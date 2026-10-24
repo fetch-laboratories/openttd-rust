@@ -23,7 +23,7 @@
 
 static_assert(CalendarTime::ORIGINAL_BASE_YEAR.base() == 1920 && CalendarTime::ORIGINAL_MAX_YEAR.base() == 2090);
 static_assert(CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR.base() == 701265);
-static_assert(INVALID_RAILTYPE == 63 && INVALID_ROADTYPE == 63);
+static_assert(INVALID_RAILTYPE == 255 && INVALID_ROADTYPE == 63);
 static_assert(ATP_TTDP_LARGE == 1 && DIR_W == 6 && DIRDIFF_REVERSE == 4);
 static_assert(to_underlying(VehicleRailFlag::PoweredWagon) == 3 && to_underlying(VehicleRailFlag::Flipped) == 4 && to_underlying(VehicleRailFlag::Reversed) == 7);
 /* Native observations and common evaluator adapters. No Vehicle layout crosses
@@ -45,7 +45,7 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 	static const OpenTTDVehicleResolverServices services{
 		.vehicle = &GetRustVehicleServices(), .shared = &GetRustSharedServices(),
 		.cache = [](OpenTTDVehicle *v) noexcept { return &VehicleOf(v)->grf_cache; },
-		.first = [](OpenTTDVehicle *v) noexcept { return RustVehicle(RustVehicleFirst(VehicleOf(v))); },
+		.first = RustGroundFirst,
 		.move = [](OpenTTDVehicle *v, int32_t count) noexcept { return RustVehicle(VehicleOf(v)->Move(count)); },
 		.previous = [](OpenTTDVehicle *v) noexcept { return RustVehicle(RustVehiclePrevious(VehicleOf(v))); },
 		.can_carry = Engine_can_carry,
@@ -78,11 +78,11 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.real_count = [](const RealSpriteGroup *group, bool motion) noexcept { return static_cast<uint32_t>(motion ? group->loaded.size() : group->loading.size()); },
 		.real_at = [](const RealSpriteGroup *group, bool motion, uint32_t index) noexcept { return motion ? group->loaded[index] : group->loading[index]; },
 		.vehicle_grfid = [](OpenTTDVehicle * v) noexcept -> uint32_t { return VehicleOf(v)->GetGRFID(); },
-		.engine_by_id = [](uint16_t id) noexcept -> const OpenTTDEngine * { return RustEngineByID(id); },
-		.default_cargo = [](const OpenTTDEngine * e) noexcept -> uint8_t { return RustEngineDefaultCargo(e); },
+		.engine_by_id = RustEngineByID,
+		.default_cargo = RustEngineDefaultCargo,
 		.engine_flags = [](const OpenTTDEngine * e) noexcept -> uint8_t { return EngineOf(e)->flags.base(); },
 		.local_id = [](const OpenTTDEngine * e) noexcept -> uint16_t { return EngineOf(e)->grf_prop.local_id; },
-		.cargo_info = [](uint8_t cargo) noexcept -> OpenTTDVehicleCargoInfo { const CargoSpec *cs = CargoSpec::Get(cargo); return {cs->classes.base(), cs->weight}; },
+		.cargo_info = [](uint8_t cargo) noexcept -> OpenTTDVehicleCargoInfo { const CargoSpec *cs = CargoSpec::Get(cargo); return {RustCargoSpecClasses(cs), cs->weight}; },
 		.motion = [](OpenTTDVehicle * v) noexcept -> uint32_t { return *RustVehicleMotionAddress(VehicleOf(v)); },
 		.build_year = [](OpenTTDVehicle * v) noexcept -> int32_t { return VehicleOf(v)->build_year.base(); },
 		.last_service = [](OpenTTDVehicle * v) noexcept -> int32_t { return VehicleOf(v)->date_of_last_service_newgrf.base(); },
@@ -119,19 +119,19 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.moving_flags = [](const void * airport, uint8_t pos) noexcept -> uint16_t { return static_cast<const AirportFTAClass *>(airport)->MovingData(pos)->flags.base(); },
 		.roadtype = [](OpenTTDVehicle * v) noexcept -> RoadType { return RoadVehicle::From(VehicleOf(v))->roadtype; },
 		.tile_roadtype = [](uint32_t tile, RoadTramType rtt) noexcept -> RoadType { return GetRoadType(TileIndex(tile), rtt); },
-		.tile_railtype = [](uint32_t tile) noexcept -> RailType { return RustTileRailType(tile); },
+		.tile_railtype = RustTileRailType,
 		.rail_catenary = [](RailType rt) noexcept -> bool { return GetRailTypeInfo(rt)->flags.Test(RailTypeFlag::Catenary); },
 		.road_catenary = [](RoadType rt) noexcept -> bool { return GetRoadTypeInfo(rt)->flags.Test(RoadTypeFlag::Catenary); },
 		.reverse_rail = [](RailType rt, const GRFFile * grf) noexcept -> uint8_t { return GetReverseRailTypeTranslation(rt, grf); },
 		.reverse_road = [](RoadType rt, const GRFFile * grf) noexcept -> uint8_t { return GetReverseRoadTypeTranslation(rt, grf); },
-		.translate_rail = [](uint32_t type, const GRFFile * grf) noexcept -> RailType { return GetRailTypeTranslation(type, grf); },
-		.translate_road = [](RoadTramType rtt, uint32_t type, const GRFFile * grf) noexcept -> RoadType { return GetRoadTypeTranslation(rtt, type, grf); },
-		.compatible_rail = [](RailType a, RailType b) noexcept -> bool { return RustRailCompatible(a, b); },
-		.powered_rail = [](uint64_t types, RailType rt) noexcept -> bool { return RustRailPowered(RailTypes(types), rt); },
-		.powered_single_rail = [](RailType a, RailType b) noexcept -> bool { return RustRailPowered(a, b); },
+		.translate_rail = [](uint8_t type, const GRFFile * grf) noexcept -> RailType { return GetRailTypeTranslation(type, grf); },
+		.translate_road = [](RoadTramType rtt, uint8_t type, const GRFFile * grf) noexcept -> RoadType { return GetRoadTypeTranslation(rtt, type, grf); },
+		.compatible_rail = RustRailCompatible<RailType>,
+		.powered_rail = RustRailPoweredMask,
+		.powered_single_rail = RustRailPowered<RailType>,
 		.badge_count = [](const GRFFile * grf) noexcept -> size_t { return grf->badge_list.size(); },
-		.badge_at = [](const GRFFile * grf, uint32_t index) noexcept -> uint16_t { return grf->badge_list[index].base(); },
-		.engine_has_badge = [](const OpenTTDEngine * e, uint16_t badge) noexcept -> bool { return std::ranges::find(EngineOf(e)->badges, BadgeID(badge)) != EngineOf(e)->badges.end(); },
+		.badge_at = [](const GRFFile * grf, uint32_t index) noexcept -> uint32_t { return grf->badge_list[index].base(); },
+		.engine_has_badge = [](const OpenTTDEngine * e, uint32_t badge) noexcept -> bool { return std::ranges::find(EngineOf(e)->badges, BadgeID(badge)) != EngineOf(e)->badges.end(); },
 		.engine_badge = [](const GRFFile * grf, const OpenTTDEngine * e, uint32_t p) noexcept -> uint32_t { return GetBadgeVariableResult(*grf, EngineOf(e)->badges, p); },
 		.rail_badge = [](const GRFFile * grf, RailType rt, uint32_t p) noexcept -> uint32_t { return GetBadgeVariableResult(*grf, GetRailTypeInfo(rt)->badges, p); },
 		.road_badge = [](const GRFFile * grf, RoadType rt, uint32_t p) noexcept -> uint32_t { return GetBadgeVariableResult(*grf, GetRoadTypeInfo(rt)->badges, p); },

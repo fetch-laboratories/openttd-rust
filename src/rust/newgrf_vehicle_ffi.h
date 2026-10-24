@@ -117,14 +117,14 @@ struct OpenTTDVehicleResolverServices {
 	bool (*road_catenary)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_catenary);
 	uint8_t (*reverse_rail)(RailType, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(reverse_rail);
 	uint8_t (*reverse_road)(RoadType, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(reverse_road);
-	RailType (*translate_rail)(uint32_t, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(translate_rail);
-	RoadType (*translate_road)(RoadTramType, uint32_t, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(translate_road);
+	RailType (*translate_rail)(uint8_t, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(translate_rail);
+	RoadType (*translate_road)(RoadTramType, uint8_t, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(translate_road);
 	bool (*compatible_rail)(RailType, RailType) noexcept OPENTTD_SERVICE_DEFAULT(compatible_rail);
 	bool (*powered_rail)(uint64_t, RailType) noexcept OPENTTD_SERVICE_DEFAULT(powered_rail);
 	bool (*powered_single_rail)(RailType, RailType) noexcept OPENTTD_SERVICE_DEFAULT(powered_single_rail);
 	size_t (*badge_count)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(badge_count);
-	uint16_t (*badge_at)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(badge_at);
-	bool (*engine_has_badge)(const OpenTTDEngine *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(engine_has_badge);
+	uint32_t (*badge_at)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(badge_at);
+	bool (*engine_has_badge)(const OpenTTDEngine *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(engine_has_badge);
 	uint32_t (*engine_badge)(const GRFFile *, const OpenTTDEngine *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(engine_badge);
 	uint32_t (*rail_badge)(const GRFFile *, RailType, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_badge);
 	uint32_t (*road_badge)(const GRFFile *, RoadType, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_badge);

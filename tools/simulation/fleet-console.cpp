@@ -290,54 +290,96 @@ static void ResolverProbe()
 	e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, det);
 	v->InvalidateNewGRFCacheOfChain();
 	{
-	VehicleResolverObject ro(v->engine_type, v, VehicleResolverObject::WO_NONE);
-	bool available = true;
-	uint32_t translated = ro.self_scope.GetVariable(0x42, 0, available);
-	NewGRFCache before = v->grf_cache;
-	uint32_t hit = ro.self_scope.GetVariable(0x42, 0, available);
-	uint16_t callback = GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v);
-	fmt::print(stderr, "FLEET resolver-cache {} {} {} {} {}\n", available, translated, before.consist_cargo_information, hit == translated, callback == (translated & 0x7FFF));
-	ro.grffile = nullptr;
-	uint32_t untranslated = ro.self_scope.GetVariable(0x42, 0, available);
-	fmt::print(stderr, "FLEET resolver-translation {} {}\n", untranslated, v->grf_cache == before);
-	ro.SetRegister(0x10F, 1);
-	ro.SetRegister(0x10E, 0);
-	uint32_t relative = ro.self_scope.GetVariable(0x61, 0x40, available);
-	VehicleResolverObject other(v->engine_type, v->Next(), VehicleResolverObject::WO_NONE);
-	uint32_t direct = other.self_scope.GetVariable(0x40, 0, available);
-	fmt::print(stderr, "FLEET resolver-var61 {} {} {}\n", available, relative, relative == direct);
-	det->var_scope = VSG_SCOPE_PARENT;
-	det->adjusts[0].variable = 0x84;
-	uint16_t parent = GetVehicleCallbackParent(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v, v->Next());
-	fmt::print(stderr, "FLEET resolver-parent {}\n", parent == (v->Next()->index.base() & 0x7FFF));
-	ro.SetRegister(0x100, 1);
-	auto *scope = ro.GetScope(VSG_SCOPE_RELATIVE, 0);
-	fmt::print(stderr, "FLEET resolver-relative {}\n", scope->GetVariable(0x84, 0, available) == v->Next()->index.base());
-	/* Nested deterministic procedure changes relative scope, then returns to self.
-	 * Output registers are copied by ResolveCallback after the nested evaluation. */
-	auto *procedure = new DeterministicSpriteGroup();
-	procedure->size = DSG_SIZE_DWORD; procedure->var_scope = VSG_SCOPE_RELATIVE;
-	procedure->default_result.calculated_result = true;
-	procedure->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x84, .and_mask = UINT32_MAX}};
-	det->var_scope = VSG_SCOPE_SELF;
-	det->adjusts = {
-		{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 1},
-		{.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100},
-		{.operation = DSGA_OP_RST, .variable = 0x7E, .and_mask = UINT32_MAX, .subroutine = procedure},
-		{.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x101},
-		{.operation = DSGA_OP_RST, .variable = 0x84, .and_mask = UINT32_MAX},
-	};
-	std::array<int32_t, 2> registers{};
-	uint16_t nested = GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v, registers);
-	fmt::print(stderr, "FLEET resolver-reentry {} {} {}\n", nested == (v->index.base() & 0x7FFF), registers[0] == 1, registers[1] == (v->Next()->index.base() & 0x7FFF));
-	det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 0x7FFE}};
-	fmt::print(stderr, "FLEET resolver-property {} {}\n", GetVehicleProperty(v, PROP_TRAIN_SPEED, 17, true) == -2, GetVehicleProperty(v, PROP_TRAIN_SPEED, 17) == 0x7FFE);
-	det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x61, .parameter = 0x84, .and_mask = UINT32_MAX}};
-	auto *fallback = new CallbackResultSpriteGroup(123);
-	det->error_group = fallback;
-	fmt::print(stderr, "FLEET resolver-unavailable {}\n", GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v) == 123);
-	/* DoResolve clears changed registers; the actual group above supplies them. */
-	delete fallback; delete procedure;
+		VehicleResolverObject ro(v->engine_type, v, VehicleResolverObject::WO_NONE);
+		bool available = true;
+		uint32_t translated = ro.self_scope.GetVariable(0x42, 0, available);
+		NewGRFCache before = v->grf_cache;
+		uint32_t hit = ro.self_scope.GetVariable(0x42, 0, available);
+		uint16_t callback = GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v);
+		fmt::print(stderr, "FLEET resolver-cache {} {} {} {} {}\n", available, translated, before.consist_cargo_information, hit == translated, callback == (translated & 0x7FFF));
+		ro.grffile = nullptr;
+		uint32_t untranslated = ro.self_scope.GetVariable(0x42, 0, available);
+		fmt::print(stderr, "FLEET resolver-translation {} {}\n", untranslated, v->grf_cache == before);
+		GRFFile caller;
+		caller.grf_version = 7;
+		for (uint i = 0; i < NUM_CARGO; ++i) caller.cargo_map[i] = i;
+		ro.grffile = &caller;
+		uint32_t version7 = ro.self_scope.GetVariable(0x42, 0, available);
+		caller.grf_version = 8;
+		uint32_t version8 = ro.self_scope.GetVariable(0x42, 0, available);
+		fmt::print(stderr, "FLEET resolver-caller-grf {} {} {}\n", version7 == untranslated, version8 != translated, v->grf_cache == before);
+		Backup<decltype(e->badges)> badges(e->badges, std::vector<BadgeID>{BadgeID(0x12345678)});
+		caller.badge_list = {BadgeID(0x12345678)};
+		uint32_t badge_count = ro.self_scope.GetVariable(0x64, 0, available);
+		fmt::print(stderr, "FLEET resolver-wide-badge {} {}\n", available, badge_count > 0);
+		badges.Restore();
+		ro.grffile = nullptr;
+
+		ro.SetRegister(0x10F, 1);
+		ro.SetRegister(0x10E, 0);
+		uint32_t relative = ro.self_scope.GetVariable(0x61, 0x40, available);
+		VehicleResolverObject other(v->engine_type, v->Next(), VehicleResolverObject::WO_NONE);
+		uint32_t direct = other.self_scope.GetVariable(0x40, 0, available);
+		fmt::print(stderr, "FLEET resolver-var61 {} {} {}\n", available, relative, relative == direct);
+		det->var_scope = VSG_SCOPE_PARENT;
+		det->adjusts[0].variable = 0x84;
+		uint16_t parent = GetVehicleCallbackParent(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v, v->Next());
+		fmt::print(stderr, "FLEET resolver-parent {}\n", parent == (v->Next()->index.base() & 0x7FFF));
+		ro.SetRegister(0x100, 1);
+		auto *scope = ro.GetScope(VSG_SCOPE_RELATIVE, 0);
+		fmt::print(stderr, "FLEET resolver-relative {}\n", scope->GetVariable(0x84, 0, available) == v->Next()->index.base());
+		/* Nested deterministic procedure changes relative scope, then returns to self.
+		 * Output registers are copied by ResolveCallback after the nested evaluation. */
+		auto *procedure = new DeterministicSpriteGroup();
+		procedure->size = DSG_SIZE_DWORD; procedure->var_scope = VSG_SCOPE_RELATIVE;
+		procedure->default_result.calculated_result = true;
+		procedure->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x84, .and_mask = UINT32_MAX}};
+		det->var_scope = VSG_SCOPE_SELF;
+		det->adjusts = {
+			{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 1},
+			{.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100},
+			{.operation = DSGA_OP_RST, .variable = 0x7E, .and_mask = UINT32_MAX, .subroutine = procedure},
+			{.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x101},
+			{.operation = DSGA_OP_RST, .variable = 0x84, .and_mask = UINT32_MAX},
+		};
+		std::array<int32_t, 2> registers{};
+		uint16_t nested = GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v, registers);
+		fmt::print(stderr, "FLEET resolver-reentry {} {} {}\n", nested == (v->index.base() & 0x7FFF), registers[0] == 1, registers[1] == (v->Next()->index.base() & 0x7FFF));
+		det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 0x7FFE}};
+		fmt::print(stderr, "FLEET resolver-property {} {}\n", GetVehicleProperty(v, PROP_TRAIN_SPEED, 17, true) == -2, GetVehicleProperty(v, PROP_TRAIN_SPEED, 17) == 0x7FFE);
+		SavedRandomSeeds probability_before, probability_after;
+		SaveRandomSeeds(&probability_before);
+		auto probability = TestVehicleBuildProbability(v, v->engine_type, BuildProbabilityType::Reversed);
+		SaveRandomSeeds(&probability_after);
+		fmt::print(stderr, "FLEET resolver-probability {} {} {}\n", probability.has_value(), probability.value_or(false), !SameRandom(probability_before, probability_after));
+		e->grf_prop.spritegroups.clear();
+		SaveRandomSeeds(&probability_before);
+		probability = TestVehicleBuildProbability(v, v->engine_type, BuildProbabilityType::Reversed);
+		SaveRandomSeeds(&probability_after);
+		fmt::print(stderr, "FLEET resolver-probability-failed {} {}\n", !probability.has_value(), SameRandom(probability_before, probability_after));
+		e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, det);
+		det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x61, .parameter = 0x84, .and_mask = UINT32_MAX}};
+		auto *fallback = new CallbackResultSpriteGroup(123);
+		det->error_group = fallback;
+		fmt::print(stderr, "FLEET resolver-unavailable {}\n", GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v) == 123);
+		/* DoResolve clears changed registers; the actual group above supplies them. */
+		delete fallback; delete procedure;
+	}
+	{
+		auto *low = new CallbackResultSpriteGroup(7);
+		auto *high = new CallbackResultSpriteGroup(11);
+		auto *real = new RealSpriteGroup();
+		real->loaded = {low, high}; real->loading = {high, low};
+		e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, real);
+		Backup<Order> order(v->current_order);
+		for (bool loading : {false, true}) {
+			if (loading) v->current_order.MakeLoading(false); else v->current_order.MakeDummy();
+			fmt::print(stderr, "FLEET resolver-real {} {}\n", loading, GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v));
+		}
+		fmt::print(stderr, "FLEET resolver-purchase-real {}\n", GetEngineProperty(v->engine_type, PROP_TRAIN_SPEED, 17) == 11);
+		order.Restore();
+		e->grf_prop.spritegroups.clear();
+		delete real; delete high; delete low;
 	}
 	auto *result = new CallbackResultSpriteGroup(7);
 	auto *random = new RandomizedSpriteGroup();

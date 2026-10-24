@@ -21,10 +21,16 @@ use crate::newgrf_callbacks::{
     CALLBACK_FAILED, CBID_VEHICLE_BUILD_PROBABILITY, CBID_VEHICLE_MODIFY_PROPERTY,
 };
 use crate::vehicle::{OpenTTDEngine, OpenTTDVehicle, VehicleRef, VehicleServices};
+use crate::vehicle_base::{
+    NCVV_COMPANY_INFORMATION, NCVV_CONSIST_CARGO_INFORMATION, NCVV_END,
+    NCVV_POSITION_CONSIST_LENGTH, NCVV_POSITION_IN_VEHICLE, NCVV_POSITION_SAME_ID_LENGTH,
+};
 use std::ffi::c_void;
 use std::ptr::{null, null_mut};
 type V = *mut OpenTTDVehicle;
 type Group = *const c_void;
+/// `BuildProbabilityType::Reversed`.
+pub const BUILD_PROBABILITY_REVERSED: u8 = 0;
 #[repr(C)]
 #[derive(Default)]
 pub struct Cache {
@@ -169,10 +175,10 @@ pub struct Services {
     road_catenary: unsafe extern "C" fn(crate::services::RoadType) -> bool,
     reverse_rail: unsafe extern "C" fn(crate::services::RailType, *const c_void) -> u8,
     reverse_road: unsafe extern "C" fn(crate::services::RoadType, *const c_void) -> u8,
-    translate_rail: unsafe extern "C" fn(u32, *const c_void) -> crate::services::RailType,
+    translate_rail: unsafe extern "C" fn(u8, *const c_void) -> crate::services::RailType,
     translate_road: unsafe extern "C" fn(
         crate::services::RoadTramType,
-        u32,
+        u8,
         *const c_void,
     ) -> crate::services::RoadType,
     compatible_rail:
@@ -181,8 +187,8 @@ pub struct Services {
     powered_single_rail:
         unsafe extern "C" fn(crate::services::RailType, crate::services::RailType) -> bool,
     badge_count: unsafe extern "C" fn(*const c_void) -> usize,
-    badge_at: unsafe extern "C" fn(*const c_void, u32) -> u16,
-    engine_has_badge: unsafe extern "C" fn(*const OpenTTDEngine, u16) -> bool,
+    badge_at: unsafe extern "C" fn(*const c_void, u32) -> u32,
+    engine_has_badge: unsafe extern "C" fn(*const OpenTTDEngine, u32) -> bool,
     engine_badge: unsafe extern "C" fn(*const c_void, *const OpenTTDEngine, u32) -> u32,
     rail_badge: unsafe extern "C" fn(*const c_void, crate::services::RailType, u32) -> u32,
     road_badge: unsafe extern "C" fn(*const c_void, crate::services::RoadType, u32) -> u32,
@@ -263,11 +269,11 @@ fn first_max(values: &[u8]) -> u8 {
 unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) -> u32 {
     unsafe {
         let (bit, field) = match variable {
-            0x40 => (0, 0),
-            0x41 => (1, 1),
-            0x42 => (2, 2),
-            0x43 => (3, 3),
-            0x4d => (4, 4),
+            0x40 => (NCVV_POSITION_CONSIST_LENGTH, 0),
+            0x41 => (NCVV_POSITION_SAME_ID_LENGTH, 1),
+            0x42 => (NCVV_CONSIST_CARGO_INFORMATION, 2),
+            0x43 => (NCVV_COMPANY_INFORMATION, 3),
+            0x4d => (NCVV_POSITION_IN_VEHICLE, 4),
             _ => unreachable!(),
         };
         let cache = (s.cache)(v);
@@ -283,8 +289,8 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
                         if (s.vehicle.vehicle_type)(handle(v)) == 0 {
                             user_data |= (s.vehicle.train_handle)(u).get_user_def_data() as u8;
                         }
-                        let cargo_type = (s.cargo_type)(u);
                         if (s.can_carry)((s.vehicle.engine)(handle(u)).0.as_ptr()) {
+                            let cargo_type = (s.cargo_type)(u);
                             classes |= (s.cargo_classes)(cargo_type) as u8;
                             cargoes[cargo_type as usize] =
                                 cargoes[cargo_type as usize].wrapping_add(1);
@@ -393,7 +399,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_grf_fill(s: &Services, v: V) {
                 cached_variable(s, v, variable, null());
             }
         }
-        (s.check)((*(s.cache)(v)).cache_valid == 31);
+        (s.check)((*(s.cache)(v)).cache_valid == (1 << NCVV_END) - 1);
     }
 }
 unsafe fn wagon_override(s: &Services, id: u16, cargo: u8, overriding: u16) -> Group {
@@ -1007,13 +1013,13 @@ unsafe fn variable(
     };
     unsafe {
         let h = handle(v);
-        let kind = (s.vehicle.vehicle_type)(h);
+        let kind = || (s.vehicle.vehicle_type)(h);
         let check = |ok| (s.check)(ok);
         match variable {
             0x25 => return (s.vehicle_grfid)(v),
             0x40 | 0x41 | 0x42 | 0x43 | 0x4d => return cached_variable(s, v, variable, grf),
             0x44 => {
-                if kind != 3 || !crate::aircraft::is_normal_aircraft((s.vehicle.subtype)(h)) {
+                if kind() != 3 || !crate::aircraft::is_normal_aircraft((s.vehicle.subtype)(h)) {
                     return u32::MAX;
                 }
                 let w = next(s, v);
@@ -1059,7 +1065,7 @@ unsafe fn variable(
             0x49 => return (s.build_year)(v) as u32,
             0x4a => {
                 let tile = (s.vehicle.tile)(h);
-                match kind {
+                match kind() {
                     0 => {
                         let rt = (s.tile_railtype)(tile);
                         let types = (s.vehicle.train_handle)(v).get_railtypes();
@@ -1080,13 +1086,13 @@ unsafe fn variable(
             0x4b => return (s.last_service)(v) as u32,
             0x4c => {
                 return if (s.primary)(v) {
-                    current_max_speed(s, v, kind) as u32
+                    current_max_speed(s, v, kind()) as u32
                 } else {
                     0
                 };
             }
             0x60 => {
-                if kind != 0 {
+                if kind() != 0 {
                     return u32::from(
                         u32::from((s.local_id)((s.vehicle.engine)(h).0.as_ptr())) == parameter,
                     );
@@ -1174,9 +1180,9 @@ unsafe fn variable(
                     | difference(a.y, b.y) << 16
                     | difference(a.z, b.z) << 24;
             }
-            0x63 => match kind {
+            0x63 => match kind() {
                 0 => {
-                    let param = (s.translate_rail)(parameter, grf);
+                    let param = (s.translate_rail)(parameter as u8, grf);
                     if param.0 == crate::rail_type::INVALID_RAILTYPE {
                         return 0;
                     }
@@ -1190,7 +1196,7 @@ unsafe fn variable(
                 }
                 1 => {
                     let rtt = (s.shared.road_tram_type)((s.roadtype)(v).0);
-                    let param = (s.translate_road)(rtt, parameter, grf);
+                    let param = (s.translate_road)(rtt, parameter as u8, grf);
                     if param.0 == crate::road_type::INVALID_ROADTYPE {
                         return 0;
                     }
@@ -1207,7 +1213,7 @@ unsafe fn variable(
                 _ => return 0,
             },
             0x64 => {
-                if kind != 0 {
+                if kind() != 0 {
                     return (s.engine_badge)(grf, (s.vehicle.engine)(h).0.as_ptr(), parameter);
                 }
                 if u64::from(parameter) >= (s.badge_count)(grf) as u64 {
@@ -1224,7 +1230,7 @@ unsafe fn variable(
                 }
                 return count;
             }
-            0x65 => match kind {
+            0x65 => match kind() {
                 0 => {
                     return (s.rail_badge)(
                         grf,
@@ -1245,7 +1251,7 @@ unsafe fn variable(
             0x7a => return (s.engine_badge)(grf, (s.vehicle.engine)(h).0.as_ptr(), parameter),
             0xfe | 0xff => {
                 let mut flags = 0u32;
-                if kind == 0 {
+                if kind() == 0 {
                     let t = (s.vehicle.train_handle)(v);
                     let f = t.get_flags();
                     let wagon = f & crate::train::VRF_POWERED_WAGON != 0;
@@ -1285,8 +1291,8 @@ unsafe fn variable(
             }
         };
         match variable {
-            0x80 => return u32::from(kind) + 0x10,
-            0x81 => return old_subtype(s, v, kind),
+            0x80 => return u32::from(kind()) + 0x10,
+            0x81 => return old_subtype(s, v, kind()),
             0x84 | 0x85 => return high((s.id)(v)),
             0x8a => return u32::from((s.old_order)(v)),
             0x8b => return u32::from((s.vehicle.order_destination)(h)),
@@ -1296,7 +1302,7 @@ unsafe fn variable(
                 let ticks = if (s.vehicle.order_type)(h) == crate::vehicle::OT_LOADING {
                     u32::from((s.load_ticks)(v))
                 } else {
-                    match kind {
+                    match kind() {
                         0 => (s.vehicle.train_handle)(v).get_wait_counter() as u32,
                         3 => u32::from((*(s.aircraft)(v)).turn_counter),
                         _ => 0,
@@ -1310,7 +1316,7 @@ unsafe fn variable(
             0x97 => return u32::from((s.vehicle.tick)(h)),
             0x98 | 0x99 => {
                 let speed = u32::from((s.vehicle.max_speed)(h));
-                return high(if kind == 3 {
+                return high(if kind() == 3 {
                     crate::aircraft::speed_old_units(speed)
                 } else {
                     speed
@@ -1330,7 +1336,7 @@ unsafe fn variable(
             0xb2 => return u32::from((s.vehicle.status)(h)),
             0xb4 | 0xb5 => {
                 let speed = u32::from((s.vehicle.speed)(h));
-                return high(if kind == 3 { speed * 10 / 128 } else { speed });
+                return high(if kind() == 3 { speed * 10 / 128 } else { speed });
             }
             0xb6 => return u32::from((s.vehicle.subspeed)(h)),
             0xb7 => return u32::from((s.acceleration)(v)),
@@ -1359,7 +1365,7 @@ unsafe fn variable(
             0xc6 | 0xc7 => return high(u32::from((s.local_id)((s.vehicle.engine)(h).0.as_ptr()))),
             0xc8 => {
                 let sprite = (s.sprite)(v);
-                if kind != 0 || sprite != crate::vehicle_func::CUSTOM_VEHICLE_SPRITENUM {
+                if kind() != 0 || sprite != crate::vehicle_func::CUSTOM_VEHICLE_SPRITENUM {
                     return u32::from(sprite);
                 }
                 return u32::from(
@@ -1404,7 +1410,7 @@ unsafe fn variable(
             0xfb => return u32::from((s.waiting)(v)),
             _ => {}
         }
-        match kind {
+        match kind() {
             0 => match variable {
                 0xe2 => return (s.vehicle.train_handle)(v).get_track() as u32,
                 0xe6 => {
@@ -1456,7 +1462,7 @@ unsafe fn variable(
             },
             _ => {}
         }
-        (s.unhandled)(variable, kind);
+        (s.unhandled)(variable, kind());
         *available = false;
         u32::MAX
     }
@@ -1594,8 +1600,12 @@ pub(crate) unsafe fn signed_property(
 /// `TestVehicleBuildProbability(..., Reversed).has_value()` still consumes its RNG.
 pub(crate) unsafe fn reverse_probability(vs: &VehicleServices, v: VehicleRef) -> bool {
     unsafe {
-        openttd_rust_vehicle_build_probability(&*(vs.newgrf)(), v.0.as_ptr(), (vs.engine_id)(v), 0)
-            >= 0
+        openttd_rust_vehicle_build_probability(
+            &*(vs.newgrf)(),
+            v.0.as_ptr(),
+            (vs.engine_id)(v),
+            BUILD_PROBABILITY_REVERSED,
+        ) >= 0
     }
 }
 crate::abi::layouts! {

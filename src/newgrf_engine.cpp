@@ -418,7 +418,6 @@ static const Livery *LiveryHelper(EngineID engine, const Vehicle *v)
  *                    with the same 'engine type'.
  * @return the position in the chain from front and tail and chain length.
  */
-#ifndef WITH_RUST
 static uint32_t PositionHelper(const Vehicle *v, bool consecutive)
 {
 	const Vehicle *u;
@@ -438,8 +437,6 @@ static uint32_t PositionHelper(const Vehicle *v, bool consecutive)
 	return chain_before | chain_after << 8 | (chain_before + chain_after + consecutive) << 16;
 }
 
-#endif
-
 static uint32_t VehicleGetVariable(Vehicle *v, const VehicleScopeResolver *object, uint8_t variable, uint32_t parameter, bool &available)
 {
 	/* Calculated vehicle parameters */
@@ -447,10 +444,6 @@ static uint32_t VehicleGetVariable(Vehicle *v, const VehicleScopeResolver *objec
 		case 0x25: // Get engine GRF ID
 			return v->GetGRFID();
 
-#ifdef WITH_RUST
-		case 0x40: case 0x41: case 0x42: case 0x43: case 0x4D:
-			return openttd_rust_vehicle_cached_variable(&GetRustVehicleResolverServices(), v, variable, object->ro.grffile);
-#else
 		case 0x40: // Get length of consist
 			if (!HasBit(v->grf_cache.cache_valid, NCVV_POSITION_CONSIST_LENGTH)) {
 				v->grf_cache.position_consist_length = PositionHelper(v, false);
@@ -530,8 +523,6 @@ static uint32_t VehicleGetVariable(Vehicle *v, const VehicleScopeResolver *objec
 				SetBit(v->grf_cache.cache_valid, NCVV_COMPANY_INFORMATION);
 			}
 			return v->grf_cache.company_information;
-
-#endif
 
 		case 0x44: // Aircraft information
 			if (v->type != VEH_AIRCRAFT || !Aircraft::From(v)->IsNormalAircraft()) return UINT_MAX;
@@ -622,7 +613,6 @@ static uint32_t VehicleGetVariable(Vehicle *v, const VehicleScopeResolver *objec
 			if (!v->IsPrimaryVehicle()) return 0;
 			return v->GetCurrentMaxSpeed();
 
-#ifndef WITH_RUST
 		case 0x4D: // Position within articulated vehicle
 			if (!HasBit(v->grf_cache.cache_valid, NCVV_POSITION_IN_VEHICLE)) {
 				uint8_t artic_before = 0;
@@ -633,8 +623,6 @@ static uint32_t VehicleGetVariable(Vehicle *v, const VehicleScopeResolver *objec
 				SetBit(v->grf_cache.cache_valid, NCVV_POSITION_IN_VEHICLE);
 			}
 			return v->grf_cache.position_in_vehicle;
-
-#endif
 
 		/* Variables which use the parameter */
 		case 0x60: // Count consist's engine ID occurrence

@@ -74,8 +74,12 @@ pub fn other_axis(axis: u8, check: impl Fn(bool) + Copy) -> u8 {
 
 /// `DirDifference`, preserving the native header assertions.
 pub fn dir_difference(a: u8, b: u8, check: impl Fn(bool)) -> u8 {
-    check(a < DIR_END);
-    check(b < DIR_END);
+    if a >= DIR_END {
+        check(false);
+    }
+    if b >= DIR_END {
+        check(false);
+    }
     a.wrapping_sub(b) % DIR_END
 }
 /// `ChangeDirDiff`.

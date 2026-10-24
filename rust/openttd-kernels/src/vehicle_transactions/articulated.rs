@@ -132,7 +132,7 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
                     &*(r.common.vehicles.newgrf)(),
                     v.cast(),
                     (g.vehicle_engine)(v),
-                    0,
+                    crate::newgrf_vehicle::BUILD_PROBABILITY_REVERSED,
                 )
             };
             if probability >= 0 {

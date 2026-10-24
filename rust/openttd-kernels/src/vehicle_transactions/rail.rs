@@ -163,7 +163,7 @@ impl Ctx {
                 &*(self.c.vehicles.newgrf)(),
                 v.cast(),
                 self.engine(v),
-                0,
+                crate::newgrf_vehicle::BUILD_PROBABILITY_REVERSED,
             )
         };
         if probability >= 0 {

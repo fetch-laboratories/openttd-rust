@@ -2158,3 +2158,28 @@ Historical monitor-key conversion and external GameScript callers remain #156
 coverage gaps. Independent fixing review and the separate root cost disposition
 are recorded on #388; #391 integrated the frozen owners on the routing base after
 scoped reconciliation review and exact-combination Full passed.
+
+### Vehicle NewGRF resolver and canonical query cache (#392, PR #397)
+
+`newgrf_vehicle.rs` owns the five-value cache/validity allocation and lifetime,
+cache fill/invalidation, stack self/parent/relative/root selection, wagon overrides,
+real-group selection, complete vehicle/purchase variable control, callback/property/
+probability entries and trigger recursion. Native virtual facades keep the portable
+originals excluded from `WITH_RUST`; common Action2 evaluation, specifications,
+pools, saved vehicle random/waiting fields and rendering stay native.
+Existing train/road/aircraft/ship, cargo, command and loading owners enter Rust
+properties/callbacks/randomisation directly. Typed observations read consumed
+fields only; neither cache/state borrows nor references into native storage cross
+common evaluation. Invocation paths allocate nothing; each native shell owns one
+canonical cache allocation with native aliases, including indexed construction.
+Default fleet resolver evidence uses actual deterministic/procedure/randomized/
+real groups, cache miss/hit/caller-v7/v8 translation, wide badge IDs, unavailable
+variables, signed properties, probability RNG, output registers, parent/relative
+reentry, all five triggers and zero-bit reseeding. Stock road/ship/aircraft fixtures
+compare public vehicle/purchase variables; aircraft mappings use all byte states
+at the fixture airport's positions. Native GRF reload destroys the synthetic groups
+and reinstalls fresh groups; it compares transient cache observations separately
+from nonempty random/waiting fields decoded from a saved fleet and loaded again.
+PR #397 records focused commands and metrics. Arbitrary external GRF programs,
+historical saves, GUI scheduling and remaining branch combinations are #156 gaps;
+the fixtures do not claim persistent synthetic sprite groups or whole-game equivalence.

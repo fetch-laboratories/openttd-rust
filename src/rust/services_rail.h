@@ -37,6 +37,7 @@ template <typename EngineType>
 inline bool RustRailCompatible(EngineType engine, RailType tile) noexcept { return IsCompatibleRail(engine, tile); }
 template <typename EngineType>
 inline bool RustRailPowered(EngineType engine, RailType tile) noexcept { return HasPowerOnRail(engine, tile); }
+inline bool RustRailPoweredMask(uint64_t types, RailType type) noexcept { return RustRailPowered(RailTypes(types), type); }
 inline bool RustRailCompatibleLegacy(uint8_t engine, uint8_t tile) noexcept { return RustRailCompatible(static_cast<RailType>(engine), static_cast<RailType>(tile)); }
 inline bool RustRailPoweredLegacy(uint8_t engine, uint8_t tile) noexcept { return RustRailPowered(static_cast<RailType>(engine), static_cast<RailType>(tile)); }
 inline bool RustRailIsDepot(uint32_t tile) noexcept { return IsRailDepot(TileIndex(tile)); }

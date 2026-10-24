@@ -2609,5 +2609,5 @@ pub(crate) fn speed_old_units(speed: u32) -> u32 {
 
 /// `Aircraft::IsNormalAircraft`.
 pub(crate) const fn is_normal_aircraft(subtype: u8) -> bool {
-    subtype <= 2
+    subtype <= AIR_AIRCRAFT
 }

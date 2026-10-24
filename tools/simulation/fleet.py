@@ -267,8 +267,13 @@ def check(scenario, run, mode, role, result):
             "FLEET resolver-checkpoint complete",
             "FLEET resolver-parent true",
             "FLEET resolver-relative true",
+            "FLEET resolver-caller-grf true true true",
+            "FLEET resolver-wide-badge true true",
             "FLEET resolver-reentry true true true",
             "FLEET resolver-property true true",
+            "FLEET resolver-probability true true true",
+            "FLEET resolver-probability-failed true true",
+            "FLEET resolver-purchase-real true",
             "FLEET resolver-unavailable true",
             "FLEET resolver-anynew true",
             "FLEET resolver-zero-reseed true true",
@@ -353,6 +358,15 @@ def check(scenario, run, mode, role, result):
         if line not in run["log"]:
             result["problems"].append(f"{mode}/{role}: missing {line}")
     if scenario["fleet"] == "resolver":
+        if (
+            len(
+                [line for line in run["log"] if line.startswith("FLEET resolver-real ")]
+            )
+            != 2
+        ):
+            result["problems"].append(
+                f"{mode}/{role}: missing loaded/loading real groups"
+            )
         for label in ("cache", "translation", "var61", "grf-reload"):
             lines = [
                 line
