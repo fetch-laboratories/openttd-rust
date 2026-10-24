@@ -1413,3 +1413,6 @@ mod timer_game_common;
 mod subsidy_type;
 
 pub mod landscape_cmd;
+
+mod newgrf_airport;
+mod station_base;

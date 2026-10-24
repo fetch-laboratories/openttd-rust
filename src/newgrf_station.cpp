@@ -29,6 +29,7 @@
 #include "rust/station_resolver_ffi.h"
 #include "rust/services_rail.h"
 #include "rust/services_map.h"
+#include "rust/services_cargo.h"
 #endif
 #include "timer/timer_game_calendar.h"
 
@@ -41,6 +42,9 @@
 
 
 #ifdef WITH_RUST
+static_assert(INITIAL_STATION_RATING == 175 && HVOT_WAYPOINT == (1 << 6));
+static_assert(ATP_TTDP_LARGE == 1 && CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR.base() == 701265);
+static_assert(VSG_SCOPE_PARENT == 1);
 const OpenTTDCargoStorageServices *CargoStorageServices();
 static uint16_t RustEvaluateStationCallback(uint16_t cb, uint32_t p1, uint32_t p2, const StationSpec *s, BaseStation *st, uint32_t t, uint8_t axis, int32_t *regs, size_t count) noexcept
 {
@@ -79,6 +83,20 @@ const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
 			return OpenTTDStationReseed{object.GetReseedSum(), object.GetUsedRandomTriggers().base()};
 		},
 		.resolve_callback = RustEvaluateStationCallback,
+		.file_version = RustGRFFileVersion,
+		.company = RustCompanyInfo,
+		.reverse_rail = RustReverseRailTypeTranslation,
+		.nearby = RustSignedNearbyTile,
+		.nearby_station = RustNearbyStationTile,
+		.nearby_info = RustNearbyTileInformation,
+		.terrain = RustTerrainType,
+		.badges = RustSpecBadges<StationSpec>,
+		.translate = OpenTTDCargoTranslation,
+		.build_date = [](BaseStation *st) noexcept { return st->build_date.base(); },
+		.airport_spec = [](BaseStation *st) noexcept { return Station::From(st)->airport.GetSpec(); },
+		.airport_ttd_type = [](const AirportSpec *s) noexcept { return s->ttd_airport_type; },
+		.identity = [](BaseStation *st, uint8_t i) noexcept { const auto &sm = st->speclist[i]; return OpenTTDStationSpecIdentity{sm.grfid, sm.localidx}; },
+		.unhandled = [](uint8_t variable) noexcept { Debug(grf, 1, "Unhandled station variable 0x{:X}", variable); },
 		.slope_error = RustLocationCallbackError<StationSpec, StationSpec, OpenTTDStationSlopeResult, OpenTTDCommandCost, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION>,
 	};
 	return services;
@@ -112,12 +130,16 @@ static const uint NUM_STATIONSSPECS_PER_STATION = 255; ///< Maximum number of pa
  */
 uint8_t GoodsEntry::ConvertState() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_goods_convert_state(this->status.base());
+#else
 	uint8_t res = 0;
 	if (this->status.Test(GoodsEntry::State::EverAccepted))    SetBit(res, 0);
 	if (this->status.Test(GoodsEntry::State::LastMonth))       SetBit(res, 1);
 	if (this->status.Test(GoodsEntry::State::CurrentMonth))    SetBit(res, 2);
 	if (this->status.Test(GoodsEntry::State::AcceptedBigtick)) SetBit(res, 3);
 	return res;
+#endif
 }
 
 enum TriggerArea : uint8_t {
@@ -323,6 +345,12 @@ static uint32_t GetRailContinuationInfo(TileIndex tile)
  */
 TownScopeResolver *StationResolverObject::GetTown()
 {
+#ifdef WITH_RUST
+	const Town *town = openttd_rust_station_resolver_town(&this->station_scope.state);
+	if (town == nullptr) return nullptr;
+	if (!this->town_scope.has_value()) this->town_scope.emplace(*this, const_cast<Town *>(town), this->station_scope.st == nullptr);
+	return &*this->town_scope;
+#else
 	if (!this->town_scope.has_value()) {
 		Town *t = nullptr;
 		if (this->station_scope.st != nullptr) {
@@ -334,15 +362,14 @@ TownScopeResolver *StationResolverObject::GetTown()
 		this->town_scope.emplace(*this, t, this->station_scope.st == nullptr);
 	}
 	return &*this->town_scope;
+#endif
 }
 
 /* virtual */ uint32_t StationScopeResolver::GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const
 {
 #ifdef WITH_RUST
-	uint32_t value;
-	if (this->st != nullptr && openttd_rust_station_cached_variable(&this->state, variable, &value)) return value;
-#endif
-
+	return openttd_rust_station_variable(&this->state, &this->ro, this->ro.grffile, variable, parameter, &available);
+#else
 	if (this->st == nullptr) {
 		/* Station does not exist, so we're in a purchase list or the land slope check callback. */
 		switch (variable) {
@@ -377,44 +404,32 @@ TownScopeResolver *StationResolverObject::GetTown()
 
 	switch (variable) {
 		/* Calculated station variables */
-#ifndef WITH_RUST
 		case 0x40:
 			if (!this->cache.v40.has_value()) this->cache.v40 = GetPlatformInfoHelper(this->tile, false, false, false);
 			return *this->cache.v40;
-#endif
 
-#ifndef WITH_RUST
 		case 0x41:
 			if (!this->cache.v41.has_value()) this->cache.v41 = GetPlatformInfoHelper(this->tile, true,  false, false);
 			return *this->cache.v41;
-#endif
 
 		case 0x42: return GetTerrainType(this->tile) | (GetReverseRailTypeTranslation(GetRailType(this->tile), this->statspec->grf_prop.grffile) << 8);
 		case 0x43: return GetCompanyInfo(this->st->owner); // Station owner
 		case 0x44: return HasStationReservation(this->tile) ? 7 : 4; // PBS status
-#ifndef WITH_RUST
 		case 0x45:
 			if (!this->cache.v45.has_value()) this->cache.v45 = GetRailContinuationInfo(this->tile);
 			return *this->cache.v45;
-#endif
 
-#ifndef WITH_RUST
 		case 0x46:
 			if (!this->cache.v46.has_value()) this->cache.v46 = GetPlatformInfoHelper(this->tile, false, false, true);
 			return *this->cache.v46;
-#endif
 
-#ifndef WITH_RUST
 		case 0x47:
 			if (!this->cache.v47.has_value()) this->cache.v47 = GetPlatformInfoHelper(this->tile, true,  false, true);
 			return *this->cache.v47;
-#endif
 
-#ifndef WITH_RUST
 		case 0x49:
 			if (!this->cache.v49.has_value()) this->cache.v49 = GetPlatformInfoHelper(this->tile, false, true, false);
 			return *this->cache.v49;
-#endif
 
 		case 0x4A: // Animation frame of tile
 			return GetAnimationFrame(this->tile);
@@ -492,10 +507,14 @@ TownScopeResolver *StationResolverObject::GetTown()
 	}
 
 	return this->st->GetNewGRFVariable(this->ro, variable, parameter, available);
+#endif
 }
 
 uint32_t Station::GetNewGRFVariable(const ResolverObject &object, uint8_t variable, uint8_t parameter, bool &available) const
 {
+#ifdef WITH_RUST
+	return openttd_rust_station_base_variable(const_cast<Station *>(this), object.grffile, variable, parameter, &available);
+#else
 	switch (variable) {
 		case 0x48: { // Accepted cargo types
 			uint32_t value = GetAcceptanceMask(this);
@@ -553,10 +572,14 @@ uint32_t Station::GetNewGRFVariable(const ResolverObject &object, uint8_t variab
 
 	available = false;
 	return UINT_MAX;
+#endif
 }
 
 uint32_t Waypoint::GetNewGRFVariable(const ResolverObject &, uint8_t variable, [[maybe_unused]] uint8_t parameter, bool &available) const
 {
+#ifdef WITH_RUST
+	return openttd_rust_station_base_variable(const_cast<Waypoint *>(this), nullptr, variable, parameter, &available);
+#else
 	switch (variable) {
 		case 0x48: return 0; // Accepted cargo types
 		case 0x8A: return HVOT_WAYPOINT;
@@ -585,6 +608,7 @@ uint32_t Waypoint::GetNewGRFVariable(const ResolverObject &, uint8_t variable, [
 
 	available = false;
 	return UINT_MAX;
+#endif
 }
 
 /* virtual */ const SpriteGroup *StationResolverObject::ResolveReal(const RealSpriteGroup &group) const

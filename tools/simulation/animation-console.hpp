@@ -246,7 +246,13 @@ static void AnimationBindingProbe(const char *name, TileIndex tile, Spec *spec, 
 			spec->animation.triggers = phase == 1 ? StationAnimationTriggers{} : StationAnimationTriggers{event};
 			group->observation = [&, phase](ResolverObject &ro) {
 				TileIndex t;
-				if constexpr (std::is_same_v<Spec, StationSpec>) t = static_cast<StationResolverObject &>(ro).station_scope.tile;
+				if constexpr (std::is_same_v<Spec, StationSpec>) {
+#ifdef WITH_RUST
+					t = TileIndex{static_cast<StationResolverObject &>(ro).station_scope.tile};
+#else
+					t = static_cast<StationResolverObject &>(ro).station_scope.tile;
+#endif
+				}
 				else t = static_cast<RoadStopResolverObject &>(ro).roadstop_scope.tile;
 				fmt::print(stderr, "OBJECT animation-visit {} {} {} {} {} {}\n", name, t.base(), ro.callback_param1, ro.callback_param2, _random.state[0], _random.state[1]);
 				if (phase == 3) spec->animation.triggers.Reset();

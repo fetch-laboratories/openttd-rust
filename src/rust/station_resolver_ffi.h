@@ -5,11 +5,12 @@
 #include "station_command_ffi.h"
 #include "animation_ffi.h"
 #include "cargo_storage_ffi.h"
-struct ResolverObject; struct RealSpriteGroup; struct SpriteGroup; struct GRFFile;
+struct Livery; struct AirportSpec; struct ResolverObject; struct RealSpriteGroup; struct SpriteGroup; struct GRFFile;
 struct OpenTTDStationResolverState {
 	BaseStation *station; const StationSpec *spec; const Town *town;
-	TileIndex tile; uint8_t cargo; Axis axis; uint8_t valid; uint32_t cache[6];
+	uint32_t tile; uint8_t cargo; Axis axis; uint8_t valid; uint32_t cache[6];
 };
+struct OpenTTDStationSpecIdentity { uint32_t grfid; uint16_t local; };
 struct OpenTTDStationReseed { uint32_t reseed, used; };
 struct OpenTTDStationResolverSpec { uint16_t threshold; bool divide; };
 struct OpenTTDStationSlopeResult { uint16_t callback; int32_t registers[16]; };
@@ -36,11 +37,32 @@ struct OpenTTDStationResolverServices {
 	uint64_t (*spec_cargo)(const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_cargo);
 	OpenTTDStationReseed (*resolve_random)(const StationSpec *, BaseStation *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve_random);
 	uint16_t (*resolve_callback)(uint16_t, uint32_t, uint32_t, const StationSpec *, BaseStation *, uint32_t, uint8_t, int32_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve_callback);
+
+	uint8_t (*file_version)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(file_version);
+	uint32_t (*company)(uint8_t, const Livery *) noexcept OPENTTD_SERVICE_DEFAULT(company);
+	uint8_t (*reverse_rail)(RailType, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(reverse_rail);
+	uint32_t (*nearby)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(nearby);
+	uint32_t (*nearby_station)(uint8_t, uint32_t, Axis) noexcept OPENTTD_SERVICE_DEFAULT(nearby_station);
+	uint32_t (*nearby_info)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(nearby_info);
+	uint32_t (*terrain)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terrain);
+	uint32_t (*badges)(const ResolverObject *, const StationSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(badges);
+	uint8_t (*translate)(uint8_t, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(translate);
+	int32_t (*build_date)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(build_date);
+	const AirportSpec *(*airport_spec)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_spec);
+	uint8_t (*airport_ttd_type)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_ttd_type);
+	OpenTTDStationSpecIdentity (*identity)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(identity);
+	void (*unhandled)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unhandled);
 	void (*slope_error)(OpenTTDCommandCost *, const OpenTTDStationSlopeResult *, const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(slope_error);
 };
 const OpenTTDStationResolverServices &GetStationResolverServices() noexcept;
 extern "C" {
 const OpenTTDStationResolverServices *openttd_rust_station_resolver_exchange(const OpenTTDStationResolverServices *);
+uint64_t openttd_rust_station_empty_mask(BaseStation *);
+uint8_t openttd_rust_goods_convert_state(uint8_t);
+const Town *openttd_rust_station_resolver_town(OpenTTDStationResolverState *);
+bool openttd_rust_station_scope_is_parent(OpenTTDStationResolverState *, uint8_t);
+uint32_t openttd_rust_station_variable(OpenTTDStationResolverState *, const ResolverObject *, const GRFFile *, uint8_t, uint32_t, bool *);
+uint32_t openttd_rust_station_base_variable(BaseStation *, const GRFFile *, uint8_t, uint8_t, bool *);
 const SpriteGroup *openttd_rust_station_resolver_init(OpenTTDStationResolverState *, const StationSpec *, BaseStation *, uint32_t);
 bool openttd_rust_station_cached_variable(OpenTTDStationResolverState *, uint8_t, uint32_t *);
 const SpriteGroup *openttd_rust_station_resolve_real(const OpenTTDStationResolverState *, const RealSpriteGroup *);

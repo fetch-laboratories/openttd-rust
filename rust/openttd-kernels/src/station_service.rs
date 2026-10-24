@@ -429,6 +429,62 @@ pub(crate) fn has_rating(state: *mut Service, cargo: u8) -> bool {
     // SAFETY: scalar read of the live serialized owner; no borrow survives.
     unsafe { (*cp(state, cargo)).status & 2 != 0 }
 }
+/// `GoodsEntry::HasVehicleEverTriedLoading`, from its canonical owner.
+pub(crate) unsafe fn has_vehicle_ever_tried_loading(state: *mut Service, cargo: u8) -> bool {
+    unsafe { (*cp(state, cargo)).last_speed != 0 }
+}
+/// `GoodsEntry::ConvertState`: the four history bits keep their native order.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_goods_convert_state(status: u8) -> u8 {
+    (status >> 2) & 15
+}
+/// Read only the fields consumed by a station `NewGRF` cargo variable. Container
+/// counts, source and periods are queried directly by the resolver's cargo owner.
+/// No station borrow survives a service call.
+pub(crate) unsafe fn newgrf_cargo_variable(
+    state: *mut Service,
+    cargo: u8,
+    variable: u8,
+    legacy: bool,
+) -> u32 {
+    let ge = unsafe { cp(state, cargo) };
+    unsafe {
+        match variable {
+            0x61 => {
+                if legacy || has_vehicle_ever_tried_loading(state, cargo) {
+                    u32::from((*ge).time_since_pickup)
+                } else {
+                    0
+                }
+            }
+            0x62 => {
+                if legacy || has_rating(state, cargo) {
+                    u32::from((*ge).rating)
+                } else {
+                    u32::MAX
+                }
+            }
+            0x64 => {
+                if has_vehicle_ever_tried_loading(state, cargo) {
+                    u32::from((*ge).last_speed) | (u32::from((*ge).last_age) << 8)
+                } else {
+                    0xff00
+                }
+            }
+            0x65 => {
+                if (*ge).status & 1 != 0 {
+                    8
+                } else {
+                    0
+                }
+            }
+            0x69 => u32::from(openttd_rust_goods_convert_state((*ge).status)),
+            0x66 => u32::from((*ge).last_speed),
+            0x67 => u32::from((*ge).last_age),
+            _ => unreachable!(),
+        }
+    }
+}
 unsafe fn status(state: *mut Service, cargo: u8, bit: u8, value: bool) {
     let p = unsafe { &raw mut (*cp(state, cargo)).status };
     let old = unsafe { p.read() };
@@ -440,7 +496,7 @@ unsafe fn status(state: *mut Service, cargo: u8, bit: u8, value: bool) {
         });
     }
 }
-unsafe fn acceptance_mask(state: *mut Service) -> u64 {
+pub(crate) unsafe fn acceptance_mask(state: *mut Service) -> u64 {
     let mut mask = 0;
     for cargo in 0..64 {
         if unsafe { (*cp(state, cargo)).status } & 1 != 0 {
@@ -448,6 +504,11 @@ unsafe fn acceptance_mask(state: *mut Service) -> u64 {
         }
     }
     mask
+}
+/// Native facade for the canonical `GetAcceptanceMask` reducer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_station_acceptance_mask(state: *mut Service) -> u64 {
+    unsafe { acceptance_mask(state) }
 }
 unsafe fn truncate(st: *mut BaseStation, cargo: u8, amount: u32, w: &World) {
     let mut body = |map| {
