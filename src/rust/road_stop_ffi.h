@@ -40,8 +40,8 @@ struct OpenTTDRoadStopServices {
 	uint32_t (*tile)(const RoadStop *) noexcept OPENTTD_SERVICE_DEFAULT(tile);
 	OpenTTDRoadStopState *(*state)(const RoadStop *) noexcept OPENTTD_SERVICE_DEFAULT(state);
 	OpenTTDRoadStopPoolItem (*pool_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(pool_next);
-	OpenTTDRoadStopDriveRead (OPENTTD_VEHICLE_CALL *drive_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(drive_read);
-	OpenTTDRoadStopRebuildRead (OPENTTD_VEHICLE_CALL *rebuild_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(rebuild_read);
+	OpenTTDRoadStopDriveRead (OPENTTD_RUST_CALL *drive_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(drive_read);
+	OpenTTDRoadStopRebuildRead (OPENTTD_RUST_CALL *rebuild_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(rebuild_read);
 };
 const OpenTTDRoadStopServices &GetRustRoadStopServices() noexcept;
 extern "C" {

@@ -9,13 +9,7 @@
 #ifndef OPENTTD_RUST_SCRIPT_LIST_FFI_H
 #define OPENTTD_RUST_SCRIPT_LIST_FFI_H
 #include <stdint.h>
-#if defined(_MSC_VER)
-#define OPENTTD_LIST_CALL __cdecl
-#elif defined(__i386__)
-#define OPENTTD_LIST_CALL __attribute__((cdecl))
-#else
-#define OPENTTD_LIST_CALL
-#endif
+#include "call_ffi.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -27,26 +21,26 @@ struct OpenTTDScriptList;
  * Combine recognizes self-aliasing before creating Rust references. Panics/OOM
  * abort; original signed-overflow and invalidated valuation-iterator cases are
  * outside the defined-input contract. No collection layout crosses this ABI. */
-struct OpenTTDScriptList *OPENTTD_LIST_CALL openttd_rust_list_new(void);
-void OPENTTD_LIST_CALL openttd_rust_list_destroy(struct OpenTTDScriptList *);
-int32_t OPENTTD_LIST_CALL openttd_rust_list_token(const struct OpenTTDScriptList *);
-int64_t OPENTTD_LIST_CALL openttd_rust_list_count(const struct OpenTTDScriptList *);
-uint8_t OPENTTD_LIST_CALL openttd_rust_list_get(const struct OpenTTDScriptList *, int64_t, int64_t *);
-void OPENTTD_LIST_CALL openttd_rust_list_add(struct OpenTTDScriptList *, int64_t, int64_t);
-void OPENTTD_LIST_CALL openttd_rust_list_remove(struct OpenTTDScriptList *, int64_t);
-uint8_t OPENTTD_LIST_CALL openttd_rust_list_set(struct OpenTTDScriptList *, int64_t, int64_t);
-void OPENTTD_LIST_CALL openttd_rust_list_clear(struct OpenTTDScriptList *);
-void OPENTTD_LIST_CALL openttd_rust_list_sort(struct OpenTTDScriptList *, int32_t, uint8_t);
+struct OpenTTDScriptList *OPENTTD_RUST_CALL openttd_rust_list_new(void);
+void OPENTTD_RUST_CALL openttd_rust_list_destroy(struct OpenTTDScriptList *);
+int32_t OPENTTD_RUST_CALL openttd_rust_list_token(const struct OpenTTDScriptList *);
+int64_t OPENTTD_RUST_CALL openttd_rust_list_count(const struct OpenTTDScriptList *);
+uint8_t OPENTTD_RUST_CALL openttd_rust_list_get(const struct OpenTTDScriptList *, int64_t, int64_t *);
+void OPENTTD_RUST_CALL openttd_rust_list_add(struct OpenTTDScriptList *, int64_t, int64_t);
+void OPENTTD_RUST_CALL openttd_rust_list_remove(struct OpenTTDScriptList *, int64_t);
+uint8_t OPENTTD_RUST_CALL openttd_rust_list_set(struct OpenTTDScriptList *, int64_t, int64_t);
+void OPENTTD_RUST_CALL openttd_rust_list_clear(struct OpenTTDScriptList *);
+void OPENTTD_RUST_CALL openttd_rust_list_sort(struct OpenTTDScriptList *, int32_t, uint8_t);
 /* Iteration 0=Begin, 1=Next, 2=IsEnd. Status zero means never initialized for
  * Next/IsEnd (C++ emits original diagnostic); value is otherwise the result. */
-uint8_t OPENTTD_LIST_CALL openttd_rust_list_iter(struct OpenTTDScriptList *, uint8_t, int64_t *);
+uint8_t OPENTTD_RUST_CALL openttd_rust_list_iter(struct OpenTTDScriptList *, uint8_t, int64_t *);
 /* Filter: Remove above/below/between/equal=0..3, Keep equivalents=4..7. */
-void OPENTTD_LIST_CALL openttd_rust_list_filter(struct OpenTTDScriptList *, uint8_t, int64_t, int64_t);
+void OPENTTD_RUST_CALL openttd_rust_list_filter(struct OpenTTDScriptList *, uint8_t, int64_t, int64_t);
 /* Rank: RemoveTop/RemoveBottom/KeepTop/KeepBottom=0..3. */
-void OPENTTD_LIST_CALL openttd_rust_list_rank(struct OpenTTDScriptList *, uint8_t, int64_t);
+void OPENTTD_RUST_CALL openttd_rust_list_rank(struct OpenTTDScriptList *, uint8_t, int64_t);
 /* Combine: Add/Swap/Remove/Keep/CopyContents=0..4. CopyContents retains target's
  * original sort/init flow; it is used on freshly constructed clone targets. */
-void OPENTTD_LIST_CALL openttd_rust_list_combine(struct OpenTTDScriptList *, struct OpenTTDScriptList *, uint8_t);
+void OPENTTD_RUST_CALL openttd_rust_list_combine(struct OpenTTDScriptList *, struct OpenTTDScriptList *, uint8_t);
 /* ScriptList-specific resumable control. Operations: valuation/filter/save/load/
  * get/set/nexti = 0..6. Controllers own only scalar phase state, and never retain
  * list/VM/world pointers. Every host operation executes after step returns.
@@ -72,9 +66,9 @@ enum OpenTTDListControlActionKind {
 	LC_POP, LC_POP_TOP, LC_CALL, LC_CHARGE, LC_DISABLE, LC_LIMIT,
 	LC_ERROR, LC_THROW_RESULT, LC_ITEM, LC_GET_PAIR, LC_LOG_NEXT, LC_LOG_END, LC_THROW_ERROR, LC_INDEX,
 };
-struct OpenTTDListControl *OPENTTD_LIST_CALL openttd_rust_list_control_new(uint8_t operation);
-void OPENTTD_LIST_CALL openttd_rust_list_control_destroy(struct OpenTTDListControl *);
-void OPENTTD_LIST_CALL openttd_rust_list_control_step(struct OpenTTDListControl *, struct OpenTTDScriptList *, const struct OpenTTDListControlInput *, struct OpenTTDListControlAction *);
+struct OpenTTDListControl *OPENTTD_RUST_CALL openttd_rust_list_control_new(uint8_t operation);
+void OPENTTD_RUST_CALL openttd_rust_list_control_destroy(struct OpenTTDListControl *);
+void OPENTTD_RUST_CALL openttd_rust_list_control_step(struct OpenTTDListControl *, struct OpenTTDScriptList *, const struct OpenTTDListControlInput *, struct OpenTTDListControlAction *);
 #ifdef __cplusplus
 }
 #endif

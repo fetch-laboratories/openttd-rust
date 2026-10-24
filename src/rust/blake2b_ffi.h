@@ -75,12 +75,12 @@ struct OpenTTDBlake2bLayout {
  * larger keys overrun original storage and have no compatibility guarantee.
  * No allocation, retained pointers, callback registration or C++ unwinding.
  * Panics abort. Original temporary wipe points are unchanged. */
-void OPENTTD_CRYPTO_CALL openttd_rust_blake2b_keyed_init(const struct OpenTTDBlake2bLayout *, void *, size_t, const uint8_t *, size_t);
-void OPENTTD_CRYPTO_CALL openttd_rust_blake2b_init(const struct OpenTTDBlake2bLayout *, void *, size_t);
-void OPENTTD_CRYPTO_CALL openttd_rust_blake2b_update(const struct OpenTTDBlake2bLayout *, void *, const uint8_t *, size_t);
-void OPENTTD_CRYPTO_CALL openttd_rust_blake2b_final(const struct OpenTTDCryptoLeaves *, const struct OpenTTDBlake2bLayout *, void *, uint8_t *);
-void OPENTTD_CRYPTO_CALL openttd_rust_blake2b_keyed(const struct OpenTTDCryptoLeaves *, const struct OpenTTDBlake2bLayout *, void *, uint8_t *, size_t, const uint8_t *, size_t, const uint8_t *, size_t);
-void OPENTTD_CRYPTO_CALL openttd_rust_blake2b(const struct OpenTTDCryptoLeaves *, const struct OpenTTDBlake2bLayout *, void *, uint8_t *, size_t, const uint8_t *, size_t);
+void OPENTTD_RUST_CALL openttd_rust_blake2b_keyed_init(const struct OpenTTDBlake2bLayout *, void *, size_t, const uint8_t *, size_t);
+void OPENTTD_RUST_CALL openttd_rust_blake2b_init(const struct OpenTTDBlake2bLayout *, void *, size_t);
+void OPENTTD_RUST_CALL openttd_rust_blake2b_update(const struct OpenTTDBlake2bLayout *, void *, const uint8_t *, size_t);
+void OPENTTD_RUST_CALL openttd_rust_blake2b_final(const struct OpenTTDCryptoLeaves *, const struct OpenTTDBlake2bLayout *, void *, uint8_t *);
+void OPENTTD_RUST_CALL openttd_rust_blake2b_keyed(const struct OpenTTDCryptoLeaves *, const struct OpenTTDBlake2bLayout *, void *, uint8_t *, size_t, const uint8_t *, size_t, const uint8_t *, size_t);
+void OPENTTD_RUST_CALL openttd_rust_blake2b(const struct OpenTTDCryptoLeaves *, const struct OpenTTDBlake2bLayout *, void *, uint8_t *, size_t, const uint8_t *, size_t);
 #ifdef __cplusplus
 }
 #endif

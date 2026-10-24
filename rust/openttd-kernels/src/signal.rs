@@ -128,12 +128,9 @@ struct World<'a> {
     map: Map,
 }
 macro_rules! read {
-    ($w:expr, $group:ident, $field:ident $(, $arg:expr)*) => {{
-        crate::witness::hit(crate::witness::SIGNAL_SERVICES);
-        let result = ($w.$group.$field)($($arg),*);
-        crate::witness::add(crate::witness::SIGNAL_BYTES, std::mem::size_of_val(&result) as u64);
-        result
-    }};
+    ($w:expr, $group:ident, $field:ident $(, $arg:expr)*) => {
+        crate::witness::counted!(SIGNAL_SERVICES, SIGNAL_BYTES, ($w.$group.$field)($($arg),*))
+    };
 }
 fn track_bits(status: u32) -> u8 {
     ((status | (status >> 8)) & 0x3f) as u8

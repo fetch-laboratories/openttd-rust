@@ -11,13 +11,7 @@
 #include "service_defaults.hpp"
 #include <stdint.h>
 #include "services_ffi.h"
-#if defined(_MSC_VER)
-#define OPENTTD_EFFECT_CALL __cdecl
-#elif defined(__i386__)
-#define OPENTTD_EFFECT_CALL __attribute__((cdecl))
-#else
-#define OPENTTD_EFFECT_CALL
-#endif
+#include "call_ffi.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -28,10 +22,10 @@ typedef struct {
 	uint8_t progress, spritenum, subtype, ambient;
 } OpenTTDEffectView;
 typedef struct OpenTTDEffectLeaves {
-	void (OPENTTD_EFFECT_CALL *observe)(void *, OpenTTDEffectView *) noexcept OPENTTD_SERVICE_DEFAULT(observe);
-	void (OPENTTD_EFFECT_CALL *write)(void *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(write);
-	void (OPENTTD_EFFECT_CALL *viewport)(void *) noexcept OPENTTD_SERVICE_DEFAULT(viewport);
-	void (OPENTTD_EFFECT_CALL *sound)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(sound);
+	void (OPENTTD_RUST_CALL *observe)(void *, OpenTTDEffectView *) noexcept OPENTTD_SERVICE_DEFAULT(observe);
+	void (OPENTTD_RUST_CALL *write)(void *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(write);
+	void (OPENTTD_RUST_CALL *viewport)(void *) noexcept OPENTTD_SERVICE_DEFAULT(viewport);
+	void (OPENTTD_RUST_CALL *sound)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(sound);
 
 } OpenTTDEffectLeaves;
 /* One shell owns one zero-created state; destroy once after final use. get/set:
@@ -46,11 +40,11 @@ typedef struct OpenTTDEffectLeaves {
  * C++ performs deletion only after return, including destructor/pool hooks.
  * Save/load get/set use existing C++ staging; controllers never run from loading.
  * Original subtype/table/coordinate preconditions apply; Rust panics abort. */
-OpenTTDEffectState *OPENTTD_EFFECT_CALL openttd_rust_effect_new(void);
-void OPENTTD_EFFECT_CALL openttd_rust_effect_destroy(OpenTTDEffectState *);
-void OPENTTD_EFFECT_CALL openttd_rust_effect_set(OpenTTDEffectState *, uint8_t field, uint16_t value);
-uint16_t OPENTTD_EFFECT_CALL openttd_rust_effect_get(const OpenTTDEffectState *, uint8_t field);
-uint8_t OPENTTD_EFFECT_CALL openttd_rust_effect_run(OpenTTDEffectState *, void *context, const OpenTTDEffectLeaves *, const OpenTTDSharedServices *, uint8_t initialize);
+OpenTTDEffectState *OPENTTD_RUST_CALL openttd_rust_effect_new(void);
+void OPENTTD_RUST_CALL openttd_rust_effect_destroy(OpenTTDEffectState *);
+void OPENTTD_RUST_CALL openttd_rust_effect_set(OpenTTDEffectState *, uint8_t field, uint16_t value);
+uint16_t OPENTTD_RUST_CALL openttd_rust_effect_get(const OpenTTDEffectState *, uint8_t field);
+uint8_t OPENTTD_RUST_CALL openttd_rust_effect_run(OpenTTDEffectState *, void *context, const OpenTTDEffectLeaves *, const OpenTTDSharedServices *, uint8_t initialize);
 #ifdef __cplusplus
 }
 #endif

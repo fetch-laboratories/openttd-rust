@@ -817,6 +817,32 @@ pub fn hit(index: usize) {
     add(index, 1);
 }
 
+/// Evaluate `$call`, then count one service crossing in `$calls` and its result bytes in
+/// `$bytes`, when the optional const condition holds. Without `$bytes`, count the crossing
+/// only.
+macro_rules! counted {
+    ($calls:ident, $bytes:ident if $when:expr, $call:expr) => {{
+        let result = $call;
+        if $when {
+            $crate::witness::hit($crate::witness::$calls);
+            $crate::witness::add(
+                $crate::witness::$bytes,
+                ::std::mem::size_of_val(&result) as u64,
+            );
+        }
+        result
+    }};
+    ($calls:ident, $bytes:ident, $call:expr) => {
+        $crate::witness::counted!($calls, $bytes if true, $call)
+    };
+    ($calls:ident, $call:expr) => {{
+        let result = $call;
+        $crate::witness::hit($crate::witness::$calls);
+        result
+    }};
+}
+pub(crate) use counted;
+
 /// Turn every counter on; called once at static initialization.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_witness_enable() {

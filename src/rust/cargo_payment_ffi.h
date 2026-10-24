@@ -18,13 +18,7 @@ struct RustNearbyIndustryCursor;
 struct CargoPayment;
 using OpenTTDNativeCargoPayment = CargoPayment;
 #include <cstdint>
-#if defined(_MSC_VER)
-#define OPENTTD_CARGO_CALL __cdecl
-#elif defined(__i386__)
-#define OPENTTD_CARGO_CALL __attribute__((cdecl))
-#else
-#define OPENTTD_CARGO_CALL
-#endif
+#include "call_ffi.h"
 struct OpenTTDCargoDelivery;
 struct OpenTTDCargoSpec {
 	int64_t payment;
@@ -69,31 +63,31 @@ struct OpenTTDCargoPayment {
  * 9 default sound. Setting0 subsidy multiplier,1 feeder share. Monitor source is
  * SourceID low16/SourceType high16, industry=0xFFFF means town/house delivery. */
 struct OpenTTDCargoServices {
-	void (OPENTTD_CARGO_CALL *spec)(uint8_t, OpenTTDCargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec);
-	uint16_t (OPENTTD_CARGO_CALL *callback)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(callback);
-	uint32_t (OPENTTD_CARGO_CALL *station_read)(uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_read);
-	uint32_t (OPENTTD_CARGO_CALL *industry_read)(void *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_read);
-	void (OPENTTD_CARGO_CALL *industry_write)(void *, uint8_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_write);
+	void (OPENTTD_RUST_CALL *spec)(uint8_t, OpenTTDCargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec);
+	uint16_t (OPENTTD_RUST_CALL *callback)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(callback);
+	uint32_t (OPENTTD_RUST_CALL *station_read)(uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_read);
+	uint32_t (OPENTTD_RUST_CALL *industry_read)(void *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_read);
+	void (OPENTTD_RUST_CALL *industry_write)(void *, uint8_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_write);
 	const OpenTTDIndustryResolverServices *resolver;
-	void (OPENTTD_CARGO_CALL *accept)(void *, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(accept);
-	void (OPENTTD_CARGO_CALL *statistics)(uint16_t, uint8_t, uint8_t, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(statistics);
-	const OpenTTDSubsidyServices *(OPENTTD_CARGO_CALL *subsidies)() noexcept OPENTTD_SERVICE_DEFAULT(subsidies);
-	void (OPENTTD_CARGO_CALL *industry_effect)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_effect);
-	uint32_t (OPENTTD_CARGO_CALL *vehicle_read)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_read);
-	uint32_t (OPENTTD_CARGO_CALL *settle)(void *, uint8_t, int64_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(settle);
-	int64_t (OPENTTD_CARGO_CALL *feeder)(const void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(feeder);
-	uint32_t (OPENTTD_CARGO_CALL *setting)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(setting);
+	void (OPENTTD_RUST_CALL *accept)(void *, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(accept);
+	void (OPENTTD_RUST_CALL *statistics)(uint16_t, uint8_t, uint8_t, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(statistics);
+	const OpenTTDSubsidyServices *(OPENTTD_RUST_CALL *subsidies)() noexcept OPENTTD_SERVICE_DEFAULT(subsidies);
+	void (OPENTTD_RUST_CALL *industry_effect)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_effect);
+	uint32_t (OPENTTD_RUST_CALL *vehicle_read)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_read);
+	uint32_t (OPENTTD_RUST_CALL *settle)(void *, uint8_t, int64_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(settle);
+	int64_t (OPENTTD_RUST_CALL *feeder)(const void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(feeder);
+	uint32_t (OPENTTD_RUST_CALL *setting)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(setting);
 };
 extern "C" {
-OpenTTDCargoPayment *OPENTTD_CARGO_CALL openttd_rust_cargo_payment_new(void *, uint16_t);
-void OPENTTD_CARGO_CALL openttd_rust_cargo_payment_destroy(OpenTTDCargoPayment *, const OpenTTDCargoServices *, uint8_t);
-void *OPENTTD_CARGO_CALL openttd_rust_cargo_payment_front(const OpenTTDCargoPayment *);
-void OPENTTD_CARGO_CALL openttd_rust_cargo_payment_afterload(OpenTTDCargoPayment *, const OpenTTDCargoServices *);
-int64_t OPENTTD_CARGO_CALL openttd_rust_cargo_payment_transfer(OpenTTDCargoPayment *, const OpenTTDCargoServices *, uint8_t, const void *, uint32_t, uint32_t, uint16_t);
-void OPENTTD_CARGO_CALL openttd_rust_cargo_payment_final(OpenTTDCargoPayment *, OpenTTDCargoDelivery *, const OpenTTDCargoServices *, uint8_t, const void *, uint32_t, uint32_t, uint16_t, uint32_t, RustNearbyIndustryCursor *, const OpenTTDCargoMonitorServices *, RustNearbyIndustryCursor *);
-int64_t OPENTTD_CARGO_CALL openttd_rust_cargo_income(const OpenTTDCargoServices *, uint32_t, uint32_t, uint16_t, uint8_t);
-OpenTTDCargoDelivery *OPENTTD_CARGO_CALL openttd_rust_cargo_delivery_new();
-void OPENTTD_CARGO_CALL openttd_rust_cargo_delivery_destroy(OpenTTDCargoDelivery *);
-void OPENTTD_CARGO_CALL openttd_rust_cargo_delivery_flush(OpenTTDCargoDelivery *, const OpenTTDCargoServices *);
+OpenTTDCargoPayment *OPENTTD_RUST_CALL openttd_rust_cargo_payment_new(void *, uint16_t);
+void OPENTTD_RUST_CALL openttd_rust_cargo_payment_destroy(OpenTTDCargoPayment *, const OpenTTDCargoServices *, uint8_t);
+void *OPENTTD_RUST_CALL openttd_rust_cargo_payment_front(const OpenTTDCargoPayment *);
+void OPENTTD_RUST_CALL openttd_rust_cargo_payment_afterload(OpenTTDCargoPayment *, const OpenTTDCargoServices *);
+int64_t OPENTTD_RUST_CALL openttd_rust_cargo_payment_transfer(OpenTTDCargoPayment *, const OpenTTDCargoServices *, uint8_t, const void *, uint32_t, uint32_t, uint16_t);
+void OPENTTD_RUST_CALL openttd_rust_cargo_payment_final(OpenTTDCargoPayment *, OpenTTDCargoDelivery *, const OpenTTDCargoServices *, uint8_t, const void *, uint32_t, uint32_t, uint16_t, uint32_t, RustNearbyIndustryCursor *, const OpenTTDCargoMonitorServices *, RustNearbyIndustryCursor *);
+int64_t OPENTTD_RUST_CALL openttd_rust_cargo_income(const OpenTTDCargoServices *, uint32_t, uint32_t, uint16_t, uint8_t);
+OpenTTDCargoDelivery *OPENTTD_RUST_CALL openttd_rust_cargo_delivery_new();
+void OPENTTD_RUST_CALL openttd_rust_cargo_delivery_destroy(OpenTTDCargoDelivery *);
+void OPENTTD_RUST_CALL openttd_rust_cargo_delivery_flush(OpenTTDCargoDelivery *, const OpenTTDCargoServices *);
 }
 #endif /* RUST_CARGO_PAYMENT_FFI_H */

@@ -28,6 +28,7 @@
 )]
 use crate::company_type::{INVALID_OWNER, MAX_COMPANIES, OWNER_DEITY, OWNER_NONE};
 use crate::economy_type::EXPENSES_OTHER;
+use crate::raw_field::{read_field, write_field};
 use std::ptr::{addr_of, addr_of_mut};
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -375,8 +376,6 @@ static mut TICK: u32 = 0;
 // SAFETY: The caller resolves a live canonical allocation on the serial game
 // thread. Field types/layout are native-ABI checked. Each read/write finishes
 // before a shared service; no reference is created or retained.
-macro_rules! get { ($p:expr,$($f:tt)+)=>{unsafe { addr_of!((*$p).$($f)+).read() }}; }
-macro_rules! put { ($p:expr,$v:expr,$($f:tt)+)=>{{let value=$v;unsafe { addr_of_mut!((*$p).$($f)+).write(value) }}}; }
 // Stable Rust allocations also carry C++ view lifetimes. Access is raw and serial.
 /// Allocate zeroed private finance storage; C++ immediately starts its field objects.
 #[unsafe(no_mangle)]
@@ -485,9 +484,9 @@ fn companies(s: &Services, mut body: impl FnMut(*mut Finances, u8)) {
     }
 }
 fn maxloan(p: *const Finances) -> i64 {
-    let max = get!(p, max_loan);
+    let max = read_field!(p, max_loan);
     if max == i64::MIN {
-        get!(e(), max_loan)
+        read_field!(e(), max_loan)
     } else {
         max
     }
@@ -496,38 +495,38 @@ fn available(p: *const Finances, infinite: bool) -> i64 {
     if infinite || p.is_null() {
         i64::MAX
     } else {
-        get!(p, money)
+        read_field!(p, money)
     }
 }
 fn subtract(f: &FinanceServices, p: *mut Finances, id: u8, cost: i64, expense: usize) {
     if cost == 0 {
         return;
     }
-    put!(p, get!(p, money).saturating_sub(cost), money);
-    put!(
+    write_field!(p, money, read_field!(p, money).saturating_sub(cost));
+    write_field!(
         p,
-        get!(p, expenses[0][expense]).saturating_add(cost),
-        expenses[0][expense]
+        expenses[0][expense],
+        read_field!(p, expenses[0][expense]).saturating_add(cost)
     );
     if (7..=10).contains(&expense) {
-        put!(
+        write_field!(
             p,
-            get!(p, current.income).saturating_sub(cost),
-            current.income
+            current.income,
+            read_field!(p, current.income).saturating_sub(cost)
         );
     } else if (2..=6).contains(&expense) || expense == 11 {
-        put!(
+        write_field!(
             p,
-            get!(p, current.expenses).saturating_sub(cost),
-            current.expenses
+            current.expenses,
+            read_field!(p, current.expenses).saturating_sub(cost)
         );
     }
     (f.invalidate_company_windows)(id);
 }
 fn subtract_fraction(f: &FinanceServices, p: *mut Finances, id: u8, mut cost: i64, expense: usize) {
-    let old = get!(p, fraction);
+    let old = read_field!(p, fraction);
     let next = old.wrapping_sub(cost as u8);
-    put!(p, next, fraction);
+    write_field!(p, fraction, next);
     cost >>= 8;
     if next > old {
         cost = cost.saturating_add(1);
@@ -561,20 +560,20 @@ fn assets(s: &Services, id: u8) -> i64 {
 fn value(s: &Services, p: *mut Finances, id: u8, including_loan: bool) -> i64 {
     let mut amount = assets(s, id);
     if including_loan {
-        amount = amount.saturating_sub(get!(p, loan));
+        amount = amount.saturating_sub(read_field!(p, loan));
     }
-    amount.saturating_add(get!(p, money)).max(1)
+    amount.saturating_add(read_field!(p, money)).max(1)
 }
 fn hostile_value(s: &Services, p: *mut Finances, id: u8) -> i64 {
     let mut amount = assets(s, id);
-    amount = amount.saturating_add(get!(p, loan));
-    if get!(p, money) < 0 {
-        amount = amount.saturating_add(neg(get!(p, money)));
+    amount = amount.saturating_add(read_field!(p, loan));
+    if read_field!(p, money) < 0 {
+        amount = amount.saturating_add(neg(read_field!(p, money)));
     }
     for quarter in 0..4 {
         amount = amount.saturating_add(
-            get!(p, old[quarter].income)
-                .saturating_add(get!(p, old[quarter].expenses))
+            read_field!(p, old[quarter].income)
+                .saturating_add(read_field!(p, old[quarter].expenses))
                 .max(0)
                 .saturating_mul(2),
         );
@@ -618,28 +617,29 @@ fn rating(s: &Services, p: *mut Finances, id: u8, update: bool) -> i32 {
         },
     );
     part[1] = i64::from(count);
-    let entries = usize::from(get!(p, valid)).min(12);
+    let entries = usize::from(read_field!(p, valid)).min(12);
     if entries != 0 {
         let mut min = i64::MAX;
         let mut max = i64::MIN;
         for i in 0..entries {
-            let income = get!(p, old[i].income).saturating_add(get!(p, old[i].expenses));
+            let income =
+                read_field!(p, old[i].income).saturating_add(read_field!(p, old[i].expenses));
             min = min.min(income);
             max = max.max(income);
         }
         part[3] = min.max(0);
         part[4] = max;
     }
-    for i in 0..usize::from(get!(p, valid)).min(4) {
+    for i in 0..usize::from(read_field!(p, valid)).min(4) {
         for c in 0..64 {
-            part[5] = part[5].saturating_add(i64::from(get!(p, old[i].cargo[c])));
+            part[5] = part[5].saturating_add(i64::from(read_field!(p, old[i].cargo[c])));
         }
     }
     for c in 0..64 {
-        part[6] += i64::from(get!(p, old[0].cargo[c]) != 0);
+        part[6] += i64::from(read_field!(p, old[0].cargo[c]) != 0);
     }
-    part[7] = get!(p, money).max(0);
-    part[8] = 250_000_i64.saturating_sub(get!(p, loan));
+    part[7] = read_field!(p, money).max(0);
+    part[8] = 250_000_i64.saturating_sub(read_field!(p, loan));
     let mut score = 0;
     let mut total = 0;
     for i in 0..9 {
@@ -657,7 +657,7 @@ fn rating(s: &Services, p: *mut Finances, id: u8, update: bool) -> i32 {
         score = score * 1000 / total;
     }
     if update {
-        put!(p, score as i32, old[0].performance);
+        write_field!(p, old[0].performance, score as i32);
         // SAFETY: immutable object table; no finance borrow spans HQ mutation.
         unsafe {
             crate::objects::openttd_rust_object_update_hq(
@@ -667,7 +667,7 @@ fn rating(s: &Services, p: *mut Finances, id: u8, update: bool) -> i32 {
             );
         }
         let v = value(s, p, id, true);
-        put!(p, v, old[0].value);
+        write_field!(p, old[0].value, v);
     }
     (s.performance_detail_dirty)();
     score as i32
@@ -695,30 +695,30 @@ fn bankruptcy(s: &Services, m: &Month, p: *mut Finances, id: u8) {
     if m.infinite_money {
         return;
     }
-    if get!(p, money).saturating_sub(get!(p, loan)) >= neg(maxloan(p)) {
-        let previous = u32::from(get!(p, bankruptcy)).div_ceil(3);
-        put!(p, 0, bankruptcy);
-        put!(p, 0, asked);
+    if read_field!(p, money).saturating_sub(read_field!(p, loan)) >= neg(maxloan(p)) {
+        let previous = u32::from(read_field!(p, bankruptcy)).div_ceil(3);
+        write_field!(p, bankruptcy, 0);
+        write_field!(p, asked, 0);
         if previous != 0 {
             (s.company_admin_update)(id);
         }
         return;
     }
-    let month = get!(p, bankruptcy).wrapping_add(1);
-    put!(p, month, bankruptcy);
+    let month = read_field!(p, bankruptcy).wrapping_add(1);
+    write_field!(p, bankruptcy, month);
     match month {
         0..=3 | 5 | 6 | 8 | 9 => {}
         4 => (s.company_in_trouble)(id),
         7 => {
             let v = value(s, p, id, false);
-            put!(p, v, bankrupt_value);
-            put!(p, 1_u16 << id, asked);
-            put!(p, 0, timeout);
+            write_field!(p, bankrupt_value, v);
+            write_field!(p, asked, 1_u16 << id);
+            write_field!(p, timeout, 0);
         }
         _ => {
             let networking = (s.finance.networking)();
             if !networking && (s.local_company)() == id {
-                put!(p, u16::MAX, asked);
+                write_field!(p, asked, u16::MAX);
             } else if !networking || (s.network_server)() {
                 // Singleplayer executes the deletion synchronously; `p` is dead after it.
                 (s.post_company_delete)(id);
@@ -775,16 +775,16 @@ fn statistics(s: &Services, m: &Month) {
     }
     companies(s, |p, id| {
         for i in (1..24).rev() {
-            put!(p, get!(p, old[i - 1]), old[i]);
+            write_field!(p, old[i], read_field!(p, old[i - 1]));
         }
-        put!(p, get!(p, current), old[0]);
-        put!(p, unsafe { std::mem::zeroed() }, current);
-        if get!(p, valid) != 24 {
-            put!(p, get!(p, valid).wrapping_add(1), valid);
+        write_field!(p, old[0], read_field!(p, current));
+        write_field!(p, current, unsafe { std::mem::zeroed() });
+        if read_field!(p, valid) != 24 {
+            write_field!(p, valid, read_field!(p, valid).wrapping_add(1));
         }
         rating(s, p, id, true);
-        if get!(p, preview) != 0 {
-            put!(p, get!(p, preview).wrapping_sub(1), preview);
+        if read_field!(p, preview) != 0 {
+            write_field!(p, preview, read_field!(p, preview).wrapping_sub(1));
         }
     });
     (s.company_graphs_dirty)();
@@ -793,42 +793,43 @@ fn inflation(check: bool, year: i32) -> bool {
     if check && !(ORIGINAL_BASE_YEAR..ORIGINAL_MAX_YEAR).contains(&year) {
         return true;
     }
-    let prices = get!(e(), prices);
-    let payment = get!(e(), payment);
+    let prices = read_field!(e(), prices);
+    let payment = read_field!(e(), payment);
     if prices == MAX_INFLATION || payment == MAX_INFLATION {
         return true;
     }
-    put!(
+    write_field!(
         e(),
+        prices,
         prices
             .wrapping_add(
                 prices
-                    .wrapping_mul(u64::from(get!(e(), infl_amount)))
+                    .wrapping_mul(u64::from(read_field!(e(), infl_amount)))
                     .wrapping_mul(54)
                     >> 16
             )
-            .min(MAX_INFLATION),
-        prices
+            .min(MAX_INFLATION)
     );
-    put!(
+    write_field!(
         e(),
+        payment,
         payment
             .wrapping_add(
                 payment
-                    .wrapping_mul(u64::from(get!(e(), infl_payment)))
+                    .wrapping_mul(u64::from(read_field!(e(), infl_payment)))
                     .wrapping_mul(54)
                     >> 16
             )
-            .min(MAX_INFLATION),
-        payment
+            .min(MAX_INFLATION)
     );
     false
 }
 fn recompute(s: &Services, es: &EconomySettings) {
-    put!(
+    write_field!(
         e(),
-        ((u64::from(es.max_loan).wrapping_mul(get!(e(), prices)) >> 16) / 10_000 * 10_000) as i64,
-        max_loan
+        max_loan,
+        ((u64::from(es.max_loan).wrapping_mul(read_field!(e(), prices)) >> 16) / 10_000 * 10_000)
+            as i64
     );
     for i in 0..PRICE_COUNT {
         let spec = (s.price_base)(i as u32);
@@ -843,7 +844,7 @@ fn recompute(s: &Services, es: &EconomySettings) {
             2 => 9,
             _ => unreachable!(),
         });
-        price = (price as u64).wrapping_mul(get!(e(), prices)) as i64;
+        price = (price as u64).wrapping_mul(read_field!(e(), prices)) as i64;
         let shift = i32::from(unsafe { addr_of!(MULTIPLIERS).cast::<i8>().add(i).read() }) - 19;
         price = if shift >= 0 {
             price.wrapping_shl(shift as u32)
@@ -865,7 +866,10 @@ fn recompute(s: &Services, es: &EconomySettings) {
             break;
         }
         from = id.wrapping_add(1);
-        (s.set_cargo_payment)(id, initial.saturating_mul(get!(e(), payment) as i64) >> 16);
+        (s.set_cargo_payment)(
+            id,
+            initial.saturating_mul(read_field!(e(), payment) as i64) >> 16,
+        );
     }
     (s.price_windows_dirty)();
 }
@@ -873,8 +877,8 @@ fn interest(s: &Services, m: &Month) {
     let current = (s.finance.current_company)();
     companies(s, |p, id| {
         (s.finance.set_current_company)(id);
-        let rate = i64::from(get!(e(), interest));
-        let mut fee = get!(p, loan).saturating_mul(rate) / 100;
+        let rate = i64::from(read_field!(e(), interest));
+        let mut fee = read_field!(p, loan).saturating_mul(rate) / 100;
         let cash = available(p, m.infinite_money);
         if cash < 0 {
             fee = fee.saturating_add(neg(cash).saturating_mul(rate) / 100);
@@ -901,39 +905,39 @@ fn interest(s: &Services, m: &Month) {
 }
 fn fluctuations(s: &Services, m: &Month) {
     if m.fluctuating {
-        put!(e(), get!(e(), fluct).wrapping_sub(1), fluct);
-    } else if get!(e(), fluct) <= 0 {
-        put!(e(), -12, fluct);
+        write_field!(e(), fluct, read_field!(e(), fluct).wrapping_sub(1));
+    } else if read_field!(e(), fluct) <= 0 {
+        write_field!(e(), fluct, -12);
     } else {
         return;
     }
-    if get!(e(), fluct) == 0 {
-        put!(e(), -((s.shared.random() & 3) as i16), fluct);
+    if read_field!(e(), fluct) == 0 {
+        write_field!(e(), fluct, -((s.shared.random() & 3) as i16));
         (s.recession_news)(true);
-    } else if get!(e(), fluct) == -12 {
-        put!(e(), ((s.shared.random() & 255) + 312) as i16, fluct);
+    } else if read_field!(e(), fluct) == -12 {
+        write_field!(e(), fluct, ((s.shared.random() & 255) + 312) as i16);
         (s.recession_news)(false);
     }
 }
 fn offer(s: &Services, p: *mut Finances, id: u8) {
-    let timeout = get!(p, timeout);
+    let timeout = read_field!(p, timeout);
     if timeout != 0 {
         let next = timeout.wrapping_sub(i16::from(MAX_COMPANIES));
-        put!(p, next, timeout);
+        write_field!(p, timeout, next);
         if next <= 0 {
-            put!(p, 0, timeout);
+            write_field!(p, timeout, 0);
         }
         return;
     }
-    if get!(p, asked) == u16::MAX {
+    if read_field!(p, asked) == u16::MAX {
         return;
     }
     let mut best = INVALID_OWNER;
     let mut performance = -1;
     companies(s, |q, other| {
-        let score = get!(q, old[1].performance);
-        if get!(q, asked) == 0
-            && get!(p, asked) & (1 << other) == 0
+        let score = read_field!(q, old[1].performance);
+        if read_field!(q, asked) == 0
+            && read_field!(p, asked) & (1 << other) == 0
             && performance < score
             && takeover_limit(s, other, id)
         {
@@ -942,16 +946,16 @@ fn offer(s: &Services, p: *mut Finances, id: u8) {
         }
     });
     if performance == -1 {
-        put!(p, u16::MAX, asked);
+        write_field!(p, asked, u16::MAX);
         return;
     }
-    put!(p, get!(p, asked) | (1 << best), asked);
-    put!(
+    write_field!(p, asked, read_field!(p, asked) | (1 << best));
+    write_field!(
         p,
-        (3 * 30 * DAY_TICKS / (i32::from(MAX_COMPANIES) - 1)) as i16,
-        timeout
+        timeout,
+        (3 * 30 * DAY_TICKS / (i32::from(MAX_COMPANIES) - 1)) as i16
     );
-    (s.ask_merger)(best, id, get!(p, bankrupt_value));
+    (s.ask_merger)(best, id, read_field!(p, bankrupt_value));
     if (s.is_interactive_company)(best) {
         (s.show_buy_company)(id);
     }
@@ -974,11 +978,11 @@ fn startup(s: &Services, f: &mut Startup) -> bool {
     f.company = c.id;
     let id = c.id as u8;
     (s.set_company_colour)(id, colour);
-    let loan =
-        (((INITIAL_LOAN as u64).wrapping_mul(get!(e(), prices)) >> 16) / 10_000 * 10_000) as i64;
-    let loan = loan.min(get!(e(), max_loan));
-    put!(c.finances, loan, loan);
-    put!(c.finances, loan, money);
+    let loan = (((INITIAL_LOAN as u64).wrapping_mul(read_field!(e(), prices)) >> 16) / 10_000
+        * 10_000) as i64;
+    let loan = loan.min(read_field!(e(), max_loan));
+    write_field!(c.finances, loan, loan);
+    write_field!(c.finances, money, loan);
     (s.setup_new_company)(id, f.is_ai);
     if f.is_ai && (!(s.finance.networking)() || (s.network_server)()) {
         f.stage = 1;
@@ -1011,7 +1015,7 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
         (f.set_current_company)(saved);
     }
     if new == INVALID_OWNER {
-        put!((f.company_finances)(old), (u64::MAX >> 2) as i64, money);
+        write_field!((f.company_finances)(old), money, (u64::MAX >> 2) as i64);
     }
     unsafe { &*(s.subsidies)() }.transfer(old, new);
     let mut t = TownRights {
@@ -1307,7 +1311,7 @@ fn tick(s: &Services, t: &mut Tick) -> bool {
             if t.named {
                 (s.generate_company_name)(id);
             }
-            if get!(t.finances, asked) != 0 {
+            if read_field!(t.finances, asked) != 0 {
                 offer(s, t.finances, id);
             }
         }
@@ -1359,7 +1363,7 @@ fn buy(
     }
     let current = (s.finance.current_company)();
     // Special owners lie outside the 16-bit CompanyMask and have no offer.
-    let asked = get!(p, asked) & 1_u16.checked_shl(u32::from(current)).unwrap_or(0) != 0;
+    let asked = read_field!(p, asked) & 1_u16.checked_shl(u32::from(current)).unwrap_or(0) != 0;
     if hostile && asked {
         hostile = false;
     }
@@ -1385,7 +1389,7 @@ fn buy(
     let cost = if hostile {
         hostile_value(s, p, id)
     } else {
-        get!(p, bankrupt_value)
+        read_field!(p, bankrupt_value)
     };
     if execute {
         (s.merger_news)(id, hostile);
@@ -1408,7 +1412,7 @@ fn loan(
 ) -> Cost {
     let id = (f.current_company)();
     let p = (f.company_finances)(id);
-    let current = get!(p, loan);
+    let current = read_field!(p, loan);
     let max = maxloan(p);
     if increase && current >= max {
         return failed(2, max);
@@ -1449,7 +1453,7 @@ fn loan(
     if !increase && cmd == 1 {
         loan = loan.saturating_sub(loan % LOAN_INTERVAL);
     }
-    if increase && get!(p, money) > i64::MAX.saturating_sub(loan) {
+    if increase && read_field!(p, money) > i64::MAX.saturating_sub(loan) {
         return error();
     }
     if !increase && available(p, infinite) < loan {
@@ -1457,11 +1461,11 @@ fn loan(
     }
     if execute {
         if increase {
-            put!(p, get!(p, money).saturating_add(loan), money);
-            put!(p, current.saturating_add(loan), loan);
+            write_field!(p, money, read_field!(p, money).saturating_add(loan));
+            write_field!(p, loan, current.saturating_add(loan));
         } else {
-            put!(p, get!(p, money).saturating_sub(loan), money);
-            put!(p, current.saturating_sub(loan), loan);
+            write_field!(p, money, read_field!(p, money).saturating_sub(loan));
+            write_field!(p, loan, current.saturating_sub(loan));
         }
         (f.invalidate_company_windows)(id);
     }
@@ -1504,21 +1508,29 @@ pub extern "C" fn openttd_rust_company_update_landscaping_limits(s: &Services, r
         (u64::from(value) + u64::from(per)).min(u64::from(burst) << 16) as u32
     };
     companies(s, |p, _| {
-        put!(
+        write_field!(
             p,
-            next(get!(p, terraform), r.terraform_per_64k, r.terraform_burst),
-            terraform
+            terraform,
+            next(
+                read_field!(p, terraform),
+                r.terraform_per_64k,
+                r.terraform_burst
+            )
         );
-        put!(
+        write_field!(
             p,
-            next(get!(p, clear), r.clear_per_64k, r.clear_burst),
-            clear
+            clear,
+            next(read_field!(p, clear), r.clear_per_64k, r.clear_burst)
         );
-        put!(p, next(get!(p, tree), r.tree_per_64k, r.tree_burst), tree);
-        put!(
+        write_field!(
             p,
-            next(get!(p, object), r.object_per_64k, r.object_burst),
-            object
+            tree,
+            next(read_field!(p, tree), r.tree_per_64k, r.tree_burst)
+        );
+        write_field!(
+            p,
+            object,
+            next(read_field!(p, object), r.object_per_64k, r.object_burst)
         );
     });
 }
@@ -1600,10 +1612,10 @@ pub extern "C" fn openttd_rust_economy_set_price_multiplier(price: u32, factor: 
 /// `StartupEconomy`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_economy_startup(s: &Services, es: &EconomySettings) {
-    put!(e(), es.initial_interest, interest);
-    put!(e(), es.initial_interest, infl_amount);
-    put!(e(), es.initial_interest.saturating_sub(1), infl_payment);
-    put!(e(), ((s.shared.random() & 255) + 168) as i16, fluct);
+    write_field!(e(), interest, es.initial_interest);
+    write_field!(e(), infl_amount, es.initial_interest);
+    write_field!(e(), infl_payment, es.initial_interest.saturating_sub(1));
+    write_field!(e(), fluct, ((s.shared.random() & 255) + 168) as i16);
     if es.inflation {
         let months = (es.year.min(ORIGINAL_MAX_YEAR) - ORIGINAL_BASE_YEAR) * 12;
         for _ in 0..months {
@@ -1616,8 +1628,8 @@ pub extern "C" fn openttd_rust_economy_startup(s: &Services, es: &EconomySetting
 /// `InitializeEconomy`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_economy_initialize() {
-    put!(e(), 1 << 16, prices);
-    put!(e(), 1 << 16, payment);
+    write_field!(e(), prices, 1 << 16);
+    write_field!(e(), payment, 1 << 16);
     crate::cargomonitor::openttd_rust_monitor_clear_pickups(crate::company_type::INVALID_OWNER);
     crate::cargomonitor::openttd_rust_monitor_clear_deliveries(crate::company_type::INVALID_OWNER);
 }
@@ -1648,7 +1660,7 @@ pub unsafe extern "C" fn openttd_rust_company_available_money(
 /// # Safety
 /// `p` is null or a live finance owner.
 pub(crate) unsafe fn has_money(p: *const Finances, infinite: bool, cost: i64) -> bool {
-    cost <= 0 || infinite || p.is_null() || cost <= get!(p, money)
+    cost <= 0 || infinite || p.is_null() || cost <= read_field!(p, money)
 }
 /// `Company::GetMaxLoan`.
 /// # Safety
@@ -1688,15 +1700,16 @@ pub unsafe extern "C" fn openttd_rust_company_on_tick(s: &Services, t: &mut Tick
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_company_yearly(s: &Services, y: &Year) {
     companies(s, |p, id| {
-        put!(p, get!(p, expenses[1]), expenses[2]);
-        put!(p, get!(p, expenses[0]), expenses[1]);
-        put!(p, [0; 13], expenses[0]);
+        write_field!(p, expenses[2], read_field!(p, expenses[1]));
+        write_field!(p, expenses[1], read_field!(p, expenses[0]));
+        write_field!(p, expenses[0], [0; 13]);
         (s.finances_dirty)(id);
     });
     if y.show_finances && y.local != INVALID_OWNER {
         (s.show_company_finances)(y.local);
         let p = y.local_finances;
-        let bad = get!(p, valid) > 5 && get!(p, old[0].performance) < get!(p, old[4].performance);
+        let bad = read_field!(p, valid) > 5
+            && read_field!(p, old[0].performance) < read_field!(p, old[4].performance);
         if y.new_year_sound {
             (s.new_year_sound)(bad);
         }
@@ -1753,7 +1766,7 @@ pub extern "C" fn openttd_rust_company_give_money(
     let current = (f.current_company)();
     let p = (f.company_finances)(current);
     let amount = money.min(20_000_000);
-    if get!(p, money).saturating_sub(get!(p, loan)) < amount || amount < 0 {
+    if read_field!(p, money).saturating_sub(read_field!(p, loan)) < amount || amount < 0 {
         return failed(5, 0);
     }
     let q = (f.company_finances)(dest);
@@ -1816,7 +1829,7 @@ pub extern "C" fn openttd_rust_company_set_max_loan(
         } else {
             amount - amount % LOAN_INTERVAL
         };
-        put!(p, amount, max_loan);
+        write_field!(p, max_loan, amount);
         (f.invalidate_company_windows)(id);
     }
     done(0, NO_EXPENSE)
@@ -1861,10 +1874,10 @@ pub unsafe extern "C" fn openttd_rust_company_initialize(
     tree: u32,
     o: u32,
 ) {
-    put!(p, t.wrapping_shl(16), terraform);
-    put!(p, c.wrapping_shl(16), clear);
-    put!(p, tree.wrapping_shl(16), tree);
-    put!(p, o.wrapping_shl(16), object);
+    write_field!(p, terraform, t.wrapping_shl(16));
+    write_field!(p, clear, c.wrapping_shl(16));
+    write_field!(p, tree, tree.wrapping_shl(16));
+    write_field!(p, object, o.wrapping_shl(16));
 }
 
 crate::abi::layouts! {

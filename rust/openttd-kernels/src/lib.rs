@@ -83,6 +83,7 @@ mod pbs;
 mod rail_cmd;
 pub mod rail_yapf;
 mod random_func;
+mod raw_field;
 mod road;
 mod road_cmd;
 mod road_cost;

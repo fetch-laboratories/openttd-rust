@@ -178,10 +178,10 @@ void crypto_wipe(void *secret, size_t size)
 
 #ifdef WITH_RUST
 // Only original leaf primitives cross back to C++; never application callbacks.
-static void OPENTTD_CRYPTO_CALL RustCryptoWipe(void *p, size_t size) noexcept { crypto_wipe(p, size); }
-static int32_t OPENTTD_CRYPTO_CALL RustCryptoVerify16(const uint8_t *a, const uint8_t *b) noexcept { return crypto_verify16(a, b); }
+static void OPENTTD_RUST_CALL RustCryptoWipe(void *p, size_t size) noexcept { crypto_wipe(p, size); }
+static int32_t OPENTTD_RUST_CALL RustCryptoVerify16(const uint8_t *a, const uint8_t *b) noexcept { return crypto_verify16(a, b); }
 static const OpenTTDCryptoLeaves rust_crypto_leaves = {RustCryptoWipe, RustCryptoVerify16};
-static int32_t OPENTTD_CRYPTO_CALL RustX25519Verify32(const uint8_t *a, const uint8_t *b) noexcept { return crypto_verify32(a, b); }
+static int32_t OPENTTD_RUST_CALL RustX25519Verify32(const uint8_t *a, const uint8_t *b) noexcept { return crypto_verify32(a, b); }
 static const OpenTTDX25519Leaves rust_x25519_leaves = {RustCryptoWipe, RustX25519Verify32};
 static_assert(sizeof(OpenTTDX25519Leaves) == 2 * sizeof(void *) && sizeof(i32) == 4 && sizeof(int) == 4);
 static_assert((-1 >> 1) == -1);

@@ -425,14 +425,14 @@ static void Blake2b()
 static size_t x25519_wipes, x25519_last_wipe;
 static unsigned x25519_verifies;
 static bool x25519_wipes_zero;
-static void OPENTTD_CRYPTO_CALL X25519Wipe(void *data, size_t size) noexcept
+static void OPENTTD_RUST_CALL X25519Wipe(void *data, size_t size) noexcept
 {
 	crypto_wipe(data, size);
 	x25519_wipes++; x25519_last_wipe = size;
 	const auto *bytes = static_cast<const uint8_t *>(data);
 	x25519_wipes_zero &= std::all_of(bytes, bytes + size, [](uint8_t x) { return x == 0; });
 }
-static int32_t OPENTTD_CRYPTO_CALL X25519Verify32(const uint8_t *a, const uint8_t *b) noexcept
+static int32_t OPENTTD_RUST_CALL X25519Verify32(const uint8_t *a, const uint8_t *b) noexcept
 {
 	x25519_verifies++;
 	return crypto_verify32(a, b);

@@ -15,15 +15,9 @@ use crate::witness as w;
 use std::cell::OnceCell;
 
 macro_rules! observed {
-    ($call:expr) => {{
-        let result = $call;
-        crate::witness::hit(crate::witness::TOWN_SERVICES);
-        crate::witness::add(
-            crate::witness::TOWN_BYTES,
-            std::mem::size_of_val(&result) as u64,
-        );
-        result
-    }};
+    ($call:expr) => {
+        crate::witness::counted!(TOWN_SERVICES, TOWN_BYTES, $call)
+    };
 }
 pub(super) use observed;
 

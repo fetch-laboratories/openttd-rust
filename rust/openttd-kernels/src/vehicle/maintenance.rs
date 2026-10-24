@@ -206,14 +206,11 @@ pub struct Services {
 }
 
 macro_rules! svc {
-    ($counted:ident, $function:expr $(, $arg:expr)*) => {{
-        let result = ($function)($($arg),*);
-        if $counted {
-            crate::witness::hit(crate::witness::VEHICLE_MAINT_CROSSINGS);
-            crate::witness::add(crate::witness::VEHICLE_MAINT_BYTES, std::mem::size_of_val(&result) as u64);
-        }
-        result
-    }};
+    ($counted:ident, $function:expr $(, $arg:expr)*) => {
+        crate::witness::counted!(
+            VEHICLE_MAINT_CROSSINGS, VEHICLE_MAINT_BYTES if $counted, ($function)($($arg),*)
+        )
+    };
 }
 macro_rules! branch {
     ($counted:ident, $name:ident) => {
