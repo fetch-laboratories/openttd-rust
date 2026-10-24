@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
-"""Compare actual original/Rust X25519 endpoints, wire bytes and state transitions."""
+"""Compare actual original/Rust X25519 endpoints, wire bytes and state transitions.
 
-import hashlib
+Limits: prescribed entropy verifies call order and bytes, not operating-system
+RNG quality; nonempty-short enable nonce is undefined in pinned Packet and
+excluded (#41); prefilled Poly1305/BLAKE2b final contexts supplement the
+observed wipes, but compiler spills are not fully observable. Protocol
+primitives are the real bundled Monocypher. The sanitizer instruments the C++
+fixture, Packet, vendor code and facade and checks Rust allocation leaks, not
+Rust memory accesses.
+"""
+
 import json
-import runpy
 import subprocess
-from collections import Counter
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = runpy.run_path(str(ROOT / "tools/migration.py"))
-REFERENCE = MIGRATION["REFERENCE"].resolve()
-OUT = ROOT / ".local/auth-comparison"
+import probe
+
 SECRET_SERVER = bytes(range(32)).hex()
 SECRET_CLIENT = bytes(range(32, 64)).hex()
 
@@ -175,43 +178,28 @@ def scenario(server_binary, client_binary, env, extra_server, extra_client, mode
 
 
 def main():
-    MIGRATION["ensure_reference"]()
-    OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "report.json").unlink(missing_ok=True)
-    env = MIGRATION["environment"]()
-    archive = MIGRATION["rust_archive"](ROOT / "build-rust")
-    fixture = ROOT / "tools/migration/auth-comparison.cpp"
-    commands, binaries, ladder_shims = [], {}, {}
+    out = probe.output("auth-comparison")
+    env = probe.ENV
+    fixture = probe.ROOT / "tools/migration/auth-comparison.cpp"
+    commands, binaries = {}, {}
     sources = (
-        "src/network/network_crypto.cpp",
-        "src/network/network_crypto_internal.h",
         "src/network/core/packet.cpp",
-        "src/3rdparty/monocypher/monocypher.cpp",
-        "src/3rdparty/monocypher/monocypher.h",
         "src/string.cpp",
         "src/core/string_builder.cpp",
         "src/core/string_inplace.cpp",
         "src/core/utf8.cpp",
     )
-    for label, source in (
-        ("reference", REFERENCE),
-        ("candidate", ROOT),
-        ("candidate-cpp", ROOT),
-    ):
-        binary = OUT / label
+    for label, source in probe.LABELS:
+        binary = out / label
         # Include unchanged actual vendor source and expose only its private
         # coarse helper. No copied field/ladder oracle or altered vendor body.
-        shim = OUT / f"{label}-ladder.cpp"
+        shim = out / f"{label}-ladder.cpp"
         shim.write_text(
             f'#include "{source / "src/3rdparty/monocypher/monocypher.cpp"}"\n'
             'extern "C" void FixtureLadder(uint8_t *out, const uint8_t *scalar, const uint8_t *point, int32_t bits) { scalarmult(out, scalar, point, bits); }\n'
         )
-        ladder_shims[label] = {
-            "path": str(shim),
-            "sha256": hashlib.sha256(shim.read_bytes()).hexdigest(),
-        }
-        command = [
-            "g++",
+        commands[label] = [
+            probe.compiler(),
             "-std=c++20",
             "-O2",
             "-DUNIX",
@@ -219,28 +207,15 @@ def main():
             "-ffunction-sections",
             "-fdata-sections",
             "-I",
-            str(source / "src"),
-            str(fixture),
-            *[
-                str(
-                    shim
-                    if name == "src/3rdparty/monocypher/monocypher.cpp"
-                    else source / name
-                )
-                for name in sources
-                if name.endswith(".cpp") and name != "src/network/network_crypto.cpp"
-            ],
+            source / "src",
+            fixture,
+            *(source / name for name in sources[:1]),
+            shim,
+            *(source / name for name in sources[1:]),
             "-Wl,--gc-sections",
-            "-o",
-            str(binary),
+            *(probe.rust() if label == "candidate" else []),
         ]
-        if label == "candidate":
-            command.extend(["-DWITH_RUST", str(archive), "-ldl", "-lpthread", "-lm"])
-        commands.append(command)
-        with (OUT / f"{label}-compile.log").open("wb") as log:
-            subprocess.run(
-                command, env=env, stdout=log, stderr=subprocess.STDOUT, check=True
-            )
+        probe.compile([*commands[label], "-o", binary], f"{binary}-compile.log")
         binaries[label] = binary
     scenarios = [
         (b"", b"", "normal"),
@@ -249,7 +224,7 @@ def main():
         (b"password", b"wrong", "normal"),
         (b"password", b"", "normal"),
     ]
-    comparisons, counts, hashes = 0, Counter(), {}
+    comparisons = 0
     for index, (server_extra, client_extra, mode) in enumerate(scenarios):
         expected = scenario(
             binaries["reference"],
@@ -259,7 +234,6 @@ def main():
             client_extra,
             mode,
         )
-        counts.update(row[1].split()[0] for row in expected)
         for server_label, client_label in (
             ("reference", "candidate"),
             ("candidate", "reference"),
@@ -275,80 +249,56 @@ def main():
                 client_extra,
                 mode,
             )
-            (OUT / f"{name}.json").write_text(
-                json.dumps({"expected": expected, "actual": actual}, indent=2) + "\n"
-            )
             if actual != expected:
+                (out / f"{name}.json").write_text(
+                    json.dumps({"expected": expected, "actual": actual}, indent=2)
+                    + "\n"
+                )
                 raise RuntimeError(
                     f"Mixed authentication discrepancy: {name}; see retained transcript"
                 )
             comparisons += len(actual)
-            hashes[name] = hashlib.sha256(json.dumps(actual).encode()).hexdigest()
     # Only uncovered primitive variants/alias/buffer/padding/state cases. Expected
     # bytes always come from the actual pinned vendor binary, never from Rust.
-    primitive_outputs = {}
-    for label in ("reference", "candidate", "candidate-cpp"):
-        result = subprocess.run(
-            [str(binaries[label]), "--primitives"],
-            env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+    primitives = {}
+    for label, _ in probe.LABELS:
+        primitives[label] = probe.execute(
+            [binaries[label], "--primitives"], out / f"{label}-primitives"
         )
-        (OUT / f"{label}-primitives.out").write_bytes(result.stdout)
-        (OUT / f"{label}-primitives.err").write_bytes(result.stderr)
-        if result.returncode or result.stderr:
-            raise RuntimeError(f"{label} direct primitives failed; see retained output")
-        primitive_outputs[label] = result.stdout
-        if label != "reference" and result.stdout != primitive_outputs["reference"]:
-            expected, actual = (
-                primitive_outputs["reference"].splitlines(),
-                result.stdout.splitlines(),
-            )
-            failures = [
-                {
-                    "line": i + 1,
-                    "expected": expected[i].decode()
-                    if i < len(expected)
-                    else "<missing>",
-                    "actual": actual[i].decode() if i < len(actual) else "<missing>",
-                }
-                for i in range(max(len(expected), len(actual)))
-                if (expected[i] if i < len(expected) else None)
-                != (actual[i] if i < len(actual) else None)
-            ]
-            (OUT / "primitive-failures.json").write_text(
-                json.dumps(failures, indent=2) + "\n"
-            )
-            raise RuntimeError(f"{label} primitive discrepancies: {len(failures)}")
+        probe.same(
+            primitives["reference"], primitives[label], f"{label}-primitives", out
+        )
     # Instrument the complete C++ fixture, Packet, vendor and facade boundary;
     # stable Rust allocations are leak-observable, Rust accesses are not ASan-instrumented.
-    sanitizer = next(list(command) for command in commands if "-DWITH_RUST" in command)
-    sanitizer[sanitizer.index("-o") + 1] = str(OUT / "candidate-sanitized")
-    sanitizer.extend(
-        ["-fsanitize=address,undefined", "-fno-omit-frame-pointer", "-g", "-no-pie"]
+    sanitizer = out / "candidate-sanitized"
+    probe.compile(
+        [
+            *commands["candidate"],
+            "-o",
+            sanitizer,
+            "-fsanitize=address,undefined",
+            "-fno-omit-frame-pointer",
+            "-g",
+            "-no-pie",
+        ],
+        f"{sanitizer}-compile.log",
     )
-    commands.append(sanitizer)
-    with (OUT / "candidate-sanitized-compile.log").open("wb") as log:
-        subprocess.run(
-            sanitizer, env=env, stdout=log, stderr=subprocess.STDOUT, check=True
-        )
-    sanitized_env = env.copy()
-    sanitized_env["ASAN_OPTIONS"] = "detect_leaks=1:abort_on_error=1"
-    sanitized_env["UBSAN_OPTIONS"] = "halt_on_error=1:print_stacktrace=1"
-    for server_label, client_label in (
-        ("reference", "candidate-sanitized"),
-        ("candidate-sanitized", "reference"),
+    sanitized_env = env | {
+        "ASAN_OPTIONS": "detect_leaks=1:abort_on_error=1",
+        "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1",
+    }
+    expected = scenario(
+        binaries["reference"],
+        binaries["reference"],
+        env,
+        b"a\x00b\xff",
+        b"a\x00b\xff",
+        "failures",
+    )
+    for server_binary, client_binary in (
+        (binaries["reference"], sanitizer),
+        (sanitizer, binaries["reference"]),
     ):
-        server_binary = (
-            binaries[server_label]
-            if server_label == "reference"
-            else OUT / server_label
-        )
-        client_binary = (
-            binaries[client_label]
-            if client_label == "reference"
-            else OUT / client_label
-        )
         actual = scenario(
             server_binary,
             client_binary,
@@ -357,98 +307,18 @@ def main():
             b"a\x00b\xff",
             "failures",
         )
-        expected = scenario(
-            binaries["reference"],
-            binaries["reference"],
-            env,
-            b"a\x00b\xff",
-            b"a\x00b\xff",
-            "failures",
-        )
         if actual != expected:
             raise RuntimeError("Sanitizer output changed")
-    result = subprocess.run(
-        [str(OUT / "candidate-sanitized"), "--primitives"],
-        env=sanitized_env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+    sanitized = probe.execute(
+        [sanitizer, "--primitives"], f"{sanitizer}-primitives", env=sanitized_env
     )
-    (OUT / "candidate-sanitized-primitives.out").write_bytes(result.stdout)
-    (OUT / "candidate-sanitized-primitives.err").write_bytes(result.stderr)
-    if (
-        result.returncode
-        or result.stderr
-        or result.stdout != primitive_outputs["reference"]
-    ):
-        raise RuntimeError(
-            "Direct primitive C++ boundary sanitizer failed; see retained output"
-        )
-    primitives = {
-        "records": len(primitive_outputs["reference"].splitlines()),
-        "record_counts": dict(
-            Counter(
-                row.split()[0].decode()
-                for row in primitive_outputs["reference"].splitlines()
-            )
-        ),
-        "output_sha256": {
-            label: hashlib.sha256(output).hexdigest()
-            for label, output in primitive_outputs.items()
-        },
-        "all_context_bytes_prefilled": True,
-        "cpp_boundary_sanitizers_passed": True,
-        "passed": True,
-    }
-    primitives["blake2b_records"] = sum(
-        count
-        for kind, count in primitives["record_counts"].items()
-        if kind.startswith("blake-")
+    probe.same(
+        primitives["reference"], sanitized, "candidate-sanitized-primitives", out
     )
-    primitives["x25519_records"] = sum(
-        count
-        for kind, count in primitives["record_counts"].items()
-        if kind.startswith("x25519-")
-    )
-    primitives["prior_cipher_mac_records"] = (
-        primitives["records"]
-        - primitives["blake2b_records"]
-        - primitives["x25519_records"]
-    )
-    MIGRATION["ensure_reference"]()
-    report = {
-        "baseline": MIGRATION["BASELINE"],
-        "candidate_commit": MIGRATION["git"]("rev-parse", "HEAD"),
-        "candidate_status": MIGRATION["git"]("status", "--porcelain"),
-        "rust_archive": str(archive),
-        "commands": commands,
-        "ladder_shims": ladder_shims,
-        "scenario_count": len(scenarios),
-        "compared_endpoint_records": comparisons,
-        "primitives": primitives,
-        "original_record_counts": dict(counts),
-        "transcript_sha256": hashes,
-        "reference_source_sha256": {
-            name: hashlib.sha256((REFERENCE / name).read_bytes()).hexdigest()
-            for name in sources
-        },
-        "fixture_sha256": hashlib.sha256(fixture.read_bytes()).hexdigest(),
-        "sanitizer_scope": {
-            "cpp_vendor_packet_fixture_and_facade": True,
-            "rust_accesses_instrumented": False,
-            "rust_allocation_leaks_checked": True,
-            "passed": True,
-        },
-        "limits": [
-            "Prescribed entropy verifies call order/bytes, not operating-system RNG quality",
-            "Nonempty-short enable nonce is undefined in pinned Packet and excluded (#41)",
-            "Observed outer session/shared/hash wipes are supplemented by prefilled Poly1305/BLAKE2b final context checks; compiler spills are not fully observable",
-            "Protocol primitives are real bundled Monocypher, not mock crypto",
-        ],
-        "passed": True,
-    }
-    (OUT / "report.json").write_text(json.dumps(report, indent=2) + "\n")
-    print(
-        f"Authentication comparisons passed: {comparisons} mixed endpoint records + {primitives['records']} bounded primitive records; {OUT / 'report.json'}"
+    probe.passed(
+        "Authentication comparison",
+        mixed_endpoint_records=comparisons,
+        bounded_primitive_records=len(primitives["reference"].splitlines()),
     )
 
 

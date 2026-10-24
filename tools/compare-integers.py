@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """Compare bounded integer parser/builder gaps against pinned unchanged C++ sources."""
 
-import hashlib
 import json
 import re
-import runpy
 import struct
 import subprocess
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = runpy.run_path(str(ROOT / "tools/migration.py"))
-REFERENCE = MIGRATION["REFERENCE"].resolve()
+import probe
+
+import migration
+
+ROOT = probe.ROOT
+REFERENCE = probe.REFERENCE
+TOOLS = ROOT / ".local/build-tools-rust"
 OUT = ROOT / ".local/integer-comparison"
 
 
@@ -104,11 +105,9 @@ def compare_builders(env, binaries):
         for width, signed, base, bits in corpus
     ]
     (OUT / "builder-corpus.txt").write_bytes(b"".join(records))
-    commands = []
     streams = {}
     for name in ("reference", "candidate", "candidate-cpp"):
         command = [str(binaries[name, False]), "--builder"]
-        commands.append(command)
         result = subprocess.run(
             command,
             input=b"".join(records),
@@ -143,12 +142,7 @@ def compare_builders(env, binaries):
             raise RuntimeError(
                 f"Builder comparison failed: {name}; {OUT / f'{name}-builder-failures.json'}"
             )
-    return {
-        "cases": len(corpus),
-        "fixed_alias_sink_cases": 13,
-        "commands": commands,
-        "output_sha256": hashlib.sha256(b"\n".join(expected) + b"\n").hexdigest(),
-    }
+    return len(corpus)
 
 
 def compare_consumers(env, binaries):
@@ -215,7 +209,7 @@ def compare_consumers(env, binaries):
     assert streams[0] == streams[1] == streams[2], (
         "Consumer byte/cursor/diagnostic mismatch; retained streams in evidence"
     )
-    fatal_cases = []
+    fatal_cases = 0
     for operation, offset, requested, src in (
         (1, 1, 8, b"A\x00\xff"),
         (2, 1, 8, b"A\x00\xff"),
@@ -244,19 +238,12 @@ def compare_consumers(env, binaries):
             results[0].stdout == results[1].stdout
             and results[0].stderr == results[1].stderr
         )
-        fatal_cases.append(
-            {
-                "input": record.decode().strip(),
-                "exit_code": 2,
-                "stdout": results[0].stdout.decode(),
-            }
-        )
-    return {"cases": len(corpus), "fatal_cases": fatal_cases}
+        fatal_cases += 1
+    return len(corpus), fatal_cases
 
 
 def compare_generators(env):
     outputs = {}
-    commands = []
     settings_dir = REFERENCE / "src/table/settings"
     settings_inputs = [
         str(settings_dir / name)
@@ -267,8 +254,8 @@ def compare_generators(env):
     ]
     lang = REFERENCE / "src/lang"
     tools = {
-        "reference": (MIGRATION["REFERENCE_BUILD"] / "src").resolve(),
-        "candidate": ROOT / ".local/build-tools-rust/src",
+        "reference": (migration.REFERENCE_BUILD / "src").resolve(),
+        "candidate": TOOLS / "src",
     }
     for name, tool_dir in tools.items():
         out = OUT / (name + "-generated")
@@ -293,17 +280,13 @@ def compare_generators(env):
             ],
         ]
         for index, command in enumerate(invocations):
-            commands.append(command)
-            with (OUT / f"{name}-generator-{index}.log").open("wb") as log:
-                subprocess.run(
-                    command, env=env, stdout=log, stderr=subprocess.STDOUT, check=True
-                )
+            probe.compile(command, OUT / f"{name}-generator-{index}.log", env)
         outputs[name] = {
             filename: (out / filename).read_bytes()
             for filename in ("strings.h", "settings.h", "english.lng", "french.lng")
         }
     assert outputs["reference"] == outputs["candidate"], "Generator output mismatch"
-    malformed = []
+    malformed = 0
     original = (lang / "english.txt").read_bytes()
     for index, pragma in enumerate(
         (
@@ -327,75 +310,44 @@ def compare_generators(env):
                 "-d",
                 str(directory),
             ]
-            commands.append(command)
             result = subprocess.run(
                 command, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
             results.append((result.returncode, result.stdout, result.stderr))
         assert results[0] == results[1] and results[0][0] == 2, results
-        malformed.append(
-            {
-                "pragma_hex": pragma.hex(),
-                "exit_code": results[0][0],
-                "stderr_hex": results[0][2].hex(),
-            }
-        )
-    return {
-        "commands": commands,
-        "generated_sha256": {
-            name: hashlib.sha256(value).hexdigest()
-            for name, value in outputs["reference"].items()
-        },
-        "malformed_strgen": malformed,
-    }
+        malformed += 1
+    return malformed
 
 
 def main():
-    MIGRATION["ensure_reference"]()
-    OUT.mkdir(parents=True, exist_ok=True)
-    env = MIGRATION["environment"]()
-    archive = MIGRATION["rust_archive"](ROOT / ".local/build-tools-rust")
-    if not archive.exists():
-        raise RuntimeError("Build the native Rust tools first; see migration guide")
+    probe.output("integer-comparison")
+    env = probe.ENV
     binaries = {}
-    for name, source in (
-        ("reference", REFERENCE),
-        ("candidate", ROOT),
-        ("candidate-cpp", ROOT),
-    ):
+    for name, source in probe.LABELS:
         for fatal in (False,) if name == "candidate-cpp" else (False, True):
             binary = OUT / (name + ("-fatal" if fatal else ""))
             command = [
-                "g++",
+                probe.compiler(TOOLS),
                 "-std=c++20",
                 "-O0",
                 "-ffunction-sections",
                 "-fdata-sections",
                 "-DFMT_HEADER_ONLY",
                 "-I",
-                str(source / "src"),
-                str(ROOT / "tools/integer_probe.cpp"),
-                str(source / "src/core/string_consumer.cpp"),
-                str(source / "src/core/string_builder.cpp"),
-                str(source / "src/core/utf8.cpp"),
+                source / "src",
+                ROOT / "tools/integer_probe.cpp",
+                source / "src/core/string_consumer.cpp",
+                source / "src/core/string_builder.cpp",
+                source / "src/core/utf8.cpp",
                 "-Wl,--gc-sections",
                 "-o",
-                str(binary),
+                binary,
             ]
             if fatal:
                 command.append("-DSTRGEN")
             if name == "candidate":
-                command.extend(
-                    ["-DWITH_RUST", str(archive), "-ldl", "-lpthread", "-lm"]
-                )
-            with (OUT / (binary.name + "-compile.log")).open("w") as output:
-                subprocess.run(
-                    command,
-                    env=env,
-                    stdout=output,
-                    stderr=subprocess.STDOUT,
-                    check=True,
-                )
+                command += probe.rust(TOOLS)
+            probe.compile(command, OUT / (binary.name + "-compile.log"))
             binaries[name, fatal] = binary
     corpus = list(cases())
     records = [
@@ -429,7 +381,7 @@ def main():
         raise RuntimeError(
             f"{len(failures)} integer discrepancies; see {OUT / 'failures.json'}"
         )
-    fatal_cases = []
+    fatal_cases = 0
     # These have errors in ReadIntegerBase, with prefix-relative and range spans.
     for case in (
         (8, 1, 0, 0, b"-0xffTAIL"),
@@ -456,42 +408,19 @@ def main():
             outputs[0].stdout == outputs[1].stdout
             and outputs[0].stderr == outputs[1].stderr
         )
-        fatal_cases.append(
-            {
-                "input": record.decode().strip(),
-                "exit_code": 2,
-                "stdout": outputs[0].stdout.decode(),
-            }
-        )
+        fatal_cases += 1
     builders = compare_builders(env, binaries)
-    consumer_bytes = compare_consumers(env, binaries)
-    generators = compare_generators(env)
-    MIGRATION["ensure_reference"]()
-    report = {
-        "baseline": MIGRATION["BASELINE"],
-        "candidate_commit": MIGRATION["git"]("rev-parse", "HEAD"),
-        "candidate_status": MIGRATION["git"]("status", "--porcelain"),
-        "cases": len(corpus),
-        "fatal_cases": fatal_cases,
-        "generators": generators,
-        "builders": builders,
-        "consumer_bytes": consumer_bytes,
-        "reference_sources_sha256": {
-            name: hashlib.sha256((REFERENCE / name).read_bytes()).hexdigest()
-            for name in (
-                "src/core/string_consumer.hpp",
-                "src/core/string_consumer.cpp",
-                "src/core/string_builder.hpp",
-                "src/core/string_builder.cpp",
-                "src/core/utf8.hpp",
-                "src/core/utf8.cpp",
-            )
-        },
-        "passed": True,
-    }
-    (OUT / "report.json").write_text(json.dumps(report, indent=2) + "\n")
-    print(
-        f"Integer comparisons passed: {len(corpus)} API cases, {len(fatal_cases)} fatal diagnostic cases, {builders['cases']} builder formats + {builders['fixed_alias_sink_cases']} fixed sink/alias cases, {consumer_bytes['cases']} consumer byte gaps + {len(consumer_bytes['fatal_cases'])} fatal timing gaps; {OUT / 'report.json'}"
+    consumer_bytes, consumer_fatal = compare_consumers(env, binaries)
+    malformed = compare_generators(env)
+    probe.passed(
+        "Integer comparison",
+        API_cases=len(corpus),
+        fatal_diagnostic_cases=fatal_cases,
+        builder_formats=builders,
+        fixed_sink_alias_cases=13,
+        consumer_byte_gaps=consumer_bytes,
+        fatal_timing_gaps=consumer_fatal,
+        malformed_strgen_pragmas=malformed,
     )
 
 

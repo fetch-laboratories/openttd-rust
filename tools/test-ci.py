@@ -437,7 +437,6 @@ class PolicyTests(unittest.TestCase):
             "Test",
             "Fresh Rust native generators",
             "Validate refusals and actual archive freshness",
-            "Record native CRT ABI linkage and fresh outputs",
             "Retain native Windows Rust and test evidence",
         }
         for filename, name, skipped in (
