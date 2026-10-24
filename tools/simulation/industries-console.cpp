@@ -67,6 +67,13 @@ static bool VariableCases(Industry *i, Industry *temporary, TileIndex tile, Indu
 		}
 	}
 	file.grf_version = 8;
+	{
+		Backup<Owner> founder(i->founder);
+		for (Owner owner : {Owner(0), OWNER_NONE, INVALID_OWNER}) {
+			i->founder = owner; bool available = true;
+			fmt::print(stderr, "INDUSTRY-RESOLVER founder {} {}\n", owner.base(), live.industries_scope.GetVariable(0x45, 0, available));
+		}
+	}
 	GRFFile caller; caller.grfid = file.grfid + 1; caller.grf_version = 8; caller.cargo_list = file.cargo_list;
 	std::ranges::reverse(caller.cargo_list); live.grffile = &caller;
 	for (uint32_t parameter : {0U, 1U, 31U, 63U, 64U, 255U, 256U}) for (uint8_t v : {0x69,0x6A,0x6B,0x6C,0x6D,0x6E,0x6F,0x70,0x71}) {
@@ -100,6 +107,37 @@ static bool CountWrapCases(Industry *i)
 	fmt::print(stderr, "INDUSTRY-RESOLVER count-wrap {}\n", equal);
 	return equal;
 }
+static bool TileIdentityCases(Industry *i, Industry *temporary, TileIndex tile, GRFFile &file, const SpriteGroup *group)
+{
+	IndustryGfx original = GetCleanIndustryGfx(tile);
+	constexpr IndustryGfx custom = NEW_INDUSTRYTILEOFFSET + 1, replacement = NEW_INDUSTRYTILEOFFSET + 2;
+	auto *old_spec = const_cast<IndustryTileSpec *>(GetIndustryTileSpec(original));
+	auto *new_spec = const_cast<IndustryTileSpec *>(GetIndustryTileSpec(custom));
+	auto *override_spec = const_cast<IndustryTileSpec *>(GetIndustryTileSpec(replacement));
+	Backup<IndustryTileSpec> old_backup(*old_spec), new_backup(*new_spec), override_backup(*override_spec);
+	bool equal = true;
+	for (IndustryGfx gfx : {original, custom}) for (bool groups : {false, true}) for (uint32_t grfid : {file.grfid, file.grfid + 1}) {
+		SetIndustryGfx(tile, gfx);
+		auto *s = gfx == original ? old_spec : new_spec;
+		s->grf_prop.grfid = grfid; s->grf_prop.local_id = 19; s->grf_prop.subst_id = 17;
+		s->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, groups ? group : nullptr);
+		old_spec->grf_prop.override_id = groups ? replacement : INVALID_INDUSTRYTILE;
+		override_spec->grf_prop.grfid = grfid; override_spec->grf_prop.local_id = 21;
+		uint32_t value = GetIndustryIDAtOffset(tile, i, file.grfid);
+		uint32_t expected = gfx == original && !groups ? 0xFF00U | original : !groups ? 0xFF11U : grfid != file.grfid ? 0xFFFEU : gfx == original ? 21U : 19U;
+		equal &= value == expected;
+		fmt::print(stderr, "INDUSTRY-RESOLVER tile-id {} {} {} {}\n", gfx, groups, grfid, value);
+	}
+	SetIndustryGfx(tile, original);
+	Backup<TileArea> location(temporary->location);
+	temporary->location.tile = tile + 1;
+	IndustryTileResolverObject negative(original, tile, temporary); bool available = true;
+	fmt::print(stderr, "INDUSTRY-RESOLVER relative-negative {}\n", negative.indtile_scope.GetVariable(0x43, 0, available));
+	equal &= GetIndustryIDAtOffset(tile + TileDiffXY(20, 20), i, file.grfid) == 0xFFFF;
+	fmt::print(stderr, "INDUSTRY-RESOLVER tile-identities {}\n", equal);
+	return equal;
+}
+
 static bool CallbackCases(Industry *i, IndustrySpec *spec, GRFFile &file)
 {
 	bool equal = true;
@@ -132,10 +170,16 @@ static bool CallbackCases(Industry *i, IndustrySpec *spec, GRFFile &file)
 	production->version = 1; production->num_input = production->num_output = 1; production->subtract_input[0] = 0x102; production->add_output[0] = 0x103; production->again = 4;
 	SpriteGroup::CanAllocateItem(); auto *program = new DeterministicSpriteGroup(); program->size = DSG_SIZE_DWORD;
 	Store(program, 0x103, 5); Store(program, 4, 0);
+	program->adjusts.push_back(Read(0x10)); program->adjusts.push_back(Read(0x1A, 0, 0x105, DSGA_OP_STO));
 	program->adjusts.push_back(Read(0x40)); program->adjusts.push_back(Read(0x1A, 0, 0x102, DSGA_OP_STO)); program->default_result.group = production;
 	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, program);
 	Backup<IndustryBehaviours> behaviour(spec->behaviour); spec->behaviour.Reset(IndustryBehaviour::ProdMultiHandling); spec->behaviour.Set(IndustryBehaviour::ProdCallbackRandom);
+	Randomizer expected_rng = _random; uint32_t expected_random = expected_rng.Next();
 	IndustryProductionCallback(i, 0);
+	ResolverObject registers(&file);
+	bool parameters = static_cast<uint32_t>(registers.GetRegister(0x105)) == expected_random && std::ranges::equal(_random.state, expected_rng.state);
+	equal &= parameters;
+	fmt::print(stderr, "INDUSTRY-RESOLVER production-params {}\n", parameters);
 	equal &= i->accepted[0].waiting == 0 && i->produced[0].waiting == 12;
 	fmt::print(stderr, "INDUSTRY-RESOLVER production {} {}\n", i->accepted[0].waiting, i->produced[0].waiting);
 	delete program; delete production;
@@ -230,6 +274,7 @@ static bool IndustriesScenario(std::span<std::string_view>)
 	fmt::print(stderr, "INDUSTRY-RESOLVER checkpoint {}\n", equal);
 	equal &= VariableCases(i, &temporary, tile, gfx, file);
 	equal &= CountWrapCases(i);
+	equal &= TileIdentityCases(i, &temporary, tile, file, zero);
 	equal &= CallbackCases(i, spec, file);
 	equal &= RandomCases(i, tile_spec, gfx, tile);
 	fmt::print(stderr, "INDUSTRY-RESOLVER complete {}\n", equal);

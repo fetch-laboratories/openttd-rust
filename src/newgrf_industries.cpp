@@ -850,7 +850,7 @@ const OpenTTDIndustryResolverServices &GetIndustryResolverServices() noexcept
 		.town_id = RustTownAuthorityIndex,
 		.founder_info = [](uint8_t founder) noexcept -> OpenTTDIndustryFounderInfo {
 			const Company *company = Company::GetIfValid(CompanyID(founder));
-			return {company == nullptr ? uint8_t{0} : RustCompanyRecolour(company, false), company != nullptr && company->is_ai};
+			return {company == nullptr ? uint8_t{0} : RustCompanyRecolour(company, true), company != nullptr && company->is_ai};
 		},
 		.grfid = RustResolverGRFFileID,
 		.version = RustResolverGRFVersion,

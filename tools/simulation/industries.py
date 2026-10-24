@@ -432,6 +432,8 @@ def check(scenario, run, mode, role, result):
             "location 0 2271560481",
             "checkpoint true",
             "count-wrap true",
+            "tile-identities true",
+            "production-params true",
             "production 0 12",
             "callbacks true",
             "randomized true",
