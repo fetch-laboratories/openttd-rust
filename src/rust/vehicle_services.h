@@ -25,6 +25,7 @@ inline uint16_t RustVehicleCallback(CallbackID callback, uint32_t param1, uint32
 uint16_t RustVehicleStartstopCallback(Vehicle *v, int32_t *reg) noexcept;
 OpenTTDTrainHandle RustVehicleTrain(OpenTTDVehicle *v) noexcept;
 bool RustTrainIsEngine(const Vehicle *v) noexcept;
+Train *RustTrainGetIfValid(uint32_t id) noexcept;
 uint32_t RustTrainCachedPower(const Vehicle *v) noexcept;
 uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept;
 uint32_t RustVehicleGRFString(Vehicle *v, uint32_t string) noexcept;
@@ -87,6 +88,12 @@ inline OpenTTDVehicle *RustVehicleNextArticulated(OpenTTDVehicle *v) noexcept { 
 inline Vehicle *RustVehicleNext(const Vehicle *v) noexcept { return v->Next(); }
 /** Chain, subtype and unit leaves shared by consist transactions and controllers. */
 inline Vehicle *RustVehiclePrevious(const Vehicle *v) noexcept { return v->Previous(); }
+/** Indexed legacy users encode a missing previous vehicle as the invalid ID. */
+inline uint32_t RustVehiclePreviousID(const Vehicle *v) noexcept
+{
+	const Vehicle *previous = RustVehiclePrevious(v);
+	return previous == nullptr ? VehicleID::Invalid().base() : previous->index.base();
+}
 inline void RustVehicleSetNext(Vehicle *v, Vehicle *next) noexcept { v->SetNext(next); }
 inline void RustOpaqueVehicleSetNext(void *v, void *next) noexcept { RustVehicleSetNext(static_cast<Vehicle *>(v), static_cast<Vehicle *>(next)); }
 inline Vehicle *RustVehicleLastEnginePart(Vehicle *v) noexcept { return v->GetLastEnginePart(); }

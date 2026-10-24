@@ -671,19 +671,24 @@ pub(crate) fn run(world: &World<'_>, frame: *mut Frame, input: Input) -> bool {
                 i32::from(g.get(x, y) >> 4).clamp(0, max) as u32
             };
             let tile = world.map.tile_xy(x as u32, y as u32);
-            (world.a.set_height)(tile, height);
-            if (world.a.inner_tile)(tile) {
-                (world.clear.make_clear)(
-                    tile,
-                    crate::services::ClearGroundType(crate::clear_map::CLEAR_GRASS),
-                    3,
-                );
-            }
+            tgen_set_tile_height(&world, tile, height);
         }
     }
     abort();
     (world.a.set_abort_callback)(None);
     true
+}
+
+/// `tgp.cpp::TgenSetTileHeight`.
+fn tgen_set_tile_height(world: &crate::landscape_generation::World<'_>, tile: u32, height: u32) {
+    (world.a.set_height)(tile, height);
+    if (world.a.inner_tile)(tile) {
+        (world.clear.make_clear)(
+            tile,
+            crate::services::ClearGroundType(crate::clear_map::CLEAR_GRASS),
+            3,
+        );
+    }
 }
 
 crate::abi::layouts! {

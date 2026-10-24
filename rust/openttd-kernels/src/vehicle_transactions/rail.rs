@@ -27,6 +27,7 @@ pub struct Strings {
 pub struct Services {
     pub cargo_capacity: &'static crate::cargo_storage::CapacityServices,
     pub strings: Strings,
+    pub train_if_valid: extern "C" fn(u32) -> *mut (),
     pub compatible: extern "C" fn(*const OpenTTDEngine, u32) -> bool,
     pub powered: extern "C" fn(*const OpenTTDEngine, u32) -> bool,
     pub new_wagon: extern "C" fn(u32, *const OpenTTDEngine) -> *mut (),
@@ -135,11 +136,7 @@ impl Ctx {
     }
     /// `Train::GetIfValid`.
     fn train(self, id: u32) -> *mut () {
-        let v = unsafe { (self.g.vehicle)(id) };
-        if v.is_null() || unsafe { (self.g.vehicle_type)(v) } != VEH_TRAIN {
-            return ptr::null_mut();
-        }
-        v
+        (self.s.train_if_valid)(id)
     }
     fn consist_changed(self, v: *mut ()) {
         unsafe {
@@ -932,7 +929,7 @@ pub unsafe extern "C" fn openttd_rust_train_move(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDRailConstructionServices" ["probe"] => Services {
-        cargo_capacity, strings, compatible, powered, new_wagon, new_engine, new_rear, link_multihead, subtype,
+        cargo_capacity, strings, train_if_valid, compatible, powered, new_wagon, new_engine, new_rear, link_multihead, subtype,
         set_subtype, previous, last, set_next, next_vehicle, last_engine_part, ground, first_engine,
         invalidate_grf, attach_callback, unknown_attach, train_limit, unit,
         use_unit, release_unit, head_windows, front_windows, company_dirty, depot_changed,

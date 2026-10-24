@@ -113,7 +113,7 @@ static_assert(EngineID::Invalid().base() == 0xFFFF);
 static_assert(CalendarTime::DAYS_IN_YEAR * Ticks::DAY_TICKS == 365 * 74);
 static_assert(SND_19_DEPARTURE_OLD_RV_1 == 23 && SND_1A_DEPARTURE_OLD_RV_2 == 24);
 static_assert(PROP_AIRCRAFT_SPEED == 0x0C && CBID_VEHICLE_LENGTH == 0x11 && CBID_VEHICLE_32DAY_CALLBACK == 0x32);
-static_assert(VSE_START == 1 && VSE_BREAKDOWN == 3 && VSE_RUNNING == 4 && VSE_RUNNING_16 == 7 && VSE_STOPPED_16 == 8);
+static_assert(VSE_START == 1 && VSE_BREAKDOWN == 3 && VSE_RUNNING == 4 && VSE_TOUCHDOWN == 5 && VSE_RUNNING_16 == 7 && VSE_STOPPED_16 == 8);
 static_assert(HVOT_BUS == 4 && HVOT_TRUCK == 8);
 
 static void OPENTTD_VEHICLE_CALL VehicleSvcWriteCounters(OpenTTDVehicle *v, uint8_t tick, uint8_t running, int32_t order_time) noexcept
@@ -152,6 +152,8 @@ static int32_t OPENTTD_VEHICLE_CALL VehicleSvcProperty(OpenTTDVehicle *v, uint8_
 {
 	return GetVehicleProperty(VehicleOf(v), static_cast<PropertyID>(property), fallback);
 }
+Train *RustTrainGetIfValid(uint32_t id) noexcept { return Train::GetIfValid(VehicleID(id)); }
+
 static uint16_t OPENTTD_VEHICLE_CALL VehicleSvcCallback(OpenTTDVehicle *v, CallbackID callback) noexcept
 {
 	Vehicle *u = VehicleOf(v);

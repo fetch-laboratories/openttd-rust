@@ -646,6 +646,19 @@ pub(crate) fn station_graph(
 ) -> *mut super::NativeGraph {
     (services.get_if_valid)((services.graph_id)(station, cargo))
 }
+/// `IncreaseStats`: test the invalid sentinel, then use the strict pool lookup.
+pub(crate) fn station_graph_strict(
+    station: *mut crate::station::BaseStation,
+    cargo: u8,
+    services: &Services,
+) -> *mut super::NativeGraph {
+    let id = (services.graph_id)(station, cargo);
+    if id == INVALID_LINK_GRAPH {
+        std::ptr::null_mut()
+    } else {
+        (services.get)(id)
+    }
+}
 pub(crate) unsafe fn join(graph: *mut super::NativeGraph, station: u16, services: &Services) {
     let native = (services.access)(graph);
     let access = GraphAccess {

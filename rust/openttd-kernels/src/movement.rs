@@ -297,10 +297,12 @@ impl MovementServices {
                     (self.native_assert)(ok);
                 })
             };
-            let a = (self.shared().apply_foundation)(Foundation(f), Slope(p.slope.0));
-            p.z =
-                p.z.wrapping_add(a.z.wrapping_mul(TILE_HEIGHT.cast_signed()));
-            p.slope = a.slope;
+            let z = crate::landscape::apply_pixel_foundation_to_slope(
+                self.shared(),
+                Foundation(f),
+                &mut p.slope,
+            );
+            p.z = p.z.wrapping_add(z.cast_signed());
         } else if kind == MP_TUNNELBRIDGE {
             if (self.is_tunnel)(tile) {
                 if ground_vehicle {
@@ -308,16 +310,15 @@ impl MovementServices {
                 }
             } else {
                 let dir = (self.shared().tunnel_bridge_direction)(tile);
-                let a = (self.shared().apply_foundation)(
+                let z = crate::landscape::apply_pixel_foundation_to_slope(
+                    self.shared(),
                     Foundation(crate::bridge::get_bridge_foundation(
                         p.slope.0,
                         diag_dir_to_axis(dir, |ok| (self.native_assert)(ok)),
                     )),
-                    Slope(p.slope.0),
+                    &mut p.slope,
                 );
-                p.z =
-                    p.z.wrapping_add(a.z.wrapping_mul(TILE_HEIGHT.cast_signed()));
-                p.slope = a.slope;
+                p.z = p.z.wrapping_add(z.cast_signed());
                 if ground_vehicle {
                     if p.slope.0 != SLOPE_FLAT {
                         return p.z.wrapping_add(TILE_HEIGHT.cast_signed());
