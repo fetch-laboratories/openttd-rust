@@ -84,7 +84,6 @@ inline const Station *StationOf(const OpenTTDStation *s) noexcept { return reint
 /* GetSpec preserves the native dummy-airport fallback. Resolver-specific tile
  * gates remain with their callers; all handles are borrowed synchronously. */
 inline const AirportSpec *RustStationAirportSpec(const Station *st) noexcept { return st->airport.GetSpec(); }
-inline const AirportSpec *RustBaseStationAirportSpec(BaseStation *st) noexcept { return RustStationAirportSpec(Station::From(st)); }
 inline TTDPAirportType RustAirportTTDType(const AirportSpec *spec) noexcept { return spec->ttd_airport_type; }
 inline uint8_t RustStationAirportTTDType(const OpenTTDStation *st) noexcept { return RustAirportTTDType(RustStationAirportSpec(StationOf(st))); }
 inline uint32_t RustStationAirportTile(const BaseStation *s) noexcept { return Station::From(s)->airport.tile.base(); }
