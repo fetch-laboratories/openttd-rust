@@ -506,7 +506,7 @@ OpenTTDIndustryAnimationSpec IndustryAnimationSpec(uint32_t tile) noexcept
 
 #ifdef WITH_RUST
 IndustryTileScopeResolver::IndustryTileScopeResolver(ResolverObject &ro, Industry *industry, TileIndex tile)
-	: ScopeResolver(ro), context{industry == nullptr ? nullptr : industry->production_owner.get(), industry, industry == nullptr ? nullptr : industry->town, tile.base(), 0, industry == nullptr ? uint16_t{0xFFFF} : industry->index.base(), 0}
+	: ScopeResolver(ro), context{industry == nullptr ? nullptr : industry->production_owner.get(), industry, industry == nullptr ? nullptr : industry->town, tile.base(), 0, industry == nullptr ? IndustryID::Invalid().base() : industry->index.base(), 0}
 {
 }
 ScopeResolver *IndustryTileResolverObject::GetScope(VarSpriteGroupScope scope, uint8_t relative)

@@ -806,7 +806,7 @@ bool IndustryTemporarilyRefusesCargo(Industry *ind, CargoType cargo_type)
 
 #ifdef WITH_RUST
 IndustriesScopeResolver::IndustriesScopeResolver(ResolverObject &ro, TileIndex tile, Industry *industry, IndustryType type, uint32_t random_bits)
-	: ScopeResolver(ro), context{industry == nullptr ? nullptr : industry->production_owner.get(), industry, industry == nullptr ? nullptr : industry->town, tile.base(), random_bits, industry == nullptr ? uint16_t{0xFFFF} : industry->index.base(), type}
+	: ScopeResolver(ro), context{industry == nullptr ? nullptr : industry->production_owner.get(), industry, industry == nullptr ? nullptr : industry->town, tile.base(), random_bits, industry == nullptr ? IndustryID::Invalid().base() : industry->index.base(), type}
 {
 }
 ScopeResolver *IndustriesResolverObject::GetScope(VarSpriteGroupScope scope, uint8_t relative)
