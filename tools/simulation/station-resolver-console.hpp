@@ -95,6 +95,16 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 	std::array<int32_t, 2> parent_regs{}; StationNeed(object.ResolveCallback(parent_regs) == 0x400 && parent_regs[1] == 0x399, __LINE__);
 	StationResolverObject prototype(&spec, nullptr, tile); StationNeed(prototype.GetTown() != nullptr && prototype.GetTown()->readonly, __LINE__);
 	StationResolverObject no_town(&spec, nullptr, INVALID_TILE); StationNeed(no_town.GetTown() == nullptr, __LINE__);
+	StationNeed(no_town.ResolveCallback({}) == CALLBACK_FAILED, __LINE__);
+	det->var_scope = VSG_SCOPE_RELATIVE;
+	StationNeed(object.ResolveCallback({}) == CALLBACK_FAILED, __LINE__); det->var_scope = VSG_SCOPE_PARENT;
+	/* A readonly purchase parent cannot change the shared town storage. */
+	det->adjusts[2].and_mask = 0x400; StationNeed(prototype.ResolveCallback(parent_regs) == 0x400 && parent_regs[1] == 0x399, __LINE__); det->adjusts[2].and_mask = 0x399;
+	st->town = nullptr; StationResolverObject retry(&spec, st, tile);
+	StationNeed(retry.ResolveCallback({}) == CALLBACK_FAILED, __LINE__); st->town = original_town;
+	StationNeed(retry.ResolveCallback(parent_regs) == 0x400 && parent_regs[1] == 0x399, __LINE__);
+	fmt::print(stderr, "STCMD resolver-scope-fallback parent relative readonly retry\n");
+
 	fmt::print(stderr, "STCMD resolver-parent {} {} {}\n", parent->t->index.base(), parent_regs[1], prototype.GetTown()->t->index.base());
 	det->var_scope = VSG_SCOPE_SELF;
 	/* Real-group thresholds, division, fallbacks and cargo-map order use the

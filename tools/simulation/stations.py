@@ -1109,6 +1109,7 @@ def check_commands(scenario, run, mode, role, result):
             "resolver-variable slope-x",
             "resolver-variable slope-y",
             "resolver-parent",
+            "resolver-scope-fallback",
             "resolver-root",
             "resolver-root-null",
             "resolver-state",
