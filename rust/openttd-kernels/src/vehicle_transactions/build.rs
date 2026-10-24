@@ -198,10 +198,9 @@ pub(crate) unsafe fn build(
             result.capacity.total = result.capacity.cargo[usize::from(default_cargo)];
         } else {
             result.capacity.total = unsafe {
-                crate::engine_capabilities::openttd_rust_engine_capacity(
+                crate::engine_capabilities::display_default_capacity(
                     r.capabilities,
                     e,
-                    ptr::null_mut(),
                     &raw mut result.capacity.mail,
                 )
             };

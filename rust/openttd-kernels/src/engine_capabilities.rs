@@ -14,6 +14,7 @@
     clippy::cast_sign_loss,
     clippy::too_many_lines
 )]
+use crate::bitmath_func::{gb, has_bit, set_bit64};
 use crate::cargo_type::{
     ALL_CARGOTYPES, CT_MAIL, CT_PASSENGERS, INVALID_CARGO, NUM_CARGO, is_valid_cargo_type,
 };
@@ -271,7 +272,8 @@ pub unsafe extern "C" fn openttd_rust_engine_refittable(s: &Services, id: u16) -
             return true;
         }
         let cargo = (s.default_cargo)(e);
-        let mask = 1_u64.wrapping_shl(u32::from(cargo));
+        let mut mask = 0;
+        set_bit64(&mut mask, cargo);
         is_valid_cargo_type(cargo) && (s.refit_mask)(e) != mask
     }
 }
@@ -292,22 +294,22 @@ pub(crate) unsafe fn openttd_rust_articulated_next(
             return INVALID_ENGINE;
         }
         if (s.version)((s.grf)(e)) < 8 {
-            result &= 0xff;
+            result = gb(u32::from(result), 0, 8) as u16;
             if result == 0xff {
                 return INVALID_ENGINE;
             }
             if !mirrored.is_null() {
-                mirrored.write(result & 0x80 != 0);
+                mirrored.write(has_bit(result, 7));
             }
-            result &= 0x7f;
+            result = gb(u32::from(result), 0, 7) as u16;
         } else {
             if result == 0x7fff {
                 return INVALID_ENGINE;
             }
             if !mirrored.is_null() {
-                mirrored.write(result & 0x4000 != 0);
+                mirrored.write(has_bit(result, 14));
             }
-            result &= 0x3fff;
+            result = gb(u32::from(result), 0, 14) as u16;
         }
         (s.new_engine)((s.grf)(e), (s.kind)(e), result)
     }
@@ -351,6 +353,10 @@ pub unsafe extern "C" fn openttd_rust_articulated_count(
 pub(crate) unsafe fn can_carry_vehicle(s: &Services, v: V) -> bool {
     unsafe { openttd_rust_engine_can_carry(s, (s.vehicle_engine_object)(v)) }
 }
+/// `Engine::GetDisplayDefaultCapacity` delegates to the capacity owner in purchase context.
+pub(crate) unsafe fn display_default_capacity(s: &Services, e: E, mail: *mut u16) -> u32 {
+    unsafe { openttd_rust_engine_capacity(s, e, null_mut(), mail) }
+}
 /// Original helper narrows the display uint result to uint16 before aggregation.
 unsafe fn default_capacity(s: &Services, engine: u16) -> (u8, u16) {
     unsafe {
@@ -363,7 +369,7 @@ unsafe fn default_capacity(s: &Services, engine: u16) -> (u8, u16) {
         (
             cargo,
             if is_valid_cargo_type(cargo) {
-                openttd_rust_engine_capacity(s, e, null_mut(), null_mut()) as u16
+                display_default_capacity(s, e, null_mut()) as u16
             } else {
                 0
             },
@@ -378,7 +384,7 @@ pub(crate) unsafe fn available_cargo(s: &Services, engine: u16, initial: bool) -
         }
         let mut cargoes = (s.refit_mask)(e);
         if initial {
-            cargoes |= 1_u64.wrapping_shl(u32::from((s.default_cargo)(e)));
+            set_bit64(&mut cargoes, (s.default_cargo)(e));
         }
         cargoes
     }
@@ -428,12 +434,12 @@ pub unsafe extern "C" fn openttd_rust_articulated_cargoes(s: &Services, engine: 
         let e = (s.engine)(engine);
         let (cargo, cap) = default_capacity(s, engine);
         if is_valid_cargo_type(cargo) && cap > 0 {
-            cargoes |= 1_u64 << cargo;
+            set_bit64(&mut cargoes, cargo);
         }
         parts(s, e, engine, |part| {
             let (cargo, cap) = default_capacity(s, part);
             if is_valid_cargo_type(cargo) && cap > 0 {
-                cargoes |= 1_u64 << cargo;
+                set_bit64(&mut cargoes, cargo);
             }
             true
         });
@@ -515,7 +521,7 @@ pub unsafe extern "C" fn openttd_rust_articulated_live_cargoes(
             if is_valid_cargo_type(cargo)
                 && openttd_rust_engine_can_carry(s, (s.vehicle_engine_object)(v))
             {
-                cargoes |= 1_u64.wrapping_shl(u32::from(cargo));
+                set_bit64(&mut cargoes, cargo);
                 if !is_valid_cargo_type(first) {
                     first = (s.vehicle_cargo)(v);
                 }
