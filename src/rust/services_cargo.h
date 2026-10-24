@@ -12,6 +12,7 @@
 #include "../economy_func.h"
 #include "../newgrf_cargo.h"
 #include "../newgrf_spritegroup.h"
+#include "../newgrf.h"
 #include "../industrytype.h"
 struct OpenTTDIndustrySpecHandle;
 
@@ -23,8 +24,11 @@ inline uint16_t RustCargoClasses(CargoType cargo) noexcept { return RustCargoSpe
 inline uint OpenTTDScaleCargo(uint amount, bool town) noexcept { return ScaleByCargoScale(amount, town); }
 inline CargoType OpenTTDCargoTranslation(uint8_t cargo, const GRFFile *grf) noexcept { return GetCargoTranslation(cargo, grf); }
 inline CargoType RustResolverCargoTranslation(const ResolverObject *resolver, uint8_t cargo) noexcept { return OpenTTDCargoTranslation(cargo, resolver->grffile); }
+/* Raw inverse-map reads retain the native file and cargo-index preconditions;
+ * they do not apply GetCargoTranslation's version or nullable-file policy. */
 inline uint8_t RustGRFCargoMap(const GRFFile *file, CargoType cargo) noexcept { return file->cargo_map[cargo]; }
-template <typename Spec> inline uint8_t RustSpecCargoMap(const Spec *spec, CargoType cargo) noexcept { return RustGRFCargoMap(spec->grf_prop.grffile, cargo); }
+template <typename Spec>
+inline uint8_t RustSpecCargoMap(const Spec *spec, CargoType cargo) noexcept { return RustGRFCargoMap(spec->grf_prop.grffile, cargo); }
 inline CargoType OpenTTDCargoByLabel(CargoLabel label) noexcept { return GetCargoTypeByLabel(label); }
 inline uint OpenTTDMoveGoodsToStation(CargoType cargo, uint amount, Source source, const StationList &stations, Owner exclusivity = INVALID_OWNER) noexcept
 {

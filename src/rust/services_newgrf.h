@@ -36,6 +36,16 @@ inline bool RustSpecGRFVersion8(const Spec *spec) noexcept { return RustSpecGRFV
 inline int32_t RustResolverRegister(const ResolverObject *resolver, uint16_t reg) noexcept { return resolver->GetRegister(reg); }
 inline int32_t RustResolverRegister100(const ResolverObject *resolver) noexcept { return RustResolverRegister(resolver, 0x100); }
 
+/* Container reads retain the native index preconditions and full size_t width.
+ * Selection and narrowing belong to the caller; these leaves allocate nothing. */
+inline size_t RustRealLoadingCount(const RealSpriteGroup *group) noexcept { return group->loading.size(); }
+inline size_t RustRealLoadedCount(const RealSpriteGroup *group) noexcept { return group->loaded.size(); }
+inline const SpriteGroup *RustRealLoading(const RealSpriteGroup *group, size_t index) noexcept { return group->loading[index]; }
+inline const SpriteGroup *RustRealLoaded(const RealSpriteGroup *group, size_t index) noexcept { return group->loaded[index]; }
+template <typename Spec>
+inline bool RustSpecHasSpriteGroups(const Spec *spec) noexcept { return spec->grf_prop.HasSpriteGroups(); }
+inline bool RustHouseHasSpriteGroups(uint16_t house) noexcept { return RustSpecHasSpriteGroups(RustHouseSpec(house)); }
+
 /* Keep the native map wrapping, station-axis handling and signed-offset default. */
 inline uint32_t RustNearbyTileWithAxis(uint8_t parameter, uint32_t tile, bool signed_offsets, Axis axis) noexcept { return GetNearbyTile(parameter, TileIndex(tile), signed_offsets, axis).base(); }
 inline uint32_t RustNearbyTile(uint8_t parameter, uint32_t tile, bool signed_offsets) noexcept { return RustNearbyTileWithAxis(parameter, tile, signed_offsets, INVALID_AXIS); }
