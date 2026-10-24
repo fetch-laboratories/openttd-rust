@@ -333,11 +333,18 @@ inline RailTypes GetAllPoweredRailTypes(RailTypes railtypes)
  * @param railtypes Set of railtypes to get the introduced railtypes from.
  * @return Union of all introduced railtypes.
  */
+#ifdef WITH_RUST
+uint64_t RustAllIntroducesRailTypes(uint64_t types) noexcept;
+#endif
 inline RailTypes GetAllIntroducesRailTypes(RailTypes railtypes)
 {
+#ifdef WITH_RUST
+	return RailTypes{RustAllIntroducesRailTypes(railtypes.base())};
+#else
 	RailTypes introduces{};
 	for (RailType rt : railtypes) introduces.Set(GetRailTypeInfo(rt)->introduces_railtypes);
 	return introduces;
+#endif
 }
 
 /**

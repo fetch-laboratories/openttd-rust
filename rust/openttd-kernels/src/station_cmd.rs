@@ -1333,7 +1333,7 @@ impl Ctx<'_> {
         if !cost.ok() {
             return;
         }
-        if !(self.rail().rail_type_valid)(rt) || axis >= 2 {
+        if !crate::rail::val_param_rail_type(self.shared, rt) || axis >= 2 {
             return cost.error(0xffff);
         }
         if u32::from(class) >= (self.s.rail_class_count)()
@@ -2263,7 +2263,7 @@ impl Ctx<'_> {
         adjacent: bool,
     ) {
         crate::witness::hit(crate::witness::STATION_CMD_BUILD_ROAD);
-        if !(self.shared.road_type_valid)(rt) || dir >= 4 || stop_type >= 2 {
+        if !crate::road::val_param_road_type(self.shared, rt) || dir >= 4 || stop_type >= 2 {
             return cost.error(0xffff);
         }
         let reuse = target != 0xfffd;
