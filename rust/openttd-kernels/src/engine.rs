@@ -782,7 +782,7 @@ unsafe fn available(s: &Services, e: EngineRef, date: i32) {
         if types.assertions {
             assert_ne!(rails, 0);
         }
-        let introduced = crate::rail::openttd_rust_all_introduces_rail_types(types, rails);
+        let introduced = crate::rail::get_all_introduces_rail_types(types, rails);
         let mut from = 0;
         loop {
             let c = unsafe { call!(s, company_next, from) };

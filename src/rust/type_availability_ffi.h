@@ -39,7 +39,6 @@ bool openttd_rust_val_rail_type(const OpenTTDSharedServices *, RailType);
 uint64_t openttd_rust_add_date_rail_types(const OpenTTDTypeAvailabilityServices *, uint64_t, int32_t);
 uint64_t openttd_rust_company_rail_types(const OpenTTDSharedServices *, const OpenTTDTypeAvailabilityServices *, uint8_t, bool);
 uint64_t openttd_rust_rail_types(const OpenTTDSharedServices *, const OpenTTDTypeAvailabilityServices *, bool);
-uint64_t openttd_rust_all_introduces_rail_types(const OpenTTDTypeAvailabilityServices *, uint64_t);
 bool openttd_rust_has_road_type(const OpenTTDSharedServices *, const OpenTTDTypeAvailabilityServices *, uint8_t, RoadType);
 bool openttd_rust_has_any_road_types(const OpenTTDTypeAvailabilityServices *, uint8_t, RoadTramType);
 bool openttd_rust_val_road_type(const OpenTTDSharedServices *, RoadType);

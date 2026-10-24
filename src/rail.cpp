@@ -236,10 +236,3 @@ RailType GetRailTypeByLabel(RailTypeLabel label, bool allow_alternate_labels)
 	/* No matching label was found, so it is invalid */
 	return INVALID_RAILTYPE;
 }
-
-#ifdef WITH_RUST
-uint64_t RustAllIntroducesRailTypes(uint64_t types) noexcept
-{
-	return openttd_rust_all_introduces_rail_types(&GetRustTypeAvailabilityServices(), types);
-}
-#endif

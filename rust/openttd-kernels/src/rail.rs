@@ -7,8 +7,7 @@ use crate::timer_game_common::MAX_DATE;
 use crate::type_availability::{Services, company_available, services};
 use crate::vehicle::{RailVehicleTypes, VehicleType};
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_all_introduces_rail_types(s: &Services, mut types: u64) -> u64 {
+pub fn get_all_introduces_rail_types(s: &Services, mut types: u64) -> u64 {
     let mut introduces = 0;
     while types != 0 {
         let rt = crate::base_bitset_type::get_nth_set_bit(types, 0).unwrap_or(0);
@@ -86,7 +85,7 @@ fn engine_types(shared: &Shared, s: &Services, company: Option<u8>, introduces: 
             assert_ne!(rails, 0);
         }
         types |= if introduces {
-            openttd_rust_all_introduces_rail_types(s, rails)
+            get_all_introduces_rail_types(s, rails)
         } else {
             rails
         };

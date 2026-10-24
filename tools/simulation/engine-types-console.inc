@@ -113,6 +113,8 @@ static void TypeEngineInputs(Company *c)
 	r->VehInfo<RoadVehicleInfo>().roadtype = static_cast<RoadType>(62);
 	e->company_avail = {}; r->company_avail = {}; e->intro_date = r->intro_date = TimerGameCalendar::date - 364;
 	TypeRequire(GetCompanyRailTypes(c->index, false).None() && GetCompanyRoadTypes(c->index, false).None(), "before-release");
+	bool special = true; for (uint8_t id : {16, 17, 32, 33, 48, 49, 63}) special &= GetCompanyRailTypes(CompanyID{id}, false).None() && GetCompanyRoadTypes(CompanyID{id}, false).None();
+	TypeRequire(special, "company-bits");
 	TypeRequire(GetRailTypes(false) == e->VehInfo<RailVehicleInfo>().railtypes && GetRoadTypes(false) == RoadTypes{static_cast<RoadType>(62)}, "all-multirail");
 	e->company_avail.Set(c->index); r->company_avail.Set(c->index);
 	TypeRequire(GetCompanyRailTypes(c->index, false) == GetRailTypes(false) && GetCompanyRoadTypes(c->index, false) == GetRoadTypes(false) && GetCompanyRailTypes(CompanyID{static_cast<uint8_t>(c->index.base() ^ 1)}, false).None() && GetCompanyRoadTypes(CompanyID{static_cast<uint8_t>(c->index.base() ^ 1)}, false).None(), "preview-owner");
@@ -153,6 +155,7 @@ static bool TypesScenario(std::span<std::string_view> args)
 		TypeRequire(rs.All(railchain) && ds.All(roadchain), "fixedpoint");
 		for (uint i : {50, 52, 53, 54, 55, 56, 57}) TypeRequire(!rs.Test(static_cast<RailType>(i)) && !ds.Test(static_cast<RoadType>(i)), fmt::format("excluded-{}", i).c_str());
 		TypeRequire(rs.Test(static_cast<RailType>(51)) && ds.Test(static_cast<RoadType>(51)), "date-zero");
+		TypeRequire(AddDateIntroducedRailTypes(RailTypes{static_cast<RailType>(55)}, date).Test(static_cast<RailType>(56)) && AddDateIntroducedRoadTypes(RoadTypes{static_cast<RoadType>(55)}, date).Test(static_cast<RoadType>(56)), "seeded-cycle");
 		TypeRequire(AddDateIntroducedRailTypes(RailTypes{RAILTYPE_RAIL}, date - 1).Test(static_cast<RailType>(60)) == false && AddDateIntroducedRoadTypes(RoadTypes{ROADTYPE_ROAD}, date - 1).Test(static_cast<RoadType>(60)) == false, "inclusive-day");
 		TypeRequire(GetRailTypes(true).Test(static_cast<RailType>(53)) && GetRoadTypes(true).Test(static_cast<RoadType>(53)), "max-date");
 		TypeEngineInputs(c);
