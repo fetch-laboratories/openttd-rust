@@ -106,6 +106,10 @@ static void ResolverBinding(ResolverObject *ro, OpenTTDResolverBinding *out) noe
 		out->self = &it->indtile_scope; out->parent = &it->ind_scope; out->kind = 4;
 	} else if (auto *rs = dynamic_cast<RoadStopResolverObject *>(ro)) {
 		out->state = &rs->roadstop_scope.state; out->self = &rs->roadstop_scope; out->kind = 6;
+	} else if (auto *h = dynamic_cast<HouseResolverObject *>(ro)) {
+		out->self = &h->house_scope; out->parent = &h->town_scope; out->kind = 7;
+	} else if (auto *t = dynamic_cast<TownResolverObject *>(ro)) {
+		out->self = &t->town_scope; out->kind = 8;
 	} else if (typeid(*ro) != typeid(ResolverObject)) {
 		out->kind = 5; // Remaining native feature scope-selection behavior.
 	}
@@ -118,9 +122,10 @@ static void ScopeBinding(ScopeResolver *scope, OpenTTDScopeBinding *out) noexcep
 	else if (auto *i = dynamic_cast<IndustriesScopeResolver *>(scope)) { out->kind = 3; out->data.industry = &i->context; }
 	else if (auto *it = dynamic_cast<IndustryTileScopeResolver *>(scope)) { out->kind = 4; out->data.industry = &it->context; }
 	else if (auto *o = dynamic_cast<ObjectScopeResolver *>(scope)) { out->kind = 5; out->data.object = {o->obj, o->spec, o->tile.base(), o->view}; }
-	else if (auto *t = dynamic_cast<TownScopeResolver *>(scope)) { out->kind = 6; out->data.town = {t->t, t->readonly}; }
+	else if (auto *t = dynamic_cast<TownScopeResolver *>(scope)) { out->kind = 6; out->data.town = &t->context; }
 	else if (auto *a = dynamic_cast<AirportScopeResolver *>(scope)) { out->kind = 7; out->data.airport = a->st; }
 	else if (auto *rs = dynamic_cast<RoadStopScopeResolver *>(scope)) { out->kind = 9; out->data.roadstop = &rs->state; }
+	else if (auto *h = dynamic_cast<HouseScopeResolver *>(scope)) { out->kind = 10; out->data.house = &h->context; }
 	else { out->kind = typeid(*scope) == typeid(ScopeResolver) ? 0 : 8; }
 }
 const OpenTTDSpriteGroupServices &GetRustSpriteGroupServices() noexcept
@@ -128,6 +133,7 @@ const OpenTTDSpriteGroupServices &GetRustSpriteGroupServices() noexcept
 	static const OpenTTDSpriteGroupServices services{
 		.adjust = GroupAdjust,
 		.global = &GetRustGlobalVariableServices(),
+		.house = &GetHouseResolverServices(),
 		.industry = &GetIndustryResolverServices(),
 		.industry_builder = RustIndustryBuilderState,
 		.loaded = RustRealLoaded,
