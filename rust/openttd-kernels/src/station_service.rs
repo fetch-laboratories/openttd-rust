@@ -1857,7 +1857,7 @@ pub(crate) unsafe fn load_station(
 ) {
     // C++ supplies the queue owner directly: no callback precedes the empty
     // queue check, and the queue station is not the vehicles' loading station.
-    let mut node = unsafe { openttd_rust_station_queue_first(state) };
+    let node = unsafe { openttd_rust_station_queue_first(state) };
     if node.is_null() {
         return;
     }
@@ -1869,6 +1869,19 @@ pub(crate) unsafe fn load_station(
         out,
         temporary,
     };
+    // SAFETY: The first queue node and immutable tables are live for the same
+    // synchronous load. The helper retains the original live-next traversal.
+    unsafe { load_station_queue(state, node, w, l, visits, &refit) };
+}
+
+unsafe fn load_station_queue(
+    state: *mut Service,
+    mut node: *mut QueueEntry,
+    w: &World,
+    l: &Loading,
+    visits: &Visits,
+    refit: &RefitContext,
+) {
     let mut last = None;
     while !node.is_null() {
         let v = VehicleRef(unsafe {
@@ -1893,7 +1906,7 @@ pub(crate) unsafe fn load_station(
         });
         if (l.status)(v) & (VS_STOPPED | VS_CRASHED) == 0 {
             unsafe {
-                load_vehicle(v, w, l, &refit, visits);
+                load_vehicle(v, w, l, refit, visits);
             }
         }
         if Some(v) == last {
