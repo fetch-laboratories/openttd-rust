@@ -4,13 +4,13 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-23, code at `ac7d2b60f2`)
+## Where the fork stands (2026-10-24, code at `cb4a01e86f`)
 
-- Fifty-two ownership ports. Original retirement: 57,462 / 470,612 C/C++ src lines (12.21%); simulation 49,264 / 102,615 (48.01%). Whole-fork Rust/tooling/glue: 103,834 / 36,694 / 37,169. These are source-line measures, including comments/data, not completed behavior percentages.
-- Since the seventeenth steering: 14 owners, 7,826 original lines retired, 2,772 net glue and 4,612 tooling lines added. Latest #391 integrates scheduler #380, live graph #383, occupancy #384 and monitors #388. The last session integrated #360/#368/#379/#382/#390/#391; no rollback.
+- Fifty-two ownership ports. Original retirement: 57,462 / 470,612 C/C++ src lines (12.21%); simulation 49,264 / 102,615 (48.01%). Whole-fork Rust/tooling/glue: 103,834 / 36,703 / 37,169. These are source-line measures, including comments/data, not completed behavior percentages.
+- Since the seventeenth steering: 14 owners, 7,826 original lines retired, 2,772 net glue and 4,612 tooling lines added. Latest #391 integrates scheduler #380, live graph #383, occupancy #384 and monitors #388. The previous migration session integrated #360/#368/#379/#382/#390/#391; #395 subsequently trimmed CI setup/export idle time. No rollback.
 - Current tip projections, using the 824 quiet anchors: TGP 1.112461x; Opus 1.473042x; Grok 1.464168x; P1996 1.368048x; P2000 1.442738x; P2016 1.516110x. All five play rises exceed 3% when BOTH tips use those anchors (#275). These are not wall measurements. The last complete quiet pass was at 824: P2016 1.453124x, the only measured scenario still in band. The ac7 attempt is incomplete and supplies no new anchors.
-- Integrated code and current docs Quick are green; final combinations passed Full. Since steering: 27 Full requests, 15 successful, six failed and six cancelled. Strict current-base protection is enabled. macOS is due after four more integrations; CI maintenance observation remains 4/10. CI_ON_DEMAND stays true.
-- Three unfinished components: reviewed animation #389, plus #392/#393 pushed sketches without PRs. All agents/jobs stopped at wind-down. There are 22 task checkouts, including 17 integrated ancestors; protected speed evidence remains needed. Disk has about 801 GiB free; #259 owns lifecycle cleanup.
+- Integrated code and current docs Quick are green; final combinations passed Full. Since steering: 27 Full requests, 15 successful, six failed and six cancelled. Strict current-base protection is enabled. macOS is due after three more integrations; CI maintenance observation is 5/10. CI_ON_DEMAND stays true.
+- Three unfinished owners: animation #389 passed its scoped conflict review; #392/#393 are resumed from pushed sketches. Source maintenance, coverage and both NewGRF workers are active, with retained speed attribution alongside them. Ten completed checkouts were safely removed under #259; protected speed inputs remain. Four component/batch branches plus one coverage fragment are active; no new owner starts before selection.
 
 ## Eighteenth steering review (2026-10-23, remove accidental gates and close shared-layer debt)
 
@@ -137,6 +137,7 @@ Rows below use original retirement and net glue (#223).
 | #261 canonical station reservation setter | #376 | #379 | `dd31616e7a` | in PR; other drafts adopt this definition |
 | #261 shared linear nearby-industry cursor | #381 | #382 | `032d0d150c` | 47 / 25 / 28 / 0; net glue 11; 100/100 added lines |
 | #275, #356 typed routing and quiet anchors | #390, #391 anchors | direct | `824ebd56c5`, `ac7d2b60f2` | #390: 226 / 13 / 34 / 0; net glue 20; fixture 24/80 |
+| #394 CI idle-time trims | #395 | direct | `cb4a01e86f` | 0 / 10 / 0 / 0; net glue 0 |
 
 ## Phase 1: selected maintenance and coverage
 
@@ -156,6 +157,8 @@ three active owners below leave room, but fill maintenance/coverage capacity fir
 4. **#392 vehicle NewGRF resolver/cache:** finish the complete vehicle-specific scope/root/variable/callback/property/randomisation runtime and canonical cache. Native common Action2/specs/pools/rendering remain shared. Issue owns the first concrete checkpoint and default callback/reload evidence; split review above about 1,000 retired lines.
 5. **#393 transactional NewGRF storage:** finish process registry/modes/registers, payloads/backups and industry/airport/town creation policies. Native associations/save-error frames remain. Prove aliases, transitions and nonempty reload in existing modules. Issue estimates are planning inputs, not inherited budget gates.
 6. **#259 lifecycle cleanup:** remove verified completed review/fix checkouts, retaining pending speed inputs until consumed. Broader infrastructure is unselected; revisit CI tooling only after the ten-integration observation already chosen.
+7. **#398 industry and industry-tile NewGRF resolver:** own both feature runtimes, stack contexts, variables/roots/town selection, type/nearby policy and callback/probability/refusal routes. Reuse industry state directly; common Action2/specs remain native and storage stays #393. First checkpoint requires actual var67/68 and production/refusal callbacks in default industry scenarios.
+8. **#399 rail-station/waypoint NewGRF resolver:** own scope/root/cargo policy, six caches for each resolver lifetime, platform/continuation queries, slope callbacks and randomisation. Direct cargo/movement routes and exact reseed RNG are the first checkpoint; animation stays #389. No draft-service dependency. Issues hold the interface/evidence plans; root selects a fresh worker when capacity frees.
 
 New owners start from integrated rust-migration, never draft services. Root lands
 a shared service once, and other drafts adopt it when preparing final validation.
@@ -166,24 +169,26 @@ when the existing restart loop calls for it; completing this list does not stop 
 
 ## Resume checkpoint
 
-Paused at the user's request. All agents and local validation jobs are stopped.
-The steering review changed only docs/issues/comments; no game build, profile,
-CI request, integration or worktree cleanup. Nothing is currently ready to merge.
+Development resumed. Animation's fresh scoped conflict review passed without fixes;
+root owns current-base adoption, native/ABI/affected scenarios and final Full.
+Four implementation workers and a retained-speed analyst are active. No final Full
+is running; finish routine roadmap changes before freezing its base.
 
 | Item | Saved head | Resume action | Jobs / CI |
 | --- | --- | --- | --- |
-| #389 animation | `2290e57998` | Scoped conflict review; affected checks, current-base Full. No speed dependency. | None. Quick green; no Full. Native build interrupted; ABI/scenarios pending. |
-| #392 vehicle resolver | `48727d8fd1` | Finish unbuildable interface sketch and canonical cache/runtime checkpoint. | None; no checks or PR. |
-| #393 storage | `8b5e305555` | Finish payload/interfaces, creation policies and save aliases; nonempty reload. | None; no checks or PR. |
-| #261/#281/#156 batch | not started | Assign maintenance and coverage workers to the linked selections. | None. |
-| #275 speed | frozen `ac7d2b60f2` | Retained-profile attribution and complete quiet-six retry. | None; previous attempt incomplete, no new anchors. |
+| #389 animation | `f7bd701c2a` | Scoped review/base adoption complete; native/ABI/scenarios, Full. | Build passed; native/scenarios running; prior Cargo4/Quick retained. |
+| #392 vehicle resolver | `48727d8fd1` | Assigned: complete canonical cache/runtime and first default callback checkpoint. | Implementing; no PR yet. |
+| #393 storage | `8b5e305555` | Assigned: finish interface audit, creation policies and nonempty reload. | Implementing; no PR yet. |
+| #261/#281 source batch | current base | Assigned selected source fixes; checker carries separately. | Implementing. |
+| #156 coverage | current base | Assigned real rail callbacks, then heightmap/reserved-cargo gaps; batch ready work. | Implementing. |
+| #275 speed | frozen `ac7d2b60f2` | Assigned retained ac7/824 attribution; whole quiet-six inputs prepared. | No timed collection. |
+| #398 / #399 next owners | selected | Industry resolver first, then station/waypoint resolver; fresh agents when capacity frees. | Not started. |
 
 Preserve speed checkouts `af1fea6a`, `bf961767`, `72a1223d`, `7ece2878`, `2a35b1c0`
 and their exact runtime until #275 consumes them. Keep the pinned reference
-unchanged. Root's most recent session used gpt-6.1-sol ultra; follow the user's
-host/model selection and lower-effort subagent roles. CI_ON_DEMAND stays true;
-macOS is due after four integrations. The restart skill resumes normal work;
-old wind-down messages bind only the stopped session.
+unchanged. Current root is gpt-6.1-sol xhigh; implementation/review workers use
+Sol high and planning uses Astra high. CI_ON_DEMAND stays true; macOS is due
+after three integrations. Old wind-down messages bind only the stopped session.
 
 ## Progress metric
 

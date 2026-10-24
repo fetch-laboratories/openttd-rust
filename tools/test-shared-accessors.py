@@ -148,5 +148,59 @@ with tempfile.TemporaryDirectory() as directory:
     assert "remove retired" in check().stdout
     baseline.write_text("")
     assert check().returncode == 0
+    seed = "\nint First(Vehicle *v) noexcept { return NativeLeaf(v, EVENT_A); }\nOpenTTDFixtureServices first{.a = First,\n};\n"
+    port.write_text(original + seed)
+    git("commit", "-qam", "Add: Single native callee fixture")
+    base = git("rev-parse", "HEAD")
+    call = "return NativeLeaf(v, EVENT_A);"
+    variants = [
+        (call, "noexcept", True),
+        (
+            "Vehicle *p = static_cast<Vehicle *>(v.shell); "
+            "return NativeLeaf(p, EVENT_A);",
+            "noexcept",
+            True,
+        ),
+        (call.replace("EVENT_A", "EVENT_B"), "noexcept", False),
+        ("Notify(v); " + call, "noexcept", False),
+        (call.replace("(v,", "(v->owner + v->index,"), "noexcept", False),
+        (call, "", False),
+    ]
+    for body, qualifier, copied in variants:
+        for prefix in ["int Second", "[]"]:
+            definition = f"{prefix}(Vehicle *v) {qualifier} {{ {body} }}"
+            binding = "Second" if prefix != "[]" else definition
+            source = definition if prefix != "[]" else ""
+            port.write_text(
+                original
+                + seed
+                + source
+                + f"\nOpenTTDFixtureServices second{{.b = {binding},\n}};\n"
+            )
+            result = check()
+            assert ("callee | NativeLeaf(arg0,EVENT_A)" in result.stdout) == copied
+            assert bool(result.returncode) == copied, result.stdout
+    port.write_text(
+        original
+        + seed
+        + "int Second(Vehicle *v) noexcept { "
+        + call
+        + " }\nOpenTTDFixtureServices second{.b = Second,\n};\n"
+    )
+    git("commit", "-qam", "Add: Existing callee copies fixture")
+    base = git("rev-parse", "HEAD")
+    assert check().returncode == 0, check().stdout
+    port.write_text(
+        port.read_text()
+        + "int Third(Vehicle *v) noexcept { return NativeLeaf(v, EVENT_A); }\nOpenTTDFixtureServices third{.c = Third,\n};\n"
+    )
+    result = check()
+    assert "callee |" in result.stdout and result.returncode == 1, result.stdout
+    fingerprint = result.stdout.split("new shared accessor: ")[1].splitlines()[0]
+    baseline.write_text(fingerprint + "\n")
+    assert "addition forbidden" in check().stdout
+    port.write_text(original + seed)
+    baseline.write_text("")
+    assert check().returncode == 0, check().stdout
     baseline.unlink()
     assert check().returncode != 0
