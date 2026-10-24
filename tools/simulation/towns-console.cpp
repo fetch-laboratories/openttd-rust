@@ -419,7 +419,8 @@ static bool CommandsScenario(std::span<std::string_view> args)
 		}
 		fmt::print(stderr, "TOWN final-town {} {}\n", Town::GetNumItems(), Object::GetNumItems());
 		/* Keep the simulation valid after the final-town input. */
-		Cost("delete-final-recover", CmdFoundTown(DoCommandFlag::Execute, TileIndex{}, TSZ_SMALL, false, TL_ORIGINAL, true, 0, "Recovery town"));
+		auto recovery = CmdFoundTown(DoCommandFlag::Execute, Site(), TSZ_SMALL, false, TL_ORIGINAL, false, 0, "Recovery town");
+		Cost("delete-final-recover", recovery); if (std::get<0>(recovery).Failed()) std::abort();
 		cleanup_owner.Restore(); cleanup_mode.Restore();
 	}
 	return true;

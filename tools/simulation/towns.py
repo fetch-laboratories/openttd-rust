@@ -1096,9 +1096,11 @@ def check_bribes(scenario, run, mode, role, result):
                     chunks["STNN"], dict(chunks["STNN"]["elements"])[int(station)]
                 )
                 # Saved pool references are one-based; owner IDs are raw values.
-                if st["town"] != (town if index < 2 else neighbour) + 1 or st[
-                    "owner"
-                ] != (company if index % 2 == 0 else other):
+                if st["normal[0]/base[0]/town"] != (
+                    town if index < 2 else neighbour
+                ) + 1 or st["normal[0]/base[0]/owner"] != (
+                    company if index % 2 == 0 else other
+                ):
                     raise RuntimeError("town bribe mixed station associations missing")
                 ratings = [
                     st[f"normal[0]/goods[{cargo}]/rating"] for cargo in range(64)
