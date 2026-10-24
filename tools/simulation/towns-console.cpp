@@ -87,6 +87,56 @@ static TileIndex Site()
 	}
 	std::abort();
 }
+/* The ordinary authority fixture has ample cash. Exercise the real mask and
+ * command gate at native prices, including queries for a non-current company. */
+static void TownActionMoney(Town *town, Company *company, Company *other)
+{
+#ifdef WITH_RUST
+	Backup<Money> cash(company->Finances().money), peer(other->Finances().money);
+#else
+	Backup<Money> cash(company->money), peer(other->money);
+#endif
+	Backup<bool> infinite(_settings_game.difficulty.infinite_money, false);
+	std::array<Money, 8> prices;
+	std::set<Money> balances{-1, 0};
+	for (TownAction action{}; action < TownAction::End; ++action) {
+		Money price = _price[PR_TOWN_ACTION] * GetTownActionCost(action) >> 8;
+		prices[to_underlying(action)] = price;
+		for (int delta : {-1, 0, 1}) balances.insert(price + delta);
+		fmt::print(stderr, "TOWN money-price {} {}\n", to_underlying(action), price);
+	}
+	/* Interactive randomness starts from process-specific state, not the map seed. */
+	Backup<Randomizer> interactive_seed(_interactive_random);
+	_interactive_random.SetSeed(12345);
+	const auto random = _random, interactive = _interactive_random;
+	for (bool foreign : {false, true}) {
+		for (Money balance : balances) {
+			cash.Change(foreign ? Money{1000000000000LL} : balance);
+			peer.Change(foreign ? balance : Money{1000000000000LL});
+			fmt::print(stderr, "TOWN money-mask {} {} {} {}\n", foreign, balance, GetMaskOfTownActions(foreign ? other->index : company->index, town).base(), GetMaskOfTownActions(foreign ? company->index : other->index, town).base());
+		}
+	}
+	peer.Restore();
+	Backup<uint8_t> funding(town->fund_buildings_months, 0);
+	Money price = prices[to_underlying(TownAction::FundBuildings)];
+	for (int delta : {-1, 0}) {
+		cash.Change(price + delta);
+		funding.Change(0);
+		auto save = [&](const char *phase) {
+			std::string path = fmt::format("{}/money-{}-{}.sav", std::getenv("HOME"), delta, phase);
+			if (SaveOrLoad(path, SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false) != SL_OK) std::abort();
+		};
+		fmt::print(stderr, "TOWN money-command {} {} {} {}\n", delta, price, town->index.base(), company->index.base());
+		save("before");
+		Cost("money-test", CmdDoTownAction({}, town->index, TownAction::FundBuildings));
+		save("test");
+		Cost("money-exec", CmdDoTownAction(DoCommandFlag::Execute, town->index, TownAction::FundBuildings));
+		save("after");
+		fmt::print(stderr, "TOWN money-funded {} {}\n", delta, town->fund_buildings_months);
+	}
+	fmt::print(stderr, "TOWN money-rng {} {} {} {} {}\n", _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1], _random.state[0] == random.state[0] && _random.state[1] == random.state[1] && _interactive_random.state[0] == interactive.state[0] && _interactive_random.state[1] == interactive.state[1]);
+	cash.Restore(); funding.Restore(); infinite.Restore(); interactive_seed.Restore();
+}
 /* Real CmdPlaceHouse and animation bodies in both games, with controlled spec
  * overrides. The save corpus has no external NewGRF providing callback 0x1C.
  * Restore specs before returning so ordinary simulation and saves stay valid. */
@@ -272,6 +322,7 @@ static bool CommandsScenario(std::span<std::string_view> args)
 	owner.Change(company->index);
 	if (!Station::CanAllocateItem()) std::abort();
 	Station *station = new Station(town->xy); _station_kdtree.Insert(station->index); station->town = town; station->owner = company->index;
+	TownActionMoney(town, company, other);
 	fmt::print(stderr, "TOWN action-mask {} {}\n", GetMaskOfTownActions(company->index, town).base(), GetMaskOfTownActions(COMPANY_SPECTATOR, town).base());
 	for (TownAction action{}; action < TownAction::Bribe; ++action) {
 		Cost("action-test", CmdDoTownAction({}, id, action)); Cost("action-exec", CmdDoTownAction(DoCommandFlag::Execute, id, action));

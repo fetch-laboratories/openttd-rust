@@ -1043,6 +1043,107 @@ FOUNDING_BRANCHES = (
 ).split()
 
 
+def check_action_money(scenario, run, mode, role, result):
+    """Affordability masks and real command refusal/success, before time advances."""
+    prices = [
+        list(map(int, line.split()[2:]))
+        for line in run["log"]
+        if line.startswith("TOWN money-price ")
+    ]
+    if len(prices) != 8 or [row[0] for row in prices] != list(range(8)):
+        raise RuntimeError("town action price markers missing")
+    prices = [row[1] for row in prices]
+    if prices[0] <= 1 or prices != sorted(set(prices)):
+        raise RuntimeError("town action prices must distinguish affordability levels")
+    balances = {-1, 0} | {price + delta for price in prices for delta in (-1, 0, 1)}
+    masks = [
+        line.split()[2:] for line in run["log"] if line.startswith("TOWN money-mask ")
+    ]
+    expected = [
+        [
+            str(foreign).lower(),
+            str(balance),
+            str(sum(1 << i for i, price in enumerate(prices) if balance >= price)),
+            "255",
+        ]
+        for foreign in (False, True)
+        for balance in sorted(balances)
+    ]
+    if masks != expected:
+        raise RuntimeError("town action affordability/query-company masks differ")
+    commands = [
+        line.split()[2:]
+        for line in run["log"]
+        if line.startswith("TOWN money-command ")
+    ]
+    if len(commands) != 2 or [int(row[0]) for row in commands] != [-1, 0]:
+        raise RuntimeError("town action affordability command markers missing")
+    captures = []
+    for delta, price, town, company in commands:
+        if int(price) != prices[5]:
+            raise RuntimeError("town funding command price differs")
+        saves = {
+            phase: run["dir"] / f"money-{delta}-{phase}.sav"
+            for phase in ("before", "test", "after")
+        }
+        if not all(path.is_file() for path in saves.values()):
+            raise RuntimeError("town action affordability semantic save missing")
+        if differences := core.compare_saves(
+            saves["before"], saves["test"], scenario["name"], 10, result["stats"]
+        ):
+            raise RuntimeError(f"town funding test mutated state: {differences}")
+        if delta == "-1" and (
+            differences := core.compare_saves(
+                saves["before"], saves["after"], scenario["name"], 10, result["stats"]
+            )
+        ):
+            raise RuntimeError(
+                f"unaffordable town funding mutated state: {differences}"
+            )
+        for phase, path in saves.items():
+            chunks = read_save(path)
+            finances = decode_element(
+                chunks["PLYR"], dict(chunks["PLYR"]["elements"])[int(company)]
+            )
+            if finances["money"] != int(price) + int(delta):
+                raise RuntimeError("town funding prepared balance changed")
+            city = decode_element(
+                chunks["CITY"], dict(chunks["CITY"]["elements"])[int(town)]
+            )
+            if city["fund_buildings_months"] != (
+                3 if delta == "0" and phase == "after" else 0
+            ):
+                raise RuntimeError("town funding CITY effect missing")
+            captures.append(path.name)
+            if role == "candidate" and (
+                differences := core.compare_saves(
+                    run["dir"].with_name("reference") / path.name,
+                    path,
+                    scenario["name"],
+                    10,
+                    result["stats"],
+                )
+            ):
+                raise RuntimeError(
+                    f"town affordability semantic state differs: {differences}"
+                )
+    for label in ("test", "exec"):
+        costs = [
+            line.split()[3:]
+            for line in run["log"]
+            if line.startswith(f"TOWN cost money-{label} ")
+        ]
+        if len(costs) != 2 or [row[:2] for row in costs] != [
+            ["false", "0"],
+            ["true", str(prices[5])],
+        ]:
+            raise RuntimeError("town funding command gate outcome missing")
+    rng = [line for line in run["log"] if line.startswith("TOWN money-rng ")]
+    if len(rng) != 1 or not rng[0].endswith(" true"):
+        raise RuntimeError("town affordability changed simulation/interactive RNG")
+    result[mode + "_town_money_saves"] = captures
+
+
 def check_bribes(scenario, run, mode, role, result):
     """Require real threshold/filter inputs and compare their immediate saves."""
     inputs = [
@@ -1153,6 +1254,7 @@ def check(scenario, run, mode, role, result):
             raise RuntimeError("nonempty storage reference/owner reload marker missing")
     elif scenario.get("town_founding") == "authority" and not run["exit"]:
         if not scenario["town_commands_reload"]:
+            check_action_money(scenario, run, mode, role, result)
             check_bribes(scenario, run, mode, role, result)
         required = (
             ()
