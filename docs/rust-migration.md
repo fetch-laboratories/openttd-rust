@@ -2274,3 +2274,24 @@ INDY/map/save/log and RNG comparisons accompany existing production/lifecycle/
 animation/acceptance and cargo probes. Commands, metrics, accepted boundary cost
 and fixing/adoption reviews are on #407; external/historical limits are on #156.
 The final exact-current-base combination passed Full in #415.
+
+### Rail-station and waypoint NewGRF resolution (#399, PR #411)
+
+Rust owns stack scope/root/cargo/lazy-town state, complete station/waypoint
+variables, real-group selection, platform/end/continuation, slope callbacks and
+randomisation. All six optional caches follow the resolver object's lifetime,
+including repeated DoResolve. Native specs/association vectors, map/station shells,
+saved random/waiting bits, common Action2 and optional TownScope frames remain.
+Direct cargo/station/movement owners replace displaced command/animation/PBS
+callback bounces. Shared goods conversion, scope fallback, container/airport and
+metadata helpers retain native types, narrowing and original GetSpec behavior.
+No owner/cache/container borrow spans evaluation/storage; setters remain immediate.
+Original portable bodies and native callback CommandCost/error frames retain order.
+Default resolver/reload fixtures install actual deterministic/randomized groups,
+require all variables/availability, cache reuse/fresh-owner contrasts, roots/parent
+readonly/retry, slope outcomes, trigger gating and lower/upper/combined reseeding.
+Lower-only reseeding proves six tile draws plus one station draw. Semantic STNN/
+map/cargo/save/register/ordered effects and both RNG streams compare in both modes.
+Transient groups are reconstructed after native load; arbitrary external-GRF,
+historical and GUI paths remain #156. Commands, accepted cost, fixing reviews
+and root's final current-base combination evidence are linked from #411.
