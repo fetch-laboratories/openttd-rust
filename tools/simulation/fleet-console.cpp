@@ -227,7 +227,7 @@ static void ResolverVariables(Vehicle *v)
 	for (uint8_t variable : {0x25, 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x7A}) query(variable, 0);
 	for (uint variable = 0x80; variable <= 0xFF; ++variable) query(variable, 0);
 	for (uint32_t parameter : {0x5FU, 0x61U, 0x84U, 0xFFFFU}) query(0x61, parameter);
-	VehicleResolverObject purchase(v->engine_type, nullptr);
+	VehicleResolverObject purchase(v->engine_type, nullptr, VehicleResolverObject::WO_NONE);
 	purchase.grffile = &grf;
 	for (uint8_t variable : {0x43, 0x46, 0x47, 0x48, 0x49, 0x4B, 0x7A, 0x92, 0x93, 0xC4, 0xC6, 0xC7, 0xDA, 0xF2, 0xFF}) {
 		bool available = true;
@@ -280,7 +280,7 @@ static void ResolverProbe()
 	grf.grf_version = 8;
 	for (uint i = 0; i < NUM_CARGO; ++i) grf.cargo_map[i] = NUM_CARGO - 1 - i;
 	file.Change(&grf);
-	if (!SpriteGroup::CanAllocateItem(6)) FixtureAbort(__LINE__);
+	if (!SpriteGroup::CanAllocateItem(8)) FixtureAbort(__LINE__);
 	auto *det = new DeterministicSpriteGroup();
 	det->size = DSG_SIZE_DWORD;
 	det->var_scope = VSG_SCOPE_SELF;
@@ -375,7 +375,7 @@ static void ResolverProbe()
 		};
 		std::array<int32_t, 2> registers{};
 		uint16_t nested = GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v, registers);
-		fmt::print(stderr, "FLEET resolver-reentry {} {} {}\n", nested == (v->index.base() & 0x7FFF), registers[0] == 1, registers[1] == (v->Next()->index.base() & 0x7FFF));
+		fmt::print(stderr, "FLEET resolver-reentry {} {} {}\n", nested == (v->index.base() & 0x7FFF), registers[0] == 1, registers[1] == static_cast<int32_t>(v->Next()->index.base() & 0x7FFF));
 		det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 0x7FFE}};
 		fmt::print(stderr, "FLEET resolver-property {} {}\n", GetVehicleProperty(v, PROP_TRAIN_SPEED, 17, true) == -2, GetVehicleProperty(v, PROP_TRAIN_SPEED, 17) == 0x7FFE);
 		SavedRandomSeeds probability_before, probability_after;
@@ -559,7 +559,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 		VehicleType type = args[1].ends_with("road") ? VEH_ROAD : VEH_AIRCRAFT;
 		Vehicle *v = BuildFixture(type);
 		if (type == VEH_ROAD) GroundPhysicsProbe(RoadVehicle::From(v), Engine::Get(v->engine_type)->VehInfo<RoadVehicleInfo>());
-		for (Vehicle *u = v; u != nullptr; u = u->Next()) ResolverVariables(u);
+		ResolverVariables(v);
 		if (type == VEH_AIRCRAFT) ResolverAircraft(Aircraft::From(v));
 		SavedRandomSeeds before, after;
 		bool restored = true;
