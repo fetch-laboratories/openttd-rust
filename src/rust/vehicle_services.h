@@ -142,11 +142,11 @@ inline uint8_t RustVehicleBreakdownCounter(const Vehicle *v) noexcept { return v
 inline int64_t RustVehicleValue(const Vehicle *v) noexcept { return v->value.base(); }
 inline uint16_t RustEngineReliability(const Engine *e) noexcept { return e->reliability; }
 inline uint32_t RustVehicleIndexOpaque(const void *v) noexcept { return static_cast<const Vehicle *>(v)->index.base(); }
-/** Indexed legacy users encode a missing previous vehicle as the invalid ID. */
+/** The legacy company sentinel is UINT32_MAX, distinct from VehicleID::Invalid(). */
 inline uint32_t RustVehiclePreviousID(const Vehicle *v) noexcept
 {
 	const Vehicle *previous = RustVehiclePrevious(v);
-	return previous == nullptr ? VehicleID::Invalid().base() : RustVehicleIndexOpaque(previous);
+	return previous == nullptr ? UINT32_MAX : RustVehicleIndexOpaque(previous);
 }
 inline uint16_t RustVehicleEngineID(const Vehicle *v) noexcept { return v->engine_type.base(); }
 inline const OpenTTDEngine *RustEngine(const Engine *e) noexcept { return reinterpret_cast<const OpenTTDEngine *>(e); }

@@ -19,6 +19,7 @@
 #include "../newgrf_sound.h"
 #include "abi_layout.hpp"
 #include "../rust/fleet_ffi.h"
+#include "../rust/company_adapter.h"
 #include "../safeguards.h"
 
 /* Exercise CallVehicleTicks itself, with the original PoolIterator as oracle.
@@ -60,6 +61,19 @@ struct SchedulerLifetimeVehicle final : Vehicle {
 		return true;
 	}
 };
+TEST_CASE("Vehicle maintenance previous ID preserves the company sentinel")
+{
+	struct Restore { ~Restore() { _vehicle_pool.CleanPool(); } } restore;
+	_vehicle_pool.CleanPool();
+	REQUIRE(Vehicle::CanAllocateItem(2));
+	auto *head = new (VehicleID(0)) SchedulerLifetimeVehicle();
+	auto *part = new (VehicleID(1)) SchedulerLifetimeVehicle();
+	head->SetNext(part);
+	const auto &services = GetRustCompanyServices();
+	CHECK(services.vehicle_previous(head->index.base()) == UINT32_MAX);
+	CHECK(services.vehicle_previous(part->index.base()) == head->index.base());
+}
+
 TEST_CASE("Base vehicle scheduler - production deletion, reuse and reallocation order")
 {
 	struct Restore {
