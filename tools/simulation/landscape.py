@@ -123,13 +123,12 @@ def game_environment(scenario):
 
 def prepare(scenario, binaries, builds, out, timeout, env, result):
     if scenario.get("generic_callbacks"):
+        folder = out / scenario["name"] / "input"
+        source, record = rails.normalize(Path(scenario["save"]), folder / "normalized")
+        result["generic_input"] = record
+        scenario = dict(scenario, save=str(source))
         executables = prepared_console(
-            "objects",
-            objects.adapter,
-            binaries,
-            builds,
-            out / scenario["name"] / "input",
-            env,
+            "objects", objects.adapter, binaries, builds, folder, env
         )
         return dict(
             scenario,

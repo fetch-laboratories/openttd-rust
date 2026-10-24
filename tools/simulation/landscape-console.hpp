@@ -144,6 +144,8 @@ static void GenericPrograms()
 	ResetGenericCallbacks(); yes.result = 4;
 	program.adjusts = {{.operation = DSGA_OP_RST, .variable = 0x10, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}, {.operation = DSGA_OP_RST, .variable = 0x0C, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x101}, {.operation = DSGA_OP_RST, .variable = 0x18, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x102}};
 	const TileIndex tile = TileXY(4, 4); Tile t(tile);
+	std::array<TileIndex, 3> corner_tiles{tile + 1, tile + TileDiffXY(0, 1), tile + TileDiffXY(1, 1)};
+	std::array<uint8_t, 3> corner_heights; for (uint i = 0; i < 3; ++i) { corner_heights[i] = TileHeight(corner_tiles[i]); SetTileHeight(corner_tiles[i], 19); }
 	auto fields = std::tuple(t.height(), t.m1(), t.m2(), t.m3(), t.m4(), t.m5(), t.m6(), t.m7(), t.m8());
 	std::vector<uint8_t> types; for (Tile one : Map::Iterate()) { types.push_back(one.type()); one.type() = MP_VOID << 4; }
 	AutoRestoreBackup<LandscapeType> climate(_settings_game.game_creation.landscape, LandscapeType::Tropic);
@@ -160,13 +162,13 @@ static void GenericPrograms()
 		ResetGenericCallbacks(); first.grf_version = version;
 		AddGenericCallback(GSF_SOUNDFX, &first, &program); AddGenericCallback(GSF_SOUNDFX, &second, &failure);
 		if (kind == MP_CLEAR) MakeClear(tile, CLEAR_GRASS, 3);
-		if (kind == MP_TREES) MakeTree(tile, TreeType{0}, 1, TreeGrowthStage::Grown, TREE_GROUND_GRASS, 3);
+		if (kind == MP_TREES) MakeTree(tile, TREE_TEMPERATE, 1, TreeGrowthStage::Grown, TREE_GROUND_GRASS, 3);
 		if (kind == MP_WATER) { MakeCanal(tile, OWNER_NONE, 0); SetNonFloodingWaterTile(tile, true); }
 		SetTileHeight(tile, 19); SetTropicZone(tile, TROPICZONE_DESERT);
 		_misc_grf_features = mode == 0 ? GrfMiscBits{} : GrfMiscBits{GrfMiscBit::AmbientSoundCallback};
 		_settings_client.sound.ambient = mode != 1;
 		Randomizer before; uint32_t draw = 0;
-		for (uint seed = 1;; ++seed) { before.SetSeed(seed); auto next = before; draw = next.Next(); if (Chance16I(1, 200, draw) == (mode != 2)) break; }
+		for (uint seed = 1;; ++seed) { before.SetSeed(0x42900000U + seed); auto next = before; draw = next.Next(); if (Chance16I(1, 200, draw) == (mode != 2) && GB(draw, 16, 8) != 0) break; }
 		auto expected_rng = before; if (mode != 0) expected_rng.Next(); _random = before;
 		uint32_t packed = version < 8 ? kind << 28 | 15U << 24 | GB(draw, 16, 8) << 16 | GetTerrainType(tile) : kind << 24 | GetTileZ(tile) << 16 | GB(draw, 16, 8) << 8 | (HasTileWaterClass(tile) ? to_underlying(GetWaterClass(tile)) : 0) << 3 | GetTerrainType(tile);
 		generic_sound_calls = 0; generic_sound_file = nullptr;
@@ -192,6 +194,7 @@ static void GenericPrograms()
 	RunTileLoop(); GenericNeed(generic_sound_calls == 0 && _random.state[0] == expected_rng.state[0] && _random.state[1] == expected_rng.state[1]);
 	fmt::print(stderr, "GENERIC ambient-unavailable-all-fail true\n");
 	cursor = saved_cursor; uint i = 0; for (Tile one : Map::Iterate()) one.type() = types[i++];
+	for (uint i = 0; i < 3; ++i) SetTileHeight(corner_tiles[i], corner_heights[i]);
 	std::tie(t.height(), t.m1(), t.m2(), t.m3(), t.m4(), t.m5(), t.m6(), t.m7(), t.m8()) = fields;
 	ResetGenericCallbacks(); // Before every graph/file destruction, including native reload.
 	fmt::print(stderr, "GENERIC programs-complete true\n");
