@@ -5,7 +5,9 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Canonical fleet state and complete group/rule control; validation remains WIP.
+//! Canonical fleet state and complete group and autoreplace-rule control. Exports take
+//! live, serialized group, statistics and rule records whose scalar prefix C++ starts;
+//! field accesses copy one field and hold no reference across a callback.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,
@@ -350,7 +352,7 @@ unsafe fn contains(w: &GroupServices, mut search: u16, target: u16) -> bool {
         if search == target {
             return true;
         }
-        search = read_field!(g.cast::<GroupFields>(), parent);
+        search = read_field!(g, parent);
         if search == INVALID_GROUP {
             return false;
         }
@@ -493,8 +495,8 @@ unsafe fn update_autoreplace(w: &GroupServices, company: u8) {
             break;
         }
         let g = unsafe { group(w, id as u16) };
-        if read_field!(g.cast::<GroupFields>(), owner) == company {
-            let kind = read_field!(g.cast::<GroupFields>(), vehicle_type);
+        if read_field!(g, owner) == company {
+            let kind = read_field!(g, vehicle_type);
             let s = unsafe { (w.stats)(company, id as u16, kind) };
             unsafe { openttd_rust_fleet_stats_clear_autoreplace(s) };
         }
@@ -504,9 +506,9 @@ unsafe fn update_autoreplace(w: &GroupServices, company: u8) {
     let mut er = unsafe { head.cast::<*mut ()>().read() };
     while !er.is_null() {
         let p = unsafe { (w.renew_state)(er).cast::<Renew>() };
-        let engine = read_field!(p.cast::<Renew>(), from);
-        let id = read_field!(p.cast::<Renew>(), group);
-        let next = read_field!(p.cast::<Renew>(), next);
+        let engine = read_field!(p, from);
+        let id = read_field!(p, group);
+        let next = read_field!(p, next);
         let kind = unsafe { (w.engine_type)(engine) };
         let s = unsafe { (w.stats)(company, id, kind).cast::<Stats>() };
         unsafe {
@@ -574,14 +576,14 @@ unsafe fn add_vehicle(w: &GroupServices, v: *mut (), new: u16) {
     }
 }
 unsafe fn parent_livery(w: &GroupServices, g: *mut GroupFields) -> [u8; 3] {
-    let parent = read_field!(g.cast::<GroupFields>(), parent);
+    let parent = read_field!(g, parent);
     if parent == INVALID_GROUP {
-        let owner = read_field!(g.cast::<GroupFields>(), owner);
+        let owner = read_field!(g, owner);
         let p = unsafe { (w.company_livery)(owner) };
         unsafe { p.cast::<[u8; 3]>().read() }
     } else {
         let p = unsafe { group(w, parent) };
-        read_field!(p.cast::<GroupFields>(), livery)
+        read_field!(p, livery)
     }
 }
 unsafe fn propagate_livery(w: &GroupServices, id: u16, reset: bool) {
@@ -608,15 +610,15 @@ unsafe fn propagate_livery(w: &GroupServices, id: u16, reset: bool) {
     let mut from = 0;
     while let Some(child) = unsafe { child_after(g, from) } {
         let cg = unsafe { group(w, child) };
-        let mut livery = read_field!(cg.cast::<GroupFields>(), livery);
-        let parent = read_field!(g.cast::<GroupFields>(), livery);
+        let mut livery = read_field!(cg, livery);
+        let parent = read_field!(g, livery);
         if livery[0] & 1 == 0 {
             livery[1] = parent[1];
         }
         if livery[0] & 2 == 0 {
             livery[2] = parent[2];
         }
-        write_field!(cg.cast::<GroupFields>(), livery, livery);
+        write_field!(cg, livery, livery);
         unsafe { propagate_livery(w, child, reset) };
         from = u32::from(child) + 1;
     }
@@ -628,42 +630,31 @@ unsafe fn create_group(w: &GroupServices, flags: u32, kind: u8, parent: u16, out
     }
     let pg = unsafe { group(w, parent) };
     let owner = unsafe { (w.current_company)() };
-    if !pg.is_null()
-        && (read_field!(pg.cast::<GroupFields>(), owner) != owner
-            || read_field!(pg.cast::<GroupFields>(), vehicle_type) != kind)
-    {
+    if !pg.is_null() && (read_field!(pg, owner) != owner || read_field!(pg, vehicle_type) != kind) {
         return ERROR;
     }
     if flags & 1 != 0 {
         let id = unsafe { (w.allocate)(owner, kind) };
         let g = unsafe { group(w, id) };
         let number = unsafe { (w.use_number)(owner) };
-        write_field!(g.cast::<GroupFields>(), number, number);
-        let mut livery = read_field!(g.cast::<GroupFields>(), livery);
+        write_field!(g, number, number);
+        let mut livery = read_field!(g, livery);
         if pg.is_null() {
             let parent = unsafe { (w.company_livery)(owner).cast::<[u8; 3]>().read() };
             livery[1] = parent[1];
             livery[2] = parent[2];
             if unsafe { (w.keep_length)(owner) } {
-                write_field!(
-                    g.cast::<GroupFields>(),
-                    flags,
-                    read_field!(g.cast::<GroupFields>(), flags) | 2
-                );
+                write_field!(g, flags, read_field!(g, flags) | 2);
             }
         } else {
-            write_field!(g.cast::<GroupFields>(), parent, parent);
-            let parent = read_field!(pg.cast::<GroupFields>(), livery);
+            write_field!(g, parent, parent);
+            let parent = read_field!(pg, livery);
             livery[1] = parent[1];
             livery[2] = parent[2];
-            write_field!(
-                g.cast::<GroupFields>(),
-                flags,
-                read_field!(pg.cast::<GroupFields>(), flags)
-            );
+            write_field!(g, flags, read_field!(pg, flags));
             unsafe { openttd_rust_fleet_child_change(pg.cast(), u32::from(id), true) };
         }
-        write_field!(g.cast::<GroupFields>(), livery, livery);
+        write_field!(g, livery, livery);
         unsafe {
             (w.list_dirty)(owner, kind);
             (w.colour_dirty)(owner, kind);
@@ -675,7 +666,7 @@ unsafe fn create_group(w: &GroupServices, flags: u32, kind: u8, parent: u16, out
 unsafe fn delete_group(w: &GroupServices, flags: u32, id: u16) -> u32 {
     let g = unsafe { group(w, id) };
     let owner = unsafe { (w.current_company)() };
-    if g.is_null() || read_field!(g.cast::<GroupFields>(), owner) != owner {
+    if g.is_null() || read_field!(g, owner) != owner {
         return ERROR;
     }
     unsafe { (w.remove_vehicles)(id, flags) };
@@ -685,7 +676,7 @@ unsafe fn delete_group(w: &GroupServices, flags: u32, id: u16) -> u32 {
     }
     if flags & 1 != 0 {
         unsafe { (w.clear_backup)(id) };
-        let owner = read_field!(g.cast::<GroupFields>(), owner);
+        let owner = read_field!(g, owner);
         if owner < 15 {
             let mut from = 0;
             loop {
@@ -695,20 +686,20 @@ unsafe fn delete_group(w: &GroupServices, flags: u32, id: u16) -> u32 {
                 }
                 from = unsafe { (w.renew_id)(er) } + 1;
                 let p = unsafe { (w.renew_state)(er).cast::<Renew>() };
-                if read_field!(p.cast::<Renew>(), group) == id {
-                    let engine = read_field!(p.cast::<Renew>(), from);
+                if read_field!(p, group) == id {
+                    let engine = read_field!(p, from);
                     unsafe { (w.remove_rule)(owner, engine, id, flags) };
                 }
             }
-            let number = read_field!(g.cast::<GroupFields>(), number);
+            let number = read_field!(g, number);
             unsafe { (w.release_number)(owner, number) };
         }
-        let parent = read_field!(g.cast::<GroupFields>(), parent);
+        let parent = read_field!(g, parent);
         if parent != INVALID_GROUP {
             let pg = unsafe { group(w, parent) };
             unsafe { openttd_rust_fleet_child_change(pg.cast(), u32::from(id), false) };
         }
-        let kind = read_field!(g.cast::<GroupFields>(), vehicle_type);
+        let kind = read_field!(g, vehicle_type);
         unsafe {
             (w.close_replace)(kind);
             (w.delete_group)(id);
@@ -729,7 +720,7 @@ unsafe fn alter_group(
 ) -> u32 {
     let g = unsafe { group(w, id) };
     let owner = unsafe { (w.current_company)() };
-    if g.is_null() || read_field!(g.cast::<GroupFields>(), owner) != owner {
+    if g.is_null() || read_field!(g, owner) != owner {
         return ERROR;
     }
     if mode == 0 {
@@ -740,14 +731,13 @@ unsafe fn alter_group(
             unsafe { openttd_rust_fleet_set_name(g.cast(), text, len) };
         }
     } else if mode == 1 {
-        if read_field!(g.cast::<GroupFields>(), parent) == parent {
+        if read_field!(g, parent) == parent {
             return OK;
         }
         let pg = unsafe { group(w, parent) };
         if !pg.is_null() {
-            if read_field!(pg.cast::<GroupFields>(), owner) != owner
-                || read_field!(pg.cast::<GroupFields>(), vehicle_type)
-                    != read_field!(g.cast::<GroupFields>(), vehicle_type)
+            if read_field!(pg, owner) != owner
+                || read_field!(pg, vehicle_type) != read_field!(g, vehicle_type)
             {
                 return ERROR;
             }
@@ -756,21 +746,17 @@ unsafe fn alter_group(
             }
         }
         if flags & 1 != 0 {
-            let old_parent = read_field!(g.cast::<GroupFields>(), parent);
+            let old_parent = read_field!(g, parent);
             if old_parent != INVALID_GROUP {
                 let old = unsafe { group(w, old_parent) };
                 unsafe { openttd_rust_fleet_child_change(old.cast(), u32::from(id), false) };
             }
-            write_field!(
-                g.cast::<GroupFields>(),
-                parent,
-                if pg.is_null() { INVALID_GROUP } else { parent }
-            );
+            write_field!(g, parent, if pg.is_null() { INVALID_GROUP } else { parent });
             if !pg.is_null() {
                 unsafe { openttd_rust_fleet_child_change(pg.cast(), u32::from(id), true) };
             }
             unsafe { update_autoreplace(w, owner) };
-            let mut livery = read_field!(g.cast::<GroupFields>(), livery);
+            let mut livery = read_field!(g, livery);
             if livery[0] & 3 != 3 {
                 let inherited = unsafe { parent_livery(w, g) };
                 if livery[0] & 1 == 0 {
@@ -779,7 +765,7 @@ unsafe fn alter_group(
                 if livery[0] & 2 == 0 {
                     livery[2] = inherited[2];
                 }
-                write_field!(g.cast::<GroupFields>(), livery, livery);
+                write_field!(g, livery, livery);
                 unsafe {
                     propagate_livery(w, id, true);
                     (w.screen_dirty)();
@@ -790,7 +776,7 @@ unsafe fn alter_group(
         return ERROR;
     }
     if flags & 1 != 0 {
-        let kind = read_field!(g.cast::<GroupFields>(), vehicle_type);
+        let kind = read_field!(g, vehicle_type);
         unsafe {
             (w.alter_dirty)(kind);
             (w.list_dirty)(owner, kind);
@@ -801,9 +787,9 @@ unsafe fn alter_group(
 }
 unsafe fn set_flag(w: &GroupServices, id: u16, flag: u8, value: bool, children: bool) {
     let g = unsafe { group(w, id) };
-    let bits = read_field!(g.cast::<GroupFields>(), flags);
+    let bits = read_field!(g, flags);
     write_field!(
-        g.cast::<GroupFields>(),
+        g,
         flags,
         if value {
             bits | (1 << flag)
@@ -830,19 +816,17 @@ unsafe fn update_children(w: &GroupServices) {
         }
         from = id + 1;
         let g = unsafe { group(w, id as u16) };
-        let parent = read_field!(g.cast::<GroupFields>(), parent);
+        let parent = read_field!(g, parent);
         if parent == INVALID_GROUP {
             continue;
         }
         let pg = unsafe { group(w, parent) };
         if pg.is_null()
-            || read_field!(pg.cast::<GroupFields>(), owner)
-                != read_field!(g.cast::<GroupFields>(), owner)
-            || read_field!(pg.cast::<GroupFields>(), vehicle_type)
-                != read_field!(g.cast::<GroupFields>(), vehicle_type)
+            || read_field!(pg, owner) != read_field!(g, owner)
+            || read_field!(pg, vehicle_type) != read_field!(g, vehicle_type)
         {
             unsafe { (w.invalid_parent)(id as u16, parent) };
-            write_field!(g.cast::<GroupFields>(), parent, INVALID_GROUP);
+            write_field!(g, parent, INVALID_GROUP);
         } else {
             unsafe { openttd_rust_fleet_child_change(pg.cast(), id, true) };
         }
@@ -871,8 +855,8 @@ unsafe fn update_afterload(w: &GroupServices) {
         }
         from = id + 1;
         let g = unsafe { group(w, id as u16) };
-        let owner = read_field!(g.cast::<GroupFields>(), owner);
-        let kind = read_field!(g.cast::<GroupFields>(), vehicle_type);
+        let owner = read_field!(g, owner);
+        let kind = read_field!(g, vehicle_type);
         let p = unsafe { (w.stats)(owner, id as u16, kind) };
         unsafe { openttd_rust_fleet_stats_clear(p) };
     }
@@ -924,8 +908,8 @@ unsafe fn update_profits(w: &GroupServices) {
         }
         from = id + 1;
         let g = unsafe { group(w, id as u16) };
-        let owner = read_field!(g.cast::<GroupFields>(), owner);
-        let kind = read_field!(g.cast::<GroupFields>(), vehicle_type);
+        let owner = read_field!(g, owner);
+        let kind = read_field!(g, vehicle_type);
         let p = unsafe { (w.stats)(owner, id as u16, kind) };
         unsafe { openttd_rust_fleet_stats_clear_profits(p) };
     }
@@ -953,18 +937,16 @@ unsafe fn company_liveries(w: &GroupServices, company: u8) {
         }
         from = id + 1;
         let g = unsafe { group(w, id as u16) };
-        if read_field!(g.cast::<GroupFields>(), owner) == company
-            && read_field!(g.cast::<GroupFields>(), parent) == INVALID_GROUP
-        {
+        if read_field!(g, owner) == company && read_field!(g, parent) == INVALID_GROUP {
             let inherited = unsafe { (w.company_livery)(company).cast::<[u8; 3]>().read() };
-            let mut livery = read_field!(g.cast::<GroupFields>(), livery);
+            let mut livery = read_field!(g, livery);
             if livery[0] & 1 == 0 {
                 livery[1] = inherited[1];
             }
             if livery[0] & 2 == 0 {
                 livery[2] = inherited[2];
             }
-            write_field!(g.cast::<GroupFields>(), livery, livery);
+            write_field!(g, livery, livery);
             unsafe { propagate_livery(w, id as u16, false) };
         }
     }
@@ -1027,10 +1009,7 @@ unsafe fn add_vehicle_group(
         }
     }
     let g = unsafe { group(w, new) };
-    if !g.is_null()
-        && (read_field!(g.cast::<GroupFields>(), owner) != owner
-            || read_field!(g.cast::<GroupFields>(), vehicle_type) != kind)
-    {
+    if !g.is_null() && (read_field!(g, owner) != owner || read_field!(g, vehicle_type) != kind) {
         return ERROR;
     }
     if new == NEW_GROUP {
@@ -1101,7 +1080,7 @@ unsafe fn add_shared_group(w: &GroupServices, flags: u32, id: u16, kind: u8) -> 
 unsafe fn remove_vehicles_group(w: &GroupServices, flags: u32, id: u16) -> u32 {
     let g = unsafe { group(w, id) };
     let owner = unsafe { (w.current_company)() };
-    if g.is_null() || read_field!(g.cast::<GroupFields>(), owner) != owner {
+    if g.is_null() || read_field!(g, owner) != owner {
         return ERROR;
     }
     if flags & 1 != 0 {
@@ -1118,7 +1097,7 @@ unsafe fn remove_vehicles_group(w: &GroupServices, flags: u32, id: u16) -> u32 {
             let vehicle_id = unsafe { (w.vehicle_id)(v) };
             unsafe { (w.add_to_group)(DEFAULT_GROUP, vehicle_id, flags) };
         }
-        let kind = read_field!(g.cast::<GroupFields>(), vehicle_type);
+        let kind = read_field!(g, vehicle_type);
         unsafe { (w.list_dirty)(owner, kind) };
     }
     OK
@@ -1126,14 +1105,11 @@ unsafe fn remove_vehicles_group(w: &GroupServices, flags: u32, id: u16) -> u32 {
 unsafe fn set_livery(w: &GroupServices, flags: u32, id: u16, primary: bool, mut colour: u8) -> u32 {
     let g = unsafe { group(w, id) };
     let owner = unsafe { (w.current_company)() };
-    if g.is_null()
-        || read_field!(g.cast::<GroupFields>(), owner) != owner
-        || (colour >= 16 && colour != 255)
-    {
+    if g.is_null() || read_field!(g, owner) != owner || (colour >= 16 && colour != 255) {
         return ERROR;
     }
     if flags & 1 != 0 {
-        let mut livery = read_field!(g.cast::<GroupFields>(), livery);
+        let mut livery = read_field!(g, livery);
         let mask = if primary { 1 } else { 2 };
         let index = if primary { 1 } else { 2 };
         if colour == 255 {
@@ -1143,7 +1119,7 @@ unsafe fn set_livery(w: &GroupServices, flags: u32, id: u16, primary: bool, mut 
             livery[0] |= mask;
         }
         livery[index] = colour;
-        write_field!(g.cast::<GroupFields>(), livery, livery);
+        write_field!(g, livery, livery);
         unsafe {
             propagate_livery(w, id, true);
             (w.screen_dirty)();
@@ -1161,12 +1137,12 @@ unsafe fn flag_command(
 ) -> u32 {
     let g = unsafe { group(w, id) };
     let owner = unsafe { (w.current_company)() };
-    if g.is_null() || read_field!(g.cast::<GroupFields>(), owner) != owner || flag > 1 {
+    if g.is_null() || read_field!(g, owner) != owner || flag > 1 {
         return ERROR;
     }
     if flags & 1 != 0 {
         unsafe { set_flag(w, id, flag, value, recursive) };
-        let kind = read_field!(g.cast::<GroupFields>(), vehicle_type);
+        let kind = read_field!(g, vehicle_type);
         unsafe {
             (w.list_set_dirty)(owner, kind);
             (w.replace_invalidate)(kind);
@@ -1183,7 +1159,7 @@ unsafe fn remove_company_groups(w: &GroupServices, company: u8) {
         }
         from = id + 1;
         let g = unsafe { group(w, id as u16) };
-        if read_field!(g.cast::<GroupFields>(), owner) == company {
+        if read_field!(g, owner) == company {
             unsafe { (w.delete_group)(id as u16) };
         }
     }
@@ -1191,11 +1167,11 @@ unsafe fn remove_company_groups(w: &GroupServices, company: u8) {
 unsafe fn get_replacement(w: &GroupServices, mut er: *mut (), engine: u16, id: u16) -> *mut Renew {
     while !er.is_null() {
         let p = unsafe { (w.renew_state)(er).cast::<Renew>() };
-        let target = read_field!(p.cast::<Renew>(), group);
-        if read_field!(p.cast::<Renew>(), from) == engine && unsafe { contains(w, id, target) } {
+        let target = read_field!(p, group);
+        if read_field!(p, from) == engine && unsafe { contains(w, id, target) } {
             return p;
         }
-        er = read_field!(p.cast::<Renew>(), next);
+        er = read_field!(p, next);
     }
     std::ptr::null_mut()
 }
@@ -1209,22 +1185,18 @@ unsafe fn replacement(
     let mut p = unsafe { get_replacement(w, er, engine, id) };
     if p.is_null() {
         let g = unsafe { group(w, id) };
-        if id == DEFAULT_GROUP
-            || (!g.is_null() && read_field!(g.cast::<GroupFields>(), flags) & 1 == 0)
-        {
+        if id == DEFAULT_GROUP || (!g.is_null() && read_field!(g, flags) & 1 == 0) {
             p = unsafe { get_replacement(w, er, engine, ALL_GROUP) };
         }
     }
     if !when_old.is_null() {
-        let old = !p.is_null()
-            && (read_field!(p.cast::<Renew>(), to) == engine
-                || read_field!(p.cast::<Renew>(), when_old));
+        let old = !p.is_null() && (read_field!(p, to) == engine || read_field!(p, when_old));
         unsafe { when_old.write(old) };
     }
     if p.is_null() {
         INVALID_GROUP
     } else {
-        read_field!(p.cast::<Renew>(), to)
+        read_field!(p, to)
     }
 }
 unsafe fn add_replacement(
@@ -1239,8 +1211,8 @@ unsafe fn add_replacement(
     let p = unsafe { get_replacement(w, head.read(), from, id) };
     if !p.is_null() {
         if flags & 1 != 0 {
-            write_field!(p.cast::<Renew>(), to, to);
-            write_field!(p.cast::<Renew>(), when_old, old);
+            write_field!(p, to, to);
+            write_field!(p, when_old, old);
         }
         return OK;
     }
@@ -1250,11 +1222,11 @@ unsafe fn add_replacement(
     if flags & 1 != 0 {
         let shell = unsafe { (w.renew_allocate)() };
         let p = unsafe { (w.renew_state)(shell).cast::<Renew>() };
-        write_field!(p.cast::<Renew>(), from, from);
-        write_field!(p.cast::<Renew>(), to, to);
-        write_field!(p.cast::<Renew>(), group, id);
-        write_field!(p.cast::<Renew>(), when_old, old);
-        write_field!(p.cast::<Renew>(), next, unsafe { head.read() });
+        write_field!(p, from, from);
+        write_field!(p, to, to);
+        write_field!(p, group, id);
+        write_field!(p, when_old, old);
+        write_field!(p, next, unsafe { head.read() });
         unsafe { head.write(shell) };
     }
     OK
@@ -1270,15 +1242,13 @@ unsafe fn remove_replacement(
     let mut prev: *mut Renew = std::ptr::null_mut();
     while !er.is_null() {
         let p = unsafe { (w.renew_state)(er).cast::<Renew>() };
-        let next = read_field!(p.cast::<Renew>(), next);
-        if read_field!(p.cast::<Renew>(), from) == engine
-            && read_field!(p.cast::<Renew>(), group) == id
-        {
+        let next = read_field!(p, next);
+        if read_field!(p, from) == engine && read_field!(p, group) == id {
             if flags & 1 != 0 {
                 if prev.is_null() {
                     unsafe { head.write(next) };
                 } else {
-                    write_field!(prev.cast::<Renew>(), next, next);
+                    write_field!(prev, next, next);
                 }
                 unsafe { (w.renew_delete)(er) };
             }
@@ -1293,7 +1263,7 @@ unsafe fn remove_all_replacements(w: &GroupServices, head: *mut *mut ()) {
     let mut er = unsafe { head.read() };
     while !er.is_null() {
         let p = unsafe { (w.renew_state)(er).cast::<Renew>() };
-        let next = read_field!(p.cast::<Renew>(), next);
+        let next = read_field!(p, next);
         unsafe { (w.renew_delete)(er) };
         er = next;
     }
