@@ -714,8 +714,8 @@ pub(super) unsafe fn allow_construction(
         || (unsafe { &*l.houses }.convert_8bit)(house, CBID_HOUSE_ALLOW_CONSTRUCTION.0, result)
 }
 pub(crate) unsafe fn foundation(tile: u32, house: u16) -> u16 {
-    let l = unsafe { &*services().towns };
-    let town = (unsafe { &*l.houses }.town)(tile).shell;
+    let s = services();
+    let town = (s.town_by_id)(u32::from((unsafe { &*s.shared }.town_index)(tile)));
     unsafe {
         callback(
             CBID_HOUSE_DRAW_FOUNDATIONS.0,

@@ -164,7 +164,12 @@ pub fn is_tile_owner(s: &crate::services::Services, tile: u32, owner: u8) -> boo
     (s.tile_owner)(tile) == owner
 }
 
-/// `TileHash2Bit`, including the unsigned subtraction in `TileHash`.
+/// `TileHash`, preserving the source unsigned subtraction.
+pub(crate) fn tile_hash(x: u32, y: u32) -> u32 {
+    ((x >> 4) ^ (x >> 6) ^ (y >> 4)).wrapping_sub(y >> 6)
+}
+
+/// `TileHash2Bit` calls the canonical hash before extracting its low bits.
 pub(crate) fn tile_hash_2bit(x: u32, y: u32) -> u32 {
-    ((x >> 4) ^ (x >> 6) ^ (y >> 4)).wrapping_sub(y >> 6) & 3
+    tile_hash(x, y) & 3
 }
