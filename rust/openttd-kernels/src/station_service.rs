@@ -1909,8 +1909,10 @@ unsafe fn load_vehicle(
     let (context, callback) = scope_context(&mut body);
     (l.with_next_stations)(front, context, callback);
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_load(
+// Keep the queue-empty check visible to Rust callers before loading-table setup.
+// The native entry below uses this same named owner body.
+#[inline]
+pub(crate) unsafe fn load_station(
     state: *mut Service,
     world: *const World,
     loading: *const Loading,
@@ -1920,7 +1922,7 @@ pub unsafe extern "C" fn openttd_rust_station_load(
 ) {
     // C++ supplies the queue owner directly: no callback precedes the empty
     // queue check, and the queue station is not the vehicles' loading station.
-    let mut node = unsafe { openttd_rust_station_queue_first(state) };
+    let node = unsafe { openttd_rust_station_queue_first(state) };
     if node.is_null() {
         return;
     }
@@ -1932,6 +1934,19 @@ pub unsafe extern "C" fn openttd_rust_station_load(
         out,
         temporary,
     };
+    // SAFETY: The first queue node and immutable tables are live for the same
+    // synchronous load. The helper retains the original live-next traversal.
+    unsafe { load_station_queue(state, node, w, l, visits, &refit) };
+}
+
+unsafe fn load_station_queue(
+    state: *mut Service,
+    mut node: *mut QueueEntry,
+    w: &World,
+    l: &Loading,
+    visits: &Visits,
+    refit: &RefitContext,
+) {
     let mut last = None;
     while !node.is_null() {
         let v = VehicleRef(unsafe {
@@ -1956,7 +1971,7 @@ pub unsafe extern "C" fn openttd_rust_station_load(
         });
         if (l.status)(v) & (VS_STOPPED | VS_CRASHED) == 0 {
             unsafe {
-                load_vehicle(v, w, l, &refit, visits);
+                load_vehicle(v, w, l, refit, visits);
             }
         }
         if Some(v) == last {
@@ -1965,6 +1980,19 @@ pub unsafe extern "C" fn openttd_rust_station_load(
         node = unsafe { openttd_rust_station_queue_next(state, node) };
     }
     (l.flush_delivery)();
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_station_load(
+    state: *mut Service,
+    world: *const World,
+    loading: *const Loading,
+    visits: *const Visits,
+    out: *mut crate::services::CommandCost,
+    temporary: *mut crate::services::CommandCost,
+) {
+    // SAFETY: Forward the native entry's live queue/table/cost contract unchanged.
+    unsafe { load_station(state, world, loading, visits, out, temporary) };
 }
 
 #[unsafe(no_mangle)]

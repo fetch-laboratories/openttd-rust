@@ -319,9 +319,7 @@ static bool SharedRecession() noexcept { return EconomyIsInRecession(); }
 static void SharedRebuildTownTree() noexcept { RebuildTownKdtree(); }
 static void SharedForEachStation(void *context, void (*visit)(void *, const OpenTTDStation *, OpenTTDStationService *, uint16_t)) noexcept
 {
-	uint32_t from = 0;
-	while (Station *st = OpenTTDNextStation(from)) {
-		from = st->index.base() + 1U;
+	for (Station *st : Station::Iterate()) {
 		visit(context, RustStation(st), st->rust_service.get(), st->index.base());
 	}
 }
