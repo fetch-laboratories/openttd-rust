@@ -304,18 +304,17 @@ Configuration retains `rust-toolchain.txt` and `rust-native-libs.log`; archive b
 `rust-build.log`. A content-stable `rust-build-configuration.txt` dependency records the
 compiler, target, SDK, minimum and relevant build flags. A changed configuration invalidates
 only that target's release crate; unchanged reconfiguration preserves the archive. Native CI
-checks minimum changes and restoration explicitly.
+checks an unchanged reconfiguration and a Cargo profile change and its restoration.
 
 The macOS ARM jobs activate Rust through the reusable workflow's `rust` input. Debug enables
 `OPTION_USE_ASSERTS`: game/tests get `WITH_ASSERT`, while generators keep ordinary C++
 assertions with neither `WITH_ASSERT` nor `NDEBUG`. Release defines `NDEBUG` for every consumer.
 Both run the four Cargo checks, nonempty CTest inventories and scripted regressions, then build
-and execute fresh native tools. The evidence artifact retains JUnit, compiler/SDK/target
-metadata, compile commands, link scripts, native libraries, archive architecture, final Mach-O
-symbols and fresh generated files. Whole-archive Apple `nm` inspection is excluded: its LLVM21
-reader cannot parse LLVM23 bitcode embedded by the pinned Rust compiler. Architecture, exact
-archive linkage and final executable symbol checks remain mandatory. Linux results alone do not
-establish Darwin support.
+and execute fresh native tools. `tools/check-rust-platform.py` requires WITH_RUST and the
+original assertion flags in every game, test and generator compile command, matching
+configure-time and archive native libraries, and the freshness trial above. A WITH_RUST consumer
+cannot link without the archive, so linkage and architecture follow from the build. Linux
+results alone do not establish Darwin support.
 
 ## Native Windows MSVC Rust linkage
 
@@ -351,11 +350,12 @@ ABI](https://doc.rust-lang.org/rustc/platform-support/windows-msvc.html)). Rust 
 encoded descriptors with `read_unaligned` before taking references, closing the [MSVC i686
 alignment gap](https://doc.rust-lang.org/rustc/platform-support.html).
 
-`windows-rust-evidence.py` checks PE machine headers, Ninja response files, exact archive
-linkage, MSVC maps and static CRT imports, and runs the native ABI executable: struct sizes,
-alignments and field offsets for every `abi.rs` layout, high-bit scalars, by-value returns,
-sentinels, null/empty inputs, Rust allocation/view/destroy paths, history-engine staging and a
-per-thread non-C locale lowercase check (signed negative compare arguments stay outside the
+`tools/check-rust-platform.py` also requires only `/MT` in every Windows Rust consumer's compile
+command and no dynamic C/C++ runtime import, and runs each unsupported configuration above as a
+refusal smoke test. CTest runs the native ABI executable (`rust-abi-layout-and-calls`): struct
+sizes, alignments and field offsets for every `abi.rs` layout, high-bit scalars, by-value
+returns, sentinels, null/empty inputs, Rust allocation/view/destroy paths, history-engine staging
+and a per-thread non-C locale lowercase check (signed negative compare arguments stay outside the
 defined C domain, #26). Fresh tools-only builds run the current string and settings generators
 after deleting previous outputs.
 
