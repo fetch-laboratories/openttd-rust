@@ -2412,3 +2412,20 @@ impl Game<'_> {
         service!(self.l.after_enter_tile)(v, flags)
     }
 }
+
+/// `RoadVehicle::GetBlockedCounter`; live serialized owner, no borrow spans reentry.
+pub(crate) unsafe fn blocked_counter(state: *const State) -> u16 {
+    unsafe { (*state).scalars[BLOCKED] }
+}
+/// `RoadVehicle::GetOvertaking`; live serialized owner, no borrow spans reentry.
+pub(crate) unsafe fn overtaking(state: *const State) -> u8 {
+    unsafe { (*state).scalars[OVERTAKING] as u8 }
+}
+/// `RoadVehicle::GetOvertakingCounter`; live serialized owner, no borrow spans reentry.
+pub(crate) unsafe fn overtaking_counter(state: *const State) -> u8 {
+    unsafe { (*state).scalars[OVERTAKING_CTR] as u8 }
+}
+/// `RoadVehicle::GetCrashedCounter`; live serialized owner, no borrow spans reentry.
+pub(crate) unsafe fn crashed_counter(state: *const State) -> u16 {
+    unsafe { (*state).scalars[CRASHED] }
+}

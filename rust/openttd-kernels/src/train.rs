@@ -2684,7 +2684,7 @@ impl Game<'_> {
 /// `VehicleRailFlag::LeavingStation`.
 pub(crate) const VRF_LEAVING_STATION: u64 = 1 << 9;
 /// `VehicleRailFlag::Reversed`.
-const VRF_REVERSED: u64 = 1 << 7;
+pub const VRF_REVERSED: u64 = 1 << 7;
 
 /// The train part of `VehicleEnterDepot` (#349): clear the depot reservation,
 /// update the segment's signals and arrange the consist.
@@ -3457,3 +3457,6 @@ impl Game<'_> {
         u64::from(self.movement.get().track_status(tile, 0, 0, side))
     }
 }
+
+pub const VRF_POWERED_WAGON: u64 = 1 << 3;
+pub const VRF_FLIPPED: u64 = 1 << 4;

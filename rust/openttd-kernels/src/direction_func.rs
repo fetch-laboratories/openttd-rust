@@ -72,6 +72,17 @@ pub fn other_axis(axis: u8, check: impl Fn(bool) + Copy) -> u8 {
     axis ^ 1
 }
 
+/// `DirDifference`, preserving the native header assertions.
+pub fn dir_difference(a: u8, b: u8, check: impl Fn(bool)) -> u8 {
+    check(a < DIR_END);
+    check(b < DIR_END);
+    a.wrapping_sub(b) % DIR_END
+}
+/// `ChangeDirDiff`.
+pub const fn change_dir_diff(a: u8, b: u8) -> u8 {
+    a.wrapping_add(b) % DIR_END
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

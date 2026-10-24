@@ -2601,3 +2601,13 @@ crate::abi::layouts! {
         hangar,
     };
 }
+
+/// `Aircraft::GetSpeedOldUnits` applied to `cached_max_speed`.
+pub(crate) fn speed_old_units(speed: u32) -> u32 {
+    speed * 10 / 128
+}
+
+/// `Aircraft::IsNormalAircraft`.
+pub(crate) const fn is_normal_aircraft(subtype: u8) -> bool {
+    subtype <= 2
+}

@@ -3,6 +3,7 @@
 #ifndef RUST_NEWGRF_VEHICLE_FFI_H
 #define RUST_NEWGRF_VEHICLE_FFI_H
 #include "vehicle_ffi.h"
+#include "station_ffi.h"
 struct Vehicle;
 struct NewGRFCache;
 struct ResolverObject;
@@ -11,6 +12,14 @@ struct RealSpriteGroup;
 struct GRFFile;
 struct Livery;
 struct OpenTTDSharedServices;
+struct OpenTTDAircraftState;
+struct OpenTTDAircraftLeaves;
+struct OpenTTDGroundPhysicsServices;
+struct OpenTTDCargoStorageServices;
+struct OpenTTDShipState;
+enum RoadTramType : bool;
+enum RailType : uint8_t;
+enum RoadType : uint8_t;
 /** Invocation-local state; no owner/reference survives common Action2 evaluation. */
 struct OpenTTDVehicleScopeState { const Vehicle *v; uint16_t self_type; bool rotor_in_gui; };
 struct OpenTTDVehicleResolverState {
@@ -20,7 +29,6 @@ struct OpenTTDVehicleResolverState {
 };
 struct OpenTTDVehicleLoadingOrder { uint8_t unload, load; bool loading; };
 struct OpenTTDVehicleRandomResult { uint32_t used, reseed; };
-struct OpenTTDVehicleCargoQuery { uint8_t cargo, subtype; const OpenTTDEngine *engine; };
 struct OpenTTDVehicleOverride { const SpriteGroup *group; uint8_t cargo; size_t count; };
 struct OpenTTDVehicleOverrides { const OpenTTDEngine *engine; size_t count; };
 struct OpenTTDVehicleResolverServices {
@@ -30,7 +38,6 @@ struct OpenTTDVehicleResolverServices {
 	OpenTTDVehicle *(*first)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(first);
 	OpenTTDVehicle *(*move)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(move);
 	OpenTTDVehicle *(*previous)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(previous);
-	OpenTTDVehicleCargoQuery (*cargo)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo);
 	bool (*can_carry)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(can_carry);
 	uint16_t (*cargo_classes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_classes);
 	uint8_t (*cargo_bitnum)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_bitnum);
@@ -60,6 +67,67 @@ struct OpenTTDVehicleResolverServices {
 	uint16_t (*cargo_capacity)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_capacity);
 	uint32_t (*real_count)(const RealSpriteGroup *, bool) noexcept OPENTTD_SERVICE_DEFAULT(real_count);
 	const SpriteGroup *(*real_at)(const RealSpriteGroup *, bool, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(real_at);
+	uint32_t (*vehicle_grfid)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_grfid);
+	const OpenTTDEngine * (*engine_by_id)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(engine_by_id);
+	uint8_t (*default_cargo)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(default_cargo);
+	uint8_t (*engine_flags)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_flags);
+	uint16_t (*local_id)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(local_id);
+	uint16_t (*cargo_weight)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_weight);
+	uint32_t (*motion)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(motion);
+	int32_t (*build_year)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(build_year);
+	int32_t (*last_service)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(last_service);
+	bool (*primary)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(primary);
+	int32_t (*current_max_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(current_max_speed);
+	uint32_t (*id)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(id);
+	uint16_t (*old_order)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(old_order);
+	uint8_t (*num_orders)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(num_orders);
+	uint8_t (*real_order)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(real_order);
+	uint16_t (*load_ticks)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(load_ticks);
+	uint16_t (*service_interval)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(service_interval);
+	uint8_t (*acceleration)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(acceleration);
+	uint8_t (*cargo_type)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_type);
+	uint8_t (*cargo_subtype)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_subtype);
+	int32_t (*age)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(age);
+	int32_t (*max_age)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(max_age);
+	uint16_t (*unit)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(unit);
+	uint8_t (*sprite)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(sprite);
+	uint8_t (*breakdowns)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdowns);
+	uint8_t (*breakdown_counter)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_counter);
+	uint8_t (*breakdown_delay)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_delay);
+	uint8_t (*breakdown_chance)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_chance);
+	uint16_t (*reliability)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(reliability);
+	uint16_t (*reliability_decay)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(reliability_decay);
+	int64_t (*value)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(value);
+	int64_t (*profit_this)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(profit_this);
+	int64_t (*profit_last)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(profit_last);
+	uint16_t (*vehicle_flags)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_flags);
+	OpenTTDAircraftState *(*aircraft)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft);
+	const OpenTTDStation * (*target_airport)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(target_airport);
+	uint8_t (*airport_ttd_type)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_ttd_type);
+	uint16_t (*moving_flags)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(moving_flags);
+	RoadType (*roadtype)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(roadtype);
+	RoadType (*tile_roadtype)(uint32_t, RoadTramType) noexcept OPENTTD_SERVICE_DEFAULT(tile_roadtype);
+	RailType (*tile_railtype)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_railtype);
+	bool (*rail_catenary)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_catenary);
+	bool (*road_catenary)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_catenary);
+	uint8_t (*reverse_rail)(RailType, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(reverse_rail);
+	uint8_t (*reverse_road)(RoadType, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(reverse_road);
+	RailType (*translate_rail)(uint32_t, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(translate_rail);
+	RoadType (*translate_road)(RoadTramType, uint32_t, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(translate_road);
+	bool (*compatible_rail)(RailType, RailType) noexcept OPENTTD_SERVICE_DEFAULT(compatible_rail);
+	bool (*powered_rail)(uint64_t, RailType) noexcept OPENTTD_SERVICE_DEFAULT(powered_rail);
+	bool (*powered_single_rail)(RailType, RailType) noexcept OPENTTD_SERVICE_DEFAULT(powered_single_rail);
+	size_t (*badge_count)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(badge_count);
+	uint16_t (*badge_at)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(badge_at);
+	bool (*engine_has_badge)(const OpenTTDEngine *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(engine_has_badge);
+	uint32_t (*engine_badge)(const GRFFile *, const OpenTTDEngine *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(engine_badge);
+	uint32_t (*rail_badge)(const GRFFile *, RailType, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_badge);
+	uint32_t (*road_badge)(const GRFFile *, RoadType, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_badge);
+	OpenTTDShipState * (*ship_owner)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(ship_owner);
+	void (*unhandled)(uint8_t, VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(unhandled);
+	const OpenTTDAircraftLeaves * (*aircraft_leaves)() noexcept OPENTTD_SERVICE_DEFAULT(aircraft_leaves);
+	const OpenTTDGroundPhysicsServices * (*ground)() noexcept OPENTTD_SERVICE_DEFAULT(ground);
+	const OpenTTDCargoStorageServices * (*cargo_services)() noexcept OPENTTD_SERVICE_DEFAULT(cargo_services);
 	void (*check)(bool) noexcept OPENTTD_SERVICE_DEFAULT(check);
 };
 const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept;
@@ -73,8 +141,8 @@ void openttd_rust_vehicle_grf_fill(const OpenTTDVehicleResolverServices *, const
 void openttd_rust_vehicle_resolver_init(const OpenTTDVehicleResolverServices *, OpenTTDVehicleResolverState *, uint16_t, const Vehicle *, uint8_t, bool);
 uint8_t openttd_rust_vehicle_resolver_scope(const OpenTTDVehicleResolverServices *, OpenTTDVehicleResolverState *, const ResolverObject *, uint8_t, uint8_t);
 void openttd_rust_vehicle_scope_set(OpenTTDVehicleScopeState *, const Vehicle *);
+uint32_t openttd_rust_vehicle_scope_variable(const OpenTTDVehicleResolverServices *, const OpenTTDVehicleScopeState *, const ResolverObject *, const GRFFile *, uint16_t, uint8_t, uint32_t, bool *);
 uint32_t openttd_rust_vehicle_scope_random(const OpenTTDVehicleResolverServices *, const OpenTTDVehicleScopeState *, bool);
-uint32_t openttd_rust_vehicle_cached_variable(const OpenTTDVehicleResolverServices *, const Vehicle *, uint8_t, const GRFFile *);
 const SpriteGroup *openttd_rust_vehicle_resolve_real(const OpenTTDVehicleResolverServices *, const OpenTTDVehicleResolverState *, const RealSpriteGroup *);
 const SpriteGroup *openttd_rust_vehicle_wagon_override(const OpenTTDVehicleResolverServices *, uint16_t, uint8_t, uint16_t);
 uint16_t openttd_rust_vehicle_callback(const OpenTTDVehicleResolverServices *, uint16_t, uint32_t, uint32_t, uint16_t, const Vehicle *, const Vehicle *, bool, int32_t *, size_t);

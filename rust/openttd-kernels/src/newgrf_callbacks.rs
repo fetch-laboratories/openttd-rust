@@ -26,3 +26,10 @@ crate::abi::layouts! {
 
 pub const CBID_VEHICLE_MODIFY_PROPERTY: CallbackID = CallbackID(0x36);
 pub const CBID_VEHICLE_BUILD_PROBABILITY: CallbackID = CallbackID(0x162);
+
+pub const CBID_NO_CALLBACK: CallbackID = CallbackID(0x00);
+pub const CBID_RANDOM_TRIGGER: CallbackID = CallbackID(0x01);
+pub const CBID_TRAIN_ALLOW_WAGON_ATTACH: CallbackID = CallbackID(0x1d);
+pub const CBID_VEHICLE_START_STOP_CHECK: CallbackID = CallbackID(0x31);
+pub const CBID_VEHICLE_COLOUR_MAPPING: CallbackID = CallbackID(0x2d);
+pub const CBID_VEHICLE_SPAWN_VISUAL_EFFECT: CallbackID = CallbackID(0x160);

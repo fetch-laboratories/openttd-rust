@@ -13,3 +13,7 @@ pub const MONTHS_IN_YEAR: u32 = 12;
 pub const SECONDS_PER_DAY: i32 = 2;
 /// `TimerGameConst::INVALID_DATE`, inherited by `EconomyTime`/`CalendarTime`.
 pub const INVALID_DATE: i32 = -1;
+
+pub const ORIGINAL_BASE_YEAR: i32 = 1920;
+pub const ORIGINAL_MAX_YEAR: i32 = 2090;
+pub const DAYS_TILL_ORIGINAL_BASE_YEAR: i32 = 701_265;

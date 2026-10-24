@@ -79,6 +79,7 @@ void SetEngineGRF(EngineID engine, const GRFFile *file)
 }
 
 
+#ifndef WITH_RUST
 static int MapOldSubType(const Vehicle *v)
 {
 	switch (v->type) {
@@ -308,6 +309,8 @@ static uint8_t MapAircraftMovementAction(const Aircraft *v)
 }
 
 
+#endif
+
 /* virtual */ uint32_t VehicleScopeResolver::GetRandomBits() const
 {
 #ifdef WITH_RUST
@@ -391,6 +394,7 @@ static uint8_t MapAircraftMovementAction(const Aircraft *v)
  * @param v Vehicle, nullptr in purchase list.
  * @return Livery to use
  */
+#ifndef WITH_RUST
 static const Livery *LiveryHelper(EngineID engine, const Vehicle *v)
 {
 	const Livery *l;
@@ -1002,8 +1006,13 @@ static uint32_t VehicleGetVariable(Vehicle *v, const VehicleScopeResolver *objec
 	return UINT_MAX;
 }
 
+#endif
+
 /* virtual */ uint32_t VehicleScopeResolver::GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const
 {
+#ifdef WITH_RUST
+	return openttd_rust_vehicle_scope_variable(&GetRustVehicleResolverServices(), &this->state, &this->ro, this->ro.grffile, this->ro.callback, variable, parameter, &available);
+#else
 	if (this->v == nullptr) {
 		/* Vehicle does not exist, so we're in a purchase list */
 		switch (variable) {
@@ -1039,6 +1048,7 @@ static uint32_t VehicleGetVariable(Vehicle *v, const VehicleScopeResolver *objec
 	}
 
 	return VehicleGetVariable(const_cast<Vehicle*>(this->v), this, variable, parameter, available);
+#endif
 }
 
 

@@ -423,8 +423,7 @@ const INITIAL_LOAN: i64 = 100_000;
 const LOAN_INTERVAL: i64 = 10_000;
 const MAX_INFLATION: u64 = (1_u64 << 31) - 1;
 const MAX_LOAN_LIMIT: i64 = 2_000_000_000;
-const ORIGINAL_BASE_YEAR: i32 = 1920;
-const ORIGINAL_MAX_YEAR: i32 = 2090;
+use crate::timer_game_common::{ORIGINAL_BASE_YEAR, ORIGINAL_MAX_YEAR};
 /// `Ticks::DAY_TICKS` and `Ticks::TICKS_PER_SECOND` (static-asserted in C++).
 const DAY_TICKS: i32 = 74;
 const TICKS_PER_SECOND: i32 = 37;
