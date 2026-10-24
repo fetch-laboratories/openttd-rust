@@ -951,7 +951,7 @@ static OpenTTDLandscapeLoopServices RustLandscapeLoopServices(OpenTTDGroundCall 
 		.tile_types = GetRustTileTypeAllocation(),
 		.trees = &GetRustTreeServices(),
 		.industry = GetRustIndustryLoopServices(),
-		.ground = {.clear = &GetRustClearServices(), .rail = &GetRustRailGroundServices(), .road = &GetRustRoadGroundServices(), .road_command = road, .tunnel = &GetRustTunnelGroundServices(), .water = &GetRustWaterGroundServices(), .costs = &GetRustGroundCostServices(), .call = call, .climate = OpenTTDLandscape(), .editor = OpenTTDEditor(), .rebuild = _settings_game.economy.mod_road_rebuild, .ambient_callback = RustAmbientSoundEnabled()},
+		.ground = {.clear = &GetRustClearServices(), .rail = &GetRustRailGroundServices(), .road = &GetRustRoadGroundServices(), .road_command = road, .tunnel = &GetRustTunnelGroundServices(), .water = &GetRustWaterGroundServices(), .costs = &GetRustGroundCostServices(), .call = call, .climate = OpenTTDLandscape(), .editor = OpenTTDEditor(), .rebuild = _settings_game.economy.mod_road_rebuild},
 		.town = &GetRustTownServices(),
 		.station_loop = _tile_type_station_procs.tile_loop_proc,
 		.objects = &GetRustObjectServices(),

@@ -3357,6 +3357,9 @@ static const IntervalTimer<TimerGameEconomy> _economy_vehicles_yearly({TimerGame
  */
 bool CanVehicleUseStation(EngineID engine_type, const Station *st)
 {
+#ifdef WITH_RUST
+	return openttd_rust_can_engine_use_station(engine_type.base(), st, &GetAirportResolverServices());
+#else
 	const Engine *e = Engine::GetIfValid(engine_type);
 	assert(e != nullptr);
 
@@ -3380,6 +3383,7 @@ bool CanVehicleUseStation(EngineID engine_type, const Station *st)
 		default:
 			return false;
 	}
+#endif
 }
 
 /**
@@ -3390,9 +3394,13 @@ bool CanVehicleUseStation(EngineID engine_type, const Station *st)
  */
 bool CanVehicleUseStation(const Vehicle *v, const Station *st)
 {
+#ifdef WITH_RUST
+	return openttd_rust_can_vehicle_use_station(RustVehicle(v), st, &GetAirportResolverServices());
+#else
 	if (v->type == VEH_ROAD) return st->GetPrimaryRoadStop(RoadVehicle::From(v)) != nullptr;
 
 	return CanVehicleUseStation(v->engine_type, st);
+#endif
 }
 
 /**

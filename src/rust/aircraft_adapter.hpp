@@ -64,12 +64,6 @@ static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_helipads(const void * airport) noe
 	return ap->num_helipads;
 }
 
-static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_airport_flags(const void * airport) noexcept
-{
-	const auto *ap = static_cast<const AirportFTAClass *>(airport);
-	return ap->flags.base();
-}
-
 static const void * OPENTTD_AIRCRAFT_CALL Aircraft_node(const void * airport, uint8_t pos) noexcept
 {
 	return &static_cast<const AirportFTAClass *>(airport)->layout[pos];
@@ -96,7 +90,7 @@ static uint16_t OPENTTD_AIRCRAFT_CALL Aircraft_engine_speed(OpenTTDAircraftVehic
 static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_engine_subtype(OpenTTDAircraftVehicle vehicle) noexcept
 {
 	const Vehicle *v = VehicleOf(vehicle.handle);
-	return AircraftVehInfo(v->engine_type)->subtype;
+	return RustAircraftInfoSubtype(AircraftVehInfo(EngineID(RustVehicleEngineID(v))));
 }
 
 static uint16_t OPENTTD_AIRCRAFT_CALL Aircraft_engine_sound(OpenTTDAircraftVehicle vehicle) noexcept
@@ -115,9 +109,9 @@ static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_direction_towards(OpenTTDAircraftV
 	return GetDirectionTowards(VehicleOf(vehicle.handle), x, y);
 }
 
-static int32_t OPENTTD_AIRCRAFT_CALL Aircraft_hangar_height(uint16_t station) noexcept
+static int32_t OPENTTD_AIRCRAFT_CALL Aircraft_hangar_height(const OpenTTDStation *station, const AirportSpec *spec) noexcept
 {
-	return GetTileMaxPixelZ(RustStationHangarTile(Station::Get(station), 0));
+	return GetTileMaxPixelZ(RustStationHangarTile(StationOf(station), 0, spec));
 }
 
 static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_terminal_count(const void * ap, uint32_t index) noexcept
@@ -125,15 +119,9 @@ static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_terminal_count(const void * ap, ui
 	return static_cast<const AirportFTAClass *>(ap)->terminals[index];
 }
 
-static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_hangar_exit(OpenTTDAircraftVehicle vehicle) noexcept
+static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_hangar_exit(const OpenTTDStation *station, uint32_t tile, const AirportSpec *spec) noexcept
 {
-	const Vehicle *v = VehicleOf(vehicle.handle);
-	return Station::GetByTile(v->tile)->airport.GetHangarExitDirection(v->tile);
-}
-
-static bool OPENTTD_AIRCRAFT_CALL Aircraft_can_use_station(OpenTTDAircraftVehicle vehicle, const OpenTTDStation *station) noexcept
-{
-	return CanVehicleUseStation(VehicleOf(vehicle.handle), StationOf(station));
+	return StationOf(station)->airport.GetHangarExitDirection(TileIndex{tile}, spec);
 }
 
 static uint16_t OPENTTD_AIRCRAFT_CALL Aircraft_service_interval(OpenTTDAircraftVehicle vehicle) noexcept
@@ -345,7 +333,6 @@ static OpenTTDAircraftGeometry OPENTTD_AIRCRAFT_CALL Aircraft_geometry(const Ope
 	return {.tile = tile, .rotation = st->airport.rotation, .width = RustStationAirportWidth(st), .height = RustStationAirportHeight(st), .airport = true};
 }
 static uint64_t OPENTTD_AIRCRAFT_CALL Aircraft_layout_blocks(const void *ap, uint8_t pos) noexcept { return static_cast<const AirportFTAClass *>(ap)->layout[pos].blocks.base(); }
-static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_layout_heading(const void *ap, uint8_t pos) noexcept { return static_cast<const AirportFTAClass *>(ap)->layout[pos].heading; }
 static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_layout_next_position(const void *ap, uint8_t pos) noexcept { return static_cast<const AirportFTAClass *>(ap)->layout[pos].next_position; }
 static const void *OPENTTD_AIRCRAFT_CALL Aircraft_layout_next(const void *ap, uint8_t pos) noexcept { return static_cast<const AirportFTAClass *>(ap)->layout[pos].next.get(); }
 static OpenTTDAircraftLayoutRoute OPENTTD_AIRCRAFT_CALL Aircraft_layout_route(const void *ap, uint8_t pos) noexcept
@@ -353,18 +340,10 @@ static OpenTTDAircraftLayoutRoute OPENTTD_AIRCRAFT_CALL Aircraft_layout_route(co
 	const AirportFTA *n = &static_cast<const AirportFTAClass *>(ap)->layout[pos];
 	return {.node = n, .next = n->next.get(), .next_position = n->next_position, .heading = n->heading};
 }
-static OpenTTDAircraftHangarCandidate OPENTTD_AIRCRAFT_CALL Aircraft_hangar_candidate(const OpenTTDStation *station, uint8_t vehicle_owner) noexcept
-{
-	const Station *st = StationOf(station);
-	uint8_t owner = OpenTTDStationOwner(st).base();
-	bool airport = owner == vehicle_owner && RustStationHasAirport(st);
-	return {.owner = owner, .airport = airport, .hangar = airport && RustStationHasHangar(st)};
-}
 static const OpenTTDAircraftLeaves _aircraft_leaves{
-	.hangar_candidate = Aircraft_hangar_candidate,
 	.geometry = Aircraft_geometry,
 	.layout_blocks = Aircraft_layout_blocks,
-	.layout_heading = Aircraft_layout_heading,
+	.layout_heading = OpenTTDAirportLayoutHeading,
 	.layout_next_position = Aircraft_layout_next_position,
 	.layout_next = Aircraft_layout_next,
 	.layout_route = Aircraft_layout_route,
@@ -377,14 +356,11 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.rotation = Aircraft_rotation,
 	.airport_type = Aircraft_airport_type,
 	.station_owner = Aircraft_station_owner,
-	.has_hangar = Aircraft_has_hangar,
-	.airport_fta = OpenTTDStationAirportFTA,
 	.airport_blocks = Aircraft_airport_blocks,
 	.had_vehicle = Aircraft_had_vehicle,
-	.dummy_airport = RustDummyAirportFTA,
 	.airport_elements = Aircraft_airport_elements,
 	.helipads = Aircraft_helipads,
-	.airport_flags = Aircraft_airport_flags,
+	.airport_flags = OpenTTDAirportFlags,
 	.airport_delta_z = OpenTTDAirportDeltaZ,
 	.node = Aircraft_node,
 	.fta = Aircraft_fta,
@@ -397,7 +373,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.hangar_height = Aircraft_hangar_height,
 	.terminal_count = Aircraft_terminal_count,
 	.hangar_exit = Aircraft_hangar_exit,
-	.can_use_station = Aircraft_can_use_station,
 	.service_interval = Aircraft_service_interval,
 	.chain_in_depot = Aircraft_chain_in_depot,
 	.nearest_depot_order = Aircraft_nearest_depot_order,

@@ -17,6 +17,7 @@
 #else
 #define OPENTTD_AIRCRAFT_CALL
 #endif
+struct AirportSpec;
 struct OpenTTDAircraftLeaves;
 struct OpenTTDAircraftVehicle;
 const OpenTTDAircraftLeaves &GetRustAircraftLeaves() noexcept;
@@ -44,9 +45,7 @@ struct OpenTTDAircraftBlockChoice { const void *next; uint64_t blocks; uint8_t h
  * Flight helpers accept actual Vehicle identity, with null state for disasters. */
 struct OpenTTDAircraftGeometry { uint32_t tile; uint8_t rotation; uint16_t width, height; bool airport; };
 struct OpenTTDAircraftLayoutRoute { const void *node, *next; uint8_t next_position, heading; };
-struct OpenTTDAircraftHangarCandidate { uint8_t owner; bool airport, hangar; };
 struct OpenTTDAircraftLeaves {
-	OpenTTDAircraftHangarCandidate (OPENTTD_AIRCRAFT_CALL *hangar_candidate)(const OpenTTDStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(hangar_candidate);
 	OpenTTDAircraftGeometry (OPENTTD_AIRCRAFT_CALL *geometry)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(geometry);
 	uint64_t (OPENTTD_AIRCRAFT_CALL *layout_blocks)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(layout_blocks);
 	uint8_t (OPENTTD_AIRCRAFT_CALL *layout_heading)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(layout_heading);
@@ -62,11 +61,8 @@ struct OpenTTDAircraftLeaves {
 	uint8_t (OPENTTD_AIRCRAFT_CALL *rotation)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(rotation);
 	uint8_t (OPENTTD_AIRCRAFT_CALL *airport_type)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_type);
 	uint8_t (OPENTTD_AIRCRAFT_CALL *station_owner)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_owner);
-	bool (OPENTTD_AIRCRAFT_CALL *has_hangar)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(has_hangar);
-	const void * (OPENTTD_AIRCRAFT_CALL *airport_fta)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_fta);
 	uint64_t * (OPENTTD_AIRCRAFT_CALL *airport_blocks)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_blocks);
 	uint8_t (OPENTTD_AIRCRAFT_CALL *had_vehicle)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(had_vehicle);
-	const void * (OPENTTD_AIRCRAFT_CALL *dummy_airport)() noexcept OPENTTD_SERVICE_DEFAULT(dummy_airport);
 	uint8_t (OPENTTD_AIRCRAFT_CALL *airport_elements)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(airport_elements);
 	uint8_t (OPENTTD_AIRCRAFT_CALL *helipads)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(helipads);
 	uint8_t (OPENTTD_AIRCRAFT_CALL *airport_flags)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(airport_flags);
@@ -79,10 +75,9 @@ struct OpenTTDAircraftLeaves {
 	uint16_t (OPENTTD_AIRCRAFT_CALL *engine_sound)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(engine_sound);
 	uint8_t (OPENTTD_AIRCRAFT_CALL *airport_entry)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_entry);
 	uint8_t (OPENTTD_AIRCRAFT_CALL *direction_towards)(OpenTTDAircraftVehicle, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(direction_towards);
-	int32_t (OPENTTD_AIRCRAFT_CALL *hangar_height)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(hangar_height);
+	int32_t (OPENTTD_AIRCRAFT_CALL *hangar_height)(const OpenTTDStation *, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_height);
 	uint8_t (OPENTTD_AIRCRAFT_CALL *terminal_count)(const void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terminal_count);
-	uint8_t (OPENTTD_AIRCRAFT_CALL *hangar_exit)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(hangar_exit);
-	bool (OPENTTD_AIRCRAFT_CALL *can_use_station)(OpenTTDAircraftVehicle, const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(can_use_station);
+	uint8_t (OPENTTD_AIRCRAFT_CALL *hangar_exit)(const OpenTTDStation *, uint32_t, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_exit);
 	uint16_t (OPENTTD_AIRCRAFT_CALL *service_interval)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(service_interval);
 	bool (OPENTTD_AIRCRAFT_CALL *chain_in_depot)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(chain_in_depot);
 	bool (OPENTTD_AIRCRAFT_CALL *nearest_depot_order)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(nearest_depot_order);

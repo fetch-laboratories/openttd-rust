@@ -122,3 +122,7 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDGlobalVariableServices" ["storage"] => Services { climate, date_fraction, date_to_ymd, disable_elrails, file_version, game_mode, height_limit, misc_bits, newgrf_version, palette, pitch, rail_cost, road_side, shared, width, ymd_to_date };
 }
+
+// Feature identities from newgrf.h, pinned by native static assertions.
+pub const GSF_SOUNDFX: u8 = 12;
+pub const GSF_END: u8 = 22;

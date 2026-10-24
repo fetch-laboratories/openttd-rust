@@ -49,9 +49,14 @@ static void AnimationTrace(std::string_view event)
 	for (const auto &r : st->custom_roadstop_tile_data) fmt::print(stderr, " r{}:{}:{}", r.tile.base(), r.random_bits, r.animation_frame);
 	fmt::print(stderr, "\n");
 }
+static uint generic_sound_calls = 0;
+static const GRFFile *generic_sound_file = nullptr;
+static SoundID generic_sound_id = 0;
+static TileIndex generic_sound_tile;
 extern "C" void __real__Z13PlayTileSoundPK7GRFFiletN10StrongType7TypedefIj12TileIndexTagJNS2_7CompareENS2_7IntegerENS2_10CompatibleIiEENS7_IlEEEEE(const GRFFile *, SoundID, TileIndex);
 extern "C" void __wrap__Z13PlayTileSoundPK7GRFFiletN10StrongType7TypedefIj12TileIndexTagJNS2_7CompareENS2_7IntegerENS2_10CompatibleIiEENS7_IlEEEEE(const GRFFile *f, SoundID s, TileIndex t)
 {
+	generic_sound_calls++; generic_sound_file = f; generic_sound_id = s; generic_sound_tile = t;
 	AnimationTrace("sound-enter");
 	__real__Z13PlayTileSoundPK7GRFFiletN10StrongType7TypedefIj12TileIndexTagJNS2_7CompareENS2_7IntegerENS2_10CompatibleIiEENS7_IlEEEEE(f, s, t);
 	AnimationTrace("sound-exit");
@@ -296,8 +301,13 @@ static void AnimationBindingProbe(const char *name, TileIndex tile, Spec *spec, 
 			}
 			group->observation = [phase](ResolverObject &ro) {
 				auto &scope = static_cast<AirportTileResolverObject &>(ro).tiles_scope;
-				fmt::print(stderr, "OBJECT animation-visit airport {} {} {} {} {}\n", scope.tile.base(), ro.callback_param1, ro.callback_param2, _random.state[0], _random.state[1]);
-				if (phase == 4) const_cast<AirportTileSpec *>(scope.ats)->animation.triggers.Reset();
+#ifdef WITH_RUST
+				TileIndex tile{scope.context.tile}; const auto *spec = scope.context.tile_spec;
+#else
+				TileIndex tile = scope.tile; const auto *spec = scope.ats;
+#endif
+				fmt::print(stderr, "OBJECT animation-visit airport {} {} {} {} {}\n", tile.base(), ro.callback_param1, ro.callback_param2, _random.state[0], _random.state[1]);
+				if (phase == 4) const_cast<AirportTileSpec *>(spec)->animation.triggers.Reset();
 			};
 			bool accepted = TriggerAirportAnimation(st, AirportAnimationTrigger::NewCargo, 0);
 			fmt::print(stderr, "OBJECT animation-airport {} {} {} {}\n", phase, accepted, _random.state[0], _random.state[1]);

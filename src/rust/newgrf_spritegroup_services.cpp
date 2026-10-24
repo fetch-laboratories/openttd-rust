@@ -14,10 +14,12 @@
 #include "environment_services.h"
 #include "services_newgrf.h"
 #include "../newgrf_engine.h"
+#include "generic_resolver.h"
 #include "../newgrf_station.h"
 #include "../newgrf_industries.h"
 #include "../newgrf_industrytiles.h"
 #include "../newgrf_airport.h"
+#include "../newgrf_airporttiles.h"
 #include "../newgrf_object.h"
 #include "../newgrf_roadstop.h"
 #include "../industry.h"
@@ -110,6 +112,14 @@ static void ResolverBinding(ResolverObject *ro, OpenTTDResolverBinding *out) noe
 		out->self = &h->house_scope; out->parent = &h->town_scope; out->kind = 7;
 	} else if (auto *t = dynamic_cast<TownResolverObject *>(ro)) {
 		out->self = &t->town_scope; out->kind = 8;
+	} else if (auto *a = dynamic_cast<AirportResolverObject *>(ro)) {
+		out->state = &a->airport_scope.context; out->self = &a->airport_scope; out->kind = 9;
+	} else if (auto *at = dynamic_cast<AirportTileResolverObject *>(ro)) {
+		out->state = &at->tiles_scope.context; out->self = &at->tiles_scope; out->parent = &at->airport_scope; out->kind = 10;
+	} else if (auto *g = dynamic_cast<GenericResolverObject *>(ro)) {
+		out->self = &g->generic_scope; out->kind = 11;
+	} else if (auto *o = dynamic_cast<ObjectResolverObject *>(ro)) {
+		out->state = &o->object_scope.context; out->self = &o->object_scope; out->kind = 12;
 	} else if (typeid(*ro) != typeid(ResolverObject)) {
 		out->kind = 5; // Remaining native feature scope-selection behavior.
 	}
@@ -121,17 +131,20 @@ static void ScopeBinding(ScopeResolver *scope, OpenTTDScopeBinding *out) noexcep
 	else if (auto *st = dynamic_cast<StationScopeResolver *>(scope)) { out->kind = 2; out->data.station = &st->state; }
 	else if (auto *i = dynamic_cast<IndustriesScopeResolver *>(scope)) { out->kind = 3; out->data.industry = &i->context; }
 	else if (auto *it = dynamic_cast<IndustryTileScopeResolver *>(scope)) { out->kind = 4; out->data.industry = &it->context; }
-	else if (auto *o = dynamic_cast<ObjectScopeResolver *>(scope)) { out->kind = 5; out->data.object = {o->obj, o->spec, o->tile.base(), o->view}; }
+	else if (auto *o = dynamic_cast<ObjectScopeResolver *>(scope)) { out->kind = 5; out->data.object = &o->context; }
 	else if (auto *t = dynamic_cast<TownScopeResolver *>(scope)) { out->kind = 6; out->data.town = &t->context; }
-	else if (auto *a = dynamic_cast<AirportScopeResolver *>(scope)) { out->kind = 7; out->data.airport = a->st; }
+	else if (auto *a = dynamic_cast<AirportScopeResolver *>(scope)) { out->kind = 7; out->data.airport = &a->context; }
+	else if (auto *at = dynamic_cast<AirportTileScopeResolver *>(scope)) { out->kind = 11; out->data.airport = &at->context; }
 	else if (auto *rs = dynamic_cast<RoadStopScopeResolver *>(scope)) { out->kind = 9; out->data.roadstop = &rs->state; }
 	else if (auto *h = dynamic_cast<HouseScopeResolver *>(scope)) { out->kind = 10; out->data.house = &h->context; }
+	else if (auto *g = dynamic_cast<GenericScopeResolver *>(scope)) { out->kind = 12; out->data.generic = &g->invocation; }
 	else { out->kind = typeid(*scope) == typeid(ScopeResolver) ? 0 : 8; }
 }
 const OpenTTDSpriteGroupServices &GetRustSpriteGroupServices() noexcept
 {
 	static const OpenTTDSpriteGroupServices services{
 		.adjust = GroupAdjust,
+		.airport = &GetAirportResolverServices(),
 		.global = &GetRustGlobalVariableServices(),
 		.house = &GetHouseResolverServices(),
 		.industry = &GetIndustryResolverServices(),

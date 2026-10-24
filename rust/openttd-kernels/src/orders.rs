@@ -504,10 +504,8 @@ pub struct Leaves {
     pub ship_station_tile: unsafe extern "C" fn(destination: u16) -> u64,
     pub valid_station: extern "C" fn(destination: u16) -> u64,
     pub station_owner: unsafe extern "C" fn(destination: u16) -> u64,
-    pub can_use_station: unsafe extern "C" fn(ctx: *mut c_void, destination: u16) -> u64,
     pub owner_check: unsafe extern "C" fn(owner: u8, result: *mut c_void) -> u64,
     pub station_error: unsafe extern "C" fn(ctx: *mut c_void, destination: u16) -> u64,
-    pub has_hangar: unsafe extern "C" fn(destination: u16) -> u64,
     pub valid_depot: extern "C" fn(destination: u16) -> u64,
     pub depot_owner: unsafe extern "C" fn(destination: u16) -> u64,
     pub rail_depot: unsafe extern "C" fn(destination: u16) -> u64,
@@ -532,11 +530,9 @@ pub struct Leaves {
     pub vehicle_tile: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub vehicle_group: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub unique_backup_name: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub backup_hangar: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub review_setting: extern "C" fn() -> u64,
     pub local_owner: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub fast_aircraft: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub short_strip: unsafe extern "C" fn(destination: u16) -> u64,
     pub no_jet_crash: extern "C" fn() -> u64,
     pub append_station: unsafe extern "C" fn(ctx: *mut c_void, station: u16),
     pub invalidate_station_list: extern "C" fn(),
@@ -3524,7 +3520,7 @@ impl Control {
                     return 0;
                 }
                 // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-                if unsafe { (g.0.can_use_station)(v, destination as u16) } == 0 {
+                if unsafe { order_can_use_station(v, destination as u16) } == 0 {
                     return self.g.error_with(
                         output,
                         5,
@@ -3535,7 +3531,7 @@ impl Control {
                 let mut u = g.first(v);
                 while !u.is_null() {
                     // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-                    if unsafe { (g.0.can_use_station)(u, destination as u16) } == 0 {
+                    if unsafe { order_can_use_station(u, destination as u16) } == 0 {
                         return self.g.error_with(
                             output,
                             6,
@@ -3584,9 +3580,9 @@ impl Control {
                             return 0;
                         }
                         // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-                        if unsafe { (g.0.can_use_station)(v, destination as u16) } == 0
+                        if unsafe { order_can_use_station(v, destination as u16) } == 0
                             // SAFETY: The source branch supplies a live destination of the required pool type.
-                            || unsafe { (g.0.has_hangar)(destination as u16) } == 0
+                            || u64::from(crate::station_base::airport_has_hangar(crate::newgrf_airport::station_by_id(destination as u16, crate::newgrf_airport::runtime()), crate::newgrf_airport::runtime())) == 0
                         {
                             return self.g.error(output, 0);
                         }
@@ -4270,9 +4266,9 @@ impl Control {
                 }
                 let destination = u64::from(order.destination);
                 // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-                if (action == 1 || unsafe { (g.0.can_use_station)(src, destination as u16) } != 0)
+                if (action == 1 || unsafe { order_can_use_station(src, destination as u16) } != 0)
                     // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-                    && unsafe { (g.0.can_use_station)(dst, destination as u16) } == 0
+                    && unsafe { order_can_use_station(dst, destination as u16) } == 0
                 {
                     return self.g.error_with(
                         output,
@@ -4583,7 +4579,10 @@ impl Control {
                         continue;
                     }
                     // SAFETY: The pool traversal supplies a live OrderBackup shell and its saved tile.
-                    let hangar = unsafe { (g.0.backup_hangar)(ob) } != 0;
+                    let hangar = crate::station_map::is_hangar_tile(
+                        unsafe { (*g.backup(ob)).tile },
+                        crate::newgrf_airport::runtime(),
+                    );
                     if kind == 2 && c != 0 && !hangar {
                         continue;
                     }
@@ -4717,14 +4716,14 @@ impl Control {
                 if order.kind() == 1 {
                     stations = stations.wrapping_add(1);
                     // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-                    if unsafe { (g.0.can_use_station)(v, order.destination) } == 0 {
+                    if unsafe { order_can_use_station(v, order.destination) } == 0 {
                         message = 2;
                     // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
                     } else if unsafe { (g.0.vehicle_type)(v) } == 3
                         // SAFETY: The source branch has established that this live vehicle is an aircraft.
                         && unsafe { (g.0.fast_aircraft)(v) } != 0
                         // SAFETY: The source branch supplies a live destination of the required pool type.
-                        && unsafe { (g.0.short_strip)(order.destination) } != 0
+                        && u64::from((crate::newgrf_airport::runtime().fta_flags)(crate::newgrf_airport::station_fta(crate::newgrf_airport::station_by_id(order.destination, crate::newgrf_airport::runtime()), crate::newgrf_airport::runtime())) & crate::airport::FTA_SHORT_STRIP != 0) != 0
                         && (g.0.no_jet_crash)() == 0
                         && message == 0
                     {
@@ -5109,10 +5108,8 @@ crate::abi::layouts! {
         ship_station_tile,
         valid_station,
         station_owner,
-        can_use_station,
         owner_check,
         station_error,
-        has_hangar,
         valid_depot,
         depot_owner,
         rail_depot,
@@ -5137,11 +5134,9 @@ crate::abi::layouts! {
         vehicle_tile,
         vehicle_group,
         unique_backup_name,
-        backup_hangar,
         review_setting,
         local_owner,
         fast_aircraft,
-        short_strip,
         no_jet_crash,
         append_station,
         invalidate_station_list,
@@ -5181,4 +5176,16 @@ crate::abi::layouts! {
         reverse,
         found,
     };
+}
+
+/// Shared named station eligibility operation, keeping the source vehicle gate.
+unsafe fn order_can_use_station(vehicle: *mut std::ffi::c_void, destination: u16) -> u64 {
+    // SAFETY: The caller supplies live serialized vehicle and destination shells.
+    u64::from(unsafe {
+        crate::vehicle_func::can_vehicle_use_station(
+            vehicle.cast(),
+            crate::newgrf_airport::station_by_id(destination, crate::newgrf_airport::runtime()),
+            crate::newgrf_airport::runtime(),
+        )
+    })
 }

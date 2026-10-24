@@ -1248,6 +1248,30 @@ growth, cancellation, query availability/register/nearby/count decisions and cal
 ordering, including unmasked `SB` refresh and reentry. External NewGRF/legacy,
 autoslope and generation branches remain tracked in #156.
 
+### Object invocation and eligibility (#430)
+
+`objects.rs` owns stack object/spec/tile/view context, root selection, successful
+lazy parent caching, scope/feature/debug identity, callback entry and complete
+spec eligibility. Failed parent lookups retry; construction town scopes are
+readonly. Native object/spec vectors, overrides, map/save adapters, rendering
+and virtual resolver/town facades stay canonical. Common Action2 uses direct Rust
+object scope/variable/random dispatch through the canonical context pointer;
+native frames supply stack lifetimes. No owner borrow spans reentry. Leaves
+are typed noexcept calls; native cancellation and save/load frames stay outside.
+
+Command colour/slope/autoslope and animation enter the owner directly. Shared
+root/local-ID/GRF, qualified base-scope and town/storage services are reused;
+station and object use one optional-town facade construction helper. No variable,
+query, command or animation algorithm receives a second retirement credit.
+Default `objects-commands`, `objects-gaps` and `objects-reload` install actual
+deterministic/procedure/randomized groups, compare result registers and colour,
+exercise parent PSA/cache/retry/readonly and real date/mode admission, and detach
+transient groups/specs before saving. Reload explicitly reinstalls them. These
+checks and generation scenarios compare full semantic saves and named witnesses.
+Build/Cargo4, native ABI and focused object/generation checks pass (PR #438).
+External GRF loading and historical layouts remain #156 gaps; this fixture does
+not establish loader equivalence. Root owns exact-combination Full.
+
 ### Shared tile ownership dispatch (#331)
 
 Rust owns the general `ChangeTileOwner` tile-kind dispatch and directly calls the
@@ -2367,3 +2391,58 @@ Build/Cargo4, affected native/ABI and default scenarios, callee/duplicate/orphan
 review and exact-current-base Full are recorded in #427. Remaining historical,
 external-GRF and named unreachable branches remain on #156. Necessary typed
 native vector/spec/evaluator boundary cost was accepted once at the checkpoint.
+
+### Airport and airport-tile NewGRF runtime (#418, #428)
+
+Rust owns both resolver stack contexts, roots, self/parent/default scopes,
+lazy town selection, variables, random packing, tile callbacks and live airport
+selection/availability/bounds. Native parsing, spec/layout/override storage,
+rendering, preview drawing and text remain. Canonical station/cargo/town/storage
+owners and the industry relative-position helper are called directly. Common
+Action2 and airport operations dispatch directly in Rust; native stack frames
+retain their synchronous lifetimes.
+Animation and construction admission call the Rust owner. Shared named support
+ports CanVehicleUseStation, IsHangar/IsHangarTile, GetVehiclePosOnBuild,
+GetAirport and Airport::GetSpec preserve the original gates. Native hangar and
+rotation algorithms accept selected specs; existing aircraft/orders/ship controls
+remain in their owners. Displaced callback slots and orphan relative-position
+exports are removed; unused GetAirportCallback has no Rust export.
+Default airport/reload fixtures install real deterministic/randomized/procedure
+groups and compare construction test/execute, rotated bounds, Built/animation,
+parent PSA, variables/IDs, scopes, registers, STNN/PSAC/map and both RNG streams.
+Groups are explicitly reinstalled after reload; external GRF loading is unproved.
+Temporary admission builds carry no storage-writing group because native removal
+leaves a deleted PSA pointer; the retained airport's PSA is saved and reloaded.
+Build/Cargo4, native ABI, affected defaults and callee/shared/orphan audit are
+recorded in #428. Necessary selected-spec support cost was accepted once (#418).
+External loading, historical saves, GUI scheduling and the exact native removal
+setup limitation remain on #156. Fixing review passed; combination Full follows.
+
+### Generic NewGRF callbacks (#429, PR #436)
+
+`newgrf_generic.rs` owns the process-wide ordered feature registry, reverse
+candidate traversal, stack invocation/root/scope/variables, AI selection and
+ambient enable/chance/parameter/playback policy. Registration alone allocates;
+resolution copies one pointer pair at a time, with no registry snapshot. Native
+load phases exclude registration/reset during callbacks. Context/container
+borrows end before Action2 or sound reentry; nested entries own their stack state.
+Common Action2 evaluation and generic scope/variable dispatch call their Rust
+owners directly. The native evaluation leaf constructs only the required stack
+virtual/profiler frame, exposing the actual invocation and common carrier through
+typed bindings (resolver11/scope12); no mirrored state or virtual forwarding.
+C++ retains files, parsed graphs, specs, map, loading callers and playback. Typed
+noexcept leaves do not throw during play; script commands follow callback return.
+Portable originals stay.
+Clear/tree/water call Rust directly; tree retains its post-call feature observation
+before refresh. Cargo bitnum and GRF-aware playback have canonical shared leaves
+adopted by vehicle/animation consumers; displaced ambient callbacks are removed.
+Default `landscape-generic-callbacks` uses deterministic/procedure groups and two
+files, requiring reset/duplicates/priority/fallback/failure, variables/industry
+substitution/narrowing, v7/v8, per-attempt register reset, and all ambient gates.
+Real scheduler routes compare nonzero height/random/terrain/water parameters,
+selected sound/file, exact RNG and semantic saves in plain/desync modes. Transient
+registrations are cleared before graph destruction and rebuilt after native reload.
+Build/Cargo4, native ABI/table completeness, focused ground/vehicle/animation checks
+and exact commands are recorded on #436. External-GRF loading, script station-build
+integration, other feature registrations, arbitrary programs, historical saves and
+GUI scheduling remain #156 gaps. Fixing review passed; root owns combination Full.

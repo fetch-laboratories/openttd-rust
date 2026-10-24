@@ -343,7 +343,7 @@ void Ship::PlayLeaveStationSound(bool force) const
 TileIndex Ship::GetOrderStationLocation(StationID station)
 {
 #ifdef WITH_RUST
-	return TileIndex(static_cast<uint32_t>(openttd_rust_ship_station_destination(this->index.base(), station.base(), &GetRustShipServices(), &GetRustSharedServices())));
+	return TileIndex(static_cast<uint32_t>(openttd_rust_ship_station_destination(this->index.base(), station.base(), RustVehicle(this), &GetRustShipServices(), &GetRustSharedServices())));
 #else
 	if (station == this->last_station_visited) this->last_station_visited = StationID::Invalid();
 

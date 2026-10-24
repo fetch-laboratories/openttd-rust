@@ -173,7 +173,6 @@ pub struct ClearServices {
     pub field: extern "C" fn(u32) -> FieldGround,
     pub set_field: extern "C" fn(u32, u32),
     pub water_class: extern "C" fn(u32) -> WaterClass,
-    pub ambient: extern "C" fn(u32),
 }
 #[repr(C)]
 pub struct RailSnowGround {
@@ -245,7 +244,6 @@ pub(crate) unsafe fn clear_tile_loop(
     tile: u32,
     climate: LandscapeType,
     editor: bool,
-    ambient_callback: bool,
     size_x: u32,
     clear: *const ClearServices,
     shared: *const Services,
@@ -254,9 +252,7 @@ pub(crate) unsafe fn clear_tile_loop(
     let climate = climate.0;
     // SAFETY: Caller supplies immutable live tables. No state borrow crosses a call.
     let (c, s) = unsafe { (&*clear, &*shared) };
-    if ambient_callback {
-        (c.ambient)(tile);
-    }
+    crate::newgrf_generic::ambient(tile);
     if climate == 1 {
         let k = crate::tile_map::get_tile_z(map, tile, size_x, map.count() / size_x)
             .unwrap_or_else(|| (s.tile_z)(tile))
@@ -434,7 +430,6 @@ pub(crate) unsafe fn clear_tile_loop(
 pub(crate) unsafe fn rail_tile_loop(
     tile: u32,
     climate: LandscapeType,
-    ambient_callback: bool,
     size_x: u32,
     size_y: u32,
     call: *mut Call,
@@ -452,17 +447,7 @@ pub(crate) unsafe fn rail_tile_loop(
         // result context; no result is live before this source early return.
         // `TileLoop_Water` observes this railway tile's type.
         unsafe {
-            crate::water::water_tile_loop(
-                tile,
-                1,
-                size_x,
-                size_y,
-                ambient_callback,
-                call,
-                water,
-                shared,
-                types,
-            );
+            crate::water::water_tile_loop(tile, 1, size_x, size_y, call, water, shared, types);
         };
         return;
     }
@@ -920,7 +905,6 @@ crate::abi::layouts! {
         field,
         set_field,
         water_class,
-        ambient,
     };
     "OpenTTDRailSnowGround" ["landscape"] => RailSnowGround {
         z,

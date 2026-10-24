@@ -15,8 +15,8 @@
 //! script events, but none changes map dimensions, climate, tree placement, tick
 //! counter, editor mode, road-rebuild or client ambient settings. Generation progress also runs outside this
 //! entry. `_misc_grf_features` is changed by reset and GRF `ActionD` loading,
-//! both excluded from this batch. The ambient callback feature bit is captured
-//! per independent entry, never cached globally or substituted by client audio.
+//! both excluded from this batch. The Rust generic owner observes the feature bit
+//! at the original ambient call site, never substituting client audio.
 //! Enabled callbacks retain their source RNG position; the tree legacy adapter
 //! still rereads the feature bit after its call. Thus settings are entry-local;
 //! tree/map observations still occur inside each owner at original callback sites.
@@ -90,7 +90,6 @@ pub struct GroundServices {
     pub climate: services::LandscapeType,
     pub editor: bool,
     pub rebuild: bool,
-    pub ambient_callback: bool,
 }
 
 /// Each native handler remains separately typed; map reads use the shared table.
@@ -130,7 +129,6 @@ unsafe fn dispatch(
                 tile,
                 g.climate,
                 g.editor,
-                g.ambient_callback,
                 settings.size_x,
                 g.clear,
                 s.shared,
@@ -141,7 +139,6 @@ unsafe fn dispatch(
             ground::rail_tile_loop(
                 tile,
                 g.climate,
-                g.ambient_callback,
                 settings.size_x,
                 size_y,
                 g.call,
@@ -177,7 +174,6 @@ unsafe fn dispatch(
                 tile_type,
                 settings.size_x,
                 size_y,
-                g.ambient_callback,
                 g.call,
                 g.water,
                 s.shared,
@@ -260,7 +256,6 @@ crate::abi::layouts! {
         climate,
         editor,
         rebuild,
-        ambient_callback,
     };
     "OpenTTDIndustryLoopServices" ["landscape"] => IndustryServices {
         production,

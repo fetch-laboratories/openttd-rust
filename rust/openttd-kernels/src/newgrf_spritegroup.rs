@@ -153,6 +153,7 @@ pub struct Range {
 #[repr(C)]
 pub struct Services {
     adjust: unsafe extern "C" fn(Handle, usize) -> Adjust,
+    airport: *const crate::newgrf_airport::Services,
     global: *const crate::newgrf::Services,
     house: *const crate::town::resolver::ResolverServices,
     industry: *const crate::industry::resolver::ResolverServices,
@@ -194,23 +195,16 @@ pub struct ResolverBinding {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct ObjectScope {
-    object: *mut crate::objects::Object,
-    spec: *const crate::objects::Spec,
-    tile: u32,
-    view: u8,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
 pub union ScopeData {
     vehicle: *const crate::newgrf_vehicle::Scope,
     industry: *const crate::industry::resolver::ResolverContext,
     station: Resolver,
-    object: ObjectScope,
+    object: *const crate::objects::ObjectScope,
     town: *const crate::town::resolver::TownScope,
-    airport: Resolver,
+    airport: *const crate::newgrf_airport::State,
     house: *const crate::town::resolver::HouseScope,
     roadstop: *const crate::newgrf_roadstop::State,
+    generic: *const crate::newgrf_generic::Invocation,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -302,6 +296,25 @@ impl<'a> Invocation<'a> {
                     self.ro, b.own, b.parent, kind, relative,
                 ),
                 8 => crate::town::resolver::openttd_rust_town_scope(self.ro, b.own, kind, relative),
+                9 | 10 => crate::newgrf_airport::openttd_rust_airport_scope(
+                    b.state.cast(),
+                    self.ro,
+                    b.own,
+                    b.parent,
+                    kind,
+                    relative,
+                    self.s.airport,
+                ),
+                11 => {
+                    crate::newgrf_generic::openttd_rust_generic_scope(b.own, b.default_scope, kind)
+                }
+                12 => crate::objects::openttd_rust_object_scope(
+                    b.state.cast(),
+                    self.ro.cast(),
+                    b.own,
+                    kind,
+                    relative,
+                ),
                 _ => (self.s.scope)(self.ro, kind, relative),
             };
             let mut binding = std::mem::MaybeUninit::uninit();
@@ -362,14 +375,18 @@ impl<'a> Invocation<'a> {
                     self.s.industry,
                 ),
                 5 => {
-                    let o = b.data.object;
+                    let context = b.data.object;
+                    let object = (*context).object;
+                    let spec = (*context).spec;
+                    let tile = (*context).tile;
+                    let view = (*context).view;
                     crate::objects::openttd_rust_object_variable(
                         self.s.object,
                         self.ro.cast(),
-                        o.object,
-                        o.spec,
-                        o.tile,
-                        o.view,
+                        object,
+                        spec,
+                        tile,
+                        view,
                         variable,
                         parameter,
                         available,
@@ -400,6 +417,28 @@ impl<'a> Invocation<'a> {
                     available,
                     self.s.roadstop,
                 ),
+                7 => crate::newgrf_airport::openttd_rust_airport_variable(
+                    b.data.airport,
+                    self.ro,
+                    self.file,
+                    variable,
+                    parameter,
+                    available,
+                    self.s.airport,
+                ),
+                11 => crate::newgrf_airport::openttd_rust_airport_tile_variable(
+                    b.data.airport,
+                    self.ro,
+                    variable,
+                    parameter,
+                    available,
+                    self.s.airport,
+                ),
+                12 => crate::newgrf_generic::openttd_rust_generic_variable(
+                    b.data.generic,
+                    variable,
+                    available,
+                ),
                 _ => (self.s.variable)(scope.native, variable, parameter, available),
             }
         }
@@ -408,6 +447,7 @@ impl<'a> Invocation<'a> {
         unsafe {
             match scope.binding.kind {
                 0 | 6 => 0,
+                12 => openttd_rust_scope_default_random(),
                 1 => crate::newgrf_vehicle::openttd_rust_vehicle_scope_random(
                     &*self.s.vehicle,
                     scope.binding.data.vehicle,
@@ -428,7 +468,7 @@ impl<'a> Invocation<'a> {
                 }
                 5 => crate::objects::openttd_rust_object_random_bits(
                     self.s.object,
-                    scope.binding.data.object.tile,
+                    (*scope.binding.data.object).tile,
                 ),
                 9 => crate::newgrf_roadstop::openttd_rust_roadstop_random(
                     scope.binding.data.roadstop,
@@ -440,6 +480,11 @@ impl<'a> Invocation<'a> {
                     scope.binding.data.house,
                     false,
                 ),
+                7 | 11 => crate::newgrf_airport::openttd_rust_airport_random(
+                    scope.binding.data.airport,
+                    scope.binding.kind == 11,
+                    self.s.airport,
+                ),
                 _ => (self.s.random_bits)(scope.native),
             }
         }
@@ -447,7 +492,8 @@ impl<'a> Invocation<'a> {
     unsafe fn random_triggers(self, scope: Scope) -> u32 {
         unsafe {
             match scope.binding.kind {
-                0 | 3 | 5 | 6 | 7 => 0,
+                0 | 3 | 5 | 6 | 7 | 11 => 0,
+                12 => openttd_rust_scope_default_random(),
                 1 => crate::newgrf_vehicle::openttd_rust_vehicle_scope_random(
                     &*self.s.vehicle,
                     scope.binding.data.vehicle,
@@ -481,7 +527,7 @@ impl<'a> Invocation<'a> {
         crate::witness::hit(crate::witness::ACTION2_STORAGE);
         unsafe {
             match scope.binding.kind {
-                0..=2 | 4 | 5 | 9 | 10 => {}
+                0..=2 | 4 | 5 | 9 | 10 | 11 | 12 => {}
                 3 => {
                     let industry = (*scope.binding.data.industry).industry;
                     crate::newgrf_storage::openttd_rust_storage_industry(
@@ -500,7 +546,7 @@ impl<'a> Invocation<'a> {
                 ),
                 7 => crate::newgrf_storage::openttd_rust_storage_airport(
                     &*self.s.storage,
-                    scope.binding.data.airport,
+                    (*scope.binding.data.airport).station.cast(),
                     self.file,
                     reg,
                     value,
@@ -924,7 +970,6 @@ pub unsafe extern "C" fn openttd_rust_resolver_callback(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDResolverBinding" ["storage"] => ResolverBinding { state, own => self, parent, relative, default_scope, kind };
-    "OpenTTDObjectScope" ["storage"] => ObjectScope { object, spec, tile, view };
     "OpenTTDScopeBinding" ["storage"] => ScopeBinding { data, kind };
     "OpenTTDResolverState" ["storage"] => State { callback, callback_param1, callback_param2, last_value, waiting_random_triggers, used_random_triggers, reseed };
     "OpenTTDResolverResult" ["storage"] => ResultValue { group, callback, kind };
@@ -934,5 +979,5 @@ crate::abi::layouts! {
     "OpenTTDGroupNode" ["storage"] => Node { data, kind };
     "OpenTTDGroupAdjust" ["storage"] => Adjust { subroutine, and_mask, add_val, divmod_val, operation, kind => type, variable, parameter, shift_num };
     "OpenTTDGroupRange" ["storage"] => Range { result, low, high };
-    "OpenTTDSpriteGroupServices" ["storage"] => Services { adjust, global, house, industry, industry_builder, loaded, loaded_count, loading, loading_count, native, node, object, parameter, profile_end, profile_enter, random_bits, random_group, random_triggers, range, resolver_binding, roadstop, scope, scope_binding, storage, store_psa, tile_random_check, unhandled_scope, variable, vehicle };
+    "OpenTTDSpriteGroupServices" ["storage"] => Services { adjust, airport, global, house, industry, industry_builder, loaded, loaded_count, loading, loading_count, native, node, object, parameter, profile_end, profile_enter, random_bits, random_group, random_triggers, range, resolver_binding, roadstop, scope, scope_binding, storage, store_psa, tile_random_check, unhandled_scope, variable, vehicle };
 }

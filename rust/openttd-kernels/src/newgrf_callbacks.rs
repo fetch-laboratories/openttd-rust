@@ -69,3 +69,10 @@ pub const INDUSTRY_REFUSE_CARGO: u16 = 1 << 10;
 pub const CBID_STATION_LAND_SLOPE_CHECK: CallbackID = CallbackID(0x149);
 /// `CBID_STATION_AVAILABILITY`.
 pub const CBID_STATION_AVAILABILITY: u16 = 0x13;
+
+pub const CBID_GENERIC_AI_PURCHASE_SELECTION: CallbackID = CallbackID(0x18);
+pub const CBID_SOUNDS_AMBIENT_EFFECT: CallbackID = CallbackID(0x144);
+/// Object land slope check callback.
+pub const CBID_OBJECT_LAND_SLOPE_CHECK: CallbackID = CallbackID(0x157);
+/// Object colour callback.
+pub const CBID_OBJECT_COLOUR: CallbackID = CallbackID(0x15b);

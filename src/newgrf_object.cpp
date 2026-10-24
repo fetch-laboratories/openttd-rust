@@ -89,8 +89,12 @@ size_t ObjectSpec::Count()
  */
 bool ObjectSpec::IsEverAvailable() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_object_ever_available(&GetRustObjectServices(), this);
+#else
 	return this->IsEnabled() && this->climate.Test(_settings_game.game_creation.landscape) &&
 			!this->flags.Test((_game_mode != GM_EDITOR && !_generating_world) ? ObjectFlag::OnlyInScenedit : ObjectFlag::OnlyInGame);
+#endif
 }
 
 /**
@@ -99,7 +103,11 @@ bool ObjectSpec::IsEverAvailable() const
  */
 bool ObjectSpec::WasEverAvailable() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_object_was_available(&GetRustObjectServices(), this);
+#else
 	return this->IsEverAvailable() && TimerGameCalendar::date > this->introduction_date;
+#endif
 }
 
 /**
@@ -108,8 +116,12 @@ bool ObjectSpec::WasEverAvailable() const
  */
 bool ObjectSpec::IsAvailable() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_object_available(&GetRustObjectServices(), this);
+#else
 	return this->WasEverAvailable() &&
 			(TimerGameCalendar::date < this->end_of_life_date || this->end_of_life_date < this->introduction_date + 365);
+#endif
 }
 
 /**
@@ -136,6 +148,9 @@ uint ObjectSpec::Index() const
 /** This function initialize the spec arrays of objects. */
 void ResetObjects()
 {
+#ifdef WITH_RUST
+	openttd_rust_object_services_exchange(&GetRustObjectServices());
+#endif
 	/* Clean the pool. */
 	_object_specs.clear();
 
@@ -171,7 +186,7 @@ template class NewGRFClass<ObjectSpec, ObjectClassID, OBJECT_CLASS_MAX>;
 /* virtual */ uint32_t ObjectScopeResolver::GetRandomBits() const
 {
 #ifdef WITH_RUST
-	return openttd_rust_object_random_bits(&GetRustObjectServices(), this->tile.base());
+	return openttd_rust_object_random_bits(&GetRustObjectServices(), this->context.tile);
 #else
 	return IsValidTile(this->tile) && IsTileType(this->tile, MP_OBJECT) ? GetObjectRandomBits(this->tile) : 0;
 #endif
@@ -281,7 +296,7 @@ static uint32_t GetCountAndDistanceOfClosestInstance(const ResolverObject &objec
 /* virtual */ uint32_t ObjectScopeResolver::GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const
 {
 #ifdef WITH_RUST
-	return openttd_rust_object_variable(&GetRustObjectServices(), &this->ro, this->obj, this->spec, this->tile.base(), this->view, variable, parameter, &available);
+	return openttd_rust_object_variable(&GetRustObjectServices(), &this->ro, this->context.object, this->context.spec, this->context.tile, this->context.view, variable, parameter, &available);
 #else
 	/* We get the town from the object, or we calculate the closest
 	 * town if we need to when there's no object. */
@@ -408,9 +423,19 @@ unhandled:
  */
 ObjectResolverObject::ObjectResolverObject(const ObjectSpec *spec, Object *obj, TileIndex tile, uint8_t view,
 		CallbackID callback, uint32_t param1, uint32_t param2)
-	: ResolverObject(spec->grf_prop.grffile, callback, param1, param2), object_scope(*this, obj, spec, tile, view)
+	: ResolverObject(
+#ifdef WITH_RUST
+		openttd_rust_object_file(spec),
+#else
+		spec->grf_prop.grffile,
+#endif
+		callback, param1, param2), object_scope(*this, obj, spec, tile, view)
 {
+#ifdef WITH_RUST
+	this->root_spritegroup = openttd_rust_object_root(&this->object_scope.context);
+#else
 	this->root_spritegroup = spec->grf_prop.GetSpriteGroup(obj != nullptr);
+#endif
 }
 
 /**
@@ -418,6 +443,7 @@ ObjectResolverObject::ObjectResolverObject(const ObjectSpec *spec, Object *obj, 
  * On the first call, the town scope is created (if possible).
  * @return Town scope, if available.
  */
+#ifndef WITH_RUST
 TownScopeResolver *ObjectResolverObject::GetTown()
 {
 	if (!this->town_scope.has_value()) {
@@ -432,15 +458,24 @@ TownScopeResolver *ObjectResolverObject::GetTown()
 	}
 	return &*this->town_scope;
 }
+#endif
 
 GrfSpecFeature ObjectResolverObject::GetFeature() const
 {
+#ifdef WITH_RUST
+	return static_cast<GrfSpecFeature>(openttd_rust_object_feature());
+#else
 	return GSF_OBJECTS;
+#endif
 }
 
 uint32_t ObjectResolverObject::GetDebugID() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_object_debug_id(&this->object_scope.context);
+#else
 	return this->object_scope.spec->grf_prop.local_id;
+#endif
 }
 
 /**
@@ -457,8 +492,12 @@ uint32_t ObjectResolverObject::GetDebugID() const
  */
 uint16_t GetObjectCallback(CallbackID callback, uint32_t param1, uint32_t param2, const ObjectSpec *spec, Object *o, TileIndex tile, std::span<int32_t> regs100, uint8_t view)
 {
+#ifdef WITH_RUST
+	return openttd_rust_object_callback(&GetRustObjectServices(), callback, param1, param2, spec, o, tile.base(), regs100.data(), regs100.size(), view);
+#else
 	ObjectResolverObject object(spec, o, tile, view, callback, param1, param2);
 	return object.ResolveCallback(regs100);
+#endif
 }
 
 /**
@@ -555,18 +594,22 @@ void DrawNewObjectTileInGUI(int x, int y, const ObjectSpec *spec, uint8_t view)
  * @param tile     The tile the callback is called for.
  * @return The result of the callback.
  */
+#ifndef WITH_RUST
 uint16_t StubGetObjectCallback(CallbackID callback, uint32_t param1, uint32_t param2, const ObjectSpec *spec, Object *o, TileIndex tile, int)
 {
 	return GetObjectCallback(callback, param1, param2, spec, o, tile);
 }
 
+#endif
+
 /** Helper class for animation control. */
 #ifdef WITH_RUST
 const OpenTTDObjectAnimation &GetObjectAnimationBinding() noexcept
 {
-	static const auto binding = MakeRustAnimationBinding<ObjectSpec, Object, int, StubGetObjectCallback>(
+	static const auto binding = MakeRustAnimationBindingDirect<ObjectSpec, Object, int>(
 		[](uint32_t t) noexcept -> OpenTTDObjectAnimationEntry { const auto *s = RustObjectSpecByTile(t); if (s == nullptr || !s->flags.Test(ObjectFlag::Animation)) return {nullptr, nullptr}; return {s, RustObjectByTile(t)}; },
-		[](const ObjectSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(ObjectCallbackMask::AnimationSpeed), s->callback_mask.Test(ObjectCallbackMask::AnimationNextFrame), s->flags.Test(ObjectFlag::AnimRandomBits), true}; });
+		[](const ObjectSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(ObjectCallbackMask::AnimationSpeed), s->callback_mask.Test(ObjectCallbackMask::AnimationNextFrame), s->flags.Test(ObjectFlag::AnimRandomBits), true}; },
+		openttd_rust_object_animation_callback);
 	return binding;
 }
 #else
@@ -655,7 +698,7 @@ const OpenTTDObjectQueryServices &GetRustObjectQueryServices() noexcept
 	static const OpenTTDObjectQueryServices services{
 		.random_bits = [](uint32_t t) noexcept { return GetObjectRandomBits(TileIndex(t)); },
 		.index = [](uint32_t t) noexcept { return GetObjectIndex(TileIndex(t)).base(); },
-		.by_tile = [](uint32_t t) noexcept { return Object::GetByTile(TileIndex(t)); },
+		.by_tile = RustObjectByTile,
 		.definition = [](Object *o) noexcept -> OpenTTDObjectDefinition { const auto *s = ObjectSpec::Get(o->type); return {s->grf_prop.grfid, s->grf_prop.local_id, o->view, s->grf_prop.HasGrfFile()}; },
 		.object_index = [](Object *o) noexcept { return o->index.base(); },
 		.kind = [](Object *o) noexcept { return o->type; },
@@ -678,6 +721,30 @@ const OpenTTDObjectQueryServices &GetRustObjectQueryServices() noexcept
 		.triggers = [](const ObjectSpec *s) noexcept { return s->animation.triggers.base(); },
 
 		.unhandled = [](uint8_t variable) noexcept { Debug(grf, 1, "Unhandled object variable 0x{:X}", variable); },
+	};
+	return services;
+}
+#endif
+
+#ifdef WITH_RUST
+const OpenTTDObjectResolverServices &GetObjectResolverServices() noexcept
+{
+	static_assert(GSF_OBJECTS == 0x0F && VSG_SCOPE_SELF == 0 && VSG_SCOPE_PARENT == 1 && CBID_OBJECT_LAND_SLOPE_CHECK == 0x157 && CBID_OBJECT_COLOUR == 0x15B);
+	static const OpenTTDObjectResolverServices services{
+		.file = RustSpecGRFFile<ObjectSpec>,
+		.root = RustSpecSpriteGroup<ObjectSpec>,
+		.local_id = RustSpecLocalID<ObjectSpec>,
+		.version = RustGRFFileVersion,
+		.views = RustObjectViews,
+		.eligibility = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectEligibility { return {RustObjectSpecFlags(spec), spec->climate.base(), RustObjectViews(spec)}; },
+		.introduction = [](const ObjectSpec *spec) noexcept -> int32_t { return spec->introduction_date.base(); },
+		.lifetime = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectLifetime { return {spec->introduction_date.base(), spec->end_of_life_date.base()}; },
+		.town_scope = RustResolverTownScope<ObjectResolverObject>,
+		.base_scope = RustResolverBaseScope,
+		.evaluate = [](const OpenTTDObjectScope *context, uint16_t callback, uint32_t param1, uint32_t param2, int32_t *regs, size_t count) noexcept -> uint16_t {
+			ObjectResolverObject ro(context->spec, context->object, TileIndex{context->tile}, context->view, static_cast<CallbackID>(callback), param1, param2);
+			return ro.ResolveCallback({regs, count});
+		},
 	};
 	return services;
 }
