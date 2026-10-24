@@ -538,8 +538,8 @@ static void RoadResolverRandom(BaseStation *st, TileIndex tile, bool waypoint)
 		RoadStopResolverObject object(spec, st, tile, INVALID_ROADTYPE, GetStationType(tile), GetStationGfx(tile), CBID_RANDOM_TRIGGER); object.SetWaitingRandomTriggers(StationRandomTriggers(1 << to_underlying(trigger))); object.ResolveRerandomisation();
 		uint32_t expected_mask = (mask & 1 ? 8 : 0) | (mask & 2 ? 1 << 18 : 0);
 		StationNeed(object.GetReseedSum() == expected_mask && object.GetUsedRandomTriggers().Test(trigger), __LINE__);
-		Randomizer unarmed = _random; TriggerRoadStopRandomisation(st, tile, trigger, INVALID_CARGO);
-		StationNeed(std::ranges::equal(_random.state, unarmed.state) && st->waiting_random_triggers.Test(trigger) && st->random_bits == 0xA55A && st->GetRoadStopRandomBits(tile) == 0x69, __LINE__);
+		Randomizer interactive = _interactive_random; Randomizer unarmed = _random; TriggerRoadStopRandomisation(st, tile, trigger, INVALID_CARGO);
+		StationNeed(std::ranges::equal(_random.state, unarmed.state) && std::ranges::equal(_interactive_random.state, interactive.state) && st->waiting_random_triggers.Test(trigger) && st->random_bits == 0xA55A && st->GetRoadStopRandomBits(tile) == 0x69, __LINE__);
 		ResolverObject registers(&f.file); StationNeed(registers.GetRegister(0x105) == (1 << to_underlying(trigger)) && registers.GetRegister(0x106) == CBID_NO_CALLBACK, __LINE__);
 		fmt::print(stderr, "STCMD resolver-unarmed {} {} {} no-reseed waiting-retained published\n", waypoint, mask, to_underlying(trigger));
 		fmt::print(stderr, "STCMD resolver-mask {} {} {} {} {} {}\n", waypoint, mask, to_underlying(trigger), object.GetReseedSum(), object.GetUsedRandomTriggers().base(), object.roadstop_scope.GetRandomBits());
@@ -569,6 +569,8 @@ static void StationRoadResolver(TileIndex tile, bool waypoint, DoCommandFlags te
 	StationNeed(build(exec, f.indices[0], 2, NEW_STATION).Succeeded(), __LINE__);
 	BaseStation *st = BaseStation::GetByTile(tile); StationID id = st->index; st->name = waypoint ? "Owner410 waypoint" : "Owner410 stop";
 	StationNeed(st->roadstop_speclist.size() == 2 && GetCustomRoadStopSpecIndex(tile) == 1 && GetCustomRoadStopSpecIndex(tile + step) == 1, __LINE__);
+	AssignSpecToRoadStop(nullptr, st, 0); DeallocateSpecFromRoadStop(st, 0);
+	SetCustomRoadStopSpecIndex(tile, 63); StationNeed(GetRoadStopSpec(tile) == nullptr, __LINE__); SetCustomRoadStopSpecIndex(tile, 1);
 	RoadResolverState("assigned", st); RoadResolverQueries(st, tile, waypoint); RoadResolverRandom(st, tile, waypoint);
 	StationNeed(remove(tile).Succeeded() && st->roadstop_speclist[1].spec == &f.specs[0], __LINE__);
 	StationNeed(build(test, f.indices[1], 1, id).Succeeded() && st->roadstop_speclist.size() == 2, __LINE__);
@@ -579,6 +581,9 @@ static void StationRoadResolver(TileIndex tile, bool waypoint, DoCommandFlags te
 	StationNeed(AllocateSpecToRoadStop(&f.specs[2], st) == 2, __LINE__); AssignSpecToRoadStop(&f.specs[2], st, 2);
 	StationNeed(AllocateSpecToRoadStop(&f.specs[2], st) == 2 && AllocateSpecToRoadStop(&f.specs[3], st) == 4, __LINE__);
 	DeallocateSpecFromRoadStop(st, 2); StationNeed(st->roadstop_speclist.size() == 4 && AllocateSpecToRoadStop(&f.specs[3], st) == 2, __LINE__);
+	AssignSpecToRoadStop(&f.specs[2], st, 4); StationNeed(AllocateSpecToRoadStop(&f.specs[2], st) == 4, __LINE__);
+	AssignSpecToRoadStop(&f.specs[2], st, 2); StationNeed(AllocateSpecToRoadStop(&f.specs[2], st) == 2, __LINE__);
+	DeallocateSpecFromRoadStop(st, 2); DeallocateSpecFromRoadStop(st, 4); StationNeed(st->roadstop_speclist.size() == 4, __LINE__);
 	for (uint8_t index = 2; index < 63; index++) { st->roadstop_speclist.resize(index + 1); st->roadstop_speclist[index].grfid = 0xDEAD410; }
 	StationNeed(!AllocateSpecToRoadStop(&f.specs[3], st).has_value() && build(test, f.indices[3], 1, id).Failed() && !IsAnyRoadStopTile(tile), __LINE__);
 	for (uint8_t index = 62; index > 1; index--) DeallocateSpecFromRoadStop(st, index);
