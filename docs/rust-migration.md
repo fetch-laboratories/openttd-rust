@@ -1268,8 +1268,9 @@ deterministic/procedure/randomized groups, compare result registers and colour,
 exercise parent PSA/cache/retry/readonly and real date/mode admission, and detach
 transient groups/specs before saving. Reload explicitly reinstalls them. These
 checks and generation scenarios compare full semantic saves and named witnesses.
-Local validation is in progress in PR #438. External GRF loading and historical
-layouts remain #156 gaps; this fixture does not establish loader equivalence.
+Build/Cargo4, native ABI and focused object/generation checks pass (PR #438).
+External GRF loading and historical layouts remain #156 gaps; this fixture does
+not establish loader equivalence. Root owns final-base adoption and Full.
 
 ### Shared tile ownership dispatch (#331)
 
