@@ -164,7 +164,7 @@ static void AircraftPhaseBoundary()
 	 * UpdatePosition, then z after the rotor callback, rather than on acquisition. */
 	leaves.viewport = [](OpenTTDAircraftVehicle) noexcept { aircraft_probe.moves++; aircraft_probe.subtype = 0; aircraft_probe.z = 17; };
 	leaves.rotor_image = [](OpenTTDAircraftVehicle) noexcept { CHECK(aircraft_probe.z == 17); aircraft_probe.z = 25; };
-	leaves.next = [](OpenTTDAircraftVehicle u) noexcept { if (u.id != 17) return OpenTTDAircraftVehicle{nullptr, nullptr, 1048575}; u.id = 18; u.handle = reinterpret_cast<OpenTTDVehicle *>(uintptr_t{18}); return u; };
+	v.next = [](OpenTTDVehicle *u) noexcept -> OpenTTDVehicle * { return u == aircraft_probe.vehicle.handle ? reinterpret_cast<OpenTTDVehicle *>(uintptr_t{18}) : nullptr; };
 	v.write_x = [](OpenTTDVehicle *, int32_t x) noexcept { CHECK(x == 1); };
 	v.write_y = [](OpenTTDVehicle *, int32_t y) noexcept { CHECK(y == -3); };
 	v.y = [](OpenTTDVehicle *) noexcept { return int32_t{-3}; };
@@ -177,7 +177,7 @@ static void AircraftPhaseBoundary()
 	movement.pixel_location = [](int32_t x, int32_t y) noexcept -> OpenTTDPixelLocation { return {.tile = ((uint32_t(y) >> 4) << 6) + (uint32_t(x) >> 4), .kind = 0}; };
 	movement.pixel_slope = [](uint32_t) noexcept -> OpenTTDFoundationSlope { return {.z = 0, .slope = SLOPE_FLAT}; };
 	s.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
-	leaves.copy_sprite = [](OpenTTDAircraftVehicle, OpenTTDAircraftVehicle) noexcept {};
+	leaves.copy_sprite = [](OpenTTDVehicle *, OpenTTDVehicle *) noexcept {};
 	v.base_viewport = [](OpenTTDVehicle *) noexcept {};
 	v.tile_links = [](OpenTTDVehicle *shell) noexcept { return &aircraft_probe.links[shell == aircraft_probe.vehicle.handle ? 0 : 1]; };
 	v.tile = [](OpenTTDVehicle *) noexcept { return uint32_t{0}; };

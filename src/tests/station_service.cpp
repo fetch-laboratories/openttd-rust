@@ -20,8 +20,58 @@
 #include "../openttd.h"
 #include "abi_layout.hpp"
 #include "../rust/station_queue_save.hpp"
+#include "../rust/services_ffi.h"
 
 extern void OnTick_Station();
+
+TEST_CASE("Shared station traversal - live filtered pool mutation and reentry")
+{
+	MockEnvironment::Instance();
+	struct Restore { ~Restore() { _station_pool.CleanPool(); RebuildStationKdtree(); } } restore;
+	const auto Trace = [](bool shared) {
+		_station_pool.CleanPool();
+		RebuildStationKdtree();
+		const auto Create = [](uint32_t id) {
+			REQUIRE(BaseStation::CanAllocateItem());
+			auto *st = new (StationID(id)) Station(TileIndex(1));
+			_station_kdtree.Insert(st->index);
+		};
+		for (uint32_t id : {0, 2, 4, 5}) Create(id);
+		new (StationID(1)) Waypoint(TileIndex(2)); // Shares the pool, excluded by Iterate.
+		std::vector<uint16_t> visits;
+		uint32_t growth = UINT32_MAX;
+		auto Visit = [&](uint16_t id) {
+			visits.push_back(id);
+			if (id == 0) delete Station::Get(StationID(id));
+			if (id != 2) return;
+			std::vector<uint16_t> nested;
+			GetRustSharedServices().for_each_station(&nested, [](void *context, const OpenTTDStation *, OpenTTDStationService *, uint16_t next) {
+				static_cast<std::vector<uint16_t> *>(context)->push_back(next);
+			});
+			CHECK(nested == std::vector<uint16_t>{2, 4, 5});
+			Create(0); // Behind the live cursor: waits for another traversal.
+			Create(3); // Ahead in initialized storage: visited now.
+			delete Station::Get(StationID(4));
+			Create(4); // Reused ahead: visited now.
+			delete Station::Get(StationID(5)); // A new hole must be skipped.
+			growth = static_cast<uint32_t>(_station_pool.data.capacity());
+			Create(growth); // Relocates the pool's slot array during the callback.
+		};
+		if (shared) {
+			GetRustSharedServices().for_each_station(&Visit, [](void *context, const OpenTTDStation *shell, OpenTTDStationService *owner, uint16_t id) {
+				CHECK(shell == reinterpret_cast<const OpenTTDStation *>(Station::Get(StationID(id))));
+				CHECK(owner == Station::Get(StationID(id))->rust_service.get());
+				(*static_cast<decltype(Visit) *>(context))(id);
+			});
+		} else {
+			for (Station *st : Station::Iterate()) Visit(st->index.base());
+		}
+		CHECK(visits == std::vector<uint16_t>{0, 2, 3, 4, static_cast<uint16_t>(growth)});
+		return visits;
+	};
+	const auto source = Trace(false);
+	CHECK(Trace(true) == source);
+}
 
 TEST_CASE("Station service - scalar ABI layouts")
 {

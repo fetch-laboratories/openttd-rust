@@ -266,10 +266,12 @@ impl MovementServices {
             _ => FOUNDATION_NONE,
         }
     }
+    #[inline]
     pub(crate) fn pixel_z_at(&self, x: i32, y: i32, ground: bool) -> i32 {
         let p = (self.pixel_location)(x, y);
         self.pixel_z(p.tile, x as u32, y as u32, ground, p.kind)
     }
+    #[inline]
     fn pixel_z(&self, tile: u32, x: u32, y: u32, ground_vehicle: bool, kind: u8) -> i32 {
         w::hit(w::MOVE_PIXEL_Z);
         if matches!(kind, MP_HOUSE | MP_INDUSTRY | MP_STATION)
