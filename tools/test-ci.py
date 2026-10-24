@@ -74,9 +74,15 @@ def evaluate(expression, *, cancelled=False, interpolate=False, **contexts):
     declarations = "".join(
         f"const {key} = {json.dumps(value)};\n" for key, value in contexts.items()
     )
+    results = [
+        dependency.get("result", "success")
+        for dependency in contexts.get("needs", {}).values()
+    ]
+    succeeded = not cancelled and all(result == "success" for result in results)
+    failed = "failure" in results
     return node(
         f"const cancelled = () => {json.dumps(cancelled)}, always = () => true;\n"
-        "const success = () => !cancelled(), failure = () => false;\n"
+        f"const success = () => {json.dumps(succeeded)}, failure = () => {json.dumps(failed)};\n"
         + declarations
         + f"console.log(JSON.stringify({expression}));"
     )
@@ -481,7 +487,12 @@ class PolicyTests(unittest.TestCase):
                         (True, "", "", "", dispatch, False),
                     ]
                 for cancelled, checkout, heavy, profile, event, expected in cases:
-                    needs = {"policy": {"outputs": {"heavy": heavy}}}
+                    needs = {
+                        "policy": {
+                            "result": "skipped" if checkout else "success",
+                            "outputs": {"heavy": heavy},
+                        }
+                    }
                     needs["build"] = {"result": "success"}
                     with self.subTest(filename=filename, job=name, cancelled=cancelled):
                         result = evaluate(
