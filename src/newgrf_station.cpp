@@ -45,6 +45,10 @@
 static_assert(INITIAL_STATION_RATING == 175 && HVOT_WAYPOINT == (1 << 6));
 static_assert(ATP_TTDP_LARGE == 1 && CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR.base() == 701265);
 static_assert(VSG_SCOPE_SELF == 0 && VSG_SCOPE_PARENT == 1);
+static_assert(to_underlying(GoodsEntry::State::Acceptance) == 0 && to_underlying(GoodsEntry::State::Rating) == 1);
+static_assert(to_underlying(GoodsEntry::State::EverAccepted) == 2 && to_underlying(GoodsEntry::State::LastMonth) == 3);
+static_assert(to_underlying(GoodsEntry::State::CurrentMonth) == 4 && to_underlying(GoodsEntry::State::AcceptedBigtick) == 5);
+
 const OpenTTDCargoStorageServices *CargoStorageServices();
 static uint16_t RustEvaluateStationCallback(uint16_t cb, uint32_t p1, uint32_t p2, const StationSpec *s, BaseStation *st, uint32_t t, uint8_t axis, int32_t *regs, size_t count) noexcept
 {

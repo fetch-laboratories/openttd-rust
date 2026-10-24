@@ -427,16 +427,18 @@ unsafe fn cp(state: *mut Service, cargo: u8) -> *mut CargoFields {
 /// `GoodsEntry::HasRating()` of a live station owner.
 pub(crate) fn has_rating(state: *mut Service, cargo: u8) -> bool {
     // SAFETY: scalar read of the live serialized owner; no borrow survives.
-    unsafe { (*cp(state, cargo)).status & 2 != 0 }
-}
-/// `GoodsEntry::HasVehicleEverTriedLoading`, from its canonical owner.
-pub(crate) unsafe fn has_vehicle_ever_tried_loading(state: *mut Service, cargo: u8) -> bool {
-    unsafe { (*cp(state, cargo)).last_speed != 0 }
+    unsafe { crate::station_base::has_rating((*cp(state, cargo)).status) }
 }
 /// `GoodsEntry::ConvertState`: the four history bits keep their native order.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_goods_convert_state(status: u8) -> u8 {
-    (status >> 2) & 15
+    use crate::station_base::{
+        GE_ACCEPTED_BIGTICK, GE_CURRENT_MONTH, GE_EVER_ACCEPTED, GE_LAST_MONTH,
+    };
+    ((status >> GE_EVER_ACCEPTED) & 1)
+        | (((status >> GE_LAST_MONTH) & 1) << 1)
+        | (((status >> GE_CURRENT_MONTH) & 1) << 2)
+        | (((status >> GE_ACCEPTED_BIGTICK) & 1) << 3)
 }
 /// Read only the fields consumed by a station `NewGRF` cargo variable. Container
 /// counts, source and periods are queried directly by the resolver's cargo owner.
@@ -451,7 +453,7 @@ pub(crate) unsafe fn newgrf_cargo_variable(
     unsafe {
         match variable {
             0x61 => {
-                if legacy || has_vehicle_ever_tried_loading(state, cargo) {
+                if legacy || crate::station_base::has_vehicle_ever_tried_loading((*ge).last_speed) {
                     u32::from((*ge).time_since_pickup)
                 } else {
                     0
@@ -465,14 +467,15 @@ pub(crate) unsafe fn newgrf_cargo_variable(
                 }
             }
             0x64 => {
-                if has_vehicle_ever_tried_loading(state, cargo) {
-                    u32::from((*ge).last_speed) | (u32::from((*ge).last_age) << 8)
+                let speed = (*ge).last_speed;
+                if crate::station_base::has_vehicle_ever_tried_loading(speed) {
+                    u32::from(speed) | (u32::from((*ge).last_age) << 8)
                 } else {
                     0xff00
                 }
             }
             0x65 => {
-                if (*ge).status & 1 != 0 {
+                if (*ge).status & (1 << crate::station_base::GE_ACCEPTANCE) != 0 {
                     8
                 } else {
                     0
