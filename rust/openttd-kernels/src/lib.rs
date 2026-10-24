@@ -59,9 +59,12 @@ mod math;
 mod movement;
 mod newgrf_animation_base;
 mod newgrf_callbacks;
+mod newgrf_commons;
 mod newgrf_properties;
 mod newgrf_sound;
 mod newgrf_spritegroup;
+
+mod newgrf_station;
 mod newgrf_storage;
 mod node_hash;
 mod object_type;
@@ -1417,10 +1420,12 @@ pub mod landscape_cmd;
 
 mod newgrf_vehicle;
 
-mod newgrf_commons;
 
 pub mod vehicle_func;
 
 pub mod rail_type;
 
 pub mod base_bitset_type;
+
+mod newgrf_airport;
+mod station_base;

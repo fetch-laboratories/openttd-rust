@@ -219,10 +219,7 @@ pub struct CommandServicesTable {
     pub rail_spec_count: extern "C" fn(u16) -> u32,
     pub class_rail_spec: extern "C" fn(u16, u16) -> *const RailSpec,
     pub rail_spec_info: extern "C" fn(*const RailSpec) -> RailSpecInfo,
-    pub station_slope_check: extern "C" fn(*mut CommandCost, u32, u32, *const RailSpec, u8, u8, u8),
     pub rail_layout: extern "C" fn(*const RailSpec, u8, u8) -> crate::services::ByteSpan,
-    pub rail_callback: extern "C" fn(u16, u32, u32, *const RailSpec, *mut BaseStation, u32) -> u16,
-    pub platform_info: extern "C" fn(u8, u8, u8, u8, u8) -> u32,
     pub allocate_rail_spec: extern "C" fn(*const RailSpec, *mut BaseStation) -> SpecIndex,
     pub assign_rail_spec: extern "C" fn(*const RailSpec, *mut BaseStation, u8),
     pub deallocate_rail_spec: extern "C" fn(*mut BaseStation, u32),
@@ -1204,7 +1201,11 @@ impl Ctx<'_> {
         cost.set(0);
         cost.add_money(ret.money());
         if slope_callback {
-            (self.s.station_slope_check)(ret.0, north, tile, spec, axis, length, tracks);
+            unsafe {
+                crate::newgrf_station::openttd_rust_station_slope_check(
+                    ret.0, north, tile, spec, axis, length, tracks,
+                );
+            }
             if !ret.ok() {
                 return cost.take(ret);
             }
@@ -1463,9 +1464,15 @@ impl Ctx<'_> {
                 )
                 .wrapping_add(axis);
                 if !spec.is_null() {
-                    let info = (self.s.platform_info)(gfx, length, tracks, j, i);
-                    let cb =
-                        (self.s.rail_callback)(0x24, info, 0, spec, std::ptr::null_mut(), u32::MAX);
+                    let info = crate::newgrf_station::platform_info(gfx, length, tracks, j, i);
+                    let cb = crate::newgrf_station::callback(
+                        0x24,
+                        info,
+                        0,
+                        spec,
+                        std::ptr::null_mut(),
+                        u32::MAX,
+                    );
                     if cb != 0xffff && cb <= 255 {
                         gfx = (cb as u8 & !1).wrapping_add(axis);
                     }
@@ -1489,7 +1496,14 @@ impl Ctx<'_> {
                 return cost.error(self.s.strings.disallowed_length);
             }
             if info.availability_callback {
-                let cb = (self.s.rail_callback)(0x13, 0, 0, spec, std::ptr::null_mut(), u32::MAX);
+                let cb = crate::newgrf_station::callback(
+                    0x13,
+                    0,
+                    0,
+                    spec,
+                    std::ptr::null_mut(),
+                    u32::MAX,
+                );
                 if cb != 0xffff && !(self.s.rail_boolean)(spec, 0x13, cb) {
                     return cost.error(0xffff);
                 }
@@ -1562,9 +1576,21 @@ impl Ctx<'_> {
                 (self.s.set_random_bits)(t, ((self.shared.random)(self.shared.context) & 15) as u8);
                 (self.shared.tile_animation_set_frame)(t, 0);
                 if !spec.is_null() {
-                    let info =
-                        (self.s.platform_info)((self.shared.station_gfx)(t), length, tracks, j, i);
-                    let cb = (self.s.rail_callback)(0x24, info, 0, spec, std::ptr::null_mut(), t);
+                    let info = crate::newgrf_station::platform_info(
+                        (self.shared.station_gfx)(t),
+                        length,
+                        tracks,
+                        j,
+                        i,
+                    );
+                    let cb = crate::newgrf_station::callback(
+                        0x24,
+                        info,
+                        0,
+                        spec,
+                        std::ptr::null_mut(),
+                        t,
+                    );
                     if cb != 0xffff {
                         if cb <= 255 {
                             (self.s.set_gfx)(t, (cb as u8 & !1).wrapping_add(axis));
@@ -4136,10 +4162,7 @@ crate::abi::layouts! {
         rail_spec_count,
         class_rail_spec,
         rail_spec_info,
-        station_slope_check,
         rail_layout,
-        rail_callback,
-        platform_info,
         allocate_rail_spec,
         assign_rail_spec,
         deallocate_rail_spec,

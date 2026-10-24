@@ -520,12 +520,16 @@ void ClearAllStationCachedNames()
  */
 CargoTypes GetAcceptanceMask(const Station *st)
 {
+#ifdef WITH_RUST
+	return openttd_rust_station_acceptance_mask(st->rust_service.get());
+#else
 	CargoTypes mask = 0;
 
 	for (auto it = std::begin(st->goods); it != std::end(st->goods); ++it) {
 		if (it->status.Test(GoodsEntry::State::Acceptance)) SetBit(mask, std::distance(std::begin(st->goods), it));
 	}
 	return mask;
+#endif
 }
 
 /**
@@ -535,12 +539,16 @@ CargoTypes GetAcceptanceMask(const Station *st)
  */
 CargoTypes GetEmptyMask(const Station *st)
 {
+#ifdef WITH_RUST
+	return openttd_rust_station_empty_mask(const_cast<Station *>(st));
+#else
 	CargoTypes mask = 0;
 
 	for (auto it = std::begin(st->goods); it != std::end(st->goods); ++it) {
 		if (it->TotalCount() == 0) SetBit(mask, std::distance(std::begin(st->goods), it));
 	}
 	return mask;
+#endif
 }
 
 /**
