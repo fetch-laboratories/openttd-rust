@@ -172,7 +172,7 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 	/* Upper-only, combined, trigger mismatch, cached-mask exits and CargoTaken
 	 * all-empty gating. Ordered per-tile bits and final consumed-trigger removal
 	 * are observable, including publication before each common resolution. */
-	for (uint8_t bit : {0, 16, 17}) for (auto trigger : {StationRandomTrigger::NewCargo, StationRandomTrigger::CargoTaken, StationRandomTrigger::VehicleArrives}) {
+	for (uint8_t bit : {0, 16, 17}) for (auto trigger : {StationRandomTrigger::NewCargo, StationRandomTrigger::CargoTaken, StationRandomTrigger::VehicleArrives, StationRandomTrigger::VehicleDeparts, StationRandomTrigger::VehicleLoads, StationRandomTrigger::PathReservation}) {
 		random->lowest_randbit = bit; random->triggers = 1U << to_underlying(trigger);
 		for (CargoTypes mask : {CargoTypes{0}, CargoTypes{1}, CargoTypes{2}, CargoTypes{1} << 63}) {
 			spec.cargo_triggers = mask; st->cached_cargo_triggers = mask;
@@ -182,6 +182,11 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 			fmt::print(stderr, "\n");
 		}
 	}
+	/* ALL consumes a previously waiting CargoTaken together with NewCargo. */
+	random->cmp_mode = RSG_CMP_ALL; random->triggers = 3; random->lowest_randbit = 0; spec.cargo_triggers = 1; st->cached_cargo_triggers = 1;
+	TriggerStationRandomisation(st, tile, StationRandomTrigger::NewCargo, 0);
+	StationNeed(st->waiting_random_triggers.None(), __LINE__);
+	fmt::print(stderr, "STCMD resolver-rng all {} {} {}\n", st->random_bits, _random.state[0], _random.state[1]); random->cmp_mode = RSG_CMP_ANY;
 	/* Nested lower/upper groups combine masks in one resolution. */
 	auto *upper = new RandomizedSpriteGroup(); upper->var_scope = VSG_SCOPE_SELF; upper->triggers = 1; upper->lowest_randbit = 16; upper->groups = {result, result};
 	random->lowest_randbit = 0; random->triggers = 1; random->groups = {upper, upper}; spec.cargo_triggers = 1; st->cached_cargo_triggers = 1;
