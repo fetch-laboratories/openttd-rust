@@ -54,6 +54,7 @@
 #include "rust/services_landscape.h"
 #include "rust/settings_services.h"
 #include "rust/town_founding_ffi.h"
+#include "rust/services_map.h"
 #include "rust/generation_services.hpp"
 #include "rust/house_ffi.h"
 #include "rust/town_command_ffi.h"
