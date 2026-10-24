@@ -61,6 +61,7 @@ mod newgrf_callbacks;
 mod newgrf_commons;
 mod newgrf_properties;
 mod newgrf_sound;
+mod newgrf_spritegroup;
 mod newgrf_station;
 mod newgrf_storage;
 mod node_hash;

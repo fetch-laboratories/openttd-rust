@@ -41,7 +41,7 @@ struct OpenTTDStationResolverServices {
 
 	uint8_t (*file_version)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(file_version);
 	uint32_t (*company)(uint8_t, const Livery *) noexcept OPENTTD_SERVICE_DEFAULT(company);
-	uint8_t (*reverse_rail)(RailType, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(reverse_rail);
+	uint8_t (*spec_reverse_rail)(RailType, const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_reverse_rail);
 	uint32_t (*nearby)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(nearby);
 	uint32_t (*nearby_station)(uint8_t, uint32_t, Axis) noexcept OPENTTD_SERVICE_DEFAULT(nearby_station);
 	uint32_t (*nearby_info)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(nearby_info);

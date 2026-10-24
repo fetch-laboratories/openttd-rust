@@ -94,7 +94,7 @@ pub struct Services {
     ) -> u16,
     file_version: extern "C" fn(*const c_void) -> u8,
     company: extern "C" fn(u8, *const c_void) -> u32,
-    reverse_rail: extern "C" fn(crate::services::RailType, *const c_void) -> u8,
+    spec_reverse_rail: extern "C" fn(crate::services::RailType, *const RailSpec) -> u8,
     nearby: extern "C" fn(u8, u32) -> u32,
     nearby_station: extern "C" fn(u8, u32, crate::services::Axis) -> u32,
     nearby_info: extern "C" fn(u32, bool) -> u32,
@@ -401,7 +401,7 @@ pub unsafe extern "C" fn openttd_rust_station_resolver_town(
     let tile = unsafe { (*state).tile };
     let town = if !st.is_null() {
         (native.commands().station_town)(st)
-    } else if tile != u32::MAX {
+    } else if tile != crate::tile_type::INVALID_TILE {
         (native.shared().closest_town)(tile, u32::MAX)
     } else {
         ptr::null()
@@ -418,7 +418,8 @@ pub unsafe extern "C" fn openttd_rust_station_scope_is_parent(
 ) -> bool {
     // VSG_SCOPE_PARENT: parent selection ends all state borrows before the native
     // TownScopeResolver is entered, including persistent-storage callbacks.
-    scope == 1 && !unsafe { openttd_rust_station_resolver_town(state) }.is_null()
+    scope == crate::newgrf_spritegroup::VSG_SCOPE_PARENT
+        && !unsafe { openttd_rust_station_resolver_town(state) }.is_null()
 }
 fn unhandled(native: &Services, variable: u8, available: *mut bool) -> u32 {
     (native.unhandled)(variable);
@@ -496,7 +497,7 @@ pub unsafe extern "C" fn openttd_rust_station_base_variable(
             return u32::from(unsafe { ((*native.commands().aircraft).had_vehicle)(st.cast()) });
         }
         0xf1 => {
-            return if (native.commands().airport_tile)(st) != u32::MAX {
+            return if (native.commands().airport_tile)(st) != crate::tile_type::INVALID_TILE {
                 u32::from((native.airport_ttd_type)((native.airport_spec)(st)).0)
             } else {
                 u32::from(crate::newgrf_airport::ATP_TTDP_LARGE)
@@ -586,7 +587,9 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
             0x42 => 0,
             0x43 => (native.company)((native.shared().current_company)(), ptr::null()),
             0x44 => 2,
-            0x67 if unsafe { (*state).axis } != INVALID_AXIS && tile != u32::MAX => {
+            0x67 if unsafe { (*state).axis } != INVALID_AXIS
+                && tile != crate::tile_type::INVALID_TILE =>
+            {
                 let axis = unsafe { (*state).axis };
                 let nearby = if parameter != 0 {
                     (native.nearby_station)(parameter as u8, tile, crate::services::Axis(axis))
@@ -612,7 +615,10 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
     match variable {
         0x42 => {
             (native.terrain)(tile)
-                | (u32::from((native.reverse_rail)((native.rail().rail_type)(tile), file)) << 8)
+                | (u32::from((native.spec_reverse_rail)(
+                    (native.rail().rail_type)(tile),
+                    spec,
+                )) << 8)
         }
         0x43 => (native.company)((native.world().station_owner)(st), ptr::null()),
         0x44 => {
@@ -761,7 +767,7 @@ pub unsafe extern "C" fn openttd_rust_station_random_bits(state: *const State) -
         0
     } else {
         u32::from((native.station_random)(st))
-    }) | if tile == u32::MAX {
+    }) | if tile == crate::tile_type::INVALID_TILE {
         0
     } else {
         u32::from((native.tile_random)(tile)) << 16
@@ -927,7 +933,7 @@ crate::abi::layouts! {
  "OpenTTDStationResolverServices" ["station_service"] => Services {
  shared, cargo, cargo_owner, group_count, group_cargo, group, spec, loading_count, loaded_count,
  loading, loaded, axis, tile_add, tile_random, station_random, waiting, set_waiting, set_random,
- cached_cargo, spec_cargo, resolve_random, resolve_callback, file_version, company, reverse_rail, nearby, nearby_station, nearby_info, terrain, badges, translate, build_date, airport_spec, airport_ttd_type, identity, unhandled, slope_error
+ cached_cargo, spec_cargo, resolve_random, resolve_callback, file_version, company, spec_reverse_rail, nearby, nearby_station, nearby_info, terrain, badges, translate, build_date, airport_spec, airport_ttd_type, identity, unhandled, slope_error
  };
 }
 
