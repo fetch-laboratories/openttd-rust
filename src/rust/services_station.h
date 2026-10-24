@@ -8,6 +8,7 @@
 /** @file services_station.h Canonical station fields and opaque handles for Rust ports. */
 #ifndef RUST_SERVICES_STATION_H
 #define RUST_SERVICES_STATION_H
+#include "../airport.h"
 #include "../station_base.h"
 #include "../station_func.h"
 #include "../industry.h"
@@ -28,6 +29,8 @@
 #include "../base_station_base.h"
 #include "../station_map.h"
 #include "../pbs.h"
+
+inline uint16_t RustAirportMovingFlags(const AirportMovingData *moving) noexcept { return moving->flags.base(); }
 
 template <class Handle> inline Handle RustStationGet(uint16_t id) noexcept { return Station::Get(StationID{id}); }
 inline Station *RustAnimationStation(BaseStation *st) noexcept { return Station::From(st); }

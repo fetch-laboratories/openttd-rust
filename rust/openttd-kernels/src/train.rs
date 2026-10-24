@@ -508,7 +508,6 @@ pub struct Leaves {
     pub backoff: extern "C" fn(Handle) -> u64,
     pub base_viewport: extern "C" fn(Handle, u8),
     pub bridge_speed: extern "C" fn(Handle, u32) -> u64,
-    pub cache_override: extern "C" fn(Handle),
     pub capacity: extern "C" fn(Handle) -> u64,
     pub capacity_error: extern "C" fn(Handle),
     pub cargo_age_default: extern "C" fn(Handle) -> u64,
@@ -531,7 +530,7 @@ pub struct Leaves {
     pub crossing_road_axis: extern "C" fn(Handle, u32) -> u64,
     pub crossing_sound: extern "C" fn(Handle, u32),
     pub curve_advantage: extern "C" fn(Handle) -> u64,
-    pub curve_mod: extern "C" fn(Handle) -> u64,
+    pub curve_mod_default: extern "C" fn(Handle) -> i16,
     pub day_ticks: extern "C" fn(Handle) -> u64,
     pub delete_vehicle: extern "C" fn(Handle),
     pub depot_dir: extern "C" fn(Handle, u32) -> u64,
@@ -589,7 +588,6 @@ pub struct Leaves {
     pub pow_wag_power: extern "C" fn(Handle) -> u64,
     pub price: extern "C" fn(Handle, u32) -> u64,
     pub process_orders: extern "C" fn(Handle) -> u64,
-    pub property: extern "C" fn(Handle, u8, u32) -> u64,
     pub railveh_wagon: extern "C" fn(Handle) -> u64,
     pub rail_tilt: extern "C" fn(Handle) -> u64,
     pub rail_type: extern "C" fn(Handle, u32) -> u64,
@@ -724,7 +722,12 @@ const PROP_TRAIN_SHORTEN_FACTOR: u32 = 33;
 const PROP_TRAIN_RUNNING_COST_FACTOR: u32 = 13;
 impl Game<'_> {
     fn property(&self, id: Handle, prop: u32, default: u64) -> u64 {
-        (self.leaves.property)(id, prop as u8, default as u32)
+        (self.vs().property)(
+            (self.vs().newgrf)(),
+            id.vehicle(),
+            prop as u8,
+            default as i32,
+        ) as u64
     }
     fn consist_changed(&self, id: Handle, allowed: u8) {
         let mut max_speed = u16::MAX;
@@ -766,8 +769,17 @@ impl Game<'_> {
             if (self.leaves.rail_tilt)(u) == 0 {
                 tilt = false;
             }
-            min_curve_mod = min_curve_mod.min((self.leaves.curve_mod)(u) as i16);
-            (self.leaves.cache_override)(u);
+            // SAFETY: the current shell survives property evaluation; no owner borrow is held.
+            min_curve_mod = min_curve_mod.min(unsafe {
+                crate::newgrf_vehicle::signed_property(
+                    self.vs(),
+                    u.vehicle(),
+                    crate::newgrf_properties::PROP_TRAIN_CURVE_SPEED_MOD,
+                    i32::from((self.leaves.curve_mod_default)(u)),
+                )
+            } as i16);
+            // SAFETY: live serialized shell; evaluation retains no owner reference.
+            unsafe { crate::newgrf_vehicle::cache_override(self.vs(), u.vehicle()) };
             (self.leaves.write_colourmap)(u, 0);
             (self.leaves.vis_effect)(u, 1);
             let powered = (self.leaves.pow_wag_power)(id) != 0
@@ -830,8 +842,11 @@ impl Game<'_> {
                     );
                 }
             } else if (self.leaves.length_callback)(u) != 0 {
-                length =
-                    (self.vs().callback)(u.vehicle(), crate::newgrf_callbacks::CBID_VEHICLE_LENGTH);
+                length = (self.vs().callback)(
+                    (self.vs().newgrf)(),
+                    u.vehicle(),
+                    crate::newgrf_callbacks::CBID_VEHICLE_LENGTH,
+                );
             }
             if length == u16::MAX {
                 length = (self.leaves.length_default)(u) as u16;
@@ -2692,7 +2707,7 @@ impl Game<'_> {
 /// `VehicleRailFlag::LeavingStation`.
 pub(crate) const VRF_LEAVING_STATION: u64 = 1 << 9;
 /// `VehicleRailFlag::Reversed`.
-const VRF_REVERSED: u64 = 1 << 7;
+pub const VRF_REVERSED: u64 = 1 << 7;
 
 /// The train part of `VehicleEnterDepot` (#349): clear the depot reservation,
 /// update the segment's signals and arrange the consist.
@@ -3269,7 +3284,6 @@ crate::abi::layouts! {
         backoff,
         base_viewport,
         bridge_speed,
-        cache_override,
         capacity,
         capacity_error,
         cargo_age_default,
@@ -3292,7 +3306,7 @@ crate::abi::layouts! {
         crossing_road_axis,
         crossing_sound,
         curve_advantage,
-        curve_mod,
+        curve_mod_default,
         day_ticks,
         delete_vehicle,
         depot_dir,
@@ -3350,7 +3364,6 @@ crate::abi::layouts! {
         pow_wag_power,
         price,
         process_orders,
-        property,
         railveh_wagon,
         rail_tilt,
         rail_type,
@@ -3462,3 +3475,6 @@ impl Game<'_> {
         u64::from(self.movement.get().track_status(tile, 0, 0, side))
     }
 }
+
+pub const VRF_POWERED_WAGON: u64 = 1 << 3;
+pub const VRF_FLIPPED: u64 = 1 << 4;

@@ -40,3 +40,7 @@ pub const INVALID_AXIS: u8 = 0xFF;
 
 /// `AXIS_END`.
 pub const AXIS_END: u8 = 2;
+
+pub const DIR_W: u8 = 6;
+pub const DIRDIFF_REVERSE: u8 = 4;
+pub const DIRDIFF_SAME: u8 = 0;

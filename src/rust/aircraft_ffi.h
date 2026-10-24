@@ -113,8 +113,8 @@ struct OpenTTDAircraftLeaves {
 	void (OPENTTD_AIRCRAFT_CALL *invalid_position)(OpenTTDAircraftVehicle, const void *) noexcept OPENTTD_SERVICE_DEFAULT(invalid_position);
 	void (OPENTTD_AIRCRAFT_CALL *invalid_scheme)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(invalid_scheme);
 	void (OPENTTD_AIRCRAFT_CALL *unreachable)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(unreachable);
-	uint32_t (OPENTTD_AIRCRAFT_CALL *cargo_age_property)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(cargo_age_property);
-	uint32_t (OPENTTD_AIRCRAFT_CALL *range_property)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(range_property);
+	uint16_t (OPENTTD_AIRCRAFT_CALL *cargo_age_default)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(cargo_age_default);
+	uint16_t (OPENTTD_AIRCRAFT_CALL *range_default)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(range_default);
 	bool (OPENTTD_AIRCRAFT_CALL *rotor_image_if_changed)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(rotor_image_if_changed);
 	void (OPENTTD_AIRCRAFT_CALL *update_rotor_image)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(update_rotor_image);
 	void (OPENTTD_AIRCRAFT_CALL *process_orders)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(process_orders);

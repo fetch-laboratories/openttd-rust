@@ -1244,15 +1244,10 @@ pub struct Loading {
     pub(crate) platform_length: extern "C" fn(*mut Station, VehicleRef) -> u32,
     pub(crate) vehicle_tile: extern "C" fn(VehicleRef) -> u32,
     pub(crate) station_cargo_total: extern "C" fn(*mut Station, u8) -> u32,
-    pub(crate) load_property: extern "C" fn(VehicleRef) -> u16,
-    pub(crate) load_callback: extern "C" fn(VehicleRef) -> u16,
     pub(crate) get_payment: extern "C" fn(VehicleRef) -> *mut NativePayment,
     pub(crate) create_payment: extern "C" fn(VehicleRef) -> *mut NativePayment,
     pub(crate) delete_payment: extern "C" fn(*mut NativePayment),
     pub(crate) flush_delivery: extern "C" fn(),
-    pub(crate) vehicle_new_cargo: extern "C" fn(VehicleRef),
-
-    pub(crate) vehicle_empty: extern "C" fn(VehicleRef),
     pub(crate) station_dirty: extern "C" fn(*mut Station),
 }
 
@@ -1337,6 +1332,8 @@ fn reserve_consist(
     }
 }
 fn load_amount(v: VehicleRef, gradual: bool, l: &Loading) -> u32 {
+    // SAFETY: the static base services outlive this synchronous call.
+    let vehicle = unsafe { &*l.vehicle };
     let observed = (l.load_engine)(v);
     let engine = observed.engine;
     let mut amount = u32::from(observed.amount);
@@ -1348,9 +1345,18 @@ fn load_amount(v: VehicleRef, gradual: bool, l: &Loading) -> u32 {
         let version = (l.grf_version)(engine);
         let mut cb = 0xffff;
         if version >= 8 {
-            cb = (l.load_property)(v);
+            cb = (vehicle.property)(
+                (vehicle.newgrf)(),
+                v,
+                crate::newgrf_properties::PROP_VEHICLE_LOAD_AMOUNT,
+                i32::from(crate::newgrf_callbacks::CALLBACK_FAILED),
+            ) as u16;
         } else if (l.engine_load_callback)(engine) {
-            cb = (l.load_callback)(v);
+            cb = (vehicle.callback)(
+                (vehicle.newgrf)(),
+                v,
+                crate::newgrf_callbacks::CBID_VEHICLE_LOAD_AMOUNT,
+            );
         }
         if cb != 0xffff {
             if (l.grf_version)(engine) < 8 {
@@ -1706,7 +1712,13 @@ unsafe fn load_vehicle(
                     && may_load(st, v, w, l)
                 {
                     if observed.stored == 0 {
-                        (l.vehicle_new_cargo)(v);
+                        unsafe {
+                            crate::newgrf_vehicle::trigger(
+                                vehicle,
+                                v,
+                                crate::newgrf_vehicle::Trigger::NewCargo,
+                            );
+                        };
                     }
                     if control.gradual {
                         cap = cap.min(load_amount(v, control.gradual, l));
@@ -1814,7 +1826,13 @@ unsafe fn load_vehicle(
         }
         if emptied {
             dirty_vehicle = true;
-            (l.vehicle_empty)(front);
+            unsafe {
+                crate::newgrf_vehicle::trigger(
+                    vehicle,
+                    front,
+                    crate::newgrf_vehicle::Trigger::Empty,
+                );
+            };
         }
         if dirty_vehicle {
             (l.vehicle_dirty)(front);
@@ -2127,15 +2145,10 @@ crate::abi::layouts! {
         platform_length,
         vehicle_tile,
         station_cargo_total,
-        load_property,
-        load_callback,
         get_payment,
         create_payment,
         delete_payment,
         flush_delivery,
-        vehicle_new_cargo,
-
-        vehicle_empty,
         station_dirty,
     };
 }

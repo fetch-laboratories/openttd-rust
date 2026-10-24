@@ -6,7 +6,6 @@ src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> bool | c1ccb7a99eba675e
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> bool | c63db387bfa123f1 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> bool | cb5a17d7b102cbc0 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint16_t | 02b8967881717dcf | 1
-src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint16_t | 43fc64270dcd8062 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | 0adea4dfb4e628dd | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | 2476726e8336e3a3 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | 2f3fe8935519b746 | 1
@@ -14,7 +13,6 @@ src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | 42b3050e0348
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | 45992d52fc0daa85 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | b47b72a3c9ac9c98 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint64_t | 64e8426b85c95e58 | 1
-src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint8_t | 299ddfab032b8035 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint8_t | 3a455c1292b18196 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle, bool value) noexcept -> void | 7cb5a659cbe6a8f4 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle, bool value) noexcept -> void | 7cf059c2aa94086f | 1
@@ -71,14 +69,12 @@ src/order_cmd.cpp | openttd_orders_vehicle_type(void *ctx) noexcept | 548f4cd5ca
 src/pathfinder/water_regions.cpp | CalculateWaterRegionPatchHash(const WaterRegionPatchDesc &patch) | 43ab4b50224ccf7a | 1
 src/pathfinder/yapf/yapf_rail.cpp | YapfTrainFindNearestSafeTile(const Train *v, TileIndex tile, Trackdir td, bool override_railtype) | 02526afd5bf0c047 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_airport_blocks(const OpenTTDStation *s) noexcept | 97ae30fe84ad813b | 1
-src/rust/aircraft_adapter.hpp | Aircraft_cargo_age_property(OpenTTDAircraftVehicle vehicle) noexcept | e353390d8a0ed3b7 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_engine_sound(OpenTTDAircraftVehicle vehicle) noexcept | ab16a3a16a30787d | 1
 src/rust/aircraft_adapter.hpp | Aircraft_engine_speed(OpenTTDAircraftVehicle vehicle) noexcept | a6cd81a57940c095 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_engine_subtype(OpenTTDAircraftVehicle vehicle) noexcept | d686df951ef1732d | 1
 src/rust/aircraft_adapter.hpp | Aircraft_had_vehicle(const OpenTTDStation *s) noexcept | 20ea2629b76c3ff3 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_nearest_depot_order(OpenTTDAircraftVehicle vehicle) noexcept | c2837c0411ced584 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_part_of_orders(OpenTTDAircraftVehicle vehicle) noexcept | 42a2fa6130a76f6a | 1
-src/rust/aircraft_adapter.hpp | Aircraft_range_property(OpenTTDAircraftVehicle vehicle) noexcept | 7307bcd5feec8b72 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_service_interval(OpenTTDAircraftVehicle vehicle) noexcept | 0841847ee09aa8ff | 1
 src/rust/aircraft_adapter.hpp | UpdateAirplanesOnNewStation(const Station *st) | 3385f4a0c2f65978 | 1
 src/rust/company_adapter.cpp | Co_aircraft_is_normal(uint32_t id) noexcept | 83a0e1036f160164 | 1

@@ -40,7 +40,6 @@ struct OpenTTDVehicleRefitServices {
 	bool (*has_grf)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(has_grf);
 	uint8_t (*refit_cost)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(refit_cost);
 	OpenTTDRefitCargo (*refit_cargo)(const OpenTTDEngine *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(refit_cargo);
-	uint16_t (*cost_callback)(OpenTTDVehicle *, uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(cost_callback);
 	VehicleType (*engine_kind)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_kind);
 	RailVehicleTypes (*rail_kind)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(rail_kind);
 	int32_t (*price_shift)(const OpenTTDEngine *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(price_shift);
@@ -66,7 +65,6 @@ struct OpenTTDVehicleRefitServices {
 	void (*lists_ui)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(lists_ui);
 };
 struct OpenTTDArticulatedPart { uint8_t image; uint16_t capacity; };
-struct OpenTTDArticulatedProbability { bool present, value; };
 struct OpenTTDVehicleArticulatedServices {
 	const OpenTTDVehicleRefitServices *refit;
 	uint8_t (*default_cargo)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(default_cargo);
@@ -87,7 +85,6 @@ struct OpenTTDVehicleArticulatedServices {
 	void (*copy_common)(void *, void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(copy_common);
 	void (*random_bits)(void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(random_bits);
 	void (*flip_image)(void *) noexcept OPENTTD_SERVICE_DEFAULT(flip_image);
-	OpenTTDArticulatedProbability (*reverse)(void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(reverse);
 	uint64_t (*available_cargo)(uint16_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(available_cargo);
 	void (*warning)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(warning);
 	bool (*has_articulated)(void *) noexcept OPENTTD_SERVICE_DEFAULT(has_articulated);
@@ -144,7 +141,6 @@ struct OpenTTDRailConstructionServices {
 	const OpenTTDGroundServices *ground;
 	uint16_t (*first_engine)(void *) noexcept OPENTTD_SERVICE_DEFAULT(first_engine);
 	void (*invalidate_grf)(void *) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_grf);
-	uint16_t (*attach_callback)(void *, void *, int32_t *) noexcept OPENTTD_SERVICE_DEFAULT(attach_callback);
 	void (*unknown_attach)(void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(unknown_attach);
 	uint16_t (*train_limit)() noexcept OPENTTD_SERVICE_DEFAULT(train_limit);
 	uint16_t (*unit)(void *) noexcept OPENTTD_SERVICE_DEFAULT(unit);

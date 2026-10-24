@@ -44,7 +44,6 @@ pub struct Services {
     pub ground: &'static crate::vehicle::GroundServices,
     pub first_engine: extern "C" fn(*mut ()) -> u16,
     pub invalidate_grf: extern "C" fn(*mut ()),
-    pub attach_callback: extern "C" fn(*mut (), *mut (), *mut i32) -> u16,
     pub unknown_attach: extern "C" fn(*mut (), u16),
     pub train_limit: extern "C" fn() -> u16,
     pub unit: extern "C" fn(*mut ()) -> u16,
@@ -156,10 +155,16 @@ impl Ctx {
     }
     /// `TestVehicleBuildProbability(v, v->engine_type, Reversed)` and its flag.
     fn reverse_on_build(self, v: *mut ()) {
-        let a = self.b.construct.articulated;
-        let probability = (a.reverse)(v, self.engine(v));
-        if probability.present {
-            (self.r.train_handle)(v.cast()).set_flag(crate::train::FLIPPED, probability.value);
+        let probability = unsafe {
+            crate::newgrf_vehicle::openttd_rust_vehicle_build_probability(
+                &*(self.c.vehicles.newgrf)(),
+                v.cast(),
+                self.engine(v),
+                crate::newgrf_vehicle::BUILD_PROBABILITY_REVERSED,
+            )
+        };
+        if probability >= 0 {
+            (self.r.train_handle)(v.cast()).set_flag(crate::train::FLIPPED, probability != 0);
         }
     }
     /// `Vehicle::orders` of the canonical Rust-owned order view.
@@ -518,7 +523,19 @@ fn check_train_attachment(x: Ctx, mut t: *mut ()) -> Option<u32> {
             );
             (x.s.invalidate_grf)(t);
             let mut regs100 = MaybeUninit::<i32>::uninit();
-            let callback = (x.s.attach_callback)(t, head, regs100.as_mut_ptr());
+            let callback = unsafe {
+                crate::newgrf_vehicle::callback(
+                    x.c.vehicles,
+                    super::vehicle_ref(t),
+                    (x.c.vehicles.engine_id)(super::vehicle_ref(head)),
+                    crate::newgrf_callbacks::CBID_TRAIN_ALLOW_WAGON_ATTACH.0,
+                    0,
+                    head.cast(),
+                    true,
+                    regs100.as_mut_ptr(),
+                    1,
+                )
+            };
             (x.s.ground.write_first_engine)(unsafe { super::vehicle_ref(t) }, first_engine);
             (x.s.invalidate_grf)(t);
             (x.s.invalidate_grf)(head);
@@ -931,7 +948,7 @@ crate::abi::layouts! {
     "OpenTTDRailConstructionServices" ["probe"] => Services {
         cargo_capacity, strings, train_if_valid, compatible, powered, new_wagon, new_engine, new_rear, link_multihead, subtype,
         set_subtype, previous, last, set_next, next_vehicle, last_engine_part, ground, first_engine,
-        invalidate_grf, attach_callback, unknown_attach, train_limit, unit,
+        invalidate_grf, unknown_attach, train_limit, unit,
         use_unit, release_unit, head_windows, front_windows, company_dirty, depot_changed,
     };
     "OpenTTDRailConstructionStrings" ["probe"] => Strings { rear_follow, depot_only, no_orders, };

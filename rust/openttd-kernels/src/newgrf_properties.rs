@@ -12,3 +12,11 @@ pub const PROP_TRAIN_TRACTIVE_EFFORT: u8 = 0x1f;
 pub const PROP_ROADVEH_POWER: u8 = 0x13;
 pub const PROP_ROADVEH_WEIGHT: u8 = 0x14;
 pub const PROP_ROADVEH_TRACTIVE_EFFORT: u8 = 0x18;
+
+pub const PROP_VEHICLE_LOAD_AMOUNT: u8 = 0x07;
+pub const PROP_TRAIN_CURVE_SPEED_MOD: u8 = 0x2e;
+pub const PROP_ROADVEH_CARGO_AGE_PERIOD: u8 = 0x22;
+pub const PROP_SHIP_SPEED: u8 = 0x0b;
+pub const PROP_SHIP_CARGO_AGE_PERIOD: u8 = 0x1d;
+pub const PROP_AIRCRAFT_CARGO_AGE_PERIOD: u8 = 0x1c;
+pub const PROP_AIRCRAFT_RANGE: u8 = 0x1f;

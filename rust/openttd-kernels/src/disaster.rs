@@ -1399,8 +1399,9 @@ mod tests {
         new_position: unused!(vehicle::VehicleRef ; vehicle::NewPosition),
         write_xy: unused!(vehicle::VehicleRef, i32, i32),
         base_viewport: viewport,
-        property: unused!(vehicle::VehicleRef, u8, i32 ; i32),
-        callback: unused!(vehicle::VehicleRef, crate::newgrf_callbacks::CallbackID ; u16),
+        newgrf: unused!(; *const crate::newgrf_vehicle::Services),
+        property: unused!(*const crate::newgrf_vehicle::Services, vehicle::VehicleRef, u8, i32 ; i32),
+        callback: unused!(*const crate::newgrf_vehicle::Services, vehicle::VehicleRef, crate::newgrf_callbacks::CallbackID ; u16),
         unknown_callback_result: unused!(
             vehicle::EngineRef,
             crate::newgrf_callbacks::CallbackID,

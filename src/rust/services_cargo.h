@@ -17,6 +17,8 @@ struct OpenTTDIndustrySpecHandle;
 /* Keep native types and source observation points. Scaling may draw Random;
  * delivery may reenter owners, so callers end their owner access first.
  * Environmental failures terminate inside these noexcept leaves. */
+inline uint16_t RustCargoSpecClasses(const CargoSpec *cs) noexcept { return cs->classes.base(); }
+inline uint16_t RustCargoClasses(CargoType cargo) noexcept { return RustCargoSpecClasses(CargoSpec::Get(cargo)); }
 inline uint OpenTTDScaleCargo(uint amount, bool town) noexcept { return ScaleByCargoScale(amount, town); }
 inline CargoType OpenTTDCargoTranslation(uint8_t cargo, const GRFFile *grf) noexcept { return GetCargoTranslation(cargo, grf); }
 inline CargoType OpenTTDCargoByLabel(CargoLabel label) noexcept { return GetCargoTypeByLabel(label); }

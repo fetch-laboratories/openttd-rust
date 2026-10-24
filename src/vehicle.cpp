@@ -171,7 +171,6 @@ const OpenTTDVehicleVisits &GetRustVehicleVisits() noexcept
 		.leave_sound = RustVehiclePlayLeaveSound,
 		.depot_windows = VehicleVisitDepotWindows,
 		.ship_depot_viewport = VehicleVisitShipDepotViewport,
-		.depot_randomisation = RustVehicleDepotRandomisation,
 		.view_invalidate = RustVehicleVisitInvalidateView,
 		.with_costs = VehicleVisitWithCosts,
 		.refit_failed_news = VehicleVisitRefitFailedNews,

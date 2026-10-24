@@ -55,6 +55,7 @@ inline uint8_t RustReverseRailTypeTranslation(RailType railtype, const GRFFile *
  * A town shell is live for resolution (or null for a prototype); no Rust
  * owner borrow spans it. No C++ exception crosses Rust; environmental
  * failures terminate. */
+inline uint8_t RustGRFCargoMap(const GRFFile *grf, CargoType cargo) noexcept { return grf->cargo_map[cargo]; }
 inline bool OpenTTDConvertBooleanCallback(const GRFFile *grf, uint16_t callback, uint16_t result) noexcept { return ConvertBooleanCallback(grf, callback, result); }
 inline bool OpenTTDConvert8bitBooleanCallback(const GRFFile *grf, uint16_t callback, uint16_t result) noexcept { return Convert8bitBooleanCallback(grf, callback, result); }
 inline uint16_t OpenTTDHouseCallback(CallbackID callback, uint32_t param1, uint32_t param2, HouseID house, Town *town, TileIndex tile, bool not_yet_constructed, uint8_t initial_random = 0) noexcept

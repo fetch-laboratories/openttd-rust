@@ -37,6 +37,10 @@
 #include "newgrf_engine.h"
 #include "newgrf_text.h"
 #include "table/strings.h"
+#include "newgrf_engine.h"
+#include "newgrf.h"
+#include "aircraft.h"
+#include "ship.h"
 
 [[noreturn]] static void FixtureAbort(int line) { fmt::print(stderr, "FLEET setup-failure {}\n", line); std::fflush(stderr); std::abort(); }
 static bool SameRandom(const SavedRandomSeeds &a, const SavedRandomSeeds &b);
@@ -288,6 +292,278 @@ static void OccupancyProbe()
 	fmt::print(stderr, "FLEET occupancy-probe 18 live-next {}\n", SameRandom(before, after));
 }
 
+/* Public-variable results over live stock shells; this is comparison evidence,
+ * not an oracle or a second implementation of the compatibility formulas. */
+static void ResolverVariables(Vehicle *v)
+{
+	GRFFile grf;
+	grf.grf_version = 8;
+	for (uint i = 0; i < NUM_CARGO; ++i) grf.cargo_map[i] = NUM_CARGO - 1 - i;
+	VehicleResolverObject ro(v->engine_type, v, VehicleResolverObject::WO_NONE);
+	ro.grffile = &grf;
+	ro.SetRegister(0x10E, 0); ro.SetRegister(0x10F, 1);
+	uint64_t digest = 0;
+	uint count = 0;
+	auto query = [&](uint8_t variable, uint32_t parameter) {
+		bool available = true;
+		uint32_t value = ro.self_scope.GetVariable(variable, parameter, available);
+		digest = digest * 31337 + value + available;
+		++count;
+	};
+	for (uint8_t variable : {0x25, 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x7A}) query(variable, 0);
+	for (uint variable = 0x80; variable <= 0xFF; ++variable) query(variable, 0);
+	for (uint32_t parameter : {0x5FU, 0x61U, 0x84U, 0xFFFFU}) query(0x61, parameter);
+	VehicleResolverObject purchase(v->engine_type, nullptr, VehicleResolverObject::WO_NONE);
+	purchase.grffile = &grf;
+	for (uint8_t variable : {0x43, 0x46, 0x47, 0x48, 0x49, 0x4B, 0x7A, 0x92, 0x93, 0xC4, 0xC6, 0xC7, 0xDA, 0xF2, 0xFF}) {
+		bool available = true;
+		digest = digest * 31337 + purchase.self_scope.GetVariable(variable, 0, available) + available;
+		++count;
+	}
+	fmt::print(stderr, "FLEET resolver-variables {} {} {} {}\n", v->type, v->subtype, count, digest);
+	v->InvalidateNewGRFCacheOfChain();
+}
+
+/* Actual airport movement flags at every position, all byte states and both
+ * loading/depot order branches, through the original vehicle variable API. */
+static void ResolverAircraft(Aircraft *v)
+{
+	const Station *st = GetTargetAirportIfValid(v);
+	if (st == nullptr) FixtureAbort(__LINE__);
+	const AirportFTAClass *airport = st->airport.GetFTA();
+	Backup<uint8_t> state(v->state), pos(v->pos);
+	Backup<Order> order(v->current_order);
+	VehicleResolverObject ro(v->engine_type, v, VehicleResolverObject::WO_NONE);
+	uint64_t digest = 0;
+	uint count = 0;
+	for (bool loading : {false, true}) {
+		if (loading) v->current_order.MakeLoading(false); else v->current_order.MakeGoToDepot(DepotID(0), OrderDepotTypeFlags{});
+		for (uint p = 0; p < airport->nofelements; ++p) for (uint s = 0; s < 256; ++s) {
+			state.Change(s); pos.Change(p);
+			bool available = true;
+			digest = digest * 31337 + ro.self_scope.GetVariable(0xE2, 0, available);
+			digest = digest * 31337 + ro.self_scope.GetVariable(0xE6, 0, available);
+			if (!available) FixtureAbort(__LINE__);
+			++count;
+		}
+	}
+	order.Restore(); pos.Restore(); state.Restore();
+	fmt::print(stderr, "FLEET resolver-aircraft {} {}\n", count, digest);
+}
+
+/* Exercise real Action2 groups through the unchanged public native API on both
+ * runtimes. Cache values are captured before any diagnostic rebuild can hide them. */
+static void ResolverProbe()
+{
+	Train *v = nullptr;
+	for (Train *t : Train::Iterate()) if (t->IsFrontEngine() && t->Next() != nullptr) { v = t; break; }
+	if (v == nullptr) FixtureAbort(__LINE__);
+	ResolverVariables(v);
+	Engine *e = Engine::Get(v->engine_type);
+	Backup<decltype(e->grf_prop.spritegroups)> sprites(e->grf_prop.spritegroups);
+	Backup<const GRFFile *> file(e->grf_prop.grffile);
+	GRFFile grf;
+	grf.grf_version = 8;
+	for (uint i = 0; i < NUM_CARGO; ++i) grf.cargo_map[i] = NUM_CARGO - 1 - i;
+	file.Change(&grf);
+	if (!SpriteGroup::CanAllocateItem(8)) FixtureAbort(__LINE__);
+	auto *det = new DeterministicSpriteGroup();
+	det->size = DSG_SIZE_DWORD;
+	det->var_scope = VSG_SCOPE_SELF;
+	det->default_result.calculated_result = true;
+	det->adjusts.push_back({.operation = DSGA_OP_RST, .variable = 0x42, .and_mask = UINT32_MAX});
+	e->grf_prop.spritegroups.clear();
+	e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, det);
+	v->InvalidateNewGRFCacheOfChain();
+	{
+		VehicleResolverObject ro(v->engine_type, v, VehicleResolverObject::WO_NONE);
+		bool available = true;
+		uint32_t translated = ro.self_scope.GetVariable(0x42, 0, available);
+		NewGRFCache before = v->grf_cache;
+		uint32_t hit = ro.self_scope.GetVariable(0x42, 0, available);
+		uint16_t callback = GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v);
+		fmt::print(stderr, "FLEET resolver-cache {} {} {} {} {}\n", available, translated, before.consist_cargo_information, hit == translated, callback == (translated & 0x7FFF));
+		ro.grffile = nullptr;
+		uint32_t untranslated = ro.self_scope.GetVariable(0x42, 0, available);
+		fmt::print(stderr, "FLEET resolver-translation {} {}\n", untranslated, v->grf_cache == before);
+		GRFFile caller;
+		caller.grf_version = 7;
+		for (uint i = 0; i < NUM_CARGO; ++i) caller.cargo_map[i] = i;
+		ro.grffile = &caller;
+		uint32_t version7 = ro.self_scope.GetVariable(0x42, 0, available);
+		caller.grf_version = 8;
+		uint32_t version8 = ro.self_scope.GetVariable(0x42, 0, available);
+		fmt::print(stderr, "FLEET resolver-caller-grf {} {} {}\n", version7 == untranslated, version8 != translated, v->grf_cache == before);
+		Backup<decltype(e->badges)> badges(e->badges, std::vector<BadgeID>{BadgeID(0x12345678)});
+		caller.badge_list = {BadgeID(0x12345678)};
+		uint32_t badge_count = ro.self_scope.GetVariable(0x64, 0, available);
+		fmt::print(stderr, "FLEET resolver-wide-badge {} {}\n", available, badge_count > 0);
+		badges.Restore();
+		ro.grffile = nullptr;
+
+		ro.SetRegister(0x10F, 1);
+		ro.SetRegister(0x10E, 0);
+		uint32_t relative = ro.self_scope.GetVariable(0x61, 0x40, available);
+		VehicleResolverObject other(v->engine_type, v->Next(), VehicleResolverObject::WO_NONE);
+		uint32_t direct = other.self_scope.GetVariable(0x40, 0, available);
+		fmt::print(stderr, "FLEET resolver-var61 {} {} {}\n", available, relative, relative == direct);
+		det->var_scope = VSG_SCOPE_PARENT;
+		det->adjusts[0].variable = 0x84;
+		uint16_t parent = GetVehicleCallbackParent(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v, v->Next());
+		fmt::print(stderr, "FLEET resolver-parent {}\n", parent == (v->Next()->index.base() & 0x7FFF));
+		ro.SetRegister(0x100, 1);
+		auto *scope = ro.GetScope(VSG_SCOPE_RELATIVE, 0);
+		fmt::print(stderr, "FLEET resolver-relative {}\n", scope->GetVariable(0x84, 0, available) == v->Next()->index.base());
+		uint64_t relative_digest = 0;
+		uint relative_cases = 0;
+		for (int32_t reg : {INT32_MIN, -1, 0, 1, INT32_MAX}) for (uint8_t selector : {0, 1, 0x40, 0x41, 0x80, 0x81, 0xC0, 0xC1}) {
+			ro.SetRegister(0x100, reg);
+			bool valid = true;
+			uint32_t value = ro.GetScope(VSG_SCOPE_RELATIVE, selector)->GetVariable(0x84, 0, valid);
+			relative_digest = relative_digest * 31337 + value + valid;
+			++relative_cases;
+		}
+		fmt::print(stderr, "FLEET resolver-relative-matrix {} {}\n", relative_cases, relative_digest);
+		ro.GetScope(VSG_SCOPE_RELATIVE, 1);
+		ro.self_scope.SetVehicle(v->Next());
+		bool valid = true;
+		uint32_t fresh = ro.GetScope(VSG_SCOPE_RELATIVE, 1)->GetVariable(0x84, 0, valid);
+		const Vehicle *expected = v->Next()->Next();
+		fmt::print(stderr, "FLEET resolver-relative-uncached {}\n", fresh == (expected == nullptr ? UINT_MAX : expected->index.base()) && valid == (expected != nullptr));
+		ro.self_scope.SetVehicle(v);
+		uint64_t policy_digest = 0;
+		uint policy_cases = 0;
+		for (CallbackID cb : {CBID_NO_CALLBACK, CBID_RANDOM_TRIGGER, CBID_TRAIN_ALLOW_WAGON_ATTACH, CBID_VEHICLE_START_STOP_CHECK, CBID_VEHICLE_32DAY_CALLBACK, CBID_VEHICLE_COLOUR_MAPPING, CBID_VEHICLE_SPAWN_VISUAL_EFFECT, CBID_VEHICLE_MODIFY_PROPERTY}) {
+			ro.callback = cb;
+			for (uint32_t parameter : {0x5FU, 0x61U, 0x84U}) {
+				bool allowed = true;
+				uint32_t value = ro.self_scope.GetVariable(0x61, parameter, allowed);
+				policy_digest = policy_digest * 31337 + value + allowed;
+				++policy_cases;
+			}
+		}
+		ro.callback = CBID_NO_CALLBACK;
+		fmt::print(stderr, "FLEET resolver-var61-policy {} {}\n", policy_cases, policy_digest);
+
+		/* Nested deterministic procedure changes relative scope, then returns to self.
+		 * Output registers are copied by ResolveCallback after the nested evaluation. */
+		auto *procedure = new DeterministicSpriteGroup();
+		procedure->size = DSG_SIZE_DWORD; procedure->var_scope = VSG_SCOPE_RELATIVE;
+		procedure->default_result.calculated_result = true;
+		procedure->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x84, .and_mask = UINT32_MAX}};
+		det->var_scope = VSG_SCOPE_SELF;
+		det->adjusts = {
+			{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 1},
+			{.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100},
+			{.operation = DSGA_OP_RST, .variable = 0x7E, .and_mask = UINT32_MAX, .subroutine = procedure},
+			{.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x101},
+			{.operation = DSGA_OP_RST, .variable = 0x84, .and_mask = UINT32_MAX},
+		};
+		std::array<int32_t, 2> registers{};
+		uint16_t nested = GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v, registers);
+		fmt::print(stderr, "FLEET resolver-reentry {} {} {}\n", nested == (v->index.base() & 0x7FFF), registers[0] == 1, registers[1] == static_cast<int32_t>(v->Next()->index.base() & 0x7FFF));
+		det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 0x7FFE}};
+		fmt::print(stderr, "FLEET resolver-property {} {}\n", GetVehicleProperty(v, PROP_TRAIN_SPEED, 17, true) == -2, GetVehicleProperty(v, PROP_TRAIN_SPEED, 17) == 0x7FFE);
+		SavedRandomSeeds probability_before, probability_after;
+		SaveRandomSeeds(&probability_before);
+		auto probability = TestVehicleBuildProbability(v, v->engine_type, BuildProbabilityType::Reversed);
+		SaveRandomSeeds(&probability_after);
+		fmt::print(stderr, "FLEET resolver-probability {} {} {}\n", probability.has_value(), probability.value_or(false), !SameRandom(probability_before, probability_after));
+		e->grf_prop.spritegroups.clear();
+		SaveRandomSeeds(&probability_before);
+		probability = TestVehicleBuildProbability(v, v->engine_type, BuildProbabilityType::Reversed);
+		SaveRandomSeeds(&probability_after);
+		fmt::print(stderr, "FLEET resolver-probability-failed {} {}\n", !probability.has_value(), SameRandom(probability_before, probability_after));
+		e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, det);
+		det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x61, .parameter = 0x84, .and_mask = UINT32_MAX}};
+		auto *fallback = new CallbackResultSpriteGroup(123);
+		det->error_group = fallback;
+		fmt::print(stderr, "FLEET resolver-unavailable {}\n", GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v) == 123);
+		/* DoResolve clears changed registers; the actual group above supplies them. */
+		delete fallback; delete procedure;
+	}
+	{
+		auto *low = new CallbackResultSpriteGroup(7);
+		auto *high = new CallbackResultSpriteGroup(11);
+		auto *real = new RealSpriteGroup();
+		real->loaded = {low, high}; real->loading = {high, low};
+		e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, real);
+		Backup<Order> order(v->current_order);
+		for (bool loading : {false, true}) {
+			if (loading) v->current_order.MakeLoading(false); else v->current_order.MakeDummy();
+			fmt::print(stderr, "FLEET resolver-real {} {}\n", loading, GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v));
+		}
+		fmt::print(stderr, "FLEET resolver-purchase-real {}\n", GetEngineProperty(v->engine_type, PROP_TRAIN_SPEED, 17) == 11);
+		order.Restore();
+		e->grf_prop.spritegroups.clear();
+		delete real; delete high; delete low;
+	}
+	auto *result = new CallbackResultSpriteGroup(7);
+	auto *random = new RandomizedSpriteGroup();
+	random->var_scope = VSG_SCOPE_SELF;
+	random->triggers = 0x1F;
+	random->cmp_mode = RSG_CMP_ANY;
+	random->lowest_randbit = 3;
+	random->groups = {result, result};
+	e->grf_prop.spritegroups.clear();
+	e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, random);
+	for (Train *u = v; u != nullptr; u = u->Next()) u->tcache.cached_override = random;
+	for (VehicleRandomTrigger trigger : {VehicleRandomTrigger::NewCargo, VehicleRandomTrigger::Depot, VehicleRandomTrigger::Empty, VehicleRandomTrigger::Callback32}) {
+		SavedRandomSeeds before, after;
+		SaveRandomSeeds(&before);
+		TriggerVehicleRandomisation(v, trigger);
+		SaveRandomSeeds(&after);
+		fmt::print(stderr, "FLEET resolver-trigger {} {}\n", to_underlying(trigger), !SameRandom(before, after));
+		uint index = 0;
+		for (Train *u = v; u != nullptr; u = u->Next()) {
+			fmt::print(stderr, "FLEET resolver-random {} {} {} {} {}\n", to_underlying(trigger), index++, u->random_bits, u->waiting_random_triggers.base(), u->grf_cache.cache_valid);
+		}
+	}
+	/* NewCargo propagates AnyNewCargo; its waiting bit must have been consumed. */
+	bool propagated = true;
+	for (Train *u = v; u != nullptr; u = u->Next()) propagated &= !u->waiting_random_triggers.Test(VehicleRandomTrigger::AnyNewCargo);
+	fmt::print(stderr, "FLEET resolver-anynew {}\n", propagated);
+	/* A matching group with one outcome reseeds zero bits but still draws RNG. */
+	random->groups = {result};
+	uint16_t bits = v->random_bits;
+	SavedRandomSeeds before, after;
+	SaveRandomSeeds(&before); TriggerVehicleRandomisation(v, VehicleRandomTrigger::Callback32); SaveRandomSeeds(&after);
+	fmt::print(stderr, "FLEET resolver-zero-reseed {} {}\n", bits == v->random_bits, !SameRandom(before, after));
+	v->waiting_random_triggers = VehicleRandomTriggers(0x10);
+	FillNewGRFVehicleCache(v);
+	NewGRFCache cache = v->grf_cache;
+	VehicleID id = v->index;
+	uint8_t waiting = v->waiting_random_triggers.base();
+	bits = v->random_bits;
+	/* Native reload destroys these synthetic pooled groups and resets engine specs.
+	 * No group survives: reinstall fresh deterministic data afterwards. Shell random
+	 * bits/waiting triggers survive; the transient cache is rebuilt, never restored. */
+	sprites.Trash(); file.Trash();
+	ReloadNewGRFData();
+	v = Train::Get(id); e = Engine::Get(v->engine_type);
+	fmt::print(stderr, "FLEET resolver-grf-reload {} {} {} {}\n", cache.cache_valid == 31, bits == v->random_bits, waiting == v->waiting_random_triggers.base(), v->grf_cache.cache_valid);
+	Backup<decltype(e->grf_prop.spritegroups)> reinstalled(e->grf_prop.spritegroups);
+	Backup<const GRFFile *> refile(e->grf_prop.grffile, &grf);
+	if (!SpriteGroup::CanAllocateItem()) FixtureAbort(__LINE__);
+	det = new DeterministicSpriteGroup();
+	det->size = DSG_SIZE_DWORD; det->var_scope = VSG_SCOPE_SELF;
+	det->default_result.calculated_result = true;
+	det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x42, .and_mask = UINT32_MAX}};
+	e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, det);
+	v->InvalidateNewGRFCacheOfChain();
+	{
+		VehicleResolverObject ro(v->engine_type, v, VehicleResolverObject::WO_NONE);
+		bool available = true;
+		uint32_t value = ro.self_scope.GetVariable(0x42, 0, available);
+		fmt::print(stderr, "FLEET resolver-reinstalled {} {}\n", available, GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v) == (value & 0x7FFF));
+	}
+	reinstalled.Restore(); refile.Restore(); delete det;
+	v->InvalidateNewGRFCacheOfChain();
+	fmt::print(stderr, "FLEET resolver-persist {} {} {}\n", id.base(), v->random_bits, v->waiting_random_triggers.base());
+
+	fmt::print(stderr, "FLEET resolver-checkpoint complete\n");
+}
+
 /** Running road vehicle 12 of padhattan-ridge-2000 heads to a service depot; the witness runs on 2001-01-01. */
 static VehicleID _drain_vehicle = VehicleID::Invalid();
 static UnitID _drain_unit = 0;
@@ -295,6 +571,15 @@ static bool FleetScenario(std::span<std::string_view> args)
 {
 	if (args.size() != 2) return false;
 	Backup<CompanyID> company(_current_company);
+	if (args[1] == "resolver") { ResolverProbe(); company.Restore(); return true; }
+	if (args[1] == "resolver-inspect") {
+		Train *v = nullptr;
+		for (Train *t : Train::Iterate()) if (t->IsFrontEngine() && t->Next() != nullptr) { v = t; break; }
+		if (v == nullptr) FixtureAbort(__LINE__);
+		fmt::print(stderr, "FLEET resolver-saved {} {} {}\n", v->index.base(), v->random_bits, v->waiting_random_triggers.base());
+		ResolverVariables(v);
+		company.Restore(); return true;
+	}
 	if (args[1].starts_with("transaction-mass-")) {
 		VehicleType type = args[1].ends_with("train") ? VEH_TRAIN : args[1].ends_with("road") ? VEH_ROAD : args[1].ends_with("ship") ? VEH_SHIP : VEH_AIRCRAFT;
 		Vehicle *v = BuildFixture(type);
@@ -360,6 +645,8 @@ static bool FleetScenario(std::span<std::string_view> args)
 		VehicleType type = args[1].ends_with("road") ? VEH_ROAD : VEH_AIRCRAFT;
 		Vehicle *v = BuildFixture(type);
 		if (type == VEH_ROAD) GroundPhysicsProbe(RoadVehicle::From(v), Engine::Get(v->engine_type)->VehInfo<RoadVehicleInfo>());
+		ResolverVariables(v);
+		if (type == VEH_AIRCRAFT) ResolverAircraft(Aircraft::From(v));
 		SavedRandomSeeds before, after;
 		bool restored = true;
 		/* Every buildable engine through query, test and execute, then one speculative build for another cargo. */
@@ -572,6 +859,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 		return true;
 	}
 	Vehicle *v = args[1] == "ship" ? BuildFixture(VEH_SHIP) : args[1] == "aircraft" ? BuildFixture(VEH_AIRCRAFT) : args[1].starts_with("train") ? BuildFixture(VEH_TRAIN) : Vehicle::Get(VehicleID(126));
+	if (args[1] == "ship") ResolverVariables(v);
 	if (!v->IsInDepot()) FixtureAbort(__LINE__);
 	company.Change(v->owner);
 	if (args[1] == "list") {
