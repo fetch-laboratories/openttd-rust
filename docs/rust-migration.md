@@ -1248,14 +1248,28 @@ growth, cancellation, query availability/register/nearby/count decisions and cal
 ordering, including unmasked `SB` refresh and reentry. External NewGRF/legacy,
 autoslope and generation branches remain tracked in #156.
 
-### Object invocation and eligibility (#430, in progress)
+### Object invocation and eligibility (#430)
 
-The selected port moves stack invocation context, roots, lazy parent selection,
-callback entry and spec eligibility into `objects.rs`, reusing its existing
-variables, command and animation owners. Native object/spec/map/save records and
-resolver virtual facades remain canonical. Focused default object scenarios will
-exercise actual Action2 groups, admission boundaries and transient reload setup.
-Validation is pending; this checkpoint records the implementation scope only.
+`objects.rs` owns stack object/spec/tile/view context, root selection, successful
+lazy parent caching, scope/feature/debug identity, callback entry and complete
+spec eligibility. Failed parent lookups retry; construction town scopes are
+readonly. Native object/spec vectors, overrides, map/save adapters, rendering
+and virtual resolver/town facades stay canonical. Common Action2 evaluation uses
+the assigned base's native evaluator; final-base adoption follows root's #425
+integration. No context/town/storage borrow spans evaluation or reentry. Leaves
+are typed noexcept calls; native cancellation and save/load frames stay outside.
+
+Command colour/slope/autoslope and animation enter the owner directly. Shared
+root/local-ID/GRF, qualified base-scope and town/storage services are reused;
+station and object use one optional-town facade construction helper. No variable,
+query, command or animation algorithm receives a second retirement credit.
+Default `objects-commands`, `objects-gaps` and `objects-reload` install actual
+deterministic/procedure/randomized groups, compare result registers and colour,
+exercise parent PSA/cache/retry/readonly and real date/mode admission, and detach
+transient groups/specs before saving. Reload explicitly reinstalls them. These
+checks and generation scenarios compare full semantic saves and named witnesses.
+Local validation is in progress in PR #438. External GRF loading and historical
+layouts remain #156 gaps; this fixture does not establish loader equivalence.
 
 ### Shared tile ownership dispatch (#331)
 

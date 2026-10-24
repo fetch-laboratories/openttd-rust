@@ -197,7 +197,8 @@ static void ObjectInvocationProbe(TileIndex tile, bool reloaded)
 	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Purchase, nullptr);
 	ObjectResolverObject fallback(spec, nullptr, tile); ObjectNeed(fallback.root_spritegroup == live_root, __LINE__);
 	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, nullptr);
-	ObjectResolverObject missing(spec, object, tile); regs.fill(0x1234); ObjectNeed(missing.ResolveCallback(regs) == CALLBACK_FAILED && regs[0] == 0x1234, __LINE__);
+	ObjectResolverObject missing(spec, object, tile), missing_purchase(spec, nullptr, INVALID_TILE);
+	regs.fill(0x1234); ObjectNeed(missing.ResolveCallback(regs) == CALLBACK_FAILED && missing_purchase.ResolveCallback(regs) == CALLBACK_FAILED && regs[0] == 0x1234, __LINE__);
 	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, live_root); spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Purchase, purchase_root);
 	fmt::print(stderr, "OBJECT invocation-roots {} {} {}\n", reloaded, callback, object->colour);
 	/* The procedure reenters self queries; the parent program enters integrated
@@ -243,13 +244,15 @@ static void ObjectInvocationProbe(TileIndex tile, bool reloaded)
 		ObjectNeed(test.Succeeded() == execute.Succeeded(), __LINE__);
 		fmt::print(stderr, "OBJECT invocation-eligibility {} {} {} {} {} {} {} {}\n", to_underlying(mode), generating, boundary, spec->IsEnabled(), spec->IsEverAvailable(), spec->WasEverAvailable(), spec->IsAvailable(), execute.Succeeded());
 		if (execute.Succeeded()) ObjectNeed(Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, tile).Succeeded(), __LINE__);
+		company.Restore(); world.Restore(); game_mode.Restore();
 	}
 	/* Leave a real object in the save with transient groups/specs detached. The
 	 * inspect path repeats this installation after native load, never serializes it. */
 	_object_specs.resize(saved_count);
-	ObjectNeed(Command<CMD_BUILD_OBJECT>::Do(DoCommandFlag::Execute, tile, OBJECT_TRANSMITTER, 0).Succeeded(), __LINE__);
+	ObjectNeed(Object::CanAllocateItem(), __LINE__); BuildObject(OBJECT_TRANSMITTER, tile, _current_company);
 	corner = 0; for (TileIndex t : TileArea(tile, 2, 2)) SetTileHeight(t, heights[corner++]);
 	for (auto *group : groups) delete group;
+	bulldozer.Restore(); ticks.Restore(); autosloping.Restore();
 	fmt::print(stderr, "OBJECT invocation-complete {}\n", reloaded);
 }
 
@@ -265,8 +268,9 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 		TileIndex invocation_tile = INVALID_TILE;
 		for (const Object *o : Object::Iterate()) if (o->type == OBJECT_TRANSMITTER) { invocation_tile = o->location.tile; break; }
 		ObjectNeed(invocation_tile != INVALID_TILE, __LINE__);
+		Backup<bool> bulldozer(_cheats.magic_bulldozer.value, true);
 		ObjectNeed(Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, invocation_tile).Succeeded(), __LINE__);
-		ObjectInvocationProbe(invocation_tile, true);
+		bulldozer.Restore(); ObjectInvocationProbe(invocation_tile, true);
 		std::array<uint16_t, NUM_OBJECTS> counts{};
 		for (const Object *o : Object::Iterate()) counts[o->type]++;
 		bool equal = true;
