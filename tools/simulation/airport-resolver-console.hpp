@@ -81,7 +81,7 @@ static void StationAirportFixture(TileIndex origin, DoCommandFlags test, DoComma
 	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Purchase, det);
 	AirportResolverObject preview(tile, nullptr, spec, 2), nowhere(INVALID_TILE, nullptr, spec, 3);
 	variables("preview", preview, preview.airport_scope); variables("nowhere", nowhere, nowhere.airport_scope);
-	for (int32_t date : {0, CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR - 1, CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR + 65536}) {
+	for (int32_t date : {0, CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR.base() - 1, CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR.base() + 65536}) {
 		auto old = st->build_date; st->build_date = TimerGameCalendar::Date(date); AirportResolverObject query(tile, st, spec, 0); bool ok = true;
 		fmt::print(stderr, "STCMD airport-date {} {}\n", date, query.airport_scope.GetVariable(0xFA, 0, ok)); st->build_date = old;
 	}
