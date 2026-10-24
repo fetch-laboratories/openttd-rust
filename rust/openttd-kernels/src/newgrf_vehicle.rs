@@ -1,6 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Vehicle invocation state and the per-shell `NewGRF` cache. Shells and generic Action2
-//! evaluation stay native.
+//! Vehicle invocation state and the per-shell `NewGRF` cache. Shells and evaluator stack
+//! facades stay native; common Action2 evaluation is in `newgrf_spritegroup.rs`.
 #![allow(
     unsafe_code,
     missing_docs,

@@ -6,9 +6,9 @@
  */
 
 //! Migrated game and text kernels exposed through the documented `src/rust` ABIs. Entries are
-//! synchronous calls serialized by the game-state mutex; services are typed `noexcept` C++
-//! functions, and both profiles abort on panic, so nothing unwinds across the boundary. No
-//! borrow of owner or world state survives a service that can reenter Rust.
+//! synchronous calls with typed `noexcept` C++ services; both profiles abort on panic, so nothing
+//! unwinds across the boundary. Game-state entries hold the native mutex; worker jobs use private
+//! snapshots. No borrow of owner or world state survives a service that can reenter Rust.
 
 mod admin_conversion;
 mod aircraft;

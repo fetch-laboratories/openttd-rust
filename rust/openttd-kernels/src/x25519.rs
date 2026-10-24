@@ -988,8 +988,8 @@ fn x25519(leaves: &Leaves, out: *mut u8, secret: *const u8, point: *const u8) {
     scalarmult(leaves, out, e, point, 255);
     wipe(leaves, e, 32);
 }
-// SAFETY for exports: the `x25519_ffi.h` contract. Buffers are fixed 32-byte spans
-// that output may overlap, because scalar and point reads finish before serialization.
+// SAFETY for exports: fixed 32-byte spans follow `x25519_ffi.h`'s aliasing contract,
+// including trim's forward-copy propagation through overlapping input.
 #[unsafe(no_mangle)]
 pub(crate) unsafe extern "C" fn openttd_rust_x25519_trim(out: *mut u8, input: *const u8) {
     trim(out, input);

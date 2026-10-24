@@ -35,8 +35,9 @@ struct OpenTTDCargoListFields {
 	uint32_t count, reserved_count, action_counts[4];
 };
 /* Handles are opaque owners; C++ pool shells keep IDs and allocation order, and list nodes hold
- * pool-shell handles. Payment callbacks may reenter packet and list getters, so Rust writes metadata
- * in source order after them. Save/load writes packet fields in place; import never dereferences
+ * pool-shell handles. Payment callbacks may reenter packet and list getters; raw owner accesses end
+ * before them, and metadata writes keep their source order. Save/load writes packet fields in place;
+ * import never dereferences
  * unresolved IDs. Next-hop buffers borrow the caller's StationID span for one call. Flow mode:
  * 0 normal/restricted, 1 forced transfer (excludes current and next reverse), 2 reroute (excludes
  * avoid/avoid2); selector 3 asks for the first flow origin, selector 4 whether any flows exist.
