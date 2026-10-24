@@ -116,7 +116,25 @@ static bool VisitsScenario(std::span<std::string_view> args)
 	Vehicle *empty = vehicle(11, VEH_ROAD);
 	CheckCommand("unload", Command<CMD_MODIFY_ORDER>::Do(DoCommandFlag::Execute, empty->index, 0, MOF_UNLOAD, to_underlying(OrderUnloadType::Unload)));
 	CheckCommand("no-load", Command<CMD_MODIFY_ORDER>::Do(DoCommandFlag::Execute, empty->index, 0, MOF_LOAD, to_underlying(OrderLoadType::NoLoad)));
-	/* Skipping a loading order returns its reserved cargo. */
+	/* The committed save has no reservations. Add seven ordinary station cargo
+	 * units, reserve them through the real cargo list, then leave by SkipToOrder. */
+	bool reservation = false;
+	for (Vehicle *u : Vehicle::Iterate()) {
+		if (!u->IsPrimaryVehicle() || !u->current_order.IsType(OT_LOADING) || u->cargo_cap < u->cargo.TotalCount() + 7) continue;
+		Station *st = Station::Get(u->last_station_visited);
+		auto &cargo = st->goods[u->cargo_type].GetOrCreateData().cargo;
+		cargo.Append(new CargoPacket(7, 3, st->index, st->xy, Money(133)), StationID::Invalid());
+		const std::array<StationID, 1> next{StationID::Invalid()};
+		uint amount = cargo.Reserve(7, &u->cargo, next, u->tile);
+		uint waiting = cargo.AvailableCount(), reserved = cargo.ReservedCount();
+		uint load = u->cargo.ActionCount(VehicleCargoList::MTA_LOAD);
+		CheckCommand("reserved-skip", Command<CMD_SKIP_TO_ORDER>::Do(DoCommandFlag::Execute, u->index, u->orders->GetNext(u->cur_implicit_order_index)));
+		reservation = amount == 7 && load == 7 && u->cargo.ActionCount(VehicleCargoList::MTA_LOAD) == 0;
+		fmt::print(stderr, "VISITS reservation {} {} {} {} {}\n", u->index, amount, reservation, cargo.ReservedCount() + 7 == reserved, cargo.AvailableCount() == waiting + 7);
+		break;
+	}
+	if (!reservation) std::abort();
+	/* Also skip any pre-existing reservation, if future fixture saves add one. */
 	size_t reserved = 0;
 	for (Vehicle *u : Vehicle::Iterate()) {
 		if (!u->IsPrimaryVehicle() || !u->current_order.IsType(OT_LOADING)) continue;

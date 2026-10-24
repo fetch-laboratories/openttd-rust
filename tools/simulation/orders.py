@@ -21,12 +21,12 @@ COMMON = "roadveh[0]/common[0]/"
 # fixture's refit, autorefit, conditional, full-load, cross-graph, depot and
 # unload-only orders. Unreached (#156): graph_failure (exhausted link-graph
 # pool), depot_refit_failed (refit cost beyond cash), depot_elsewhere,
-# dummy and reservation (departure with reserved cargo).
+# and dummy. The visits adapter reserves real station cargo before departure.
 VISITS = ["aircraft_mail", "autorefit", "begin_loading", "conditional_branch"]
 VISITS += ["depot", "depot_halt", "depot_refit", "full_load_increase"]
 VISITS += ["graph_join", "graph_merge_first", "graph_merge_second", "graph_new"]
 VISITS += ["leave_empty", "leave_loaded", "loading_depart", "merge_blocked"]
-VISITS += ["refit", "reset_refit"]
+VISITS += ["refit", "reset_refit", "reservation"]
 
 
 def scenarios(soak):
@@ -236,6 +236,18 @@ def check(scenario, run, mode, role, result):
     if operation == "visits":
         if "VISITS setup 3 3 120 0" not in run["log"]:
             result["problems"].append(f"{mode}/{role}: missing visits setup")
+        reservations = [
+            line.split()
+            for line in run["log"]
+            if line.startswith("VISITS reservation ")
+        ]
+        if len(reservations) != 1 or reservations[0][3:] != [
+            "7",
+            "true",
+            "true",
+            "true",
+        ]:
+            raise RuntimeError("missing nonempty reserved-cargo departure")
         if counts := branch_witnesses(scenario, run, role, "vehicle_visits", VISITS):
             result[f"{mode}_{role}_visit_branches"] = counts
         return
