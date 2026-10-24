@@ -88,12 +88,6 @@ inline OpenTTDVehicle *RustVehicleNextArticulated(OpenTTDVehicle *v) noexcept { 
 inline Vehicle *RustVehicleNext(const Vehicle *v) noexcept { return v->Next(); }
 /** Chain, subtype and unit leaves shared by consist transactions and controllers. */
 inline Vehicle *RustVehiclePrevious(const Vehicle *v) noexcept { return v->Previous(); }
-/** Indexed legacy users encode a missing previous vehicle as the invalid ID. */
-inline uint32_t RustVehiclePreviousID(const Vehicle *v) noexcept
-{
-	const Vehicle *previous = RustVehiclePrevious(v);
-	return previous == nullptr ? VehicleID::Invalid().base() : previous->index.base();
-}
 inline void RustVehicleSetNext(Vehicle *v, Vehicle *next) noexcept { v->SetNext(next); }
 inline void RustOpaqueVehicleSetNext(void *v, void *next) noexcept { RustVehicleSetNext(static_cast<Vehicle *>(v), static_cast<Vehicle *>(next)); }
 inline Vehicle *RustVehicleLastEnginePart(Vehicle *v) noexcept { return v->GetLastEnginePart(); }
@@ -148,6 +142,12 @@ inline uint8_t RustVehicleBreakdownCounter(const Vehicle *v) noexcept { return v
 inline int64_t RustVehicleValue(const Vehicle *v) noexcept { return v->value.base(); }
 inline uint16_t RustEngineReliability(const Engine *e) noexcept { return e->reliability; }
 inline uint32_t RustVehicleIndexOpaque(const void *v) noexcept { return static_cast<const Vehicle *>(v)->index.base(); }
+/** Indexed legacy users encode a missing previous vehicle as the invalid ID. */
+inline uint32_t RustVehiclePreviousID(const Vehicle *v) noexcept
+{
+	const Vehicle *previous = RustVehiclePrevious(v);
+	return previous == nullptr ? VehicleID::Invalid().base() : RustVehicleIndexOpaque(previous);
+}
 inline uint16_t RustVehicleEngineID(const Vehicle *v) noexcept { return v->engine_type.base(); }
 inline const OpenTTDEngine *RustEngine(const Engine *e) noexcept { return reinterpret_cast<const OpenTTDEngine *>(e); }
 inline const Engine *EngineOf(const OpenTTDEngine *e) noexcept { return reinterpret_cast<const Engine *>(e); }
