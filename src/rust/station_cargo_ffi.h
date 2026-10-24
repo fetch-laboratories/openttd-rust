@@ -28,12 +28,12 @@ typedef struct {
 } OpenTTDCargoCollector;
 /* Plan: 0 all waiting packets, 1 equal_range(via), 2 all origins, 3 find(from).
  * Invalid mode/selector returns 255 for the original C++ fatal policy. */
-uint8_t OPENTTD_LIST_CALL openttd_rust_cargo_plan(uint8_t mode, uint8_t selector);
-void OPENTTD_LIST_CALL openttd_rust_cargo_init(OpenTTDCargoCollector *, uint8_t selector, uint16_t other);
-void OPENTTD_LIST_CALL openttd_rust_cargo_packet(OpenTTDCargoCollector *, struct OpenTTDScriptList *, uint16_t from, uint16_t via, uint32_t amount);
-void OPENTTD_LIST_CALL openttd_rust_cargo_origin(OpenTTDCargoCollector *, uint16_t origin);
-void OPENTTD_LIST_CALL openttd_rust_cargo_share(OpenTTDCargoCollector *, struct OpenTTDScriptList *, uint16_t via, uint32_t cumulative);
-void OPENTTD_LIST_CALL openttd_rust_cargo_finish(OpenTTDCargoCollector *, struct OpenTTDScriptList *);
+uint8_t OPENTTD_RUST_CALL openttd_rust_cargo_plan(uint8_t mode, uint8_t selector);
+void OPENTTD_RUST_CALL openttd_rust_cargo_init(OpenTTDCargoCollector *, uint8_t selector, uint16_t other);
+void OPENTTD_RUST_CALL openttd_rust_cargo_packet(OpenTTDCargoCollector *, struct OpenTTDScriptList *, uint16_t from, uint16_t via, uint32_t amount);
+void OPENTTD_RUST_CALL openttd_rust_cargo_origin(OpenTTDCargoCollector *, uint16_t origin);
+void OPENTTD_RUST_CALL openttd_rust_cargo_share(OpenTTDCargoCollector *, struct OpenTTDScriptList *, uint16_t via, uint32_t cumulative);
+void OPENTTD_RUST_CALL openttd_rust_cargo_finish(OpenTTDCargoCollector *, struct OpenTTDScriptList *);
 #ifdef __cplusplus
 }
 #endif

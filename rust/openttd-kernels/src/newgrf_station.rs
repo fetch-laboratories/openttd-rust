@@ -14,6 +14,7 @@
 )]
 use crate::cargo_type::{INVALID_CARGO, NUM_CARGO, is_valid_cargo_type};
 use crate::direction_type::{AXIS_X, AXIS_Y, INVALID_AXIS, INVALID_DIAGDIR};
+use crate::game_state::GameState;
 use crate::newgrf_commons::{SG_DEFAULT, SG_DEFAULT_NA, SG_PURCHASE};
 use crate::slope_func::{SLOPE_E, SLOPE_EW, SLOPE_W};
 use crate::station_type::SRT_CARGO_TAKEN;
@@ -23,7 +24,7 @@ use crate::{
     station::BaseStation,
     station_cmd::RailSpec,
 };
-use std::{cell::UnsafeCell, ffi::c_void, ptr};
+use std::{ffi::c_void, ptr};
 const TA_PLATFORM: u8 = 1;
 const TA_WHOLE: u8 = 2;
 #[repr(C)]
@@ -110,22 +111,15 @@ pub struct Services {
     unhandled: extern "C" fn(u8),
     slope_error: extern "C" fn(*mut CommandCost, *const SlopeResult, *const RailSpec),
 }
-struct Registry(UnsafeCell<*const Services>);
-// SAFETY: installation and all resolver use are serialized by the game-state mutex.
-unsafe impl Sync for Registry {}
-static REGISTRY: Registry = Registry(UnsafeCell::new(ptr::null()));
+static REGISTRY: GameState<*const Services> = GameState::new(ptr::null());
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_resolver_exchange(
     native: *const Services,
 ) -> *const Services {
-    unsafe {
-        let old = *REGISTRY.0.get();
-        *REGISTRY.0.get() = native;
-        old
-    }
+    REGISTRY.exchange(native)
 }
 fn services<'a>() -> &'a Services {
-    unsafe { &**REGISTRY.0.get() }
+    unsafe { REGISTRY.table() }
 }
 impl Services {
     fn shared(&self) -> &Shared {

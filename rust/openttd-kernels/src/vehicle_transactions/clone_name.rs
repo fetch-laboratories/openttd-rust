@@ -1,8 +1,8 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Clone-name suffix policy with platform-long parsing and retained byte scratch.
 use super::CommonServices;
+use crate::game_state::GameState;
 use crate::services::ByteSpan;
-use std::cell::UnsafeCell;
 use std::ffi::c_long;
 use std::io::Write;
 #[derive(Default)]
@@ -10,16 +10,12 @@ struct Frame {
     prefix: Vec<u8>,
     candidate: Vec<u8>,
 }
-struct Pool(UnsafeCell<Vec<Frame>>);
-// SAFETY: Commands on GUI and game threads are serialized by the game-state
-// mutex. Active frames leave the pool, and no pool borrow spans a callback.
-unsafe impl Sync for Pool {}
-static POOL: Pool = Pool(UnsafeCell::new(Vec::new()));
+static POOL: GameState<Vec<Frame>> = GameState::new(Vec::new());
 struct Transaction(Frame);
 impl Transaction {
     fn new() -> Self {
         // SAFETY: Short serialized access; nested commands obtain distinct frames.
-        Self(unsafe { (&mut *POOL.0.get()).pop() }.unwrap_or_default())
+        Self(unsafe { (&mut *POOL.get()).pop() }.unwrap_or_default())
     }
 }
 impl Drop for Transaction {
@@ -28,7 +24,7 @@ impl Drop for Transaction {
         self.0.candidate.clear();
         // SAFETY: Returning cleared buffers invokes no external callbacks.
         unsafe {
-            (&mut *POOL.0.get()).push(std::mem::take(&mut self.0));
+            (&mut *POOL.get()).push(std::mem::take(&mut self.0));
         }
     }
 }

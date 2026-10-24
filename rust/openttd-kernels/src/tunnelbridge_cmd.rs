@@ -196,10 +196,6 @@ impl<'a> World<'a> {
     fn clear_command(&self, out: Cost<'_>, tile: u32, flags: u16) {
         crate::landscape_cmd::clear_command(self.cmd, out.0, tile, flags);
     }
-    fn ownership(&self, out: Cost<'_>, owner: u8, tile: u32) {
-        // SAFETY: live native output slot, no world borrow.
-        unsafe { (self.cmd.ownership)(out.0, owner, tile) };
-    }
     fn signal(&self, tile: u32, direction: u8, owner: u8) {
         crate::signal::Context {
             shared: self.r.shared,
@@ -993,8 +989,7 @@ impl<'a> World<'a> {
                     && company != OWNER_TOWN
                     && !((self.road.extra_dynamite)() || (self.authority.bulldozer)())
                 {
-                    // SAFETY: native slot remains live across encoded-error construction.
-                    unsafe { (self.cmd.tile_ownership)(out.0, tile) };
+                    out.tile_ownership(self.cmd, tile);
                     return;
                 }
                 if road_owner == OWNER_NONE || road_owner == OWNER_TOWN {
@@ -1003,18 +998,18 @@ impl<'a> World<'a> {
                 if tram_owner == OWNER_NONE {
                     tram_owner = company;
                 }
-                self.ownership(out, road_owner, tile);
+                out.ownership(self.cmd, road_owner, tile);
                 if out.ok() {
-                    self.ownership(out, tram_owner, tile);
+                    out.ownership(self.cmd, tram_owner, tile);
                 }
             }
-            RAIL => self.ownership(out, (self.s.tile_owner)(tile), 0),
+            RAIL => out.ownership(self.cmd, (self.s.tile_owner)(tile), 0),
             WATER => {
                 let mut owner = (self.s.tile_owner)(tile);
                 if owner == OWNER_NONE {
                     owner = company;
                 }
-                self.ownership(out, owner, 0);
+                out.ownership(self.cmd, owner, 0);
             }
             _ => unreachable!(),
         }

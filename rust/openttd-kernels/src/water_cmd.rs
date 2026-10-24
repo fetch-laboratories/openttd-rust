@@ -20,7 +20,7 @@ use crate::command_type::DoCommandFlag;
 use crate::company_type::{INVALID_OWNER, OWNER_NONE, OWNER_WATER};
 use crate::direction_type::INVALID_DIAGDIR;
 use crate::services::{
-    CommandCost, CommandCostServices, CommandServices, Map, Services, WaterClass,
+    CommandCost, CommandCostServices, CommandServices, Cost, Map, Services, WaterClass,
 };
 use crate::slope_func::{
     get_inclined_slope_direction, is_inclined_slope, is_slope_with_one_corner_raised,
@@ -141,17 +141,8 @@ impl World<'_> {
     fn clear_command(&self, ret: *mut CommandCost, tile: u32, flags: u16) {
         crate::landscape_cmd::clear_command(self.cmd, ret, tile, flags);
     }
-    fn ownership(&self, ret: *mut CommandCost, tile: u32) {
-        // SAFETY: The facade owns this live native stack slot across reentry.
-        unsafe {
-            (self.cmd.tile_ownership)(ret, tile);
-        }
-    }
-    fn no_vehicle(&self, ret: *mut CommandCost, tile: u32) {
-        // SAFETY: The facade owns this live native stack slot across reentry.
-        unsafe {
-            self.cmd.no_vehicle(ret, tile);
-        }
+    fn cost(&self, ret: *mut CommandCost) -> Cost<'_> {
+        Cost(ret, self.c)
     }
     fn class(&self, t: u32) -> u8 {
         unsafe { ((*self.water.clear).water_class)(t).0 }
@@ -299,15 +290,15 @@ impl World<'_> {
             self.error(out, INVALID_STRING_ID);
             return;
         }
-        self.ownership(ret, tile);
+        self.cost(ret).tile_ownership(self.cmd, tile);
         if self.take_failure(out, ret) {
             return;
         }
         let tile2 = (self.a.other_depot_tile)(tile);
         if flags & DoCommandFlag::BANKRUPT == 0 {
-            self.no_vehicle(ret, tile);
+            self.cost(ret).no_vehicle(self.cmd, tile);
             if !self.failed(ret) {
-                self.no_vehicle(ret, tile2);
+                self.cost(ret).no_vehicle(self.cmd, tile2);
             }
             if self.take_failure(out, ret) {
                 return;
@@ -348,7 +339,7 @@ impl World<'_> {
         let lower = tile.wrapping_sub(delta);
         let upper = tile.wrapping_add(delta);
         for t in [tile, upper, lower] {
-            self.no_vehicle(ret, t);
+            self.cost(ret).no_vehicle(self.cmd, t);
             if self.take_failure(out, ret) {
                 return;
             }
@@ -453,7 +444,7 @@ impl World<'_> {
     }
     fn remove_lock(&self, out: *mut CommandCost, ret: *mut CommandCost, flags: u16, tile: u32) {
         if (self.s.tile_owner)(tile) != OWNER_NONE {
-            self.ownership(ret, tile);
+            self.cost(ret).tile_ownership(self.cmd, tile);
             if self.take_failure(out, ret) {
                 return;
             }
@@ -462,7 +453,7 @@ impl World<'_> {
         let upper = tile.wrapping_add(delta);
         let lower = tile.wrapping_sub(delta);
         for t in [tile, upper, lower] {
-            self.no_vehicle(ret, t);
+            self.cost(ret).no_vehicle(self.cmd, t);
             if self.take_failure(out, ret) {
                 return;
             }
@@ -606,13 +597,13 @@ impl World<'_> {
                     self.error(out, self.a.strings.edge);
                     return;
                 }
-                self.no_vehicle(ret, tile);
+                self.cost(ret).no_vehicle(self.cmd, tile);
                 if self.take_failure(out, ret) {
                     return;
                 }
                 let owner = (self.s.tile_owner)(tile);
                 if owner != OWNER_WATER && owner != OWNER_NONE {
-                    self.ownership(ret, tile);
+                    self.cost(ret).tile_ownership(self.cmd, tile);
                     if self.take_failure(out, ret) {
                         return;
                     }
@@ -630,7 +621,7 @@ impl World<'_> {
             }
             1 => {
                 let slope = (self.s.tile_slope)(tile);
-                self.no_vehicle(ret, tile);
+                self.cost(ret).no_vehicle(self.cmd, tile);
                 if self.take_failure(out, ret) {
                     return;
                 }

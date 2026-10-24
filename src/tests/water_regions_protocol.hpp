@@ -19,7 +19,7 @@ namespace WaterProbe {
 inline std::array<bool, 32 * 32> water;
 inline uint32_t tracks_calls, follow_calls;
 inline uint8_t WaterType(uint32_t tile) noexcept { ++tracks_calls; return water[tile] ? 6 : 0; }
-inline uint32_t OPENTTD_WATER_CALL WaterProbeFollow(uint32_t tile, uint8_t dir, uint8_t *bridge) noexcept
+inline uint32_t OPENTTD_RUST_CALL WaterProbeFollow(uint32_t tile, uint8_t dir, uint8_t *bridge) noexcept
 {
 	++follow_calls;
 	*bridge = 0;
@@ -32,8 +32,8 @@ inline uint32_t OPENTTD_WATER_CALL WaterProbeFollow(uint32_t tile, uint8_t dir, 
 	if (nx < 0 || ny < 0 || nx >= 32 || ny >= 32 || !water[nx + ny * 32]) return UINT32_MAX;
 	return nx + ny * 32;
 }
-inline uint32_t OPENTTD_WATER_CALL Aqueduct(uint32_t) noexcept { return UINT32_MAX; }
-inline void OPENTTD_WATER_CALL WaterProbeDebug(uint8_t, int32_t, int32_t) noexcept {}
+inline uint32_t OPENTTD_RUST_CALL Aqueduct(uint32_t) noexcept { return UINT32_MAX; }
+inline void OPENTTD_RUST_CALL WaterProbeDebug(uint8_t, int32_t, int32_t) noexcept {}
 
 /* These callbacks deliberately mutate a warmed cache between next calls, a gap
  * the ship AI corpus cannot reach: YAPF visitors do not execute world commands. */

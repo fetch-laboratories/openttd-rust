@@ -5,10 +5,11 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Object lifecycle owner. Native pools, specs, map and save records remain
-//! canonical. Counts and cleared-area command scratch have one process-wide
-//! Rust owner, serialized by the game-state mutex. No state borrow spans a
-//! reentrant service. Panics abort; native exceptions never unwind through Rust.
+//! Object lifecycle owner; native pools, specs, map and save records remain canonical.
+//! Export contract: tables and native cost, frame and array storage are live for the
+//! synchronous call, arguments meet the original's tile and ID preconditions, and calls are
+//! serialized with reset, save and load. No native pointer is retained, services reenter only
+//! after state accesses end, native cancellation returns before C++ rethrows; panics abort.
 #![allow(
     clippy::similar_names,
     clippy::if_not_else,
@@ -28,25 +29,21 @@ use crate::company_type::{
 };
 use crate::economy_func::get_price;
 use crate::economy_type::PR_BUILD_FOUNDATION;
+use crate::game_state::GameState;
 use crate::newgrf_callbacks::CALLBACK_FAILED;
 use crate::slope_func::{get_slope_max_z, is_steep_slope};
 use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_OBJECT, MP_WATER};
 use crate::tilearea::TileArea;
-use std::cell::UnsafeCell;
 
 struct State {
     counts: [u16; 64000],
     areas: Vec<ClearArea>,
 }
-struct Global(UnsafeCell<State>);
-// SAFETY: native callers serialize every entry under the game-state mutex.
-// An access ends before any service can reenter; the owner is process-wide.
-unsafe impl Sync for Global {}
-static STATE: Global = Global(UnsafeCell::new(State {
+static STATE: GameState<State> = GameState::new(State {
     counts: [0; 64000],
     areas: Vec::new(),
-}));
+});
 
 /// Value-only command scratch entry. Indices, never pointers, survive append.
 #[repr(C)]
@@ -60,44 +57,44 @@ pub struct ClearArea {
 /// Industry transaction backup at the original copy point.
 pub(crate) fn snapshot_areas() -> Vec<ClearArea> {
     // SAFETY: caller holds the game-state mutex; no callback in this scope.
-    unsafe { (*STATE.0.get()).areas.clone() }
+    unsafe { (*STATE.get()).areas.clone() }
 }
 /// Industry transaction restore at the original move point.
 pub(crate) fn restore_areas(areas: Vec<ClearArea>) {
     // SAFETY: caller holds the game-state mutex; no callback in this scope.
-    unsafe { (*STATE.0.get()).areas = areas };
+    unsafe { (*STATE.get()).areas = areas };
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_object_counts_reset() {
     // SAFETY: serialized native entry.
-    unsafe { (*STATE.0.get()).counts.fill(0) };
+    unsafe { (*STATE.get()).counts.fill(0) };
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_object_count_increment(kind: u16) {
     // SAFETY: serialized entry; native source asserts kind < NUM_OBJECTS.
-    let count = unsafe { &mut (*STATE.0.get()).counts[usize::from(kind)] };
+    let count = unsafe { &mut (*STATE.get()).counts[usize::from(kind)] };
     *count = count.wrapping_add(1);
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_object_count_decrement(kind: u16) {
     // SAFETY: serialized entry; native source asserts kind < NUM_OBJECTS.
-    let count = unsafe { &mut (*STATE.0.get()).counts[usize::from(kind)] };
+    let count = unsafe { &mut (*STATE.get()).counts[usize::from(kind)] };
     *count = count.wrapping_sub(1);
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_object_count(kind: u16) -> u16 {
     // SAFETY: serialized native entry; original kind precondition.
-    unsafe { (*STATE.0.get()).counts[usize::from(kind)] }
+    unsafe { (*STATE.get()).counts[usize::from(kind)] }
 }
 pub(crate) fn clear_areas() {
     // SAFETY: serialized native entry.
-    unsafe { (*STATE.0.get()).areas.clear() };
+    unsafe { (*STATE.get()).areas.clear() };
 }
 fn openttd_rust_object_areas_find(tile: u32, log_x: u32) -> usize {
     let map = crate::services::Map::from_log_x(log_x);
     let tile_area = TileArea { tile, w: 1, h: 1 };
     // SAFETY: serialized entry, no callbacks while reading.
-    unsafe { &(*STATE.0.get()).areas }
+    unsafe { &(*STATE.get()).areas }
         .iter()
         .position(|a| {
             TileArea {
@@ -111,17 +108,17 @@ fn openttd_rust_object_areas_find(tile: u32, log_x: u32) -> usize {
 }
 fn openttd_rust_object_areas_get(index: usize) -> ClearArea {
     // SAFETY: serialized entry; index was returned by find/append.
-    unsafe { (&(*STATE.0.get()).areas)[index] }
+    unsafe { (&(*STATE.get()).areas)[index] }
 }
 fn openttd_rust_object_areas_append(area: ClearArea) -> usize {
     // SAFETY: serialized entry; allocation failure aborts.
-    let areas = unsafe { &mut (*STATE.0.get()).areas };
+    let areas = unsafe { &mut (*STATE.get()).areas };
     areas.push(area);
     areas.len() - 1
 }
 fn openttd_rust_object_areas_set_first(index: usize, first: u32) {
     // SAFETY: serialized entry; append preserves indices returned by find/append.
-    unsafe { (&mut (*STATE.0.get()).areas)[index].first_tile = first };
+    unsafe { (&mut (*STATE.get()).areas)[index].first_tile = first };
 }
 
 /// Stable tunnel scratch token; append never invalidates its index.
@@ -1845,21 +1842,17 @@ pub struct ResolverServices {
     pub base_scope: unsafe extern "C" fn(*mut Resolver, u8, u8) -> *mut std::ffi::c_void,
     pub evaluate: unsafe extern "C" fn(*const ObjectScope, u16, u32, u32, *mut i32, usize) -> u16,
 }
-struct InvocationRegistry(UnsafeCell<*const ObjectServices>);
-// SAFETY: native game-state serialization covers installation and every use,
-// including GUI commands and the game thread. Reset does not overlap resolution.
-unsafe impl Sync for InvocationRegistry {}
-static INVOCATIONS: InvocationRegistry = InvocationRegistry(UnsafeCell::new(ptr::null()));
+static INVOCATIONS: GameState<*const ObjectServices> = GameState::new(ptr::null());
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_services_exchange(
     s: *const ObjectServices,
 ) -> *const ObjectServices {
-    unsafe { ptr::replace(INVOCATIONS.0.get(), s) }
+    INVOCATIONS.exchange(s)
 }
 fn invocation_services<'a>() -> &'a ObjectServices {
     // SAFETY: ResetObjects installs the immutable process-live native table
     // before use. No Rust reference into a context or world record escapes.
-    unsafe { &**INVOCATIONS.0.get() }
+    unsafe { INVOCATIONS.table() }
 }
 fn resolver_services(s: &ObjectServices) -> &ResolverServices {
     // SAFETY: native table lives for the serialized entry.
@@ -2128,10 +2121,7 @@ pub unsafe extern "C" fn openttd_rust_object_trigger(
 
 /// Synchronous object owner entry.
 /// # Safety
-/// Immutable tables, live native cost/frame/array storage and original tile/ID
-/// preconditions; serialized with reset/save/load. No native pointer is retained.
-/// Services may reenter after all state accesses end. Native cancellation is
-/// returned before C++ rethrows; other leaves are noexcept. Panics abort.
+/// The module's export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_build(
     s: *const ObjectServices,
@@ -2141,7 +2131,6 @@ pub unsafe extern "C" fn openttd_rust_object_build(
     town: *const TownHandle,
     view: u8,
 ) {
-    // SAFETY: native tables and stack storage outlive the synchronous call.
     unsafe { build(&*s, kind, tile, owner, town, view) };
 }
 
@@ -2164,40 +2153,29 @@ pub(crate) unsafe fn build(
 
 /// Synchronous object owner entry.
 /// # Safety
-/// Immutable tables, live native cost/frame/array storage and original tile/ID
-/// preconditions; serialized with reset/save/load. No native pointer is retained.
-/// Services may reenter after all state accesses end. Native cancellation is
-/// returned before C++ rethrows; other leaves are noexcept. Panics abort.
+/// The module's export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_update_hq(
     s: *const ObjectServices,
     tile: u32,
     score: u32,
 ) {
-    // SAFETY: native tables and stack storage outlive the synchronous call.
     let w = unsafe { World::new::<true>(&*s) };
     w.update_hq(tile, score);
 }
 
 /// Synchronous object owner entry.
 /// # Safety
-/// Immutable tables, live native cost/frame/array storage and original tile/ID
-/// preconditions; serialized with reset/save/load. No native pointer is retained.
-/// Services may reenter after all state accesses end. Native cancellation is
-/// returned before C++ rethrows; other leaves are noexcept. Panics abort.
+/// The module's export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_colours(s: *const ObjectServices, company: u8) {
-    // SAFETY: native tables and stack storage outlive the synchronous call.
     let w = unsafe { World::new::<false>(&*s) };
     w.colours(company);
 }
 
 /// Synchronous object owner entry.
 /// # Safety
-/// Immutable tables, live native cost/frame/array storage and original tile/ID
-/// preconditions; serialized with reset/save/load. No native pointer is retained.
-/// Services may reenter after all state accesses end. Native cancellation is
-/// returned before C++ rethrows; other leaves are noexcept. Panics abort.
+/// The module's export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_build_command(
     s: *const ObjectServices,
@@ -2209,7 +2187,6 @@ pub unsafe extern "C" fn openttd_rust_object_build_command(
     kind: u16,
     view: u8,
 ) {
-    // SAFETY: native tables and stack storage outlive the synchronous call.
     let w = unsafe { World::new::<true>(&*s) };
     let costs = unsafe { &*(*s).cost };
     let out = Cost(out, costs);
@@ -2220,10 +2197,7 @@ pub unsafe extern "C" fn openttd_rust_object_build_command(
 
 /// Synchronous object owner entry.
 /// # Safety
-/// Immutable tables, live native cost/frame/array storage and original tile/ID
-/// preconditions; serialized with reset/save/load. No native pointer is retained.
-/// Services may reenter after all state accesses end. Native cancellation is
-/// returned before C++ rethrows; other leaves are noexcept. Panics abort.
+/// The module's export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_build_area(
     s: *const ObjectServices,
@@ -2239,7 +2213,6 @@ pub unsafe extern "C" fn openttd_rust_object_build_area(
     view: u8,
     diagonal: bool,
 ) {
-    // SAFETY: native tables and stack storage outlive the synchronous call.
     let w = unsafe { World::new::<true>(&*s) };
     let costs = unsafe { &*(*s).cost };
     let out = Cost(out, costs);
@@ -2254,10 +2227,7 @@ pub unsafe extern "C" fn openttd_rust_object_build_area(
 
 /// Synchronous object owner entry.
 /// # Safety
-/// Immutable tables, live native cost/frame/array storage and original tile/ID
-/// preconditions; serialized with reset/save/load. No native pointer is retained.
-/// Services may reenter after all state accesses end. Native cancellation is
-/// returned before C++ rethrows; other leaves are noexcept. Panics abort.
+/// The module's export contract.
 pub(crate) unsafe fn openttd_rust_object_clear(
     s: *const ObjectServices,
     out: *mut CommandCost,
@@ -2265,7 +2235,6 @@ pub(crate) unsafe fn openttd_rust_object_clear(
     tile: u32,
     flags: u16,
 ) {
-    // SAFETY: native tables and stack storage outlive the synchronous call.
     let w = unsafe { World::new::<true>(&*s) };
     let costs = unsafe { &*(*s).cost };
     let out = Cost(out, costs);
@@ -2275,10 +2244,7 @@ pub(crate) unsafe fn openttd_rust_object_clear(
 
 /// Synchronous object owner entry.
 /// # Safety
-/// Immutable tables, live native cost/frame/array storage and original tile/ID
-/// preconditions; serialized with reset/save/load. No native pointer is retained.
-/// Services may reenter after all state accesses end. Native cancellation is
-/// returned before C++ rethrows; other leaves are noexcept. Panics abort.
+/// The module's export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_cargo(
     s: *const ObjectServices,
@@ -2286,17 +2252,13 @@ pub unsafe extern "C" fn openttd_rust_object_cargo(
     cargo: *mut u32,
     accepted: *mut u64,
 ) {
-    // SAFETY: native tables and stack storage outlive the synchronous call.
     let w = unsafe { World::new::<false>(&*s) };
     w.cargo(tile, cargo, accepted);
 }
 
 /// Synchronous object owner entry.
 /// # Safety
-/// Immutable tables, live native cost/frame/array storage and original tile/ID
-/// preconditions; serialized with reset/save/load. No native pointer is retained.
-/// Services may reenter after all state accesses end. Native cancellation is
-/// returned before C++ rethrows; other leaves are noexcept. Panics abort.
+/// The module's export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_tile_loop(
     s: *const ObjectServices,
@@ -2304,17 +2266,13 @@ pub unsafe extern "C" fn openttd_rust_object_tile_loop(
     call: *mut crate::ground::Call,
     tile: u32,
 ) {
-    // SAFETY: native tables and stack storage outlive the synchronous call.
     let w = unsafe { World::new::<false>(&*s) };
     w.tile_loop(tile, frame, call);
 }
 
 /// Synchronous object owner entry.
 /// # Safety
-/// Immutable tables, live native cost/frame/array storage and original tile/ID
-/// preconditions; serialized with reset/save/load. No native pointer is retained.
-/// Services may reenter after all state accesses end. Native cancellation is
-/// returned before C++ rethrows; other leaves are noexcept. Panics abort.
+/// The module's export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_generate(
     s: *const ObjectServices,
@@ -2323,7 +2281,6 @@ pub unsafe extern "C" fn openttd_rust_object_generate(
     aux: *mut CommandCost,
     frame: *mut GenerationFrame,
 ) -> bool {
-    // SAFETY: native tables and stack storage outlive the synchronous call.
     let w = unsafe { World::new::<true>(&*s) };
     let costs = unsafe { &*(*s).cost };
     let out = Cost(out, costs);
@@ -2344,17 +2301,13 @@ pub(crate) unsafe fn openttd_rust_object_change_owner(
     old: u8,
     new_owner: u8,
 ) {
-    // SAFETY: native tables and stack storage outlive the synchronous call.
     let w = unsafe { World::new::<true>(&*s) };
     w.change_owner(ownership, tile, old, new_owner);
 }
 
 /// Synchronous object owner entry.
 /// # Safety
-/// Immutable tables, live native cost/frame/array storage and original tile/ID
-/// preconditions; serialized with reset/save/load. No native pointer is retained.
-/// Services may reenter after all state accesses end. Native cancellation is
-/// returned before C++ rethrows; other leaves are noexcept. Panics abort.
+/// The module's export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_terraform(
     s: *const ObjectServices,
@@ -2364,7 +2317,6 @@ pub unsafe extern "C" fn openttd_rust_object_terraform(
     z: i32,
     slope: u8,
 ) {
-    // SAFETY: native tables and stack storage outlive the synchronous call.
     let w = unsafe { World::new::<false>(&*s) };
     let costs = unsafe { &*(*s).cost };
     let out = Cost(out, costs);
@@ -2373,10 +2325,7 @@ pub unsafe extern "C" fn openttd_rust_object_terraform(
 
 /// Synchronous object owner entry.
 /// # Safety
-/// Immutable tables, live native cost/frame/array storage and original tile/ID
-/// preconditions; serialized with reset/save/load. No native pointer is retained.
-/// Services may reenter after all state accesses end. Native cancellation is
-/// returned before C++ rethrows; other leaves are noexcept. Panics abort.
+/// The module's export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_build_above(
     s: *const ObjectServices,
@@ -2385,7 +2334,6 @@ pub unsafe extern "C" fn openttd_rust_object_build_above(
     flags: u16,
     height: i32,
 ) {
-    // SAFETY: native tables and stack storage outlive the synchronous call.
     let w = unsafe { World::new::<false>(&*s) };
     let costs = unsafe { &*(*s).cost };
     let out = Cost(out, costs);

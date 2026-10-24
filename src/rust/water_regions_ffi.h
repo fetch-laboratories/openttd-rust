@@ -10,13 +10,7 @@
 #define OPENTTD_RUST_WATER_REGIONS_FFI_H
 #include "service_defaults.hpp"
 #include <stdint.h>
-#if defined(_MSC_VER)
-#define OPENTTD_WATER_CALL __cdecl
-#elif defined(__i386__)
-#define OPENTTD_WATER_CALL __attribute__((cdecl))
-#else
-#define OPENTTD_WATER_CALL
-#endif
+#include "call_ffi.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -26,9 +20,9 @@ typedef struct { int32_t x, y; uint8_t label; } OpenTTDWaterPatch;
 typedef struct { uint16_t edges[4]; uint8_t labels[256], patches, aqueducts; } OpenTTDWaterSnapshot;
 typedef struct OpenTTDWaterLeaves {
 	const struct OpenTTDSharedServices *shared;
-	uint32_t (OPENTTD_WATER_CALL *follow)(uint32_t, uint8_t, uint8_t *) OPENTTD_SERVICE_DEFAULT(follow);
-	uint32_t (OPENTTD_WATER_CALL *aqueduct)(uint32_t) OPENTTD_SERVICE_DEFAULT(aqueduct);
-	void (OPENTTD_WATER_CALL *debug)(uint8_t, int32_t, int32_t) OPENTTD_SERVICE_DEFAULT(debug);
+	uint32_t (OPENTTD_RUST_CALL *follow)(uint32_t, uint8_t, uint8_t *) OPENTTD_SERVICE_DEFAULT(follow);
+	uint32_t (OPENTTD_RUST_CALL *aqueduct)(uint32_t) OPENTTD_SERVICE_DEFAULT(aqueduct);
+	void (OPENTTD_RUST_CALL *debug)(uint8_t, int32_t, int32_t) OPENTTD_SERVICE_DEFAULT(debug);
 } OpenTTDWaterLeaves;
 typedef struct OpenTTDWaterRegionContext { OpenTTDWaterRegions *owner; const OpenTTDWaterLeaves *leaves; } OpenTTDWaterRegionContext;
 /* One map-lifetime owner, replaced at Map::Allocate. follow returns INVALID_TILE on failure;
@@ -38,14 +32,14 @@ typedef struct OpenTTDWaterRegionContext { OpenTTDWaterRegions *owner; const Ope
  * lifetime. Destroy each owner and cursor once, also on visitor exception paths.
  * Leaves are synchronous, nonthrowing and nonreentrant; initialized outputs are exclusive per call.
  * Each next call receives the live descriptor and retains the original region origin. */
-OpenTTDWaterRegions *OPENTTD_WATER_CALL openttd_rust_water_new(uint32_t, uint32_t);
-void OPENTTD_WATER_CALL openttd_rust_water_destroy(OpenTTDWaterRegions *);
-uint8_t OPENTTD_WATER_CALL openttd_rust_water_label(OpenTTDWaterRegions *, const OpenTTDWaterLeaves *, uint32_t);
-void OPENTTD_WATER_CALL openttd_rust_water_invalidate(OpenTTDWaterRegions *, const OpenTTDWaterLeaves *, uint32_t);
-void OPENTTD_WATER_CALL openttd_rust_water_snapshot(OpenTTDWaterRegions *, const OpenTTDWaterLeaves *, uint32_t, OpenTTDWaterSnapshot *);
-OpenTTDWaterVisit *OPENTTD_WATER_CALL openttd_rust_water_visit_new(OpenTTDWaterRegions *, const OpenTTDWaterLeaves *, OpenTTDWaterPatch);
-void OPENTTD_WATER_CALL openttd_rust_water_visit_destroy(OpenTTDWaterVisit *);
-uint8_t OPENTTD_WATER_CALL openttd_rust_water_visit_next(OpenTTDWaterRegions *, const OpenTTDWaterLeaves *, OpenTTDWaterVisit *, OpenTTDWaterPatch, OpenTTDWaterPatch *);
+OpenTTDWaterRegions *OPENTTD_RUST_CALL openttd_rust_water_new(uint32_t, uint32_t);
+void OPENTTD_RUST_CALL openttd_rust_water_destroy(OpenTTDWaterRegions *);
+uint8_t OPENTTD_RUST_CALL openttd_rust_water_label(OpenTTDWaterRegions *, const OpenTTDWaterLeaves *, uint32_t);
+void OPENTTD_RUST_CALL openttd_rust_water_invalidate(OpenTTDWaterRegions *, const OpenTTDWaterLeaves *, uint32_t);
+void OPENTTD_RUST_CALL openttd_rust_water_snapshot(OpenTTDWaterRegions *, const OpenTTDWaterLeaves *, uint32_t, OpenTTDWaterSnapshot *);
+OpenTTDWaterVisit *OPENTTD_RUST_CALL openttd_rust_water_visit_new(OpenTTDWaterRegions *, const OpenTTDWaterLeaves *, OpenTTDWaterPatch);
+void OPENTTD_RUST_CALL openttd_rust_water_visit_destroy(OpenTTDWaterVisit *);
+uint8_t OPENTTD_RUST_CALL openttd_rust_water_visit_next(OpenTTDWaterRegions *, const OpenTTDWaterLeaves *, OpenTTDWaterVisit *, OpenTTDWaterPatch, OpenTTDWaterPatch *);
 #ifdef __cplusplus
 }
 #endif

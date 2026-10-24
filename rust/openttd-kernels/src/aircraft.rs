@@ -329,14 +329,10 @@ const HOLD: i64 = 256;
 macro_rules! private_fields {
     ($(($get:ident,$set:ident,$field:ident,$type:ty)),* $(,)?)=>{$(
         fn $get(&self,id:Vehicle)->$type {
-            let ptr=id.state;
-            // SAFETY: Live shell owns a fixed allocation; only this scalar is read.
-            unsafe { (&raw const (*ptr).$field).read() }
+            crate::raw_field::read_field!(id.state, $field)
         }
         fn $set(&self,id:Vehicle,value:$type) {
-            let ptr=id.state;
-            // SAFETY: Serial game-thread scalar access; no reference spans callbacks.
-            unsafe { (&raw mut (*ptr).$field).write(value); }
+            crate::raw_field::write_field!(id.state, $field, value);
         }
     )*};
 }

@@ -26,11 +26,13 @@ use crate::order_type::{
     OT_CONDITIONAL, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT, OT_LEAVESTATION, OT_LOADING,
     OT_NOTHING,
 };
+use crate::raw_field::{read_field, write_field};
 use crate::services::Services;
 use crate::train_state::State;
 use crate::vehicle::{VehicleRef, VehicleServices, maintenance};
 /// Native identity and canonical scalar owner, resolved together once per entry or link.
 /// Neither pointer permits a Rust borrow to survive a callback. Deletion invalidates both.
+/// Each entry keeps `owner` live and serialized for the `raw_field` accesses below.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Handle {
@@ -88,114 +90,70 @@ impl Handle {
     }
 
     pub(crate) fn get_flags(self) -> u64 {
-        // SAFETY: A live serialized owner, scalar access ends before any callback.
-        unsafe { u64::from((*self.owner).flags) }
+        u64::from(read_field!(self.owner, flags))
     }
     pub(crate) fn set_flags(self, value: u64) {
-        // SAFETY: Exclusive serialized scalar write, retaining no owner borrow.
-        unsafe {
-            (*self.owner).flags = value as u16;
-        }
+        write_field!(self.owner, flags, value as u16);
     }
     pub(crate) fn get_crash_anim_pos(self) -> u64 {
-        // SAFETY: A live serialized owner, scalar access ends before any callback.
-        unsafe { u64::from((*self.owner).crash_anim_pos) }
+        u64::from(read_field!(self.owner, crash_anim_pos))
     }
     pub(crate) fn set_crash_anim_pos(self, value: u64) {
-        // SAFETY: Exclusive serialized scalar write, retaining no owner borrow.
-        unsafe {
-            (*self.owner).crash_anim_pos = value as u16;
-        }
+        write_field!(self.owner, crash_anim_pos, value as u16);
     }
     pub(crate) fn get_wait_counter(self) -> u64 {
-        // SAFETY: A live serialized owner, scalar access ends before any callback.
-        unsafe { u64::from((*self.owner).wait_counter) }
+        u64::from(read_field!(self.owner, wait_counter))
     }
     pub(crate) fn set_wait_counter(self, value: u64) {
-        // SAFETY: Exclusive serialized scalar write, retaining no owner borrow.
-        unsafe {
-            (*self.owner).wait_counter = value as u16;
-        }
+        write_field!(self.owner, wait_counter, value as u16);
     }
     pub(crate) fn get_compatible_railtypes(self) -> u64 {
-        // SAFETY: A live serialized owner, scalar access ends before any callback.
-        unsafe { (*self.owner).compatible_railtypes }
+        read_field!(self.owner, compatible_railtypes)
     }
     pub(crate) fn set_compatible_railtypes(self, value: u64) {
-        // SAFETY: Exclusive serialized scalar write, retaining no owner borrow.
-        unsafe {
-            (*self.owner).compatible_railtypes = value;
-        }
+        write_field!(self.owner, compatible_railtypes, value);
     }
     pub(crate) fn get_railtypes(self) -> u64 {
-        // SAFETY: A live serialized owner, scalar access ends before any callback.
-        unsafe { (*self.owner).railtypes }
+        read_field!(self.owner, railtypes)
     }
     pub(crate) fn set_railtypes(self, value: u64) {
-        // SAFETY: Exclusive serialized scalar write, retaining no owner borrow.
-        unsafe {
-            (*self.owner).railtypes = value;
-        }
+        write_field!(self.owner, railtypes, value);
     }
     pub(crate) fn get_track(self) -> u64 {
-        // SAFETY: A live serialized owner, scalar access ends before any callback.
-        unsafe { u64::from((*self.owner).track) }
+        u64::from(read_field!(self.owner, track))
     }
     pub(crate) fn set_track(self, value: u64) {
-        // SAFETY: Exclusive serialized scalar write, retaining no owner borrow.
-        unsafe {
-            (*self.owner).track = value as u8;
-        }
+        write_field!(self.owner, track, value as u8);
     }
     pub(crate) fn get_force_proceed(self) -> u64 {
-        // SAFETY: A live serialized owner, scalar access ends before any callback.
-        unsafe { u64::from((*self.owner).force_proceed) }
+        u64::from(read_field!(self.owner, force_proceed))
     }
     pub(crate) fn set_force_proceed(self, value: u64) {
-        // SAFETY: Exclusive serialized scalar write, retaining no owner borrow.
-        unsafe {
-            (*self.owner).force_proceed = value as u8;
-        }
+        write_field!(self.owner, force_proceed, value as u8);
     }
     pub(crate) fn get_cached_tilt(self) -> u64 {
-        // SAFETY: A live serialized owner, scalar access ends before any callback.
-        unsafe { u64::from((*self.owner).cached_tilt) }
+        u64::from(read_field!(self.owner, cached_tilt))
     }
     pub(crate) fn set_cached_tilt(self, value: u64) {
-        // SAFETY: Exclusive serialized scalar write, retaining no owner borrow.
-        unsafe {
-            (*self.owner).cached_tilt = value != 0;
-        }
+        write_field!(self.owner, cached_tilt, value != 0);
     }
     pub(crate) fn get_user_def_data(self) -> u64 {
-        // SAFETY: A live serialized owner, scalar access ends before any callback.
-        unsafe { u64::from((*self.owner).user_def_data) }
+        u64::from(read_field!(self.owner, user_def_data))
     }
     pub(crate) fn set_user_def_data(self, value: u64) {
-        // SAFETY: Exclusive serialized scalar write, retaining no owner borrow.
-        unsafe {
-            (*self.owner).user_def_data = value as u8;
-        }
+        write_field!(self.owner, user_def_data, value as u8);
     }
     pub(crate) fn get_cached_curve_speed_mod(self) -> u64 {
-        // SAFETY: A live serialized owner, scalar access ends before any callback.
-        unsafe { u64::from((*self.owner).cached_curve_speed_mod as u16) }
+        u64::from(read_field!(self.owner, cached_curve_speed_mod) as u16)
     }
     pub(crate) fn set_cached_curve_speed_mod(self, value: u64) {
-        // SAFETY: Exclusive serialized scalar write, retaining no owner borrow.
-        unsafe {
-            (*self.owner).cached_curve_speed_mod = value as i16;
-        }
+        write_field!(self.owner, cached_curve_speed_mod, value as i16);
     }
     pub(crate) fn get_cached_max_curve_speed(self) -> u64 {
-        // SAFETY: A live serialized owner, scalar access ends before any callback.
-        unsafe { u64::from((*self.owner).cached_max_curve_speed) }
+        u64::from(read_field!(self.owner, cached_max_curve_speed))
     }
     pub(crate) fn set_cached_max_curve_speed(self, value: u64) {
-        // SAFETY: Exclusive serialized scalar write, retaining no owner borrow.
-        unsafe {
-            (*self.owner).cached_max_curve_speed = value as u16;
-        }
+        write_field!(self.owner, cached_max_curve_speed, value as u16);
     }
     pub(crate) fn set_flag(self, bit: u8, value: bool) {
         let mask = 1 << bit;
@@ -659,6 +617,13 @@ pub struct Leaves {
     /// Base vehicle table, immutable for the process.
     pub vehicle: *const VehicleServices,
 }
+/// The `Game` view of an entry's `leaves` and `services` tables.
+macro_rules! entry_game {
+    ($leaves:expr, $services:expr) => {
+        // SAFETY: The entry's contract keeps both immutable tables live until it returns.
+        Game::new(unsafe { &*$leaves }, unsafe { &*$services })
+    };
+}
 #[derive(Clone)]
 struct Game<'a> {
     leaves: &'a Leaves,
@@ -677,17 +642,45 @@ impl<'a> Game<'a> {
         // SAFETY: The native table names the immutable process-wide base table.
         unsafe { &*self.leaves.vehicle }
     }
+    /// Run one `vehicle::maintenance` entry on this entry's shell.
+    /// # Safety
+    /// The caller must satisfy `entry`'s preconditions for this shell and table.
+    unsafe fn maintain<R>(
+        &self,
+        id: Handle,
+        entry: unsafe fn(VehicleRef, &VehicleServices) -> R,
+    ) -> R {
+        // SAFETY: The caller meets the maintenance entry contract.
+        unsafe { self.vs().maintain(id.vehicle(), entry) }
+    }
+    /// `TryPathReserve`.
+    fn try_path_reserve(&self, id: Handle, mark_as_reserved: bool, first_tile_okay: bool) -> bool {
+        // SAFETY: id.shell is the live Train for this serialized entry; no owner borrow spans the call.
+        unsafe {
+            (self.services.try_path_reserve)(id.shell.cast(), mark_as_reserved, first_tile_okay)
+        }
+    }
+    /// `FreeTrainTrackReservation`.
+    fn free_train_reservation(&self, id: Handle) {
+        // SAFETY: id.shell is the live Train for this serialized entry; no owner borrow spans the call.
+        unsafe { (self.services.free_train_reservation)(id.shell.cast()) };
+    }
+    /// `UpdateVehicleTileHash` of this shell, which stays in place.
+    fn update_occupancy(&self, id: Handle) {
+        // SAFETY: The controller retains this live shell through the index update.
+        unsafe { crate::vehicle::occupancy::update(self.vs(), id.vehicle(), false) };
+    }
     fn handle_breakdown(&self, id: Handle) -> bool {
-        // SAFETY: Live serialized shell; no owner borrow spans the call.
-        unsafe { maintenance::vehicle_handle_breakdown(id.vehicle(), self.vs()) }
+        // SAFETY: The live train and unborrowed owner satisfy `vehicle_handle_breakdown`.
+        unsafe { self.maintain(id, maintenance::vehicle_handle_breakdown) }
     }
     fn needs_automatic_servicing(&self, id: Handle) -> bool {
-        // SAFETY: Live serialized shell; no owner borrow spans the call.
-        unsafe { maintenance::needs_automatic_servicing(id.vehicle(), self.vs()) }
+        // SAFETY: The live train and unborrowed owner satisfy `needs_automatic_servicing`.
+        unsafe { self.maintain(id, maintenance::needs_automatic_servicing) }
     }
     fn service_in_depot(&self, id: Handle) {
-        // SAFETY: Live serialized shell; no owner borrow spans the call.
-        unsafe { maintenance::service_in_depot(id.vehicle(), self.vs()) };
+        // SAFETY: The live train and unborrowed owner satisfy `service_in_depot`.
+        unsafe { self.maintain(id, maintenance::service_in_depot) };
     }
     /// `SetWindowDirty(WC_VEHICLE_VIEW, v->index)`.
     fn view_dirty(&self, id: Handle) {
@@ -1330,10 +1323,7 @@ impl Game<'_> {
                 if id.track() != WORMHOLE
                     && (self.leaves.is_bridge)(Handle::NONE, (self.leaves.read_tile)(id)) != 0
                 {
-                    // SAFETY: The controller retains this live shell through the index update.
-                    unsafe {
-                        crate::vehicle::occupancy::update(self.vs(), id.vehicle(), false);
-                    }
+                    self.update_occupancy(id);
                     crate::ground_vehicle::inclination(
                         self.leaves.physics,
                         id.vehicle(),
@@ -1344,10 +1334,7 @@ impl Game<'_> {
                 }
             }
         }
-        // SAFETY: The controller retains this live shell through the index update.
-        unsafe {
-            crate::vehicle::occupancy::update(self.vs(), id.vehicle(), false);
-        }
+        self.update_occupancy(id);
         (self.leaves.viewport)(id, 1, 1);
     }
     fn swap_ground_flags(&self, a: Handle, b: Handle) {
@@ -1475,8 +1462,7 @@ impl Game<'_> {
             (self.leaves.depot_dirty)(id);
         }
         if !id.flag(8) {
-            // SAFETY: id.shell is the live Train for this serialized entry; no owner borrow spans the call.
-            unsafe { (self.services.free_train_reservation)(id.shell.cast()) };
+            self.free_train_reservation(id);
         }
         let crossing = self.approaching_crossing(id);
         let mut r = (self.leaves.count_chain)(id) as i32 - 1;
@@ -1546,8 +1532,7 @@ impl Game<'_> {
                     true,
                 );
             }
-            // SAFETY: id.shell is the live Train for this serialized entry; no owner borrow spans the call.
-            if unsafe { (self.services.try_path_reserve)(id.shell.cast(), false, okay) } {
+            if self.try_path_reserve(id, false, okay) {
                 (self.leaves.check_next)(id);
             } else if (self.leaves.read_order)(id) != OT_LOADING {
                 self.mark_stuck(id);
@@ -1951,10 +1936,7 @@ impl Game<'_> {
             } else {
                 (self.leaves.write_x)(id, (x as u64) as i32);
                 (self.leaves.write_y)(id, (y as u64) as i32);
-                // SAFETY: The controller retains this live shell through the index update.
-                unsafe {
-                    crate::vehicle::occupancy::update(self.vs(), id.vehicle(), false);
-                }
+                self.update_occupancy(id);
                 if (self.leaves.read_status)(id) & 1 == 0 {
                     (self.leaves.base_viewport)(id, 1);
                 }
@@ -1964,10 +1946,7 @@ impl Game<'_> {
         (self.leaves.update_delta)(id);
         (self.leaves.write_x)(id, (x as u64) as i32);
         (self.leaves.write_y)(id, (y as u64) as i32);
-        // SAFETY: The controller retains this live shell through the index update.
-        unsafe {
-            crate::vehicle::occupancy::update(self.vs(), id.vehicle(), false);
-        }
+        self.update_occupancy(id);
         let old_z = crate::ground_vehicle::inclination(
             self.leaves.physics,
             id.vehicle(),
@@ -1981,8 +1960,7 @@ impl Game<'_> {
             if (self.leaves.read_front)(id) != 0 && self.moved_signals(id, new, entered) {
                 if (!crate::pbs::Pbs::acquire(self.services).has_reserved_tracks(new, id.track())
                     && self.reserve_track(id, new, u64::from(id.track().trailing_zeros())) == 0)
-                    // SAFETY: id.shell is the live Train for this serialized entry; no owner borrow spans the call.
-                    || !unsafe { (self.services.try_path_reserve)(id.shell.cast(), false, false) }
+                    || !self.try_path_reserve(id, false, false)
                 {
                     self.mark_stuck(id);
                 }
@@ -2043,8 +2021,7 @@ impl Game<'_> {
         if (self.leaves.read_front)(id) != 0 {
             victims += 2;
             if !id.flag(8) {
-                // SAFETY: id.shell is the live Train for this serialized entry; no owner borrow spans the call.
-                unsafe { (self.services.free_train_reservation)(id.shell.cast()) };
+                self.free_train_reservation(id);
             }
             let mut u = id;
             while u != Handle::NONE {
@@ -2241,10 +2218,7 @@ impl Game<'_> {
                     (u64::from((self.leaves.read_direction)(id).wrapping_add(delta) & 7)) as u8,
                 );
                 if id.track() != WORMHOLE {
-                    // SAFETY: The controller retains this live shell through the index update.
-                    unsafe {
-                        crate::vehicle::occupancy::update(self.vs(), id.vehicle(), false);
-                    }
+                    self.update_occupancy(id);
                     crate::ground_vehicle::inclination(
                         self.leaves.physics,
                         id.vehicle(),
@@ -2344,8 +2318,7 @@ impl Game<'_> {
             return true;
         }
         if segment == (self.leaves.sigseg_pbs)(id)
-            // SAFETY: id.shell is the live Train for this serialized entry; no owner borrow spans the call.
-            && !unsafe { (self.services.try_path_reserve)(id.shell.cast(), false, false) }
+            && !self.try_path_reserve(id, false, false)
             && id.get_force_proceed() == 0
         {
             (self.leaves.train_list)(id);
@@ -2369,10 +2342,7 @@ impl Game<'_> {
         self.write_status(id, 1, false);
         (self.leaves.write_speed)(id, 0_u16);
         (self.leaves.viewport)(id, 1, 1);
-        // SAFETY: The controller retains this live shell through the index update.
-        unsafe {
-            crate::vehicle::occupancy::update(self.vs(), id.vehicle(), false);
-        }
+        self.update_occupancy(id);
         self.signal_segment(id, (self.leaves.read_tile)(id), u8::MAX);
         self.update_acceleration(id);
         (self.leaves.depot_dirty)(id);
@@ -2425,8 +2395,7 @@ impl Game<'_> {
             if self.signal_segment(id, tile, dir) == (self.leaves.sigseg_pbs)(id)
                 || (self.leaves.reserve_paths)(id) != 0
             {
-                // SAFETY: id.shell is the live Train for this serialized entry; no owner borrow spans the call.
-                unsafe { (self.services.try_path_reserve)(id.shell.cast(), true, true) };
+                self.try_path_reserve(id, true, true);
             }
             id.set_flag(9, false);
         }
@@ -2448,8 +2417,7 @@ impl Game<'_> {
             if !turn && wait % (self.leaves.backoff)(id) != 0 && id.get_force_proceed() == 0 {
                 return true;
             }
-            // SAFETY: id.shell is the live Train for this serialized entry; no owner borrow spans the call.
-            if !unsafe { (self.services.try_path_reserve)(id.shell.cast(), false, false) } {
+            if !self.try_path_reserve(id, false, false) {
                 if turn {
                     crate::witness::hit(crate::witness::TRAIN_STUCK_REVERSE);
                     self.reverse(id);
@@ -2597,17 +2565,17 @@ impl Game<'_> {
         (self.leaves.start_stop_dirty)(id);
     }
     fn economy_day(&self, id: Handle) {
-        // SAFETY: Live serialized shell; no owner borrow spans the call.
-        unsafe { maintenance::economy_age_vehicle(id.vehicle(), self.vs()) };
+        // SAFETY: The live train and unborrowed owner satisfy `economy_age_vehicle`.
+        unsafe { self.maintain(id, maintenance::economy_age_vehicle) };
         let day = (self.leaves.read_day)(id).wrapping_add(1);
         (self.leaves.write_day)(id, (u64::from(day)) as u8);
         if day & 7 == 0 {
-            // SAFETY: Live serialized shell; no owner borrow spans the call.
-            unsafe { maintenance::decrease_vehicle_value(id.vehicle(), self.vs()) };
+            // SAFETY: The live train and unborrowed owner satisfy `decrease_vehicle_value`.
+            unsafe { self.maintain(id, maintenance::decrease_vehicle_value) };
         }
         if (self.leaves.read_front)(id) != 0 {
-            // SAFETY: Live serialized shell; no owner borrow spans the call.
-            unsafe { maintenance::check_vehicle_breakdown(id.vehicle(), self.vs()) };
+            // SAFETY: The live train and unborrowed owner satisfy `check_vehicle_breakdown`.
+            unsafe { self.maintain(id, maintenance::check_vehicle_breakdown) };
             self.needs_service(id);
             (self.leaves.check_orders)(id);
             if (self.leaves.read_order)(id) == OT_GOTO_STATION {
@@ -2748,8 +2716,7 @@ pub unsafe extern "C" fn openttd_rust_train_consist_changed(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    // SAFETY: Both immutable tables outlive this synchronous entry.
-    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
+    let g = entry_game!(leaves, services);
     g.consist_changed(id, allowed);
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2761,8 +2728,7 @@ pub unsafe extern "C" fn openttd_rust_train_curve_limit(
     leaves: *const Leaves,
     services: *const Services,
 ) -> u16 {
-    // SAFETY: Both immutable tables outlive this synchronous entry.
-    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
+    let g = entry_game!(leaves, services);
     g.curve_limit(id)
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2774,8 +2740,7 @@ pub unsafe extern "C" fn openttd_rust_train_current_max_speed(
     leaves: *const Leaves,
     services: *const Services,
 ) -> i32 {
-    // SAFETY: Both immutable tables outlive this synchronous entry.
-    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
+    let g = entry_game!(leaves, services);
     g.current_max_speed(id)
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2787,8 +2752,7 @@ pub unsafe extern "C" fn openttd_rust_train_update_acceleration(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    // SAFETY: Both immutable tables outlive this synchronous entry.
-    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
+    let g = entry_game!(leaves, services);
     g.update_acceleration(id);
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2800,8 +2764,7 @@ pub unsafe extern "C" fn openttd_rust_train_update_speed(
     leaves: *const Leaves,
     services: *const Services,
 ) -> i32 {
-    // SAFETY: Both immutable tables outlive this synchronous entry.
-    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
+    let g = entry_game!(leaves, services);
     g.update_speed(id)
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2813,8 +2776,7 @@ pub unsafe extern "C" fn openttd_rust_train_mark_dirty(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    // SAFETY: Both immutable tables outlive this synchronous entry.
-    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
+    let g = entry_game!(leaves, services);
     g.mark_dirty(id);
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2826,8 +2788,7 @@ pub unsafe extern "C" fn openttd_rust_train_tick(
     leaves: *const Leaves,
     services: *const Services,
 ) -> u8 {
-    // SAFETY: Both immutable tables outlive this synchronous entry.
-    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
+    let g = entry_game!(leaves, services);
     u8::from(g.tick(id))
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2839,10 +2800,9 @@ pub unsafe extern "C" fn openttd_rust_train_calendar_day(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    // SAFETY: Both immutable tables outlive this synchronous entry.
-    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
-    // SAFETY: Live serialized shell; no owner borrow spans the call.
-    unsafe { maintenance::age_vehicle(id.vehicle(), g.vs()) };
+    let g = entry_game!(leaves, services);
+    // SAFETY: The live train and unborrowed owner satisfy `age_vehicle`.
+    unsafe { g.maintain(id, maintenance::age_vehicle) };
 }
 /// Invoke synchronous train policy with live serialized services.
 /// # Safety
@@ -2853,8 +2813,7 @@ pub unsafe extern "C" fn openttd_rust_train_economy_day(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    // SAFETY: Both immutable tables outlive this synchronous entry.
-    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
+    let g = entry_game!(leaves, services);
     g.economy_day(id);
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2866,8 +2825,7 @@ pub unsafe extern "C" fn openttd_rust_train_running_cost(
     leaves: *const Leaves,
     services: *const Services,
 ) -> i64 {
-    // SAFETY: Both immutable tables outlive this synchronous entry.
-    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
+    let g = entry_game!(leaves, services);
     g.running_cost(id)
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2879,8 +2837,7 @@ pub unsafe extern "C" fn openttd_rust_train_trackdir(
     leaves: *const Leaves,
     services: *const Services,
 ) -> u8 {
-    // SAFETY: Both immutable tables outlive this synchronous entry.
-    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
+    let g = entry_game!(leaves, services);
     g.trackdir(id)
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2892,8 +2849,7 @@ pub unsafe extern "C" fn openttd_rust_train_mark_stuck(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    // SAFETY: Both immutable tables outlive this synchronous entry.
-    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
+    let g = entry_game!(leaves, services);
     g.mark_stuck(id);
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2907,8 +2863,7 @@ pub unsafe extern "C" fn openttd_rust_train_reverse_swap(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    // SAFETY: Both immutable tables outlive this synchronous entry.
-    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
+    let g = entry_game!(leaves, services);
     g.reverse_swap(id, left, right);
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2920,8 +2875,7 @@ pub unsafe extern "C" fn openttd_rust_train_train_on_tile(
     leaves: *const Leaves,
     services: *const Services,
 ) -> u8 {
-    // SAFETY: Both immutable tables outlive this synchronous entry.
-    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
+    let g = entry_game!(leaves, services);
     u8::from(g.train_on_tile(tile))
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2935,8 +2889,7 @@ pub unsafe extern "C" fn openttd_rust_train_update_crossing(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    // SAFETY: Both immutable tables outlive this synchronous entry.
-    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
+    let g = entry_game!(leaves, services);
     g.update_crossing(tile, sound != 0, force_bar != 0);
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2949,8 +2902,7 @@ pub unsafe extern "C" fn openttd_rust_train_adjacent_crossing_dirty(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    // SAFETY: Both immutable tables outlive this synchronous entry.
-    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
+    let g = entry_game!(leaves, services);
     g.adjacent_crossing_dirty(tile, u64::from(axis));
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2963,8 +2915,7 @@ pub unsafe extern "C" fn openttd_rust_train_crossing_removed(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    // SAFETY: Both immutable tables outlive this synchronous entry.
-    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
+    let g = entry_game!(leaves, services);
     g.crossing_removed(tile, u64::from(axis));
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2976,8 +2927,7 @@ pub unsafe extern "C" fn openttd_rust_train_reverse(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    // SAFETY: Both immutable tables outlive this synchronous entry.
-    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
+    let g = entry_game!(leaves, services);
     g.reverse(id);
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2991,8 +2941,7 @@ pub unsafe extern "C" fn openttd_rust_train_controller(
     leaves: *const Leaves,
     services: *const Services,
 ) -> u8 {
-    // SAFETY: Both immutable tables outlive this synchronous entry.
-    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
+    let g = entry_game!(leaves, services);
     u8::from(g.controller(id, nomove, reverse != 0))
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -3005,8 +2954,7 @@ pub unsafe extern "C" fn openttd_rust_train_crash(
     leaves: *const Leaves,
     services: *const Services,
 ) -> u32 {
-    // SAFETY: Both immutable tables outlive this synchronous entry.
-    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
+    let g = entry_game!(leaves, services);
     g.crash(id, flooded != 0)
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -3018,8 +2966,7 @@ pub unsafe extern "C" fn openttd_rust_train_needs_service(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    // SAFETY: Both immutable tables outlive this synchronous entry.
-    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
+    let g = entry_game!(leaves, services);
     g.needs_service(id);
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -3033,8 +2980,7 @@ pub unsafe extern "C" fn openttd_rust_train_reverse_command(
     leaves: *const Leaves,
     services: *const Services,
 ) -> u8 {
-    // SAFETY: Both immutable tables outlive this synchronous entry.
-    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
+    let g = entry_game!(leaves, services);
     g.reverse_command(id, execute != 0, single != 0)
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -3047,8 +2993,7 @@ pub unsafe extern "C" fn openttd_rust_train_force_command(
     leaves: *const Leaves,
     services: *const Services,
 ) -> u8 {
-    // SAFETY: Both immutable tables outlive this synchronous entry.
-    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
+    let g = entry_game!(leaves, services);
     u8::from(g.force_command(id, execute != 0))
 }
 

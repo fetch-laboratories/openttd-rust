@@ -18,13 +18,7 @@ using OpenTTDLinkGraph = LinkGraph;
 #endif
 #include <stdint.h>
 #include <stddef.h>
-#if defined(_MSC_VER)
-#define OPENTTD_LINKGRAPH_CALL __cdecl
-#elif defined(__i386__)
-#define OPENTTD_LINKGRAPH_CALL __attribute__((cdecl))
-#else
-#define OPENTTD_LINKGRAPH_CALL
-#endif
+#include "call_ffi.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -46,10 +40,10 @@ typedef struct OpenTTDLinkGraphResult OpenTTDLinkGraphResult;
  * C++ copies them before destroying it once, also on allocation exceptions.
  * Inputs and settings are live, aligned and readable; array extents are <= PTRDIFF_MAX and obey
  * the original graph invariants. The abort callback cannot reenter Rust or mutate the snapshot. */
-OpenTTDLinkGraphResult *OPENTTD_LINKGRAPH_CALL openttd_rust_linkgraph_run(const OpenTTDLinkGraphNode *, size_t, const OpenTTDLinkGraphEdge *, size_t, const OpenTTDLinkGraphSettings *, const void *, uint8_t (OPENTTD_LINKGRAPH_CALL *)(const void *));
-const OpenTTDLinkGraphShare *OPENTTD_LINKGRAPH_CALL openttd_rust_linkgraph_shares(const OpenTTDLinkGraphResult *, size_t *);
-const uint32_t *OPENTTD_LINKGRAPH_CALL openttd_rust_linkgraph_edges(const OpenTTDLinkGraphResult *);
-void OPENTTD_LINKGRAPH_CALL openttd_rust_linkgraph_destroy(OpenTTDLinkGraphResult *);
+OpenTTDLinkGraphResult *OPENTTD_RUST_CALL openttd_rust_linkgraph_run(const OpenTTDLinkGraphNode *, size_t, const OpenTTDLinkGraphEdge *, size_t, const OpenTTDLinkGraphSettings *, const void *, uint8_t (OPENTTD_RUST_CALL *)(const void *));
+const OpenTTDLinkGraphShare *OPENTTD_RUST_CALL openttd_rust_linkgraph_shares(const OpenTTDLinkGraphResult *, size_t *);
+const uint32_t *OPENTTD_RUST_CALL openttd_rust_linkgraph_edges(const OpenTTDLinkGraphResult *);
+void OPENTTD_RUST_CALL openttd_rust_linkgraph_destroy(OpenTTDLinkGraphResult *);
 /* Contents owner. Canonical edge scalars have the BaseEdge layout; a borrowed
  * pointer expires on edge/vector mutation. Node handles never copy records.
  * Save addresses expire on graph resize/destruction. SlObject and all error

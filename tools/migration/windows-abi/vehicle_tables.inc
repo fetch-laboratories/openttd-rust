@@ -3,8 +3,8 @@
  * These are boundary/lifetime checks, not a second simulation oracle. */
 template <typename Function> struct VehicleUnused;
 template <typename Result, typename... Args>
-struct VehicleUnused<Result (OPENTTD_VEHICLE_CALL *)(Args...) noexcept> {
-	static Result OPENTTD_VEHICLE_CALL Call(Args...) noexcept
+struct VehicleUnused<Result (OPENTTD_RUST_CALL *)(Args...) noexcept> {
+	static Result OPENTTD_RUST_CALL Call(Args...) noexcept
 	{
 		CHECK(false);
 		if constexpr (!std::is_void_v<Result>) return {};

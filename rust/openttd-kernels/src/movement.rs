@@ -164,34 +164,24 @@ pub struct MovementServices {
     pub industry_callback: extern "C" fn(u32, u16) -> u16,
     pub industry_boolean: extern "C" fn(*const c_void, u16) -> bool,
 }
+/// One accessor per nested table pointer, named after its field.
+macro_rules! nested_tables {
+    ($($vis:vis fn $name:ident -> $ty:ty;)*) => {$(
+        $vis fn $name(&self) -> &$ty {
+            // SAFETY: Only resolved at branches whose native/fixture table supplies this immutable callee.
+            unsafe { &*self.$name }
+        }
+    )*};
+}
 impl MovementServices {
-    pub(crate) fn shared(&self) -> &Services {
-        // SAFETY: Only resolved at branches whose native/fixture table supplies this immutable callee.
-        unsafe { &*self.shared }
-    }
-    fn rail(&self) -> &RailServices {
-        // SAFETY: Only resolved at branches whose native/fixture table supplies this immutable callee.
-        unsafe { &*self.rail }
-    }
-    fn road(&self) -> &RoadServices {
-        // SAFETY: Only resolved at branches whose native/fixture table supplies this immutable callee.
-        unsafe { &*self.road }
-    }
-    fn rail_map(&self) -> &crate::services::RailMapServices {
-        // SAFETY: Only resolved at branches whose native/fixture table supplies this immutable callee.
-        unsafe { &*self.rail_map }
-    }
-    fn train(&self) -> &crate::train::Leaves {
-        // SAFETY: Only resolved at branches whose native/fixture table supplies this immutable callee.
-        unsafe { &*self.train }
-    }
-    fn vehicle(&self) -> &crate::vehicle::VehicleServices {
-        // SAFETY: Only resolved at branches whose native/fixture table supplies this immutable callee.
-        unsafe { &*self.vehicle }
-    }
-    fn road_vehicle(&self) -> &crate::road::Leaves {
-        // SAFETY: Only resolved at branches whose native/fixture table supplies this immutable callee.
-        unsafe { &*self.road_vehicle }
+    nested_tables! {
+        pub(crate) fn shared -> Services;
+        fn rail -> RailServices;
+        fn road -> RoadServices;
+        fn rail_map -> crate::services::RailMapServices;
+        fn train -> crate::train::Leaves;
+        fn vehicle -> crate::vehicle::VehicleServices;
+        fn road_vehicle -> crate::road::Leaves;
     }
     fn foundation(&self, tile: u32, slope: u8) -> u8 {
         w::hit(w::MOVE_FOUNDATION);

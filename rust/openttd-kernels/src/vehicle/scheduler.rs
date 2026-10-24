@@ -86,14 +86,11 @@ pub struct Tables {
 // Select counted/plain implementations once at entry. In the plain monomorph,
 // COUNTED=false erases every new per-visit witness branch/load/update.
 macro_rules! svc {
-    ($counted:ident, $function:expr $(, $arg:expr)*) => {{
-        let result = ($function)($($arg),*);
-        if $counted {
-            crate::witness::hit(crate::witness::VEHICLE_CROSSINGS);
-            crate::witness::add(crate::witness::VEHICLE_OBSERVED_BYTES, std::mem::size_of_val(&result) as u64);
-        }
-        result
-    }};
+    ($counted:ident, $function:expr $(, $arg:expr)*) => {
+        crate::witness::counted!(
+            VEHICLE_CROSSINGS, VEHICLE_OBSERVED_BYTES if $counted, ($function)($($arg),*)
+        )
+    };
 }
 
 /// Refresh before ANY cached slot read after callbacks. `ResizeFor` grows only

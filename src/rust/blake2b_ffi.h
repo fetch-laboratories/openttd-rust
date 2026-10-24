@@ -69,12 +69,12 @@ struct OpenTTDBlake2bLayout {
  * Layouts and leaves are live, initialized and immutable; contexts exclude message, key and hash.
  * Readable/writable spans are <= PTRDIFF_MAX; empty message/key allow NULL, and update(NULL, 0)
  * accesses no context or layout. Calls are serialized; final wipes the actual context storage. */
-void OPENTTD_CRYPTO_CALL openttd_rust_blake2b_keyed_init(const struct OpenTTDBlake2bLayout *, void *, size_t, const uint8_t *, size_t);
-void OPENTTD_CRYPTO_CALL openttd_rust_blake2b_init(const struct OpenTTDBlake2bLayout *, void *, size_t);
-void OPENTTD_CRYPTO_CALL openttd_rust_blake2b_update(const struct OpenTTDBlake2bLayout *, void *, const uint8_t *, size_t);
-void OPENTTD_CRYPTO_CALL openttd_rust_blake2b_final(const struct OpenTTDCryptoLeaves *, const struct OpenTTDBlake2bLayout *, void *, uint8_t *);
-void OPENTTD_CRYPTO_CALL openttd_rust_blake2b_keyed(const struct OpenTTDCryptoLeaves *, const struct OpenTTDBlake2bLayout *, void *, uint8_t *, size_t, const uint8_t *, size_t, const uint8_t *, size_t);
-void OPENTTD_CRYPTO_CALL openttd_rust_blake2b(const struct OpenTTDCryptoLeaves *, const struct OpenTTDBlake2bLayout *, void *, uint8_t *, size_t, const uint8_t *, size_t);
+void OPENTTD_RUST_CALL openttd_rust_blake2b_keyed_init(const struct OpenTTDBlake2bLayout *, void *, size_t, const uint8_t *, size_t);
+void OPENTTD_RUST_CALL openttd_rust_blake2b_init(const struct OpenTTDBlake2bLayout *, void *, size_t);
+void OPENTTD_RUST_CALL openttd_rust_blake2b_update(const struct OpenTTDBlake2bLayout *, void *, const uint8_t *, size_t);
+void OPENTTD_RUST_CALL openttd_rust_blake2b_final(const struct OpenTTDCryptoLeaves *, const struct OpenTTDBlake2bLayout *, void *, uint8_t *);
+void OPENTTD_RUST_CALL openttd_rust_blake2b_keyed(const struct OpenTTDCryptoLeaves *, const struct OpenTTDBlake2bLayout *, void *, uint8_t *, size_t, const uint8_t *, size_t, const uint8_t *, size_t);
+void OPENTTD_RUST_CALL openttd_rust_blake2b(const struct OpenTTDCryptoLeaves *, const struct OpenTTDBlake2bLayout *, void *, uint8_t *, size_t, const uint8_t *, size_t);
 #ifdef __cplusplus
 }
 #endif

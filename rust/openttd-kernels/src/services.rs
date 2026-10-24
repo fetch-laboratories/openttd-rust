@@ -227,9 +227,6 @@ pub struct ClearSquareServices {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Services {
-    /// Private controller unit-test callee stub, absent from the game ABI.
-    #[cfg(test)]
-    pub safe_waiting_position: unsafe extern "C" fn(*const Train, u32, u8, bool) -> bool,
     /// Complete synchronous movement owner; immutable process-lifetime table.
     pub movement_services: extern "C" fn() -> *const crate::movement::MovementServices,
     /// Canonical native tile owner write.
@@ -923,7 +920,6 @@ pub fn fixture(
         false
     }
     Services {
-        safe_waiting_position: fixture_safe,
         movement_services: fixture_movement,
         set_tile_owner: zone,
         autoslope: flag0,
@@ -1386,6 +1382,35 @@ impl Cost<'_> {
         (self.1.money)(self.0)
     }
 }
+/// Command checks that write their result into a `Cost`, whose native slot is live for
+/// the synchronous entry; the checks take plain tile, owner and track values.
+impl Cost<'_> {
+    /// `CheckTileOwnership`.
+    pub(crate) fn tile_ownership(self, command: &CommandServices, tile: u32) {
+        // SAFETY: The impl contract above.
+        unsafe { (command.tile_ownership)(self.0, tile) };
+    }
+    /// `CheckOwnership`.
+    pub(crate) fn ownership(self, command: &CommandServices, owner: u8, tile: u32) {
+        // SAFETY: The impl contract above.
+        unsafe { (command.ownership)(self.0, owner, tile) };
+    }
+    /// `EnsureNoVehicleOnGround`.
+    pub(crate) fn no_vehicle(self, command: &CommandServices, tile: u32) {
+        // SAFETY: The impl contract above.
+        unsafe { command.no_vehicle(self.0, tile) };
+    }
+    /// `EnsureNoTrainOnTrackBits`.
+    pub(crate) fn no_train(self, command: &CommandServices, tile: u32, bits: u8) {
+        // SAFETY: The impl contract above.
+        unsafe { command.no_train(self.0, tile, bits) };
+    }
+    /// `TunnelBridgeIsFree` with no ignored vehicle.
+    pub(crate) fn wormhole_free(self, command: &CommandServices, tile: u32, end: u32) {
+        // SAFETY: The impl contract above; a null `ignore` names no vehicle.
+        unsafe { command.wormhole_free(self.0, tile, end, std::ptr::null()) };
+    }
+}
 
 /// Native station tile kind (uint8).
 #[repr(transparent)]
@@ -1461,11 +1486,6 @@ extern "C" fn unused_tile_add_wrap(_: u32, _: i32, _: i32) -> u32 {
 #[cfg(test)]
 extern "C" fn unused_road_is_tram(_: RoadType) -> bool {
     panic!("unused tram classification");
-}
-
-#[cfg(test)]
-extern "C" fn fixture_safe(_: *const Train, _: u32, _: u8, _: bool) -> bool {
-    false
 }
 
 #[cfg(test)]

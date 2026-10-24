@@ -7,12 +7,13 @@
 
 //! Whole autoreplace transactions. Native costs/seeds live in the caller's stack.
 use super::{
-    ALL_GROUP, DEFAULT_GROUP, ERROR, GroupFields, GroupServices, add_profit, add_replacement,
-    group, remove_replacement, replacement, update_autoreplace,
+    ALL_GROUP, DEFAULT_GROUP, ERROR, GroupServices, add_profit, add_replacement, group,
+    remove_replacement, replacement, update_autoreplace,
 };
 use crate::cargo_type::INVALID_CARGO;
 use crate::command_type::DoCommandFlag;
 use crate::engine_type::INVALID_ENGINE;
+use crate::raw_field::read_field;
 use crate::tile_type::TILE_SIZE;
 use std::ptr;
 #[repr(C)]
@@ -966,7 +967,7 @@ unsafe fn autoreplace(w: &Services, gw: &GroupServices, costs: Costs, flags: u32
     let group_id = unsafe { (gw.vehicle_group)(v) };
     let g = unsafe { group(gw, group_id) };
     if !g.is_null() {
-        wagon_removal = field!(g, GroupFields, flags) & 2 != 0;
+        wagon_removal = read_field!(g, flags) & 2 != 0;
     }
     let mut unit = v;
     let mut any = false;
@@ -1067,7 +1068,7 @@ unsafe fn set_rule(
     if if g.is_null() {
         id != ALL_GROUP && id != DEFAULT_GROUP
     } else {
-        field!(g, GroupFields, owner) != company
+        read_field!(g, owner) != company
     } {
         return ERROR;
     }
@@ -1075,7 +1076,7 @@ unsafe fn set_rule(
         return ERROR;
     }
     let kind = unsafe { (gw.engine_type)(from) };
-    if !g.is_null() && field!(g, GroupFields, vehicle_type) != kind {
+    if !g.is_null() && read_field!(g, vehicle_type) != kind {
         return ERROR;
     }
     let head = unsafe { (gw.head)(company).cast::<*mut ()>() };

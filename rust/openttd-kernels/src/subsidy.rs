@@ -16,6 +16,7 @@
     clippy::comparison_chain,
     clippy::if_not_else
 )]
+use crate::game_state::GameState;
 pub use crate::source_type::Source;
 use crate::station::{NearbyIndustryCursor, Station};
 use crate::subsidy_type::PartOfSubsidy;
@@ -28,7 +29,7 @@ use crate::{
     timer_game_common::MONTHS_IN_YEAR,
 };
 use crate::{industry, services::Services as Shared, town};
-use std::{cell::UnsafeCell, ffi::c_void, ptr};
+use std::{ffi::c_void, ptr};
 #[repr(C)]
 pub struct State {
     pub cargo_type: u8,
@@ -92,20 +93,17 @@ struct RegistryState {
     slots: [*mut State; 256],
     limit: u16,
 }
-struct Registry(UnsafeCell<RegistryState>);
-// SAFETY: Native game-state mutex serializes registration, iteration and aliases.
-unsafe impl Sync for Registry {}
-static OWNERS: Registry = Registry(UnsafeCell::new(RegistryState {
+static OWNERS: GameState<RegistryState> = GameState::new(RegistryState {
     slots: [ptr::null_mut(); 256],
     limit: 0,
-}));
+});
 fn owner(id: u16) -> *mut State {
     // SAFETY: Serialized native pool index; no registry borrow crosses callbacks.
-    unsafe { (*OWNERS.0.get()).slots[usize::from(id)] }
+    unsafe { (*OWNERS.get()).slots[usize::from(id)] }
 }
 fn each(mut visit: impl FnMut(u16, *mut State)) {
     let mut id = 0;
-    while id < unsafe { (*OWNERS.0.get()).limit } {
+    while id < unsafe { (*OWNERS.get()).limit } {
         let state = owner(id);
         if !state.is_null() {
             visit(id, state);
@@ -124,8 +122,8 @@ pub extern "C" fn openttd_rust_subsidy_new(id: u16) -> *mut State {
     }));
     // SAFETY: The constructing native pool shell owns this stable allocation.
     unsafe {
-        (*OWNERS.0.get()).slots[usize::from(id)] = state;
-        (*OWNERS.0.get()).limit = (*OWNERS.0.get()).limit.max(id + 1);
+        (*OWNERS.get()).slots[usize::from(id)] = state;
+        (*OWNERS.get()).limit = (*OWNERS.get()).limit.max(id + 1);
     }
     state
 }
@@ -133,11 +131,11 @@ pub extern "C" fn openttd_rust_subsidy_new(id: u16) -> *mut State {
 pub unsafe extern "C" fn openttd_rust_subsidy_destroy(id: u16, state: *mut State) {
     // SAFETY: Native pool destroys exactly once, after every scalar alias ends.
     unsafe {
-        (*OWNERS.0.get()).slots[usize::from(id)] = ptr::null_mut();
-        while (*OWNERS.0.get()).limit > 0
-            && (*OWNERS.0.get()).slots[usize::from((*OWNERS.0.get()).limit - 1)].is_null()
+        (*OWNERS.get()).slots[usize::from(id)] = ptr::null_mut();
+        while (*OWNERS.get()).limit > 0
+            && (*OWNERS.get()).slots[usize::from((*OWNERS.get()).limit - 1)].is_null()
         {
-            (*OWNERS.0.get()).limit -= 1;
+            (*OWNERS.get()).limit -= 1;
         }
         drop(Box::from_raw(state));
     }

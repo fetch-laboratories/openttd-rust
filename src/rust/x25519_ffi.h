@@ -60,8 +60,8 @@
 extern "C" {
 #endif
 struct OpenTTDX25519Leaves {
-	void (OPENTTD_CRYPTO_CALL *wipe)(void *, size_t) OPENTTD_SERVICE_DEFAULT(wipe);
-	int32_t (OPENTTD_CRYPTO_CALL *verify32)(const uint8_t *, const uint8_t *) OPENTTD_SERVICE_DEFAULT(verify32);
+	void (OPENTTD_RUST_CALL *wipe)(void *, size_t) OPENTTD_SERVICE_DEFAULT(wipe);
+	int32_t (OPENTTD_RUST_CALL *verify32)(const uint8_t *, const uint8_t *) OPENTTD_SERVICE_DEFAULT(verify32);
 };
 /* Leaves are the original nonthrowing wipe and constant-time verify32. Buffers are fixed 32-byte
  * spans; output may overlap secret, scalar or point, partially too, because all inputs are read
@@ -70,10 +70,10 @@ struct OpenTTDX25519Leaves {
  * carries and shifts. Original wipe points and order remain; compiler spills need not be erased.
  * Tables are initialized, live and immutable; calls are serialized and buffers are readable/writable
  * for their declared extents. */
-void OPENTTD_CRYPTO_CALL openttd_rust_x25519_trim(uint8_t *, const uint8_t *);
-void OPENTTD_CRYPTO_CALL openttd_rust_x25519_ladder(const struct OpenTTDX25519Leaves *, uint8_t *, const uint8_t *, const uint8_t *, int32_t);
-void OPENTTD_CRYPTO_CALL openttd_rust_x25519(const struct OpenTTDX25519Leaves *, uint8_t *, const uint8_t *, const uint8_t *);
-void OPENTTD_CRYPTO_CALL openttd_rust_x25519_public_key(const struct OpenTTDX25519Leaves *, uint8_t *, const uint8_t *);
+void OPENTTD_RUST_CALL openttd_rust_x25519_trim(uint8_t *, const uint8_t *);
+void OPENTTD_RUST_CALL openttd_rust_x25519_ladder(const struct OpenTTDX25519Leaves *, uint8_t *, const uint8_t *, const uint8_t *, int32_t);
+void OPENTTD_RUST_CALL openttd_rust_x25519(const struct OpenTTDX25519Leaves *, uint8_t *, const uint8_t *, const uint8_t *);
+void OPENTTD_RUST_CALL openttd_rust_x25519_public_key(const struct OpenTTDX25519Leaves *, uint8_t *, const uint8_t *);
 #ifdef __cplusplus
 }
 #endif

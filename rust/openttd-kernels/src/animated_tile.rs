@@ -12,6 +12,7 @@
 #![allow(unsafe_code, missing_docs, clippy::cast_possible_truncation)]
 use crate::animated_tile_map::AnimatedTileState;
 use crate::cargo_type::{INVALID_CARGO, NUM_CARGO};
+use crate::game_state::GameState;
 use crate::industry::{ShellHandle as IndustryShell, TileSpec as IndustrySpec};
 use crate::newgrf_animation_base::{Binding, Entry};
 use crate::newgrf_callbacks::{
@@ -31,7 +32,6 @@ use crate::{
     tile_type::{INVALID_TILE, MP_HOUSE, MP_INDUSTRY, MP_OBJECT, MP_STATION},
     town::Leaves,
 };
-use std::cell::UnsafeCell;
 #[repr(C)]
 pub struct HouseSpec {
     _private: [u8; 0],
@@ -82,10 +82,7 @@ pub struct Services {
     pub road_count: extern "C" fn(*mut BaseStation) -> usize,
     pub road_tile: extern "C" fn(*mut BaseStation, usize) -> u32,
 }
-struct Registry(UnsafeCell<*const Services>);
-// SAFETY: installation and all calls are serialized by the game-state mutex.
-unsafe impl Sync for Registry {}
-static REGISTRY: Registry = Registry(UnsafeCell::new(std::ptr::null()));
+static REGISTRY: GameState<*const Services> = GameState::new(std::ptr::null());
 /// Install the immutable native table at `InitializeAnimatedTiles`, before play.
 /// Native fixtures temporarily install a stack table and restore its predecessor.
 /// No owner borrow spans installation; the previous table is never dereferenced.
@@ -93,16 +90,12 @@ static REGISTRY: Registry = Registry(UnsafeCell::new(std::ptr::null()));
 pub unsafe extern "C" fn openttd_rust_animation_exchange(
     table: *const Services,
 ) -> *const Services {
-    unsafe {
-        let previous = *REGISTRY.0.get();
-        *REGISTRY.0.get() = table;
-        previous
-    }
+    REGISTRY.exchange(table)
 }
 pub(crate) fn services<'a>() -> &'a Services {
     // SAFETY: InitializeAnimatedTiles installs the process-lifetime native table
     // before any map use. A native test scope pins its replacement until restore.
-    unsafe { &**REGISTRY.0.get() }
+    unsafe { REGISTRY.table() }
 }
 
 impl Services {
@@ -110,13 +103,9 @@ impl Services {
         unsafe { &*self.shared }
     }
 }
-struct Queue(UnsafeCell<Vec<u32>>);
-// SAFETY: all entries run under the native game-state mutex (including GUI
-// commands). No queue reference escapes its callback-free lexical access.
-unsafe impl Sync for Queue {}
-static QUEUE: Queue = Queue(UnsafeCell::new(Vec::new()));
+static QUEUE: GameState<Vec<u32>> = GameState::new(Vec::new());
 fn queue<R>(f: impl FnOnce(&mut Vec<u32>) -> R) -> R {
-    unsafe { f(&mut *QUEUE.0.get()) }
+    unsafe { f(&mut *QUEUE.get()) }
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_animation_count() -> usize {

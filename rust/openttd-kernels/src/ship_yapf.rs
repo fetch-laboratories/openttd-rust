@@ -6,7 +6,7 @@
  */
 
 //! Complete ship YAPF searches and canonical path storage.
-// Equal estimates deliberately follow CBinaryHeapT rather than a stable queue.
+// Equal estimates follow `CBinaryHeapT`, not a stable queue.
 // Arena indices preserve parent identity when an existing open node is replaced.
 #![allow(
     clippy::cast_possible_truncation,
@@ -16,11 +16,12 @@
     clippy::similar_names,
     clippy::too_many_lines
 )]
+use crate::binaryheap::BinaryHeap;
+use crate::game_state::GameState;
 use crate::node_hash::NodeMap;
 use crate::services::Services;
 use crate::track_type::INVALID_TRACKDIR;
 use crate::water_regions::Patch;
-use std::cell::UnsafeCell;
 use std::ffi::c_void;
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -104,20 +105,16 @@ struct Scratch {
     arena: Vec<Node>,
     open: NodeMap<u32, usize>,
     closed: NodeMap<u32, usize>,
-    heap: Vec<usize>,
+    heap: BinaryHeap,
 }
-struct SerializedScratch(UnsafeCell<Option<Scratch>>);
-// SAFETY: Production entries hold the native game-state mutex. Slot borrows end
-// before callbacks; an active search owns its storage, including during reentry.
-// Native heap probes use local storage without accessing this process-wide slot.
-unsafe impl Sync for SerializedScratch {}
-static SCRATCH: SerializedScratch = SerializedScratch(UnsafeCell::new(None));
+// An active search owns the taken scratch; native heap probes never touch this slot.
+static SCRATCH: GameState<Option<Scratch>> = GameState::new(None);
 
 struct Search {
     arena: Vec<Node>,
     open: NodeMap<u32, usize>,
     closed: NodeMap<u32, usize>,
-    heap: Vec<usize>,
+    heap: BinaryHeap,
     limit: i32,
     reuse_scratch: bool,
 }
@@ -129,66 +126,31 @@ impl Search {
     unsafe fn reused(limit: i32) -> Self {
         // SAFETY: Move ownership out before any callback; nested calls get their
         // own storage. First use allocates only when the search grows.
-        let scratch = unsafe { (*SCRATCH.0.get()).take().unwrap_or_default() };
+        let scratch = unsafe { (*SCRATCH.get()).take().unwrap_or_default() };
         Self::with_scratch(limit, scratch, true)
     }
     fn with_scratch(limit: i32, mut scratch: Scratch, reuse_scratch: bool) -> Self {
         scratch.arena.clear();
         scratch.open.clear();
         scratch.closed.clear();
-        scratch.heap.clear();
-        scratch.heap.push(usize::MAX);
         Self {
             arena: scratch.arena,
             open: scratch.open,
             closed: scratch.closed,
-            heap: scratch.heap,
+            heap: BinaryHeap::reuse(scratch.heap),
             limit,
             reuse_scratch,
         }
     }
-    fn less(&self, a: usize, b: usize) -> bool {
-        self.arena[a].estimate < self.arena[b].estimate
-    }
-    fn up(&mut self, mut gap: usize, item: usize) -> usize {
-        while gap > 1 {
-            let parent = gap / 2;
-            if !self.less(item, self.heap[parent]) {
-                break;
-            }
-            self.heap[gap] = self.heap[parent];
-            gap = parent;
-        }
-        gap
-    }
-    fn down(&mut self, mut gap: usize, item: usize) -> usize {
-        let mut child = gap * 2;
-        while child < self.heap.len() {
-            if child + 1 < self.heap.len() && self.less(self.heap[child + 1], self.heap[child]) {
-                child += 1;
-            }
-            if !self.less(self.heap[child], item) {
-                break;
-            }
-            self.heap[gap] = self.heap[child];
-            gap = child;
-            child = gap * 2;
-        }
-        gap
-    }
     fn include(&mut self, item: usize) {
-        self.heap.push(0);
-        let gap = self.up(self.heap.len() - 1, item);
-        self.heap[gap] = item;
+        let arena = &self.arena;
+        self.heap
+            .include(item, |a, b| arena[a].estimate < arena[b].estimate);
     }
     fn remove(&mut self, item: usize) {
-        let index = self.heap.iter().position(|i| *i == item).unwrap();
-        let last = self.heap.pop().unwrap();
-        if index < self.heap.len() {
-            let gap = self.up(index, last);
-            let gap = self.down(gap, last);
-            self.heap[gap] = last;
-        }
+        let arena = &self.arena;
+        self.heap
+            .remove(item, |a, b| arena[a].estimate < arena[b].estimate);
     }
     fn add(&mut self, n: Node) {
         if let Some(&old) = self.open.get(&n.key) {
@@ -216,7 +178,7 @@ impl Search {
         }
     }
     fn best(&self) -> Option<usize> {
-        self.heap.get(1).copied()
+        self.heap.first()
     }
     fn report(&self, input: &Input, leaves: &Leaves, kind: u8, rounds: u32, found: Option<usize>) {
         let (cost, distance) = found.map_or((-1, -1), |index| {
@@ -260,7 +222,7 @@ impl Drop for Search {
             };
             // SAFETY: Only serialized entries enable reuse. No slot borrow spans
             // callbacks; an outer search may replace a nested call's cache.
-            unsafe { *SCRATCH.0.get() = Some(scratch) };
+            unsafe { *SCRATCH.get() = Some(scratch) };
         }
     }
 }
@@ -915,10 +877,9 @@ pub unsafe extern "C" fn openttd_rust_ship_regions_destroy(p: *mut RegionPath) {
     drop(unsafe { Box::from_raw(p) });
 }
 
-/// Narrow evidence hook for the heap tie/removal gap in saved-state scenarios.
+/// Heap probe for tie and removal order, which no saved state records.
 /// Commands use bits 31..30: include, remove, update; low bits are arena indices.
-/// This calls the actual search heap; the native test independently uses the
-/// unchanged original `CBinaryHeapT`, never a second Rust implementation.
+/// The native test runs the same commands through the original `CBinaryHeapT`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_heap_probe(
     costs: *const i32,
@@ -1053,7 +1014,7 @@ mod tests {
             assert_eq!(capacities(&next), retained);
             assert_eq!(next.arena.as_ptr() as usize, arena);
             assert!(next.arena.is_empty() && next.open.is_empty() && next.closed.is_empty());
-            assert_eq!(next.heap, [usize::MAX]);
+            assert_eq!(next.heap.first(), None);
             assert_eq!(next.limit, 2);
             for key in 0..64 {
                 next.add(blank(key, key, 0, patch, None));

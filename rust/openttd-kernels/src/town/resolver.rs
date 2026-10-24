@@ -1,15 +1,13 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! House and shared-town query runtime. Stack contexts live with the native Action2 facades.
-use super::{BUILDING_COUNTS, GameState, Leaves, State, house};
+use super::{BUILDING_COUNTS, Leaves, State, house};
 use crate::cargo_type::{CT_MAIL, CT_PASSENGERS, is_valid_cargo_type};
+use crate::game_state::GameState;
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
 use crate::newgrf_storage;
 use crate::services::{Map, Services, TownHandle};
 use crate::tile_type::{INVALID_TILE, MP_HOUSE};
-use std::{
-    cell::{OnceCell, UnsafeCell},
-    ffi::c_void,
-};
+use std::{cell::OnceCell, ffi::c_void};
 
 use crate::house::{HOUSE_NO_CLASS, INVALID_HOUSE_ID, NEW_HOUSE_OFFSET, TOWN_HOUSE_COMPLETED};
 use crate::newgrf_callbacks::{CBID_HOUSE_ALLOW_CONSTRUCTION, CBID_HOUSE_DRAW_FOUNDATIONS};
@@ -97,16 +95,16 @@ struct ClassMapping {
 static CLASSES: GameState<Vec<ClassMapping>> = GameState::new(Vec::new());
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_house_classes_reset() {
-    CLASSES.with(|cell| unsafe {
-        let classes = &mut *cell.get();
+    unsafe {
+        let classes = &mut *CLASSES.get();
         classes.clear();
         classes.push(ClassMapping::default());
-    });
+    }
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_house_class_allocate(class: u8, grfid: u32) -> u16 {
-    CLASSES.with(|cell| unsafe {
-        let classes = &mut *cell.get();
+    unsafe {
+        let classes = &mut *CLASSES.get();
         if let Some(index) = classes
             .iter()
             .skip(1)
@@ -117,7 +115,7 @@ pub extern "C" fn openttd_rust_house_class_allocate(class: u8, grfid: u32) -> u1
         let index = classes.len();
         classes.push(ClassMapping { grfid, class });
         index as u16
-    })
+    }
 }
 unsafe fn initialize_counts(owner: *mut State, specs: usize, classes: usize) {
     let owner = unsafe { &mut *owner };
@@ -133,18 +131,18 @@ pub unsafe extern "C" fn openttd_rust_house_counts_init(
     owner: *mut State,
     specs: usize,
 ) {
-    let classes = CLASSES.with(|cell| unsafe { (*cell.get()).len() });
+    let classes = unsafe { (*CLASSES.get()).len() };
     if !owner.is_null() {
         unsafe { initialize_counts(owner, specs, classes) };
         return;
     }
-    BUILDING_COUNTS.with(|cell| unsafe {
-        let counts = &mut *cell.get();
+    unsafe {
+        let counts = &mut *BUILDING_COUNTS.get();
         counts.ids.clear();
         counts.classes.clear();
         counts.ids.resize(specs, 0);
         counts.classes.resize(classes, 0);
-    });
+    };
     let mut id = (l.next_town)(0);
     while id != u32::MAX {
         let owner = (s.town_owner_by_id)(id);
@@ -161,10 +159,10 @@ unsafe fn num_houses(owner: *const State, house: u16, class: u16) -> u32 {
             state.class_counts[usize::from(class)],
         )
     };
-    let (map_id, map_class) = BUILDING_COUNTS.with(|cell| unsafe {
-        let c = &*cell.get();
+    let (map_id, map_class) = unsafe {
+        let c = &*BUILDING_COUNTS.get();
         (c.ids[usize::from(house)], c.classes[usize::from(class)])
-    });
+    };
     map_class.min(255) << 24
         | u32::from(town_class.min(255)) << 16
         | map_id.min(255) << 8
@@ -320,7 +318,7 @@ pub unsafe extern "C" fn openttd_rust_town_scope_store(
             pos,
             value,
         );
-    };
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_house_random(
@@ -512,8 +510,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
             let class = if spec.house_class == HOUSE_NO_CLASS {
                 0
             } else {
-                let local_class = CLASSES
-                    .with(|cell| unsafe { (&*cell.get())[usize::from(spec.house_class)].class });
+                let local_class = unsafe { (&*CLASSES.get())[usize::from(spec.house_class)].class };
                 same_file << 8 | u32::from(local_class)
             };
             let local = if house < NEW_HOUSE_OFFSET {
@@ -610,23 +607,16 @@ crate::abi::layouts! {
 
 /// Immutable process-lifetime native leaves, installed on house-class reset
 /// before any callback.
-struct Registry(UnsafeCell<*const ResolverServices>);
-// SAFETY: Installation and all reads hold the native game-state mutex.
-unsafe impl Sync for Registry {}
-static REGISTRY: Registry = Registry(UnsafeCell::new(std::ptr::null()));
+static REGISTRY: GameState<*const ResolverServices> = GameState::new(std::ptr::null());
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_house_resolver_exchange(
     s: *const ResolverServices,
 ) -> *const ResolverServices {
-    unsafe {
-        let previous = *REGISTRY.0.get();
-        *REGISTRY.0.get() = s;
-        previous
-    }
+    REGISTRY.exchange(s)
 }
 fn services<'a>() -> &'a ResolverServices {
     // SAFETY: ResetHouses installs before use. Table is immutable and process-live.
-    unsafe { &**REGISTRY.0.get() }
+    unsafe { REGISTRY.table() }
 }
 #[repr(C)]
 pub struct CallbackArgs {

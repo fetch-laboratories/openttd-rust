@@ -9,13 +9,7 @@
 #ifndef OPENTTD_RUST_STRING_VALIDATION_FFI_H
 #define OPENTTD_RUST_STRING_VALIDATION_FFI_H
 #include "utf8_ffi.h"
-#if defined(_MSC_VER)
-#define OPENTTD_VALIDATION_CALL __cdecl
-#elif defined(__i386__)
-#define OPENTTD_VALIDATION_CALL __attribute__((cdecl))
-#else
-#define OPENTTD_VALIDATION_CALL
-#endif
+#include "call_ffi.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -32,15 +26,15 @@ typedef struct {
 /* Input is one readable allocation <= PTRDIFF_MAX, valid only during the call;
  * zero length accepts null. Result bytes own their storage. Unknown settings
  * bits are ignored. No callback or C++ allocation occurs in Rust; panic aborts. */
-OpenTTDValidationStep OPENTTD_VALIDATION_CALL openttd_rust_validation_step(const uint8_t *, size_t length, uint8_t settings);
-uint8_t OPENTTD_VALIDATION_CALL openttd_rust_validation_valid(const uint8_t *, size_t length);
+OpenTTDValidationStep OPENTTD_RUST_CALL openttd_rust_validation_step(const uint8_t *, size_t length, uint8_t settings);
+uint8_t OPENTTD_RUST_CALL openttd_rust_validation_valid(const uint8_t *, size_t length);
 /* Original ranges::copy preconditions apply: with live-consumer capacity accepted, length source
  * bytes are readable and dest[position..position+length] writable. Output start lies outside a
  * nonempty input range; defined left overlap is allowed, and raw reads precede writes. Zero length
  * accesses neither pointer. Overtake leaves output and position unchanged; C++ fatal dispatch
  * happens only after return. Each span lies in one live allocation <= PTRDIFF_MAX, without
  * concurrent access while writing; raw reads and writes create no overlapping Rust references. */
-OpenTTDInplaceWrite OPENTTD_VALIDATION_CALL openttd_rust_inplace_write(uint8_t *dest, size_t position, size_t consumed, const uint8_t *source, size_t length);
+OpenTTDInplaceWrite OPENTTD_RUST_CALL openttd_rust_inplace_write(uint8_t *dest, size_t position, size_t consumed, const uint8_t *source, size_t length);
 #ifdef __cplusplus
 }
 #endif
