@@ -19,6 +19,7 @@
 #include "../newgrf_industrytiles.h"
 #include "../newgrf_airport.h"
 #include "../newgrf_object.h"
+#include "../newgrf_roadstop.h"
 #include "../industry.h"
 #include "../industry_map.h"
 #include "object_ffi.h"
@@ -103,6 +104,8 @@ static void ResolverBinding(ResolverObject *ro, OpenTTDResolverBinding *out) noe
 		out->state = &i->industries_scope.context; out->self = &i->industries_scope; out->kind = 3;
 	} else if (auto *it = dynamic_cast<IndustryTileResolverObject *>(ro)) {
 		out->self = &it->indtile_scope; out->parent = &it->ind_scope; out->kind = 4;
+	} else if (auto *rs = dynamic_cast<RoadStopResolverObject *>(ro)) {
+		out->state = &rs->roadstop_scope.state; out->self = &rs->roadstop_scope; out->kind = 6;
 	} else if (typeid(*ro) != typeid(ResolverObject)) {
 		out->kind = 5; // Remaining native feature scope-selection behavior.
 	}
@@ -117,6 +120,7 @@ static void ScopeBinding(ScopeResolver *scope, OpenTTDScopeBinding *out) noexcep
 	else if (auto *o = dynamic_cast<ObjectScopeResolver *>(scope)) { out->kind = 5; out->data.object = {o->obj, o->spec, o->tile.base(), o->view}; }
 	else if (auto *t = dynamic_cast<TownScopeResolver *>(scope)) { out->kind = 6; out->data.town = {t->t, t->readonly}; }
 	else if (auto *a = dynamic_cast<AirportScopeResolver *>(scope)) { out->kind = 7; out->data.airport = a->st; }
+	else if (auto *rs = dynamic_cast<RoadStopScopeResolver *>(scope)) { out->kind = 9; out->data.roadstop = &rs->state; }
 	else { out->kind = typeid(*scope) == typeid(ScopeResolver) ? 0 : 8; }
 }
 const OpenTTDSpriteGroupServices &GetRustSpriteGroupServices() noexcept
@@ -141,6 +145,7 @@ const OpenTTDSpriteGroupServices &GetRustSpriteGroupServices() noexcept
 		.random_triggers = [](const ScopeResolver *s) noexcept { return s->GetRandomTriggers(); },
 		.range = GroupRange,
 		.resolver_binding = ResolverBinding,
+		.roadstop = &GetRoadStopResolverServices(),
 		.scope = [](ResolverObject *ro, uint8_t scope, uint8_t relative) noexcept { return ro->GetScope(static_cast<VarSpriteGroupScope>(scope), relative); },
 		.scope_binding = ScopeBinding,
 		.storage = &GetRustStorageServices(),

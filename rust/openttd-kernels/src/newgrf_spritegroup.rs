@@ -171,6 +171,7 @@ pub struct Services {
     random_triggers: unsafe extern "C" fn(Handle) -> u32,
     range: unsafe extern "C" fn(Handle, usize) -> Range,
     resolver_binding: unsafe extern "C" fn(Resolver, *mut ResolverBinding),
+    roadstop: *const crate::newgrf_roadstop::Services,
     scope: unsafe extern "C" fn(Resolver, u8, u8) -> Resolver,
     scope_binding: unsafe extern "C" fn(Resolver, *mut ScopeBinding),
     storage: *const crate::newgrf_storage::Services,
@@ -213,6 +214,7 @@ pub union ScopeData {
     object: ObjectScope,
     town: TownScope,
     airport: Resolver,
+    roadstop: *const crate::newgrf_roadstop::State,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -291,6 +293,14 @@ impl<'a> Invocation<'a> {
                     kind,
                     relative,
                     self.s.industry,
+                ),
+                6 => crate::newgrf_roadstop::openttd_rust_roadstop_scope(
+                    b.state.cast(),
+                    self.ro,
+                    b.own,
+                    kind,
+                    relative,
+                    self.s.roadstop,
                 ),
                 _ => (self.s.scope)(self.ro, kind, relative),
             };
@@ -376,6 +386,15 @@ impl<'a> Invocation<'a> {
                         parameter,
                     )
                 }
+                9 => crate::newgrf_roadstop::openttd_rust_roadstop_variable(
+                    b.data.roadstop,
+                    self.ro,
+                    self.file,
+                    variable,
+                    parameter,
+                    available,
+                    self.s.roadstop,
+                ),
                 _ => (self.s.variable)(scope.native, variable, parameter, available),
             }
         }
@@ -406,6 +425,11 @@ impl<'a> Invocation<'a> {
                     self.s.object,
                     scope.binding.data.object.tile,
                 ),
+                9 => crate::newgrf_roadstop::openttd_rust_roadstop_random(
+                    scope.binding.data.roadstop,
+                    false,
+                    self.s.roadstop,
+                ),
                 _ => (self.s.random_bits)(scope.native),
             }
         }
@@ -429,6 +453,11 @@ impl<'a> Invocation<'a> {
                         self.s.industry,
                     )
                 }
+                9 => crate::newgrf_roadstop::openttd_rust_roadstop_random(
+                    scope.binding.data.roadstop,
+                    true,
+                    self.s.roadstop,
+                ),
                 _ => (self.s.random_triggers)(scope.native),
             }
         }
@@ -437,7 +466,7 @@ impl<'a> Invocation<'a> {
         crate::witness::hit(crate::witness::ACTION2_STORAGE);
         unsafe {
             match scope.binding.kind {
-                0..=2 | 4 | 5 => {}
+                0..=2 | 4 | 5 | 9 => {}
                 3 => {
                     let industry = (*scope.binding.data.industry).industry;
                     crate::newgrf_storage::openttd_rust_storage_industry(
@@ -895,5 +924,5 @@ crate::abi::layouts! {
     "OpenTTDGroupNode" ["storage"] => Node { data, kind };
     "OpenTTDGroupAdjust" ["storage"] => Adjust { subroutine, and_mask, add_val, divmod_val, operation, kind => type, variable, parameter, shift_num };
     "OpenTTDGroupRange" ["storage"] => Range { result, low, high };
-    "OpenTTDSpriteGroupServices" ["storage"] => Services { adjust, global, industry, industry_builder, loaded, loaded_count, loading, loading_count, native, node, object, parameter, profile_end, profile_enter, random_bits, random_group, random_triggers, range, resolver_binding, scope, scope_binding, storage, store_psa, tile_random_check, unhandled_scope, variable, vehicle };
+    "OpenTTDSpriteGroupServices" ["storage"] => Services { adjust, global, industry, industry_builder, loaded, loaded_count, loading, loading_count, native, node, object, parameter, profile_end, profile_enter, random_bits, random_group, random_triggers, range, resolver_binding, roadstop, scope, scope_binding, storage, store_psa, tile_random_check, unhandled_scope, variable, vehicle };
 }

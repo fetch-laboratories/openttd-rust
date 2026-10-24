@@ -42,6 +42,8 @@ struct OpenTTDVehicleResolverServices;
 struct OpenTTDIndustryResolverServices;
 struct OpenTTDObjectServices;
 struct OpenTTDStorageServices;
+struct OpenTTDRoadStopResolverServices;
+struct OpenTTDRoadStopResolverState;
 struct OpenTTDIndustryBuilder;
 struct OpenTTDVehicleScopeState;
 struct OpenTTDIndustryResolverContext;
@@ -52,7 +54,7 @@ struct ObjectSpec;
 struct OpenTTDResolverBinding { void *state; ScopeResolver *self, *parent, *relative, *default_scope; uint8_t kind; };
 struct OpenTTDObjectScope { Object *object; const ObjectSpec *spec; uint32_t tile; uint8_t view; };
 struct OpenTTDTownScope { Town *town; bool readonly; };
-union OpenTTDScopeData { const OpenTTDVehicleScopeState *vehicle; const OpenTTDIndustryResolverContext *industry; void *station; OpenTTDObjectScope object; OpenTTDTownScope town; Station *airport; };
+union OpenTTDScopeData { const OpenTTDVehicleScopeState *vehicle; const OpenTTDIndustryResolverContext *industry; void *station; OpenTTDObjectScope object; OpenTTDTownScope town; Station *airport; const OpenTTDRoadStopResolverState *roadstop; };
 struct OpenTTDScopeBinding { OpenTTDScopeData data; uint8_t kind; };
 struct OpenTTDSpriteGroupServices {
 	OpenTTDGroupAdjust (*adjust)(const SpriteGroup *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(adjust);
@@ -74,6 +76,7 @@ struct OpenTTDSpriteGroupServices {
 	uint32_t (*random_triggers)(const ScopeResolver *) noexcept OPENTTD_SERVICE_DEFAULT(random_triggers);
 	OpenTTDGroupRange (*range)(const SpriteGroup *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(range);
 	void (*resolver_binding)(ResolverObject *, OpenTTDResolverBinding *) noexcept OPENTTD_SERVICE_DEFAULT(resolver_binding);
+	const OpenTTDRoadStopResolverServices *roadstop;
 	ScopeResolver *(*scope)(ResolverObject *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(scope);
 	void (*scope_binding)(ScopeResolver *, OpenTTDScopeBinding *) noexcept OPENTTD_SERVICE_DEFAULT(scope_binding);
 	const OpenTTDStorageServices *storage;
