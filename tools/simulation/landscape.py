@@ -489,17 +489,14 @@ def scheduler_gap():
     def function(text, name):
         import re
 
+        import probe
+
         match = re.search(
             r"^(?:static )?(?:inline )?[\w:<>]+\s+" + name + r"\([^;{}]*\)\s*\{",
             text,
             re.M,
         )
-        start = text.rfind("\n", 0, match.start()) + 1
-        end, depth = match.end(), 1
-        while depth:
-            depth += (text[end] == "{") - (text[end] == "}")
-            end += 1
-        return text[start:end] + "\n"
+        return probe.body(text, match[0]) + "\n"
 
     fragments = (
         (migration.REFERENCE / "src/slope_func.h")

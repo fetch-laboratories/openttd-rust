@@ -183,7 +183,7 @@ jobs:
 
     - name: Compare accepted wide math templates with pinned C++
       if: inputs.rust
-      run: python3 tools/math-extension-comparison.py --build build --output .local/macos-evidence/math-extensions
+      run: python3 tools/math-comparison.py --build build --output .local/macos-evidence/math-extensions
 
     - name: Reject unsupported Rust configurations
       if: inputs.rust

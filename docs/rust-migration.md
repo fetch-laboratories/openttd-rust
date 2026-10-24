@@ -100,7 +100,9 @@ verification. The candidate Rust option is checked in the CMake cache and record
 report; a C++ fallback cannot pass as a migrated candidate. The `tools` action builds the native
 Rust generators alone into `.local/build-tools-rust` (`OPTION_TOOLS_ONLY=ON`, `OPTION_RUST=ON`),
 using the bootstrapped toolchain when present. `tools/run-comparisons.py` then runs every
-reference comparison tool (`tools/*-comparison.py`) in parallel; CI runs all three steps.
+reference comparison tool (`tools/*-comparison.py`) in parallel and prints each one's case
+inventory; CI runs all three steps. The tools share `tools/probe.py` (pinned-reference guard,
+body extraction, build-rust archive linkage and pass line).
 
 ```sh
 python3 tools/migration.py rust-checks
@@ -690,9 +692,9 @@ remains C++: its potentially overflowing signed intermediates need separate work
 scalar-only: modulo-2^64 value bits plus explicit width and signedness; C++20 integral
 conversion rebuilds the result. Reversed signed 8/16-bit SoftClamp intervals convert min to
 unsigned and then promote to int, so `SoftClamp<int8_t>(0, -1, -3)` returns 126. Checks: the
-unchanged IntSqrt, ClampTo and SoftClamp cases, `python3 tools/math-comparison.py` and `python3
-tools/math-extension-comparison.py` (wide templates on the native library; macOS CI runs it with
-`--build build`). PR #36.
+unchanged IntSqrt, ClampTo and SoftClamp cases and `python3 tools/math-comparison.py` (bounded
+corpus with GNU link wrapping on Linux, wide templates on the native library; macOS CI runs the
+wide templates with `--build build`). PR #36.
 
 ### Generic history structural engine
 
