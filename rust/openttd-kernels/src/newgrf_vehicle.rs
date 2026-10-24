@@ -667,7 +667,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_shell_callback(
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDVehicleOrderState" ["vehicle_resolver"] => OrderState { unload, load, loading };
+    "OpenTTDVehicleLoadingOrder" ["vehicle_resolver"] => OrderState { unload, load, loading };
     "OpenTTDVehicleRandomResult" ["vehicle_resolver"] => RandomResult { used, reseed };
     "OpenTTDVehicleCargoQuery" ["vehicle_resolver"] => CargoQuery { cargo, subtype, engine };
     "OpenTTDVehicleOverride" ["vehicle_resolver"] => Override { group, cargo, count };

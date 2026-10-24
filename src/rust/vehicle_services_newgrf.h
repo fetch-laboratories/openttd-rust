@@ -56,7 +56,7 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.write_random = [](OpenTTDVehicle *v, uint16_t bits) noexcept { RustVehicleSetRandomBits(VehicleOf(v), bits); },
 		.write_waiting = [](OpenTTDVehicle *v, uint8_t waiting) noexcept { VehicleOf(v)->waiting_random_triggers = VehicleRandomTriggers(waiting); },
 		.resolve_callback = VehicleResolverCallback, .resolve_random = VehicleResolverRandom,
-		.order = [](OpenTTDVehicle *v) noexcept -> OpenTTDVehicleOrderState { const Order &o = VehicleOf(v)->current_order; return {to_underlying(o.GetUnloadType()), to_underlying(o.GetLoadType()), o.IsType(OT_LOADING)}; },
+		.order = [](OpenTTDVehicle *v) noexcept -> OpenTTDVehicleLoadingOrder { const Order &o = VehicleOf(v)->current_order; return {to_underlying(o.GetUnloadType()), to_underlying(o.GetLoadType()), o.IsType(OT_LOADING)}; },
 		.cargo_owner = [](OpenTTDVehicle *v) noexcept { return RustVehicleCargoOwner(VehicleOf(v)); },
 		.cargo_capacity = RustVehicleCargoCap,
 		.real_count = [](const RealSpriteGroup *group, bool motion) noexcept { return static_cast<uint32_t>(motion ? group->loaded.size() : group->loading.size()); },
