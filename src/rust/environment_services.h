@@ -36,6 +36,7 @@ inline uint OpenTTDMapScaleSize(uint n) noexcept { return Map::ScaleBySize(n); }
 inline uint OpenTTDMapScaleLandProportion(uint n) noexcept { return Map::ScaleByLandProportion(n); }
 enum ClearGround : uint8_t;
 enum TreeGround : uint8_t;
+inline bool RustIsTileFlat(uint32_t tile, int *height = nullptr) noexcept { return IsTileFlat(TileIndex{tile}, height); }
 bool OpenTTDIsTileFlat(uint32_t tile) noexcept;
 ClearGround OpenTTDClearGround(uint32_t tile) noexcept;
 TreeGround OpenTTDTreeGround(uint32_t tile) noexcept;

@@ -21,7 +21,7 @@ COMMON = "roadveh[0]/common[0]/"
 # fixture's refit, autorefit, conditional, full-load, cross-graph, depot and
 # unload-only orders. Unreached (#156): graph_failure (exhausted link-graph
 # pool), depot_refit_failed (refit cost beyond cash), depot_elsewhere,
-# dummy and reservation (departure with reserved cargo).
+# and dummy. The visits adapter reserves real station cargo before departure.
 VISITS = ["aircraft_mail", "autorefit", "begin_loading", "conditional_branch"]
 VISITS += ["depot", "depot_halt", "depot_refit", "full_load_increase"]
 VISITS += ["graph_join", "graph_merge_first", "graph_merge_second", "graph_new"]
@@ -60,12 +60,25 @@ def scenarios(soak):
             "console": [*DISTRIBUTIONS["cargodist"][:-1], "orders_scenario visits"]
             + ["unpause"],
             "ticks": 4 * SNAPSHOT_TICKS,
-        }
+        },
+        {
+            "name": "orders-visits-reserved",
+            "kind": "save",
+            "save": str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
+            "orders": "visits-reserved",
+            "console": [
+                *DISTRIBUTIONS["cargodist"][:-1],
+                "orders_scenario visits-reserved",
+                "unpause",
+            ],
+            "ticks": 1,
+            "short_checkpoint": True,
+        },
     ]
 
 
 def game_environment(scenario):
-    if scenario.get("orders") == "visits" and scenario.get("witnesses"):
+    if scenario.get("orders", "").startswith("visits") and scenario.get("witnesses"):
         return WITNESS_ENVIRONMENT
     return {"OPENTTD_ORDERS_CLIENT": "1"} if scenario.get("orders_client") else {}
 
@@ -111,7 +124,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                     builds[role] / name, target_is_directory=True
                 )
     mode = scenario["orders"]
-    if mode == "visits":
+    if mode.startswith("visits"):
         from pathlib import Path
 
         from .rails import normalize
@@ -237,6 +250,24 @@ def check(scenario, run, mode, role, result):
         if "VISITS setup 3 3 120 0" not in run["log"]:
             result["problems"].append(f"{mode}/{role}: missing visits setup")
         if counts := branch_witnesses(scenario, run, role, "vehicle_visits", VISITS):
+            result[f"{mode}_{role}_visit_branches"] = counts
+        return
+    if operation == "visits-reserved":
+        reservations = [
+            line.split()
+            for line in run["log"]
+            if line.startswith("VISITS reservation ")
+        ]
+        if len(reservations) != 1 or reservations[0][3:] != [
+            "7",
+            "true",
+            "true",
+            "true",
+        ]:
+            raise RuntimeError("missing nonempty reserved-cargo departure")
+        if counts := branch_witnesses(
+            scenario, run, role, "vehicle_visits", ["reservation"]
+        ):
             result[f"{mode}_{role}_visit_branches"] = counts
         return
     required = {

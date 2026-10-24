@@ -140,11 +140,6 @@ static void TrainCacheOverride(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	v->tcache.cached_override = GetWagonOverrideSpriteSet(v->engine_type, v->cargo_type, EngineID(RustGroundFirstEngine(v)));
 }
-static uint64_t TrainCallbackLength(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	return RustVehicleCallback(CBID_VEHICLE_LENGTH, 0, 0, v->engine_type, v);
-}
 static uint64_t TrainCapacity(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
@@ -360,20 +355,10 @@ static uint64_t TrainLengthCallback(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	return EngineOf(RustVehicleGetEngine(RustVehicle(v)))->info.callback_mask.Test(VehicleCallbackMask::Length);
 }
-static void TrainLengthChanged(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	VehicleLengthChanged(v);
-}
 static uint64_t TrainLengthDefault(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
 	return RailVehInfo(v->engine_type)->shorten_factor;
-}
-static void TrainLengthError(OpenTTDTrainHandle id, uint16_t a) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	RustUnknownCallbackResult(EngineOf(RustVehicleGetEngine(RustVehicle(v)))->GetGRFID(), CBID_VEHICLE_LENGTH, static_cast<uint16_t>(a));
 }
 static uint64_t TrainLocalCompany(OpenTTDTrainHandle) noexcept
 {

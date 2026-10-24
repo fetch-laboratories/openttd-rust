@@ -132,12 +132,9 @@ const OpenTTDCargoCapacityServices &GetRustCargoCapacityServices() noexcept
  * @pre You can only do this if the consist is not loading or unloading. It
  *      must not carry reserved cargo, nor cargo to be unloaded or transferred.
  */
+#ifndef WITH_RUST
 void CheckCargoCapacity(Vehicle *v)
 {
-#ifdef WITH_RUST
-	const auto &services = GetRustCargoCapacityServices();
-	openttd_rust_cargo_capacity(&services, v, nullptr, 0, 0);
-#else
 	assert(v == nullptr || v->First() == v);
 
 	for (Vehicle *src = v; src != nullptr; src = src->Next()) {
@@ -160,8 +157,8 @@ void CheckCargoCapacity(Vehicle *v)
 		/* Any left-overs will be thrown away, but not their feeder share. */
 		if (src->cargo_cap < src->cargo.TotalCount()) src->cargo.Truncate(src->cargo.TotalCount() - src->cargo_cap);
 	}
-#endif /* WITH_RUST */
 }
+#endif /* !WITH_RUST */
 
 /**
  * Transfer cargo from a single (articulated )old vehicle to the new vehicle chain

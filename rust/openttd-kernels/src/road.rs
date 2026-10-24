@@ -566,6 +566,9 @@ struct Game<'a> {
     acceleration_model: u8,
     road_side: u8,
     queue: bool,
+    // Entry/TickRead dimensions last only for this synchronous controller call.
+    // Orders, sound/GRF, movement, crash and viewport callbacks cannot load/reset
+    // the map or yield the game-state mutex; nested entries have their own Game.
     map: Map,
 }
 
@@ -910,7 +913,7 @@ impl Game<'_> {
     }
     /// x/y store, `UpdatePosition`, `UpdateInclination` and `RoadZPosAffectSpeed`.
     fn move_to(&self, v: Part, s: &mut Step, x: i32, y: i32, new_tile: bool, delta: bool) {
-        let m = crate::ground_vehicle::move_incline(self.gs, v.v, x, y, new_tile, delta);
+        let m = crate::ground_vehicle::move_incline(self.gs, self.map, v.v, x, y, new_tile, delta);
         s.x = x;
         s.y = y;
         s.z = m.z;
@@ -1224,7 +1227,7 @@ impl Game<'_> {
         service!(self.l.depot_exit)(v.v, x, y);
         // SAFETY: The newly visible shell survives depot exit.
         unsafe {
-            crate::vehicle::occupancy::update(self.vs, v.v, false);
+            crate::vehicle::occupancy::update_position(self.vs, v.v, self.map);
         }
         crate::ground_vehicle::inclination(self.gs.physics, v.v, true, true);
         service!(self.l.depot_exit_dirty)(v.v);
@@ -1324,7 +1327,7 @@ impl Game<'_> {
             service!(self.vs.write_xy)(v.v, gp.x, gp.y);
             // SAFETY: The live road shell survives the synchronous index update.
             unsafe {
-                crate::vehicle::occupancy::update(self.vs, v.v, false);
+                crate::vehicle::occupancy::update_position(self.vs, v.v, self.map);
             }
             let status = service!(self.vs.status)(v.v);
             s.x = gp.x;
@@ -1619,7 +1622,7 @@ impl Game<'_> {
     }
     /// Wormhole entry: x/y, `UpdatePosition`, `UpdateInclination(true, true)`.
     fn move_without_speed(&self, v: Part, s: &mut Step, x: i32, y: i32) {
-        let m = crate::ground_vehicle::move_incline(self.gs, v.v, x, y, true, true);
+        let m = crate::ground_vehicle::move_incline(self.gs, self.map, v.v, x, y, true, true);
         s.x = x;
         s.y = y;
         s.z = m.z;
