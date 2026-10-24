@@ -1712,7 +1712,9 @@ impl<'a> Ctx<'a> {
     }
     fn convert_owner(&self, tile: u32, num: u32, owner: u8, from: u8, to: u8) {
         let company = (self.shared.current_company)();
-        if company >= MAX_COMPANIES || (owner >= MAX_COMPANIES && owner != OWNER_NONE) {
+        if u32::from(company) >= u32::from(MAX_COMPANIES)
+            || (u32::from(owner) >= u32::from(MAX_COMPANIES) && owner != OWNER_NONE)
+        {
             return;
         }
         if owner == OWNER_NONE {

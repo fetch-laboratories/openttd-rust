@@ -1210,7 +1210,7 @@ fn control(s: &Services, ownership: &crate::tile_owner::Context, c: &mut Control
             }
             1 => {
                 let target = c.target;
-                if target != INVALID_OWNER && target >= MAX_COMPANIES {
+                if target != INVALID_OWNER && u32::from(target) >= u32::from(MAX_COMPANIES) {
                     c.result = error();
                     return false;
                 }
