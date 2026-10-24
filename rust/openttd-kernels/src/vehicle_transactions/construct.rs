@@ -200,7 +200,7 @@ pub(crate) unsafe fn aircraft(
     (k.service_flags)(v, (k.exclusive_preview)(e), (b.interval_percent)(company));
     (r.invalidate_chain)(v.cast());
     // Source passes the live mail shell field, so callbacks see each optional write immediately.
-    let main = unsafe {
+    let capacity = unsafe {
         crate::engine_capabilities::openttd_rust_engine_capacity(
             r.capabilities,
             e,
@@ -208,7 +208,7 @@ pub(crate) unsafe fn aircraft(
             (k.mail_capacity_address)(u),
         )
     };
-    (r.set_capacity)(v.cast(), main as u16);
+    (r.set_capacity)(v.cast(), capacity as u16);
     (r.invalidate_chain)(v.cast());
     unsafe { crate::aircraft::openttd_rust_aircraft_cache(r.aircraft, hv, true) };
     unsafe {

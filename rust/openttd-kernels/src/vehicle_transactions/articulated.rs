@@ -7,6 +7,7 @@ use std::mem::MaybeUninit;
 #[repr(C)]
 pub struct Part {
     pub image: u8,
+    pub capacity: u16,
 }
 #[repr(C)]
 pub struct Services {
@@ -66,7 +67,7 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
             crate::engine_capabilities::openttd_rust_articulated_next(
                 r.capabilities,
                 index,
-                unsafe { (g.vehicle_engine)(first) },
+                (g.vehicle_engine)(first),
                 first.cast(),
                 flip.as_mut_ptr(),
             )
@@ -168,9 +169,9 @@ pub(crate) unsafe fn consistency(s: &Services, mut v: *mut ()) {
     unsafe {
         crate::engine_capabilities::openttd_rust_articulated_capacity(
             r.capabilities,
-            unsafe { (c.base.groups.vehicle_engine)(v) },
+            (c.base.groups.vehicle_engine)(v),
             purchase_capacity.as_mut_ptr(),
-        )
+        );
     };
     let mut real_union = 0;
     let mut real_intersection = crate::cargo_type::ALL_CARGOTYPES;

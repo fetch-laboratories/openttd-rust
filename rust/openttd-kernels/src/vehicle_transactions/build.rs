@@ -193,7 +193,7 @@ pub(crate) unsafe fn build(
                     r.capabilities,
                     engine,
                     result.capacity.cargo.as_mut_ptr(),
-                )
+                );
             };
             result.capacity.total = result.capacity.cargo[usize::from(default_cargo)];
         } else {

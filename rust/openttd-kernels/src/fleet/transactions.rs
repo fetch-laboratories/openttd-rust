@@ -417,7 +417,7 @@ unsafe fn new_cargo(
             true,
             &raw mut union,
             &raw mut available,
-        )
+        );
     };
     if union == 0 {
         return NO_REFIT;

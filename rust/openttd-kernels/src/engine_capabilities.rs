@@ -499,7 +499,7 @@ pub unsafe extern "C" fn openttd_rust_articulated_refit_union(
             initial,
             &raw mut union,
             &raw mut intersection,
-        )
+        );
     };
     union
 }
