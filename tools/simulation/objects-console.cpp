@@ -75,6 +75,7 @@ struct ObjectPolicyGroup : SpriteGroup {
 	}
 };
 struct ObjectClearOrderGroup : SpriteGroup {
+	ObjectClearOrderGroup() {} // Preserve the pool-assigned index.
 	ResolverResult Resolve(ResolverObject &ro) const override {
 		if (ro.callback != CBID_OBJECT_LAND_SLOPE_CHECK) return CallbackResult(0xA5);
 		auto &scope = static_cast<ObjectResolverObject &>(ro).object_scope;
@@ -222,7 +223,8 @@ static void ObjectInvocationProbe(TileIndex tile, bool reloaded)
 	spec->animation.triggers = {ObjectAnimationTrigger::Built};
 	ObjectNeed(TriggerObjectAnimation(object, ObjectAnimationTrigger::Built, spec) && GetAnimationFrame(tile) == 1, __LINE__);
 	spec->callback_mask.Set({ObjectCallbackMask::AnimationSpeed, ObjectCallbackMask::AnimationNextFrame});
-	AnimateNewObjectTile(tile); ObjectNeed(GetAnimationFrame(tile) == 1, __LINE__);
+	Backup<uint64_t> ticks(TimerGameTick::counter, 0);
+	SetAnimationFrame(tile, 0); AnimateNewObjectTile(tile); ObjectNeed(GetAnimationFrame(tile) == 1, __LINE__);
 	fmt::print(stderr, "OBJECT invocation-animation {}\n", GetAnimationFrame(tile));
 	/* Eligibility is observed through actual command test and execute admission.
 	 * The temporary editor/world-generation modes use the original owner rules. */
