@@ -10,9 +10,9 @@ forward-looking, about 200 lines; completed work is one row, with evidence in PR
 - Since the seventeenth steering:25 owners and12,533 original lines retired. #444 integrated reviewed airport428/generic436/object438 with statue441 and whole quiet156915 anchors443, plus the19-line concrete-animation ABI test repair. Exact-current-base Full passed; no regression/rollback.
 - Latest103ee merged-tip profile passed6/6 semantic/end/log/identity comparisons. SAME156915-anchor projections: TGP1.403021x, Opus1.406031x, Grok1.411097x, P1996 1.368669x, P2000 1.421772x, P2016 1.501579x. TGP work+13.181%/projection+26.362%, P1996 projection+3.892%, P2000+3.025% trigger retained per-function/PR attribution. These are projections, not wall results; prior156915 counts remain preserved.
 - Quiet103ee whole pass:144 exits/72 equal pairs, four interleaved three-pair medians, no contaminated samples. TGP1.209077x, Opus1.419874x, Grok1.414493x, P1996 1.343712x, P2000 1.412774x, P2016 1.483781x. All below ceilings; onlyP2016 remains in band. Workers resumed before assessment. Whole anchors448 are ready; re-anchoring does not repair or erase growth. Retained-only attribution selects the next bounded maintenance repair; ready owners proceed while it is prepared.
-- Reviewed442 aircraft counted/plain specialization and four direct ProcessOrders routes adopted actual103ee and passed affected checks; root spot-check passed. Prior track/deferred-order repairs are not recycled. Raw/cache differences remain explicit and family exposure is not promised savings. No hold is active; no new timing or raw-access permission.
+- Reviewed442 aircraft counted/plain specialization and four direct ProcessOrders routes adopted actual103ee and passed affected checks; root spot-check passed. Growth/P2016 account is posted on #275: TGP ambient/containing-loop frontier361.148M Ir after prior-work credit; explicit residuals and original raw/cache-5,691,628 remain. Tiny436 ambient gate and airport animation dispatcher are repair candidates, not promised savings. No repair PR started.
 - Exact-current-base Full remains strict:44 requests since steering,24 successful,12 failed,8 cancelled. #444's first Full repeated a stale ABI regression-test assumption and was cancelled; the reviewed test-only repair passed fresh Full. macOS Debug/Release passed at8b3; next macOS after four further integrations. CI_ON_DEMAND true, broader infrastructure unselected.
-- Five component branches: reviewed442; reviewed coverage445; active engine/articulated446(#439), type-introduction447(#440); whole quiet103ee anchors448. Reserve the sixth for the attributed growth repair. Cleanup111; protected speed inputs remain while consumers use them. Fresh Astra next-owner proposals await root selection; no draft dependency or future maintenance-base gate.
+- Paused at the user's request. Five drafts remain: ready442/445/448 and incomplete446/447. None has Full at its current head/current base, so nothing qualifies to merge. All known task jobs exited, subagents closed; no rollback or confirmed main regression. Cleanup111; protected inputs and user tar files remain. Effect-emission/cargo-lifecycle proposals stay unselected.
 
 ## Eighteenth steering review (2026-10-23, remove accidental gates and close shared-layer debt)
 
@@ -48,10 +48,7 @@ continue. No new profiling controller, raw-map/Vehicle permission or owner cost
 ledger was introduced. Its [accepted disposition](https://github.com/fetch-laboratories/openttd-rust/pull/389#issuecomment-6370622209)
 remains settled; ready owners do not wait for future speed maintenance.
 
-The 3% trigger and factor 2 remain provisional: observed reference count drift is
-about 0.055%, far below this tip's 2.17-2.68% play-work growth. At 032d the factor-2
-projections exceeded quiet play ratios by 9.55-19.36%; keep using quiet passes to
-decide actual ceiling proximity, not treating projections as wall results.
+The 3% trigger/factor2 remain provisional; quiet passes determine ceiling proximity and raw/cache drift stays explicit on #275.
 No user speed/CI/wind-down policy is reversed. The removed gates were agent
 interpretations. The requested whole quiet-six retry is now complete. The steer skill
 uses the active host's native subagents, whether Codex or Claude Code;
@@ -163,39 +160,38 @@ Maintenance rows use original retirement and net glue (#223); evidence stays in 
 
 ## Phase 1: selected maintenance and coverage
 
-The semantic harness remains the evidence base. #261/#281 own source-boundary
-repairs, #156 owns missing branches, and #275 owns the measured speed work.
-Their current selections and readiness order follow below; no separate gate or
-new tooling stream is introduced. Keep one worker closing the coverage backlog.
+The semantic harness remains the evidence base. #261/#281 own boundary repairs,
+#156 missing branches and #275 measured speed; resume coverage within the component limit.
 
 ## Phase 2: current work, in order of readiness
 
 Integrate ready reviewed work first. Keep at most six component branches.
 
-1. **#275 growth repair next maintenance:** retained103ee-versus156915 function accounts attribute the TGP/P1996/P2000 >3% projection rise to437/444. Keep the new quiet anchors448 and raw/cache discrepancies intact. Root selects concrete source/boundary repairs from current proof; no gross-cost or recoverable-savings claim. Ready ownership proceeds independently.
-2. **Ready maintenance442/445/448:**442 current-base fixing review/root spot-check pass;445 order-flag coverage reviewed;448 whole median record exempt new review. Batch ready work with the selected growth repair for one current-base Full, removing an item that fails review/CI. No per-PR speed or extra local full suite.
-3. **Owners439/440 in progress:**446 owns engine cargo/articulated-query runtime;447 owns rail/road introduction/admission. Both start actual103ee, preserve complete control/state and direct consumers, and report one concrete boundary/evidence cost checkpoint. Canonical single-owner metadata stays in its shared header; actual multi-draft needs land once through root.
-4. **Next-owner queue:** fresh Astra proposals are whole vehicle effect-emission/cache policy, then cargo registry/translation/callback lifecycle. Root source-checks and creates selected issues before implementation. Preserve exact native sorting/loader phase boundaries and give no second existing-owner credit.
+1. **First action on resume:** prepare the ready current-base maintenance batch442/445/448 and its one Full. Do not assemble, request CI or merge during this pause. Current reviewed heads are retained; final-base update and exact-combination validation remain required.
+2. **Due #275 growth repair:** use the posted conserved103ee/156915 growth and current P2016 net account. The tiny per-call436 ambient gate and shared airport animation dispatch are candidates; no repair PR exists. Keep it due as the next maintenance item, preserve raw/cache discrepancy and explicit residuals, and do not recycle442's reviewed repairs or claim all exposure recoverable.
+3. **Unfinished owners446/447:**446 next investigates nullable clone/refit-cost handling after the capability fixture crash;447 validates the saved per-actor TownID fixture repair. First paired cost checkpoints, remaining evidence/audits, fresh review and Full are pending. No fix/retry continues during wind-down.
+4. **Unselected next-owner proposals:** whole vehicle effect-emission/cache policy and cargo registry/translation/callback lifecycle. Read-only planning is complete; neither is selected or started. Root selects only after resume, preserving native sorting/loader phases and existing-owner credit.
 
-Shared operations land once and drafts adopt them for final validation. Catchment,
-#64/#68/#69, vendored/GUI/platform expansion stay unselected. No circular deferral.
+Shared operations land once. Catchment, #64/#68/#69 and vendored/GUI/platform
+expansion stay unselected; no circular deferral or future maintenance-base gate.
 
 ## Resume checkpoint
 
-Development active;444 merged, profile/quiet pass complete and released.
+Paused at the user's request.
 
-| Item | Saved head | Resume action | Jobs / CI |
+| Draft / item | Saved head | Next action on resume | Jobs / CI |
 | --- | --- | --- | --- |
-| #442 speed repairs | `af29f9521a` | Root spot-check pass; next ready maintenance preparation. | Whole/scoped reviews and affected checks pass. |
-| #445 coverage / #448 anchors | `0486abc627` / `01bbc69578` | Ready maintenance, no new implementation scope. | Coverage reviewed; median record exempt; Full not requested. |
-| #439 / #446 | `e96e45c240` | Complete paired capability/aircraft evidence, once-only cost checkpoint. | Build/Cargo4/native pass; first defaults active. |
-| #440 / #447 | `70a7473b67` | Complete actual type/reload evidence and once-only cost checkpoint. | Build/Cargo4/native pass; fixture retry active. |
-| #275 growth attribution | code `103ee7cff8` | Retained-only TGP/P1996/P2000 growth and P2016 net account. | Analysis active; no new game/profile. |
-| Next owners | proposals | Root source-check/select effect-emission and cargo lifecycle. | Planning complete; implementations not started. |
+| #442 speed repairs | `af29f9521a` | Reviewed/spot-checked; ready batch with445/448, current-base update and one Full. | No task jobs; no Full; push CI unknown. |
+| #445 order-flag coverage | `0486abc627` | Reviewed, no findings; ready batch and exact-combination Full. | No task jobs; no Full; push CI unknown. |
+| #446 engine/articulated (#439) | `e96e45c240` | Investigate nullable refit-cost clone path; finish paired evidence/cost checkpoint and review. | Build/Cargo4/native pass; simulate1/3, capability/reload crash. No jobs; push CI unknown. |
+| #447 type admission (#440) | `c3fdd2227d` | Validate saved TownID fixture repair; finish paired evidence/cost checkpoint and review. | Last assessed pair failed; later retry exited unread. No jobs; no Full; push CI unknown. |
+| #448 whole quiet anchors | `01bbc69578` | Median-only record exempt review; ready batch and exact-combination Full. | No jobs; harness19/Ruff/preflight pass; no Full; push CI unknown. |
+| Due #275 growth repair | account6386132219 | Next maintenance: per-call ambient gate/airport animation dispatch candidates; root selects bounded fixes. | Analysis posted; agent closed; no repair PR or job. |
+| Unselected proposals | planning complete | Effect-emission/cache, then cargo registry/translation lifecycle; no selection or start during pause. | Planner closed; no jobs. |
 
-Protected inputs stay while #275 consumers use them; pinned reference unchanged.
-RootSol xhigh, implementation/reviewSol high, planningAstra high. CI_ON_DEMAND true;
-next macOS after four integrations. Exact-head CI/commands stay in PRs, not this table.
+#444 Full passed;103ee push Quick/Build/baseline green at the user's15:49Z check.
+Final docs CI pending/unknown, not waited on. No new CI request, task job or hold.
+Protected profile/quiet inputs and tar files stay; next macOS after four integrations.
 
 ## Progress metric
 
