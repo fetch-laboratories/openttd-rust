@@ -73,10 +73,10 @@ fn engine_types(shared: &Shared, s: &Services, company: Option<u8>, introduces: 
         if e.kind != VehicleType::TRAIN || !unsafe { (s.climate)(e.shell) } {
             continue;
         }
-        if let Some(company) = company {
-            if !unsafe { company_available(e, company, (shared.calendar_date)()) } {
-                continue;
-            }
+        if let Some(company) = company
+            && !unsafe { company_available(e, company, shared) }
+        {
+            continue;
         }
         if unsafe { (s.rail_kind)(e.shell) } == RailVehicleTypes::WAGON {
             continue;

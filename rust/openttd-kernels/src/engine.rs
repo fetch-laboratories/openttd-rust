@@ -362,7 +362,6 @@ unsafe fn start_one(s: &Services, e: EngineRef, aging: Ymd, seed: u32) {
     unsafe {
         call!(
             rng,
-            types,
             set_seed,
             settings.generation_seed
                 ^ seed
@@ -399,7 +398,6 @@ unsafe fn start_one(s: &Services, e: EngineRef, aging: Ymd, seed: u32) {
     unsafe {
         call!(
             rng,
-            types,
             set_seed,
             settings.generation_seed
                 ^ seed
