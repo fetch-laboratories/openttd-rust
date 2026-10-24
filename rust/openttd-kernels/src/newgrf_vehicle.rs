@@ -773,9 +773,9 @@ unsafe fn current_max_speed(s: &Services, v: V, kind: u8) -> i32 {
     }
 }
 unsafe fn old_subtype(s: &Services, v: V, kind: u8) -> u32 {
-    let subtype = (s.vehicle.subtype)(handle(v));
     match kind {
         0 => {
+            let subtype = (s.vehicle.subtype)(handle(v));
             if crate::ground_vehicle::is_engine(subtype) {
                 0
             } else if crate::ground_vehicle::is_free_wagon(subtype) {
@@ -785,14 +785,43 @@ unsafe fn old_subtype(s: &Services, v: V, kind: u8) -> u32 {
             }
         }
         1 | 2 => 0,
-        3 | 5 => u32::from(subtype),
-        4 => u32::from(subtype) << 1,
+        3 | 5 => u32::from((s.vehicle.subtype)(handle(v))),
+        4 => u32::from((s.vehicle.subtype)(handle(v))) << 1,
         _ => {
             unsafe { (s.check)(false) };
             unreachable!()
         }
     }
 }
+const AMS_TTDP_HANGAR: u32 = 0;
+const AMS_TTDP_TO_HANGAR: u32 = 1;
+const AMS_TTDP_TO_PAD1: u32 = 2;
+const AMS_TTDP_TO_PAD2: u32 = 3;
+const AMS_TTDP_TO_PAD3: u32 = 4;
+const AMS_TTDP_TO_ENTRY_2_AND_3_AND_H: u32 = 6;
+const AMS_TTDP_TO_JUNCTION: u32 = 7;
+const AMS_TTDP_TO_INWAY: u32 = 9;
+const AMS_TTDP_TO_OUTWAY: u32 = 11;
+const AMS_TTDP_TAKEOFF: u32 = 13;
+const AMS_TTDP_CLIMBING: u32 = 15;
+const AMS_TTDP_FLIGHT_APPROACH: u32 = 16;
+const AMS_TTDP_FLIGHT_TO_TOWER: u32 = 18;
+const AMS_TTDP_FLIGHT_DESCENT: u32 = 21;
+const AMS_TTDP_BRAKING: u32 = 22;
+const AMS_TTDP_HELI_LAND_AIRPORT: u32 = 25;
+const AMS_TTDP_HELI_TAKEOFF_HELIPORT: u32 = 26;
+const AMS_TTDP_HELI_LAND_HELIPORT: u32 = 28;
+const AMA_TTDP_IN_HANGAR: u32 = 0;
+const AMA_TTDP_ON_PAD1: u32 = 1;
+const AMA_TTDP_ON_PAD2: u32 = 2;
+const AMA_TTDP_ON_PAD3: u32 = 3;
+const AMA_TTDP_LANDING_TO_PAD1: u32 = 7;
+const AMA_TTDP_LANDING_TO_PAD2: u32 = 8;
+const AMA_TTDP_LANDING_TO_PAD3: u32 = 9;
+const AMA_TTDP_PAD1_TO_TAKEOFF: u32 = 13;
+const AMA_TTDP_LANDING_TO_HANGAR: u32 = 17;
+const AMA_TTDP_IN_FLIGHT: u32 = 18;
+
 unsafe fn aircraft_movement_state(s: &Services, v: V) -> u32 {
     use crate::airport::{
         AMD_BRAKE, AMD_EXACT_POSITION, AMD_HELI_LOWER, AMD_HELI_RAISE, AMD_HOLD, AMD_SLOW_TURN,
@@ -803,7 +832,7 @@ unsafe fn aircraft_movement_state(s: &Services, v: V) -> u32 {
     unsafe {
         let st = (s.target_airport)(v);
         if st.is_null() {
-            return 18;
+            return AMS_TTDP_FLIGHT_TO_TOWER;
         } // AMS_TTDP_FLIGHT_TO_TOWER
         let leaves = &*(s.aircraft_leaves)();
         let airport = (leaves.airport_fta)(st);
@@ -813,82 +842,82 @@ unsafe fn aircraft_movement_state(s: &Services, v: V) -> u32 {
         match (*a).state {
             HANGAR => {
                 if has(AMD_HELI_LOWER) {
-                    25
+                    AMS_TTDP_HELI_LAND_AIRPORT
                 } else if has(AMD_SLOW_TURN) {
-                    18
+                    AMS_TTDP_FLIGHT_TO_TOWER
                 } else if has(AMD_EXACT_POSITION) {
-                    0
+                    AMS_TTDP_HANGAR
                 } else {
-                    1
+                    AMS_TTDP_TO_HANGAR
                 }
             }
             TERM1 => {
                 if has(AMD_EXACT_POSITION) {
-                    2
+                    AMS_TTDP_TO_PAD1
                 } else {
-                    7
+                    AMS_TTDP_TO_JUNCTION
                 }
             }
             TERM2 => {
                 if has(AMD_EXACT_POSITION) {
-                    3
+                    AMS_TTDP_TO_PAD2
                 } else {
-                    6
+                    AMS_TTDP_TO_ENTRY_2_AND_3_AND_H
                 }
             }
             TERM3 | TERM4 | TERM5 | TERM6 | TERM7 | TERM8 => {
                 if has(AMD_EXACT_POSITION) {
-                    4
+                    AMS_TTDP_TO_PAD3
                 } else {
-                    6
+                    AMS_TTDP_TO_ENTRY_2_AND_3_AND_H
                 }
             }
             HELIPAD1 | HELIPAD2 | HELIPAD3 => {
                 if has(AMD_HELI_LOWER) {
-                    25
+                    AMS_TTDP_HELI_LAND_AIRPORT
                 } else if has(AMD_SLOW_TURN) {
-                    18
+                    AMS_TTDP_FLIGHT_TO_TOWER
                 } else {
-                    7
+                    AMS_TTDP_TO_JUNCTION
                 }
             }
-            TAKEOFF => 11,
-            STARTTAKEOFF => 13,
-            ENDTAKEOFF => 15,
+            TAKEOFF => AMS_TTDP_TO_OUTWAY,
+            STARTTAKEOFF => AMS_TTDP_TAKEOFF,
+            ENDTAKEOFF => AMS_TTDP_CLIMBING,
             HELITAKEOFF => {
                 if (leaves.airport_delta_z)(airport) == 0 {
                     if has(AMD_HELI_RAISE) { 23 } else { 7 }
                 } else {
-                    26
+                    AMS_TTDP_HELI_TAKEOFF_HELIPORT
                 }
             }
             FLYING => {
                 if has(AMD_HOLD) {
-                    16
+                    AMS_TTDP_FLIGHT_APPROACH
                 } else {
-                    18
+                    AMS_TTDP_FLIGHT_TO_TOWER
                 }
             }
-            LANDING => 21,
+            LANDING => AMS_TTDP_FLIGHT_DESCENT,
             ENDLANDING => {
                 if has(AMD_BRAKE) {
-                    22
+                    AMS_TTDP_BRAKING
                 } else {
-                    9
+                    AMS_TTDP_TO_INWAY
                 }
             }
             HELILANDING | HELIENDLANDING => {
                 if has(AMD_HELI_LOWER) {
                     if (leaves.airport_delta_z)(airport) == 0 {
-                        25
+                        AMS_TTDP_HELI_LAND_AIRPORT
                     } else {
-                        28
+                        AMS_TTDP_HELI_LAND_HELIPORT
                     }
                 } else {
-                    18
+                    AMS_TTDP_FLIGHT_TO_TOWER
                 }
             }
-            _ => 0,
+            _ => AMS_TTDP_HANGAR,
         }
     }
 }
@@ -903,42 +932,42 @@ unsafe fn aircraft_movement_action(s: &Services, v: V) -> u32 {
         match (*a).state {
             HANGAR => {
                 if (s.vehicle.speed)(handle(v)) > 0 {
-                    17
+                    AMA_TTDP_LANDING_TO_HANGAR
                 } else {
-                    0
+                    AMA_TTDP_IN_HANGAR
                 }
             }
             TERM1 | HELIPAD1 => {
                 if (s.vehicle.order_type)(handle(v)) == crate::vehicle::OT_LOADING {
-                    1
+                    AMA_TTDP_ON_PAD1
                 } else {
-                    7
+                    AMA_TTDP_LANDING_TO_PAD1
                 }
             }
             TERM2 | HELIPAD2 => {
                 if (s.vehicle.order_type)(handle(v)) == crate::vehicle::OT_LOADING {
-                    2
+                    AMA_TTDP_ON_PAD2
                 } else {
-                    8
+                    AMA_TTDP_LANDING_TO_PAD2
                 }
             }
             TERM3 | TERM4 | TERM5 | TERM6 | TERM7 | TERM8 | HELIPAD3 => {
                 if (s.vehicle.order_type)(handle(v)) == crate::vehicle::OT_LOADING {
-                    3
+                    AMA_TTDP_ON_PAD3
                 } else {
-                    9
+                    AMA_TTDP_LANDING_TO_PAD3
                 }
             }
-            TAKEOFF | STARTTAKEOFF | ENDTAKEOFF | HELITAKEOFF => 13,
-            FLYING => 18,
+            TAKEOFF | STARTTAKEOFF | ENDTAKEOFF | HELITAKEOFF => AMA_TTDP_PAD1_TO_TAKEOFF,
+            FLYING => AMA_TTDP_IN_FLIGHT,
             LANDING | ENDLANDING | HELILANDING | HELIENDLANDING => {
                 if (s.vehicle.order_type)(handle(v)) == crate::vehicle::OT_GOTO_DEPOT {
-                    17
+                    AMA_TTDP_LANDING_TO_HANGAR
                 } else {
-                    7
+                    AMA_TTDP_LANDING_TO_PAD1
                 }
             }
-            _ => 0,
+            _ => AMA_TTDP_IN_HANGAR,
         }
     }
 }
@@ -1380,11 +1409,10 @@ unsafe fn variable(
                 0xe2 => return (s.vehicle.train_handle)(v).get_track() as u32,
                 0xe6 => {
                     let bits = (s.vehicle.train_handle)(v).get_railtypes();
-                    return if bits == 0 {
-                        u32::from(crate::rail_type::INVALID_RAILTYPE)
-                    } else {
-                        bits.trailing_zeros()
-                    };
+                    return u32::from(
+                        crate::base_bitset_type::get_nth_set_bit(bits, 0)
+                            .unwrap_or(crate::rail_type::INVALID_RAILTYPE),
+                    );
                 }
                 0xf3 => {
                     let owner = ((&*(s.ground)()).resolve)(handle(v));

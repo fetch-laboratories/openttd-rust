@@ -31,7 +31,6 @@ static void VehicleArticCopyCommon(void *shell, void *head, uint16_t engine) noe
 	v->sprite_cache.sprite_seq.Set(SPR_IMG_QUERY);
 }
 static void VehicleArticFlip(void *shell) noexcept { ++static_cast<Vehicle *>(shell)->spritenum; }
-static OpenTTDArticulatedProbability VehicleArticReverse(void *v, uint16_t engine) noexcept { auto p = RustVehicleBuildProbability(static_cast<Vehicle *>(v), EngineID(engine), BuildProbabilityType::Reversed); return {.present = p.has_value(), .value = p.value_or(false)}; }
 static uint64_t VehicleArticAvailableCargo(uint16_t engine, bool purchase) noexcept { return GetAvailableVehicleCargoTypes(EngineID(engine), purchase); }
 static void VehicleArticWarning(const OpenTTDEngine *e) noexcept { ShowNewGrfVehicleError(EngineOf(e)->index, STR_NEWGRF_BUGGY, STR_NEWGRF_BUGGY_ARTICULATED_CARGO, GRFBug::VehRefit, false); }
 const OpenTTDVehicleArticulatedServices &GetRustVehicleArticulatedServices() noexcept
@@ -44,7 +43,7 @@ const OpenTTDVehicleArticulatedServices &GetRustVehicleArticulatedServices() noe
 		.train_info = VehicleArticInfo<RailVehicleInfo>, .road_info = VehicleArticInfo<RoadVehicleInfo>,
 		.set_part = VehicleArticSetPart, .mark_train = VehicleArticMark<Train>, .mark_road = VehicleArticMark<RoadVehicle>,
 		.copy_common = VehicleArticCopyCommon, .random_bits = RustOpaqueVehicleInvoke<RustVehicleSetRandomBits, uint16_t>,
-		.flip_image = VehicleArticFlip, .reverse = VehicleArticReverse,
+		.flip_image = VehicleArticFlip,
 		.available_cargo = VehicleArticAvailableCargo, .warning = VehicleArticWarning,
 		.has_articulated = RustOpaqueVehicleRead<bool, RustGroundHasArticulated<Vehicle>>,
 		.next_articulated = RustOpaqueHandleRead<void *, RustVehicleNextArticulated>, .max_parts = MAX_ARTICULATED_PARTS, .all_cargo = ALL_CARGOTYPES,

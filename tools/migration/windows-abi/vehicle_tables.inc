@@ -163,7 +163,7 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(ground, cached_length);
 		VEHICLE_UNUSED(leaves, shorten_factor);
 		VEHICLE_UNUSED(leaves, default_max_speed);
-		VEHICLE_UNUSED(leaves, update_cargo_age);
+		VEHICLE_UNUSED(leaves, cargo_age_default);
 		VEHICLE_UNUSED(vehicle, write_max_speed);
 		VEHICLE_UNUSED(leaves, cost_read);
 		VEHICLE_UNUSED(leaves, price);

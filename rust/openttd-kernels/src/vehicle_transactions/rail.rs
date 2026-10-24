@@ -158,10 +158,16 @@ impl Ctx {
     }
     /// `TestVehicleBuildProbability(v, v->engine_type, Reversed)` and its flag.
     fn reverse_on_build(self, v: *mut ()) {
-        let a = self.b.construct.articulated;
-        let probability = (a.reverse)(v, self.engine(v));
-        if probability.present {
-            (self.r.train_handle)(v.cast()).set_flag(crate::train::FLIPPED, probability.value);
+        let probability = unsafe {
+            crate::newgrf_vehicle::openttd_rust_vehicle_build_probability(
+                &*(self.c.vehicles.newgrf)(),
+                v.cast(),
+                self.engine(v),
+                0,
+            )
+        };
+        if probability >= 0 {
+            (self.r.train_handle)(v.cast()).set_flag(crate::train::FLIPPED, probability != 0);
         }
     }
     /// `Vehicle::orders` of the canonical Rust-owned order view.

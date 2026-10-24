@@ -65,7 +65,6 @@ struct OpenTTDVehicleRefitServices {
 	void (*lists_ui)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(lists_ui);
 };
 struct OpenTTDArticulatedPart { uint8_t image; uint16_t capacity; };
-struct OpenTTDArticulatedProbability { bool present, value; };
 struct OpenTTDVehicleArticulatedServices {
 	const OpenTTDVehicleRefitServices *refit;
 	uint8_t (*default_cargo)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(default_cargo);
@@ -86,7 +85,6 @@ struct OpenTTDVehicleArticulatedServices {
 	void (*copy_common)(void *, void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(copy_common);
 	void (*random_bits)(void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(random_bits);
 	void (*flip_image)(void *) noexcept OPENTTD_SERVICE_DEFAULT(flip_image);
-	OpenTTDArticulatedProbability (*reverse)(void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(reverse);
 	uint64_t (*available_cargo)(uint16_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(available_cargo);
 	void (*warning)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(warning);
 	bool (*has_articulated)(void *) noexcept OPENTTD_SERVICE_DEFAULT(has_articulated);

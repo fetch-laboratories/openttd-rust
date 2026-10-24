@@ -10,11 +10,6 @@ pub struct Part {
     pub capacity: u16,
 }
 #[repr(C)]
-pub struct Probability {
-    pub present: bool,
-    pub value: bool,
-}
-#[repr(C)]
 pub struct Services {
     pub refit: &'static refit::Services,
     pub default_cargo: extern "C" fn(*const OpenTTDEngine) -> u8,
@@ -35,7 +30,6 @@ pub struct Services {
     pub copy_common: extern "C" fn(*mut (), *mut (), u16),
     pub random_bits: extern "C" fn(*mut (), u16),
     pub flip_image: extern "C" fn(*mut ()),
-    pub reverse: extern "C" fn(*mut (), u16) -> Probability,
     pub available_cargo: extern "C" fn(u16, bool) -> u64,
     pub warning: extern "C" fn(*const OpenTTDEngine),
     pub has_articulated: extern "C" fn(*mut ()) -> bool,
@@ -133,9 +127,16 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
             (s.flip_image)(v);
         }
         if unsafe { (g.vehicle_type)(v) } == VehicleType::TRAIN.0 {
-            let probability = (s.reverse)(v, unsafe { (g.vehicle_engine)(v) });
-            if probability.present {
-                (r.train_handle)(v.cast()).set_flag(crate::train::FLIPPED, probability.value);
+            let probability = unsafe {
+                crate::newgrf_vehicle::openttd_rust_vehicle_build_probability(
+                    &*(r.common.vehicles.newgrf)(),
+                    v.cast(),
+                    (g.vehicle_engine)(v),
+                    0,
+                )
+            };
+            if probability >= 0 {
+                (r.train_handle)(v.cast()).set_flag(crate::train::FLIPPED, probability != 0);
             }
         }
         unsafe {
@@ -221,11 +222,10 @@ pub unsafe extern "C" fn openttd_rust_vehicle_articulated_consistency(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDArticulatedPart" ["probe"] => Part { image, capacity, };
-    "OpenTTDArticulatedProbability" ["probe"] => Probability { present, value, };
     "OpenTTDVehicleArticulatedServices" ["probe"] => Services {
         refit, default_cargo, capacity, pool_available, has_callback, next_part, prepare_previous,
         new_train, new_road, road_length, copy_roadtype, train_info, road_info, set_part, mark_train,
-        mark_road, copy_common, random_bits, flip_image, reverse, available_cargo, warning,
+        mark_road, copy_common, random_bits, flip_image, available_cargo, warning,
         has_articulated, next_articulated, max_parts, all_cargo,
     };
 }

@@ -104,6 +104,8 @@ def scenarios(soak):
     ]
 
     cases.append(dict(cases[0], name="fleet-reload", fleet="reload"))
+    resolver = next(case for case in cases if case["fleet"] == "resolver")
+    cases.append(dict(resolver, name="fleet-resolver-reload", fleet="resolver-reload"))
     return cases
 
 
@@ -131,6 +133,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     folder = out / scenario["name"] / "input"
     if scenario["fleet"].startswith(("train", "drain")) or scenario["fleet"] in (
         "resolver",
+        "resolver-reload",
         "transaction-meta",
         "transaction-refit-train",
         "transaction-mass-train",
@@ -168,10 +171,16 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 (folder / role / name).symlink_to(
                     builds[role] / name, target_is_directory=True
                 )
-    if scenario["fleet"] == "reload":
-        saves, capture = {}, {}
+    if scenario["fleet"] in ("reload", "resolver-reload"):
+        resolver = scenario["fleet"] == "resolver-reload"
+        saves, capture, saved_resolver = {}, {}, {}
         setup = dict(
-            scenario, console=["fleet_scenario groups-store", "unpause"], ticks=1
+            scenario,
+            console=[
+                "fleet_scenario " + ("resolver" if resolver else "groups-store"),
+                "unpause",
+            ],
+            ticks=1,
         )
         for role in ("reference", "candidate"):
             run = run_game(
@@ -186,10 +195,38 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             if (
                 run["exit"]
                 or not run["snapshots"]
-                or "FLEET groups true 1 1 true" not in run["log"]
+                or (
+                    "FLEET resolver-checkpoint complete"
+                    if resolver
+                    else "FLEET groups true 1 1 true"
+                )
+                not in run["log"]
             ):
                 raise RuntimeError("fleet reload capture lacks live groups/rules")
             saves[role] = run["snapshots"][-1]
+            if resolver:
+                from .disasters import rows
+
+                marker = next(
+                    (
+                        line.split()
+                        for line in run["log"]
+                        if line.startswith("FLEET resolver-persist ")
+                    ),
+                    None,
+                )
+                if marker is None:
+                    raise RuntimeError("missing resolver persistence input")
+                index = int(marker[2])
+                fields = rows(saves[role])[index]
+                prefix = "train[0]/common[0]/"
+                saved_resolver[role] = [
+                    index,
+                    fields[prefix + "random_bits"],
+                    fields[prefix + "waiting_triggers"],
+                ]
+                if not all(saved_resolver[role][1:]):
+                    raise RuntimeError("resolver save has empty random/trigger state")
             capture[role] = {
                 "input_sha256": hashlib.sha256(saves[role].read_bytes()).hexdigest(),
                 "witnesses": [line for line in run["log"] if line.startswith("FLEET ")],
@@ -208,11 +245,16 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             result["differences"].extend(differences)
             raise RuntimeError("fleet reload capture differs")
         result["fleet_capture"] = capture
+        if resolver:
+            result["resolver_saved"] = saved_resolver
         return dict(
             scenario,
             executables=executables,
             role_inputs={role: {"save": str(save)} for role, save in saves.items()},
-            console=["fleet_scenario inspect", "unpause"],
+            console=[
+                "fleet_scenario " + ("resolver-inspect" if resolver else "inspect"),
+                "unpause",
+            ],
         )
     return dict(scenario, executables=executables)
 
@@ -225,7 +267,15 @@ def check(scenario, run, mode, role, result):
             "FLEET resolver-checkpoint complete",
             "FLEET resolver-parent true",
             "FLEET resolver-relative true",
+            "FLEET resolver-reentry true true true",
+            "FLEET resolver-property true true",
+            "FLEET resolver-unavailable true",
+            "FLEET resolver-anynew true",
+            "FLEET resolver-zero-reseed true true",
+            "FLEET resolver-reinstalled true true",
+            *[f"FLEET resolver-trigger {trigger} true" for trigger in (0, 1, 2, 4)],
         ],
+        "resolver-reload": [],
         **{
             "transaction-mass-" + kind: [
                 "FLEET mass-test true true",
@@ -303,7 +353,7 @@ def check(scenario, run, mode, role, result):
         if line not in run["log"]:
             result["problems"].append(f"{mode}/{role}: missing {line}")
     if scenario["fleet"] == "resolver":
-        for label in ("cache", "translation", "var61", "trigger"):
+        for label in ("cache", "translation", "var61", "grf-reload"):
             lines = [
                 line
                 for line in run["log"]
@@ -311,8 +361,48 @@ def check(scenario, run, mode, role, result):
             ]
             if len(lines) != 1:
                 result["problems"].append(f"{mode}/{role}: missing resolver {label}")
+            elif label == "grf-reload" and not lines[0].startswith(
+                "FLEET resolver-grf-reload true true true "
+            ):
+                result["problems"].append(
+                    f"{mode}/{role}: resolver nonempty native reload invariant"
+                )
             elif label in ("translation", "var61") and not lines[0].endswith(" true"):
                 result["problems"].append(f"{mode}/{role}: resolver {label} invariant")
+    if scenario["fleet"] == "resolver-reload":
+        expected = "FLEET resolver-saved " + " ".join(
+            map(str, result["resolver_saved"][role])
+        )
+        if expected not in run["log"]:
+            result["problems"].append(
+                f"{mode}/{role}: resolver saved random/trigger state changed"
+            )
+    if scenario["fleet"] in (
+        "resolver",
+        "resolver-reload",
+        "transaction-build-road",
+        "transaction-build-aircraft",
+        "ship",
+    ):
+        probes = [
+            line.split()
+            for line in run["log"]
+            if line.startswith("FLEET resolver-variables ")
+        ]
+        if not probes or any(int(probe[4]) != 169 for probe in probes):
+            result["problems"].append(
+                f"{mode}/{role}: missing complete resolver variable probe"
+            )
+    if scenario["fleet"] == "transaction-build-aircraft":
+        probes = [
+            line.split()
+            for line in run["log"]
+            if line.startswith("FLEET resolver-aircraft ")
+        ]
+        if len(probes) != 1 or int(probes[0][2]) < 512:
+            result["problems"].append(
+                f"{mode}/{role}: missing aircraft state compatibility probe"
+            )
     if scenario["fleet"] in ("transaction-build-road", "transaction-rail"):
         kind = "road" if scenario["fleet"] == "transaction-build-road" else "rail"
         probes = [line for line in run["log"] if line.startswith("FLEET ground-probe ")]

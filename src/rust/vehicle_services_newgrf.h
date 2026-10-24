@@ -21,6 +21,11 @@
 #include "cargo_storage_ffi.h"
 #include "services_station.h"
 
+static_assert(CalendarTime::ORIGINAL_BASE_YEAR.base() == 1920 && CalendarTime::ORIGINAL_MAX_YEAR.base() == 2090);
+static_assert(CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR.base() == 701265);
+static_assert(INVALID_RAILTYPE == 63 && INVALID_ROADTYPE == 63);
+static_assert(ATP_TTDP_LARGE == 1 && DIR_W == 6 && DIRDIFF_REVERSE == 4);
+static_assert(to_underlying(VehicleRailFlag::PoweredWagon) == 3 && to_underlying(VehicleRailFlag::Flipped) == 4 && to_underlying(VehicleRailFlag::Reversed) == 7);
 /* Native observations and common evaluator adapters. No Vehicle layout crosses
  * this boundary; aliases into Rust's cache remain canonical until shell death. */
 static uint16_t VehicleResolverCallback(OpenTTDVehicleResolverState *state, uint16_t engine, uint16_t callback, uint32_t p1, uint32_t p2, int32_t *regs, size_t count) noexcept

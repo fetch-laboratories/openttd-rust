@@ -293,16 +293,6 @@ static void OPENTTD_AIRCRAFT_CALL Aircraft_invalid_scheme(OpenTTDAircraftVehicle
 
 
 
-static uint16_t OPENTTD_AIRCRAFT_CALL Aircraft_cargo_age_default(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	return RustEngineCargoAge(RustVehicleGetEngine(vehicle.handle));
-}
-
-static uint16_t OPENTTD_AIRCRAFT_CALL Aircraft_range_default(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	return RustEngineAircraftRange(RustVehicleGetEngine(vehicle.handle));
-}
-
 static bool OPENTTD_AIRCRAFT_CALL Aircraft_touchdown_sound(OpenTTDAircraftVehicle vehicle) noexcept
 {
 	const Vehicle *v = VehicleOf(vehicle.handle);
@@ -450,8 +440,8 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.invalid_position = Aircraft_invalid_position,
 	.invalid_scheme = Aircraft_invalid_scheme,
 	.unreachable = RustNotReachedWithUnusedOwner<OpenTTDAircraftVehicle>,
-	.cargo_age_default = Aircraft_cargo_age_default,
-	.range_default = Aircraft_range_default,
+	.cargo_age_default = RustVehicleEngineObservation<uint16_t, OpenTTDAircraftVehicle, RustEngineCargoAge>,
+	.range_default = RustVehicleEngineObservation<uint16_t, OpenTTDAircraftVehicle, RustEngineAircraftRange>,
 	.touchdown_sound = Aircraft_touchdown_sound,
 	.rotor_image_if_changed = Aircraft_rotor_image_if_changed,
 	.update_rotor_image = Aircraft_update_rotor_image,
