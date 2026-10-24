@@ -43,7 +43,7 @@ impl Default for CargoFields {
             max_waiting_cargo: 0,
             status: 0,
             time_since_pickup: 255,
-            rating: 175,
+            rating: crate::station_base::INITIAL_STATION_RATING,
             last_speed: 0,
             last_age: 255,
             amount_fract: 0,

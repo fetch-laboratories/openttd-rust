@@ -40,8 +40,8 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 		/* A persistent object retains all six caches across independent DoResolve calls. */
 		auto gfx = GetStationGfx(tile);
 		SetStationGfx(tile, gfx ^ 2);
-		object.ResolveCallback(regs); StationNeed(regs[0] == first, __LINE__);
 		if (var == 0x45) StationNeed(Command<CMD_BUILD_SINGLE_RAIL>::Do(exec, tile + TileDiffXY(-1, 0), RAILTYPE_RAIL, TRACK_X, false).Succeeded(), __LINE__);
+		object.ResolveCallback(regs); StationNeed(regs[0] == first, __LINE__);
 		{ StationResolverObject fresh(&spec, st, tile); std::array<int32_t, 1> other{}; StationNeed(fresh.ResolveCallback(other) == 0x400, __LINE__); StationNeed(other[0] != first, __LINE__); }
 		if (var == 0x45) StationNeed(Command<CMD_REMOVE_SINGLE_RAIL>::Do(exec, tile + TileDiffXY(-1, 0), TRACK_X).Succeeded(), __LINE__);
 		SetStationGfx(tile, gfx);
