@@ -504,7 +504,7 @@ pub unsafe extern "C" fn openttd_rust_station_base_variable(
         }
         0xf2 | 0xf3 => {
             let stops = unsafe { &*(native.shared().road_stops)() };
-            let stop = (stops.head)(st, variable == 0xf3);
+            let stop = (stops.head)(st, variable == 0xf2);
             return if stop.is_null() {
                 0
             } else {

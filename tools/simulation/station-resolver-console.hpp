@@ -11,9 +11,14 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 		for (Waypoint *candidate : Waypoint::Iterate()) if (candidate->name == "Resolver waypoint") wp = candidate;
 		StationNeed(st != nullptr && wp != nullptr, __LINE__);
 	} else {
-		TileIndex tile = origin + TileDiffXY(2, 2), waytile = origin + TileDiffXY(10, 2);
+		TileIndex tile = origin + TileDiffXY(2, 2), waytile = origin + TileDiffXY(6, 6);
 		StationNeed(Command<CMD_BUILD_RAIL_STATION>::Do(exec, tile, RAILTYPE_RAIL, AXIS_X, 2, 3, STAT_CLASS_DFLT, 0, NEW_STATION, true).Succeeded(), __LINE__);
 		st = Station::GetByTile(tile); st->name = "Resolver station";
+		_settings_game.station.station_spread = 32;
+		StationNeed(Command<CMD_BUILD_ROAD_STOP>::Do(exec, origin + TileDiffXY(8, 2), 1, 1, RoadStopType::Truck, false, DIAGDIR_NE, ROADTYPE_ROAD, ROADSTOP_CLASS_DFLT, 0, st->index, true).Succeeded(), __LINE__);
+		StationNeed(Command<CMD_BUILD_ROAD_STOP>::Do(exec, origin + TileDiffXY(10, 2), 1, 1, RoadStopType::Bus, false, DIAGDIR_NE, ROADTYPE_ROAD, ROADSTOP_CLASS_DFLT, 0, st->index, true).Succeeded(), __LINE__);
+		StationNeed(Command<CMD_BUILD_AIRPORT>::Do(exec, origin + TileDiffXY(14, 2), AT_SMALL, 0, st->index, true).Succeeded(), __LINE__);
+
 		StationNeed(Command<CMD_BUILD_SINGLE_RAIL>::Do(exec, waytile, RAILTYPE_RAIL, TRACK_X, false).Succeeded(), __LINE__);
 		StationNeed(Command<CMD_BUILD_RAIL_WAYPOINT>::Do(exec, waytile, AXIS_X, 1, 1, STAT_CLASS_WAYP, 0, StationID::Invalid(), false).Succeeded(), __LINE__);
 		wp = Waypoint::GetByTile(waytile); wp->name = "Resolver waypoint";
@@ -22,6 +27,9 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 		st->goods[1].GetOrCreateData().cargo.Append(new CargoPacket(9, 13, st->index, tile, 0), StationID::Invalid());
 	}
 	TileIndex tile = st->train_station.tile, waytile = wp->train_station.tile;
+	st->truck_stops->status.Reset(RoadStopStatusFlag::Bay0Free);
+	st->airport.blocks.Set({AirportBlock::Term1, AirportBlock::RunwayIn, AirportBlock::AirportClosed});
+
 	fmt::print(stderr, "STCMD resolver-reconstruction {} {} {} {}\n", reloaded, st->index.base(), st->goods[0].TotalCount(), st->goods[0].GetData().cargo.PeriodsInTransit());
 	GRFFile file; file.grfid = 0x52533939; file.grf_version = 8;
 	StationSpec spec; spec.grf_prop.grffile = &file; spec.grf_prop.grfid = file.grfid; spec.grf_prop.local_id = 19;
