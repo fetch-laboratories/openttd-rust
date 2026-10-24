@@ -845,7 +845,6 @@ const OpenTTDIndustryResolverServices &GetIndustryResolverServices() noexcept
 		.grfid = RustResolverGRFFileID,
 		.version = RustResolverGRFVersion,
 		.callback_id = RustResolverCallback,
-		.register_value = RustResolverRegister,
 		.cargo_translation = RustResolverCargoTranslation,
 		.cargo_map = RustSpecCargoMap<IndustrySpec>,
 		.badges = RustSpecBadges<IndustrySpec>,

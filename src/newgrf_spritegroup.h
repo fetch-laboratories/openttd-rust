@@ -499,11 +499,15 @@ public:
 	 */
 	uint32_t GetReseedSum() const
 	{
+#ifdef WITH_RUST
+		return openttd_rust_resolver_reseed_sum(&this->common_state);
+#else
 		uint32_t sum = 0;
 		for (VarSpriteGroupScope vsg = VSG_BEGIN; vsg < VSG_END; vsg++) {
 			sum |= this->reseed[vsg];
 		}
 		return sum;
+#endif
 	}
 
 	/**

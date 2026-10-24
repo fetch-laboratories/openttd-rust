@@ -142,13 +142,7 @@ pub struct AgingYear {
     pub base_intro: i32,
     pub lifelength: i32,
 }
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Ymd {
-    pub year: i32,
-    pub month: u8,
-    pub day: u8,
-}
+pub use crate::services::CalendarYmd as Ymd;
 #[repr(C)]
 pub struct StartSettings {
     pub generation_seed: u32,

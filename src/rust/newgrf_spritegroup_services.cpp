@@ -6,6 +6,11 @@
 #include "../newgrf_profiling.h"
 #include "../newgrf.h"
 #include "../debug.h"
+#include "newgrf_global_ffi.h"
+#include "timer_services.h"
+#include "settings_services.h"
+#include "services_rail.h"
+#include "environment_services.h"
 #include "services_newgrf.h"
 #include "../newgrf_engine.h"
 #include "../newgrf_station.h"
@@ -131,10 +136,32 @@ const OpenTTDSpriteGroupServices &GetRustSpriteGroupServices() noexcept
 		.store_psa = [](ScopeResolver *s, uint32_t reg, int32_t value) noexcept { s->StorePSA(reg, value); },
 		.real = [](ResolverObject *ro, const SpriteGroup *g) noexcept { return ro->ResolveReal(*static_cast<const RealSpriteGroup *>(g)); },
 		.native = RustNativeSpriteGroup,
-		.parameter = [](const GRFFile *file, uint32_t param) noexcept { return file->GetParam(param); },
-		.global = [](uint8_t var, uint32_t *value, const GRFFile *file) noexcept { return GetGlobalVariable(var, value, file); },
+		.parameter = RustGRFParameter,
+		.global = &GetRustGlobalVariableServices(),
 		.profile_enter = ProfileEnter,
 		.profile_end = ProfileEnd,
+	};
+	return services;
+}
+const OpenTTDGlobalVariableServices &GetRustGlobalVariableServices() noexcept
+{
+	static const OpenTTDGlobalVariableServices services{
+		.shared = &GetRustSharedServices(),
+		.date_to_ymd = RustCalendarDateToYMD,
+		.ymd_to_date = RustCalendarYMDToDate,
+		.date_fraction = RustCalendarDateFraction,
+		.climate = OpenTTDLandscapeValue,
+		.road_side = RustRoadSide,
+		.palette = RustGRFPalette,
+		.pitch = RustGRFTrainPitch,
+		.disable_elrails = RustDisableElrails,
+		.rail_cost = RustRailCostMultiplier,
+		.game_mode = RustGameMode,
+		.misc_bits = RustGRFMiscBits,
+		.width = RustGRFTrainWidth,
+		.height_limit = RustMapHeightLimit,
+		.file_version = RustGRFFileVersion,
+		.newgrf_version = RustNewGRFVersion,
 	};
 	return services;
 }
@@ -146,18 +173,21 @@ ResolverResult ResolverObject::DoResolve()
 {
 	return NativeResult(openttd_rust_resolver_resolve(&GetRustSpriteGroupServices(), this->root_spritegroup, this, this->CommonState(), this->grffile));
 }
-uint32_t ScopeResolver::GetRandomBits() const { return 0; }
-uint32_t ScopeResolver::GetRandomTriggers() const { return 0; }
+uint32_t ScopeResolver::GetRandomBits() const { return openttd_rust_scope_default_random(); }
+uint32_t ScopeResolver::GetRandomTriggers() const { return openttd_rust_scope_default_random(); }
 uint32_t ScopeResolver::GetVariable(uint8_t variable, uint32_t, bool &available) const
 {
 	Debug(grf, 1, "Unhandled scope variable 0x{:X}", variable);
-	available = false;
-	return UINT_MAX;
+	return openttd_rust_scope_default_variable(&available);
 }
 void ScopeResolver::StorePSA(uint, int32_t) {}
 const SpriteGroup *ResolverObject::ResolveReal(const RealSpriteGroup &group) const
 {
 	return openttd_rust_resolver_default_real(&GetRustSpriteGroupServices(), &group);
 }
-ScopeResolver *ResolverObject::GetScope(VarSpriteGroupScope, uint8_t) { return &this->default_scope; }
+ScopeResolver *ResolverObject::GetScope(VarSpriteGroupScope, uint8_t) { return openttd_rust_scope_default(&this->default_scope); }
+#include "service_table_check.hpp"
+#include "abi-visit-OpenTTDSpriteGroupServices.hpp"
+#include "abi-visit-OpenTTDGlobalVariableServices.hpp"
+bool CheckAbi_spritegroup() { return AbiServicesComplete(GetRustSpriteGroupServices()) && AbiServicesComplete(GetRustGlobalVariableServices()); }
 #endif

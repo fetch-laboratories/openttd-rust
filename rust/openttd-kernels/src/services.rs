@@ -52,6 +52,18 @@ impl LandscapeType {
     pub const TOYLAND: Self = Self(3);
 }
 
+/// Shared scalar result of `TimerGameCalendar::ConvertDateToYMD`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct CalendarYmd {
+    /// Calendar year.
+    pub year: i32,
+    /// Zero-based month.
+    pub month: u8,
+    /// One-based day.
+    pub day: u8,
+}
+
 /// Explicit C ABI carrier for a native calendar Date, converted in C++.
 #[repr(transparent)]
 #[derive(Clone, Copy)]

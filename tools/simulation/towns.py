@@ -743,7 +743,7 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
             Path(scenario["save"]), folder / "source"
         )
         scenario = dict(scenario, save=str(source))
-        captures, saves = {}, {}
+        captures, saves, action2 = {}, {}, {}
         for role, executable in executables.items():
             save = folder / role / "storage.sav"
             setup = dict(
@@ -764,18 +764,28 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
                 or not save.is_file()
             ):
                 raise RuntimeError(f"{role} nonempty storage capture failed")
+            markers = [
+                line for line in run["log"] if line.startswith("STORAGE action2 ")
+            ]
+            if len(markers) != 1:
+                raise RuntimeError(f"{role} real common Action2 cases missing")
+            action2[role] = markers
             chunk = read_save(save)["PSAC"]
             values = [decode_element(chunk, body) for _, body in chunk["elements"]]
             if len(values) != 4 or not all(any(row["storage"]) for row in values):
                 raise RuntimeError(f"{role} nonempty PSAC marker missing")
             captures[role] = values
             saves[role] = save
-        if captures["reference"] != captures["candidate"] or core.compare_saves(
-            saves["reference"],
-            saves["candidate"],
-            scenario["name"],
-            10,
-            {"chunks": 0, "elements": 0, "masked": {}},
+        if (
+            action2["reference"] != action2["candidate"]
+            or captures["reference"] != captures["candidate"]
+            or core.compare_saves(
+                saves["reference"],
+                saves["candidate"],
+                scenario["name"],
+                10,
+                {"chunks": 0, "elements": 0, "masked": {}},
+            )
         ):
             raise RuntimeError(
                 "captured storage payloads or native associations differ"
@@ -1001,6 +1011,7 @@ def scenarios(soak):
         + [
             {
                 "name": "town-storage-reload",
+                "witnesses": not soak,
                 "kind": "save",
                 "save": str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
                 "town_founding": "storage",
@@ -1250,8 +1261,18 @@ def check_bribes(scenario, run, mode, role, result):
 
 def check(scenario, run, mode, role, result):
     if scenario.get("town_founding") == "storage" and not run["exit"]:
-        if "STORAGE reloaded true" not in run["log"]:
+        if "STORAGE reloaded true" not in run["log"] or not any(
+            line.startswith("STORAGE action2 ") for line in run["log"]
+        ):
             raise RuntimeError("nonempty storage reference/owner reload marker missing")
+        if counts := branch_witnesses(
+            scenario,
+            run,
+            role,
+            "common_action2",
+            "binary error indirect linear procedure reseed storage".split(),
+        ):
+            result[mode + "_common_action2_branches"] = counts
     elif scenario.get("town_founding") == "authority" and not run["exit"]:
         if not scenario["town_commands_reload"]:
             check_action_money(scenario, run, mode, role, result)

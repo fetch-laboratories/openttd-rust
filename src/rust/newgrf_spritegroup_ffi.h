@@ -11,6 +11,7 @@ struct ResolverObject;
 struct ScopeResolver;
 struct GRFFile;
 struct NewGRFProfiler;
+struct OpenTTDGlobalVariableServices;
 enum CallbackID : uint16_t;
 /** The sole common invocation state, embedded for the actual ResolverObject lifetime.
  * Native compatibility aliases address these fields. Calls hold the game-state
@@ -79,13 +80,17 @@ struct OpenTTDSpriteGroupServices {
 	const SpriteGroup *(*real)(ResolverObject *, const SpriteGroup *) noexcept OPENTTD_SERVICE_DEFAULT(real);
 	OpenTTDResolverResult (*native)(const SpriteGroup *, ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(native);
 	uint32_t (*parameter)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(parameter);
-	bool (*global)(uint8_t, uint32_t *, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(global);
+	const OpenTTDGlobalVariableServices *global;
 	NewGRFProfiler *(*profile_enter)(ResolverObject *, bool) noexcept OPENTTD_SERVICE_DEFAULT(profile_enter);
 	void (*profile_end)(NewGRFProfiler *, const OpenTTDResolverResult *) noexcept OPENTTD_SERVICE_DEFAULT(profile_end);
 };
 const OpenTTDSpriteGroupServices &GetRustSpriteGroupServices() noexcept;
 extern "C" {
 const SpriteGroup *openttd_rust_resolver_default_real(const OpenTTDSpriteGroupServices *, const struct RealSpriteGroup *);
+uint32_t openttd_rust_resolver_reseed_sum(const OpenTTDResolverState *);
+uint32_t openttd_rust_scope_default_random();
+uint32_t openttd_rust_scope_default_variable(bool *);
+ScopeResolver *openttd_rust_scope_default(ScopeResolver *);
 void openttd_rust_resolver_init(OpenTTDResolverState *, CallbackID, uint32_t, uint32_t);
 OpenTTDResolverResult openttd_rust_spritegroup_resolve(const OpenTTDSpriteGroupServices *, const SpriteGroup *, ResolverObject *, OpenTTDResolverState *, const GRFFile *, bool);
 OpenTTDResolverResult openttd_rust_resolver_resolve(const OpenTTDSpriteGroupServices *, const SpriteGroup *, ResolverObject *, OpenTTDResolverState *, const GRFFile *);

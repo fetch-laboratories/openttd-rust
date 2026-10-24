@@ -24,7 +24,7 @@ struct OpenTTDEngineReliability { int32_t base_life; int8_t retire_early; };
 struct OpenTTDEngineStartup { int32_t base_intro; uint32_t grfid; int32_t base_life; uint8_t decay_speed; bool climate; };
 struct OpenTTDEngineSeed { int32_t base_intro, lifelength; uint8_t decay_speed; int8_t retire_early; };
 struct OpenTTDEngineYear { int32_t base_intro, lifelength; };
-struct OpenTTDEngineYMD { int32_t year; uint8_t month, day; };
+using OpenTTDEngineYMD = OpenTTDCalendarYMD;
 struct OpenTTDEngineStartSettings { uint32_t generation_seed; int32_t starting_year, date; };
 struct OpenTTDEngineCompany { const Company *shell; uint8_t id; };
 struct OpenTTDEngineCompanyPreview { uint8_t blocked; int32_t performance; };

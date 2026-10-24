@@ -13,6 +13,7 @@
 #include "engine_services.h"
 #include "presentation_services.h"
 #include "environment_services.h"
+#include "timer_services.h"
 static_assert(MAX_COMPANIES == 15 && OWNER_DEITY.base() == 18 && MAX_LENGTH_ENGINE_NAME_CHARS == 32);
 static OpenTTDEngineRef EngineRef(const Engine *e) noexcept
 {
@@ -69,12 +70,6 @@ static OpenTTDEngineYear Engine_aging_year(const OpenTTDEngine *shell) noexcept
 
 static OpenTTDEngineStartSettings Engine_start_settings() noexcept { return {.generation_seed = _settings_game.game_creation.generation_seed, .starting_year = _settings_game.game_creation.starting_year.base(), .date = TimerGameCalendar::date.base()}; }
 
-static OpenTTDEngineYMD Engine_date_to_ymd(int32_t date) noexcept
-{
-	auto ymd = TimerGameCalendar::ConvertDateToYMD(TimerGameCalendar::Date{date});
-	return {.year = ymd.year.base(), .month = ymd.month, .day = ymd.day};
-}
-static int32_t Engine_ymd_to_date(int32_t year, uint8_t month, uint8_t day) noexcept { return TimerGameCalendar::ConvertYMDToDate(TimerGameCalendar::Year{year}, month, day).base(); }
 static bool Engine_enabled(const OpenTTDEngine *e) noexcept { return EngineOf(e)->IsEnabled(); }
 
 static void Engine_clear_last_variant(const OpenTTDEngine *shell) noexcept
@@ -181,8 +176,8 @@ static const OpenTTDEngineServices &EngineServices() noexcept
 		.ai_road_disabled = RustAIRoadDisabled,
 		.ai_ship_disabled = RustAIShipDisabled,
 		.ai_aircraft_disabled = RustAIAircraftDisabled,
-		.date_to_ymd = Engine_date_to_ymd,
-		.ymd_to_date = Engine_ymd_to_date,
+		.date_to_ymd = RustCalendarDateToYMD,
+		.ymd_to_date = RustCalendarYMDToDate,
 		.enabled = Engine_enabled,
 		.climate = RustEngineClimate,
 		.rail_kind = Engine_rail_kind,

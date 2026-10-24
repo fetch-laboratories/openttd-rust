@@ -102,7 +102,6 @@ pub struct Services {
     cargo_bitnum: unsafe extern "C" fn(u8) -> u8,
     cargo_translation: unsafe extern "C" fn(*const c_void, u8) -> u8,
     grf_version: unsafe extern "C" fn(*const c_void) -> u8,
-    get_register: unsafe extern "C" fn(*const c_void, u16) -> i32,
     current_company: unsafe extern "C" fn() -> u8,
     valid_company: unsafe extern "C" fn(u8) -> bool,
     livery: unsafe extern "C" fn(u16, u8, u16, V) -> *const c_void,
@@ -512,7 +511,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_scope_random(
 pub unsafe extern "C" fn openttd_rust_vehicle_resolver_scope(
     s: &Services,
     state: *mut State,
-    ro: *const c_void,
+    _ro: *const c_void,
     scope: u8,
     relative: u8,
 ) -> u8 {
@@ -524,7 +523,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_resolver_scope(
         let mut count = i32::from(relative & 15);
         if !self_v.is_null() && (relative != (*state).cached_relative_count || count == 0) {
             if count == 0 {
-                count = (s.get_register)(ro, 0x100);
+                count = crate::newgrf_storage::openttd_rust_storage_temp_get(0x100);
             }
             let v = match relative >> 6 {
                 0 => self_v,
@@ -1128,7 +1127,10 @@ unsafe fn variable(
                     ]
                     .contains(&callback)
                 {
-                    let u = (s.move_vehicle)(v, (s.get_register)(ro, 0x10f));
+                    let u = (s.move_vehicle)(
+                        v,
+                        crate::newgrf_storage::openttd_rust_storage_temp_get(0x10f),
+                    );
                     if u.is_null() {
                         return 0;
                     }
@@ -1143,7 +1145,7 @@ unsafe fn variable(
                         grf,
                         callback,
                         parameter as u8,
-                        (s.get_register)(ro, 0x10e) as u32,
+                        crate::newgrf_storage::openttd_rust_storage_temp_get(0x10e) as u32,
                         available,
                     );
                 }
@@ -1622,7 +1624,7 @@ crate::abi::layouts! {
     "OpenTTDVehicleOverrides" ["vehicle_resolver"] => Overrides { engine, count };
     "OpenTTDVehicleResolverServices" ["vehicle_resolver"] => Services {
         vehicle, shared, cache, first, move_vehicle => move, previous, can_carry,
-        cargo_classes, cargo_bitnum, cargo_translation, grf_version, get_register, current_company,
+        cargo_classes, cargo_bitnum, cargo_translation, grf_version, current_company,
         valid_company, livery, company_info, first_engine, articulated, has_articulated,
         overrides, override_at, override_engine, cached_override, write_override, spritegroup, random_bits, waiting,
         write_random, write_waiting, resolve_callback, resolve_random, order, cargo_owner,

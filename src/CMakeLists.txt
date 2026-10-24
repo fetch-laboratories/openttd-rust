@@ -347,6 +347,8 @@ add_files(
     newgrf_station.h
     rust/newgrf_spritegroup_services.cpp
     rust/newgrf_spritegroup_ffi.h
+    rust/newgrf_global_ffi.h
+    rust/timer_services.h
     rust/newgrf_storage_services.cpp
     rust/newgrf_storage_ffi.h
     newgrf_storage.cpp

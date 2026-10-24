@@ -145,7 +145,7 @@ pub struct Services {
     real: unsafe extern "C" fn(Resolver, Handle) -> Handle,
     native: unsafe extern "C" fn(Handle, Resolver) -> ResultValue,
     parameter: unsafe extern "C" fn(Handle, u32) -> u32,
-    global: unsafe extern "C" fn(u8, *mut u32, Handle) -> bool,
+    global: *const crate::newgrf::Services,
     profile_enter: unsafe extern "C" fn(Resolver, bool) -> Resolver,
     profile_end: unsafe extern "C" fn(Resolver, *const ResultValue),
 }
@@ -398,6 +398,7 @@ impl<'a> Invocation<'a> {
         }
     }
     unsafe fn store_psa(self, scope: Scope, reg: u32, value: i32) {
+        crate::witness::hit(crate::witness::ACTION2_STORAGE);
         unsafe {
             match scope.binding.kind {
                 0..=2 | 4 | 5 => {}
@@ -474,7 +475,14 @@ impl<'a> Invocation<'a> {
                 }
                 _ => {
                     let mut value = 0;
-                    if variable < 0x40 && (self.s.global)(variable, &raw mut value, self.file) {
+                    if variable < 0x40
+                        && crate::newgrf::openttd_rust_global_variable(
+                            &*self.s.global,
+                            variable,
+                            &raw mut value,
+                            self.file,
+                        )
+                    {
                         value
                     } else {
                         self.feature_variable(scope, variable, parameter, available)
@@ -522,6 +530,7 @@ impl<'a> Invocation<'a> {
                 let mut available = true;
                 value = match adjust.variable {
                     0x7E => {
+                        crate::witness::hit(crate::witness::ACTION2_PROCEDURE);
                         let result = self.resolve(adjust.subroutine, false);
                         if result.kind == 1 {
                             u32::from(result.callback)
@@ -529,7 +538,10 @@ impl<'a> Invocation<'a> {
                             u32::from(u16::MAX)
                         }
                     }
-                    0x7B => self.variable(scope, adjust.parameter, last, &raw mut available),
+                    0x7B => {
+                        crate::witness::hit(crate::witness::ACTION2_INDIRECT);
+                        self.variable(scope, adjust.parameter, last, &raw mut available)
+                    }
                     _ => self.variable(
                         scope,
                         adjust.variable,
@@ -538,6 +550,7 @@ impl<'a> Invocation<'a> {
                     ),
                 };
                 if !available {
+                    crate::witness::hit(crate::witness::ACTION2_ERROR);
                     return self.resolve(node.error_group, false);
                 }
                 value = self.adjust(&adjust, scope, node.size, last, value);
@@ -546,6 +559,7 @@ impl<'a> Invocation<'a> {
             (*self.state).last_value = last;
             let mut result = node.default_result;
             if node.ranges > 4 {
+                crate::witness::hit(crate::witness::ACTION2_BINARY);
                 let mut first = 0;
                 let mut count = node.ranges;
                 // std::lower_bound: compare high first, including inclusive endpoints.
@@ -567,6 +581,7 @@ impl<'a> Invocation<'a> {
                     }
                 }
             } else {
+                crate::witness::hit(crate::witness::ACTION2_LINEAR);
                 for i in 0..node.ranges {
                     let range = (self.s.range)(group, i);
                     if range.low <= value && value <= range.high {
@@ -593,6 +608,7 @@ impl<'a> Invocation<'a> {
                     matched == node.triggers
                 };
                 if triggered {
+                    crate::witness::hit(crate::witness::ACTION2_RESEED);
                     (*self.state).used_random_triggers |= u32::from(matched);
                     let reseed = (node.groups.wrapping_sub(1) << node.lowest_bit) as u32;
                     let slot = (&raw mut (*self.state).reseed)
@@ -735,6 +751,26 @@ unsafe fn default_real(s: &Services, group: Handle) -> Handle {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_resolver_default_real(s: &Services, group: Handle) -> Handle {
     unsafe { default_real(s, group) }
+}
+/// Native facades pass the original default frame and availability output.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_scope_default(scope: Resolver) -> Resolver {
+    scope
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_scope_default_random() -> u32 {
+    0
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_scope_default_variable(available: *mut bool) -> u32 {
+    unsafe {
+        available.write(false);
+    }
+    u32::MAX
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_resolver_reseed_sum(state: *const State) -> u32 {
+    unsafe { (*state).reseed[0] | (*state).reseed[1] | (*state).reseed[2] }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_resolver_init(

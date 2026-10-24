@@ -74,7 +74,6 @@ pub struct ResolverServices {
     pub grfid: unsafe extern "C" fn(*const c_void) -> u32,
     pub version: unsafe extern "C" fn(*const c_void) -> u8,
     pub callback_id: unsafe extern "C" fn(*const c_void) -> u16,
-    pub register_value: unsafe extern "C" fn(*const c_void, u16) -> i32,
     pub cargo_translation: unsafe extern "C" fn(*const c_void, u8) -> u8,
     pub cargo_map: unsafe extern "C" fn(*const SpecHandle, u8) -> u8,
     pub badges: unsafe extern "C" fn(*const c_void, *const SpecHandle, u32) -> u32,
@@ -216,7 +215,7 @@ fn count_and_distance(
     builder: *const Builder,
     s: &ResolverServices,
 ) -> u32 {
-    let mut grfid = unsafe { (s.register_value)(ro, 0x100) } as u32;
+    let mut grfid = unsafe { crate::newgrf_storage::openttd_rust_storage_temp_get(0x100) } as u32;
     let kind = if grfid == 0 {
         parameter
     } else {
@@ -423,7 +422,7 @@ fn variable(
         }
         0x67 | 0x68 => {
             let reg = if variable == 0x68 {
-                (unsafe { (s.register_value)(ro, 0x101) }) as u32
+                (unsafe { crate::newgrf_storage::openttd_rust_storage_temp_get(0x101) }) as u32
             } else {
                 0
             };
@@ -923,7 +922,6 @@ crate::abi::layouts! {
         grfid,
         version,
         callback_id,
-        register_value,
         cargo_translation,
         cargo_map,
         badges,
