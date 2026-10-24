@@ -559,8 +559,27 @@ def check(scenario, run, mode, role, result):
     if scenario["fleet"] in ("capabilities", "capabilities-reload"):
         check_capabilities(run, mode, role, result)
     if scenario["fleet"] == "transaction-build-aircraft":
+        for kind in ("mail", "extra"):
+            rows = [
+                line.split()[2:]
+                for line in run["log"]
+                if line.startswith(f"FLEET capability-aircraft-{kind} ")
+            ]
+            expected_inputs = [
+                [str(algorithm).lower(), str(factor)]
+                for algorithm in (False, True)
+                for factor in (1, 256, 65535)
+            ]
+            if [row[:2] for row in rows] != expected_inputs or any(
+                row[-1] != "0" for row in rows
+            ):
+                result["problems"].append(
+                    f"{mode}/{role}: aircraft {kind} multiplier/optional-mail bounds"
+                )
         for marker in (
             "FLEET capability-aircraft 20 17",
+            "FLEET capability-aircraft-build false 17 17 true",
+            "FLEET capability-aircraft-build true 17 17 true",
             "FLEET capability-aircraft-refit false 17 0",
             "FLEET capability-aircraft-refit true 17 0 0",
             "FLEET capability-aircraft-restored true",

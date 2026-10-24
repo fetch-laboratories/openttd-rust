@@ -99,7 +99,7 @@ static void *RailNewRear(void *front) noexcept
 	v->value >>= 1;
 	u->value = v->value;
 	u->direction = v->direction;
-	u->owner = v->owner;
+	RustVehicleSetOwner(RustVehicle(u), RustVehicleOwner(v));
 	u->tile = v->tile;
 	u->x_pos = v->x_pos;
 	u->y_pos = v->y_pos;
@@ -113,7 +113,7 @@ static void *RailNewRear(void *front) noexcept
 	u->cargo_cap = v->cargo_cap;
 	u->refit_cap = v->refit_cap;
 	u->SetRailTypes(v->GetRailTypes());
-	u->engine_type = v->engine_type;
+	RustVehicleSetEngine(RustVehicle(u), RustVehicleEngineID(v));
 	u->date_of_last_service = v->date_of_last_service;
 	u->date_of_last_service_newgrf = RustVehicleCalendarService(v);
 	u->build_year = RustVehicleBuildYear(v);

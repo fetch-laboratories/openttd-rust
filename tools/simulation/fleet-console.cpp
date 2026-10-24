@@ -249,10 +249,16 @@ struct CapabilityObserver : SpriteGroup {
 	mutable std::vector<uint32_t> indices;
 	mutable bool purchase = true, pooled = true;
 	mutable VehicleID temporary = VehicleID::Invalid();
-	mutable uint refits = 0;
+	mutable uint refits = 0, mail_calls = 0;
+	bool inspect_mail = false;
+	mutable bool mail_valid = true;
 	ResolverResult Resolve(ResolverObject &object) const override
 	{
-		if (object.callback == CBID_VEHICLE_REFIT_CAPACITY) ++refits;
+		if (object.callback == CBID_VEHICLE_REFIT_CAPACITY) {
+			++refits;
+			const Vehicle *v = static_cast<VehicleResolverObject &>(object).self_scope.v;
+			if (inspect_mail && v != nullptr) { ++mail_calls; mail_valid &= v->type == VEH_AIRCRAFT && v->Next() != nullptr && v->Next()->cargo_cap == 17; }
+		}
 		if (object.callback == CBID_VEHICLE_ARTIC_ENGINE) {
 			indices.push_back(object.callback_param1);
 			const Vehicle *v = static_cast<VehicleResolverObject &>(object).self_scope.v;
@@ -427,17 +433,29 @@ static void CapabilityAircraft(Vehicle *v)
 	uint amount = e->DetermineCapacity(v, &secondary);
 	fmt::print(stderr, "FLEET capability-aircraft {} {}\n", amount, secondary);
 	{
-		Backup<uint16_t> passengers(CargoSpec::Get(e->info.cargo_type)->multiplier), mail(CargoSpec::Get(GetCargoTypeByLabel(CT_MAIL))->multiplier);
+		Backup<uint16_t> passengers(CargoSpec::Get(e->info.cargo_type)->multiplier), mail(CargoSpec::Get(GetCargoTypeByLabel(CT_MAIL))->multiplier), goods(CargoSpec::Get(GetCargoTypeByLabel(CT_GOODS))->multiplier);
 		e->info.callback_mask.Reset(VehicleCallbackMask::RefitCapacity);
 		v->cargo_type = GetCargoTypeByLabel(CT_MAIL);
 		for (bool algorithm : {false, true}) for (uint16_t factor : {1, 256, 65535}) {
 			e->info.misc_flags.Set(EngineMiscFlag::NoDefaultCargoMultiplier, algorithm); CargoSpec::Get(e->info.cargo_type)->multiplier = UINT16_MAX; CargoSpec::Get(v->cargo_type)->multiplier = factor;
 			uint16_t extra = 999; uint amount = e->DetermineCapacity(v, &extra);
 			fmt::print(stderr, "FLEET capability-aircraft-mail {} {} {} {}\n", algorithm, factor, amount, extra);
+			v->cargo_type = GetCargoTypeByLabel(CT_GOODS); CargoSpec::Get(v->cargo_type)->multiplier = UINT16_MAX;
+			amount = e->DetermineCapacity(v, &extra);
+			fmt::print(stderr, "FLEET capability-aircraft-extra {} {} {} {}\n", algorithm, factor, amount, extra);
+			v->cargo_type = GetCargoTypeByLabel(CT_MAIL);
 		}
-		passengers.Restore(); mail.Restore();
+		passengers.Restore(); mail.Restore(); goods.Restore();
 		e->info.callback_mask.Set(VehicleCallbackMask::RefitCapacity); e->info.misc_flags.Reset(EngineMiscFlag::NoDefaultCargoMultiplier); v->cargo_type = e->info.cargo_type;
 	}
+	e->info.misc_flags.Set(EngineMiscFlag::NoDefaultCargoMultiplier);
+	p.observer->inspect_mail = true;
+	for (DoCommandFlags flags : {DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Execute}}) {
+		auto [cost, id, cap, mail, caps] = Command<CMD_BUILD_VEHICLE>::Do(flags, v->tile, e->index, false, INVALID_CARGO, INVALID_CLIENT_ID); Checked("capability-aircraft-build", cost);
+		fmt::print(stderr, "FLEET capability-aircraft-build {} {} {} {}\n", flags.Test(DoCommandFlag::Execute), cap, mail, p.observer->mail_valid && (!flags.Test(DoCommandFlag::Execute) || p.observer->mail_calls != 0));
+		if (flags.Test(DoCommandFlag::Execute)) { CapabilityChain(Vehicle::Get(id), "aircraft"); Checked("capability-aircraft-sell", Command<CMD_SELL_VEHICLE>::Do(DoCommandFlag::Execute, id, true, false, INVALID_CLIENT_ID)); }
+	}
+	p.observer->inspect_mail = false; e->info.misc_flags.Reset(EngineMiscFlag::NoDefaultCargoMultiplier);
 	for (DoCommandFlags flags : {DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Execute}}) {
 		auto [cost, cap, mail, caps] = Command<CMD_REFIT_VEHICLE>::Do(flags, v->index, GetCargoTypeByLabel(CT_MAIL), 1, false, false, 0); Checked("capability-aircraft-refit", cost);
 		fmt::print(stderr, "FLEET capability-aircraft-refit {} {} {} {}\n", flags.Test(DoCommandFlag::Execute), cap, mail, v->Next()->cargo_cap);
