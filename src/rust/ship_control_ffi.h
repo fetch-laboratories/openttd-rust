@@ -1,3 +1,4 @@
+struct OpenTTDEngineCapabilitiesServices;
 /*
  * This file is part of OpenTTD.
  * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
@@ -74,7 +75,7 @@ struct OpenTTDShipLeaves {
 	uint32_t (*speed_frac)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(speed_frac);
 	void (*update_visual)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(update_visual);
 	void (*cache_invalidate)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(cache_invalidate);
-	uint32_t (*capacity)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(capacity);
+	const OpenTTDEngineCapabilitiesServices *capabilities;
 	void (*sprite_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(sprite_direction);
 	uint32_t (*tile_x)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_x);
 	uint32_t (*tile_y)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_y);

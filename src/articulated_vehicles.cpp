@@ -22,11 +22,14 @@
 #ifdef WITH_RUST
 #include "rust/vehicle_refit_ffi.h"
 #include "rust/engine_services.h"
+#include "rust/engine_capabilities_ffi.h"
 #include "rust/services_cargo.h"
 #endif
 #include "safeguards.h"
 
+#ifndef WITH_RUST
 static const uint MAX_ARTICULATED_PARTS = 100; ///< Maximum of articulated parts per vehicle, i.e. when to abort calling the articulated vehicle callback.
+#endif
 
 /**
  * Determines the next articulated part to attach
@@ -36,8 +39,12 @@ static const uint MAX_ARTICULATED_PARTS = 100; ///< Maximum of articulated parts
  * @param mirrored Returns whether the part shall be flipped.
  * @return engine to add or EngineID::Invalid()
  */
+#ifndef WITH_RUST
 static EngineID GetNextArticulatedPart(uint index, EngineID front_type, Vehicle *front = nullptr, bool *mirrored = nullptr)
 {
+#ifdef WITH_RUST
+	return EngineID(openttd_rust_articulated_next(&GetRustEngineCapabilitiesServices(), index, front_type.base(), front, mirrored));
+#else
 	assert(front == nullptr || front->engine_type == front_type);
 
 	const Engine *front_engine = Engine::Get(front_type);
@@ -59,7 +66,9 @@ static EngineID GetNextArticulatedPart(uint index, EngineID front_type, Vehicle 
 	}
 
 	return GetNewEngineID(front_engine->GetGRF(), front_engine->type, callback);
+#endif
 }
+#endif
 
 
 /**
@@ -69,7 +78,11 @@ static EngineID GetNextArticulatedPart(uint index, EngineID front_type, Vehicle 
  */
 bool IsArticulatedEngine(EngineID engine_type)
 {
+#ifdef WITH_RUST
+	return openttd_rust_articulated_is(&GetRustEngineCapabilitiesServices(), engine_type.base());
+#else
 	return EngInfo(engine_type)->callback_mask.Test(VehicleCallbackMask::ArticEngine);
+#endif
 }
 
 /**
@@ -80,6 +93,9 @@ bool IsArticulatedEngine(EngineID engine_type)
  */
 uint CountArticulatedParts(EngineID engine_type, bool purchase_window)
 {
+#ifdef WITH_RUST
+	return openttd_rust_articulated_count(&GetRustEngineCapabilitiesServices(), engine_type.base(), purchase_window);
+#else
 	if (!EngInfo(engine_type)->callback_mask.Test(VehicleCallbackMask::ArticEngine)) return 0;
 
 	/* If we can't allocate a vehicle now, we can't allocate it in the command
@@ -99,6 +115,7 @@ uint CountArticulatedParts(EngineID engine_type, bool purchase_window)
 	}
 
 	return i - 1;
+#endif
 }
 
 
@@ -107,12 +124,14 @@ uint CountArticulatedParts(EngineID engine_type, bool purchase_window)
  * @param engine the EngineID of interest
  * @return cargo and capacity
  */
+#ifndef WITH_RUST
 static inline std::pair<CargoType, uint16_t> GetVehicleDefaultCapacity(EngineID engine)
 {
 	const Engine *e = Engine::Get(engine);
 	CargoType cargo = e->CanCarryCargo() ? e->GetDefaultCargoType() : INVALID_CARGO;
 	return {cargo, IsValidCargoType(cargo) ? e->GetDisplayDefaultCapacity() : 0};
 }
+#endif
 
 /**
  * Returns all cargoes a vehicle can carry.
@@ -120,6 +139,7 @@ static inline std::pair<CargoType, uint16_t> GetVehicleDefaultCapacity(EngineID 
  * @param include_initial_cargo_type if true the default cargo type of the vehicle is included; if false only the refit_mask
  * @return bit set of CargoTypes
  */
+#ifndef WITH_RUST
 static inline CargoTypes GetAvailableVehicleCargoTypes(EngineID engine, bool include_initial_cargo_type)
 {
 	const Engine *e = Engine::Get(engine);
@@ -133,6 +153,7 @@ static inline CargoTypes GetAvailableVehicleCargoTypes(EngineID engine, bool inc
 
 	return cargoes;
 }
+#endif
 
 /**
  * Get the capacity of the parts of a given engine.
@@ -141,6 +162,11 @@ static inline CargoTypes GetAvailableVehicleCargoTypes(EngineID engine, bool inc
  */
 CargoArray GetCapacityOfArticulatedParts(EngineID engine)
 {
+#ifdef WITH_RUST
+	CargoArray capacity{};
+	openttd_rust_articulated_capacity(&GetRustEngineCapabilitiesServices(), engine.base(), capacity.data());
+	return capacity;
+#else
 	CargoArray capacity{};
 	const Engine *e = Engine::Get(engine);
 
@@ -162,6 +188,7 @@ CargoArray GetCapacityOfArticulatedParts(EngineID engine)
 	}
 
 	return capacity;
+#endif
 }
 
 /**
@@ -171,6 +198,9 @@ CargoArray GetCapacityOfArticulatedParts(EngineID engine)
  */
 CargoTypes GetCargoTypesOfArticulatedParts(EngineID engine)
 {
+#ifdef WITH_RUST
+	return openttd_rust_articulated_cargoes(&GetRustEngineCapabilitiesServices(), engine.base());
+#else
 	CargoTypes cargoes = 0;
 	const Engine *e = Engine::Get(engine);
 
@@ -192,6 +222,7 @@ CargoTypes GetCargoTypesOfArticulatedParts(EngineID engine)
 	}
 
 	return cargoes;
+#endif
 }
 
 /**
@@ -201,6 +232,9 @@ CargoTypes GetCargoTypesOfArticulatedParts(EngineID engine)
  */
 bool IsArticulatedVehicleRefittable(EngineID engine)
 {
+#ifdef WITH_RUST
+	return openttd_rust_articulated_refittable(&GetRustEngineCapabilitiesServices(), engine.base());
+#else
 	if (IsEngineRefittable(engine)) return true;
 
 	const Engine *e = Engine::Get(engine);
@@ -216,6 +250,7 @@ bool IsArticulatedVehicleRefittable(EngineID engine)
 	}
 
 	return false;
+#endif
 }
 
 /**
@@ -227,6 +262,9 @@ bool IsArticulatedVehicleRefittable(EngineID engine)
  */
 void GetArticulatedRefitMasks(EngineID engine, bool include_initial_cargo_type, CargoTypes *union_mask, CargoTypes *intersection_mask)
 {
+#ifdef WITH_RUST
+	openttd_rust_articulated_refit_masks(&GetRustEngineCapabilitiesServices(), engine.base(), include_initial_cargo_type, union_mask, intersection_mask);
+#else
 	const Engine *e = Engine::Get(engine);
 	CargoTypes veh_cargoes = GetAvailableVehicleCargoTypes(engine, include_initial_cargo_type);
 	*union_mask = veh_cargoes;
@@ -243,6 +281,7 @@ void GetArticulatedRefitMasks(EngineID engine, bool include_initial_cargo_type, 
 		*union_mask |= veh_cargoes;
 		if (veh_cargoes != 0) *intersection_mask &= veh_cargoes;
 	}
+#endif
 }
 
 /**
@@ -253,9 +292,13 @@ void GetArticulatedRefitMasks(EngineID engine, bool include_initial_cargo_type, 
  */
 CargoTypes GetUnionOfArticulatedRefitMasks(EngineID engine, bool include_initial_cargo_type)
 {
+#ifdef WITH_RUST
+	return openttd_rust_articulated_refit_union(&GetRustEngineCapabilitiesServices(), engine.base(), include_initial_cargo_type);
+#else
 	CargoTypes union_mask, intersection_mask;
 	GetArticulatedRefitMasks(engine, include_initial_cargo_type, &union_mask, &intersection_mask);
 	return union_mask;
+#endif
 }
 
 /**
@@ -267,6 +310,9 @@ CargoTypes GetUnionOfArticulatedRefitMasks(EngineID engine, bool include_initial
  */
 CargoTypes GetCargoTypesOfArticulatedVehicle(const Vehicle *v, CargoType *cargo_type)
 {
+#ifdef WITH_RUST
+	return openttd_rust_articulated_live_cargoes(&GetRustEngineCapabilitiesServices(), v, cargo_type);
+#else
 	CargoTypes cargoes = 0;
 	CargoType first_cargo = INVALID_CARGO;
 
@@ -287,6 +333,7 @@ CargoTypes GetCargoTypesOfArticulatedVehicle(const Vehicle *v, CargoType *cargo_
 
 	if (cargo_type != nullptr) *cargo_type = first_cargo;
 	return cargoes;
+#endif
 }
 
 #ifdef WITH_RUST

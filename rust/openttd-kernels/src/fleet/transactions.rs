@@ -53,7 +53,7 @@ pub struct Services {
     pub(crate) prev_unit: unsafe extern "C" fn(*mut ()) -> *mut (),
     pub(crate) length: unsafe extern "C" fn(*mut ()) -> u16,
     pub(crate) cargo_type: unsafe extern "C" fn(*mut ()) -> u8,
-    pub(crate) can_carry: unsafe extern "C" fn(*mut ()) -> bool,
+    pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub(crate) stopped_in_depot: unsafe extern "C" fn(*mut ()) -> bool,
     pub(crate) max_length: unsafe extern "C" fn() -> u8,
     pub(crate) check: unsafe extern "C" fn(bool),
@@ -66,10 +66,6 @@ pub struct Services {
     pub(crate) wagon: unsafe extern "C" fn(u16) -> bool,
     pub(crate) tram: unsafe extern "C" fn(u16) -> bool,
     pub(crate) plane: unsafe extern "C" fn(u16) -> u8,
-    pub(crate) refit_mask: unsafe extern "C" fn(u16, bool) -> u64,
-    pub(crate) refit_masks: unsafe extern "C" fn(u16, *mut u64, *mut u64),
-    pub(crate) vehicle_cargo: unsafe extern "C" fn(*mut (), *mut u8) -> u64,
-    pub(crate) default_cargo: unsafe extern "C" fn(u16) -> u64,
     pub(crate) orders: unsafe extern "C" fn(*mut ()) -> *mut (),
     pub(crate) order_count: unsafe extern "C" fn(*mut ()) -> usize,
     pub(crate) order_count_id: unsafe extern "C" fn(*mut ()) -> u8,
@@ -325,8 +321,12 @@ unsafe fn valid(w: &Services, gw: &GroupServices, from: u16, to: u16, company: u
         }
         _ => (),
     }
-    let a = unsafe { (w.refit_mask)(from, true) };
-    let b = unsafe { (w.refit_mask)(to, true) };
+    let a = unsafe {
+        crate::engine_capabilities::openttd_rust_articulated_refit_union(w.capabilities, from, true)
+    };
+    let b = unsafe {
+        crate::engine_capabilities::openttd_rust_articulated_refit_union(w.capabilities, to, true)
+    };
     a == 0 || b == 0 || a & b != 0
 }
 unsafe fn order_vehicle(w: &Services, gw: &GroupServices, v: *mut ()) -> *mut () {
@@ -338,8 +338,20 @@ unsafe fn order_vehicle(w: &Services, gw: &GroupServices, v: *mut ()) -> *mut ()
 }
 unsafe fn verify_refits(w: &Services, gw: &GroupServices, v: *mut (), engine: u16) -> bool {
     let old_engine = unsafe { (gw.vehicle_engine)(v) };
-    let old_mask = unsafe { (w.refit_mask)(old_engine, false) };
-    let new_mask = unsafe { (w.refit_mask)(engine, false) };
+    let old_mask = unsafe {
+        crate::engine_capabilities::openttd_rust_articulated_refit_union(
+            w.capabilities,
+            old_engine,
+            false,
+        )
+    };
+    let new_mask = unsafe {
+        crate::engine_capabilities::openttd_rust_articulated_refit_union(
+            w.capabilities,
+            engine,
+            false,
+        )
+    };
     let u = unsafe { order_vehicle(w, gw, v) };
     let orders = unsafe { (w.orders)(u) };
     if orders.is_null() {
@@ -364,7 +376,13 @@ unsafe fn verify_refits(w: &Services, gw: &GroupServices, v: *mut (), engine: u1
     true
 }
 unsafe fn incompatible_refit(w: &Services, gw: &GroupServices, v: *mut (), engine: u16) -> i32 {
-    let mask = unsafe { (w.refit_mask)(engine, false) };
+    let mask = unsafe {
+        crate::engine_capabilities::openttd_rust_articulated_refit_union(
+            w.capabilities,
+            engine,
+            false,
+        )
+    };
     let u = unsafe { order_vehicle(w, gw, v) };
     let orders = unsafe { (w.orders)(u) };
     if orders.is_null() {
@@ -392,14 +410,30 @@ unsafe fn new_cargo(
 ) -> u8 {
     let mut union = 0;
     let mut available = 0;
-    unsafe { (w.refit_masks)(engine, &raw mut union, &raw mut available) };
+    unsafe {
+        crate::engine_capabilities::openttd_rust_articulated_refit_masks(
+            w.capabilities,
+            engine,
+            true,
+            &raw mut union,
+            &raw mut available,
+        )
+    };
     if union == 0 {
         return NO_REFIT;
     }
     let mut cargo = INVALID_CARGO;
-    let mask = unsafe { (w.vehicle_cargo)(v, &raw mut cargo) };
+    let mask = unsafe {
+        crate::engine_capabilities::openttd_rust_articulated_live_cargoes(
+            w.capabilities,
+            v.cast(),
+            &raw mut cargo,
+        )
+    };
     if mask & mask.wrapping_sub(1) != 0 {
-        let defaults = unsafe { (w.default_cargo)(engine) };
+        let defaults = unsafe {
+            crate::engine_capabilities::openttd_rust_articulated_cargoes(w.capabilities, engine)
+        };
         if mask & defaults == mask {
             return NO_REFIT;
         }
@@ -411,7 +445,7 @@ unsafe fn new_cargo(
         }
         v = unsafe { (w.first)(v) };
         while !v.is_null() {
-            if unsafe { (w.can_carry)(v) } {
+            if unsafe { crate::engine_capabilities::can_carry_vehicle(w.capabilities, v.cast()) } {
                 let cargo = unsafe { (w.cargo_type)(v) };
                 if available & 1_u64.wrapping_shl(u32::from(cargo)) != 0 {
                     return cargo;
@@ -1167,7 +1201,7 @@ crate::abi::layouts! {
         prev_unit,
         length,
         cargo_type,
-        can_carry,
+        capabilities,
         stopped_in_depot,
         max_length,
         check,
@@ -1180,10 +1214,6 @@ crate::abi::layouts! {
         wagon,
         tram,
         plane,
-        refit_mask,
-        refit_masks,
-        vehicle_cargo,
-        default_cargo,
         orders,
         order_count,
         order_count_id,

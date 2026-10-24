@@ -37,7 +37,7 @@ pub struct Services {
     pub aircraft_info: extern "C" fn(*const OpenTTDEngine) -> AircraftInfo,
     pub aircraft_properties: extern "C" fn(*mut (), *mut (), *const OpenTTDEngine, u8),
     pub rotor: extern "C" fn(*mut (), *mut (), *mut ()),
-    pub aircraft_capacity: extern "C" fn(*const OpenTTDEngine, *mut (), *mut ()),
+    pub mail_capacity_address: extern "C" fn(*mut ()) -> *mut u16,
     pub road_capacity: extern "C" fn(*mut (), *mut (), u16),
     pub set_cargo_type: extern "C" fn(*mut OpenTTDVehicle, u8),
     pub engine_common: extern "C" fn(*mut (), *const OpenTTDEngine),
@@ -90,7 +90,14 @@ pub(crate) unsafe fn road(
     (r.invalidate_chain)(v.cast());
     let mut u = v;
     while !u.is_null() {
-        let capacity = (r.capacity)((r.vehicle_engine)(u.cast()), u.cast(), ptr::null_mut());
+        let capacity = unsafe {
+            crate::engine_capabilities::openttd_rust_engine_capacity(
+                r.capabilities,
+                (r.vehicle_engine)(u.cast()),
+                u.cast(),
+                ptr::null_mut(),
+            )
+        };
         (k.road_capacity)(v, u, capacity as u16);
         u = unsafe { super::refit::next(r, u) };
     }
@@ -191,7 +198,18 @@ pub(crate) unsafe fn aircraft(
     (a.random_bits)(v, b.shared.random() as u16);
     (a.random_bits)(u, b.shared.random() as u16);
     (k.service_flags)(v, (k.exclusive_preview)(e), (b.interval_percent)(company));
-    (k.aircraft_capacity)(e, v, u);
+    (r.invalidate_chain)(v.cast());
+    // Source passes the live mail shell field, so callbacks see each optional write immediately.
+    let main = unsafe {
+        crate::engine_capabilities::openttd_rust_engine_capacity(
+            r.capabilities,
+            e,
+            v.cast(),
+            (k.mail_capacity_address)(u),
+        )
+    };
+    (r.set_capacity)(v.cast(), main as u16);
+    (r.invalidate_chain)(v.cast());
     unsafe { crate::aircraft::openttd_rust_aircraft_cache(r.aircraft, hv, true) };
     unsafe {
         a.position(v);
@@ -223,7 +241,7 @@ crate::abi::layouts! {
     "OpenTTDVehicleConstructServices" ["probe"] => Services {
         articulated, powered_roadtypes, any_roadtype, new_road, road_front, station,
         hangar_tile, new_aircraft, aircraft_place, aircraft_info, aircraft_properties,
-        rotor, aircraft_capacity, road_capacity, set_cargo_type, engine_common, service_dates,
+        rotor, mail_capacity_address, road_capacity, set_cargo_type, engine_common, service_dates,
         build_stamp, exclusive_preview, service_flags, wrong_depot,
     };
 }

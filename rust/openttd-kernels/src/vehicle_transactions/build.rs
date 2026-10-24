@@ -26,7 +26,6 @@ pub struct Services {
     pub depot_kind: extern "C" fn(u32) -> VehicleType,
     pub engine_cost: extern "C" fn(*const OpenTTDEngine) -> i64,
     pub default_cargo: extern "C" fn(*const OpenTTDEngine) -> u8,
-    pub articulate_count: extern "C" fn(u16, bool) -> u32,
     pub pool_available: extern "C" fn(usize) -> bool,
     pub free_unit: extern "C" fn(VehicleType) -> u16,
     pub construct: &'static construct::Services,
@@ -34,8 +33,6 @@ pub struct Services {
     pub ship_tile: extern "C" fn(u32) -> u32,
     pub new_ship: extern "C" fn(u32) -> *mut (),
     pub set_purchase: extern "C" fn(*mut (), u16, i64),
-    pub articulated_capacity: extern "C" fn(u16, *mut u32),
-    pub display_capacity: extern "C" fn(*const OpenTTDEngine, *mut u16) -> u32,
     pub is_engine: extern "C" fn(*mut ()) -> bool,
     pub presentation: extern "C" fn(*mut (), VehicleType),
     pub use_unit: extern "C" fn(*mut ()),
@@ -90,9 +87,23 @@ pub(crate) unsafe fn build(
         VehicleType::TRAIN => {
             u32::from((r.rail_kind)(e) == RailVehicleTypes::MULTIHEAD)
                 + 1
-                + (s.articulate_count)(engine, false)
+                + unsafe {
+                    crate::engine_capabilities::openttd_rust_articulated_count(
+                        r.capabilities,
+                        engine,
+                        false,
+                    )
+                }
         }
-        VehicleType::ROAD => 1 + (s.articulate_count)(engine, false),
+        VehicleType::ROAD => {
+            1 + unsafe {
+                crate::engine_capabilities::openttd_rust_articulated_count(
+                    r.capabilities,
+                    engine,
+                    false,
+                )
+            }
+        }
         VehicleType::SHIP => 1,
         VehicleType::AIRCRAFT => {
             if unsafe { (c.transactions.plane)(engine) } != 0 {
@@ -177,10 +188,23 @@ pub(crate) unsafe fn build(
             };
             value.add(Cost(temporary, b.cost));
         } else if kind == VehicleType::TRAIN || kind == VehicleType::ROAD {
-            (s.articulated_capacity)(engine, result.capacity.cargo.as_mut_ptr());
+            unsafe {
+                crate::engine_capabilities::openttd_rust_articulated_capacity(
+                    r.capabilities,
+                    engine,
+                    result.capacity.cargo.as_mut_ptr(),
+                )
+            };
             result.capacity.total = result.capacity.cargo[usize::from(default_cargo)];
         } else {
-            result.capacity.total = (s.display_capacity)(e, &raw mut result.capacity.mail);
+            result.capacity.total = unsafe {
+                crate::engine_capabilities::openttd_rust_engine_capacity(
+                    r.capabilities,
+                    e,
+                    ptr::null_mut(),
+                    &raw mut result.capacity.mail,
+                )
+            };
             result.capacity.cargo[usize::from(default_cargo)] = result.capacity.total;
             let mail = (r.mail_cargo)();
             if (c.valid_cargo)(mail) {
@@ -280,8 +304,8 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDVehicleBuildResult" ["probe"] => Result { id, capacity, };
     "OpenTTDVehicleBuildServices" ["probe"] => Services {
-        refit, mass, random, depot_kind, engine_cost, default_cargo, articulate_count, pool_available,
-        free_unit, construct, rail, ship_tile, new_ship, set_purchase, articulated_capacity,
-        display_capacity, is_engine, presentation, use_unit, too_many, unavailable,
+        refit, mass, random, depot_kind, engine_cost, default_cargo, pool_available,
+        free_unit, construct, rail, ship_tile, new_ship, set_purchase,
+        is_engine, presentation, use_unit, too_many, unavailable,
     };
 }

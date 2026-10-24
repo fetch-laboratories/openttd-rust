@@ -1,3 +1,4 @@
+struct OpenTTDEngineCapabilitiesServices;
 /*
  * This file is part of OpenTTD.
  * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
@@ -275,7 +276,7 @@ struct OpenTTDTrainServices {
 	uint64_t (*backoff)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(backoff);
 	void (*base_viewport)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(base_viewport);
 	uint64_t (*bridge_speed)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bridge_speed);
-	uint64_t (*capacity)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(capacity);
+	const OpenTTDEngineCapabilitiesServices *capabilities;
 	void (*capacity_error)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(capacity_error);
 	uint64_t (*cargo_age_default)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(cargo_age_default);
 	void (*check_next)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(check_next);

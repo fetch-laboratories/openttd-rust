@@ -1,7 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file vehicle_build_services.hpp Native pools, specification helpers and presentation leaves. */
 static VehicleType VehicleBuildDepotKind(uint32_t tile) noexcept { return GetDepotVehicleType(TileIndex(tile)); }
-static uint32_t VehicleBuildArticulatedCount(uint16_t engine, bool capacity) noexcept { return CountArticulatedParts(EngineID(engine), capacity); }
 static uint16_t VehicleBuildFreeUnit(VehicleType type) noexcept { return GetFreeUnitNumber(type); }
 /* Road vehicle and aircraft construction leaves: shell allocation and field stores. */
 static bool VehicleConstructRoadTile(uint32_t tile, uint64_t powered) noexcept { return HasTileAnyRoadType(TileIndex(tile), RoadTypes(powered)); }
@@ -84,13 +83,6 @@ static void VehicleConstructRotor(void *rotor, void *aircraft, void *shadow) noe
 	w->sprite_cache.sprite_seq.Set(SPR_ROTOR_STOPPED);
 	RustVehicleSetNext(static_cast<Vehicle *>(shadow), w);
 }
-static void VehicleConstructAircraftCapacity(const OpenTTDEngine *e, void *aircraft, void *shadow) noexcept
-{
-	Vehicle *v = static_cast<Vehicle *>(aircraft);
-	RustVehicleInvalidateChain(RustVehicle(v));
-	v->cargo_cap = RustEngineDetermineCapacity(e, RustVehicle(v), &static_cast<Vehicle *>(shadow)->cargo_cap);
-	RustVehicleInvalidateChain(RustVehicle(v));
-}
 static void VehicleConstructRoadCapacity(void *front, void *part, uint16_t capacity) noexcept
 {
 	Vehicle *v = static_cast<Vehicle *>(front);
@@ -140,7 +132,7 @@ static const OpenTTDVehicleConstructServices &GetVehicleConstructServices() noex
 		.new_aircraft = VehicleConstructNewAircraft,
 		.aircraft_place = VehicleConstructAircraftPlace, .aircraft_info = VehicleConstructAircraftInfo,
 		.aircraft_properties = VehicleConstructAircraftProperties, .rotor = VehicleConstructRotor,
-		.aircraft_capacity = VehicleConstructAircraftCapacity, .road_capacity = VehicleConstructRoadCapacity,
+		.mail_capacity_address = RustOpaqueVehicleInvoke<RustVehicleCargoCapacityAddress>, .road_capacity = VehicleConstructRoadCapacity,
 		.set_cargo_type = RustVehicleSetCargoType, .engine_common = VehicleConstructEngineCommon,
 		.service_dates = VehicleConstructServiceDates, .build_stamp = VehicleConstructStamp,
 		.exclusive_preview = RustEngineExclusivePreview, .service_flags = VehicleConstructServiceFlags,
@@ -151,7 +143,6 @@ static const OpenTTDVehicleConstructServices &GetVehicleConstructServices() noex
 static uint32_t VehicleBuildShipTile(uint32_t tile) noexcept { return GetShipDepotNorthTile(TileIndex(tile)).base(); }
 static void *VehicleBuildNewShip(uint32_t tile) noexcept { Ship *v = new Ship(); v->tile = TileIndex(tile); return v; }
 static void VehicleBuildSetPurchase(void *shell, uint16_t unit, int64_t value) noexcept { Vehicle *v = static_cast<Vehicle *>(shell); v->unitnumber = unit; v->value = value; }
-static uint32_t VehicleBuildDisplayCapacity(const OpenTTDEngine *e, uint16_t *mail) noexcept { return EngineOf(e)->GetDisplayDefaultCapacity(mail); }
 static void VehicleBuildPresentation(void *shell, VehicleType type) noexcept
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);
@@ -165,10 +156,10 @@ const OpenTTDVehicleBuildServices &GetRustVehicleBuildServices() noexcept
 	static const OpenTTDVehicleBuildServices services{
 		.refit = &GetRustVehicleRefitServices(), .mass = &GetVehicleMassServices(), .random = &GetRustRandomServices(),
 		.depot_kind = VehicleBuildDepotKind, .engine_cost = RustEngineCost, .default_cargo = RustEngineDefaultCargo,
-		.articulate_count = VehicleBuildArticulatedCount, .pool_available = RustVehicleCanAllocate, .free_unit = VehicleBuildFreeUnit,
+		.pool_available = RustVehicleCanAllocate, .free_unit = VehicleBuildFreeUnit,
 		.construct = &GetVehicleConstructServices(), .rail = &GetRustRailConstructionServices(),
 		.ship_tile = VehicleBuildShipTile, .new_ship = VehicleBuildNewShip, .set_purchase = VehicleBuildSetPurchase,
-		.articulated_capacity = RustArticulatedCapacity, .display_capacity = VehicleBuildDisplayCapacity,
+
 		.is_engine = RustOpaqueVehicleRead<bool, RustTrainIsEngine>, .presentation = VehicleBuildPresentation, .use_unit = RustVehicleUseCurrentUnit,
 		.too_many = STR_ERROR_TOO_MANY_VEHICLES_IN_GAME, .unavailable = STR_ERROR_RAIL_VEHICLE_NOT_AVAILABLE,
 	};

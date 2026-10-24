@@ -210,8 +210,7 @@ pub struct Services {
     pub company_preview: unsafe extern "C" fn(*const OpenTTDCompany) -> CompanyPreview,
     pub vehicle_next: unsafe extern "C" fn(u32) -> Vehicle,
     pub vehicle_cargo: unsafe extern "C" fn(*mut OpenTTDVehicle) -> VehicleCargo,
-    pub can_carry: unsafe extern "C" fn(*const OpenTTDEngine) -> bool,
-    pub refit_mask: unsafe extern "C" fn(*const OpenTTDEngine) -> u64,
+    pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub update_railtypes: unsafe extern "C" fn(u8),
     pub update_roadtypes: unsafe extern "C" fn(u8),
     pub date_company_types: unsafe extern "C" fn(u8, i32),
@@ -623,7 +622,13 @@ unsafe fn preview_company(s: &Services, e: EngineRef) -> u8 {
     let mask = if e.kind == VehicleType::TRAIN {
         u64::MAX
     } else {
-        unsafe { call!(s, refit_mask, e.shell) }
+        unsafe {
+            crate::engine_capabilities::openttd_rust_articulated_refit_union(
+                s.capabilities,
+                (s.engine_id)(e.shell),
+                true,
+            )
+        }
     };
     let mut best = 255;
     let mut performance = -1;
@@ -652,8 +657,12 @@ unsafe fn preview_company(s: &Services, e: EngineRef) -> u8 {
                 continue;
             }
             let cargo = unsafe { call!(s, vehicle_cargo, v.shell) };
-            if !unsafe { call!(s, can_carry, cargo.engine) }
-                || mask & 1u64.wrapping_shl(u32::from(cargo.cargo)) == 0
+            if !unsafe {
+                crate::engine_capabilities::openttd_rust_engine_can_carry(
+                    s.capabilities,
+                    cargo.engine,
+                )
+            } || mask & 1u64.wrapping_shl(u32::from(cargo.cargo)) == 0
             {
                 continue;
             }
@@ -1202,8 +1211,7 @@ crate::abi::layouts! {
         company_preview,
         vehicle_next,
         vehicle_cargo,
-        can_carry,
-        refit_mask,
+        capabilities,
         update_railtypes,
         update_roadtypes,
         date_company_types,

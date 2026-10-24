@@ -1,7 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file vehicle_articulated_services.hpp Native specification, pool and shell leaves. */
 #include "services_road.h"
-static uint16_t VehicleArticNext(uint32_t index, uint16_t engine, void *v, bool *flip) noexcept { return GetNextArticulatedPart(index, EngineID(engine), static_cast<Vehicle *>(v), flip).base(); }
 static void *VehicleArticPreparePrevious(void *shell) noexcept { Vehicle *v = static_cast<Vehicle *>(shell); auto *cache = v->GetGroundVehicleCache(); RustGroundSetFirstEngine(cache, v->engine_type); return cache; }
 template <class T> static void *VehicleArticNew(void *previous) noexcept { T *v = new T(); RustVehicleSetNext(static_cast<Vehicle *>(previous), v); RustVehicleSetSubtype(v, 0); return v; }
 static void VehicleArticRoadLength(void *cache) noexcept { static_cast<GroundVehicleCache *>(cache)->cached_veh_length = VEHICLE_LENGTH; }
@@ -32,22 +31,21 @@ static void VehicleArticCopyCommon(void *shell, void *head, uint16_t engine) noe
 	v->sprite_cache.sprite_seq.Set(SPR_IMG_QUERY);
 }
 static void VehicleArticFlip(void *shell) noexcept { ++static_cast<Vehicle *>(shell)->spritenum; }
-static uint64_t VehicleArticAvailableCargo(uint16_t engine, bool purchase) noexcept { return GetAvailableVehicleCargoTypes(EngineID(engine), purchase); }
 static void VehicleArticWarning(const OpenTTDEngine *e) noexcept { ShowNewGrfVehicleError(EngineOf(e)->index, STR_NEWGRF_BUGGY, STR_NEWGRF_BUGGY_ARTICULATED_CARGO, GRFBug::VehRefit, false); }
 const OpenTTDVehicleArticulatedServices &GetRustVehicleArticulatedServices() noexcept
 {
 	static const OpenTTDVehicleArticulatedServices services{
-		.refit = &GetRustVehicleRefitServices(), .default_cargo = RustEngineDefaultCargo, .capacity = RustArticulatedCapacity,
-		.pool_available = RustVehicleCanAllocate, .has_callback = RustEngineHasArticulatedCallback, .next_part = VehicleArticNext,
+		.refit = &GetRustVehicleRefitServices(), .default_cargo = RustEngineDefaultCargo,
+		.pool_available = RustVehicleCanAllocate,
 		.prepare_previous = VehicleArticPreparePrevious, .new_train = VehicleArticNew<Train>, .new_road = VehicleArticNew<RoadVehicle>,
 		.road_length = VehicleArticRoadLength, .copy_roadtype = VehicleArticCopyRoadtype,
 		.train_info = VehicleArticInfo<RailVehicleInfo>, .road_info = VehicleArticInfo<RoadVehicleInfo>,
 		.set_part = VehicleArticSetPart, .mark_train = VehicleArticMark<Train>, .mark_road = VehicleArticMark<RoadVehicle>,
 		.copy_common = VehicleArticCopyCommon, .random_bits = RustOpaqueVehicleInvoke<RustVehicleSetRandomBits, uint16_t>,
 		.flip_image = VehicleArticFlip,
-		.available_cargo = VehicleArticAvailableCargo, .warning = VehicleArticWarning,
+		.warning = VehicleArticWarning,
 		.has_articulated = RustOpaqueVehicleRead<bool, RustGroundHasArticulated<Vehicle>>,
-		.next_articulated = RustOpaqueHandleRead<void *, RustVehicleNextArticulated>, .max_parts = MAX_ARTICULATED_PARTS, .all_cargo = ALL_CARGOTYPES,
+		.next_articulated = RustOpaqueHandleRead<void *, RustVehicleNextArticulated>,
 	};
 	return services;
 }

@@ -207,6 +207,7 @@ inline const VehicleType *RustVehicleVehicleTypeAddress(const Vehicle *v) noexce
 inline VehicleType RustVehicleVehicleType(const Vehicle *v) noexcept { return *RustVehicleVehicleTypeAddress(v); }
 
 inline const uint16_t *RustVehicleCargoPeriodAddress(const Vehicle *v) noexcept { return &v->vcache.cached_cargo_age_period; }
+inline uint16_t *RustVehicleCargoCapacityAddress(Vehicle *v) noexcept { return &v->cargo_cap; }
 inline uint16_t *RustVehicleCargoCounterAddress(Vehicle *v) noexcept { return &v->cargo_age_counter; }
 inline uint32_t *RustVehicleMotionAddress(Vehicle *v) noexcept { return &v->motion_counter; }
 
