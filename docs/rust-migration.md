@@ -50,7 +50,7 @@ shared random-number behavior.
 - **Witness**: a named branch counter in `witness.rs`. Simulation scenarios that set `witnesses`
   require their listed counters to be nonzero, so a scenario fails when it stops reaching the
   branch it claims to cover.
-- **Anchor**: a `SPEED_ANCHORS` record in `tools/simulation/roads.py` holding a speed pass's
+- **Anchor**: a `SPEED_ANCHORS` record in `tools/simulation/instructions.py` holding a speed pass's
   measured wall ratio and game-loop instruction count for one scenario; speed projections scale
   from it.
 
@@ -270,7 +270,7 @@ runtime files (not their CMake bookkeeping)/libraries, resolved inputs, build/pr
 architecture and Valgrind version. Candidate executable identity stays separate from the
 compatibility identity checked against anchors.
 
-`SPEED_ANCHORS` in `tools/simulation/roads.py` holds each measured anchor `{head, ratio, Ir,
+`SPEED_ANCHORS` in `tools/simulation/instructions.py` holds each measured anchor `{head, ratio, Ir,
 identity}` and a separate `integrated` record with its head and Ir. Empty anchors mean
 collection only, never a passing speed guard. Each speed pass fills them from its same-head
 quiet medians. Compute each projection as `R0 * (1 + 2 * max(0, I / I0 - 1))`, directly from the

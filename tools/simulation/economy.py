@@ -6,7 +6,14 @@ import subprocess
 from pathlib import Path
 
 from . import core
-from .core import ROOT, SNAPSHOT_TICKS, decode_element, field_spans, read_save, run_game
+from .core import (
+    ROOT,
+    SNAPSHOT_TICKS,
+    field_spans,
+    read_save,
+    rows,
+    run_game,
+)
 from .play_saves import DISTRIBUTIONS
 
 
@@ -41,10 +48,6 @@ def scenarios(soak):
     ]
 
 
-def rows(chunks, cid):
-    return {i: decode_element(chunks[cid], body) for i, body in chunks[cid]["elements"]}
-
-
 def pending(chunks):
     """Actual unloading coal vehicle with a live payment, not a synthetic packet."""
     vehicles = rows(chunks, "VEHS")
@@ -62,7 +65,7 @@ def pending(chunks):
 
 def active_monitors(path, cargoes=(0, 1), amount=0):
     """Register cargo 0/1 town/industry monitors through the real modern loader."""
-    from .disasters import gamma
+    from .core import gamma
 
     chunks = read_save(path)
     keys = sorted(
@@ -202,13 +205,8 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 ):
                     patch("INDY", i, field, 65530)
         result["stockpile_front"] = front
-    # Normalize only reference-derived input history, as existing road reloads do.
-    begin, end = original["GLOG"]["span"]
     normalized = fixture.parent / "economy-input.sav"
-    normalized.write_bytes(data[:begin] + data[end:])
-    checked = read_save(normalized)
-    if set(checked) != set(original) - {"GLOG"}:
-        raise RuntimeError("economy input changed the chunk set")
+    core.strip_glog(data, normalized)
     active_monitors(normalized)
     result["economy_input"] = {
         "reference_sha256": hashlib.sha256(source).hexdigest(),
@@ -435,7 +433,7 @@ def subsidy_reference(folder):
 
 def monitor_load_probes(scenario, executables, builds, folder, timeout, env):
     """Dispatch real modern chunk bytes, including native decode/error unwinding."""
-    from .disasters import gamma
+    from .core import gamma
 
     data = Path(scenario["save"]).read_bytes()
     for cid in ("CMDL", "CMPU"):

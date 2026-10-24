@@ -16,7 +16,9 @@ import argparse
 import concurrent.futures
 import contextlib
 import fnmatch
+import hashlib
 import json
+import lzma
 import os
 import re
 import shutil
@@ -120,6 +122,11 @@ def scenario_modules():
     )
 
 
+def adapter_modules():
+    """Families whose console adapter relinks the game; runtime bundles carry each."""
+    return [module for module in scenario_modules() if hasattr(module, "adapter")]
+
+
 def scenario_list(soak):
     return [
         scenario for module in scenario_modules() for scenario in module.scenarios(soak)
@@ -219,9 +226,12 @@ def read_object(reader, fields, prefix, out):
 
 def read_save(path):
     """Return {chunk id: chunk} for an uncompressed OTTN save."""
-    data = path.read_bytes()
+    return parse_save(path.read_bytes(), path.name)
+
+
+def parse_save(data, name="save"):
     if data[:4] != b"OTTN":
-        raise Corrupt(f"{path.name} is not an uncompressed save")
+        raise Corrupt(f"{name} is not an uncompressed save")
     reader, chunks = Reader(data, 8), {}
     while True:
         chunk_start = reader.pos
@@ -405,7 +415,7 @@ GAME_LOCK = None  # Set by main to the clone-wide game coordination file.
 
 
 @contextlib.contextmanager
-def game_slot(isolate):
+def game_slot():
     """All games share coordination; timed games never reserve a quiet host."""
     path = GAME_LOCK
     if path is None:
@@ -513,7 +523,7 @@ def run_game(
             scenario, command, binary, build, run_dir, env, run_dir.name == "reference"
         )
     with (
-        game_slot(isolate),
+        game_slot(),
         open(run_dir / "stdout.log", "wb") as out,
         open(run_dir / "stderr.log", "wb") as err,
     ):
@@ -551,6 +561,24 @@ def run_game(
         "snapshots": snapshots,
         "log": log_lines(run_dir),
         "stdout": (run_dir / "stdout.log").read_bytes(),
+    }
+
+
+def capture_pair(scenario, executables, builds, folder, timeout, env, name="capture"):
+    """One plain preparation game per role in folder/role/name.
+
+    `scenario` is a dictionary or a function of the role."""
+    return {
+        role: run_game(
+            scenario(role) if callable(scenario) else scenario,
+            executables[role],
+            builds[role],
+            folder / role / name,
+            timeout,
+            env,
+            False,
+        )
+        for role in ("reference", "candidate")
     }
 
 
@@ -638,6 +666,159 @@ def field_spans(body, header):
     if reader.pos != len(body):
         raise RuntimeError("prepared VEHS element has undescribed bytes")
     return spans
+
+
+def gamma(value):
+    """Saveload SlWriteSimpleGamma, the inverse of Reader.gamma."""
+    for size, limit, prefix in (
+        (1, 128, 0),
+        (2, 16384, 0x8000),
+        (3, 2097152, 0xC00000),
+        (4, 268435456, 0xE0000000),
+    ):
+        if value < limit:
+            return (value | prefix).to_bytes(size, "big")
+    return b"\xf0" + value.to_bytes(4, "big")
+
+
+def rows(source, cid="VEHS"):
+    """Decoded table elements by index from a save path or its read_save chunks."""
+    chunk = (source if isinstance(source, dict) else read_save(source))[cid]
+    result = {index: decode_element(chunk, body) for index, body in chunk["elements"]}
+    if any(row is None for row in result.values()):
+        raise RuntimeError(f"undecodable {cid} element")
+    return result
+
+
+def strip_glog(data, target):
+    """Write save bytes without optional GLOG history; other chunks keep every byte.
+
+    Input fixtures only: a reference-produced revision log would make only the
+    candidate append a load-revision event. Output GLOG is compared normally."""
+    chunks = parse_save(data)
+    begin, end = chunks["GLOG"]["span"] if "GLOG" in chunks else (0, 0)
+    normalized = bytes(data[:begin] + data[end:])
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(normalized)
+    check = read_save(target)
+    if set(check) != set(chunks) - {"GLOG"} or any(
+        data[slice(*chunks[cid]["span"])] != normalized[slice(*check[cid]["span"])]
+        for cid in check
+    ):
+        raise RuntimeError(f"{target.name} changed outside optional GLOG history")
+    return check
+
+
+def normalize(source, directory):
+    """Keep every original chunk byte except optional GLOG history."""
+    packed = source.read_bytes()
+    data = (
+        b"OTTN" + packed[4:8] + lzma.decompress(packed[8:])
+        if packed[:4] == b"OTTX"
+        else packed
+    )
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "owner-uncompressed.sav").write_bytes(data)
+    normalized = directory / "rail-input.sav"
+    check = strip_glog(data, normalized)
+    return normalized, {
+        "source": str(source),
+        "source_sha256": hashlib.sha256(packed).hexdigest(),
+        "normalized_sha256": hashlib.sha256(normalized.read_bytes()).hexdigest(),
+        "removed_chunk": "GLOG",
+        "typed_edits": [],
+        "unchanged_chunks": sorted(check),
+    }
+
+
+def patch(source, target, changes, ai=None):
+    """Only declared typed input fields, AIPL company 1 and optional GLOG change."""
+    original, chunks = source.read_bytes(), read_save(source)
+    work, allowed, assignments = bytearray(original), set(), []
+    for cid, byindex in changes.items():
+        chunk = chunks[cid]
+        if chunk["kind"] not in (3, 4):
+            raise RuntimeError(f"unexpected input table {cid}")
+        reader = Reader(original, chunk["span"][0] + 5)
+        reader.take(reader.gamma() - 1)
+        index, seen = 0, set()
+        while length := reader.gamma():
+            end = reader.pos + length - 1
+            if chunk["kind"] == 4:
+                index = reader.gamma()
+            begin = reader.pos
+            body = reader.take(end - begin)
+            if index in byindex:
+                fields, locations = (
+                    decode_element(chunk, body),
+                    field_spans(body, chunk["header"]),
+                )
+                for key, value in byindex[index].items():
+                    lo, hi, kind = locations[key]
+                    fmt, width = FILE_TYPES[kind & 15]
+                    vals = value if kind & HAS_LENGTH else (value,)
+                    at = begin + lo
+                    if kind & HAS_LENGTH:
+                        array = Reader(body, lo)
+                        if array.gamma() != len(vals):
+                            raise RuntimeError("input array size differs")
+                        at = begin + array.pos
+                    if at + len(vals) * width != begin + hi:
+                        raise RuntimeError("input field width differs")
+                    for value_index, scalar in enumerate(vals):
+                        struct.pack_into(fmt, work, at + value_index * width, scalar)
+                    allowed.update(range(at, begin + hi))
+                    assignments.append([cid, index, key, fields.get(key), value])
+                seen.add(index)
+            index += 1
+        if seen != set(byindex):
+            raise RuntimeError("input omitted edited element")
+    if any(
+        a != b and index not in allowed
+        for index, (a, b) in enumerate(zip(original, work, strict=True))
+    ):
+        raise RuntimeError("input changed undeclared bytes")
+    if ai is not None:
+        chunk = chunks["AIPL"]
+        if chunk["kind"] != 3 or chunk["header"] != [
+            {"type": 26, "key": "name"},
+            {"type": 26, "key": "settings"},
+            {"type": 6, "key": "version"},
+        ]:
+            raise RuntimeError("unexpected AIPL schema")
+        elements = dict(chunk["elements"])
+        if ai == "human":
+            payload = elements[0]
+            if payload != b"\0\0\xff\xff\xff\xff":
+                raise RuntimeError("company zero is not an empty human AI slot")
+        else:
+            name = b"MigrationDisasters"
+            config = gamma(len(name)) + name + b"\0" + struct.pack(">I", 1)
+            payload = config * 2 + b"\0"
+        elements[1] = payload
+        reader = Reader(original, chunk["span"][0] + 5)
+        reader.take(reader.gamma() - 1)
+        begin, end = reader.pos, chunk["span"][1]
+        body = (
+            b"".join(
+                gamma(len(elements.get(index, b"")) + 1) + elements.get(index, b"")
+                for index in range(max(elements) + 1)
+            )
+            + b"\0"
+        )
+        work = work[:begin] + body + work[end:]
+        assignments.append(["AIPL", 1, "configuration", ai])
+    after, patched = strip_glog(work, target), target.read_bytes()
+    for cid in set(after) - set(changes) - ({"AIPL"} if ai is not None else set()):
+        if original[slice(*chunks[cid]["span"])] != patched[slice(*after[cid]["span"])]:
+            raise RuntimeError(f"input changed unrelated {cid}")
+    return {
+        "source": str(source),
+        "source_sha256": hashlib.sha256(original).hexdigest(),
+        "sha256": hashlib.sha256(patched).hexdigest(),
+        "assignments": assignments,
+        "removed_chunk": "GLOG",
+    }
 
 
 def run_scenario(
@@ -826,7 +1007,7 @@ def run_scenario(
                     )
             if instructions:
                 from . import instructions as profiler
-                from .roads import SPEED_ANCHORS
+                from .instructions import SPEED_ANCHORS
 
                 result["instruction_speed"] = profiler.finish(runs, result)
                 if name in SPEED_ANCHORS:
@@ -876,7 +1057,7 @@ def run_scenario(
             ratios
         )
     if benchmark_repetitions:
-        from .roads import speed_budget
+        from .instructions import speed_budget
 
         result["plain_speed"]["budget"] = speed_budget(
             scenario["name"],
@@ -884,20 +1065,7 @@ def run_scenario(
         )
     result["passed"] = not result["differences"] and not result["problems"]
     if result["passed"] and not benchmark_repetitions:
-        if (
-            "reload_input" in result
-            or "town_name_input" in result
-            or "tree_input" in result
-            or "effect_input" in result
-            or "economy_input" in result
-            or "company_input" in result
-            or "station_input" in result
-            or "disaster_input" in result
-        ):
-            for mode in ("snapshots", "plain"):
-                shutil.rmtree(out / name / mode, ignore_errors=True)
-        else:
-            shutil.rmtree(out / name, ignore_errors=True)  # Keep only failing runs.
+        shutil.rmtree(out / name, ignore_errors=True)  # Keep only failing runs.
     result["seconds"] = round(time.monotonic() - started, 3)
     return result
 
@@ -1016,7 +1184,7 @@ def main():
         parser.error("--instructions conflicts with --benchmark/--soak")
     every = scenario_list(args.soak)
     if args.instructions:
-        from .roads import SPEED_BUDGETS
+        from .instructions import SPEED_BUDGETS
 
         every = [s for s in every if s["name"] in SPEED_BUDGETS]
     # An exact scenario name selects only that scenario; anything else is a substring filter.
@@ -1093,18 +1261,8 @@ def run_simulation(args, scenarios, migration, out, parser, stamp):
                 / ("openttd" if role == "reference" else "openttd-rust")
             )
             binaries[role] = copy_runtime(source.parent, source, builds[role])
-            for name in (
-                "fleet",
-                "orders",
-                "engines",
-                "industries",
-                "objects",
-                "rails",
-                "ships",
-                "signals",
-                "stations",
-                "towns",
-            ):
+            for module in adapter_modules():
+                name = module.__name__.rsplit(".", 1)[1]
                 shutil.copytree(source.parent / name, builds[role] / name)
     else:
         # The game finds its data next to the executable, so copy the shared

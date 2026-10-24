@@ -2,7 +2,6 @@
 
 import hashlib
 import json
-import lzma
 import re
 import shutil
 import struct
@@ -16,6 +15,7 @@ from .core import (
     SNAPSHOT_TICKS,
     TICKS_PER_DAY,
     decode_element,
+    normalize,
     read_save,
     run_game,
 )
@@ -320,40 +320,6 @@ def train_required(scenario):
     ]
 
 
-def normalize(source, directory):
-    """Keep every original chunk byte except optional GLOG history."""
-    packed = source.read_bytes()
-    data = (
-        b"OTTN" + packed[4:8] + lzma.decompress(packed[8:])
-        if packed[:4] == b"OTTX"
-        else packed
-    )
-    directory.mkdir(parents=True, exist_ok=True)
-    original = directory / "owner-uncompressed.sav"
-    original.write_bytes(data)
-    chunks = read_save(original)
-    begin, end = chunks["GLOG"]["span"]
-    normalized_data = data[:begin] + data[end:]
-    normalized = directory / "rail-input.sav"
-    normalized.write_bytes(normalized_data)
-    check = read_save(normalized)
-    if set(check) != set(chunks) - {"GLOG"}:
-        raise RuntimeError("rail input changed chunk inventory")
-    if any(
-        data[slice(*chunks[cid]["span"])] != normalized_data[slice(*check[cid]["span"])]
-        for cid in check
-    ):
-        raise RuntimeError("rail input changed outside optional GLOG history")
-    return normalized, {
-        "source": str(source),
-        "source_sha256": hashlib.sha256(packed).hexdigest(),
-        "normalized_sha256": hashlib.sha256(normalized_data).hexdigest(),
-        "removed_chunk": "GLOG",
-        "typed_edits": [],
-        "unchanged_chunks": sorted(check),
-    }
-
-
 def prepare(scenario, binaries, builds, out, timeout, env, result):
     if scenario.get("movement_structure"):
         from . import signals
@@ -398,7 +364,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         normalized, _ = normalize(
             warm["snapshots"][-1], directory / "depot-warm-normalized"
         )
-        from .disasters import rows
+        from .core import rows
 
         if rows(normalized)[14]["train[0]/common[0]/current_order.type"] & 15 == 3:
             raise RuntimeError("depot staging still has a station loading owner")
@@ -470,7 +436,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
 
 def depot_input(source, directory):
     """Stage the existing consist north of real depot 5; ordinary ticks enter/leave."""
-    from .disasters import patch
+    from .core import patch
 
     common, depot = "train[0]/common[0]/", 8280
     changes = {"VEHS": {}}
@@ -516,7 +482,7 @@ def depot_input(source, directory):
 
 def controller_input(source, directory, scenario):
     """Declare company/AI inputs and source-derived placement; no expected edits."""
-    from .disasters import gamma, patch, rows
+    from .core import gamma, patch, rows
 
     changes = {"PLYR": {0: {"is_ai": 1}}}
     if scenario["rail_control"] == "collision":
@@ -776,7 +742,7 @@ def structure_witnesses(paths, observations, mode):
 
 
 def controller_witnesses(scenario, run, mode):
-    from .disasters import rows
+    from .core import rows
 
     if run["exit"] != 0 or not run["snapshots"]:
         raise RuntimeError("rail controller game failed or omitted checkpoints")

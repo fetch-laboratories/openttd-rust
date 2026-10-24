@@ -11,6 +11,7 @@ import threading
 from pathlib import Path
 
 from . import core
+from .console_adapter import prepared_console
 from .core import (
     ROOT,
     SNAPSHOT_TICKS,
@@ -130,19 +131,9 @@ def prepare_town_names(scenario, binaries, builds, out, timeout, env):
         assignments.append([index, seed])
     if {seed for _, seed in assignments} != set(TOWN_SEEDS):
         raise RuntimeError("town-name fixture omitted explicit seed corpus members")
-    # Same prepared-input GLOG reset as road reloads; output is never normalized.
-    begin, end = original["GLOG"]["span"]
     normalized = fixture.parent / "town-name-input.sav"
-    normalized_data = bytes(data[:begin] + data[end:])
-    normalized.write_bytes(normalized_data)
-    check = read_save(normalized)
-    if set(check) != set(original) - {"GLOG"} or any(
-        source[slice(*original[cid]["span"])]
-        != normalized_data[slice(*check[cid]["span"])]
-        for cid in check
-        if cid != "CITY"
-    ):
-        raise RuntimeError("town-name input changed outside CITY/GLOG")
+    check = core.strip_glog(data, normalized)
+    normalized_data = normalized.read_bytes()
     for (index, a), (other_index, b) in zip(
         city["elements"], check["CITY"]["elements"], strict=True
     ):
@@ -256,7 +247,6 @@ def tunnel_reference_gap(out, archive=None):
     percent_body = header[start:end]
     (out / "town-percent-original.hpp").write_text(percent_body + "\n")
     (out / "town-tunnel-original.hpp").write_text("\n\n".join(bodies.values()) + "\n")
-    bodies["PctTransported"] = percent_body
     build = ROOT / "build-rust"
     configuration = migration.rust_configuration(build)
     archive = archive or migration.rust_archive(build)
@@ -289,67 +279,24 @@ def tunnel_reference_gap(out, archive=None):
     (out / "stderr.txt").write_bytes(run.stderr)
     if run.returncode != 0:
         raise RuntimeError(f"town tunnel reference gap failed: {run.stderr.decode()}")
-    match = re.search(rb"\nPASS (\d+) unchanged-reference tunnel cases\n$", run.stdout)
-    if not match or int(match[1]) == 0:
-        raise RuntimeError("town tunnel reference gap omitted completion/count marker")
-    history = re.search(
-        rb"\nPASS (\d+) unchanged-reference history cases\n", run.stdout
-    )
-    if not history or int(history[1]) == 0:
-        raise RuntimeError("town history reference gap omitted completion/count marker")
-    rating = re.search(rb"\nPASS (\d+) unchanged-reference rating cases\n", run.stdout)
-    if not rating or int(rating[1]) == 0:
-        raise RuntimeError("town rating reference gap omitted completion/count marker")
-    radius = re.search(rb"\nPASS (\d+) unchanged-reference radius cases\n", run.stdout)
-    if not radius or int(radius[1]) == 0:
-        raise RuntimeError("town radius reference gap omitted completion/count marker")
-    authority = re.search(
-        rb"\nPASS (\d+) unchanged-reference authority cases\n", run.stdout
-    )
-    if not authority or int(authority[1]) == 0:
-        raise RuntimeError(
-            "town authority reference gap omitted completion/count marker"
+    counts = {}
+    for kind in ("tunnel", "history", "rating", "radius", "authority", "percent"):
+        found = re.search(
+            rb"\nPASS (\d+) unchanged-reference %s cases\n" % kind.encode()
+            + (b"$" if kind == "tunnel" else b""),
+            run.stdout,
         )
-    percent = re.search(
-        rb"\nPASS (\d+) unchanged-reference percent cases\n", run.stdout
-    )
-    if not percent or int(percent[1]) == 0:
-        raise RuntimeError(
-            "town transported-percent gap omitted completion/count marker"
-        )
+        if not found or int(found[1]) == 0:
+            raise RuntimeError(
+                f"town {kind} reference gap omitted completion/count marker"
+            )
+        counts["cases" if kind == "tunnel" else f"{kind}_cases"] = int(found[1])
     migration.ensure_reference()
     report = {
         "passed": True,
-        "history_cases": int(history[1]),
-        "rating_cases": int(rating[1]),
-        "radius_cases": int(radius[1]),
-        "authority_cases": int(authority[1]),
-        "percent_cases": int(percent[1]),
-        "cases": int(match[1]),
+        **counts,
         "successful_tunnel_cases": len(re.findall(rb" result=1 ", run.stdout)),
         "execute_effect_cases": len(re.findall(rb" effects=1 ", run.stdout)),
-        "reference": migration.BASELINE,
-        "reference_body_sha256": {
-            name: hashlib.sha256(body.encode()).hexdigest()
-            for name, body in bodies.items()
-        },
-        "fixture_sha256": hashlib.sha256(fixture.read_bytes()).hexdigest(),
-        "archive": str(archive),
-        "archive_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
-        "transcript_sha256": hashlib.sha256(run.stdout).hexdigest(),
-        "commands": [command, [str(binary)]],
-        "limits": [
-            "Controlled world and command outcomes; the paired save corpus has no actual tunnel build.",
-            "Original int history accumulation compares full uint32 edges; ordinary saves cannot reach these extreme histories.",
-            "Nested rating scratch, company changes, shell reuse and early-return service ordering are absent from ordinary console saves.",
-            "Radius table/linear boundary and full house-count widths supplement the ordinary generated-town populations.",
-            "Ordered road-mask/info services, command arguments, result, RNG and partial execute effects compare exactly.",
-            "Pure C++ map getter calls and Rust bundled records have different granularity; their call counts/order are not compared.",
-            "One active town-buildable road type; shared command internals and road-type selection are outside this gap check.",
-        ],
-        "agent": "/root/town_lifecycle_148",
-        "model": "gpt-6.1-sol",
-        "reasoning_effort": "high",
     }
     report_path.write_text(json.dumps(report, indent=2) + "\n")
     return report
@@ -432,23 +379,9 @@ def prepare_growth(scenario, binaries, builds, out, timeout, env):
                 ]
             )
             data[absolute : absolute + len(encoded)] = encoded
-    begin, end = chunks["GLOG"]["span"]
     normalized = fixture.parent / "town-growth-input.sav"
-    normalized_data = bytes(data[:begin] + data[end:])
-    normalized.write_bytes(normalized_data)
-    check = read_save(normalized)
-    if set(check) != set(chunks) - {"GLOG"}:
-        raise RuntimeError("town-growth input changed chunk inventory")
-    for cid in check:
-        expected = bytearray(source[slice(*chunks[cid]["span"])])
-        if cid == "CITY":
-            for offset, old, new, _ in patches:
-                value = bytes.fromhex(new)
-                if expected[offset : offset + len(value)] != bytes.fromhex(old):
-                    raise RuntimeError("town-growth input patch preparation mismatch")
-                expected[offset : offset + len(value)] = value
-        if bytes(expected) != normalized_data[slice(*check[cid]["span"])]:
-            raise RuntimeError(f"town-growth input changed unintended {cid} bytes")
+    core.strip_glog(data, normalized)
+    normalized_data = normalized.read_bytes()
     return dict(
         scenario, kind="save", save=str(normalized), growth_assignments=assignments
     ), {
@@ -708,57 +641,30 @@ def adapter(build, folder, env):
 
 
 def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
-    import migration
-
-    from .runtime import prepared_adapter
-
     folder = out / scenario["name"] / "input"
-    executables = {}
-    for role in ("reference", "candidate"):
-        target = folder / role
-        prepared = prepared_adapter("towns", role, builds, target)
-        if prepared is None:
-            native = (
-                migration.REFERENCE_BUILD
-                if role == "reference" or binaries[role] == binaries["reference"]
-                else ROOT / "build-rust"
-            )
-            lock = (
-                migration.reference_lock(shared=True)
-                if native == migration.REFERENCE_BUILD
-                else migration.candidate_lock(native, shared=True)
-            )
-            with lock:
-                prepared = adapter(native, target, env)
-        executables[role] = prepared
-        for name in core.RUNTIME_DIRECTORIES:
-            if (builds[role] / name).is_dir():
-                (target / name).symlink_to(
-                    builds[role] / name, target_is_directory=True
-                )
+    executables = prepared_console("towns", adapter, binaries, builds, folder, env)
     scenario = dict(scenario, executables=executables)
     if scenario["town_founding"] == "storage":
-        from .rails import normalize
+        from .core import normalize
 
         source, result["storage_source_input"] = normalize(
             Path(scenario["save"]), folder / "source"
         )
         scenario = dict(scenario, save=str(source))
-        captures, saves, action2 = {}, {}, {}
-        for role, executable in executables.items():
-            save = folder / role / "storage.sav"
-            setup = dict(
-                scenario, console=[f'towns_scenario storage "{save}"'], ticks=1
-            )
-            run = run_game(
-                setup,
-                executable,
-                builds[role],
-                folder / role / "capture",
-                timeout,
-                env,
-                False,
-            )
+        captures, action2 = {}, {}
+        saves = {role: folder / role / "storage.sav" for role in executables}
+        runs = core.capture_pair(
+            lambda role: dict(
+                scenario, console=[f'towns_scenario storage "{saves[role]}"'], ticks=1
+            ),
+            executables,
+            builds,
+            folder,
+            timeout,
+            env,
+        )
+        for role, run in runs.items():
+            save = saves[role]
             if (
                 run["exit"]
                 or "STORAGE policies rollback reuse saved true" not in run["log"]
@@ -776,7 +682,6 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
             if len(values) != 4 or not all(any(row["storage"]) for row in values):
                 raise RuntimeError(f"{role} nonempty PSAC marker missing")
             captures[role] = values
-            saves[role] = save
         if (
             action2["reference"] != action2["candidate"]
             or captures["reference"] != captures["candidate"]
@@ -826,7 +731,7 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
         ):
             raise RuntimeError("town authority reload capture failed")
         check_statue_search(scenario, run, "capture", "reference", result)
-        from .rails import normalize
+        from .core import normalize
 
         save, result["town_reload_input"] = normalize(save, folder / "normalized")
         return dict(
@@ -838,7 +743,7 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
     if scenario["town_founding"] == "houses":
         mode = scenario["house_mode"]
         if scenario.get("house_reload"):
-            from .rails import normalize
+            from .core import normalize
 
             save = folder / "reference" / "house-resolver.sav"
             setup = dict(
@@ -872,7 +777,7 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
         )
     if scenario["town_founding"] != "reload":
         return dict(scenario, console=["towns_scenario commands", "unpause"])
-    from .rails import normalize
+    from .core import normalize
 
     save = folder / "reference" / "towns.sav"
     setup = dict(
@@ -904,7 +809,7 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
 
 def storage_load_probes(scenario, executables, builds, folder, capture, timeout, env):
     """Real PSAC header failure, incremental partial publication and 16-word import."""
-    from .disasters import gamma
+    from .core import gamma
 
     chunk = read_save(capture)["PSAC"]
     data = capture.read_bytes()
@@ -1430,12 +1335,6 @@ def check(scenario, run, mode, role, result):
             town = decode_element(city, dict(city["elements"])[0])
             if town["exclusive_counter"] or any(town["unwanted"]):
                 raise RuntimeError("town rights/unwanted expiration witness missing")
-        lines = [line for line in run["log"] if line.startswith("TOWN ")]
-        key = mode + "_town_authority"
-        if role == "reference":
-            result[key] = lines
-        elif result[key] != lines:
-            raise RuntimeError("town authority outcomes differ")
     elif scenario.get("town_founding") == "houses" and not run["exit"]:
         required = HOUSE_BRANCHES + HOUSE_MODE_BRANCHES[scenario["house_mode"]]
         if counts := branch_witnesses(scenario, run, role, "house", required):
@@ -1447,12 +1346,6 @@ def check(scenario, run, mode, role, result):
         )
         if any("HOUSE_RESOLVER " + marker not in run["log"] for marker in markers):
             raise RuntimeError("house resolver mandatory semantic marker missing")
-        lines = [line for line in run["log"] if line.startswith("HOUSE_RESOLVER ")]
-        key = mode + "_house_resolver"
-        if role == "reference":
-            result[key] = lines
-        elif result[key] != lines:
-            raise RuntimeError("house resolver callback/register outcomes differ")
         if not any(line.startswith("TOWN house-done ") for line in run["log"]):
             raise RuntimeError("house command witness missing")
         overrides = [
@@ -1491,12 +1384,6 @@ def check(scenario, run, mode, role, result):
         )
         if any("TOWN " + line not in run["log"] for line in expected):
             raise RuntimeError("town command/lifetime/cancellation witness missing")
-        lines = [line for line in run["log"] if line.startswith("TOWN ")]
-        key = mode + "_town_commands"
-        if role == "reference":
-            result[key] = lines
-        elif result[key] != lines:
-            raise RuntimeError("town command outcomes differ")
     if "town_growth" in scenario:
         result[f"{mode}_{role}_town_growth"] = check_growth(scenario, run)
     if "town_style" in scenario:

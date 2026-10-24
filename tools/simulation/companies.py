@@ -12,11 +12,12 @@ from .core import (
     ROOT,
     SNAPSHOT_TICKS,
     Reader,
-    decode_element,
+    gamma,
+    patch,
     read_save,
+    rows,
     run_game,
 )
-from .disasters import gamma, patch
 
 AI_FOLDER = "company-scenario-ai"
 
@@ -137,14 +138,6 @@ def install(scenario, run_dir):
         f"COMPANY_SETUP <- {str(scenario.get('company_setup', False)).lower()};\n"
         f'COMPANY_ACTION <- "{scenario["companies"]}";\n'
     )
-
-
-def rows(path, cid):
-    chunks = read_save(path)
-    return {
-        index: decode_element(chunks[cid], body)
-        for index, body in chunks[cid]["elements"]
-    }
 
 
 def configure_competitors(path, record):
