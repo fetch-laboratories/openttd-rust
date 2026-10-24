@@ -13,7 +13,6 @@ struct Town;
 struct GRFFile;
 struct Livery;
 enum class HouseZone : uint8_t;
-struct OpenTTDCargoList;
 struct OpenTTDRoadStopResolverState {
 	BaseStation *station;
 	const RoadStopSpec *spec;
