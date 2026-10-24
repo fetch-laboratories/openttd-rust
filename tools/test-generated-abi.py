@@ -176,6 +176,20 @@ class GeneratedAbiTests(unittest.TestCase):
                 name,
             )
 
+    def test_concrete_animation_binding_visitors_are_complete(self):
+        src = ROOT / "rust/openttd-kernels/src"
+        source = (src / "newgrf_animation_base.rs").read_text()
+        body = re.search(r"pub struct Binding.*?\{(.*?)^}", source, re.M | re.S)[1]
+        members = re.findall(r"^    pub (\w+):", body, re.M)
+        self.assertIn("version8", members)
+        records = [r for r in GENERATOR["declarations"]() if "Binding<" in r[2]]
+        self.assertEqual(len(records), 6)
+        fragments = GENERATOR["generate"]()
+        for name, _, _, fields, _, _ in records:
+            self.assertEqual([cpp for _, cpp in fields], members)
+            visitor = fragments[f"abi-visit-{name}.hpp"]
+            self.assertEqual(re.findall(r'visit\("(\w+)"', visitor), members)
+
     def test_generation_is_deterministic_and_build_directory_only(self):
         with tempfile.TemporaryDirectory() as directory:
             subprocess.run(

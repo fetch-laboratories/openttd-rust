@@ -89,9 +89,9 @@ static Tile At(TileIndex tile)
 	auto it = world->tiles.find(tile);
 	return it == world->tiles.end() ? Tile{} : it->second;
 }
-static TileIndexDiff TileOffsByDiagDir(DiagDirection dir) { return std::array<int32_t, 4>{-1, 1024, 1, -1024}[dir]; }
-static DiagDirection ReverseDiagDir(DiagDirection dir) { return static_cast<DiagDirection>((dir + 2) & 3); }
-static uint32_t DiagDirToAxis(DiagDirection dir) { return dir & 1; }
+/* A callable map service suppresses ADL into the real map's dimension-dependent
+ * TileOffsByDiagDir. Direction-only helpers use the canonical native header. */
+static constexpr auto TileOffsByDiagDir = [](DiagDirection dir) -> TileIndexDiff { return std::array<int32_t, 4>{-1, 1024, 1, -1024}[dir]; };
 static RoadBits DiagDirToRoadBits(DiagDirection dir) { return 1 << (3 - dir); }
 static TileIndex TileAddByDiagDir(TileIndex tile, DiagDirection dir) { return tile + TileOffsByDiagDir(dir); }
 static Slope InclinedSlope(DiagDirection dir) { return static_cast<Slope>(std::array<uint32_t, 4>{12, 6, 3, 9}[dir]); }
@@ -429,11 +429,8 @@ static void ComparePercentTransported()
 	}
 	std::printf("\nPASS %u unchanged-reference percent cases\n", checked);
 }
-} // namespace TownReference
-
-int main()
+static void Run()
 {
-	using namespace TownReference;
 	CompareHistories();
 	CompareRatings();
 	CompareRadii();
@@ -477,4 +474,11 @@ int main()
 		}
 	}
 	std::printf("PASS %u unchanged-reference tunnel cases\n", cases);
+}
+
+} // namespace TownReference
+
+int main()
+{
+	TownReference::Run();
 }

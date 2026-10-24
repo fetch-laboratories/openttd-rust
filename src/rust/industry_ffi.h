@@ -215,7 +215,7 @@ typedef struct OpenTTDIndustryLifecycleServices {
 	uint8_t (*random_bits)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(random_bits);
 	void (*set_random_bits)(uint32_t, uint8_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(set_random_bits);
 	OpenTTDIndustryAnimationSpec (*animation_spec)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(animation_spec);
-	void (*change_frame)(const void *, uint32_t, uint32_t, uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(change_frame);
+
 } OpenTTDIndustryLifecycleServices;
 void openttd_rust_industry_cleanup(void *, OpenTTDIndustry *, OpenTTDIndustryBuilder *, uint16_t, bool, OpenTTDIndustryMap, const OpenTTDIndustryServices *, const OpenTTDIndustryLifecycleServices *);
 void openttd_rust_industry_randomise_tile(uint32_t, uint8_t, void *, OpenTTDIndustry *, const OpenTTDIndustryServices *, const OpenTTDIndustryLifecycleServices *);
@@ -276,7 +276,7 @@ typedef struct OpenTTDIndustryConstructionServices {
 	void (*set_construction_stage)(uint32_t, uint8_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(set_construction_stage);
 	uint16_t (*translated_gfx)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(translated_gfx);
 	bool (*animation_enabled)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(animation_enabled);
-	void (*add_animated)(uint32_t, bool) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(add_animated);
+
 	void (*build_window_dirty)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(build_window_dirty);
 	bool (*serve_neutral)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(serve_neutral);
 	void (*insert_near_station)(void *, OpenTTDIndustryStationHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(insert_near_station);
@@ -362,7 +362,7 @@ typedef struct OpenTTDIndustryTileServices {
 	uint8_t (*animation_loop)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(animation_loop);
 	void (*set_animation_loop)(uint32_t, uint8_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(set_animation_loop);
 	bool (*ambient)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(ambient);
-	void (*animate_new)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(animate_new);
+
 	uint8_t (*construction_counter)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(construction_counter);
 	uint8_t (*construction_stage)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(construction_stage);
 	bool (*completed)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(completed);

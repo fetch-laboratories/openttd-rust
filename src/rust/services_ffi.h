@@ -80,8 +80,7 @@ struct OpenTTDEnvironmentServices {
 const OpenTTDEnvironmentServices &GetRustEnvironmentServices() noexcept;
 enum RoadTramType : bool;
 struct OpenTTDClearSquareServices {
-	bool (*may_animate)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(may_animate);
-	void (*delete_animated)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(delete_animated);
+
 	bool (*docking)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(docking);
 	bool (*generating_world)() noexcept OPENTTD_SERVICE_DEFAULT(generating_world);
 };
@@ -169,8 +168,7 @@ struct OpenTTDSharedServices {
 	uint8_t (*station_gfx)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_gfx);
 	bool (*station_serve_neutral)() noexcept OPENTTD_SERVICE_DEFAULT(station_serve_neutral);
 	StationType (*station_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_type);
-	void (*tile_animation_add)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(tile_animation_add);
-	void (*tile_animation_delete)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_animation_delete);
+
 	void (*tile_animation_set_frame)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_animation_set_frame);
 	uint32_t (*town_next_id)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_next_id);
 	OpenTTDTownState *(*town_owner_by_id)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_owner_by_id);

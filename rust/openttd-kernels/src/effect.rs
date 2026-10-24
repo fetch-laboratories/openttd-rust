@@ -43,7 +43,6 @@ pub struct Leaves {
     pub write: extern "C" fn(*mut c_void, u8, u32),
     pub viewport: extern "C" fn(*mut c_void),
     pub sound: extern "C" fn(*mut c_void, u8),
-    pub animated: extern "C" fn(u32),
 }
 const INITIAL: [u32; 12] = [
     3701, 3079, 3073, 3084, 2040, 3709, 3737, 3725, 1416, 4751, 2040, 2040,
@@ -314,7 +313,7 @@ impl Controller<'_> {
             }
             let mut tile = 0;
             if self.industry(&mut tile) == 2 {
-                (self.leaves.animated)(tile);
+                crate::animated_tile::openttd_rust_animation_add(tile, true);
             }
         }
         self.state().animation = animation as u16;
@@ -522,6 +521,6 @@ crate::abi::layouts! {
         write,
         viewport,
         sound,
-        animated,
+
     };
 }

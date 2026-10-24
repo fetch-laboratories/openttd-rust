@@ -165,13 +165,6 @@ static void OPENTTD_VEHICLE_CALL RoadSvcArrivalNews(OpenTTDVehicle *v, uint16_t 
 	Game::NewEvent(new ScriptEventStationFirstVehicle(st->index, u->index));
 }
 /** The road stop arrival triggers after `BeginLoading`. */
-static void OPENTTD_VEHICLE_CALL RoadSvcArrivalTriggers(OpenTTDVehicle *v, uint16_t station) noexcept
-{
-	RoadVehicle *u = RoadOf(v);
-	Station *st = Station::Get(StationID(station));
-	RustRoadStopRandomisation(st, u->tile, StationRandomTrigger::VehicleArrives);
-	RustRoadStopAnimation(st, u->tile, StationAnimationTrigger::VehicleArrives);
-}
 static OpenTTDRoadOvertakeRead OPENTTD_VEHICLE_CALL RoadSvcOvertakeRead(OpenTTDVehicle *v) noexcept
 {
 	const RoadVehicle *u = RoadOf(v);
@@ -306,7 +299,6 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.should_stop = RoadSvcShouldStop,
 	.arrival_read = RoadSvcArrivalRead,
 	.arrival_news = RoadSvcArrivalNews,
-	.arrival_triggers = RoadSvcArrivalTriggers,
 	.overtake_read = RoadSvcOvertakeRead,
 	.sound_read = RoadSvcSoundRead,
 	.depot_exit_dirty = RoadSvcDepotExitDirty,

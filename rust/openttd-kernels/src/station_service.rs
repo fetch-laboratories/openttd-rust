@@ -379,12 +379,12 @@ pub struct World {
     pub(crate) acceptance_news: extern "C" fn(*mut BaseStation, u64, bool),
     pub(crate) acceptance_redraw: extern "C" fn(*mut BaseStation),
     pub(crate) delete_station: extern "C" fn(*mut BaseStation),
-    pub(crate) acceptance_animation: extern "C" fn(*mut BaseStation),
+
     pub(crate) watched_animation: extern "C" fn(u32, u64),
     pub(crate) append_packet:
         extern "C" fn(*mut BaseStation, u8, u32, crate::cargo_storage::Source),
     pub(crate) station_list_invalidation: extern "C" fn(*mut BaseStation, i32),
-    pub(crate) new_cargo_animation: extern "C" fn(*mut BaseStation, u8),
+
     pub(crate) waiting_redraw: extern "C" fn(*mut BaseStation),
     pub(crate) rating_callback: extern "C" fn(*mut BaseStation, u8, u32, u32) -> u16,
     pub(crate) with_tiles: extern "C" fn(*mut BaseStation, *mut c_void, Scope),
@@ -785,7 +785,13 @@ unsafe fn admit(
             status(state, cargo, 1, true);
         }
     }
-    (w.new_cargo_animation)(st, cargo);
+    crate::animated_tile::cargo_event(
+        st,
+        cargo,
+        crate::station_type::SAT_NEW_CARGO,
+        crate::station_type::AAT_NEW_CARGO,
+        crate::station_type::SRT_NEW_CARGO,
+    );
     (w.waiting_redraw)(st);
     amount
 }
@@ -1158,7 +1164,7 @@ pub unsafe extern "C" fn openttd_rust_station_tick(
                 }
             }
             if phase % 250 == 0 {
-                (w.acceptance_animation)(st);
+                crate::animated_tile::acceptance(st);
             }
         }
         id += 1;
@@ -1245,9 +1251,7 @@ pub struct Loading {
     pub(crate) delete_payment: extern "C" fn(*mut NativePayment),
     pub(crate) flush_delivery: extern "C" fn(),
     pub(crate) vehicle_new_cargo: extern "C" fn(VehicleRef),
-    pub(crate) cargo_taken: extern "C" fn(*mut Station, u8),
-    pub(crate) train_loads: extern "C" fn(*mut Station, VehicleRef),
-    pub(crate) road_loads: extern "C" fn(*mut Station, VehicleRef),
+
     pub(crate) vehicle_empty: extern "C" fn(VehicleRef),
     pub(crate) station_dirty: extern "C" fn(*mut Station),
 }
@@ -1724,7 +1728,13 @@ unsafe fn load_vehicle(
                             (&raw mut (*state).fields.last_vehicle_type).write(part.vehicle_type);
                         }
                         if (l.station_cargo_total)(st.native, cargo) == 0 {
-                            (l.cargo_taken)(st.native, cargo);
+                            crate::animated_tile::cargo_event(
+                                st.base,
+                                cargo,
+                                crate::station_type::SAT_CARGO_TAKEN,
+                                crate::station_type::AAT_CARGO_TAKEN,
+                                crate::station_type::SRT_CARGO_TAKEN,
+                            );
                         }
                         ticks = ticks.wrapping_add(loaded as i32);
                         dirty_vehicle = true;
@@ -1742,9 +1752,19 @@ unsafe fn load_vehicle(
         }
         if loaded_any || unloaded {
             if control.vehicle_type == 0 {
-                (l.train_loads)(st.native, front);
+                crate::animated_tile::rail_event(
+                    st.base,
+                    (visits.vehicles().tile)(front),
+                    crate::station_type::SAT_VEHICLE_LOADS,
+                    crate::station_type::SRT_VEHICLE_LOADS,
+                );
             } else if control.vehicle_type == 1 {
-                (l.road_loads)(st.native, front);
+                crate::animated_tile::road_event(
+                    st.base,
+                    (visits.vehicles().tile)(front),
+                    crate::station_type::SAT_VEHICLE_LOADS,
+                    crate::station_type::SRT_VEHICLE_LOADS,
+                );
             }
         }
         emptied &= unloaded;
@@ -1999,11 +2019,11 @@ crate::abi::layouts! {
         acceptance_news,
         acceptance_redraw,
         delete_station,
-        acceptance_animation,
+
         watched_animation,
         append_packet,
         station_list_invalidation,
-        new_cargo_animation,
+
         waiting_redraw,
         rating_callback,
         with_tiles,
@@ -2114,9 +2134,7 @@ crate::abi::layouts! {
         delete_payment,
         flush_delivery,
         vehicle_new_cargo,
-        cargo_taken,
-        train_loads,
-        road_loads,
+
         vehicle_empty,
         station_dirty,
     };

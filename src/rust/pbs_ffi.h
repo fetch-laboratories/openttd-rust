@@ -32,7 +32,7 @@ struct OpenTTDPbsServices {
 	void (*assert_platform)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assert_platform);
 	BaseStation * (*station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
 	void (*randomisation)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(randomisation);
-	void (*animation)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(animation);
+
 	bool (*is_crossing)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_crossing);
 	OpenTTDTrainHandle (*read_train_on_res)(const OpenTTDPbsTrainOutput *) noexcept OPENTTD_SERVICE_DEFAULT(read_train_on_res);
 	void (*write_train_on_res)(OpenTTDPbsTrainOutput *, OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(write_train_on_res);

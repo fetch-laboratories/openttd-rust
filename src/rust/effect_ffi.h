@@ -32,7 +32,7 @@ typedef struct OpenTTDEffectLeaves {
 	void (OPENTTD_EFFECT_CALL *write)(void *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(write);
 	void (OPENTTD_EFFECT_CALL *viewport)(void *) noexcept OPENTTD_SERVICE_DEFAULT(viewport);
 	void (OPENTTD_EFFECT_CALL *sound)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(sound);
-	void (OPENTTD_EFFECT_CALL *animated)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(animated);
+
 } OpenTTDEffectLeaves;
 /* One shell owns one zero-created state; destroy once after final use. get/set:
  * field0 uint16 animation, field1 uint8 substate. No persistent C++ mirror.

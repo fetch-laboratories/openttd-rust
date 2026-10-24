@@ -17,6 +17,7 @@
 #include "newgrf_callbacks.h"
 #include "tile_map.h"
 
+#ifndef WITH_RUST
 template <typename Tobj>
 struct TileAnimationFrameAnimationHelper {
 	static uint8_t Get(Tobj *, TileIndex tile) { return GetAnimationFrame(tile); }
@@ -148,3 +149,5 @@ struct AnimationBase {
 		if (GB(callback, 8, 7) != 0 && _settings_client.sound.ambient) PlayTileSound(spec->grf_prop.grffile, GB(callback, 8, 7), tile);
 	}
 };
+
+#endif /* !WITH_RUST */

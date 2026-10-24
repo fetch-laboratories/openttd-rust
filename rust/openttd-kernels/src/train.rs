@@ -503,7 +503,7 @@ pub struct Leaves {
     pub all_powered: extern "C" fn(Handle, u64) -> u64,
     pub ambient_sound: extern "C" fn(Handle) -> u64,
     pub arrival_news: extern "C" fn(Handle, u16),
-    pub arrival_triggers: extern "C" fn(Handle, u16),
+
     pub axis_diag: extern "C" fn(Handle, u8) -> u64,
     pub backoff: extern "C" fn(Handle) -> u64,
     pub base_viewport: extern "C" fn(Handle, u8),
@@ -1633,7 +1633,12 @@ impl Game<'_> {
         id.set_force_proceed(0);
         self.view_dirty(id);
         crate::vehicle::visits::begin_loading(id.vehicle(), self.vs().visits());
-        (self.leaves.arrival_triggers)(id, station);
+        crate::animated_tile::rail_event(
+            crate::animated_tile::station_base(station),
+            (self.vs().tile)(id.vehicle()),
+            crate::station_type::SAT_VEHICLE_ARRIVES,
+            crate::station_type::SRT_VEHICLE_ARRIVES,
+        );
     }
     fn speed_z(&self, id: Handle, old: i32) {
         let v = (self.leaves.read_speed_z)(id);
@@ -3259,7 +3264,7 @@ crate::abi::layouts! {
         all_powered,
         ambient_sound,
         arrival_news,
-        arrival_triggers,
+
         axis_diag,
         backoff,
         base_viewport,
