@@ -1866,7 +1866,7 @@ impl Game<'_> {
         let depot_id = service!(self.ss.depot_index)(depot.tile);
         if service!(self.vs.order_type)(v.v) == OT_GOTO_DEPOT
             && service!(self.vs.order_nonstop)(v.v) & 1 != 0
-            && !crate::services::chance16_i(1, 20, self.random())
+            && !crate::random_func::chance16_i(1, 20, self.random())
         {
             return;
         }

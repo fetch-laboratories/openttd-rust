@@ -388,9 +388,7 @@ impl Search<'_> {
             if t.drive_through != 0 {
                 cost = cost.wrapping_add(self.input.stop);
                 let dir = crate::track_func::trackdir_to_exitdir(td);
-                let map = Map {
-                    log_x: self.input.map_x.trailing_zeros() as u8,
-                };
+                let map = Map::from_log_x(self.input.map_x.trailing_zeros());
                 if !crate::road_stop::continuation(
                     shared,
                     tile,
@@ -449,9 +447,7 @@ impl Search<'_> {
             // SAFETY: After accepted continuation, observe current/next height,
             // then vehicle and old-tile follower limits, without world mutation.
             let movement = self.movement.get();
-            let map = crate::services::Map {
-                log_x: self.input.map_x.trailing_zeros() as u8,
-            };
+            let map = crate::services::Map::from_log_x(self.input.map_x.trailing_zeros());
             let center_z = |tile| {
                 movement.pixel_z_at(
                     (map.tile_x(tile) * crate::tile_type::TILE_SIZE

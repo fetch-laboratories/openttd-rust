@@ -370,9 +370,7 @@ impl<'a> Ctx<'a> {
             ground: unsafe { &*(*s.rail).ground },
             cost: unsafe { &*s.cost },
             command: unsafe { &*s.command },
-            map: Map {
-                log_x: (shared.map_log_x)() as u8,
-            },
+            map: shared.map(),
         }
     }
     fn c(&self, cost: *mut CommandCost) -> Cost<'a> {

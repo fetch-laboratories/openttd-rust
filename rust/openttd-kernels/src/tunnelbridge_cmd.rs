@@ -171,9 +171,7 @@ impl<'a> World<'a> {
                 town: &*road.town,
                 authority: &*road.authority,
                 stations: &*(s.station_commands)(),
-                map: Map {
-                    log_x: (s.map_log_x)() as u8,
-                },
+                map: s.map(),
             }
         }
     }

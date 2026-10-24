@@ -29,7 +29,8 @@ pub mod names;
 pub mod resolver;
 
 use crate::history_type::LAST_MONTH;
-use crate::services::{Map, Services, chance16_i};
+use crate::random_func::chance16_i;
+use crate::services::{Map, Services};
 use crate::slope_func::{is_slope_with_one_corner_raised, is_steep_slope};
 use crate::tile_type::{MP_HOUSE, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
 use crate::timer_game_tick::TOWN_GROWTH_TICKS;
@@ -227,8 +228,7 @@ pub(crate) unsafe fn road_context(state: *const State, tile: u32, size_x: u32) -
     let shift = size_x.trailing_zeros();
     let dx = (tile & mask).abs_diff(xy & mask);
     let dy = (tile >> shift).abs_diff(xy >> shift);
-    let zone =
-        unsafe { get_radius_group(state, tile, crate::map_func::Map { log_x: shift as u8 }) };
+    let zone = unsafe { get_radius_group(state, tile, crate::map_func::Map::from_log_x(shift)) };
     (state.growth.road, zone, dx + dy)
 }
 static GENERATING_TOWN: GameState<bool> = GameState::new(false);
@@ -762,9 +762,9 @@ struct Engine<'a> {
 }
 impl Engine<'_> {
     fn map(&self) -> Map {
-        *self.map.get_or_init(|| Map {
-            log_x: (self.leaves.map_log_x)() as u8,
-        })
+        *self
+            .map
+            .get_or_init(|| Map::from_log_x((self.leaves.map_log_x)()))
     }
     fn size_x(&self) -> u32 {
         self.map().size_x()

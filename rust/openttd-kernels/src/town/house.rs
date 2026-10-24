@@ -18,8 +18,9 @@ use crate::company_type::{OWNER_NONE, OWNER_TOWN, OWNER_WATER};
 use crate::economy_type::PR_BUILD_FOUNDATION;
 use crate::history_type::THIS_MONTH;
 use crate::newgrf_callbacks::CALLBACK_FAILED;
+use crate::random_func::chance16_i;
 use crate::services::{
-    CommandCost, CommandCostServices, CommandServices, Map, Services, TownHandle, chance16_i,
+    CommandCost, CommandCostServices, CommandServices, Map, Services, TownHandle,
 };
 use crate::slope_func::{get_slope_max_z, is_steep_slope};
 use crate::station::Station;
@@ -307,9 +308,9 @@ pub(super) fn north_part(leaves: &Leaves, house: &mut u16, map: Map) -> u32 {
 }
 impl House<'_> {
     fn map(&self) -> Map {
-        *self.map.get_or_init(|| Map {
-            log_x: (self.l.map_log_x)() as u8,
-        })
+        *self
+            .map
+            .get_or_init(|| Map::from_log_x((self.l.map_log_x)()))
     }
     fn engine(&self, town: TownRef) -> super::Engine<'_> {
         let mut engine = engine(self.l, self.s);

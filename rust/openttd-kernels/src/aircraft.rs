@@ -45,7 +45,8 @@ use crate::newgrf_sound::VSE_START;
 use crate::order_type::{
     OT_CONDITIONAL, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_LEAVESTATION, OT_LOADING, OT_NOTHING,
 };
-use crate::services::{Map, Services, chance16_i};
+use crate::random_func::chance16_i;
+use crate::services::{Map, Services};
 use crate::station::Station;
 use crate::station_type::INVALID_STATION;
 use crate::tile_type::INVALID_TILE;
@@ -410,7 +411,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         self.map.get().unwrap_or_else(|| {
             let log_x = (self.ss.map_log_x)();
             Self::service_witness("map_log_x", std::mem::size_of_val(&log_x));
-            let map = Map { log_x: log_x as u8 };
+            let map = Map::from_log_x(log_x);
             self.map.set(Some(map));
             map
         })

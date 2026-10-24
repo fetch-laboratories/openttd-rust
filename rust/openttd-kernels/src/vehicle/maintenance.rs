@@ -422,7 +422,7 @@ unsafe fn check_breakdown<const C: bool>(v: VehicleRef, base: &VehicleServices) 
     let random = svc!(C, shared.random, shared.context);
     let trigger = svc!(C, s.breakdown_trigger, v);
     let mut chance = u16::from(trigger.chance) + 1;
-    if services::chance16_i(1, 25, random) {
+    if crate::random_func::chance16_i(1, 25, random) {
         chance += 25;
     }
     let chance = chance.min(255) as u8;

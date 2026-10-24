@@ -390,9 +390,7 @@ impl<'a> Ctx<'a> {
         if let Some(map) = self.map.get() {
             return map;
         }
-        let map = Map {
-            log_x: (self.shared.map_log_x)() as u8,
-        };
+        let map = self.shared.map();
         self.map.set(Some(map));
         map
     }

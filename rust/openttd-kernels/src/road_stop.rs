@@ -119,9 +119,7 @@ pub struct RoadStopServices {
 /// Map dimensions read at the entry's use.
 #[allow(clippy::cast_possible_truncation)] // Map::LogX() is at most 12.
 fn map(s: &Services) -> Map {
-    Map {
-        log_x: (s.map_log_x)() as u8,
-    }
+    s.map()
 }
 
 fn table(s: &Services) -> &RoadStopServices {

@@ -164,9 +164,7 @@ impl Services {
         (self.set_source_flag)(source, flag);
     }
     fn distance_tiles(&self, a: u32, b: u32) -> bool {
-        let map = crate::map_func::Map {
-            log_x: (self.shared().map_log_x)() as u8,
-        };
+        let map = self.shared().map();
         map.distance_manhattan(a, b) <= SUBSIDY_MAX_DISTANCE
     }
     fn distance(&self, a: Source, b: Source) -> bool {
@@ -261,9 +259,7 @@ impl Services {
         }
         let shared = self.shared();
         let xy = unsafe { town::position(owner) };
-        let map = crate::map_func::Map {
-            log_x: (shared.map_log_x)() as u8,
-        };
+        let map = shared.map();
         let mut area = crate::tilearea::TileArea {
             tile: xy,
             w: 1,
@@ -365,7 +361,7 @@ impl Services {
         self.destination(scratch, cargo, Source::industry((self.industry_id)(shell)))
     }
     fn destination(&self, scratch: Cargo, cargo: u8, src: Source) -> bool {
-        let dst = if crate::services::chance16_i(1, 2, self.shared().random()) {
+        let dst = if crate::random_func::chance16_i(1, 2, self.shared().random()) {
             let town = (self.random_town)();
             self.scan(scratch, town.state, true);
             if unsafe { scratch.data.add(usize::from(cargo)).read() < 8 } {

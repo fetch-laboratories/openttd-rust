@@ -26,7 +26,6 @@ use crate::{
     linkgraph::live,
     linkgraph_schedule::{self, Services as ScheduleServices},
     linkgraph_type::{EdgeUpdateModes, INVALID_LINK_GRAPH},
-    map_func::Map,
     order_type::{
         INVALID_VEH_ORDER_ID, ODATF_HALT, ODATF_NEAREST_DEPOT, ODTF_PART_OF_ORDERS, OLFB_NO_LOAD,
         OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_IMPLICIT, OT_LOADING,
@@ -475,9 +474,7 @@ impl Refresher {
         }
         let st_to = (s.station.station)(next_station).base;
         let v = self.vehicle;
-        let map = Map {
-            log_x: (s.shared.map_log_x)() as u8,
-        };
+        let map = s.shared.map();
         for cargo in 0..NUM_CARGO {
             // Refresh the link and give it a minimum capacity.
             let cargo_quantity = self.capacities[usize::from(cargo)];

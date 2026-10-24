@@ -252,9 +252,7 @@ impl<'a> Ctx<'a> {
             commands: unsafe { &*r.command },
             town: unsafe { &*s.town },
             authority: unsafe { &*s.authority },
-            map: Map {
-                log_x: (shared.map_log_x)() as u8,
-            },
+            map: shared.map(),
         }
     }
     fn command(&self, cost: Cost<'_>, flags: u16, tile: u32, body: impl FnMut(u16) -> i64) -> i64 {

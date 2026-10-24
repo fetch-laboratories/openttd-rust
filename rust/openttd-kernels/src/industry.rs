@@ -25,6 +25,7 @@
     clippy::if_not_else
 )]
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
+use crate::random_func::chance16_i;
 use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_TREES};
 use crate::timer_game_tick::DAY_TICKS;
 use std::ffi::c_void;
@@ -457,9 +458,7 @@ impl Services {
 }
 impl Map {
     fn coordinates(self) -> crate::services::Map {
-        crate::services::Map {
-            log_x: self.size_x.trailing_zeros() as u8,
-        }
+        crate::services::Map::from_log_x(self.size_x.trailing_zeros())
     }
 }
 const SND_36_LUMBER_MILL_3: u16 = 0x36;
@@ -478,11 +477,8 @@ fn rand(s: &Services) -> u32 {
 fn range(s: &Services, n: u32) -> u32 {
     s.shared().random_range(n)
 }
-fn chance_value(a: u32, b: u32, value: u32) -> bool {
-    (((value & 0xffff).wrapping_mul(b).wrapping_add(b / 2)) >> 16) < a
-}
 fn chance(s: &Services, a: u32, b: u32) -> bool {
-    chance_value(a, b, rand(s))
+    chance16_i(a, b, rand(s))
 }
 fn fields(owner: *mut Industry) -> *mut Fields {
     unsafe { ptr::addr_of_mut!((*owner).fields) }
@@ -586,7 +582,7 @@ fn produce(e: Entry, t: &TickRecord, s: &Services, builder: *mut Builder) {
     let f = fields(owner);
     if unsafe { (*f).counter.is_multiple_of(64) } {
         let r = rand(s);
-        if chance_value(1, 14, r) {
+        if chance16_i(1, 14, r) {
             let sounds = unsafe { (s.sound_count)(i) };
             if sounds != 0
                 && t.ambient != 0
@@ -900,11 +896,11 @@ fn change(i: *mut c_void, s: &Services, monthly: bool) {
                 let mut mult = if pct > 153 { 1 } else { -1 };
                 if only_decrease {
                     mult = -1;
-                } else if chance_value(1, if pct > 204 { 6 } else { 3 }, random) {
+                } else if chance16_i(1, if pct > 204 { 6 } else { 3 }, random) {
                     mult *= -1;
                 }
                 let mut new = old;
-                if chance_value(1, 22, random >> 16) {
+                if chance16_i(1, 22, random >> 16) {
                     new = new.wrapping_add(
                         mult * (((range(s, 50) + 10) * old as u32) >> 8).max(1) as i32,
                     );
@@ -1373,9 +1369,7 @@ fn plant(tile: u32, industry: u16, map: Map, s: &Services, landscape: &impl Fn()
         r += 0x404;
     }
     let (width, height) = (map.size_x, map.size_y);
-    let tiles = crate::map_func::Map {
-        log_x: width.trailing_zeros() as u8,
-    };
+    let tiles = crate::map_func::Map::from_log_x(width.trailing_zeros());
     let sx = r & 255;
     let sy = (r >> 8) & 255;
     let x = tile % width;
@@ -1456,9 +1450,7 @@ fn chop(i: *mut c_void, owner: *mut Industry, map: Map, s: &Services, builder: *
     }
     let l = unsafe { (s.location)(i) };
     let width = map.size_x;
-    let tiles = crate::map_func::Map {
-        log_x: width.trailing_zeros() as u8,
-    };
+    let tiles = crate::map_func::Map::from_log_x(width.trailing_zeros());
     for y in l.tile / width..l.tile / width + u32::from(l.height) {
         for x in l.tile % width..l.tile % width + u32::from(l.width) {
             if unsafe { !(s.tile_completed)(i, tiles.tile_xy(x, y)) } {

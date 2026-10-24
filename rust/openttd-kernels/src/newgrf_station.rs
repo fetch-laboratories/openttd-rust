@@ -142,9 +142,7 @@ impl Services {
         unsafe { &*(*self.commands().rail).rail }
     }
     fn map(&self) -> Map {
-        Map {
-            log_x: (self.shared().map_log_x)() as u8,
-        }
+        self.shared().map()
     }
     fn count(&self, st: *mut BaseStation, cargo: u8) -> u32 {
         let list = (self.cargo_owner)(st, cargo);

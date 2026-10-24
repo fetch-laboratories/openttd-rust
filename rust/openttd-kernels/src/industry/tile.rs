@@ -77,7 +77,7 @@ pub struct TileServices {
     pub cargo_translation: unsafe extern "C" fn(*const TileSpec, u8) -> u8,
 }
 fn chance(s: &Services, a: u32, b: u32) -> bool {
-    crate::services::chance16_i(a, b, s.shared().random())
+    crate::random_func::chance16_i(a, b, s.shared().random())
 }
 fn sound(tile: u32, sound: u16, s: &Services, t: &TileServices) {
     if unsafe { (t.ambient)() } {

@@ -2268,7 +2268,7 @@ impl Game<'_> {
         }
         if state <= 200 {
             let mut r = self.services.random();
-            if crate::services::chance16_i(1, 7, r) {
+            if crate::random_func::chance16_i(1, 7, r) {
                 let mut index = (r.wrapping_mul(10) >> 16) as i32;
                 let mut u = id;
                 loop {
@@ -2586,7 +2586,7 @@ impl Game<'_> {
         let v = (self.leaves.read_needs_service)(id);
         if v.order == OT_GOTO_DEPOT
             && v.order_destination != depot_id
-            && !crate::services::chance16_i(3, 16, self.services.random())
+            && !crate::random_func::chance16_i(3, 16, self.services.random())
         {
             return;
         }

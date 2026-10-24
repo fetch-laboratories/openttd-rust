@@ -93,7 +93,7 @@ pub(crate) fn clear_areas() {
     unsafe { (*STATE.0.get()).areas.clear() };
 }
 fn openttd_rust_object_areas_find(tile: u32, log_x: u32) -> usize {
-    let map = crate::services::Map { log_x: log_x as u8 };
+    let map = crate::services::Map::from_log_x(log_x);
     let tile_area = Area {
         tile,
         width: 1,
@@ -160,7 +160,7 @@ pub extern "C" fn openttd_rust_object_restore_first(hidden: HiddenArea) {
 }
 
 use crate::services::{
-    CommandCost, CommandCostServices, CommandServices, Services, TownHandle, WaterClass,
+    CommandCost, CommandCostServices, CommandServices, Cost, Services, TownHandle, WaterClass,
 };
 use std::ptr;
 
@@ -378,7 +378,6 @@ const SOURCE_HEADQUARTERS: u8 = 2;
 const CBID_OBJECT_AUTOSLOPE: u16 = 0x15D;
 const PR_BUILD_OBJECT: u32 = 50;
 const PR_CLEAR_OBJECT: u32 = 51;
-const CONSTRUCTION: u8 = 0;
 const SCENEDIT: u16 = 1;
 const CANNOT_REMOVE: u16 = 1 << 1;
 const AUTOREMOVE: u16 = 1 << 2;
@@ -434,37 +433,6 @@ pub struct QueryServices {
     pub unhandled: unsafe extern "C" fn(u8),
 }
 
-#[derive(Clone, Copy)]
-struct Cost<'a>(*mut CommandCost, &'a CommandCostServices);
-impl Cost<'_> {
-    fn zero(self) {
-        (self.1.zero)(self.0);
-    }
-    fn set(self, money: i64) {
-        (self.1.expense_money)(self.0, CONSTRUCTION, money);
-    }
-    fn fail(self, error: u32) {
-        (self.1.error)(self.0, error);
-    }
-    fn error(self) {
-        self.fail(INVALID_STRING_ID);
-    }
-    fn add(self, cost: Self) {
-        (self.1.add)(self.0, cost.0);
-    }
-    fn money(self) -> i64 {
-        (self.1.money)(self.0)
-    }
-    fn amount(self, money: i64) {
-        (self.1.amount)(self.0, money);
-    }
-    fn ok(self) -> bool {
-        (self.1.success)(self.0)
-    }
-    fn take(self, cost: Self) {
-        (self.1.move_cost)(self.0, cost.0);
-    }
-}
 struct World<'a> {
     s: &'a ObjectServices,
     shared: &'a Services,
@@ -477,12 +445,10 @@ impl<'a> World<'a> {
         Self {
             s,
             shared,
-            map: crate::services::Map {
-                log_x: if NEEDS_MAP {
-                    (shared.map_log_x)() as u8
-                } else {
-                    0
-                },
+            map: if NEEDS_MAP {
+                shared.map()
+            } else {
+                crate::services::Map::from_log_x(0)
             },
         }
     }
@@ -699,9 +665,7 @@ impl<'a> World<'a> {
             let area = (self.s.location)(obj);
             // The tile-loop entry has no captured map. Acquire the actual stride
             // only when the original whole-object iterator is constructed.
-            let map = crate::services::Map {
-                log_x: (self.shared.map_log_x)() as u8,
-            };
+            let map = self.shared.map();
             for tile in Self::tiles_with_map(area, map) {
                 if self.do_trigger(obj, tile, trigger, spec, random) {
                     // SB also ORs high bits from the unmasked draw.
@@ -929,17 +893,17 @@ impl<'a> World<'a> {
             });
             let company = self.current();
             if company == OWNER_TOWN {
-                out.error();
+                out.error(INVALID_STRING_ID);
                 return;
             }
             if company != OWNER_WATER {
                 if flags & DoCommandFlag::NO_WATER != 0 && ((*self.s.industry_tiles).on_water)(tile)
                 {
-                    out.fail(self.s.strings.water);
+                    out.error(self.s.strings.water);
                     return;
                 }
                 if flags_spec & AUTOREMOVE == 0 && flags & DoCommandFlag::AUTO != 0 {
-                    out.fail(if object.kind == HQ {
+                    out.error(if object.kind == HQ {
                         self.s.strings.hq
                     } else {
                         self.s.strings.object
@@ -949,7 +913,7 @@ impl<'a> World<'a> {
                 if ((*self.s.town).environment.editor)() {
                 } else if self.owner(tile) == OWNER_NONE {
                     if !(self.s.bulldozer)() && flags_spec & CANNOT_REMOVE != 0 {
-                        out.error();
+                        out.error(INVALID_STRING_ID);
                         return;
                     }
                 } else {
@@ -961,9 +925,9 @@ impl<'a> World<'a> {
                     if flags_spec & CANNOT_REMOVE != 0 && flags_spec & AUTOREMOVE == 0 {
                         if !(self.s.bulldozer)() {
                             if object.kind == HQ {
-                                out.fail(self.s.strings.hq);
+                                out.error(self.s.strings.hq);
                             } else {
-                                out.error();
+                                out.error(INVALID_STRING_ID);
                             }
                             return;
                         }
@@ -971,7 +935,7 @@ impl<'a> World<'a> {
                     }
                 }
             } else if flags_spec & (BUILT_ON_WATER | NOT_ON_LAND) != 0 {
-                out.error();
+                out.error(INVALID_STRING_ID);
                 return;
             }
             if object.kind == HQ {
@@ -1023,20 +987,20 @@ impl<'a> World<'a> {
         unsafe {
             out.set(0);
             if usize::from(kind) >= (self.s.spec_count)() {
-                out.error();
+                out.error(INVALID_STRING_ID);
                 return;
             }
             let spec = (self.s.spec)(kind);
             let admission = (self.s.admission)(spec);
             if (self.s.normal)() && !available(self.s, spec) && !((*self.s.town).generating_world)()
             {
-                out.error();
+                out.error(INVALID_STRING_ID);
                 return;
             }
             if (((*self.s.town).environment.editor)() || ((*self.s.town).generating_world)())
                 && !was_available(self.s, spec)
             {
-                out.error();
+                out.error(INVALID_STRING_ID);
                 return;
             }
             let shape = (self.s.footprint)(spec);
@@ -1045,7 +1009,7 @@ impl<'a> World<'a> {
                     && !((*self.s.town).environment.editor)())
                     || self.current() != OWNER_NONE)
             {
-                out.error();
+                out.error(INVALID_STRING_ID);
                 return;
             }
             if shape.flags & IN_GAME != 0
@@ -1053,25 +1017,25 @@ impl<'a> World<'a> {
                     || !(self.s.normal)()
                     || self.current() > MAX_COMPANIES)
             {
-                out.error();
+                out.error(INVALID_STRING_ID);
                 return;
             }
             if view >= admission.views {
-                out.error();
+                out.error(INVALID_STRING_ID);
                 return;
             }
             if !(self.s.can_allocate)() {
-                out.fail(self.s.strings.too_many);
+                out.error(self.s.strings.too_many);
                 return;
             }
             if (self.shared.town_count)() == 0 {
-                out.fail(self.s.strings.no_town);
+                out.error(self.s.strings.no_town);
                 return;
             }
             let area = Self::footprint(tile, shape, view);
             for t in self.tiles(area) {
                 if !(self.shared.tile_valid)(t) {
-                    out.fail(self.s.strings.edge_sub);
+                    out.error(self.s.strings.edge_sub);
                     return;
                 }
             }
@@ -1084,7 +1048,7 @@ impl<'a> World<'a> {
                 for t in self.tiles(area) {
                     if (self.shared.has_water_ground)(t) {
                         if !water {
-                            out.fail(self.s.strings.water);
+                            out.error(self.s.strings.water);
                             return;
                         }
                         if !(self.shared.is_water_tile)(t) {
@@ -1112,7 +1076,7 @@ impl<'a> World<'a> {
                                     ((self.shared.map_max_y)() - 1) as usize,
                                 ))
                             {
-                                out.fail(self.s.strings.edge);
+                                out.error(self.s.strings.edge);
                                 return;
                             }
                             self.commands().no_vehicle(tmp.0, t);
@@ -1120,7 +1084,7 @@ impl<'a> World<'a> {
                         }
                     } else {
                         if !ground {
-                            out.fail(self.s.strings.on_water);
+                            out.error(self.s.strings.on_water);
                             return;
                         }
                         if !(kind == HQ
@@ -1221,7 +1185,7 @@ impl<'a> World<'a> {
                             )
                         })
                 {
-                    out.fail(self.s.strings.bridge);
+                    out.error(self.s.strings.bridge);
                     return;
                 }
             }
@@ -1230,7 +1194,7 @@ impl<'a> World<'a> {
             match kind {
                 TRANSMITTER | LIGHTHOUSE => {
                     if !((*self.s.founding).flat)(crate::town::founding::Tile(tile)) {
-                        out.fail(self.s.strings.flat);
+                        out.error(self.s.strings.flat);
                         return;
                     }
                 }
@@ -1239,7 +1203,7 @@ impl<'a> World<'a> {
                         && crate::tile_map::is_tile_owner(self.shared, tile, self.current())
                         && self.object_type_is(tile, OWNED)
                     {
-                        out.fail(self.s.strings.own);
+                        out.error(self.s.strings.own);
                         return;
                     }
                 }
@@ -1248,7 +1212,7 @@ impl<'a> World<'a> {
                     let old = (self.company().hq_location)(company);
                     if old != INVALID_TILE {
                         if old == tile {
-                            out.fail(self.s.strings.built);
+                            out.error(self.s.strings.built);
                             return;
                         }
                         (self.company().finance.set_current_company)(OWNER_WATER);
@@ -1268,7 +1232,7 @@ impl<'a> World<'a> {
                     }
                 }
                 STATUE => {
-                    out.error();
+                    out.error(INVALID_STRING_ID);
                     return;
                 }
                 _ => {
@@ -1277,7 +1241,7 @@ impl<'a> World<'a> {
             }
             let finance = self.finance(self.current());
             if !finance.is_null() && Self::object_limit(finance) < size {
-                out.fail(self.s.strings.limit);
+                out.error(self.s.strings.limit);
                 return;
             }
             if flags & DoCommandFlag::EXECUTE != 0 {
@@ -1300,7 +1264,7 @@ impl<'a> World<'a> {
                     (*finance).object = (*finance).object.wrapping_sub(size << 16);
                 }
             }
-            out.amount(self.get_build_cost(spec).saturating_mul(i64::from(size)));
+            out.add_money(self.get_build_cost(spec).saturating_mul(i64::from(size)));
         }
         crate::witness::hit(crate::witness::OBJECT_BUILD_COMMAND);
     }
@@ -1317,8 +1281,7 @@ impl World<'_> {
         kind: u16,
         view: u8,
     ) {
-        let result = crate::services::Cost(out.0, out.1);
-        crate::command::nested(self.commands(), self.shared, result, tile, flags, |flags| {
+        crate::command::nested(self.commands(), self.shared, out, tile, flags, |flags| {
             self.build_command(out, tmp, aux, flags, tile, kind, view);
         });
     }
@@ -1339,18 +1302,18 @@ impl World<'_> {
         unsafe {
             let map_y = (self.shared.map_max_y)() + 1;
             if start >= self.map.size_x() * map_y || usize::from(kind) >= (self.s.spec_count)() {
-                out.error();
+                out.error(INVALID_STRING_ID);
                 return;
             }
             let spec = (self.s.spec)(kind);
             let shape = (self.s.area_shape)(spec);
             if view >= shape.views || shape.size != OBJECT_SIZE_1X1 {
-                out.error();
+                out.error(INVALID_STRING_ID);
                 return;
             }
             let mut money = crate::command::available_money(self.commands());
             out.set(0);
-            last.error();
+            last.error(INVALID_STRING_ID);
             let mut success = false;
             let finance = self.finance(self.current());
             let mut limit = Self::object_limit(finance) as i32;
@@ -1387,7 +1350,7 @@ impl World<'_> {
                     }
                     self.do_build(ret, tmp, aux, flags, t, kind, view);
                 }
-                out.amount(cost);
+                out.add_money(cost);
                 iterator.advance();
             }
             if !success {
