@@ -220,7 +220,7 @@ pub struct Command {
 
 /// Tree services. Reads are pure. Writes are the named `tree_map.h`/`clear_map.h`
 /// functions. Direct water calls, `ambient` and `landscape_clear` can reenter tree
-/// entries; `ambient` returns whether its `NewGRF` callback ran. `progress` and
+/// entries. The generic owner observes its enable bit after ambient returns. `progress` and
 /// `progress_total` return true when world generation was aborted; C++ then holds
 /// the exception and rethrows it after the entry returns.
 #[repr(C)]
@@ -238,7 +238,6 @@ pub struct TreeServices {
     pub add_growth: extern "C" fn(u32, i32),
     pub set_growth: extern "C" fn(u32, u8),
     pub make_clear: extern "C" fn(u32, u8, u32),
-    pub ambient: extern "C" fn(u32) -> bool,
     pub progress: extern "C" fn() -> bool,
     pub progress_total: extern "C" fn(u32) -> bool,
     pub town_rating: extern "C" fn(u16, u32, bool),
@@ -693,7 +692,6 @@ impl Trees<'_> {
                         MP_TREES,
                         s.size_x,
                         map.count() / s.size_x,
-                        false,
                         call,
                         (self.s.water_services)(),
                         self.s,
@@ -711,7 +709,15 @@ impl Trees<'_> {
             }
         }
         // Flooding and a NewGRF ambient callback may have changed the map.
-        if (self.t.ambient)(tile) || shore {
+        #[cfg(not(test))]
+        let enabled = {
+            crate::newgrf_generic::ambient(tile);
+            // Preserve the native adapter's POST-call enable observation.
+            crate::newgrf_generic::ambient_enabled()
+        };
+        #[cfg(test)]
+        let enabled = tests::ambient(tile);
+        if enabled || shore {
             t = self.tree_observation(tile);
         }
 
@@ -1225,7 +1231,6 @@ crate::abi::layouts! {
         add_growth,
         set_growth,
         make_clear,
-        ambient,
         progress,
         progress_total,
         town_rating,
@@ -1470,7 +1475,7 @@ mod tests {
         }; }
         WATER.with(std::ptr::from_ref)
     }
-    extern "C" fn ambient(_: u32) -> bool {
+    pub(super) extern "C" fn ambient(_: u32) -> bool {
         log(Event::Ambient);
         WORLD.with_borrow_mut(|w| {
             if let Some(growth) = w.ambient_growth {
@@ -1526,7 +1531,6 @@ mod tests {
         field: unused_clear1,
         set_field: unused_clear2,
         water_class: unused_clear1,
-        ambient: unused_clear1,
     };
     extern "C" fn clear_square(_: u32, _: crate::services::ClearGroundType, _: u32) {
         log(Event::Write("clear_square"));
@@ -1579,7 +1583,6 @@ mod tests {
         add_growth,
         set_growth,
         make_clear,
-        ambient,
         progress,
         progress_total,
         town_rating: rating,

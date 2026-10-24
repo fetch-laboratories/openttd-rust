@@ -2392,3 +2392,31 @@ Build/Cargo4, native ABI, affected defaults and callee/shared/orphan audit are
 recorded in #428. Necessary selected-spec support cost was accepted once (#418).
 External loading, historical saves, GUI scheduling and the exact native removal
 setup limitation remain on #156. Fresh review/current-base Full remain pending.
+
+### Generic NewGRF callbacks (#429, PR #436)
+
+`newgrf_generic.rs` owns the process-wide ordered feature registry, reverse
+candidate traversal, stack invocation/root/scope/variables, AI selection and
+ambient enable/chance/parameter/playback policy. Registration alone allocates;
+resolution copies one pointer pair at a time, with no registry snapshot. Native
+load phases exclude registration/reset during callbacks. Context/container
+borrows end before Action2 or sound reentry; nested entries own their stack state.
+Common Action2 evaluation and generic scope/variable dispatch call their Rust
+owners directly. The native evaluation leaf constructs only the required stack
+virtual/profiler frame, exposing the actual invocation and common carrier through
+typed bindings (resolver11/scope12); no mirrored state or virtual forwarding.
+C++ retains files, parsed graphs, specifications, map, loading callers and playback. Typed noexcept leaves have no ordinary-play throwing
+operation; script commands run after the callback returns. Portable originals stay.
+Clear/tree/water call Rust directly; tree retains its post-call feature observation
+before refresh. Cargo bitnum and GRF-aware playback have canonical shared leaves
+adopted by vehicle/animation consumers; displaced ambient callbacks are removed.
+Default `landscape-generic-callbacks` uses deterministic/procedure groups and two
+files, requiring reset/duplicates/priority/fallback/failure, variables/industry
+substitution/narrowing, v7/v8, per-attempt register reset, and all ambient gates.
+Real scheduler routes compare nonzero height/random/terrain/water parameters,
+selected sound/file, exact RNG and semantic saves in plain/desync modes. Transient
+registrations are cleared before graph destruction and rebuilt after native reload.
+Build/Cargo4, native ABI/table completeness, focused ground/vehicle/animation checks
+and exact commands are recorded on #436. External-GRF loading, script station-build
+integration, other feature registrations, arbitrary programs, historical saves and
+GUI scheduling remain #156 gaps. Root owns fixing review and combination Full.

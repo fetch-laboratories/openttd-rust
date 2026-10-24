@@ -12,7 +12,7 @@
 #include "services_station.h"
 
 /** @file train_services.h Direct shared-world operations; no train policy. */
-#include "sound_services.h"
+#include "services_sound.h"
 
 #include "vehicle_services.h"
 #include "engine_services.h"
@@ -107,10 +107,6 @@ static uint64_t TrainAdvanceDistance(OpenTTDTrainHandle id) noexcept
 static uint64_t TrainAllPowered(OpenTTDTrainHandle, uint64_t a) noexcept
 {
 	return GetAllPoweredRailTypes(RailTypes(a)).base();
-}
-static uint64_t TrainAmbientSound(OpenTTDTrainHandle) noexcept
-{
-	return OpenTTDAmbientSound();
 }
 static void TrainArrivalNews(OpenTTDTrainHandle id, uint16_t a) noexcept
 {

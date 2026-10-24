@@ -14,6 +14,7 @@
 #include "environment_services.h"
 #include "services_newgrf.h"
 #include "../newgrf_engine.h"
+#include "generic_resolver.h"
 #include "../newgrf_station.h"
 #include "../newgrf_industries.h"
 #include "../newgrf_industrytiles.h"
@@ -115,6 +116,8 @@ static void ResolverBinding(ResolverObject *ro, OpenTTDResolverBinding *out) noe
 		out->state = &a->airport_scope.context; out->self = &a->airport_scope; out->kind = 9;
 	} else if (auto *at = dynamic_cast<AirportTileResolverObject *>(ro)) {
 		out->state = &at->tiles_scope.context; out->self = &at->tiles_scope; out->parent = &at->airport_scope; out->kind = 10;
+	} else if (auto *g = dynamic_cast<GenericResolverObject *>(ro)) {
+		out->self = &g->generic_scope; out->kind = 11;
 	} else if (typeid(*ro) != typeid(ResolverObject)) {
 		out->kind = 5; // Remaining native feature scope-selection behavior.
 	}
@@ -132,6 +135,7 @@ static void ScopeBinding(ScopeResolver *scope, OpenTTDScopeBinding *out) noexcep
 	else if (auto *at = dynamic_cast<AirportTileScopeResolver *>(scope)) { out->kind = 11; out->data.airport = &at->context; }
 	else if (auto *rs = dynamic_cast<RoadStopScopeResolver *>(scope)) { out->kind = 9; out->data.roadstop = &rs->state; }
 	else if (auto *h = dynamic_cast<HouseScopeResolver *>(scope)) { out->kind = 10; out->data.house = &h->context; }
+	else if (auto *g = dynamic_cast<GenericScopeResolver *>(scope)) { out->kind = 12; out->data.generic = &g->invocation; }
 	else { out->kind = typeid(*scope) == typeid(ScopeResolver) ? 0 : 8; }
 }
 const OpenTTDSpriteGroupServices &GetRustSpriteGroupServices() noexcept

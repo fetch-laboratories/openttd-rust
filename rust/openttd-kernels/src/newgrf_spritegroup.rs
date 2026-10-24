@@ -212,6 +212,7 @@ pub union ScopeData {
     airport: *const crate::newgrf_airport::State,
     house: *const crate::town::resolver::HouseScope,
     roadstop: *const crate::newgrf_roadstop::State,
+    generic: *const crate::newgrf_generic::Invocation,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -312,6 +313,9 @@ impl<'a> Invocation<'a> {
                     relative,
                     self.s.airport,
                 ),
+                11 => {
+                    crate::newgrf_generic::openttd_rust_generic_scope(b.own, b.default_scope, kind)
+                }
                 _ => (self.s.scope)(self.ro, kind, relative),
             };
             let mut binding = std::mem::MaybeUninit::uninit();
@@ -427,6 +431,11 @@ impl<'a> Invocation<'a> {
                     available,
                     self.s.airport,
                 ),
+                12 => crate::newgrf_generic::openttd_rust_generic_variable(
+                    b.data.generic,
+                    variable,
+                    available,
+                ),
                 _ => (self.s.variable)(scope.native, variable, parameter, available),
             }
         }
@@ -435,6 +444,7 @@ impl<'a> Invocation<'a> {
         unsafe {
             match scope.binding.kind {
                 0 | 6 => 0,
+                12 => openttd_rust_scope_default_random(),
                 1 => crate::newgrf_vehicle::openttd_rust_vehicle_scope_random(
                     &*self.s.vehicle,
                     scope.binding.data.vehicle,
@@ -480,6 +490,7 @@ impl<'a> Invocation<'a> {
         unsafe {
             match scope.binding.kind {
                 0 | 3 | 5 | 6 | 7 | 11 => 0,
+                12 => openttd_rust_scope_default_random(),
                 1 => crate::newgrf_vehicle::openttd_rust_vehicle_scope_random(
                     &*self.s.vehicle,
                     scope.binding.data.vehicle,
@@ -513,7 +524,7 @@ impl<'a> Invocation<'a> {
         crate::witness::hit(crate::witness::ACTION2_STORAGE);
         unsafe {
             match scope.binding.kind {
-                0..=2 | 4 | 5 | 9 | 10 | 11 => {}
+                0..=2 | 4 | 5 | 9 | 10 | 11 | 12 => {}
                 3 => {
                     let industry = (*scope.binding.data.industry).industry;
                     crate::newgrf_storage::openttd_rust_storage_industry(

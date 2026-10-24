@@ -163,7 +163,6 @@ static const OpenTTDTreeServices _tree_services{
 	.add_growth = [](uint32_t tile, int32_t growth) noexcept { AddTreeGrowth(TileIndex{tile}, growth); },
 	.set_growth = [](uint32_t tile, uint8_t growth) noexcept { SetTreeGrowth(TileIndex{tile}, static_cast<TreeGrowthStage>(growth)); },
 	.make_clear = RustMakeClearValue,
-	.ambient = RustAmbientSoundLegacy,
 	.progress = []() noexcept { return TreeProgress([] { RustIncreaseGeneratingWorldProgress(GWP_TREE); }); },
 	.progress_total = [](uint32_t total) noexcept { return TreeProgress([total] { RustSetGeneratingWorldProgress(GWP_TREE, total); }); },
 	.town_rating = TreeTownRating,

@@ -52,7 +52,7 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.previous = [](OpenTTDVehicle *v) noexcept { return RustVehicle(RustVehiclePrevious(VehicleOf(v))); },
 		.can_carry = Engine_can_carry,
 		.cargo_classes = RustCargoClasses,
-		.cargo_bitnum = [](uint8_t cargo) noexcept { return CargoSpec::Get(cargo)->bitnum; },
+		.cargo_bitnum = RustCargoBitnum,
 		.cargo_translation = RustGRFCargoMap,
 		.grf_version = RustGRFFileVersion,
 		.current_company = RustCurrentCompanyID,

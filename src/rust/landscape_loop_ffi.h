@@ -36,7 +36,6 @@ struct OpenTTDGroundLoopServices {
 	LandscapeType climate;
 	bool editor;
 	bool rebuild;
-	bool ambient_callback;
 };
 /* Native handlers retain their complete original bodies; houses dispatch to the
  * Rust owner with the town table. No generic dispatch slot.
