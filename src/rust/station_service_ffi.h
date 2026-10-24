@@ -19,6 +19,7 @@
 #include "orders_ffi.h"
 #include "cargo_payment_ffi.h"
 struct OpenTTDStationService;
+extern "C" uint64_t openttd_rust_station_acceptance_mask(OpenTTDStationService *);
 struct OpenTTDStationCargo {
 	uint32_t max_waiting_cargo;
 	uint8_t status, time_since_pickup, rating, last_speed, last_age, amount_fract;
@@ -279,6 +280,7 @@ const OpenTTDStationServices &GetRustStationServices() noexcept;
 const OpenTTDStationLoading &GetRustStationLoading() noexcept;
 const OpenTTDStationLinks &GetRustStationLinks() noexcept;
 extern "C" {
+uint8_t openttd_rust_goods_convert_state(uint8_t status);
 OpenTTDStationService *openttd_rust_station_service_new();
 void openttd_rust_station_service_destroy(OpenTTDStationService *);
 OpenTTDStationFields *openttd_rust_station_service_fields(OpenTTDStationService *);

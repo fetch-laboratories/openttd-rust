@@ -32,7 +32,6 @@ struct OpenTTDAnimationServices {
 	Station *(*as_station)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(as_station);
 	uint32_t (*location)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(location);
 	bool (*is_station)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(is_station);
-	void (*rail_randomisation)(BaseStation *, uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_randomisation);
 	void (*road_randomisation)(BaseStation *, uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_randomisation);
 	const OpenTTDTownLeaves *town;
 	const OpenTTDIndustryServices *industries;

@@ -18,3 +18,6 @@ pub(crate) fn first_sprite_group_of<const N: usize>(
     }
     std::ptr::null()
 }
+
+/// `CargoGRFFileProps::SG_DEFAULT_NA`.
+pub(crate) const SG_DEFAULT_NA: u8 = crate::cargo_type::NUM_CARGO + 2;

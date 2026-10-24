@@ -46,4 +46,5 @@ inline uint32_t OpenTTDDistanceManhattan(uint32_t from, uint32_t to) noexcept { 
 inline uint32_t OpenTTDDistanceSquare(uint32_t from, uint32_t to) noexcept { return DistanceSquare(TileIndex(from), TileIndex(to)); }
 /* Retain the existing orders-table carrier while sharing the typed leaves. */
 inline uint64_t OpenTTDLegacyOrderDistance(uint32_t from, uint32_t to, uint8_t square) noexcept { return square ? OpenTTDDistanceSquare(from, to) : OpenTTDDistanceManhattan(from, to); }
+inline uint32_t RustTileAdd(uint32_t tile, int32_t delta) noexcept { return TileAdd(TileIndex{tile}, delta).base(); }
 #endif

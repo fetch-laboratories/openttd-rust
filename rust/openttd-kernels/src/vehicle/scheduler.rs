@@ -397,7 +397,7 @@ unsafe extern "C" fn load_stations<const COUNTED: bool>(tables: *const Tables) {
             crate::witness::hit(crate::witness::VEHICLE_STATIONS);
         }
         unsafe {
-            station_service::openttd_rust_station_load(
+            station_service::load_station(
                 service,
                 tables.station,
                 tables.loading,

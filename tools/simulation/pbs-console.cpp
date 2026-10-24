@@ -10,8 +10,9 @@
 #include "bridge_map.h"
 #include "clear_map.h"
 #ifdef WITH_RUST
-#include "rust/pbs_ffi.h"
 #include "rust/animation_ffi.h"
+#include "rust/pbs_ffi.h"
+#include "rust/station_resolver_ffi.h"
 #endif
 using PbsTrace = std::vector<std::tuple<uint8_t, uint32_t, uint16_t>>;
 static PbsTrace *_pbs_trace = nullptr;
@@ -21,12 +22,19 @@ extern "C" void __wrap_##Symbol(BaseStation *st, TileIndex t, Trigger trigger, C
 	if (_pbs_trace != nullptr) _pbs_trace->emplace_back(Kind, t.base(), st->index.base()); \
 	__real_##Symbol(st, t, trigger, cargo); \
 }
-PBS_TRIGGER_WRAPPER(_Z27TriggerStationRandomisationP11BaseStationN10StrongType7TypedefIj12TileIndexTagJNS1_7CompareENS1_7IntegerENS1_10CompatibleIiEENS6_IlEEEEE20StationRandomTriggerh, StationRandomTrigger, 0)
 #ifndef WITH_RUST
+PBS_TRIGGER_WRAPPER(_Z27TriggerStationRandomisationP11BaseStationN10StrongType7TypedefIj12TileIndexTagJNS1_7CompareENS1_7IntegerENS1_10CompatibleIiEENS6_IlEEEEE20StationRandomTriggerh, StationRandomTrigger, 0)
 PBS_TRIGGER_WRAPPER(_Z23TriggerStationAnimationP11BaseStationN10StrongType7TypedefIj12TileIndexTagJNS1_7CompareENS1_7IntegerENS1_10CompatibleIiEENS6_IlEEEEE23StationAnimationTriggerh, StationAnimationTrigger, 1)
 #else
-/* PBS calls the Rust owner directly. Observe that entry for both the unchanged
+/* PBS calls the Rust owners directly. Observe their entries for both the unchanged
  * body's native facade and the Rust caller, forwarding every typed argument. */
+extern "C" decltype(openttd_rust_station_randomisation) __real_openttd_rust_station_randomisation;
+extern "C" void __wrap_openttd_rust_station_randomisation(BaseStation *st, uint32_t tile, uint8_t trigger, uint8_t cargo)
+{
+	if (_pbs_trace != nullptr) _pbs_trace->emplace_back(0, tile, st->index.base());
+	__real_openttd_rust_station_randomisation(st, tile, trigger, cargo);
+}
+static_assert(std::is_same_v<decltype(__wrap_openttd_rust_station_randomisation), decltype(openttd_rust_station_randomisation)>);
 extern "C" decltype(openttd_rust_trigger_station) __real_openttd_rust_trigger_station;
 extern "C" void __wrap_openttd_rust_trigger_station(BaseStation *st, uint32_t tile, uint8_t trigger, uint8_t cargo)
 {

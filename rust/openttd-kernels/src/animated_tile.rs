@@ -55,7 +55,6 @@ pub struct Services {
     pub as_station: extern "C" fn(*mut BaseStation) -> *mut Station,
     pub location: extern "C" fn(*const BaseStation) -> u32,
     pub is_station: extern "C" fn(*mut BaseStation) -> bool,
-    pub rail_randomisation: extern "C" fn(*mut BaseStation, u32, u8, u8),
     pub road_randomisation: extern "C" fn(*mut BaseStation, u32, u8, u8),
     pub town: *const Leaves,
     pub industries: *const Industries,
@@ -534,7 +533,7 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAnimationServices" ["probe"] => Services {
         shared,
-        station_base, as_station, location, is_station, rail_randomisation, road_randomisation,
+        station_base, as_station, location, is_station, road_randomisation,
         town,
         industries,
         construction,
@@ -588,7 +587,12 @@ pub(crate) fn station_base(id: u16) -> *mut BaseStation {
     (services().station_base)(id)
 }
 pub(crate) fn rail_event(st: *mut BaseStation, tile: u32, trigger: u8, random_trigger: u8) {
-    (services().rail_randomisation)(st, tile, random_trigger, INVALID_CARGO);
+    crate::newgrf_station::openttd_rust_station_randomisation(
+        st,
+        tile,
+        random_trigger,
+        INVALID_CARGO,
+    );
     openttd_rust_trigger_station(st, tile, trigger, INVALID_CARGO);
 }
 pub(crate) fn road_event(st: *mut BaseStation, tile: u32, trigger: u8, random_trigger: u8) {
@@ -604,7 +608,7 @@ pub(crate) fn cargo_event(
 ) {
     let a = services();
     let tile = (a.location)(st);
-    (a.rail_randomisation)(st, tile, random_trigger, cargo);
+    crate::newgrf_station::openttd_rust_station_randomisation(st, tile, random_trigger, cargo);
     openttd_rust_trigger_station(st, tile, trigger, cargo);
     openttd_rust_trigger_airport((a.as_station)(st), airport_trigger, cargo);
     (a.road_randomisation)(st, tile, random_trigger, cargo);

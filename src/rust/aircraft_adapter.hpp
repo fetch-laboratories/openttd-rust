@@ -176,9 +176,9 @@ static void OPENTTD_AIRCRAFT_CALL Aircraft_rotor_image(OpenTTDAircraftVehicle ve
 	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); GetRotorImage(v, EIT_ON_MAP, &v->Next()->Next()->sprite_cache.sprite_seq);
 }
 
-static void OPENTTD_AIRCRAFT_CALL Aircraft_copy_sprite(OpenTTDAircraftVehicle vehicle, OpenTTDAircraftVehicle source) noexcept
+static void OPENTTD_AIRCRAFT_CALL Aircraft_copy_sprite(OpenTTDVehicle *vehicle, OpenTTDVehicle *source) noexcept
 {
-	VehicleOf(vehicle.handle)->sprite_cache.sprite_seq.CopyWithoutPalette(VehicleOf(source.handle)->sprite_cache.sprite_seq);
+	VehicleOf(vehicle)->sprite_cache.sprite_seq.CopyWithoutPalette(VehicleOf(source)->sprite_cache.sprite_seq);
 }
 
 
