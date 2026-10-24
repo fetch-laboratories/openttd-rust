@@ -14,12 +14,8 @@
 #include "../pathfinder/yapf/yapf_base.hpp"
 #include "../pathfinder/yapf/yapf_node.hpp"
 #include "../pathfinder/yapf/nodelist.hpp"
-TEST_CASE("Ship YAPF Rust heap and path ownership")
-{
-	ShipYapfProbe::Run([](bool value) { CHECK(value); });
-}
 /* The unchanged generic reference search checks the exact follow-before-limit
- * timing that the injected low-level fixture above reaches at 5120 closed nodes. */
+ * timing that the injected low-level fixture reaches at 5120 closed nodes. */
 namespace ShipYapfLimitReference {
 struct Key {
 	uint32_t index;
@@ -66,6 +62,12 @@ public:
 	bool PfDetectDestination(Node &node) { return node.key.index == this->goal; }
 	char TransportTypeChar() const { return 'w'; }
 };
+}
+TEST_CASE("Ship YAPF Rust heap and path ownership")
+{
+	ShipYapfLimitReference::Search reference;
+	REQUIRE_FALSE(reference.FindPath(nullptr));
+	ShipYapfProbe::Run([](bool value) { CHECK(value); }, reference.follows);
 }
 TEST_CASE("Ship YAPF fixed limit timing against unchanged reference search")
 {

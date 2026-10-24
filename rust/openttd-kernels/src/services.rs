@@ -348,7 +348,6 @@ pub struct Services {
     pub road_owner: extern "C" fn(u32) -> u8,
     /// Original native `road_type` map observation.
     pub road_type: extern "C" fn(u32) -> u8,
-    // Registry: road commands (#266).
     /// Canonical native `HasCrossingReservation`.
     pub crossing_reserved: extern "C" fn(u32) -> bool,
     /// Canonical native `SetCrossingReservation`.
@@ -380,7 +379,6 @@ pub struct Services {
     pub snow_line: extern "C" fn() -> u8,
     /// `GetStationIndex`.
     pub station_index: extern "C" fn(u32) -> u16,
-    // Registry: station construction (#267).
     /// Canonical shared `docking_tile` service.
     pub road_commands: extern "C" fn() -> *const crate::road_cmd::RoadCommandServices,
     /// Canonical native station command table.
@@ -447,7 +445,6 @@ pub struct Services {
     pub tunnel_transport: extern "C" fn(u32) -> u8,
     /// Original `UpdateLevelCrossing`; callers retain their original sound argument.
     pub update_level_crossing: extern "C" fn(u32, bool),
-    // Registry: house (#256).
     /// Rebuild the canonical town spatial index.
     pub rebuild_town_tree: extern "C" fn(),
     /// Whether the economy is in recession.
@@ -456,7 +453,6 @@ pub struct Services {
     pub tick_counter: extern "C" fn() -> u64,
     /// Number of towns in the pool.
     pub town_count: extern "C" fn() -> usize,
-    // Registry: landscape (#212).
     /// `ApplyFoundationToSlope`, returning the height added and the modified slope.
     pub apply_foundation: extern "C" fn(Foundation, Slope) -> FoundationSlope,
     /// `GetClearGround`.
@@ -480,7 +476,6 @@ pub struct Services {
     /// canonical service owner and index. Visits may reenter but never add or
     /// delete a station.
     pub for_each_station: extern "C" fn(*mut c_void, StationVisitor),
-    // Registry: road stops (#354).
     /// `GetRoadStopType`.
     pub road_stop_type: extern "C" fn(u32) -> RoadStopType,
     /// Native road stop shells and their vehicle reads.
@@ -1033,12 +1028,10 @@ pub fn fixture(
         tunnel_bridge_direction: byte,
         tunnel_transport: byte,
         update_level_crossing: fixture_crossing_update,
-        // Registry: house (#256).
         rebuild_town_tree: noop,
         recession: flag0,
         tick_counter: tick0,
         town_count: count0,
-        // Registry: landscape (#212).
         apply_foundation,
         clear_ground,
         has_water_class: flag,
@@ -1049,7 +1042,6 @@ pub fn fixture(
         tree_ground,
         water_services: fixture_water_services,
         for_each_station: fixture_stations,
-        // Registry: road stops (#354).
         road_stop_type: fixture_road_stop_type,
         road_stops: fixture_road_stops,
     }
@@ -1111,10 +1103,9 @@ mod tests {
         assert!(!chance16_i(1, 200, 328));
         assert!(!chance16_i(1, 200, 65535));
         assert!(chance16_i(1, 200, 0xffff_0000));
-        assert_eq!(
-            chance16_i(1, u32::MAX, 65535),
-            ((65535_u32.wrapping_mul(u32::MAX).wrapping_add(u32::MAX / 2)) >> 16) < 1
-        );
+        // 0xffff_ffff + 0x7fff_ffff wraps to 0x7fff_fffe, so the quotient is 32767.
+        assert!(chance16_i(32768, u32::MAX, 1));
+        assert!(!chance16_i(32767, u32::MAX, 1));
     }
 }
 

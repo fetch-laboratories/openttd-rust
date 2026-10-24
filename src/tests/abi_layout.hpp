@@ -27,4 +27,7 @@ inline int AbiLayoutMismatch(const char *type, std::initializer_list<size_t> val
 	}
 	return openttd_rust_abi_layout_named(type, item) == SIZE_MAX ? -1 : static_cast<int>(item);
 }
+
+/** Defines the Layout() check that generated abi-layout fragments call, with the test's Catch2 CHECK. */
+#define ABI_LAYOUT_CHECK auto Layout = [](const char *type, std::initializer_list<size_t> values) { INFO(type); CHECK(AbiLayoutMismatch(type, values) == -1); }
 #endif /* ABI_LAYOUT_HPP */

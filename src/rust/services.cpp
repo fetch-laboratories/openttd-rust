@@ -440,13 +440,11 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.tunnel_bridge_direction = MapSvcTunnelBridgeDirection,
 	.tunnel_transport = OpenTTDMapQuery<uint8_t, RustTunnelBridgeTransport, uint32_t>,
 	.update_level_crossing = SharedUpdateLevelCrossing,
-	// Registry: house (#256).
 	.rebuild_town_tree = SharedRebuildTownTree,
 	.recession = SharedRecession,
 	.tick_counter = openttd_orders_tick_counter,
 	.town_count = SharedTownCount,
 
-	// Registry: landscape (#212).
 	.apply_foundation = RustApplyFoundation,
 	.clear_ground = OpenTTDClearGround,
 
@@ -458,7 +456,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.tree_ground = OpenTTDTreeGround,
 	.water_services = []() noexcept { return &GetRustWaterGroundServices(); },
 	.for_each_station = SharedForEachStation,
-	// Registry: road stops (#354).
 	.road_stop_type = SharedRoadStopType,
 	.road_stops = []() noexcept { return &GetRustRoadStopServices(); },
 };

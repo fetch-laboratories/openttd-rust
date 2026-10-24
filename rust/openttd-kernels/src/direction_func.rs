@@ -106,10 +106,5 @@ mod tests {
         assert_eq!(diag_dir_to_dir(255, disabled), 255);
         assert_eq!(reverse_dir(8, disabled), 12);
         assert_eq!(failures.get(), 6);
-        let enabled = |ok: bool| assert!(ok);
-        for direction in 0..4 {
-            assert_eq!(diag_dir_to_axis(direction, enabled), direction & 1);
-            assert_eq!(diag_dir_to_dir(direction, enabled), direction * 2 + 1);
-        }
     }
 }

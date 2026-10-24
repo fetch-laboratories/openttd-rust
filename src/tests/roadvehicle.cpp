@@ -246,7 +246,7 @@ TEST_CASE("Ground cache - canonical aliases on normal and indexed construction")
 }
 TEST_CASE("Vehicle resolver - boundary layouts and complete service table")
 {
-	auto Layout = [](const char *name, std::initializer_list<size_t> values) { CHECK(AbiLayoutMismatch(name, values) == -1); };
+	ABI_LAYOUT_CHECK;
 #include "abi-layout-vehicle_resolver.inc"
 	CHECK(AbiServicesComplete(GetRustVehicleResolverServices()));
 }
