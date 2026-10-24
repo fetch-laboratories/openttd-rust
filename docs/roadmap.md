@@ -10,7 +10,7 @@ forward-looking, about 200 lines; completed work is one row, with evidence in PR
 - Since the seventeenth steering: 14 owners, 7,826 original lines retired, 2,772 net glue and 4,612 tooling lines added. Latest #391 integrates scheduler #380, live graph #383, occupancy #384 and monitors #388. The previous migration session integrated #360/#368/#379/#382/#390/#391; #395 subsequently trimmed CI setup/export idle time. No rollback.
 - Current tip projections, using the 824 quiet anchors: TGP 1.112461x; Opus 1.473042x; Grok 1.464168x; P1996 1.368048x; P2000 1.442738x; P2016 1.516110x. All five play rises exceed 3% when BOTH tips use those anchors (#275). These are not wall measurements. The last complete quiet pass was at 824: P2016 1.453124x, the only measured scenario still in band. The ac7 attempt is incomplete and supplies no new anchors.
 - Integrated code and current docs Quick are green; final combinations passed Full. Since steering: 27 Full requests, 15 successful, six failed and six cancelled. Strict current-base protection is enabled. macOS is due after three more integrations; CI maintenance observation is 5/10. CI_ON_DEMAND stays true.
-- Three unfinished owners: animation #389 passed its scoped conflict review; #392/#393 are resumed from pushed sketches. Source maintenance and coverage workers are active, with next-owner planning alongside them. Seven completed checkouts were safely removed under #259; protected speed inputs remain. Four component/batch branches plus one coverage fragment are active; no new owner starts before selection.
+- Three unfinished owners: animation #389 passed its scoped conflict review; #392/#393 are resumed from pushed sketches. Source maintenance, coverage and both NewGRF workers are active, with retained speed attribution alongside them. Ten completed checkouts were safely removed under #259; protected speed inputs remain. Four component/batch branches plus one coverage fragment are active; no new owner starts before selection.
 
 ## Eighteenth steering review (2026-10-23, remove accidental gates and close shared-layer debt)
 
@@ -157,6 +157,8 @@ three active owners below leave room, but fill maintenance/coverage capacity fir
 4. **#392 vehicle NewGRF resolver/cache:** finish the complete vehicle-specific scope/root/variable/callback/property/randomisation runtime and canonical cache. Native common Action2/specs/pools/rendering remain shared. Issue owns the first concrete checkpoint and default callback/reload evidence; split review above about 1,000 retired lines.
 5. **#393 transactional NewGRF storage:** finish process registry/modes/registers, payloads/backups and industry/airport/town creation policies. Native associations/save-error frames remain. Prove aliases, transitions and nonempty reload in existing modules. Issue estimates are planning inputs, not inherited budget gates.
 6. **#259 lifecycle cleanup:** remove verified completed review/fix checkouts, retaining pending speed inputs until consumed. Broader infrastructure is unselected; revisit CI tooling only after the ten-integration observation already chosen.
+7. **#398 industry and industry-tile NewGRF resolver:** own both feature runtimes, stack contexts, variables/roots/town selection, type/nearby policy and callback/probability/refusal routes. Reuse industry state directly; common Action2/specs remain native and storage stays #393. First checkpoint requires actual var67/68 and production/refusal callbacks in default industry scenarios.
+8. **#399 rail-station/waypoint NewGRF resolver:** own scope/root/cargo policy, six caches for each resolver lifetime, platform/continuation queries, slope callbacks and randomisation. Direct cargo/movement routes and exact reseed RNG are the first checkpoint; animation stays #389. No draft-service dependency. Issues hold the interface/evidence plans; root selects a fresh worker when capacity frees.
 
 New owners start from integrated rust-migration, never draft services. Root lands
 a shared service once, and other drafts adopt it when preparing final validation.
@@ -169,18 +171,18 @@ when the existing restart loop calls for it; completing this list does not stop 
 
 Development resumed. Animation's fresh scoped conflict review passed without fixes;
 root owns current-base adoption, native/ABI/affected scenarios and final Full.
-Four implementation workers and a next-owner planner are active. No final Full
+Four implementation workers and a retained-speed analyst are active. No final Full
 is running; finish routine roadmap changes before freezing its base.
 
 | Item | Saved head | Resume action | Jobs / CI |
 | --- | --- | --- | --- |
-| #389 animation | `2290e57998` | Scoped review complete; update from base, affected native/ABI/scenarios, Full. | Checks pending; prior Cargo4/Quick retained. |
+| #389 animation | `f7bd701c2a` | Scoped review/base adoption complete; native/ABI/scenarios, Full. | Build passed; native/scenarios running; prior Cargo4/Quick retained. |
 | #392 vehicle resolver | `48727d8fd1` | Assigned: complete canonical cache/runtime and first default callback checkpoint. | Implementing; no PR yet. |
 | #393 storage | `8b5e305555` | Assigned: finish interface audit, creation policies and nonempty reload. | Implementing; no PR yet. |
 | #261/#281 source batch | current base | Assigned selected source fixes; checker carries separately. | Implementing. |
 | #156 coverage | current base | Assigned real rail callbacks, then heightmap/reserved-cargo gaps; batch ready work. | Implementing. |
-| #275 speed | frozen `ac7d2b60f2` | Consume retained ac7/824 attribution; prepare whole quiet-six retry before hold. | No timed collection. |
-| Next owners | planning | Fresh Astra/high read-only selection; root updates work order before starting. | Planning. |
+| #275 speed | frozen `ac7d2b60f2` | Assigned retained ac7/824 attribution; whole quiet-six inputs prepared. | No timed collection. |
+| #398 / #399 next owners | selected | Industry resolver first, then station/waypoint resolver; fresh agents when capacity frees. | Not started. |
 
 Preserve speed checkouts `af1fea6a`, `bf961767`, `72a1223d`, `7ece2878`, `2a35b1c0`
 and their exact runtime until #275 consumes them. Keep the pinned reference
