@@ -47,19 +47,78 @@ impl<S, O> Clone for Entry<S, O> {
     }
 }
 #[repr(C)]
-pub struct Binding<S, O, E> {
+pub struct Binding<S, O, E: Callback<S, O>> {
     pub entry: extern "C" fn(u32) -> Entry<S, O>,
     pub info: extern "C" fn(*const S) -> Info,
-    pub callback: extern "C" fn(u16, u32, u32, *const S, *mut O, u32, E) -> u16,
+    pub callback: E::Native,
     pub sound: extern "C" fn(*const S, u8, u32),
     pub version8: extern "C" fn(*const S) -> bool,
     pub speed_error: extern "C" fn(*const S, u16, u16),
 }
+
+/// Native callbacks remain only for features whose runtime is still native.
+pub trait Callback<S, O>: Sized {
+    type Native;
+    fn resolve(
+        a: &Services,
+        b: &Binding<S, O, Self>,
+        cb: u16,
+        p1: u32,
+        p2: u32,
+        spec: *const S,
+        object: *mut O,
+        tile: u32,
+        extra: Self,
+    ) -> u16;
+}
+macro_rules! native_callback {
+    ($e:ty) => {
+        impl<S, O> Callback<S, O> for $e {
+            type Native = extern "C" fn(u16, u32, u32, *const S, *mut O, u32, Self) -> u16;
+            fn resolve(
+                _: &Services,
+                b: &Binding<S, O, Self>,
+                cb: u16,
+                p1: u32,
+                p2: u32,
+                spec: *const S,
+                object: *mut O,
+                tile: u32,
+                extra: Self,
+            ) -> u16 {
+                (b.callback)(cb, p1, p2, spec, object, tile, extra)
+            }
+        }
+    };
+}
+native_callback!(i32);
+native_callback!(u64);
+#[derive(Default)]
+pub struct AirportExtra;
+impl Callback<crate::animated_tile::AirportSpec, crate::station::Station> for AirportExtra {
+    type Native = ();
+    fn resolve(
+        a: &Services,
+        _: &Binding<crate::animated_tile::AirportSpec, crate::station::Station, Self>,
+        cb: u16,
+        p1: u32,
+        p2: u32,
+        spec: *const crate::animated_tile::AirportSpec,
+        object: *mut crate::station::Station,
+        tile: u32,
+        _: Self,
+    ) -> u16 {
+        crate::newgrf_airport::tile_callback(cb, p1, p2, spec, object, tile, unsafe {
+            &*a.airport_runtime
+        })
+    }
+}
+
 /// The feature fixes the real native carrier types and shared callback IDs.
 pub trait Feature {
     type Spec;
     type Owner;
-    type Extra: Default;
+    type Extra: Default + Callback<Self::Spec, Self::Owner>;
     type Frame: Frame<Self::Owner>;
     const SPEED: CallbackID;
     const NEXT: CallbackID;
@@ -108,7 +167,7 @@ feature!(
     Airport,
     crate::animated_tile::AirportSpec,
     crate::station::Station,
-    i32,
+    AirportExtra,
     TileFrame,
     CBID_AIRPTILE_ANIMATION_SPEED,
     CBID_AIRPTILE_ANIMATION_NEXT_FRAME
@@ -157,7 +216,13 @@ impl Frame<BaseStation> for RoadFrame {
         (a.set_road_frame)(o, t, f)
     }
 }
-fn sound<S, O, E>(a: &Services, b: &Binding<S, O, E>, spec: *const S, tile: u32, cb: u16) {
+fn sound<S, O, E: Callback<S, O>>(
+    a: &Services,
+    b: &Binding<S, O, E>,
+    spec: *const S,
+    tile: u32,
+    cb: u16,
+) {
     let id = ((cb >> 8) & 0x7F) as u8;
     if id != 0 && unsafe { ((*a.industry_tiles).ambient)() } {
         (b.sound)(spec, id, tile);
@@ -175,7 +240,9 @@ pub fn animate<F: Feature>(
     }
     let mut speed = info.speed;
     if info.speed_callback {
-        let cb = (b.callback)(
+        let cb = F::Extra::resolve(
+            a,
+            b,
             F::SPEED.0,
             0,
             0,
@@ -200,7 +267,9 @@ pub fn animate<F: Feature>(
     let mut set = false;
     if info.next_callback {
         let random = if info.random { a.shared().random() } else { 0 };
-        let cb = (b.callback)(
+        let cb = F::Extra::resolve(
+            a,
+            b,
             F::NEXT.0,
             random,
             0,
@@ -242,7 +311,7 @@ pub fn change<F: Feature>(
     trigger: u32,
     extra: F::Extra,
 ) {
-    let cb = (b.callback)(cb, random, trigger, e.spec, e.object, tile, extra);
+    let cb = F::Extra::resolve(a, b, cb, random, trigger, e.spec, e.object, tile, extra);
     if cb == CALLBACK_FAILED {
         return;
     }

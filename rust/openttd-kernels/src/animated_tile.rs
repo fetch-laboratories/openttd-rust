@@ -63,7 +63,8 @@ pub struct Services {
     pub house: *const Binding<HouseSpec, TownHandle, u64>,
     pub industry: *const Binding<IndustrySpec, IndustryShell, i32>,
     pub station: *const Binding<RailSpec, BaseStation, i32>,
-    pub airport: *const Binding<AirportSpec, Station, i32>,
+    pub airport: *const Binding<AirportSpec, Station, crate::newgrf_animation_base::AirportExtra>,
+    pub airport_runtime: *const crate::newgrf_airport::Services,
     pub object: *const Binding<ObjectSpec, Object, i32>,
     pub roadstop: *const Binding<RoadSpec, BaseStation, i32>,
     pub state: extern "C" fn(u32) -> AnimatedTileState,
@@ -485,7 +486,7 @@ fn airport_trigger(
         CBID_AIRPTILE_ANIMATION_TRIGGER.0,
         random,
         u32::from(trigger) | u32::from(extra),
-        0,
+        crate::newgrf_animation_base::AirportExtra,
     );
     true
 }
@@ -542,6 +543,7 @@ crate::abi::layouts! {
         industry,
         station,
         airport,
+        airport_runtime,
         object,
         roadstop,
         state,
@@ -570,7 +572,7 @@ crate::abi::layouts! {
     "OpenTTDHouseAnimation" ["probe"] => Binding<HouseSpec, TownHandle, u64> { entry, info, callback, sound, version8, speed_error };
     "OpenTTDIndustryAnimation" ["probe"] => Binding<IndustrySpec, IndustryShell, i32> { entry, info, callback, sound, version8, speed_error };
     "OpenTTDStationAnimation" ["probe"] => Binding<RailSpec, BaseStation, i32> { entry, info, callback, sound, version8, speed_error };
-    "OpenTTDAirportAnimation" ["probe"] => Binding<AirportSpec, Station, i32> { entry, info, callback, sound, version8, speed_error };
+    "OpenTTDAirportAnimation" ["probe"] => Binding<AirportSpec, Station, crate::newgrf_animation_base::AirportExtra> { entry, info, sound, version8, speed_error };
     "OpenTTDObjectAnimation" ["probe"] => Binding<ObjectSpec, Object, i32> { entry, info, callback, sound, version8, speed_error };
     "OpenTTDRoadStopAnimation" ["probe"] => Binding<RoadSpec, BaseStation, i32> { entry, info, callback, sound, version8, speed_error };
     "OpenTTDHouseAnimationEntry" ["probe"] => Entry<HouseSpec, TownHandle> { spec, object };

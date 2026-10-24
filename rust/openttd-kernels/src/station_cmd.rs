@@ -286,10 +286,8 @@ pub struct CommandServicesTable {
     pub road_vehicle_owner: extern "C" fn(crate::vehicle::VehicleRef) -> *mut crate::road::State,
     pub order_station_location: extern "C" fn(crate::vehicle::VehicleRef, u16) -> u32,
     pub aircraft: *const crate::aircraft::Leaves,
-    pub airport_spec: extern "C" fn(u8) -> *const AirportSpec,
-    pub airport_available: extern "C" fn(*const AirportSpec) -> bool,
+    pub airport_runtime: *const crate::newgrf_airport::Services,
     pub airport_layout_count: extern "C" fn(*const AirportSpec) -> usize,
-    pub airport_in_bounds: extern "C" fn(*const AirportSpec, u8, u32) -> bool,
     pub airport_size: extern "C" fn(*const AirportSpec) -> AirportSize,
     pub airport_layout: extern "C" fn(*const AirportSpec, u8) -> AirportLayout,
     pub airport_layout_tile: extern "C" fn(*const AirportSpec, u8, u32, usize) -> AirportTile,
@@ -2953,10 +2951,11 @@ impl Ctx<'_> {
         if !cost.ok() {
             return;
         }
-        let spec = (self.s.airport_spec)(airport);
-        if !(self.s.airport_available)(spec)
+        let runtime = unsafe { &*self.s.airport_runtime };
+        let spec = crate::newgrf_airport::get(airport, runtime);
+        if !crate::newgrf_airport::available(spec, runtime)
             || usize::from(layout) >= (self.s.airport_layout_count)(spec)
-            || !(self.s.airport_in_bounds)(spec, layout, tile)
+            || !crate::newgrf_airport::in_bounds(spec, layout, tile, runtime)
         {
             return cost.error(0xffff);
         }
@@ -4228,10 +4227,8 @@ crate::abi::layouts! {
         road_vehicle_owner,
         order_station_location,
         aircraft,
-        airport_spec,
-        airport_available,
+        airport_runtime,
         airport_layout_count,
-        airport_in_bounds,
         airport_size,
         airport_layout,
         airport_layout_tile,

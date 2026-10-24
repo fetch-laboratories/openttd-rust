@@ -176,7 +176,7 @@ fn nearby_information(
     let same = s.belongs(tile, id);
     (unsafe { (s.nearby_info)(tile, version8) }) | (u32::from(same) << 8)
 }
-fn relative_position(tile: u32, north: u32, map: crate::map_func::Map) -> u32 {
+pub(crate) fn relative_position(tile: u32, north: u32, map: crate::map_func::Map) -> u32 {
     let x = map.tile_x(tile).wrapping_sub(map.tile_x(north)) as u8;
     let y = map.tile_y(tile).wrapping_sub(map.tile_y(north)) as u8;
     (u32::from(y & 15) << 20) | (u32::from(x & 15) << 16) | (u32::from(y) << 8) | u32::from(x)
@@ -803,10 +803,6 @@ pub unsafe extern "C" fn openttd_rust_industry_map_type(
     s: *const ResolverServices,
 ) -> u8 {
     map_type(kind, grfid, unsafe { &*s })
-}
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_industry_relative_position(tile: u32, north: u32, log_x: u8) -> u32 {
-    relative_position(tile, north, crate::map_func::Map { log_x })
 }
 /// # Safety
 /// Live specs/table, callback may synchronously reenter with its own stack context.

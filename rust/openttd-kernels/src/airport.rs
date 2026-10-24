@@ -39,3 +39,12 @@ pub const AMD_HELI_RAISE: u8 = 6;
 pub const AMD_HELI_LOWER: u8 = 7;
 pub const AMD_HOLD: u8 = 8;
 pub const ATP_TTDP_LARGE: u8 = 1;
+
+/// First custom airport.
+pub const NEW_AIRPORT_OFFSET: u8 = 10;
+/// Invalid airport type.
+pub const AT_INVALID: u16 = 254;
+/// First custom airport tile.
+pub const NEW_AIRPORTTILE_OFFSET: u8 = 74;
+/// Invalid airport tile spec.
+pub const INVALID_AIRPORTTILE: u16 = 256;

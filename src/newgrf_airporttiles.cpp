@@ -29,7 +29,9 @@
 
 #include "safeguards.h"
 
+#ifndef WITH_RUST
 extern uint32_t GetRelativePosition(TileIndex tile, TileIndex ind_tile);
+#endif
 
 AirportTileSpec AirportTileSpec::tiles[NUM_AIRPORTTILES];
 
@@ -101,8 +103,12 @@ void AirportTileOverrideManager::SetEntitySpec(AirportTileSpec &&airpts)
  */
 StationGfx GetTranslatedAirportTileID(StationGfx gfx)
 {
+#ifdef WITH_RUST
+	return openttd_rust_airport_translate_tile(gfx, &GetAirportResolverServices());
+#else
 	const AirportTileSpec *it = AirportTileSpec::Get(gfx);
 	return it->grf_prop.override_id == INVALID_AIRPORTTILE ? gfx : it->grf_prop.override_id;
+#endif
 }
 
 /**
@@ -113,6 +119,7 @@ StationGfx GetTranslatedAirportTileID(StationGfx gfx)
  * @param grf_version8 True, if we are dealing with a new NewGRF which uses GRF version >= 8.
  * @return a construction of bits obeying the newgrf format
  */
+#ifndef WITH_RUST
 static uint32_t GetNearbyAirportTileInformation(uint8_t parameter, TileIndex tile, StationID index, bool grf_version8)
 {
 	if (parameter != 0) tile = GetNearbyTile(parameter, tile); // only perform if it is required
@@ -165,8 +172,13 @@ static uint32_t GetAirportTileIDAtOffset(TileIndex tile, const Station *st, uint
 	return 0xFF << 8 | ats->grf_prop.subst_id; // so just give it the substitute
 }
 
+#endif
+
 /* virtual */ uint32_t AirportTileScopeResolver::GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const
 {
+#ifdef WITH_RUST
+	return openttd_rust_airport_tile_variable(&this->context, &this->ro, variable, parameter, &available, &GetAirportResolverServices());
+#else
 	assert(this->st != nullptr);
 
 	switch (variable) {
@@ -204,11 +216,16 @@ static uint32_t GetAirportTileIDAtOffset(TileIndex tile, const Station *st, uint
 
 	available = false;
 	return UINT_MAX;
+#endif
 }
 
 /* virtual */ uint32_t AirportTileScopeResolver::GetRandomBits() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_airport_random(&this->context, true, &GetAirportResolverServices());
+#else
 	return (this->st == nullptr ? 0 : this->st->random_bits) | (this->tile == INVALID_TILE ? 0 : GetStationTileRandomBits(this->tile) << 16);
+#endif
 }
 
 /**
@@ -226,7 +243,12 @@ AirportTileResolverObject::AirportTileResolverObject(const AirportTileSpec *ats,
 		tiles_scope(*this, ats, tile, st),
 		airport_scope(*this, tile, st, st != nullptr ? AirportSpec::Get(st->airport.type) : nullptr, st != nullptr ? st->airport.layout : 0)
 {
+#ifdef WITH_RUST
+	/* The parent scope initializes last; publish the tile invocation root. */
+	this->root_spritegroup = openttd_rust_airport_init(&this->tiles_scope.context, st, nullptr, ats, tile.base(), 0, &GetAirportResolverServices());
+#else
 	this->root_spritegroup = ats->grf_prop.GetSpriteGroup(st != nullptr);
+#endif
 }
 
 GrfSpecFeature AirportTileResolverObject::GetFeature() const
@@ -286,19 +308,27 @@ bool DrawNewAirportTile(TileInfo *ti, Station *st, const AirportTileSpec *airts)
 	return true;
 }
 
+#ifndef WITH_RUST
 /* Simple wrapper for GetAirportTileCallback to keep the animation unified. */
 static uint16_t GetSimpleAirportTileCallback(CallbackID callback, uint32_t param1, uint32_t param2, const AirportTileSpec *ats, Station *st, TileIndex tile, int)
 {
 	return GetAirportTileCallback(callback, param1, param2, ats, st, tile);
 }
 
+#endif
+
 /** Helper class for animation control. */
 #ifdef WITH_RUST
 const OpenTTDAirportAnimation &GetAirportAnimationBinding() noexcept
 {
-	static const auto binding = MakeRustAnimationBinding<AirportTileSpec, Station, int, GetSimpleAirportTileCallback>(
+	static const OpenTTDAirportAnimation binding{
+		.entry =
 		[](uint32_t t) noexcept -> OpenTTDAirportAnimationEntry { const auto *s = RustAnimationAirportSpec(t); if (s == nullptr) return {nullptr, nullptr}; return {s, Station::GetByTile(TileIndex{t})}; },
-		[](const AirportTileSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(AirportTileCallbackMask::AnimationSpeed), s->callback_mask.Test(AirportTileCallbackMask::AnimationNextFrame), HasBit(s->animation_special_flags, 0), true}; });
+		.info = [](const AirportTileSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(AirportTileCallbackMask::AnimationSpeed), s->callback_mask.Test(AirportTileCallbackMask::AnimationNextFrame), HasBit(s->animation_special_flags, 0), true}; },
+		.sound = [](const AirportTileSpec *s, uint8_t sound, uint32_t t) noexcept { PlayTileSound(s->grf_prop.grffile, sound, TileIndex{t}); },
+		.version8 = RustSpecGRFVersion8<AirportTileSpec>,
+		.speed_error = RustSpecCallbackError<AirportTileSpec, AirportTileSpec>,
+	};
 	return binding;
 }
 #else

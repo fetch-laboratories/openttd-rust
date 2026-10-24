@@ -18,6 +18,9 @@
 #include "newgrf_spritegroup.h"
 #include "newgrf_town.h"
 #include "tilearea_type.h"
+#ifdef WITH_RUST
+#include "rust/airport_resolver_ffi.h"
+#endif
 
 /** Copy from station_map.h */
 typedef uint8_t StationGfx;
@@ -155,6 +158,9 @@ void BindAirportSpecs();
 
 /** Resolver for the airport scope. */
 struct AirportScopeResolver : public ScopeResolver {
+#ifdef WITH_RUST
+	OpenTTDAirportResolverState context;
+#endif
 	struct Station *st; ///< Station of the airport for which the callback is run, or \c nullptr for build gui.
 	const AirportSpec *spec; ///< AirportSpec for which the callback is run.
 	uint8_t layout;        ///< Layout of the airport to build.
@@ -171,6 +177,9 @@ struct AirportScopeResolver : public ScopeResolver {
 	AirportScopeResolver(ResolverObject &ro, TileIndex tile, Station *st, const AirportSpec *spec, uint8_t layout)
 		: ScopeResolver(ro), st(st), spec(spec), layout(layout), tile(tile)
 	{
+#ifdef WITH_RUST
+		ro.root_spritegroup = openttd_rust_airport_init(&this->context, st, spec, nullptr, tile.base(), layout, &GetAirportResolverServices());
+#endif
 	}
 
 	uint32_t GetRandomBits() const override;
@@ -191,6 +200,9 @@ struct AirportResolverObject : public ResolverObject {
 
 	ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, uint8_t relative = 0) override
 	{
+#ifdef WITH_RUST
+		return openttd_rust_airport_scope(&this->airport_scope.context, this, &this->airport_scope, nullptr, scope, relative, &GetAirportResolverServices());
+#else
 		switch (scope) {
 			case VSG_SCOPE_SELF: return &this->airport_scope;
 			case VSG_SCOPE_PARENT:
@@ -201,6 +213,7 @@ struct AirportResolverObject : public ResolverObject {
 			}
 			default: return ResolverObject::GetScope(scope, relative);
 		}
+#endif
 	}
 
 	GrfSpecFeature GetFeature() const override;
