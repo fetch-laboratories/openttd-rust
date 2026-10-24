@@ -2295,3 +2295,26 @@ map/cargo/save/register/ordered effects and both RNG streams compare in both mod
 Transient groups are reconstructed after native load; arbitrary external-GRF,
 historical and GUI paths remain #156. Commands, accepted cost, fixing reviews
 and root's final current-base combination evidence are linked from #411.
+
+### Road-stop NewGRF runtime and associations (#410, #422 via #427)
+
+Rust owns road-stop/road-waypoint stack context, root/cargo selection, lazy parent
+and variable policy, callback and randomisation control, spec-slot selection,
+assignment/removal and trigger-cache reconstruction. Native station shells retain
+shared spec/tile vectors, saved bits and serialization; specs, parsed Action2 and
+rendering remain native. Thin virtual/evaluator frames keep portable callers.
+Station variables, existing-cargo counts, empty masks and storage use their Rust
+owners directly; station/spec metadata has one shared native definition. Displaced
+command/animation/cargo callback slots and orphan declarations are removed.
+
+Ordinary road-stop randomisation constructs CBID_NO_CALLBACK in the original;
+real groups preserve waiting publication/retention, gates and zero new draws.
+Explicit CBID_RANDOM_TRIGGER fixtures establish resolver masks, without claiming
+ordinary execution of the otherwise-unreachable reseed/consumption branches.
+Default command/reload cases compare actual groups, slot/cache lifecycle, full
+semantic saves, map/STNN/registers and both RNG streams. Transient spec/group
+reattachment after load does not establish arbitrary external-GRF loading.
+Build/Cargo4, affected native/ABI and default scenarios, callee/duplicate/orphan
+review and exact-current-base Full are recorded in #427. Remaining historical,
+external-GRF and named unreachable branches remain on #156. Necessary typed
+native vector/spec/evaluator boundary cost was accepted once at the checkpoint.
