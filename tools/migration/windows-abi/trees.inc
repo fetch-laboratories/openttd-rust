@@ -88,7 +88,6 @@ static void Trees()
 		return static_cast<TreeGround>(0);
 	};
 	shared.clear_square_services = {
-		.may_animate = [](uint32_t) noexcept { return false; },
 		.docking = [](uint32_t) noexcept { return false; },
 		.generating_world = []() noexcept { return false; },
 	};

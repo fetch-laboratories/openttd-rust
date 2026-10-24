@@ -71,6 +71,7 @@
 #include "rust/sound_services.h"
 #include "rust/tile_animation_services.h"
 #include "rust/orders_ffi.h"
+const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices();
 const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices();
 static const OpenTTDIndustryCommandServices &GetIndustryCommandServices();
 const OpenTTDIndustryCostServices &GetIndustryCostServices() noexcept;
@@ -766,11 +767,9 @@ static void AnimateMineTower(TileIndex tile)
 
 #endif
 
+#ifndef WITH_RUST
 static void AnimateTile_Industry(TileIndex tile)
 {
-#ifdef WITH_RUST
-	openttd_rust_industry_tile_animate(tile.base(), &GetIndustryRustServices(), &GetIndustryConstructionServices(), &GetIndustryTileServices());
-#else
 	IndustryGfx gfx = GetIndustryGfx(tile);
 
 	if (GetIndustryTileSpec(gfx)->animation.status != AnimationStatus::NoAnimation) {
@@ -818,8 +817,8 @@ static void AnimateTile_Industry(TileIndex tile)
 		AnimateMineTower(tile);
 		break;
 	}
-#endif
 }
+#endif
 
 #ifndef WITH_RUST
 static void CreateChimneySmoke(TileIndex tile)
@@ -3534,7 +3533,9 @@ extern const TileTypeProcs _tile_type_industry_procs = {
 	GetTileTrackStatus_Industry, // get_tile_track_status_proc
 #endif
 	ClickTile_Industry,          // click_tile_proc
+#ifndef WITH_RUST
 	AnimateTile_Industry,        // animate_tile_proc
+#endif
 #ifdef WITH_RUST
 	nullptr,                 // Rust scheduler calls the owner directly.
 #else
@@ -3789,7 +3790,7 @@ static const OpenTTDIndustryLifecycleServices _industry_lifecycle_services = {
 	.random_bits = [](uint32_t tile) noexcept -> uint8_t { return GetIndustryRandomBits(TileIndex(tile)); },
 	.set_random_bits = [](uint32_t tile, uint8_t bits) noexcept { SetIndustryRandomBits(TileIndex(tile), bits); },
 	.animation_spec = IndustryAnimationSpec,
-	.change_frame = IndustryChangeAnimationFrame,
+
 };
 const OpenTTDIndustryLifecycleServices &GetIndustryLifecycleRustServices() { return _industry_lifecycle_services; }
 #endif
@@ -3865,7 +3866,7 @@ const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices()
 		.set_construction_stage = [](uint32_t tile, uint8_t stage) noexcept { SetIndustryConstructionStage(TileIndex(tile), stage); },
 		.translated_gfx = [](uint16_t gfx) noexcept -> uint16_t { return GetTranslatedIndustryTileID(gfx); },
 		.animation_enabled = [](uint16_t gfx) noexcept -> bool { return GetIndustryTileSpec(gfx)->animation.status != AnimationStatus::NoAnimation; },
-		.add_animated = GetRustSharedServices().tile_animation_add,
+
 		.build_window_dirty = []() noexcept { SetWindowDirty(WC_BUILD_INDUSTRY, 0); },
 		.serve_neutral = GetRustSharedServices().station_serve_neutral,
 		.insert_near_station = [](void *shell, OpenTTDIndustryStationHandle *station) noexcept { RustIndustry(shell)->stations_near.insert(reinterpret_cast<Station *>(station)); },
@@ -3889,13 +3890,13 @@ const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept
 		.animation_loop = [](uint32_t tile) noexcept -> uint8_t { return GetIndustryAnimationLoop(TileIndex(tile)); },
 		.set_animation_loop = [](uint32_t tile, uint8_t value) noexcept { SetIndustryAnimationLoop(TileIndex(tile), value); },
 		.ambient = OpenTTDAmbientSound,
-		.animate_new = [](uint32_t tile) noexcept { AnimateNewIndustryTile(TileIndex(tile)); },
+
 		.construction_counter = [](uint32_t tile) noexcept -> uint8_t { return GetIndustryConstructionCounter(TileIndex(tile)); },
 		.construction_stage = [](uint32_t tile) noexcept -> uint8_t { return GetIndustryConstructionStage(TileIndex(tile)); },
 		.completed = [](uint32_t tile) noexcept -> bool { return IsIndustryCompleted(TileIndex(tile)); },
 		.set_completed = [](uint32_t tile) noexcept { SetIndustryCompleted(TileIndex(tile)); },
 		.reset_construction = [](uint32_t tile) noexcept { ResetIndustryConstructionStage(TileIndex(tile)); },
-		.industry = [](uint32_t tile) noexcept -> OpenTTDIndustryTileOwner { Industry *i = Industry::GetByTile(TileIndex(tile)); return {i, RustIndustryCanonicalOwner(i)}; },
+		.industry = [](uint32_t tile) noexcept -> OpenTTDIndustryTileOwner { Industry *i = RustIndustryByTile(tile); return {i, RustIndustryCanonicalOwner(i)}; },
 		.industry_index = [](uint32_t tile) noexcept -> uint16_t { return GetIndustryIndex(TileIndex(tile)).base(); },
 		.toffee_offset = [](uint8_t frame) noexcept -> uint8_t { return _industry_anim_offs_toffee[frame]; },
 		.on_water = RustOnWater,

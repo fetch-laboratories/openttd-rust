@@ -18,6 +18,10 @@
 #include "command_func.h"
 #include "water.h"
 #include "newgrf_animation_base.h"
+#ifdef WITH_RUST
+#include "rust/animation_binding.hpp"
+#include "rust/services_industry.h"
+#endif
 
 #include "table/strings.h"
 
@@ -299,6 +303,15 @@ uint16_t GetSimpleIndustryCallback(CallbackID callback, uint32_t param1, uint32_
 }
 
 /** Helper class for animation control. */
+#ifdef WITH_RUST
+const OpenTTDIndustryAnimation &GetIndustryAnimationBinding() noexcept
+{
+	static const auto binding = MakeRustAnimationBinding<IndustryTileSpec, Industry, int, GetSimpleIndustryCallback>(
+		[](uint32_t t) noexcept -> OpenTTDIndustryAnimationEntry { const auto *s = GetIndustryTileSpec(GetIndustryGfx(TileIndex{t})); if (s == nullptr) return {nullptr, nullptr}; return {s, RustIndustryByTile(t)}; },
+		[](const IndustryTileSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(IndustryTileCallbackMask::AnimationSpeed), s->callback_mask.Test(IndustryTileCallbackMask::AnimationNextFrame), s->special_flags.Test(IndustryTileSpecialFlag::NextFrameRandomBits), true}; });
+	return binding;
+}
+#else
 struct IndustryAnimationBase : public AnimationBase<IndustryAnimationBase, IndustryTileSpec, Industry, int, GetSimpleIndustryCallback, TileAnimationFrameAnimationHelper<Industry> > {
 	static constexpr CallbackID cb_animation_speed      = CBID_INDTILE_ANIMATION_SPEED;
 	static constexpr CallbackID cb_animation_next_frame = CBID_INDTILE_ANIMATION_NEXT_FRAME;
@@ -306,13 +319,18 @@ struct IndustryAnimationBase : public AnimationBase<IndustryAnimationBase, Indus
 	static constexpr IndustryTileCallbackMask cbm_animation_speed      = IndustryTileCallbackMask::AnimationSpeed;
 	static constexpr IndustryTileCallbackMask cbm_animation_next_frame = IndustryTileCallbackMask::AnimationNextFrame;
 };
+#endif
 
 void AnimateNewIndustryTile(TileIndex tile)
 {
+#ifdef WITH_RUST
+	openttd_rust_animate_industry(tile.base());
+#else
 	const IndustryTileSpec *itspec = GetIndustryTileSpec(GetIndustryGfx(tile));
 	if (itspec == nullptr) return;
 
 	IndustryAnimationBase::AnimateTile(itspec, Industry::GetByTile(tile), tile, itspec->special_flags.Test(IndustryTileSpecialFlag::NextFrameRandomBits));
+#endif
 }
 
 #ifndef WITH_RUST
@@ -483,10 +501,6 @@ OpenTTDIndustryAnimationSpec IndustryAnimationSpec(uint32_t tile) noexcept
 {
 	const IndustryTileSpec *spec = GetIndustryTileSpec(GetIndustryGfx(TileIndex(tile)));
 	return {spec, spec->animation.triggers.base()};
-}
-void IndustryChangeAnimationFrame(const void *spec, uint32_t tile, uint32_t random, uint32_t parameter) noexcept
-{
-	IndustryAnimationBase::ChangeAnimationFrame(CBID_INDTILE_ANIMATION_TRIGGER, static_cast<const IndustryTileSpec *>(spec), Industry::GetByTile(TileIndex(tile)), TileIndex(tile), random, parameter);
 }
 #endif
 

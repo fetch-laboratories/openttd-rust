@@ -149,7 +149,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(leaves, should_stop);
 		VEHICLE_UNUSED(leaves, arrival_read);
 		VEHICLE_UNUSED(leaves, arrival_news);
-		VEHICLE_UNUSED(leaves, arrival_triggers);
 		VEHICLE_UNUSED(leaves, overtake_read);
 		VEHICLE_UNUSED(leaves, sound_read);
 		VEHICLE_UNUSED(leaves, depot_exit);

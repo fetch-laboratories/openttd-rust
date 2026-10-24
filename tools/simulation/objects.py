@@ -1,5 +1,6 @@
 """Object ownership scenarios and named unchanged-original-body gap inputs."""
 
+from itertools import product
 from pathlib import Path
 
 from . import core, generated, rails
@@ -41,8 +42,12 @@ def adapter(build, folder, env):
             "_Z26SetGeneratingWorldProgress16GenWorldProgressj",
             "_Z31IncreaseGeneratingWorldProgress16GenWorldProgress",
             "_Z29GenerateWorldSetAbortCallbackPFvvE",
+            "_Z13PlayTileSoundPK7GRFFiletN10StrongType7TypedefIj12TileIndexTagJNS2_7CompareENS2_7IntegerENS2_10CompatibleIiEENS7_IlEEEEE",
+            "_ZN11BaseStation19SetRoadStopTileDataEN10StrongType7TypedefIj12TileIndexTagJNS0_7CompareENS0_7IntegerENS0_10CompatibleIiEENS5_IlEEEEEhb",
+            "_Z19MarkTileDirtyByTileN10StrongType7TypedefIj12TileIndexTagJNS_7CompareENS_7IntegerENS_10CompatibleIiEENS4_IlEEEEEii",
+            "_Z26ErrorUnknownCallbackResultjtt",
         ),
-        replace_objects=("/src/object_cmd.cpp.o",),
+        replace_objects=("/src/object_cmd.cpp.o", "/src/saveload/saveload.cpp.o"),
     )
 
 
@@ -53,6 +58,29 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     source, _ = rails.normalize(Path(scenario["save"]), folder / "normalized")
     scenario = dict(scenario, save=str(source))
     executables = prepared_console("objects", adapter, binaries, builds, folder, env)
+    if scenario["objects"] == "gaps":
+        for kind in ("valid", "header", "partial", "excess", "fixed", "riff"):
+            logs = {}
+            for role in ("reference", "candidate"):
+                probe = dict(scenario, console=["objects_scenario anit-" + kind])
+                run = core.run_game(
+                    probe,
+                    executables[role],
+                    builds[role],
+                    folder / role / ("anit-" + kind),
+                    timeout,
+                    env,
+                    False,
+                )
+                logs[role] = [x for x in run["log"] if x.startswith("OBJECT ")]
+                if (
+                    run["exit"]
+                    or len(logs[role]) != 2
+                    or logs[role][-1:] != ["OBJECT animation-load-complete " + kind]
+                ):
+                    raise RuntimeError(f"{role}: missing actual ANIT {kind} evidence")
+            if logs["reference"] != logs["candidate"]:
+                raise RuntimeError(f"actual ANIT {kind} differs: {logs}")
     if scenario["objects"] != "reload":
         return dict(
             scenario,
@@ -80,6 +108,12 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             or "OBJECT id-reused true" not in capture["log"]
         ):
             raise RuntimeError("object reload capture failed")
+        state = [x for x in capture["log"] if x.startswith("OBJECT animation-reload ")]
+        if len(state) != 1 or (
+            role == "candidate" and state != result["saved_animation"]
+        ):
+            raise RuntimeError("nonempty animation reload capture differs/missing")
+        result["saved_animation"] = state
     differences = core.compare_saves(
         saves["reference"],
         saves["candidate"],
@@ -110,7 +144,11 @@ def check(scenario, run, mode, role, result):
         "gaps": (
             "count-wrap true|scratch-growth true true|callback-before-clear true|"
             "cleared-before-bridge true|callback-colour true|"
-            "cancellation 0 true|cancellation 1 true|query-animation-order true"
+            "cancellation 0 true|cancellation 1 true|query-animation-order true|"
+            "animation-binding house true|animation-binding industry true|"
+            "animation-binding station true|animation-binding airport true|"
+            "animation-binding roadstop true|animation-binding object true|"
+            "animation-road-zero 0 1 0 true"
         ).split("|"),
         "reload": ("afterload-counts true",),
     }[scenario["objects"]]
@@ -123,6 +161,67 @@ def check(scenario, run, mode, role, result):
         and sum(line.startswith("OBJECT query ") for line in lines) != 96
     ):
         raise RuntimeError(f"{mode}/{role}: missing object query results")
+    if scenario["objects"] == "gaps":
+        for marker, expected in (
+            ("animation-step", 240),
+            ("animation-speed", 144),
+            ("animation-property-speed", 90),
+            ("animation-traversal", 72),
+            ("animation-airport", 5),
+            ("animation-diagnostic", 6),
+            ("animation-visit station", 46),
+            ("animation-visit roadstop", 21),
+            ("animation-visit airport", 9),
+        ):
+            if (
+                sum(line.startswith("OBJECT " + marker + " ") for line in lines)
+                != expected
+            ):
+                raise RuntimeError(f"{mode}/{role}: missing {marker} boundary cases")
+        features = "house industry station airport roadstop object".split()
+        results = "65535 509 510 511 259 263 32771".split()
+        rejections = "cached nonmember nullspec disabled accepted".split()
+        lifecycle = "house-replace house-clear industry-clear industry-terraform rail-remove roadstop-remove airport-remove oilrig-convert object-clear object-preserve object-remove station-preserve station-remove".split()
+        booleans = ["false", "true"]
+        matrix_axes = (["station", "roadstop"], booleans, booleans, results)
+        inventories = (
+            ("matrix", "-", matrix_axes),
+            ("version", " ", (features, ["7", "8"], ["255", "256", "65535"])),
+            ("rejection", " ", (rejections, ["before", "after"])),
+            ("diagnostic", " ", ([f"{f}-8-256" for f in features],)),
+            ("lifecycle", " ", (lifecycle, ["before", "after"])),
+        )
+        for marker, separator, axes in inventories:
+            keys = {separator.join(x) for x in product(*axes)}
+            width = 1 if separator == "-" else len(axes)
+            rows = [
+                x.split()[2:]
+                for x in lines
+                if x.startswith("OBJECT animation-" + marker + " ")
+            ]
+            if len(rows) != len(keys) or {" ".join(x[:width]) for x in rows} != keys:
+                raise RuntimeError(f"missing/duplicate keyed animation {marker}")
+        traces = [
+            x.split()[2:] for x in lines if x.startswith("OBJECT animation-trace ")
+        ]
+        for event, count in {
+            "sound-enter": 20,
+            "sound-exit": 20,
+            "setter-enter": 20,
+            "dirty": 20,
+            "callback": 56,
+            "end": 56,
+        }.items():
+            if sum(x[2] == event for x in traces) != count:
+                raise RuntimeError(
+                    f"original animation event inventory differs: {event}"
+                )
+    if scenario["objects"] == "reload":
+        state = [x for x in lines if x.startswith("OBJECT animation-reload ")]
+        if state != result["saved_animation"]:
+            raise RuntimeError(
+                "animation queue/frame/bits/records/RNG changed on reload"
+            )
     key = mode + "_object_results"
     if role == "reference":
         result[key] = lines

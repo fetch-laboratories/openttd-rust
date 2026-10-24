@@ -10,8 +10,9 @@
 #include "core/bitmath_func.hpp"
 #include "core/enum_type.hpp"
 #include "sound_type.h"
+#include "rust/animation_save.hpp"
+namespace IndustryReference {
 #include "industry-graphics-reference.inc"
-#include "rust/industry_ffi.h"
 using TileIndex = uint32_t;
 using IndustryGfx = uint16_t;
 enum class IndustryTileSpecialFlag : uint8_t { AcceptsAllCargo = 1 };
@@ -33,6 +34,7 @@ enum class AnimationStatus : uint8_t { NoAnimation, Animated };
 struct BuiltinState { uint16_t gfx; uint8_t frame, loop, stage; bool operator==(const BuiltinState &) const = default; };
 static BuiltinState builtin{};
 static bool builtin_mode;
+static AnimatedTileState animation_state;
 struct IndustryTileSpec {
 	struct { bool enabled; void *grffile = nullptr; bool HasSpriteGroups() const { return enabled; } } grf_prop;
 	struct { Bits triggers; AnimationStatus status = AnimationStatus::NoAnimation; } animation;
@@ -89,7 +91,7 @@ static uint8_t GetAnimationFrame(TileIndex) { return builtin.frame; }
 static void SetAnimationFrame(TileIndex tile, uint8_t frame) { builtin.frame = frame; trace.push_back({6, tile, frame, 0}); }
 static uint8_t GetIndustryAnimationLoop(TileIndex) { return builtin.loop; }
 static void SetIndustryAnimationLoop(TileIndex tile, uint8_t loop) { builtin.loop = loop; trace.push_back({7, tile, loop, 0}); }
-static void DeleteAnimatedTile(TileIndex tile) { trace.push_back({8, tile, 0, 0}); }
+static void DeleteAnimatedTile(TileIndex tile) { animation_state = AnimatedTileState::Deleted; trace.push_back({8, tile, 0, 0}); }
 static void SetIndustryGfx(TileIndex tile, IndustryGfx gfx) { builtin.gfx = gfx; trace.push_back({9, tile, gfx, 0}); }
 static void SetIndustryConstructionStage(TileIndex tile, uint8_t stage) { builtin.stage = stage; trace.push_back({10, tile, stage, 0}); }
 static void SndPlayTileFx(uint16_t sound, TileIndex tile) { trace.push_back({11, tile, sound, 0}); }
@@ -128,9 +130,10 @@ static void CheckAcceptance()
 {
 	OpenTTDIndustryTileServices service{};
 	service.gfx = [](uint32_t tile) noexcept -> uint16_t { return GetIndustryGfx(tile); };
-	service.industry = [](uint32_t tile) noexcept -> OpenTTDIndustryTileOwner { return {Industry::GetByTile(tile), acceptance_owner}; };
-	service.spec = GetIndustryTileSpec;
-	service.acceptance = [](const OpenTTDIndustryTileSpec *spec) noexcept -> OpenTTDIndustryTileAcceptance {
+	service.industry = [](uint32_t tile) noexcept -> OpenTTDIndustryTileOwner { return {reinterpret_cast<::Industry *>(Industry::GetByTile(tile)), acceptance_owner}; };
+	service.spec = [](uint16_t gfx) noexcept -> const OpenTTDIndustryTileSpec * { return reinterpret_cast<const OpenTTDIndustryTileSpec *>(GetIndustryTileSpec(gfx)); };
+	service.acceptance = [](const OpenTTDIndustryTileSpec *native_spec) noexcept -> OpenTTDIndustryTileAcceptance {
+		const auto *spec = reinterpret_cast<const IndustryTileSpec *>(native_spec);
 		OpenTTDIndustryTileAcceptance result;
 		std::ranges::copy(spec->accepts_cargo, result.cargo);
 		std::ranges::copy(spec->acceptance, result.amount);
@@ -140,7 +143,7 @@ static void CheckAcceptance()
 		return result;
 	};
 	service.callback = [](uint32_t tile, uint16_t gfx, uint16_t callback, uint32_t p1, uint32_t p2) noexcept -> uint16_t { return GetIndustryTileCallback(callback, p1, p2, gfx, Industry::GetByTile(tile), tile); };
-	service.cargo_translation = [](const OpenTTDIndustryTileSpec *spec, uint8_t cargo) noexcept -> uint8_t { return GetCargoTranslation(cargo, spec->grf_prop.grffile); };
+	service.cargo_translation = [](const OpenTTDIndustryTileSpec *spec, uint8_t cargo) noexcept -> uint8_t { return GetCargoTranslation(cargo, reinterpret_cast<const IndustryTileSpec *>(spec)->grf_prop.grffile); };
 	Industry industry{}; active = &industry;
 	OpenTTDIndustry *owner = openttd_rust_industry_new();
 	uint cases = 0;
@@ -176,7 +179,7 @@ static void CheckAcceptance()
 	openttd_rust_industry_destroy(owner); acceptance_owner = nullptr;
 	std::printf("Industry acceptance absent-NewGRF reference cases: %u\n", cases);
 }
-static void CheckBuiltinAnimation(const OpenTTDIndustryServices &services)
+static void CheckBuiltinAnimation(const OpenTTDIndustryServices &services, OpenTTDAnimationServices &animation)
 {
 	OpenTTDIndustryConstructionServices construction{};
 	construction.animation_enabled = [](uint16_t) noexcept -> bool { return builtin_spec.animation.status != AnimationStatus::NoAnimation; };
@@ -189,19 +192,19 @@ static void CheckBuiltinAnimation(const OpenTTDIndustryServices &services)
 	tileservice.animation_loop = [](uint32_t tile) noexcept -> uint8_t { return GetIndustryAnimationLoop(tile); };
 	tileservice.set_animation_loop = [](uint32_t tile, uint8_t loop) noexcept { SetIndustryAnimationLoop(tile, loop); };
 	tileservice.ambient = []() noexcept -> bool { return _settings_client.sound.ambient; };
-	tileservice.animate_new = [](uint32_t tile) noexcept { AnimateNewIndustryTile(tile); };
 	tileservice.toffee_offset = [](uint8_t frame) noexcept -> uint8_t { return _industry_anim_offs_toffee[frame]; };
+	animation.industry_tiles = &tileservice;
 	builtin_mode = true;
 	uint cases = 0;
 	for (uint32_t seed : {0U, 1U, 0x12345678U, UINT32_MAX}) for (uint64_t tick : {0ULL, 1ULL, 2ULL, 3ULL, 7ULL, 8ULL, 1023ULL, 1024ULL, 1025ULL, 1056ULL, 1407ULL, 1408ULL, 1439ULL, 1440ULL, 1536ULL, 1568ULL, 1919ULL, 1920ULL, 1951ULL, 1952ULL, 2047ULL, static_cast<unsigned long long>(UINT64_MAX)}) {
 		for (uint16_t gfx : {1, 10, 30, 31, 32, 48, 88, 143, 148, 151, 155, 162, 165, 174, 175}) for (uint8_t frame : {0, 1, 3, 4, 5, 6, 7, 14, 23, 28, 39, 49, 50, 56, 69, 70, 96, 127, 128, 130, 191, 192, 194, 195, 254, 255}) {
 			if (gfx == GFX_TOFFEE_QUARRY && frame >= std::size(_industry_anim_offs_toffee)) continue; // Reference has no defined read outside its rendering table.
 			for (uint8_t loop : {0, 7, 255}) for (bool ambient : {false, true}) for (bool custom : {false, true}) {
-				auto setup = [&] { rng = seed; trace.clear(); builtin = {gfx, frame, loop, 0}; _settings_client.sound.ambient = ambient; TimerGameTick::counter = tick; builtin_spec.animation.status = custom ? AnimationStatus::Animated : AnimationStatus::NoAnimation; };
+				auto setup = [&] { openttd_rust_animation_initialize(); openttd_rust_animation_append(2); animation_state = AnimatedTileState::Animated; rng = seed; trace.clear(); builtin = {gfx, frame, loop, 0}; _settings_client.sound.ambient = ambient; TimerGameTick::counter = tick; builtin_spec.animation.status = custom ? AnimationStatus::Animated : AnimationStatus::NoAnimation; };
 				setup(); AnimateTile_Industry(2);
-				const auto expected_trace = trace; const auto expected_state = builtin; const auto expected_rng = rng;
+				const auto expected_trace = trace; const auto expected_state = builtin; const auto expected_rng = rng; const auto expected_animation = animation_state;
 				setup(); openttd_rust_industry_tile_animate(2, &services, &construction, &tileservice);
-				if (trace != expected_trace || builtin != expected_state || rng != expected_rng) {
+				if (trace != expected_trace || builtin != expected_state || rng != expected_rng || animation_state != expected_animation || openttd_rust_animation_count() != 1 || openttd_rust_animation_at(0) != 2) {
 					std::fprintf(stderr, "builtin gfx %u tick %llu frame %u loop %u ambient %d custom %d: traces %zu/%zu\n", gfx, static_cast<unsigned long long>(tick), frame, loop, ambient, custom, trace.size(), expected_trace.size());
 					std::abort();
 				}
@@ -209,6 +212,8 @@ static void CheckBuiltinAnimation(const OpenTTDIndustryServices &services)
 			}
 		}
 	}
+	animation.industry_tiles = nullptr;
+	openttd_rust_animation_initialize();
 	builtin_mode = false;
 	std::printf("Industry builtin animation reference cases: %u\n", cases);
 }
@@ -229,20 +234,43 @@ static OpenTTDIndustryLifecycleServices Lifecycle()
 	result.random_bits = [](uint32_t tile) noexcept -> uint8_t { return GetIndustryRandomBits(tile); };
 	result.set_random_bits = [](uint32_t tile, uint8_t bits) noexcept { SetIndustryRandomBits(tile, bits); };
 	result.animation_spec = [](uint32_t tile) noexcept -> OpenTTDIndustryAnimationSpec { return {&specs[tile], specs[tile].animation.triggers.value}; };
-	result.change_frame = [](const void *spec, uint32_t tile, uint32_t random, uint32_t parameter) noexcept { IndustryAnimationBase::ChangeAnimationFrame(0, static_cast<const IndustryTileSpec *>(spec), active, tile, random, parameter); };
 	return result;
 }
 static void Require(bool condition) { if (!condition) std::abort(); }
-int main()
+static void Run()
 {
 	const auto lifecycle = Lifecycle();
 	OpenTTDIndustryServices services{};
 	auto shared = OpenTTDFixtureSharedServices(nullptr, [](void *) noexcept -> uint32_t { return Random(); });
 	shared.mark_dirty = [](uint32_t tile) noexcept { MarkTileDirtyByTile(tile); };
-	shared.tile_animation_delete = [](uint32_t tile) noexcept { DeleteAnimatedTile(tile); };
 	shared.tick_counter = []() noexcept -> uint64_t { return TimerGameTick::counter; };
 	services.shared = &shared;
 	services.play_sound = [](uint16_t sound, uint32_t tile) noexcept { SndPlayTileFx(sound, tile); };
+	/* Observe the same no-op resolver boundary through the canonical Rust owner.
+	 * Callback failure leaves frames/queue unchanged, as the reference stub did. */
+	const OpenTTDIndustryAnimation binding{
+		.entry = [](uint32_t tile) noexcept -> OpenTTDIndustryAnimationEntry {
+			AnimateNewIndustryTile(tile);
+			return {reinterpret_cast<const ::IndustryTileSpec *>(&builtin_spec), nullptr};
+		},
+		.info = [](const ::IndustryTileSpec *spec) noexcept -> OpenTTDAnimationInfo {
+			Require(spec == reinterpret_cast<const ::IndustryTileSpec *>(&builtin_spec));
+			return {}; // The former AnimateNewIndustryTile observation made no frame changes.
+		},
+		.callback = [](uint16_t callback, uint32_t random, uint32_t parameter, const ::IndustryTileSpec *spec, ::Industry *industry, uint32_t tile, int32_t extra) noexcept -> uint16_t {
+			Require(callback == CBID_INDTILE_ANIMATION_TRIGGER && extra == 0);
+			Require(spec == reinterpret_cast<const ::IndustryTileSpec *>(&specs[tile]) && industry == reinterpret_cast<::Industry *>(active));
+			IndustryAnimationBase::ChangeAnimationFrame(0, reinterpret_cast<const IndustryTileSpec *>(spec), active, tile, random, parameter);
+			return CALLBACK_FAILED;
+		},
+	};
+	OpenTTDAnimationServices animation{
+		.shared = &shared, .industry = &binding,
+		.state = [](uint32_t tile) noexcept -> AnimatedTileState { Require(tile == 2); return animation_state; },
+		.set_state = [](uint32_t tile, AnimatedTileState state) noexcept { Require(state == AnimatedTileState::Deleted); DeleteAnimatedTile(tile); },
+		.industry_object = [](uint32_t tile) noexcept -> ::Industry * { return reinterpret_cast<::Industry *>(Industry::GetByTile(tile)); },
+	};
+	RustAnimationScope animation_scope(animation);
 	uint cases = 0;
 	for (uint32_t seed : {0U, 1U, 0x12345678U, UINT32_MAX}) for (uint32_t mask : {0U, 1U, 0x55U, 0xFFFFU, 0x10000U, 0x12345678U, UINT32_MAX}) {
 		for (uint8_t variant = 0; variant < 8; variant++) for (uint8_t trigger = 0; trigger < 5; trigger++) {
@@ -286,6 +314,13 @@ int main()
 		}
 	}
 	std::printf("Industry lifecycle absent-NewGRF reference cases: %u\n", cases);
-	CheckBuiltinAnimation(services);
+	CheckBuiltinAnimation(services, animation);
 	CheckAcceptance();
+}
+
+} // namespace IndustryReference
+
+int main()
+{
+	IndustryReference::Run();
 }

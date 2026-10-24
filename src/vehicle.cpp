@@ -107,18 +107,6 @@ static void VehicleVisitArrivalDirty(OpenTTDVehicle *handle) noexcept
 	RustStationMarkTilesDirty(Station::Get(v->last_station_visited), true);
 }
 static void VehicleVisitReservationLog() noexcept { Debug(misc, 1, "cancelling cargo reservation"); }
-static void VehicleVisitStationDeparture(OpenTTDStation *handle, uint32_t tile) noexcept
-{
-	Station *st = static_cast<Station *>(handle);
-	RustStationRandomisation(st, TileIndex(tile), StationRandomTrigger::VehicleDeparts);
-	RustStationAnimation(st, TileIndex(tile), StationAnimationTrigger::VehicleDeparts);
-}
-static void VehicleVisitRoadStopDeparture(OpenTTDStation *handle, uint32_t tile) noexcept
-{
-	Station *st = static_cast<Station *>(handle);
-	RustRoadStopRandomisation(st, TileIndex(tile), StationRandomTrigger::VehicleDeparts);
-	RustRoadStopAnimation(st, TileIndex(tile), StationAnimationTrigger::VehicleDeparts);
-}
 static void VehicleVisitDepotWindows(OpenTTDVehicle *handle, bool invalidate) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
@@ -180,8 +168,6 @@ const OpenTTDVehicleVisits &GetRustVehicleVisits() noexcept
 		.reservation_log = VehicleVisitReservationLog,
 		.hide_filling = RustVehicleHideFilling,
 		.set_occupancy = RustVehicleSetTripOccupancy,
-		.station_departure = VehicleVisitStationDeparture,
-		.road_stop_departure = VehicleVisitRoadStopDeparture,
 		.leave_sound = RustVehiclePlayLeaveSound,
 		.depot_windows = VehicleVisitDepotWindows,
 		.ship_depot_viewport = VehicleVisitShipDepotViewport,

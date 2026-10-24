@@ -22,6 +22,10 @@
 #include "town.h"
 #include "water.h"
 #include "newgrf_animation_base.h"
+#ifdef WITH_RUST
+#include "rust/animation_binding.hpp"
+#include "rust/services_object.h"
+#endif
 
 #include "table/strings.h"
 
@@ -557,6 +561,15 @@ uint16_t StubGetObjectCallback(CallbackID callback, uint32_t param1, uint32_t pa
 }
 
 /** Helper class for animation control. */
+#ifdef WITH_RUST
+const OpenTTDObjectAnimation &GetObjectAnimationBinding() noexcept
+{
+	static const auto binding = MakeRustAnimationBinding<ObjectSpec, Object, int, StubGetObjectCallback>(
+		[](uint32_t t) noexcept -> OpenTTDObjectAnimationEntry { const auto *s = RustObjectSpecByTile(t); if (s == nullptr || !s->flags.Test(ObjectFlag::Animation)) return {nullptr, nullptr}; return {s, RustObjectByTile(t)}; },
+		[](const ObjectSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(ObjectCallbackMask::AnimationSpeed), s->callback_mask.Test(ObjectCallbackMask::AnimationNextFrame), s->flags.Test(ObjectFlag::AnimRandomBits), true}; });
+	return binding;
+}
+#else
 struct ObjectAnimationBase : public AnimationBase<ObjectAnimationBase, ObjectSpec, Object, int, StubGetObjectCallback, TileAnimationFrameAnimationHelper<Object> > {
 	static const CallbackID cb_animation_speed      = CBID_OBJECT_ANIMATION_SPEED;
 	static const CallbackID cb_animation_next_frame = CBID_OBJECT_ANIMATION_NEXT_FRAME;
@@ -564,6 +577,7 @@ struct ObjectAnimationBase : public AnimationBase<ObjectAnimationBase, ObjectSpe
 	static const ObjectCallbackMask cbm_animation_speed      = ObjectCallbackMask::AnimationSpeed;
 	static const ObjectCallbackMask cbm_animation_next_frame = ObjectCallbackMask::AnimationNextFrame;
 };
+#endif
 
 /**
  * Handle the animation of the object tile.
@@ -571,10 +585,14 @@ struct ObjectAnimationBase : public AnimationBase<ObjectAnimationBase, ObjectSpe
  */
 void AnimateNewObjectTile(TileIndex tile)
 {
+#ifdef WITH_RUST
+	openttd_rust_animate_object(tile.base());
+#else
 	const ObjectSpec *spec = ObjectSpec::GetByTile(tile);
 	if (spec == nullptr || !spec->flags.Test(ObjectFlag::Animation)) return;
 
 	ObjectAnimationBase::AnimateTile(spec, Object::GetByTile(tile), tile, spec->flags.Test(ObjectFlag::AnimRandomBits));
+#endif
 }
 
 #ifndef WITH_RUST
@@ -659,7 +677,7 @@ const OpenTTDObjectQueryServices &GetRustObjectQueryServices() noexcept
 		.manhattan = OpenTTDDistanceManhattan,
 		.square = OpenTTDDistanceSquare,
 		.triggers = [](const ObjectSpec *s) noexcept { return s->animation.triggers.base(); },
-		.change_frame = [](const ObjectSpec *s, Object *o, uint32_t t, uint32_t random, uint32_t trigger) noexcept { ObjectAnimationBase::ChangeAnimationFrame(CBID_OBJECT_ANIMATION_TRIGGER, s, o, TileIndex(t), random, trigger); },
+
 		.unhandled = [](uint8_t variable) noexcept { Debug(grf, 1, "Unhandled object variable 0x{:X}", variable); },
 	};
 	return services;

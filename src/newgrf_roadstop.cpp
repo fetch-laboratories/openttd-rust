@@ -24,6 +24,10 @@
 #include "tile_cmd.h"
 #include "viewport_func.h"
 #include "newgrf_animation_base.h"
+#ifdef WITH_RUST
+#include "rust/animation_binding.hpp"
+#include "rust/services_station.h"
+#endif
 #include "newgrf_sound.h"
 
 #include "table/strings.h"
@@ -356,12 +360,24 @@ uint16_t GetAnimRoadStopCallback(CallbackID callback, uint32_t param1, uint32_t 
 	return GetRoadStopCallback(callback, param1, param2, roadstopspec, st, tile, INVALID_ROADTYPE, GetStationType(tile), GetStationGfx(tile));
 }
 
+#ifndef WITH_RUST
 struct RoadStopAnimationFrameAnimationHelper {
 	static uint8_t Get(BaseStation *st, TileIndex tile) { return st->GetRoadStopAnimationFrame(tile); }
 	static bool Set(BaseStation *st, TileIndex tile, uint8_t frame) { return st->SetRoadStopAnimationFrame(tile, frame); }
 };
 
+#endif
+
 /** Helper class for animation control. */
+#ifdef WITH_RUST
+const OpenTTDRoadStopAnimation &GetRoadStopAnimationBinding() noexcept
+{
+	static const auto binding = MakeRustAnimationBinding<RoadStopSpec, BaseStation, int, GetAnimRoadStopCallback>(
+		[](uint32_t t) noexcept -> OpenTTDRoadStopAnimationEntry { const auto *s = RustAnimationRoadSpec(t); if (s == nullptr) return {nullptr, nullptr}; return {s, BaseStation::GetByTile(TileIndex{t})}; },
+		[](const RoadStopSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(RoadStopCallbackMask::AnimationSpeed), s->callback_mask.Test(RoadStopCallbackMask::AnimationNextFrame), s->flags.Test(RoadStopSpecFlag::Cb141RandomBits), true}; });
+	return binding;
+}
+#else
 struct RoadStopAnimationBase : public AnimationBase<RoadStopAnimationBase, RoadStopSpec, BaseStation, int, GetAnimRoadStopCallback, RoadStopAnimationFrameAnimationHelper> {
 	static constexpr CallbackID cb_animation_speed      = CBID_STATION_ANIMATION_SPEED;
 	static constexpr CallbackID cb_animation_next_frame = CBID_STATION_ANIMATION_NEXT_FRAME;
@@ -369,17 +385,25 @@ struct RoadStopAnimationBase : public AnimationBase<RoadStopAnimationBase, RoadS
 	static constexpr RoadStopCallbackMask cbm_animation_speed      = RoadStopCallbackMask::AnimationSpeed;
 	static constexpr RoadStopCallbackMask cbm_animation_next_frame = RoadStopCallbackMask::AnimationNextFrame;
 };
+#endif
 
 void AnimateRoadStopTile(TileIndex tile)
 {
+#ifdef WITH_RUST
+	openttd_rust_animate_roadstop(tile.base());
+#else
 	const RoadStopSpec *ss = GetRoadStopSpec(tile);
 	if (ss == nullptr) return;
 
 	RoadStopAnimationBase::AnimateTile(ss, BaseStation::GetByTile(tile), tile, ss->flags.Test(RoadStopSpecFlag::Cb141RandomBits));
+#endif
 }
 
 void TriggerRoadStopAnimation(BaseStation *st, TileIndex trigger_tile, StationAnimationTrigger trigger, CargoType cargo_type)
 {
+#ifdef WITH_RUST
+	openttd_rust_trigger_roadstop(st, trigger_tile.base(), to_underlying(trigger), cargo_type);
+#else
 	assert(st != nullptr);
 
 	/* Check the cached animation trigger bitmask to see if we need
@@ -405,6 +429,7 @@ void TriggerRoadStopAnimation(BaseStation *st, TileIndex trigger_tile, StationAn
 	} else {
 		process_tile(trigger_tile);
 	}
+#endif
 }
 
 /**

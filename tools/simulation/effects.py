@@ -420,13 +420,20 @@ def check_effects(scenario, path):
 
     def animated_tiles(save):
         chunk = read_save(save)["ANIT"]
-        return set(decode_element(chunk, chunk["elements"][0][1])["tiles"])
+        return decode_element(chunk, chunk["elements"][0][1])["tiles"]
 
     added_animation = sorted(
-        animated_tiles(path) - animated_tiles(Path(scenario["save"]))
+        set(animated_tiles(path)) - set(animated_tiles(Path(scenario["save"])))
     )
+    lifecycle = None
     labels = {label: index for index, label, _ in scenario["effect_assignments"]}
     if scenario["effects"] == "controllers" and elapsed == 1:
+        prior = animated_tiles(Path(scenario["save"]))
+        current = animated_tiles(path)
+        bits = read_save(path)["MAPE"]["raw"]
+        if sum(bits[t] & 3 == 3 for t in prior if t in current) < 2:
+            raise RuntimeError("catcher insertion lacks two live ANIT survivors")
+        lifecycle = ["effects-catcher", prior, current]
         if {before[labels[f"subtype-{i}"]]["subtype"] for i in range(12)} != set(
             range(12)
         ) or any(labels[f"subtype-{i}"] not in changed for i in range(12)):
@@ -460,7 +467,8 @@ def check_effects(scenario, path):
         row = after[labels["bubble-absorb"]]
         maps = read_save(path)["MAPS"]
         width = struct.unpack(">II", maps["elements"][0][1])[0]
-        if (row["y_pos"] // 16) * width + row["x_pos"] // 16 not in added_animation:
+        catcher = (row["y_pos"] // 16) * width + row["x_pos"] // 16
+        if current != prior + (catcher,):
             raise RuntimeError(
                 "bubble absorption did not add its natural catcher tile to ANIT"
             )
@@ -488,6 +496,8 @@ def check_effects(scenario, path):
     return {
         "elapsed_ticks": elapsed,
         "added_animated_tiles": added_animation,
+        "animated_tile_order": animated_tiles(path),
+        "animation_lifecycle": lifecycle,
         "rng": [fields[f"random_state[{i}]"] for i in range(2)],
         "before": before,
         "after": after,
