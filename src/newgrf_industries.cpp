@@ -439,6 +439,9 @@ static uint32_t GetCountAndDistanceOfClosestInstance(const ResolverObject &objec
 
 /* virtual */ void IndustriesScopeResolver::StorePSA(uint pos, int32_t value)
 {
+#ifdef WITH_RUST
+	openttd_rust_storage_industry(&GetRustStorageServices(), this->industry, pos, value);
+#else
 	if (this->industry->index == IndustryID::Invalid()) return;
 
 	if (this->industry->psa == nullptr) {
@@ -452,6 +455,7 @@ static uint32_t GetCountAndDistanceOfClosestInstance(const ResolverObject &objec
 	}
 
 	this->industry->psa->StoreValue(pos, value);
+#endif
 }
 
 /**

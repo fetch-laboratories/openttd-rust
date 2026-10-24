@@ -8,6 +8,9 @@
 /** @file object_cmd.cpp Handling of object tiles. */
 
 #include "stdafx.h"
+#ifdef WITH_RUST
+#include "rust/animation_ffi.h"
+#endif
 #include "landscape.h"
 #include "command_func.h"
 #include "company_func.h"
@@ -827,10 +830,12 @@ static bool ClickTile_Object(TileIndex tile)
 	return true;
 }
 
+#ifndef WITH_RUST
 static void AnimateTile_Object(TileIndex tile)
 {
 	AnimateNewObjectTile(tile);
 }
+#endif
 
 /**
  * Try to build a lighthouse.
@@ -1082,7 +1087,9 @@ extern const TileTypeProcs _tile_type_object_procs = {
 	GetTileTrackStatus_Object,   // get_tile_track_status_proc
 #endif
 	ClickTile_Object,            // click_tile_proc
+#ifndef WITH_RUST
 	AnimateTile_Object,          // animate_tile_proc
+#endif
 	TileLoop_Object,             // tile_loop_proc
 	ChangeTileOwner_Object,      // change_tile_owner_proc
 	AddProducedCargo_Object,     // add_produced_cargo_proc
@@ -1117,10 +1124,10 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 		.spec_count = []() noexcept -> size_t { return ObjectSpec::Count(); },
 		.spec = [](uint16_t type) noexcept -> const ObjectSpec * { return ObjectSpec::Get(type); },
 		.callbacks = RustObjectSpecCallbacks,
-		.colour_policy = [](Object *o) noexcept -> OpenTTDObjectPolicy { const ObjectSpec *spec = ObjectSpec::GetByTile(o->location.tile); return {RustObjectSpecFlags(spec), RustObjectSpecCallbacks(spec)}; },
+		.colour_policy = [](Object *o) noexcept -> OpenTTDObjectPolicy { const ObjectSpec *spec = RustObjectSpecByTile(o->location.tile.base()); return {RustObjectSpecFlags(spec), RustObjectSpecCallbacks(spec)}; },
 		.flags = RustObjectSpecFlags,
 		.footprint = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectFootprint { return {RustObjectSpecFlags(spec), RustObjectSpecCallbacks(spec), spec->size}; },
-		.clearance = [](uint32_t tile) noexcept -> OpenTTDObjectClearance { const ObjectSpec *spec = ObjectSpec::GetByTile(TileIndex(tile)); return {RustObjectSpecFlags(spec), spec->height}; },
+		.clearance = [](uint32_t tile) noexcept -> OpenTTDObjectClearance { const ObjectSpec *spec = RustObjectSpecByTile(tile); return {RustObjectSpecFlags(spec), spec->height}; },
 		.available = [](const ObjectSpec *spec) noexcept -> bool { return spec->IsAvailable(); },
 		.ever = RustObjectEverAvailable,
 		.area_shape = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectAreaShape { return {spec->views, spec->size}; },
@@ -1129,8 +1136,8 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 		.can_allocate = []() noexcept -> bool { return Object::CanAllocateItem(); },
 		.allocate = [](uint16_t type, const Town *town, OpenTTDObjectArea area, uint8_t view) noexcept -> OpenTTDObjectAllocation { Object *o = new Object(type, const_cast<Town *>(town), TileArea(TileIndex(area.tile), area.width, area.height), TimerGameCalendar::date, view); return {o, o->index.base()}; },
 		.object_type = [](uint32_t tile) noexcept { return GetObjectType(TileIndex(tile)); },
-		.loop_policy = [](uint32_t tile) noexcept -> OpenTTDObjectLoopPolicy { Object *o = Object::GetByTile(TileIndex(tile)); const auto kind = o->type; const ObjectSpec *spec = ObjectSpec::GetByTile(TileIndex(tile)); const auto flags = RustObjectSpecFlags(spec); return {spec, o, ObjectFlags{flags}.Test(ObjectFlag::Animation) ? o->location.tile.base() : 0, flags, kind}; },
-		.identity = [](uint32_t tile) noexcept -> OpenTTDObjectIdentity { Object *o = Object::GetByTile(TileIndex(tile)); return {o, {o->location.tile.base(), o->location.w, o->location.h}, o->type}; },
+		.loop_policy = [](uint32_t tile) noexcept -> OpenTTDObjectLoopPolicy { Object *o = RustObjectByTile(tile); const auto kind = o->type; const ObjectSpec *spec = RustObjectSpecByTile(tile); const auto flags = RustObjectSpecFlags(spec); return {spec, o, ObjectFlags{flags}.Test(ObjectFlag::Animation) ? o->location.tile.base() : 0, flags, kind}; },
+		.identity = [](uint32_t tile) noexcept -> OpenTTDObjectIdentity { Object *o = RustObjectByTile(tile); return {o, {o->location.tile.base(), o->location.w, o->location.h}, o->type}; },
 		.location = [](Object *o) noexcept -> OpenTTDObjectArea { const auto &a = o->location; return {a.tile.base(), a.w, a.h}; },
 		.next = [](uint32_t from) noexcept -> OpenTTDObjectNext { for (Object *o : Object::Iterate(from)) return {o, o->index.base(), o->location.tile.base()}; return {nullptr, UINT32_MAX, 0}; },
 		.set_colour = [](Object *o, uint8_t colour) noexcept -> void { o->colour = colour; },
@@ -1140,7 +1147,7 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 		.make = [](uint32_t tile, uint8_t owner, uint32_t id, WaterClass water, uint32_t random) noexcept -> void { MakeObject(TileIndex(tile), Owner(owner), ObjectID(id), water, random); },
 		.delete_object = [](Object *o) noexcept -> void { delete o; },
 		.query = &GetRustObjectQueryServices(),
-		.slope_callback = [](const ObjectSpec *spec, uint32_t tile, Slope slope, uint32_t offset, uint8_t view) noexcept -> OpenTTDObjectSlopeResult { OpenTTDObjectSlopeResult r{}; r.callback = GetObjectCallback(CBID_OBJECT_LAND_SLOPE_CHECK, slope, offset, spec, nullptr, TileIndex(tile), r.registers, view); if (r.callback != CALLBACK_FAILED) r.version = spec->grf_prop.grffile->grf_version; return r; },
+		.slope_callback = [](const ObjectSpec *spec, uint32_t tile, Slope slope, uint32_t offset, uint8_t view) noexcept -> OpenTTDObjectSlopeResult { OpenTTDObjectSlopeResult r{}; r.callback = GetObjectCallback(CBID_OBJECT_LAND_SLOPE_CHECK, slope, offset, spec, nullptr, TileIndex(tile), r.registers, view); if (r.callback != CALLBACK_FAILED) r.version = RustGRFFileVersion(spec->grf_prop.grffile); return r; },
 		.slope_error = RustLocationCallbackError<ObjectSpec, ObjectSpec, OpenTTDObjectSlopeResult, OpenTTDCommandCost, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION>,
 		.build_price = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectPrice { return {spec->build_cost_multiplier, spec->grf_prop.grffile == nullptr ? 0 : spec->grf_prop.grffile->price_base_multipliers[PR_BUILD_OBJECT]}; },
 		.clear_price = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectPrice { return {spec->clear_cost_multiplier, spec->grf_prop.grffile == nullptr ? 0 : spec->grf_prop.grffile->price_base_multipliers[PR_CLEAR_OBJECT]}; },

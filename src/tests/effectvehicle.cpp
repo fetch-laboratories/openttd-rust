@@ -26,6 +26,53 @@ TEST_CASE("Effect vehicles - native direct services and ownership")
 	CheckEffectProtocol([](bool result) { CHECK(result); });
 }
 
+TEST_CASE("Animated tiles - ordered queue and partial native load publication")
+{
+	std::vector<uint32_t> saved;
+	for (size_t i = 0; i < openttd_rust_animation_count(); ++i) saved.push_back(openttd_rust_animation_at(i));
+	static std::array<AnimatedTileState, 4> states{}; states.fill(AnimatedTileState::None);
+	auto shared = OpenTTDSharedServices{};
+	shared.tile_type = [](uint32_t t) noexcept -> uint8_t { return t == 2 ? 0 : 3; };
+	shared.map_log_x = []() noexcept -> uint32_t { return 0; };
+	shared.map_max_y = []() noexcept -> uint32_t { return 3; };
+	const OpenTTDAnimationServices services{
+		.shared = &shared,
+		.state = [](uint32_t t) noexcept { return states[t]; },
+		.set_state = [](uint32_t t, AnimatedTileState s) noexcept { states[t] = s; },
+	};
+	RustAnimationScope scope(services);
+	openttd_rust_animation_initialize();
+	for (uint32_t t : {1, 2, 3}) openttd_rust_animation_add(t, false);
+	openttd_rust_animation_delete(1, false);
+	openttd_rust_animation_add(1, false); // Reactivation keeps its original position.
+	CHECK(openttd_rust_animation_count() == 3);
+	openttd_rust_animation_delete(2, true);
+	CHECK(openttd_rust_animation_at(0) == 1);
+	CHECK(openttd_rust_animation_at(1) == 3);
+	openttd_rust_animation_delete(1, false); states[3] = AnimatedTileState::None;
+	openttd_rust_animation_run(); // Process the swapped-in final entry.
+	CHECK(openttd_rust_animation_count() == 0);
+	try {
+		RustAnimationSave loading(true);
+		RustAnimationSave::Tiles().resize(3);
+		RustAnimationSave::Tiles()[0] = TileIndex{3};
+		throw 17; // SlCopy/SlGlobList/SlError unwind entirely on native frames.
+	} catch (int) {}
+	CHECK(openttd_rust_animation_count() == 3);
+	CHECK(openttd_rust_animation_at(0) == 3);
+	CHECK(openttd_rust_animation_at(1) == 0);
+	CHECK(RustAnimationSave::active == nullptr);
+	openttd_rust_animation_initialize();
+	for (uint32_t t : {1, 2, 1, 3}) openttd_rust_animation_append(t);
+	openttd_rust_animation_afterload(true, true);
+	CHECK(openttd_rust_animation_count() == 2);
+	CHECK(openttd_rust_animation_at(0) == 1);
+	CHECK(openttd_rust_animation_at(1) == 3);
+	CHECK((states[1] == AnimatedTileState::Animated && states[2] == AnimatedTileState::None && states[3] == AnimatedTileState::Animated));
+	openttd_rust_animation_initialize();
+	for (uint32_t t : saved) openttd_rust_animation_append(t);
+}
+
 TEST_CASE("Effect vehicles - zero construction, nested save staging and pool cleanup")
 {
 	REQUIRE(Vehicle::CanAllocateItem(2));

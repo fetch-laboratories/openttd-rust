@@ -57,6 +57,7 @@
 #include "rust/generation_services.hpp"
 #include "rust/house_ffi.h"
 #include "rust/town_command_ffi.h"
+#include "rust/town_services.h"
 #include "rust/services_object.h"
 #include "rust/services_industry.h"
 #include "rust/presentation_services.h"
@@ -377,9 +378,7 @@ static Foundation GetFoundation_Town(TileIndex tile, Slope tileh)
  * The newhouses animation supersedes regular ones.
  * @param tile TileIndex of the house to animate.
  */
-#ifdef WITH_RUST
-static void AnimateTile_Town(TileIndex tile) { openttd_rust_house_animate(&GetRustTownServices(), &GetRustSharedServices(), tile.base()); }
-#else
+#ifndef WITH_RUST
 static void AnimateTile_Town(TileIndex tile)
 {
 	if (GetHouseType(tile) >= NEW_HOUSE_OFFSET) {
@@ -1217,7 +1216,7 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 		.set_random_bits = [](uint32_t tile, uint8_t bits) noexcept { SetHouseRandomBits(TileIndex{tile}, bits); },
 		.set_random_triggers = [](uint32_t tile, uint8_t triggers) noexcept { SetHouseRandomTriggers(TileIndex{tile}, HouseRandomTriggers{triggers}); },
 		.set_type = [](uint32_t tile, uint16_t house) noexcept { SetHouseType(TileIndex{tile}, house); },
-		.animate_new = OpenTTDAnimateNewHouse,
+
 		.delete_inspect = OpenTTDDeleteHouseInspect,
 		.callback = [](uint16_t callback, uint32_t param1, uint32_t param2, uint16_t house, Town *town, uint32_t tile, bool not_yet_constructed) noexcept -> uint16_t {
 			return OpenTTDHouseCallback(static_cast<CallbackID>(callback), param1, param2, house, town, TileIndex{tile}, not_yet_constructed);
@@ -1226,7 +1225,7 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 		.convert_boolean = [](uint16_t house, uint16_t callback, uint16_t result) noexcept { return OpenTTDConvertBooleanCallback(RustHouseGrf(house), callback, result); },
 		.convert_8bit = [](uint16_t house, uint16_t callback, uint16_t result) noexcept { return OpenTTDConvert8bitBooleanCallback(RustHouseGrf(house), callback, result); },
 		.resolve_reseed = OpenTTDHouseResolveReseed,
-		.change_frame = OpenTTDHouseChangeFrame,
+
 		.next_near_station = [](Town *t, Station *previous) noexcept -> Station * {
 			auto next = previous == nullptr ? t->stations_near.begin() : t->stations_near.upper_bound(previous);
 			return next == t->stations_near.end() ? nullptr : *next;
@@ -1289,7 +1288,7 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.exchange_company = RustTown_exchange_company,
 		.house_class = RustTownHouseClass,
 		.make_house = RustTown_make_house,
-		.add_animation = GetRustSharedServices().tile_animation_add,
+
 		.population_changed = RustTown_population_changed,
 		.nearby_stations = RustTown_nearby_stations,
 		.house_count = RustTown_house_count,
@@ -3724,7 +3723,7 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 		.cleaning_pool = []() noexcept { return Town::CleaningPool(); },
 		.close_view = [](uint16_t town) noexcept { CloseWindowById(WC_TOWN_VIEW, TownID(town)); },
 		.close_graph = [](uint16_t town) noexcept { CloseWindowById(WC_TOWN_CARGO_GRAPH, TownID(town)); },
-		.storage_count = [](Town *town) noexcept { return town->psa_list.size(); },
+		.storage_count = RustTownStorageCount<Town>,
 		.delete_storage = [](Town *town, size_t index) noexcept { delete town->psa_list[index]; },
 		.clear_storage = [](Town *town) noexcept { town->psa_list.clear(); },
 		.delete_inspect = OpenTTDDeleteTownInspect,
@@ -4600,7 +4599,6 @@ static void UpdateTownGrowth(Town *t)
 #ifdef WITH_RUST
 static uint8_t RustTownCouncilTolerance() noexcept { return _settings_game.difficulty.town_council_tolerance; }
 static uint8_t RustTownAuthorityDistance() noexcept { return _settings_game.economy.dist_local_authority; }
-#include "rust/town_services.h"
 const OpenTTDTownAuthorityServices &GetRustTownAuthorityServices() noexcept
 {
 	static const OpenTTDTownAuthorityServices services{
@@ -4936,7 +4934,9 @@ extern const TileTypeProcs _tile_type_town_procs = {
 	GetTileTrackStatus_Town, // get_tile_track_status_proc
 #endif
 	nullptr,                    // click_tile_proc
+#ifndef WITH_RUST
 	AnimateTile_Town,        // animate_tile_proc
+#endif
 #ifdef WITH_RUST
 	nullptr,                 // Rust scheduler calls the owner directly.
 #else

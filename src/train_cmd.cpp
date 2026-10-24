@@ -4617,7 +4617,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.all_powered = TrainAllPowered,
 		.ambient_sound = TrainAmbientSound,
 		.arrival_news = TrainArrivalNews,
-		.arrival_triggers = TrainArrivalTriggers,
 		.axis_diag = TrainAxisDiag,
 		.backoff = TrainBackoff,
 		.base_viewport = TrainBaseViewport,

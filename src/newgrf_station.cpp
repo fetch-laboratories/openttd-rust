@@ -23,6 +23,10 @@
 #include "company_func.h"
 #include "tunnelbridge_map.h"
 #include "newgrf_animation_base.h"
+#ifdef WITH_RUST
+#include "rust/animation_binding.hpp"
+#include "rust/services_station.h"
+#endif
 #include "timer/timer_game_calendar.h"
 
 #include "table/strings.h"
@@ -884,6 +888,16 @@ uint16_t GetAnimStationCallback(CallbackID callback, uint32_t param1, uint32_t p
 }
 
 /** Helper class for animation control. */
+#ifdef WITH_RUST
+OpenTTDAnimationArea OpenTTDAnimationRailArea(BaseStation *s, uint32_t t, uint8_t area) noexcept { auto a = GetRailTileArea(s, TileIndex{t}, static_cast<TriggerArea>(area)); return {a.tile.base(), a.w, a.h}; }
+const OpenTTDStationAnimation &GetStationAnimationBinding() noexcept
+{
+	static const auto binding = MakeRustAnimationBinding<StationSpec, BaseStation, int, GetAnimStationCallback>(
+		[](uint32_t t) noexcept -> OpenTTDStationAnimationEntry { const auto *s = RustAnimationRailSpec(t); if (s == nullptr) return {nullptr, nullptr}; return {s, BaseStation::GetByTile(TileIndex{t})}; },
+		[](const StationSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(StationCallbackMask::AnimationSpeed), s->callback_mask.Test(StationCallbackMask::AnimationNextFrame), s->flags.Test(StationSpecFlag::Cb141RandomBits), true}; });
+	return binding;
+}
+#else
 struct StationAnimationBase : public AnimationBase<StationAnimationBase, StationSpec, BaseStation, int, GetAnimStationCallback, TileAnimationFrameAnimationHelper<BaseStation> > {
 	static constexpr CallbackID cb_animation_speed      = CBID_STATION_ANIMATION_SPEED;
 	static constexpr CallbackID cb_animation_next_frame = CBID_STATION_ANIMATION_NEXT_FRAME;
@@ -891,17 +905,25 @@ struct StationAnimationBase : public AnimationBase<StationAnimationBase, Station
 	static constexpr StationCallbackMask cbm_animation_speed      = StationCallbackMask::AnimationSpeed;
 	static constexpr StationCallbackMask cbm_animation_next_frame = StationCallbackMask::AnimationNextFrame;
 };
+#endif
 
 void AnimateStationTile(TileIndex tile)
 {
+#ifdef WITH_RUST
+	openttd_rust_animate_station(tile.base());
+#else
 	const StationSpec *ss = GetStationSpec(tile);
 	if (ss == nullptr) return;
 
 	StationAnimationBase::AnimateTile(ss, BaseStation::GetByTile(tile), tile, ss->flags.Test(StationSpecFlag::Cb141RandomBits));
+#endif
 }
 
 void TriggerStationAnimation(BaseStation *st, TileIndex trigger_tile, StationAnimationTrigger trigger, CargoType cargo_type)
 {
+#ifdef WITH_RUST
+	openttd_rust_trigger_station(st, trigger_tile.base(), to_underlying(trigger), cargo_type);
+#else
 	/* List of coverage areas for each animation trigger */
 	static const TriggerArea tas[] = {
 		TA_TILE, // Built
@@ -937,6 +959,7 @@ void TriggerStationAnimation(BaseStation *st, TileIndex trigger_tile, StationAni
 			}
 		}
 	}
+#endif
 }
 
 /**
@@ -1035,4 +1058,3 @@ void StationUpdateCachedTriggers(BaseStation *st)
 		st->cached_cargo_triggers |= sm.spec->cargo_triggers;
 	}
 }
-

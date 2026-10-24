@@ -16,6 +16,8 @@
 #include <optional>
 struct OpenTTDObjectLoopFrame { std::optional<StationFinder> stations; };
 struct OpenTTDObjectGenerationFrame { std::exception_ptr cancellation; };
+inline Object *RustObjectByTile(uint32_t tile) noexcept { return Object::GetByTile(TileIndex{tile}); }
+inline const ObjectSpec *RustObjectSpecByTile(uint32_t tile) noexcept { return ObjectSpec::GetByTile(TileIndex{tile}); }
 inline uint16_t RustObjectSpecFlags(const ObjectSpec *spec) noexcept { return spec->flags.base(); }
 inline uint8_t RustObjectSpecCallbacks(const ObjectSpec *spec) noexcept { return spec->callback_mask.base(); }
 inline bool RustObjectEverAvailable(const ObjectSpec *spec) noexcept { return spec->WasEverAvailable(); }

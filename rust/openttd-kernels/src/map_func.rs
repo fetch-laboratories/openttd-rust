@@ -25,6 +25,11 @@ impl Map {
     pub fn tile_xy(self, x: u32, y: u32) -> u32 {
         y.wrapping_shl(u32::from(self.log_x)).wrapping_add(x)
     }
+    /// `TileVirtXY`, including the unsigned coordinate shifts and addition.
+    #[must_use]
+    pub fn tile_virt_xy(self, x: u32, y: u32) -> u32 {
+        self.tile_xy(x >> 4, y >> 4)
+    }
     /// `Map::ScaleBySize`, preserving its pre-division unsigned shift.
     #[must_use]
     pub fn scale_by_size(self, size_y: u32, n: u32) -> u32 {

@@ -213,7 +213,7 @@ struct OpenTTDRoadLeaves {
 	bool (OPENTTD_VEHICLE_CALL *should_stop)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(should_stop);
 	OpenTTDRoadArrivalRead (OPENTTD_VEHICLE_CALL *arrival_read)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(arrival_read);
 	void (OPENTTD_VEHICLE_CALL *arrival_news)(OpenTTDVehicle *, uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(arrival_news);
-	void (OPENTTD_VEHICLE_CALL *arrival_triggers)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(arrival_triggers);
+
 	OpenTTDRoadOvertakeRead (OPENTTD_VEHICLE_CALL *overtake_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(overtake_read);
 	OpenTTDRoadSoundRead (OPENTTD_VEHICLE_CALL *sound_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(sound_read);
 	void (OPENTTD_VEHICLE_CALL *depot_exit_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(depot_exit_dirty);

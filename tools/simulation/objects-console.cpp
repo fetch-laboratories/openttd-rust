@@ -6,6 +6,7 @@
  */
 
 /** @file objects-console.cpp Identical inputs to unchanged original and Rust-backed bodies. */
+#include "saveload/saveload.cpp" // Unchanged native reader/dispatcher; relink replaces this object.
 #define GetObjectCallback ObjectProbeCallback
 #define SetGeneratingWorldProgress ObjectProbeSetProgress
 #define IncreaseGeneratingWorldProgress ObjectProbeIncreaseProgress
@@ -145,12 +146,15 @@ static void ObjectPolicyProbe(Object *o, ObjectSpec *spec)
 	delete group;
 	fmt::print(stderr, "OBJECT query-animation-order {}\n", same);
 }
+#include "animation-console.hpp"
 static bool ObjectsScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
+	if (args[1].starts_with("anit-")) AnimationLoadProbe(args[1].substr(5));
 	Company *c = *Company::Iterate().begin();
 	Backup<CompanyID> company(_current_company, c->index);
 	if (args[1] == "inspect") {
+		AnimationReloadObservation();
 		std::array<uint16_t, NUM_OBJECTS> counts{};
 		for (const Object *o : Object::Iterate()) counts[o->type]++;
 		bool equal = true;
@@ -204,6 +208,7 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 		Result("colour", build(OBJECT_TRANSMITTER, tile));
 		fmt::print(stderr, "OBJECT callback-colour {}\n", Object::GetByTile(tile)->colour == 0xA5);
 		ObjectPolicyProbe(Object::GetByTile(tile), spec);
+		AnimationBindingsProbe();
 		callbacks = false; backup.Restore();
 		Backup<bool> generating(_generating_world, true);
 		for (cancellation = 0; cancellation < 2; cancellation++) {
@@ -212,6 +217,7 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 			fmt::print(stderr, "OBJECT cancellation {} {}\n", cancellation, caught);
 		}
 		cancellation = -1;
+		AnimationLifecycleProbe(tile);
 	} else {
 		Result("hq-test", Command<CMD_BUILD_OBJECT>::Do({}, tile, OBJECT_HQ, 0));
 		Result("hq", build(OBJECT_HQ, tile));
@@ -240,7 +246,13 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 		fmt::print(stderr, "\n");
 	}
 	uint index = 0; for (TileIndex t : TileArea(tile - TileDiffXY(3, 3), 14, 14)) SetTileHeight(t, heights[index++]);
-	if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
+	if (args.size() == 3) {
+		for (auto t : AnimationQueue()) SetAnimatedTileState(t, AnimatedTileState::None);
+		InitializeAnimatedTiles();
+		for (auto t : AnimationFixtureTiles()) AddAnimatedTile(t, false);
+		AnimationReloadObservation();
+		SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
+	}
 	std::fflush(stderr); return true;
 }
 #include "landscape-console.hpp"

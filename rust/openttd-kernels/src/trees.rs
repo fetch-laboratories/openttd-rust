@@ -1382,8 +1382,6 @@ mod tests {
             tree_ground: water,
             play_sound: sound,
             clear_square_services: crate::services::ClearSquareServices {
-                may_animate: clear_flag,
-                delete_animated: clear_animation,
                 docking: clear_flag,
                 generating_world: clear_generation,
             },
@@ -1503,9 +1501,6 @@ mod tests {
     }
     extern "C" fn clear_generation() -> bool {
         false
-    }
-    extern "C" fn clear_animation(_: u32, _: bool) {
-        panic!("unused animation");
     }
     extern "C" fn unused_clear1<A, R>(_: A) -> R {
         panic!("unused clear leaf");

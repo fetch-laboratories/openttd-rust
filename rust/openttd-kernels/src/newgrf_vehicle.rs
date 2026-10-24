@@ -1219,7 +1219,7 @@ unsafe fn variable(
             },
             0x64 => {
                 if kind() != 0 {
-                    return (s.engine_badge)(grf, (s.vehicle.engine)(h).0.as_ptr(), parameter);
+                    return (s.engine_badge)(ro, (s.vehicle.engine)(h).0.as_ptr(), parameter);
                 }
                 if u64::from(parameter) >= (s.badge_count)(grf) as u64 {
                     return u32::MAX;
@@ -1238,7 +1238,7 @@ unsafe fn variable(
             0x65 => match kind() {
                 0 => {
                     return (s.rail_badge)(
-                        grf,
+                        ro,
                         ((&*(s.ground)()).rail_type)((s.vehicle.tile)(h)),
                         parameter,
                     );
@@ -1246,14 +1246,14 @@ unsafe fn variable(
                 1 => {
                     let rtt = (s.shared.road_tram_type)((s.roadtype)(v).0);
                     return (s.road_badge)(
-                        grf,
+                        ro,
                         (s.tile_roadtype)((s.vehicle.tile)(h), rtt),
                         parameter,
                     );
                 }
                 _ => return u32::MAX,
             },
-            0x7a => return (s.engine_badge)(grf, (s.vehicle.engine)(h).0.as_ptr(), parameter),
+            0x7a => return (s.engine_badge)(ro, (s.vehicle.engine)(h).0.as_ptr(), parameter),
             0xfe | 0xff => {
                 let mut flags = 0u32;
                 if kind() == 0 {
@@ -1515,7 +1515,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_scope_variable(
             0x48 => u32::from((s.engine_flags)((s.engine_by_id)((*scope).self_type))),
             0x49 => (s.shared.calendar_year)() as u32,
             0x4b => (s.shared.calendar_date)() as u32,
-            0x7a => (s.engine_badge)(grf, (s.engine_by_id)((*scope).self_type), parameter),
+            0x7a => (s.engine_badge)(ro, (s.engine_by_id)((*scope).self_type), parameter),
             0x92 => service_date((s.shared.calendar_date)()),
             0x93 => service_date((s.shared.calendar_date)()) >> 8,
             0xc4 => old_year((s.shared.calendar_year)()),

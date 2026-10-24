@@ -503,7 +503,11 @@ static inline uint RemapOrderIndex(uint x)
 	return _savegame_type == SGT_TTO ? (x - 0x1AC4) / 2 : (x - 0x1C18) / 2;
 }
 
+#ifdef WITH_RUST
+#include "../rust/animation_ffi.h"
+#else
 extern std::vector<TileIndex> _animated_tiles;
+#endif
 extern TimeoutTimer<TimerGameTick> _new_competitor_timeout;
 extern std::unique_ptr<std::string[]> _old_name_array;
 
@@ -705,7 +709,11 @@ static bool LoadOldAnimTileList(LoadgameState &ls, int)
 	/* The first zero in the loaded array indicates the end of the list. */
 	for (int i = 0; i < 256; i++) {
 		if (anim_list[i] == 0) break;
+#ifdef WITH_RUST
+		openttd_rust_animation_append(anim_list[i].base());
+#else
 		_animated_tiles.push_back(anim_list[i]);
+#endif
 	}
 
 	return true;

@@ -63,7 +63,6 @@ pub struct LifecycleServices {
     pub random_bits: unsafe extern "C" fn(u32) -> u8,
     pub set_random_bits: unsafe extern "C" fn(u32, u8),
     pub animation_spec: unsafe extern "C" fn(u32) -> AnimationSpec,
-    pub change_frame: unsafe extern "C" fn(*const c_void, u32, u32, u32),
 }
 
 pub(super) unsafe fn location(owner: *mut Industry) -> Location {
@@ -266,7 +265,9 @@ unsafe fn trigger_animation(
     if spec.triggers & (1_u8 << trigger) == 0 {
         return false;
     }
-    unsafe { (w.change_frame)(spec.spec, tile, random, u32::from(trigger) | extra) };
+    unsafe {
+        crate::animated_tile::industry_change(spec.spec, tile, random, u32::from(trigger) | extra);
+    };
     true
 }
 /// # Safety

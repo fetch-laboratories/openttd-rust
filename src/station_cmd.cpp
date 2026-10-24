@@ -8,6 +8,9 @@
 /** @file station_cmd.cpp Handling of station tiles. */
 
 #include "stdafx.h"
+#ifdef WITH_RUST
+#include "rust/animation_ffi.h"
+#endif
 #include "core/flatset_type.hpp"
 #include "aircraft.h"
 #include "bridge_map.h"
@@ -628,7 +631,7 @@ struct RustStationTruncation {
 static const OpenTTDStationServices _rust_station_services = {
 	.graphs = &GetRustLiveGraphServices(),
 	.station = [](uint16_t id) noexcept -> OpenTTDLoadingStation {
-		Station *st = Station::Get(StationID(id));
+		Station *st = RustStationGet<Station *>(id);
 		return {.native = st, .base = st, .state = st->rust_service.get()};
 	},
 	.station_owner = RustStationOwnerByte<BaseStation>,
@@ -708,12 +711,8 @@ static const OpenTTDStationServices _rust_station_services = {
 	.delete_station = [](OpenTTDBaseStation *handle) noexcept -> void {
 		delete static_cast<BaseStation *>(handle);
 	},
-	.acceptance_animation = [](OpenTTDBaseStation *handle) noexcept -> void {
-		BaseStation *bst = static_cast<BaseStation *>(handle);
-		RustStationAnimation(bst, bst->xy, StationAnimationTrigger::AcceptanceTick);
-		RustRoadStopAnimation(bst, bst->xy, StationAnimationTrigger::AcceptanceTick);
-		if (Station::IsExpected(bst)) TriggerAirportAnimation(Station::From(bst), AirportAnimationTrigger::AcceptanceTick);
-	},
+
+
 	.watched_animation = [](uint32_t tile, uint64_t cargoes) noexcept -> void {
 		TriggerHouseAnimation_WatchedCargoAccepted(TileIndex(tile), cargoes);
 	},
@@ -724,14 +723,8 @@ static const OpenTTDStationServices _rust_station_services = {
 		ge.GetOrCreateData().cargo.Append(new CargoPacket(st->index, amount, Source(source.id, source.type)), next);
 	},
 	.station_list_invalidation = RustStationListInvalidation,
-	.new_cargo_animation = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> void {
-		Station *st = Station::From(static_cast<BaseStation *>(handle));
-		RustStationRandomisation(st, st->xy, StationRandomTrigger::NewCargo, cargo);
-		RustStationAnimation(st, st->xy, StationAnimationTrigger::NewCargo, cargo);
-		TriggerAirportAnimation(st, AirportAnimationTrigger::NewCargo, cargo);
-		RustRoadStopRandomisation(st, st->xy, StationRandomTrigger::NewCargo, cargo);
-		RustRoadStopAnimation(st, st->xy, StationAnimationTrigger::NewCargo, cargo);
-	},
+
+
 	.waiting_redraw = [](OpenTTDBaseStation *handle) noexcept -> void {
 		SetWindowDirty(WC_STATION_VIEW, static_cast<BaseStation *>(handle)->index);
 		RustStationMarkTilesDirty(static_cast<BaseStation *>(handle), true);
@@ -4262,6 +4255,7 @@ static void TileLoop_Station(TileIndex tile)
 }
 
 
+#ifndef WITH_RUST
 static void AnimateTile_Station(TileIndex tile)
 {
 	if (HasStationRail(tile)) {
@@ -4279,6 +4273,7 @@ static void AnimateTile_Station(TileIndex tile)
 		return;
 	}
 }
+#endif
 
 
 static bool ClickTile_Station(TileIndex tile)
@@ -5972,7 +5967,9 @@ extern const TileTypeProcs _tile_type_station_procs = {
 	GetTileTrackStatus_Station, // get_tile_track_status_proc
 #endif
 	ClickTile_Station,          // click_tile_proc
+#ifndef WITH_RUST
 	AnimateTile_Station,        // animate_tile_proc
+#endif
 	TileLoop_Station,           // tile_loop_proc
 #ifdef WITH_RUST
 	nullptr,                 // Rust ownership dispatcher calls the owner directly.

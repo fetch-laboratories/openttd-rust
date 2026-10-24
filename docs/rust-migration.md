@@ -1374,6 +1374,32 @@ External station/road-stop GRFs, exhausted pools/spec lists and legacy saves rem
 coverage gaps under #156. Independent review and exact-head Full are root's gates.
 
 
+### Animated-tile scheduling and shared animation control (#385, draft)
+
+Rust owns the process-wide queue, scheduling/control, six typed bindings,
+trigger traversals and dispatch; existing owners call it directly. Native map
+frames/bits, road records, pools/specs/PSA and stack resolvers remain. Borrows end
+before callbacks. Generated visitors include all six version8 fields.
+ANIT retains native Sl* frames, nested active pointers, append/resize and partial
+publication. Shared station lookup/membership, IsAirport and orthogonal iteration
+preserve original callees; unused native animation table/facades are portable-only.
+`python3 tools/migration.py simulate objects-gaps objects-reload effects-controllers-1`
+requires bindings240/144/90, traversal72, airport5, visits46/21/9, zero-frame road
+insertion, six actual ANIT load/error processes and positive immediate reload of
+queue/frame/bits/road records/RNG. Airport SB retains unmasked OR.
+The56 keyed sound/sentinel cases delegate real sound/setter/dirty calls (20 each),
+comparing frames, records, ordered queue and sequence;36 version cases require
+six actual version8-0100 diagnostics with valid native GRFConfig lookup.
+Five rejection cases compare RNG/callback/queue outcomes and retain mask mutation.
+Area/spec/member/mask reads and initial-RNG-before-area are source-compared, not
+independently traced; this precise dynamic limit remains on #156 under root's
+revised evidence scope. Thirteen successful owner pairs require two live survivors
+and exact swap/deferred order; the catcher pair requires exact queue append.
+Purpose cost348 implementation/81 native evidence/550 tooling including CMake
+versus unchanged415 basis;57 retired scaffolding lines add no behavior. Root accepted
+the reviewed cost; scoped conflict review/Full remain. Historical/pre6/TTO saves, external GRFs,
+GUI threads and raw>=64 outside pinned Linux compilation remain #156 limits.
+
 <!-- Subsystem: Vehicles, pathfinding and orders. Add a new entry at the end of its group, not of the file. -->
 
 ### Effect vehicles
@@ -1383,8 +1409,8 @@ C++ EffectVehicle shell owns one zero-created opaque state, also on indexed load
 it on ordinary deletion and pool cleanup.
 
 Copied call-scoped observations and immediate scalar writes keep original mutation order. Rust
-calls common Random/map and effect-specific sound, viewport and animated-tile noexcept wrappers
-directly; none can reenter Rust. The immutable shared service table is borrowed only
+calls common Random/map and effect-specific sound/viewport noexcept leaves
+directly, plus the Rust animated-tile owner; the native leaves cannot reenter Rust. The immutable shared service table is borrowed only
 until the controller returns (#299); no full table is copied.
 
 `python3 tools/migration.py simulate effects` compares save chunks across subtypes, expiry,
@@ -2187,3 +2213,25 @@ from nonempty random/waiting fields decoded from a saved fleet and loaded again.
 PR #397 records focused commands and metrics. Arbitrary external GRF programs,
 historical saves, GUI scheduling and remaining branch combinations are #156 gaps;
 the fixtures do not claim persistent synthetic sprite groups or whole-game equivalence.
+
+### NewGRF transactional storage (#393)
+
+`newgrf_storage.rs` owns process-wide modes, the pointer-ordered changed registry,
+temporary registers/generation keys and canonical 16/256-word payloads/backups.
+Native pool shells retain IDs and feature associations; save/debug aliases address
+the Rust arrays directly. Every mode switch restores temporary changes in shell
+pointer order. PSAC saving restores payloads without removing registry membership;
+destruction removes pending entries, and the registry outlives native destructors.
+Rust also owns industry/airport/town StorePSA and town GRFID selection/traversal.
+Native typed leaves retain pool allocation/publication and ordered town associations;
+town publishes after StoreValue, while industry/airport publish before it.
+Original bodies remain portable. Native SlObject, reference fixup, legacy copies
+and SlError frames keep their original order, with no live Rust frame or borrow
+across save errors. Compression workers receive already serialized bytes.
+Default `town-storage-reload` uses real resolvers and PSAC: all creation policies,
+GRFID reads/writes, command-test/save rollback, deletion/reuse, nonempty modern
+save/reload and native header/partial-load plus 16-word compatibility probes.
+Native storage tests cover alias identity, legacy copying, all six modes,
+save-registry retention, pending destruction and temporary-key rollover.
+External NewGRF programs, complete pre-161 conversion saves and GUI thread
+scheduling remain #156 limits. PR validation and metrics carry the exact evidence.

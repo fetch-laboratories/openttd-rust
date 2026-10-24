@@ -136,7 +136,7 @@ def adapter(build, folder, env):
     inspection calls the Rust diagnostic entry without resetting its owner.
     """
     folder.mkdir(parents=True, exist_ok=True)
-    from .rails import PBS_WRAPS, pbs_reference
+    from .rails import pbs_reference, pbs_wraps
 
     pbs_reference(folder)
     commands = json.loads((build / "compile_commands.json").read_text())
@@ -164,7 +164,7 @@ def adapter(build, folder, env):
         env,
         source,
         "signals",
-        wraps=PBS_WRAPS,
+        wraps=pbs_wraps(build),
         replace_objects=("/src/signal.cpp.o",),
     )
 

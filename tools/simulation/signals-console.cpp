@@ -471,6 +471,63 @@ static bool SignalsScenario(std::span<std::string_view> args)
 }
 #include "roads-console.cpp"
 
+/* Real command-built routes for movement admission (#156). Vehicles leave their
+ * depots and run ordinary orders in the game loop; no movement call is mocked. */
+#include "order_cmd.h"
+#include "cargotype.h"
+static bool MovementStructures(std::span<std::string_view> args)
+{
+	if (args.size() != 2) return false;
+	const bool rail = args[1] == "train-bridge";
+	if (!rail && args[1] != "road-tunnel") return false;
+	Backup<CompanyID> company(_current_company, CompanyID::Begin());
+	SignalRichCompany(_current_company);
+	TileIndex base = SignalFlatArea(24);
+	auto t = [base](uint x) { return base + TileDiffXY(x, 4); };
+	const DoCommandFlags exec = DoCommandFlag::Execute;
+	if (rail) {
+		SignalCost("movement-bridge", Command<CMD_BUILD_BRIDGE>::Do(exec, t(13), t(8), TRANSPORT_RAIL, BridgeType{0}, RAILTYPE_RAIL));
+		for (uint x = 5; x <= 20; ++x) {
+			if (x >= 8 && x <= 13) continue;
+			SignalCost("movement-track", Command<CMD_BUILD_SINGLE_RAIL>::Do(exec, t(x), RAILTYPE_RAIL, TRACK_X, false));
+		}
+		for (uint x : {2u, 17u}) SignalCost("movement-station", Command<CMD_BUILD_RAIL_STATION>::Do(exec, t(x), RAILTYPE_RAIL, AXIS_X, 1, 3, STAT_CLASS_DFLT, 0, StationID::Invalid(), false));
+		SignalCost("movement-depot", Command<CMD_BUILD_TRAIN_DEPOT>::Do(exec, t(21), RAILTYPE_RAIL, DIAGDIR_NE));
+	} else {
+		SignalCost("movement-hill", std::get<0>(Command<CMD_TERRAFORM_LAND>::Do(exec, t(10), SLOPE_ELEVATED, true)));
+		SignalCost("movement-tunnel", Command<CMD_BUILD_TUNNEL>::Do(exec, t(9), TRANSPORT_ROAD, ROADTYPE_ROAD));
+		for (uint x = 1; x <= 20; ++x) {
+			if (x >= 9 && x <= 11) continue;
+			SignalCost("movement-road", Command<CMD_BUILD_ROAD>::Do(exec, t(x), ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid()));
+		}
+		for (uint x : {2u, 19u}) SignalCost("movement-stop", Command<CMD_BUILD_ROAD_STOP>::Do(exec, t(x), 1, 1, RoadStopType::Bus, true, DIAGDIR_NE, ROADTYPE_ROAD, ROADSTOP_CLASS_DFLT, 0, StationID::Invalid(), false));
+		SignalCost("movement-depot", Command<CMD_BUILD_ROAD_DEPOT>::Do(exec, t(21), ROADTYPE_ROAD, DIAGDIR_NE));
+	}
+	VehicleType type = rail ? VEH_TRAIN : VEH_ROAD;
+	EngineID engine = EngineID::Invalid();
+	for (const Engine *e : Engine::Iterate()) {
+		if (!IsEngineBuildable(e->index, type, _current_company)) continue;
+		if (rail ? RailVehInfo(e->index)->railveh_type == RAILVEH_WAGON : e->GetDefaultCargoType() != GetCargoTypeByLabel(CT_PASSENGERS)) continue;
+		if (std::get<0>(Command<CMD_BUILD_VEHICLE>::Do({}, t(21), e->index, false, INVALID_CARGO, INVALID_CLIENT_ID)).Failed()) continue;
+		engine = e->index; break;
+	}
+	if (engine == EngineID::Invalid()) SignalFixtureAbort(__LINE__);
+	auto built = Command<CMD_BUILD_VEHICLE>::Do(exec, t(21), engine, false, INVALID_CARGO, INVALID_CLIENT_ID);
+	SignalCost("movement-vehicle", std::get<0>(built));
+	VehicleID id = std::get<1>(built);
+	for (uint x : {2u, rail ? 17u : 19u}) {
+		Order order;
+		order.MakeGoToStation(GetStationIndex(t(x)));
+		order.SetStopLocation(OrderStopLocation::FarEnd);
+		SignalCost("movement-order", Command<CMD_INSERT_ORDER>::Do(exec, id, Vehicle::Get(id)->GetNumOrders(), order));
+	}
+	SignalCost("movement-start", Command<CMD_START_STOP_VEHICLE>::Do(exec, id, false));
+	UpdateSignalsInBuffer();
+	fmt::print(stderr, "MOVEMENT route {} {} {} {} {} {}\n", args[1], id, t(21).base(), t(2).base(), t(rail ? 8 : 9).base(), t(rail ? 13 : 11).base());
+	company.Restore();
+	return true;
+}
+
 extern "C" void __real__Z22IConsoleStdLibRegisterv();
 extern "C" void __wrap__Z22IConsoleStdLibRegisterv()
 {
@@ -478,4 +535,5 @@ extern "C" void __wrap__Z22IConsoleStdLibRegisterv()
 	IConsole::CmdRegister("pbs_probe", PbsProbe);
 	IConsole::CmdRegister("signals_scenario", SignalsScenario);
 	IConsole::CmdRegister("road_commands", RoadCommandsScenario);
+	IConsole::CmdRegister("movement_structures", MovementStructures);
 }

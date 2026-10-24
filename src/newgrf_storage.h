@@ -13,6 +13,10 @@
 #include "core/pool_type.hpp"
 #include "newgrf.h"
 #include "tile_type.h"
+#ifdef WITH_RUST
+#include "rust/newgrf_storage_ffi.h"
+#include "rust/services_assert.h"
+#endif
 
 /**
  * Mode switches to the behaviour of persistent storage array.
@@ -39,6 +43,7 @@ struct BasePersistentStorageArray {
 
 	static void SwitchMode(PersistentStorageMode mode, bool ignore_prev_mode = false);
 
+#ifndef WITH_RUST
 protected:
 	/**
 	 * Discard temporary changes.
@@ -55,6 +60,7 @@ private:
 	static bool gameloop;
 	static bool command;
 	static bool testmode;
+#endif
 };
 
 /**
@@ -67,6 +73,20 @@ template <typename TYPE, uint SIZE>
 struct PersistentStorageArray : BasePersistentStorageArray {
 	using StorageType = std::array<TYPE, SIZE>;
 
+#ifdef WITH_RUST
+	static_assert(std::is_same_v<TYPE, int32_t> && (SIZE == 16 || SIZE == 256));
+	using RustStorage = std::conditional_t<SIZE == 16, OpenTTDStorage16, OpenTTDStorage256>;
+	RustStorage *rust_storage = RustStorageNew(std::integral_constant<uint, SIZE>{}, this);
+	StorageType &storage = *reinterpret_cast<StorageType *>(RustStorageData(this->rust_storage)); ///< Canonical save/debug alias.
+
+	PersistentStorageArray() = default;
+	PersistentStorageArray(const PersistentStorageArray &) = delete;
+	PersistentStorageArray &operator=(const PersistentStorageArray &) = delete;
+	~PersistentStorageArray() override { RustStorageDelete(this->rust_storage); }
+	void StoreValue(uint pos, int32_t value) { RustStorageStore(this->rust_storage, pos, value, RustAssertCondition); }
+	TYPE GetValue(uint pos) const { return RustStorageGet(this->rust_storage, pos); }
+	void ClearChanges() { RustStorageClear(this->rust_storage); }
+#else
 	StorageType storage{}; ///< Memory for the storage array
 	std::unique_ptr<StorageType> prev_storage{}; ///< Temporary memory to store previous state so it can be reverted, e.g. for command tests.
 
@@ -120,6 +140,7 @@ struct PersistentStorageArray : BasePersistentStorageArray {
 			this->prev_storage.reset();
 		}
 	}
+#endif
 };
 
 
@@ -134,6 +155,12 @@ struct TemporaryStorageArray {
 	using StorageType = std::array<TYPE, SIZE>;
 	using StorageInitType = std::array<uint16_t, SIZE>;
 
+#ifdef WITH_RUST
+	static_assert(std::is_same_v<TYPE, int32_t> && SIZE == 0x110);
+	void StoreValue(uint pos, int32_t value) { openttd_rust_storage_temp_store(pos, value); }
+	TYPE GetValue(uint pos) const { return openttd_rust_storage_temp_get(pos); }
+	void ClearChanges() { openttd_rust_storage_temp_clear(); }
+#else
 	StorageType storage{}; ///< Memory for the storage array
 	StorageInitType init{}; ///< Storage has been assigned, if this equals 'init_key'.
 	uint16_t init_key = 1; ///< Magic key to 'init'.
@@ -180,9 +207,12 @@ struct TemporaryStorageArray {
 			this->init_key = 1;
 		}
 	}
+#endif
 };
 
+#ifndef WITH_RUST
 void AddChangedPersistentStorage(BasePersistentStorageArray *storage);
+#endif
 
 typedef PersistentStorageArray<int32_t, 16> OldPersistentStorage;
 
@@ -206,6 +236,6 @@ struct PersistentStorage : PersistentStorageArray<int32_t, 256>, PersistentStora
 	}
 };
 
-static_assert(std::tuple_size_v<decltype(OldPersistentStorage::storage)> <= std::tuple_size_v<decltype(PersistentStorage::storage)>);
+static_assert(std::tuple_size_v<std::remove_reference_t<decltype(OldPersistentStorage::storage)>> <= std::tuple_size_v<std::remove_reference_t<decltype(PersistentStorage::storage)>>);
 
 #endif /* NEWGRF_STORAGE_H */
