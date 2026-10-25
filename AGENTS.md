@@ -406,7 +406,9 @@ its draft PR, keep the branch on origin, record its head on the issue, and
 remove the worktree and local branch without archiving or copying anything
 out. `.local/`
 holds only caches and rebuildable output: delete ad hoc output (CI artifacts,
-probe runs, logs, superseded runtimes) once the PR or issue records it.
+probe runs, logs, superseded runtimes) once the PR or issue records it. Establish
+file provenance before calling it user-owned; untracked files may be outputs
+left by earlier agents and follow the same cleanup rule.
 
 Docs-only changes (only `docs/` or `*.md` files, such as roadmap updates and
 skill edits under `docs/skills/`) are committed directly to `rust-migration` as

@@ -27,8 +27,8 @@ and process. Root verified source, the retained stack and mocked collector behav
 
 - #462 is an inherited reachable source defect, not a #446 fixture failure.
   Restore the nullable original callback contract through one shared repair.
-- #450 accepts compiler-overlapped timings and rejects unrelated user tar files.
-  Reopened for bounded repairs using existing observations and identity checks.
+- #450 accepts compiler-overlapped timings after stopping the compiler.
+  Reopened for a bounded repair using existing observations; keep clean-checkout checks.
 - #454 deleted two meaningful serialized-thread tests. #156 selects their
   restoration and production tree ambient/reread coverage for #275. This corrects
   nineteenth-steering test cleanup: an explicit state contract is still behavior.
@@ -178,7 +178,7 @@ Closed #449/#451/#452 housekeeping is not a standing task.
    #461 and #156's two thread checks/production tree path. An unfinished item
    leaves the batch. Run the due merged-tip profile in the background; after the
    collector repair and source fixes, run the due tracked quiet pass. No new
-   per-PR timing or private collector. Preserve the user's tar files.
+   per-PR timing or private collector. Stale agent-downloaded CI archives were removed.
 4. **Next owners, still unselected:** vehicle effect emission/cache policy, then
    cargo registry/callback lifecycle. Plan when capacity permits; catchment,
    #64/#68/#69, vendored, GUI and platform work remain outside this order.
