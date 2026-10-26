@@ -16,6 +16,7 @@
 #include "town_cmd.h"
 #include "townname_func.h"
 #include "house.h"
+#include "tile_cmd.h"
 #include "genworld.h"
 #include "strings_func.h"
 #include "error.h"
@@ -599,6 +600,11 @@ static size_t OccupiedDefinitionTiles()
 		HouseID id = GetHouseType(tile);
 		if (id != _house_mngr.GetID(0, HOUSE_DEFINITION_GRF) && id != _house_mngr.GetID(1, HOUSE_DEFINITION_GRF)) continue;
 		++count;
+		CargoArray accepted{}, produced{}; CargoTypes always = 0;
+		AddAcceptedCargo(tile, accepted, &always); AddProducedCargo(tile, produced);
+		for (CargoType cargo = 0; cargo < NUM_CARGO; ++cargo) {
+			if (accepted[cargo] != 0 || produced[cargo] != 0) fmt::print(stderr, "TOWN definition-tile-cargo {} {} {} {} {}\n", tile.base(), cargo, accepted[cargo], produced[cargo], always);
+		}
 		fmt::print(stderr, "TOWN definition-tile {} {} {} {}\n", tile.base(), id, GetTownIndex(tile).base(), GetHouseBuildingStage(tile));
 	}
 	return count;
@@ -633,7 +639,7 @@ static bool HouseDefinitionsScenario(std::span<std::string_view> args)
 	Town *town = Town::Get(town_id);
 	uint population = town->cache.population;
 	HouseDefinitionNeed(CmdExpandTown(DoCommandFlag::Execute, town_id, 128, {TownExpandMode::Buildings, TownExpandMode::Roads}).Succeeded(), "expand-command");
-	HouseDefinitionNeed(town->cache.population >= population && town->cache.population > 0, "growth");
+	HouseDefinitionNeed(town->cache.population > population, "growth");
 	fmt::print(stderr, "TOWN definition-population {} {}\n", population, town->cache.population);
 	HouseID before = _house_mngr.GetID(0, HOUSE_DEFINITION_GRF);
 	ResetNewGRFData();
