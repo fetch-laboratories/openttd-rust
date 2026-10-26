@@ -264,7 +264,7 @@ pub struct Services {
     resolve: extern "C" fn(u16) -> EngineRef,
     dynamic: extern "C" fn() -> bool,
     file_id: extern "C" fn(File) -> u32,
-    find_file: extern "C" fn(u32) -> File,
+    find_file: extern "C" fn(u32) -> *mut c_void,
     engine_file: extern "C" fn(E) -> File,
     has_file: extern "C" fn(E) -> bool,
     set_file: extern "C" fn(E, File),
@@ -848,7 +848,7 @@ pub unsafe extern "C" fn openttd_rust_engine_current_override(s: &Services, file
     let target = unsafe { &*OVERRIDES.get() }
         .get(&(s.file_id)(file))
         .copied();
-    target.map_or(ptr::null(), |target| (s.find_file)(target))
+    target.map_or(ptr::null(), |target| (s.find_file)(target).cast_const())
 }
 pub(crate) unsafe fn openttd_rust_engine_finalise(s: &Services) {
     let mut from = 0;

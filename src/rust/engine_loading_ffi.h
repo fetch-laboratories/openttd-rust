@@ -22,7 +22,7 @@ struct OpenTTDEngineLoadingServices {
 	OpenTTDEngineRef (*resolve)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve);
 	bool (*dynamic)() noexcept OPENTTD_SERVICE_DEFAULT(dynamic);
 	uint32_t (*file_id)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(file_id);
-	const GRFFile *(*find_file)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(find_file);
+	GRFFile *(*find_file)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(find_file);
 	const GRFFile *(*engine_file)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_file);
 	bool (*has_file)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(has_file);
 	void (*set_file)(const OpenTTDEngine *, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(set_file);

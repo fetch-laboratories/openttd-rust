@@ -16,7 +16,7 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 		.resolve = Engine_resolve_strict,
 		.dynamic = RustDynamicEngines,
 		.file_id = RustGRFFileID,
-		.find_file = [](uint32_t id) noexcept -> const GRFFile * { return GetFileByGRFID(id); },
+		.find_file = RustGRFFileByID,
 		.engine_file = RustEngineGRF,
 		.has_file = RustEngineHasGRF,
 		.set_file = [](const OpenTTDEngine *shell, const GRFFile *file) noexcept { const_cast<Engine *>(EngineOf(shell))->grf_prop.SetGRFFile(file); },
@@ -66,8 +66,8 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 		.set_roadtype = RustSetEngineRoadType,
 		.road_list_size = [](const GRFFile *file, bool tram) noexcept { return (tram ? file->tramtype_list : file->roadtype_list).size(); },
 		.road_label = [](const GRFFile *file, bool tram, size_t index) noexcept { return (tram ? file->tramtype_list : file->roadtype_list)[index]; },
-		.road_by_label = [](RoadTypeLabel label) noexcept { return GetRoadTypeByLabel(label); },
-		.rail_by_label = [](RailTypeLabel label) noexcept { return GetRailTypeByLabel(label); },
+		.road_by_label = RustGRFRoadTypeByLabel,
+		.rail_by_label = RustGRFRailTypeByLabel,
 		.set_railtypes = [](const OpenTTDEngine *shell, uint64_t types) noexcept { auto &rvi = const_cast<Engine *>(EngineOf(shell))->VehInfo<RailVehicleInfo>(); rvi.railtypes = RailTypes{types}; rvi.intended_railtypes = RailTypes{types}; },
 		.override_log = [](uint32_t source, uint32_t target) noexcept {
 			if (target == 0) GrfMsg(5, "SetNewGRFOverride: Removed override of 0x{:X}", std::byteswap(source));
