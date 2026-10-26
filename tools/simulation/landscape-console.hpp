@@ -200,7 +200,7 @@ static void GenericPrograms()
 		AutoRestoreBackup<LandscapeType> temperate(_settings_game.game_creation.landscape, LandscapeType::Temperate);
 		AutoRestoreBackup<decltype(_settings_game.construction.extra_tree_placement)> placement(_settings_game.construction.extra_tree_placement, ETP_NO_SPREAD);
 		TimerGameTick::counter = 15U << 8;
-		MakeTree(tile, TREE_TEMPERATE, 2, TreeGrowthStage::Grown, TREE_GROUND_ROUGH, 3);
+		MakeTree(tile, TREE_TEMPERATE, 1, TreeGrowthStage::Grown, TREE_GROUND_ROUGH, 3);
 		ResetGenericCallbacks(); AddGenericCallback(GSF_SOUNDFX, &first, &yes); yes.tree_mutation = tile;
 		_misc_grf_features = {GrfMiscBit::AmbientSoundCallback}; _settings_client.sound.ambient = true;
 		for (uint seed = 1;; ++seed) { _random.SetSeed(seed); auto next = _random; if (Chance16I(1, 200, next.Next())) break; }

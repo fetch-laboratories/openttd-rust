@@ -292,10 +292,10 @@ static DEPOT_SCRATCH: GameState<Option<DepotScratch>> = GameState::new(None);
 unsafe fn depot_scratch() -> *mut DepotScratch {
     // SAFETY: Serialized initialization; the short borrow ends before returning.
     unsafe {
-        (*DEPOT_SCRATCH.get()).get_or_insert_with(|| DepotScratch {
+        std::ptr::from_mut((*DEPOT_SCRATCH.get()).get_or_insert_with(|| DepotScratch {
             visited: HashSet::new(),
             queue: VecDeque::new(),
-        }) as *mut DepotScratch
+        }))
     }
 }
 struct Game<'a> {

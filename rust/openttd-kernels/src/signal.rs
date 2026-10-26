@@ -965,6 +965,6 @@ mod tests {
         })
         .join()
         .unwrap();
-        access(|s| s.last_owner = INVALID);
+        access(|s| s.last_owner = INVALID_OWNER);
     }
 }

@@ -249,10 +249,12 @@ pub extern "C" fn openttd_rust_generic_ai(
 }
 /// The original outer feature gate; tree callers observe it again AFTER return.
 #[inline(always)]
+#[allow(clippy::inline_always)]
 pub fn ambient_enabled() -> bool {
     (services().enabled)()
 }
 #[inline(always)]
+#[allow(clippy::inline_always)]
 pub fn ambient(tile: u32) {
     if ambient_enabled() {
         ambient_callback(tile);
@@ -312,7 +314,6 @@ pub(crate) fn with_disabled_fixture<R>(
     f: impl FnOnce() -> R,
 ) -> R {
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    let _lock = LOCK.lock().unwrap();
     extern "C" fn unused0<R>() -> R {
         panic!("unexpected generic fixture service");
     }
@@ -325,6 +326,16 @@ pub(crate) fn with_disabled_fixture<R>(
     extern "C" fn unused3<A, B, C, R>(_: A, _: B, _: C) -> R {
         panic!("unexpected generic fixture service");
     }
+    struct Restore(*const Services);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            // SAFETY: The fixture mutex remains held until after restoration.
+            unsafe {
+                (*STATE.get()).native = self.0;
+            }
+        }
+    }
+    let _lock = LOCK.lock().unwrap();
     let native = Services {
         shared: ptr::null(),
         version: unused1,
@@ -343,9 +354,6 @@ pub(crate) fn with_disabled_fixture<R>(
     };
     // SAFETY: The mutex serializes fixture entries; no registration or callback uses graphs.
     let before = unsafe { ptr::replace(&raw mut (*STATE.get()).native, &raw const native) };
-    let result = f();
-    unsafe {
-        (*STATE.get()).native = before;
-    }
-    result
+    let _restore = Restore(before);
+    f()
 }
