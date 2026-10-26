@@ -110,10 +110,9 @@ static bool IsBayRoadStopTile(TileIndex tile) { return At(tile).stop == 2; }
 static DiagDirection GetBayRoadStopDir(TileIndex tile) { return static_cast<DiagDirection>(At(tile).facing); }
 static bool IsRoadDepot(TileIndex tile) { return At(tile).stop == 3; }
 static DiagDirection GetRoadDepotDirection(TileIndex tile) { return static_cast<DiagDirection>(At(tile).facing); }
-static void RoadMask() { world->trace.push_back({21, 0, 0, 0, 0, 0, 0}); }
 static void RoadInfo(uint32_t type) { world->trace.push_back({24, type, 0, 0, 0, 0, 0}); }
 /* One active town-buildable road type, served by a controlled shared service. */
-static RoadType GetTownRoadType() { RoadMask(); RoadInfo(0); return 0; }
+static RoadType GetTownRoadType() { RoadInfo(0); return 0; }
 static Cost RoadCommand(TileIndex tile, RoadBits bits, RoadType rt, uint32_t town)
 {
 	world->trace.push_back({1, town, tile, bits, rt, 0, 0});
@@ -158,7 +157,6 @@ static Town *ClosestTownFromTile(TileIndex tile, uint32_t threshold)
 
 #include "town-tunnel-original.hpp"
 
-static uint64_t Leaf(uint32_t op, uint32_t, uint32_t, uint32_t, uint32_t) noexcept { assert(op == 21); RoadMask(); return 1; }
 /* Rust retains this fixture shell only as an opaque identity; the native FFI
  * tag is global Town, while the reference body uses TownReference::Town. */
 static OpenTTDTownState *ResolveOwner(uint32_t id) noexcept { assert(id == world->town.index); return world->owner; }
@@ -173,11 +171,11 @@ static uint8_t Read_tile_slope(uint32_t id) noexcept { return uint8_t(GetTileSlo
 static int32_t Read_tile_z(uint32_t id) noexcept { return int32_t(GetTileZ(id)); }
 static uint8_t Read_road_bits(uint32_t id, uint8_t type, bool straight) noexcept { assert(type == 0 && straight); return uint8_t(GetTownRoadBits(id)); }
 static OpenTTDTownRoadChoice Read_road_info(uint8_t id) noexcept { RoadInfo(id); return {.introduction_date = 0, .max_speed = 50, .town_build = true}; }
-static uint64_t RoadTypes() noexcept { return Leaf(21, 0, 0, 0, 0); }
 static bool BuildRoad(uint32_t town, uint32_t tile, uint32_t bits, uint32_t type, uint32_t mode) noexcept { assert(mode == 0); return RoadCommand(tile, bits, type, town).Succeeded(); }
 static bool BuildTunnel(uint32_t tile, uint32_t type, uint32_t execute) noexcept { return TunnelCommand(tile, type, execute != 0).Succeeded(); }
 static bool Candidate()
 {
+	AutoRestoreBackup<uint64_t> road_mask(*openttd_rust_road_mask(), 1);
 	openttd_rust_town_simulation(world->owner)->population = world->town.cache.population;
 	auto leaves = TownProtocolServices();
 	leaves.map_log_x = Read_map_log_x; leaves.road_info = Read_road_info;
@@ -185,7 +183,7 @@ static bool Candidate()
 	auto house_services = *leaves.houses;
 	house_services.town_shell = ResolveShell;
 	leaves.houses = &house_services;
-	leaves.stations = Stations; leaves.road_mask = RoadTypes; leaves.build_tunnel = BuildTunnel;
+	leaves.stations = Stations; leaves.build_tunnel = BuildTunnel;
 	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, Random, Industry);
 	services.calendar_date = []() noexcept { return 0; }; // The controlled road type is available from date zero.
 	services.tile_type = Read_tile_type; services.tile_valid = Read_tile_valid;

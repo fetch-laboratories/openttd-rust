@@ -9,8 +9,8 @@
 #include "services_ffi.h"
 #include "../rail_type.h"
 #include "../road_type.h"
-struct RailTypeInfo;
-struct RoadTypeInfo;
+class RailTypeInfo;
+class RoadTypeInfo;
 struct GRFFile;
 struct OpenTTDTypePublication { uint32_t label; bool hidden; };
 struct OpenTTDTypeAllocation { uint32_t label; uint64_t self; uint8_t order; };
