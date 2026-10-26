@@ -45,10 +45,8 @@ struct OpenTTDHouseResolverServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDStorageServices *storage;
 	uint8_t (*larger_towns)() noexcept OPENTTD_SERVICE_DEFAULT(larger_towns);
-	uint8_t (*cargo_by_label)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_by_label);
 	const GRFFile *(*file)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(file);
 	uint8_t (*version)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(version);
-	uint8_t (*cargo_translation)(uint8_t, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_translation);
 	uint32_t (*nearby)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(nearby);
 	uint32_t (*nearby_info)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(nearby_info);
 	uint32_t (*terrain)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terrain);

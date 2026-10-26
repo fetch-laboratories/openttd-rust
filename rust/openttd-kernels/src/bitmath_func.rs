@@ -48,3 +48,9 @@ pub fn set_bit64(value: &mut u64, bit: u8) -> u64 {
     *value |= 1_u64.wrapping_shl(u32::from(bit));
     *value
 }
+
+/// `ClrBit` for uint64 cargo masks.
+pub fn clr_bit64(value: &mut u64, bit: u8) -> u64 {
+    *value &= !1_u64.wrapping_shl(u32::from(bit));
+    *value
+}

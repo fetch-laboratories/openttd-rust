@@ -33,5 +33,14 @@ pub(crate) unsafe fn cargo_array_count(data: *const u32) -> u32 {
 pub const CT_PASSENGERS: u32 = u32::from_be_bytes(*b"PASS");
 pub const CT_MAIL: u32 = u32::from_be_bytes(*b"MAIL");
 
+/// Invalid cargo label.
+pub const CT_INVALID: u32 = u32::MAX;
+
+/// Native food label.
+pub const CT_FOOD: u32 = u32::from_be_bytes(*b"FOOD");
+
+/// Original cargo slot count.
+pub const NUM_ORIGINAL_CARGO: u8 = 12;
+
 /// All cargo bits, including undefined cargo slots.
 pub const ALL_CARGOTYPES: u64 = u64::MAX;

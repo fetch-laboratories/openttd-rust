@@ -71,8 +71,6 @@ pub struct Services {
     pub manual: extern "C" fn(u8) -> bool,
     pub manual_pax: extern "C" fn() -> bool,
     pub any_manual: extern "C" fn() -> bool,
-    pub passenger_count: extern "C" fn() -> u32,
-    pub passenger_at: extern "C" fn(u32) -> u8,
     pub offered_news: extern "C" fn(u16),
     pub awarded_news: extern "C" fn(u16),
     pub offer_expired_news: extern "C" fn(u16),
@@ -220,8 +218,12 @@ impl Services {
         if !(self.can_allocate)() {
             return false;
         }
-        let n = self.shared().random_range((self.passenger_count)());
-        let cargo = (self.passenger_at)(n);
+        let n = self
+            .shared()
+            .random_range(
+                crate::cargo_registry::town_count(crate::cargotype::TPE_PASSENGERS) as u32,
+            );
+        let cargo = crate::cargo_registry::town_cargo(crate::cargotype::TPE_PASSENGERS, n as usize);
         let src = (self.random_town)();
         if unsafe {
             town::population(src.state) < SUBSIDY_PAX_MIN_POPULATION
@@ -301,8 +303,9 @@ impl Services {
             return false;
         }
         self.scan(scratch, src.state, false);
-        for index in 0..(self.passenger_count)() {
-            let cargo = (self.passenger_at)(index);
+        for index in 0..crate::cargo_registry::town_count(crate::cargotype::TPE_PASSENGERS) as u32 {
+            let cargo =
+                crate::cargo_registry::town_cargo(crate::cargotype::TPE_PASSENGERS, index as usize);
             unsafe {
                 scratch.data.add(usize::from(cargo)).write(0);
             }
@@ -627,8 +630,6 @@ crate::abi::layouts! {
         manual,
         manual_pax,
         any_manual,
-        passenger_count,
-        passenger_at,
         offered_news,
         awarded_news,
         offer_expired_news,

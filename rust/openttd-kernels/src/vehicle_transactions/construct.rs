@@ -161,7 +161,7 @@ pub(crate) unsafe fn aircraft(
     let info = (k.aircraft_info)(e);
     (a.set_part)(v, info.image, (a.default_cargo)(e), info.passengers, true);
     (r.set_refit_cap)(u.cast(), 0);
-    let mail = (r.mail_cargo)();
+    let mail = crate::cargo_registry::openttd_rust_cargo_by_label(crate::cargo_type::CT_MAIL);
     if (c.valid_cargo)(mail) {
         (k.set_cargo_type)(u.cast(), mail);
         (r.set_capacity)(u.cast(), info.mail);

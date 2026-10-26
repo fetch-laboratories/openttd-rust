@@ -79,6 +79,12 @@ pub const CBID_OBJECT_COLOUR: CallbackID = CallbackID(0x15b);
 
 /// `CBID_VEHICLE_VISUAL_EFFECT`.
 pub const CBID_VEHICLE_VISUAL_EFFECT: CallbackID = CallbackID(0x10);
+/// Cargo payment callback from `newgrf_callbacks.h`.
+pub const CBID_CARGO_PROFIT_CALC: CallbackID = CallbackID(0x39);
+
+/// Station cargo rating callback from `newgrf_callbacks.h`.
+pub const CBID_CARGO_STATION_RATING_CALC: CallbackID = CallbackID(0x145);
+
 pub const CBID_VEHICLE_REFIT_CAPACITY: CallbackID = CallbackID(0x15);
 pub const CBID_VEHICLE_ARTIC_ENGINE: CallbackID = CallbackID(0x16);
 pub const VEHICLE_REFIT_CAPACITY: u16 = 1 << 3;

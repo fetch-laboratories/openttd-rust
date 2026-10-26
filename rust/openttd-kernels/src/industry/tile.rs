@@ -66,7 +66,7 @@ pub struct TileServices {
     pub spec: unsafe extern "C" fn(u16) -> *const TileSpec,
     pub acceptance: unsafe extern "C" fn(*const TileSpec) -> TileAcceptance,
     pub callback: unsafe extern "C" fn(u32, u16, u16, u32, u32) -> u16,
-    pub cargo_translation: unsafe extern "C" fn(*const TileSpec, u8) -> u8,
+    pub cargo_file: unsafe extern "C" fn(*const TileSpec) -> *const std::ffi::c_void,
 }
 fn chance(s: &Services, a: u32, b: u32) -> bool {
     crate::random_func::chance16_i(a, b, s.shared().random())
@@ -519,8 +519,13 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
         if result != CALLBACK_FAILED {
             info.cargo.fill(255);
             for n in 0..3 {
-                info.cargo[n] =
-                    unsafe { (t.cargo_translation)(spec, ((result >> (n * 5)) & 31) as u8) };
+                info.cargo[n] = unsafe {
+                    crate::cargo_registry::openttd_rust_cargo_translate(
+                        ((result >> (n * 5)) & 31) as u8,
+                        (t.cargo_file)(spec),
+                        false,
+                    )
+                };
             }
         }
     }
