@@ -81,7 +81,6 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept;
 void RustVehicleOrderSort(uint16_t *, size_t) noexcept;
 void RustVehicleOrderSlide(uint16_t *, size_t, size_t) noexcept;
 extern "C" {
-void openttd_rust_vehicle_order(uint16_t, uint16_t);
 void openttd_rust_vehicle_order_commit(const OpenTTDEngineLoadingServices *);
 bool openttd_rust_engine_reset_config(const OpenTTDEngineLoadingServices *);
 const GRFFile *openttd_rust_engine_current_override(const OpenTTDEngineLoadingServices *, const GRFFile *);

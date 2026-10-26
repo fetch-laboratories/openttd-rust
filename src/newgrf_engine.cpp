@@ -1413,7 +1413,6 @@ struct ListOrderChange {
 };
 
 static std::vector<ListOrderChange> _list_order_changes;
-#endif
 
 /**
  * Record a vehicle ListOrderChange.
@@ -1423,13 +1422,10 @@ static std::vector<ListOrderChange> _list_order_changes;
  */
 void AlterVehicleListOrder(EngineID engine, uint16_t target)
 {
-#ifdef WITH_RUST
-	openttd_rust_vehicle_order(engine.base(), target);
-#else
 	/* Add the list order change to a queue */
 	_list_order_changes.emplace_back(engine, target);
-#endif
 }
+#endif
 
 /**
  * Comparator function to sort engines via scope-GRFID and local ID.

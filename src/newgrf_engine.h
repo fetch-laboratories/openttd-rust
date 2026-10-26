@@ -130,7 +130,9 @@ std::optional<bool> TestVehicleBuildProbability(Vehicle *v, EngineID engine, Bui
 
 void TriggerVehicleRandomisation(Vehicle *veh, VehicleRandomTrigger trigger);
 
+#ifndef WITH_RUST
 void AlterVehicleListOrder(EngineID engine, uint16_t target);
+#endif
 void CommitVehicleListOrderChanges();
 
 EngineID GetNewEngineID(const GRFFile *file, VehicleType type, uint16_t internal_id);

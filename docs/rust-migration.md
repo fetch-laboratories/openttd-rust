@@ -1377,16 +1377,33 @@ setup/allocation control, temporary loading records and rail-label vectors,
 refit-mask computation, variant finalization and road/train binding loops.
 Mappings outlive engine-pool rebuilds. Native EIDS frames serialize canonical
 mapping views in the original engine-ID order; there is no synchronized map.
-Native Action0 ByteReader frames mutate aliases of Rust-owned temporary fields;
-rail-vector views preserve partial parser writes. Field aliases end before
-storage resize/clear; rail-vector views end before vector mutations.
+Vehicle Action0 interpretation extends this same temporary owner (#491); native
+consumers no longer hold temporary-field or rail-vector aliases.
 Rust ends owner borrows before native callbacks, construction and publication.
 Custom-refit evaluation calls the Rust vehicle resolver with the original null
-vehicle context. Specifications, shells, pool allocation, GRF files, parsing,
+vehicle context. Specifications, shells, pool allocation, GRF files, Action0 framing,
 serialization/error frames, badge/livery stores and presentation remain native.
 Typed native leaves are synchronous and noexcept. Historical mappings, pool
 exhaustion, malformed parser sequences, arbitrary GRFs and GUI/network execution
 remain #156 limits. PR #474.
+
+### Vehicle properties and deferred purchase order (#491)
+
+`engine_loading/properties.rs` owns common and all four vehicle Action0 property
+range loops, interpretation and base-price conversion. It mutates the existing
+process-wide `engine_loading.rs` TEMP records, cargo masks and rail-label vectors.
+That owner also holds the deferred purchase-order queue, applies queued changes
+in insertion order, publishes narrowed positions and clears/shrinks the queue.
+Rust reads the type registry's canonical rail-label carrier within one call.
+Specifications, engine shells/pool, file/cargo identity, sound/image validation,
+badge effects and checked ByteReader reads remain native through typed leaves.
+Reader failures return through Rust before the original native exception rethrow;
+partial masks, vectors and badge effects retain their original write order.
+The original native `EnginePreSort`, unstable sort and `Slide` remain shared.
+Action0 framing, EIDS serialization/error frames and Action3 consumers stay native.
+Historical EIDS, real pool exhaustion, arbitrary GRFs, remaining malformed and
+property/climate combinations, graphics/audio and GUI/network scheduling remain
+#156 limits. PR #495.
 
 ### Engine cargo and articulated query runtime (#439)
 

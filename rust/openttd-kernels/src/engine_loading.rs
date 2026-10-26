@@ -1014,8 +1014,7 @@ struct ListOrderChange {
     target: u16,
 }
 static LIST_ORDER_CHANGES: GameState<Vec<ListOrderChange>> = GameState::new(Vec::new());
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_order(engine: u16, target: u16) {
+pub(crate) unsafe fn openttd_rust_vehicle_order(engine: u16, target: u16) {
     unsafe { &mut *LIST_ORDER_CHANGES.get() }.push(ListOrderChange { engine, target });
 }
 #[unsafe(no_mangle)]
