@@ -8,6 +8,7 @@
 /** @file services.cpp Direct shared-world leaves for Rust game owners. */
 #include "../stdafx.h"
 #include "../source_type.h"
+#include "../effectvehicle_func.h"
 #include "../airport.h"
 #include "town_services.h"
 #include "services_ffi.h"

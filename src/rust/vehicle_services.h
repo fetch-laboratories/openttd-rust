@@ -212,7 +212,7 @@ inline bool RustGroundHasArticulated(const T *v) noexcept { return v->HasArticul
 inline const uint8_t *RustVehicleSubtypeAddress(const Vehicle *v) noexcept { return &v->subtype; }
 inline uint8_t RustVehicleSubtype(const Vehicle *v) noexcept { return *RustVehicleSubtypeAddress(v); }
 inline bool RustVehicleFront(const Vehicle *v) noexcept { return v->IsFrontEngine(); }
-inline uint8_t *RustVehicleVisualCache(const Vehicle *v) noexcept { return &v->vcache.cached_vis_effect; }
+inline auto *RustVehicleVisualCache(const Vehicle *v) noexcept { return &v->vcache.cached_vis_effect; }
 inline uint8_t RustVehicleVisualEffect(const Vehicle *v) noexcept { return *RustVehicleVisualCache(v); }
 inline const int32_t *RustVehicleXAddress(const Vehicle *v) noexcept { return &v->x_pos; }
 inline int32_t RustVehicleX(const Vehicle *v) noexcept { return *RustVehicleXAddress(v); }
