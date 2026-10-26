@@ -308,7 +308,6 @@ pub struct Services {
     road_list_size: extern "C" fn(File, bool) -> usize,
     road_label: extern "C" fn(File, bool, usize) -> u32,
     road_by_label: extern "C" fn(u32) -> u8,
-    road_tram_type: extern "C" fn(u8) -> u8,
     rail_by_label: extern "C" fn(u32) -> u8,
     set_railtypes: extern "C" fn(E, u64),
     override_log: extern "C" fn(u32, u32),
@@ -512,7 +511,6 @@ crate::abi::layouts! {
         road_list_size,
         road_label,
         road_by_label,
-        road_tram_type,
         rail_by_label,
         set_railtypes,
         override_log,
@@ -961,6 +959,7 @@ pub unsafe extern "C" fn openttd_rust_engine_finalise(s: &Services) {
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_bind_types(s: &Services) {
+    let shared = unsafe { &*s.shared };
     let mut from = 0;
     loop {
         let e = (s.next)(from);
@@ -989,7 +988,7 @@ pub unsafe extern "C" fn openttd_rust_engine_bind_types(s: &Services) {
         if usize::from(slot) < (s.road_list_size)(file, tram) {
             let label = (s.road_label)(file, tram, usize::from(slot));
             let rt = (s.road_by_label)(label);
-            if rt != INVALID_ROADTYPE && ((s.road_tram_type)(rt) != 0) == tram {
+            if rt != INVALID_ROADTYPE && (shared.road_tram_type)(rt).0 == tram {
                 (s.set_roadtype)(e.shell, rt);
                 continue;
             }

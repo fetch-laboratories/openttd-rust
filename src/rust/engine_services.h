@@ -143,5 +143,6 @@ inline OpenTTDEngineRef Engine_next(uint32_t from) noexcept
 	for (Engine *e : Engine::Iterate(from)) return EngineRef(e);
 	return EngineRef(nullptr);
 }
+inline OpenTTDEngineRef Engine_resolve_strict(uint16_t id) noexcept { return EngineRef(EngineOf(RustEngineByID(id))); }
 inline OpenTTDEngineRef Engine_resolve(uint16_t id) noexcept { return EngineRef(EngineOf(RustEngineByIDIfValid(id))); }
 #endif /* RUST_ENGINE_SERVICES_H */

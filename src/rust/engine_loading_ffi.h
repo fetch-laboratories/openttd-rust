@@ -73,7 +73,6 @@ struct OpenTTDEngineLoadingServices {
 	size_t (*road_list_size)(const GRFFile *, bool) noexcept OPENTTD_SERVICE_DEFAULT(road_list_size);
 	RoadTypeLabel (*road_label)(const GRFFile *, bool, size_t) noexcept OPENTTD_SERVICE_DEFAULT(road_label);
 	RoadType (*road_by_label)(RoadTypeLabel) noexcept OPENTTD_SERVICE_DEFAULT(road_by_label);
-	RoadTramType (*road_tram_type)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_tram_type);
 	RailType (*rail_by_label)(RailTypeLabel) noexcept OPENTTD_SERVICE_DEFAULT(rail_by_label);
 	void (*set_railtypes)(const OpenTTDEngine *, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_railtypes);
 	void (*override_log)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(override_log);

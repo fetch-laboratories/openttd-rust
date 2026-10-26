@@ -13,7 +13,7 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 		.shared = &GetRustSharedServices(),
 		.resolver = &GetRustVehicleResolverServices(),
 		.next = Engine_next,
-		.resolve = [](uint16_t id) noexcept { return EngineRef(Engine::Get(EngineID{id})); },
+		.resolve = Engine_resolve_strict,
 		.dynamic = RustDynamicEngines,
 		.file_id = RustGRFFileID,
 		.find_file = [](uint32_t id) noexcept -> const GRFFile * { return GetFileByGRFID(id); },
@@ -74,7 +74,6 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 		.road_list_size = [](const GRFFile *file, bool tram) noexcept { return (tram ? file->tramtype_list : file->roadtype_list).size(); },
 		.road_label = [](const GRFFile *file, bool tram, size_t index) noexcept { return (tram ? file->tramtype_list : file->roadtype_list)[index]; },
 		.road_by_label = [](RoadTypeLabel label) noexcept { return GetRoadTypeByLabel(label); },
-		.road_tram_type = RustRoadTramType,
 		.rail_by_label = [](RailTypeLabel label) noexcept { return GetRailTypeByLabel(label); },
 		.set_railtypes = [](const OpenTTDEngine *shell, uint64_t types) noexcept { auto &rvi = const_cast<Engine *>(EngineOf(shell))->VehInfo<RailVehicleInfo>(); rvi.railtypes = RailTypes{types}; rvi.intended_railtypes = RailTypes{types}; },
 		.override_log = [](uint32_t source, uint32_t target) noexcept {
