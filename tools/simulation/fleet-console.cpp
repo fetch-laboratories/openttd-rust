@@ -44,6 +44,8 @@
 
 #include "effectvehicle_base.h"
 #include "effectvehicle_func.h"
+#include "bridge_map.h"
+#include "tunnel_map.h"
 #include "newgrf_sound.h"
 
 [[noreturn]] static void FixtureAbort(int line) { fmt::print(stderr, "FLEET setup-failure {}\n", line); std::fflush(stderr); std::abort(); }
@@ -712,14 +714,16 @@ static void ResolverProbe()
 }
 
 struct VisualEffectObserver : SpriteGroup {
+	VisualEffectObserver() : SpriteGroup() {}
 	const SpriteGroup *program = nullptr;
 	mutable uint spawn = 0, sound = 0;
 	uint16_t visual = 0x41;
+	bool failed = false;
 	ResolverResult Resolve(ResolverObject &object) const override
 	{
 		if (object.callback == CBID_VEHICLE_VISUAL_EFFECT) return CallbackResult(this->visual);
 		if (object.callback == CBID_VEHICLE_SOUND_EFFECT) { if (object.callback_param1 == VSE_VISUAL_EFFECT) ++this->sound; return {}; }
-		if (object.callback == CBID_VEHICLE_SPAWN_VISUAL_EFFECT) { ++this->spawn; return SpriteGroup::Resolve(this->program, object, false); }
+		if (object.callback == CBID_VEHICLE_SPAWN_VISUAL_EFFECT) { ++this->spawn; return this->failed ? ResolverResult{} : SpriteGroup::Resolve(this->program, object, false); }
 		return {};
 	}
 };
@@ -730,12 +734,13 @@ static void VisualEffectProbe()
 	for (RoadVehicle *u : RoadVehicle::Iterate()) if (u->IsPrimaryVehicle() && u->Next() == nullptr) { v = u; break; }
 	if (v == nullptr) FixtureAbort(__LINE__);
 	Engine *e = Engine::Get(v->engine_type);
+	fmt::print(stderr, "FLEET effect-load-cache {}\n", v->vcache.cached_vis_effect);
 	Backup<CargoGRFFileProps> props(e->grf_prop);
 	Backup<VehicleCallbackMasks> mask(e->info.callback_mask);
 	Backup<uint8_t> smoke(_settings_game.vehicle.smoke_amount, 2);
 	Backup<bool> sound(_settings_client.sound.vehicle, true);
 	Backup<VehicleCache> cache(v->vcache);
-	Backup<VehStates> status(v->vehstatus, {});
+	Backup<VehStates> status(v->vehstatus, VehStates{});
 	Backup<uint16_t> speed(v->cur_speed, 2);
 	Backup<uint8_t> tick(v->tick_counter, 0);
 	Backup<Direction> direction(v->direction, DIR_NE);
@@ -743,14 +748,19 @@ static void VisualEffectProbe()
 	Backup<TileIndex> tile(v->tile);
 	for (uint32_t index = 0; index < Map::Size(); ++index) { TileIndex t{index}; if (IsTileType(t, MP_CLEAR) && !IsBridgeAbove(t)) { tile.Change(t); break; } }
 	Backup<int> x(v->x_pos, TileX(v->tile) * TILE_SIZE + 8), y(v->y_pos, TileY(v->tile) * TILE_SIZE + 8), z(v->z_pos, 30);
-	GRFFile grf; grf.grf_version = 8;
+	GRFFile grf; grf.grf_version = 8; grf.grfid = 0x466EFFE0;
+	auto config = std::make_unique<GRFConfig>("effect-fixture.grf");
+	config->ident.grfid = grf.grfid;
+	_grfconfig.push_back(std::move(config));
+	Backup<uint8_t> default_visual(e->VehInfo<RoadVehicleInfo>().visual_effect, VE_DEFAULT);
 	e->grf_prop.grffile = &grf;
 	e->info.callback_mask.Set(VehicleCallbackMask::VisualEffect).Set(VehicleCallbackMask::SoundEffect);
+	if (!SpriteGroup::CanAllocateItem(2)) FixtureAbort(__LINE__);
 	auto *observer = new VisualEffectObserver();
 	auto *program = new DeterministicSpriteGroup();
 	observer->program = program;
 	program->size = DSG_SIZE_DWORD;
-	program->calculated_result = true;
+	program->default_result.calculated_result = true;
 	e->grf_prop.spritegroups.clear();
 	e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, observer);
 	for (uint16_t result : {uint16_t(0x2003), uint16_t(0), uint16_t(0x4001)}) {
@@ -778,6 +788,42 @@ static void VisualEffectProbe()
 		}
 		fmt::print(stderr, "FLEET effect-count {} {}\n", result, count);
 	}
+	for (const char *label : {"failed", "unsupported", "smoke-off", "stopped", "slow", "hidden", "bridge", "depot", "tunnel", "bridge-middle"}) {
+		observer->failed = std::string_view(label) == "failed";
+		program->adjusts[0].and_mask = std::string_view(label) == "unsupported" ? 0xFE03FCF0 : 0xFE03FCF1;
+		uint old_sound = observer->sound, old_spawn = observer->spawn;
+		SavedRandomSeeds before, after; SaveRandomSeeds(&before);
+		auto expected = _random;
+		const bool attempted = observer->failed || std::string_view(label) == "unsupported" || std::string_view(label) == "bridge-middle";
+		if (attempted) expected.Next();
+		smoke.Change(std::string_view(label) == "smoke-off" ? 0 : 2);
+		v->cur_speed = std::string_view(label) == "slow" ? 1 : 2;
+		v->vehstatus = std::string_view(label) == "stopped" ? VehStates{VehState::Stopped} : std::string_view(label) == "hidden" ? VehStates{VehState::Hidden} : VehStates{};
+		Tile current(v->tile);
+		auto original_tile = std::tuple{current.type(), current.m1(), current.m2(), current.m3(), current.m4(), current.m5(), current.m6(), current.m7(), current.m8()};
+		const int original_x = v->x_pos;
+		if (std::string_view(label) == "depot") MakeRoadDepot(current, v->owner, DepotID::Invalid(), DIAGDIR_NE, ROADTYPE_ROAD);
+		if (std::string_view(label) == "tunnel") MakeRoadTunnel(current, v->owner, DIAGDIR_NE, ROADTYPE_ROAD, INVALID_ROADTYPE);
+		if (std::string_view(label) == "bridge-middle") { MakeBridgeRamp(current, v->owner, 0, DIAGDIR_NE, TRANSPORT_ROAD); SetBridgeMiddle(current, AXIS_X); v->x_pos += TILE_SIZE; }
+		if (std::string_view(label) == "bridge") SetBridgeMiddle(v->tile, AXIS_X);
+		const size_t effects = EffectVehicle::GetNumItems();
+		v->ShowVisualEffect();
+		std::tie(current.type(), current.m1(), current.m2(), current.m3(), current.m4(), current.m5(), current.m6(), current.m7(), current.m8()) = original_tile;
+		v->x_pos = original_x;
+		SaveRandomSeeds(&after);
+		fmt::print(stderr, "FLEET effect-gate {} callbacks {} sound {} count {} rng {}\n", label, observer->spawn - old_spawn, observer->sound - old_sound, EffectVehicle::GetNumItems() - effects, _random.state[0] == expected.state[0] && _random.state[1] == expected.state[1] && (attempted || SameRandom(before, after)));
+	}
+	v->cur_speed = 2; v->vehstatus = {};
+	for (uint16_t callback : {uint16_t(CALLBACK_FAILED), uint16_t(0), uint16_t(0xFF), uint16_t(0x80), uint16_t(0x141), uint16_t(0xC1)}) {
+		observer->visual = callback;
+		v->vcache.cached_vis_effect = 0x41;
+		SavedRandomSeeds before, after; SaveRandomSeeds(&before);
+		v->UpdateVisualEffect(callback != 0xC1);
+		SaveRandomSeeds(&after);
+		fmt::print(stderr, "FLEET effect-cache {} {} rng {}\n", callback, v->vcache.cached_vis_effect, SameRandom(before, after));
+	}
+	default_visual.Restore();
+	_grfconfig.pop_back();
 	e->grf_prop = props.GetOriginalValue();
 	delete program; delete observer;
 	props.Restore(); mask.Restore(); smoke.Restore(); sound.Restore(); cache.Restore(); status.Restore(); speed.Restore(); tick.Restore(); direction.Restore(); length.Restore(); tile.Restore(); x.Restore(); y.Restore(); z.Restore();

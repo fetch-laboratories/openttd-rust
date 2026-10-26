@@ -61,7 +61,7 @@ static void RoadBoundary()
 	static uint8_t cache_visual_byte = 0;
 	OpenTTDVisualServices cache_visual{
 		.vehicle = &t.vehicle, .shared = &t.shared,
-		.engine = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualEngine { return {.engine = nullptr, .cache = &cache_visual_byte, .id = 0, .kind = VEH_ROAD, .visual = 0x40, .rail_kind = 0, .engclass = 0, .callback = false}; },
+		.engine = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualEngine { return {.engine = nullptr, .cache = &cache_visual_byte, .id = 0, .kind = VEH_ROAD, .visual = 0x40, .callback = false}; },
 	};
 	auto previous_visual = openttd_rust_visual_bind(&cache_visual);
 	probe.leaves = &t.leaves;
@@ -273,8 +273,9 @@ static void RoadBoundary()
 		.vehicle = &emission_vehicle, .shared = &emission_shared,
 		.gate = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualGate {
 			auto &p = *road_abi_probe; p.visual_stage = 1;
-			return {.speed = 2, .status = 0, .kind = VEH_ROAD, .smoke = uint8_t(p.visual_eligible ? 2 : 0), .primary = true};
+			return {.speed = 2, .status = 0, .smoke = uint8_t(p.visual_eligible ? 2 : 0), .primary = true};
 		},
+		.show = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualShow { return {2, VEH_ROAD, 2}; },
 		.part = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualPart { return {.cache = &emission_cache, .tile = 100, .kind = VEH_ROAD, .status = 0, .tick = 0}; },
 		.offset = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualOffset { return {DIR_NE, 8, false}; },
 		.depot = [](uint32_t) noexcept { return false; }, .tunnel = [](uint32_t) noexcept { return false; },

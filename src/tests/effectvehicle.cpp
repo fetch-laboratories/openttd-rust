@@ -75,6 +75,7 @@ TEST_CASE("Animated tiles - ordered queue and partial native load publication")
 
 TEST_CASE("Vehicle visual cache - canonical alias and independent value copies")
 {
+	REQUIRE(Vehicle::CanAllocateItem(2));
 	auto *a = new EffectVehicle();
 	auto *b = new EffectVehicle();
 	CHECK(&a->vcache.cached_vis_effect == openttd_rust_vehicle_visual_cache(a->rust_grf_cache.state));
@@ -91,6 +92,7 @@ TEST_CASE("Vehicle visual cache - canonical alias and independent value copies")
 	copy.cached_vis_effect = 0;
 	CHECK(b->vcache.cached_vis_effect == 0xA3);
 	_vehicle_pool.CleanPool();
+	REQUIRE(Vehicle::CanAllocateItem());
 	auto *reused = new EffectVehicle();
 	CHECK(reused->vcache.cached_vis_effect == 0);
 	_vehicle_pool.CleanPool();

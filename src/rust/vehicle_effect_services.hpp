@@ -2,6 +2,7 @@
 /** @file vehicle_effect_services.hpp Native shell and parsed-spec observations for emission. */
 #include "vehicle_effect_ffi.h"
 #include "engine_services.h"
+#include "settings_services.h"
 #include "services_map.h"
 #include "services_rail.h"
 
@@ -12,26 +13,32 @@ const OpenTTDVisualServices &GetRustVisualServices()
 		.shared = &GetRustSharedServices(),
 		.gate = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualGate {
 			const Vehicle *v = VehicleOf(shell);
-			return {.speed = RustVehicleSpeed(v), .status = RustVehicleStatus(v), .kind = RustVehicleVehicleType(v), .smoke = _settings_game.vehicle.smoke_amount, .primary = RustVehiclePrimary(v)};
+			return {.speed = RustVehicleSpeed(v), .status = RustVehicleStatus(v), .smoke = RustVehicleSmokeAmount(), .primary = RustVehiclePrimary(v)};
+		},
+		.show = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualShow {
+			const Vehicle *v = VehicleOf(shell);
+			return {.speed = RustVehicleSpeed(v), .kind = RustVehicleVehicleType(v), .smoke = RustVehicleSmokeAmount()};
 		},
 		.engine = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualEngine {
 			Vehicle *v = VehicleOf(shell);
 			const Engine *e = EngineOf(RustVehicleGetEngine(shell));
-			OpenTTDVisualEngine result{.engine = RustEngine(e), .cache = &v->vcache.cached_vis_effect, .id = RustVehicleEngineID(v), .kind = RustEngineType(RustEngine(e)), .visual = 0, .rail_kind = 0, .engclass = 0, .callback = e->info.callback_mask.Test(VehicleCallbackMask::VisualEffect)};
+			OpenTTDVisualEngine result{.engine = RustEngine(e), .cache = &v->vcache.cached_vis_effect, .id = RustVehicleEngineID(v), .kind = RustEngineType(RustEngine(e)), .visual = 0, .callback = e->info.callback_mask.Test(VehicleCallbackMask::VisualEffect)};
 			switch (e->type) {
-				case VEH_TRAIN: result.visual = e->VehInfo<RailVehicleInfo>().visual_effect; result.rail_kind = RustEngineRailKind(e); result.engclass = e->VehInfo<RailVehicleInfo>().engclass; break;
+				case VEH_TRAIN: result.visual = e->VehInfo<RailVehicleInfo>().visual_effect; break;
 				case VEH_ROAD: result.visual = e->VehInfo<RoadVehicleInfo>().visual_effect; break;
 				case VEH_SHIP: result.visual = e->VehInfo<ShipVehicleInfo>().visual_effect; break;
 				default: break;
 			}
 			return result;
 		},
+		.defaults = [](const OpenTTDEngine *shell) noexcept -> OpenTTDVisualDefaults { const Engine *e = EngineOf(shell); return {.rail_kind = RustEngineRailKind(e), .engclass = e->VehInfo<RailVehicleInfo>().engclass}; },
 		.grf_version = RustEngineGRFVersionOpaque,
 		.power_error = [](uint16_t engine) noexcept { ShowNewGrfVehicleError(EngineID(engine), STR_NEWGRF_BROKEN, STR_NEWGRF_BROKEN_POWERED_WAGON, GRFBug::VehPoweredWagon, false); },
 		.part = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualPart {
 			Vehicle *v = VehicleOf(shell);
 			return {.cache = &v->vcache.cached_vis_effect, .tile = RustVehicleTile(v), .kind = RustVehicleVehicleType(v), .status = RustVehicleStatus(v), .tick = RustVehicleTick(v)};
 		},
+		.bridge_position = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualBridgePosition { const Vehicle *v = VehicleOf(shell); return {.x = RustVehicleX(v), .y = RustVehicleY(v)}; },
 		.offset = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualOffset {
 			const Vehicle *v = VehicleOf(shell);
 			return {.direction = RustVehicleDirection(v), .length = v->type == VEH_TRAIN ? RustGroundCachedLength(Train::From(v)) : v->type == VEH_ROAD ? RustGroundCachedLength(RoadVehicle::From(v)) : uint8_t(VEHICLE_LENGTH), .flipped = v->type == VEH_TRAIN && Train::From(v)->GetTrainFlags().Test(VehicleRailFlag::Flipped)};

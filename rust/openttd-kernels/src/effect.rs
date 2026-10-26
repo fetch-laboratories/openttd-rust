@@ -570,19 +570,21 @@ pub struct CreationServices {
     position: extern "C" fn(*const crate::vehicle::OpenTTDVehicle) -> Position,
     slope_pixel_z: extern "C" fn(i32, i32, bool) -> i32,
 }
-static CREATION: crate::game_state::GameState<*const CreationServices> =
-    crate::game_state::GameState::new(std::ptr::null());
+static CREATION: std::sync::atomic::AtomicPtr<CreationServices> =
+    std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
 /// Bind immutable process-wide services before vehicle initialization or native creation.
 #[unsafe(no_mangle)]
 #[allow(unsafe_code)]
 pub unsafe extern "C" fn openttd_rust_effect_bind(
     services: *const CreationServices,
 ) -> *const CreationServices {
-    unsafe { std::ptr::replace(CREATION.get(), services) }
+    CREATION
+        .swap(services.cast_mut(), std::sync::atomic::Ordering::AcqRel)
+        .cast_const()
 }
 #[allow(unsafe_code)]
 fn creation() -> &'static CreationServices {
-    unsafe { &**CREATION.get() }
+    unsafe { &*CREATION.load(std::sync::atomic::Ordering::Acquire) }
 }
 /// `CreateEffectVehicle` over the shared native pool.
 #[unsafe(no_mangle)]
@@ -646,12 +648,6 @@ pub extern "C" fn openttd_rust_effect_create_rel(
         p.z.wrapping_add(z),
         kind,
     )
-}
-
-/// Canonical coordinates at the relative-creation observation point.
-pub(crate) fn position(v: *const crate::vehicle::OpenTTDVehicle) -> (i32, i32, i32) {
-    let p = (creation().position)(v);
-    (p.x, p.y, p.z)
 }
 
 /// `EffectVehicle::SetAnimationState` on a live created shell.

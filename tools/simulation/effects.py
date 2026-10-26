@@ -526,6 +526,9 @@ def scenarios(soak):
             "console": ["fleet_scenario effect-emission", "unpause"],
         }
     )
+    scenarios.append(
+        dict(scenarios[-1], name="effects-emission-reload", effect_emission_reload=True)
+    )
     return scenarios
 
 
@@ -539,6 +542,39 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
 
 def check(scenario, run, mode, role, result):
     if scenario.get("effect_emission"):
+        for callback, cache in (
+            (65535, 64),
+            (0, 64),
+            (255, 207),
+            (128, 192),
+            (321, 65),
+            (193, 65),
+        ):
+            if f"FLEET effect-cache {callback} {cache} rng true" not in run["log"]:
+                raise RuntimeError(
+                    f"{mode}/{role}: cache normalization or powered-bit rollback {callback}"
+                )
+        for gate in (
+            "failed",
+            "unsupported",
+            "smoke-off",
+            "stopped",
+            "slow",
+            "hidden",
+            "bridge",
+            "depot",
+            "tunnel",
+            "bridge-middle",
+        ):
+            count = int(gate in ("failed", "unsupported", "bridge-middle"))
+            created = int(gate == "bridge-middle")
+            if (
+                f"FLEET effect-gate {gate} callbacks {count} sound {count} count {created} rng true"
+                not in run["log"]
+            ):
+                raise RuntimeError(
+                    f"{mode}/{role}: emission suppression or failed-callback sound {gate}"
+                )
         expected = {
             8195: [(1, -5, -3, -2), (2, 1, 2, 4), (3, -2, -1, 6)],
             0: [],

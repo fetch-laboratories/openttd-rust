@@ -24,7 +24,6 @@ use crate::engine_type::{
     VE_DISABLE_WAGON_POWER, VE_OFFSET_CENTRE, VE_OFFSET_COUNT, VE_OFFSET_START, VE_TYPE_COUNT,
     VE_TYPE_DEFAULT, VE_TYPE_START, VE_TYPE_STEAM,
 };
-use crate::game_state::GameState;
 use crate::newgrf_callbacks::{
     CALLBACK_FAILED, CBID_VEHICLE_SPAWN_VISUAL_EFFECT, CBID_VEHICLE_VISUAL_EFFECT,
 };
@@ -36,13 +35,24 @@ use crate::vehicle_base::{
     VS_TRAIN_SLOWING,
 };
 use crate::vehicle_type::{VEH_ROAD, VEH_SHIP, VEH_TRAIN};
+use std::sync::atomic::{AtomicPtr, Ordering};
 #[repr(C)]
 pub struct Gate {
     speed: u16,
     status: u8,
-    kind: u8,
     smoke: u8,
     primary: bool,
+}
+#[repr(C)]
+pub struct Show {
+    speed: u16,
+    kind: u8,
+    smoke: u8,
+}
+#[repr(C)]
+pub struct BridgePosition {
+    x: i32,
+    y: i32,
 }
 #[repr(C)]
 pub struct Engine {
@@ -51,9 +61,12 @@ pub struct Engine {
     id: u16,
     kind: u8,
     visual: u8,
+    callback: bool,
+}
+#[repr(C)]
+pub struct Defaults {
     rail_kind: u8,
     engclass: u8,
-    callback: bool,
 }
 #[repr(C)]
 pub struct Part {
@@ -86,10 +99,13 @@ pub struct Services {
     vehicle: &'static VehicleServices,
     shared: &'static Shared,
     gate: extern "C" fn(VehicleRef) -> Gate,
+    show: extern "C" fn(VehicleRef) -> Show,
     engine: extern "C" fn(VehicleRef) -> Engine,
+    defaults: extern "C" fn(*const OpenTTDEngine) -> Defaults,
     grf_version: extern "C" fn(*const OpenTTDEngine) -> u8,
     power_error: extern "C" fn(u16),
     part: extern "C" fn(VehicleRef) -> Part,
+    bridge_position: extern "C" fn(VehicleRef) -> BridgePosition,
     offset: extern "C" fn(VehicleRef) -> Offset,
     train: extern "C" fn(VehicleRef) -> Train,
     station: extern "C" fn(u32) -> bool,
@@ -101,13 +117,13 @@ pub struct Services {
     powered: extern "C" fn(u64, crate::services::RailType) -> bool,
     power_weight: extern "C" fn(VehicleRef) -> PowerWeight,
 }
-static RUNTIME: GameState<*const Services> = GameState::new(std::ptr::null());
+static RUNTIME: AtomicPtr<Services> = AtomicPtr::new(std::ptr::null_mut());
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_visual_bind(s: *const Services) -> *const Services {
-    unsafe { std::ptr::replace(RUNTIME.get(), s) }
+    RUNTIME.swap(s.cast_mut(), Ordering::AcqRel).cast_const()
 }
 fn services() -> &'static Services {
-    unsafe { &**RUNTIME.get() }
+    unsafe { &*RUNTIME.load(Ordering::Acquire) }
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_visual_update(v: VehicleRef, allow_power_change: bool) {
@@ -143,22 +159,28 @@ pub extern "C" fn openttd_rust_visual_update(v: VehicleRef, allow_power_change: 
         || (visual & (1 << VE_DISABLE_EFFECT) == 0
             && (visual >> VE_TYPE_START) & ((1 << VE_TYPE_COUNT) - 1) == VE_TYPE_DEFAULT)
     {
-        if e.kind != VEH_TRAIN
-            || e.rail_kind == crate::vehicle::RailVehicleTypes::WAGON.0
-            || !(EC_STEAM..EC_MONORAIL).contains(&e.engclass)
-        {
+        let defaults = if e.kind == VEH_TRAIN {
+            Some((s.defaults)(e.engine))
+        } else {
+            None
+        };
+        if defaults.as_ref().is_none_or(|d| {
+            d.rail_kind == crate::vehicle::RailVehicleTypes::WAGON.0
+                || !(EC_STEAM..EC_MONORAIL).contains(&d.engclass)
+        }) {
             visual = if visual == VE_DEFAULT {
                 1 << VE_DISABLE_EFFECT
             } else {
                 visual | (1 << VE_DISABLE_EFFECT)
             };
         } else {
+            let engclass = defaults.unwrap().engclass;
             if visual == VE_DEFAULT {
-                visual = (VE_OFFSET_CENTRE - if e.engclass == EC_STEAM { 4 } else { 0 })
+                visual = (VE_OFFSET_CENTRE - if engclass == EC_STEAM { 4 } else { 0 })
                     << VE_OFFSET_START;
             }
             visual = (visual & !(((1 << VE_TYPE_COUNT) - 1) << VE_TYPE_START))
-                | ((e.engclass - EC_STEAM + VE_TYPE_STEAM) << VE_TYPE_START);
+                | ((engclass - EC_STEAM + VE_TYPE_STEAM) << VE_TYPE_START);
         }
     }
     unsafe {
@@ -260,7 +282,7 @@ fn advanced(s: &Services, v: VehicleRef, kind: u8) {
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
     let s = services();
-    let gate = (s.gate)(front);
+    let gate = (s.show)(front);
     if gate.kind == VEH_TRAIN {
         let t = (s.train)(front);
         if t.reversing
@@ -296,9 +318,9 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
                 return false;
             }
             let bridge = if (s.shared.is_bridge)(p.tile) {
-                let pos = crate::effect::position(v.0.as_ptr());
+                let pos = (s.bridge_position)(v);
                 let map = crate::map_func::Map::from_log_x((s.shared.map_log_x)());
-                map.tile_virt_xy(pos.0 as u32, pos.1 as u32) == p.tile
+                map.tile_virt_xy(pos.x as u32, pos.y as u32) == p.tile
                     && (s.shared.bridge_above)(p.tile)
             } else {
                 (s.shared.bridge_above)(p.tile)
@@ -376,11 +398,14 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDVisualGate" ["probe"] => Gate { speed, status, kind, smoke, primary, };
-    "OpenTTDVisualEngine" ["probe"] => Engine { engine, cache, id, kind, visual, rail_kind, engclass, callback, };
+    "OpenTTDVisualGate" ["probe"] => Gate { speed, status, smoke, primary, };
+    "OpenTTDVisualShow" ["probe"] => Show { speed, kind, smoke, };
+    "OpenTTDVisualBridgePosition" ["probe"] => BridgePosition { x, y, };
+    "OpenTTDVisualEngine" ["probe"] => Engine { engine, cache, id, kind, visual, callback, };
+    "OpenTTDVisualDefaults" ["probe"] => Defaults { rail_kind, engclass, };
     "OpenTTDVisualPart" ["probe"] => Part { cache, tile, kind, status, tick, };
     "OpenTTDVisualOffset" ["probe"] => Offset { direction, length, flipped, };
     "OpenTTDVisualTrain" ["probe"] => Train { tile, speed, reversing, front, };
     "OpenTTDVisualPowerWeight" ["probe"] => PowerWeight { power, weight, };
-    "OpenTTDVisualServices" ["probe"] => Services { vehicle, shared, gate, engine, grf_version, power_error, part, offset, train, station, should_stop, depot, tunnel, rail_types, tile_rail, powered, power_weight, };
+    "OpenTTDVisualServices" ["probe"] => Services { vehicle, shared, gate, show, engine, defaults, grf_version, power_error, part, bridge_position, offset, train, station, should_stop, depot, tunnel, rail_types, tile_rail, powered, power_weight, };
 }
