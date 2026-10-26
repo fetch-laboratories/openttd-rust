@@ -136,5 +136,4 @@ pub const GLS_RESERVE: u8 = 4;
 pub const GLS_ACTIVATION: u8 = 5;
 
 pub const GSF_GLOBALVAR: u8 = 8;
-pub const GSF_CARGOES: u8 = 11;
 pub const SECOND_ROCKY_TILE_SET: u8 = 6;
