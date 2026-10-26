@@ -26,3 +26,8 @@ pub const ROAD_NE: u8 = 8;
 
 /// `ROADTYPE_END`.
 pub const ROADTYPE_END: u8 = 63;
+
+/// `ROADTYPE_ROAD`.
+pub const ROADTYPE_ROAD: u8 = 0;
+/// `ROADTYPE_TRAM`.
+pub const ROADTYPE_TRAM: u8 = 1;

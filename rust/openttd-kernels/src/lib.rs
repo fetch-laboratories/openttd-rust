@@ -1416,3 +1416,5 @@ mod newgrf_roadstop;
 
 mod rail;
 mod type_availability;
+
+pub mod type_registry;

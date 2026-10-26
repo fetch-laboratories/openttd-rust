@@ -186,8 +186,13 @@ public:
  */
 inline RoadTypes GetMaskForRoadTramType(RoadTramType rtt)
 {
+#ifdef WITH_RUST
+	extern RoadTypes &_roadtypes_road;
+	extern RoadTypes &_roadtypes_tram;
+#else
 	extern RoadTypes _roadtypes_road;
 	extern RoadTypes _roadtypes_tram;
+#endif
 	return rtt == RTT_ROAD ? _roadtypes_road : _roadtypes_tram;
 }
 
@@ -309,7 +314,12 @@ void InitRoadTypes();
 RoadType AllocateRoadType(RoadTypeLabel label, RoadTramType rtt);
 bool HasAnyRoadTypesAvail(CompanyID company, RoadTramType rtt);
 
+#ifdef WITH_RUST
+extern std::span<RoadType> _sorted_roadtypes;
+extern RoadTypes &_roadtypes_hidden_mask;
+#else
 extern std::vector<RoadType> _sorted_roadtypes;
 extern RoadTypes _roadtypes_hidden_mask;
+#endif
 
 #endif /* ROAD_H */

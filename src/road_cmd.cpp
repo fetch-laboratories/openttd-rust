@@ -59,6 +59,10 @@
 #include "rust/movement_ffi.h"
 #endif
 
+#ifdef WITH_RUST
+#include "rust/type_registry_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 
@@ -66,16 +70,26 @@
 typedef std::vector<RoadVehicle *> RoadVehicleList;
 
 RoadTypeInfo _roadtypes[ROADTYPE_END];
+#ifdef WITH_RUST
+std::span<RoadType> _sorted_roadtypes;
+RoadTypes &_roadtypes_hidden_mask = *reinterpret_cast<RoadTypes *>(openttd_rust_road_hidden_mask());
+RoadTypes &_roadtypes_road = *reinterpret_cast<RoadTypes *>(openttd_rust_road_mask());
+RoadTypes &_roadtypes_tram = *reinterpret_cast<RoadTypes *>(openttd_rust_tram_mask());
+#else
 std::vector<RoadType> _sorted_roadtypes; ///< Sorted list of road types.
 RoadTypes _roadtypes_hidden_mask; ///< Bitset of hidden roadtypes.
 RoadTypes _roadtypes_road; ///< Bitset of road roadtypes.
 RoadTypes _roadtypes_tram; ///< Bitset of tram roadtypes.
+#endif
 
 /**
  * Reset all road type information to its default values.
  */
 void ResetRoadTypes()
 {
+#ifdef WITH_RUST
+	openttd_rust_road_reset(&GetRustTypeRegistryServices(), std::size(_original_roadtypes));
+#else
 	static_assert(std::size(_original_roadtypes) <= std::size(_roadtypes));
 
 	auto insert = std::copy(std::begin(_original_roadtypes), std::end(_original_roadtypes), std::begin(_roadtypes));
@@ -84,6 +98,7 @@ void ResetRoadTypes()
 	_roadtypes_hidden_mask = {};
 	_roadtypes_road = {ROADTYPE_ROAD};
 	_roadtypes_tram = {ROADTYPE_TRAM};
+#endif
 }
 
 void ResolveRoadTypeGUISprites(RoadTypeInfo *rti)
@@ -124,6 +139,9 @@ static bool CompareRoadTypes(const RoadType &first, const RoadType &second)
  */
 void InitRoadTypes()
 {
+#ifdef WITH_RUST
+	openttd_rust_road_init();
+#else
 	_sorted_roadtypes.clear();
 	for (RoadTypeInfo &rti : _roadtypes) {
 		RoadType rt = rti.Index();
@@ -135,6 +153,7 @@ void InitRoadTypes()
 		_sorted_roadtypes.push_back(rt);
 	}
 	std::sort(_sorted_roadtypes.begin(), _sorted_roadtypes.end(), CompareRoadTypes);
+#endif
 }
 
 /**
@@ -142,6 +161,9 @@ void InitRoadTypes()
  */
 RoadType AllocateRoadType(RoadTypeLabel label, RoadTramType rtt)
 {
+#ifdef WITH_RUST
+	return openttd_rust_road_allocate(label, rtt);
+#else
 	auto it = std::ranges::find(_roadtypes, 0, &RoadTypeInfo::label);
 	if (it == std::end(_roadtypes)) return INVALID_ROADTYPE;
 
@@ -174,7 +196,36 @@ RoadType AllocateRoadType(RoadTypeLabel label, RoadTramType rtt)
 	_roadtypes_tram.Set(rt, rtt == RTT_TRAM);
 
 	return rt;
+#endif
 }
+
+#ifdef WITH_RUST
+const OpenTTDRoadRegistryServices &GetRustRoadRegistryServices() noexcept
+{
+	static const OpenTTDRoadRegistryServices table = {
+		.spec = [](RoadType rt) noexcept { return &_roadtypes[rt]; },
+		.label = [](const RoadTypeInfo *info) noexcept { return info->label; },
+		.alternate = [](const RoadTypeInfo *info, uint32_t label) noexcept { return info->alternate_labels.contains(label); },
+		.clear = [](RoadType rt) noexcept { _roadtypes[rt] = RoadTypeInfo{}; },
+		.copy_default = [](RoadType rt, RoadType source) noexcept { _roadtypes[rt] = _original_roadtypes[source]; },
+		.resolve_gui = [](RoadTypeInfo *info) noexcept { ResolveRoadTypeGUISprites(info); },
+		.publication = [](const RoadTypeInfo *info) noexcept { return OpenTTDTypePublication{.label = info->label, .hidden = info->flags.Test(RoadTypeFlag::Hidden)}; },
+		.sort = [](RoadType *data, size_t count) noexcept { std::sort(data, data + count, CompareRoadTypes); },
+		.publish_sorted = [](RoadType *data, size_t count) noexcept { _sorted_roadtypes = {data, count}; },
+		.allocate = [](RoadTypeInfo *info, const OpenTTDTypeAllocation *value) noexcept {
+			info->label = value->label;
+			info->alternate_labels.clear();
+			info->flags = {};
+			info->introduction_date = CalendarTime::INVALID_DATE;
+			info->powered_roadtypes = RoadTypes{value->self};
+			info->introduces_roadtypes = RoadTypes{value->self};
+			info->sorting_order = value->order;
+		},
+	};
+	return table;
+}
+#endif
+
 
 /**
  * Verify whether a road vehicle is available.

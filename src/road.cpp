@@ -25,6 +25,10 @@
 #include "rust/type_availability_ffi.h"
 #endif
 
+#ifdef WITH_RUST
+#include "rust/type_registry_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 /**
@@ -292,6 +296,9 @@ RoadTypes GetRoadTypes(bool introduces)
  */
 RoadType GetRoadTypeByLabel(RoadTypeLabel label, bool allow_alternate_labels)
 {
+#ifdef WITH_RUST
+	return openttd_rust_road_by_label(label, allow_alternate_labels);
+#else
 	extern RoadTypeInfo _roadtypes[ROADTYPE_END];
 	if (label == 0) return INVALID_ROADTYPE;
 
@@ -305,4 +312,5 @@ RoadType GetRoadTypeByLabel(RoadTypeLabel label, bool allow_alternate_labels)
 
 	/* No matching label was found, so it is invalid */
 	return INVALID_ROADTYPE;
+#endif
 }
