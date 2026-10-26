@@ -1,5 +1,5 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Canonical NewGRF loading execution state. The game-state mutex serializes native aliases
+//! Canonical `NewGRF` loading execution state. The game-state mutex serializes native aliases
 //! and Rust entries. Raw field accesses end before native parser reentry; the carrier never
 //! moves, and native aliases own no storage. Parsed objects remain native.
 #![allow(unsafe_code, missing_docs, clippy::missing_safety_doc)]
@@ -83,13 +83,14 @@ pub unsafe extern "C" fn openttd_rust_grf_has_set(feature: u8, set: u32) -> bool
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_grf_set_sprite(feature: u8, set: u32) -> u32 {
-    unsafe { (*STATE.get()).spritesets[usize::from(feature)][&set].sprite }
+    unsafe { (&(*STATE.get()).spritesets[usize::from(feature)])[&set].sprite }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_grf_set_size(feature: u8, set: u32) -> u32 {
-    unsafe { (*STATE.get()).spritesets[usize::from(feature)][&set].num_sprites }
+    unsafe { (&(*STATE.get()).spritesets[usize::from(feature)])[&set].num_sprites }
 }
 crate::abi::layouts! {
+    fn abi_layout;
     "OpenTTDGrfExecution" ["probe"] => Execution {
         stage, spriteid, file, grffile, grfconfig, nfo_line, skip_sprites, spritegroups
     };
