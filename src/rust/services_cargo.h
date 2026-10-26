@@ -15,6 +15,7 @@
 #include "../newgrf.h"
 #include "../industrytype.h"
 #include "services_newgrf.h"
+#include "newgrf_global_ffi.h"
 struct OpenTTDIndustrySpecHandle;
 
 /* Keep native types and source observation points. Scaling may draw Random;
@@ -34,6 +35,10 @@ inline CargoType RustResolverCargoTranslation(const ResolverObject *resolver, ui
 inline uint8_t RustGRFCargoMap(const GRFFile *file, CargoType cargo) noexcept { return file->cargo_map[cargo]; }
 template <typename Spec>
 inline uint8_t RustSpecCargoMap(const Spec *spec, CargoType cargo) noexcept { return RustGRFCargoMap(RustSpecGRFFile(spec), cargo); }
+inline OpenTTDNewGRFCargoLabel RustCargoLabel(const std::variant<CargoLabel, MixedCargoType> &label) noexcept
+{
+	return std::visit([](auto value) { if constexpr (std::is_same_v<decltype(value), CargoLabel>) return OpenTTDNewGRFCargoLabel{value.base(), false}; else return OpenTTDNewGRFCargoLabel{value, true}; }, label);
+}
 inline CargoType OpenTTDCargoByLabel(uint32_t label) noexcept { return GetCargoTypeByLabel(CargoLabel{label}); }
 inline uint OpenTTDMoveGoodsToStation(CargoType cargo, uint amount, Source source, const StationList &stations, Owner exclusivity = INVALID_OWNER) noexcept
 {

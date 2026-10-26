@@ -5,6 +5,7 @@
 #include "services_ffi.h"
 struct GRFFile;
 enum GameMode : uint8_t;
+struct OpenTTDNewGRFCargoLabel { uint32_t value; bool mixed; };
 struct OpenTTDGlobalVariableServices {
 	uint8_t (*climate)() noexcept OPENTTD_SERVICE_DEFAULT(climate);
 	uint16_t (*date_fraction)() noexcept OPENTTD_SERVICE_DEFAULT(date_fraction);

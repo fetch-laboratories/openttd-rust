@@ -128,3 +128,44 @@ pub const GSF_END: u8 = 22;
 
 /// Unreserved engine mapping scope.
 pub const INVALID_GRFID: u32 = 0xFFFF_FFFF;
+
+/// Native cargo-label or mixed-cargo alternative from `GetActiveCargoLabel`.
+#[repr(C)]
+pub(crate) struct CargoLabel {
+    pub(crate) value: u32,
+    pub(crate) mixed: bool,
+}
+
+/// First existing label, in the order supplied by the definition.
+pub(crate) fn get_active_cargo_label_from_list(
+    labels: &[u32],
+    mut cargo_by_label: impl FnMut(u32) -> u8,
+) -> u32 {
+    for &label in labels {
+        if cargo_by_label(label) != crate::cargo_type::INVALID_CARGO {
+            return label;
+        }
+    }
+    crate::cargo_type::CT_INVALID
+}
+
+/// Resolve a mixed label; a literal label passes through without a lookup.
+pub(crate) fn get_active_cargo_label(
+    label: CargoLabel,
+    cargo_by_label: impl FnMut(u32) -> u8,
+) -> u32 {
+    use crate::cargo_type::{
+        CT_DIAMONDS, CT_FRUIT, CT_GOLD, CT_GRAIN, CT_LIVESTOCK, CT_MAIZE, CT_VALUABLES, CT_WHEAT,
+        MCT_GRAIN_WHEAT_MAIZE, MCT_LIVESTOCK_FRUIT, MCT_VALUABLES_GOLD_DIAMONDS,
+    };
+    if !label.mixed {
+        return label.value;
+    }
+    let labels: &[u32] = match label.value {
+        MCT_LIVESTOCK_FRUIT => &[CT_LIVESTOCK, CT_FRUIT],
+        MCT_GRAIN_WHEAT_MAIZE => &[CT_GRAIN, CT_WHEAT, CT_MAIZE],
+        MCT_VALUABLES_GOLD_DIAMONDS => &[CT_VALUABLES, CT_GOLD, CT_DIAMONDS],
+        _ => unreachable!(),
+    };
+    get_active_cargo_label_from_list(labels, cargo_by_label)
+}

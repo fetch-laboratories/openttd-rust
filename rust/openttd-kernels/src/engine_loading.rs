@@ -8,7 +8,11 @@
     clippy::cast_possible_truncation,
     clippy::too_many_lines
 )]
-use crate::{engine_type::INVALID_ENGINE, game_state::GameState, newgrf::INVALID_GRFID};
+use crate::{
+    engine_type::INVALID_ENGINE,
+    game_state::GameState,
+    newgrf::{CargoLabel, INVALID_GRFID, get_active_cargo_label},
+};
 use std::{collections::BTreeMap, ffi::c_void, ptr};
 
 #[repr(C)]
@@ -522,18 +526,13 @@ crate::abi::layouts! {
     };
     "EngineIDMapping" ["engine_loading"] => Mapping { grfid, internal_id, kind => type, substitute_id, engine };
     "OpenTTDEngineMappingView" ["engine_loading"] => MappingView { data, size };
-    "OpenTTDEngineCargoLabel" ["engine_loading"] => CargoLabel { value, mixed };
+    "OpenTTDNewGRFCargoLabel" ["engine_loading"] => CargoLabel { value, mixed };
     "OpenTTDEngineRefitInputs" ["engine_loading"] => RefitInputs { mask, cargo, custom };
     "OpenTTDEngineTrainCargo" ["engine_loading"] => TrainCargo { capacity, kind };
     "OpenTTDEngineCargoClass" ["engine_loading"] => CargoClass { classes, cargo };
     "GRFTempEngineData" ["engine_loading"] => TempFields { cargo_allowed, cargo_allowed_required, cargo_disallowed, railtypelabels, roadtramtype, defaultcargo_grf, refittability, rv_max_speed, ctt_include_mask, ctt_exclude_mask };
     "RustRailLabelView" ["engine_loading"] => RailLabelView { data, size };
 
-}
-#[repr(C)]
-pub struct CargoLabel {
-    value: u32,
-    mixed: bool,
 }
 #[repr(C)]
 pub struct RefitInputs {
@@ -552,10 +551,8 @@ pub struct CargoClass {
     cargo: u8,
 }
 use crate::cargo_type::{
-    CT_CANDY, CT_COAL, CT_COLA, CT_COPPER_ORE, CT_DIAMONDS, CT_FOOD, CT_FRUIT, CT_GOLD, CT_GOODS,
-    CT_GRAIN, CT_INVALID, CT_LIVESTOCK, CT_MAIL, CT_MAIZE, CT_OIL, CT_PASSENGERS, CT_SUGAR,
-    CT_VALUABLES, CT_WHEAT, INVALID_CARGO, MCT_GRAIN_WHEAT_MAIZE, MCT_LIVESTOCK_FRUIT,
-    MCT_VALUABLES_GOLD_DIAMONDS, NUM_CARGO, is_valid_cargo_type,
+    CT_CANDY, CT_COAL, CT_COLA, CT_COPPER_ORE, CT_FOOD, CT_GOODS, CT_INVALID, CT_MAIL, CT_OIL,
+    CT_PASSENGERS, CT_SUGAR, CT_VALUABLES, INVALID_CARGO, NUM_CARGO, is_valid_cargo_type,
 };
 use crate::cargotype::{
     CC_ARMOURED, CC_BULK, CC_EXPRESS, CC_LIQUID, CC_MAIL, CC_PIECEGOODS, CC_REFRIGERATED,
@@ -564,25 +561,12 @@ use crate::cargotype::{
 use crate::newgrf_callbacks::{CALLBACK_FAILED, CBID_VEHICLE_CUSTOM_REFIT};
 use crate::vehicle::RailVehicleTypes;
 use crate::vehicle_type::{VEH_AIRCRAFT, VEH_SHIP};
-fn active_labels(s: &Services, labels: &[u32]) -> u32 {
-    for &label in labels {
-        if (s.cargo_by_label)(label) != INVALID_CARGO {
-            return label;
-        }
-    }
-    CT_INVALID
-}
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_engine_active_label(s: &Services, label: CargoLabel) -> u32 {
-    if !label.mixed {
-        return label.value;
-    }
-    match label.value {
-        MCT_LIVESTOCK_FRUIT => active_labels(s, &[CT_LIVESTOCK, CT_FRUIT]),
-        MCT_GRAIN_WHEAT_MAIZE => active_labels(s, &[CT_GRAIN, CT_WHEAT, CT_MAIZE]),
-        MCT_VALUABLES_GOLD_DIAMONDS => active_labels(s, &[CT_VALUABLES, CT_GOLD, CT_DIAMONDS]),
-        _ => unreachable!(),
-    }
+pub(crate) extern "C" fn openttd_rust_engine_active_label(
+    cargo_by_label: extern "C" fn(u32) -> u8,
+    label: CargoLabel,
+) -> u32 {
+    get_active_cargo_label(label, |label| cargo_by_label(label))
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_engine_translate_refit(s: &Services, mask: u32, file: File) -> u64 {
@@ -599,7 +583,7 @@ pub extern "C" fn openttd_rust_engine_translate_refit(s: &Services, mask: u32, f
     result
 }
 fn engine_label(s: &Services, shell: E) -> u32 {
-    openttd_rust_engine_active_label(s, (s.cargo_label)(shell))
+    get_active_cargo_label((s.cargo_label)(shell), |label| (s.cargo_by_label)(label))
 }
 fn default_masks(s: &Services, kind: u8, shell: E, id: u16, label: u32) -> (u16, u16) {
     if kind == VEH_AIRCRAFT {

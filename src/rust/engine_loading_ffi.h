@@ -7,8 +7,8 @@
 #include "../livery.h"
 #include "../road_type.h"
 #include "newgrf_vehicle_ffi.h"
+#include "newgrf_global_ffi.h"
 struct OpenTTDEngineLoadingVehicle { uint32_t id; VehicleType type; };
-struct OpenTTDEngineCargoLabel { uint32_t value; bool mixed; };
 struct OpenTTDEngineRefitInputs { CargoTypes mask; CargoType cargo; bool custom; };
 struct OpenTTDEngineTrainCargo { uint8_t capacity; RailVehicleTypes kind; };
 struct OpenTTDEngineCargoClass { uint16_t classes; CargoType cargo; };
@@ -38,7 +38,7 @@ struct OpenTTDEngineLoadingServices {
 	uint64_t (*railtypes)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(railtypes);
 	uint32_t (*rail_label)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_label);
 	OpenTTDEngineRefitInputs (*refit_inputs)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(refit_inputs);
-	OpenTTDEngineCargoLabel (*cargo_label)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_label);
+	OpenTTDNewGRFCargoLabel (*cargo_label)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_label);
 	OpenTTDEngineTrainCargo (*train_cargo)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(train_cargo);
 	void (*set_cargo)(const OpenTTDEngine *, CargoType) noexcept OPENTTD_SERVICE_DEFAULT(set_cargo);
 	void (*set_refit)(const OpenTTDEngine *, CargoTypes) noexcept OPENTTD_SERVICE_DEFAULT(set_refit);
@@ -88,7 +88,7 @@ void openttd_rust_engine_bind_types(const OpenTTDEngineLoadingServices *);
 const GRFFile *openttd_rust_engine_current_override(const OpenTTDEngineLoadingServices *, const GRFFile *);
 void openttd_rust_engine_set_override(const OpenTTDEngineLoadingServices *, uint32_t, uint32_t);
 void openttd_rust_engine_calculate_refits(const OpenTTDEngineLoadingServices *);
-uint32_t openttd_rust_engine_active_label(const OpenTTDEngineLoadingServices *, OpenTTDEngineCargoLabel);
+uint32_t openttd_rust_engine_active_label(CargoType (*)(uint32_t) noexcept, OpenTTDNewGRFCargoLabel);
 uint64_t openttd_rust_engine_translate_refit(const OpenTTDEngineLoadingServices *, uint32_t, const GRFFile *);
 void openttd_rust_engine_setup(const OpenTTDEngineLoadingServices *);
 const OpenTTDEngine *openttd_rust_engine_definition(const OpenTTDEngineLoadingServices *, const GRFFile *, VehicleType, uint16_t, bool);
