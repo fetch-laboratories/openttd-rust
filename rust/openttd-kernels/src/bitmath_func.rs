@@ -36,3 +36,15 @@ pub const fn gb(value: u32, start: u8, count: u8) -> u32 {
 pub const fn kill_first_bit(value: u8) -> u8 {
     value & value.wrapping_sub(1)
 }
+
+/// `SetBit` for uint64 cargo masks.
+pub fn set_bit64(value: &mut u64, bit: u8) -> u64 {
+    *value |= 1_u64.wrapping_shl(u32::from(bit));
+    *value
+}
+
+/// `ClrBit` for uint64 cargo masks.
+pub fn clr_bit64(value: &mut u64, bit: u8) -> u64 {
+    *value &= !1_u64.wrapping_shl(u32::from(bit));
+    *value
+}

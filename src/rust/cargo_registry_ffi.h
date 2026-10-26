@@ -44,6 +44,7 @@ struct OpenTTDCargoRegistryServices {
 	void (*publish_sorted)(const CargoSpec **, size_t) noexcept OPENTTD_SERVICE_DEFAULT(publish_sorted);
 	void (*publish_standard)(const CargoSpec **, size_t) noexcept OPENTTD_SERVICE_DEFAULT(publish_standard);
 	void (*publish_town)(uint8_t, const CargoSpec **, size_t) noexcept OPENTTD_SERVICE_DEFAULT(publish_town);
+	void (*set_file)(const CargoSpec *, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(set_file);
 	void (*set_effect)(const CargoSpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_effect);
 	void (*invalidate_strings)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_strings);
 	OpenTTDCargoFile (*file)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(file);
@@ -64,6 +65,7 @@ uint64_t *openttd_rust_standard_cargo_mask();
 uint8_t *openttd_rust_cargo_reverse();
 void openttd_rust_cargo_setup(const OpenTTDCargoRegistryServices *, uint8_t);
 void openttd_rust_cargo_labels_rebuild();
+void openttd_rust_cargo_bitnum_changed(const CargoSpec *, uint8_t, const GRFFile *);
 bool openttd_rust_cargo_is_default(uint8_t);
 OpenTTDCargoLabels openttd_rust_cargo_climate_labels();
 OpenTTDCargoLabels openttd_rust_cargo_bitnum_labels();

@@ -10,7 +10,10 @@
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss
 )]
-use crate::cargo_type::{CT_INVALID, CT_MAIL, CT_PASSENGERS, INVALID_CARGO, NUM_CARGO};
+use crate::bitmath_func::{clr_bit64, set_bit64};
+use crate::cargo_type::{
+    CT_INVALID, CT_MAIL, CT_PASSENGERS, INVALID_CARGO, NUM_CARGO, NUM_ORIGINAL_CARGO,
+};
 use crate::cargotype::{
     INVALID_TPE, NUM_TPE, TPE_MAIL, TPE_NONE, TPE_PASSENGERS, is_cargo_spec_valid,
 };
@@ -87,6 +90,7 @@ pub struct Services {
     publish_sorted: extern "C" fn(*mut Handle, usize),
     publish_standard: extern "C" fn(*mut Handle, usize),
     publish_town: extern "C" fn(u8, *mut Handle, usize),
+    set_file: extern "C" fn(Handle, Handle),
     set_effect: extern "C" fn(Handle, u8),
     invalidate_strings: extern "C" fn(Handle),
     file: extern "C" fn(Handle) -> File,
@@ -105,24 +109,24 @@ struct Registry {
     mask: u64,
     standard: u64,
     defaults: Vec<u32>,
-    climate: [u32; 12],
+    climate: [u32; NUM_ORIGINAL_CARGO as usize],
     bitnum: [u32; 32],
     labels: BTreeMap<u32, u8>,
     sorted: Vec<Handle>,
-    reverse: [u8; 64],
-    town: [Vec<Handle>; 3],
+    reverse: [u8; NUM_CARGO as usize],
+    town: [Vec<Handle>; NUM_TPE as usize],
 }
 static REGISTRY: GameState<Registry> = GameState::new(Registry {
     services: ptr::null(),
     mask: 0,
     standard: 0,
     defaults: Vec::new(),
-    climate: [0; 12],
+    climate: [0; NUM_ORIGINAL_CARGO as usize],
     bitnum: [0; 32],
     labels: BTreeMap::new(),
     sorted: Vec::new(),
-    reverse: [0; 64],
-    town: [const { Vec::new() }; 3],
+    reverse: [0; NUM_CARGO as usize],
+    town: [const { Vec::new() }; NUM_TPE as usize],
 });
 fn services() -> &'static Services {
     unsafe { &*(*REGISTRY.get()).services }
@@ -144,26 +148,29 @@ pub unsafe extern "C" fn openttd_rust_cargo_setup(s: *const Services, climate: u
     // SAFETY: serialized native loading excludes all runtime registry views.
     unsafe {
         (*REGISTRY.get()).services = s;
-        crate::movement::native_assert(&*(*s).shared, climate < 4);
+        crate::movement::native_assert(
+            &*(*s).shared,
+            climate < crate::landscape_type::NUM_LANDSCAPE,
+        );
         (*REGISTRY.get()).mask = 0;
         (*REGISTRY.get()).defaults.clear();
         (*REGISTRY.get()).climate.fill(CT_INVALID);
         (*REGISTRY.get()).bitnum.fill(CT_INVALID);
     }
     let s = unsafe { &*s };
-    for slot in 0..12 {
+    for slot in 0..NUM_ORIGINAL_CARGO {
         (s.copy_default)(climate, slot);
         let spec = (s.label_spec)((s.spec)(slot));
         if is_cargo_spec_valid(spec.bitnum) {
             unsafe {
-                (*REGISTRY.get()).mask |= 1_u64 << slot;
+                set_bit64(&mut (*REGISTRY.get()).mask, slot);
                 (*REGISTRY.get()).defaults.push(spec.label);
                 (*REGISTRY.get()).climate[usize::from(slot)] = spec.label;
                 (*REGISTRY.get()).bitnum[usize::from(spec.bitnum)] = spec.label;
             }
         }
     }
-    (s.clear_specs)(12);
+    (s.clear_specs)(NUM_ORIGINAL_CARGO);
     openttd_rust_cargo_labels_rebuild();
 }
 #[unsafe(no_mangle)]
@@ -180,6 +187,21 @@ pub extern "C" fn openttd_rust_cargo_labels_rebuild() {
             }
         }
     }
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_cargo_bitnum_changed(spec: Handle, cargo: u8, file: Handle) {
+    let s = services();
+    if is_cargo_spec_valid((s.bitnum)(spec)) {
+        (s.set_file)(spec, file);
+        unsafe {
+            set_bit64(&mut (*REGISTRY.get()).mask, cargo);
+        }
+    } else {
+        unsafe {
+            clr_bit64(&mut (*REGISTRY.get()).mask, cargo);
+        }
+    }
+    openttd_rust_cargo_labels_rebuild();
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_by_label(label: u32) -> u8 {
@@ -201,7 +223,7 @@ pub extern "C" fn openttd_rust_cargo_is_default(cargo: u8) -> bool {
 pub extern "C" fn openttd_rust_cargo_climate_labels() -> Labels {
     Labels {
         data: unsafe { (&raw const (*REGISTRY.get()).climate).cast() },
-        size: 12,
+        size: usize::from(NUM_ORIGINAL_CARGO),
     }
 }
 #[unsafe(no_mangle)]
@@ -296,7 +318,7 @@ pub extern "C" fn openttd_rust_cargo_sort(native: *const Services) {
         }
         standard += 1;
         unsafe {
-            (*REGISTRY.get()).standard |= 1_u64 << order.cargo;
+            set_bit64(&mut (*REGISTRY.get()).standard, order.cargo);
         }
     }
     (s.publish_standard)(data, standard);
@@ -478,5 +500,5 @@ crate::abi::layouts! {
     "OpenTTDCargoLabels" ["probe"] => Labels {data,size};
     "OpenTTDCargoFile" ["probe"] => File {labels,version,fallback};
     "OpenTTDCargoInvocation" ["probe"] => Invocation {label,file,root,callback,param1,param2};
-    "OpenTTDCargoRegistryServices" ["probe"] => Services {shared,common,spec,copy_default,clear_specs,label_spec,bitnum,finalise_spec,order_spec,index,production,sort,publish_sorted,publish_standard,publish_town,set_effect,invalidate_strings,file,assign_fallback,resize_fallback,set_fallback,clear_inverse,set_inverse,invocation,callback_frame,sprite_frame,sprite};
+    "OpenTTDCargoRegistryServices" ["probe"] => Services {shared,common,spec,copy_default,clear_specs,label_spec,bitnum,finalise_spec,order_spec,index,production,sort,publish_sorted,publish_standard,publish_town,set_file,set_effect,invalidate_strings,file,assign_fallback,resize_fallback,set_fallback,clear_inverse,set_inverse,invocation,callback_frame,sprite_frame,sprite};
 }

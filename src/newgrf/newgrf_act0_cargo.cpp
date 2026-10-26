@@ -70,6 +70,9 @@ static ChangeInfoResult CargoReserveInfo(uint first, uint last, int prop, ByteRe
 		switch (prop) {
 			case 0x08: // Bit number of cargo
 				cs->bitnum = buf.ReadByte();
+#ifdef WITH_RUST
+				openttd_rust_cargo_bitnum_changed(cs, id, _cur_gps.grffile);
+#else
 				if (cs->IsValid()) {
 					cs->grffile = _cur_gps.grffile;
 					SetBit(_cargo_mask, id);
@@ -77,6 +80,7 @@ static ChangeInfoResult CargoReserveInfo(uint first, uint last, int prop, ByteRe
 					ClrBit(_cargo_mask, id);
 				}
 				BuildCargoLabelMap();
+#endif
 				break;
 
 			case 0x09: // String ID for cargo type name

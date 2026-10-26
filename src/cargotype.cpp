@@ -370,6 +370,7 @@ const OpenTTDCargoRegistryServices &GetRustCargoRegistryServices() noexcept
 		.publish_sorted = [](const CargoSpec **data, size_t count) noexcept { _sorted_cargo_specs = {data, count}; },
 		.publish_standard = [](const CargoSpec **data, size_t count) noexcept { _sorted_standard_cargo_specs = {data, count}; },
 		.publish_town = [](uint8_t effect, const CargoSpec **data, size_t count) noexcept { CargoSpec::town_production_cargoes[effect] = {data, count}; },
+		.set_file = [](const CargoSpec *cs, const GRFFile *file) noexcept { const_cast<CargoSpec *>(cs)->grffile = file; },
 		.set_effect = [](const CargoSpec *cs, uint8_t effect) noexcept { const_cast<CargoSpec *>(cs)->town_production_effect = static_cast<TownProductionEffect>(effect); },
 		.invalidate_strings = [](const CargoSpec *spec) noexcept {
 			auto cs = const_cast<CargoSpec *>(spec);

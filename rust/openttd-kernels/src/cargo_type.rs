@@ -38,3 +38,6 @@ pub const CT_INVALID: u32 = u32::MAX;
 
 /// Native food label.
 pub const CT_FOOD: u32 = u32::from_be_bytes(*b"FOOD");
+
+/// Original cargo slot count.
+pub const NUM_ORIGINAL_CARGO: u8 = 12;
