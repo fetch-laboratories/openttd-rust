@@ -62,8 +62,6 @@ inline uint8_t RustGRFFileVersion(const GRFFile *file) noexcept { return file->g
 inline uint8_t RustResolverGRFVersion(const ResolverObject *resolver) noexcept { return RustGRFFileVersion(RustResolverGRFFile(resolver)); }
 inline bool RustResolverGRFVersion8(const ResolverObject *resolver) noexcept { return RustResolverGRFVersion(resolver) >= 8; }
 template <typename Spec>
-inline void RustSpecSetGRFFile(Spec *spec, const GRFFile *file) noexcept { spec->grf_prop.SetGRFFile(file); }
-template <typename Spec>
 inline const GRFFile *RustSpecGRFFile(const Spec *spec) noexcept { return spec->grf_prop.grffile; }
 template <typename Spec, typename Handle>
 inline const GRFFile *RustSpecHandleGRFFile(const Handle *spec) noexcept { return RustSpecGRFFile(reinterpret_cast<const Spec *>(spec)); }
