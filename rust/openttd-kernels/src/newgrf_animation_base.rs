@@ -104,7 +104,6 @@ pub struct AirportExtra;
 impl Callback<crate::animated_tile::AirportSpec, crate::station::Station> for AirportExtra {
     type Native = ();
     type NativeEntry = ();
-    #[inline(never)]
     fn entry(
         a: &Services,
         _: &Binding<crate::animated_tile::AirportSpec, crate::station::Station, Self>,

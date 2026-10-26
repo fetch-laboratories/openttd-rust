@@ -244,7 +244,8 @@ pub extern "C" fn openttd_rust_animation_afterload(clean: bool, flags: bool) {
     }
 }
 macro_rules! animate {
-    ($fn:ident,$field:ident,$feature:ty) => {
+    ($(#[$attribute:meta])* $fn:ident,$field:ident,$feature:ty) => {
+        $(#[$attribute])*
         #[unsafe(no_mangle)]
         pub extern "C" fn $fn(tile: u32) {
             let a = services();
@@ -272,6 +273,7 @@ animate!(
     crate::newgrf_animation_base::Station
 );
 animate!(
+    #[inline(never)]
     openttd_rust_animate_airport,
     airport,
     crate::newgrf_animation_base::Airport
