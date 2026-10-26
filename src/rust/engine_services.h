@@ -16,6 +16,7 @@
 #include "../rail.h"
 #include "services_rail.h"
 #include "../road.h"
+#include "../table/strings.h"
 inline const OpenTTDEngine *RustEngineByIDIfValid(uint16_t id) noexcept { return RustEngine(Engine::GetIfValid(EngineID(id))); }
 inline uint8_t RustAircraftInfoSubtype(const AircraftVehicleInfo *info) noexcept { return info->subtype; }
 inline uint8_t RustEngineAircraftSubtype(const OpenTTDEngine *e) noexcept { return RustAircraftInfoSubtype(&EngineOf(e)->VehInfo<AircraftVehicleInfo>()); }

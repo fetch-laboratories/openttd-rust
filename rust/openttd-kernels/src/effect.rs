@@ -631,8 +631,14 @@ pub extern "C" fn openttd_rust_effect_create_above(
     kind: u8,
 ) -> *mut c_void {
     let s = creation();
-    let safe_x = x.clamp(0, ((s.shared.map_max_x)() * 16) as i32);
-    let safe_y = y.clamp(0, ((s.shared.map_max_y)() * 16) as i32);
+    let safe_x = x.clamp(
+        0,
+        ((s.shared.map_max_x)() * crate::tile_type::TILE_SIZE) as i32,
+    );
+    let safe_y = y.clamp(
+        0,
+        ((s.shared.map_max_y)() * crate::tile_type::TILE_SIZE) as i32,
+    );
     openttd_rust_effect_create(
         x,
         y,
