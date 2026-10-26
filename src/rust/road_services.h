@@ -138,7 +138,7 @@ static OpenTTDRoadStopRead OPENTTD_RUST_CALL RoadSvcStopRead(OpenTTDVehicle *v) 
 static bool OPENTTD_RUST_CALL RoadSvcShouldStop(OpenTTDVehicle *v, uint32_t tile) noexcept
 {
 	const RoadVehicle *u = RoadOf(v);
-	return RustVehicleShouldStopAtStation(u, StationID(GetRustSharedServices().station_index(tile)));
+	return u->current_order.ShouldStopAtStation(u, StationID(GetRustSharedServices().station_index(tile)));
 }
 static OpenTTDRoadArrivalRead OPENTTD_RUST_CALL RoadSvcArrivalRead(OpenTTDVehicle *v, uint16_t station) noexcept
 {

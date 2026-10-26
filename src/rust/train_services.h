@@ -134,7 +134,7 @@ static uint64_t TrainCapacity(OpenTTDTrainHandle id) noexcept
 static void TrainCapacityError(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	ShowNewGrfVehicleError(v->engine_type, STR_NEWGRF_BROKEN, STR_NEWGRF_BROKEN_CAPACITY, GRFBug::VehCapacity, true);
+	RustVehicleShowNewGRFError(v->engine_type, STR_NEWGRF_BROKEN, STR_NEWGRF_BROKEN_CAPACITY, GRFBug::VehCapacity, true);
 }
 static uint64_t TrainCargoAgeDefault(OpenTTDTrainHandle id) noexcept
 {

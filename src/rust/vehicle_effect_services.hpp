@@ -33,7 +33,7 @@ const OpenTTDVisualServices &GetRustVisualServices()
 		},
 		.defaults = [](const OpenTTDEngine *shell) noexcept -> OpenTTDVisualDefaults { const Engine *e = EngineOf(shell); return {.rail_kind = RustEngineRailKind(e), .engclass = RustRailEngineClass(&e->VehInfo<RailVehicleInfo>())}; },
 		.grf_version = RustEngineGRFVersionOpaque,
-		.power_error = [](uint16_t engine) noexcept { ShowNewGrfVehicleError(EngineID(engine), STR_NEWGRF_BROKEN, STR_NEWGRF_BROKEN_POWERED_WAGON, GRFBug::VehPoweredWagon, false); },
+		.power_error = [](uint16_t engine) noexcept { RustVehicleShowNewGRFError(EngineID(engine), STR_NEWGRF_BROKEN, STR_NEWGRF_BROKEN_POWERED_WAGON, GRFBug::VehPoweredWagon, false); },
 		.part = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualPart {
 			Vehicle *v = VehicleOf(shell);
 			return {.cache = RustVehicleVisualCache(v), .tile = RustVehicleTile(v), .kind = RustVehicleVehicleType(v), .status = RustVehicleStatus(v), .tick = RustVehicleTick(v)};
@@ -48,7 +48,6 @@ const OpenTTDVisualServices &GetRustVisualServices()
 			return {.handle = TrainHandle(v), .tile = RustVehicleTile(v), .speed = RustVehicleSpeed(v), .front = RustVehicleFront(v)};
 		},
 		.station = RustIsRailStation,
-		.should_stop = [](OpenTTDVehicle *shell, uint32_t tile) noexcept { const Train *v = Train::From(VehicleOf(shell)); return RustVehicleShouldStopAtStation(v, StationID(MapSvcStationIndex(tile))); },
 		.depot = SharedIsDepotTile,
 		.tunnel = RustIsTunnelTile,
 		.tile_rail = RustTileRailType,

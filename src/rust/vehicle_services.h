@@ -78,6 +78,7 @@ inline void RustVehicleInvalidateView(VehicleID id) noexcept { InvalidateWindowD
 inline void RustVehicleVisitInvalidateView(OpenTTDVehicle *v) noexcept { RustVehicleInvalidateView(VehicleOf(v)->index); }
 inline void RustVehicleSetTripOccupancy(OpenTTDVehicle *v, uint8_t occupancy) noexcept { VehicleOf(v)->trip_occupancy = occupancy; }
 inline bool RustVehicleCanAllocate(size_t count) noexcept { return Vehicle::CanAllocateItem(count); }
+inline void RustVehicleShowNewGRFError(EngineID engine, StringID first, StringID second, GRFBug bug, bool critical) noexcept { ShowNewGrfVehicleError(engine, first, second, bug, critical); }
 
 /** Shared ascending vehicle pool traversal for lifecycle and fleet ports. */
 inline OpenTTDVehicle *RustNextVehicle(uint32_t from) noexcept
@@ -210,7 +211,6 @@ inline uint8_t RustVehicleSubtype(const Vehicle *v) noexcept { return *RustVehic
 inline bool RustVehicleFront(const Vehicle *v) noexcept { return v->IsFrontEngine(); }
 inline uint8_t *RustVehicleVisualCache(const Vehicle *v) noexcept { return &v->vcache.cached_vis_effect; }
 inline uint8_t RustVehicleVisualEffect(const Vehicle *v) noexcept { return *RustVehicleVisualCache(v); }
-inline bool RustVehicleShouldStopAtStation(const Vehicle *v, StationID station) noexcept { return v->current_order.ShouldStopAtStation(v, station); }
 inline const int32_t *RustVehicleXAddress(const Vehicle *v) noexcept { return &v->x_pos; }
 inline int32_t RustVehicleX(const Vehicle *v) noexcept { return *RustVehicleXAddress(v); }
 inline const int32_t *RustVehicleYAddress(const Vehicle *v) noexcept { return &v->y_pos; }

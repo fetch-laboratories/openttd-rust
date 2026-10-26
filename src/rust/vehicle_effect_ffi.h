@@ -33,7 +33,6 @@ struct OpenTTDVisualServices {
 	OpenTTDVisualOffset (*offset)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(offset);
 	OpenTTDVisualTrain (*train)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(train);
 	bool (*station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
-	bool (*should_stop)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(should_stop);
 	bool (*depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot);
 	bool (*tunnel)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tunnel);
 	RailType (*tile_rail)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_rail);

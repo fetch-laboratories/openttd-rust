@@ -109,7 +109,6 @@ pub struct Services {
     offset: extern "C" fn(VehicleRef) -> Offset,
     train: extern "C" fn(VehicleRef) -> Train,
     station: extern "C" fn(u32) -> bool,
-    should_stop: extern "C" fn(VehicleRef, u32) -> bool,
     depot: extern "C" fn(u32) -> bool,
     tunnel: extern "C" fn(u32) -> bool,
     tile_rail: extern "C" fn(u32) -> crate::services::RailType,
@@ -299,7 +298,7 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
         if t.handle.get_flags() & crate::train::FLAG_REVERSING != 0
             || ((s.station)(t.tile)
                 && t.front
-                && (s.should_stop)(front, t.tile)
+                && crate::movement::should_stop(s.shared, front, (s.shared.station_index)(t.tile))
                 && u32::from(t.speed) >= max_speed)
         {
             return;
@@ -314,9 +313,9 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
         let p = (s.part)(v);
         let train = if p.kind == VEH_TRAIN {
             Some(if v == front {
-                front_train.unwrap_or_else(|| (s.vehicle.train_handle)(v))
+                front_train.unwrap_or_else(|| (s.vehicle.train_handle)(v.0.as_ptr()))
             } else {
-                (s.vehicle.train_handle)(v)
+                (s.vehicle.train_handle)(v.0.as_ptr())
             })
         } else {
             None
@@ -431,5 +430,5 @@ crate::abi::layouts! {
     "OpenTTDVisualOffset" ["probe"] => Offset { direction, length, };
     "OpenTTDVisualTrain" ["probe"] => Train { handle, tile, speed, front, };
     "OpenTTDVisualPowerWeight" ["probe"] => PowerWeight { power, weight, };
-    "OpenTTDVisualServices" ["probe"] => Services { vehicle, shared, gate, show, engine, defaults, grf_version, power_error, part, bridge_position, offset, train, station, should_stop, depot, tunnel, tile_rail, powered, power_weight, };
+    "OpenTTDVisualServices" ["probe"] => Services { vehicle, shared, gate, show, engine, defaults, grf_version, power_error, part, bridge_position, offset, train, station, depot, tunnel, tile_rail, powered, power_weight, };
 }

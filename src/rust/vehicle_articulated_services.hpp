@@ -32,7 +32,7 @@ static void VehicleArticCopyCommon(void *shell, void *head, uint16_t engine) noe
 	RustWriteVehicleSpriteSequence(v, SPR_IMG_QUERY);
 }
 static uint64_t VehicleArticAvailableCargo(uint16_t engine, bool purchase) noexcept { return GetAvailableVehicleCargoTypes(EngineID(engine), purchase); }
-static void VehicleArticWarning(const OpenTTDEngine *e) noexcept { ShowNewGrfVehicleError(EngineOf(e)->index, STR_NEWGRF_BUGGY, STR_NEWGRF_BUGGY_ARTICULATED_CARGO, GRFBug::VehRefit, false); }
+static void VehicleArticWarning(const OpenTTDEngine *e) noexcept { RustVehicleShowNewGRFError(EngineOf(e)->index, STR_NEWGRF_BUGGY, STR_NEWGRF_BUGGY_ARTICULATED_CARGO, GRFBug::VehRefit, false); }
 const OpenTTDVehicleArticulatedServices &GetRustVehicleArticulatedServices() noexcept
 {
 	static const OpenTTDVehicleArticulatedServices services{

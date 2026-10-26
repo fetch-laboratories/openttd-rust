@@ -277,7 +277,7 @@ static void RoadBoundary()
 		},
 		.show = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualShow { return {2, VEH_ROAD, 2}; },
 		.part = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualPart { return {.cache = &emission_cache, .tile = 100, .kind = VEH_ROAD, .status = 0, .tick = 0}; },
-		.offset = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualOffset { return {DIR_NE, 8, false}; },
+		.offset = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualOffset { return {DIR_NE, 8}; },
 		.depot = [](uint32_t) noexcept { return false; }, .tunnel = [](uint32_t) noexcept { return false; },
 	};
 	openttd_rust_visual_bind(&emission);
