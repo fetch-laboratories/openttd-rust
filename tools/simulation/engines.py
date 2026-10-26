@@ -37,6 +37,11 @@ EXPECTED = {
     "cargo-rating-reload": ("rating-controls true",),
     "types-definitions": (
         "types-case definitions-file-loaded-save true",
+        "types-case definitions-movement true",
+        "types-case definitions-conversion-categories true",
+        "types-case definitions-allocation-order true",
+        "types-case definitions-reordered-tiles true",
+        "types-case definitions-missing-fallbacks true",
         "types-case definitions-reordered true",
         "types-case definitions-missing true",
     ),
@@ -435,6 +440,35 @@ def write_type_grfs(folder):
     )
 
 
+DEFINITION_CAPTURE = (
+    "reserved",
+    "exact-alternate-zero",
+    "cross-file",
+    "road-tram",
+    "introduction-lists",
+    "clamps",
+    "properties",
+    "hidden-introduction",
+    "maps-first-match",
+    "forward-subtype",
+    "partial-rail-label",
+    "partial-road-label",
+    "partial-alternate",
+    "partial-compatible",
+    "partial-powered",
+    "partial-rail-badges",
+    "partial-road-badges",
+    "partial-table",
+    "reverse-narrowing",
+    "no-table",
+    "reserve-mismatch",
+    "exhaustion",
+    "reset",
+    "usable-engine",
+    "built",
+)
+
+
 def definition_reload(scenario, executables, builds, folder, timeout, env, result):
     runs = core.capture_pair(
         lambda role: dict(
@@ -451,7 +485,10 @@ def definition_reload(scenario, executables, builds, folder, timeout, env, resul
     for run in runs.values():
         if (
             run["exit"]
-            or "ENGINE types-case definitions-built true" not in run["log"]
+            or any(
+                f"ENGINE types-case definitions-{label} true" not in run["log"]
+                for label in DEFINITION_CAPTURE
+            )
             or not run["snapshots"]
         ):
             raise RuntimeError("real-file type construction capture failed")

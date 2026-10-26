@@ -227,6 +227,11 @@ static void DefinitionReadFailures()
 	TypeRequire(failed([](ByteReader &reader) { GrfChangeInfoHandler<GSF_RAILTYPES>::Activation(1, 2, 0x1e, reader); }, badges) == 1 && GetRailTypeInfo(file->railtype_map[1])->badges == std::vector<BadgeID>{old_badge} && GetBadge(new_badge)->features.Test(GSF_RAILTYPES), "definitions-partial-rail-badges");
 	TypeRequire(failed([](ByteReader &reader) { GrfChangeInfoHandler<GSF_ROADTYPES>::Activation(0, 1, 0x1e, reader); }, badges) == 1 && GetRoadTypeInfo(file->roadtype_map[0])->badges == std::vector<BadgeID>{old_badge} && GetBadge(new_badge)->features.Test(GSF_ROADTYPES), "definitions-partial-road-badges");
 	TypeRequire(failed([](ByteReader &reader) { GrfChangeInfoHandler<GSF_GLOBALVAR>::Reserve(0, 2, 0x12, reader); }, rail_label) == 1 && file->railtype_list == std::vector<RailTypeLabel>{0x50344141}, "definitions-partial-table");
+	file->railtype_list.assign(257, 0x4d495353); file->railtype_list.back() = 0x52344141;
+	file->roadtype_list.assign(257, 0x4d495353); file->roadtype_list.back() = 0x44344141;
+	TypeRequire(GetReverseRailTypeTranslation(file->railtype_map[1], file) == 0 && GetReverseRoadTypeTranslation(file->roadtype_map[0], file) == 0, "definitions-reverse-narrowing");
+	GRFFile empty;
+	TypeRequire(GetRailTypeTranslation(RAILTYPE_RAIL, nullptr) == RAILTYPE_RAIL && GetRailTypeTranslation(RAILTYPE_RAIL, &empty) == RAILTYPE_RAIL && GetRoadTypeTranslation(RTT_ROAD, 0, &empty) == INVALID_ROADTYPE && GetReverseRailTypeTranslation(RAILTYPE_RAIL, &empty) == RAILTYPE_RAIL && GetReverseRoadTypeTranslation(ROADTYPE_TRAM, &empty) == ROADTYPE_TRAM, "definitions-no-table");
 	current.Restore();
 }
 static bool DefinitionScenario(std::span<std::string_view> args)
