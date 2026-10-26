@@ -172,11 +172,13 @@ GRFError *DisableGrf(StringID message, GRFConfig *config)
  * best result as no NewGRF author can complain about that.
  * @param c The NewGRF to disable.
  */
+#ifndef WITH_RUST
 void DisableStaticNewGRFInfluencingNonStaticNewGRFs(GRFConfig &c)
 {
 	GRFError *error = DisableGrf(STR_NEWGRF_ERROR_STATIC_GRF_CAUSES_DESYNC, &c);
 	error->data = _cur_gps.grfconfig->GetName();
 }
+#endif
 
 static std::map<uint32_t, uint32_t> _grf_id_overrides;
 

@@ -240,7 +240,9 @@ bool ReadSpriteLayout(ByteReader &buf, uint num_building_sprites, bool use_cur_s
 
 GRFFile *GetFileByGRFID(uint32_t grfid);
 GRFError *DisableGrf(StringID message = {}, GRFConfig *config = nullptr);
+#ifndef WITH_RUST
 void DisableStaticNewGRFInfluencingNonStaticNewGRFs(GRFConfig &c);
+#endif
 bool HandleChangeInfoResult(std::string_view caller, ChangeInfoResult cir, GrfSpecFeature feature, uint8_t property);
 #ifndef WITH_RUST
 uint32_t GetParamVal(uint8_t param, uint32_t *cond_val);

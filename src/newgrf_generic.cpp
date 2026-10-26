@@ -57,10 +57,6 @@ const OpenTTDGenericServices &GetRustGenericServices() noexcept
 	};
 	return services;
 }
-void ResetGenericCallbacks()
-{
-	openttd_rust_generic_reset(&GetRustGenericServices());
-}
 void AddGenericCallback(GrfSpecFeature feature, const GRFFile *file, const SpriteGroup *group) { openttd_rust_generic_add(feature, file, group); }
 std::pair<const GRFFile *, uint16_t> GetAiPurchaseCallbackResult(GrfSpecFeature feature, CargoType cargo, uint8_t selection, IndustryType source, IndustryType destination, uint8_t distance, AIConstructionEvent event, uint8_t count, uint8_t station_size)
 {
