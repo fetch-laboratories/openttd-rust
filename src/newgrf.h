@@ -234,4 +234,6 @@ bool GetGlobalVariable(uint8_t param, uint32_t *value, const GRFFile *grffile);
 StringID MapGRFStringID(uint32_t grfid, GRFStringID str);
 void ShowNewGRFError();
 
+std::span<const GRFFile> GetAllGRFFiles();
+
 #endif /* NEWGRF_H */

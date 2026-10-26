@@ -1688,6 +1688,19 @@ inspect-window deletion, share canonical typed native leaves with industry consu
 `python3 tools/migration.py simulate town-houses- --jobs 2`, which places every original house
 through `CmdPlaceHouse`. Station removal on house clearance remains a #156 gap. PR #269.
 
+### House definition loading and publication (#477)
+
+`house_definition.rs` owns property decoding, first-substitute allocation policy, local and
+published multitile validation, global publication, earliest-year repair and reset ordering.
+Native HouseSpec shells/defaults, GRF and sprite graphs, string mapping and badge storage remain.
+The checked shared ByteReader preserves prior writes and partial badge-seen effects before
+returning read errors to the decoder's native exception frame. Cargo translation and house
+classes call their existing Rust owners directly. Loading calls house reset/finalisation directly.
+The original property and lifecycle bodies compile only portably. Shared-manager adoption
+remains open until #479 integrates; the draft uses its existing native facade without another
+manager owner. Historical HIDS, other climates and unreached property branches remain #156
+limits. PR #486.
+
 ### House and shared-town NewGRF resolution (#409)
 
 `town/resolver.rs` owns HouseScope/HouseResolver and TownScope/TownResolver query policy,

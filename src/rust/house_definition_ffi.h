@@ -5,7 +5,8 @@
 #include "newgrf_bytereader_ffi.h"
 #include "../house.h"
 struct OpenTTDHouseDefinitionIdentity { uint32_t grfid; uint16_t local, substitute; };
-struct OpenTTDHouseDefinitionValidity { uint16_t availability, substitute; uint8_t flags, population; bool enabled; };
+struct OpenTTDHouseDefinitionValidity { uint16_t availability, substitute; uint8_t flags; };
+struct OpenTTDHouseDefinitionPart { uint8_t flags, population; bool enabled; };
 struct OpenTTDHouseDefinitionEarly { int32_t year; uint16_t availability; bool enabled; };
 struct OpenTTDHouseDefinitionCargo { uint32_t label; CargoType cargo; };
 struct OpenTTDHouseDefinitionOverride { uint32_t grfid; uint16_t local; };
@@ -26,6 +27,8 @@ struct OpenTTDHouseDefinitionServices {
 	void (*set_identity)(const HouseSpec *spec, GRFFile *file, uint16_t local, uint16_t substitute) noexcept OPENTTD_SERVICE_DEFAULT(set_identity);
 	OpenTTDHouseDefinitionIdentity (*identity)(const HouseSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(identity);
 	OpenTTDHouseDefinitionValidity (*validity)(const HouseSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(validity);
+	OpenTTDHouseDefinitionPart (*part)(const HouseSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(part);
+	uint8_t (*flags)(const HouseSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(flags);
 	OpenTTDHouseDefinitionEarly (*early)(const HouseSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(early);
 	OpenTTDHouseDefinitionCargo (*cargo)(const HouseSpec *spec, uint8_t index) noexcept OPENTTD_SERVICE_DEFAULT(cargo);
 	void (*set_cargo)(const HouseSpec *spec, uint8_t index, CargoType cargo) noexcept OPENTTD_SERVICE_DEFAULT(set_cargo);
@@ -78,8 +81,5 @@ struct OpenTTDHouseDefinitionServices {
 const OpenTTDHouseDefinitionServices &GetHouseDefinitionServices() noexcept;
 extern "C" {
 uint8_t openttd_rust_house_definition_property(const OpenTTDHouseDefinitionServices *, const OpenTTDByteReaderServices *, GRFFile *, uint32_t, uint32_t, int, ByteReader *);
-void openttd_rust_house_definitions_reset(const OpenTTDHouseDefinitionServices *);
-void openttd_rust_house_definitions_finalise(const OpenTTDHouseDefinitionServices *);
-void openttd_rust_house_definition_publish(const OpenTTDHouseDefinitionServices *, const HouseSpec *);
 }
 #endif

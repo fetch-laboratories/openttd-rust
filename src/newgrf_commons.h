@@ -235,7 +235,9 @@ public:
 	HouseOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
 			OverrideManagerBase(offset, maximum, invalid) {}
 
+#ifndef WITH_RUST
 	void SetEntitySpec(HouseSpec &&hs);
+#endif
 };
 
 

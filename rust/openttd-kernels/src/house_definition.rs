@@ -14,10 +14,16 @@
 use crate::cargo_registry::{
     openttd_rust_cargo_by_label as by_label, openttd_rust_cargo_translate as translate,
 };
-use crate::cargo_type::*;
-use crate::gfx_type::*;
-use crate::house::*;
-use crate::newgrf_animation_type::*;
+use crate::cargo_type::{
+    CT_CANDY, CT_FIZZY_DRINKS, CT_FOOD, CT_GOODS, CT_INVALID, INVALID_CARGO, is_valid_cargo_type,
+};
+use crate::gfx_type::{COLOUR_BLUE, COLOUR_GREEN, COLOUR_ORANGE, COLOUR_RED};
+use crate::house::{
+    BUILDING_HAS_1_TILE, BUILDING_HAS_2_TILES, BUILDING_HAS_4_TILES, BUILDING_IS_CHURCH,
+    BUILDING_IS_STADIUM, HOUSE_NUM_ACCEPTS, HOUSE_ORIGINAL_NUM_ACCEPTS, HZ_CLIMATE_ALL,
+    HZ_ZONE_ALL, INVALID_HOUSE_ID, NEW_HOUSE_OFFSET, NUM_HOUSES, NUM_HOUSES_PER_GRF,
+};
+use crate::newgrf_animation_type::{ANIMATION_LOOPING, ANIMATION_NON_LOOPING};
 use crate::newgrf_bytereader::{BadgeList, ByteReader, ReadError, Reader};
 use crate::timer_game_common::{MAX_YEAR, MIN_YEAR, ORIGINAL_BASE_YEAR};
 use std::ffi::c_void;
@@ -33,6 +39,10 @@ pub struct Identity {
 pub struct Validity {
     availability: u16,
     substitute: u16,
+    flags: u8,
+}
+#[repr(C)]
+pub struct Part {
     flags: u8,
     population: u8,
     enabled: bool,
@@ -71,6 +81,8 @@ pub struct Services {
     set_identity: extern "C" fn(Spec, File, u16, u16),
     identity: extern "C" fn(Spec) -> Identity,
     validity: extern "C" fn(Spec) -> Validity,
+    part: extern "C" fn(Spec) -> Part,
+    flags: extern "C" fn(Spec) -> u8,
     early: extern "C" fn(Spec) -> Early,
     cargo: extern "C" fn(Spec, u8) -> Cargo,
     set_cargo: extern "C" fn(Spec, u8, u8),
@@ -123,11 +135,12 @@ pub struct Services {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDHouseDefinitionIdentity" ["house_definition"] => Identity { grfid, local, substitute };
-    "OpenTTDHouseDefinitionValidity" ["house_definition"] => Validity { availability, substitute, flags, population, enabled };
+    "OpenTTDHouseDefinitionValidity" ["house_definition"] => Validity { availability, substitute, flags };
+    "OpenTTDHouseDefinitionPart" ["house_definition"] => Part { flags, population, enabled };
     "OpenTTDHouseDefinitionEarly" ["house_definition"] => Early { year, availability, enabled };
     "OpenTTDHouseDefinitionCargo" ["house_definition"] => Cargo { label, cargo };
     "OpenTTDHouseDefinitionOverride" ["house_definition"] => PendingOverride { grfid, local };
-    "OpenTTDHouseDefinitionServices" ["house_definition"] => Services { get, count, clear_specs, reserve_specs, append_default, file_count, file_at, local_count, has_filename, resize_local, local, clear_local, copy_substitute, set_identity, identity, validity, early, cargo, set_cargo, set_label, set_acceptance, set_colour, callbacks, watched, map_string, set_animation, badges, file_id, add_override, add_entity, pending_override, clear_override, reset_override, resize_specs, move_spec, set_override, climate_mask, landscape, too_many, invalid_substitute, invalid_override, allocation_failed, disable_list, invalid_missing, invalid_population, invalid_size, invalid_availability, set_enabled, set_flags, set_min_year, set_max_year, set_population, set_mail, set_rating, set_removal, set_availability, set_callbacks, set_processing, set_probability, set_extra, set_animation_speed, set_class_id, set_minimum_life, set_watched };
+    "OpenTTDHouseDefinitionServices" ["house_definition"] => Services { get, count, clear_specs, reserve_specs, append_default, file_count, file_at, local_count, has_filename, resize_local, local, clear_local, copy_substitute, set_identity, identity, validity, part, flags, early, cargo, set_cargo, set_label, set_acceptance, set_colour, callbacks, watched, map_string, set_animation, badges, file_id, add_override, add_entity, pending_override, clear_override, reset_override, resize_specs, move_spec, set_override, climate_mask, landscape, too_many, invalid_substitute, invalid_override, allocation_failed, disable_list, invalid_missing, invalid_population, invalid_size, invalid_availability, set_enabled, set_flags, set_min_year, set_max_year, set_population, set_mail, set_rating, set_removal, set_availability, set_callbacks, set_processing, set_probability, set_extra, set_animation_speed, set_class_id, set_minimum_life, set_watched };
 }
 
 fn ignore_property(prop: i32, reader: &mut Reader<'_>) -> Result<u8, ReadError> {
@@ -205,7 +218,7 @@ fn property(
                     {
                         (s.set_colour)(spec, index as u8, colour);
                     }
-                    let flags = (s.validity)(spec).flags;
+                    let flags = (s.flags)(spec);
                     (s.set_flags)(spec, flags & !(BUILDING_IS_CHURCH | BUILDING_IS_STADIUM));
                     let cargo = (s.cargo)(spec, 2);
                     let cargo = if is_valid_cargo_type(cargo.cargo) {
@@ -382,23 +395,32 @@ fn valid(s: &Services, spec: Spec, next: [Spec; 3], file: File) -> bool {
     let info = (s.validity)(spec);
     let two = info.flags & BUILDING_HAS_2_TILES != 0;
     let four = info.flags & BUILDING_HAS_4_TILES != 0;
-    let missing = |spec: Spec| {
-        spec.is_null() || {
-            let info = (s.validity)(spec);
-            !info.enabled || info.flags & BUILDING_HAS_1_TILE != 0
+    let part = |spec: Spec| {
+        if spec.is_null() {
+            None
+        } else {
+            Some((s.part)(spec))
         }
     };
+    let next1 = if two { part(next[0]) } else { None };
+    let next2 = if four { part(next[1]) } else { None };
+    let next3 = if four { part(next[2]) } else { None };
+    let missing = |part: &Option<Part>| {
+        part.as_ref()
+            .is_none_or(|info| !info.enabled || info.flags & BUILDING_HAS_1_TILE != 0)
+    };
     let report = !file.is_null() && (s.has_filename)(file);
-    if (two && missing(next[0])) || (four && (missing(next[1]) || missing(next[2]))) {
+    if (two && missing(&next1)) || (four && (missing(&next2) || missing(&next3))) {
         (s.set_enabled)(spec, false);
         if report {
             (s.invalid_missing)(file, spec);
         }
         return false;
     }
-    if (two && (s.validity)(next[0]).population != 0)
+    if (two && next1.as_ref().is_some_and(|info| info.population != 0))
         || (four
-            && ((s.validity)(next[1]).population != 0 || (s.validity)(next[2]).population != 0))
+            && (next2.as_ref().is_some_and(|info| info.population != 0)
+                || next3.as_ref().is_some_and(|info| info.population != 0)))
     {
         (s.set_enabled)(spec, false);
         if report {
@@ -408,7 +430,7 @@ fn valid(s: &Services, spec: Spec, next: [Spec; 3], file: File) -> bool {
     }
     if report
         && (info.flags & BUILDING_HAS_1_TILE)
-            != ((s.validity)((s.get)(info.substitute)).flags & BUILDING_HAS_1_TILE)
+            != ((s.flags)((s.get)(info.substitute)) & BUILDING_HAS_1_TILE)
     {
         (s.set_enabled)(spec, false);
         (s.invalid_size)(file, spec);
@@ -472,7 +494,6 @@ pub fn publish(s: &Services, spec: Spec) {
     for original in 0..NEW_HOUSE_OFFSET {
         let overridden = (s.get)(original);
         let pending = (s.pending_override)(original);
-        let identity = (s.identity)((s.get)(id));
         if pending.local != identity.local || pending.grfid != identity.grfid {
             continue;
         }
@@ -544,16 +565,4 @@ pub fn finalise(s: &Services) {
             }
         }
     }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_house_definitions_reset(s: *const Services) {
-    reset(unsafe { &*s });
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_house_definitions_finalise(s: *const Services) {
-    finalise(unsafe { &*s });
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_house_definition_publish(s: *const Services, spec: Spec) {
-    publish(unsafe { &*s }, spec);
 }

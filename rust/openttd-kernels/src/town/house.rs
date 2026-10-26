@@ -29,18 +29,13 @@ use std::ffi::c_void;
 
 use crate::house::NEW_HOUSE_OFFSET;
 const PRODUCE_END: u16 = 0x20FF;
-// Building flags.
-const NOT_SLOPED: u8 = 1 << 1;
-const SIZE_2X1: u8 = 1 << 2;
-const SIZE_1X2: u8 = 1 << 3;
-const SIZE_2X2: u8 = 1 << 4;
-const ANIMATED: u8 = 1 << 5;
-const CHURCH: u8 = 1 << 6;
-const STADIUM: u8 = 1 << 7;
-const HAS_1_TILE: u8 = 1 | SIZE_2X1 | SIZE_1X2 | SIZE_2X2;
-const HAS_2_TILES: u8 = SIZE_2X1 | SIZE_1X2 | SIZE_2X2;
-const TILES_X: u8 = SIZE_2X1 | SIZE_2X2;
-const TILES_Y: u8 = SIZE_1X2 | SIZE_2X2;
+use crate::house::{
+    BUILDING_2_TILES_X as TILES_X, BUILDING_2_TILES_Y as TILES_Y,
+    BUILDING_HAS_1_TILE as HAS_1_TILE, BUILDING_HAS_2_TILES as HAS_2_TILES,
+    BUILDING_IS_ANIMATED as ANIMATED, BUILDING_IS_CHURCH as CHURCH, BUILDING_IS_STADIUM as STADIUM,
+    BUILDING_NOT_SLOPED as NOT_SLOPED, BUILDING_SIZE_1X2 as SIZE_1X2,
+    BUILDING_SIZE_2X1 as SIZE_2X1, BUILDING_SIZE_2X2 as SIZE_2X2,
+};
 // House callback mask bits and callback IDs.
 const CBM_ANIM_LOOP: u16 = 1 << 2;
 const CBM_ANIM_STAGE: u16 = 1 << 3;

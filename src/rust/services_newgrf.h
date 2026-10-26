@@ -32,6 +32,10 @@ inline int32_t RustHouseAge(uint32_t tile) noexcept { return GetHouseAge(TileInd
 inline uint8_t RustHouseRandomBits(uint32_t tile) noexcept { return GetHouseRandomBits(TileIndex{tile}); }
 inline uint8_t RustHouseRandomTriggers(uint32_t tile) noexcept { return GetHouseRandomTriggers(TileIndex{tile}).base(); }
 inline const HouseSpec *RustHouseSpec(uint16_t house) noexcept { return HouseSpec::Get(house); }
+inline size_t RustHouseSpecCount() noexcept { return HouseSpec::Specs().size(); }
+inline uint8_t RustTownHouseFlags(const HouseSpec *spec) noexcept { return spec->building_flags.base(); }
+inline uint16_t RustTownHouseCallbacks(const HouseSpec *spec) noexcept { return spec->callback_mask.base(); }
+inline uint64_t RustHouseWatched(const HouseSpec *spec) noexcept { return spec->watched_cargoes; }
 inline uint16_t RustTownHouseClass(const HouseSpec *spec) noexcept { return spec->class_id; }
 inline uint16_t RustTownHouseClass(uint16_t house) noexcept { return RustTownHouseClass(RustHouseSpec(house)); }
 

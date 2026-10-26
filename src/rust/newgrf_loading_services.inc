@@ -223,5 +223,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 	return services;
 }
 #include "abi-visit-OpenTTDGrfLoadingServices.hpp"
-bool CheckAbi_grf_loading() { return AbiServicesComplete(GetRustGrfLoadingServices()); }
+#include "abi-visit-OpenTTDHouseDefinitionServices.hpp"
+bool CheckAbi_grf_loading() { return AbiServicesComplete(GetRustGrfLoadingServices()) && AbiServicesComplete(GetHouseDefinitionServices()); }
 #endif

@@ -1007,9 +1007,7 @@ static OpenTTDTownHousePlacement RustTownHousePlacement(uint16_t id) noexcept
 	return {.min_year = hs->min_year.base(), .max_year = hs->max_year.base()};
 }
 static uint8_t RustTownHousePopulation(const HouseSpec *spec) noexcept { return spec->population; }
-static uint8_t RustTownHouseFlags(const HouseSpec *spec) noexcept { return spec->building_flags.base(); }
 static uint8_t RustTownHouseExtraFlags(const HouseSpec *spec) noexcept { return spec->extra_flags.base(); }
-static uint16_t RustTownHouseCallbacks(const HouseSpec *spec) noexcept { return spec->callback_mask.base(); }
 static OpenTTDTownRoadChoice RustTownRoadInfo(uint8_t id) noexcept
 {
 	const auto *rti = GetRoadTypeInfo(static_cast<RoadType>(id));
@@ -1059,7 +1057,7 @@ static void RustTown_nearby_stations(uint32_t town, uint32_t tile, uint32_t size
 }
 static uint32_t RustTown_house_count() noexcept
 {
-	return static_cast<uint32_t>(HouseSpec::Specs().size());
+	return static_cast<uint32_t>(RustHouseSpecCount());
 }
 static void RustTown_update_max_pass(uint32_t town) noexcept
 {
@@ -1196,7 +1194,7 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 		.sprite_groups = RustHouseHasSpriteGroups,
 		.removal = [](uint16_t house) noexcept -> OpenTTDHouseRemoval { const HouseSpec *hs = HouseSpec::Get(house); return {static_cast<int64_t>(hs->GetRemovalCost()), hs->remove_rating_decrease}; },
 		.acceptance = RustHouseAcceptance,
-		.watched = [](uint16_t house) noexcept -> uint64_t { return HouseSpec::Get(house)->watched_cargoes; },
+		.watched = [](uint16_t house) noexcept -> uint64_t { return RustHouseWatched(RustHouseSpec(house)); },
 		.substitute = [](uint16_t house) noexcept -> uint16_t { return _house_mngr.GetSubstituteID(house); },
 		.inc_construction = [](uint32_t tile) noexcept { IncHouseConstructionTick(TileIndex{tile}); },
 		.reset_age = [](uint32_t tile) noexcept { ResetHouseAge(TileIndex{tile}); },

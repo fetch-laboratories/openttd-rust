@@ -33,10 +33,6 @@
 #include "rust/environment_services.h"
 #endif
 
-#ifdef WITH_RUST
-#include "rust/house_definition_services.hpp"
-#endif
-
 #include "safeguards.h"
 
 #ifdef WITH_RUST
@@ -164,11 +160,9 @@ HouseSpec *HouseSpec::Get(size_t house_id)
 }
 
 /* Reset and initialise house specs. */
+#ifndef WITH_RUST
 void ResetHouses()
 {
-#ifdef WITH_RUST
-	openttd_rust_house_definitions_reset(&GetHouseDefinitionServices());
-#else
 	_house_specs.clear();
 	_house_specs.reserve(std::size(_original_house_specs));
 
@@ -179,8 +173,8 @@ void ResetHouses()
 
 	/* Reset any overrides that have been set. */
 	_house_mngr.ResetOverride();
-#endif
 }
+#endif
 
 /**
  * Construct a resolver for a house.
