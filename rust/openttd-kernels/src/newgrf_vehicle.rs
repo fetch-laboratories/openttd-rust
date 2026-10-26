@@ -1567,10 +1567,10 @@ pub(crate) unsafe fn cache_override(vs: &VehicleServices, v: VehicleRef) {
 pub(crate) unsafe fn trigger(vs: &VehicleServices, v: VehicleRef, trigger: Trigger) {
     unsafe { openttd_rust_vehicle_randomise(&*(vs.newgrf)(), v.0.as_ptr(), trigger as u8) }
 }
-/// Direct general callback with source engine selection and caller register output.
+/// Direct callback; `None` preserves purchase/clone-estimate contexts without a shell.
 pub(crate) unsafe fn callback(
     vs: &VehicleServices,
-    v: VehicleRef,
+    v: Option<VehicleRef>,
     engine: u16,
     callback: u16,
     parameter: u32,
@@ -1586,7 +1586,7 @@ pub(crate) unsafe fn callback(
             parameter,
             0,
             engine,
-            v.0.as_ptr(),
+            v.map_or(null_mut(), |v| v.0.as_ptr()),
             parent,
             override_parent,
             registers,
