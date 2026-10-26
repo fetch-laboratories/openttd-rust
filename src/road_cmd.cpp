@@ -89,11 +89,10 @@ RoadTypes _roadtypes_tram; ///< Bitset of tram roadtypes.
  */
 void ResetRoadTypes()
 {
-#ifdef WITH_RUST
-	openttd_rust_road_reset(&GetRustTypeRegistryServices(), std::size(_original_roadtypes));
-#else
 	static_assert(std::size(_original_roadtypes) <= std::size(_roadtypes));
-
+#ifdef WITH_RUST
+	openttd_rust_road_reset(&GetRustTypeRegistryServices());
+#else
 	auto insert = std::copy(std::begin(_original_roadtypes), std::end(_original_roadtypes), std::begin(_roadtypes));
 	std::fill(insert, std::end(_roadtypes), RoadTypeInfo{});
 
@@ -205,6 +204,7 @@ RoadType AllocateRoadType(RoadTypeLabel label, RoadTramType rtt)
 const OpenTTDRoadRegistryServices &GetRustRoadRegistryServices() noexcept
 {
 	static const OpenTTDRoadRegistryServices table = {
+		.default_count = std::size(_original_roadtypes),
 		.spec = [](RoadType rt) noexcept { return &_roadtypes[rt]; },
 		.type_label = [](RoadType rt) noexcept { return RustRoadTypeLabel(GetRoadTypeInfo(rt)); },
 		.alternate = [](RoadType rt, uint32_t label) noexcept { return GetRoadTypeInfo(rt)->alternate_labels.contains(label); },

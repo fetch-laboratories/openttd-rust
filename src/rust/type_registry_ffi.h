@@ -17,6 +17,7 @@ struct OpenTTDTypeAllocation { uint32_t label; uint64_t self; uint8_t order; };
 struct OpenTTDTypeLabels { const uint32_t *data; size_t size; };
 struct OpenTTDTypeMap { uint8_t *data; size_t size; };
 struct OpenTTDRailRegistryServices {
+	uint8_t default_count;
 	RailTypeInfo * (*spec)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(spec);
 	RailTypeLabel (*type_label)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(type_label);
 	bool (*alternate)(RailType, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(alternate);
@@ -29,6 +30,7 @@ struct OpenTTDRailRegistryServices {
 	void (*allocate)(RailTypeInfo *, const OpenTTDTypeAllocation *) noexcept OPENTTD_SERVICE_DEFAULT(allocate);
 };
 struct OpenTTDRoadRegistryServices {
+	uint8_t default_count;
 	RoadTypeInfo * (*spec)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(spec);
 	RoadTypeLabel (*type_label)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(type_label);
 	bool (*alternate)(RoadType, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(alternate);
@@ -58,8 +60,8 @@ uint64_t *openttd_rust_rail_hidden_mask();
 uint64_t *openttd_rust_road_hidden_mask();
 uint64_t *openttd_rust_road_mask();
 uint64_t *openttd_rust_tram_mask();
-void openttd_rust_rail_reset(const OpenTTDTypeRegistryServices *, uint8_t);
-void openttd_rust_road_reset(const OpenTTDTypeRegistryServices *, uint8_t);
+void openttd_rust_rail_reset(const OpenTTDTypeRegistryServices *);
+void openttd_rust_road_reset(const OpenTTDTypeRegistryServices *);
 void openttd_rust_rail_init();
 void openttd_rust_road_init();
 RailType openttd_rust_rail_allocate(uint32_t);

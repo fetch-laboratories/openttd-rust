@@ -52,6 +52,7 @@ pub struct TypeMap {
 }
 #[repr(C)]
 pub struct RailServices {
+    default_count: u8,
     spec: extern "C" fn(u8) -> Handle,
     type_label: extern "C" fn(u8) -> u32,
     alternate: extern "C" fn(u8, u32) -> bool,
@@ -65,6 +66,7 @@ pub struct RailServices {
 }
 #[repr(C)]
 pub struct RoadServices {
+    default_count: u8,
     spec: extern "C" fn(u8) -> Handle,
     type_label: extern "C" fn(u8) -> u32,
     alternate: extern "C" fn(u8, u32) -> bool,
@@ -133,14 +135,14 @@ pub extern "C" fn openttd_rust_rail_hidden_mask() -> *mut u64 {
     unsafe { &raw mut (*REGISTRY.get()).rail_hidden }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_rail_reset(s: *const Services, defaults: u8) {
+pub unsafe extern "C" fn openttd_rust_rail_reset(s: *const Services) {
     unsafe {
         (*REGISTRY.get()).services = s;
     }
     let s = services();
     for rt in RAILTYPE_BEGIN..RAILTYPE_END {
         let info = (s.rail().spec)(rt);
-        if rt < defaults {
+        if rt < s.rail().default_count {
             (s.rail().copy_default)(info, rt);
         } else {
             (s.rail().clear)(info);
@@ -252,14 +254,14 @@ pub extern "C" fn openttd_rust_road_hidden_mask() -> *mut u64 {
     unsafe { &raw mut (*REGISTRY.get()).road_hidden }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_road_reset(s: *const Services, defaults: u8) {
+pub unsafe extern "C" fn openttd_rust_road_reset(s: *const Services) {
     unsafe {
         (*REGISTRY.get()).services = s;
     }
     let s = services();
     for rt in ROADTYPE_BEGIN..ROADTYPE_END {
         let info = (s.road().spec)(rt);
-        if rt < defaults {
+        if rt < s.road().default_count {
             (s.road().copy_default)(info, rt);
         } else {
             (s.road().clear)(info);
@@ -493,8 +495,8 @@ crate::abi::layouts! {
  "OpenTTDTypeAllocation" ["engine"] => Allocation { label, self_ => self, order };
  "OpenTTDTypeLabels" ["engine"] => Labels { data, size };
  "OpenTTDTypeMap" ["engine"] => TypeMap { data, size };
- "OpenTTDRailRegistryServices" ["engine"] => RailServices { spec, type_label, alternate, clear, copy_default, resolve_gui, publication, sort, publish_sorted, allocate };
- "OpenTTDRoadRegistryServices" ["engine"] => RoadServices { spec, type_label, alternate, clear, copy_default, resolve_gui, publication, sort, publish_sorted, allocate };
+ "OpenTTDRailRegistryServices" ["engine"] => RailServices { default_count, spec, type_label, alternate, clear, copy_default, resolve_gui, publication, sort, publish_sorted, allocate };
+ "OpenTTDRoadRegistryServices" ["engine"] => RoadServices { default_count, spec, type_label, alternate, clear, copy_default, resolve_gui, publication, sort, publish_sorted, allocate };
  "OpenTTDTypeRegistryServices" ["engine"] => Services { rail, road, rail_labels, road_labels, tram_labels, rail_map, road_map, tram_map };
 }
 

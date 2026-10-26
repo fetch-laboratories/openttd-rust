@@ -85,11 +85,10 @@ enum SignalOffsets {
  */
 void ResetRailTypes()
 {
-#ifdef WITH_RUST
-	openttd_rust_rail_reset(&GetRustTypeRegistryServices(), std::size(_original_railtypes));
-#else
 	static_assert(std::size(_original_railtypes) <= std::size(_railtypes));
-
+#ifdef WITH_RUST
+	openttd_rust_rail_reset(&GetRustTypeRegistryServices());
+#else
 	auto insert = std::copy(std::begin(_original_railtypes), std::end(_original_railtypes), std::begin(_railtypes));
 	std::fill(insert, std::end(_railtypes), RailTypeInfo{});
 
@@ -213,6 +212,7 @@ RailType AllocateRailType(RailTypeLabel label)
 const OpenTTDRailRegistryServices &GetRustRailRegistryServices() noexcept
 {
 	static const OpenTTDRailRegistryServices table = {
+		.default_count = std::size(_original_railtypes),
 		.spec = [](RailType rt) noexcept { return &_railtypes[rt]; },
 		.type_label = [](RailType rt) noexcept { return RustRailTypeLabel(GetRailTypeInfo(rt)); },
 		.alternate = [](RailType rt, uint32_t label) noexcept { return GetRailTypeInfo(rt)->alternate_labels.contains(label); },
