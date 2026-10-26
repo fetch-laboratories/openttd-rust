@@ -77,8 +77,6 @@ const OpenTTDIndustryPropertyServices &GetIndustryPropertyServices() noexcept
 		.layout_import_index = [](uint32_t id) noexcept { GrfMsg(1, "IndustriesChangeInfo: Invalid original industry layout index for layout import, industry {}", id); },
 		.layout_tile_undefined = [](uint16_t tile, uint32_t id) noexcept { GrfMsg(2, "IndustriesChangeInfo: Attempt to use industry tile {} with industry id {}, not yet defined. Ignoring.", tile, id); },
 		.layout_invalid = [](uint32_t id) noexcept { GrfMsg(1, "IndustriesChangeInfo: Invalid industry layout for industry id {}. Ignoring", id); },
-		.list_too_long = [](int32_t prop) noexcept { GRFError *error = DisableGrf(STR_NEWGRF_ERROR_LIST_PROPERTY_TOO_LONG); error->param_value[1] = prop; },
-		.invalid_import = []() noexcept { DisableGrf(STR_NEWGRF_ERROR_INVALID_ID); },
 		.industry_badges = [](IndustrySpec *spec) noexcept { return &spec->badges; },
 		.tile_badges = [](IndustryTileSpec *spec) noexcept { return &spec->badges; },
 	};

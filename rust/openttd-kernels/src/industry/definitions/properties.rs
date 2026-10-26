@@ -17,7 +17,7 @@ use crate::newgrf_internal::{
     CIR_DISABLED as DISABLED, CIR_INVALID_ID as INVALID_ID, CIR_SUCCESS as SUCCESS,
     CIR_UNKNOWN as UNKNOWN,
 };
-use crate::{newgrf, override_manager};
+use crate::{newgrf, newgrf_loading, override_manager};
 use std::{ffi::c_void, ptr};
 #[repr(C)]
 pub struct Context {
@@ -26,7 +26,7 @@ pub struct Context {
     pub version: u8,
     pub climate: u8,
 }
-fn ignore_tile(prop: i32, r: &mut Reader<'_>) -> Result<u8, ReadError> {
+fn ignore_tile(prop: i32, r: &mut Reader<'_>) -> Result<i32, ReadError> {
     match prop {
         0x09 | 0x0d | 0x0e | 0x10..=0x12 => {
             r.byte()?;
@@ -42,7 +42,7 @@ fn ignore_tile(prop: i32, r: &mut Reader<'_>) -> Result<u8, ReadError> {
     }
     Ok(SUCCESS)
 }
-fn ignore_industry(prop: i32, r: &mut Reader<'_>) -> Result<u8, ReadError> {
+fn ignore_industry(prop: i32, r: &mut Reader<'_>) -> Result<i32, ReadError> {
     match prop {
         0x09 | 0x0b | 0x0f | 0x12..=0x14 | 0x17..=0x19 | 0x21 | 0x22 => {
             r.byte()?;
@@ -115,7 +115,8 @@ unsafe fn layouts(
     c: &Context,
     r: &mut Reader<'_>,
     p: &Storage,
-) -> Result<u8, ReadError> {
+    loading: &newgrf_loading::Services,
+) -> Result<i32, ReadError> {
     let count = r.byte()?;
     let mut definition_size = r.dword()?;
     let mut bytes_read = 0_u32;
@@ -146,14 +147,14 @@ unsafe fn layouts(
                 if u16::from(kind) >= NEW_INDUSTRYOFFSET {
                     unsafe {
                         (p.layout_import_type)(id);
-                        (p.invalid_import)();
+                        newgrf_loading::disable_invalid_id(loading);
                     }
                     return Ok(DISABLED);
                 }
                 if usize::from(index) >= unsafe { (p.original_layout_count)(kind) } {
                     unsafe {
                         (p.layout_import_index)(id);
-                        (p.invalid_import)();
+                        newgrf_loading::disable_invalid_id(loading);
                     }
                     return Ok(DISABLED);
                 }
@@ -214,7 +215,8 @@ unsafe fn tiles(
     r: &mut Reader<'_>,
     s: &Services,
     p: &Storage,
-) -> Result<u8, ReadError> {
+    loading: &newgrf_loading::Services,
+) -> Result<i32, ReadError> {
     if last > u32::from(NUM_INDUSTRYTILES_PER_GRF) {
         unsafe {
             (p.too_many_tiles)(last);
@@ -306,7 +308,7 @@ unsafe fn tiles(
                 let count = usize::from(r.byte()?);
                 if count > INDUSTRY_NUM_INPUTS {
                     unsafe {
-                        (p.list_too_long)(prop);
+                        newgrf_loading::disable_list_property(loading, prop as u32);
                     }
                     return Ok(DISABLED);
                 }
@@ -354,7 +356,8 @@ unsafe fn industries(
     r: &mut Reader<'_>,
     s: &Services,
     p: &Storage,
-) -> Result<u8, ReadError> {
+    loading: &newgrf_loading::Services,
+) -> Result<i32, ReadError> {
     if last > u32::from(NUM_INDUSTRYTYPES_PER_GRF) {
         unsafe {
             (p.too_many_industries)(last);
@@ -416,7 +419,7 @@ unsafe fn industries(
                 }
             }
             0x0a => {
-                let status = unsafe { layouts(id, spec, c, r, p) }?;
+                let status = unsafe { layouts(id, spec, c, r, p, loading) }?;
                 if status == DISABLED {
                     return Ok(status);
                 }
@@ -563,7 +566,7 @@ unsafe fn industries(
                 };
                 if count > maximum {
                     unsafe {
-                        (p.list_too_long)(prop);
+                        newgrf_loading::disable_list_property(loading, prop as u32);
                     }
                     return Ok(DISABLED);
                 }
@@ -608,7 +611,7 @@ unsafe fn industries(
                 let count = usize::from(r.byte()?);
                 if count > INDUSTRY_NUM_OUTPUTS {
                     unsafe {
-                        (p.list_too_long)(prop);
+                        newgrf_loading::disable_list_property(loading, prop as u32);
                     }
                     return Ok(DISABLED);
                 }
@@ -624,7 +627,7 @@ unsafe fn industries(
                 let outputs = usize::from(r.byte()?);
                 if inputs > INDUSTRY_NUM_INPUTS || outputs > INDUSTRY_NUM_OUTPUTS {
                     unsafe {
-                        (p.list_too_long)(prop);
+                        newgrf_loading::disable_list_property(loading, prop as u32);
                     }
                     return Ok(DISABLED);
                 }
@@ -650,7 +653,7 @@ unsafe fn industries(
     }
     Ok(result)
 }
-fn finish(status: &Result<u8, ReadError>, result: *mut u8) -> bool {
+fn finish(status: &Result<i32, ReadError>, result: *mut i32) -> bool {
     match status {
         Ok(value) => {
             unsafe {
@@ -671,12 +674,13 @@ pub unsafe extern "C" fn openttd_rust_industry_properties(
     reads: *const ReaderServices,
     s: *const Services,
     p: *const Storage,
-    result: *mut u8,
+    loading: *const newgrf_loading::Services,
+    result: *mut i32,
 ) -> bool {
-    let (c, reads, s, p) = unsafe { (&*c, &*reads, &*s, &*p) };
+    let (c, reads, s, p, loading) = unsafe { (&*c, &*reads, &*s, &*p, &*loading) };
     let mut reader = unsafe { Reader::new(native, reads) };
     finish(
-        &unsafe { industries(first, last, prop, c, &mut reader, s, p) },
+        &unsafe { industries(first, last, prop, c, &mut reader, s, p, loading) },
         result,
     )
 }
@@ -690,12 +694,13 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_properties(
     reads: *const ReaderServices,
     s: *const Services,
     p: *const Storage,
-    result: *mut u8,
+    loading: *const newgrf_loading::Services,
+    result: *mut i32,
 ) -> bool {
-    let (c, reads, s, p) = unsafe { (&*c, &*reads, &*s, &*p) };
+    let (c, reads, s, p, loading) = unsafe { (&*c, &*reads, &*s, &*p, &*loading) };
     let mut reader = unsafe { Reader::new(native, reads) };
     finish(
-        &unsafe { tiles(first, last, prop, c, &mut reader, s, p) },
+        &unsafe { tiles(first, last, prop, c, &mut reader, s, p, loading) },
         result,
     )
 }

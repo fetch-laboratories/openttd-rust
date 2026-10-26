@@ -5,6 +5,7 @@
 #include "industry_definition_ffi.h"
 #include "../industrytype.h"
 #include "newgrf_bytereader_ffi.h"
+struct OpenTTDGrfLoadingServices;
 struct OpenTTDIndustryDefinitionLayout { const IndustryTileLayoutTile *data; size_t size; };
 struct OpenTTDIndustryDefinitionLayoutBuffer { const IndustryTileLayoutTile *data; size_t size, capacity; };
 struct OpenTTDIndustryPropertyServices {
@@ -63,8 +64,6 @@ struct OpenTTDIndustryPropertyServices {
 	void (*layout_import_index)(uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(layout_import_index);
 	void (*layout_tile_undefined)(uint16_t tile, uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(layout_tile_undefined);
 	void (*layout_invalid)(uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(layout_invalid);
-	void (*list_too_long)(int32_t prop) noexcept OPENTTD_SERVICE_DEFAULT(list_too_long);
-	void (*invalid_import)() noexcept OPENTTD_SERVICE_DEFAULT(invalid_import);
 	std::vector<BadgeID> *(*industry_badges)(IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(industry_badges);
 	std::vector<BadgeID> *(*tile_badges)(IndustryTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(tile_badges);
 };
@@ -73,7 +72,7 @@ struct OpenTTDIndustryPropertyContext {
 	uint32_t grfid;
 	uint8_t version, climate;
 };
-extern "C" bool openttd_rust_industry_properties(uint32_t, uint32_t, int32_t, ByteReader *, const OpenTTDIndustryPropertyContext *, const OpenTTDByteReaderServices *, const OpenTTDIndustryDefinitionServices *, const OpenTTDIndustryPropertyServices *, uint8_t *);
-extern "C" bool openttd_rust_industry_tile_properties(uint32_t, uint32_t, int32_t, ByteReader *, const OpenTTDIndustryPropertyContext *, const OpenTTDByteReaderServices *, const OpenTTDIndustryDefinitionServices *, const OpenTTDIndustryPropertyServices *, uint8_t *);
+extern "C" bool openttd_rust_industry_properties(uint32_t, uint32_t, int32_t, ByteReader *, const OpenTTDIndustryPropertyContext *, const OpenTTDByteReaderServices *, const OpenTTDIndustryDefinitionServices *, const OpenTTDIndustryPropertyServices *, const OpenTTDGrfLoadingServices *, int32_t *);
+extern "C" bool openttd_rust_industry_tile_properties(uint32_t, uint32_t, int32_t, ByteReader *, const OpenTTDIndustryPropertyContext *, const OpenTTDByteReaderServices *, const OpenTTDIndustryDefinitionServices *, const OpenTTDIndustryPropertyServices *, const OpenTTDGrfLoadingServices *, int32_t *);
 const OpenTTDIndustryPropertyServices &GetIndustryPropertyServices() noexcept;
 #endif

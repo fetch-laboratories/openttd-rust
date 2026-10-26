@@ -95,8 +95,6 @@ pub struct Services {
     pub layout_import_index: unsafe extern "C" fn(u32),
     pub layout_tile_undefined: unsafe extern "C" fn(u16, u32),
     pub layout_invalid: unsafe extern "C" fn(u32),
-    pub list_too_long: unsafe extern "C" fn(i32),
-    pub invalid_import: unsafe extern "C" fn(),
     pub industry_badges:
         unsafe extern "C" fn(*mut SpecHandle) -> *mut crate::newgrf_bytereader::BadgeList,
     pub tile_badges:
@@ -109,6 +107,6 @@ crate::abi::layouts! {
     "OpenTTDIndustryDefinitionLayoutBuffer" ["industry"] => LayoutBuffer { data, size, capacity };
     "OpenTTDIndustryPropertyServices" ["industry"] => Services {
         resize_industries, resize_tiles, create_industry, create_tile, industry_identity, tile_identity, clear_placement_check, clear_animation, callbacks, set_rate, set_multiplier, set_conflicting, set_creation, set_ingame, invalidate_produced, invalidate_accepted, invalidate_tile_accepted, set_acceptance, set_sounds, clear_station_name, set_life, set_cost, set_minimal_cargo, set_map_colour, set_behaviour, set_prospecting, set_removal_cost, set_callbacks, set_tile_slopes, set_tile_callbacks, set_animation_frames, set_animation_status, set_animation_speed, set_animation_triggers, set_tile_flags, map_closure_text, map_production_up_text, map_production_down_text, map_new_industry_text, map_name, map_station_name, original_layout_count, original_layout, install_layouts,
-        too_many_tiles, too_many_industries, tile_substitute_invalid, tile_override_invalid, industry_substitute_invalid, industry_override_invalid, layout_size_mismatch, layout_import_type, layout_import_index, layout_tile_undefined, layout_invalid, list_too_long, invalid_import, industry_badges, tile_badges
+        too_many_tiles, too_many_industries, tile_substitute_invalid, tile_override_invalid, industry_substitute_invalid, industry_override_invalid, layout_size_mismatch, layout_import_type, layout_import_index, layout_tile_undefined, layout_invalid, industry_badges, tile_badges
     };
 }

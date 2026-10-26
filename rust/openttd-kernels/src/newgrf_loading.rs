@@ -413,7 +413,6 @@ pub unsafe extern "C" fn openttd_rust_grf_disable(
     }
 }
 /// Disable the current file and retain the offending Action0 property.
-#[allow(dead_code)]
 pub unsafe fn disable_list_property(s: &Services, property: u32) {
     unsafe {
         let error = openttd_rust_grf_disable(s, s.list_property_too_long, ptr::null_mut());
@@ -421,7 +420,6 @@ pub unsafe fn disable_list_property(s: &Services, property: u32) {
     }
 }
 /// Disable the current file after an invalid feature ID.
-#[allow(dead_code)]
 pub unsafe fn disable_invalid_id(s: &Services) {
     unsafe { disable(s, s.invalid_id) }
 }
