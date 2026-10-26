@@ -4,6 +4,8 @@
 #ifdef WITH_RUST
 #include "../industrytype.h"
 #include "../newgrf.h"
+#include "../debug.h"
+#include "../sound_type.h"
 #include "../newgrf_cargo.h"
 #include "../newgrf_config.h"
 #include "../newgrf/newgrf_internal.h"
@@ -14,7 +16,7 @@
 
 static OpenTTDIndustryDefinitionCargo DefinitionCargo(CargoType cargo, const std::variant<CargoLabel, MixedCargoType> &label) noexcept
 {
-	if (const auto *value = std::get_if<CargoLabel>(&label)) return {*value, false, cargo};
+	if (const auto *value = std::get_if<CargoLabel>(&label)) return {value->base(), false, cargo};
 	return {static_cast<uint32_t>(std::get<MixedCargoType>(label)), true, cargo};
 }
 const OpenTTDIndustryDefinitionServices &GetIndustryDefinitionServices() noexcept

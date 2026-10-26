@@ -16,6 +16,8 @@
 #include "../rust/industry_resolver_ffi.h"
 #include "../rust/override_manager_ffi.h"
 #include "../rust/industry_definition_ffi.h"
+#include "../rust/industry_property_ffi.h"
+#include "../rust/newgrf_bytereader_ffi.h"
 #include "../rust/newgrf_global_ffi.h"
 #include "../object_base.h"
 #include "../industrytype.h"

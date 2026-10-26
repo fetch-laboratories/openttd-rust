@@ -1414,3 +1414,7 @@ mod rail;
 mod type_availability;
 
 mod override_manager;
+
+mod newgrf_bytereader;
+
+mod industry_map;

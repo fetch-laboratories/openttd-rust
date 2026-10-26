@@ -146,12 +146,12 @@ static void StationAirportFixture(TileIndex origin, DoCommandFlags test, DoComma
 	}
 	st->airport.tile = north;
 	/* Live selection: missing/disabled custom, substitute and its override. */
-	auto mappings = _airport_mngr.mappings; auto *new_spec = AirportSpec::GetWithoutOverride(NEW_AIRPORT_OFFSET); AirportSpec saved_new = *new_spec;
+	std::vector<EntityIDMapping> mappings(_airport_mngr.mappings.begin(), _airport_mngr.mappings.end()); auto *new_spec = AirportSpec::GetWithoutOverride(NEW_AIRPORT_OFFSET); AirportSpec saved_new = *new_spec;
 	for (bool enabled : {false, true}) for (uint32_t grfid : {0U, file.grfid}) for (uint16_t substitute : {uint16_t{AT_INVALID}, uint16_t{AT_SMALL}}) {
 		new_spec->enabled = enabled; new_spec->grf_prop.override_id = AT_INVALID; _airport_mngr.mappings[NEW_AIRPORT_OFFSET] = {grfid, 0, substitute};
 		for (uint16_t over : {uint16_t{AT_INVALID}, uint16_t{AT_LARGE}}) { spec->grf_prop.override_id = over; fmt::print(stderr, "STCMD airport-selection {} {} {} {} {}\n", enabled, grfid, substitute, over, AirportSpec::Get(NEW_AIRPORT_OFFSET)->GetIndex()); }
 	}
-	_airport_mngr.mappings = std::move(mappings); *new_spec = std::move(saved_new);
+	std::copy(mappings.begin(), mappings.end(), _airport_mngr.mappings.begin()); *new_spec = std::move(saved_new);
 	fmt::print(stderr, "STCMD airport-state {} {} {} {} {}\n", st->index.base(), st->random_bits, st->airport.psa->GetValue(7), _random.state[0], _random.state[1]);
 	*ats = std::move(saved_tile); *spec = std::move(saved);
 	delete random; delete det; delete parent; delete other; delete result;

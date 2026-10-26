@@ -3,6 +3,8 @@
 //! mapping/override state is canonical Rust storage. All calls run under the game-state
 //! mutex. References to manager storage end before native leaves or reentrant owners.
 use super::{SpecHandle, TileSpec};
+pub(crate) mod properties;
+pub(crate) mod storage;
 use crate::override_manager::{self, Mapping};
 use std::ffi::c_void;
 #[repr(C)]
