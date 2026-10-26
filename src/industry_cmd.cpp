@@ -3899,8 +3899,6 @@ const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept
 		.anim_next = [](uint16_t gfx) noexcept -> uint16_t { return GetIndustryTileSpec(gfx)->anim_next; },
 		.build_oilrig = [](uint32_t tile) noexcept { BuildOilRig(TileIndex(tile)); },
 		.pixel_max_z = OpenTTDTileMaxPixelZ,
-		.create_effect = [](int32_t x, int32_t y, int32_t z, uint8_t type) noexcept -> OpenTTDEffectVehicle * { return CreateEffectVehicle(x, y, z, static_cast<EffectVehicleType>(type)); },
-		.create_effect_above = RustCreateEffectAboveValue,
 		.set_effect_substate = [](OpenTTDEffectVehicle *vehicle, uint8_t state) noexcept { vehicle->SetAnimationSubstate(state); },
 		.spec = [](uint16_t gfx) noexcept -> const OpenTTDIndustryTileSpec * { return GetIndustryTileSpec(gfx); },
 		.acceptance = [](const OpenTTDIndustryTileSpec *spec) noexcept -> OpenTTDIndustryTileAcceptance {

@@ -67,8 +67,6 @@ pub struct TileServices {
     pub anim_next: unsafe extern "C" fn(u16) -> u16,
     pub build_oilrig: unsafe extern "C" fn(u32),
     pub pixel_max_z: unsafe extern "C" fn(u32) -> i32,
-    pub create_effect: unsafe extern "C" fn(i32, i32, i32, u8) -> *mut EffectHandle,
-    pub create_effect_above: unsafe extern "C" fn(i32, i32, i32, u8) -> *mut EffectHandle,
     pub set_effect_substate: unsafe extern "C" fn(*mut EffectHandle, u8),
     pub spec: unsafe extern "C" fn(u16) -> *const TileSpec,
     pub acceptance: unsafe extern "C" fn(*const TileSpec) -> TileAcceptance,
@@ -90,14 +88,12 @@ fn chimney(tile: u32, map: crate::services::Map, t: &TileServices) {
     let x = map.tile_x(tile).wrapping_mul(16);
     let y = map.tile_y(tile).wrapping_mul(16);
     let z = unsafe { (t.pixel_max_z)(tile) };
-    unsafe {
-        (t.create_effect)(
-            x.wrapping_add(15) as i32,
-            y.wrapping_add(14) as i32,
-            z.wrapping_add(59),
-            0,
-        )
-    };
+    crate::effect::openttd_rust_effect_create(
+        x.wrapping_add(15) as i32,
+        y.wrapping_add(14) as i32,
+        z.wrapping_add(59),
+        0,
+    );
 }
 fn bigger(
     tile: u32,
@@ -327,9 +323,9 @@ fn bubble(tile: u32, s: &Services, map: crate::services::Map, t: &TileServices) 
         .tile_y(tile)
         .wrapping_mul(16)
         .wrapping_add([-4_i32, -10, -4, 1][dir] as u32) as i32;
-    let vehicle = unsafe { (t.create_effect_above)(x, y, [49, 59, 60, 65][dir], 9) };
+    let vehicle = crate::effect::openttd_rust_effect_create_above(x, y, [49, 59, 60, 65][dir], 9);
     if !vehicle.is_null() {
-        unsafe { (t.set_effect_substate)(vehicle, dir as u8) };
+        unsafe { (t.set_effect_substate)(vehicle.cast(), dir as u8) };
     }
 }
 /// # Safety
@@ -459,14 +455,12 @@ pub(crate) unsafe fn tile_loop(
             }
         }
         49 => {
-            unsafe {
-                (t.create_effect_above)(
-                    map.tile_x(tile).wrapping_mul(16).wrapping_add(6) as i32,
-                    map.tile_y(tile).wrapping_mul(16).wrapping_add(6) as i32,
-                    43,
-                    11,
-                )
-            };
+            crate::effect::openttd_rust_effect_create_above(
+                map.tile_x(tile).wrapping_mul(16).wrapping_add(6) as i32,
+                map.tile_y(tile).wrapping_mul(16).wrapping_add(6) as i32,
+                43,
+                11,
+            );
         }
         143 => {
             let industry = unsafe { (t.industry)(tile) };

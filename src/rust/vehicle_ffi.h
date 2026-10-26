@@ -129,7 +129,6 @@ struct OpenTTDVehicleServices {
 	void (OPENTTD_RUST_CALL *length_changed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(length_changed);
 	bool (OPENTTD_RUST_CALL *play_vehicle_sound)(OpenTTDVehicle *, VehicleSoundEvent) noexcept OPENTTD_SERVICE_DEFAULT(play_vehicle_sound);
 	void (OPENTTD_RUST_CALL *play_sound)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(play_sound);
-	void (OPENTTD_RUST_CALL *large_explosion)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(large_explosion);
 	void (OPENTTD_RUST_CALL *order_free)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_free);
 	void (OPENTTD_RUST_CALL *order_dummy)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_dummy);
 	void (OPENTTD_RUST_CALL *start_stop_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(start_stop_dirty);

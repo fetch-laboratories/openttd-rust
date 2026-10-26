@@ -72,6 +72,21 @@
 #include "../slope_func.h"
 #include "tile_type_access.hpp"
 #include "../safeguards.h"
+static_assert(VE_OFFSET_START == 0);
+static_assert(VE_OFFSET_CENTRE == 8);
+static_assert(VE_TYPE_START == 4);
+static_assert(VE_TYPE_DEFAULT == 0);
+static_assert(VE_TYPE_STEAM == 1);
+static_assert(VE_DISABLE_EFFECT == 6);
+static_assert(VE_ADVANCED_EFFECT == 6);
+static_assert(VE_DISABLE_WAGON_POWER == 7);
+static_assert(VE_DEFAULT == 255);
+static_assert(EC_STEAM == 0);
+static_assert(EC_MONORAIL == 3);
+static_assert(DIRDIFF_90RIGHT == 2);
+static_assert(CBID_VEHICLE_VISUAL_EFFECT == 16);
+static_assert(VSE_VISUAL_EFFECT == 6);
+
 #include "settings_services.h"
 #include "environment_services.h"
 #include "services_station.h"

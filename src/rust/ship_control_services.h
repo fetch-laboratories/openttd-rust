@@ -155,7 +155,6 @@ static uint32_t Ship_speed_frac(uint32_t id, bool sea) noexcept
 	return sea ? ShipVehInfo(v->engine_type)->ocean_speed_frac : ShipVehInfo(v->engine_type)->canal_speed_frac;
 }
 
-static void Ship_update_visual(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->UpdateVisualEffect(); }
 
 static void Ship_cache_invalidate(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleInvalidateChain(RustVehicle(v)); }
 
@@ -199,7 +198,6 @@ static void Ship_viewport(uint32_t id, bool update_delta, bool force) noexcept {
 
 static void Ship_base_viewport(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->Vehicle::UpdateViewport(true); }
 
-static void Ship_visual(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->ShowVisualEffect(); }
 
 static void Ship_cache(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->UpdateCache(); }
 
@@ -221,7 +219,7 @@ static OpenTTDShipTrackResult Ship_yapf_choose(uint32_t id, uint32_t tile) noexc
 	return {static_cast<uint8_t>(track), found};
 }
 
-static void Ship_update_delta(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->UpdateDeltaXY(); }
+static void Ship_update_delta(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleUpdateDelta(v); }
 
 static void Ship_build_owner(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->owner = _current_company; }
 
@@ -381,7 +379,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.running_cost = Ship_running_cost, .cost_divisor = Ship_cost_divisor,
 		.pay_running = Ship_pay_running, .speed_default = Ship_speed_default,
 		.age_default = Ship_age_default, .speed_frac = Ship_speed_frac,
-		.update_visual = Ship_update_visual, .cache_invalidate = Ship_cache_invalidate,
+		.cache_invalidate = Ship_cache_invalidate,
 		.capacity = Ship_capacity, .sprite_direction = Ship_sprite_direction,
 		.tile_x = Ship_tile_x, .tile_y = Ship_tile_y,
 		.build_flag = RustIndexedEngineRead<bool, RustEngineExclusivePreview, uint32_t>, .build_random = Ship_build_random,
@@ -391,7 +389,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.path_back = Ship_path_back, .path_pop = Ship_path_pop,
 		.path_clear = Ship_path_clear,
 		.viewport = Ship_viewport,
-		.base_viewport = Ship_base_viewport, .visual = Ship_visual,
+		.base_viewport = Ship_base_viewport,
 		.cache = Ship_cache, .play_sound = Ship_play_sound,
 		.yapf_reverse = Ship_yapf_reverse, .yapf_choose = Ship_yapf_choose,
 		.update_delta = Ship_update_delta, .build_owner = Ship_build_owner,

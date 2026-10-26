@@ -321,11 +321,6 @@ static uint64_t TrainIsTunnelbridge(OpenTTDTrainHandle, uint32_t a) noexcept
 {
 	return IsTileType(TileIndex(a), MP_TUNNELBRIDGE);
 }
-static void TrainLargeExplosion(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	CreateEffectVehicleRel(v, 4, 4, 8, EV_EXPLOSION_LARGE);
-}
 static void TrainLeaveSound(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
@@ -462,11 +457,6 @@ static uint64_t TrainServint(OpenTTDTrainHandle id) noexcept
 	return Company::Get(v->owner)->settings.vehicle.servint_trains;
 }
 
-static void TrainShowEffect(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	v->ShowVisualEffect();
-}
 
 static uint64_t TrainSignalPbs(OpenTTDTrainHandle, uint8_t a) noexcept
 {
@@ -479,11 +469,6 @@ static uint64_t TrainSigsegFull(OpenTTDTrainHandle) noexcept
 static uint64_t TrainSigsegPbs(OpenTTDTrainHandle) noexcept
 {
 	return SIGSEG_PBS;
-}
-static void TrainSmallExplosion(OpenTTDTrainHandle id, int32_t a, int32_t b, int32_t c) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	CreateEffectVehicleRel(v, static_cast<int>(a), static_cast<int>(b), static_cast<int>(c), EV_EXPLOSION_SMALL);
 }
 static uint64_t TrainSpeedDefault(OpenTTDTrainHandle id) noexcept
 {
@@ -562,11 +547,6 @@ static void TrainTruncateCargo(OpenTTDTrainHandle id, uint32_t a) noexcept
 }
 
 
-static void TrainUpdateDelta(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	v->UpdateDeltaXY();
-}
 static uint64_t TrainUserDefault(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
@@ -584,11 +564,6 @@ static void TrainViewport(OpenTTDTrainHandle id, uint8_t a, uint8_t b) noexcept
 static uint64_t TrainVisitType(OpenTTDTrainHandle, uint16_t a) noexcept
 {
 	return Station::Get(StationID(a))->had_vehicle_of_type;
-}
-static void TrainVisEffect(OpenTTDTrainHandle id, uint8_t a) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	v->UpdateVisualEffect(a != 0);
 }
 static uint64_t TrainWagonOverride(OpenTTDTrainHandle id) noexcept
 {

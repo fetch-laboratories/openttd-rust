@@ -62,6 +62,14 @@ inline void RustVehicleDirtyDepotOpaque(void *v) noexcept { RustVehicleDirtyDepo
 inline void RustVehicleInvalidateDepotTile(TileIndex tile) noexcept { InvalidateWindowData(WC_VEHICLE_DEPOT, tile); }
 inline void RustVehicleInvalidateDepot(const Vehicle *v) noexcept { RustVehicleInvalidateDepotTile(v->tile); }
 template <class T> inline void RustVehicleUpdateViewport(T *v, bool update_delta, bool force) noexcept { v->UpdateViewport(update_delta, force); }
+template <typename Handle> inline void RustVehicleUpdateDelta(Handle handle) noexcept
+{
+	Vehicle *v;
+	if constexpr (std::is_pointer_v<Handle>) { v = reinterpret_cast<Vehicle *>(handle); }
+	else if constexpr (requires { handle.handle; }) { v = VehicleOf(handle.handle); }
+	else { v = static_cast<Vehicle *>(handle.shell); }
+	v->UpdateDeltaXY();
+}
 inline void RustVehiclePlayLeaveSound(OpenTTDVehicle *v) noexcept { VehicleOf(v)->PlayLeaveStationSound(); }
 inline void RustVehicleHideFilling(OpenTTDVehicle *v) noexcept { HideFillingPercent(&VehicleOf(v)->fill_percent_te_id); }
 inline void RustVehicleInvalidateView(VehicleID id) noexcept { InvalidateWindowData(WC_VEHICLE_VIEW, id); }
@@ -283,7 +291,6 @@ inline void OPENTTD_RUST_CALL GroundSvcWriteLength(OpenTTDVehicle *part, uint8_t
 	T *u = T::From(VehicleOf(part));
 	u->gcache.cached_veh_length = length;
 	T::From(VehicleOf(front))->gcache.cached_total_length = total_length;
-	u->UpdateVisualEffect();
 }
 
 template <class T>

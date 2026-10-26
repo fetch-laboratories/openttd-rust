@@ -605,17 +605,18 @@ extern "C" const OpenTTDEffectCreationServices *GetRustEffectCreationServices() 
 		.shared = &GetRustSharedServices(),
 		.can_allocate = RustVehicleCanAllocate,
 		.allocate = []() noexcept -> OpenTTDEffectAllocation { auto *v = new EffectVehicle(); return {v, v->rust_state.get()}; },
+		.owner = [](void *shell) noexcept { return static_cast<EffectVehicle *>(shell)->rust_state.get(); },
 		.place = [](void *shell, int32_t x, int32_t y, int32_t z, uint8_t type) noexcept {
 			auto *v = static_cast<EffectVehicle *>(shell);
 			v->subtype = type; v->x_pos = x; v->y_pos = y; v->z_pos = z; v->tile = TileIndex{};
 		},
-		.delta = [](void *shell) noexcept { static_cast<EffectVehicle *>(shell)->UpdateDeltaXY(); },
+		.delta = RustVehicleUpdateDelta<void *>,
 		.unclickable = [](void *shell) noexcept { static_cast<EffectVehicle *>(shell)->vehstatus = VehState::Unclickable; },
 		.position = [](const OpenTTDVehicle *shell) noexcept -> OpenTTDEffectPosition {
 			const auto *v = VehicleOf(shell);
 			return {.x = RustVehicleX(v), .y = RustVehicleY(v), .z = RustVehicleZ(v)};
 		},
-		.slope_pixel_z = [](int32_t x, int32_t y) noexcept -> int32_t { return SharedSlopePixelZ(x, y, false); },
+		.slope_pixel_z = SharedSlopePixelZ,
 	};
 	return &services;
 }

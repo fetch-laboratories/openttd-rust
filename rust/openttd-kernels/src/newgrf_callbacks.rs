@@ -76,3 +76,6 @@ pub const CBID_SOUNDS_AMBIENT_EFFECT: CallbackID = CallbackID(0x144);
 pub const CBID_OBJECT_LAND_SLOPE_CHECK: CallbackID = CallbackID(0x157);
 /// Object colour callback.
 pub const CBID_OBJECT_COLOUR: CallbackID = CallbackID(0x15b);
+
+/// `CBID_VEHICLE_VISUAL_EFFECT`.
+pub const CBID_VEHICLE_VISUAL_EFFECT: CallbackID = CallbackID(0x10);

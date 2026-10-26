@@ -1863,8 +1863,6 @@ crate::abi::layouts! {
         anim_next,
         build_oilrig,
         pixel_max_z,
-        create_effect,
-        create_effect_above,
         set_effect_substate,
         spec,
         acceptance,

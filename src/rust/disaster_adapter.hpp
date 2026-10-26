@@ -123,8 +123,6 @@ static int64_t OPENTTD_RUST_CALL DisasterService(void *, const OpenTTDDisasterAc
 	switch (step.kind) {
 		case 5: response = GetAircraftFlightLevel(DisasterVehicle::Get(step.id)); break;
 		case 6: { int z; GetAircraftFlightLevelBounds(DisasterVehicle::Get(step.id), &z, nullptr); response = z; break; }
-		case 7: CreateEffectVehicleRel(Vehicle::Get(step.id), step.a, step.b, step.c, static_cast<EffectVehicleType>(step.other)); break;
-		case 8: RustCreateEffectAbove(step.a, step.b, step.c, static_cast<EffectVehicleType>(step.other)); break;
 		case 9: SndPlayVehicleFx(SND_12_EXPLOSION, Vehicle::Get(step.id)); break;
 		case 10: RustPlayTileSound(step.id, SND_12_EXPLOSION); break;
 		case 11:
@@ -156,7 +154,7 @@ static int64_t OPENTTD_RUST_CALL DisasterService(void *, const OpenTTDDisasterAc
 		case 18: RustUpdateSignals(); break;
 		case 20: ResetIndustryConstructionStage(TileIndex{step.id}); MarkTileDirtyByTile(TileIndex{step.id}); break;
 		case 21: response = ClosestTownFromTile(TileIndex{step.id}, UINT_MAX)->index.base(); break;
-		case 24: DisasterVehicle::Get(step.id)->UpdateDeltaXY(); break;
+		case 24: RustVehicleUpdateDelta(DisasterVehicle::Get(step.id)); break;
 	}
 	return response;
 }

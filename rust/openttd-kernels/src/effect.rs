@@ -523,7 +523,7 @@ crate::abi::layouts! {
 "OpenTTDEffectAllocation" ["probe"] => Allocation { shell, owner, };
     "OpenTTDEffectPosition" ["probe"] => Position { x, y, z, };
     "OpenTTDEffectCreationServices" ["probe"] => CreationServices {
-        effect, shared, can_allocate, allocate, place, delta, unclickable, position, slope_pixel_z,
+        effect, shared, can_allocate, allocate, owner, place, delta, unclickable, position, slope_pixel_z,
     };
 
 }
@@ -548,21 +548,22 @@ pub struct CreationServices {
     shared: &'static Services,
     can_allocate: extern "C" fn(usize) -> bool,
     allocate: extern "C" fn() -> Allocation,
+    owner: extern "C" fn(*mut c_void) -> *mut State,
     place: extern "C" fn(*mut c_void, i32, i32, i32, u8),
     delta: extern "C" fn(*mut c_void),
     unclickable: extern "C" fn(*mut c_void),
     position: extern "C" fn(*const crate::vehicle::OpenTTDVehicle) -> Position,
-    slope_pixel_z: extern "C" fn(i32, i32) -> i32,
+    slope_pixel_z: extern "C" fn(i32, i32, bool) -> i32,
 }
 static CREATION: crate::game_state::GameState<*const CreationServices> =
     crate::game_state::GameState::new(std::ptr::null());
 /// Bind immutable process-wide services before vehicle initialization or native creation.
 #[unsafe(no_mangle)]
 #[allow(unsafe_code)]
-pub unsafe extern "C" fn openttd_rust_effect_bind(services: *const CreationServices) {
-    unsafe {
-        *CREATION.get() = services;
-    }
+pub unsafe extern "C" fn openttd_rust_effect_bind(
+    services: *const CreationServices,
+) -> *const CreationServices {
+    unsafe { std::ptr::replace(CREATION.get(), services) }
 }
 #[allow(unsafe_code)]
 fn creation() -> &'static CreationServices {
@@ -601,7 +602,7 @@ pub extern "C" fn openttd_rust_effect_create_above(
     openttd_rust_effect_create(
         x,
         y,
-        (s.slope_pixel_z)(safe_x, safe_y).wrapping_add(z),
+        (s.slope_pixel_z)(safe_x, safe_y, false).wrapping_add(z),
         kind,
     )
 }
@@ -622,4 +623,18 @@ pub extern "C" fn openttd_rust_effect_create_rel(
         p.z.wrapping_add(z),
         kind,
     )
+}
+
+/// Canonical coordinates at the relative-creation observation point.
+pub(crate) fn position(v: *const crate::vehicle::OpenTTDVehicle) -> (i32, i32, i32) {
+    let p = (creation().position)(v);
+    (p.x, p.y, p.z)
+}
+
+/// `EffectVehicle::SetAnimationState` on a live created shell.
+#[allow(unsafe_code)]
+pub(crate) fn set_animation(shell: *mut c_void, duration: u16) {
+    unsafe {
+        openttd_rust_effect_set((creation().owner)(shell), 0, duration);
+    }
 }

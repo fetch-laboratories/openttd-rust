@@ -87,6 +87,14 @@ pub const fn change_dir_diff(a: u8, b: u8) -> u8 {
     a.wrapping_add(b) % DIR_END
 }
 
+/// `ChangeDir`, retaining the native direction precondition.
+pub fn change_dir(direction: u8, difference: u8, check: impl Fn(bool)) -> u8 {
+    if direction >= DIR_END {
+        check(false);
+    }
+    direction.wrapping_add(difference) % DIR_END
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

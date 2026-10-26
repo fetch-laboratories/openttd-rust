@@ -234,8 +234,6 @@ pub struct VehicleServices {
     /// `PlayVehicleSound(v, event)`.
     pub play_vehicle_sound: extern "C" fn(VehicleRef, VehicleSoundEvent) -> bool,
     pub play_sound: extern "C" fn(VehicleRef, u16),
-    /// `CreateEffectVehicleRel(v, 4, 4, 8, EV_EXPLOSION_LARGE)`.
-    pub large_explosion: extern "C" fn(VehicleRef),
     pub order_free: extern "C" fn(VehicleRef),
     /// `MakeDummy()`, then the start/stop widget dirty.
     pub order_dummy: extern "C" fn(VehicleRef),
@@ -367,7 +365,7 @@ pub struct GroundServices {
     /// Set `GVF_SUPPRESS_IMPLICIT_ORDERS`, then `MakeGoToDepot(depot, Service)`.
     pub go_to_depot_service: extern "C" fn(VehicleRef, u16),
     pub write_first_engine: extern "C" fn(VehicleRef, u16),
-    /// Store `u` length and `v` total length, then `u->UpdateVisualEffect()`.
+    /// Store `u` length and `v` total length.
     pub write_length: extern "C" fn(VehicleRef, u8, VehicleRef, u16),
     pub cached_length: extern "C" fn(VehicleRef) -> u8,
     pub has_articulated: extern "C" fn(VehicleRef) -> bool,
@@ -425,7 +423,6 @@ crate::abi::layouts! {
         length_changed,
         play_vehicle_sound,
         play_sound,
-        large_explosion,
         order_free,
         order_dummy,
         start_stop_dirty,

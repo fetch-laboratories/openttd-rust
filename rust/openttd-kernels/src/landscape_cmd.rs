@@ -60,7 +60,6 @@ pub struct LandscapeServices {
     pub mark_dirty_height: extern "C" fn(u32, i32),
     pub set_height: extern "C" fn(u32, u32),
     pub paused: extern "C" fn() -> bool,
-    pub explosion: extern "C" fn(u32, bool),
 }
 /// Immutable canonical tile-owner tables, resolved without copying world records.
 #[repr(C)]
@@ -447,7 +446,12 @@ impl<'a> World<'a> {
                     crate::command::with_cost(self.c, |ignored| self.clear_do(ignored, t, flags))
                 };
                 if (t == tile || t == start) && !(self.a.paused)() {
-                    (self.a.explosion)(t, tile == start);
+                    crate::effect::openttd_rust_effect_create_above(
+                        (self.map.tile_x(t) * 16 + 8) as i32,
+                        (self.map.tile_y(t) * 16 + 8) as i32,
+                        2,
+                        if tile == start { 7 } else { 5 },
+                    );
                 }
             } else if amount != 0 {
                 limit -= 1;
@@ -922,7 +926,7 @@ crate::abi::layouts! {
     "OpenTTDLandscapeCommandServices" ["landscape"] => crate::landscape_cmd::LandscapeServices {
         shared, costs, commands, strings, tile_procs, water, on_water, coast, buoy, canal,
         height_limit, max_bridge_height, freeform_edges, editor, exchange_generating,
-        tunnel_in_way, mark_dirty_height, set_height, paused, explosion,
+        tunnel_in_way, mark_dirty_height, set_height, paused,
     };
     "OpenTTDLandscapeTileServices" ["landscape"] => crate::landscape_cmd::TileServices {
         clear, terraform, owners, trees, industry_policy, industry_costs, industry_generation,

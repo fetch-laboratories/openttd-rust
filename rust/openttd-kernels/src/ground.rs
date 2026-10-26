@@ -589,7 +589,6 @@ pub struct RoadServices {
     pub work_counter: extern "C" fn(u32) -> u32,
     pub set_work_counter: extern "C" fn(u32, u32),
     pub all_bits: extern "C" fn(u32) -> RoadBits,
-    pub bulldozer: extern "C" fn(u32),
     pub cleanup: extern "C" fn(u32, RoadBits) -> RoadBits,
     pub town: *const crate::town::Leaves,
     pub set_road_type: extern "C" fn(u32, RoadType),
@@ -657,7 +656,13 @@ pub(crate) unsafe fn road_tile_loop(
                         if ambient {
                             (s.play_sound)(tile, 31);
                         }
-                        (r.bulldozer)(tile);
+                        let map = crate::map_func::Map::from_log_x(size_x.ilog2());
+                        crate::effect::openttd_rust_effect_create_above(
+                            (map.tile_x(tile) * 16 + 7).cast_signed(),
+                            (map.tile_y(tile) * 16 + 7).cast_signed(),
+                            0,
+                            8,
+                        );
                         (s.mark_dirty)(tile);
                         return;
                     }
@@ -868,7 +873,6 @@ crate::abi::layouts! {
         work_counter,
         set_work_counter,
         all_bits,
-        bulldozer,
         cleanup,
         town,
         set_road_type,

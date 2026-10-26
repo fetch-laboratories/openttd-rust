@@ -162,7 +162,6 @@ static void OPENTTD_RUST_CALL VehicleSvcUnknownCallbackResult(const OpenTTDEngin
 static void OPENTTD_RUST_CALL VehicleSvcLengthChanged(OpenTTDVehicle *v) noexcept { VehicleLengthChanged(VehicleOf(v)); }
 static bool OPENTTD_RUST_CALL VehicleSvcPlayVehicleSound(OpenTTDVehicle *v, VehicleSoundEvent event) noexcept { return PlayVehicleSound(VehicleOf(v), event); }
 static void OPENTTD_RUST_CALL VehicleSvcPlaySound(OpenTTDVehicle *v, uint16_t sound) noexcept { SndPlayVehicleFx(static_cast<SoundID>(sound), VehicleOf(v)); }
-static void OPENTTD_RUST_CALL VehicleSvcLargeExplosion(OpenTTDVehicle *v) noexcept { CreateEffectVehicleRel(VehicleOf(v), 4, 4, 8, EV_EXPLOSION_LARGE); }
 static void OPENTTD_RUST_CALL VehicleSvcOrderFree(OpenTTDVehicle *v) noexcept { VehicleOf(v)->current_order.Free(); }
 static void OPENTTD_RUST_CALL VehicleSvcOrderDummy(OpenTTDVehicle *v) noexcept
 {
@@ -345,7 +344,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.length_changed = VehicleSvcLengthChanged,
 	.play_vehicle_sound = VehicleSvcPlayVehicleSound,
 	.play_sound = VehicleSvcPlaySound,
-	.large_explosion = VehicleSvcLargeExplosion,
 	.order_free = VehicleSvcOrderFree,
 	.order_dummy = VehicleSvcOrderDummy,
 	.start_stop_dirty = VehicleSvcStartStopDirty,
@@ -593,13 +591,6 @@ static OpenTTDVehicleMaintenanceBreakdownSoundState OPENTTD_RUST_CALL Maintenanc
 }
 static void OPENTTD_RUST_CALL MaintenanceBreakdownDelayWrite(OpenTTDVehicle *handle, uint8_t delay) noexcept { VehicleOf(handle)->breakdown_delay = delay; }
 static bool OPENTTD_RUST_CALL MaintenanceSmokeDisabled(OpenTTDVehicle *handle) noexcept { return EngInfo(VehicleOf(handle)->engine_type)->misc_flags.Test(EngineMiscFlag::NoBreakdownSmoke); }
-static OpenTTDVehicleMaintenanceBreakdownSmoke OPENTTD_RUST_CALL MaintenanceSmoke(OpenTTDVehicle *handle) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	EffectVehicle *smoke = CreateEffectVehicleRel(v, 4, 4, 5, EV_BREAKDOWN_SMOKE);
-	return {.shell = RustVehicle(smoke), .delay = RustVehicleBreakdownDelay(v)};
-}
-static void OPENTTD_RUST_CALL MaintenanceSmokeAnimation(OpenTTDVehicle *handle, uint16_t duration) noexcept { EffectVehicle::From(VehicleOf(handle))->SetAnimationState(duration); }
 static void OPENTTD_RUST_CALL MaintenanceAircraftBroken(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->vehstatus.Set(VehState::AircraftBroken); }
 static void OPENTTD_RUST_CALL MaintenanceMarkDirty(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->MarkDirty(); }
 static void OPENTTD_RUST_CALL MaintenanceViewDirty(OpenTTDVehicle *handle) noexcept { SetWindowDirty(WC_VEHICLE_VIEW, VehicleOf(handle)->index); }
@@ -667,8 +658,7 @@ const OpenTTDVehicleMaintenanceServices _rust_vehicle_maintenance_services{
 	.breakdown_sound_state = MaintenanceBreakdownSoundState,
 	.breakdown_delay_write = MaintenanceBreakdownDelayWrite,
 	.smoke_disabled = MaintenanceSmokeDisabled,
-	.smoke = MaintenanceSmoke,
-	.smoke_animation = MaintenanceSmokeAnimation,
+	.smoke_delay = RustVehicleRead<uint8_t, RustVehicleBreakdownDelay>,
 	.aircraft_broken = MaintenanceAircraftBroken,
 	.mark_dirty = MaintenanceMarkDirty,
 	.view_dirty = MaintenanceViewDirty,

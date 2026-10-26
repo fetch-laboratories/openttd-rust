@@ -42,6 +42,10 @@
 #include "aircraft.h"
 #include "ship.h"
 
+#include "effectvehicle_base.h"
+#include "effectvehicle_func.h"
+#include "newgrf_sound.h"
+
 [[noreturn]] static void FixtureAbort(int line) { fmt::print(stderr, "FLEET setup-failure {}\n", line); std::fflush(stderr); std::abort(); }
 static bool SameRandom(const SavedRandomSeeds &a, const SavedRandomSeeds &b);
 
@@ -707,12 +711,86 @@ static void ResolverProbe()
 	fmt::print(stderr, "FLEET resolver-checkpoint complete\n");
 }
 
+struct VisualEffectObserver : SpriteGroup {
+	const SpriteGroup *program = nullptr;
+	mutable uint spawn = 0, sound = 0;
+	uint16_t visual = 0x41;
+	ResolverResult Resolve(ResolverObject &object) const override
+	{
+		if (object.callback == CBID_VEHICLE_VISUAL_EFFECT) return CallbackResult(this->visual);
+		if (object.callback == CBID_VEHICLE_SOUND_EFFECT) { if (object.callback_param1 == VSE_VISUAL_EFFECT) ++this->sound; return {}; }
+		if (object.callback == CBID_VEHICLE_SPAWN_VISUAL_EFFECT) { ++this->spawn; return SpriteGroup::Resolve(this->program, object, false); }
+		return {};
+	}
+};
+
+static void VisualEffectProbe()
+{
+	RoadVehicle *v = nullptr;
+	for (RoadVehicle *u : RoadVehicle::Iterate()) if (u->IsPrimaryVehicle() && u->Next() == nullptr) { v = u; break; }
+	if (v == nullptr) FixtureAbort(__LINE__);
+	Engine *e = Engine::Get(v->engine_type);
+	Backup<CargoGRFFileProps> props(e->grf_prop);
+	Backup<VehicleCallbackMasks> mask(e->info.callback_mask);
+	Backup<uint8_t> smoke(_settings_game.vehicle.smoke_amount, 2);
+	Backup<bool> sound(_settings_client.sound.vehicle, true);
+	Backup<VehicleCache> cache(v->vcache);
+	Backup<VehStates> status(v->vehstatus, {});
+	Backup<uint16_t> speed(v->cur_speed, 2);
+	Backup<uint8_t> tick(v->tick_counter, 0);
+	Backup<Direction> direction(v->direction, DIR_NE);
+	Backup<uint8_t> length(v->gcache.cached_veh_length, 5);
+	Backup<TileIndex> tile(v->tile);
+	for (uint32_t index = 0; index < Map::Size(); ++index) { TileIndex t{index}; if (IsTileType(t, MP_CLEAR) && !IsBridgeAbove(t)) { tile.Change(t); break; } }
+	Backup<int> x(v->x_pos, TileX(v->tile) * TILE_SIZE + 8), y(v->y_pos, TileY(v->tile) * TILE_SIZE + 8), z(v->z_pos, 30);
+	GRFFile grf; grf.grf_version = 8;
+	e->grf_prop.grffile = &grf;
+	e->info.callback_mask.Set(VehicleCallbackMask::VisualEffect).Set(VehicleCallbackMask::SoundEffect);
+	auto *observer = new VisualEffectObserver();
+	auto *program = new DeterministicSpriteGroup();
+	observer->program = program;
+	program->size = DSG_SIZE_DWORD;
+	program->calculated_result = true;
+	e->grf_prop.spritegroups.clear();
+	e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, observer);
+	for (uint16_t result : {uint16_t(0x2003), uint16_t(0), uint16_t(0x4001)}) {
+		program->adjusts.clear();
+		for (auto [reg, value] : {std::pair{0x100U, 0xFE03FCF1U}, {0x101U, 0x04FE02F2U}, {0x102U, 0x0601FFF3U}}) {
+			program->adjusts.push_back({.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = value});
+			program->adjusts.push_back({.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = reg});
+		}
+		program->adjusts.push_back({.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = result});
+		std::set<VehicleID> before;
+		for (const EffectVehicle *u : EffectVehicle::Iterate()) before.insert(u->index);
+		v->UpdateVisualEffect();
+		VehicleCache copied(v->vcache);
+		v->vcache.cached_vis_effect = 0x42;
+		bool independent = copied.cached_vis_effect == 0x41;
+		v->vcache = copied;
+		auto expected = _random; expected.Next();
+		uint old_sound = observer->sound, old_spawn = observer->spawn;
+		v->ShowVisualEffect();
+		fmt::print(stderr, "FLEET effect-emission {} cache {} independent {} callbacks {} sound {} rng {}\n", result, v->vcache.cached_vis_effect, independent, observer->spawn - old_spawn, observer->sound - old_sound, _random.state[0] == expected.state[0] && _random.state[1] == expected.state[1]);
+		uint count = 0;
+		for (const EffectVehicle *u : EffectVehicle::Iterate()) if (!before.contains(u->index)) {
+			++count;
+			fmt::print(stderr, "FLEET effect-created {} {} {} {} {} {}\n", result, u->index.base(), u->subtype, u->x_pos - v->x_pos, u->y_pos - v->y_pos, u->z_pos - v->z_pos);
+		}
+		fmt::print(stderr, "FLEET effect-count {} {}\n", result, count);
+	}
+	e->grf_prop = props.GetOriginalValue();
+	delete program; delete observer;
+	props.Restore(); mask.Restore(); smoke.Restore(); sound.Restore(); cache.Restore(); status.Restore(); speed.Restore(); tick.Restore(); direction.Restore(); length.Restore(); tile.Restore(); x.Restore(); y.Restore(); z.Restore();
+	fmt::print(stderr, "FLEET effect-checkpoint complete\n");
+}
+
 /** Running road vehicle 12 of padhattan-ridge-2000 heads to a service depot; the witness runs on 2001-01-01. */
 static VehicleID _drain_vehicle = VehicleID::Invalid();
 static UnitID _drain_unit = 0;
 static bool FleetScenario(std::span<std::string_view> args)
 {
 	if (args.size() != 2) return false;
+	if (args[1] == "effect-emission") { VisualEffectProbe(); return true; }
 	Backup<CompanyID> company(_current_company);
 	if (args[1] == "resolver") { ResolverProbe(); company.Restore(); return true; }
 	if (args[1] == "resolver-inspect") {

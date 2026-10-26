@@ -210,14 +210,6 @@ pub struct MaxSpeedRead {
     pub status: u8,
 }
 
-/// Shared native eligibility gate, followed by max-speed inputs only when eligible.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct VisualRead {
-    pub max: MaxSpeedRead,
-    pub eligible: bool,
-}
-
 /// Speed and first-step inputs observed after visual effects return.
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -425,8 +417,6 @@ pub struct Leaves {
     pub ground: *const GroundServices,
     pub shared: *const Services,
     pub max_depot_penalty: extern "C" fn() -> u32,
-    pub visual_read: extern "C" fn(VehicleRef) -> VisualRead,
-    pub visual_effect_then_speed: extern "C" fn(VehicleRef, u32) -> SpeedRead,
     pub speed_read: extern "C" fn(VehicleRef) -> SpeedRead,
     pub max_speed_read: extern "C" fn(VehicleRef) -> MaxSpeedRead,
     pub speed_part: extern "C" fn(VehicleRef) -> SpeedPart,
@@ -684,16 +674,12 @@ impl Game<'_> {
     }
 
     fn visual_effect_and_speed(&self, v: Part) -> SpeedRead {
-        // The shared gate asserts primary status before observing max-speed inputs.
-        let r = service!(self.l.visual_read)(v.v);
-        if r.eligible {
-            let speed = max_speed(v, r.max, self.acceleration_model, self.l);
-            // Effects can reenter: the native tail then reobserves all speed/movement
-            // inputs. No owner borrow or earlier max-speed observation crosses it.
-            service!(self.l.visual_effect_then_speed)(v.v, speed as u32)
-        } else {
-            service!(self.l.speed_read)(v.v)
+        if crate::vehicle_effect::openttd_rust_visual_eligible(v.v) {
+            let r = service!(self.l.max_speed_read)(v.v);
+            let speed = max_speed(v, r, self.acceleration_model, self.l);
+            crate::vehicle_effect::openttd_rust_visual_show(v.v, speed as u32);
         }
+        service!(self.l.speed_read)(v.v)
     }
     /// `RoadVehicle::UpdateSpeed`, returning the distance and stored speed.
     fn update_speed(&self, front: Part, r: &SpeedRead) -> (i32, u16) {
@@ -981,7 +967,7 @@ impl Game<'_> {
         let counter = v.get(CRASHED).wrapping_add(1);
         v.set(CRASHED, counter);
         if counter == 2 {
-            service!(self.vs.large_explosion)(v.v);
+            crate::effect::openttd_rust_effect_create_rel(v.v.0.as_ptr(), 4, 4, 8, 5);
         } else if counter <= 45 {
             if tick & 7 == 0 {
                 const DELTA: [u8; 4] = [7, 0, 0, 1];
@@ -1060,6 +1046,7 @@ impl Game<'_> {
             }
             total = total.wrapping_add(u16::from(length));
             service!(self.gs.write_length)(u, length, v.v, total);
+            crate::vehicle_effect::openttd_rust_visual_update(u, true);
             let period = service!(self.l.cargo_age_default)(u);
             let age = service!(self.vs.property)(
                 (self.vs.newgrf)(),
@@ -2213,10 +2200,6 @@ crate::abi::layouts! {
         direction,
         status,
     };
-    "OpenTTDRoadVisualRead" ["probe"] => VisualRead {
-        max,
-        eligible,
-    };
     "OpenTTDRoadSpeedRead" ["probe"] => SpeedRead {
         max,
         x,
@@ -2348,8 +2331,6 @@ crate::abi::layouts! {
         ground,
         shared,
         max_depot_penalty,
-        visual_read,
-        visual_effect_then_speed,
         speed_read,
         max_speed_read,
         speed_part,
