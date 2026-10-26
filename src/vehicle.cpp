@@ -79,6 +79,9 @@
 #include "rust/movement_ffi.h"
 #endif
 
+#ifdef WITH_RUST
+#include "rust/vehicle_effect_services.hpp"
+#endif
 #include "safeguards.h"
 
 #ifdef WITH_RUST
@@ -841,6 +844,10 @@ static void RecordPendingAutoreplace(VehicleID id, bool leave) { _vehicles_to_au
 
 void InitializeVehicles()
 {
+#ifdef WITH_RUST
+	openttd_rust_effect_bind(GetRustEffectCreationServices());
+	openttd_rust_visual_bind(&GetRustVisualServices());
+#endif
 	ClearPendingAutoreplace();
 	ResetVehicleHash();
 }
@@ -2929,6 +2936,10 @@ CommandCost Vehicle::SendToDepot(DoCommandFlags flags, DepotCommandFlags command
  */
 void Vehicle::UpdateVisualEffect(bool allow_power_change)
 {
+#ifdef WITH_RUST
+	openttd_rust_visual_bind(&GetRustVisualServices());
+	openttd_rust_visual_update(RustVehicle(this), allow_power_change);
+#else
 	bool powered_before = HasBit(this->vcache.cached_vis_effect, VE_DISABLE_WAGON_POWER);
 	const Engine *e = this->GetEngine();
 
@@ -2985,8 +2996,10 @@ void Vehicle::UpdateVisualEffect(bool allow_power_change)
 		ToggleBit(this->vcache.cached_vis_effect, VE_DISABLE_WAGON_POWER);
 		ShowNewGrfVehicleError(this->engine_type, STR_NEWGRF_BROKEN, STR_NEWGRF_BROKEN_POWERED_WAGON, GRFBug::VehPoweredWagon, false);
 	}
+#endif
 }
 
+#ifndef WITH_RUST
 static const int8_t _vehicle_smoke_pos[8] = {
 	1, 1, 1, 0, -1, -1, -1, 0
 };
@@ -3064,6 +3077,8 @@ static bool IsBridgeAboveVehicle(const Vehicle *v)
 	return IsBridgeAbove(v->tile);
 }
 
+#endif
+
 /**
  * Draw visual effects (smoke and/or sparks) for a vehicle chain.
  * @pre this->IsPrimaryVehicle()
@@ -3078,6 +3093,10 @@ void Vehicle::ShowVisualEffect() const
 /** Shared assertion and eligibility gate, before any maximum-speed query. */
 bool Vehicle::VisualEffectEligible() const
 {
+#ifdef WITH_RUST
+	openttd_rust_visual_bind(&GetRustVisualServices());
+	return openttd_rust_visual_eligible(RustVehicle(this));
+#else
 	assert(this->IsPrimaryVehicle());
 
 	/* Do not show any smoke when:
@@ -3091,11 +3110,16 @@ bool Vehicle::VisualEffectEligible() const
 		return false;
 	}
 	return true;
+#endif
 }
 
 /** Draw effects after VisualEffectEligible(), using the owner's current speed limit. */
 void Vehicle::ShowVisualEffectAtSpeed(uint max_speed) const
 {
+#ifdef WITH_RUST
+	openttd_rust_visual_bind(&GetRustVisualServices());
+	openttd_rust_visual_show(RustVehicle(this), max_speed);
+#else
 	bool sound = false;
 	if (this->type == VEH_TRAIN) {
 		const Train *t = Train::From(this);
@@ -3222,6 +3246,7 @@ void Vehicle::ShowVisualEffectAtSpeed(uint max_speed) const
 	} while ((v = v->Next()) != nullptr);
 
 	if (sound) PlayVehicleSound(this, VSE_VISUAL_EFFECT);
+#endif
 }
 
 /**
@@ -3608,11 +3633,12 @@ bool VehiclesHaveSameOrderList(const Vehicle *v1, const Vehicle *v2)
 #include "abi-visit-OpenTTDGroundServices.hpp"
 #include "abi-visit-OpenTTDFleetPendingServices.hpp"
 #include "abi-visit-OpenTTDVehicleVisits.hpp"
+#include "abi-visit-OpenTTDVisualServices.hpp"
 bool CheckAbi_vehicle()
 {
 	return AbiServicesComplete(GetRustGroundServices<Train>()) &&
 		AbiServicesComplete(GetRustGroundServices<RoadVehicle>()) &&
 		AbiServicesComplete(_fleet_pending_services) &&
-		AbiServicesComplete(GetRustVehicleVisits());
+		AbiServicesComplete(GetRustVehicleVisits()) && AbiServicesComplete(GetRustVisualServices());
 }
 #endif

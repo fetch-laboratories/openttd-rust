@@ -8,6 +8,7 @@
 /** @file services.cpp Direct shared-world leaves for Rust game owners. */
 #include "../stdafx.h"
 #include "../source_type.h"
+#include "../effectvehicle_func.h"
 #include "../airport.h"
 #include "town_services.h"
 #include "services_ffi.h"
@@ -71,7 +72,23 @@
 #include "../newgrf_callbacks.h"
 #include "../slope_func.h"
 #include "tile_type_access.hpp"
+#include "../effectvehicle_func.h"
 #include "../safeguards.h"
+static_assert(VE_OFFSET_START == 0);
+static_assert(VE_OFFSET_CENTRE == 8);
+static_assert(VE_TYPE_START == 4);
+static_assert(VE_TYPE_DEFAULT == 0);
+static_assert(VE_TYPE_STEAM == 1);
+static_assert(VE_DISABLE_EFFECT == 6);
+static_assert(VE_ADVANCED_EFFECT == 6);
+static_assert(VE_DISABLE_WAGON_POWER == 7);
+static_assert(VE_DEFAULT == 255);
+static_assert(EC_STEAM == 0);
+static_assert(EC_MONORAIL == 3);
+static_assert(DIRDIFF_90RIGHT == 2);
+static_assert(CBID_VEHICLE_VISUAL_EFFECT == 16);
+static_assert(VSE_VISUAL_EFFECT == 6);
+
 #include "settings_services.h"
 #include "environment_services.h"
 #include "type_availability_ffi.h"
@@ -665,5 +682,24 @@ const OpenTTDLiveGraphServices &GetRustLiveGraphServices() noexcept
 }
 #endif /* WITH_RUST */
 
+static_assert(EV_CHIMNEY_SMOKE == 0);
+static_assert(EV_STEAM_SMOKE == 1);
+static_assert(EV_DIESEL_SMOKE == 2);
+static_assert(EV_ELECTRIC_SPARK == 3);
+static_assert(EV_CRASH_SMOKE == 4);
+static_assert(EV_EXPLOSION_LARGE == 5);
+static_assert(EV_BREAKDOWN_SMOKE == 6);
+static_assert(EV_EXPLOSION_SMALL == 7);
+static_assert(EV_BULLDOZER == 8);
+static_assert(EV_BUBBLE == 9);
+static_assert(EV_BREAKDOWN_SMOKE_AIRCRAFT == 10);
+static_assert(EV_COPPER_MINE_SMOKE == 11);
+static_assert(EV_END == 12);
+static_assert(VESM_NONE == 0);
+static_assert(VESM_STEAM == 1);
+static_assert(VESM_DIESEL == 2);
+static_assert(VESM_ELECTRIC == 3);
+static_assert(VESM_END == 4);
+static_assert(VE_OFFSET_COUNT == 4 && VE_TYPE_COUNT == 2);
 static_assert(CalendarTime::MAX_DATE.base() == 1826212865 && CalendarTime::DAYS_IN_YEAR == 365);
 static_assert(RAILTYPE_END == 64 && ROADTYPE_END == 63);

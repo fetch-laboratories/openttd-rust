@@ -17,6 +17,7 @@
 #include "../rail.h"
 #include "services_rail.h"
 #include "../road.h"
+#include "../table/strings.h"
 inline uint16_t RustEngineCallbackMask(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.callback_mask.base(); }
 inline uint8_t RustEngineMiscFlags(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.misc_flags.base(); }
 inline uint64_t RustEngineCargoRefitMask(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.refit_mask; }
@@ -65,6 +66,7 @@ inline OpenTTDEngineCapacityConfig RustEngineCapacityConfig(const OpenTTDEngine 
 inline int32_t RustEngineBaseIntro(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.base_intro.base(); }
 inline bool RustEngineClimate(const Engine *e) noexcept { return e->info.climates.Test(OpenTTDLandscape()); }
 inline bool RustEngineClimate(const OpenTTDEngine *e) noexcept { return RustEngineClimate(EngineOf(e)); }
+inline uint8_t RustRailEngineClass(const RailVehicleInfo *info) noexcept { return info->engclass; }
 inline RailVehicleTypes RustEngineRailKind(const Engine *e) noexcept { return e->VehInfo<RailVehicleInfo>().railveh_type; }
 inline uint64_t RustEngineRailTypes(const Engine *e) noexcept { return e->VehInfo<RailVehicleInfo>().railtypes.base(); }
 inline uint64_t RustEngineRailTypes(const OpenTTDEngine *e) noexcept { return RustEngineRailTypes(EngineOf(e)); }
@@ -121,6 +123,8 @@ inline uint8_t RustGroundEngineTE(OpenTTDVehicle *shell) noexcept { const Vehicl
 inline uint8_t RustGroundEngineDrag(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->type == VEH_TRAIN ? RailVehInfo(v->engine_type)->air_drag : RoadVehInfo(v->engine_type)->air_drag; }
 inline uint16_t RustEngineWagonPower(uint16_t engine) noexcept { return RailVehInfo(EngineID(engine))->pow_wag_power; }
 inline uint8_t RustEngineWagonWeight(uint16_t engine) noexcept { return RailVehInfo(EngineID(engine))->pow_wag_weight; }
+inline uint8_t RustEngineGRFVersionOpaque(const OpenTTDEngine *e) noexcept { return RustEngineGRFVersion(EngineOf(e)); }
+inline void RustEngineArticulatedWarning(const OpenTTDEngine *e) noexcept { RustVehicleShowNewGRFError(EngineOf(e)->index, STR_NEWGRF_BUGGY, STR_NEWGRF_BUGGY_ARTICULATED_CARGO, GRFBug::VehRefit, false); }
 inline OpenTTDEngineRef EngineRef(const Engine *e) noexcept
 {
 	if (e == nullptr) return {.shell = nullptr, .state = nullptr, .id = EngineID::Invalid().base(), .type = VEH_INVALID};

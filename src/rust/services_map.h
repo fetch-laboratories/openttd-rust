@@ -16,10 +16,12 @@
 #include "../road.h"
 #include "../road_map.h"
 #include "../station_map.h"
+#include "../tunnel_map.h"
 
 inline uint8_t OpenTTDAnimationFrame(uint32_t tile) noexcept { return GetAnimationFrame(TileIndex(tile)); }
 inline uint RustClosestWaterDistance(uint32_t tile, bool water) noexcept { return GetClosestWaterDistance(TileIndex(tile), water); }
 inline uint32_t RustTileAddByDiagDir(uint32_t tile, uint8_t dir) noexcept { return TileAddByDiagDir(TileIndex{tile}, static_cast<DiagDirection>(dir)).base(); }
+inline bool RustIsTunnelTile(uint32_t tile) noexcept { return IsTunnelTile(TileIndex(tile)); }
 inline bool SharedIsDepotTile(uint32_t tile) noexcept { return IsDepotTile(TileIndex(tile)); }
 inline uint32_t SharedTileAddWrap(uint32_t tile, int32_t x, int32_t y) noexcept { return TileAddWrap(TileIndex(tile), x, y).base(); }
 inline uint8_t SharedTileType(uint32_t tile) noexcept { return GetTileType(TileIndex{tile}); }

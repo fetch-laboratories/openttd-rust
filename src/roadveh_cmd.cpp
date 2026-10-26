@@ -61,7 +61,7 @@ static OpenTTDRoadEntry GetRoadEntry() noexcept
 /** The front gate never observes movement settings or front-only fields for parts. */
 OpenTTDRoadTickRead RustRoadTickRead(const RoadVehicle *v) noexcept
 {
-	OpenTTDRoadTickRead read{.tick = RustVehicleTick(v), .front = v->IsFrontEngine()};
+	OpenTTDRoadTickRead read{.tick = RustVehicleTick(v), .front = RustVehicleFront(v)};
 	if (read.front) {
 		read.movement = GetRoadEntry();
 		read.order_time = RustVehicleOrderTimeAddress(v);
@@ -1868,7 +1868,7 @@ static void CheckIfRoadVehNeedsService(RoadVehicle *v)
 void RoadVehicle::OnNewCalendarDay()
 {
 #ifdef WITH_RUST
-	openttd_rust_road_calendar_day(RustVehicle(this), this->IsFrontEngine(), &GetRoadLeaves());
+	openttd_rust_road_calendar_day(RustVehicle(this), RustVehicleFront(this), &GetRoadLeaves());
 #else
 	if (!this->IsFrontEngine()) return;
 	AgeVehicle(this);
@@ -1879,7 +1879,7 @@ void RoadVehicle::OnNewCalendarDay()
 void RoadVehicle::OnNewEconomyDay()
 {
 #ifdef WITH_RUST
-	openttd_rust_road_economy_day(RustVehicle(this), this->GetRustState(), this->IsFrontEngine(), &GetRoadLeaves());
+	openttd_rust_road_economy_day(RustVehicle(this), this->GetRustState(), RustVehicleFront(this), &GetRoadLeaves());
 #else
 	if (!this->IsFrontEngine()) return;
 	EconomyAgeVehicle(this);
