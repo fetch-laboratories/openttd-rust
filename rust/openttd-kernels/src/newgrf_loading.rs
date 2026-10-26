@@ -148,7 +148,7 @@ pub struct Services {
     skip: unsafe extern "C" fn(*mut c_void, usize),
     container_version: unsafe extern "C" fn(*const c_void) -> u8,
     sprite_offsets: unsafe extern "C" fn(*mut c_void),
-    skip_sprite_data: unsafe extern "C" fn(*mut c_void, u8, u32),
+    skip_sprite_data: unsafe extern "C" fn(*mut c_void, u8, u16) -> bool,
     open_cached: unsafe extern "C" fn(*const c_void, u8) -> *mut c_void,
     open_temporary: unsafe extern "C" fn(*const c_void, u8, *mut c_void) -> *mut c_void,
     scan_name: unsafe extern "C" fn(*mut c_void, u32, *const u8, usize),
@@ -1231,7 +1231,7 @@ unsafe fn load_file_body(s: &Services, stage: u8, f: *mut c_void) {
                     (s.skip)(f, num as usize);
                 } else {
                     (s.skip)(f, 7);
-                    (s.skip_sprite_data)(f, typ, num.wrapping_sub(8));
+                    (s.skip_sprite_data)(f, typ, num.wrapping_sub(8) as u16);
                 }
             }
             if (*execution()).skip_sprites > 0 {

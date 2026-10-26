@@ -67,7 +67,7 @@ struct OpenTTDGrfLoadingServices {
 	void (*skip)(SpriteFile *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(skip);
 	uint8_t (*container_version)(const SpriteFile *) noexcept OPENTTD_SERVICE_DEFAULT(container_version);
 	void (*sprite_offsets)(SpriteFile *) noexcept OPENTTD_SERVICE_DEFAULT(sprite_offsets);
-	void (*skip_sprite_data)(SpriteFile *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(skip_sprite_data);
+	bool (*skip_sprite_data)(SpriteFile *, uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(skip_sprite_data);
 	SpriteFile *(*open_cached)(const GRFConfig *, Subdirectory) noexcept OPENTTD_SERVICE_DEFAULT(open_cached);
 	SpriteFile *(*open_temporary)(const GRFConfig *, Subdirectory, void *) noexcept OPENTTD_SERVICE_DEFAULT(open_temporary);
 	void (*scan_name)(GRFConfig *, uint32_t, const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(scan_name);

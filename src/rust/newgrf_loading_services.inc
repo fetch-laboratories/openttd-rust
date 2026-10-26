@@ -58,7 +58,7 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.skip = [](SpriteFile *f, size_t size) noexcept { f->SkipBytes(size); },
 		.container_version = [](const SpriteFile *f) noexcept { return f->GetContainerVersion(); },
 		.sprite_offsets = [](SpriteFile *f) noexcept { ReadGRFSpriteOffsets(*f); },
-		.skip_sprite_data = [](SpriteFile *f, uint8_t type, uint32_t size) noexcept { SkipSpriteData(*f, type, size); },
+		.skip_sprite_data = [](SpriteFile *f, uint8_t type, uint16_t size) noexcept { return SkipSpriteData(*f, type, size); },
 		.open_cached = [](const GRFConfig *c, Subdirectory subdir) noexcept { return &OpenCachedSpriteFile(c->filename, subdir, c->palette & GRFP_USE_MASK); },
 		.open_temporary = [](const GRFConfig *c, Subdirectory subdir, void *temporary) noexcept { return &static_cast<std::optional<SpriteFile> *>(temporary)->emplace(c->filename, subdir, c->palette & GRFP_USE_MASK); },
 		.scan_name = [](GRFConfig *c, uint32_t id, const uint8_t *data, size_t size) noexcept { AddGRFTextToList(c->name, 0x7F, id, false, {reinterpret_cast<const char *>(data), size}); },
