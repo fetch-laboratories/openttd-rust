@@ -10,6 +10,11 @@
 use crate::map_func::TileTypeAccess;
 
 #[inline]
+pub(crate) fn is_tile_type(s: &crate::services::Services, tile: u32, kind: u8) -> bool {
+    (s.tile_type)(tile) == kind
+}
+
+#[inline]
 pub(crate) fn get_tile_type(m: &TileTypeAccess, t: u32) -> Option<u8> {
     Some(m.kind(t)? >> 4)
 }

@@ -129,6 +129,10 @@ pub const GSF_END: u8 = 22;
 
 pub const GSF_INDUSTRYTILES: u8 = 9;
 pub const GSF_INDUSTRIES: u8 = 10;
+/// `GSF_RAILTYPES`.
+pub const GSF_RAILTYPES: u8 = 0x10;
+/// `GSF_ROADTYPES`.
+pub const GSF_ROADTYPES: u8 = 0x12;
 /// Unreserved engine mapping scope.
 pub const INVALID_GRFID: u32 = 0xFFFF_FFFF;
 

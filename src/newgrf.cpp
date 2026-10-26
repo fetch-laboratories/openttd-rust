@@ -53,6 +53,10 @@
 #include "rust/cargo_registry_ffi.h"
 #endif
 
+#ifdef WITH_RUST
+#include "rust/type_registry_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 /* TTDPatch extended GRF format codec
@@ -655,6 +659,9 @@ GRFFile::GRFFile(const GRFConfig &config)
 	/* Mark price_base_multipliers as 'not set' */
 	this->price_base_multipliers.fill(INVALID_PRICE_MODIFIER);
 
+#ifdef WITH_RUST
+	openttd_rust_type_maps_init(&GetRustTypeRegistryServices(), this);
+#else
 	/* Initialise rail type map with default rail types */
 	this->railtype_map.fill(INVALID_RAILTYPE);
 	this->railtype_map[0] = RAILTYPE_RAIL;
@@ -669,6 +676,8 @@ GRFFile::GRFFile(const GRFConfig &config)
 	/* Initialise tram type map with default tram types */
 	this->tramtype_map.fill(INVALID_ROADTYPE);
 	this->tramtype_map[0] = ROADTYPE_TRAM;
+
+#endif
 
 	/* Copy the initial parameter list */
 	this->param = config.param;
@@ -2005,4 +2014,20 @@ void LoadNewGRF(SpriteID load_index, uint num_baseset)
 #endif
 }
 
+#ifdef WITH_RUST
+const OpenTTDTypeRegistryServices &GetRustTypeRegistryServices() noexcept
+{
+	static const OpenTTDTypeRegistryServices table = {
+		.rail = &GetRustRailRegistryServices(),
+		.road = &GetRustRoadRegistryServices(),
+		.rail_labels = [](const GRFFile *file) noexcept { return OpenTTDTypeLabels{.data = file->railtype_list.data(), .size = file->railtype_list.size()}; },
+		.road_labels = [](const GRFFile *file) noexcept { return OpenTTDTypeLabels{.data = file->roadtype_list.data(), .size = file->roadtype_list.size()}; },
+		.tram_labels = [](const GRFFile *file) noexcept { return OpenTTDTypeLabels{.data = file->tramtype_list.data(), .size = file->tramtype_list.size()}; },
+		.rail_map = [](GRFFile *file) noexcept { return OpenTTDTypeMap{.data = reinterpret_cast<uint8_t *>(file->railtype_map.data()), .size = file->railtype_map.size()}; },
+		.road_map = [](GRFFile *file) noexcept { return OpenTTDTypeMap{.data = reinterpret_cast<uint8_t *>(file->roadtype_map.data()), .size = file->roadtype_map.size()}; },
+		.tram_map = [](GRFFile *file) noexcept { return OpenTTDTypeMap{.data = reinterpret_cast<uint8_t *>(file->tramtype_map.data()), .size = file->tramtype_map.size()}; },
+	};
+	return table;
+}
+#endif
 #include "rust/newgrf_loading_services.inc"

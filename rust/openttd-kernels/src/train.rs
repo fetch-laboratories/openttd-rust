@@ -28,6 +28,8 @@ use crate::order_type::{
 };
 use crate::raw_field::{read_field, write_field};
 use crate::services::Services;
+use crate::tile_map::is_tile_type;
+use crate::tile_type::{MP_RAILWAY, MP_TUNNELBRIDGE};
 use crate::train_state::State;
 use crate::vehicle::{VehicleRef, VehicleServices, maintenance};
 /// Native identity and canonical scalar owner, resolved together once per entry or link.
@@ -467,7 +469,7 @@ pub struct Leaves {
     pub arrival_news: extern "C" fn(Handle, u16),
 
     pub axis_diag: extern "C" fn(Handle, u8) -> u64,
-    pub backoff: extern "C" fn(Handle) -> u64,
+    pub backoff: extern "C" fn() -> u8,
     pub base_viewport: extern "C" fn(Handle, u8),
     pub bridge_speed: extern "C" fn(Handle, u32) -> u64,
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
@@ -506,7 +508,6 @@ pub struct Leaves {
     pub diag_trackdir: extern "C" fn(Handle, u8) -> u64,
     pub dirty_tile: extern "C" fn(Handle, u32),
     pub dir_diag: extern "C" fn(Handle, u8) -> u64,
-    pub disaster_sound: extern "C" fn(Handle) -> u64,
     pub disconnect: extern "C" fn(Handle),
     pub engine_power: extern "C" fn(Handle) -> u64,
     pub find_depot: extern "C" fn(Handle, i32) -> Depot,
@@ -523,10 +524,8 @@ pub struct Leaves {
     pub is_crossing: extern "C" fn(Handle, u32) -> u64,
     pub is_depot: extern "C" fn(Handle, u32) -> u64,
     pub is_plain_rail: extern "C" fn(Handle, u32) -> u64,
-    pub is_railway: extern "C" fn(Handle, u32) -> u64,
     pub is_station: extern "C" fn(Handle, u32) -> u64,
     pub is_station_any: extern "C" fn(Handle, u32) -> u64,
-    pub is_tunnelbridge: extern "C" fn(Handle, u32) -> u64,
     pub leave_sound: extern "C" fn(Handle),
     pub leave_unbunch: extern "C" fn(Handle),
     pub length_callback: extern "C" fn(Handle) -> u64,
@@ -552,7 +551,7 @@ pub struct Leaves {
     pub rail_tilt: extern "C" fn(Handle) -> u64,
     pub rail_type: extern "C" fn(Handle, u32) -> u64,
     pub rail_types: extern "C" fn(Handle) -> u64,
-    pub reserve_paths: extern "C" fn(Handle) -> u64,
+    pub reserve_paths: extern "C" fn() -> bool,
     pub reserve_under: extern "C" fn(Handle),
     pub reset_unbunch: extern "C" fn(Handle),
     pub reverse_at_signals: extern "C" fn(Handle) -> u64,
@@ -1119,7 +1118,7 @@ impl Game<'_> {
         if track == WORMHOLE || track == DEPOT {
             return false;
         }
-        if (self.leaves.is_tunnelbridge)(Handle::NONE, v.tile) != 0
+        if is_tile_type(self.services, v.tile, MP_TUNNELBRIDGE)
             && (self.leaves.tunnel_dir)(Handle::NONE, v.tile) as u8 * 2 + 1 == v.direction
         {
             return false;
@@ -1322,7 +1321,7 @@ impl Game<'_> {
             self.movement_enter(id, v.tile, (v.x as u64) as i32, (v.y as u64) as i32);
         } else {
             let vt = (self.leaves.tile_virt)((v.x as u64) as i32, (v.y as u64) as i32);
-            if (self.leaves.is_tunnelbridge)(Handle::NONE, vt) != 0 {
+            if is_tile_type(self.services, vt, MP_TUNNELBRIDGE) {
                 self.movement_enter(id, vt, (v.x as u64) as i32, (v.y as u64) as i32);
                 if id.track() != WORMHOLE
                     && (self.leaves.is_bridge)(Handle::NONE, (self.leaves.read_tile)(id)) != 0
@@ -1509,15 +1508,15 @@ impl Game<'_> {
         let tile = (self.leaves.read_tile)(id);
         let mut dir = self.exitdir(id);
         if (self.leaves.is_depot)(Handle::NONE, tile) != 0
-            || (self.leaves.is_tunnelbridge)(Handle::NONE, tile) != 0
+            || is_tile_type(self.services, tile, MP_TUNNELBRIDGE)
         {
             dir = u8::MAX;
         }
         if self.signal_segment(id, tile, dir) == (self.leaves.sigseg_pbs)(id)
-            || (self.leaves.reserve_paths)(id) != 0
+            || (self.leaves.reserve_paths)()
         {
             let td = self.trackdir(id);
-            let mut okay = !((self.leaves.is_railway)(Handle::NONE, tile) != 0
+            let mut okay = !(is_tile_type(self.services, tile, MP_RAILWAY)
                 && (self.leaves.has_signal_td)(id, tile, td) != 0
                 && (self.leaves.signal_pbs)(
                     id,
@@ -1665,7 +1664,7 @@ impl Game<'_> {
         }
     }
     fn moved_signals(&self, id: Handle, tile: u32, dir: u8) -> bool {
-        if (self.leaves.is_railway)(Handle::NONE, tile) != 0
+        if is_tile_type(self.services, tile, MP_RAILWAY)
             && (self.leaves.has_signals)(Handle::NONE, tile) != 0
         {
             let tracks = (self.leaves.track_bits)(Handle::NONE, tile) as u16;
@@ -1926,7 +1925,7 @@ impl Game<'_> {
                 }
             }
         } else {
-            if (self.leaves.is_tunnelbridge)(Handle::NONE, new) != 0
+            if is_tile_type(self.services, new, MP_TUNNELBRIDGE)
                 && self.movement_enter(id, new, (x as u64) as i32, (y as u64) as i32) & 2 != 0
             {
                 if (self.leaves.read_front)(id) != 0 {
@@ -1977,7 +1976,7 @@ impl Game<'_> {
             }
         }
         if (self.leaves.read_front)(id) != 0
-            && u64::from((self.leaves.read_tick)(id)) % (self.leaves.backoff)(id) == 0
+            && u64::from((self.leaves.read_tick)(id)) % u64::from((self.leaves.backoff)()) == 0
         {
             (self.leaves.check_next)(id);
         }
@@ -2031,7 +2030,7 @@ impl Game<'_> {
             while u != Handle::NONE {
                 let tile = (self.leaves.read_tile)(u);
                 (self.leaves.clear_reservation)(u, tile, self.trackdir(u));
-                if (self.leaves.is_tunnelbridge)(Handle::NONE, tile) != 0 {
+                if is_tile_type(self.services, tile, MP_TUNNELBRIDGE) {
                     (self.leaves.set_tunnel_res)(
                         u,
                         (self.leaves.other_end)(Handle::NONE, tile) as u32,
@@ -2116,7 +2115,7 @@ impl Game<'_> {
         crate::witness::hit(crate::witness::TRAIN_COLLISION);
         (self.leaves.crash_news)(id, victims);
         (self.leaves.crash_rating)(id);
-        if (self.leaves.disaster_sound)(id) != 0 {
+        if (self.services.disaster_sound)() {
             (self.leaves.crash_sound)(id);
         }
         true
@@ -2205,7 +2204,7 @@ impl Game<'_> {
             crate::pbs::Pbs::acquire(self.services).platform(tile, dir, occupied);
             crate::pbs::Pbs::acquire(self.services).platform(tile, dir ^ 2, occupied);
         }
-        if (self.leaves.is_tunnelbridge)(Handle::NONE, tile) != 0
+        if is_tile_type(self.services, tile, MP_TUNNELBRIDGE)
             || (self.leaves.is_depot)(Handle::NONE, tile) != 0
         {
             self.signal_context().segment(tile, u8::MAX, owner);
@@ -2307,7 +2306,7 @@ impl Game<'_> {
             }
             id.set_wait_counter(0);
         }
-        let segment = if (self.leaves.reserve_paths)(id) != 0 {
+        let segment = if (self.leaves.reserve_paths)() {
             (self.leaves.sigseg_pbs)(id)
         } else {
             self.signal_segment(id, v.tile, u8::MAX)
@@ -2399,12 +2398,12 @@ impl Game<'_> {
             let tile = (self.leaves.read_tile)(id);
             let mut dir = self.exitdir(id);
             if (self.leaves.is_depot)(Handle::NONE, tile) != 0
-                || (self.leaves.is_tunnelbridge)(Handle::NONE, tile) != 0
+                || is_tile_type(self.services, tile, MP_TUNNELBRIDGE)
             {
                 dir = u8::MAX;
             }
             if self.signal_segment(id, tile, dir) == (self.leaves.sigseg_pbs)(id)
-                || (self.leaves.reserve_paths)(id) != 0
+                || (self.leaves.reserve_paths)()
             {
                 self.try_path_reserve(id, true, true);
             }
@@ -2430,7 +2429,10 @@ impl Game<'_> {
             let wait = u64::from(id.wait_inc());
             let turn = wait % ((self.leaves.wait_pbs)(id) * (self.leaves.day_ticks)(id)) == 0
                 && (self.leaves.reverse_at_signals)(id) != 0;
-            if !turn && wait % (self.leaves.backoff)(id) != 0 && id.get_force_proceed() == 0 {
+            if !turn
+                && wait % u64::from((self.leaves.backoff)()) != 0
+                && id.get_force_proceed() == 0
+            {
                 return true;
             }
             if !self.try_path_reserve(id, false, false) {
@@ -2630,7 +2632,7 @@ impl Game<'_> {
         let dir = (self.leaves.trackdir_exit)(id, self.trackdir(id)) as u8;
         let tile = self.tile_diag(v.tile, dir);
         if tile == INVALID_TILE
-            || (self.leaves.is_railway)(Handle::NONE, tile) == 0
+            || !is_tile_type(self.services, tile, MP_RAILWAY)
             || (self.leaves.has_signals)(Handle::NONE, tile) == 0
         {
             return 1;
@@ -3295,7 +3297,6 @@ crate::abi::layouts! {
         diag_trackdir,
         dirty_tile,
         dir_diag,
-        disaster_sound,
         disconnect,
         engine_power,
         find_depot,
@@ -3312,10 +3313,8 @@ crate::abi::layouts! {
         is_crossing,
         is_depot,
         is_plain_rail,
-        is_railway,
         is_station,
         is_station_any,
-        is_tunnelbridge,
         leave_sound,
         leave_unbunch,
         length_callback,

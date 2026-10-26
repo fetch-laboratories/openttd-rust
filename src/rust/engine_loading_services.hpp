@@ -34,7 +34,6 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 		.close_previews = []() noexcept { CloseWindowByClass(WC_ENGINE_PREVIEW); },
 		.clean_pool = []() noexcept { _engine_pool.CleanPool(); },
 		.railtypes = RustEngineRailTypes,
-		.rail_label = [](RailType rt) noexcept { return GetRailTypeInfo(rt)->label; },
 		.refit_inputs = [](const OpenTTDEngine *shell) noexcept { const auto &ei = EngineOf(shell)->info; return OpenTTDEngineRefitInputs{.mask = RustEngineCargoRefitMask(shell), .cargo = ei.cargo_type, .custom = VehicleCallbackMasks{RustEngineCallbackMask(shell)}.Test(VehicleCallbackMask::CustomRefit)}; },
 		.cargo_label = RustEngineCargoLabel,
 		.train_cargo = [](const OpenTTDEngine *shell) noexcept { return OpenTTDEngineTrainCargo{.capacity = RustEngineRailCapacity(shell), .kind = Engine_rail_kind(shell)}; },
@@ -64,10 +63,6 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 		.is_tram = RustEngineIsTram,
 		.set_road_speed = RustSetEngineRoadSpeed,
 		.set_roadtype = RustSetEngineRoadType,
-		.road_list_size = [](const GRFFile *file, bool tram) noexcept { return (tram ? file->tramtype_list : file->roadtype_list).size(); },
-		.road_label = [](const GRFFile *file, bool tram, size_t index) noexcept { return (tram ? file->tramtype_list : file->roadtype_list)[index]; },
-		.road_by_label = RustGRFRoadTypeByLabel,
-		.rail_by_label = RustGRFRailTypeByLabel,
 		.set_railtypes = [](const OpenTTDEngine *shell, uint64_t types) noexcept { auto &rvi = const_cast<Engine *>(EngineOf(shell))->VehInfo<RailVehicleInfo>(); rvi.railtypes = RailTypes{types}; rvi.intended_railtypes = RailTypes{types}; },
 		.override_log = [](uint32_t source, uint32_t target) noexcept {
 			if (target == 0) GrfMsg(5, "SetNewGRFOverride: Removed override of 0x{:X}", std::byteswap(source));

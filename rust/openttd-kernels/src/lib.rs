@@ -1428,4 +1428,9 @@ mod override_manager;
 
 mod industry_map;
 
-mod newgrf_internal;
+pub mod type_registry;
+
+pub mod type_definitions;
+
+pub mod newgrf_internal;
+pub mod newgrf_translation;

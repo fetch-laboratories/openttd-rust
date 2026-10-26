@@ -708,7 +708,6 @@ pub struct Leaves {
     pub house_count: extern "C" fn() -> u32,
     pub update_max_pass: extern "C" fn(u32),
     pub next_town: extern "C" fn(u32) -> u32,
-    pub road_mask: extern "C" fn() -> u64,
     pub build_bridge: extern "C" fn(u32, u32, u32, u32, u32) -> bool,
     pub build_tunnel: extern "C" fn(u32, u32, u32) -> bool,
     pub assert_clear_house: extern "C" fn(bool),
@@ -1053,7 +1052,7 @@ fn round_div(a: i32, b: u32) -> i32 {
 
 impl Engine<'_> {
     fn road_type(&self) -> u32 {
-        let mut mask = (self.leaves.road_mask)();
+        let mut mask = crate::road::get_mask_for_road_tram_type(crate::road_type::RTT_ROAD);
         let mut best = 0;
         let mut best_speed = None;
         while mask != 0 {
@@ -2540,7 +2539,6 @@ crate::abi::layouts! {
         house_count,
         update_max_pass,
         next_town,
-        road_mask,
         build_bridge,
         build_tunnel,
         assert_clear_house,

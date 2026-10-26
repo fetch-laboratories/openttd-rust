@@ -27,7 +27,14 @@ pub const ROAD_NE: u8 = 8;
 /// `ROADTYPE_END`.
 pub const ROADTYPE_END: u8 = 63;
 
-/// Default road vehicle road type.
+/// `ROADTYPE_ROAD`.
 pub const ROADTYPE_ROAD: u8 = 0;
-/// Default tram vehicle road type.
+/// `ROADTYPE_TRAM`.
 pub const ROADTYPE_TRAM: u8 = 1;
+
+/// `ROADTYPE_BEGIN`.
+pub const ROADTYPE_BEGIN: u8 = 0;
+/// `RTT_ROAD`.
+pub const RTT_ROAD: crate::services::RoadTramType = crate::services::RoadTramType(false);
+/// `RTT_TRAM`.
+pub const RTT_TRAM: crate::services::RoadTramType = crate::services::RoadTramType(true);
