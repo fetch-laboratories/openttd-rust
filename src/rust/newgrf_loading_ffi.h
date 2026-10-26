@@ -29,6 +29,7 @@ bool openttd_rust_grf_has_set(uint8_t, uint32_t);
 uint32_t openttd_rust_grf_set_sprite(uint8_t, uint32_t);
 uint32_t openttd_rust_grf_set_size(uint8_t, uint32_t);
 }
+struct OpenTTDHouseDefinitionServices;
 struct OpenTTDEngineLoadingServices;
 struct OpenTTDGenericServices;
 struct OpenTTDCargoRegistryServices;
@@ -38,6 +39,7 @@ struct OpenTTDGrfLoadingServices {
 	const OpenTTDGlobalVariableServices * global;
 	const OpenTTDCargoRegistryServices *cargo;
 	const OpenTTDEngineLoadingServices *engine;
+	const OpenTTDHouseDefinitionServices *houses;
 	OpenTTDGrfEngineRange (*engine_range)(GrfSpecFeature) noexcept OPENTTD_SERVICE_DEFAULT(engine_range);
 	uint32_t (*parameter)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(parameter);
 	uint32_t (*file_id)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(file_id);
@@ -147,7 +149,6 @@ struct OpenTTDGrfLoadingServices {
 	void (*reset_roadtypes)() noexcept OPENTTD_SERVICE_DEFAULT(reset_roadtypes);
 	void (*reset_prices)() noexcept OPENTTD_SERVICE_DEFAULT(reset_prices);
 	void (*reset_currencies)() noexcept OPENTTD_SERVICE_DEFAULT(reset_currencies);
-	void (*reset_houses)() noexcept OPENTTD_SERVICE_DEFAULT(reset_houses);
 	void (*reset_industries)() noexcept OPENTTD_SERVICE_DEFAULT(reset_industries);
 	void (*reset_object_classes)() noexcept OPENTTD_SERVICE_DEFAULT(reset_object_classes);
 	void (*reset_objects)() noexcept OPENTTD_SERVICE_DEFAULT(reset_objects);
@@ -168,7 +169,6 @@ struct OpenTTDGrfLoadingServices {
 	void (*finalise_strings)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_strings);
 	void (*finalise_badges)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_badges);
 	void (*finalise_canals)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_canals);
-	void (*finalise_houses)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_houses);
 	void (*finalise_industries)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_industries);
 	void (*finalise_objects)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_objects);
 	void (*sort_industries)() noexcept OPENTTD_SERVICE_DEFAULT(sort_industries);

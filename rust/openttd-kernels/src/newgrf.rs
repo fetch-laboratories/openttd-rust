@@ -188,3 +188,6 @@ pub const GLS_ACTIVATION: u8 = 5;
 
 pub const GSF_GLOBALVAR: u8 = 8;
 pub const SECOND_ROCKY_TILE_SET: u8 = 6;
+
+/// `GSF_HOUSES`.
+pub const GSF_HOUSES: u8 = 7;

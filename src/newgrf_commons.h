@@ -227,8 +227,10 @@ public:
 };
 
 
+struct OpenTTDHouseDefinitionServices;
 struct HouseSpec;
 class HouseOverrideManager : public OverrideManagerBase {
+	friend const OpenTTDHouseDefinitionServices &GetHouseDefinitionServices() noexcept;
 public:
 	HouseOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
 			OverrideManagerBase(offset, maximum, invalid) {}

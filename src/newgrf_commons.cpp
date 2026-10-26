@@ -32,6 +32,10 @@
 
 #include "table/strings.h"
 
+#ifdef WITH_RUST
+#include "rust/house_definition_services.hpp"
+#endif
+
 #include "safeguards.h"
 
 /**
@@ -159,6 +163,9 @@ uint16_t OverrideManagerBase::GetSubstituteID(uint16_t entity_id) const
  */
 void HouseOverrideManager::SetEntitySpec(HouseSpec &&hs)
 {
+#ifdef WITH_RUST
+	openttd_rust_house_definition_publish(&GetHouseDefinitionServices(), &hs);
+#else
 	HouseID house_id = this->AddEntityID(hs.grf_prop.local_id, hs.grf_prop.grfid, hs.grf_prop.subst_id);
 
 	if (house_id == this->invalid_id) {
@@ -182,6 +189,7 @@ void HouseOverrideManager::SetEntitySpec(HouseSpec &&hs)
 		this->entity_overrides[i] = this->invalid_id;
 		this->grfid_overrides[i] = 0;
 	}
+#endif
 }
 
 /**

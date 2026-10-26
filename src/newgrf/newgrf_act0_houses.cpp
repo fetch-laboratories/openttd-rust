@@ -20,6 +20,16 @@
 
 #include "../safeguards.h"
 
+#ifdef WITH_RUST
+#include "../rust/house_definition_services.hpp"
+#include "../rust/newgrf_bytereader_services.h"
+static ChangeInfoResult TownHouseChangeInfo(uint first, uint last, int prop, ByteReader &buf)
+{
+	uint8_t result = openttd_rust_house_definition_property(&GetHouseDefinitionServices(), &GetRustByteReaderServices(), _cur_gps.grffile, first, last, prop, &buf);
+	if (result == UINT8_MAX) RustGRFRethrowReadError();
+	return static_cast<ChangeInfoResult>(result);
+}
+#else
 /**
  * Ignore a house property
  * @param prop Property to read.
@@ -354,6 +364,8 @@ static ChangeInfoResult TownHouseChangeInfo(uint first, uint last, int prop, Byt
 
 	return ret;
 }
+
+#endif
 
 template <> ChangeInfoResult GrfChangeInfoHandler<GSF_HOUSES>::Reserve(uint, uint, int, ByteReader &) { return CIR_UNHANDLED; }
 template <> ChangeInfoResult GrfChangeInfoHandler<GSF_HOUSES>::Activation(uint first, uint last, int prop, ByteReader &buf) { return TownHouseChangeInfo(first, last, prop, buf); }

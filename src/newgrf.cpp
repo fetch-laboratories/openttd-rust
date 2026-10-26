@@ -51,6 +51,7 @@
 #ifdef WITH_RUST
 #include "rust/engine_loading_services.hpp"
 #include "rust/cargo_registry_ffi.h"
+#include "rust/house_definition_services.hpp"
 #endif
 
 #include "safeguards.h"
@@ -1041,6 +1042,7 @@ void FinaliseCargoArray()
 }
 #endif
 
+#ifndef WITH_RUST
 /**
  * Check if a given housespec is valid and disable it if it's not.
  * The housespecs that follow it are used to check the validity of
@@ -1191,6 +1193,8 @@ static void FinaliseHouseArray()
 		}
 	}
 }
+
+#endif
 
 /**
  * Add all new industries to the industry array. Industry properties can be set at any
