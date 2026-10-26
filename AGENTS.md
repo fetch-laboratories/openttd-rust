@@ -162,10 +162,12 @@ checks that run; do not restate them in paragraphs.
 - Component entry in `docs/rust-migration.md`: about 25 lines at most, saying
   what Rust owns, what stays in C++, open limits and the PR. Review status,
   witness counts and costs stay in the PR.
-- Roadmap: forward-looking, about 200 lines at most. A completed item becomes
-  one table row (issue, PR, commit, metrics); its evidence stays in the PR. The
-  resume checkpoint is a short status table, not a log: CI run IDs, executable
-  hashes, probe values and per-PR plans go in the PR or issue.
+- Roadmap: forward-looking, with no line cap. Edits update it in place: a
+  completed item becomes one table row (issue, PR, commit, metrics) and its
+  evidence stays in the PR. The resume checkpoint replaces the previous one and
+  is a short status table, not a log: CI run IDs, executable hashes, probe
+  values and per-PR plans go in the PR or issue. No edit deletes or folds
+  another section to make room; each `/steer` run prunes the roadmap.
 - Evidence is the exact-head CI runs plus the commands recorded in the PR.
   Comments and docs carry no receipt bundles, executable hashes or `.local/`
   paths, which nobody else can check. Tooling that a rule depends on, such as

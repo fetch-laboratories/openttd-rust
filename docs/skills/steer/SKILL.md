@@ -159,8 +159,10 @@ a one-off finding. Each correction lands in exactly one authoritative place:
 - **Roadmap**: rewrite "Where the fork stands" and the work order. Add an "Nth
   steering review" section with findings and corrections. `/start-development`
   tells root to apply that section first, so state each action plainly. Fold
-  older steering sections into the compact "still in force" paragraph. Keep the
-  file under the `AGENTS.md` budget, moving per-PR plans to their PRs or issues.
+  older steering sections into the compact "still in force" paragraph. This is
+  the roadmap's only pruning, so also collapse completed rows that no longer
+  guide work, drop superseded text, and move per-PR plans to their PRs or
+  issues.
 
 Write each correction as the outcome you want, with its bounds attached:
 

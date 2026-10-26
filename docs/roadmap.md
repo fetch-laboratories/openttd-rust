@@ -1,7 +1,8 @@
 # OpenTTD-Rust near-term roadmap
 
 Root selects here; `AGENTS.md` and `docs/rust-migration.md` define process. Follow
-this roadmap over conflicting issues. Keep about 200 lines; evidence stays in PRs.
+this roadmap over conflicting issues. Update it in place; `/steer` prunes it.
+Evidence stays in PRs.
 
 ## Where the fork stands (2026-10-26, code at `4853789508`)
 
@@ -22,7 +23,24 @@ this roadmap over conflicting issues. Keep about 200 lines; evidence stays in PR
   accepted reviews, while the other drafts retain the next checks/reviews below.
   Work is paused at the user's request. #156 retains corpus gaps.
 
-## Standing steering
+## Twentieth steering review (2026-10-24, recovery and production evidence)
+
+The nullable callback, compiler-overlap, serialized-thread and typed-engine
+repairs are integrated. Keep explicit state contracts, clean-checkout checks
+and one concrete owner-cost disposition.
+
+| Standing correction from reviews eighteen/nineteen | Verdict and cost/result |
+| --- | --- |
+| Ownership; necessary owner cost once | Applied before the user's scoped pauses: 11 owners and 4,707 retired lines since review eighteen. |
+| Strict combinations, batching, fixing review | Keep: 24 Full requests since review eighteen, 16 passed, 6 failed, 2 cancelled; 239.7 elapsed run-minutes. Housekeeping used five passing Fulls, 59.0 minutes, and 17 tasks. |
+| Ready owners alongside speed; no per-PR timing | Applied in development; sequential resume wording and old issue gates risked recurrence. Work order and #168/#199/#312 corrected. |
+| Same anchors, merged-tip cadence, bounded quiet holds | Applied through `00ab107424`; final profile interrupted. Five completed passes released after 720 timed exits. New collector needs #450. |
+| macOS cadence, focused local checks, review exemption | Applied; one no-finding conflict review unnecessarily reran tests. No new gate needed. |
+| Shared callees, scope, orphan checks, #156 capacity | Improved; nine coverage PRs before the scope restriction. #462 and pending boundary findings show remaining gaps. |
+| Housekeeping, current lists, cleanup | Applied with limits: 3,845 lines removed, local output 25 to 8.5 GiB; #275's body was stale, now refreshed. Two useful tests must return. |
+| Checkpoints, wind-down, rollback | User pauses respected; drafts preserved. Newly confirmed #462 requires forward recovery because later code rules out bounded rollback. |
+
+## Earlier steering, still in force
 
 Ownership and original behavior come first: named callees, shared typed services,
 process scope and RNG; no extra hot allocation, opcode dispatch, whole-record
