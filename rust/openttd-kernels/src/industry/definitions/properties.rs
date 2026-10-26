@@ -11,7 +11,7 @@ use crate::industry_type::{
     INDUSTRY_ORIGINAL_NUM_OUTPUTS, INVALID_INDUSTRYTILE, NEW_INDUSTRYOFFSET,
     NEW_INDUSTRYTILEOFFSET, NUM_INDUSTRYTILES_PER_GRF, NUM_INDUSTRYTYPES_PER_GRF,
 };
-use crate::newgrf_bytereader::{ByteReader, Reader, Services as ReaderServices};
+use crate::newgrf_bytereader::{ByteReader, ReadError, Reader, Services as ReaderServices};
 use crate::newgrf_internal::{
     CIR_DISABLED as DISABLED, CIR_INVALID_ID as INVALID_ID, CIR_SUCCESS as SUCCESS,
     CIR_UNKNOWN as UNKNOWN,
@@ -25,7 +25,7 @@ pub struct Context {
     pub version: u8,
     pub climate: u8,
 }
-fn ignore_tile(prop: i32, r: &mut Reader<'_>) -> Result<u8, ()> {
+fn ignore_tile(prop: i32, r: &mut Reader<'_>) -> Result<u8, ReadError> {
     match prop {
         0x09 | 0x0d | 0x0e | 0x10..=0x12 => {
             r.byte()?;
@@ -41,7 +41,7 @@ fn ignore_tile(prop: i32, r: &mut Reader<'_>) -> Result<u8, ()> {
     }
     Ok(SUCCESS)
 }
-fn ignore_industry(prop: i32, r: &mut Reader<'_>) -> Result<u8, ()> {
+fn ignore_industry(prop: i32, r: &mut Reader<'_>) -> Result<u8, ReadError> {
     match prop {
         0x09 | 0x0b | 0x0f | 0x12..=0x14 | 0x17..=0x19 | 0x21 | 0x22 => {
             r.byte()?;
@@ -114,7 +114,7 @@ unsafe fn layouts(
     c: &Context,
     r: &mut Reader<'_>,
     p: &Storage,
-) -> Result<u8, ()> {
+) -> Result<u8, ReadError> {
     let count = r.byte()?;
     let mut definition_size = r.dword()?;
     let mut bytes_read = 0_u32;
@@ -213,7 +213,7 @@ unsafe fn tiles(
     r: &mut Reader<'_>,
     s: &Services,
     p: &Storage,
-) -> Result<u8, ()> {
+) -> Result<u8, ReadError> {
     if last > u32::from(NUM_INDUSTRYTILES_PER_GRF) {
         unsafe {
             (p.too_many_tiles)(last);
@@ -350,7 +350,7 @@ unsafe fn industries(
     r: &mut Reader<'_>,
     s: &Services,
     p: &Storage,
-) -> Result<u8, ()> {
+) -> Result<u8, ReadError> {
     if last > u32::from(NUM_INDUSTRYTYPES_PER_GRF) {
         unsafe {
             (p.too_many_industries)(last);
@@ -632,7 +632,7 @@ unsafe fn industries(
     }
     Ok(result)
 }
-fn finish(status: Result<u8, ()>, result: *mut u8) -> bool {
+fn finish(status: Result<u8, ReadError>, result: *mut u8) -> bool {
     match status {
         Ok(value) => {
             unsafe {
@@ -640,7 +640,7 @@ fn finish(status: Result<u8, ()>, result: *mut u8) -> bool {
             }
             true
         }
-        Err(()) => false,
+        Err(ReadError) => false,
     }
 }
 #[unsafe(no_mangle)]

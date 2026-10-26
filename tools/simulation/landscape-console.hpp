@@ -94,10 +94,19 @@ static bool LandscapeScenario(std::span<std::string_view> args)
 #include "tile_cmd.h"
 #ifdef WITH_RUST
 #include "rust/landscape_loop_ffi.h"
+#include "rust/generic_ffi.h"
 #else
 extern TileIndex _cur_tileloop_tile;
 #endif
 extern GrfMiscBits _misc_grf_features;
+static void GenericResetCallbacks()
+{
+#ifdef WITH_RUST
+	openttd_rust_generic_reset(&GetRustGenericServices());
+#else
+	ResetGenericCallbacks();
+#endif
+}
 static void GenericNeed(bool ok) { if (!ok) std::abort(); }
 /* This is a native observation terminal, not a parsed callback node: the common
  * evaluator must invoke its virtual method so duplicate-attempt counts are real. */
@@ -136,7 +145,7 @@ static void GenericPrograms()
 	failure.default_result.group = &no;
 	ResolverObject registers(nullptr);
 	auto ai = [&](uint8_t source = IT_AI_UNKNOWN, uint8_t destination = IT_AI_TOWN) { return GetAiPurchaseCallbackResult(GSF_STATIONS, cargo, 13, source, destination, 55, AICE_STATION_GET_STATION_ID, 17, 19); };
-	ResetGenericCallbacks(); GenericNeed(ai() == std::pair<const GRFFile *, uint16_t>{nullptr, CALLBACK_FAILED});
+	GenericResetCallbacks(); GenericNeed(ai() == std::pair<const GRFFile *, uint16_t>{nullptr, CALLBACK_FAILED});
 	AddGenericCallback(GSF_INVALID, &first, &program); GenericNeed(ai().second == CALLBACK_FAILED);
 	AddGenericCallback(GSF_STATIONS, &first, &program); AddGenericCallback(GSF_STATIONS, &second, &failure); AddGenericCallback(GSF_STATIONS, &second, &failure);
 	auto answer = ai(); GenericNeed(answer.first == &first && answer.second == 0x34 && no.attempts == 2 && yes.attempts == 1 && registers.GetRegister(0x10E) == 0);
@@ -151,9 +160,9 @@ static void GenericPrograms()
 	fmt::print(stderr, "GENERIC industry-sentinels-narrowing true\n");
 	program.adjusts = {{.operation = DSGA_OP_RST, .variable = 0x89, .and_mask = UINT32_MAX}};
 	GenericNeed(ai().second == 0x4567); program.var_scope = VSG_SCOPE_PARENT; GenericNeed(ai().second == 0x4567); program.var_scope = VSG_SCOPE_SELF;
-	ResetGenericCallbacks(); AddGenericCallback(GSF_STATIONS, &first, &failure); AddGenericCallback(GSF_STATIONS, &second, &failure); GenericNeed(ai().first == nullptr && ai().second == CALLBACK_FAILED);
+	GenericResetCallbacks(); AddGenericCallback(GSF_STATIONS, &first, &failure); AddGenericCallback(GSF_STATIONS, &second, &failure); GenericNeed(ai().first == nullptr && ai().second == CALLBACK_FAILED);
 	fmt::print(stderr, "GENERIC unavailable-all-fail-reset true\n");
-	ResetGenericCallbacks(); yes.result = 4;
+	GenericResetCallbacks(); yes.result = 4;
 	program.adjusts = {{.operation = DSGA_OP_RST, .variable = 0x10, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}, {.operation = DSGA_OP_RST, .variable = 0x0C, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x101}, {.operation = DSGA_OP_RST, .variable = 0x18, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x102}};
 	const TileIndex tile = TileXY(4, 4); Tile t(tile);
 	std::array<TileIndex, 3> corner_tiles{tile + 1, tile + TileDiffXY(0, 1), tile + TileDiffXY(1, 1)};
@@ -171,7 +180,7 @@ static void GenericPrograms()
 #endif
 	const auto saved_cursor = cursor;
 	for (const TileType kind : {MP_CLEAR, MP_TREES, MP_WATER}) for (uint version : {7U, 8U}) for (uint mode = 0; mode < 4; ++mode) {
-		ResetGenericCallbacks(); first.grf_version = version;
+		GenericResetCallbacks(); first.grf_version = version;
 		AddGenericCallback(GSF_SOUNDFX, &first, &program); AddGenericCallback(GSF_SOUNDFX, &second, &failure);
 		if (kind == MP_CLEAR) MakeClear(tile, CLEAR_GRASS, 3);
 		if (kind == MP_TREES) MakeTree(tile, TREE_TEMPERATE, 1, TreeGrowthStage::Grown, TREE_GROUND_GRASS, 3);
@@ -201,7 +210,7 @@ static void GenericPrograms()
 		AutoRestoreBackup<decltype(_settings_game.construction.extra_tree_placement)> placement(_settings_game.construction.extra_tree_placement, 0); // tree_cmd.cpp's private ETP_NO_SPREAD.
 		TimerGameTick::counter = 15U << 8;
 		MakeTree(tile, TREE_TEMPERATE, 1, TreeGrowthStage::Grown, TREE_GROUND_ROUGH, 3);
-		ResetGenericCallbacks(); AddGenericCallback(GSF_SOUNDFX, &first, &yes); yes.tree_mutation = tile;
+		GenericResetCallbacks(); AddGenericCallback(GSF_SOUNDFX, &first, &yes); yes.tree_mutation = tile;
 		_misc_grf_features = {GrfMiscBit::AmbientSoundCallback}; _settings_client.sound.ambient = true;
 		for (uint seed = 1;; ++seed) { _random.SetSeed(seed); auto next = _random; if (Chance16I(1, 200, next.Next())) break; }
 		auto expected_rng = _random; expected_rng.Next(); generic_sound_calls = 0;
@@ -217,7 +226,7 @@ static void GenericPrograms()
 	}
 	TimerGameTick::counter = 1;
 	MakeCanal(tile, OWNER_NONE, 0); SetNonFloodingWaterTile(tile, true);
-	ResetGenericCallbacks(); AddGenericCallback(GSF_SOUNDFX, &first, &program); AddGenericCallback(GSF_SOUNDFX, &second, &failure);
+	GenericResetCallbacks(); AddGenericCallback(GSF_SOUNDFX, &first, &program); AddGenericCallback(GSF_SOUNDFX, &second, &failure);
 	program.adjusts = {{.operation = DSGA_OP_RST, .variable = 0x80, .and_mask = UINT32_MAX}}; program.error_group = &no;
 	for (uint seed = 1;; ++seed) { _random.SetSeed(seed); auto next = _random; if (Chance16I(1, 200, next.Next())) break; }
 	auto expected_rng = _random; expected_rng.Next(); generic_sound_calls = 0;
@@ -231,7 +240,7 @@ static void GenericPrograms()
 	cursor = saved_cursor; uint i = 0; for (Tile one : Map::Iterate()) one.type() = types[i++];
 	for (uint i = 0; i < 3; ++i) SetTileHeight(corner_tiles[i], corner_heights[i]);
 	std::tie(t.height(), t.m1(), t.m2(), t.m3(), t.m4(), t.m5(), t.m6(), t.m7(), t.m8()) = fields;
-	ResetGenericCallbacks(); // Before every graph/file destruction, including native reload.
+	GenericResetCallbacks(); // Before every graph/file destruction, including native reload.
 	fmt::print(stderr, "GENERIC programs-complete true\n");
 }
 static bool GenericScenario(std::span<std::string_view> args)

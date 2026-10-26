@@ -49,6 +49,7 @@
 #include "table/strings.h"
 
 #ifdef WITH_RUST
+#include "rust/engine_loading_services.hpp"
 #include "rust/cargo_registry_ffi.h"
 #endif
 
@@ -79,7 +80,11 @@ GRFLoadedFeatures _loaded_newgrf_features;
 
 GrfProcessingState _cur_gps;
 
+#ifdef WITH_RUST
+RustEngineTempView _gted;
+#else
 TypedIndexContainer<std::vector<GRFTempEngineData>, EngineID> _gted;  ///< Temporary engine data used during NewGRF loading
+#endif
 
 /**
  * Debug() function dedicated to newGRF debugging messages
@@ -125,10 +130,12 @@ static GRFFile *GetFileByFilename(const std::string &filename)
 }
 
 /** Reset all NewGRFData that was used only while processing data */
+#ifndef WITH_RUST
 static void ClearTemporaryNewGRFData(GRFFile *gf)
 {
 	gf->labels.clear();
 }
+#endif
 
 /**
  * Disable a GRF
@@ -138,6 +145,10 @@ static void ClearTemporaryNewGRFData(GRFFile *gf)
  */
 GRFError *DisableGrf(StringID message, GRFConfig *config)
 {
+#ifdef WITH_RUST
+	return openttd_rust_grf_disable(&GetRustGrfLoadingServices(), message, config);
+#else
+
 	GRFFile *file;
 	if (config != nullptr) {
 		file = GetFileByGRFID(config->ident.grfid);
@@ -158,6 +169,7 @@ GRFError *DisableGrf(StringID message, GRFConfig *config)
 	}
 	if (config == _cur_gps.grfconfig) it->param_value[0] = _cur_gps.nfo_line;
 	return &*it;
+#endif
 }
 
 /**
@@ -169,13 +181,29 @@ GRFError *DisableGrf(StringID message, GRFConfig *config)
  * best result as no NewGRF author can complain about that.
  * @param c The NewGRF to disable.
  */
+#ifndef WITH_RUST
 void DisableStaticNewGRFInfluencingNonStaticNewGRFs(GRFConfig &c)
 {
 	GRFError *error = DisableGrf(STR_NEWGRF_ERROR_STATIC_GRF_CAUSES_DESYNC, &c);
 	error->data = _cur_gps.grfconfig->GetName();
 }
+#endif
 
+#ifndef WITH_RUST
 static std::map<uint32_t, uint32_t> _grf_id_overrides;
+#endif
+
+static bool GetNewGRFOverride(uint32_t source, uint32_t &target)
+{
+#ifdef WITH_RUST
+	return openttd_rust_engine_override_get(source, &target);
+#else
+	auto it = _grf_id_overrides.find(source);
+	if (it == _grf_id_overrides.end()) return false;
+	target = it->second;
+	return true;
+#endif
+}
 
 /**
  * Set the override for a NewGRF
@@ -184,6 +212,9 @@ static std::map<uint32_t, uint32_t> _grf_id_overrides;
  */
 void SetNewGRFOverride(uint32_t source_grfid, uint32_t target_grfid)
 {
+#ifdef WITH_RUST
+	openttd_rust_engine_set_override(&GetRustEngineLoadingServices(), source_grfid, target_grfid);
+#else
 	if (target_grfid == 0) {
 		_grf_id_overrides.erase(source_grfid);
 		GrfMsg(5, "SetNewGRFOverride: Removed override of 0x{:X}", std::byteswap(source_grfid));
@@ -191,6 +222,7 @@ void SetNewGRFOverride(uint32_t source_grfid, uint32_t target_grfid)
 		_grf_id_overrides[source_grfid] = target_grfid;
 		GrfMsg(5, "SetNewGRFOverride: Added override of 0x{:X} to 0x{:X}", std::byteswap(source_grfid), std::byteswap(target_grfid));
 	}
+#endif
 }
 
 /**
@@ -199,12 +231,16 @@ void SetNewGRFOverride(uint32_t source_grfid, uint32_t target_grfid)
  */
 GRFFile *GetCurrentGRFOverride()
 {
-	auto found = _grf_id_overrides.find(_cur_gps.grffile->grfid);
-	if (found != std::end(_grf_id_overrides)) {
-		GRFFile *grffile = GetFileByGRFID(found->second);
+#ifdef WITH_RUST
+	return const_cast<GRFFile *>(openttd_rust_engine_current_override(&GetRustEngineLoadingServices(), _cur_gps.grffile));
+#else
+	uint32_t target;
+	if (GetNewGRFOverride(_cur_gps.grffile->grfid, target)) {
+		GRFFile *grffile = GetFileByGRFID(target);
 		if (grffile != nullptr) return grffile;
 	}
 	return nullptr;
+#endif
 }
 
 /**
@@ -217,6 +253,9 @@ GRFFile *GetCurrentGRFOverride()
  */
 Engine *GetNewEngine(const GRFFile *file, VehicleType type, uint16_t internal_id, bool static_access)
 {
+#ifdef WITH_RUST
+	return const_cast<Engine *>(EngineOf(openttd_rust_engine_definition(&GetRustEngineLoadingServices(), file, type, internal_id, static_access)));
+#else
 	/* Hack for add-on GRFs that need to modify another GRF's engines. This lets
 	 * them use the same engine slots. */
 	uint32_t scope_grfid = INVALID_GRFID; // If not using dynamic_engines, all newgrfs share their ID range
@@ -285,6 +324,7 @@ Engine *GetNewEngine(const GRFFile *file, VehicleType type, uint16_t internal_id
 	GrfMsg(5, "Created new engine at index {} for GRFID {:x}, type {}, index {}", e->index, std::byteswap(file->grfid), type, internal_id);
 
 	return e;
+#endif
 }
 
 /**
@@ -299,6 +339,9 @@ Engine *GetNewEngine(const GRFFile *file, VehicleType type, uint16_t internal_id
  */
 EngineID GetNewEngineID(const GRFFile *file, VehicleType type, uint16_t internal_id)
 {
+#ifdef WITH_RUST
+	return EngineID{openttd_rust_engine_new_id(&GetRustEngineLoadingServices(), file, type, internal_id)};
+#else
 	uint32_t scope_grfid = INVALID_GRFID; // If not using dynamic_engines, all newgrfs share their ID range
 	if (_settings_game.vehicle.dynamic_engines) {
 		scope_grfid = file->grfid;
@@ -308,6 +351,7 @@ EngineID GetNewEngineID(const GRFFile *file, VehicleType type, uint16_t internal
 	}
 
 	return _engine_mngr.GetID(type, internal_id, scope_grfid);
+#endif
 }
 
 
@@ -318,12 +362,16 @@ EngineID GetNewEngineID(const GRFFile *file, VehicleType type, uint16_t internal
  */
 CargoTypes TranslateRefitMask(uint32_t refit_mask)
 {
+#ifdef WITH_RUST
+	return openttd_rust_engine_translate_refit(refit_mask, _cur_gps.grffile);
+#else
 	CargoTypes result = 0;
 	for (uint8_t bit : SetBitIterator(refit_mask)) {
 		CargoType cargo = GetCargoTranslation(bit, _cur_gps.grffile, true);
 		if (IsValidCargoType(cargo)) SetBit(result, cargo);
 	}
 	return result;
+#endif
 }
 
 /**
@@ -376,13 +424,19 @@ void ConvertTTDBasePrice(uint32_t base_pointer, std::string_view error_location,
  */
 void GRFUnsafe(ByteReader &)
 {
+#ifdef WITH_RUST
+	openttd_rust_grf_unsafe(&GetRustGrfLoadingServices());
+#else
+
 	_cur_gps.grfconfig->flags.Set(GRFConfigFlag::Unsafe);
 
 	/* Skip remainder of GRF */
 	_cur_gps.skip_sprites = -1;
+#endif
 }
 
 /** Reset and clear all NewGRFs */
+#ifndef WITH_RUST
 static void ResetNewGRF()
 {
 	_cur_gps.grfconfig = nullptr;
@@ -394,23 +448,32 @@ static void ResetNewGRF()
 	 * reserving when the size is known is good practice anyway. */
 	_grf_files.reserve(_grfconfig.size());
 }
+#endif
 
 /** Clear all NewGRF errors */
+#ifndef WITH_RUST
 static void ResetNewGRFErrors()
 {
 	for (const auto &c : _grfconfig) {
 		c->errors.clear();
 	}
 }
+#endif
 
 extern void ResetCallbacks(bool final);
+#ifndef WITH_RUST
 extern void ResetGRM();
+#endif
 
 /**
  * Reset all NewGRF loaded data
  */
 void ResetNewGRFData()
 {
+#ifdef WITH_RUST
+	openttd_rust_grf_reset(&GetRustGrfLoadingServices());
+#else
+
 	CleanUpStrings();
 	CleanUpGRFTownNames();
 
@@ -501,6 +564,7 @@ void ResetNewGRFData()
 	InitializeSoundPool();
 	_spritegroup_pool.CleanPool();
 	ResetCallbacks(false);
+#endif
 }
 
 /**
@@ -543,11 +607,9 @@ void ResetPersistentNewGRFData()
  * Construct the Cargo Mapping
  * @note This is the reverse of a cargo translation table
  */
+#ifndef WITH_RUST
 static void BuildCargoTranslationMap()
 {
-#ifdef WITH_RUST
-	openttd_rust_cargo_build_inverse(_cur_gps.grffile);
-#else
 	_cur_gps.grffile->cargo_map.fill(UINT8_MAX);
 
 	auto cargo_list = GetCargoTranslationTable(*_cur_gps.grffile);
@@ -557,8 +619,8 @@ static void BuildCargoTranslationMap()
 		int idx = find_index(cargo_list, cs->label);
 		if (idx >= 0) _cur_gps.grffile->cargo_map[cs->Index()] = idx;
 	}
-#endif
 }
+#endif
 
 /**
  * Prepare loading a NewGRF file with its config
@@ -622,6 +684,7 @@ GRFFile::~GRFFile() = default;
  * @param labels List of cargo labels.
  * @returns First cargo label in list that exists, or CT_INVALID if none exist.
  */
+#ifndef WITH_RUST
 static CargoLabel GetActiveCargoLabel(const std::initializer_list<CargoLabel> &labels)
 {
 	for (const CargoLabel &label : labels) {
@@ -631,6 +694,8 @@ static CargoLabel GetActiveCargoLabel(const std::initializer_list<CargoLabel> &l
 	return CT_INVALID;
 }
 
+#endif
+
 /**
  * Get active cargo label from either a cargo label or climate-dependent mixed cargo type.
  * @param label Cargo label or climate-dependent mixed cargo type.
@@ -638,6 +703,9 @@ static CargoLabel GetActiveCargoLabel(const std::initializer_list<CargoLabel> &l
  */
 static CargoLabel GetActiveCargoLabel(const std::variant<CargoLabel, MixedCargoType> &label)
 {
+#ifdef WITH_RUST
+	return CargoLabel{openttd_rust_newgrf_active_cargo_label(RustCargoLabel(label))};
+#else
 	struct visitor {
 		CargoLabel operator()(const CargoLabel &label) { return label; }
 		CargoLabel operator()(const MixedCargoType &mixed)
@@ -652,11 +720,13 @@ static CargoLabel GetActiveCargoLabel(const std::variant<CargoLabel, MixedCargoT
 	};
 
 	return std::visit(visitor{}, label);
+#endif
 }
 
 /**
  * Precalculate refit masks from cargo classes for all vehicles.
  */
+#ifndef WITH_RUST
 static void CalculateRefitMasks()
 {
 	CargoTypes original_known_cargoes = 0;
@@ -851,6 +921,7 @@ static void CalculateRefitMasks()
 		}
 	}
 }
+#endif
 
 /** Set to use the correct action0 properties for each canal feature */
 static void FinaliseCanals()
@@ -864,6 +935,7 @@ static void FinaliseCanals()
 }
 
 /** Check for invalid engines */
+#ifndef WITH_RUST
 static void FinaliseEngineArray()
 {
 	for (Engine *e : Engine::Iterate()) {
@@ -945,13 +1017,12 @@ static void FinaliseEngineArray()
 		}
 	}
 }
+#endif
 
 /** Check for invalid cargoes */
+#ifndef WITH_RUST
 void FinaliseCargoArray()
 {
-#ifdef WITH_RUST
-	openttd_rust_cargo_finalise();
-#else
 	for (CargoSpec &cs : CargoSpec::array) {
 		if (cs.town_production_effect == INVALID_TPE) {
 			/* Set default town production effect by cargo label. */
@@ -967,8 +1038,8 @@ void FinaliseCargoArray()
 			cs.abbrev = STR_NEWGRF_INVALID_CARGO_ABBREV;
 		}
 	}
-#endif
 }
+#endif
 
 /**
  * Check if a given housespec is valid and disable it if it's not.
@@ -1126,6 +1197,7 @@ static void FinaliseHouseArray()
  * time in the GRF file, so we can only add a industry spec to the industry array
  * after the file has finished loading.
  */
+#ifndef WITH_RUST
 static void FinaliseIndustriesArray()
 {
 	for (auto &file : _grf_files) {
@@ -1174,6 +1246,8 @@ static void FinaliseIndustriesArray()
 		}
 	}
 }
+
+#endif
 
 /**
  * Add all new objects to the object array. Object properties can be set at any
@@ -1225,6 +1299,7 @@ static void FinaliseAirportsArray()
 	}
 }
 
+#ifndef WITH_RUST
 /** Helper class to invoke a GrfActionHandler. */
 struct InvokeGrfActionHandler {
 	template <uint8_t TAction>
@@ -1397,6 +1472,8 @@ static void LoadNewGRFFileFromFile(GRFConfig &config, GrfLoadingStage stage, Spr
 	}
 }
 
+#endif
+
 /**
  * Load a particular NewGRF.
  * @param config     The configuration of the to be loaded NewGRF.
@@ -1407,6 +1484,11 @@ static void LoadNewGRFFileFromFile(GRFConfig &config, GrfLoadingStage stage, Spr
  */
 void LoadNewGRFFile(GRFConfig &config, GrfLoadingStage stage, Subdirectory subdir, bool temporary)
 {
+#ifdef WITH_RUST
+	std::optional<SpriteFile> temporary_file;
+	openttd_rust_grf_load_file(&GetRustGrfLoadingServices(), &config, stage, subdir, temporary ? &temporary_file : nullptr);
+#else
+
 	const std::string &filename = config.filename;
 
 	/* A .grf file is activated only if it was active when the game was
@@ -1432,6 +1514,7 @@ void LoadNewGRFFile(GRFConfig &config, GrfLoadingStage stage, Subdirectory subdi
 	} else {
 		LoadNewGRFFileFromFile(config, stage, OpenCachedSpriteFile(filename, subdir, needs_palette_remap));
 	}
+#endif
 }
 
 /**
@@ -1504,9 +1587,8 @@ static void FinalisePriceBaseMultipliers()
 	std::vector<int> grf_overrides(num_grfs, -1);
 	for (int i = 0; i < num_grfs; i++) {
 		GRFFile &source = _grf_files[i];
-		auto it = _grf_id_overrides.find(source.grfid);
-		if (it == std::end(_grf_id_overrides)) continue;
-		uint32_t override_grfid = it->second;
+		uint32_t override_grfid;
+		if (!GetNewGRFOverride(source.grfid, override_grfid)) continue;
 
 		auto dest = std::ranges::find(_grf_files, override_grfid, &GRFFile::grfid);
 		if (dest == std::end(_grf_files)) continue;
@@ -1646,6 +1728,7 @@ static void FinaliseBadges()
 extern void InitGRFTownGeneratorNames();
 
 /** Finish loading NewGRFs and execute needed post-processing */
+#ifndef WITH_RUST
 static void AfterLoadGRFs()
 {
 	/* Cached callback groups are no longer needed. */
@@ -1654,7 +1737,11 @@ static void AfterLoadGRFs()
 	FinaliseStringMapping();
 
 	/* Clear the action 6 override sprites. */
+#ifdef WITH_RUST
+	openttd_rust_grf_clear_overrides();
+#else
 	_grf_line_to_action6_sprite_override.clear();
+#endif
 
 	FinaliseBadges();
 
@@ -1764,8 +1851,13 @@ static void AfterLoadGRFs()
 
 	/* Deallocate temporary loading data */
 	_gted.clear();
+#ifdef WITH_RUST
+	openttd_rust_grf_clear_grm_sprites();
+#else
 	_grm_sprites.clear();
+#endif
 }
+#endif
 
 /**
  * Load all the NewGRFs.
@@ -1774,6 +1866,10 @@ static void AfterLoadGRFs()
  */
 void LoadNewGRF(SpriteID load_index, uint num_baseset)
 {
+#ifdef WITH_RUST
+	openttd_rust_grf_load(&GetRustGrfLoadingServices(), load_index, num_baseset);
+#else
+
 	/* In case of networking we need to "sync" the start values
 	 * so all NewGRFs are loaded equally. For this we use the
 	 * start date of the game and we set the counters, etc. to
@@ -1906,4 +2002,7 @@ void LoadNewGRF(SpriteID load_index, uint num_baseset)
 
 	TimerGameTick::counter = tick_counter;
 	_display_opt  = display_opt;
+#endif
 }
+
+#include "rust/newgrf_loading_services.inc"

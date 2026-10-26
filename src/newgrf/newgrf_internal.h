@@ -45,6 +45,45 @@ struct GrfActionHandler {
 
 static constexpr uint MAX_SPRITEGROUP = UINT8_MAX; ///< Maximum GRF-local ID for a spritegroup.
 
+#ifdef WITH_RUST
+#include "../rust/newgrf_loading_ffi.h"
+/** Nonowning references into the process-wide Rust execution carrier. */
+struct GrfProcessingState {
+	GrfLoadingStage &stage = openttd_rust_grf_execution()->stage;
+	SpriteID &spriteid = openttd_rust_grf_execution()->spriteid;
+	SpriteFile *&file = openttd_rust_grf_execution()->file;
+	GRFFile *&grffile = openttd_rust_grf_execution()->grffile;
+	GRFConfig *&grfconfig = openttd_rust_grf_execution()->grfconfig;
+	uint32_t &nfo_line = openttd_rust_grf_execution()->nfo_line;
+	int &skip_sprites = openttd_rust_grf_execution()->skip_sprites;
+	std::array<const SpriteGroup *, MAX_SPRITEGROUP + 1> &spritegroups = openttd_rust_grf_execution()->spritegroups;
+	void AddSpriteSets(GrfSpecFeature feature, SpriteID first_sprite, uint first_set, uint numsets, uint numents)
+	{
+		assert(feature < GSF_END);
+		openttd_rust_grf_add_sets(feature, first_sprite, first_set, numsets, numents);
+	}
+	bool HasValidSpriteSets(GrfSpecFeature feature) const
+	{
+		assert(feature < GSF_END);
+		return openttd_rust_grf_has_sets(feature);
+	}
+	bool IsValidSpriteSet(GrfSpecFeature feature, uint set) const
+	{
+		assert(feature < GSF_END);
+		return openttd_rust_grf_has_set(feature, set);
+	}
+	SpriteID GetSprite(GrfSpecFeature feature, uint set) const
+	{
+		assert(IsValidSpriteSet(feature, set));
+		return openttd_rust_grf_set_sprite(feature, set);
+	}
+	uint GetNumEnts(GrfSpecFeature feature, uint set) const
+	{
+		assert(IsValidSpriteSet(feature, set));
+		return openttd_rust_grf_set_size(feature, set);
+	}
+};
+#else
 /** Temporary data during loading of GRFs */
 struct GrfProcessingState {
 private:
@@ -155,8 +194,11 @@ public:
 	}
 };
 
+#endif
+
 extern GrfProcessingState _cur_gps;
 
+#ifndef WITH_RUST
 struct GRFLocation {
 	uint32_t grfid;
 	uint32_t nfoline;
@@ -178,6 +220,7 @@ using GRFLineToSpriteOverride = std::map<GRFLocation, std::vector<uint8_t>>;
 
 extern std::map<GRFLocation, std::pair<SpriteID, uint16_t>> _grm_sprites;
 extern GRFLineToSpriteOverride _grf_line_to_action6_sprite_override;
+#endif
 
 extern GrfMiscBits _misc_grf_features;
 
@@ -197,11 +240,17 @@ bool ReadSpriteLayout(ByteReader &buf, uint num_building_sprites, bool use_cur_s
 
 GRFFile *GetFileByGRFID(uint32_t grfid);
 GRFError *DisableGrf(StringID message = {}, GRFConfig *config = nullptr);
+#ifndef WITH_RUST
 void DisableStaticNewGRFInfluencingNonStaticNewGRFs(GRFConfig &c);
+#endif
 bool HandleChangeInfoResult(std::string_view caller, ChangeInfoResult cir, GrfSpecFeature feature, uint8_t property);
+#ifndef WITH_RUST
 uint32_t GetParamVal(uint8_t param, uint32_t *cond_val);
+#endif
 void GRFUnsafe(ByteReader &);
 
+#ifndef WITH_RUST
 void InitializePatchFlags();
+#endif
 
 #endif /* NEWGRF_INTERNAL_H */

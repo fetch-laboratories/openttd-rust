@@ -20,8 +20,7 @@ pub struct Availability {
 }
 #[repr(C)]
 pub struct Cargo {
-    pub label: u32,
-    pub mixed: bool,
+    pub label: crate::newgrf::CargoLabel,
     pub cargo: u8,
 }
 #[repr(C)]
@@ -189,8 +188,17 @@ pub unsafe fn publish_tile(
         }
     }
 }
-#[allow(dead_code)]
-pub unsafe fn finalise(s: &Services, mut translate: impl FnMut(Cargo) -> u8) {
+fn translate(cargo: Cargo) -> u8 {
+    use crate::cargo_registry::openttd_rust_cargo_by_label;
+    openttd_rust_cargo_by_label(crate::newgrf::get_active_cargo_label(
+        cargo.label,
+        |label| openttd_rust_cargo_by_label(label),
+    ))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_industry_definition_finalise(s: *const Services) {
+    let s = unsafe { &*s };
     let mut file_index = 0;
     loop {
         let file = unsafe { (s.file)(file_index) };
@@ -352,7 +360,7 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDIndustryDefinitionIdentity" ["industry"] => Identity { grfid, local, substitute };
     "OpenTTDIndustryDefinitionAvailability" ["industry"] => Availability { enabled, has_file };
-    "OpenTTDIndustryDefinitionCargo" ["industry"] => Cargo { label, mixed, cargo };
+    "OpenTTDIndustryDefinitionCargo" ["industry"] => Cargo { label, cargo };
     "OpenTTDIndustryDefinitionServices" ["industry"] => Services {
         generation, industry, tile, grfid, identity, tile_identity, availability, set_enabled, set_override, set_tile_override, set_tile_enabled, publish, publish_tile, industry_full, tile_full, reset_industry, clear_industry, climate_available, reset_tile, clear_tile, file, industry_count, tile_count, file_industry, file_tile, clear_file, conflicting, invalid_name, produced, accepted, tile_accepted, set_produced, set_accepted, set_tile_accepted
     };

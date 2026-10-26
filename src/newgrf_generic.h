@@ -44,7 +44,9 @@ enum AIConstructionEvent : uint8_t {
 static const IndustryType IT_AI_UNKNOWN = 0xFE; ///< The AI has no specific industry in mind.
 static const IndustryType IT_AI_TOWN    = 0xFF; ///< The AI actually wants to transport to/from a town, not an industry.
 
+#ifndef WITH_RUST
 void ResetGenericCallbacks();
+#endif
 void AddGenericCallback(GrfSpecFeature feature, const GRFFile *file, const SpriteGroup *group);
 
 std::pair<const GRFFile *, uint16_t> GetAiPurchaseCallbackResult(GrfSpecFeature feature, CargoType cargo_type, uint8_t default_selection, IndustryType src_industry, IndustryType dst_industry, uint8_t distance, AIConstructionEvent event, uint8_t count, uint8_t station_size);

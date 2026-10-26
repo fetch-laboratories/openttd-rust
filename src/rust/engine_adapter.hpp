@@ -54,17 +54,17 @@ static OpenTTDEngineRef EnginePrototype(const Engine *e) noexcept
 static OpenTTDEngineSyncVariant Engine_sync_variant(const OpenTTDEngine *e) noexcept
 {
 	const auto &info = EngineOf(e)->info;
-	return {.parent = info.variant_id.base(), .sync = info.extra_flags.Test(ExtraEngineFlag::SyncReliability)};
+	return {.parent = RustEngineVariant(e), .sync = info.extra_flags.Test(ExtraEngineFlag::SyncReliability)};
 }
 static OpenTTDEngineDisplayVariant Engine_display_variant(const OpenTTDEngine *shell) noexcept
 {
 	const Engine *e = EngineOf(shell);
-	return {.parent = e->info.variant_id.base(), .display = e->display_last_variant.base()};
+	return {.parent = RustEngineVariant(e), .display = e->display_last_variant.base()};
 }
 static OpenTTDEnginePreviewVariant Engine_preview_variant(const OpenTTDEngine *e) noexcept
 {
 	const auto &info = EngineOf(e)->info;
-	return {.parent = info.variant_id.base(), .join = info.extra_flags.Test(ExtraEngineFlag::JoinPreview)};
+	return {.parent = RustEngineVariant(e), .join = info.extra_flags.Test(ExtraEngineFlag::JoinPreview)};
 }
 static OpenTTDEngineReliability Engine_reliability(const OpenTTDEngine *shell) noexcept
 {
@@ -87,7 +87,7 @@ static OpenTTDEngineYear Engine_aging_year(const OpenTTDEngine *shell) noexcept
 	return {.base_intro = RustEngineBaseIntro(shell), .lifelength = e->info.lifelength.base()};
 }
 
-static OpenTTDEngineStartSettings Engine_start_settings() noexcept { return {.generation_seed = _settings_game.game_creation.generation_seed, .starting_year = _settings_game.game_creation.starting_year.base(), .date = TimerGameCalendar::date.base()}; }
+static OpenTTDEngineStartSettings Engine_start_settings() noexcept { return {.generation_seed = RustGenerationSeed(), .starting_year = RustStartingYear(), .date = TimerGameCalendar::date.base()}; }
 
 static bool Engine_enabled(const OpenTTDEngine *e) noexcept { return EngineOf(e)->IsEnabled(); }
 

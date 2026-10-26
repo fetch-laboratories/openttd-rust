@@ -34,6 +34,7 @@
 #include "../strings_func.h"
 #include "../table/strings.h"
 #ifdef WITH_RUST
+#include "newgrf_bytereader_services.h"
 #include "../aircraft.h"
 #include "../airport.h"
 #include "../engine_type.h"
@@ -625,11 +626,13 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 #include "abi-visit-OpenTTDEnvironmentServices.hpp"
 #include "abi-visit-OpenTTDClearSquareServices.hpp"
 #include "abi-visit-OpenTTDWaterRestorationServices.hpp"
+#include "abi-visit-OpenTTDByteReaderServices.hpp"
 bool CheckAbi_services()
 {
 	return AbiServicesComplete(GetPbsServices()) && AbiServicesComplete(GetRustLiveGraphServices()) &&
 		AbiServicesComplete(GetRustEnvironmentServices()) &&
 		AbiServicesComplete(GetRustRandomServices()) &&
+		AbiServicesComplete(GetRustByteReaderServices()) &&
 		AbiServicesComplete(GetRustRailMapServices()) &&
 		AbiServicesComplete(GetRustCommandServices()) &&
 		AbiServicesComplete(GetRustCommandCostServices()) &&

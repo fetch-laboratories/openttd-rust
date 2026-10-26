@@ -117,7 +117,6 @@ src/rust/train_services.h | TrainReservePaths(OpenTTDTrainHandle) noexcept | ca4
 src/rust/train_services.h | TrainReverseAtSignals(OpenTTDTrainHandle) noexcept | 562ee8ededd55021 | 1
 src/rust/train_services.h | TrainSharedMap(OpenTTDTrainHandle, uint32_t tile) noexcept | d2c72c5ff1b66cb5 | 1
 src/rust/train_services.h | TrainVisitType(OpenTTDTrainHandle, uint16_t a) noexcept | 01608408cc222048 | 1
-src/rust/train_services.h | TrainWagonSpeedLimits(OpenTTDTrainHandle) noexcept | 1b4981b5c17ac89a | 1
 src/rust/train_services.h | TrainWaitOneway(OpenTTDTrainHandle) noexcept | 99ac10cb2f2f467c | 1
 src/rust/train_services.h | TrainWaitPbs(OpenTTDTrainHandle) noexcept | 47e292e790d4250a | 1
 src/rust/train_services.h | TrainWaitTwoway(OpenTTDTrainHandle) noexcept | 508c48d22dab543e | 1

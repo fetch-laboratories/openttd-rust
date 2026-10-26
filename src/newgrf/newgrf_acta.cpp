@@ -25,11 +25,16 @@
  */
 static bool IsGRMReservedSprite(SpriteID first_sprite, uint16_t num_sprites)
 {
+#ifdef WITH_RUST
+	return openttd_rust_grf_reserved_sprite(_cur_gps.grffile->grfid, first_sprite, num_sprites);
+#else
+
 	for (const auto &grm_sprite : _grm_sprites) {
 		if (grm_sprite.first.grfid != _cur_gps.grffile->grfid) continue;
 		if (grm_sprite.second.first <= first_sprite && grm_sprite.second.first + grm_sprite.second.second >= first_sprite + num_sprites) return true;
 	}
 	return false;
+#endif
 }
 
 /* Action 0x0A */

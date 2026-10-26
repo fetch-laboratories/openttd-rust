@@ -3,6 +3,7 @@
 #ifndef RUST_INDUSTRY_DEFINITION_FFI_H
 #define RUST_INDUSTRY_DEFINITION_FFI_H
 #include "service_defaults.hpp"
+#include "newgrf_global_ffi.h"
 #include <cstdint>
 #include <cstddef>
 struct OpenTTDIndustryGenerationServices;
@@ -12,7 +13,7 @@ struct IndustryTileSpec;
 struct GRFFile;
 struct OpenTTDIndustryDefinitionIdentity { uint32_t grfid; uint16_t local, substitute; };
 struct OpenTTDIndustryDefinitionAvailability { bool enabled, has_file; };
-struct OpenTTDIndustryDefinitionCargo { uint32_t label; bool mixed; uint8_t cargo; };
+struct OpenTTDIndustryDefinitionCargo { OpenTTDNewGRFCargoLabel label; uint8_t cargo; };
 /** Native specs remain canonical. Load/reset is serialized by the game-state mutex;
  * leaves never yield or reset definitions. No borrowed spec survives vector cleanup. */
 struct OpenTTDIndustryDefinitionServices {
@@ -57,6 +58,7 @@ uint16_t openttd_rust_industry_tile_definition_allocate(OpenTTDOverrideManager *
 uint16_t openttd_rust_industry_definition_allocate(OpenTTDOverrideManager *, uint16_t, uint32_t, uint16_t, const OpenTTDIndustryDefinitionServices *);
 void openttd_rust_industry_definition_publish(OpenTTDOverrideManager *, IndustrySpec *, const OpenTTDIndustryDefinitionServices *);
 void openttd_rust_industry_tile_definition_publish(OpenTTDOverrideManager *, IndustryTileSpec *, const OpenTTDIndustryDefinitionServices *);
+void openttd_rust_industry_definition_finalise(const OpenTTDIndustryDefinitionServices *);
 void openttd_rust_industry_definition_reset(uint8_t, const OpenTTDIndustryDefinitionServices *);
 }
 #endif

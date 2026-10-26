@@ -4,6 +4,7 @@
 #define RUST_ENGINE_CAPABILITIES_FFI_H
 #include "newgrf_vehicle_ffi.h"
 #include "engine_ffi.h"
+struct OpenTTDEngineLoadingServices;
 struct OpenTTDEngineCapabilitiesServices {
 	const OpenTTDVehicleResolverServices *(*resolver)() noexcept OPENTTD_SERVICE_DEFAULT(resolver);
 	const OpenTTDEngine *(*engine)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(engine);
@@ -22,7 +23,7 @@ struct OpenTTDEngineCapabilitiesServices {
 	RailVehicleTypes (*rail_kind)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(rail_kind);
 	const GRFFile *(*grf)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(grf);
 	uint8_t (*version)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(version);
-	uint16_t (*new_engine)(const GRFFile *, VehicleType, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(new_engine);
+	const OpenTTDEngineLoadingServices *(*loading)() noexcept OPENTTD_SERVICE_DEFAULT(loading);
 	uint16_t (*cargo_classes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_classes);
 	uint16_t (*multiplier)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(multiplier);
 	bool (*pool_available)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(pool_available);

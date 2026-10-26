@@ -12,15 +12,15 @@
 #include "industry_definition_ffi.h"
 #include "industry_ffi.h"
 #include "services_newgrf.h"
+#include "services_cargo.h"
 #include "../table/build_industry.h"
 #include "../table/strings.h"
 #include "../safeguards.h"
 
 static OpenTTDIndustryDefinitionCargo DefinitionCargo(CargoType cargo, const std::variant<CargoLabel, MixedCargoType> &label) noexcept
 {
-	if (IsValidCargoType(cargo)) return {0, false, cargo};
-	if (const auto *value = std::get_if<CargoLabel>(&label)) return {value->base(), false, cargo};
-	return {static_cast<uint32_t>(std::get<MixedCargoType>(label)), true, cargo};
+	if (IsValidCargoType(cargo)) return {{0, false}, cargo};
+	return {RustCargoLabel(label), cargo};
 }
 const OpenTTDIndustryDefinitionServices &GetIndustryDefinitionServices() noexcept
 {
