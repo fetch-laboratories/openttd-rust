@@ -21,7 +21,7 @@ static void LoadingScan()
 {
 	const char *folder = std::getenv("OPENTTD_ENGINE_LOADING");
 	if (folder == nullptr) return;
-	for (uint which = 1; which <= 4; ++which) {
+	for (uint which = 1; which <= 5; ++which) {
 		auto config = std::make_unique<GRFConfig>(fmt::format("{}/owner470-{}.grf", folder, which));
 		LoadingRequire(FillGRFDetails(*config, which == 4), "file-scan");
 		LoadingRequire(config->ident.grfid == 0x4700A000 + which, "file-identity");
@@ -70,9 +70,14 @@ static void LoadingInspect()
 			LoadingRequire(result == expected, "file-callback");
 		}
 	}
-	for (uint16_t local : {302, 304, 309}) LoadingRequire(LoadingEngine(1, VEH_TRAIN, local)->info.climates.None(), "disabled-cargo-or-label");
+	for (uint16_t local : {302, 304, 309, 314}) LoadingRequire(LoadingEngine(1, VEH_TRAIN, local)->info.climates.None(), "disabled-cargo-or-label");
 	LoadingRequire(LoadingEngine(1, VEH_TRAIN, 301)->info.cargo_type == passengers && LoadingEngine(1, VEH_TRAIN, 301)->info.refit_mask == 0 && LoadingEngine(1, VEH_TRAIN, 301)->IsEnabled(), "empty-refit");
 	LoadingRequire(LoadingEngine(1, VEH_TRAIN, 312)->info.cargo_type == passengers && LoadingEngine(1, VEH_TRAIN, 312)->info.refit_mask == _cargo_mask, "unset-refit");
+	LoadingRequire(LoadingEngine(1, VEH_TRAIN, 313)->info.cargo_type == mail && LoadingEngine(1, VEH_TRAIN, 313)->info.refit_mask == (CargoTypes{1} << mail), "required-classes");
+	LoadingRequire(LoadingEngine(1, VEH_TRAIN, 315)->info.cargo_type == mail, "missing-cargo-label");
+	const auto stale = _engine_mngr.GetID(VEH_TRAIN, 450, dynamic ? 0x4700A005 : INVALID_GRFID);
+	LoadingRequire(Engine::IsValidID(stale) && GetFileByGRFID(0x4700A005) == nullptr && Engine::Get(stale)->info.string_id == STR_NEWGRF_INVALID_ENGINE, "persistent-mapping");
+	fmt::print(stderr, "ENGINE loading-stale {}\n", stale);
 	LoadingRequire(LoadingEngine(1, VEH_TRAIN, 303)->VehInfo<RailVehicleInfo>().railtypes == RailTypes{RAILTYPE_RAIL, RAILTYPE_ELECTRIC}, "rail-label-list");
 	for (uint16_t local : {305, 306, 310}) LoadingRequire(LoadingEngine(1, VEH_TRAIN, local)->info.variant_id == EngineID::Invalid(), "variant-cycle");
 	LoadingRequire(LoadingEngine(1, VEH_TRAIN, 307)->info.variant_id == LoadingEngine(1, VEH_TRAIN, 308)->index && LoadingEngine(1, VEH_TRAIN, 308)->display_flags.Test(EngineDisplayFlag::HasVariants), "variant-parent");
@@ -118,10 +123,11 @@ static void LoadingBuild()
 		const CargoType mail = GetCargoTypeByLabel(CT_MAIL), passengers = GetCargoTypeByLabel(CT_PASSENGERS);
 		SaveRandomSeeds(&before);
 		const auto original = Vehicle::Get(id)->cargo_type;
-		auto refused = Command<CMD_REFIT_VEHICLE>::Do({}, id, passengers, 0, false, false, 0);
+		auto excluded = Command<CMD_REFIT_VEHICLE>::Do({}, id, passengers, 0, false, false, 0);
+		auto refused = Command<CMD_REFIT_VEHICLE>::Do({}, id, NUM_CARGO, 0, false, false, 0);
 		auto refit_test = Command<CMD_REFIT_VEHICLE>::Do({}, id, mail, 0, false, false, 0);
 		SaveRandomSeeds(&after);
-		LoadingRequire(std::get<0>(refused).Failed() && std::get<0>(refit_test).Succeeded() && Vehicle::Get(id)->cargo_type == original && TypeSameRng(before, after), "refit-tests");
+		LoadingRequire(std::get<0>(refused).Failed() && std::get<0>(excluded).Succeeded() && std::get<1>(excluded) == 0 && std::get<0>(refit_test).Succeeded() && Vehicle::Get(id)->cargo_type == original && TypeSameRng(before, after), "refit-tests");
 		auto refit = Command<CMD_REFIT_VEHICLE>::Do(DoCommandFlag::Execute, id, mail, 0, false, false, 0);
 		LoadingRequire(std::get<0>(refit).Succeeded() && Vehicle::Get(id)->cargo_type == mail, "refit-execute");
 		fmt::print(stderr, "ENGINE loading-refit {} {} {} {} {}\n", type, id, std::get<0>(refit).GetCost(), std::get<1>(refit), Vehicle::Get(id)->cargo_cap);
@@ -133,7 +139,7 @@ static bool LoadingScenario(std::span<std::string_view> args)
 	if (args[1] != "loading-inspect") {
 		_settings_game.vehicle.dynamic_engines = args[1] != "loading-shared";
 		_grfconfig.clear();
-		for (uint which = 1; which <= 3; ++which) {
+		for (uint which : {1, 2, 3, 5}) {
 			const GRFConfig *found = FindGRFConfig(0x4700A000 + which, FGCM_NEWEST);
 			if (found == nullptr) FixtureAbort(__LINE__);
 			_grfconfig.push_back(std::make_unique<GRFConfig>(*found));
@@ -142,13 +148,27 @@ static bool LoadingScenario(std::span<std::string_view> args)
 		const auto size = Engine::GetPoolSize();
 		SavedRandomSeeds before, expected, after;
 		SaveRandomSeeds(&before);
-		Random(); SaveRandomSeeds(&expected); RestoreRandomSeeds(before);
+		Random(); Random(); SaveRandomSeeds(&expected); RestoreRandomSeeds(before);
+		ReloadNewGRFData();
+		std::erase_if(_grfconfig, [](const auto &config) { return config->ident.grfid == 0x4700A005; });
 		ReloadNewGRFData();
 		SaveRandomSeeds(&after);
 		LoadingRequire(TypeSameRng(expected, after), "loading-rng");
 		LoadingRequire(Engine::GetPoolSize() > size, "pool-growth");
 	}
 	LoadingInspect();
+	if (args[1] == "loading-inspect") {
+		for (VehicleType type = VEH_BEGIN; type != VEH_COMPANY_END; type++) {
+			uint count = 0;
+			for (const Vehicle *v : Vehicle::Iterate()) {
+				if (v->type != type || !v->IsPrimaryVehicle() || v->engine_type != LoadingEngine(1, type, 300)->index) continue;
+				LoadingRequire(v->cargo_type == GetCargoTypeByLabel(CT_MAIL) && v->cargo_cap > 0, "reloaded-vehicle");
+				fmt::print(stderr, "ENGINE loading-vehicle {} {} {} {} {}\n", type, v->index, v->engine_type, v->cargo_type, v->cargo_cap);
+				++count;
+			}
+			LoadingRequire(count == 1, "reloaded-count");
+		}
+	}
 	LoadingBuild();
 	if (args.size() == 3) LoadingRequire(SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false) == SL_OK, "save-eids");
 	fmt::print(stderr, "ENGINE loading-complete true\n");

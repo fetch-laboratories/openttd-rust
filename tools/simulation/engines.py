@@ -246,6 +246,8 @@ def check(scenario, run, mode, role, result):
     if "engines" not in scenario or run["exit"] or not run["snapshots"]:
         return
     variant = scenario["engines"]
+    if variant.startswith("loading"):
+        loading_markers(run["log"], setup=variant != "loading-reload")
     if variant.startswith("types") and not type_markers(
         run["log"], capture=variant == "types"
     ):
@@ -388,14 +390,16 @@ def loading_grfs(folder):
         )
         return result
 
-    for which, version in ((1, 8), (2, 7), (3, 8), (4, 8)):
+    for which, version in ((1, 8), (2, 7), (3, 8), (4, 8), (5, 8)):
         sprites = [
             b"\x08"
             + bytes([version])
             + dword(0x4700A000 + which)
             + b"Engine loading fixture\0GPLv2\0"
         ]
-        if which == 4:
+        if which == 5:
+            sprites += engine(0, 450, custom=False)
+        elif which == 4:
             for local in (1, 65000):
                 sprites.append(
                     b"\x04\x00\x7f\x01" + extended(local) + b"Static loading name\0"
@@ -418,13 +422,20 @@ def loading_grfs(folder):
                     sprites += engine(feature, 0, custom=False)
             if which == 1:
                 sprites.append(properties(0, 350, [(6, bytes(70))], 70))
-                for local in range(301, 313):
+                for local in range(301, 316):
                     sprites += engine(0, local, custom=False)
                 sprites += [
                     properties(0, 301, [(0x28, word(0))]),
                     properties(0, 302, [(0x28, word(256))]),
                     properties(0, 303, [(0x34, b"\2\0\2")]),
                     properties(0, 304, [(5, b"\1")]),
+                ]
+                sprites += [
+                    properties(
+                        0, 313, [(0x28, word(6)), (0x29, word(64)), (0x32, word(2))]
+                    ),
+                    properties(0, 314, [(0x28, word(16)), (0x29, word(16))]),
+                    properties(0, 315, [(0x15, b"\3")]),
                 ]
                 for local, parent in (
                     (305, 310),
@@ -483,6 +494,7 @@ def prepare_loading(scenario, executables, builds, folder, timeout, env, result)
             or "ENGINE loading-complete true" not in run["log"]
         ):
             raise RuntimeError("file-loaded engine capture failed")
+        loading_markers(run["log"], setup=True, saving=True)
         captures[role] = [
             line for line in run["log"] if line.startswith("ENGINE loading-")
         ]
@@ -503,3 +515,71 @@ def prepare_loading(scenario, executables, builds, folder, timeout, env, result)
         role_inputs={role: {"save": str(save)} for role, save in saves.items()},
         console=["engines_scenario loading-inspect", "unpause"],
     )
+
+
+def loading_markers(lines, *, setup, saving=False):
+    from collections import Counter
+
+    counts = Counter(
+        line.removeprefix("ENGINE loading-case ").removesuffix(" true")
+        for line in lines
+        if line.startswith("ENGINE loading-case ") and line.endswith(" true")
+    )
+    expected = {
+        "file-scan": 5,
+        "file-identity": 5,
+        "cargo-inputs": 1,
+        "scopes-overrides": 4,
+        "custom-refit-v8": 4,
+        "local-slot-version": 4,
+        "reservation": 4,
+        "mapping-order": 4,
+        "file-callback": 16,
+        "disabled-cargo-or-label": 4,
+        "empty-refit": 1,
+        "unset-refit": 1,
+        "rail-label-list": 1,
+        "required-classes": 1,
+        "missing-cargo-label": 1,
+        "persistent-mapping": 1,
+        "variant-cycle": 3,
+        "variant-parent": 1,
+        "road-label-class": 2,
+        "road-tram-labels": 1,
+        "road-speed": 1,
+        "static-no-allocation": 1,
+        "static-no-reservation": 1,
+        "static-lookup": 1,
+        "depot": 4,
+        "build-test": 4,
+        "build-execute": 4,
+        "refit-tests": 4,
+        "refit-execute": 4,
+    }
+    expected.update(
+        {"loading-rng": 1, "pool-growth": 1}
+        if setup
+        else {"reloaded-vehicle": 4, "reloaded-count": 4}
+    )
+    if saving:
+        expected["save-eids"] = 1
+    for label, count in expected.items():
+        if counts[label] != count:
+            raise RuntimeError(
+                f"engine loading marker {label}: {counts[label]} of {count}"
+            )
+    for category in ("engine", "mapping", "build", "refit") + (
+        () if setup else ("vehicle",)
+    ):
+        observed = [
+            line.split()[2]
+            for line in lines
+            if line.startswith(f"ENGINE loading-{category} ")
+        ]
+        if sorted(observed) != ["0", "1", "2", "3"]:
+            raise RuntimeError("engine loading four-type records missing: " + category)
+    for category in ("stale", "liveries"):
+        if sum(line.startswith(f"ENGINE loading-{category} ") for line in lines) != 1:
+            raise RuntimeError("engine loading state record missing: " + category)
+    if "ENGINE loading-complete true" not in lines:
+        raise RuntimeError("engine loading completion missing")
