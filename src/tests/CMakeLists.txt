@@ -23,6 +23,7 @@ add_test_files(
     mock_fontcache.h
     mock_spritecache.cpp
     mock_spritecache.h
+    newgrf_bytereader.cpp
     orders.cpp
     rail_yapf.cpp
     rail_yapf_protocol.hpp
