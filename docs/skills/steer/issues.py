@@ -8,9 +8,9 @@ line, when another open issue's checklist names it, or when it carries the
 `deferred-improvement` label (AGENTS.md parks those until near-full
 reproduction). It is excluded when the roadmap names it only on exclusion
 lines; each such line must state the condition that brings it back. Every
-roadmap list item and table row that excludes something is printed in full, so
-the reader can check its return condition and spot a component it leaves out
-without an issue. STALE marks issues untouched for 7 days or more,
+roadmap line that excludes something is printed in full, so the reader can
+check its return condition and spot a component it leaves out without an
+issue; list items and table rows naming no issue are counted. STALE marks issues untouched for 7 days or more,
 which may be finished work left open.
 """
 
@@ -73,17 +73,17 @@ def open_issues() -> list[Issue]:
 
 
 def roadmap_lines() -> list[str]:
-    """Roadmap lines, with wrapped list items joined into one logical line."""
+    """Roadmap logical lines: wrapped paragraphs and list items joined into one."""
+    starts = re.compile(r"\s*([-*] |\d+\. |\||#+ )")
     joined: list[str] = []
+    previous_blank = True
     for line in Path("docs/roadmap.md").read_text().splitlines():
-        if (
-            joined
-            and line.startswith("  ")
-            and not line.lstrip().startswith(("-", "|"))
-        ):
+        blank = not line.strip()
+        if joined and not blank and not previous_blank and not starts.match(line):
             joined[-1] += " " + line.strip()
         else:
             joined.append(line)
+        previous_blank = blank
     return joined
 
 
@@ -122,14 +122,18 @@ def main() -> int:
     exclusions = [
         line.strip()
         for line in lines
-        if re.match(r"\s*([-|]|\d+\.)", line) and EXCLUSION.search(line)
+        if EXCLUSION.search(line) and not re.match(r"#+ ", line)
     ]
     if exclusions:
         print("\nRoadmap exclusion lines; each needs a return condition, and each")
         print("component it leaves out without an issue number needs an issue:")
     for line in exclusions:
         print(f"  {line[:240]}")
-    orphan_lines = [line for line in exclusions if not re.search(r"#\d+", line)]
+    orphan_lines = [
+        line
+        for line in exclusions
+        if re.match(r"([-|]|\d+\.)", line) and not re.search(r"#\d+", line)
+    ]
     unplaced = sum(status == "UNPLACED" for status, _ in rows)
     excluded = sum(status.startswith("EXCLUDED") for status, _ in rows)
     print(

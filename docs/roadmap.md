@@ -27,8 +27,8 @@ Evidence stays in PRs.
   moved only in docs since. #495 needs one fix commit before its Full and #493
   a scoped adoption review. #156 retains corpus gaps.
 - The user's testing issues #503 to #513, typing #500 and #501, the CI matrix
-  change #514 and the issue-form change #502 are evaluated and ordered by
-  twenty-first steering correction 9; #504 is selected.
+  change #514 and the issue-form change #502 are evaluated and ranked in the
+  work order with everything else.
 
 ## Twenty-first steering review (2026-10-26, orphans, concurrency, cadence and accessor cost)
 
@@ -96,22 +96,19 @@ Findings:
   commits in one session.
 
 Corrections (AGENTS.md carries the rules; apply these in order):
-1. Integrate the ready drafts solo. #495 first takes one fix commit for its
-   orphan facade and export and the `Slide` port (its PR comment), a fresh
-   scoped review of that commit, then a Full at the new head. #493 takes its
-   fresh scoped adoption review, then a Full at its head (no code base update is
-   needed). #486 and #499 follow as they complete. First rerun the cancelled
-   macOS Debug job at `4853789508`; set `CI_MACOS_HEAVY` only if it is
-   cancelled again.
-2. Next maintenance batch: #515 (orphans, duplicates and constants from the
-   audits; it no longer carries the manager bounces) plus #500's first PR (the
-   shared newtype module only). #514 is the next workflow PR and carries #502.
-3. Concurrent owners need disjoint unintegrated services. Plan #516
-   (catchment) now with a planning agent; it is game code, so it takes the next
-   owner slot ahead of #497 Action3 and #498 object definitions, and starts as
-   soon as its services are disjoint from the open drafts. #497 and #498 start
-   only after the services they share with #486, #493 and #499 integrate;
-   planning names each owner's service needs.
+1. Work from the ranked work order at the end of this roadmap. It holds
+   ports, maintenance, testing and housekeeping in one list, ranked by what each
+   item retires, protects or saves; a category is not a rank. Each free slot
+   takes the highest unblocked item. This replaces the earlier order that put
+   every new port ahead of testing and left housekeeping to "ride a batch".
+2. #497 Action3 and #498 object definitions are parked. Like the recent
+   definition ports, they keep the data in C++ behind one setter per field
+   (glue near the lines retired) and port load-time code no speed scenario
+   runs; no selected game component needs them. They return when a selected
+   component needs their data in Rust, re-planned so Rust owns that storage.
+   Planning ranks by value, never by how easy an item is to scope.
+3. Concurrent owners need disjoint unintegrated services; planning names each
+   owner's service needs. #516 catchment is planned now.
 4. Batch only disjoint-file components into one integration PR; overlapping
    ones integrate one at a time at their reviewed heads. Its stated basis was
    wrong (see Process), so the next review judges it by Fulls per integrated
@@ -139,13 +136,9 @@ Corrections (AGENTS.md carries the rules; apply these in order):
 8. Remove the redundant worktrees `t3-d6418e16`, `t3-9bff1490` and
    `t3-758125c7`; keep one worktree per PR, on its PR branch. Commit the
    roadmap when taking stock or changing the work order, not per integration.
-9. Branch slots and the user's testing issues. The next free slots go, in
-   order, to #515, the #275 accessor audit, #514, #516 (once its plan is ready
-   and its services are disjoint from the drafts; #504 goes first if it is not)
-   and #504; from then on testing holds one slot, one item at a time, each
-   selected when the previous one integrates. The order rests on the defects the fork has had: #461 (thread
-   scope), #462 and #75 (reachable branches no scenario ran) and #355 (MSVC
-   ABI).
+9. The user's testing issues, ranked in the work order by the defects the
+   fork has had: #461 (thread scope), #462 and #75 (reachable branches no
+   scenario ran) and #355 (MSVC ABI).
    1. #504 coverage, selected now. Audits find coverage gaps by reading code,
       and #156 holds 234 unranked entries. A measured report ranks them, names
       default scenarios that add no unique coverage (shortening Full) and gives
@@ -307,40 +300,50 @@ Batches before #453 (#358 to #448) are recorded in their PRs.
 | #275 primary dispatch, compact visual observations and deferred train resolution | #490 | direct | `f4923c79eb` | 28 / 3 / 18 / 0; net glue 1 |
 | #275 road compiler boundaries, shared movement cache and six quiet anchors; direct class resets | #496; #494 combination | #494 | `4853789508` | #496: 55 / 9 / 2 / 0; net glue 0; combination retires 22 class-default lines |
 
-## Phase 1: maintenance and coverage
+## Work order
 
-#515 is the next maintenance batch, with #500's shared newtype module. The
-#275 ground-vehicle accessor audit is the next speed item (twenty-first
-steering, correction 7). The merged-tip instruction profile is due after the
-next integration under the unchanged f492 anchors (the steering profile of
-`4853789508` does not reset that count); a quiet pass runs only under the
-in-band rule in AGENTS.md. #168 tracks the remaining boundary debt, converted when a maintenance batch
-touches a module; #312 batches under #275 after the accessor audit. Ready owners proceed
-alongside maintenance; only timed collection holds games.
+One ranked list (twenty-first steering, correction 1). Each free slot takes the
+highest unblocked item; finishing review and integration comes first. Rank
+reasons are one line each; scope is in the issues and corrections above.
 
-## Phase 2: work order
+1. **Finish the four drafts**, solo, sunk work that rots while open: #495 (fix
+   commit from its steering comment, fresh scoped review, Full), #493 (scoped
+   adoption review, Full), #486 (native tests and 11 scenarios, scoped review,
+   Full), #499 (`StationGfx` compile fix, file-loaded/reload and parser
+   evidence, whole-port review, Full). Rerun the cancelled macOS Debug job at
+   `4853789508` first.
+2. **#514** with #502 and #501's gate configuration: removes about a third of
+   the runner-minutes from every later Full, the project's cost bottleneck.
+3. **#275 ground-vehicle accessor audit** (correction 7): P2016 sits 2% under
+   its ceiling and three drafts change runtime accessors.
+4. **#504 coverage**: cheap, no CI cost, measures where the harness is blind
+   across all 72 ports and ranks #156's 234 entries.
+5. **#515** with #500's first PR and #506's `thread_local!` quick-CI check:
+   orphans, duplicate accessors and constants from the audits.
+6. **#168 disaster boundary**: `disaster.rs` still allocates an Rc channel,
+   boxed future and boxed run per entry behind positional action dispatch, a
+   design fault AGENTS.md allows no exception for.
+7. **#516 catchment**: the remaining simulation component in C++; planned now.
+8. **#503** deep tier with `--soak`, which runs nowhere today.
+9. **#507** corpus, NewGRF sets first: no play save loads a NewGRF file.
+10. **#275 tile-loop batch**: #312 trees, houses and water, about 1.6% of the
+    P2016 loop.
+11. **#505** ASan and UBSan.
+12. **#508** random-command AI, aimed at command code #504 shows unexecuted.
+13. **#511** mutation study, classified with #504's report.
+14. **#506** threaded and TSan run, once its deterministic stop is designed.
+15. **#509** Windows and macOS subset; **#510** multiplayer spike.
 
-1. **Ready drafts, solo:** rerun the macOS Debug job at `4853789508`; #495
-   takes the fix commit from its steering comment, a fresh scoped review and a
-   Full at the new head; fresh scoped review of #493's adoption resolutions,
-   then its Full; #486 runs its native tests and 11
-   scenarios, scoped review, Full; #499 fixes the `StationGfx` compile error,
-   finishes file-loaded/reload and parser evidence, whole-port review, Full.
-2. **Maintenance:** #515 plus #500's first PR as one batch (one review, one
-   Full); the #275 ground-vehicle accessor audit as its own maintenance PR. #514 workflow PR carrying #502, with the bootstrap procedure. #275
-   profile after the next integration.
-3. **Whole owners:** plan #516 catchment now; it takes the next owner slot
-   once its services are disjoint from the drafts. #497 Action3 and #498
-   object definitions start from integrated `rust-migration` once the services
-   they share with the drafts have integrated, within six branches; planning
-   records each owner's unintegrated service needs and keeps concurrent owners
-   disjoint.
-4. #64/#68 (vendored crypto), the rest of #69 beyond what #516 needs, GUI and
-   platform stay outside this order; the six `deferred-improvement` issues wait
-   for near-full reproduction.
-5. **Testing:** #504 is selected and takes the slot after #514 and #516; the
-   rest follow one at a time in the order of twenty-first steering correction
-   9.
+Recurring: the merged-tip instruction profile after the next integration under
+the f492 anchors (a quiet pass only under AGENTS.md's in-band rule); #512's
+tally at the tenth integration after `4853789508`; `issues.py` at start, when
+planning and when taking stock. #168's selector audit and #199's mirror audit
+ride the items above that touch those modules.
+
+Parked, each with what brings it back: #497 and #498 (correction 2); #64 and
+#68, vendored code, after the simulation; the rest of #69 when a selected port
+needs it beyond #516; GUI and platform after the simulation; the six
+`deferred-improvement` issues and #513 after near-full reproduction.
 
 ## Resume checkpoint
 
@@ -359,8 +362,9 @@ rollback target or confirmed regression. Baseline validation passed at
 | Worktrees | | Remove `t3-d6418e16`, `t3-9bff1490`, `t3-758125c7`; one worktree per PR on its PR branch. |
 | #515 and #500 first PR | unstarted | Next maintenance batch after the first ready integration. |
 | #275 accessor audit | unstarted | Twenty-first steering, correction 7; credit against `.local/speed-reference-profiles/`. |
-| #504 coverage | selected, unstarted | First testing item; takes the slot after #514 and #516. |
-| #516 catchment | queued for planning | Planning agent writes scope and service needs; next owner slot. |
+| #504 coverage | selected, unstarted | Work order item 4. |
+| #516 catchment | queued for planning | Planning agent writes scope and service needs; work order item 7. |
+| #497, #498 | parked | Return per correction 2. |
 
 Selection: /root, gpt-6.1-sol, xhigh; planning agents run gpt-6-astra, high.
 Scopes and evidence plans are in the selected issues; PRs carry current task status.

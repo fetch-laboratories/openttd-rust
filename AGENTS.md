@@ -16,9 +16,13 @@ fork; the remaining upstream documentation explains behavior and architecture.
 - The goal is a game whose simulation runs in Rust. Prioritize game code: map
   generation, landscape and tile loops, towns, industries, vehicles, cargo,
   economy, link graph, pathfinding, and the commands that change them. Port
-  support code only when a selected game component needs it. Vendored libraries
-  (`src/3rdparty`), GUI rendering and platform code come last. Upstream
-  unit-test coverage alone is not a reason to select a component.
+  support code only when a selected game component needs it; a port that keeps
+  the data in C++ behind one setter per field is support code. Vendored
+  libraries (`src/3rdparty`), GUI rendering and platform code come last.
+  Upstream unit-test coverage alone is not a reason to select a component.
+  This orders what to port, not ports against other work: the roadmap keeps
+  one work order for ports, maintenance, testing and housekeeping, ranked by
+  what each item retires, protects or saves.
 - Prefer ownership ports: Rust owns the component's state and control flow, and
   C++ keeps only a thin facade plus callbacks for shared services (`Random`,
   pools, map access, progress). With `WITH_RUST` defined the original C++ body
