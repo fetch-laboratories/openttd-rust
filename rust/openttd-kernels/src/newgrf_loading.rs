@@ -315,7 +315,7 @@ pub struct Services {
 use crate::newgrf::{
     GLS_ACTIVATION, GLS_FILESCAN, GLS_INIT, GLS_LABELSCAN, GLS_RESERVE, GLS_SAFETYSCAN,
 };
-use crate::newgrf_bytereader::{ByteReader, ReadBounds};
+use crate::newgrf_bytereader::{Cursor as ByteReader, ReadBounds};
 use crate::newgrf_config::{
     GCS_ACTIVATED, GCS_DISABLED, GCS_INITIALISED, GCS_NOT_FOUND, GCS_UNKNOWN, INIT_ONLY, INVALID,
     RESERVED, STATIC, SYSTEM, UNSAFE,

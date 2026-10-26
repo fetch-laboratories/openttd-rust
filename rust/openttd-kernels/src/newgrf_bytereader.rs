@@ -1,21 +1,24 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! `ByteReader` cursor over the current pseudo-sprite, including unterminated strings.
-#![allow(unsafe_code, missing_docs, clippy::missing_safety_doc)]
+//! Checked native `ByteReader` operations. Native leaves catch only `OTTDByteReaderSignal`.
+//! Failure ends the Rust interpreter; its native caller rethrows after Rust drops scratch.
+//! A native reader and badge destination are exclusively borrowed for one loading entry.
+//! `Cursor` reads the interpreter's borrowed pseudo-sprite buffer directly.
+#![allow(unsafe_code, missing_docs, clippy::missing_errors_doc)]
 #[derive(Clone, Copy, Debug)]
-pub struct ReadBounds;
-pub struct ByteReader {
+pub(crate) struct ReadBounds;
+pub(crate) struct Cursor {
     data: *const u8,
     len: usize,
     pos: usize,
 }
-impl ByteReader {
-    pub const fn new(data: *const u8, len: usize) -> Self {
+impl Cursor {
+    pub(crate) const fn new(data: *const u8, len: usize) -> Self {
         Self { data, len, pos: 0 }
     }
-    pub const fn remaining(&self) -> usize {
+    pub(crate) const fn remaining(&self) -> usize {
         self.len - self.pos
     }
-    pub unsafe fn byte(&mut self) -> Result<u8, ReadBounds> {
+    pub(crate) unsafe fn byte(&mut self) -> Result<u8, ReadBounds> {
         if self.remaining() < 1 {
             return Err(ReadBounds);
         }
@@ -23,7 +26,7 @@ impl ByteReader {
         self.pos += 1;
         Ok(result)
     }
-    pub unsafe fn word(&mut self) -> Result<u16, ReadBounds> {
+    pub(crate) unsafe fn word(&mut self) -> Result<u16, ReadBounds> {
         if self.remaining() < 2 {
             return Err(ReadBounds);
         }
@@ -31,7 +34,7 @@ impl ByteReader {
         self.pos += 2;
         Ok(u16::from_le(result))
     }
-    pub unsafe fn dword(&mut self) -> Result<u32, ReadBounds> {
+    pub(crate) unsafe fn dword(&mut self) -> Result<u32, ReadBounds> {
         if self.remaining() < 4 {
             return Err(ReadBounds);
         }
@@ -39,7 +42,7 @@ impl ByteReader {
         self.pos += 4;
         Ok(u32::from_le(result))
     }
-    pub unsafe fn extended(&mut self) -> Result<u16, ReadBounds> {
+    pub(crate) unsafe fn extended(&mut self) -> Result<u16, ReadBounds> {
         let v = unsafe { self.byte()? };
         if v == 255 {
             unsafe { self.word() }
@@ -47,7 +50,7 @@ impl ByteReader {
             Ok(u16::from(v))
         }
     }
-    pub unsafe fn string(&mut self) -> (*const u8, usize) {
+    pub(crate) unsafe fn string(&mut self) -> (*const u8, usize) {
         let data = unsafe { self.data.add(self.pos) };
         let mut len = 0;
         while self.pos < self.len {
@@ -60,7 +63,95 @@ impl ByteReader {
         }
         (data, len)
     }
-    pub unsafe fn tail(&self) -> (*const u8, usize) {
+    pub(crate) unsafe fn tail(&self) -> (*const u8, usize) {
         (unsafe { self.data.add(self.pos) }, self.remaining())
     }
+}
+
+#[repr(C)]
+pub struct ByteReader {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+pub struct BadgeList {
+    _opaque: [u8; 0],
+}
+#[derive(Debug)]
+pub struct ReadError;
+
+#[repr(C)]
+pub struct Services {
+    pub read_byte: unsafe extern "C" fn(*mut ByteReader, *mut u8) -> bool,
+    pub read_word: unsafe extern "C" fn(*mut ByteReader, *mut u16) -> bool,
+    pub read_dword: unsafe extern "C" fn(*mut ByteReader, *mut u32) -> bool,
+    pub skip: unsafe extern "C" fn(*mut ByteReader, usize) -> bool,
+    pub read_badges: unsafe extern "C" fn(*mut ByteReader, u8, *mut BadgeList) -> bool,
+    pub skip_badges: unsafe extern "C" fn(*mut ByteReader) -> bool,
+}
+pub struct Reader<'a> {
+    native: *mut ByteReader,
+    services: &'a Services,
+}
+impl<'a> Reader<'a> {
+    /// # Safety
+    /// The reader stays valid and exclusively borrowed for this lifetime; every
+    /// service accepts that reader and its declared native output storage.
+    pub unsafe fn new(native: *mut ByteReader, services: &'a Services) -> Self {
+        Self { native, services }
+    }
+    pub fn byte(&mut self) -> Result<u8, ReadError> {
+        let mut value = 0;
+        if unsafe { (self.services.read_byte)(self.native, &raw mut value) } {
+            Ok(value)
+        } else {
+            Err(ReadError)
+        }
+    }
+    pub fn word(&mut self) -> Result<u16, ReadError> {
+        let mut value = 0;
+        if unsafe { (self.services.read_word)(self.native, &raw mut value) } {
+            Ok(value)
+        } else {
+            Err(ReadError)
+        }
+    }
+    pub fn dword(&mut self) -> Result<u32, ReadError> {
+        let mut value = 0;
+        if unsafe { (self.services.read_dword)(self.native, &raw mut value) } {
+            Ok(value)
+        } else {
+            Err(ReadError)
+        }
+    }
+    pub fn skip(&mut self, count: usize) -> Result<(), ReadError> {
+        if unsafe { (self.services.skip)(self.native, count) } {
+            Ok(())
+        } else {
+            Err(ReadError)
+        }
+    }
+    /// # Safety
+    /// The destination is a valid, exclusively borrowed native badge vector for the call.
+    pub unsafe fn badges(
+        &mut self,
+        feature: u8,
+        destination: *mut BadgeList,
+    ) -> Result<(), ReadError> {
+        if unsafe { (self.services.read_badges)(self.native, feature, destination) } {
+            Ok(())
+        } else {
+            Err(ReadError)
+        }
+    }
+    pub fn skip_badges(&mut self) -> Result<(), ReadError> {
+        if unsafe { (self.services.skip_badges)(self.native) } {
+            Ok(())
+        } else {
+            Err(ReadError)
+        }
+    }
+}
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDByteReaderServices" ["services"] => Services { read_byte, read_word, read_dword, skip, read_badges, skip_badges };
 }

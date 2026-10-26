@@ -65,7 +65,7 @@ mod movement;
 mod network_config;
 mod newgrf;
 mod newgrf_animation_base;
-mod newgrf_bytereader;
+pub mod newgrf_bytereader;
 mod newgrf_callbacks;
 mod newgrf_commons;
 mod newgrf_config;

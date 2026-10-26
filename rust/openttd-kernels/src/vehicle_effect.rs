@@ -293,6 +293,86 @@ fn advanced(s: &Services, v: VehicleRef, kind: VehicleType, train: Option<crate:
         );
     }
 }
+// Keep emission setup after the model, visibility, structure and power gates.
+#[inline(never)]
+#[allow(clippy::too_many_arguments)]
+fn emit_part(
+    s: &Services,
+    front: VehicleRef,
+    v: VehicleRef,
+    gate: &Show,
+    p: &Part,
+    train: Option<crate::train::Handle>,
+    cache: u8,
+    model: u8,
+    max_speed: u32,
+) -> bool {
+    let speed = u32::from(gate.speed);
+    let should_emit = match model {
+        VESM_STEAM => {
+            let n = (4_u32 >> gate.smoke) + speed * 3 / max_speed;
+            gb(u32::from(p.tick), 0, n as u8) == 0
+        }
+        VESM_DIESEL => {
+            let power_weight = if p.kind == VehicleType::TRAIN {
+                let w = (s.power_weight)(front);
+                (32_u32.wrapping_shr(w.power >> 10)) as i32
+                    - (32_u32.wrapping_shr(w.weight >> 9)) as i32
+            } else {
+                0
+            };
+            speed < (max_speed >> (2 >> gate.smoke))
+                && chance16_i(
+                    (64 - ((speed << 5) / max_speed) as i32 + power_weight) as u32,
+                    512 >> gate.smoke,
+                    s.shared.random(),
+                )
+        }
+        VESM_ELECTRIC => {
+            gb(u32::from(p.tick), 0, 2) == 0
+                && chance16_i(
+                    6_u32.wrapping_sub((speed << 2) / max_speed),
+                    360 >> gate.smoke,
+                    s.shared.random(),
+                )
+        }
+        _ => unreachable!(),
+    };
+    if !should_emit {
+        return false;
+    }
+    let is_advanced = has_bit(cache, VE_ADVANCED_EFFECT);
+    let mut offset = if is_advanced {
+        i32::from(VE_OFFSET_CENTRE)
+    } else {
+        gb(u32::from(cache), VE_OFFSET_START, VE_OFFSET_COUNT) as i32 - i32::from(VE_OFFSET_CENTRE)
+    };
+    if is_advanced {
+        advanced(s, v, p.kind, train);
+    } else {
+        let o = (s.offset)(v);
+        if p.kind == VehicleType::TRAIN {
+            offset = offset.wrapping_add(
+                (u32::from(VEHICLE_LENGTH).wrapping_sub(u32::from(o.length)) / 2) as i32,
+            );
+        }
+        let mut x = i32::from(SMOKE_POS[usize::from(o.direction)]).wrapping_mul(offset);
+        let mut y =
+            i32::from(SMOKE_POS[usize::from(o.direction.wrapping_add(2) % 8)]).wrapping_mul(offset);
+        if train.is_some_and(|t| has_bit(t.get_flags() as u16, crate::train::FLIPPED)) {
+            x = x.wrapping_neg();
+            y = y.wrapping_neg();
+        }
+        let kind = match model {
+            VESM_STEAM => EV_STEAM_SMOKE,
+            VESM_DIESEL => EV_DIESEL_SMOKE,
+            VESM_ELECTRIC => EV_ELECTRIC_SPARK,
+            _ => unreachable!(),
+        };
+        create_rel(v.0.as_ptr(), x, y, 10, kind);
+    }
+    true
+}
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
     let s = services();
@@ -326,10 +406,7 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
         };
         let cache = unsafe { *p.cache };
         let is_advanced = has_bit(cache, VE_ADVANCED_EFFECT);
-        let mut offset = gb(u32::from(cache), VE_OFFSET_START, VE_OFFSET_COUNT) as i32
-            - i32::from(VE_OFFSET_CENTRE);
         let model = if is_advanced {
-            offset = i32::from(VE_OFFSET_CENTRE);
             let m = gb(u32::from(cache), 0, VE_ADVANCED_EFFECT) as u8;
             if m >= VESM_END { VESM_NONE } else { m }
         } else {
@@ -358,64 +435,10 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
             {
                 return false;
             }
-            let speed = u32::from(gate.speed);
-            match model {
-                VESM_STEAM => {
-                    let n = (4_u32 >> gate.smoke) + speed * 3 / max_speed;
-                    gb(u32::from(p.tick), 0, n as u8) == 0
-                }
-                VESM_DIESEL => {
-                    let power_weight = if p.kind == VehicleType::TRAIN {
-                        let w = (s.power_weight)(front);
-                        (32_u32.wrapping_shr(w.power >> 10)) as i32
-                            - (32_u32.wrapping_shr(w.weight >> 9)) as i32
-                    } else {
-                        0
-                    };
-                    speed < (max_speed >> (2 >> gate.smoke))
-                        && chance16_i(
-                            (64 - ((speed << 5) / max_speed) as i32 + power_weight) as u32,
-                            512 >> gate.smoke,
-                            s.shared.random(),
-                        )
-                }
-                VESM_ELECTRIC => {
-                    gb(u32::from(p.tick), 0, 2) == 0
-                        && chance16_i(
-                            6_u32.wrapping_sub((speed << 2) / max_speed),
-                            360 >> gate.smoke,
-                            s.shared.random(),
-                        )
-                }
-                _ => unreachable!(),
-            }
+            true
         };
-        if emit() {
+        if emit() && emit_part(s, front, v, &gate, &p, train, cache, model, max_speed) {
             sound = true;
-            if is_advanced {
-                advanced(s, v, p.kind, train);
-            } else {
-                let o = (s.offset)(v);
-                if p.kind == VehicleType::TRAIN {
-                    offset = offset.wrapping_add(
-                        (u32::from(VEHICLE_LENGTH).wrapping_sub(u32::from(o.length)) / 2) as i32,
-                    );
-                }
-                let mut x = i32::from(SMOKE_POS[usize::from(o.direction)]).wrapping_mul(offset);
-                let mut y = i32::from(SMOKE_POS[usize::from(o.direction.wrapping_add(2) % 8)])
-                    .wrapping_mul(offset);
-                if train.is_some_and(|t| has_bit(t.get_flags() as u16, crate::train::FLIPPED)) {
-                    x = x.wrapping_neg();
-                    y = y.wrapping_neg();
-                }
-                let kind = match model {
-                    VESM_STEAM => EV_STEAM_SMOKE,
-                    VESM_DIESEL => EV_DIESEL_SMOKE,
-                    VESM_ELECTRIC => EV_ELECTRIC_SPARK,
-                    _ => unreachable!(),
-                };
-                create_rel(v.0.as_ptr(), x, y, 10, kind);
-            }
         }
         current = (s.vehicle.next)(v);
     }
