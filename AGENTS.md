@@ -344,7 +344,10 @@ supported prefixes such as `Add:`, `Change:`, `Fix:`, `Doc:` or `Update:`,
 including on integration merges (`Merge:` is rejected). Use ASCII without tabs
 in commit messages, including their bodies. Python tools pass
 `uvx --from ruff==0.16.8 ruff check tools/` and
-`uvx --from ruff==0.16.8 ruff format --check tools/`. Before pushing, run
+`uvx --from ruff==0.16.8 ruff format --check tools/`. New or rewritten Python
+functions annotate every parameter and return type, and fixed-shape data uses
+typed records (`dataclass`, `TypedDict`) rather than bare dicts; existing code
+gains hints and a ty gate incrementally (#501). Before pushing, run
 `python3 tools/preflight.py --base origin/rust-migration`.
 
 Comments say what the code cannot: a quirk of the original, an outside
