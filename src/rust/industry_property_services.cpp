@@ -12,6 +12,13 @@
 #include "../table/build_industry.h"
 #include "../table/strings.h"
 #include "../safeguards.h"
+
+static_assert(NUM_INDUSTRYTYPES_PER_GRF == 128 && NUM_INDUSTRYTILES_PER_GRF == 255);
+static_assert(NEW_INDUSTRYOFFSET == 37 && NEW_INDUSTRYTILEOFFSET == 175 && NUM_INDUSTRYTYPES == 240 && NUM_INDUSTRYTILES == 512);
+static_assert(INDUSTRY_NUM_INPUTS == 16 && INDUSTRY_NUM_OUTPUTS == 16 && INDUSTRY_ORIGINAL_NUM_INPUTS == 3 && INDUSTRY_ORIGINAL_NUM_OUTPUTS == 2);
+static_assert(CIR_SUCCESS == 0 && CIR_DISABLED == 1 && CIR_UNKNOWN == 3 && CIR_INVALID_ID == 4);
+static_assert(GSF_INDUSTRYTILES == 9 && GSF_INDUSTRIES == 10);
+
 const OpenTTDIndustryPropertyServices &GetIndustryPropertyServices() noexcept
 {
 	static const OpenTTDIndustryPropertyServices services{
