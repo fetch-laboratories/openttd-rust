@@ -79,8 +79,8 @@ struct OpenTTDAction2Services {
 	OpenTTDLayoutStorage (*layout_storage)(NewGRFSpriteLayout *) noexcept OPENTTD_SERVICE_DEFAULT(layout_storage);
 	DrawTileSeqStruct * (*layout_sequence)(NewGRFSpriteLayout *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(layout_sequence);
 	OpenTTDSequenceStorage (*sequence_storage)(DrawTileSeqStruct *) noexcept OPENTTD_SERVICE_DEFAULT(sequence_storage);
-	bool (*is_parent)(DrawTileSeqStruct *) noexcept OPENTTD_SERVICE_DEFAULT(is_parent);
-	bool (*has_registers)(NewGRFSpriteLayout *) noexcept OPENTTD_SERVICE_DEFAULT(has_registers);
+	bool (*is_parent)(const DrawTileSeqStruct *) noexcept OPENTTD_SERVICE_DEFAULT(is_parent);
+	bool (*has_registers)(const NewGRFSpriteLayout *) noexcept OPENTTD_SERVICE_DEFAULT(has_registers);
 	void (*allocate_registers)(NewGRFSpriteLayout *) noexcept OPENTTD_SERVICE_DEFAULT(allocate_registers);
 	TileLayoutRegisters * (*registers)(NewGRFSpriteLayout *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(registers);
 	void (*assert_offsets)(bool, bool, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(assert_offsets);

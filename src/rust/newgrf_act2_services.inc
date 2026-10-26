@@ -16,7 +16,7 @@ const OpenTTDAction2Services &GetRustAction2Services() noexcept
 		.invalid_production = STR_NEWGRF_ERROR_INDPROD_CALLBACK,
 		.callback_new = [](uint16_t value) noexcept -> const SpriteGroup * { assert(CallbackResultSpriteGroup::CanAllocateItem()); return new CallbackResultSpriteGroup(value); },
 		.group_index = [](const SpriteGroup *group) noexcept { return group->index.base(); },
-		.group_get = [](uint32_t index) noexcept { return SpriteGroup::Get(SpriteGroupID(index)); },
+		.group_get = [](uint32_t index) noexcept -> const SpriteGroup * { return SpriteGroup::Get(SpriteGroupID(index)); },
 		.result_new = [](SpriteID sprite, uint8_t count) noexcept -> const SpriteGroup * { assert(ResultSpriteGroup::CanAllocateItem()); return new ResultSpriteGroup(sprite, count); },
 		.assert_loaded = [](uint32_t end, SpriteID current) noexcept { assert(end <= current); },
 		.deterministic_new = [](uint32_t line, VarSpriteGroupScope scope, DeterministicSpriteGroupSize size) noexcept -> const SpriteGroup * { assert(DeterministicSpriteGroup::CanAllocateItem()); auto *group = new DeterministicSpriteGroup(); group->nfo_line = line; group->var_scope = scope; group->size = size; return group; },

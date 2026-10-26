@@ -52,6 +52,24 @@ def info(identifier):
     return b"\x08\x08" + identifier + b"Interpreter fixture\x00Loading test\x00"
 
 
+def action2(feature, setid, ranges, default=0x7FFF, kind=0x81, variable=0x0C):
+    width = {0x81: 1, 0x85: 2, 0x89: 4}[kind]
+
+    def pack(value):
+        return value.to_bytes(width, "little")
+
+    return (
+        bytes((2, feature, setid, kind, variable, 0))
+        + pack((1 << (width * 8)) - 1)
+        + bytes((len(ranges),))
+        + b"".join(
+            struct.pack("<H", group) + pack(low) + pack(high)
+            for group, low, high in ranges
+        )
+        + struct.pack("<H", default)
+    )
+
+
 def fixtures(folder, version):
     folder.mkdir(parents=True, exist_ok=True)
     main = [
@@ -95,14 +113,36 @@ def fixtures(folder, version):
         param(22, 1),
         bytes((14, 1)) + b"V471",
     ]
+    main += [
+        # The first overlapping range supplies the actual build/refit capacity.
+        bytes((0, 1, 3, 1, 0, 0x17, 8, 0x1C, 32, 0x1D, 255, 255)),
+        action2(1, 10, [(0x8037, 0x15, 0x20), (0x8042, 0, 255)]),
+        bytes((3, 1, 1, 0, 0, 10, 0)),
+        # A native station definition consumes the file-loaded callback graph.
+        bytes((0, 4, 3, 1, 0, 8))
+        + b"A485"
+        + bytes((9, 8))
+        + dword(0) * 8
+        + bytes((11, 1)),
+        action2(4, 11, [(0x8001, 0x13, 0x13)]),
+        bytes((3, 4, 1, 0, 0, 11, 0)),
+    ]
     broken = [
         info(b"B471"),
         param(0, 21),
         # The speed mutation survives the following capacity read failure.
         bytes((0, 1, 2, 1, 1, 8, 88, 15)),
     ]
+    graph_broken = [
+        info(b"B485"),
+        action2(1, 30, [(0x8003, 0, 255)]),
+        # A callback and partial deterministic node remain pooled; slot 30 retains
+        # its prior group until loader reset erases the temporary publication map.
+        bytes((2, 1, 30, 0x81, 0x0C, 0, 255, 1, 4, 128)),
+    ]
     for name, actions in (
         ("main", main),
+        ("graph-broken", graph_broken),
         ("broken", broken),
         ("victim", [info(b"V471"), param(0, 999)]),
         (
@@ -123,7 +163,14 @@ def fixtures(folder, version):
 
 
 def adapter(build, folder, env):
-    return console_adapter(build, folder, env, ADAPTER, "newgrf_loading")
+    return console_adapter(
+        build,
+        folder,
+        env,
+        ADAPTER,
+        "newgrf_loading",
+        replace_objects=("/newgrf/newgrf_act2.cpp.o",),
+    )
 
 
 def prepare(scenario, binaries, builds, out, timeout, env, result):
@@ -192,6 +239,10 @@ def check(scenario, run, mode, role, result):
         ("LOADING complete true",)
         if scenario["newgrf_loading"] != "reload"
         else ("LOADING reload true",)
+    )
+    expected += (
+        "LOADING case action2-file-graph true",
+        "LOADING case action2-partial-read true",
     )
     for marker in expected:
         if marker not in run["log"]:
