@@ -351,12 +351,6 @@ static bool Ship_next_depot(uint32_t first, OpenTTDShipDepot *out) noexcept
 }
 const OpenTTDShipLeaves &GetRustShipServices() noexcept
 {
-	static const bool bound = []() {
-		openttd_rust_visual_bind(&GetRustVisualServices());
-		openttd_rust_effect_bind(GetRustEffectCreationServices());
-		return true;
-	}();
-	(void)bound;
 	static const OpenTTDShipLeaves leaves{
 		.depot_dir = Ship_depot_dir, .depot_axis = OpenTTDMapQuery<uint32_t, RustShipDepotAxis, uint32_t>,
 		.is_depot = Ship_is_depot, .depot_index = Ship_depot_index,

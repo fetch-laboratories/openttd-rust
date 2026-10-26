@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run the real shared-accessors CLI for every seeded category, upstream scope and ratchet."""
 
+import json
 import re
 import subprocess
 import tempfile
@@ -215,5 +216,35 @@ with tempfile.TemporaryDirectory() as directory:
     port.write_text(original + seed)
     baseline.write_text("")
     assert check().returncode == 0, check().stdout
+    messages = [
+        ("tile substitute {}", "industry substitute {}", False),
+        ("tile substitute {}", "tile substitute {}", True),
+        ("id", "other", False),
+        ("id", "id", True),
+        (
+            'braces {}, semicolon; quote " and comma,',
+            'braces {}, semicolon; quote " and comma,',
+            True,
+        ),
+        ('braces {}, semicolon; quote " and comma,', "different", False),
+    ]
+    for first, second, copied in messages:
+        for named in (True, False):
+            leaf = (
+                "(uint32_t other) noexcept { "
+                f"GrfMsg(2, {json.dumps(second)}, other); }}"
+            )
+            binding = "Second" if named else "[]" + leaf
+            port.write_text(
+                original
+                + f"void First(uint32_t id) noexcept {{ GrfMsg(2, {json.dumps(first)}, id); }}\n"
+                + ("void Second" + leaf if named else "")
+                + "\nOpenTTDFixtureServices first{.a = First,\n};\n"
+                + f"OpenTTDFixtureServices second{{.b = {binding},\n}};\n"
+            )
+            result = check()
+            assert ("callee | GrfMsg(" in result.stdout) == copied, result.stdout
+            assert bool(result.returncode) == copied, result.stdout
+    port.write_text(original + seed)
     baseline.unlink()
     assert check().returncode != 0

@@ -64,6 +64,7 @@ mod math;
 mod movement;
 mod newgrf;
 mod newgrf_animation_base;
+pub mod newgrf_bytereader;
 mod newgrf_callbacks;
 mod newgrf_commons;
 mod newgrf_engine;
