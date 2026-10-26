@@ -17,6 +17,7 @@ use crate::newgrf_layout::Layout;
 use crate::sprite::Sequence;
 use crate::station_cmd::{RailSpec, RoadSpec};
 use std::ffi::c_void;
+const NUM_STATIONS_PER_GRF: u32 = u16::MAX as u32 - 1;
 const CIR_SUCCESS: u8 = 0;
 const CIR_DISABLED: u8 = 1;
 const CIR_UNKNOWN: u8 = 3;
@@ -144,7 +145,7 @@ unsafe fn station_change(
     reader: &mut Reader<'_>,
 ) -> Result<u8, ReadError> {
     unsafe {
-        if last > u32::from(u16::MAX) - 1 {
+        if last > NUM_STATIONS_PER_GRF {
             (s.station_invalid)(last);
             return Ok(CIR_INVALID_ID);
         }
@@ -164,8 +165,11 @@ unsafe fn station_change(
                         spec = (s.station_new)(file, id);
                     }
                     let label = reader.dword()?.swap_bytes();
-                    let class =
-                        crate::newgrf_class::station::allocate(label, u16::MAX, s.empty_string);
+                    let class = crate::newgrf_class::station::allocate(
+                        label,
+                        crate::newgrf_station::STAT_CLASS_MAX,
+                        s.empty_string,
+                    );
                     (s.station_class)(spec, class);
                 }
                 0x09 => {
@@ -177,7 +181,7 @@ unsafe fn station_change(
                         (s.layout_unlimited)(layout);
                         if reader.has_data(4) && reader.peek_dword()? == 0 {
                             reader.skip(4)?;
-                            (s.layout_original)(layout, u32::from(tile));
+                            (s.layout_original)(layout, u32::from(tile) % 8);
                             continue;
                         }
                         let mut flags = 0;
@@ -400,7 +404,7 @@ unsafe fn road_change(
     reader: &mut Reader<'_>,
 ) -> Result<u8, ReadError> {
     unsafe {
-        if last > u32::from(u16::MAX) - 1 {
+        if last > crate::newgrf_roadstop::NUM_ROADSTOPS_PER_GRF {
             (s.road_invalid)(last);
             return Ok(CIR_INVALID_ID);
         }
@@ -421,8 +425,11 @@ unsafe fn road_change(
                         spec = (s.road_new)(file, id);
                     }
                     let label = reader.dword()?.swap_bytes();
-                    let class =
-                        crate::newgrf_class::roadstop::allocate(label, u16::MAX, s.empty_string);
+                    let class = crate::newgrf_class::roadstop::allocate(
+                        label,
+                        crate::newgrf_roadstop::ROADSTOP_CLASS_MAX,
+                        s.empty_string,
+                    );
                     (s.road_class)(spec, class);
                 }
                 0x09 => (s.road_stop_type)(spec, reader.byte()?),

@@ -72,7 +72,7 @@ const OpenTTDStationDefinitionServices &GetStationDefinitionServices() noexcept
 		.layout_unlimited = [](NewGRFSpriteLayout *layout) noexcept -> void { layout->consistent_max_offset = UINT16_MAX; },
 		.layout_ground = [](NewGRFSpriteLayout *layout) noexcept -> PalSpriteID * { return &layout->ground; },
 		.layout_sequence = [](NewGRFSpriteLayout *layout, const DrawTileSeqStruct *data, size_t count) noexcept -> void { layout->seq.assign(data, data + count); },
-		.layout_original = [](NewGRFSpriteLayout *layout, uint32_t index) noexcept -> void { extern const DrawTileSpriteSpan _station_display_datas_rail[8]; const auto &span = _station_display_datas_rail[index % 8]; layout->ground = span.ground; layout->seq.insert(layout->seq.end(), span.GetSequence().begin(), span.GetSequence().end()); },
+		.layout_original = [](NewGRFSpriteLayout *layout, uint32_t index) noexcept -> void { extern const DrawTileSpriteSpan _station_display_datas_rail[8]; const auto &span = _station_display_datas_rail[index]; layout->ground = span.ground; layout->seq.insert(layout->seq.end(), span.GetSequence().begin(), span.GetSequence().end()); },
 		.station_custom_assign = [](StationSpec *spec, uint16_t key, const uint8_t *data, size_t count) noexcept -> void { spec->layouts[key].assign(data, data + count); },
 		.station_custom_tile = [](StationSpec *spec, uint16_t key, size_t index, uint8_t value) noexcept -> void { spec->layouts[key][index] = value; },
 		.station_custom_copy = [](StationSpec *spec, const StationSpec *source) noexcept -> void { spec->layouts = source->layouts; },

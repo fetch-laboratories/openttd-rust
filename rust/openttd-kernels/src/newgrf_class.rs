@@ -251,23 +251,20 @@ pub(crate) fn roadstop_label(class: u16) -> u32 {
     unsafe { (*roadstop::classes().add(usize::from(class))).global_id }
 }
 
-unsafe fn station_defaults(
+unsafe fn defaults<T>(
     allocate: unsafe extern "C" fn(u32, u16, u32) -> u16,
-    insert: unsafe extern "C" fn(u16, *mut crate::station_cmd::RailSpec),
+    insert: unsafe extern "C" fn(u16, *mut T),
     classes: extern "C" fn() -> *mut Class,
-    empty: u32,
-    default_name: u32,
-    waypoint_name: u32,
+    labels: [u32; 2],
+    max: u16,
+    names: [u32; 3],
 ) {
-    for (label, name) in [
-        (u32::from_be_bytes(*b"DFLT"), default_name),
-        (u32::from_be_bytes(*b"WAYP"), waypoint_name),
-    ] {
-        let index = unsafe { allocate(label, u16::MAX, empty) };
+    for (label, name) in labels.into_iter().zip([names[1], names[2]]) {
+        let index = unsafe { allocate(label, max, names[0]) };
         unsafe {
             (*classes().add(usize::from(index))).name = name;
         }
-        let index = unsafe { allocate(label, u16::MAX, empty) };
+        let index = unsafe { allocate(label, max, names[0]) };
         unsafe {
             insert(index, ptr::null_mut());
         }
@@ -279,14 +276,17 @@ pub unsafe extern "C" fn openttd_rust_station_class_defaults(
     default_name: u32,
     waypoint_name: u32,
 ) {
+    use crate::newgrf_station::{
+        STAT_CLASS_MAX, STATION_CLASS_LABEL_DEFAULT, STATION_CLASS_LABEL_WAYPOINT,
+    };
     unsafe {
-        station_defaults(
+        defaults(
             station::allocate,
             station::insert,
             station::classes,
-            empty,
-            default_name,
-            waypoint_name,
+            [STATION_CLASS_LABEL_DEFAULT, STATION_CLASS_LABEL_WAYPOINT],
+            STAT_CLASS_MAX,
+            [empty, default_name, waypoint_name],
         );
     }
 }
@@ -296,17 +296,17 @@ pub unsafe extern "C" fn openttd_rust_roadstop_class_defaults(
     default_name: u32,
     waypoint_name: u32,
 ) {
-    for (label, name) in [
-        (u32::from_be_bytes(*b"DFLT"), default_name),
-        (u32::from_be_bytes(*b"WAYP"), waypoint_name),
-    ] {
-        let index = unsafe { roadstop::allocate(label, u16::MAX, empty) };
-        unsafe {
-            (*roadstop::classes().add(usize::from(index))).name = name;
-        }
-        let index = unsafe { roadstop::allocate(label, u16::MAX, empty) };
-        unsafe {
-            roadstop::insert(index, ptr::null_mut());
-        }
+    use crate::newgrf_roadstop::{
+        ROADSTOP_CLASS_LABEL_DEFAULT, ROADSTOP_CLASS_LABEL_WAYPOINT, ROADSTOP_CLASS_MAX,
+    };
+    unsafe {
+        defaults(
+            roadstop::allocate,
+            roadstop::insert,
+            roadstop::classes,
+            [ROADSTOP_CLASS_LABEL_DEFAULT, ROADSTOP_CLASS_LABEL_WAYPOINT],
+            ROADSTOP_CLASS_MAX,
+            [empty, default_name, waypoint_name],
+        );
     }
 }

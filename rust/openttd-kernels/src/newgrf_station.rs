@@ -1023,5 +1023,12 @@ pub extern "C" fn openttd_rust_is_waypoint_class(global_id: u32) -> bool {
     is_waypoint_class(global_id)
 }
 pub(crate) const fn is_waypoint_class(global_id: u32) -> bool {
-    global_id == u32::from_be_bytes(*b"WAYP") || global_id >> 24 == 255
+    global_id == STATION_CLASS_LABEL_WAYPOINT || global_id >> 24 == u8::MAX as u32
 }
+
+/// Default station class label from `newgrf_station.h`.
+pub(crate) const STATION_CLASS_LABEL_DEFAULT: u32 = u32::from_be_bytes(*b"DFLT");
+/// Waypoint class label from `newgrf_station.h`.
+pub(crate) const STATION_CLASS_LABEL_WAYPOINT: u32 = u32::from_be_bytes(*b"WAYP");
+/// Class index limit from `newgrf_station.h`.
+pub(crate) const STAT_CLASS_MAX: u16 = u16::MAX;

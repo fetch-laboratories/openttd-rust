@@ -765,3 +765,12 @@ crate::abi::layouts! {
     "OpenTTDRoadStopReseed" ["station_service"] => Reseed { reseed, used, };
     "OpenTTDRoadStopResolverServices" ["station_service"] => Services { rebind, badges, base_scope, build_date, by_tile, cached_cargo, clear, company, custom, facilities, frame, group, group_cargo, group_count, index, is_station, make_town, nearby, nearby_info, owner, random_bits, resize, resolve_callback, resolve_reseed, reverse_road, set_cached, set_random_bits, set_slot, set_tile_random, set_waiting, shared, slot_grfid, slot_key, slot_spec, slot_vacancy, spec_cargo, spec_count, spec_file, spec_grfid, spec_local_id, spec_triggers, station_id, terrain, tile, tile_count, tile_random, town, town_tile, town_zone, version, waiting, };
 }
+
+/// Default road-stop class label from `newgrf_roadstop.h`.
+pub(crate) const ROADSTOP_CLASS_LABEL_DEFAULT: u32 = u32::from_be_bytes(*b"DFLT");
+/// Waypoint road-stop class label from `newgrf_roadstop.h`.
+pub(crate) const ROADSTOP_CLASS_LABEL_WAYPOINT: u32 = u32::from_be_bytes(*b"WAYP");
+/// Class index limit from `newgrf_roadstop.h`.
+pub(crate) const ROADSTOP_CLASS_MAX: u16 = u16::MAX;
+/// Per-file definition limit from `newgrf_roadstop.h`.
+pub(crate) const NUM_ROADSTOPS_PER_GRF: u32 = u16::MAX as u32 - 1;

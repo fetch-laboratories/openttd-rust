@@ -1952,6 +1952,24 @@ conditionals, historical saves, remaining native feature combinations and GUI sc
 undefined result; the cross-game fixture excludes it and Rust uses explicit wrapping division.
 PR #425.
 
+### Station and road-stop definitions and associations (#484)
+
+Rust (`station_definitions.rs`, `newgrf_class.rs`, `station_association.rs`) owns
+station/road-stop Action0 properties, cargo-specific/default group publication,
+shared class reset/allocation/membership/lookup and rail association allocation,
+assignment, deallocation, trigger rebuilding and station/road-stop afterload rebinding.
+Station and waypoint commands call these owners directly. Native class spans alias
+Rust storage; station/road-stop/airport/object presentation uses one shared registry.
+Object-class availability calls the existing Rust eligibility owner.
+
+Canonical native GRF/spec allocations, payload/layout containers, station shells,
+saved slot records, sprite graphs, strings and badges remain native. Checked native
+`ReadSpriteLayoutSprite` and `ReadSpriteLayout` callees preserve their incremental
+writes; read errors return from Rust before the decoder rethrows. Deferred class
+names resolve the spec's current class. Original bodies remain portable-only.
+Historical STNN/STNS/legacy save frames, real exhaustion, arbitrary GRFs and GUI
+scheduling remain coverage limits tracked in #156. PR: #488.
+
 ### Road-stop NewGRF runtime and associations (#410)
 
 Rust owns road-stop/road-waypoint stack context, root/cargo selection, lazy parent and variable

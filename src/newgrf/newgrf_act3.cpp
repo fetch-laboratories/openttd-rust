@@ -43,8 +43,8 @@ const OpenTTDAct3CargoServices &GetAct3CargoServices() noexcept
 	static const OpenTTDAct3CargoServices services{
 		.out_of_range = [](uint8_t cargo, uint32_t maximum) noexcept { GrfMsg(1, "TranslateCargo: Cargo type {} out of range (max {}), skipping.", cargo, maximum); },
 		.not_available = [](uint8_t cargo) noexcept { GrfMsg(5, "TranslateCargo: Cargo type {} not available in this climate, skipping.", cargo); },
-		.unsupported = [](CargoLabel cl) noexcept { GrfMsg(5, "TranslateCargo: Cargo '{:c}{:c}{:c}{:c}' unsupported, skipping.", GB(cl.base(), 24, 8), GB(cl.base(), 16, 8), GB(cl.base(), 8, 8), GB(cl.base(), 0, 8)); },
-		.mapped = [](CargoLabel cl, CargoType cargo) noexcept { GrfMsg(6, "TranslateCargo: Cargo '{:c}{:c}{:c}{:c}' mapped to cargo type {}.", GB(cl.base(), 24, 8), GB(cl.base(), 16, 8), GB(cl.base(), 8, 8), GB(cl.base(), 0, 8), cargo); },
+		.unsupported = [](uint32_t cl) noexcept { GrfMsg(5, "TranslateCargo: Cargo '{:c}{:c}{:c}{:c}' unsupported, skipping.", GB(cl, 24, 8), GB(cl, 16, 8), GB(cl, 8, 8), GB(cl, 0, 8)); },
+		.mapped = [](uint32_t cl, CargoType cargo) noexcept { GrfMsg(6, "TranslateCargo: Cargo '{:c}{:c}{:c}{:c}' mapped to cargo type {}.", GB(cl, 24, 8), GB(cl, 16, 8), GB(cl, 8, 8), GB(cl, 0, 8), cargo); },
 	};
 	return services;
 }

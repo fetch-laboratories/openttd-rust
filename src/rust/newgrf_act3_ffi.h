@@ -9,8 +9,8 @@ struct GRFFile;
 struct OpenTTDAct3CargoServices {
 	void (*out_of_range)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(out_of_range);
 	void (*not_available)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(not_available);
-	void (*unsupported)(CargoLabel) noexcept OPENTTD_SERVICE_DEFAULT(unsupported);
-	void (*mapped)(CargoLabel, CargoType) noexcept OPENTTD_SERVICE_DEFAULT(mapped);
+	void (*unsupported)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(unsupported);
+	void (*mapped)(uint32_t, CargoType) noexcept OPENTTD_SERVICE_DEFAULT(mapped);
 };
 const OpenTTDAct3CargoServices &GetAct3CargoServices() noexcept;
 extern "C" CargoType openttd_rust_act3_translate_cargo(const OpenTTDAct3CargoServices *, GrfSpecFeature, uint8_t, const GRFFile *);
