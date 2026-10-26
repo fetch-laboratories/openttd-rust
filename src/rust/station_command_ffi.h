@@ -12,7 +12,7 @@
 #include "services_ffi.h"
 #include "command_services_ffi.h"
 #include "station_service_ffi.h"
-#include "station_association_ffi.h"
+#include "station_ffi.h"
 #include "rail_command_ffi.h"
 #include "train_reservation_ffi.h"
 #include "ground_ffi.h"
@@ -32,6 +32,7 @@ struct BridgeableTileInfo;
 struct OpenTTDStationArea { uint32_t tile; uint16_t w, h; };
 struct OpenTTDStationBridgeInfo { const BridgeableTileInfo *data; size_t size; };
 struct OpenTTDStationBounds { int32_t left, top, right, bottom; };
+struct OpenTTDStationAssociationServices;
 struct OpenTTDRailStationSpecInfo { uint8_t platforms, lengths; bool slope_callback, availability_callback; };
 struct OpenTTDWaypointLayout;
 struct RoadStop;

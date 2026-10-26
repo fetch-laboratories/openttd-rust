@@ -3,9 +3,9 @@
 #ifndef RUST_STATION_ASSOCIATION_FFI_H
 #define RUST_STATION_ASSOCIATION_FFI_H
 #include "service_defaults.hpp"
+#include "station_ffi.h"
 #include "newgrf_class_ffi.h"
 struct BaseStation;
-struct OpenTTDStationSpecIndex { uint8_t value; bool valid; };
 struct OpenTTDSharedServices;
 struct OpenTTDRoadStopResolverServices;
 struct OpenTTDStationSpecVacancy { const StationSpec *spec; uint32_t grfid; };
