@@ -9,6 +9,8 @@
 #ifndef TOWN_PROTOCOL_HPP
 #define TOWN_PROTOCOL_HPP
 #include "../rust/town_ffi.h"
+#include "../rust/type_registry_ffi.h"
+#include "../core/backup_type.hpp"
 #include "../rust/road_command_ffi.h"
 #include "../rust/house_ffi.h"
 #include "../rust/house_resolver_ffi.h"
@@ -81,7 +83,6 @@ static inline void TownProtocol_nearby_stations(uint32_t town, uint32_t tile, ui
 static inline uint32_t TownProtocol_house_count() noexcept { return static_cast<uint32_t>(TownProtocolLeaf(17, 0, 0, 0, 0)); }
 static inline void TownProtocol_update_max_pass(uint32_t town) noexcept { TownProtocolLeaf(19, town, 0, 0, 0); }
 static inline uint32_t TownProtocol_next_town(uint32_t from) noexcept { return static_cast<uint32_t>(TownProtocolLeaf(20, 0, from, 0, 0)); }
-static inline uint64_t TownProtocol_road_mask() noexcept { return TownProtocolLeaf(21, 0, 0, 0, 0); }
 static inline bool TownProtocol_build_road(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t mode) noexcept
 {
 	auto &w = *town_protocol_world; w.roads++; return mode == 0;
@@ -199,7 +200,6 @@ static inline OpenTTDTownLeaves TownProtocolServices()
 		.house_count = TownProtocol_house_count,
 		.update_max_pass = TownProtocol_update_max_pass,
 		.next_town = TownProtocol_next_town,
-		.road_mask = TownProtocol_road_mask,
 		.build_bridge = TownProtocol_build_bridge,
 		.build_tunnel = TownProtocol_build_tunnel,
 		.assert_clear_house = TownProtocol_assert_clear_house,
@@ -208,6 +208,7 @@ static inline OpenTTDTownLeaves TownProtocolServices()
 }
 template <typename Check> void CheckTownProtocol(Check check)
 {
+	AutoRestoreBackup<uint64_t> road_mask(*openttd_rust_road_mask(), 0);
 	/* Source quirks: first-road execute failure still returns success; a failed
 	 * expansion tries 25 times; reentry mutates the canonical owner's flags. */
 	auto owner = std::unique_ptr<OpenTTDTownState, decltype(&openttd_rust_town_destroy)>(openttd_rust_town_new(), openttd_rust_town_destroy);
