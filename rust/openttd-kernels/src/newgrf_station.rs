@@ -1023,7 +1023,8 @@ pub extern "C" fn openttd_rust_is_waypoint_class(global_id: u32) -> bool {
     is_waypoint_class(global_id)
 }
 pub(crate) const fn is_waypoint_class(global_id: u32) -> bool {
-    global_id == STATION_CLASS_LABEL_WAYPOINT || global_id >> 24 == u8::MAX as u32
+    global_id == STATION_CLASS_LABEL_WAYPOINT
+        || crate::bitmath_func::gb(global_id, 24, 8) == u8::MAX as u32
 }
 
 /// Default station class label from `newgrf_station.h`.
