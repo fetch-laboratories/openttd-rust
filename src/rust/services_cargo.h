@@ -21,6 +21,7 @@ struct OpenTTDIndustrySpecHandle;
  * delivery may reenter owners, so callers end their owner access first.
  * Environmental failures terminate inside these noexcept leaves. */
 inline CargoSpec *RustCargoSpec(CargoType cargo) noexcept { return CargoSpec::Get(cargo); }
+inline void RustCargoSetCurrentPayment(uint32_t cargo, int64_t payment) noexcept { RustCargoSpec(static_cast<CargoType>(cargo))->current_payment = payment; }
 inline uint16_t RustCargoSpecClasses(const CargoSpec *cs) noexcept { return cs->classes.base(); }
 inline uint32_t RustCargoSpecLabel(const CargoSpec *cs) noexcept { return cs->label.base(); }
 inline CargoType RustCargoSpecIndex(const CargoSpec *cs) noexcept { return cs->Index(); }

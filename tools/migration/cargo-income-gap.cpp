@@ -49,7 +49,7 @@ int main()
 	OpenTTDCargoServices s = CargoTestServices();
 	s.spec = [](uint8_t, OpenTTDCargoSpec *out) noexcept { *out = {spec.current_payment.base(), uint8_t(spec.valid), uint8_t(spec.callback_mask.value), spec.transit_periods[0], spec.transit_periods[1]}; };
 	static const OpenTTDCargoRegistryServices registry{
-		.spec = [](uint8_t) noexcept -> const CargoSpec * { return &spec; },
+		.spec = [](uint8_t) noexcept -> CargoSpec * { return &spec; },
 		.invocation = [](const CargoSpec *, OpenTTDCargoInvocation *) noexcept {},
 		.callback_frame = [](const OpenTTDCargoInvocation *invocation, int32_t *, size_t) noexcept -> uint16_t { callback_argument = invocation->param2; return callback_value; },
 	};

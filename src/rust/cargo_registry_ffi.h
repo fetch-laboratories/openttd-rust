@@ -31,7 +31,7 @@ struct OpenTTDCargoInvocation {
 struct OpenTTDCargoRegistryServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDSpriteGroupServices *common;
-	const CargoSpec *(*spec)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(spec);
+	CargoSpec *(*spec)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(spec);
 	void (*copy_default)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(copy_default);
 	void (*clear_specs)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_specs);
 	OpenTTDCargoLabelSpec (*label_spec)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(label_spec);

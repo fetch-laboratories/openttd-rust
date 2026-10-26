@@ -189,7 +189,6 @@ static uint32_t Co_cargo_next(uint32_t from, int64_t *initial_payment) noexcept
 	}
 	return UINT32_MAX;
 }
-static void Co_set_cargo_payment(uint32_t cargo, int64_t payment) noexcept { RustCargoSpec(static_cast<CargoType>(cargo))->current_payment = payment; }
 static void Co_price_windows_dirty() noexcept
 {
 	SetWindowClassesDirty(WC_BUILD_VEHICLE);
@@ -415,7 +414,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.road_maintenance_cost = Co_road_maintenance_cost, .canal_maintenance_cost = Co_canal_maintenance_cost,
 		.station_maintenance_cost = Co_station_maintenance_cost, .airport_maintenance_cost = Co_airport_maintenance_cost,
 		.recession_news = Co_recession_news, .price_base = Co_price_base,
-		.cargo_next = Co_cargo_next, .set_cargo_payment = Co_set_cargo_payment,
+		.cargo_next = Co_cargo_next, .set_cargo_payment = RustCargoSetCurrentPayment,
 		.price_windows_dirty = Co_price_windows_dirty, .industry_daily_changes = Co_industry_daily_changes,
 		.generate_company_name = RustCompanyGenerateName, .ask_merger = Co_ask_merger,
 		.is_interactive_company = RustIsInteractiveCompany, .show_buy_company = Co_show_buy_company,

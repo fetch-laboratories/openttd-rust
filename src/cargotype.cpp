@@ -347,15 +347,16 @@ const OpenTTDCargoRegistryServices &GetRustCargoRegistryServices() noexcept
 	static const OpenTTDCargoRegistryServices services{
 		.shared = &GetRustSharedServices(),
 		.common = &GetRustSpriteGroupServices(),
-		.spec = [](uint8_t cargo) noexcept -> const CargoSpec * { return RustCargoSpec(cargo); },
+		.spec = RustCargoSpec,
 		.copy_default = [](uint8_t climate, uint8_t slot) noexcept {
-			std::visit([slot](const auto &entry) {
+			auto *cs = RustCargoSpec(slot);
+			std::visit([cs](const auto &entry) {
 				if constexpr (std::is_same_v<std::decay_t<decltype(entry)>, int>) {
-					*RustCargoSpec(slot) = _default_cargo[entry];
+					*cs = _default_cargo[entry];
 				} else {
 					auto found = std::ranges::find(_default_cargo, entry, &CargoSpec::label);
 					if (found == std::end(_default_cargo)) NOT_REACHED();
-					*RustCargoSpec(slot) = *found;
+					*cs = *found;
 				}
 			}, _default_climate_cargo[climate][slot]);
 		},

@@ -330,7 +330,7 @@ int main()
 	for (uint32_t cargo = 0; cargo < labels.size(); ++cargo) labels[cargo] = cargo == 31 ? UINT32_MAX : (cargo * 3 + 2) % 64 + 1;
 	static const OpenTTDCargoRegistryServices registry{
 		.shared = &shared,
-		.spec = [](uint8_t cargo) noexcept { return reinterpret_cast<const CargoSpec *>(uintptr_t(cargo + 1)); },
+		.spec = [](uint8_t cargo) noexcept { return reinterpret_cast<CargoSpec *>(uintptr_t(cargo + 1)); },
 		.copy_default = [](uint8_t, uint8_t) noexcept {},
 		.clear_specs = [](uint8_t) noexcept {},
 		.label_spec = [](const CargoSpec *spec) noexcept -> OpenTTDCargoLabelSpec { auto id = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(spec)); return {id, static_cast<uint8_t>(id - 1)}; },
