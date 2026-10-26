@@ -5,7 +5,7 @@
 #include "service_defaults.hpp"
 #include "newgrf_class_ffi.h"
 struct BaseStation;
-struct OpenTTDStationSpecIndex;
+struct OpenTTDStationSpecIndex { uint8_t value; bool valid; };
 struct OpenTTDSharedServices;
 struct OpenTTDRoadStopResolverServices;
 struct OpenTTDStationSpecVacancy { const StationSpec *spec; uint32_t grfid; };
