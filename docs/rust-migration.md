@@ -1320,8 +1320,8 @@ Rust owns each engine's lifecycle scalars and name, the process-wide aging-stop 
 startup/reliability, daily/monthly preview and availability policy, variant synchronization and
 control/name/visibility commands. Native Engine shells expose canonical scalar aliases;
 temporary owners survive relocation and TTO replacement. Original bodies compile only portably.
-Pool/configuration/spec, NewGRF/articulated, company/type availability and presentation remain
-native through typed synchronous noexcept services shared with fleet/company consumers. No owner
+Pool/spec loading, company masks and presentation remain native through typed synchronous
+noexcept services shared with fleet/company consumers. No owner
 borrow spans a callback; script events enqueue without running a VM. RNG draws, narrowing and
 command/effect order retain the original behavior. Modern ENGN scalar descriptors address
 aliases directly; only opaque names use a native string scope, preserving partial decoding on
@@ -1331,6 +1331,23 @@ Panics/environmental exceptions abort; native save/load errors remain outside Ru
 --jobs 2`, whose identical adapter declares variant and cutoff spec inputs for unchanged
 reference bodies. External NewGRF programs/retire_early, ENGS and TTO/TTD fixtures, legacy
 preview conversion and threaded GUI/presentation remain #156 gaps. PR #248.
+
+### Engine cargo and articulated query runtime (#439)
+
+`engine_capabilities.rs` owns cargo eligibility, capacity/refittability and complete
+articulated part, capacity, mask and live-chain query traversal. Non-purchase counting
+retains the original temporary pooled vehicle lifetime; purchase queries allocate nothing.
+Native specs, dynamic identity mapping, cargo definitions and shell allocation remain shared.
+Existing transaction, fleet, ground/train/ship and resolver owners call Rust directly;
+aircraft mail writes and cache invalidations keep their original order. Narrow canonical
+carrying/config observations share consumed immutable fields without copying EngineInfo.
+GRF evaluation cannot load/reset, mutate specs, execute a command/VM or yield; no owner
+borrow survives it. Zero ground capacity still returns before default-cargo observation.
+Native facades retain portable originals. Default fleet capability/reload scenarios use
+real Action2 and build/refit/clone/replacement commands, retaining and inspecting the same
+articulated chain across save/load after transient graph reattachment. Dynamic mappings,
+v7 mirror output, zero/failing refit-capacity, part-only refittability, arbitrary external
+GRFs, pool exhaustion, historical saves and GUI scheduling remain #156 gaps. PR #446.
 
 ### Orders lifecycle ownership
 
