@@ -16,20 +16,36 @@ static void CargoSnapshot(std::string_view phase)
 	for (uint8_t effect = 0; effect < NUM_TPE; ++effect) for (const CargoSpec *cs : CargoSpec::town_production_cargoes[effect]) fmt::print(stderr, " t{}:{}", effect, cs->Index());
 	fmt::print(stderr, "\n");
 }
+static void CargoFixtureFinalise()
+{
+#ifdef WITH_RUST
+	openttd_rust_cargo_finalise();
+#else
+	FinaliseCargoArray();
+#endif
+}
+static void CargoFixtureBuildInverse()
+{
+#ifdef WITH_RUST
+	openttd_rust_cargo_build_inverse(_cur_gps.grffile);
+#else
+	BuildCargoTranslationMap();
+#endif
+}
 static bool CargoRegistryScenario(std::span<std::string_view> args)
 {
 	if (args[1] != "cargo-registry") return false;
 	auto *saved_file = _cur_gps.grffile;
 	for (LandscapeType climate : {LandscapeType::Temperate, LandscapeType::Arctic, LandscapeType::Tropic, LandscapeType::Toyland}) {
 		SetupCargoForClimate(climate);
-		FinaliseCargoArray(); InitializeSortedCargoSpecs();
+		CargoFixtureFinalise(); InitializeSortedCargoSpecs();
 		CargoSnapshot("climate");
 		GRFFile file;
 		_cur_gps.grffile = &file;
 		for (uint8_t version : {6, 7, 8}) {
 			file.grf_version = version;
 			for (uint8_t cargo = 0; cargo < 64; ++cargo) for (bool usebit : {false, true}) fmt::print(stderr, "CARGO forward {} {} {} {}\n", version, cargo, usebit, GetCargoTranslation(cargo, &file, usebit));
-			BuildCargoTranslationMap();
+			CargoFixtureBuildInverse();
 			for (uint8_t cargo = 0; cargo < 64; ++cargo) fmt::print(stderr, "CARGO inverse {} {} {}\n", version, cargo, file.cargo_map[cargo]);
 		}
 		const CargoSpec original = *CargoSpec::Get(0);
@@ -66,19 +82,19 @@ static bool CargoRegistryScenario(std::span<std::string_view> args)
 		CARGO_REQUIRE(file.cargo_list.size() == 41 && file.cargo_list[40] == CargoLabel{0x57494445});
 		file.cargo_list.assign(300, CT_INVALID); file.cargo_list[257] = original.label; file.cargo_list[258] = original.label;
 		file.cargo_list_is_fallback = false; file.grf_version = 8;
-		BuildCargoTranslationMap(); CARGO_REQUIRE(file.cargo_map[20] == 1);
+		CargoFixtureBuildInverse(); CARGO_REQUIRE(file.cargo_map[20] == 1);
 		CARGO_REQUIRE(GetCargoTranslation(1, &file) == INVALID_CARGO);
 		file.cargo_list = {original.label, original.label};
 		for (uint8_t version : {6, 7, 8}) {
 			file.grf_version = version;
-			BuildCargoTranslationMap();
+			CargoFixtureBuildInverse();
 			CARGO_REQUIRE(file.cargo_map[20] == 0 && GetCargoTranslation(1, &file, true) == 20 && GetCargoTranslation(1, &file, false) == (version < 7 ? 1 : 20));
 		}
 		/* Same names and bitnums retain the native unstable sorter and its ties. */
 		*CargoSpec::Get(24) = original; CargoSpec::Get(24)->classes.Set(CargoClass::Special);
 		CargoSpec::Get(24)->town_production_effect = TPE_MAIL;
 		CargoSpec::Get(20)->town_production_effect = INVALID_TPE;
-		FinaliseCargoArray(); InitializeSortedCargoSpecs();
+		CargoFixtureFinalise(); InitializeSortedCargoSpecs();
 		CARGO_REQUIRE(CargoSpec::Get(20)->town_production_effect == TPE_PASSENGERS && CargoSpec::Get(0)->name == STR_NEWGRF_INVALID_CARGO && CargoSpec::Get(25)->town_production_effect == TPE_NONE);
 		CargoSnapshot("changed");
 		auto old_order = _sorted_cargo_types[20];

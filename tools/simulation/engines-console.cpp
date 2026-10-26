@@ -61,9 +61,11 @@ static Engine *UnusedEngine(EngineID except = EngineID::Invalid())
 #include "cargomonitor-console.inc"
 #include "cargo-registry-console.inc"
 #include "engine-types-console.inc"
+#include "engine-loading-console.inc"
 static bool EnginesScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
+	if (args[1].starts_with("loading")) return LoadingScenario(args);
 	if (args[1] == "cargo-registry") return CargoRegistryScenario(args);
 	if (args[1] == "cargo-profit" || args[1] == "cargo-rating") {
 		if (args[1] == "cargo-profit") CargoProfitFixture(); else CargoRatingFixture();
@@ -176,5 +178,6 @@ extern "C" void __real__Z22IConsoleStdLibRegisterv();
 extern "C" void __wrap__Z22IConsoleStdLibRegisterv()
 {
 	__real__Z22IConsoleStdLibRegisterv();
+	LoadingScan();
 	IConsole::CmdRegister("engines_scenario", EnginesScenario);
 }

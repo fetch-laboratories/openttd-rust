@@ -11,6 +11,7 @@
 
 #include "../newgrf/newgrf_bytereader.h"
 #include "../newgrf/newgrf_internal.h"
+#include "newgrf_bytereader_ffi.h"
 
 /* Failure preserves the native cursor movement and partial effects, leaving its
  * output untouched. Callers return from Rust before rethrowing in the parser's
@@ -54,6 +55,19 @@ inline bool RustGRFReadBadgeList(ByteReader *reader, GrfSpecFeature feature, std
 inline bool RustGRFSkipBadgeList(ByteReader *reader) noexcept
 {
 	return RustGRFReadChecked([&] { SkipBadgeList(*reader); });
+}
+
+inline const OpenTTDByteReaderServices &GetRustByteReaderServices() noexcept
+{
+	static const OpenTTDByteReaderServices services{
+		.read_byte = RustGRFReadByte,
+		.read_word = RustGRFReadWord,
+		.read_dword = RustGRFReadDWord,
+		.skip = RustGRFSkipBytes,
+		.read_badges = RustGRFReadBadgeList,
+		.skip_badges = RustGRFSkipBadgeList,
+	};
+	return services;
 }
 
 [[noreturn]] inline void RustGRFRethrowReadError()

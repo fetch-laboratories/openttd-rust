@@ -42,6 +42,7 @@ struct OpenTTDGenericServices {
 	void (*unsupported)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unsupported);
 	void (*unhandled)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unhandled);
 };
+const OpenTTDGenericServices &GetRustGenericServices() noexcept;
 extern "C" {
 void openttd_rust_generic_reset(const OpenTTDGenericServices *);
 void openttd_rust_generic_add(uint8_t, const GRFFile *, const SpriteGroup *);

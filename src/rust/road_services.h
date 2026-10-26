@@ -213,7 +213,7 @@ static OpenTTDRoadCostRead OPENTTD_RUST_CALL RoadSvcCostRead(OpenTTDVehicle *v) 
 static int64_t OPENTTD_RUST_CALL RoadSvcPrice(const OpenTTDEngine *engine, uint32_t cost_factor) noexcept
 {
 	const Engine *e = EngineOf(engine);
-	return static_cast<int64_t>(GetPrice(e->VehInfo<RoadVehicleInfo>().running_cost_class, cost_factor, RustEngineGRF(engine)));
+	return static_cast<int64_t>(GetPrice(e->VehInfo<RoadVehicleInfo>().running_cost_class, cost_factor, RustEngineGRF(e)));
 }
 /** The running cost tail of `RoadVehicle::OnNewEconomyDay`. */
 static void OPENTTD_RUST_CALL RoadSvcPayRunning(OpenTTDVehicle *v, int64_t amount) noexcept
@@ -300,11 +300,5 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 
 static const OpenTTDRoadLeaves &GetRoadLeaves()
 {
-	static const bool bound = []() {
-		openttd_rust_visual_bind(&GetRustVisualServices());
-		openttd_rust_effect_bind(GetRustEffectCreationServices());
-		return true;
-	}();
-	(void)bound;
 	return _rust_road_leaves;
 }

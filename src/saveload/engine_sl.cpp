@@ -189,14 +189,16 @@ struct EIDSChunkHandler : ChunkHandler {
 
 		/* Count total entries needed for combined list. */
 		size_t total = 0;
-		for (const auto &mapping : _engine_mngr.mappings) {
+		for (VehicleType type = VEH_BEGIN; type != VEH_COMPANY_END; type++) {
+			const auto mapping = _engine_mngr.Mappings(type);
 			total += std::size(mapping);
 		}
 
 		/* Combine per-type mappings into single list for all types. */
 		std::vector<EngineIDMapping> temp;
 		temp.reserve(total);
-		for (const auto &mapping : _engine_mngr.mappings) {
+		for (VehicleType type = VEH_BEGIN; type != VEH_COMPANY_END; type++) {
+			const auto mapping = _engine_mngr.Mappings(type);
 			temp.insert(std::end(temp), std::begin(mapping), std::end(mapping));
 		}
 
@@ -213,7 +215,7 @@ struct EIDSChunkHandler : ChunkHandler {
 	{
 		const std::vector<SaveLoad> slt = SlCompatTableHeader(_engine_id_mapping_desc, _engine_id_mapping_sl_compat);
 
-		_engine_mngr.mappings = {};
+		_engine_mngr.ClearMapping();
 
 		int index;
 		while ((index = SlIterateArray()) != -1) {

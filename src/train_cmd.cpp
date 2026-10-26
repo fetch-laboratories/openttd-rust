@@ -4533,12 +4533,6 @@ uint16_t Train::GetMaxWeight() const
 
 const OpenTTDTrainServices &GetTrainServices() noexcept
 {
-	static const bool bound = []() {
-		openttd_rust_visual_bind(&GetRustVisualServices());
-		openttd_rust_effect_bind(GetRustEffectCreationServices());
-		return true;
-	}();
-	(void)bound;
 	static const OpenTTDTrainServices services{
 		.physics = &GetRustGroundPhysicsServices(),
 		.read_first = TrainReadFirst,
@@ -4769,7 +4763,7 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.viewport = TrainViewport,
 		.visit_type = TrainVisitType,
 		.wagon_override = TrainWagonOverride,
-		.wagon_speed_limits = TrainWagonSpeedLimits,
+		.wagon_speed_limits = RustSettingRead<uint64_t, RustWagonSpeedLimits, OpenTTDTrainHandle>,
 		.wait_oneway = TrainWaitOneway,
 		.wait_pbs = TrainWaitPbs,
 		.wait_twoway = TrainWaitTwoway,

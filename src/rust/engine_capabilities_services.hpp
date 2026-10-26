@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file engine_capabilities_services.hpp Native specs, pooled TEMP shell lifetime and shared services only. */
 #include "engine_services.h"
+#include "engine_loading_ffi.h"
 #include "services_cargo.h"
 #include "services_assert.h"
 static OpenTTDVehicle *EngineTemporaryNew() noexcept { return RustVehicle(new Vehicle()); }
@@ -24,7 +25,7 @@ const OpenTTDEngineCapabilitiesServices &GetRustEngineCapabilitiesServices() noe
 		.rail_kind = Engine_rail_kind,
 		.grf = RustEngineGRF,
 		.version = RustGRFFileVersion,
-		.new_engine = RustNewEngineID,
+		.loading = []() noexcept { return &GetRustEngineLoadingServices(); },
 		.cargo_classes = RustCargoClasses,
 		.multiplier = RustCargoMultiplier,
 		.pool_available = RustVehicleCanAllocate,
