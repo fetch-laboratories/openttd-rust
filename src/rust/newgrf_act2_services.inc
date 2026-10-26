@@ -2,6 +2,9 @@
 /** @file newgrf_act2_services.inc Native canonical Action2 pool and payload storage. */
 #include "newgrf_act2_ffi.h"
 #include "newgrf_bytereader_services.h"
+// Scalar enum aliases have explicit uint8_t representation, including unnamed grammar values.
+static_assert(std::is_same_v<std::underlying_type_t<DeterministicSpriteGroupAdjustOperation>, uint8_t> && std::is_same_v<std::underlying_type_t<DeterministicSpriteGroupAdjustType>, uint8_t>);
+static_assert(std::is_same_v<std::underlying_type_t<VarSpriteGroupScope>, uint8_t> && std::is_same_v<std::underlying_type_t<RandomizedSpriteGroupCompareMode>, uint8_t>);
 static_assert(TLF_DODRAW == 1 && TLF_SPRITE == 2 && TLF_PALETTE == 4 && TLF_CUSTOM_PALETTE == 8);
 static_assert(TLF_BB_XY_OFFSET == 16 && TLF_BB_Z_OFFSET == 32 && TLF_CHILD_X_OFFSET == 16 && TLF_CHILD_Y_OFFSET == 32);
 static_assert(TLF_SPRITE_VAR10 == 64 && TLF_PALETTE_VAR10 == 128 && TLF_KNOWN_FLAGS == 255 && TLR_MAX_VAR10 == 7);

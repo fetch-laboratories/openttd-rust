@@ -44,10 +44,6 @@ bool ReadSpriteLayout(ByteReader &buf, uint num_building_sprites, bool use_cur_s
 	return result != 0;
 }
 
-static void NewSpriteGroup(ByteReader &buf)
-{
-	if (!openttd_rust_action2_parse(&GetRustAction2Services(), &GetRustGrfLoadingServices(), &GetRustByteReaderServices(), &buf)) RustGRFRethrowReadError();
-}
 #else
 constexpr uint16_t GROUPID_CALLBACK_FAILED = 0x7FFF; ///< Explicit "failure" result.
 constexpr uint16_t GROUPID_CALCULATED_RESULT = 0x7FFE; ///< Return calculated result from VarAction2.
@@ -750,9 +746,11 @@ static void NewSpriteGroup(ByteReader &buf)
 
 #endif
 
+#ifndef WITH_RUST
 template <> void GrfActionHandler<0x02>::FileScan(ByteReader &) { }
 template <> void GrfActionHandler<0x02>::SafetyScan(ByteReader &) { }
 template <> void GrfActionHandler<0x02>::LabelScan(ByteReader &) { }
 template <> void GrfActionHandler<0x02>::Init(ByteReader &) { }
 template <> void GrfActionHandler<0x02>::Reserve(ByteReader &) { }
 template <> void GrfActionHandler<0x02>::Activation(ByteReader &buf) { NewSpriteGroup(buf); }
+#endif
