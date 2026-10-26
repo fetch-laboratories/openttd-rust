@@ -297,9 +297,12 @@ static bool IndustriesScenario(std::span<std::string_view>)
 	std::fflush(stderr);
 	return true;
 }
+#include "industry-definitions-console.hpp"
+
 extern "C" void __real__Z22IConsoleStdLibRegisterv();
 extern "C" void __wrap__Z22IConsoleStdLibRegisterv()
 {
 	__real__Z22IConsoleStdLibRegisterv();
 	IConsole::CmdRegister("industries_scenario", IndustriesScenario);
+	IConsole::CmdRegister("industry_definitions", IndustryDefinitionsScenario);
 }

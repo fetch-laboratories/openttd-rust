@@ -104,7 +104,7 @@ pub unsafe fn allocate_tile(local: u16, grfid: u32, substitute: u16) -> u16 {
     }
 }
 unsafe extern "C" fn tile_valid(_: *mut c_void, id: u16) -> bool {
-    id != 0xff
+    override_manager::industry_tile_valid_id(id)
 }
 pub unsafe fn publish(spec: *mut SpecHandle, s: &Services) {
     let identity = unsafe { (s.identity)(spec) };
@@ -162,6 +162,86 @@ pub unsafe fn publish_tile(spec: *mut TileSpec, s: &Services) {
         }
     }
 }
+#[allow(dead_code)]
+pub unsafe fn finalise(s: &Services, mut translate: impl FnMut(Cargo) -> u8) {
+    let mut file_index = 0;
+    loop {
+        let file = unsafe { (s.file)(file_index) };
+        if file.is_null() {
+            break;
+        }
+        let count = unsafe { (s.counts)(file) };
+        for i in 0..count.industries {
+            let spec = unsafe { (s.file_industry)(file, i) };
+            if spec.is_null() || !unsafe { (s.availability)(spec) }.enabled {
+                continue;
+            }
+            unsafe {
+                publish(spec, s);
+            }
+        }
+        for i in 0..count.tiles {
+            let spec = unsafe { (s.file_tile)(file, i) };
+            if !spec.is_null() {
+                unsafe {
+                    publish_tile(spec, s);
+                }
+            }
+        }
+        unsafe {
+            (s.clear_file)(file);
+        }
+        file_index += 1;
+    }
+    for id in 0..u16::from(crate::industry_type::NUM_INDUSTRYTYPES) {
+        let spec = unsafe { (s.industry)(id) };
+        let status = unsafe { (s.availability)(spec) };
+        if status.enabled && status.has_file {
+            let grfid = unsafe { (s.identity)(spec) }.grfid;
+            let conflicting = unsafe { (s.conflicting)(spec) };
+            for i in 0..3 {
+                let kind = unsafe { conflicting.add(i).read() };
+                let mapped = crate::industry::resolver::map_type(kind, grfid);
+                unsafe {
+                    conflicting.add(i).write(mapped);
+                }
+            }
+        }
+        if !status.enabled {
+            unsafe {
+                (s.invalid_name)(spec);
+            }
+        }
+        for i in 0..crate::industry_type::INDUSTRY_ORIGINAL_NUM_OUTPUTS {
+            let cargo = unsafe { (s.produced)(spec, i) };
+            if !crate::cargo_type::is_valid_cargo_type(cargo.cargo) {
+                unsafe {
+                    (s.set_produced)(spec, i, translate(cargo));
+                }
+            }
+        }
+        for i in 0..crate::industry_type::INDUSTRY_ORIGINAL_NUM_INPUTS {
+            let cargo = unsafe { (s.accepted)(spec, i) };
+            if !crate::cargo_type::is_valid_cargo_type(cargo.cargo) {
+                unsafe {
+                    (s.set_accepted)(spec, i, translate(cargo));
+                }
+            }
+        }
+    }
+    for id in 0..crate::industry_type::NUM_INDUSTRYTILES {
+        let spec = unsafe { (s.tile)(id) };
+        for i in 0..crate::industry_type::INDUSTRY_ORIGINAL_NUM_INPUTS {
+            let cargo = unsafe { (s.tile_accepted)(spec, i) };
+            if !crate::cargo_type::is_valid_cargo_type(cargo.cargo) {
+                unsafe {
+                    (s.set_tile_accepted)(spec, i, translate(cargo));
+                }
+            }
+        }
+    }
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_definition_allocate(
     local: u16,

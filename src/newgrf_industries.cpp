@@ -55,7 +55,7 @@ IndustryTileOverrideManager _industile_mngr(NEW_INDUSTRYTILEOFFSET, NUM_INDUSTRY
 IndustryType MapNewGRFIndustryType(IndustryType grf_type, uint32_t grf_id)
 {
 #ifdef WITH_RUST
-	return openttd_rust_industry_map_type(grf_type, grf_id, &GetIndustryResolverServices());
+	return openttd_rust_industry_map_type(grf_type, grf_id);
 #else
 	if (grf_type == IT_INVALID) return IT_INVALID;
 	if (!HasBit(grf_type, 7)) return GB(grf_type, 0, 7);
