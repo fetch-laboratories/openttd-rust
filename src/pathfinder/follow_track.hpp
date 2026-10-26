@@ -450,23 +450,29 @@ public:
 	/** Helper for pathfinders - get min/max speed on the old_tile/old_td */
 	int GetSpeedLimit(int *pmin_speed = nullptr) const
 	{
+		return GetSpeedLimit(this->old_tile, this->veh, pmin_speed);
+	}
+
+	/** Speed limits need only the old tile and the live vehicle. */
+	static int GetSpeedLimit(TileIndex old_tile, const VehicleType *veh, int *pmin_speed = nullptr)
+	{
 		int min_speed = 0;
 		int max_speed = INT_MAX; // no limit
 
 		/* Check for on-bridge speed limit */
-		if (!IsWaterTT() && IsBridgeTile(this->old_tile)) {
-			int spd = GetBridgeSpec(GetBridgeType(this->old_tile))->speed;
+		if (!IsWaterTT() && IsBridgeTile(old_tile)) {
+			int spd = GetBridgeSpec(GetBridgeType(old_tile))->speed;
 			if (IsRoadTT()) spd *= 2;
 			max_speed = std::min(max_speed, spd);
 		}
 		/* Check for speed limit imposed by railtype */
 		if (IsRailTT()) {
-			uint16_t rail_speed = GetRailTypeInfo(GetRailType(this->old_tile))->max_speed;
+			uint16_t rail_speed = GetRailTypeInfo(GetRailType(old_tile))->max_speed;
 			if (rail_speed > 0) max_speed = std::min<int>(max_speed, rail_speed);
 		}
 		if (IsRoadTT()) {
 			/* max_speed is already in roadvehicle units, no need to further modify (divide by 2) */
-			uint16_t road_speed = GetRoadTypeInfo(GetRoadType(this->old_tile, GetRoadTramType(RoadVehicle::From(this->veh)->roadtype)))->max_speed;
+			uint16_t road_speed = GetRoadTypeInfo(GetRoadType(old_tile, GetRoadTramType(RoadVehicle::From(veh)->roadtype)))->max_speed;
 			if (road_speed > 0) max_speed = std::min<int>(max_speed, road_speed);
 		}
 
