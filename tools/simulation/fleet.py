@@ -51,6 +51,7 @@ def scenarios(soak):
                         "transaction-clone",
                         "transaction-rail",
                         "resolver",
+                        "capabilities",
                     )
                     else "padhattan-ridge-2000.sav"
                     if mode.startswith("drain") or mode == "transaction-meta"
@@ -77,6 +78,7 @@ def scenarios(soak):
         for mode in (
             "groups",
             "resolver",
+            "capabilities",
             "transaction-meta",
             "transaction-mass-train",
             "transaction-mass-road",
@@ -106,6 +108,12 @@ def scenarios(soak):
     cases.append(dict(cases[0], name="fleet-reload", fleet="reload"))
     resolver = next(case for case in cases if case["fleet"] == "resolver")
     cases.append(dict(resolver, name="fleet-resolver-reload", fleet="resolver-reload"))
+    capabilities = next(case for case in cases if case["fleet"] == "capabilities")
+    cases.append(
+        dict(
+            capabilities, name="fleet-capabilities-reload", fleet="capabilities-reload"
+        )
+    )
     return cases
 
 
@@ -134,6 +142,8 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         "resolver",
         "resolver-reload",
         "effect-emission-train",
+        "capabilities",
+        "capabilities-reload",
         "transaction-meta",
         "transaction-refit-train",
         "transaction-mass-train",
@@ -176,13 +186,21 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             executables=executables,
             role_inputs={role: {"save": str(save)} for role, save in saves.items()},
         )
-    if scenario["fleet"] in ("reload", "resolver-reload"):
+    if scenario["fleet"] in ("reload", "resolver-reload", "capabilities-reload"):
         resolver = scenario["fleet"] == "resolver-reload"
-        saves, capture, saved_resolver = {}, {}, {}
+        capabilities = scenario["fleet"] == "capabilities-reload"
+        saves, capture, saved_resolver, saved_capabilities = {}, {}, {}, {}
         setup = dict(
             scenario,
             console=[
-                "fleet_scenario " + ("resolver" if resolver else "groups-store"),
+                "fleet_scenario "
+                + (
+                    "resolver"
+                    if resolver
+                    else "capabilities"
+                    if capabilities
+                    else "groups-store"
+                ),
                 "unpause",
             ],
             ticks=1,
@@ -195,12 +213,21 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 or (
                     "FLEET resolver-checkpoint complete"
                     if resolver
+                    else "FLEET capability-checkpoint complete"
+                    if capabilities
                     else "FLEET groups true 1 1 true"
                 )
                 not in run["log"]
             ):
                 raise RuntimeError("fleet reload capture lacks live groups/rules")
             saves[role] = run["snapshots"][-1]
+            if capabilities:
+                check_capabilities(run, "capture", role, result)
+                saved_capabilities[role] = capability_state(run, "persist")
+                if len(saved_capabilities[role]["chain"]) != 2:
+                    raise RuntimeError(
+                        "capability capture lacks retained articulated pair"
+                    )
             if resolver:
                 check_override_order(run, "capture", role, result)
                 check_property_boundaries(run, "capture", role, result)
@@ -247,16 +274,128 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         result["fleet_capture"] = capture
         if resolver:
             result["resolver_saved"] = saved_resolver
+        if capabilities:
+            result["capability_saved"] = saved_capabilities
         return dict(
             scenario,
             executables=executables,
             role_inputs={role: {"save": str(save)} for role, save in saves.items()},
             console=[
-                "fleet_scenario " + ("resolver-inspect" if resolver else "inspect"),
+                "fleet_scenario "
+                + (
+                    "resolver-inspect"
+                    if resolver
+                    else "capabilities-inspect"
+                    if capabilities
+                    else "inspect"
+                ),
                 "unpause",
             ],
         )
     return dict(scenario, executables=executables)
+
+
+def capability_state(run, stage):
+    return {
+        key: [
+            line.split()[3:]
+            for line in run["log"]
+            if line.startswith(f"FLEET capability-{key} {stage} ")
+        ]
+        for key in ("chain", "live")
+    }
+
+
+def check_capabilities(run, mode, role, result):
+    counts = [
+        line.split()[2:]
+        for line in run["log"]
+        if line.startswith("FLEET capability-count ")
+    ]
+    expected = [
+        [
+            str(version),
+            str(fail).lower(),
+            str(purchase).lower(),
+            "1",
+            "true",
+            "true",
+            "true",
+            "true",
+        ]
+        for version in (7, 8)
+        for fail in (False, True)
+        for purchase in (False, True)
+    ]
+    if counts != expected:
+        result["problems"].append(
+            f"{mode}/{role}: articulated contexts/TEMP lifecycle/stops"
+        )
+    gates = [
+        line.split()[2:]
+        for line in run["log"]
+        if line.startswith("FLEET capability-gate ")
+    ]
+    expected_gates = [
+        [
+            str(algorithm).lower(),
+            str(other).lower(),
+            str(suffix),
+            str(17 if algorithm or other or suffix else 20),
+            str(int(algorithm or other or suffix)),
+        ]
+        for algorithm in (False, True)
+        for other in (False, True)
+        for suffix in (0, 1)
+    ]
+    if gates != expected_gates:
+        result["problems"].append(f"{mode}/{role}: refit callback gating")
+    multipliers = [
+        line.split()[2:]
+        for line in run["log"]
+        if line.startswith("FLEET capability-multiplier ")
+    ]
+    expected_multipliers = [
+        [
+            str(algorithm).lower(),
+            str(base),
+            str(factor),
+            str(
+                (20 * factor + (256 if algorithm else base) // 2)
+                // (256 if algorithm else base)
+            ),
+        ]
+        for algorithm in (False, True)
+        for base in (1, 256, 65535)
+        for factor in (1, 256, 65535)
+    ]
+    if multipliers != expected_multipliers:
+        result["problems"].append(f"{mode}/{role}: capacity multiplier rounding/bounds")
+    required = (
+        "FLEET capability-limit 99 99 99",
+        "FLEET capability-aggregate false 4 4 20 7 5 true",
+        "FLEET capability-aggregate true 5 4 20 7 5 true",
+        "FLEET capability-suffix false true",
+        "FLEET capability-zero true 0 false 0",
+        "FLEET capability-empty 0 true",
+        "FLEET capability-multihead 30",
+        "FLEET capability-ship 16776704 65024 true",
+        "FLEET capability-query-rng true",
+        "FLEET capability-mixed 5 true 5",
+        "FLEET capability-refit false 24 0",
+        "FLEET capability-refit true 24 0",
+        "FLEET capability-checkpoint complete",
+    )
+    for marker in required:
+        if marker not in run["log"]:
+            result["problems"].append(f"{mode}/{role}: missing {marker}")
+    restoration = [
+        line
+        for line in run["log"]
+        if line.startswith("FLEET capability-restored true ")
+    ]
+    if len(restoration) != 1:
+        result["problems"].append(f"{mode}/{role}: capability spec/graph restoration")
 
 
 def check_override_order(run, mode, role, result):
@@ -421,6 +560,8 @@ def check(scenario, run, mode, role, result):
             *[f"FLEET resolver-trigger {trigger} true" for trigger in (0, 1, 2, 4)],
         ],
         "resolver-reload": [],
+        "capabilities": ["FLEET capability-checkpoint complete"],
+        "capabilities-reload": ["FLEET capability-reinstalled true"],
         **{
             "transaction-mass-" + kind: [
                 "FLEET mass-test true true",
@@ -497,6 +638,58 @@ def check(scenario, run, mode, role, result):
     for line in required:
         if line not in run["log"]:
             result["problems"].append(f"{mode}/{role}: missing {line}")
+    if scenario["fleet"] == "capabilities":
+        check_capabilities(run, mode, role, result)
+    if scenario["fleet"] == "capabilities-reload":
+        loaded = capability_state(run, "loaded")
+        if loaded != result["capability_saved"][role]:
+            result["problems"].append(
+                f"{mode}/{role}: restored articulated chain/state"
+            )
+        if loaded["live"] != [["4", "2", "17", "7", "1"]]:
+            result["problems"].append(f"{mode}/{role}: restored cargo/capacity queries")
+    if scenario["fleet"] == "transaction-build-aircraft":
+        for kind in ("mail", "extra"):
+            rows = [
+                line.split()[2:]
+                for line in run["log"]
+                if line.startswith(f"FLEET capability-aircraft-{kind} ")
+            ]
+            expected_inputs = [
+                [str(algorithm).lower(), str(factor)]
+                for algorithm in (False, True)
+                for factor in (1, 256, 65535)
+            ]
+            if [row[:2] for row in rows] != expected_inputs or any(
+                row[-1] != "0" for row in rows
+            ):
+                result["problems"].append(
+                    f"{mode}/{role}: aircraft {kind} multiplier/optional-mail bounds"
+                )
+        for marker in (
+            "FLEET capability-aircraft 20 17",
+            "FLEET capability-aircraft-build false 17 17 true",
+            "FLEET capability-aircraft-build true 17 17 true",
+            "FLEET capability-aircraft-refit false 17 0",
+            "FLEET capability-aircraft-refit true 17 0 0",
+            "FLEET capability-aircraft-restored true",
+        ):
+            if not any(line.startswith(marker) for line in run["log"]):
+                result["problems"].append(f"{mode}/{role}: missing {marker}")
+    if scenario["fleet"] == "transaction-clone":
+        rows = [
+            line.split()[2:]
+            for line in run["log"]
+            if line.startswith("FLEET clone-refit-cost ")
+        ]
+        if (
+            len(rows) != 2
+            or [row[0] for row in rows] != ["64", "65535"]
+            or any(len(row) != 7 or row[3:] != ["true"] * 4 for row in rows)
+        ):
+            result["problems"].append(
+                f"{mode}/{role}: missing nullable/live clone refit-cost evidence"
+            )
     if scenario["fleet"] == "resolver":
         check_override_order(run, mode, role, result)
         check_property_boundaries(run, mode, role, result)

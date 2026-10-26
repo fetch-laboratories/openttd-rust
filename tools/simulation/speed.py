@@ -160,7 +160,7 @@ class Hold:
         self.hz, self.thread = os.sysconf("SC_CLK_TCK"), None
         self.error = None
 
-    def scan(self, before, elapsed):
+    def scan(self, before, elapsed, quiescing=False):
         table = processes()
 
         def ours(pid):  # The collector and its timed games.
@@ -168,14 +168,21 @@ class Hold:
                 pid = table.get(pid, {}).get("parent", 0)
             return pid == os.getpid()
 
-        other = {
+        observed = {
             pid: row
             for pid, row in table.items()
-            if row["state"] not in "ZXTt"
-            and (
+            if (
                 row["comm"] in HEAVY or row["comm"].startswith(("openttd", "callgrind"))
             )
             and not ours(pid)
+        }
+        other = {p: r for p, r in observed.items() if r["state"] not in "ZXTt"}
+        # Stopping a process cannot undo its overlap with the timed games.
+        overlap = {
+            p: r["comm"]
+            for p, r in observed.items()
+            if not quiescing
+            and (p in other or r["ticks"] > before.get(p, {"ticks": 0})["ticks"])
         }
         for pid, row in other.items():
             if row["uid"] == os.getuid():  # Other users' processes stay recorded.
@@ -195,13 +202,19 @@ class Hold:
             > 0.02
         }
         unheld = {p: r["comm"] for p, r in other.items() if p not in self.stopped}
-        entry = dict(time=time.time(), load=os.getloadavg(), busy=busy, unheld=unheld)
+        entry = dict(
+            time=time.time(),
+            load=os.getloadavg(),
+            busy=busy,
+            unheld=unheld,
+            overlap=overlap,
+        )
         with self.log.open("a") as log:
             log.write(json.dumps(entry) + "\n")
         return table
 
     def start(self):
-        before, started = self.scan({}, 1), time.monotonic()
+        before, started = self.scan({}, 1, True), time.monotonic()
 
         def watch():
             nonlocal before, started
@@ -342,7 +355,7 @@ def summarize(out, manifest, names, groups):
         json.loads(line)
         for line in (out / "observations.jsonl").read_text().splitlines()
     ]
-    if any(entry["unheld"] for entry in loads):
+    if any(entry["unheld"] or entry["overlap"] for entry in loads):
         sys.exit("other builds, profiles or games ran during collection; no anchors")
     rows = [
         (

@@ -2448,3 +2448,6 @@ pub(crate) unsafe fn current_max_speed(
         leaves,
     )
 }
+
+pub(crate) mod availability;
+pub(crate) use availability::*;

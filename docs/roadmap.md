@@ -3,23 +3,23 @@
 Root selects here; `AGENTS.md` and `docs/rust-migration.md` define process. Follow
 this roadmap over conflicting issues. Keep about 200 lines; evidence stays in PRs.
 
-## Where the fork stands (2026-10-24, code at `d4a0700869`)
+## Where the fork stands (2026-10-26, code at `04fa3753bf`)
 
-- 63 ownership ports. Original C++ retired: 62,169 of 470,612 source lines
-  (13.21%); simulation sources: 53,345 of 102,615 (51.99%). Whole-fork Rust,
-  tooling and glue: 112,742, 39,255 and 40,073 lines. These source-line measures
-  include comments/data, not completed behavior. Since review nineteen: the ready
-  batch plus five housekeeping integrations, zero original retirement;
-  housekeeping removed 1,352 Rust, 2,007 tooling and 486 glue lines.
-- **Integrated regression #462 requires recovery before further integrations.**
-  #446 exposed a null-to-non-null clone callback from #415; later code prevents rollback.
-- Latest complete quiet anchors are at `103ee7cff8`: TGP 1.209x, Opus 1.420x,
-  Grok 1.414x, P1996 1.344x, P2000 1.413x, P2016 1.484x. Projections at
-  `00ab107424` equal those floors; `d4a0700869` remains unprofiled. P2016 is
-  in band. #275 owns the two selected repairs; #450 must fix the new collector
-  before its first timed pass. No current anchor contamination is established.
-- Five unintegrated branches: owners #446/#447 and maintenance #463-#465.
-  Recovery #463 is first; no other integration proceeds before it.
+- 64 ownership ports. Original C++ retired: 62,327 of 470,612 source lines
+  (13.24%); simulation sources: 53,503 of 102,615 (52.14%). Whole-fork Rust,
+  tooling and glue: 113,246, 39,755 and 40,238 lines. These source-line measures
+  include comments/data, not completed behavior. This resume integrated recovery
+  #463 and #469's availability/maintenance combination: 158 original lines retired.
+- #462 is recovered by #463 at `4677a4fe4f`. #446 has source and scoped merge
+  reviews; focused current-base checks continue alongside final Full preparation.
+- Quiet anchors remain at `103ee7cff8`: TGP 1.209x, Opus 1.420x, Grok 1.414x,
+  P1996 1.344x, P2000 1.413x, P2016 1.484x. Projections at `04fa3753bf`
+  equal those six floors; every loop count fell against the previous tip under
+  the same anchors, so no rise requires attribution.
+  P2016 is in band; the tracked quiet pass follows. #450's collector repair and
+  #275's ambient/airport repairs are integrated. No anchor contamination is proved.
+- Five component branches remain: #446, effects #468, cargo #472, engine-loading
+  #470 and interpreter #471. Astra planning selects the following whole owners.
 
 ## Twentieth steering review (2026-10-24, recovery and production evidence)
 
@@ -130,6 +130,7 @@ Metrics are `tools/port-metrics.py`: Rust / tooling / C++ glue / C++ retired.
 | #418 | Airport/airport-tile runtime and live spec selection | #428 via #444 | `103ee7cff8` | 1087 / 245 / 496 / 264; net glue 337 |
 | #429 | Generic callback registry, AI and ambient runtime | #436 via #444 | `103ee7cff8` | 349 / 188 / 164 / 248; net glue 138 |
 | #430 | Object invocation and complete eligibility | #438 via #444 | `103ee7cff8` | 334 / 178 / 182 / 51; net glue 152 |
+| #440 | Rail/road type introduction and construction availability | #447 via #469 | `04fa3753bf` | 457 / 327 / 229 / 158; net glue 165 |
 
 Maintenance rows use original retirement and net glue (#223); evidence stays in PRs.
 
@@ -158,49 +159,45 @@ Maintenance rows use original retirement and net glue (#223); evidence stays in 
 | #451 shared header constants; #450 harness helpers and tracked speed collector | #456, #457 | #458 | `00ab107424` | 921 / 1207 / 8 / 0; net glue -12 |
 | #452 comment pass outside the #451 structural files (comments only) | #459 | direct | `e5c8c62a96` | 221 / 49 / 248 / 0; net glue -191 |
 | #451 YAPF heaps, `GameState`, shared macros, raw-access contracts, reservation callbacks | #460 | direct | `d4a0700869` | 2479 / 9 / 968 / 0; net glue -83; net -1,030 lines |
+| #462 nullable clone refit callback recovery | #463 | direct | `4677a4fe4f` | 6 / 71 / 0 / 0; net glue 0 |
+| #275/#450/#461/#156 source, collector and coverage maintenance | #464, #465 | #469 | `04fa3753bf` | 150 / 121 / 0 / 0; net glue 0 |
 
 ## Phase 1: maintenance and coverage
 
-Root owns #462 recovery; #275 speed, #450 collector, #461 ship scope and #156
-coverage repairs follow. #168/#199 retain boundary debt without per-PR timing
-gates. #312 stays unselected pending current #275 attribution, blocking no owner.
+#275 owns merged-tip profiling and the due tracked quiet pass. #450/#461 and
+selected #156 coverage repairs are integrated through #469. #168/#199 retain
+boundary debt without timing gates; #312 stays unselected pending attribution.
 Closed #449/#451/#452 housekeeping is not a standing task.
 
 ## Phase 2: work order
 
-1. **Recover #462 first:** one small PR from integrated main, default nullable
-   clone/refit-cost evidence, fresh fixing review and exact-head Full. No other
-   integration proceeds until recovery; #446 adopts the shared fix.
-2. **Resume #446 and #447 alongside maintenance.** Complete their PR-comment
-   boundary/evidence actions and cost dispositions. Root coordinates any genuinely
-   shared new engine observation under #199 once; keep policy and loops in Rust.
-   Integrate in readiness order after recovery, without a speed wait.
-3. **Assign the ready maintenance batch:** #450, #275's ambient/airport repairs,
-   #461 and #156's two thread checks/production tree path. An unfinished item
-   leaves the batch. Run the due merged-tip profile in the background; after the
-   collector repair and source fixes, run the due tracked quiet pass. No new
-   per-PR timing or private collector. Stale agent-downloaded CI archives were removed.
-4. **Next selected owners:** #466 transfers vehicle effect emission/cache and
-   creation sequencing; #467 transfers cargo registry/translation and callback
-   lifecycle. Start from integrated main as capacity and the six-branch cap allow.
-   Their first concrete checkpoints decide necessary boundary/evidence cost once;
-   no speed gate. Catchment, #64/#68/#69, vendored, GUI and platform stay outside.
+1. **Integrate ready #446:** source and substantive availability-merge reviews
+   pass. Update from final base and obtain exact-head Full; affected local checks
+   continue alongside it. Preserve the reviewed ownership/cost disposition.
+2. **Continue whole owners #466/#468, #467/#472, #470 and #471** from integrated
+   main. First concrete checkpoints decide necessary boundary/evidence cost once.
+   Keep six component branches; ready review/integration comes before new work.
+3. Finish the due merged-tip profile and tracked quiet pass. Only timed collection
+   pauses host builds/profiles/games; ready ownership has no speed wait.
+4. Plan following whole simulation owners. Catchment, #64/#68/#69, vendored,
+   GUI and platform remain outside this order. No utility-kernel fallback.
 
 ## Resume checkpoint
 
-Development resumed. Root owns recovery/integration; all five agent slots are active.
+Root owns final combinations and speed; completed reports remain in the PRs.
 
 | Item | Saved head | Next action |
 | --- | --- | --- |
-| #462 recovery / #463 | `059f8bc8f0` | Focused checks pass; fresh fixing review, then current-base Full. |
-| #446 engine/articulated (#439) | `2d561dbc07` | Boundary/retained-chain repair; adopt recovery and finish checks/review. |
-| #447 type admission (#440) | `7d6a47e19b` | TownID/negative checks pass; finish carrier checks and fresh review. |
-| #450 collector / #465 | `b9787cd2ec` | Checks pass within budget; fresh fixing review running. |
-| #275/#461/#156 / #464 | `38feeba7b5` | Source/coverage batch checks running; review when ready. |
-| Merged-tip profile | code `52ffa46994` | Instruction profile running alongside work; same quiet anchors. |
+| #446 engine/articulated (#439) | `61ba77ef3b` | Both reviews pass; current-base Cargo4 passes, native/semantic checks running. |
+| #466 effects / #468 | `b99294ee3e` | Complete emission/creation checkpoint; advanced/default/reload evidence and cost pending. |
+| #467 cargo / #472 | `10f3f6749c` | Canonical registry/callback checkpoint; production profit/rating/reload evidence pending. |
+| #470 engine definitions | issue | Implementation active from integrated `04fa3753bf`. |
+| #471 loading interpreter | `68eb511d67` | Implementation active; early checkpoint, no integration evidence. |
+| Next-owner planning | active | Fresh Astra planning after #471; root selects before implementation. |
+| Merged-tip profile / #275 | code `04fa3753bf` | Six comparisons pass; quiet-pass runtimes prepared, collect after current affected games finish. |
 
-macOS passed at `00ab107424`; next cadence run is due after three integrations.
+macOS passed at `00ab107424`; the next integration makes the cadence run due.
 Delete the superseded private speed collector after the first tracked pass.
 
-Selection: /root, gpt-6.1-sol, xhigh; planning: /root/plan_next_simulation_owners,
-gpt-6-astra, high. Next-owner scope, interfaces and evidence plans are in #466/#467.
+Selection: /root, gpt-6.1-sol, xhigh; planning agents run gpt-6-astra, high.
+Scopes and evidence plans are in #466/#467/#470/#471; PRs carry current task status.

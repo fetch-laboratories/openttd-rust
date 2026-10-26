@@ -542,6 +542,7 @@ mod effect;
 mod effectvehicle_func;
 mod encoded;
 mod engine;
+mod engine_capabilities;
 mod vehicle_effect;
 pub use encoded::{
     Descriptor as EncodedDescriptor, Diagnostic as EncodedDiagnostic, View as EncodedView,
@@ -1410,3 +1411,6 @@ pub mod base_bitset_type;
 
 mod newgrf_airport;
 mod newgrf_roadstop;
+
+mod rail;
+mod type_availability;

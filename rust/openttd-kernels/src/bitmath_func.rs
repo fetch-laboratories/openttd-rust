@@ -42,3 +42,9 @@ pub fn toggle_bit(value: &mut u32, bit: u8) -> u32 {
     *value ^= 1_u32.wrapping_shl(u32::from(bit));
     *value
 }
+
+/// `SetBit` for native 64-bit cargo masks, preserving the original return value.
+pub fn set_bit64(value: &mut u64, bit: u8) -> u64 {
+    *value |= 1_u64.wrapping_shl(u32::from(bit));
+    *value
+}

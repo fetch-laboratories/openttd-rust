@@ -11,7 +11,7 @@ static void *RailNewWagon(uint32_t tile_index, const OpenTTDEngine *engine) noex
 	Train *v = new Train();
 	RustWriteVehicleSprite(v, rvi->image_index);
 
-	v->engine_type = e->index;
+	RustVehicleSetEngine(RustVehicle(v), e->index.base());
 	RustGroundSetFirstEngine(&v->gcache, EngineID::Invalid()); // needs to be set before first callback
 
 	DiagDirection dir = RustRailDepotDirection(tile.base());
@@ -25,7 +25,7 @@ static void *RailNewWagon(uint32_t tile_index, const OpenTTDEngine *engine) noex
 	RustWriteVehicleX(v, x);
 	RustWriteVehicleY(v, y);
 	RustWriteVehicleZ(v, SharedSlopePixelZ(x, y, true));
-	v->owner = _current_company;
+	RustVehicleSetOwner(RustVehicle(v), RustCurrentCompanyID());
 	v->SetTrack(TRACK_BIT_DEPOT);
 	RustWriteVehicleStatus(v, {VehState::Hidden, VehState::DefaultPalette});
 
@@ -36,10 +36,10 @@ static void *RailNewWagon(uint32_t tile_index, const OpenTTDEngine *engine) noex
 
 	v->cargo_type = RustEngineDefaultCargo(engine);
 	assert(IsValidCargoType(v->cargo_type));
-	v->cargo_cap = rvi->capacity;
+	RustVehicleSetCargoCap(RustVehicle(v), RustEngineRailCapacity(engine));
 	v->refit_cap = 0;
 
-	v->SetRailTypes(rvi->railtypes);
+	v->SetRailTypes(RailTypes{RustEngineRailTypes(e)});
 
 	v->date_of_last_service = TimerGameEconomy::date;
 	v->date_of_last_service_newgrf = TimerGameCalendar::date;
@@ -60,7 +60,7 @@ static void *RailNewEngine(uint32_t tile_index, const OpenTTDEngine *engine) noe
 	Train *v = new Train();
 	v->direction = DiagDirToDir(dir);
 	RustWriteVehicleTile(v, tile);
-	v->owner = _current_company;
+	RustVehicleSetOwner(RustVehicle(v), RustCurrentCompanyID());
 	RustWriteVehicleX(v, x);
 	RustWriteVehicleY(v, y);
 	RustWriteVehicleZ(v, SharedSlopePixelZ(x, y, true));
@@ -69,19 +69,19 @@ static void *RailNewEngine(uint32_t tile_index, const OpenTTDEngine *engine) noe
 	RustWriteVehicleSprite(v, rvi->image_index);
 	v->cargo_type = RustEngineDefaultCargo(engine);
 	assert(IsValidCargoType(v->cargo_type));
-	v->cargo_cap = rvi->capacity;
+	RustVehicleSetCargoCap(RustVehicle(v), RustEngineRailCapacity(engine));
 	v->refit_cap = 0;
 	v->last_station_visited = StationID::Invalid();
 	RustVehicleSetLastLoadingStation(RustVehicle(v), StationID::Invalid().base());
 
-	v->engine_type = e->index;
+	RustVehicleSetEngine(RustVehicle(v), e->index.base());
 	RustGroundSetFirstEngine(&v->gcache, EngineID::Invalid()); // needs to be set before first callback
 
 	v->reliability = e->reliability;
 	v->reliability_spd_dec = e->reliability_spd_dec;
 	v->max_age = RustEngineLifeLength(e);
 
-	v->SetRailTypes(rvi->railtypes);
+	v->SetRailTypes(RailTypes{RustEngineRailTypes(e)});
 
 	RustVehicleSetServiceInterval(v, Company::Get(_current_company)->settings.vehicle.servint_trains);
 	v->date_of_last_service = TimerGameEconomy::date;
@@ -99,7 +99,7 @@ static void *RailNewRear(void *front) noexcept
 	v->value >>= 1;
 	u->value = v->value;
 	u->direction = v->direction;
-	u->owner = v->owner;
+	RustVehicleSetOwner(RustVehicle(u), RustVehicleOwner(v));
 	RustWriteVehicleTile(u, v->tile);
 	RustWriteVehicleX(u, v->x_pos);
 	RustWriteVehicleY(u, v->y_pos);
@@ -113,7 +113,7 @@ static void *RailNewRear(void *front) noexcept
 	u->cargo_cap = v->cargo_cap;
 	u->refit_cap = v->refit_cap;
 	u->SetRailTypes(RailTypes{RustTrainRailTypes(v)});
-	u->engine_type = v->engine_type;
+	RustVehicleSetEngine(RustVehicle(u), RustVehicleEngineID(v));
 	u->date_of_last_service = v->date_of_last_service;
 	u->date_of_last_service_newgrf = RustVehicleCalendarService(v);
 	u->build_year = RustVehicleBuildYear(v);

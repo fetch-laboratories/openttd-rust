@@ -23,3 +23,6 @@ pub const ROAD_SW: u8 = 2;
 pub const ROAD_SE: u8 = 4;
 /// `ROAD_NE`.
 pub const ROAD_NE: u8 = 8;
+
+/// `ROADTYPE_END`.
+pub const ROADTYPE_END: u8 = 63;

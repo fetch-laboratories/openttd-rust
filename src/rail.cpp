@@ -17,6 +17,10 @@
 
 #include "table/track_data.h"
 
+#ifdef WITH_RUST
+#include "rust/type_availability_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 /**
@@ -67,7 +71,11 @@ RailType GetTileRailType(Tile tile)
  */
 bool HasRailTypeAvail(const CompanyID company, const RailType railtype)
 {
+#ifdef WITH_RUST
+	return openttd_rust_has_rail_type(&GetRustTypeAvailabilityServices(), company.base(), railtype);
+#else
 	return !_railtypes_hidden_mask.Test(railtype) && Company::Get(company)->avail_railtypes.Test(railtype);
+#endif
 }
 
 /**
@@ -77,9 +85,13 @@ bool HasRailTypeAvail(const CompanyID company, const RailType railtype)
  */
 bool HasAnyRailTypesAvail(const CompanyID company)
 {
+#ifdef WITH_RUST
+	return openttd_rust_has_any_rail_types(&GetRustTypeAvailabilityServices(), company.base());
+#else
 	RailTypes avail = Company::Get(company)->avail_railtypes;
 	avail.Reset(_railtypes_hidden_mask);
 	return avail.Any();
+#endif
 }
 
 /**
@@ -89,7 +101,11 @@ bool HasAnyRailTypesAvail(const CompanyID company)
  */
 bool ValParamRailType(const RailType rail)
 {
+#ifdef WITH_RUST
+	return openttd_rust_val_rail_type(&GetRustSharedServices(), rail);
+#else
 	return rail < RAILTYPE_END && HasRailTypeAvail(_current_company, rail);
+#endif
 }
 
 /**
@@ -101,6 +117,9 @@ bool ValParamRailType(const RailType rail)
  */
 RailTypes AddDateIntroducedRailTypes(RailTypes current, TimerGameCalendar::Date date)
 {
+#ifdef WITH_RUST
+	return RailTypes{openttd_rust_add_date_rail_types(&GetRustTypeAvailabilityServices(), current.base(), date.base())};
+#else
 	RailTypes rts = current;
 
 	for (RailType rt = RAILTYPE_BEGIN; rt != RAILTYPE_END; rt++) {
@@ -124,6 +143,7 @@ RailTypes AddDateIntroducedRailTypes(RailTypes current, TimerGameCalendar::Date 
 	/* When we added railtypes we need to run this method again; the added
 	 * railtypes might enable more rail types to become introduced. */
 	return rts == current ? rts : AddDateIntroducedRailTypes(rts, date);
+#endif
 }
 
 /**
@@ -134,6 +154,9 @@ RailTypes AddDateIntroducedRailTypes(RailTypes current, TimerGameCalendar::Date 
  */
 RailTypes GetCompanyRailTypes(CompanyID company, bool introduces)
 {
+#ifdef WITH_RUST
+	return RailTypes{openttd_rust_company_rail_types(&GetRustSharedServices(), &GetRustTypeAvailabilityServices(), company.base(), introduces)};
+#else
 	RailTypes rts{};
 
 	for (const Engine *e : Engine::IterateType(VEH_TRAIN)) {
@@ -156,6 +179,7 @@ RailTypes GetCompanyRailTypes(CompanyID company, bool introduces)
 
 	if (introduces) return AddDateIntroducedRailTypes(rts, TimerGameCalendar::date);
 	return rts;
+#endif
 }
 
 /**
@@ -165,6 +189,9 @@ RailTypes GetCompanyRailTypes(CompanyID company, bool introduces)
  */
 RailTypes GetRailTypes(bool introduces)
 {
+#ifdef WITH_RUST
+	return RailTypes{openttd_rust_rail_types(&GetRustSharedServices(), &GetRustTypeAvailabilityServices(), introduces)};
+#else
 	RailTypes rts{};
 
 	for (const Engine *e : Engine::IterateType(VEH_TRAIN)) {
@@ -184,6 +211,7 @@ RailTypes GetRailTypes(bool introduces)
 
 	if (introduces) return AddDateIntroducedRailTypes(rts, CalendarTime::MAX_DATE);
 	return rts;
+#endif
 }
 
 /**

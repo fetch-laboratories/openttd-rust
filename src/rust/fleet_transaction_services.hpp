@@ -49,11 +49,8 @@ static bool FleetTransaction_needs_renew(void *shell, bool settings) noexcept { 
 static bool FleetTransaction_engine_valid(uint16_t id) noexcept { return Engine::IsValidID(EngineID(id)); }
 static bool FleetTransaction_company_valid(uint8_t id) noexcept { return GetRustSharedServices().company_valid(id); }
 static bool FleetTransaction_engine_buildable(uint16_t id, uint8_t type, uint8_t company) noexcept { return IsEngineBuildable(EngineID(id), static_cast<VehicleType>(type), CompanyID(company)); }
-static bool FleetTransaction_tram(uint16_t id) noexcept { return Engine::Get(EngineID(id))->info.misc_flags.Test(EngineMiscFlag::RoadIsTram); }
+static bool FleetTransaction_tram(uint16_t id) noexcept { return EngineMiscFlags(RustEngineMiscFlags(RustEngineByID(id))).Test(EngineMiscFlag::RoadIsTram); }
 static uint8_t FleetTransaction_plane(uint16_t id) noexcept { return RustAircraftInfoSubtype(AircraftVehInfo(EngineID(id))) & AIR_CTOL; }
-static void FleetTransaction_refit_masks(uint16_t id, uint64_t *union_mask, uint64_t *available) noexcept { GetArticulatedRefitMasks(EngineID(id), true, union_mask, available); }
-static uint64_t FleetTransaction_vehicle_cargo(void *shell, uint8_t *cargo) noexcept { return GetCargoTypesOfArticulatedVehicle(static_cast<Vehicle *>(shell), cargo); }
-static uint64_t FleetTransaction_default_cargo(uint16_t id) noexcept { return GetCargoTypesOfArticulatedParts(EngineID(id)); }
 static void * FleetTransaction_orders(void *shell) noexcept { return static_cast<Vehicle *>(shell)->orders; }
 static size_t FleetTransaction_order_count(void *orders) noexcept { return static_cast<OrderList *>(orders)->GetOrders().size(); }
 static uint8_t FleetTransaction_order_count_id(void *orders) noexcept { return static_cast<OrderList *>(orders)->GetNumOrders(); }
@@ -97,7 +94,7 @@ static const OpenTTDFleetTransactionServices _fleet_transaction_services{
 	.prev_unit = FleetTransaction_prev_unit,
 	.length = FleetTransaction_length,
 	.cargo_type = RustOpaqueHandleRead<uint8_t, RustVehicleCargoType>,
-	.can_carry = FleetTransaction_can_carry,
+	.capabilities = &GetRustEngineCapabilitiesServices(),
 	.stopped_in_depot = FleetTransaction_stopped_in_depot,
 	.max_length = FleetTransaction_max_length,
 	.check = RustAssertCondition,
@@ -110,10 +107,6 @@ static const OpenTTDFleetTransactionServices _fleet_transaction_services{
 	.wagon = FleetTransaction_wagon,
 	.tram = FleetTransaction_tram,
 	.plane = FleetTransaction_plane,
-	.refit_mask = FleetTransaction_refit_mask,
-	.refit_masks = FleetTransaction_refit_masks,
-	.vehicle_cargo = FleetTransaction_vehicle_cargo,
-	.default_cargo = FleetTransaction_default_cargo,
 	.orders = FleetTransaction_orders,
 	.order_count = FleetTransaction_order_count,
 	.order_count_id = FleetTransaction_order_count_id,

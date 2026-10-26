@@ -50,7 +50,7 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.first = RustGroundFirst,
 		.move = [](OpenTTDVehicle *v, int32_t count) noexcept { return RustVehicle(VehicleOf(v)->Move(count)); },
 		.previous = [](OpenTTDVehicle *v) noexcept { return RustVehicle(RustVehiclePrevious(VehicleOf(v))); },
-		.can_carry = Engine_can_carry,
+		.capabilities = &GetRustEngineCapabilitiesServices(),
 		.cargo_classes = RustCargoClasses,
 		.cargo_bitnum = RustCargoBitnum,
 		.cargo_translation = RustGRFCargoMap,

@@ -171,9 +171,21 @@ pub struct VehicleCargo {
     pub cargo: u8,
 }
 #[repr(C)]
+pub struct RailAvailability {
+    pub climate: bool,
+    pub kind: RailVehicleTypes,
+    pub railtypes: u64,
+}
+#[repr(C)]
+pub struct RoadAvailability {
+    pub climate: bool,
+    pub roadtype: u8,
+}
+#[repr(C)]
 pub struct Services {
     pub shared: *const SharedServices,
     pub rng: *const RandomServices,
+    pub types: *const crate::type_availability::Services,
     pub next: unsafe extern "C" fn(u32) -> EngineRef,
     pub resolve: unsafe extern "C" fn(u16) -> EngineRef,
     pub sync_variant: unsafe extern "C" fn(*const OpenTTDEngine) -> SyncVariant,
@@ -209,11 +221,7 @@ pub struct Services {
     pub company_preview: unsafe extern "C" fn(*const OpenTTDCompany) -> CompanyPreview,
     pub vehicle_next: unsafe extern "C" fn(u32) -> Vehicle,
     pub vehicle_cargo: unsafe extern "C" fn(*mut OpenTTDVehicle) -> VehicleCargo,
-    pub can_carry: unsafe extern "C" fn(*const OpenTTDEngine) -> bool,
-    pub refit_mask: unsafe extern "C" fn(*const OpenTTDEngine) -> u64,
-    pub update_railtypes: unsafe extern "C" fn(u8),
-    pub update_roadtypes: unsafe extern "C" fn(u8),
-    pub date_company_types: unsafe extern "C" fn(u8, i32),
+    pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub company_valid: unsafe extern "C" fn(u8) -> bool,
     pub compatible_railtypes: unsafe extern "C" fn(*const OpenTTDEngine) -> u64,
     pub powered_roadtypes: unsafe extern "C" fn(*const OpenTTDEngine) -> u64,
@@ -221,10 +229,6 @@ pub struct Services {
     pub company_roadtypes: unsafe extern "C" fn(u8) -> u64,
     pub company_engine_count: unsafe extern "C" fn(u8, u16) -> c_uint,
     pub block_preview: unsafe extern "C" fn(u8),
-    pub introduces_railtypes: unsafe extern "C" fn(*const OpenTTDEngine) -> u64,
-    pub introduces_roadtypes: unsafe extern "C" fn(*const OpenTTDEngine) -> u64,
-    pub set_railtypes: unsafe extern "C" fn(u8, u64, i32),
-    pub set_roadtypes: unsafe extern "C" fn(u8, u64, i32),
     pub current_company: unsafe extern "C" fn() -> u8,
     pub local_company: unsafe extern "C" fn() -> u8,
     pub toolbar_enable: unsafe extern "C" fn(VehicleType),
@@ -524,8 +528,14 @@ pub unsafe extern "C" fn openttd_rust_engine_start_all(s: *const Services) {
         }
         from = u32::from(c.id) + 1;
         unsafe {
-            call!(s, update_railtypes, c.id);
-            call!(s, update_roadtypes, c.id);
+            ((&*s.types).set_company_railtypes)(
+                c.id,
+                crate::rail::openttd_rust_company_rail_types(&*s.shared, &*s.types, c.id, true),
+            );
+            ((&*s.types).set_company_roadtypes)(
+                c.id,
+                crate::road::openttd_rust_company_road_types(&*s.shared, &*s.types, c.id, true),
+            );
         }
     }
     unsafe {
@@ -561,9 +571,15 @@ unsafe fn enable(s: &Services, e: EngineRef, company: u8) {
     );
     unsafe {
         if e.kind == VehicleType::TRAIN {
-            call!(s, update_railtypes, company);
+            ((&*s.types).set_company_railtypes)(
+                company,
+                crate::rail::openttd_rust_company_rail_types(&*s.shared, &*s.types, company, true),
+            );
         } else if e.kind == VehicleType::ROAD {
-            call!(s, update_roadtypes, company);
+            ((&*s.types).set_company_roadtypes)(
+                company,
+                crate::road::openttd_rust_company_road_types(&*s.shared, &*s.types, company, true),
+            );
         }
     }
     if company == unsafe { call!(s, local_company) } {
@@ -581,9 +597,15 @@ unsafe fn disable(s: &Services, e: EngineRef, company: u8) {
     );
     unsafe {
         if e.kind == VehicleType::TRAIN {
-            call!(s, update_railtypes, company);
+            ((&*s.types).set_company_railtypes)(
+                company,
+                crate::rail::openttd_rust_company_rail_types(&*s.shared, &*s.types, company, true),
+            );
         } else if e.kind == VehicleType::ROAD {
-            call!(s, update_roadtypes, company);
+            ((&*s.types).set_company_roadtypes)(
+                company,
+                crate::road::openttd_rust_company_road_types(&*s.shared, &*s.types, company, true),
+            );
         }
     }
     if company == unsafe { call!(s, local_company) } {
@@ -630,7 +652,13 @@ unsafe fn preview_company(s: &Services, e: EngineRef) -> u8 {
     let mask = if e.kind == VehicleType::TRAIN {
         u64::MAX
     } else {
-        unsafe { call!(s, refit_mask, e.shell) }
+        unsafe {
+            crate::engine_capabilities::openttd_rust_articulated_refit_union(
+                s.capabilities,
+                (s.engine_id)(e.shell),
+                true,
+            )
+        }
     };
     let mut best = 255;
     let mut performance = -1;
@@ -659,8 +687,12 @@ unsafe fn preview_company(s: &Services, e: EngineRef) -> u8 {
                 continue;
             }
             let cargo = unsafe { call!(s, vehicle_cargo, v.shell) };
-            if !unsafe { call!(s, can_carry, cargo.engine) }
-                || mask & 1u64.wrapping_shl(u32::from(cargo.cargo)) == 0
+            if !unsafe {
+                crate::engine_capabilities::openttd_rust_engine_can_carry(
+                    s.capabilities,
+                    cargo.engine,
+                )
+            } || mask & 1u64.wrapping_shl(u32::from(cargo.cargo)) == 0
             {
                 continue;
             }
@@ -684,7 +716,23 @@ pub unsafe extern "C" fn openttd_rust_engine_daily(s: *const Services) {
         }
         from = u32::from(c.id) + 1;
         unsafe {
-            call!(s, date_company_types, c.id, date);
+            let types = &*s.types;
+            (types.set_company_railtypes)(
+                c.id,
+                crate::rail::openttd_rust_add_date_rail_types(
+                    types,
+                    call!(s, company_railtypes, c.id),
+                    date,
+                ),
+            );
+            (types.set_company_roadtypes)(
+                c.id,
+                crate::road::openttd_rust_add_date_road_types(
+                    types,
+                    call!(s, company_roadtypes, c.id),
+                    date,
+                ),
+            );
         }
     }
     if unsafe { call!(s, calendar_year) } >= unsafe { AGING_STOPS } {
@@ -764,7 +812,12 @@ unsafe fn available(s: &Services, e: EngineRef, date: i32) {
         return;
     }
     if e.kind == VehicleType::TRAIN {
-        let introduced = unsafe { call!(s, introduces_railtypes, e.shell) };
+        let types = unsafe { &*s.types };
+        let rails = unsafe { (types.engine_railtypes)(e.shell) };
+        if types.assertions {
+            assert_ne!(rails, 0);
+        }
+        let introduced = crate::rail::get_all_introduces_rail_types(types, rails);
         let mut from = 0;
         loop {
             let c = unsafe { call!(s, company_next, from) };
@@ -774,11 +827,19 @@ unsafe fn available(s: &Services, e: EngineRef, date: i32) {
             from = u32::from(c.id) + 1;
             let types = unsafe { call!(s, company_railtypes, c.id) } | introduced;
             unsafe {
-                call!(s, set_railtypes, c.id, types, date);
+                ((&*s.types).set_company_railtypes)(
+                    c.id,
+                    crate::rail::openttd_rust_add_date_rail_types(&*s.types, types, date),
+                );
             }
         }
     } else if e.kind == VehicleType::ROAD {
-        let introduced = unsafe { call!(s, introduces_roadtypes, e.shell) };
+        let types = unsafe { &*s.types };
+        let rt = unsafe { (types.engine_roadtype)(e.shell) };
+        if types.assertions {
+            assert!(rt < crate::road_type::ROADTYPE_END);
+        }
+        let introduced = (types.road_introduces)(rt);
         let mut from = 0;
         loop {
             let c = unsafe { call!(s, company_next, from) };
@@ -788,7 +849,10 @@ unsafe fn available(s: &Services, e: EngineRef, date: i32) {
             from = u32::from(c.id) + 1;
             let types = unsafe { call!(s, company_roadtypes, c.id) } | introduced;
             unsafe {
-                call!(s, set_roadtypes, c.id, types, date);
+                ((&*s.types).set_company_roadtypes)(
+                    c.id,
+                    crate::road::openttd_rust_add_date_road_types(&*s.types, types, date),
+                );
             }
         }
     }
@@ -1187,9 +1251,21 @@ crate::abi::layouts! {
         engine,
         cargo,
     };
+    "OpenTTDEngineCarrying" ["engine"] => Carrying { kind, ground_capacity, default_cargo };
+    "OpenTTDEngineCapacityConfig" ["engine"] => CapacityConfig { id, callbacks, misc };
+    "OpenTTDEngineRailAvailability" ["engine"] => RailAvailability {
+        climate,
+        kind,
+        railtypes,
+    };
+    "OpenTTDEngineRoadAvailability" ["engine"] => RoadAvailability {
+        climate,
+        roadtype,
+    };
     "OpenTTDEngineServices" ["engine"] => Services {
         shared,
         rng,
+        types,
         next,
         resolve,
         sync_variant,
@@ -1225,11 +1301,7 @@ crate::abi::layouts! {
         company_preview,
         vehicle_next,
         vehicle_cargo,
-        can_carry,
-        refit_mask,
-        update_railtypes,
-        update_roadtypes,
-        date_company_types,
+        capabilities,
         company_valid,
         compatible_railtypes,
         powered_roadtypes,
@@ -1237,10 +1309,6 @@ crate::abi::layouts! {
         company_roadtypes,
         company_engine_count,
         block_preview,
-        introduces_railtypes,
-        introduces_roadtypes,
-        set_railtypes,
-        set_roadtypes,
         current_company,
         local_company,
         toolbar_enable,
@@ -1254,4 +1322,22 @@ crate::abi::layouts! {
         screen_dirty,
         utf8_length,
     };
+}
+
+/// Fields observed together by `Engine::CanCarryCargo` before any callback.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct Carrying {
+    pub kind: VehicleType,
+    pub ground_capacity: u8,
+    pub default_cargo: u8,
+}
+/// Capacity configuration is immutable through `GetVehicleCallback`/`GetEngineProperty`:
+/// `SpriteGroup::Resolve` reads parsed specs/variables and writes registers or PSA;
+/// it cannot load GRFs, reset engines, execute commands/scripts or yield the mutex.
+#[repr(C)]
+pub(crate) struct CapacityConfig {
+    pub id: u16,
+    pub callbacks: u16,
+    pub misc: u8,
 }

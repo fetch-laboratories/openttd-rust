@@ -22,7 +22,7 @@ const OpenTTDVisualServices &GetRustVisualServices()
 		.engine = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualEngine {
 			Vehicle *v = VehicleOf(shell);
 			const Engine *e = EngineOf(RustVehicleGetEngine(shell));
-			OpenTTDVisualEngine result{.engine = RustEngine(e), .cache = RustVehicleVisualCache(v), .id = RustVehicleEngineID(v), .kind = RustEngineType(RustEngine(e)), .visual = 0, .callback = e->info.callback_mask.Test(VehicleCallbackMask::VisualEffect)};
+			OpenTTDVisualEngine result{.engine = RustEngine(e), .cache = RustVehicleVisualCache(v), .id = RustVehicleEngineID(v), .kind = RustEngineType(RustEngine(e)), .visual = 0, .callback = VehicleCallbackMasks(RustEngineCallbackMask(RustEngine(e))).Test(VehicleCallbackMask::VisualEffect)};
 			switch (e->type) {
 				case VEH_TRAIN: result.visual = e->VehInfo<RailVehicleInfo>().visual_effect; break;
 				case VEH_ROAD: result.visual = e->VehInfo<RoadVehicleInfo>().visual_effect; break;

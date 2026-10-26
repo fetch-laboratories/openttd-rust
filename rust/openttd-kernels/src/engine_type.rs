@@ -43,3 +43,6 @@ pub const EC_MONORAIL: u8 = 3;
 pub const VE_OFFSET_COUNT: u8 = 4;
 /// `VE_TYPE_COUNT`.
 pub const VE_TYPE_COUNT: u8 = 2;
+
+/// `EngineMiscFlag::NoDefaultCargoMultiplier`.
+pub const NO_DEFAULT_CARGO_MULTIPLIER: u8 = 1 << 5;

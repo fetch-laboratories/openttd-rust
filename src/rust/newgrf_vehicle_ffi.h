@@ -1,3 +1,4 @@
+struct OpenTTDEngineCapabilitiesServices;
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file newgrf_vehicle_ffi.h Stack vehicle resolver and canonical query cache boundary. */
 #ifndef RUST_NEWGRF_VEHICLE_FFI_H
@@ -42,7 +43,7 @@ struct OpenTTDVehicleResolverServices {
 	OpenTTDVehicle *(*first)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(first);
 	OpenTTDVehicle *(*move)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(move);
 	OpenTTDVehicle *(*previous)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(previous);
-	bool (*can_carry)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(can_carry);
+	const OpenTTDEngineCapabilitiesServices *capabilities;
 	uint16_t (*cargo_classes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_classes);
 	uint8_t (*cargo_bitnum)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_bitnum);
 	uint8_t (*cargo_translation)(const GRFFile *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_translation);

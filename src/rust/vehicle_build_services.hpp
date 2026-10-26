@@ -1,7 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file vehicle_build_services.hpp Native pools, specification helpers and presentation leaves. */
 static VehicleType VehicleBuildDepotKind(uint32_t tile) noexcept { return GetDepotVehicleType(TileIndex(tile)); }
-static uint32_t VehicleBuildArticulatedCount(uint16_t engine, bool capacity) noexcept { return CountArticulatedParts(EngineID(engine), capacity); }
 static uint16_t VehicleBuildFreeUnit(VehicleType type) noexcept { return GetFreeUnitNumber(type); }
 /* Road vehicle and aircraft construction leaves: shell allocation and field stores. */
 static bool VehicleConstructRoadTile(uint32_t tile, uint64_t powered) noexcept { return HasTileAnyRoadType(TileIndex(tile), RoadTypes(powered)); }
@@ -9,7 +8,7 @@ static void *VehicleConstructNewRoad(uint32_t tile) noexcept
 {
 	RoadVehicle *v = new RoadVehicle();
 	v->direction = DiagDirToDir(static_cast<DiagDirection>(Shared_road_depot_direction(tile)));
-	v->owner = _current_company;
+	RustVehicleSetOwner(RustVehicle(v), RustCurrentCompanyID());
 	RustWriteVehicleTile(v, TileIndex(tile));
 	int x = TileX(v->tile) * TILE_SIZE + TILE_SIZE / 2;
 	int y = TileY(v->tile) * TILE_SIZE + TILE_SIZE / 2;
@@ -22,7 +21,7 @@ static void *VehicleConstructNewRoad(uint32_t tile) noexcept
 static void VehicleConstructRoadFront(void *shell, const OpenTTDEngine *e) noexcept
 {
 	RoadVehicle *v = static_cast<RoadVehicle *>(shell);
-	RoadType rt = EngineOf(e)->VehInfo<RoadVehicleInfo>().roadtype;
+	RoadType rt = RustEngineRoadType(e);
 	RustGroundSetFirstEngine(&v->gcache, EngineID::Invalid()); // needs to be set before first callback
 	v->SetFrontEngine();
 	v->roadtype = rt;
@@ -41,7 +40,7 @@ static void VehicleConstructAircraftPlace(void *aircraft, void *shadow, uint32_t
 	Aircraft *v = static_cast<Aircraft *>(aircraft);
 	Aircraft *u = static_cast<Aircraft *>(shadow);
 	v->direction = DIR_SE;
-	v->owner = u->owner = _current_company;
+	RustVehicleSetOwner(RustVehicle(u), RustCurrentCompanyID()); RustVehicleSetOwner(RustVehicle(v), RustVehicleOwner(u));
 	RustWriteVehicleTile(v, TileIndex(tile));
 	uint x = TileX(v->tile) * TILE_SIZE + 5;
 	uint y = TileY(v->tile) * TILE_SIZE + 3;
@@ -55,14 +54,14 @@ static void VehicleConstructAircraftPlace(void *aircraft, void *shadow, uint32_t
 static OpenTTDAircraftInfo VehicleConstructAircraftInfo(const OpenTTDEngine *e) noexcept
 {
 	const AircraftVehicleInfo &avi = EngineOf(e)->VehInfo<AircraftVehicleInfo>();
-	return {.image = avi.image_index, .passengers = avi.passenger_capacity, .mail = avi.mail_capacity, .subtype = RustAircraftInfoSubtype(&avi)};
+	return {.image = avi.image_index, .passengers = RustEnginePassengerCapacity(e), .mail = RustEngineMailCapacity(e), .subtype = RustAircraftInfoSubtype(&avi)};
 }
 static void VehicleConstructAircraftProperties(void *aircraft, void *shadow, const OpenTTDEngine *e, uint8_t subtype) noexcept
 {
 	Aircraft *v = static_cast<Aircraft *>(aircraft);
 	Aircraft *u = static_cast<Aircraft *>(shadow);
 	v->acceleration = EngineOf(e)->VehInfo<AircraftVehicleInfo>().acceleration;
-	u->engine_type = EngineOf(e)->index;
+	RustVehicleSetEngine(RustVehicle(u), RustEngineID(e));
 	RustVehicleSetSubtype(v, subtype);
 	RustVehicleSetSubtype(u, AIR_SHADOW);
 	v->vehicle_flags = {};
@@ -72,9 +71,9 @@ static void VehicleConstructRotor(void *rotor, void *aircraft, void *shadow) noe
 {
 	Aircraft *w = static_cast<Aircraft *>(rotor);
 	const Aircraft *v = static_cast<Aircraft *>(aircraft);
-	w->engine_type = v->engine_type;
+	RustVehicleSetEngine(RustVehicle(w), RustVehicleEngineID(v));
 	w->direction = DIR_N;
-	w->owner = _current_company;
+	RustVehicleSetOwner(RustVehicle(w), RustCurrentCompanyID());
 	RustWriteVehicleX(w, v->x_pos);
 	RustWriteVehicleY(w, v->y_pos);
 	RustWriteVehicleZ(w, v->z_pos + ROTOR_Z_OFFSET);
@@ -83,13 +82,6 @@ static void VehicleConstructRotor(void *rotor, void *aircraft, void *shadow) noe
 	RustVehicleSetSubtype(w, AIR_ROTOR);
 	RustWriteVehicleSpriteSequence(w, SPR_ROTOR_STOPPED);
 	RustVehicleSetNext(static_cast<Vehicle *>(shadow), w);
-}
-static void VehicleConstructAircraftCapacity(const OpenTTDEngine *e, void *aircraft, void *shadow) noexcept
-{
-	Vehicle *v = static_cast<Vehicle *>(aircraft);
-	RustVehicleInvalidateChain(RustVehicle(v));
-	v->cargo_cap = RustEngineDetermineCapacity(e, RustVehicle(v), &static_cast<Vehicle *>(shadow)->cargo_cap);
-	RustVehicleInvalidateChain(RustVehicle(v));
 }
 static void VehicleConstructRoadCapacity(void *front, void *part, uint16_t capacity) noexcept
 {
@@ -106,7 +98,7 @@ static void VehicleConstructEngineCommon(void *shell, const OpenTTDEngine *engin
 	const Engine *e = EngineOf(engine);
 	v->last_station_visited = StationID::Invalid();
 	RustVehicleSetLastLoadingStation(RustVehicle(v), StationID::Invalid().base());
-	v->engine_type = e->index;
+	RustVehicleSetEngine(RustVehicle(v), e->index.base());
 	v->reliability = RustEngineReliability(e);
 	v->reliability_spd_dec = e->reliability_spd_dec;
 	v->max_age = RustEngineLifeLength(e);
@@ -140,7 +132,7 @@ static const OpenTTDVehicleConstructServices &GetVehicleConstructServices() noex
 		.new_aircraft = VehicleConstructNewAircraft,
 		.aircraft_place = VehicleConstructAircraftPlace, .aircraft_info = VehicleConstructAircraftInfo,
 		.aircraft_properties = VehicleConstructAircraftProperties, .rotor = VehicleConstructRotor,
-		.aircraft_capacity = VehicleConstructAircraftCapacity, .road_capacity = VehicleConstructRoadCapacity,
+		.mail_capacity_address = RustOpaqueVehicleInvoke<RustVehicleCargoCapacityAddress>, .road_capacity = VehicleConstructRoadCapacity,
 		.set_cargo_type = RustVehicleSetCargoType, .engine_common = VehicleConstructEngineCommon,
 		.service_dates = VehicleConstructServiceDates, .build_stamp = VehicleConstructStamp,
 		.exclusive_preview = RustEngineExclusivePreview, .service_flags = VehicleConstructServiceFlags,
@@ -151,7 +143,6 @@ static const OpenTTDVehicleConstructServices &GetVehicleConstructServices() noex
 static uint32_t VehicleBuildShipTile(uint32_t tile) noexcept { return GetShipDepotNorthTile(TileIndex(tile)).base(); }
 static void *VehicleBuildNewShip(uint32_t tile) noexcept { Ship *v = new Ship(); RustWriteVehicleTile(v, TileIndex(tile)); return v; }
 static void VehicleBuildSetPurchase(void *shell, uint16_t unit, int64_t value) noexcept { Vehicle *v = static_cast<Vehicle *>(shell); v->unitnumber = unit; v->value = value; }
-static uint32_t VehicleBuildDisplayCapacity(const OpenTTDEngine *e, uint16_t *mail) noexcept { return EngineOf(e)->GetDisplayDefaultCapacity(mail); }
 static void VehicleBuildPresentation(void *shell, VehicleType type) noexcept
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);
@@ -165,10 +156,10 @@ const OpenTTDVehicleBuildServices &GetRustVehicleBuildServices() noexcept
 	static const OpenTTDVehicleBuildServices services{
 		.refit = &GetRustVehicleRefitServices(), .mass = &GetVehicleMassServices(), .random = &GetRustRandomServices(),
 		.depot_kind = VehicleBuildDepotKind, .engine_cost = RustEngineCost, .default_cargo = RustEngineDefaultCargo,
-		.articulate_count = VehicleBuildArticulatedCount, .pool_available = RustVehicleCanAllocate, .free_unit = VehicleBuildFreeUnit,
+		.pool_available = RustVehicleCanAllocate, .free_unit = VehicleBuildFreeUnit,
 		.construct = &GetVehicleConstructServices(), .rail = &GetRustRailConstructionServices(),
 		.ship_tile = VehicleBuildShipTile, .new_ship = VehicleBuildNewShip, .set_purchase = VehicleBuildSetPurchase,
-		.articulated_capacity = RustArticulatedCapacity, .display_capacity = VehicleBuildDisplayCapacity,
+
 		.is_engine = RustOpaqueVehicleRead<bool, RustTrainIsEngine>, .presentation = VehicleBuildPresentation, .use_unit = RustVehicleUseCurrentUnit,
 		.too_many = STR_ERROR_TOO_MANY_VEHICLES_IN_GAME, .unavailable = STR_ERROR_RAIL_VEHICLE_NOT_AVAILABLE,
 	};

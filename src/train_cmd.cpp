@@ -4631,7 +4631,7 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.backoff = TrainBackoff,
 		.base_viewport = TrainBaseViewport,
 		.bridge_speed = TrainSharedMap<uint64_t, &OpenTTDSharedServices::bridge_speed>,
-		.capacity = TrainCapacity,
+		.capabilities = &GetRustEngineCapabilitiesServices(),
 		.capacity_error = TrainCapacityError,
 		.cargo_age_default = TrainCargoAgeDefault,
 		.check_next = TrainCheckNext,
