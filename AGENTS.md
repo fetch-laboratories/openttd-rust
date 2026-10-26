@@ -152,16 +152,18 @@ fork; the remaining upstream documentation explains behavior and architecture.
 Evidence must be checkable, not exhaustive prose. Spend effort on code and on
 checks that run; do not restate them in paragraphs.
 
-- Issue: scope, affected interfaces, evidence plan and acceptance criteria;
-  about 60 lines at most, leaving design detail to the implementation.
+- Issue: scope, affected interfaces, evidence plan and acceptance criteria,
+  leaving design detail to the implementation.
 - PR description: what moved, what stays in C++, exact commands, known limits,
   and the output of `python3 tools/port-metrics.py` (the roadmap progress
-  metric); about 60 lines at most. Integration PRs link the component PRs
-  instead of re-describing them. `.github/PULL_REQUEST_TEMPLATE.md` and the
-  migration issue form follow this budget.
-- Component entry in `docs/rust-migration.md`: about 25 lines at most, saying
-  what Rust owns, what stays in C++, open limits and the PR. Review status,
-  witness counts and costs stay in the PR.
+  metric). Integration PRs link the component PRs instead of re-describing
+  them. `.github/PULL_REQUEST_TEMPLATE.md` and the migration issue form follow
+  this budget.
+- Component entry in `docs/rust-migration.md`: what Rust owns, what stays in
+  C++, open limits and the PR. Review status, witness counts and costs stay in
+  the PR.
+- These are contents, not line counts. Leave out what belongs elsewhere, but
+  never drop a needed fact, limit or step to make a document shorter.
 - Roadmap: forward-looking, with no line cap. Edits update it in place: a
   completed item becomes one table row (issue, PR, commit, metrics) and its
   evidence stays in the PR. The resume checkpoint replaces the previous one and

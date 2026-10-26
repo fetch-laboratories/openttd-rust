@@ -134,9 +134,10 @@ parts:
    them. Put the text between `--- AGENTS.md at <short SHA of
    origin/rust-migration>: Automatic rollback and wind-down ---` and
    `--- end ---`, with no edits, summary or additions.
-3. About 20 tailored lines. They go into a long thread close to compaction, so
-   every line is about this session: name the PRs, agents and heads, and
-   choose your own wording. Apply the quoted rules rather than repeating them:
+3. Tailored lines, a line or two per item in flight. They go into a long
+   thread close to compaction, so every line is about this session: name the
+   PRs, agents and heads, and choose your own wording. Apply the quoted rules
+   rather than repeating them:
    - The current action or handoff for each item from step 3. Name any
      component, review, planner or repair round root was about to start as
      "do not start it; stop it if already started", since root keeps working
@@ -171,7 +172,7 @@ fails, or root's thread is ambiguous, say so and print the message so the user
 can paste it. If the user's input asks for a review before sending, show the
 message and wait for their approval.
 
-Then give the user at most 10 lines, followed by the sent message in a code
+Then give the user a short note, followed by the sent message in a code
 block:
 
 - that it was sent (thread link `[title](t3-thread://v1/<threadId>)` and the

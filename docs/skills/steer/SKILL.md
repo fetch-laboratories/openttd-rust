@@ -136,7 +136,7 @@ worktree, commit and merge base, and the pinned original at
 - **Glue**: its share against retired lines.
 - **Coverage**: which Random, crash and contention branches the harness reaches.
 
-Each agent reports under about 70 lines. Tag findings REACHABLE-DIVERGENCE,
+Each agent reports findings, not narration. Tag findings REACHABLE-DIVERGENCE,
 UNREACHABLE, RULE-VIOLATION, COVERAGE-GAP, PERF or HURDLE (a rule or gate that
 costs more than it catches), with `file:line` in both Rust and the original
 where they apply, and name what it compared. Relay a short summary to the
@@ -151,8 +151,8 @@ Choose a few high-leverage corrections. A systemic pattern counts for more than
 a one-off finding. Each correction lands in exactly one authoritative place:
 
 - **Rule change** goes in `AGENTS.md`, phrased as the target behavior.
-- **New work** gets an issue, about 60 lines at most: problem with measurements,
-  scope, evidence and acceptance. Label it `roadmap` when the roadmap orders it.
+- **New work** gets an issue: problem with measurements, scope, evidence and
+  acceptance. Label it `roadmap` when the roadmap orders it.
 - **Finding on a pending PR** goes in a PR comment: what must change before
   integration, and what can follow.
 - **New coverage gaps** go in a comment on the coverage tracker (#156).
@@ -195,7 +195,7 @@ ends the assignment. Include any edit in the step 4 commit.
 
 ## 6. Report and hand off
 
-Tell the user, in about 25 lines at most:
+Tell the user, briefly:
 
 - the verdict on root's track;
 - what the audits found, with numbers;
