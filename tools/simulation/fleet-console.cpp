@@ -307,6 +307,39 @@ static void CapabilityChain(const Vehicle *v, const char *stage)
 {
 	for (; v != nullptr; v = v->Next()) fmt::print(stderr, "FLEET capability-chain {} {} {} {} {} {} {} {}\n", stage, v->index.base(), v->engine_type.base(), v->subtype, v->cargo_type, v->cargo_subtype, v->cargo_cap, v->spritenum);
 }
+static constexpr std::string_view CAPABILITY_CHAIN_NAME = "Capability reload chain";
+static void CapabilityLive(const Vehicle *v, const char *stage)
+{
+	CapabilityChain(v, stage);
+	CargoType common = INVALID_CARGO;
+	CargoTypes cargoes = GetCargoTypesOfArticulatedVehicle(v, &common);
+	fmt::print(stderr, "FLEET capability-live {} {} {} {} {} {}\n", stage, cargoes, common, v->GetEngine()->DetermineCapacity(v), v->Next()->GetEngine()->DetermineCapacity(v->Next()), CountArticulatedParts(v->engine_type, true));
+}
+static void CapabilitiesInspect()
+{
+	Vehicle *v = nullptr;
+	for (Train *t : Train::Iterate()) if (t->name == CAPABILITY_CHAIN_NAME) { v = t; break; }
+	if (v == nullptr || !v->HasArticulatedPart() || v->Next()->Next() != nullptr) FixtureAbort(__LINE__);
+	_current_company = v->owner;
+	Engine *e = Engine::Get(v->engine_type), *part = Engine::Get(v->Next()->engine_type);
+	Backup<bool> dynamic(_settings_game.vehicle.dynamic_engines, false);
+	Backup<RailVehicleInfo> rail(e->VehInfo<RailVehicleInfo>()), part_rail(part->VehInfo<RailVehicleInfo>());
+	Backup<EngineInfo> part_info(part->info);
+	{
+		CapabilityProgram p(e);
+		e->VehInfo<RailVehicleInfo>().capacity = 10; e->VehInfo<RailVehicleInfo>().railveh_type = RAILVEH_SINGLEHEAD;
+		part->VehInfo<RailVehicleInfo>().capacity = 7;
+		e->info.cargo_type = GetCargoTypeByLabel(CT_PASSENGERS); e->info.refit_mask = CargoTypes{1} << GetCargoTypeByLabel(CT_MAIL);
+		e->info.misc_flags.Reset(EngineMiscFlag::NoDefaultCargoMultiplier); e->info.callback_mask = {VehicleCallbackMask::ArticEngine, VehicleCallbackMask::RefitCapacity};
+		part->info.cargo_type = GetCargoTypeByLabel(CT_MAIL); part->info.refit_mask = CargoTypes{1} << GetCargoTypeByLabel(CT_MAIL); part->info.callback_mask = {};
+		p.part->result = part->grf_prop.local_id | 0x4000;
+		v->InvalidateNewGRFCacheOfChain();
+		CapabilityLive(v, "loaded");
+	}
+	part_info.Restore(); rail.Restore(); part_rail.Restore(); dynamic.Restore();
+	v->InvalidateNewGRFCacheOfChain();
+	fmt::print(stderr, "FLEET capability-reinstalled true\n");
+}
 static void CapabilitiesProbe()
 {
 	Vehicle *fixture = BuildFixture(VEH_TRAIN);
@@ -403,7 +436,8 @@ static void CapabilitiesProbe()
 			}
 			CapabilityChain(built, "refit");
 			auto [cloned, clone] = Command<CMD_CLONE_VEHICLE>::Do(DoCommandFlag::Execute, fixture->tile, id, false); Checked("capability-clone", cloned); CapabilityChain(Vehicle::Get(clone), "clone");
-			Checked("capability-sell-clone", Command<CMD_SELL_VEHICLE>::Do(DoCommandFlag::Execute, clone, true, false, INVALID_CLIENT_ID));
+			Checked("capability-name-clone", Command<CMD_RENAME_VEHICLE>::Do(DoCommandFlag::Execute, clone, std::string(CAPABILITY_CHAIN_NAME)));
+			CapabilityLive(Vehicle::Get(clone), "persist");
 			Checked("capability-renew-rule", Command<CMD_SET_AUTOREPLACE>::Do(DoCommandFlag::Execute, ALL_GROUP, e->index, e->index, true));
 			built->age = TimerGameCalendar::Date(built->max_age.base() + 366);
 			Cost("capability-replace-test", Command<CMD_AUTOREPLACE_VEHICLE>::Do({}, id));
@@ -939,7 +973,8 @@ static bool FleetScenario(std::span<std::string_view> args)
 {
 	if (args.size() != 2) return false;
 	Backup<CompanyID> company(_current_company);
-	if (args[1] == "capabilities" || args[1] == "capabilities-inspect") { CapabilitiesProbe(); if (args[1] == "capabilities-inspect") fmt::print(stderr, "FLEET capability-reinstalled true\n"); company.Restore(); return true; }
+	if (args[1] == "capabilities") { CapabilitiesProbe(); company.Restore(); return true; }
+	if (args[1] == "capabilities-inspect") { CapabilitiesInspect(); company.Restore(); return true; }
 	if (args[1] == "resolver") { ResolverProbe(); company.Restore(); return true; }
 	if (args[1] == "resolver-inspect") {
 		Train *v = nullptr;

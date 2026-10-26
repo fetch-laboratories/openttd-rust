@@ -588,7 +588,7 @@ static OpenTTDVehicleMaintenanceBreakdownSoundState OPENTTD_VEHICLE_CALL Mainten
 	return {.kind = RustVehicleVehicleType(v), .landscape = OpenTTDLandscape()};
 }
 static void OPENTTD_VEHICLE_CALL MaintenanceBreakdownDelayWrite(OpenTTDVehicle *handle, uint8_t delay) noexcept { VehicleOf(handle)->breakdown_delay = delay; }
-static bool OPENTTD_VEHICLE_CALL MaintenanceSmokeDisabled(OpenTTDVehicle *handle) noexcept { return EngInfo(VehicleOf(handle)->engine_type)->misc_flags.Test(EngineMiscFlag::NoBreakdownSmoke); }
+static bool OPENTTD_VEHICLE_CALL MaintenanceSmokeDisabled(OpenTTDVehicle *handle) noexcept { return EngineMiscFlags(RustEngineMiscFlags(RustVehicleGetEngine(handle))).Test(EngineMiscFlag::NoBreakdownSmoke); }
 static OpenTTDVehicleMaintenanceBreakdownSmoke OPENTTD_VEHICLE_CALL MaintenanceSmoke(OpenTTDVehicle *handle) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);

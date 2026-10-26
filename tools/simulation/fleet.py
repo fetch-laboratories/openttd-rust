@@ -184,7 +184,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     if scenario["fleet"] in ("reload", "resolver-reload", "capabilities-reload"):
         resolver = scenario["fleet"] == "resolver-reload"
         capabilities = scenario["fleet"] == "capabilities-reload"
-        saves, capture, saved_resolver = {}, {}, {}
+        saves, capture, saved_resolver, saved_capabilities = {}, {}, {}, {}
         setup = dict(
             scenario,
             console=[
@@ -226,6 +226,11 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             saves[role] = run["snapshots"][-1]
             if capabilities:
                 check_capabilities(run, "capture", role, result)
+                saved_capabilities[role] = capability_state(run, "persist")
+                if len(saved_capabilities[role]["chain"]) != 2:
+                    raise RuntimeError(
+                        "capability capture lacks retained articulated pair"
+                    )
             if resolver:
                 check_override_order(run, "capture", role, result)
                 check_property_boundaries(run, "capture", role, result)
@@ -271,6 +276,8 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         result["fleet_capture"] = capture
         if resolver:
             result["resolver_saved"] = saved_resolver
+        if capabilities:
+            result["capability_saved"] = saved_capabilities
         return dict(
             scenario,
             executables=executables,
@@ -288,6 +295,17 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             ],
         )
     return dict(scenario, executables=executables)
+
+
+def capability_state(run, stage):
+    return {
+        key: [
+            line.split()[3:]
+            for line in run["log"]
+            if line.startswith(f"FLEET capability-{key} {stage} ")
+        ]
+        for key in ("chain", "live")
+    }
 
 
 def check_capabilities(run, mode, role, result):
@@ -476,10 +494,7 @@ def check(scenario, run, mode, role, result):
         ],
         "resolver-reload": [],
         "capabilities": ["FLEET capability-checkpoint complete"],
-        "capabilities-reload": [
-            "FLEET capability-checkpoint complete",
-            "FLEET capability-reinstalled true",
-        ],
+        "capabilities-reload": ["FLEET capability-reinstalled true"],
         **{
             "transaction-mass-" + kind: [
                 "FLEET mass-test true true",
@@ -556,8 +571,16 @@ def check(scenario, run, mode, role, result):
     for line in required:
         if line not in run["log"]:
             result["problems"].append(f"{mode}/{role}: missing {line}")
-    if scenario["fleet"] in ("capabilities", "capabilities-reload"):
+    if scenario["fleet"] == "capabilities":
         check_capabilities(run, mode, role, result)
+    if scenario["fleet"] == "capabilities-reload":
+        loaded = capability_state(run, "loaded")
+        if loaded != result["capability_saved"][role]:
+            result["problems"].append(
+                f"{mode}/{role}: restored articulated chain/state"
+            )
+        if loaded["live"] != [["4", "2", "17", "7", "1"]]:
+            result["problems"].append(f"{mode}/{role}: restored cargo/capacity queries")
     if scenario["fleet"] == "transaction-build-aircraft":
         for kind in ("mail", "extra"):
             rows = [

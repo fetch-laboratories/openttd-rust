@@ -106,7 +106,7 @@ static void OPENTTD_DISASTER_CALL DisasterWrite(void *, uint32_t field, uint32_t
 		case 6: v->direction = static_cast<Direction>(value); break;
 		case 7: v->age = TimerGameCalendar::Date{static_cast<int32_t>(value)}; break;
 		case 8: v->tick_counter = value; break;
-		case 9: v->owner = CompanyID{static_cast<uint8_t>(value)}; break;
+		case 9: RustVehicleSetOwner(RustVehicle(v), static_cast<uint8_t>(value)); break;
 		case 10: v->vehstatus = VehStates{static_cast<uint8_t>(value)}; break;
 		case 11: RustVehicleSetNext(v, Vehicle::Get(static_cast<uint32_t>(value))); break;
 		case 12: v->sprite_cache.sprite_seq.Set(value); break;
