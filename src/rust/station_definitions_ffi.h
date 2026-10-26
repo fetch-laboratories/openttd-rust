@@ -38,7 +38,7 @@ struct OpenTTDStationDefinitionServices {
 	void (*station_flags)(StationSpec *spec, uint8_t value) noexcept OPENTTD_SERVICE_DEFAULT(station_flags);
 	bool (*station_has_file)(const StationSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(station_has_file);
 	void (*station_set_group)(StationSpec *spec, CargoType cargo, const SpriteGroup *group) noexcept OPENTTD_SERVICE_DEFAULT(station_set_group);
-	void (*station_set_file)(StationSpec *spec, GRFFile *file) noexcept OPENTTD_SERVICE_DEFAULT(station_set_file);
+	void (*station_set_file)(StationSpec *spec, const GRFFile *file) noexcept OPENTTD_SERVICE_DEFAULT(station_set_file);
 	void (*station_set_local)(StationSpec *spec, uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(station_set_local);
 	void (*road_resize)(GRFFile *file, uint32_t count) noexcept OPENTTD_SERVICE_DEFAULT(road_resize);
 	size_t (*road_count)(const GRFFile *file) noexcept OPENTTD_SERVICE_DEFAULT(road_count);
@@ -57,7 +57,7 @@ struct OpenTTDStationDefinitionServices {
 	void (*road_flags)(RoadStopSpec *spec, uint32_t value) noexcept OPENTTD_SERVICE_DEFAULT(road_flags);
 	bool (*road_has_file)(const RoadStopSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(road_has_file);
 	void (*road_set_group)(RoadStopSpec *spec, CargoType cargo, const SpriteGroup *group) noexcept OPENTTD_SERVICE_DEFAULT(road_set_group);
-	void (*road_set_file)(RoadStopSpec *spec, GRFFile *file) noexcept OPENTTD_SERVICE_DEFAULT(road_set_file);
+	void (*road_set_file)(RoadStopSpec *spec, const GRFFile *file) noexcept OPENTTD_SERVICE_DEFAULT(road_set_file);
 	void (*road_set_local)(RoadStopSpec *spec, uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(road_set_local);
 	void (*station_disallowed_platforms)(StationSpec *spec, uint8_t value) noexcept OPENTTD_SERVICE_DEFAULT(station_disallowed_platforms);
 	void (*station_disallowed_lengths)(StationSpec *spec, uint8_t value) noexcept OPENTTD_SERVICE_DEFAULT(station_disallowed_lengths);
