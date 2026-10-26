@@ -271,7 +271,8 @@ unsafe fn tiles(
             0x0a..=0x0c => {
                 let value = r.word()?;
                 let slot = (prop - 0x0a) as usize;
-                let cargo = unsafe { (p.cargo_translation)(value as u8, c.file) };
+                let cargo =
+                    crate::cargo_registry::openttd_rust_cargo_translate(value as u8, c.file, false);
                 unsafe {
                     (s.set_tile_accepted)(spec, slot, cargo);
                     (p.set_acceptance)(spec, slot, ((value >> 8).min(16)) as i8);
@@ -307,7 +308,11 @@ unsafe fn tiles(
                 }
                 for i in 0..INDUSTRY_NUM_INPUTS {
                     if i < count {
-                        let cargo = unsafe { (p.cargo_translation)(r.byte()?, c.file) };
+                        let cargo = crate::cargo_registry::openttd_rust_cargo_translate(
+                            r.byte()?,
+                            c.file,
+                            false,
+                        );
                         unsafe {
                             (s.set_tile_accepted)(spec, i, cargo);
                         }
@@ -435,7 +440,11 @@ unsafe fn industries(
                     INDUSTRY_ORIGINAL_NUM_INPUTS
                 };
                 for i in 0..count {
-                    let cargo = unsafe { (p.cargo_translation)(r.byte()?, c.file) };
+                    let cargo = crate::cargo_registry::openttd_rust_cargo_translate(
+                        r.byte()?,
+                        c.file,
+                        false,
+                    );
                     if produced {
                         unsafe {
                             (s.set_produced)(spec, i, cargo);
@@ -547,7 +556,11 @@ unsafe fn industries(
                 };
                 for i in 0..maximum {
                     let cargo = if i < count {
-                        unsafe { (p.cargo_translation)(r.byte()?, c.file) }
+                        crate::cargo_registry::openttd_rust_cargo_translate(
+                            r.byte()?,
+                            c.file,
+                            false,
+                        )
                     } else {
                         INVALID_CARGO
                     };

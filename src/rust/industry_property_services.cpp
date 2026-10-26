@@ -8,7 +8,6 @@
 #include "../newgrf/newgrf_internal.h"
 #include "../newgrf/newgrf_stringmapping.h"
 #include "industry_property_ffi.h"
-#include "services_cargo.h"
 #include "../table/build_industry.h"
 #include "../table/strings.h"
 #include "../safeguards.h"
@@ -79,7 +78,6 @@ const OpenTTDIndustryPropertyServices &GetIndustryPropertyServices() noexcept
 		.layout_invalid = [](uint32_t id) noexcept { GrfMsg(1, "IndustriesChangeInfo: Invalid industry layout for industry id {}. Ignoring", id); },
 		.list_too_long = [](int32_t prop) noexcept { GRFError *error = DisableGrf(STR_NEWGRF_ERROR_LIST_PROPERTY_TOO_LONG); error->param_value[1] = prop; },
 		.invalid_import = []() noexcept { DisableGrf(STR_NEWGRF_ERROR_INVALID_ID); },
-		.cargo_translation = OpenTTDCargoTranslation,
 		.industry_badges = [](IndustrySpec *spec) noexcept { return &spec->badges; },
 		.tile_badges = [](IndustryTileSpec *spec) noexcept { return &spec->badges; },
 	};

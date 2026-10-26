@@ -21,7 +21,39 @@
 #include "table/strings.h"
 #include "../table/build_industry.h"
 
+#ifdef WITH_RUST
+#include "../rust/industry_property_ffi.h"
+#include "../rust/newgrf_bytereader_services.h"
+#endif
+
 #include "../safeguards.h"
+
+#ifdef WITH_RUST
+static const OpenTTDByteReaderServices _industry_property_reader{
+	.read_byte = RustGRFReadByte,
+	.read_word = RustGRFReadWord,
+	.read_dword = RustGRFReadDWord,
+	.skip = RustGRFSkipBytes,
+	.read_badges = RustGRFReadBadgeList,
+	.skip_badges = RustGRFSkipBadgeList,
+};
+
+static ChangeInfoResult IndustrytilesChangeInfo(uint first, uint last, int prop, ByteReader &buf)
+{
+	const OpenTTDIndustryPropertyContext context{_cur_gps.grffile, _cur_gps.grffile->grfid, _cur_gps.grffile->grf_version, to_underlying(_settings_game.game_creation.landscape)};
+	uint8_t result;
+	if (!openttd_rust_industry_tile_properties(first, last, prop, &buf, &context, &_industry_property_reader, &GetIndustryDefinitionServices(), &GetIndustryPropertyServices(), &result)) RustGRFRethrowReadError();
+	return static_cast<ChangeInfoResult>(result);
+}
+
+static ChangeInfoResult IndustriesChangeInfo(uint first, uint last, int prop, ByteReader &buf)
+{
+	const OpenTTDIndustryPropertyContext context{_cur_gps.grffile, _cur_gps.grffile->grfid, _cur_gps.grffile->grf_version, to_underlying(_settings_game.game_creation.landscape)};
+	uint8_t result;
+	if (!openttd_rust_industry_properties(first, last, prop, &buf, &context, &_industry_property_reader, &GetIndustryDefinitionServices(), &GetIndustryPropertyServices(), &result)) RustGRFRethrowReadError();
+	return static_cast<ChangeInfoResult>(result);
+}
+#else
 
 /**
  * Ignore an industry tile property
@@ -700,6 +732,8 @@ static ChangeInfoResult IndustriesChangeInfo(uint first, uint last, int prop, By
 
 	return ret;
 }
+
+#endif
 
 template <> ChangeInfoResult GrfChangeInfoHandler<GSF_INDUSTRYTILES>::Reserve(uint, uint, int, ByteReader &) { return CIR_UNHANDLED; }
 template <> ChangeInfoResult GrfChangeInfoHandler<GSF_INDUSTRYTILES>::Activation(uint first, uint last, int prop, ByteReader &buf) { return IndustrytilesChangeInfo(first, last, prop, buf); }

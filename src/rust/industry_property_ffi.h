@@ -65,7 +65,6 @@ struct OpenTTDIndustryPropertyServices {
 	void (*layout_invalid)(uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(layout_invalid);
 	void (*list_too_long)(int32_t prop) noexcept OPENTTD_SERVICE_DEFAULT(list_too_long);
 	void (*invalid_import)() noexcept OPENTTD_SERVICE_DEFAULT(invalid_import);
-	CargoType (*cargo_translation)(uint8_t, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_translation);
 	std::vector<BadgeID> *(*industry_badges)(IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(industry_badges);
 	std::vector<BadgeID> *(*tile_badges)(IndustryTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(tile_badges);
 };
