@@ -3,32 +3,29 @@
 Root selects here; `AGENTS.md` and `docs/rust-migration.md` define process. Follow
 this roadmap over conflicting issues. Keep about 200 lines; evidence stays in PRs.
 
-## Where the fork stands (2026-10-26, code at `f4923c79eb`)
+## Where the fork stands (2026-10-26, code at `4853789508`)
 
-- 70 ownership ports. Original C++ retired: 66,156 of 470,612 source lines
-  (14.06%); simulation sources: 54,611 of 102,615 (53.22%). Whole-fork Rust,
-  tooling and glue: 119,485, 42,202 and 42,513 lines. These measures include
-  comments/data, not completed behavior. #489 integrated type definitions and
-  maintenance: 780 retired lines and 488 net glue. #490 adds no retirement.
+- 72 ownership ports. Original C++ retired: 67,865 of 470,612 source lines
+  (14.42%); simulation sources: 54,762 of 102,615 (53.37%). Whole-fork Rust,
+  tooling and glue: 122,234, 43,001 and 43,921 lines. These measures include
+  comments/data, not completed behavior. #494 integrates industry and station
+  definitions plus maintenance: 1,709 retired lines and 1,408 net glue.
 - The `f4923c79eb` quiet pass measured TGP 1.178x, Opus 1.402x, Grok 1.395x,
-  P1996 1.335x, P2000 1.393x and P2016 1.469x. All six comparisons pass;
-  144 timed games and 81 observations show no overlap. #496 records these anchors.
-  All ratios are below their ceilings; P2016 remains in the 5% trigger band.
-  #487/#489 record the six anchors. The `f4923c79eb` instruction comparisons
-  pass under those anchors: projections are 1.172281x, 1.387911x, 1.374991x,
-  1.341336x, 1.410312x and 1.453359x in the same order. All counts fell;
-  clamped projection growth is zero. Only P2016 remains in the measured trigger band.
-- Six branches remain: industry #479, houses #486, stations #488, Action2 #493,
-  vehicle properties #495 and maintenance #496. #494 combines industry/stations for Full;
-  house adoption follows its canonical manager. #156 retains corpus gaps.
+  P1996 1.335x, P2000 1.393x and P2016 1.469x. All comparisons pass;
+  144 timed games and 81 observations show no overlap. #496/#494 integrate
+  these anchors. All ratios are below their ceilings; P2016 remains in band.
+  The latest instruction profile is `f4923c79eb`; at the new anchors its six
+  projections equal those ratios. No positive count growth preceded re-anchoring.
+  One integration has followed that profile; profile again after the next one.
+- Three drafts remain: houses #486, reviewed Action2 #493 and reviewed vehicle
+  properties #495. They adopt the integrated managers, layouts and reader once.
+  Airport/tile definitions #492 may start within capacity. #156 retains gaps.
 
 ## Twentieth steering review (2026-10-24, recovery and production evidence)
 
-Five Codex gpt-6.1-sol/high audits established the nullable callback repair (#462),
-compiler-overlap rejection (#450), restoration of meaningful serialized-thread
-tests (#454/#156), and typed engine observations plus default evidence (#446/#447).
-Those repairs are integrated. Explicit state contracts remain behavior; keep
-clean-checkout checks and one concrete owner-cost disposition.
+The nullable callback, compiler-overlap, serialized-thread and typed-engine
+repairs are integrated. Keep explicit state contracts, clean-checkout checks
+and one concrete owner-cost disposition.
 
 | Standing correction from reviews eighteen/nineteen | Verdict and cost/result |
 | --- | --- |
@@ -40,8 +37,6 @@ clean-checkout checks and one concrete owner-cost disposition.
 | Shared callees, scope, orphan checks, #156 capacity | Improved; nine coverage PRs before the scope restriction. #462 and pending boundary findings show remaining gaps. |
 | Housekeeping, current lists, cleanup | Applied with limits: 3,845 lines removed, local output 25 to 8.5 GiB; #275's body was stale, now refreshed. Two useful tests must return. |
 | Checkpoints, wind-down, rollback | User pauses respected; drafts preserved. Newly confirmed #462 requires forward recovery because later code rules out bounded rollback. |
-
-No user policy is reversed. AGENTS.md clarifies test retention; the restart prompt is unchanged.
 
 ## Earlier steering, still in force
 
@@ -130,6 +125,8 @@ Metrics are `tools/port-metrics.py`: Rust / tooling / C++ glue / C++ retired.
 | #470 | Engine definitions, identity and finalization | #474 via #483 | `b959f89059` | 1183 / 506 / 456 / 520; net glue 442 |
 | #471 | Staged NewGRF loading interpreter and state | #473 via #483 | `b959f89059` | 1640 / 340 / 442 / 1778; net glue 413 |
 | #476 | Rail/road definitions, translation and saved identity | #481 via #489 | `da1e7b7ade` | 1252 / 406 / 557 / 780; net glue 491 |
+| #475 | Industry definitions, overrides and publication | #479 via #494 | `4853789508` | 1415 / 408 / 607 / 881; net glue 596 |
+| #484 | Station/road-stop definitions and associations | #488 via #494 | `4853789508` | 1410 / 398 / 749 / 806; net glue 715 |
 
 Maintenance rows use original retirement and net glue (#223); evidence stays in PRs.
 
@@ -164,43 +161,40 @@ Maintenance rows use original retirement and net glue (#223); evidence stays in 
 | #275/#199 visual boundaries, shared reader and checker; fixture compile repair | #482; #483 repair | #483 | `b959f89059` | #482: 175 / 50 / 42 / 0; net glue 16 |
 | #199 train/order boundaries, loading disable helpers; #275 quiet anchors; town fixture repair | #487; #489 repair | #489 | `da1e7b7ade` | #487: 61 / 8 / 61 / 0; net glue -3 |
 | #275 primary dispatch, compact visual observations and deferred train resolution | #490 | direct | `f4923c79eb` | 28 / 3 / 18 / 0; net glue 1 |
+| #275 road compiler boundaries, shared movement cache and six quiet anchors; direct class resets | #496; #494 combination | #494 | `4853789508` | #496: 55 / 9 / 2 / 0; net glue 0; combination retires 22 class-default lines |
 
 ## Phase 1: maintenance and coverage
 
-#496 batches the six quiet anchors with credited #275 repairs: compiler exposure
-of the existing road max-speed/crash bodies, reuse of the movement-table cache
-and removal of the unused crash tile. Preserve separate observations and callees;
-net exposure bounds are not promised savings. #168 retains boundary debt;
-#312 is unselected. Ready owners proceed alongside this maintenance.
+#496/#494 integrate the three credited #275 repairs and six quiet anchors.
+Check their result with the next scheduled merged-tip profile; attribution bounds
+are not promised savings. #168 retains boundary debt; #312 is unselected.
+Ready owners proceed alongside maintenance; only timed collection holds games.
 
 ## Phase 2: work order
 
-1. **Ready owners:** current-base combination Full for reviewed industry #479
-   and station #488 in #494. Batch ready work when that avoids serial Fulls.
-   Reviewed work gains no scope; house #486 adopts the integrated manager next.
-2. **Maintenance:** merged-tip profiling and any triggered #275 repair proceed
-   alongside ready owners. Only timed collection holds builds and games.
-3. **Whole owners:** complete active #475, #477, #484 and #485. Select complete
-   vehicle property interpretation/deferred ordering #491 next, then airport/tile
-   definition lifecycle #492. Start from integrated base within six branches;
-   reuse canonical state/services and decide necessary cost once per owner.
+1. **Ready owners:** adopt integrated base once in reviewed Action2 #493 and
+   vehicle properties #495, including direct station layout calls and one shared
+   extended-byte reader. Batch ready work to avoid serial Fulls; review substantive
+   resolutions. House #486 adopts the integrated manager/disable helpers.
+2. **Maintenance:** merged-tip profiling and triggered #275 repairs proceed
+   alongside owners. Complete the scheduled macOS check before more integrations.
+3. **Whole owners:** complete active #477, #485 and #491; start selected airport
+   and airport-tile definition lifecycle #492 from integrated base within six
+   branches. Reuse canonical state and decide necessary cost once per owner.
+   Action3 #497 and object definitions #498 remain queued, unselected.
 4. Catchment, #64/#68/#69, vendored, GUI and platform stay outside this order.
 
 ## Resume checkpoint
 
-Root owns final combinations and speed; completed reports remain in the PRs.
-
 | Item | Saved head | Next action |
 | --- | --- | --- |
-| #475 industry definitions / #479 | `b8757b2fed` | Fixing review and root spot-check pass; #494 combination validation. |
-| #477 house definitions / #486 | `1966724cdb` | Independent checks pass; adopt integrated manager/disable helpers after #479. |
-| #275 speed / #496 | `f4923c79eb` | Quiet pass complete; implement selected repairs with the six saved anchors. |
-| #484 station/road-stop definitions / #488 | `ebdce9ce31` | Fixing review and root spot-check pass; #494 combination validation. |
-| #485 Action2 graph construction / #493 | `bf8e9a3d85` | Real-file command/reload checkpoint passes; complete grammar evidence and audits. |
-| #491 vehicle properties / #495 | `c563eeec64` | Canonical rail-label repair pushed; finish four-type file evidence and audits. |
-| #492 airport definitions | selected next | Start after integration frees capacity. |
+| #477 house definitions / #486 | `1966724cdb` | Adopt integrated manager/disable helpers and delete resolver/runtime bounces. |
+| #485 Action2 graph construction / #493 | `10e9946463` | Fixing review passes; adopt integrated base and direct station layout callers. |
+| #491 vehicle properties / #495 | `6ecc66c6d1` | Both group reviews pass; adopt base and reconcile Reader::extended once. |
+| #492 airport definitions | selected | Start from integrated manager/class owners within capacity. |
+| #275 merged-tip speed | `f4923c79eb` | Six anchors integrated; one more integration before next instruction profile. |
 
-macOS cadence passed on `f6cec101d3`; four integrations have followed it.
+macOS fifth-integration check is running at `4853789508`; last pass was `f6cec101d3`.
 
 Selection: /root, gpt-6.1-sol, xhigh; planning agents run gpt-6-astra, high.
 Scopes and evidence plans are in the selected issues; PRs carry current task status.
