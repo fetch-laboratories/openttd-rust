@@ -25,6 +25,8 @@
 
 #include "../safeguards.h"
 
+#ifndef WITH_RUST
+
 /**
  * Contains the GRF ID of the owner of a vehicle if it has been reserved.
  * GRM for vehicles is only used if dynamic engine allocation is disabled,
@@ -489,3 +491,9 @@ template <> void GrfActionHandler<0x0D>::LabelScan(ByteReader &) { }
 template <> void GrfActionHandler<0x0D>::Init(ByteReader &buf) { ParamSet(buf); }
 template <> void GrfActionHandler<0x0D>::Reserve(ByteReader &buf) { ParamSet(buf); }
 template <> void GrfActionHandler<0x0D>::Activation(ByteReader &buf) { ParamSet(buf); }
+
+#endif
+
+#ifdef WITH_RUST
+void ResetGRM() { openttd_rust_grf_reset_grm(); }
+#endif

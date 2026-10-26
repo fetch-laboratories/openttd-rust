@@ -55,7 +55,8 @@ static_assert(!OPENTTD_SERVICE_RETURN_TYPE<GRFStringID>);
 	X(cargomonitor) \
 	X(spritegroup) \
 	X(storage) \
-	X(generic)
+	X(generic) \
+	X(grf_loading)
 #define OPENTTD_DECLARE_ABI_CHECK(unit) extern bool CheckAbi_##unit();
 OPENTTD_ABI_CHECKED_UNITS(OPENTTD_DECLARE_ABI_CHECK)
 

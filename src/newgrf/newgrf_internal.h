@@ -218,8 +218,10 @@ struct GRFLocation {
 
 using GRFLineToSpriteOverride = std::map<GRFLocation, std::vector<uint8_t>>;
 
+#ifndef WITH_RUST
 extern std::map<GRFLocation, std::pair<SpriteID, uint16_t>> _grm_sprites;
 extern GRFLineToSpriteOverride _grf_line_to_action6_sprite_override;
+#endif
 
 extern GrfMiscBits _misc_grf_features;
 

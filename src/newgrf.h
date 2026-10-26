@@ -130,7 +130,9 @@ struct GRFFile {
 
 	std::vector<uint32_t> param{};
 
+#ifndef WITH_RUST
 	std::vector<GRFLabel> labels{}; ///< List of labels
+#endif
 
 	std::vector<CargoLabel> cargo_list{}; ///< Cargo translation table (local ID -> label)
 	std::array<uint8_t, NUM_CARGO> cargo_map{}; ///< Inverse cargo translation table (CargoType -> local ID)

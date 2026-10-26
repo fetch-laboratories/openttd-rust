@@ -21,6 +21,8 @@
 
 #include "../safeguards.h"
 
+#ifndef WITH_RUST
+
 /** 32 * 8 = 256 flags. Apparently TTDPatch uses this many.. */
 static std::array<uint32_t, 8> _ttdpatch_flags;
 
@@ -351,3 +353,10 @@ template <> void GrfActionHandler<0x09>::LabelScan(ByteReader &) { }
 template <> void GrfActionHandler<0x09>::Init(ByteReader &buf) { SkipIf(buf); }
 template <> void GrfActionHandler<0x09>::Reserve(ByteReader &buf) { SkipIf(buf); }
 template <> void GrfActionHandler<0x09>::Activation(ByteReader &buf) { SkipIf(buf); }
+
+#endif
+
+#ifdef WITH_RUST
+void InitializePatchFlags() { openttd_rust_grf_patch_flags(&GetRustGrfLoadingServices()); }
+uint32_t GetParamVal(uint8_t param, uint32_t *cond_val) { return openttd_rust_grf_param(&GetRustGrfLoadingServices(), param, cond_val); }
+#endif

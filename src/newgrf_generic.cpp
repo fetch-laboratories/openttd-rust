@@ -37,7 +37,7 @@ static uint16_t EvaluateGeneric(const OpenTTDGenericInvocation *invocation, int3
 	// Evaluation and all generic dispatch return directly to their Rust owners.
 	return openttd_rust_generic_evaluate(invocation, &object, object.CommonState(), regs, count);
 }
-static const OpenTTDGenericServices &GenericServices() noexcept
+const OpenTTDGenericServices &GetRustGenericServices() noexcept
 {
 	static const OpenTTDGenericServices services{
 		.shared = &GetRustSharedServices(),
@@ -59,7 +59,7 @@ static const OpenTTDGenericServices &GenericServices() noexcept
 }
 void ResetGenericCallbacks()
 {
-	openttd_rust_generic_reset(&GenericServices());
+	openttd_rust_generic_reset(&GetRustGenericServices());
 }
 void AddGenericCallback(GrfSpecFeature feature, const GRFFile *file, const SpriteGroup *group) { openttd_rust_generic_add(feature, file, group); }
 std::pair<const GRFFile *, uint16_t> GetAiPurchaseCallbackResult(GrfSpecFeature feature, CargoType cargo, uint8_t selection, IndustryType source, IndustryType destination, uint8_t distance, AIConstructionEvent event, uint8_t count, uint8_t station_size)
@@ -313,5 +313,5 @@ void AmbientSoundEffectCallback(TileIndex tile)
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDGenericServices.hpp"
-bool CheckAbi_generic() { return AbiServicesComplete(GenericServices()); }
+bool CheckAbi_generic() { return AbiServicesComplete(GetRustGenericServices()); }
 #endif

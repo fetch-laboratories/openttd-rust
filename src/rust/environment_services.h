@@ -16,6 +16,7 @@
 #include "../settings_type.h"
 #include "../landscape.h"
 
+inline uint32_t OpenTTDMapLogY() noexcept { return Map::LogY(); }
 inline uint32_t OpenTTDMapLogX() noexcept { return Map::LogX(); }
 inline bool OpenTTDFreeformEdges() noexcept { return _settings_game.construction.freeform_edges; }
 inline GameMode RustGameMode() noexcept { return _game_mode; }

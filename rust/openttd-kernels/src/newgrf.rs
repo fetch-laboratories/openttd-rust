@@ -27,7 +27,7 @@ pub struct Services {
     file_version: unsafe extern "C" fn(*const c_void) -> u8,
     game_mode: unsafe extern "C" fn() -> u8,
     height_limit: unsafe extern "C" fn() -> u8,
-    misc_bits: unsafe extern "C" fn() -> u8,
+    pub(crate) misc_bits: unsafe extern "C" fn() -> u8,
     newgrf_version: unsafe extern "C" fn() -> u32,
     palette: unsafe extern "C" fn(*const c_void) -> u8,
     pitch: unsafe extern "C" fn(*const c_void) -> i32,
@@ -35,7 +35,7 @@ pub struct Services {
     road_side: unsafe extern "C" fn() -> u8,
     shared: *const Shared,
     width: unsafe extern "C" fn(*const c_void) -> u32,
-    ymd_to_date: unsafe extern "C" fn(i32, u8, u8) -> i32,
+    pub(crate) ymd_to_date: unsafe extern "C" fn(i32, u8, u8) -> i32,
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_global_variable(
@@ -125,3 +125,15 @@ crate::abi::layouts! {
 // Feature identities from newgrf.h, pinned by native static assertions.
 pub const GSF_SOUNDFX: u8 = 12;
 pub const GSF_END: u8 = 22;
+
+// Loading-stage identities from newgrf.h.
+pub const GLS_FILESCAN: u8 = 0;
+pub const GLS_SAFETYSCAN: u8 = 1;
+pub const GLS_LABELSCAN: u8 = 2;
+pub const GLS_INIT: u8 = 3;
+pub const GLS_RESERVE: u8 = 4;
+pub const GLS_ACTIVATION: u8 = 5;
+
+pub const GSF_GLOBALVAR: u8 = 8;
+pub const GSF_CARGOES: u8 = 11;
+pub const SECOND_ROCKY_TILE_SET: u8 = 6;
