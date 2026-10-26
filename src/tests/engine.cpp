@@ -77,7 +77,7 @@ TEST_CASE("Engine capability observations preserve type and zero-capacity gates"
 		const auto config = RustEngineCapacityConfig(RustEngine(&e));
 		CHECK(config.id == 60000);
 		CHECK(config.callbacks == 24);
-		CHECK(config.misc == 48);
+		CHECK(config.misc == 96);
 	}
 #endif
 }
