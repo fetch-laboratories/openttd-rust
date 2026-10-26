@@ -2,6 +2,7 @@
 /** @file newgrf_loading_services.inc Typed native loading services. */
 #ifdef WITH_RUST
 #include "newgrf_loading_ffi.h"
+#include "newgrf_act2_ffi.h"
 #include "type_registry_ffi.h"
 #include "newgrf_global_ffi.h"
 #include "generic_ffi.h"
@@ -29,6 +30,7 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.cargo = &GetRustCargoRegistryServices(),
 		.engine = &GetRustEngineLoadingServices(),
 		.types = &GetRustTypeRegistryServices(),
+		.action2 = &GetRustAction2Services(),
 		.engine_range = [](GrfSpecFeature feature) noexcept { return OpenTTDGrfEngineRange{_engine_offsets[feature], _engine_counts[feature]}; },
 		.parameter = RustGRFParameter,
 		.file_id = RustGRFFileID,
@@ -72,7 +74,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.feature_change_info = ParseGrfAction<&GrfActionHandler<0x00>::Activation>,
 		.skip_act1 = ParseGrfAction<&GrfActionHandler<0x01>::FileScan>,
 		.new_sprite_set = ParseGrfAction<&GrfActionHandler<0x01>::Activation>,
-		.new_sprite_group = ParseGrfAction<&GrfActionHandler<0x02>::Activation>,
 		.feature_map_sprite_group = ParseGrfAction<&GrfActionHandler<0x03>::Activation>,
 		.feature_new_name = ParseGrfAction<&GrfActionHandler<0x04>::Activation>,
 		.skip_act5 = ParseGrfAction<&GrfActionHandler<0x05>::FileScan>,
@@ -151,8 +152,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.reset_loaded_features = []() noexcept { _loaded_newgrf_features.has_2CC = false; _loaded_newgrf_features.used_liveries = 1 << LS_DEFAULT; _loaded_newgrf_features.shore = SHORE_REPLACE_NONE; _loaded_newgrf_features.tram = TRAMWAY_REPLACE_DEPOT_NONE; },
 		.initialize_sounds = []() noexcept { InitializeSoundPool(); },
 		.clean_spritegroups = []() noexcept { _spritegroup_pool.CleanPool(); },
-		.reset_callbacks = []() noexcept { ResetCallbacks(false); },
-		.finish_callbacks = []() noexcept { ResetCallbacks(true); },
 		.finalise_strings = []() noexcept { FinaliseStringMapping(); },
 		.finalise_badges = []() noexcept { FinaliseBadges(); },
 		.finalise_canals = []() noexcept { FinaliseCanals(); },

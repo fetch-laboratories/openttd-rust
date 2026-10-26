@@ -5,6 +5,7 @@
 #ifdef WITH_RUST
 #include "../newgrf/newgrf_internal.h"
 #include "../rust/newgrf_loading_ffi.h"
+#include "../rust/newgrf_act2_ffi.h"
 #include "abi_layout.hpp"
 #include <thread>
 
@@ -12,6 +13,7 @@ TEST_CASE("Rust NewGRF loading - native ABI")
 {
 	ABI_LAYOUT_CHECK;
 #include "abi-layout-grf_loading.inc"
+#include "abi-layout-act2.inc"
 }
 
 TEST_CASE("Rust NewGRF loading - canonical aliases cross serialized threads")

@@ -9,3 +9,12 @@ pub const INVALID_INDUSTRYTILE: u16 = 512;
 /// Masks from `industrytype.h::IndustryBehaviour`.
 pub const BUILT_ON_WATER: u32 = 1 << 2;
 pub const PROD_MULTI_HANDLING: u32 = 1 << 14;
+
+/// `INDUSTRY_NUM_INPUTS`.
+pub const INDUSTRY_NUM_INPUTS: usize = 16;
+/// `INDUSTRY_NUM_OUTPUTS`.
+pub const INDUSTRY_NUM_OUTPUTS: usize = 16;
+/// `INDUSTRY_ORIGINAL_NUM_INPUTS`.
+pub const INDUSTRY_ORIGINAL_NUM_INPUTS: u8 = 3;
+/// `INDUSTRY_ORIGINAL_NUM_OUTPUTS`.
+pub const INDUSTRY_ORIGINAL_NUM_OUTPUTS: u8 = 2;
