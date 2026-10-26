@@ -57,6 +57,7 @@ static bool LoadingScenario(std::span<std::string_view> args)
 	if (args.size() < 2) return false;
 	if (args[1] == "inspect") { Inspect(true); return true; }
 	if (args.size() < 3) return false;
+	SetRandomSeed(0x47100001);
 	_grfconfig.clear();
 	for (const char *name : {"main", "broken", "victim", "fatal", "before", "after"}) {
 		auto c = std::make_unique<GRFConfig>(std::string(args[2]) + "/" + name + ".grf");
