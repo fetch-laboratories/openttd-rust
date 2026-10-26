@@ -87,7 +87,7 @@ static OpenTTDEngineYear Engine_aging_year(const OpenTTDEngine *shell) noexcept
 	return {.base_intro = RustEngineBaseIntro(shell), .lifelength = e->info.lifelength.base()};
 }
 
-static OpenTTDEngineStartSettings Engine_start_settings() noexcept { return {.generation_seed = _settings_game.game_creation.generation_seed, .starting_year = _settings_game.game_creation.starting_year.base(), .date = TimerGameCalendar::date.base()}; }
+static OpenTTDEngineStartSettings Engine_start_settings() noexcept { return {.generation_seed = RustGenerationSeed(), .starting_year = RustStartingYear(), .date = TimerGameCalendar::date.base()}; }
 
 static bool Engine_enabled(const OpenTTDEngine *e) noexcept { return EngineOf(e)->IsEnabled(); }
 

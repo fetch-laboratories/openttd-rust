@@ -2,3 +2,6 @@
 //! Shared constants from `newgrf_engine.h`.
 /// `VEHICLEINFO_FULL_VEHICLE_WIDTH`.
 pub const VEHICLEINFO_FULL_VEHICLE_WIDTH: u32 = 32;
+
+/// `TRAININFO_DEFAULT_VEHICLE_WIDTH`.
+pub const TRAININFO_DEFAULT_VEHICLE_WIDTH: u32 = 29;

@@ -69,5 +69,18 @@ inline bool OpenTTDExclusiveRights() noexcept { return _settings_game.economy.ex
 inline bool OpenTTDBribe() noexcept { return _settings_game.economy.bribe; }
 inline void RustSetSnowLineHeight(uint8_t height) noexcept { _settings_game.game_creation.snow_line_height = height; }
 inline void RustSetFreeformEdges(bool value) noexcept { _settings_game.construction.freeform_edges = value; }
+inline bool RustGradualLoading() noexcept { return _settings_game.order.gradual_loading; }
+inline uint8_t RustTrainSignalSide() noexcept { return _settings_game.construction.train_signal_side; }
+inline uint8_t RustFreightTrains() noexcept { return _settings_game.vehicle.freight_trains; }
+inline bool RustWagonSpeedLimits() noexcept { return _settings_game.vehicle.wagon_speed_limits; }
+inline bool RustAllowTownRoads() noexcept { return _settings_game.economy.allow_town_roads; }
+inline bool RustImprovedLoad() noexcept { return _settings_game.order.improved_load; }
+inline bool RustDynamicEngines() noexcept { return _settings_game.vehicle.dynamic_engines; }
+inline bool RustInflation() noexcept { return _settings_game.economy.inflation; }
+inline int32_t RustStartingYear() noexcept { return _settings_game.game_creation.starting_year.base(); }
+inline uint32_t RustGenerationSeed() noexcept { return _settings_game.game_creation.generation_seed; }
+/** Adapt legacy callback widths and unused context arguments to a canonical setting read. */
+template <typename Result, auto Read, typename... Args>
+inline Result RustSettingRead(Args...) noexcept { return Read(); }
 inline uint8_t RustVehicleSmokeAmount() noexcept { return _settings_game.vehicle.smoke_amount; }
 #endif /* RUST_SETTINGS_SERVICES_H */

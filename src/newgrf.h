@@ -102,6 +102,7 @@ using GrfSpecFeatures = EnumBitSet<GrfSpecFeature, uint32_t, GrfSpecFeature::GSF
 
 static const uint32_t INVALID_GRFID = 0xFFFFFFFF;
 
+#ifndef WITH_RUST
 struct GRFLabel {
 	uint8_t label;
 	uint32_t nfo_line;
@@ -109,6 +110,7 @@ struct GRFLabel {
 
 	GRFLabel(uint8_t label, uint32_t nfo_line, size_t pos) : label(label), nfo_line(nfo_line), pos(pos) {}
 };
+#endif
 
 /** Dynamic data of a loaded NewGRF */
 struct GRFFile {
@@ -130,7 +132,9 @@ struct GRFFile {
 
 	std::vector<uint32_t> param{};
 
+#ifndef WITH_RUST
 	std::vector<GRFLabel> labels{}; ///< List of labels
+#endif
 
 	std::vector<CargoLabel> cargo_list{}; ///< Cargo translation table (local ID -> label)
 	std::array<uint8_t, NUM_CARGO> cargo_map{}; ///< Inverse cargo translation table (CargoType -> local ID)

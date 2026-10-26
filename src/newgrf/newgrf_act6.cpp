@@ -14,6 +14,8 @@
 
 #include "../safeguards.h"
 
+#ifndef WITH_RUST
+
 std::map<GRFLocation, std::pair<SpriteID, uint16_t>> _grm_sprites;
 GRFLineToSpriteOverride _grf_line_to_action6_sprite_override;
 
@@ -117,3 +119,5 @@ template <> void GrfActionHandler<0x06>::LabelScan(ByteReader &) { }
 template <> void GrfActionHandler<0x06>::Init(ByteReader &buf) { CfgApply(buf); }
 template <> void GrfActionHandler<0x06>::Reserve(ByteReader &buf) { CfgApply(buf); }
 template <> void GrfActionHandler<0x06>::Activation(ByteReader &buf) { CfgApply(buf); }
+
+#endif

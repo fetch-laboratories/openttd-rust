@@ -20,14 +20,14 @@ use std::ffi::c_void;
 pub const TRAIN_WIDTH_32_PIXELS: u8 = 3;
 #[repr(C)]
 pub struct Services {
-    climate: unsafe extern "C" fn() -> u8,
+    pub(crate) climate: unsafe extern "C" fn() -> u8,
     date_fraction: unsafe extern "C" fn() -> u16,
     date_to_ymd: unsafe extern "C" fn(i32) -> CalendarYmd,
     disable_elrails: unsafe extern "C" fn() -> bool,
     file_version: unsafe extern "C" fn(*const c_void) -> u8,
     game_mode: unsafe extern "C" fn() -> u8,
     height_limit: unsafe extern "C" fn() -> u8,
-    misc_bits: unsafe extern "C" fn() -> u8,
+    pub(crate) misc_bits: unsafe extern "C" fn() -> u8,
     newgrf_version: unsafe extern "C" fn() -> u32,
     palette: unsafe extern "C" fn(*const c_void) -> u8,
     pitch: unsafe extern "C" fn(*const c_void) -> i32,
@@ -35,7 +35,7 @@ pub struct Services {
     road_side: unsafe extern "C" fn() -> u8,
     shared: *const Shared,
     width: unsafe extern "C" fn(*const c_void) -> u32,
-    ymd_to_date: unsafe extern "C" fn(i32, u8, u8) -> i32,
+    pub(crate) ymd_to_date: unsafe extern "C" fn(i32, u8, u8) -> i32,
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_global_variable(
@@ -178,3 +178,13 @@ pub(crate) extern "C" fn openttd_rust_newgrf_active_cargo_label(label: CargoLabe
         crate::cargo_registry::openttd_rust_cargo_by_label(label)
     })
 }
+// Loading-stage identities from newgrf.h.
+pub const GLS_FILESCAN: u8 = 0;
+pub const GLS_SAFETYSCAN: u8 = 1;
+pub const GLS_LABELSCAN: u8 = 2;
+pub const GLS_INIT: u8 = 3;
+pub const GLS_RESERVE: u8 = 4;
+pub const GLS_ACTIVATION: u8 = 5;
+
+pub const GSF_GLOBALVAR: u8 = 8;
+pub const SECOND_ROCKY_TILE_SET: u8 = 6;

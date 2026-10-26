@@ -2004,6 +2004,24 @@ native reload. External-GRF loading, script station-build integration, other fea
 registrations, arbitrary programs, historical saves and GUI scheduling remain #156 gaps. PR
 #436, integrated in #444.
 
+### Staged NewGRF loading interpreter (#471)
+
+`newgrf_loading.rs` owns staged/file traversal, pseudo-sprite decoding and the
+control actions 6/7/9/8/D/E/10, patch flags/variables, GRM, labels, Action6 buffers,
+reset/status policy and finalization sequencing. One process-wide Rust execution
+carrier owns `_cur_gps`, spriteset maps and spritegroup references; native feature
+parsers hold genuine field aliases. No execution mirror or spec-pool copy exists.
+Native config/GRF/spec objects, parameters, parsed Action2, sprite/file I/O and
+feature parsers remain. Each named throwing parser catches the original decode
+exception domain and reports failure; Rust applies the bounds-disable policy with
+partial effects retained. File reads do not throw ordinary parsing exceptions.
+Cargo setup, label lookup, finalization, sorting and inverse maps call the Rust
+registry directly. Engine-definition initialization/finalization remain native. Borrow scopes end before parser and shared-service reentry; temporary
+native file frames preserve file/config restoration and lifetime. Portable bodies
+remain. Arbitrary feature grammars/data sections, historical saves, network clock
+and static influence, remaining GRM/variable/target combinations and GUI scheduling
+remain #156 gaps. PR #473.
+
 ### Cargo registry, translation and callback lifecycle (#467)
 
 `cargo_registry.rs` owns the process-wide label/default/climate tables, available and standard

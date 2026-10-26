@@ -17,6 +17,8 @@
 
 #include "../safeguards.h"
 
+#ifndef WITH_RUST
+
 /* Action 0x08 (GLS_FILESCAN) */
 static void ScanInfo(ByteReader &buf)
 {
@@ -82,3 +84,5 @@ template <> void GrfActionHandler<0x08>::LabelScan(ByteReader &) { }
 template <> void GrfActionHandler<0x08>::Init(ByteReader &buf) { GRFInfo(buf); }
 template <> void GrfActionHandler<0x08>::Reserve(ByteReader &buf) { GRFInfo(buf); }
 template <> void GrfActionHandler<0x08>::Activation(ByteReader &buf) { GRFInfo(buf); }
+
+#endif
