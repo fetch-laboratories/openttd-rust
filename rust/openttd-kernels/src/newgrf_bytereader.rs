@@ -130,9 +130,6 @@ impl<'a> Reader<'a> {
             Err(ReadError)
         }
     }
-    pub fn native(&mut self) -> *mut ByteReader {
-        self.native
-    }
     pub fn byte(&mut self) -> Result<u8, ReadError> {
         let mut value = 0;
         if unsafe { (self.services.read_byte)(self.native, &raw mut value) } {

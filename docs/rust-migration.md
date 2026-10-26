@@ -2001,9 +2001,9 @@ Rust storage; station/road-stop/airport/object presentation uses one shared regi
 Object-class availability calls the existing Rust eligibility owner.
 
 Canonical native GRF/spec allocations, payload/layout containers, station shells,
-saved slot records, sprite graphs, strings and badges remain native. Checked native
-`ReadSpriteLayoutSprite` and `ReadSpriteLayout` callees preserve their incremental
-writes. A native stack vector carries the temporary sequence payload; Rust drives
+saved slot records, sprite graphs, strings and badges remain native. Direct Rust
+Action2 layout callees preserve their incremental writes through the shared
+reader and opaque native payloads. A native stack vector carries the temporary sequence payload; Rust drives
 every read and its successful move into the layout. Read errors return from Rust
 before the decoder rethrows. Deferred class
 names resolve the spec's current class. Original bodies remain portable-only.
@@ -2069,7 +2069,7 @@ control actions 6/7/9/8/D/E/10, patch flags/variables, GRM, labels, Action6 buff
 reset/status policy and finalization sequencing. One process-wide Rust execution
 carrier owns `_cur_gps`, spriteset maps and spritegroup references; native feature
 parsers hold genuine field aliases. No execution mirror or spec-pool copy exists.
-Native config/GRF/spec objects, parameters, parsed Action2, sprite/file I/O and
+Native config/GRF/spec objects, parameters, sprite/file I/O and
 feature parsers remain. Each named throwing parser catches the original decode
 exception domain and reports failure; Rust applies the bounds-disable policy with
 partial effects retained. File reads do not throw ordinary parsing exceptions.
