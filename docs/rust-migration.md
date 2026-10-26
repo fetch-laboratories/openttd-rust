@@ -1725,6 +1725,22 @@ evaluator, storage and station reentry. Checks: the default `town-houses-` scena
 install real groups and reinstall transient groups after reload. External-GRF badge/content
 combinations, historical save adapters and GUI-thread integration remain #156 gaps. PR #416.
 
+### Industry and tile definitions and shared mapping storage (#475)
+
+Rust owns complete Action0 industry/tile property and layout interpretation, allocation,
+publication, reset/finalization and canonical `OverrideManagerBase` mapping/override vectors.
+Other native managers keep virtual `GetID`/`CheckValidNewID` facades over those same vectors;
+copy/assignment refresh borrowed native spans. IIDS/TIDS adapters retain native `SlObject` and
+`SlError` frames and serialize canonical mapping aliases without staging a second copy.
+Native specs/defaults, GRF files, Action2 graphs, strings and badges remain C++ storage.
+The shared Reader preserves incremental cursor/property effects and catches native read errors
+before Rust returns to the rethrow frame. Property failures call the canonical Rust loading
+disable owner with typed, entry-scoped loading services. Manager borrows end before virtual
+callbacks or reentry; reset fills stable buffers, while assignment refreshes native aliases.
+Original policy bodies compile only portably. Historical IIDS/TIDS and malformed save frames,
+exhaustion, remaining undefined-spec/property/layout branches and arbitrary GRFs remain #156
+limits. PR #479.
+
 ### Industry periodic production and builder ownership (#129)
 
 Rust owns the produced/accepted slots, optional accepted histories, production fields, sound

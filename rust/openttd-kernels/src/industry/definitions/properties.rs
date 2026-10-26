@@ -208,8 +208,7 @@ unsafe fn layouts(
     Ok(SUCCESS)
 }
 unsafe fn tiles(
-    first: u32,
-    last: u32,
+    ids: std::ops::Range<u32>,
     prop: i32,
     c: &Context,
     r: &mut Reader<'_>,
@@ -217,6 +216,7 @@ unsafe fn tiles(
     p: &Storage,
     loading: &newgrf_loading::Services,
 ) -> Result<i32, ReadError> {
+    let last = ids.end;
     if last > u32::from(NUM_INDUSTRYTILES_PER_GRF) {
         unsafe {
             (p.too_many_tiles)(last);
@@ -229,7 +229,7 @@ unsafe fn tiles(
         }
     }
     let mut result = SUCCESS;
-    for id in first..last {
+    for id in ids {
         let mut spec = unsafe { (s.file_tile)(c.file, id as usize) };
         if prop != 0x08 && spec.is_null() {
             result = result.max(ignore_tile(prop, r)?);
@@ -349,8 +349,7 @@ unsafe fn tiles(
     Ok(result)
 }
 unsafe fn industries(
-    first: u32,
-    last: u32,
+    ids: std::ops::Range<u32>,
     prop: i32,
     c: &Context,
     r: &mut Reader<'_>,
@@ -358,6 +357,7 @@ unsafe fn industries(
     p: &Storage,
     loading: &newgrf_loading::Services,
 ) -> Result<i32, ReadError> {
+    let last = ids.end;
     if last > u32::from(NUM_INDUSTRYTYPES_PER_GRF) {
         unsafe {
             (p.too_many_industries)(last);
@@ -370,7 +370,7 @@ unsafe fn industries(
         }
     }
     let mut result = SUCCESS;
-    for id in first..last {
+    for id in ids {
         let mut spec = unsafe { (s.file_industry)(c.file, id as usize) };
         if prop != 0x08 && spec.is_null() {
             result = result.max(ignore_industry(prop, r)?);
@@ -680,7 +680,7 @@ pub unsafe extern "C" fn openttd_rust_industry_properties(
     let (c, reads, s, p, loading) = unsafe { (&*c, &*reads, &*s, &*p, &*loading) };
     let mut reader = unsafe { Reader::new(native, reads) };
     finish(
-        &unsafe { industries(first, last, prop, c, &mut reader, s, p, loading) },
+        &unsafe { industries(first..last, prop, c, &mut reader, s, p, loading) },
         result,
     )
 }
@@ -700,7 +700,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_properties(
     let (c, reads, s, p, loading) = unsafe { (&*c, &*reads, &*s, &*p, &*loading) };
     let mut reader = unsafe { Reader::new(native, reads) };
     finish(
-        &unsafe { tiles(first, last, prop, c, &mut reader, s, p, loading) },
+        &unsafe { tiles(first..last, prop, c, &mut reader, s, p, loading) },
         result,
     )
 }
