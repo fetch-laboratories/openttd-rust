@@ -1292,6 +1292,22 @@ bankruptcy through `ChangeOwnershipOfCompanyItems` (#156), with required witness
 
 <!-- Subsystem: Rail and road infrastructure. Add a new entry at the end of its group, not of the file. -->
 
+### Rail and road introduction and construction availability (#440)
+
+Rust owns paired type availability and validation, ascending engine aggregation,
+the date-introduction fixed points and the rail introduction reducer. Hidden types
+still participate in introduction dependencies; construction applies the original
+company, town, deity, editor and generation rules. Engine lifecycle publishes
+derived masks through canonical native company setters, and Rust construction
+owners call availability directly. Native facades retain the portable originals.
+
+C++ retains type registries and their loading/finalization, engine specs, company
+mask storage and presentation. Typed observations carry only consumed metadata;
+no lifecycle borrow spans a callback or load. Unsaved masks rebuild through the
+native afterload phase. Live GameScript construction, editor/generation command
+execution, persistent file-loaded custom registries, legacy saves and GUI
+scheduling remain #156 limits. PR #447.
+
 ### Rail signal blocks and fixed work sets (#219)
 
 Rust owns complete signal-block exploration, immediate signal update/propagation, first-segment
@@ -1610,7 +1626,7 @@ Rust owns each engine's lifecycle scalars and name, the process-wide aging-stop 
 startup/reliability, daily/monthly preview and availability policy, variant synchronization and
 control/name/visibility commands. Native Engine shells expose canonical scalar aliases;
 temporary owners survive relocation and TTO replacement. Original bodies compile only portably.
-Pool/configuration/spec, NewGRF/articulated, company/type availability and presentation remain
+Pool/configuration/spec, NewGRF/articulated, company mask storage and presentation remain
 native through typed synchronous noexcept services shared with fleet/company consumers. No owner
 borrow spans a callback; script events enqueue without running a VM. RNG draws, narrowing and
 command/effect order retain the original behavior.
