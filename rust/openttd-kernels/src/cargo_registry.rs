@@ -161,12 +161,14 @@ pub unsafe extern "C" fn openttd_rust_cargo_setup(s: *const Services, climate: u
     let s = unsafe { &*s };
     for slot in 0..NUM_ORIGINAL_CARGO {
         (s.copy_default)(climate, slot);
-        let spec = (s.label_spec)((s.spec)(slot));
+        let cs = (s.spec)(slot);
+        let spec = (s.label_spec)(cs);
         if is_cargo_spec_valid(spec.bitnum) {
+            let cargo = (s.index)(cs);
             unsafe {
-                set_bit64(&mut (*REGISTRY.get()).mask, slot);
+                set_bit64(&mut (*REGISTRY.get()).mask, cargo);
                 (*REGISTRY.get()).defaults.push(spec.label);
-                (*REGISTRY.get()).climate[usize::from(slot)] = spec.label;
+                (*REGISTRY.get()).climate[usize::from(cargo)] = spec.label;
                 (*REGISTRY.get()).bitnum[usize::from(spec.bitnum)] = spec.label;
             }
         }
@@ -181,10 +183,12 @@ pub extern "C" fn openttd_rust_cargo_labels_rebuild() {
     }
     let s = services();
     for cargo in 0..NUM_CARGO {
-        let spec = (s.label_spec)((s.spec)(cargo));
+        let cs = (s.spec)(cargo);
+        let spec = (s.label_spec)(cs);
         if is_cargo_spec_valid(spec.bitnum) && spec.label != 0 && spec.label != CT_INVALID {
+            let index = (s.index)(cs);
             unsafe {
-                (*REGISTRY.get()).labels.entry(spec.label).or_insert(cargo);
+                (*REGISTRY.get()).labels.entry(spec.label).or_insert(index);
             }
         }
     }
@@ -378,18 +382,21 @@ pub extern "C" fn openttd_rust_cargo_build_inverse(file: *mut c_void) {
     let s = services();
     (s.clear_inverse)(file);
     let labels = openttd_rust_cargo_translation_table(file);
-    for (cargo, cs) in crate::cargotype::iterate(
-        |cargo| (s.label_spec)((s.spec)(cargo)),
-        |cs| is_cargo_spec_valid(cs.bitnum),
+    for (_, (cs, info)) in crate::cargotype::iterate(
+        |cargo| {
+            let cs = (s.spec)(cargo);
+            (cs, (s.label_spec)(cs))
+        },
+        |(_, info)| is_cargo_spec_valid(info.bitnum),
     ) {
         let index = unsafe {
             crate::container_func::find_index(
                 std::slice::from_raw_parts(labels.data, labels.size),
-                &cs.label,
+                &info.label,
             )
         };
         if index >= 0 {
-            (s.set_inverse)(file, cargo, index as u8);
+            (s.set_inverse)(file, (s.index)(cs), index as u8);
         }
     }
 }

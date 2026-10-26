@@ -334,6 +334,7 @@ int main()
 		.copy_default = [](uint8_t, uint8_t) noexcept {},
 		.clear_specs = [](uint8_t) noexcept {},
 		.label_spec = [](const CargoSpec *spec) noexcept -> OpenTTDCargoLabelSpec { auto id = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(spec)); return {id, static_cast<uint8_t>(id - 1)}; },
+		.index = [](const CargoSpec *spec) noexcept -> uint8_t { return static_cast<uint8_t>(reinterpret_cast<uintptr_t>(spec) - 1); },
 		.file = [](const GRFFile *) noexcept -> OpenTTDCargoFile { return {{labels.data(), labels.size()}, 8, false}; },
 	};
 	openttd_rust_cargo_setup(&registry, 0);
