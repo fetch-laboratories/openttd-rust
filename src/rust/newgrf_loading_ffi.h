@@ -29,6 +29,7 @@ bool openttd_rust_grf_has_set(uint8_t, uint32_t);
 uint32_t openttd_rust_grf_set_sprite(uint8_t, uint32_t);
 uint32_t openttd_rust_grf_set_size(uint8_t, uint32_t);
 }
+struct OpenTTDEngineLoadingServices;
 struct OpenTTDGenericServices;
 struct OpenTTDCargoRegistryServices;
 struct OpenTTDGrfClock { int32_t date, year; uint16_t date_fract; int32_t economy_date, economy_year; uint16_t economy_date_fract; uint64_t ticks; uint8_t display; };
@@ -36,6 +37,7 @@ struct OpenTTDGrfEngineRange { uint8_t offset, count; };
 struct OpenTTDGrfLoadingServices {
 	const OpenTTDGlobalVariableServices * global;
 	const OpenTTDCargoRegistryServices *cargo;
+	const OpenTTDEngineLoadingServices *engine;
 	OpenTTDGrfEngineRange (*engine_range)(GrfSpecFeature) noexcept OPENTTD_SERVICE_DEFAULT(engine_range);
 	uint32_t (*parameter)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(parameter);
 	uint32_t (*file_id)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(file_id);
@@ -135,17 +137,14 @@ struct OpenTTDGrfLoadingServices {
 	GRFConfig *(*config_at)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(config_at);
 	bool (*exists)(const GRFConfig *, Subdirectory) noexcept OPENTTD_SERVICE_DEFAULT(exists);
 	void (*init_file)(const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(init_file);
-	void (*override_grf)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(override_grf);
 	void (*too_many)(GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(too_many);
 	void (*clear_errors)(GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(clear_errors);
 	void (*cleanup_strings)() noexcept OPENTTD_SERVICE_DEFAULT(cleanup_strings);
 	void (*cleanup_townnames)() noexcept OPENTTD_SERVICE_DEFAULT(cleanup_townnames);
 	void (*reset_badges)() noexcept OPENTTD_SERVICE_DEFAULT(reset_badges);
-	void (*setup_engines)() noexcept OPENTTD_SERVICE_DEFAULT(setup_engines);
 	void (*reset_bridges)() noexcept OPENTTD_SERVICE_DEFAULT(reset_bridges);
 	void (*reset_railtypes)() noexcept OPENTTD_SERVICE_DEFAULT(reset_railtypes);
 	void (*reset_roadtypes)() noexcept OPENTTD_SERVICE_DEFAULT(reset_roadtypes);
-	void (*init_engine_loading)() noexcept OPENTTD_SERVICE_DEFAULT(init_engine_loading);
 	void (*reset_prices)() noexcept OPENTTD_SERVICE_DEFAULT(reset_prices);
 	void (*reset_currencies)() noexcept OPENTTD_SERVICE_DEFAULT(reset_currencies);
 	void (*reset_houses)() noexcept OPENTTD_SERVICE_DEFAULT(reset_houses);
@@ -162,15 +161,12 @@ struct OpenTTDGrfLoadingServices {
 	void (*clear_snowline)() noexcept OPENTTD_SERVICE_DEFAULT(clear_snowline);
 	void (*reset_files)() noexcept OPENTTD_SERVICE_DEFAULT(reset_files);
 	void (*reset_loaded_features)() noexcept OPENTTD_SERVICE_DEFAULT(reset_loaded_features);
-	void (*clear_engine_overrides)() noexcept OPENTTD_SERVICE_DEFAULT(clear_engine_overrides);
 	void (*initialize_sounds)() noexcept OPENTTD_SERVICE_DEFAULT(initialize_sounds);
 	void (*clean_spritegroups)() noexcept OPENTTD_SERVICE_DEFAULT(clean_spritegroups);
 	void (*reset_callbacks)() noexcept OPENTTD_SERVICE_DEFAULT(reset_callbacks);
 	void (*finish_callbacks)() noexcept OPENTTD_SERVICE_DEFAULT(finish_callbacks);
 	void (*finalise_strings)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_strings);
 	void (*finalise_badges)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_badges);
-	void (*calculate_refits)() noexcept OPENTTD_SERVICE_DEFAULT(calculate_refits);
-	void (*finalise_engines)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_engines);
 	void (*finalise_canals)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_canals);
 	void (*finalise_houses)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_houses);
 	void (*finalise_industries)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_industries);
@@ -188,8 +184,6 @@ struct OpenTTDGrfLoadingServices {
 	void (*init_roadtypes)() noexcept OPENTTD_SERVICE_DEFAULT(init_roadtypes);
 	void (*aging_stops)() noexcept OPENTTD_SERVICE_DEFAULT(aging_stops);
 	void (*finalise_prices)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_prices);
-	void (*clear_engine_loading)() noexcept OPENTTD_SERVICE_DEFAULT(clear_engine_loading);
-	void (*bind_engine_types)() noexcept OPENTTD_SERVICE_DEFAULT(bind_engine_types);
 	Subdirectory baseset_dir;
 	Subdirectory newgrf_dir;
 	void (*assert_override_size)(size_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(assert_override_size);

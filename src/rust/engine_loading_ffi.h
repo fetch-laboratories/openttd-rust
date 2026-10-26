@@ -79,16 +79,12 @@ struct OpenTTDEngineLoadingServices {
 const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept;
 extern "C" {
 bool openttd_rust_engine_reset_config(const OpenTTDEngineLoadingServices *);
-void openttd_rust_engine_finalise(const OpenTTDEngineLoadingServices *);
-void openttd_rust_engine_bind_types(const OpenTTDEngineLoadingServices *);
 const GRFFile *openttd_rust_engine_current_override(const OpenTTDEngineLoadingServices *, const GRFFile *);
 void openttd_rust_engine_set_override(const OpenTTDEngineLoadingServices *, uint32_t, uint32_t);
-void openttd_rust_engine_calculate_refits(const OpenTTDEngineLoadingServices *);
 uint64_t openttd_rust_engine_translate_refit(uint32_t, const GRFFile *);
 void openttd_rust_engine_setup(const OpenTTDEngineLoadingServices *);
 const OpenTTDEngine *openttd_rust_engine_definition(const OpenTTDEngineLoadingServices *, const GRFFile *, VehicleType, uint16_t, bool);
 uint16_t openttd_rust_engine_new_id(const OpenTTDEngineLoadingServices *, const GRFFile *, VehicleType, uint16_t);
-void openttd_rust_engine_temp_initialize(const OpenTTDEngineLoadingServices *);
 OpenTTDEngineMappingView openttd_rust_engine_mappings(uint8_t);
 void openttd_rust_engine_mapping_clear();
 void openttd_rust_engine_mapping_defaults(const uint8_t *);
@@ -96,6 +92,5 @@ uint16_t openttd_rust_engine_mapping_get(uint8_t, uint16_t, uint32_t);
 uint16_t openttd_rust_engine_mapping_use(uint8_t, uint16_t, uint32_t, bool);
 void openttd_rust_engine_mapping_set(uint8_t, uint16_t, uint32_t, uint8_t, uint16_t);
 bool openttd_rust_engine_override_get(uint32_t, uint32_t *);
-void openttd_rust_engine_override_clear();
 }
 #endif

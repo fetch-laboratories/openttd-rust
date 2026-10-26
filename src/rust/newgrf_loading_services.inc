@@ -26,6 +26,7 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 	static const OpenTTDGrfLoadingServices services{
 		.global = &GetRustGlobalVariableServices(),
 		.cargo = &GetRustCargoRegistryServices(),
+		.engine = &GetRustEngineLoadingServices(),
 		.engine_range = [](GrfSpecFeature feature) noexcept { return OpenTTDGrfEngineRange{_engine_offsets[feature], _engine_counts[feature]}; },
 		.parameter = RustGRFParameter,
 		.file_id = RustGRFFileID,
@@ -125,17 +126,14 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.config_at = [](size_t i) noexcept { return i < _grfconfig.size() ? _grfconfig[i].get() : nullptr; },
 		.exists = [](const GRFConfig *c, Subdirectory subdir) noexcept { return FioCheckFileExists(c->filename, subdir); },
 		.init_file = [](const GRFConfig *c) noexcept { InitNewGRFFile(*c); },
-		.override_grf = [](uint32_t source, uint32_t target) noexcept { SetNewGRFOverride(source, target); },
 		.too_many = [](GRFConfig *c) noexcept { Debug(grf, 0, "'{}' is not loaded as the maximum number of non-static GRFs has been reached", c->filename); c->errors.emplace_back(STR_NEWGRF_ERROR_MSG_FATAL, 0, STR_NEWGRF_ERROR_TOO_MANY_NEWGRFS_LOADED); },
 		.clear_errors = [](GRFConfig *c) noexcept { c->errors.clear(); },
 		.cleanup_strings = []() noexcept { CleanUpStrings(); },
 		.cleanup_townnames = []() noexcept { CleanUpGRFTownNames(); },
 		.reset_badges = []() noexcept { ResetBadges(); },
-		.setup_engines = []() noexcept { SetupEngines(); },
 		.reset_bridges = []() noexcept { ResetBridges(); },
 		.reset_railtypes = []() noexcept { ResetRailTypes(); },
 		.reset_roadtypes = []() noexcept { ResetRoadTypes(); },
-		.init_engine_loading = []() noexcept { _gted.resize(Engine::GetPoolSize()); for (const Engine *e : Engine::IterateType(VEH_TRAIN)) { _gted[e->index].railtypelabels.clear(); for (RailType rt : e->VehInfo<RailVehicleInfo>().railtypes) _gted[e->index].railtypelabels.push_back(GetRailTypeInfo(rt)->label); } },
 		.reset_prices = []() noexcept { ResetPriceBaseMultipliers(); },
 		.reset_currencies = []() noexcept { ResetCurrencies(); },
 		.reset_houses = []() noexcept { ResetHouses(); },
@@ -152,15 +150,12 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.clear_snowline = []() noexcept { ClearSnowLine(); },
 		.reset_files = []() noexcept { _grf_files.clear(); _grf_files.reserve(_grfconfig.size()); },
 		.reset_loaded_features = []() noexcept { _loaded_newgrf_features.has_2CC = false; _loaded_newgrf_features.used_liveries = 1 << LS_DEFAULT; _loaded_newgrf_features.shore = SHORE_REPLACE_NONE; _loaded_newgrf_features.tram = TRAMWAY_REPLACE_DEPOT_NONE; },
-		.clear_engine_overrides = []() noexcept { _grf_id_overrides.clear(); },
 		.initialize_sounds = []() noexcept { InitializeSoundPool(); },
 		.clean_spritegroups = []() noexcept { _spritegroup_pool.CleanPool(); },
 		.reset_callbacks = []() noexcept { ResetCallbacks(false); },
 		.finish_callbacks = []() noexcept { ResetCallbacks(true); },
 		.finalise_strings = []() noexcept { FinaliseStringMapping(); },
 		.finalise_badges = []() noexcept { FinaliseBadges(); },
-		.calculate_refits = []() noexcept { CalculateRefitMasks(); },
-		.finalise_engines = []() noexcept { FinaliseEngineArray(); },
 		.finalise_canals = []() noexcept { FinaliseCanals(); },
 		.finalise_houses = []() noexcept { FinaliseHouseArray(); },
 		.finalise_industries = []() noexcept { FinaliseIndustriesArray(); },
@@ -178,57 +173,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.init_roadtypes = []() noexcept { InitRoadTypes(); },
 		.aging_stops = []() noexcept { SetYearEngineAgingStops(); },
 		.finalise_prices = []() noexcept { FinalisePriceBaseMultipliers(); },
-		.clear_engine_loading = []() noexcept { _gted.clear(); },
-		.bind_engine_types = []() noexcept {
-	for (Engine *e : Engine::IterateType(VEH_ROAD)) {
-		if (_gted[e->index].rv_max_speed != 0) {
-			/* Set RV maximum speed from the mph/0.8 unit value */
-			e->VehInfo<RoadVehicleInfo>().max_speed = _gted[e->index].rv_max_speed * 4;
-		}
-
-		RoadTramType rtt = e->info.misc_flags.Test(EngineMiscFlag::RoadIsTram) ? RTT_TRAM : RTT_ROAD;
-
-		const GRFFile *file = e->GetGRF();
-		if (file == nullptr || _gted[e->index].roadtramtype == 0) {
-			e->VehInfo<RoadVehicleInfo>().roadtype = (rtt == RTT_TRAM) ? ROADTYPE_TRAM : ROADTYPE_ROAD;
-			continue;
-		}
-
-		/* Remove +1 offset. */
-		_gted[e->index].roadtramtype--;
-
-		const std::vector<RoadTypeLabel> *list = (rtt == RTT_TRAM) ? &file->tramtype_list : &file->roadtype_list;
-		if (_gted[e->index].roadtramtype < list->size())
-		{
-			RoadTypeLabel rtl = (*list)[_gted[e->index].roadtramtype];
-			RoadType rt = GetRoadTypeByLabel(rtl);
-			if (rt != INVALID_ROADTYPE && GetRoadTramType(rt) == rtt) {
-				e->VehInfo<RoadVehicleInfo>().roadtype = rt;
-				continue;
-			}
-		}
-
-		/* Road type is not available, so disable this engine */
-		e->info.climates = {};
-	}
-
-	for (Engine *e : Engine::IterateType(VEH_TRAIN)) {
-		RailTypes railtypes{};
-		for (RailTypeLabel label : _gted[e->index].railtypelabels) {
-			auto rt = GetRailTypeByLabel(label);
-			if (rt != INVALID_RAILTYPE) railtypes.Set(rt);
-		}
-
-		if (railtypes.Any()) {
-			e->VehInfo<RailVehicleInfo>().railtypes = railtypes;
-			e->VehInfo<RailVehicleInfo>().intended_railtypes = railtypes;
-		} else {
-			/* Rail type is not available, so disable this engine */
-			e->info.climates = {};
-		}
-	}
-
-		},
 		.baseset_dir = BASESET_DIR,
 		.newgrf_dir = NEWGRF_DIR,
 		.assert_override_size = [](size_t actual, uint32_t expected) noexcept { assert(actual == expected); },

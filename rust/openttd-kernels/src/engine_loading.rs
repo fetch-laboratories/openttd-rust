@@ -152,8 +152,7 @@ pub unsafe extern "C" fn openttd_rust_engine_override_get(source: u32, target: *
         false
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_override_clear() {
+pub(crate) unsafe fn openttd_rust_engine_override_clear() {
     unsafe { &mut *OVERRIDES.get() }.clear();
 }
 
@@ -434,8 +433,7 @@ pub unsafe extern "C" fn openttd_rust_engine_setup(s: &Services) {
         }
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_temp_initialize(s: &Services) {
+pub(crate) unsafe fn openttd_rust_engine_temp_initialize(s: &Services) {
     unsafe {
         openttd_rust_engine_temp_resize((s.pool_size)());
     }
@@ -641,8 +639,7 @@ fn default_masks(s: &Services, kind: u8, shell: E, id: u16, label: u32) -> (u16,
             )
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_calculate_refits(s: &Services) {
+pub(crate) unsafe fn openttd_rust_engine_calculate_refits(s: &Services) {
     let mut original_known_cargoes = 0;
     for cargo in 0..NUM_CARGO {
         if openttd_rust_cargo_is_default(cargo) {
@@ -853,8 +850,7 @@ pub unsafe extern "C" fn openttd_rust_engine_current_override(s: &Services, file
         .copied();
     target.map_or(ptr::null(), |target| (s.find_file)(target))
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_finalise(s: &Services) {
+pub(crate) unsafe fn openttd_rust_engine_finalise(s: &Services) {
     let mut from = 0;
     loop {
         let e = (s.next)(from);
@@ -941,8 +937,7 @@ pub unsafe extern "C" fn openttd_rust_engine_finalise(s: &Services) {
         }
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_bind_types(s: &Services) {
+pub(crate) unsafe fn openttd_rust_engine_bind_types(s: &Services) {
     let shared = unsafe { &*s.shared };
     let mut from = 0;
     loop {

@@ -491,9 +491,6 @@ void ResetNewGRFData()
 	/* Copy/reset original road type info data */
 	ResetRoadTypes();
 
-#ifdef WITH_RUST
-	openttd_rust_engine_temp_initialize(&GetRustEngineLoadingServices());
-#else
 	/* Allocate temporary refit/cargo class data */
 	_gted.resize(Engine::GetPoolSize());
 
@@ -502,8 +499,6 @@ void ResetNewGRFData()
 		_gted[e->index].railtypelabels.clear();
 		for (RailType rt : e->VehInfo<RailVehicleInfo>().railtypes) _gted[e->index].railtypelabels.push_back(GetRailTypeInfo(rt)->label);
 	}
-
-#endif
 
 	/* Reset GRM reservations */
 	ResetGRM();
@@ -564,11 +559,7 @@ void ResetNewGRFData()
 	_loaded_newgrf_features.tram              = TRAMWAY_REPLACE_DEPOT_NONE;
 
 	/* Clear all GRF overrides */
-#ifdef WITH_RUST
-	openttd_rust_engine_override_clear();
-#else
 	_grf_id_overrides.clear();
-#endif
 
 	InitializeSoundPool();
 	_spritegroup_pool.CleanPool();
@@ -735,11 +726,9 @@ static CargoLabel GetActiveCargoLabel(const std::variant<CargoLabel, MixedCargoT
 /**
  * Precalculate refit masks from cargo classes for all vehicles.
  */
+#ifndef WITH_RUST
 static void CalculateRefitMasks()
 {
-#ifdef WITH_RUST
-	openttd_rust_engine_calculate_refits(&GetRustEngineLoadingServices());
-#else
 	CargoTypes original_known_cargoes = 0;
 	for (CargoType cargo_type = 0; cargo_type != NUM_CARGO; ++cargo_type) {
 		if (IsDefaultCargo(cargo_type)) SetBit(original_known_cargoes, cargo_type);
@@ -931,8 +920,8 @@ static void CalculateRefitMasks()
 			ei->refit_mask = 0;
 		}
 	}
-#endif
 }
+#endif
 
 /** Set to use the correct action0 properties for each canal feature */
 static void FinaliseCanals()
@@ -946,11 +935,9 @@ static void FinaliseCanals()
 }
 
 /** Check for invalid engines */
+#ifndef WITH_RUST
 static void FinaliseEngineArray()
 {
-#ifdef WITH_RUST
-	openttd_rust_engine_finalise(&GetRustEngineLoadingServices());
-#else
 	for (Engine *e : Engine::Iterate()) {
 		if (e->GetGRF() == nullptr) {
 			auto found = std::ranges::find(_engine_mngr.mappings[e->type], e->index, &EngineIDMapping::engine);
@@ -1029,8 +1016,8 @@ static void FinaliseEngineArray()
 			Engine::Get(e->info.variant_id)->display_flags.Set({EngineDisplayFlag::HasVariants, EngineDisplayFlag::IsFolded});
 		}
 	}
-#endif
 }
+#endif
 
 /** Check for invalid cargoes */
 #ifndef WITH_RUST
@@ -1807,9 +1794,6 @@ static void AfterLoadGRFs()
 	InitRailTypes();
 	InitRoadTypes();
 
-#ifdef WITH_RUST
-	openttd_rust_engine_bind_types(&GetRustEngineLoadingServices());
-#else
 	for (Engine *e : Engine::IterateType(VEH_ROAD)) {
 		if (_gted[e->index].rv_max_speed != 0) {
 			/* Set RV maximum speed from the mph/0.8 unit value */
@@ -1857,8 +1841,6 @@ static void AfterLoadGRFs()
 			e->info.climates = {};
 		}
 	}
-
-#endif
 
 	SetYearEngineAgingStops();
 
