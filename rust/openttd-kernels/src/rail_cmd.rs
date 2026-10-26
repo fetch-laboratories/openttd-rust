@@ -147,7 +147,6 @@ pub struct RailCommandServices {
     /// Signal-buffer occupancy and assertion services (`_signal_services`).
     pub signal: *const crate::signal::SignalServices,
     pub strings: Strings,
-    /// `ValParamRailType`.
     /// `IsCompatibleRail`.
     pub compatible_rail: extern "C" fn(u8, u8) -> bool,
     /// `HasPowerOnRail(RailType, RailType)`.
