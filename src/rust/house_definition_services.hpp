@@ -28,7 +28,7 @@ inline const OpenTTDHouseDefinitionServices &GetHouseDefinitionServices() noexce
 		.local = [](const GRFFile *file, size_t index) noexcept -> const HouseSpec * { return file->housespec[index].get(); },
 		.clear_local = [](GRFFile *file) noexcept { file->housespec.clear(); file->housespec.shrink_to_fit(); },
 		.copy_substitute = [](GRFFile *file, uint16_t id, const HouseSpec *source) noexcept -> const HouseSpec * { auto &spec = file->housespec[id]; spec = std::make_unique<HouseSpec>(*source); return spec.get(); },
-		.set_identity = [](const HouseSpec *spec, GRFFile *file, uint16_t local, uint16_t substitute) noexcept { auto &props = MutableHouse(spec)->grf_prop; props.local_id = local; props.subst_id = substitute; RustSpecSetGRFFile(MutableHouse(spec), file); },
+		.set_identity = [](const HouseSpec *spec, GRFFile *file, uint16_t local, uint16_t substitute) noexcept { RustSpecSetLocalID(MutableHouse(spec), local); MutableHouse(spec)->grf_prop.subst_id = substitute; RustSpecSetGRFFile(MutableHouse(spec), file); },
 		.identity = [](const HouseSpec *spec) noexcept -> OpenTTDHouseDefinitionIdentity { return {.grfid = RustSpecGRFID(spec), .local = RustSpecLocalID(spec), .substitute = RustSpecSubstitute(spec)}; },
 		.validity = [](const HouseSpec *spec) noexcept -> OpenTTDHouseDefinitionValidity { return {.availability = RustHouseAvailability(spec), .substitute = RustSpecSubstitute(spec), .flags = RustTownHouseFlags(spec)}; },
 		.part = [](const HouseSpec *spec) noexcept -> OpenTTDHouseDefinitionPart { return {.flags = RustTownHouseFlags(spec), .population = RustTownHousePopulation(spec), .enabled = RustHouseEnabled(spec)}; },
