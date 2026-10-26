@@ -60,8 +60,6 @@ uint64_t *openttd_rust_rail_hidden_mask();
 uint64_t *openttd_rust_road_hidden_mask();
 uint64_t *openttd_rust_road_mask();
 uint64_t *openttd_rust_tram_mask();
-void openttd_rust_rail_reset(const OpenTTDTypeRegistryServices *);
-void openttd_rust_road_reset(const OpenTTDTypeRegistryServices *);
 void openttd_rust_rail_init();
 void openttd_rust_road_init();
 RailType openttd_rust_rail_allocate(uint32_t);

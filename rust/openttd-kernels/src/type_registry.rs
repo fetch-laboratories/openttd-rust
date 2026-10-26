@@ -138,8 +138,7 @@ pub fn road_tram_mask(rtt: RoadTramType) -> u64 {
 pub extern "C" fn openttd_rust_rail_hidden_mask() -> *mut u64 {
     unsafe { &raw mut (*REGISTRY.get()).rail_hidden }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_rail_reset(s: *const Services) {
+pub(crate) unsafe fn openttd_rust_rail_reset(s: *const Services) {
     unsafe {
         (*REGISTRY.get()).services = s;
     }
@@ -257,8 +256,7 @@ pub extern "C" fn openttd_rust_rail_saved_current() {
 pub extern "C" fn openttd_rust_road_hidden_mask() -> *mut u64 {
     unsafe { &raw mut (*REGISTRY.get()).road_hidden }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_road_reset(s: *const Services) {
+pub(crate) unsafe fn openttd_rust_road_reset(s: *const Services) {
     unsafe {
         (*REGISTRY.get()).services = s;
     }
