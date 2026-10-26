@@ -821,7 +821,6 @@ const OpenTTDIndustryResolverServices &GetIndustryResolverServices() noexcept
 		.lifecycle = &GetIndustryLifecycleRustServices(),
 		.tile = &GetIndustryTileServices(),
 		.get = [](uint16_t id) noexcept -> OpenTTDIndustryResolverRef { Industry *i = RustIndustryByID(id); return {RustIndustryCanonicalOwner(i), OpenTTDIndustryTown(i)}; },
-		.map_type = [](uint8_t local, uint32_t grfid) noexcept { return _industry_mngr.GetID(local, grfid); },
 		.spec_grfid = RustSpecGRFID<IndustrySpec>,
 		.spec_local_id = RustSpecLocalID<IndustrySpec>,
 		.root = RustSpecSpriteGroup<IndustrySpec>,

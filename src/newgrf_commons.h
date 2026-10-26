@@ -195,10 +195,20 @@ struct EntityIDMapping {
 	uint16_t substitute_id; ///< The (original) entity ID to use if this GRF is not available
 };
 
+#ifdef WITH_RUST
+#include "rust/override_manager_ffi.h"
+#endif
+
 class OverrideManagerBase {
 protected:
+#ifdef WITH_RUST
+	OpenTTDOverrideManager *rust_owner;
+	std::span<uint16_t> entity_overrides;
+	std::span<uint32_t> grfid_overrides;
+#else
 	std::vector<uint16_t> entity_overrides;
 	std::vector<uint32_t> grfid_overrides;
+#endif
 
 	uint16_t max_offset;   ///< what is the length of the original entity's array of specs
 	uint16_t max_entities; ///< what is the amount of entities, old and new summed
@@ -207,10 +217,18 @@ protected:
 	virtual bool CheckValidNewID([[maybe_unused]] uint16_t testid) { return true; }
 
 public:
+#ifdef WITH_RUST
+	std::span<EntityIDMapping> mappings;
+#else
 	std::vector<EntityIDMapping> mappings; ///< mapping of ids from grf files.  Public out of convenience
+#endif
 
 	OverrideManagerBase(uint16_t offset, uint16_t maximum, uint16_t invalid);
+#ifdef WITH_RUST
+	virtual ~OverrideManagerBase();
+#else
 	virtual ~OverrideManagerBase() = default;
+#endif
 
 	void ResetOverride();
 	void ResetMapping();
@@ -241,7 +259,11 @@ struct IndustrySpec;
 class IndustryOverrideManager : public OverrideManagerBase {
 public:
 	IndustryOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
-			OverrideManagerBase(offset, maximum, invalid) {}
+			OverrideManagerBase(offset, maximum, invalid) {
+#ifdef WITH_RUST
+		openttd_rust_industry_register_manager(this->rust_owner);
+#endif
+	}
 
 	uint16_t AddEntityID(uint16_t grf_local_id, uint32_t grfid, uint16_t substitute_id) override;
 	uint16_t GetID(uint16_t grf_local_id, uint32_t grfid) const override;
@@ -256,7 +278,11 @@ protected:
 	bool CheckValidNewID(uint16_t testid) override { return testid != 0xFF; }
 public:
 	IndustryTileOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
-			OverrideManagerBase(offset, maximum, invalid) {}
+			OverrideManagerBase(offset, maximum, invalid) {
+#ifdef WITH_RUST
+		openttd_rust_industry_tile_register_manager(this->rust_owner);
+#endif
+	}
 
 	void SetEntitySpec(IndustryTileSpec &&indts);
 };

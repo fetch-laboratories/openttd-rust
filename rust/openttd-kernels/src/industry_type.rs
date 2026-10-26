@@ -9,3 +9,6 @@ pub const INVALID_INDUSTRYTILE: u16 = 512;
 /// Masks from `industrytype.h::IndustryBehaviour`.
 pub const BUILT_ON_WATER: u32 = 1 << 2;
 pub const PROD_MULTI_HANDLING: u32 = 1 << 14;
+
+pub const NEW_INDUSTRYOFFSET: u16 = 37;
+pub const NUM_INDUSTRYTILES: u16 = 512;

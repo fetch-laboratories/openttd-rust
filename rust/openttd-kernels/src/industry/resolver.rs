@@ -50,7 +50,6 @@ pub struct ResolverServices {
     pub lifecycle: *const LifecycleServices,
     pub tile: *const TileServices,
     pub get: unsafe extern "C" fn(u16) -> ResolverRef,
-    pub map_type: unsafe extern "C" fn(u8, u32) -> u16,
     pub spec_grfid: unsafe extern "C" fn(*const SpecHandle) -> u32,
     pub spec_local_id: unsafe extern "C" fn(*const SpecHandle) -> u16,
     pub root: unsafe extern "C" fn(*const SpecHandle, bool) -> *const c_void,
@@ -120,14 +119,14 @@ impl ResolverServices {
     }
 }
 
-fn map_type(kind: u8, grfid: u32, s: &ResolverServices) -> u8 {
+fn map_type(kind: u8, grfid: u32, _s: &ResolverServices) -> u8 {
     if kind == IT_INVALID {
         return IT_INVALID;
     }
     if kind & 0x80 == 0 {
         return kind & 0x7f;
     }
-    (unsafe { (s.map_type)(kind & 0x7f, grfid) }) as u8
+    (unsafe { crate::override_manager::industry_id(u16::from(kind & 0x7f), grfid) }) as u8
 }
 fn id_at_offset(tile: u32, id: u16, grfid: u32, s: &ResolverServices) -> u32 {
     if !s.belongs(tile, id) {
@@ -883,7 +882,6 @@ crate::abi::layouts! {
         lifecycle,
         tile,
         get,
-        map_type,
         spec_grfid,
         spec_local_id,
         root,

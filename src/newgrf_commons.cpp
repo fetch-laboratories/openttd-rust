@@ -32,6 +32,10 @@
 
 #include "table/strings.h"
 
+#ifdef WITH_RUST
+#include "rust/industry_definition_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 /**
@@ -42,6 +46,16 @@
  */
 OverrideManagerBase::OverrideManagerBase(uint16_t offset, uint16_t maximum, uint16_t invalid)
 {
+#ifdef WITH_RUST
+	this->max_offset = offset;
+	this->max_entities = maximum;
+	this->invalid_id = invalid;
+	this->rust_owner = openttd_rust_override_new(offset, maximum, invalid);
+	auto view = openttd_rust_override_view(this->rust_owner);
+	this->mappings = {view.mappings, maximum};
+	this->entity_overrides = {view.entities, offset};
+	this->grfid_overrides = {view.grfids, offset};
+#else
 	this->max_offset = offset;
 	this->max_entities = maximum;
 	this->invalid_id = invalid;
@@ -50,7 +64,12 @@ OverrideManagerBase::OverrideManagerBase(uint16_t offset, uint16_t maximum, uint
 	this->entity_overrides.resize(this->max_offset);
 	std::fill(this->entity_overrides.begin(), this->entity_overrides.end(), this->invalid_id);
 	this->grfid_overrides.resize(this->max_offset);
+#endif
 }
+
+#ifdef WITH_RUST
+OverrideManagerBase::~OverrideManagerBase() { openttd_rust_override_delete(this->rust_owner); }
+#endif
 
 /**
  * Since the entity IDs defined by the GRF file does not necessarily correlate
@@ -62,24 +81,37 @@ OverrideManagerBase::OverrideManagerBase(uint16_t offset, uint16_t maximum, uint
  */
 void OverrideManagerBase::Add(uint16_t local_id, uint32_t grfid, uint entity_type)
 {
+#ifdef WITH_RUST
+	assert(entity_type < this->max_offset);
+	openttd_rust_override_add(this->rust_owner, local_id, grfid, entity_type);
+#else
 	assert(entity_type < this->max_offset);
 	/* An override can be set only once */
 	if (this->entity_overrides[entity_type] != this->invalid_id) return;
 	this->entity_overrides[entity_type] = local_id;
 	this->grfid_overrides[entity_type] = grfid;
+#endif
 }
 
 /** Resets the mapping, which is used while initializing game */
 void OverrideManagerBase::ResetMapping()
 {
+#ifdef WITH_RUST
+	openttd_rust_override_reset_mapping(this->rust_owner);
+#else
 	std::fill(this->mappings.begin(), this->mappings.end(), EntityIDMapping{});
+#endif
 }
 
 /** Resets the override, which is used while initializing game */
 void OverrideManagerBase::ResetOverride()
 {
+#ifdef WITH_RUST
+	openttd_rust_override_reset(this->rust_owner);
+#else
 	std::fill(this->entity_overrides.begin(), this->entity_overrides.end(), this->invalid_id);
 	std::fill(this->grfid_overrides.begin(), this->grfid_overrides.end(), uint32_t());
+#endif
 }
 
 /**
@@ -90,6 +122,9 @@ void OverrideManagerBase::ResetOverride()
  */
 uint16_t OverrideManagerBase::GetID(uint16_t grf_local_id, uint32_t grfid) const
 {
+#ifdef WITH_RUST
+	return openttd_rust_override_get(this->rust_owner, grf_local_id, grfid);
+#else
 	for (uint16_t id = 0; id < this->max_entities; id++) {
 		const EntityIDMapping *map = &this->mappings[id];
 		if (map->entity_id == grf_local_id && map->grfid == grfid) {
@@ -98,6 +133,7 @@ uint16_t OverrideManagerBase::GetID(uint16_t grf_local_id, uint32_t grfid) const
 	}
 
 	return this->invalid_id;
+#endif
 }
 
 /**
@@ -109,6 +145,11 @@ uint16_t OverrideManagerBase::GetID(uint16_t grf_local_id, uint32_t grfid) const
  */
 uint16_t OverrideManagerBase::AddEntityID(uint16_t grf_local_id, uint32_t grfid, uint16_t substitute_id)
 {
+#ifdef WITH_RUST
+	return openttd_rust_override_allocate(this->rust_owner, grf_local_id, grfid, substitute_id, this,
+		this->GetID(grf_local_id, grfid),
+		[](void *self, uint16_t id) noexcept { return static_cast<OverrideManagerBase *>(self)->CheckValidNewID(id); });
+#else
 	uint16_t id = this->GetID(grf_local_id, grfid);
 
 	/* Look to see if this entity has already been added. This is done
@@ -130,6 +171,7 @@ uint16_t OverrideManagerBase::AddEntityID(uint16_t grf_local_id, uint32_t grfid,
 	}
 
 	return this->invalid_id;
+#endif
 }
 
 /**
@@ -139,7 +181,11 @@ uint16_t OverrideManagerBase::AddEntityID(uint16_t grf_local_id, uint32_t grfid,
  */
 uint32_t OverrideManagerBase::GetGRFID(uint16_t entity_id) const
 {
+#ifdef WITH_RUST
+	return openttd_rust_override_grfid(this->rust_owner, entity_id);
+#else
 	return this->mappings[entity_id].grfid;
+#endif
 }
 
 /**
@@ -149,7 +195,11 @@ uint32_t OverrideManagerBase::GetGRFID(uint16_t entity_id) const
  */
 uint16_t OverrideManagerBase::GetSubstituteID(uint16_t entity_id) const
 {
+#ifdef WITH_RUST
+	return openttd_rust_override_substitute(this->rust_owner, entity_id);
+#else
 	return this->mappings[entity_id].substitute_id;
+#endif
 }
 
 /**
@@ -192,6 +242,9 @@ void HouseOverrideManager::SetEntitySpec(HouseSpec &&hs)
  */
 uint16_t IndustryOverrideManager::GetID(uint16_t grf_local_id, uint32_t grfid) const
 {
+#ifdef WITH_RUST
+	return openttd_rust_industry_definition_id(grf_local_id, grfid);
+#else
 	uint16_t id = OverrideManagerBase::GetID(grf_local_id, grfid);
 	if (id != this->invalid_id) return id;
 
@@ -201,6 +254,7 @@ uint16_t IndustryOverrideManager::GetID(uint16_t grf_local_id, uint32_t grfid) c
 	}
 
 	return this->invalid_id;
+#endif
 }
 
 /**
@@ -212,6 +266,9 @@ uint16_t IndustryOverrideManager::GetID(uint16_t grf_local_id, uint32_t grfid) c
  */
 uint16_t IndustryOverrideManager::AddEntityID(uint16_t grf_local_id, uint32_t grfid, uint16_t substitute_id)
 {
+#ifdef WITH_RUST
+	return openttd_rust_industry_definition_allocate(grf_local_id, grfid, substitute_id, &GetIndustryDefinitionServices());
+#else
 	/* This entity hasn't been defined before, so give it an ID now. */
 	for (uint16_t id = 0; id < this->max_entities; id++) {
 		/* Skip overridden industries */
@@ -237,6 +294,7 @@ uint16_t IndustryOverrideManager::AddEntityID(uint16_t grf_local_id, uint32_t gr
 	}
 
 	return this->invalid_id;
+#endif
 }
 
 /**
@@ -247,6 +305,9 @@ uint16_t IndustryOverrideManager::AddEntityID(uint16_t grf_local_id, uint32_t gr
  */
 void IndustryOverrideManager::SetEntitySpec(IndustrySpec &&inds)
 {
+#ifdef WITH_RUST
+	openttd_rust_industry_definition_publish(&inds, &GetIndustryDefinitionServices());
+#else
 	/* First step : We need to find if this industry is already specified in the savegame data. */
 	IndustryType ind_id = this->GetID(inds.grf_prop.local_id, inds.grf_prop.grfid);
 
@@ -268,10 +329,14 @@ void IndustryOverrideManager::SetEntitySpec(IndustrySpec &&inds)
 	_industry_specs[ind_id] = std::move(inds);
 	/* ... and mark it as usable*/
 	_industry_specs[ind_id].enabled = true;
+#endif
 }
 
 void IndustryTileOverrideManager::SetEntitySpec(IndustryTileSpec &&its)
 {
+#ifdef WITH_RUST
+	openttd_rust_industry_tile_definition_publish(&its, &GetIndustryDefinitionServices());
+#else
 	IndustryGfx indt_id = this->AddEntityID(its.grf_prop.local_id, its.grf_prop.grfid, its.grf_prop.subst_id);
 
 	if (indt_id == this->invalid_id) {
@@ -292,6 +357,7 @@ void IndustryTileOverrideManager::SetEntitySpec(IndustryTileSpec &&its)
 		this->entity_overrides[i] = this->invalid_id;
 		this->grfid_overrides[i] = 0;
 	}
+#endif
 }
 
 /**

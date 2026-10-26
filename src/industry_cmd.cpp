@@ -95,6 +95,10 @@ static bool IndustryCommandDeity() noexcept { return OpenTTDCurrentCompany() == 
 #include "rust/industry_resolver_ffi.h"
 #endif
 
+#ifdef WITH_RUST
+#include "rust/industry_definition_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 IndustryPool _industry_pool("Industry");
@@ -136,6 +140,9 @@ static int WhoCanServiceIndustry(Industry *ind);
  */
 void ResetIndustries()
 {
+#ifdef WITH_RUST
+	openttd_rust_industry_definition_reset(to_underlying(_settings_game.game_creation.landscape), &GetIndustryDefinitionServices());
+#else
 	auto industry_insert = std::copy(std::begin(_origin_industry_specs), std::end(_origin_industry_specs), std::begin(_industry_specs));
 	std::fill(industry_insert, std::end(_industry_specs), IndustrySpec{});
 
@@ -150,6 +157,7 @@ void ResetIndustries()
 	/* Reset any overrides that have been set. */
 	_industile_mngr.ResetOverride();
 	_industry_mngr.ResetOverride();
+#endif
 }
 
 /**

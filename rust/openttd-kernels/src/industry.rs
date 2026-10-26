@@ -28,6 +28,7 @@ use crate::tilearea::TileArea;
 use crate::timer_game_tick::DAY_TICKS;
 use std::ffi::c_void;
 use std::ptr;
+pub(crate) mod definitions;
 pub mod resolver;
 mod transaction;
 pub use transaction::*;

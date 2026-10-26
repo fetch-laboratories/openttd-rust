@@ -31,7 +31,6 @@ struct OpenTTDIndustryResolverServices {
 	const OpenTTDIndustryLifecycleServices *lifecycle;
 	const OpenTTDIndustryTileServices *tile;
 	OpenTTDIndustryResolverRef (*get)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(get);
-	uint16_t (*map_type)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(map_type);
 	uint32_t (*spec_grfid)(const IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_grfid);
 	uint16_t (*spec_local_id)(const IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_local_id);
 	const SpriteGroup *(*root)(const IndustrySpec *, bool) noexcept OPENTTD_SERVICE_DEFAULT(root);

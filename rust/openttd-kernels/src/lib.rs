@@ -1412,3 +1412,5 @@ mod newgrf_roadstop;
 
 mod rail;
 mod type_availability;
+
+mod override_manager;
