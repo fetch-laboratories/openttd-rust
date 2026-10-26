@@ -27,21 +27,7 @@
 
 void MapSpriteMappingRecolour(PalSpriteID *sprite)
 {
-	openttd_rust_action2_recolour(sprite);
-}
-
-TileLayoutFlags ReadSpriteLayoutSprite(ByteReader &buf, bool read_flags, bool invert_action1_flag, bool use_cur_spritesets, GrfSpecFeature feature, PalSpriteID *sprite, uint16_t *max_sprite_offset, uint16_t *max_palette_offset)
-{
-	uint8_t flags;
-	if (!openttd_rust_action2_layout_sprite(&GetRustAction2Services(), &GetRustGrfLoadingServices(), &GetRustByteReaderServices(), &buf, read_flags, invert_action1_flag, use_cur_spritesets, feature, sprite, max_sprite_offset, max_palette_offset, &flags)) RustGRFRethrowReadError();
-	return static_cast<TileLayoutFlags>(flags);
-}
-
-bool ReadSpriteLayout(ByteReader &buf, uint num_building_sprites, bool use_cur_spritesets, GrfSpecFeature feature, bool allow_var10, bool no_z_position, NewGRFSpriteLayout *layout)
-{
-	int32_t result = openttd_rust_action2_layout(&GetRustAction2Services(), &GetRustGrfLoadingServices(), &GetRustByteReaderServices(), &buf, num_building_sprites, use_cur_spritesets, feature, allow_var10, no_z_position, layout);
-	if (result < 0) RustGRFRethrowReadError();
-	return result != 0;
+	openttd_rust_action2_recolour(&GetRustAction2Services(), sprite);
 }
 
 #else

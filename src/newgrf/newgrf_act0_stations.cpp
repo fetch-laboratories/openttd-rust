@@ -14,10 +14,19 @@
 #include "newgrf_internal.h"
 #include "newgrf_stringmapping.h"
 
+#ifdef WITH_RUST
+#include "../rust/station_definitions_ffi.h"
+#include "../rust/newgrf_act2_ffi.h"
+#include "../rust/newgrf_loading_ffi.h"
+#include "../rust/newgrf_bytereader_services.h"
+#endif
+
 #include "../safeguards.h"
 
 /** The maximum amount of stations a single GRF is allowed to add */
+#ifndef WITH_RUST
 static const uint NUM_STATIONS_PER_GRF = UINT16_MAX - 1;
+#endif
 
 /**
  * Define properties for stations
@@ -29,6 +38,12 @@ static const uint NUM_STATIONS_PER_GRF = UINT16_MAX - 1;
  */
 static ChangeInfoResult StationChangeInfo(uint first, uint last, int prop, ByteReader &buf)
 {
+#ifdef WITH_RUST
+	OpenTTDStationSequence sequence;
+	uint8_t result;
+	if (!openttd_rust_station_change_info(&GetStationDefinitionServices(), &GetRustAction2Services(), &GetRustGrfLoadingServices(), _cur_gps.grffile, first, last, prop, &buf, &sequence, &result)) RustGRFRethrowReadError();
+	return static_cast<ChangeInfoResult>(result);
+#else
 	ChangeInfoResult ret = CIR_SUCCESS;
 
 	if (last > NUM_STATIONS_PER_GRF) {
@@ -319,6 +334,7 @@ static ChangeInfoResult StationChangeInfo(uint first, uint last, int prop, ByteR
 	}
 
 	return ret;
+#endif
 }
 
 template <> ChangeInfoResult GrfChangeInfoHandler<GSF_STATIONS>::Reserve(uint, uint, int, ByteReader &) { return CIR_UNHANDLED; }

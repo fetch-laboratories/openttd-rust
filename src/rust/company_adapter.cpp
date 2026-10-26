@@ -299,7 +299,6 @@ static uint32_t Co_vehicle_next_owned(uint8_t owner, uint32_t from, uint8_t *typ
 	return UINT32_MAX;
 }
 static bool Co_aircraft_is_normal(uint32_t id) noexcept { return Aircraft::From(Vehicle::Get(id))->IsNormalAircraft(); }
-static bool Co_vehicle_is_primary(uint32_t id) noexcept { return Vehicle::Get(id)->IsPrimaryVehicle(); }
 static OpenTTDCompanyVehicleProfit Co_vehicle_profit(uint32_t id) noexcept
 {
 	const Vehicle *v = Vehicle::Get(id);
@@ -308,7 +307,7 @@ static OpenTTDCompanyVehicleProfit Co_vehicle_profit(uint32_t id) noexcept
 static OpenTTDCompanyVehicleGroupFlags Co_vehicle_group_flags(uint32_t id) noexcept
 {
 	const Vehicle *v = Vehicle::Get(id);
-	return {v->IsEngineCountable(), v->IsPrimaryVehicle()};
+	return {v->IsEngineCountable(), RustVehiclePrimary(v)};
 }
 static bool Co_vehicle_service_interval_is_custom(uint32_t id) noexcept { return Vehicle::Get(id)->ServiceIntervalIsCustom(); }
 static void Co_delete_vehicle(uint32_t id) noexcept { delete Vehicle::Get(id); }
@@ -433,7 +432,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.town_next = Co_town_next, .town_rating = Co_town_rating,
 		.set_town_rating = Co_set_town_rating, .set_town_exclusivity = Co_set_town_exclusivity,
 		.vehicle_next_owned = Co_vehicle_next_owned, .aircraft_is_normal = Co_aircraft_is_normal,
-		.vehicle_value = RustIndexedVehicleRead<int64_t, RustVehicleValue>, .vehicle_is_primary = Co_vehicle_is_primary,
+		.vehicle_value = RustIndexedVehicleRead<int64_t, RustVehicleValue>, .vehicle_is_primary = RustIndexedVehicleRead<bool, RustVehiclePrimary>,
 		.vehicle_profit = Co_vehicle_profit, .vehicle_previous = RustIndexedVehicleRead<uint32_t, RustVehiclePreviousID>,
 		.vehicle_group_flags = Co_vehicle_group_flags, .vehicle_service_interval_is_custom = Co_vehicle_service_interval_is_custom,
 		.delete_vehicle = Co_delete_vehicle, .count_group_engine = Co_count_group_engine,

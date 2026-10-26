@@ -90,6 +90,10 @@ def scenarios(soak):
                 "short_checkpoint": True,
             }
             for mode in (
+                "definitions",
+                "definitions-reload",
+                "definitions-reordered",
+                "definitions-missing",
                 "commands",
                 "linkgraph",
                 "reload",
@@ -493,7 +497,7 @@ struct RoadResolverFixture {
 			spec.callback_mask.Set(RoadStopCallbackMask::Avail); spec.cargo_triggers = 3; spec.animation.triggers.Set(StationAnimationTrigger::Built);
 			spec.grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_PURCHASE, purchase); spec.grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, one);
 			spec.grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT_NA, empty); spec.grf_prop.SetSpriteGroup(0, cargo0); spec.grf_prop.SetSpriteGroup(1, cargo1);
-			indices[i] = RoadStopClass::Get(cls)->GetSpecCount(); RoadStopClass::Get(cls)->Insert(&spec);
+			indices[i] = RoadStopClass::Get(cls)->GetSpecCount(); spec.class_index = cls; RoadStopClass::Assign(&spec);
 		}
 	}
 };
@@ -782,6 +786,14 @@ static bool StationCommands(std::span<std::string_view> args)
 	_settings_game.construction.road_stop_on_competitor_road = true;
 	const DoCommandFlags test{DoCommandFlag::NoTestTownRating};
 	const DoCommandFlags exec{DoCommandFlag::Execute, DoCommandFlag::NoTestTownRating};
+	if (args[1].starts_with("definitions")) {
+		bool reload = args[1].ends_with("inspect");
+		if (args[1] == "definitions-missing-inspect") { StationDefinitionMissing(); fmt::print(stderr, "STCMD complete\n"); current.Restore(); return true; }
+		if (!reload) { StationNeed(args.size() >= 3, __LINE__); StationDefinitionLoad(args[2]); }
+		StationDefinitionFixture(reload ? INVALID_TILE : StationPatch(), test, exec, reload);
+		if (!reload && args.size() == 4) StationNeed(SaveOrLoad(std::string(args[3]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false) == SL_OK, __LINE__);
+		fmt::print(stderr, "STCMD complete\n"); current.Restore(); return true;
+	}
 	if (args[1] == "airport-inspect") { StationAirportFixture(INVALID_TILE, test, exec, true); fmt::print(stderr, "STCMD complete\n"); current.Restore(); return true; }
 	if (args[1] == "resolver-inspect") { StationResolverFixture(INVALID_TILE, exec, true); fmt::print(stderr, "STCMD complete\n"); current.Restore(); return true; }
 	if (args[1] == "waypoints-inspect") {
@@ -1069,6 +1081,9 @@ extern "C" void __wrap__Z22IConsoleStdLibRegisterv() { __real__Z22IConsoleStdLib
 
 RELOADS = {
     "reload": ("commands", "inspect"),
+    "definitions-reload": ("definitions", "definitions-inspect"),
+    "definitions-reordered": ("definitions", "definitions-inspect"),
+    "definitions-missing": ("definitions", "definitions-missing-inspect"),
     "road-stops-reload": ("road-stops", "road-stops-inspect"),
     "resolver-reload": ("resolver", "resolver-inspect"),
     "airport-reload": ("airport", "airport-inspect"),
@@ -1104,14 +1119,167 @@ def adapter(build, folder, env):
     )
 
 
+def definition_grfs(folder, reordered=False):
+    """File-loaded station, rail-waypoint, road-stop and road-waypoint definitions."""
+    from .newgrf_loading import grf, info
+
+    folder.mkdir(parents=True, exist_ok=True)
+
+    def word(value):
+        return struct.pack("<H", value)
+
+    def dword(value):
+        return struct.pack("<I", value)
+
+    def prop(feature, local, properties):
+        return bytes((0, feature, len(properties), 1, local)) + b"".join(
+            bytes((key,)) + value for key, value in properties
+        )
+
+    def group(feature, index, value):
+        result = word(0x8000 | value)
+        return (
+            bytes((2, feature, index, 0x81, 0x1A, 0, 0xFF, 1))
+            + result
+            + b"\0\xff"
+            + result
+        )
+
+    def mapping(feature, local, default, specific=()):
+        return (
+            bytes((3, feature, 1, local, len(specific)))
+            + b"".join(bytes((cargo,)) + word(index) for cargo, index in specific)
+            + word(default)
+        )
+
+    actions = [
+        info(b"S484"),
+        bytes((13, 0, 0, 255, 255)) + dword(int(reordered)),
+        prop(8, 0, [(0x18, b"owner484/badge\0")]),
+    ]
+    for feature in (4, 20):
+        actions += [group(feature, index, 0x400 + index) for index in range(3)]
+    actions += [
+        prop(
+            4,
+            0,
+            [
+                (8, b"OLD4"),
+                (0x1C, word(0xD000)),
+                (0x1D, word(0xD001)),
+                (
+                    9,
+                    b"\3"
+                    + dword(1)
+                    + bytes((1, 2, 3, 4, 5, 6))
+                    + dword(0x80000002)
+                    + b"\x80"
+                    + bytes(8),
+                ),
+                (0x1F, word(3) + word(0) + word(0) + word(99)),
+                (0x0E, b"\2\1\1\3\0\0"),
+                (0x11, b"\x55"),
+                (0x14, b"\xaa"),
+                (0x15, b"\0"),
+                (0x12, dword(1)),
+                (0x16, b"\4\0"),
+                (0x17, b"\2"),
+                (0x18, word(1)),
+                (0x20, b"\3\4\5\6"),
+                (0x21, b"\2\1\2"),
+            ],
+        ),
+        prop(4, 0, [(8, b"NEW4")]),
+        prop(4, 1, [(8, b"NEW4"), (0x0A, b"\0"), (0x0A, b"\1"), (0x0F, b"\0")]),
+        prop(
+            4,
+            2,
+            [
+                (8, b"\xffWP4"),
+                (0x1A, b"\2\0" + dword(1) + b"\0" + dword(2)),
+                (0x12, dword(1)),
+            ],
+        ),
+        prop(
+            20,
+            0,
+            [
+                (8, b"OLD4"),
+                (9, b"\2"),
+                (0x0A, word(0xD002)),
+                (0x0B, word(0xD003)),
+                (0x16, word(1) + word(0)),
+                (0x0C, b"\3"),
+                (0x0D, dword(1)),
+                (0x0E, b"\4\0"),
+                (0x0F, b"\2"),
+                (0x10, word(1)),
+                (0x13, b"\7\1\2\3\4\5\6\7"),
+                (0x14, b"\2\1\2"),
+                (0x15, b"\x20\x18"),
+            ],
+        ),
+        prop(
+            20, 1, [(8, b"\xffRW4"), (9, b"\2"), (0x0D, dword(1)), (0x15, b"\x18\x20")]
+        ),
+        bytes((4, 4, 0xFF, 4))
+        + word(0xD000)
+        + b"Station 484\0Class 484\0Road stop 484\0Road class 484\0",
+    ]
+    actions.append(prop(20, 0, [(8, b"RST4")]))
+    publication = ((4, 0), (4, 1), (4, 2), (20, 0), (20, 1))
+    for feature, local in reversed(publication) if reordered else publication:
+        actions += [mapping(feature, local, 0), mapping(feature, local, 1, [(0, 2)])]
+    (folder / "stations.grf").write_bytes(grf(actions, 1))
+    (folder / "invalid-layout.grf").write_bytes(
+        grf(
+            [
+                info(b"L484"),
+                prop(4, 0, [(8, b"DFLT")]),
+                prop(4, 0, [(0x1A, b"\2\x40" + dword(1) + word(0x10))]),
+            ],
+            1,
+        )
+    )
+    for feature, ident, name in (
+        (4, b"B484", "broken-station"),
+        (20, b"R484", "broken-road"),
+    ):
+        (folder / (name + ".grf")).write_bytes(
+            grf(
+                [
+                    info(ident),
+                    prop(feature, 0, [(8, b"DFLT")]),
+                    prop(feature, 0, [(0x16 if feature == 4 else 0x0E, b"\x09")]),
+                ],
+                1,
+            )
+        )
+
+
+def install(scenario, run_dir):
+    if folder := scenario.get("station_definition_dir"):
+        from .newgrf_loading import install as install_grfs
+
+        install_grfs({"loading_fixture_dir": folder}, run_dir)
+
+
 def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
     folder = out / scenario["name"] / "input"
     source = Path(scenario["save"])
     read_save(source)
+    if scenario["station_commands"].startswith("definitions"):
+        definition_grfs(folder / "grfs")
+        scenario = dict(scenario, station_definition_dir=str(folder / "grfs"))
     executables = prepared_console("stations", adapter, binaries, builds, folder, env)
     if binaries["candidate"] == binaries["reference"]:
         executables["candidate"] = executables["reference"]
     scenario = dict(scenario, save=str(source), executables=executables)
+    extra = (
+        f' "{folder / "grfs"}"'
+        if scenario["station_commands"].startswith("definitions")
+        else ""
+    )
     # Reload modes capture the command fixture's save, then inspect it after load.
     capture, inspect = RELOADS.get(scenario["station_commands"], (None, None))
     if capture:
@@ -1119,7 +1287,10 @@ def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
         runs = core.capture_pair(
             lambda role: dict(
                 scenario,
-                console=[f'stations_scenario {capture} "{saves[role]}"', "unpause"],
+                console=[
+                    f'stations_scenario {capture}{extra} "{saves[role]}"',
+                    "unpause",
+                ],
             ),
             executables,
             builds,
@@ -1145,6 +1316,10 @@ def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
         )
         if differences or logs["reference"] != logs["candidate"]:
             raise RuntimeError("station reload input differs")
+        if scenario["station_commands"] == "definitions-reordered":
+            definition_grfs(folder / "grfs", reordered=True)
+        elif scenario["station_commands"] == "definitions-missing":
+            (folder / "grfs/stations.grf").unlink()
         return dict(
             scenario,
             role_inputs={role: {"save": str(save)} for role, save in saves.items()},
@@ -1152,11 +1327,36 @@ def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
         )
     return dict(
         scenario,
-        console=["stations_scenario " + scenario["station_commands"], "unpause"],
+        console=[
+            "stations_scenario " + scenario["station_commands"] + extra,
+            "unpause",
+        ],
     )
 
 
 def check_commands(scenario, run, mode, role, result):
+    if scenario["station_commands"].startswith("definitions"):
+        markers = (
+            ("identity", "missing")
+            if scenario["station_commands"] == "definitions-missing"
+            else (
+                "registry",
+                "layout",
+                "identity",
+                "callbacks",
+                "occupied",
+                "rng",
+                "malformed",
+            )
+        )
+        for marker in markers:
+            if not any(
+                line.startswith("STCMD definitions-" + marker) for line in run["log"]
+            ):
+                raise RuntimeError("file-loaded station evidence missing: " + marker)
+        if "STCMD complete" not in run["log"]:
+            raise RuntimeError("file-loaded station scenario did not complete")
+        return
     if scenario["station_commands"] == "linkgraph":
         core.branch_witnesses(
             scenario,

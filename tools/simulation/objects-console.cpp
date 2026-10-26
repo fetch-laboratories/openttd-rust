@@ -104,7 +104,8 @@ static void ObjectPolicyProbe(Object *o, ObjectSpec *spec)
 		ObjectResolverObject other(spec, o, t);
 		for (uint8_t var : {0x40,0x42,0x47,0x48,0x64}) { bool a = true; fmt::print(stderr, "OBJECT query-live-tile {} {} {}\n", t.base(), var, other.object_scope.GetVariable(var, 0, a)); }
 	}
-	Backup<std::vector<EntityIDMapping>> mappings(_object_mngr.mappings);
+	Backup<EntityIDMapping> mapping(_object_mngr.mappings[o->type]);
+	Backup<EntityIDMapping> lighthouse_mapping(_object_mngr.mappings[OBJECT_LIGHTHOUSE]);
 	_object_mngr.mappings[o->type] = {file.grfid, 17, o->type};
 	_object_mngr.mappings[OBJECT_LIGHTHOUSE] = {file.grfid + 1, 17, OBJECT_LIGHTHOUSE};
 	for (uint32_t grfid : {0U, UINT32_MAX, file.grfid, file.grfid + 1, 0x87654321U}) {

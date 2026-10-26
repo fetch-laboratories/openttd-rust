@@ -271,7 +271,6 @@ pub struct Step {
 pub struct CrashPart {
     pub next: Option<VehicleRef>,
     pub next_state: *mut State,
-    pub tile: u32,
     pub z: i32,
     pub crossing: bool,
 }
@@ -575,6 +574,11 @@ fn straight(dir: u8) -> bool {
     dir & 6 == 0
 }
 /// `RoadVehicle::GetCurrentMaxSpeed`.
+#[expect(
+    clippy::inline_always,
+    reason = "Specialize the existing loop at each speed observation."
+)]
+#[inline(always)]
 fn max_speed(front: Part, r: MaxSpeedRead, acceleration_model: u8, l: &Leaves) -> i32 {
     let mut speed = i32::from(r.max_track_speed);
     let mut u = SpeedPart {
@@ -917,7 +921,14 @@ impl Game<'_> {
         delta: bool,
     ) {
         let m = crate::ground_vehicle::move_incline(
-            self.gs, self.map, v.v, ground, pos, new_tile, delta,
+            self.gs,
+            &self.movement,
+            self.map,
+            v.v,
+            ground,
+            pos,
+            new_tile,
+            delta,
         );
         s.x = pos.0;
         s.y = pos.1;
@@ -960,6 +971,11 @@ impl Game<'_> {
         victims
     }
     /// `RoadVehCheckTrainCrash`, starting with the front part's observation.
+    #[expect(
+        clippy::inline_always,
+        reason = "Reject noncrossing parts in the controller frame."
+    )]
+    #[inline(always)]
     fn train_crash(&self, v: Part, first: CrashPart) -> bool {
         let mut part = v;
         let mut u = first;
@@ -1252,7 +1268,14 @@ impl Game<'_> {
         unsafe {
             crate::vehicle::occupancy::update_position(self.vs, v.v, self.map);
         }
-        crate::ground_vehicle::inclination_owned(self.gs.physics, v.v, ground, true, true);
+        crate::ground_vehicle::inclination_owned(
+            self.gs.physics,
+            &self.movement,
+            v.v,
+            ground,
+            true,
+            true,
+        );
         service!(self.l.depot_exit_dirty)(v.v);
         true
     }
@@ -1663,8 +1686,16 @@ impl Game<'_> {
         x: i32,
         y: i32,
     ) {
-        let m =
-            crate::ground_vehicle::move_incline(self.gs, self.map, v.v, ground, (x, y), true, true);
+        let m = crate::ground_vehicle::move_incline(
+            self.gs,
+            &self.movement,
+            self.map,
+            v.v,
+            ground,
+            (x, y),
+            true,
+            true,
+        );
         s.x = x;
         s.y = y;
         s.z = m.z;
@@ -1771,7 +1802,6 @@ impl Game<'_> {
                 let first = CrashPart {
                     next: link.next,
                     next_state: link.next_state,
-                    tile: s.tile,
                     z: s.z,
                     crossing,
                 };
@@ -2285,7 +2315,6 @@ crate::abi::layouts! {
     "OpenTTDRoadCrashPart" ["probe"] => CrashPart {
         next,
         next_state,
-        tile,
         z,
         crossing,
     };

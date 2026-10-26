@@ -80,7 +80,7 @@ static bool VariableCases(Industry *i, Industry *temporary, TileIndex tile, Indu
 		bool available = true;
 		fmt::print(stderr, "INDUSTRY-RESOLVER caller-cargo {} {} {}\n", v, parameter, live.industries_scope.GetVariable(v, parameter, available));
 	}
-	Backup<std::vector<EntityIDMapping>> mapping(_industry_mngr.mappings);
+	Backup<EntityIDMapping> mapping(_industry_mngr.mappings[i->type]);
 	_industry_mngr.mappings[i->type] = {file.grfid, 17, i->type}; live.grffile = &file;
 	for (uint32_t id : {0U, UINT32_MAX, file.grfid, file.grfid + 1}) for (uint32_t filter : {0U, 1U, 0x100U, 0x101U}) {
 		live.SetRegister(0x100, id); live.SetRegister(0x101, filter); bool available = true;
@@ -297,9 +297,12 @@ static bool IndustriesScenario(std::span<std::string_view>)
 	std::fflush(stderr);
 	return true;
 }
+#include "industry-definitions-console.hpp"
+
 extern "C" void __real__Z22IConsoleStdLibRegisterv();
 extern "C" void __wrap__Z22IConsoleStdLibRegisterv()
 {
 	__real__Z22IConsoleStdLibRegisterv();
 	IConsole::CmdRegister("industries_scenario", IndustriesScenario);
+	IConsole::CmdRegister("industry_definitions", IndustryDefinitionsScenario);
 }

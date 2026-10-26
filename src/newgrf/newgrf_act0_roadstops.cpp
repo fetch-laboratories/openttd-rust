@@ -15,6 +15,11 @@
 #include "newgrf_internal.h"
 #include "newgrf_stringmapping.h"
 
+#ifdef WITH_RUST
+#include "../rust/station_definitions_ffi.h"
+#include "../rust/newgrf_bytereader_services.h"
+#endif
+
 #include "../safeguards.h"
 
 /**
@@ -23,6 +28,7 @@
  * @param buf The property value.
  * @return ChangeInfoResult.
  */
+#ifndef WITH_RUST
 static ChangeInfoResult IgnoreRoadStopProperty(uint prop, ByteReader &buf)
 {
 	ChangeInfoResult ret = CIR_SUCCESS;
@@ -65,9 +71,15 @@ static ChangeInfoResult IgnoreRoadStopProperty(uint prop, ByteReader &buf)
 
 	return ret;
 }
+#endif
 
 static ChangeInfoResult RoadStopChangeInfo(uint first, uint last, int prop, ByteReader &buf)
 {
+#ifdef WITH_RUST
+	uint8_t result;
+	if (!openttd_rust_roadstop_change_info(&GetStationDefinitionServices(), _cur_gps.grffile, first, last, prop, &buf, &result)) RustGRFRethrowReadError();
+	return static_cast<ChangeInfoResult>(result);
+#else
 	ChangeInfoResult ret = CIR_SUCCESS;
 
 	if (last > NUM_ROADSTOPS_PER_GRF) {
@@ -179,6 +191,7 @@ static ChangeInfoResult RoadStopChangeInfo(uint first, uint last, int prop, Byte
 	}
 
 	return ret;
+#endif
 }
 
 template <> ChangeInfoResult GrfChangeInfoHandler<GSF_ROADSTOPS>::Reserve(uint, uint, int, ByteReader &) { return CIR_UNHANDLED; }

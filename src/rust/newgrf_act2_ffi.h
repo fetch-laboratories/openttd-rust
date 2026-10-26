@@ -8,7 +8,10 @@
 #include "../newgrf_spritegroup.h"
 struct OpenTTDGrfLoadingServices;
 using OpenTTDLayoutRegisters = TileLayoutRegisters;
-using OpenTTDPalSprite = PalSpriteID;
+struct OpenTTDPalSpriteStorage {
+	SpriteID *sprite;
+	PaletteID *pal;
+};
 struct OpenTTDAdjustStorage {
 	uint8_t *operation;
 	uint8_t *kind;
@@ -51,6 +54,7 @@ struct OpenTTDSequenceStorage {
 	uint8_t *extent_z;
 };
 struct OpenTTDAction2Services {
+	OpenTTDPalSpriteStorage (*pal_sprite_storage)(PalSpriteID *) noexcept OPENTTD_SERVICE_DEFAULT(pal_sprite_storage);
 	StringID invalid_layout, invalid_production;
 	const SpriteGroup * (*callback_new)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(callback_new);
 	uint32_t (*group_index)(const SpriteGroup *) noexcept OPENTTD_SERVICE_DEFAULT(group_index);
@@ -108,10 +112,8 @@ struct OpenTTDAction2Services {
 };
 const OpenTTDAction2Services &GetRustAction2Services() noexcept;
 extern "C" {
-void openttd_rust_action2_recolour(PalSpriteID *);
+void openttd_rust_action2_recolour(const OpenTTDAction2Services *, PalSpriteID *);
 void openttd_rust_action2_reset(bool);
-bool openttd_rust_action2_layout_sprite(const OpenTTDAction2Services *, const OpenTTDGrfLoadingServices *, const OpenTTDByteReaderServices *, ByteReader *, bool, bool, bool, GrfSpecFeature, PalSpriteID *, uint16_t *, uint16_t *, uint8_t *);
 bool openttd_rust_action2_parse(const OpenTTDAction2Services *, const OpenTTDGrfLoadingServices *, const OpenTTDByteReaderServices *, ByteReader *);
-int32_t openttd_rust_action2_layout(const OpenTTDAction2Services *, const OpenTTDGrfLoadingServices *, const OpenTTDByteReaderServices *, ByteReader *, uint32_t, bool, GrfSpecFeature, bool, bool, NewGRFSpriteLayout *);
 }
 #endif

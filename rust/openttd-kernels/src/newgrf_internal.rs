@@ -2,6 +2,8 @@
 //! Shared `newgrf_internal.h` property parser results.
 /// `CIR_SUCCESS`.
 pub const CIR_SUCCESS: i32 = 0;
+/// `CIR_DISABLED`.
+pub const CIR_DISABLED: i32 = 1;
 /// `CIR_UNKNOWN`.
 pub const CIR_UNKNOWN: i32 = 3;
 /// `CIR_INVALID_ID`.

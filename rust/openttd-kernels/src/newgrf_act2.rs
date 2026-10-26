@@ -35,6 +35,7 @@ use crate::newgrf_commons::{
     TLF_PALETTE_REG_FLAGS, TLF_PALETTE_VAR10, TLF_SPRITE, TLF_SPRITE_REG_FLAGS, TLF_SPRITE_VAR10,
     TLF_VAR10_FLAGS, TLR_MAX_VAR10,
 };
+use crate::newgrf_layout::{Layout, PalSprite};
 use crate::newgrf_loading::{self as loading, Services as LoadingServices};
 use crate::newgrf_spritegroup::{
     DSG_SIZE_BYTE, DSG_SIZE_DWORD, DSG_SIZE_WORD, DSGA_OP_ADD, DSGA_TYPE_NONE, GroupResult, Handle,
@@ -46,17 +47,13 @@ use crate::sprites::{
 };
 use std::{ffi::c_void, ptr};
 #[repr(C)]
-pub struct Layout {
-    _opaque: [u8; 0],
-}
-#[repr(C)]
 pub struct Sequence {
     _opaque: [u8; 0],
 }
 #[repr(C)]
-pub struct PalSprite {
-    pub sprite: u32,
-    pub pal: u32,
+pub struct PalSpriteStorage {
+    sprite: *mut u32,
+    pal: *mut u32,
 }
 #[repr(C)]
 pub struct LayoutRegisters {
@@ -118,6 +115,7 @@ pub struct SequenceStorage {
 }
 #[repr(C)]
 pub struct Services {
+    pal_sprite_storage: unsafe extern "C" fn(*mut PalSprite) -> PalSpriteStorage,
     invalid_layout: u32,
     invalid_production: u32,
     callback_new: unsafe extern "C" fn(u16) -> Handle,
@@ -181,9 +179,9 @@ crate::abi::layouts! {
     "OpenTTDProductionStorage" ["act2"] => ProductionStorage { version, num_input, subtract_input, cargo_input, num_output, add_output, cargo_output, again };
     "OpenTTDLayoutStorage" ["act2"] => LayoutStorage { ground, consistent_max_offset };
     "OpenTTDSequenceStorage" ["act2"] => SequenceStorage { image, x, y, z, extent_x, extent_y, extent_z };
-    "OpenTTDPalSprite" ["act2"] => PalSprite { sprite, pal };
+    "OpenTTDPalSpriteStorage" ["act2"] => PalSpriteStorage { sprite, pal };
     "OpenTTDLayoutRegisters" ["act2"] => LayoutRegisters { flags, dodraw, sprite, palette, max_sprite_offset, max_palette_offset, delta, sprite_var10, palette_var10 };
-    "OpenTTDAction2Services" ["act2"] => Services { invalid_layout, invalid_production, callback_new, group_index, group_get, result_new, assert_loaded, deterministic_new, random_new, real_new, layout_new, production_new, adjust_begin, deterministic_default, deterministic_error, range_append, random_storage, random_reserve, random_append, loaded_reserve, loaded_append, loading_reserve, loading_append, production_storage, group_layout, layout_allocate, layout_storage, layout_sequence, sequence_storage, is_parent, has_registers, allocate_registers, registers, assert_offsets, error_data, missing_group, missing_set, unsupported_feature, reserved_type, random_count, no_sets, real_counts, real_empty, real_one, real_same, loaded_entry, loading_entry, production_version, sprite_set, palette_set, sprite_var10, palette_var10, register_var10, ground_flags, unknown_flags };
+    "OpenTTDAction2Services" ["act2"] => Services { pal_sprite_storage, invalid_layout, invalid_production, callback_new, group_index, group_get, result_new, assert_loaded, deterministic_new, random_new, real_new, layout_new, production_new, adjust_begin, deterministic_default, deterministic_error, range_append, random_storage, random_reserve, random_append, loaded_reserve, loaded_append, loading_reserve, loading_append, production_storage, group_layout, layout_allocate, layout_storage, layout_sequence, sequence_storage, is_parent, has_registers, allocate_registers, registers, assert_offsets, error_data, missing_group, missing_set, unsupported_feature, reserved_type, random_count, no_sets, real_counts, real_empty, real_one, real_same, loaded_entry, loading_entry, production_version, sprite_set, palette_set, sprite_var10, palette_var10, register_var10, ground_flags, unknown_flags };
 }
 
 const GROUPID_CALLBACK_FAILED: u16 = 0x7FFF;
@@ -545,16 +543,16 @@ unsafe fn production<R: Read>(
         let f = (s.production_storage)(group);
         *f.version = kind;
         if kind < 2 {
-            *f.num_input = INDUSTRY_ORIGINAL_NUM_INPUTS;
-            for i in 0..usize::from(INDUSTRY_ORIGINAL_NUM_INPUTS) {
+            *f.num_input = INDUSTRY_ORIGINAL_NUM_INPUTS as u8;
+            for i in 0..INDUSTRY_ORIGINAL_NUM_INPUTS {
                 *f.subtract_input.add(i) = if kind == 0 {
                     b.word()? as i16
                 } else {
                     i16::from(b.byte()?)
                 };
             }
-            *f.num_output = INDUSTRY_ORIGINAL_NUM_OUTPUTS;
-            for i in 0..usize::from(INDUSTRY_ORIGINAL_NUM_OUTPUTS) {
+            *f.num_output = INDUSTRY_ORIGINAL_NUM_OUTPUTS as u8;
+            for i in 0..INDUSTRY_ORIGINAL_NUM_OUTPUTS {
                 *f.add_output.add(i) = if kind == 0 {
                     b.word()?
                 } else {
@@ -610,19 +608,24 @@ unsafe fn production<R: Read>(
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_action2_recolour(image: *mut PalSprite) {
+pub unsafe extern "C" fn openttd_rust_action2_recolour(s: &Services, image: *mut PalSprite) {
     unsafe {
-        if has_bit((*image).pal, 14) {
-            clr_bit(&mut (*image).pal, 14);
-            set_bit(&mut (*image).sprite, SPRITE_MODIFIER_OPAQUE);
+        recolour((s.pal_sprite_storage)(image));
+    }
+}
+unsafe fn recolour(image: PalSpriteStorage) {
+    unsafe {
+        if has_bit(*image.pal, 14) {
+            clr_bit(&mut *image.pal, 14);
+            set_bit(&mut *image.sprite, SPRITE_MODIFIER_OPAQUE);
         }
-        if has_bit((*image).sprite, 14) {
-            clr_bit(&mut (*image).sprite, 14);
-            set_bit(&mut (*image).sprite, PALETTE_MODIFIER_TRANSPARENT);
+        if has_bit(*image.sprite, 14) {
+            clr_bit(&mut *image.sprite, 14);
+            set_bit(&mut *image.sprite, PALETTE_MODIFIER_TRANSPARENT);
         }
-        if has_bit((*image).sprite, 15) {
-            clr_bit(&mut (*image).sprite, 15);
-            set_bit(&mut (*image).sprite, PALETTE_MODIFIER_COLOUR);
+        if has_bit(*image.sprite, 15) {
+            clr_bit(&mut *image.sprite, 15);
+            set_bit(&mut *image.sprite, PALETTE_MODIFIER_COLOUR);
         }
     }
 }
@@ -639,25 +642,29 @@ pub(crate) unsafe fn layout_sprite<R: Read>(
     max_palette: *mut u16,
 ) -> Result<u8, ReadError> {
     unsafe {
-        (*image).sprite = u32::from(b.word()?);
-        (*image).pal = u32::from(b.word()?);
+        let image = (s.pal_sprite_storage)(image);
+        *image.sprite = u32::from(b.word()?);
+        *image.pal = u32::from(b.word()?);
         let flags = if read_flags {
             b.word()? as u8
         } else {
             TLF_NOTHING
         };
-        openttd_rust_action2_recolour(image);
-        let custom = has_bit((*image).pal, 15) != invert;
-        clr_bit(&mut (*image).pal, 15);
+        recolour(PalSpriteStorage {
+            sprite: image.sprite,
+            pal: image.pal,
+        });
+        let custom = has_bit(*image.pal, 15) != invert;
+        clr_bit(&mut *image.pal, 15);
         if custom {
-            let index = gb((*image).sprite, 0, 14);
+            let index = gb(*image.sprite, 0, 14);
             if use_sets
                 && (!loading::openttd_rust_grf_has_set(feature, index)
                     || loading::openttd_rust_grf_set_size(feature, index) == 0)
             {
                 (s.sprite_set)(index);
-                (*image).sprite = SPR_IMG_QUERY;
-                (*image).pal = PAL_NONE;
+                *image.sprite = SPR_IMG_QUERY;
+                *image.pal = PAL_NONE;
             } else {
                 let sprite = if use_sets {
                     loading::openttd_rust_grf_set_sprite(feature, index)
@@ -671,8 +678,8 @@ pub(crate) unsafe fn layout_sprite<R: Read>(
                         u16::MAX
                     };
                 }
-                sb(&mut (*image).sprite, 0, SPRITE_WIDTH, sprite);
-                set_bit(&mut (*image).sprite, SPRITE_MODIFIER_CUSTOM_SPRITE);
+                sb(&mut *image.sprite, 0, SPRITE_WIDTH, sprite);
+                set_bit(&mut *image.sprite, SPRITE_MODIFIER_CUSTOM_SPRITE);
             }
         } else if flags & TLF_SPRITE_VAR10 != 0 && flags & TLF_SPRITE_REG_FLAGS == 0 {
             (s.sprite_var10)();
@@ -680,13 +687,13 @@ pub(crate) unsafe fn layout_sprite<R: Read>(
             return Ok(flags);
         }
         if flags & TLF_CUSTOM_PALETTE != 0 {
-            let index = gb((*image).pal, 0, 14);
+            let index = gb(*image.pal, 0, 14);
             if use_sets
                 && (!loading::openttd_rust_grf_has_set(feature, index)
                     || loading::openttd_rust_grf_set_size(feature, index) == 0)
             {
                 (s.palette_set)(index);
-                (*image).pal = PAL_NONE;
+                *image.pal = PAL_NONE;
             } else {
                 let sprite = if use_sets {
                     loading::openttd_rust_grf_set_sprite(feature, index)
@@ -700,8 +707,8 @@ pub(crate) unsafe fn layout_sprite<R: Read>(
                         u16::MAX
                     };
                 }
-                sb(&mut (*image).pal, 0, SPRITE_WIDTH, sprite);
-                set_bit(&mut (*image).pal, SPRITE_MODIFIER_CUSTOM_SPRITE);
+                sb(&mut *image.pal, 0, SPRITE_WIDTH, sprite);
+                set_bit(&mut *image.pal, SPRITE_MODIFIER_CUSTOM_SPRITE);
             }
         } else if flags & TLF_PALETTE_VAR10 != 0 && flags & TLF_PALETTE_REG_FLAGS == 0 {
             (s.palette_var10)();
@@ -972,70 +979,4 @@ pub unsafe extern "C" fn openttd_rust_action2_parse(
     native: *mut ByteReader,
 ) -> bool {
     unsafe { parse(s, l, &mut Reader::new(native, reads)).is_ok() }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_action2_layout(
-    s: &Services,
-    l: &LoadingServices,
-    reads: &crate::newgrf_bytereader::Services,
-    native: *mut ByteReader,
-    count: u32,
-    use_sets: bool,
-    feature: u8,
-    allow_var10: bool,
-    no_z: bool,
-    layout: *mut Layout,
-) -> i32 {
-    unsafe {
-        match read_layout(
-            s,
-            l,
-            &mut Reader::new(native, reads),
-            count,
-            use_sets,
-            feature,
-            allow_var10,
-            no_z,
-            layout,
-        ) {
-            Ok(error) => i32::from(error),
-            Err(_) => -1,
-        }
-    }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_action2_layout_sprite(
-    s: &Services,
-    l: &LoadingServices,
-    reads: &crate::newgrf_bytereader::Services,
-    native: *mut ByteReader,
-    read_flags: bool,
-    invert: bool,
-    use_sets: bool,
-    feature: u8,
-    image: *mut PalSprite,
-    max_sprite: *mut u16,
-    max_palette: *mut u16,
-    flags: *mut u8,
-) -> bool {
-    unsafe {
-        match layout_sprite(
-            s,
-            l,
-            &mut Reader::new(native, reads),
-            read_flags,
-            invert,
-            use_sets,
-            feature,
-            image,
-            max_sprite,
-            max_palette,
-        ) {
-            Ok(value) => {
-                *flags = value;
-                true
-            }
-            Err(_) => false,
-        }
-    }
 }

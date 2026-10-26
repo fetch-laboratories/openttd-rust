@@ -27,6 +27,10 @@ inline bool RustGRFReadChecked(Action &&action) noexcept
 	}
 }
 
+inline bool RustGRFHasData(ByteReader *reader, size_t count) noexcept { return reader->HasData(count); }
+inline bool RustGRFPeekDWord(ByteReader *reader, uint32_t *value) noexcept { return RustGRFReadChecked([&] { *value = reader->PeekDWord(); }); }
+inline bool RustGRFReadBytes(ByteReader *reader, size_t count, const uint8_t **value) noexcept { return RustGRFReadChecked([&] { *value = reader->ReadBytes(count); }); }
+
 inline bool RustGRFReadByte(ByteReader *reader, uint8_t *value) noexcept
 {
 	return RustGRFReadChecked([&] { *value = reader->ReadByte(); });
@@ -60,6 +64,9 @@ inline bool RustGRFSkipBadgeList(ByteReader *reader) noexcept
 inline const OpenTTDByteReaderServices &GetRustByteReaderServices() noexcept
 {
 	static const OpenTTDByteReaderServices services{
+		.has_data = RustGRFHasData,
+		.peek_dword = RustGRFPeekDWord,
+		.read_bytes = RustGRFReadBytes,
 		.read_byte = RustGRFReadByte,
 		.read_word = RustGRFReadWord,
 		.read_dword = RustGRFReadDWord,

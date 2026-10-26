@@ -55,7 +55,7 @@ IndustryTileOverrideManager _industile_mngr(NEW_INDUSTRYTILEOFFSET, NUM_INDUSTRY
 IndustryType MapNewGRFIndustryType(IndustryType grf_type, uint32_t grf_id)
 {
 #ifdef WITH_RUST
-	return openttd_rust_industry_map_type(grf_type, grf_id, &GetIndustryResolverServices());
+	return openttd_rust_industry_map_type(grf_type, grf_id);
 #else
 	if (grf_type == IT_INVALID) return IT_INVALID;
 	if (!HasBit(grf_type, 7)) return GB(grf_type, 0, 7);
@@ -821,7 +821,6 @@ const OpenTTDIndustryResolverServices &GetIndustryResolverServices() noexcept
 		.lifecycle = &GetIndustryLifecycleRustServices(),
 		.tile = &GetIndustryTileServices(),
 		.get = [](uint16_t id) noexcept -> OpenTTDIndustryResolverRef { Industry *i = RustIndustryByID(id); return {RustIndustryCanonicalOwner(i), OpenTTDIndustryTown(i)}; },
-		.map_type = [](uint8_t local, uint32_t grfid) noexcept { return _industry_mngr.GetID(local, grfid); },
 		.spec_grfid = RustSpecGRFID<IndustrySpec>,
 		.spec_local_id = RustSpecLocalID<IndustrySpec>,
 		.root = RustSpecSpriteGroup<IndustrySpec>,

@@ -17,6 +17,7 @@ static_assert(INDUSTRY_NUM_INPUTS == 16 && INDUSTRY_NUM_OUTPUTS == 16 && INDUSTR
 const OpenTTDAction2Services &GetRustAction2Services() noexcept
 {
 	static const OpenTTDAction2Services services{
+		.pal_sprite_storage = [](PalSpriteID *image) noexcept { return OpenTTDPalSpriteStorage{&image->sprite, &image->pal}; },
 		.invalid_layout = STR_NEWGRF_ERROR_INVALID_SPRITE_LAYOUT,
 		.invalid_production = STR_NEWGRF_ERROR_INDPROD_CALLBACK,
 		.callback_new = [](uint16_t value) noexcept -> const SpriteGroup * { assert(CallbackResultSpriteGroup::CanAllocateItem()); return new CallbackResultSpriteGroup(value); },

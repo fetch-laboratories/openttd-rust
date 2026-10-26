@@ -58,3 +58,7 @@ pub const TLF_SPRITE_REG_FLAGS: u8 = TLF_DODRAW | TLF_SPRITE | TLF_NON_GROUND_FL
 pub const TLF_PALETTE_REG_FLAGS: u8 = TLF_PALETTE;
 /// `TLR_MAX_VAR10`.
 pub const TLR_MAX_VAR10: u8 = 7;
+/// `IndustryTileOverrideManager::CheckValidNewID` excludes the water-check marker.
+pub(crate) fn industry_tile_check_valid_new_id(id: u16) -> bool {
+    id != crate::industry_map::GFX_WATERTILE_SPECIALCHECK
+}

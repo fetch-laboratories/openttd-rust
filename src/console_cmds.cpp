@@ -1257,7 +1257,6 @@ static bool ConReturn(std::span<std::string_view> argv)
  *  default console commands
  ******************************/
 extern bool CloseConsoleLogIfActive();
-extern std::span<const GRFFile> GetAllGRFFiles();
 extern void ConPrintFramerate(); // framerate_gui.cpp
 extern void ShowFramerateWindow();
 
