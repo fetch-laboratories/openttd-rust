@@ -1348,6 +1348,24 @@ Panics/environmental exceptions abort; native save/load errors remain outside Ru
 reference bodies. External NewGRF programs/retire_early, ENGS and TTO/TTD fixtures, legacy
 preview conversion and threaded GUI/presentation remain #156 gaps. PR #248.
 
+### Engine definition loading (#470)
+
+`engine_loading.rs` owns sorted engine identity mappings, NewGRF overrides,
+setup/allocation control, temporary loading records and rail-label vectors,
+refit-mask computation, variant finalization and road/train binding loops.
+Mappings outlive engine-pool rebuilds. Native EIDS frames serialize canonical
+mapping views in the original engine-ID order; there is no synchronized map.
+Native Action0 ByteReader frames mutate aliases of Rust-owned temporary fields;
+rail-vector views preserve partial parser writes. Field aliases end before
+storage resize/clear; rail-vector views end before vector mutations.
+Rust ends owner borrows before native callbacks, construction and publication.
+Custom-refit evaluation calls the Rust vehicle resolver with the original null
+vehicle context. Specifications, shells, pool allocation, GRF files, parsing,
+serialization/error frames, badge/livery stores and presentation remain native.
+Typed native leaves are synchronous and noexcept. Historical mappings, pool
+exhaustion, malformed parser sequences, arbitrary GRFs and GUI/network execution
+remain #156 limits. PR #474.
+
 ### Orders lifecycle ownership
 
 Rust owns order storage, links, backups and consist timetable/unbunching state, including

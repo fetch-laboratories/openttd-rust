@@ -241,10 +241,13 @@ inline uint8_t RustVehicleCargoType(OpenTTDVehicle *handle) noexcept { return Ve
 inline uint8_t RustVehicleOwnerOf(OpenTTDVehicle *handle) noexcept { return RustVehicleOwner(VehicleOf(handle)); }
 inline bool RustVehicleHasArticulated(OpenTTDVehicle *handle) noexcept { return RustGroundHasArticulated(VehicleOf(handle)); }
 
+inline const GRFFile *RustEngineGRF(const Engine *engine) noexcept { return engine->GetGRF(); }
+inline const GRFFile *RustEngineGRF(const OpenTTDEngine *engine) noexcept { return RustEngineGRF(EngineOf(engine)); }
+
 /** GRF version of a live engine; the original default-engine value is zero. */
 inline uint8_t RustEngineGRFVersion(const Engine *engine) noexcept
 {
-	const GRFFile *grf = engine->GetGRF();
+	const GRFFile *grf = RustEngineGRF(engine);
 	return grf == nullptr ? uint8_t(0) : RustGRFFileVersion(grf);
 }
 
