@@ -3640,7 +3640,7 @@ static const OpenTTDIndustryServices _industry_services = {
 	.next_tick = [](uint32_t from) noexcept -> OpenTTDIndustryEntry {
 		Industry *i = OpenTTDNextIndustry(from);
 		if (i == nullptr) return {};
-		return {i, RustIndustryCanonicalOwner(i), RustIndustryID(i), GetIndustrySpec(i->type)->callback_mask.base()};
+		return {i, RustIndustryCanonicalOwner(i), RustIndustryID(i), RustIndustrySpecCallbackMask(GetIndustrySpec(i->type))};
 	},
 	.sound_count = [](void *i) noexcept -> uint16_t { return static_cast<uint16_t>(RustIndustrySpec(i)->random_sounds.size()); },
 	.behaviour = [](void *i) noexcept -> uint32_t { return RustIndustrySpec(i)->behaviour.base(); },
@@ -3703,7 +3703,7 @@ static const OpenTTDIndustryServices _industry_services = {
 	.observe = [](void *handle, OpenTTDIndustryObservation *out) noexcept {
 		Industry *i = RustIndustry(handle);
 		const IndustrySpec *spec = GetIndustrySpec(i->type);
-		*out = {RustIndustryCanonicalOwner(i), spec->behaviour.base(), spec->callback_mask.base(), spec->life_type.base(), uint8_t(spec->UsesOriginalEconomy()), i->type,
+		*out = {RustIndustryCanonicalOwner(i), spec->behaviour.base(), RustIndustrySpecCallbackMask(spec), spec->life_type.base(), uint8_t(spec->UsesOriginalEconomy()), i->type,
 			spec->production_up_text, spec->production_down_text, spec->closure_text};
 	},
 	.production_rate = [](void *i, uint32_t slot) noexcept -> uint8_t { return RustIndustrySpec(i)->production_rate[slot]; },
