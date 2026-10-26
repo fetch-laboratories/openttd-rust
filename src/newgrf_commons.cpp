@@ -91,6 +91,19 @@ OverrideManagerBase &OverrideManagerBase::operator=(const OverrideManagerBase &o
 OverrideManagerBase::~OverrideManagerBase() { openttd_rust_override_delete(this->rust_owner); }
 #endif
 
+#ifdef WITH_RUST
+IndustryOverrideManager::IndustryOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
+		OverrideManagerBase(offset, maximum, invalid)
+{
+	if (this == &_industry_mngr) openttd_rust_industry_register_manager(this->rust_owner);
+}
+IndustryTileOverrideManager::IndustryTileOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
+		OverrideManagerBase(offset, maximum, invalid)
+{
+	if (this == &_industile_mngr) openttd_rust_industry_tile_register_manager(this->rust_owner);
+}
+#endif
+
 /**
  * Since the entity IDs defined by the GRF file does not necessarily correlate
  * to those used by the game, the IDs used for overriding old entities must be
@@ -350,12 +363,6 @@ void IndustryOverrideManager::SetEntitySpec(IndustrySpec &&inds)
 }
 #endif
 
-#ifdef WITH_RUST
-uint16_t IndustryTileOverrideManager::AddEntityID(uint16_t grf_local_id, uint32_t grfid, uint16_t substitute_id)
-{
-	return openttd_rust_industry_tile_definition_allocate(this->rust_owner, grf_local_id, grfid, substitute_id);
-}
-#endif
 
 #ifndef WITH_RUST
 void IndustryTileOverrideManager::SetEntitySpec(IndustryTileSpec &&its)

@@ -54,7 +54,6 @@ struct OpenTTDIndustryDefinitionServices {
 };
 const OpenTTDIndustryDefinitionServices &GetIndustryDefinitionServices() noexcept;
 extern "C" {
-uint16_t openttd_rust_industry_tile_definition_allocate(OpenTTDOverrideManager *, uint16_t, uint32_t, uint16_t);
 uint16_t openttd_rust_industry_definition_allocate(OpenTTDOverrideManager *, uint16_t, uint32_t, uint16_t, const OpenTTDIndustryDefinitionServices *);
 void openttd_rust_industry_definition_reset(uint8_t, const OpenTTDIndustryDefinitionServices *);
 }

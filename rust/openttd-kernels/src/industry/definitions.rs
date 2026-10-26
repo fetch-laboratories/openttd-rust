@@ -276,16 +276,6 @@ pub unsafe fn finalise(s: &Services) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_tile_definition_allocate(
-    manager: *mut override_manager::Manager,
-    local: u16,
-    grfid: u32,
-    substitute: u16,
-) -> u16 {
-    unsafe { allocate_tile_for(manager, local, grfid, substitute) }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_definition_allocate(
     manager: *mut override_manager::Manager,
     local: u16,

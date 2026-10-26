@@ -17,6 +17,9 @@
 #include "../rust/override_manager_ffi.h"
 #include "../rust/industry_definition_ffi.h"
 #include "../rust/industry_property_ffi.h"
+#include "../rust/newgrf_bytereader_services.h"
+#include "../rust/newgrf_loading_ffi.h"
+#include "../newgrf.h"
 #include "../rust/newgrf_global_ffi.h"
 #include "../object_base.h"
 #include "../industrytype.h"
@@ -80,6 +83,59 @@ TEST_CASE("NewGRF - canonical manager virtual dispatch and reset lifetimes")
 	manager.ResetMapping();
 	CHECK(manager.GetID(5, 17) == 99);
 	CHECK(manager.Requested(0) == 5);
+}
+class TestIndustryTileOverrideManager : public IndustryTileOverrideManager {
+public:
+	using IndustryTileOverrideManager::IndustryTileOverrideManager;
+	bool CheckValidNewID(uint16_t id) override { return id != 3 && IndustryTileOverrideManager::CheckValidNewID(id); }
+	uint16_t GetID(uint16_t local, uint32_t grfid) const override { return local == 42 ? 1 : IndustryTileOverrideManager::GetID(local, grfid); }
+};
+TEST_CASE("NewGRF - industry tile manager retains virtual allocation")
+{
+	TestIndustryTileOverrideManager manager(2, 6, 99);
+	CHECK(manager.AddEntityID(5, 17, 1) == 2);
+	CHECK(manager.AddEntityID(6, 17, 0) == 4);
+	CHECK(manager.AddEntityID(42, 17, 0) == 1);
+	IndustryTileOverrideManager water(254, 257, 512);
+	CHECK(water.AddEntityID(1, 17, 0) == 254);
+	CHECK(water.AddEntityID(2, 17, 0) == 256);
+}
+TEST_CASE("NewGRF - temporary managers preserve canonical industry owner")
+{
+	const auto saved = _industry_mngr.mappings[NUM_INDUSTRYTYPES - 1];
+	_industry_mngr.mappings[NUM_INDUSTRYTYPES - 1] = {0x475475, 126, 0};
+	{
+		IndustryOverrideManager temporary(2, 6, 99);
+		temporary.mappings[3] = {0x475475, 126, 0};
+		CHECK(openttd_rust_industry_map_type(254, 0x475475) == NUM_INDUSTRYTYPES - 1);
+		IndustryOverrideManager copy = temporary;
+		copy = _industry_mngr;
+		CHECK(copy.GetID(126, 0x475475) == NUM_INDUSTRYTYPES - 1);
+	}
+	CHECK(openttd_rust_industry_map_type(254, 0x475475) == NUM_INDUSTRYTYPES - 1);
+	_industry_mngr.mappings[NUM_INDUSTRYTYPES - 1] = saved;
+}
+TEST_CASE("NewGRF - temporary managers preserve canonical tile owner")
+{
+	std::vector<EntityIDMapping> saved(_industile_mngr.mappings.begin(), _industile_mngr.mappings.end());
+	_industile_mngr.ResetMapping();
+	GRFFile file;
+	file.grfid = 0x475475;
+	const OpenTTDIndustryPropertyContext context{&file, file.grfid, 8, 0};
+	const uint8_t substitute = 0;
+	auto define = [&](uint32_t id) {
+		ByteReader reader(&substitute, 1);
+		int32_t result = CIR_UNKNOWN;
+		CHECK(openttd_rust_industry_tile_properties(id, id + 1, 8, &reader, &context, &GetRustByteReaderServices(), &GetIndustryDefinitionServices(), &GetIndustryPropertyServices(), &GetRustGrfLoadingServices(), &result));
+		CHECK(result == CIR_SUCCESS);
+		CHECK(_industile_mngr.GetID(id, file.grfid) == NEW_INDUSTRYTILEOFFSET + id);
+	};
+	{
+		IndustryTileOverrideManager temporary(2, 6, 99);
+		define(0);
+	}
+	define(1);
+	std::copy(saved.begin(), saved.end(), _industile_mngr.mappings.begin());
 }
 TEST_CASE("NewGRF - industry mapping is shared across serialized threads")
 {

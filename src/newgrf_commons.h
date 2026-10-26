@@ -260,12 +260,12 @@ public:
 struct IndustrySpec;
 class IndustryOverrideManager : public OverrideManagerBase {
 public:
-	IndustryOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
-			OverrideManagerBase(offset, maximum, invalid) {
 #ifdef WITH_RUST
-		openttd_rust_industry_register_manager(this->rust_owner);
+	IndustryOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid);
+#else
+	IndustryOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
+			OverrideManagerBase(offset, maximum, invalid) {}
 #endif
-	}
 
 	uint16_t AddEntityID(uint16_t grf_local_id, uint32_t grfid, uint16_t substitute_id) override;
 	uint16_t GetID(uint16_t grf_local_id, uint32_t grfid) const override;
@@ -287,15 +287,11 @@ protected:
 #endif
 	}
 public:
+#ifdef WITH_RUST
+	IndustryTileOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid);
+#else
 	IndustryTileOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
-			OverrideManagerBase(offset, maximum, invalid) {
-#ifdef WITH_RUST
-		openttd_rust_industry_tile_register_manager(this->rust_owner);
-#endif
-	}
-
-#ifdef WITH_RUST
-	uint16_t AddEntityID(uint16_t grf_local_id, uint32_t grfid, uint16_t substitute_id) override;
+			OverrideManagerBase(offset, maximum, invalid) {}
 #endif
 
 #ifndef WITH_RUST
