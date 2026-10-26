@@ -4,7 +4,6 @@
 #define RUST_VEHICLE_PROPERTIES_FFI_H
 #include "engine_loading_ffi.h"
 #include "newgrf_bytereader_ffi.h"
-struct OpenTTDRailLabelList { const RailTypeLabel *data; size_t size; };
 struct OpenTTDVehicleProperties {
 	const OpenTTDEngineLoadingServices *loading;
 	void (*set_intro)(const OpenTTDEngine *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_intro);
@@ -79,7 +78,6 @@ struct OpenTTDVehicleProperties {
 	EngineClass (*train_class)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(train_class);
 	uint8_t (*aircraft_subtype)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_subtype);
 	std::vector<BadgeID> * (*badges)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(badges);
-	OpenTTDRailLabelList (*rail_labels)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(rail_labels);
 	SoundID (*sound)(const GRFFile *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(sound);
 	bool (*train_image_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(train_image_valid);
 	bool (*road_image_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_image_valid);
@@ -94,8 +92,6 @@ struct OpenTTDVehicleProperties {
 	void (*invalid_price)(const char *, size_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(invalid_price);
 };
 const OpenTTDVehicleProperties &GetRustVehicleProperties() noexcept;
-void RustVehicleOrderSort(uint16_t *, size_t) noexcept;
-void RustVehicleOrderSlide(uint16_t *, size_t, size_t) noexcept;
 extern "C" {
 int32_t openttd_rust_vehicle_properties(const OpenTTDVehicleProperties *, const OpenTTDByteReaderServices *, const GRFFile *, VehicleType, uint32_t, uint32_t, int32_t, ByteReader *);
 }

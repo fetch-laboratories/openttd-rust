@@ -63,7 +63,7 @@ inline void RustSetEngineLife(const OpenTTDEngine *shell, int32_t value) noexcep
 inline void RustSetEngineModelLife(const OpenTTDEngine *shell, int32_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->info.base_life = TimerGameCalendar::Year{value}; }
 inline void RustSetEngineClimates(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->info.climates = LandscapeTypes{value}; }
 inline void RustSetEngineLoadAmount(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->info.load_amount = value; }
-inline void RustSetEngineCargoLabel(const OpenTTDEngine *shell, uint32_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->info.cargo_label = value; }
+inline void RustSetEngineCargoLabel(const OpenTTDEngine *shell, uint32_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->info.cargo_label = CargoLabel{value}; }
 inline void RustSetEngineCallbacks(const OpenTTDEngine *shell, uint16_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->info.callback_mask = VehicleCallbackMasks{value}; }
 inline void RustSetEngineRefitCost(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->info.refit_cost = value; }
 inline void RustSetEngineRetire(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->info.retire_early = value; }

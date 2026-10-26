@@ -85,7 +85,6 @@ const OpenTTDVehicleProperties &GetRustVehicleProperties() noexcept
 		.train_class = [](const OpenTTDEngine *e) noexcept { return static_cast<EngineClass>(RustRailEngineClass(&EngineOf(e)->VehInfo<RailVehicleInfo>())); },
 		.aircraft_subtype = RustEngineAircraftSubtype,
 		.badges = [](const OpenTTDEngine *e) noexcept { return &const_cast<Engine *>(EngineOf(e))->badges; },
-		.rail_labels = [](const GRFFile *file) noexcept { return OpenTTDRailLabelList{.data = file->railtype_list.data(), .size = file->railtype_list.size()}; },
 		.sound = [](const GRFFile *file, uint16_t sound) noexcept { return GetNewGRFSoundID(file, sound); },
 		.train_image_valid = IsValidNewGRFImageIndex<VEH_TRAIN>,
 		.road_image_valid = IsValidNewGRFImageIndex<VEH_ROAD>,
@@ -101,3 +100,8 @@ const OpenTTDVehicleProperties &GetRustVehicleProperties() noexcept
 	};
 	return services;
 }
+
+static_assert(AIR_HELI == 0 && EC_DIESEL == 1 && EC_ELECTRIC == 2 && EC_MAGLEV == 4);
+static_assert(RAILVEH_SINGLEHEAD == 0 && RAILVEH_MULTIHEAD == 1 && RAILVEH_WAGON == 2);
+static_assert(RAILTYPE_LABEL_RAIL == 0x5241494c && RAILTYPE_LABEL_ELECTRIC == 0x454c524c && RAILTYPE_LABEL_MONO == 0x4d4f4e4f && RAILTYPE_LABEL_MAGLEV == 0x4d474c56);
+static_assert(to_underlying(EngineMiscFlag::Uses2CC) == 1);

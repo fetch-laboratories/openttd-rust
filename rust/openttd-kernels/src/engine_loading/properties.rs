@@ -26,11 +26,6 @@ use crate::newgrf_bytereader::{
 use crate::newgrf_internal::{CIR_INVALID_ID, CIR_SUCCESS, CIR_UNKNOWN};
 use crate::vehicle_func::CUSTOM_VEHICLE_SPRITENUM;
 #[repr(C)]
-pub struct RailLabelList {
-    data: *const u32,
-    size: usize,
-}
-#[repr(C)]
 pub struct Properties {
     loading: *const Services,
     set_intro: extern "C" fn(E, i32),
@@ -105,7 +100,6 @@ pub struct Properties {
     train_class: extern "C" fn(E) -> u8,
     aircraft_subtype: extern "C" fn(E) -> u8,
     badges: extern "C" fn(E) -> *mut BadgeList,
-    rail_labels: extern "C" fn(File) -> RailLabelList,
     sound: extern "C" fn(File, u16) -> u16,
     train_image_valid: extern "C" fn(u8) -> bool,
     road_image_valid: extern "C" fn(u8) -> bool,
@@ -121,8 +115,7 @@ pub struct Properties {
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDRailLabelList" ["engine_loading"] => RailLabelList { data, size };
-    "OpenTTDVehicleProperties" ["engine_loading"] => Properties { loading, set_intro, set_decay, set_life, set_model_life, set_climates, set_load_amount, set_cargo_label, set_callbacks, set_refit_cost, set_retire, set_misc, set_extra, set_cargo_age, set_train_ai, set_train_speed, set_train_power, set_train_kind, set_train_running, set_train_price, set_train_image, set_train_capacity, set_train_weight, set_train_cost, set_train_class, set_train_wagon_power, set_train_te, set_train_drag, set_train_shorten, set_train_visual, set_train_wagon_weight, set_train_user, set_train_curve, set_road_running, set_road_price, set_road_image, set_road_capacity, set_road_cost, set_road_sound, set_road_power, set_road_weight, set_road_te, set_road_drag, set_road_visual, set_road_shorten, set_ship_image, set_ship_cost, set_ship_speed, set_ship_capacity, set_ship_running, set_ship_sound, set_ship_ocean, set_ship_canal, set_ship_visual, set_ship_acceleration, set_aircraft_image, set_aircraft_subtype, set_aircraft_cost, set_aircraft_speed, set_aircraft_acceleration, set_aircraft_running, set_aircraft_passengers, set_aircraft_mail, set_aircraft_sound, set_aircraft_range, id, callbacks, train_power, train_kind, train_weight, train_class, aircraft_subtype, badges, rail_labels, sound, train_image_valid, road_image_valid, ship_image_valid, aircraft_image_valid, uses_2cc, invalid_sprite, invalid_cargo, invalid_track, invalid_weight, ai_rank, invalid_price };
+    "OpenTTDVehicleProperties" ["engine_loading"] => Properties { loading, set_intro, set_decay, set_life, set_model_life, set_climates, set_load_amount, set_cargo_label, set_callbacks, set_refit_cost, set_retire, set_misc, set_extra, set_cargo_age, set_train_ai, set_train_speed, set_train_power, set_train_kind, set_train_running, set_train_price, set_train_image, set_train_capacity, set_train_weight, set_train_cost, set_train_class, set_train_wagon_power, set_train_te, set_train_drag, set_train_shorten, set_train_visual, set_train_wagon_weight, set_train_user, set_train_curve, set_road_running, set_road_price, set_road_image, set_road_capacity, set_road_cost, set_road_sound, set_road_power, set_road_weight, set_road_te, set_road_drag, set_road_visual, set_road_shorten, set_ship_image, set_ship_cost, set_ship_speed, set_ship_capacity, set_ship_running, set_ship_sound, set_ship_ocean, set_ship_canal, set_ship_visual, set_ship_acceleration, set_aircraft_image, set_aircraft_subtype, set_aircraft_cost, set_aircraft_speed, set_aircraft_acceleration, set_aircraft_running, set_aircraft_passengers, set_aircraft_mail, set_aircraft_sound, set_aircraft_range, id, callbacks, train_power, train_kind, train_weight, train_class, aircraft_subtype, badges, sound, train_image_valid, road_image_valid, ship_image_valid, aircraft_image_valid, uses_2cc, invalid_sprite, invalid_cargo, invalid_track, invalid_weight, ai_rank, invalid_price };
 }
 
 fn common(s: &Properties, e: E, prop: i32, r: &mut Reader<'_>) -> Result<i32, ReadError> {
@@ -314,9 +307,9 @@ unsafe fn train(
             unsafe {
                 (*temp(id)).labels.clear();
             }
-            let list = (s.rail_labels)(file);
-            if usize::from(track) < list.size {
-                let label = unsafe { *list.data.add(usize::from(track)) };
+            let list = crate::type_registry::rail_labels(file);
+            if usize::from(track) < list.len() {
+                let label = unsafe { list.at(usize::from(track)) };
                 unsafe {
                     (*temp(id)).labels.push(label);
                 }
@@ -400,7 +393,7 @@ unsafe fn train(
                 0x38..=0x41 => EC_MAGLEV,
                 _ => return Ok(CIR_SUCCESS),
             };
-            if (s.rail_labels)(file).size == 0 {
+            if crate::type_registry::rail_labels(file).len() == 0 {
                 use crate::rail_type::{RAILTYPE_LABEL_ELECTRIC, RAILTYPE_LABEL_RAIL};
                 if let Some(label) = unsafe { &mut (*temp(id)).labels }.first_mut() {
                     if *label == RAILTYPE_LABEL_RAIL && class >= EC_ELECTRIC {
@@ -468,9 +461,9 @@ unsafe fn train(
             }
             for _ in 0..count {
                 let track = r.byte()?;
-                let list = (s.rail_labels)(file);
-                if usize::from(track) < list.size {
-                    let label = unsafe { *list.data.add(usize::from(track)) };
+                let list = crate::type_registry::rail_labels(file);
+                if usize::from(track) < list.len() {
+                    let label = unsafe { list.at(usize::from(track)) };
                     unsafe {
                         (*temp(id)).labels.push(label);
                     }

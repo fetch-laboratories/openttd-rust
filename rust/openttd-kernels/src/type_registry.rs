@@ -37,6 +37,15 @@ pub struct Labels {
     size: usize,
 }
 impl Labels {
+    pub(crate) const fn len(self) -> usize {
+        self.size
+    }
+    /// # Safety
+    /// The index is below len and the native list has not been mutated.
+    pub(crate) unsafe fn at(self, index: usize) -> u32 {
+        unsafe { *self.data.add(index) }
+    }
+
     fn slice(self) -> &'static [u32] {
         if self.size == 0 {
             &[]
@@ -387,6 +396,12 @@ pub extern "C" fn openttd_rust_road_mask() -> *mut u64 {
 pub extern "C" fn openttd_rust_tram_mask() -> *mut u64 {
     unsafe { &raw mut (*REGISTRY.get()).tram }
 }
+/// Call-scoped alias into the file's canonical translation list. Loading cannot
+/// reset or mutate the list until the caller has finished reading the alias.
+pub(crate) fn rail_labels(file: Handle) -> Labels {
+    (services().rail_labels)(file)
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_rail_translate(rt: u8, file: Handle) -> u8 {
     let s = services();
