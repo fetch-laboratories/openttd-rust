@@ -57,6 +57,9 @@ inline OpenTTDRoadStopSpecTriggers RustRoadStopSpecTriggers(const RoadStopSpec *
 /* Borrowed native station shells; retain strict tile/type/index preconditions.
  * Const and mutable table receivers share each scalar's actual field read. */
 inline BaseStation *RustBaseStationByTile(uint32_t tile) noexcept { return BaseStation::GetByTile(TileIndex(tile)); }
+/* Bind directly: another service table may still be dynamically initializing. */
+template <class Handle>
+inline bool RustStationIsExpected(Handle handle) noexcept { return Station::IsExpected(static_cast<const BaseStation *>(handle)); }
 template <typename TStation>
 inline uint16_t RustBaseStationID(TStation *st) noexcept { return st->index.base(); }
 inline uint8_t RustStationFacilities(const BaseStation *st) noexcept { return st->facilities.base(); }

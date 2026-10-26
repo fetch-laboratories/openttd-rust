@@ -679,9 +679,7 @@ static const OpenTTDStationServices _rust_station_services = {
 	.in_use = [](OpenTTDBaseStation *handle) noexcept -> bool {
 		return static_cast<BaseStation *>(handle)->IsInUse();
 	},
-	.is_station = [](OpenTTDBaseStation *handle) noexcept -> bool {
-		return Station::IsExpected(static_cast<BaseStation *>(handle));
-	},
+	.is_station = RustStationIsExpected<OpenTTDBaseStation *>,
 	.local_owner = [](OpenTTDBaseStation *handle) noexcept -> bool {
 		return static_cast<BaseStation *>(handle)->owner == _local_company;
 	},
