@@ -203,9 +203,13 @@ pub unsafe extern "C" fn openttd_rust_engine_temp_resize(size: usize) {
 pub unsafe extern "C" fn openttd_rust_engine_temp_clear() {
     unsafe { &mut *TEMP.get() }.clear();
 }
+fn temp(engine: u16) -> *mut Temp {
+    // Vec::as_mut_ptr does not borrow elements; native field aliases stay valid.
+    unsafe { (*TEMP.get()).as_mut_ptr().add(usize::from(engine)) }
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_temp_fields(engine: u16) -> *mut TempFields {
-    &raw mut (unsafe { &mut *TEMP.get() })[usize::from(engine)].fields
+    unsafe { ptr::addr_of_mut!((*temp(engine)).fields) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_temp_refittability(
@@ -221,15 +225,11 @@ pub unsafe extern "C" fn openttd_rust_engine_temp_refittability(
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_temp_labels_clear(engine: u16) {
-    (unsafe { &mut *TEMP.get() })[usize::from(engine)]
-        .labels
-        .clear();
+    unsafe { &mut (*temp(engine)).labels }.clear();
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_temp_labels_push(engine: u16, label: u32) {
-    (unsafe { &mut *TEMP.get() })[usize::from(engine)]
-        .labels
-        .push(label);
+    unsafe { &mut (*temp(engine)).labels }.push(label);
 }
 #[repr(C)]
 pub struct RailLabelView {
@@ -238,7 +238,7 @@ pub struct RailLabelView {
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_temp_labels(engine: u16) -> RailLabelView {
-    let labels = &mut (unsafe { &mut *TEMP.get() })[usize::from(engine)].labels;
+    let labels = unsafe { &mut (*temp(engine)).labels };
     RailLabelView {
         data: labels.as_mut_ptr(),
         size: labels.len(),

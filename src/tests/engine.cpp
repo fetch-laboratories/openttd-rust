@@ -76,7 +76,13 @@ TEST_CASE("Engine mappings preserve reservation, sorted identity and replacement
 		REQUIRE(_engine_mngr.UseUnreservedID(type, 1, 17, false) == original);
 		REQUIRE(_engine_mngr.GetID(type, 1, INVALID_GRFID) == EngineID::Invalid());
 		REQUIRE(_engine_mngr.GetID(type, 1, 17) == original);
-		_engine_mngr.SetID(type, 1, 17, 99, EngineID{500});
+		bool visible = false;
+		std::thread game([&] {
+			visible = _engine_mngr.GetID(type, 1, 17) == original;
+			_engine_mngr.SetID(type, 1, 17, 99, EngineID{500});
+		});
+		game.join();
+		REQUIRE(visible);
 		auto map = _engine_mngr.Mappings(type);
 		REQUIRE(map.front().grfid == 17);
 		REQUIRE(map.front().engine == EngineID{500});

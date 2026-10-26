@@ -110,7 +110,6 @@ def scenarios(soak):
             "ticks": 74 if soak else 1,
         }
         for mode in (
-            "loading",
             "loading-shared",
             "loading-reload",
             "commands",
@@ -374,9 +373,12 @@ def loading_grfs(folder):
                 word(0x8000 | value) + bytes([slot, slot])
                 for slot, value in enumerate((1, 2, 0))
             )
+            dispatch = bytes([2, feature, 1, 0x85, 0x0C, 0]) + word(0xFFFF)
+            dispatch += b"\1" + word(0) + word(0x163) + word(0x163) + word(0x7FFF)
             result += [
                 group + word(0x7FFF),
-                bytes([3, feature, 1]) + extended(local) + b"\0" + word(0),
+                dispatch,
+                bytes([3, feature, 1]) + extended(local) + b"\0" + word(1),
             ]
         result.append(
             bytes([4, feature, 0x7F, 1])

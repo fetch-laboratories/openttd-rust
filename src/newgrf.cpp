@@ -206,10 +206,10 @@ void SetNewGRFOverride(uint32_t source_grfid, uint32_t target_grfid)
 	openttd_rust_engine_set_override(&GetRustEngineLoadingServices(), source_grfid, target_grfid);
 #else
 	if (target_grfid == 0) {
-				_grf_id_overrides.erase(source_grfid);
+		_grf_id_overrides.erase(source_grfid);
 		GrfMsg(5, "SetNewGRFOverride: Removed override of 0x{:X}", std::byteswap(source_grfid));
 	} else {
-				_grf_id_overrides[source_grfid] = target_grfid;
+		_grf_id_overrides[source_grfid] = target_grfid;
 		GrfMsg(5, "SetNewGRFOverride: Added override of 0x{:X} to 0x{:X}", std::byteswap(source_grfid), std::byteswap(target_grfid));
 	}
 #endif

@@ -9,7 +9,7 @@
 #include "depot_base.h"
 #include "station_base.h"
 #include "depot_map.h"
-#include "ship_map.h"
+#include "water_map.h"
 #include "road_map.h"
 #include "core/random_func.hpp"
 static void LoadingRequire(bool value, const char *name)
