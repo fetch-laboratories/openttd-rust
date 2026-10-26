@@ -223,7 +223,7 @@ static OpenTTDRoadCostRead OPENTTD_RUST_CALL RoadSvcCostRead(OpenTTDVehicle *v) 
 static int64_t OPENTTD_RUST_CALL RoadSvcPrice(const OpenTTDEngine *engine, uint32_t cost_factor) noexcept
 {
 	const Engine *e = EngineOf(engine);
-	return static_cast<int64_t>(GetPrice(e->VehInfo<RoadVehicleInfo>().running_cost_class, cost_factor, e->GetGRF()));
+	return static_cast<int64_t>(GetPrice(e->VehInfo<RoadVehicleInfo>().running_cost_class, cost_factor, RustEngineGRF(engine)));
 }
 /** The running cost tail of `RoadVehicle::OnNewEconomyDay`. */
 static void OPENTTD_RUST_CALL RoadSvcPayRunning(OpenTTDVehicle *v, int64_t amount) noexcept

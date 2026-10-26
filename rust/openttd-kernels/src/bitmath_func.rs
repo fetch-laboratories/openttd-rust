@@ -37,7 +37,7 @@ pub const fn kill_first_bit(value: u8) -> u8 {
     value & value.wrapping_sub(1)
 }
 
-/// `SetBit` for uint64 cargo masks.
+/// `SetBit` for native 64-bit cargo masks, preserving the original return value.
 pub fn set_bit64(value: &mut u64, bit: u8) -> u64 {
     *value |= 1_u64.wrapping_shl(u32::from(bit));
     *value

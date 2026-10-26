@@ -9,8 +9,8 @@
 #include "services_road.h"
 #include "services_cargo.h"
 
-static OpenTTDRefitCargo VehicleRefitCargo(const OpenTTDEngine *e, uint8_t cargo) noexcept { return {.classes = RustCargoClasses(cargo), .local = RustGRFCargoMap(EngineOf(e)->GetGRF(), cargo)}; }
-static OpenTTDRefitEngine VehicleRefitEngine(const OpenTTDEngine *e) noexcept { return {.mask = EngineOf(e)->info.refit_mask, .automatic = EngineOf(e)->info.misc_flags.Test(EngineMiscFlag::AutoRefit)}; }
+static OpenTTDRefitCargo VehicleRefitCargo(const OpenTTDEngine *e, uint8_t cargo) noexcept { return {.classes = RustCargoClasses(cargo), .local = RustGRFCargoMap(RustEngineGRF(e), cargo)}; }
+static OpenTTDRefitEngine VehicleRefitEngine(const OpenTTDEngine *e) noexcept { return {.mask = RustEngineCargoRefitMask(e), .automatic = EngineMiscFlags(RustEngineMiscFlags(e)).Test(EngineMiscFlag::AutoRefit)}; }
 static OpenTTDRefitCargoKind VehicleRefitCargoKind(OpenTTDVehicle *handle) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
@@ -53,9 +53,8 @@ const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept
 		.engine_kind = RustEngineType,
 		.rail_kind = Engine_rail_kind,
 		.price_shift = RustEnginePriceShift,
-		.can_carry = Engine_can_carry,
+		.capabilities = &GetRustEngineCapabilitiesServices(),
 		.refit_engine = VehicleRefitEngine,
-		.capacity = RustEngineDetermineCapacity,
 		.cargo_kind = VehicleRefitCargoKind,
 		.set_cargo_kind = RustVehicleSetCargoKind,
 		.expense = RustVehicleExpense,

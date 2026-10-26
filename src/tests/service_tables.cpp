@@ -30,6 +30,7 @@ static_assert(!OPENTTD_SERVICE_RETURN_TYPE<GRFStringID>);
 	X(vehicle_cmd) \
 	X(vehiclelist) \
 	X(engine) \
+	X(engine_capabilities) \
 	X(aircraft_cmd) \
 	X(cargopacket) \
 	X(roadveh_cmd) \

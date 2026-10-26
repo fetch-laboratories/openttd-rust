@@ -327,7 +327,7 @@ static void Co_reset_service_interval(uint32_t id, uint8_t company) noexcept
 static void Co_set_vehicle_owner(uint32_t id, uint8_t owner) noexcept
 {
 	Vehicle *v = Vehicle::Get(id);
-	v->owner = CompanyID(owner);
+	RustVehicleSetOwner(RustVehicle(v), owner);
 	v->colourmap = PAL_NONE;
 	RustVehicleInvalidateNewGRFCache(v);
 }

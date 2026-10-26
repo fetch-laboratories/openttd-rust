@@ -1,3 +1,4 @@
+struct OpenTTDEngineCapabilitiesServices;
 /*
  * This file is part of OpenTTD.
  * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
@@ -31,7 +32,7 @@ struct OpenTTDGroundPhysicsServices {
 	OpenTTDGroundWeightInput (*weight_input)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(weight_input);
 	OpenTTDGroundAccelerationInput (*acceleration_input)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(acceleration_input);
 	OpenTTDGroundSpeedInput (*speed_input)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(speed_input);
-	uint32_t (*capacity)(const OpenTTDEngine *, OpenTTDVehicle *, uint16_t *) noexcept OPENTTD_SERVICE_DEFAULT(capacity);
+	const OpenTTDEngineCapabilitiesServices *capabilities;
 	uint64_t (*cargo_weight)(const CargoSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_weight);
 	uint64_t (*train_cargo_weight)(const CargoSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(train_cargo_weight);
 	uint16_t (*engine_power)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine_power);

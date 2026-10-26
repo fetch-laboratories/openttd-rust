@@ -25,6 +25,7 @@ inline uint32_t RustCargoSpecLabel(const CargoSpec *cs) noexcept { return cs->la
 inline CargoType RustCargoSpecIndex(const CargoSpec *cs) noexcept { return cs->Index(); }
 inline uint8_t RustCargoSpecBitnum(const CargoSpec *cs) noexcept { return cs->bitnum; }
 inline uint8_t RustCargoBitnum(CargoType cargo) noexcept { return RustCargoSpecBitnum(CargoSpec::Get(cargo)); }
+inline uint16_t RustCargoMultiplier(CargoType cargo) noexcept { return CargoSpec::Get(cargo)->multiplier; }
 inline uint16_t RustCargoClasses(CargoType cargo) noexcept { return RustCargoSpecClasses(CargoSpec::Get(cargo)); }
 inline uint OpenTTDScaleCargo(uint amount, bool town) noexcept { return ScaleByCargoScale(amount, town); }
 /* Raw inverse-map reads retain the native file and cargo-index preconditions;
