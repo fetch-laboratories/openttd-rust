@@ -206,9 +206,8 @@ const OpenTTDRoadRegistryServices &GetRustRoadRegistryServices() noexcept
 {
 	static const OpenTTDRoadRegistryServices table = {
 		.spec = [](RoadType rt) noexcept { return &_roadtypes[rt]; },
-		.label = RustRoadTypeLabel,
 		.type_label = [](RoadType rt) noexcept { return RustRoadTypeLabel(GetRoadTypeInfo(rt)); },
-		.alternate = [](const RoadTypeInfo *info, uint32_t label) noexcept { return info->alternate_labels.contains(label); },
+		.alternate = [](RoadType rt, uint32_t label) noexcept { return GetRoadTypeInfo(rt)->alternate_labels.contains(label); },
 		.clear = [](RoadTypeInfo *info) noexcept { *info = RoadTypeInfo{}; },
 		.copy_default = [](RoadTypeInfo *info, RoadType source) noexcept { *info = _original_roadtypes[source]; },
 		.resolve_gui = [](RoadTypeInfo *info) noexcept { ResolveRoadTypeGUISprites(info); },

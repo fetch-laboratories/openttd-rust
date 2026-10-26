@@ -214,9 +214,8 @@ const OpenTTDRailRegistryServices &GetRustRailRegistryServices() noexcept
 {
 	static const OpenTTDRailRegistryServices table = {
 		.spec = [](RailType rt) noexcept { return &_railtypes[rt]; },
-		.label = RustRailTypeLabel,
 		.type_label = [](RailType rt) noexcept { return RustRailTypeLabel(GetRailTypeInfo(rt)); },
-		.alternate = [](const RailTypeInfo *info, uint32_t label) noexcept { return info->alternate_labels.contains(label); },
+		.alternate = [](RailType rt, uint32_t label) noexcept { return GetRailTypeInfo(rt)->alternate_labels.contains(label); },
 		.clear = [](RailTypeInfo *info) noexcept { *info = RailTypeInfo{}; },
 		.copy_default = [](RailTypeInfo *info, RailType source) noexcept { *info = _original_railtypes[source]; },
 		.resolve_gui = [](RailTypeInfo *info) noexcept { ResolveRailTypeGUISprites(info); },

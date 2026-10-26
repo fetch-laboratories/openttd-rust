@@ -53,9 +53,8 @@ pub struct TypeMap {
 #[repr(C)]
 pub struct RailServices {
     spec: extern "C" fn(u8) -> Handle,
-    label: extern "C" fn(Handle) -> u32,
     type_label: extern "C" fn(u8) -> u32,
-    alternate: extern "C" fn(Handle, u32) -> bool,
+    alternate: extern "C" fn(u8, u32) -> bool,
     clear: extern "C" fn(Handle),
     copy_default: extern "C" fn(Handle, u8),
     resolve_gui: extern "C" fn(Handle),
@@ -67,9 +66,8 @@ pub struct RailServices {
 #[repr(C)]
 pub struct RoadServices {
     spec: extern "C" fn(u8) -> Handle,
-    label: extern "C" fn(Handle) -> u32,
     type_label: extern "C" fn(u8) -> u32,
-    alternate: extern "C" fn(Handle, u32) -> bool,
+    alternate: extern "C" fn(u8, u32) -> bool,
     clear: extern "C" fn(Handle),
     copy_default: extern "C" fn(Handle, u8),
     resolve_gui: extern "C" fn(Handle),
@@ -159,13 +157,13 @@ pub extern "C" fn openttd_rust_rail_by_label(label: u32, alternate: bool) -> u8 
     }
     let s = services();
     for rt in RAILTYPE_BEGIN..RAILTYPE_END {
-        if (s.rail().label)((s.rail().spec)(rt)) == label {
+        if (s.rail().type_label)(rt) == label {
             return rt;
         }
     }
     if alternate {
         for rt in RAILTYPE_BEGIN..RAILTYPE_END {
-            if (s.rail().alternate)((s.rail().spec)(rt), label) {
+            if (s.rail().alternate)(rt, label) {
                 return rt;
             }
         }
@@ -176,10 +174,10 @@ pub extern "C" fn openttd_rust_rail_by_label(label: u32, alternate: bool) -> u8 
 pub extern "C" fn openttd_rust_rail_allocate(label: u32) -> u8 {
     let s = services();
     for rt in RAILTYPE_BEGIN..RAILTYPE_END {
-        let info = (s.rail().spec)(rt);
-        if (s.rail().label)(info) != 0 {
+        if (s.rail().type_label)(rt) != 0 {
             continue;
         }
+        let info = (s.rail().spec)(rt);
         (s.rail().copy_default)(info, RAILTYPE_RAIL);
         let value = Allocation {
             label,
@@ -282,13 +280,13 @@ pub extern "C" fn openttd_rust_road_by_label(label: u32, alternate: bool) -> u8 
     }
     let s = services();
     for rt in ROADTYPE_BEGIN..ROADTYPE_END {
-        if (s.road().label)((s.road().spec)(rt)) == label {
+        if (s.road().type_label)(rt) == label {
             return rt;
         }
     }
     if alternate {
         for rt in ROADTYPE_BEGIN..ROADTYPE_END {
-            if (s.road().alternate)((s.road().spec)(rt), label) {
+            if (s.road().alternate)(rt, label) {
                 return rt;
             }
         }
@@ -299,10 +297,10 @@ pub extern "C" fn openttd_rust_road_by_label(label: u32, alternate: bool) -> u8 
 pub extern "C" fn openttd_rust_road_allocate(label: u32, rtt: RoadTramType) -> u8 {
     let s = services();
     for rt in ROADTYPE_BEGIN..ROADTYPE_END {
-        let info = (s.road().spec)(rt);
-        if (s.road().label)(info) != 0 {
+        if (s.road().type_label)(rt) != 0 {
             continue;
         }
+        let info = (s.road().spec)(rt);
         (s.road().copy_default)(info, if rtt.0 { ROADTYPE_TRAM } else { ROADTYPE_ROAD });
         let value = Allocation {
             label,
@@ -495,8 +493,8 @@ crate::abi::layouts! {
  "OpenTTDTypeAllocation" ["engine"] => Allocation { label, self_ => self, order };
  "OpenTTDTypeLabels" ["engine"] => Labels { data, size };
  "OpenTTDTypeMap" ["engine"] => TypeMap { data, size };
- "OpenTTDRailRegistryServices" ["engine"] => RailServices { spec, label, type_label, alternate, clear, copy_default, resolve_gui, publication, sort, publish_sorted, allocate };
- "OpenTTDRoadRegistryServices" ["engine"] => RoadServices { spec, label, type_label, alternate, clear, copy_default, resolve_gui, publication, sort, publish_sorted, allocate };
+ "OpenTTDRailRegistryServices" ["engine"] => RailServices { spec, type_label, alternate, clear, copy_default, resolve_gui, publication, sort, publish_sorted, allocate };
+ "OpenTTDRoadRegistryServices" ["engine"] => RoadServices { spec, type_label, alternate, clear, copy_default, resolve_gui, publication, sort, publish_sorted, allocate };
  "OpenTTDTypeRegistryServices" ["engine"] => Services { rail, road, rail_labels, road_labels, tram_labels, rail_map, road_map, tram_map };
 }
 
