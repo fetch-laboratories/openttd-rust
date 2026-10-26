@@ -21,7 +21,7 @@ struct OpenTTDCargoOrderSpec { uint8_t cargo, effect; bool special; };
 struct OpenTTDCargoLabels { const uint32_t *data; size_t size; };
 struct OpenTTDCargoFile { OpenTTDCargoLabels labels; uint8_t version; bool fallback; };
 struct OpenTTDCargoInvocation {
-	const CargoSpec *spec;
+	uint32_t label;
 	const GRFFile *file;
 	const SpriteGroup *root;
 	uint16_t callback;
@@ -63,7 +63,7 @@ void openttd_rust_cargo_labels_rebuild();
 bool openttd_rust_cargo_is_default(uint8_t);
 OpenTTDCargoLabels openttd_rust_cargo_climate_labels();
 OpenTTDCargoLabels openttd_rust_cargo_bitnum_labels();
-void openttd_rust_cargo_sort();
+void openttd_rust_cargo_sort(const OpenTTDCargoRegistryServices *);
 void openttd_rust_cargo_finalise();
 OpenTTDCargoLabels openttd_rust_cargo_translation_table(const GRFFile *);
 uint8_t openttd_rust_cargo_translate(uint8_t, const GRFFile *, bool);
@@ -74,6 +74,6 @@ uint16_t openttd_rust_cargo_callback(uint16_t, uint32_t, uint32_t, const CargoSp
 uint16_t openttd_rust_cargo_evaluate_callback(const OpenTTDCargoInvocation *, ResolverObject *, OpenTTDResolverState *, int32_t *, size_t);
 uint32_t openttd_rust_cargo_evaluate_sprite(const OpenTTDCargoInvocation *, ResolverObject *, OpenTTDResolverState *);
 uint8_t openttd_rust_cargo_feature();
-uint32_t openttd_rust_cargo_debug_id(const CargoSpec *);
+uint32_t openttd_rust_cargo_debug_id(const OpenTTDCargoInvocation *);
 }
 #endif

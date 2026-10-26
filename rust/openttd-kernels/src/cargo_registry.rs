@@ -6,7 +6,9 @@
     unsafe_code,
     missing_docs,
     clippy::missing_safety_doc,
-    clippy::cast_possible_truncation
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
 )]
 use crate::cargo_type::{CT_INVALID, CT_MAIL, CT_PASSENGERS, INVALID_CARGO, NUM_CARGO};
 use crate::cargotype::{
@@ -55,7 +57,7 @@ pub struct File {
 }
 #[repr(C)]
 pub struct Invocation {
-    spec: Handle,
+    label: u32,
     file: Handle,
     root: Handle,
     callback: u16,
@@ -226,7 +228,11 @@ pub fn production(effect: u8, index: u32) -> ProductionCargo {
     )
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_cargo_sort() {
+pub extern "C" fn openttd_rust_cargo_sort(native: *const Services) {
+    // Language loading sorts the initially empty specification array before climate setup.
+    unsafe {
+        (*REGISTRY.get()).services = native;
+    }
     let s = services();
     unsafe {
         for town in &mut (*REGISTRY.get()).town {
@@ -343,7 +349,10 @@ pub extern "C" fn openttd_rust_cargo_build_inverse(file: *mut c_void) {
         }
         for index in 0..labels.size {
             if unsafe { labels.data.add(index).read() } == cs.label {
-                (s.set_inverse)(file, cargo, index as u8);
+                let index = index as i32;
+                if index >= 0 {
+                    (s.set_inverse)(file, cargo, index as u8);
+                }
                 break;
             }
         }
@@ -366,7 +375,7 @@ pub extern "C" fn openttd_rust_cargo_fallback(file: *mut c_void, id: u32, last: 
 }
 fn invocation(spec: Handle, callback: u16, param1: u32, param2: u32) -> Invocation {
     let mut invocation = Invocation {
-        spec,
+        label: 0,
         file: ptr::null(),
         root: ptr::null(),
         callback,
@@ -390,14 +399,14 @@ pub extern "C" fn openttd_rust_cargo_callback(
 }
 pub unsafe fn callback(s: &Services, cargo: u8, callback: u16, param1: u32, param2: u32) -> u16 {
     let mut invocation = Invocation {
-        spec: (s.spec)(cargo),
+        label: 0,
         file: ptr::null(),
         root: ptr::null(),
         callback,
         param1,
         param2,
     };
-    (s.invocation)(invocation.spec, &raw mut invocation);
+    (s.invocation)((s.spec)(cargo), &raw mut invocation);
     (s.callback_frame)(&raw const invocation, ptr::null_mut(), 0)
 }
 #[unsafe(no_mangle)]
@@ -443,8 +452,8 @@ pub extern "C" fn openttd_rust_cargo_feature() -> u8 {
     crate::newgrf::GSF_CARGOES
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_cargo_debug_id(spec: Handle) -> u32 {
-    (services().label_spec)(spec).label
+pub unsafe extern "C" fn openttd_rust_cargo_debug_id(invocation: *const Invocation) -> u32 {
+    unsafe { (*invocation).label }
 }
 crate::abi::layouts! {
     fn abi_layout;
@@ -454,6 +463,6 @@ crate::abi::layouts! {
     "OpenTTDCargoOrderSpec" ["probe"] => OrderSpec {cargo,effect,special};
     "OpenTTDCargoLabels" ["probe"] => Labels {data,size};
     "OpenTTDCargoFile" ["probe"] => File {labels,version,fallback};
-    "OpenTTDCargoInvocation" ["probe"] => Invocation {spec,file,root,callback,param1,param2};
+    "OpenTTDCargoInvocation" ["probe"] => Invocation {label,file,root,callback,param1,param2};
     "OpenTTDCargoRegistryServices" ["probe"] => Services {shared,common,spec,copy_default,clear_specs,label_spec,order_spec,index,production,sort,publish_sorted,publish_town,set_effect,invalidate_strings,file,assign_fallback,resize_fallback,set_fallback,clear_inverse,set_inverse,invocation,callback_frame,sprite_frame,sprite};
 }

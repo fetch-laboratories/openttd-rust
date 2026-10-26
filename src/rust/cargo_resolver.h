@@ -8,6 +8,6 @@ struct CargoResolverObject final : ResolverObject {
 	const OpenTTDCargoInvocation &invocation;
 	CargoResolverObject(const OpenTTDCargoInvocation &invocation) : ResolverObject(invocation.file, static_cast<CallbackID>(invocation.callback), invocation.param1, invocation.param2), invocation(invocation) { this->root_spritegroup = invocation.root; }
 	GrfSpecFeature GetFeature() const override { return static_cast<GrfSpecFeature>(openttd_rust_cargo_feature()); }
-	uint32_t GetDebugID() const override { return openttd_rust_cargo_debug_id(this->invocation.spec); }
+	uint32_t GetDebugID() const override { return openttd_rust_cargo_debug_id(&this->invocation); }
 };
 #endif

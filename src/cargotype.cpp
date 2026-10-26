@@ -263,7 +263,7 @@ static bool CargoSpecClassSorter(const CargoSpec * const &a, const CargoSpec * c
 void InitializeSortedCargoSpecs()
 {
 #ifdef WITH_RUST
-	openttd_rust_cargo_sort();
+	openttd_rust_cargo_sort(&GetRustCargoRegistryServices());
 #else
 	for (auto &tpc : CargoSpec::town_production_cargoes) tpc.clear();
 	_sorted_cargo_specs.clear();
@@ -358,7 +358,7 @@ const OpenTTDCargoRegistryServices &GetRustCargoRegistryServices() noexcept
 				}
 			}, _default_climate_cargo[climate][slot]);
 		},
-		.clear_specs = [](uint8_t first) noexcept { for (size_t i = first; i < CargoSpec::GetArraySize(); ++i) *CargoSpec::Get(i) = CargoSpec{}; },
+		.clear_specs = [](uint8_t first) noexcept { std::fill(CargoSpec::Get(first), CargoSpec::Get(0) + CargoSpec::GetArraySize(), CargoSpec{}); },
 		.label_spec = [](const CargoSpec *cs) noexcept -> OpenTTDCargoLabelSpec { return {cs->label.base(), cs->bitnum}; },
 		.order_spec = [](const CargoSpec *cs) noexcept -> OpenTTDCargoOrderSpec { return {cs->Index(), cs->town_production_effect, cs->classes.Test(CargoClass::Special)}; },
 		.index = [](const CargoSpec *cs) noexcept { return cs->Index(); },
@@ -379,7 +379,7 @@ const OpenTTDCargoRegistryServices &GetRustCargoRegistryServices() noexcept
 		.set_fallback = [](GRFFile *file, uint32_t id, uint32_t label) noexcept { file->cargo_list[id] = CargoLabel{label}; },
 		.clear_inverse = [](GRFFile *file) noexcept { file->cargo_map.fill(UINT8_MAX); },
 		.set_inverse = [](GRFFile *file, uint8_t cargo, uint8_t index) noexcept { file->cargo_map[cargo] = index; },
-		.invocation = [](const CargoSpec *cs, OpenTTDCargoInvocation *out) noexcept { out->file = cs->grffile; out->root = cs->group; },
+		.invocation = [](const CargoSpec *cs, OpenTTDCargoInvocation *out) noexcept { out->label = cs->label.base(); out->file = cs->grffile; out->root = cs->group; },
 		.callback_frame = CargoCallbackFrame,
 		.sprite_frame = CargoSpriteFrame,
 		.sprite = [](const SpriteGroup *group) noexcept -> OpenTTDCargoSprite { auto result = static_cast<const ResultSpriteGroup *>(group); return {result->sprite, result->num_sprites}; },

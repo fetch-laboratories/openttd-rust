@@ -72,7 +72,9 @@ static bool CargoRegistryScenario(std::span<std::string_view> args)
 		/* Same names and bitnums retain the native unstable sorter and its ties. */
 		*CargoSpec::Get(24) = original; CargoSpec::Get(24)->classes.Set(CargoClass::Special);
 		CargoSpec::Get(24)->town_production_effect = TPE_MAIL;
+		CargoSpec::Get(20)->town_production_effect = INVALID_TPE;
 		FinaliseCargoArray(); InitializeSortedCargoSpecs();
+		CARGO_REQUIRE(CargoSpec::Get(20)->town_production_effect == TPE_PASSENGERS && CargoSpec::Get(0)->name == STR_NEWGRF_INVALID_CARGO && CargoSpec::Get(25)->town_production_effect == TPE_NONE);
 		CargoSnapshot("changed");
 		auto old_order = _sorted_cargo_types[20];
 		CargoSpec::Get(20)->bitnum = INVALID_CARGO_BITNUM;
@@ -99,12 +101,19 @@ static void CargoProfitFixture()
 	program.adjusts = {read(0x18), read(0x1A, 0x100, DSGA_OP_STO), read(0x10), read(0x1A, 0x101, DSGA_OP_STO), read(0x0C), read(0x1A, 0x102, DSGA_OP_STO)};
 	program.default_result = {false, &result};
 	cs->grffile = &file; cs->group = &program; cs->callback_mask.Set(CargoCallbackMask::ProfitCalc);
+	program.nfo_line = 467;
+	_newgrf_profilers.emplace_back(&file); _newgrf_profilers.back().Start();
 	Randomizer before = _random;
 	Money income = GetTransportedGoodsIncome(31, 17, 5, cargo);
+	const auto &profile = _newgrf_profilers.back();
+	CARGO_REQUIRE(profile.calls.size() == 1 && profile.calls[0].feat == GSF_CARGOES && profile.calls[0].item == cs->label.base() && profile.calls[0].cb == CBID_CARGO_PROFIT_CALC && profile.calls[0].result == 0x4001);
+	fmt::print(stderr, "CARGO identity {} {} {} {}\n", profile.calls[0].root_sprite, profile.calls[0].item, uint(profile.calls[0].feat), uint(profile.calls[0].cb));
+	_newgrf_profilers.back().Abort(); _newgrf_profilers.pop_back();
 	ResolverObject observer(nullptr);
 	fmt::print(stderr, "CARGO profit {} {} {} {} {} {}\n", income.base(), observer.GetRegister(0x100), observer.GetRegister(0x101), observer.GetRegister(0x102), _random.state[0], _random.state[1]);
 	CARGO_REQUIRE(observer.GetRegister(0x100) == (17 | (31 << 16) | (5 << 24)) && observer.GetRegister(0x101) == 0 && observer.GetRegister(0x102) == CBID_CARGO_PROFIT_CALC);
 	CARGO_REQUIRE(_random.state[0] == before.state[0] && _random.state[1] == before.state[1]);
+	CARGO_REQUIRE(GetCustomCargoSprite(cs) == 0);
 	std::array<int32_t, 3> regs{-1, -2, -3};
 	CARGO_REQUIRE(GetCargoCallback(CBID_CARGO_PROFIT_CALC, 7, 19, cs, regs) == 0x4001 && regs[0] == 19 && regs[1] == 7 && regs[2] == CBID_CARGO_PROFIT_CALC);
 	Vehicle *front = nullptr;
