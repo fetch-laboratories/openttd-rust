@@ -946,7 +946,7 @@ class SpeedPassTests(unittest.TestCase):
                 "identities": {name: name + "-id" for name in names},
             }
             (out / "observations.jsonl").write_text(
-                json.dumps({"load": [0.5, 0, 0], "unheld": []}) + "\n"
+                json.dumps({"load": [0.5, 0, 0], "unheld": [], "overlap": {}}) + "\n"
             )
 
             def write(group, ratios, passed=True):
@@ -983,10 +983,75 @@ class SpeedPassTests(unittest.TestCase):
                     speed.summarize(out, manifest, names, incomplete)
             write(3, groups[3])
             (out / "observations.jsonl").write_text(
-                json.dumps({"load": [0, 0, 0], "unheld": {"123": "ninja"}}) + "\n"
+                json.dumps(
+                    {"load": [0, 0, 0], "unheld": {"123": "ninja"}, "overlap": {}}
+                )
+                + "\n"
             )
             with self.assertRaisesRegex(SystemExit, "no anchors"):
                 speed.summarize(out, manifest, names, len(groups))
+
+            for comm, preexisting, parent, ticks, state, rejected in (
+                ("cc1plus", False, 1, 200, "R", True),
+                ("cc1plus", False, 1, 200, "T", True),
+                ("cc1plus", False, 1, 200, "Z", True),
+                ("cc1plus", False, 1, 0, "T", False),
+                ("cc1plus", True, 1, 0, "T", False),
+                ("cc1plus", True, 1, 1, "T", True),
+                ("unrelated", True, 1, 200, "R", False),
+                ("openttd", False, os.getpid(), 200, "R", False),
+                ("openttd", False, os.getpid(), 200, "Z", False),
+            ):
+                with self.subTest(
+                    comm=comm, preexisting=preexisting, parent=parent, state=state
+                ):
+                    log = out / "observations.jsonl"
+                    log.unlink()
+                    (out / "anchors.json").unlink(missing_ok=True)
+                    row = dict(
+                        comm=comm, state="R", parent=parent, uid=os.getuid(), ticks=0
+                    )
+                    hold = speed.Hold(log)
+                    hold.hz = 100
+                    with (
+                        patch.object(speed, "processes") as processes,
+                        patch.object(speed.os, "kill") as kill,
+                    ):
+                        processes.return_value = {123: row} if preexisting else {}
+                        before = hold.scan({}, 1, True)
+                        processes.return_value = {
+                            123: dict(row, ticks=ticks, state=state)
+                        }
+                        before = hold.scan(before, 2)
+                        processes.return_value = {}
+                        hold.scan(before, 2)
+                        hold.release()
+                    entries = [
+                        json.loads(line) for line in log.read_text().splitlines()
+                    ]
+                    self.assertFalse(any(entry["unheld"] for entry in entries))
+                    if comm == "unrelated":
+                        self.assertEqual(entries[1]["busy"]["123"], [comm, 1.0, False])
+                    if comm == "cc1plus":
+                        self.assertEqual(
+                            kill.call_args_list,
+                            [
+                                unittest.mock.call(123, speed.signal.SIGSTOP),
+                                unittest.mock.call(123, speed.signal.SIGCONT),
+                            ]
+                            if preexisting or state == "R"
+                            else [],
+                        )
+                    with contextlib.redirect_stdout(io.StringIO()) as printed:
+                        if rejected:
+                            with self.assertRaisesRegex(SystemExit, "no anchors"):
+                                speed.summarize(out, manifest, names, len(groups))
+                            self.assertFalse((out / "anchors.json").exists())
+                            self.assertEqual(printed.getvalue(), "")
+                        else:
+                            self.assertEqual(
+                                speed.summarize(out, manifest, names, len(groups)), 0
+                            )
 
 
 if __name__ == "__main__":

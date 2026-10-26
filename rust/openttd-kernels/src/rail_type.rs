@@ -11,3 +11,6 @@ pub const RAILTYPE_ELECTRIC: u8 = 1;
 pub const RAILTYPE_MONO: u8 = 2;
 /// `RAILTYPE_MAGLEV`.
 pub const RAILTYPE_MAGLEV: u8 = 3;
+
+/// `RAILTYPE_END`.
+pub const RAILTYPE_END: u8 = 64;
