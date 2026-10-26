@@ -464,6 +464,20 @@ def check(scenario, run, mode, role, result):
     for line in required:
         if line not in run["log"]:
             result["problems"].append(f"{mode}/{role}: missing {line}")
+    if scenario["fleet"] == "transaction-clone":
+        rows = [
+            line.split()[2:]
+            for line in run["log"]
+            if line.startswith("FLEET clone-refit-cost ")
+        ]
+        if (
+            len(rows) != 2
+            or [row[0] for row in rows] != ["64", "65535"]
+            or any(len(row) != 7 or row[3:] != ["true"] * 4 for row in rows)
+        ):
+            result["problems"].append(
+                f"{mode}/{role}: missing nullable/live clone refit-cost evidence"
+            )
     if scenario["fleet"] == "resolver":
         check_override_order(run, mode, role, result)
         check_property_boundaries(run, mode, role, result)

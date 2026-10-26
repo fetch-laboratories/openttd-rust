@@ -146,7 +146,7 @@ unsafe fn cost_factor(
         let result = unsafe {
             crate::newgrf_vehicle::callback(
                 s.common.vehicles,
-                super::vehicle_ref(v),
+                std::ptr::NonNull::new(v.cast()).map(crate::vehicle::VehicleRef),
                 engine,
                 crate::newgrf_callbacks::CBID_VEHICLE_REFIT_COST.0,
                 param,

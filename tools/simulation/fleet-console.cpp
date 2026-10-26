@@ -230,6 +230,62 @@ static Vehicle *BuildFixture(VehicleType type)
 	}
 	return v;
 }
+/* GetRefitCost's null clone-estimate context and live refit context use the same Action2 program. */
+struct RefitCostObserver : SpriteGroup {
+	RefitCostObserver() : SpriteGroup() {}
+	const SpriteGroup *program = nullptr;
+	mutable uint null_calls = 0, live_calls = 0;
+	ResolverResult Resolve(ResolverObject &object) const override
+	{
+		if (object.callback == CBID_VEHICLE_REFIT_COST) {
+			if (static_cast<const VehicleResolverObject &>(object).self_scope.v == nullptr) ++this->null_calls;
+			else ++this->live_calls;
+		}
+		return SpriteGroup::Resolve(this->program, object, false);
+	}
+};
+static void CloneRefitCosts(Vehicle *front)
+{
+	Vehicle *v = front->GetNextVehicle();
+	if (v == nullptr || v->cargo_cap == 0) FixtureAbort(__LINE__);
+	Engine *e = Engine::Get(v->engine_type);
+	Backup<EngineInfo> info(e->info);
+	Backup<CargoGRFFileProps> props(e->grf_prop);
+	CargoType cargo = GetCargoTypeByLabel(CT_MAIL);
+	if (!IsValidCargoType(cargo) || cargo == e->GetDefaultCargoType()) FixtureAbort(__LINE__);
+	GRFFile grf;
+	grf.grfid = 0x462CA110; grf.grf_version = 8;
+	for (uint i = 0; i < NUM_CARGO; ++i) grf.cargo_map[i] = i;
+	if (!SpriteGroup::CanAllocateItem(4)) FixtureAbort(__LINE__);
+	auto result = std::make_unique<CallbackResultSpriteGroup>(0x40);
+	auto failure = std::make_unique<CallbackResultSpriteGroup>(CALLBACK_FAILED);
+	auto program = std::make_unique<DeterministicSpriteGroup>();
+	program->size = DSG_SIZE_DWORD;
+	program->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x0C, .and_mask = 0xFFFF}};
+	program->ranges = {{{.group = result.get()}, CBID_VEHICLE_REFIT_COST, CBID_VEHICLE_REFIT_COST}};
+	program->default_result.group = failure.get();
+	auto observer = std::make_unique<RefitCostObserver>(); observer->program = program.get();
+	e->grf_prop.grffile = &grf;
+	e->grf_prop.spritegroups.clear();
+	e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, observer.get());
+	e->info.refit_mask |= CargoTypes{1} << cargo;
+	Checked("clone-refit-setup", std::get<0>(Command<CMD_REFIT_VEHICLE>::Do(DoCommandFlag::Execute, v->index, cargo, 1, false, true, 0)));
+	for (uint16_t value : {uint16_t(0x40), uint16_t(CALLBACK_FAILED)}) {
+		result->result = value;
+		observer->null_calls = observer->live_calls = 0;
+		auto [live, cap, mail, capacities] = Command<CMD_REFIT_VEHICLE>::Do({}, v->index, cargo, 1, false, true, 0);
+		Checked("clone-refit-live", live);
+		const auto original = std::tuple{v->cargo_type, v->cargo_subtype, v->cargo_cap, v->refit_cap, Vehicle::GetNumItems(), CompanyMoney(Company::Get(_current_company))};
+		SavedRandomSeeds before, after; SaveRandomSeeds(&before);
+		auto [cost, id] = Command<CMD_CLONE_VEHICLE>::Do({}, front->tile, front->index, false);
+		Checked("clone-refit-query", cost);
+		SaveRandomSeeds(&after);
+		bool unchanged = original == std::tuple{v->cargo_type, v->cargo_subtype, v->cargo_cap, v->refit_cap, Vehicle::GetNumItems(), CompanyMoney(Company::Get(_current_company))};
+		fmt::print(stderr, "FLEET clone-refit-cost {} {} {} {} {} {} {}\n", value, live.GetCost(), cost.GetCost(), observer->null_calls > 0, observer->live_calls > 0, id == VehicleID::Invalid(), unchanged && SameRandom(before, after));
+	}
+	props.Restore(); info.Restore(); front->InvalidateNewGRFCacheOfChain();
+}
+
 static uint CargoCount(const Vehicle *v)
 {
 	uint count = 0;
@@ -819,6 +875,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 	if (args[1] == "transaction-clone") {
 		/* A train longer than one tile cannot rejoin: execute sells the front and the unjoined wagon. */
 		Vehicle *v = BuildFixture(VEH_TRAIN);
+		CloneRefitCosts(v);
 		uint before = 0, after = 0;
 		for (const Vehicle *u : Vehicle::Iterate()) if (u->owner == _current_company) ++before;
 		Backup<uint8_t> max_length(_settings_game.vehicle.max_train_length);
