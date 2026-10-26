@@ -191,11 +191,15 @@ Ready owners proceed alongside maintenance; only timed collection holds games.
    resolutions. House #486 adopts the integrated manager/disable helpers.
 2. **Maintenance:** merged-tip profiling and triggered #275 repairs proceed
    alongside owners. Complete the scheduled macOS check before more integrations.
+   User-decided #514 moves Windows x86, Linux Clang and GCC Dedicated from each
+   Full to the every-fifth-integration run; it is the next workflow PR.
 3. **Whole owners:** complete active #477, #485 and #491; start selected airport
    and airport-tile definition lifecycle #492 from integrated base within six
    branches. Reuse canonical state and decide necessary cost once per owner.
    Action3 #497 and object definitions #498 remain queued, unselected.
 4. Catchment, #64/#68/#69, vendored, GUI and platform stay outside this order.
+5. **Testing (queued, unselected):** #503-#513 add no per-PR CI; heavy checks run
+   on the host during sessions under #503. Start with coverage #504 and #503.
 
 ## Resume checkpoint
 
