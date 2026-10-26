@@ -78,7 +78,9 @@ one (from that diff, its commit messages and any note under the latest steering
 review): applied, slipped, reinterpreted, or harmful as written. For each, note
 what it cost root (agent hours, CI runs, PRs parked) against what it caught.
 A user-directed change found harmful goes back to the user with its evidence;
-do not revert it yourself. Trace each problem you find to the rule, roadmap action or user message
+do not revert it yourself. A change no root session has run under yet has no
+effects to judge: copy it, with what to watch, into your new steering review
+section so the following review judges it. Trace each problem you find to the rule, roadmap action or user message
 that produced it. Relax or remove a harmful rule before adding a new one.
 
 Watch for the patterns root has repeated before:

@@ -40,8 +40,9 @@ and one concrete owner-cost disposition.
 | Housekeeping, current lists, cleanup | Applied with limits: 3,845 lines removed, local output 25 to 8.5 GiB; #275's body was stale, now refreshed. Two useful tests must return. |
 | Checkpoints, wind-down, rollback | User pauses respected; drafts preserved. Newly confirmed #462 requires forward recovery because later code rules out bounded rollback. |
 
-User rule changes since this review, for the next steering review to judge by
-their effects. They need no action from root beyond following the rules.
+User rule changes since this review, to judge by their effects once a root
+session has run under them; until then each review carries them forward. They
+need no action from root beyond following the rules.
 
 | Change | Commit | Watch for |
 | --- | --- | --- |
