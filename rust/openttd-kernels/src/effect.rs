@@ -10,6 +10,7 @@
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
+    clippy::many_single_char_names,
     clippy::verbose_bit_mask
 )]
 
@@ -519,4 +520,106 @@ crate::abi::layouts! {
         sound,
 
     };
+"OpenTTDEffectAllocation" ["probe"] => Allocation { shell, owner, };
+    "OpenTTDEffectPosition" ["probe"] => Position { x, y, z, };
+    "OpenTTDEffectCreationServices" ["probe"] => CreationServices {
+        effect, shared, can_allocate, allocate, place, delta, unclickable, position, slope_pixel_z,
+    };
+
+}
+
+/// Creation owns the allocation gate, field/initializer/viewport order and offsets.
+/// Services are immutable for the process. Native pools and shells remain canonical;
+/// creation callbacks cannot reset the map or delete a newly allocated effect.
+#[repr(C)]
+struct Allocation {
+    shell: *mut c_void,
+    owner: *mut State,
+}
+#[repr(C)]
+struct Position {
+    x: i32,
+    y: i32,
+    z: i32,
+}
+#[repr(C)]
+pub struct CreationServices {
+    effect: &'static Leaves,
+    shared: &'static Services,
+    can_allocate: extern "C" fn(usize) -> bool,
+    allocate: extern "C" fn() -> Allocation,
+    place: extern "C" fn(*mut c_void, i32, i32, i32, u8),
+    delta: extern "C" fn(*mut c_void),
+    unclickable: extern "C" fn(*mut c_void),
+    position: extern "C" fn(*const crate::vehicle::OpenTTDVehicle) -> Position,
+    slope_pixel_z: extern "C" fn(i32, i32) -> i32,
+}
+static CREATION: crate::game_state::GameState<*const CreationServices> =
+    crate::game_state::GameState::new(std::ptr::null());
+/// Bind immutable process-wide services before vehicle initialization or native creation.
+#[unsafe(no_mangle)]
+#[allow(unsafe_code)]
+pub unsafe extern "C" fn openttd_rust_effect_bind(services: *const CreationServices) {
+    unsafe {
+        *CREATION.get() = services;
+    }
+}
+#[allow(unsafe_code)]
+fn creation() -> &'static CreationServices {
+    unsafe { &**CREATION.get() }
+}
+/// `CreateEffectVehicle` over the shared native pool.
+#[unsafe(no_mangle)]
+#[allow(unsafe_code)]
+pub extern "C" fn openttd_rust_effect_create(x: i32, y: i32, z: i32, kind: u8) -> *mut c_void {
+    let s = creation();
+    if !(s.can_allocate)(1) {
+        return std::ptr::null_mut();
+    }
+    let v = (s.allocate)();
+    (s.place)(v.shell, x, y, z, kind);
+    (s.delta)(v.shell);
+    (s.unclickable)(v.shell);
+    unsafe {
+        openttd_rust_effect_run(v.owner, v.shell, s.effect, s.shared, 1);
+    }
+    (s.effect.viewport)(v.shell);
+    v.shell
+}
+/// `CreateEffectVehicleAbove`, clamping only the terrain lookup.
+#[unsafe(no_mangle)]
+#[allow(unsafe_code)]
+pub extern "C" fn openttd_rust_effect_create_above(
+    x: i32,
+    y: i32,
+    z: i32,
+    kind: u8,
+) -> *mut c_void {
+    let s = creation();
+    let safe_x = x.clamp(0, ((s.shared.map_max_x)() * 16) as i32);
+    let safe_y = y.clamp(0, ((s.shared.map_max_y)() * 16) as i32);
+    openttd_rust_effect_create(
+        x,
+        y,
+        (s.slope_pixel_z)(safe_x, safe_y).wrapping_add(z),
+        kind,
+    )
+}
+/// `CreateEffectVehicleRel`; the source shell is live for this synchronous call.
+#[unsafe(no_mangle)]
+#[allow(unsafe_code)]
+pub extern "C" fn openttd_rust_effect_create_rel(
+    v: *const crate::vehicle::OpenTTDVehicle,
+    x: i32,
+    y: i32,
+    z: i32,
+    kind: u8,
+) -> *mut c_void {
+    let p = (creation().position)(v);
+    openttd_rust_effect_create(
+        p.x.wrapping_add(x),
+        p.y.wrapping_add(y),
+        p.z.wrapping_add(z),
+        kind,
+    )
 }

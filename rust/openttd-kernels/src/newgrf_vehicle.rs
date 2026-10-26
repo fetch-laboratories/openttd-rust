@@ -40,6 +40,13 @@ pub struct Cache {
     position_in_vehicle: u32,
     cache_valid: u8,
 }
+// The first member preserves the native NewGRFCache alias and its ABI.
+#[repr(C)]
+#[derive(Default)]
+struct VehicleCacheOwner {
+    grf: Cache,
+    visual_effect: u8,
+}
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Scope {
@@ -368,12 +375,16 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_vehicle_grf_cache_new() -> *mut Cache {
-    Box::into_raw(Box::default())
+    Box::into_raw(Box::<VehicleCacheOwner>::default()).cast()
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_vehicle_visual_cache(cache: *mut Cache) -> *mut u8 {
+    unsafe { &raw mut (*cache.cast::<VehicleCacheOwner>()).visual_effect }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_grf_cache_delete(cache: *mut Cache) {
     unsafe {
-        drop(Box::from_raw(cache));
+        drop(Box::from_raw(cache.cast::<VehicleCacheOwner>()));
     }
 }
 #[unsafe(no_mangle)]

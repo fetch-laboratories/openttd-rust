@@ -17,6 +17,10 @@
 #include "effectvehicle_func.h"
 #include "effectvehicle_base.h"
 
+#ifdef WITH_RUST
+#include "rust/vehicle_services.h"
+#include "rust/services_map.h"
+#endif
 #include "safeguards.h"
 
 
@@ -594,6 +598,28 @@ static const OpenTTDEffectLeaves &EffectServices()
 	return leaves;
 }
 
+extern "C" const OpenTTDEffectCreationServices *GetRustEffectCreationServices() noexcept
+{
+	static const OpenTTDEffectCreationServices services{
+		.effect = &EffectServices(),
+		.shared = &GetRustSharedServices(),
+		.can_allocate = RustVehicleCanAllocate,
+		.allocate = []() noexcept -> OpenTTDEffectAllocation { auto *v = new EffectVehicle(); return {v, v->rust_state.get()}; },
+		.place = [](void *shell, int32_t x, int32_t y, int32_t z, uint8_t type) noexcept {
+			auto *v = static_cast<EffectVehicle *>(shell);
+			v->subtype = type; v->x_pos = x; v->y_pos = y; v->z_pos = z; v->tile = TileIndex{};
+		},
+		.delta = [](void *shell) noexcept { static_cast<EffectVehicle *>(shell)->UpdateDeltaXY(); },
+		.unclickable = [](void *shell) noexcept { static_cast<EffectVehicle *>(shell)->vehstatus = VehState::Unclickable; },
+		.position = [](const OpenTTDVehicle *shell) noexcept -> OpenTTDEffectPosition {
+			const auto *v = VehicleOf(shell);
+			return {.x = RustVehicleX(v), .y = RustVehicleY(v), .z = RustVehicleZ(v)};
+		},
+		.slope_pixel_z = [](int32_t x, int32_t y) noexcept -> int32_t { return SharedSlopePixelZ(x, y, false); },
+	};
+	return &services;
+}
+
 static bool RunEffect(EffectVehicle *v, bool initialize)
 {
 	if (openttd_rust_effect_run(v->rust_state.get(), v, &EffectServices(), &GetRustSharedServices(), initialize) != 0) return true;
@@ -614,6 +640,10 @@ static bool RunEffect(EffectVehicle *v, bool initialize)
  */
 EffectVehicle *CreateEffectVehicle(int x, int y, int z, EffectVehicleType type)
 {
+#ifdef WITH_RUST
+	openttd_rust_effect_bind(GetRustEffectCreationServices());
+	return reinterpret_cast<EffectVehicle *>(openttd_rust_effect_create(x, y, z, type));
+#else
 	if (!Vehicle::CanAllocateItem()) return nullptr;
 
 	EffectVehicle *v = new EffectVehicle();
@@ -625,15 +655,12 @@ EffectVehicle *CreateEffectVehicle(int x, int y, int z, EffectVehicleType type)
 	v->UpdateDeltaXY();
 	v->vehstatus = VehState::Unclickable;
 
-#ifdef WITH_RUST
-	RunEffect(v, true);
-#else
 	_effect_procs[type].init_proc(v);
-#endif
 
 	v->UpdatePositionAndViewport();
 
 	return v;
+#endif
 }
 
 /**
@@ -646,9 +673,14 @@ EffectVehicle *CreateEffectVehicle(int x, int y, int z, EffectVehicleType type)
  */
 EffectVehicle *CreateEffectVehicleAbove(int x, int y, int z, EffectVehicleType type)
 {
+#ifdef WITH_RUST
+	openttd_rust_effect_bind(GetRustEffectCreationServices());
+	return reinterpret_cast<EffectVehicle *>(openttd_rust_effect_create_above(x, y, z, type));
+#else
 	int safe_x = Clamp(x, 0, Map::MaxX() * TILE_SIZE);
 	int safe_y = Clamp(y, 0, Map::MaxY() * TILE_SIZE);
 	return CreateEffectVehicle(x, y, GetSlopePixelZ(safe_x, safe_y) + z, type);
+#endif
 }
 
 /**
@@ -662,7 +694,12 @@ EffectVehicle *CreateEffectVehicleAbove(int x, int y, int z, EffectVehicleType t
  */
 EffectVehicle *CreateEffectVehicleRel(const Vehicle *v, int x, int y, int z, EffectVehicleType type)
 {
+#ifdef WITH_RUST
+	openttd_rust_effect_bind(GetRustEffectCreationServices());
+	return reinterpret_cast<EffectVehicle *>(openttd_rust_effect_create_rel(RustVehicle(v), x, y, z, type));
+#else
 	return CreateEffectVehicle(v->x_pos + x, v->y_pos + y, v->z_pos + z, type);
+#endif
 }
 
 bool EffectVehicle::Tick()
@@ -696,5 +733,6 @@ TransparencyOption EffectVehicle::GetTransparencyOption() const
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDEffectLeaves.hpp"
-bool CheckAbi_effectvehicle() { return AbiServicesComplete(EffectServices()); }
+#include "abi-visit-OpenTTDEffectCreationServices.hpp"
+bool CheckAbi_effectvehicle() { return AbiServicesComplete(EffectServices()) && AbiServicesComplete(*GetRustEffectCreationServices()); }
 #endif

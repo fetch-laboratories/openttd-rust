@@ -28,6 +28,26 @@ typedef struct OpenTTDEffectLeaves {
 	void (OPENTTD_RUST_CALL *sound)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(sound);
 
 } OpenTTDEffectLeaves;
+struct OpenTTDVehicle;
+struct OpenTTDEffectVehicle;
+struct OpenTTDEffectAllocation { void *shell; OpenTTDEffectState *owner; };
+struct OpenTTDEffectPosition { int32_t x, y, z; };
+struct OpenTTDEffectCreationServices {
+	const OpenTTDEffectLeaves *effect;
+	const OpenTTDSharedServices *shared;
+	bool (*can_allocate)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
+	OpenTTDEffectAllocation (*allocate)() noexcept OPENTTD_SERVICE_DEFAULT(allocate);
+	void (*place)(void *, int32_t, int32_t, int32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(place);
+	void (*delta)(void *) noexcept OPENTTD_SERVICE_DEFAULT(delta);
+	void (*unclickable)(void *) noexcept OPENTTD_SERVICE_DEFAULT(unclickable);
+	OpenTTDEffectPosition (*position)(const OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(position);
+	int32_t (*slope_pixel_z)(int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(slope_pixel_z);
+};
+const OpenTTDEffectCreationServices *GetRustEffectCreationServices() noexcept;
+void openttd_rust_effect_bind(const OpenTTDEffectCreationServices *);
+OpenTTDEffectVehicle *openttd_rust_effect_create(int32_t, int32_t, int32_t, uint8_t);
+OpenTTDEffectVehicle *openttd_rust_effect_create_above(int32_t, int32_t, int32_t, uint8_t);
+OpenTTDEffectVehicle *openttd_rust_effect_create_rel(const OpenTTDVehicle *, int32_t, int32_t, int32_t, uint8_t);
 /* One shell owns one zero-created state. get/set: field 0 uint16 animation, field 1 uint8 substate.
  * Write fields: 0 x, 1 y, 2 z, 3 sprite sequence.Set, 4 scalar sprite, 5 progress, 6 spritenum,
  * written immediately in original order. Sound: 0 fail, 1 success. run returns 1 alive, 0 expiry;

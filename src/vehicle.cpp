@@ -841,6 +841,9 @@ static void RecordPendingAutoreplace(VehicleID id, bool leave) { _vehicles_to_au
 
 void InitializeVehicles()
 {
+#ifdef WITH_RUST
+	openttd_rust_effect_bind(GetRustEffectCreationServices());
+#endif
 	ClearPendingAutoreplace();
 	ResetVehicleHash();
 }
