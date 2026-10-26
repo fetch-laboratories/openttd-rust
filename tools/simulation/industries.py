@@ -1,6 +1,7 @@
 """Industry production/history and builder evidence on existing reference inputs."""
 
 import shutil
+import struct
 from pathlib import Path
 
 from . import companies, core, economy
@@ -41,6 +42,17 @@ def uses_ai(scenario):
 
 
 def install(scenario, run_dir):
+    if source := scenario.get("industry_definition_dir"):
+        for personal in (
+            run_dir / ".openttd",
+            run_dir / ".openttd-rust",
+            run_dir / "xdg-data/openttd",
+            run_dir / "xdg-data/openttd-rust",
+        ):
+            target = personal / "newgrf/industry-definitions"
+            target.mkdir(parents=True, exist_ok=True)
+            for path in Path(source).glob("*.grf"):
+                (target / path.name).write_bytes(path.read_bytes())
     if uses_ai(scenario):
         folder = run_dir / "ai/industry-scenarios"
         shutil.copytree(scenario["scenario_ai"], folder)
@@ -215,6 +227,21 @@ def scenarios(soak):
             save=str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
         )
     )
+    result.extend(
+        dict(
+            name="industry-" + mode,
+            kind="save",
+            save=str(ROOT / "migration/saves/grok-159-001.sav"),
+            industry=mode,
+            ticks=(8 if soak else 4) * SNAPSHOT_TICKS,
+            settings={
+                "construction": {"raw_industry_construction": 1},
+                "economy": {"multiple_industry_per_town": True},
+            },
+        )
+        for mode in ("definitions", "definitions-reload")
+    )
+
     return result
 
 
@@ -238,6 +265,10 @@ def adapter(build, folder, env):
 
 def prepare(scenario, binaries, builds, out, timeout, env, result):
     mode = scenario.get("industry")
+    if mode in ("definitions", "definitions-reload"):
+        return prepare_definitions(
+            scenario, binaries, builds, out, timeout, env, result
+        )
     if mode == "resolver":
         folder = out / scenario["name"] / "input"
         source, _ = core.normalize(Path(scenario["save"]), folder / "normalized")
@@ -404,6 +435,9 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
 
 def check(scenario, run, mode, role, result):
     kind = scenario.get("industry")
+    if kind in ("definitions", "definitions-reload"):
+        check_definitions(scenario, run, mode, role, result)
+        return
     if kind == "resolver":
         branch_witnesses(
             scenario,
@@ -814,3 +848,245 @@ def lifecycle_gap():
 if __name__ == "__main__":
     production_gap()
     lifecycle_gap()
+
+
+def definition_grfs(folder):
+    """Write real GRF containers with independent property and layout expectations."""
+    folder.mkdir(parents=True, exist_ok=True)
+
+    def action(feature, first, properties, count=1):
+        return bytes((0, feature, len(properties), count, first)) + b"".join(
+            bytes((prop,)) + data for prop, data in properties
+        )
+
+    def byte(value):
+        return bytes((value,))
+
+    def word(value):
+        return struct.pack("<H", value)
+
+    def dword(value):
+        return struct.pack("<I", value)
+
+    def layout(*tables):
+        data = b"".join(tables)
+        # A short declared size is warning-only; the table terminators control parsing.
+        return byte(len(tables)) + dword(0) + data
+
+    custom = bytes((0, 0, 0xFE)) + word(0) + bytes((0, 0x80))
+    duplicate = bytes((0, 0, 0, 0, 0, 1, 0, 0x80))
+    imported = bytes((0xFE, 0, 0))
+    water = bytes((0xFF, 1, 0xFF, 0, 0, 0, 0, 0x80))
+    for name, identifier, properties in (
+        (
+            "main",
+            b"I475",
+            [
+                action(8, 0, [(0x18, b"owner475/main\0")]),
+                # Eighty-two early reservations cross the 0xFF water-marker hole.
+                action(9, 0, [(8, bytes(82))], count=82),
+                action(
+                    9,
+                    0,
+                    [
+                        (8, byte(5)),
+                        (9, byte(250)),
+                        (9, byte(0)),
+                        (0x0F, bytes((3, 0))),
+                        (0x10, byte(4)),
+                        (0x11, byte(0)),
+                        (0x12, byte(2)),
+                        (0x13, bytes((2, 1, 8, 0, 0xFC))),
+                        (0x14, word(3) + word(0) + word(0) + word(99)),
+                    ],
+                ),
+                action(
+                    10,
+                    17,
+                    [
+                        (8, byte(0)),
+                        (8, byte(3)),
+                        (9, byte(250)),
+                        (9, byte(0)),
+                        (0x0A, layout(custom, duplicate, imported)),
+                        (0x0F, byte(1)),
+                        (0x14, byte(0)),
+                        (0x16, bytes((255, 255, 255))),
+                        (0x19, byte(77)),
+                        (0x1A, dword(0)),
+                        (0x20, dword(0xFEDCBA98)),
+                        (0x21, byte(0)),
+                        (0x22, byte(0)),
+                        (0x23, dword(12345)),
+                        (0x24, word(0)),
+                        (0x25, bytes((1, 1))),
+                        (0x26, byte(0)),
+                        (0x27, bytes((1, 80))),
+                        (
+                            0x28,
+                            bytes((2, 2))
+                            + word(256)
+                            + word(512)
+                            + word(768)
+                            + word(1024),
+                        ),
+                    ],
+                ),
+                action(10, 17, [(0x29, word(1) + word(0))]),
+                action(9, 90, [(0x0F, bytes((3, 0)))]),
+                action(10, 90, [(0x0A, byte(0)), (0x29, word(0)), (0x0F, byte(12))]),
+                action(
+                    10,
+                    18,
+                    [(8, byte(3)), (0x0A, layout(water)), (0x15, bytes((2, 3, 4)))],
+                ),
+            ],
+        ),
+        (
+            "conflict",
+            b"C475",
+            [
+                action(9, 0, [(8, byte(1)), (9, byte(0))]),
+                action(10, 17, [(8, byte(0)), (9, byte(0))]),
+            ],
+        ),
+        # The first animation byte is published even though the second read fails.
+        ("partial", b"P475", [action(9, 0, [(8, byte(2)), (0x0F, byte(7))])]),
+        # Scalar industry mutation likewise survives the later truncated dword.
+        (
+            "broken",
+            b"B475",
+            [action(10, 19, [(8, byte(3)), (0x0F, byte(93)), (0x20, word(1))])],
+        ),
+        (
+            "badges",
+            b"Q475",
+            [
+                action(
+                    8, 0, [(0x18, b"owner475/partial1\0owner475/partial2\0")], count=2
+                ),
+                action(
+                    9,
+                    0,
+                    [
+                        (8, byte(2)),
+                        (0x14, word(1) + word(1)),
+                        (0x14, word(2) + word(0)),
+                    ],
+                ),
+            ],
+        ),
+        (
+            "invalid",
+            b"X475",
+            [action(10, 20, [(8, byte(3)), (0x0A, layout(bytes((0xFE, 255, 0))))])],
+        ),
+    ):
+        actions = [
+            b"\x08\x07" + identifier + b"Industry definitions\0Ownership fixture\0",
+            *properties,
+        ]
+        payload = word(4) + b"\xff" + dword(len(actions))
+        payload += b"".join(word(len(data)) + b"\xff" + data for data in actions)
+        (folder / (name + ".grf")).write_bytes(payload + word(0))
+
+
+def prepare_definitions(scenario, binaries, builds, out, timeout, env, result):
+    folder = out / scenario["name"] / "input"
+    source, _ = core.normalize(Path(scenario["save"]), folder / "normalized")
+    definition_grfs(folder / "grfs")
+    executables = prepared_console("industries", adapter, binaries, builds, folder, env)
+    command = f'industry_definitions run "{folder / "grfs"}"'
+    scenario = dict(
+        scenario,
+        executables=executables,
+        save=str(source),
+        industry_definition_dir=str(folder / "grfs"),
+    )
+    if scenario["industry"] == "definitions":
+        return dict(
+            scenario,
+            console=[command, "setting difficulty.industry_density 0", "unpause"],
+        )
+    saves = {role: folder / role / "definitions.sav" for role in executables}
+    captures = core.capture_pair(
+        lambda role: dict(
+            scenario,
+            console=[command + f' "{saves[role]}"', "unpause"],
+            ticks=1,
+            short_checkpoint=True,
+        ),
+        executables,
+        builds,
+        folder,
+        timeout,
+        env,
+    )
+    for role, run in captures.items():
+        if (
+            run["exit"]
+            or not saves[role].is_file()
+            or "INDUSTRY-DEFINITIONS complete true" not in run["log"]
+        ):
+            raise RuntimeError("industry definition capture failed: " + role)
+    differences = core.compare_saves(
+        saves["reference"],
+        saves["candidate"],
+        scenario["name"],
+        10,
+        {"chunks": 0, "elements": 0, "masked": {}},
+    )
+    if differences or captures["reference"]["log"] != captures["candidate"]["log"]:
+        result["differences"].extend(differences)
+        raise RuntimeError("industry definition captures differ")
+    return dict(
+        scenario,
+        role_inputs={role: {"save": str(save)} for role, save in saves.items()},
+        console=[
+            "industry_definitions inspect",
+            "setting difficulty.industry_density 0",
+            "unpause",
+        ],
+    )
+
+
+def check_definitions(scenario, run, mode, role, result):
+    if run["exit"]:
+        return
+    marker = "INDUSTRY-DEFINITIONS complete true"
+    if marker not in run["log"]:
+        raise RuntimeError(f"{mode}/{role}: missing real-GRF industry definitions")
+    saves = [read_save(path) for path in run["snapshots"]]
+    if not saves:
+        raise RuntimeError("industry definition scenario produced no saves")
+    identity = int.from_bytes(b"I475", "little")
+    for saved in saves:
+        industries = core.rows(saved, "INDY")
+        mapping = core.rows(saved, "IIDS")
+        tiles = core.rows(saved, "TIDS")
+        if not any(
+            row["grfid"] == identity and row["entity_id"] == 18
+            for row in mapping.values()
+        ):
+            raise RuntimeError("industry mapping identity was not retained")
+        custom = [row for row in tiles.values() if row["grfid"] == identity]
+        if len(custom) != 82 or 255 in tiles or tiles[256]["entity_id"] != 80:
+            raise RuntimeError("early tile reservations or 0xFF exclusion changed")
+        coal = [row for row in industries.values() if row["type"] == 0]
+        if len(coal) < 2:
+            raise RuntimeError("industry funding did not create a second coal mine")
+    final = core.rows(saves[-1], "INDY")
+    funded = [
+        row
+        for row in final.values()
+        if row["type"] == 0 and row["location.w"] == 1 and row["location.h"] == 1
+    ]
+    if len(funded) != 1:
+        raise RuntimeError("funded custom layout identity was not retained")
+    for field in ("production", "transported"):
+        if not any(
+            value > 0
+            for key, value in funded[0].items()
+            if key.startswith("produced[0]/history[") and key.endswith("/" + field)
+        ):
+            raise RuntimeError("funded custom industry has no cargo " + field)

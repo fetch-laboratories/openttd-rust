@@ -47,6 +47,8 @@ use std::cell::Cell;
 use std::ffi::c_void;
 
 /// Entry-local lazy reuse of the immutable registry, never map or owner state.
+/// Native `GetRustMovementServices` is static const and never reset, even on load.
+/// Fixtures retain their tables until entry return; reentry cannot replace either table.
 #[derive(Clone)]
 pub(crate) struct CachedTable<'a> {
     shared: &'a Services,

@@ -1424,9 +1424,21 @@ mod newgrf_roadstop;
 mod rail;
 mod type_availability;
 
+mod override_manager;
+
+mod industry_map;
+
 pub mod type_registry;
 
 pub mod type_definitions;
 
+mod newgrf_class;
 pub mod newgrf_internal;
 pub mod newgrf_translation;
+
+mod station_association;
+
+mod newgrf_layout;
+mod station_definitions;
+
+mod newgrf_act3;

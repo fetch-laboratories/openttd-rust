@@ -222,3 +222,191 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 	 * associations are removed before save and reconstructed by resolver-inspect. */
 	delete real; delete other; delete upper; delete random; delete det; delete result;
 }
+
+#include "newgrf_config.h"
+#include "newgrf_badge.h"
+#include "newgrf_roadstop.h"
+#include "newgrf/newgrf_internal.h"
+#include "strings_func.h"
+static uint32_t StationDefinitionID()
+{
+	return uint32_t('S') | uint32_t('4') << 8 | uint32_t('8') << 16 | uint32_t('4') << 24;
+}
+/* Full loading frees failed specs. These production-entry observations retain the
+ * original ByteReader frame to distinguish partial mutations before that cleanup. */
+static void StationDefinitionPartialReads()
+{
+	GRFFile file; file.grf_version = 8;
+	AutoRestoreBackup current(_cur_gps.grffile, &file);
+	AutoRestoreBackup skip(_cur_gps.skip_sprites, 0);
+	auto read = [&](GrfSpecFeature feature, uint32_t first, uint32_t last, int property, std::initializer_list<uint8_t> data) {
+		ByteReader reader(data.begin(), data.size());
+		int result = -1; bool bounds = false;
+		try {
+			result = feature == GSF_STATIONS ? GrfChangeInfoHandler<GSF_STATIONS>::Activation(first, last, property, reader) : GrfChangeInfoHandler<GSF_ROADSTOPS>::Activation(first, last, property, reader);
+		} catch (const OTTDByteReaderSignal &) { bounds = true; }
+		fmt::print(stderr, "STCMD definitions-partial {} {} {} {} {} {}\n", to_underlying(feature), property, first, result, bounds, reader.Remaining());
+		return bounds;
+	};
+	StationNeed(read(GSF_STATIONS, 0, 1, 8, {'D', 'F'}) && file.stations[0] != nullptr, __LINE__);
+	StationNeed(!read(GSF_STATIONS, 0, 1, 8, {'D', 'F', 'L', 'T'}), __LINE__);
+	StationNeed(read(GSF_STATIONS, 0, 1, 0x16, {7}) && file.stations[0]->animation.frames == 7, __LINE__);
+	StationNeed(read(GSF_STATIONS, 0, 1, 0x20, {3, 4, 5}), __LINE__);
+	StationNeed(file.stations[0]->bridgeable_info.size() == 3 && file.stations[0]->bridgeable_info[1].height == 5 && file.stations[0]->bridgeable_info[2].height == 0, __LINE__);
+	StationNeed(read(GSF_STATIONS, 0, 1, 9, {2, 1, 0}) && file.stations[0]->renderdata.size() == 1, __LINE__);
+	StationNeed(read(GSF_STATIONS, 0, 1, 0x1A, {2, 1, 1, 0}) && file.stations[0]->renderdata.size() == 1, __LINE__);
+	StationNeed(read(GSF_STATIONS, 0, 1, 0x0E, {2, 2, 0, 1, 2}) && file.stations[0]->layouts.empty(), __LINE__);
+	StationNeed(!read(GSF_STATIONS, 1, 2, 0x16, {4, 0}), __LINE__);
+	StationNeed(!read(GSF_ROADSTOPS, 1, 2, 0x0E, {4, 0}), __LINE__);
+	StationNeed(read(GSF_ROADSTOPS, 0, 1, 8, {'D', 'F'}) && file.roadstops[0] != nullptr, __LINE__);
+	StationNeed(!read(GSF_ROADSTOPS, 0, 1, 8, {'D', 'F', 'L', 'T'}), __LINE__);
+	StationNeed(read(GSF_ROADSTOPS, 0, 1, 0x15, {23}) && file.roadstops[0]->build_cost_multiplier == 23 && file.roadstops[0]->clear_cost_multiplier == 16, __LINE__);
+	StationNeed(read(GSF_ROADSTOPS, 0, 1, 0x13, {7, 4, 5, 6}) && file.roadstops[0]->bridgeable_info[2].height == 6, __LINE__);
+	StationNeed(!read(GSF_ROADSTOPS, 0, 2, 0xFE, {99}), __LINE__);
+	BadgeID badge = GetOrCreateBadge("owner484/partial").index;
+	BadgeID skipped = GetOrCreateBadge("owner484/skipped").index;
+	file.badge_list = {badge, skipped};
+	StationNeed(!read(GSF_ROADSTOPS, 1, 2, 0x16, {1, 0, 1, 0}) && !GetBadge(skipped)->features.Test(GSF_ROADSTOPS), __LINE__);
+	StationNeed(read(GSF_STATIONS, 0, 1, 0x1F, {2, 0, 0, 0}) && file.stations[0]->badges.empty() && GetBadge(badge)->features.Test(GSF_STATIONS), __LINE__);
+	StationNeed(read(GSF_ROADSTOPS, 0, 1, 0x16, {2, 0, 0, 0}) && file.roadstops[0]->badges.empty() && GetBadge(badge)->features.Test(GSF_ROADSTOPS), __LINE__);
+	StationNeed(read(GSF_STATIONS, 0, 1, 9, {2, 1, 0, 0, 0, 5, 6}) && file.stations[0]->renderdata[0].ground.sprite == 1 && file.stations[0]->renderdata[0].seq.empty(), __LINE__);
+	fmt::print(stderr, "STCMD definitions-partial-state {} {} {} {}\n", file.stations[0]->animation.frames, file.stations[0]->renderdata[0].seq.size(), file.stations[0]->bridgeable_info[1].height, file.roadstops[0]->bridgeable_info[2].height);
+}
+static void StationDefinitionMissing()
+{
+	uint count = 0;
+	for (BaseStation *st : BaseStation::Iterate()) {
+		if (!st->name.starts_with("Definitions ")) continue;
+		for (const auto &slot : st->speclist) if (slot.grfid != 0) {
+			StationNeed(slot.spec == nullptr && slot.grfid == StationDefinitionID(), __LINE__);
+			fmt::print(stderr, "STCMD definitions-identity missing-rail {} {} {}\n", st->index.base(), slot.grfid, slot.localidx);
+		}
+		for (const auto &slot : st->roadstop_speclist) if (slot.grfid != 0) {
+			StationNeed(slot.spec == nullptr && slot.grfid == StationDefinitionID(), __LINE__);
+			fmt::print(stderr, "STCMD definitions-identity missing-road {} {} {}\n", st->index.base(), slot.grfid, slot.localidx);
+		}
+		StationNeed(st->cached_anim_triggers.None() && st->cached_cargo_triggers == 0 && st->cached_roadstop_anim_triggers.None() && st->cached_roadstop_cargo_triggers == 0, __LINE__);
+		if (st->name == "Definitions station") {
+			StationSpec spec{};
+			auto next = AllocateSpecToStation(&spec, st);
+			StationNeed(next.has_value() && *next == 3, __LINE__);
+		}
+		++count;
+	}
+	StationNeed(count == 4, __LINE__);
+	fmt::print(stderr, "STCMD definitions-missing {} preserved no-reuse\n", count);
+}
+static void StationDefinitionLoad(std::string_view folder)
+{
+	StationDefinitionPartialReads();
+	SetRandomSeed(0x48400001);
+	_grfconfig.clear();
+	for (const char *name : {"stations", "broken-station", "broken-road", "invalid-layout"}) {
+		auto config = std::make_unique<GRFConfig>(std::string(folder) + "/" + name + ".grf");
+		StationNeed(FillGRFDetails(*config, false, NO_DIRECTORY), __LINE__);
+		config->flags.Reset(GRFConfigFlag::InitOnly);
+		_grfconfig.push_back(std::move(config));
+	}
+	ReloadNewGRFData();
+}
+
+static void StationDefinitionFixture(TileIndex origin, DoCommandFlags test, DoCommandFlags exec, bool reload)
+{
+	const auto id = StationDefinitionID();
+	const GRFFile *file = GetFileByGRFID(id);
+	StationNeed(file != nullptr && GetGRFConfig(id)->status == GCS_ACTIVATED, __LINE__);
+	const StationSpec *rail = StationClass::GetByGrf(id, 0), *extra = StationClass::GetByGrf(id, 1), *way = StationClass::GetByGrf(id, 2);
+	const RoadStopSpec *road = RoadStopClass::GetByGrf(id, 0), *roadway = RoadStopClass::GetByGrf(id, 1);
+	StationNeed(rail != nullptr && extra != nullptr && way != nullptr && road != nullptr && roadway != nullptr, __LINE__);
+	StationNeed(StationClass::GetClassCount() == 5 && StationClass::GetUIClassCount() == 4 && RoadStopClass::GetClassCount() == 5, __LINE__);
+	StationNeed(StationClass::Get(rail->class_index)->GetSpecCount() == 2 && rail->index == (file->GetParam(0) != 0 ? 1 : 0) && extra->index == (file->GetParam(0) != 0 ? 0 : 1) && IsWaypointClass(*StationClass::Get(way->class_index)) && IsWaypointClass(*RoadStopClass::Get(roadway->class_index)), __LINE__);
+	StationNeed(GetString(rail->name) == "Station 484" && GetString(StationClass::Get(rail->class_index)->name) == "Class 484" && GetString(road->name) == "Road stop 484" && GetString(RoadStopClass::Get(road->class_index)->name) == "Road class 484", __LINE__);
+	for (uint32_t broken : {uint32_t('B') | uint32_t('4') << 8 | uint32_t('8') << 16 | uint32_t('4') << 24, uint32_t('R') | uint32_t('4') << 8 | uint32_t('8') << 16 | uint32_t('4') << 24}) {
+		const GRFConfig *config = GetGRFConfig(broken);
+		StationNeed(config != nullptr && config->status == GCS_DISABLED && config->errors.size() == 1 && config->errors.front().message == STR_NEWGRF_ERROR_READ_BOUNDS, __LINE__);
+	}
+	const GRFConfig *invalid = GetGRFConfig(uint32_t('L') | uint32_t('4') << 8 | uint32_t('8') << 16 | uint32_t('4') << 24);
+	StationNeed(invalid != nullptr && invalid->status == GCS_DISABLED && invalid->errors.size() == 1 && invalid->errors.front().message == STR_NEWGRF_ERROR_INVALID_SPRITE_LAYOUT, __LINE__);
+	fmt::print(stderr, "STCMD definitions-malformed real-file read-bounds\n");
+	StationNeed(StationClass::Get(static_cast<StationClassID>(2))->name == STR_UNDEFINED && RoadStopClass::Get(static_cast<RoadStopClassID>(2))->name == STR_UNDEFINED, __LINE__);
+	fmt::print(stderr, "STCMD definitions-registry {} {} {} {} {}\n", rail->class_index, way->class_index, road->class_index, roadway->class_index, StationClass::Get(STAT_CLASS_DFLT)->GetSpecCount());
+	StationNeed(rail->renderdata.size() == 2 && extra->renderdata.empty() && rail->layouts.at(GetStationLayoutKey(1, 2)) == std::vector<uint8_t>{0, 2} && extra->layouts == rail->layouts, __LINE__);
+	StationNeed(rail->renderdata[0].ground.sprite == 1 && rail->renderdata[0].seq.size() == 1, __LINE__);
+	const auto &sequence = rail->renderdata[0].seq[0];
+	StationNeed(sequence.origin.x == 1 && sequence.origin.y == 2 && sequence.origin.z == 3 && sequence.extent.x == 4 && sequence.extent.y == 5 && sequence.extent.z == 6 && sequence.image.sprite == 2, __LINE__);
+	StationNeed(way->renderdata.size() == 2 && way->renderdata[0].ground.sprite == 1 && way->renderdata[1].ground.sprite == 2, __LINE__);
+	StationNeed(rail->badges.size() == 1 && road->badges == rail->badges && GetBadge(rail->badges[0])->features.Test(GSF_STATIONS) && GetBadge(rail->badges[0])->features.Test(GSF_ROADSTOPS), __LINE__);
+	StationNeed(rail->bridgeable_info.size() == 3 && rail->bridgeable_info[2].height == 6 && rail->bridgeable_info[1].disallowed_pillars.base() == 2 && road->bridgeable_info[5].height == 6, __LINE__);
+	fmt::print(stderr, "STCMD definitions-layout {} {} {} {} {}\n", rail->renderdata.size(), extra->renderdata.size(), rail->tileflags[0].base(), rail->tileflags[1].base(), rail->bridgeable_info[2].height);
+	Station *station = nullptr, *stop = nullptr;
+	Waypoint *waypoint = nullptr, *roadpoint = nullptr;
+	if (!reload) {
+		auto at = [origin](uint x, uint y) { return origin + TileDiffXY(x, y); };
+		auto checked = [](const char *label, CommandCost cost) { StationCost(label, cost); StationNeed(cost.Succeeded(), __LINE__); return cost.GetCost(); };
+		auto build = [&](DoCommandFlags flags, TileIndex tile, const StationSpec *spec, StationID join) { return Command<CMD_BUILD_RAIL_STATION>::Do(flags, tile, RAILTYPE_RAIL, AXIS_X, 1, 2, spec->class_index, spec->index, join, true); };
+		auto price = checked("definition-rail-test", build(test, at(2, 2), rail, NEW_STATION));
+		StationNeed(price == checked("definition-rail-exec", build(exec, at(2, 2), rail, NEW_STATION)), __LINE__);
+		station = Station::GetByTile(at(2, 2)); station->name = "Definitions station";
+		checked("definition-second", build(exec, at(2, 3), extra, station->index));
+		checked("definition-same-new-slot", build(exec, at(2, 4), rail, station->index));
+		StationNeed(GetCustomStationSpecIndex(at(2, 4)) == 3, __LINE__);
+		checked("definition-remove-middle", Command<CMD_REMOVE_FROM_RAIL_STATION>::Do(exec, at(2, 3), at(3, 3), true));
+		checked("definition-reuse", build(exec, at(2, 5), extra, station->index));
+		StationNeed(GetCustomStationSpecIndex(at(2, 5)) == 2, __LINE__);
+		checked("definition-remove-high", Command<CMD_REMOVE_FROM_RAIL_STATION>::Do(exec, at(2, 4), at(3, 4), true));
+		StationNeed(station->speclist.size() == 3, __LINE__);
+		checked("definition-way-track", Command<CMD_BUILD_SINGLE_RAIL>::Do(exec, at(8, 2), RAILTYPE_RAIL, TRACK_X, false));
+		auto build_way = [&](DoCommandFlags flags) { return Command<CMD_BUILD_RAIL_WAYPOINT>::Do(flags, at(8, 2), AXIS_X, 1, 1, way->class_index, way->index, NEW_STATION, true); };
+		price = checked("definition-way-test", build_way(test)); StationNeed(price == checked("definition-way-exec", build_way(exec)), __LINE__);
+		waypoint = Waypoint::GetByTile(at(8, 2)); waypoint->name = "Definitions waypoint";
+		auto build_stop = [&](DoCommandFlags flags) { return Command<CMD_BUILD_ROAD_STOP>::Do(flags, at(12, 2), 1, 1, RoadStopType::Bus, false, DIAGDIR_NE, ROADTYPE_ROAD, road->class_index, road->index, NEW_STATION, true); };
+		price = checked("definition-road-test", build_stop(test)); StationNeed(price == checked("definition-road-exec", build_stop(exec)), __LINE__);
+		stop = Station::GetByTile(at(12, 2)); stop->name = "Definitions stop";
+		checked("definition-road-track", Command<CMD_BUILD_ROAD>::Do(exec, at(16, 2), ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid()));
+		auto build_roadway = [&](DoCommandFlags flags) { return Command<CMD_BUILD_ROAD_WAYPOINT>::Do(flags, at(16, 2), AXIS_X, 1, 1, roadway->class_index, roadway->index, NEW_STATION, true); };
+		price = checked("definition-roadway-test", build_roadway(test)); StationNeed(price == checked("definition-roadway-exec", build_roadway(exec)), __LINE__);
+		roadpoint = Waypoint::GetByTile(at(16, 2)); roadpoint->name = "Definitions roadpoint";
+	} else {
+		for (Station *st : Station::Iterate()) {
+			if (st->name == "Definitions station") station = st;
+			if (st->name == "Definitions stop") stop = st;
+		}
+		for (Waypoint *wp : Waypoint::Iterate()) {
+			if (wp->name == "Definitions waypoint") waypoint = wp;
+			if (wp->name == "Definitions roadpoint") roadpoint = wp;
+		}
+	}
+	StationNeed(station != nullptr && stop != nullptr && waypoint != nullptr && roadpoint != nullptr, __LINE__);
+	for (BaseStation *st : {static_cast<BaseStation *>(station), static_cast<BaseStation *>(waypoint)}) {
+		for (const auto &slot : st->speclist) if (slot.grfid != 0) {
+			StationNeed(slot.spec == StationClass::GetByGrf(slot.grfid, slot.localidx), __LINE__);
+			fmt::print(stderr, "STCMD definitions-identity rail {} {} {} {} {} {}\n", st->index.base(), slot.grfid, slot.localidx, slot.spec->index, st->cached_anim_triggers.base(), st->cached_cargo_triggers);
+		}
+	}
+	for (BaseStation *st : {static_cast<BaseStation *>(stop), static_cast<BaseStation *>(roadpoint)}) {
+		for (const auto &slot : st->roadstop_speclist) if (slot.grfid != 0) {
+			StationNeed(slot.spec == RoadStopClass::GetByGrf(slot.grfid, slot.localidx), __LINE__);
+			fmt::print(stderr, "STCMD definitions-identity road {} {} {} {} {} {}\n", st->index.base(), slot.grfid, slot.localidx, slot.spec->index, st->cached_roadstop_anim_triggers.base(), st->cached_roadstop_cargo_triggers);
+		}
+	}
+	uint occupied = 0;
+	for (TileIndex tile : Map::Iterate()) {
+		if (!IsTileType(tile, MP_STATION)) continue;
+		if (GetStationIndex(tile) != station->index && GetStationIndex(tile) != waypoint->index && GetStationIndex(tile) != stop->index && GetStationIndex(tile) != roadpoint->index) continue;
+		++occupied;
+		fmt::print(stderr, "STCMD definitions-occupied {} {} {}\n", tile.base(), to_underlying(GetStationType(tile)), HasStationTileRail(tile) ? GetCustomStationSpecIndex(tile) : GetCustomRoadStopSpecIndex(tile));
+	}
+	StationNeed(occupied == 7, __LINE__);
+	StationResolverObject rail_query(rail, station, station->train_station.tile);
+	RoadStopResolverObject road_query(road, stop, stop->bus_stops->xy, ROADTYPE_ROAD, StationType::Bus, 0);
+	for (CargoType cargo : {CargoGRFFileProps::SG_DEFAULT, CargoType{0}}) {
+		rail_query.root_spritegroup = rail->grf_prop.GetSpriteGroup(cargo);
+		road_query.root_spritegroup = road->grf_prop.GetSpriteGroup(cargo);
+		auto r = rail_query.ResolveCallback({}), b = road_query.ResolveCallback({});
+		StationNeed(r == (cargo == 0 ? 0x402 : 0x400) && r == b, __LINE__);
+		fmt::print(stderr, "STCMD definitions-callbacks {} {} {}\n", cargo, r, b);
+	}
+	TriggerStationRandomisation(station, station->train_station.tile, StationRandomTrigger::NewCargo, 0);
+	TriggerRoadStopRandomisation(stop, stop->bus_stops->xy, StationRandomTrigger::NewCargo, 0);
+	fmt::print(stderr, "STCMD definitions-rng {} {} {} {} {}\n", reload, _random.state[0], _random.state[1], station->waiting_random_triggers.base(), stop->waiting_random_triggers.base());
+}

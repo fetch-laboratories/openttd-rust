@@ -19,7 +19,7 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 		.find_file = RustGRFFileByID,
 		.engine_file = RustEngineGRF,
 		.has_file = RustEngineHasGRF,
-		.set_file = [](const OpenTTDEngine *shell, const GRFFile *file) noexcept { const_cast<Engine *>(EngineOf(shell))->grf_prop.SetGRFFile(file); },
+		.set_file = RustEngineSetGRFFile,
 		.mapping_log = [](uint32_t source, uint32_t target, bool loaded) noexcept {
 			if (loaded) GrfMsg(5, "Mapping from GRFID {:x} to {:x}", std::byteswap(source), std::byteswap(target));
 			else GrfMsg(5, "Tried mapping from GRFID {:x} to {:x} but target is not loaded", std::byteswap(source), std::byteswap(target));

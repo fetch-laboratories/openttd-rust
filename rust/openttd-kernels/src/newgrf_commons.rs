@@ -20,3 +20,8 @@ pub(crate) fn first_sprite_group_of<const N: usize>(
     }
     std::ptr::null()
 }
+
+/// `IndustryTileOverrideManager::CheckValidNewID` excludes the water-check marker.
+pub(crate) fn industry_tile_check_valid_new_id(id: u16) -> bool {
+    id != crate::industry_map::GFX_WATERTILE_SPECIALCHECK
+}

@@ -310,7 +310,7 @@ static void RoadBoundary()
 		++road_abi_probe->next_reads;
 		return {.next = nullptr, .final_progress = static_cast<uint8_t>(road_abi_probe->progress)};
 	};
-	t.leaves.crash_part = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadCrashPart { return {.next = nullptr, .next_state = nullptr, .tile = 100, .z = 0, .crossing = false}; };
+	t.leaves.crash_part = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadCrashPart { return {.next = nullptr, .next_state = nullptr, .z = 0, .crossing = false}; };
 	OpenTTDRoadTickRead front{.tick = 255, .front = true, .movement = probe.entry, .order_time = &probe.order_time, .running = &probe.running, .status = &probe.status};
 	// Fresh scalar loads and the post-write crashed-bit reset precede controller entry.
 	probe.order_time = INT32_MAX;

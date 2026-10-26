@@ -1335,6 +1335,7 @@ impl Game<'_> {
                     self.update_occupancy(id);
                     crate::ground_vehicle::inclination(
                         self.leaves.physics,
+                        &self.movement,
                         id.vehicle(),
                         true,
                         true,
@@ -1958,6 +1959,7 @@ impl Game<'_> {
         self.update_occupancy(id);
         let old_z = crate::ground_vehicle::inclination(
             self.leaves.physics,
+            &self.movement,
             id.vehicle(),
             new != old,
             false,
@@ -2230,6 +2232,7 @@ impl Game<'_> {
                     self.update_occupancy(id);
                     crate::ground_vehicle::inclination(
                         self.leaves.physics,
+                        &self.movement,
                         id.vehicle(),
                         false,
                         true,

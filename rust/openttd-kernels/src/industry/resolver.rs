@@ -50,7 +50,6 @@ pub struct ResolverServices {
     pub lifecycle: *const LifecycleServices,
     pub tile: *const TileServices,
     pub get: unsafe extern "C" fn(u16) -> ResolverRef,
-    pub map_type: unsafe extern "C" fn(u8, u32) -> u16,
     pub spec_grfid: unsafe extern "C" fn(*const SpecHandle) -> u32,
     pub spec_local_id: unsafe extern "C" fn(*const SpecHandle) -> u16,
     pub root: unsafe extern "C" fn(*const SpecHandle, bool) -> *const c_void,
@@ -120,14 +119,14 @@ impl ResolverServices {
     }
 }
 
-fn map_type(kind: u8, grfid: u32, s: &ResolverServices) -> u8 {
+pub(crate) fn map_type(kind: u8, grfid: u32) -> u8 {
     if kind == IT_INVALID {
         return IT_INVALID;
     }
     if kind & 0x80 == 0 {
         return kind & 0x7f;
     }
-    (unsafe { (s.map_type)(kind & 0x7f, grfid) }) as u8
+    (unsafe { crate::override_manager::industry_id(u16::from(kind & 0x7f), grfid) }) as u8
 }
 fn id_at_offset(tile: u32, id: u16, grfid: u32, s: &ResolverServices) -> u32 {
     if !s.belongs(tile, id) {
@@ -218,7 +217,7 @@ fn count_and_distance(
             grfid = unsafe { (s.spec_grfid)(s.spec((*current.owner).metadata.kind)) };
         }
         parameter |= 0x80;
-        map_type(parameter, grfid, s)
+        map_type(parameter, grfid)
     };
     if kind >= NUM_INDUSTRYTYPES {
         return 0xffff;
@@ -397,7 +396,7 @@ fn variable(
             }
         }
         0x64 if c.tile != INVALID_TILE => {
-            let kind = map_type(parameter as u8, unsafe { (s.spec_grfid)(spec) }, s);
+            let kind = map_type(parameter as u8, unsafe { (s.spec_grfid)(spec) });
             if kind >= NUM_INDUSTRYTYPES {
                 u32::MAX
             } else {
@@ -795,12 +794,8 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_scope(
 /// # Safety
 /// Live mapping manager throughout the call.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_map_type(
-    kind: u8,
-    grfid: u32,
-    s: *const ResolverServices,
-) -> u8 {
-    map_type(kind, grfid, unsafe { &*s })
+pub unsafe extern "C" fn openttd_rust_industry_map_type(kind: u8, grfid: u32) -> u8 {
+    map_type(kind, grfid)
 }
 /// # Safety
 /// Live specs/table, callback may synchronously reenter with its own stack context.
@@ -895,7 +890,6 @@ crate::abi::layouts! {
         lifecycle,
         tile,
         get,
-        map_type,
         spec_grfid,
         spec_local_id,
         root,

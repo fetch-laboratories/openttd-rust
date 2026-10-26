@@ -55,8 +55,8 @@ pub struct OrderSpec {
 #[derive(Clone, Copy)]
 /// Data stays live through pure searches; native vector limits fit a Rust slice.
 pub struct Labels {
-    data: *const u32,
-    size: usize,
+    pub(crate) data: *const u32,
+    pub(crate) size: usize,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -508,4 +508,8 @@ crate::abi::layouts! {
     "OpenTTDCargoFile" ["probe"] => File {labels,version,fallback};
     "OpenTTDCargoInvocation" ["probe"] => Invocation {label,file,root,callback,param1,param2};
     "OpenTTDCargoRegistryServices" ["probe"] => Services {shared,common,spec,copy_default,clear_specs,label_spec,bitnum,finalise_spec,order_spec,index,production,sort,publish_sorted,publish_standard,publish_town,set_file,set_effect,invalidate_strings,file,assign_fallback,resize_fallback,set_fallback,clear_inverse,set_inverse,invocation,callback_frame,sprite_frame,sprite};
+}
+
+pub(crate) fn file_cargo_count(file: Handle) -> usize {
+    (services().file)(file).labels.size
 }

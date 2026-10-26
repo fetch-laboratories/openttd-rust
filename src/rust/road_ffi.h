@@ -88,7 +88,6 @@ struct OpenTTDRoadStep {
 struct OpenTTDRoadCrashPart {
 	OpenTTDVehicle *next;
 	OpenTTDRoadState *next_state;
-	uint32_t tile;
 	int32_t z;
 	bool crossing;
 };

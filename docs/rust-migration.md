@@ -1742,6 +1742,22 @@ evaluator, storage and station reentry. Checks: the default `town-houses-` scena
 install real groups and reinstall transient groups after reload. External-GRF badge/content
 combinations, historical save adapters and GUI-thread integration remain #156 gaps. PR #416.
 
+### Industry and tile definitions and shared mapping storage (#475)
+
+Rust owns complete Action0 industry/tile property and layout interpretation, allocation,
+publication, reset/finalization and canonical `OverrideManagerBase` mapping/override vectors.
+Other native managers keep virtual `GetID`/`CheckValidNewID` facades over those same vectors;
+copy/assignment refresh borrowed native spans. IIDS/TIDS adapters retain native `SlObject` and
+`SlError` frames and serialize canonical mapping aliases without staging a second copy.
+Native specs/defaults, GRF files, Action2 graphs, strings and badges remain C++ storage.
+The shared Reader preserves incremental cursor/property effects and catches native read errors
+before Rust returns to the rethrow frame. Property failures call the canonical Rust loading
+disable owner with typed, entry-scoped loading services. Manager borrows end before virtual
+callbacks or reentry; reset fills stable buffers, while assignment refreshes native aliases.
+Original policy bodies compile only portably. Historical IIDS/TIDS and malformed save frames,
+exhaustion, remaining undefined-spec/property/layout branches and arbitrary GRFs remain #156
+limits. PR #479.
+
 ### Industry periodic production and builder ownership (#129)
 
 Rust owns the produced/accepted slots, optional accepted histories, production fields, sound
@@ -1990,6 +2006,26 @@ conditionals, historical saves, remaining native feature combinations and GUI sc
 #156 gaps. Native signed dword MIN/-1 division overflow has a compiler/platform-dependent
 undefined result; the cross-game fixture excludes it and Rust uses explicit wrapping division.
 PR #425.
+
+### Station and road-stop definitions and associations (#484)
+
+Rust (`station_definitions.rs`, `newgrf_class.rs`, `station_association.rs`) owns
+station/road-stop Action0 properties, cargo-specific/default group publication,
+shared class reset/allocation/membership/lookup and rail association allocation,
+assignment, deallocation, trigger rebuilding and station/road-stop afterload rebinding.
+Station and waypoint commands call these owners directly. Native class spans alias
+Rust storage; station/road-stop/airport/object presentation uses one shared registry.
+Object-class availability calls the existing Rust eligibility owner.
+
+Canonical native GRF/spec allocations, payload/layout containers, station shells,
+saved slot records, sprite graphs, strings and badges remain native. Checked native
+`ReadSpriteLayoutSprite` and `ReadSpriteLayout` callees preserve their incremental
+writes. A native stack vector carries the temporary sequence payload; Rust drives
+every read and its successful move into the layout. Read errors return from Rust
+before the decoder rethrows. Deferred class
+names resolve the spec's current class. Original bodies remain portable-only.
+Historical STNN/STNS/legacy save frames, real exhaustion, arbitrary GRFs and GUI
+scheduling remain coverage limits tracked in #156. PR: #488.
 
 ### Road-stop NewGRF runtime and associations (#410)
 
