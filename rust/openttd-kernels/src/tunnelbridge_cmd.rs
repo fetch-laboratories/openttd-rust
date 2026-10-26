@@ -406,13 +406,13 @@ impl<'a> World<'a> {
         match transport {
             ROAD => {
                 roadtype = kind;
-                if !(self.s.road_type_valid)(roadtype) {
+                if !crate::road::val_param_road_type(self.s, roadtype) {
                     return Self::error(cost);
                 }
             }
             RAIL => {
                 railtype = kind;
-                if !(self.r.rail_type_valid)(railtype) {
+                if !crate::rail::val_param_rail_type(self.s, railtype) {
                     return Self::error(cost);
                 }
             }
@@ -791,13 +791,13 @@ impl<'a> World<'a> {
         match transport {
             RAIL => {
                 railtype = kind;
-                if !(self.r.rail_type_valid)(railtype) {
+                if !crate::rail::val_param_rail_type(self.s, railtype) {
                     return Self::error(cost);
                 }
             }
             ROAD => {
                 roadtype = kind;
-                if !(self.s.road_type_valid)(roadtype) {
+                if !crate::road::val_param_road_type(self.s, roadtype) {
                     return Self::error(cost);
                 }
             }
@@ -1494,4 +1494,20 @@ crate::abi::layouts! {
         objects,
         strings,
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn tunnel_output_is_shared_with_the_gui_thread() {
+        let before = END_TILE.swap(0x1234_5678, Ordering::Relaxed);
+        let value = std::thread::spawn(|| {
+            assert_eq!(openttd_rust_tunnel_endtile(), 0x1234_5678);
+            END_TILE.store(0x8765_4321, Ordering::Relaxed);
+        });
+        value.join().expect("GUI reader thread");
+        assert_eq!(openttd_rust_tunnel_endtile(), 0x8765_4321);
+        END_TILE.store(before, Ordering::Relaxed);
+    }
 }

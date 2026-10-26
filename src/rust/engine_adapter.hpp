@@ -14,18 +14,37 @@
 #include "presentation_services.h"
 #include "environment_services.h"
 #include "services_timer.h"
+#include "type_availability_services.h"
 static_assert(MAX_COMPANIES == 15 && OWNER_DEITY.base() == 18 && MAX_LENGTH_ENGINE_NAME_CHARS == 32);
-static OpenTTDEngineRef EngineRef(const Engine *e) noexcept
+const OpenTTDTypeAvailabilityServices &GetRustTypeAvailabilityServices() noexcept
 {
-	if (e == nullptr) return {.shell = nullptr, .state = nullptr, .id = EngineID::Invalid().base(), .type = VEH_INVALID};
-	return {.shell = RustEngine(e), .state = e->rust_lifecycle.state, .id = e->index.base(), .type = RustEngineType(RustEngine(e))};
+	static const OpenTTDTypeAvailabilityServices services{
+		.next = Engine_next,
+		.rail_availability = RustEngineRailAvailability,
+		.road_availability = RustEngineRoadAvailability,
+		.engine_railtypes = RustEngineRailTypes,
+		.engine_roadtype = RustEngineRoadType,
+		.rail_introduction = RustRailTypeIntroduction,
+		.road_introduction = RustRoadTypeIntroduction,
+		.rail_introduces = [](RailType rt) noexcept { return RustRailTypeIntroduces(GetRailTypeInfo(rt)); },
+		.road_introduces = [](RoadType rt) noexcept { return RustRoadTypeIntroduces(GetRoadTypeInfo(rt)); },
+		.road_construction = RustRoadTypeConstruction,
+		.rail_hidden = RustRailTypesHidden,
+		.road_hidden = RustRoadTypesHidden,
+		.road_tram_mask = RustMaskForRoadTramType,
+		.company_railtypes = RustCompanyRailTypes,
+		.company_roadtypes = RustCompanyRoadTypes,
+		.set_company_railtypes = RustSetCompanyRailTypes,
+		.set_company_roadtypes = RustSetCompanyRoadTypes,
+		.editor = OpenTTDEditor,
+#ifdef WITH_ASSERT
+		.assertions = true,
+#else
+		.assertions = false,
+#endif
+	};
+	return services;
 }
-static OpenTTDEngineRef Engine_next(uint32_t from) noexcept
-{
-	for (Engine *e : Engine::Iterate(from)) return EngineRef(e);
-	return EngineRef(nullptr);
-}
-static OpenTTDEngineRef Engine_resolve(uint16_t id) noexcept { return EngineRef(EngineOf(RustEngineByIDIfValid(id))); }
 static OpenTTDEngineRef EnginePrototype(const Engine *e) noexcept
 {
 	/* Unpooled prototypes may not initialize PoolItem::index. Read that field
@@ -95,13 +114,6 @@ static OpenTTDEngineVehicleCargo Engine_vehicle_cargo(OpenTTDVehicle *handle) no
 	return {.engine = RustEngine(v->GetEngine()), .cargo = RustVehicleCargoType(handle)};
 }
 
-static void Engine_date_company_types(uint8_t company, int32_t date) noexcept
-{
-	Company *c = Company::Get(CompanyID{company});
-	c->avail_railtypes = AddDateIntroducedRailTypes(c->avail_railtypes, TimerGameCalendar::Date{date});
-	c->avail_roadtypes = AddDateIntroducedRoadTypes(c->avail_roadtypes, TimerGameCalendar::Date{date});
-}
-
 static uint Engine_company_engine_count(uint8_t company, uint16_t engine) noexcept { return GetGroupNumEngines(CompanyID{company}, ALL_GROUP, EngineID{engine}); }
 static void Engine_block_preview(uint8_t company) noexcept { Company::Get(CompanyID{company})->Finances().block_preview = 20; }
 
@@ -132,27 +144,12 @@ static void Engine_no_engines(int32_t date) noexcept
 	if (date < INT32_MAX) ShowErrorMessage(GetEncodedString(STR_ERROR_NO_VEHICLES_AVAILABLE_YET), GetEncodedString(STR_ERROR_NO_VEHICLES_AVAILABLE_YET_EXPLANATION, TimerGameCalendar::Date{date}), WL_WARNING);
 	else ShowErrorMessage(GetEncodedString(STR_ERROR_NO_VEHICLES_AVAILABLE_AT_ALL), GetEncodedString(STR_ERROR_NO_VEHICLES_AVAILABLE_AT_ALL_EXPLANATION), WL_WARNING);
 }
-static void Engine_update_railtypes(uint8_t id) noexcept { Company::Get(CompanyID{id})->avail_railtypes = GetCompanyRailTypes(CompanyID{id}); }
-static void Engine_update_roadtypes(uint8_t id) noexcept { Company::Get(CompanyID{id})->avail_roadtypes = GetCompanyRoadTypes(CompanyID{id}); }
-static uint64_t Engine_introduces_railtypes(const OpenTTDEngine *e) noexcept
-{
-	RailTypes types = EngineOf(e)->VehInfo<RailVehicleInfo>().railtypes;
-	assert(types != RailTypes{});
-	return GetAllIntroducesRailTypes(types).base();
-}
-static uint64_t Engine_introduces_roadtypes(const OpenTTDEngine *e) noexcept
-{
-	RoadType type = EngineOf(e)->VehInfo<RoadVehicleInfo>().roadtype;
-	assert(type < ROADTYPE_END);
-	return GetRoadTypeInfo(type)->introduces_roadtypes.base();
-}
-static void Engine_set_railtypes(uint8_t id, uint64_t types, int32_t date) noexcept { Company::Get(CompanyID{id})->avail_railtypes = AddDateIntroducedRailTypes(RailTypes{types}, TimerGameCalendar::Date{date}); }
-static void Engine_set_roadtypes(uint8_t id, uint64_t types, int32_t date) noexcept { Company::Get(CompanyID{id})->avail_roadtypes = AddDateIntroducedRoadTypes(RoadTypes{types}, TimerGameCalendar::Date{date}); }
 static const OpenTTDEngineServices &EngineServices() noexcept
 {
 	static const OpenTTDEngineServices services{
 		.shared = &GetRustSharedServices(),
 		.rng = &GetRustRandomServices(),
+		.types = &GetRustTypeAvailabilityServices(),
 		.next = Engine_next,
 		.resolve = Engine_resolve,
 		.sync_variant = Engine_sync_variant,
@@ -189,9 +186,6 @@ static const OpenTTDEngineServices &EngineServices() noexcept
 		.vehicle_next = Engine_vehicle_next,
 		.vehicle_cargo = Engine_vehicle_cargo,
 		.capabilities = &GetRustEngineCapabilitiesServices(),
-		.update_railtypes = Engine_update_railtypes,
-		.update_roadtypes = Engine_update_roadtypes,
-		.date_company_types = Engine_date_company_types,
 		.company_valid = GetRustSharedServices().company_valid,
 		.compatible_railtypes = Engine_compatible_railtypes,
 		.powered_roadtypes = Engine_powered_roadtypes,
@@ -199,10 +193,6 @@ static const OpenTTDEngineServices &EngineServices() noexcept
 		.company_roadtypes = RustCompanyRoadTypes,
 		.company_engine_count = Engine_company_engine_count,
 		.block_preview = Engine_block_preview,
-		.introduces_railtypes = Engine_introduces_railtypes,
-		.introduces_roadtypes = Engine_introduces_roadtypes,
-		.set_railtypes = Engine_set_railtypes,
-		.set_roadtypes = Engine_set_roadtypes,
 		.current_company = RustCurrentCompanyID,
 		.local_company = RustLocalCompanyID,
 		.toolbar_enable = Engine_toolbar_enable,

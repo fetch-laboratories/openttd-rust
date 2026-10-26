@@ -11,6 +11,7 @@
 #ifdef WITH_RUST
 #include "../rust/engine_ffi.h"
 #include "../rust/engine_services.h"
+#include "../rust/type_availability_ffi.h"
 #include "abi_layout.hpp"
 #endif
 #include "../3rdparty/catch2/catch.hpp"

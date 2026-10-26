@@ -707,14 +707,9 @@ impl Trees<'_> {
             }
         }
         // Flooding and a NewGRF ambient callback may have changed the map.
-        #[cfg(not(test))]
-        let enabled = {
-            crate::newgrf_generic::ambient(tile);
-            // Preserve the native adapter's POST-call enable observation.
-            crate::newgrf_generic::ambient_enabled()
-        };
-        #[cfg(test)]
-        let enabled = tests::ambient(tile);
+        crate::newgrf_generic::ambient(tile);
+        // Preserve the native adapter's POST-call enable observation.
+        let enabled = crate::newgrf_generic::ambient_enabled();
         if enabled || shore {
             t = self.tree_observation(tile);
         }
@@ -1335,8 +1330,6 @@ mod tests {
         random: u32,
         abort_at: Option<usize>,
         progress: usize,
-        ambient_ran: bool,
-        ambient_growth: Option<u8>,
         limit: i32,
         length: u32,
         iterator: u32,
@@ -1473,14 +1466,9 @@ mod tests {
         }; }
         WATER.with(std::ptr::from_ref)
     }
-    pub(super) extern "C" fn ambient(_: u32) -> bool {
+    extern "C" fn ambient_disabled() -> bool {
         log(Event::Ambient);
-        WORLD.with_borrow_mut(|w| {
-            if let Some(growth) = w.ambient_growth {
-                w.tree.growth = growth;
-            }
-            w.ambient_ran
-        })
+        false
     }
     extern "C" fn sound(_: u32, id: u16) {
         log(Event::Sound(id));
@@ -1591,10 +1579,12 @@ mod tests {
     };
     fn with<R>(f: impl FnOnce(&Trees) -> R) -> R {
         let shared = shared();
-        f(&Trees {
-            t: &SERVICES,
-            s: &shared,
-            map: None,
+        crate::newgrf_generic::with_disabled_fixture(ambient_disabled, || {
+            f(&Trees {
+                t: &SERVICES,
+                s: &shared,
+                map: None,
+            })
         })
     }
     const CLEAR_TILE: PlantObservation = PlantObservation {
@@ -1713,11 +1703,11 @@ mod tests {
             ambient: true,
         };
         with(|t| t.tile_loop(0, &s, std::ptr::null_mut()));
-        assert_eq!(events(), [Event::Tree, Event::Ambient]);
+        assert_eq!(events(), [Event::Tree, Event::Ambient, Event::Ambient]);
     }
 
     #[test]
-    fn ambient_and_water_reread_the_tile_without_normalizing_bitpattern_seven() {
+    fn water_rereads_the_tile_without_normalizing_bitpattern_seven() {
         let s = LoopSettings {
             tick_counter: 2304, // Tile 2: cycle 31.
             size_x: 64,
@@ -1742,24 +1732,8 @@ mod tests {
             [
                 Event::Tree,
                 Event::Ambient,
-                Event::Write("add_growth"),
-                Event::Dirty
-            ]
-        );
-        reset(World {
-            tree,
-            ambient_ran: true,
-            ambient_growth: Some(DEAD),
-            ..World::default()
-        });
-        with(|t| t.tile_loop(2, &s, std::ptr::null_mut()));
-        assert_eq!(
-            events(),
-            [
-                Event::Tree,
                 Event::Ambient,
-                Event::Tree,
-                Event::Write("set_growth"),
+                Event::Write("add_growth"),
                 Event::Dirty
             ]
         );
@@ -1776,6 +1750,7 @@ mod tests {
             [
                 Event::Tree,
                 Event::Water,
+                Event::Ambient,
                 Event::Ambient,
                 Event::Tree,
                 Event::Write("add_growth"),
@@ -1813,6 +1788,7 @@ mod tests {
                 Event::Snow,
                 Event::Draw,
                 Event::Sound(ARCTIC_SNOW_2),
+                Event::Ambient,
                 Event::Ambient
             ]
         );

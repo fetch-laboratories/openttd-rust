@@ -1432,5 +1432,6 @@ void CheckEngines()
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDEngineServices.hpp"
-bool CheckAbi_engine() { return AbiServicesComplete(EngineServices()); }
+#include "abi-visit-OpenTTDTypeAvailabilityServices.hpp"
+bool CheckAbi_engine() { return AbiServicesComplete(EngineServices()) && AbiServicesComplete(GetRustTypeAvailabilityServices()); }
 #endif

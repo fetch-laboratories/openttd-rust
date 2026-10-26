@@ -21,7 +21,7 @@ static void *VehicleConstructNewRoad(uint32_t tile) noexcept
 static void VehicleConstructRoadFront(void *shell, const OpenTTDEngine *e) noexcept
 {
 	RoadVehicle *v = static_cast<RoadVehicle *>(shell);
-	RoadType rt = EngineOf(e)->VehInfo<RoadVehicleInfo>().roadtype;
+	RoadType rt = RustEngineRoadType(e);
 	RustGroundSetFirstEngine(&v->gcache, EngineID::Invalid()); // needs to be set before first callback
 	v->SetFrontEngine();
 	v->roadtype = rt;

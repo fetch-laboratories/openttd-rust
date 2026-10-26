@@ -74,6 +74,7 @@
 #include "../safeguards.h"
 #include "settings_services.h"
 #include "environment_services.h"
+#include "type_availability_ffi.h"
 #include "services_station.h"
 #include "services_landscape.h"
 #include "ground_ffi.h"
@@ -205,7 +206,6 @@ static void Shared_set_road_bits(uint32_t tile, uint8_t bits, uint8_t rtt) noexc
 static void Shared_set_road_type(uint32_t tile, uint8_t rtt, uint8_t rt) noexcept { RustSetRoadType(TileIndex{tile}, static_cast<RoadTramType>(rtt), static_cast<RoadType>(rt)); }
 static void Shared_set_road_directions(uint32_t tile, uint8_t drd) noexcept { SetDisallowedRoadDirections(TileIndex{tile}, static_cast<DisallowedRoadDirections>(drd)); }
 static bool Shared_road_powered(uint8_t from, uint8_t to) noexcept { return HasPowerOnRoad(static_cast<RoadType>(from), static_cast<RoadType>(to)); }
-static bool Shared_road_type_valid(uint8_t rt) noexcept { return ValParamRoadType(static_cast<RoadType>(rt)); }
 static void SharedSetTropicZone(uint32_t tile, uint8_t zone) noexcept { SetTropicZone(TileIndex{tile}, static_cast<TropicZone>(zone)); }
 
 /** Pure map query; no allocation, reentry or C++ exception crosses into Rust. */
@@ -401,7 +401,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.set_road_owner = RustSetRoadOwner,
 	.set_road_directions = Shared_set_road_directions,
 	.road_powered = Shared_road_powered,
-	.road_type_valid = Shared_road_type_valid,
+	.type_availability = []() noexcept { return &GetRustTypeAvailabilityServices(); },
 	.pbs_services = [](const OpenTTDSharedServices *) noexcept { return &GetPbsServices(); },
 	.service_at_helipad = SharedServiceAtHelipad,
 	.set_tropic_zone = SharedSetTropicZone,
@@ -664,3 +664,6 @@ const OpenTTDLiveGraphServices &GetRustLiveGraphServices() noexcept
 	return services;
 }
 #endif /* WITH_RUST */
+
+static_assert(CalendarTime::MAX_DATE.base() == 1826212865 && CalendarTime::DAYS_IN_YEAR == 365);
+static_assert(RAILTYPE_END == 64 && ROADTYPE_END == 63);

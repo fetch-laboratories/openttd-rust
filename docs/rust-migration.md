@@ -1075,6 +1075,22 @@ shared boundary maintenance, with no new subsystem ownership. Checks: the defaul
 
 <!-- Subsystem: Rail and road infrastructure. Add a new entry at the end of its group, not of the file. -->
 
+### Rail and road introduction and construction availability (#440)
+
+Rust owns paired type availability and validation, ascending engine aggregation,
+the date-introduction fixed points and the rail introduction reducer. Hidden types
+still participate in introduction dependencies; construction applies the original
+company, town, deity, editor and generation rules. Engine lifecycle publishes
+derived masks through canonical native company setters, and Rust construction
+owners call availability directly. Native facades retain the portable originals.
+
+C++ retains type registries and their loading/finalization, engine specs, company
+mask storage and presentation. Typed observations carry only consumed metadata;
+no lifecycle borrow spans a callback or load. Unsaved masks rebuild through the
+native afterload phase. Live GameScript construction, editor/generation command
+execution, persistent file-loaded custom registries, legacy saves and GUI
+scheduling remain #156 limits. PR #447.
+
 ### Rail signal blocks and fixed work sets (#219)
 
 Rust owns complete signal-block exploration, immediate signal update/propagation, first-segment

@@ -39,7 +39,7 @@ static void *RailNewWagon(uint32_t tile_index, const OpenTTDEngine *engine) noex
 	RustVehicleSetCargoCap(RustVehicle(v), RustEngineRailCapacity(engine));
 	v->refit_cap = 0;
 
-	v->SetRailTypes(rvi->railtypes);
+	v->SetRailTypes(RailTypes{RustEngineRailTypes(e)});
 
 	v->date_of_last_service = TimerGameEconomy::date;
 	v->date_of_last_service_newgrf = TimerGameCalendar::date;
@@ -81,7 +81,7 @@ static void *RailNewEngine(uint32_t tile_index, const OpenTTDEngine *engine) noe
 	v->reliability_spd_dec = e->reliability_spd_dec;
 	v->max_age = RustEngineLifeLength(e);
 
-	v->SetRailTypes(rvi->railtypes);
+	v->SetRailTypes(RailTypes{RustEngineRailTypes(e)});
 
 	RustVehicleSetServiceInterval(v, Company::Get(_current_company)->settings.vehicle.servint_trains);
 	v->date_of_last_service = TimerGameEconomy::date;
