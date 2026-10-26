@@ -239,7 +239,7 @@ std::vector<LabelObject<RoadTypeLabel>> _roadtype_list;
 void ConvertRoadTypes()
 {
 #ifdef WITH_RUST
-	openttd_rust_road_saved_convert(&GetRustSharedServices());
+	openttd_rust_road_saved_convert(&GetRustSharedServices(), Map::Size());
 #else
 	std::vector<RoadType> roadtype_conversion_map;
 	bool needs_conversion = false;

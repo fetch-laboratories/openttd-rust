@@ -9,6 +9,7 @@ use crate::type_availability::{Services, company_available, services};
 use crate::vehicle::VehicleType;
 
 /// `GetMaskForRoadTramType`; classification masks belong to the registry owner.
+#[must_use]
 pub fn get_mask_for_road_tram_type(rtt: RoadTramType) -> u64 {
     crate::type_registry::road_tram_mask(u8::from(rtt.0))
 }
@@ -141,14 +142,17 @@ pub extern "C" fn openttd_rust_road_types(shared: &Shared, s: &Services, introdu
 }
 
 /// `RoadTypeIsRoad` reads the canonical classification mask.
+#[must_use]
 pub fn road_type_is_road(rt: u8) -> bool {
     crate::type_registry::road_tram_mask(0) & (1u64 << rt) != 0
 }
 /// `RoadTypeIsTram` reads the canonical classification mask.
+#[must_use]
 pub fn road_type_is_tram(rt: u8) -> bool {
     crate::type_registry::road_tram_mask(1) & (1u64 << rt) != 0
 }
 /// `GetRoadTramType` defaults to road for unclassified types.
+#[must_use]
 pub fn get_road_tram_type(rt: u8) -> RoadTramType {
     RoadTramType(road_type_is_tram(rt))
 }

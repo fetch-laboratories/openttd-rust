@@ -514,6 +514,7 @@ crate::abi::layouts! {
 pub unsafe extern "C" fn openttd_rust_rail_saved_convert(
     shared: *const crate::services::Services,
     map: *const crate::services::RailMapServices,
+    count: u32,
 ) {
     use crate::{
         tile_type::{MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE},
@@ -523,8 +524,8 @@ pub unsafe extern "C" fn openttd_rust_rail_saved_convert(
     let map = unsafe { &*map };
     let mut conversion = Vec::new();
     let mut needed = false;
-    let count = unsafe { (*REGISTRY.get()).rail_saved.len() };
-    for index in 0..count {
+    let saved_count = unsafe { (*REGISTRY.get()).rail_saved.len() };
+    for index in 0..saved_count {
         let (label, _) = unsafe { (&(*REGISTRY.get()).rail_saved)[index] };
         let mut rt = openttd_rust_rail_by_label(label, true);
         if rt == INVALID_RAILTYPE {
@@ -538,8 +539,7 @@ pub unsafe extern "C" fn openttd_rust_rail_saved_convert(
     if !needed {
         return;
     }
-    let count = ((s.map_max_x)() + 1) * ((s.map_max_y)() + 1);
-    for tile in 0..count {
+    for tile in crate::map_func::Map::iterate(count) {
         let convert = match (s.tile_type)(tile) {
             MP_RAILWAY => true,
             MP_ROAD => (s.is_level_crossing)(tile),
@@ -553,7 +553,10 @@ pub unsafe extern "C" fn openttd_rust_rail_saved_convert(
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_road_saved_convert(shared: *const crate::services::Services) {
+pub unsafe extern "C" fn openttd_rust_road_saved_convert(
+    shared: *const crate::services::Services,
+    count: u32,
+) {
     use crate::{
         tile_type::{MP_ROAD, MP_STATION, MP_TUNNELBRIDGE},
         transport_type::TRANSPORT_ROAD,
@@ -561,8 +564,8 @@ pub unsafe extern "C" fn openttd_rust_road_saved_convert(shared: *const crate::s
     let s = unsafe { &*shared };
     let mut conversion = Vec::new();
     let mut needed = false;
-    let count = unsafe { (*REGISTRY.get()).road_saved.len() };
-    for index in 0..count {
+    let saved_count = unsafe { (*REGISTRY.get()).road_saved.len() };
+    for index in 0..saved_count {
         let (label, subtype) = unsafe { (&(*REGISTRY.get()).road_saved)[index] };
         let mut rt = openttd_rust_road_by_label(label, true);
         if rt == INVALID_ROADTYPE || road_tram_type(rt) != subtype {
@@ -580,8 +583,7 @@ pub unsafe extern "C" fn openttd_rust_road_saved_convert(shared: *const crate::s
     if !needed {
         return;
     }
-    let count = ((s.map_max_x)() + 1) * ((s.map_max_y)() + 1);
-    for tile in 0..count {
+    for tile in crate::map_func::Map::iterate(count) {
         let convert = match (s.tile_type)(tile) {
             MP_ROAD => true,
             MP_STATION => (s.is_any_road_stop)(tile),

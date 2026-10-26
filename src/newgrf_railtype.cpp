@@ -208,7 +208,7 @@ std::vector<LabelObject<RailTypeLabel>> _railtype_list;
 void ConvertRailTypes()
 {
 #ifdef WITH_RUST
-	openttd_rust_rail_saved_convert(&GetRustSharedServices(), &GetRustRailMapServices());
+	openttd_rust_rail_saved_convert(&GetRustSharedServices(), &GetRustRailMapServices(), Map::Size());
 #else
 	std::vector<RailType> railtype_conversion_map;
 	bool needs_conversion = false;
