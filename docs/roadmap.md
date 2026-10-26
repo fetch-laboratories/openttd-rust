@@ -17,28 +17,12 @@ this roadmap over conflicting issues. Keep about 200 lines; evidence stays in PR
   The latest instruction profile is `f4923c79eb`; at the new anchors its six
   projections equal those ratios. No positive count growth preceded re-anchoring.
   One integration has followed that profile; profile again after the next one.
-- Three drafts remain: houses #486, reviewed Action2 #493 and reviewed vehicle
-  properties #495. They adopt the integrated managers, layouts and reader once.
-  Airport/tile definitions #492 may start within capacity. #156 retains gaps.
+- Four drafts remain: houses #486, Action2 #493, vehicle properties #495 and
+  airport/tile definitions #499. Integrated-base adoption is saved; #495 has
+  accepted reviews, while the other drafts retain the next checks/reviews below.
+  Work is paused at the user's request. #156 retains corpus gaps.
 
-## Twentieth steering review (2026-10-24, recovery and production evidence)
-
-The nullable callback, compiler-overlap, serialized-thread and typed-engine
-repairs are integrated. Keep explicit state contracts, clean-checkout checks
-and one concrete owner-cost disposition.
-
-| Standing correction from reviews eighteen/nineteen | Verdict and cost/result |
-| --- | --- |
-| Ownership; necessary owner cost once | Applied before the user's scoped pauses: 11 owners and 4,707 retired lines since review eighteen. |
-| Strict combinations, batching, fixing review | Keep: 24 Full requests since review eighteen, 16 passed, 6 failed, 2 cancelled; 239.7 elapsed run-minutes. Housekeeping used five passing Fulls, 59.0 minutes, and 17 tasks. |
-| Ready owners alongside speed; no per-PR timing | Applied in development; sequential resume wording and old issue gates risked recurrence. Work order and #168/#199/#312 corrected. |
-| Same anchors, merged-tip cadence, bounded quiet holds | Applied through `00ab107424`; final profile interrupted. Five completed passes released after 720 timed exits. New collector needs #450. |
-| macOS cadence, focused local checks, review exemption | Applied; one no-finding conflict review unnecessarily reran tests. No new gate needed. |
-| Shared callees, scope, orphan checks, #156 capacity | Improved; nine coverage PRs before the scope restriction. #462 and pending boundary findings show remaining gaps. |
-| Housekeeping, current lists, cleanup | Applied with limits: 3,845 lines removed, local output 25 to 8.5 GiB; #275's body was stale, now refreshed. Two useful tests must return. |
-| Checkpoints, wind-down, rollback | User pauses respected; drafts preserved. Newly confirmed #462 requires forward recovery because later code rules out bounded rollback. |
-
-## Earlier steering, still in force
+## Standing steering
 
 Ownership and original behavior come first: named callees, shared typed services,
 process scope and RNG; no extra hot allocation, opcode dispatch, whole-record
@@ -186,15 +170,25 @@ Ready owners proceed alongside maintenance; only timed collection holds games.
 
 ## Resume checkpoint
 
+Paused at the user's request. No merges, Full requests, new checks or retries
+were started during wind-down. No rollback target or confirmed main regression.
+
 | Item | Saved head | Next action |
 | --- | --- | --- |
-| #477 house definitions / #486 | `1966724cdb` | Adopt integrated manager/disable helpers and delete resolver/runtime bounces. |
-| #485 Action2 graph construction / #493 | `10e9946463` | Fixing review passes; adopt integrated base and direct station layout callers. |
-| #491 vehicle properties / #495 | `6ecc66c6d1` | Both group reviews pass; adopt base and reconcile Reader::extended once. |
-| #492 airport definitions | selected | Start from integrated manager/class owners within capacity. |
-| #275 merged-tip speed | `f4923c79eb` | Six anchors integrated; one more integration before next instruction profile. |
+| #477 houses / #486 | `e956d15b2c` | Finish pending native tests and 11 house/loading scenarios; fresh scoped adoption review, then Full. |
+| #485 Action2 / #493 | `5f7b996386` | Adoption checks pass, including 13 scenarios; complete a fresh scoped resolution review, then Full. |
+| #491 vehicle properties / #495 | `85674c615d` | Accepted group and scoped reviews; next ready Full, then matching-head merge if it passes. |
+| #492 airports / #499 | `ff917b3cf7` | Fix the saved StationGfx compile error; finish file-loaded/reload and partial-parser evidence, then whole-port review. |
+| macOS check | code `4853789508` | Run 40345537485 pending; monitor cancelled. Check result before any integration. |
+| Baseline validation | code `4853789508` | Run 40345418143 building at pause. Check result before any integration. |
+| #275 instruction profile | `f4923c79eb` | Due after the next integration, not before. |
+| #497 Action3; #498 objects | queued | Unselected and unstarted; no planner or repair round starts during pause. |
 
-macOS fifth-integration check is running at `4853789508`; last pass was `f6cec101d3`.
+All local agents/jobs are stopped. House fixtures remain unvalidated; the airport
+native build failed. All drafts lack exact-head Full. A required base update
+remains resume work; preserve prepared heads and update only before final Full.
+Preserve draft and older unmerged worktrees. The four merged profiling and monitor
+worktrees are removed. Pending or later CI results do not restart work.
 
 Selection: /root, gpt-6.1-sol, xhigh; planning agents run gpt-6-astra, high.
 Scopes and evidence plans are in the selected issues; PRs carry current task status.
