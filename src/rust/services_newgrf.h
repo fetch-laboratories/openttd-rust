@@ -26,6 +26,7 @@
 #include "../newgrf_config.h"
 #include "../newgrf/newgrf_internal.h"
 #include "../rev.h"
+inline void RustGRFErrorProperty(GRFError *error, uint32_t property) noexcept { error->param_value[1] = property; }
 inline void RustGRFPlayTileSound(const GRFFile *file, uint16_t sound, uint32_t tile) noexcept { PlayTileSound(file, sound, TileIndex{tile}); }
 inline uint16_t RustIndustrySubstitute(uint8_t industry) noexcept { return GetIndustrySpec(industry)->grf_prop.subst_id; }
 inline int32_t RustHouseAge(uint32_t tile) noexcept { return GetHouseAge(TileIndex{tile}).base(); }

@@ -21,7 +21,9 @@ use crate::order_type::{
     OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT, OT_LEAVESTATION,
     OT_LOADING, OT_NOTHING,
 };
+use crate::tile_map::is_tile_type;
 use crate::tile_type::INVALID_TILE;
+use crate::tile_type::{MP_RAILWAY, MP_TUNNELBRIDGE};
 use crate::track_func::{
     find_first_trackdir as first, track_bits_to_trackdir_bits as dirs,
     trackdir_bits_to_track_bits as tracks,
@@ -153,7 +155,7 @@ pub struct Leaves {
     pub read_check_next: extern "C" fn(Handle) -> TrainReservationCheckNextRead,
 
     pub all_compat: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
-    pub backoff: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
+    pub backoff: extern "C" fn() -> u8,
     pub bits_track: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub blocking: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub check_reverse: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
@@ -176,9 +178,7 @@ pub struct Leaves {
     pub is_depot: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
     pub is_pbs: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub is_plain: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
-    pub is_railway: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
     pub is_station: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
-    pub is_tunnel: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
     pub is_waypoint: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
     pub line_reverse: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
     pub mark_tile: extern "C" fn(*mut std::ffi::c_void, Handle, u32),
@@ -191,7 +191,7 @@ pub struct Leaves {
     pub rail90: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u32) -> u64,
     pub reach_dirs: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub reach_tracks: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
-    pub reserve_paths: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
+    pub reserve_paths: extern "C" fn() -> bool,
     pub restore_order: unsafe extern "C" fn(Handle, *const crate::orders::Order),
     pub save_order: extern "C" fn(Handle) -> crate::orders::Order,
     pub service: extern "C" fn(*mut std::ffi::c_void, Handle),
@@ -419,7 +419,7 @@ fn pbs(step: Search) -> Pbs {
 }
 fn clear(g: &Game, id: Handle, tile: u32, td: u8) {
     let dir = g.dir(id, td);
-    if (g.leaves.is_tunnel)(g.context, id, tile) != 0 {
+    if is_tile_type(g.shared(), tile, MP_TUNNELBRIDGE) {
         if (g.leaves.tunnel_dir)(g.context, id, tile) as u8 == dir ^ 2 {
             let end = (g.leaves.other_end)(g.context, id, tile) as u32;
             if g.tunnel_free(id, tile, end) {
@@ -450,7 +450,7 @@ fn free(g: &Game, id: Handle) {
     let mut tile = v.tile;
     let mut td = g.td(id);
     let mut free_tile = !(((g.leaves.is_station)(g.context, id, tile) != 0)
-        || ((g.leaves.is_tunnel)(g.context, id, tile) != 0));
+        || (is_tile_type(g.shared(), tile, MP_TUNNELBRIDGE)));
     let station = if (g.leaves.is_station)(g.context, id, tile) != 0 {
         (g.leaves.station)(g.context, id, tile) as u16
     } else {
@@ -484,7 +484,7 @@ fn free(g: &Game, id: Handle) {
         if td == 0xff {
             break;
         }
-        if (g.leaves.is_railway)(g.context, id, tile) != 0 {
+        if is_tile_type(g.shared(), tile, MP_RAILWAY) {
             if ((g.leaves.has_signal)(g.context, id, tile, td) != 0)
                 && ((g.leaves.is_pbs)(g.context, id, tile, td & 7) == 0)
             {
@@ -540,7 +540,7 @@ fn extend_from(g: &Game, id: Handle, origin: Pbs, new_tracks: &mut u8, enterdir:
             }
         }
         let target = ft.station != 0
-            || (((g.leaves.is_railway)(g.context, id, ft.new_tile) != 0)
+            || ((is_tile_type(g.shared(), ft.new_tile, MP_RAILWAY))
                 && ((g.leaves.is_plain)(g.context, id, ft.new_tile) == 0));
         if target || !single(ft.dirs) {
             if g.has_reserved(
@@ -731,7 +731,7 @@ fn choose(
 ) -> (u8, bool) {
     crate::witness::hit(crate::witness::TRAIN_CHOOSE_TRACK);
     let mut best = 0xff;
-    let mut reserve = (g.leaves.reserve_paths)(g.context, id) != 0 || force;
+    let mut reserve = (g.leaves.reserve_paths)() || force;
     let mut changed = false;
     let mut final_dest = INVALID_TILE;
     let mut got = false;
@@ -960,7 +960,7 @@ fn try_path(g: &Game, id: Handle, mark: bool, first_okay: bool) -> bool {
     true
 }
 fn check_next(g: &Game, id: Handle) {
-    if (g.leaves.backoff)(g.context, id) == 255 || id.get_track() == u64::from(DEPOT) {
+    if (g.leaves.backoff)() == 255 || id.get_track() == u64::from(DEPOT) {
         return;
     }
     let v = g.read_check_next(id);
@@ -987,7 +987,7 @@ fn check_next(g: &Game, id: Handle) {
         return;
     }
     let td = g.td(id);
-    if ((g.leaves.is_railway)(g.context, id, tile) != 0)
+    if (is_tile_type(g.shared(), tile, MP_RAILWAY))
         && ((g.leaves.has_signal)(g.context, id, tile, td) != 0)
         && ((g.leaves.is_pbs)(g.context, id, tile, td & 7) == 0)
         && ((g.leaves.green)(g.context, id, tile, td) == 0)
@@ -1269,9 +1269,7 @@ crate::abi::layouts! {
         is_depot,
         is_pbs,
         is_plain,
-        is_railway,
         is_station,
-        is_tunnel,
         is_waypoint,
         line_reverse,
         mark_tile,
@@ -1405,9 +1403,7 @@ mod tests {
             is_depot: unused(),
             is_pbs: unused(),
             is_plain: unused(),
-            is_railway: unused(),
             is_station: unused(),
-            is_tunnel: unused(),
             is_waypoint: unused(),
             line_reverse: unused(),
             mark_tile: unused(),
@@ -1661,8 +1657,8 @@ mod tests {
         }
     }
 
-    extern "C" fn zero_tile(_: *mut c_void, _: Handle, _: u32) -> u64 {
-        0
+    extern "C" fn is_plain(_: *mut c_void, _: Handle, tile: u32) -> u64 {
+        u64::from(yes(tile))
     }
     extern "C" fn zero_pair(_: *mut c_void, _: Handle, _: u32, _: u32) -> u64 {
         0
@@ -1705,7 +1701,7 @@ mod tests {
             shared,
             blocking: zero_track,
             rail90: zero_pair,
-            is_railway: zero_tile,
+            is_plain,
             has_pbs: one_track,
             green: one_track,
             set_signal: signal,
