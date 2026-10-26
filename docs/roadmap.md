@@ -14,10 +14,12 @@ this roadmap over conflicting issues. Keep about 200 lines; evidence stays in PR
   P1996 1.341x, P2000 1.410x and P2016 1.453x at `b959f89059`. All six
   comparisons pass; 144 timed games and 79 observations show no overlap.
   All ratios are below their ceilings; P2016 remains in the 5% trigger band.
-  #487/#489 record the six anchors. #490 integrated the selected visual repairs;
-  the required six merged-tip instruction comparisons are running under those anchors.
-- Four branches remain: reviewed industry #479, houses #486, station review
-  #488 and Action2 construction #493. Industry is next for current-base Full;
+  #487/#489 record the six anchors. The `f4923c79eb` instruction comparisons
+  pass under those anchors: projections are 1.172281x, 1.387911x, 1.374991x,
+  1.341336x, 1.410312x and 1.453359x in the same order. All counts fell;
+  clamped projection growth is zero. Only P2016 triggers the prepared quiet pass.
+- Four branches remain: reviewed industry #479, houses #486, reviewed stations
+  #488 and Action2 construction #493. #494 combines the two ready owners for Full;
   house adoption follows its canonical manager. #156 retains corpus gaps.
 
 ## Twentieth steering review (2026-10-24, recovery and production evidence)
@@ -172,8 +174,8 @@ credits and bounded holds. #168 retains boundary debt; #312 is unselected.
 
 ## Phase 2: work order
 
-1. **Ready owners:** final-base Full for reviewed industry #479; finish station
-   #488 fixing review. Batch ready work when that avoids serial Fulls.
+1. **Ready owners:** current-base combination Full for reviewed industry #479
+   and station #488 in #494. Batch ready work when that avoids serial Fulls.
    Reviewed work gains no scope; house #486 adopts the integrated manager next.
 2. **Maintenance:** merged-tip profiling and any triggered #275 repair proceed
    alongside ready owners. Only timed collection holds builds and games.
@@ -189,10 +191,10 @@ Root owns final combinations and speed; completed reports remain in the PRs.
 
 | Item | Saved head | Next action |
 | --- | --- | --- |
-| #475 industry definitions / #479 | `b8757b2fed` | Whole-port fixing review and root spot-check pass; prepare final-base Full. |
+| #475 industry definitions / #479 | `b8757b2fed` | Fixing review and root spot-check pass; #494 combination validation. |
 | #477 house definitions / #486 | `1966724cdb` | Independent checks pass; adopt integrated manager/disable helpers after #479. |
-| #275 speed | `f4923c79eb` | Visual repairs integrated; six instruction comparisons running under b959 anchors. |
-| #484 station/road-stop definitions / #488 | `0e6be2cf19` | Whole-port fixing review in progress. |
+| #275 speed | `f4923c79eb` | Six instruction comparisons pass; quiet runtimes prepared, collection pending. |
+| #484 station/road-stop definitions / #488 | `ebdce9ce31` | Fixing review and root spot-check pass; #494 combination validation. |
 | #485 Action2 graph construction / #493 | `bf8e9a3d85` | Real-file command/reload checkpoint passes; complete grammar evidence and audits. |
 | #491 vehicle properties; #492 airport definitions | selected | Implement in this order as integration frees capacity. |
 
