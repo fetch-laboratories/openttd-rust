@@ -81,9 +81,15 @@ Findings:
   definition and Action2/3 parsing cannot move a ratio; #486 and #499 change
   runtime accessors, #495 none on the game loop.
 - Direction: the C++ still compiled in simulation sources is mostly drawing,
-  GUI, mode control and the generation driver, so the NewGRF definition owners
-  are a reasonable next step. They keep spec storage native behind per-field
-  setters (net glue 491 to 715 against 780 to 881 retired).
+  GUI, mode control and the generation driver. The exception is station
+  catchment (about 400 compiled lines), which root's planning dropped on
+  2026-10-23 with no issue or reason while the work order moved to NewGRF
+  loading, support code that keeps spec storage native behind per-field setters
+  (net glue 491 to 715 against 780 to 881 retired). #516 now tracks it.
+- Passed-over issues: besides the testing set, #198's remaining scope landed on
+  2026-10-09 but the issue stayed open (now closed), and #312 waited on an
+  attribution nobody applied (trees +65M Ir, 0.48% of the P2016 loop; houses
+  +76M and water +71M beside it).
 - Hygiene: 3 of 7 draft worktrees are redundant, 3 drafts sit on local
   branches named differently from their PR branches, and root made 17 roadmap
   commits in one session.
@@ -99,9 +105,12 @@ Corrections (AGENTS.md carries the rules; apply these in order):
 2. Next maintenance batch: #515 (orphans, duplicates and constants from the
    audits; it no longer carries the manager bounces) plus #500's first PR (the
    shared newtype module only). #514 is the next workflow PR and carries #502.
-3. Concurrent owners need disjoint unintegrated services. #497 Action3 and
-   #498 object definitions start only after the services they share with
-   #486, #493 and #499 integrate; planning names each owner's service needs.
+3. Concurrent owners need disjoint unintegrated services. Plan #516
+   (catchment) now with a planning agent; it is game code, so it takes the next
+   owner slot ahead of #497 Action3 and #498 object definitions, and starts as
+   soon as its services are disjoint from the open drafts. #497 and #498 start
+   only after the services they share with #486, #493 and #499 integrate;
+   planning names each owner's service needs.
 4. Batch only disjoint-file components into one integration PR; overlapping
    ones integrate one at a time at their reviewed heads. Its stated basis was
    wrong (see Process), so the next review judges it by Fulls per integrated
@@ -124,7 +133,8 @@ Corrections (AGENTS.md carries the rules; apply these in order):
    audit cannot prove keeps its typed service. This lifts #275's "do not
    enlarge shared raw descriptors" for these accessors only. If the batch
    credits 1.5%, the in-band pass follows; trains (1.57x) are the next
-   attribution target.
+   attribution target. #312's tree excess then batches with the house and water
+   tile-loop excess (together about 1.6%) as the following #275 item.
 8. Remove the redundant worktrees `t3-d6418e16`, `t3-9bff1490` and
    `t3-758125c7`; keep one worktree per PR, on its PR branch. Commit the
    roadmap when taking stock or changing the work order, not per integration.
@@ -315,11 +325,15 @@ alongside maintenance; only timed collection holds games.
 2. **Maintenance:** #515 plus #500's first PR as one batch (one review, one
    Full); the #275 ground-vehicle accessor audit as its own maintenance PR. #514 workflow PR carrying #502, with the bootstrap procedure. #275
    profile after the next integration.
-3. **Whole owners:** #497 Action3 and #498 object definitions start from
-   integrated `rust-migration` once the services they share with the drafts
-   have integrated, within six branches; planning records each owner's
-   unintegrated service needs and keeps concurrent owners disjoint.
-4. Catchment, #64/#68/#69, vendored, GUI and platform stay outside this order.
+3. **Whole owners:** plan #516 catchment now; it takes the next owner slot
+   once its services are disjoint from the drafts. #497 Action3 and #498
+   object definitions start from integrated `rust-migration` once the services
+   they share with the drafts have integrated, within six branches; planning
+   records each owner's unintegrated service needs and keeps concurrent owners
+   disjoint.
+4. #64/#68 (vendored crypto), the rest of #69 beyond what #516 needs, GUI and
+   platform stay outside this order; the six `deferred-improvement` issues wait
+   for near-full reproduction.
 5. **Testing:** #504 is selected and takes the slot after #514; the rest
    follow one at a time in the order of twenty-first steering correction 9.
 
@@ -341,6 +355,7 @@ rollback target or confirmed regression. Baseline validation passed at
 | #515 and #500 first PR | unstarted | Next maintenance batch after the first ready integration. |
 | #275 accessor audit | unstarted | Twenty-first steering, correction 7; credit against `.local/speed-reference-profiles/`. |
 | #504 coverage | selected, unstarted | First testing item; takes the slot after #514. |
+| #516 catchment | queued for planning | Planning agent writes scope and service needs; next owner slot. |
 
 Selection: /root, gpt-6.1-sol, xhigh; planning agents run gpt-6-astra, high.
 Scopes and evidence plans are in the selected issues; PRs carry current task status.
