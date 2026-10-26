@@ -198,7 +198,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     )
     captures = {}
     required = (
-        EXPECTED[variant]
+        EXPECTED[scenario["engines"]]
         if cargo
         else EXPECTED["types"]
         if types
