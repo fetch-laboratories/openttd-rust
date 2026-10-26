@@ -33,9 +33,15 @@ inline uint8_t RustHouseRandomBits(uint32_t tile) noexcept { return GetHouseRand
 inline uint8_t RustHouseRandomTriggers(uint32_t tile) noexcept { return GetHouseRandomTriggers(TileIndex{tile}).base(); }
 inline const HouseSpec *RustHouseSpec(uint16_t house) noexcept { return HouseSpec::Get(house); }
 inline size_t RustHouseSpecCount() noexcept { return HouseSpec::Specs().size(); }
+inline uint32_t RustHouseSpecCount32() noexcept { return static_cast<uint32_t>(RustHouseSpecCount()); }
+inline uint8_t RustTownHousePopulation(const HouseSpec *spec) noexcept { return spec->population; }
+inline uint16_t RustHouseAvailability(const HouseSpec *spec) noexcept { return spec->building_availability.base(); }
+inline bool RustHouseEnabled(const HouseSpec *spec) noexcept { return spec->enabled; }
+inline int32_t RustHouseMinYear(const HouseSpec *spec) noexcept { return spec->min_year.base(); }
 inline uint8_t RustTownHouseFlags(const HouseSpec *spec) noexcept { return spec->building_flags.base(); }
 inline uint16_t RustTownHouseCallbacks(const HouseSpec *spec) noexcept { return spec->callback_mask.base(); }
 inline uint64_t RustHouseWatched(const HouseSpec *spec) noexcept { return spec->watched_cargoes; }
+inline uint64_t RustHouseWatchedByID(uint16_t house) noexcept { return RustHouseWatched(RustHouseSpec(house)); }
 inline uint16_t RustTownHouseClass(const HouseSpec *spec) noexcept { return spec->class_id; }
 inline uint16_t RustTownHouseClass(uint16_t house) noexcept { return RustTownHouseClass(RustHouseSpec(house)); }
 
@@ -52,6 +58,8 @@ inline uint32_t RustResolverGRFFileID(const ResolverObject *resolver) noexcept {
 inline uint8_t RustGRFFileVersion(const GRFFile *file) noexcept { return file->grf_version; }
 inline uint8_t RustResolverGRFVersion(const ResolverObject *resolver) noexcept { return RustGRFFileVersion(RustResolverGRFFile(resolver)); }
 inline bool RustResolverGRFVersion8(const ResolverObject *resolver) noexcept { return RustResolverGRFVersion(resolver) >= 8; }
+template <typename Spec>
+inline void RustSpecSetGRFFile(Spec *spec, const GRFFile *file) noexcept { spec->grf_prop.SetGRFFile(file); }
 template <typename Spec>
 inline const GRFFile *RustSpecGRFFile(const Spec *spec) noexcept { return spec->grf_prop.grffile; }
 template <typename Spec, typename Handle>

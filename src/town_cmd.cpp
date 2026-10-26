@@ -999,14 +999,13 @@ static uint8_t RustTownRoadFlags(uint8_t id) noexcept { return GetRoadTypeInfo(s
 static OpenTTDTownHouseAvailability RustTownHouseAvailability(uint16_t id) noexcept
 {
 	const auto *hs = HouseSpec::Get(id);
-	return {.zones = hs->building_availability.base(), .override_id = RustSpecOverride(hs), .class_id = RustTownHouseClass(hs), .probability = hs->probability, .enabled = hs->enabled};
+	return {.zones = RustHouseAvailability(hs), .override_id = RustSpecOverride(hs), .class_id = RustTownHouseClass(hs), .probability = hs->probability, .enabled = RustHouseEnabled(hs)};
 }
 static OpenTTDTownHousePlacement RustTownHousePlacement(uint16_t id) noexcept
 {
 	const auto *hs = HouseSpec::Get(id);
-	return {.min_year = hs->min_year.base(), .max_year = hs->max_year.base()};
+	return {.min_year = RustHouseMinYear(hs), .max_year = hs->max_year.base()};
 }
-static uint8_t RustTownHousePopulation(const HouseSpec *spec) noexcept { return spec->population; }
 static uint8_t RustTownHouseExtraFlags(const HouseSpec *spec) noexcept { return spec->extra_flags.base(); }
 static OpenTTDTownRoadChoice RustTownRoadInfo(uint8_t id) noexcept
 {
@@ -1054,10 +1053,6 @@ static void RustTown_nearby_stations(uint32_t town, uint32_t tile, uint32_t size
 			ForAllStationsAroundTiles(TileArea(TileIndex{tile}, flags.Any(BUILDING_2_TILES_X) ? 2 : 1, flags.Any(BUILDING_2_TILES_Y) ? 2 : 1), [t](Station *st, TileIndex) { t->stations_near.insert(st); return true; });
 
 		}
-}
-static uint32_t RustTown_house_count() noexcept
-{
-	return static_cast<uint32_t>(RustHouseSpecCount());
 }
 static void RustTown_update_max_pass(uint32_t town) noexcept
 {
@@ -1194,7 +1189,7 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 		.sprite_groups = RustHouseHasSpriteGroups,
 		.removal = [](uint16_t house) noexcept -> OpenTTDHouseRemoval { const HouseSpec *hs = HouseSpec::Get(house); return {static_cast<int64_t>(hs->GetRemovalCost()), hs->remove_rating_decrease}; },
 		.acceptance = RustHouseAcceptance,
-		.watched = [](uint16_t house) noexcept -> uint64_t { return RustHouseWatched(RustHouseSpec(house)); },
+		.watched = RustHouseWatchedByID,
 		.substitute = [](uint16_t house) noexcept -> uint16_t { return _house_mngr.GetSubstituteID(house); },
 		.inc_construction = [](uint32_t tile) noexcept { IncHouseConstructionTick(TileIndex{tile}); },
 		.reset_age = [](uint32_t tile) noexcept { ResetHouseAge(TileIndex{tile}); },
@@ -1272,7 +1267,7 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 
 		.population_changed = RustTown_population_changed,
 		.nearby_stations = RustTown_nearby_stations,
-		.house_count = RustTown_house_count,
+		.house_count = RustHouseSpecCount32,
 		.update_max_pass = RustTown_update_max_pass,
 		.next_town = GetRustSharedServices().town_next_id,
 		.road_mask = RustTown_road_mask,

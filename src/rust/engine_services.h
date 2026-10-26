@@ -19,6 +19,7 @@
 #include "../road.h"
 #include "../table/strings.h"
 #include "services_cargo.h"
+inline void RustEngineSetGRFFile(const OpenTTDEngine *shell, const GRFFile *file) noexcept { RustSpecSetGRFFile(const_cast<Engine *>(EngineOf(shell)), file); }
 inline OpenTTDNewGRFCargoLabel RustEngineCargoLabel(const OpenTTDEngine *e) noexcept { return RustCargoLabel(EngineOf(e)->info.cargo_label); }
 inline uint16_t RustEngineCallbackMask(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.callback_mask.base(); }
 inline uint8_t RustEngineMiscFlags(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.misc_flags.base(); }
