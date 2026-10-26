@@ -411,7 +411,7 @@ static uint64_t TrainPrice(OpenTTDTrainHandle id, uint32_t a) noexcept
 static uint64_t TrainRailvehWagon(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	return RailVehInfo(v->engine_type)->railveh_type == RAILVEH_WAGON;
+	return RustEngineRailKind(Engine::Get(v->engine_type)) == RAILVEH_WAGON;
 }
 static uint64_t TrainRailTilt(OpenTTDTrainHandle id) noexcept
 {
@@ -421,7 +421,7 @@ static uint64_t TrainRailTilt(OpenTTDTrainHandle id) noexcept
 static uint64_t TrainRailTypes(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	return RailVehInfo(v->engine_type)->railtypes.base();
+	return RustEngineRailTypes(Engine::Get(v->engine_type));
 }
 static uint64_t TrainReservePaths(OpenTTDTrainHandle) noexcept
 {
