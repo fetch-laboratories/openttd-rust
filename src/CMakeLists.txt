@@ -352,6 +352,8 @@ add_files(
     rust/newgrf_global_ffi.h
     rust/services_timer.h
     rust/newgrf_storage_services.cpp
+    rust/industry_definition_services.cpp
+    rust/industry_property_services.cpp
     rust/newgrf_storage_ffi.h
     newgrf_storage.cpp
     newgrf_storage.h

@@ -1424,6 +1424,10 @@ mod newgrf_roadstop;
 mod rail;
 mod type_availability;
 
+mod override_manager;
+
+mod industry_map;
+
 pub mod type_registry;
 
 pub mod type_definitions;

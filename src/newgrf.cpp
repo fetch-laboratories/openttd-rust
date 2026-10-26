@@ -1206,6 +1206,7 @@ static void FinaliseHouseArray()
  * time in the GRF file, so we can only add a industry spec to the industry array
  * after the file has finished loading.
  */
+#ifndef WITH_RUST
 static void FinaliseIndustriesArray()
 {
 	for (auto &file : _grf_files) {
@@ -1254,6 +1255,8 @@ static void FinaliseIndustriesArray()
 		}
 	}
 }
+
+#endif
 
 /**
  * Add all new objects to the object array. Object properties can be set at any
