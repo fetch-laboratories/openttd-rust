@@ -26,7 +26,7 @@ use crate::{
 };
 use std::{ffi::c_void, ptr};
 const TA_PLATFORM: u8 = 1;
-const TA_WHOLE: u8 = 2;
+pub(crate) const TA_WHOLE: u8 = 2;
 #[repr(C)]
 pub struct State {
     station: *mut BaseStation,

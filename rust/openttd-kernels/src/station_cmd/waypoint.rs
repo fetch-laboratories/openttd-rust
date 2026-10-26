@@ -381,7 +381,7 @@ impl Ctx<'_> {
         } else if !(self.s.waypoint_available)() {
             return cost.error(self.s.strings.too_many_stations);
         }
-        let specindex = (self.s.allocate_rail_spec)(spec, wp);
+        let specindex = crate::station_association::allocate(self.s.rail_association, spec, wp);
         if !specindex.valid {
             return cost.error(self.s.strings.too_many_specs);
         }
@@ -405,7 +405,7 @@ impl Ctx<'_> {
             },
             ADD_TRY,
         );
-        (self.s.assign_rail_spec)(spec, wp, specindex.value);
+        crate::station_association::assign(self.s.rail_association, spec, wp, specindex.value);
         self.reset_delete_counter(wp);
         (self.s.set_facility_bits)(wp, FACILITY_TRAIN);
         (self.s.set_build_date)(wp, (self.shared.calendar_date)());
@@ -449,7 +449,7 @@ impl Ctx<'_> {
             self.set_rail_flags(tile, spec);
             (self.s.set_rail_station_reservation)(tile, reserved);
             (self.shared.mark_dirty)(tile);
-            (self.s.deallocate_rail_spec)(wp, u32::from(old));
+            crate::station_association::deallocate(self.s.rail_association, wp, old);
             if spec.is_null() {
                 (self.s.close_station_inspect)(tile);
             }

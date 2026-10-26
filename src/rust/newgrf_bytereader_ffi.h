@@ -7,6 +7,9 @@
 #include "../newgrf.h"
 #include "../newgrf/newgrf_bytereader.h"
 struct OpenTTDByteReaderServices {
+	bool (*has_data)(ByteReader *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(has_data);
+	bool (*peek_dword)(ByteReader *, uint32_t *) noexcept OPENTTD_SERVICE_DEFAULT(peek_dword);
+	bool (*read_bytes)(ByteReader *, size_t, const uint8_t **) noexcept OPENTTD_SERVICE_DEFAULT(read_bytes);
 	bool (*read_byte)(ByteReader *, uint8_t *) noexcept OPENTTD_SERVICE_DEFAULT(read_byte);
 	bool (*read_word)(ByteReader *, uint16_t *) noexcept OPENTTD_SERVICE_DEFAULT(read_word);
 	bool (*read_dword)(ByteReader *, uint32_t *) noexcept OPENTTD_SERVICE_DEFAULT(read_dword);

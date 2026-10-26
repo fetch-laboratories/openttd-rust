@@ -3,6 +3,7 @@
 #ifndef RUST_NEWGRF_CLASS_FFI_H
 #define RUST_NEWGRF_CLASS_FFI_H
 #include "service_defaults.hpp"
+#include "../strings_type.h"
 struct StationSpec;
 struct RoadStopSpec;
 struct AirportSpec;
@@ -18,6 +19,12 @@ template <typename T> struct OpenTTDGRFClassServices {
 };
 extern "C" uint16_t openttd_rust_station_layout_key(uint8_t, uint8_t);
 extern "C" bool openttd_rust_is_waypoint_class(uint32_t);
+extern "C" void openttd_rust_station_class_defaults(StringID, StringID, StringID);
+extern "C" void openttd_rust_roadstop_class_defaults(StringID, StringID, StringID);
+using OpenTTDStationClassServices = OpenTTDGRFClassServices<StationSpec>;
+using OpenTTDRoadStopClassServices = OpenTTDGRFClassServices<RoadStopSpec>;
+using OpenTTDAirportClassServices = OpenTTDGRFClassServices<AirportSpec>;
+using OpenTTDObjectClassServices = OpenTTDGRFClassServices<ObjectSpec>;
 template <typename T> struct RustGRFClassOps;
 extern "C" {
 void openttd_rust_station_class_reset(const OpenTTDGRFClassServices<StationSpec> *);

@@ -81,6 +81,9 @@ pub struct ReadError;
 
 #[repr(C)]
 pub struct Services {
+    pub has_data: unsafe extern "C" fn(*mut ByteReader, usize) -> bool,
+    pub peek_dword: unsafe extern "C" fn(*mut ByteReader, *mut u32) -> bool,
+    pub read_bytes: unsafe extern "C" fn(*mut ByteReader, usize, *mut *const u8) -> bool,
     pub read_byte: unsafe extern "C" fn(*mut ByteReader, *mut u8) -> bool,
     pub read_word: unsafe extern "C" fn(*mut ByteReader, *mut u16) -> bool,
     pub read_dword: unsafe extern "C" fn(*mut ByteReader, *mut u32) -> bool,
@@ -98,6 +101,37 @@ impl<'a> Reader<'a> {
     /// service accepts that reader and its declared native output storage.
     pub unsafe fn new(native: *mut ByteReader, services: &'a Services) -> Self {
         Self { native, services }
+    }
+    pub fn extended(&mut self) -> Result<u16, ReadError> {
+        let value = self.byte()?;
+        if value == 255 {
+            self.word()
+        } else {
+            Ok(u16::from(value))
+        }
+    }
+    #[must_use]
+    pub fn has_data(&self, count: usize) -> bool {
+        unsafe { (self.services.has_data)(self.native, count) }
+    }
+    pub fn peek_dword(&mut self) -> Result<u32, ReadError> {
+        let mut value = 0;
+        if unsafe { (self.services.peek_dword)(self.native, &raw mut value) } {
+            Ok(value)
+        } else {
+            Err(ReadError)
+        }
+    }
+    pub fn bytes(&mut self, count: usize) -> Result<*const u8, ReadError> {
+        let mut value = std::ptr::null();
+        if unsafe { (self.services.read_bytes)(self.native, count, &raw mut value) } {
+            Ok(value)
+        } else {
+            Err(ReadError)
+        }
+    }
+    pub fn native(&mut self) -> *mut ByteReader {
+        self.native
     }
     pub fn byte(&mut self) -> Result<u8, ReadError> {
         let mut value = 0;
@@ -153,5 +187,5 @@ impl<'a> Reader<'a> {
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDByteReaderServices" ["services"] => Services { read_byte, read_word, read_dword, skip, read_badges, skip_badges };
+    "OpenTTDByteReaderServices" ["services"] => Services { has_data, peek_dword, read_bytes, read_byte, read_word, read_dword, skip, read_badges, skip_badges };
 }

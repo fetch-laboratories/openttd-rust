@@ -30,11 +30,31 @@
 #include "newgrf_internal_vehicle.h"
 #include "newgrf_internal.h"
 
+#ifdef WITH_RUST
+#include "../rust/newgrf_act3_ffi.h"
+#include "../rust/station_definitions_ffi.h"
+#endif
 #include "../safeguards.h"
 
 
+#ifdef WITH_RUST
+const OpenTTDAct3CargoServices &GetAct3CargoServices() noexcept
+{
+	static const OpenTTDAct3CargoServices services{
+		.out_of_range = [](uint8_t cargo, uint32_t maximum) noexcept { GrfMsg(1, "TranslateCargo: Cargo type {} out of range (max {}), skipping.", cargo, maximum); },
+		.not_available = [](uint8_t cargo) noexcept { GrfMsg(5, "TranslateCargo: Cargo type {} not available in this climate, skipping.", cargo); },
+		.unsupported = [](CargoLabel cl) noexcept { GrfMsg(5, "TranslateCargo: Cargo '{:c}{:c}{:c}{:c}' unsupported, skipping.", GB(cl.base(), 24, 8), GB(cl.base(), 16, 8), GB(cl.base(), 8, 8), GB(cl.base(), 0, 8)); },
+		.mapped = [](CargoLabel cl, CargoType cargo) noexcept { GrfMsg(6, "TranslateCargo: Cargo '{:c}{:c}{:c}{:c}' mapped to cargo type {}.", GB(cl.base(), 24, 8), GB(cl.base(), 16, 8), GB(cl.base(), 8, 8), GB(cl.base(), 0, 8), cargo); },
+	};
+	return services;
+}
+#endif
+
 static CargoType TranslateCargo(GrfSpecFeature feature, uint8_t ctype)
 {
+#ifdef WITH_RUST
+	return openttd_rust_act3_translate_cargo(&GetAct3CargoServices(), feature, ctype, _cur_gps.grffile);
+#else
 	/* Special cargo types for purchase list and stations */
 	if ((feature == GSF_STATIONS || feature == GSF_ROADSTOPS) && ctype == 0xFE) return CargoGRFFileProps::SG_DEFAULT_NA;
 	if (ctype == 0xFF) return CargoGRFFileProps::SG_PURCHASE;
@@ -62,6 +82,7 @@ static CargoType TranslateCargo(GrfSpecFeature feature, uint8_t ctype)
 
 	GrfMsg(6, "TranslateCargo: Cargo '{:c}{:c}{:c}{:c}' mapped to cargo type {}.", GB(cl.base(), 24, 8), GB(cl.base(), 16, 8), GB(cl.base(), 8, 8), GB(cl.base(), 0, 8), cargo_type);
 	return cargo_type;
+#endif
 }
 
 
@@ -192,6 +213,24 @@ struct PurchaseDefaultMapSpriteGroupHandler : MapSpriteGroupHandler {
 /** Common handler for mapping sprite groups for features which support cargo-type specific sprites. */
 template <typename T, typename Tclass>
 struct CargoTypeMapSpriteGroupHandler : MapSpriteGroupHandler {
+#ifdef WITH_RUST
+	void MapSpecific(uint16_t local_id, uint8_t cid, const SpriteGroup *group) override
+	{
+		if constexpr (std::is_same_v<T, StationSpec>) {
+			openttd_rust_station_map_specific(&GetStationDefinitionServices(), _cur_gps.grffile, local_id, cid, group);
+		} else {
+			openttd_rust_roadstop_map_specific(&GetStationDefinitionServices(), _cur_gps.grffile, local_id, cid, group);
+		}
+	}
+	void MapDefault(uint16_t local_id, const SpriteGroup *group) override
+	{
+		if constexpr (std::is_same_v<T, StationSpec>) {
+			openttd_rust_station_map_default(&GetStationDefinitionServices(), _cur_gps.grffile, local_id, group);
+		} else {
+			openttd_rust_roadstop_map_default(&GetStationDefinitionServices(), _cur_gps.grffile, local_id, group);
+		}
+	}
+#else
 	void MapSpecific(uint16_t local_id, uint8_t cid, const SpriteGroup *group) override
 	{
 		CargoType cargo_type = TranslateCargo(GSF_STATIONS, cid);
@@ -217,6 +256,7 @@ struct CargoTypeMapSpriteGroupHandler : MapSpriteGroupHandler {
 			Tclass::Assign(spec);
 		}
 	}
+#endif
 };
 
 struct CanalMapSpriteGroupHandler : MapSpriteGroupHandler {

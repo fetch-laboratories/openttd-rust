@@ -39,11 +39,15 @@
 template <>
 void RoadStopClass::InsertDefaults()
 {
+#ifdef WITH_RUST
+	openttd_rust_roadstop_class_defaults(STR_EMPTY, STR_STATION_CLASS_DFLT, STR_STATION_CLASS_WAYP);
+#else
 	/* Set up initial data */
 	RoadStopClass::Get(RoadStopClass::Allocate(ROADSTOP_CLASS_LABEL_DEFAULT))->name = STR_STATION_CLASS_DFLT;
 	RoadStopClass::Get(RoadStopClass::Allocate(ROADSTOP_CLASS_LABEL_DEFAULT))->Insert(nullptr);
 	RoadStopClass::Get(RoadStopClass::Allocate(ROADSTOP_CLASS_LABEL_WAYPOINT))->name = STR_STATION_CLASS_WAYP;
 	RoadStopClass::Get(RoadStopClass::Allocate(ROADSTOP_CLASS_LABEL_WAYPOINT))->Insert(nullptr);
+#endif
 }
 
 #ifndef WITH_RUST
@@ -766,6 +770,7 @@ const OpenTTDRoadStopResolverServices &GetRoadStopResolverServices() noexcept
 	static_assert(CargoGRFFileProps::SG_DEFAULT_NA == NUM_CARGO + 2);
 	static_assert(CBID_STATION_AVAILABILITY == 0x13);
 	static const OpenTTDRoadStopResolverServices services{
+		.rebind = [](BaseStation *st, size_t index, const RoadStopSpec *spec) noexcept { st->roadstop_speclist[index].spec = spec; },
 		.badges = RustSpecBadges<RoadStopSpec>,
 		.base_scope = RustResolverBaseScope,
 		.build_date = RustStationBuildDate<const BaseStation>,

@@ -1,0 +1,107 @@
+/* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
+/** @file station_definitions.cpp Typed native storage leaves for station definitions. */
+#include "../stdafx.h"
+#ifdef WITH_RUST
+#include "station_definitions_ffi.h"
+#include "../newgrf_station.h"
+#include "../newgrf_roadstop.h"
+#include "../newgrf/newgrf_stringmapping.h"
+#include "newgrf_layout_services.h"
+#include "services_newgrf.h"
+#include "newgrf_act3_ffi.h"
+#include "../table/strings.h"
+#include "../safeguards.h"
+const OpenTTDStationDefinitionServices &GetStationDefinitionServices() noexcept
+{
+	static const OpenTTDStationDefinitionServices services{
+		.empty_string = STR_EMPTY,
+		.cargo = &GetAct3CargoServices(),
+		.reader = &GetRustByteReaderServices(),
+		.file_version = RustGRFFileVersion,
+		.station_resize = [](GRFFile *file, uint32_t count) noexcept -> void { file->stations.resize(count); },
+		.station_count = [](const GRFFile *file) noexcept -> size_t { return file->stations.size(); },
+		.station_get = [](GRFFile *file, uint32_t id) noexcept -> StationSpec * { return id < file->stations.size() ? file->stations[id].get() : nullptr; },
+		.station_new = [](GRFFile *file, uint32_t id) noexcept -> StationSpec * { file->stations[id] = std::make_unique<StationSpec>(); return file->stations[id].get(); },
+		.station_class = [](StationSpec *spec, uint16_t value) noexcept -> void { spec->class_index = static_cast<StationClassID>(value); },
+		.station_name = [](StationSpec *spec, uint16_t value) noexcept -> void { AddStringForMapping(GRFStringID{value}, &spec->name); },
+		.station_class_name = [](StationSpec *spec, uint16_t value) noexcept -> void { AddStringForMapping(GRFStringID{value}, [spec](StringID name) { StationClass::Get(spec->class_index)->name = name; }); },
+		.station_badges = [](StationSpec *spec) noexcept -> std::vector<BadgeID> * { return &spec->badges; },
+		.station_cargo_triggers = [](StationSpec *spec, CargoTypes value) noexcept -> void { spec->cargo_triggers = value; },
+		.station_frames = [](StationSpec *spec, uint8_t value) noexcept -> void { spec->animation.frames = value; },
+		.station_status = [](StationSpec *spec, uint8_t value) noexcept -> void { spec->animation.status = static_cast<AnimationStatus>(value); },
+		.station_speed = [](StationSpec *spec, uint8_t value) noexcept -> void { spec->animation.speed = value; },
+		.station_triggers = [](StationSpec *spec, uint16_t value) noexcept -> void { spec->animation.triggers = StationAnimationTriggers(value); },
+		.station_callback_mask = [](StationSpec *spec, uint8_t value) noexcept -> void { spec->callback_mask = static_cast<StationCallbackMasks>(value); },
+		.station_flags = [](StationSpec *spec, uint8_t value) noexcept -> void { spec->flags = StationSpecFlags{static_cast<uint8_t>(value)}; },
+		.station_has_file = RustSpecHasGRFFile<StationSpec>,
+		.station_set_group = [](StationSpec *spec, CargoType cargo, const SpriteGroup *group) noexcept -> void { spec->grf_prop.SetSpriteGroup(cargo, group); },
+		.station_set_file = [](StationSpec *spec, GRFFile *file) noexcept -> void { spec->grf_prop.SetGRFFile(file); },
+		.station_set_local = [](StationSpec *spec, uint16_t id) noexcept -> void { spec->grf_prop.local_id = id; },
+		.road_resize = [](GRFFile *file, uint32_t count) noexcept -> void { file->roadstops.resize(count); },
+		.road_count = [](const GRFFile *file) noexcept -> size_t { return file->roadstops.size(); },
+		.road_get = [](GRFFile *file, uint32_t id) noexcept -> RoadStopSpec * { return id < file->roadstops.size() ? file->roadstops[id].get() : nullptr; },
+		.road_new = [](GRFFile *file, uint32_t id) noexcept -> RoadStopSpec * { file->roadstops[id] = std::make_unique<RoadStopSpec>(); return file->roadstops[id].get(); },
+		.road_class = [](RoadStopSpec *spec, uint16_t value) noexcept -> void { spec->class_index = static_cast<RoadStopClassID>(value); },
+		.road_name = [](RoadStopSpec *spec, uint16_t value) noexcept -> void { AddStringForMapping(GRFStringID{value}, &spec->name); },
+		.road_class_name = [](RoadStopSpec *spec, uint16_t value) noexcept -> void { AddStringForMapping(GRFStringID{value}, [spec](StringID name) { RoadStopClass::Get(spec->class_index)->name = name; }); },
+		.road_badges = [](RoadStopSpec *spec) noexcept -> std::vector<BadgeID> * { return &spec->badges; },
+		.road_cargo_triggers = [](RoadStopSpec *spec, CargoTypes value) noexcept -> void { spec->cargo_triggers = value; },
+		.road_frames = [](RoadStopSpec *spec, uint8_t value) noexcept -> void { spec->animation.frames = value; },
+		.road_status = [](RoadStopSpec *spec, uint8_t value) noexcept -> void { spec->animation.status = static_cast<AnimationStatus>(value); },
+		.road_speed = [](RoadStopSpec *spec, uint8_t value) noexcept -> void { spec->animation.speed = value; },
+		.road_triggers = [](RoadStopSpec *spec, uint16_t value) noexcept -> void { spec->animation.triggers = StationAnimationTriggers(value); },
+		.road_callback_mask = [](RoadStopSpec *spec, uint8_t value) noexcept -> void { spec->callback_mask = static_cast<RoadStopCallbackMasks>(value); },
+		.road_flags = [](RoadStopSpec *spec, uint32_t value) noexcept -> void { spec->flags = RoadStopSpecFlags{static_cast<uint8_t>(value)}; },
+		.road_has_file = RustSpecHasGRFFile<RoadStopSpec>,
+		.road_set_group = [](RoadStopSpec *spec, CargoType cargo, const SpriteGroup *group) noexcept -> void { spec->grf_prop.SetSpriteGroup(cargo, group); },
+		.road_set_file = [](RoadStopSpec *spec, GRFFile *file) noexcept -> void { spec->grf_prop.SetGRFFile(file); },
+		.road_set_local = [](RoadStopSpec *spec, uint16_t id) noexcept -> void { spec->grf_prop.local_id = id; },
+		.station_disallowed_platforms = [](StationSpec *spec, uint8_t value) noexcept -> void { spec->disallowed_platforms = value; },
+		.station_disallowed_lengths = [](StationSpec *spec, uint8_t value) noexcept -> void { spec->disallowed_lengths = value; },
+		.station_cargo_threshold = [](StationSpec *spec, uint16_t value) noexcept -> void { spec->cargo_threshold = value; },
+		.road_stop_type = [](RoadStopSpec *spec, uint8_t value) noexcept -> void { spec->stop_type = static_cast<RoadStopAvailabilityType>(value); },
+		.road_draw_mode = [](RoadStopSpec *spec, uint8_t value) noexcept -> void { spec->draw_mode = RoadStopDrawModes(value); },
+		.road_build_cost = [](RoadStopSpec *spec, uint8_t value) noexcept -> void { spec->build_cost_multiplier = value; },
+		.road_clear_cost = [](RoadStopSpec *spec, uint8_t value) noexcept -> void { spec->clear_cost_multiplier = value; },
+		.station_render_clear = [](StationSpec *spec) noexcept -> void { spec->renderdata.clear(); },
+		.station_render_reserve = [](StationSpec *spec, uint16_t count) noexcept -> void { spec->renderdata.reserve(count); },
+		.station_render_size = [](const StationSpec *spec) noexcept -> size_t { return spec->renderdata.size(); },
+		.station_render_append = [](StationSpec *spec) noexcept -> NewGRFSpriteLayout * { return &spec->renderdata.emplace_back(); },
+		.station_render_pop = [](StationSpec *spec) noexcept -> void { spec->renderdata.pop_back(); },
+		.station_render_copy_append = [](StationSpec *spec, const StationSpec *source, size_t index) noexcept -> void { spec->renderdata.emplace_back(source->renderdata[index]); },
+		.layout_unlimited = [](NewGRFSpriteLayout *layout) noexcept -> void { layout->consistent_max_offset = UINT16_MAX; },
+		.layout_ground = [](NewGRFSpriteLayout *layout) noexcept -> PalSpriteID * { return &layout->ground; },
+		.layout_sequence = [](NewGRFSpriteLayout *layout, const DrawTileSeqStruct *data, size_t count) noexcept -> void { layout->seq.assign(data, data + count); },
+		.layout_original = [](NewGRFSpriteLayout *layout, uint32_t index) noexcept -> void { extern const DrawTileSpriteSpan _station_display_datas_rail[8]; const auto &span = _station_display_datas_rail[index % 8]; layout->ground = span.ground; layout->seq.insert(layout->seq.end(), span.GetSequence().begin(), span.GetSequence().end()); },
+		.station_custom_assign = [](StationSpec *spec, uint16_t key, const uint8_t *data, size_t count) noexcept -> void { spec->layouts[key].assign(data, data + count); },
+		.station_custom_tile = [](StationSpec *spec, uint16_t key, size_t index, uint8_t value) noexcept -> void { spec->layouts[key][index] = value; },
+		.station_custom_copy = [](StationSpec *spec, const StationSpec *source) noexcept -> void { spec->layouts = source->layouts; },
+		.station_tileflags_size = [](const StationSpec *spec) noexcept -> size_t { return spec->tileflags.size(); },
+		.station_tileflags_resize = [](StationSpec *spec, size_t count) noexcept -> void { spec->tileflags.resize(count); },
+		.station_pylons = [](StationSpec *spec, uint8_t index, bool set) noexcept -> void { spec->tileflags[index].Set(StationSpec::TileFlag::Pylons, set); },
+		.station_wires = [](StationSpec *spec, uint8_t index, bool set) noexcept -> void { spec->tileflags[index].Set(StationSpec::TileFlag::NoWires, set); },
+		.station_blocked = [](StationSpec *spec, uint8_t index, bool set) noexcept -> void { spec->tileflags[index].Set(StationSpec::TileFlag::Blocked, set); },
+		.station_tileflags_assign = [](StationSpec *spec, const uint8_t *data, size_t count) noexcept -> void { auto flags = reinterpret_cast<const StationSpec::TileFlags *>(data); spec->tileflags.assign(flags, flags + count); },
+		.station_bridge_size = [](const StationSpec *spec) noexcept -> size_t { return spec->bridgeable_info.size(); },
+		.station_bridge_resize = [](StationSpec *spec, size_t count) noexcept -> void { spec->bridgeable_info.resize(count); },
+		.road_bridge_size = [](const RoadStopSpec *spec) noexcept -> size_t { return spec->bridgeable_info.size(); },
+		.station_bridge_height = [](StationSpec *spec, size_t index, uint8_t value) noexcept -> void { spec->bridgeable_info[index].height = value; },
+		.station_bridge_pillars = [](StationSpec *spec, size_t index, uint8_t value) noexcept -> void { spec->bridgeable_info[index].disallowed_pillars = BridgePillarFlags{value}; },
+		.road_bridge_height = [](RoadStopSpec *spec, size_t index, uint8_t value) noexcept -> void { spec->bridgeable_info[index].height = value; },
+		.road_bridge_pillars = [](RoadStopSpec *spec, size_t index, uint8_t value) noexcept -> void { spec->bridgeable_info[index].disallowed_pillars = BridgePillarFlags{value}; },
+		.station_invalid = [](uint32_t last) noexcept -> void { GrfMsg(1, "StationChangeInfo: Station {} is invalid, max {}, ignoring", last, UINT16_MAX - 1); },
+		.road_invalid = [](uint32_t last) noexcept -> void { GrfMsg(1, "RoadStopChangeInfo: RoadStop {} is invalid, max {}, ignoring", last, NUM_ROADSTOPS_PER_GRF); },
+		.station_undefined = [](uint32_t id) noexcept -> void { GrfMsg(2, "StationChangeInfo: Attempt to modify undefined station {}, ignoring", id); },
+		.road_undefined = [](uint32_t id) noexcept -> void { GrfMsg(1, "RoadStopChangeInfo: Attempt to modify undefined road stop {}, ignoring", id); },
+		.odd_layout = [](uint32_t id) noexcept -> void { GrfMsg(1, "StationChangeInfo: Station {} defines an odd number of sprite layouts, dropping the last item", id); },
+		.missing_sprite = [](uint16_t source, uint32_t id) noexcept -> void { GrfMsg(1, "StationChangeInfo: Station {} is not defined, cannot copy sprite layout to {}.", source, id); },
+		.missing_custom = [](uint16_t source, uint32_t id) noexcept -> void { GrfMsg(1, "StationChangeInfo: Station {} is not defined, cannot copy tile layout to {}.", source, id); },
+		.invalid_tile = [](uint8_t tile, uint8_t length, uint8_t number) noexcept -> void { GrfMsg(1, "StationChangeInfo: Invalid tile {} in layout {}x{}", tile, length, number); },
+		.undefined_publication = [](uint16_t id) noexcept -> void { GrfMsg(1, "MapSpriteGroup: {} undefined, skipping", id); },
+		.duplicate_publication = [](uint16_t id) noexcept -> void { GrfMsg(1, "MapSpriteGroup: {} mapped multiple times, skipping", id); },
+		.read_layout_sprite = RustGRFReadSpriteLayoutSprite,
+		.read_layout = RustGRFReadSpriteLayout,
+	};
+	return services;
+}
+#endif

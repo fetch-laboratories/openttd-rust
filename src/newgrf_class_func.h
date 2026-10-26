@@ -13,6 +13,7 @@
 
 #ifdef WITH_RUST
 #include "rust/object_resolver_ffi.h"
+#include "rust/services_newgrf.h"
 
 template <typename Tspec, typename Tindex, Tindex Tmax>
 void NewGRFClass<Tspec, Tindex, Tmax>::Reset()
@@ -20,7 +21,7 @@ void NewGRFClass<Tspec, Tindex, Tmax>::Reset()
 	static const OpenTTDGRFClassServices<Tspec> services{
 		.class_index = [](const Tspec *spec) noexcept { return static_cast<uint16_t>(spec->class_index); },
 		.set_index = [](Tspec *spec, uint16_t index) noexcept { spec->index = index; },
-		.identity = [](const Tspec *spec) noexcept { return OpenTTDGRFClassIdentity{spec->grf_prop.grfid, spec->grf_prop.local_id}; },
+		.identity = RustSpecIdentity<Tspec>,
 		.exhausted = [](uint16_t max) noexcept { GrfMsg(2, "ClassAllocate: already allocated {} classes, using default", max); },
 		.object = []() noexcept -> const OpenTTDObjectServices * { if constexpr (std::is_same_v<Tspec, ObjectSpec>) return &GetRustObjectServices(); else return nullptr; }(),
 	};

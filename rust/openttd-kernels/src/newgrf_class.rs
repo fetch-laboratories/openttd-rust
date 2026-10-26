@@ -243,10 +243,10 @@ crate::abi::layouts! {
     "AirportClass" ["station_service"] => Class { global_id, name, rust_index };
     "ObjectClass" ["station_service"] => Class { global_id, name, rust_index };
     "OpenTTDGRFClassIdentity" ["station_service"] => Identity { grfid, local_id };
-    "OpenTTDGRFClassServices<StationSpec>" ["station_service"] => Services<crate::station_cmd::RailSpec> { class_index, set_index, identity, exhausted, object };
-    "OpenTTDGRFClassServices<RoadStopSpec>" ["station_service"] => Services<crate::station_cmd::RoadSpec> { class_index, set_index, identity, exhausted, object };
-    "OpenTTDGRFClassServices<AirportSpec>" ["station_service"] => Services<crate::station_cmd::AirportSpec> { class_index, set_index, identity, exhausted, object };
-    "OpenTTDGRFClassServices<ObjectSpec>" ["station_service"] => Services<crate::objects::Spec> { class_index, set_index, identity, exhausted, object };
+    "OpenTTDStationClassServices" ["station_service"] => Services<crate::station_cmd::RailSpec> { class_index, set_index, identity, exhausted, object };
+    "OpenTTDRoadStopClassServices" ["station_service"] => Services<crate::station_cmd::RoadSpec> { class_index, set_index, identity, exhausted, object };
+    "OpenTTDAirportClassServices" ["station_service"] => Services<crate::station_cmd::AirportSpec> { class_index, set_index, identity, exhausted, object };
+    "OpenTTDObjectClassServices" ["station_service"] => Services<crate::objects::Spec> { class_index, set_index, identity, exhausted, object };
 }
 
 pub(crate) fn station_label(class: u16) -> u32 {
@@ -254,4 +254,64 @@ pub(crate) fn station_label(class: u16) -> u32 {
 }
 pub(crate) fn roadstop_label(class: u16) -> u32 {
     unsafe { (*roadstop::classes().add(usize::from(class))).global_id }
+}
+
+unsafe fn station_defaults(
+    allocate: unsafe extern "C" fn(u32, u16, u32) -> u16,
+    insert: unsafe extern "C" fn(u16, *mut crate::station_cmd::RailSpec),
+    classes: extern "C" fn() -> *mut Class,
+    empty: u32,
+    default_name: u32,
+    waypoint_name: u32,
+) {
+    for (label, name) in [
+        (u32::from_be_bytes(*b"DFLT"), default_name),
+        (u32::from_be_bytes(*b"WAYP"), waypoint_name),
+    ] {
+        let index = unsafe { allocate(label, u16::MAX, empty) };
+        unsafe {
+            (*classes().add(usize::from(index))).name = name;
+        }
+        let index = unsafe { allocate(label, u16::MAX, empty) };
+        unsafe {
+            insert(index, ptr::null_mut());
+        }
+    }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_station_class_defaults(
+    empty: u32,
+    default_name: u32,
+    waypoint_name: u32,
+) {
+    unsafe {
+        station_defaults(
+            station::allocate,
+            station::insert,
+            station::classes,
+            empty,
+            default_name,
+            waypoint_name,
+        );
+    }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_roadstop_class_defaults(
+    empty: u32,
+    default_name: u32,
+    waypoint_name: u32,
+) {
+    for (label, name) in [
+        (u32::from_be_bytes(*b"DFLT"), default_name),
+        (u32::from_be_bytes(*b"WAYP"), waypoint_name),
+    ] {
+        let index = unsafe { roadstop::allocate(label, u16::MAX, empty) };
+        unsafe {
+            (*roadstop::classes().add(usize::from(index))).name = name;
+        }
+        let index = unsafe { roadstop::allocate(label, u16::MAX, empty) };
+        unsafe {
+            roadstop::insert(index, ptr::null_mut());
+        }
+    }
 }

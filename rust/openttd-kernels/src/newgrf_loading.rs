@@ -1530,3 +1530,7 @@ pub unsafe extern "C" fn openttd_rust_grf_load(s: &Services, load_index: u32, nu
         (s.set_clock)(&raw const saved);
     }
 }
+
+pub(crate) fn is_disabled() -> bool {
+    unsafe { (*EXECUTION.get()).skip_sprites < 0 }
+}

@@ -9,6 +9,7 @@
 #ifndef RUST_SERVICES_NEWGRF_H
 #define RUST_SERVICES_NEWGRF_H
 #include "../command_type.h"
+#include "newgrf_class_ffi.h"
 #include "../newgrf.h"
 #include "../newgrf_commons.h"
 #include "../newgrf_debug.h"
@@ -119,6 +120,7 @@ inline ScopeResolver *RustResolverBaseScopeFor(Resolver *resolver, uint8_t scope
 inline uint16_t RustResolverCallback(const ResolverObject *resolver) noexcept { return resolver->callback; }
 template <typename Spec> inline uint16_t RustSpecOverride(const Spec *spec) noexcept { return spec->grf_prop.override_id; }
 template <typename Spec> inline uint16_t RustSpecSubstitute(const Spec *spec) noexcept { return spec->grf_prop.subst_id; }
+template <typename Spec> inline OpenTTDGRFClassIdentity RustSpecIdentity(const Spec *spec) noexcept { return {spec->grf_prop.grfid, spec->grf_prop.local_id}; }
 template <typename Spec> inline uint32_t RustSpecGRFID(const Spec *spec) noexcept { return spec->grf_prop.grfid; }
 template <typename Spec> inline uint16_t RustSpecLocalID(const Spec *spec) noexcept { return spec->grf_prop.local_id; }
 template <typename Spec> inline const SpriteGroup *RustSpecSpriteGroup(const Spec *spec, bool live) noexcept { return spec->grf_prop.GetSpriteGroup(live); }

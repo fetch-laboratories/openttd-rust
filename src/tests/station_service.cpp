@@ -11,6 +11,9 @@
 #include "mock_environment.h"
 #ifdef WITH_RUST
 #include "../rust/station_service_ffi.h"
+#include "../rust/station_association_ffi.h"
+#include "../rust/station_definitions_ffi.h"
+#include "../rust/newgrf_act3_ffi.h"
 #include "../rust/station_resolver_ffi.h"
 #include "../rust/roadstop_resolver_ffi.h"
 #include "../station_base.h"

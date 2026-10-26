@@ -32,9 +32,23 @@
 #include "../station_map.h"
 #include "../pbs.h"
 #include "roadstop_resolver_ffi.h"
+#include "station_association_ffi.h"
 
 /* Shared canonical road-stop association/container leaves. No element address
  * survives a call; evaluation may mutate storage but cannot reset these shells. */
+inline CargoTypes RustStationCargoTriggers(const StationSpec *spec) noexcept { return spec->cargo_triggers; }
+inline uint16_t RustStationAnimationTriggers(const StationSpec *spec) noexcept { return spec->animation.triggers.base(); }
+inline OpenTTDStationSpecTriggers RustStationSpecTriggers(const StationSpec *spec) noexcept { return {RustStationAnimationTriggers(spec), RustStationCargoTriggers(spec)}; }
+inline size_t RustStationSpecCount(const BaseStation *st) noexcept { return st->speclist.size(); }
+inline const StationSpec *RustStationSlotSpec(const BaseStation *st, size_t index) noexcept { return st->speclist[index].spec; }
+inline OpenTTDStationSpecVacancy RustStationSlotVacancy(const BaseStation *st, size_t index) noexcept { const auto &slot = st->speclist[index]; return {slot.spec, slot.grfid}; }
+inline OpenTTDGRFClassIdentity RustStationSlotKey(const BaseStation *st, size_t index) noexcept { const auto &slot = st->speclist[index]; return {slot.grfid, slot.localidx}; }
+inline void RustStationSpecResize(BaseStation *st, size_t size) noexcept { st->speclist.resize(size); }
+inline void RustStationSpecClear(BaseStation *st) noexcept { st->speclist.clear(); }
+inline void RustStationSetSpecSlot(BaseStation *st, uint8_t index, const StationSpec *spec, uint32_t grfid, uint16_t local_id) noexcept { auto &slot = st->speclist[index]; slot.spec = spec; slot.grfid = grfid; slot.localidx = local_id; }
+inline void RustStationRebindSpec(BaseStation *st, size_t index, const StationSpec *spec) noexcept { st->speclist[index].spec = spec; }
+inline uint32_t RustCustomStationIndex(uint32_t tile) noexcept { return GetCustomStationSpecIndex(TileIndex{tile}); }
+inline void RustStationSetCachedTriggers(BaseStation *st, uint16_t animation, CargoTypes cargo) noexcept { st->cached_anim_triggers = StationAnimationTriggers(animation); st->cached_cargo_triggers = cargo; }
 inline uint8_t RustRoadStopRandomBits(const BaseStation *st, uint32_t tile) noexcept { return st->GetRoadStopRandomBits(TileIndex(tile)); }
 inline void RustRoadStopSetRandomBits(BaseStation *st, uint32_t tile, uint8_t bits) noexcept { st->SetRoadStopRandomBits(TileIndex(tile), bits); }
 inline uint8_t RustRoadStopAnimationFrame(BaseStation *st, uint32_t tile) noexcept { return st->GetRoadStopAnimationFrame(TileIndex(tile)); }
@@ -226,3 +240,4 @@ inline void RustStationSetWaitingTriggers(BaseStation *station, uint8_t triggers
 inline void RustStationSetRandomBits(BaseStation *station, uint16_t bits) noexcept { station->random_bits = bits; }
 inline uint64_t RustStationCachedCargoTriggers(BaseStation *station) noexcept { return station->cached_cargo_triggers; }
 #endif /* RUST_SERVICES_STATION_H */
+

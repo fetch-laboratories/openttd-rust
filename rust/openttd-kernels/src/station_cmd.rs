@@ -207,11 +207,9 @@ pub struct CommandServicesTable {
     pub flip_airport_closed: extern "C" fn(*mut BaseStation),
     pub closed_widget: extern "C" fn(*mut BaseStation),
     pub distant_join: extern "C" fn() -> bool,
+    pub rail_association: *const crate::station_association::Services,
     pub rail_spec_info: extern "C" fn(*const RailSpec) -> RailSpecInfo,
     pub rail_layout: extern "C" fn(*const RailSpec, u8, u8) -> crate::services::ByteSpan,
-    pub allocate_rail_spec: extern "C" fn(*const RailSpec, *mut BaseStation) -> SpecIndex,
-    pub assign_rail_spec: extern "C" fn(*const RailSpec, *mut BaseStation, u8),
-    pub deallocate_rail_spec: extern "C" fn(*mut BaseStation, u32),
     pub rail_boolean: extern "C" fn(*const RailSpec, u16, u16) -> bool,
     pub rail_callback_error: extern "C" fn(*const RailSpec, u16, u16),
     pub set_train_area: extern "C" fn(*mut BaseStation, TileArea),
@@ -1448,7 +1446,7 @@ impl Ctx<'_> {
                 }
             }
         }
-        let specindex = (self.s.allocate_rail_spec)(spec, st);
+        let specindex = crate::station_association::allocate(self.s.rail_association, spec, st);
         if !specindex.valid {
             return cost.error(self.s.strings.too_many_specs);
         }
@@ -1489,7 +1487,7 @@ impl Ctx<'_> {
             },
             1,
         );
-        (self.s.assign_rail_spec)(spec, st, specindex.value);
+        crate::station_association::assign(self.s.rail_association, spec, st, specindex.value);
         if !spec.is_null() {
             (self.s.rail_triggers)(st, spec);
         }
@@ -1534,7 +1532,7 @@ impl Ctx<'_> {
                     length,
                 );
                 (self.s.make_rail_station)(t, owner, id, axis, gfx, rt);
-                (self.s.deallocate_rail_spec)(st, u32::from(old));
+                crate::station_association::deallocate(self.s.rail_association, st, old);
                 if spec.is_null() {
                     (self.s.close_station_inspect)(t);
                 }
@@ -1774,7 +1772,7 @@ impl Ctx<'_> {
             (self.s.after_remove_tile)(st, tile);
             self.signals().add_track(tile, track, owner);
             (self.rail().layout_changed)(tile, track);
-            (self.s.deallocate_rail_spec)(st, index);
+            crate::station_association::deallocate(self.s.rail_association, st, index as u8);
             if !affected.contains(&st) {
                 affected.push(st);
             }
@@ -4173,11 +4171,9 @@ crate::abi::layouts! {
         flip_airport_closed,
         closed_widget,
         distant_join,
+        rail_association,
         rail_spec_info,
         rail_layout,
-        allocate_rail_spec,
-        assign_rail_spec,
-        deallocate_rail_spec,
         rail_boolean,
         rail_callback_error,
         set_train_area,

@@ -8,6 +8,9 @@
 /** @file station_sl.cpp Code handling saving and loading of stations. */
 
 #include "../stdafx.h"
+#ifdef WITH_RUST
+#include "../rust/station_association_ffi.h"
+#endif
 
 #include "saveload.h"
 #include "compat/station_sl_compat.h"
@@ -124,6 +127,9 @@ void AfterLoadStations()
 {
 	/* Update the speclists of all stations to point to the currently loaded custom stations. */
 	for (BaseStation *st : BaseStation::Iterate()) {
+#ifdef WITH_RUST
+		openttd_rust_station_spec_rebind(&GetStationAssociationServices(), st);
+#else
 		for (auto &sm : GetStationSpecList<StationSpec>(st)) {
 			if (sm.grfid == 0) continue;
 			sm.spec = StationClass::GetByGrf(sm.grfid, sm.localidx);
@@ -132,6 +138,7 @@ void AfterLoadStations()
 			if (sm.grfid == 0) continue;
 			sm.spec = RoadStopClass::GetByGrf(sm.grfid, sm.localidx);
 		}
+#endif
 
 		if (Station::IsExpected(st)) {
 			Station *sta = Station::From(st);
