@@ -255,7 +255,14 @@ struct EngineIDMappingKeyProjection {
  * Note: This is not part of Engine, as the data in the EngineOverrideManager and the engine pool get reset in different cases.
  */
 struct EngineOverrideManager {
+#ifdef WITH_RUST
+	std::span<const EngineIDMapping> Mappings(VehicleType type) const;
+	void ClearMapping();
+#else
 	std::array<std::vector<EngineIDMapping>, VEH_COMPANY_END> mappings;
+	std::span<const EngineIDMapping> Mappings(VehicleType type) const { return this->mappings[type]; }
+	void ClearMapping() { this->mappings = {}; }
+#endif
 
 	void ResetToDefaultMapping();
 	EngineID GetID(VehicleType type, uint16_t grf_local_id, uint32_t grfid);

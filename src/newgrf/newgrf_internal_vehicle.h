@@ -15,6 +15,31 @@
 #include "../vehicle_func.h"
 #include "newgrf_internal.h"
 
+#ifdef WITH_RUST
+struct GRFTempEngineData;
+struct RustRailLabelView { RailTypeLabel *data; size_t size; };
+extern "C" {
+void openttd_rust_engine_temp_resize(size_t);
+void openttd_rust_engine_temp_clear();
+GRFTempEngineData *openttd_rust_engine_temp_fields(uint16_t);
+void openttd_rust_engine_temp_refittability(GRFTempEngineData *, bool);
+void openttd_rust_engine_temp_labels_clear(uint16_t);
+void openttd_rust_engine_temp_labels_push(uint16_t, uint32_t);
+RustRailLabelView openttd_rust_engine_temp_labels(uint16_t);
+}
+/** Nonowning parser view; resize and clear invalidate every field/label reference. */
+struct RustEngineRailLabels {
+	uint16_t engine;
+	std::span<RailTypeLabel> View() const { auto v = openttd_rust_engine_temp_labels(this->engine); return {v.data, v.size}; }
+	void clear() { openttd_rust_engine_temp_labels_clear(this->engine); }
+	void push_back(RailTypeLabel label) { openttd_rust_engine_temp_labels_push(this->engine, label.base()); }
+	bool empty() const { return this->View().empty(); }
+	RailTypeLabel &operator[](size_t index) { return this->View()[index]; }
+	auto begin() const { return this->View().begin(); }
+	auto end() const { return this->View().end(); }
+};
+#endif
+
 /** Temporary engine data used when loading only */
 struct GRFTempEngineData {
 	/** Summary state of refittability properties */
@@ -27,7 +52,11 @@ struct GRFTempEngineData {
 	CargoClasses cargo_allowed;          ///< Bitmask of cargo classes that are allowed as a refit.
 	CargoClasses cargo_allowed_required; ///< Bitmask of cargo classes that are required to be all present to allow a cargo as a refit.
 	CargoClasses cargo_disallowed;       ///< Bitmask of cargo classes that are disallowed as a refit.
+#ifdef WITH_RUST
+	RustEngineRailLabels railtypelabels;
+#else
 	std::vector<RailTypeLabel> railtypelabels;
+#endif
 	uint8_t roadtramtype;
 	const GRFFile *defaultcargo_grf; ///< GRF defining the cargo translation table to use if the default cargo is the 'first refittable'.
 	Refittability refittability;     ///< Did the newgrf set any refittability property? If not, default refittability will be applied.
@@ -41,15 +70,28 @@ struct GRFTempEngineData {
 	 */
 	void UpdateRefittability(bool non_empty)
 	{
+#ifdef WITH_RUST
+		openttd_rust_engine_temp_refittability(this, non_empty);
+#else
 		if (non_empty) {
 			this->refittability = NONEMPTY;
 		} else if (this->refittability == UNSET) {
 			this->refittability = EMPTY;
 		}
+#endif
 	}
 };
 
+#ifdef WITH_RUST
+struct RustEngineTempView {
+	GRFTempEngineData &operator[](EngineID id) { return *openttd_rust_engine_temp_fields(id.base()); }
+	void resize(size_t size) { openttd_rust_engine_temp_resize(size); }
+	void clear() { openttd_rust_engine_temp_clear(); }
+};
+extern RustEngineTempView _gted;
+#else
 extern TypedIndexContainer<std::vector<GRFTempEngineData>, EngineID> _gted;  ///< Temporary engine data used during NewGRF loading
+#endif
 
 Engine *GetNewEngine(const GRFFile *file, VehicleType type, uint16_t internal_id, bool static_access = false);
 void ConvertTTDBasePrice(uint32_t base_pointer, std::string_view error_location, Price *index);

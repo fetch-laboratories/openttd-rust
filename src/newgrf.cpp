@@ -75,7 +75,11 @@ GRFLoadedFeatures _loaded_newgrf_features;
 
 GrfProcessingState _cur_gps;
 
+#ifdef WITH_RUST
+RustEngineTempView _gted;
+#else
 TypedIndexContainer<std::vector<GRFTempEngineData>, EngineID> _gted;  ///< Temporary engine data used during NewGRF loading
+#endif
 
 /**
  * Debug() function dedicated to newGRF debugging messages
@@ -855,8 +859,8 @@ static void FinaliseEngineArray()
 {
 	for (Engine *e : Engine::Iterate()) {
 		if (e->GetGRF() == nullptr) {
-			auto found = std::ranges::find(_engine_mngr.mappings[e->type], e->index, &EngineIDMapping::engine);
-			if (found == std::end(_engine_mngr.mappings[e->type]) || found->grfid != INVALID_GRFID || found->internal_id != found->substitute_id) {
+			auto found = std::ranges::find(_engine_mngr.Mappings(e->type), e->index, &EngineIDMapping::engine);
+			if (found == std::end(_engine_mngr.Mappings(e->type)) || found->grfid != INVALID_GRFID || found->internal_id != found->substitute_id) {
 				e->info.string_id = STR_NEWGRF_INVALID_ENGINE;
 			}
 		}
