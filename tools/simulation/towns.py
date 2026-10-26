@@ -622,7 +622,7 @@ def house_definition_fixtures(folder):
             "13": word(0xF81F),
             "21": word(2100),
             "22": word(65535),
-            "1d": b"\x04",
+            "14": b"\x01",
         },
     )
     main += definition(1, 8)
