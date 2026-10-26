@@ -18,7 +18,8 @@ this roadmap over conflicting issues. Keep about 200 lines; evidence stays in PR
   `00ab107424` equal those floors; `d4a0700869` remains unprofiled. P2016 is
   in band. #275 owns the two selected repairs; #450 must fix the new collector
   before its first timed pass. No current anchor contamination is established.
-- Two drafts (#446/#447) retain worktrees; local caches/output occupy 8.5 GiB.
+- Five unintegrated branches: owners #446/#447 and maintenance #463-#465.
+  Recovery #463 is first; no other integration proceeds before it.
 
 ## Twentieth steering review (2026-10-24, recovery and production evidence)
 
@@ -179,21 +180,27 @@ Closed #449/#451/#452 housekeeping is not a standing task.
    leaves the batch. Run the due merged-tip profile in the background; after the
    collector repair and source fixes, run the due tracked quiet pass. No new
    per-PR timing or private collector. Stale agent-downloaded CI archives were removed.
-4. **Next owners, still unselected:** vehicle effect emission/cache policy, then
-   cargo registry/callback lifecycle. Plan when capacity permits; catchment,
-   #64/#68/#69, vendored, GUI and platform work remain outside this order.
+4. **Next selected owners:** #466 transfers vehicle effect emission/cache and
+   creation sequencing; #467 transfers cargo registry/translation and callback
+   lifecycle. Start from integrated main as capacity and the six-branch cap allow.
+   Their first concrete checkpoints decide necessary boundary/evidence cost once;
+   no speed gate. Catchment, #64/#68/#69, vendored, GUI and platform stay outside.
 
 ## Resume checkpoint
 
-Audits complete; no steering builds, games, profiles or CI. Draft worktrees preserved.
+Development resumed. Root owns recovery/integration; all five agent slots are active.
 
 | Item | Saved head | Next action |
 | --- | --- | --- |
-| #462 recovery | issue | Repair integrated null context first; subsequent code prevents rollback. |
-| #446 engine/articulated (#439) | `e96e45c240` | Adopt recovery; PR comment specifies boundary and evidence fixes. |
-| #447 type admission (#440) | `c3fdd2227d` | Repair observation boundary; validate TownID and negative masks. |
-| #450/#275/#461/#156 | issues | Ready maintenance batch; collector fixes precede timed use. |
-| Merged-tip profile | code `d4a0700869` | Interrupted; profile next integrated tip alongside work. |
+| #462 recovery / #463 | `059f8bc8f0` | Focused checks pass; fresh fixing review, then current-base Full. |
+| #446 engine/articulated (#439) | `2d561dbc07` | Boundary/retained-chain repair; adopt recovery and finish checks/review. |
+| #447 type admission (#440) | `7d6a47e19b` | TownID/negative checks pass; finish carrier checks and fresh review. |
+| #450 collector / #465 | `b9787cd2ec` | Checks pass within budget; fresh fixing review running. |
+| #275/#461/#156 / #464 | `38feeba7b5` | Source/coverage batch checks running; review when ready. |
+| Merged-tip profile | code `52ffa46994` | Instruction profile running alongside work; same quiet anchors. |
 
 macOS passed at `00ab107424`; next cadence run is due after three integrations.
-Delete the superseded private speed collector after the first successful tracked pass.
+Delete the superseded private speed collector after the first tracked pass.
+
+Selection: /root, gpt-6.1-sol, xhigh; planning: /root/plan_next_simulation_owners,
+gpt-6-astra, high. Next-owner scope, interfaces and evidence plans are in #466/#467.
