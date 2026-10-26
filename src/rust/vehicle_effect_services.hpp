@@ -22,7 +22,7 @@ const OpenTTDVisualServices &GetRustVisualServices()
 		.engine = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualEngine {
 			Vehicle *v = VehicleOf(shell);
 			const Engine *e = EngineOf(RustVehicleGetEngine(shell));
-			OpenTTDVisualEngine result{.engine = RustEngine(e), .cache = &v->vcache.cached_vis_effect, .id = RustVehicleEngineID(v), .kind = RustEngineType(RustEngine(e)), .visual = 0, .callback = e->info.callback_mask.Test(VehicleCallbackMask::VisualEffect)};
+			OpenTTDVisualEngine result{.engine = RustEngine(e), .cache = RustVehicleVisualCache(v), .id = RustVehicleEngineID(v), .kind = RustEngineType(RustEngine(e)), .visual = 0, .callback = e->info.callback_mask.Test(VehicleCallbackMask::VisualEffect)};
 			switch (e->type) {
 				case VEH_TRAIN: result.visual = e->VehInfo<RailVehicleInfo>().visual_effect; break;
 				case VEH_ROAD: result.visual = e->VehInfo<RoadVehicleInfo>().visual_effect; break;
@@ -31,27 +31,26 @@ const OpenTTDVisualServices &GetRustVisualServices()
 			}
 			return result;
 		},
-		.defaults = [](const OpenTTDEngine *shell) noexcept -> OpenTTDVisualDefaults { const Engine *e = EngineOf(shell); return {.rail_kind = RustEngineRailKind(e), .engclass = e->VehInfo<RailVehicleInfo>().engclass}; },
+		.defaults = [](const OpenTTDEngine *shell) noexcept -> OpenTTDVisualDefaults { const Engine *e = EngineOf(shell); return {.rail_kind = RustEngineRailKind(e), .engclass = RustRailEngineClass(&e->VehInfo<RailVehicleInfo>())}; },
 		.grf_version = RustEngineGRFVersionOpaque,
 		.power_error = [](uint16_t engine) noexcept { ShowNewGrfVehicleError(EngineID(engine), STR_NEWGRF_BROKEN, STR_NEWGRF_BROKEN_POWERED_WAGON, GRFBug::VehPoweredWagon, false); },
 		.part = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualPart {
 			Vehicle *v = VehicleOf(shell);
-			return {.cache = &v->vcache.cached_vis_effect, .tile = RustVehicleTile(v), .kind = RustVehicleVehicleType(v), .status = RustVehicleStatus(v), .tick = RustVehicleTick(v)};
+			return {.cache = RustVehicleVisualCache(v), .tile = RustVehicleTile(v), .kind = RustVehicleVehicleType(v), .status = RustVehicleStatus(v), .tick = RustVehicleTick(v)};
 		},
 		.bridge_position = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualBridgePosition { const Vehicle *v = VehicleOf(shell); return {.x = RustVehicleX(v), .y = RustVehicleY(v)}; },
 		.offset = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualOffset {
 			const Vehicle *v = VehicleOf(shell);
-			return {.direction = RustVehicleDirection(v), .length = v->type == VEH_TRAIN ? RustGroundCachedLength(Train::From(v)) : v->type == VEH_ROAD ? RustGroundCachedLength(RoadVehicle::From(v)) : uint8_t(VEHICLE_LENGTH), .flipped = v->type == VEH_TRAIN && Train::From(v)->GetTrainFlags().Test(VehicleRailFlag::Flipped)};
+			return {.direction = RustVehicleDirection(v), .length = v->type == VEH_TRAIN ? RustGroundCachedLength(Train::From(v)) : v->type == VEH_ROAD ? RustGroundCachedLength(RoadVehicle::From(v)) : uint8_t(VEHICLE_LENGTH)};
 		},
 		.train = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualTrain {
 			const Train *v = Train::From(VehicleOf(shell));
-			return {.tile = RustVehicleTile(v), .speed = RustVehicleSpeed(v), .reversing = v->GetTrainFlags().Test(VehicleRailFlag::Reversing), .front = v->IsFrontEngine()};
+			return {.handle = TrainHandle(v), .tile = RustVehicleTile(v), .speed = RustVehicleSpeed(v), .front = RustVehicleFront(v)};
 		},
 		.station = RustIsRailStation,
-		.should_stop = [](OpenTTDVehicle *shell, uint32_t tile) noexcept { const Train *v = Train::From(VehicleOf(shell)); return v->current_order.ShouldStopAtStation(v, GetStationIndex(TileIndex(tile))); },
+		.should_stop = [](OpenTTDVehicle *shell, uint32_t tile) noexcept { const Train *v = Train::From(VehicleOf(shell)); return RustVehicleShouldStopAtStation(v, StationID(MapSvcStationIndex(tile))); },
 		.depot = SharedIsDepotTile,
-		.tunnel = [](uint32_t tile) noexcept { return IsTunnelTile(TileIndex(tile)); },
-		.rail_types = RustVehicleRead<uint64_t, RustTrainRailTypes>,
+		.tunnel = RustIsTunnelTile,
 		.tile_rail = RustTileRailType,
 		.powered = RustRailPoweredMask,
 		.power_weight = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualPowerWeight { const Train *v = Train::From(VehicleOf(shell)); return {.power = RustTrainCachedPower(v), .weight = RustTrainCachedWeight(v)}; },

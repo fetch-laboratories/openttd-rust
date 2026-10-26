@@ -41,6 +41,7 @@ inline int32_t RustEngineBaseIntro(const OpenTTDEngine *e) noexcept { return Eng
 inline bool RustEngineClimate(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.climates.Test(OpenTTDLandscape()); }
 inline bool RustEngineCanCarry(const Engine *e) noexcept { return e->CanCarryCargo(); }
 inline uint64_t RustEngineRefitMask(EngineID id, bool initial) noexcept { return GetUnionOfArticulatedRefitMasks(id, initial); }
+inline uint8_t RustRailEngineClass(const RailVehicleInfo *info) noexcept { return info->engclass; }
 inline RailVehicleTypes RustEngineRailKind(const Engine *e) noexcept { return e->VehInfo<RailVehicleInfo>().railveh_type; }
 inline uint64_t RustEngineCompatibleRailTypes(const Engine *e) noexcept { return RustAllCompatibleRailTypes(e->VehInfo<RailVehicleInfo>().railtypes.base()); }
 /** Reserve a unit number and assign the returned native ID to the shell. */

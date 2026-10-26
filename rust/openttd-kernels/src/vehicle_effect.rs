@@ -81,13 +81,12 @@ pub struct Part {
 pub struct Offset {
     direction: u8,
     length: u8,
-    flipped: bool,
 }
 #[repr(C)]
 pub struct Train {
+    handle: crate::train::Handle,
     tile: u32,
     speed: u16,
-    reversing: bool,
     front: bool,
 }
 #[repr(C)]
@@ -113,7 +112,6 @@ pub struct Services {
     should_stop: extern "C" fn(VehicleRef, u32) -> bool,
     depot: extern "C" fn(u32) -> bool,
     tunnel: extern "C" fn(u32) -> bool,
-    rail_types: extern "C" fn(VehicleRef) -> u64,
     tile_rail: extern "C" fn(u32) -> crate::services::RailType,
     powered: extern "C" fn(u64, crate::services::RailType) -> bool,
     power_weight: extern "C" fn(VehicleRef) -> PowerWeight,
@@ -216,7 +214,7 @@ pub extern "C" fn openttd_rust_visual_eligible(v: VehicleRef) -> bool {
     g.smoke != 0 && g.status & (VS_TRAIN_SLOWING | VS_STOPPED) == 0 && g.speed >= 2
 }
 const SMOKE_POS: [i8; 8] = [1, 1, 1, 0, -1, -1, -1, 0];
-fn advanced(s: &Services, v: VehicleRef, kind: u8) {
+fn advanced(s: &Services, v: VehicleRef, kind: u8, train: Option<crate::train::Handle>) {
     let mut regs = [0_i32; 4];
     let n = (s.vehicle.newgrf)();
     let engine_id = (s.vehicle.engine_id)(v);
@@ -248,7 +246,7 @@ fn advanced(s: &Services, v: VehicleRef, kind: u8) {
     } else {
         0
     } as i8;
-    let dir = if kind == VEH_TRAIN && p.flipped {
+    let dir = if train.is_some_and(|t| has_bit(t.get_flags() as u16, crate::train::FLIPPED)) {
         reverse_dir(p.direction, |ok| {
             if s.vehicle.assertions {
                 assert!(ok);
@@ -296,9 +294,9 @@ fn advanced(s: &Services, v: VehicleRef, kind: u8) {
 pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
     let s = services();
     let gate = (s.show)(front);
-    if gate.kind == VEH_TRAIN {
+    let front_train = if gate.kind == VEH_TRAIN {
         let t = (s.train)(front);
-        if t.reversing
+        if t.handle.get_flags() & crate::train::FLAG_REVERSING != 0
             || ((s.station)(t.tile)
                 && t.front
                 && (s.should_stop)(front, t.tile)
@@ -306,11 +304,23 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
         {
             return;
         }
-    }
+        Some(t.handle)
+    } else {
+        None
+    };
     let mut sound = false;
     let mut current = Some(front);
     while let Some(v) = current {
         let p = (s.part)(v);
+        let train = if p.kind == VEH_TRAIN {
+            Some(if v == front {
+                front_train.unwrap_or_else(|| (s.vehicle.train_handle)(v))
+            } else {
+                (s.vehicle.train_handle)(v)
+            })
+        } else {
+            None
+        };
         let cache = unsafe { *p.cache };
         let is_advanced = has_bit(cache, VE_ADVANCED_EFFECT);
         let mut offset = gb(u32::from(cache), VE_OFFSET_START, VE_OFFSET_COUNT) as i32
@@ -341,7 +351,7 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
             if bridge
                 || (s.depot)(p.tile)
                 || (s.tunnel)(p.tile)
-                || (p.kind == VEH_TRAIN && !(s.powered)((s.rail_types)(v), (s.tile_rail)(p.tile)))
+                || train.is_some_and(|t| !(s.powered)(t.get_railtypes(), (s.tile_rail)(p.tile)))
             {
                 return false;
             }
@@ -380,7 +390,7 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
         if emit() {
             sound = true;
             if is_advanced {
-                advanced(s, v, p.kind);
+                advanced(s, v, p.kind, train);
             } else {
                 let o = (s.offset)(v);
                 if p.kind == VEH_TRAIN {
@@ -391,7 +401,7 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
                 let mut x = i32::from(SMOKE_POS[usize::from(o.direction)]).wrapping_mul(offset);
                 let mut y = i32::from(SMOKE_POS[usize::from(o.direction.wrapping_add(2) % 8)])
                     .wrapping_mul(offset);
-                if p.kind == VEH_TRAIN && o.flipped {
+                if train.is_some_and(|t| has_bit(t.get_flags() as u16, crate::train::FLIPPED)) {
                     x = x.wrapping_neg();
                     y = y.wrapping_neg();
                 }
@@ -418,8 +428,8 @@ crate::abi::layouts! {
     "OpenTTDVisualEngine" ["probe"] => Engine { engine, cache, id, kind, visual, callback, };
     "OpenTTDVisualDefaults" ["probe"] => Defaults { rail_kind, engclass, };
     "OpenTTDVisualPart" ["probe"] => Part { cache, tile, kind, status, tick, };
-    "OpenTTDVisualOffset" ["probe"] => Offset { direction, length, flipped, };
-    "OpenTTDVisualTrain" ["probe"] => Train { tile, speed, reversing, front, };
+    "OpenTTDVisualOffset" ["probe"] => Offset { direction, length, };
+    "OpenTTDVisualTrain" ["probe"] => Train { handle, tile, speed, front, };
     "OpenTTDVisualPowerWeight" ["probe"] => PowerWeight { power, weight, };
-    "OpenTTDVisualServices" ["probe"] => Services { vehicle, shared, gate, show, engine, defaults, grf_version, power_error, part, bridge_position, offset, train, station, should_stop, depot, tunnel, rail_types, tile_rail, powered, power_weight, };
+    "OpenTTDVisualServices" ["probe"] => Services { vehicle, shared, gate, show, engine, defaults, grf_version, power_error, part, bridge_position, offset, train, station, should_stop, depot, tunnel, tile_rail, powered, power_weight, };
 }

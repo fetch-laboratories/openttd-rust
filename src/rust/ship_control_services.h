@@ -225,15 +225,15 @@ static void Ship_update_delta(uint32_t id) noexcept { Ship *v = Ship::Get(Vehicl
 
 static void Ship_build_owner(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->owner = _current_company; }
 
-static void Ship_build_z(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->z_pos = SharedSlopePixelZ(RustVehicleX(v), RustVehicleY(v), false); }
+static void Ship_build_z(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustWriteVehicleZ(v, SharedSlopePixelZ(RustVehicleX(v), RustVehicleY(v), false)); }
 
 static void Ship_build_properties(uint32_t id, uint32_t engine) noexcept
 {
 	Ship *v = Ship::Get(VehicleID(id));
 	const Engine *e = Engine::Get(EngineID(engine));
 	const auto &svi = e->VehInfo<ShipVehicleInfo>();
-	v->vehstatus = {VehState::Hidden, VehState::Stopped, VehState::DefaultPalette};
-	v->spritenum = svi.image_index;
+	RustWriteVehicleStatus(v, {VehState::Hidden, VehState::Stopped, VehState::DefaultPalette});
+	RustWriteVehicleSprite(v, svi.image_index);
 	RustVehicleSetCargoType(RustVehicle(v), RustEngineDefaultCargo(RustEngine(e)));
 	assert(OpenTTDIsValidCargo(RustVehicleCargoType(RustVehicle(v))));
 	RustVehicleSetCargoCap(RustVehicle(v), svi.capacity);
@@ -253,7 +253,7 @@ static void Ship_build_dates(uint32_t id) noexcept
 	v->date_of_last_service = TimerGameEconomy::date;
 	v->date_of_last_service_newgrf = TimerGameCalendar::date;
 	v->build_year = TimerGameCalendar::year;
-	v->sprite_cache.sprite_seq.Set(SPR_IMG_QUERY);
+	RustWriteVehicleSpriteSequence(v, SPR_IMG_QUERY);
 }
 
 static void Ship_build_acceleration(uint32_t id, uint32_t engine) noexcept
@@ -273,13 +273,13 @@ static void Ship_build_interval_percent(uint32_t id) noexcept
 
 static void Ship_build_capacity(uint32_t id, uint32_t capacity) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleSetCargoCap(RustVehicle(v), static_cast<uint16_t>(capacity)); }
 
-static void Ship_set_tile(uint32_t id, uint32_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->tile = TileIndex(static_cast<uint32_t>(value)); }
+static void Ship_set_tile(uint32_t id, uint32_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustWriteVehicleTile(v, TileIndex(static_cast<uint32_t>(value))); }
 
-static void Ship_set_x(uint32_t id, int32_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->x_pos = static_cast<int32_t>(value); }
+static void Ship_set_x(uint32_t id, int32_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustWriteVehicleX(v, static_cast<int32_t>(value)); }
 
-static void Ship_set_y(uint32_t id, int32_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->y_pos = static_cast<int32_t>(value); }
+static void Ship_set_y(uint32_t id, int32_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustWriteVehicleY(v, static_cast<int32_t>(value)); }
 
-static void Ship_set_z(uint32_t id, int32_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->z_pos = static_cast<int32_t>(value); }
+static void Ship_set_z(uint32_t id, int32_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustWriteVehicleZ(v, static_cast<int32_t>(value)); }
 
 static void Ship_set_direction(uint32_t id, uint8_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->direction = static_cast<Direction>(value); }
 

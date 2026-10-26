@@ -126,6 +126,11 @@ inline OrderLoadType RustVehicleOrderLoadType(const Vehicle *v) noexcept { retur
 inline TimerGameCalendar::Date RustVehicleCalendarService(const Vehicle *v) noexcept { return v->date_of_last_service_newgrf; }
 inline TimerGameCalendar::Year RustVehicleBuildYear(const Vehicle *v) noexcept { return v->build_year; }
 inline uint8_t RustVehicleSprite(const Vehicle *v) noexcept { return v->spritenum; }
+inline void RustWriteVehicleSprite(Vehicle *v, uint8_t sprite) noexcept { v->spritenum = sprite; }
+inline void RustVehicleFlipImage(Vehicle *v) noexcept { RustWriteVehicleSprite(v, RustVehicleSprite(v) + 1); }
+inline SpriteID RustVehicleFirstSprite(const Vehicle *v) noexcept { return v->sprite_cache.sprite_seq.seq[0].sprite; }
+inline void RustWriteVehicleFirstSprite(Vehicle *v, SpriteID sprite) noexcept { v->sprite_cache.sprite_seq.seq[0].sprite = sprite; }
+inline void RustWriteVehicleSpriteSequence(Vehicle *v, SpriteID sprite) noexcept { v->sprite_cache.sprite_seq.Set(sprite); }
 inline uint8_t RustVehicleNumOrders(const Vehicle *v) noexcept { return v->GetNumOrders(); }
 inline uint8_t RustVehicleRealOrderIndex(const Vehicle *v) noexcept { return v->cur_real_order_index; }
 inline uint16_t RustVehicleServiceInterval(const Vehicle *v) noexcept { return v->GetServiceInterval(); }
@@ -150,6 +155,9 @@ inline const uint8_t *RustVehicleTickAddress(const Vehicle *v) noexcept { return
 inline uint8_t RustVehicleTick(const Vehicle *v) noexcept { return *RustVehicleTickAddress(v); }
 inline const uint8_t *RustVehicleStatusAddress(const Vehicle *v) noexcept { return v->vehstatus.base_address(); }
 inline uint8_t RustVehicleStatus(const Vehicle *v) noexcept { return *RustVehicleStatusAddress(v); }
+inline void RustWriteVehicleStatus(Vehicle *v, VehStates status) noexcept { v->vehstatus = status; }
+inline void RustVehicleSetUnclickable(Vehicle *v) noexcept { RustWriteVehicleStatus(v, VehState::Unclickable); }
+inline void RustWriteVehicleTile(Vehicle *v, TileIndex tile) noexcept { v->tile = tile; }
 inline void RustWriteVehicleTick(Vehicle *v, uint8_t tick) noexcept { v->tick_counter = tick; }
 inline uint8_t RustVehicleBreakdownDelay(const Vehicle *v) noexcept { return v->breakdown_delay; }
 inline uint8_t RustVehicleBreakdownChance(const Vehicle *v) noexcept { return v->breakdown_chance; }
@@ -199,12 +207,19 @@ inline bool RustGroundHasArticulated(const T *v) noexcept { return v->HasArticul
 
 inline const uint8_t *RustVehicleSubtypeAddress(const Vehicle *v) noexcept { return &v->subtype; }
 inline uint8_t RustVehicleSubtype(const Vehicle *v) noexcept { return *RustVehicleSubtypeAddress(v); }
+inline bool RustVehicleFront(const Vehicle *v) noexcept { return v->IsFrontEngine(); }
+inline uint8_t *RustVehicleVisualCache(const Vehicle *v) noexcept { return &v->vcache.cached_vis_effect; }
+inline uint8_t RustVehicleVisualEffect(const Vehicle *v) noexcept { return *RustVehicleVisualCache(v); }
+inline bool RustVehicleShouldStopAtStation(const Vehicle *v, StationID station) noexcept { return v->current_order.ShouldStopAtStation(v, station); }
 inline const int32_t *RustVehicleXAddress(const Vehicle *v) noexcept { return &v->x_pos; }
 inline int32_t RustVehicleX(const Vehicle *v) noexcept { return *RustVehicleXAddress(v); }
 inline const int32_t *RustVehicleYAddress(const Vehicle *v) noexcept { return &v->y_pos; }
 inline int32_t RustVehicleY(const Vehicle *v) noexcept { return *RustVehicleYAddress(v); }
 inline const int32_t *RustVehicleZAddress(const Vehicle *v) noexcept { return &v->z_pos; }
 inline int32_t RustVehicleZ(const Vehicle *v) noexcept { return *RustVehicleZAddress(v); }
+inline void RustWriteVehicleX(Vehicle *v, int32_t x) noexcept { v->x_pos = x; }
+inline void RustWriteVehicleY(Vehicle *v, int32_t y) noexcept { v->y_pos = y; }
+inline void RustWriteVehicleZ(Vehicle *v, int32_t z) noexcept { v->z_pos = z; }
 inline const uint16_t *RustVehicleSpeedAddress(const Vehicle *v) noexcept { return &v->cur_speed; }
 inline uint16_t RustVehicleSpeed(const Vehicle *v) noexcept { return *RustVehicleSpeedAddress(v); }
 inline uint8_t RustVehicleSubspeed(const Vehicle *v) noexcept { return v->subspeed; }

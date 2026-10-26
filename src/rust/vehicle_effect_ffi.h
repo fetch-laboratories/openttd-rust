@@ -16,8 +16,8 @@ struct OpenTTDVisualEngine {
 };
 struct OpenTTDVisualDefaults { uint8_t rail_kind, engclass; };
 struct OpenTTDVisualPart { uint8_t *cache; uint32_t tile; uint8_t kind, status, tick; };
-struct OpenTTDVisualOffset { uint8_t direction, length; bool flipped; };
-struct OpenTTDVisualTrain { uint32_t tile; uint16_t speed; bool reversing, front; };
+struct OpenTTDVisualOffset { uint8_t direction, length; };
+struct OpenTTDVisualTrain { OpenTTDTrainHandle handle; uint32_t tile; uint16_t speed; bool front; };
 struct OpenTTDVisualPowerWeight { uint32_t power, weight; };
 struct OpenTTDVisualServices {
 	const OpenTTDVehicleServices *vehicle;
@@ -36,7 +36,6 @@ struct OpenTTDVisualServices {
 	bool (*should_stop)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(should_stop);
 	bool (*depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot);
 	bool (*tunnel)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tunnel);
-	uint64_t (*rail_types)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(rail_types);
 	RailType (*tile_rail)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_rail);
 	bool (*powered)(uint64_t, RailType) noexcept OPENTTD_SERVICE_DEFAULT(powered);
 	OpenTTDVisualPowerWeight (*power_weight)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(power_weight);

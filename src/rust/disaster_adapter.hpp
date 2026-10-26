@@ -47,8 +47,8 @@ static void OPENTTD_RUST_CALL DisasterRead(void *, uint32_t kind, uint32_t id, i
 			const Vehicle *v = Vehicle::Get(id);
 			out[0] = v->subtype; out[1] = RustVehicleX(v); out[2] = RustVehicleY(v); out[3] = RustVehicleZ(v); out[4] = v->tile.base(); out[5] = v->dest_tile.base();
 			out[6] = RustVehicleDirection(v); out[7] = RustVehicleAge(v).base(); out[8] = v->tick_counter; out[9] = v->owner.base(); out[10] = v->vehstatus.base();
-			out[11] = v->Next() == nullptr ? VehicleID::Invalid().base() : v->Next()->index.base(); out[12] = v->sprite_cache.sprite_seq.seq[0].sprite;
-			out[13] = v->IsFrontEngine(); out[14] = v->IsGroundVehicle(); out[15] = v->type; out[16] = RustVehicleBreakdownCounter(v); out[17] = RustVehicleBreakdownDelay(v);
+			out[11] = v->Next() == nullptr ? VehicleID::Invalid().base() : v->Next()->index.base(); out[12] = RustVehicleFirstSprite(v);
+			out[13] = RustVehicleFront(v); out[14] = v->IsGroundVehicle(); out[15] = v->type; out[16] = RustVehicleBreakdownCounter(v); out[17] = RustVehicleBreakdownDelay(v);
 			if (v->type == VEH_ROAD) { const RoadVehicle *r = RoadVehicle::From(v); out[18] = r->GetCrashedCounter(); out[19] = r->disaster_vehicle.base(); }
 			break;
 		}
@@ -98,18 +98,18 @@ static void OPENTTD_RUST_CALL DisasterWrite(void *, uint32_t field, uint32_t id,
 	Vehicle *v = Vehicle::Get(id);
 	switch (field) {
 		case 0: RustVehicleSetSubtype(v, static_cast<uint8_t>(value)); break;
-		case 1: v->x_pos = value; break;
-		case 2: v->y_pos = value; break;
-		case 3: v->z_pos = value; break;
-		case 4: v->tile = TileIndex{static_cast<uint32_t>(value)}; break;
+		case 1: RustWriteVehicleX(v, value); break;
+		case 2: RustWriteVehicleY(v, value); break;
+		case 3: RustWriteVehicleZ(v, value); break;
+		case 4: RustWriteVehicleTile(v, TileIndex{static_cast<uint32_t>(value)}); break;
 		case 5: v->dest_tile = TileIndex{static_cast<uint32_t>(value)}; break;
 		case 6: v->direction = static_cast<Direction>(value); break;
 		case 7: v->age = TimerGameCalendar::Date{static_cast<int32_t>(value)}; break;
 		case 8: v->tick_counter = value; break;
 		case 9: v->owner = CompanyID{static_cast<uint8_t>(value)}; break;
-		case 10: v->vehstatus = VehStates{static_cast<uint8_t>(value)}; break;
+		case 10: RustWriteVehicleStatus(v, VehStates{static_cast<uint8_t>(value)}); break;
 		case 11: RustVehicleSetNext(v, Vehicle::Get(static_cast<uint32_t>(value))); break;
-		case 12: v->sprite_cache.sprite_seq.Set(value); break;
+		case 12: RustWriteVehicleSpriteSequence(v, value); break;
 		case 16: v->breakdown_ctr = value; break;
 		case 17: v->breakdown_delay = value; break;
 		case 19: RoadVehicle::From(v)->disaster_vehicle = VehicleID{static_cast<uint32_t>(value)}; break;

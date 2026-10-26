@@ -46,7 +46,7 @@ static OpenTTDRoadStep OPENTTD_RUST_CALL RoadSvcStep(OpenTTDVehicle *v) noexcept
 {
 	const RoadVehicle *u = RoadOf(v);
 	return {.tile = RustVehicleTile(u), .x = RustVehicleX(u), .y = RustVehicleY(u), .z = RustVehicleZ(u),
-		.cur_speed = RustVehicleSpeed(u), .direction = RustVehicleDirection(u), .length = RustGroundCachedLength(u), .front = u->IsFrontEngine(), .tram = SharedRoadTypeIsTram(RustRoadVehicleType(u))};
+		.cur_speed = RustVehicleSpeed(u), .direction = RustVehicleDirection(u), .length = RustGroundCachedLength(u), .front = RustVehicleFront(u), .tram = SharedRoadTypeIsTram(RustRoadVehicleType(u))};
 }
 static OpenTTDRoadCrashPart OPENTTD_RUST_CALL RoadSvcCrashPart(OpenTTDVehicle *v) noexcept
 {
@@ -102,7 +102,7 @@ static OpenTTDRoadRoadTypes OPENTTD_RUST_CALL RoadSvcMoveTile(OpenTTDVehicle *v,
 {
 	RoadVehicle *u = RoadOf(v);
 	TileIndex old_tile = u->tile;
-	u->tile = TileIndex(tile);
+	RustWriteVehicleTile(u, TileIndex(tile));
 	RoadTramType rtt = RustRoadTramType(RustRoadVehicleType(u));
 	return {.before = RustRoadTileType(old_tile.base(), rtt), .after = RustRoadTileType(u->tile.base(), rtt)};
 }
@@ -138,7 +138,7 @@ static OpenTTDRoadStopRead OPENTTD_RUST_CALL RoadSvcStopRead(OpenTTDVehicle *v) 
 static bool OPENTTD_RUST_CALL RoadSvcShouldStop(OpenTTDVehicle *v, uint32_t tile) noexcept
 {
 	const RoadVehicle *u = RoadOf(v);
-	return u->current_order.ShouldStopAtStation(u, StationID(GetRustSharedServices().station_index(tile)));
+	return RustVehicleShouldStopAtStation(u, StationID(GetRustSharedServices().station_index(tile)));
 }
 static OpenTTDRoadArrivalRead OPENTTD_RUST_CALL RoadSvcArrivalRead(OpenTTDVehicle *v, uint16_t station) noexcept
 {
@@ -171,8 +171,8 @@ static void OPENTTD_RUST_CALL RoadSvcDepotExit(OpenTTDVehicle *v, int32_t x, int
 {
 	RoadVehicle *u = RoadOf(v);
 	u->vehstatus.Reset(VehState::Hidden);
-	u->x_pos = x;
-	u->y_pos = y;
+	RustWriteVehicleX(u, x);
+	RustWriteVehicleY(u, y);
 }
 static void OPENTTD_RUST_CALL RoadSvcDepotExitDirty(OpenTTDVehicle *v) noexcept
 {

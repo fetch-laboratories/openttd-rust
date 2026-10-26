@@ -130,9 +130,9 @@ static void OPENTTD_RUST_CALL VehicleSvcCheckOrdersOnly(OpenTTDVehicle *v) noexc
 static void OPENTTD_RUST_CALL VehicleSvcWriteCoordinates(OpenTTDVehicle *v, int32_t x, int32_t y, int32_t z) noexcept
 {
 	Vehicle *u = VehicleOf(v);
-	u->x_pos = x;
-	u->y_pos = y;
-	u->z_pos = z;
+	RustWriteVehicleX(u, x);
+	RustWriteVehicleY(u, y);
+	RustWriteVehicleZ(u, z);
 }
 static bool OPENTTD_RUST_CALL VehicleSvcWaitingForUnbunching(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->IsWaitingForUnbunching(); }
 static void OPENTTD_RUST_CALL VehicleSvcLeaveUnbunchingDepot(OpenTTDVehicle *v) noexcept { VehicleOf(v)->LeaveUnbunchingDepot(); }
@@ -146,8 +146,8 @@ static OpenTTDVehicleNewPosition OPENTTD_RUST_CALL VehicleSvcNewPosition(OpenTTD
 static void OPENTTD_RUST_CALL VehicleSvcWriteXY(OpenTTDVehicle *v, int32_t x, int32_t y) noexcept
 {
 	Vehicle *u = VehicleOf(v);
-	u->x_pos = x;
-	u->y_pos = y;
+	RustWriteVehicleX(u, x);
+	RustWriteVehicleY(u, y);
 
 }
 static void OPENTTD_RUST_CALL VehicleSvcBaseViewport(OpenTTDVehicle *v) noexcept { VehicleOf(v)->Vehicle::UpdateViewport(true); }
@@ -235,11 +235,11 @@ static uint8_t OPENTTD_RUST_CALL VehicleSvcSubspeed(OpenTTDVehicle *v) noexcept 
 static uint8_t OPENTTD_RUST_CALL VehicleSvcRunning(OpenTTDVehicle *v) noexcept { return RustVehicleRunning(VehicleOf(v)); }
 static int32_t OPENTTD_RUST_CALL VehicleSvcOrderTime(OpenTTDVehicle *v) noexcept { return RustVehicleOrderTime(VehicleOf(v)); }
 static uint8_t OPENTTD_RUST_CALL VehicleSvcVehicleType(OpenTTDVehicle *v) noexcept { return static_cast<uint8_t>(RustVehicleVehicleType(VehicleOf(v))); }
-static void OPENTTD_RUST_CALL VehicleSvcWriteX(OpenTTDVehicle *v, int32_t value) noexcept { VehicleOf(v)->x_pos = value; }
-static void OPENTTD_RUST_CALL VehicleSvcWriteY(OpenTTDVehicle *v, int32_t value) noexcept { VehicleOf(v)->y_pos = value; }
-static void OPENTTD_RUST_CALL VehicleSvcWriteZ(OpenTTDVehicle *v, int32_t value) noexcept { VehicleOf(v)->z_pos = value; }
-static void OPENTTD_RUST_CALL VehicleSvcWriteTile(OpenTTDVehicle *v, uint32_t value) noexcept { VehicleOf(v)->tile = TileIndex(value); }
-static void OPENTTD_RUST_CALL VehicleSvcWriteStatus(OpenTTDVehicle *v, uint8_t value) noexcept { VehicleOf(v)->vehstatus = VehStates{value}; }
+static void OPENTTD_RUST_CALL VehicleSvcWriteX(OpenTTDVehicle *v, int32_t value) noexcept { RustWriteVehicleX(VehicleOf(v), value); }
+static void OPENTTD_RUST_CALL VehicleSvcWriteY(OpenTTDVehicle *v, int32_t value) noexcept { RustWriteVehicleY(VehicleOf(v), value); }
+static void OPENTTD_RUST_CALL VehicleSvcWriteZ(OpenTTDVehicle *v, int32_t value) noexcept { RustWriteVehicleZ(VehicleOf(v), value); }
+static void OPENTTD_RUST_CALL VehicleSvcWriteTile(OpenTTDVehicle *v, uint32_t value) noexcept { RustWriteVehicleTile(VehicleOf(v), TileIndex(value)); }
+static void OPENTTD_RUST_CALL VehicleSvcWriteStatus(OpenTTDVehicle *v, uint8_t value) noexcept { RustWriteVehicleStatus(VehicleOf(v), VehStates{value}); }
 static void OPENTTD_RUST_CALL VehicleSvcWriteSubspeed(OpenTTDVehicle *v, uint8_t value) noexcept { VehicleOf(v)->subspeed = value; }
 static void OPENTTD_RUST_CALL VehicleSvcWriteBreakdownCounter(OpenTTDVehicle *v, uint8_t value) noexcept { VehicleOf(v)->breakdown_ctr = value; }
 static void OPENTTD_RUST_CALL VehicleSvcWriteRunning(OpenTTDVehicle *v, uint8_t value) noexcept { VehicleOf(v)->running_ticks = value; }

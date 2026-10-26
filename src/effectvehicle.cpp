@@ -563,7 +563,7 @@ static const std::array<EffectProcs, EV_END> _effect_procs = {{
 static void OPENTTD_RUST_CALL EffectObserve(void *context, OpenTTDEffectView *view) noexcept
 {
 	auto *v = static_cast<EffectVehicle *>(context);
-	*view = {v->x_pos, v->y_pos, v->z_pos, v->sprite_cache.sprite_seq.seq[0].sprite, v->progress, v->spritenum, v->subtype, static_cast<uint8_t>(_settings_client.sound.ambient)};
+	*view = {RustVehicleX(v), RustVehicleY(v), RustVehicleZ(v), RustVehicleFirstSprite(v), RustVehicleProgress(v), RustVehicleSprite(v), RustVehicleSubtype(v), static_cast<uint8_t>(_settings_client.sound.ambient)};
 }
 
 static void OPENTTD_RUST_CALL EffectViewport(void *context) noexcept
@@ -581,13 +581,13 @@ static const OpenTTDEffectLeaves &EffectServices()
 {
 	static const OpenTTDEffectLeaves leaves{
 		.observe = EffectObserve,
-		.write_x = [](void *shell, int32_t value) noexcept { static_cast<EffectVehicle *>(shell)->x_pos = value; },
-		.write_y = [](void *shell, int32_t value) noexcept { static_cast<EffectVehicle *>(shell)->y_pos = value; },
-		.write_z = [](void *shell, int32_t value) noexcept { static_cast<EffectVehicle *>(shell)->z_pos = value; },
-		.sprite_sequence = [](void *shell, uint32_t value) noexcept { static_cast<EffectVehicle *>(shell)->sprite_cache.sprite_seq.Set(value); },
-		.sprite = [](void *shell, uint32_t value) noexcept { static_cast<EffectVehicle *>(shell)->sprite_cache.sprite_seq.seq[0].sprite = value; },
-		.progress = [](void *shell, uint8_t value) noexcept { static_cast<EffectVehicle *>(shell)->progress = value; },
-		.spritenum = [](void *shell, uint8_t value) noexcept { static_cast<EffectVehicle *>(shell)->spritenum = value; },
+		.write_x = RustOpaqueVehicleInvoke<RustWriteVehicleX, int32_t>,
+		.write_y = RustOpaqueVehicleInvoke<RustWriteVehicleY, int32_t>,
+		.write_z = RustOpaqueVehicleInvoke<RustWriteVehicleZ, int32_t>,
+		.sprite_sequence = RustOpaqueVehicleInvoke<RustWriteVehicleSpriteSequence, uint32_t>,
+		.sprite = RustOpaqueVehicleInvoke<RustWriteVehicleFirstSprite, uint32_t>,
+		.progress = RustOpaqueVehicleInvoke<RustWriteVehicleProgress, uint8_t>,
+		.spritenum = RustOpaqueVehicleInvoke<RustWriteVehicleSprite, uint8_t>,
 		.viewport = EffectViewport,
 		.sound = EffectSound,
 	};
@@ -604,10 +604,10 @@ extern "C" const OpenTTDEffectCreationServices *GetRustEffectCreationServices() 
 		.owner = [](void *shell) noexcept { return static_cast<EffectVehicle *>(shell)->rust_state.get(); },
 		.place = [](void *shell, int32_t x, int32_t y, int32_t z, uint8_t type) noexcept {
 			auto *v = static_cast<EffectVehicle *>(shell);
-			v->subtype = type; v->x_pos = x; v->y_pos = y; v->z_pos = z; v->tile = TileIndex{};
+			RustVehicleSetSubtype(v, type); RustWriteVehicleX(v, x); RustWriteVehicleY(v, y); RustWriteVehicleZ(v, z); RustWriteVehicleTile(v, TileIndex{});
 		},
 		.delta = RustVehicleUpdateDelta<void *>,
-		.unclickable = [](void *shell) noexcept { static_cast<EffectVehicle *>(shell)->vehstatus = VehState::Unclickable; },
+		.unclickable = RustOpaqueVehicleInvoke<RustVehicleSetUnclickable>,
 		.position = [](const OpenTTDVehicle *shell) noexcept -> OpenTTDEffectPosition {
 			const auto *v = VehicleOf(shell);
 			return {.x = RustVehicleX(v), .y = RustVehicleY(v), .z = RustVehicleZ(v)};

@@ -10,7 +10,7 @@ template <class T> static OpenTTDArticulatedPart VehicleArticInfo(const OpenTTDE
 static void VehicleArticSetPart(void *shell, uint8_t image, uint8_t cargo, uint16_t capacity, bool validate) noexcept
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);
-	v->spritenum = image;
+	RustWriteVehicleSprite(v, image);
 	RustVehicleSetCargoType(RustVehicle(v), cargo);
 	if (validate) assert(OpenTTDIsValidCargo(RustVehicleCargoType(RustVehicle(v))));
 	RustVehicleSetCargoCap(RustVehicle(v), capacity);
@@ -21,17 +21,16 @@ static void VehicleArticCopyCommon(void *shell, void *head, uint16_t engine) noe
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);
 	const Vehicle *first = static_cast<Vehicle *>(head);
-	v->direction = first->direction; v->owner = first->owner; v->tile = first->tile;
-	v->x_pos = first->x_pos; v->y_pos = first->y_pos; v->z_pos = first->z_pos;
+	v->direction = first->direction; v->owner = first->owner; RustWriteVehicleTile(v, first->tile);
+	RustWriteVehicleX(v, first->x_pos); RustWriteVehicleY(v, first->y_pos); RustWriteVehicleZ(v, first->z_pos);
 	v->date_of_last_service = first->date_of_last_service;
 	v->date_of_last_service_newgrf = RustVehicleCalendarService(first);
 	v->build_year = RustVehicleBuildYear(first);
-	v->vehstatus = first->vehstatus; v->vehstatus.Reset(VehState::Stopped);
+	RustWriteVehicleStatus(v, first->vehstatus); v->vehstatus.Reset(VehState::Stopped);
 	RustVehicleSetCargoSubtype(RustVehicle(v), 0);
 	v->max_age = CalendarTime::MIN_DATE; v->engine_type = EngineID(engine); v->value = 0;
-	v->sprite_cache.sprite_seq.Set(SPR_IMG_QUERY);
+	RustWriteVehicleSpriteSequence(v, SPR_IMG_QUERY);
 }
-static void VehicleArticFlip(void *shell) noexcept { ++static_cast<Vehicle *>(shell)->spritenum; }
 static uint64_t VehicleArticAvailableCargo(uint16_t engine, bool purchase) noexcept { return GetAvailableVehicleCargoTypes(EngineID(engine), purchase); }
 static void VehicleArticWarning(const OpenTTDEngine *e) noexcept { ShowNewGrfVehicleError(EngineOf(e)->index, STR_NEWGRF_BUGGY, STR_NEWGRF_BUGGY_ARTICULATED_CARGO, GRFBug::VehRefit, false); }
 const OpenTTDVehicleArticulatedServices &GetRustVehicleArticulatedServices() noexcept
@@ -44,7 +43,7 @@ const OpenTTDVehicleArticulatedServices &GetRustVehicleArticulatedServices() noe
 		.train_info = VehicleArticInfo<RailVehicleInfo>, .road_info = VehicleArticInfo<RoadVehicleInfo>,
 		.set_part = VehicleArticSetPart, .mark_train = VehicleArticMark<Train>, .mark_road = VehicleArticMark<RoadVehicle>,
 		.copy_common = VehicleArticCopyCommon, .random_bits = RustOpaqueVehicleInvoke<RustVehicleSetRandomBits, uint16_t>,
-		.flip_image = VehicleArticFlip,
+		.flip_image = RustOpaqueVehicleInvoke<RustVehicleFlipImage>,
 		.available_cargo = VehicleArticAvailableCargo, .warning = VehicleArticWarning,
 		.has_articulated = RustOpaqueVehicleRead<bool, RustGroundHasArticulated<Vehicle>>,
 		.next_articulated = RustOpaqueHandleRead<void *, RustVehicleNextArticulated>, .max_parts = MAX_ARTICULATED_PARTS, .all_cargo = ALL_CARGOTYPES,
