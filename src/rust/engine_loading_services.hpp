@@ -34,19 +34,19 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 		.clean_pool = []() noexcept { _engine_pool.CleanPool(); },
 		.railtypes = RustEngineRailTypes,
 		.rail_label = [](RailType rt) noexcept { return GetRailTypeInfo(rt)->label; },
-		.refit_inputs = [](const OpenTTDEngine *shell) noexcept { const auto &ei = EngineOf(shell)->info; return OpenTTDEngineRefitInputs{.mask = ei.refit_mask, .cargo = ei.cargo_type, .custom = ei.callback_mask.Test(VehicleCallbackMask::CustomRefit)}; },
+		.refit_inputs = [](const OpenTTDEngine *shell) noexcept { const auto &ei = EngineOf(shell)->info; return OpenTTDEngineRefitInputs{.mask = RustEngineCargoRefitMask(shell), .cargo = ei.cargo_type, .custom = VehicleCallbackMasks{RustEngineCallbackMask(shell)}.Test(VehicleCallbackMask::CustomRefit)}; },
 		.cargo_label = [](const OpenTTDEngine *shell) noexcept {
 			const auto &label = EngineOf(shell)->info.cargo_label;
 			return std::visit([](auto label) { if constexpr (std::is_same_v<decltype(label), CargoLabel>) return OpenTTDEngineCargoLabel{label.base(), false}; else return OpenTTDEngineCargoLabel{label, true}; }, label);
 		},
-		.train_cargo = [](const OpenTTDEngine *shell) noexcept { const auto &rvi = EngineOf(shell)->VehInfo<RailVehicleInfo>(); return OpenTTDEngineTrainCargo{.capacity = rvi.capacity, .kind = rvi.railveh_type}; },
+		.train_cargo = [](const OpenTTDEngine *shell) noexcept { return OpenTTDEngineTrainCargo{.capacity = RustEngineRailCapacity(shell), .kind = Engine_rail_kind(shell)}; },
 		.set_cargo = RustSetEngineCargo,
 		.set_refit = RustSetEngineRefitMask,
 		.disable = RustDisableEngine,
 		.old_refittable = RustEngineOldRefittable,
 		.set_old_refittable = RustSetEngineOldRefittable,
 		.default_cargo = [](CargoType cargo) noexcept { return IsDefaultCargo(cargo); },
-		.cargo_by_label = [](uint32_t label) noexcept { return OpenTTDCargoByLabel(CargoLabel{label}); },
+		.cargo_by_label = OpenTTDCargoByLabel,
 		.cargo_mask = []() noexcept { return _cargo_mask; },
 		.standard_cargo_mask = []() noexcept { return _standard_cargo_mask; },
 		.cargo_next = [](uint32_t from) noexcept { for (const CargoSpec *cs : CargoSpec::Iterate(from)) return OpenTTDEngineCargoClass{.classes = RustCargoSpecClasses(cs), .cargo = cs->Index()}; return OpenTTDEngineCargoClass{.classes = 0, .cargo = INVALID_CARGO}; },
@@ -59,7 +59,7 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 
 		.variant = RustEngineVariant,
 		.set_variant = RustSetEngineVariant,
-		.invalid_string = [](const OpenTTDEngine *shell) noexcept { RustSetEngineStringID(shell, STR_NEWGRF_INVALID_ENGINE); },
+		.invalid_string = RustSetEngineInvalidString,
 		.engine_climate = static_cast<bool (*)(const OpenTTDEngine *) noexcept>(RustEngineClimate),
 		.rail_badges = [](const OpenTTDEngine *shell, RailType rt) noexcept { AppendCopyableBadgeList(const_cast<Engine *>(EngineOf(shell))->badges, GetRailTypeInfo(rt)->badges, GSF_TRAINS); },
 		.road_badges = [](const OpenTTDEngine *shell) noexcept { auto *e = const_cast<Engine *>(EngineOf(shell)); AppendCopyableBadgeList(e->badges, GetRoadTypeInfo(e->VehInfo<RoadVehicleInfo>().roadtype)->badges, GSF_ROADVEHICLES); },

@@ -1,3 +1,4 @@
+struct OpenTTDEngineCapabilitiesServices;
 /*
  * This file is part of OpenTTD.
  * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
@@ -30,6 +31,8 @@ struct OpenTTDEngineCompany { const Company *shell; uint8_t id; };
 struct OpenTTDEngineCompanyPreview { uint8_t blocked; int32_t performance; };
 struct OpenTTDEngineVehicle { OpenTTDVehicle *shell; uint32_t id; uint8_t owner; VehicleType type; };
 struct OpenTTDEngineVehicleCargo { const OpenTTDEngine *engine; uint8_t cargo; };
+struct OpenTTDEngineCarrying { VehicleType kind; uint8_t ground_capacity, default_cargo; };
+struct OpenTTDEngineCapacityConfig { uint16_t id, callbacks; uint8_t misc; };
 struct OpenTTDEngineRailAvailability { bool climate; RailVehicleTypes kind; uint64_t railtypes; };
 struct OpenTTDEngineRoadAvailability { bool climate; RoadType roadtype; };
 /** Every callback is noexcept; script events only enqueue, no VM executes.
@@ -76,8 +79,7 @@ struct OpenTTDEngineServices {
 	OpenTTDEngineCompanyPreview (*company_preview)(const Company *) noexcept OPENTTD_SERVICE_DEFAULT(company_preview);
 	OpenTTDEngineVehicle (*vehicle_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_next);
 	OpenTTDEngineVehicleCargo (*vehicle_cargo)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_cargo);
-	bool (*can_carry)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(can_carry);
-	uint64_t (*refit_mask)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(refit_mask);
+	const OpenTTDEngineCapabilitiesServices *capabilities;
 	bool (*company_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_valid);
 	uint64_t (*compatible_railtypes)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(compatible_railtypes);
 	uint64_t (*powered_roadtypes)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(powered_roadtypes);

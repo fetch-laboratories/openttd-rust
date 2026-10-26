@@ -40,6 +40,7 @@
 void ShowEnginePreviewWindow(EngineID engine);
 #ifdef WITH_RUST
 #include "rust/engine_adapter.hpp"
+#include "rust/engine_capabilities_services.hpp"
 #endif
 
 #ifdef WITH_RUST
@@ -177,6 +178,9 @@ uint32_t Engine::GetGRFID() const
  */
 bool Engine::CanCarryCargo() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_engine_can_carry(&GetRustEngineCapabilitiesServices(), RustEngine(this));
+#else
 	/* For engines that can appear in a consist (i.e. rail vehicles and (articulated) road vehicles), a capacity
 	 * of zero is a special case, to define the vehicle to not carry anything. The default cargotype is still used
 	 * for livery selection etc.
@@ -198,6 +202,7 @@ bool Engine::CanCarryCargo() const
 		default: NOT_REACHED();
 	}
 	return IsValidCargoType(this->GetDefaultCargoType());
+#endif
 }
 
 
@@ -210,6 +215,9 @@ bool Engine::CanCarryCargo() const
  */
 uint Engine::DetermineCapacity(const Vehicle *v, uint16_t *mail_capacity) const
 {
+#ifdef WITH_RUST
+	return openttd_rust_engine_capacity(&GetRustEngineCapabilitiesServices(), RustEngine(this), v, mail_capacity);
+#else
 	assert(v == nullptr || this->index == v->engine_type);
 	if (mail_capacity != nullptr) *mail_capacity = 0;
 
@@ -282,6 +290,7 @@ uint Engine::DetermineCapacity(const Vehicle *v, uint16_t *mail_capacity) const
 	}
 
 	return capacity;
+#endif
 }
 
 /**
@@ -1390,6 +1399,9 @@ bool IsEngineBuildable(EngineID engine, VehicleType type, CompanyID company)
  */
 bool IsEngineRefittable(EngineID engine)
 {
+#ifdef WITH_RUST
+	return openttd_rust_engine_refittable(&GetRustEngineCapabilitiesServices(), engine.base());
+#else
 	const Engine *e = Engine::GetIfValid(engine);
 
 	/* check if it's an engine that is in the engine array */
@@ -1409,6 +1421,7 @@ bool IsEngineRefittable(EngineID engine)
 	CargoTypes default_cargo_mask = 0;
 	SetBit(default_cargo_mask, default_cargo);
 	return IsValidCargoType(default_cargo) && ei->refit_mask != default_cargo_mask;
+#endif
 }
 
 /**

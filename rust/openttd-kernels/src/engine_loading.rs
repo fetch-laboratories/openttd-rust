@@ -560,8 +560,8 @@ use crate::cargo_type::{
     MCT_VALUABLES_GOLD_DIAMONDS, NUM_CARGO, is_valid_cargo_type,
 };
 use crate::cargotype::{
-    CC_ARMOURED, CC_BULK, CC_EXPRESS, CC_LIQUID, CC_MAIL, CC_PASSENGERS, CC_PIECEGOODS,
-    CC_REFRIGERATED,
+    CC_ARMOURED, CC_BULK, CC_EXPRESS, CC_LIQUID, CC_MAIL, CC_PIECEGOODS, CC_REFRIGERATED,
+    PASSENGERS,
 };
 use crate::newgrf_callbacks::{CALLBACK_FAILED, CBID_VEHICLE_CUSTOM_REFIT};
 use crate::vehicle::RailVehicleTypes;
@@ -606,37 +606,28 @@ fn engine_label(s: &Services, shell: E) -> u32 {
 fn default_masks(s: &Services, kind: u8, shell: E, id: u16, label: u32) -> (u16, u16) {
     let climate = (s.climate)();
     if kind == VEH_AIRCRAFT {
-        (
-            CC_PASSENGERS | CC_MAIL | CC_ARMOURED | CC_EXPRESS,
-            CC_LIQUID,
-        )
+        (PASSENGERS | CC_MAIL | CC_ARMOURED | CC_EXPRESS, CC_LIQUID)
     } else if kind == VEH_SHIP {
         match label {
-            CT_PASSENGERS => (CC_PASSENGERS, 0),
+            CT_PASSENGERS => (PASSENGERS, 0),
             CT_OIL => (CC_LIQUID, 0),
             _ if climate == crate::services::LandscapeType::TOYLAND.0 => (
                 CC_MAIL | CC_ARMOURED | CC_EXPRESS | CC_BULK | CC_PIECEGOODS | CC_LIQUID,
-                CC_PASSENGERS,
+                PASSENGERS,
             ),
             _ => (
                 CC_MAIL | CC_ARMOURED | CC_EXPRESS | CC_BULK | CC_PIECEGOODS,
-                CC_LIQUID | CC_PASSENGERS,
+                CC_LIQUID | PASSENGERS,
             ),
         }
     } else if kind == VEH_TRAIN && (s.train_cargo)(shell).kind != RailVehicleTypes::WAGON {
         (
-            CC_PASSENGERS
-                | CC_MAIL
-                | CC_ARMOURED
-                | CC_EXPRESS
-                | CC_BULK
-                | CC_PIECEGOODS
-                | CC_LIQUID,
+            PASSENGERS | CC_MAIL | CC_ARMOURED | CC_EXPRESS | CC_BULK | CC_PIECEGOODS | CC_LIQUID,
             0,
         )
     } else {
         const DEFAULTS: &[(u8, u32, u16, u16)] = &[
-            (0b1111, CT_PASSENGERS, CC_PASSENGERS, 0),
+            (0b1111, CT_PASSENGERS, PASSENGERS, 0),
             (0b0111, CT_MAIL, CC_MAIL, 0),
             (0b0111, CT_VALUABLES, CC_ARMOURED, CC_LIQUID),
             (0b1000, CT_MAIL, CC_MAIL | CC_ARMOURED, CC_LIQUID),
@@ -649,20 +640,20 @@ fn default_masks(s: &Services, kind: u8, shell: E, id: u16, label: u32) -> (u16,
                 0b0001,
                 CT_GOODS,
                 CC_PIECEGOODS | CC_EXPRESS,
-                CC_LIQUID | CC_PASSENGERS,
+                CC_LIQUID | PASSENGERS,
             ),
             (
                 0b0110,
                 CT_GOODS,
                 CC_PIECEGOODS | CC_EXPRESS,
-                CC_LIQUID | CC_PASSENGERS | CC_REFRIGERATED,
+                CC_LIQUID | PASSENGERS | CC_REFRIGERATED,
             ),
             (0b0110, CT_FOOD, CC_REFRIGERATED, 0),
             (
                 0b1000,
                 CT_CANDY,
                 CC_PIECEGOODS | CC_EXPRESS,
-                CC_LIQUID | CC_PASSENGERS,
+                CC_LIQUID | PASSENGERS,
             ),
         ];
         DEFAULTS

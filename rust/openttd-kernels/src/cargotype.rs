@@ -2,8 +2,6 @@
 //! Town cargo acceptance effects from `cargotype.h`.
 pub const TAE_WATER: u8 = 4;
 pub const TAE_FOOD: u8 = 5;
-/// `CargoClass::Passengers` mask.
-pub const CC_PASSENGERS: u16 = 1 << 0;
 /// `CargoClass::Mail` mask.
 pub const CC_MAIL: u16 = 1 << 1;
 /// `CargoClass::Express` mask.
@@ -18,3 +16,10 @@ pub const CC_PIECEGOODS: u16 = 1 << 5;
 pub const CC_LIQUID: u16 = 1 << 6;
 /// `CargoClass::Refrigerated` mask.
 pub const CC_REFRIGERATED: u16 = 1 << 7;
+
+/// `CargoClass::Passengers`.
+pub const PASSENGERS: u16 = 1 << 0;
+/// `IsCargoInClass` with classes read from the canonical native cargo spec.
+pub const fn is_cargo_in_class(classes: u16, requested: u16) -> bool {
+    classes & requested != 0
+}

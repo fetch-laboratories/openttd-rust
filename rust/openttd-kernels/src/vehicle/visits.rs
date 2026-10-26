@@ -365,7 +365,14 @@ impl Refresher {
             (r.set_cargo_kind)(shell, self.cargo, subtype);
 
             let mut mail_capacity = 0_u16;
-            let amount = (r.capacity)(e, shell, &raw mut mail_capacity);
+            let amount = unsafe {
+                crate::engine_capabilities::openttd_rust_engine_capacity(
+                    r.capabilities,
+                    e,
+                    shell,
+                    &raw mut mail_capacity,
+                )
+            };
 
             // Restore the original cargo type.
             (r.set_cargo_kind)(shell, temp.cargo, temp.subtype);

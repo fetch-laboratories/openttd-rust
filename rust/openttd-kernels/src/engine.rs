@@ -221,8 +221,7 @@ pub struct Services {
     pub company_preview: unsafe extern "C" fn(*const OpenTTDCompany) -> CompanyPreview,
     pub vehicle_next: unsafe extern "C" fn(u32) -> Vehicle,
     pub vehicle_cargo: unsafe extern "C" fn(*mut OpenTTDVehicle) -> VehicleCargo,
-    pub can_carry: unsafe extern "C" fn(*const OpenTTDEngine) -> bool,
-    pub refit_mask: unsafe extern "C" fn(*const OpenTTDEngine) -> u64,
+    pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub company_valid: unsafe extern "C" fn(u8) -> bool,
     pub compatible_railtypes: unsafe extern "C" fn(*const OpenTTDEngine) -> u64,
     pub powered_roadtypes: unsafe extern "C" fn(*const OpenTTDEngine) -> u64,
@@ -653,7 +652,13 @@ unsafe fn preview_company(s: &Services, e: EngineRef) -> u8 {
     let mask = if e.kind == VehicleType::TRAIN {
         u64::MAX
     } else {
-        unsafe { call!(s, refit_mask, e.shell) }
+        unsafe {
+            crate::engine_capabilities::openttd_rust_articulated_refit_union(
+                s.capabilities,
+                (s.engine_id)(e.shell),
+                true,
+            )
+        }
     };
     let mut best = 255;
     let mut performance = -1;
@@ -682,8 +687,12 @@ unsafe fn preview_company(s: &Services, e: EngineRef) -> u8 {
                 continue;
             }
             let cargo = unsafe { call!(s, vehicle_cargo, v.shell) };
-            if !unsafe { call!(s, can_carry, cargo.engine) }
-                || mask & 1u64.wrapping_shl(u32::from(cargo.cargo)) == 0
+            if !unsafe {
+                crate::engine_capabilities::openttd_rust_engine_can_carry(
+                    s.capabilities,
+                    cargo.engine,
+                )
+            } || mask & 1u64.wrapping_shl(u32::from(cargo.cargo)) == 0
             {
                 continue;
             }
@@ -1242,6 +1251,8 @@ crate::abi::layouts! {
         engine,
         cargo,
     };
+    "OpenTTDEngineCarrying" ["engine"] => Carrying { kind, ground_capacity, default_cargo };
+    "OpenTTDEngineCapacityConfig" ["engine"] => CapacityConfig { id, callbacks, misc };
     "OpenTTDEngineRailAvailability" ["engine"] => RailAvailability {
         climate,
         kind,
@@ -1290,8 +1301,7 @@ crate::abi::layouts! {
         company_preview,
         vehicle_next,
         vehicle_cargo,
-        can_carry,
-        refit_mask,
+        capabilities,
         company_valid,
         compatible_railtypes,
         powered_roadtypes,
@@ -1312,4 +1322,22 @@ crate::abi::layouts! {
         screen_dirty,
         utf8_length,
     };
+}
+
+/// Fields observed together by `Engine::CanCarryCargo` before any callback.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct Carrying {
+    pub kind: VehicleType,
+    pub ground_capacity: u8,
+    pub default_cargo: u8,
+}
+/// Capacity configuration is immutable through `GetVehicleCallback`/`GetEngineProperty`:
+/// `SpriteGroup::Resolve` reads parsed specs/variables and writes registers or PSA;
+/// it cannot load GRFs, reset engines, execute commands/scripts or yield the mutex.
+#[repr(C)]
+pub(crate) struct CapacityConfig {
+    pub id: u16,
+    pub callbacks: u16,
+    pub misc: u8,
 }

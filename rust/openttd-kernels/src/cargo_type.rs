@@ -73,3 +73,6 @@ pub const MCT_LIVESTOCK_FRUIT: u32 = 0;
 pub const MCT_GRAIN_WHEAT_MAIZE: u32 = 1;
 /// Mixed valuables/gold/diamonds definition.
 pub const MCT_VALUABLES_GOLD_DIAMONDS: u32 = 2;
+
+/// All cargo bits, including undefined cargo slots.
+pub const ALL_CARGOTYPES: u64 = u64::MAX;

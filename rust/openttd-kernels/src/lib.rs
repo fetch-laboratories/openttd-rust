@@ -543,6 +543,8 @@ mod encoded;
 mod engine;
 mod engine_loading;
 mod livery;
+
+mod engine_capabilities;
 pub use encoded::{
     Descriptor as EncodedDescriptor, Diagnostic as EncodedDiagnostic, View as EncodedView,
 };
