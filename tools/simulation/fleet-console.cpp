@@ -270,7 +270,7 @@ static void CloneRefitCosts(Vehicle *front)
 	e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, observer.get());
 	e->info.refit_mask |= CargoTypes{1} << cargo;
 	Checked("clone-refit-setup", std::get<0>(Command<CMD_REFIT_VEHICLE>::Do(DoCommandFlag::Execute, v->index, cargo, 1, false, true, 0)));
-	for (uint16_t value : {uint16_t(0x40), CALLBACK_FAILED}) {
+	for (uint16_t value : {uint16_t(0x40), uint16_t(CALLBACK_FAILED)}) {
 		result->result = value;
 		observer->null_calls = observer->live_calls = 0;
 		auto [live, cap, mail, capacities] = Command<CMD_REFIT_VEHICLE>::Do({}, v->index, cargo, 1, false, true, 0);
