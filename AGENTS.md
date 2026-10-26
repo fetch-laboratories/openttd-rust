@@ -162,8 +162,9 @@ checks that run; do not restate them in paragraphs.
 - Component entry in `docs/rust-migration.md`: what Rust owns, what stays in
   C++, open limits and the PR. Review status, witness counts and costs stay in
   the PR.
-- These are contents, not line counts. Leave out what belongs elsewhere, but
-  never drop a needed fact, limit or step to make a document shorter.
+- These are contents, not line counts (user decision, 2026-10-26). Leave out
+  what belongs elsewhere, but never drop a needed fact, limit or step to make a
+  document shorter.
 - Roadmap: forward-looking, with no line cap. Edits update it in place: a
   completed item becomes one table row (issue, PR, commit, metrics) and its
   evidence stays in the PR. The resume checkpoint replaces the previous one and
@@ -186,13 +187,14 @@ checks that run; do not restate them in paragraphs.
   behavior existing checks cannot distinguish; tracing pure helpers only to
   reproduce the source call sequence is not required.
 - Infrastructure work (CI, caches, evidence plumbing, not scenario or test
-  support within an ownership port) states a tooling budget in its issue and
-  prefers platform defaults and settings (LRU cache eviction, concurrency
-  groups) over custom controllers. Root may accept a draft up to about 25% over
-  its budget and may raise a budget once; a second raise is a `question` issue
-  for the user. Its review fixes only defects that can change a game comparison
-  or a speed decision on this host or in CI; hypothetical ones go in the PR's
-  limits.
+  support within an ownership port) states an expected tooling size in its
+  issue and prefers platform defaults and settings (LRU cache eviction,
+  concurrency groups) over custom controllers. Root decides its cost at the
+  first draft as for an ownership port: a bounded repair, or the necessary cost
+  with a specific explanation in the PR. An overrun alone parks nothing and
+  needs no user decision (user decision, 2026-10-26). Its review fixes only
+  defects that can change a game comparison or a speed decision on this host or
+  in CI; hypothetical ones go in the PR's limits.
 - Review report: reviewed commit, findings with their fixing commits (or why one
   went to root), and one line each naming the functions or files compared
   against the original body, any new callback that duplicates a shared accessor,
