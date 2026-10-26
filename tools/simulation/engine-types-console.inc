@@ -179,6 +179,16 @@ static bool TypesScenario(std::span<std::string_view> args)
 		fmt::print(stderr, "ENGINE types-masks daily {:016x} {:016x}\n", c->avail_railtypes.base(), c->avail_roadtypes.base());
 		TypeConstruction(c, tile, 0, 60, true, "rail-after"); TypeConstruction(c, tile + TileDiffXY(2, 0), 1, 60, true, "road-after"); TypeConstruction(c, tile + TileDiffXY(4, 0), 1, 61, true, "tram-after");
 		TypeRequire(!HasRailTypeAvail(c->index, static_cast<RailType>(62)) && HasAnyRailTypesAvail(c->index) && HasAnyRoadTypesAvail(c->index, RTT_ROAD) && HasAnyRoadTypesAvail(c->index, RTT_TRAM), "hidden-and-masks");
+		{
+			Backup<RailTypes> rails(c->avail_railtypes, RailTypes{static_cast<RailType>(62)});
+			TypeRequire(!HasAnyRailTypesAvail(c->index), "hidden-only-rail");
+			rails.Restore();
+			Backup<RoadTypes> roads(c->avail_roadtypes, RoadTypes{static_cast<RoadType>(61)});
+			TypeRequire(!HasAnyRoadTypesAvail(c->index, RTT_ROAD) && HasAnyRoadTypesAvail(c->index, RTT_TRAM), "tram-only-mask");
+			roads.Change(RoadTypes{static_cast<RoadType>(60)});
+			TypeRequire(HasAnyRoadTypesAvail(c->index, RTT_ROAD) && !HasAnyRoadTypesAvail(c->index, RTT_TRAM), "road-only-mask");
+			roads.Restore();
+		}
 		TypeRequire(!HasRoadTypeAvail(CompanyID::Invalid(), static_cast<RoadType>(59)) && !HasRoadTypeAvail(c->index, static_cast<RoadType>(59)), "company-hidden");
 		TypeConstruction(c, tile + TileDiffXY(6, 0), 1, 59, false, "hidden-company");
 		for (CompanyID owner : {OWNER_TOWN, OWNER_DEITY}) {
