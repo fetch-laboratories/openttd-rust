@@ -25,3 +25,15 @@ pub(crate) fn first_sprite_group_of<const N: usize>(
 pub(crate) fn industry_tile_check_valid_new_id(id: u16) -> bool {
     id != crate::industry_map::GFX_WATERTILE_SPECIALCHECK
 }
+
+/// Metadata read together by substitute-spec publication.
+#[repr(C)]
+pub struct SubstituteSpecIdentity {
+    pub grfid: u32,
+    pub local: u16,
+    pub substitute: u16,
+}
+/// `AirportTileOverrideManager::CheckValidNewID` excludes the layout marker.
+pub(crate) fn airport_tile_check_valid_new_id(id: u16) -> bool {
+    id != 0xff
+}

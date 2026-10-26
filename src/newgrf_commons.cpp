@@ -92,6 +92,16 @@ OverrideManagerBase::~OverrideManagerBase() { openttd_rust_override_delete(this-
 #endif
 
 #ifdef WITH_RUST
+AirportOverrideManager::AirportOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
+		OverrideManagerBase(offset, maximum, invalid)
+{
+	if (this == &_airport_mngr) openttd_rust_airport_register_manager(this->rust_owner);
+}
+AirportTileOverrideManager::AirportTileOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
+		OverrideManagerBase(offset, maximum, invalid)
+{
+	if (this == &_airporttile_mngr) openttd_rust_airport_tile_register_manager(this->rust_owner);
+}
 IndustryOverrideManager::IndustryOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
 		OverrideManagerBase(offset, maximum, invalid)
 {

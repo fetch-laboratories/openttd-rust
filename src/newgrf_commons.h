@@ -296,8 +296,12 @@ public:
 struct AirportSpec;
 class AirportOverrideManager : public OverrideManagerBase {
 public:
+#ifdef WITH_RUST
+	AirportOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid);
+#else
 	AirportOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
 			OverrideManagerBase(offset, maximum, invalid) {}
+#endif
 
 	void SetEntitySpec(AirportSpec &&inds);
 };
@@ -307,8 +311,12 @@ class AirportTileOverrideManager : public OverrideManagerBase {
 protected:
 	bool CheckValidNewID(uint16_t testid) override { return testid != 0xFF; }
 public:
+#ifdef WITH_RUST
+	AirportTileOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid);
+#else
 	AirportTileOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
 			OverrideManagerBase(offset, maximum, invalid) {}
+#endif
 
 	void SetEntitySpec(AirportTileSpec &&ats);
 };

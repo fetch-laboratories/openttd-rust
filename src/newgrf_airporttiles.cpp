@@ -27,6 +27,10 @@
 #include "table/strings.h"
 #include "table/airporttiles.h"
 
+#ifdef WITH_RUST
+#include "rust/airport_definitions_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 #ifndef WITH_RUST
@@ -34,6 +38,9 @@ extern uint32_t GetRelativePosition(TileIndex tile, TileIndex ind_tile);
 #endif
 
 AirportTileSpec AirportTileSpec::tiles[NUM_AIRPORTTILES];
+#ifdef WITH_RUST
+void RustAirportTileDefault(uint16_t id) noexcept { *const_cast<AirportTileSpec *>(AirportTileSpec::Get(id)) = _origin_airporttile_specs[id]; }
+#endif
 
 AirportTileOverrideManager _airporttile_mngr(NEW_AIRPORTTILE_OFFSET, NUM_AIRPORTTILES, INVALID_AIRPORTTILE);
 
@@ -65,15 +72,22 @@ AirportTileOverrideManager _airporttile_mngr(NEW_AIRPORTTILE_OFFSET, NUM_AIRPORT
  */
 void AirportTileSpec::ResetAirportTiles()
 {
+#ifdef WITH_RUST
+	openttd_rust_airport_tile_definition_reset(&GetAirportDefinitionServices());
+#else
 	auto insert = std::copy(std::begin(_origin_airporttile_specs), std::end(_origin_airporttile_specs), std::begin(AirportTileSpec::tiles));
 	std::fill(insert, std::end(AirportTileSpec::tiles), AirportTileSpec{});
 
 	/* Reset any overrides that have been set. */
 	_airporttile_mngr.ResetOverride();
+#endif
 }
 
 void AirportTileOverrideManager::SetEntitySpec(AirportTileSpec &&airpts)
 {
+#ifdef WITH_RUST
+	openttd_rust_airport_tile_definition_publish(this->rust_owner, &airpts, &GetAirportDefinitionServices());
+#else
 	StationGfx airpt_id = this->AddEntityID(airpts.grf_prop.local_id, airpts.grf_prop.grfid, airpts.grf_prop.subst_id);
 
 	if (airpt_id == this->invalid_id) {
@@ -94,6 +108,7 @@ void AirportTileOverrideManager::SetEntitySpec(AirportTileSpec &&airpts)
 		this->entity_overrides[i] = this->invalid_id;
 		this->grfid_overrides[i] = 0;
 	}
+#endif
 }
 
 /**

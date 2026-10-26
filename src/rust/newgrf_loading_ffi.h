@@ -32,6 +32,7 @@ uint32_t openttd_rust_grf_set_size(uint8_t, uint32_t);
 }
 struct OpenTTDEngineLoadingServices;
 struct OpenTTDIndustryDefinitionServices;
+struct OpenTTDAirportDefinitionServices;
 struct OpenTTDTypeRegistryServices;
 struct OpenTTDGenericServices;
 struct OpenTTDCargoRegistryServices;
@@ -42,6 +43,7 @@ struct OpenTTDGrfLoadingServices {
 	const OpenTTDCargoRegistryServices *cargo;
 	const OpenTTDEngineLoadingServices *engine;
 	const OpenTTDIndustryDefinitionServices *industry;
+	const OpenTTDAirportDefinitionServices *airports;
 	const OpenTTDTypeRegistryServices *types;
 	OpenTTDGrfEngineRange (*engine_range)(GrfSpecFeature) noexcept OPENTTD_SERVICE_DEFAULT(engine_range);
 	uint32_t (*parameter)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(parameter);
@@ -154,8 +156,6 @@ struct OpenTTDGrfLoadingServices {
 	void (*reset_objects)() noexcept OPENTTD_SERVICE_DEFAULT(reset_objects);
 	const OpenTTDStationClassServices *station_classes;
 	const OpenTTDAirportClassServices *airport_classes;
-	void (*reset_airports)() noexcept OPENTTD_SERVICE_DEFAULT(reset_airports);
-	void (*reset_airporttiles)() noexcept OPENTTD_SERVICE_DEFAULT(reset_airporttiles);
 	const OpenTTDRoadStopClassServices *roadstop_classes;
 	void (*reset_water_features)() noexcept OPENTTD_SERVICE_DEFAULT(reset_water_features);
 	void (*reset_faces)() noexcept OPENTTD_SERVICE_DEFAULT(reset_faces);
@@ -174,8 +174,6 @@ struct OpenTTDGrfLoadingServices {
 	void (*sort_industries)() noexcept OPENTTD_SERVICE_DEFAULT(sort_industries);
 	void (*industry_legend)() noexcept OPENTTD_SERVICE_DEFAULT(industry_legend);
 	void (*linkstats_legend)() noexcept OPENTTD_SERVICE_DEFAULT(linkstats_legend);
-	void (*finalise_airports)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_airports);
-	void (*bind_airports)() noexcept OPENTTD_SERVICE_DEFAULT(bind_airports);
 	void (*townnames)() noexcept OPENTTD_SERVICE_DEFAULT(townnames);
 	void (*vehicle_list_orders)() noexcept OPENTTD_SERVICE_DEFAULT(vehicle_list_orders);
 	void (*activate_shore)() noexcept OPENTTD_SERVICE_DEFAULT(activate_shore);

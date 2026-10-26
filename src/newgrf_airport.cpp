@@ -28,6 +28,10 @@
 #include "rust/services_assert.h"
 #include "rust/airport_resolver_ffi.h"
 #endif
+#ifdef WITH_RUST
+#include "rust/airport_definitions_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 #ifdef WITH_RUST
@@ -66,12 +70,10 @@ const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept
 		.dummy_fta = RustDummyAirportFTA(),
 		.fta = RustAirportSpecFTA,
 		.base_spec = [](uint16_t type) noexcept -> const AirportSpec * { return AirportSpec::RustRawSpec(type); },
-		.enabled = [](const AirportSpec *spec) noexcept { return spec->enabled; },
+		.enabled = RustSpecEnabled<AirportSpec>,
 		.min_year = [](const AirportSpec *spec) noexcept { return spec->min_year.base(); },
 		.max_year = [](const AirportSpec *spec) noexcept { return spec->max_year.base(); },
 		.override_id = RustSpecOverride<AirportSpec>,
-		.manager_grfid = [](uint8_t type) noexcept { return _airport_mngr.GetGRFID(type); },
-		.substitute = [](uint8_t type) noexcept { return _airport_mngr.GetSubstituteID(type); },
 		.never_expire = RustNeverExpireAirports,
 		.station_layout = RustStationAirportLayout,
 		.random = RustStationRandomBits<BaseStation>,
@@ -232,12 +234,16 @@ bool AirportSpec::IsWithinMapBounds(uint8_t table, TileIndex tile) const
  */
 void AirportSpec::ResetAirports()
 {
+#ifdef WITH_RUST
+	openttd_rust_airport_definition_reset(&GetAirportDefinitionServices());
+#else
 	extern const AirportSpec _origin_airport_specs[NEW_AIRPORT_OFFSET];
 
 	auto insert = std::copy(std::begin(_origin_airport_specs), std::end(_origin_airport_specs), std::begin(AirportSpec::specs));
 	std::fill(insert, std::end(AirportSpec::specs), AirportSpec{});
 
 	_airport_mngr.ResetOverride();
+#endif
 }
 
 /**
@@ -245,15 +251,22 @@ void AirportSpec::ResetAirports()
  */
 void BindAirportSpecs()
 {
+#ifdef WITH_RUST
+	openttd_rust_airport_definition_bind(&GetAirportDefinitionServices());
+#else
 	for (int i = 0; i < NUM_AIRPORTS; i++) {
 		AirportSpec *as = AirportSpec::GetWithoutOverride(i);
 		if (as->enabled) AirportClass::Assign(as);
 	}
+#endif
 }
 
 
 void AirportOverrideManager::SetEntitySpec(AirportSpec &&as)
 {
+#ifdef WITH_RUST
+	openttd_rust_airport_definition_publish(this->rust_owner, &as, &GetAirportDefinitionServices());
+#else
 	uint8_t airport_id = this->AddEntityID(as.grf_prop.local_id, as.grf_prop.grfid, as.grf_prop.subst_id);
 
 	if (airport_id == this->invalid_id) {
@@ -274,6 +287,7 @@ void AirportOverrideManager::SetEntitySpec(AirportSpec &&as)
 		this->entity_overrides[i] = this->invalid_id;
 		this->grfid_overrides[i] = 0;
 	}
+#endif
 }
 
 /* virtual */ uint32_t AirportScopeResolver::GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const

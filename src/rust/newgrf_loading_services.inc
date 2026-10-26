@@ -3,6 +3,7 @@
 #ifdef WITH_RUST
 #include "newgrf_loading_ffi.h"
 #include "industry_definition_ffi.h"
+#include "airport_definitions_ffi.h"
 #include "type_registry_ffi.h"
 #include "newgrf_global_ffi.h"
 #include "generic_ffi.h"
@@ -30,6 +31,7 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.cargo = &GetRustCargoRegistryServices(),
 		.engine = &GetRustEngineLoadingServices(),
 		.industry = &GetIndustryDefinitionServices(),
+		.airports = &GetAirportDefinitionServices(),
 		.types = &GetRustTypeRegistryServices(),
 		.engine_range = [](GrfSpecFeature feature) noexcept { return OpenTTDGrfEngineRange{_engine_offsets[feature], _engine_counts[feature]}; },
 		.parameter = RustGRFParameter,
@@ -142,8 +144,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.reset_objects = []() noexcept { ResetObjects(); },
 		.station_classes = &StationClass::GetServices(),
 		.airport_classes = &AirportClass::GetServices(),
-		.reset_airports = []() noexcept { AirportSpec::ResetAirports(); },
-		.reset_airporttiles = []() noexcept { AirportTileSpec::ResetAirportTiles(); },
 		.roadstop_classes = &RoadStopClass::GetServices(),
 		.reset_water_features = []() noexcept { _water_feature.fill({}); },
 		.reset_faces = []() noexcept { ResetFaces(); },
@@ -162,8 +162,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.sort_industries = []() noexcept { SortIndustryTypes(); },
 		.industry_legend = []() noexcept { BuildIndustriesLegend(); },
 		.linkstats_legend = []() noexcept { BuildLinkStatsLegend(); },
-		.finalise_airports = []() noexcept { FinaliseAirportsArray(); },
-		.bind_airports = []() noexcept { BindAirportSpecs(); },
 		.townnames = []() noexcept { InitGRFTownGeneratorNames(); },
 		.vehicle_list_orders = []() noexcept { CommitVehicleListOrderChanges(); },
 		.activate_shore = []() noexcept { ActivateOldShore(); },

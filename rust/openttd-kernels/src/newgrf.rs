@@ -199,3 +199,8 @@ pub const SECOND_ROCKY_TILE_SET: u8 = 6;
 pub const GSF_STATIONS: u8 = 4;
 /// Road-stop GRF feature.
 pub const GSF_ROADSTOPS: u8 = 20;
+
+/// Airport feature identity.
+pub const GSF_AIRPORTS: u8 = 0x0d;
+/// Tram-type feature identity.
+pub const GSF_TRAMTYPES: u8 = 0x13;
