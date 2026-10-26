@@ -11,15 +11,15 @@ this roadmap over conflicting issues. Keep about 200 lines; evidence stays in PR
   include comments/data, not completed behavior. Since review nineteen: the ready
   batch plus five housekeeping integrations, zero original retirement;
   housekeeping removed 1,352 Rust, 2,007 tooling and 486 glue lines.
-- **Integrated regression #462 requires recovery before further integrations.**
-  #446 exposed a null-to-non-null clone callback from #415; later code prevents rollback.
+- #462 is recovered by #463 at `4677a4fe4f`; ordinary integration resumes.
+  The nullable clone callback now retains the original purchase context.
 - Latest complete quiet anchors are at `103ee7cff8`: TGP 1.209x, Opus 1.420x,
   Grok 1.414x, P1996 1.344x, P2000 1.413x, P2016 1.484x. Projections at
-  `00ab107424` equal those floors; `d4a0700869` remains unprofiled. P2016 is
-  in band. #275 owns the two selected repairs; #450 must fix the new collector
-  before its first timed pass. No current anchor contamination is established.
-- Five unintegrated branches: owners #446/#447 and maintenance #463-#465.
-  Recovery #463 is first; no other integration proceeds before it.
+  `52ffa46994` equal those floors, with all six loop counts below the same
+  anchors. P2016 is in band. #469 carries the reviewed source/collector repairs;
+  the tracked quiet pass follows integration. No anchor contamination is proved.
+- Six component branches: #446/#447, #464/#465, effect emission #468 and
+  cargo registry #467. Integration #469 combines the three ready heads.
 
 ## Twentieth steering review (2026-10-24, recovery and production evidence)
 
@@ -158,49 +158,51 @@ Maintenance rows use original retirement and net glue (#223); evidence stays in 
 | #451 shared header constants; #450 harness helpers and tracked speed collector | #456, #457 | #458 | `00ab107424` | 921 / 1207 / 8 / 0; net glue -12 |
 | #452 comment pass outside the #451 structural files (comments only) | #459 | direct | `e5c8c62a96` | 221 / 49 / 248 / 0; net glue -191 |
 | #451 YAPF heaps, `GameState`, shared macros, raw-access contracts, reservation callbacks | #460 | direct | `d4a0700869` | 2479 / 9 / 968 / 0; net glue -83; net -1,030 lines |
+| #462 nullable clone refit callback recovery | #463 | direct | `4677a4fe4f` | 6 / 71 / 0 / 0; net glue 0 |
 
 ## Phase 1: maintenance and coverage
 
-Root owns #462 recovery; #275 speed, #450 collector, #461 ship scope and #156
-coverage repairs follow. #168/#199 retain boundary debt without per-PR timing
-gates. #312 stays unselected pending current #275 attribution, blocking no owner.
+#275 owns merged-tip profiling and the due tracked quiet pass. #469 combines
+#450's collector, #275's source repairs, #461 and #156 coverage. #168/#199 retain
+boundary debt without timing gates; #312 stays unselected pending attribution.
 Closed #449/#451/#452 housekeeping is not a standing task.
 
 ## Phase 2: work order
 
-1. **Recover #462 first:** one small PR from integrated main, default nullable
-   clone/refit-cost evidence, fresh fixing review and exact-head Full. No other
-   integration proceeds until recovery; #446 adopts the shared fix.
-2. **Resume #446 and #447 alongside maintenance.** Complete their PR-comment
-   boundary/evidence actions and cost dispositions. Root coordinates any genuinely
-   shared new engine observation under #199 once; keep policy and loops in Rust.
-   Integrate in readiness order after recovery, without a speed wait.
-3. **Assign the ready maintenance batch:** #450, #275's ambient/airport repairs,
-   #461 and #156's two thread checks/production tree path. An unfinished item
-   leaves the batch. Run the due merged-tip profile in the background; after the
-   collector repair and source fixes, run the due tracked quiet pass. No new
-   per-PR timing or private collector. Stale agent-downloaded CI archives were removed.
-4. **Next selected owners:** #466 transfers vehicle effect emission/cache and
-   creation sequencing; #467 transfers cargo registry/translation and callback
-   lifecycle. Start from integrated main as capacity and the six-branch cap allow.
-   Their first concrete checkpoints decide necessary boundary/evidence cost once;
-   no speed gate. Catchment, #64/#68/#69, vendored, GUI and platform stay outside.
+1. **Integrate ready #469:** reviewed #447 availability and #464/#465 maintenance.
+   Recovery is integrated. Update the combination from current base, obtain
+   exact-head Full and merge only that combination. An unfinished item leaves it.
+2. **Finish #446:** source review passes after the boundary/retained-chain repair;
+   adopt recovery, complete candidate capability/reload evidence and integrate
+   in readiness order. No speed wait or new cost gate.
+3. **Continue #466/#468 and #467:** whole vehicle effect emission/cache/creation,
+   then cargo registry/translation/callback lifecycle, from integrated main.
+   Their first concrete checkpoints decide necessary boundary/evidence cost once.
+4. **Next selected owners:** #470 transfers whole engine-definition loading,
+   dynamic identity and finalization; #471 transfers the staged NewGRF loading
+   interpreter and execution state. Their issues hold scope, interfaces and
+   evidence plans. Keep six component branches; ready integration comes first.
+5. After the source/collector integration, profile the merged tip and run the due
+   tracked quiet pass. Only timed collection pauses builds/profiles/games.
+   Catchment, #64/#68/#69, vendored, GUI and platform stay outside this order.
 
 ## Resume checkpoint
 
-Development resumed. Root owns recovery/integration; all five agent slots are active.
+Root owns final combinations and speed; completed task reports remain in their PRs.
 
 | Item | Saved head | Next action |
 | --- | --- | --- |
-| #462 recovery / #463 | `059f8bc8f0` | Focused checks pass; fresh fixing review, then current-base Full. |
-| #446 engine/articulated (#439) | `2d561dbc07` | Boundary/retained-chain repair; adopt recovery and finish checks/review. |
-| #447 type admission (#440) | `7d6a47e19b` | TownID/negative checks pass; finish carrier checks and fresh review. |
-| #450 collector / #465 | `b9787cd2ec` | Checks pass within budget; fresh fixing review running. |
-| #275/#461/#156 / #464 | `38feeba7b5` | Source/coverage batch checks running; review when ready. |
-| Merged-tip profile | code `52ffa46994` | Instruction profile running alongside work; same quiet anchors. |
+| #469 combination | #447/#464/#465 | Ready reviews pass; root spot-checks, updates base and requests Full. |
+| #446 engine/articulated (#439) | `bf15333f0e` | Source reviewed at `20a0bdf459`; marker-only recovery merge, candidate checks running. |
+| #447 type admission (#440) | `c710f2e1d3` | Fixing review/checks pass; included in #469. |
+| #450 collector / #465 | `17d1be58ae` | Fixing review/checks pass within budget; included in #469. |
+| #275/#461/#156 / #464 | `9d7e848f4f` | Review/checks pass; included in #469. |
+| #466 effects / #468 | `27c04b240e` | Canonical cache/creation checkpoint; emission and evidence in progress. |
+| #467 cargo registry | issue | Implementation started from recovered integrated main. |
+| Merged-tip profile | code `52ffa46994` | Six comparisons pass; same floor projections, no growth attribution. |
 
-macOS passed at `00ab107424`; next cadence run is due after three integrations.
+macOS passed at `00ab107424`; next cadence run is due after two integrations.
 Delete the superseded private speed collector after the first tracked pass.
 
-Selection: /root, gpt-6.1-sol, xhigh; planning: /root/plan_next_simulation_owners,
-gpt-6-astra, high. Next-owner scope, interfaces and evidence plans are in #466/#467.
+Selection: /root, gpt-6.1-sol, xhigh; planning: /root/plan_next_simulation_owners
+and /root/plan_simulation_owners_after467, gpt-6-astra, high. Scope is in #466/#467/#470/#471.
