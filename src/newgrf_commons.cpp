@@ -243,7 +243,7 @@ void HouseOverrideManager::SetEntitySpec(HouseSpec &&hs)
 uint16_t IndustryOverrideManager::GetID(uint16_t grf_local_id, uint32_t grfid) const
 {
 #ifdef WITH_RUST
-	return openttd_rust_industry_definition_id(grf_local_id, grfid);
+	return openttd_rust_industry_definition_id(this->rust_owner, grf_local_id, grfid);
 #else
 	uint16_t id = OverrideManagerBase::GetID(grf_local_id, grfid);
 	if (id != this->invalid_id) return id;
@@ -267,7 +267,7 @@ uint16_t IndustryOverrideManager::GetID(uint16_t grf_local_id, uint32_t grfid) c
 uint16_t IndustryOverrideManager::AddEntityID(uint16_t grf_local_id, uint32_t grfid, uint16_t substitute_id)
 {
 #ifdef WITH_RUST
-	return openttd_rust_industry_definition_allocate(grf_local_id, grfid, substitute_id, &GetIndustryDefinitionServices());
+	return openttd_rust_industry_definition_allocate(this->rust_owner, grf_local_id, grfid, substitute_id, &GetIndustryDefinitionServices());
 #else
 	/* This entity hasn't been defined before, so give it an ID now. */
 	for (uint16_t id = 0; id < this->max_entities; id++) {
@@ -306,7 +306,7 @@ uint16_t IndustryOverrideManager::AddEntityID(uint16_t grf_local_id, uint32_t gr
 void IndustryOverrideManager::SetEntitySpec(IndustrySpec &&inds)
 {
 #ifdef WITH_RUST
-	openttd_rust_industry_definition_publish(&inds, &GetIndustryDefinitionServices());
+	openttd_rust_industry_definition_publish(this->rust_owner, &inds, &GetIndustryDefinitionServices());
 #else
 	/* First step : We need to find if this industry is already specified in the savegame data. */
 	IndustryType ind_id = this->GetID(inds.grf_prop.local_id, inds.grf_prop.grfid);
@@ -335,7 +335,7 @@ void IndustryOverrideManager::SetEntitySpec(IndustrySpec &&inds)
 void IndustryTileOverrideManager::SetEntitySpec(IndustryTileSpec &&its)
 {
 #ifdef WITH_RUST
-	openttd_rust_industry_tile_definition_publish(&its, &GetIndustryDefinitionServices());
+	openttd_rust_industry_tile_definition_publish(this->rust_owner, &its, &GetIndustryDefinitionServices());
 #else
 	IndustryGfx indt_id = this->AddEntityID(its.grf_prop.local_id, its.grf_prop.grfid, its.grf_prop.subst_id);
 

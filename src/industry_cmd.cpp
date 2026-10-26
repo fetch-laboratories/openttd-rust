@@ -97,6 +97,7 @@ static bool IndustryCommandDeity() noexcept { return OpenTTDCurrentCompany() == 
 
 #ifdef WITH_RUST
 #include "rust/industry_definition_ffi.h"
+#include "rust/industry_property_ffi.h"
 #endif
 
 #include "safeguards.h"
@@ -4051,6 +4052,8 @@ static OpenTTDIndustryTransactionContext GetIndustryTransactionContext()
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDIndustryResolverServices.hpp"
+#include "abi-visit-OpenTTDIndustryDefinitionServices.hpp"
+#include "abi-visit-OpenTTDIndustryPropertyServices.hpp"
 #include "abi-visit-OpenTTDIndustryServices.hpp"
 #include "abi-visit-OpenTTDIndustryLifecycleServices.hpp"
 #include "abi-visit-OpenTTDIndustryGenerationServices.hpp"
@@ -4063,7 +4066,9 @@ static OpenTTDIndustryTransactionContext GetIndustryTransactionContext()
 #include "abi-visit-OpenTTDEnvironmentServices.hpp"
 bool CheckAbi_industry_cmd()
 {
-	return AbiServicesComplete(GetIndustryGenerationServices().environment) &&
+	return AbiServicesComplete(GetIndustryDefinitionServices()) &&
+		AbiServicesComplete(GetIndustryPropertyServices()) &&
+		AbiServicesComplete(GetIndustryGenerationServices().environment) &&
 		AbiServicesComplete(GetIndustryResolverServices()) &&
 		AbiServicesComplete(GetIndustryRustServices()) &&
 		AbiServicesComplete(GetIndustryLifecycleRustServices()) &&

@@ -42,6 +42,17 @@ def uses_ai(scenario):
 
 
 def install(scenario, run_dir):
+    if source := scenario.get("industry_definition_dir"):
+        for personal in (
+            run_dir / ".openttd",
+            run_dir / ".openttd-rust",
+            run_dir / "xdg-data/openttd",
+            run_dir / "xdg-data/openttd-rust",
+        ):
+            target = personal / "newgrf/industry-definitions"
+            target.mkdir(parents=True, exist_ok=True)
+            for path in Path(source).glob("*.grf"):
+                (target / path.name).write_bytes(path.read_bytes())
     if uses_ai(scenario):
         folder = run_dir / "ai/industry-scenarios"
         shutil.copytree(scenario["scenario_ai"], folder)
@@ -959,9 +970,17 @@ def prepare_definitions(scenario, binaries, builds, out, timeout, env, result):
     definition_grfs(folder / "grfs")
     executables = prepared_console("industries", adapter, binaries, builds, folder, env)
     command = f'industry_definitions run "{folder / "grfs"}"'
-    scenario = dict(scenario, executables=executables, save=str(source))
+    scenario = dict(
+        scenario,
+        executables=executables,
+        save=str(source),
+        industry_definition_dir=str(folder / "grfs"),
+    )
     if scenario["industry"] == "definitions":
-        return dict(scenario, console=[command, "unpause"])
+        return dict(
+            scenario,
+            console=[command, "setting difficulty.industry_density 0", "unpause"],
+        )
     saves = {role: folder / role / "definitions.sav" for role in executables}
     captures = core.capture_pair(
         lambda role: dict(
@@ -996,7 +1015,11 @@ def prepare_definitions(scenario, binaries, builds, out, timeout, env, result):
     return dict(
         scenario,
         role_inputs={role: {"save": str(save)} for role, save in saves.items()},
-        console=["industry_definitions inspect", "unpause"],
+        console=[
+            "industry_definitions inspect",
+            "setting difficulty.industry_density 0",
+            "unpause",
+        ],
     )
 
 
@@ -1026,15 +1049,17 @@ def check_definitions(scenario, run, mode, role, result):
         if len(coal) < 2:
             raise RuntimeError("industry funding did not create a second coal mine")
     final = core.rows(saves[-1], "INDY")
-    if not any(
-        row.get("produced[0]/history[0]/production", 0) > 0
+    funded = [
+        row
         for row in final.values()
-        if row["type"] == 0
-    ):
-        raise RuntimeError("custom industry did not produce cargo")
-    if not any(
-        row.get("produced[0]/history[0]/transported", 0) > 0
-        for row in final.values()
-        if row["type"] == 0
-    ):
-        raise RuntimeError("custom industry cargo was not transported")
+        if row["type"] == 0 and row["location.w"] == 1 and row["location.h"] == 1
+    ]
+    if len(funded) != 1:
+        raise RuntimeError("funded custom layout identity was not retained")
+    for field in ("production", "transported"):
+        if not any(
+            value > 0
+            for key, value in funded[0].items()
+            if key.startswith("produced[0]/history[") and key.endswith("/" + field)
+        ):
+            raise RuntimeError("funded custom industry has no cargo " + field)

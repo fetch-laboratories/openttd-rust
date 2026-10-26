@@ -101,8 +101,7 @@ pub unsafe fn get(manager: *const Manager, local: u16, grfid: u32) -> u16 {
     }
     m.invalid
 }
-pub unsafe fn industry_id(local: u16, grfid: u32) -> u16 {
-    let manager = industry();
+pub unsafe fn industry_id_for(manager: *const Manager, local: u16, grfid: u32) -> u16 {
     let id = unsafe { get(manager, local, grfid) };
     let m = unsafe { &*manager };
     if id != m.invalid {
@@ -115,6 +114,10 @@ pub unsafe fn industry_id(local: u16, grfid: u32) -> u16 {
     }
     m.invalid
 }
+pub unsafe fn industry_id(local: u16, grfid: u32) -> u16 {
+    unsafe { industry_id_for(industry(), local, grfid) }
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_override_get(
     manager: *const Manager,
@@ -124,9 +127,14 @@ pub unsafe extern "C" fn openttd_rust_override_get(
     unsafe { get(manager, local, grfid) }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_definition_id(local: u16, grfid: u32) -> u16 {
-    unsafe { industry_id(local, grfid) }
+pub unsafe extern "C" fn openttd_rust_industry_definition_id(
+    manager: *const Manager,
+    local: u16,
+    grfid: u32,
+) -> u16 {
+    unsafe { industry_id_for(manager, local, grfid) }
 }
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_override_grfid(manager: *const Manager, id: u16) -> u32 {
     unsafe { (&(*manager).mappings)[usize::from(id)].grfid }

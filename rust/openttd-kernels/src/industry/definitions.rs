@@ -31,8 +31,10 @@ pub struct Cargo {
 }
 #[repr(C)]
 pub struct Services {
+    pub generation: *const super::GenerationServices,
     pub industry: unsafe extern "C" fn(u16) -> *mut SpecHandle,
     pub tile: unsafe extern "C" fn(u16) -> *mut TileSpec,
+    pub grfid: unsafe extern "C" fn(*const SpecHandle) -> u32,
     pub identity: unsafe extern "C" fn(*const SpecHandle) -> Identity,
     pub tile_identity: unsafe extern "C" fn(*const TileSpec) -> Identity,
     pub availability: unsafe extern "C" fn(*const SpecHandle) -> Availability,
@@ -63,15 +65,20 @@ pub struct Services {
     pub set_accepted: unsafe extern "C" fn(*mut SpecHandle, usize, u8),
     pub set_tile_accepted: unsafe extern "C" fn(*mut TileSpec, usize, u8),
 }
-pub unsafe fn allocate(local: u16, grfid: u32, substitute: u16, s: &Services) -> u16 {
-    let manager = override_manager::industry();
+pub unsafe fn allocate(
+    manager: *mut override_manager::Manager,
+    local: u16,
+    grfid: u32,
+    substitute: u16,
+    s: &Services,
+) -> u16 {
     let (offset, maximum, invalid) =
         unsafe { ((*manager).offset, (*manager).maximum, (*manager).invalid) };
     for id in 0..maximum {
         if id < offset && unsafe { (&(*manager).entities)[usize::from(id)] } != invalid {
             continue;
         }
-        let spec = unsafe { (s.industry)(id) };
+        let spec = unsafe { ((*s.generation).spec)(id as u8) };
         let status = unsafe { (s.availability)(spec) };
         if !status.enabled && !status.has_file {
             let map = unsafe { &mut (&mut (*manager).mappings)[usize::from(id)] };
@@ -87,8 +94,12 @@ pub unsafe fn allocate(local: u16, grfid: u32, substitute: u16, s: &Services) ->
     }
     invalid
 }
-pub unsafe fn allocate_tile(local: u16, grfid: u32, substitute: u16) -> u16 {
-    let manager = override_manager::tile();
+pub unsafe fn allocate_tile_for(
+    manager: *mut override_manager::Manager,
+    local: u16,
+    grfid: u32,
+    substitute: u16,
+) -> u16 {
     let existing = unsafe { override_manager::get(manager, local, grfid) };
     // IndustryTileOverrideManager::CheckValidNewID excludes the water-check marker.
     unsafe {
@@ -103,17 +114,33 @@ pub unsafe fn allocate_tile(local: u16, grfid: u32, substitute: u16) -> u16 {
         )
     }
 }
+pub unsafe fn allocate_tile(local: u16, grfid: u32, substitute: u16) -> u16 {
+    unsafe { allocate_tile_for(override_manager::tile(), local, grfid, substitute) }
+}
+
 unsafe extern "C" fn tile_valid(_: *mut c_void, id: u16) -> bool {
     override_manager::industry_tile_valid_id(id)
 }
-pub unsafe fn publish(spec: *mut SpecHandle, s: &Services) {
+pub unsafe fn publish(
+    manager: *mut override_manager::Manager,
+    spec: *mut SpecHandle,
+    s: &Services,
+) {
     let identity = unsafe { (s.identity)(spec) };
-    let manager = override_manager::industry();
     let invalid = unsafe { (*manager).invalid };
     // The original narrows GetID and AddEntityID to IndustryType before testing it.
-    let mut id = unsafe { override_manager::industry_id(identity.local, identity.grfid) } as u8;
+    let mut id =
+        unsafe { override_manager::industry_id_for(manager, identity.local, identity.grfid) } as u8;
     if u16::from(id) == invalid {
-        id = unsafe { allocate(identity.local, identity.grfid, identity.substitute, s) } as u8;
+        id = unsafe {
+            allocate(
+                manager,
+                identity.local,
+                identity.grfid,
+                identity.substitute,
+                s,
+            )
+        } as u8;
         unsafe {
             (s.set_override)(spec, invalid);
         }
@@ -129,11 +156,15 @@ pub unsafe fn publish(spec: *mut SpecHandle, s: &Services) {
         (s.set_enabled)((s.industry)(u16::from(id)), true);
     }
 }
-pub unsafe fn publish_tile(spec: *mut TileSpec, s: &Services) {
+pub unsafe fn publish_tile(
+    manager: *mut override_manager::Manager,
+    spec: *mut TileSpec,
+    s: &Services,
+) {
     let identity = unsafe { (s.tile_identity)(spec) };
-    let manager = override_manager::tile();
     let (offset, invalid) = unsafe { ((*manager).offset, (*manager).invalid) };
-    let id = unsafe { allocate_tile(identity.local, identity.grfid, identity.substitute) };
+    let id =
+        unsafe { allocate_tile_for(manager, identity.local, identity.grfid, identity.substitute) };
     if id == invalid {
         unsafe {
             (s.tile_full)();
@@ -177,14 +208,14 @@ pub unsafe fn finalise(s: &Services, mut translate: impl FnMut(Cargo) -> u8) {
                 continue;
             }
             unsafe {
-                publish(spec, s);
+                publish(override_manager::industry(), spec, s);
             }
         }
         for i in 0..count.tiles {
             let spec = unsafe { (s.file_tile)(file, i) };
             if !spec.is_null() {
                 unsafe {
-                    publish_tile(spec, s);
+                    publish_tile(override_manager::tile(), spec, s);
                 }
             }
         }
@@ -197,7 +228,7 @@ pub unsafe fn finalise(s: &Services, mut translate: impl FnMut(Cargo) -> u8) {
         let spec = unsafe { (s.industry)(id) };
         let status = unsafe { (s.availability)(spec) };
         if status.enabled && status.has_file {
-            let grfid = unsafe { (s.identity)(spec) }.grfid;
+            let grfid = unsafe { (s.grfid)(spec) };
             let conflicting = unsafe { (s.conflicting)(spec) };
             for i in 0..3 {
                 let kind = unsafe { conflicting.add(i).read() };
@@ -244,29 +275,32 @@ pub unsafe fn finalise(s: &Services, mut translate: impl FnMut(Cargo) -> u8) {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_definition_allocate(
+    manager: *mut override_manager::Manager,
     local: u16,
     grfid: u32,
     substitute: u16,
     s: *const Services,
 ) -> u16 {
-    unsafe { allocate(local, grfid, substitute, &*s) }
+    unsafe { allocate(manager, local, grfid, substitute, &*s) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_definition_publish(
+    manager: *mut override_manager::Manager,
     spec: *mut SpecHandle,
     s: *const Services,
 ) {
     unsafe {
-        publish(spec, &*s);
+        publish(manager, spec, &*s);
     }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_tile_definition_publish(
+    manager: *mut override_manager::Manager,
     spec: *mut TileSpec,
     s: *const Services,
 ) {
     unsafe {
-        publish_tile(spec, &*s);
+        publish_tile(manager, spec, &*s);
     }
 }
 #[unsafe(no_mangle)]
@@ -314,6 +348,6 @@ crate::abi::layouts! {
     "OpenTTDIndustryDefinitionCounts" ["industry"] => Counts { industries, tiles };
     "OpenTTDIndustryDefinitionCargo" ["industry"] => Cargo { label, mixed, cargo };
     "OpenTTDIndustryDefinitionServices" ["industry"] => Services {
-        industry, tile, identity, tile_identity, availability, set_enabled, set_override, set_tile_override, set_tile_enabled, publish, publish_tile, industry_full, tile_full, reset_industry, clear_industry, climate_available, reset_tile, clear_tile, file, counts, file_industry, file_tile, clear_file, conflicting, invalid_name, produced, accepted, tile_accepted, set_produced, set_accepted, set_tile_accepted
+        generation, industry, tile, grfid, identity, tile_identity, availability, set_enabled, set_override, set_tile_override, set_tile_enabled, publish, publish_tile, industry_full, tile_full, reset_industry, clear_industry, climate_available, reset_tile, clear_tile, file, counts, file_industry, file_tile, clear_file, conflicting, invalid_name, produced, accepted, tile_accepted, set_produced, set_accepted, set_tile_accepted
     };
 }

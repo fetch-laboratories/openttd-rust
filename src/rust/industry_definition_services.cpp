@@ -10,23 +10,28 @@
 #include "../newgrf_config.h"
 #include "../newgrf/newgrf_internal.h"
 #include "industry_definition_ffi.h"
+#include "industry_ffi.h"
+#include "services_newgrf.h"
 #include "../table/build_industry.h"
 #include "../table/strings.h"
 #include "../safeguards.h"
 
 static OpenTTDIndustryDefinitionCargo DefinitionCargo(CargoType cargo, const std::variant<CargoLabel, MixedCargoType> &label) noexcept
 {
+	if (IsValidCargoType(cargo)) return {0, false, cargo};
 	if (const auto *value = std::get_if<CargoLabel>(&label)) return {value->base(), false, cargo};
 	return {static_cast<uint32_t>(std::get<MixedCargoType>(label)), true, cargo};
 }
 const OpenTTDIndustryDefinitionServices &GetIndustryDefinitionServices() noexcept
 {
 	static const OpenTTDIndustryDefinitionServices services{
+		.generation = &GetIndustryGenerationServices(),
 		.industry = [](uint16_t id) noexcept { return &_industry_specs[id]; },
 		.tile = [](uint16_t id) noexcept { return &_industry_tile_specs[id]; },
-		.identity = [](const IndustrySpec *spec) noexcept { return OpenTTDIndustryDefinitionIdentity{spec->grf_prop.grfid, spec->grf_prop.local_id, spec->grf_prop.subst_id}; },
-		.tile_identity = [](const IndustryTileSpec *spec) noexcept { return OpenTTDIndustryDefinitionIdentity{spec->grf_prop.grfid, spec->grf_prop.local_id, spec->grf_prop.subst_id}; },
-		.availability = [](const IndustrySpec *spec) noexcept { return OpenTTDIndustryDefinitionAvailability{spec->enabled, spec->grf_prop.HasGrfFile()}; },
+		.grfid = RustSpecGRFID<IndustrySpec>,
+		.identity = [](const IndustrySpec *spec) noexcept { return OpenTTDIndustryDefinitionIdentity{RustSpecGRFID(spec), RustSpecLocalID(spec), RustSpecSubstitute(spec)}; },
+		.tile_identity = [](const IndustryTileSpec *spec) noexcept { return OpenTTDIndustryDefinitionIdentity{RustSpecGRFID(spec), RustSpecLocalID(spec), RustSpecSubstitute(spec)}; },
+		.availability = [](const IndustrySpec *spec) noexcept { return OpenTTDIndustryDefinitionAvailability{spec->enabled, RustSpecHasGRFFile(spec)}; },
 		.set_enabled = [](IndustrySpec *spec, bool enabled) noexcept { spec->enabled = enabled; },
 		.set_override = [](IndustrySpec *spec, uint16_t id) noexcept { spec->grf_prop.override_id = id; },
 		.set_tile_override = [](IndustryTileSpec *spec, uint16_t id) noexcept { spec->grf_prop.override_id = id; },

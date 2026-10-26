@@ -77,7 +77,7 @@ static void DefinitionClimateReset()
 static bool IndustryDefinitionsScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
-	if (args[1] == "inspect") { DefinitionInspect(true); fmt::print(stderr, "INDUSTRY-DEFINITIONS complete true\n"); return true; }
+	if (args[1] == "inspect") { _interactive_random.SetSeed(0x47500002); ReloadNewGRFData(); DefinitionInspect(true); fmt::print(stderr, "INDUSTRY-DEFINITIONS complete true\n"); return true; }
 	if (args.size() < 3) return false;
 	DefinitionClimateReset();
 	SetRandomSeed(0x47500001);

@@ -5,6 +5,8 @@
 #include "service_defaults.hpp"
 #include <cstdint>
 #include <cstddef>
+struct OpenTTDIndustryGenerationServices;
+struct OpenTTDOverrideManager;
 struct IndustrySpec;
 struct IndustryTileSpec;
 struct GRFFile;
@@ -15,8 +17,10 @@ struct OpenTTDIndustryDefinitionCargo { uint32_t label; bool mixed; uint8_t carg
 /** Native specs remain canonical. Load/reset is serialized by the game-state mutex;
  * leaves never yield or reset definitions. No borrowed spec survives vector cleanup. */
 struct OpenTTDIndustryDefinitionServices {
+	const OpenTTDIndustryGenerationServices *generation;
 	IndustrySpec *(*industry)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(industry);
 	IndustryTileSpec *(*tile)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(tile);
+	uint32_t (*grfid)(const IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(grfid);
 	OpenTTDIndustryDefinitionIdentity (*identity)(const IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(identity);
 	OpenTTDIndustryDefinitionIdentity (*tile_identity)(const IndustryTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(tile_identity);
 	OpenTTDIndustryDefinitionAvailability (*availability)(const IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(availability);
@@ -49,9 +53,9 @@ struct OpenTTDIndustryDefinitionServices {
 };
 const OpenTTDIndustryDefinitionServices &GetIndustryDefinitionServices() noexcept;
 extern "C" {
-uint16_t openttd_rust_industry_definition_allocate(uint16_t, uint32_t, uint16_t, const OpenTTDIndustryDefinitionServices *);
-void openttd_rust_industry_definition_publish(IndustrySpec *, const OpenTTDIndustryDefinitionServices *);
-void openttd_rust_industry_tile_definition_publish(IndustryTileSpec *, const OpenTTDIndustryDefinitionServices *);
+uint16_t openttd_rust_industry_definition_allocate(OpenTTDOverrideManager *, uint16_t, uint32_t, uint16_t, const OpenTTDIndustryDefinitionServices *);
+void openttd_rust_industry_definition_publish(OpenTTDOverrideManager *, IndustrySpec *, const OpenTTDIndustryDefinitionServices *);
+void openttd_rust_industry_tile_definition_publish(OpenTTDOverrideManager *, IndustryTileSpec *, const OpenTTDIndustryDefinitionServices *);
 void openttd_rust_industry_definition_reset(uint8_t, const OpenTTDIndustryDefinitionServices *);
 }
 #endif

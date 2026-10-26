@@ -22,6 +22,7 @@
 #include "../object_base.h"
 #include "../industrytype.h"
 #include "../water_map.h"
+#include <thread>
 static_assert(sizeof(CargoArray::value_type) == sizeof(uint32_t) && sizeof(CargoTypes) == sizeof(uint64_t));
 static_assert(std::is_trivially_destructible_v<TileArea>);
 static_assert(sizeof(TileArea) == sizeof(OpenTTDIndustryLocation));
@@ -47,6 +48,43 @@ TEST_CASE("Industry - canonical native layouts")
 	REQUIRE(sizeof(TimerGameEconomy::Date) == sizeof(int32_t));
 	REQUIRE(sizeof(IndustryControlFlags) == sizeof(uint8_t));
 	REQUIRE(sizeof(IndustryTypeBuildData) == sizeof(OpenTTDIndustryBuildFields));
+}
+class TestOverrideManager : public OverrideManagerBase {
+public:
+	using OverrideManagerBase::OverrideManagerBase;
+	bool CheckValidNewID(uint16_t id) override { return id != 3; }
+	uint16_t GetID(uint16_t local, uint32_t grfid) const override { return local == 42 ? 1 : OverrideManagerBase::GetID(local, grfid); }
+	uint16_t Requested(uint16_t id) const { return this->entity_overrides[id]; }
+};
+TEST_CASE("NewGRF - canonical manager virtual dispatch and reset lifetimes")
+{
+	TestOverrideManager manager(2, 6, 99);
+	CHECK(manager.AddEntityID(5, 17, 1) == 2);
+	CHECK(manager.AddEntityID(6, 17, 0) == 4);
+	CHECK(manager.AddEntityID(5, 17, 0) == 2);
+	CHECK(manager.AddEntityID(42, 17, 0) == 1);
+	CHECK(manager.GetGRFID(2) == 17);
+	CHECK(manager.GetSubstituteID(2) == 1);
+	manager.Add(5, 17, 0);
+	manager.Add(6, 18, 0);
+	CHECK(manager.Requested(0) == 5);
+	manager.ResetOverride();
+	CHECK(manager.Requested(0) == 99);
+	CHECK(manager.GetID(5, 17) == 2);
+	manager.Add(5, 17, 0);
+	manager.ResetMapping();
+	CHECK(manager.GetID(5, 17) == 99);
+	CHECK(manager.Requested(0) == 5);
+}
+TEST_CASE("NewGRF - industry mapping is shared across serialized threads")
+{
+	const auto saved = _industry_mngr.mappings[NUM_INDUSTRYTYPES - 1];
+	_industry_mngr.mappings[NUM_INDUSTRYTYPES - 1] = {0x475475, 127, 0};
+	uint16_t result = IT_INVALID;
+	std::thread worker([&result] { result = _industry_mngr.GetID(127, 0x475475); });
+	worker.join();
+	_industry_mngr.mappings[NUM_INDUSTRYTYPES - 1] = saved;
+	CHECK(result == NUM_INDUSTRYTYPES - 1);
 }
 TEST_CASE("Industry - canonical allocation and history lifetime")
 {
