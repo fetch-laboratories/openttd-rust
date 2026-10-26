@@ -35,7 +35,7 @@ use crate::newgrf_commons::{
     TLF_PALETTE_REG_FLAGS, TLF_PALETTE_VAR10, TLF_SPRITE, TLF_SPRITE_REG_FLAGS, TLF_SPRITE_VAR10,
     TLF_VAR10_FLAGS, TLR_MAX_VAR10,
 };
-use crate::newgrf_layout::{Layout, PalSprite};
+use crate::newgrf_layout::{Layout, LayoutSequence as Sequence, PalSprite};
 use crate::newgrf_loading::{self as loading, Services as LoadingServices};
 use crate::newgrf_spritegroup::{
     DSG_SIZE_BYTE, DSG_SIZE_DWORD, DSG_SIZE_WORD, DSGA_OP_ADD, DSGA_TYPE_NONE, GroupResult, Handle,
@@ -46,10 +46,6 @@ use crate::sprites::{
     SPRITE_MODIFIER_CUSTOM_SPRITE, SPRITE_MODIFIER_OPAQUE, SPRITE_WIDTH,
 };
 use std::{ffi::c_void, ptr};
-#[repr(C)]
-pub struct Sequence {
-    _opaque: [u8; 0],
-}
 #[repr(C)]
 pub struct PalSpriteStorage {
     sprite: *mut u32,
@@ -105,13 +101,13 @@ pub struct LayoutStorage {
 }
 #[repr(C)]
 pub struct SequenceStorage {
-    image: *mut PalSprite,
-    x: *mut i8,
-    y: *mut i8,
-    z: *mut i8,
-    extent_x: *mut u8,
-    extent_y: *mut u8,
-    extent_z: *mut u8,
+    pub(crate) image: *mut PalSprite,
+    pub(crate) x: *mut i8,
+    pub(crate) y: *mut i8,
+    pub(crate) z: *mut i8,
+    pub(crate) extent_x: *mut u8,
+    pub(crate) extent_y: *mut u8,
+    pub(crate) extent_z: *mut u8,
 }
 #[repr(C)]
 pub struct Services {
@@ -144,7 +140,7 @@ pub struct Services {
     layout_allocate: unsafe extern "C" fn(*mut Layout, u32),
     pub(crate) layout_storage: unsafe extern "C" fn(*mut Layout) -> LayoutStorage,
     layout_sequence: unsafe extern "C" fn(*mut Layout, u32) -> *mut Sequence,
-    sequence_storage: unsafe extern "C" fn(*mut Sequence) -> SequenceStorage,
+    pub(crate) sequence_storage: unsafe extern "C" fn(*mut Sequence) -> SequenceStorage,
     is_parent: unsafe extern "C" fn(*const Sequence) -> bool,
     has_registers: unsafe extern "C" fn(*const Layout) -> bool,
     allocate_registers: unsafe extern "C" fn(*mut Layout),

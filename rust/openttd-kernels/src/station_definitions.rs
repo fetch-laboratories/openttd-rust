@@ -14,7 +14,7 @@
 )]
 use crate::newgrf_act2::{self, Services as Action2Services};
 use crate::newgrf_bytereader::{BadgeList, ByteReader, ReadError, Reader};
-use crate::newgrf_layout::{Layout, Sequence, SequenceFields};
+use crate::newgrf_layout::{Layout, LayoutSequence, Sequence};
 use crate::newgrf_loading::Services as LoadingServices;
 use crate::station_cmd::{RailSpec, RoadSpec};
 use std::ffi::c_void;
@@ -83,7 +83,7 @@ pub struct Services {
     station_render_pop: unsafe extern "C" fn(*mut RailSpec) -> (),
     station_render_copy_append: unsafe extern "C" fn(*mut RailSpec, *const RailSpec, usize) -> (),
     sequence_reset: unsafe extern "C" fn(*mut Sequence),
-    sequence_append: unsafe extern "C" fn(*mut Sequence) -> SequenceFields,
+    sequence_append: unsafe extern "C" fn(*mut Sequence) -> *mut LayoutSequence,
     layout_sequence_move: unsafe extern "C" fn(*mut Layout, *mut Sequence),
     layout_original: unsafe extern "C" fn(*mut Layout, u32) -> (),
     station_custom_assign: unsafe extern "C" fn(*mut RailSpec, u16, *const u8, usize) -> (),
@@ -191,10 +191,11 @@ unsafe fn station_change(
                             if delta_x == 0x80 {
                                 break;
                             }
-                            let fields = (s.sequence_append)(sequence);
-                            fields.origin_x.write(delta_x as i8);
-                            fields.origin_y.write(reader.byte()? as i8);
-                            fields.origin_z.write(reader.byte()? as i8);
+                            let item = (s.sequence_append)(sequence);
+                            let fields = (action2.sequence_storage)(item);
+                            fields.x.write(delta_x as i8);
+                            fields.y.write(reader.byte()? as i8);
+                            fields.z.write(reader.byte()? as i8);
                             fields.extent_x.write(reader.byte()?);
                             fields.extent_y.write(reader.byte()?);
                             fields.extent_z.write(reader.byte()?);

@@ -71,7 +71,7 @@ const OpenTTDStationDefinitionServices &GetStationDefinitionServices() noexcept
 		.station_render_pop = [](StationSpec *spec) noexcept -> void { spec->renderdata.pop_back(); },
 		.station_render_copy_append = [](StationSpec *spec, const StationSpec *source, size_t index) noexcept -> void { spec->renderdata.emplace_back(source->renderdata[index]); },
 		.sequence_reset = [](OpenTTDStationSequence *sequence) noexcept { OpenTTDStationSequence{}.swap(*sequence); },
-		.sequence_append = [](OpenTTDStationSequence *sequence) noexcept -> OpenTTDStationSequenceFields { auto &item = sequence->emplace_back(); return {&item.origin.x, &item.origin.y, &item.origin.z, &item.extent.x, &item.extent.y, &item.extent.z, &item.image}; },
+		.sequence_append = [](OpenTTDStationSequence *sequence) noexcept -> DrawTileSeqStruct * { return &sequence->emplace_back(); },
 		.layout_sequence_move = [](NewGRFSpriteLayout *layout, OpenTTDStationSequence *sequence) noexcept { layout->seq = std::move(*sequence); },
 		.layout_original = [](NewGRFSpriteLayout *layout, uint32_t index) noexcept -> void { extern const DrawTileSpriteSpan _station_display_datas_rail[8]; const auto &span = _station_display_datas_rail[index]; layout->ground = span.ground; layout->seq.insert(layout->seq.end(), span.GetSequence().begin(), span.GetSequence().end()); },
 		.station_custom_assign = [](StationSpec *spec, uint16_t key, const uint8_t *data, size_t count) noexcept -> void { spec->layouts[key].assign(data, data + count); },
