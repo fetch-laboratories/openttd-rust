@@ -60,7 +60,7 @@ Run these together:
 
 - `git fetch`, then `git log` from the steering commit to `origin/rust-migration`, and
   `git diff <steer>..origin/rust-migration -- AGENTS.md docs/ .github/`.
-  A loosened rule is a red flag.
+  A loosened rule is a red flag unless the user directed it.
 - `docs/roadmap.md` in full, including its resume checkpoint.
 - CI on `rust-migration` (`gh run list --branch rust-migration`). Note PR checks and
   how many runs were cancelled.
@@ -73,9 +73,12 @@ Run these together:
 Then post a short status line to the user and continue.
 
 Judge each standing correction from the last two steering reviews, your own
-rules included: applied, slipped, reinterpreted, or harmful as written. For
-each, note what it cost root (agent hours, CI runs, PRs parked) against what it
-caught. Trace each problem you find to the rule, roadmap action or user message
+rules included, and each rule changed outside a steering review since the last
+one (from that diff, its commit messages and any note under the latest steering
+review): applied, slipped, reinterpreted, or harmful as written. For each, note
+what it cost root (agent hours, CI runs, PRs parked) against what it caught.
+A user-directed change found harmful goes back to the user with its evidence;
+do not revert it yourself. Trace each problem you find to the rule, roadmap action or user message
 that produced it. Relax or remove a harmful rule before adding a new one.
 
 Watch for the patterns root has repeated before:

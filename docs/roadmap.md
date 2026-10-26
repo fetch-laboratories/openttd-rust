@@ -40,6 +40,16 @@ and one concrete owner-cost disposition.
 | Housekeeping, current lists, cleanup | Applied with limits: 3,845 lines removed, local output 25 to 8.5 GiB; #275's body was stale, now refreshed. Two useful tests must return. |
 | Checkpoints, wind-down, rollback | User pauses respected; drafts preserved. Newly confirmed #462 requires forward recovery because later code rules out bounded rollback. |
 
+User rule changes since this review, for the next steering review to judge by
+their effects. They need no action from root beyond following the rules.
+
+| Change | Commit | Watch for |
+| --- | --- | --- |
+| Wind-down rereads root before sending, cancels clean workers, re-sends to silent ones, makes cleanup optional | `42972a002c` | Time from message to stop; stale or overrun instructions |
+| Roadmap has no line cap; edits update in place; only `/steer` prunes | `414ff1daab` | Growth between steers, sediment, sections still deleted to make room |
+| Issue, PR, component-entry and skill-output caps become content rules | `987af0b0be`, #502 | Narration or evidence logs in documents; needed facts no longer dropped |
+| Tooling overruns decided at the first draft, with no raise count | `40b20044f1` | Infrastructure work overrunning without a recorded reason |
+
 ## Earlier steering, still in force
 
 Ownership and original behavior come first: named callees, shared typed services,
