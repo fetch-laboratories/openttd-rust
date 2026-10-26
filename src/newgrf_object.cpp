@@ -167,12 +167,24 @@ void ResetObjects()
 	_object_specs[OBJECT_TRANSMITTER].class_index = ObjectClass::Allocate('TRNS');
 }
 
+#ifdef WITH_RUST
+template <>
+std::span<const OpenTTDGRFClassDefault> ObjectClass::Defaults()
+{
+	static const OpenTTDGRFClassDefault defaults[]{
+		{'LTHS', STR_OBJECT_CLASS_LTHS},
+		{'TRNS', STR_OBJECT_CLASS_TRNS},
+	};
+	return defaults;
+}
+#else
 template <>
 /* static */ void ObjectClass::InsertDefaults()
 {
 	ObjectClass::Get(ObjectClass::Allocate('LTHS'))->name = STR_OBJECT_CLASS_LTHS;
 	ObjectClass::Get(ObjectClass::Allocate('TRNS'))->name = STR_OBJECT_CLASS_TRNS;
 }
+#endif
 
 #ifndef WITH_RUST
 template <>

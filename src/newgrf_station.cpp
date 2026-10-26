@@ -133,19 +133,27 @@ const OpenTTDStationAssociationServices &GetStationAssociationServices() noexcep
 }
 #endif
 
+#ifdef WITH_RUST
+template <>
+std::span<const OpenTTDGRFClassDefault> StationClass::Defaults()
+{
+	static const OpenTTDGRFClassDefault defaults[]{
+		{STATION_CLASS_LABEL_DEFAULT, STR_STATION_CLASS_DFLT},
+		{STATION_CLASS_LABEL_WAYPOINT, STR_STATION_CLASS_WAYP},
+	};
+	return defaults;
+}
+#else
 template <>
 /* static */ void StationClass::InsertDefaults()
 {
-#ifdef WITH_RUST
-	openttd_rust_station_class_defaults(STR_EMPTY, STR_STATION_CLASS_DFLT, STR_STATION_CLASS_WAYP);
-#else
 	/* Set up initial data */
 	StationClass::Get(StationClass::Allocate(STATION_CLASS_LABEL_DEFAULT))->name = STR_STATION_CLASS_DFLT;
 	StationClass::Get(StationClass::Allocate(STATION_CLASS_LABEL_DEFAULT))->Insert(nullptr);
 	StationClass::Get(StationClass::Allocate(STATION_CLASS_LABEL_WAYPOINT))->name = STR_STATION_CLASS_WAYP;
 	StationClass::Get(StationClass::Allocate(STATION_CLASS_LABEL_WAYPOINT))->Insert(nullptr);
-#endif
 }
+#endif
 
 #ifndef WITH_RUST
 template <>

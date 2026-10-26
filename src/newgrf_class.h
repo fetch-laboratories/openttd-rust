@@ -34,7 +34,7 @@ public:
 	uint32_t rust_index;
 private:
 	using Ops = RustGRFClassOps<Tspec>;
-	static void InsertDefaults();
+	static std::span<const OpenTTDGRFClassDefault> Defaults();
 public:
 	using spec_type = Tspec;
 	using index_type = Tindex;
@@ -44,6 +44,7 @@ public:
 	uint GetSpecCount() const { return Ops::spec_count(this->Index()); }
 	uint GetUISpecCount() const { return Ops::ui_spec_count(this->Index()); }
 	const Tspec *GetSpec(uint index) const { return Ops::spec(this->Index(), index); }
+	static const OpenTTDGRFClassServices<Tspec> &GetServices();
 	static void Reset();
 	static Tindex Allocate(uint32_t global_id);
 	static void Assign(Tspec *spec) { assert(static_cast<size_t>(spec->class_index) < Ops::count()); Ops::assign(spec); }

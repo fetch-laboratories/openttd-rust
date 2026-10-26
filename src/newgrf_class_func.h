@@ -16,17 +16,28 @@
 #include "rust/services_newgrf.h"
 
 template <typename Tspec, typename Tindex, Tindex Tmax>
-void NewGRFClass<Tspec, Tindex, Tmax>::Reset()
+const OpenTTDGRFClassServices<Tspec> &NewGRFClass<Tspec, Tindex, Tmax>::GetServices()
 {
+	static const auto defaults = NewGRFClass::Defaults();
 	static const OpenTTDGRFClassServices<Tspec> services{
 		.class_index = [](const Tspec *spec) noexcept { return static_cast<uint16_t>(spec->class_index); },
 		.set_index = [](Tspec *spec, uint16_t index) noexcept { spec->index = index; },
 		.identity = RustSpecIdentity<Tspec>,
 		.exhausted = [](uint16_t max) noexcept { GrfMsg(2, "ClassAllocate: already allocated {} classes, using default", max); },
 		.object = []() noexcept -> const OpenTTDObjectServices * { if constexpr (std::is_same_v<Tspec, ObjectSpec>) return &GetRustObjectServices(); else return nullptr; }(),
+		.defaults = defaults.data(),
+		.default_count = defaults.size(),
+		.maximum = Tmax,
+		.empty = STR_EMPTY,
+		.insert_empty = std::is_same_v<Tspec, StationSpec> || std::is_same_v<Tspec, RoadStopSpec>,
 	};
-	Ops::reset(&services);
-	NewGRFClass::InsertDefaults();
+	return services;
+}
+
+template <typename Tspec, typename Tindex, Tindex Tmax>
+void NewGRFClass<Tspec, Tindex, Tmax>::Reset()
+{
+	Ops::reset(&NewGRFClass::GetServices());
 }
 
 template <typename Tspec, typename Tindex, Tindex Tmax>

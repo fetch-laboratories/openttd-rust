@@ -14,6 +14,8 @@
 #include "../rust/station_association_ffi.h"
 #include "../rust/station_definitions_ffi.h"
 #include "../rust/newgrf_act3_ffi.h"
+#include "../rust/newgrf_loading_ffi.h"
+#include "../table/strings.h"
 #include "../rust/station_resolver_ffi.h"
 #include "../rust/roadstop_resolver_ffi.h"
 #include "../station_base.h"
@@ -121,6 +123,40 @@ TEST_CASE("NewGRF station classes - canonical order, reassignment and first memb
 	CHECK(StationClass::Classes()[2].global_id == 'TST1');
 	CHECK(IsWaypointClass(*StationClass::Get(StationClass::Allocate(0xFF000001))));
 	StationClass::Reset();
+}
+
+template <typename Class, typename Services, typename Reset>
+static void CheckClassDefaults(const Services *services, Reset reset, std::initializer_list<std::pair<uint32_t, StringID>> expected, bool insert_empty)
+{
+	Class::Allocate('TST1');
+	reset(services);
+	CHECK(Class::GetClassCount() == expected.size());
+	CHECK(Class::GetUIClassCount() == (insert_empty ? expected.size() : 0));
+	size_t index = 0;
+	for (const auto &[label, name] : expected) {
+		const auto *cls = Class::Get(static_cast<typename Class::index_type>(index++));
+		CHECK(cls->global_id == label);
+		CHECK(cls->name == name);
+		CHECK(cls->GetSpecCount() == (insert_empty ? 1 : 0));
+		CHECK(cls->GetSpec(0) == nullptr);
+	}
+}
+
+TEST_CASE("NewGRF classes - direct loader resets preserve original defaults")
+{
+	const auto &loading = GetRustGrfLoadingServices();
+	StationClass::Reset();
+	RoadStopClass::Reset();
+	AirportClass::Reset();
+	ObjectClass::Reset();
+	CheckClassDefaults<StationClass>(loading.station_classes, openttd_rust_station_class_reset,
+		{{STATION_CLASS_LABEL_DEFAULT, STR_STATION_CLASS_DFLT}, {STATION_CLASS_LABEL_WAYPOINT, STR_STATION_CLASS_WAYP}}, true);
+	CheckClassDefaults<RoadStopClass>(loading.roadstop_classes, openttd_rust_roadstop_class_reset,
+		{{ROADSTOP_CLASS_LABEL_DEFAULT, STR_STATION_CLASS_DFLT}, {ROADSTOP_CLASS_LABEL_WAYPOINT, STR_STATION_CLASS_WAYP}}, true);
+	CheckClassDefaults<AirportClass>(loading.airport_classes, openttd_rust_airport_class_reset,
+		{{'SMAL', STR_AIRPORT_CLASS_SMALL}, {'LARG', STR_AIRPORT_CLASS_LARGE}, {'HUB_', STR_AIRPORT_CLASS_HUB}, {'HELI', STR_AIRPORT_CLASS_HELIPORTS}}, false);
+	CheckClassDefaults<ObjectClass>(loading.object_classes, openttd_rust_object_class_reset,
+		{{'LTHS', STR_OBJECT_CLASS_LTHS}, {'TRNS', STR_OBJECT_CLASS_TRNS}}, false);
 }
 
 TEST_CASE("Station service - scalar ABI layouts")

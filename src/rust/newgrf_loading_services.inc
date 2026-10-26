@@ -138,13 +138,13 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.reset_prices = []() noexcept { ResetPriceBaseMultipliers(); },
 		.reset_currencies = []() noexcept { ResetCurrencies(); },
 		.reset_houses = []() noexcept { ResetHouses(); },
-		.reset_object_classes = []() noexcept { ObjectClass::Reset(); },
+		.object_classes = &ObjectClass::GetServices(),
 		.reset_objects = []() noexcept { ResetObjects(); },
-		.reset_station_classes = []() noexcept { StationClass::Reset(); },
-		.reset_airport_classes = []() noexcept { AirportClass::Reset(); },
+		.station_classes = &StationClass::GetServices(),
+		.airport_classes = &AirportClass::GetServices(),
 		.reset_airports = []() noexcept { AirportSpec::ResetAirports(); },
 		.reset_airporttiles = []() noexcept { AirportTileSpec::ResetAirportTiles(); },
-		.reset_roadstop_classes = []() noexcept { RoadStopClass::Reset(); },
+		.roadstop_classes = &RoadStopClass::GetServices(),
 		.reset_water_features = []() noexcept { _water_feature.fill({}); },
 		.reset_faces = []() noexcept { ResetFaces(); },
 		.clear_snowline = []() noexcept { ClearSnowLine(); },
@@ -221,5 +221,13 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 	return services;
 }
 #include "abi-visit-OpenTTDGrfLoadingServices.hpp"
-bool CheckAbi_grf_loading() { return AbiServicesComplete(GetRustGrfLoadingServices()); }
+#include "abi-visit-OpenTTDStationClassServices.hpp"
+#include "abi-visit-OpenTTDRoadStopClassServices.hpp"
+#include "abi-visit-OpenTTDAirportClassServices.hpp"
+#include "abi-visit-OpenTTDObjectClassServices.hpp"
+bool CheckAbi_grf_loading()
+{
+	const auto &s = GetRustGrfLoadingServices();
+	return AbiServicesComplete(s) && AbiServicesComplete(*s.station_classes) && AbiServicesComplete(*s.roadstop_classes) && AbiServicesComplete(*s.airport_classes) && AbiServicesComplete(*s.object_classes);
+}
 #endif

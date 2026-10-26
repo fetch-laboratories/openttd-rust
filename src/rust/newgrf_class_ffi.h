@@ -9,6 +9,7 @@ struct RoadStopSpec;
 struct AirportSpec;
 struct ObjectSpec;
 struct OpenTTDObjectServices;
+struct OpenTTDGRFClassDefault { uint32_t label; StringID name; };
 struct OpenTTDGRFClassIdentity { uint32_t grfid; uint16_t local_id; };
 template <typename T> struct OpenTTDGRFClassServices {
 	uint16_t (*class_index)(const T *) noexcept OPENTTD_SERVICE_DEFAULT(class_index);
@@ -16,11 +17,14 @@ template <typename T> struct OpenTTDGRFClassServices {
 	OpenTTDGRFClassIdentity (*identity)(const T *) noexcept OPENTTD_SERVICE_DEFAULT(identity);
 	void (*exhausted)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(exhausted);
 	const OpenTTDObjectServices *object;
+	const OpenTTDGRFClassDefault *defaults;
+	size_t default_count;
+	uint16_t maximum;
+	StringID empty;
+	bool insert_empty;
 };
 extern "C" uint16_t openttd_rust_station_layout_key(uint8_t, uint8_t);
 extern "C" bool openttd_rust_is_waypoint_class(uint32_t);
-extern "C" void openttd_rust_station_class_defaults(StringID, StringID, StringID);
-extern "C" void openttd_rust_roadstop_class_defaults(StringID, StringID, StringID);
 using OpenTTDStationClassServices = OpenTTDGRFClassServices<StationSpec>;
 using OpenTTDRoadStopClassServices = OpenTTDGRFClassServices<RoadStopSpec>;
 using OpenTTDAirportClassServices = OpenTTDGRFClassServices<AirportSpec>;

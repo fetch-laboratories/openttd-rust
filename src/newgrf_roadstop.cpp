@@ -36,19 +36,27 @@
 
 #include "safeguards.h"
 
+#ifdef WITH_RUST
+template <>
+std::span<const OpenTTDGRFClassDefault> RoadStopClass::Defaults()
+{
+	static const OpenTTDGRFClassDefault defaults[]{
+		{ROADSTOP_CLASS_LABEL_DEFAULT, STR_STATION_CLASS_DFLT},
+		{ROADSTOP_CLASS_LABEL_WAYPOINT, STR_STATION_CLASS_WAYP},
+	};
+	return defaults;
+}
+#else
 template <>
 void RoadStopClass::InsertDefaults()
 {
-#ifdef WITH_RUST
-	openttd_rust_roadstop_class_defaults(STR_EMPTY, STR_STATION_CLASS_DFLT, STR_STATION_CLASS_WAYP);
-#else
 	/* Set up initial data */
 	RoadStopClass::Get(RoadStopClass::Allocate(ROADSTOP_CLASS_LABEL_DEFAULT))->name = STR_STATION_CLASS_DFLT;
 	RoadStopClass::Get(RoadStopClass::Allocate(ROADSTOP_CLASS_LABEL_DEFAULT))->Insert(nullptr);
 	RoadStopClass::Get(RoadStopClass::Allocate(ROADSTOP_CLASS_LABEL_WAYPOINT))->name = STR_STATION_CLASS_WAYP;
 	RoadStopClass::Get(RoadStopClass::Allocate(ROADSTOP_CLASS_LABEL_WAYPOINT))->Insert(nullptr);
-#endif
 }
+#endif
 
 #ifndef WITH_RUST
 template <>
