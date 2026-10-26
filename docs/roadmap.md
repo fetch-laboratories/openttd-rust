@@ -10,15 +10,15 @@ this roadmap over conflicting issues. Keep about 200 lines; evidence stays in PR
   tooling and glue: 118,341, 41,812 and 42,024 lines. These measures include
   comments/data, not completed behavior. #483 integrated engine loading,
   the loading interpreter and maintenance: 2,246 retired lines and 845 net glue.
-- Under unchanged `04fa3753bf` quiet anchors, merged-tip projections are TGP
-  1.158x, Opus 1.456x, Grok 1.451x, P1996 1.407x, P2000 1.453x and P2016
-  1.541x. All six semantic/compatibility checks pass. Every play projection
-  fell from `97c32c48b1`; none rose over 3%. #482's visual-boundary repairs
-  are integrated. P2016 exceeds its ceiling; prepared runtimes await a quiet pass.
-- Three owner branches remain: industry definitions #479, rail/road definitions
-  #481 and house definitions #486. Shared checked reads and literal checking
-  are integrated. #199 next shares train predicates and scalar signatures;
-  root supplies common property-disable calls. #156 retains corpus gaps.
+- The repaired-tip quiet pass measured TGP 1.172x, Opus 1.388x, Grok 1.375x,
+  P1996 1.341x, P2000 1.410x and P2016 1.453x at `b959f89059`. All six
+  comparisons pass; 144 timed games and 79 observations show no overlap.
+  All ratios are below their ceilings; P2016 remains in the 5% trigger band.
+  #487 records the six anchors; #275 selects the bounded repairs below.
+- Five branches remain: industry #479, rail/road #481, houses #486, stations
+  #488 and maintenance #487. #481/#487 passed fixing review and await one
+  current-base combination Full. Checked reads and literal checking are integrated.
+  #156 retains corpus gaps. Keep the sixth branch for selected visual maintenance.
 
 ## Twentieth steering review (2026-10-24, recovery and production evidence)
 
@@ -170,18 +170,18 @@ Maintenance rows use original retirement and net glue (#223); evidence stays in 
 
 ## Phase 1: maintenance and coverage
 
-#275 owns quiet remeasurement and attribution of any remaining speed excess.
-#199 selects the audited train/order predicates, settings widths and shared
-sound/date calls, plus common property-disable calls needed by active owners.
-Batch these repairs with quiet anchors. #168 retains boundary debt without
-per-PR timing gates; #312 stays unselected. Closed housekeeping is not standing work.
+#275 selects canonical primary-vehicle Boolean dispatch, deferring rejected-part
+train resolution and a compact visual-part observation, with original-operation
+credits in its current list. Preserve assertions, named callees and callback reads.
+#487 batches quiet anchors, audited train/order calls and common property-disable
+helpers. #168 retains boundary debt without per-PR timing gates; #312 is unselected.
 
 ## Phase 2: work order
 
-1. **Ready owners:** finish #479/#481 evidence, obtain fresh fixing reviews and
-   integrate exact-current-base combinations. Reviewed work gains no new scope.
-2. **Maintenance:** run the prepared #275 quiet pass; #199 supplies selected
-   shared calls. Only timed collection holds builds, profiles and games.
+1. **Ready owners:** combine reviewed #481/#487 for exact-current-base Full;
+   finish #479 evidence/adoption and fresh review. Reviewed work gains no scope.
+2. **Maintenance:** integrate #487, then repair the selected #275 visual
+   boundaries. Ready owners continue; only timed collection holds other jobs.
 3. **Whole owners:** complete active industry #475, rail/road #476 and house
    #477 definitions. Then select station/road-stop definitions and associations
    #484, followed by complete Action2 graph construction/publication #485.
@@ -195,11 +195,11 @@ Root owns final combinations and speed; completed reports remain in the PRs.
 | Item | Saved head | Next action |
 | --- | --- | --- |
 | #475 industry definitions / #479 | `1e2e666c2b` | Integrated API/finalization adoption and evidence in progress. |
-| #476 rail/road definitions / #481 | `0d241115de` | Adopted reader/loading consumers; finish native build and candidate scenarios after quiet hold. |
-| #477 house definitions / #486 | `d7efc835ea` | Native build and real-file evidence; adopt integrated shared manager when available. |
-| #199 maintenance | selected | Share audited train/order calls and property-disable operations. |
-| #275 speed | `b959f89059` | Six comparisons pass; frozen runtimes prepared for quiet collection. |
-| #484 station/road-stop definitions | selected next | Begin after ready work within branch and agent limits. |
+| #476 rail/road definitions / #481 | `dc09af548f` | Fixing review and focused evidence pass; combine with #487 for Full. |
+| #477 house definitions / #486 | `f49a1ad6bb` | Real-file evidence passes; finish follow-up and adopt integrated manager/disable helpers. |
+| #199 maintenance / #487 | `b3242fc089` | Fixing review and focused checks pass; combine with #481 for Full. |
+| #275 speed | `b959f89059` | Quiet pass complete; record anchors via #487 and repair selected visual boundaries. |
+| #484 station/road-stop definitions / #488 | `19d8b3981f` | Canonical class registry checkpoint; complete property/publication/association evidence. |
 | #485 Action2 graph construction | selected after #484 | Complete construction owner, reusing integrated interpreter state. |
 
 macOS cadence passed on `f6cec101d3`; two integrations have followed it.
