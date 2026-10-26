@@ -208,7 +208,7 @@ pub struct Leaves {
     pub speed_frac: extern "C" fn(u32, bool) -> u32,
     pub update_visual: extern "C" fn(u32),
     pub cache_invalidate: extern "C" fn(u32),
-    pub capacity: extern "C" fn(u32) -> u32,
+    pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub sprite_direction: extern "C" fn(u32),
     pub tile_x: extern "C" fn(u32) -> u32,
     pub tile_y: extern "C" fn(u32) -> u32,
@@ -1105,7 +1105,15 @@ pub(crate) unsafe fn ship_build(
     }
     (game.leaves.build_interval_percent)(id);
     (game.leaves.cache_invalidate)(id);
-    let capacity = (game.leaves.capacity)(id);
+    // SAFETY: the build transaction retains the new shell across capacity callbacks.
+    let capacity = unsafe {
+        crate::engine_capabilities::openttd_rust_engine_capacity(
+            game.leaves.capabilities,
+            (game.vs().engine)(v).0.as_ptr(),
+            v.0.as_ptr(),
+            std::ptr::null_mut(),
+        )
+    };
     (game.leaves.build_capacity)(id, capacity);
     (game.leaves.cache_invalidate)(id);
     // SAFETY: The build transaction retains the new shell.
@@ -1175,7 +1183,7 @@ crate::abi::layouts! {
         speed_frac,
         update_visual,
         cache_invalidate,
-        capacity,
+        capabilities,
         sprite_direction,
         tile_x,
         tile_y,
