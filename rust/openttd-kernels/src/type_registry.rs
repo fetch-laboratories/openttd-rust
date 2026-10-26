@@ -17,7 +17,7 @@ use crate::{
     road_type::{INVALID_ROADTYPE, ROADTYPE_END, ROADTYPE_ROAD, ROADTYPE_TRAM},
 };
 use std::{ffi::c_void, ptr};
-type Handle = *mut c_void;
+type Handle = *const c_void;
 #[repr(C)]
 pub struct Publication {
     label: u32,
@@ -46,8 +46,8 @@ impl Labels {
 }
 #[repr(C)]
 pub struct TypeMap {
-    data: *mut u8,
-    size: usize,
+    pub(crate) data: *mut u8,
+    pub(crate) size: usize,
 }
 #[repr(C)]
 pub struct RailServices {
@@ -601,4 +601,11 @@ impl Services {
     fn road(&self) -> &RoadServices {
         unsafe { &*self.road }
     }
+}
+
+pub(crate) fn rail_spec(rt: u8) -> Handle {
+    (services().rail().spec)(rt)
+}
+pub(crate) fn road_spec(rt: u8) -> Handle {
+    (services().road().spec)(rt)
 }

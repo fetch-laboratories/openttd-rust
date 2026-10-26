@@ -89,7 +89,7 @@ const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
 		.resolve_callback = RustEvaluateStationCallback,
 		.file_version = RustGRFFileVersion,
 		.company = RustCompanyInfo,
-		.spec_reverse_rail = RustSpecReverseRailTypeTranslation<StationSpec>,
+		.spec_file = RustSpecGRFFile<StationSpec>,
 		.nearby = RustSignedNearbyTile,
 		.nearby_station = RustNearbyStationTile,
 		.nearby_info = RustNearbyTileInformation,

@@ -1,5 +1,6 @@
 """Engine lifecycle commands, preview, reliability and canonical modern reload."""
 
+import struct
 from pathlib import Path
 
 from . import core, economy
@@ -19,6 +20,7 @@ REQUIRED = {
     "cargo-profit-reload": (),
     "cargo-rating-reload": (),
     "types": (),
+    "types-definitions": (),
     "types-reload": (),
     "monitors": (),
     "commands": ("rename", "visibility", "control"),
@@ -33,6 +35,11 @@ EXPECTED = {
     "cargo-profit": ("profit-controls true",),
     "cargo-profit-reload": ("profit-controls true",),
     "cargo-rating-reload": ("rating-controls true",),
+    "types-definitions": (
+        "types-case definitions-file-loaded-save true",
+        "types-case definitions-reordered true",
+        "types-case definitions-missing true",
+    ),
     "types": (
         "types-case afterload-masks true",
         "types-case fixedpoint true",
@@ -121,6 +128,7 @@ def scenarios(soak):
             "cargo-profit",
             "types",
             "types-reload",
+            "types-definitions",
         )
     ]
 
@@ -131,7 +139,10 @@ def game_environment(scenario):
         if scenario.get("engines") and scenario.get("witnesses")
         else {}
     )
-    if scenario.get("engines", "").startswith("types"):
+    if (
+        scenario.get("engines", "").startswith("types")
+        and scenario["engines"] != "types-definitions"
+    ):
         env["OPENTTD_ENGINE_TYPES"] = "1"
     return env
 
@@ -157,6 +168,12 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     result["engines_input"] = record
     scenario = dict(scenario, save=str(normalized))
     executables = prepared_console("engines", adapter, binaries, builds, folder, env)
+    if scenario["engines"] == "types-definitions":
+        for executable in executables.values():
+            write_type_grfs(executable.parent / "newgrf")
+        return definition_reload(
+            scenario, executables, builds, folder, timeout, env, result
+        )
     if scenario["engines"] == "monitors":
         economy.monitor_load_probes(scenario, executables, builds, folder, timeout, env)
     if scenario["engines"] not in (
@@ -256,8 +273,16 @@ def check(scenario, run, mode, role, result):
     if "engines" not in scenario or run["exit"] or not run["snapshots"]:
         return
     variant = scenario["engines"]
-    if variant.startswith("types") and not type_markers(
-        run["log"], capture=variant == "types"
+    if variant == "types-definitions":
+        trace = [line for line in run["log"] if line.startswith("ENGINE definitions-")]
+        result.setdefault(mode + "_definitions_trace", {})[role] = trace
+        pair = result[mode + "_definitions_trace"]
+        if len(pair) == 2 and pair["reference"] != pair["candidate"]:
+            raise RuntimeError("unsaved type registry/translation state differs")
+    if (
+        variant.startswith("types")
+        and variant != "types-definitions"
+        and not type_markers(run["log"], capture=variant == "types")
     ):
         raise RuntimeError("type loadphase/mask/command/restoration markers missing")
     component = (
@@ -303,3 +328,134 @@ def type_markers(lines, capture):
                 ):
                     return False
     return True
+
+
+def write_type_grfs(folder):
+    """Real version-1 containers exercise the production reserve/activate reader."""
+    folder.mkdir(parents=True, exist_ok=True)
+
+    def prop(feature, first, number, key, value):
+        return bytes((0, feature, 1, number, first, key)) + value
+
+    def labels(feature, names):
+        return prop(feature, 0, len(names), 8, b"".join(names))
+
+    def table(key, names):
+        return prop(8, 0, len(names), key, b"".join(names))
+
+    def listing(feature, first, key, names):
+        return prop(feature, first, 1, key, bytes((len(names),)) + b"".join(names))
+
+    def write(name, grfid, actions):
+        actions = [
+            bytes((8, 8)) + grfid + name.encode() + b"\0Type registry fixture\0",
+            *actions,
+        ]
+        sprites = [struct.pack("<HB", len(action), 255) + action for action in actions]
+        (folder / name).write_bytes(
+            struct.pack("<HBI", 4, 255, len(actions)) + b"".join(sprites) + b"\0\0"
+        )
+
+    a = [
+        labels(16, [b"\0" * 4, b"R4AA", b"R4BB", b"R4DD"]),
+        labels(18, [b"D4AA", b"D4DD"]),
+        labels(19, [b"T4AA", b"T4DD"]),
+    ]
+    a += [
+        table(0x12, [b"R4AA", b"R4BB", b"R4AA", b"A4AA"]),
+        table(0x16, [b"D4AA", b"D4AA", b"T4AA"]),
+        table(0x17, [b"T4AA", b"D4AA"]),
+    ]
+    a += [
+        listing(16, 1, 0x1D, [b"A4AA", b"Z4AA"]),
+        listing(16, 1, 0x0F, [b"R4BB", b"R4CC"]),
+        listing(18, 0, 0x0F, [b"D4BB", b"T4AA"]),
+        listing(19, 0, 0x0F, [b"T4BB"]),
+    ]
+    for feature, first in [(16, 1), (18, 0), (19, 0)]:
+        a += [
+            prop(feature, first, 1, 0x13, struct.pack("<H", 13)),
+            prop(feature, first, 1, 0x14, struct.pack("<H", 177)),
+            prop(feature, first, 1, 0x16, b"\x55"),
+            prop(feature, first, 1, 0x17, struct.pack("<I", 1)),
+            prop(feature, first, 1, 0x1A, b"\x33"),
+            prop(feature, first, 1, 0x1C, struct.pack("<H", 19)),
+            prop(feature, first, 1, 0x1E, b"\0\0"),
+        ]
+    a += [
+        prop(16, 2, 1, 0x10, b"\x04"),
+        prop(18, 1, 1, 0x10, b"\x08"),
+        prop(0, 0, 1, 5, b"\0"),
+        prop(1, 0, 1, 5, b"\0"),
+        prop(1, 1, 1, 5, b"\0"),
+        prop(1, 1, 1, 0x1C, b"\x01"),
+    ]
+    write("types-a.grf", b"T47A", a)
+    b = [
+        labels(16, [b"R4CC", b"R4BB", b"A4AA"]),
+        labels(18, [b"D4BB"]),
+        labels(19, [b"T4BB"]),
+        listing(16, 0, 0x1D, [b"R4AA"]),
+        listing(16, 1, 0x0F, [b"R4AA"]),
+        listing(18, 0, 0x0F, [b"D4AA"]),
+    ]
+    write("types-b.grf", b"T47B", b)
+    write(
+        "types-full.grf",
+        b"T47F",
+        [
+            labels(feature, [f"{prefix}{i:03}".encode() for i in range(count)])
+            for feature, prefix, count in [(16, "X", 64), (18, "Y", 63)]
+        ],
+    )
+    write("types-mismatch.grf", b"T47X", [labels(18, [b"T4AA"])])
+    write(
+        "types-missing.grf",
+        b"T47M",
+        [labels(16, [b"R4CC"]), listing(16, 0, 0x1D, [b"R4AA"]), labels(18, [b"T4AA"])],
+    )
+
+
+def definition_reload(scenario, executables, builds, folder, timeout, env, result):
+    runs = core.capture_pair(
+        lambda role: dict(
+            scenario,
+            console=["engines_scenario types-definitions-build", "unpause"],
+            ticks=74,
+        ),
+        executables,
+        builds,
+        folder / "definitions",
+        timeout,
+        env,
+    )
+    for run in runs.values():
+        if (
+            run["exit"]
+            or "ENGINE types-case definitions-built true" not in run["log"]
+            or not run["snapshots"]
+        ):
+            raise RuntimeError("real-file type construction capture failed")
+    traces = {
+        role: [line for line in run["log"] if line.startswith("ENGINE definitions-")]
+        for role, run in runs.items()
+    }
+    if traces["reference"] != traces["candidate"]:
+        raise RuntimeError("loaded unsaved type registry state differs")
+    saves = {role: run["snapshots"][-1] for role, run in runs.items()}
+    differences = compare_saves(
+        saves["reference"],
+        saves["candidate"],
+        scenario["name"],
+        10,
+        {"chunks": 0, "elements": 0, "masked": {}},
+    )
+    if differences:
+        result["differences"].extend(differences)
+        raise RuntimeError("real-file type construction differs")
+    return dict(
+        scenario,
+        executables=executables,
+        role_inputs={role: {"save": str(save)} for role, save in saves.items()},
+        console=["engines_scenario types-definitions-reload", "unpause"],
+    )

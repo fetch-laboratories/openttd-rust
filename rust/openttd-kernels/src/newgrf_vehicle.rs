@@ -180,14 +180,6 @@ pub struct Services {
     tile_railtype: unsafe extern "C" fn(u32) -> crate::services::RailType,
     rail_catenary: unsafe extern "C" fn(crate::services::RailType) -> bool,
     road_catenary: unsafe extern "C" fn(crate::services::RoadType) -> bool,
-    reverse_rail: unsafe extern "C" fn(crate::services::RailType, *const c_void) -> u8,
-    reverse_road: unsafe extern "C" fn(crate::services::RoadType, *const c_void) -> u8,
-    translate_rail: unsafe extern "C" fn(u8, *const c_void) -> crate::services::RailType,
-    translate_road: unsafe extern "C" fn(
-        crate::services::RoadTramType,
-        u8,
-        *const c_void,
-    ) -> crate::services::RoadType,
     compatible_rail:
         unsafe extern "C" fn(crate::services::RailType, crate::services::RailType) -> bool,
     powered_rail: unsafe extern "C" fn(u64, crate::services::RailType) -> bool,
@@ -1100,14 +1092,18 @@ unsafe fn variable(
                         let types = (s.vehicle.train_handle)(v).get_railtypes();
                         return (u32::from((s.rail_catenary)(rt)) * 0x200)
                             | (u32::from((s.powered_rail)(types, rt)) * 0x100)
-                            | u32::from((s.reverse_rail)(rt, grf));
+                            | u32::from(crate::type_registry::openttd_rust_rail_reverse(
+                                rt.0, grf,
+                            ));
                     }
                     1 => {
                         let rtt = (s.shared.road_tram_type)((s.roadtype)(v).0);
                         let rt = (s.tile_roadtype)(tile, rtt);
                         return (u32::from((s.road_catenary)(rt)) * 0x200)
                             | 0x100
-                            | u32::from((s.reverse_road)(rt, grf));
+                            | u32::from(crate::type_registry::openttd_rust_road_reverse(
+                                rt.0, grf,
+                            ));
                     }
                     _ => return 0,
                 }
@@ -1214,7 +1210,9 @@ unsafe fn variable(
             }
             0x63 => match kind() {
                 0 => {
-                    let param = (s.translate_rail)(parameter as u8, grf);
+                    let param = crate::services::RailType(
+                        crate::type_registry::openttd_rust_rail_translate(parameter as u8, grf),
+                    );
                     if param.0 == crate::rail_type::INVALID_RAILTYPE {
                         return 0;
                     }
@@ -1228,7 +1226,13 @@ unsafe fn variable(
                 }
                 1 => {
                     let rtt = (s.shared.road_tram_type)((s.roadtype)(v).0);
-                    let param = (s.translate_road)(rtt, parameter as u8, grf);
+                    let param = crate::services::RoadType(
+                        crate::type_registry::openttd_rust_road_translate(
+                            u8::from(rtt.0),
+                            parameter as u8,
+                            grf,
+                        ),
+                    );
                     if param.0 == crate::road_type::INVALID_ROADTYPE {
                         return 0;
                     }
@@ -1654,7 +1658,7 @@ crate::abi::layouts! {
         overrides, override_at, override_engine, cached_override, write_override, spritegroup, random_bits, waiting,
         write_random, write_waiting, resolve_callback, resolve_random, order, cargo_owner,
         cargo_capacity, real_count, real_at,
-        vehicle_grfid, engine_by_id, default_cargo, engine_flags, local_id, cargo_info, motion, build_year, last_service, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, load_ticks, service_interval, acceleration, cargo_type, cargo_subtype, age, max_age, unit, sprite, breakdowns, breakdown_counter, breakdown_delay, breakdown_chance, reliability, reliability_decay, value, profit_this, profit_last, vehicle_flags, aircraft, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, reverse_rail, reverse_road, translate_rail, translate_road, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, engine_has_badge, engine_badge, rail_badge, road_badge, ship_owner, unhandled, aircraft_leaves, ground, cargo_services, check
+        vehicle_grfid, engine_by_id, default_cargo, engine_flags, local_id, cargo_info, motion, build_year, last_service, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, load_ticks, service_interval, acceleration, cargo_type, cargo_subtype, age, max_age, unit, sprite, breakdowns, breakdown_counter, breakdown_delay, breakdown_chance, reliability, reliability_decay, value, profit_this, profit_last, vehicle_flags, aircraft, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, engine_has_badge, engine_badge, rail_badge, road_badge, ship_owner, unhandled, aircraft_leaves, ground, cargo_services, check
     };
     "NewGRFCache" ["vehicle_resolver"] => Cache { position_consist_length, position_same_id_length, consist_cargo_information, company_information, position_in_vehicle, cache_valid };
     "OpenTTDVehicleScopeState" ["vehicle_resolver"] => Scope { v, self_type, rotor_in_gui };

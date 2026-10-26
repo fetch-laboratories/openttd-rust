@@ -19,12 +19,12 @@ pub fn get_all_introduces_rail_types(s: &Services, mut types: u64) -> u64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_has_rail_type(s: &Services, company: u8, rt: u8) -> bool {
     let bit = 1u64.wrapping_shl(u32::from(rt));
-    (s.rail_hidden)() & bit == 0 && (s.company_railtypes)(company) & bit != 0
+    crate::type_registry::rail_hidden() & bit == 0 && (s.company_railtypes)(company) & bit != 0
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_has_any_rail_types(s: &Services, company: u8) -> bool {
     let available = (s.company_railtypes)(company);
-    available & !(s.rail_hidden)() != 0
+    available & !crate::type_registry::rail_hidden() != 0
 }
 pub fn val_param_rail_type(shared: &Shared, rt: u8) -> bool {
     rt < RAILTYPE_END

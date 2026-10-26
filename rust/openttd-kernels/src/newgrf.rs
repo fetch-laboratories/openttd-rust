@@ -126,3 +126,10 @@ crate::abi::layouts! {
 pub const GSF_SOUNDFX: u8 = 12;
 pub const GSF_CARGOES: u8 = 11;
 pub const GSF_END: u8 = 22;
+
+/// `GSF_RAILTYPES`.
+pub const GSF_RAILTYPES: u8 = 0x10;
+/// `GSF_ROADTYPES`.
+pub const GSF_ROADTYPES: u8 = 0x12;
+/// `GSF_TRAMTYPES`.
+pub const GSF_TRAMTYPES: u8 = 0x13;

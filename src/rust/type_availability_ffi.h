@@ -21,9 +21,6 @@ struct OpenTTDTypeAvailabilityServices {
 	uint64_t (*rail_introduces)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_introduces);
 	uint64_t (*road_introduces)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_introduces);
 	OpenTTDRoadTypeConstruction (*road_construction)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_construction);
-	uint64_t (*rail_hidden)() noexcept OPENTTD_SERVICE_DEFAULT(rail_hidden);
-	uint64_t (*road_hidden)() noexcept OPENTTD_SERVICE_DEFAULT(road_hidden);
-	uint64_t (*road_tram_mask)(RoadTramType) noexcept OPENTTD_SERVICE_DEFAULT(road_tram_mask);
 	uint64_t (*company_railtypes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_railtypes);
 	uint64_t (*company_roadtypes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_roadtypes);
 	void (*set_company_railtypes)(uint8_t, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_company_railtypes);

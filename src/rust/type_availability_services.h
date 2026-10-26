@@ -24,7 +24,4 @@ inline OpenTTDRoadTypeConstruction RustRoadTypeConstruction(RoadType rt) noexcep
 	const RoadTypeInfo *rti = GetRoadTypeInfo(rt);
 	return {.label = rti->label, .date = RustRoadTypeIntroductionDate(rti), .hidden = rti->flags.Test(RoadTypeFlag::Hidden), .town_build = RustRoadTypeTownBuild(rti)};
 }
-inline uint64_t RustRailTypesHidden() noexcept { return _railtypes_hidden_mask.base(); }
-inline uint64_t RustRoadTypesHidden() noexcept { return _roadtypes_hidden_mask.base(); }
-inline uint64_t RustMaskForRoadTramType(RoadTramType rtt) noexcept { return GetMaskForRoadTramType(rtt).base(); }
 #endif
