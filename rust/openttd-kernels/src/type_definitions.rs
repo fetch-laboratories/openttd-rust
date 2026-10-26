@@ -10,6 +10,7 @@
     clippy::too_many_arguments
 )]
 use crate::newgrf_internal::{CIR_INVALID_ID, CIR_SUCCESS, CIR_UNKNOWN};
+use crate::services::RoadTramType;
 use crate::{
     newgrf_bytereader::{BadgeList, ByteReader, ReadError, Reader, Services as ReaderServices},
     type_registry::{self as registry, TypeMap},
@@ -251,7 +252,7 @@ fn road_change(
     first: u32,
     last: u32,
     prop: i32,
-    rtt: u8,
+    rtt: RoadTramType,
 ) -> Result<i32, ReadError> {
     if last as usize > map.size {
         (s.invalid_change)(last, map.size);
@@ -285,7 +286,7 @@ fn road_change(
                     }
                     match prop {
                         0x0f => {
-                            if registry::road_tram_type(resolved) == rtt {
+                            if crate::road::get_road_tram_type(resolved).0 == rtt.0 {
                                 (s.powered)(info, resolved);
                             } else {
                                 (s.power_mismatch)(resolved, rt);
@@ -321,7 +322,7 @@ fn road_reserve(
     first: u32,
     last: u32,
     prop: i32,
-    rtt: u8,
+    rtt: RoadTramType,
 ) -> Result<i32, ReadError> {
     if last as usize > map.size {
         (s.invalid_reserve)(last, map.size);
@@ -335,7 +336,7 @@ fn road_reserve(
                 let mut rt = registry::openttd_rust_road_by_label(label, false);
                 if rt == INVALID_ROADTYPE {
                     rt = registry::openttd_rust_road_allocate(label, rtt);
-                } else if registry::road_tram_type(rt) != rtt {
+                } else if crate::road::get_road_tram_type(rt).0 != rtt.0 {
                     (s.reserve_mismatch)(id);
                     return Ok(CIR_INVALID_ID);
                 }
@@ -382,7 +383,7 @@ pub unsafe extern "C" fn openttd_rust_road_change(
     last: u32,
     prop: i32,
     native: *mut ByteReader,
-    rtt: u8,
+    rtt: RoadTramType,
 ) -> i32 {
     let mut reader = unsafe { Reader::new(native, &*reads) };
     road_change(unsafe { &*s }, &mut reader, map, first, last, prop, rtt).unwrap_or(-1)
@@ -397,7 +398,7 @@ pub unsafe extern "C" fn openttd_rust_road_reserve(
     last: u32,
     prop: i32,
     native: *mut ByteReader,
-    rtt: u8,
+    rtt: RoadTramType,
 ) -> i32 {
     let mut reader = unsafe { Reader::new(native, &*reads) };
     road_reserve(unsafe { &*s }, &mut reader, map, first, last, prop, rtt).unwrap_or(-1)

@@ -19,10 +19,10 @@ struct OpenTTDRailProperties {
 	void (*alternate_label)(RailTypeInfo *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(alternate_label);
 	void (*new_engine)(RailTypeInfo *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(new_engine);
 	void (*flags)(RailTypeInfo *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(flags);
-	void (*powered)(RailTypeInfo *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(powered);
-	void (*required)(RailTypeInfo *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(required);
-	void (*introduces)(RailTypeInfo *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(introduces);
-	void (*compatible)(RailTypeInfo *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(compatible);
+	void (*powered)(RailTypeInfo *, RailType) noexcept OPENTTD_SERVICE_DEFAULT(powered);
+	void (*required)(RailTypeInfo *, RailType) noexcept OPENTTD_SERVICE_DEFAULT(required);
+	void (*introduces)(RailTypeInfo *, RailType) noexcept OPENTTD_SERVICE_DEFAULT(introduces);
+	void (*compatible)(RailTypeInfo *, RailType) noexcept OPENTTD_SERVICE_DEFAULT(compatible);
 	void (*curve_speed)(RailTypeInfo *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(curve_speed);
 	void (*fallback)(RailTypeInfo *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(fallback);
 	void (*acceleration)(RailTypeInfo *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(acceleration);
@@ -48,9 +48,9 @@ struct OpenTTDRoadProperties {
 	void (*alternate_label)(RoadTypeInfo *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(alternate_label);
 	void (*new_engine)(RoadTypeInfo *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(new_engine);
 	void (*flags)(RoadTypeInfo *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(flags);
-	void (*powered)(RoadTypeInfo *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(powered);
-	void (*required)(RoadTypeInfo *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(required);
-	void (*introduces)(RoadTypeInfo *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(introduces);
+	void (*powered)(RoadTypeInfo *, RoadType) noexcept OPENTTD_SERVICE_DEFAULT(powered);
+	void (*required)(RoadTypeInfo *, RoadType) noexcept OPENTTD_SERVICE_DEFAULT(required);
+	void (*introduces)(RoadTypeInfo *, RoadType) noexcept OPENTTD_SERVICE_DEFAULT(introduces);
 	std::vector<BadgeID> *(*badges)(RoadTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(badges);
 	void (*invalid_reserve)(uint32_t, size_t) noexcept OPENTTD_SERVICE_DEFAULT(invalid_reserve);
 	void (*invalid_change)(uint32_t, size_t) noexcept OPENTTD_SERVICE_DEFAULT(invalid_change);

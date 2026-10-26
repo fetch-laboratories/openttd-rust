@@ -18,7 +18,8 @@ struct OpenTTDTypeLabels { const uint32_t *data; size_t size; };
 struct OpenTTDTypeMap { uint8_t *data; size_t size; };
 struct OpenTTDRailRegistryServices {
 	RailTypeInfo * (*spec)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(spec);
-	uint32_t (*label)(const RailTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(label);
+	RailTypeLabel (*label)(const RailTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(label);
+	RailTypeLabel (*type_label)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(type_label);
 	bool (*alternate)(const RailTypeInfo *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(alternate);
 	void (*clear)(RailTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(clear);
 	void (*copy_default)(RailTypeInfo *, RailType) noexcept OPENTTD_SERVICE_DEFAULT(copy_default);
@@ -30,7 +31,8 @@ struct OpenTTDRailRegistryServices {
 };
 struct OpenTTDRoadRegistryServices {
 	RoadTypeInfo * (*spec)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(spec);
-	uint32_t (*label)(const RoadTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(label);
+	RoadTypeLabel (*label)(const RoadTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(label);
+	RoadTypeLabel (*type_label)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(type_label);
 	bool (*alternate)(const RoadTypeInfo *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(alternate);
 	void (*clear)(RoadTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(clear);
 	void (*copy_default)(RoadTypeInfo *, RoadType) noexcept OPENTTD_SERVICE_DEFAULT(copy_default);

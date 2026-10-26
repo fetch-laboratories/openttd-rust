@@ -1052,7 +1052,7 @@ fn round_div(a: i32, b: u32) -> i32 {
 
 impl Engine<'_> {
     fn road_type(&self) -> u32 {
-        let mut mask = crate::type_registry::road_tram_mask(0);
+        let mut mask = crate::road::get_mask_for_road_tram_type(crate::road_type::RTT_ROAD);
         let mut best = 0;
         let mut best_speed = None;
         while mask != 0 {

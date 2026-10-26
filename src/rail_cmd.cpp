@@ -50,6 +50,7 @@
 
 #ifdef WITH_RUST
 #include "rust/type_registry_ffi.h"
+#include "rust/type_availability_services.h"
 #endif
 
 #include "safeguards.h"
@@ -212,12 +213,13 @@ const OpenTTDRailRegistryServices &GetRustRailRegistryServices() noexcept
 {
 	static const OpenTTDRailRegistryServices table = {
 		.spec = [](RailType rt) noexcept { return &_railtypes[rt]; },
-		.label = [](const RailTypeInfo *info) noexcept { return info->label; },
+		.label = RustRailTypeLabel,
+		.type_label = [](RailType rt) noexcept { return RustRailTypeLabel(GetRailTypeInfo(rt)); },
 		.alternate = [](const RailTypeInfo *info, uint32_t label) noexcept { return info->alternate_labels.contains(label); },
 		.clear = [](RailTypeInfo *info) noexcept { *info = RailTypeInfo{}; },
 		.copy_default = [](RailTypeInfo *info, RailType source) noexcept { *info = _original_railtypes[source]; },
 		.resolve_gui = [](RailTypeInfo *info) noexcept { ResolveRailTypeGUISprites(info); },
-		.publication = [](const RailTypeInfo *info) noexcept { return OpenTTDTypePublication{.label = info->label, .hidden = info->flags.Test(RailTypeFlag::Hidden)}; },
+		.publication = [](const RailTypeInfo *info) noexcept { return OpenTTDTypePublication{.label = RustRailTypeLabel(info), .hidden = RustRailTypeHidden(info)}; },
 		.sort = [](RailType *data, size_t count) noexcept { std::sort(data, data + count, CompareRailTypes); },
 		.publish_sorted = [](RailType *data, size_t count) noexcept { _sorted_railtypes = {data, count}; },
 		.allocate = [](RailTypeInfo *info, const OpenTTDTypeAllocation *value) noexcept {

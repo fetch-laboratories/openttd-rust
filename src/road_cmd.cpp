@@ -61,6 +61,7 @@
 
 #ifdef WITH_RUST
 #include "rust/type_registry_ffi.h"
+#include "rust/type_availability_services.h"
 #endif
 
 #include "safeguards.h"
@@ -204,12 +205,13 @@ const OpenTTDRoadRegistryServices &GetRustRoadRegistryServices() noexcept
 {
 	static const OpenTTDRoadRegistryServices table = {
 		.spec = [](RoadType rt) noexcept { return &_roadtypes[rt]; },
-		.label = [](const RoadTypeInfo *info) noexcept { return info->label; },
+		.label = RustRoadTypeLabel,
+		.type_label = [](RoadType rt) noexcept { return RustRoadTypeLabel(GetRoadTypeInfo(rt)); },
 		.alternate = [](const RoadTypeInfo *info, uint32_t label) noexcept { return info->alternate_labels.contains(label); },
 		.clear = [](RoadTypeInfo *info) noexcept { *info = RoadTypeInfo{}; },
 		.copy_default = [](RoadTypeInfo *info, RoadType source) noexcept { *info = _original_roadtypes[source]; },
 		.resolve_gui = [](RoadTypeInfo *info) noexcept { ResolveRoadTypeGUISprites(info); },
-		.publication = [](const RoadTypeInfo *info) noexcept { return OpenTTDTypePublication{.label = info->label, .hidden = info->flags.Test(RoadTypeFlag::Hidden)}; },
+		.publication = [](const RoadTypeInfo *info) noexcept { return OpenTTDTypePublication{.label = RustRoadTypeLabel(info), .hidden = RustRoadTypeHidden(info)}; },
 		.sort = [](RoadType *data, size_t count) noexcept { std::sort(data, data + count, CompareRoadTypes); },
 		.publish_sorted = [](RoadType *data, size_t count) noexcept { _sorted_roadtypes = {data, count}; },
 		.allocate = [](RoadTypeInfo *info, const OpenTTDTypeAllocation *value) noexcept {

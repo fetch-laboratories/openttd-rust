@@ -1228,7 +1228,7 @@ unsafe fn variable(
                     let rtt = crate::road::get_road_tram_type((s.roadtype)(v).0);
                     let param = crate::services::RoadType(
                         crate::type_registry::openttd_rust_road_translate(
-                            u8::from(rtt.0),
+                            rtt,
                             parameter as u8,
                             grf,
                         ),
