@@ -25,6 +25,13 @@ use crate::newgrf_bytereader::{
 };
 use crate::newgrf_internal::{CIR_INVALID_ID, CIR_SUCCESS, CIR_UNKNOWN};
 use crate::newgrf_properties::{
+    PROP_AIRCRAFT_CARGO_AGE_PERIOD, PROP_AIRCRAFT_COST_FACTOR, PROP_AIRCRAFT_MAIL_CAPACITY,
+    PROP_AIRCRAFT_PASSENGER_CAPACITY, PROP_AIRCRAFT_RANGE, PROP_AIRCRAFT_RUNNING_COST_FACTOR,
+    PROP_AIRCRAFT_SPEED, PROP_ROADVEH_CARGO_AGE_PERIOD, PROP_ROADVEH_CARGO_CAPACITY,
+    PROP_ROADVEH_COST_FACTOR, PROP_ROADVEH_POWER, PROP_ROADVEH_RUNNING_COST_FACTOR,
+    PROP_ROADVEH_SHORTEN_FACTOR, PROP_ROADVEH_SPEED, PROP_ROADVEH_TRACTIVE_EFFORT,
+    PROP_ROADVEH_WEIGHT, PROP_SHIP_CARGO_AGE_PERIOD, PROP_SHIP_CARGO_CAPACITY,
+    PROP_SHIP_COST_FACTOR, PROP_SHIP_RUNNING_COST_FACTOR, PROP_SHIP_SPEED,
     PROP_TRAIN_CARGO_AGE_PERIOD, PROP_TRAIN_CARGO_CAPACITY, PROP_TRAIN_COST_FACTOR,
     PROP_TRAIN_CURVE_SPEED_MOD, PROP_TRAIN_POWER, PROP_TRAIN_RUNNING_COST_FACTOR,
     PROP_TRAIN_SHORTEN_FACTOR, PROP_TRAIN_SPEED, PROP_TRAIN_TRACTIVE_EFFORT, PROP_TRAIN_USER_DATA,
@@ -487,25 +494,25 @@ unsafe fn road(
             (*temp(id)).fields.roadtramtype = r.byte()?.wrapping_add(1);
         },
         0x08 => (unsafe { &*s.loading }.set_road_speed)(e, u16::from(r.byte()?)),
-        0x09 => (s.set_road_running)(e, r.byte()?),
+        p if p == i32::from(PROP_ROADVEH_RUNNING_COST_FACTOR) => (s.set_road_running)(e, r.byte()?),
         0x0a => price(s, e, VEH_ROAD, r.dword()?),
         0x0e => (s.set_road_image)(e, image(s, VEH_ROAD, r.byte()?)),
-        0x0f => (s.set_road_capacity)(e, r.byte()?),
+        p if p == i32::from(PROP_ROADVEH_CARGO_CAPACITY) => (s.set_road_capacity)(e, r.byte()?),
         0x10 => unsafe {
             default_cargo(s, e, id, file, VEH_ROAD, r)?;
         },
-        0x11 => (s.set_road_cost)(e, r.byte()?),
+        p if p == i32::from(PROP_ROADVEH_COST_FACTOR) => (s.set_road_cost)(e, r.byte()?),
         0x12 => (s.set_road_sound)(e, (s.sound)(file, u16::from(r.byte()?))),
-        0x13 => (s.set_road_power)(e, r.byte()?),
-        0x14 => (s.set_road_weight)(e, r.byte()?),
-        0x15 => unsafe {
+        p if p == i32::from(PROP_ROADVEH_POWER) => (s.set_road_power)(e, r.byte()?),
+        p if p == i32::from(PROP_ROADVEH_WEIGHT) => (s.set_road_weight)(e, r.byte()?),
+        p if p == i32::from(PROP_ROADVEH_SPEED) => unsafe {
             (*temp(id)).fields.rv_max_speed = r.byte()?;
         },
         0x16 => unsafe {
             refit(s, e, id, file, r.dword()?);
         },
         0x17 => callbacks(s, e, r, false)?,
-        0x18 => (s.set_road_te)(e, r.byte()?),
+        p if p == i32::from(PROP_ROADVEH_TRACTIVE_EFFORT) => (s.set_road_te)(e, r.byte()?),
         0x19 => (s.set_road_drag)(e, r.byte()?),
         0x1a => (s.set_refit_cost)(e, r.byte()?),
         0x1b => (s.set_retire)(e, r.byte()?),
@@ -521,8 +528,8 @@ unsafe fn road(
             openttd_rust_vehicle_order(id, r.extended()?);
         },
         0x21 => (s.set_road_visual)(e, visual(s, r.byte()?)),
-        0x22 => (s.set_cargo_age)(e, r.word()?),
-        0x23 => (s.set_road_shorten)(e, r.byte()?),
+        p if p == i32::from(PROP_ROADVEH_CARGO_AGE_PERIOD) => (s.set_cargo_age)(e, r.word()?),
+        p if p == i32::from(PROP_ROADVEH_SHORTEN_FACTOR) => (s.set_road_shorten)(e, r.byte()?),
         0x24 | 0x25 => unsafe {
             cargo_list(id, file, prop == 0x24, r)?;
         },
@@ -550,13 +557,13 @@ unsafe fn ship(
     match prop {
         0x08 => (s.set_ship_image)(e, image(s, VEH_SHIP, r.byte()?)),
         0x09 => (unsafe { &*s.loading }.set_old_refittable)(e, r.byte()? != 0),
-        0x0a => (s.set_ship_cost)(e, r.byte()?),
-        0x0b => (s.set_ship_speed)(e, u16::from(r.byte()?)),
+        p if p == i32::from(PROP_SHIP_COST_FACTOR) => (s.set_ship_cost)(e, r.byte()?),
+        p if p == i32::from(PROP_SHIP_SPEED) => (s.set_ship_speed)(e, u16::from(r.byte()?)),
         0x0c => unsafe {
             default_cargo(s, e, id, file, VEH_SHIP, r)?;
         },
-        0x0d => (s.set_ship_capacity)(e, r.word()?),
-        0x0f => (s.set_ship_running)(e, r.byte()?),
+        p if p == i32::from(PROP_SHIP_CARGO_CAPACITY) => (s.set_ship_capacity)(e, r.word()?),
+        p if p == i32::from(PROP_SHIP_RUNNING_COST_FACTOR) => (s.set_ship_running)(e, r.byte()?),
         0x10 => (s.set_ship_sound)(e, (s.sound)(file, u16::from(r.byte()?))),
         0x11 => unsafe {
             refit(s, e, id, file, r.dword()?);
@@ -578,7 +585,7 @@ unsafe fn ship(
             openttd_rust_vehicle_order(id, r.extended()?);
         },
         0x1c => (s.set_ship_visual)(e, visual(s, r.byte()?)),
-        0x1d => (s.set_cargo_age)(e, r.word()?),
+        p if p == i32::from(PROP_SHIP_CARGO_AGE_PERIOD) => (s.set_cargo_age)(e, r.word()?),
         0x1e | 0x1f => unsafe {
             cargo_list(id, file, prop == 0x1e, r)?;
         },
@@ -624,12 +631,18 @@ unsafe fn aircraft(
             assign_bit(&mut subtype, 1, large);
             (s.set_aircraft_subtype)(e, subtype as u8);
         }
-        0x0b => (s.set_aircraft_cost)(e, r.byte()?),
-        0x0c => (s.set_aircraft_speed)(e, u16::from(r.byte()?) * 128 / 10),
+        p if p == i32::from(PROP_AIRCRAFT_COST_FACTOR) => (s.set_aircraft_cost)(e, r.byte()?),
+        p if p == i32::from(PROP_AIRCRAFT_SPEED) => {
+            (s.set_aircraft_speed)(e, u16::from(r.byte()?) * 128 / 10);
+        }
         0x0d => (s.set_aircraft_acceleration)(e, r.byte()?),
-        0x0e => (s.set_aircraft_running)(e, r.byte()?),
-        0x0f => (s.set_aircraft_passengers)(e, r.word()?),
-        0x11 => (s.set_aircraft_mail)(e, r.byte()?),
+        p if p == i32::from(PROP_AIRCRAFT_RUNNING_COST_FACTOR) => {
+            (s.set_aircraft_running)(e, r.byte()?);
+        }
+        p if p == i32::from(PROP_AIRCRAFT_PASSENGER_CAPACITY) => {
+            (s.set_aircraft_passengers)(e, r.word()?);
+        }
+        p if p == i32::from(PROP_AIRCRAFT_MAIL_CAPACITY) => (s.set_aircraft_mail)(e, r.byte()?),
         0x12 => (s.set_aircraft_sound)(e, (s.sound)(file, u16::from(r.byte()?))),
         0x13 => unsafe {
             refit(s, e, id, file, r.dword()?);
@@ -648,11 +661,11 @@ unsafe fn aircraft(
         0x1b => unsafe {
             openttd_rust_vehicle_order(id, r.extended()?);
         },
-        0x1c => (s.set_cargo_age)(e, r.word()?),
+        p if p == i32::from(PROP_AIRCRAFT_CARGO_AGE_PERIOD) => (s.set_cargo_age)(e, r.word()?),
         0x1d | 0x1e => unsafe {
             cargo_list(id, file, prop == 0x1d, r)?;
         },
-        0x1f => (s.set_aircraft_range)(e, r.word()?),
+        p if p == i32::from(PROP_AIRCRAFT_RANGE) => (s.set_aircraft_range)(e, r.word()?),
         0x20 => (unsafe { &*s.loading }.set_variant)(e, r.word()?),
         0x21 => (s.set_extra)(e, r.dword()?),
         0x22 => callbacks(s, e, r, true)?,

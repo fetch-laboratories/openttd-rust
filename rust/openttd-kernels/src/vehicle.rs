@@ -98,8 +98,6 @@ pub use crate::tile_type::{MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
 pub const AM_REALISTIC: u8 = 1;
 /// `INVALID_PRICE`.
 pub use crate::economy_type::INVALID_PRICE;
-/// `PROP_AIRCRAFT_SPEED`.
-pub const PROP_AIRCRAFT_SPEED: u8 = 0x0C;
 /// `VEHICLE_LENGTH`.
 pub const VEHICLE_LENGTH: u8 = 8;
 /// `CalendarTime::DAYS_IN_YEAR * Ticks::DAY_TICKS`.

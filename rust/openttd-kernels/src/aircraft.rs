@@ -41,6 +41,7 @@ use crate::airport::{
     LANDING, STARTTAKEOFF, TAKEOFF,
 };
 use crate::company_type::OWNER_NONE;
+use crate::newgrf_properties::PROP_AIRCRAFT_SPEED;
 use crate::newgrf_sound::VSE_START;
 use crate::order_type::{
     OT_CONDITIONAL, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_LEAVESTATION, OT_LOADING, OT_NOTHING,
@@ -50,7 +51,6 @@ use crate::services::{Map, Services};
 use crate::station::Station;
 use crate::station_type::INVALID_STATION;
 use crate::tile_type::INVALID_TILE;
-use crate::vehicle::PROP_AIRCRAFT_SPEED;
 use crate::vehicle::maintenance;
 use crate::vehicle::{
     AltitudeInputs, Coordinates, DayCost, DirectionProgress, MovementObservations, OpenTTDVehicle,
