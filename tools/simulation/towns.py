@@ -682,6 +682,11 @@ def house_definition_fixtures(folder):
         + definition(0, 0, **{"13": word(0), "0b": b"\x35"})
         + [prop(0, 0x23, b"\x11")]
     )
+    invalid_id = (
+        [info(b"I477")]
+        + definition(0, 0, **{"13": word(0), "0b": b"\x36"})
+        + [bytes((0, 7, 1, 1, 255)) + word(65535) + b"\x08\x00"]
+    )
     for name, actions in (
         ("houses", main),
         ("conflict", conflict),
@@ -689,6 +694,7 @@ def house_definition_fixtures(folder):
         ("cargo", cargo),
         ("badges", badges),
         ("oversized", oversized),
+        ("invalid-id", invalid_id),
     ):
         (folder / f"{name}.grf").write_bytes(grf(actions, 2))
 

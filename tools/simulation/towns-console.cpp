@@ -586,6 +586,8 @@ static void InspectHouseDefinitions()
 	HouseDefinitionNeed(GetGRFConfig(0x37373444U)->status == GCS_DISABLED && badge_spec->badges.size() == 1 && badge_spec->badges.front() == keep->index && partial->features.Test(GSF_HOUSES), "partial-badge-seen");
 	const auto *oversized = GetGRFConfig(0x3737344cU);
 	HouseDefinitionNeed(oversized->status == GCS_DISABLED && oversized->errors.front().message == STR_NEWGRF_ERROR_LIST_PROPERTY_TOO_LONG && oversized->errors.front().param_value[1] == 0x23 && DefinitionSpec(0, 0x3737344cU)->population == 53, "list-limit");
+	const auto *invalid_id = GetGRFConfig(0x37373449U);
+	HouseDefinitionNeed(invalid_id->status == GCS_DISABLED && invalid_id->errors.size() == 1 && invalid_id->errors.front().message == STR_NEWGRF_ERROR_INVALID_ID && DefinitionSpec(0, 0x37373449U)->population == 54, "invalid-id");
 	for (HouseID id = 0; id < HouseSpec::Specs().size(); ++id) {
 		const auto *spec = HouseSpec::Get(id);
 		fmt::print(stderr, "TOWN definition-state {} {} {} {} {} {} {} {} {}\n", id, spec->enabled, spec->building_flags.base(), spec->building_availability.base(), spec->population, spec->min_year.base(), spec->max_year.base(), spec->grf_prop.override_id, spec->watched_cargoes);
@@ -600,6 +602,26 @@ static size_t OccupiedDefinitionTiles()
 		HouseID id = GetHouseType(tile);
 		if (id != _house_mngr.GetID(0, HOUSE_DEFINITION_GRF) && id != _house_mngr.GetID(1, HOUSE_DEFINITION_GRF)) continue;
 		++count;
+		if (count == 1) {
+			auto check_mapping = [&] {
+				HouseResolverObject resolver(id, tile, Town::GetByTile(tile));
+				bool available = true;
+				HouseDefinitionNeed(resolver.house_scope.GetVariable(0x67, 0, available) == HOUSE_DEFINITION_GRF && available, "resolver-grfid");
+				const uint32_t count = resolver.house_scope.GetVariable(0x61, HouseSpec::Get(id)->grf_prop.local_id, available);
+				HouseDefinitionNeed((count & 0xFF) == std::min<uint>(255, Town::GetByTile(tile)->cache.building_counts.id_count[id]) && (count & 0xFF) > 0 && available, "resolver-local-id");
+			};
+			check_mapping();
+			{
+				HouseOverrideManager temporary(NEW_HOUSE_OFFSET, NUM_HOUSES, INVALID_HOUSE_ID);
+				temporary.mappings[id] = {.grfid = 0xBAD, .entity_id = 0, .substitute_id = 0};
+				check_mapping();
+				HouseOverrideManager copied = temporary;
+				check_mapping();
+				copied = _house_mngr;
+				check_mapping();
+			}
+			check_mapping();
+		}
 		CargoArray accepted{}, produced{}; CargoTypes always = 0;
 		AddAcceptedCargo(tile, accepted, &always); AddProducedCargo(tile, produced);
 		for (CargoType cargo = 0; cargo < NUM_CARGO; ++cargo) {
@@ -620,7 +642,7 @@ static bool HouseDefinitionsScenario(std::span<std::string_view> args)
 	if (args.size() < 4) return false;
 	SetRandomSeed(0x47700001);
 	_grfconfig.clear();
-	for (const char *name : {"houses", "conflict", "colours", "cargo", "badges", "oversized"}) {
+	for (const char *name : {"houses", "conflict", "colours", "cargo", "badges", "oversized", "invalid-id"}) {
 		auto config = std::make_unique<GRFConfig>(std::string(args[2]) + "/" + name + ".grf");
 		HouseDefinitionNeed(FillGRFDetails(*config, false, NO_DIRECTORY), "file-scan");
 		config->flags.Reset(GRFConfigFlag::InitOnly);
