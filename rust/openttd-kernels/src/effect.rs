@@ -662,15 +662,17 @@ pub extern "C" fn openttd_rust_effect_create_rel(
 /// `EffectVehicle::SetAnimationState` on a live created shell.
 #[allow(unsafe_code)]
 pub(crate) fn set_animation(shell: *mut c_void, duration: u16) {
+    let owner = (creation().owner)(shell);
     unsafe {
-        openttd_rust_effect_set((creation().owner)(shell), 0, duration);
+        (*owner).animation = duration;
     }
 }
 
 /// `EffectVehicle::SetAnimationSubstate` on a live created shell.
 #[allow(unsafe_code)]
 pub(crate) fn set_substate(shell: *mut c_void, value: u8) {
+    let owner = (creation().owner)(shell);
     unsafe {
-        openttd_rust_effect_set((creation().owner)(shell), 1, u16::from(value));
+        (*owner).substate = value;
     }
 }

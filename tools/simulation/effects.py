@@ -552,6 +552,13 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
 
 
 def check(scenario, run, mode, role, result):
+    if scenario.get("effect_emission"):
+        observations = [line for line in run["log"] if line.startswith("FLEET effect-")]
+        key = f"{mode}_effect_emission"
+        if result.setdefault(key, observations) != observations:
+            raise RuntimeError(
+                f"{mode}/{role}: effect IDs, cache or emission records differ"
+            )
     if scenario.get("effect_emission") == "train":
         expected = {
             "stock-flipped": (6, 0, 10),
