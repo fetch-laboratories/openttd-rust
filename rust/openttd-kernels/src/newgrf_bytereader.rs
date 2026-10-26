@@ -25,7 +25,7 @@ pub struct Reader<'a> {
     services: &'a Services,
 }
 impl<'a> Reader<'a> {
-    pub fn new(native: *mut ByteReader, services: &'a Services) -> Self {
+    pub unsafe fn new(native: *mut ByteReader, services: &'a Services) -> Self {
         Self { native, services }
     }
     pub fn byte(&mut self) -> Result<u8, ()> {
@@ -59,7 +59,7 @@ impl<'a> Reader<'a> {
             Err(())
         }
     }
-    pub fn badges(&mut self, feature: u8, destination: *mut BadgeList) -> Result<(), ()> {
+    pub unsafe fn badges(&mut self, feature: u8, destination: *mut BadgeList) -> Result<(), ()> {
         if unsafe { (self.services.read_badges)(self.native, feature, destination) } {
             Ok(())
         } else {

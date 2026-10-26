@@ -12,7 +12,6 @@ struct IndustryTileSpec;
 struct GRFFile;
 struct OpenTTDIndustryDefinitionIdentity { uint32_t grfid; uint16_t local, substitute; };
 struct OpenTTDIndustryDefinitionAvailability { bool enabled, has_file; };
-struct OpenTTDIndustryDefinitionCounts { size_t industries, tiles; };
 struct OpenTTDIndustryDefinitionCargo { uint32_t label; bool mixed; uint8_t cargo; };
 /** Native specs remain canonical. Load/reset is serialized by the game-state mutex;
  * leaves never yield or reset definitions. No borrowed spec survives vector cleanup. */
@@ -38,7 +37,8 @@ struct OpenTTDIndustryDefinitionServices {
 	void (*reset_tile)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(reset_tile);
 	void (*clear_tile)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_tile);
 	GRFFile *(*file)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(file);
-	OpenTTDIndustryDefinitionCounts (*counts)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(counts);
+	size_t (*industry_count)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(industry_count);
+	size_t (*tile_count)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(tile_count);
 	IndustrySpec *(*file_industry)(GRFFile *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(file_industry);
 	IndustryTileSpec *(*file_tile)(GRFFile *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(file_tile);
 	void (*clear_file)(GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(clear_file);
@@ -53,6 +53,7 @@ struct OpenTTDIndustryDefinitionServices {
 };
 const OpenTTDIndustryDefinitionServices &GetIndustryDefinitionServices() noexcept;
 extern "C" {
+uint16_t openttd_rust_industry_tile_definition_allocate(OpenTTDOverrideManager *, uint16_t, uint32_t, uint16_t);
 uint16_t openttd_rust_industry_definition_allocate(OpenTTDOverrideManager *, uint16_t, uint32_t, uint16_t, const OpenTTDIndustryDefinitionServices *);
 void openttd_rust_industry_definition_publish(OpenTTDOverrideManager *, IndustrySpec *, const OpenTTDIndustryDefinitionServices *);
 void openttd_rust_industry_tile_definition_publish(OpenTTDOverrideManager *, IndustryTileSpec *, const OpenTTDIndustryDefinitionServices *);

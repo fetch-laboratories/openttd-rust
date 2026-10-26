@@ -13,6 +13,31 @@ pub struct LayoutView {
     pub data: *const LayoutTile,
     pub size: usize,
 }
+/// Rust owns each local layout allocation; native installation borrows data only until return.
+#[repr(C)]
+pub struct LayoutBuffer {
+    pub data: *mut LayoutTile,
+    pub size: usize,
+    pub capacity: usize,
+}
+impl LayoutBuffer {
+    pub fn new(tiles: Vec<LayoutTile>) -> Self {
+        let mut tiles = std::mem::ManuallyDrop::new(tiles);
+        Self {
+            data: tiles.as_mut_ptr(),
+            size: tiles.len(),
+            capacity: tiles.capacity(),
+        }
+    }
+}
+impl Drop for LayoutBuffer {
+    fn drop(&mut self) {
+        unsafe {
+            drop(Vec::from_raw_parts(self.data, self.size, self.capacity));
+        }
+    }
+}
+
 #[repr(C)]
 pub struct Services {
     pub resize_industries: unsafe extern "C" fn(*mut c_void, usize),
@@ -58,7 +83,7 @@ pub struct Services {
     pub map_station_name: unsafe extern "C" fn(*mut SpecHandle, u16),
     pub original_layout_count: unsafe extern "C" fn(u8) -> usize,
     pub original_layout: unsafe extern "C" fn(u8, u8) -> LayoutView,
-    pub install_layouts: unsafe extern "C" fn(*mut SpecHandle, *const LayoutView, usize),
+    pub install_layouts: unsafe extern "C" fn(*mut SpecHandle, *const LayoutBuffer, usize),
     pub too_many_tiles: unsafe extern "C" fn(u32),
     pub too_many_industries: unsafe extern "C" fn(u32),
     pub tile_substitute_invalid: unsafe extern "C" fn(u8, u32),
@@ -82,6 +107,7 @@ crate::abi::layouts! {
     fn abi_layout;
     "IndustryTileLayoutTile" ["industry"] => LayoutTile { ti, gfx };
     "OpenTTDIndustryDefinitionLayout" ["industry"] => LayoutView { data, size };
+    "OpenTTDIndustryDefinitionLayoutBuffer" ["industry"] => LayoutBuffer { data, size, capacity };
     "OpenTTDIndustryPropertyServices" ["industry"] => Services {
         resize_industries, resize_tiles, create_industry, create_tile, industry_identity, tile_identity, clear_placement_check, clear_animation, callbacks, set_rate, set_multiplier, set_conflicting, set_creation, set_ingame, invalidate_produced, invalidate_accepted, invalidate_tile_accepted, set_acceptance, set_sounds, clear_station_name, set_life, set_cost, set_minimal_cargo, set_map_colour, set_behaviour, set_prospecting, set_removal_cost, set_callbacks, set_tile_slopes, set_tile_callbacks, set_animation_frames, set_animation_status, set_animation_speed, set_animation_triggers, set_tile_flags, map_closure_text, map_production_up_text, map_production_down_text, map_new_industry_text, map_name, map_station_name, original_layout_count, original_layout, install_layouts,
         too_many_tiles, too_many_industries, tile_substitute_invalid, tile_override_invalid, industry_substitute_invalid, industry_override_invalid, layout_size_mismatch, layout_import_type, layout_import_index, layout_tile_undefined, layout_invalid, list_too_long, invalid_import, cargo_translation, industry_badges, tile_badges

@@ -352,6 +352,13 @@ void IndustryOverrideManager::SetEntitySpec(IndustrySpec &&inds)
 #endif
 }
 
+#ifdef WITH_RUST
+uint16_t IndustryTileOverrideManager::AddEntityID(uint16_t grf_local_id, uint32_t grfid, uint16_t substitute_id)
+{
+	return openttd_rust_industry_tile_definition_allocate(this->rust_owner, grf_local_id, grfid, substitute_id);
+}
+#endif
+
 void IndustryTileOverrideManager::SetEntitySpec(IndustryTileSpec &&its)
 {
 #ifdef WITH_RUST

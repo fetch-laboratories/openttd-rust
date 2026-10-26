@@ -6,6 +6,7 @@
 #include "../industrytype.h"
 #include "newgrf_bytereader_ffi.h"
 struct OpenTTDIndustryDefinitionLayout { const IndustryTileLayoutTile *data; size_t size; };
+struct OpenTTDIndustryDefinitionLayoutBuffer { const IndustryTileLayoutTile *data; size_t size, capacity; };
 struct OpenTTDIndustryPropertyServices {
 	void (*resize_industries)(GRFFile *file, size_t size) noexcept OPENTTD_SERVICE_DEFAULT(resize_industries);
 	void (*resize_tiles)(GRFFile *file, size_t size) noexcept OPENTTD_SERVICE_DEFAULT(resize_tiles);
@@ -50,7 +51,7 @@ struct OpenTTDIndustryPropertyServices {
 	void (*map_station_name)(IndustrySpec *spec, uint16_t string) noexcept OPENTTD_SERVICE_DEFAULT(map_station_name);
 	size_t (*original_layout_count)(uint8_t type) noexcept OPENTTD_SERVICE_DEFAULT(original_layout_count);
 	OpenTTDIndustryDefinitionLayout (*original_layout)(uint8_t type, uint8_t layout) noexcept OPENTTD_SERVICE_DEFAULT(original_layout);
-	void (*install_layouts)(IndustrySpec *spec, const OpenTTDIndustryDefinitionLayout *layouts, size_t count) noexcept OPENTTD_SERVICE_DEFAULT(install_layouts);
+	void (*install_layouts)(IndustrySpec *spec, const OpenTTDIndustryDefinitionLayoutBuffer *layouts, size_t count) noexcept OPENTTD_SERVICE_DEFAULT(install_layouts);
 	void (*too_many_tiles)(uint32_t last) noexcept OPENTTD_SERVICE_DEFAULT(too_many_tiles);
 	void (*too_many_industries)(uint32_t last) noexcept OPENTTD_SERVICE_DEFAULT(too_many_industries);
 	void (*tile_substitute_invalid)(uint8_t substitute, uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(tile_substitute_invalid);

@@ -19,11 +19,6 @@ pub struct Availability {
     pub has_file: bool,
 }
 #[repr(C)]
-pub struct Counts {
-    pub industries: usize,
-    pub tiles: usize,
-}
-#[repr(C)]
 pub struct Cargo {
     pub label: u32,
     pub mixed: bool,
@@ -52,7 +47,8 @@ pub struct Services {
     pub reset_tile: unsafe extern "C" fn(u16),
     pub clear_tile: unsafe extern "C" fn(u16),
     pub file: unsafe extern "C" fn(usize) -> *mut c_void,
-    pub counts: unsafe extern "C" fn(*const c_void) -> Counts,
+    pub industry_count: unsafe extern "C" fn(*const c_void) -> usize,
+    pub tile_count: unsafe extern "C" fn(*const c_void) -> usize,
     pub file_industry: unsafe extern "C" fn(*mut c_void, usize) -> *mut SpecHandle,
     pub file_tile: unsafe extern "C" fn(*mut c_void, usize) -> *mut TileSpec,
     pub clear_file: unsafe extern "C" fn(*mut c_void),
@@ -119,7 +115,7 @@ pub unsafe fn allocate_tile(local: u16, grfid: u32, substitute: u16) -> u16 {
 }
 
 unsafe extern "C" fn tile_valid(_: *mut c_void, id: u16) -> bool {
-    override_manager::industry_tile_valid_id(id)
+    crate::newgrf_commons::industry_tile_check_valid_new_id(id)
 }
 pub unsafe fn publish(
     manager: *mut override_manager::Manager,
@@ -201,8 +197,8 @@ pub unsafe fn finalise(s: &Services, mut translate: impl FnMut(Cargo) -> u8) {
         if file.is_null() {
             break;
         }
-        let count = unsafe { (s.counts)(file) };
-        for i in 0..count.industries {
+        let industry_count = unsafe { (s.industry_count)(file) };
+        for i in 0..industry_count {
             let spec = unsafe { (s.file_industry)(file, i) };
             if spec.is_null() || !unsafe { (s.availability)(spec) }.enabled {
                 continue;
@@ -211,7 +207,8 @@ pub unsafe fn finalise(s: &Services, mut translate: impl FnMut(Cargo) -> u8) {
                 publish(override_manager::industry(), spec, s);
             }
         }
-        for i in 0..count.tiles {
+        let tile_count = unsafe { (s.tile_count)(file) };
+        for i in 0..tile_count {
             let spec = unsafe { (s.file_tile)(file, i) };
             if !spec.is_null() {
                 unsafe {
@@ -271,6 +268,16 @@ pub unsafe fn finalise(s: &Services, mut translate: impl FnMut(Cargo) -> u8) {
             }
         }
     }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_industry_tile_definition_allocate(
+    manager: *mut override_manager::Manager,
+    local: u16,
+    grfid: u32,
+    substitute: u16,
+) -> u16 {
+    unsafe { allocate_tile_for(manager, local, grfid, substitute) }
 }
 
 #[unsafe(no_mangle)]
@@ -345,9 +352,8 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDIndustryDefinitionIdentity" ["industry"] => Identity { grfid, local, substitute };
     "OpenTTDIndustryDefinitionAvailability" ["industry"] => Availability { enabled, has_file };
-    "OpenTTDIndustryDefinitionCounts" ["industry"] => Counts { industries, tiles };
     "OpenTTDIndustryDefinitionCargo" ["industry"] => Cargo { label, mixed, cargo };
     "OpenTTDIndustryDefinitionServices" ["industry"] => Services {
-        generation, industry, tile, grfid, identity, tile_identity, availability, set_enabled, set_override, set_tile_override, set_tile_enabled, publish, publish_tile, industry_full, tile_full, reset_industry, clear_industry, climate_available, reset_tile, clear_tile, file, counts, file_industry, file_tile, clear_file, conflicting, invalid_name, produced, accepted, tile_accepted, set_produced, set_accepted, set_tile_accepted
+        generation, industry, tile, grfid, identity, tile_identity, availability, set_enabled, set_override, set_tile_override, set_tile_enabled, publish, publish_tile, industry_full, tile_full, reset_industry, clear_industry, climate_available, reset_tile, clear_tile, file, industry_count, tile_count, file_industry, file_tile, clear_file, conflicting, invalid_name, produced, accepted, tile_accepted, set_produced, set_accepted, set_tile_accepted
     };
 }

@@ -277,7 +277,13 @@ public:
 struct IndustryTileSpec;
 class IndustryTileOverrideManager : public OverrideManagerBase {
 protected:
-	bool CheckValidNewID(uint16_t testid) override { return testid != 0xFF; }
+	bool CheckValidNewID(uint16_t testid) override {
+#ifdef WITH_RUST
+		return openttd_rust_industry_tile_valid_id(testid);
+#else
+		return testid != 0xFF;
+#endif
+	}
 public:
 	IndustryTileOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
 			OverrideManagerBase(offset, maximum, invalid) {
@@ -285,6 +291,10 @@ public:
 		openttd_rust_industry_tile_register_manager(this->rust_owner);
 #endif
 	}
+
+#ifdef WITH_RUST
+	uint16_t AddEntityID(uint16_t grf_local_id, uint32_t grfid, uint16_t substitute_id) override;
+#endif
 
 	void SetEntitySpec(IndustryTileSpec &&indts);
 };
@@ -301,7 +311,13 @@ public:
 struct AirportTileSpec;
 class AirportTileOverrideManager : public OverrideManagerBase {
 protected:
-	bool CheckValidNewID(uint16_t testid) override { return testid != 0xFF; }
+	bool CheckValidNewID(uint16_t testid) override {
+#ifdef WITH_RUST
+		return openttd_rust_industry_tile_valid_id(testid);
+#else
+		return testid != 0xFF;
+#endif
+	}
 public:
 	AirportTileOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
 			OverrideManagerBase(offset, maximum, invalid) {}
@@ -312,7 +328,13 @@ public:
 struct ObjectSpec;
 class ObjectOverrideManager : public OverrideManagerBase {
 protected:
-	bool CheckValidNewID(uint16_t testid) override { return testid != 0xFF; }
+	bool CheckValidNewID(uint16_t testid) override {
+#ifdef WITH_RUST
+		return openttd_rust_industry_tile_valid_id(testid);
+#else
+		return testid != 0xFF;
+#endif
+	}
 public:
 	ObjectOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
 			OverrideManagerBase(offset, maximum, invalid) {}

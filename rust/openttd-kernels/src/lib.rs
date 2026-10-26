@@ -1418,3 +1418,5 @@ mod override_manager;
 mod newgrf_bytereader;
 
 mod industry_map;
+
+mod newgrf_internal;

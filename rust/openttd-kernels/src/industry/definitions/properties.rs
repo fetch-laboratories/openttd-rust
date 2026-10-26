@@ -2,7 +2,7 @@
 //! Action0 industry and tile property interpretation, including incremental failure effects.
 use super::{
     Services,
-    storage::{LayoutTile, LayoutView, Services as Storage},
+    storage::{LayoutBuffer, LayoutTile, Services as Storage},
 };
 use crate::cargo_type::INVALID_CARGO;
 use crate::industry_map::GFX_WATERTILE_SPECIALCHECK;
@@ -12,12 +12,12 @@ use crate::industry_type::{
     NEW_INDUSTRYTILEOFFSET, NUM_INDUSTRYTILES_PER_GRF, NUM_INDUSTRYTYPES_PER_GRF,
 };
 use crate::newgrf_bytereader::{ByteReader, Reader, Services as ReaderServices};
+use crate::newgrf_internal::{
+    CIR_DISABLED as DISABLED, CIR_INVALID_ID as INVALID_ID, CIR_SUCCESS as SUCCESS,
+    CIR_UNKNOWN as UNKNOWN,
+};
 use crate::{newgrf, override_manager};
 use std::{ffi::c_void, ptr};
-const SUCCESS: u8 = 0;
-const DISABLED: u8 = 1;
-const UNKNOWN: u8 = 3;
-const INVALID_ID: u8 = 4;
 #[repr(C)]
 pub struct Context {
     pub file: *mut c_void,
@@ -193,22 +193,15 @@ unsafe fn layouts(
             k = k.wrapping_add(1);
         }
         if valid_layout(&layout) {
-            new_layouts.push(layout.clone());
+            new_layouts.push(LayoutBuffer::new(layout.clone()));
         } else {
             unsafe {
                 (p.layout_invalid)(id);
             }
         }
     }
-    let views: Vec<_> = new_layouts
-        .iter()
-        .map(|tiles| LayoutView {
-            data: tiles.as_ptr(),
-            size: tiles.len(),
-        })
-        .collect();
     unsafe {
-        (p.install_layouts)(spec, views.as_ptr(), views.len());
+        (p.install_layouts)(spec, new_layouts.as_ptr(), new_layouts.len());
     }
     Ok(SUCCESS)
 }
@@ -227,7 +220,7 @@ unsafe fn tiles(
         }
         return Ok(INVALID_ID);
     }
-    if unsafe { (s.counts)(c.file) }.tiles < last as usize {
+    if unsafe { (s.tile_count)(c.file) } < last as usize {
         unsafe {
             (p.resize_tiles)(c.file, last as usize);
         }
@@ -337,7 +330,7 @@ unsafe fn tiles(
             }
             0x14 => {
                 let destination = unsafe { (p.tile_badges)(spec) };
-                r.badges(newgrf::GSF_INDUSTRYTILES, destination)?;
+                unsafe { r.badges(newgrf::GSF_INDUSTRYTILES, destination) }?;
             }
             _ => result = UNKNOWN,
         }
@@ -359,7 +352,7 @@ unsafe fn industries(
         }
         return Ok(INVALID_ID);
     }
-    if unsafe { (s.counts)(c.file) }.industries < last as usize {
+    if unsafe { (s.industry_count)(c.file) } < last as usize {
         unsafe {
             (p.resize_industries)(c.file, last as usize);
         }
@@ -619,7 +612,7 @@ unsafe fn industries(
             }
             0x29 => {
                 let destination = unsafe { (p.industry_badges)(spec) };
-                r.badges(newgrf::GSF_INDUSTRIES, destination)?;
+                unsafe { r.badges(newgrf::GSF_INDUSTRIES, destination) }?;
             }
             _ => result = UNKNOWN,
         }
@@ -650,7 +643,7 @@ pub unsafe extern "C" fn openttd_rust_industry_properties(
     result: *mut u8,
 ) -> bool {
     let (c, reads, s, p) = unsafe { (&*c, &*reads, &*s, &*p) };
-    let mut reader = Reader::new(native, reads);
+    let mut reader = unsafe { Reader::new(native, reads) };
     finish(
         unsafe { industries(first, last, prop, c, &mut reader, s, p) },
         result,
@@ -669,7 +662,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_properties(
     result: *mut u8,
 ) -> bool {
     let (c, reads, s, p) = unsafe { (&*c, &*reads, &*s, &*p) };
-    let mut reader = Reader::new(native, reads);
+    let mut reader = unsafe { Reader::new(native, reads) };
     finish(
         unsafe { tiles(first, last, prop, c, &mut reader, s, p) },
         result,

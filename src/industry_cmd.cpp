@@ -53,7 +53,9 @@
 
 #include "table/strings.h"
 #include "table/industry_land.h"
+#ifndef WITH_RUST
 #include "table/build_industry.h"
+#endif
 
 #ifdef WITH_RUST
 #include "rust/services_industry.h"

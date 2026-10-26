@@ -216,7 +216,3 @@ crate::abi::layouts! {
     "EntityIDMapping" ["industry"] => Mapping { grfid, entity_id, substitute_id };
     "OpenTTDOverrideView" ["industry"] => View { mappings, entities, grfids };
 }
-
-pub fn industry_tile_valid_id(id: u16) -> bool {
-    id != crate::industry_map::GFX_WATERTILE_SPECIALCHECK
-}
