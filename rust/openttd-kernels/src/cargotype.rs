@@ -20,3 +20,13 @@ pub const INVALID_TPE: u8 = 4;
 pub const fn is_cargo_spec_valid(bitnum: u8) -> bool {
     bitnum != INVALID_CARGO_BITNUM
 }
+
+/// Default `CargoSpec::Iterate()` observes each slot when advancing, without retaining a world borrow.
+pub(crate) fn iterate<T>(
+    mut load: impl FnMut(u8) -> T,
+    mut valid: impl FnMut(&T) -> bool,
+) -> impl Iterator<Item = (u8, T)> {
+    (0..crate::cargo_type::NUM_CARGO)
+        .map(move |cargo| (cargo, load(cargo)))
+        .filter(move |(_, spec)| valid(spec))
+}

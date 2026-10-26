@@ -53,6 +53,7 @@ pub struct OrderSpec {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
+/// Data stays live through pure searches; native vector limits fit a Rust slice.
 pub struct Labels {
     data: *const u32,
     size: usize,
@@ -277,12 +278,12 @@ pub extern "C" fn openttd_rust_cargo_sort(native: *const Services) {
         (*REGISTRY.get()).sorted.as_mut_ptr()
     };
     (s.publish_sorted)(data, 0);
-    for cargo in 0..NUM_CARGO {
-        let spec = (s.spec)(cargo);
-        if is_cargo_spec_valid((s.bitnum)(spec)) {
-            unsafe {
-                (*REGISTRY.get()).sorted.push(spec);
-            }
+    for (_, spec) in crate::cargotype::iterate(
+        |cargo| (s.spec)(cargo),
+        |spec| is_cargo_spec_valid((s.bitnum)(*spec)),
+    ) {
+        unsafe {
+            (*REGISTRY.get()).sorted.push(spec);
         }
     }
     let (data, count) = unsafe {
@@ -377,19 +378,18 @@ pub extern "C" fn openttd_rust_cargo_build_inverse(file: *mut c_void) {
     let s = services();
     (s.clear_inverse)(file);
     let labels = openttd_rust_cargo_translation_table(file);
-    for cargo in 0..NUM_CARGO {
-        let cs = (s.label_spec)((s.spec)(cargo));
-        if !is_cargo_spec_valid(cs.bitnum) {
-            continue;
-        }
-        for index in 0..labels.size {
-            if unsafe { labels.data.add(index).read() } == cs.label {
-                let index = index as i32;
-                if index >= 0 {
-                    (s.set_inverse)(file, cargo, index as u8);
-                }
-                break;
-            }
+    for (cargo, cs) in crate::cargotype::iterate(
+        |cargo| (s.label_spec)((s.spec)(cargo)),
+        |cs| is_cargo_spec_valid(cs.bitnum),
+    ) {
+        let index = unsafe {
+            crate::container_func::find_index(
+                std::slice::from_raw_parts(labels.data, labels.size),
+                &cs.label,
+            )
+        };
+        if index >= 0 {
+            (s.set_inverse)(file, cargo, index as u8);
         }
     }
 }
