@@ -1,6 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! `OverrideManagerBase` owns stable vectors. Native facades and `SlObject` borrow their storage
-//! until destruction; no operation resizes it. The game-state mutex serializes access. End
+//! until assignment or destruction; assignment refreshes native spans. The game-state mutex serializes access. End
 //! every reference before virtual native calls, which may revisit the manager. FFI never unwinds.
 #![allow(unsafe_code)]
 use std::{cell::UnsafeCell, ffi::c_void, ptr};

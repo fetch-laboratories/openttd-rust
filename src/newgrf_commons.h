@@ -311,13 +311,7 @@ public:
 struct AirportTileSpec;
 class AirportTileOverrideManager : public OverrideManagerBase {
 protected:
-	bool CheckValidNewID(uint16_t testid) override {
-#ifdef WITH_RUST
-		return openttd_rust_industry_tile_valid_id(testid);
-#else
-		return testid != 0xFF;
-#endif
-	}
+	bool CheckValidNewID(uint16_t testid) override { return testid != 0xFF; }
 public:
 	AirportTileOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
 			OverrideManagerBase(offset, maximum, invalid) {}
@@ -328,13 +322,7 @@ public:
 struct ObjectSpec;
 class ObjectOverrideManager : public OverrideManagerBase {
 protected:
-	bool CheckValidNewID(uint16_t testid) override {
-#ifdef WITH_RUST
-		return openttd_rust_industry_tile_valid_id(testid);
-#else
-		return testid != 0xFF;
-#endif
-	}
+	bool CheckValidNewID(uint16_t testid) override { return testid != 0xFF; }
 public:
 	ObjectOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
 			OverrideManagerBase(offset, maximum, invalid) {}
