@@ -703,3 +703,190 @@ pub unsafe extern "C" fn openttd_rust_vehicle_properties(
     }
     result
 }
+
+#[cfg(test)]
+pub(super) unsafe fn partial_read_tests() {
+    extern "C" fn unused0<R>() -> R {
+        panic!("unused property service")
+    }
+    extern "C" fn unused1<A, R>(_: A) -> R {
+        panic!("unused property service")
+    }
+    extern "C" fn unused2<A, B, R>(_: A, _: B) -> R {
+        panic!("unused property service")
+    }
+    extern "C" fn unused3<A, B, C, R>(_: A, _: B, _: C) -> R {
+        panic!("unused property service")
+    }
+    unsafe extern "C" fn byte(reader: *mut ByteReader, out: *mut u8) -> bool {
+        let cursor = unsafe { &mut *reader.cast::<crate::newgrf_bytereader::Cursor>() };
+        match unsafe { cursor.byte() } {
+            Ok(value) => {
+                unsafe {
+                    *out = value;
+                }
+                true
+            }
+            Err(_) => false,
+        }
+    }
+    unsafe extern "C" fn word(reader: *mut ByteReader, out: *mut u16) -> bool {
+        let cursor = unsafe { &mut *reader.cast::<crate::newgrf_bytereader::Cursor>() };
+        match unsafe { cursor.word() } {
+            Ok(value) => {
+                unsafe {
+                    *out = value;
+                }
+                true
+            }
+            Err(_) => false,
+        }
+    }
+    let services = Properties {
+        loading: std::ptr::null(),
+        set_intro: unused2,
+        set_decay: unused2,
+        set_life: unused2,
+        set_model_life: unused2,
+        set_climates: unused2,
+        set_load_amount: unused2,
+        set_cargo_label: unused2,
+        set_callbacks: unused2,
+        set_refit_cost: unused2,
+        set_retire: unused2,
+        set_misc: unused2,
+        set_extra: unused2,
+        set_cargo_age: unused2,
+        set_train_ai: unused2,
+        set_train_speed: unused2,
+        set_train_power: unused2,
+        set_train_kind: unused2,
+        set_train_running: unused2,
+        set_train_price: unused2,
+        set_train_image: unused2,
+        set_train_capacity: unused2,
+        set_train_weight: unused2,
+        set_train_cost: unused2,
+        set_train_class: unused2,
+        set_train_wagon_power: unused2,
+        set_train_te: unused2,
+        set_train_drag: unused2,
+        set_train_shorten: unused2,
+        set_train_visual: unused2,
+        set_train_wagon_weight: unused2,
+        set_train_user: unused2,
+        set_train_curve: unused2,
+        set_road_running: unused2,
+        set_road_price: unused2,
+        set_road_image: unused2,
+        set_road_capacity: unused2,
+        set_road_cost: unused2,
+        set_road_sound: unused2,
+        set_road_power: unused2,
+        set_road_weight: unused2,
+        set_road_te: unused2,
+        set_road_drag: unused2,
+        set_road_visual: unused2,
+        set_road_shorten: unused2,
+        set_ship_image: unused2,
+        set_ship_cost: unused2,
+        set_ship_speed: unused2,
+        set_ship_capacity: unused2,
+        set_ship_running: unused2,
+        set_ship_sound: unused2,
+        set_ship_ocean: unused2,
+        set_ship_canal: unused2,
+        set_ship_visual: unused2,
+        set_ship_acceleration: unused2,
+        set_aircraft_image: unused2,
+        set_aircraft_subtype: unused2,
+        set_aircraft_cost: unused2,
+        set_aircraft_speed: unused2,
+        set_aircraft_acceleration: unused2,
+        set_aircraft_running: unused2,
+        set_aircraft_passengers: unused2,
+        set_aircraft_mail: unused2,
+        set_aircraft_sound: unused2,
+        set_aircraft_range: unused2,
+        id: unused1,
+        callbacks: unused1,
+        train_power: unused1,
+        train_kind: unused1,
+        train_weight: unused1,
+        train_class: unused1,
+        aircraft_subtype: unused1,
+        badges: unused1,
+        sound: unused2,
+        train_image_valid: unused1,
+        road_image_valid: unused1,
+        ship_image_valid: unused1,
+        aircraft_image_valid: unused1,
+        uses_2cc: unused1,
+        invalid_sprite: unused2,
+        invalid_cargo: unused2,
+        invalid_track: unused1,
+        invalid_weight: unused1,
+        ai_rank: unused0,
+        invalid_price: unused3,
+    };
+    let reads = ReaderServices {
+        read_byte: byte,
+        read_word: word,
+        read_dword: unused2,
+        skip: unused2,
+        read_badges: unused3,
+        skip_badges: unused1,
+    };
+    let file = std::ptr::dangling::<std::ffi::c_void>();
+    for include in [false, true] {
+        for bytes in [&[][..], &[2][..]] {
+            unsafe {
+                (*temp(1)).fields.ctt_include_mask = 17;
+                (*temp(1)).fields.ctt_exclude_mask = 23;
+                (*temp(1)).fields.defaultcargo_grf = std::ptr::null();
+                let mut cursor = crate::newgrf_bytereader::Cursor::new(bytes.as_ptr(), bytes.len());
+                let mut reader = Reader::new((&raw mut cursor).cast(), &reads);
+                assert!(cargo_list(1, file, include, &mut reader).is_err());
+                assert_eq!(
+                    (*temp(1)).fields.ctt_include_mask,
+                    if include && !bytes.is_empty() { 0 } else { 17 }
+                );
+                assert_eq!(
+                    (*temp(1)).fields.ctt_exclude_mask,
+                    if !include && !bytes.is_empty() { 0 } else { 23 }
+                );
+                assert_eq!(
+                    (*temp(1)).fields.defaultcargo_grf,
+                    if include && !bytes.is_empty() {
+                        file
+                    } else {
+                        std::ptr::null()
+                    }
+                );
+                assert_eq!(cursor.remaining(), 0);
+            }
+        }
+    }
+    unsafe {
+        let bytes = [255, 1];
+        let mut cursor = crate::newgrf_bytereader::Cursor::new(bytes.as_ptr(), bytes.len());
+        let mut reader = Reader::new((&raw mut cursor).cast(), &reads);
+        assert!(extended(&mut reader).is_err());
+        assert_eq!(cursor.remaining(), 1);
+        let mut cursor = crate::newgrf_bytereader::Cursor::new(bytes.as_ptr(), 0);
+        let mut reader = Reader::new((&raw mut cursor).cast(), &reads);
+        (*temp(1)).fields.defaultcargo_grf = std::ptr::null();
+        assert!(
+            default_cargo(&services, std::ptr::null(), 1, file, VEH_TRAIN, &mut reader).is_err()
+        );
+        assert_eq!((*temp(1)).fields.defaultcargo_grf, file);
+        for bytes in [&[][..], &[2][..]] {
+            (*temp(1)).labels = vec![crate::rail_type::RAILTYPE_LABEL_RAIL];
+            let mut cursor = crate::newgrf_bytereader::Cursor::new(bytes.as_ptr(), bytes.len());
+            let mut reader = Reader::new((&raw mut cursor).cast(), &reads);
+            assert!(train(&services, std::ptr::null(), 1, file, 0x34, &mut reader).is_err());
+            assert_eq!((*temp(1)).labels.len(), usize::from(bytes.is_empty()));
+            assert_eq!(cursor.remaining(), 0);
+        }
+    }
+}

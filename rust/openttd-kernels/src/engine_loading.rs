@@ -1093,6 +1093,7 @@ mod tests {
             assert_eq!((*temp(1)).fields.cargo_allowed, 0);
             assert_eq!((*temp(1)).labels, [] as [u32; 0]);
             assert!((*temp(1)).fields.defaultcargo_grf.is_null());
+            properties::partial_read_tests();
             openttd_rust_engine_temp_clear();
             (*LIST_ORDER_CHANGES.get()).clear();
         }

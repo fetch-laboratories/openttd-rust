@@ -790,9 +790,11 @@ def loading_markers(lines, *, setup, saving=False, properties=False):
                 "properties-ship": 1,
                 "properties-aircraft": 1,
                 "properties-traction": 1,
+                "properties-2cc": 1,
             }
         )
         expected["properties-start"] = 4
+        expected["properties-orders"] = 4
         if not setup:
             expected["properties-movement"] = 1
         if setup:
@@ -807,6 +809,18 @@ def loading_markers(lines, *, setup, saving=False, properties=False):
             )
         if "ENGINE properties-complete true" not in lines:
             raise RuntimeError("engine property completion missing")
+        for category in ("state", "built") + (() if setup else ("movement",)):
+            observed = [
+                line.split()[2]
+                for line in lines
+                if line.startswith(f"ENGINE properties-{category} ")
+            ]
+            if sorted(observed) != ["0", "1", "2", "3"]:
+                raise RuntimeError(
+                    "engine property four-type records missing: " + category
+                )
+        if sum(line.startswith("ENGINE properties-rng ") for line in lines) != 1:
+            raise RuntimeError("engine property RNG record missing")
     if saving:
         expected["save-eids"] = 1
     for label, count in expected.items():

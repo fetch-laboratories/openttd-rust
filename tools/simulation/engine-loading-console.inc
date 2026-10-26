@@ -94,6 +94,7 @@ static void LoadingInspect()
 }
 static void PropertiesInspect()
 {
+	LoadingRequire(_loaded_newgrf_features.has_2CC, "properties-2cc");
 	for (VehicleType type = VEH_BEGIN; type != VEH_COMPANY_END; type++) {
 		Engine *e = LoadingEngine(1, type, 500), *b = LoadingEngine(1, type, 501), *c = LoadingEngine(1, type, 502);
 		LoadingRequire(e->info.decay_speed == 17 && e->info.lifelength == TimerGameCalendar::Year{60} && e->info.base_life == TimerGameCalendar::Year{90} && e->info.load_amount == 7, "properties-common");
@@ -254,7 +255,7 @@ static bool LoadingScenario(std::span<std::string_view> args)
 				LoadingRequire(v->cargo_type == GetCargoTypeByLabel(CT_MAIL) && v->cargo_cap > 0, "reloaded-vehicle");
 				fmt::print(stderr, "ENGINE loading-vehicle {} {} {} {} {}\n", type, v->index, v->engine_type, v->cargo_type, v->cargo_cap);
 				if (properties) {
-					moving += !v->IsInDepot();
+					moving += !v->IsInDepot() && v->cur_speed != 0;
 					fmt::print(stderr, "ENGINE properties-movement {} {} {} {} {}\n", type, v->tile, v->x_pos, v->y_pos, v->cur_speed);
 				}
 				++count;
