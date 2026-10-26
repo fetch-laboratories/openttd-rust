@@ -60,6 +60,7 @@ typedef std::vector<Train *> TrainList;
 
 RailTypeInfo _railtypes[RAILTYPE_END];
 #ifdef WITH_RUST
+static_assert(sizeof(RailTypes) == sizeof(uint64_t) && alignof(RailTypes) == alignof(uint64_t));
 std::span<RailType> _sorted_railtypes;
 RailTypes &_railtypes_hidden_mask = *reinterpret_cast<RailTypes *>(openttd_rust_rail_hidden_mask());
 #else

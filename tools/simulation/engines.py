@@ -459,6 +459,8 @@ DEFINITION_CAPTURE = (
     "partial-rail-badges",
     "partial-road-badges",
     "partial-table",
+    "override-partial",
+    "override-table",
     "reverse-narrowing",
     "no-table",
     "reserve-mismatch",

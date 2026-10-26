@@ -72,6 +72,7 @@ typedef std::vector<RoadVehicle *> RoadVehicleList;
 
 RoadTypeInfo _roadtypes[ROADTYPE_END];
 #ifdef WITH_RUST
+static_assert(sizeof(RoadTypes) == sizeof(uint64_t) && alignof(RoadTypes) == alignof(uint64_t));
 std::span<RoadType> _sorted_roadtypes;
 RoadTypes &_roadtypes_hidden_mask = *reinterpret_cast<RoadTypes *>(openttd_rust_road_hidden_mask());
 RoadTypes &_roadtypes_road = *reinterpret_cast<RoadTypes *>(openttd_rust_road_mask());

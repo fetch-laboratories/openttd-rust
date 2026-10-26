@@ -232,6 +232,17 @@ static void DefinitionReadFailures()
 	TypeRequire(GetReverseRailTypeTranslation(file->railtype_map[1], file) == 0 && GetReverseRoadTypeTranslation(file->roadtype_map[0], file) == 0, "definitions-reverse-narrowing");
 	GRFFile empty;
 	TypeRequire(GetRailTypeTranslation(RAILTYPE_RAIL, nullptr) == RAILTYPE_RAIL && GetRailTypeTranslation(RAILTYPE_RAIL, &empty) == RAILTYPE_RAIL && GetRoadTypeTranslation(RTT_ROAD, 0, &empty) == INVALID_ROADTYPE && GetReverseRailTypeTranslation(RAILTYPE_RAIL, &empty) == RAILTYPE_RAIL && GetReverseRoadTypeTranslation(ROADTYPE_TRAM, &empty) == ROADTYPE_TRAM, "definitions-no-table");
+	auto *overridden = GetFileByGRFID(0x42373454);
+	SetNewGRFOverride(file->grfid, overridden->grfid);
+	auto table_copy = [&](int prop, auto &source, auto &target) {
+		using Label = typename std::remove_reference_t<decltype(source)>::value_type;
+		target = {Label{0x4d495353}};
+		TypeRequire(failed([&](ByteReader &reader) { GrfChangeInfoHandler<GSF_GLOBALVAR>::Reserve(0, 2, prop, reader); }, rail_label) == 1 && source == std::vector<Label>{Label{0x50344141}} && target == std::vector<Label>{Label{0x4d495353}}, "definitions-override-partial");
+		const std::array<uint8_t, 4> complete{'O', '4', 'V', 'R'}; ByteReader reader(complete.data(), complete.size());
+		TypeRequire(GrfChangeInfoHandler<GSF_GLOBALVAR>::Reserve(0, 1, prop, reader) == CIR_SUCCESS && source == std::vector<Label>{Label{0x4f345652}} && target == source, "definitions-override-table");
+	};
+	table_copy(0x09, file->cargo_list, overridden->cargo_list); table_copy(0x12, file->railtype_list, overridden->railtype_list);
+	table_copy(0x16, file->roadtype_list, overridden->roadtype_list); table_copy(0x17, file->tramtype_list, overridden->tramtype_list);
 	current.Restore();
 }
 static bool DefinitionScenario(std::span<std::string_view> args)
