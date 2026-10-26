@@ -20,8 +20,8 @@ const OpenTTDTypeAvailabilityServices &GetRustTypeAvailabilityServices() noexcep
 {
 	static const OpenTTDTypeAvailabilityServices services{
 		.next = Engine_next,
-		.climate = RustEngineClimate,
-		.rail_kind = Engine_rail_kind,
+		.rail_availability = RustEngineRailAvailability,
+		.road_availability = RustEngineRoadAvailability,
 		.engine_railtypes = RustEngineRailTypes,
 		.engine_roadtype = RustEngineRoadType,
 		.rail_introduction = RustRailTypeIntroduction,

@@ -3,9 +3,9 @@
 //! handles are call-scoped, serialized by the game-state mutex. No lifecycle
 //! borrow survives a callback; registry observations copy only consumed fields.
 #![allow(unsafe_code)]
-use crate::engine::EngineRef;
+use crate::engine::{EngineRef, RailAvailability, RoadAvailability};
 use crate::services::{RoadTramType, Services as Shared};
-use crate::vehicle::{OpenTTDEngine, RailVehicleTypes};
+use crate::vehicle::OpenTTDEngine;
 #[repr(C)]
 pub struct Introduction {
     pub label: u32,
@@ -23,8 +23,8 @@ pub struct RoadConstruction {
 #[repr(C)]
 pub struct Services {
     pub next: unsafe extern "C" fn(u32) -> EngineRef,
-    pub climate: unsafe extern "C" fn(*const OpenTTDEngine) -> bool,
-    pub rail_kind: unsafe extern "C" fn(*const OpenTTDEngine) -> RailVehicleTypes,
+    pub rail_availability: unsafe extern "C" fn(*const OpenTTDEngine) -> RailAvailability,
+    pub road_availability: unsafe extern "C" fn(*const OpenTTDEngine) -> RoadAvailability,
     pub engine_railtypes: unsafe extern "C" fn(*const OpenTTDEngine) -> u64,
     pub engine_roadtype: unsafe extern "C" fn(*const OpenTTDEngine) -> u8,
     pub rail_introduction: extern "C" fn(u8) -> Introduction,
@@ -61,7 +61,7 @@ crate::abi::layouts! {
     "OpenTTDTypeIntroduction" ["engine"] => Introduction { label, date, required, introduces };
     "OpenTTDRoadTypeConstruction" ["engine"] => RoadConstruction { label, date, hidden, town_build };
     "OpenTTDTypeAvailabilityServices" ["engine"] => Services {
-        next, climate, rail_kind, engine_railtypes, engine_roadtype,
+        next, rail_availability, road_availability, engine_railtypes, engine_roadtype,
         rail_introduction, road_introduction, rail_introduces, road_introduces,
         road_construction, rail_hidden, road_hidden, road_tram_mask,
         company_railtypes, company_roadtypes, set_company_railtypes,

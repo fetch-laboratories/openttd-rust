@@ -92,7 +92,11 @@ fn engine_types(shared: &Shared, s: &Services, company: Option<u8>, introduces: 
             break;
         }
         from = u32::from(e.id) + 1;
-        if e.kind != VehicleType::ROAD || !unsafe { (s.climate)(e.shell) } {
+        if e.kind != VehicleType::ROAD {
+            continue;
+        }
+        let info = unsafe { (s.road_availability)(e.shell) };
+        if !info.climate {
             continue;
         }
         if let Some(company) = company {
@@ -100,7 +104,7 @@ fn engine_types(shared: &Shared, s: &Services, company: Option<u8>, introduces: 
                 continue;
             }
         }
-        let rt = unsafe { (s.engine_roadtype)(e.shell) };
+        let rt = info.roadtype;
         if s.assertions {
             assert!(rt < ROADTYPE_END);
         }

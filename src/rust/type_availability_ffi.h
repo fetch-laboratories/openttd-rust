@@ -12,8 +12,8 @@ struct OpenTTDRoadTypeConstruction { uint32_t label; int32_t date; bool hidden, 
  * Panics and environmental exceptions abort; ordinary play has no throwing leaf. */
 struct OpenTTDTypeAvailabilityServices {
 	OpenTTDEngineRef (*next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next);
-	bool (*climate)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(climate);
-	RailVehicleTypes (*rail_kind)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(rail_kind);
+	OpenTTDEngineRailAvailability (*rail_availability)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(rail_availability);
+	OpenTTDEngineRoadAvailability (*road_availability)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(road_availability);
 	uint64_t (*engine_railtypes)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_railtypes);
 	RoadType (*engine_roadtype)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_roadtype);
 	OpenTTDTypeIntroduction (*rail_introduction)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_introduction);

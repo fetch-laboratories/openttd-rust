@@ -38,12 +38,33 @@ static Result RustIndexedEngineRead(Index id) noexcept { return Read(RustEngineB
 inline uint8_t RustEngineExtraFlags(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.extra_flags.base(); }
 inline uint16_t RustEngineID(const OpenTTDEngine *e) noexcept { return EngineOf(e)->index.base(); }
 inline int32_t RustEngineBaseIntro(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.base_intro.base(); }
-inline bool RustEngineClimate(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.climates.Test(OpenTTDLandscape()); }
+inline bool RustEngineClimate(const Engine *e) noexcept { return e->info.climates.Test(OpenTTDLandscape()); }
+inline bool RustEngineClimate(const OpenTTDEngine *e) noexcept { return RustEngineClimate(EngineOf(e)); }
 inline bool RustEngineCanCarry(const Engine *e) noexcept { return e->CanCarryCargo(); }
 inline uint64_t RustEngineRefitMask(EngineID id, bool initial) noexcept { return GetUnionOfArticulatedRefitMasks(id, initial); }
 inline RailVehicleTypes RustEngineRailKind(const Engine *e) noexcept { return e->VehInfo<RailVehicleInfo>().railveh_type; }
-inline uint64_t RustEngineRailTypes(const OpenTTDEngine *e) noexcept { return EngineOf(e)->VehInfo<RailVehicleInfo>().railtypes.base(); }
-inline RoadType RustEngineRoadType(const OpenTTDEngine *e) noexcept { return EngineOf(e)->VehInfo<RoadVehicleInfo>().roadtype; }
+inline uint64_t RustEngineRailTypes(const Engine *e) noexcept { return e->VehInfo<RailVehicleInfo>().railtypes.base(); }
+inline uint64_t RustEngineRailTypes(const OpenTTDEngine *e) noexcept { return RustEngineRailTypes(EngineOf(e)); }
+inline RoadType RustEngineRoadType(const Engine *e) noexcept { return e->VehInfo<RoadVehicleInfo>().roadtype; }
+inline RoadType RustEngineRoadType(const OpenTTDEngine *e) noexcept { return RustEngineRoadType(EngineOf(e)); }
+/* Callers gate the vehicle type; inactive climate/wagon fields are not observed. */
+inline OpenTTDEngineRailAvailability RustEngineRailAvailability(const OpenTTDEngine *shell) noexcept
+{
+	const Engine *e = EngineOf(shell);
+	OpenTTDEngineRailAvailability info{.climate = RustEngineClimate(e), .kind = {}, .railtypes = 0};
+	if (info.climate) {
+		info.kind = RustEngineRailKind(e);
+		if (info.kind != RAILVEH_WAGON) info.railtypes = RustEngineRailTypes(e);
+	}
+	return info;
+}
+inline OpenTTDEngineRoadAvailability RustEngineRoadAvailability(const OpenTTDEngine *shell) noexcept
+{
+	const Engine *e = EngineOf(shell);
+	OpenTTDEngineRoadAvailability info{.climate = RustEngineClimate(e), .roadtype = INVALID_ROADTYPE};
+	if (info.climate) info.roadtype = RustEngineRoadType(e);
+	return info;
+}
 inline uint64_t RustEngineCompatibleRailTypes(const Engine *e) noexcept { return RustAllCompatibleRailTypes(RustEngineRailTypes(RustEngine(e))); }
 /** Reserve a unit number and assign the returned native ID to the shell. */
 inline void RustVehicleUseUnitNumber(Vehicle *v, uint16_t unit) noexcept { v->unitnumber = RustCompanyUseVehicleUnit(v->owner, v->type, unit); }

@@ -172,6 +172,17 @@ pub struct VehicleCargo {
     pub cargo: u8,
 }
 #[repr(C)]
+pub struct RailAvailability {
+    pub climate: bool,
+    pub kind: RailVehicleTypes,
+    pub railtypes: u64,
+}
+#[repr(C)]
+pub struct RoadAvailability {
+    pub climate: bool,
+    pub roadtype: u8,
+}
+#[repr(C)]
 pub struct Services {
     pub shared: *const SharedServices,
     pub rng: *const RandomServices,
@@ -1207,6 +1218,15 @@ crate::abi::layouts! {
     "OpenTTDEngineVehicleCargo" ["engine"] => VehicleCargo {
         engine,
         cargo,
+    };
+    "OpenTTDEngineRailAvailability" ["engine"] => RailAvailability {
+        climate,
+        kind,
+        railtypes,
+    };
+    "OpenTTDEngineRoadAvailability" ["engine"] => RoadAvailability {
+        climate,
+        roadtype,
     };
     "OpenTTDEngineServices" ["engine"] => Services {
         shared,

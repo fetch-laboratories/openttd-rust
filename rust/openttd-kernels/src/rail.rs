@@ -69,7 +69,11 @@ fn engine_types(shared: &Shared, s: &Services, company: Option<u8>, introduces: 
             break;
         }
         from = u32::from(e.id) + 1;
-        if e.kind != VehicleType::TRAIN || !unsafe { (s.climate)(e.shell) } {
+        if e.kind != VehicleType::TRAIN {
+            continue;
+        }
+        let info = unsafe { (s.rail_availability)(e.shell) };
+        if !info.climate {
             continue;
         }
         if let Some(company) = company
@@ -77,10 +81,10 @@ fn engine_types(shared: &Shared, s: &Services, company: Option<u8>, introduces: 
         {
             continue;
         }
-        if unsafe { (s.rail_kind)(e.shell) } == RailVehicleTypes::WAGON {
+        if info.kind == RailVehicleTypes::WAGON {
             continue;
         }
-        let rails = unsafe { (s.engine_railtypes)(e.shell) };
+        let rails = info.railtypes;
         if s.assertions {
             assert_ne!(rails, 0);
         }
