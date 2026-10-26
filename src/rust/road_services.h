@@ -52,7 +52,8 @@ static OpenTTDRoadCrashPart OPENTTD_RUST_CALL RoadSvcCrashPart(OpenTTDVehicle *v
 {
 	const RoadVehicle *u = RoadOf(v);
 	const RoadVehicle *next = static_cast<const RoadVehicle *>(RustVehicleNext(u));
-	return {.next = RustVehicle(next), .next_state = RoadStateOf(next), .tile = RustVehicleTile(u), .z = RustVehicleZ(u), .crossing = MapSvcIsLevelCrossing(u->tile.base())};
+	const uint32_t tile = RustVehicleTile(u);
+	return {.next = RustVehicle(next), .next_state = RoadStateOf(next), .z = RustVehicleZ(u), .crossing = MapSvcIsLevelCrossing(tile)};
 }
 static OpenTTDRoadPartRead OPENTTD_RUST_CALL RoadSvcPart(OpenTTDVehicle *v) noexcept
 {
