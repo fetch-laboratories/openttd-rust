@@ -63,6 +63,7 @@
 #include "settings_services.h"
 #include "environment_services.h"
 #include "vehicle_services.h"
+#include "services_cargo.h"
 #include "services_landscape.h"
 
 #include <memory>
@@ -184,11 +185,11 @@ static uint32_t Co_cargo_next(uint32_t from, int64_t *initial_payment) noexcept
 {
 	for (const CargoSpec *cs : CargoSpec::Iterate(from)) {
 		*initial_payment = cs->initial_payment;
-		return cs->Index();
+		return RustCargoSpecIndex(cs);
 	}
 	return UINT32_MAX;
 }
-static void Co_set_cargo_payment(uint32_t cargo, int64_t payment) noexcept { CargoSpec::Get(static_cast<CargoType>(cargo))->current_payment = payment; }
+static void Co_set_cargo_payment(uint32_t cargo, int64_t payment) noexcept { RustCargoSpec(static_cast<CargoType>(cargo))->current_payment = payment; }
 static void Co_price_windows_dirty() noexcept
 {
 	SetWindowClassesDirty(WC_BUILD_VEHICLE);

@@ -20,13 +20,14 @@ struct OpenTTDIndustrySpecHandle;
 /* Keep native types and source observation points. Scaling may draw Random;
  * delivery may reenter owners, so callers end their owner access first.
  * Environmental failures terminate inside these noexcept leaves. */
+inline CargoSpec *RustCargoSpec(CargoType cargo) noexcept { return CargoSpec::Get(cargo); }
 inline uint16_t RustCargoSpecClasses(const CargoSpec *cs) noexcept { return cs->classes.base(); }
 inline uint32_t RustCargoSpecLabel(const CargoSpec *cs) noexcept { return cs->label.base(); }
 inline CargoType RustCargoSpecIndex(const CargoSpec *cs) noexcept { return cs->Index(); }
 inline uint8_t RustCargoSpecBitnum(const CargoSpec *cs) noexcept { return cs->bitnum; }
-inline uint8_t RustCargoBitnum(CargoType cargo) noexcept { return RustCargoSpecBitnum(CargoSpec::Get(cargo)); }
-inline uint16_t RustCargoMultiplier(CargoType cargo) noexcept { return CargoSpec::Get(cargo)->multiplier; }
-inline uint16_t RustCargoClasses(CargoType cargo) noexcept { return RustCargoSpecClasses(CargoSpec::Get(cargo)); }
+inline uint8_t RustCargoBitnum(CargoType cargo) noexcept { return RustCargoSpecBitnum(RustCargoSpec(cargo)); }
+inline uint16_t RustCargoMultiplier(CargoType cargo) noexcept { return RustCargoSpec(cargo)->multiplier; }
+inline uint16_t RustCargoClasses(CargoType cargo) noexcept { return RustCargoSpecClasses(RustCargoSpec(cargo)); }
 inline uint OpenTTDScaleCargo(uint amount, bool town) noexcept { return ScaleByCargoScale(amount, town); }
 /* Raw inverse-map reads retain the native file and cargo-index preconditions;
  * they do not apply GetCargoTranslation's version or nullable-file policy. */
@@ -41,5 +42,5 @@ inline uint OpenTTDMoveGoodsToStation(CargoType cargo, uint amount, Source sourc
 inline uint OpenTTDScaleTownCargo(uint amount) noexcept { return OpenTTDScaleCargo(amount, true); }
 inline uint OpenTTDScaleIndustryCargo(uint amount) noexcept { return OpenTTDScaleCargo(amount, false); }
 inline bool OpenTTDIsValidCargo(CargoType cargo) noexcept { return IsValidCargoType(cargo); }
-inline bool OpenTTDCargoSpecValid(CargoType cargo) noexcept { return CargoSpec::Get(cargo)->IsValid(); }
+inline bool OpenTTDCargoSpecValid(CargoType cargo) noexcept { return RustCargoSpec(cargo)->IsValid(); }
 #endif /* RUST_SERVICES_CARGO_H */

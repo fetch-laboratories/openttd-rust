@@ -63,6 +63,7 @@
 #ifdef WITH_RUST
 #include "rust/services_industry.h"
 #include "rust/cargo_registry_ffi.h"
+#include "rust/services_cargo.h"
 #include "rust/company_adapter.h"
 #include "rust/tile_owner_services.h"
 #include "rust/vehicle_services.h"
@@ -1079,7 +1080,7 @@ Money GetPrice(Price index, uint cost_factor, const GRFFile *grf_file, int shift
  * No exception crosses Rust; allocation/debug/UI failures terminate here. */
 static const OpenTTDCargoServices _cargo_services = {
 	.spec = [](uint8_t cargo, OpenTTDCargoSpec *out) noexcept {
-		const CargoSpec *cs = CargoSpec::Get(cargo);
+		const CargoSpec *cs = RustCargoSpec(cargo);
 		*out = {cs->current_payment.base(), uint8_t(cs->IsValid()), uint8_t(cs->callback_mask.Test(CargoCallbackMask::ProfitCalc)), cs->transit_periods[0], cs->transit_periods[1]};
 	},
 	.registry = &GetRustCargoRegistryServices(),
@@ -1126,7 +1127,7 @@ static const OpenTTDCargoServices _cargo_services = {
 		switch (field) {
 			case 0: st->goods[cargo].status.Set({GoodsEntry::State::EverAccepted, GoodsEntry::State::CurrentMonth, GoodsEntry::State::AcceptedBigtick}); break;
 			case 1: Company::Get(CompanyID(company))->Finances().cur_economy.delivered_cargo[cargo] += amount; break;
-			case 2: st->town->received[CargoSpec::Get(cargo)->town_acceptance_effect].new_act += amount; break;
+			case 2: st->town->received[RustCargoSpec(cargo)->town_acceptance_effect].new_act += amount; break;
 			default: NOT_REACHED();
 		}
 	},

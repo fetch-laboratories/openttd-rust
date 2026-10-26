@@ -347,19 +347,19 @@ const OpenTTDCargoRegistryServices &GetRustCargoRegistryServices() noexcept
 	static const OpenTTDCargoRegistryServices services{
 		.shared = &GetRustSharedServices(),
 		.common = &GetRustSpriteGroupServices(),
-		.spec = [](uint8_t cargo) noexcept -> const CargoSpec * { return CargoSpec::Get(cargo); },
+		.spec = [](uint8_t cargo) noexcept -> const CargoSpec * { return RustCargoSpec(cargo); },
 		.copy_default = [](uint8_t climate, uint8_t slot) noexcept {
 			std::visit([slot](const auto &entry) {
 				if constexpr (std::is_same_v<std::decay_t<decltype(entry)>, int>) {
-					*CargoSpec::Get(slot) = _default_cargo[entry];
+					*RustCargoSpec(slot) = _default_cargo[entry];
 				} else {
 					auto found = std::ranges::find(_default_cargo, entry, &CargoSpec::label);
 					if (found == std::end(_default_cargo)) NOT_REACHED();
-					*CargoSpec::Get(slot) = *found;
+					*RustCargoSpec(slot) = *found;
 				}
 			}, _default_climate_cargo[climate][slot]);
 		},
-		.clear_specs = [](uint8_t first) noexcept { std::fill(CargoSpec::Get(first), CargoSpec::Get(0) + CargoSpec::GetArraySize(), CargoSpec{}); },
+		.clear_specs = [](uint8_t first) noexcept { std::fill(RustCargoSpec(first), RustCargoSpec(0) + CargoSpec::GetArraySize(), CargoSpec{}); },
 		.label_spec = [](const CargoSpec *cs) noexcept -> OpenTTDCargoLabelSpec { return {RustCargoSpecLabel(cs), RustCargoSpecBitnum(cs)}; },
 		.bitnum = RustCargoSpecBitnum,
 		.finalise_spec = [](const CargoSpec *cs) noexcept -> OpenTTDCargoFinaliseSpec { return {RustCargoSpecLabel(cs), RustCargoSpecBitnum(cs), cs->town_production_effect}; },

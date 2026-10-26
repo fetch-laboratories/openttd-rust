@@ -700,7 +700,7 @@ static const OpenTTDStationServices _rust_station_services = {
 	},
 	.cargo_valid = OpenTTDCargoSpecValid,
 	.rating_callback_enabled = [](uint8_t cargo) noexcept -> bool {
-		return CargoSpec::Get(cargo)->callback_mask.Test(CargoCallbackMask::StationRatingCalc);
+		return RustCargoSpec(cargo)->callback_mask.Test(CargoCallbackMask::StationRatingCalc);
 	},
 	.passenger_cargo = [](uint8_t cargo) noexcept -> bool {
 		return IsCargoInClass(cargo, CargoClass::Passengers);
