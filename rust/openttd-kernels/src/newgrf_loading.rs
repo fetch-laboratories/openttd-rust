@@ -1394,7 +1394,7 @@ unsafe fn after_load(s: &Services) {
         (s.finalise_strings)();
         openttd_rust_grf_clear_overrides();
         (s.finalise_badges)();
-        crate::cargo_registry::finalise();
+        crate::cargo_registry::openttd_rust_cargo_finalise();
         (s.calculate_refits)();
         (s.finalise_engines)();
         (s.finalise_canals)();
@@ -1519,7 +1519,7 @@ pub unsafe extern "C" fn openttd_rust_grf_load(s: &Services, load_index: u32, nu
                     (s.set_flag)(c, RESERVED, false);
                     (s.assert_file_match)(c, file());
                     clear_labels(file());
-                    crate::cargo_registry::build_inverse(file());
+                    crate::cargo_registry::openttd_rust_cargo_build_inverse(file());
                     (s.loaded_sprites)((*execution()).spriteid);
                 } else if stage == GLS_INIT && (s.config_flags)(c) & (1 << INIT_ONLY) != 0 {
                     clear_labels(file());
