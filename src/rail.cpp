@@ -21,6 +21,10 @@
 #include "rust/type_availability_ffi.h"
 #endif
 
+#ifdef WITH_RUST
+#include "rust/type_registry_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 /**
@@ -222,6 +226,9 @@ RailTypes GetRailTypes(bool introduces)
  */
 RailType GetRailTypeByLabel(RailTypeLabel label, bool allow_alternate_labels)
 {
+#ifdef WITH_RUST
+	return openttd_rust_rail_by_label(label, allow_alternate_labels);
+#else
 	extern RailTypeInfo _railtypes[RAILTYPE_END];
 	if (label == 0) return INVALID_RAILTYPE;
 
@@ -235,4 +242,5 @@ RailType GetRailTypeByLabel(RailTypeLabel label, bool allow_alternate_labels)
 
 	/* No matching label was found, so it is invalid */
 	return INVALID_RAILTYPE;
+#endif
 }

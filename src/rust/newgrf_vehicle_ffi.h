@@ -117,10 +117,6 @@ struct OpenTTDVehicleResolverServices {
 	RailType (*tile_railtype)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_railtype);
 	bool (*rail_catenary)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_catenary);
 	bool (*road_catenary)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_catenary);
-	uint8_t (*reverse_rail)(RailType, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(reverse_rail);
-	uint8_t (*reverse_road)(RoadType, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(reverse_road);
-	RailType (*translate_rail)(uint8_t, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(translate_rail);
-	RoadType (*translate_road)(RoadTramType, uint8_t, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(translate_road);
 	bool (*compatible_rail)(RailType, RailType) noexcept OPENTTD_SERVICE_DEFAULT(compatible_rail);
 	bool (*powered_rail)(uint64_t, RailType) noexcept OPENTTD_SERVICE_DEFAULT(powered_rail);
 	bool (*powered_single_rail)(RailType, RailType) noexcept OPENTTD_SERVICE_DEFAULT(powered_single_rail);

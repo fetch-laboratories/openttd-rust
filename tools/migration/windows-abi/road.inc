@@ -295,7 +295,6 @@ static void RoadBoundary()
 	// speed 2/distance 1; realistic kickoff gives speed 4/distance 3.
 	t.physics.speed_input = [](OpenTTDVehicle *) noexcept -> OpenTTDGroundSpeedInput { CHECK(road_abi_probe->visual_stage == 4); return {0, 0}; };
 	t.physics.acceleration_input = [](OpenTTDVehicle *) noexcept -> OpenTTDGroundAccelerationInput { return {0, 0, 0, RoadType{0}}; };
-	t.physics.tram = [](RoadType) noexcept { return false; };
 	probe.ground.state->cache.cached_weight = 1;
 	t.physics_vehicle.write_subspeed = [](OpenTTDVehicle *, uint8_t value) noexcept { CHECK(value == (road_abi_probe->entry.acceleration_model == 1 ? 2 : 0)); };
 	t.physics_vehicle.write_speed = [](OpenTTDVehicle *, uint16_t value) noexcept { CHECK(value == (road_abi_probe->entry.acceleration_model == 1 ? 4 : 2)); road_abi_probe->speed = value; };

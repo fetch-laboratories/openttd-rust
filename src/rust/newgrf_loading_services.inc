@@ -2,6 +2,7 @@
 /** @file newgrf_loading_services.inc Typed native loading services. */
 #ifdef WITH_RUST
 #include "newgrf_loading_ffi.h"
+#include "type_registry_ffi.h"
 #include "newgrf_global_ffi.h"
 #include "generic_ffi.h"
 #include "../string_func.h"
@@ -27,6 +28,7 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.global = &GetRustGlobalVariableServices(),
 		.cargo = &GetRustCargoRegistryServices(),
 		.engine = &GetRustEngineLoadingServices(),
+		.types = &GetRustTypeRegistryServices(),
 		.engine_range = [](GrfSpecFeature feature) noexcept { return OpenTTDGrfEngineRange{_engine_offsets[feature], _engine_counts[feature]}; },
 		.parameter = RustGRFParameter,
 		.file_id = RustGRFFileID,
@@ -45,11 +47,8 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.file_for_config = [](const GRFConfig *c) noexcept { auto *f = GetFileByFilename(c->filename); if (f == nullptr) UserError("File '{}' lost in cache.\n", c->filename); return f; },
 		.error = [](GRFConfig *c, uint32_t line, StringID message, bool current) noexcept { auto it = std::ranges::find(c->errors, line, &GRFError::nfo_line); if (it == c->errors.end()) it = c->errors.emplace(it, STR_NEWGRF_ERROR_MSG_FATAL, line, message); if (current) it->param_value[0] = line; return &*it; },
 		.error_name = [](GRFError *e, const GRFConfig *c) noexcept { e->data = c->GetName(); },
+		.error_property = RustGRFErrorProperty,
 		.networking = RustNetworking,
-		.rail_label = RustGRFRailTypeByLabel,
-		.road_label = RustGRFRoadTypeByLabel,
-		.road_is_road = [](RoadType rt) noexcept { return RustRoadTypeIsRoad(rt); },
-		.road_is_tram = SharedRoadTypeIsTram,
 		.read_byte = [](SpriteFile *f) noexcept { return f->ReadByte(); },
 		.read_word = [](SpriteFile *f) noexcept { return f->ReadWord(); },
 		.read_dword = [](SpriteFile *f) noexcept { return f->ReadDword(); },
@@ -115,6 +114,8 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.multiple_action8 = STR_NEWGRF_ERROR_MULTIPLE_ACTION_8,
 		.grm_failed = STR_NEWGRF_ERROR_GRM_FAILED,
 		.static_desync = STR_NEWGRF_ERROR_STATIC_GRF_CAUSES_DESYNC,
+		.list_property_too_long = STR_NEWGRF_ERROR_LIST_PROPERTY_TOO_LONG,
+		.invalid_id = STR_NEWGRF_ERROR_INVALID_ID,
 		.force_disabled = STR_NEWGRF_ERROR_FORCEFULLY_DISABLED,
 		.colourmap_sprite = SPR_2CCMAP_BASE,
 		.slopes_sprite = SPR_SLOPES_BASE,
@@ -132,8 +133,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.cleanup_townnames = []() noexcept { CleanUpGRFTownNames(); },
 		.reset_badges = []() noexcept { ResetBadges(); },
 		.reset_bridges = []() noexcept { ResetBridges(); },
-		.reset_railtypes = []() noexcept { ResetRailTypes(); },
-		.reset_roadtypes = []() noexcept { ResetRoadTypes(); },
 		.reset_prices = []() noexcept { ResetPriceBaseMultipliers(); },
 		.reset_currencies = []() noexcept { ResetCurrencies(); },
 		.reset_houses = []() noexcept { ResetHouses(); },
@@ -169,8 +168,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.vehicle_list_orders = []() noexcept { CommitVehicleListOrderChanges(); },
 		.activate_shore = []() noexcept { ActivateOldShore(); },
 		.activate_tram_depot = []() noexcept { ActivateOldTramDepot(); },
-		.init_railtypes = []() noexcept { InitRailTypes(); },
-		.init_roadtypes = []() noexcept { InitRoadTypes(); },
 		.aging_stops = []() noexcept { SetYearEngineAgingStops(); },
 		.finalise_prices = []() noexcept { FinalisePriceBaseMultipliers(); },
 		.baseset_dir = BASESET_DIR,

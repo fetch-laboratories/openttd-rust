@@ -2103,7 +2103,7 @@ impl Ctx<'_> {
                     }
                     let pieces = (self.shared.normal_road_bits)(tile, 0).0.count_ones();
                     if rt != 63
-                        && (self.shared.road_type_is_road)(rt)
+                        && crate::road::road_type_is_road(rt)
                         && !(self.shared.road_powered)(rt, road)
                     {
                         return cost.error(self.s.strings.unsuitable_road);
@@ -2123,7 +2123,7 @@ impl Ctx<'_> {
                         crate::road_cost::build_cost(self.shared, road)
                             .saturating_mul(i64::from(2_u32.wrapping_sub(pieces))),
                     );
-                } else if rt != 63 && (self.shared.road_type_is_road)(rt) {
+                } else if rt != 63 && crate::road::road_type_is_road(rt) {
                     cost.add_money(crate::road_cost::build_cost(self.shared, rt).saturating_mul(2));
                 }
                 let tram = self.road_type(tile, true);
@@ -2142,7 +2142,7 @@ impl Ctx<'_> {
                     }
                     let pieces = (self.shared.normal_road_bits)(tile, 1).0.count_ones();
                     if rt != 63
-                        && (self.shared.road_tram_type)(rt).0
+                        && crate::road::get_road_tram_type(rt).0
                         && !(self.shared.road_powered)(rt, tram)
                     {
                         return cost.error(self.s.strings.unsuitable_road);
@@ -2151,7 +2151,7 @@ impl Ctx<'_> {
                         crate::road_cost::build_cost(self.shared, tram)
                             .saturating_mul(i64::from(2_u32.wrapping_sub(pieces))),
                     );
-                } else if rt != 63 && (self.shared.road_tram_type)(rt).0 {
+                } else if rt != 63 && crate::road::get_road_tram_type(rt).0 {
                     cost.add_money(crate::road_cost::build_cost(self.shared, rt).saturating_mul(2));
                 }
             } else if rt == 63 {
@@ -2276,7 +2276,7 @@ impl Ctx<'_> {
         if distant && (!(self.s.distant_join)() || self.full_station(target).is_null()) {
             return cost.error(0xffff);
         }
-        if !drive && !(self.shared.road_type_is_road)(rt) {
+        if !drive && !crate::road::road_type_is_road(rt) {
             return cost.error(0xffff);
         }
         let axis = dir & 1;
@@ -2435,10 +2435,10 @@ impl Ctx<'_> {
                         -((self.shared.normal_road_bits)(tile, 1).0.count_ones() as i32),
                     );
                 }
-                if road == 63 && (self.shared.road_type_is_road)(rt) {
+                if road == 63 && crate::road::road_type_is_road(rt) {
                     road = rt;
                 }
-                if tram == 63 && (self.shared.road_tram_type)(rt).0 {
+                if tram == 63 && crate::road::get_road_tram_type(rt).0 {
                     tram = rt;
                 }
                 (self.s.make_drive_stop)(
@@ -2446,10 +2446,10 @@ impl Ctx<'_> {
                 );
                 crate::road_stop::make_drive_through(self.shared, tile, (self.stops().state)(stop));
             } else {
-                if road == 63 && (self.shared.road_type_is_road)(rt) {
+                if road == 63 && crate::road::road_type_is_road(rt) {
                     road = rt;
                 }
-                if tram == 63 && (self.shared.road_tram_type)(rt).0 {
+                if tram == 63 && crate::road::get_road_tram_type(rt).0 {
                     tram = rt;
                 }
                 (self.s.make_bay_stop)(tile, owner, id, stop_type, road, tram, dir);

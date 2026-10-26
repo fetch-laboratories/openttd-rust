@@ -11,6 +11,8 @@
 #include "../order_base.h"
 #include "../base_consist.h"
 #ifdef WITH_RUST
+#include "../timer/timer_game_economy.h"
+#include "../rust/services_ffi.h"
 TEST_CASE("Order vector preserves values and allocation invalidation")
 {
 	RustOrderVector orders;
@@ -39,6 +41,40 @@ TEST_CASE("Order vector preserves values and allocation invalidation")
 	CHECK(orders.data() == allocation);
 	CHECK(orders[0].Equals(Order{}));
 	CHECK(orders[1].Equals(Order{}));
+}
+namespace {
+struct TimetableDateFixture {
+	OpenTTDVehicleOrderState vehicle{};
+	OpenTTDOrderListState list{};
+	RustOrderVector orders;
+	TimetableDateFixture() { this->vehicle.orders = this; }
+};
+}
+TEST_CASE("Orders timetable - signed native economy dates cross into Rust")
+{
+	const auto saved_date = TimerGameEconomy::date;
+	TimetableDateFixture fixture;
+	OpenTTDOrdersLeaves leaves{};
+	leaves.vehicle = [](void *v) noexcept { return &static_cast<TimetableDateFixture *>(v)->vehicle; };
+	leaves.list = [](void *v) noexcept { return &static_cast<TimetableDateFixture *>(v)->list; };
+	leaves.vector = [](void *v) noexcept { return static_cast<TimetableDateFixture *>(v)->orders.GetRustOwner(); };
+	leaves.primary_vehicle = [](void *) noexcept -> uint64_t { return 1; };
+	leaves.vehicle_ownership = [](void *, void *) noexcept -> uint64_t { return 1; };
+	leaves.economy_date = GetRustSharedServices().economy_date;
+	leaves.tick_counter = []() noexcept -> uint64_t { return UINT64_MAX; };
+	leaves.economy_fraction = []() noexcept -> uint64_t { return 0; };
+	leaves.maximum_date = []() noexcept -> uint64_t { return INT32_MAX; };
+	leaves.timetable_year_limit = []() noexcept -> uint64_t { return 366; };
+	leaves.command_error = [](void *out, uint32_t error, uint32_t detail) noexcept { CHECK(error == 0); CHECK(detail == 0); *static_cast<bool *>(out) = true; };
+	struct Case { int32_t date; uint64_t tick; bool valid; };
+	for (const Case test : {Case{INT32_MIN, UINT64_MAX, false}, Case{-1, 73, true}, Case{0, UINT64_MAX, true}, Case{INT32_MAX, UINT64_MAX, true}, Case{INT32_MAX, 73, false}}) {
+		CAPTURE(test.date, test.tick);
+		TimerGameEconomy::date = TimerGameEconomy::Date{test.date};
+		bool error = false;
+		CHECK(openttd_rust_timetable_start(&fixture, 0, 0, test.tick, &error, &leaves) == uint32_t(test.valid));
+		CHECK(error == !test.valid);
+	}
+	TimerGameEconomy::date = saved_date;
 }
 #endif
 TEST_CASE("Base consist copies preserve values with independent aliases")

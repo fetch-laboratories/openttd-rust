@@ -5,6 +5,7 @@
 #ifdef WITH_RUST
 #include "../rust/train_ffi.h"
 #include "../rust/pbs_ffi.h"
+#include "../rust/train_reservation_ffi.h"
 #include "../tile_type.h"
 #include "../track_type.h"
 
@@ -66,5 +67,13 @@ TEST_CASE("Train speed - depot break and wormhole limits")
 			CHECK(openttd_rust_train_current_max_speed(handle, &table, &shared) == test.speed);
 		}
 	}
+}
+TEST_CASE("Train reservation - backoff 255 skips lookahead before owner reads")
+{
+	std::unique_ptr<OpenTTDTrainState, decltype(&openttd_rust_train_state_destroy)> owner(openttd_rust_train_state_new(), openttd_rust_train_state_destroy);
+	OpenTTDTrainReservationLeaves leaves{};
+	leaves.backoff = []() noexcept -> uint8_t { return 255; };
+	openttd_rust_train_reservation_check_next({owner.get(), owner.get()}, reinterpret_cast<OpenTTDVehicle *>(owner.get()), &leaves, nullptr);
+	CHECK(openttd_rust_train_state_get_track(owner.get()) == 0);
 }
 #endif

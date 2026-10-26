@@ -14,3 +14,6 @@ pub const RAILTYPE_MAGLEV: u8 = 3;
 
 /// `RAILTYPE_END`.
 pub const RAILTYPE_END: u8 = 64;
+
+/// `RAILTYPE_BEGIN`.
+pub const RAILTYPE_BEGIN: u8 = 0;
