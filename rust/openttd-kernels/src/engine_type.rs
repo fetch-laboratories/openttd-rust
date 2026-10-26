@@ -16,3 +16,6 @@ pub const AIR_CTOL: u8 = 1;
 pub const ACCELERATION_NORMAL: u8 = 0;
 /// `VehicleAccelerationModel::Maglev`.
 pub const ACCELERATION_MAGLEV: u8 = 2;
+
+/// `EngineMiscFlag::NoDefaultCargoMultiplier`.
+pub const NO_DEFAULT_CARGO_MULTIPLIER: u8 = 1 << 5;

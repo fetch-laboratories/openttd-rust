@@ -1,3 +1,4 @@
+struct OpenTTDEngineCapabilitiesServices;
 /*
  * This file is part of OpenTTD.
  * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
@@ -43,9 +44,8 @@ struct OpenTTDVehicleRefitServices {
 	VehicleType (*engine_kind)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_kind);
 	RailVehicleTypes (*rail_kind)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(rail_kind);
 	int32_t (*price_shift)(const OpenTTDEngine *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(price_shift);
-	bool (*can_carry)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(can_carry);
+	const OpenTTDEngineCapabilitiesServices *capabilities;
 	OpenTTDRefitEngine (*refit_engine)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(refit_engine);
-	uint32_t (*capacity)(const OpenTTDEngine *, OpenTTDVehicle *, uint16_t *) noexcept OPENTTD_SERVICE_DEFAULT(capacity);
 	OpenTTDRefitCargoKind (*cargo_kind)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_kind);
 	void (*set_cargo_kind)(OpenTTDVehicle *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_cargo_kind);
 	ExpensesType (*expense)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(expense);
@@ -68,10 +68,7 @@ struct OpenTTDArticulatedPart { uint8_t image; uint16_t capacity; };
 struct OpenTTDVehicleArticulatedServices {
 	const OpenTTDVehicleRefitServices *refit;
 	uint8_t (*default_cargo)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(default_cargo);
-	void (*capacity)(uint16_t, uint32_t *) noexcept OPENTTD_SERVICE_DEFAULT(capacity);
 	bool (*pool_available)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(pool_available);
-	bool (*has_callback)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(has_callback);
-	uint16_t (*next_part)(uint32_t, uint16_t, void *, bool *) noexcept OPENTTD_SERVICE_DEFAULT(next_part);
 	void *(*prepare_previous)(void *) noexcept OPENTTD_SERVICE_DEFAULT(prepare_previous);
 	void *(*new_train)(void *) noexcept OPENTTD_SERVICE_DEFAULT(new_train);
 	void *(*new_road)(void *) noexcept OPENTTD_SERVICE_DEFAULT(new_road);
@@ -85,12 +82,9 @@ struct OpenTTDVehicleArticulatedServices {
 	void (*copy_common)(void *, void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(copy_common);
 	void (*random_bits)(void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(random_bits);
 	void (*flip_image)(void *) noexcept OPENTTD_SERVICE_DEFAULT(flip_image);
-	uint64_t (*available_cargo)(uint16_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(available_cargo);
 	void (*warning)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(warning);
 	bool (*has_articulated)(void *) noexcept OPENTTD_SERVICE_DEFAULT(has_articulated);
 	void *(*next_articulated)(void *) noexcept OPENTTD_SERVICE_DEFAULT(next_articulated);
-	uint32_t max_parts;
-	uint64_t all_cargo;
 };
 const OpenTTDVehicleArticulatedServices &GetRustVehicleArticulatedServices() noexcept;
 struct OpenTTDVehicleBuildResult { uint32_t id; OpenTTDVehicleRefitCapacity capacity; };
@@ -108,7 +102,7 @@ struct OpenTTDVehicleConstructServices {
 	OpenTTDAircraftInfo (*aircraft_info)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_info);
 	void (*aircraft_properties)(void *, void *, const OpenTTDEngine *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_properties);
 	void (*rotor)(void *, void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(rotor);
-	void (*aircraft_capacity)(const OpenTTDEngine *, void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_capacity);
+	uint16_t *(*mail_capacity_address)(void *) noexcept OPENTTD_SERVICE_DEFAULT(mail_capacity_address);
 	void (*road_capacity)(void *, void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(road_capacity);
 	void (*set_cargo_type)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_cargo_type);
 	void (*engine_common)(void *, const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_common);
@@ -157,7 +151,6 @@ struct OpenTTDVehicleBuildServices {
 	VehicleType (*depot_kind)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_kind);
 	int64_t (*engine_cost)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_cost);
 	uint8_t (*default_cargo)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(default_cargo);
-	uint32_t (*articulate_count)(uint16_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(articulate_count);
 	bool (*pool_available)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(pool_available);
 	uint16_t (*free_unit)(VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(free_unit);
 	const OpenTTDVehicleConstructServices *construct;
@@ -165,8 +158,6 @@ struct OpenTTDVehicleBuildServices {
 	uint32_t (*ship_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ship_tile);
 	void *(*new_ship)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_ship);
 	void (*set_purchase)(void *, uint16_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_purchase);
-	void (*articulated_capacity)(uint16_t, uint32_t *) noexcept OPENTTD_SERVICE_DEFAULT(articulated_capacity);
-	uint32_t (*display_capacity)(const OpenTTDEngine *, uint16_t *) noexcept OPENTTD_SERVICE_DEFAULT(display_capacity);
 	bool (*is_engine)(void *) noexcept OPENTTD_SERVICE_DEFAULT(is_engine);
 	void (*presentation)(void *, VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(presentation);
 	void (*use_unit)(void *) noexcept OPENTTD_SERVICE_DEFAULT(use_unit);
