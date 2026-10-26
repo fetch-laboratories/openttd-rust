@@ -18,6 +18,7 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 		.file_id = RustGRFFileID,
 		.find_file = [](uint32_t id) noexcept -> const GRFFile * { return GetFileByGRFID(id); },
 		.engine_file = RustEngineGRF,
+		.has_file = RustEngineHasGRF,
 		.set_file = [](const OpenTTDEngine *shell, const GRFFile *file) noexcept { const_cast<Engine *>(EngineOf(shell))->grf_prop.SetGRFFile(file); },
 		.mapping_log = [](uint32_t source, uint32_t target, bool loaded) noexcept {
 			if (loaded) GrfMsg(5, "Mapping from GRFID {:x} to {:x}", std::byteswap(source), std::byteswap(target));
@@ -35,10 +36,7 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 		.railtypes = RustEngineRailTypes,
 		.rail_label = [](RailType rt) noexcept { return GetRailTypeInfo(rt)->label; },
 		.refit_inputs = [](const OpenTTDEngine *shell) noexcept { const auto &ei = EngineOf(shell)->info; return OpenTTDEngineRefitInputs{.mask = RustEngineCargoRefitMask(shell), .cargo = ei.cargo_type, .custom = VehicleCallbackMasks{RustEngineCallbackMask(shell)}.Test(VehicleCallbackMask::CustomRefit)}; },
-		.cargo_label = [](const OpenTTDEngine *shell) noexcept {
-			const auto &label = EngineOf(shell)->info.cargo_label;
-			return std::visit([](auto label) { if constexpr (std::is_same_v<decltype(label), CargoLabel>) return OpenTTDEngineCargoLabel{label.base(), false}; else return OpenTTDEngineCargoLabel{label, true}; }, label);
-		},
+		.cargo_label = [](const OpenTTDEngine *shell) noexcept { return RustCargoLabel(EngineOf(shell)->info.cargo_label); },
 		.train_cargo = [](const OpenTTDEngine *shell) noexcept { return OpenTTDEngineTrainCargo{.capacity = RustEngineRailCapacity(shell), .kind = Engine_rail_kind(shell)}; },
 		.set_cargo = RustSetEngineCargo,
 		.set_refit = RustSetEngineRefitMask,
@@ -54,7 +52,7 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 		.file_version = RustGRFFileVersion,
 		.cargo_list_size = [](const GRFFile *file) noexcept { return file->cargo_list.size(); },
 		.cargo_translation = RustCargoTranslation,
-		.unknown_refit = [](const GRFFile *file, uint16_t result) noexcept { ErrorUnknownCallbackResult(RustGRFFileID(file), CBID_VEHICLE_CUSTOM_REFIT, result); },
+		.unknown_refit = RustUnknownCallbackResult,
 		.climate = OpenTTDLandscapeValue,
 
 		.variant = RustEngineVariant,
@@ -62,13 +60,13 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 		.invalid_string = RustSetEngineInvalidString,
 		.engine_climate = static_cast<bool (*)(const OpenTTDEngine *) noexcept>(RustEngineClimate),
 		.rail_badges = [](const OpenTTDEngine *shell, RailType rt) noexcept { AppendCopyableBadgeList(const_cast<Engine *>(EngineOf(shell))->badges, GetRailTypeInfo(rt)->badges, GSF_TRAINS); },
-		.road_badges = [](const OpenTTDEngine *shell) noexcept { auto *e = const_cast<Engine *>(EngineOf(shell)); AppendCopyableBadgeList(e->badges, GetRoadTypeInfo(e->VehInfo<RoadVehicleInfo>().roadtype)->badges, GSF_ROADVEHICLES); },
+		.road_badges = [](const OpenTTDEngine *shell) noexcept { auto *e = const_cast<Engine *>(EngineOf(shell)); AppendCopyableBadgeList(e->badges, GetRoadTypeInfo(RustEngineRoadType(e))->badges, GSF_ROADVEHICLES); },
 		.rail_kind = Engine_rail_kind,
 		.livery = [](uint16_t id) noexcept { return GetEngineLiveryScheme(EngineID{id}, EngineID::Invalid(), nullptr); },
 		.use_livery = [](LiveryScheme scheme) noexcept { SetBit(_loaded_newgrf_features.used_liveries, scheme); },
 		.variant_flags = [](const OpenTTDEngine *shell) noexcept { const_cast<Engine *>(EngineOf(shell))->display_flags.Set({EngineDisplayFlag::HasVariants, EngineDisplayFlag::IsFolded}); },
 		.variant_cycle_log = [](const OpenTTDEngine *shell) noexcept { const Engine *e = EngineOf(shell); GrfMsg(1, "FinaliseEngineArray: Variant of engine {:x} in '{}' loops back on itself", e->grf_prop.local_id, RustEngineGRF(shell)->filename); },
-		.is_tram = [](const OpenTTDEngine *shell) noexcept { return EngineOf(shell)->info.misc_flags.Test(EngineMiscFlag::RoadIsTram); },
+		.is_tram = RustEngineIsTram,
 		.set_road_speed = RustSetEngineRoadSpeed,
 		.set_roadtype = RustSetEngineRoadType,
 		.road_list_size = [](const GRFFile *file, bool tram) noexcept { return (tram ? file->tramtype_list : file->roadtype_list).size(); },

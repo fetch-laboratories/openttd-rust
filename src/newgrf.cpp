@@ -680,8 +680,7 @@ static CargoLabel GetActiveCargoLabel(const std::initializer_list<CargoLabel> &l
 static CargoLabel GetActiveCargoLabel(const std::variant<CargoLabel, MixedCargoType> &label)
 {
 #ifdef WITH_RUST
-	auto value = std::visit([](auto label) { if constexpr (std::is_same_v<decltype(label), CargoLabel>) return OpenTTDEngineCargoLabel{label.base(), false}; else return OpenTTDEngineCargoLabel{label, true}; }, label);
-	return CargoLabel{openttd_rust_engine_active_label(&GetRustEngineLoadingServices(), value)};
+	return CargoLabel{openttd_rust_newgrf_active_cargo_label(OpenTTDCargoByLabel, RustCargoLabel(label))};
 #else
 	struct visitor {
 		CargoLabel operator()(const CargoLabel &label) { return label; }
