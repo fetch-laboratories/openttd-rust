@@ -12,7 +12,7 @@
 )]
 use crate::cargo_type::{CT_INVALID, CT_MAIL, CT_PASSENGERS, INVALID_CARGO, NUM_CARGO};
 use crate::cargotype::{
-    INVALID_CARGO_BITNUM, INVALID_TPE, NUM_TPE, TPE_MAIL, TPE_NONE, TPE_PASSENGERS,
+    INVALID_TPE, NUM_TPE, TPE_MAIL, TPE_NONE, TPE_PASSENGERS, is_cargo_spec_valid,
 };
 use crate::game_state::GameState;
 use crate::newgrf_callbacks::CBID_NO_CALLBACK;
@@ -34,6 +34,12 @@ pub struct Sprite {
 pub struct LabelSpec {
     label: u32,
     bitnum: u8,
+}
+#[repr(C)]
+pub struct FinaliseSpec {
+    label: u32,
+    bitnum: u8,
+    effect: u8,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -72,11 +78,14 @@ pub struct Services {
     copy_default: extern "C" fn(u8, u8),
     clear_specs: extern "C" fn(u8),
     label_spec: extern "C" fn(Handle) -> LabelSpec,
+    bitnum: extern "C" fn(Handle) -> u8,
+    finalise_spec: extern "C" fn(Handle) -> FinaliseSpec,
     order_spec: extern "C" fn(Handle) -> OrderSpec,
     index: extern "C" fn(Handle) -> u8,
     production: extern "C" fn(Handle) -> ProductionCargo,
     sort: extern "C" fn(*mut Handle, usize),
-    publish_sorted: extern "C" fn(*mut Handle, usize, usize),
+    publish_sorted: extern "C" fn(*mut Handle, usize),
+    publish_standard: extern "C" fn(*mut Handle, usize),
     publish_town: extern "C" fn(u8, *mut Handle, usize),
     set_effect: extern "C" fn(Handle, u8),
     invalidate_strings: extern "C" fn(Handle),
@@ -145,7 +154,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_setup(s: *const Services, climate: u
     for slot in 0..12 {
         (s.copy_default)(climate, slot);
         let spec = (s.label_spec)((s.spec)(slot));
-        if spec.bitnum != INVALID_CARGO_BITNUM {
+        if is_cargo_spec_valid(spec.bitnum) {
             unsafe {
                 (*REGISTRY.get()).mask |= 1_u64 << slot;
                 (*REGISTRY.get()).defaults.push(spec.label);
@@ -165,7 +174,7 @@ pub extern "C" fn openttd_rust_cargo_labels_rebuild() {
     let s = services();
     for cargo in 0..NUM_CARGO {
         let spec = (s.label_spec)((s.spec)(cargo));
-        if spec.bitnum != INVALID_CARGO_BITNUM && spec.label != 0 && spec.label != CT_INVALID {
+        if is_cargo_spec_valid(spec.bitnum) && spec.label != 0 && spec.label != CT_INVALID {
             unsafe {
                 (*REGISTRY.get()).labels.entry(spec.label).or_insert(cargo);
             }
@@ -186,8 +195,7 @@ pub extern "C" fn openttd_rust_cargo_by_label(label: u32) -> u8 {
 pub extern "C" fn openttd_rust_cargo_is_default(cargo: u8) -> bool {
     let s = services();
     let spec = (s.label_spec)((s.spec)(cargo));
-    spec.bitnum != INVALID_CARGO_BITNUM
-        && unsafe { (*REGISTRY.get()).defaults.contains(&spec.label) }
+    is_cargo_spec_valid(spec.bitnum) && unsafe { (*REGISTRY.get()).defaults.contains(&spec.label) }
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_climate_labels() -> Labels {
@@ -234,15 +242,22 @@ pub extern "C" fn openttd_rust_cargo_sort(native: *const Services) {
         (*REGISTRY.get()).services = native;
     }
     let s = services();
-    unsafe {
-        for town in &mut (*REGISTRY.get()).town {
+    for effect in 0..NUM_TPE {
+        let data = unsafe {
+            let town = &mut (*REGISTRY.get()).town[usize::from(effect)];
             town.clear();
-        }
-        (*REGISTRY.get()).sorted.clear();
+            town.as_mut_ptr()
+        };
+        (s.publish_town)(effect, data, 0);
     }
+    let data = unsafe {
+        (*REGISTRY.get()).sorted.clear();
+        (*REGISTRY.get()).sorted.as_mut_ptr()
+    };
+    (s.publish_sorted)(data, 0);
     for cargo in 0..NUM_CARGO {
         let spec = (s.spec)(cargo);
-        if (s.label_spec)(spec).bitnum != INVALID_CARGO_BITNUM {
+        if is_cargo_spec_valid((s.bitnum)(spec)) {
             unsafe {
                 (*REGISTRY.get()).sorted.push(spec);
             }
@@ -254,11 +269,12 @@ pub extern "C" fn openttd_rust_cargo_sort(native: *const Services) {
             (*REGISTRY.get()).sorted.len(),
         )
     };
+    (s.publish_sorted)(data, count);
     (s.sort)(data, count);
     for index in 0..count {
-        let order = (s.order_spec)(unsafe { data.add(index).read() });
+        let cargo = (s.index)(unsafe { data.add(index).read() });
         unsafe {
-            (*REGISTRY.get()).reverse[usize::from(order.cargo)] = index as u8;
+            (*REGISTRY.get()).reverse[usize::from(cargo)] = index as u8;
         }
     }
     unsafe {
@@ -269,9 +285,12 @@ pub extern "C" fn openttd_rust_cargo_sort(native: *const Services) {
         let spec = unsafe { data.add(index).read() };
         let order = (s.order_spec)(spec);
         crate::movement::native_assert(unsafe { &*s.shared }, order.effect != INVALID_TPE);
-        unsafe {
-            (*REGISTRY.get()).town[usize::from(order.effect)].push(spec);
-        }
+        let (town_data, town_count) = unsafe {
+            let town = &mut (*REGISTRY.get()).town[usize::from(order.effect)];
+            town.push(spec);
+            (town.as_mut_ptr(), town.len())
+        };
+        (s.publish_town)(order.effect, town_data, town_count);
         if order.special {
             break;
         }
@@ -280,22 +299,16 @@ pub extern "C" fn openttd_rust_cargo_sort(native: *const Services) {
             (*REGISTRY.get()).standard |= 1_u64 << order.cargo;
         }
     }
-    (s.publish_sorted)(data, count, standard);
-    for effect in 0..NUM_TPE {
-        let (data, count) = unsafe {
-            let town = &mut (*REGISTRY.get()).town[usize::from(effect)];
-            (town.as_mut_ptr(), town.len())
-        };
-        (s.publish_town)(effect, data, count);
-    }
+    (s.publish_standard)(data, standard);
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_finalise() {
     let s = services();
     for cargo in 0..NUM_CARGO {
         let cs = (s.spec)(cargo);
-        if (s.order_spec)(cs).effect == INVALID_TPE {
-            let label = (s.label_spec)(cs).label;
+        let info = (s.finalise_spec)(cs);
+        if info.effect == INVALID_TPE {
+            let label = info.label;
             (s.set_effect)(
                 cs,
                 match label {
@@ -305,7 +318,7 @@ pub extern "C" fn openttd_rust_cargo_finalise() {
                 },
             );
         }
-        if (s.label_spec)(cs).bitnum == INVALID_CARGO_BITNUM {
+        if !is_cargo_spec_valid(info.bitnum) {
             (s.invalidate_strings)(cs);
         }
     }
@@ -344,7 +357,7 @@ pub extern "C" fn openttd_rust_cargo_build_inverse(file: *mut c_void) {
     let labels = openttd_rust_cargo_translation_table(file);
     for cargo in 0..NUM_CARGO {
         let cs = (s.label_spec)((s.spec)(cargo));
-        if cs.bitnum == INVALID_CARGO_BITNUM {
+        if !is_cargo_spec_valid(cs.bitnum) {
             continue;
         }
         for index in 0..labels.size {
@@ -460,9 +473,10 @@ crate::abi::layouts! {
     "OpenTTDCargoProduction" ["probe"] => ProductionCargo {cargo,multiplier};
     "OpenTTDCargoSprite" ["probe"] => Sprite {sprite,count};
     "OpenTTDCargoLabelSpec" ["probe"] => LabelSpec {label,bitnum};
+    "OpenTTDCargoFinaliseSpec" ["probe"] => FinaliseSpec {label,bitnum,effect};
     "OpenTTDCargoOrderSpec" ["probe"] => OrderSpec {cargo,effect,special};
     "OpenTTDCargoLabels" ["probe"] => Labels {data,size};
     "OpenTTDCargoFile" ["probe"] => File {labels,version,fallback};
     "OpenTTDCargoInvocation" ["probe"] => Invocation {label,file,root,callback,param1,param2};
-    "OpenTTDCargoRegistryServices" ["probe"] => Services {shared,common,spec,copy_default,clear_specs,label_spec,order_spec,index,production,sort,publish_sorted,publish_town,set_effect,invalidate_strings,file,assign_fallback,resize_fallback,set_fallback,clear_inverse,set_inverse,invocation,callback_frame,sprite_frame,sprite};
+    "OpenTTDCargoRegistryServices" ["probe"] => Services {shared,common,spec,copy_default,clear_specs,label_spec,bitnum,finalise_spec,order_spec,index,production,sort,publish_sorted,publish_standard,publish_town,set_effect,invalidate_strings,file,assign_fallback,resize_fallback,set_fallback,clear_inverse,set_inverse,invocation,callback_frame,sprite_frame,sprite};
 }

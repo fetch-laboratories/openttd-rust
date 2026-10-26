@@ -15,3 +15,8 @@ pub const TPE_MAIL: u8 = 2;
 pub const NUM_TPE: u8 = 3;
 /// Town production effect from `cargotype.h`.
 pub const INVALID_TPE: u8 = 4;
+
+/// Original `CargoSpec::IsValid`.
+pub const fn is_cargo_spec_valid(bitnum: u8) -> bool {
+    bitnum != INVALID_CARGO_BITNUM
+}

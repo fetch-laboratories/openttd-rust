@@ -21,6 +21,7 @@
 
 #ifdef WITH_RUST
 #include "rust/cargo_registry_ffi.h"
+#include "rust/services_cargo.h"
 #include "newgrf.h"
 #include "newgrf_spritegroup.h"
 #include "rust/newgrf_spritegroup_ffi.h"
@@ -360,11 +361,14 @@ const OpenTTDCargoRegistryServices &GetRustCargoRegistryServices() noexcept
 		},
 		.clear_specs = [](uint8_t first) noexcept { std::fill(CargoSpec::Get(first), CargoSpec::Get(0) + CargoSpec::GetArraySize(), CargoSpec{}); },
 		.label_spec = [](const CargoSpec *cs) noexcept -> OpenTTDCargoLabelSpec { return {cs->label.base(), cs->bitnum}; },
+		.bitnum = RustCargoSpecBitnum,
+		.finalise_spec = [](const CargoSpec *cs) noexcept -> OpenTTDCargoFinaliseSpec { return {cs->label.base(), cs->bitnum, cs->town_production_effect}; },
 		.order_spec = [](const CargoSpec *cs) noexcept -> OpenTTDCargoOrderSpec { return {cs->Index(), cs->town_production_effect, cs->classes.Test(CargoClass::Special)}; },
 		.index = [](const CargoSpec *cs) noexcept { return cs->Index(); },
 		.production = [](const CargoSpec *cs) noexcept -> OpenTTDCargoProduction { return {cs->Index(), cs->town_production_multiplier}; },
 		.sort = [](const CargoSpec **data, size_t count) noexcept { std::sort(data, data + count, &CargoSpecClassSorter); },
-		.publish_sorted = [](const CargoSpec **data, size_t count, size_t standard) noexcept { _sorted_cargo_specs = {data, count}; _sorted_standard_cargo_specs = {data, standard}; },
+		.publish_sorted = [](const CargoSpec **data, size_t count) noexcept { _sorted_cargo_specs = {data, count}; },
+		.publish_standard = [](const CargoSpec **data, size_t count) noexcept { _sorted_standard_cargo_specs = {data, count}; },
 		.publish_town = [](uint8_t effect, const CargoSpec **data, size_t count) noexcept { CargoSpec::town_production_cargoes[effect] = {data, count}; },
 		.set_effect = [](const CargoSpec *cs, uint8_t effect) noexcept { const_cast<CargoSpec *>(cs)->town_production_effect = static_cast<TownProductionEffect>(effect); },
 		.invalidate_strings = [](const CargoSpec *spec) noexcept {

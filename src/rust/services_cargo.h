@@ -21,7 +21,8 @@ struct OpenTTDIndustrySpecHandle;
  * delivery may reenter owners, so callers end their owner access first.
  * Environmental failures terminate inside these noexcept leaves. */
 inline uint16_t RustCargoSpecClasses(const CargoSpec *cs) noexcept { return cs->classes.base(); }
-inline uint8_t RustCargoBitnum(CargoType cargo) noexcept { return CargoSpec::Get(cargo)->bitnum; }
+inline uint8_t RustCargoSpecBitnum(const CargoSpec *cs) noexcept { return cs->bitnum; }
+inline uint8_t RustCargoBitnum(CargoType cargo) noexcept { return RustCargoSpecBitnum(CargoSpec::Get(cargo)); }
 inline uint16_t RustCargoClasses(CargoType cargo) noexcept { return RustCargoSpecClasses(CargoSpec::Get(cargo)); }
 inline uint OpenTTDScaleCargo(uint amount, bool town) noexcept { return ScaleByCargoScale(amount, town); }
 /* Raw inverse-map reads retain the native file and cargo-index preconditions;

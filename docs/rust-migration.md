@@ -1464,13 +1464,14 @@ transactions remain #156 gaps. PRs #151 and #268.
 Rust owns CargoPayment state/lifetime, final/transfer payment and settlement, industry
 acceptance, statistics/payment ordering, destination deduplication and the complete production
 flush. C++ retains pool shells, canonical world and packet storage, loading/reservation, subsidy
-checks, NewGRF resolution and UI. CAPY saves the repr(C) payment in place through `CargoPayment`
+checks and UI. Cargo callbacks enter the Rust registry/common Action2 owner directly. CAPY saves the repr(C) payment in place through `CargoPayment`
 reference aliases. Cargo/refusal/production/randomisation/animation and vehicle-sound resolution
 uses the NewGRF evaluator, without script VM entry or payment/destination reentry; wrappers are
 noexcept. Money saturates arithmetic but retains native shifts; callback unsigned products,
 BigMulS narrowing, stockpile limits and ordered randomisation/animation are explicit. Checks:
 the default `economy` simulation. NewGRF resolver execution, legacy CAPY files and every
-industry layout are not exhausted; the narrow fixture supplies callback results. PR #123.
+industry layout are not exhausted. Production cargo callback fixtures accompany #467; the narrow
+arithmetic fixture also supplies callback results. PR #123.
 
 ### Company finances and economy lifecycle
 
@@ -1935,3 +1936,22 @@ with two files; transient registrations are cleared before graph destruction and
 native reload. External-GRF loading, script station-build integration, other feature
 registrations, arbitrary programs, historical saves and GUI scheduling remain #156 gaps. PR
 #436, integrated in #444.
+
+### Cargo registry, translation and callback lifecycle (#467)
+
+`cargo_registry.rs` owns the process-wide label/default/climate tables, available and standard
+masks, sorted/reverse order and town-production lists. Native spans alias the Rust buffers;
+clears, sorting publication and the first special-cargo insertion keep their original phases.
+Invalid slots retain stale reverse entries. Native CargoSpec/default data, per-file GRF vectors,
+strings and the exact native class/name sort remain. Action0 ByteReader/error frames remain
+native and publish each completed mutation before reading the next value.
+
+Rust owns forward/inverse/fallback translation, finalization and cargo callback invocation,
+identity, sprites and register output through the common Action2/storage owner. Native resolver
+and profiler frames retain their stack lifetimes. Label/translation/list consumers, cargo
+payment and station ratings enter the Rust owner directly; inverse file-map access retains its
+separate meaning. Lookup and runtime callback paths allocate nothing. Serialized native loading
+excludes callback execution, and no registry/container borrow spans a service or Action2 call.
+Arbitrary external GRF loading, historical saves and GUI scheduling remain #156 gaps. Runtime
+fixture graphs are reconstructed after actual reload and do not establish file-loaded
+persistence. PR #472.
