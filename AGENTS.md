@@ -69,7 +69,11 @@ fork; the remaining upstream documentation explains behavior and architecture.
   types on both sides and tables use designated initializers. A C++ class type
   (`PoolID`, `StrongType`) crosses as its base type, because MSVC returns class
   types through a hidden pointer (#355). Existing ports convert under #168 and
-  #199. Allocation on a hot path or per call where the original has none,
+  #199. Rust-side IDs and pool pointers use the shared `repr(transparent)`
+  newtypes and opaque marker types from the header modules once #500's first
+  PR adds them; a new port adopts them from the start, and existing modules
+  convert when a maintenance batch touches them, never as a whole-fork sweep
+  while drafts are open. Allocation on a hot path or per call where the original has none,
   opcode dispatch, whole-record copies and a Rust-to-C++-to-Rust bounce into
   code Rust owns are design faults: they are fixed before integration whatever
   the timing, and root grants no exceptions.
@@ -81,7 +85,9 @@ fork; the remaining upstream documentation explains behavior and architecture.
   each existing wrapper of it as a finding. Command ports share one set of
   command-check services. A PR that adds a shared accessor deletes the
   integrated copies, and a PR that removes a caller deletes the export,
-  declaration or callback field it orphans.
+  declaration or callback field it orphans. A test or harness caller does not
+  keep a `WITH_RUST` body or `openttd_rust_*` export alive: the fixture moves
+  onto the Rust entry and the body goes.
 - The selected #274 shared map descriptor is limited to audited scheduler clear,
   water and tree loops (`docs/design/world-state.md`). C++ retains canonical
   arrays and writes. Shared header helpers preserve native assertions; raw
@@ -129,15 +135,24 @@ fork; the remaining upstream documentation explains behavior and architecture.
   profile, root attributes the rise per function to the PRs since and fixes it
   forward; that fix is the next maintenance PR to integrate. A ready ownership
   PR proceeds meanwhile; it does not wait for a future maintenance base.
-- A speed pass runs only when a tip projection comes within 5% of its ceiling
-  (1.425x play, 1.235x generation). It re-measures the six wall ratios on a
+- A speed pass runs when a tip projection first comes within 5% of its ceiling
+  (1.425x play, 1.235x generation). While a scenario stays in band, a further
+  pass runs only after its projection has risen at least 3% over its anchor or
+  a repair batch crediting at least 1.5% of its loop count has integrated;
+  otherwise the instruction projection is the record (provisional: the three
+  2026-10-26 passes spread 3.3% on P2016 while all six repairs together
+  credited 1.13% of its loop count). It re-measures the six wall ratios on a
   quiet host (no builds, links or other timed games) as the median of four
   interleaved three-pair medians, and records them with their loop counts as the
   new anchors. If no measured ratio is in its band, the pass ends there.
   Otherwise it profiles that scenario with callgrind, counts boundary cost as
   the overhead beyond what the original spends inline on the same work, ranks
   those net costs (never gross callback counts), turns the two or three largest
-  into maintenance PRs, then re-measures.
+  into maintenance PRs, then re-measures. A candidate crediting under 0.5% of
+  the scenario's loop count stays a note on #275, and candidates batch until
+  they credit 1% together (provisional). Each profile keeps its per-function
+  report under `.local/` until the next profile replaces it, so attribution
+  can be rechecked.
 - A pass runs alongside other work: only its timed collection pauses builds,
   links, profiles and other games. Prepare runtimes before the hold and release
   it when the last timed game exits; parsing, attribution and reports run after
@@ -195,11 +210,13 @@ checks that run; do not restate them in paragraphs.
   needs no user decision (user decision, 2026-10-26). Its review fixes only
   defects that can change a game comparison or a speed decision on this host or
   in CI; hypothetical ones go in the PR's limits.
-- Review report: reviewed commit, findings with their fixing commits (or why one
-  went to root), and one line each naming the functions or files compared
-  against the original body, any new callback that duplicates a shared accessor,
-  and any WITH_RUST body, export or declaration the PR leaves without a caller
-  (each one is a finding). Do not narrate further when there are no findings.
+- Review report: a first line `Reviewed commit: <sha>`, findings with their
+  fixing commits (or why one went to root) and the check that found each, and
+  one line each naming the functions or files compared against the original
+  body, any new callback that duplicates a shared accessor, and any WITH_RUST
+  body, export or declaration the PR leaves without a production caller (each
+  one is a finding; the line names every `WITH_RUST` body and `openttd_rust_*`
+  export the PR touches and the production caller found for it). Do not narrate further when there are no findings.
   Branches the harness does not reach go in the coverage tracker (#156), not
   only in the disposition.
 - One PR per ownership port, targeting `rust-migration` directly. Small
@@ -209,7 +226,8 @@ checks that run; do not restate them in paragraphs.
   one reviewer and one Full run. An item that fails review or CI leaves the
   batch for the next one rather than holding it. A fix that a draft or a live
   crash needs may go alone. Batch ready, reviewed components in one integration
-  PR when that avoids serial Full runs.
+  PR only when their diffs touch disjoint files; components that overlap
+  integrate one at a time, each at its own reviewed head.
 
 ## Agent team and review
 
@@ -307,6 +325,9 @@ shared layer in its final typed form, and other drafts adopt it when they
 update from base. A shared service or shared-path fix (command protocol,
 clearing, prices, restoration) that more than one draft needs is built once, as
 root's own small PR from `rust-migration`; no draft builds a parallel copy.
+Concurrent owners need disjoint unintegrated services: an owner whose shared
+service another draft is still building starts after that service integrates,
+and planning selects concurrent owners accordingly.
 Integrate drafts in order of readiness: none waits for another draft's
 services, and a reviewed PR gains no new scope before it integrates.
 
@@ -348,7 +369,10 @@ C/C++ uses tabs; Rust uses `cargo fmt`. The inherited commit checker examines
 every commit's diff and title: fix style in the introducing commit, and use
 supported prefixes such as `Add:`, `Change:`, `Fix:`, `Doc:` or `Update:`,
 including on integration merges (`Merge:` is rejected). Use ASCII without tabs
-in commit messages, including their bodies. Python tools pass
+in commit messages, including their bodies. A commit that fixes a fidelity or
+crash defect ends with a `Found-by:` trailer naming the check that found it
+(`review`, `scenario NAME`, `comparison TOOL`, `unit test`, `CI JOB`, `deep
+check` or `user`), so #512 can tally where test effort pays. Python tools pass
 `uvx --from ruff==0.16.8 ruff check tools/` and
 `uvx --from ruff==0.16.8 ruff format --check tools/`. New or rewritten Python
 functions annotate every parameter and return type, and fixed-shape data uses
