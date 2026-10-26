@@ -1,7 +1,8 @@
 # OpenTTD-Rust near-term roadmap
 
 Root selects here; `AGENTS.md` and `docs/rust-migration.md` define process. Follow
-this roadmap over conflicting issues. Update it in place; `/steer` prunes it.
+this roadmap over conflicting issues; it is the current state of the umbrella
+issue #3. Update it in place; `/steer` prunes it.
 Evidence stays in PRs.
 
 ## Where the fork stands (2026-10-26, code at `4853789508`)
@@ -191,6 +192,7 @@ review judges them by their effects):
 | New Python code is type-annotated; #501 converts existing code | `122754f627` | Unannotated new functions passing review; #501's tooling size |
 | Testing issues queued; #514 the next workflow PR | `1f2bc8e228` | Testing work starting ahead of ready owners or #515 |
 | Steer judges user rule changes and carries untested ones forward | `bcbfa60afb`, `805c0111c8` | Applied by this review at no cost |
+| Every open issue has a place in the roadmap; root runs `docs/skills/steer/issues.py` at start, when planning and when taking stock (user-directed after this review found catchment, the testing set, #312 and #198 passed over) | twenty-first review | Unplaced and excluded counts at each steer; exclusion lines without a return condition; time root spends placing issues |
 
 ## Earlier steering, still in force
 
@@ -311,7 +313,8 @@ Batches before #453 (#358 to #448) are recorded in their PRs.
 steering, correction 7). The merged-tip instruction profile is due after the
 next integration under the unchanged f492 anchors (the steering profile of
 `4853789508` does not reset that count); a quiet pass runs only under the
-in-band rule in AGENTS.md. #168 retains boundary debt; #312 is unselected. Ready owners proceed
+in-band rule in AGENTS.md. #168 tracks the remaining boundary debt, converted when a maintenance batch
+touches a module; #312 batches under #275 after the accessor audit. Ready owners proceed
 alongside maintenance; only timed collection holds games.
 
 ## Phase 2: work order

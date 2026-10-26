@@ -99,6 +99,14 @@ fork; the remaining upstream documentation explains behavior and architecture.
   condition that waits on another deferred or unscheduled item is circular. A
   core loop (tile loop, vehicle tick) that misses the retirement ratio gets a
   boundary fix, not abandonment.
+- Every open issue has a place in the roadmap: in the work order, selected or
+  queued behind the event that selects it; on a tracker's checklist; or
+  excluded on a line stating what brings it back (an owned issue's result, or
+  a policy such as vendored-last or `deferred-improvement`). A component left
+  out of the work order gets an issue first. Root places every unplaced issue,
+  including the user's, when it starts and whenever it plans, and re-checks
+  each exclusion's condition; `python3 docs/skills/steer/issues.py` lists
+  them. Work that finishes an issue's remaining scope closes it.
 - Evidence for game-logic ports is the semantic simulation harness (`python3
   tools/migration.py simulate`, #72) plus the existing tests; a new game-logic
   port integrates only after its harness scenarios exercise the component.
