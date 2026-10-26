@@ -195,9 +195,7 @@ fn translate(label: crate::newgrf::CargoLabel) -> u8 {
     }))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_definition_finalise(s: *const Services) {
-    let s = unsafe { &*s };
+pub unsafe fn finalise(s: &Services) {
     let mut file_index = 0;
     loop {
         let file = unsafe { (s.file)(file_index) };

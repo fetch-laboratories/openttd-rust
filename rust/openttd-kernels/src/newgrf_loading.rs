@@ -1403,7 +1403,7 @@ unsafe fn after_load(s: &Services) {
         crate::engine_loading::openttd_rust_engine_finalise(&*s.engine);
         (s.finalise_canals)();
         (s.finalise_houses)();
-        crate::industry::definitions::openttd_rust_industry_definition_finalise(s.industry);
+        crate::industry::definitions::finalise(&*s.industry);
         (s.finalise_objects)();
         crate::cargo_registry::openttd_rust_cargo_sort(s.cargo);
         (s.sort_industries)();
