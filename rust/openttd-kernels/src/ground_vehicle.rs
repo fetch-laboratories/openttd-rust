@@ -682,23 +682,28 @@ fn update_z(s: &Services, movement: &crate::movement::CachedTable<'_>, v: Vehicl
         assert_eq!(z, movement.get().pixel_z_at(xy.x, xy.y, true));
     }
 }
-pub(crate) fn inclination(s: &Services, v: VehicleRef, new_tile: bool, delta: bool) -> i32 {
-    inclination_owned(s, v, (s.resolve)(v), new_tile, delta)
+pub(crate) fn inclination(
+    s: &Services,
+    movement: &crate::movement::CachedTable<'_>,
+    v: VehicleRef,
+    new_tile: bool,
+    delta: bool,
+) -> i32 {
+    inclination_owned(s, movement, v, (s.resolve)(v), new_tile, delta)
 }
 pub(crate) fn inclination_owned(
     s: &Services,
+    movement: &crate::movement::CachedTable<'_>,
     v: VehicleRef,
     o: Owner,
     new_tile: bool,
     delta: bool,
 ) -> i32 {
-    // SAFETY: Only the immutable registry is retained for this entry.
-    let movement = crate::movement::CachedTable::new(unsafe { &*s.road.shared });
     let old_z = (s.vehicle.z)(v);
     if new_tile {
-        update_z_inclination(s, &movement, v, o);
+        update_z_inclination(s, movement, v, o);
     } else {
-        update_z(s, &movement, v, o);
+        update_z(s, movement, v, o);
     }
     (s.viewport)(v, true, delta);
     old_z
@@ -784,6 +789,7 @@ pub(crate) struct Moved {
 }
 pub(crate) fn move_incline(
     gs: &crate::vehicle::GroundServices,
+    movement: &crate::movement::CachedTable<'_>,
     map: crate::map_func::Map,
     v: VehicleRef,
     o: Owner,
@@ -799,7 +805,7 @@ pub(crate) fn move_incline(
     unsafe {
         crate::vehicle::occupancy::update_position(s.vehicle, v, map);
     }
-    let old_z = inclination_owned(s, v, o, new_tile, delta);
+    let old_z = inclination_owned(s, movement, v, o, new_tile, delta);
     Moved {
         old_z,
         z: (s.vehicle.z)(v),
