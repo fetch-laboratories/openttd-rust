@@ -65,6 +65,12 @@ TEST_CASE("NewGRF - canonical manager virtual dispatch and reset lifetimes")
 	CHECK(manager.AddEntityID(42, 17, 0) == 1);
 	CHECK(manager.GetGRFID(2) == 17);
 	CHECK(manager.GetSubstituteID(2) == 1);
+	TestOverrideManager copied = manager;
+	copied.ResetMapping();
+	CHECK(copied.GetID(5, 17) == 99);
+	CHECK(manager.GetID(5, 17) == 2);
+	copied = manager;
+	CHECK(copied.GetID(5, 17) == 2);
 	manager.Add(5, 17, 0);
 	manager.Add(6, 18, 0);
 	CHECK(manager.Requested(0) == 5);

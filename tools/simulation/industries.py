@@ -882,18 +882,22 @@ def definition_grfs(folder):
             "main",
             b"I475",
             [
+                action(8, 0, [(0x18, b"owner475/main\0")]),
                 # Eighty-two early reservations cross the 0xFF water-marker hole.
                 action(9, 0, [(8, bytes(82))], count=82),
                 action(
                     9,
                     0,
                     [
+                        (8, byte(5)),
+                        (9, byte(250)),
                         (9, byte(0)),
                         (0x0F, bytes((3, 0))),
                         (0x10, byte(4)),
                         (0x11, byte(0)),
                         (0x12, byte(2)),
                         (0x13, bytes((2, 1, 8, 0, 0xFC))),
+                        (0x14, word(3) + word(0) + word(0) + word(99)),
                     ],
                 ),
                 action(
@@ -901,6 +905,8 @@ def definition_grfs(folder):
                     17,
                     [
                         (8, byte(0)),
+                        (8, byte(3)),
+                        (9, byte(250)),
                         (9, byte(0)),
                         (0x0A, layout(custom, duplicate, imported)),
                         (0x0F, byte(1)),
@@ -926,6 +932,9 @@ def definition_grfs(folder):
                         ),
                     ],
                 ),
+                action(10, 17, [(0x29, word(1) + word(0))]),
+                action(9, 90, [(0x0F, bytes((3, 0)))]),
+                action(10, 90, [(0x0A, byte(0)), (0x29, word(0)), (0x0F, byte(12))]),
                 action(
                     10,
                     18,
@@ -948,6 +957,24 @@ def definition_grfs(folder):
             "broken",
             b"B475",
             [action(10, 19, [(8, byte(3)), (0x0F, byte(93)), (0x20, word(1))])],
+        ),
+        (
+            "badges",
+            b"Q475",
+            [
+                action(
+                    8, 0, [(0x18, b"owner475/partial1\0owner475/partial2\0")], count=2
+                ),
+                action(
+                    9,
+                    0,
+                    [
+                        (8, byte(2)),
+                        (0x14, word(1) + word(1)),
+                        (0x14, word(2) + word(0)),
+                    ],
+                ),
+            ],
         ),
         (
             "invalid",

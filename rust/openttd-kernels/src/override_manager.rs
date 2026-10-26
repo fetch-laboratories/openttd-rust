@@ -11,6 +11,7 @@ pub struct Mapping {
     pub entity_id: u16,
     pub substitute_id: u16,
 }
+#[derive(Clone)]
 pub struct Manager {
     pub mappings: Vec<Mapping>,
     pub entities: Vec<u16>,
@@ -51,6 +52,29 @@ pub unsafe extern "C" fn openttd_rust_override_new(
         invalid,
     }))
 }
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_override_clone(manager: *const Manager) -> *mut Manager {
+    Box::into_raw(Box::new(unsafe { (&*manager).clone() }))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_override_assign(
+    manager: *mut Manager,
+    source: *const Manager,
+) {
+    if std::ptr::eq(manager, source) {
+        return;
+    }
+    let source = unsafe { &*source };
+    let target = unsafe { &mut *manager };
+    target.entities.clone_from(&source.entities);
+    target.grfids.clone_from(&source.grfids);
+    target.offset = source.offset;
+    target.maximum = source.maximum;
+    target.invalid = source.invalid;
+    target.mappings.clone_from(&source.mappings);
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_override_delete(manager: *mut Manager) {
     drop(unsafe { Box::from_raw(manager) });

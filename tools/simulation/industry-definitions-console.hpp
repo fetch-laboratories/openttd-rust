@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file industry-definitions-console.hpp Real GRF definitions, funding and reload evidence. */
 #include "newgrf_config.h"
+#include "newgrf_badge.h"
 #include "newgrf/newgrf_internal.h"
 #include "command_func.h"
 #include "industry_cmd.h"
@@ -26,7 +27,7 @@ static void DefinitionInspect(bool reused)
 	uint16_t type = _industry_mngr.GetID(18, main);
 	DefinitionRequire(type < NEW_INDUSTRYOFFSET && type != 0, "disabled-original-slot");
 	const IndustrySpec *spec = GetIndustrySpec(0);
-	DefinitionRequire(spec->enabled && spec->grf_prop.grfid == main && spec->grf_prop.local_id == 17, "industry-identity");
+	DefinitionRequire(spec->enabled && spec->grf_prop.grfid == main && spec->grf_prop.local_id == 17 && spec->grf_prop.subst_id == 0, "industry-identity");
 	DefinitionRequire(spec->layouts.size() == 2 && spec->layouts[0].size() == 1 && spec->layouts[0][0].gfx == NEW_INDUSTRYTILEOFFSET && spec->layouts[1].size() > 1, "custom-invalid-imported-layouts");
 	DefinitionRequire(spec->cost_multiplier == 1 && spec->minimal_cargo == 0 && spec->map_colour.p == 77 && spec->behaviour.None() && spec->prospecting_chance == 0xFEDCBA98 && spec->removal_cost_multiplier == 12345 && spec->station_name == STR_NULL, "scalars");
 	DefinitionRequire(spec->produced_cargo[0] == 1 && spec->produced_cargo[1] == INVALID_CARGO && spec->accepts_cargo[0] == INVALID_CARGO && spec->production_rate[0] == 80 && spec->production_rate[1] == 0 && spec->input_cargo_multiplier[0][0] == 256 && spec->input_cargo_multiplier[0][1] == 512 && spec->input_cargo_multiplier[1][0] == 768 && spec->input_cargo_multiplier[1][1] == 1024 && spec->input_cargo_multiplier[2][0] == 0, "cargo-multipliers");
@@ -39,13 +40,17 @@ static void DefinitionInspect(bool reused)
 	DefinitionRequire(_industile_mngr.GetID(79, main) == 254 && _industile_mngr.GetID(80, main) == 256 && _industile_mngr.GetID(81, main) == 257, "water-marker-slot-excluded");
 	uint16_t conflict = _industry_mngr.GetID(17, DefinitionGRFID("C475"));
 	DefinitionRequire(conflict < NUM_INDUSTRYTYPES && conflict != 0 && GetIndustrySpec(conflict)->grf_prop.override_id == (reused ? 0 : IT_INVALID), "industry-override-conflict");
-	for (const char *name : {"P475", "B475", "X475"}) {
+	DefinitionRequire(tile.badges.size() == 1 && spec->badges == tile.badges, "badge-publication");
+	for (const char *name : {"P475", "B475", "Q475", "X475"}) {
 		const auto *config = GetGRFConfig(DefinitionGRFID(name));
 		DefinitionRequire(config != nullptr && config->status == GCS_DISABLED && config->errors.size() == 1, "disabled-file");
 		DefinitionRequire(config->errors.front().message == (name[0] == 'X' ? STR_NEWGRF_ERROR_INVALID_ID : STR_NEWGRF_ERROR_READ_BOUNDS), "native-error");
 	}
 	uint16_t partial_tile = _industile_mngr.GetID(0, DefinitionGRFID("P475"));
 	DefinitionRequire(partial_tile < NUM_INDUSTRYTILES && _industry_tile_specs[partial_tile].animation.frames == 7, "incremental-animation-failure");
+	const auto *badge_file = GetFileByGRFID(DefinitionGRFID("Q475"));
+	uint16_t badge_tile = _industile_mngr.GetID(0, DefinitionGRFID("Q475"));
+	DefinitionRequire(badge_file != nullptr && badge_file->badge_list.size() == 2 && _industry_tile_specs[badge_tile].badges == std::vector<BadgeID>{badge_file->badge_list[1]} && GetBadge(badge_file->badge_list[0])->features.Test(GSF_INDUSTRYTILES), "partial-badge-effects");
 	uint16_t partial_industry = _industry_mngr.GetID(19, DefinitionGRFID("B475"));
 	DefinitionRequire(partial_industry < NUM_INDUSTRYTYPES && GetIndustrySpec(partial_industry)->cost_multiplier == 93, "incremental-industry-failure");
 	for (uint16_t id : {uint16_t(0), type, conflict, partial_industry}) {
@@ -82,7 +87,7 @@ static bool IndustryDefinitionsScenario(std::span<std::string_view> args)
 	DefinitionClimateReset();
 	SetRandomSeed(0x47500001);
 	_grfconfig.clear();
-	for (const char *name : {"main", "conflict", "partial", "broken", "invalid"}) {
+	for (const char *name : {"main", "conflict", "partial", "broken", "badges", "invalid"}) {
 		auto config = std::make_unique<GRFConfig>(std::string(args[2]) + "/" + name + ".grf");
 		DefinitionRequire(FillGRFDetails(*config, false, NO_DIRECTORY), "real-file-scan");
 		config->flags.Reset(GRFConfigFlag::InitOnly);

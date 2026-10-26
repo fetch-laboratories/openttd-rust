@@ -225,6 +225,8 @@ public:
 
 	OverrideManagerBase(uint16_t offset, uint16_t maximum, uint16_t invalid);
 #ifdef WITH_RUST
+	OverrideManagerBase(const OverrideManagerBase &other);
+	OverrideManagerBase &operator=(const OverrideManagerBase &other);
 	virtual ~OverrideManagerBase();
 #else
 	virtual ~OverrideManagerBase() = default;

@@ -68,6 +68,26 @@ OverrideManagerBase::OverrideManagerBase(uint16_t offset, uint16_t maximum, uint
 }
 
 #ifdef WITH_RUST
+OverrideManagerBase::OverrideManagerBase(const OverrideManagerBase &other) :
+		rust_owner(openttd_rust_override_clone(other.rust_owner)), max_offset(other.max_offset), max_entities(other.max_entities), invalid_id(other.invalid_id)
+{
+	auto view = openttd_rust_override_view(this->rust_owner);
+	this->mappings = {view.mappings, this->max_entities};
+	this->entity_overrides = {view.entities, this->max_offset};
+	this->grfid_overrides = {view.grfids, this->max_offset};
+}
+OverrideManagerBase &OverrideManagerBase::operator=(const OverrideManagerBase &other)
+{
+	openttd_rust_override_assign(this->rust_owner, other.rust_owner);
+	this->max_offset = other.max_offset;
+	this->max_entities = other.max_entities;
+	this->invalid_id = other.invalid_id;
+	auto view = openttd_rust_override_view(this->rust_owner);
+	this->mappings = {view.mappings, this->max_entities};
+	this->entity_overrides = {view.entities, this->max_offset};
+	this->grfid_overrides = {view.grfids, this->max_offset};
+	return *this;
+}
 OverrideManagerBase::~OverrideManagerBase() { openttd_rust_override_delete(this->rust_owner); }
 #endif
 

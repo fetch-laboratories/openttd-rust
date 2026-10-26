@@ -12,6 +12,8 @@ struct OpenTTDOverrideView {
 };
 extern "C" {
 OpenTTDOverrideManager *openttd_rust_override_new(uint16_t, uint16_t, uint16_t);
+OpenTTDOverrideManager *openttd_rust_override_clone(const OpenTTDOverrideManager *);
+void openttd_rust_override_assign(OpenTTDOverrideManager *, const OpenTTDOverrideManager *);
 void openttd_rust_override_delete(OpenTTDOverrideManager *);
 OpenTTDOverrideView openttd_rust_override_view(OpenTTDOverrideManager *);
 void openttd_rust_override_add(OpenTTDOverrideManager *, uint16_t, uint32_t, uint32_t);
