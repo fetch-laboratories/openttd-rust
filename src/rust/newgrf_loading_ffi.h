@@ -56,6 +56,7 @@ struct OpenTTDGrfLoadingServices {
 	GRFFile *(*file_for_config)(const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(file_for_config);
 	GRFError *(*error)(GRFConfig *, uint32_t, StringID, bool) noexcept OPENTTD_SERVICE_DEFAULT(error);
 	void (*error_name)(GRFError *, const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(error_name);
+	void (*error_property)(GRFError *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(error_property);
 	bool (*networking)() noexcept OPENTTD_SERVICE_DEFAULT(networking);
 	RailType (*rail_label)(RailTypeLabel) noexcept OPENTTD_SERVICE_DEFAULT(rail_label);
 	RoadType (*road_label)(RoadTypeLabel) noexcept OPENTTD_SERVICE_DEFAULT(road_label);
@@ -126,6 +127,8 @@ struct OpenTTDGrfLoadingServices {
 	StringID multiple_action8;
 	StringID grm_failed;
 	StringID static_desync;
+	StringID list_property_too_long;
+	StringID invalid_id;
 	StringID force_disabled;
 	SpriteID colourmap_sprite;
 	SpriteID slopes_sprite;

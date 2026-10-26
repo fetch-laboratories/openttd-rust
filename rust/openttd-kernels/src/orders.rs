@@ -509,7 +509,7 @@ pub struct Leaves {
     pub vehicle_ownership: unsafe extern "C" fn(ctx: *mut c_void, result: *mut c_void) -> u64,
     pub ticks_per_second: extern "C" fn() -> u64,
     pub unit_number: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub economy_date: extern "C" fn() -> u64,
+    pub economy_date: extern "C" fn() -> i32,
     pub economy_fraction: extern "C" fn() -> u64,
     pub maximum_date: extern "C" fn() -> u64,
     pub timetable_year_limit: extern "C" fn() -> u64,
@@ -1638,7 +1638,7 @@ pub unsafe extern "C" fn openttd_rust_timetable_start(
     {
         let list = g.orders(v);
         let total = g.duration(list);
-        let date = (g.0.economy_date)() as i32;
+        let date = (g.0.economy_date)();
         let start_date = date.wrapping_add(
             (start.wrapping_sub((g.0.tick_counter)()) as i32)
                 .wrapping_add((g.0.economy_fraction)() as i32)

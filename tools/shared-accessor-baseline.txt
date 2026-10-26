@@ -45,7 +45,6 @@ src/order_cmd.cpp | openttd_orders_close_shared_window(void *ctx, uint32_t windo
 src/order_cmd.cpp | openttd_orders_delete_order_news(void *ctx) noexcept | c1738e0dbc9d4eb4 | 1
 src/order_cmd.cpp | openttd_orders_destination_tile(void *ctx) noexcept | 0b76ca810f4b4e15 | 1
 src/order_cmd.cpp | openttd_orders_dirty_vehicle_windows(void *ctx) noexcept | 8876801f39931566 | 1
-src/order_cmd.cpp | openttd_orders_economy_date() noexcept | b7b2717268568730 | 1
 src/order_cmd.cpp | openttd_orders_economy_fraction() noexcept | 1d0bc137e6e8cdeb | 1
 src/order_cmd.cpp | openttd_orders_invalidate_shared_window(void *ctx, uint32_t window, int32_t data) noexcept | cb66b8a463e43dbf | 1
 src/order_cmd.cpp | openttd_orders_invalidate_vehicle_list(void *ctx) noexcept | 1a5042d4ba5f5c18 | 1
@@ -107,13 +106,10 @@ src/rust/train_reservation_services.h | TrainReservationLineReverse(void *, Open
 src/rust/train_reservation_services.h | TrainReservationStationTrain(void *, OpenTTDTrainHandle, uint16_t a) noexcept | def73589acac5540 | 1
 src/rust/train_reservation_services.h | TrainReservationStationXy(void *, OpenTTDTrainHandle, uint16_t a) noexcept | 30f910a9db971102 | 1
 src/rust/train_services.h | TrainAccModel(OpenTTDTrainHandle) noexcept | cba5e3d48e960c09 | 1
-src/rust/train_services.h | TrainBackoff(OpenTTDTrainHandle) noexcept | 9313c60aa144dfac | 1
-src/rust/train_services.h | TrainDisasterSound(OpenTTDTrainHandle) noexcept | f1eea74b68153b3c | 1
 src/rust/train_services.h | TrainLostWarn(OpenTTDTrainHandle) noexcept | a7daee26a20b15e2 | 1
 src/rust/train_services.h | TrainMapSize(OpenTTDTrainHandle) noexcept | b49ebe1aff917479 | 1
 src/rust/train_services.h | TrainMaxDepotPenalty(OpenTTDTrainHandle) noexcept | b7492fcfee760201 | 1
 src/rust/train_services.h | TrainPlatformLength(OpenTTDTrainHandle, uint16_t a, uint32_t b) noexcept | 458d1f670121d8ef | 1
-src/rust/train_services.h | TrainReservePaths(OpenTTDTrainHandle) noexcept | ca4028cc43e737ca | 1
 src/rust/train_services.h | TrainReverseAtSignals(OpenTTDTrainHandle) noexcept | 562ee8ededd55021 | 1
 src/rust/train_services.h | TrainSharedMap(OpenTTDTrainHandle, uint32_t tile) noexcept | d2c72c5ff1b66cb5 | 1
 src/rust/train_services.h | TrainVisitType(OpenTTDTrainHandle, uint16_t a) noexcept | 01608408cc222048 | 1

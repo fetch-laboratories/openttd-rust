@@ -11,18 +11,18 @@ from pathlib import Path
 
 ENTRIES = ("StateGameLoop()", "_GenerateWorld()")
 
-# Quiet speed pass at 04fa3753bf (#275): ratio is the median of
+# Quiet speed pass at b959f89059 (#275): ratio is the median of
 # four three-pair medians; Ir and compatible identity come from profiles of the
 # same build.
-SPEED_HEAD = "04fa3753bf"
+SPEED_HEAD = "b959f89059"
 # fmt: off
 SPEED_PASS = (
-    ("generate-tgp-256-1", 1.158125, 2896299241, "f6f82b6bbc4769f652d1451890003fef0f2c7f12c76c6d8d5549614a7d35a1e1"),
-    ("play-opus-55-167-002-manual", 1.4287079113552386, 28994707985, "b4ecf7337dcda62268175b3e99de2e43ffb3a3ffe4f608ee365751dbaabc23a2"),
-    ("play-grok-159-001-manual", 1.4301772708939777, 27541103519, "46dcbfc4ceba5d11801053ac2eb8d35ac640082a6393744d0825fe9dca7229c8"),
-    ("play-padhattan-ridge-1996-manual", 1.3534222277868202, 4616294723, "27801b82dceb31797d73fc2f2f9448be781d1551b2594408b562d7f96b79323d"),
-    ("play-padhattan-ridge-2000-manual", 1.4050822122571, 7471421200, "17e34235425021ca2f96c739312d9f15ca167ac5f579617d6c9eb1047e8c2627"),
-    ("play-padhattan-ridge-2016-manual", 1.5022951923109775, 13474259291, "602255e34b6a04367a3aea9749e289d8efe8bdd921ba2f2a58e9bc57d11ed7b6"),
+    ("generate-tgp-256-1", 1.172280764574488, 2887209997, "f6f82b6bbc4769f652d1451890003fef0f2c7f12c76c6d8d5549614a7d35a1e1"),
+    ("play-opus-55-167-002-manual", 1.3879109594186272, 29267325558, "b4ecf7337dcda62268175b3e99de2e43ffb3a3ffe4f608ee365751dbaabc23a2"),
+    ("play-grok-159-001-manual", 1.374991116425806, 27737400178, "46dcbfc4ceba5d11801053ac2eb8d35ac640082a6393744d0825fe9dca7229c8"),
+    ("play-padhattan-ridge-1996-manual", 1.3413361169102298, 4707583509, "27801b82dceb31797d73fc2f2f9448be781d1551b2594408b562d7f96b79323d"),
+    ("play-padhattan-ridge-2000-manual", 1.410312146769846, 7599159520, "17e34235425021ca2f96c739312d9f15ca167ac5f579617d6c9eb1047e8c2627"),
+    ("play-padhattan-ridge-2016-manual", 1.453359475929639, 13646197550, "602255e34b6a04367a3aea9749e289d8efe8bdd921ba2f2a58e9bc57d11ed7b6"),
 )
 # Loop Ir at the anchor, in SPEED_PASS order, for projecting instruction-count growth.
 SPEED_INTEGRATED = SPEED_HEAD, tuple(ir for _, _, ir, _ in SPEED_PASS)
