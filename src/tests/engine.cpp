@@ -8,8 +8,13 @@
 /** @file engine.cpp Native engine owner lifetime and ABI evidence. */
 #include "../stdafx.h"
 #include "../engine_base.h"
+#include "../engine_func.h"
+#include "../newgrf.h"
+#include <thread>
 #ifdef WITH_RUST
 #include "../rust/engine_ffi.h"
+#include "../rust/engine_loading_ffi.h"
+#include "../newgrf/newgrf_internal_vehicle.h"
 #include "../rust/type_availability_ffi.h"
 #include "abi_layout.hpp"
 #endif
@@ -21,6 +26,7 @@ TEST_CASE("Engine lifecycle canonical ABI", "[rust][engine][abi]")
 #ifdef WITH_RUST
 	ABI_LAYOUT_CHECK;
 #include "abi-layout-engine.inc"
+#include "abi-layout-engine_loading.inc"
 #endif
 }
 
@@ -52,3 +58,66 @@ TEST_CASE("Engine temporary owners survive relocation and replacement", "[rust][
 	staged.clear();
 #endif
 }
+
+TEST_CASE("Engine mappings preserve reservation, sorted identity and replacement metadata", "[engine][loading]")
+{
+	std::array<std::vector<EngineIDMapping>, VEH_COMPANY_END> saved;
+	for (VehicleType type = VEH_BEGIN; type != VEH_COMPANY_END; type++) {
+		auto view = _engine_mngr.Mappings(type);
+		saved[type].assign(view.begin(), view.end());
+	}
+	_engine_mngr.ResetToDefaultMapping();
+	for (VehicleType type = VEH_BEGIN; type != VEH_COMPANY_END; type++) {
+		REQUIRE(_engine_mngr.Mappings(type).size() == _engine_counts[type]);
+		REQUIRE(_engine_mngr.GetID(type, 0, INVALID_GRFID) == EngineID{_engine_offsets[type]});
+		const auto original = _engine_mngr.GetID(type, 1, INVALID_GRFID);
+		REQUIRE(_engine_mngr.UseUnreservedID(type, 1, 17, true) == original);
+		REQUIRE(_engine_mngr.GetID(type, 1, 17) == EngineID::Invalid());
+		REQUIRE(_engine_mngr.UseUnreservedID(type, 1, 17, false) == original);
+		REQUIRE(_engine_mngr.GetID(type, 1, INVALID_GRFID) == EngineID::Invalid());
+		REQUIRE(_engine_mngr.GetID(type, 1, 17) == original);
+		_engine_mngr.SetID(type, 1, 17, 99, EngineID{500});
+		auto map = _engine_mngr.Mappings(type);
+		REQUIRE(map.front().grfid == 17);
+		REQUIRE(map.front().engine == EngineID{500});
+		REQUIRE(map.front().substitute_id == 1);
+		_engine_mngr.SetID(type, 300, 12, 44, EngineID{501});
+		map = _engine_mngr.Mappings(type);
+		REQUIRE(map.front().grfid == 12);
+		REQUIRE(map.front().internal_id == 300);
+		REQUIRE(map.front().substitute_id == 44);
+		REQUIRE(std::ranges::is_sorted(map, std::less{}, EngineIDMappingKeyProjection{}));
+	}
+	_engine_mngr.ClearMapping();
+	for (const auto &map : saved) for (const auto &entry : map) _engine_mngr.SetID(entry.type, entry.internal_id, entry.grfid, entry.substitute_id, entry.engine);
+}
+
+#ifdef WITH_RUST
+TEST_CASE("Engine loading state crosses serialized game threads and retains partial fields", "[rust][engine][loading]")
+{
+	_gted.resize(3);
+	_gted[EngineID{1}].cargo_allowed = CargoClasses{123};
+	_gted[EngineID{1}].railtypelabels.push_back(RAILTYPE_LABEL_RAIL);
+	_gted[EngineID{1}].UpdateRefittability(false);
+	std::thread game([] {
+		REQUIRE(_gted[EngineID{1}].cargo_allowed.base() == 123);
+		REQUIRE(_gted[EngineID{1}].refittability == GRFTempEngineData::EMPTY);
+		_gted[EngineID{1}].UpdateRefittability(true);
+		_gted[EngineID{1}].ctt_include_mask = 7;
+	});
+	game.join();
+	_gted.resize(70);
+	REQUIRE(_gted[EngineID{1}].ctt_include_mask == 7);
+	REQUIRE(_gted[EngineID{1}].railtypelabels[0] == RAILTYPE_LABEL_RAIL);
+	REQUIRE(_gted[EngineID{1}].refittability == GRFTempEngineData::NONEMPTY);
+	_gted[EngineID{1}].UpdateRefittability(false);
+	REQUIRE(_gted[EngineID{1}].refittability == GRFTempEngineData::NONEMPTY);
+	REQUIRE(_gted[EngineID{69}].refittability == GRFTempEngineData::UNSET);
+	_gted.clear();
+	_gted.resize(3);
+	REQUIRE(_gted[EngineID{1}].cargo_allowed.None());
+	REQUIRE(_gted[EngineID{1}].railtypelabels.empty());
+	REQUIRE(_gted[EngineID{1}].defaultcargo_grf == nullptr);
+	_gted.clear();
+}
+#endif

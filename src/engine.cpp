@@ -614,6 +614,9 @@ void EngineOverrideManager::SetID(VehicleType type, uint16_t grf_local_id, uint3
  */
 bool EngineOverrideManager::ResetToCurrentNewGRFConfig()
 {
+#ifdef WITH_RUST
+	return openttd_rust_engine_reset_config(&GetRustEngineLoadingServices());
+#else
 	for (const Vehicle *v : Vehicle::Iterate()) {
 		if (IsCompanyBuildableVehicleType(v)) return false;
 	}
@@ -623,6 +626,7 @@ bool EngineOverrideManager::ResetToCurrentNewGRFConfig()
 	ReloadNewGRFData();
 
 	return true;
+#endif
 }
 
 /**
@@ -630,11 +634,14 @@ bool EngineOverrideManager::ResetToCurrentNewGRFConfig()
  */
 void SetupEngines()
 {
+#ifdef WITH_RUST
+	openttd_rust_engine_setup(&GetRustEngineLoadingServices());
+#else
 	CloseWindowByClass(WC_ENGINE_PREVIEW);
 	_engine_pool.CleanPool();
 
 	for (VehicleType type = VEH_BEGIN; type != VEH_COMPANY_END; type++) {
-		const auto mapping = _engine_mngr.Mappings(type);
+		const auto &mapping = _engine_mngr.mappings[type];
 
 		/* Verify that the engine override manager has at least been set up with the default engines. */
 		assert(std::size(mapping) >= _engine_counts[type]);
@@ -643,6 +650,7 @@ void SetupEngines()
 			new (eid.engine) Engine(type, eid.internal_id);
 		}
 	}
+#endif
 }
 
 /**
@@ -1439,8 +1447,9 @@ void CheckEngines()
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDEngineServices.hpp"
+#include "abi-visit-OpenTTDEngineLoadingServices.hpp"
 #include "abi-visit-OpenTTDTypeAvailabilityServices.hpp"
-bool CheckAbi_engine() { return AbiServicesComplete(EngineServices()) && AbiServicesComplete(GetRustTypeAvailabilityServices()); }
+bool CheckAbi_engine() { return AbiServicesComplete(GetRustEngineLoadingServices()) && AbiServicesComplete(EngineServices()) && AbiServicesComplete(GetRustTypeAvailabilityServices()); }
 #endif
 
 #ifdef WITH_RUST

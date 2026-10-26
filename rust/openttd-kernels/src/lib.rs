@@ -542,6 +542,7 @@ mod effect;
 mod encoded;
 mod engine;
 mod engine_loading;
+mod livery;
 pub use encoded::{
     Descriptor as EncodedDescriptor, Diagnostic as EncodedDiagnostic, View as EncodedView,
 };

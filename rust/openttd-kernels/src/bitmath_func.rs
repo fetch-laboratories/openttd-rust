@@ -36,3 +36,13 @@ pub const fn gb(value: u32, start: u8, count: u8) -> u32 {
 pub const fn kill_first_bit(value: u8) -> u8 {
     value & value.wrapping_sub(1)
 }
+
+/// `FindFirstBit` for a cargo bitmask, including its zero-input result.
+#[allow(clippy::cast_possible_truncation)]
+pub const fn find_first_bit(value: u64) -> u8 {
+    if value == 0 {
+        0
+    } else {
+        value.trailing_zeros() as u8
+    }
+}

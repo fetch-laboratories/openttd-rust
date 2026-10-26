@@ -32,7 +32,7 @@ struct RustEngineRailLabels {
 	uint16_t engine;
 	std::span<RailTypeLabel> View() const { auto v = openttd_rust_engine_temp_labels(this->engine); return {v.data, v.size}; }
 	void clear() { openttd_rust_engine_temp_labels_clear(this->engine); }
-	void push_back(RailTypeLabel label) { openttd_rust_engine_temp_labels_push(this->engine, label.base()); }
+	void push_back(RailTypeLabel label) { openttd_rust_engine_temp_labels_push(this->engine, label); }
 	bool empty() const { return this->View().empty(); }
 	RailTypeLabel &operator[](size_t index) { return this->View()[index]; }
 	auto begin() const { return this->View().begin(); }

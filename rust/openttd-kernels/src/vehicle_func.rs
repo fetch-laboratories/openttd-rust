@@ -54,3 +54,8 @@ pub(crate) unsafe fn can_vehicle_use_station(
     }
     can_engine_use_station((vs.engine_id)(vehicle), st, s)
 }
+
+/// Original type admission for a company's vehicles.
+pub const fn is_company_buildable_vehicle_type(kind: u8) -> bool {
+    kind < crate::vehicle_type::VEH_COMPANY_END
+}
