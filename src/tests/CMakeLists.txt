@@ -4,6 +4,7 @@ add_test_files(
     abi_layout.hpp
     bitmath_func.cpp
     company_economy.cpp
+    cargo_registry.cpp
     cargo_payment.cpp
     cargo_payment_stubs.hpp
     fleet.cpp

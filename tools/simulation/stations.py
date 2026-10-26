@@ -32,66 +32,81 @@ def game_environment(scenario):
 
 
 def scenarios(soak):
-    return [
-        {
-            "name": f"stations-{mode}",
-            "kind": "save",
-            "save": str(ROOT / "migration/saves/grok-159-001.sav"),
-            "console": DISTRIBUTIONS["cargodist" if mode in CARGODIST else "manual"],
-            "economy": "cargodist"
-            if mode in CARGODIST
-            else "stockpile"
-            if mode in ("acceptance-loss", "full-gradual", "loading-context")
-            else "manual",
-            "station_service": mode,
-            "ticks": 1
-            if mode == "loading-context"
-            else 32
-            if mode == "acceptance-loss"
-            else (8 if soak else 4) * SNAPSHOT_TICKS,
-            "snapshot_minimum": 0
-            if mode in ("acceptance-loss", "loading-context")
-            else 2,
-        }
-        for mode in (
-            "manual",
-            "cargodist",
-            "acceptance-loss",
-            "full-gradual",
-            "loading-context",
-            "rating-expire",
-            "rating-cap",
-            "stale-refresh",
-            "stale-remove",
-            "stale-restrict",
-            "stale-release",
-        )
-    ] + [
-        {
-            "name": "stations-commands-" + mode,
-            "kind": "save",
-            "save": str(ROOT / "migration/saves/road-crossing.sav"),
-            "station_commands": mode,
-            "ticks": 1,
-            "short_checkpoint": True,
-        }
-        for mode in (
-            "commands",
-            "linkgraph",
-            "reload",
-            "removed-destination",
-            "map-edges",
-            "railtype-63",
-            "road-stops",
-            "road-stops-reload",
-            "waypoints",
-            "waypoints-reload",
-            "resolver",
-            "resolver-reload",
-            "airport",
-            "airport-reload",
-        )
-    ]
+    return (
+        [
+            dict(
+                name="stations-cargo-rating",
+                kind="save",
+                save=str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
+                engines="cargo-rating-reload",
+                short_checkpoint=True,
+                ticks=1,
+            )
+        ]
+        + [
+            {
+                "name": f"stations-{mode}",
+                "kind": "save",
+                "save": str(ROOT / "migration/saves/grok-159-001.sav"),
+                "console": DISTRIBUTIONS[
+                    "cargodist" if mode in CARGODIST else "manual"
+                ],
+                "economy": "cargodist"
+                if mode in CARGODIST
+                else "stockpile"
+                if mode in ("acceptance-loss", "full-gradual", "loading-context")
+                else "manual",
+                "station_service": mode,
+                "ticks": 1
+                if mode == "loading-context"
+                else 32
+                if mode == "acceptance-loss"
+                else (8 if soak else 4) * SNAPSHOT_TICKS,
+                "snapshot_minimum": 0
+                if mode in ("acceptance-loss", "loading-context")
+                else 2,
+            }
+            for mode in (
+                "manual",
+                "cargodist",
+                "acceptance-loss",
+                "full-gradual",
+                "loading-context",
+                "rating-expire",
+                "rating-cap",
+                "stale-refresh",
+                "stale-remove",
+                "stale-restrict",
+                "stale-release",
+            )
+        ]
+        + [
+            {
+                "name": "stations-commands-" + mode,
+                "kind": "save",
+                "save": str(ROOT / "migration/saves/road-crossing.sav"),
+                "station_commands": mode,
+                "ticks": 1,
+                "short_checkpoint": True,
+            }
+            for mode in (
+                "commands",
+                "linkgraph",
+                "reload",
+                "removed-destination",
+                "map-edges",
+                "railtype-63",
+                "road-stops",
+                "road-stops-reload",
+                "waypoints",
+                "waypoints-reload",
+                "resolver",
+                "resolver-reload",
+                "airport",
+                "airport-reload",
+            )
+        ]
+    )
 
 
 def prepare(scenario, binaries, builds, out, timeout, env, result):

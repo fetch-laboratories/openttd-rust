@@ -16,6 +16,8 @@ ADAPTER = ROOT / "tools/simulation/engines-console.cpp"
 REQUIRED = {
     "cargo-registry": (),
     "cargo-profit": (),
+    "cargo-profit-reload": (),
+    "cargo-rating-reload": (),
     "monitors": (),
     "commands": ("rename", "visibility", "control"),
     "preview": ("offer", "accept", "join", "penalty"),
@@ -27,6 +29,8 @@ REQUIRED = {
 EXPECTED = {
     "cargo-registry": ("registry-controls true",),
     "cargo-profit": ("profit-controls true",),
+    "cargo-profit-reload": ("profit-controls true",),
+    "cargo-rating-reload": ("rating-controls true",),
     "monitors": ("controls true",),
     "commands": (
         "company-bits true",
@@ -96,7 +100,7 @@ def adapter(build, folder, env):
         env,
         ADAPTER,
         "engines",
-        replace_objects=("saveload.cpp.o", "newgrf.cpp.o", "newgrf_act0_cargo.cpp.o"),
+        replace_objects=("saveload.cpp.o", "/newgrf.cpp.o", "/newgrf_act0_cargo.cpp.o"),
     )
 
 
@@ -110,14 +114,26 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     executables = prepared_console("engines", adapter, binaries, builds, folder, env)
     if scenario["engines"] == "monitors":
         economy.monitor_load_probes(scenario, executables, builds, folder, timeout, env)
-    if scenario["engines"] not in ("reload", "subsidies-reload"):
+    if scenario["engines"] not in (
+        "reload",
+        "subsidies-reload",
+        "cargo-profit-reload",
+        "cargo-rating-reload",
+    ):
         return dict(
             scenario,
             executables=executables,
             console=["engines_scenario " + scenario["engines"], "unpause"],
         )
     subsidy = scenario["engines"] == "subsidies-reload"
-    variant, prefix = ("subsidies", "SUBSIDY ") if subsidy else ("commands", "ENGINE ")
+    cargo = scenario["engines"].startswith("cargo-")
+    variant, prefix = (
+        (scenario["engines"].removesuffix("-reload"), "CARGO ")
+        if cargo
+        else ("subsidies", "SUBSIDY ")
+        if subsidy
+        else ("commands", "ENGINE ")
+    )
     saves = {role: folder / role / "engines.sav" for role in executables}
     runs = core.capture_pair(
         lambda role: dict(
@@ -136,7 +152,17 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         if (
             run["exit"]
             or not saves[role].is_file()
-            or ("SUBSIDY transfer true true" if subsidy else "ENGINE hidden true")
+            or (
+                (
+                    "CARGO profit-controls true"
+                    if variant == "cargo-profit"
+                    else "CARGO rating-controls true"
+                )
+                if cargo
+                else "SUBSIDY transfer true true"
+                if subsidy
+                else "ENGINE hidden true"
+            )
             not in run["log"]
         ):
             raise RuntimeError("engine reload capture failed")
@@ -157,7 +183,8 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         executables=executables,
         role_inputs={role: {"save": str(save)} for role, save in saves.items()},
         console=[
-            "engines_scenario " + ("subsidies-inspect" if subsidy else "inspect"),
+            "engines_scenario "
+            + (variant if cargo else "subsidies-inspect" if subsidy else "inspect"),
             "unpause",
         ],
     )

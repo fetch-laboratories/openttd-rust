@@ -62,6 +62,7 @@
 
 #ifdef WITH_RUST
 #include "rust/services_industry.h"
+#include "rust/cargo_registry_ffi.h"
 #include "rust/company_adapter.h"
 #include "rust/tile_owner_services.h"
 #include "rust/vehicle_services.h"
