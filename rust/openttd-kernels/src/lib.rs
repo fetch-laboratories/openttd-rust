@@ -1432,9 +1432,9 @@ pub mod type_registry;
 
 pub mod type_definitions;
 
+mod newgrf_class;
 pub mod newgrf_internal;
 pub mod newgrf_translation;
-mod newgrf_class;
 
 mod station_association;
 
