@@ -143,7 +143,7 @@ unsafe fn by_grf<T>(
     ptr::null()
 }
 macro_rules! registry {
-    ($module:ident, $spec:ty, $prefix:literal) => {
+    ($module:ident, $spec:ty, $prefix:literal $(, $set_name:ident)?) => {
         pub mod $module {
             use super::*;
             type Spec = $spec;
@@ -165,6 +165,13 @@ macro_rules! registry {
                     super::insert(STATE.get(), class, spec, SERVICES.table());
                 }
             }
+            $(
+                #[unsafe(no_mangle)]
+                pub unsafe extern "C" fn $set_name(spec: *const Spec, name: u32) {
+                    let class = unsafe { (SERVICES.table().class_index)(spec) };
+                    unsafe { (*classes().add(usize::from(class))).name = name; }
+                }
+            )?
             #[unsafe(export_name = concat!($prefix, "_assign"))]
             pub unsafe extern "C" fn assign(spec: *mut Spec) {
                 let s = unsafe { SERVICES.table() };
@@ -217,12 +224,14 @@ macro_rules! registry {
 registry!(
     station,
     crate::station_cmd::RailSpec,
-    "openttd_rust_station_class"
+    "openttd_rust_station_class",
+    openttd_rust_station_class_set_name
 );
 registry!(
     roadstop,
     crate::station_cmd::RoadSpec,
-    "openttd_rust_roadstop_class"
+    "openttd_rust_roadstop_class",
+    openttd_rust_roadstop_class_set_name
 );
 registry!(
     airport,

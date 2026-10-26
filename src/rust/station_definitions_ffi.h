@@ -109,6 +109,8 @@ struct OpenTTDStationDefinitionServices {
 };
 const OpenTTDStationDefinitionServices &GetStationDefinitionServices() noexcept;
 extern "C" {
+void openttd_rust_station_class_set_name(const StationSpec *, StringID);
+void openttd_rust_roadstop_class_set_name(const RoadStopSpec *, StringID);
 bool openttd_rust_station_change_info(const OpenTTDStationDefinitionServices *, GRFFile *, uint32_t, uint32_t, uint32_t, ByteReader *, OpenTTDStationSequence *, uint8_t *);
 bool openttd_rust_roadstop_change_info(const OpenTTDStationDefinitionServices *, GRFFile *, uint32_t, uint32_t, uint32_t, ByteReader *, uint8_t *);
 void openttd_rust_station_map_specific(const OpenTTDStationDefinitionServices *, GRFFile *, uint16_t, uint8_t, const SpriteGroup *);

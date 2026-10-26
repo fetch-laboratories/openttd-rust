@@ -318,7 +318,7 @@ static void StationDefinitionFixture(TileIndex origin, DoCommandFlags test, DoCo
 	const StationSpec *rail = StationClass::GetByGrf(id, 0), *extra = StationClass::GetByGrf(id, 1), *way = StationClass::GetByGrf(id, 2);
 	const RoadStopSpec *road = RoadStopClass::GetByGrf(id, 0), *roadway = RoadStopClass::GetByGrf(id, 1);
 	StationNeed(rail != nullptr && extra != nullptr && way != nullptr && road != nullptr && roadway != nullptr, __LINE__);
-	StationNeed(StationClass::GetClassCount() == 5 && StationClass::GetUIClassCount() == 4 && RoadStopClass::GetClassCount() == 4, __LINE__);
+	StationNeed(StationClass::GetClassCount() == 5 && StationClass::GetUIClassCount() == 4 && RoadStopClass::GetClassCount() == 5, __LINE__);
 	StationNeed(StationClass::Get(rail->class_index)->GetSpecCount() == 2 && rail->index == (file->GetParam(0) != 0 ? 1 : 0) && extra->index == (file->GetParam(0) != 0 ? 0 : 1) && IsWaypointClass(*StationClass::Get(way->class_index)) && IsWaypointClass(*RoadStopClass::Get(roadway->class_index)), __LINE__);
 	StationNeed(GetString(rail->name) == "Station 484" && GetString(StationClass::Get(rail->class_index)->name) == "Class 484" && GetString(road->name) == "Road stop 484" && GetString(RoadStopClass::Get(road->class_index)->name) == "Road class 484", __LINE__);
 	for (uint32_t broken : {uint32_t('B') | uint32_t('4') << 8 | uint32_t('8') << 16 | uint32_t('4') << 24, uint32_t('R') | uint32_t('4') << 8 | uint32_t('8') << 16 | uint32_t('4') << 24}) {
@@ -328,9 +328,12 @@ static void StationDefinitionFixture(TileIndex origin, DoCommandFlags test, DoCo
 	const GRFConfig *invalid = GetGRFConfig(uint32_t('L') | uint32_t('4') << 8 | uint32_t('8') << 16 | uint32_t('4') << 24);
 	StationNeed(invalid != nullptr && invalid->status == GCS_DISABLED && invalid->errors.size() == 1 && invalid->errors.front().message == STR_NEWGRF_ERROR_INVALID_SPRITE_LAYOUT, __LINE__);
 	fmt::print(stderr, "STCMD definitions-malformed real-file read-bounds\n");
+	StationNeed(StationClass::Get(static_cast<StationClassID>(2))->name == STR_UNDEFINED && RoadStopClass::Get(static_cast<RoadStopClassID>(2))->name == STR_UNDEFINED, __LINE__);
 	fmt::print(stderr, "STCMD definitions-registry {} {} {} {} {}\n", rail->class_index, way->class_index, road->class_index, roadway->class_index, StationClass::Get(STAT_CLASS_DFLT)->GetSpecCount());
 	StationNeed(rail->renderdata.size() == 2 && extra->renderdata.empty() && rail->layouts.at(GetStationLayoutKey(1, 2)) == std::vector<uint8_t>{0, 2} && extra->layouts == rail->layouts, __LINE__);
-	StationNeed(rail->renderdata[0].ground.sprite == 1 && rail->renderdata[0].seq.size() == 1 && rail->renderdata[0].seq[0].origin == Coord3D<int8_t>(1, 2, 3) && rail->renderdata[0].seq[0].extent == Coord3D<uint8_t>(4, 5, 6) && rail->renderdata[0].seq[0].image.sprite == 2, __LINE__);
+	StationNeed(rail->renderdata[0].ground.sprite == 1 && rail->renderdata[0].seq.size() == 1, __LINE__);
+	const auto &sequence = rail->renderdata[0].seq[0];
+	StationNeed(sequence.origin.x == 1 && sequence.origin.y == 2 && sequence.origin.z == 3 && sequence.extent.x == 4 && sequence.extent.y == 5 && sequence.extent.z == 6 && sequence.image.sprite == 2, __LINE__);
 	StationNeed(way->renderdata.size() == 2 && way->renderdata[0].ground.sprite == 1 && way->renderdata[1].ground.sprite == 2, __LINE__);
 	StationNeed(rail->badges.size() == 1 && road->badges == rail->badges && GetBadge(rail->badges[0])->features.Test(GSF_STATIONS) && GetBadge(rail->badges[0])->features.Test(GSF_ROADSTOPS), __LINE__);
 	StationNeed(rail->bridgeable_info.size() == 3 && rail->bridgeable_info[2].height == 6 && rail->bridgeable_info[1].disallowed_pillars.base() == 2 && road->bridgeable_info[5].height == 6, __LINE__);

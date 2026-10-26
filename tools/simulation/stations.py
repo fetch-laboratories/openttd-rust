@@ -1204,7 +1204,7 @@ def definition_grfs(folder, reordered=False):
             20,
             0,
             [
-                (8, b"RST4"),
+                (8, b"OLD4"),
                 (9, b"\2"),
                 (0x0A, word(0xD002)),
                 (0x0B, word(0xD003)),
@@ -1226,6 +1226,7 @@ def definition_grfs(folder, reordered=False):
         + word(0xD000)
         + b"Station 484\0Class 484\0Road stop 484\0Road class 484\0",
     ]
+    actions.append(prop(20, 0, [(8, b"RST4")]))
     publication = ((4, 0), (4, 1), (4, 2), (20, 0), (20, 1))
     for feature, local in reversed(publication) if reordered else publication:
         actions += [mapping(feature, local, 0), mapping(feature, local, 1, [(0, 2)])]
