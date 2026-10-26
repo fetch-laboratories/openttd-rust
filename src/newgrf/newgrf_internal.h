@@ -45,6 +45,46 @@ struct GrfActionHandler {
 
 static constexpr uint MAX_SPRITEGROUP = UINT8_MAX; ///< Maximum GRF-local ID for a spritegroup.
 
+#ifdef WITH_RUST
+#include "../rust/newgrf_loading_ffi.h"
+/** Nonowning references into the process-wide Rust execution carrier. */
+struct GrfProcessingState {
+	GrfLoadingStage &stage = openttd_rust_grf_execution()->stage;
+	SpriteID &spriteid = openttd_rust_grf_execution()->spriteid;
+	SpriteFile *&file = openttd_rust_grf_execution()->file;
+	GRFFile *&grffile = openttd_rust_grf_execution()->grffile;
+	GRFConfig *&grfconfig = openttd_rust_grf_execution()->grfconfig;
+	uint32_t &nfo_line = openttd_rust_grf_execution()->nfo_line;
+	int &skip_sprites = openttd_rust_grf_execution()->skip_sprites;
+	std::array<const SpriteGroup *, MAX_SPRITEGROUP + 1> &spritegroups = openttd_rust_grf_execution()->spritegroups;
+	void ClearDataForNextFile() { openttd_rust_grf_clear_file(); }
+	void AddSpriteSets(GrfSpecFeature feature, SpriteID first_sprite, uint first_set, uint numsets, uint numents)
+	{
+		assert(feature < GSF_END);
+		openttd_rust_grf_add_sets(feature, first_sprite, first_set, numsets, numents);
+	}
+	bool HasValidSpriteSets(GrfSpecFeature feature) const
+	{
+		assert(feature < GSF_END);
+		return openttd_rust_grf_has_sets(feature);
+	}
+	bool IsValidSpriteSet(GrfSpecFeature feature, uint set) const
+	{
+		assert(feature < GSF_END);
+		return openttd_rust_grf_has_set(feature, set);
+	}
+	SpriteID GetSprite(GrfSpecFeature feature, uint set) const
+	{
+		assert(IsValidSpriteSet(feature, set));
+		return openttd_rust_grf_set_sprite(feature, set);
+	}
+	uint GetNumEnts(GrfSpecFeature feature, uint set) const
+	{
+		assert(IsValidSpriteSet(feature, set));
+		return openttd_rust_grf_set_size(feature, set);
+	}
+};
+#else
 /** Temporary data during loading of GRFs */
 struct GrfProcessingState {
 private:
@@ -154,6 +194,8 @@ public:
 		return this->spritesets[feature].find(set)->second.num_sprites;
 	}
 };
+
+#endif
 
 extern GrfProcessingState _cur_gps;
 
