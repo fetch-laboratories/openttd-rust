@@ -91,7 +91,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(vehicle, length_changed);
 		VEHICLE_UNUSED(vehicle, play_vehicle_sound);
 		VEHICLE_UNUSED(vehicle, play_sound);
-		VEHICLE_UNUSED(vehicle, large_explosion);
 		VEHICLE_UNUSED(vehicle, order_free);
 		VEHICLE_UNUSED(vehicle, order_dummy);
 		VEHICLE_UNUSED(vehicle, start_stop_dirty);

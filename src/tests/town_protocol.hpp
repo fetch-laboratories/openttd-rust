@@ -138,7 +138,6 @@ static inline OpenTTDHouseServices TownProtocolHouses()
 	houses.loop_spec = [](uint16_t id) noexcept -> OpenTTDHouseLoopSpec { return {.callbacks = TownProtocol_house_callbacks(id), .flags = TownProtocol_house_flags(id), .population = TownProtocol_house_population(id), .mail = 0, .minimum_life = 0}; };
 	houses.delete_inspect = [](uint32_t) noexcept {};
 	houses.next_near_station = [](Town *, OpenTTDStation *) noexcept -> OpenTTDStation * { return nullptr; };
-	houses.production_cargo = [](uint8_t, uint32_t) noexcept -> OpenTTDHouseCargo { return {UINT8_MAX, 0}; };
 	houses.cargogen_mode = []() noexcept -> uint8_t { return 0; };
 	houses.place_houses = []() noexcept -> uint8_t { return 2; };
 	houses.company_human = [](uint8_t) noexcept { return true; };

@@ -124,6 +124,7 @@ crate::abi::layouts! {
 
 // Feature identities from newgrf.h, pinned by native static assertions.
 pub const GSF_SOUNDFX: u8 = 12;
+pub const GSF_CARGOES: u8 = 11;
 pub const GSF_END: u8 = 22;
 
 pub const GSF_INDUSTRYTILES: u8 = 9;

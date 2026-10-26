@@ -95,7 +95,7 @@ const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
 		.nearby_info = RustNearbyTileInformation,
 		.terrain = RustTerrainType,
 		.badges = RustSpecBadges<StationSpec>,
-		.translate = OpenTTDCargoTranslation,
+
 		.build_date = RustStationBuildDate<BaseStation>,
 		.airport_ttd_type = RustAirportTTDType,
 		.identity = [](BaseStation *st, uint8_t i) noexcept { const auto &sm = st->speclist[i]; return OpenTTDStationSpecIdentity{sm.grfid, sm.localidx}; },

@@ -27,7 +27,6 @@ const OpenTTDEngineCapabilitiesServices &GetRustEngineCapabilitiesServices() noe
 		.new_engine = RustNewEngineID,
 		.cargo_classes = RustCargoClasses,
 		.multiplier = RustCargoMultiplier,
-		.cargo_by_label = OpenTTDCargoByLabel,
 		.pool_available = RustVehicleCanAllocate,
 		.new_temporary = EngineTemporaryNew,
 		.destroy_temporary = GetRustVehicleServices().destroy,

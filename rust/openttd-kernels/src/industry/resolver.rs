@@ -71,7 +71,7 @@ pub struct ResolverServices {
     pub grfid: unsafe extern "C" fn(*const c_void) -> u32,
     pub version: unsafe extern "C" fn(*const c_void) -> u8,
     pub callback_id: unsafe extern "C" fn(*const c_void) -> u16,
-    pub cargo_translation: unsafe extern "C" fn(*const c_void, u8) -> u8,
+    pub cargo_file: unsafe extern "C" fn(*const c_void) -> *const std::ffi::c_void,
     pub cargo_map: unsafe extern "C" fn(*const SpecHandle, u8) -> u8,
     pub badges: unsafe extern "C" fn(*const c_void, *const SpecHandle, u32) -> u32,
     pub tile_badges: unsafe extern "C" fn(*const c_void, *const TileSpec, u32) -> u32,
@@ -423,7 +423,13 @@ fn variable(
             count_and_distance(parameter as u8, reg as u8, reg & 0x100 != 0, c, builder, s)
         }
         0x69..=0x6d | 0x70 | 0x71 => {
-            let cargo = unsafe { (s.cargo_translation)(ro, parameter as u8) };
+            let cargo = unsafe {
+                crate::cargo_registry::openttd_rust_cargo_translate(
+                    parameter as u8,
+                    (s.cargo_file)(ro),
+                    false,
+                )
+            };
             let Some(slot) = (unsafe { super::get_cargo_produced(i, cargo) }) else {
                 return 0;
             };
@@ -439,7 +445,13 @@ fn variable(
             }
         }
         0x6e | 0x6f => {
-            let cargo = unsafe { (s.cargo_translation)(ro, parameter as u8) };
+            let cargo = unsafe {
+                crate::cargo_registry::openttd_rust_cargo_translate(
+                    parameter as u8,
+                    (s.cargo_file)(ro),
+                    false,
+                )
+            };
             let Some(slot) = (unsafe { super::get_cargo_accepted(i, cargo) }) else {
                 return 0;
             };
@@ -899,7 +911,7 @@ crate::abi::layouts! {
         grfid,
         version,
         callback_id,
-        cargo_translation,
+        cargo_file,
         cargo_map,
         badges,
         tile_badges,

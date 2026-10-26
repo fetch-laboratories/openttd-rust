@@ -16,6 +16,33 @@ pub const AIR_CTOL: u8 = 1;
 pub const ACCELERATION_NORMAL: u8 = 0;
 /// `VehicleAccelerationModel::Maglev`.
 pub const ACCELERATION_MAGLEV: u8 = 2;
+/// `VE_OFFSET_START`.
+pub const VE_OFFSET_START: u8 = 0;
+/// `VE_OFFSET_CENTRE`.
+pub const VE_OFFSET_CENTRE: u8 = 8;
+/// `VE_TYPE_START`.
+pub const VE_TYPE_START: u8 = 4;
+/// `VE_TYPE_DEFAULT`.
+pub const VE_TYPE_DEFAULT: u8 = 0;
+/// `VE_TYPE_STEAM`.
+pub const VE_TYPE_STEAM: u8 = 1;
+/// `VE_DISABLE_EFFECT`.
+pub const VE_DISABLE_EFFECT: u8 = 6;
+/// `VE_ADVANCED_EFFECT`.
+pub const VE_ADVANCED_EFFECT: u8 = 6;
+/// `VE_DISABLE_WAGON_POWER`.
+pub const VE_DISABLE_WAGON_POWER: u8 = 7;
+/// `VE_DEFAULT`.
+pub const VE_DEFAULT: u8 = 255;
+/// `EC_STEAM`.
+pub const EC_STEAM: u8 = 0;
+/// `EC_MONORAIL`.
+pub const EC_MONORAIL: u8 = 3;
+
+/// `VE_OFFSET_COUNT`.
+pub const VE_OFFSET_COUNT: u8 = 4;
+/// `VE_TYPE_COUNT`.
+pub const VE_TYPE_COUNT: u8 = 2;
 
 /// `EngineMiscFlag::NoDefaultCargoMultiplier`.
 pub const NO_DEFAULT_CARGO_MULTIPLIER: u8 = 1 << 5;

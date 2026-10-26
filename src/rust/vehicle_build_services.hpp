@@ -9,13 +9,13 @@ static void *VehicleConstructNewRoad(uint32_t tile) noexcept
 	RoadVehicle *v = new RoadVehicle();
 	v->direction = DiagDirToDir(static_cast<DiagDirection>(Shared_road_depot_direction(tile)));
 	RustVehicleSetOwner(RustVehicle(v), RustCurrentCompanyID());
-	v->tile = TileIndex(tile);
+	RustWriteVehicleTile(v, TileIndex(tile));
 	int x = TileX(v->tile) * TILE_SIZE + TILE_SIZE / 2;
 	int y = TileY(v->tile) * TILE_SIZE + TILE_SIZE / 2;
-	v->x_pos = x;
-	v->y_pos = y;
-	v->z_pos = SharedSlopePixelZ(x, y, true);
-	v->vehstatus = {VehState::Hidden, VehState::Stopped, VehState::DefaultPalette};
+	RustWriteVehicleX(v, x);
+	RustWriteVehicleY(v, y);
+	RustWriteVehicleZ(v, SharedSlopePixelZ(x, y, true));
+	RustWriteVehicleStatus(v, {VehState::Hidden, VehState::Stopped, VehState::DefaultPalette});
 	return v;
 }
 static void VehicleConstructRoadFront(void *shell, const OpenTTDEngine *e) noexcept
@@ -41,15 +41,15 @@ static void VehicleConstructAircraftPlace(void *aircraft, void *shadow, uint32_t
 	Aircraft *u = static_cast<Aircraft *>(shadow);
 	v->direction = DIR_SE;
 	RustVehicleSetOwner(RustVehicle(u), RustCurrentCompanyID()); RustVehicleSetOwner(RustVehicle(v), RustVehicleOwner(u));
-	v->tile = TileIndex(tile);
+	RustWriteVehicleTile(v, TileIndex(tile));
 	uint x = TileX(v->tile) * TILE_SIZE + 5;
 	uint y = TileY(v->tile) * TILE_SIZE + 3;
-	v->x_pos = u->x_pos = x;
-	v->y_pos = u->y_pos = y;
-	u->z_pos = SharedSlopePixelZ(x, y, false);
-	v->z_pos = u->z_pos + 1;
-	v->vehstatus = {VehState::Hidden, VehState::Stopped, VehState::DefaultPalette};
-	u->vehstatus = {VehState::Hidden, VehState::Unclickable, VehState::Shadow};
+	RustWriteVehicleX(u, x); RustWriteVehicleX(v, x);
+	RustWriteVehicleY(u, y); RustWriteVehicleY(v, y);
+	RustWriteVehicleZ(u, SharedSlopePixelZ(x, y, false));
+	RustWriteVehicleZ(v, u->z_pos + 1);
+	RustWriteVehicleStatus(v, {VehState::Hidden, VehState::Stopped, VehState::DefaultPalette});
+	RustWriteVehicleStatus(u, {VehState::Hidden, VehState::Unclickable, VehState::Shadow});
 }
 static OpenTTDAircraftInfo VehicleConstructAircraftInfo(const OpenTTDEngine *e) noexcept
 {
@@ -74,13 +74,13 @@ static void VehicleConstructRotor(void *rotor, void *aircraft, void *shadow) noe
 	RustVehicleSetEngine(RustVehicle(w), RustVehicleEngineID(v));
 	w->direction = DIR_N;
 	RustVehicleSetOwner(RustVehicle(w), RustCurrentCompanyID());
-	w->x_pos = v->x_pos;
-	w->y_pos = v->y_pos;
-	w->z_pos = v->z_pos + ROTOR_Z_OFFSET;
-	w->vehstatus = {VehState::Hidden, VehState::Unclickable};
-	w->spritenum = 0xFF;
+	RustWriteVehicleX(w, v->x_pos);
+	RustWriteVehicleY(w, v->y_pos);
+	RustWriteVehicleZ(w, v->z_pos + ROTOR_Z_OFFSET);
+	RustWriteVehicleStatus(w, {VehState::Hidden, VehState::Unclickable});
+	RustWriteVehicleSprite(w, 0xFF);
 	RustVehicleSetSubtype(w, AIR_ROTOR);
-	w->sprite_cache.sprite_seq.Set(SPR_ROTOR_STOPPED);
+	RustWriteVehicleSpriteSequence(w, SPR_ROTOR_STOPPED);
 	RustVehicleSetNext(static_cast<Vehicle *>(shadow), w);
 }
 static void VehicleConstructRoadCapacity(void *front, void *part, uint16_t capacity) noexcept
@@ -114,7 +114,7 @@ static void VehicleConstructStamp(void *shell) noexcept
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);
 	v->build_year = TimerGameCalendar::year;
-	v->sprite_cache.sprite_seq.Set(SPR_IMG_QUERY);
+	RustWriteVehicleSpriteSequence(v, SPR_IMG_QUERY);
 }
 static void VehicleConstructServiceFlags(void *shell, bool prototype, bool percent) noexcept
 {
@@ -141,7 +141,7 @@ static const OpenTTDVehicleConstructServices &GetVehicleConstructServices() noex
 	return services;
 }
 static uint32_t VehicleBuildShipTile(uint32_t tile) noexcept { return GetShipDepotNorthTile(TileIndex(tile)).base(); }
-static void *VehicleBuildNewShip(uint32_t tile) noexcept { Ship *v = new Ship(); v->tile = TileIndex(tile); return v; }
+static void *VehicleBuildNewShip(uint32_t tile) noexcept { Ship *v = new Ship(); RustWriteVehicleTile(v, TileIndex(tile)); return v; }
 static void VehicleBuildSetPurchase(void *shell, uint16_t unit, int64_t value) noexcept { Vehicle *v = static_cast<Vehicle *>(shell); v->unitnumber = unit; v->value = value; }
 static void VehicleBuildPresentation(void *shell, VehicleType type) noexcept
 {

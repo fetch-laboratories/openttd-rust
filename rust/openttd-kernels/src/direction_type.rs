@@ -63,3 +63,6 @@ pub const AXIS_END: u8 = 2;
 
 pub const DIRDIFF_REVERSE: u8 = 4;
 pub const DIRDIFF_SAME: u8 = 0;
+
+/// `DIRDIFF_90RIGHT`.
+pub const DIRDIFF_90RIGHT: u8 = 2;

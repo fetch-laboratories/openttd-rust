@@ -10,6 +10,7 @@
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
+    clippy::many_single_char_names,
     clippy::verbose_bit_mask
 )]
 
@@ -41,14 +42,20 @@ pub struct View {
 #[derive(Clone, Copy)]
 pub struct Leaves {
     pub observe: extern "C" fn(*mut c_void, *mut View),
-    pub write: extern "C" fn(*mut c_void, u8, u32),
+    pub write_x: extern "C" fn(*mut c_void, i32),
+    pub write_y: extern "C" fn(*mut c_void, i32),
+    pub write_z: extern "C" fn(*mut c_void, i32),
+    pub sprite_sequence: extern "C" fn(*mut c_void, u32),
+    pub sprite: extern "C" fn(*mut c_void, u32),
+    pub progress: extern "C" fn(*mut c_void, u8),
+    pub spritenum: extern "C" fn(*mut c_void, u8),
     pub viewport: extern "C" fn(*mut c_void),
     pub sound: extern "C" fn(*mut c_void, u8),
 }
-const INITIAL: [u32; 12] = [
+const INITIAL: [u32; crate::effectvehicle_func::EV_END as usize] = [
     3701, 3079, 3073, 3084, 2040, 3709, 3737, 3725, 1416, 4751, 2040, 2040,
 ];
-const LAST: [u32; 12] = [
+const LAST: [u32; crate::effectvehicle_func::EV_END as usize] = [
     3708, 3083, 3078, 3089, 2044, 3724, 3740, 3736, 0, 0, 2044, 2044,
 ];
 const BULLDOZER: [(usize, u32, u8); 20] = [
@@ -210,7 +217,7 @@ const BUBBLES: [&[(i32, i32, i32, u32)]; 6] = [
 struct Controller<'a> {
     owner: *mut State,
     context: *mut c_void,
-    leaves: Leaves,
+    leaves: &'a Leaves,
     services: &'a Services,
     v: View,
 }
@@ -230,7 +237,16 @@ impl Controller<'_> {
             6 => self.v.spritenum = value as u8,
             _ => {} // Only the seven private field constants above reach this helper.
         }
-        (self.leaves.write)(self.context, field, value);
+        match field {
+            0 => (self.leaves.write_x)(self.context, value as i32),
+            1 => (self.leaves.write_y)(self.context, value as i32),
+            2 => (self.leaves.write_z)(self.context, value as i32),
+            3 => (self.leaves.sprite_sequence)(self.context, value),
+            4 => (self.leaves.sprite)(self.context, value),
+            5 => (self.leaves.progress)(self.context, value as u8),
+            6 => (self.leaves.spritenum)(self.context, value as u8),
+            _ => unreachable!(),
+        }
     }
     fn increment(&mut self) -> bool {
         if self.v.sprite == LAST[usize::from(self.v.subtype)] {
@@ -480,9 +496,8 @@ pub unsafe extern "C" fn openttd_rust_effect_run(
     context: *mut c_void,
     leaves: *const Leaves,
     services: *const Services,
-    initialize: u8,
 ) -> u8 {
-    let leaves = unsafe { *leaves };
+    let leaves = unsafe { &*leaves };
     let mut v = View::default();
     (leaves.observe)(context, &raw mut v);
     let mut controller = Controller {
@@ -492,12 +507,31 @@ pub unsafe extern "C" fn openttd_rust_effect_run(
         services: unsafe { &*services },
         v,
     };
-    if initialize != 0 {
-        controller.init();
-        1
-    } else {
-        u8::from(controller.tick())
-    }
+    u8::from(controller.tick())
+}
+/// Initialize one newly allocated effect through the same owner used by creation.
+/// # Safety
+/// The live owner, shell and immutable tables obey `openttd_rust_effect_run`'s contract.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_effect_initialize(
+    owner: *mut State,
+    context: *mut c_void,
+    kind: u8,
+    leaves: &Leaves,
+    services: &Services,
+) {
+    let mut controller = Controller {
+        owner,
+        context,
+        leaves,
+        services,
+        v: View {
+            subtype: kind,
+            ..View::default()
+        },
+    };
+    controller.init();
 }
 
 crate::abi::layouts! {
@@ -514,9 +548,137 @@ crate::abi::layouts! {
     };
     "OpenTTDEffectLeaves" ["probe"] => Leaves {
         observe,
-        write,
+        write_x, write_y, write_z, sprite_sequence, sprite, progress, spritenum,
         viewport,
         sound,
 
     };
+"OpenTTDEffectAllocation" ["probe"] => Allocation { shell, owner, };
+    "OpenTTDEffectPosition" ["probe"] => Position { x, y, z, };
+    "OpenTTDEffectCreationServices" ["probe"] => CreationServices {
+        effect, shared, can_allocate, allocate, owner, place, delta, unclickable, position,
+    };
+
+}
+
+/// Creation owns the allocation gate, field/initializer/viewport order and offsets.
+/// Services are immutable for the process. Native pools and shells remain canonical;
+/// creation callbacks cannot reset the map or delete a newly allocated effect.
+#[repr(C)]
+struct Allocation {
+    shell: *mut c_void,
+    owner: *mut State,
+}
+#[repr(C)]
+struct Position {
+    x: i32,
+    y: i32,
+    z: i32,
+}
+#[repr(C)]
+pub struct CreationServices {
+    effect: &'static Leaves,
+    shared: &'static Services,
+    can_allocate: extern "C" fn(usize) -> bool,
+    allocate: extern "C" fn() -> Allocation,
+    owner: extern "C" fn(*mut c_void) -> *mut State,
+    place: extern "C" fn(*mut c_void, i32, i32, i32, u8),
+    delta: extern "C" fn(*mut c_void),
+    unclickable: extern "C" fn(*mut c_void),
+    position: extern "C" fn(*const crate::vehicle::OpenTTDVehicle) -> Position,
+}
+static CREATION: std::sync::atomic::AtomicPtr<CreationServices> =
+    std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
+/// Bind immutable process-wide services before vehicle initialization or native creation.
+#[unsafe(no_mangle)]
+#[allow(unsafe_code)]
+pub unsafe extern "C" fn openttd_rust_effect_bind(
+    services: *const CreationServices,
+) -> *const CreationServices {
+    CREATION
+        .swap(services.cast_mut(), std::sync::atomic::Ordering::AcqRel)
+        .cast_const()
+}
+#[allow(unsafe_code)]
+fn creation() -> &'static CreationServices {
+    unsafe { &*CREATION.load(std::sync::atomic::Ordering::Acquire) }
+}
+/// `CreateEffectVehicle` over the shared native pool.
+#[unsafe(no_mangle)]
+#[allow(unsafe_code)]
+pub extern "C" fn openttd_rust_effect_create(x: i32, y: i32, z: i32, kind: u8) -> *mut c_void {
+    let s = creation();
+    if !(s.can_allocate)(1) {
+        return std::ptr::null_mut();
+    }
+    let v = (s.allocate)();
+    (s.place)(v.shell, x, y, z, kind);
+    (s.delta)(v.shell);
+    (s.unclickable)(v.shell);
+    unsafe {
+        openttd_rust_effect_initialize(v.owner, v.shell, kind, s.effect, s.shared);
+    }
+    (s.effect.viewport)(v.shell);
+    v.shell
+}
+/// `CreateEffectVehicleAbove`, clamping only the terrain lookup.
+#[unsafe(no_mangle)]
+#[allow(unsafe_code)]
+pub extern "C" fn openttd_rust_effect_create_above(
+    x: i32,
+    y: i32,
+    z: i32,
+    kind: u8,
+) -> *mut c_void {
+    let s = creation();
+    let safe_x = x.clamp(
+        0,
+        ((s.shared.map_max_x)() * crate::tile_type::TILE_SIZE) as i32,
+    );
+    let safe_y = y.clamp(
+        0,
+        ((s.shared.map_max_y)() * crate::tile_type::TILE_SIZE) as i32,
+    );
+    openttd_rust_effect_create(
+        x,
+        y,
+        crate::movement::pixel_z(s.shared, safe_x, safe_y, false).wrapping_add(z),
+        kind,
+    )
+}
+/// `CreateEffectVehicleRel`; the source shell is live for this synchronous call.
+#[unsafe(no_mangle)]
+#[allow(unsafe_code)]
+pub extern "C" fn openttd_rust_effect_create_rel(
+    v: *const crate::vehicle::OpenTTDVehicle,
+    x: i32,
+    y: i32,
+    z: i32,
+    kind: u8,
+) -> *mut c_void {
+    let p = (creation().position)(v);
+    openttd_rust_effect_create(
+        p.x.wrapping_add(x),
+        p.y.wrapping_add(y),
+        p.z.wrapping_add(z),
+        kind,
+    )
+}
+
+/// `EffectVehicle::SetAnimationState` on a live created shell.
+#[allow(unsafe_code)]
+pub(crate) fn set_animation(shell: *mut c_void, duration: u16) {
+    let owner = (creation().owner)(shell);
+    unsafe {
+        (*owner).animation = duration;
+    }
+}
+
+/// `EffectVehicle::SetAnimationSubstate` on a live created shell.
+#[allow(unsafe_code)]
+pub(crate) fn set_substate(shell: *mut c_void, value: u8) {
+    let owner = (creation().owner)(shell);
+    unsafe {
+        (*owner).substate = value;
+    }
 }

@@ -306,10 +306,17 @@ impl World<'_> {
         self.channel.world.set(None);
     }
     fn effect_rel(&self, id: u32, x: i64, y: i64, z: i64, kind: u32) {
-        self.service(7, id, kind, x, y, z, 0);
+        let v = unsafe { (self.occupancy.vehicle)(self.context, id) };
+        crate::effect::openttd_rust_effect_create_rel(
+            v.0.as_ptr(),
+            x as i32,
+            y as i32,
+            z as i32,
+            kind as u8,
+        );
     }
-    fn effect_above(&self, x: i64, y: i64, z: i64, kind: u32) {
-        self.service(8, 0, kind, x, y, z, 0);
+    fn effect_above(x: i64, y: i64, z: i64, kind: u32) {
+        crate::effect::openttd_rust_effect_create_above(x as i32, y as i32, z as i32, kind as u8);
     }
     fn sound_vehicle(&self, id: u32) {
         if self.world()[7] != 0 {
@@ -455,7 +462,13 @@ async fn zeppelin(w: World<'_>, id: u32) -> i64 {
                 w.set(id, AGE, 0);
             }
             if w.v(id, TICK) & 7 == 0 {
-                w.effect_rel(id, 0, -17, 2, 4);
+                w.effect_rel(
+                    id,
+                    0,
+                    -17,
+                    2,
+                    u32::from(crate::effectvehicle_func::EV_CRASH_SMOKE),
+                );
             }
         } else if w.state(id) == 0 {
             let t = w.tile(w.v(id, TILE) as u32);
@@ -624,7 +637,7 @@ async fn aircraft(w: World<'_>, id: u32, leave_top: bool) -> i64 {
                 let x = w.tile_x(i[0] as u32) * 16;
                 let y = w.tile_y(i[0] as u32) * 16;
                 let r = w.random();
-                w.effect_above(
+                World::effect_above(
                     i64::from(r & 63) + x,
                     i64::from((r >> 6) & 63) + y,
                     i64::from((r >> 12) & 15),
@@ -788,7 +801,7 @@ async fn destroyer(w: World<'_>, id: u32) -> i64 {
         w.delete(target).await;
         for _ in 0..80 {
             let r = w.random();
-            w.effect_above(
+            World::effect_above(
                 i64::from(r & 63) + w.v(id, X) - 32,
                 i64::from((r >> 5) & 63) + w.v(id, Y) - 32,
                 0,
@@ -1398,7 +1411,6 @@ mod tests {
         length_changed: unused!(vehicle::VehicleRef),
         play_vehicle_sound: unused!(vehicle::VehicleRef, crate::newgrf_sound::VehicleSoundEvent ; bool),
         play_sound: unused!(vehicle::VehicleRef, u16),
-        large_explosion: unused!(vehicle::VehicleRef),
         order_free: unused!(vehicle::VehicleRef),
         order_dummy: unused!(vehicle::VehicleRef),
         start_stop_dirty: unused!(vehicle::VehicleRef),

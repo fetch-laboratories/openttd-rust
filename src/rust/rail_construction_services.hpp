@@ -9,7 +9,7 @@ static void *RailNewWagon(uint32_t tile_index, const OpenTTDEngine *engine) noex
 	const RailVehicleInfo *rvi = &e->VehInfo<RailVehicleInfo>();
 	TileIndex tile(tile_index);
 	Train *v = new Train();
-	v->spritenum = rvi->image_index;
+	RustWriteVehicleSprite(v, rvi->image_index);
 
 	RustVehicleSetEngine(RustVehicle(v), e->index.base());
 	RustGroundSetFirstEngine(&v->gcache, EngineID::Invalid()); // needs to be set before first callback
@@ -17,17 +17,17 @@ static void *RailNewWagon(uint32_t tile_index, const OpenTTDEngine *engine) noex
 	DiagDirection dir = RustRailDepotDirection(tile.base());
 
 	v->direction = DiagDirToDir(dir);
-	v->tile = tile;
+	RustWriteVehicleTile(v, tile);
 
 	int x = TileX(tile) * TILE_SIZE | _vehicle_initial_x_fract[dir];
 	int y = TileY(tile) * TILE_SIZE | _vehicle_initial_y_fract[dir];
 
-	v->x_pos = x;
-	v->y_pos = y;
-	v->z_pos = SharedSlopePixelZ(x, y, true);
+	RustWriteVehicleX(v, x);
+	RustWriteVehicleY(v, y);
+	RustWriteVehicleZ(v, SharedSlopePixelZ(x, y, true));
 	RustVehicleSetOwner(RustVehicle(v), RustCurrentCompanyID());
 	v->SetTrack(TRACK_BIT_DEPOT);
-	v->vehstatus = {VehState::Hidden, VehState::DefaultPalette};
+	RustWriteVehicleStatus(v, {VehState::Hidden, VehState::DefaultPalette});
 
 	v->SetWagon();
 
@@ -44,7 +44,7 @@ static void *RailNewWagon(uint32_t tile_index, const OpenTTDEngine *engine) noex
 	v->date_of_last_service = TimerGameEconomy::date;
 	v->date_of_last_service_newgrf = TimerGameCalendar::date;
 	v->build_year = TimerGameCalendar::year;
-	v->sprite_cache.sprite_seq.Set(SPR_IMG_QUERY);
+	RustWriteVehicleSpriteSequence(v, SPR_IMG_QUERY);
 	return v;
 }
 /* Original `CmdBuildRailVehicle` statements through the sprite cache. */
@@ -59,14 +59,14 @@ static void *RailNewEngine(uint32_t tile_index, const OpenTTDEngine *engine) noe
 
 	Train *v = new Train();
 	v->direction = DiagDirToDir(dir);
-	v->tile = tile;
+	RustWriteVehicleTile(v, tile);
 	RustVehicleSetOwner(RustVehicle(v), RustCurrentCompanyID());
-	v->x_pos = x;
-	v->y_pos = y;
-	v->z_pos = SharedSlopePixelZ(x, y, true);
+	RustWriteVehicleX(v, x);
+	RustWriteVehicleY(v, y);
+	RustWriteVehicleZ(v, SharedSlopePixelZ(x, y, true));
 	v->SetTrack(TRACK_BIT_DEPOT);
-	v->vehstatus = {VehState::Hidden, VehState::Stopped, VehState::DefaultPalette};
-	v->spritenum = rvi->image_index;
+	RustWriteVehicleStatus(v, {VehState::Hidden, VehState::Stopped, VehState::DefaultPalette});
+	RustWriteVehicleSprite(v, rvi->image_index);
 	v->cargo_type = RustEngineDefaultCargo(engine);
 	assert(IsValidCargoType(v->cargo_type));
 	RustVehicleSetCargoCap(RustVehicle(v), RustEngineRailCapacity(engine));
@@ -87,7 +87,7 @@ static void *RailNewEngine(uint32_t tile_index, const OpenTTDEngine *engine) noe
 	v->date_of_last_service = TimerGameEconomy::date;
 	v->date_of_last_service_newgrf = TimerGameCalendar::date;
 	v->build_year = TimerGameCalendar::year;
-	v->sprite_cache.sprite_seq.Set(SPR_IMG_QUERY);
+	RustWriteVehicleSpriteSequence(v, SPR_IMG_QUERY);
 	return v;
 }
 /* Original `AddRearEngineToMultiheadedTrain` statements through the sprite cache,
@@ -100,24 +100,24 @@ static void *RailNewRear(void *front) noexcept
 	u->value = v->value;
 	u->direction = v->direction;
 	RustVehicleSetOwner(RustVehicle(u), RustVehicleOwner(v));
-	u->tile = v->tile;
-	u->x_pos = v->x_pos;
-	u->y_pos = v->y_pos;
-	u->z_pos = v->z_pos;
+	RustWriteVehicleTile(u, v->tile);
+	RustWriteVehicleX(u, v->x_pos);
+	RustWriteVehicleY(u, v->y_pos);
+	RustWriteVehicleZ(u, v->z_pos);
 	u->SetTrack(TRACK_BIT_DEPOT);
-	u->vehstatus = v->vehstatus;
+	RustWriteVehicleStatus(u, v->vehstatus);
 	u->vehstatus.Reset(VehState::Stopped);
-	u->spritenum = RustVehicleSprite(v) + 1;
+	RustWriteVehicleSprite(u, RustVehicleSprite(v) + 1);
 	u->cargo_type = v->cargo_type;
 	u->cargo_subtype = v->cargo_subtype;
 	u->cargo_cap = v->cargo_cap;
 	u->refit_cap = v->refit_cap;
-	u->SetRailTypes(v->GetRailTypes());
+	u->SetRailTypes(RailTypes{RustTrainRailTypes(v)});
 	RustVehicleSetEngine(RustVehicle(u), RustVehicleEngineID(v));
 	u->date_of_last_service = v->date_of_last_service;
 	u->date_of_last_service_newgrf = RustVehicleCalendarService(v);
 	u->build_year = RustVehicleBuildYear(v);
-	u->sprite_cache.sprite_seq.Set(SPR_IMG_QUERY);
+	RustWriteVehicleSpriteSequence(u, SPR_IMG_QUERY);
 	return u;
 }
 static void RailLinkMultihead(void *front, void *rear) noexcept

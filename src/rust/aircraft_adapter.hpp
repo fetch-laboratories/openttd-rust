@@ -170,10 +170,6 @@ static void OPENTTD_RUST_CALL Aircraft_copy_sprite(OpenTTDVehicle *vehicle, Open
 }
 
 
-static void OPENTTD_RUST_CALL Aircraft_create_effect(OpenTTDAircraftVehicle vehicle, uint8_t kind, int32_t x, int32_t y, int32_t z) noexcept
-{
-	CreateEffectVehicleRel(VehicleOf(vehicle.handle), x, y, z, static_cast<EffectVehicleType>(kind));
-}
 
 static void OPENTTD_RUST_CALL Aircraft_truncate_cargo(OpenTTDAircraftVehicle vehicle) noexcept
 {
@@ -208,10 +204,6 @@ static void OPENTTD_RUST_CALL Aircraft_first_arrival(OpenTTDAircraftVehicle vehi
 	AI::NewEvent(v->owner, new ScriptEventStationFirstVehicle(st->index, v->index)); Game::NewEvent(new ScriptEventStationFirstVehicle(st->index, v->index));
 }
 
-static void OPENTTD_RUST_CALL Aircraft_update_delta(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	VehicleOf(vehicle.handle)->UpdateDeltaXY();
-}
 
 
 static void OPENTTD_RUST_CALL Aircraft_destination_too_far(OpenTTDAircraftVehicle vehicle) noexcept
@@ -381,14 +373,13 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.viewport = Aircraft_viewport,
 	.rotor_image = Aircraft_rotor_image,
 	.copy_sprite = Aircraft_copy_sprite,
-	.create_effect = Aircraft_create_effect,
 	.truncate_cargo = Aircraft_truncate_cargo,
 	.crash_news = Aircraft_crash_news,
 	.station_rating = OpenTTDModifyStationRatingAround,
 	.landing_rating = Aircraft_landing_rating,
 	.dirty_depot = Aircraft_dirty_depot,
 	.first_arrival = Aircraft_first_arrival,
-	.update_delta = Aircraft_update_delta,
+	.update_delta = RustVehicleUpdateDelta<OpenTTDAircraftVehicle>,
 	.destination_too_far = Aircraft_destination_too_far,
 	.delete_range_news = Aircraft_delete_range_news,
 	.service_order = Aircraft_service_order,

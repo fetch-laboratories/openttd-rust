@@ -527,7 +527,6 @@ pub struct Leaves {
     pub is_station: extern "C" fn(Handle, u32) -> u64,
     pub is_station_any: extern "C" fn(Handle, u32) -> u64,
     pub is_tunnelbridge: extern "C" fn(Handle, u32) -> u64,
-    pub large_explosion: extern "C" fn(Handle),
     pub leave_sound: extern "C" fn(Handle),
     pub leave_unbunch: extern "C" fn(Handle),
     pub length_callback: extern "C" fn(Handle) -> u64,
@@ -565,7 +564,6 @@ pub struct Leaves {
     pub set_next: extern "C" fn(Handle, Handle),
     pub set_signal_state: extern "C" fn(Handle, u32, u8, u8),
     pub set_tunnel_res: extern "C" fn(Handle, u32, u8),
-    pub show_effect: extern "C" fn(Handle),
     pub show_reservation: extern "C" fn(Handle) -> u64,
     pub signal_context: extern "C" fn() -> crate::signal::Context,
     pub signal_has_pbs: extern "C" fn(Handle, u32, u8) -> u64,
@@ -573,7 +571,6 @@ pub struct Leaves {
     pub signal_type: extern "C" fn(Handle, u32, u8) -> u64,
     pub sigseg_full: extern "C" fn(Handle) -> u64,
     pub sigseg_pbs: extern "C" fn(Handle) -> u64,
-    pub small_explosion: extern "C" fn(Handle, i32, i32, i32),
     pub speed_default: extern "C" fn(Handle) -> u64,
     pub start_stop_dirty: extern "C" fn(Handle),
     pub station: extern "C" fn(Handle, u32) -> u64,
@@ -604,7 +601,6 @@ pub struct Leaves {
     pub veh_exit_dir: extern "C" fn(Handle, u8, u8) -> u64,
     pub viewport: extern "C" fn(Handle, u8, u8),
     pub visit_type: extern "C" fn(Handle, u16) -> u64,
-    pub vis_effect: extern "C" fn(Handle, u8),
     pub wagon_override: extern "C" fn(Handle) -> u64,
     pub wagon_speed_limits: extern "C" fn(Handle) -> u64,
     pub wait_oneway: extern "C" fn(Handle) -> u64,
@@ -777,7 +773,7 @@ impl Game<'_> {
             // SAFETY: live serialized shell; evaluation retains no owner reference.
             unsafe { crate::newgrf_vehicle::cache_override(self.vs(), u.vehicle()) };
             (self.leaves.write_colourmap)(u, 0);
-            (self.leaves.vis_effect)(u, 1);
+            crate::vehicle_effect::openttd_rust_visual_update(u.vehicle(), true);
             let powered = (self.leaves.pow_wag_power)(id) != 0
                 && (self.leaves.railveh_wagon)(u) != 0
                 && (self.leaves.wagon_override)(u) != 0
@@ -2247,7 +2243,13 @@ impl Game<'_> {
         let state = (id.get_crash_anim_pos() as u16).wrapping_add(1);
         id.set_crash_anim_pos(u64::from(state));
         if state == 4 && (self.leaves.read_status)(id) & 1 == 0 {
-            (self.leaves.large_explosion)(id);
+            crate::effect::openttd_rust_effect_create_rel(
+                id.vehicle().0.as_ptr(),
+                4,
+                4,
+                8,
+                crate::effectvehicle_func::EV_EXPLOSION_LARGE,
+            );
         }
         if state <= 200 {
             let mut r = self.services.random();
@@ -2258,11 +2260,12 @@ impl Game<'_> {
                     index -= 1;
                     if index < 0 {
                         r = self.services.random();
-                        (self.leaves.small_explosion)(
-                            u,
+                        crate::effect::openttd_rust_effect_create_rel(
+                            u.vehicle().0.as_ptr(),
                             (((r >> 8) & 7) + 2) as i32,
                             (((r >> 16) & 7) + 2) as i32,
                             ((r & 7) + 5) as i32,
+                            crate::effectvehicle_func::EV_EXPLOSION_SMALL,
                         );
                         break;
                     }
@@ -2412,7 +2415,12 @@ impl Game<'_> {
             return true;
         }
         if !mode {
-            (self.leaves.show_effect)(id);
+            if crate::vehicle_effect::openttd_rust_visual_eligible(id.vehicle()) {
+                crate::vehicle_effect::openttd_rust_visual_show(
+                    id.vehicle(),
+                    self.current_max_speed(id) as u32,
+                );
+            }
         }
         if !valid_order && (self.leaves.read_order)(id) != OT_NOTHING {
             (self.leaves.check_next)(id);
@@ -3308,7 +3316,6 @@ crate::abi::layouts! {
         is_station,
         is_station_any,
         is_tunnelbridge,
-        large_explosion,
         leave_sound,
         leave_unbunch,
         length_callback,
@@ -3346,7 +3353,6 @@ crate::abi::layouts! {
         set_next,
         set_signal_state,
         set_tunnel_res,
-        show_effect,
         show_reservation,
         signal_context,
         signal_has_pbs,
@@ -3354,7 +3360,6 @@ crate::abi::layouts! {
         signal_type,
         sigseg_full,
         sigseg_pbs,
-        small_explosion,
         speed_default,
         start_stop_dirty,
         station,
@@ -3385,7 +3390,6 @@ crate::abi::layouts! {
         veh_exit_dir,
         viewport,
         visit_type,
-        vis_effect,
         wagon_override,
         wagon_speed_limits,
         wait_oneway,

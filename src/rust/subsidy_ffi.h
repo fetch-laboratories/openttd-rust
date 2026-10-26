@@ -46,8 +46,6 @@ struct OpenTTDSubsidyServices {
 	bool (*manual)(CargoType) noexcept OPENTTD_SERVICE_DEFAULT(manual);
 	bool (*manual_pax)() noexcept OPENTTD_SERVICE_DEFAULT(manual_pax);
 	bool (*any_manual)() noexcept OPENTTD_SERVICE_DEFAULT(any_manual);
-	uint32_t (*passenger_count)() noexcept OPENTTD_SERVICE_DEFAULT(passenger_count);
-	CargoType (*passenger_at)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(passenger_at);
 	void (*offered_news)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(offered_news);
 	void (*awarded_news)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(awarded_news);
 	void (*offer_expired_news)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(offer_expired_news);

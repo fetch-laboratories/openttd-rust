@@ -2,6 +2,7 @@
 /** @file industry_resolver_ffi.h Stack contexts and typed native resolver leaves. */
 #ifndef RUST_INDUSTRY_RESOLVER_FFI_H
 #define RUST_INDUSTRY_RESOLVER_FFI_H
+struct GRFFile;
 #include "industry_ffi.h"
 #include "newgrf_storage_ffi.h"
 #include "../town_type.h"
@@ -52,7 +53,7 @@ struct OpenTTDIndustryResolverServices {
 	uint32_t (*grfid)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(grfid);
 	uint8_t (*version)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(version);
 	uint16_t (*callback_id)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(callback_id);
-	uint8_t (*cargo_translation)(const ResolverObject *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_translation);
+	const GRFFile *(*cargo_file)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_file);
 	uint8_t (*cargo_map)(const IndustrySpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_map);
 	uint32_t (*badges)(const ResolverObject *, const IndustrySpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(badges);
 	uint32_t (*tile_badges)(const ResolverObject *, const IndustryTileSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_badges);

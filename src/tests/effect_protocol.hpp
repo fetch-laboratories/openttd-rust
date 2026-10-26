@@ -36,6 +36,21 @@ static inline void OPENTTD_RUST_CALL EffectTestWrite(void *context, uint8_t fiel
 		case 6: w.view.spritenum = static_cast<uint8_t>(value); break;
 	}
 }
+static inline OpenTTDEffectLeaves EffectTestLeaves()
+{
+	return {
+		.observe = EffectTestObserve,
+		.write_x = [](void *c, int32_t v) noexcept { EffectTestWrite(c, 0, v); },
+		.write_y = [](void *c, int32_t v) noexcept { EffectTestWrite(c, 1, v); },
+		.write_z = [](void *c, int32_t v) noexcept { EffectTestWrite(c, 2, v); },
+		.sprite_sequence = [](void *c, uint32_t v) noexcept { EffectTestWrite(c, 3, v); },
+		.sprite = [](void *c, uint32_t v) noexcept { EffectTestWrite(c, 4, v); },
+		.progress = [](void *c, uint8_t v) noexcept { EffectTestWrite(c, 5, v); },
+		.spritenum = [](void *c, uint8_t v) noexcept { EffectTestWrite(c, 6, v); },
+		.viewport = [](void *c) noexcept { static_cast<EffectTestWorld *>(c)->viewports++; },
+		.sound = [](void *c, uint8_t v) noexcept { static_cast<EffectTestWorld *>(c)->sound = 1 + v; },
+	};
+}
 static inline void OPENTTD_RUST_CALL EffectTestViewport(void *context) noexcept { static_cast<EffectTestWorld *>(context)->viewports++; }
 static inline void OPENTTD_RUST_CALL EffectTestSound(void *context, uint8_t success) noexcept { static_cast<EffectTestWorld *>(context)->sound = 1 + success; }
 static inline uint32_t OPENTTD_RUST_CALL EffectTestIndustry(int32_t, int32_t, uint32_t *tile) noexcept
@@ -59,7 +74,7 @@ template <typename Check> void CheckEffectProtocol(Check check)
 	 * observe immediate writes, transient services and RNG short circuit. */
 	EffectTestWorld w;
 	effect_test_world = &w;
-	const OpenTTDEffectLeaves leaves{EffectTestObserve, EffectTestWrite, EffectTestViewport, EffectTestSound};
+	const OpenTTDEffectLeaves leaves = EffectTestLeaves();
 	const OpenTTDSharedServices services = OpenTTDFixtureSharedServices(&w, EffectTestRandom, EffectTestIndustry);
 	auto animation_shared = services;
 	animation_shared.mark_dirty = [](uint32_t) noexcept {};
@@ -77,7 +92,11 @@ template <typename Check> void CheckEffectProtocol(Check check)
 	check(openttd_rust_effect_get(owner.get(), 1) == 255);
 	const std::array<uint32_t, 12> sprites{3708,3079,3073,3084,2040,3709,3737,3725,1416,4751,2040,2040};
 	const std::array<uint8_t, 12> progress{7,12,0,1,12,0,0,0,0,0,12,12};
-	auto run = [&](uint8_t init = 0) { w.writes = w.viewports = w.animated = w.sound = 0; return openttd_rust_effect_run(owner.get(), &w, &leaves, &services, init); };
+	auto run = [&](uint8_t init = 0) -> uint8_t {
+		w.writes = w.viewports = w.animated = w.sound = 0;
+		if (init != 0) { openttd_rust_effect_initialize(owner.get(), &w, w.view.subtype, &leaves, &services); return 1; }
+		return openttd_rust_effect_run(owner.get(), &w, &leaves, &services);
+	};
 	for (uint8_t subtype = 0; subtype < 12; subtype++) {
 		w.view = {13,-9,21,0,0,99,subtype,1};
 		check(run(1) == 1 && w.view.sprite == sprites[subtype] && w.view.progress == progress[subtype]);

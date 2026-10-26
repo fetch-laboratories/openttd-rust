@@ -73,7 +73,6 @@ struct OpenTTDShipLeaves {
 	uint32_t (*speed_default)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(speed_default);
 	uint32_t (*age_default)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(age_default);
 	uint32_t (*speed_frac)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(speed_frac);
-	void (*update_visual)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(update_visual);
 	void (*cache_invalidate)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(cache_invalidate);
 	const OpenTTDEngineCapabilitiesServices *capabilities;
 	void (*sprite_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(sprite_direction);
@@ -91,7 +90,6 @@ struct OpenTTDShipLeaves {
 	void (*path_clear)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(path_clear);
 	void (*viewport)(uint32_t, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(viewport);
 	void (*base_viewport)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(base_viewport);
-	void (*visual)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(visual);
 	void (*cache)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(cache);
 	void (*play_sound)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(play_sound);
 	OpenTTDShipReverseResult (*yapf_reverse)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(yapf_reverse);

@@ -437,7 +437,6 @@ pub struct Services {
     pub days_since_last_month: unsafe extern "C" fn() -> u32,
     pub landscape: unsafe extern "C" fn() -> u8,
     pub economy_type: unsafe extern "C" fn() -> u8,
-    pub passengers: unsafe extern "C" fn() -> u8,
     pub fund_only: unsafe extern "C" fn() -> bool,
     pub calendar_year: unsafe extern "C" fn() -> i32,
     pub deity: unsafe extern "C" fn() -> bool,
@@ -898,7 +897,13 @@ fn change(i: *mut c_void, s: &Services, monthly: bool) {
                     );
                 }
                 new = new.clamp(1, 255);
-                if unsafe { (*p).cargo == (s.passengers)() } && o.behaviour & (1 << 19) == 0 {
+                if unsafe {
+                    (*p).cargo
+                        == crate::cargo_registry::openttd_rust_cargo_by_label(
+                            crate::cargo_type::CT_PASSENGERS,
+                        )
+                } && o.behaviour & (1 << 19) == 0
+                {
                     new = new.clamp(0, 16);
                 }
                 if unsafe {
@@ -1864,13 +1869,10 @@ crate::abi::layouts! {
         anim_next,
         build_oilrig,
         pixel_max_z,
-        create_effect,
-        create_effect_above,
-        set_effect_substate,
         spec,
         acceptance,
         callback,
-        cargo_translation,
+        cargo_file,
     };
     "OpenTTDIndustryCargoLists" ["industry"] => crate::industry::CargoLists {
         produced,
@@ -1902,7 +1904,7 @@ crate::abi::layouts! {
         callback,
         callback_error,
         grf_version,
-        cargo_translation,
+        cargo_file,
         layout_size,
         layout_tile,
         water_class,
@@ -2099,7 +2101,6 @@ crate::abi::layouts! {
         days_since_last_month,
         landscape,
         economy_type,
-        passengers,
         fund_only,
         calendar_year,
         deity,

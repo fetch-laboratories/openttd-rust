@@ -5,6 +5,7 @@
 #include "rust/road_ffi.h"
 #include "rust/road_yapf_ffi.h"
 #include "tests/effect_protocol.hpp"
+#include "rust/vehicle_effect_ffi.h"
 
 #include "vehicle_tables.inc"
 
@@ -15,7 +16,7 @@ struct RoadAbiProbe {
 	std::unique_ptr<OpenTTDRoadStopState, decltype(&openttd_rust_road_stop_destroy)> stop{openttd_rust_road_stop_new(), openttd_rust_road_stop_destroy};
 	OpenTTDRoadStopEntries entries{};
 	const OpenTTDRoadLeaves *leaves = nullptr;
-	OpenTTDRoadEntry entry{.acceleration_model = 0, .road_side = 0, .queue = false, .map_log_x = 8};
+	OpenTTDRoadEntry entry{.ground = ground.state, .acceleration_model = 0, .road_side = 0, .queue = false, .map_log_x = 8};
 	uint32_t dest = 0, nested = 0, destroyed = 0, departures = 0, progress = 255;
 	uint8_t tick = 0, running = 0, status = 0;
 	uint32_t cache_properties = 0, cargo_ages = 0, length_changes = 0, viewports = 0, turns = 0, next_reads = 0;
@@ -57,6 +58,12 @@ static void RoadBoundary()
 	effect_test_world = &world;
 	const OpenTTDSharedServices services = OpenTTDFixtureSharedServices(&world, EffectTestRandom, EffectTestIndustry);
 	RoadTestTables t(&services);
+	static uint8_t cache_visual_byte = 0;
+	OpenTTDVisualServices cache_visual{
+		.vehicle = &t.vehicle, .shared = &t.shared,
+		.engine = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualEngine { return {.engine = nullptr, .cache = &cache_visual_byte, .id = 0, .kind = VEH_ROAD, .visual = 0x40, .callback = false}; },
+	};
+	auto previous_visual = openttd_rust_visual_bind(&cache_visual);
 	probe.leaves = &t.leaves;
 	OpenTTDVehicle *v = RoadAbiHandle();
 
@@ -237,20 +244,45 @@ static void RoadBoundary()
 	t.vehicle.order_type = [](OpenTTDVehicle *) noexcept { return road_orders->vehicle->current.type; };
 	t.vehicle.loading = [](OpenTTDVehicle *, bool, const OpenTTDVehicleVisits *) noexcept {};
 	t.vehicle.visits = []() noexcept -> const OpenTTDVehicleVisits * { return nullptr; };
-	t.leaves.visual_read = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadVisualRead {
-		auto &p = *road_abi_probe; p.visual_stage = 1;
-		auto read = RoadAbiMaxSpeed();
-		if (!p.visual_eligible) { read.next = reinterpret_cast<OpenTTDVehicle *>(&road_abi_second); read.next_state = p.state; } // A skipped lookup must not traverse.
-		return {.max = read, .eligible = p.visual_eligible};
+	OpenTTDEffectLeaves emission_leaves = EffectTestLeaves();
+	auto *emission_owner = openttd_rust_effect_new();
+	static OpenTTDEffectState *current_emission_owner;
+	current_emission_owner = emission_owner;
+	OpenTTDEffectCreationServices creation{
+		.effect = &emission_leaves, .shared = &t.shared,
+		.can_allocate = [](size_t) noexcept { return true; },
+		.allocate = []() noexcept -> OpenTTDEffectAllocation { return {effect_test_world, current_emission_owner}; },
+		.place = [](void *shell, int32_t x, int32_t y, int32_t z, uint8_t type) noexcept { static_cast<EffectTestWorld *>(shell)->view = {x, y, z, 0, 0, 0, type, 0}; },
+		.delta = [](void *) noexcept {}, .unclickable = [](void *) noexcept {},
+		.position = [](const OpenTTDVehicle *) noexcept -> OpenTTDEffectPosition { return {}; },
 	};
-	t.leaves.visual_effect_then_speed = [](OpenTTDVehicle *u, uint32_t max) noexcept -> OpenTTDRoadSpeedRead {
+	auto previous_creation = openttd_rust_effect_bind(&creation);
+	auto emission_vehicle = t.vehicle;
+	emission_vehicle.next = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicle * { return nullptr; };
+	emission_vehicle.play_vehicle_sound = [](OpenTTDVehicle *u, VehicleSoundEvent event) noexcept {
 		auto &p = *road_abi_probe;
-		CHECK(p.visual_stage == 1 && p.visual_eligible && max == 80); p.visual_stage = 3;
-		openttd_rust_road_set(p.state, 3, 1); // Reentry changes overtaking before UpdateSpeed.
+		CHECK(p.visual_stage == 1 && p.visual_eligible && event == VSE_VISUAL_EFFECT); p.visual_stage = 3;
+		openttd_rust_road_set(p.state, 3, 1);
 		openttd_rust_road_set_dest(u, p.state, 100, p.dest, p.leaves);
-		p.post_effect_max = 40;
-		++p.nested;
-		return p.leaves->speed_read(u);
+		p.post_effect_max = 40; ++p.nested; return false;
+	};
+	auto emission_shared = t.shared;
+	emission_shared.is_bridge = emission_shared.bridge_above = [](uint32_t) noexcept { return false; };
+	static uint8_t emission_cache = 0x11;
+	OpenTTDVisualServices emission{
+		.vehicle = &emission_vehicle, .shared = &emission_shared,
+		.gate = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualGate {
+			auto &p = *road_abi_probe; p.visual_stage = 1;
+			return {.speed = 2, .status = 0, .smoke = uint8_t(p.visual_eligible ? 2 : 0), .primary = true};
+		},
+		.show = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualShow { return {2, VEH_ROAD, 2}; },
+		.part = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualPart { return {.cache = &emission_cache, .tile = 100, .kind = VEH_ROAD, .status = 0, .tick = 0}; },
+		.offset = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualOffset { return {DIR_NE, 8}; },
+		.depot = [](uint32_t) noexcept { return false; }, .tunnel = [](uint32_t) noexcept { return false; },
+	};
+	openttd_rust_visual_bind(&emission);
+	t.leaves.max_speed_read = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadMaxSpeedRead {
+		auto &p = *road_abi_probe; CHECK(p.visual_eligible && p.visual_stage == 1); return RoadAbiMaxSpeed();
 	};
 	t.leaves.speed_read = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadSpeedRead {
 		auto &p = *road_abi_probe;
@@ -391,6 +423,9 @@ static void RoadBoundary()
 	const OpenTTDRoadTickRead crashed{.tick = 31, .front = true, .movement = probe.entry, .order_time = &probe.order_time, .running = &probe.running, .status = &probe.status};
 	CHECK(!openttd_rust_road_tick(v, probe.state, &crashed, &t.leaves, nullptr));
 	CHECK(probe.state == nullptr && probe.destroyed == 1 && world.draws == 1);
+	openttd_rust_visual_bind(previous_visual);
+	openttd_rust_effect_bind(previous_creation);
+	openttd_rust_effect_destroy(emission_owner);
 	std::printf("road_native_typed_reentry_path_and_owner_destruction passed\n");
 }
 

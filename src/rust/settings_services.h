@@ -68,4 +68,5 @@ inline bool OpenTTDExclusiveRights() noexcept { return _settings_game.economy.ex
 inline bool OpenTTDBribe() noexcept { return _settings_game.economy.bribe; }
 inline void RustSetSnowLineHeight(uint8_t height) noexcept { _settings_game.game_creation.snow_line_height = height; }
 inline void RustSetFreeformEdges(bool value) noexcept { _settings_game.construction.freeform_edges = value; }
+inline uint8_t RustVehicleSmokeAmount() noexcept { return _settings_game.vehicle.smoke_amount; }
 #endif /* RUST_SETTINGS_SERVICES_H */

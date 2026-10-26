@@ -46,7 +46,7 @@ pub struct Fields {
 #[derive(Clone, Copy)]
 pub struct Services {
     pub(crate) spec: extern "C" fn(u8, *mut Spec),
-    pub(crate) callback: extern "C" fn(u8, u32) -> u16,
+    pub(crate) registry: *const crate::cargo_registry::Services,
     pub(crate) station_read: extern "C" fn(u16, u8, u8) -> u32,
     pub(crate) industry_read: extern "C" fn(*mut c_void, u8, u32) -> u32,
     pub(crate) industry_write: extern "C" fn(*mut c_void, u8, u32, u32),
@@ -80,7 +80,15 @@ fn income(s: Services, pieces: u32, distance: u32, periods: u16, cargo: u8) -> i
     if cs.callback != 0 {
         let var18 =
             distance.min(65535) | (pieces.min(255) << 16) | (u32::from(periods).min(255) << 24);
-        let callback = (s.callback)(cargo, var18);
+        let callback = unsafe {
+            crate::cargo_registry::callback(
+                &*s.registry,
+                cargo,
+                crate::newgrf_callbacks::CBID_CARGO_PROFIT_CALC.0,
+                0,
+                var18,
+            )
+        };
         if callback != 0xffff {
             let mut result = i32::from(callback & 0x3fff);
             if callback & 0x4000 != 0 {
@@ -437,7 +445,7 @@ crate::abi::layouts! {
     };
     "OpenTTDCargoServices" ["probe"] => Services {
         spec,
-        callback,
+        registry,
         station_read,
         industry_read,
         industry_write,
