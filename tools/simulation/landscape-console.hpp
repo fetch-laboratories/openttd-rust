@@ -104,8 +104,17 @@ static void GenericNeed(bool ok) { if (!ok) std::abort(); }
 struct GenericObservedResult : SpriteGroup {
 	uint16_t result;
 	mutable uint attempts = 0;
+	TileIndex tree_mutation = INVALID_TILE;
 	explicit GenericObservedResult(uint16_t result) : result(result) {}
-	ResolverResult Resolve(ResolverObject &) const override { this->attempts++; return CallbackResult(this->result); }
+	ResolverResult Resolve(ResolverObject &) const override
+	{
+		this->attempts++;
+		if (this->tree_mutation != INVALID_TILE) {
+			SetTreeGrowth(this->tree_mutation, TreeGrowthStage::Dead);
+			SetTreeGroundDensity(this->tree_mutation, TREE_GROUND_GRASS, 1);
+		}
+		return CallbackResult(this->result);
+	}
 };
 static void GenericPrograms()
 {
@@ -186,6 +195,29 @@ static void GenericPrograms()
 		if (mode == 3) GenericNeed(generic_sound_file == &first && generic_sound_id == 4 && generic_sound_tile == tile && registers.GetRegister(0x100) == static_cast<int32_t>(packed) && registers.GetRegister(0x101) == CBID_SOUNDS_AMBIENT_EFFECT && registers.GetRegister(0x102) == 0);
 		fmt::print(stderr, "GENERIC ambient {} {} {} {} {} {} {} {}\n", to_underlying(kind), version, mode, generic_sound_calls, mode == 3 ? packed : 0, generic_sound_file == &first, _random.state[0], _random.state[1]);
 	}
+	{
+		// Cycle 95 reaches both grass and tree growth after the ambient callback mutates them.
+		AutoRestoreBackup<LandscapeType> temperate(_settings_game.game_creation.landscape, LandscapeType::Temperate);
+		AutoRestoreBackup<decltype(_settings_game.construction.extra_tree_placement)> placement(_settings_game.construction.extra_tree_placement, ETP_NO_SPREAD);
+		TimerGameTick::counter = 15U << 8;
+		MakeTree(tile, TREE_TEMPERATE, 2, TreeGrowthStage::Grown, TREE_GROUND_ROUGH, 3);
+		ResetGenericCallbacks(); AddGenericCallback(GSF_SOUNDFX, &first, &yes); yes.tree_mutation = tile;
+		_misc_grf_features = {GrfMiscBit::AmbientSoundCallback}; _settings_client.sound.ambient = true;
+		for (uint seed = 1;; ++seed) { _random.SetSeed(seed); auto next = _random; if (Chance16I(1, 200, next.Next())) break; }
+		auto expected_rng = _random; expected_rng.Next(); generic_sound_calls = 0;
+#ifdef WITH_RUST
+		cursor = tile.base();
+#else
+		cursor = tile;
+#endif
+		RunTileLoop(); yes.tree_mutation = INVALID_TILE;
+		GenericNeed(IsTileType(tile, MP_TREES) && GetTreeGrowth(tile) == TreeGrowthStage::Growing1 && GetTreeCount(tile) == 2 && GetTreeGround(tile) == TREE_GROUND_GRASS && GetTreeDensity(tile) == 2);
+		GenericNeed(generic_sound_calls == 1 && _random.state[0] == expected_rng.state[0] && _random.state[1] == expected_rng.state[1]);
+		fmt::print(stderr, "GENERIC tree-ambient-reread true\n");
+	}
+	TimerGameTick::counter = 1;
+	MakeCanal(tile, OWNER_NONE, 0); SetNonFloodingWaterTile(tile, true);
+	ResetGenericCallbacks(); AddGenericCallback(GSF_SOUNDFX, &first, &program); AddGenericCallback(GSF_SOUNDFX, &second, &failure);
 	program.adjusts = {{.operation = DSGA_OP_RST, .variable = 0x80, .and_mask = UINT32_MAX}}; program.error_group = &no;
 	for (uint seed = 1;; ++seed) { _random.SetSeed(seed); auto next = _random; if (Chance16I(1, 200, next.Next())) break; }
 	auto expected_rng = _random; expected_rng.Next(); generic_sound_calls = 0;

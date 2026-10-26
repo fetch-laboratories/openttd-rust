@@ -21,6 +21,7 @@
     clippy::needless_late_init,
     clippy::if_not_else
 )]
+use crate::game_state::GameState;
 use crate::order_type::{
     OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT, OT_LEAVESTATION, OT_LOADING,
 };
@@ -29,7 +30,6 @@ use crate::tile_type::{MP_INDUSTRY, MP_TUNNELBRIDGE};
 use crate::vehicle::{VehicleRef, VehicleServices, maintenance};
 use crate::vehicle_base::VS_STOPPED;
 use crate::water_regions::Patch;
-use std::cell::UnsafeCell;
 use std::collections::{HashSet, VecDeque};
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_ship_control_reload_rotation() {
@@ -281,17 +281,22 @@ pub struct Leaves {
     /// Base vehicle table, immutable for the process.
     pub vehicle: *const VehicleServices,
 }
-/// The original reuses one game-thread BFS set/deque across searches.
-/// `UnsafeCell` permits field-sized, short scratch access without holding a borrow
-/// across water-region callbacks. Searches remain synchronous on the game thread.
+/// The original reuses one process-wide BFS set/deque. Field-sized scratch borrows
+/// end before water-region callbacks under the game-state mutex.
 struct DepotScratch {
     visited: HashSet<(i32, i32, u8)>,
     queue: VecDeque<Patch>,
 }
-thread_local! {
-    static DEPOT_SCRATCH: UnsafeCell<DepotScratch> = UnsafeCell::new(DepotScratch {
-        visited: HashSet::new(), queue: VecDeque::new(),
-    });
+static DEPOT_SCRATCH: GameState<Option<DepotScratch>> = GameState::new(None);
+// The caller serializes scratch access; every borrow ends before a service call.
+unsafe fn depot_scratch() -> *mut DepotScratch {
+    // SAFETY: Serialized initialization; the short borrow ends before returning.
+    unsafe {
+        (*DEPOT_SCRATCH.get()).get_or_insert_with(|| DepotScratch {
+            visited: HashSet::new(),
+            queue: VecDeque::new(),
+        }) as *mut DepotScratch
+    }
 }
 struct Game<'a> {
     leaves: &'a Leaves,
@@ -376,7 +381,8 @@ impl Game<'_> {
     }
     fn depot(&self, id: u32, max_distance: u32) -> Option<Depot> {
         crate::witness::hit(crate::witness::SHIP_DEPOT_SEARCH);
-        let scratch = DEPOT_SCRATCH.with(UnsafeCell::get);
+        // SAFETY: The native game-state mutex serializes depot searches.
+        let scratch = unsafe { depot_scratch() };
         let observed_tile = (self.leaves.tile)(id);
         let observed_owner = (self.leaves.owner)(id);
         let start = (self.leaves.patch)(observed_tile);
@@ -1265,4 +1271,27 @@ crate::abi::layouts! {
 /// `Ship::GetCurrentMaxSpeed`, from `ship.h`.
 pub(crate) fn current_max_speed(cached: u16, order: u16) -> i32 {
     i32::from(cached).min(i32::from(order) * 2)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn depot_capacity_is_reused_across_serialized_game_threads() {
+        // Spawn/join provides the same ordering as the native game-state mutex.
+        let (address, capacity) = std::thread::spawn(|| unsafe {
+            let scratch = depot_scratch();
+            (*scratch).queue.reserve(64);
+            (scratch as usize, (*scratch).queue.capacity())
+        })
+        .join()
+        .unwrap();
+        unsafe {
+            let scratch = depot_scratch();
+            assert_eq!(scratch as usize, address);
+            assert_eq!((*scratch).queue.capacity(), capacity);
+            *DEPOT_SCRATCH.get() = None;
+        }
+    }
 }
