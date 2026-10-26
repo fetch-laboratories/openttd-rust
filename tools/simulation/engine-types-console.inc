@@ -13,7 +13,11 @@
 #include "core/random_func.hpp"
 extern RailTypeInfo _railtypes[RAILTYPE_END];
 extern RoadTypeInfo _roadtypes[ROADTYPE_END];
+#ifdef WITH_RUST
+extern RoadTypes &_roadtypes_road, &_roadtypes_tram;
+#else
 extern RoadTypes _roadtypes_road, _roadtypes_tram;
+#endif
 static std::array<RailTypeInfo, RAILTYPE_END> TypeOriginalRail;
 static std::array<RoadTypeInfo, ROADTYPE_END> TypeOriginalRoad;
 static RoadTypes TypeOriginalRoadMask, TypeOriginalTramMask;
@@ -75,15 +79,15 @@ static bool TypeSameRng(const SavedRandomSeeds &a, const SavedRandomSeeds &b)
 {
 	return a.random.state[0] == b.random.state[0] && a.random.state[1] == b.random.state[1] && a.interactive_random.state[0] == b.interactive_random.state[0] && a.interactive_random.state[1] == b.interactive_random.state[1];
 }
-static TileIndex TypeFlatArea()
+static TileIndex TypeFlatArea(uint size = 10)
 {
-	for (uint y = 2; y + 10 < Map::SizeY(); ++y) for (uint x = 2; x + 10 < Map::SizeX(); ++x) {
+	for (uint y = 2; y + size < Map::SizeY(); ++y) for (uint x = 2; x + size < Map::SizeX(); ++x) {
 		bool clear = true;
-		for (uint dy = 0; dy < 10; ++dy) for (uint dx = 0; dx < 10; ++dx) {
+		for (uint dy = 0; dy < size; ++dy) for (uint dx = 0; dx < size; ++dx) {
 			auto type = GetTileType(TileXY(x + dx, y + dy)); if (type != MP_CLEAR && type != MP_TREES) clear = false;
 		}
 		if (!clear) continue;
-		for (uint dy = 0; dy < 10; ++dy) for (uint dx = 0; dx < 10; ++dx) {
+		for (uint dy = 0; dy < size; ++dy) for (uint dx = 0; dx < size; ++dx) {
 			Tile tile{TileXY(x + dx, y + dy)}; SetTileHeight(tile, 1); MakeClear(tile, CLEAR_GRASS, 3);
 		}
 		return TileXY(x + 2, y + 2);
@@ -149,8 +153,185 @@ static void TypeEngineInputs(Company *c)
 	e->VehInfo<RailVehicleInfo>() = railinfo; r->VehInfo<RoadVehicleInfo>() = roadinfo; e->flags = flags;
 	for (auto &s : saved) { s.e->info.climates = s.climates; s.e->company_avail = s.avail; s.e->intro_date = s.intro; s.e->flags = s.flags; }
 }
+
+#include "newgrf_config.h"
+#include "newgrf_railtype.h"
+#include "newgrf_roadtype.h"
+#include "vehicle_cmd.h"
+#include "station_cmd.h"
+#include "tunnelbridge_cmd.h"
+#include "landscape_cmd.h"
+#include "terraform_cmd.h"
+#include "train.h"
+#include "roadveh.h"
+static void DefinitionLoad(std::initializer_list<const char *> files)
+{
+	ClearGRFConfigList(_grfconfig);
+	for (auto name : files) {
+		auto config = std::make_unique<GRFConfig>(name);
+		TypeRequire(FillGRFDetails(*config, false), "definitions-file");
+		_grfconfig.push_back(std::move(config));
+	}
+	ReloadNewGRFData();
+}
+static void DefinitionTrace(const char *phase)
+{
+	fmt::print(stderr, "ENGINE definitions-masks {} {:016x} {:016x} {:016x} {:016x}\n", phase, _railtypes_hidden_mask.base(), _roadtypes_hidden_mask.base(), _roadtypes_road.base(), _roadtypes_tram.base());
+	for (auto rt : _sorted_railtypes) fmt::print(stderr, "ENGINE definitions-rail {} {} {:08x} {}\n", phase, rt, GetRailTypeInfo(rt)->label, GetRailTypeInfo(rt)->sorting_order);
+	for (auto rt : _sorted_roadtypes) fmt::print(stderr, "ENGINE definitions-road {} {} {:08x} {}\n", phase, rt, GetRoadTypeInfo(rt)->label, GetRoadTypeInfo(rt)->sorting_order);
+	for (const auto &config : _grfconfig) {
+		const auto *file = GetFileByGRFID(config->ident.grfid);
+		TypeRequire(file != nullptr, "definitions-live-file");
+		for (uint8_t index : {0, 1, 2, 3, 63, 255}) {
+			auto rail = GetRailTypeTranslation(index, file); auto road = GetRoadTypeTranslation(RTT_ROAD, index, file); auto tram = GetRoadTypeTranslation(RTT_TRAM, index, file);
+			fmt::print(stderr, "ENGINE definitions-translation {} {:08x} {} {} {} {}\n", phase, config->ident.grfid, index, rail, road, tram);
+		}
+	}
+}
+static void DefinitionProperties()
+{
+	auto rail = GetRailTypeByLabel(0x52344141); auto second = GetRailTypeByLabel(0x52344242); auto third = GetRailTypeByLabel(0x52344343);
+	auto road = GetRoadTypeByLabel(0x44344141); auto tram = GetRoadTypeByLabel(0x54344141);
+	TypeRequire(rail != INVALID_RAILTYPE && road != INVALID_ROADTYPE && tram != INVALID_ROADTYPE, "definitions-reserved");
+	TypeRequire(GetRailTypeByLabel(0x41344141) != rail && GetRailTypeByLabel(0x5a344141) == rail && GetRailTypeByLabel(0) == INVALID_RAILTYPE, "definitions-exact-alternate-zero");
+	const auto *r = GetRailTypeInfo(rail); const auto *d = GetRoadTypeInfo(road); const auto *t = GetRoadTypeInfo(tram);
+	TypeRequire(r->powered_railtypes.Test(second) && r->powered_railtypes.Test(third) && GetRailTypeInfo(second)->powered_railtypes.Test(rail), "definitions-cross-file");
+	TypeRequire(d->powered_roadtypes.Test(GetRoadTypeByLabel(0x44344242)) && !d->powered_roadtypes.Test(tram) && GetRoadTramType(tram) == RTT_TRAM, "definitions-road-tram");
+	TypeRequire(r->introduction_required_railtypes.Test(second) && GetRailTypeInfo(second)->introduces_railtypes.Test(rail) && d->introduction_required_roadtypes.Test(tram) && t->introduces_roadtypes.Test(road), "definitions-introduction-lists");
+	TypeRequire(r->curve_speed == 9 && r->fallback_railtype == 2 && r->acceleration_type == VehicleAccelerationModel::Maglev, "definitions-clamps");
+	TypeRequire(r->cost_multiplier == 13 && d->cost_multiplier == 13 && t->cost_multiplier == 13 && r->max_speed == 177 && d->max_speed == 177 && t->max_speed == 177 && r->maintenance_multiplier == 19 && d->maintenance_multiplier == 19 && t->maintenance_multiplier == 19, "definitions-properties");
+	TypeRequire(_railtypes_hidden_mask.Test(second) && _roadtypes_hidden_mask.Test(GetRoadTypeByLabel(0x44344444)) && r->introduction_date.base() == 1 && d->introduction_date.base() == 1, "definitions-hidden-introduction");
+	const auto *file = GetFileByGRFID(0x41373454);
+	TypeRequire(file != nullptr && file->railtype_map[0] == rail && file->railtype_map[1] == rail && file->railtype_map[2] == second && GetReverseRailTypeTranslation(rail, file) == 0 && GetReverseRoadTypeTranslation(road, file) == 0, "definitions-maps-first-match");
+	TypeRequire(GetRoadTypeTranslation(RTT_ROAD, 2, file) == INVALID_ROADTYPE && GetRoadTypeTranslation(RTT_TRAM, 1, file) == INVALID_ROADTYPE && GetRailTypeTranslation(3, file) == GetRailTypeByLabel(0x41344141), "definitions-forward-subtype");
+}
+static void DefinitionReadFailures()
+{
+	auto *file = GetFileByGRFID(0x41373454);
+	Backup<GRFFile *> current(_cur_gps.grffile, file);
+	auto failed = [](auto parse, std::span<const uint8_t> input) {
+		ByteReader reader(input.data(), input.size());
+		try { parse(reader); } catch (const OTTDByteReaderSignal &) { return reader.Remaining(); }
+		FixtureAbort(__LINE__);
+	};
+	const std::array<uint8_t, 5> rail_label{'P', '4', 'A', 'A', 0}, road_label{'Q', '4', 'A', 'A', 0};
+	TypeRequire(failed([](ByteReader &reader) { GrfChangeInfoHandler<GSF_RAILTYPES>::Reserve(60, 62, 8, reader); }, rail_label) == 1 && file->railtype_map[60] == GetRailTypeByLabel(0x50344141), "definitions-partial-rail-label");
+	TypeRequire(failed([](ByteReader &reader) { GrfChangeInfoHandler<GSF_ROADTYPES>::Reserve(60, 62, 8, reader); }, road_label) == 1 && file->roadtype_map[60] == GetRoadTypeByLabel(0x51344141), "definitions-partial-road-label");
+	const std::array<uint8_t, 6> alternate{2, 'J', '4', 'A', 'A', 0}, compatible{2, 'R', '4', 'D', 'D', 0}, powered{2, 'D', '4', 'D', 'D', 0};
+	TypeRequire(failed([](ByteReader &reader) { GrfChangeInfoHandler<GSF_RAILTYPES>::Reserve(1, 2, 0x1d, reader); }, alternate) == 1 && GetRailTypeByLabel(0x4a344141) == file->railtype_map[1], "definitions-partial-alternate");
+	TypeRequire(failed([](ByteReader &reader) { GrfChangeInfoHandler<GSF_RAILTYPES>::Activation(1, 2, 0x0f, reader); }, compatible) == 1 && GetRailTypeInfo(file->railtype_map[1])->powered_railtypes.Test(GetRailTypeByLabel(0x52344444)) && GetRailTypeInfo(file->railtype_map[1])->compatible_railtypes.Test(GetRailTypeByLabel(0x52344444)), "definitions-partial-compatible");
+	TypeRequire(failed([](ByteReader &reader) { GrfChangeInfoHandler<GSF_ROADTYPES>::Activation(0, 1, 0x0f, reader); }, powered) == 1 && GetRoadTypeInfo(file->roadtype_map[0])->powered_roadtypes.Test(GetRoadTypeByLabel(0x44344444)), "definitions-partial-powered");
+	const BadgeID old_badge = GetOrCreateBadge("type/old").index, new_badge = GetOrCreateBadge("type/new").index;
+	file->badge_list = {new_badge}; _railtypes[file->railtype_map[1]].badges = {old_badge}; _roadtypes[file->roadtype_map[0]].badges = {old_badge};
+	const std::array<uint8_t, 5> badges{2, 0, 0, 0, 0};
+	TypeRequire(failed([](ByteReader &reader) { GrfChangeInfoHandler<GSF_RAILTYPES>::Activation(1, 2, 0x1e, reader); }, badges) == 1 && GetRailTypeInfo(file->railtype_map[1])->badges == std::vector<BadgeID>{old_badge} && GetBadge(new_badge)->features.Test(GSF_RAILTYPES), "definitions-partial-rail-badges");
+	TypeRequire(failed([](ByteReader &reader) { GrfChangeInfoHandler<GSF_ROADTYPES>::Activation(0, 1, 0x1e, reader); }, badges) == 1 && GetRoadTypeInfo(file->roadtype_map[0])->badges == std::vector<BadgeID>{old_badge} && GetBadge(new_badge)->features.Test(GSF_ROADTYPES), "definitions-partial-road-badges");
+	TypeRequire(failed([](ByteReader &reader) { GrfChangeInfoHandler<GSF_GLOBALVAR>::Reserve(0, 2, 0x12, reader); }, rail_label) == 1 && file->railtype_list == std::vector<RailTypeLabel>{0x50344141}, "definitions-partial-table");
+	file->railtype_list.assign(257, 0x4d495353); file->railtype_list.back() = 0x52344141;
+	file->roadtype_list.assign(257, 0x4d495353); file->roadtype_list.back() = 0x44344141;
+	TypeRequire(GetReverseRailTypeTranslation(file->railtype_map[1], file) == 0 && GetReverseRoadTypeTranslation(file->roadtype_map[0], file) == 0, "definitions-reverse-narrowing");
+	GRFFile empty;
+	TypeRequire(GetRailTypeTranslation(RAILTYPE_RAIL, nullptr) == RAILTYPE_RAIL && GetRailTypeTranslation(RAILTYPE_RAIL, &empty) == RAILTYPE_RAIL && GetRoadTypeTranslation(RTT_ROAD, 0, &empty) == INVALID_ROADTYPE && GetReverseRailTypeTranslation(RAILTYPE_RAIL, &empty) == RAILTYPE_RAIL && GetReverseRoadTypeTranslation(ROADTYPE_TRAM, &empty) == ROADTYPE_TRAM, "definitions-no-table");
+	auto *overridden = GetFileByGRFID(0x42373454);
+	SetNewGRFOverride(file->grfid, overridden->grfid);
+	auto table_copy = [&](int prop, auto &source, auto &target) {
+		using Label = typename std::remove_reference_t<decltype(source)>::value_type;
+		target = {Label{0x4d495353}};
+		TypeRequire(failed([&](ByteReader &reader) { GrfChangeInfoHandler<GSF_GLOBALVAR>::Reserve(0, 2, prop, reader); }, rail_label) == 1 && source == std::vector<Label>{Label{0x50344141}} && target == std::vector<Label>{Label{0x4d495353}}, "definitions-override-partial");
+		const std::array<uint8_t, 4> complete{'O', '4', 'V', 'R'}; ByteReader reader(complete.data(), complete.size());
+		TypeRequire(GrfChangeInfoHandler<GSF_GLOBALVAR>::Reserve(0, 1, prop, reader) == CIR_SUCCESS && source == std::vector<Label>{Label{0x4f345652}} && target == source, "definitions-override-table");
+	};
+	table_copy(0x09, file->cargo_list, overridden->cargo_list); table_copy(0x12, file->railtype_list, overridden->railtype_list);
+	table_copy(0x16, file->roadtype_list, overridden->roadtype_list); table_copy(0x17, file->tramtype_list, overridden->tramtype_list);
+	current.Restore();
+}
+static bool DefinitionScenario(std::span<std::string_view> args)
+{
+	Company *company = *Company::Iterate().begin();
+	Backup<CompanyID> actor(_current_company, company->index);
+	_settings_game.vehicle.never_expire_vehicles = true;
+	const DoCommandFlags exec = {DoCommandFlag::Execute, DoCommandFlag::Auto};
+	auto require_cost = [](const CommandCost &cost, const char *label = "construction") { if (cost.Failed()) { fmt::print(stderr, "ENGINE definitions-command-error {} {}\n", label, cost.GetErrorMessage()); FixtureAbort(__LINE__); } };
+	if (args[1] == "types-definitions-build") {
+		DefinitionLoad({"types-a.grf", "types-b.grf"}); DefinitionProperties(); DefinitionTrace("loaded"); DefinitionReadFailures();
+		DefinitionLoad({"types-a.grf", "types-b.grf", "types-mismatch.grf"});
+		TypeRequire(GetRoadTramType(GetRoadTypeByLabel(0x54344141)) == RTT_TRAM, "definitions-reserve-mismatch");
+		DefinitionLoad({"types-a.grf", "types-b.grf", "types-full.grf"});
+		TypeRequire(AllocateRailType(0x46554c4c) == INVALID_RAILTYPE && AllocateRoadType(0x46554c4c, RTT_ROAD) == INVALID_ROADTYPE, "definitions-exhaustion");
+		DefinitionLoad({"types-a.grf", "types-b.grf"}); DefinitionProperties();
+		TypeRequire(GetRailTypeByLabel(0x58303030) == INVALID_RAILTYPE && GetRoadTypeByLabel(0x59303030) == INVALID_ROADTYPE, "definitions-reset");
+		TileIndex base = TypeFlatArea(14);
+		for (uint kind = 0; kind < 3; ++kind) {
+			TileIndex tile = base + TileDiffXY(0, kind * 2);
+			RailType rail = GetRailTypeByLabel(0x52344141); RoadType road = GetRoadTypeByLabel(kind == 1 ? 0x44344141 : 0x54344141);
+			if (kind == 0) {
+				require_cost(Command<CMD_BUILD_TRAIN_DEPOT>::Do(exec, tile, rail, DIAGDIR_SW));
+				for (int x = 1; x <= 5; ++x) require_cost(Command<CMD_BUILD_SINGLE_RAIL>::Do(exec, tile + TileDiffXY(x, 0), rail, TRACK_X, false));
+			} else {
+				require_cost(Command<CMD_BUILD_ROAD_DEPOT>::Do(exec, tile, road, DIAGDIR_SW));
+				for (int x = 1; x <= 5; ++x) require_cost(Command<CMD_BUILD_ROAD>::Do(exec, tile + TileDiffXY(x, 0), ROAD_X, road, DRD_NONE, TownID::Invalid()));
+			}
+			EngineID engine = EngineID::Invalid();
+			for (const Engine *e : Engine::IterateType(kind == 0 ? VEH_TRAIN : VEH_ROAD)) {
+				if (!IsEngineBuildable(e->index, e->type, company->index)) continue;
+				if (kind == 0 ? !e->VehInfo<RailVehicleInfo>().railtypes.Test(rail) : e->VehInfo<RoadVehicleInfo>().roadtype != road) continue;
+				if (std::get<0>(Command<CMD_BUILD_VEHICLE>::Do({}, tile, e->index, false, INVALID_CARGO, INVALID_CLIENT_ID)).Failed()) continue;
+				engine = e->index; break;
+			}
+			TypeRequire(engine != EngineID::Invalid(), "definitions-usable-engine");
+			fmt::print(stderr, "ENGINE definitions-build {} {}\n", kind, engine.base());
+			auto built = Command<CMD_BUILD_VEHICLE>::Do(exec, tile, engine, false, INVALID_CARGO, INVALID_CLIENT_ID);
+			require_cost(std::get<0>(built), "vehicle"); auto id = std::get<1>(built);
+			require_cost(Command<CMD_RENAME_VEHICLE>::Do(exec, id, fmt::format("Type registry {}", kind)), "rename");
+			require_cost(Command<CMD_START_STOP_VEHICLE>::Do(exec, id, false), "start");
+		}
+		auto rail = GetRailTypeByLabel(0x52344141); auto road = GetRoadTypeByLabel(0x44344141); auto tram = GetRoadTypeByLabel(0x54344141);
+		require_cost(Command<CMD_BUILD_ROAD>::Do(exec, base + TileDiffXY(3, 0), ROAD_Y, road, DRD_NONE, TownID::Invalid()));
+		require_cost(Command<CMD_BUILD_RAIL_STATION>::Do(exec, base + TileDiffXY(1, 1), rail, AXIS_X, 1, 3, STAT_CLASS_DFLT, 0, StationID::Invalid(), false));
+		for (auto [dy, rt] : {std::pair{3, road}, std::pair{5, tram}}) require_cost(Command<CMD_BUILD_ROAD_STOP>::Do(exec, base + TileDiffXY(1, dy), 1, 1, RoadStopType::Bus, true, DIAGDIR_NE, rt, ROADSTOP_CLASS_DFLT, 0, StationID::Invalid(), false));
+		require_cost(Command<CMD_BUILD_BRIDGE>::Do(exec, base + TileDiffXY(4, 7), base + TileDiffXY(1, 7), TRANSPORT_RAIL, BridgeType{0}, rail));
+		for (auto rt : {road, tram}) require_cost(Command<CMD_BUILD_BRIDGE>::Do(exec, base + TileDiffXY(7, 1), base + TileDiffXY(4, 1), TRANSPORT_ROAD, BridgeType{0}, rt));
+		TileIndex tunnel = TypeFlatArea(14);
+		for (auto [dy, transport, rt] : {std::tuple{2, TRANSPORT_RAIL, uint8_t(rail)}, std::tuple{4, TRANSPORT_ROAD, uint8_t(road)}}) {
+			require_cost(std::get<0>(Command<CMD_TERRAFORM_LAND>::Do(exec, tunnel + TileDiffXY(3, dy), SLOPE_ELEVATED, true)));
+			require_cost(Command<CMD_BUILD_TUNNEL>::Do(exec, tunnel + TileDiffXY(2, dy), transport, rt));
+		}
+		require_cost(Command<CMD_BUILD_SINGLE_RAIL>::Do(exec, base + TileDiffXY(0, 6), GetRailTypeByLabel(0x52344444), TRACK_X, false));
+		TypeRequire(true, "definitions-built");
+	} else {
+		DefinitionProperties(); DefinitionTrace("saved");
+		uint moving = 0;
+		for (const Vehicle *vehicle : Vehicle::Iterate()) if (vehicle->name.starts_with("Type registry ")) { TypeRequire(!vehicle->IsInDepot(), "definitions-movement"); ++moving; }
+		TypeRequire(moving == 3, "definitions-file-loaded-save");
+		std::vector<std::pair<TileIndex, RailTypeLabel>> rails;
+		std::vector<std::tuple<TileIndex, RoadTypeLabel, RoadTypeLabel>> roads;
+		uint rail_categories = 0, road_categories = 0;
+		for (auto tile : Map::Iterate()) {
+			auto rail = GetTileRailType(tile); if (rail != INVALID_RAILTYPE) { rails.emplace_back(tile, GetRailTypeInfo(rail)->label); if (GetRailTypeInfo(rail)->label == 0x52344141) rail_categories |= 1u << GetTileType(tile); }
+			if (MayHaveRoad(tile)) { auto road = GetRoadTypeRoad(tile); auto tram = GetRoadTypeTram(tile); if (road != INVALID_ROADTYPE && GetRoadTypeInfo(road)->label == 0x44344141) road_categories |= 1u << GetTileType(tile); roads.emplace_back(tile, road == INVALID_ROADTYPE ? 0 : GetRoadTypeInfo(road)->label, tram == INVALID_ROADTYPE ? 0 : GetRoadTypeInfo(tram)->label); }
+		}
+		TypeRequire(rail_categories == ((1u << MP_RAILWAY) | (1u << MP_ROAD) | (1u << MP_STATION) | (1u << MP_TUNNELBRIDGE)) && road_categories == ((1u << MP_ROAD) | (1u << MP_STATION) | (1u << MP_TUNNELBRIDGE)), "definitions-conversion-categories");
+		auto old = GetRailTypeByLabel(0x52344141);
+		DefinitionLoad({"types-b.grf", "types-a.grf"}); DefinitionProperties(); DefinitionTrace("reordered");
+		TypeRequire(old != GetRailTypeByLabel(0x52344141), "definitions-allocation-order");
+		bool same_rail = true, same_road = true, same_tram = true;
+		for (const auto &[tile, label] : rails) same_rail &= GetRailTypeInfo(GetTileRailType(tile))->label == label;
+		for (const auto &[tile, road, tram] : roads) { if (road != 0) same_road &= GetRoadTypeInfo(GetRoadTypeRoad(tile))->label == road; if (tram != 0) same_tram &= GetRoadTypeInfo(GetRoadTypeTram(tile))->label == tram; }
+		TypeRequire(same_rail && same_road && same_tram, "definitions-reordered-tiles");
+		TypeRequire(true, "definitions-reordered");
+		DefinitionLoad({"types-missing.grf"}); DefinitionTrace("missing");
+		uint alternate = 0, missing_rail = 0, missing_road = 0, mismatched_tram = 0;
+		for (const auto &[tile, label] : rails) { if (label == 0x52344141) { same_rail &= GetRailTypeInfo(GetTileRailType(tile))->label == 0x52344343; ++alternate; } if (label == 0x52344444) { same_rail &= GetTileRailType(tile) == RAILTYPE_RAIL; ++missing_rail; } }
+		for (const auto &[tile, road, tram] : roads) { if (road == 0x44344141) { same_road &= GetRoadTypeRoad(tile) == ROADTYPE_ROAD; ++missing_road; } if (tram == 0x54344141) { same_tram &= GetRoadTypeTram(tile) == ROADTYPE_TRAM; ++mismatched_tram; } }
+		TypeRequire(same_rail && same_road && same_tram && alternate != 0 && missing_rail != 0 && missing_road != 0 && mismatched_tram != 0, "definitions-missing-fallbacks");
+		TypeRequire(true, "definitions-missing");
+	}
+	actor.Restore(); return true;
+}
+
 static bool TypesScenario(std::span<std::string_view> args)
 {
+	if (args[1].starts_with("types-definitions")) return DefinitionScenario(args);
 	if (!TypesInstalled) FixtureAbort(__LINE__);
 	Company *c = nullptr; for (Company *other : Company::Iterate()) { c = other; break; }
 	if (c == nullptr) FixtureAbort(__LINE__);

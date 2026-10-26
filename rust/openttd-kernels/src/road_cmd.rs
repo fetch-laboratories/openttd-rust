@@ -817,7 +817,7 @@ impl<'a> Ctx<'a> {
             return;
         }
         let slope = (self.shared.tile_slope)(tile);
-        let rtt = u8::from((self.shared.road_tram_type)(rt).0);
+        let rtt = u8::from(crate::road::get_road_tram_type(rt).0);
         let mut clear = false;
         match self.tile_type(tile) {
             MP_ROAD => match self.kind(tile) {
@@ -1165,7 +1165,7 @@ impl<'a> Ctx<'a> {
         if !(self.shared.tile_valid)(tile) || !self.may_have(tile) {
             return false;
         }
-        let rtt = u8::from((self.shared.road_tram_type)(rt).0);
+        let rtt = u8::from(crate::road::get_road_tram_type(rt).0);
         let old = self.rt(tile, rtt);
         if old == INVALID
             || (!(self.shared.road_powered)(old, rt) && !(self.shared.road_powered)(rt, old))
@@ -1332,7 +1332,7 @@ impl<'a> Ctx<'a> {
                 bits &= 4 | 2;
             }
             if bits != 0 {
-                let rtt = u8::from((self.shared.road_tram_type)(rt).0);
+                let rtt = u8::from(crate::road::get_road_tram_type(rt).0);
                 self.remove(
                     ret,
                     scratch,
@@ -1709,7 +1709,7 @@ impl<'a> Ctx<'a> {
         if owner == OWNER_NONE {
             (self.shared.set_road_owner)(
                 tile,
-                u8::from((self.shared.road_tram_type)(to).0),
+                u8::from(crate::road::get_road_tram_type(to).0),
                 company,
             );
             self.infrastructure(to, company, num as i32);
@@ -1737,7 +1737,7 @@ impl<'a> Ctx<'a> {
             cost.error(INVALID_STRING_ID);
             return;
         }
-        let rtt = u8::from((self.shared.road_tram_type)(to).0);
+        let rtt = u8::from(crate::road::get_road_tram_type(to).0);
         cost.set(0);
         error.error(if rtt == 1 {
             self.s.strings.no_suitable_tram

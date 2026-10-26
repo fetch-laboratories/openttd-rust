@@ -207,15 +207,9 @@ pub struct CommandServicesTable {
     pub flip_airport_closed: extern "C" fn(*mut BaseStation),
     pub closed_widget: extern "C" fn(*mut BaseStation),
     pub distant_join: extern "C" fn() -> bool,
-    pub rail_class_count: extern "C" fn() -> u32,
-    pub rail_waypoint_class: extern "C" fn(u16) -> bool,
-    pub rail_spec_count: extern "C" fn(u16) -> u32,
-    pub class_rail_spec: extern "C" fn(u16, u16) -> *const RailSpec,
+    pub rail_association: *const crate::station_association::Services,
     pub rail_spec_info: extern "C" fn(*const RailSpec) -> RailSpecInfo,
-    pub rail_layout: extern "C" fn(*const RailSpec, u8, u8) -> crate::services::ByteSpan,
-    pub allocate_rail_spec: extern "C" fn(*const RailSpec, *mut BaseStation) -> SpecIndex,
-    pub assign_rail_spec: extern "C" fn(*const RailSpec, *mut BaseStation, u8),
-    pub deallocate_rail_spec: extern "C" fn(*mut BaseStation, u32),
+    pub rail_layout: extern "C" fn(*const RailSpec, u16) -> crate::services::ByteSpan,
     pub rail_boolean: extern "C" fn(*const RailSpec, u16, u16) -> bool,
     pub rail_callback_error: extern "C" fn(*const RailSpec, u16, u16),
     pub set_train_area: extern "C" fn(*mut BaseStation, TileArea),
@@ -245,10 +239,6 @@ pub struct CommandServicesTable {
     pub vehicle: *const crate::vehicle::VehicleServices,
     pub stop_on_town_road: extern "C" fn() -> bool,
     pub stop_on_competitor_road: extern "C" fn() -> bool,
-    pub road_class_count: extern "C" fn() -> u32,
-    pub road_waypoint_class: extern "C" fn(u16) -> bool,
-    pub road_spec_count: extern "C" fn(u16) -> u32,
-    pub class_road_spec: extern "C" fn(u16, u16) -> *const RoadSpec,
     pub road_spec_info: extern "C" fn(*const RoadSpec) -> RoadSpecInfo,
     pub road_spec_build_cost: extern "C" fn(*const RoadSpec, u8) -> RoadSpecCost,
     pub road_spec_clear_cost: extern "C" fn(*const RoadSpec, u8) -> RoadSpecCost,
@@ -1314,9 +1304,9 @@ impl Ctx<'_> {
         if !crate::rail::val_param_rail_type(self.shared, rt) || axis >= 2 {
             return cost.error(0xffff);
         }
-        if u32::from(class) >= (self.s.rail_class_count)()
-            || (self.s.rail_waypoint_class)(class)
-            || u32::from(index) >= (self.s.rail_spec_count)(class)
+        if u32::from(class) >= crate::newgrf_class::station::count()
+            || crate::newgrf_station::is_waypoint_class(crate::newgrf_class::station_label(class))
+            || u32::from(index) >= crate::newgrf_class::station::spec_count(class)
             || length == 0
             || tracks == 0
         {
@@ -1348,7 +1338,7 @@ impl Ctx<'_> {
         };
         let mut est = 0xffff;
         let mut affected = Vec::new();
-        let spec = (self.s.class_rail_spec)(class, index);
+        let spec = crate::newgrf_class::station::spec(class, u32::from(index));
         let mut allowed = -1;
         let mut length_ready = true;
         let mut tracknum = 0_u8;
@@ -1417,10 +1407,13 @@ impl Ctx<'_> {
                 return cost.take(ret);
             }
         }
-        let spec = (self.s.class_rail_spec)(class, index);
+        let spec = crate::newgrf_class::station::spec(class, u32::from(index));
         let delta = if axis == 0 { 1 } else { self.map().size_x() };
         let track_delta = if axis == 0 { self.map().size_x() } else { 1 };
-        let layout = (self.s.rail_layout)(spec, tracks, length);
+        let layout = (self.s.rail_layout)(
+            spec,
+            crate::newgrf_station::get_station_layout_key(tracks, length),
+        );
         for i in 0..tracks {
             for j in 0..length {
                 let t = tile
@@ -1456,7 +1449,7 @@ impl Ctx<'_> {
                 }
             }
         }
-        let specindex = (self.s.allocate_rail_spec)(spec, st);
+        let specindex = crate::station_association::allocate(self.s.rail_association, spec, st);
         if !specindex.valid {
             return cost.error(self.s.strings.too_many_specs);
         }
@@ -1497,7 +1490,7 @@ impl Ctx<'_> {
             },
             1,
         );
-        (self.s.assign_rail_spec)(spec, st, specindex.value);
+        crate::station_association::assign(self.s.rail_association, spec, st, specindex.value);
         if !spec.is_null() {
             (self.s.rail_triggers)(st, spec);
         }
@@ -1542,7 +1535,7 @@ impl Ctx<'_> {
                     length,
                 );
                 (self.s.make_rail_station)(t, owner, id, axis, gfx, rt);
-                (self.s.deallocate_rail_spec)(st, u32::from(old));
+                crate::station_association::deallocate(self.s.rail_association, st, old);
                 if spec.is_null() {
                     (self.s.close_station_inspect)(t);
                 }
@@ -1782,7 +1775,7 @@ impl Ctx<'_> {
             (self.s.after_remove_tile)(st, tile);
             self.signals().add_track(tile, track, owner);
             (self.rail().layout_changed)(tile, track);
-            (self.s.deallocate_rail_spec)(st, index);
+            crate::station_association::deallocate(self.s.rail_association, st, index as u8);
             if !affected.contains(&st) {
                 affected.push(st);
             }
@@ -2103,7 +2096,7 @@ impl Ctx<'_> {
                     }
                     let pieces = (self.shared.normal_road_bits)(tile, 0).0.count_ones();
                     if rt != 63
-                        && (self.shared.road_type_is_road)(rt)
+                        && crate::road::road_type_is_road(rt)
                         && !(self.shared.road_powered)(rt, road)
                     {
                         return cost.error(self.s.strings.unsuitable_road);
@@ -2123,7 +2116,7 @@ impl Ctx<'_> {
                         crate::road_cost::build_cost(self.shared, road)
                             .saturating_mul(i64::from(2_u32.wrapping_sub(pieces))),
                     );
-                } else if rt != 63 && (self.shared.road_type_is_road)(rt) {
+                } else if rt != 63 && crate::road::road_type_is_road(rt) {
                     cost.add_money(crate::road_cost::build_cost(self.shared, rt).saturating_mul(2));
                 }
                 let tram = self.road_type(tile, true);
@@ -2142,7 +2135,7 @@ impl Ctx<'_> {
                     }
                     let pieces = (self.shared.normal_road_bits)(tile, 1).0.count_ones();
                     if rt != 63
-                        && (self.shared.road_tram_type)(rt).0
+                        && crate::road::get_road_tram_type(rt).0
                         && !(self.shared.road_powered)(rt, tram)
                     {
                         return cost.error(self.s.strings.unsuitable_road);
@@ -2151,7 +2144,7 @@ impl Ctx<'_> {
                         crate::road_cost::build_cost(self.shared, tram)
                             .saturating_mul(i64::from(2_u32.wrapping_sub(pieces))),
                     );
-                } else if rt != 63 && (self.shared.road_tram_type)(rt).0 {
+                } else if rt != 63 && crate::road::get_road_tram_type(rt).0 {
                     cost.add_money(crate::road_cost::build_cost(self.shared, rt).saturating_mul(2));
                 }
             } else if rt == 63 {
@@ -2242,13 +2235,13 @@ impl Ctx<'_> {
             target = 0xffff;
         }
         let distant = target != 0xffff;
-        if u32::from(class) >= (self.s.road_class_count)()
-            || (self.s.road_waypoint_class)(class)
-            || u32::from(index) >= (self.s.road_spec_count)(class)
+        if u32::from(class) >= crate::newgrf_class::roadstop::count()
+            || crate::newgrf_station::is_waypoint_class(crate::newgrf_class::roadstop_label(class))
+            || u32::from(index) >= crate::newgrf_class::roadstop::spec_count(class)
         {
             return cost.error(0xffff);
         }
-        let spec = (self.s.class_road_spec)(class, index);
+        let spec = crate::newgrf_class::roadstop::spec(class, u32::from(index));
         if !spec.is_null() {
             let info = (self.s.road_spec_info)(spec);
             if (stop_type == 1 && info.stop_type != 1 && info.stop_type != 2)
@@ -2276,7 +2269,7 @@ impl Ctx<'_> {
         if distant && (!(self.s.distant_join)() || self.full_station(target).is_null()) {
             return cost.error(0xffff);
         }
-        if !drive && !(self.shared.road_type_is_road)(rt) {
+        if !drive && !crate::road::road_type_is_road(rt) {
             return cost.error(0xffff);
         }
         let axis = dir & 1;
@@ -2435,10 +2428,10 @@ impl Ctx<'_> {
                         -((self.shared.normal_road_bits)(tile, 1).0.count_ones() as i32),
                     );
                 }
-                if road == 63 && (self.shared.road_type_is_road)(rt) {
+                if road == 63 && crate::road::road_type_is_road(rt) {
                     road = rt;
                 }
-                if tram == 63 && (self.shared.road_tram_type)(rt).0 {
+                if tram == 63 && crate::road::get_road_tram_type(rt).0 {
                     tram = rt;
                 }
                 (self.s.make_drive_stop)(
@@ -2446,10 +2439,10 @@ impl Ctx<'_> {
                 );
                 crate::road_stop::make_drive_through(self.shared, tile, (self.stops().state)(stop));
             } else {
-                if road == 63 && (self.shared.road_type_is_road)(rt) {
+                if road == 63 && crate::road::road_type_is_road(rt) {
                     road = rt;
                 }
-                if tram == 63 && (self.shared.road_tram_type)(rt).0 {
+                if tram == 63 && crate::road::get_road_tram_type(rt).0 {
                     tram = rt;
                 }
                 (self.s.make_bay_stop)(tile, owner, id, stop_type, road, tram, dir);
@@ -4181,15 +4174,9 @@ crate::abi::layouts! {
         flip_airport_closed,
         closed_widget,
         distant_join,
-        rail_class_count,
-        rail_waypoint_class,
-        rail_spec_count,
-        class_rail_spec,
+        rail_association,
         rail_spec_info,
         rail_layout,
-        allocate_rail_spec,
-        assign_rail_spec,
-        deallocate_rail_spec,
         rail_boolean,
         rail_callback_error,
         set_train_area,
@@ -4218,10 +4205,6 @@ crate::abi::layouts! {
         vehicle,
         stop_on_town_road,
         stop_on_competitor_road,
-        road_class_count,
-        road_waypoint_class,
-        road_spec_count,
-        class_road_spec,
         road_spec_info,
         road_spec_build_cost,
         road_spec_clear_cost,

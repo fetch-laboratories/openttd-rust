@@ -32,6 +32,8 @@
 
 #ifdef WITH_RUST
 #include "../rust/newgrf_global_ffi.h"
+#include "../rust/newgrf_translation_ffi.h"
+#include "../rust/newgrf_bytereader_services.h"
 #endif
 
 #include "../safeguards.h"
@@ -48,6 +50,20 @@
 template <typename T, typename TGetTableFunc>
 static ChangeInfoResult LoadTranslationTable(uint first, uint last, ByteReader &buf, TGetTableFunc gettable, std::string_view name)
 {
+#ifdef WITH_RUST
+	(void)gettable;
+	static const OpenTTDTranslationServices services = {
+		.reset = [](GRFFile *file, uint32_t last) noexcept { auto &table = TGetTableFunc{}(*file); table.clear(); table.reserve(last); },
+		.append = [](GRFFile *file, uint32_t label) noexcept { TGetTableFunc{}(*file).push_back(T(label)); },
+		.copy = [](GRFFile *target, const GRFFile *source) noexcept { TGetTableFunc{}(*target) = TGetTableFunc{}(*const_cast<GRFFile *>(source)); },
+		.override_file = []() noexcept { return GetCurrentGRFOverride(); },
+		.invalid_first = [](const char *name, size_t length) noexcept { GrfMsg(1, "LoadTranslationTable: {} translation table must start at zero", std::string_view{name, length}); },
+		.log_override = [](const char *name, size_t length, const GRFFile *file) noexcept { GrfMsg(1, "LoadTranslationTable: Copying {} translation table to override GRFID {:08X}", std::string_view{name, length}, std::byteswap(file->grfid)); },
+	};
+	int32_t result = openttd_rust_load_translation(&services, &GetRustByteReaderServices(), _cur_gps.grffile, first, last, &buf, name.data(), name.size());
+	if (result < 0) RustGRFRethrowReadError();
+	return static_cast<ChangeInfoResult>(result);
+#else
 	if (first != 0) {
 		GrfMsg(1, "LoadTranslationTable: {} translation table must start at zero", name);
 		return CIR_INVALID_ID;
@@ -69,6 +85,7 @@ static ChangeInfoResult LoadTranslationTable(uint first, uint last, ByteReader &
 	}
 
 	return CIR_SUCCESS;
+#endif
 }
 
 static ChangeInfoResult LoadBadgeTranslationTable(uint first, uint last, ByteReader &buf, std::vector<BadgeID> &translation_table, std::string_view name)

@@ -26,6 +26,7 @@ use crate::house::{
 use crate::newgrf_animation_type::{ANIMATION_LOOPING, ANIMATION_NON_LOOPING};
 use crate::newgrf_bytereader::{BadgeList, ByteReader, ReadError, Reader};
 use crate::timer_game_common::{MAX_YEAR, MIN_YEAR, ORIGINAL_BASE_YEAR};
+use crate::{newgrf_loading, override_manager};
 use std::ffi::c_void;
 type Spec = *const c_void;
 type File = *mut c_void;
@@ -57,11 +58,6 @@ pub struct Early {
 pub struct Cargo {
     label: u32,
     cargo: u8,
-}
-#[repr(C)]
-pub struct PendingOverride {
-    grfid: u32,
-    local: u16,
 }
 #[repr(C)]
 pub struct Services {
@@ -96,11 +92,6 @@ pub struct Services {
     set_animation: extern "C" fn(Spec, u8, u8),
     badges: extern "C" fn(Spec) -> *mut BadgeList,
     file_id: extern "C" fn(File) -> u32,
-    add_override: extern "C" fn(u16, u32, u16),
-    add_entity: extern "C" fn(u16, u32, u16) -> u16,
-    pending_override: extern "C" fn(u16) -> PendingOverride,
-    clear_override: extern "C" fn(u16),
-    reset_override: extern "C" fn(),
     resize_specs: extern "C" fn(usize),
     move_spec: extern "C" fn(Spec, u16),
     set_override: extern "C" fn(Spec, u16),
@@ -110,7 +101,6 @@ pub struct Services {
     invalid_substitute: extern "C" fn(u8, u32),
     invalid_override: extern "C" fn(u8, u32),
     allocation_failed: extern "C" fn(),
-    disable_list: extern "C" fn(i32),
     invalid_missing: extern "C" fn(File, Spec),
     invalid_population: extern "C" fn(File, Spec),
     invalid_size: extern "C" fn(File, Spec),
@@ -140,8 +130,7 @@ crate::abi::layouts! {
     "OpenTTDHouseDefinitionPart" ["house_definition"] => Part { flags, population, enabled };
     "OpenTTDHouseDefinitionEarly" ["house_definition"] => Early { year, availability, enabled };
     "OpenTTDHouseDefinitionCargo" ["house_definition"] => Cargo { label, cargo };
-    "OpenTTDHouseDefinitionOverride" ["house_definition"] => PendingOverride { grfid, local };
-    "OpenTTDHouseDefinitionServices" ["house_definition"] => Services { resolver, get, count, clear_specs, reserve_specs, append_default, file_count, file_at, local_count, has_filename, resize_local, local, clear_local, copy_substitute, set_identity, identity, validity, part, flags, early, cargo, set_cargo, set_label, set_acceptance, set_colour, callbacks, watched, map_string, set_animation, badges, file_id, add_override, add_entity, pending_override, clear_override, reset_override, resize_specs, move_spec, set_override, climate_mask, landscape, too_many, invalid_substitute, invalid_override, allocation_failed, disable_list, invalid_missing, invalid_population, invalid_size, invalid_availability, set_enabled, set_flags, set_min_year, set_max_year, set_population, set_mail, set_rating, set_removal, set_availability, set_callbacks, set_processing, set_probability, set_extra, set_animation_speed, set_class_id, set_minimum_life, set_watched };
+    "OpenTTDHouseDefinitionServices" ["house_definition"] => Services { resolver, get, count, clear_specs, reserve_specs, append_default, file_count, file_at, local_count, has_filename, resize_local, local, clear_local, copy_substitute, set_identity, identity, validity, part, flags, early, cargo, set_cargo, set_label, set_acceptance, set_colour, callbacks, watched, map_string, set_animation, badges, file_id, resize_specs, move_spec, set_override, climate_mask, landscape, too_many, invalid_substitute, invalid_override, allocation_failed, invalid_missing, invalid_population, invalid_size, invalid_availability, set_enabled, set_flags, set_min_year, set_max_year, set_population, set_mail, set_rating, set_removal, set_availability, set_callbacks, set_processing, set_probability, set_extra, set_animation_speed, set_class_id, set_minimum_life, set_watched };
 }
 
 fn ignore_property(prop: i32, reader: &mut Reader<'_>) -> Result<u8, ReadError> {
@@ -176,6 +165,7 @@ fn ignore_property(prop: i32, reader: &mut Reader<'_>) -> Result<u8, ReadError> 
 }
 fn property(
     s: &Services,
+    loading: &newgrf_loading::Services,
     file: File,
     first: u32,
     last: u32,
@@ -184,7 +174,10 @@ fn property(
 ) -> Result<u8, ReadError> {
     if last > NUM_HOUSES_PER_GRF {
         (s.too_many)(last);
-        return Ok(4);
+        unsafe {
+            newgrf_loading::disable_invalid_id(loading);
+        }
+        return Ok(1);
     }
     if (s.local_count)(file) < last as usize {
         (s.resize_local)(file, last as usize);
@@ -280,7 +273,14 @@ fn property(
                     (s.invalid_override)(target, id);
                     continue;
                 }
-                (s.add_override)(id as u16, (s.file_id)(file), u16::from(target));
+                unsafe {
+                    override_manager::openttd_rust_override_add(
+                        override_manager::house(),
+                        id as u16,
+                        (s.file_id)(file),
+                        u32::from(target),
+                    );
+                }
             }
             0x16 => (s.set_processing)(spec, reader.byte()?.min(63)),
             0x17 => {
@@ -354,7 +354,9 @@ fn property(
             0x23 => {
                 let count = reader.byte()?;
                 if count > HOUSE_NUM_ACCEPTS {
-                    (s.disable_list)(prop);
+                    unsafe {
+                        newgrf_loading::disable_list_property(loading, prop as u32);
+                    }
                     return Ok(1);
                 }
                 for index in 0..HOUSE_NUM_ACCEPTS {
@@ -382,6 +384,7 @@ fn property(
 pub unsafe extern "C" fn openttd_rust_house_definition_property(
     s: *const Services,
     reads: *const crate::newgrf_bytereader::Services,
+    loading: *const newgrf_loading::Services,
     file: File,
     first: u32,
     last: u32,
@@ -389,7 +392,16 @@ pub unsafe extern "C" fn openttd_rust_house_definition_property(
     native: *mut ByteReader,
 ) -> u8 {
     let mut reader = unsafe { Reader::new(native, &*reads) };
-    property(unsafe { &*s }, file, first, last, prop, &mut reader).unwrap_or(u8::MAX)
+    property(
+        unsafe { &*s },
+        unsafe { &*loading },
+        file,
+        first,
+        last,
+        prop,
+        &mut reader,
+    )
+    .unwrap_or(u8::MAX)
 }
 
 fn valid(s: &Services, spec: Spec, next: [Spec; 3], file: File) -> bool {
@@ -482,11 +494,15 @@ pub fn reset(s: &Services) {
     for id in 0..NEW_HOUSE_OFFSET {
         (s.append_default)(id);
     }
-    (s.reset_override)();
+    unsafe {
+        override_manager::openttd_rust_override_reset(override_manager::house());
+    }
 }
 pub fn publish(s: &Services, spec: Spec) {
     let identity = (s.identity)(spec);
-    let id = (s.add_entity)(identity.local, identity.grfid, identity.substitute);
+    let id = unsafe {
+        override_manager::allocate_house(identity.local, identity.grfid, identity.substitute)
+    };
     if id == INVALID_HOUSE_ID {
         (s.allocation_failed)();
         return;
@@ -497,12 +513,15 @@ pub fn publish(s: &Services, spec: Spec) {
     (s.move_spec)(spec, id);
     for original in 0..NEW_HOUSE_OFFSET {
         let overridden = (s.get)(original);
-        let pending = (s.pending_override)(original);
-        if pending.local != identity.local || pending.grfid != identity.grfid {
+        let pending =
+            unsafe { override_manager::pending_override(override_manager::house(), original) };
+        if pending != (identity.local, identity.grfid) {
             continue;
         }
         (s.set_override)(overridden, id);
-        (s.clear_override)(original);
+        unsafe {
+            override_manager::clear_override(override_manager::house(), original);
+        }
     }
 }
 pub fn finalise(s: &Services) {

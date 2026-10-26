@@ -28,7 +28,7 @@
 #ifdef WITH_RUST
 static ChangeInfoResult TownHouseChangeInfo(uint first, uint last, int prop, ByteReader &buf)
 {
-	uint8_t result = openttd_rust_house_definition_property(&GetHouseDefinitionServices(), &GetRustByteReaderServices(), _cur_gps.grffile, first, last, prop, &buf);
+	uint8_t result = openttd_rust_house_definition_property(&GetHouseDefinitionServices(), &GetRustByteReaderServices(), &GetRustGrfLoadingServices(), _cur_gps.grffile, first, last, prop, &buf);
 	if (result == UINT8_MAX) RustGRFRethrowReadError();
 	return static_cast<ChangeInfoResult>(result);
 }

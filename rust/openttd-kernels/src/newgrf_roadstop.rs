@@ -58,6 +58,7 @@ pub struct Reseed {
 }
 #[repr(C)]
 pub struct Services {
+    pub rebind: unsafe extern "C" fn(*mut BaseStation, usize, *const RoadSpec),
     pub badges: unsafe extern "C" fn(*const c_void, *const RoadSpec, u32) -> u32,
     pub base_scope: unsafe extern "C" fn(*mut c_void, u8, u8) -> *mut c_void,
     pub build_date: unsafe extern "C" fn(*const BaseStation) -> i32,
@@ -81,7 +82,6 @@ pub struct Services {
     pub resize: unsafe extern "C" fn(*mut BaseStation, usize) -> (),
     pub resolve_callback: unsafe extern "C" fn(*const State, u16, u32, u32, *mut i32, usize) -> u16,
     pub resolve_reseed: unsafe extern "C" fn(*const State, u8) -> Reseed,
-    pub reverse_road: unsafe extern "C" fn(u8, *const c_void) -> u8,
     pub set_cached: unsafe extern "C" fn(*mut BaseStation, u16, u64) -> (),
     pub set_random_bits: unsafe extern "C" fn(*mut BaseStation, u16) -> (),
     pub set_slot: unsafe extern "C" fn(*mut BaseStation, u8, *const RoadSpec, u32, u16) -> (),
@@ -222,7 +222,7 @@ unsafe fn variable(
         0x43 | 0x44 => {
             let tram = variable == 0x44;
             let rt = if c.tile == INVALID_TILE {
-                if (shared.road_tram_type)(c.roadtype).0 == tram {
+                if crate::road::get_road_tram_type(c.roadtype).0 == tram {
                     c.roadtype
                 } else {
                     crate::road_type::INVALID_ROADTYPE
@@ -237,7 +237,9 @@ unsafe fn variable(
             return if rt == crate::road_type::INVALID_ROADTYPE {
                 u32::MAX
             } else {
-                u32::from(unsafe { (s.reverse_road)(rt, (s.spec_file)(c.spec)) })
+                u32::from(unsafe {
+                    crate::type_registry::openttd_rust_road_reverse(rt, (s.spec_file)(c.spec))
+                })
             };
         }
         0x45 | 0x46 => {
@@ -762,5 +764,10 @@ crate::abi::layouts! {
     "OpenTTDRoadStopSpecVacancy" ["station_service"] => SpecVacancy { spec, grfid, };
     "OpenTTDRoadStopSpecTriggers" ["station_service"] => SpecTriggers { animation, cargo, };
     "OpenTTDRoadStopReseed" ["station_service"] => Reseed { reseed, used, };
-    "OpenTTDRoadStopResolverServices" ["station_service"] => Services { badges, base_scope, build_date, by_tile, cached_cargo, clear, company, custom, facilities, frame, group, group_cargo, group_count, index, is_station, make_town, nearby, nearby_info, owner, random_bits, resize, resolve_callback, resolve_reseed, reverse_road, set_cached, set_random_bits, set_slot, set_tile_random, set_waiting, shared, slot_grfid, slot_key, slot_spec, slot_vacancy, spec_cargo, spec_count, spec_file, spec_grfid, spec_local_id, spec_triggers, station_id, terrain, tile, tile_count, tile_random, town, town_tile, town_zone, version, waiting, };
+    "OpenTTDRoadStopResolverServices" ["station_service"] => Services { rebind, badges, base_scope, build_date, by_tile, cached_cargo, clear, company, custom, facilities, frame, group, group_cargo, group_count, index, is_station, make_town, nearby, nearby_info, owner, random_bits, resize, resolve_callback, resolve_reseed, set_cached, set_random_bits, set_slot, set_tile_random, set_waiting, shared, slot_grfid, slot_key, slot_spec, slot_vacancy, spec_cargo, spec_count, spec_file, spec_grfid, spec_local_id, spec_triggers, station_id, terrain, tile, tile_count, tile_random, town, town_tile, town_zone, version, waiting, };
 }
+
+/// Class index limit from `newgrf_roadstop.h`.
+pub(crate) const ROADSTOP_CLASS_MAX: u16 = u16::MAX;
+/// Per-file definition limit from `newgrf_roadstop.h`.
+pub(crate) const NUM_ROADSTOPS_PER_GRF: u32 = u16::MAX as u32 - 1;

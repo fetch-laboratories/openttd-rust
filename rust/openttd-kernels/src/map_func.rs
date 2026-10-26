@@ -15,6 +15,12 @@ pub struct Map {
     pub log_x: u8,
 }
 impl Map {
+    /// `Map::Iterate`, over `Map::Size()` captured for a no-reset entry.
+    #[must_use]
+    pub fn iterate(count: u32) -> std::ops::Range<u32> {
+        0..count
+    }
+
     /// Capture a `Map::LogX()` service result; the original dimension is a `uint8`.
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]

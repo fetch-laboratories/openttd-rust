@@ -26,6 +26,7 @@ struct OpenTTDRoadStopSpecVacancy { const RoadStopSpec *spec; uint32_t grfid; };
 struct OpenTTDRoadStopSpecTriggers { uint16_t animation; CargoTypes cargo; };
 struct OpenTTDRoadStopReseed { uint32_t reseed; uint8_t used; };
 struct OpenTTDRoadStopResolverServices {
+	void (*rebind)(BaseStation *, size_t, const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(rebind);
 	uint32_t (*badges)(const ResolverObject *, const RoadStopSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(badges);
 	ScopeResolver * (*base_scope)(ResolverObject *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(base_scope);
 	int32_t (*build_date)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(build_date);
@@ -49,7 +50,6 @@ struct OpenTTDRoadStopResolverServices {
 	void (*resize)(BaseStation *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(resize);
 	uint16_t (*resolve_callback)(const OpenTTDRoadStopResolverState *, uint16_t, uint32_t, uint32_t, int32_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve_callback);
 	OpenTTDRoadStopReseed (*resolve_reseed)(const OpenTTDRoadStopResolverState *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve_reseed);
-	uint8_t (*reverse_road)(RoadType, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(reverse_road);
 	void (*set_cached)(BaseStation *, uint16_t, CargoTypes) noexcept OPENTTD_SERVICE_DEFAULT(set_cached);
 	void (*set_random_bits)(BaseStation *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_random_bits);
 	void (*set_slot)(BaseStation *, uint8_t, const RoadStopSpec *, uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_slot);

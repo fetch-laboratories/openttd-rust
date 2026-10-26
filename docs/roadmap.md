@@ -3,37 +3,29 @@
 Root selects here; `AGENTS.md` and `docs/rust-migration.md` define process. Follow
 this roadmap over conflicting issues. Keep about 200 lines; evidence stays in PRs.
 
-## Where the fork stands (2026-10-26, code at `97c32c48b1`)
+## Where the fork stands (2026-10-26, code at `4853789508`)
 
-- 67 ownership ports. Original C++ retired: 63,130 of 470,612 source lines
-  (13.41%); simulation sources: 54,254 of 102,615 (52.87%). Whole-fork Rust,
-  tooling and glue: 115,422, 40,918 and 41,179 lines. These measures include
-  comments/data, not completed behavior. #480 integrated effects, cargo and
-  road/reader maintenance: 531 retired lines and 744 net glue.
-- Under integrated `04fa3753bf` quiet anchors, the six merged-tip projections
-  are TGP 1.158x, Opus 1.474x, Grok 1.468x, P1996 1.418x, P2000 1.460x and
-  P2016 1.544x. All semantic/compatibility checks pass. Opus, P1996 and P2000
-  rose over 3%; #275 owns attribution and the next maintenance repair. P2016
-  exceeds its ceiling; a quiet pass must follow the repairs. Ready owners proceed.
-- Four owner branches remain: engine loading #474, interpreter #473,
-  industry definitions #479 and rail/road definitions #476. #477 follows.
-  #199 selects the next checker/shared-reader maintenance; #156 retains corpus gaps.
+- 72 ownership ports. Original C++ retired: 67,865 of 470,612 source lines
+  (14.42%); simulation sources: 54,762 of 102,615 (53.37%). Whole-fork Rust,
+  tooling and glue: 122,234, 43,001 and 43,921 lines. These measures include
+  comments/data, not completed behavior. #494 integrates industry and station
+  definitions plus maintenance: 1,709 retired lines and 1,408 net glue.
+- The `f4923c79eb` quiet pass measured TGP 1.178x, Opus 1.402x, Grok 1.395x,
+  P1996 1.335x, P2000 1.393x and P2016 1.469x. All comparisons pass;
+  144 timed games and 81 observations show no overlap. #496/#494 integrate
+  these anchors. All ratios are below their ceilings; P2016 remains in band.
+  The latest instruction profile is `f4923c79eb`; at the new anchors its six
+  projections equal those ratios. No positive count growth preceded re-anchoring.
+  One integration has followed that profile; profile again after the next one.
+- Three drafts remain: houses #486, reviewed Action2 #493 and reviewed vehicle
+  properties #495. They adopt the integrated managers, layouts and reader once.
+  Airport/tile definitions #492 may start within capacity. #156 retains gaps.
 
 ## Twentieth steering review (2026-10-24, recovery and production evidence)
 
-Five fresh Codex gpt-6.1-sol/high audits covered both drafts, shared code, evidence
-and process. Root verified source, the retained stack and mocked collector behavior.
-
-- #462 is an inherited reachable source defect, not a #446 fixture failure.
-  Restore the nullable original callback contract through one shared repair.
-- #450 accepts compiler-overlapped timings after stopping the compiler.
-  Reopened for a bounded repair using existing observations; keep clean-checkout checks.
-- #454 deleted two meaningful serialized-thread tests. #156 selects their
-  restoration and production tree ambient/reread coverage for #275. This corrects
-  nineteenth-steering test cleanup: an explicit state contract is still behavior.
-- #446/#447 have per-field engine boundaries and unfinished evidence. Their PR
-  comments hold the fixes and measured costs; complete a bounded repair and one
-  cost disposition. No new arithmetic divergence or shared-heap regression was established.
+The nullable callback, compiler-overlap, serialized-thread and typed-engine
+repairs are integrated. Keep explicit state contracts, clean-checkout checks
+and one concrete owner-cost disposition.
 
 | Standing correction from reviews eighteen/nineteen | Verdict and cost/result |
 | --- | --- |
@@ -45,8 +37,6 @@ and process. Root verified source, the retained stack and mocked collector behav
 | Shared callees, scope, orphan checks, #156 capacity | Improved; nine coverage PRs before the scope restriction. #462 and pending boundary findings show remaining gaps. |
 | Housekeeping, current lists, cleanup | Applied with limits: 3,845 lines removed, local output 25 to 8.5 GiB; #275's body was stale, now refreshed. Two useful tests must return. |
 | Checkpoints, wind-down, rollback | User pauses respected; drafts preserved. Newly confirmed #462 requires forward recovery because later code rules out bounded rollback. |
-
-No user policy is reversed. AGENTS.md clarifies test retention; the restart prompt is unchanged.
 
 ## Earlier steering, still in force
 
@@ -132,6 +122,11 @@ Metrics are `tools/port-metrics.py`: Rust / tooling / C++ glue / C++ retired.
 | #439 | Engine cargo and articulated queries | #446 | `f6cec101d3` | 854 / 452 / 310 / 272; net glue 197 |
 | #466 | Vehicle effect emission, cache and creation | #468 via #480 | `97c32c48b1` | 845 / 461 / 504 / 288; net glue 254 |
 | #467 | Cargo registry, translation and callbacks | #472 via #480 | `97c32c48b1` | 718 / 366 / 370 / 239; net glue 301 |
+| #470 | Engine definitions, identity and finalization | #474 via #483 | `b959f89059` | 1183 / 506 / 456 / 520; net glue 442 |
+| #471 | Staged NewGRF loading interpreter and state | #473 via #483 | `b959f89059` | 1640 / 340 / 442 / 1778; net glue 413 |
+| #476 | Rail/road definitions, translation and saved identity | #481 via #489 | `da1e7b7ade` | 1252 / 406 / 557 / 780; net glue 491 |
+| #475 | Industry definitions, overrides and publication | #479 via #494 | `4853789508` | 1415 / 408 / 607 / 881; net glue 596 |
+| #484 | Station/road-stop definitions and associations | #488 via #494 | `4853789508` | 1410 / 398 / 749 / 806; net glue 715 |
 
 Maintenance rows use original retirement and net glue (#223); evidence stays in PRs.
 
@@ -163,40 +158,43 @@ Maintenance rows use original retirement and net glue (#223); evidence stays in 
 | #462 nullable clone refit callback recovery | #463 | direct | `4677a4fe4f` | 6 / 71 / 0 / 0; net glue 0 |
 | #275/#450/#461/#156 source, collector and coverage maintenance | #464, #465 | #469 | `04fa3753bf` | 150 / 121 / 0 / 0; net glue 0 |
 | #275/#199 road boundaries, quiet anchors and checked reads; Windows startup binding | #478; #480 repair | #480 | `97c32c48b1` | #478: 123 / 9 / 200 / 4; net glue 187 |
+| #275/#199 visual boundaries, shared reader and checker; fixture compile repair | #482; #483 repair | #483 | `b959f89059` | #482: 175 / 50 / 42 / 0; net glue 16 |
+| #199 train/order boundaries, loading disable helpers; #275 quiet anchors; town fixture repair | #487; #489 repair | #489 | `da1e7b7ade` | #487: 61 / 8 / 61 / 0; net glue -3 |
+| #275 primary dispatch, compact visual observations and deferred train resolution | #490 | direct | `f4923c79eb` | 28 / 3 / 18 / 0; net glue 1 |
+| #275 road compiler boundaries, shared movement cache and six quiet anchors; direct class resets | #496; #494 combination | #494 | `4853789508` | #496: 55 / 9 / 2 / 0; net glue 0; combination retires 22 class-default lines |
 
 ## Phase 1: maintenance and coverage
 
-#275 owns the measured rise, forward repair and quiet remeasurement. #199 selects
-diagnostic-literal checker repair (100 net tooling lines) and one shared Rust
-checked-reader API for #475/#476. #168 retains boundary debt without timing gates;
-#312 stays unselected. Closed housekeeping issues are not standing tasks.
+#496/#494 integrate the three credited #275 repairs and six quiet anchors.
+Check their result with the next scheduled merged-tip profile; attribution bounds
+are not promised savings. #168 retains boundary debt; #312 is unselected.
+Ready owners proceed alongside maintenance; only timed collection holds games.
 
 ## Phase 2: work order
 
-1. **Ready owners:** #473/#474 adopt integrated cargo services, then fresh scoped
-   fixing review and exact-current-base Full. Batch reviewed heads when useful.
-2. **Maintenance:** attribute the #275 rise and fix forward; #199 supplies shared
-   reads and the checker repair. Only timed collection holds builds/profiles/games.
-3. **Whole owners:** complete industry definitions #475 and active rail/road
-   definitions #476; house definitions #477 follow. Reuse canonical state/services;
-   decide necessary cost once. Plan successors when a slot frees.
+1. **Ready owners:** adopt integrated base once in reviewed Action2 #493 and
+   vehicle properties #495, including direct station layout calls and one shared
+   extended-byte reader. Batch ready work to avoid serial Fulls; review substantive
+   resolutions. House #486 adopts the integrated manager/disable helpers.
+2. **Maintenance:** merged-tip profiling and triggered #275 repairs proceed
+   alongside owners. Complete the scheduled macOS check before more integrations.
+3. **Whole owners:** complete active #477, #485 and #491; start selected airport
+   and airport-tile definition lifecycle #492 from integrated base within six
+   branches. Reuse canonical state and decide necessary cost once per owner.
+   Action3 #497 and object definitions #498 remain queued, unselected.
 4. Catchment, #64/#68/#69, vendored, GUI and platform stay outside this order.
 
 ## Resume checkpoint
 
-Root owns final combinations and speed; completed reports remain in the PRs.
-
 | Item | Saved head | Next action |
 | --- | --- | --- |
-| #470 engine definitions / #474 | `dc0a43263f` | Review passed through `683ce27b2d`; validate/review cargo adoption after provider interruption. |
-| #471 interpreter / #473 | `80abc98b99` | Split reviews pass; integrated cargo adoption and scoped review in progress. |
-| #475 industry definitions / #479 | `3744aad3e5` | Checkpoint passes; bind integrated reader/cargo, then shared finalization helper. |
-| #476 rail/road definitions | `97c32c48b1` base | Implement registry/property/translation/saved-identity owner. |
-| #199 maintenance | selected | Repair literal identity and publish one shared Rust reader API. |
-| #275 speed | `97c32c48b1` | Attribute rise from `04fa3753bf`, repair forward, then quiet pass. |
-| #477 house definitions | selected | Start after ready work within branch and agent limits. |
+| #477 house definitions / #486 | `1966724cdb` | Adopt integrated manager/disable helpers and delete resolver/runtime bounces. |
+| #485 Action2 graph construction / #493 | `10e9946463` | Fixing review passes; adopt integrated base and direct station layout callers. |
+| #491 vehicle properties / #495 | `6ecc66c6d1` | Both group reviews pass; adopt base and reconcile Reader::extended once. |
+| #492 airport definitions | selected | Start from integrated manager/class owners within capacity. |
+| #275 merged-tip speed | `f4923c79eb` | Six anchors integrated; one more integration before next instruction profile. |
 
-macOS cadence passed on `f6cec101d3`; one integration has followed it.
+macOS fifth-integration check is running at `4853789508`; last pass was `f6cec101d3`.
 
 Selection: /root, gpt-6.1-sol, xhigh; planning agents run gpt-6-astra, high.
 Scopes and evidence plans are in the selected issues; PRs carry current task status.

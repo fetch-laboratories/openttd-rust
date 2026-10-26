@@ -68,7 +68,6 @@ const OpenTTDGroundPhysicsServices &GetRustGroundPhysicsServices() noexcept
 		.rail_acceleration = RustRailAccelerationType,
 		.rail_speed = RustRailMaxSpeed,
 		.road_speed = GroundRoadSpeed,
-		.tram = SharedRoadTypeIsTram,
 		.steepness = GroundSteepness,
 		.display_max_speed = RustVehicleDisplaySpeed,
 		.viewport = GroundViewport,

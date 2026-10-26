@@ -207,7 +207,11 @@ void RoadStopUpdateCachedTriggers(BaseStation *st);
  */
 inline bool IsWaypointClass(const RoadStopClass &cls)
 {
+#ifdef WITH_RUST
+	return openttd_rust_is_waypoint_class(cls.global_id);
+#else
 	return cls.global_id == ROADSTOP_CLASS_LABEL_WAYPOINT || GB(cls.global_id, 24, 8) == UINT8_MAX;
+#endif
 }
 
 #endif /* NEWGRF_ROADSTATION_H */

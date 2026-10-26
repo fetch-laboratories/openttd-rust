@@ -62,7 +62,6 @@ struct OpenTTDHouseServices {
 	OpenTTDHouseRemoval (*removal)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(removal);
 	OpenTTDHouseAcceptance (*acceptance)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(acceptance);
 	uint64_t (*watched)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(watched);
-	uint16_t (*substitute)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(substitute);
 	void (*inc_construction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(inc_construction);
 	void (*reset_age)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(reset_age);
 	void (*set_age)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_age);

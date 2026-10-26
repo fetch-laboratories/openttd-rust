@@ -1084,12 +1084,34 @@ company, town, deity, editor and generation rules. Engine lifecycle publishes
 derived masks through canonical native company setters, and Rust construction
 owners call availability directly. Native facades retain the portable originals.
 
-C++ retains type registries and their loading/finalization, engine specs, company
-mask storage and presentation. Typed observations carry only consumed metadata;
+C++ retains type specs/defaults, engine specs, company mask storage and
+presentation. The definition owner below supplies canonical registry state and
+loading/finalization policy. Typed observations carry only consumed metadata;
 no lifecycle borrow spans a callback or load. Unsaved masks rebuild through the
 native afterload phase. Live GameScript construction, editor/generation command
-execution, persistent file-loaded custom registries, legacy saves and GUI
-scheduling remain #156 limits. PR #447.
+execution, legacy saves and GUI scheduling remain #156 limits. PR #447.
+
+### Rail/road definitions, translation and saved identity (#476)
+
+`type_registry.rs` and `type_definitions.rs` own rail/road/tram reservation,
+property interpretation, allocation/reset/publication, exact-before-alternate
+lookup, translation and saved-label conversion. Canonical sorted lists, hidden
+and road/tram masks and saved labels are process-wide Rust state. Native spans
+and mask references alias those buffers; native TypeInfo/default tables, strings,
+badges, exact sorting and named GUI sprite resolution retain their representation.
+Per-file label vectors and maps stay in native GRFFile storage; Rust controls their
+initialization and mutation through typed views and storage leaves. Availability
+fixed points remain with the existing introduction owner.
+
+`newgrf_translation.rs` owns one incremental translation-table loader for cargo,
+rail, road and tram. Shared checked Reader/BadgeList operations retain completed
+writes and badge-seen effects on failure; native parser frames rethrow only after
+Rust returns. Native RAIL/ROTT serialization preserves chunk/element order and
+ordinary save/load error frames while appending completed reads to Rust lists.
+Conversion visits the original tile categories through named typed map accessors;
+the shared map descriptor is not expanded. Rendering/resolver ownership, historical
+save variants and GUI scheduling remain outside this component. PR #481.
+
 
 ### Rail signal blocks and fixed work sets (#219)
 
@@ -1696,10 +1718,11 @@ Native HouseSpec shells/defaults, GRF and sprite graphs, string mapping and badg
 The checked shared ByteReader preserves prior writes and partial badge-seen effects before
 returning read errors to the decoder's native exception frame. Cargo translation and house
 classes call their existing Rust owners directly. Loading calls house reset/finalisation directly.
-The original property and lifecycle bodies compile only portably. Shared-manager adoption
-remains open until #479 integrates; the draft uses its existing native facade without another
-manager owner. Historical HIDS, other climates and unreached property branches remain #156
-limits. PR #486.
+The original property and lifecycle bodies compile only portably. Definition, resolver and
+runtime mapping operations call the canonical Rust override manager registered by the global
+native facade; temporary managers keep independent storage. List and ID errors call the shared
+Rust loading owner directly. Historical HIDS, other climates and unreached property branches
+remain #156 limits. PR #486.
 
 ### House and shared-town NewGRF resolution (#409)
 
@@ -1715,6 +1738,22 @@ exceptions stay native. Contexts end before load/reset/yield; owner/container bo
 evaluator, storage and station reentry. Checks: the default `town-houses-` scenarios, which
 install real groups and reinstall transient groups after reload. External-GRF badge/content
 combinations, historical save adapters and GUI-thread integration remain #156 gaps. PR #416.
+
+### Industry and tile definitions and shared mapping storage (#475)
+
+Rust owns complete Action0 industry/tile property and layout interpretation, allocation,
+publication, reset/finalization and canonical `OverrideManagerBase` mapping/override vectors.
+Other native managers keep virtual `GetID`/`CheckValidNewID` facades over those same vectors;
+copy/assignment refresh borrowed native spans. IIDS/TIDS adapters retain native `SlObject` and
+`SlError` frames and serialize canonical mapping aliases without staging a second copy.
+Native specs/defaults, GRF files, Action2 graphs, strings and badges remain C++ storage.
+The shared Reader preserves incremental cursor/property effects and catches native read errors
+before Rust returns to the rethrow frame. Property failures call the canonical Rust loading
+disable owner with typed, entry-scoped loading services. Manager borrows end before virtual
+callbacks or reentry; reset fills stable buffers, while assignment refreshes native aliases.
+Original policy bodies compile only portably. Historical IIDS/TIDS and malformed save frames,
+exhaustion, remaining undefined-spec/property/layout branches and arbitrary GRFs remain #156
+limits. PR #479.
 
 ### Industry periodic production and builder ownership (#129)
 
@@ -1964,6 +2003,26 @@ conditionals, historical saves, remaining native feature combinations and GUI sc
 #156 gaps. Native signed dword MIN/-1 division overflow has a compiler/platform-dependent
 undefined result; the cross-game fixture excludes it and Rust uses explicit wrapping division.
 PR #425.
+
+### Station and road-stop definitions and associations (#484)
+
+Rust (`station_definitions.rs`, `newgrf_class.rs`, `station_association.rs`) owns
+station/road-stop Action0 properties, cargo-specific/default group publication,
+shared class reset/allocation/membership/lookup and rail association allocation,
+assignment, deallocation, trigger rebuilding and station/road-stop afterload rebinding.
+Station and waypoint commands call these owners directly. Native class spans alias
+Rust storage; station/road-stop/airport/object presentation uses one shared registry.
+Object-class availability calls the existing Rust eligibility owner.
+
+Canonical native GRF/spec allocations, payload/layout containers, station shells,
+saved slot records, sprite graphs, strings and badges remain native. Checked native
+`ReadSpriteLayoutSprite` and `ReadSpriteLayout` callees preserve their incremental
+writes. A native stack vector carries the temporary sequence payload; Rust drives
+every read and its successful move into the layout. Read errors return from Rust
+before the decoder rethrows. Deferred class
+names resolve the spec's current class. Original bodies remain portable-only.
+Historical STNN/STNS/legacy save frames, real exhaustion, arbitrary GRFs and GUI
+scheduling remain coverage limits tracked in #156. PR: #488.
 
 ### Road-stop NewGRF runtime and associations (#410)
 

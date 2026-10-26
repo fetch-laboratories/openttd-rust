@@ -251,6 +251,7 @@ add_files(
     landscape.cpp
     rust/company_adapter.cpp
     rust/services.cpp
+    rust/station_definitions.cpp
     rust/witness.cpp
     rust/vehicle_services.cpp
     rust/vehicle_services.h
@@ -352,6 +353,8 @@ add_files(
     rust/newgrf_global_ffi.h
     rust/services_timer.h
     rust/newgrf_storage_services.cpp
+    rust/industry_definition_services.cpp
+    rust/industry_property_services.cpp
     rust/newgrf_storage_ffi.h
     newgrf_storage.cpp
     newgrf_storage.h

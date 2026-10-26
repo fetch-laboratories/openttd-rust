@@ -100,7 +100,6 @@ static OpenTTDTrainServices Leaves()
 	leaves.vehicle = &vehicle;
 	leaves.viewport = [](OpenTTDTrainHandle h, uint8_t a, uint8_t b) noexcept { Part(h).UpdateViewport(a != 0, b != 0); };
 	leaves.tile_virt = [](int32_t x, int32_t y) noexcept { return uint32_t(TileVirtXY(x, y)); };
-	leaves.is_tunnelbridge = [](OpenTTDTrainHandle, uint32_t) noexcept { return uint64_t(0); };
 	return leaves;
 }
 static uint16_t RustCurve()

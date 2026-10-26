@@ -515,11 +515,18 @@ RailTypes GetRailTypes(bool introduces);
 
 RailType GetRailTypeByLabel(RailTypeLabel label, bool allow_alternate_labels = true);
 
+#ifndef WITH_RUST
 void ResetRailTypes();
+#endif
 void InitRailTypes();
 RailType AllocateRailType(RailTypeLabel label);
 
+#ifdef WITH_RUST
+extern std::span<RailType> _sorted_railtypes;
+extern RailTypes &_railtypes_hidden_mask;
+#else
 extern std::vector<RailType> _sorted_railtypes;
 extern RailTypes _railtypes_hidden_mask;
+#endif
 
 #endif /* RAIL_H */

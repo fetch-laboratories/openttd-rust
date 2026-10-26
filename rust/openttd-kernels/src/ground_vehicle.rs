@@ -190,7 +190,6 @@ pub struct Services {
     pub rail_acceleration: extern "C" fn(RailType) -> u8,
     pub rail_speed: extern "C" fn(RailType) -> u16,
     pub road_speed: extern "C" fn(VehicleRef) -> u16,
-    pub tram: extern "C" fn(RoadType) -> bool,
     pub steepness: extern "C" fn(VehicleType) -> u32,
     pub display_max_speed: extern "C" fn(VehicleRef) -> i32,
     pub viewport: extern "C" fn(VehicleRef, bool, bool),
@@ -342,11 +341,15 @@ fn acceleration_status_for(o: Owner, status: u8) -> u8 {
 fn current_speed_for(o: Owner, speed: u16) -> u16 {
     if o.rail() { speed } else { speed / 2 }
 }
-fn rolling_friction_for(s: &Services, o: Owner, roadtype: RoadType, speed: u16) -> u32 {
+fn rolling_friction_for(o: Owner, roadtype: RoadType, speed: u16) -> u32 {
     if o.rail() {
         15 * (512 + u32::from(speed)) / 512
     } else {
-        let coeff = if (s.tram)(roadtype) { 40 } else { 75 };
+        let coeff = if crate::road::road_type_is_tram(roadtype.0) {
+            40
+        } else {
+            75
+        };
         coeff * (128 + u32::from(speed)) / 128
     }
 }
@@ -520,7 +523,6 @@ pub(crate) fn acceleration_owned(s: &Services, v: VehicleRef, o: Owner) -> i32 {
         i64::from(unsafe { (*o.state).cache.cached_axle_resistance })
             + mass
                 * i64::from(rolling_friction_for(
-                    s,
                     o,
                     r.roadtype,
                     current_speed_for(o, r.speed),
@@ -680,23 +682,28 @@ fn update_z(s: &Services, movement: &crate::movement::CachedTable<'_>, v: Vehicl
         assert_eq!(z, movement.get().pixel_z_at(xy.x, xy.y, true));
     }
 }
-pub(crate) fn inclination(s: &Services, v: VehicleRef, new_tile: bool, delta: bool) -> i32 {
-    inclination_owned(s, v, (s.resolve)(v), new_tile, delta)
+pub(crate) fn inclination(
+    s: &Services,
+    movement: &crate::movement::CachedTable<'_>,
+    v: VehicleRef,
+    new_tile: bool,
+    delta: bool,
+) -> i32 {
+    inclination_owned(s, movement, v, (s.resolve)(v), new_tile, delta)
 }
 pub(crate) fn inclination_owned(
     s: &Services,
+    movement: &crate::movement::CachedTable<'_>,
     v: VehicleRef,
     o: Owner,
     new_tile: bool,
     delta: bool,
 ) -> i32 {
-    // SAFETY: Only the immutable registry is retained for this entry.
-    let movement = crate::movement::CachedTable::new(unsafe { &*s.road.shared });
     let old_z = (s.vehicle.z)(v);
     if new_tile {
-        update_z_inclination(s, &movement, v, o);
+        update_z_inclination(s, movement, v, o);
     } else {
-        update_z(s, &movement, v, o);
+        update_z(s, movement, v, o);
     }
     (s.viewport)(v, true, delta);
     old_z
@@ -780,8 +787,10 @@ pub(crate) struct Moved {
     pub cur_speed: u16,
     pub max_track_speed: u16,
 }
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn move_incline(
     gs: &crate::vehicle::GroundServices,
+    movement: &crate::movement::CachedTable<'_>,
     map: crate::map_func::Map,
     v: VehicleRef,
     o: Owner,
@@ -797,7 +806,7 @@ pub(crate) fn move_incline(
     unsafe {
         crate::vehicle::occupancy::update_position(s.vehicle, v, map);
     }
-    let old_z = inclination_owned(s, v, o, new_tile, delta);
+    let old_z = inclination_owned(s, movement, v, o, new_tile, delta);
     Moved {
         old_z,
         z: (s.vehicle.z)(v),
@@ -831,7 +840,7 @@ crate::abi::layouts! {
     };
     "OpenTTDGroundWeightInput" ["probe"] => crate::ground_vehicle::WeightInput { cargo, owner, };
     "OpenTTDGroundSpeedInput" ["probe"] => crate::ground_vehicle::SpeedInput { speed, subspeed, };
-    "OpenTTDGroundPhysicsServices" ["probe"] => crate::ground_vehicle::Services { vehicle, road, assertions, resolve, first, power_input, weight_input, acceleration_input, speed_input, capabilities, cargo_weight, train_cargo_weight, engine_power, engine_weight, engine_te, engine_drag, wagon_power, wagon_weight, powered, rail_type, rail_acceleration, rail_speed, road_speed, tram, steepness, display_max_speed, viewport, details_dirty, base_crash, depot_tile, };
+    "OpenTTDGroundPhysicsServices" ["probe"] => crate::ground_vehicle::Services { vehicle, road, assertions, resolve, first, power_input, weight_input, acceleration_input, speed_input, capabilities, cargo_weight, train_cargo_weight, engine_power, engine_weight, engine_te, engine_drag, wagon_power, wagon_weight, powered, rail_type, rail_acceleration, rail_speed, road_speed, steepness, display_max_speed, viewport, details_dirty, base_crash, depot_tile, };
     "OpenTTDGroundState" ["probe"] => crate::ground_vehicle::State { cache, flags, };
     "OpenTTDGroundOwner" ["probe"] => crate::ground_vehicle::Owner { state, train, road, kind, };
     "OpenTTDGroundPowerInput" ["probe"] => crate::ground_vehicle::PowerInput { tile, subtype, };

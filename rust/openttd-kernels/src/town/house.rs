@@ -210,7 +210,6 @@ pub struct HouseServices {
     pub removal: extern "C" fn(u16) -> HouseRemoval,
     pub acceptance: extern "C" fn(u16) -> HouseAcceptance,
     pub watched: extern "C" fn(u16) -> u64,
-    pub substitute: extern "C" fn(u16) -> u16,
     pub inc_construction: extern "C" fn(u32),
     pub reset_age: extern "C" fn(u32),
     pub set_age: extern "C" fn(u32, u8),
@@ -1270,7 +1269,12 @@ impl House<'_> {
             }
             let house = (self.h.clean_type)(tile);
             if !(self.l.house_availability)(house).enabled && house >= NEW_HOUSE_OFFSET {
-                (self.h.set_type)(tile, (self.h.substitute)(house));
+                (self.h.set_type)(tile, unsafe {
+                    crate::override_manager::openttd_rust_override_substitute(
+                        crate::override_manager::house(),
+                        house,
+                    )
+                });
             }
         }
         let map = self.map();
@@ -1519,7 +1523,6 @@ crate::abi::layouts! {
         removal,
         acceptance,
         watched,
-        substitute,
         inc_construction,
         reset_age,
         set_age,

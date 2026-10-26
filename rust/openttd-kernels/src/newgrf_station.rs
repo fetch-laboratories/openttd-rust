@@ -26,7 +26,7 @@ use crate::{
 };
 use std::{ffi::c_void, ptr};
 const TA_PLATFORM: u8 = 1;
-const TA_WHOLE: u8 = 2;
+pub(crate) const TA_WHOLE: u8 = 2;
 #[repr(C)]
 pub struct State {
     station: *mut BaseStation,
@@ -94,7 +94,7 @@ pub struct Services {
     ) -> u16,
     file_version: extern "C" fn(*const c_void) -> u8,
     company: extern "C" fn(u8, *const c_void) -> u32,
-    spec_reverse_rail: extern "C" fn(crate::services::RailType, *const RailSpec) -> u8,
+    spec_file: extern "C" fn(*const RailSpec) -> *const c_void,
     nearby: extern "C" fn(u8, u32) -> u32,
     nearby_station: extern "C" fn(u8, u32, crate::services::Axis) -> u32,
     nearby_info: extern "C" fn(u32, bool) -> u32,
@@ -658,9 +658,9 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
     match variable {
         0x42 => {
             (native.terrain)(tile)
-                | (u32::from((native.spec_reverse_rail)(
-                    (native.rail().rail_type)(tile),
-                    spec,
+                | (u32::from(crate::type_registry::openttd_rust_rail_reverse(
+                    (native.rail().rail_type)(tile).0,
+                    (native.spec_file)(spec),
                 )) << 8)
         }
         0x43 => (native.company)((native.world().station_owner)(st), ptr::null()),
@@ -981,7 +981,7 @@ crate::abi::layouts! {
  "OpenTTDStationResolverServices" ["station_service"] => Services {
  shared, cargo, cargo_owner, group_count, group_cargo, group, spec, loading_count, loaded_count,
  loading, loaded, axis, tile_add, tile_random, station_random, waiting, set_waiting, set_random,
- cached_cargo, spec_cargo, resolve_random, resolve_callback, file_version, company, spec_reverse_rail, nearby, nearby_station, nearby_info, terrain, badges, build_date, airport_ttd_type, identity, town_scope, default_scope, unhandled, slope_error
+ cached_cargo, spec_cargo, resolve_random, resolve_callback, file_version, company, spec_file, nearby, nearby_station, nearby_info, terrain, badges, build_date, airport_ttd_type, identity, town_scope, default_scope, unhandled, slope_error
  };
 }
 
@@ -1008,3 +1008,26 @@ pub(crate) fn platform_info(gfx: u8, length: u8, tracks: u8, x: u8, y: u8) -> u3
         false,
     )
 }
+
+/// `newgrf_station.h`: axis-independent layout dimensions.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_station_layout_key(platforms: u8, length: u8) -> u16 {
+    get_station_layout_key(platforms, length)
+}
+pub(crate) const fn get_station_layout_key(platforms: u8, length: u8) -> u16 {
+    (length as u16) << 8 | platforms as u16
+}
+/// Both station and road-stop classes accept the historical high-byte-FF extension.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_is_waypoint_class(global_id: u32) -> bool {
+    is_waypoint_class(global_id)
+}
+pub(crate) const fn is_waypoint_class(global_id: u32) -> bool {
+    global_id == STATION_CLASS_LABEL_WAYPOINT
+        || crate::bitmath_func::gb(global_id, 24, 8) == u8::MAX as u32
+}
+
+/// Waypoint class label from `newgrf_station.h`.
+pub(crate) const STATION_CLASS_LABEL_WAYPOINT: u32 = u32::from_be_bytes(*b"WAYP");
+/// Class index limit from `newgrf_station.h`.
+pub(crate) const STAT_CLASS_MAX: u16 = u16::MAX;

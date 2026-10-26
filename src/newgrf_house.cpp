@@ -79,8 +79,6 @@ const OpenTTDHouseResolverServices &GetHouseResolverServices() noexcept
 		.search_spec = HouseSearchSpec,
 		.nearby_spec = HouseNearbySpec,
 		.file_identity = [](uint16_t house) noexcept -> OpenTTDHouseFileIdentity { const auto *spec = RustHouseSpec(house); return {.grfid = RustSpecGRFID(spec), .has_file = RustSpecHasGRFFile(spec)}; },
-		.house_id = [](uint16_t local, uint32_t grfid) noexcept { return _house_mngr.GetID(local, grfid); },
-		.house_grfid = [](uint16_t house) noexcept { return _house_mngr.GetGRFID(house); },
 		.badges = RustHouseBadges,
 		.stations = [](uint32_t tile, void *context, void (*visit)(void *, const Station *)) noexcept {
 			StationFinder finder(TileArea(TileIndex{tile}, 1, 1));

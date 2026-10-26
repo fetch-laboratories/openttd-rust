@@ -9,8 +9,8 @@ struct OpenTTDHouseDefinitionValidity { uint16_t availability, substitute; uint8
 struct OpenTTDHouseDefinitionPart { uint8_t flags, population; bool enabled; };
 struct OpenTTDHouseDefinitionEarly { int32_t year; uint16_t availability; bool enabled; };
 struct OpenTTDHouseDefinitionCargo { uint32_t label; CargoType cargo; };
-struct OpenTTDHouseDefinitionOverride { uint32_t grfid; uint16_t local; };
 struct OpenTTDHouseResolverServices;
+struct OpenTTDGrfLoadingServices;
 struct OpenTTDHouseDefinitionServices {
 	const OpenTTDHouseResolverServices *resolver;
 	const HouseSpec *(*get)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(get);
@@ -43,11 +43,6 @@ struct OpenTTDHouseDefinitionServices {
 	void (*set_animation)(const HouseSpec *spec, uint8_t frames, AnimationStatus status) noexcept OPENTTD_SERVICE_DEFAULT(set_animation);
 	std::vector<BadgeID> *(*badges)(const HouseSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(badges);
 	uint32_t (*file_id)(const GRFFile *file) noexcept OPENTTD_SERVICE_DEFAULT(file_id);
-	void (*add_override)(uint16_t id, uint32_t grfid, uint16_t target) noexcept OPENTTD_SERVICE_DEFAULT(add_override);
-	uint16_t (*add_entity)(uint16_t id, uint32_t grfid, uint16_t substitute) noexcept OPENTTD_SERVICE_DEFAULT(add_entity);
-	OpenTTDHouseDefinitionOverride (*pending_override)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(pending_override);
-	void (*clear_override)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(clear_override);
-	void (*reset_override)() noexcept OPENTTD_SERVICE_DEFAULT(reset_override);
 	void (*resize_specs)(size_t count) noexcept OPENTTD_SERVICE_DEFAULT(resize_specs);
 	void (*move_spec)(const HouseSpec *spec, uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(move_spec);
 	void (*set_override)(const HouseSpec *spec, uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(set_override);
@@ -57,7 +52,6 @@ struct OpenTTDHouseDefinitionServices {
 	void (*invalid_substitute)(uint8_t substitute, uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(invalid_substitute);
 	void (*invalid_override)(uint8_t target, uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(invalid_override);
 	void (*allocation_failed)() noexcept OPENTTD_SERVICE_DEFAULT(allocation_failed);
-	void (*disable_list)(int prop) noexcept OPENTTD_SERVICE_DEFAULT(disable_list);
 	void (*invalid_missing)(const GRFFile *file, const HouseSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(invalid_missing);
 	void (*invalid_population)(const GRFFile *file, const HouseSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(invalid_population);
 	void (*invalid_size)(const GRFFile *file, const HouseSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(invalid_size);
@@ -82,6 +76,6 @@ struct OpenTTDHouseDefinitionServices {
 };
 const OpenTTDHouseDefinitionServices &GetHouseDefinitionServices() noexcept;
 extern "C" {
-uint8_t openttd_rust_house_definition_property(const OpenTTDHouseDefinitionServices *, const OpenTTDByteReaderServices *, GRFFile *, uint32_t, uint32_t, int, ByteReader *);
+uint8_t openttd_rust_house_definition_property(const OpenTTDHouseDefinitionServices *, const OpenTTDByteReaderServices *, const OpenTTDGrfLoadingServices *, GRFFile *, uint32_t, uint32_t, int, ByteReader *);
 }
 #endif

@@ -11,9 +11,12 @@ const OpenTTDVisualServices &GetRustVisualServices()
 	static const OpenTTDVisualServices services{
 		.vehicle = &GetRustVehicleServices(),
 		.shared = &GetRustSharedServices(),
-		.gate = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualGate {
+		.gate = [](OpenTTDVehicle *shell, OpenTTDVisualGate *gate) noexcept {
 			const Vehicle *v = VehicleOf(shell);
-			return {.speed = RustVehicleSpeed(v), .status = RustVehicleStatus(v), .smoke = RustVehicleSmokeAmount(), .primary = RustVehiclePrimary(v)};
+			gate->speed = RustVehicleSpeed(v);
+			gate->status = RustVehicleStatus(v);
+			gate->smoke = RustVehicleSmokeAmount();
+			gate->primary = RustVehiclePrimary(v);
 		},
 		.show = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualShow {
 			const Vehicle *v = VehicleOf(shell);
@@ -36,7 +39,7 @@ const OpenTTDVisualServices &GetRustVisualServices()
 		.power_error = [](uint16_t engine) noexcept { RustVehicleShowNewGRFError(EngineID(engine), STR_NEWGRF_BROKEN, STR_NEWGRF_BROKEN_POWERED_WAGON, GRFBug::VehPoweredWagon, false); },
 		.part = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualPart {
 			Vehicle *v = VehicleOf(shell);
-			return {.cache = RustVehicleVisualCache(v), .tile = RustVehicleTile(v), .kind = RustVehicleVehicleType(v), .status = RustVehicleStatus(v), .tick = RustVehicleTick(v)};
+			return {.tile = RustVehicleTile(v), .kind = RustVehicleVehicleType(v), .status = RustVehicleStatus(v), .tick = RustVehicleTick(v), .cache = RustVehicleVisualEffect(v)};
 		},
 		.bridge_position = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualBridgePosition { const Vehicle *v = VehicleOf(shell); return {.x = RustVehicleX(v), .y = RustVehicleY(v)}; },
 		.offset = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualOffset {

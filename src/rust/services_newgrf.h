@@ -9,6 +9,7 @@
 #ifndef RUST_SERVICES_NEWGRF_H
 #define RUST_SERVICES_NEWGRF_H
 #include "../command_type.h"
+#include "newgrf_class_ffi.h"
 #include "../newgrf.h"
 #include "../newgrf_commons.h"
 #include "../newgrf_debug.h"
@@ -25,8 +26,12 @@
 #include "../town.h"
 #include "../newgrf_config.h"
 #include "../newgrf/newgrf_internal.h"
+#include "../newgrf/newgrf_stringmapping.h"
 #include "../rev.h"
+inline void RustGRFErrorProperty(GRFError *error, uint32_t property) noexcept { error->param_value[1] = property; }
 inline void RustGRFPlayTileSound(const GRFFile *file, uint16_t sound, uint32_t tile) noexcept { PlayTileSound(file, sound, TileIndex{tile}); }
+template <typename Handle> inline bool RustIndustrySpecEnabled(const Handle *spec) noexcept { return reinterpret_cast<const IndustrySpec *>(spec)->enabled; }
+template <typename Handle> inline uint16_t RustIndustrySpecCallbackMask(const Handle *spec) noexcept { return reinterpret_cast<const IndustrySpec *>(spec)->callback_mask.base(); }
 inline uint16_t RustIndustrySubstitute(uint8_t industry) noexcept { return GetIndustrySpec(industry)->grf_prop.subst_id; }
 inline int32_t RustHouseAge(uint32_t tile) noexcept { return GetHouseAge(TileIndex{tile}).base(); }
 inline uint8_t RustHouseRandomBits(uint32_t tile) noexcept { return GetHouseRandomBits(TileIndex{tile}); }
@@ -52,8 +57,6 @@ inline void RustUnhandledScopeVariable(uint8_t variable) noexcept { Debug(grf, 1
 inline const GRFFile *RustResolverGRFFile(const ResolverObject *resolver) noexcept { return resolver->grffile; }
 inline uint32_t RustGRFFileID(const GRFFile *file) noexcept { return file->grfid; }
 inline GRFFile *RustGRFFileByID(uint32_t id) noexcept { return GetFileByGRFID(id); }
-inline RailType RustGRFRailTypeByLabel(RailTypeLabel label) noexcept { return GetRailTypeByLabel(label); }
-inline RoadType RustGRFRoadTypeByLabel(RoadTypeLabel label) noexcept { return GetRoadTypeByLabel(label); }
 inline uint32_t RustResolverGRFFileID(const ResolverObject *resolver) noexcept { return RustGRFFileID(RustResolverGRFFile(resolver)); }
 inline uint8_t RustGRFFileVersion(const GRFFile *file) noexcept { return file->grf_version; }
 inline uint8_t RustResolverGRFVersion(const ResolverObject *resolver) noexcept { return RustGRFFileVersion(RustResolverGRFFile(resolver)); }
@@ -66,6 +69,16 @@ template <typename Spec, typename Handle>
 inline const GRFFile *RustSpecHandleGRFFile(const Handle *spec) noexcept { return RustSpecGRFFile(reinterpret_cast<const Spec *>(spec)); }
 template <typename Spec>
 inline void RustSpecPlayTileSound(const Spec *spec, uint8_t sound, uint32_t tile) noexcept { RustGRFPlayTileSound(RustSpecGRFFile(spec), sound, tile); }
+template <typename Spec>
+inline void RustSpecSetGRFFile(Spec *spec, const GRFFile *file) noexcept { spec->grf_prop.SetGRFFile(file); }
+template <typename Spec>
+inline void RustSpecSetCargoGroup(Spec *spec, CargoType cargo, const SpriteGroup *group) noexcept { spec->grf_prop.SetSpriteGroup(cargo, group); }
+template <typename Spec>
+inline void RustSpecSetLocalID(Spec *spec, uint16_t id) noexcept { spec->grf_prop.local_id = id; }
+template <typename Spec>
+inline void RustSpecRegisterName(Spec *spec, uint16_t source) noexcept { AddStringForMapping(GRFStringID{source}, &spec->name); }
+template <typename Spec, void (*Publish)(const Spec *, StringID)>
+inline void RustSpecRegisterClassName(Spec *spec, uint16_t source) noexcept { AddStringForMapping(GRFStringID{source}, [spec](StringID name) { Publish(spec, name); }); }
 template <typename Spec>
 inline bool RustSpecHasGRFFile(const Spec *spec) noexcept { return spec->grf_prop.HasGrfFile(); }
 inline const GRFFile *RustHouseGrf(uint16_t house) noexcept { return RustSpecGRFFile(RustHouseSpec(house)); }
@@ -109,10 +122,6 @@ inline uint32_t RustHouseBadges(const ResolverObject *resolver, uint16_t house, 
 
 /* Preserve native default-livery and nullable-file translation behavior. */
 inline uint32_t RustCompanyInfo(uint8_t owner, const Livery *livery) noexcept { return GetCompanyInfo(CompanyID(owner), livery); }
-inline uint8_t RustReverseRailTypeTranslation(RailType railtype, const GRFFile *file) noexcept { return GetReverseRailTypeTranslation(railtype, file); }
-/* A spec's file can differ from its caller resolver's file. */
-template <typename Spec>
-inline uint8_t RustSpecReverseRailTypeTranslation(RailType railtype, const Spec *spec) noexcept { return RustReverseRailTypeTranslation(railtype, RustSpecGRFFile(spec)); }
 
 
 /* Native frame address only; Rust retains common/feature scope selection. */
@@ -133,6 +142,7 @@ template <typename Spec> inline uint16_t RustSpecOverride(const Spec *spec) noex
 template <typename Spec> inline uint16_t RustSpecSubstitute(const Spec *spec) noexcept { return spec->grf_prop.subst_id; }
 template <typename Spec> inline uint32_t RustSpecGRFID(const Spec *spec) noexcept { return spec->grf_prop.grfid; }
 template <typename Spec> inline uint16_t RustSpecLocalID(const Spec *spec) noexcept { return spec->grf_prop.local_id; }
+template <typename Spec> inline OpenTTDGRFClassIdentity RustSpecIdentity(const Spec *spec) noexcept { return {RustSpecGRFID(spec), RustSpecLocalID(spec)}; }
 template <typename Spec> inline const SpriteGroup *RustSpecSpriteGroup(const Spec *spec, bool live) noexcept { return spec->grf_prop.GetSpriteGroup(live); }
 inline const SpriteGroup *RustHouseSpriteGroup(uint16_t house, bool live) noexcept { return RustSpecSpriteGroup(RustHouseSpec(house), live); }
 inline uint16_t RustHouseLocalID(uint16_t house) noexcept { return RustSpecLocalID(RustHouseSpec(house)); }
@@ -140,7 +150,6 @@ inline uint16_t RustHouseLocalID(uint16_t house) noexcept { return RustSpecLocal
 template <typename Spec> inline size_t RustSpecCargoGroupCount(const Spec *spec) noexcept { return spec->grf_prop.spritegroups.size(); }
 template <typename Spec> inline uint8_t RustSpecCargoGroupCargo(const Spec *spec, size_t index) noexcept { return spec->grf_prop.spritegroups[index].first; }
 template <typename Spec> inline const SpriteGroup *RustSpecCargoSpriteGroup(const Spec *spec, uint8_t cargo) noexcept { return spec->grf_prop.GetSpriteGroup(cargo); }
-inline uint8_t RustReverseRoadTypeTranslation(RoadType roadtype, const GRFFile *file) noexcept { return GetReverseRoadTypeTranslation(roadtype, file); }
 
 /* Borrowed GRF files remain native and live for the synchronous conversion.
  * A town shell is live for resolution (or null for a prototype); no Rust

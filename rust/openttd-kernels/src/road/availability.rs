@@ -8,9 +8,10 @@ use crate::timer_game_common::MAX_DATE;
 use crate::type_availability::{Services, company_available, services};
 use crate::vehicle::VehicleType;
 
-/// `GetMaskForRoadTramType`; classification masks remain canonical native inputs.
-pub fn get_mask_for_road_tram_type(s: &Services, rtt: RoadTramType) -> u64 {
-    (s.road_tram_mask)(rtt)
+/// `GetMaskForRoadTramType`; classification masks belong to the registry owner.
+#[must_use]
+pub fn get_mask_for_road_tram_type(rtt: RoadTramType) -> u64 {
+    crate::type_registry::road_tram_mask(rtt)
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_has_road_type(
@@ -37,7 +38,7 @@ pub extern "C" fn openttd_rust_has_road_type(
         if !(shared.company_valid)(company) {
             return false;
         }
-        let available = (s.company_roadtypes)(company) & !(s.road_hidden)();
+        let available = (s.company_roadtypes)(company) & !crate::type_registry::road_hidden();
         available & 1u64.wrapping_shl(u32::from(rt)) != 0
     }
 }
@@ -47,8 +48,8 @@ pub extern "C" fn openttd_rust_has_any_road_types(
     company: u8,
     rtt: RoadTramType,
 ) -> bool {
-    let available = (s.company_roadtypes)(company) & !(s.road_hidden)();
-    available & get_mask_for_road_tram_type(s, rtt) != 0
+    let available = (s.company_roadtypes)(company) & !crate::type_registry::road_hidden();
+    available & get_mask_for_road_tram_type(rtt) != 0
 }
 pub fn val_param_road_type(shared: &Shared, rt: u8) -> bool {
     rt < ROADTYPE_END
@@ -138,4 +139,20 @@ pub extern "C" fn openttd_rust_road_types(shared: &Shared, s: &Services, introdu
     } else {
         types
     }
+}
+
+/// `RoadTypeIsRoad` reads the canonical classification mask.
+#[must_use]
+pub fn road_type_is_road(rt: u8) -> bool {
+    crate::type_registry::road_tram_mask(crate::road_type::RTT_ROAD) & (1u64 << rt) != 0
+}
+/// `RoadTypeIsTram` reads the canonical classification mask.
+#[must_use]
+pub fn road_type_is_tram(rt: u8) -> bool {
+    crate::type_registry::road_tram_mask(crate::road_type::RTT_TRAM) & (1u64 << rt) != 0
+}
+/// `GetRoadTramType` defaults to road for unclassified types.
+#[must_use]
+pub fn get_road_tram_type(rt: u8) -> RoadTramType {
+    RoadTramType(road_type_is_tram(rt))
 }

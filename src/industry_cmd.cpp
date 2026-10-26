@@ -53,7 +53,9 @@
 
 #include "table/strings.h"
 #include "table/industry_land.h"
+#ifndef WITH_RUST
 #include "table/build_industry.h"
+#endif
 
 #ifdef WITH_RUST
 #include "rust/services_industry.h"
@@ -93,6 +95,11 @@ static bool IndustryCommandDeity() noexcept { return OpenTTDCurrentCompany() == 
 #ifdef WITH_RUST
 #include "rust/services_newgrf.h"
 #include "rust/industry_resolver_ffi.h"
+#endif
+
+#ifdef WITH_RUST
+#include "rust/industry_definition_ffi.h"
+#include "rust/industry_property_ffi.h"
 #endif
 
 #include "safeguards.h"
@@ -136,6 +143,9 @@ static int WhoCanServiceIndustry(Industry *ind);
  */
 void ResetIndustries()
 {
+#ifdef WITH_RUST
+	openttd_rust_industry_definition_reset(to_underlying(_settings_game.game_creation.landscape), &GetIndustryDefinitionServices());
+#else
 	auto industry_insert = std::copy(std::begin(_origin_industry_specs), std::end(_origin_industry_specs), std::begin(_industry_specs));
 	std::fill(industry_insert, std::end(_industry_specs), IndustrySpec{});
 
@@ -150,6 +160,7 @@ void ResetIndustries()
 	/* Reset any overrides that have been set. */
 	_industile_mngr.ResetOverride();
 	_industry_mngr.ResetOverride();
+#endif
 }
 
 /**
@@ -3629,7 +3640,7 @@ static const OpenTTDIndustryServices _industry_services = {
 	.next_tick = [](uint32_t from) noexcept -> OpenTTDIndustryEntry {
 		Industry *i = OpenTTDNextIndustry(from);
 		if (i == nullptr) return {};
-		return {i, RustIndustryCanonicalOwner(i), RustIndustryID(i), GetIndustrySpec(i->type)->callback_mask.base()};
+		return {i, RustIndustryCanonicalOwner(i), RustIndustryID(i), RustIndustrySpecCallbackMask(GetIndustrySpec(i->type))};
 	},
 	.sound_count = [](void *i) noexcept -> uint16_t { return static_cast<uint16_t>(RustIndustrySpec(i)->random_sounds.size()); },
 	.behaviour = [](void *i) noexcept -> uint32_t { return RustIndustrySpec(i)->behaviour.base(); },
@@ -3692,7 +3703,7 @@ static const OpenTTDIndustryServices _industry_services = {
 	.observe = [](void *handle, OpenTTDIndustryObservation *out) noexcept {
 		Industry *i = RustIndustry(handle);
 		const IndustrySpec *spec = GetIndustrySpec(i->type);
-		*out = {RustIndustryCanonicalOwner(i), spec->behaviour.base(), spec->callback_mask.base(), spec->life_type.base(), uint8_t(spec->UsesOriginalEconomy()), i->type,
+		*out = {RustIndustryCanonicalOwner(i), spec->behaviour.base(), RustIndustrySpecCallbackMask(spec), spec->life_type.base(), uint8_t(spec->UsesOriginalEconomy()), i->type,
 			spec->production_up_text, spec->production_down_text, spec->closure_text};
 	},
 	.production_rate = [](void *i, uint32_t slot) noexcept -> uint8_t { return RustIndustrySpec(i)->production_rate[slot]; },
@@ -3837,7 +3848,7 @@ const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices()
 			std::ranges::copy(spec->accepts_cargo, result.accepted);
 			return result;
 		},
-		.callback_mask = [](const OpenTTDIndustrySpecHandle *handle) noexcept -> uint16_t { return reinterpret_cast<const IndustrySpec *>(handle)->callback_mask.base(); },
+		.callback_mask = RustIndustrySpecCallbackMask<OpenTTDIndustrySpecHandle>,
 		.set_town = [](void *shell, const OpenTTDTownHandle *town) noexcept { RustIndustry(shell)->town = const_cast<Town *>(reinterpret_cast<const Town *>(town)); },
 		.calendar_date = GetRustSharedServices().calendar_date,
 		.generating = GetRustSharedServices().clear_square_services.generating_world,
@@ -3965,7 +3976,7 @@ const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices() noexcep
 static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices()
 {
 	static const OpenTTDIndustryTransactionServices services = {
-		.enabled = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> bool { return reinterpret_cast<const IndustrySpec *>(spec)->enabled; },
+		.enabled = RustIndustrySpecEnabled<OpenTTDIndustrySpecHandle>,
 		.layout_count = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> size_t { return reinterpret_cast<const IndustrySpec *>(spec)->layouts.size(); },
 		.layout = [](const OpenTTDIndustrySpecHandle *spec, size_t index) noexcept -> const OpenTTDIndustryLayoutHandle * { return reinterpret_cast<const OpenTTDIndustryLayoutHandle *>(&reinterpret_cast<const IndustrySpec *>(spec)->layouts[index]); },
 		.raw = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> bool { return reinterpret_cast<const IndustrySpec *>(spec)->IsRawIndustry(); },
@@ -4040,6 +4051,8 @@ static OpenTTDIndustryTransactionContext GetIndustryTransactionContext()
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDIndustryResolverServices.hpp"
+#include "abi-visit-OpenTTDIndustryDefinitionServices.hpp"
+#include "abi-visit-OpenTTDIndustryPropertyServices.hpp"
 #include "abi-visit-OpenTTDIndustryServices.hpp"
 #include "abi-visit-OpenTTDIndustryLifecycleServices.hpp"
 #include "abi-visit-OpenTTDIndustryGenerationServices.hpp"
@@ -4052,7 +4065,9 @@ static OpenTTDIndustryTransactionContext GetIndustryTransactionContext()
 #include "abi-visit-OpenTTDEnvironmentServices.hpp"
 bool CheckAbi_industry_cmd()
 {
-	return AbiServicesComplete(GetIndustryGenerationServices().environment) &&
+	return AbiServicesComplete(GetIndustryDefinitionServices()) &&
+		AbiServicesComplete(GetIndustryPropertyServices()) &&
+		AbiServicesComplete(GetIndustryGenerationServices().environment) &&
 		AbiServicesComplete(GetIndustryResolverServices()) &&
 		AbiServicesComplete(GetIndustryRustServices()) &&
 		AbiServicesComplete(GetIndustryLifecycleRustServices()) &&
