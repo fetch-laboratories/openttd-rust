@@ -156,3 +156,137 @@ static void StationAirportFixture(TileIndex origin, DoCommandFlags test, DoComma
 	*ats = std::move(saved_tile); *spec = std::move(saved);
 	delete random; delete det; delete parent; delete other; delete result;
 }
+
+#include "newgrf_config.h"
+#include "newgrf_badge.h"
+#include "newgrf/newgrf_internal.h"
+#include "strings_func.h"
+static uint32_t AirportDefinitionID(char initial = 'A')
+{
+	return uint32_t(initial) | uint32_t('4') << 8 | uint32_t('9') << 16 | uint32_t('2') << 24;
+}
+/* Full load recovery frees failed payloads. Production entries on both games expose
+ * the per-read mutations, retained old layout and badge-seen effects before cleanup. */
+static void AirportDefinitionPartialReads()
+{
+	GRFFile file; file.grf_version = 8; file.grfid = AirportDefinitionID('P');
+	AutoRestoreBackup current(_cur_gps.grffile, &file);
+	auto read = [&](bool tile, uint first, uint last, int property, std::span<const uint8_t> data) {
+		ByteReader reader(data.data(), data.size()); int result = -1; bool bounds = false;
+		try { result = tile ? GrfChangeInfoHandler<GSF_AIRPORTTILES>::Activation(first, last, property, reader) : GrfChangeInfoHandler<GSF_AIRPORTS>::Activation(first, last, property, reader); }
+		catch (const OTTDByteReaderSignal &) { bounds = true; }
+		fmt::print(stderr, "STCMD airport-def-partial {} {} {} {} {} {} {}\n", tile, first, last, property, result, bounds, reader.Remaining());
+		return std::pair(result, bounds);
+	};
+	const std::array<uint8_t, 1> zero{0}, one{1}, disable{255};
+	StationNeed(read(false, 0, 1, 9, {}).first == CIR_UNKNOWN && file.airportspec.size() == 1 && file.airportspec[0] == nullptr, __LINE__);
+	StationNeed(read(false, 0, 1, 0x0C, {}).first == CIR_INVALID_ID, __LINE__);
+	StationNeed(!read(false, 0, 1, 8, zero).second, __LINE__);
+	auto *spec = file.airportspec[0].get(); auto fsm = spec->fsm;
+	StationNeed(!read(false, 0, 1, 8, one).second && file.airportspec[0].get() == spec && spec->grf_prop.subst_id == 0 && spec->fsm == fsm, __LINE__);
+	StationNeed(!read(false, 7, 8, 8, disable).second && !AirportSpec::GetWithoutOverride(7)->enabled, __LINE__);
+	std::array<uint8_t, 4> years{0x34, 0x12, 0xff, 0xff};
+	for (size_t n = 0; n <= years.size(); n++) {
+		spec->min_year = TimerGameCalendar::Year{1}; spec->max_year = TimerGameCalendar::Year{2};
+		StationNeed(read(false, 0, 1, 0x0C, std::span(years).first(n)).second == (n < years.size()), __LINE__);
+		StationNeed(spec->min_year == (n >= 2 ? 0x1234 : 1) && spec->max_year == (n == 4 ? CalendarTime::MAX_YEAR.base() : 2), __LINE__);
+	}
+	const std::array<uint8_t, 15> layout{1, 0xff, 0xff, 0xff, 0xff, 3, 0xff, 2, 0xff, 2, 0xff, 0xfe, 99, 0, 0};
+	std::vector<uint8_t> complete(layout.begin(), layout.end()); complete.push_back(0x80);
+	for (size_t n = 0; n < complete.size(); n++) {
+		auto count = spec->layouts.size(); auto x = spec->size_x, y = spec->size_y; auto gfx = spec->layouts[0].tiles[0].gfx;
+		StationNeed(read(false, 0, 1, 0x0A, std::span(complete).first(n)).second, __LINE__);
+		StationNeed(spec->layouts.size() == count && spec->layouts[0].tiles[0].gfx == gfx && spec->size_x == x && spec->size_y == y, __LINE__);
+	}
+	StationNeed(!read(false, 0, 1, 0x0A, complete).second && spec->layouts[0].rotation == DIR_E && spec->layouts[0].tiles[0].ti.x == -1 && spec->layouts[0].tiles[1].gfx == 0xFE && spec->size_x == 3 && spec->size_y == 3, __LINE__);
+	StationNeed(!read(true, 0, 1, 8, zero).second && _airporttile_mngr.GetID(0, file.grfid) == NEW_AIRPORTTILE_OFFSET && file.airtspec[0]->animation.frames == 0, __LINE__);
+	for (size_t n = 0; n < 2; n++) {
+		const std::array<uint8_t, 2> animation{7, 0};
+		file.airtspec[0]->animation.frames = 0; file.airtspec[0]->animation.status = AnimationStatus::NoAnimation;
+		StationNeed(read(true, 0, 1, 0x0F, std::span(animation).first(n)).second && file.airtspec[0]->animation.frames == (n ? 7 : 0) && file.airtspec[0]->animation.status == AnimationStatus::NoAnimation, __LINE__);
+	}
+	BadgeID badge = GetOrCreateBadge("owner492/partial").index; file.badge_list = {badge};
+	const std::array<uint8_t, 4> badges{2, 0, 0, 0};
+	StationNeed(read(true, 0, 1, 0x12, badges).second && file.airtspec[0]->badges.empty() && GetBadge(badge)->features.Test(GSF_TRAMTYPES) && !GetBadge(badge)->features.Test(GSF_AIRPORTTILES), __LINE__);
+	StationNeed(read(false, 0, 1, 0x12, badges).second && spec->badges.empty() && GetBadge(badge)->features.Test(GSF_AIRPORTS), __LINE__);
+	/* Exhaustion is narrowed to StationGfx before the 256 invalid comparison. */
+	AirportTileSpec saved = *AirportTileSpec::Get(0);
+	AirportTileOverrideManager exhausted(NEW_AIRPORTTILE_OFFSET, NUM_AIRPORTTILES, INVALID_AIRPORTTILE);
+	for (auto &mapping : exhausted.mappings) mapping = {file.grfid, 99, 1};
+	AirportTileSpec value = *file.airtspec[0]; value.animation.frames = 19;
+	exhausted.SetEntitySpec(std::move(value));
+	StationNeed(AirportTileSpec::Get(0)->animation.frames == 19 && AirportTileSpec::Get(0)->grf_prop.grfid == file.grfid, __LINE__);
+	*const_cast<AirportTileSpec *>(AirportTileSpec::Get(0)) = std::move(saved);
+	AirportOverrideManager full(NEW_AIRPORT_OFFSET, NUM_AIRPORTS, AT_INVALID);
+	for (auto &mapping : full.mappings) mapping = {file.grfid, 99, 1};
+	AirportSpec untouched = *spec; full.SetEntitySpec(std::move(untouched));
+	StationNeed(!untouched.layouts.empty(), __LINE__);
+	fmt::print(stderr, "STCMD airport-def-exhaustion narrowed-tile-zero airport-rejected\n");
+	_airport_mngr.mappings[NUM_AIRPORTS - 1] = {file.grfid, 127, 0};
+	AirportSpec::ResetAirports(); AirportTileSpec::ResetAirportTiles();
+	StationNeed(_airport_mngr.GetID(127, file.grfid) == NUM_AIRPORTS - 1 && _airporttile_mngr.GetID(0, file.grfid) == NEW_AIRPORTTILE_OFFSET, __LINE__);
+	_airport_mngr.ResetMapping(); _airporttile_mngr.ResetMapping();
+	StationNeed(_airport_mngr.GetID(127, file.grfid) == AT_INVALID && _airporttile_mngr.GetID(0, file.grfid) == INVALID_AIRPORTTILE, __LINE__);
+	fmt::print(stderr, "STCMD airport-def-partial-state years layouts badges reset-mapping\n");
+}
+static void AirportDefinitionLoad(std::string_view folder)
+{
+	AirportDefinitionPartialReads(); SetRandomSeed(0x49200001); _grfconfig.clear();
+	for (const char *name : {"airports", "competing", "broken-airport", "broken-tile"}) {
+		auto config = std::make_unique<GRFConfig>(std::string(folder) + "/" + name + ".grf");
+		StationNeed(FillGRFDetails(*config, false, NO_DIRECTORY), __LINE__);
+		config->flags.Reset(GRFConfigFlag::InitOnly); _grfconfig.push_back(std::move(config));
+	}
+	ReloadNewGRFData();
+}
+static void AirportDefinitionFixture(TileIndex origin, DoCommandFlags test, DoCommandFlags exec, bool reload)
+{
+	const auto grfid = AirportDefinitionID();
+	if (reload) ReloadNewGRFData();
+	const GRFFile *file = GetFileByGRFID(grfid);
+	StationNeed(file != nullptr && GetGRFConfig(grfid)->status == GCS_ACTIVATED && file->airportspec.empty() && file->airtspec.empty(), __LINE__);
+	uint16_t type = _airport_mngr.GetID(0, grfid), gfx = _airporttile_mngr.GetID(0, grfid);
+	StationNeed(type == NEW_AIRPORT_OFFSET && gfx == NEW_AIRPORTTILE_OFFSET, __LINE__);
+	const auto *spec = AirportSpec::Get(type); const auto *tile_spec = AirportTileSpec::Get(gfx);
+	StationNeed(AirportSpec::GetWithoutOverride(0)->grf_prop.override_id == type && !AirportSpec::GetWithoutOverride(0)->enabled && spec->grf_prop.subst_id == 0 && spec->size_x == 4 && spec->size_y == 3 && spec->layouts.size() == 1 && spec->layouts[0].rotation == DIR_N && spec->layouts[0].tiles.size() == 12 && spec->layouts[0].tiles[0].gfx == gfx, __LINE__);
+	StationNeed(spec->min_year == 0 && spec->max_year == CalendarTime::MAX_YEAR && spec->catchment == MAX_CATCHMENT && spec->noise_level == 7 && spec->maintenance_cost == 123 && spec->IsAvailable() && GetString(spec->name) == "Airport 492", __LINE__);
+	StationNeed(AirportTileSpec::Get(0)->grf_prop.override_id == gfx && !AirportTileSpec::Get(0)->enabled && tile_spec->animation.frames == 8 && tile_spec->animation.speed == 0 && tile_spec->grf_prop.subst_id == 0 && tile_spec->badges == spec->badges && tile_spec->badges.size() == 1 && GetBadge(tile_spec->badges[0])->features.Test(GSF_TRAMTYPES), __LINE__);
+	for (char initial : {'B', 'T'}) { auto *config = GetGRFConfig(AirportDefinitionID(initial)); StationNeed(config != nullptr && config->status == GCS_DISABLED && config->errors.size() == 1 && config->errors[0].message == STR_NEWGRF_ERROR_READ_BOUNDS, __LINE__); }
+	fmt::print(stderr, "STCMD airport-def-registry {} {} {} {} {}\n", type, gfx, spec->index, spec->class_index, AirportClass::GetClassCount());
+	for (AirportClassID c = APC_BEGIN; c < AirportClass::GetClassCount(); c++) { const auto *klass = AirportClass::Get(c); for (uint i = 0; i < klass->GetSpecCount(); i++) fmt::print(stderr, "STCMD airport-def-class {} {} {}\n", c, i, klass->GetSpec(i)->GetIndex()); }
+	for (uint id = 0; id < NUM_AIRPORTS; id++) { auto *value = AirportSpec::GetWithoutOverride(id); if (value->grf_prop.grfid || value->grf_prop.override_id != AT_INVALID) fmt::print(stderr, "STCMD airport-def-spec {} {} {} {} {} {}\n", id, value->enabled, value->grf_prop.grfid, value->grf_prop.local_id, value->grf_prop.subst_id, value->grf_prop.override_id); }
+	for (const auto &part : spec->layouts[0].tiles) fmt::print(stderr, "STCMD airport-def-layout {} {} {}\n", part.ti.x, part.ti.y, part.gfx);
+	for (uint id = 0; id < NUM_AIRPORTTILES; id++) { const auto &map = _airporttile_mngr.mappings[id]; if (map.grfid) fmt::print(stderr, "STCMD airport-def-tile-map {} {} {} {}\n", id, map.grfid, map.entity_id, map.substitute_id); }
+	Station *station = nullptr;
+	if (!reload) {
+		TileIndex at = origin + TileDiffXY(2, 2), destination = origin + TileDiffXY(18, 18);
+		_settings_game.economy.station_noise_level = true;
+		Town *town = ClosestTownFromTile(at, UINT_MAX); auto old_noise = town->noise_reached; town->noise_reached = town->MaxTownNoise();
+		auto refused = Command<CMD_BUILD_AIRPORT>::Do(test, at, type, 0, NEW_STATION, true); StationCost("airport-def-noise", refused);
+		StationNeed(refused.Failed() && refused.GetErrorMessage() == STR_ERROR_LOCAL_AUTHORITY_REFUSES_NOISE, __LINE__); town->noise_reached = old_noise;
+		_settings_game.economy.station_noise_level = false;
+		auto build = [&](DoCommandFlags flags, TileIndex t) { return Command<CMD_BUILD_AIRPORT>::Do(flags, t, type, 0, NEW_STATION, true); };
+		auto price = build(test, at); StationCost("airport-def-test", price); auto cost = build(exec, at); StationCost("airport-def-exec", cost);
+		StationNeed(price.Succeeded() && cost.Succeeded() && price.GetCost() == cost.GetCost(), __LINE__);
+		station = Station::GetByTile(at); station->name = "Airport definitions";
+		StationNeed(build(exec, destination).Succeeded(), __LINE__); auto *other = Station::GetByTile(destination);
+		EngineID engine = EngineID::Invalid();
+		for (const Engine *e : Engine::IterateType(VEH_AIRCRAFT)) if (engine == EngineID::Invalid() && IsEngineBuildable(e->index, VEH_AIRCRAFT, _current_company) && e->VehInfo<AircraftVehicleInfo>().subtype & AIR_CTOL) engine = e->index;
+		StationNeed(engine != EngineID::Invalid(), __LINE__);
+		auto hangar = station->airport.GetHangarTile(0);
+		auto [built, vehicle, refit, capacity, cargo] = Command<CMD_BUILD_VEHICLE>::Do(exec, hangar, engine, false, INVALID_CARGO, INVALID_CLIENT_ID); StationCost("airport-def-aircraft", built); StationNeed(built.Succeeded(), __LINE__);
+		Vehicle *plane = Vehicle::Get(vehicle); plane->name = "Airport definition plane";
+		for (StationID target : {other->index, station->index}) { Order order; order.MakeGoToStation(target); StationNeed(Command<CMD_INSERT_ORDER>::Do(exec, vehicle, VehicleOrderID(plane->GetNumOrders()), order).Succeeded(), __LINE__); }
+		StationNeed(Command<CMD_START_STOP_VEHICLE>::Do(exec, vehicle, false).Succeeded(), __LINE__);
+	}
+	else for (Station *st : Station::Iterate()) if (st->name == "Airport definitions") station = st;
+	StationNeed(station != nullptr && station->airport.type == type && station->airport.GetSpec() == spec, __LINE__);
+	TileIndex at = station->airport.tile; StationNeed(GetAirportGfx(at) == gfx, __LINE__);
+	AirportTileResolverObject callback(tile_spec, at, station, CBID_AIRPTILE_ANIMATION_TRIGGER);
+	StationNeed(callback.ResolveCallback({}) == 3 && TriggerAirportTileAnimation(station, at, AirportAnimationTrigger::Built), __LINE__);
+	AnimateAirportTile(at); StationNeed(GetAnimationFrame(at) == 3, __LINE__);
+	fmt::print(stderr, "STCMD airport-def-callbacks {} {} {}\n", station->index.base(), callback.ResolveCallback({}), GetAnimationFrame(at));
+	fmt::print(stderr, "STCMD airport-def-occupied {} {} {} {}\n", station->airport.type, GetAirportGfx(at), spec->grf_prop.grfid, tile_spec->grf_prop.local_id);
+	for (Aircraft *plane : Aircraft::Iterate()) if (plane->name == "Airport definition plane") fmt::print(stderr, "STCMD airport-def-plane {} {} {} {}\n", plane->index.base(), plane->x_pos, plane->y_pos, plane->z_pos);
+	fmt::print(stderr, "STCMD airport-def-rng {} {}\n", _random.state[0], _random.state[1]);
+}
