@@ -602,14 +602,13 @@ fn engine_label(s: &Services, shell: E) -> u32 {
     openttd_rust_engine_active_label(s, (s.cargo_label)(shell))
 }
 fn default_masks(s: &Services, kind: u8, shell: E, id: u16, label: u32) -> (u16, u16) {
-    let climate = (s.climate)();
     if kind == VEH_AIRCRAFT {
         (PASSENGERS | CC_MAIL | CC_ARMOURED | CC_EXPRESS, CC_LIQUID)
     } else if kind == VEH_SHIP {
         match label {
             CT_PASSENGERS => (PASSENGERS, 0),
             CT_OIL => (CC_LIQUID, 0),
-            _ if climate == crate::services::LandscapeType::TOYLAND.0 => (
+            _ if (s.climate)() == crate::services::LandscapeType::TOYLAND.0 => (
                 CC_MAIL | CC_ARMOURED | CC_EXPRESS | CC_BULK | CC_PIECEGOODS | CC_LIQUID,
                 PASSENGERS,
             ),
@@ -654,6 +653,7 @@ fn default_masks(s: &Services, kind: u8, shell: E, id: u16, label: u32) -> (u16,
                 CC_LIQUID | PASSENGERS,
             ),
         ];
+        let climate = (s.climate)();
         DEFAULTS
             .iter()
             .find(|&&(climates, cargo, _, _)| climates & (1 << climate) != 0 && cargo == label)
