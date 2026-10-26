@@ -44,8 +44,24 @@ inline uint8_t RustEngineRefitCost(const OpenTTDEngine *e) noexcept { return Eng
 inline int32_t RustEnginePriceShift(const OpenTTDEngine *e, uint32_t price) noexcept { return RustGRFPriceShift(RustEngineGRF(e), price); }
 template <typename Result, auto Read, typename Index = uint16_t>
 static Result RustIndexedEngineRead(Index id) noexcept { return Read(RustEngineByID(static_cast<uint16_t>(id))); }
+inline OpenTTDEngineCarrying RustEngineCarrying(const OpenTTDEngine *engine) noexcept
+{
+	OpenTTDEngineCarrying r{.kind = RustEngineType(engine), .ground_capacity = 0, .default_cargo = INVALID_CARGO};
+	switch (r.kind) {
+		case VEH_TRAIN: r.ground_capacity = RustEngineRailCapacity(engine); break;
+		case VEH_ROAD: r.ground_capacity = RustEngineRoadCapacity(engine); break;
+		default: break;
+	}
+	if ((r.kind == VEH_TRAIN || r.kind == VEH_ROAD) && r.ground_capacity == 0) return r;
+	r.default_cargo = RustEngineDefaultCargo(engine);
+	return r;
+}
 inline uint8_t RustEngineExtraFlags(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.extra_flags.base(); }
 inline uint16_t RustEngineID(const OpenTTDEngine *e) noexcept { return EngineOf(e)->index.base(); }
+inline OpenTTDEngineCapacityConfig RustEngineCapacityConfig(const OpenTTDEngine *engine) noexcept
+{
+	return {.id = RustEngineID(engine), .callbacks = RustEngineCallbackMask(engine), .misc = RustEngineMiscFlags(engine)};
+}
 inline int32_t RustEngineBaseIntro(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.base_intro.base(); }
 inline bool RustEngineClimate(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.climates.Test(OpenTTDLandscape()); }
 inline RailVehicleTypes RustEngineRailKind(const Engine *e) noexcept { return e->VehInfo<RailVehicleInfo>().railveh_type; }

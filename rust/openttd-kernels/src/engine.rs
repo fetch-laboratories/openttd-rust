@@ -1173,6 +1173,8 @@ crate::abi::layouts! {
         engine,
         cargo,
     };
+    "OpenTTDEngineCarrying" ["engine"] => Carrying { kind, ground_capacity, default_cargo };
+    "OpenTTDEngineCapacityConfig" ["engine"] => CapacityConfig { id, callbacks, misc };
     "OpenTTDEngineServices" ["engine"] => Services {
         shared,
         rng,
@@ -1239,4 +1241,22 @@ crate::abi::layouts! {
         screen_dirty,
         utf8_length,
     };
+}
+
+/// Fields observed together by `Engine::CanCarryCargo` before any callback.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct Carrying {
+    pub kind: VehicleType,
+    pub ground_capacity: u8,
+    pub default_cargo: u8,
+}
+/// Capacity configuration is immutable through `GetVehicleCallback`/`GetEngineProperty`:
+/// `SpriteGroup::Resolve` reads parsed specs/variables and writes registers or PSA;
+/// it cannot load GRFs, reset engines, execute commands/scripts or yield the mutex.
+#[repr(C)]
+pub(crate) struct CapacityConfig {
+    pub id: u16,
+    pub callbacks: u16,
+    pub misc: u8,
 }

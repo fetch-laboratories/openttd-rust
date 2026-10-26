@@ -3,6 +3,7 @@
 #ifndef RUST_ENGINE_CAPABILITIES_FFI_H
 #define RUST_ENGINE_CAPABILITIES_FFI_H
 #include "newgrf_vehicle_ffi.h"
+#include "engine_ffi.h"
 struct OpenTTDEngineCapabilitiesServices {
 	const OpenTTDVehicleResolverServices *(*resolver)() noexcept OPENTTD_SERVICE_DEFAULT(resolver);
 	const OpenTTDEngine *(*engine)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(engine);
@@ -12,10 +13,9 @@ struct OpenTTDEngineCapabilitiesServices {
 	uint16_t (*id)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(id);
 	uint8_t (*default_cargo)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(default_cargo);
 	uint16_t (*callbacks)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(callbacks);
-	uint8_t (*misc)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(misc);
+	OpenTTDEngineCarrying (*carrying)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(carrying);
+	OpenTTDEngineCapacityConfig (*capacity_config)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(capacity_config);
 	uint64_t (*refit_mask)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(refit_mask);
-	uint8_t (*rail_capacity)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(rail_capacity);
-	uint8_t (*road_capacity)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(road_capacity);
 	uint16_t (*ship_capacity)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(ship_capacity);
 	uint16_t (*passenger_capacity)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(passenger_capacity);
 	uint8_t (*mail_capacity)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(mail_capacity);

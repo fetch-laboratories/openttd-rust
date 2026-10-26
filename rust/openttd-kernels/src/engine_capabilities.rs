@@ -46,10 +46,9 @@ pub struct Services {
     id: extern "C" fn(E) -> u16,
     default_cargo: extern "C" fn(E) -> u8,
     callbacks: extern "C" fn(E) -> u16,
-    misc: extern "C" fn(E) -> u8,
+    carrying: extern "C" fn(E) -> crate::engine::Carrying,
+    capacity_config: extern "C" fn(E) -> crate::engine::CapacityConfig,
     refit_mask: extern "C" fn(E) -> u64,
-    rail_capacity: extern "C" fn(E) -> u8,
-    road_capacity: extern "C" fn(E) -> u8,
     ship_capacity: extern "C" fn(E) -> u16,
     passenger_capacity: extern "C" fn(E) -> u16,
     mail_capacity: extern "C" fn(E) -> u8,
@@ -91,11 +90,11 @@ unsafe fn callback(s: &Services, cb: u16, p1: u32, engine: u16, v: V) -> u16 {
         )
     }
 }
-unsafe fn property(s: &Services, e: E, prop: u8, fallback: u32, v: V) -> u32 {
+unsafe fn property(s: &Services, engine: u16, prop: u8, fallback: u32, v: V) -> u32 {
     unsafe {
         crate::newgrf_vehicle::openttd_rust_vehicle_property(
             &*(s.resolver)(),
-            (s.id)(e),
+            engine,
             prop,
             fallback as i32,
             v,
@@ -103,23 +102,21 @@ unsafe fn property(s: &Services, e: E, prop: u8, fallback: u32, v: V) -> u32 {
         ) as u32
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_can_carry(s: &Services, e: E) -> bool {
-    match (s.kind)(e) {
-        VehicleType::TRAIN => {
-            if (s.rail_capacity)(e) == 0 {
-                return false;
-            }
-        }
-        VehicleType::ROAD => {
-            if (s.road_capacity)(e) == 0 {
+fn can_carry(info: crate::engine::Carrying) -> bool {
+    match info.kind {
+        VehicleType::TRAIN | VehicleType::ROAD => {
+            if info.ground_capacity == 0 {
                 return false;
             }
         }
         VehicleType::SHIP | VehicleType::AIRCRAFT => {}
         _ => unreachable!("cargo engine type"),
     }
-    is_valid_cargo_type((s.default_cargo)(e))
+    is_valid_cargo_type(info.default_cargo)
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_engine_can_carry(s: &Services, e: E) -> bool {
+    can_carry((s.carrying)(e))
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_capacity(
@@ -135,18 +132,20 @@ pub unsafe extern "C" fn openttd_rust_engine_capacity(
         if !mail.is_null() {
             mail.write(0);
         }
-        if !openttd_rust_engine_can_carry(s, e) {
+        let carrying = (s.carrying)(e);
+        if !can_carry(carrying) {
             return 0;
         }
-        let new_multipliers = (s.misc)(e) & NO_DEFAULT_CARGO_MULTIPLIER != 0;
-        let mut default_cargo = (s.default_cargo)(e);
+        let config = (s.capacity_config)(e);
+        let new_multipliers = config.misc & NO_DEFAULT_CARGO_MULTIPLIER != 0;
+        let mut default_cargo = carrying.default_cargo;
         let cargo = if v.is_null() {
             default_cargo
         } else {
             (s.vehicle_cargo)(v)
         };
         if !mail.is_null()
-            && (s.kind)(e) == VehicleType::AIRCRAFT
+            && carrying.kind == VehicleType::AIRCRAFT
             && crate::cargotype::is_cargo_in_class(
                 (s.cargo_classes)(cargo),
                 crate::cargotype::PASSENGERS,
@@ -154,47 +153,47 @@ pub unsafe extern "C" fn openttd_rust_engine_capacity(
         {
             mail.write(property(
                 s,
-                e,
+                config.id,
                 PROP_AIRCRAFT_MAIL_CAPACITY,
                 u32::from((s.mail_capacity)(e)),
                 v,
             ) as u16);
         }
-        if (s.callbacks)(e) & VEHICLE_REFIT_CAPACITY != 0
+        if config.callbacks & VEHICLE_REFIT_CAPACITY != 0
             && (new_multipliers
                 || default_cargo != cargo
                 || (!v.is_null() && (s.vehicle_subtype)(v) != 0))
         {
-            let result = callback(s, CBID_VEHICLE_REFIT_CAPACITY.0, 0, (s.id)(e), v);
+            let result = callback(s, CBID_VEHICLE_REFIT_CAPACITY.0, 0, config.id, v);
             if result != CALLBACK_FAILED {
                 return u32::from(result);
             }
         }
         let mut extra_mail = 0_u32;
-        let mut capacity = match (s.kind)(e) {
+        let mut capacity = match carrying.kind {
             VehicleType::TRAIN => {
                 let mut capacity = property(
                     s,
-                    e,
+                    config.id,
                     PROP_TRAIN_CARGO_CAPACITY,
-                    u32::from((s.rail_capacity)(e)),
+                    u32::from(carrying.ground_capacity),
                     v,
                 );
                 if v.is_null() && (s.rail_kind)(e) == RailVehicleTypes::MULTIHEAD {
-                    capacity = capacity.wrapping_add(u32::from((s.rail_capacity)(e)));
+                    capacity = capacity.wrapping_add(u32::from(carrying.ground_capacity));
                 }
                 capacity
             }
             VehicleType::ROAD => property(
                 s,
-                e,
+                config.id,
                 PROP_ROADVEH_CARGO_CAPACITY,
-                u32::from((s.road_capacity)(e)),
+                u32::from(carrying.ground_capacity),
                 v,
             ),
             VehicleType::SHIP => property(
                 s,
-                e,
+                config.id,
                 PROP_SHIP_CARGO_CAPACITY,
                 u32::from((s.ship_capacity)(e)),
                 v,
@@ -202,7 +201,7 @@ pub unsafe extern "C" fn openttd_rust_engine_capacity(
             VehicleType::AIRCRAFT => {
                 let capacity = property(
                     s,
-                    e,
+                    config.id,
                     PROP_AIRCRAFT_PASSENGER_CAPACITY,
                     u32::from((s.passenger_capacity)(e)),
                     v,
@@ -213,7 +212,7 @@ pub unsafe extern "C" fn openttd_rust_engine_capacity(
                 ) {
                     extra_mail = property(
                         s,
-                        e,
+                        config.id,
                         PROP_AIRCRAFT_MAIL_CAPACITY,
                         u32::from((s.mail_capacity)(e)),
                         v,
@@ -234,7 +233,7 @@ pub unsafe extern "C" fn openttd_rust_engine_capacity(
             capacity = capacity.wrapping_add(extra_mail);
             extra_mail = 0;
         }
-        if new_multipliers || ((s.kind)(e) != VehicleType::SHIP && default_cargo != cargo) {
+        if new_multipliers || (carrying.kind != VehicleType::SHIP && default_cargo != cargo) {
             let default_multiplier = if new_multipliers {
                 0x100_u16
             } else {
@@ -548,8 +547,8 @@ pub unsafe extern "C" fn openttd_rust_articulated_live_cargoes(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDEngineCapabilitiesServices" ["probe"] => Services {
-        resolver, engine, engine_if_valid, kind, ground, id, default_cargo, callbacks, misc, refit_mask,
-        rail_capacity, road_capacity, ship_capacity, passenger_capacity, mail_capacity, rail_kind,
+        resolver, engine, engine_if_valid, kind, ground, id, default_cargo, callbacks, carrying, capacity_config, refit_mask,
+        ship_capacity, passenger_capacity, mail_capacity, rail_kind,
         grf, version, new_engine, cargo_classes, multiplier, cargo_by_label, pool_available,
         new_temporary, destroy_temporary, set_engine, set_owner, current_company, vehicle_engine,
         vehicle_engine_object, vehicle_cargo, vehicle_subtype, has_articulated, next_articulated, check, assertions,

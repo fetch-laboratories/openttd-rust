@@ -31,6 +31,8 @@ struct OpenTTDEngineCompany { const Company *shell; uint8_t id; };
 struct OpenTTDEngineCompanyPreview { uint8_t blocked; int32_t performance; };
 struct OpenTTDEngineVehicle { OpenTTDVehicle *shell; uint32_t id; uint8_t owner; VehicleType type; };
 struct OpenTTDEngineVehicleCargo { const OpenTTDEngine *engine; uint8_t cargo; };
+struct OpenTTDEngineCarrying { VehicleType kind; uint8_t ground_capacity, default_cargo; };
+struct OpenTTDEngineCapacityConfig { uint16_t id, callbacks; uint8_t misc; };
 /** Every callback is noexcept; script events only enqueue, no VM executes.
  * No owner borrow survives any callback, including native type availability,
  * articulated/NewGRF reads, windows, and recursively joined variants.
