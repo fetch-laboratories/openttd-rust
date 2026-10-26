@@ -7,7 +7,7 @@
 #include "../road_type.h"
 struct OpenTTDTypeIntroduction { uint32_t label; int32_t date; uint64_t required, introduces; };
 struct OpenTTDRoadTypeConstruction { uint32_t label; int32_t date; bool hidden, town_build; };
-/* Native registries stay canonical. These immutable typed leaves neither reset
+/* Native TypeInfo storage supplies immutable metadata. These leaves neither reset
  * pools nor yield. Engine lifecycle scalar reads end before every callback.
  * Panics and environmental exceptions abort; ordinary play has no throwing leaf. */
 struct OpenTTDTypeAvailabilityServices {
