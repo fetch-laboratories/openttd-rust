@@ -406,13 +406,13 @@ impl<'a> World<'a> {
         match transport {
             ROAD => {
                 roadtype = kind;
-                if !(self.s.road_type_valid)(roadtype) {
+                if !crate::road::val_param_road_type(self.s, roadtype) {
                     return Self::error(cost);
                 }
             }
             RAIL => {
                 railtype = kind;
-                if !(self.r.rail_type_valid)(railtype) {
+                if !crate::rail::val_param_rail_type(self.s, railtype) {
                     return Self::error(cost);
                 }
             }
@@ -791,13 +791,13 @@ impl<'a> World<'a> {
         match transport {
             RAIL => {
                 railtype = kind;
-                if !(self.r.rail_type_valid)(railtype) {
+                if !crate::rail::val_param_rail_type(self.s, railtype) {
                     return Self::error(cost);
                 }
             }
             ROAD => {
                 roadtype = kind;
-                if !(self.s.road_type_valid)(roadtype) {
+                if !crate::road::val_param_road_type(self.s, roadtype) {
                     return Self::error(cost);
                 }
             }
