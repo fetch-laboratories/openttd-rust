@@ -342,6 +342,8 @@ static void CapabilitiesInspect()
 }
 static void CapabilitiesProbe()
 {
+	Backup<Randomizer> interactive(_interactive_random);
+	_interactive_random.SetSeed(12345);
 	Vehicle *fixture = BuildFixture(VEH_TRAIN);
 	Engine *e = Engine::Get(fixture->engine_type), *part = Engine::Get(fixture->GetNextVehicle()->engine_type);
 	Backup<bool> dynamic(_settings_game.vehicle.dynamic_engines, false);
@@ -449,6 +451,7 @@ static void CapabilitiesProbe()
 	SaveRandomSeeds(&after);
 	fmt::print(stderr, "FLEET capability-restored {} {} {} {} {}\n", e->GetGRF() == original_grf, after.random.state[0], after.random.state[1], after.interactive_random.state[0], after.interactive_random.state[1]);
 	fmt::print(stderr, "FLEET capability-checkpoint complete\n");
+	interactive.Restore();
 }
 static void CapabilityAircraft(Vehicle *v)
 {
