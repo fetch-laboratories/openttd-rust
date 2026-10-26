@@ -4,18 +4,20 @@
 #define RUST_VEHICLE_EFFECT_FFI_H
 #include "vehicle_ffi.h"
 #include "services_ffi.h"
+enum RailVehicleTypes : uint8_t;
 struct OpenTTDVisualGate { uint16_t speed; uint8_t status, smoke; bool primary; };
-struct OpenTTDVisualShow { uint16_t speed; uint8_t kind, smoke; };
+struct OpenTTDVisualShow { uint16_t speed; VehicleType kind; uint8_t smoke; };
 struct OpenTTDVisualBridgePosition { int32_t x, y; };
 struct OpenTTDVisualEngine {
 	const OpenTTDEngine *engine;
 	uint8_t *cache;
 	uint16_t id;
-	uint8_t kind, visual;
+	VehicleType kind;
+	uint8_t visual;
 	bool callback;
 };
-struct OpenTTDVisualDefaults { uint8_t rail_kind, engclass; };
-struct OpenTTDVisualPart { uint8_t *cache; uint32_t tile; uint8_t kind, status, tick; };
+struct OpenTTDVisualDefaults { RailVehicleTypes rail_kind; uint8_t engclass; };
+struct OpenTTDVisualPart { uint8_t *cache; uint32_t tile; VehicleType kind; uint8_t status, tick; };
 struct OpenTTDVisualOffset { uint8_t direction, length; };
 struct OpenTTDVisualTrain { OpenTTDTrainHandle handle; uint32_t tile; uint16_t speed; bool front; };
 struct OpenTTDVisualPowerWeight { uint32_t power, weight; };

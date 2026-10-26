@@ -30,12 +30,13 @@ use crate::newgrf_callbacks::{
 };
 use crate::random_func::chance16_i;
 use crate::services::Services as Shared;
-use crate::vehicle::{OpenTTDEngine, VEHICLE_LENGTH, VehicleRef, VehicleServices};
+use crate::vehicle::{
+    OpenTTDEngine, RailVehicleTypes, VEHICLE_LENGTH, VehicleRef, VehicleServices, VehicleType,
+};
 use crate::vehicle_base::{
     VESM_DIESEL, VESM_ELECTRIC, VESM_END, VESM_NONE, VESM_STEAM, VS_HIDDEN, VS_STOPPED,
     VS_TRAIN_SLOWING,
 };
-use crate::vehicle_type::{VEH_ROAD, VEH_SHIP, VEH_TRAIN};
 use std::sync::atomic::{AtomicPtr, Ordering};
 #[repr(C)]
 pub struct Gate {
@@ -47,7 +48,7 @@ pub struct Gate {
 #[repr(C)]
 pub struct Show {
     speed: u16,
-    kind: u8,
+    kind: VehicleType,
     smoke: u8,
 }
 #[repr(C)]
@@ -60,20 +61,20 @@ pub struct Engine {
     engine: *const OpenTTDEngine,
     cache: *mut u8,
     id: u16,
-    kind: u8,
+    kind: VehicleType,
     visual: u8,
     callback: bool,
 }
 #[repr(C)]
 pub struct Defaults {
-    rail_kind: u8,
+    rail_kind: RailVehicleTypes,
     engclass: u8,
 }
 #[repr(C)]
 pub struct Part {
     cache: *mut u8,
     tile: u32,
-    kind: u8,
+    kind: VehicleType,
     status: u8,
     tick: u8,
 }
@@ -128,7 +129,10 @@ pub extern "C" fn openttd_rust_visual_update(v: VehicleRef, allow_power_change: 
     let s = services();
     let e = (s.engine)(v);
     let powered_before = has_bit(unsafe { *e.cache }, VE_DISABLE_WAGON_POWER);
-    let mut visual = if matches!(e.kind, VEH_TRAIN | VEH_ROAD | VEH_SHIP) {
+    let mut visual = if matches!(
+        e.kind,
+        VehicleType::TRAIN | VehicleType::ROAD | VehicleType::SHIP
+    ) {
         u32::from(e.visual)
     } else {
         1 << VE_DISABLE_EFFECT
@@ -159,13 +163,13 @@ pub extern "C" fn openttd_rust_visual_update(v: VehicleRef, allow_power_change: 
         || (!has_bit(visual, VE_DISABLE_EFFECT)
             && gb(visual, VE_TYPE_START, VE_TYPE_COUNT) == u32::from(VE_TYPE_DEFAULT))
     {
-        let defaults = if e.kind == VEH_TRAIN {
+        let defaults = if e.kind == VehicleType::TRAIN {
             Some((s.defaults)(e.engine))
         } else {
             None
         };
         if defaults.as_ref().is_none_or(|d| {
-            d.rail_kind == crate::vehicle::RailVehicleTypes::WAGON.0
+            d.rail_kind == RailVehicleTypes::WAGON
                 || !crate::math::is_inside_mm(
                     usize::from(d.engclass),
                     usize::from(EC_STEAM),
@@ -213,7 +217,7 @@ pub extern "C" fn openttd_rust_visual_eligible(v: VehicleRef) -> bool {
     g.smoke != 0 && g.status & (VS_TRAIN_SLOWING | VS_STOPPED) == 0 && g.speed >= 2
 }
 const SMOKE_POS: [i8; 8] = [1, 1, 1, 0, -1, -1, -1, 0];
-fn advanced(s: &Services, v: VehicleRef, kind: u8, train: Option<crate::train::Handle>) {
+fn advanced(s: &Services, v: VehicleRef, kind: VehicleType, train: Option<crate::train::Handle>) {
     let mut regs = [0_i32; 4];
     let n = (s.vehicle.newgrf)();
     let engine_id = (s.vehicle.engine_id)(v);
@@ -238,9 +242,9 @@ fn advanced(s: &Services, v: VehicleRef, kind: u8, train: Option<crate::train::H
     let center = has_bit(callback, 13);
     let rotate = !has_bit(callback, 14);
     let p = (s.offset)(v);
-    let l_center = if center && kind == VEH_ROAD {
+    let l_center = if center && kind == VehicleType::ROAD {
         -(u32::from(VEHICLE_LENGTH).wrapping_sub(u32::from(p.length)) as i32) / 2
-    } else if !center && kind == VEH_TRAIN {
+    } else if !center && kind == VehicleType::TRAIN {
         (u32::from(VEHICLE_LENGTH).wrapping_sub(u32::from(p.length)) / 2) as i32
     } else {
         0
@@ -293,7 +297,7 @@ fn advanced(s: &Services, v: VehicleRef, kind: u8, train: Option<crate::train::H
 pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
     let s = services();
     let gate = (s.show)(front);
-    let front_train = if gate.kind == VEH_TRAIN {
+    let front_train = if gate.kind == VehicleType::TRAIN {
         let t = (s.train)(front);
         if t.handle.get_flags() & crate::train::FLAG_REVERSING != 0
             || ((s.station)(t.tile)
@@ -311,7 +315,7 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
     let mut current = Some(front);
     while let Some(v) = current {
         let p = (s.part)(v);
-        let train = if p.kind == VEH_TRAIN {
+        let train = if p.kind == VehicleType::TRAIN {
             Some(if v == front {
                 front_train.unwrap_or_else(|| (s.vehicle.train_handle)(v.0.as_ptr()))
             } else {
@@ -361,7 +365,7 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
                     gb(u32::from(p.tick), 0, n as u8) == 0
                 }
                 VESM_DIESEL => {
-                    let power_weight = if p.kind == VEH_TRAIN {
+                    let power_weight = if p.kind == VehicleType::TRAIN {
                         let w = (s.power_weight)(front);
                         (32_u32.wrapping_shr(w.power >> 10)) as i32
                             - (32_u32.wrapping_shr(w.weight >> 9)) as i32
@@ -392,7 +396,7 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
                 advanced(s, v, p.kind, train);
             } else {
                 let o = (s.offset)(v);
-                if p.kind == VEH_TRAIN {
+                if p.kind == VehicleType::TRAIN {
                     offset = offset.wrapping_add(
                         (u32::from(VEHICLE_LENGTH).wrapping_sub(u32::from(o.length)) / 2) as i32,
                     );
