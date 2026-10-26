@@ -87,8 +87,9 @@ Remove only verified merged work; do not close unfinished PRs just to stop.
 - The roadmap's resume checkpoint and the count of unintegrated branches.
 - Running local jobs (cmake, ninja, cargo, openttd, tools/*.py), mapped to
   their worktrees.
-- Cleanup only for work already verified as merged. Leave cache/log audits and
-  unrelated housekeeping for normal development.
+- Cleanup only for work already verified as merged, and it is optional: if a
+  removal fails, the checkpoint lists the worktree for resume. Leave cache/log
+  audits and unrelated housekeeping for normal development.
 
 Verify rather than trust the roadmap or root's messages.
 
@@ -99,6 +100,10 @@ Verify rather than trust the roadmap or root's messages.
   start CI, or fix a failure to make it eligible during wind-down.
 - Finish the current action: complete the edit already underway and save it,
   or finish the active review with its findings recorded. No downstream round.
+  A worker whose tree is clean and pushed has no edit underway: root cancels it
+  and records its head. A worker can sit unresponsive after a stop message; if
+  it shows no activity, root sends the stop again, or cancels it once its edit
+  is pushed.
 - Hand off: anything needing implementation, a new review, fixes, validation,
   or a CI result. Name the next action, not a chain to finish before stopping.
 - Recover: an identified breaking merge eligible for AGENTS.md's automatic
@@ -133,17 +138,19 @@ parts:
    every line is about this session: name the PRs, agents and heads, and
    choose your own wording. Apply the quoted rules rather than repeating them:
    - The current action or handoff for each item from step 3. Name any
-     component, planner or repair round root was about to start; it stays
-     unstarted. Due speed/planning work stays due in the checkpoint, not a new
-     gate on resume.
+     component, review, planner or repair round root was about to start as
+     "do not start it; stop it if already started", since root keeps working
+     until the message lands. Due speed/planning work stays due in the
+     checkpoint, not a new gate on resume.
    - Which tested combinations can merge now, or that none can.
    - The rollback target, if step 3 found one; root retains the removed work
      for a replacement PR on resume. Never demand that root fix a red tip
      through another PR/CI cycle before stopping.
    - Changed facts, if root's state has moved on. Preserve unfinished work.
-   - One docs-only roadmap commit within its budget, updating "Where the fork
-     stands" and a checkpoint opening "Paused at the user's request", with
-     each remaining draft, its head, next action and any running jobs or CI.
+   - One docs-only roadmap commit that updates "Where the fork stands" and
+     replaces the checkpoint with one opening "Paused at the user's request",
+     with each remaining draft, its head, next action and any running jobs or
+     CI. It leaves every other section as it is; `/steer` prunes the roadmap.
    - A final report: integrations and rollbacks, current progress metrics if
      available, remaining work and next actions, and CI state (including
      pending or unknown). Do not launch measurement work to fill the report.
@@ -151,6 +158,9 @@ parts:
      green report.
 
 ## 5. Send it to root
+
+Just before sending, reread root's latest few items. If root has started or
+finished something since your survey, correct those lines.
 
 Send the message text, without the code fence, with `t3_thread_send`: root's
 `threadId`, `mode: "auto"` (starts root if it is idle, steers it if it is
