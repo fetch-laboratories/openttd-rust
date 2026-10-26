@@ -15,7 +15,6 @@
 #include "../newgrf.h"
 #include "../industrytype.h"
 #include "services_newgrf.h"
-struct OpenTTDIndustrySpecHandle;
 
 /* Keep native types and source observation points. Scaling may draw Random;
  * delivery may reenter owners, so callers end their owner access first.
