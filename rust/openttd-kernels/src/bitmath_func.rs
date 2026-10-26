@@ -37,6 +37,16 @@ pub const fn kill_first_bit(value: u8) -> u8 {
     value & value.wrapping_sub(1)
 }
 
+/// `FindFirstBit` for a cargo bitmask, including its zero-input result.
+#[allow(clippy::cast_possible_truncation)]
+pub const fn find_first_bit(value: u64) -> u8 {
+    if value == 0 {
+        0
+    } else {
+        value.trailing_zeros() as u8
+    }
+}
+
 /// `ToggleBit` for promoted integer fields.
 pub fn toggle_bit(value: &mut u32, bit: u8) -> u32 {
     *value ^= 1_u32.wrapping_shl(u32::from(bit));

@@ -49,6 +49,7 @@
 #include "table/strings.h"
 
 #ifdef WITH_RUST
+#include "rust/engine_loading_services.hpp"
 #include "rust/cargo_registry_ffi.h"
 #endif
 
@@ -79,7 +80,11 @@ GRFLoadedFeatures _loaded_newgrf_features;
 
 GrfProcessingState _cur_gps;
 
+#ifdef WITH_RUST
+RustEngineTempView _gted;
+#else
 TypedIndexContainer<std::vector<GRFTempEngineData>, EngineID> _gted;  ///< Temporary engine data used during NewGRF loading
+#endif
 
 /**
  * Debug() function dedicated to newGRF debugging messages
@@ -175,7 +180,21 @@ void DisableStaticNewGRFInfluencingNonStaticNewGRFs(GRFConfig &c)
 	error->data = _cur_gps.grfconfig->GetName();
 }
 
+#ifndef WITH_RUST
 static std::map<uint32_t, uint32_t> _grf_id_overrides;
+#endif
+
+static bool GetNewGRFOverride(uint32_t source, uint32_t &target)
+{
+#ifdef WITH_RUST
+	return openttd_rust_engine_override_get(source, &target);
+#else
+	auto it = _grf_id_overrides.find(source);
+	if (it == _grf_id_overrides.end()) return false;
+	target = it->second;
+	return true;
+#endif
+}
 
 /**
  * Set the override for a NewGRF
@@ -184,6 +203,9 @@ static std::map<uint32_t, uint32_t> _grf_id_overrides;
  */
 void SetNewGRFOverride(uint32_t source_grfid, uint32_t target_grfid)
 {
+#ifdef WITH_RUST
+	openttd_rust_engine_set_override(&GetRustEngineLoadingServices(), source_grfid, target_grfid);
+#else
 	if (target_grfid == 0) {
 		_grf_id_overrides.erase(source_grfid);
 		GrfMsg(5, "SetNewGRFOverride: Removed override of 0x{:X}", std::byteswap(source_grfid));
@@ -191,6 +213,7 @@ void SetNewGRFOverride(uint32_t source_grfid, uint32_t target_grfid)
 		_grf_id_overrides[source_grfid] = target_grfid;
 		GrfMsg(5, "SetNewGRFOverride: Added override of 0x{:X} to 0x{:X}", std::byteswap(source_grfid), std::byteswap(target_grfid));
 	}
+#endif
 }
 
 /**
@@ -199,12 +222,16 @@ void SetNewGRFOverride(uint32_t source_grfid, uint32_t target_grfid)
  */
 GRFFile *GetCurrentGRFOverride()
 {
-	auto found = _grf_id_overrides.find(_cur_gps.grffile->grfid);
-	if (found != std::end(_grf_id_overrides)) {
-		GRFFile *grffile = GetFileByGRFID(found->second);
+#ifdef WITH_RUST
+	return const_cast<GRFFile *>(openttd_rust_engine_current_override(&GetRustEngineLoadingServices(), _cur_gps.grffile));
+#else
+	uint32_t target;
+	if (GetNewGRFOverride(_cur_gps.grffile->grfid, target)) {
+		GRFFile *grffile = GetFileByGRFID(target);
 		if (grffile != nullptr) return grffile;
 	}
 	return nullptr;
+#endif
 }
 
 /**
@@ -217,6 +244,9 @@ GRFFile *GetCurrentGRFOverride()
  */
 Engine *GetNewEngine(const GRFFile *file, VehicleType type, uint16_t internal_id, bool static_access)
 {
+#ifdef WITH_RUST
+	return const_cast<Engine *>(EngineOf(openttd_rust_engine_definition(&GetRustEngineLoadingServices(), file, type, internal_id, static_access)));
+#else
 	/* Hack for add-on GRFs that need to modify another GRF's engines. This lets
 	 * them use the same engine slots. */
 	uint32_t scope_grfid = INVALID_GRFID; // If not using dynamic_engines, all newgrfs share their ID range
@@ -285,6 +315,7 @@ Engine *GetNewEngine(const GRFFile *file, VehicleType type, uint16_t internal_id
 	GrfMsg(5, "Created new engine at index {} for GRFID {:x}, type {}, index {}", e->index, std::byteswap(file->grfid), type, internal_id);
 
 	return e;
+#endif
 }
 
 /**
@@ -299,6 +330,9 @@ Engine *GetNewEngine(const GRFFile *file, VehicleType type, uint16_t internal_id
  */
 EngineID GetNewEngineID(const GRFFile *file, VehicleType type, uint16_t internal_id)
 {
+#ifdef WITH_RUST
+	return EngineID{openttd_rust_engine_new_id(&GetRustEngineLoadingServices(), file, type, internal_id)};
+#else
 	uint32_t scope_grfid = INVALID_GRFID; // If not using dynamic_engines, all newgrfs share their ID range
 	if (_settings_game.vehicle.dynamic_engines) {
 		scope_grfid = file->grfid;
@@ -308,6 +342,7 @@ EngineID GetNewEngineID(const GRFFile *file, VehicleType type, uint16_t internal
 	}
 
 	return _engine_mngr.GetID(type, internal_id, scope_grfid);
+#endif
 }
 
 
@@ -318,12 +353,16 @@ EngineID GetNewEngineID(const GRFFile *file, VehicleType type, uint16_t internal
  */
 CargoTypes TranslateRefitMask(uint32_t refit_mask)
 {
+#ifdef WITH_RUST
+	return openttd_rust_engine_translate_refit(refit_mask, _cur_gps.grffile);
+#else
 	CargoTypes result = 0;
 	for (uint8_t bit : SetBitIterator(refit_mask)) {
 		CargoType cargo = GetCargoTranslation(bit, _cur_gps.grffile, true);
 		if (IsValidCargoType(cargo)) SetBit(result, cargo);
 	}
 	return result;
+#endif
 }
 
 /**
@@ -428,6 +467,9 @@ void ResetNewGRFData()
 	/* Copy/reset original road type info data */
 	ResetRoadTypes();
 
+#ifdef WITH_RUST
+	openttd_rust_engine_temp_initialize(&GetRustEngineLoadingServices());
+#else
 	/* Allocate temporary refit/cargo class data */
 	_gted.resize(Engine::GetPoolSize());
 
@@ -436,6 +478,8 @@ void ResetNewGRFData()
 		_gted[e->index].railtypelabels.clear();
 		for (RailType rt : e->VehInfo<RailVehicleInfo>().railtypes) _gted[e->index].railtypelabels.push_back(GetRailTypeInfo(rt)->label);
 	}
+
+#endif
 
 	/* Reset GRM reservations */
 	ResetGRM();
@@ -496,7 +540,11 @@ void ResetNewGRFData()
 	_loaded_newgrf_features.tram              = TRAMWAY_REPLACE_DEPOT_NONE;
 
 	/* Clear all GRF overrides */
+#ifdef WITH_RUST
+	openttd_rust_engine_override_clear();
+#else
 	_grf_id_overrides.clear();
+#endif
 
 	InitializeSoundPool();
 	_spritegroup_pool.CleanPool();
@@ -622,6 +670,7 @@ GRFFile::~GRFFile() = default;
  * @param labels List of cargo labels.
  * @returns First cargo label in list that exists, or CT_INVALID if none exist.
  */
+#ifndef WITH_RUST
 static CargoLabel GetActiveCargoLabel(const std::initializer_list<CargoLabel> &labels)
 {
 	for (const CargoLabel &label : labels) {
@@ -631,6 +680,8 @@ static CargoLabel GetActiveCargoLabel(const std::initializer_list<CargoLabel> &l
 	return CT_INVALID;
 }
 
+#endif
+
 /**
  * Get active cargo label from either a cargo label or climate-dependent mixed cargo type.
  * @param label Cargo label or climate-dependent mixed cargo type.
@@ -638,6 +689,9 @@ static CargoLabel GetActiveCargoLabel(const std::initializer_list<CargoLabel> &l
  */
 static CargoLabel GetActiveCargoLabel(const std::variant<CargoLabel, MixedCargoType> &label)
 {
+#ifdef WITH_RUST
+	return CargoLabel{openttd_rust_newgrf_active_cargo_label(RustCargoLabel(label))};
+#else
 	struct visitor {
 		CargoLabel operator()(const CargoLabel &label) { return label; }
 		CargoLabel operator()(const MixedCargoType &mixed)
@@ -652,6 +706,7 @@ static CargoLabel GetActiveCargoLabel(const std::variant<CargoLabel, MixedCargoT
 	};
 
 	return std::visit(visitor{}, label);
+#endif
 }
 
 /**
@@ -659,6 +714,9 @@ static CargoLabel GetActiveCargoLabel(const std::variant<CargoLabel, MixedCargoT
  */
 static void CalculateRefitMasks()
 {
+#ifdef WITH_RUST
+	openttd_rust_engine_calculate_refits(&GetRustEngineLoadingServices());
+#else
 	CargoTypes original_known_cargoes = 0;
 	for (CargoType cargo_type = 0; cargo_type != NUM_CARGO; ++cargo_type) {
 		if (IsDefaultCargo(cargo_type)) SetBit(original_known_cargoes, cargo_type);
@@ -850,6 +908,7 @@ static void CalculateRefitMasks()
 			ei->refit_mask = 0;
 		}
 	}
+#endif
 }
 
 /** Set to use the correct action0 properties for each canal feature */
@@ -866,6 +925,9 @@ static void FinaliseCanals()
 /** Check for invalid engines */
 static void FinaliseEngineArray()
 {
+#ifdef WITH_RUST
+	openttd_rust_engine_finalise(&GetRustEngineLoadingServices());
+#else
 	for (Engine *e : Engine::Iterate()) {
 		if (e->GetGRF() == nullptr) {
 			auto found = std::ranges::find(_engine_mngr.mappings[e->type], e->index, &EngineIDMapping::engine);
@@ -944,6 +1006,7 @@ static void FinaliseEngineArray()
 			Engine::Get(e->info.variant_id)->display_flags.Set({EngineDisplayFlag::HasVariants, EngineDisplayFlag::IsFolded});
 		}
 	}
+#endif
 }
 
 /** Check for invalid cargoes */
@@ -1504,9 +1567,8 @@ static void FinalisePriceBaseMultipliers()
 	std::vector<int> grf_overrides(num_grfs, -1);
 	for (int i = 0; i < num_grfs; i++) {
 		GRFFile &source = _grf_files[i];
-		auto it = _grf_id_overrides.find(source.grfid);
-		if (it == std::end(_grf_id_overrides)) continue;
-		uint32_t override_grfid = it->second;
+		uint32_t override_grfid;
+		if (!GetNewGRFOverride(source.grfid, override_grfid)) continue;
 
 		auto dest = std::ranges::find(_grf_files, override_grfid, &GRFFile::grfid);
 		if (dest == std::end(_grf_files)) continue;
@@ -1710,6 +1772,9 @@ static void AfterLoadGRFs()
 	InitRailTypes();
 	InitRoadTypes();
 
+#ifdef WITH_RUST
+	openttd_rust_engine_bind_types(&GetRustEngineLoadingServices());
+#else
 	for (Engine *e : Engine::IterateType(VEH_ROAD)) {
 		if (_gted[e->index].rv_max_speed != 0) {
 			/* Set RV maximum speed from the mph/0.8 unit value */
@@ -1757,6 +1822,8 @@ static void AfterLoadGRFs()
 			e->info.climates = {};
 		}
 	}
+
+#endif
 
 	SetYearEngineAgingStops();
 

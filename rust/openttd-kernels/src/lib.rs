@@ -542,6 +542,9 @@ mod effect;
 mod effectvehicle_func;
 mod encoded;
 mod engine;
+mod engine_loading;
+mod livery;
+
 mod engine_capabilities;
 mod vehicle_effect;
 pub use encoded::{

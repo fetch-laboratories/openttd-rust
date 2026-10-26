@@ -26,3 +26,8 @@ pub const ROAD_NE: u8 = 8;
 
 /// `ROADTYPE_END`.
 pub const ROADTYPE_END: u8 = 63;
+
+/// Default road vehicle road type.
+pub const ROADTYPE_ROAD: u8 = 0;
+/// Default tram vehicle road type.
+pub const ROADTYPE_TRAM: u8 = 1;

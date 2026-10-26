@@ -14,6 +14,7 @@
 #include "../autoslope.h"
 #include "../openttd.h"
 
+inline bool RustDynamicEngines() noexcept { return _settings_game.vehicle.dynamic_engines; }
 inline uint8_t RustRoadAccelerationModel() noexcept { return _settings_game.vehicle.roadveh_acceleration_model; }
 inline uint8_t RustRoadSide() noexcept { return _settings_game.vehicle.road_side; }
 inline bool RustRoadQueue() noexcept { return _settings_game.pf.roadveh_queue; }

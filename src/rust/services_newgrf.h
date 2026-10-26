@@ -51,7 +51,7 @@ inline const GRFFile *RustSpecHandleGRFFile(const Handle *spec) noexcept { retur
 template <typename Spec>
 inline void RustSpecPlayTileSound(const Spec *spec, uint8_t sound, uint32_t tile) noexcept { RustGRFPlayTileSound(RustSpecGRFFile(spec), sound, tile); }
 template <typename Spec>
-inline bool RustSpecHasGRFFile(const Spec *spec) noexcept { return RustSpecGRFFile(spec) != nullptr; }
+inline bool RustSpecHasGRFFile(const Spec *spec) noexcept { return spec->grf_prop.HasGrfFile(); }
 inline const GRFFile *RustHouseGrf(uint16_t house) noexcept { return RustSpecGRFFile(RustHouseSpec(house)); }
 template <typename Spec, typename Handle = Spec>
 inline uint8_t RustSpecGRFVersion(const Handle *handle) noexcept { return RustGRFFileVersion(RustSpecGRFFile(reinterpret_cast<const Spec *>(handle))); }

@@ -43,6 +43,10 @@ void ShowEnginePreviewWindow(EngineID engine);
 #include "rust/engine_capabilities_services.hpp"
 #endif
 
+#ifdef WITH_RUST
+#include "rust/engine_loading_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 EnginePool _engine_pool("Engine");
@@ -527,6 +531,9 @@ bool Engine::IsVariantHidden(CompanyID c) const
  */
 void EngineOverrideManager::ResetToDefaultMapping()
 {
+#ifdef WITH_RUST
+	openttd_rust_engine_mapping_defaults(_engine_counts);
+#else
 	EngineID id = EngineID::Begin();
 	for (VehicleType type = VEH_TRAIN; type <= VEH_AIRCRAFT; type++) {
 		auto &map = this->mappings[type];
@@ -535,6 +542,7 @@ void EngineOverrideManager::ResetToDefaultMapping()
 			map.emplace_back(INVALID_GRFID, internal_id, type, internal_id, id);
 		}
 	}
+#endif
 }
 
 /**
@@ -548,11 +556,15 @@ void EngineOverrideManager::ResetToDefaultMapping()
  */
 EngineID EngineOverrideManager::GetID(VehicleType type, uint16_t grf_local_id, uint32_t grfid)
 {
+#ifdef WITH_RUST
+	return EngineID{openttd_rust_engine_mapping_get(type, grf_local_id, grfid)};
+#else
 	const auto &map = this->mappings[type];
 	const auto key = EngineIDMapping::Key(grfid, grf_local_id);
 	auto it = std::ranges::lower_bound(map, key, std::less{}, EngineIDMappingKeyProjection{});
 	if (it == std::end(map) || it->Key() != key) return EngineID::Invalid();
 	return it->engine;
+#endif
 }
 
 /**
@@ -567,6 +579,9 @@ EngineID EngineOverrideManager::GetID(VehicleType type, uint16_t grf_local_id, u
  */
 EngineID EngineOverrideManager::UseUnreservedID(VehicleType type, uint16_t grf_local_id, uint32_t grfid, bool static_access)
 {
+#ifdef WITH_RUST
+	return EngineID{openttd_rust_engine_mapping_use(type, grf_local_id, grfid, static_access)};
+#else
 	auto &map = _engine_mngr.mappings[type];
 	const auto key = EngineIDMapping::Key(INVALID_GRFID, grf_local_id);
 	auto it = std::ranges::lower_bound(map, key, std::less{}, EngineIDMappingKeyProjection{});
@@ -582,10 +597,14 @@ EngineID EngineOverrideManager::UseUnreservedID(VehicleType type, uint16_t grf_l
 	}
 
 	return it->engine;
+#endif
 }
 
 void EngineOverrideManager::SetID(VehicleType type, uint16_t grf_local_id, uint32_t grfid, uint8_t substitute_id, EngineID engine)
 {
+#ifdef WITH_RUST
+	openttd_rust_engine_mapping_set(type, grf_local_id, grfid, substitute_id, engine.base());
+#else
 	auto &map = this->mappings[type];
 	const auto key = EngineIDMapping::Key(grfid, grf_local_id);
 	auto it = std::ranges::lower_bound(map, key, std::less{}, EngineIDMappingKeyProjection{});
@@ -594,6 +613,7 @@ void EngineOverrideManager::SetID(VehicleType type, uint16_t grf_local_id, uint3
 	} else {
 		it->engine = engine;
 	}
+#endif
 }
 
 /**
@@ -603,6 +623,9 @@ void EngineOverrideManager::SetID(VehicleType type, uint16_t grf_local_id, uint3
  */
 bool EngineOverrideManager::ResetToCurrentNewGRFConfig()
 {
+#ifdef WITH_RUST
+	return openttd_rust_engine_reset_config(&GetRustEngineLoadingServices());
+#else
 	for (const Vehicle *v : Vehicle::Iterate()) {
 		if (IsCompanyBuildableVehicleType(v)) return false;
 	}
@@ -612,6 +635,7 @@ bool EngineOverrideManager::ResetToCurrentNewGRFConfig()
 	ReloadNewGRFData();
 
 	return true;
+#endif
 }
 
 /**
@@ -619,6 +643,9 @@ bool EngineOverrideManager::ResetToCurrentNewGRFConfig()
  */
 void SetupEngines()
 {
+#ifdef WITH_RUST
+	openttd_rust_engine_setup(&GetRustEngineLoadingServices());
+#else
 	CloseWindowByClass(WC_ENGINE_PREVIEW);
 	_engine_pool.CleanPool();
 
@@ -632,6 +659,7 @@ void SetupEngines()
 			new (eid.engine) Engine(type, eid.internal_id);
 		}
 	}
+#endif
 }
 
 /**
@@ -1432,6 +1460,16 @@ void CheckEngines()
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDEngineServices.hpp"
+#include "abi-visit-OpenTTDEngineLoadingServices.hpp"
 #include "abi-visit-OpenTTDTypeAvailabilityServices.hpp"
-bool CheckAbi_engine() { return AbiServicesComplete(EngineServices()) && AbiServicesComplete(GetRustTypeAvailabilityServices()); }
+bool CheckAbi_engine() { return AbiServicesComplete(GetRustEngineLoadingServices()) && AbiServicesComplete(EngineServices()) && AbiServicesComplete(GetRustTypeAvailabilityServices()); }
+#endif
+
+#ifdef WITH_RUST
+std::span<const EngineIDMapping> EngineOverrideManager::Mappings(VehicleType type) const
+{
+	auto view = openttd_rust_engine_mappings(type);
+	return {view.data, view.size};
+}
+void EngineOverrideManager::ClearMapping() { openttd_rust_engine_mapping_clear(); }
 #endif

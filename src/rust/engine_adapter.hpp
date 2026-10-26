@@ -54,17 +54,17 @@ static OpenTTDEngineRef EnginePrototype(const Engine *e) noexcept
 static OpenTTDEngineSyncVariant Engine_sync_variant(const OpenTTDEngine *e) noexcept
 {
 	const auto &info = EngineOf(e)->info;
-	return {.parent = info.variant_id.base(), .sync = info.extra_flags.Test(ExtraEngineFlag::SyncReliability)};
+	return {.parent = RustEngineVariant(e), .sync = info.extra_flags.Test(ExtraEngineFlag::SyncReliability)};
 }
 static OpenTTDEngineDisplayVariant Engine_display_variant(const OpenTTDEngine *shell) noexcept
 {
 	const Engine *e = EngineOf(shell);
-	return {.parent = e->info.variant_id.base(), .display = e->display_last_variant.base()};
+	return {.parent = RustEngineVariant(e), .display = e->display_last_variant.base()};
 }
 static OpenTTDEnginePreviewVariant Engine_preview_variant(const OpenTTDEngine *e) noexcept
 {
 	const auto &info = EngineOf(e)->info;
-	return {.parent = info.variant_id.base(), .join = info.extra_flags.Test(ExtraEngineFlag::JoinPreview)};
+	return {.parent = RustEngineVariant(e), .join = info.extra_flags.Test(ExtraEngineFlag::JoinPreview)};
 }
 static OpenTTDEngineReliability Engine_reliability(const OpenTTDEngine *shell) noexcept
 {
