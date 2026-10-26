@@ -3,7 +3,7 @@
 from itertools import product
 from pathlib import Path
 
-from . import core, generated, rails
+from . import core, generated
 from .console_adapter import console_adapter, prepared_console
 from .core import ROOT, WITNESS_ENVIRONMENT, branch_witnesses
 
@@ -55,23 +55,17 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     if "objects" not in scenario:
         return scenario
     folder = out / scenario["name"] / "input"
-    source, _ = rails.normalize(Path(scenario["save"]), folder / "normalized")
+    source, _ = core.normalize(Path(scenario["save"]), folder / "normalized")
     scenario = dict(scenario, save=str(source))
     executables = prepared_console("objects", adapter, binaries, builds, folder, env)
     if scenario["objects"] == "gaps":
         for kind in ("valid", "header", "partial", "excess", "fixed", "riff"):
             logs = {}
-            for role in ("reference", "candidate"):
-                probe = dict(scenario, console=["objects_scenario anit-" + kind])
-                run = core.run_game(
-                    probe,
-                    executables[role],
-                    builds[role],
-                    folder / role / ("anit-" + kind),
-                    timeout,
-                    env,
-                    False,
-                )
+            probe = dict(scenario, console=["objects_scenario anit-" + kind])
+            runs = core.capture_pair(
+                probe, executables, builds, folder, timeout, env, "anit-" + kind
+            )
+            for role, run in runs.items():
                 logs[role] = [x for x in run["log"] if x.startswith("OBJECT ")]
                 if (
                     run["exit"]
@@ -87,21 +81,19 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             executables=executables,
             console=["objects_scenario " + scenario["objects"], "unpause"],
         )
-    saves = {role: folder / role / "objects.sav" for role in ("reference", "candidate")}
-    for role in ("reference", "candidate"):
-        setup = dict(
+    saves = {role: folder / role / "objects.sav" for role in executables}
+    runs = core.capture_pair(
+        lambda role: dict(
             scenario,
             console=[f'objects_scenario commands "{saves[role]}"', "unpause"],
-        )
-        capture = core.run_game(
-            setup,
-            executables[role],
-            builds[role],
-            folder / role / "capture",
-            timeout,
-            env,
-            False,
-        )
+        ),
+        executables,
+        builds,
+        folder,
+        timeout,
+        env,
+    )
+    for role, capture in runs.items():
         if (
             capture["exit"]
             or not saves[role].is_file()
@@ -250,11 +242,6 @@ def check(scenario, run, mode, role, result):
             raise RuntimeError(
                 "animation queue/frame/bits/records/RNG changed on reload"
             )
-    key = mode + "_object_results"
-    if role == "reference":
-        result[key] = lines
-    elif result[key] != lines:
-        raise RuntimeError(f"{mode}: object command/query results differ")
 
     branches = {
         "commands": "build clear hq_grow hq_relocate area cargo hq_pass hq_mail owner colours autoslope build_above".split(),

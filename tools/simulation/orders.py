@@ -2,22 +2,22 @@
 
 import hashlib
 
+from .console_adapter import prepared_console
 from .core import (
     ROOT,
-    RUNTIME_DIRECTORIES,
     SNAPSHOT_TICKS,
     WITNESS_ENVIRONMENT,
     branch_witnesses,
+    capture_pair,
     compare_saves,
     decode_element,
     read_save,
-    run_game,
 )
 from .play_saves import DISTRIBUTIONS
 
 ADAPTER = ROOT / "tools/simulation/orders-console.cpp"
 COMMON = "roadveh[0]/common[0]/"
-# Station/depot visits and route prediction (#349) reached by the visits
+# Station/depot visits and route prediction (vehicle/visits.rs) reached by the visits
 # fixture's refit, autorefit, conditional, full-load, cross-graph, depot and
 # unload-only orders. Unreached (#156): graph_failure (exhausted link-graph
 # pool), depot_refit_failed (refit cost beyond cash), depot_elsewhere,
@@ -94,40 +94,14 @@ def adapter(build, folder, env, *, source=ADAPTER, name="orders", afterload=True
 def prepare(scenario, binaries, builds, out, timeout, env, result):
     if "orders" not in scenario:
         return scenario
-    import migration
 
     folder = out / scenario["name"] / "input"
-    native_builds = {
-        "reference": migration.REFERENCE_BUILD,
-        "candidate": migration.REFERENCE_BUILD
-        if binaries["reference"] == binaries["candidate"]
-        else ROOT / "build-rust",
-    }
-    executables = {}
-    for role in ("reference", "candidate"):
-        from .runtime import prepared_adapter
-
-        prepared = prepared_adapter("orders", role, builds, folder / role)
-        if prepared is not None:
-            executables[role] = prepared
-        else:
-            lock = (
-                migration.reference_lock(shared=True)
-                if native_builds[role] == migration.REFERENCE_BUILD
-                else migration.candidate_lock(native_builds[role], shared=True)
-            )
-            with lock:
-                executables[role] = adapter(native_builds[role], folder / role, env)
-        for name in RUNTIME_DIRECTORIES:
-            if (builds[role] / name).is_dir():
-                (folder / role / name).symlink_to(
-                    builds[role] / name, target_is_directory=True
-                )
+    executables = prepared_console("orders", adapter, binaries, builds, folder, env)
     mode = scenario["orders"]
     if mode.startswith("visits"):
         from pathlib import Path
 
-        from .rails import normalize
+        from .core import normalize
 
         save, result["visits_input"] = normalize(Path(scenario["save"]), folder)
         return dict(scenario, executables=executables, save=str(save))
@@ -142,9 +116,10 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         )
     shared = mode == "client-shared-restore"
     saves, captures, active_inputs = {}, {}, {}
-    for role in ("reference", "candidate"):
+
+    def setup(role):
         backup = folder / role / "backups.sav"
-        setup = dict(
+        return dict(
             scenario,
             console=[
                 f'orders_scenario setup "{backup}" {"shared" if shared else "unique"}',
@@ -152,22 +127,17 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             ],
             ticks=1,
         )
-        run = run_game(
-            setup,
-            executables[role],
-            builds[role],
-            folder / role / "capture",
-            timeout,
-            env,
-            desync=False,
-        )
+
+    runs = capture_pair(setup, executables, builds, folder, timeout, env)
+    for role, run in runs.items():
+        backup = folder / role / "backups.sav"
         if run["exit"] or "ORDERS backups captured 2" not in run["log"]:
             raise RuntimeError(f"{role} did not capture two actual order backups")
         if len(read_save(backup)["BKOR"]["elements"]) != 1:
             raise RuntimeError("server-policy save has no actual BKOR contents")
         captures[role] = {
             "input_sha256": hashlib.sha256(backup.read_bytes()).hexdigest(),
-            "commands": setup["console"],
+            "commands": setup(role)["console"],
             "witnesses": [line for line in run["log"] if line.startswith("ORDERS ")],
         }
         saves[role] = backup
@@ -181,22 +151,21 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         result["differences"].extend(records)
         raise RuntimeError("serialized backup preparation states differ")
     if mode == "active-reload":
-        for role in ("reference", "candidate"):
-            active = dict(
+        runs = capture_pair(
+            lambda role: dict(
                 scenario,
                 save=str(saves[role]),
                 console=["orders_scenario active", "unpause"],
                 ticks=1,
-            )
-            run = run_game(
-                active,
-                executables[role],
-                builds[role],
-                folder / role / "active",
-                timeout,
-                env,
-                desync=False,
-            )
+            ),
+            executables,
+            builds,
+            folder,
+            timeout,
+            env,
+            "active",
+        )
+        for role, run in runs.items():
             if (
                 run["exit"]
                 or "ORDERS active 7 8 1" not in run["log"]

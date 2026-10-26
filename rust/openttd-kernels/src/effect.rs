@@ -18,7 +18,8 @@ pub struct State {
     animation: u16,
     substate: u8,
 }
-use crate::services::{Services, chance16_i};
+use crate::random_func::chance16_i;
+use crate::services::Services;
 use std::ffi::c_void;
 
 /// Call-scoped copied observation of canonical C++ fields.
@@ -468,15 +469,10 @@ pub unsafe extern "C" fn openttd_rust_effect_get(owner: *const State, field: u8)
     }
 }
 /// # Safety
-/// Owner is live/exclusive for this invocation. Context identifies its live C++
-/// shell. Tables are live, aligned, immutable and disjoint from owner until return;
-/// observation output is call-scoped. The shared table borrow ends on return;
-/// leaves cannot throw, reenter, destroy owner or retain output pointers. They may
-/// allocate (environmental failures terminate). No private-owner borrow survives
-/// a leaf. Shared mutations are immediate; only private animation bytes persist.
-/// False requests deletion after return; no Rust frame then accesses the owner.
-/// Save/load uses separate get/set exports and never runs these controllers.
-/// Original subtype, table-index and coordinate preconditions apply. Panics abort.
+/// Owner is live and exclusive for this invocation and context is its live C++ shell; tables
+/// stay live and immutable until return. Leaves may allocate but cannot destroy the owner.
+/// False requests deletion after return. Save/load uses the get/set exports instead. The
+/// alignment, disjointness, callback and source-index requirements are in `effect_ffi.h`.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_effect_run(

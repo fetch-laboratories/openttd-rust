@@ -209,7 +209,7 @@ static void ObjectInvocationProbe(TileIndex tile, bool reloaded)
 	regs.fill(0x1234); ObjectNeed(missing.ResolveCallback(regs) == CALLBACK_FAILED && missing_purchase.ResolveCallback(regs) == CALLBACK_FAILED && regs[0] == 0x1234, __LINE__);
 	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, live_root); spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Purchase, purchase_root);
 	fmt::print(stderr, "OBJECT invocation-roots {} {} {}\n", reloaded, callback, object->colour);
-	/* The procedure reenters self queries; the parent program enters integrated
+	/* The procedure reenters self queries; the parent program enters the Rust
 	 * town persistent storage and preserves readonly construction semantics. */
 	auto *parent = program(VSG_SCOPE_PARENT, slope);
 	parent->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}, {.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 0x430}, {.operation = DSGA_OP_STOP, .variable = 0x1A, .and_mask = 3}, {.operation = DSGA_OP_RST, .variable = 0x7C, .parameter = 3, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x101}};

@@ -33,13 +33,9 @@ typedef struct OpenTTDRustIntegerResult {
 	uint8_t error_kind; ///< 0 = none, 1 = invalid, 2 = range, 3 = negative-hex range.
 } OpenTTDRustIntegerResult;
 
-/**
- * Borrow readable bytes in one allocation, length <= PTRDIFF_MAX, for this call
- * only; no retention/ownership transfer or concurrent modification.
- * Zero length permits NULL. Arbitrary bytes and embedded NULs are accepted.
- * Base is 0/8/10/16; width is the native integer bit width (at most 64).
- * Signed/clamp are 0/1. Rust never unwinds into C++; panic aborts.
- */
+/** Borrow readable bytes for this call only; zero length permits NULL, and arbitrary bytes and
+ * embedded NULs are accepted. Base is 0/8/10/16; width is the native integer bit width (at most
+ * 64). Signed/clamp are 0/1. The span is one live immutable allocation of length <= PTRDIFF_MAX. */
 OpenTTDRustIntegerResult openttd_rust_parse_integer(const uint8_t *src, size_t length, uint8_t base, uint8_t width, uint8_t is_signed, uint8_t clamp);
 
 /** Independent lexical skip, with the same byte-borrow/base contract. */

@@ -4,9 +4,11 @@
 Tools are discovered as tools/*-comparison.py plus tools/compare-integers.py, so
 adding a comparison never requires a workflow edit. Each tool keeps its own
 scratch directory under .local/; their logs go to .local/comparison-logs/.
+Each passing tool's case inventory (its "passed" and "cases" lines) is printed.
 """
 
 import argparse
+import re
 import subprocess
 import sys
 import time
@@ -18,6 +20,8 @@ from validation_execution import run_logged
 ROOT = Path(__file__).resolve().parents[1]
 LOGS = ROOT / ".local/comparison-logs"
 TIMEOUT_SECONDS = 1200
+# Summary lines; compiler diagnostics start with a path, file:line or space.
+INVENTORY = re.compile(r"^(?![^\s:]+:\d+:)[A-Za-z].*(?:\bpassed\b|cases: \d+$)")
 
 
 def discover():
@@ -73,6 +77,10 @@ def main():
             )
             if code:
                 failed.append(log)
+            else:
+                for line in log.read_text(errors="replace").splitlines():
+                    if INVENTORY.match(line):
+                        print(f"      {line}", flush=True)
     for log in failed:
         print(f"\n===== {log.relative_to(ROOT)} (last 80 lines) =====")
         print("\n".join(log.read_text(errors="replace").splitlines()[-80:]))

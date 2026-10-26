@@ -1,11 +1,11 @@
-"""Signal traversal, return classifications and transient work-set evidence (#219)."""
+"""Signal traversal, return classifications and transient work-set evidence."""
 
 import hashlib
 import json
 from pathlib import Path
 
 from . import core
-from .console_adapter import console_adapter
+from .console_adapter import console_adapter, prepared_console
 
 ADAPTER = core.ROOT / "tools/simulation/signals-console.cpp"
 
@@ -68,7 +68,7 @@ def scenarios(soak):
     return cases
 
 
-# Rail command owner branches (#265) reached by the rail-commands scenario.
+# Rail command owner (rail_cmd.rs) branches reached by the rail-commands scenario.
 RAIL_COMMAND_BRANCHES = (
     "build_rail",
     "build_not_plain",
@@ -172,38 +172,13 @@ def adapter(build, folder, env):
 def prepare(scenario, binaries, builds, out, timeout, env, result):
     if "signals" not in scenario:
         return scenario
-    import migration
 
-    from .rails import normalize
-    from .runtime import prepared_adapter
+    from .core import normalize
 
     folder = out / scenario["name"] / "input"
     source, record = normalize(Path(scenario["save"]), folder / "normalized")
     result["signals_input"] = record
-    native_builds = {
-        "reference": migration.REFERENCE_BUILD,
-        "candidate": migration.REFERENCE_BUILD
-        if binaries["reference"] == binaries["candidate"]
-        else core.ROOT / "build-rust",
-    }
-    executables = {}
-    for role in ("reference", "candidate"):
-        prepared = prepared_adapter("signals", role, builds, folder / role)
-        if prepared is not None:
-            executables[role] = prepared
-        else:
-            lock = (
-                migration.reference_lock(shared=True)
-                if native_builds[role] == migration.REFERENCE_BUILD
-                else migration.candidate_lock(native_builds[role], shared=True)
-            )
-            with lock:
-                executables[role] = adapter(native_builds[role], folder / role, env)
-        for name in core.RUNTIME_DIRECTORIES:
-            if (builds[role] / name).is_dir():
-                (folder / role / name).symlink_to(
-                    builds[role] / name, target_is_directory=True
-                )
+    executables = prepared_console("signals", adapter, binaries, builds, folder, env)
     if binaries["reference"] == binaries["candidate"]:
         # Reuse the identical reference adapter in --self. Distinct output paths
         # would incorrectly make the core expect Rust-only branch witnesses.
@@ -216,16 +191,8 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             ticks=32 * core.TICKS_PER_DAY + core.SNAPSHOT_TICKS,
             console=["signals_scenario ordinary", "unpause"],
         )
-        for role in ("reference", "candidate"):
-            run = core.run_game(
-                capture,
-                executables[role],
-                builds[role],
-                folder / role / "capture",
-                timeout,
-                env,
-                desync=False,
-            )
+        runs = core.capture_pair(capture, executables, builds, folder, timeout, env)
+        for role, run in runs.items():
             if run["exit"] or not run["snapshots"]:
                 raise RuntimeError("signal reload capture failed")
             saves[role] = run["snapshots"][-1]
@@ -329,11 +296,6 @@ def check(scenario, run, mode, role, result):
         lines = [line for line in run["log"] if line.startswith("RAILCMD ")]
         if len(lines) < 150 or not any("live-reserved" in line for line in lines):
             result["problems"].append(f"{mode}/{role}: missing rail command results")
-        key = mode + "_rail_commands"
-        if role == "reference":
-            result[key] = lines
-        elif result[key] != lines:
-            result["problems"].append(f"{mode}: rail command results differ")
         core.branch_witnesses(scenario, run, role, "rail_cmd", RAIL_COMMAND_BRANCHES)
         return
     if scenario["signals"] == "reload":
@@ -342,11 +304,6 @@ def check(scenario, run, mode, role, result):
                 result["problems"].append(
                     f"{mode}/{role}: missing live signal reload witness"
                 )
-        key = mode + "_signals_reload"
-        if role == "reference":
-            result[key] = lines
-        elif result[key] != lines:
-            result["problems"].append(f"{mode}: live signal reload state differs")
         counts = core.branch_witnesses(
             scenario,
             run,
@@ -373,11 +330,6 @@ def check(scenario, run, mode, role, result):
                 result["problems"].append(
                     f"{mode}/{role}: missing reset/follow-up state"
                 )
-        key = mode + "_signals_overflow"
-        if role == "reference":
-            result[key] = lines
-        elif result[key] != lines:
-            result["problems"].append(f"{mode}: signal overflow input/state differs")
         counts = core.branch_witnesses(
             scenario,
             run,
@@ -402,11 +354,6 @@ def check(scenario, run, mode, role, result):
                 result["problems"].append(
                     f"{mode}/{role}: missing unchanged-body fixed-set probe {size}"
                 )
-        key = mode + "_signals_worksets"
-        if role == "reference":
-            result[key] = lines
-        elif result[key] != lines:
-            result["problems"].append(f"{mode}: fixed-set source probe differs")
         return
     for name in (
         "initial",
@@ -429,13 +376,6 @@ def check(scenario, run, mode, role, result):
     if not live or any(int(count) == 0 for count in live[0].split()[2:]):
         result["problems"].append(
             f"{mode}/{role}: missing free/occupied/PBS return classifications during live play"
-        )
-    key = mode + "_signals_witnesses"
-    if role == "reference":
-        result[key] = lines
-    elif result[key] != lines:
-        result["problems"].append(
-            f"{mode}: native signal state/command witnesses differ"
         )
     from .rails import vehicle_rows
 

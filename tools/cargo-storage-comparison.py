@@ -1,37 +1,21 @@
 #!/usr/bin/env python3
 """Check the pool-limit Split failure and large queues absent from play saves."""
 
-import hashlib
-import json
-import runpy
-import subprocess
-from pathlib import Path
-
+import probe
 from simulation.cargo_storage import scaling_probe
-
-ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = runpy.run_path(str(ROOT / "tools/migration.py"))
-OUT = ROOT / ".local/cargo-storage-comparison"
 
 
 def main():
-    MIGRATION["ensure_reference"]()
-    reference = MIGRATION["REFERENCE"] / "src/cargopacket.cpp"
-    original = reference.read_text()
-    start = original.index("CargoPacket *CargoPacket::Split(uint new_size)")
-    end = original.index("\n}", start) + 2
-    body = original[start:end]
-    fixture = ROOT / "tools/simulation/cargo-split-reference.cpp"
-    OUT.mkdir(parents=True, exist_ok=True)
-    source = OUT / "split.cpp"
+    out = probe.output("cargo-storage-comparison")
+    original = (probe.REFERENCE / "src/cargopacket.cpp").read_text()
+    body = probe.body(original, "CargoPacket *CargoPacket::Split(uint new_size)")
+    fixture = probe.ROOT / "tools/simulation/cargo-split-reference.cpp"
+    source = out / "split.cpp"
     source.write_text(fixture.read_text().replace("@UNCHANGED_SPLIT@", body))
-    env = MIGRATION["environment"]()
-    commands, outputs = [], {}
-    for candidate in (False, True):
-        label = "candidate" if candidate else "reference"
-        binary = OUT / label
-        command = [
-            "g++",
+
+    def command(label, root):
+        return [
+            probe.compiler(),
             "-std=c++20",
             "-O2",
             "-include",
@@ -39,37 +23,14 @@ def main():
             "-include",
             "initializer_list",
             "-I",
-            str(ROOT / "src"),
-            str(source),
-            "-o",
-            str(binary),
+            probe.ROOT / "src",
+            source,
         ]
-        if candidate:
-            command += [
-                "-DWITH_RUST",
-                str(MIGRATION["rust_archive"](ROOT / "build-rust")),
-                "-ldl",
-                "-lpthread",
-                "-lm",
-            ]
-        subprocess.run(command, env=env, check=True)
-        outputs[label] = subprocess.check_output([str(binary)], env=env)
-        commands.append(command)
-    if outputs["reference"] != outputs["candidate"]:
-        raise RuntimeError("pool-limit Split failure differs")
-    report = {
-        "passed": True,
-        "gap": "pool-limit Split failure: early return and no mutation or allocation",
-        "cases": len(outputs["reference"].splitlines()),
-        "reference_sha256": hashlib.sha256(reference.read_bytes()).hexdigest(),
-        "unchanged_body_sha256": hashlib.sha256(body.encode()).hexdigest(),
-        "fixture_sha256": hashlib.sha256(fixture.read_bytes()).hexdigest(),
-        "commands": commands,
-        "candidate_commit": MIGRATION["git"]("rev-parse", "HEAD"),
-        "candidate_status": MIGRATION["git"]("status", "--short"),
-    }
-    (OUT / "report.json").write_text(json.dumps(report, indent=2) + "\n")
-    print(f"Cargo pool-limit Split comparison passed: {report['cases']} cases")
+
+    labels = probe.LABELS[:2]
+    output = probe.compare(out, "split", command, labels=labels, stderr="allowed")
+    # Pool-limit Split failure: early return and no mutation or allocation.
+    probe.passed("Cargo pool-limit Split comparison", cases=len(output.splitlines()))
 
 
 if __name__ == "__main__":

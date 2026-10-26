@@ -1,9 +1,9 @@
-"""Base scheduler and maintenance evidence over actual transport saves (#213)."""
+"""Base scheduler and maintenance evidence over actual transport saves."""
 
 from pathlib import Path
 
-from . import core, rails
-from .disasters import patch, rows
+from . import core
+from .core import patch, rows
 
 OPUS = "play-opus-55-167-002-manual"
 PREFIXES = (
@@ -54,7 +54,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         return scenario
     kind = scenario["vehicle_maintenance"]
     folder = out / scenario["name"] / "input"
-    source, normalization = rails.normalize(Path(scenario["save"]), folder)
+    source, normalization = core.normalize(Path(scenario["save"]), folder)
     original = rows(source)[3]
     if original["type"] != 1 or original[COMMON + "vehstatus"] & 130:
         raise RuntimeError("maintenance fixture is not an active road head")

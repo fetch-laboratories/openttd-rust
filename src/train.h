@@ -298,7 +298,7 @@ struct Train final : public GroundVehicle<Train, VEH_TRAIN> {
 	void ResetTrainFlag(VehicleRailFlag flag) { this->SetTrainFlags(this->GetTrainFlags().Reset(flag)); }
 	void FlipTrainFlag(VehicleRailFlag flag) { this->SetTrainFlags(this->GetTrainFlags().Flip(flag)); }
 
-	/** Copied diagnostic view; never a second authority for private cache state. */
+	/** Copied diagnostic view of the private cache state. */
 	TrainCache CopyTrainCache() const
 	{
 		return {this->tcache.cached_override, this->GetCachedTilt(), this->GetUserDefData(), this->GetCachedCurveSpeedMod(), this->GetCachedMaxCurveSpeed()};

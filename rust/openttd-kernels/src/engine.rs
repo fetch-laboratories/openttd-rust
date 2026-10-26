@@ -5,22 +5,22 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Canonical engine lifecycle state. Native shells own this allocation through
-//! ordinary/indexed construction, temporary staging and vector relocation.
-//! Native scalar aliases carry their real widths. No Rust reference is retained
-//! across a native callback. Allocation failure and panics abort; no unwinding.
+//! Engine lifecycle state. Native shells own this allocation through ordinary and indexed
+//! construction, temporary staging and vector relocation; native scalar aliases carry their
+//! real widths.
 #![allow(
     unsafe_code,
     clippy::cast_ptr_alignment,
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
-    clippy::too_many_lines,
     clippy::struct_field_names,
     clippy::struct_excessive_bools,
     clippy::fn_params_excessive_bools
 )]
+use crate::raw_field::{read_field, write_field};
 use crate::services::ByteSpan;
+use crate::timer_game_common::{DAYS_IN_LEAP_YEAR, DAYS_IN_YEAR};
 #[repr(C)]
 #[derive(Default, Clone, Copy)]
 pub struct Lifecycle {
@@ -93,7 +93,6 @@ use crate::company::OpenTTDCompany;
 use crate::services::{RandomServices, Services as SharedServices};
 use crate::vehicle::{OpenTTDEngine, OpenTTDVehicle, RailVehicleTypes, VehicleType};
 use std::ffi::c_uint;
-use std::ptr::{addr_of, addr_of_mut};
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct EngineRef {
@@ -248,28 +247,14 @@ pub struct Services {
 const AVAILABLE: u8 = 1;
 const EXCLUSIVE: u8 = 2;
 use crate::company_type::OWNER_DEITY;
-use crate::vehicle::INVALID_ENGINE as INVALID;
+use crate::engine_type::INVALID_ENGINE as INVALID;
 // Original static year is process-wide; all engine entries run serialized by
 // the game-state mutex, including main-thread GUI commands and game timers.
 static mut AGING_STOPS: i32 = 0;
 macro_rules! call {
-    ($s:expr, $field:ident $(, $arg:expr)* $(,)?) => {{
-        let result = ($s.$field)($($arg),*);
-        crate::witness::hit(crate::witness::ENGINE_SERVICES);
-        crate::witness::add(crate::witness::ENGINE_BYTES, std::mem::size_of_val(&result) as u64);
-        result
-    }};
-}
-macro_rules! read {
-    ($e:expr, $field:ident) => {
-        unsafe { addr_of!((*$e.state).$field).read() }
+    ($s:expr, $field:ident $(, $arg:expr)* $(,)?) => {
+        crate::witness::counted!(ENGINE_SERVICES, ENGINE_BYTES, ($s.$field)($($arg),*))
     };
-}
-macro_rules! write {
-    ($e:expr, $field:ident, $value:expr) => {{
-        let value = $value;
-        unsafe { addr_of_mut!((*$e.state).$field).write(value) }
-    }};
 }
 unsafe fn parent(s: &Services, mut e: EngineRef) -> EngineRef {
     loop {
@@ -295,7 +280,7 @@ unsafe fn never_expire(s: &Services) -> bool {
 }
 unsafe fn reliability(s: &Services, e: EngineRef, month: bool) {
     let re = unsafe { parent(s, e) };
-    let mut age = read!(re, age) as u32;
+    let mut age = read_field!(re.state, age) as u32;
     if month
         && unsafe { call!(s, engine_id, re.shell) > call!(s, engine_id, e.shell) }
         && age != i32::MAX as u32
@@ -303,14 +288,17 @@ unsafe fn reliability(s: &Services, e: EngineRef, month: bool) {
         age = age.wrapping_add(1);
     }
     let cfg = unsafe { call!(s, reliability, e.shell) };
-    let phase1 = u32::from(read!(e, duration_phase_1));
-    let phase2 = u32::from(read!(e, duration_phase_2));
-    let phase3 = u32::from(read!(e, duration_phase_3));
-    if read!(e, company_avail) != 0 && !unsafe { never_expire(s) } && cfg.base_life != 255 {
+    let phase1 = u32::from(read_field!(e.state, duration_phase_1));
+    let phase2 = u32::from(read_field!(e.state, duration_phase_2));
+    let phase3 = u32::from(read_field!(e.state, duration_phase_3));
+    if read_field!(e.state, company_avail) != 0
+        && !unsafe { never_expire(s) }
+        && cfg.base_life != 255
+    {
         let early = i32::from(cfg.retire_early);
         let max_age = ((phase1 + phase2) as i32 - early * 12).max(0) as u32;
         if early != 0 && age >= max_age {
-            write!(e, company_avail, 0);
+            write_field!(e.state, company_avail, 0);
             unsafe {
                 clear_last_variant(s, e);
                 call!(s, refresh_type, e.kind);
@@ -319,25 +307,32 @@ unsafe fn reliability(s: &Services, e: EngineRef, month: bool) {
     }
     let value;
     if age < phase1 {
-        let start = u32::from(read!(e, reliability_start));
-        value = age.wrapping_mul(u32::from(read!(e, reliability_max)).wrapping_sub(start)) / phase1
+        let start = u32::from(read_field!(e.state, reliability_start));
+        value = age
+            .wrapping_mul(u32::from(read_field!(e.state, reliability_max)).wrapping_sub(start))
+            / phase1
             + start;
     } else {
         age = age.wrapping_sub(phase1);
         if age < phase2 || unsafe { never_expire(s) } || cfg.base_life == 255 {
-            value = u32::from(read!(e, reliability_max));
+            value = u32::from(read_field!(e.state, reliability_max));
         } else {
             age = age.wrapping_sub(phase2);
             if age < phase3 {
-                let max = u32::from(read!(e, reliability_max));
-                let delta = u32::from(read!(e, reliability_final)).wrapping_sub(max) as i32;
+                let max = u32::from(read_field!(e.state, reliability_max));
+                let delta =
+                    u32::from(read_field!(e.state, reliability_final)).wrapping_sub(max) as i32;
                 value = ((age as i32).wrapping_mul(delta) / phase3 as i32) as u32;
-                write!(e, reliability, value.wrapping_add(max) as u16);
+                write_field!(e.state, reliability, value.wrapping_add(max) as u16);
                 return;
             }
             crate::witness::hit(crate::witness::ENGINE_RETIRE);
-            write!(e, company_avail, 0);
-            write!(e, reliability, read!(e, reliability_final));
+            write_field!(e.state, company_avail, 0);
+            write_field!(
+                e.state,
+                reliability,
+                read_field!(e.state, reliability_final)
+            );
             unsafe {
                 clear_last_variant(s, e);
                 call!(s, refresh_type, e.kind);
@@ -345,7 +340,7 @@ unsafe fn reliability(s: &Services, e: EngineRef, month: bool) {
             return;
         }
     }
-    write!(e, reliability, value as u16);
+    write_field!(e.state, reliability, value as u16);
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_reliability(
@@ -363,10 +358,10 @@ pub unsafe extern "C" fn openttd_rust_engine_reliability(
 unsafe fn start_one(s: &Services, e: EngineRef, aging: Ymd, seed: u32) {
     let cfg = unsafe { call!(s, startup, e.shell) };
     let settings = unsafe { call!(s, start_settings) };
-    write!(e, age, 0);
-    write!(e, flags, 0);
-    write!(e, company_avail, 0);
-    write!(e, company_hidden, 0);
+    write_field!(e.state, age, 0);
+    write_field!(e.state, flags, 0);
+    write_field!(e.state, company_avail, 0);
+    write_field!(e.state, company_hidden, 0);
     let rng = unsafe { &*s.rng };
     let shared = unsafe { &*s.shared };
     let saved = unsafe { call!(rng, save) };
@@ -388,7 +383,7 @@ unsafe fn start_one(s: &Services, e: EngineRef, aging: Ymd, seed: u32) {
     } else {
         cfg.base_intro.wrapping_add((r & 511) as i32)
     };
-    write!(e, intro_date, intro);
+    write_field!(e.state, intro_date, intro);
     if intro <= settings.date {
         let ymd = unsafe { call!(s, date_to_ymd, intro) };
         let aging_months = aging
@@ -400,9 +395,9 @@ unsafe fn start_one(s: &Services, e: EngineRef, aging: Ymd, seed: u32) {
             .wrapping_mul(12)
             .wrapping_add(i32::from(ymd.month))
             .wrapping_add(i32::from(ymd.day > 1));
-        write!(e, age, aging_months.wrapping_sub(intro_months));
-        write!(e, company_avail, u16::MAX);
-        write!(e, flags, read!(e, flags) | AVAILABLE);
+        write_field!(e.state, age, aging_months.wrapping_sub(intro_months));
+        write_field!(e.state, company_avail, u16::MAX);
+        write_field!(e.state, flags, read_field!(e.state, flags) | AVAILABLE);
     }
     let re = unsafe { parent(s, e) };
     let re_cfg = unsafe { call!(s, seed_config, re.shell) };
@@ -422,13 +417,21 @@ unsafe fn start_one(s: &Services, e: EngineRef, aging: Ymd, seed: u32) {
         );
     }
     let r = call!(shared, random, shared.context);
-    write!(e, reliability_start, ((r >> 16) & 16383) as u16 + 0x7ae0);
-    write!(e, reliability_max, (r & 16383) as u16 + 0xbfff);
+    write_field!(
+        e.state,
+        reliability_start,
+        ((r >> 16) & 16383) as u16 + 0x7ae0
+    );
+    write_field!(e.state, reliability_max, (r & 16383) as u16 + 0xbfff);
     let r = call!(shared, random, shared.context);
-    write!(e, reliability_final, ((r >> 16) & 16383) as u16 + 0x3fff);
-    write!(e, duration_phase_1, (r & 31) as u16 + 7);
-    write!(
-        e,
+    write_field!(
+        e.state,
+        reliability_final,
+        ((r >> 16) & 16383) as u16 + 0x3fff
+    );
+    write_field!(e.state, duration_phase_1, (r & 31) as u16 + 7);
+    write_field!(
+        e.state,
         duration_phase_2,
         cfg.base_life
             .wrapping_mul(12)
@@ -436,14 +439,18 @@ unsafe fn start_one(s: &Services, e: EngineRef, aging: Ymd, seed: u32) {
             .wrapping_sub(96)
             .max(0) as u16
     );
-    write!(e, duration_phase_3, ((r >> 9) & 127) as u16 + 120);
+    write_field!(e.state, duration_phase_3, ((r >> 9) & 127) as u16 + 120);
     unsafe {
         call!(rng, restore, saved);
     }
-    write!(e, reliability_spd_dec, u16::from(cfg.decay_speed) << 2);
+    write_field!(
+        e.state,
+        reliability_spd_dec,
+        u16::from(cfg.decay_speed) << 2
+    );
     if !cfg.climate {
-        write!(e, flags, read!(e, flags) | AVAILABLE);
-        write!(e, company_avail, 0);
+        write_field!(e.state, flags, read_field!(e.state, flags) | AVAILABLE);
+        write_field!(e.state, company_avail, 0);
     }
 }
 #[unsafe(no_mangle)]
@@ -476,7 +483,7 @@ pub unsafe extern "C" fn openttd_rust_engine_aging_stops(s: *const Services) {
         let cfg = unsafe { call!(s, aging_year, e.shell) };
         let date = cfg
             .base_intro
-            .wrapping_add(cfg.lifelength.wrapping_mul(366) / 2);
+            .wrapping_add(cfg.lifelength.wrapping_mul(DAYS_IN_LEAP_YEAR) / 2);
         year = year.max(unsafe { call!(s, date_to_ymd, date) }.year);
     }
     unsafe {
@@ -558,10 +565,10 @@ unsafe fn disabled(s: &Services, kind: VehicleType, ai: bool) -> bool {
     }
 }
 unsafe fn enable(s: &Services, e: EngineRef, company: u8) {
-    write!(
-        e,
+    write_field!(
+        e.state,
         company_avail,
-        read!(e, company_avail) | (1u16 << company)
+        read_field!(e.state, company_avail) | (1u16 << company)
     );
     unsafe {
         if e.kind == VehicleType::TRAIN {
@@ -584,10 +591,10 @@ unsafe fn enable(s: &Services, e: EngineRef, company: u8) {
     }
 }
 unsafe fn disable(s: &Services, e: EngineRef, company: u8) {
-    write!(
-        e,
+    write_field!(
+        e.state,
         company_avail,
-        read!(e, company_avail) & !(1u16 << company)
+        read_field!(e.state, company_avail) & !(1u16 << company)
     );
     unsafe {
         if e.kind == VehicleType::TRAIN {
@@ -615,8 +622,8 @@ unsafe fn accept(s: &Services, e: EngineRef, company: u8, depth: i32) {
     } else {
         crate::witness::ENGINE_JOIN
     });
-    write!(e, preview_company, 255);
-    write!(e, preview_asked, u16::MAX);
+    write_field!(e.state, preview_company, 255);
+    write_field!(e.state, preview_asked, u16::MAX);
     unsafe {
         enable(s, e, company);
         call!(s, invalidate_preview, e.id);
@@ -659,7 +666,7 @@ unsafe fn preview_company(s: &Services, e: EngineRef) -> u8 {
         from = u32::from(c.id) + 1;
         let preview = unsafe { call!(s, company_preview, c.shell) };
         if preview.blocked != 0
-            || read!(e, preview_asked) & (1 << c.id) != 0
+            || read_field!(e.state, preview_asked) & (1 << c.id) != 0
             || preview.performance <= performance
         {
             continue;
@@ -730,27 +737,31 @@ pub unsafe extern "C" fn openttd_rust_engine_daily(s: *const Services) {
             break;
         }
         from = u32::from(e.id) + 1;
-        if read!(e, flags) & EXCLUSIVE == 0 {
+        if read_field!(e.state, flags) & EXCLUSIVE == 0 {
             continue;
         }
-        if read!(e, preview_company) != 255 {
-            let wait = read!(e, preview_wait).wrapping_sub(1);
-            write!(e, preview_wait, wait);
+        if read_field!(e.state, preview_company) != 255 {
+            let wait = read_field!(e.state, preview_wait).wrapping_sub(1);
+            write_field!(e.state, preview_wait, wait);
             if wait == 0 {
                 unsafe {
                     call!(s, close_preview, e.id);
                 }
-                write!(e, preview_company, 255);
+                write_field!(e.state, preview_company, 255);
             }
-        } else if read!(e, preview_asked).count_ones() < 15 {
+        } else if read_field!(e.state, preview_asked).count_ones() < 15 {
             let company = unsafe { preview_company(s, e) };
-            write!(e, preview_company, company);
+            write_field!(e.state, preview_company, company);
             if company == 255 {
-                write!(e, preview_asked, u16::MAX);
+                write_field!(e.state, preview_asked, u16::MAX);
                 continue;
             }
-            write!(e, preview_asked, read!(e, preview_asked) | (1 << company));
-            write!(e, preview_wait, 20);
+            write_field!(
+                e.state,
+                preview_asked,
+                read_field!(e.state, preview_asked) | (1 << company)
+            );
+            write_field!(e.state, preview_wait, 20);
             let ai = !unsafe { disabled(s, e.kind, true) };
             unsafe {
                 crate::witness::hit(crate::witness::ENGINE_OFFER);
@@ -760,7 +771,7 @@ pub unsafe extern "C" fn openttd_rust_engine_daily(s: *const Services) {
     }
 }
 unsafe fn available(s: &Services, e: EngineRef, date: i32) {
-    if read!(e, flags) & EXCLUSIVE != 0 {
+    if read_field!(e.state, flags) & EXCLUSIVE != 0 {
         let mut from = 0;
         loop {
             let c = unsafe { call!(s, company_next, from) };
@@ -768,7 +779,7 @@ unsafe fn available(s: &Services, e: EngineRef, date: i32) {
                 break;
             }
             from = u32::from(c.id) + 1;
-            if read!(e, company_avail) & (1 << c.id) == 0 {
+            if read_field!(e.state, company_avail) & (1 << c.id) == 0 {
                 continue;
             }
             if unsafe { call!(s, company_engine_count, c.id, e.id) } == 0 {
@@ -779,11 +790,15 @@ unsafe fn available(s: &Services, e: EngineRef, date: i32) {
             }
         }
     }
-    write!(e, flags, (read!(e, flags) & !EXCLUSIVE) | AVAILABLE);
+    write_field!(
+        e.state,
+        flags,
+        (read_field!(e.state, flags) & !EXCLUSIVE) | AVAILABLE
+    );
     unsafe {
         call!(s, refresh_type, e.kind);
     }
-    write!(e, company_avail, u16::MAX);
+    write_field!(e.state, company_avail, u16::MAX);
     if unsafe { wagon(s, e) } {
         return;
     }
@@ -865,8 +880,8 @@ pub unsafe extern "C" fn openttd_rust_engine_monthly(s: *const Services) {
             break;
         }
         from = u32::from(e.id) + 1;
-        if read!(e, flags) & AVAILABLE != 0 && read!(e, age) != i32::MAX {
-            write!(e, age, read!(e, age).wrapping_add(1));
+        if read_field!(e.state, flags) & AVAILABLE != 0 && read_field!(e.state, age) != i32::MAX {
+            write_field!(e.state, age, read_field!(e.state, age).wrapping_add(1));
             unsafe {
                 reliability(s, e, true);
             }
@@ -875,20 +890,24 @@ pub unsafe extern "C" fn openttd_rust_engine_monthly(s: *const Services) {
         if !unsafe { call!(s, enabled, e.shell) } {
             continue;
         }
-        if read!(e, flags) & AVAILABLE == 0 && date >= read!(e, intro_date).wrapping_add(365) {
+        if read_field!(e.state, flags) & AVAILABLE == 0
+            && date >= read_field!(e.state, intro_date).wrapping_add(DAYS_IN_YEAR)
+        {
             unsafe {
                 available(s, e, date);
             }
-        } else if read!(e, flags) & (AVAILABLE | EXCLUSIVE) == 0 && date >= read!(e, intro_date) {
+        } else if read_field!(e.state, flags) & (AVAILABLE | EXCLUSIVE) == 0
+            && date >= read_field!(e.state, intro_date)
+        {
             if unsafe { disabled(s, e.kind, false) }
                 || unsafe { wagon(s, e) }
                 || unsafe { call!(s, extra_flags, e.shell) } & 2 != 0
             {
                 continue;
             }
-            write!(e, flags, read!(e, flags) | EXCLUSIVE);
-            write!(e, preview_company, 255);
-            write!(e, preview_asked, 0);
+            write_field!(e.state, flags, read_field!(e.state, flags) | EXCLUSIVE);
+            write_field!(e.state, preview_company, 255);
+            write_field!(e.state, preview_asked, 0);
         }
     }
     unsafe {
@@ -906,10 +925,10 @@ pub unsafe extern "C" fn openttd_rust_engine_clear_hidden(s: *const Services, co
             break;
         }
         from = u32::from(e.id) + 1;
-        write!(
-            e,
+        write_field!(
+            e.state,
             company_hidden,
-            read!(e, company_hidden) & !company_mask(company)
+            read_field!(e.state, company_hidden) & !company_mask(company)
         );
     }
 }
@@ -921,10 +940,11 @@ unsafe fn buildable(s: &Services, e: EngineRef, kind: VehicleType, company: u8) 
         return false;
     }
     if company == OWNER_DEITY {
-        if read!(e, flags) & AVAILABLE == 0 || read!(e, company_avail) == 0 {
+        if read_field!(e.state, flags) & AVAILABLE == 0 || read_field!(e.state, company_avail) == 0
+        {
             return false;
         }
-    } else if read!(e, company_avail) & company_mask(company) == 0 {
+    } else if read_field!(e.state, company_avail) & company_mask(company) == 0 {
         return false;
     }
     if !unsafe { call!(s, enabled, e.shell) } {
@@ -968,7 +988,7 @@ pub unsafe extern "C" fn openttd_rust_engine_variant_hidden(
     if company >= 15 {
         return false;
     }
-    if read!(e, company_hidden) & (1 << company) != 0 {
+    if read_field!(e.state, company_hidden) & (1 << company) != 0 {
         return true;
     }
     let s = unsafe { &*s };
@@ -980,7 +1000,7 @@ pub unsafe extern "C" fn openttd_rust_engine_variant_hidden(
         } else {
             unsafe { call!(s, resolve, variant.display) }
         };
-        let hidden = read!(ve, company_hidden) & (1 << company) != 0;
+        let hidden = read_field!(ve.state, company_hidden) & (1 << company) != 0;
         if hidden || variant.parent == INVALID {
             return hidden;
         }
@@ -1003,13 +1023,13 @@ pub unsafe extern "C" fn openttd_rust_engine_visibility(
     if execute {
         crate::witness::hit(crate::witness::ENGINE_VISIBILITY);
         let mask = 1 << company;
-        write!(
-            e,
+        write_field!(
+            e.state,
             company_hidden,
             if hide {
-                read!(e, company_hidden) | mask
+                read_field!(e.state, company_hidden) | mask
             } else {
-                read!(e, company_hidden) & !mask
+                read_field!(e.state, company_hidden) & !mask
             }
         );
         unsafe {
@@ -1027,7 +1047,9 @@ pub unsafe extern "C" fn openttd_rust_engine_want_preview(
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
     let s = unsafe { &*s };
     let company = unsafe { call!(s, current_company) };
-    if e.shell.is_null() || read!(e, flags) & EXCLUSIVE == 0 || read!(e, preview_company) != company
+    if e.shell.is_null()
+        || read_field!(e.state, flags) & EXCLUSIVE == 0
+        || read_field!(e.state, preview_company) != company
     {
         return 1;
     }
@@ -1122,7 +1144,8 @@ pub unsafe extern "C" fn openttd_rust_engine_check(s: *const Services) {
         if !unsafe { call!(s, enabled, e.shell) } || unsafe { wagon(s, e) } {
             continue;
         }
-        if read!(e, flags) & AVAILABLE != 0 && read!(e, company_avail) != 0 {
+        if read_field!(e.state, flags) & AVAILABLE != 0 && read_field!(e.state, company_avail) != 0
+        {
             return;
         }
         min = min.min(unsafe { call!(s, base_intro, e.shell) });

@@ -557,13 +557,13 @@ static const std::array<EffectProcs, EV_END> _effect_procs = {{
 }};
 
 #else
-static void OPENTTD_EFFECT_CALL EffectObserve(void *context, OpenTTDEffectView *view) noexcept
+static void OPENTTD_RUST_CALL EffectObserve(void *context, OpenTTDEffectView *view) noexcept
 {
 	auto *v = static_cast<EffectVehicle *>(context);
 	*view = {v->x_pos, v->y_pos, v->z_pos, v->sprite_cache.sprite_seq.seq[0].sprite, v->progress, v->spritenum, v->subtype, static_cast<uint8_t>(_settings_client.sound.ambient)};
 }
 
-static void OPENTTD_EFFECT_CALL EffectWrite(void *context, uint8_t field, uint32_t value) noexcept
+static void OPENTTD_RUST_CALL EffectWrite(void *context, uint8_t field, uint32_t value) noexcept
 {
 	auto *v = static_cast<EffectVehicle *>(context);
 	switch (field) {
@@ -577,13 +577,13 @@ static void OPENTTD_EFFECT_CALL EffectWrite(void *context, uint8_t field, uint32
 	}
 }
 
-static void OPENTTD_EFFECT_CALL EffectViewport(void *context) noexcept
+static void OPENTTD_RUST_CALL EffectViewport(void *context) noexcept
 {
 	/* Effects skip UpdatePosition; UpdateViewport has no NewGRF/script callbacks. */
 	static_cast<EffectVehicle *>(context)->UpdatePositionAndViewport();
 }
 
-static void OPENTTD_EFFECT_CALL EffectSound(void *context, uint8_t success) noexcept
+static void OPENTTD_RUST_CALL EffectSound(void *context, uint8_t success) noexcept
 {
 	SndPlayVehicleFx(success == 0 ? SND_2F_BUBBLE_GENERATOR_FAIL : SND_31_BUBBLE_GENERATOR_SUCCESS, static_cast<EffectVehicle *>(context));
 }

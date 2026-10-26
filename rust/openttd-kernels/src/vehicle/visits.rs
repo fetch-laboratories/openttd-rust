@@ -5,18 +5,16 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Route-link prediction (`LinkRefresher`, `linkgraph/refresh.cpp`) and both
-//! `IncreaseStats` overloads (`station_cmd.cpp`). Native shells keep vehicle,
-//! station and link-graph pool identity; graph allocation, nodes, merging,
-//! and edges stay native operations; scheduling calls its Rust owner directly. Entries are serialized by the
-//! game-state mutex. Prediction frames (capacities, refit descriptions and the
-//! shared seen-hop set) are private to one entry: no callback can reach them.
-//! Temporary cargo/subtype writes happen in source order around the native
-//! subtype and capacity callbacks and are restored before the next vehicle.
+//! Route-link prediction (`LinkRefresher`, `linkgraph/refresh.cpp`) and both `IncreaseStats`
+//! overloads (`station_cmd.cpp`). Graph allocation, nodes, merging and edges stay native.
+//! Prediction frames are private to one entry. Temporary cargo and subtype writes happen in
+//! source order around the native subtype and capacity callbacks and are restored before the
+//! next vehicle.
 // Truncating casts are the original's `uint` to `uint16_t` stores (below the
 // stored value) and its `Map::LogX()` byte; `if_not_else` keeps source order.
 #![allow(unsafe_code, clippy::cast_possible_truncation, clippy::if_not_else)]
-use super::{VS_CRASHED, VS_HIDDEN, VS_STOPPED, VehicleRef, VehicleServices, VehicleType};
+use super::{VehicleRef, VehicleServices, VehicleType};
+use crate::vehicle_base::{VS_CRASHED, VS_HIDDEN, VS_STOPPED};
 use crate::{
     base_consist::{VF_LOADING_FINISHED, VF_STOP_LOADING},
     cargo_storage::List,
@@ -25,7 +23,6 @@ use crate::{
     linkgraph::live,
     linkgraph_schedule::{self, Services as ScheduleServices},
     linkgraph_type::{EdgeUpdateModes, INVALID_LINK_GRAPH},
-    map_func::Map,
     order_type::{
         INVALID_VEH_ORDER_ID, ODATF_HALT, ODATF_NEAREST_DEPOT, ODTF_PART_OF_ORDERS, OLFB_NO_LOAD,
         OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_IMPLICIT, OT_LOADING,
@@ -474,9 +471,7 @@ impl Refresher {
         }
         let st_to = (s.station.station)(next_station).base;
         let v = self.vehicle;
-        let map = Map {
-            log_x: (s.shared.map_log_x)() as u8,
-        };
+        let map = s.shared.map();
         for cargo in 0..NUM_CARGO {
             // Refresh the link and give it a minimum capacity.
             let cargo_quantity = self.capacities[usize::from(cargo)];

@@ -7,7 +7,7 @@ import struct
 import subprocess
 from pathlib import Path
 
-from . import core, economy
+from . import core
 from .core import ROOT, SNAPSHOT_TICKS, field_spans, read_save
 from .play_saves import DISTRIBUTIONS
 
@@ -55,14 +55,14 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         patches.append((cid, index, field, value))
 
     unload = {"unload": 1, "transfer": 2, "no-unload": 4}[mode]
-    for index, orders in economy.rows(original, "ORDL").items():
+    for index, orders in core.rows(original, "ORDL").items():
         # Current saves store orders as nested records inside each shared list.
         # Only station orders use these unloading flag bits.
         for field, order_type in orders.items():
             if field.endswith("/type") and order_type & 15 == 1:
                 flags = field.removesuffix("type") + "flags"
                 patch("ORDL", index, flags, (orders[flags] & ~7) | unload)
-    for index, vehicle in economy.rows(original, "VEHS").items():
+    for index, vehicle in core.rows(original, "VEHS").items():
         if vehicle["type"] == 1:
             flags = vehicle[VEHICLE + "current_order.flags"]
             patch("VEHS", index, VEHICLE + "current_order.flags", (flags & ~7) | unload)
@@ -84,12 +84,12 @@ def check(scenario, run, mode, role, result):
         return
     before = read_save(Path(scenario["save"]))
     saved = [read_save(path) for path in run["snapshots"]]
-    packets = economy.rows(before, "CAPA")
+    packets = core.rows(before, "CAPA")
     observed = []
     action_totals = [0, 0, 0, 0]
     for chunks in saved:
-        current = economy.rows(chunks, "CAPA")
-        for vehicle in economy.rows(chunks, "VEHS").values():
+        current = core.rows(chunks, "CAPA")
+        for vehicle in core.rows(chunks, "VEHS").values():
             if vehicle["type"] != 1:
                 continue
             actions = vehicle[VEHICLE + "cargo.action_counts"]
@@ -111,7 +111,7 @@ def check(scenario, run, mode, role, result):
                 "feeder": sum(packet["feeder_share"] for packet in current.values()),
                 "flow_records": sum(
                     field.endswith("/restricted")
-                    for station in economy.rows(chunks, "STNN").values()
+                    for station in core.rows(chunks, "STNN").values()
                     for field in station
                 ),
                 "jobs": len(chunks["LGRJ"]["elements"]),

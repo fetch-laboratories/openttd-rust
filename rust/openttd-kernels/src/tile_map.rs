@@ -29,9 +29,7 @@ fn tile_height(m: &TileTypeAccess, t: u32) -> Option<i32> {
 #[allow(clippy::cast_possible_truncation)] // trailing_zeros is in 0..=32.
 fn corners(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<[i32; 4]> {
     m.available(t)?;
-    let map = crate::map_func::Map {
-        log_x: x.trailing_zeros() as u8,
-    };
+    let map = crate::map_func::Map::from_log_x(x.trailing_zeros());
     let x1 = map.tile_x(t);
     let y1 = map.tile_y(t);
     let x2 = (x1 + 1).min(map.max_x());

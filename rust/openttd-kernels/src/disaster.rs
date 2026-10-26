@@ -5,8 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 //! Disaster-private ownership and complete controllers over canonical C++ world data.
-// Source-width casts and bit masks intentionally preserve the original encodings.
-// Keeping controller bodies intact makes their service ordering reviewable.
+// Source-width casts and bit masks preserve the original encodings.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,
@@ -18,7 +17,8 @@
     clippy::struct_field_names,
     clippy::verbose_bit_mask
 )]
-use crate::services::{Services, chance16_i};
+use crate::random_func::chance16_i;
+use crate::services::Services;
 use crate::tile_type::INVALID_TILE;
 use std::cell::Cell;
 use std::ffi::c_void;
@@ -219,28 +219,21 @@ impl World<'_> {
         self.read(10, id, 0, 0)
     }
     fn tile_xy(&self, x: u32, y: u32) -> u32 {
-        crate::map_func::Map {
-            log_x: (self.world()[0] as u32).trailing_zeros() as u8,
-        }
-        .tile_xy(x, y)
+        crate::map_func::Map::from_log_x((self.world()[0] as u32).trailing_zeros()).tile_xy(x, y)
     }
     fn tile_virt(&self, x: i64, y: i64) -> u32 {
         self.tile_xy((x as i32 as u32) >> 4, (y as i32 as u32) >> 4)
     }
     fn tile_x(&self, tile: u32) -> i64 {
         i64::from(
-            crate::map_func::Map {
-                log_x: (self.world()[0] as u32).trailing_zeros() as u8,
-            }
-            .tile_x(tile),
+            crate::map_func::Map::from_log_x((self.world()[0] as u32).trailing_zeros())
+                .tile_x(tile),
         )
     }
     fn tile_y(&self, tile: u32) -> i64 {
         i64::from(
-            crate::map_func::Map {
-                log_x: (self.world()[0] as u32).trailing_zeros() as u8,
-            }
-            .tile_y(tile),
+            crate::map_func::Map::from_log_x((self.world()[0] as u32).trailing_zeros())
+                .tile_y(tile),
         )
     }
     async fn action(&self, kind: u32, id: u32, other: u32, a: i64, b: i64, c: i64, d: i64) -> i64 {
@@ -1118,15 +1111,10 @@ pub extern "C" fn openttd_rust_disaster_delay() -> *mut u16 {
 }
 /// Create one component continuation; arguments and IDs follow original preconditions.
 /// # Safety
-/// Context/callbacks remain live until destruction. Read/write leaves cannot
-/// throw or reenter, and copy/write only source-valid canonical scalars. Shared
-/// and occupancy tables, including their pointees, stay immutable and live through
-/// Run destruction, suspension and all World clones. Context may mutate
-/// independently; table references borrow no world storage. Services are
-/// synchronous and noexcept; allocation may construct a separate owner. No raw
-/// State reference spans any service; flight helpers access flags only during
-/// their call. Returned actions 2/14/17 allow deletion/Crash/clear callbacks on
-/// the C++ stack. All operations run on the game thread.
+/// Context and callbacks stay live until destruction; the shared and occupancy tables and
+/// their pointees stay immutable and live through destruction, suspension and all `World`
+/// clones (see `disaster_ffi.h`). Returned actions 2, 14 and 17 run deletion, `Crash` and clear
+/// callbacks on the C++ stack.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_disaster_create<'a>(
     operation: u32,
@@ -1162,7 +1150,7 @@ pub unsafe extern "C" fn openttd_rust_disaster_create<'a>(
         future: Box::pin(run(w, operation, id, a, b, c, d)),
     }))
 }
-/// Resume after the prior C++ action completes. Kind0 contains the final result.
+/// Resume after the prior C++ action completes. Kind 0 contains the final result.
 /// # Safety
 /// `owner` is live/exclusive for this call; source-valid callback contracts hold.
 /// Returned actions retain no Rust owner/world references. Panics abort, never unwind.
@@ -1487,6 +1475,8 @@ mod tests {
         max_speed: unused!(vehicle::VehicleRef ; u16),
         maintenance: std::ptr::null(),
         visits: unused!( ; *const vehicle::visits::Services),
+        orders: unused!( ; *const crate::orders::Leaves),
+        ship_get: unused!(u32 ; vehicle::VehicleRef),
     };
     // Existing tests never clear; the native ABI fixture below covers full costs.
     const OCCUPANCY: Occupancy = Occupancy {

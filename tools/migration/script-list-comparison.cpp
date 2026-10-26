@@ -390,7 +390,7 @@ static void Persistence(std::string_view tag)
 		sq_close(vm); Require(EndAllocator() == 0);
 	}
 }
-/* Only the issue #65 uncovered VM/control paths; bundled VM and owner are real. */
+/* Only the ScriptList VM/control paths the harness does not reach; bundled VM and owner are real. */
 struct FilterItem {
 	SQInteger index;
 	static auto &Items() { static FilterItem items[] = {{1}, {2}, {3}, {4}}; return items; }

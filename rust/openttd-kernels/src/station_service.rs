@@ -5,9 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Canonical station cargo-service state. Native scalar aliases and packet
-//! services never overlap Rust references into this owner. Addresses are stable
-//! for the shell lifetime, including indexed loading and retired-station reuse.
+//! Station cargo-service state. Addresses are stable for the shell lifetime, including
+//! indexed loading and retired-station reuse.
 #![allow(
     unsafe_code,
     clippy::missing_safety_doc,
@@ -23,7 +22,8 @@ use crate::orders::NativeOrderList;
 use crate::station::{BaseStation, Station};
 use crate::timer_game_common::INVALID_DATE;
 use crate::vehicle::visits::{Services as Visits, refresh_links};
-use crate::vehicle::{EngineRef, VS_CRASHED, VS_STOPPED, VehicleRef};
+use crate::vehicle::{EngineRef, VehicleRef};
+use crate::vehicle_base::{VS_CRASHED, VS_STOPPED};
 use std::ffi::c_void;
 use std::ptr::NonNull;
 /// `GoodsEntry::ConvertState`: the four history bits keep their native order.
@@ -108,15 +108,6 @@ pub(crate) unsafe fn activity(state: *const Service) -> StationActivity {
             time_since_unload: (&raw const (*state).fields.time_since_unload).read(),
         }
     }
-}
-/// Shared native town observation of the canonical station owner.
-///
-/// # Safety
-/// `state` is live and game-state-mutex serialized; no borrow survives this call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_activity(state: *const Service) -> StationActivity {
-    // SAFETY: Native shared helper supplies the station's live canonical owner.
-    unsafe { activity(state) }
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_station_service_new() -> *mut Service {
@@ -1569,7 +1560,7 @@ pub unsafe extern "C" fn openttd_rust_station_prepare(
 /// `PrepareUnload`.
 pub(crate) fn prepare_unload(front: VehicleRef, w: &World, l: &Loading) {
     // SAFETY: the shared immutable vehicle table outlives this entry. Station
-    // identities and owner are resolved before next-station discovery (#228).
+    // identities and owner are resolved before next-station discovery.
     let vehicle = unsafe { &*l.vehicle };
     let st = (w.station)((vehicle.last_station)(front));
     unsafe {
@@ -1618,7 +1609,7 @@ unsafe fn load_vehicle(
     visits: &Visits,
 ) {
     // SAFETY: the shared immutable vehicle table outlives this entry. Station
-    // identities and owner are resolved before next-station discovery (#228).
+    // identities and owner are resolved before next-station discovery.
     let vehicle = unsafe { &*l.vehicle };
     let st = (w.station)((vehicle.last_station)(front));
     let mut body = |next| {

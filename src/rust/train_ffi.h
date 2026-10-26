@@ -17,15 +17,10 @@
 #include "signal_ffi.h"
 struct OpenTTDVehicleServices;
 struct OpenTTDGroundPhysicsServices;
-/* Each shell owns one canonical Rust state allocation. A resolved handle copies
- * native identity and its owner once per entry or topology read. Narrow records
- * contain only fields consumed by the current policy; no world borrow spans a
- * service. Tables are immutable and borrowed for synchronous calls. Native
- * visitors preserve container order and filter non-trains before Rust policy.
- * Tile/depot, orders/loading, station callbacks and destruction are direct
- * noexcept services: none unwinds an ordinary-play script or save error here.
- * Escaping environmental exceptions and Rust panics abort. Destruction invalidates
- * both handle pointers; policy never reads them after the original deletion point. */
+/* Each shell owns one Rust state allocation. A resolved handle copies native identity and its
+ * owner once per entry or topology read; records hold only the fields the policy consumes.
+ * Native visitors keep container order and filter non-trains before Rust policy. Destruction
+ * invalidates both handle pointers; policy never reads them after the original deletion point. */
 struct OpenTTDTrainDepot { uint32_t tile, length; };
 struct Train;
 struct OpenTTDTrainServices;
@@ -354,7 +349,6 @@ struct OpenTTDTrainServices {
 	uint64_t (*platform_length)(OpenTTDTrainHandle, uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(platform_length);
 	uint64_t (*pow_wag_power)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(pow_wag_power);
 	uint64_t (*price)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(price);
-	uint64_t (*process_orders)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(process_orders);
 	uint64_t (*railveh_wagon)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(railveh_wagon);
 	uint64_t (*rail_tilt)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(rail_tilt);
 	uint64_t (*rail_type)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_type);

@@ -4,14 +4,12 @@
 #define RUST_LINKGRAPH_SCHEDULE_STAGING_HPP
 #include "linkgraph_schedule_ffi.h"
 
-/* VideoDriver::game_state_mutex serializes save/load with the game loop (the
- * headless harness is single-threaded). DoSave calls SlSaveChunks before it
- * starts the asynchronous compression writer. Workers never touch these queues;
- * export and both copies below invoke no callback, yield or pool reset. Discard
- * exported spans before SlObject, which may recurse through SlError/SlNullPointers.
- * Nested fixup uses active itself and publishes nulls before returning; the outer
- * destructor therefore publishes the same cleaned vectors, never stale references.
- * Only native frames cross SlObject; partial decoded state commits even on unwind. */
+/* DoSave calls SlSaveChunks before it starts the asynchronous compression writer, and workers never
+ * touch these queues. Discard exported spans before SlObject, which may recurse through
+ * SlError/SlNullPointers. Nested fixup uses active itself and publishes nulls before returning, so
+ * the outer destructor publishes the same cleaned vectors; partial decoded state commits on unwind.
+ * VideoDriver::game_state_mutex serializes access; export and both copies cannot call back, yield
+ * or reset pools, so their borrowed spans remain valid until the copies finish. */
 struct ScheduleStaging {
 	inline static ScheduleStaging *active = nullptr;
 	std::vector<LinkGraph *> schedule;

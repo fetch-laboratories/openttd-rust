@@ -5,7 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Complete road track/depot searches; #121 retains the sole persistent path.
+//! Complete road track/depot searches; the road vehicle controller keeps the only persistent path.
 //! Lookup maps are never iterated; arena identity survives open-node replacement.
 //! Heap ties follow `CBinaryHeapT`, including removal's upward then downward repair.
 #![allow(
@@ -16,11 +16,14 @@
     clippy::too_many_arguments,
     clippy::similar_names
 )]
+use crate::binaryheap::BinaryHeap;
+use crate::game_state::GameState;
 use crate::map_func::Map;
 use crate::node_hash::NodeMap;
+use crate::order_type::{OT_GOTO_STATION, OT_GOTO_WAYPOINT};
 use crate::road::{PathElement, State};
 use crate::services::Services;
-use std::cell::UnsafeCell;
+use crate::track_type::INVALID_TRACKDIR;
 use std::ffi::c_void;
 
 #[repr(C)]
@@ -107,7 +110,6 @@ pub struct Result {
     pub calcs: i32,
     pub distance: i32,
 }
-const INVALID: u8 = 255;
 #[derive(Clone, Copy)]
 struct Node {
     tile: u32,
@@ -146,15 +148,10 @@ struct Scratch {
     arena: Vec<Node>,
     open: NodeMap<(u32, u8), usize>,
     closed: NodeMap<(u32, u8), usize>,
-    heap: Vec<usize>,
+    heap: BinaryHeap,
 }
-struct SerializedScratch(UnsafeCell<Option<Scratch>>);
-// SAFETY: Production searches run under the native game-state mutex. Taking or
-// returning scratch ends its global borrow before any callback; active searches
-// own their storage, so a nested call cannot alias it. Native heap probes keep
-// local storage and do not access this process-wide cache.
-unsafe impl Sync for SerializedScratch {}
-static SCRATCH: SerializedScratch = SerializedScratch(UnsafeCell::new(None));
+// An active search owns the taken scratch; native heap probes never touch this slot.
+static SCRATCH: GameState<Option<Scratch>> = GameState::new(None);
 
 struct Search<'a> {
     movement: crate::movement::CachedTable<'a>,
@@ -171,7 +168,7 @@ struct Search<'a> {
     // Lookup-only (never iterated); order never selects a node.
     open: NodeMap<(u32, u8), usize>,
     closed: NodeMap<(u32, u8), usize>,
-    heap: Vec<usize>,
+    heap: BinaryHeap,
     intermediate: Option<usize>,
     best_dest: Option<usize>,
     rounds: i32,
@@ -207,7 +204,7 @@ impl Search<'_> {
     ) -> Self {
         // SAFETY: Native production entries serialize access. Ownership moves
         // out of the slot before any query; first use has no allocation yet.
-        let scratch = unsafe { (*SCRATCH.0.get()).take().unwrap_or_default() };
+        let scratch = unsafe { (*SCRATCH.get()).take().unwrap_or_default() };
         Self::with_scratch(input, leaves, context, depot, max_cost, scratch, true)
     }
     fn with_scratch(
@@ -222,8 +219,6 @@ impl Search<'_> {
         scratch.arena.clear();
         scratch.open.clear();
         scratch.closed.clear();
-        scratch.heap.clear();
-        scratch.heap.push(usize::MAX);
         Self {
             // SAFETY: The shared registry outlives this synchronous search.
             movement: crate::movement::CachedTable::new(unsafe { &*leaves.shared }),
@@ -239,7 +234,7 @@ impl Search<'_> {
             arena: scratch.arena,
             open: scratch.open,
             closed: scratch.closed,
-            heap: scratch.heap,
+            heap: BinaryHeap::reuse(scratch.heap),
             intermediate: None,
             best_dest: None,
             rounds: 0,
@@ -271,9 +266,9 @@ impl Search<'_> {
         unsafe { (self.leaves.follow)(self.context, tile, td) }
     }
     fn destination(&mut self) {
-        if self.input.order_type == 1 || self.input.order_type == 6 {
+        if self.input.order_type == OT_GOTO_STATION || self.input.order_type == OT_GOTO_WAYPOINT {
             self.dest_station = Some(self.input.order_destination);
-            self.station_type = if self.input.order_type == 6 {
+            self.station_type = if self.input.order_type == OT_GOTO_WAYPOINT {
                 8
             } else if self.input.bus != 0 {
                 3
@@ -315,48 +310,15 @@ impl Search<'_> {
             )
         })
     }
-    fn less(&self, a: usize, b: usize) -> bool {
-        self.arena[a].estimate < self.arena[b].estimate
-    }
-    fn up(&mut self, mut gap: usize, item: usize) -> usize {
-        while gap > 1 {
-            let parent = gap / 2;
-            if !self.less(item, self.heap[parent]) {
-                break;
-            }
-            self.heap[gap] = self.heap[parent];
-            gap = parent;
-        }
-        gap
-    }
-    fn down(&mut self, mut gap: usize, item: usize) -> usize {
-        let mut child = gap * 2;
-        while child < self.heap.len() {
-            if child + 1 < self.heap.len() && self.less(self.heap[child + 1], self.heap[child]) {
-                child += 1;
-            }
-            if !self.less(self.heap[child], item) {
-                break;
-            }
-            self.heap[gap] = self.heap[child];
-            gap = child;
-            child = gap * 2;
-        }
-        gap
-    }
     fn include(&mut self, item: usize) {
-        self.heap.push(0);
-        let gap = self.up(self.heap.len() - 1, item);
-        self.heap[gap] = item;
+        let arena = &self.arena;
+        self.heap
+            .include(item, |a, b| arena[a].estimate < arena[b].estimate);
     }
     fn remove(&mut self, item: usize) {
-        let index = self.heap.iter().position(|i| *i == item).unwrap();
-        let last = self.heap.pop().unwrap();
-        if index < self.heap.len() {
-            let gap = self.up(index, last);
-            let gap = self.down(gap, last);
-            self.heap[gap] = last;
-        }
+        let arena = &self.arena;
+        self.heap
+            .remove(item, |a, b| arena[a].estimate < arena[b].estimate);
     }
     fn startup(&mut self, tile: u32, mut dirs: u16) {
         let choice = dirs.count_ones() > 1;
@@ -387,9 +349,7 @@ impl Search<'_> {
             if t.drive_through != 0 {
                 cost = cost.wrapping_add(self.input.stop);
                 let dir = crate::track_func::trackdir_to_exitdir(td);
-                let map = Map {
-                    log_x: self.input.map_x.trailing_zeros() as u8,
-                };
+                let map = Map::from_log_x(self.input.map_x.trailing_zeros());
                 if !crate::road_stop::continuation(
                     shared,
                     tile,
@@ -448,9 +408,7 @@ impl Search<'_> {
             // SAFETY: After accepted continuation, observe current/next height,
             // then vehicle and old-tile follower limits, without world mutation.
             let movement = self.movement.get();
-            let map = crate::services::Map {
-                log_x: self.input.map_x.trailing_zeros() as u8,
-            };
+            let map = crate::services::Map::from_log_x(self.input.map_x.trailing_zeros());
             let center_z = |tile| {
                 movement.pixel_z_at(
                     (map.tile_x(tile) * crate::tile_type::TILE_SIZE
@@ -548,7 +506,7 @@ impl Search<'_> {
     fn find(&mut self) -> bool {
         loop {
             self.rounds = self.rounds.wrapping_add(1);
-            let Some(&best) = self.heap.get(1) else {
+            let Some(best) = self.heap.first() else {
                 break;
             };
             let n = self.arena[best];
@@ -594,7 +552,7 @@ impl Search<'_> {
     }
     unsafe fn reconstruct(&self, state: *mut State) -> u8 {
         let Some(mut index) = self.best() else {
-            return INVALID;
+            return INVALID_TRACKDIR;
         };
         let mut steps = 0;
         let mut cursor = index;
@@ -655,7 +613,7 @@ impl Drop for Search<'_> {
             // SAFETY: Only serialized production entries set reuse_scratch.
             // No borrow of the slot spans callbacks, and no native pointer is
             // stored here. An outer search can replace a nested call's cache.
-            unsafe { *SCRATCH.0.get() = Some(scratch) };
+            unsafe { *SCRATCH.get() = Some(scratch) };
         }
     }
 }
@@ -676,7 +634,7 @@ pub unsafe extern "C" fn openttd_rust_road_yapf_choose(
 ) -> Result {
     // SAFETY: Caller-owned descriptors remain live and immutable for this call.
     let (input, leaves) = unsafe { (*input, *leaves) };
-    if tile == input.dest_tile && input.order_type != 1 {
+    if tile == input.dest_tile && input.order_type != OT_GOTO_STATION {
         return Result {
             tile,
             cost: 0,
@@ -701,7 +659,7 @@ pub unsafe extern "C" fn openttd_rust_road_yapf_choose(
     let found = u8::from(search.find());
     // SAFETY: Canonical road owner live and no borrow overlaps world services.
     let mut direction = unsafe { search.reconstruct(state) };
-    if direction == INVALID {
+    if direction == INVALID_TRACKDIR {
         direction = dirs.trailing_zeros() as u8;
     }
     search.result(direction, found)
@@ -724,7 +682,7 @@ pub unsafe extern "C" fn openttd_rust_road_yapf_depot(
         return Result {
             tile: u32::MAX,
             cost: 0,
-            direction: INVALID,
+            direction: INVALID_TRACKDIR,
             found: 0,
             rounds: 0,
             open: 0,
@@ -735,10 +693,10 @@ pub unsafe extern "C" fn openttd_rust_road_yapf_depot(
     }
     search.startup(input.tile, 1 << input.trackdir);
     let found = u8::from(search.find());
-    search.result(INVALID, found)
+    search.result(INVALID_TRACKDIR, found)
 }
 
-/// Evidence-only entry for the exact heap tie/removal gap absent from save fields.
+/// Heap probe for tie and removal order, which no saved state records.
 /// Spans are initialized, disjoint, live, and at most `isize::MAX`; indices and
 /// membership follow Include/Remove preconditions. Uses the actual search heap.
 #[unsafe(no_mangle)]
@@ -767,7 +725,7 @@ pub unsafe extern "C" fn openttd_rust_road_yapf_heap_probe(
             0 => search.include(value as usize),
             1 => search.remove(value as usize),
             2 => {
-                let node = search.heap[1];
+                let node = search.heap.first().unwrap();
                 search.remove(node);
                 // SAFETY: output spans count exclusive writable elements.
                 unsafe {
@@ -781,7 +739,7 @@ pub unsafe extern "C" fn openttd_rust_road_yapf_heap_probe(
         unsafe {
             output
                 .add(i)
-                .write(search.heap.get(1).map_or(u32::MAX, |n| *n as u32));
+                .write(search.heap.first().map_or(u32::MAX, |n| n as u32));
         }
     }
 }

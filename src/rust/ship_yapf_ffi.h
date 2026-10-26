@@ -37,12 +37,10 @@ struct OpenTTDShipYapfLeaves {
 	void (*visit_destroy)(void *) noexcept OPENTTD_SERVICE_DEFAULT(visit_destroy);
 	void (*debug)(uint32_t, uint8_t, uint8_t, uint32_t, uint32_t, uint32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug);
 };
-/* Search owns its arena, hashes, heap and copied world observations. The ship
-	* context is opaque and live for the synchronous call. Leaves never reenter this
-	* search or path owner; region calls may enter the distinct water-cache owner.
-	* No world/STL borrow survives a leaf. All leaves are noexcept; environment
-	* failures terminate. Panics/OOM abort. Path owner belongs to its Ship facade;
-	* no reference to its Vec escapes, and save errors occur outside Rust frames. */
+/* Search owns its arena, hashes, heap and copied world observations; the ship context is opaque
+ * and live for the call. Region calls may enter the distinct water-cache owner. The path owner
+ * belongs to its Ship facade, and save errors occur outside Rust frames.
+ * Leaves cannot reenter the search or path owner; no reference to its Vec escapes. */
 OpenTTDShipPath *openttd_rust_ship_path_new();
 OpenTTDShipPath *openttd_rust_ship_path_clone(const OpenTTDShipPath *);
 void openttd_rust_ship_path_destroy(OpenTTDShipPath *);

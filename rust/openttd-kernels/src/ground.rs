@@ -5,10 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Ground evolution for clear, railway and tunnel/bridge tiles. Native storage is
-//! accessed through consumed-field records; no map or owner borrow spans calls.
-//! Entries are synchronous and serialized by the game-state mutex. Native leaves
-//! are noexcept and all Rust panics abort, including impossible original states.
+//! Ground evolution for clear, railway and tunnel/bridge tiles. Map storage stays native and
+//! is read through consumed-field records.
 #![allow(
     unsafe_code,
     missing_docs,
@@ -653,7 +651,7 @@ pub(crate) unsafe fn road_tile_loop(
                     let empty = unsafe { ((*c.costs).success)(out) };
                     // SAFETY: The command/check has returned; no result access follows.
                     unsafe { (c.release)(call) };
-                    if empty && crate::services::chance16_i(1, 40, (s.random)(s.context)) {
+                    if empty && crate::random_func::chance16_i(1, 40, (s.random)(s.context)) {
                         (r.set_roadside)(tile, Roadside(if side <= 1 { 6 } else { 7 }));
                         hit(Witness::RoadWorkStart);
                         if ambient {

@@ -1,10 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file house_resolver_ffi.h Stack contexts for house and shared-town resolution.
- * Native game-state serialization pins these stack facades and their town/spec
- * identities across synchronous Action2/storage reentry. No entry loads/resets
- * the map or pools, or yields. Rust ends owner borrows before every native leaf.
- * Native leaves are noexcept; allocation/debug failures terminate, and no
- * ordinary-play throwing leaf is used. SlObject/SlError remain outside Rust. */
+ * The game-state mutex pins these stack facades and their town and spec identities across
+ * synchronous Action2 and storage reentry; no entry loads or resets the map or pools, or yields. */
 #ifndef RUST_HOUSE_RESOLVER_FFI_H
 #define RUST_HOUSE_RESOLVER_FFI_H
 #include "town_ffi.h"

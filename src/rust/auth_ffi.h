@@ -13,13 +13,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#if defined(_MSC_VER)
-#define OPENTTD_AUTH_CALL __cdecl
-#elif defined(__i386__)
-#define OPENTTD_AUTH_CALL __attribute__((cdecl))
-#else
-#define OPENTTD_AUTH_CALL
-#endif
+#include "call_ffi.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,7 +22,7 @@ extern "C" {
 /* All callbacks are nonthrowing, synchronous primitive operations. They retain
  * no input pointer and invoke no Packet, RNG, logger, allocator, or UI callback.
  * The host starts the actual trivial vendor-context lifetime in init/copy.
- * Layouts describe the host vendor types, not a mirrored Rust representation. */
+ * Layouts describe the host vendor types. */
 struct OpenTTDAuthPrimitives {
 	uint32_t version;
 	uint32_t reserved;
@@ -36,59 +30,56 @@ struct OpenTTDAuthPrimitives {
 	size_t aead_alignment;
 	size_t hash_size;
 	size_t hash_alignment;
-	void (OPENTTD_AUTH_CALL *wipe)(void *, size_t) OPENTTD_SERVICE_DEFAULT(wipe);
-	void (OPENTTD_AUTH_CALL *x25519)(uint8_t *, const uint8_t *, const uint8_t *) OPENTTD_SERVICE_DEFAULT(x25519);
-	void (OPENTTD_AUTH_CALL *public_key)(uint8_t *, const uint8_t *) OPENTTD_SERVICE_DEFAULT(public_key);
-	void (OPENTTD_AUTH_CALL *hash_init)(void *, size_t) OPENTTD_SERVICE_DEFAULT(hash_init);
-	void (OPENTTD_AUTH_CALL *hash_update)(void *, const uint8_t *, size_t) OPENTTD_SERVICE_DEFAULT(hash_update);
-	void (OPENTTD_AUTH_CALL *hash_final)(void *, uint8_t *) OPENTTD_SERVICE_DEFAULT(hash_final);
-	void (OPENTTD_AUTH_CALL *aead_init)(void *, const uint8_t *, const uint8_t *) OPENTTD_SERVICE_DEFAULT(aead_init);
-	void (OPENTTD_AUTH_CALL *aead_copy)(void *, const void *) OPENTTD_SERVICE_DEFAULT(aead_copy);
-	void (OPENTTD_AUTH_CALL *aead_write)(void *, uint8_t *, uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t) OPENTTD_SERVICE_DEFAULT(aead_write);
-	int32_t (OPENTTD_AUTH_CALL *aead_read)(void *, uint8_t *, const uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t) OPENTTD_SERVICE_DEFAULT(aead_read);
-	void (OPENTTD_AUTH_CALL *lock)(uint8_t *, uint8_t *, const uint8_t *, const uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t) OPENTTD_SERVICE_DEFAULT(lock);
-	int32_t (OPENTTD_AUTH_CALL *unlock)(uint8_t *, const uint8_t *, const uint8_t *, const uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t) OPENTTD_SERVICE_DEFAULT(unlock);
+	void (OPENTTD_RUST_CALL *wipe)(void *, size_t) OPENTTD_SERVICE_DEFAULT(wipe);
+	void (OPENTTD_RUST_CALL *x25519)(uint8_t *, const uint8_t *, const uint8_t *) OPENTTD_SERVICE_DEFAULT(x25519);
+	void (OPENTTD_RUST_CALL *public_key)(uint8_t *, const uint8_t *) OPENTTD_SERVICE_DEFAULT(public_key);
+	void (OPENTTD_RUST_CALL *hash_init)(void *, size_t) OPENTTD_SERVICE_DEFAULT(hash_init);
+	void (OPENTTD_RUST_CALL *hash_update)(void *, const uint8_t *, size_t) OPENTTD_SERVICE_DEFAULT(hash_update);
+	void (OPENTTD_RUST_CALL *hash_final)(void *, uint8_t *) OPENTTD_SERVICE_DEFAULT(hash_final);
+	void (OPENTTD_RUST_CALL *aead_init)(void *, const uint8_t *, const uint8_t *) OPENTTD_SERVICE_DEFAULT(aead_init);
+	void (OPENTTD_RUST_CALL *aead_copy)(void *, const void *) OPENTTD_SERVICE_DEFAULT(aead_copy);
+	void (OPENTTD_RUST_CALL *aead_write)(void *, uint8_t *, uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t) OPENTTD_SERVICE_DEFAULT(aead_write);
+	int32_t (OPENTTD_RUST_CALL *aead_read)(void *, uint8_t *, const uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t) OPENTTD_SERVICE_DEFAULT(aead_read);
+	void (OPENTTD_RUST_CALL *lock)(uint8_t *, uint8_t *, const uint8_t *, const uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t) OPENTTD_SERVICE_DEFAULT(lock);
+	int32_t (OPENTTD_RUST_CALL *unlock)(uint8_t *, const uint8_t *, const uint8_t *, const uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t) OPENTTD_SERVICE_DEFAULT(unlock);
 };
 
 struct OpenTTDAuthKeys;
 struct OpenTTDAuthSession;
 struct OpenTTDAuthStream;
 
-/* All owners allocate/free only in Rust. Clone makes independent stable storage;
- * assignment overwrites fixed state like the original C++ member assignment.
- * Callers serialize operations. Fixed owner views keep their address until
- * destruction and may observe new bytes after completed mutation/assignment;
- * they must not be accessed concurrently with a call. Exchange extra payload
- * may alias existing derived-key bytes: hashing completes before replacement.
- * Output message/MAC regions do not overlap owner state. Fixed buffers are initialized/live (32-byte keys, 24-byte nonces,
- * 16-byte MACs, 8-byte auth messages). Other lengths are <= PTRDIFF_MAX, with null
- * allowed only for an empty span. MAC/message regions are disjoint; encryption
- * is in place and never creates overlapping Rust shared/mutable slices. */
-struct OpenTTDAuthKeys *OPENTTD_AUTH_CALL openttd_rust_auth_keys_new(const struct OpenTTDAuthPrimitives *);
-struct OpenTTDAuthKeys *OPENTTD_AUTH_CALL openttd_rust_auth_keys_clone(const struct OpenTTDAuthKeys *);
-void OPENTTD_AUTH_CALL openttd_rust_auth_keys_assign(struct OpenTTDAuthKeys *, const struct OpenTTDAuthKeys *);
-void OPENTTD_AUTH_CALL openttd_rust_auth_keys_destroy(struct OpenTTDAuthKeys *);
-const uint8_t *OPENTTD_AUTH_CALL openttd_rust_auth_keys_data(const struct OpenTTDAuthKeys *, uint8_t);
-uint8_t OPENTTD_AUTH_CALL openttd_rust_auth_keys_exchange(struct OpenTTDAuthKeys *, const uint8_t *, uint8_t, const uint8_t *, const uint8_t *, const uint8_t *, size_t);
+/* Owners allocate and free only in Rust. Clone makes independent storage; assignment overwrites
+ * fixed state like the original member assignment. Fixed owner views keep their address until
+ * destruction. Exchange extra payload may alias derived-key bytes: hashing completes before
+ * replacement. Fixed buffers are 32-byte keys, 24-byte nonces, 16-byte MACs and 8-byte auth
+ * messages; MAC and message regions are disjoint, and encryption is in place.
+ * Calls are serialized; live initialized buffers have lengths <= PTRDIFF_MAX (NULL only if empty),
+ * output excludes owner storage, and owner views cannot be accessed during mutation. */
+struct OpenTTDAuthKeys *OPENTTD_RUST_CALL openttd_rust_auth_keys_new(const struct OpenTTDAuthPrimitives *);
+struct OpenTTDAuthKeys *OPENTTD_RUST_CALL openttd_rust_auth_keys_clone(const struct OpenTTDAuthKeys *);
+void OPENTTD_RUST_CALL openttd_rust_auth_keys_assign(struct OpenTTDAuthKeys *, const struct OpenTTDAuthKeys *);
+void OPENTTD_RUST_CALL openttd_rust_auth_keys_destroy(struct OpenTTDAuthKeys *);
+const uint8_t *OPENTTD_RUST_CALL openttd_rust_auth_keys_data(const struct OpenTTDAuthKeys *, uint8_t);
+uint8_t OPENTTD_RUST_CALL openttd_rust_auth_keys_exchange(struct OpenTTDAuthKeys *, const uint8_t *, uint8_t, const uint8_t *, const uint8_t *, const uint8_t *, size_t);
 
-struct OpenTTDAuthSession *OPENTTD_AUTH_CALL openttd_rust_auth_session_new(const struct OpenTTDAuthPrimitives *, const uint8_t *);
-struct OpenTTDAuthSession *OPENTTD_AUTH_CALL openttd_rust_auth_session_clone(const struct OpenTTDAuthSession *);
-void OPENTTD_AUTH_CALL openttd_rust_auth_session_assign(struct OpenTTDAuthSession *, const struct OpenTTDAuthSession *);
-void OPENTTD_AUTH_CALL openttd_rust_auth_session_destroy(struct OpenTTDAuthSession *);
+struct OpenTTDAuthSession *OPENTTD_RUST_CALL openttd_rust_auth_session_new(const struct OpenTTDAuthPrimitives *, const uint8_t *);
+struct OpenTTDAuthSession *OPENTTD_RUST_CALL openttd_rust_auth_session_clone(const struct OpenTTDAuthSession *);
+void OPENTTD_RUST_CALL openttd_rust_auth_session_assign(struct OpenTTDAuthSession *, const struct OpenTTDAuthSession *);
+void OPENTTD_RUST_CALL openttd_rust_auth_session_destroy(struct OpenTTDAuthSession *);
 /* Fields: 0 our public key, 1 peer public key, 2 exchange nonce, 3 stream nonce,
  * 4 client-to-server key, 5 server-to-client key. Only fields 1/2/3 are mutable. */
-const uint8_t *OPENTTD_AUTH_CALL openttd_rust_auth_session_view(const struct OpenTTDAuthSession *, uint8_t);
-uint8_t *OPENTTD_AUTH_CALL openttd_rust_auth_session_mut_view(struct OpenTTDAuthSession *, uint8_t);
-uint8_t OPENTTD_AUTH_CALL openttd_rust_auth_session_exchange(struct OpenTTDAuthSession *, uint8_t, const uint8_t *, size_t);
-void OPENTTD_AUTH_CALL openttd_rust_auth_session_encrypt_response(const struct OpenTTDAuthSession *, uint8_t *, uint8_t *);
-uint8_t OPENTTD_AUTH_CALL openttd_rust_auth_session_decrypt_response(const struct OpenTTDAuthSession *, uint8_t *, const uint8_t *);
+const uint8_t *OPENTTD_RUST_CALL openttd_rust_auth_session_view(const struct OpenTTDAuthSession *, uint8_t);
+uint8_t *OPENTTD_RUST_CALL openttd_rust_auth_session_mut_view(struct OpenTTDAuthSession *, uint8_t);
+uint8_t OPENTTD_RUST_CALL openttd_rust_auth_session_exchange(struct OpenTTDAuthSession *, uint8_t, const uint8_t *, size_t);
+void OPENTTD_RUST_CALL openttd_rust_auth_session_encrypt_response(const struct OpenTTDAuthSession *, uint8_t *, uint8_t *);
+uint8_t OPENTTD_RUST_CALL openttd_rust_auth_session_decrypt_response(const struct OpenTTDAuthSession *, uint8_t *, const uint8_t *);
 
-struct OpenTTDAuthStream *OPENTTD_AUTH_CALL openttd_rust_auth_stream_new(const struct OpenTTDAuthSession *, uint8_t);
-struct OpenTTDAuthStream *OPENTTD_AUTH_CALL openttd_rust_auth_stream_clone(const struct OpenTTDAuthStream *);
-void OPENTTD_AUTH_CALL openttd_rust_auth_stream_assign(struct OpenTTDAuthStream *, const struct OpenTTDAuthStream *);
-void OPENTTD_AUTH_CALL openttd_rust_auth_stream_destroy(struct OpenTTDAuthStream *);
-void OPENTTD_AUTH_CALL openttd_rust_auth_stream_encrypt(struct OpenTTDAuthStream *, uint8_t *, uint8_t *, size_t);
-uint8_t OPENTTD_AUTH_CALL openttd_rust_auth_stream_decrypt(struct OpenTTDAuthStream *, const uint8_t *, uint8_t *, size_t);
+struct OpenTTDAuthStream *OPENTTD_RUST_CALL openttd_rust_auth_stream_new(const struct OpenTTDAuthSession *, uint8_t);
+struct OpenTTDAuthStream *OPENTTD_RUST_CALL openttd_rust_auth_stream_clone(const struct OpenTTDAuthStream *);
+void OPENTTD_RUST_CALL openttd_rust_auth_stream_assign(struct OpenTTDAuthStream *, const struct OpenTTDAuthStream *);
+void OPENTTD_RUST_CALL openttd_rust_auth_stream_destroy(struct OpenTTDAuthStream *);
+void OPENTTD_RUST_CALL openttd_rust_auth_stream_encrypt(struct OpenTTDAuthStream *, uint8_t *, uint8_t *, size_t);
+uint8_t OPENTTD_RUST_CALL openttd_rust_auth_stream_decrypt(struct OpenTTDAuthStream *, const uint8_t *, uint8_t *, size_t);
 
 #ifdef __cplusplus
 }

@@ -292,8 +292,7 @@ static void OccupancyProbe()
 	fmt::print(stderr, "FLEET occupancy-probe 18 live-next {}\n", SameRandom(before, after));
 }
 
-/* Public-variable results over live stock shells; this is comparison evidence,
- * not an oracle or a second implementation of the compatibility formulas. */
+/* Public-variable results over live stock shells, compared against the reference. */
 static void ResolverVariables(Vehicle *v)
 {
 	GRFFile grf;
@@ -379,12 +378,12 @@ static void ResolverRealBoundaries(Train *v, Engine *engine)
 		if (mask & 1) real->loaded.assign(loaded.begin(), loaded.end());
 		if (mask & 2) real->loading.assign(loading.begin(), loading.end());
 		fmt::print(stderr, "FLEET resolver-real-purchase {} {}\n", mask, GetEngineProperty(v->engine_type, PROP_TRAIN_SPEED, 17));
-		for (uint state = 0; state < 3; ++state) {
+		/* 0: moving, 1: loading, 2: both disabled, 3/4: only one disabled. */
+		for (uint state = 0; state < 5; ++state) {
 			if (state == 0) v->First()->current_order.MakeDummy(); else v->First()->current_order.MakeLoading(false);
-			if (state == 2) {
-				v->First()->current_order.SetLoadType(OrderLoadType::NoLoad);
-				v->First()->current_order.SetUnloadType(OrderUnloadType::NoUnload);
-			}
+			if (state == 2 || state == 3) v->First()->current_order.SetLoadType(OrderLoadType::NoLoad);
+			if (state == 2 || state == 4) v->First()->current_order.SetUnloadType(OrderUnloadType::NoUnload);
+			fmt::print(stderr, "FLEET resolver-real-order {} {} {} {}\n", mask, state, to_underlying(v->First()->current_order.GetLoadType()), to_underlying(v->First()->current_order.GetUnloadType()));
 			for (auto [cap, count] : {std::pair{0, 0}, {0, 1}, {8, 0}, {8, 1}, {8, 2}, {8, 3}, {8, 5}, {8, 6}, {8, 7}, {8, 8}, {8, 9}}) {
 				capacity.Change(cap);
 				if (count != 0) {
@@ -396,12 +395,14 @@ static void ResolverRealBoundaries(Train *v, Engine *engine)
 			}
 		}
 	}
-	capacity.Restore(); order.Restore(); sprites.Restore();
+	capacity.Restore(); order.Restore(); sprites.Revert();
+	bool roots_restored = sprites.Verify();
+	sprites.Trash();
 	delete real;
 	for (auto *group : loaded) delete group;
 	for (auto *group : loading) delete group;
 	SaveRandomSeeds(&after);
-	fmt::print(stderr, "FLEET resolver-real-restored {} {} {} {} {} {}\n", v->cargo.TotalCount() == 0 && v->cargo_cap == original_capacity && v->First()->current_order.Equals(original_order), SameRandom(before, after), after.random.state[0], after.random.state[1], after.interactive_random.state[0], after.interactive_random.state[1]);
+	fmt::print(stderr, "FLEET resolver-real-restored {} {} {} {} {} {}\n", roots_restored && v->cargo.TotalCount() == 0 && v->cargo_cap == original_capacity && v->First()->current_order.Equals(original_order), SameRandom(before, after), after.random.state[0], after.random.state[1], after.interactive_random.state[0], after.interactive_random.state[1]);
 	interactive.Restore();
 }
 /* Override registration order is observable: a default entry can win before a

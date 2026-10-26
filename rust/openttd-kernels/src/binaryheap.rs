@@ -1,6 +1,8 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! `misc/binaryheap.hpp` over owner-local node indices. Equal keys never swap.
 
+/// `Default` is unallocated storage that only `reuse` makes usable.
+#[derive(Default)]
 pub(crate) struct BinaryHeap {
     data: Vec<usize>,
 }
@@ -9,6 +11,17 @@ impl BinaryHeap {
         let mut data = Vec::with_capacity(capacity);
         data.push(usize::MAX);
         Self { data }
+    }
+    /// Empty heap over `storage`'s allocation.
+    pub(crate) fn reuse(storage: Self) -> Self {
+        let mut data = storage.data;
+        data.clear();
+        data.push(usize::MAX);
+        Self { data }
+    }
+    #[cfg(test)]
+    pub(crate) fn capacity(&self) -> usize {
+        self.data.capacity()
     }
     pub(crate) fn first(&self) -> Option<usize> {
         self.data.get(1).copied()

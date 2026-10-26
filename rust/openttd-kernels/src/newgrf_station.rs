@@ -1,8 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Station/waypoint resolver policy. State lives in the native resolver stack
-//! carrier for its whole lifetime, including repeated common Action2 resolutions.
-//! Calls run under the game-state mutex. Native aliases and evaluator reentry
-//! require field-sized reads/writes; no state borrow crosses a service call.
+//! Station and waypoint resolver policy. State lives in the native resolver stack carrier
+//! for its whole lifetime, including repeated common Action2 resolutions; native aliases and
+//! evaluator reentry require field-sized reads and writes.
 #![allow(
     unsafe_code,
     clippy::missing_safety_doc,
@@ -15,6 +14,7 @@
 )]
 use crate::cargo_type::{INVALID_CARGO, NUM_CARGO, is_valid_cargo_type};
 use crate::direction_type::{AXIS_X, AXIS_Y, INVALID_AXIS, INVALID_DIAGDIR};
+use crate::game_state::GameState;
 use crate::newgrf_commons::{SG_DEFAULT, SG_DEFAULT_NA, SG_PURCHASE};
 use crate::slope_func::{SLOPE_E, SLOPE_EW, SLOPE_W};
 use crate::station_type::SRT_CARGO_TAKEN;
@@ -24,7 +24,7 @@ use crate::{
     station::BaseStation,
     station_cmd::RailSpec,
 };
-use std::{cell::UnsafeCell, ffi::c_void, ptr};
+use std::{ffi::c_void, ptr};
 const TA_PLATFORM: u8 = 1;
 const TA_WHOLE: u8 = 2;
 #[repr(C)]
@@ -111,22 +111,15 @@ pub struct Services {
     unhandled: extern "C" fn(u8),
     slope_error: extern "C" fn(*mut CommandCost, *const SlopeResult, *const RailSpec),
 }
-struct Registry(UnsafeCell<*const Services>);
-// SAFETY: installation and all resolver use are serialized by the game-state mutex.
-unsafe impl Sync for Registry {}
-static REGISTRY: Registry = Registry(UnsafeCell::new(ptr::null()));
+static REGISTRY: GameState<*const Services> = GameState::new(ptr::null());
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_resolver_exchange(
     native: *const Services,
 ) -> *const Services {
-    unsafe {
-        let old = *REGISTRY.0.get();
-        *REGISTRY.0.get() = native;
-        old
-    }
+    REGISTRY.exchange(native)
 }
 fn services<'a>() -> &'a Services {
-    unsafe { &**REGISTRY.0.get() }
+    unsafe { REGISTRY.table() }
 }
 impl Services {
     fn shared(&self) -> &Shared {
@@ -142,9 +135,7 @@ impl Services {
         unsafe { &*(*self.commands().rail).rail }
     }
     fn map(&self) -> Map {
-        Map {
-            log_x: (self.shared().map_log_x)() as u8,
-        }
+        self.shared().map()
     }
     fn count(&self, st: *mut BaseStation, cargo: u8) -> u32 {
         let list = (self.cargo_owner)(st, cargo);
@@ -879,8 +870,8 @@ pub extern "C" fn openttd_rust_station_randomisation(
     let map = native.map();
     let mut whole = 0;
     let mut used = 0;
-    for y in 0..area.height {
-        for x in 0..area.width {
+    for y in 0..area.h {
+        for x in 0..area.w {
             let t = area.tile.wrapping_add(map.diff(i32::from(x), i32::from(y)));
             if !(a.rail_belongs)(st, t) {
                 continue;

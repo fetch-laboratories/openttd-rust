@@ -43,21 +43,13 @@ struct OpenTTDTileTypeAllocation {
 };
 OpenTTDTileTypeAllocation GetRustTileTypeAllocation() noexcept;
 
-/* Immutable function table. All functions are noexcept; world operations may
- * reenter Rust owners after the caller ends its world/owner accesses.
- * Context may be null in the game; test fixtures supply their own world.
- * No Rust references into the map/pools survive calls. Output is call-scoped.
- * Map predicates take a TileIndex value and return the original accessor's
- * underlying type: TileType, TropicZone and Slope are uint8_t, GetTileZ is int.
- * mark_dirty is MarkTileDirtyByTile(tile), set_tropic_zone is SetTropicZone and
- * free_train_reservation is
- * FreeTrainTrackReservation(v), try_path_reserve is TryPathReserve(v, mark_as_stuck,
- * first_tile_okay). pbs_services acquires leaves for direct Rust PBS calls.
- * Train reservation services can reenter the Rust train owners.
- * Random logging still runs, but its debug source location names this wrapper.
- * Industry query returns 0 not industry,1 industry,2 bubble catcher and writes
- * TileVirtXY(x,y). It observes only type and industry graphics.
- * An environmental exception terminates rather than unwinding through Rust. */
+/* Immutable table of world services; context may be null in the game, while test fixtures supply
+ * their own world. Map predicates take a TileIndex value and return the original accessor's
+ * underlying type (TileType, TropicZone and Slope are uint8_t, GetTileZ is int). Train reservation
+ * services can reenter the Rust train owners. Random debug logging names this wrapper's location.
+ * mark_dirty is MarkTileDirtyByTile, free_train_reservation FreeTrainTrackReservation and
+ * try_path_reserve TryPathReserve(v, mark_as_stuck, first_tile_okay).
+ * Industry query returns 0 not industry, 1 industry, 2 bubble catcher and writes TileVirtXY(x, y). */
 enum ClearGround : uint8_t;
 enum TreeGround : uint8_t;
 enum Foundation : uint8_t;
@@ -163,7 +155,6 @@ struct OpenTTDSharedServices {
 	void (*set_tropic_zone)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tropic_zone);
 	uint8_t (*snow_line)() noexcept OPENTTD_SERVICE_DEFAULT(snow_line);
 	uint16_t (*station_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_index);
-	// Registry: station construction (#267).
 	const OpenTTDRoadCommandServices *(*road_commands)() noexcept OPENTTD_SERVICE_DEFAULT(road_commands);
 	const OpenTTDStationCommandServices *(*station_commands)() noexcept OPENTTD_SERVICE_DEFAULT(station_commands);
 	bool (*docking_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(docking_tile);
@@ -196,13 +187,11 @@ struct OpenTTDSharedServices {
 	uint8_t (*tunnel_bridge_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tunnel_bridge_direction);
 	uint8_t (*tunnel_transport)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tunnel_transport);
 	void (*update_level_crossing)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(update_level_crossing);
-	// Registry: house (#256).
 	void (*rebuild_town_tree)() noexcept OPENTTD_SERVICE_DEFAULT(rebuild_town_tree);
 	bool (*recession)() noexcept OPENTTD_SERVICE_DEFAULT(recession);
 	uint64_t (*tick_counter)() noexcept OPENTTD_SERVICE_DEFAULT(tick_counter);
 	size_t (*town_count)() noexcept OPENTTD_SERVICE_DEFAULT(town_count);
 
-	// Registry: landscape (#212).
 	OpenTTDFoundationSlope (*apply_foundation)(Foundation, Slope) noexcept OPENTTD_SERVICE_DEFAULT(apply_foundation);
 	ClearGround (*clear_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_ground);
 	bool (*has_water_class)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_water_class);
@@ -213,7 +202,6 @@ struct OpenTTDSharedServices {
 	TreeGround (*tree_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tree_ground);
 	const OpenTTDWaterGroundServices *(*water_services)() noexcept OPENTTD_SERVICE_DEFAULT(water_services); ///< Immutable table; getter avoids recursive static initialization.
 	void (*for_each_station)(void *, void (*)(void *, const OpenTTDStation *, OpenTTDStationService *, uint16_t)) noexcept OPENTTD_SERVICE_DEFAULT(for_each_station); ///< Live Station::Iterate(); resolves the next slot after each visit, including reentry.
-	// Registry: road stops (#354).
 	RoadStopType (*road_stop_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_stop_type);
 	const OpenTTDRoadStopServices *(*road_stops)() noexcept OPENTTD_SERVICE_DEFAULT(road_stops);
 };
@@ -273,7 +261,7 @@ struct OpenTTDRailMapServices {
 	SignalState (*signal_state)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_state);
 	void (*set_signal_state)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_signal_state);
 	uint32_t (*other_tunnel_bridge_end)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(other_tunnel_bridge_end);
-	/* Rail command, depot and level-crossing leaves (#265). */
+	/* Rail command, depot and level-crossing leaves (rail_cmd.rs). */
 	bool (*has_signals)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_signals);
 	SignalType (*signal_type)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_type);
 	RailType (*invalid_rail_type)() noexcept OPENTTD_SERVICE_DEFAULT(invalid_rail_type);
@@ -321,13 +309,10 @@ inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_
 		.industry = industry,
 		.next_company = [](uint8_t) noexcept -> uint8_t { return UINT8_MAX; },
 		.random = random,
-		// Registry: house (#256).
 		.rebuild_town_tree = OpenTTDFixtureMapService<void>,
 		.recession = OpenTTDFixtureMapService<bool>,
 		.tick_counter = OpenTTDFixtureMapService<uint64_t>,
 		.town_count = OpenTTDFixtureMapService<size_t>,
-
-		// Registry: landscape (#212).
 	};
 }
 #endif /* RUST_SERVICES_FFI_H */

@@ -13,12 +13,10 @@
 #include "command_services_ffi.h"
 #include "signal_ffi.h"
 
-/* Rust owns the command and tile-proc control flow; map, pools, company
- * counters and every CommandCost stay native. Each service is a direct
- * noexcept call. Nested commands, reservations and crossing updates may
- * reenter Rust; Rust holds no borrow of native state across any call.
- * Strong IDs cross as TileIndex uint32_t, CompanyID uint8_t, DepotID uint16_t,
- * TownID uint16_t; enums as their uint8_t value. No entry draws Random. */
+/* Rust owns the command and tile-proc control flow; map, pools, company counters and every
+ * CommandCost stay native. Nested commands, reservations and crossing updates may reenter Rust.
+ * Strong IDs cross as TileIndex uint32_t, CompanyID uint8_t, DepotID uint16_t, TownID uint16_t;
+ * enums as their uint8_t value. No entry draws Random. */
 enum Foundation : uint8_t;
 enum FloodingBehaviour : uint8_t;
 struct Train;

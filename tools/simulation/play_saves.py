@@ -14,6 +14,7 @@ from .core import (
     decode_element,
     read_save,
     run_game,
+    strip_glog,
 )
 
 # Road networks built by LLM players in OpenTTD 15.1 (migration/saves/README.md),
@@ -47,6 +48,8 @@ _SCHEDULER_REPORTS = {}
 
 def scheduler_reference(out):
     """Default fixture for worker states unavailable with deterministic thread fallback."""
+    import probe
+
     import migration
 
     out.mkdir(parents=True, exist_ok=True)
@@ -80,13 +83,7 @@ def scheduler_reference(out):
         )
         bodies.clear()
         for signature in signatures:
-            start = source.index(signature)
-            end = source.index("{", start) + 1
-            depth = 1
-            while depth:
-                depth += (source[end] == "{") - (source[end] == "}")
-                end += 1
-            bodies.append(source[start:end])
+            bodies.append(probe.body(source, signature))
         (out / destination).write_text("\n".join(bodies))
     build = ROOT / "build-rust"
     binary = out / "scheduler-reference"
@@ -245,22 +242,11 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 if (fields := decode_element(original[chunk], body)) is not None
             }
         )
-        # A reference-produced revision log makes only the candidate append
-        # a load-revision event. Reset GLOG history only in these newly
-        # prepared road INPUT fixtures (including settings/GRF/cheat history),
-        # so both loaders append one. Output GLOG is still compared normally.
+        # GLOG history includes settings, GRF and cheat events.
         data = fixture.read_bytes()
-        begin, end = original["GLOG"]["span"]
         normalized = fixture.parent / "reload-input.sav"
-        normalized_data = data[:begin] + data[end:]
-        normalized.write_bytes(normalized_data)
-        check = read_save(normalized)
-        if set(check) != set(original) - {"GLOG"} or any(
-            data[slice(*original[cid]["span"])]
-            != normalized_data[slice(*check[cid]["span"])]
-            for cid in check
-        ):
-            raise RuntimeError("reload input changed outside optional GLOG history")
+        strip_glog(data, normalized)
+        normalized_data = normalized.read_bytes()
         result["reload_input"] = {
             "reference": str(fixture),
             "normalized": str(normalized),

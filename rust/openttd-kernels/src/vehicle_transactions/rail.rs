@@ -1,9 +1,8 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Rail vehicle construction and depot consist transactions: the original
-//! `train_cmd.cpp` bodies from `GetFreeWagonsInDepot` through `CmdSellRailWagon`.
-//! Native shells keep their chain links and fields; Rust owns the control flow,
-//! the temporary backup lists and the free-wagon order. Every shell access is a
-//! short typed service call; none spans a callback, nested move or deletion.
+//! Rail vehicle construction and depot consist transactions: the original `train_cmd.cpp`
+//! bodies from `GetFreeWagonsInDepot` through `CmdSellRailWagon`. Shells keep their chain
+//! links and fields; Rust owns control flow, the temporary backup lists and the free-wagon
+//! order.
 #![allow(clippy::many_single_char_names, clippy::too_many_lines)]
 use super::{CommonServices, ERROR, TransactionServices, build, construct, refit};
 use crate::command_type::DoCommandFlag;
@@ -55,9 +54,8 @@ pub struct Services {
     pub depot_changed: extern "C" fn(u32),
 }
 
-/// `CCF_ARRANGE`: `ConsistChangeFlag::Length | ConsistChangeFlag::Capacity`.
-const CCF_ARRANGE: u8 = crate::train::CCF_ARRANGE;
-const VEH_TRAIN: u8 = 0;
+use crate::train::CCF_ARRANGE;
+use crate::vehicle_type::VEH_TRAIN;
 
 /// Resolved immutable service tables; holds no world or owner borrow.
 #[derive(Clone, Copy)]
@@ -519,7 +517,7 @@ fn check_train_attachment(x: Ctx, mut t: *mut ()) -> Option<u32> {
             let first_engine = (x.s.first_engine)(t);
             (x.s.ground.write_first_engine)(
                 unsafe { super::vehicle_ref(t) },
-                crate::vehicle::INVALID_ENGINE,
+                crate::engine_type::INVALID_ENGINE,
             );
             (x.s.invalidate_grf)(t);
             let mut regs100 = MaybeUninit::<i32>::uninit();

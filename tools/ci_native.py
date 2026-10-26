@@ -4,6 +4,7 @@
 import argparse
 import collections
 import json
+import os
 import re
 import shlex
 import shutil
@@ -237,7 +238,11 @@ def pack(bundle, count):
         bundle.parent / "native-runtimes.tar", "w", dereference=True
     ) as archive:
         archive.add(bundle, arcname=bundle.name)
-    print(json.dumps({"shards": [s["id"] for s in value["shards"]]}))
+    shards = "shards=" + json.dumps([s["id"] for s in value["shards"]]) + "\n"
+    print(shards, end="")
+    if "GITHUB_OUTPUT" in os.environ:
+        with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+            output.write(shards)
 
 
 def collect_evidence(destination):

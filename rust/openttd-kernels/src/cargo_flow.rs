@@ -5,12 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Canonical cumulative flow shares, origin maps and post-join live application.
-//!
-//! Owners are allocated in Rust. Native facades retain raw handles only; no Rust
-//! reference survives a world callback, and entries have stable allocation until
-//! erased. Original unsigned arithmetic is explicitly wrapping. FFI contracts
-//! and operation numbers are in `cargo_flow_ffi.h`; panic never unwinds.
+//! Cumulative flow shares, origin maps and post-join live application. Original unsigned
+//! arithmetic wraps explicitly. Operation numbers are in `cargo_flow_ffi.h`.
 #![allow(
     unsafe_code,
     clippy::missing_safety_doc,

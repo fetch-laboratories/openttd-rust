@@ -10,8 +10,6 @@
 #include "../3rdparty/catch2/catch.hpp"
 #ifdef WITH_RUST
 #include "../industry.h"
-#include "../effectvehicle_func.h"
-#include "../sound_type.h"
 #include "abi_layout.hpp"
 #include "../rust/industry_generation_adapter.hpp"
 #include "../rust/industry_shell_services.h"
@@ -20,19 +18,6 @@
 #include "../object_base.h"
 #include "../industrytype.h"
 #include "../water_map.h"
-static_assert(NUM_INDUSTRYTYPES == 240 && IT_INVALID == 0xFF && IndustryID::Invalid().base() == 0xFFFF);
-static_assert(NEW_INDUSTRYTILEOFFSET == 175 && INVALID_INDUSTRYTILE == 512);
-static_assert(VSG_SCOPE_SELF == 0 && VSG_SCOPE_PARENT == 1 && TILE_HEIGHT == 8);
-static_assert(CalendarTime::ORIGINAL_BASE_YEAR.base() == 1920 && EconomyTime::ORIGINAL_BASE_YEAR.base() == 1920);
-static_assert(CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR.base() == 701265 && EconomyTime::DAYS_TILL_ORIGINAL_BASE_YEAR.base() == 701265);
-static_assert(CBID_INDUSTRY_PROBABILITY == 0x22 && CBID_INDUSTRY_LOCATION == 0x28 && CBID_INDUSTRY_REFUSE_CARGO == 0x3D);
-static_assert(EV_CHIMNEY_SMOKE == 0 && EV_BUBBLE == 9 && EV_COPPER_MINE_SMOKE == 11);
-static_assert(SND_0B_MINE == 9 && SND_0C_POWER_STATION == 10 && SND_29_SUGAR_MINE_2 == 41);
-static_assert(SND_2A_TOY_FACTORY_3 == 42 && SND_2B_TOY_FACTORY_2 == 43 && SND_2C_TOY_FACTORY_1 == 44);
-static_assert(SND_2D_SUGAR_MINE_1 == 45 && SND_2E_BUBBLE_GENERATOR == 46 && SND_30_TOFFEE_QUARRY == 48);
-static_assert(OWNER_NONE.base() == 16 && INVALID_OWNER.base() == 255);
-static_assert(ICT_NORMAL_GAMEPLAY == 1 && ICT_MAP_GENERATION == 2 && ICT_SCENARIO_EDITOR == 3);
-static_assert(INDUSTRY_NUM_INPUTS == 16 && INDUSTRY_NUM_OUTPUTS == 16);
 static_assert(sizeof(CargoArray::value_type) == sizeof(uint32_t) && sizeof(CargoTypes) == sizeof(uint64_t));
 static_assert(std::is_trivially_destructible_v<TileArea>);
 static_assert(sizeof(TileArea) == sizeof(OpenTTDIndustryLocation));
@@ -47,10 +32,9 @@ static_assert(sizeof(TimerGameCalendar::Date) == sizeof(int32_t));
 
 TEST_CASE("Industry - canonical native layouts")
 {
-	auto Layout = [](const char *name, std::initializer_list<size_t> values) { CHECK(AbiLayoutMismatch(name, values) == -1); };
+	ABI_LAYOUT_CHECK;
 #include "abi-layout-industry.inc"
 
-	REQUIRE(NUM_INDUSTRYTYPES == 240);
 	REQUIRE(std::size(OpenTTDIndustryBuilderFields{}.builddata) == NUM_INDUSTRYTYPES);
 	REQUIRE(HISTORY_RECORDS == 61);
 	REQUIRE(sizeof(Industry::ProducedHistory) == 4);
@@ -337,7 +321,7 @@ TEST_CASE("NewGRF storage canonical aliases and complete transaction lifetime", 
 #ifdef WITH_RUST
 	CHECK(modern.storage.data() == RustStorageData(modern.rust_storage));
 	CHECK(legacy.storage.data() == RustStorageData(legacy.rust_storage));
-	auto Layout = [](const char *name, std::initializer_list<size_t> values) { CHECK(AbiLayoutMismatch(name, values) == -1); };
+	ABI_LAYOUT_CHECK;
 #include "abi-layout-storage.inc"
 #endif
 	legacy.storage[15] = -7;

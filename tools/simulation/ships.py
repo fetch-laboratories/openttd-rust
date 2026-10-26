@@ -6,6 +6,7 @@ import shutil
 import struct
 from pathlib import Path
 
+from .console_adapter import prepared_console
 from .core import (
     FILE_TYPES,
     ROOT,
@@ -20,6 +21,7 @@ from .core import (
     read_value,
     run_game,
     save_moment,
+    strip_glog,
     witness_counts,
 )
 from .play_saves import DISTRIBUTIONS
@@ -225,33 +227,9 @@ def adapter(build, folder, env):
 
 def prepare(scenario, binaries, builds, out, timeout, env, result):
     if scenario.get("water_commands"):
-        import migration
-
-        from .runtime import prepared_adapter
-
-        executables = {}
-        for role in ("reference", "candidate"):
-            folder = out / scenario["name"] / role
-            prepared = prepared_adapter("ships", role, builds, folder)
-            if prepared is None:
-                native = (
-                    migration.REFERENCE_BUILD
-                    if role == "reference" or binaries[role] == binaries["reference"]
-                    else ROOT / "build-rust"
-                )
-                lock = (
-                    migration.reference_lock(shared=True)
-                    if native == migration.REFERENCE_BUILD
-                    else migration.candidate_lock(native, shared=True)
-                )
-                with lock:
-                    prepared = adapter(native, folder, env)
-            executables[role] = prepared
-            for name in ("lang", "baseset", "ai", "game", "regression"):
-                if (builds[role] / name).is_dir():
-                    (folder / name).symlink_to(
-                        builds[role] / name, target_is_directory=True
-                    )
+        executables = prepared_console(
+            "ships", adapter, binaries, builds, out / scenario["name"], env
+        )
         return dict(scenario, executables=executables)
 
     if scenario.get("water_operation") == "class":
@@ -311,17 +289,9 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     )
     if fixture is None:
         raise RuntimeError("ship reload has no saved live path")
-    original, data = read_save(fixture), fixture.read_bytes()
-    begin, end = original["GLOG"]["span"]
+    data = fixture.read_bytes()
     normalized = fixture.parent / "ship-reload-input.sav"
-    normalized.write_bytes(data[:begin] + data[end:])
-    chunks = read_save(normalized)
-    if set(chunks) != set(original) - {"GLOG"} or any(
-        data[slice(*original[cid]["span"])]
-        != normalized.read_bytes()[slice(*chunks[cid]["span"])]
-        for cid in chunks
-    ):
-        raise RuntimeError("ship reload input changed outside GLOG")
+    strip_glog(data, normalized)
     record = {
         "ship": ship,
         "reference_sha256": hashlib.sha256(data).hexdigest(),
@@ -403,11 +373,6 @@ def check(scenario, run, mode, role, result):
         if not markers or markers[-1] != "complete":
             raise RuntimeError("ownership fixture did not finish")
         check_ownership(scenario, run, role, markers)
-        key = mode + "_ownership"
-        if role == "reference":
-            result[key] = markers
-        elif result[key] != markers:
-            raise RuntimeError("ownership dispatch results differ")
         return
     if scenario.get("water_commands"):
         markers = [
@@ -507,11 +472,6 @@ def check(scenario, run, mode, role, result):
             "waypoint_command",
             ["build_buoy", "remove_buoy", "bankrupt", "reuse"],
         )
-        key = mode + "_water_commands"
-        if role == "reference":
-            result[key] = markers
-        elif result[key] != markers:
-            raise RuntimeError("water command/state/RNG results differ")
         branches = branch_witnesses(
             scenario,
             run,
@@ -699,18 +659,8 @@ def prepare_water_save(layout, migration, out, timeout):
             # Equal-length names preserve every length and all AI saved-data bytes.
             data[offset + begin + 1 : offset + reader.pos] = b"WaterScenes"
             renamed.append([offset + begin + 1, value, "WaterScenes"])
-    glog = chunks["GLOG"]["span"]
     destination = ROOT / "migration/saves" / f"water-{layout}.sav"
-    destination.write_bytes(data[: glog[0]] + data[glog[1] :])
-    normalized = read_save(destination)
-    if set(normalized) != set(chunks) - {"GLOG"}:
-        raise RuntimeError("water normalization changed chunk inventory")
-    for cid, chunk in normalized.items():
-        if (
-            bytes(data[slice(*chunks[cid]["span"])])
-            != destination.read_bytes()[slice(*chunk["span"])]
-        ):
-            raise RuntimeError("water normalization changed unrelated bytes")
+    strip_glog(data, destination)
     if destination.stat().st_size >= 1_000_000:
         raise RuntimeError("water fixture exceeds the committed-save budget")
     record = {

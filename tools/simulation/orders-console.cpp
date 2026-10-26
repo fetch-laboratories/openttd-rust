@@ -75,7 +75,7 @@ static bool VisitsScenario(std::span<std::string_view> args)
 		return true;
 	}
 	if (args[1] != "visits") return false;
-	/* Declared inputs on padhattan-ridge-2000's running fleet (#349): each order
+	/* Declared inputs on padhattan-ridge-2000's running fleet (vehicle/visits.rs): each order
 	 * change is an ordinary command, checked against the vehicle it expects. */
 	auto vehicle = [](uint16_t index, VehicleType type) {
 		Vehicle *u = Vehicle::GetIfValid(VehicleID(index));

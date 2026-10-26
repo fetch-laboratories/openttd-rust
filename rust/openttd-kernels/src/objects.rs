@@ -5,10 +5,11 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Object lifecycle owner. Native pools, specs, map and save records remain
-//! canonical. Counts and cleared-area command scratch have one process-wide
-//! Rust owner, serialized by the game-state mutex. No state borrow spans a
-//! reentrant service. Panics abort; native exceptions never unwind through Rust.
+//! Object lifecycle owner; native pools, specs, map and save records remain canonical.
+//! Export contract: tables and native cost, frame and array storage are live for the
+//! synchronous call, arguments meet the original's tile and ID preconditions, and calls are
+//! serialized with reset, save and load. No native pointer is retained, services reenter only
+//! after state accesses end, native cancellation returns before C++ rethrows; panics abort.
 #![allow(
     clippy::similar_names,
     clippy::if_not_else,
@@ -23,27 +24,26 @@
     clippy::fn_params_excessive_bools
 )]
 use crate::command_type::DoCommandFlag;
-use crate::company_type::{INVALID_OWNER, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER};
+use crate::company_type::{
+    INVALID_OWNER, MAX_COMPANIES, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER,
+};
 use crate::economy_func::get_price;
 use crate::economy_type::PR_BUILD_FOUNDATION;
+use crate::game_state::GameState;
 use crate::newgrf_callbacks::CALLBACK_FAILED;
 use crate::slope_func::{get_slope_max_z, is_steep_slope};
 use crate::strings_type::INVALID_STRING_ID;
-use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_WATER};
-use std::cell::UnsafeCell;
+use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_OBJECT, MP_WATER};
+use crate::tilearea::TileArea;
 
 struct State {
     counts: [u16; 64000],
     areas: Vec<ClearArea>,
 }
-struct Global(UnsafeCell<State>);
-// SAFETY: native callers serialize every entry under the game-state mutex.
-// An access ends before any service can reenter; the owner is process-wide.
-unsafe impl Sync for Global {}
-static STATE: Global = Global(UnsafeCell::new(State {
+static STATE: GameState<State> = GameState::new(State {
     counts: [0; 64000],
     areas: Vec::new(),
-}));
+});
 
 /// Value-only command scratch entry. Indices, never pointers, survive append.
 #[repr(C)]
@@ -57,54 +57,50 @@ pub struct ClearArea {
 /// Industry transaction backup at the original copy point.
 pub(crate) fn snapshot_areas() -> Vec<ClearArea> {
     // SAFETY: caller holds the game-state mutex; no callback in this scope.
-    unsafe { (*STATE.0.get()).areas.clone() }
+    unsafe { (*STATE.get()).areas.clone() }
 }
 /// Industry transaction restore at the original move point.
 pub(crate) fn restore_areas(areas: Vec<ClearArea>) {
     // SAFETY: caller holds the game-state mutex; no callback in this scope.
-    unsafe { (*STATE.0.get()).areas = areas };
+    unsafe { (*STATE.get()).areas = areas };
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_object_counts_reset() {
     // SAFETY: serialized native entry.
-    unsafe { (*STATE.0.get()).counts.fill(0) };
+    unsafe { (*STATE.get()).counts.fill(0) };
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_object_count_increment(kind: u16) {
     // SAFETY: serialized entry; native source asserts kind < NUM_OBJECTS.
-    let count = unsafe { &mut (*STATE.0.get()).counts[usize::from(kind)] };
+    let count = unsafe { &mut (*STATE.get()).counts[usize::from(kind)] };
     *count = count.wrapping_add(1);
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_object_count_decrement(kind: u16) {
     // SAFETY: serialized entry; native source asserts kind < NUM_OBJECTS.
-    let count = unsafe { &mut (*STATE.0.get()).counts[usize::from(kind)] };
+    let count = unsafe { &mut (*STATE.get()).counts[usize::from(kind)] };
     *count = count.wrapping_sub(1);
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_object_count(kind: u16) -> u16 {
     // SAFETY: serialized native entry; original kind precondition.
-    unsafe { (*STATE.0.get()).counts[usize::from(kind)] }
+    unsafe { (*STATE.get()).counts[usize::from(kind)] }
 }
 pub(crate) fn clear_areas() {
     // SAFETY: serialized native entry.
-    unsafe { (*STATE.0.get()).areas.clear() };
+    unsafe { (*STATE.get()).areas.clear() };
 }
 fn openttd_rust_object_areas_find(tile: u32, log_x: u32) -> usize {
-    let map = crate::services::Map { log_x: log_x as u8 };
-    let tile_area = Area {
-        tile,
-        width: 1,
-        height: 1,
-    };
+    let map = crate::services::Map::from_log_x(log_x);
+    let tile_area = TileArea { tile, w: 1, h: 1 };
     // SAFETY: serialized entry, no callbacks while reading.
-    unsafe { &(*STATE.0.get()).areas }
+    unsafe { &(*STATE.get()).areas }
         .iter()
         .position(|a| {
-            Area {
+            TileArea {
                 tile: a.tile,
-                width: a.width,
-                height: a.height,
+                w: a.width,
+                h: a.height,
             }
             .intersects(tile_area, map)
         })
@@ -112,17 +108,17 @@ fn openttd_rust_object_areas_find(tile: u32, log_x: u32) -> usize {
 }
 fn openttd_rust_object_areas_get(index: usize) -> ClearArea {
     // SAFETY: serialized entry; index was returned by find/append.
-    unsafe { (&(*STATE.0.get()).areas)[index] }
+    unsafe { (&(*STATE.get()).areas)[index] }
 }
 fn openttd_rust_object_areas_append(area: ClearArea) -> usize {
     // SAFETY: serialized entry; allocation failure aborts.
-    let areas = unsafe { &mut (*STATE.0.get()).areas };
+    let areas = unsafe { &mut (*STATE.get()).areas };
     areas.push(area);
     areas.len() - 1
 }
 fn openttd_rust_object_areas_set_first(index: usize, first: u32) {
     // SAFETY: serialized entry; append preserves indices returned by find/append.
-    unsafe { (&mut (*STATE.0.get()).areas)[index].first_tile = first };
+    unsafe { (&mut (*STATE.get()).areas)[index].first_tile = first };
 }
 
 /// Stable tunnel scratch token; append never invalidates its index.
@@ -158,7 +154,7 @@ pub extern "C" fn openttd_rust_object_restore_first(hidden: HiddenArea) {
 }
 
 use crate::services::{
-    CommandCost, CommandCostServices, CommandServices, Services, TownHandle, WaterClass,
+    CommandCost, CommandCostServices, CommandServices, Cost, Services, TownHandle, WaterClass,
 };
 use std::ptr;
 
@@ -197,34 +193,9 @@ pub struct GenerationFrame {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct Area {
-    pub tile: u32,
-    pub width: u16,
-    pub height: u16,
-}
-impl Area {
-    /// Original `OrthogonalTileArea::Intersects`, including empty-area handling.
-    fn intersects(self, other: Self, map: crate::services::Map) -> bool {
-        if other.width == 0 || self.width == 0 {
-            return false;
-        }
-        assert!(other.height != 0 && self.height != 0);
-        let left1 = map.tile_x(self.tile);
-        let top1 = map.tile_y(self.tile);
-        let right1 = left1 + u32::from(self.width) - 1;
-        let bottom1 = top1 + u32::from(self.height) - 1;
-        let left2 = map.tile_x(other.tile);
-        let top2 = map.tile_y(other.tile);
-        let right2 = left2 + u32::from(other.width) - 1;
-        let bottom2 = top2 + u32::from(other.height) - 1;
-        !(left2 > right1 || right2 < left1 || top2 > bottom1 || bottom2 < top1)
-    }
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
 pub struct Identity {
     pub object: *mut Object,
-    pub area: Area,
+    pub area: TileArea,
     pub kind: u16,
 }
 #[repr(C)]
@@ -328,11 +299,11 @@ pub struct ObjectServices {
     pub admission: unsafe extern "C" fn(*const Spec) -> Admission,
     pub generation: unsafe extern "C" fn(*const Spec) -> Generation,
     pub can_allocate: unsafe extern "C" fn() -> bool,
-    pub allocate: unsafe extern "C" fn(u16, *const TownHandle, Area, u8) -> Allocation,
+    pub allocate: unsafe extern "C" fn(u16, *const TownHandle, TileArea, u8) -> Allocation,
     pub object_type: unsafe extern "C" fn(u32) -> u16,
     pub loop_policy: unsafe extern "C" fn(u32) -> LoopPolicy,
     pub identity: unsafe extern "C" fn(u32) -> Identity,
-    pub location: unsafe extern "C" fn(*mut Object) -> Area,
+    pub location: unsafe extern "C" fn(*mut Object) -> TileArea,
     pub next: unsafe extern "C" fn(u32) -> Next,
     pub set_colour: unsafe extern "C" fn(*mut Object, u8) -> (),
     pub recolour: unsafe extern "C" fn(u8, bool) -> u8,
@@ -370,14 +341,12 @@ use crate::object_type::OBJECT_STATUE as STATUE;
 const LIGHTHOUSE: u16 = 1;
 const TRANSMITTER: u16 = 0;
 const NEW_OBJECT_OFFSET: u16 = 5;
-const MAX_COMPANIES: u8 = 15;
 const OBJECT_SIZE_1X1: u8 = 0x11;
 const INVALID_WATER_CLASS: WaterClass = WaterClass(3);
 const SOURCE_HEADQUARTERS: u8 = 2;
 const CBID_OBJECT_AUTOSLOPE: u16 = 0x15D;
 const PR_BUILD_OBJECT: u32 = 50;
 const PR_CLEAR_OBJECT: u32 = 51;
-const CONSTRUCTION: u8 = 0;
 const SCENEDIT: u16 = 1;
 const CANNOT_REMOVE: u16 = 1 << 1;
 const AUTOREMOVE: u16 = 1 << 2;
@@ -433,37 +402,6 @@ pub struct QueryServices {
     pub unhandled: unsafe extern "C" fn(u8),
 }
 
-#[derive(Clone, Copy)]
-struct Cost<'a>(*mut CommandCost, &'a CommandCostServices);
-impl Cost<'_> {
-    fn zero(self) {
-        (self.1.zero)(self.0);
-    }
-    fn set(self, money: i64) {
-        (self.1.expense_money)(self.0, CONSTRUCTION, money);
-    }
-    fn fail(self, error: u32) {
-        (self.1.error)(self.0, error);
-    }
-    fn error(self) {
-        self.fail(INVALID_STRING_ID);
-    }
-    fn add(self, cost: Self) {
-        (self.1.add)(self.0, cost.0);
-    }
-    fn money(self) -> i64 {
-        (self.1.money)(self.0)
-    }
-    fn amount(self, money: i64) {
-        (self.1.amount)(self.0, money);
-    }
-    fn ok(self) -> bool {
-        (self.1.success)(self.0)
-    }
-    fn take(self, cost: Self) {
-        (self.1.move_cost)(self.0, cost.0);
-    }
-}
 struct World<'a> {
     s: &'a ObjectServices,
     shared: &'a Services,
@@ -476,12 +414,10 @@ impl<'a> World<'a> {
         Self {
             s,
             shared,
-            map: crate::services::Map {
-                log_x: if NEEDS_MAP {
-                    (shared.map_log_x)() as u8
-                } else {
-                    0
-                },
+            map: if NEEDS_MAP {
+                shared.map()
+            } else {
+                crate::services::Map::from_log_x(0)
             },
         }
     }
@@ -508,14 +444,14 @@ impl<'a> World<'a> {
         unsafe { &*self.s.query }
     }
     fn random_bits(&self, tile: u32) -> u32 {
-        if (self.shared.tile_valid)(tile) && (self.shared.tile_type)(tile) == 10 {
+        if (self.shared.tile_valid)(tile) && (self.shared.tile_type)(tile) == MP_OBJECT {
             unsafe { u32::from((self.query().random_bits)(tile)) }
         } else {
             0
         }
     }
     fn id_at_offset(&self, tile: u32, grfid: u32) -> u32 {
-        if (self.shared.tile_type)(tile) != 10 {
+        if (self.shared.tile_type)(tile) != MP_OBJECT {
             return 0xffff;
         }
         // SAFETY: object tile owns a live native object and specification.
@@ -533,7 +469,7 @@ impl<'a> World<'a> {
             if parameter != 0 {
                 tile = (q.nearby)(parameter, tile);
             }
-            let same = (self.shared.tile_type)(tile) == 10 && (q.index)(tile) == index;
+            let same = (self.shared.tile_type)(tile) == MP_OBJECT && (q.index)(tile) == index;
             (q.nearby_info)(tile, version8) | u32::from(same) << 8
         }
     }
@@ -627,7 +563,7 @@ impl<'a> World<'a> {
                 0x60 => self.id_at_offset((q.nearby)(parameter as u8, tile), (q.grfid)(ro)),
                 0x61 | 0x63 => {
                     let near = (q.nearby)(parameter as u8, tile);
-                    if (self.shared.tile_type)(near) == 10 && (q.by_tile)(near) == obj {
+                    if (self.shared.tile_type)(near) == MP_OBJECT && (q.by_tile)(near) == obj {
                         if variable == 0x61 {
                             u32::from((q.random_bits)(near))
                         } else {
@@ -698,10 +634,8 @@ impl<'a> World<'a> {
             let area = (self.s.location)(obj);
             // The tile-loop entry has no captured map. Acquire the actual stride
             // only when the original whole-object iterator is constructed.
-            let map = crate::services::Map {
-                log_x: (self.shared.map_log_x)() as u8,
-            };
-            for tile in Self::tiles_with_map(area, map) {
+            let map = self.shared.map();
+            for tile in area.tiles(map) {
                 if self.do_trigger(obj, tile, trigger, spec, random) {
                     // SB also ORs high bits from the unmasked draw.
                     crate::bitmath_func::sb(&mut random, 0, 16, self.shared.random());
@@ -720,31 +654,23 @@ impl<'a> World<'a> {
         // SAFETY: entry provides the immutable table when company services are used.
         unsafe { &*self.s.company }
     }
-    fn tiles(&self, a: Area) -> impl Iterator<Item = u32> {
-        Self::tiles_with_map(a, self.map)
+    fn tiles(&self, a: TileArea) -> impl Iterator<Item = u32> {
+        a.tiles(self.map)
     }
-    fn tiles_with_map(a: Area, map: crate::services::Map) -> impl Iterator<Item = u32> {
-        crate::tilearea::TileArea {
-            tile: a.tile,
-            w: a.width,
-            h: a.height,
-        }
-        .tiles(map)
-    }
-    fn footprint(tile: u32, shape: Footprint, view: u8) -> Area {
+    fn footprint(tile: u32, shape: Footprint, view: u8) -> TileArea {
         let (x, y) = if view & 1 == 0 {
             (shape.size & 15, shape.size >> 4)
         } else {
             (shape.size >> 4, shape.size & 15)
         };
-        Area {
+        TileArea {
             tile,
-            width: u16::from(x),
-            height: u16::from(y),
+            w: u16::from(x),
+            h: u16::from(y),
         }
     }
     fn is_type(&self, tile: u32, kind: u16) -> bool {
-        (self.shared.tile_type)(tile) == 10 && self.object_type_is(tile, kind)
+        (self.shared.tile_type)(tile) == MP_OBJECT && self.object_type_is(tile, kind)
     }
     /// Original `IsObjectType`; callers uphold its object-tile precondition.
     fn object_type_is(&self, tile: u32, kind: u16) -> bool {
@@ -918,8 +844,8 @@ impl<'a> World<'a> {
             let flags_spec = (self.s.flags)(spec);
             let price = self
                 .get_clear_cost(spec)
-                .saturating_mul(i64::from(object.area.width))
-                .saturating_mul(i64::from(object.area.height))
+                .saturating_mul(i64::from(object.area.w))
+                .saturating_mul(i64::from(object.area.h))
                 / 5;
             out.set(if flags_spec & CLEAR_INCOME == 0 {
                 price
@@ -928,17 +854,17 @@ impl<'a> World<'a> {
             });
             let company = self.current();
             if company == OWNER_TOWN {
-                out.error();
+                out.error(INVALID_STRING_ID);
                 return;
             }
             if company != OWNER_WATER {
                 if flags & DoCommandFlag::NO_WATER != 0 && ((*self.s.industry_tiles).on_water)(tile)
                 {
-                    out.fail(self.s.strings.water);
+                    out.error(self.s.strings.water);
                     return;
                 }
                 if flags_spec & AUTOREMOVE == 0 && flags & DoCommandFlag::AUTO != 0 {
-                    out.fail(if object.kind == HQ {
+                    out.error(if object.kind == HQ {
                         self.s.strings.hq
                     } else {
                         self.s.strings.object
@@ -948,7 +874,7 @@ impl<'a> World<'a> {
                 if ((*self.s.town).environment.editor)() {
                 } else if self.owner(tile) == OWNER_NONE {
                     if !(self.s.bulldozer)() && flags_spec & CANNOT_REMOVE != 0 {
-                        out.error();
+                        out.error(INVALID_STRING_ID);
                         return;
                     }
                 } else {
@@ -960,9 +886,9 @@ impl<'a> World<'a> {
                     if flags_spec & CANNOT_REMOVE != 0 && flags_spec & AUTOREMOVE == 0 {
                         if !(self.s.bulldozer)() {
                             if object.kind == HQ {
-                                out.fail(self.s.strings.hq);
+                                out.error(self.s.strings.hq);
                             } else {
-                                out.error();
+                                out.error(INVALID_STRING_ID);
                             }
                             return;
                         }
@@ -970,7 +896,7 @@ impl<'a> World<'a> {
                     }
                 }
             } else if flags_spec & (BUILT_ON_WATER | NOT_ON_LAND) != 0 {
-                out.error();
+                out.error(INVALID_STRING_ID);
                 return;
             }
             if object.kind == HQ {
@@ -1000,8 +926,8 @@ impl<'a> World<'a> {
             openttd_rust_object_areas_append(ClearArea {
                 first_tile: tile,
                 tile: object.area.tile,
-                width: object.area.width,
-                height: object.area.height,
+                width: object.area.w,
+                height: object.area.h,
             });
             if flags & DoCommandFlag::EXECUTE != 0 {
                 self.really_clear(object);
@@ -1022,20 +948,20 @@ impl<'a> World<'a> {
         unsafe {
             out.set(0);
             if usize::from(kind) >= (self.s.spec_count)() {
-                out.error();
+                out.error(INVALID_STRING_ID);
                 return;
             }
             let spec = (self.s.spec)(kind);
             let admission = (self.s.admission)(spec);
             if (self.s.normal)() && !available(self.s, spec) && !((*self.s.town).generating_world)()
             {
-                out.error();
+                out.error(INVALID_STRING_ID);
                 return;
             }
             if (((*self.s.town).environment.editor)() || ((*self.s.town).generating_world)())
                 && !was_available(self.s, spec)
             {
-                out.error();
+                out.error(INVALID_STRING_ID);
                 return;
             }
             let shape = (self.s.footprint)(spec);
@@ -1044,7 +970,7 @@ impl<'a> World<'a> {
                     && !((*self.s.town).environment.editor)())
                     || self.current() != OWNER_NONE)
             {
-                out.error();
+                out.error(INVALID_STRING_ID);
                 return;
             }
             if shape.flags & IN_GAME != 0
@@ -1052,25 +978,25 @@ impl<'a> World<'a> {
                     || !(self.s.normal)()
                     || self.current() > MAX_COMPANIES)
             {
-                out.error();
+                out.error(INVALID_STRING_ID);
                 return;
             }
             if view >= admission.views {
-                out.error();
+                out.error(INVALID_STRING_ID);
                 return;
             }
             if !(self.s.can_allocate)() {
-                out.fail(self.s.strings.too_many);
+                out.error(self.s.strings.too_many);
                 return;
             }
             if (self.shared.town_count)() == 0 {
-                out.fail(self.s.strings.no_town);
+                out.error(self.s.strings.no_town);
                 return;
             }
             let area = Self::footprint(tile, shape, view);
             for t in self.tiles(area) {
                 if !(self.shared.tile_valid)(t) {
-                    out.fail(self.s.strings.edge_sub);
+                    out.error(self.s.strings.edge_sub);
                     return;
                 }
             }
@@ -1083,7 +1009,7 @@ impl<'a> World<'a> {
                 for t in self.tiles(area) {
                     if (self.shared.has_water_ground)(t) {
                         if !water {
-                            out.fail(self.s.strings.water);
+                            out.error(self.s.strings.water);
                             return;
                         }
                         if !(self.shared.is_water_tile)(t) {
@@ -1111,7 +1037,7 @@ impl<'a> World<'a> {
                                     ((self.shared.map_max_y)() - 1) as usize,
                                 ))
                             {
-                                out.fail(self.s.strings.edge);
+                                out.error(self.s.strings.edge);
                                 return;
                             }
                             self.commands().no_vehicle(tmp.0, t);
@@ -1119,11 +1045,11 @@ impl<'a> World<'a> {
                         }
                     } else {
                         if !ground {
-                            out.fail(self.s.strings.on_water);
+                            out.error(self.s.strings.on_water);
                             return;
                         }
                         if !(kind == HQ
-                            && (self.shared.tile_type)(t) == 10
+                            && (self.shared.tile_type)(t) == MP_OBJECT
                             && crate::tile_map::is_tile_owner(self.shared, t, self.current())
                             && self.object_type_is(t, HQ))
                         {
@@ -1220,7 +1146,7 @@ impl<'a> World<'a> {
                             )
                         })
                 {
-                    out.fail(self.s.strings.bridge);
+                    out.error(self.s.strings.bridge);
                     return;
                 }
             }
@@ -1229,16 +1155,16 @@ impl<'a> World<'a> {
             match kind {
                 TRANSMITTER | LIGHTHOUSE => {
                     if !((*self.s.founding).flat)(crate::town::founding::Tile(tile)) {
-                        out.fail(self.s.strings.flat);
+                        out.error(self.s.strings.flat);
                         return;
                     }
                 }
                 OWNED => {
-                    if (self.shared.tile_type)(tile) == 10
+                    if (self.shared.tile_type)(tile) == MP_OBJECT
                         && crate::tile_map::is_tile_owner(self.shared, tile, self.current())
                         && self.object_type_is(tile, OWNED)
                     {
-                        out.fail(self.s.strings.own);
+                        out.error(self.s.strings.own);
                         return;
                     }
                 }
@@ -1247,7 +1173,7 @@ impl<'a> World<'a> {
                     let old = (self.company().hq_location)(company);
                     if old != INVALID_TILE {
                         if old == tile {
-                            out.fail(self.s.strings.built);
+                            out.error(self.s.strings.built);
                             return;
                         }
                         (self.company().finance.set_current_company)(OWNER_WATER);
@@ -1267,16 +1193,16 @@ impl<'a> World<'a> {
                     }
                 }
                 STATUE => {
-                    out.error();
+                    out.error(INVALID_STRING_ID);
                     return;
                 }
                 _ => {
-                    size = u32::from(area.width) * u32::from(area.height);
+                    size = u32::from(area.w) * u32::from(area.h);
                 }
             }
             let finance = self.finance(self.current());
             if !finance.is_null() && Self::object_limit(finance) < size {
-                out.fail(self.s.strings.limit);
+                out.error(self.s.strings.limit);
                 return;
             }
             if flags & DoCommandFlag::EXECUTE != 0 {
@@ -1299,7 +1225,7 @@ impl<'a> World<'a> {
                     (*finance).object = (*finance).object.wrapping_sub(size << 16);
                 }
             }
-            out.amount(self.get_build_cost(spec).saturating_mul(i64::from(size)));
+            out.add_money(self.get_build_cost(spec).saturating_mul(i64::from(size)));
         }
         crate::witness::hit(crate::witness::OBJECT_BUILD_COMMAND);
     }
@@ -1316,8 +1242,7 @@ impl World<'_> {
         kind: u16,
         view: u8,
     ) {
-        let result = crate::services::Cost(out.0, out.1);
-        crate::command::nested(self.commands(), self.shared, result, tile, flags, |flags| {
+        crate::command::nested(self.commands(), self.shared, out, tile, flags, |flags| {
             self.build_command(out, tmp, aux, flags, tile, kind, view);
         });
     }
@@ -1338,18 +1263,18 @@ impl World<'_> {
         unsafe {
             let map_y = (self.shared.map_max_y)() + 1;
             if start >= self.map.size_x() * map_y || usize::from(kind) >= (self.s.spec_count)() {
-                out.error();
+                out.error(INVALID_STRING_ID);
                 return;
             }
             let spec = (self.s.spec)(kind);
             let shape = (self.s.area_shape)(spec);
             if view >= shape.views || shape.size != OBJECT_SIZE_1X1 {
-                out.error();
+                out.error(INVALID_STRING_ID);
                 return;
             }
             let mut money = crate::command::available_money(self.commands());
             out.set(0);
-            last.error();
+            last.error(INVALID_STRING_ID);
             let mut success = false;
             let finance = self.finance(self.current());
             let mut limit = Self::object_limit(finance) as i32;
@@ -1386,7 +1311,7 @@ impl World<'_> {
                     }
                     self.do_build(ret, tmp, aux, flags, t, kind, view);
                 }
-                out.amount(cost);
+                out.add_money(cost);
                 iterator.advance();
             }
             if !success {
@@ -1917,21 +1842,17 @@ pub struct ResolverServices {
     pub base_scope: unsafe extern "C" fn(*mut Resolver, u8, u8) -> *mut std::ffi::c_void,
     pub evaluate: unsafe extern "C" fn(*const ObjectScope, u16, u32, u32, *mut i32, usize) -> u16,
 }
-struct InvocationRegistry(UnsafeCell<*const ObjectServices>);
-// SAFETY: native game-state serialization covers installation and every use,
-// including GUI commands and the game thread. Reset does not overlap resolution.
-unsafe impl Sync for InvocationRegistry {}
-static INVOCATIONS: InvocationRegistry = InvocationRegistry(UnsafeCell::new(ptr::null()));
+static INVOCATIONS: GameState<*const ObjectServices> = GameState::new(ptr::null());
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_services_exchange(
     s: *const ObjectServices,
 ) -> *const ObjectServices {
-    unsafe { ptr::replace(INVOCATIONS.0.get(), s) }
+    INVOCATIONS.exchange(s)
 }
 fn invocation_services<'a>() -> &'a ObjectServices {
     // SAFETY: ResetObjects installs the immutable process-live native table
     // before use. No Rust reference into a context or world record escapes.
-    unsafe { &**INVOCATIONS.0.get() }
+    unsafe { INVOCATIONS.table() }
 }
 fn resolver_services(s: &ObjectServices) -> &ResolverServices {
     // SAFETY: native table lives for the serialized entry.
@@ -2200,10 +2121,7 @@ pub unsafe extern "C" fn openttd_rust_object_trigger(
 
 /// Synchronous object owner entry.
 /// # Safety
-/// Immutable tables, live native cost/frame/array storage and original tile/ID
-/// preconditions; serialized with reset/save/load. No native pointer is retained.
-/// Services may reenter after all state accesses end. Native cancellation is
-/// returned before C++ rethrows; other leaves are noexcept. Panics abort.
+/// The module's export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_build(
     s: *const ObjectServices,
@@ -2213,7 +2131,6 @@ pub unsafe extern "C" fn openttd_rust_object_build(
     town: *const TownHandle,
     view: u8,
 ) {
-    // SAFETY: native tables and stack storage outlive the synchronous call.
     unsafe { build(&*s, kind, tile, owner, town, view) };
 }
 
@@ -2236,40 +2153,29 @@ pub(crate) unsafe fn build(
 
 /// Synchronous object owner entry.
 /// # Safety
-/// Immutable tables, live native cost/frame/array storage and original tile/ID
-/// preconditions; serialized with reset/save/load. No native pointer is retained.
-/// Services may reenter after all state accesses end. Native cancellation is
-/// returned before C++ rethrows; other leaves are noexcept. Panics abort.
+/// The module's export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_update_hq(
     s: *const ObjectServices,
     tile: u32,
     score: u32,
 ) {
-    // SAFETY: native tables and stack storage outlive the synchronous call.
     let w = unsafe { World::new::<true>(&*s) };
     w.update_hq(tile, score);
 }
 
 /// Synchronous object owner entry.
 /// # Safety
-/// Immutable tables, live native cost/frame/array storage and original tile/ID
-/// preconditions; serialized with reset/save/load. No native pointer is retained.
-/// Services may reenter after all state accesses end. Native cancellation is
-/// returned before C++ rethrows; other leaves are noexcept. Panics abort.
+/// The module's export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_colours(s: *const ObjectServices, company: u8) {
-    // SAFETY: native tables and stack storage outlive the synchronous call.
     let w = unsafe { World::new::<false>(&*s) };
     w.colours(company);
 }
 
 /// Synchronous object owner entry.
 /// # Safety
-/// Immutable tables, live native cost/frame/array storage and original tile/ID
-/// preconditions; serialized with reset/save/load. No native pointer is retained.
-/// Services may reenter after all state accesses end. Native cancellation is
-/// returned before C++ rethrows; other leaves are noexcept. Panics abort.
+/// The module's export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_build_command(
     s: *const ObjectServices,
@@ -2281,7 +2187,6 @@ pub unsafe extern "C" fn openttd_rust_object_build_command(
     kind: u16,
     view: u8,
 ) {
-    // SAFETY: native tables and stack storage outlive the synchronous call.
     let w = unsafe { World::new::<true>(&*s) };
     let costs = unsafe { &*(*s).cost };
     let out = Cost(out, costs);
@@ -2292,10 +2197,7 @@ pub unsafe extern "C" fn openttd_rust_object_build_command(
 
 /// Synchronous object owner entry.
 /// # Safety
-/// Immutable tables, live native cost/frame/array storage and original tile/ID
-/// preconditions; serialized with reset/save/load. No native pointer is retained.
-/// Services may reenter after all state accesses end. Native cancellation is
-/// returned before C++ rethrows; other leaves are noexcept. Panics abort.
+/// The module's export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_build_area(
     s: *const ObjectServices,
@@ -2311,7 +2213,6 @@ pub unsafe extern "C" fn openttd_rust_object_build_area(
     view: u8,
     diagonal: bool,
 ) {
-    // SAFETY: native tables and stack storage outlive the synchronous call.
     let w = unsafe { World::new::<true>(&*s) };
     let costs = unsafe { &*(*s).cost };
     let out = Cost(out, costs);
@@ -2326,10 +2227,7 @@ pub unsafe extern "C" fn openttd_rust_object_build_area(
 
 /// Synchronous object owner entry.
 /// # Safety
-/// Immutable tables, live native cost/frame/array storage and original tile/ID
-/// preconditions; serialized with reset/save/load. No native pointer is retained.
-/// Services may reenter after all state accesses end. Native cancellation is
-/// returned before C++ rethrows; other leaves are noexcept. Panics abort.
+/// The module's export contract.
 pub(crate) unsafe fn openttd_rust_object_clear(
     s: *const ObjectServices,
     out: *mut CommandCost,
@@ -2337,7 +2235,6 @@ pub(crate) unsafe fn openttd_rust_object_clear(
     tile: u32,
     flags: u16,
 ) {
-    // SAFETY: native tables and stack storage outlive the synchronous call.
     let w = unsafe { World::new::<true>(&*s) };
     let costs = unsafe { &*(*s).cost };
     let out = Cost(out, costs);
@@ -2347,10 +2244,7 @@ pub(crate) unsafe fn openttd_rust_object_clear(
 
 /// Synchronous object owner entry.
 /// # Safety
-/// Immutable tables, live native cost/frame/array storage and original tile/ID
-/// preconditions; serialized with reset/save/load. No native pointer is retained.
-/// Services may reenter after all state accesses end. Native cancellation is
-/// returned before C++ rethrows; other leaves are noexcept. Panics abort.
+/// The module's export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_cargo(
     s: *const ObjectServices,
@@ -2358,17 +2252,13 @@ pub unsafe extern "C" fn openttd_rust_object_cargo(
     cargo: *mut u32,
     accepted: *mut u64,
 ) {
-    // SAFETY: native tables and stack storage outlive the synchronous call.
     let w = unsafe { World::new::<false>(&*s) };
     w.cargo(tile, cargo, accepted);
 }
 
 /// Synchronous object owner entry.
 /// # Safety
-/// Immutable tables, live native cost/frame/array storage and original tile/ID
-/// preconditions; serialized with reset/save/load. No native pointer is retained.
-/// Services may reenter after all state accesses end. Native cancellation is
-/// returned before C++ rethrows; other leaves are noexcept. Panics abort.
+/// The module's export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_tile_loop(
     s: *const ObjectServices,
@@ -2376,17 +2266,13 @@ pub unsafe extern "C" fn openttd_rust_object_tile_loop(
     call: *mut crate::ground::Call,
     tile: u32,
 ) {
-    // SAFETY: native tables and stack storage outlive the synchronous call.
     let w = unsafe { World::new::<false>(&*s) };
     w.tile_loop(tile, frame, call);
 }
 
 /// Synchronous object owner entry.
 /// # Safety
-/// Immutable tables, live native cost/frame/array storage and original tile/ID
-/// preconditions; serialized with reset/save/load. No native pointer is retained.
-/// Services may reenter after all state accesses end. Native cancellation is
-/// returned before C++ rethrows; other leaves are noexcept. Panics abort.
+/// The module's export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_generate(
     s: *const ObjectServices,
@@ -2395,7 +2281,6 @@ pub unsafe extern "C" fn openttd_rust_object_generate(
     aux: *mut CommandCost,
     frame: *mut GenerationFrame,
 ) -> bool {
-    // SAFETY: native tables and stack storage outlive the synchronous call.
     let w = unsafe { World::new::<true>(&*s) };
     let costs = unsafe { &*(*s).cost };
     let out = Cost(out, costs);
@@ -2416,17 +2301,13 @@ pub(crate) unsafe fn openttd_rust_object_change_owner(
     old: u8,
     new_owner: u8,
 ) {
-    // SAFETY: native tables and stack storage outlive the synchronous call.
     let w = unsafe { World::new::<true>(&*s) };
     w.change_owner(ownership, tile, old, new_owner);
 }
 
 /// Synchronous object owner entry.
 /// # Safety
-/// Immutable tables, live native cost/frame/array storage and original tile/ID
-/// preconditions; serialized with reset/save/load. No native pointer is retained.
-/// Services may reenter after all state accesses end. Native cancellation is
-/// returned before C++ rethrows; other leaves are noexcept. Panics abort.
+/// The module's export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_terraform(
     s: *const ObjectServices,
@@ -2436,7 +2317,6 @@ pub unsafe extern "C" fn openttd_rust_object_terraform(
     z: i32,
     slope: u8,
 ) {
-    // SAFETY: native tables and stack storage outlive the synchronous call.
     let w = unsafe { World::new::<false>(&*s) };
     let costs = unsafe { &*(*s).cost };
     let out = Cost(out, costs);
@@ -2445,10 +2325,7 @@ pub unsafe extern "C" fn openttd_rust_object_terraform(
 
 /// Synchronous object owner entry.
 /// # Safety
-/// Immutable tables, live native cost/frame/array storage and original tile/ID
-/// preconditions; serialized with reset/save/load. No native pointer is retained.
-/// Services may reenter after all state accesses end. Native cancellation is
-/// returned before C++ rethrows; other leaves are noexcept. Panics abort.
+/// The module's export contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_build_above(
     s: *const ObjectServices,
@@ -2457,7 +2334,6 @@ pub unsafe extern "C" fn openttd_rust_object_build_above(
     flags: u16,
     height: i32,
 ) {
-    // SAFETY: native tables and stack storage outlive the synchronous call.
     let w = unsafe { World::new::<false>(&*s) };
     let costs = unsafe { &*(*s).cost };
     let out = Cost(out, costs);
@@ -2474,10 +2350,10 @@ crate::abi::layouts! {
         factor,
         shift,
     };
-    "OpenTTDObjectArea" ["landscape"] => Area {
+    "OpenTTDObjectArea" ["landscape"] => TileArea {
         tile,
-        width,
-        height,
+        w => width,
+        h => height,
     };
     "OpenTTDObjectIdentity" ["landscape"] => Identity {
         object,

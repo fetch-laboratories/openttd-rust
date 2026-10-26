@@ -60,24 +60,20 @@
 extern "C" {
 #endif
 struct OpenTTDX25519Leaves {
-	void (OPENTTD_CRYPTO_CALL *wipe)(void *, size_t) OPENTTD_SERVICE_DEFAULT(wipe);
-	int32_t (OPENTTD_CRYPTO_CALL *verify32)(const uint8_t *, const uint8_t *) OPENTTD_SERVICE_DEFAULT(verify32);
+	void (OPENTTD_RUST_CALL *wipe)(void *, size_t) OPENTTD_SERVICE_DEFAULT(wipe);
+	int32_t (OPENTTD_RUST_CALL *verify32)(const uint8_t *, const uint8_t *) OPENTTD_SERVICE_DEFAULT(verify32);
 };
-/* Immutable initialized table borrowed synchronously, containing only original
- * nonthrowing wipe/constant-time verify32 leaves. No global registration,
- * heap, application callback, direct vendor import or C++ unwind through Rust.
- * Buffers are original fixed readable/writable 32-byte spans; output may overlap
- * secret/scalar/point, including partial overlap. All inputs are read before
- * output serialization. Trim separately retains literal FORWARD byte-copy
- * behavior, including propagation for forward overlaps; it is not memmove.
- * Coarse ladder callers supply 255/256 bits. No C++ field representation crosses
- * ABI; internal ten-limb Rust storage preserves signed bounds/carry/shifts.
- * No pointer survives a call. Serialized operations, Rust panic aborts. Original
- * wipe points/order remain; no complete compiler-copy/spill erasure claim. */
-void OPENTTD_CRYPTO_CALL openttd_rust_x25519_trim(uint8_t *, const uint8_t *);
-void OPENTTD_CRYPTO_CALL openttd_rust_x25519_ladder(const struct OpenTTDX25519Leaves *, uint8_t *, const uint8_t *, const uint8_t *, int32_t);
-void OPENTTD_CRYPTO_CALL openttd_rust_x25519(const struct OpenTTDX25519Leaves *, uint8_t *, const uint8_t *, const uint8_t *);
-void OPENTTD_CRYPTO_CALL openttd_rust_x25519_public_key(const struct OpenTTDX25519Leaves *, uint8_t *, const uint8_t *);
+/* Leaves are the original nonthrowing wipe and constant-time verify32. Buffers are fixed 32-byte
+ * spans; output may overlap secret, scalar or point, partially too, because all inputs are read
+ * first. Trim keeps the literal forward byte copy, which propagates forward overlaps (not memmove).
+ * Coarse ladder callers supply 255/256 bits; internal ten-limb storage keeps the signed bounds,
+ * carries and shifts. Original wipe points and order remain; compiler spills need not be erased.
+ * Tables are initialized, live and immutable; calls are serialized and buffers are readable/writable
+ * for their declared extents. */
+void OPENTTD_RUST_CALL openttd_rust_x25519_trim(uint8_t *, const uint8_t *);
+void OPENTTD_RUST_CALL openttd_rust_x25519_ladder(const struct OpenTTDX25519Leaves *, uint8_t *, const uint8_t *, const uint8_t *, int32_t);
+void OPENTTD_RUST_CALL openttd_rust_x25519(const struct OpenTTDX25519Leaves *, uint8_t *, const uint8_t *, const uint8_t *);
+void OPENTTD_RUST_CALL openttd_rust_x25519_public_key(const struct OpenTTDX25519Leaves *, uint8_t *, const uint8_t *);
 #ifdef __cplusplus
 }
 #endif

@@ -8,6 +8,10 @@
 //! Shared time constants from `timer_game_common.h`.
 /// `CalendarTime::MONTHS_IN_YEAR`.
 pub const MONTHS_IN_YEAR: u32 = 12;
+/// `TimerGameConst::DAYS_IN_YEAR`.
+pub const DAYS_IN_YEAR: i32 = 365;
+/// `TimerGameConst::DAYS_IN_LEAP_YEAR`.
+pub const DAYS_IN_LEAP_YEAR: i32 = 366;
 
 /// `EconomyTime::SECONDS_PER_DAY`.
 pub const SECONDS_PER_DAY: i32 = 2;

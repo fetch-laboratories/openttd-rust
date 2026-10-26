@@ -15,15 +15,9 @@ use crate::witness as w;
 use std::cell::OnceCell;
 
 macro_rules! observed {
-    ($call:expr) => {{
-        let result = $call;
-        crate::witness::hit(crate::witness::TOWN_SERVICES);
-        crate::witness::add(
-            crate::witness::TOWN_BYTES,
-            std::mem::size_of_val(&result) as u64,
-        );
-        result
-    }};
+    ($call:expr) => {
+        crate::witness::counted!(TOWN_SERVICES, TOWN_BYTES, $call)
+    };
 }
 pub(super) use observed;
 
@@ -135,9 +129,9 @@ impl<'a> Founding<'a> {
         }
     }
     fn map(&self) -> crate::services::Map {
-        *self.map.get_or_init(|| crate::services::Map {
-            log_x: observed!((self.shared.map_log_x)()) as u8,
-        })
+        *self
+            .map
+            .get_or_init(|| crate::services::Map::from_log_x(observed!((self.shared.map_log_x)())))
     }
     fn size_y(&self) -> u32 {
         *self

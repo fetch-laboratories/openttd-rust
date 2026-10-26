@@ -17,32 +17,7 @@ def strip_debug(source, destination=None):
 
 def export(destination, migration):
     """Capture under build locks; adapters must come from these exact game objects."""
-    from . import (
-        engines,
-        fleet,
-        industries,
-        objects,
-        orders,
-        rails,
-        ships,
-        signals,
-        stations,
-        towns,
-    )
-
-    adapters = (
-        engines,
-        fleet,
-        industries,
-        objects,
-        orders,
-        rails,
-        ships,
-        signals,
-        stations,
-        towns,
-    )
-
+    adapters = core.adapter_modules()
     destination.mkdir(parents=True)
     builds = {
         "reference": migration.REFERENCE_BUILD.resolve(),
@@ -67,7 +42,7 @@ def export(destination, migration):
                 strip_debug(executable)
 
             # Each adapter compiles one source and relinks the game into its own
-            # folder; the serial loop left all but one core idle (#394).
+            # folder, so adapters build in parallel.
             workers = min(len(adapters), os.cpu_count() or 1)
             with concurrent.futures.ThreadPoolExecutor(workers) as pool:
                 list(pool.map(build_adapter, adapters))

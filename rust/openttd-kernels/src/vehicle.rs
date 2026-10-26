@@ -5,14 +5,10 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Shared vehicle boundary used by every vehicle port: one opaque handle, the
-//! base-`Vehicle` and `GroundVehicle` service tables and constants. Shared map
-//! operations and arithmetic live in `services.rs`. The tables are defined once in `src/rust/vehicle_ffi.h` and filled
-//! with designated initializers in `src/rust/vehicle_services.cpp`.
-//!
-//! A handle is a live `Vehicle *`, valid until the service that deletes it.
-//! Services are synchronous and `noexcept`; none retains a Rust reference, and
-//! callers end every owner borrow before calling one that can reenter Rust.
+//! Shared vehicle boundary: one opaque handle (a live `Vehicle *`, valid until the service that
+//! deletes it), the base-`Vehicle` and `GroundVehicle` service tables and constants. The tables
+//! are declared in `src/rust/vehicle_ffi.h` and filled in `src/rust/vehicle_services.cpp`.
+//! Callers end every owner borrow before a service that can reenter Rust.
 pub(crate) mod maintenance;
 pub(crate) mod occupancy;
 pub(crate) mod scheduler;
@@ -20,6 +16,8 @@ pub(crate) mod visits;
 
 use crate::newgrf_callbacks::CallbackID;
 use crate::newgrf_sound::VehicleSoundEvent;
+use crate::timer_game_common::DAYS_IN_YEAR;
+use crate::timer_game_tick::DAY_TICKS;
 use std::ptr::NonNull;
 
 /// Opaque C++ `Vehicle`.
@@ -90,20 +88,12 @@ pub struct EngineForLength {
 
 pub use crate::newgrf_callbacks::CALLBACK_FAILED;
 pub use crate::order_type::{OT_GOTO_DEPOT, OT_GOTO_STATION, OT_LEAVESTATION, OT_LOADING};
-pub use crate::tile_type::{MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
-/// `VehState` bits.
-pub const VS_HIDDEN: u8 = 1 << 0;
-pub const VS_STOPPED: u8 = 1 << 1;
-pub const VS_CRASHED: u8 = 1 << 7;
 pub use crate::tile_cmd::CANNOT_ENTER as VETS_CANNOT_ENTER;
 /// `VehicleEnterTileState` bits.
 pub use crate::tile_cmd::ENTERED_WORMHOLE as VETS_ENTERED_WORMHOLE;
+pub use crate::tile_type::{MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
 /// `AM_REALISTIC`.
 pub const AM_REALISTIC: u8 = 1;
-/// `INVALID_TRACKDIR`.
-pub const INVALID_TRACKDIR: u8 = 0xFF;
-/// `EngineID::Invalid()`.
-pub const INVALID_ENGINE: u16 = 0xFFFF;
 /// `INVALID_PRICE`.
 pub const INVALID_PRICE: u8 = 0xFF;
 /// `PROP_AIRCRAFT_SPEED`.
@@ -111,7 +101,7 @@ pub const PROP_AIRCRAFT_SPEED: u8 = 0x0C;
 /// `VEHICLE_LENGTH`.
 pub const VEHICLE_LENGTH: u8 = 8;
 /// `CalendarTime::DAYS_IN_YEAR * Ticks::DAY_TICKS`.
-pub const YEAR_TICKS: i64 = 365 * 74;
+pub const YEAR_TICKS: i64 = DAYS_IN_YEAR as i64 * DAY_TICKS as i64;
 /// `SND_19_DEPARTURE_OLD_RV_1` and `SND_1A_DEPARTURE_OLD_RV_2`.
 pub const SND_DEPARTURE_OLD_RV_1: u16 = 23;
 pub const SND_DEPARTURE_OLD_RV_2: u16 = 24;
@@ -324,8 +314,12 @@ pub struct VehicleServices {
     pub movement_observations: extern "C" fn(VehicleRef) -> MovementObservations,
     pub max_speed: extern "C" fn(VehicleRef) -> u16,
     pub maintenance: *const maintenance::Services,
-    /// The static station/depot visit table, resolved on use (#349).
+    /// The static station and depot visit table (`vehicle/visits.rs`), resolved on use.
     pub visits: extern "C" fn() -> *const visits::Services,
+    /// The same canonical orders table used by visits/refit.
+    pub orders: extern "C" fn() -> *const crate::orders::Leaves,
+    /// Strict `Ship::Get`, never a nullable pool lookup.
+    pub ship_get: extern "C" fn(u32) -> VehicleRef,
 }
 // The visit table and its entries are native-supplied static Rust functions.
 #[allow(unsafe_code)]
@@ -334,6 +328,11 @@ impl VehicleServices {
     pub(crate) fn visits(&self) -> &'static visits::Services {
         // SAFETY: the getter returns the immutable process-wide visit table.
         unsafe { &*(self.visits)() }
+    }
+    /// The immutable canonical orders services, shared by every controller.
+    pub(crate) fn orders(&self) -> &'static crate::orders::Leaves {
+        // SAFETY: the getter returns the immutable process-wide orders table.
+        unsafe { &*(self.orders)() }
     }
     /// `VehicleEnterDepot(v)`.
     pub(crate) fn enter_depot(&self, v: VehicleRef) {
@@ -499,6 +498,8 @@ crate::abi::layouts! {
         max_speed,
         maintenance,
         visits,
+        orders,
+        ship_get,
     };
 
 

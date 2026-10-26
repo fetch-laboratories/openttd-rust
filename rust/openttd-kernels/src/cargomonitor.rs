@@ -5,11 +5,9 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Complete process-wide cargo-monitor maps, accounting and lifecycle.
-//! The native game-state mutex serializes every entry, including script queries,
-//! saving and loading. No owner borrow survives a native callback. Native entry
-//! frames own independent cursors for nested payment and monitor scans. Handles
-//! are never dereferenced or retained; no delivery allocates or inserts a key.
+//! Process-wide cargo-monitor maps, accounting and lifecycle. Native entry frames own
+//! independent cursors for nested payment and monitor scans. Handles are never dereferenced
+//! or retained, and no delivery allocates or inserts a key.
 #![allow(
     unsafe_code,
     missing_docs,
@@ -19,6 +17,7 @@
     clippy::cast_possible_wrap,
     clippy::too_many_arguments
 )]
+use crate::game_state::GameState;
 use crate::{
     bitmath_func::{gb, has_bit, sb, set_bit},
     company_type::INVALID_OWNER,
@@ -27,7 +26,6 @@ use crate::{
     station::{NearbyIndustryCursor, Station},
 };
 use std::{
-    cell::UnsafeCell,
     collections::BTreeMap,
     ffi::c_void,
     ops::Bound::{Excluded, Unbounded},
@@ -42,11 +40,9 @@ pub const CCB_COMPANY_START: u8 = 25;
 pub const CCB_COMPANY_LENGTH: u8 = 4;
 
 type MonitorMap = BTreeMap<u32, i32>;
-struct Owner(UnsafeCell<MonitorMap>);
-// SAFETY: All accesses hold the native game-state mutex; no reference escapes.
-unsafe impl Sync for Owner {}
-static PICKUPS: Owner = Owner(UnsafeCell::new(BTreeMap::new()));
-static DELIVERIES: Owner = Owner(UnsafeCell::new(BTreeMap::new()));
+struct Owner(GameState<MonitorMap>);
+static PICKUPS: Owner = Owner(GameState::new(BTreeMap::new()));
+static DELIVERIES: Owner = Owner(GameState::new(BTreeMap::new()));
 impl Owner {
     fn clear(&self, company: u8) {
         // SAFETY: Serialized entry; no callback or reentry while borrowed.

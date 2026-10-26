@@ -5,12 +5,9 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! House lifecycle and tile simulation: construction stages, builtin lifts,
-//! cargo production and acceptance, clearing, rebuilding, placement, cache
-//! rebuild and house-specific `NewGRF` trigger traversal. Packed map fields,
-//! pools, specs, sprite resolvers and `AnimationBase` stay native. Every
-//! service is a synchronous typed call that may reenter; owner fields are
-//! accessed only immediately, never borrowed across a service.
+//! House lifecycle and tile simulation: construction stages, builtin lifts, cargo, clearing,
+//! rebuilding, placement, cache rebuild and house `NewGRF` trigger traversal. Packed map
+//! fields, pools, specs, sprite resolvers and `AnimationBase` stay native.
 use super::{AuthorityServices, Leaves, State, TownRef, change_population, engine, update_radius};
 use crate::cargo_type::INVALID_CARGO;
 use crate::command_type::DoCommandFlag;
@@ -18,8 +15,9 @@ use crate::company_type::{OWNER_NONE, OWNER_TOWN, OWNER_WATER};
 use crate::economy_type::PR_BUILD_FOUNDATION;
 use crate::history_type::THIS_MONTH;
 use crate::newgrf_callbacks::CALLBACK_FAILED;
+use crate::random_func::chance16_i;
 use crate::services::{
-    CommandCost, CommandCostServices, CommandServices, Map, Services, TownHandle, chance16_i,
+    CommandCost, CommandCostServices, CommandServices, Map, Services, TownHandle,
 };
 use crate::slope_func::{get_slope_max_z, is_steep_slope};
 use crate::station::Station;
@@ -307,9 +305,9 @@ pub(super) fn north_part(leaves: &Leaves, house: &mut u16, map: Map) -> u32 {
 }
 impl House<'_> {
     fn map(&self) -> Map {
-        *self.map.get_or_init(|| Map {
-            log_x: (self.l.map_log_x)() as u8,
-        })
+        *self
+            .map
+            .get_or_init(|| Map::from_log_x((self.l.map_log_x)()))
     }
     fn engine(&self, town: TownRef) -> super::Engine<'_> {
         let mut engine = engine(self.l, self.s);

@@ -7,9 +7,7 @@
 
 //! Complete scalar spiral traversal; map storage stays in C++.
 
-const BEGIN: u8 = 0;
-const END: u8 = 4;
-const INVALID: u8 = 255;
+use crate::direction_type::{DIAGDIR_BEGIN, DIAGDIR_END, INVALID_DIAGDIR};
 
 /// Copyable traversal state, with all original unsigned arithmetic at 32 bits.
 #[repr(C)]
@@ -41,7 +39,7 @@ impl SpiralState {
     /// End is exactly the radius limit with a non-invalid direction.
     #[must_use]
     pub fn is_end(self) -> bool {
-        self.cur_radius == self.max_radius && self.direction != INVALID
+        self.cur_radius == self.max_radius && self.direction != INVALID_DIAGDIR
     }
 
     fn init_position(&mut self) {
@@ -57,9 +55,9 @@ impl SpiralState {
 
     fn increment(&mut self) {
         assert!(!self.is_end());
-        if self.direction == INVALID {
+        if self.direction == INVALID_DIAGDIR {
             self.west();
-            self.direction = BEGIN;
+            self.direction = DIAGDIR_BEGIN;
             self.init_position();
             return;
         }
@@ -75,10 +73,10 @@ impl SpiralState {
             return;
         }
         self.direction += 1; // Valid directions are 0..3 before this increment.
-        if self.direction == END {
+        if self.direction == DIAGDIR_END {
             self.west();
             self.cur_radius = self.cur_radius.wrapping_add(1);
-            self.direction = BEGIN;
+            self.direction = DIAGDIR_BEGIN;
         }
         self.init_position();
     }
@@ -108,7 +106,7 @@ pub fn square(x: u32, y: u32, diameter: u32, size_x: u32, size_y: u32) -> Spiral
         position: 0,
         x: if odd { x } else { x.wrapping_add(1) },
         y,
-        direction: if odd { INVALID } else { BEGIN },
+        direction: if odd { INVALID_DIAGDIR } else { DIAGDIR_BEGIN },
     };
     if !odd {
         state.init_position();
@@ -134,7 +132,7 @@ pub fn hole(
         position: 0,
         x: x.wrapping_add(width).wrapping_add(1),
         y,
-        direction: BEGIN,
+        direction: DIAGDIR_BEGIN,
     };
     state.init_position();
     state.skip_outside(size_x, size_y);

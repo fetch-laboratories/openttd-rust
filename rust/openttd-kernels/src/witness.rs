@@ -129,7 +129,6 @@ witness_blocks! {
         GROUND_SPEED = 11 => "ground.speed",
         GROUND_FULL_WEIGHT = 12 => "ground.full_weight",
     }
-    // Registry: house (#256).
     house {
         HOUSE = 0 => "house.stage",
         HOUSE_COMPLETE = 1 => "house.complete",
@@ -149,7 +148,6 @@ witness_blocks! {
         HOUSE_STATION_REMOVED = 15 => "house.station_removed",
         HOUSE_PROTECTED = 16 => "house.protected",
     }
-    // Registry: landscape (#212).
     industry_resolver {
         INDUSTRY_RESOLVER_VARIABLE = 0 => "industry_resolver.variable",
         INDUSTRY_RESOLVER_TILE_VARIABLE = 1 => "industry_resolver.tile_variable",
@@ -818,6 +816,45 @@ pub fn add(index: usize, amount: u64) {
 pub fn hit(index: usize) {
     add(index, 1);
 }
+
+/// Count one crossing and its result bytes when the optional const condition holds.
+/// `before` counts the crossing before evaluating `$call`; otherwise both counts follow it.
+/// Without `$bytes`, count the crossing only.
+macro_rules! counted {
+    (before $calls:ident, $bytes:ident, $call:expr) => {{
+        $crate::witness::hit($crate::witness::$calls);
+        let result = $call;
+        $crate::witness::add(
+            $crate::witness::$bytes,
+            ::std::mem::size_of_val(&result) as u64,
+        );
+        result
+    }};
+    (before $calls:ident, $call:expr) => {{
+        $crate::witness::hit($crate::witness::$calls);
+        $call
+    }};
+    ($calls:ident, $bytes:ident if $when:expr, $call:expr) => {{
+        let result = $call;
+        if $when {
+            $crate::witness::hit($crate::witness::$calls);
+            $crate::witness::add(
+                $crate::witness::$bytes,
+                ::std::mem::size_of_val(&result) as u64,
+            );
+        }
+        result
+    }};
+    ($calls:ident, $bytes:ident, $call:expr) => {
+        $crate::witness::counted!($calls, $bytes if true, $call)
+    };
+    ($calls:ident, $call:expr) => {{
+        let result = $call;
+        $crate::witness::hit($crate::witness::$calls);
+        result
+    }};
+}
+pub(crate) use counted;
 
 /// Turn every counter on; called once at static initialization.
 #[unsafe(no_mangle)]

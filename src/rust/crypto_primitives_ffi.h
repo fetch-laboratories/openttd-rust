@@ -57,19 +57,13 @@
 #include "service_defaults.hpp"
 #include <stddef.h>
 #include <stdint.h>
-#if defined(_MSC_VER)
-#define OPENTTD_CRYPTO_CALL __cdecl
-#elif defined(__i386__)
-#define OPENTTD_CRYPTO_CALL __attribute__((cdecl))
-#else
-#define OPENTTD_CRYPTO_CALL
-#endif
+#include "call_ffi.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
 struct OpenTTDCryptoLeaves {
-	void (OPENTTD_CRYPTO_CALL *wipe)(void *, size_t) OPENTTD_SERVICE_DEFAULT(wipe);
-	int32_t (OPENTTD_CRYPTO_CALL *verify16)(const uint8_t *, const uint8_t *) OPENTTD_SERVICE_DEFAULT(verify16);
+	void (OPENTTD_RUST_CALL *wipe)(void *, size_t) OPENTTD_SERVICE_DEFAULT(wipe);
+	int32_t (OPENTTD_RUST_CALL *verify16)(const uint8_t *, const uint8_t *) OPENTTD_SERVICE_DEFAULT(verify16);
 };
 struct OpenTTDPolyLayout {
 	size_t size, alignment, c, c_idx, r, pad, h;
@@ -77,35 +71,29 @@ struct OpenTTDPolyLayout {
 struct OpenTTDAeadLayout {
 	size_t size, alignment, counter, key, nonce;
 };
-/* Tables/layouts are fully initialized, live/aligned, immutable and borrowed
- * synchronously. Leaves are the nonthrowing original wipe/constant-time compare,
- * with explicit C calling convention; they retain no pointers. No registration,
- * allocation ownership, C++ exception or direct vendor import enters Rust.
- * Context lifetime starts in C++, and its actual size/offsets are supplied here.
- * Only initialized fields/chunk bytes are read; init preserves unwritten chunk
- * and padding bytes. Final wipes use the complete actual caller context size.
- * Buffers have their original readable/writable extents (within isize::MAX).
- * Input/output text is disjoint or exactly identical, never partial overlap;
- * key/nonce loads precede cipher writes, including Elligator's overlapping key.
- * Empty text/update spans may be NULL; raw cipher plaintext may also be NULL
- * for nonempty keystream. Contexts and outputs follow vendor alias preconditions.
- * No Rust slice/reference aliases external input/output storage. Operations are
- * serialized, panics abort; compiler spills/copies are not all-erasure claims. */
-void OPENTTD_CRYPTO_CALL openttd_rust_chacha_h(const struct OpenTTDCryptoLeaves *, uint8_t *, const uint8_t *, const uint8_t *);
-uint64_t OPENTTD_CRYPTO_CALL openttd_rust_chacha_djb(const struct OpenTTDCryptoLeaves *, uint8_t *, const uint8_t *, size_t, const uint8_t *, const uint8_t *, uint64_t);
-uint32_t OPENTTD_CRYPTO_CALL openttd_rust_chacha_ietf(const struct OpenTTDCryptoLeaves *, uint8_t *, const uint8_t *, size_t, const uint8_t *, const uint8_t *, uint32_t);
-uint64_t OPENTTD_CRYPTO_CALL openttd_rust_chacha_x(const struct OpenTTDCryptoLeaves *, uint8_t *, const uint8_t *, size_t, const uint8_t *, const uint8_t *, uint64_t);
-void OPENTTD_CRYPTO_CALL openttd_rust_poly_init(const struct OpenTTDPolyLayout *, void *, const uint8_t *);
-void OPENTTD_CRYPTO_CALL openttd_rust_poly_update(const struct OpenTTDPolyLayout *, void *, const uint8_t *, size_t);
-void OPENTTD_CRYPTO_CALL openttd_rust_poly_final(const struct OpenTTDCryptoLeaves *, const struct OpenTTDPolyLayout *, void *, uint8_t *);
-void OPENTTD_CRYPTO_CALL openttd_rust_poly(const struct OpenTTDCryptoLeaves *, const struct OpenTTDPolyLayout *, void *, uint8_t *, const uint8_t *, size_t, const uint8_t *);
-void OPENTTD_CRYPTO_CALL openttd_rust_aead_init_x(const struct OpenTTDCryptoLeaves *, const struct OpenTTDAeadLayout *, void *, const uint8_t *, const uint8_t *);
-void OPENTTD_CRYPTO_CALL openttd_rust_aead_init_djb(const struct OpenTTDAeadLayout *, void *, const uint8_t *, const uint8_t *);
-void OPENTTD_CRYPTO_CALL openttd_rust_aead_init_ietf(const struct OpenTTDAeadLayout *, void *, const uint8_t *, const uint8_t *);
-void OPENTTD_CRYPTO_CALL openttd_rust_aead_write(const struct OpenTTDCryptoLeaves *, const struct OpenTTDAeadLayout *, void *, uint8_t *, uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t);
-int32_t OPENTTD_CRYPTO_CALL openttd_rust_aead_read(const struct OpenTTDCryptoLeaves *, const struct OpenTTDAeadLayout *, void *, uint8_t *, const uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t);
-void OPENTTD_CRYPTO_CALL openttd_rust_aead_lock(const struct OpenTTDCryptoLeaves *, const struct OpenTTDAeadLayout *, void *, uint8_t *, uint8_t *, const uint8_t *, const uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t);
-int32_t OPENTTD_CRYPTO_CALL openttd_rust_aead_unlock(const struct OpenTTDCryptoLeaves *, const struct OpenTTDAeadLayout *, void *, uint8_t *, const uint8_t *, const uint8_t *, const uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t);
+/* Leaves are the original nonthrowing wipe and constant-time compare. Context lifetime starts in
+ * C++, which supplies its actual size and offsets; only initialized fields are read, and final
+ * wipes cover the whole caller context. Text input and output are disjoint or identical, and key
+ * and nonce loads precede cipher writes, including Elligator's overlapping key. Empty spans may be
+ * NULL; raw cipher plaintext may also be NULL for a nonempty keystream.
+ * Tables and layouts are live, aligned, initialized and immutable; calls are serialized and spans
+ * have their original readable/writable extents <= PTRDIFF_MAX and vendor context/output alias rules.
+ * Init preserves unwritten chunk and padding bytes; compiler spills need not be erased. */
+void OPENTTD_RUST_CALL openttd_rust_chacha_h(const struct OpenTTDCryptoLeaves *, uint8_t *, const uint8_t *, const uint8_t *);
+uint64_t OPENTTD_RUST_CALL openttd_rust_chacha_djb(const struct OpenTTDCryptoLeaves *, uint8_t *, const uint8_t *, size_t, const uint8_t *, const uint8_t *, uint64_t);
+uint32_t OPENTTD_RUST_CALL openttd_rust_chacha_ietf(const struct OpenTTDCryptoLeaves *, uint8_t *, const uint8_t *, size_t, const uint8_t *, const uint8_t *, uint32_t);
+uint64_t OPENTTD_RUST_CALL openttd_rust_chacha_x(const struct OpenTTDCryptoLeaves *, uint8_t *, const uint8_t *, size_t, const uint8_t *, const uint8_t *, uint64_t);
+void OPENTTD_RUST_CALL openttd_rust_poly_init(const struct OpenTTDPolyLayout *, void *, const uint8_t *);
+void OPENTTD_RUST_CALL openttd_rust_poly_update(const struct OpenTTDPolyLayout *, void *, const uint8_t *, size_t);
+void OPENTTD_RUST_CALL openttd_rust_poly_final(const struct OpenTTDCryptoLeaves *, const struct OpenTTDPolyLayout *, void *, uint8_t *);
+void OPENTTD_RUST_CALL openttd_rust_poly(const struct OpenTTDCryptoLeaves *, const struct OpenTTDPolyLayout *, void *, uint8_t *, const uint8_t *, size_t, const uint8_t *);
+void OPENTTD_RUST_CALL openttd_rust_aead_init_x(const struct OpenTTDCryptoLeaves *, const struct OpenTTDAeadLayout *, void *, const uint8_t *, const uint8_t *);
+void OPENTTD_RUST_CALL openttd_rust_aead_init_djb(const struct OpenTTDAeadLayout *, void *, const uint8_t *, const uint8_t *);
+void OPENTTD_RUST_CALL openttd_rust_aead_init_ietf(const struct OpenTTDAeadLayout *, void *, const uint8_t *, const uint8_t *);
+void OPENTTD_RUST_CALL openttd_rust_aead_write(const struct OpenTTDCryptoLeaves *, const struct OpenTTDAeadLayout *, void *, uint8_t *, uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t);
+int32_t OPENTTD_RUST_CALL openttd_rust_aead_read(const struct OpenTTDCryptoLeaves *, const struct OpenTTDAeadLayout *, void *, uint8_t *, const uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t);
+void OPENTTD_RUST_CALL openttd_rust_aead_lock(const struct OpenTTDCryptoLeaves *, const struct OpenTTDAeadLayout *, void *, uint8_t *, uint8_t *, const uint8_t *, const uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t);
+int32_t OPENTTD_RUST_CALL openttd_rust_aead_unlock(const struct OpenTTDCryptoLeaves *, const struct OpenTTDAeadLayout *, void *, uint8_t *, const uint8_t *, const uint8_t *, const uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t);
 #ifdef __cplusplus
 }
 #endif

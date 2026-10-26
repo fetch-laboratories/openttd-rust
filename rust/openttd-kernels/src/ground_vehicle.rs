@@ -5,15 +5,13 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Canonical ground cache/flags, dynamics and train/road physics callees.
-//! Native shells own one stable allocation. Every raw scalar access ends before
-//! property, viewport, crash or other potentially reentrant services.
+//! Ground vehicle cache and flags, dynamics and the train and road physics callees. Native
+//! shells own one stable allocation.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
-    clippy::too_many_lines,
     clippy::many_single_char_names,
     clippy::struct_field_names
 )]
@@ -83,7 +81,7 @@ pub struct Cache {
     pub cached_veh_length: u8,
     pub last_speed: u16,
 }
-/// One owner per native train/road shell, never relocated or mirrored.
+/// One owner per native train/road shell, never relocated.
 #[repr(C)]
 #[derive(Default)]
 pub struct State {
@@ -119,8 +117,8 @@ use crate::services::{RailType, RoadType};
 use crate::tile_type::{TILE_SIZE, TILE_UNIT_MASK};
 use crate::track_func::track_status_to_track_bits;
 use crate::track_type::{TRACK_BIT_WORMHOLE, TRACK_BIT_X, TRACK_BIT_Y};
-use crate::vehicle::{VS_HIDDEN, VS_STOPPED, VehicleRef, VehicleServices, VehicleType};
-use crate::vehicle_base::is_articulated_part;
+use crate::vehicle::{VehicleRef, VehicleServices, VehicleType};
+use crate::vehicle_base::{VS_HIDDEN, VS_STOPPED, is_articulated_part};
 use crate::vehicle_type::GROUND_ACCELERATION;
 use crate::witness::{self, hit};
 

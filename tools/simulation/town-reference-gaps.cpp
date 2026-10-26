@@ -112,8 +112,7 @@ static bool IsRoadDepot(TileIndex tile) { return At(tile).stop == 3; }
 static DiagDirection GetRoadDepotDirection(TileIndex tile) { return static_cast<DiagDirection>(At(tile).facing); }
 static void RoadMask() { world->trace.push_back({21, 0, 0, 0, 0, 0, 0}); }
 static void RoadInfo(uint32_t type) { world->trace.push_back({24, type, 0, 0, 0, 0, 0}); }
-/* One active town-buildable type is a controlled shared service, not a second
- * copy of the migrated road-type-selection algorithm. */
+/* One active town-buildable road type, served by a controlled shared service. */
 static RoadType GetTownRoadType() { RoadMask(); RoadInfo(0); return 0; }
 static Cost RoadCommand(TileIndex tile, RoadBits bits, RoadType rt, uint32_t town)
 {

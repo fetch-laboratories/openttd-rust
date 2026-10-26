@@ -1,4 +1,4 @@
-"""Company lifecycle witnesses using real reference-built AI companies (#137)."""
+"""Company lifecycle witnesses using real reference-built AI companies."""
 
 import datetime
 import hashlib
@@ -9,14 +9,17 @@ import subprocess
 from pathlib import Path
 
 from .core import (
+    EMPTY_AI,
     ROOT,
     SNAPSHOT_TICKS,
     Reader,
-    decode_element,
+    ai_config,
+    patch,
     read_save,
+    rows,
     run_game,
+    set_ai_slots,
 )
-from .disasters import gamma, patch
 
 AI_FOLDER = "company-scenario-ai"
 
@@ -24,6 +27,8 @@ AI_FOLDER = "company-scenario-ai"
 def command_gap():
     """Unchanged native financial commands for deity/network/Money boundaries."""
     import importlib.util
+
+    import probe
 
     spec = importlib.util.spec_from_file_location(
         "migration", ROOT / "tools/migration.py"
@@ -39,19 +44,8 @@ def command_gap():
         for name in ("misc_cmd.cpp", "company_cmd.cpp")
     }
 
-    def function(file, signature):
-        source = sources[file]
-        start = source.index(signature)
-        opening = source.index("{", start)
-        depth = 1
-        end = opening + 1
-        while depth:
-            depth += (source[end] == "{") - (source[end] == "}")
-            end += 1
-        return source[start:end]
-
     bodies = [
-        function("company_cmd.cpp", signature)
+        probe.body(sources["company_cmd.cpp"], signature)
         for signature in (
             "Money Company::GetMaxLoan() const",
             "Money GetAvailableMoney(CompanyID company)",
@@ -60,7 +54,7 @@ def command_gap():
         )
     ]
     bodies += [
-        function("misc_cmd.cpp", "CommandCost " + name + "(")
+        probe.body(sources["misc_cmd.cpp"], "CommandCost " + name + "(")
         for name in (
             "CmdIncreaseLoan",
             "CmdDecreaseLoan",
@@ -68,7 +62,7 @@ def command_gap():
             "CmdChangeBankBalance",
         )
     ]
-    bodies.append(function("company_cmd.cpp", "CommandCost CmdGiveMoney("))
+    bodies.append(probe.body(sources["company_cmd.cpp"], "CommandCost CmdGiveMoney("))
     (out / "company-command-reference.inc").write_text("\n".join(bodies))
     subprocess.run(
         [
@@ -139,47 +133,18 @@ def install(scenario, run_dir):
     )
 
 
-def rows(path, cid):
-    chunks = read_save(path)
-    return {
-        index: decode_element(chunks[cid], body)
-        for index, body in chunks[cid]["elements"]
-    }
-
-
 def configure_competitors(path, record):
     """Declare fixed local scripts for vacant slots; preserve running AI data."""
-    original, chunks = path.read_bytes(), read_save(path)
-    chunk = chunks["AIPL"]
-    if chunk["kind"] != 3 or chunk["header"] != [
-        {"type": 26, "key": "name"},
-        {"type": 26, "key": "settings"},
-        {"type": 6, "key": "version"},
-    ]:
-        raise RuntimeError("unexpected company AI configuration schema")
-    elements = dict(chunk["elements"])
-    name = b"MigrationCompanies"
-    config = gamma(len(name)) + name + b"\0" + struct.pack(">I", 1)
+    elements = dict(read_save(path)["AIPL"]["elements"])
     for index in (3, 4):
-        if elements[index] != b"\0\0\xff\xff\xff\xff":
+        if elements[index] != EMPTY_AI:
             raise RuntimeError("competitor input slot already has an AI configured")
-        elements[index] = config
-        record["assignments"].append(["AIPL", index, "configuration", name.decode()])
-    reader = Reader(original, chunk["span"][0] + 5)
-    reader.take(reader.gamma() - 1)
-    begin, end = reader.pos, chunk["span"][1]
-    body = (
-        b"".join(gamma(len(value) + 1) + value for value in elements.values()) + b"\0"
-    )
-    prepared = original[:begin] + body + original[end:]
+        record["assignments"].append(
+            ["AIPL", index, "configuration", "MigrationCompanies"]
+        )
+    config = ai_config(b"MigrationCompanies")
+    prepared = set_ai_slots(path.read_bytes(), {3: config, 4: config})
     path.write_bytes(prepared)
-    after = read_save(path)
-    for cid in set(chunks) - {"AIPL"}:
-        if (
-            original[slice(*chunks[cid]["span"])]
-            != prepared[slice(*after[cid]["span"])]
-        ):
-            raise RuntimeError(f"competitor configuration changed unrelated {cid}")
     record["sha256"] = hashlib.sha256(prepared).hexdigest()
 
 

@@ -29,8 +29,13 @@ pub mod names;
 pub mod resolver;
 
 use crate::history_type::LAST_MONTH;
-use crate::services::{Map, Services, chance16_i};
+use crate::random_func::chance16_i;
+use crate::services::{Map, Services};
 use crate::slope_func::{is_slope_with_one_corner_raised, is_steep_slope};
+use crate::tile_type::{
+    MP_HOUSE, MP_INDUSTRY, MP_OBJECT, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_VOID,
+};
+use crate::timer_game_tick::TOWN_GROWTH_TICKS;
 
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -42,25 +47,9 @@ pub struct TownRef {
     pub state: *mut State,
     pub id: TownId,
 }
-use std::{
-    cell::{OnceCell, UnsafeCell},
-    ffi::c_void,
-};
-
-// Original C++ globals are shared by GUI commands on the main thread and the
-// simulation on ottd:game. The native game-state mutex serializes both; startup
-// accesses occur before the game thread starts. No borrow crosses a callback.
-struct GameState<T>(UnsafeCell<T>);
-// SAFETY: Every access is serialized by the native game-state mutex (or startup).
-unsafe impl<T: Send> Sync for GameState<T> {}
-impl<T> GameState<T> {
-    const fn new(value: T) -> Self {
-        Self(UnsafeCell::new(value))
-    }
-    fn with<R>(&self, access: impl FnOnce(&UnsafeCell<T>) -> R) -> R {
-        access(&self.0)
-    }
-}
+use crate::game_state::GameState;
+use crate::raw_field::{read_field, write_field};
+use std::{cell::OnceCell, ffi::c_void};
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -225,20 +214,17 @@ pub(crate) unsafe fn road_context(state: *const State, tile: u32, size_x: u32) -
     let shift = size_x.trailing_zeros();
     let dx = (tile & mask).abs_diff(xy & mask);
     let dy = (tile >> shift).abs_diff(xy >> shift);
-    let zone =
-        unsafe { get_radius_group(state, tile, crate::map_func::Map { log_x: shift as u8 }) };
+    let zone = unsafe { get_radius_group(state, tile, crate::map_func::Map::from_log_x(shift)) };
     (state.growth.road, zone, dx + dy)
 }
 static GENERATING_TOWN: GameState<bool> = GameState::new(false);
 pub extern "C" fn openttd_rust_town_generating_exchange(generating: bool) -> bool {
-    GENERATING_TOWN.with(|flag| {
-        // SAFETY: Serialized native entry; the flag is process-wide.
-        unsafe { std::ptr::replace(flag.get(), generating) }
-    })
+    // SAFETY: Serialized native entry; the flag is process-wide.
+    unsafe { std::ptr::replace(GENERATING_TOWN.get(), generating) }
 }
 /// Convert original town tick counters, including tick zero, to game ticks.
 fn town_ticks_to_game_ticks(ticks: u16) -> u16 {
-    ((u32::from(ticks.min(930)) + 1) * 70 - 1) as u16
+    ((u32::from(ticks.min(930)) + 1) * u32::from(TOWN_GROWTH_TICKS) - 1) as u16
 }
 
 unsafe fn update_radius(state: *mut State) {
@@ -298,10 +284,8 @@ unsafe fn change_population(leaves: &Leaves, state: *mut State, town: u32, amoun
     unsafe {
         (*state).simulation.population = population(state).wrapping_add(amount as u32);
     }
-    if GENERATING_TOWN.with(|flag| {
-        // SAFETY: Immediate serialized read ends before presentation callbacks.
-        unsafe { *flag.get() }
-    }) {
+    // SAFETY: Immediate serialized read ends before presentation callbacks.
+    if unsafe { *GENERATING_TOWN.get() } {
         return;
     }
     (leaves.population_changed)(town);
@@ -476,72 +460,63 @@ pub unsafe extern "C" fn openttd_rust_town_class_counts_resize(state: *mut State
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_town_global_id_counts() -> Slots {
-    BUILDING_COUNTS.with(|cell| {
-        // SAFETY: Game-state-mutex serialized access; no service call or reentry.
-        let counts = unsafe { &mut (*cell.get()).ids };
-        Slots {
-            data: counts.as_mut_ptr().cast(),
-            size: counts.len(),
-        }
-    })
+    // SAFETY: Game-state-mutex serialized access; no service call or reentry.
+    let counts = unsafe { &mut (*BUILDING_COUNTS.get()).ids };
+    Slots {
+        data: counts.as_mut_ptr().cast(),
+        size: counts.len(),
+    }
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_town_global_id_counts_resize(count: usize) {
     // SAFETY: Game-state-mutex serialized access; no native view survives resizing.
-    BUILDING_COUNTS.with(|cell| unsafe {
-        (*cell.get()).ids.resize(count, 0);
-    });
+    unsafe {
+        (*BUILDING_COUNTS.get()).ids.resize(count, 0);
+    }
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_town_global_class_counts() -> Slots {
-    BUILDING_COUNTS.with(|cell| {
-        // SAFETY: Game-state-mutex serialized access; no service call or reentry.
-        let counts = unsafe { &mut (*cell.get()).classes };
-        Slots {
-            data: counts.as_mut_ptr().cast(),
-            size: counts.len(),
-        }
-    })
+    // SAFETY: Game-state-mutex serialized access; no service call or reentry.
+    let counts = unsafe { &mut (*BUILDING_COUNTS.get()).classes };
+    Slots {
+        data: counts.as_mut_ptr().cast(),
+        size: counts.len(),
+    }
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_town_global_class_counts_resize(count: usize) {
     // SAFETY: Game-state-mutex serialized access; no native view survives resizing.
-    BUILDING_COUNTS.with(|cell| unsafe {
-        (*cell.get()).classes.resize(count, 0);
-    });
+    unsafe {
+        (*BUILDING_COUNTS.get()).classes.resize(count, 0);
+    }
 }
 /// Count one built house part in its town and the process-wide totals.
 unsafe fn increase_building(state: *mut State, house: u16, class: u16) {
     // SAFETY: Original valid spec/count indices; no callback while borrowed.
     let state = unsafe { &mut *state };
-    BUILDING_COUNTS.with(|cell| {
-        // SAFETY: All counters are serialized by the game-state mutex.
-        let global = unsafe { &mut *cell.get() };
-        state.id_counts[usize::from(house)] = state.id_counts[usize::from(house)].wrapping_add(1);
-        global.ids[usize::from(house)] = global.ids[usize::from(house)].wrapping_add(1);
-        if class != 0 {
-            state.class_counts[usize::from(class)] =
-                state.class_counts[usize::from(class)].wrapping_add(1);
-            global.classes[usize::from(class)] = global.classes[usize::from(class)].wrapping_add(1);
-        }
-    });
+    // SAFETY: All counters are serialized by the game-state mutex.
+    let global = unsafe { &mut *BUILDING_COUNTS.get() };
+    state.id_counts[usize::from(house)] = state.id_counts[usize::from(house)].wrapping_add(1);
+    global.ids[usize::from(house)] = global.ids[usize::from(house)].wrapping_add(1);
+    if class != 0 {
+        state.class_counts[usize::from(class)] =
+            state.class_counts[usize::from(class)].wrapping_add(1);
+        global.classes[usize::from(class)] = global.classes[usize::from(class)].wrapping_add(1);
+    }
 }
 /// Saturating removal of one house part from town and process-wide totals.
 unsafe fn decrease_building(state: *mut State, house: u16, class: u16) {
     // SAFETY: Source valid indices and serialized original lifetime preconditions.
     let state = unsafe { &mut *state };
-    BUILDING_COUNTS.with(|cell| {
-        // SAFETY: No callback spans the process-wide global count access.
-        let global = unsafe { &mut *cell.get() };
-        state.id_counts[usize::from(house)] = state.id_counts[usize::from(house)].saturating_sub(1);
-        global.ids[usize::from(house)] = global.ids[usize::from(house)].saturating_sub(1);
-        if class != 0 {
-            state.class_counts[usize::from(class)] =
-                state.class_counts[usize::from(class)].saturating_sub(1);
-            global.classes[usize::from(class)] =
-                global.classes[usize::from(class)].saturating_sub(1);
-        }
-    });
+    // SAFETY: No callback spans the process-wide global count access.
+    let global = unsafe { &mut *BUILDING_COUNTS.get() };
+    state.id_counts[usize::from(house)] = state.id_counts[usize::from(house)].saturating_sub(1);
+    global.ids[usize::from(house)] = global.ids[usize::from(house)].saturating_sub(1);
+    if class != 0 {
+        state.class_counts[usize::from(class)] =
+            state.class_counts[usize::from(class)].saturating_sub(1);
+        global.classes[usize::from(class)] = global.classes[usize::from(class)].saturating_sub(1);
+    }
 }
 struct HouseCandidates {
     slots: [std::mem::MaybeUninit<(u32, u32)>; 4096],
@@ -552,41 +527,37 @@ static HOUSE_CANDIDATES: GameState<HouseCandidates> = GameState::new(HouseCandid
     len: 0,
 });
 fn clear_house_candidates() {
-    HOUSE_CANDIDATES.with(|cell| unsafe {
-        (*cell.get()).len = 0;
-    });
+    unsafe {
+        (*HOUSE_CANDIDATES.get()).len = 0;
+    }
 }
 fn add_house_candidate(house: u32, weight: u32) {
-    HOUSE_CANDIDATES.with(|cell| {
-        // SAFETY: HouseSpec's original maximum is NUM_HOUSES=4096. No callback occurs.
-        let candidates = unsafe { &mut *cell.get() };
-        candidates.slots[candidates.len].write((house, weight));
-        candidates.len += 1;
-    });
+    // SAFETY: HouseSpec's original maximum is NUM_HOUSES=4096. No callback occurs.
+    let candidates = unsafe { &mut *HOUSE_CANDIDATES.get() };
+    candidates.slots[candidates.len].write((house, weight));
+    candidates.len += 1;
 }
 fn take_house_candidate(mut random: u32) -> (u32, u32) {
-    HOUSE_CANDIDATES.with(|cell| {
-        // SAFETY: Source's positive total guarantees an initialized weighted slot.
-        // The source's static probability vector is also replaced by reentrant builds.
-        let candidates = unsafe { &mut *cell.get() };
-        let index = (0..candidates.len)
-            .find(|&at| {
-                // SAFETY: Every slot below len was written while collecting specs.
-                let (_, weight) = unsafe { candidates.slots[at].assume_init() };
-                if weight > random {
-                    true
-                } else {
-                    random -= weight;
-                    false
-                }
-            })
-            .unwrap();
-        // SAFETY: Selected and final slots are occupied. Match source swap/pop order.
-        let selected = unsafe { candidates.slots[index].assume_init() };
-        candidates.len -= 1;
-        candidates.slots[index] = candidates.slots[candidates.len];
-        selected
-    })
+    // SAFETY: Source's positive total guarantees an initialized weighted slot.
+    // The source's static probability vector is also replaced by reentrant builds.
+    let candidates = unsafe { &mut *HOUSE_CANDIDATES.get() };
+    let index = (0..candidates.len)
+        .find(|&at| {
+            // SAFETY: Every slot below len was written while collecting specs.
+            let (_, weight) = unsafe { candidates.slots[at].assume_init() };
+            if weight > random {
+                true
+            } else {
+                random -= weight;
+                false
+            }
+        })
+        .unwrap();
+    // SAFETY: Selected and final slots are occupied. Match source swap/pop order.
+    let selected = unsafe { candidates.slots[index].assume_init() };
+    candidates.len -= 1;
+    candidates.slots[index] = candidates.slots[candidates.len];
+    selected
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -749,6 +720,7 @@ pub struct CommandResult {
     pub cost: i64,
     pub success: bool,
 }
+/// `owner` is the town's live state for the entry; field accesses end before services.
 #[derive(Clone)]
 struct Engine<'a> {
     road: *const crate::road_cmd::CommandContext,
@@ -760,9 +732,9 @@ struct Engine<'a> {
 }
 impl Engine<'_> {
     fn map(&self) -> Map {
-        *self.map.get_or_init(|| Map {
-            log_x: (self.leaves.map_log_x)() as u8,
-        })
+        *self
+            .map
+            .get_or_init(|| Map::from_log_x((self.leaves.map_log_x)()))
     }
     fn size_x(&self) -> u32 {
         self.map().size_x()
@@ -772,34 +744,30 @@ impl Engine<'_> {
         unsafe { position(self.owner) }
     }
     fn num_houses(&self) -> u32 {
-        // SAFETY: Stable live owner; each immediate field read ends before services.
-        unsafe { (*self.owner).simulation.num_houses }
+        read_field!(self.owner, simulation.num_houses)
     }
     fn change_house_count(&self, amount: u32) {
-        // SAFETY: Immediate owner mutation ends before every native callback.
-        unsafe {
-            (*self.owner).simulation.num_houses = self.num_houses().wrapping_add(amount);
-        }
+        write_field!(
+            self.owner,
+            simulation.num_houses,
+            self.num_houses().wrapping_add(amount)
+        );
     }
     fn population(&self) -> u32 {
         // SAFETY: Stable live owner; each immediate field read ends before services.
         unsafe { population(self.owner) }
     }
     fn layout(&self) -> u8 {
-        // SAFETY: Stable live owner; each immediate field read ends before services.
-        unsafe { (*self.owner).simulation.layout }
+        read_field!(self.owner, simulation.layout)
     }
     fn is_city(&self) -> bool {
-        // SAFETY: Stable live owner; each immediate field read ends before services.
-        unsafe { (*self.owner).simulation.larger_town }
+        read_field!(self.owner, simulation.larger_town)
     }
     fn radius(&self) -> [u32; 5] {
-        // SAFETY: Stable live owner; each immediate field read ends before services.
-        unsafe { (*self.owner).simulation.radius }
+        read_field!(self.owner, simulation.radius)
     }
     fn goals(&self) -> [u32; 6] {
-        // SAFETY: Stable live owner; each immediate field read ends before services.
-        unsafe { (*self.owner).simulation.goal }
+        read_field!(self.owner, simulation.goal)
     }
     fn old_received(&self, at: usize) -> u32 {
         // SAFETY: Source bounds and immediate owner access before any callback.
@@ -1190,7 +1158,7 @@ impl Engine<'_> {
         true
     }
     fn level(&self, tile: u32) {
-        if (self.services.tile_type)(tile) == 3 {
+        if (self.services.tile_type)(tile) == MP_HOUSE {
             return;
         }
         let slope = u32::from((self.services.tile_slope)(tile));
@@ -1232,7 +1200,10 @@ impl Engine<'_> {
         }
         let mut count = 0;
         for dir in 0..4 {
-            if matches!((self.services.tile_type)(self.step(tile, dir)), 3 | 7) {
+            if matches!(
+                (self.services.tile_type)(self.step(tile, dir)),
+                MP_HOUSE | MP_VOID
+            ) {
                 count += 1;
             }
             if count >= 3 {
@@ -1248,11 +1219,11 @@ impl Engine<'_> {
             return false;
         }
         match (self.services.tile_type)(next) {
-            9 => {
+            MP_TUNNELBRIDGE => {
                 return (self.services.tunnel_transport)(next) == 1
                     && u32::from((self.services.tunnel_bridge_direction)(next)) == dir;
             }
-            5 => {
+            MP_STATION => {
                 if (self.services.is_drive_through_stop)(next) {
                     return u32::from((self.services.drive_through_axis)(next)) == dir & 1;
                 }
@@ -1261,11 +1232,11 @@ impl Engine<'_> {
                 }
                 return false;
             }
-            2 => {
+            MP_ROAD => {
                 return (self.services.is_road_depot)(next)
                     && u32::from((self.services.road_depot_direction)(next)) == reverse(dir);
             }
-            1 => {
+            MP_RAILWAY => {
                 if !(self.leaves.allow_crossings)() {
                     return false;
                 }
@@ -1398,7 +1369,8 @@ impl Engine<'_> {
         ] {
             let at = self.offset(tile, x, y);
             if !self.valid(at)
-                || !((self.services.tile_type)(at) == 2 || (self.services.is_any_road_stop)(at))
+                || !((self.services.tile_type)(at) == MP_ROAD
+                    || (self.services.is_any_road_stop)(at))
             {
                 continue;
             }
@@ -1411,7 +1383,7 @@ impl Engine<'_> {
         !found
     }
     fn grow_road(&self, tile: u32) -> bool {
-        if (self.services.tile_type)(tile) != 2 {
+        if (self.services.tile_type)(tile) != MP_ROAD {
             return true;
         }
         let road_type = (self.services.road_type)(tile);
@@ -1425,10 +1397,10 @@ impl Engine<'_> {
         let bits = self.rb(next);
         if modes & 2 != 0 {
             match (self.services.tile_type)(next) {
-                2 => bits != 0,
-                5 => (self.services.is_drive_through_stop)(next),
-                9 => (self.services.tunnel_transport)(next) == 1,
-                3 | 8 | 10 => false,
+                MP_ROAD => bits != 0,
+                MP_STATION => (self.services.is_drive_through_stop)(next),
+                MP_TUNNELBRIDGE => (self.services.tunnel_transport)(next) == 1,
+                MP_HOUSE | MP_INDUSTRY | MP_OBJECT => false,
                 _ => true,
             }
         } else {
@@ -1445,7 +1417,7 @@ impl Engine<'_> {
         let mut bits;
         if cur == 0 {
             if modes & 2 == 0
-                || (!(self.leaves.allow_crossings)() && (self.services.tile_type)(at) == 1)
+                || (!(self.leaves.allow_crossings)() && (self.services.tile_type)(at) == MP_RAILWAY)
             {
                 return 1;
             }
@@ -1474,8 +1446,8 @@ impl Engine<'_> {
                     if dir != reverse(source) {
                         return 1;
                     }
-                    if (self.services.tile_type)(self.step(at, (dir + 1) & 3)) != 3
-                        && (self.services.tile_type)(self.step(at, (dir + 3) & 3)) != 3
+                    if (self.services.tile_type)(self.step(at, (dir + 1) & 3)) != MP_HOUSE
+                        && (self.services.tile_type)(self.step(at, (dir + 3) & 3)) != MP_HOUSE
                     {
                         return 1;
                     }
@@ -1496,7 +1468,7 @@ impl Engine<'_> {
             };
         } else {
             let mut allow = true;
-            if (self.services.tile_type)(at) == 9 {
+            if (self.services.tile_type)(at) == MP_TUNNELBRIDGE {
                 if (self.services.tunnel_transport)(at) == 1 && (dir != 4 || self.chance(1, 2)) {
                     *tile = (self.services.other_tunnel_end)(at);
                 }
@@ -1544,7 +1516,7 @@ impl Engine<'_> {
             }
             allow &= self.roads_allow_house(house_tile);
             if allow {
-                if (self.services.tile_type)(house_tile) != 3 {
+                if (self.services.tile_type)(house_tile) != MP_HOUSE {
                     if self.chance(1, 6) {
                         self.level(house_tile);
                     }
@@ -1592,7 +1564,7 @@ impl Engine<'_> {
             if cur == 0 {
                 return false;
             }
-            if (self.services.tile_type)(tile) == 9 {
+            if (self.services.tile_type)(tile) == MP_TUNNELBRIDGE {
                 dir = reverse(u32::from((self.services.tunnel_bridge_direction)(tile)));
             } else {
                 loop {
@@ -1613,7 +1585,7 @@ impl Engine<'_> {
                 }
             }
             tile = self.step(tile, dir);
-            if (self.services.tile_type)(tile) == 2
+            if (self.services.tile_type)(tile) == MP_ROAD
                 && !(self.services.is_road_depot)(tile)
                 && (self.services.has_road_type)(tile)
             {
@@ -1662,7 +1634,7 @@ impl Engine<'_> {
         if modes & 2 != 0 {
             tile = self.position();
             for (x, y) in OFFSETS {
-                if (self.services.tile_type)(tile) != 3
+                if (self.services.tile_type)(tile) != MP_HOUSE
                     && (self.services.tile_slope)(tile) == 0
                     && self.clear(tile, false)
                 {
@@ -2105,7 +2077,7 @@ impl Engine<'_> {
         self.update_growth(town);
         let counter = i32::from(self.counter());
         let rate = i32::from(self.rate());
-        let ticks = 70;
+        let ticks = i32::from(TOWN_GROWTH_TICKS);
         self.set_counter((counter.min(2 * ticks - (rate - counter) % ticks)) as u16);
     }
 }
@@ -2350,19 +2322,17 @@ static RATING_TEST: GameState<RatingTest> = GameState::new(RatingTest {
 });
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_town_rating_test(mode: bool) {
-    RATING_TEST.with(|cell| {
-        // SAFETY: Game-state-mutex serialized scratch; no callback.
-        let test = unsafe { &mut *cell.get() };
-        if mode {
-            if test.depth == 0 {
-                test.ratings.clear();
-            }
-            test.depth = test.depth.wrapping_add(1);
-        } else {
-            debug_assert!(test.depth > 0);
-            test.depth = test.depth.wrapping_sub(1);
+    // SAFETY: Game-state-mutex serialized scratch; no callback.
+    let test = unsafe { &mut *RATING_TEST.get() };
+    if mode {
+        if test.depth == 0 {
+            test.ratings.clear();
         }
-    });
+        test.depth = test.depth.wrapping_add(1);
+    } else {
+        debug_assert!(test.depth > 0);
+        test.depth = test.depth.wrapping_sub(1);
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_rating(
@@ -2370,17 +2340,15 @@ pub unsafe extern "C" fn openttd_rust_town_rating(
     shell: usize,
     company: u8,
 ) -> i32 {
-    RATING_TEST.with(|cell| {
-        // SAFETY: Serialized immediate accesses; native shell address preserves source map keys and reuse.
-        let test = unsafe { &*cell.get() };
-        if test.depth != 0 {
-            if let Some(rating) = test.ratings.get(&shell) {
-                return *rating;
-            }
+    // SAFETY: Serialized immediate accesses; native shell address preserves source map keys and reuse.
+    let test = unsafe { &*RATING_TEST.get() };
+    if test.depth != 0 {
+        if let Some(rating) = test.ratings.get(&shell) {
+            return *rating;
         }
-        // SAFETY: Original source invokes this only with live owner and valid company.
-        unsafe { i32::from((*state).simulation.ratings[usize::from(company)]) }
-    })
+    }
+    // SAFETY: Original source invokes this only with live owner and valid company.
+    unsafe { i32::from((*state).simulation.ratings[usize::from(company)]) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_change_rating(
@@ -2412,16 +2380,16 @@ pub unsafe extern "C" fn openttd_rust_town_change_rating(
     } else if rating < maximum {
         rating = rating.wrapping_add(add).min(maximum);
     }
-    let testing = RATING_TEST.with(|cell| {
+    let testing = {
         // SAFETY: No callback during scratch map insertion.
-        let test = unsafe { &mut *cell.get() };
+        let test = unsafe { &mut *RATING_TEST.get() };
         if test.depth == 0 {
             false
         } else {
             test.ratings.insert(shell, rating);
             true
         }
-    });
+    };
     if !testing {
         // SAFETY: Field writes finish before native window invalidation.
         unsafe {
@@ -2613,12 +2581,12 @@ mod tests {
             unsafe {
                 increase_building(owner, 110, 15);
             }
-            RATING_TEST.with(|cell| {
+            {
                 // SAFETY: Serialized access; same process-wide test scratch.
-                let test = unsafe { &mut *cell.get() };
+                let test = unsafe { &mut *RATING_TEST.get() };
                 assert_eq!(test.depth, 1);
                 test.ratings.insert(42, -99);
-            });
+            };
             // SAFETY: The parent does not touch its live owner until this join.
             let rating = unsafe { openttd_rust_town_rating(owner, 42, 0) };
             (

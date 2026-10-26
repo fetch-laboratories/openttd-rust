@@ -29,17 +29,12 @@ typedef struct {
 	uint64_t value;
 } OpenTTDRustHistoryStep;
 
-/**
- * Mode 0 update, 1 first-child validity, 2 rotation, 3 OR-validity query.
- * Tokens are opaque uintptr_t identities round-tripped only by C++, never
- * dereferenced in Rust. All identified HistoryRange objects form a live immutable
- * acyclic chain until destroy; original valid-index/divisor/bit-shift preconditions
- * apply. No hard depth/range enum limit is imposed. No typed history/scratch data
- * or callbacks enter Rust; all typed operations/exceptions occur between calls.
- * Age/phase use native uint32 arithmetic. Rust owns the engine/frame allocations,
- * returned to its destroy function exactly once; no C++ allocator/layout crosses.
- * Panic/OOM abort, never unwind. Handles are nonnull and exclusively accessed.
- */
+/** Mode 0 update, 1 first-child validity, 2 rotation, 3 OR-validity query. Tokens are opaque
+ * uintptr_t identities that only C++ round-trips; the identified HistoryRange objects form a live
+ * acyclic chain until destroy. Typed history operations and exceptions run between calls. Age and
+ * phase use native uint32 arithmetic. Each engine and frame is destroyed once by its function.
+ * Handles are live, nonnull and exclusive; the chain is immutable with the original valid-index,
+ * divisor and bit-shift preconditions. */
 OpenTTDRustHistoryEngine *openttd_rust_history_create(uint8_t mode, uintptr_t root, uint64_t mask, uint32_t age, uint32_t month);
 
 /**

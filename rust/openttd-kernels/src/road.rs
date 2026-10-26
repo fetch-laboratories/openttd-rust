@@ -5,12 +5,11 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Road vehicles own their movement, consist traversal and private counters/cache.
-//! Each entry receives a live vehicle handle and its Rust owner; consist links
-//! carry both. Owner scalars are read and written in place through the raw owner
-//! pointer, so no reference into an owner survives a service call. Observations
-//! are copies taken at the original read points and refreshed after every service
-//! that can change them.
+//! Road vehicle movement, consist traversal and private counters and cache. Observations are
+//! copies taken at the original read points and refreshed after every service that can
+//! change them.
+//! Entries keep vehicle shells and their service tables live and serialized through
+//! maintenance calls; no owner borrow spans a callback that can reenter or mutate it.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,
@@ -30,23 +29,25 @@
     clippy::if_not_else
 )]
 use crate::direction_func::dir_to_diag_dir as diag;
+use crate::engine_type::INVALID_ENGINE;
 use crate::newgrf_callbacks::CBID_VEHICLE_LENGTH;
 use crate::newgrf_sound::VSE_START;
 use crate::roadveh::{
     RVSB_IN_DEPOT as DEPOT, RVSB_IN_DT_ROAD_STOP as DT_STOP, RVSB_IN_ROAD_STOP as STOP,
+    RVSB_WORMHOLE,
 };
 use crate::services::{Map, RoadStopType, Services};
+use crate::track_type::INVALID_TRACKDIR;
 use crate::vehicle::maintenance;
 use crate::vehicle::{
-    AM_REALISTIC, CALLBACK_FAILED, GroundServices, HVOT_BUS, HVOT_TRUCK, INVALID_ENGINE,
-    INVALID_PRICE, INVALID_TRACKDIR, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, OT_GOTO_DEPOT,
-    OT_GOTO_STATION, OT_LEAVESTATION, OT_LOADING, SND_DEPARTURE_OLD_RV_1, SND_DEPARTURE_OLD_RV_2,
-    VEHICLE_LENGTH, VETS_CANNOT_ENTER, VETS_ENTERED_WORMHOLE, VS_CRASHED, VS_HIDDEN, VS_STOPPED,
-    VehicleRef, VehicleServices, YEAR_TICKS, advance_distance,
+    AM_REALISTIC, CALLBACK_FAILED, GroundServices, HVOT_BUS, HVOT_TRUCK, INVALID_PRICE, MP_ROAD,
+    MP_STATION, MP_TUNNELBRIDGE, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_LEAVESTATION, OT_LOADING,
+    SND_DEPARTURE_OLD_RV_1, SND_DEPARTURE_OLD_RV_2, VEHICLE_LENGTH, VETS_CANNOT_ENTER,
+    VETS_ENTERED_WORMHOLE, VehicleRef, VehicleServices, YEAR_TICKS, advance_distance,
 };
+use crate::vehicle_base::{VS_CRASHED, VS_HIDDEN, VS_STOPPED};
 use std::ptr::NonNull;
 
-const WORMHOLE: u8 = 255;
 const REVERSE: [u8; 4] = [6, 7, 14, 15];
 /// Owner scalar selectors, shared with `openttd_rust_road_get/set`.
 const STATE: usize = 0;
@@ -101,7 +102,7 @@ pub(crate) unsafe fn set_state(state: *mut State, value: u8) {
 pub(crate) unsafe fn get_state(state: *const State) -> u8 {
     unsafe { (*state).scalars[STATE] as u8 }
 }
-/// Original `RoadVehicle::SetState(RVSB_IN_DEPOT)` without a native-owner bounce.
+/// Original `RoadVehicle::SetState(RVSB_IN_DEPOT)`.
 /// # Safety
 /// A live serialized road owner; the scalar access ends before any callback.
 pub(crate) unsafe fn set_depot_state(state: *mut State) {
@@ -424,8 +425,6 @@ pub struct Leaves {
     pub ground: *const GroundServices,
     pub shared: *const Services,
     pub max_depot_penalty: extern "C" fn() -> u32,
-    /// `ProcessOrders(v)`.
-    pub process_orders: extern "C" fn(VehicleRef),
     pub visual_read: extern "C" fn(VehicleRef) -> VisualRead,
     pub visual_effect_then_speed: extern "C" fn(VehicleRef, u32) -> SpeedRead,
     pub speed_read: extern "C" fn(VehicleRef) -> SpeedRead,
@@ -549,10 +548,9 @@ pub struct TramBuildRead {
 }
 /// Count one actual typed outgoing call; returns the unchanged function pointer.
 macro_rules! service {
-    ($function:expr) => {{
-        crate::witness::hit(crate::witness::ROAD_SERVICES);
-        $function
-    }};
+    ($function:expr) => {
+        crate::witness::counted!(before ROAD_SERVICES, $function)
+    };
 }
 
 struct Game<'a> {
@@ -601,7 +599,7 @@ fn max_speed(front: Part, r: MaxSpeedRead, acceleration_model: u8, l: &Leaves) -
                 speed = i32::from(r.max_track_speed) * 3 / 4;
             }
         }
-        if part.state() == WORMHOLE && u.status & VS_HIDDEN == 0 {
+        if part.state() == RVSB_WORMHOLE && u.status & VS_HIDDEN == 0 {
             // SAFETY: The static shared table outlives this synchronous query.
             speed = speed.min(i32::from(service!(unsafe { (*l.shared).bridge_speed })(u.tile)) * 2);
         }
@@ -725,7 +723,7 @@ impl Game<'_> {
         }
         let mut best: Option<Candidate> = None;
         let mut best_diff = u32::MAX;
-        let wormhole = v.state() == WORMHOLE;
+        let wormhole = v.state() == RVSB_WORMHOLE;
         let mut offer = |vehicle| {
             let mut out = std::mem::MaybeUninit::<Candidate>::uninit();
             // SAFETY: Live shell; successful admission initializes the narrow read.
@@ -958,7 +956,7 @@ impl Game<'_> {
         let mut part = v;
         let mut u = first;
         loop {
-            if part.state() != WORMHOLE && u.crossing {
+            if part.state() != RVSB_WORMHOLE && u.crossing {
                 let z = u.z;
                 let xy = (self.vs.xy)(v.v);
                 let hit = self.vs.any_near(xy.x, xy.y, 4, |t| {
@@ -1227,8 +1225,7 @@ impl Game<'_> {
             if self.close(v, d.z, x, y, direction, false).is_some() {
                 return true;
             }
-            // SAFETY: Live serialized shell; no owner borrow spans the call.
-            unsafe { maintenance::service_in_depot(v.v, self.vs) };
+            unsafe { self.vs.maintain(v.v, maintenance::service_in_depot) };
             service!(self.vs.leave_unbunching_depot)(v.v);
             self.start_sound(v);
             service!(self.vs.write_speed)(v.v, 0);
@@ -1252,7 +1249,7 @@ impl Game<'_> {
         }
         let state = prev.state();
         let dir;
-        if state == WORMHOLE || state == DEPOT {
+        if state == RVSB_WORMHOLE || state == DEPOT {
             let diagonal = if service!(self.ss.tile_type)(tile) == MP_TUNNELBRIDGE {
                 service!(self.ss.tunnel_bridge_direction)(tile)
             } else if service!(self.l.is_road_depot_tile)(tile) {
@@ -1324,7 +1321,7 @@ impl Game<'_> {
         if v.state() == DEPOT {
             return true;
         }
-        if v.state() == WORMHOLE {
+        if v.state() == RVSB_WORMHOLE {
             let gp = service!(self.vs.new_position)(v.v);
             if s.front {
                 if let Some(u) = self.close(v, s.z, gp.x, gp.y, s.direction, true) {
@@ -1685,7 +1682,9 @@ impl Game<'_> {
             crate::ground_vehicle::last_speed(self.gs.physics, v.v);
             return true;
         }
-        service!(self.l.process_orders)(v.v);
+        let orders = service!(self.vs.orders)();
+        // SAFETY: The original live shell survives orders; no owner borrow spans reentry.
+        unsafe { crate::orders::openttd_rust_process_orders(v.v.0.as_ptr().cast(), &*orders) };
         self.vs.handle_loading(v.v, false);
         if service!(self.vs.order_type)(v.v) == OT_LOADING {
             return true;
@@ -1726,7 +1725,8 @@ impl Game<'_> {
             }
             adv = advance_distance(s.direction);
             if j >= adv {
-                let crossing = v.state() != WORMHOLE && service!(self.ss.is_level_crossing)(s.tile);
+                let crossing =
+                    v.state() != RVSB_WORMHOLE && service!(self.ss.is_level_crossing)(s.tile);
                 let link = service!(self.l.link)(v.v);
                 let first = CrashPart {
                     next: link.next,
@@ -1818,7 +1818,12 @@ impl Game<'_> {
     /// `CheckIfRoadVehNeedsService`; `IsChainInDepot` and `FindClosestRoadDepot` inline.
     fn service(&self, v: Part) {
         let r = service!(self.l.service_read)(v.v);
-        if r.servint == 0 || !unsafe { maintenance::needs_automatic_servicing(v.v, self.vs) } {
+        if r.servint == 0
+            || !unsafe {
+                self.vs
+                    .maintain(v.v, maintenance::needs_automatic_servicing)
+            }
+        {
             return;
         }
         let depot_tile = service!(self.l.is_road_depot_tile)(r.tile);
@@ -1841,8 +1846,7 @@ impl Game<'_> {
             }
         }
         if all_in_depot {
-            // SAFETY: Live serialized shell; no owner borrow spans the call.
-            unsafe { maintenance::service_in_depot(v.v, self.vs) };
+            unsafe { self.vs.maintain(v.v, maintenance::service_in_depot) };
             return;
         }
         let penalty = service!(self.l.max_depot_penalty)();
@@ -1863,7 +1867,7 @@ impl Game<'_> {
         let depot_id = service!(self.ss.depot_index)(depot.tile);
         if service!(self.vs.order_type)(v.v) == OT_GOTO_DEPOT
             && service!(self.vs.order_nonstop)(v.v) & 1 != 0
-            && !crate::services::chance16_i(1, 20, self.random())
+            && !crate::random_func::chance16_i(1, 20, self.random())
         {
             return;
         }
@@ -1873,15 +1877,14 @@ impl Game<'_> {
     }
     /// `RoadVehicle::OnNewEconomyDay`.
     fn economy_day(&self, v: Part) {
-        // SAFETY: Live serialized shell; no owner borrow spans these calls.
-        unsafe { maintenance::economy_age_vehicle(v.v, self.vs) };
+        unsafe { self.vs.maintain(v.v, maintenance::economy_age_vehicle) };
         let day = service!(self.vs.day)(v.v).wrapping_add(1);
         service!(self.vs.write_day)(v.v, day);
         if day & 7 == 0 {
-            unsafe { maintenance::decrease_vehicle_value(v.v, self.vs) };
+            unsafe { self.vs.maintain(v.v, maintenance::decrease_vehicle_value) };
         }
         if v.get(BLOCKED) == 0 {
-            unsafe { maintenance::check_vehicle_breakdown(v.v, self.vs) };
+            unsafe { self.vs.maintain(v.v, maintenance::check_vehicle_breakdown) };
         }
         self.service(v);
         let running = service!(self.vs.check_orders)(v.v);
@@ -1897,7 +1900,7 @@ impl Game<'_> {
         if r.status & (VS_STOPPED | VS_CRASHED) != 0
             || r.breakdown_ctr != 0
             || v.overtaking() != 0
-            || v.state() == WORMHOLE
+            || v.state() == RVSB_WORMHOLE
             || v.state() == DEPOT
             || r.order_type == OT_LOADING
         {
@@ -2144,7 +2147,6 @@ pub unsafe extern "C" fn openttd_rust_road_trackdir(
 }
 /// # Safety
 /// As `openttd_rust_road_tick`; `first` is the live first part of `v`'s consist.
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_road_slope_pixel(
     v: VehicleRef,
     first: VehicleRef,
@@ -2345,7 +2347,6 @@ crate::abi::layouts! {
         vehicle,
         ground,
         shared,
-        process_orders,
         max_depot_penalty,
         visual_read,
         visual_effect_then_speed,
@@ -2444,7 +2445,7 @@ pub(crate) unsafe fn crashed_counter(state: *const State) -> u16 {
     unsafe { (*state).scalars[CRASHED] }
 }
 
-/// `RoadVehicle::GetCurrentMaxSpeed`, entering its owner without a native virtual bounce.
+/// `RoadVehicle::GetCurrentMaxSpeed`.
 /// # Safety
 /// Live serialized shell/private owner; immutable services, no borrow spans callbacks.
 pub(crate) unsafe fn current_max_speed(

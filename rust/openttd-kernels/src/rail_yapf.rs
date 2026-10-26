@@ -21,11 +21,14 @@
     clippy::collapsible_else_if,
     clippy::similar_names
 )]
+use crate::game_state::GameState;
+use crate::order_type::{OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT};
 use crate::rail_map::is_pbs_signal as pbs;
 use crate::track_func::{
     find_first_trackdir as first, is_diagonal_trackdir as diagonal, trackdir_to_exitdir as exit,
 };
 
+use crate::binaryheap::BinaryHeap;
 use crate::node_hash::NodeMap;
 use crate::witness;
 use std::cell::UnsafeCell;
@@ -173,8 +176,8 @@ pub struct Leaves {
     pub output: unsafe extern "C" fn(*mut c_void, u8, *const Step),
     pub debug: unsafe extern "C" fn(*mut c_void, u8, *const u32, u32),
 }
+use crate::track_type::INVALID_TRACKDIR;
 const INVALID: u32 = u32::MAX;
-const INVALID_TD: u8 = 255;
 const RAILWAY: u32 = 1;
 const ROAD: u32 = 2;
 const STATION_RAIL: u32 = 4;
@@ -236,7 +239,7 @@ impl Segment {
             last_td: td,
             cost: -1,
             signal_tile: INVALID,
-            signal_td: INVALID_TD,
+            signal_td: INVALID_TRACKDIR,
             reasons: 0,
         }
     }
@@ -254,13 +257,9 @@ struct Globals {
     counter: i32,
     banks: [Bank; 6],
 }
-struct SerializedGlobals(UnsafeCell<Option<Globals>>);
-// SAFETY: the C++ facade enters only on the serialized simulation thread. It
-// never exposes references; synchronous leaves do not reenter this owner.
-unsafe impl Sync for SerializedGlobals {}
-static GLOBALS: SerializedGlobals = SerializedGlobals(UnsafeCell::new(None));
+static GLOBALS: GameState<Option<Globals>> = GameState::new(None);
 unsafe fn globals() -> *mut Globals {
-    let slot = GLOBALS.0.get();
+    let slot = GLOBALS.get();
     if unsafe { (*slot).is_none() } {
         unsafe {
             *slot = Some(Globals {
@@ -329,7 +328,7 @@ struct Search {
     // Lookup-only (never iterated); order never selects a node.
     open: NodeMap<(u32, u8), usize>,
     closed: NodeMap<(u32, u8), usize>,
-    heap: Vec<usize>,
+    heap: BinaryHeap,
     best_dest: Option<usize>,
     intermediate: Option<usize>,
     rounds: u32,
@@ -393,7 +392,7 @@ impl Search {
             scratch: None,
             open: NodeMap::default(),
             closed: NodeMap::default(),
-            heap: vec![usize::MAX],
+            heap: BinaryHeap::new(1),
             best_dest: None,
             intermediate: None,
             rounds: 0,
@@ -471,56 +470,23 @@ impl Search {
             i
         }
     }
-    fn less(&self, a: usize, b: usize) -> bool {
-        self.arena[a].estimate < self.arena[b].estimate
-    }
-    fn up(&mut self, mut gap: usize, item: usize) -> usize {
-        while gap > 1 {
-            let parent = gap / 2;
-            if !self.less(item, self.heap[parent]) {
-                break;
-            }
-            self.heap[gap] = self.heap[parent];
-            gap = parent;
-        }
-        gap
-    }
-    fn down(&mut self, mut gap: usize, item: usize) -> usize {
-        let mut child = gap * 2;
-        while child < self.heap.len() {
-            if child + 1 < self.heap.len() && self.less(self.heap[child + 1], self.heap[child]) {
-                child += 1;
-            }
-            if !self.less(self.heap[child], item) {
-                break;
-            }
-            self.heap[gap] = self.heap[child];
-            gap = child;
-            child = gap * 2;
-        }
-        gap
-    }
     fn include(&mut self, i: usize) {
         self.open.insert((self.arena[i].tile, self.arena[i].td), i);
-        self.heap.push(0);
-        let gap = self.up(self.heap.len() - 1, i);
-        self.heap[gap] = i;
+        let arena = &self.arena;
+        self.heap
+            .include(i, |a, b| arena[a].estimate < arena[b].estimate);
         if self.scratch == Some(i) {
             self.scratch = None;
         }
     }
     fn remove(&mut self, i: usize) {
-        let index = self.heap.iter().position(|n| *n == i).unwrap();
-        let last = self.heap.pop().unwrap();
-        if index < self.heap.len() {
-            let gap = self.up(index, last);
-            let gap = self.down(gap, last);
-            self.heap[gap] = last;
-        }
+        let arena = &self.arena;
+        self.heap
+            .remove(i, |a, b| arena[a].estimate < arena[b].estimate);
         self.open.remove(&(self.arena[i].tile, self.arena[i].td));
     }
     fn startup(&mut self, tile: u32, td: u8, cost: i32) {
-        if tile == INVALID || td == INVALID_TD {
+        if tile == INVALID || td == INVALID_TRACKDIR {
             return;
         }
         let mut node = self.node(None, tile, td, false);
@@ -601,20 +567,20 @@ impl Search {
             return;
         }
         match self.train.order {
-            1 | 6 => {
-                if self.train.order == 6 && self.train.complex_waypoint != 0 {
+            OT_GOTO_STATION | OT_GOTO_WAYPOINT => {
+                if self.train.order == OT_GOTO_WAYPOINT && self.train.complex_waypoint != 0 {
                     self.disabled = true;
                 }
                 self.dest_tile = unsafe {
                     (self.leaves.closest_station)(
                         self.input.context,
-                        u8::from(self.train.order == 1),
+                        u8::from(self.train.order == OT_GOTO_STATION),
                     )
                 };
                 self.dest_station = self.train.order_destination;
             }
             _ => {
-                self.any_depot = self.train.order == 2 && self.train.nearest_depot != 0;
+                self.any_depot = self.train.order == OT_GOTO_DEPOT && self.train.nearest_depot != 0;
                 self.dest_tile = self.train.dest_tile;
                 self.dest_dirs = unsafe {
                     crate::track_func::track_status_to_trackdir_bits(crate::movement::track_status(
@@ -780,7 +746,7 @@ impl Search {
             cur = f.tile;
             max_tiles -= 1;
             if cur == tile || max_tiles == 0 || f.dirs & f.dirs.wrapping_sub(1) != 0 {
-                dir = INVALID_TD;
+                dir = INVALID_TRACKDIR;
                 break;
             }
             dir = first(f.dirs);
@@ -788,7 +754,7 @@ impl Search {
                 break;
             }
         }
-        if dir == INVALID_TD
+        if dir == INVALID_TRACKDIR
             || !self.safe(cur, dir, self.input.forbid90)
             || !self.free(cur, dir, self.input.forbid90)
         {
@@ -805,7 +771,7 @@ impl Search {
         let mut cur_info = self.tile(cur, td);
         let (mut prev, mut prev_td) = n
             .parent
-            .map_or((INVALID, INVALID_TD), |p| self.arena[p].last());
+            .map_or((INVALID, INVALID_TRACKDIR), |p| self.arena[p].last());
         let mut prev_info = if prev == INVALID {
             Tile::default()
         } else {
@@ -894,7 +860,7 @@ impl Search {
             } else if cur_info.flags & DEPOT != 0 {
                 reasons |= E_DEPOT;
             } else if cur_info.flags & WAYPOINT != 0 {
-                if self.train.order == 6
+                if self.train.order == OT_GOTO_WAYPOINT
                     && cur_info.station == self.train.order_destination
                     && self.train.complex_waypoint != 0
                 {
@@ -1077,7 +1043,7 @@ impl Search {
     fn find_path(&mut self) -> bool {
         loop {
             self.rounds = self.rounds.wrapping_add(1);
-            let Some(&i) = self.heap.get(1) else {
+            let Some(i) = self.heap.first() else {
                 break;
             };
             let (tile, td) = self.arena[i].last();
@@ -1364,7 +1330,7 @@ impl Reservation {
             target_td,
             origin: search.arena[node].last().0,
             fail_tile: INVALID,
-            fail_td: INVALID_TD,
+            fail_td: INVALID_TRACKDIR,
             signals: Vec::new(),
             cursor: TileCursor::new(search, target_node),
             resume_callback: false,
@@ -1542,11 +1508,11 @@ fn empty_step() -> Step {
         target_tile: INVALID,
         best_length: u32::MAX,
         action: 0,
-        td: INVALID_TD,
+        td: INVALID_TRACKDIR,
         found: 0,
         reverse: 0,
         value: 0,
-        target_td: INVALID_TD,
+        target_td: INVALID_TRACKDIR,
         target_okay: 0,
     }
 }
