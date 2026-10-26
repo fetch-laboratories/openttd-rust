@@ -140,9 +140,10 @@ Corrections (AGENTS.md carries the rules; apply these in order):
    `t3-758125c7`; keep one worktree per PR, on its PR branch. Commit the
    roadmap when taking stock or changing the work order, not per integration.
 9. Branch slots and the user's testing issues. The next free slots go, in
-   order, to #515, the #275 accessor audit, #514 and #504; from then on testing
-   holds one slot, one item at a time, each selected when the previous one
-   integrates. The order rests on the defects the fork has had: #461 (thread
+   order, to #515, the #275 accessor audit, #514, #516 (once its plan is ready
+   and its services are disjoint from the drafts; #504 goes first if it is not)
+   and #504; from then on testing holds one slot, one item at a time, each
+   selected when the previous one integrates. The order rests on the defects the fork has had: #461 (thread
    scope), #462 and #75 (reachable branches no scenario ran) and #355 (MSVC
    ABI).
    1. #504 coverage, selected now. Audits find coverage gaps by reading code,
@@ -337,8 +338,9 @@ alongside maintenance; only timed collection holds games.
 4. #64/#68 (vendored crypto), the rest of #69 beyond what #516 needs, GUI and
    platform stay outside this order; the six `deferred-improvement` issues wait
    for near-full reproduction.
-5. **Testing:** #504 is selected and takes the slot after #514; the rest
-   follow one at a time in the order of twenty-first steering correction 9.
+5. **Testing:** #504 is selected and takes the slot after #514 and #516; the
+   rest follow one at a time in the order of twenty-first steering correction
+   9.
 
 ## Resume checkpoint
 
@@ -357,7 +359,7 @@ rollback target or confirmed regression. Baseline validation passed at
 | Worktrees | | Remove `t3-d6418e16`, `t3-9bff1490`, `t3-758125c7`; one worktree per PR on its PR branch. |
 | #515 and #500 first PR | unstarted | Next maintenance batch after the first ready integration. |
 | #275 accessor audit | unstarted | Twenty-first steering, correction 7; credit against `.local/speed-reference-profiles/`. |
-| #504 coverage | selected, unstarted | First testing item; takes the slot after #514. |
+| #504 coverage | selected, unstarted | First testing item; takes the slot after #514 and #516. |
 | #516 catchment | queued for planning | Planning agent writes scope and service needs; next owner slot. |
 
 Selection: /root, gpt-6.1-sol, xhigh; planning agents run gpt-6-astra, high.
