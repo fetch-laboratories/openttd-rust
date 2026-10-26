@@ -567,20 +567,6 @@ static void OPENTTD_RUST_CALL EffectObserve(void *context, OpenTTDEffectView *vi
 	*view = {v->x_pos, v->y_pos, v->z_pos, v->sprite_cache.sprite_seq.seq[0].sprite, v->progress, v->spritenum, v->subtype, static_cast<uint8_t>(_settings_client.sound.ambient)};
 }
 
-static void OPENTTD_RUST_CALL EffectWrite(void *context, uint8_t field, uint32_t value) noexcept
-{
-	auto *v = static_cast<EffectVehicle *>(context);
-	switch (field) {
-		case 0: v->x_pos = static_cast<int32_t>(value); break;
-		case 1: v->y_pos = static_cast<int32_t>(value); break;
-		case 2: v->z_pos = static_cast<int32_t>(value); break;
-		case 3: v->sprite_cache.sprite_seq.Set(value); break;
-		case 4: v->sprite_cache.sprite_seq.seq[0].sprite = value; break;
-		case 5: v->progress = static_cast<uint8_t>(value); break;
-		case 6: v->spritenum = static_cast<uint8_t>(value); break;
-	}
-}
-
 static void OPENTTD_RUST_CALL EffectViewport(void *context) noexcept
 {
 	/* Effects skip UpdatePosition; UpdateViewport has no NewGRF/script callbacks. */
@@ -594,7 +580,18 @@ static void OPENTTD_RUST_CALL EffectSound(void *context, uint8_t success) noexce
 
 static const OpenTTDEffectLeaves &EffectServices()
 {
-	static const OpenTTDEffectLeaves leaves{EffectObserve, EffectWrite, EffectViewport, EffectSound};
+	static const OpenTTDEffectLeaves leaves{
+		.observe = EffectObserve,
+		.write_x = [](void *shell, int32_t value) noexcept { static_cast<EffectVehicle *>(shell)->x_pos = value; },
+		.write_y = [](void *shell, int32_t value) noexcept { static_cast<EffectVehicle *>(shell)->y_pos = value; },
+		.write_z = [](void *shell, int32_t value) noexcept { static_cast<EffectVehicle *>(shell)->z_pos = value; },
+		.sprite_sequence = [](void *shell, uint32_t value) noexcept { static_cast<EffectVehicle *>(shell)->sprite_cache.sprite_seq.Set(value); },
+		.sprite = [](void *shell, uint32_t value) noexcept { static_cast<EffectVehicle *>(shell)->sprite_cache.sprite_seq.seq[0].sprite = value; },
+		.progress = [](void *shell, uint8_t value) noexcept { static_cast<EffectVehicle *>(shell)->progress = value; },
+		.spritenum = [](void *shell, uint8_t value) noexcept { static_cast<EffectVehicle *>(shell)->spritenum = value; },
+		.viewport = EffectViewport,
+		.sound = EffectSound,
+	};
 	return leaves;
 }
 
@@ -621,9 +618,9 @@ extern "C" const OpenTTDEffectCreationServices *GetRustEffectCreationServices() 
 	return &services;
 }
 
-static bool RunEffect(EffectVehicle *v, bool initialize)
+static bool RunEffect(EffectVehicle *v)
 {
-	if (openttd_rust_effect_run(v->rust_state.get(), v, &EffectServices(), &GetRustSharedServices(), initialize) != 0) return true;
+	if (openttd_rust_effect_run(v->rust_state.get(), v, &EffectServices(), &GetRustSharedServices(), false) != 0) return true;
 	/* Expiry returns before destroying the Rust owner. Vehicle::~Vehicle and
 	 * Pool::FreeItem/PostDestructor run wholly outside any Rust frame/borrow. */
 	delete v;
@@ -706,7 +703,7 @@ EffectVehicle *CreateEffectVehicleRel(const Vehicle *v, int x, int y, int z, Eff
 bool EffectVehicle::Tick()
 {
 #ifdef WITH_RUST
-	return RunEffect(this, false);
+	return RunEffect(this);
 #else
 	return _effect_procs[this->subtype].tick_proc(this);
 #endif

@@ -514,13 +514,18 @@ def scenarios(soak):
                     },
                 }
             )
-    scenarios.append({
-        "name": "effects-emission", "kind": "save",
-        "save": str(ROOT / "migration/saves/opus-55-167-002.sav"),
-        "fleet": "effect-emission", "effect_emission": True,
-        "short_checkpoint": True, "ticks": 1,
-        "console": ["fleet_scenario effect-emission", "unpause"],
-    })
+    scenarios.append(
+        {
+            "name": "effects-emission",
+            "kind": "save",
+            "save": str(ROOT / "migration/saves/opus-55-167-002.sav"),
+            "fleet": "effect-emission",
+            "effect_emission": True,
+            "short_checkpoint": True,
+            "ticks": 1,
+            "console": ["fleet_scenario effect-emission", "unpause"],
+        }
+    )
     return scenarios
 
 
@@ -534,14 +539,26 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
 
 def check(scenario, run, mode, role, result):
     if scenario.get("effect_emission"):
-        expected = {8195: [(1, -5, -3, -2), (2, 1, 2, 4), (3, -2, -1, 6)], 0: [], 16385: [(1, -4, 3, -2)]}
+        expected = {
+            8195: [(1, -5, -3, -2), (2, 1, 2, 4), (3, -2, -1, 6)],
+            0: [],
+            16385: [(1, -4, 3, -2)],
+        }
         for callback, positions in expected.items():
             marker = f"FLEET effect-emission {callback} cache 65 independent true callbacks 1 sound 1 rng true"
             if marker not in run["log"]:
-                raise RuntimeError(f"{mode}/{role}: missing advanced emission {callback}")
-            created = [list(map(int, line.split()[4:])) for line in run["log"] if line.startswith(f"FLEET effect-created {callback} ")]
+                raise RuntimeError(
+                    f"{mode}/{role}: missing advanced emission {callback}"
+                )
+            created = [
+                list(map(int, line.split()[4:]))
+                for line in run["log"]
+                if line.startswith(f"FLEET effect-created {callback} ")
+            ]
             if created != [list(p) for p in positions]:
-                raise RuntimeError(f"{mode}/{role}: advanced effect positions {created}")
+                raise RuntimeError(
+                    f"{mode}/{role}: advanced effect positions {created}"
+                )
             if f"FLEET effect-count {callback} {len(positions)}" not in run["log"]:
                 raise RuntimeError("missing exact advanced creation count")
 

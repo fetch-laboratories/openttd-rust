@@ -44,10 +44,10 @@ const OpenTTDVisualServices &GetRustVisualServices()
 		.should_stop = [](OpenTTDVehicle *shell, uint32_t tile) noexcept { const Train *v = Train::From(VehicleOf(shell)); return v->current_order.ShouldStopAtStation(v, GetStationIndex(TileIndex(tile))); },
 		.depot = SharedIsDepotTile,
 		.tunnel = [](uint32_t tile) noexcept { return IsTunnelTile(TileIndex(tile)); },
-		.rail_types = [](OpenTTDVehicle *shell) noexcept { return Train::From(VehicleOf(shell))->GetRailTypes().base(); },
+		.rail_types = RustVehicleRead<uint64_t, RustTrainRailTypes>,
 		.tile_rail = RustTileRailType,
 		.powered = RustRailPoweredMask,
-		.power_weight = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualPowerWeight { const Train *v = Train::From(VehicleOf(shell)); return {.power = RustTrainCachedPower(v), .weight = v->gcache.cached_weight}; },
+		.power_weight = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualPowerWeight { const Train *v = Train::From(VehicleOf(shell)); return {.power = RustTrainCachedPower(v), .weight = RustTrainCachedWeight(v)}; },
 	};
 	return services;
 }

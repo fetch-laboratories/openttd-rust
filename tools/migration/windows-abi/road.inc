@@ -58,6 +58,12 @@ static void RoadBoundary()
 	effect_test_world = &world;
 	const OpenTTDSharedServices services = OpenTTDFixtureSharedServices(&world, EffectTestRandom, EffectTestIndustry);
 	RoadTestTables t(&services);
+	static uint8_t cache_visual_byte = 0;
+	OpenTTDVisualServices cache_visual{
+		.vehicle = &t.vehicle, .shared = &t.shared,
+		.engine = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualEngine { return {.engine = nullptr, .cache = &cache_visual_byte, .id = 0, .kind = VEH_ROAD, .visual = 0x40, .rail_kind = 0, .engclass = 0, .callback = false}; },
+	};
+	auto previous_visual = openttd_rust_visual_bind(&cache_visual);
 	probe.leaves = &t.leaves;
 	OpenTTDVehicle *v = RoadAbiHandle();
 
@@ -238,7 +244,7 @@ static void RoadBoundary()
 	t.vehicle.order_type = [](OpenTTDVehicle *) noexcept { return road_orders->vehicle->current.type; };
 	t.vehicle.loading = [](OpenTTDVehicle *, bool, const OpenTTDVehicleVisits *) noexcept {};
 	t.vehicle.visits = []() noexcept -> const OpenTTDVehicleVisits * { return nullptr; };
-	OpenTTDEffectLeaves emission_leaves{EffectTestObserve, EffectTestWrite, EffectTestViewport, EffectTestSound};
+	OpenTTDEffectLeaves emission_leaves = EffectTestLeaves();
 	auto *emission_owner = openttd_rust_effect_new();
 	static OpenTTDEffectState *current_emission_owner;
 	current_emission_owner = emission_owner;
@@ -273,7 +279,7 @@ static void RoadBoundary()
 		.offset = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualOffset { return {DIR_NE, 8, false}; },
 		.depot = [](uint32_t) noexcept { return false; }, .tunnel = [](uint32_t) noexcept { return false; },
 	};
-	auto previous_visual = openttd_rust_visual_bind(&emission);
+	openttd_rust_visual_bind(&emission);
 	t.leaves.max_speed_read = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadMaxSpeedRead {
 		auto &p = *road_abi_probe; CHECK(p.visual_eligible && p.visual_stage == 1); return RoadAbiMaxSpeed();
 	};

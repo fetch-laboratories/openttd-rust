@@ -36,6 +36,21 @@ static inline void OPENTTD_RUST_CALL EffectTestWrite(void *context, uint8_t fiel
 		case 6: w.view.spritenum = static_cast<uint8_t>(value); break;
 	}
 }
+static inline OpenTTDEffectLeaves EffectTestLeaves()
+{
+	return {
+		.observe = EffectTestObserve,
+		.write_x = [](void *c, int32_t v) noexcept { EffectTestWrite(c, 0, v); },
+		.write_y = [](void *c, int32_t v) noexcept { EffectTestWrite(c, 1, v); },
+		.write_z = [](void *c, int32_t v) noexcept { EffectTestWrite(c, 2, v); },
+		.sprite_sequence = [](void *c, uint32_t v) noexcept { EffectTestWrite(c, 3, v); },
+		.sprite = [](void *c, uint32_t v) noexcept { EffectTestWrite(c, 4, v); },
+		.progress = [](void *c, uint8_t v) noexcept { EffectTestWrite(c, 5, v); },
+		.spritenum = [](void *c, uint8_t v) noexcept { EffectTestWrite(c, 6, v); },
+		.viewport = [](void *c) noexcept { static_cast<EffectTestWorld *>(c)->viewports++; },
+		.sound = [](void *c, uint8_t v) noexcept { static_cast<EffectTestWorld *>(c)->sound = 1 + v; },
+	};
+}
 static inline void OPENTTD_RUST_CALL EffectTestViewport(void *context) noexcept { static_cast<EffectTestWorld *>(context)->viewports++; }
 static inline void OPENTTD_RUST_CALL EffectTestSound(void *context, uint8_t success) noexcept { static_cast<EffectTestWorld *>(context)->sound = 1 + success; }
 static inline uint32_t OPENTTD_RUST_CALL EffectTestIndustry(int32_t, int32_t, uint32_t *tile) noexcept
@@ -59,7 +74,7 @@ template <typename Check> void CheckEffectProtocol(Check check)
 	 * observe immediate writes, transient services and RNG short circuit. */
 	EffectTestWorld w;
 	effect_test_world = &w;
-	const OpenTTDEffectLeaves leaves{EffectTestObserve, EffectTestWrite, EffectTestViewport, EffectTestSound};
+	const OpenTTDEffectLeaves leaves = EffectTestLeaves();
 	const OpenTTDSharedServices services = OpenTTDFixtureSharedServices(&w, EffectTestRandom, EffectTestIndustry);
 	auto animation_shared = services;
 	animation_shared.mark_dirty = [](uint32_t) noexcept {};

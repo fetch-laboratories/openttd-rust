@@ -1,3 +1,5 @@
+#include "vehicle_effect_ffi.h"
+#include "effect_ffi.h"
 /*
  * This file is part of OpenTTD.
  * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
@@ -350,6 +352,8 @@ static bool Ship_next_depot(uint32_t first, OpenTTDShipDepot *out) noexcept
 }
 const OpenTTDShipLeaves &GetRustShipServices() noexcept
 {
+	openttd_rust_visual_bind(&GetRustVisualServices());
+	openttd_rust_effect_bind(GetRustEffectCreationServices());
 	static const OpenTTDShipLeaves leaves{
 		.depot_dir = Ship_depot_dir, .depot_axis = OpenTTDMapQuery<uint32_t, RustShipDepotAxis, uint32_t>,
 		.is_depot = Ship_is_depot, .depot_index = Ship_depot_index,

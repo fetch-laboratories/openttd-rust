@@ -967,7 +967,13 @@ impl Game<'_> {
         let counter = v.get(CRASHED).wrapping_add(1);
         v.set(CRASHED, counter);
         if counter == 2 {
-            crate::effect::openttd_rust_effect_create_rel(v.v.0.as_ptr(), 4, 4, 8, 5);
+            crate::effect::openttd_rust_effect_create_rel(
+                v.v.0.as_ptr(),
+                4,
+                4,
+                8,
+                crate::effectvehicle_func::EV_EXPLOSION_LARGE,
+            );
         } else if counter <= 45 {
             if tick & 7 == 0 {
                 const DELTA: [u8; 4] = [7, 0, 0, 1];

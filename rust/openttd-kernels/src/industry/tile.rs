@@ -92,7 +92,7 @@ fn chimney(tile: u32, map: crate::services::Map, t: &TileServices) {
         x.wrapping_add(15) as i32,
         y.wrapping_add(14) as i32,
         z.wrapping_add(59),
-        0,
+        crate::effectvehicle_func::EV_CHIMNEY_SMOKE,
     );
 }
 fn bigger(
@@ -323,7 +323,12 @@ fn bubble(tile: u32, s: &Services, map: crate::services::Map, t: &TileServices) 
         .tile_y(tile)
         .wrapping_mul(16)
         .wrapping_add([-4_i32, -10, -4, 1][dir] as u32) as i32;
-    let vehicle = crate::effect::openttd_rust_effect_create_above(x, y, [49, 59, 60, 65][dir], 9);
+    let vehicle = crate::effect::openttd_rust_effect_create_above(
+        x,
+        y,
+        [49, 59, 60, 65][dir],
+        crate::effectvehicle_func::EV_BUBBLE,
+    );
     if !vehicle.is_null() {
         unsafe { (t.set_effect_substate)(vehicle.cast(), dir as u8) };
     }
@@ -459,7 +464,7 @@ pub(crate) unsafe fn tile_loop(
                 map.tile_x(tile).wrapping_mul(16).wrapping_add(6) as i32,
                 map.tile_y(tile).wrapping_mul(16).wrapping_add(6) as i32,
                 43,
-                11,
+                crate::effectvehicle_func::EV_COPPER_MINE_SMOKE,
             );
         }
         143 => {

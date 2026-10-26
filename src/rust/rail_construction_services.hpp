@@ -112,7 +112,7 @@ static void *RailNewRear(void *front) noexcept
 	u->cargo_subtype = v->cargo_subtype;
 	u->cargo_cap = v->cargo_cap;
 	u->refit_cap = v->refit_cap;
-	u->SetRailTypes(v->GetRailTypes());
+	u->SetRailTypes(RailTypes{RustTrainRailTypes(v)});
 	u->engine_type = v->engine_type;
 	u->date_of_last_service = v->date_of_last_service;
 	u->date_of_last_service_newgrf = RustVehicleCalendarService(v);

@@ -450,7 +450,11 @@ impl<'a> World<'a> {
                         (self.map.tile_x(t) * 16 + 8) as i32,
                         (self.map.tile_y(t) * 16 + 8) as i32,
                         2,
-                        if tile == start { 7 } else { 5 },
+                        if tile == start {
+                            crate::effectvehicle_func::EV_EXPLOSION_SMALL
+                        } else {
+                            crate::effectvehicle_func::EV_EXPLOSION_LARGE
+                        },
                     );
                 }
             } else if amount != 0 {

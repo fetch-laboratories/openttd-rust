@@ -42,14 +42,20 @@ pub struct View {
 #[derive(Clone, Copy)]
 pub struct Leaves {
     pub observe: extern "C" fn(*mut c_void, *mut View),
-    pub write: extern "C" fn(*mut c_void, u8, u32),
+    pub write_x: extern "C" fn(*mut c_void, i32),
+    pub write_y: extern "C" fn(*mut c_void, i32),
+    pub write_z: extern "C" fn(*mut c_void, i32),
+    pub sprite_sequence: extern "C" fn(*mut c_void, u32),
+    pub sprite: extern "C" fn(*mut c_void, u32),
+    pub progress: extern "C" fn(*mut c_void, u8),
+    pub spritenum: extern "C" fn(*mut c_void, u8),
     pub viewport: extern "C" fn(*mut c_void),
     pub sound: extern "C" fn(*mut c_void, u8),
 }
-const INITIAL: [u32; 12] = [
+const INITIAL: [u32; crate::effectvehicle_func::EV_END as usize] = [
     3701, 3079, 3073, 3084, 2040, 3709, 3737, 3725, 1416, 4751, 2040, 2040,
 ];
-const LAST: [u32; 12] = [
+const LAST: [u32; crate::effectvehicle_func::EV_END as usize] = [
     3708, 3083, 3078, 3089, 2044, 3724, 3740, 3736, 0, 0, 2044, 2044,
 ];
 const BULLDOZER: [(usize, u32, u8); 20] = [
@@ -231,7 +237,16 @@ impl Controller<'_> {
             6 => self.v.spritenum = value as u8,
             _ => {} // Only the seven private field constants above reach this helper.
         }
-        (self.leaves.write)(self.context, field, value);
+        match field {
+            0 => (self.leaves.write_x)(self.context, value as i32),
+            1 => (self.leaves.write_y)(self.context, value as i32),
+            2 => (self.leaves.write_z)(self.context, value as i32),
+            3 => (self.leaves.sprite_sequence)(self.context, value),
+            4 => (self.leaves.sprite)(self.context, value),
+            5 => (self.leaves.progress)(self.context, value as u8),
+            6 => (self.leaves.spritenum)(self.context, value as u8),
+            _ => unreachable!(),
+        }
     }
     fn increment(&mut self) -> bool {
         if self.v.sprite == LAST[usize::from(self.v.subtype)] {
@@ -515,7 +530,7 @@ crate::abi::layouts! {
     };
     "OpenTTDEffectLeaves" ["probe"] => Leaves {
         observe,
-        write,
+        write_x, write_y, write_z, sprite_sequence, sprite, progress, spritenum,
         viewport,
         sound,
 
@@ -581,9 +596,17 @@ pub extern "C" fn openttd_rust_effect_create(x: i32, y: i32, z: i32, kind: u8) -
     (s.place)(v.shell, x, y, z, kind);
     (s.delta)(v.shell);
     (s.unclickable)(v.shell);
-    unsafe {
-        openttd_rust_effect_run(v.owner, v.shell, s.effect, s.shared, 1);
-    }
+    let mut controller = Controller {
+        owner: v.owner,
+        context: v.shell,
+        leaves: *s.effect,
+        services: s.shared,
+        v: View {
+            subtype: kind,
+            ..View::default()
+        },
+    };
+    controller.init();
     (s.effect.viewport)(v.shell);
     v.shell
 }

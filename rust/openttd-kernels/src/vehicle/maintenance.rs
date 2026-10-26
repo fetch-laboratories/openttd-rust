@@ -479,8 +479,13 @@ unsafe fn breakdown_state<const C: bool>(
                     svc!(C, base.play_sound, v, sound);
                 }
                 if svc!(C, base.status, v) & VS_HIDDEN == 0 && !svc!(C, s.smoke_disabled, v) {
-                    let smoke =
-                        crate::effect::openttd_rust_effect_create_rel(v.0.as_ptr(), 4, 4, 5, 6);
+                    let smoke = crate::effect::openttd_rust_effect_create_rel(
+                        v.0.as_ptr(),
+                        4,
+                        4,
+                        5,
+                        crate::effectvehicle_func::EV_BREAKDOWN_SMOKE,
+                    );
                     let delay = svc!(C, s.smoke_delay, v);
                     if !smoke.is_null() {
                         crate::effect::set_animation(smoke, u16::from(delay) * 2);

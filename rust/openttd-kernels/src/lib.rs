@@ -539,6 +539,7 @@ pub extern "C" fn openttd_rust_spiral_equal(left: SpiralState, right: SpiralStat
 }
 
 mod effect;
+mod effectvehicle_func;
 mod encoded;
 mod engine;
 mod vehicle_effect;

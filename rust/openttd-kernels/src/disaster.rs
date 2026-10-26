@@ -462,7 +462,13 @@ async fn zeppelin(w: World<'_>, id: u32) -> i64 {
                 w.set(id, AGE, 0);
             }
             if w.v(id, TICK) & 7 == 0 {
-                w.effect_rel(id, 0, -17, 2, 4);
+                w.effect_rel(
+                    id,
+                    0,
+                    -17,
+                    2,
+                    u32::from(crate::effectvehicle_func::EV_CRASH_SMOKE),
+                );
             }
         } else if w.state(id) == 0 {
             let t = w.tile(w.v(id, TILE) as u32);

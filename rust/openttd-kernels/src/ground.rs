@@ -661,7 +661,7 @@ pub(crate) unsafe fn road_tile_loop(
                             (map.tile_x(tile) * 16 + 7).cast_signed(),
                             (map.tile_y(tile) * 16 + 7).cast_signed(),
                             0,
-                            8,
+                            crate::effectvehicle_func::EV_BULLDOZER,
                         );
                         (s.mark_dirty)(tile);
                         return;

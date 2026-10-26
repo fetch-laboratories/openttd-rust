@@ -16,10 +16,13 @@
 use crate::direction_func::{change_dir, reverse_dir};
 use crate::direction_type::DIRDIFF_90RIGHT;
 use crate::effect::openttd_rust_effect_create_rel as create_rel;
+use crate::effectvehicle_func::{
+    EV_BREAKDOWN_SMOKE_AIRCRAFT, EV_DIESEL_SMOKE, EV_ELECTRIC_SPARK, EV_STEAM_SMOKE,
+};
 use crate::engine_type::{
     EC_MONORAIL, EC_STEAM, VE_ADVANCED_EFFECT, VE_DEFAULT, VE_DISABLE_EFFECT,
-    VE_DISABLE_WAGON_POWER, VE_OFFSET_CENTRE, VE_OFFSET_START, VE_TYPE_DEFAULT, VE_TYPE_START,
-    VE_TYPE_STEAM,
+    VE_DISABLE_WAGON_POWER, VE_OFFSET_CENTRE, VE_OFFSET_COUNT, VE_OFFSET_START, VE_TYPE_COUNT,
+    VE_TYPE_DEFAULT, VE_TYPE_START, VE_TYPE_STEAM,
 };
 use crate::game_state::GameState;
 use crate::newgrf_callbacks::{
@@ -28,7 +31,10 @@ use crate::newgrf_callbacks::{
 use crate::random_func::chance16_i;
 use crate::services::Services as Shared;
 use crate::vehicle::{OpenTTDEngine, VEHICLE_LENGTH, VehicleRef, VehicleServices};
-use crate::vehicle_base::{VS_HIDDEN, VS_STOPPED, VS_TRAIN_SLOWING};
+use crate::vehicle_base::{
+    VESM_DIESEL, VESM_ELECTRIC, VESM_END, VESM_NONE, VESM_STEAM, VS_HIDDEN, VS_STOPPED,
+    VS_TRAIN_SLOWING,
+};
 use crate::vehicle_type::{VEH_ROAD, VEH_SHIP, VEH_TRAIN};
 #[repr(C)]
 pub struct Gate {
@@ -128,14 +134,14 @@ pub extern "C" fn openttd_rust_visual_update(v: VehicleRef, allow_power_change: 
             }
             callback &= 0xff;
             if callback == u16::from(VE_DEFAULT) {
-                callback &= !(3 << VE_TYPE_START);
+                callback &= !(((1 << VE_TYPE_COUNT) - 1) << VE_TYPE_START);
             }
             visual = callback as u8;
         }
     }
     if visual == VE_DEFAULT
         || (visual & (1 << VE_DISABLE_EFFECT) == 0
-            && (visual >> VE_TYPE_START) & 3 == VE_TYPE_DEFAULT)
+            && (visual >> VE_TYPE_START) & ((1 << VE_TYPE_COUNT) - 1) == VE_TYPE_DEFAULT)
     {
         if e.kind != VEH_TRAIN
             || e.rail_kind == crate::vehicle::RailVehicleTypes::WAGON.0
@@ -151,7 +157,7 @@ pub extern "C" fn openttd_rust_visual_update(v: VehicleRef, allow_power_change: 
                 visual = (VE_OFFSET_CENTRE - if e.engclass == EC_STEAM { 4 } else { 0 })
                     << VE_OFFSET_START;
             }
-            visual = (visual & !(3 << VE_TYPE_START))
+            visual = (visual & !(((1 << VE_TYPE_COUNT) - 1) << VE_TYPE_START))
                 | ((e.engclass - EC_STEAM + VE_TYPE_STEAM) << VE_TYPE_START);
         }
     }
@@ -178,14 +184,14 @@ const SMOKE_POS: [i8; 8] = [1, 1, 1, 0, -1, -1, -1, 0];
 fn advanced(s: &Services, v: VehicleRef, kind: u8) {
     let mut regs = [0_i32; 4];
     let n = (s.vehicle.newgrf)();
-    let e = (s.engine)(v);
+    let engine_id = (s.vehicle.engine_id)(v);
     let callback = unsafe {
         crate::newgrf_vehicle::openttd_rust_vehicle_callback(
             &*n,
             CBID_VEHICLE_SPAWN_VISUAL_EFFECT.0,
             0,
             s.shared.random(),
-            e.id,
+            engine_id,
             v.0.as_ptr(),
             std::ptr::null_mut(),
             false,
@@ -201,9 +207,9 @@ fn advanced(s: &Services, v: VehicleRef, kind: u8) {
     let rotate = callback & (1 << 14) == 0;
     let p = (s.offset)(v);
     let l_center = if center && kind == VEH_ROAD {
-        -(i32::from(VEHICLE_LENGTH) - i32::from(p.length)) / 2
+        -(u32::from(VEHICLE_LENGTH).wrapping_sub(u32::from(p.length)) as i32) / 2
     } else if !center && kind == VEH_TRAIN {
-        (i32::from(VEHICLE_LENGTH) - i32::from(p.length)) / 2
+        (u32::from(VEHICLE_LENGTH).wrapping_sub(u32::from(p.length)) / 2) as i32
     } else {
         0
     } as i8;
@@ -236,10 +242,10 @@ fn advanced(s: &Services, v: VehicleRef, kind: u8) {
             y = (i32::from(b) * l - i32::from(a) * t) as i8;
         }
         let typ = match typ {
-            0xf1 => 1,
-            0xf2 => 2,
-            0xf3 => 3,
-            0xfa => 10,
+            0xf1 => EV_STEAM_SMOKE,
+            0xf2 => EV_DIESEL_SMOKE,
+            0xf3 => EV_ELECTRIC_SPARK,
+            0xfa => EV_BREAKDOWN_SMOKE_AIRCRAFT,
             _ => continue,
         };
         create_rel(
@@ -272,20 +278,21 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
         let p = (s.part)(v);
         let cache = unsafe { *p.cache };
         let is_advanced = cache & (1 << VE_ADVANCED_EFFECT) != 0;
-        let mut offset = i32::from(cache & 15) - i32::from(VE_OFFSET_CENTRE);
+        let mut offset =
+            i32::from(cache & ((1 << VE_OFFSET_COUNT) - 1)) - i32::from(VE_OFFSET_CENTRE);
         let model = if is_advanced {
             offset = i32::from(VE_OFFSET_CENTRE);
             let m = cache & ((1 << VE_ADVANCED_EFFECT) - 1);
-            if m >= 4 { 0 } else { m }
+            if m >= VESM_END { VESM_NONE } else { m }
         } else {
-            let m = (cache >> VE_TYPE_START) & 3;
+            let m = (cache >> VE_TYPE_START) & ((1 << VE_TYPE_COUNT) - 1);
             if s.vehicle.assertions {
                 assert_ne!(m, VE_TYPE_DEFAULT);
             }
             m
         };
         let emit = || {
-            if model == 0 || p.status & VS_HIDDEN != 0 {
+            if model == VESM_NONE || p.status & VS_HIDDEN != 0 {
                 return false;
             }
             let bridge = if (s.shared.is_bridge)(p.tile) {
@@ -305,11 +312,11 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
             }
             let speed = u32::from(gate.speed);
             match model {
-                1 => {
+                VESM_STEAM => {
                     let n = (4_u32 >> gate.smoke) + speed * 3 / max_speed;
                     u32::from(p.tick) & ((1_u32.wrapping_shl(n)).wrapping_sub(1)) == 0
                 }
-                2 => {
+                VESM_DIESEL => {
                     let power_weight = if p.kind == VEH_TRAIN {
                         let w = (s.power_weight)(front);
                         (32_u32.wrapping_shr(w.power >> 10)) as i32
@@ -324,7 +331,7 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
                             s.shared.random(),
                         )
                 }
-                3 => {
+                VESM_ELECTRIC => {
                     p.tick & 3 == 0
                         && chance16_i(
                             6_u32.wrapping_sub((speed << 2) / max_speed),
@@ -342,7 +349,9 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
             } else {
                 let o = (s.offset)(v);
                 if p.kind == VEH_TRAIN {
-                    offset += (i32::from(VEHICLE_LENGTH) - i32::from(o.length)) / 2;
+                    offset = offset.wrapping_add(
+                        (u32::from(VEHICLE_LENGTH).wrapping_sub(u32::from(o.length)) / 2) as i32,
+                    );
                 }
                 let mut x = i32::from(SMOKE_POS[usize::from(o.direction)]) * offset;
                 let mut y = i32::from(SMOKE_POS[usize::from((o.direction + 2) % 8)]) * offset;
@@ -350,7 +359,13 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
                     x = -x;
                     y = -y;
                 }
-                create_rel(v.0.as_ptr(), x, y, 10, model);
+                let kind = match model {
+                    VESM_STEAM => EV_STEAM_SMOKE,
+                    VESM_DIESEL => EV_DIESEL_SMOKE,
+                    VESM_ELECTRIC => EV_ELECTRIC_SPARK,
+                    _ => unreachable!(),
+                };
+                create_rel(v.0.as_ptr(), x, y, 10, kind);
             }
         }
         current = (s.vehicle.next)(v);

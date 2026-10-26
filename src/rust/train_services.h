@@ -706,7 +706,7 @@ static OpenTTDTrainCurrentMaxSpeedRead TrainReadCurrentMaxSpeed(OpenTTDTrainHand
 static OpenTTDTrainUpdateAccelerationRead TrainReadUpdateAcceleration(OpenTTDTrainHandle id) noexcept
 {
 	const Train *v=static_cast<Train *>(id.shell);
-	return {RustTrainCachedPower(v), v->gcache.cached_weight};
+	return {RustTrainCachedPower(v), RustTrainCachedWeight(v)};
 }
 static OpenTTDTrainUpdateSpeedRead TrainReadUpdateSpeed(OpenTTDTrainHandle id) noexcept
 {

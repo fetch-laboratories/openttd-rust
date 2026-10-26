@@ -141,8 +141,8 @@ struct OpenTTDVehicleMaintenanceServices {
 	OpenTTDVehicleMaintenanceBreakdownCountdown (OPENTTD_RUST_CALL *breakdown_countdown)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_countdown);
 	OpenTTDVehicleMaintenanceBreakdownSoundState (OPENTTD_RUST_CALL *breakdown_sound_state)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_sound_state);
 	void (OPENTTD_RUST_CALL *breakdown_delay_write)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_delay_write);
-	uint8_t (OPENTTD_RUST_CALL *smoke_delay)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(smoke_delay);
 	bool (OPENTTD_RUST_CALL *smoke_disabled)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(smoke_disabled);
+	uint8_t (OPENTTD_RUST_CALL *smoke_delay)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(smoke_delay);
 	void (OPENTTD_RUST_CALL *aircraft_broken)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_broken);
 	void (OPENTTD_RUST_CALL *mark_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(mark_dirty);
 	void (OPENTTD_RUST_CALL *view_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(view_dirty);

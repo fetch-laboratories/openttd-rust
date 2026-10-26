@@ -38,3 +38,8 @@ pub const VE_DEFAULT: u8 = 255;
 pub const EC_STEAM: u8 = 0;
 /// `EC_MONORAIL`.
 pub const EC_MONORAIL: u8 = 3;
+
+/// `VE_OFFSET_COUNT`.
+pub const VE_OFFSET_COUNT: u8 = 4;
+/// `VE_TYPE_COUNT`.
+pub const VE_TYPE_COUNT: u8 = 2;

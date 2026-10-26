@@ -59,6 +59,10 @@ static_assert(std::is_trivially_copyable_v<Order> && std::is_trivially_destructi
 
 #endif
 
+#ifdef WITH_RUST
+#include "rust/vehicle_effect_ffi.h"
+#include "rust/effect_ffi.h"
+#endif
 #include "safeguards.h"
 
 static Track ChooseTrainTrack(Train *v, TileIndex tile, DiagDirection enterdir, TrackBits tracks, bool force_res, bool *got_reservation, bool mark_stuck);
@@ -4529,6 +4533,8 @@ uint16_t Train::GetMaxWeight() const
 
 const OpenTTDTrainServices &GetTrainServices() noexcept
 {
+	openttd_rust_visual_bind(&GetRustVisualServices());
+	openttd_rust_effect_bind(GetRustEffectCreationServices());
 	static const OpenTTDTrainServices services{
 		.physics = &GetRustGroundPhysicsServices(),
 		.read_first = TrainReadFirst,

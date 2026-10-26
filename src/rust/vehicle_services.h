@@ -32,6 +32,8 @@ Train *RustTrainGetIfValid(uint32_t id) noexcept;
 /** Strict Ship::Get lookup, preserving source pool assertions. */
 OpenTTDVehicle *RustShipGet(uint32_t id) noexcept;
 uint32_t RustTrainCachedPower(const Vehicle *v) noexcept;
+uint32_t RustTrainCachedWeight(const Vehicle *v) noexcept;
+uint64_t RustTrainRailTypes(const Vehicle *v) noexcept;
 uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept;
 inline uint32_t RustVehicleGRFID(const Vehicle *v) noexcept { return v->GetGRFID(); }
 /** Fixed callback-error adapter for a live native vehicle shell. */

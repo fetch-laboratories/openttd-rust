@@ -9,6 +9,8 @@
 #include "services_road.h"
 
 /** @file road_services.h Typed road services; each resolves its vehicle once and reads only what it returns. */
+#include "vehicle_effect_ffi.h"
+#include "effect_ffi.h"
 #include "services_map.h"
 #include "engine_services.h"
 #include "services_road.h"
@@ -298,5 +300,7 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 
 static const OpenTTDRoadLeaves &GetRoadLeaves()
 {
+	openttd_rust_visual_bind(&GetRustVisualServices());
+	openttd_rust_effect_bind(GetRustEffectCreationServices());
 	return _rust_road_leaves;
 }
