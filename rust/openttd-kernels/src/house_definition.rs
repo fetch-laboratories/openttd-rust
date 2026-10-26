@@ -499,9 +499,15 @@ pub fn reset(s: &Services) {
     }
 }
 pub fn publish(s: &Services, spec: Spec) {
+    let manager = override_manager::house();
     let identity = (s.identity)(spec);
     let id = unsafe {
-        override_manager::allocate_house(identity.local, identity.grfid, identity.substitute)
+        override_manager::allocate_house(
+            manager,
+            identity.local,
+            identity.grfid,
+            identity.substitute,
+        )
     };
     if id == INVALID_HOUSE_ID {
         (s.allocation_failed)();
@@ -513,14 +519,13 @@ pub fn publish(s: &Services, spec: Spec) {
     (s.move_spec)(spec, id);
     for original in 0..NEW_HOUSE_OFFSET {
         let overridden = (s.get)(original);
-        let pending =
-            unsafe { override_manager::pending_override(override_manager::house(), original) };
+        let pending = unsafe { override_manager::pending_override(manager, original) };
         if pending != (identity.local, identity.grfid) {
             continue;
         }
         (s.set_override)(overridden, id);
         unsafe {
-            override_manager::clear_override(override_manager::house(), original);
+            override_manager::clear_override(manager, original);
         }
     }
 }

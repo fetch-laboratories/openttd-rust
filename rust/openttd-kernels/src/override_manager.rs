@@ -203,12 +203,16 @@ pub unsafe extern "C" fn openttd_rust_override_allocate(
     }
     invalid
 }
-pub unsafe fn allocate_house(local: u16, grfid: u32, substitute: u16) -> u16 {
+pub unsafe fn allocate_house(
+    manager: *mut Manager,
+    local: u16,
+    grfid: u32,
+    substitute: u16,
+) -> u16 {
     // HouseOverrideManager inherits OverrideManagerBase::CheckValidNewID.
     unsafe extern "C" fn valid(_: *mut c_void, _: u16) -> bool {
         true
     }
-    let manager = house();
     let existing = unsafe { get(manager, local, grfid) };
     unsafe {
         openttd_rust_override_allocate(
