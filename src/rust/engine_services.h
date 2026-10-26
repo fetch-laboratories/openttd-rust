@@ -20,6 +20,7 @@
 #include "table/strings.h"
 inline uint16_t RustEngineCallbackMask(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.callback_mask.base(); }
 inline uint8_t RustEngineMiscFlags(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.misc_flags.base(); }
+inline bool RustEngineIsTram(const OpenTTDEngine *e) noexcept { return EngineMiscFlags(RustEngineMiscFlags(e)).Test(EngineMiscFlag::RoadIsTram); }
 inline uint64_t RustEngineCargoRefitMask(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.refit_mask; }
 inline uint8_t RustEngineRailCapacity(const OpenTTDEngine *e) noexcept { return EngineOf(e)->VehInfo<RailVehicleInfo>().capacity; }
 inline uint8_t RustEngineRoadCapacity(const OpenTTDEngine *e) noexcept { return EngineOf(e)->VehInfo<RoadVehicleInfo>().capacity; }
@@ -39,7 +40,7 @@ inline uint16_t RustEngineAircraftRange(const OpenTTDEngine *e) noexcept { retur
 inline uint8_t RustEngineDefaultCargo(const OpenTTDEngine *e) noexcept { return EngineOf(e)->GetDefaultCargoType(); }
 inline VehicleType RustEngineType(const OpenTTDEngine *e) noexcept { return EngineOf(e)->type; }
 inline bool RustEngineExclusivePreview(const OpenTTDEngine *e) noexcept { return EngineOf(e)->flags.Test(EngineFlag::ExclusivePreview); }
-inline bool RustEngineHasGRF(const OpenTTDEngine *e) noexcept { return RustEngineGRF(e) != nullptr; }
+inline bool RustEngineHasGRF(const OpenTTDEngine *e) noexcept { return RustSpecHasGRFFile(EngineOf(e)); }
 inline uint8_t RustEngineRefitCost(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.refit_cost; }
 inline int32_t RustEnginePriceShift(const OpenTTDEngine *e, uint32_t price) noexcept { return RustGRFPriceShift(RustEngineGRF(e), price); }
 inline uint16_t RustEngineVariant(const Engine *e) noexcept { return e->info.variant_id.base(); }

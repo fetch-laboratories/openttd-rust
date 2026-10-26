@@ -259,6 +259,7 @@ pub struct Services {
     file_id: extern "C" fn(File) -> u32,
     find_file: extern "C" fn(u32) -> File,
     engine_file: extern "C" fn(E) -> File,
+    has_file: extern "C" fn(E) -> bool,
     set_file: extern "C" fn(E, File),
     mapping_log: extern "C" fn(u32, u32, bool),
     replaced_log: extern "C" fn(u16, u32, u8, u16),
@@ -289,7 +290,7 @@ pub struct Services {
     file_version: extern "C" fn(File) -> u8,
     cargo_list_size: extern "C" fn(File) -> usize,
     cargo_translation: extern "C" fn(u8, File, bool) -> u8,
-    unknown_refit: extern "C" fn(File, u16),
+    unknown_refit: extern "C" fn(u32, u16, u16),
     climate: extern "C" fn() -> u8,
     variant: extern "C" fn(E) -> u16,
     set_variant: extern "C" fn(E, u16),
@@ -367,7 +368,7 @@ pub unsafe extern "C" fn openttd_rust_engine_definition(
         let id = unsafe { openttd_rust_engine_mapping_get(kind, local, scope) };
         if id != INVALID_ENGINE {
             let engine = (s.resolve)(id);
-            if (s.engine_file)(engine.shell).is_null() {
+            if !(s.has_file)(engine.shell) {
                 (s.set_file)(engine.shell, file);
             }
             return engine.shell;
@@ -376,7 +377,7 @@ pub unsafe extern "C" fn openttd_rust_engine_definition(
     let id = unsafe { openttd_rust_engine_mapping_use(kind, local, scope, static_access) };
     if id != INVALID_ENGINE {
         let engine = (s.resolve)(id);
-        if (s.engine_file)(engine.shell).is_null() {
+        if !(s.has_file)(engine.shell) {
             (s.set_file)(engine.shell, file);
             (s.replaced_log)(id, (s.file_id)(file), kind, local);
         }
@@ -462,6 +463,7 @@ crate::abi::layouts! {
         file_id,
         find_file,
         engine_file,
+        has_file,
         set_file,
         mapping_log,
         replaced_log,
@@ -530,11 +532,7 @@ crate::abi::layouts! {
     "RustRailLabelView" ["engine_loading"] => RailLabelView { data, size };
 
 }
-#[repr(C)]
-pub struct CargoLabel {
-    value: u32,
-    mixed: bool,
-}
+use crate::newgrf::{CargoLabel, get_active_cargo_label};
 #[repr(C)]
 pub struct RefitInputs {
     mask: u64,
@@ -552,10 +550,8 @@ pub struct CargoClass {
     cargo: u8,
 }
 use crate::cargo_type::{
-    CT_CANDY, CT_COAL, CT_COLA, CT_COPPER_ORE, CT_DIAMONDS, CT_FOOD, CT_FRUIT, CT_GOLD, CT_GOODS,
-    CT_GRAIN, CT_INVALID, CT_LIVESTOCK, CT_MAIL, CT_MAIZE, CT_OIL, CT_PASSENGERS, CT_SUGAR,
-    CT_VALUABLES, CT_WHEAT, INVALID_CARGO, MCT_GRAIN_WHEAT_MAIZE, MCT_LIVESTOCK_FRUIT,
-    MCT_VALUABLES_GOLD_DIAMONDS, NUM_CARGO, is_valid_cargo_type,
+    CT_CANDY, CT_COAL, CT_COLA, CT_COPPER_ORE, CT_FOOD, CT_GOODS, CT_INVALID, CT_MAIL, CT_OIL,
+    CT_PASSENGERS, CT_SUGAR, CT_VALUABLES, INVALID_CARGO, NUM_CARGO, is_valid_cargo_type,
 };
 use crate::cargotype::{
     CC_ARMOURED, CC_BULK, CC_EXPRESS, CC_LIQUID, CC_MAIL, CC_PIECEGOODS, CC_REFRIGERATED,
@@ -564,25 +560,9 @@ use crate::cargotype::{
 use crate::newgrf_callbacks::{CALLBACK_FAILED, CBID_VEHICLE_CUSTOM_REFIT};
 use crate::vehicle::RailVehicleTypes;
 use crate::vehicle_type::{VEH_AIRCRAFT, VEH_SHIP};
-fn active_labels(s: &Services, labels: &[u32]) -> u32 {
-    for &label in labels {
-        if (s.cargo_by_label)(label) != INVALID_CARGO {
-            return label;
-        }
-    }
-    CT_INVALID
-}
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_engine_active_label(s: &Services, label: CargoLabel) -> u32 {
-    if !label.mixed {
-        return label.value;
-    }
-    match label.value {
-        MCT_LIVESTOCK_FRUIT => active_labels(s, &[CT_LIVESTOCK, CT_FRUIT]),
-        MCT_GRAIN_WHEAT_MAIZE => active_labels(s, &[CT_GRAIN, CT_WHEAT, CT_MAIZE]),
-        MCT_VALUABLES_GOLD_DIAMONDS => active_labels(s, &[CT_VALUABLES, CT_GOLD, CT_DIAMONDS]),
-        _ => unreachable!(),
-    }
+pub(crate) extern "C" fn openttd_rust_engine_active_label(s: &Services, label: CargoLabel) -> u32 {
+    get_active_cargo_label(label, |label| (s.cargo_by_label)(label))
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_engine_translate_refit(s: &Services, mask: u32, file: File) -> u64 {
@@ -599,7 +579,7 @@ pub extern "C" fn openttd_rust_engine_translate_refit(s: &Services, mask: u32, f
     result
 }
 fn engine_label(s: &Services, shell: E) -> u32 {
-    openttd_rust_engine_active_label(s, (s.cargo_label)(shell))
+    get_active_cargo_label((s.cargo_label)(shell), |label| (s.cargo_by_label)(label))
 }
 fn default_masks(s: &Services, kind: u8, shell: E, id: u16, label: u32) -> (u16, u16) {
     if kind == VEH_AIRCRAFT {
@@ -789,7 +769,9 @@ pub unsafe extern "C" fn openttd_rust_engine_calculate_refits(s: &Services) {
                         input.mask &= !(1_u64 << cs.cargo);
                         (s.set_refit)(e.shell, input.mask);
                     }
-                    _ => (s.unknown_refit)(file, callback),
+                    _ => {
+                        (s.unknown_refit)((s.file_id)(file), CBID_VEHICLE_CUSTOM_REFIT.0, callback);
+                    }
                 }
             }
         }

@@ -1,5 +1,5 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Common global-variable policy for Action2 and Action7/9/D. Leaves keep the source
+//! Common global-variable and loading cargo-label policy. Leaves keep the source
 //! file and config preconditions, including non-null GRF and config where variables need them.
 #![allow(
     unsafe_code,
@@ -128,3 +128,97 @@ pub const GSF_END: u8 = 22;
 
 /// Unreserved engine mapping scope.
 pub const INVALID_GRFID: u32 = 0xFFFF_FFFF;
+
+/// Native `variant<CargoLabel, MixedCargoType>` used by definition loading.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct CargoLabel {
+    pub(crate) value: u32,
+    pub(crate) mixed: bool,
+}
+
+/// `GetActiveCargoLabel` list overload, in source preference order.
+pub(crate) fn get_active_cargo_label_from_list(
+    labels: &[u32],
+    mut cargo_by_label: impl FnMut(u32) -> u8,
+) -> u32 {
+    use crate::cargo_type::{CT_INVALID, INVALID_CARGO};
+    for &label in labels {
+        if cargo_by_label(label) != INVALID_CARGO {
+            return label;
+        }
+    }
+    CT_INVALID
+}
+
+/// `GetActiveCargoLabel` variant overload; plain labels bypass availability lookup.
+pub(crate) fn get_active_cargo_label(
+    label: CargoLabel,
+    cargo_by_label: impl FnMut(u32) -> u8,
+) -> u32 {
+    use crate::cargo_type::{
+        CT_DIAMONDS, CT_FRUIT, CT_GOLD, CT_GRAIN, CT_LIVESTOCK, CT_MAIZE, CT_VALUABLES, CT_WHEAT,
+        MCT_GRAIN_WHEAT_MAIZE, MCT_LIVESTOCK_FRUIT, MCT_VALUABLES_GOLD_DIAMONDS,
+    };
+    if !label.mixed {
+        return label.value;
+    }
+    let labels: &[u32] = match label.value {
+        MCT_LIVESTOCK_FRUIT => &[CT_LIVESTOCK, CT_FRUIT],
+        MCT_GRAIN_WHEAT_MAIZE => &[CT_GRAIN, CT_WHEAT, CT_MAIZE],
+        MCT_VALUABLES_GOLD_DIAMONDS => &[CT_VALUABLES, CT_GOLD, CT_DIAMONDS],
+        _ => unreachable!(),
+    };
+    get_active_cargo_label_from_list(labels, cargo_by_label)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CargoLabel, get_active_cargo_label};
+    use crate::cargo_type::{
+        CT_DIAMONDS, CT_FRUIT, CT_GOLD, CT_GRAIN, CT_INVALID, CT_LIVESTOCK, CT_MAIZE, CT_VALUABLES,
+        CT_WHEAT, INVALID_CARGO, MCT_GRAIN_WHEAT_MAIZE, MCT_LIVESTOCK_FRUIT,
+        MCT_VALUABLES_GOLD_DIAMONDS,
+    };
+
+    #[test]
+    fn active_cargo_labels_preserve_preference_and_unavailable_fallback() {
+        for (mixed, labels) in [
+            (MCT_LIVESTOCK_FRUIT, &[CT_LIVESTOCK, CT_FRUIT][..]),
+            (MCT_GRAIN_WHEAT_MAIZE, &[CT_GRAIN, CT_WHEAT, CT_MAIZE][..]),
+            (
+                MCT_VALUABLES_GOLD_DIAMONDS,
+                &[CT_VALUABLES, CT_GOLD, CT_DIAMONDS][..],
+            ),
+        ] {
+            for first in 0..=labels.len() {
+                let selected = get_active_cargo_label(
+                    CargoLabel {
+                        value: mixed,
+                        mixed: true,
+                    },
+                    |label| {
+                        if labels[first..].contains(&label) {
+                            0
+                        } else {
+                            INVALID_CARGO
+                        }
+                    },
+                );
+                assert_eq!(selected, labels.get(first).copied().unwrap_or(CT_INVALID));
+            }
+        }
+        for value in [CT_GRAIN, CT_INVALID] {
+            assert_eq!(
+                get_active_cargo_label(
+                    CargoLabel {
+                        value,
+                        mixed: false
+                    },
+                    |_| { panic!("plain cargo labels do not consult availability") }
+                ),
+                value
+            );
+        }
+    }
+}
