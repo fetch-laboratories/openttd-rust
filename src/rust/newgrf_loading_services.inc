@@ -244,7 +244,7 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.grm_failure = [](uint16_t count, bool engines, bool fatal) noexcept { std::string_view type = engines ? "vehicles" : "cargoes"; if (fatal) { GrfMsg(0, "ParamSet: GRM: Unable to allocate {} {}, deactivating", count, type); } else { GrfMsg(1, "ParamSet: GRM: Unable to allocate {} {}", count, type); } },
 		.unknown_operation = [](uint8_t op) noexcept { GrfMsg(0, "ParamSet: Unknown operation {}, skipping", op); },
 		.id_mismatch = [](uint32_t old_id, uint32_t new_id) noexcept { Debug(grf, 0, "GRFInfo: GRFID {:08X} in FILESCAN stage does not match GRFID {:08X} in INIT/RESERVE/ACTIVATION stage", std::byteswap(old_id), std::byteswap(new_id)); },
-		.invalid_version = [](const GRFConfig *c, uint32_t id, uint8_t version, const uint8_t *name, size_t len) noexcept { Debug(grf, 0, "{}: NewGRF \"{}\" (GRFID {:08X}) uses GRF version {}, which is incompatible with this version of OpenTTD.", c->filename, StrMakeValid({reinterpret_cast<const char *>(name), len}), std::byteswap(id), version); },
+		.invalid_version = [](const GRFConfig *c, uint32_t id, uint8_t version, const uint8_t *name, size_t len) noexcept { Debug(grf, 0, "{}: NewGRF \"{}\" (GRFID {:08X}) uses GRF version {}, which is incompatible with this version of OpenTTD.", c->filename, StrMakeValid(std::string_view{reinterpret_cast<const char *>(name), len}), std::byteswap(id), version); },
 		.null_error = STR_NULL,
 	};
 	return services;
