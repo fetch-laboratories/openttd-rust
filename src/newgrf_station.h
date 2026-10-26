@@ -248,7 +248,9 @@ CommandCost PerformStationTileSlopeCheck(TileIndex north_tile, TileIndex cur_til
 
 std::optional<uint8_t> AllocateSpecToStation(const StationSpec *spec, BaseStation *st);
 void AssignSpecToStation(const StationSpec *spec, BaseStation *st, uint8_t specindex);
+#ifndef WITH_RUST
 void DeallocateSpecFromStation(BaseStation *st, uint8_t specindex);
+#endif
 bool DrawStationTile(int x, int y, RailType railtype, Axis axis, StationClassID sclass, uint station);
 
 void AnimateStationTile(TileIndex tile);

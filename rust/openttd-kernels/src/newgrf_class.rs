@@ -160,7 +160,6 @@ macro_rules! registry {
             pub unsafe extern "C" fn allocate(id: u32, max: u16, empty: u32) -> u16 {
                 unsafe { super::allocate(STATE.get(), id, max, empty, SERVICES.table()) }
             }
-            #[unsafe(export_name = concat!($prefix, "_insert"))]
             pub unsafe extern "C" fn insert(class: u16, spec: *mut Spec) {
                 unsafe {
                     super::insert(STATE.get(), class, spec, SERVICES.table());
@@ -207,10 +206,6 @@ macro_rules! registry {
             #[unsafe(export_name = concat!($prefix, "_spec"))]
             pub extern "C" fn spec(class: u16, index: u32) -> *mut Spec {
                 unsafe { get_spec(STATE.get(), class, index) }
-            }
-            #[unsafe(export_name = concat!($prefix, "_available"))]
-            pub unsafe extern "C" fn available(class: u16, index: u32) -> bool {
-                unsafe { super::available(STATE.get(), class, index, SERVICES.table()) }
             }
             #[unsafe(export_name = concat!($prefix, "_by_grf"))]
             pub unsafe extern "C" fn by_grf(grfid: u32, local_id: u16) -> *const Spec {

@@ -29,7 +29,6 @@ template <typename T> struct RustGRFClassOps;
 extern "C" {
 void openttd_rust_station_class_reset(const OpenTTDGRFClassServices<StationSpec> *);
 uint16_t openttd_rust_station_class_allocate(uint32_t, uint16_t, uint32_t);
-void openttd_rust_station_class_insert(uint16_t, StationSpec *);
 void openttd_rust_station_class_assign(StationSpec *);
 void * openttd_rust_station_class_classes();
 uint32_t openttd_rust_station_class_count();
@@ -38,13 +37,11 @@ StationSpec * const * openttd_rust_station_class_specs(uint16_t);
 uint32_t openttd_rust_station_class_spec_count(uint16_t);
 uint32_t openttd_rust_station_class_ui_spec_count(uint16_t);
 const StationSpec * openttd_rust_station_class_spec(uint16_t, uint32_t);
-bool openttd_rust_station_class_available(uint16_t, uint32_t);
 const StationSpec * openttd_rust_station_class_by_grf(uint32_t, uint16_t);
 }
 template <> struct RustGRFClassOps<StationSpec> {
 	static constexpr auto reset = openttd_rust_station_class_reset;
 	static constexpr auto allocate = openttd_rust_station_class_allocate;
-	static constexpr auto insert = openttd_rust_station_class_insert;
 	static constexpr auto assign = openttd_rust_station_class_assign;
 	static constexpr auto classes = openttd_rust_station_class_classes;
 	static constexpr auto count = openttd_rust_station_class_count;
@@ -53,13 +50,11 @@ template <> struct RustGRFClassOps<StationSpec> {
 	static constexpr auto spec_count = openttd_rust_station_class_spec_count;
 	static constexpr auto ui_spec_count = openttd_rust_station_class_ui_spec_count;
 	static constexpr auto spec = openttd_rust_station_class_spec;
-	static constexpr auto available = openttd_rust_station_class_available;
 	static constexpr auto by_grf = openttd_rust_station_class_by_grf;
 };
 extern "C" {
 void openttd_rust_roadstop_class_reset(const OpenTTDGRFClassServices<RoadStopSpec> *);
 uint16_t openttd_rust_roadstop_class_allocate(uint32_t, uint16_t, uint32_t);
-void openttd_rust_roadstop_class_insert(uint16_t, RoadStopSpec *);
 void openttd_rust_roadstop_class_assign(RoadStopSpec *);
 void * openttd_rust_roadstop_class_classes();
 uint32_t openttd_rust_roadstop_class_count();
@@ -68,13 +63,11 @@ RoadStopSpec * const * openttd_rust_roadstop_class_specs(uint16_t);
 uint32_t openttd_rust_roadstop_class_spec_count(uint16_t);
 uint32_t openttd_rust_roadstop_class_ui_spec_count(uint16_t);
 const RoadStopSpec * openttd_rust_roadstop_class_spec(uint16_t, uint32_t);
-bool openttd_rust_roadstop_class_available(uint16_t, uint32_t);
 const RoadStopSpec * openttd_rust_roadstop_class_by_grf(uint32_t, uint16_t);
 }
 template <> struct RustGRFClassOps<RoadStopSpec> {
 	static constexpr auto reset = openttd_rust_roadstop_class_reset;
 	static constexpr auto allocate = openttd_rust_roadstop_class_allocate;
-	static constexpr auto insert = openttd_rust_roadstop_class_insert;
 	static constexpr auto assign = openttd_rust_roadstop_class_assign;
 	static constexpr auto classes = openttd_rust_roadstop_class_classes;
 	static constexpr auto count = openttd_rust_roadstop_class_count;
@@ -83,13 +76,11 @@ template <> struct RustGRFClassOps<RoadStopSpec> {
 	static constexpr auto spec_count = openttd_rust_roadstop_class_spec_count;
 	static constexpr auto ui_spec_count = openttd_rust_roadstop_class_ui_spec_count;
 	static constexpr auto spec = openttd_rust_roadstop_class_spec;
-	static constexpr auto available = openttd_rust_roadstop_class_available;
 	static constexpr auto by_grf = openttd_rust_roadstop_class_by_grf;
 };
 extern "C" {
 void openttd_rust_airport_class_reset(const OpenTTDGRFClassServices<AirportSpec> *);
 uint16_t openttd_rust_airport_class_allocate(uint32_t, uint16_t, uint32_t);
-void openttd_rust_airport_class_insert(uint16_t, AirportSpec *);
 void openttd_rust_airport_class_assign(AirportSpec *);
 void * openttd_rust_airport_class_classes();
 uint32_t openttd_rust_airport_class_count();
@@ -98,13 +89,11 @@ AirportSpec * const * openttd_rust_airport_class_specs(uint16_t);
 uint32_t openttd_rust_airport_class_spec_count(uint16_t);
 uint32_t openttd_rust_airport_class_ui_spec_count(uint16_t);
 const AirportSpec * openttd_rust_airport_class_spec(uint16_t, uint32_t);
-bool openttd_rust_airport_class_available(uint16_t, uint32_t);
 const AirportSpec * openttd_rust_airport_class_by_grf(uint32_t, uint16_t);
 }
 template <> struct RustGRFClassOps<AirportSpec> {
 	static constexpr auto reset = openttd_rust_airport_class_reset;
 	static constexpr auto allocate = openttd_rust_airport_class_allocate;
-	static constexpr auto insert = openttd_rust_airport_class_insert;
 	static constexpr auto assign = openttd_rust_airport_class_assign;
 	static constexpr auto classes = openttd_rust_airport_class_classes;
 	static constexpr auto count = openttd_rust_airport_class_count;
@@ -113,13 +102,11 @@ template <> struct RustGRFClassOps<AirportSpec> {
 	static constexpr auto spec_count = openttd_rust_airport_class_spec_count;
 	static constexpr auto ui_spec_count = openttd_rust_airport_class_ui_spec_count;
 	static constexpr auto spec = openttd_rust_airport_class_spec;
-	static constexpr auto available = openttd_rust_airport_class_available;
 	static constexpr auto by_grf = openttd_rust_airport_class_by_grf;
 };
 extern "C" {
 void openttd_rust_object_class_reset(const OpenTTDGRFClassServices<ObjectSpec> *);
 uint16_t openttd_rust_object_class_allocate(uint32_t, uint16_t, uint32_t);
-void openttd_rust_object_class_insert(uint16_t, ObjectSpec *);
 void openttd_rust_object_class_assign(ObjectSpec *);
 void * openttd_rust_object_class_classes();
 uint32_t openttd_rust_object_class_count();
@@ -128,13 +115,11 @@ ObjectSpec * const * openttd_rust_object_class_specs(uint16_t);
 uint32_t openttd_rust_object_class_spec_count(uint16_t);
 uint32_t openttd_rust_object_class_ui_spec_count(uint16_t);
 const ObjectSpec * openttd_rust_object_class_spec(uint16_t, uint32_t);
-bool openttd_rust_object_class_available(uint16_t, uint32_t);
 const ObjectSpec * openttd_rust_object_class_by_grf(uint32_t, uint16_t);
 }
 template <> struct RustGRFClassOps<ObjectSpec> {
 	static constexpr auto reset = openttd_rust_object_class_reset;
 	static constexpr auto allocate = openttd_rust_object_class_allocate;
-	static constexpr auto insert = openttd_rust_object_class_insert;
 	static constexpr auto assign = openttd_rust_object_class_assign;
 	static constexpr auto classes = openttd_rust_object_class_classes;
 	static constexpr auto count = openttd_rust_object_class_count;
@@ -143,7 +128,6 @@ template <> struct RustGRFClassOps<ObjectSpec> {
 	static constexpr auto spec_count = openttd_rust_object_class_spec_count;
 	static constexpr auto ui_spec_count = openttd_rust_object_class_ui_spec_count;
 	static constexpr auto spec = openttd_rust_object_class_spec;
-	static constexpr auto available = openttd_rust_object_class_available;
 	static constexpr auto by_grf = openttd_rust_object_class_by_grf;
 };
 #endif

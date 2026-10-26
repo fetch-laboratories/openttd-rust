@@ -770,7 +770,7 @@ const OpenTTDRoadStopResolverServices &GetRoadStopResolverServices() noexcept
 	static_assert(CargoGRFFileProps::SG_DEFAULT_NA == NUM_CARGO + 2);
 	static_assert(CBID_STATION_AVAILABILITY == 0x13);
 	static const OpenTTDRoadStopResolverServices services{
-		.rebind = [](BaseStation *st, size_t index, const RoadStopSpec *spec) noexcept { st->roadstop_speclist[index].spec = spec; },
+		.rebind = RustRoadStopRebindSpec,
 		.badges = RustSpecBadges<RoadStopSpec>,
 		.base_scope = RustResolverBaseScope,
 		.build_date = RustStationBuildDate<const BaseStation>,

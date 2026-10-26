@@ -193,14 +193,6 @@ pub unsafe extern "C" fn openttd_rust_station_spec_assign(
     assign(s, spec, st, index);
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_spec_deallocate(
-    s: *const Services,
-    st: *mut BaseStation,
-    index: u8,
-) {
-    deallocate(s, st, index);
-}
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_spec_cache(s: *const Services, st: *mut BaseStation) {
     cache(s, st);
 }

@@ -27,6 +27,7 @@
 #include "../waypoint_base.h"
 #include "../timer/timer_game_tick.h"
 #include "../openttd.h"
+#include <thread>
 #include "abi_layout.hpp"
 #include "../rust/station_queue_save.hpp"
 #include "../rust/services_ffi.h"
@@ -85,6 +86,13 @@ TEST_CASE("Shared station traversal - live filtered pool mutation and reentry")
 
 TEST_CASE("NewGRF station classes - canonical order, reassignment and first membership")
 {
+	StationClass::Reset();
+	std::thread writer([] { StationClass::Allocate('THRD'); });
+	writer.join();
+	bool observed = false;
+	std::thread reader([&] { observed = StationClass::GetClassCount() == 3 && StationClass::Allocate('THRD') == static_cast<StationClassID>(2); });
+	reader.join();
+	CHECK(observed);
 	StationClass::Reset();
 	CHECK(StationClass::GetClassCount() == 2);
 	CHECK(StationClass::GetUIClassCount() == 2);

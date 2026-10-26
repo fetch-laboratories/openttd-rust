@@ -40,12 +40,10 @@ public:
 	using index_type = Tindex;
 	std::span<Tspec * const> Specs() const { return {Ops::specs(this->Index()), this->GetSpecCount()}; }
 	static std::span<NewGRFClass const> Classes() { return {static_cast<const NewGRFClass *>(Ops::classes()), Ops::count()}; }
-	void Insert(Tspec *spec) { Ops::insert(this->Index(), spec); }
 	Tindex Index() const { return static_cast<Tindex>(this->rust_index); }
 	uint GetSpecCount() const { return Ops::spec_count(this->Index()); }
 	uint GetUISpecCount() const { return Ops::ui_spec_count(this->Index()); }
 	const Tspec *GetSpec(uint index) const { return Ops::spec(this->Index(), index); }
-	bool IsUIAvailable(uint index) const { return Ops::available(this->Index(), index); }
 	static void Reset();
 	static Tindex Allocate(uint32_t global_id);
 	static void Assign(Tspec *spec) { assert(static_cast<size_t>(spec->class_index) < Ops::count()); Ops::assign(spec); }

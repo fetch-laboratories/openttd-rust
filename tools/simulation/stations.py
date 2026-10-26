@@ -92,6 +92,8 @@ def scenarios(soak):
             for mode in (
                 "definitions",
                 "definitions-reload",
+                "definitions-reordered",
+                "definitions-missing",
                 "commands",
                 "linkgraph",
                 "reload",
@@ -785,7 +787,8 @@ static bool StationCommands(std::span<std::string_view> args)
 	const DoCommandFlags test{DoCommandFlag::NoTestTownRating};
 	const DoCommandFlags exec{DoCommandFlag::Execute, DoCommandFlag::NoTestTownRating};
 	if (args[1].starts_with("definitions")) {
-		bool reload = args[1] == "definitions-inspect";
+		bool reload = args[1].ends_with("inspect");
+		if (args[1] == "definitions-missing-inspect") { StationDefinitionMissing(); fmt::print(stderr, "STCMD complete\n"); current.Restore(); return true; }
 		if (!reload) { StationNeed(args.size() >= 3, __LINE__); StationDefinitionLoad(args[2]); }
 		StationDefinitionFixture(reload ? INVALID_TILE : StationPatch(), test, exec, reload);
 		if (!reload && args.size() == 4) StationNeed(SaveOrLoad(std::string(args[3]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false) == SL_OK, __LINE__);
@@ -1079,6 +1082,8 @@ extern "C" void __wrap__Z22IConsoleStdLibRegisterv() { __real__Z22IConsoleStdLib
 RELOADS = {
     "reload": ("commands", "inspect"),
     "definitions-reload": ("definitions", "definitions-inspect"),
+    "definitions-reordered": ("definitions", "definitions-inspect"),
+    "definitions-missing": ("definitions", "definitions-missing-inspect"),
     "road-stops-reload": ("road-stops", "road-stops-inspect"),
     "resolver-reload": ("resolver", "resolver-inspect"),
     "airport-reload": ("airport", "airport-inspect"),
@@ -1114,7 +1119,7 @@ def adapter(build, folder, env):
     )
 
 
-def definition_grfs(folder):
+def definition_grfs(folder, reordered=False):
     """File-loaded station, rail-waypoint, road-stop and road-waypoint definitions."""
     from .newgrf_loading import grf, info
 
@@ -1147,7 +1152,7 @@ def definition_grfs(folder):
             + word(default)
         )
 
-    actions = [info(b"S484")]
+    actions = [info(b"S484"), bytes((13, 0, 0, 255, 255)) + dword(int(reordered))]
     for feature in (4, 20):
         actions += [group(feature, index, 0x400 + index) for index in range(3)]
     actions += [
@@ -1199,9 +1204,24 @@ def definition_grfs(folder):
         + word(0xD000)
         + b"Station 484\0Class 484\0Road stop 484\0Road class 484\0",
     ]
-    for feature, local in ((4, 0), (4, 1), (4, 2), (20, 0), (20, 1)):
+    publication = ((4, 0), (4, 1), (4, 2), (20, 0), (20, 1))
+    for feature, local in reversed(publication) if reordered else publication:
         actions += [mapping(feature, local, 0), mapping(feature, local, 1, [(0, 2)])]
     (folder / "stations.grf").write_bytes(grf(actions, 1))
+    for feature, ident, name in (
+        (4, b"B484", "broken-station"),
+        (20, b"R484", "broken-road"),
+    ):
+        (folder / (name + ".grf")).write_bytes(
+            grf(
+                [
+                    info(ident),
+                    prop(feature, 0, [(8, b"DFLT")]),
+                    prop(feature, 0, [(0x16 if feature == 4 else 0x0E, b"\x09")]),
+                ],
+                1,
+            )
+        )
 
 
 def install(scenario, run_dir):
@@ -1263,6 +1283,10 @@ def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
         )
         if differences or logs["reference"] != logs["candidate"]:
             raise RuntimeError("station reload input differs")
+        if scenario["station_commands"] == "definitions-reordered":
+            definition_grfs(folder / "grfs", reordered=True)
+        elif scenario["station_commands"] == "definitions-missing":
+            (folder / "grfs/stations.grf").unlink()
         return dict(
             scenario,
             role_inputs={role: {"save": str(save)} for role, save in saves.items()},
@@ -1279,14 +1303,20 @@ def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
 
 def check_commands(scenario, run, mode, role, result):
     if scenario["station_commands"].startswith("definitions"):
-        for marker in (
-            "registry",
-            "layout",
-            "identity",
-            "callbacks",
-            "occupied",
-            "rng",
-        ):
+        markers = (
+            ("identity", "missing")
+            if scenario["station_commands"] == "definitions-missing"
+            else (
+                "registry",
+                "layout",
+                "identity",
+                "callbacks",
+                "occupied",
+                "rng",
+                "malformed",
+            )
+        )
+        for marker in markers:
             if not any(
                 line.startswith("STCMD definitions-" + marker) for line in run["log"]
             ):

@@ -98,7 +98,7 @@ const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
 
 		.build_date = RustStationBuildDate<BaseStation>,
 		.airport_ttd_type = RustAirportTTDType,
-		.identity = [](BaseStation *st, uint8_t i) noexcept { const auto &sm = st->speclist[i]; return OpenTTDStationSpecIdentity{sm.grfid, sm.localidx}; },
+		.identity = [](BaseStation *st, uint8_t i) noexcept { const auto key = RustStationSlotKey(st, i); return OpenTTDStationSpecIdentity{key.grfid, key.local_id}; },
 		/* Only shared native ScopeResolver frames are materialized here; Rust
 		 * selects and caches the owner before either synchronous shell call. */
 		.town_scope = RustResolverTownScope<StationResolverObject>,
@@ -928,11 +928,9 @@ void AssignSpecToStation(const StationSpec *spec, BaseStation *st, uint8_t speci
  * @param st Station to work with.
  * @param specindex Index of the custom station within the Station's station spec list.
  */
+#ifndef WITH_RUST
 void DeallocateSpecFromStation(BaseStation *st, uint8_t specindex)
 {
-#ifdef WITH_RUST
-	openttd_rust_station_spec_deallocate(&GetStationAssociationServices(), st, specindex);
-#else
 	/* specindex of 0 (default) is never freeable */
 	if (specindex == 0) return;
 
@@ -966,8 +964,8 @@ void DeallocateSpecFromStation(BaseStation *st, uint8_t specindex)
 	}
 
 	StationUpdateCachedTriggers(st);
-#endif
 }
+#endif
 
 /**
  * Draw representation of a station tile for GUI purposes.

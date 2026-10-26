@@ -6002,11 +6002,19 @@ extern const TileTypeProcs _tile_type_station_procs = {
 #include "abi-visit-OpenTTDStationServices.hpp"
 #include "abi-visit-OpenTTDStationLinks.hpp"
 #include "abi-visit-OpenTTDStationCommandServices.hpp"
+#include "rust/station_definitions_ffi.h"
+#include "rust/newgrf_act3_ffi.h"
+#include "abi-visit-OpenTTDStationAssociationServices.hpp"
+#include "abi-visit-OpenTTDStationDefinitionServices.hpp"
+#include "abi-visit-OpenTTDAct3CargoServices.hpp"
 bool CheckAbi_station_cmd()
 {
 	return AbiServicesComplete(_rust_station_services.environment) &&
 		AbiServicesComplete(_rust_station_services) &&
 		AbiServicesComplete(_rust_station_links) &&
-		AbiServicesComplete(GetRustStationCommandServices());
+		AbiServicesComplete(GetRustStationCommandServices()) &&
+		AbiServicesComplete(GetStationAssociationServices()) &&
+		AbiServicesComplete(GetStationDefinitionServices()) &&
+		AbiServicesComplete(GetAct3CargoServices());
 }
 #endif

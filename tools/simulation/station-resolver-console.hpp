@@ -231,16 +231,77 @@ static uint32_t StationDefinitionID()
 {
 	return uint32_t('S') | uint32_t('4') << 8 | uint32_t('8') << 16 | uint32_t('4') << 24;
 }
+/* Full loading frees failed specs. These production-entry observations retain the
+ * original ByteReader frame to distinguish partial mutations before that cleanup. */
+static void StationDefinitionPartialReads()
+{
+	GRFFile file; file.grf_version = 8;
+	AutoRestoreBackup current(_cur_gps.grffile, &file);
+	AutoRestoreBackup skip(_cur_gps.skip_sprites, 0);
+	auto read = [&](GrfSpecFeature feature, uint32_t first, uint32_t last, int property, std::initializer_list<uint8_t> data) {
+		ByteReader reader(data.begin(), data.size());
+		int result = -1; bool bounds = false;
+		try {
+			result = feature == GSF_STATIONS ? GrfChangeInfoHandler<GSF_STATIONS>::Activation(first, last, property, reader) : GrfChangeInfoHandler<GSF_ROADSTOPS>::Activation(first, last, property, reader);
+		} catch (const OTTDByteReaderSignal &) { bounds = true; }
+		fmt::print(stderr, "STCMD definitions-partial {} {} {} {} {} {}\n", to_underlying(feature), property, first, result, bounds, reader.Remaining());
+		return bounds;
+	};
+	StationNeed(read(GSF_STATIONS, 0, 1, 8, {'D', 'F'}) && file.stations[0] != nullptr, __LINE__);
+	StationNeed(!read(GSF_STATIONS, 0, 1, 8, {'D', 'F', 'L', 'T'}), __LINE__);
+	StationNeed(read(GSF_STATIONS, 0, 1, 0x16, {7}) && file.stations[0]->animation.frames == 7, __LINE__);
+	StationNeed(read(GSF_STATIONS, 0, 1, 0x20, {3, 4, 5}), __LINE__);
+	StationNeed(file.stations[0]->bridgeable_info.size() == 3 && file.stations[0]->bridgeable_info[1].height == 5 && file.stations[0]->bridgeable_info[2].height == 0, __LINE__);
+	StationNeed(read(GSF_STATIONS, 0, 1, 9, {2, 1, 0}) && file.stations[0]->renderdata.size() == 1, __LINE__);
+	StationNeed(read(GSF_STATIONS, 0, 1, 0x1A, {2, 1, 1, 0}) && file.stations[0]->renderdata.size() == 1, __LINE__);
+	StationNeed(read(GSF_STATIONS, 0, 1, 0x0E, {2, 2, 0, 1, 2}) && file.stations[0]->layouts.empty(), __LINE__);
+	StationNeed(!read(GSF_STATIONS, 1, 2, 0x16, {4, 0}), __LINE__);
+	StationNeed(!read(GSF_ROADSTOPS, 1, 2, 0x0E, {4, 0}), __LINE__);
+	StationNeed(read(GSF_ROADSTOPS, 0, 1, 8, {'D', 'F'}) && file.roadstops[0] != nullptr, __LINE__);
+	StationNeed(!read(GSF_ROADSTOPS, 0, 1, 8, {'D', 'F', 'L', 'T'}), __LINE__);
+	StationNeed(read(GSF_ROADSTOPS, 0, 1, 0x15, {23}) && file.roadstops[0]->build_cost_multiplier == 23 && file.roadstops[0]->clear_cost_multiplier == 16, __LINE__);
+	StationNeed(read(GSF_ROADSTOPS, 0, 1, 0x13, {7, 4, 5, 6}) && file.roadstops[0]->bridgeable_info[2].height == 6, __LINE__);
+	StationNeed(!read(GSF_ROADSTOPS, 0, 2, 0xFE, {99}), __LINE__);
+	fmt::print(stderr, "STCMD definitions-partial-state {} {} {} {}\n", file.stations[0]->animation.frames, file.stations[0]->renderdata[0].seq.size(), file.stations[0]->bridgeable_info[1].height, file.roadstops[0]->bridgeable_info[2].height);
+}
+static void StationDefinitionMissing()
+{
+	uint count = 0;
+	for (BaseStation *st : BaseStation::Iterate()) {
+		if (!st->name.starts_with("Definitions ")) continue;
+		for (const auto &slot : st->speclist) if (slot.grfid != 0) {
+			StationNeed(slot.spec == nullptr && slot.grfid == StationDefinitionID(), __LINE__);
+			fmt::print(stderr, "STCMD definitions-identity missing-rail {} {} {}\n", st->index.base(), slot.grfid, slot.localidx);
+		}
+		for (const auto &slot : st->roadstop_speclist) if (slot.grfid != 0) {
+			StationNeed(slot.spec == nullptr && slot.grfid == StationDefinitionID(), __LINE__);
+			fmt::print(stderr, "STCMD definitions-identity missing-road {} {} {}\n", st->index.base(), slot.grfid, slot.localidx);
+		}
+		StationNeed(st->cached_anim_triggers.None() && st->cached_cargo_triggers == 0 && st->cached_roadstop_anim_triggers.None() && st->cached_roadstop_cargo_triggers == 0, __LINE__);
+		if (st->name == "Definitions station") {
+			StationSpec spec{};
+			auto next = AllocateSpecToStation(&spec, st);
+			StationNeed(next.has_value() && *next == 3, __LINE__);
+		}
+		++count;
+	}
+	StationNeed(count == 4, __LINE__);
+	fmt::print(stderr, "STCMD definitions-missing {} preserved no-reuse\n", count);
+}
 static void StationDefinitionLoad(std::string_view folder)
 {
+	StationDefinitionPartialReads();
 	SetRandomSeed(0x48400001);
 	_grfconfig.clear();
-	auto config = std::make_unique<GRFConfig>(std::string(folder) + "/stations.grf");
-	StationNeed(FillGRFDetails(*config, false, NO_DIRECTORY), __LINE__);
-	config->flags.Reset(GRFConfigFlag::InitOnly);
-	_grfconfig.push_back(std::move(config));
+	for (const char *name : {"stations", "broken-station", "broken-road"}) {
+		auto config = std::make_unique<GRFConfig>(std::string(folder) + "/" + name + ".grf");
+		StationNeed(FillGRFDetails(*config, false, NO_DIRECTORY), __LINE__);
+		config->flags.Reset(GRFConfigFlag::InitOnly);
+		_grfconfig.push_back(std::move(config));
+	}
 	ReloadNewGRFData();
 }
+
 static void StationDefinitionFixture(TileIndex origin, DoCommandFlags test, DoCommandFlags exec, bool reload)
 {
 	const auto id = StationDefinitionID();
@@ -250,8 +311,13 @@ static void StationDefinitionFixture(TileIndex origin, DoCommandFlags test, DoCo
 	const RoadStopSpec *road = RoadStopClass::GetByGrf(id, 0), *roadway = RoadStopClass::GetByGrf(id, 1);
 	StationNeed(rail != nullptr && extra != nullptr && way != nullptr && road != nullptr && roadway != nullptr, __LINE__);
 	StationNeed(StationClass::GetClassCount() == 5 && StationClass::GetUIClassCount() == 4 && RoadStopClass::GetClassCount() == 4, __LINE__);
-	StationNeed(StationClass::Get(rail->class_index)->GetSpecCount() == 2 && rail->index == 0 && extra->index == 1 && IsWaypointClass(*StationClass::Get(way->class_index)) && IsWaypointClass(*RoadStopClass::Get(roadway->class_index)), __LINE__);
+	StationNeed(StationClass::Get(rail->class_index)->GetSpecCount() == 2 && rail->index == (file->GetParam(0) != 0 ? 1 : 0) && extra->index == (file->GetParam(0) != 0 ? 0 : 1) && IsWaypointClass(*StationClass::Get(way->class_index)) && IsWaypointClass(*RoadStopClass::Get(roadway->class_index)), __LINE__);
 	StationNeed(GetString(rail->name) == "Station 484" && GetString(StationClass::Get(rail->class_index)->name) == "Class 484" && GetString(road->name) == "Road stop 484" && GetString(RoadStopClass::Get(road->class_index)->name) == "Road class 484", __LINE__);
+	for (uint32_t broken : {uint32_t('B') | uint32_t('4') << 8 | uint32_t('8') << 16 | uint32_t('4') << 24, uint32_t('R') | uint32_t('4') << 8 | uint32_t('8') << 16 | uint32_t('4') << 24}) {
+		const GRFConfig *config = GetGRFConfig(broken);
+		StationNeed(config != nullptr && config->status == GCS_DISABLED && config->errors.size() == 1 && config->errors.front().message == STR_NEWGRF_ERROR_READ_BOUNDS, __LINE__);
+	}
+	fmt::print(stderr, "STCMD definitions-malformed real-file read-bounds\n");
 	fmt::print(stderr, "STCMD definitions-registry {} {} {} {} {}\n", rail->class_index, way->class_index, road->class_index, roadway->class_index, StationClass::Get(STAT_CLASS_DFLT)->GetSpecCount());
 	StationNeed(rail->renderdata.size() == 2 && extra->renderdata.empty() && rail->layouts.at(GetStationLayoutKey(1, 2)) == std::vector<uint8_t>{0, 2} && extra->layouts == rail->layouts, __LINE__);
 	StationNeed(rail->bridgeable_info.size() == 3 && rail->bridgeable_info[2].height == 6 && rail->bridgeable_info[1].disallowed_pillars.base() == 2 && road->bridgeable_info[5].height == 6, __LINE__);

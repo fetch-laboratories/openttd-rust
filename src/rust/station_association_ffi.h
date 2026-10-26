@@ -30,7 +30,6 @@ const OpenTTDStationAssociationServices &GetStationAssociationServices() noexcep
 extern "C" {
 OpenTTDStationSpecIndex openttd_rust_station_spec_allocate(const OpenTTDStationAssociationServices *, const StationSpec *, BaseStation *);
 void openttd_rust_station_spec_assign(const OpenTTDStationAssociationServices *, const StationSpec *, BaseStation *, uint8_t);
-void openttd_rust_station_spec_deallocate(const OpenTTDStationAssociationServices *, BaseStation *, uint8_t);
 void openttd_rust_station_spec_cache(const OpenTTDStationAssociationServices *, BaseStation *);
 void openttd_rust_station_spec_rebind(const OpenTTDStationAssociationServices *, BaseStation *);
 }
