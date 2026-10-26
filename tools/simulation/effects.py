@@ -529,6 +529,17 @@ def scenarios(soak):
     scenarios.append(
         dict(scenarios[-1], name="effects-emission-reload", effect_emission_reload=True)
     )
+    scenarios.append(
+        dict(
+            scenarios[-1],
+            name="effects-emission-train",
+            effect_emission="train",
+            effect_emission_reload=False,
+            fleet="effect-emission-train",
+            save=str(ROOT / "migration/saves/padhattan-ridge-1996.sav"),
+            console=["fleet_scenario effect-emission-train", "unpause"],
+        )
+    )
     return scenarios
 
 
@@ -541,6 +552,36 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
 
 
 def check(scenario, run, mode, role, result):
+    if scenario.get("effect_emission") == "train":
+        expected = {
+            "stock-flipped": (6, 0, 10),
+            "advanced-flipped": (3, 3, -2),
+            "advanced-center": (4, 3, -2),
+            "reversing": None,
+            "unpowered": None,
+        }
+        for label, position in expected.items():
+            count = int(position is not None)
+            if (
+                f"FLEET effect-train {label} count {count} sound {count} rng true"
+                not in run["log"]
+            ):
+                raise RuntimeError(f"{mode}/{role}: train emission {label}")
+            created = [
+                list(map(int, line.split()[4:]))
+                for line in run["log"]
+                if line.startswith(f"FLEET effect-train-created {label} ")
+            ]
+            if created != ([[1, *position]] if position else []):
+                raise RuntimeError(
+                    f"{mode}/{role}: flipped/short train positions {created}"
+                )
+        for kind, cache in ((0, 20), (1, 40), (2, 56), (3, 64), (255, 64)):
+            if f"FLEET effect-train-default {kind} {cache}" not in run["log"]:
+                raise RuntimeError(f"{mode}/{role}: train default normalization {kind}")
+        if "FLEET effect-train-wagon 64" not in run["log"]:
+            raise RuntimeError("wagon default normalization missing")
+        return
     if scenario.get("effect_emission"):
         for callback, cache in (
             (65535, 64),
@@ -575,6 +616,27 @@ def check(scenario, run, mode, role, result):
                 raise RuntimeError(
                     f"{mode}/{role}: emission suppression or failed-callback sound {gate}"
                 )
+        for label, kind in (
+            ("steam", 1),
+            ("diesel", 2),
+            ("electric", 3),
+            ("steam-tick", 0),
+            ("electric-tick", 0),
+            ("diesel-top", 0),
+        ):
+            count = int(kind != 0)
+            if (
+                f"FLEET effect-stock {label} count {count} sound {count} rng true"
+                not in run["log"]
+            ):
+                raise RuntimeError(f"{mode}/{role}: stock emission/RNG {label}")
+            created = [
+                list(map(int, line.split()[4:]))
+                for line in run["log"]
+                if line.startswith(f"FLEET effect-stock-created {label} ")
+            ]
+            if created != ([[kind, 0, 0, 10]] if kind else []):
+                raise RuntimeError(f"{mode}/{role}: stock effect positions {created}")
         expected = {
             8195: [(1, -5, -3, -2), (2, 1, 2, 4), (3, -2, -1, 6)],
             0: [],

@@ -19,10 +19,6 @@ use crate::slope_func::{get_slope_max_z, is_steep_slope};
 use std::{ffi::c_void, ptr};
 
 #[repr(C)]
-pub struct EffectHandle {
-    _private: [u8; 0],
-}
-#[repr(C)]
 pub struct ShellHandle {
     _private: [u8; 0],
 }
@@ -67,7 +63,6 @@ pub struct TileServices {
     pub anim_next: unsafe extern "C" fn(u16) -> u16,
     pub build_oilrig: unsafe extern "C" fn(u32),
     pub pixel_max_z: unsafe extern "C" fn(u32) -> i32,
-    pub set_effect_substate: unsafe extern "C" fn(*mut EffectHandle, u8),
     pub spec: unsafe extern "C" fn(u16) -> *const TileSpec,
     pub acceptance: unsafe extern "C" fn(*const TileSpec) -> TileAcceptance,
     pub callback: unsafe extern "C" fn(u32, u16, u16, u32, u32) -> u16,
@@ -330,7 +325,7 @@ fn bubble(tile: u32, s: &Services, map: crate::services::Map, t: &TileServices) 
         crate::effectvehicle_func::EV_BUBBLE,
     );
     if !vehicle.is_null() {
-        unsafe { (t.set_effect_substate)(vehicle.cast(), dir as u8) };
+        crate::effect::set_substate(vehicle, dir as u8);
     }
 }
 /// # Safety

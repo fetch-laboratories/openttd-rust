@@ -13,6 +13,7 @@
     clippy::verbose_bit_mask,
     clippy::too_many_lines
 )]
+use crate::bitmath_func::{gb, has_bit, sb, set_bit, toggle_bit};
 use crate::direction_func::{change_dir, reverse_dir};
 use crate::direction_type::DIRDIFF_90RIGHT;
 use crate::effect::openttd_rust_effect_create_rel as create_rel;
@@ -129,9 +130,9 @@ fn services() -> &'static Services {
 pub extern "C" fn openttd_rust_visual_update(v: VehicleRef, allow_power_change: bool) {
     let s = services();
     let e = (s.engine)(v);
-    let powered_before = unsafe { *e.cache } & (1 << VE_DISABLE_WAGON_POWER);
+    let powered_before = has_bit(unsafe { *e.cache }, VE_DISABLE_WAGON_POWER);
     let mut visual = if matches!(e.kind, VEH_TRAIN | VEH_ROAD | VEH_SHIP) {
-        e.visual
+        u32::from(e.visual)
     } else {
         1 << VE_DISABLE_EFFECT
     };
@@ -148,16 +149,18 @@ pub extern "C" fn openttd_rust_visual_update(v: VehicleRef, allow_power_change: 
                     callback,
                 );
             }
-            callback &= 0xff;
+            callback = gb(u32::from(callback), 0, 8) as u16;
             if callback == u16::from(VE_DEFAULT) {
-                callback &= !(((1 << VE_TYPE_COUNT) - 1) << VE_TYPE_START);
+                let mut value = u32::from(callback);
+                sb(&mut value, VE_TYPE_START, VE_TYPE_COUNT, 0);
+                callback = value as u16;
             }
-            visual = callback as u8;
+            visual = u32::from(callback);
         }
     }
-    if visual == VE_DEFAULT
-        || (visual & (1 << VE_DISABLE_EFFECT) == 0
-            && (visual >> VE_TYPE_START) & ((1 << VE_TYPE_COUNT) - 1) == VE_TYPE_DEFAULT)
+    if visual == u32::from(VE_DEFAULT)
+        || (!has_bit(visual, VE_DISABLE_EFFECT)
+            && gb(visual, VE_TYPE_START, VE_TYPE_COUNT) == u32::from(VE_TYPE_DEFAULT))
     {
         let defaults = if e.kind == VEH_TRAIN {
             Some((s.defaults)(e.engine))
@@ -166,29 +169,39 @@ pub extern "C" fn openttd_rust_visual_update(v: VehicleRef, allow_power_change: 
         };
         if defaults.as_ref().is_none_or(|d| {
             d.rail_kind == crate::vehicle::RailVehicleTypes::WAGON.0
-                || !(EC_STEAM..EC_MONORAIL).contains(&d.engclass)
+                || !crate::math::is_inside_mm(
+                    usize::from(d.engclass),
+                    usize::from(EC_STEAM),
+                    usize::from(EC_MONORAIL),
+                )
         }) {
-            visual = if visual == VE_DEFAULT {
+            visual = if visual == u32::from(VE_DEFAULT) {
                 1 << VE_DISABLE_EFFECT
             } else {
-                visual | (1 << VE_DISABLE_EFFECT)
+                set_bit(&mut visual, VE_DISABLE_EFFECT)
             };
         } else {
             let engclass = defaults.unwrap().engclass;
-            if visual == VE_DEFAULT {
-                visual = (VE_OFFSET_CENTRE - if engclass == EC_STEAM { 4 } else { 0 })
+            if visual == u32::from(VE_DEFAULT) {
+                visual = u32::from(VE_OFFSET_CENTRE - if engclass == EC_STEAM { 4 } else { 0 })
                     << VE_OFFSET_START;
             }
-            visual = (visual & !(((1 << VE_TYPE_COUNT) - 1) << VE_TYPE_START))
-                | ((engclass - EC_STEAM + VE_TYPE_STEAM) << VE_TYPE_START);
+            sb(
+                &mut visual,
+                VE_TYPE_START,
+                VE_TYPE_COUNT,
+                u32::from(engclass - EC_STEAM + VE_TYPE_STEAM),
+            );
         }
     }
     unsafe {
-        *e.cache = visual;
+        *e.cache = visual as u8;
     }
-    if !allow_power_change && powered_before != visual & (1 << VE_DISABLE_WAGON_POWER) {
+    if !allow_power_change && powered_before != has_bit(visual, VE_DISABLE_WAGON_POWER) {
         unsafe {
-            *e.cache ^= 1 << VE_DISABLE_WAGON_POWER;
+            let mut cached = u32::from(*e.cache);
+            toggle_bit(&mut cached, VE_DISABLE_WAGON_POWER);
+            *e.cache = cached as u8;
         }
         (s.power_error)(e.id);
     }
@@ -224,9 +237,9 @@ fn advanced(s: &Services, v: VehicleRef, kind: u8) {
     if callback == CALLBACK_FAILED {
         return;
     }
-    let count = usize::from(callback & 3);
-    let center = callback & (1 << 13) != 0;
-    let rotate = callback & (1 << 14) == 0;
+    let count = gb(u32::from(callback), 0, 2) as usize;
+    let center = has_bit(callback, 13);
+    let rotate = !has_bit(callback, 14);
     let p = (s.offset)(v);
     let l_center = if center && kind == VEH_ROAD {
         -(u32::from(VEHICLE_LENGTH).wrapping_sub(u32::from(p.length)) as i32) / 2
@@ -253,10 +266,10 @@ fn advanced(s: &Services, v: VehicleRef, kind: u8) {
     let x_center = a.wrapping_mul(l_center);
     let y_center = b.wrapping_mul(l_center);
     for reg in &regs[..count] {
-        let typ = (*reg & 0xff) as u8;
-        let mut x = (*reg >> 8) as i8;
-        let mut y = (*reg >> 16) as i8;
-        let z = (*reg >> 24) as i8;
+        let typ = gb(*reg as u32, 0, 8) as u8;
+        let mut x = gb(*reg as u32, 8, 8) as i8;
+        let mut y = gb(*reg as u32, 16, 8) as i8;
+        let z = gb(*reg as u32, 24, 8) as i8;
         if rotate {
             let l = i32::from(x);
             let t = i32::from(y);
@@ -299,15 +312,15 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
     while let Some(v) = current {
         let p = (s.part)(v);
         let cache = unsafe { *p.cache };
-        let is_advanced = cache & (1 << VE_ADVANCED_EFFECT) != 0;
-        let mut offset =
-            i32::from(cache & ((1 << VE_OFFSET_COUNT) - 1)) - i32::from(VE_OFFSET_CENTRE);
+        let is_advanced = has_bit(cache, VE_ADVANCED_EFFECT);
+        let mut offset = gb(u32::from(cache), VE_OFFSET_START, VE_OFFSET_COUNT) as i32
+            - i32::from(VE_OFFSET_CENTRE);
         let model = if is_advanced {
             offset = i32::from(VE_OFFSET_CENTRE);
-            let m = cache & ((1 << VE_ADVANCED_EFFECT) - 1);
+            let m = gb(u32::from(cache), 0, VE_ADVANCED_EFFECT) as u8;
             if m >= VESM_END { VESM_NONE } else { m }
         } else {
-            let m = (cache >> VE_TYPE_START) & ((1 << VE_TYPE_COUNT) - 1);
+            let m = gb(u32::from(cache), VE_TYPE_START, VE_TYPE_COUNT) as u8;
             if s.vehicle.assertions {
                 assert_ne!(m, VE_TYPE_DEFAULT);
             }
@@ -336,7 +349,7 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
             match model {
                 VESM_STEAM => {
                     let n = (4_u32 >> gate.smoke) + speed * 3 / max_speed;
-                    u32::from(p.tick) & ((1_u32.wrapping_shl(n)).wrapping_sub(1)) == 0
+                    gb(u32::from(p.tick), 0, n as u8) == 0
                 }
                 VESM_DIESEL => {
                     let power_weight = if p.kind == VEH_TRAIN {
@@ -354,7 +367,7 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
                         )
                 }
                 VESM_ELECTRIC => {
-                    p.tick & 3 == 0
+                    gb(u32::from(p.tick), 0, 2) == 0
                         && chance16_i(
                             6_u32.wrapping_sub((speed << 2) / max_speed),
                             360 >> gate.smoke,
@@ -375,11 +388,12 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
                         (u32::from(VEHICLE_LENGTH).wrapping_sub(u32::from(o.length)) / 2) as i32,
                     );
                 }
-                let mut x = i32::from(SMOKE_POS[usize::from(o.direction)]) * offset;
-                let mut y = i32::from(SMOKE_POS[usize::from((o.direction + 2) % 8)]) * offset;
+                let mut x = i32::from(SMOKE_POS[usize::from(o.direction)]).wrapping_mul(offset);
+                let mut y = i32::from(SMOKE_POS[usize::from(o.direction.wrapping_add(2) % 8)])
+                    .wrapping_mul(offset);
                 if p.kind == VEH_TRAIN && o.flipped {
-                    x = -x;
-                    y = -y;
+                    x = x.wrapping_neg();
+                    y = y.wrapping_neg();
                 }
                 let kind = match model {
                     VESM_STEAM => EV_STEAM_SMOKE,

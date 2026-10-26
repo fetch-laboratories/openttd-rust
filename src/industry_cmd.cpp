@@ -3899,7 +3899,6 @@ const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept
 		.anim_next = [](uint16_t gfx) noexcept -> uint16_t { return GetIndustryTileSpec(gfx)->anim_next; },
 		.build_oilrig = [](uint32_t tile) noexcept { BuildOilRig(TileIndex(tile)); },
 		.pixel_max_z = OpenTTDTileMaxPixelZ,
-		.set_effect_substate = [](OpenTTDEffectVehicle *vehicle, uint8_t state) noexcept { vehicle->SetAnimationSubstate(state); },
 		.spec = [](uint16_t gfx) noexcept -> const OpenTTDIndustryTileSpec * { return GetIndustryTileSpec(gfx); },
 		.acceptance = [](const OpenTTDIndustryTileSpec *spec) noexcept -> OpenTTDIndustryTileAcceptance {
 			OpenTTDIndustryTileAcceptance result;

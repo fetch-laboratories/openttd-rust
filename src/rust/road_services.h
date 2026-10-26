@@ -300,7 +300,11 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 
 static const OpenTTDRoadLeaves &GetRoadLeaves()
 {
-	openttd_rust_visual_bind(&GetRustVisualServices());
-	openttd_rust_effect_bind(GetRustEffectCreationServices());
+	static const bool bound = []() {
+		openttd_rust_visual_bind(&GetRustVisualServices());
+		openttd_rust_effect_bind(GetRustEffectCreationServices());
+		return true;
+	}();
+	(void)bound;
 	return _rust_road_leaves;
 }

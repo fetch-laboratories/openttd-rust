@@ -133,6 +133,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     if scenario["fleet"].startswith(("train", "drain")) or scenario["fleet"] in (
         "resolver",
         "resolver-reload",
+        "effect-emission-train",
         "transaction-meta",
         "transaction-refit-train",
         "transaction-mass-train",

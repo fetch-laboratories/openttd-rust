@@ -48,7 +48,6 @@ struct OpenTTDEffectCreationServices {
 	void (*delta)(void *) noexcept OPENTTD_SERVICE_DEFAULT(delta);
 	void (*unclickable)(void *) noexcept OPENTTD_SERVICE_DEFAULT(unclickable);
 	OpenTTDEffectPosition (*position)(const OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(position);
-	int32_t (*slope_pixel_z)(int32_t, int32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(slope_pixel_z);
 };
 const OpenTTDEffectCreationServices *GetRustEffectCreationServices() noexcept;
 const OpenTTDEffectCreationServices *openttd_rust_effect_bind(const OpenTTDEffectCreationServices *);

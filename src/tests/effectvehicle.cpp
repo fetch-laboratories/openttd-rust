@@ -91,9 +91,10 @@ TEST_CASE("Vehicle visual cache - canonical alias and independent value copies")
 	CHECK(b->vcache.cached_vis_effect == 0xA3);
 	copy.cached_vis_effect = 0;
 	CHECK(b->vcache.cached_vis_effect == 0xA3);
+	const VehicleID index = a->index;
 	_vehicle_pool.CleanPool();
 	REQUIRE(Vehicle::CanAllocateItem());
-	auto *reused = new EffectVehicle();
+	auto *reused = new (index) EffectVehicle();
 	CHECK(reused->vcache.cached_vis_effect == 0);
 	_vehicle_pool.CleanPool();
 }

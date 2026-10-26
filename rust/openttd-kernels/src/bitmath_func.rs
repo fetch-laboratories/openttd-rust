@@ -26,13 +26,19 @@ pub fn sb(value: &mut u32, start: u8, length: u8, data: u32) {
     *value |= data.wrapping_shl(u32::from(start));
 }
 
-/// `GB` for a 32-bit input, with source preconditions `count < 32` and
-/// `start + count <= 32`.
+/// `GB` for a 32-bit promoted input. Native defined inputs retain their result;
+/// wrapping shifts avoid introducing a panic for the native out-of-width domain.
 pub const fn gb(value: u32, start: u8, count: u8) -> u32 {
-    (value >> start) & ((1_u32 << count) - 1)
+    value.wrapping_shr(start as u32) & (1_u32.wrapping_shl(count as u32).wrapping_sub(1))
 }
 
 /// `KillFirstBit` for the byte-sized track bitsets.
 pub const fn kill_first_bit(value: u8) -> u8 {
     value & value.wrapping_sub(1)
+}
+
+/// `ToggleBit` for promoted integer fields.
+pub fn toggle_bit(value: &mut u32, bit: u8) -> u32 {
+    *value ^= 1_u32.wrapping_shl(u32::from(bit));
+    *value
 }

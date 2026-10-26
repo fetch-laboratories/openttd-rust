@@ -1173,7 +1173,7 @@ writes keep original mutation order. Rust calls common Random/map and effect-spe
 sound/viewport noexcept leaves directly, plus the Rust animated-tile owner; the native leaves
 cannot reenter Rust. The immutable shared service table is borrowed only until the controller
 returns (#299); no full table is copied. Checks: `python3 tools/migration.py simulate effects`.
-Viewport pixels, audible output, full legacy fixtures and every caller remain limits. PRs #105,
+Viewport pixels, audible output and full legacy fixtures remain limits. PRs #105,
 #115 and #300.
 
 ### Disaster scheduling and vehicles
@@ -1390,6 +1390,22 @@ limits; arithmetic stays Rust and Follow is never repeated. Checks: `python3 too
 simulate roads --jobs 2` and native heap/depot transcripts against unchanged C++. Arbitrary
 maps, NewGRFs, articulated/tram, waypoints, exhaustive stop/loop/segment branches and legacy
 saves remain #156 gaps; shared follower logic remains native. PRs #135, #279 and #289.
+
+### Vehicle visual emission, cache and effect creation (#466)
+
+`vehicle_effect.rs` owns visual-cache normalization, callback interpretation, chain
+emission, suppression, stock/advanced offsets, creation ordering and sound selection.
+The canonical unsaved byte extends the existing Rust per-vehicle NewGRF allocation;
+native aliases address it, while native `VehicleCache` values copy independently.
+`effect.rs` owns allocation eligibility and the three creation variants, calling its
+initializers directly. Train, road, ship, aircraft, disaster, maintenance, crash,
+industry, landscape and roadworks owners enter Rust directly. Native shell/pool
+allocation, parsed specs, rendering, viewport and sound remain shared. Typed writes
+replace the animation field opcode. Immutable service tables stay borrowed;
+owner borrows end before resolver, allocation, sound and viewport calls. Portable
+original bodies remain excluded under `WITH_RUST`, and map descriptor scope stays
+unchanged. Arbitrary external GRFs, pool exhaustion, historical saves, audible output
+and GUI scheduling remain #156 limits. PR #468.
 
 <!-- Subsystem: Stations, cargo and economy. Add a new entry at the end of its group, not of the file. -->
 

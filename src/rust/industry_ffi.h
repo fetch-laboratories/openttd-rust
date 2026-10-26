@@ -22,7 +22,6 @@ struct OpenTTDIndustryResolverServices;
 extern "C" {
 #endif
 typedef struct Industry OpenTTDIndustryShell;
-typedef struct EffectVehicle OpenTTDEffectVehicle;
 typedef struct IndustryTileSpec OpenTTDIndustryTileSpec;
 typedef struct OpenTTDIndustryStationHandle OpenTTDIndustryStationHandle;
 typedef struct OpenTTDIndustry OpenTTDIndustry;
@@ -378,7 +377,6 @@ typedef struct OpenTTDIndustryTileServices {
 	uint16_t (*anim_next)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(anim_next);
 	void (*build_oilrig)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(build_oilrig);
 	int32_t (*pixel_max_z)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(pixel_max_z);
-	void (*set_effect_substate)(OpenTTDEffectVehicle *, uint8_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(set_effect_substate);
 	const OpenTTDIndustryTileSpec * (*spec)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(spec);
 	OpenTTDIndustryTileAcceptance (*acceptance)(const OpenTTDIndustryTileSpec *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(acceptance);
 	uint16_t (*callback)(uint32_t, uint16_t, uint16_t, uint32_t, uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(callback);

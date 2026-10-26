@@ -19,7 +19,6 @@
 
 #ifdef WITH_RUST
 #include "rust/vehicle_services.h"
-#include "rust/services_map.h"
 #endif
 #include "safeguards.h"
 
@@ -613,7 +612,6 @@ extern "C" const OpenTTDEffectCreationServices *GetRustEffectCreationServices() 
 			const auto *v = VehicleOf(shell);
 			return {.x = RustVehicleX(v), .y = RustVehicleY(v), .z = RustVehicleZ(v)};
 		},
-		.slope_pixel_z = SharedSlopePixelZ,
 	};
 	return &services;
 }

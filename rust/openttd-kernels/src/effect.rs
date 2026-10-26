@@ -217,7 +217,7 @@ const BUBBLES: [&[(i32, i32, i32, u32)]; 6] = [
 struct Controller<'a> {
     owner: *mut State,
     context: *mut c_void,
-    leaves: Leaves,
+    leaves: &'a Leaves,
     services: &'a Services,
     v: View,
 }
@@ -498,7 +498,7 @@ pub unsafe extern "C" fn openttd_rust_effect_run(
     services: *const Services,
     initialize: u8,
 ) -> u8 {
-    let leaves = unsafe { *leaves };
+    let leaves = unsafe { &*leaves };
     let mut v = View::default();
     (leaves.observe)(context, &raw mut v);
     let mut controller = Controller {
@@ -538,7 +538,7 @@ crate::abi::layouts! {
 "OpenTTDEffectAllocation" ["probe"] => Allocation { shell, owner, };
     "OpenTTDEffectPosition" ["probe"] => Position { x, y, z, };
     "OpenTTDEffectCreationServices" ["probe"] => CreationServices {
-        effect, shared, can_allocate, allocate, owner, place, delta, unclickable, position, slope_pixel_z,
+        effect, shared, can_allocate, allocate, owner, place, delta, unclickable, position,
     };
 
 }
@@ -568,7 +568,6 @@ pub struct CreationServices {
     delta: extern "C" fn(*mut c_void),
     unclickable: extern "C" fn(*mut c_void),
     position: extern "C" fn(*const crate::vehicle::OpenTTDVehicle) -> Position,
-    slope_pixel_z: extern "C" fn(i32, i32, bool) -> i32,
 }
 static CREATION: std::sync::atomic::AtomicPtr<CreationServices> =
     std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
@@ -601,7 +600,7 @@ pub extern "C" fn openttd_rust_effect_create(x: i32, y: i32, z: i32, kind: u8) -
     let mut controller = Controller {
         owner: v.owner,
         context: v.shell,
-        leaves: *s.effect,
+        leaves: s.effect,
         services: s.shared,
         v: View {
             subtype: kind,
@@ -627,7 +626,7 @@ pub extern "C" fn openttd_rust_effect_create_above(
     openttd_rust_effect_create(
         x,
         y,
-        (s.slope_pixel_z)(safe_x, safe_y, false).wrapping_add(z),
+        crate::movement::pixel_z(s.shared, safe_x, safe_y, false).wrapping_add(z),
         kind,
     )
 }
@@ -655,5 +654,13 @@ pub extern "C" fn openttd_rust_effect_create_rel(
 pub(crate) fn set_animation(shell: *mut c_void, duration: u16) {
     unsafe {
         openttd_rust_effect_set((creation().owner)(shell), 0, duration);
+    }
+}
+
+/// `EffectVehicle::SetAnimationSubstate` on a live created shell.
+#[allow(unsafe_code)]
+pub(crate) fn set_substate(shell: *mut c_void, value: u8) {
+    unsafe {
+        openttd_rust_effect_set((creation().owner)(shell), 1, u16::from(value));
     }
 }
