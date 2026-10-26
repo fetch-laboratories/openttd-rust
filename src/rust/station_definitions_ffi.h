@@ -74,8 +74,6 @@ struct OpenTTDStationDefinitionServices {
 	NewGRFSpriteLayout * (*station_render_append)(StationSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(station_render_append);
 	void (*station_render_pop)(StationSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(station_render_pop);
 	void (*station_render_copy_append)(StationSpec *spec, const StationSpec *source, size_t index) noexcept OPENTTD_SERVICE_DEFAULT(station_render_copy_append);
-	void (*layout_unlimited)(NewGRFSpriteLayout *layout) noexcept OPENTTD_SERVICE_DEFAULT(layout_unlimited);
-	PalSpriteID * (*layout_ground)(NewGRFSpriteLayout *layout) noexcept OPENTTD_SERVICE_DEFAULT(layout_ground);
 	void (*sequence_reset)(OpenTTDStationSequence *) noexcept OPENTTD_SERVICE_DEFAULT(sequence_reset);
 	OpenTTDStationSequenceFields (*sequence_append)(OpenTTDStationSequence *) noexcept OPENTTD_SERVICE_DEFAULT(sequence_append);
 	void (*layout_sequence_move)(NewGRFSpriteLayout *, OpenTTDStationSequence *) noexcept OPENTTD_SERVICE_DEFAULT(layout_sequence_move);

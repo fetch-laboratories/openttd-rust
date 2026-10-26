@@ -69,8 +69,6 @@ const OpenTTDStationDefinitionServices &GetStationDefinitionServices() noexcept
 		.station_render_append = [](StationSpec *spec) noexcept -> NewGRFSpriteLayout * { return &spec->renderdata.emplace_back(); },
 		.station_render_pop = [](StationSpec *spec) noexcept -> void { spec->renderdata.pop_back(); },
 		.station_render_copy_append = [](StationSpec *spec, const StationSpec *source, size_t index) noexcept -> void { spec->renderdata.emplace_back(source->renderdata[index]); },
-		.layout_unlimited = [](NewGRFSpriteLayout *layout) noexcept -> void { layout->consistent_max_offset = UINT16_MAX; },
-		.layout_ground = [](NewGRFSpriteLayout *layout) noexcept -> PalSpriteID * { return &layout->ground; },
 		.sequence_reset = [](OpenTTDStationSequence *sequence) noexcept { OpenTTDStationSequence{}.swap(*sequence); },
 		.sequence_append = [](OpenTTDStationSequence *sequence) noexcept -> OpenTTDStationSequenceFields { auto &item = sequence->emplace_back(); return {&item.origin.x, &item.origin.y, &item.origin.z, &item.extent.x, &item.extent.y, &item.extent.z, &item.image}; },
 		.layout_sequence_move = [](NewGRFSpriteLayout *layout, OpenTTDStationSequence *sequence) noexcept { layout->seq = std::move(*sequence); },

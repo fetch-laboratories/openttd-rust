@@ -14,7 +14,7 @@
 )]
 use crate::newgrf_act2::{self, Services as Action2Services};
 use crate::newgrf_bytereader::{BadgeList, ByteReader, ReadError, Reader};
-use crate::newgrf_layout::{Layout, PalSprite, Sequence, SequenceFields};
+use crate::newgrf_layout::{Layout, Sequence, SequenceFields};
 use crate::newgrf_loading::Services as LoadingServices;
 use crate::station_cmd::{RailSpec, RoadSpec};
 use std::ffi::c_void;
@@ -82,8 +82,6 @@ pub struct Services {
     station_render_append: unsafe extern "C" fn(*mut RailSpec) -> *mut Layout,
     station_render_pop: unsafe extern "C" fn(*mut RailSpec) -> (),
     station_render_copy_append: unsafe extern "C" fn(*mut RailSpec, *const RailSpec, usize) -> (),
-    layout_unlimited: unsafe extern "C" fn(*mut Layout) -> (),
-    layout_ground: unsafe extern "C" fn(*mut Layout) -> *mut PalSprite,
     sequence_reset: unsafe extern "C" fn(*mut Sequence),
     sequence_append: unsafe extern "C" fn(*mut Sequence) -> SequenceFields,
     layout_sequence_move: unsafe extern "C" fn(*mut Layout, *mut Sequence),
@@ -117,7 +115,7 @@ pub struct Services {
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDStationDefinitionServices" ["station_service"] => Services { empty_string, cargo, reader, file_version, station_resize, station_count, station_get, station_new, station_class, station_name, station_class_name, station_badges, station_cargo_triggers, station_frames, station_status, station_speed, station_triggers, station_callback_mask, station_flags, station_has_file, station_set_group, station_set_file, station_set_local, road_resize, road_count, road_get, road_new, road_class, road_name, road_class_name, road_badges, road_cargo_triggers, road_frames, road_status, road_speed, road_triggers, road_callback_mask, road_flags, road_has_file, road_set_group, road_set_file, road_set_local, station_disallowed_platforms, station_disallowed_lengths, station_cargo_threshold, road_stop_type, road_draw_mode, road_build_cost, road_clear_cost, station_render_clear, station_render_reserve, station_render_size, station_render_append, station_render_pop, station_render_copy_append, layout_unlimited, layout_ground, sequence_reset, sequence_append, layout_sequence_move, layout_original, station_custom_assign, station_custom_tile, station_custom_copy, station_tileflags_size, station_tileflags_resize, station_pylons, station_wires, station_blocked, station_tileflags_assign, station_bridge_size, station_bridge_resize, road_bridge_size, station_bridge_height, station_bridge_pillars, road_bridge_height, road_bridge_pillars, station_invalid, road_invalid, station_undefined, road_undefined, odd_layout, missing_sprite, missing_custom, invalid_tile, undefined_publication, duplicate_publication };
+    "OpenTTDStationDefinitionServices" ["station_service"] => Services { empty_string, cargo, reader, file_version, station_resize, station_count, station_get, station_new, station_class, station_name, station_class_name, station_badges, station_cargo_triggers, station_frames, station_status, station_speed, station_triggers, station_callback_mask, station_flags, station_has_file, station_set_group, station_set_file, station_set_local, road_resize, road_count, road_get, road_new, road_class, road_name, road_class_name, road_badges, road_cargo_triggers, road_frames, road_status, road_speed, road_triggers, road_callback_mask, road_flags, road_has_file, road_set_group, road_set_file, road_set_local, station_disallowed_platforms, station_disallowed_lengths, station_cargo_threshold, road_stop_type, road_draw_mode, road_build_cost, road_clear_cost, station_render_clear, station_render_reserve, station_render_size, station_render_append, station_render_pop, station_render_copy_append, sequence_reset, sequence_append, layout_sequence_move, layout_original, station_custom_assign, station_custom_tile, station_custom_copy, station_tileflags_size, station_tileflags_resize, station_pylons, station_wires, station_blocked, station_tileflags_assign, station_bridge_size, station_bridge_resize, road_bridge_size, station_bridge_height, station_bridge_pillars, road_bridge_height, road_bridge_pillars, station_invalid, road_invalid, station_undefined, road_undefined, odd_layout, missing_sprite, missing_custom, invalid_tile, undefined_publication, duplicate_publication };
 }
 
 unsafe fn station_change(
@@ -165,7 +163,8 @@ unsafe fn station_change(
                     (s.station_render_reserve)(spec, tiles);
                     for tile in 0..tiles {
                         let layout = (s.station_render_append)(spec);
-                        (s.layout_unlimited)(layout);
+                        let fields = (action2.layout_storage)(layout);
+                        fields.consistent_max_offset.write(u32::from(u16::MAX));
                         if reader.has_data(4) && reader.peek_dword()? == 0 {
                             reader.skip(4)?;
                             (s.layout_original)(layout, u32::from(tile) % 8);
@@ -179,7 +178,7 @@ unsafe fn station_change(
                             false,
                             false,
                             GSF_STATIONS,
-                            (s.layout_ground)(layout),
+                            fields.ground,
                             std::ptr::null_mut(),
                             std::ptr::null_mut(),
                         )?;

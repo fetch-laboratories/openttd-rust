@@ -100,8 +100,8 @@ pub struct ProductionStorage {
 }
 #[repr(C)]
 pub struct LayoutStorage {
-    ground: *mut PalSprite,
-    consistent_max_offset: *mut u32,
+    pub(crate) ground: *mut PalSprite,
+    pub(crate) consistent_max_offset: *mut u32,
 }
 #[repr(C)]
 pub struct SequenceStorage {
@@ -142,7 +142,7 @@ pub struct Services {
     production_storage: unsafe extern "C" fn(Handle) -> ProductionStorage,
     group_layout: unsafe extern "C" fn(Handle) -> *mut Layout,
     layout_allocate: unsafe extern "C" fn(*mut Layout, u32),
-    layout_storage: unsafe extern "C" fn(*mut Layout) -> LayoutStorage,
+    pub(crate) layout_storage: unsafe extern "C" fn(*mut Layout) -> LayoutStorage,
     layout_sequence: unsafe extern "C" fn(*mut Layout, u32) -> *mut Sequence,
     sequence_storage: unsafe extern "C" fn(*mut Sequence) -> SequenceStorage,
     is_parent: unsafe extern "C" fn(*const Sequence) -> bool,
@@ -610,10 +610,10 @@ unsafe fn production<R: Read>(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_action2_recolour(s: &Services, image: *mut PalSprite) {
     unsafe {
-        recolour((s.pal_sprite_storage)(image));
+        recolour(&(s.pal_sprite_storage)(image));
     }
 }
-unsafe fn recolour(image: PalSpriteStorage) {
+unsafe fn recolour(image: &PalSpriteStorage) {
     unsafe {
         if has_bit(*image.pal, 14) {
             clr_bit(&mut *image.pal, 14);
@@ -650,10 +650,7 @@ pub(crate) unsafe fn layout_sprite<R: Read>(
         } else {
             TLF_NOTHING
         };
-        recolour(PalSpriteStorage {
-            sprite: image.sprite,
-            pal: image.pal,
-        });
+        recolour(&image);
         let custom = has_bit(*image.pal, 15) != invert;
         clr_bit(&mut *image.pal, 15);
         if custom {

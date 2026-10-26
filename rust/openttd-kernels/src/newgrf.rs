@@ -216,12 +216,6 @@ pub const GSF_CANALS: u8 = 5;
 /// `GSF_HOUSES`.
 pub const GSF_HOUSES: u8 = 7;
 
-/// `GSF_INDUSTRYTILES`.
-pub const GSF_INDUSTRYTILES: u8 = 9;
-
-/// `GSF_INDUSTRIES`.
-pub const GSF_INDUSTRIES: u8 = 10;
-
 /// `GSF_AIRPORTS`.
 pub const GSF_AIRPORTS: u8 = 13;
 

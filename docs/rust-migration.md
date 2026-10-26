@@ -2094,8 +2094,8 @@ bindings retain incremental reads and partial writes; vector element addresses
 expire at vector mutation. Local algorithm vectors live in Rust. Publication
 occurs only at the original final assignment, including explicit null results.
 Checked read failures drop Rust locals and return to the existing decoder error
-boundary. Native layout facades remain for station callers until their direct
-Rust adoption; bridge recolouring keeps its native facade. Original bodies remain
+boundary. Station definitions call the layout owner directly with the shared reader
+and opaque native payloads; bridge recolouring keeps its native facade. Original bodies remain
 portable. Arbitrary grammars, remaining malformed and advanced-layout combinations,
 historical loading, rendering and network scheduling remain #156 limits. PR #493.
 
