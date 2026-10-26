@@ -198,6 +198,7 @@ public:
 
 extern GrfProcessingState _cur_gps;
 
+#ifndef WITH_RUST
 struct GRFLocation {
 	uint32_t grfid;
 	uint32_t nfoline;
@@ -217,7 +218,6 @@ struct GRFLocation {
 
 using GRFLineToSpriteOverride = std::map<GRFLocation, std::vector<uint8_t>>;
 
-#ifndef WITH_RUST
 extern std::map<GRFLocation, std::pair<SpriteID, uint16_t>> _grm_sprites;
 extern GRFLineToSpriteOverride _grf_line_to_action6_sprite_override;
 #endif

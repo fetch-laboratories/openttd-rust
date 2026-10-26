@@ -102,6 +102,7 @@ using GrfSpecFeatures = EnumBitSet<GrfSpecFeature, uint32_t, GrfSpecFeature::GSF
 
 static const uint32_t INVALID_GRFID = 0xFFFFFFFF;
 
+#ifndef WITH_RUST
 struct GRFLabel {
 	uint8_t label;
 	uint32_t nfo_line;
@@ -109,6 +110,7 @@ struct GRFLabel {
 
 	GRFLabel(uint8_t label, uint32_t nfo_line, size_t pos) : label(label), nfo_line(nfo_line), pos(pos) {}
 };
+#endif
 
 /** Dynamic data of a loaded NewGRF */
 struct GRFFile {
