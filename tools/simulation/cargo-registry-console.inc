@@ -52,6 +52,11 @@ static bool CargoRegistryScenario(std::span<std::string_view> args)
 			file.grf_version = version;
 			CARGO_REQUIRE(GetCargoTranslation(23, &file, false) == 23 && GetCargoTranslation(23, &file, true) == 23);
 		}
+		std::array<uint8_t, 1> disabled{INVALID_CARGO_BITNUM}; ByteReader disable_reader(disabled.data(), disabled.size());
+		CargoReserveInfo(23, 24, 0x08, disable_reader);
+		CARGO_REQUIRE(!HasBit(_cargo_mask, 23) && GetCargoTypeByLabel(CargoLabel{0x54455354}) == INVALID_CARGO && CargoSpec::Get(23)->grffile == &file);
+		ByteReader enable_reader(bitnum.data(), bitnum.size()); CargoReserveInfo(23, 24, 0x08, enable_reader);
+		CARGO_REQUIRE(HasBit(_cargo_mask, 23) && GetCargoTranslation(23, &file) == 23);
 		std::array<uint8_t, 5> partial{'P', 'A', 'R', 'T', 0}; ByteReader partial_reader(partial.data(), partial.size());
 		bool truncated = false;
 		try { CargoReserveInfo(25, 27, 0x17, partial_reader); } catch (const OTTDByteReaderSignal &) { truncated = true; }
