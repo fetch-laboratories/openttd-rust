@@ -17,14 +17,14 @@ struct OpenTTDVisualEngine {
 	bool callback;
 };
 struct OpenTTDVisualDefaults { RailVehicleTypes rail_kind; uint8_t engclass; };
-struct OpenTTDVisualPart { uint8_t *cache; uint32_t tile; VehicleType kind; uint8_t status, tick; };
+struct OpenTTDVisualPart { uint32_t tile; VehicleType kind; uint8_t status, tick, cache; };
 struct OpenTTDVisualOffset { uint8_t direction, length; };
 struct OpenTTDVisualTrain { OpenTTDTrainHandle handle; uint32_t tile; uint16_t speed; bool front; };
 struct OpenTTDVisualPowerWeight { uint32_t power, weight; };
 struct OpenTTDVisualServices {
 	const OpenTTDVehicleServices *vehicle;
 	const OpenTTDSharedServices *shared;
-	OpenTTDVisualGate (*gate)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(gate);
+	void (*gate)(OpenTTDVehicle *, OpenTTDVisualGate *) noexcept OPENTTD_SERVICE_DEFAULT(gate);
 	OpenTTDVisualShow (*show)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(show);
 	OpenTTDVisualEngine (*engine)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine);
 	OpenTTDVisualDefaults (*defaults)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(defaults);
