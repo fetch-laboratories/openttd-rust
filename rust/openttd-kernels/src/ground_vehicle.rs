@@ -787,6 +787,7 @@ pub(crate) struct Moved {
     pub cur_speed: u16,
     pub max_track_speed: u16,
 }
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn move_incline(
     gs: &crate::vehicle::GroundServices,
     movement: &crate::movement::CachedTable<'_>,

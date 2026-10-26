@@ -574,6 +574,10 @@ fn straight(dir: u8) -> bool {
     dir & 6 == 0
 }
 /// `RoadVehicle::GetCurrentMaxSpeed`.
+#[expect(
+    clippy::inline_always,
+    reason = "Specialize the existing loop at each speed observation."
+)]
 #[inline(always)]
 fn max_speed(front: Part, r: MaxSpeedRead, acceleration_model: u8, l: &Leaves) -> i32 {
     let mut speed = i32::from(r.max_track_speed);
@@ -967,6 +971,10 @@ impl Game<'_> {
         victims
     }
     /// `RoadVehCheckTrainCrash`, starting with the front part's observation.
+    #[expect(
+        clippy::inline_always,
+        reason = "Reject noncrossing parts in the controller frame."
+    )]
     #[inline(always)]
     fn train_crash(&self, v: Part, first: CrashPart) -> bool {
         let mut part = v;
