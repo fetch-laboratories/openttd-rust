@@ -244,4 +244,3 @@ inline void RustStationSetWaitingTriggers(BaseStation *station, uint8_t triggers
 inline void RustStationSetRandomBits(BaseStation *station, uint16_t bits) noexcept { station->random_bits = bits; }
 inline uint64_t RustStationCachedCargoTriggers(BaseStation *station) noexcept { return station->cached_cargo_triggers; }
 #endif /* RUST_SERVICES_STATION_H */
-
