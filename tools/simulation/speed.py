@@ -181,7 +181,8 @@ class Hold:
         overlap = {
             p: r["comm"]
             for p, r in observed.items()
-            if not quiescing and (p in other or r["ticks"] > before.get(p, r)["ticks"])
+            if not quiescing
+            and (p in other or r["ticks"] > before.get(p, {"ticks": 0})["ticks"])
         }
         for pid, row in other.items():
             if row["uid"] == os.getuid():  # Other users' processes stay recorded.

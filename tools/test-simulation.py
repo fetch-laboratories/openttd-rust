@@ -993,12 +993,18 @@ class SpeedPassTests(unittest.TestCase):
 
             for comm, preexisting, parent, ticks, state, rejected in (
                 ("cc1plus", False, 1, 200, "R", True),
+                ("cc1plus", False, 1, 200, "T", True),
+                ("cc1plus", False, 1, 200, "Z", True),
+                ("cc1plus", False, 1, 0, "T", False),
                 ("cc1plus", True, 1, 0, "T", False),
                 ("cc1plus", True, 1, 1, "T", True),
                 ("unrelated", True, 1, 200, "R", False),
                 ("openttd", False, os.getpid(), 200, "R", False),
+                ("openttd", False, os.getpid(), 200, "Z", False),
             ):
-                with self.subTest(comm=comm, preexisting=preexisting, parent=parent):
+                with self.subTest(
+                    comm=comm, preexisting=preexisting, parent=parent, state=state
+                ):
                     log = out / "observations.jsonl"
                     log.unlink()
                     (out / "anchors.json").unlink(missing_ok=True)
@@ -1032,7 +1038,9 @@ class SpeedPassTests(unittest.TestCase):
                             [
                                 unittest.mock.call(123, speed.signal.SIGSTOP),
                                 unittest.mock.call(123, speed.signal.SIGCONT),
-                            ],
+                            ]
+                            if preexisting or state == "R"
+                            else [],
                         )
                     with contextlib.redirect_stdout(io.StringIO()) as printed:
                         if rejected:
