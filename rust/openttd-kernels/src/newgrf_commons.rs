@@ -25,8 +25,3 @@ pub(crate) fn first_sprite_group_of<const N: usize>(
 pub(crate) fn industry_tile_check_valid_new_id(id: u16) -> bool {
     id != crate::industry_map::GFX_WATERTILE_SPECIALCHECK
 }
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_industry_tile_valid_id(id: u16) -> bool {
-    industry_tile_check_valid_new_id(id)
-}

@@ -279,13 +279,7 @@ public:
 struct IndustryTileSpec;
 class IndustryTileOverrideManager : public OverrideManagerBase {
 protected:
-	bool CheckValidNewID(uint16_t testid) override {
-#ifdef WITH_RUST
-		return openttd_rust_industry_tile_valid_id(testid);
-#else
-		return testid != 0xFF;
-#endif
-	}
+	bool CheckValidNewID(uint16_t testid) override { return testid != 0xFF; }
 public:
 #ifdef WITH_RUST
 	IndustryTileOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid);

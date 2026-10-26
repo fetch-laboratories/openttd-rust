@@ -23,7 +23,6 @@ uint16_t openttd_rust_override_get(const OpenTTDOverrideManager *, uint16_t, uin
 uint32_t openttd_rust_override_grfid(const OpenTTDOverrideManager *, uint16_t);
 uint16_t openttd_rust_override_substitute(const OpenTTDOverrideManager *, uint16_t);
 uint16_t openttd_rust_override_allocate(OpenTTDOverrideManager *, uint16_t, uint32_t, uint16_t, void *, uint16_t, bool (*)(void *, uint16_t) noexcept);
-bool openttd_rust_industry_tile_valid_id(uint16_t);
 void openttd_rust_industry_register_manager(OpenTTDOverrideManager *);
 void openttd_rust_industry_tile_register_manager(OpenTTDOverrideManager *);
 uint16_t openttd_rust_industry_definition_id(const OpenTTDOverrideManager *, uint16_t, uint32_t);

@@ -31,7 +31,7 @@ const OpenTTDIndustryDefinitionServices &GetIndustryDefinitionServices() noexcep
 		.grfid = RustSpecGRFID<IndustrySpec>,
 		.identity = [](const IndustrySpec *spec) noexcept { return OpenTTDIndustryDefinitionIdentity{RustSpecGRFID(spec), RustSpecLocalID(spec), RustSpecSubstitute(spec)}; },
 		.tile_identity = [](const IndustryTileSpec *spec) noexcept { return OpenTTDIndustryDefinitionIdentity{RustSpecGRFID(spec), RustSpecLocalID(spec), RustSpecSubstitute(spec)}; },
-		.availability = [](const IndustrySpec *spec) noexcept { return OpenTTDIndustryDefinitionAvailability{spec->enabled, RustSpecHasGRFFile(spec)}; },
+		.availability = [](const IndustrySpec *spec) noexcept { return OpenTTDIndustryDefinitionAvailability{RustIndustrySpecEnabled(spec), RustSpecHasGRFFile(spec)}; },
 		.set_enabled = [](IndustrySpec *spec, bool enabled) noexcept { spec->enabled = enabled; },
 		.set_override = [](IndustrySpec *spec, uint16_t id) noexcept { spec->grf_prop.override_id = id; },
 		.set_tile_override = [](IndustryTileSpec *spec, uint16_t id) noexcept { spec->grf_prop.override_id = id; },
