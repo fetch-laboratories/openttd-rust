@@ -83,7 +83,7 @@ OpenTTDByteSpan RustVehicleName(void *shell) noexcept
 void RustVehicleClearName(void *shell) noexcept { static_cast<Vehicle *>(shell)->name.clear(); }
 void RustVehicleSetName(void *shell, OpenTTDByteSpan name) noexcept { static_cast<Vehicle *>(shell)->name.assign(reinterpret_cast<const char *>(name.data), name.size); }
 
-bool RustVehiclePrimary(const Vehicle *v) noexcept { return openttd_orders_primary_vehicle(const_cast<Vehicle *>(v)) != 0; }
+bool RustVehiclePrimary(const Vehicle *v) noexcept { return v->IsPrimaryVehicle(); }
 bool RustVehicleInDepot(const Vehicle *v) noexcept { return v->IsInDepot(); }
 bool RustTrainFreeWagon(const Vehicle *v) noexcept { return Train::From(v)->IsFreeWagon(); }
 Vehicle *RustTrainFirstEnginePart(Vehicle *v) noexcept { return VehicleOf(GetRustStationLoading().first_engine_part(RustVehicle(v))); }
@@ -184,7 +184,12 @@ static void OPENTTD_RUST_CALL VehicleSvcWriteDay(OpenTTDVehicle *v, uint8_t day)
 static void OPENTTD_RUST_CALL VehicleSvcWriteDirection(OpenTTDVehicle *v, uint8_t direction) noexcept { VehicleOf(v)->direction = static_cast<Direction>(direction); }
 static void OPENTTD_RUST_CALL VehicleSvcWriteSpeed(OpenTTDVehicle *v, uint16_t speed) noexcept { VehicleOf(v)->cur_speed = speed; }
 static void OPENTTD_RUST_CALL VehicleSvcWriteLastStation(OpenTTDVehicle *v, uint16_t station) noexcept { VehicleOf(v)->last_station_visited = StationID(station); }
-/* Legacy orders context adapter; the virtual operation has one shared definition. */
+/* Legacy orders context adapters; the native operations have shared definitions. */
+extern "C" uint64_t openttd_orders_primary_vehicle(void *ctx) noexcept
+{
+	const Vehicle *v = static_cast<const Vehicle *>(ctx);
+	return RustVehiclePrimary(v);
+}
 extern "C" void openttd_orders_set_destination(void *ctx, uint32_t tile) noexcept
 {
 	RustVehicleSetDestTile(RustVehicle(static_cast<Vehicle *>(ctx)), tile);

@@ -2,6 +2,7 @@
 //! Vehicle effect cache and complete chain emission policy. The game mutex serializes
 //! process-wide services and native shell lifetimes. Field reads and owner borrows end
 //! before callbacks, which can reenter resolvers, sound and effect allocation.
+//! Each Part copies the visual byte before any callback, as `ShowVisualEffectAtSpeed` does.
 #![allow(
     unsafe_code,
     missing_docs,
@@ -72,11 +73,11 @@ pub struct Defaults {
 }
 #[repr(C)]
 pub struct Part {
-    cache: *mut u8,
     tile: u32,
     kind: VehicleType,
     status: u8,
     tick: u8,
+    cache: u8,
 }
 #[repr(C)]
 pub struct Offset {
@@ -95,11 +96,12 @@ pub struct PowerWeight {
     power: u32,
     weight: u32,
 }
+/// The gate callback initializes every output field and retains no output pointer.
 #[repr(C)]
 pub struct Services {
     vehicle: &'static VehicleServices,
     shared: &'static Shared,
-    gate: extern "C" fn(VehicleRef) -> Gate,
+    gate: extern "C" fn(VehicleRef, *mut Gate),
     show: extern "C" fn(VehicleRef) -> Show,
     engine: extern "C" fn(VehicleRef) -> Engine,
     defaults: extern "C" fn(*const OpenTTDEngine) -> Defaults,
@@ -210,7 +212,9 @@ pub extern "C" fn openttd_rust_visual_update(v: VehicleRef, allow_power_change: 
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_visual_eligible(v: VehicleRef) -> bool {
     let s = services();
-    let g = (s.gate)(v);
+    let mut g = std::mem::MaybeUninit::uninit();
+    (s.gate)(v, g.as_mut_ptr());
+    let g = unsafe { g.assume_init() };
     if s.vehicle.assertions {
         assert!(g.primary);
     }
@@ -395,16 +399,7 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
     let mut current = Some(front);
     while let Some(v) = current {
         let p = (s.part)(v);
-        let train = if p.kind == VehicleType::TRAIN {
-            Some(if v == front {
-                front_train.unwrap_or_else(|| (s.vehicle.train_handle)(v.0.as_ptr()))
-            } else {
-                (s.vehicle.train_handle)(v.0.as_ptr())
-            })
-        } else {
-            None
-        };
-        let cache = unsafe { *p.cache };
+        let cache = p.cache;
         let is_advanced = has_bit(cache, VE_ADVANCED_EFFECT);
         let model = if is_advanced {
             let m = gb(u32::from(cache), 0, VE_ADVANCED_EFFECT) as u8;
@@ -416,9 +411,9 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
             }
             m
         };
-        let emit = || {
+        'part: {
             if model == VESM_NONE || p.status & VS_HIDDEN != 0 {
-                return false;
+                break 'part;
             }
             let bridge = if (s.shared.is_bridge)(p.tile) {
                 let pos = (s.bridge_position)(v);
@@ -428,17 +423,24 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
             } else {
                 (s.shared.bridge_above)(p.tile)
             };
-            if bridge
-                || (s.depot)(p.tile)
-                || (s.tunnel)(p.tile)
-                || train.is_some_and(|t| !(s.powered)(t.get_railtypes(), (s.tile_rail)(p.tile)))
-            {
-                return false;
+            if bridge || (s.depot)(p.tile) || (s.tunnel)(p.tile) {
+                break 'part;
             }
-            true
-        };
-        if emit() && emit_part(s, front, v, &gate, &p, train, cache, model, max_speed) {
-            sound = true;
+            let train = if p.kind == VehicleType::TRAIN {
+                Some(if v == front {
+                    front_train.unwrap_or_else(|| (s.vehicle.train_handle)(v.0.as_ptr()))
+                } else {
+                    (s.vehicle.train_handle)(v.0.as_ptr())
+                })
+            } else {
+                None
+            };
+            if train.is_some_and(|t| !(s.powered)(t.get_railtypes(), (s.tile_rail)(p.tile))) {
+                break 'part;
+            }
+            if emit_part(s, front, v, &gate, &p, train, cache, model, max_speed) {
+                sound = true;
+            }
         }
         current = (s.vehicle.next)(v);
     }
@@ -453,7 +455,7 @@ crate::abi::layouts! {
     "OpenTTDVisualBridgePosition" ["probe"] => BridgePosition { x, y, };
     "OpenTTDVisualEngine" ["probe"] => Engine { engine, cache, id, kind, visual, callback, };
     "OpenTTDVisualDefaults" ["probe"] => Defaults { rail_kind, engclass, };
-    "OpenTTDVisualPart" ["probe"] => Part { cache, tile, kind, status, tick, };
+    "OpenTTDVisualPart" ["probe"] => Part { tile, kind, status, tick, cache, };
     "OpenTTDVisualOffset" ["probe"] => Offset { direction, length, };
     "OpenTTDVisualTrain" ["probe"] => Train { handle, tile, speed, front, };
     "OpenTTDVisualPowerWeight" ["probe"] => PowerWeight { power, weight, };
