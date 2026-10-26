@@ -18,6 +18,8 @@
 
 #include "../rust/engine_services.h"
 #include "../rust/type_availability_ffi.h"
+#include "../rust/type_definitions_ffi.h"
+#include "../rust/newgrf_translation_ffi.h"
 #include "abi_layout.hpp"
 #endif
 #include "../3rdparty/catch2/catch.hpp"
