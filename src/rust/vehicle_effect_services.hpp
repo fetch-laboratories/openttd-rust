@@ -23,7 +23,7 @@ const OpenTTDVisualServices &GetRustVisualServices()
 			Vehicle *v = VehicleOf(shell);
 			const Engine *e = EngineOf(RustVehicleGetEngine(shell));
 			OpenTTDVisualEngine result{.engine = RustEngine(e), .cache = RustVehicleVisualCache(v), .id = RustVehicleEngineID(v), .kind = RustEngineType(RustEngine(e)), .visual = 0, .callback = VehicleCallbackMasks(RustEngineCallbackMask(RustEngine(e))).Test(VehicleCallbackMask::VisualEffect)};
-			switch (e->type) {
+			switch (result.kind) {
 				case VEH_TRAIN: result.visual = e->VehInfo<RailVehicleInfo>().visual_effect; break;
 				case VEH_ROAD: result.visual = e->VehInfo<RoadVehicleInfo>().visual_effect; break;
 				case VEH_SHIP: result.visual = e->VehInfo<ShipVehicleInfo>().visual_effect; break;
@@ -41,7 +41,8 @@ const OpenTTDVisualServices &GetRustVisualServices()
 		.bridge_position = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualBridgePosition { const Vehicle *v = VehicleOf(shell); return {.x = RustVehicleX(v), .y = RustVehicleY(v)}; },
 		.offset = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualOffset {
 			const Vehicle *v = VehicleOf(shell);
-			return {.direction = RustVehicleDirection(v), .length = v->type == VEH_TRAIN ? RustGroundCachedLength(Train::From(v)) : v->type == VEH_ROAD ? RustGroundCachedLength(RoadVehicle::From(v)) : uint8_t(VEHICLE_LENGTH)};
+			const VehicleType kind = RustVehicleVehicleType(v);
+			return {.direction = RustVehicleDirection(v), .length = kind == VEH_TRAIN ? RustGroundCachedLength(Train::From(v)) : kind == VEH_ROAD ? RustGroundCachedLength(RoadVehicle::From(v)) : uint8_t(VEHICLE_LENGTH)};
 		},
 		.train = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualTrain {
 			const Train *v = Train::From(VehicleOf(shell));
