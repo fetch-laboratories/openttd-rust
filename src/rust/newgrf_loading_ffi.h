@@ -53,7 +53,7 @@ struct OpenTTDGrfLoadingServices {
 	GRFError *(*error)(GRFConfig *, uint32_t, StringID, bool) noexcept OPENTTD_SERVICE_DEFAULT(error);
 	void (*error_name)(GRFError *, const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(error_name);
 	bool (*networking)() noexcept OPENTTD_SERVICE_DEFAULT(networking);
-	CargoType (*cargo_label)(CargoLabel) noexcept OPENTTD_SERVICE_DEFAULT(cargo_label);
+	CargoType (*cargo_label)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_label);
 	RailType (*rail_label)(RailTypeLabel) noexcept OPENTTD_SERVICE_DEFAULT(rail_label);
 	RoadType (*road_label)(RoadTypeLabel) noexcept OPENTTD_SERVICE_DEFAULT(road_label);
 	bool (*road_is_road)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_is_road);
@@ -68,7 +68,8 @@ struct OpenTTDGrfLoadingServices {
 	uint8_t (*container_version)(const SpriteFile *) noexcept OPENTTD_SERVICE_DEFAULT(container_version);
 	void (*sprite_offsets)(SpriteFile *) noexcept OPENTTD_SERVICE_DEFAULT(sprite_offsets);
 	void (*skip_sprite_data)(SpriteFile *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(skip_sprite_data);
-	SpriteFile *(*open_file)(const GRFConfig *, Subdirectory, void *) noexcept OPENTTD_SERVICE_DEFAULT(open_file);
+	SpriteFile *(*open_cached)(const GRFConfig *, Subdirectory) noexcept OPENTTD_SERVICE_DEFAULT(open_cached);
+	SpriteFile *(*open_temporary)(const GRFConfig *, Subdirectory, void *) noexcept OPENTTD_SERVICE_DEFAULT(open_temporary);
 	void (*scan_name)(GRFConfig *, uint32_t, const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(scan_name);
 	void (*scan_info)(GRFConfig *, uint32_t, const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(scan_info);
 	void (*set_pitch)(GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_pitch);
@@ -204,6 +205,7 @@ struct OpenTTDGrfLoadingServices {
 	void (*unknown_operation)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unknown_operation);
 	void (*id_mismatch)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(id_mismatch);
 	void (*invalid_version)(const GRFConfig *, uint32_t, uint8_t, const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(invalid_version);
+	StringID null_error;
 };
 extern "C" {
 void openttd_rust_grf_unsafe(const OpenTTDGrfLoadingServices *);

@@ -59,7 +59,8 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.container_version = [](const SpriteFile *f) noexcept { return f->GetContainerVersion(); },
 		.sprite_offsets = [](SpriteFile *f) noexcept { ReadGRFSpriteOffsets(*f); },
 		.skip_sprite_data = [](SpriteFile *f, uint8_t type, uint32_t size) noexcept { SkipSpriteData(*f, type, size); },
-		.open_file = [](const GRFConfig *c, Subdirectory subdir, void *temporary) noexcept { bool remap = c->palette & GRFP_USE_MASK; if (temporary != nullptr) { auto &slot = *static_cast<std::optional<SpriteFile> *>(temporary); return &slot.emplace(c->filename, subdir, remap); } return &OpenCachedSpriteFile(c->filename, subdir, remap); },
+		.open_cached = [](const GRFConfig *c, Subdirectory subdir) noexcept { return &OpenCachedSpriteFile(c->filename, subdir, c->palette & GRFP_USE_MASK); },
+		.open_temporary = [](const GRFConfig *c, Subdirectory subdir, void *temporary) noexcept { return &static_cast<std::optional<SpriteFile> *>(temporary)->emplace(c->filename, subdir, c->palette & GRFP_USE_MASK); },
 		.scan_name = [](GRFConfig *c, uint32_t id, const uint8_t *data, size_t size) noexcept { AddGRFTextToList(c->name, 0x7F, id, false, {reinterpret_cast<const char *>(data), size}); },
 		.scan_info = [](GRFConfig *c, uint32_t id, const uint8_t *data, size_t size) noexcept { AddGRFTextToList(c->info, 0x7F, id, true, {reinterpret_cast<const char *>(data), size}); },
 		.set_pitch = [](GRFFile *f, uint32_t value) noexcept { f->traininfo_vehicle_pitch = value; },
@@ -244,6 +245,7 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.unknown_operation = [](uint8_t op) noexcept { GrfMsg(0, "ParamSet: Unknown operation {}, skipping", op); },
 		.id_mismatch = [](uint32_t old_id, uint32_t new_id) noexcept { Debug(grf, 0, "GRFInfo: GRFID {:08X} in FILESCAN stage does not match GRFID {:08X} in INIT/RESERVE/ACTIVATION stage", std::byteswap(old_id), std::byteswap(new_id)); },
 		.invalid_version = [](const GRFConfig *c, uint32_t id, uint8_t version, const uint8_t *name, size_t len) noexcept { Debug(grf, 0, "{}: NewGRF \"{}\" (GRFID {:08X}) uses GRF version {}, which is incompatible with this version of OpenTTD.", c->filename, StrMakeValid({reinterpret_cast<const char *>(name), len}), std::byteswap(id), version); },
+		.null_error = STR_NULL,
 	};
 	return services;
 }
