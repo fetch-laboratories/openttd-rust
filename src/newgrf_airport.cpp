@@ -117,11 +117,13 @@ template <>
 	AirportClass::Get(AirportClass::Allocate('HELI'))->name = STR_AIRPORT_CLASS_HELIPORTS;
 }
 
+#ifndef WITH_RUST
 template <>
 bool AirportClass::IsUIAvailable(uint) const
 {
 	return true;
 }
+#endif
 
 /* Instantiate AirportClass. */
 template class NewGRFClass<AirportSpec, AirportClassID, APC_MAX>;

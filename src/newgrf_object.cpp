@@ -174,11 +174,13 @@ template <>
 	ObjectClass::Get(ObjectClass::Allocate('TRNS'))->name = STR_OBJECT_CLASS_TRNS;
 }
 
+#ifndef WITH_RUST
 template <>
 bool ObjectClass::IsUIAvailable(uint index) const
 {
 	return this->GetSpec(index)->IsEverAvailable();
 }
+#endif
 
 /* Instantiate ObjectClass. */
 template class NewGRFClass<ObjectSpec, ObjectClassID, OBJECT_CLASS_MAX>;

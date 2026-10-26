@@ -11,6 +11,9 @@
 #define NEWGRF_CLASS_H
 
 #include "strings_type.h"
+#ifdef WITH_RUST
+#include "rust/newgrf_class_ffi.h"
+#endif
 
 /* Base for each type of NewGRF spec to be used with NewGRFClass. */
 template <typename Tindex>
@@ -24,6 +27,31 @@ struct NewGRFSpecBase {
  */
 template <typename Tspec, typename Tindex, Tindex Tmax>
 class NewGRFClass {
+#ifdef WITH_RUST
+public:
+	uint32_t global_id;
+	StringID name;
+	uint32_t rust_index;
+private:
+	using Ops = RustGRFClassOps<Tspec>;
+	static void InsertDefaults();
+public:
+	using spec_type = Tspec;
+	using index_type = Tindex;
+	std::span<Tspec * const> Specs() const { return {Ops::specs(this->Index()), this->GetSpecCount()}; }
+	static std::span<NewGRFClass const> Classes() { return {static_cast<const NewGRFClass *>(Ops::classes()), Ops::count()}; }
+	Tindex Index() const { return static_cast<Tindex>(this->rust_index); }
+	uint GetSpecCount() const { return Ops::spec_count(this->Index()); }
+	uint GetUISpecCount() const { return Ops::ui_spec_count(this->Index()); }
+	const Tspec *GetSpec(uint index) const { return Ops::spec(this->Index(), index); }
+	static void Reset();
+	static Tindex Allocate(uint32_t global_id);
+	static void Assign(Tspec *spec) { assert(static_cast<size_t>(spec->class_index) < Ops::count()); Ops::assign(spec); }
+	static uint GetClassCount() { return Ops::count(); }
+	static uint GetUIClassCount() { return Ops::ui_count(); }
+	static NewGRFClass *Get(Tindex class_index) { assert(static_cast<size_t>(class_index) < Ops::count()); return static_cast<NewGRFClass *>(Ops::classes()) + class_index; }
+	static const Tspec *GetByGrf(uint32_t grfid, uint16_t local_id) { return Ops::by_grf(grfid, local_id); }
+#else
 private:
 	/* Tspec must be of NewGRFSpecBase<Tindex>. */
 	static_assert(std::is_base_of_v<NewGRFSpecBase<Tindex>, Tspec>);
@@ -84,6 +112,7 @@ public:
 	static NewGRFClass *Get(Tindex class_index);
 
 	static const Tspec *GetByGrf(uint32_t grfid, uint16_t local_id);
+#endif
 };
 
 #endif /* NEWGRF_CLASS_H */

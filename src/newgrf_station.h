@@ -216,7 +216,11 @@ const StationSpec *GetStationSpec(TileIndex t);
  */
 inline uint16_t GetStationLayoutKey(uint8_t platforms, uint8_t length)
 {
+#ifdef WITH_RUST
+	return openttd_rust_station_layout_key(platforms, length);
+#else
 	return (length << 8U) | platforms;
+#endif
 }
 
 /**
@@ -226,7 +230,11 @@ inline uint16_t GetStationLayoutKey(uint8_t platforms, uint8_t length)
  */
 inline bool IsWaypointClass(const StationClass &cls)
 {
+#ifdef WITH_RUST
+	return openttd_rust_is_waypoint_class(cls.global_id);
+#else
 	return cls.global_id == STATION_CLASS_LABEL_WAYPOINT || GB(cls.global_id, 24, 8) == UINT8_MAX;
+#endif
 }
 
 /* Evaluate a tile's position within a station, and return the result a bitstuffed format. */
@@ -240,7 +248,9 @@ CommandCost PerformStationTileSlopeCheck(TileIndex north_tile, TileIndex cur_til
 
 std::optional<uint8_t> AllocateSpecToStation(const StationSpec *spec, BaseStation *st);
 void AssignSpecToStation(const StationSpec *spec, BaseStation *st, uint8_t specindex);
+#ifndef WITH_RUST
 void DeallocateSpecFromStation(BaseStation *st, uint8_t specindex);
+#endif
 bool DrawStationTile(int x, int y, RailType railtype, Axis axis, StationClassID sclass, uint station);
 
 void AnimateStationTile(TileIndex tile);

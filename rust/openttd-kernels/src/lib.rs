@@ -1434,3 +1434,11 @@ pub mod type_definitions;
 
 pub mod newgrf_internal;
 pub mod newgrf_translation;
+mod newgrf_class;
+
+mod station_association;
+
+mod newgrf_layout;
+mod station_definitions;
+
+mod newgrf_act3;

@@ -26,6 +26,7 @@ struct OpenTTDRoadStopSpecVacancy { const RoadStopSpec *spec; uint32_t grfid; };
 struct OpenTTDRoadStopSpecTriggers { uint16_t animation; CargoTypes cargo; };
 struct OpenTTDRoadStopReseed { uint32_t reseed; uint8_t used; };
 struct OpenTTDRoadStopResolverServices {
+	void (*rebind)(BaseStation *, size_t, const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(rebind);
 	uint32_t (*badges)(const ResolverObject *, const RoadStopSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(badges);
 	ScopeResolver * (*base_scope)(ResolverObject *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(base_scope);
 	int32_t (*build_date)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(build_date);
