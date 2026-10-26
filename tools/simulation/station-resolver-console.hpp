@@ -224,6 +224,7 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 }
 
 #include "newgrf_config.h"
+#include "newgrf_badge.h"
 #include "newgrf_roadstop.h"
 #include "newgrf/newgrf_internal.h"
 #include "strings_func.h"
@@ -262,6 +263,13 @@ static void StationDefinitionPartialReads()
 	StationNeed(read(GSF_ROADSTOPS, 0, 1, 0x15, {23}) && file.roadstops[0]->build_cost_multiplier == 23 && file.roadstops[0]->clear_cost_multiplier == 16, __LINE__);
 	StationNeed(read(GSF_ROADSTOPS, 0, 1, 0x13, {7, 4, 5, 6}) && file.roadstops[0]->bridgeable_info[2].height == 6, __LINE__);
 	StationNeed(!read(GSF_ROADSTOPS, 0, 2, 0xFE, {99}), __LINE__);
+	BadgeID badge = GetOrCreateBadge("owner484/partial").index;
+	BadgeID skipped = GetOrCreateBadge("owner484/skipped").index;
+	file.badge_list = {badge, skipped};
+	StationNeed(!read(GSF_ROADSTOPS, 1, 2, 0x16, {1, 0, 1, 0}) && !GetBadge(skipped)->features.Test(GSF_ROADSTOPS), __LINE__);
+	StationNeed(read(GSF_STATIONS, 0, 1, 0x1F, {2, 0, 0, 0}) && file.stations[0]->badges.empty() && GetBadge(badge)->features.Test(GSF_STATIONS), __LINE__);
+	StationNeed(read(GSF_ROADSTOPS, 0, 1, 0x16, {2, 0, 0, 0}) && file.roadstops[0]->badges.empty() && GetBadge(badge)->features.Test(GSF_ROADSTOPS), __LINE__);
+	StationNeed(read(GSF_STATIONS, 0, 1, 9, {2, 1, 0, 0, 0, 5, 6}) && file.stations[0]->renderdata[0].ground.sprite == 1 && file.stations[0]->renderdata[0].seq.empty(), __LINE__);
 	fmt::print(stderr, "STCMD definitions-partial-state {} {} {} {}\n", file.stations[0]->animation.frames, file.stations[0]->renderdata[0].seq.size(), file.stations[0]->bridgeable_info[1].height, file.roadstops[0]->bridgeable_info[2].height);
 }
 static void StationDefinitionMissing()
@@ -293,7 +301,7 @@ static void StationDefinitionLoad(std::string_view folder)
 	StationDefinitionPartialReads();
 	SetRandomSeed(0x48400001);
 	_grfconfig.clear();
-	for (const char *name : {"stations", "broken-station", "broken-road"}) {
+	for (const char *name : {"stations", "broken-station", "broken-road", "invalid-layout"}) {
 		auto config = std::make_unique<GRFConfig>(std::string(folder) + "/" + name + ".grf");
 		StationNeed(FillGRFDetails(*config, false, NO_DIRECTORY), __LINE__);
 		config->flags.Reset(GRFConfigFlag::InitOnly);
@@ -317,9 +325,14 @@ static void StationDefinitionFixture(TileIndex origin, DoCommandFlags test, DoCo
 		const GRFConfig *config = GetGRFConfig(broken);
 		StationNeed(config != nullptr && config->status == GCS_DISABLED && config->errors.size() == 1 && config->errors.front().message == STR_NEWGRF_ERROR_READ_BOUNDS, __LINE__);
 	}
+	const GRFConfig *invalid = GetGRFConfig(uint32_t('L') | uint32_t('4') << 8 | uint32_t('8') << 16 | uint32_t('4') << 24);
+	StationNeed(invalid != nullptr && invalid->status == GCS_DISABLED && invalid->errors.size() == 1 && invalid->errors.front().message == STR_NEWGRF_ERROR_INVALID_SPRITE_LAYOUT, __LINE__);
 	fmt::print(stderr, "STCMD definitions-malformed real-file read-bounds\n");
 	fmt::print(stderr, "STCMD definitions-registry {} {} {} {} {}\n", rail->class_index, way->class_index, road->class_index, roadway->class_index, StationClass::Get(STAT_CLASS_DFLT)->GetSpecCount());
 	StationNeed(rail->renderdata.size() == 2 && extra->renderdata.empty() && rail->layouts.at(GetStationLayoutKey(1, 2)) == std::vector<uint8_t>{0, 2} && extra->layouts == rail->layouts, __LINE__);
+	StationNeed(rail->renderdata[0].ground.sprite == 1 && rail->renderdata[0].seq.size() == 1 && rail->renderdata[0].seq[0].origin == Coord3D<int8_t>(1, 2, 3) && rail->renderdata[0].seq[0].extent == Coord3D<uint8_t>(4, 5, 6) && rail->renderdata[0].seq[0].image.sprite == 2, __LINE__);
+	StationNeed(way->renderdata.size() == 2 && way->renderdata[0].ground.sprite == 1 && way->renderdata[1].ground.sprite == 2, __LINE__);
+	StationNeed(rail->badges.size() == 1 && road->badges == rail->badges && GetBadge(rail->badges[0])->features.Test(GSF_STATIONS) && GetBadge(rail->badges[0])->features.Test(GSF_ROADSTOPS), __LINE__);
 	StationNeed(rail->bridgeable_info.size() == 3 && rail->bridgeable_info[2].height == 6 && rail->bridgeable_info[1].disallowed_pillars.base() == 2 && road->bridgeable_info[5].height == 6, __LINE__);
 	fmt::print(stderr, "STCMD definitions-layout {} {} {} {} {}\n", rail->renderdata.size(), extra->renderdata.size(), rail->tileflags[0].base(), rail->tileflags[1].base(), rail->bridgeable_info[2].height);
 	Station *station = nullptr, *stop = nullptr;

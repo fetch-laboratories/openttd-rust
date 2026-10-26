@@ -11,10 +11,8 @@
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap
 )]
-use crate::gfx_type::PalSprite;
 use crate::newgrf_bytereader::{BadgeList, ByteReader, ReadError, Reader};
-use crate::newgrf_layout::Layout;
-use crate::sprite::Sequence;
+use crate::newgrf_layout::{Layout, PalSprite, Sequence, SequenceFields};
 use crate::station_cmd::{RailSpec, RoadSpec};
 use std::ffi::c_void;
 const NUM_STATIONS_PER_GRF: u32 = u16::MAX as u32 - 1;
@@ -83,7 +81,9 @@ pub struct Services {
     station_render_copy_append: unsafe extern "C" fn(*mut RailSpec, *const RailSpec, usize) -> (),
     layout_unlimited: unsafe extern "C" fn(*mut Layout) -> (),
     layout_ground: unsafe extern "C" fn(*mut Layout) -> *mut PalSprite,
-    layout_sequence: unsafe extern "C" fn(*mut Layout, *const Sequence, usize) -> (),
+    sequence_reset: unsafe extern "C" fn(*mut Sequence),
+    sequence_append: unsafe extern "C" fn(*mut Sequence) -> SequenceFields,
+    layout_sequence_move: unsafe extern "C" fn(*mut Layout, *mut Sequence),
     layout_original: unsafe extern "C" fn(*mut Layout, u32) -> (),
     station_custom_assign: unsafe extern "C" fn(*mut RailSpec, u16, *const u8, usize) -> (),
     station_custom_tile: unsafe extern "C" fn(*mut RailSpec, u16, usize, u8) -> (),
@@ -133,7 +133,7 @@ pub struct Services {
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDStationDefinitionServices" ["station_service"] => Services { empty_string, cargo, reader, file_version, station_resize, station_count, station_get, station_new, station_class, station_name, station_class_name, station_badges, station_cargo_triggers, station_frames, station_status, station_speed, station_triggers, station_callback_mask, station_flags, station_has_file, station_set_group, station_set_file, station_set_local, road_resize, road_count, road_get, road_new, road_class, road_name, road_class_name, road_badges, road_cargo_triggers, road_frames, road_status, road_speed, road_triggers, road_callback_mask, road_flags, road_has_file, road_set_group, road_set_file, road_set_local, station_disallowed_platforms, station_disallowed_lengths, station_cargo_threshold, road_stop_type, road_draw_mode, road_build_cost, road_clear_cost, station_render_clear, station_render_reserve, station_render_size, station_render_append, station_render_pop, station_render_copy_append, layout_unlimited, layout_ground, layout_sequence, layout_original, station_custom_assign, station_custom_tile, station_custom_copy, station_tileflags_size, station_tileflags_resize, station_pylons, station_wires, station_blocked, station_tileflags_assign, station_bridge_size, station_bridge_resize, road_bridge_size, station_bridge_height, station_bridge_pillars, road_bridge_height, road_bridge_pillars, station_invalid, road_invalid, station_undefined, road_undefined, odd_layout, missing_sprite, missing_custom, invalid_tile, undefined_publication, duplicate_publication, read_layout_sprite, read_layout };
+    "OpenTTDStationDefinitionServices" ["station_service"] => Services { empty_string, cargo, reader, file_version, station_resize, station_count, station_get, station_new, station_class, station_name, station_class_name, station_badges, station_cargo_triggers, station_frames, station_status, station_speed, station_triggers, station_callback_mask, station_flags, station_has_file, station_set_group, station_set_file, station_set_local, road_resize, road_count, road_get, road_new, road_class, road_name, road_class_name, road_badges, road_cargo_triggers, road_frames, road_status, road_speed, road_triggers, road_callback_mask, road_flags, road_has_file, road_set_group, road_set_file, road_set_local, station_disallowed_platforms, station_disallowed_lengths, station_cargo_threshold, road_stop_type, road_draw_mode, road_build_cost, road_clear_cost, station_render_clear, station_render_reserve, station_render_size, station_render_append, station_render_pop, station_render_copy_append, layout_unlimited, layout_ground, sequence_reset, sequence_append, layout_sequence_move, layout_original, station_custom_assign, station_custom_tile, station_custom_copy, station_tileflags_size, station_tileflags_resize, station_pylons, station_wires, station_blocked, station_tileflags_assign, station_bridge_size, station_bridge_resize, road_bridge_size, station_bridge_height, station_bridge_pillars, road_bridge_height, road_bridge_pillars, station_invalid, road_invalid, station_undefined, road_undefined, odd_layout, missing_sprite, missing_custom, invalid_tile, undefined_publication, duplicate_publication, read_layout_sprite, read_layout };
 }
 
 unsafe fn station_change(
@@ -142,6 +142,7 @@ unsafe fn station_change(
     first: u32,
     last: u32,
     prop: u32,
+    sequence: *mut Sequence,
     reader: &mut Reader<'_>,
 ) -> Result<u8, ReadError> {
     unsafe {
@@ -199,26 +200,26 @@ unsafe fn station_change(
                         if crate::newgrf_loading::is_disabled() {
                             return Ok(CIR_DISABLED);
                         }
-                        let mut sequence = Vec::new();
+                        (s.sequence_reset)(sequence);
                         loop {
                             let delta_x = reader.byte()?;
                             if delta_x == 0x80 {
                                 break;
                             }
-                            let mut item = Sequence::default();
-                            item.origin[0] = delta_x as i8;
-                            item.origin[1] = reader.byte()? as i8;
-                            item.origin[2] = reader.byte()? as i8;
-                            item.extent[0] = reader.byte()?;
-                            item.extent[1] = reader.byte()?;
-                            item.extent[2] = reader.byte()?;
+                            let fields = (s.sequence_append)(sequence);
+                            fields.origin_x.write(delta_x as i8);
+                            fields.origin_y.write(reader.byte()? as i8);
+                            fields.origin_z.write(reader.byte()? as i8);
+                            fields.extent_x.write(reader.byte()?);
+                            fields.extent_y.write(reader.byte()?);
+                            fields.extent_z.write(reader.byte()?);
                             if !(s.read_layout_sprite)(
                                 reader.native(),
                                 false,
                                 true,
                                 false,
                                 GSF_STATIONS,
-                                &raw mut item.image,
+                                fields.image,
                                 &raw mut flags,
                             ) {
                                 return Err(ReadError);
@@ -226,9 +227,9 @@ unsafe fn station_change(
                             if crate::newgrf_loading::is_disabled() {
                                 return Ok(CIR_DISABLED);
                             }
-                            sequence.push(item);
                         }
-                        (s.layout_sequence)(layout, sequence.as_ptr(), sequence.len());
+                        (s.layout_sequence_move)(layout, sequence);
+                        (s.sequence_reset)(sequence);
                     }
                     if (s.station_render_size)(spec) & 1 != 0 {
                         (s.odd_layout)(id);
@@ -485,11 +486,12 @@ pub unsafe extern "C" fn openttd_rust_station_change_info(
     last: u32,
     prop: u32,
     native: *mut ByteReader,
+    sequence: *mut Sequence,
     output: *mut u8,
 ) -> bool {
     let s = unsafe { &*s };
     let mut reader = unsafe { Reader::new(native, &*s.reader) };
-    match unsafe { station_change(s, file, first, last, prop, &mut reader) } {
+    match unsafe { station_change(s, file, first, last, prop, sequence, &mut reader) } {
         Ok(value) => {
             unsafe {
                 output.write(value);

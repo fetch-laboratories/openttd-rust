@@ -37,8 +37,9 @@ static const uint NUM_STATIONS_PER_GRF = UINT16_MAX - 1;
 static ChangeInfoResult StationChangeInfo(uint first, uint last, int prop, ByteReader &buf)
 {
 #ifdef WITH_RUST
+	OpenTTDStationSequence sequence;
 	uint8_t result;
-	if (!openttd_rust_station_change_info(&GetStationDefinitionServices(), _cur_gps.grffile, first, last, prop, &buf, &result)) RustGRFRethrowReadError();
+	if (!openttd_rust_station_change_info(&GetStationDefinitionServices(), _cur_gps.grffile, first, last, prop, &buf, &sequence, &result)) RustGRFRethrowReadError();
 	return static_cast<ChangeInfoResult>(result);
 #else
 	ChangeInfoResult ret = CIR_SUCCESS;

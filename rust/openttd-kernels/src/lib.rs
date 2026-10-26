@@ -1428,9 +1428,7 @@ mod newgrf_class;
 
 mod station_association;
 
-mod gfx_type;
 mod newgrf_layout;
-mod sprite;
 mod station_definitions;
 
 mod newgrf_act3;

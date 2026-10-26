@@ -497,7 +497,7 @@ struct RoadResolverFixture {
 			spec.callback_mask.Set(RoadStopCallbackMask::Avail); spec.cargo_triggers = 3; spec.animation.triggers.Set(StationAnimationTrigger::Built);
 			spec.grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_PURCHASE, purchase); spec.grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, one);
 			spec.grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT_NA, empty); spec.grf_prop.SetSpriteGroup(0, cargo0); spec.grf_prop.SetSpriteGroup(1, cargo1);
-			indices[i] = RoadStopClass::Get(cls)->GetSpecCount(); RoadStopClass::Get(cls)->Insert(&spec);
+			indices[i] = RoadStopClass::Get(cls)->GetSpecCount(); spec.class_index = cls; RoadStopClass::Assign(&spec);
 		}
 	}
 };
@@ -1152,7 +1152,11 @@ def definition_grfs(folder, reordered=False):
             + word(default)
         )
 
-    actions = [info(b"S484"), bytes((13, 0, 0, 255, 255)) + dword(int(reordered))]
+    actions = [
+        info(b"S484"),
+        bytes((13, 0, 0, 255, 255)) + dword(int(reordered)),
+        prop(8, 0, [(0x18, b"owner484/badge\0")]),
+    ]
     for feature in (4, 20):
         actions += [group(feature, index, 0x400 + index) for index in range(3)]
     actions += [
@@ -1163,7 +1167,16 @@ def definition_grfs(folder, reordered=False):
                 (8, b"OLD4"),
                 (0x1C, word(0xD000)),
                 (0x1D, word(0xD001)),
-                (9, b"\3" + bytes(12)),
+                (
+                    9,
+                    b"\3"
+                    + dword(1)
+                    + bytes((1, 2, 3, 4, 5, 6))
+                    + dword(0x80000002)
+                    + b"\x80"
+                    + bytes(8),
+                ),
+                (0x1F, word(3) + word(0) + word(0) + word(99)),
                 (0x0E, b"\2\1\1\3\0\0"),
                 (0x11, b"\x55"),
                 (0x14, b"\xaa"),
@@ -1178,7 +1191,15 @@ def definition_grfs(folder, reordered=False):
         ),
         prop(4, 0, [(8, b"NEW4")]),
         prop(4, 1, [(8, b"NEW4"), (0x0A, b"\0"), (0x0A, b"\1"), (0x0F, b"\0")]),
-        prop(4, 2, [(8, b"\xffWP4"), (9, b"\2" + bytes(8)), (0x12, dword(1))]),
+        prop(
+            4,
+            2,
+            [
+                (8, b"\xffWP4"),
+                (0x1A, b"\2\0" + dword(1) + b"\0" + dword(2)),
+                (0x12, dword(1)),
+            ],
+        ),
         prop(
             20,
             0,
@@ -1187,6 +1208,7 @@ def definition_grfs(folder, reordered=False):
                 (9, b"\2"),
                 (0x0A, word(0xD002)),
                 (0x0B, word(0xD003)),
+                (0x16, word(1) + word(0)),
                 (0x0C, b"\3"),
                 (0x0D, dword(1)),
                 (0x0E, b"\4\0"),
@@ -1208,6 +1230,16 @@ def definition_grfs(folder, reordered=False):
     for feature, local in reversed(publication) if reordered else publication:
         actions += [mapping(feature, local, 0), mapping(feature, local, 1, [(0, 2)])]
     (folder / "stations.grf").write_bytes(grf(actions, 1))
+    (folder / "invalid-layout.grf").write_bytes(
+        grf(
+            [
+                info(b"L484"),
+                prop(4, 0, [(8, b"DFLT")]),
+                prop(4, 0, [(0x1A, b"\2\x40" + dword(1) + word(0x10))]),
+            ],
+            1,
+        )
+    )
     for feature, ident, name in (
         (4, b"B484", "broken-station"),
         (20, b"R484", "broken-road"),

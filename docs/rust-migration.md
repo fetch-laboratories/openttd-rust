@@ -1965,7 +1965,9 @@ Object-class availability calls the existing Rust eligibility owner.
 Canonical native GRF/spec allocations, payload/layout containers, station shells,
 saved slot records, sprite graphs, strings and badges remain native. Checked native
 `ReadSpriteLayoutSprite` and `ReadSpriteLayout` callees preserve their incremental
-writes; read errors return from Rust before the decoder rethrows. Deferred class
+writes. A native stack vector carries the temporary sequence payload; Rust drives
+every read and its successful move into the layout. Read errors return from Rust
+before the decoder rethrows. Deferred class
 names resolve the spec's current class. Original bodies remain portable-only.
 Historical STNN/STNS/legacy save frames, real exhaustion, arbitrary GRFs and GUI
 scheduling remain coverage limits tracked in #156. PR: #488.
