@@ -3,6 +3,8 @@
 //! temporary algorithms and the process-wide callback interner are Rust-owned. The game-state
 //! mutex serializes calls. Scalar storage aliases are used without creating references across
 //! callbacks, and vector element addresses expire at the next mutation of that vector.
+//! Checked reads return errors after dropping local vectors; no exception crosses Rust.
+//! Native allocation/diagnostic leaves are noexcept; allocation failure and Rust panic abort.
 #![allow(
     unsafe_code,
     missing_docs,
@@ -622,7 +624,7 @@ pub unsafe extern "C" fn openttd_rust_action2_recolour(image: *mut PalSprite) {
         }
     }
 }
-unsafe fn layout_sprite<R: Read>(
+pub(crate) unsafe fn layout_sprite<R: Read>(
     s: &Services,
     l: &LoadingServices,
     b: &mut R,

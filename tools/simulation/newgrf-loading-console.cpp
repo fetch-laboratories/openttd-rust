@@ -162,7 +162,11 @@ static void Inspect(bool reload)
 		const auto *wrapper = dynamic_cast<const DeterministicSpriteGroup *>(spec->grf_prop.GetSpriteGroup(true));
 		const auto *production = dynamic_cast<const IndustryProductionSpriteGroup *>(wrapper->ranges[0].result.group);
 		Require(production != nullptr && production->version == variant && (variant != 0 || (production->subtract_input[0] == -2 && production->add_output[0] == 7)), "action2-production-parsed");
-		if (reload) Require(std::ranges::any_of(Industry::Iterate(), [&](const Industry *industry) { return industry->type == MapNewGRFIndustryType(variant | 0x80, file->grfid) && industry->produced[0].waiting >= 7; }), "action2-industry-reload");
+		if (reload) {
+			bool found = false;
+			for (const Industry *industry : Industry::Iterate()) found |= industry->type == MapNewGRFIndustryType(variant | 0x80, file->grfid) && industry->produced[0].waiting >= 7;
+			Require(found, "action2-industry-reload");
+		}
 	}
 	Action2PartialRead();
 	if (!reload) Require(GetGRFConfig(ID("MISS"))->status == GCS_NOT_FOUND, "missing");
@@ -197,7 +201,7 @@ static void Action2Consumers()
 				if (industry->type != type) continue;
 				auto before = industry->produced[0].waiting;
 				IndustryProductionCallback(industry, 1);
-				Require(industry->produced[0].waiting == before + 7, "action2-industry-production");
+				Require(industry->produced[0].waiting == before + 7, fmt::format("action2-production-v{}", variant).c_str());
 				fmt::print(stderr, "LOADING production {} {} {} {}\n", variant, type, industry->produced[0].waiting, industry->random);
 				built = true;
 				break;

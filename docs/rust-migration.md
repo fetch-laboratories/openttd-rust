@@ -2044,6 +2044,25 @@ remain. Arbitrary feature grammars/data sections, historical saves, network cloc
 and static influence, remaining GRM/variable/target combinations and GUI scheduling
 remain #156 gaps. PR #473.
 
+### Action2 graph construction and publication (#485)
+
+`newgrf_act2.rs` owns the complete Action2 decoder, callback-result interner,
+range normalization, real-group simplification and tile-layout interpretation.
+The interner is process-wide and stores native pool IDs. Loading dispatch and
+callback reset/final shrink call Rust directly, using the existing execution,
+spriteset, cargo, GRF-version and disable owners. The shared reader dispatches
+Action2 values at the original byte, word and dword widths.
+Native polymorphic sprite groups, final payload vectors, constructors/destructors
+and graphics resources remain canonical. Typed allocation and scalar storage
+bindings retain incremental reads and partial writes; vector element addresses
+expire at vector mutation. Local algorithm vectors live in Rust. Publication
+occurs only at the original final assignment, including explicit null results.
+Checked read failures drop Rust locals and return to the existing decoder error
+boundary. Native layout facades remain for station callers until their direct
+Rust adoption; bridge recolouring keeps its native facade. Original bodies remain
+portable. Arbitrary grammars, remaining malformed and advanced-layout combinations,
+historical loading, rendering and network scheduling remain #156 limits. PR #493.
+
 ### Cargo registry, translation and callback lifecycle (#467)
 
 `cargo_registry.rs` owns the process-wide label/default/climate tables, available and standard

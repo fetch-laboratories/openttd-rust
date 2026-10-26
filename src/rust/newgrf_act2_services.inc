@@ -5,6 +5,8 @@
 // Scalar enum aliases have explicit uint8_t representation, including unnamed grammar values.
 static_assert(std::is_same_v<std::underlying_type_t<DeterministicSpriteGroupAdjustOperation>, uint8_t> && std::is_same_v<std::underlying_type_t<DeterministicSpriteGroupAdjustType>, uint8_t>);
 static_assert(std::is_same_v<std::underlying_type_t<VarSpriteGroupScope>, uint8_t> && std::is_same_v<std::underlying_type_t<RandomizedSpriteGroupCompareMode>, uint8_t>);
+static_assert(GSF_TRAINS == 0 && GSF_ROADVEHICLES == 1 && GSF_SHIPS == 2 && GSF_AIRCRAFT == 3 && GSF_STATIONS == 4 && GSF_CANALS == 5 && GSF_HOUSES == 7);
+static_assert(GSF_INDUSTRYTILES == 9 && GSF_INDUSTRIES == 10 && GSF_AIRPORTS == 13 && GSF_OBJECTS == 15 && GSF_AIRPORTTILES == 17 && GSF_TRAMTYPES == 19 && GSF_ROADSTOPS == 20 && GSF_BADGES == 21 && MAX_SPRITEGROUP == UINT8_MAX);
 static_assert(TLF_DODRAW == 1 && TLF_SPRITE == 2 && TLF_PALETTE == 4 && TLF_CUSTOM_PALETTE == 8);
 static_assert(TLF_BB_XY_OFFSET == 16 && TLF_BB_Z_OFFSET == 32 && TLF_CHILD_X_OFFSET == 16 && TLF_CHILD_Y_OFFSET == 32);
 static_assert(TLF_SPRITE_VAR10 == 64 && TLF_PALETTE_VAR10 == 128 && TLF_KNOWN_FLAGS == 255 && TLR_MAX_VAR10 == 7);

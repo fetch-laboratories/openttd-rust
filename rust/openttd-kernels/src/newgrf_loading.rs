@@ -115,7 +115,7 @@ crate::abi::layouts! {
 #[repr(C)]
 pub struct Services {
     pub(crate) global: *const crate::newgrf::Services,
-    pub(crate) cargo: *const crate::cargo_registry::Services,
+    cargo: *const crate::cargo_registry::Services,
     engine: *const crate::engine_loading::Services,
     types: *const crate::type_registry::Services,
     action2: *const crate::newgrf_act2::Services,

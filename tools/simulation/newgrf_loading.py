@@ -305,9 +305,9 @@ def check(scenario, run, mode, role, result):
             "LOADING case action2-station-command true",
             "LOADING case action2-industry-command true",
             "LOADING case action2-random-trigger true",
-            "LOADING production 0 ",
-            "LOADING production 1 ",
-            "LOADING production 2 ",
+            "LOADING case action2-production-v0 true",
+            "LOADING case action2-production-v1 true",
+            "LOADING case action2-production-v2 true",
         )
     else:
         expected += ("LOADING case action2-industry-reload true",)
