@@ -2,6 +2,7 @@
 /** @file newgrf_loading_services.inc Typed native loading services. */
 #ifdef WITH_RUST
 #include "newgrf_loading_ffi.h"
+#include "industry_definition_ffi.h"
 #include "type_registry_ffi.h"
 #include "newgrf_global_ffi.h"
 #include "generic_ffi.h"
@@ -28,6 +29,7 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.global = &GetRustGlobalVariableServices(),
 		.cargo = &GetRustCargoRegistryServices(),
 		.engine = &GetRustEngineLoadingServices(),
+		.industry = &GetIndustryDefinitionServices(),
 		.types = &GetRustTypeRegistryServices(),
 		.engine_range = [](GrfSpecFeature feature) noexcept { return OpenTTDGrfEngineRange{_engine_offsets[feature], _engine_counts[feature]}; },
 		.parameter = RustGRFParameter,
@@ -136,14 +138,13 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.reset_prices = []() noexcept { ResetPriceBaseMultipliers(); },
 		.reset_currencies = []() noexcept { ResetCurrencies(); },
 		.reset_houses = []() noexcept { ResetHouses(); },
-		.reset_industries = []() noexcept { ResetIndustries(); },
-		.reset_object_classes = []() noexcept { ObjectClass::Reset(); },
+		.object_classes = &ObjectClass::GetServices(),
 		.reset_objects = []() noexcept { ResetObjects(); },
-		.reset_station_classes = []() noexcept { StationClass::Reset(); },
-		.reset_airport_classes = []() noexcept { AirportClass::Reset(); },
+		.station_classes = &StationClass::GetServices(),
+		.airport_classes = &AirportClass::GetServices(),
 		.reset_airports = []() noexcept { AirportSpec::ResetAirports(); },
 		.reset_airporttiles = []() noexcept { AirportTileSpec::ResetAirportTiles(); },
-		.reset_roadstop_classes = []() noexcept { RoadStopClass::Reset(); },
+		.roadstop_classes = &RoadStopClass::GetServices(),
 		.reset_water_features = []() noexcept { _water_feature.fill({}); },
 		.reset_faces = []() noexcept { ResetFaces(); },
 		.clear_snowline = []() noexcept { ClearSnowLine(); },
@@ -157,7 +158,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.finalise_badges = []() noexcept { FinaliseBadges(); },
 		.finalise_canals = []() noexcept { FinaliseCanals(); },
 		.finalise_houses = []() noexcept { FinaliseHouseArray(); },
-		.finalise_industries = []() noexcept { FinaliseIndustriesArray(); },
 		.finalise_objects = []() noexcept { FinaliseObjectsArray(); },
 		.sort_industries = []() noexcept { SortIndustryTypes(); },
 		.industry_legend = []() noexcept { BuildIndustriesLegend(); },
@@ -221,5 +221,13 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 	return services;
 }
 #include "abi-visit-OpenTTDGrfLoadingServices.hpp"
-bool CheckAbi_grf_loading() { return AbiServicesComplete(GetRustGrfLoadingServices()); }
+#include "abi-visit-OpenTTDStationClassServices.hpp"
+#include "abi-visit-OpenTTDRoadStopClassServices.hpp"
+#include "abi-visit-OpenTTDAirportClassServices.hpp"
+#include "abi-visit-OpenTTDObjectClassServices.hpp"
+bool CheckAbi_grf_loading()
+{
+	const auto &s = GetRustGrfLoadingServices();
+	return AbiServicesComplete(s) && AbiServicesComplete(*s.station_classes) && AbiServicesComplete(*s.roadstop_classes) && AbiServicesComplete(*s.airport_classes) && AbiServicesComplete(*s.object_classes);
+}
 #endif

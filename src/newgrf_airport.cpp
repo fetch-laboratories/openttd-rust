@@ -108,6 +108,19 @@ const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept
  * This includes initialising the defaults classes with an empty
  * entry, for standard airports.
  */
+#ifdef WITH_RUST
+template <>
+std::span<const OpenTTDGRFClassDefault> AirportClass::Defaults()
+{
+	static const OpenTTDGRFClassDefault defaults[]{
+		{'SMAL', STR_AIRPORT_CLASS_SMALL},
+		{'LARG', STR_AIRPORT_CLASS_LARGE},
+		{'HUB_', STR_AIRPORT_CLASS_HUB},
+		{'HELI', STR_AIRPORT_CLASS_HELIPORTS},
+	};
+	return defaults;
+}
+#else
 template <>
 /* static */ void AirportClass::InsertDefaults()
 {
@@ -116,12 +129,15 @@ template <>
 	AirportClass::Get(AirportClass::Allocate('HUB_'))->name = STR_AIRPORT_CLASS_HUB;
 	AirportClass::Get(AirportClass::Allocate('HELI'))->name = STR_AIRPORT_CLASS_HELIPORTS;
 }
+#endif
 
+#ifndef WITH_RUST
 template <>
 bool AirportClass::IsUIAvailable(uint) const
 {
 	return true;
 }
+#endif
 
 /* Instantiate AirportClass. */
 template class NewGRFClass<AirportSpec, AirportClassID, APC_MAX>;

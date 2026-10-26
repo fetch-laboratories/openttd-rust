@@ -3,6 +3,7 @@
 #ifndef RUST_NEWGRF_LOADING_FFI_H
 #define RUST_NEWGRF_LOADING_FFI_H
 #include "newgrf_global_ffi.h"
+#include "newgrf_class_ffi.h"
 #include "../newgrf_config.h"
 #include "../road_type.h"
 struct SpriteGroup;
@@ -30,6 +31,7 @@ uint32_t openttd_rust_grf_set_sprite(uint8_t, uint32_t);
 uint32_t openttd_rust_grf_set_size(uint8_t, uint32_t);
 }
 struct OpenTTDEngineLoadingServices;
+struct OpenTTDIndustryDefinitionServices;
 struct OpenTTDTypeRegistryServices;
 struct OpenTTDGenericServices;
 struct OpenTTDCargoRegistryServices;
@@ -39,6 +41,7 @@ struct OpenTTDGrfLoadingServices {
 	const OpenTTDGlobalVariableServices * global;
 	const OpenTTDCargoRegistryServices *cargo;
 	const OpenTTDEngineLoadingServices *engine;
+	const OpenTTDIndustryDefinitionServices *industry;
 	const OpenTTDTypeRegistryServices *types;
 	OpenTTDGrfEngineRange (*engine_range)(GrfSpecFeature) noexcept OPENTTD_SERVICE_DEFAULT(engine_range);
 	uint32_t (*parameter)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(parameter);
@@ -147,14 +150,13 @@ struct OpenTTDGrfLoadingServices {
 	void (*reset_prices)() noexcept OPENTTD_SERVICE_DEFAULT(reset_prices);
 	void (*reset_currencies)() noexcept OPENTTD_SERVICE_DEFAULT(reset_currencies);
 	void (*reset_houses)() noexcept OPENTTD_SERVICE_DEFAULT(reset_houses);
-	void (*reset_industries)() noexcept OPENTTD_SERVICE_DEFAULT(reset_industries);
-	void (*reset_object_classes)() noexcept OPENTTD_SERVICE_DEFAULT(reset_object_classes);
+	const OpenTTDObjectClassServices *object_classes;
 	void (*reset_objects)() noexcept OPENTTD_SERVICE_DEFAULT(reset_objects);
-	void (*reset_station_classes)() noexcept OPENTTD_SERVICE_DEFAULT(reset_station_classes);
-	void (*reset_airport_classes)() noexcept OPENTTD_SERVICE_DEFAULT(reset_airport_classes);
+	const OpenTTDStationClassServices *station_classes;
+	const OpenTTDAirportClassServices *airport_classes;
 	void (*reset_airports)() noexcept OPENTTD_SERVICE_DEFAULT(reset_airports);
 	void (*reset_airporttiles)() noexcept OPENTTD_SERVICE_DEFAULT(reset_airporttiles);
-	void (*reset_roadstop_classes)() noexcept OPENTTD_SERVICE_DEFAULT(reset_roadstop_classes);
+	const OpenTTDRoadStopClassServices *roadstop_classes;
 	void (*reset_water_features)() noexcept OPENTTD_SERVICE_DEFAULT(reset_water_features);
 	void (*reset_faces)() noexcept OPENTTD_SERVICE_DEFAULT(reset_faces);
 	void (*clear_snowline)() noexcept OPENTTD_SERVICE_DEFAULT(clear_snowline);
@@ -168,7 +170,6 @@ struct OpenTTDGrfLoadingServices {
 	void (*finalise_badges)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_badges);
 	void (*finalise_canals)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_canals);
 	void (*finalise_houses)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_houses);
-	void (*finalise_industries)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_industries);
 	void (*finalise_objects)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_objects);
 	void (*sort_industries)() noexcept OPENTTD_SERVICE_DEFAULT(sort_industries);
 	void (*industry_legend)() noexcept OPENTTD_SERVICE_DEFAULT(industry_legend);

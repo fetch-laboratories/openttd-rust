@@ -1,0 +1,65 @@
+/* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
+/** @file industry_definition_services.cpp Native industry definition storage and defaults. */
+#include "../stdafx.h"
+#ifdef WITH_RUST
+#include "../industrytype.h"
+#include "../newgrf.h"
+#include "../debug.h"
+#include "../sound_type.h"
+#include "../newgrf_cargo.h"
+#include "../newgrf_config.h"
+#include "../newgrf/newgrf_internal.h"
+#include "industry_definition_ffi.h"
+#include "industry_ffi.h"
+#include "services_newgrf.h"
+#include "services_cargo.h"
+#include "../table/build_industry.h"
+#include "../table/strings.h"
+#include "../safeguards.h"
+
+static OpenTTDIndustryDefinitionCargo DefinitionCargo(CargoType cargo, const std::variant<CargoLabel, MixedCargoType> &label) noexcept
+{
+	if (IsValidCargoType(cargo)) return {{0, false}, cargo};
+	return {RustCargoLabel(label), cargo};
+}
+const OpenTTDIndustryDefinitionServices &GetIndustryDefinitionServices() noexcept
+{
+	static const OpenTTDIndustryDefinitionServices services{
+		.generation = &GetIndustryGenerationServices(),
+		.industry = [](uint16_t id) noexcept { return &_industry_specs[id]; },
+		.tile = [](uint16_t id) noexcept { return &_industry_tile_specs[id]; },
+		.grfid = RustSpecGRFID<IndustrySpec>,
+		.identity = [](const IndustrySpec *spec) noexcept { return OpenTTDIndustryDefinitionIdentity{RustSpecGRFID(spec), RustSpecLocalID(spec), RustSpecSubstitute(spec)}; },
+		.tile_identity = [](const IndustryTileSpec *spec) noexcept { return OpenTTDIndustryDefinitionIdentity{RustSpecGRFID(spec), RustSpecLocalID(spec), RustSpecSubstitute(spec)}; },
+		.availability = [](const IndustrySpec *spec) noexcept { return OpenTTDIndustryDefinitionAvailability{RustIndustrySpecEnabled(spec), RustSpecHasGRFFile(spec)}; },
+		.set_enabled = [](IndustrySpec *spec, bool enabled) noexcept { spec->enabled = enabled; },
+		.set_override = [](IndustrySpec *spec, uint16_t id) noexcept { spec->grf_prop.override_id = id; },
+		.set_tile_override = [](IndustryTileSpec *spec, uint16_t id) noexcept { spec->grf_prop.override_id = id; },
+		.set_tile_enabled = [](IndustryTileSpec *spec, bool enabled) noexcept { spec->enabled = enabled; },
+		.publish = [](uint16_t id, IndustrySpec *spec) noexcept { _industry_specs[id] = std::move(*spec); },
+		.publish_tile = [](uint16_t id, IndustryTileSpec *spec) noexcept { _industry_tile_specs[id] = std::move(*spec); },
+		.industry_full = []() noexcept { GrfMsg(1, "Industry.SetEntitySpec: Too many industries allocated. Ignoring."); },
+		.tile_full = []() noexcept { GrfMsg(1, "IndustryTile.SetEntitySpec: Too many industry tiles allocated. Ignoring."); },
+		.reset_industry = [](uint16_t id) noexcept { _industry_specs[id] = _origin_industry_specs[id]; },
+		.clear_industry = [](uint16_t id) noexcept { _industry_specs[id] = IndustrySpec{}; },
+		.climate_available = [](const IndustrySpec *spec, uint8_t climate) noexcept { return spec->climate_availability.Test(static_cast<LandscapeType>(climate)); },
+		.reset_tile = [](uint16_t id) noexcept { _industry_tile_specs[id] = _origin_industry_tile_specs[id]; },
+		.clear_tile = [](uint16_t id) noexcept { _industry_tile_specs[id] = IndustryTileSpec{}; },
+		.file = [](size_t index) noexcept { auto files = GetAllGRFFiles(); return index < files.size() ? const_cast<GRFFile *>(&files[index]) : nullptr; },
+		.industry_count = [](const GRFFile *file) noexcept { return file->industryspec.size(); },
+		.tile_count = [](const GRFFile *file) noexcept { return file->indtspec.size(); },
+		.file_industry = [](GRFFile *file, size_t index) noexcept { return file->industryspec[index].get(); },
+		.file_tile = [](GRFFile *file, size_t index) noexcept { return file->indtspec[index].get(); },
+		.clear_file = [](GRFFile *file) noexcept { file->industryspec.clear(); file->industryspec.shrink_to_fit(); file->indtspec.clear(); file->indtspec.shrink_to_fit(); },
+		.conflicting = [](IndustrySpec *spec) noexcept { return spec->conflicting; },
+		.invalid_name = [](IndustrySpec *spec) noexcept { spec->name = STR_NEWGRF_INVALID_INDUSTRYTYPE; },
+		.produced = [](const IndustrySpec *spec, size_t slot) noexcept { return DefinitionCargo(spec->produced_cargo[slot], spec->produced_cargo_label[slot]); },
+		.accepted = [](const IndustrySpec *spec, size_t slot) noexcept { return DefinitionCargo(spec->accepts_cargo[slot], spec->accepts_cargo_label[slot]); },
+		.tile_accepted = [](const IndustryTileSpec *spec, size_t slot) noexcept { return DefinitionCargo(spec->accepts_cargo[slot], spec->accepts_cargo_label[slot]); },
+		.set_produced = [](IndustrySpec *spec, size_t slot, uint8_t cargo) noexcept { spec->produced_cargo[slot] = cargo; },
+		.set_accepted = [](IndustrySpec *spec, size_t slot, uint8_t cargo) noexcept { spec->accepts_cargo[slot] = cargo; },
+		.set_tile_accepted = [](IndustryTileSpec *spec, size_t slot, uint8_t cargo) noexcept { spec->accepts_cargo[slot] = cargo; },
+	};
+	return services;
+}
+#endif

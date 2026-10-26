@@ -5,9 +5,12 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-/** @file station_ffi.h Canonical opaque live station handles shared by Rust ports. */
+/** @file station_ffi.h Canonical live station handles and association results shared by Rust ports. */
 #ifndef RUST_STATION_FFI_H
 #define RUST_STATION_FFI_H
+#include <cstdint>
+
+struct OpenTTDStationSpecIndex { uint8_t value; bool valid; };
 
 struct Station;
 struct BaseStation;

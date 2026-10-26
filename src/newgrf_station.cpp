@@ -79,7 +79,7 @@ const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
 		.set_waiting = RustStationSetWaitingTriggers,
 		.set_random = RustStationSetRandomBits,
 		.cached_cargo = RustStationCachedCargoTriggers,
-		.spec_cargo = [](const StationSpec *s) noexcept { return s->cargo_triggers; },
+		.spec_cargo = RustStationCargoTriggers,
 		.resolve_random = [](const StationSpec *s, BaseStation *st, uint32_t t, uint8_t waiting) noexcept {
 			StationResolverObject object(s, st, TileIndex{t}, CBID_RANDOM_TRIGGER, 0);
 			object.SetWaitingRandomTriggers(StationRandomTriggers(waiting));
@@ -98,7 +98,7 @@ const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
 
 		.build_date = RustStationBuildDate<BaseStation>,
 		.airport_ttd_type = RustAirportTTDType,
-		.identity = [](BaseStation *st, uint8_t i) noexcept { const auto &sm = st->speclist[i]; return OpenTTDStationSpecIdentity{sm.grfid, sm.localidx}; },
+		.identity = [](BaseStation *st, uint8_t i) noexcept { const auto key = RustStationSlotKey(st, i); return OpenTTDStationSpecIdentity{key.grfid, key.local_id}; },
 		/* Only shared native ScopeResolver frames are materialized here; Rust
 		 * selects and caches the owner before either synchronous shell call. */
 		.town_scope = RustResolverTownScope<StationResolverObject>,
@@ -110,6 +110,40 @@ const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
 }
 #endif
 
+#ifdef WITH_RUST
+const OpenTTDStationAssociationServices &GetStationAssociationServices() noexcept
+{
+	static const OpenTTDStationAssociationServices services{
+		.triggers = RustStationSpecTriggers,
+		.shared = &GetRustSharedServices(),
+		.roadstop = &GetRoadStopResolverServices(),
+		.count = RustStationSpecCount,
+		.vacancy = RustStationSlotVacancy,
+		.spec = RustStationSlotSpec,
+		.key = RustStationSlotKey,
+		.resize = RustStationSpecResize,
+		.clear = RustStationSpecClear,
+		.set_slot = RustStationSetSpecSlot,
+		.rebind = RustStationRebindSpec,
+		.identity = RustSpecIdentity<StationSpec>,
+		.custom_index = RustCustomStationIndex,
+		.set_cached = RustStationSetCachedTriggers,
+	};
+	return services;
+}
+#endif
+
+#ifdef WITH_RUST
+template <>
+std::span<const OpenTTDGRFClassDefault> StationClass::Defaults()
+{
+	static const OpenTTDGRFClassDefault defaults[]{
+		{STATION_CLASS_LABEL_DEFAULT, STR_STATION_CLASS_DFLT},
+		{STATION_CLASS_LABEL_WAYPOINT, STR_STATION_CLASS_WAYP},
+	};
+	return defaults;
+}
+#else
 template <>
 /* static */ void StationClass::InsertDefaults()
 {
@@ -119,17 +153,22 @@ template <>
 	StationClass::Get(StationClass::Allocate(STATION_CLASS_LABEL_WAYPOINT))->name = STR_STATION_CLASS_WAYP;
 	StationClass::Get(StationClass::Allocate(STATION_CLASS_LABEL_WAYPOINT))->Insert(nullptr);
 }
+#endif
 
+#ifndef WITH_RUST
 template <>
 bool StationClass::IsUIAvailable(uint) const
 {
 	return true;
 }
+#endif
 
 /* Instantiate StationClass. */
 template class NewGRFClass<StationSpec, StationClassID, STAT_CLASS_MAX>;
 
+#ifndef WITH_RUST
 static const uint NUM_STATIONSSPECS_PER_STATION = 255; ///< Maximum number of parts per station.
+#endif
 
 /**
  * Convert GoodsEntry status to the form required for NewGRF variables.
@@ -838,6 +877,10 @@ CommandCost PerformStationTileSlopeCheck(TileIndex north_tile, TileIndex cur_til
  */
 std::optional<uint8_t> AllocateSpecToStation(const StationSpec *spec, BaseStation *st)
 {
+#ifdef WITH_RUST
+	auto index = openttd_rust_station_spec_allocate(&GetStationAssociationServices(), spec, st);
+	return index.valid ? std::optional<uint8_t>{index.value} : std::nullopt;
+#else
 	uint i;
 
 	if (spec == nullptr) return 0;
@@ -863,6 +906,7 @@ std::optional<uint8_t> AllocateSpecToStation(const StationSpec *spec, BaseStatio
 	}
 
 	return i;
+#endif
 }
 
 /**
@@ -873,6 +917,9 @@ std::optional<uint8_t> AllocateSpecToStation(const StationSpec *spec, BaseStatio
  */
 void AssignSpecToStation(const StationSpec *spec, BaseStation *st, uint8_t specindex)
 {
+#ifdef WITH_RUST
+	openttd_rust_station_spec_assign(&GetStationAssociationServices(), spec, st, specindex);
+#else
 	if (specindex == 0) return;
 	if (specindex >= st->speclist.size()) st->speclist.resize(specindex + 1);
 
@@ -881,6 +928,7 @@ void AssignSpecToStation(const StationSpec *spec, BaseStation *st, uint8_t speci
 	st->speclist[specindex].localidx = spec->grf_prop.local_id;
 
 	StationUpdateCachedTriggers(st);
+#endif
 }
 
 /**
@@ -888,6 +936,7 @@ void AssignSpecToStation(const StationSpec *spec, BaseStation *st, uint8_t speci
  * @param st Station to work with.
  * @param specindex Index of the custom station within the Station's station spec list.
  */
+#ifndef WITH_RUST
 void DeallocateSpecFromStation(BaseStation *st, uint8_t specindex)
 {
 	/* specindex of 0 (default) is never freeable */
@@ -924,6 +973,7 @@ void DeallocateSpecFromStation(BaseStation *st, uint8_t specindex)
 
 	StationUpdateCachedTriggers(st);
 }
+#endif
 
 /**
  * Draw representation of a station tile for GUI purposes.
@@ -1187,6 +1237,9 @@ void TriggerStationRandomisation(BaseStation *st, TileIndex trigger_tile, Statio
  */
 void StationUpdateCachedTriggers(BaseStation *st)
 {
+#ifdef WITH_RUST
+	openttd_rust_station_spec_cache(&GetStationAssociationServices(), st);
+#else
 	st->cached_anim_triggers = {};
 	st->cached_cargo_triggers = 0;
 
@@ -1197,4 +1250,5 @@ void StationUpdateCachedTriggers(BaseStation *st)
 		st->cached_anim_triggers.Set(sm.spec->animation.triggers);
 		st->cached_cargo_triggers |= sm.spec->cargo_triggers;
 	}
+#endif
 }

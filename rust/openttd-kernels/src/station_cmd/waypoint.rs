@@ -279,9 +279,9 @@ impl Ctx<'_> {
         if !crate::direction_func::is_valid_axis(axis) {
             return cost.error(INVALID_STRING_ID);
         }
-        if u32::from(class) >= (self.s.rail_class_count)()
-            || !(self.s.rail_waypoint_class)(class)
-            || u32::from(index) >= (self.s.rail_spec_count)(class)
+        if u32::from(class) >= crate::newgrf_class::station::count()
+            || !crate::newgrf_station::is_waypoint_class(crate::newgrf_class::station_label(class))
+            || u32::from(index) >= crate::newgrf_class::station::spec_count(class)
         {
             return cost.error(INVALID_STRING_ID);
         }
@@ -313,7 +313,7 @@ impl Ctx<'_> {
             }
         }
         let mut existing = INVALID_STATION;
-        let spec = (self.s.class_rail_spec)(class, index);
+        let spec = crate::newgrf_class::station::spec(class, u32::from(index));
         (self.s.waypoint_layout_init)(layout, spec, count);
         let offset = self
             .map()
@@ -381,7 +381,7 @@ impl Ctx<'_> {
         } else if !(self.s.waypoint_available)() {
             return cost.error(self.s.strings.too_many_stations);
         }
-        let specindex = (self.s.allocate_rail_spec)(spec, wp);
+        let specindex = crate::station_association::allocate(self.s.rail_association, spec, wp);
         if !specindex.valid {
             return cost.error(self.s.strings.too_many_specs);
         }
@@ -405,7 +405,7 @@ impl Ctx<'_> {
             },
             ADD_TRY,
         );
-        (self.s.assign_rail_spec)(spec, wp, specindex.value);
+        crate::station_association::assign(self.s.rail_association, spec, wp, specindex.value);
         self.reset_delete_counter(wp);
         (self.s.set_facility_bits)(wp, FACILITY_TRAIN);
         (self.s.set_build_date)(wp, (self.shared.calendar_date)());
@@ -449,7 +449,7 @@ impl Ctx<'_> {
             self.set_rail_flags(tile, spec);
             (self.s.set_rail_station_reservation)(tile, reserved);
             (self.shared.mark_dirty)(tile);
-            (self.s.deallocate_rail_spec)(wp, u32::from(old));
+            crate::station_association::deallocate(self.s.rail_association, wp, old);
             if spec.is_null() {
                 (self.s.close_station_inspect)(tile);
             }
@@ -476,13 +476,13 @@ impl Ctx<'_> {
         if !crate::direction_func::is_valid_axis(axis) {
             return cost.error(INVALID_STRING_ID);
         }
-        if u32::from(class) >= (self.s.road_class_count)()
-            || !(self.s.road_waypoint_class)(class)
-            || u32::from(index) >= (self.s.road_spec_count)(class)
+        if u32::from(class) >= crate::newgrf_class::roadstop::count()
+            || !crate::newgrf_station::is_waypoint_class(crate::newgrf_class::roadstop_label(class))
+            || u32::from(index) >= crate::newgrf_class::roadstop::spec_count(class)
         {
             return cost.error(INVALID_STRING_ID);
         }
-        let spec = (self.s.class_road_spec)(class, index);
+        let spec = crate::newgrf_class::roadstop::spec(class, u32::from(index));
         let count = if axis == AXIS_X { height } else { width };
         if (if axis == AXIS_X { width } else { height }) != 1
             || count == 0

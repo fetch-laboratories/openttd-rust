@@ -42,6 +42,7 @@ inline uint16_t RustEngineAircraftRange(const OpenTTDEngine *e) noexcept { retur
 inline uint8_t RustEngineDefaultCargo(const OpenTTDEngine *e) noexcept { return EngineOf(e)->GetDefaultCargoType(); }
 inline VehicleType RustEngineType(const OpenTTDEngine *e) noexcept { return EngineOf(e)->type; }
 inline bool RustEngineExclusivePreview(const OpenTTDEngine *e) noexcept { return EngineOf(e)->flags.Test(EngineFlag::ExclusivePreview); }
+inline void RustEngineSetGRFFile(const OpenTTDEngine *shell, const GRFFile *file) noexcept { RustSpecSetGRFFile(const_cast<Engine *>(EngineOf(shell)), file); }
 inline bool RustEngineHasGRF(const OpenTTDEngine *e) noexcept { return RustSpecHasGRFFile(EngineOf(e)); }
 inline uint8_t RustEngineRefitCost(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.refit_cost; }
 inline int32_t RustEnginePriceShift(const OpenTTDEngine *e, uint32_t price) noexcept { return RustGRFPriceShift(RustEngineGRF(e), price); }

@@ -21,7 +21,33 @@
 #include "table/strings.h"
 #include "../table/build_industry.h"
 
+#ifdef WITH_RUST
+#include "../rust/industry_property_ffi.h"
+#include "../rust/newgrf_loading_ffi.h"
+#include "../rust/newgrf_bytereader_services.h"
+#endif
+
 #include "../safeguards.h"
+
+#ifdef WITH_RUST
+static ChangeInfoResult IndustrytilesChangeInfo(uint first, uint last, int prop, ByteReader &buf)
+{
+	GRFFile *file = _cur_gps.grffile;
+	const OpenTTDIndustryPropertyContext context{file, file->grfid, file->grf_version, to_underlying(_settings_game.game_creation.landscape)};
+	int32_t result;
+	if (!openttd_rust_industry_tile_properties(first, last, prop, &buf, &context, &GetRustByteReaderServices(), &GetIndustryDefinitionServices(), &GetIndustryPropertyServices(), &GetRustGrfLoadingServices(), &result)) RustGRFRethrowReadError();
+	return static_cast<ChangeInfoResult>(result);
+}
+
+static ChangeInfoResult IndustriesChangeInfo(uint first, uint last, int prop, ByteReader &buf)
+{
+	GRFFile *file = _cur_gps.grffile;
+	const OpenTTDIndustryPropertyContext context{file, file->grfid, file->grf_version, to_underlying(_settings_game.game_creation.landscape)};
+	int32_t result;
+	if (!openttd_rust_industry_properties(first, last, prop, &buf, &context, &GetRustByteReaderServices(), &GetIndustryDefinitionServices(), &GetIndustryPropertyServices(), &GetRustGrfLoadingServices(), &result)) RustGRFRethrowReadError();
+	return static_cast<ChangeInfoResult>(result);
+}
+#else
 
 /**
  * Ignore an industry tile property
@@ -700,6 +726,8 @@ static ChangeInfoResult IndustriesChangeInfo(uint first, uint last, int prop, By
 
 	return ret;
 }
+
+#endif
 
 template <> ChangeInfoResult GrfChangeInfoHandler<GSF_INDUSTRYTILES>::Reserve(uint, uint, int, ByteReader &) { return CIR_UNHANDLED; }
 template <> ChangeInfoResult GrfChangeInfoHandler<GSF_INDUSTRYTILES>::Activation(uint first, uint last, int prop, ByteReader &buf) { return IndustrytilesChangeInfo(first, last, prop, buf); }
