@@ -144,14 +144,14 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             scenario,
             save=str(normalized),
             executables=executables,
-            console=[command, "unpause"],
+            console=['debug_level "grf=8"', command, "unpause"],
         )
     saves = {role: folder / role / "loaded.sav" for role in executables}
     captures = core.capture_pair(
         lambda role: dict(
             scenario,
             save=str(normalized),
-            console=[command + f' "{saves[role]}"', "unpause"],
+            console=['debug_level "grf=8"', command + f' "{saves[role]}"', "unpause"],
             ticks=1,
         ),
         executables,
