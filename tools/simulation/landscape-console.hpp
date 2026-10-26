@@ -198,7 +198,7 @@ static void GenericPrograms()
 	{
 		// Cycle 95 reaches both grass and tree growth after the ambient callback mutates them.
 		AutoRestoreBackup<LandscapeType> temperate(_settings_game.game_creation.landscape, LandscapeType::Temperate);
-		AutoRestoreBackup<decltype(_settings_game.construction.extra_tree_placement)> placement(_settings_game.construction.extra_tree_placement, ETP_NO_SPREAD);
+		AutoRestoreBackup<decltype(_settings_game.construction.extra_tree_placement)> placement(_settings_game.construction.extra_tree_placement, 0); // tree_cmd.cpp's private ETP_NO_SPREAD.
 		TimerGameTick::counter = 15U << 8;
 		MakeTree(tile, TREE_TEMPERATE, 1, TreeGrowthStage::Grown, TREE_GROUND_ROUGH, 3);
 		ResetGenericCallbacks(); AddGenericCallback(GSF_SOUNDFX, &first, &yes); yes.tree_mutation = tile;
