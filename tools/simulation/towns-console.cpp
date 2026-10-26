@@ -672,6 +672,15 @@ static bool HouseDefinitionsScenario(std::span<std::string_view> args)
 	mode.Restore(); owner.Restore(); roads.Restore();
 	fmt::print(stderr, "TOWN definition-rng {} {} {} {}\n", _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]);
 	HouseDefinitionNeed(SaveOrLoad(std::string(args[3]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false) == SL_OK, "save");
+	std::vector<std::pair<TileIndex, HouseID>> substitutes;
+	for (TileIndex tile{}; tile < Map::Size(); ++tile) {
+		if (IsTileType(tile, MP_HOUSE) && _house_mngr.GetGRFID(GetHouseType(tile)) == HOUSE_DEFINITION_GRF) substitutes.emplace_back(tile, _house_mngr.GetSubstituteID(GetHouseType(tile)));
+	}
+	std::erase_if(_grfconfig, [](const auto &config) { return config->ident.grfid == HOUSE_DEFINITION_GRF; });
+	ReloadNewGRFData();
+	HouseDefinitionNeed(!substitutes.empty() && _house_mngr.GetID(0, HOUSE_DEFINITION_GRF) == before, "missing-keeps-hids");
+	for (auto [tile, substitute] : substitutes) HouseDefinitionNeed(IsTileType(tile, MP_HOUSE) && GetHouseType(tile) == substitute, "missing-substitute");
+	fmt::print(stderr, "TOWN definition-missing-rng {} {} {} {}\n", _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]);
 	fmt::print(stderr, "TOWN definition-complete true\n");
 	return true;
 }
