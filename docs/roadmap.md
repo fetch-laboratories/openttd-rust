@@ -10,16 +10,16 @@ this roadmap over conflicting issues. Keep about 200 lines; evidence stays in PR
   tooling and glue: 119,485, 42,202 and 42,513 lines. These measures include
   comments/data, not completed behavior. #489 integrated type definitions and
   maintenance: 780 retired lines and 488 net glue. #490 adds no retirement.
-- The repaired-tip quiet pass measured TGP 1.172x, Opus 1.388x, Grok 1.375x,
-  P1996 1.341x, P2000 1.410x and P2016 1.453x at `b959f89059`. All six
-  comparisons pass; 144 timed games and 79 observations show no overlap.
+- The `f4923c79eb` quiet pass measured TGP 1.178x, Opus 1.402x, Grok 1.395x,
+  P1996 1.335x, P2000 1.393x and P2016 1.469x. All six comparisons pass;
+  144 timed games and 81 observations show no overlap. #496 records these anchors.
   All ratios are below their ceilings; P2016 remains in the 5% trigger band.
   #487/#489 record the six anchors. The `f4923c79eb` instruction comparisons
   pass under those anchors: projections are 1.172281x, 1.387911x, 1.374991x,
   1.341336x, 1.410312x and 1.453359x in the same order. All counts fell;
-  clamped projection growth is zero. Only P2016 triggers the prepared quiet pass.
-- Four branches remain: reviewed industry #479, houses #486, reviewed stations
-  #488 and Action2 construction #493. #494 combines the two ready owners for Full;
+  clamped projection growth is zero. Only P2016 remains in the measured trigger band.
+- Six branches remain: industry #479, houses #486, stations #488, Action2 #493,
+  vehicle properties #495 and maintenance #496. #494 combines industry/stations for Full;
   house adoption follows its canonical manager. #156 retains corpus gaps.
 
 ## Twentieth steering review (2026-10-24, recovery and production evidence)
@@ -167,10 +167,11 @@ Maintenance rows use original retirement and net glue (#223); evidence stays in 
 
 ## Phase 1: maintenance and coverage
 
-#275's selected visual repairs and #199's train/order and property-disable helpers
-are integrated. Profile the merged tip under the same anchors, attribute a rise
-over 3% and collect a quiet pass only at the trigger. Preserve original-operation
-credits and bounded holds. #168 retains boundary debt; #312 is unselected.
+#496 batches the six quiet anchors with credited #275 repairs: compiler exposure
+of the existing road max-speed/crash bodies, reuse of the movement-table cache
+and removal of the unused crash tile. Preserve separate observations and callees;
+net exposure bounds are not promised savings. #168 retains boundary debt;
+#312 is unselected. Ready owners proceed alongside this maintenance.
 
 ## Phase 2: work order
 
@@ -193,10 +194,11 @@ Root owns final combinations and speed; completed reports remain in the PRs.
 | --- | --- | --- |
 | #475 industry definitions / #479 | `b8757b2fed` | Fixing review and root spot-check pass; #494 combination validation. |
 | #477 house definitions / #486 | `1966724cdb` | Independent checks pass; adopt integrated manager/disable helpers after #479. |
-| #275 speed | `f4923c79eb` | Six instruction comparisons pass; quiet runtimes prepared, collection pending. |
+| #275 speed / #496 | `f4923c79eb` | Quiet pass complete; implement selected repairs with the six saved anchors. |
 | #484 station/road-stop definitions / #488 | `ebdce9ce31` | Fixing review and root spot-check pass; #494 combination validation. |
 | #485 Action2 graph construction / #493 | `bf8e9a3d85` | Real-file command/reload checkpoint passes; complete grammar evidence and audits. |
-| #491 vehicle properties; #492 airport definitions | selected | Implement in this order as integration frees capacity. |
+| #491 vehicle properties / #495 | `c563eeec64` | Canonical rail-label repair pushed; finish four-type file evidence and audits. |
+| #492 airport definitions | selected next | Start after integration frees capacity. |
 
 macOS cadence passed on `f6cec101d3`; four integrations have followed it.
 
