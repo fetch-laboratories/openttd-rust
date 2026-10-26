@@ -44,6 +44,10 @@ static void Inspect(bool reload)
 	EngineID partial_id = GetNewEngineID(partial, VEH_ROAD, 1);
 	Require(partial_id != EngineID::Invalid() && Engine::Get(partial_id)->VehInfo<RoadVehicleInfo>().max_speed == 88, "partial-native-parser");
 	Require(GetGRFConfig(ID("V471"))->status == GCS_DISABLED, "inhibition");
+	GRFConfig *fatal = GetGRFConfig(ID("F471"));
+	Require(fatal->status == GCS_DISABLED && fatal->errors.size() == 1 && fatal->errors.front().message == STR_NEWGRF_ERROR_GRM_FAILED, "fatal-grm");
+	Require(GetGRFConfig(ID("Z471"))->status == GCS_DISABLED && GetGRFConfig(ID("Z471"))->errors.empty(), "skip-before-action8");
+	Require(GetGRFConfig(ID("E471"))->status == GCS_ACTIVATED && GetFileByGRFID(ID("E471"))->param.empty(), "skip-after-action8");
 	if (!reload) Require(GetGRFConfig(ID("MISS"))->status == GCS_NOT_FOUND, "missing");
 	fmt::print(stderr, "LOADING state {} {} {} {} {}\n", id.base(), partial_id.base(), file->GetParam(3), broken->errors.front().nfo_line, broken->errors.front().param_value[0]);
 	fmt::print(stderr, "LOADING {} true\n", reload ? "reload" : "complete");
@@ -54,7 +58,7 @@ static bool LoadingScenario(std::span<std::string_view> args)
 	if (args[1] == "inspect") { Inspect(true); return true; }
 	if (args.size() < 3) return false;
 	_grfconfig.clear();
-	for (const char *name : {"main", "broken", "victim"}) {
+	for (const char *name : {"main", "broken", "victim", "fatal", "before", "after"}) {
 		auto c = std::make_unique<GRFConfig>(std::string(args[2]) + "/" + name + ".grf");
 		Require(FillGRFDetails(*c, false, NO_DIRECTORY), "file-scan");
 		c->flags.Reset(GRFConfigFlag::InitOnly);

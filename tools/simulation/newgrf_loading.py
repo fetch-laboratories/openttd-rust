@@ -84,6 +84,19 @@ def fixtures(folder, version):
         ("main", main),
         ("broken", broken),
         ("victim", [info(b"V471"), param(0, 999)]),
+        (
+            "fatal",
+            [
+                info(b"F471"),
+                param(0, 11),
+                bytes((13, 1, 0, 0, 254)) + dword((129 << 16) | (11 << 8) | 255),
+            ],
+        ),
+        ("before", [bytes((9, 0x84, 4, 2)) + dword(0) + b"\x00", info(b"Z471")]),
+        (
+            "after",
+            [info(b"E471"), bytes((9, 0x88, 4, 10)) + b"NONE\x00", param(0, 999)],
+        ),
     ):
         (folder / f"{name}.grf").write_bytes(grf(actions, version))
 
