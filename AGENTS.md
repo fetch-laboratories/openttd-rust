@@ -87,7 +87,9 @@ fork; the remaining upstream documentation explains behavior and architecture.
   integrated copies, and a PR that removes a caller deletes the export,
   declaration or callback field it orphans. A test or harness caller does not
   keep a `WITH_RUST` body or `openttd_rust_*` export alive: the fixture moves
-  onto the Rust entry and the body goes.
+  onto the Rust entry and the body goes. Before requesting Full, a PR that
+  removes a name greps `tools/simulation/` and `src/tests/` for it: fixtures of
+  scenarios not run locally compile only in Full.
 - The selected #274 shared map descriptor is limited to audited scheduler clear,
   water and tree loops (`docs/design/world-state.md`). C++ retains canonical
   arrays and writes. Shared header helpers preserve native assertions; raw
@@ -150,9 +152,12 @@ fork; the remaining upstream documentation explains behavior and architecture.
   those net costs (never gross callback counts), turns the two or three largest
   into maintenance PRs, then re-measures. A candidate crediting under 0.5% of
   the scenario's loop count stays a note on #275, and candidates batch until
-  they credit 1% together (provisional). Each profile keeps its per-function
-  report under `.local/` until the next profile replaces it, so attribution
-  can be rechecked.
+  they credit 1% together (provisional). Each profile keeps its candidate
+  `callgrind.out` under `.local/simulation/` until the next profile replaces
+  it. Attribution compares inclusive costs under `StateGameLoop()` (or
+  `_GenerateWorld()`) with a retained reference profile of the same scenario in
+  `.local/speed-reference-profiles/`, because the reference Ir cache keeps no
+  per-function data.
 - A pass runs alongside other work: only its timed collection pauses builds,
   links, profiles and other games. Prepare runtimes before the hold and release
   it when the last timed game exits; parsing, attribution and reports run after

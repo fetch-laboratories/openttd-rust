@@ -11,80 +11,123 @@ Evidence stays in PRs.
   tooling and glue: 122,234, 43,001 and 43,921 lines. These measures include
   comments/data, not completed behavior. Since review twenty: 9 owners and
   5,722 retired lines in one session, through 8 integrations.
-- Fidelity: four independent audits of #473, #479, #488 and #481 (4,245
-  retired lines) found no reachable divergence. Each port left orphan
-  `WITH_RUST` bodies or exports and unlisted coverage gaps; #515 and the #156
-  comment of 2026-10-26 hold them.
+- Fidelity: five independent audits of #473, #479, #488, #481 and draft #495
+  (5,269 retired lines) found no reachable divergence. Each port left orphan
+  `WITH_RUST` bodies or exports and unlisted coverage gaps; #515, the #495 PR
+  comment and the #156 comments of 2026-10-26 hold them.
 - Speed: the f492 pass measured TGP 1.178x and P2016 1.469x (the other four
-  1.335x to 1.402x), all below their ceilings; P2016 is in band. The three
-  2026-10-26 passes spread 3.3% on P2016 while the five #275 repairs together
-  credited 1.13% of its loop count, so the in-band rule in AGENTS.md now
-  governs passes. No per-function report survives for f492; the next profile
-  keeps its report.
+  1.335x to 1.402x), all below their ceilings; P2016 is in band. A steering
+  profile of `4853789508` puts P2016 Ir 1.04% below its anchor and TGP flat,
+  so projections are unchanged. Against the original, 80% of P2016's 3.04G Ir
+  gap sits in the road, aircraft and train controllers, and per-tile accessor
+  callbacks from Rust take 4.7% of its loop.
 - Four drafts remain: houses #486, Action2 #493, vehicle properties #495 and
   airport/tile definitions #499. All contain the code tip, and the base has
-  moved only in docs since, so #495 and #493 can request Full at their current
-  heads. #156 retains corpus gaps.
+  moved only in docs since. #495 needs one fix commit before its Full and #493
+  a scoped adoption review. #156 retains corpus gaps.
 - Queued by the user: testing #503 to #513, typing #500 and #501, the CI
   matrix change #514 and the issue-form change #502.
 
-## Twenty-first steering review (2026-10-26, orphans, concurrency and cadence)
+## Twenty-first steering review (2026-10-26, orphans, concurrency, cadence and accessor cost)
 
-Four Opus fidelity audits (#473, #479, #488, #481), one process audit and one
-speed audit; root verified CI, metrics and worktrees itself. The user's
-housekeeping between wind-down and this review (#500 to #514, #502, nine docs
-commits) was reviewed as root's work.
+Two Claude Code passes. The first (Fable) ran four Opus fidelity audits (#473,
+#479, #488, #481) and short process and speed audits before its session budget
+ran out. The second (Opus) audited #495, which integrates next and retires more
+than three of those four, checked the process and speed claims against CI logs
+and retained profiles, and profiled `4853789508` against the pinned original on
+P2016. The user's housekeeping between wind-down and this review (#500 to #514,
+#502, nine docs commits) was reviewed as root's work.
 
 Findings:
-- No reachable divergence in the four largest ports. Every one left
+- No reachable divergence in #473, #479, #488, #481 or #495. Every one left
   `WITH_RUST` bodies or `openttd_rust_*` exports whose only callers are tests
   or the harness, and every review report said "no orphans". #473 also carries
   two dead `#ifdef WITH_RUST` branches nested inside the retained
-  `AfterLoadGRFs`.
+  `AfterLoadGRFs`; #495 keeps `CommitVehicleListOrderChanges` and its export
+  alive for two harness probes and runs the C++ `Slide` over a Rust vector.
 - Load-time boundary cost repeats one pattern: a callback per field or slot
   (industry finalise about 2,700 calls per load, label lookup 64 calls, station
-  cache per slot) and manager callbacks that bounce into Rust-owned storage.
+  cache per slot). The house, airport and object manager callbacks that bounce
+  into Rust-owned storage are removed by #486, #499 and #498's scope.
 - Process: 86 delegated tasks and 14 Fulls (8 passed, 6 failed, 221 minutes)
   for 9 owners and 8 maintenance items. Owners built concurrently over each
   other's unintegrated services (cargo registry, Reader, type registry, house
-  manager) cost about 20 tasks, 29 adoption commits and 4 scoped reviews. Every
-  combination PR failed its first Full while every solo PR passed; batching
-  saved no Fulls net and added prepare tasks and scoped reviews.
+  manager) cost about 20 tasks, 29 adoption commits and 4 scoped reviews. The
+  six failed Fulls came from Windows or portable builds (#468 solo, #480,
+  #494), scenario fixtures still binding a removed facade or slot (#483, #489,
+  #494's second run) and apt timeouts; none came from combining components.
 - Speed: three quiet passes in one session (P2016 1.502x, 1.453x, 1.469x)
   spread 3.3% while the six credited repair bounds total 154M Ir, 1.13% of the
   loop, and the wall ratio moved opposite to the instruction count between
   passes. Five repair PRs, nine profiling or attribution tasks and 432 timed
-  games recovered nothing a pass can show, and no per-function report survives
-  to recheck the attribution. #486, #495 and #499 change runtime accessors and
-  need a profile after integration, not before.
+  games recovered nothing a pass can show.
+- Speed attribution at `4853789508` (P2016, inclusive costs under
+  `StateGameLoop()`): 13.434G Ir against the original's 10.395G. The 3.04G gap
+  is road vehicles +1.00G (1.31x), aircraft +0.77G (1.31x), trains +0.52G
+  (1.57x), tile loop +0.25G, station tick +0.22G, vehicle dispatch about +0.14G
+  and loading +0.08G; ships run 0.12G below the original. Map and tile accessor
+  callbacks from Rust take 630M Ir self (4.7% of the loop) over 114 wrappers.
+  The top seven (`RustNormalRoadStatusTail`, `RustPixelLocation`,
+  `SharedTileType`, `RustTilePixelSlope`, `SharedNormalRoadBits`,
+  `RustHasTileRoadType`, `RustWaterTileType`) take 437M over 31.9M calls at 8 to
+  27 instructions each, where the original inlines a few: about 220M Ir (1.6%)
+  of net callee overhead after an estimated inline cost per call, before
+  caller-side savings, more than all six earlier repairs together. #274's
+  design keeps them typed until audited, and #275 forbade enlarging the
+  descriptor. Candidate profiles survive under `.local/simulation/`; the
+  reference keeps only its Ir count, so this review retained a reference P2016
+  profile under `.local/speed-reference-profiles/`. No save loads a NewGRF, so
+  definition and Action2/3 parsing cannot move a ratio; #486 and #499 change
+  runtime accessors, #495 none on the game loop.
+- Direction: the C++ still compiled in simulation sources is mostly drawing,
+  GUI, mode control and the generation driver, so the NewGRF definition owners
+  are a reasonable next step. They keep spec storage native behind per-field
+  setters (net glue 491 to 715 against 780 to 881 retired).
 - Hygiene: 3 of 7 draft worktrees are redundant, 3 drafts sit on local
   branches named differently from their PR branches, and root made 17 roadmap
   commits in one session.
 
 Corrections (AGENTS.md carries the rules; apply these in order):
-1. Integrate the ready drafts solo: #495 then #493, each with a Full at its
-   current head (no code base update is needed), then #486 and #499 as they
-   complete. First rerun the cancelled macOS Debug job at `4853789508`; set
-   `CI_MACOS_HEAVY` only if it is cancelled again.
-2. Next maintenance batch: #515 (orphans, duplicates, bounces and constants
-   from the audits) plus #500's first PR (the shared newtype module only).
-   #514 is the next workflow PR and carries #502.
+1. Integrate the ready drafts solo. #495 first takes one fix commit for its
+   orphan facade and export and the `Slide` port (its PR comment), a fresh
+   scoped review of that commit, then a Full at the new head. #493 takes its
+   fresh scoped adoption review, then a Full at its head (no code base update is
+   needed). #486 and #499 follow as they complete. First rerun the cancelled
+   macOS Debug job at `4853789508`; set `CI_MACOS_HEAVY` only if it is
+   cancelled again.
+2. Next maintenance batch: #515 (orphans, duplicates and constants from the
+   audits; it no longer carries the manager bounces) plus #500's first PR (the
+   shared newtype module only). #514 is the next workflow PR and carries #502.
 3. Concurrent owners need disjoint unintegrated services. #497 Action3 and
    #498 object definitions start only after the services they share with
    #486, #493 and #499 integrate; planning names each owner's service needs.
 4. Batch only disjoint-file components into one integration PR; overlapping
-   ones integrate one at a time at their reviewed heads.
+   ones integrate one at a time at their reviewed heads. Its stated basis was
+   wrong (see Process), so the next review judges it by Fulls per integrated
+   owner and by base-update reviews.
 5. Review reports start with `Reviewed commit:` and list each `WITH_RUST` body
    and export with its production caller; a harness or test caller is not one.
+   Before requesting Full, a PR that removes a name greps `tools/simulation/`
+   and `src/tests/` for it.
 6. Speed: while a scenario sits in band, a pass runs only after a 3%
    projection rise or a repair batch crediting 1.5% of the loop; a candidate
    under 0.5% of the loop stays a #275 note and candidates batch to 1%
    (provisional, from the 3.3% spread and 1.13% credited). Keep each profile's
-   per-function report until the next profile.
-7. Remove the redundant worktrees `t3-d6418e16`, `t3-9bff1490` and
+   candidate output; attribute against the retained reference profile.
+7. Next #275 item, its own maintenance PR within six branches (it does not wait
+   for #515): audit the seven ground-vehicle accessors named above for #274's
+   descriptor under its existing rules (field-sized loads, fresh at the
+   original observation points, ended before unproved callbacks), replace each
+   audited callback with the shared header-module helper, and credit the result
+   as net P2016 Ir against the retained reference profile. An accessor the
+   audit cannot prove keeps its typed service. This lifts #275's "do not
+   enlarge shared raw descriptors" for these accessors only. If the batch
+   credits 1.5%, the in-band pass follows; trains (1.57x) are the next
+   attribution target.
+8. Remove the redundant worktrees `t3-d6418e16`, `t3-9bff1490` and
    `t3-758125c7`; keep one worktree per PR, on its PR branch. Commit the
    roadmap when taking stock or changing the work order, not per integration.
-8. Testing queue (user issues), after #515: #504 coverage measurement first,
+9. Testing queue (user issues), after #515: #504 coverage measurement first,
    then #505 sanitizers and #506 threaded/TSan (they can catch the defect
    classes of #461 and #462, which the harness cannot), then the #503 tier,
    #507, #508, then #509 to #511. #512's trailer is now a rule; #513 needs no
@@ -229,20 +272,23 @@ Batches before #453 (#358 to #448) are recorded in their PRs.
 ## Phase 1: maintenance and coverage
 
 #515 is the next maintenance batch, with #500's shared newtype module. The
-merged-tip instruction profile is due after the next integration under the
-unchanged f492 anchors; a quiet pass runs only under the in-band rule in
-AGENTS.md. #168 retains boundary debt; #312 is unselected. Ready owners proceed
+#275 ground-vehicle accessor audit is the next speed item (twenty-first
+steering, correction 7). The merged-tip instruction profile is due after the
+next integration under the unchanged f492 anchors (the steering profile of
+`4853789508` does not reset that count); a quiet pass runs only under the
+in-band rule in AGENTS.md. #168 retains boundary debt; #312 is unselected. Ready owners proceed
 alongside maintenance; only timed collection holds games.
 
 ## Phase 2: work order
 
-1. **Ready drafts, solo:** rerun the macOS Debug job at `4853789508`; Full for
-   #495 at `85674c615d` and merge if green; fresh scoped review of #493's
-   adoption resolutions, then its Full; #486 runs its native tests and 11
+1. **Ready drafts, solo:** rerun the macOS Debug job at `4853789508`; #495
+   takes the fix commit from its steering comment, a fresh scoped review and a
+   Full at the new head; fresh scoped review of #493's adoption resolutions,
+   then its Full; #486 runs its native tests and 11
    scenarios, scoped review, Full; #499 fixes the `StationGfx` compile error,
    finishes file-loaded/reload and parser evidence, whole-port review, Full.
 2. **Maintenance:** #515 plus #500's first PR as one batch (one review, one
-   Full). #514 workflow PR carrying #502, with the bootstrap procedure. #275
+   Full); the #275 ground-vehicle accessor audit as its own maintenance PR. #514 workflow PR carrying #502, with the bootstrap procedure. #275
    profile after the next integration.
 3. **Whole owners:** #497 Action3 and #498 object definitions start from
    integrated `rust-migration` once the services they share with the drafts
@@ -261,7 +307,7 @@ rollback target or confirmed regression. Baseline validation passed at
 
 | Item | Saved head | Next action |
 | --- | --- | --- |
-| #491 vehicle properties / #495 | `85674c615d` | Full at this head, then matching-head merge. |
+| #491 vehicle properties / #495 | `85674c615d` | Fix commit from the steering comment (orphan facade and export, `Slide` port); fresh scoped review; Full; matching-head merge. |
 | #485 Action2 / #493 | `5f7b996386` | Fresh scoped review of the adoption resolutions, then Full. |
 | #477 houses / #486 | `e956d15b2c` | Native tests and 11 house/loading scenarios; scoped adoption review; Full. |
 | #492 airports / #499 | `ff917b3cf7` | Fix the `StationGfx` compile error; finish file-loaded/reload and parser evidence; whole-port review. |
@@ -269,6 +315,7 @@ rollback target or confirmed regression. Baseline validation passed at
 | #275 instruction profile | `f4923c79eb` | Due after the next integration. |
 | Worktrees | | Remove `t3-d6418e16`, `t3-9bff1490`, `t3-758125c7`; one worktree per PR on its PR branch. |
 | #515 and #500 first PR | unstarted | Next maintenance batch after the first ready integration. |
+| #275 accessor audit | unstarted | Twenty-first steering, correction 7; credit against `.local/speed-reference-profiles/`. |
 
 Selection: /root, gpt-6.1-sol, xhigh; planning agents run gpt-6-astra, high.
 Scopes and evidence plans are in the selected issues; PRs carry current task status.
