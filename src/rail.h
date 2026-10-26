@@ -333,12 +333,14 @@ inline RailTypes GetAllPoweredRailTypes(RailTypes railtypes)
  * @param railtypes Set of railtypes to get the introduced railtypes from.
  * @return Union of all introduced railtypes.
  */
+#ifndef WITH_RUST
 inline RailTypes GetAllIntroducesRailTypes(RailTypes railtypes)
 {
 	RailTypes introduces{};
 	for (RailType rt : railtypes) introduces.Set(GetRailTypeInfo(rt)->introduces_railtypes);
 	return introduces;
 }
+#endif
 
 /**
  * Checks if an engine of the given RailType can drive on a tile with a given

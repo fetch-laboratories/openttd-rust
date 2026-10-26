@@ -3271,7 +3271,6 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 			.demolish_building = STR_ERROR_BUILDING_MUST_BE_DEMOLISHED,
 			.ship_in_way = STR_ERROR_SHIP_IN_THE_WAY,
 		},
-		.rail_type_valid = [](uint8_t rt) noexcept { return ValParamRailType(static_cast<RailType>(rt)); },
 		.compatible_rail = RustRailCompatibleLegacy,
 		.powered_rail = RustRailPoweredLegacy,
 		.train_powered = [](Train *v, uint8_t rt) noexcept { return RustRailPowered(v->GetRailTypes(), static_cast<RailType>(rt)); },

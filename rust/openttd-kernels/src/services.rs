@@ -363,8 +363,8 @@ pub struct Services {
     pub set_road_directions: extern "C" fn(u32, u8),
     /// Canonical native `road_powered` service.
     pub road_powered: extern "C" fn(u8, u8) -> bool,
-    /// Canonical native `road_type_valid` service.
-    pub road_type_valid: extern "C" fn(u8) -> bool,
+    /// Leaves for direct Rust type introduction and admission.
+    pub type_availability: extern "C" fn() -> *const crate::type_availability::Services,
     /// Native leaves for direct calls to the shared Rust PBS owner.
     pub pbs_services: extern "C" fn(*const Services) -> *const crate::pbs::PbsServices,
     /// Shared live service at helipad observation.
@@ -763,7 +763,7 @@ crate::abi::layouts! {
         set_road_owner,
         set_road_directions,
         road_powered,
-        road_type_valid,
+        type_availability,
         pbs_services,
         service_at_helipad,
         set_tropic_zone,
@@ -916,9 +916,6 @@ pub fn fixture(
     extern "C" fn two_types(_: u8, _: u8) -> bool {
         false
     }
-    extern "C" fn type_valid(_: u8) -> bool {
-        false
-    }
     Services {
         movement_services: fixture_movement,
         set_tile_owner: zone,
@@ -991,7 +988,7 @@ pub fn fixture(
         set_road_owner: set_three,
         set_road_directions: zone,
         road_powered: two_types,
-        road_type_valid: type_valid,
+        type_availability: fixture_type_availability,
         pbs_services: train_safe,
         service_at_helipad: flag0,
         set_tropic_zone: zone,
@@ -1491,4 +1488,9 @@ extern "C" fn unused_road_is_tram(_: RoadType) -> bool {
 #[cfg(test)]
 extern "C" fn fixture_movement() -> *const crate::movement::MovementServices {
     std::ptr::null()
+}
+
+#[cfg(test)]
+extern "C" fn fixture_type_availability() -> *const crate::type_availability::Services {
+    std::process::abort()
 }

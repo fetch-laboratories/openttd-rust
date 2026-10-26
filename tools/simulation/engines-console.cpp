@@ -59,9 +59,11 @@ static Engine *UnusedEngine(EngineID except = EngineID::Invalid())
 }
 #include "subsidies-console.inc"
 #include "cargomonitor-console.inc"
+#include "engine-types-console.inc"
 static bool EnginesScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
+	if (args[1].starts_with("types")) return TypesScenario(args);
 	if (args[1].starts_with("monitors")) return MonitorScenario(args);
 	if (args[1].starts_with("subsidies")) return SubsidyScenario(args);
 	Company *c = nullptr;

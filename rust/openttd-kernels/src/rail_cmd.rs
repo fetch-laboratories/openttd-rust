@@ -140,8 +140,6 @@ pub struct RailCommandServices {
     /// Signal-buffer occupancy and assertion services (`_signal_services`).
     pub signal: *const crate::signal::SignalServices,
     pub strings: Strings,
-    /// `ValParamRailType`.
-    pub rail_type_valid: extern "C" fn(u8) -> bool,
     /// `IsCompatibleRail`.
     pub compatible_rail: extern "C" fn(u8, u8) -> bool,
     /// `HasPowerOnRail(RailType, RailType)`.
@@ -492,7 +490,7 @@ impl<'a> Ctx<'a> {
         auto_remove_signals: bool,
     ) {
         cost.set(0);
-        if !(self.s.rail_type_valid)(railtype) || track >= 6 {
+        if !crate::rail::val_param_rail_type(self.shared, railtype) || track >= 6 {
             cost.error(INVALID_STRING_ID);
             return;
         }
@@ -960,7 +958,7 @@ impl<'a> Ctx<'a> {
         fail_on_obstacle: bool,
     ) {
         total.set(0);
-        if (!remove && !(self.s.rail_type_valid)(railtype)) || track >= 6 {
+        if (!remove && !crate::rail::val_param_rail_type(self.shared, railtype)) || track >= 6 {
             return total.error(INVALID_STRING_ID);
         }
         let size = self.map_size();
@@ -1038,7 +1036,7 @@ impl<'a> Ctx<'a> {
         railtype: u8,
         dir: u8,
     ) {
-        if !(self.s.rail_type_valid)(railtype) || dir >= 4 {
+        if !crate::rail::val_param_rail_type(self.shared, railtype) || dir >= 4 {
             return cost.error(INVALID_STRING_ID);
         }
         let tileh = (self.shared.tile_slope)(tile);
@@ -1660,7 +1658,7 @@ impl<'a> Ctx<'a> {
         totype: u8,
         diagonal_area: bool,
     ) {
-        if !(self.s.rail_type_valid)(totype) {
+        if !crate::rail::val_param_rail_type(self.shared, totype) {
             return cost.error(INVALID_STRING_ID);
         }
         if area_start >= self.map_size() {
@@ -2439,7 +2437,6 @@ crate::abi::layouts! {
         command,
         signal,
         strings,
-        rail_type_valid,
         compatible_rail,
         powered_rail,
         train_powered,

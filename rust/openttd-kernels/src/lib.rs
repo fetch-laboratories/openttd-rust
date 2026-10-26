@@ -1408,3 +1408,6 @@ pub mod base_bitset_type;
 
 mod newgrf_airport;
 mod newgrf_roadstop;
+
+mod rail;
+mod type_availability;
