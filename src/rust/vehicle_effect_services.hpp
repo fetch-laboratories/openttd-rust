@@ -13,7 +13,10 @@ const OpenTTDVisualServices &GetRustVisualServices()
 		.shared = &GetRustSharedServices(),
 		.gate = [](OpenTTDVehicle *shell, OpenTTDVisualGate *gate) noexcept {
 			const Vehicle *v = VehicleOf(shell);
-			*gate = {.speed = RustVehicleSpeed(v), .status = RustVehicleStatus(v), .smoke = RustVehicleSmokeAmount(), .primary = RustVehiclePrimary(v)};
+			gate->speed = RustVehicleSpeed(v);
+			gate->status = RustVehicleStatus(v);
+			gate->smoke = RustVehicleSmokeAmount();
+			gate->primary = RustVehiclePrimary(v);
 		},
 		.show = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualShow {
 			const Vehicle *v = VehicleOf(shell);
