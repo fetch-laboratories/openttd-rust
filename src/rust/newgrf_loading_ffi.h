@@ -206,6 +206,16 @@ struct OpenTTDGrfLoadingServices {
 	void (*id_mismatch)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(id_mismatch);
 	void (*invalid_version)(const GRFConfig *, uint32_t, uint8_t, const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(invalid_version);
 	StringID null_error;
+	void (*unknown_action)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unknown_action);
+	void (*handling_action)(uint8_t, GrfLoadingStage) noexcept OPENTTD_SERVICE_DEFAULT(handling_action);
+	void (*preloaded_sprite)() noexcept OPENTTD_SERVICE_DEFAULT(preloaded_sprite);
+	void (*unexpected_data)() noexcept OPENTTD_SERVICE_DEFAULT(unexpected_data);
+	void (*unexpected_import)() noexcept OPENTTD_SERVICE_DEFAULT(unexpected_import);
+	void (*read_bounds_error)() noexcept OPENTTD_SERVICE_DEFAULT(read_bounds_error);
+	void (*reading_file)(const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(reading_file);
+	void (*invalid_format)() noexcept OPENTTD_SERVICE_DEFAULT(invalid_format);
+	void (*unsupported_compression)() noexcept OPENTTD_SERVICE_DEFAULT(unsupported_compression);
+	void (*loaded_sprites)(SpriteID) noexcept OPENTTD_SERVICE_DEFAULT(loaded_sprites);
 };
 extern "C" {
 void openttd_rust_grf_unsafe(const OpenTTDGrfLoadingServices *);

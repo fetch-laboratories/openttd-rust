@@ -246,6 +246,16 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.id_mismatch = [](uint32_t old_id, uint32_t new_id) noexcept { Debug(grf, 0, "GRFInfo: GRFID {:08X} in FILESCAN stage does not match GRFID {:08X} in INIT/RESERVE/ACTIVATION stage", std::byteswap(old_id), std::byteswap(new_id)); },
 		.invalid_version = [](const GRFConfig *c, uint32_t id, uint8_t version, const uint8_t *name, size_t len) noexcept { Debug(grf, 0, "{}: NewGRF \"{}\" (GRFID {:08X}) uses GRF version {}, which is incompatible with this version of OpenTTD.", c->filename, StrMakeValid(std::string_view{reinterpret_cast<const char *>(name), len}), std::byteswap(id), version); },
 		.null_error = STR_NULL,
+		.unknown_action = [](uint8_t action) noexcept { GrfMsg(7, "DecodeSpecialSprite: Skipping unknown action 0x{:02X}", action); },
+		.handling_action = [](uint8_t action, GrfLoadingStage stage) noexcept { GrfMsg(7, "DecodeSpecialSprite: Handling action 0x{:02X} in stage {}", action, stage); },
+		.preloaded_sprite = []() noexcept { GrfMsg(7, "DecodeSpecialSprite: Using preloaded pseudo sprite data"); },
+		.unexpected_data = []() noexcept { GrfMsg(2, "DecodeSpecialSprite: Unexpected data block, skipping"); },
+		.unexpected_import = []() noexcept { GrfMsg(2, "DecodeSpecialSprite: Unexpected import block, skipping"); },
+		.read_bounds_error = []() noexcept { GrfMsg(1, "DecodeSpecialSprite: Tried to read past end of pseudo-sprite data"); },
+		.reading_file = [](const GRFConfig *c) noexcept { Debug(grf, 2, "LoadNewGRFFile: Reading NewGRF-file '{}'", c->filename); },
+		.invalid_format = []() noexcept { Debug(grf, 7, "LoadNewGRFFile: Custom .grf has invalid format"); },
+		.unsupported_compression = []() noexcept { Debug(grf, 7, "LoadNewGRFFile: Unsupported compression format"); },
+		.loaded_sprites = [](SpriteID count) noexcept { Debug(sprite, 2, "LoadNewGRF: Currently {} sprites are loaded", count); },
 	};
 	return services;
 }
