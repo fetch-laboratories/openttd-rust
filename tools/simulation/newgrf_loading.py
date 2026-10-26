@@ -23,6 +23,10 @@ def scenarios(soak):
     ]
 
 
+def game_args(scenario):
+    return ["-d", "grf=1"] if "newgrf_loading" in scenario else []
+
+
 def dword(value):
     return struct.pack("<I", value)
 
