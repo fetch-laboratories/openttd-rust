@@ -383,6 +383,7 @@ def write_type_grfs(folder):
             prop(feature, first, 1, 0x1E, b"\0\0"),
         ]
     a += [
+        prop(16, 3, 1, 0x17, struct.pack("<I", 1)),
         prop(16, 2, 1, 0x10, b"\x04"),
         prop(18, 1, 1, 0x10, b"\x08"),
         prop(0, 0, 1, 5, b"\0"),
@@ -411,8 +412,19 @@ def write_type_grfs(folder):
     write("types-mismatch.grf", b"T47X", [labels(18, [b"T4AA"])])
     write(
         "types-missing.grf",
-        b"T47M",
-        [labels(16, [b"R4CC"]), listing(16, 0, 0x1D, [b"R4AA"]), labels(18, [b"T4AA"])],
+        b"T47A",
+        [
+            labels(16, [b"R4CC"]),
+            listing(16, 0, 0x1D, [b"R4AA"]),
+            labels(18, [b"T4AA"]),
+            table(0x12, [b"R4CC"]),
+            table(0x16, [b"ROAD"]),
+            table(0x17, [b"ELRL"]),
+            prop(0, 0, 1, 5, b"\0"),
+            prop(1, 0, 1, 5, b"\0"),
+            prop(1, 1, 1, 5, b"\0"),
+            prop(1, 1, 1, 0x1C, b"\x01"),
+        ],
     )
 
 

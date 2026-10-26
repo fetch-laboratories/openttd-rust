@@ -54,8 +54,8 @@ pub struct RailServices {
     spec: extern "C" fn(u8) -> Handle,
     label: extern "C" fn(Handle) -> u32,
     alternate: extern "C" fn(Handle, u32) -> bool,
-    clear: extern "C" fn(u8),
-    copy_default: extern "C" fn(u8, u8),
+    clear: extern "C" fn(Handle),
+    copy_default: extern "C" fn(Handle, u8),
     resolve_gui: extern "C" fn(Handle),
     publication: extern "C" fn(Handle) -> Publication,
     sort: extern "C" fn(*mut u8, usize),
@@ -67,8 +67,8 @@ pub struct RoadServices {
     spec: extern "C" fn(u8) -> Handle,
     label: extern "C" fn(Handle) -> u32,
     alternate: extern "C" fn(Handle, u32) -> bool,
-    clear: extern "C" fn(u8),
-    copy_default: extern "C" fn(u8, u8),
+    clear: extern "C" fn(Handle),
+    copy_default: extern "C" fn(Handle, u8),
     resolve_gui: extern "C" fn(Handle),
     publication: extern "C" fn(Handle) -> Publication,
     sort: extern "C" fn(*mut u8, usize),
@@ -142,10 +142,11 @@ pub unsafe extern "C" fn openttd_rust_rail_reset(s: *const Services, defaults: u
     }
     let s = services();
     for rt in 0..RAILTYPE_END {
+        let info = (s.rail().spec)(rt);
         if rt < defaults {
-            (s.rail().copy_default)(rt, rt);
+            (s.rail().copy_default)(info, rt);
         } else {
-            (s.rail().clear)(rt);
+            (s.rail().clear)(info);
         }
     }
     unsafe {
@@ -176,16 +177,17 @@ pub extern "C" fn openttd_rust_rail_by_label(label: u32, alternate: bool) -> u8 
 pub extern "C" fn openttd_rust_rail_allocate(label: u32) -> u8 {
     let s = services();
     for rt in 0..RAILTYPE_END {
-        if (s.rail().label)((s.rail().spec)(rt)) != 0 {
+        let info = (s.rail().spec)(rt);
+        if (s.rail().label)(info) != 0 {
             continue;
         }
-        (s.rail().copy_default)(rt, RAILTYPE_RAIL);
+        (s.rail().copy_default)(info, RAILTYPE_RAIL);
         let value = Allocation {
             label,
             self_: 1u64 << rt,
             order: rt.wrapping_shl(4) | 7,
         };
-        (s.rail().allocate)((s.rail().spec)(rt), &raw const value);
+        (s.rail().allocate)(info, &raw const value);
         return rt;
     }
     INVALID_RAILTYPE
@@ -257,10 +259,11 @@ pub unsafe extern "C" fn openttd_rust_road_reset(s: *const Services, defaults: u
     }
     let s = services();
     for rt in 0..ROADTYPE_END {
+        let info = (s.road().spec)(rt);
         if rt < defaults {
-            (s.road().copy_default)(rt, rt);
+            (s.road().copy_default)(info, rt);
         } else {
-            (s.road().clear)(rt);
+            (s.road().clear)(info);
         }
     }
     unsafe {
@@ -295,11 +298,12 @@ pub extern "C" fn openttd_rust_road_by_label(label: u32, alternate: bool) -> u8 
 pub extern "C" fn openttd_rust_road_allocate(label: u32, rtt: u8) -> u8 {
     let s = services();
     for rt in 0..ROADTYPE_END {
-        if (s.road().label)((s.road().spec)(rt)) != 0 {
+        let info = (s.road().spec)(rt);
+        if (s.road().label)(info) != 0 {
             continue;
         }
         (s.road().copy_default)(
-            rt,
+            info,
             if rtt == 1 {
                 ROADTYPE_TRAM
             } else {
@@ -311,7 +315,7 @@ pub extern "C" fn openttd_rust_road_allocate(label: u32, rtt: u8) -> u8 {
             self_: 1u64 << rt,
             order: rt.wrapping_shl(2) | 7,
         };
-        (s.road().allocate)((s.road().spec)(rt), &raw const value);
+        (s.road().allocate)(info, &raw const value);
         unsafe {
             let bit = 1u64 << rt;
             (*REGISTRY.get()).road =

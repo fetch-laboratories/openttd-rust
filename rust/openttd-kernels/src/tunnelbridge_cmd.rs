@@ -482,7 +482,7 @@ impl<'a> World<'a> {
                 return cost.error(self.a.strings.demolish_bridge);
             }
             if transport == ROAD {
-                let existing = if (self.s.road_type_is_road)(roadtype) {
+                let existing = if crate::road::road_type_is_road(roadtype) {
                     road
                 } else {
                     tram
@@ -604,10 +604,10 @@ impl<'a> World<'a> {
         let mut hasroad = road != INVALID_ROADTYPE;
         let mut hastram = tram != INVALID_ROADTYPE;
         if transport == ROAD {
-            if (self.s.road_type_is_road)(roadtype) {
+            if crate::road::road_type_is_road(roadtype) {
                 road = roadtype;
             }
-            if (self.s.road_type_is_tram)(RoadType(roadtype)) {
+            if crate::road::road_type_is_tram((RoadType(roadtype)).0) {
                 tram = roadtype;
             }
         }
@@ -937,12 +937,12 @@ impl<'a> World<'a> {
                 if valid {
                     (self.r.road_infrastructure)(company, roadtype, pieces.wrapping_mul(2));
                 }
-                let road = if (self.s.road_type_is_road)(roadtype) {
+                let road = if crate::road::road_type_is_road(roadtype) {
                     roadtype
                 } else {
                     INVALID_ROADTYPE
                 };
-                let tram = if (self.s.road_type_is_tram)(RoadType(roadtype)) {
+                let tram = if crate::road::road_type_is_tram((RoadType(roadtype)).0) {
                     roadtype
                 } else {
                     INVALID_ROADTYPE

@@ -67,7 +67,7 @@ static ChangeInfoResult RailTypeReserveInfo(uint first, uint last, int prop, Byt
 	GRFFile *file = _cur_gps.grffile;
 	auto &map = file->railtype_map;
 	OpenTTDTypeMap view{.data = reinterpret_cast<uint8_t *>(map.data()), .size = map.size()};
-	int32_t result = openttd_rust_rail_reserve(&GetRustRailProperties(), &GetRustByteReaderServices(), view, file->grf_version, first, last, prop, &buf);
+	int32_t result = openttd_rust_rail_reserve(&GetRustRailProperties(), &GetRustByteReaderServices(), view, first, last, prop, &buf);
 	if (result < 0) RustGRFRethrowReadError();
 	return static_cast<ChangeInfoResult>(result);
 }

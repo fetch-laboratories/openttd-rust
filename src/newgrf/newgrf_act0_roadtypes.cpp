@@ -56,7 +56,7 @@ static ChangeInfoResult RoadTypeChangeInfo(uint first, uint last, int prop, Byte
 	GRFFile *file = _cur_gps.grffile;
 	auto &map = (rtt == RTT_TRAM) ? file->tramtype_map : file->roadtype_map;
 	OpenTTDTypeMap view{.data = reinterpret_cast<uint8_t *>(map.data()), .size = map.size()};
-	int32_t result = openttd_rust_road_change(&GetRustRoadProperties(), &GetRustByteReaderServices(), view, file->grf_version, first, last, prop, &buf, rtt);
+	int32_t result = openttd_rust_road_change(&GetRustRoadProperties(), &GetRustByteReaderServices(), view, first, last, prop, &buf, rtt);
 	if (result < 0) RustGRFRethrowReadError();
 	return static_cast<ChangeInfoResult>(result);
 }
@@ -65,7 +65,7 @@ static ChangeInfoResult RoadTypeReserveInfo(uint first, uint last, int prop, Byt
 	GRFFile *file = _cur_gps.grffile;
 	auto &map = (rtt == RTT_TRAM) ? file->tramtype_map : file->roadtype_map;
 	OpenTTDTypeMap view{.data = reinterpret_cast<uint8_t *>(map.data()), .size = map.size()};
-	int32_t result = openttd_rust_road_reserve(&GetRustRoadProperties(), &GetRustByteReaderServices(), view, file->grf_version, first, last, prop, &buf, rtt);
+	int32_t result = openttd_rust_road_reserve(&GetRustRoadProperties(), &GetRustByteReaderServices(), view, first, last, prop, &buf, rtt);
 	if (result < 0) RustGRFRethrowReadError();
 	return static_cast<ChangeInfoResult>(result);
 }

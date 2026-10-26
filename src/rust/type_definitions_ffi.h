@@ -32,7 +32,7 @@ struct OpenTTDRailProperties {
 	void (*no_label)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(no_label);
 };
 extern "C" int32_t openttd_rust_rail_change(const OpenTTDRailProperties *, const OpenTTDByteReaderServices *, OpenTTDTypeMap, uint8_t, uint32_t, uint32_t, int32_t, ByteReader *);
-extern "C" int32_t openttd_rust_rail_reserve(const OpenTTDRailProperties *, const OpenTTDByteReaderServices *, OpenTTDTypeMap, uint8_t, uint32_t, uint32_t, int32_t, ByteReader *);
+extern "C" int32_t openttd_rust_rail_reserve(const OpenTTDRailProperties *, const OpenTTDByteReaderServices *, OpenTTDTypeMap, uint32_t, uint32_t, int32_t, ByteReader *);
 struct OpenTTDRoadProperties {
 	void (*toolbar_caption)(RoadTypeInfo *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(toolbar_caption);
 	void (*menu_text)(RoadTypeInfo *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(menu_text);
@@ -58,6 +58,6 @@ struct OpenTTDRoadProperties {
 	void (*reserve_mismatch)(uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(reserve_mismatch);
 	void (*power_mismatch)(uint8_t resolved, uint8_t current) noexcept OPENTTD_SERVICE_DEFAULT(power_mismatch);
 };
-extern "C" int32_t openttd_rust_road_change(const OpenTTDRoadProperties *, const OpenTTDByteReaderServices *, OpenTTDTypeMap, uint8_t, uint32_t, uint32_t, int32_t, ByteReader *, RoadTramType);
-extern "C" int32_t openttd_rust_road_reserve(const OpenTTDRoadProperties *, const OpenTTDByteReaderServices *, OpenTTDTypeMap, uint8_t, uint32_t, uint32_t, int32_t, ByteReader *, RoadTramType);
+extern "C" int32_t openttd_rust_road_change(const OpenTTDRoadProperties *, const OpenTTDByteReaderServices *, OpenTTDTypeMap, uint32_t, uint32_t, int32_t, ByteReader *, RoadTramType);
+extern "C" int32_t openttd_rust_road_reserve(const OpenTTDRoadProperties *, const OpenTTDByteReaderServices *, OpenTTDTypeMap, uint32_t, uint32_t, int32_t, ByteReader *, RoadTramType);
 #endif

@@ -6,7 +6,8 @@
     missing_docs,
     clippy::missing_safety_doc,
     clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap
+    clippy::cast_possible_wrap,
+    clippy::too_many_arguments
 )]
 use crate::newgrf_internal::{CIR_INVALID_ID, CIR_SUCCESS, CIR_UNKNOWN};
 use crate::{
@@ -190,9 +191,10 @@ fn rail_reserve(
             0x1d => {
                 let rt = unsafe { *map.data.add(id as usize) };
                 if rt != INVALID_RAILTYPE {
+                    let info = registry::rail_spec(rt);
                     for _ in 0..reader.byte()? {
                         let label = reader.dword()?.swap_bytes();
-                        (s.alternate_label)(registry::rail_spec(rt), label);
+                        (s.alternate_label)(info, label);
                     }
                 } else {
                     (s.no_label)(id);
@@ -233,7 +235,6 @@ pub unsafe extern "C" fn openttd_rust_rail_reserve(
     s: *const RailProperties,
     reads: *const ReaderServices,
     map: TypeMap,
-    _version: u8,
     first: u32,
     last: u32,
     prop: i32,
@@ -247,7 +248,6 @@ fn road_change(
     s: &RoadProperties,
     reader: &mut Reader<'_>,
     map: TypeMap,
-    _version: u8,
     first: u32,
     last: u32,
     prop: i32,
@@ -349,9 +349,10 @@ fn road_reserve(
             0x1d => {
                 let rt = unsafe { *map.data.add(id as usize) };
                 if rt != INVALID_ROADTYPE {
+                    let info = registry::road_spec(rt);
                     for _ in 0..reader.byte()? {
                         let label = reader.dword()?.swap_bytes();
-                        (s.alternate_label)(registry::road_spec(rt), label);
+                        (s.alternate_label)(info, label);
                     }
                 } else {
                     (s.no_label)(id);
@@ -377,7 +378,6 @@ pub unsafe extern "C" fn openttd_rust_road_change(
     s: *const RoadProperties,
     reads: *const ReaderServices,
     map: TypeMap,
-    _version: u8,
     first: u32,
     last: u32,
     prop: i32,
@@ -385,7 +385,7 @@ pub unsafe extern "C" fn openttd_rust_road_change(
     rtt: u8,
 ) -> i32 {
     let mut reader = unsafe { Reader::new(native, &*reads) };
-    road_change(unsafe { &*s }, &mut reader, map, 0, first, last, prop, rtt).unwrap_or(-1)
+    road_change(unsafe { &*s }, &mut reader, map, first, last, prop, rtt).unwrap_or(-1)
 }
 
 #[unsafe(no_mangle)]
@@ -393,7 +393,6 @@ pub unsafe extern "C" fn openttd_rust_road_reserve(
     s: *const RoadProperties,
     reads: *const ReaderServices,
     map: TypeMap,
-    _version: u8,
     first: u32,
     last: u32,
     prop: i32,

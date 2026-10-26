@@ -1097,7 +1097,7 @@ unsafe fn variable(
                             ));
                     }
                     1 => {
-                        let rtt = (s.shared.road_tram_type)((s.roadtype)(v).0);
+                        let rtt = crate::road::get_road_tram_type((s.roadtype)(v).0);
                         let rt = (s.tile_roadtype)(tile, rtt);
                         return (u32::from((s.road_catenary)(rt)) * 0x200)
                             | 0x100
@@ -1225,7 +1225,7 @@ unsafe fn variable(
                         | 1;
                 }
                 1 => {
-                    let rtt = (s.shared.road_tram_type)((s.roadtype)(v).0);
+                    let rtt = crate::road::get_road_tram_type((s.roadtype)(v).0);
                     let param = crate::services::RoadType(
                         crate::type_registry::openttd_rust_road_translate(
                             u8::from(rtt.0),
@@ -1275,7 +1275,7 @@ unsafe fn variable(
                     );
                 }
                 1 => {
-                    let rtt = (s.shared.road_tram_type)((s.roadtype)(v).0);
+                    let rtt = crate::road::get_road_tram_type((s.roadtype)(v).0);
                     return (s.road_badge)(
                         ro,
                         (s.tile_roadtype)((s.vehicle.tile)(h), rtt),

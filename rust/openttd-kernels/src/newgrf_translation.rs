@@ -2,7 +2,12 @@
 //! Shared `LoadTranslationTable` policy for cargo, rail, road and tram labels.
 //! Native vector leaves publish each completed read; the native caller rethrows
 //! read failure only after Rust has returned. No whole-property prevalidation.
-#![allow(unsafe_code, missing_docs, clippy::missing_safety_doc)]
+#![allow(
+    unsafe_code,
+    missing_docs,
+    clippy::missing_safety_doc,
+    clippy::too_many_arguments
+)]
 use crate::newgrf_bytereader::{ByteReader, ReadError, Reader, Services as ReaderServices};
 use crate::newgrf_internal::{CIR_INVALID_ID, CIR_SUCCESS};
 use std::ffi::{c_char, c_void};
