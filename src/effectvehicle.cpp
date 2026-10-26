@@ -618,7 +618,7 @@ extern "C" const OpenTTDEffectCreationServices *GetRustEffectCreationServices() 
 
 static bool RunEffect(EffectVehicle *v)
 {
-	if (openttd_rust_effect_run(v->rust_state.get(), v, &EffectServices(), &GetRustSharedServices(), false) != 0) return true;
+	if (openttd_rust_effect_run(v->rust_state.get(), v, &EffectServices(), &GetRustSharedServices()) != 0) return true;
 	/* Expiry returns before destroying the Rust owner. Vehicle::~Vehicle and
 	 * Pool::FreeItem/PostDestructor run wholly outside any Rust frame/borrow. */
 	delete v;

@@ -92,7 +92,11 @@ template <typename Check> void CheckEffectProtocol(Check check)
 	check(openttd_rust_effect_get(owner.get(), 1) == 255);
 	const std::array<uint32_t, 12> sprites{3708,3079,3073,3084,2040,3709,3737,3725,1416,4751,2040,2040};
 	const std::array<uint8_t, 12> progress{7,12,0,1,12,0,0,0,0,0,12,12};
-	auto run = [&](uint8_t init = 0) { w.writes = w.viewports = w.animated = w.sound = 0; return openttd_rust_effect_run(owner.get(), &w, &leaves, &services, init); };
+	auto run = [&](uint8_t init = 0) -> uint8_t {
+		w.writes = w.viewports = w.animated = w.sound = 0;
+		if (init != 0) { openttd_rust_effect_initialize(owner.get(), &w, w.view.subtype, &leaves, &services); return 1; }
+		return openttd_rust_effect_run(owner.get(), &w, &leaves, &services);
+	};
 	for (uint8_t subtype = 0; subtype < 12; subtype++) {
 		w.view = {13,-9,21,0,0,99,subtype,1};
 		check(run(1) == 1 && w.view.sprite == sprites[subtype] && w.view.progress == progress[subtype]);

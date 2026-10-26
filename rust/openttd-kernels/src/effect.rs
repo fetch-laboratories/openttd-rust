@@ -496,7 +496,6 @@ pub unsafe extern "C" fn openttd_rust_effect_run(
     context: *mut c_void,
     leaves: *const Leaves,
     services: *const Services,
-    initialize: u8,
 ) -> u8 {
     let leaves = unsafe { &*leaves };
     let mut v = View::default();
@@ -508,12 +507,31 @@ pub unsafe extern "C" fn openttd_rust_effect_run(
         services: unsafe { &*services },
         v,
     };
-    if initialize != 0 {
-        controller.init();
-        1
-    } else {
-        u8::from(controller.tick())
-    }
+    u8::from(controller.tick())
+}
+/// Initialize one newly allocated effect through the same owner used by creation.
+/// # Safety
+/// The live owner, shell and immutable tables obey `openttd_rust_effect_run`'s contract.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_effect_initialize(
+    owner: *mut State,
+    context: *mut c_void,
+    kind: u8,
+    leaves: &Leaves,
+    services: &Services,
+) {
+    let mut controller = Controller {
+        owner,
+        context,
+        leaves,
+        services,
+        v: View {
+            subtype: kind,
+            ..View::default()
+        },
+    };
+    controller.init();
 }
 
 crate::abi::layouts! {
@@ -597,17 +615,9 @@ pub extern "C" fn openttd_rust_effect_create(x: i32, y: i32, z: i32, kind: u8) -
     (s.place)(v.shell, x, y, z, kind);
     (s.delta)(v.shell);
     (s.unclickable)(v.shell);
-    let mut controller = Controller {
-        owner: v.owner,
-        context: v.shell,
-        leaves: s.effect,
-        services: s.shared,
-        v: View {
-            subtype: kind,
-            ..View::default()
-        },
-    };
-    controller.init();
+    unsafe {
+        openttd_rust_effect_initialize(v.owner, v.shell, kind, s.effect, s.shared);
+    }
     (s.effect.viewport)(v.shell);
     v.shell
 }

@@ -64,7 +64,8 @@ OpenTTDEffectState *OPENTTD_RUST_CALL openttd_rust_effect_new(void);
 void OPENTTD_RUST_CALL openttd_rust_effect_destroy(OpenTTDEffectState *);
 void OPENTTD_RUST_CALL openttd_rust_effect_set(OpenTTDEffectState *, uint8_t field, uint16_t value);
 uint16_t OPENTTD_RUST_CALL openttd_rust_effect_get(const OpenTTDEffectState *, uint8_t field);
-uint8_t OPENTTD_RUST_CALL openttd_rust_effect_run(OpenTTDEffectState *, void *context, const OpenTTDEffectLeaves *, const OpenTTDSharedServices *, uint8_t initialize);
+uint8_t OPENTTD_RUST_CALL openttd_rust_effect_run(OpenTTDEffectState *, void *context, const OpenTTDEffectLeaves *, const OpenTTDSharedServices *);
+void OPENTTD_RUST_CALL openttd_rust_effect_initialize(OpenTTDEffectState *, void *, uint8_t, const OpenTTDEffectLeaves *, const OpenTTDSharedServices *);
 #ifdef __cplusplus
 }
 #endif
