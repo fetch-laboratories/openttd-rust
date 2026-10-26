@@ -615,7 +615,15 @@ def house_definition_fixtures(folder):
     # variable data, without constructing a shell.
     main += [prop(100, 9, b"\xff"), prop(100, 0x23, b"\x02\x00\x07\x01\x09")]
     main += definition(
-        0, 7, **{"0b": b"\x29", "13": word(0xF81F), "21": word(2100), "22": word(65535)}
+        0,
+        7,
+        **{
+            "0b": b"\x29",
+            "13": word(0xF81F),
+            "21": word(2100),
+            "22": word(65535),
+            "1d": b"\x04",
+        },
     )
     main += definition(1, 8)
     # Repeated 08 must preserve the first substitute and all modified fields.

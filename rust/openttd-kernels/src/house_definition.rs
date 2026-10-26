@@ -65,6 +65,7 @@ pub struct PendingOverride {
 }
 #[repr(C)]
 pub struct Services {
+    resolver: *const crate::town::resolver::ResolverServices,
     get: extern "C" fn(u16) -> Spec,
     count: extern "C" fn() -> usize,
     clear_specs: extern "C" fn(),
@@ -140,7 +141,7 @@ crate::abi::layouts! {
     "OpenTTDHouseDefinitionEarly" ["house_definition"] => Early { year, availability, enabled };
     "OpenTTDHouseDefinitionCargo" ["house_definition"] => Cargo { label, cargo };
     "OpenTTDHouseDefinitionOverride" ["house_definition"] => PendingOverride { grfid, local };
-    "OpenTTDHouseDefinitionServices" ["house_definition"] => Services { get, count, clear_specs, reserve_specs, append_default, file_count, file_at, local_count, has_filename, resize_local, local, clear_local, copy_substitute, set_identity, identity, validity, part, flags, early, cargo, set_cargo, set_label, set_acceptance, set_colour, callbacks, watched, map_string, set_animation, badges, file_id, add_override, add_entity, pending_override, clear_override, reset_override, resize_specs, move_spec, set_override, climate_mask, landscape, too_many, invalid_substitute, invalid_override, allocation_failed, disable_list, invalid_missing, invalid_population, invalid_size, invalid_availability, set_enabled, set_flags, set_min_year, set_max_year, set_population, set_mail, set_rating, set_removal, set_availability, set_callbacks, set_processing, set_probability, set_extra, set_animation_speed, set_class_id, set_minimum_life, set_watched };
+    "OpenTTDHouseDefinitionServices" ["house_definition"] => Services { resolver, get, count, clear_specs, reserve_specs, append_default, file_count, file_at, local_count, has_filename, resize_local, local, clear_local, copy_substitute, set_identity, identity, validity, part, flags, early, cargo, set_cargo, set_label, set_acceptance, set_colour, callbacks, watched, map_string, set_animation, badges, file_id, add_override, add_entity, pending_override, clear_override, reset_override, resize_specs, move_spec, set_override, climate_mask, landscape, too_many, invalid_substitute, invalid_override, allocation_failed, disable_list, invalid_missing, invalid_population, invalid_size, invalid_availability, set_enabled, set_flags, set_min_year, set_max_year, set_population, set_mail, set_rating, set_removal, set_availability, set_callbacks, set_processing, set_probability, set_extra, set_animation_speed, set_class_id, set_minimum_life, set_watched };
 }
 
 fn ignore_property(prop: i32, reader: &mut Reader<'_>) -> Result<u8, ReadError> {
@@ -474,6 +475,9 @@ fn early_house(s: &Services, mask: u16) {
 pub fn reset(s: &Services) {
     (s.clear_specs)();
     (s.reserve_specs)(usize::from(NEW_HOUSE_OFFSET));
+    unsafe {
+        crate::town::resolver::openttd_rust_house_resolver_exchange(s.resolver);
+    }
     crate::town::resolver::openttd_rust_house_classes_reset();
     for id in 0..NEW_HOUSE_OFFSET {
         (s.append_default)(id);

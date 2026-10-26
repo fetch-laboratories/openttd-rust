@@ -10,7 +10,9 @@ struct OpenTTDHouseDefinitionPart { uint8_t flags, population; bool enabled; };
 struct OpenTTDHouseDefinitionEarly { int32_t year; uint16_t availability; bool enabled; };
 struct OpenTTDHouseDefinitionCargo { uint32_t label; CargoType cargo; };
 struct OpenTTDHouseDefinitionOverride { uint32_t grfid; uint16_t local; };
+struct OpenTTDHouseResolverServices;
 struct OpenTTDHouseDefinitionServices {
+	const OpenTTDHouseResolverServices *resolver;
 	const HouseSpec *(*get)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(get);
 	size_t (*count)() noexcept OPENTTD_SERVICE_DEFAULT(count);
 	void (*clear_specs)() noexcept OPENTTD_SERVICE_DEFAULT(clear_specs);

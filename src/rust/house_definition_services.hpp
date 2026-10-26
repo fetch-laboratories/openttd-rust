@@ -14,6 +14,7 @@ inline HouseSpec *MutableHouse(const HouseSpec *spec) noexcept { return const_ca
 inline const OpenTTDHouseDefinitionServices &GetHouseDefinitionServices() noexcept
 {
 	static const OpenTTDHouseDefinitionServices services{
+		.resolver = &GetHouseResolverServices(),
 		.get = RustHouseSpec,
 		.count = RustHouseSpecCount,
 		.clear_specs = []() noexcept { HouseSpec::Specs().clear(); },

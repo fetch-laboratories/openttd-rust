@@ -18,11 +18,14 @@
 
 #include "table/strings.h"
 
-#include "../safeguards.h"
-
 #ifdef WITH_RUST
 #include "../rust/house_definition_services.hpp"
 #include "../rust/newgrf_bytereader_services.h"
+#endif
+
+#include "../safeguards.h"
+
+#ifdef WITH_RUST
 static ChangeInfoResult TownHouseChangeInfo(uint first, uint last, int prop, ByteReader &buf)
 {
 	uint8_t result = openttd_rust_house_definition_property(&GetHouseDefinitionServices(), &GetRustByteReaderServices(), _cur_gps.grffile, first, last, prop, &buf);
