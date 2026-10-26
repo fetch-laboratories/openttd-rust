@@ -33,6 +33,9 @@ static void Inspect(bool reload)
 	GRFFile *file = GetFileByGRFID(ID("R471"));
 	Require(main != nullptr && file != nullptr && main->status == GCS_ACTIVATED, "active");
 	Require(file->GetParam(0) == 77 && file->GetParam(1) == 123 && file->GetParam(2) == 2, "d6-jumps");
+	Require(file->GetParam(31) == 66 && file->GetParam(32) == 55 && file->GetParam(35) == 0x201, "patch-flags-stages");
+	Require(file->GetParam(40) == 1 && file->GetParam(41) == 0xC0000000 && file->GetParam(42) == 0xFFFFFFFC && file->GetParam(43) == 17, "arithmetic");
+	fmt::print(stderr, "LOADING patch-map {}\n", file->GetParam(30));
 	Require(file->GetParam(22) == 0xFFFFFFFE, "action6-carry-reuse");
 	Require(file->GetParam(3) != 0 && file->GetParam(4) == UINT32_MAX, "grm");
 	GRFConfig *broken = GetGRFConfig(ID("B471"));
