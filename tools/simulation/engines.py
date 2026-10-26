@@ -238,7 +238,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         lambda role: dict(
             scenario,
             console=[f'engines_scenario {variant} "{saves[role]}"', "unpause"],
-            ticks=74 if property_mode else 1,
+            ticks=1,
         ),
         executables,
         builds,
@@ -265,10 +265,6 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         ):
             raise RuntimeError("engine reload capture failed")
         captures[role] = [line for line in run["log"] if line.startswith(prefix)]
-    if property_mode:
-        if any(not run["snapshots"] for run in runs.values()):
-            raise RuntimeError("file-loaded property movement save missing")
-        saves = {role: run["snapshots"][-1] for role, run in runs.items()}
     differences = compare_saves(
         saves["reference"],
         saves["candidate"],

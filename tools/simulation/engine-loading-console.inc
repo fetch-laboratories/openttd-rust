@@ -197,12 +197,15 @@ static void LoadingBuild(uint16_t local = 300)
 		LoadingRequire(std::get<0>(refit).Succeeded() && std::get<0>(refit).GetCost() == std::get<0>(refit_test).GetCost() && std::get<1>(refit) == std::get<1>(refit_test) && Vehicle::Get(id)->cargo_type == mail, "refit-execute");
 		fmt::print(stderr, "ENGINE loading-refit {} {} {} {} {}\n", type, id, std::get<0>(refit).GetCost(), std::get<1>(refit), Vehicle::Get(id)->cargo_cap);
 		if (local == 500) {
+			bool orders = false;
 			for (const Vehicle *source : Vehicle::Iterate()) {
 				if (source->index == id || source->type != type || source->owner != company->index || !source->IsPrimaryVehicle() || source->GetNumOrders() == 0) continue;
 				if (type == VEH_ROAD && (source->cargo_type == passengers) != (Vehicle::Get(id)->cargo_type == passengers)) continue;
-				LoadingRequire(Command<CMD_CLONE_ORDER>::Do(DoCommandFlag::Execute, CO_COPY, id, source->index).Succeeded(), "properties-orders");
+				if (Command<CMD_CLONE_ORDER>::Do({}, CO_COPY, id, source->index).Failed()) continue;
+				orders = Command<CMD_CLONE_ORDER>::Do(DoCommandFlag::Execute, CO_COPY, id, source->index).Succeeded();
 				break;
 			}
+			LoadingRequire(orders, "properties-orders");
 			LoadingRequire(Command<CMD_START_STOP_VEHICLE>::Do(DoCommandFlag::Execute, id, false).Succeeded(), "properties-start");
 			SaveRandomSeeds(&after);
 			fmt::print(stderr, "ENGINE properties-built {} {} {} {} {} {}\n", type, id, after.random.state[0], after.random.state[1], after.interactive_random.state[0], after.interactive_random.state[1]);
@@ -213,6 +216,7 @@ static void LoadingBuild(uint16_t local = 300)
 static bool LoadingScenario(std::span<std::string_view> args)
 {
 	const bool properties = args[1].starts_with("properties"), inspect = args[1].ends_with("inspect");
+	if (properties) _interactive_random.SetSeed(0x491);
 	const uint16_t local = properties ? 500 : 300;
 	if (!inspect) {
 		_settings_game.vehicle.dynamic_engines = args[1] != "loading-shared";
