@@ -1997,12 +1997,13 @@ Native config/GRF/spec objects, parameters, parsed Action2, sprite/file I/O and
 feature parsers remain. Each named throwing parser catches the original decode
 exception domain and reports failure; Rust applies the bounds-disable policy with
 partial effects retained. File reads do not throw ordinary parsing exceptions.
-Native engine-definition/cargo initialization and finalization retain their own
-owners. Borrow scopes end before parser and shared-service reentry; temporary
+Cargo setup, label lookup, finalization, sorting and inverse maps call the Rust
+registry directly. Engine-definition initialization/finalization remain native. Borrow scopes end before parser and shared-service reentry; temporary
 native file frames preserve file/config restoration and lifetime. Portable bodies
 remain. Arbitrary feature grammars/data sections, historical saves, network clock
 and static influence, remaining GRM/variable/target combinations and GUI scheduling
 remain #156 gaps. PR #473.
+
 ### Cargo registry, translation and callback lifecycle (#467)
 
 `cargo_registry.rs` owns the process-wide label/default/climate tables, available and standard

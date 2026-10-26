@@ -30,10 +30,12 @@ uint32_t openttd_rust_grf_set_sprite(uint8_t, uint32_t);
 uint32_t openttd_rust_grf_set_size(uint8_t, uint32_t);
 }
 struct OpenTTDGenericServices;
+struct OpenTTDCargoRegistryServices;
 struct OpenTTDGrfClock { int32_t date, year; uint16_t date_fract; int32_t economy_date, economy_year; uint16_t economy_date_fract; uint64_t ticks; uint8_t display; };
 struct OpenTTDGrfEngineRange { uint8_t offset, count; };
 struct OpenTTDGrfLoadingServices {
 	const OpenTTDGlobalVariableServices * global;
+	const OpenTTDCargoRegistryServices *cargo;
 	OpenTTDGrfEngineRange (*engine_range)(GrfSpecFeature) noexcept OPENTTD_SERVICE_DEFAULT(engine_range);
 	uint32_t (*parameter)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(parameter);
 	uint32_t (*file_id)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(file_id);
@@ -53,7 +55,6 @@ struct OpenTTDGrfLoadingServices {
 	GRFError *(*error)(GRFConfig *, uint32_t, StringID, bool) noexcept OPENTTD_SERVICE_DEFAULT(error);
 	void (*error_name)(GRFError *, const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(error_name);
 	bool (*networking)() noexcept OPENTTD_SERVICE_DEFAULT(networking);
-	CargoType (*cargo_label)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_label);
 	RailType (*rail_label)(RailTypeLabel) noexcept OPENTTD_SERVICE_DEFAULT(rail_label);
 	RoadType (*road_label)(RoadTypeLabel) noexcept OPENTTD_SERVICE_DEFAULT(road_label);
 	bool (*road_is_road)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_is_road);
@@ -160,7 +161,6 @@ struct OpenTTDGrfLoadingServices {
 	void (*reset_faces)() noexcept OPENTTD_SERVICE_DEFAULT(reset_faces);
 	void (*clear_snowline)() noexcept OPENTTD_SERVICE_DEFAULT(clear_snowline);
 	void (*reset_files)() noexcept OPENTTD_SERVICE_DEFAULT(reset_files);
-	void (*setup_cargo)() noexcept OPENTTD_SERVICE_DEFAULT(setup_cargo);
 	void (*reset_loaded_features)() noexcept OPENTTD_SERVICE_DEFAULT(reset_loaded_features);
 	void (*clear_engine_overrides)() noexcept OPENTTD_SERVICE_DEFAULT(clear_engine_overrides);
 	void (*initialize_sounds)() noexcept OPENTTD_SERVICE_DEFAULT(initialize_sounds);
@@ -169,14 +169,12 @@ struct OpenTTDGrfLoadingServices {
 	void (*finish_callbacks)() noexcept OPENTTD_SERVICE_DEFAULT(finish_callbacks);
 	void (*finalise_strings)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_strings);
 	void (*finalise_badges)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_badges);
-	void (*finalise_cargo)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_cargo);
 	void (*calculate_refits)() noexcept OPENTTD_SERVICE_DEFAULT(calculate_refits);
 	void (*finalise_engines)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_engines);
 	void (*finalise_canals)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_canals);
 	void (*finalise_houses)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_houses);
 	void (*finalise_industries)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_industries);
 	void (*finalise_objects)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_objects);
-	void (*sort_cargo)() noexcept OPENTTD_SERVICE_DEFAULT(sort_cargo);
 	void (*sort_industries)() noexcept OPENTTD_SERVICE_DEFAULT(sort_industries);
 	void (*industry_legend)() noexcept OPENTTD_SERVICE_DEFAULT(industry_legend);
 	void (*linkstats_legend)() noexcept OPENTTD_SERVICE_DEFAULT(linkstats_legend);
@@ -191,7 +189,6 @@ struct OpenTTDGrfLoadingServices {
 	void (*aging_stops)() noexcept OPENTTD_SERVICE_DEFAULT(aging_stops);
 	void (*finalise_prices)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_prices);
 	void (*clear_engine_loading)() noexcept OPENTTD_SERVICE_DEFAULT(clear_engine_loading);
-	void (*cargo_translation_map)() noexcept OPENTTD_SERVICE_DEFAULT(cargo_translation_map);
 	void (*bind_engine_types)() noexcept OPENTTD_SERVICE_DEFAULT(bind_engine_types);
 	Subdirectory baseset_dir;
 	Subdirectory newgrf_dir;

@@ -20,7 +20,7 @@ use std::ffi::c_void;
 pub const TRAIN_WIDTH_32_PIXELS: u8 = 3;
 #[repr(C)]
 pub struct Services {
-    climate: unsafe extern "C" fn() -> u8,
+    pub(crate) climate: unsafe extern "C" fn() -> u8,
     date_fraction: unsafe extern "C" fn() -> u16,
     date_to_ymd: unsafe extern "C" fn(i32) -> CalendarYmd,
     disable_elrails: unsafe extern "C" fn() -> bool,

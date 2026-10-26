@@ -568,11 +568,9 @@ void ResetPersistentNewGRFData()
  * Construct the Cargo Mapping
  * @note This is the reverse of a cargo translation table
  */
+#ifndef WITH_RUST
 static void BuildCargoTranslationMap()
 {
-#ifdef WITH_RUST
-	openttd_rust_cargo_build_inverse(_cur_gps.grffile);
-#else
 	_cur_gps.grffile->cargo_map.fill(UINT8_MAX);
 
 	auto cargo_list = GetCargoTranslationTable(*_cur_gps.grffile);
@@ -582,8 +580,8 @@ static void BuildCargoTranslationMap()
 		int idx = find_index(cargo_list, cs->label);
 		if (idx >= 0) _cur_gps.grffile->cargo_map[cs->Index()] = idx;
 	}
-#endif
 }
+#endif
 
 /**
  * Prepare loading a NewGRF file with its config
@@ -972,11 +970,9 @@ static void FinaliseEngineArray()
 }
 
 /** Check for invalid cargoes */
+#ifndef WITH_RUST
 void FinaliseCargoArray()
 {
-#ifdef WITH_RUST
-	openttd_rust_cargo_finalise();
-#else
 	for (CargoSpec &cs : CargoSpec::array) {
 		if (cs.town_production_effect == INVALID_TPE) {
 			/* Set default town production effect by cargo label. */
@@ -992,8 +988,8 @@ void FinaliseCargoArray()
 			cs.abbrev = STR_NEWGRF_INVALID_CARGO_ABBREV;
 		}
 	}
-#endif
 }
+#endif
 
 /**
  * Check if a given housespec is valid and disable it if it's not.

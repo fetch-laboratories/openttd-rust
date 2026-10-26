@@ -328,8 +328,7 @@ pub extern "C" fn openttd_rust_cargo_sort(native: *const Services) {
     }
     (s.publish_standard)(data, standard);
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_cargo_finalise() {
+pub fn finalise() {
     let s = services();
     for cargo in 0..NUM_CARGO {
         let cs = (s.spec)(cargo);
@@ -377,8 +376,7 @@ pub extern "C" fn openttd_rust_cargo_translate(cargo: u8, file: Handle, usebit: 
         INVALID_CARGO
     }
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_cargo_build_inverse(file: *mut c_void) {
+pub fn build_inverse(file: *mut c_void) {
     let s = services();
     (s.clear_inverse)(file);
     let labels = openttd_rust_cargo_translation_table(file);

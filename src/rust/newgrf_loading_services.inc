@@ -6,7 +6,7 @@
 #include "generic_ffi.h"
 #include "../string_func.h"
 #include "services_newgrf.h"
-#include "services_cargo.h"
+#include "cargo_registry_ffi.h"
 #include "settings_services.h"
 #include "environment_services.h"
 #include "services_map.h"
@@ -25,6 +25,7 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 {
 	static const OpenTTDGrfLoadingServices services{
 		.global = &GetRustGlobalVariableServices(),
+		.cargo = &GetRustCargoRegistryServices(),
 		.engine_range = [](GrfSpecFeature feature) noexcept { return OpenTTDGrfEngineRange{_engine_offsets[feature], _engine_counts[feature]}; },
 		.parameter = RustGRFParameter,
 		.file_id = RustGRFFileID,
@@ -44,7 +45,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.error = [](GRFConfig *c, uint32_t line, StringID message, bool current) noexcept { auto it = std::ranges::find(c->errors, line, &GRFError::nfo_line); if (it == c->errors.end()) it = c->errors.emplace(it, STR_NEWGRF_ERROR_MSG_FATAL, line, message); if (current) it->param_value[0] = line; return &*it; },
 		.error_name = [](GRFError *e, const GRFConfig *c) noexcept { e->data = c->GetName(); },
 		.networking = RustNetworking,
-		.cargo_label = OpenTTDCargoByLabel,
 		.rail_label = [](RailTypeLabel label) noexcept { return GetRailTypeByLabel(label); },
 		.road_label = [](RoadTypeLabel label) noexcept { return GetRoadTypeByLabel(label); },
 		.road_is_road = [](RoadType rt) noexcept { return RustRoadTypeIsRoad(rt); },
@@ -151,7 +151,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.reset_faces = []() noexcept { ResetFaces(); },
 		.clear_snowline = []() noexcept { ClearSnowLine(); },
 		.reset_files = []() noexcept { _grf_files.clear(); _grf_files.reserve(_grfconfig.size()); },
-		.setup_cargo = []() noexcept { SetupCargoForClimate(_settings_game.game_creation.landscape); },
 		.reset_loaded_features = []() noexcept { _loaded_newgrf_features.has_2CC = false; _loaded_newgrf_features.used_liveries = 1 << LS_DEFAULT; _loaded_newgrf_features.shore = SHORE_REPLACE_NONE; _loaded_newgrf_features.tram = TRAMWAY_REPLACE_DEPOT_NONE; },
 		.clear_engine_overrides = []() noexcept { _grf_id_overrides.clear(); },
 		.initialize_sounds = []() noexcept { InitializeSoundPool(); },
@@ -160,14 +159,12 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.finish_callbacks = []() noexcept { ResetCallbacks(true); },
 		.finalise_strings = []() noexcept { FinaliseStringMapping(); },
 		.finalise_badges = []() noexcept { FinaliseBadges(); },
-		.finalise_cargo = []() noexcept { FinaliseCargoArray(); },
 		.calculate_refits = []() noexcept { CalculateRefitMasks(); },
 		.finalise_engines = []() noexcept { FinaliseEngineArray(); },
 		.finalise_canals = []() noexcept { FinaliseCanals(); },
 		.finalise_houses = []() noexcept { FinaliseHouseArray(); },
 		.finalise_industries = []() noexcept { FinaliseIndustriesArray(); },
 		.finalise_objects = []() noexcept { FinaliseObjectsArray(); },
-		.sort_cargo = []() noexcept { InitializeSortedCargoSpecs(); },
 		.sort_industries = []() noexcept { SortIndustryTypes(); },
 		.industry_legend = []() noexcept { BuildIndustriesLegend(); },
 		.linkstats_legend = []() noexcept { BuildLinkStatsLegend(); },
@@ -182,7 +179,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.aging_stops = []() noexcept { SetYearEngineAgingStops(); },
 		.finalise_prices = []() noexcept { FinalisePriceBaseMultipliers(); },
 		.clear_engine_loading = []() noexcept { _gted.clear(); },
-		.cargo_translation_map = []() noexcept { BuildCargoTranslationMap(); },
 		.bind_engine_types = []() noexcept {
 	for (Engine *e : Engine::IterateType(VEH_ROAD)) {
 		if (_gted[e->index].rv_max_speed != 0) {
