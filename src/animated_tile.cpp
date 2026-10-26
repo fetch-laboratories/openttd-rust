@@ -37,7 +37,7 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 	static const OpenTTDAnimationServices services{
 		.shared = &GetRustSharedServices(),
 		.station_base = RustStationGet<BaseStation *>, .as_station = RustAnimationStation, .location = RustStationLocation,
-		.is_station = GetRustStationServices().is_station, .roadstop_resolver = &GetRoadStopResolverServices(),
+		.is_station = RustStationIsExpected<BaseStation *>, .roadstop_resolver = &GetRoadStopResolverServices(),
 		.town = &GetRustTownServices(), .industries = &GetIndustryRustServices(),
 		.construction = &GetIndustryConstructionServices(), .industry_tiles = &GetIndustryTileServices(),
 		.house = &GetHouseAnimationBinding(), .industry = &GetIndustryAnimationBinding(), .station = &GetStationAnimationBinding(),

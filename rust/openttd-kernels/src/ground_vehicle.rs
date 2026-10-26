@@ -200,6 +200,15 @@ pub struct Services {
 }
 
 impl Owner {
+    /// The road shell owns separate stable road and ground allocations.
+    pub(crate) fn for_road(state: *mut State, road: *mut crate::road::State) -> Self {
+        Self {
+            state,
+            train: crate::train::Handle::NONE,
+            road,
+            kind: VehicleType::ROAD,
+        }
+    }
     fn rail(self) -> bool {
         self.kind == VehicleType::TRAIN
     }
@@ -496,7 +505,9 @@ fn clamp_int(value: i64) -> i32 {
     value.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
 }
 pub(crate) fn acceleration(s: &Services, v: VehicleRef) -> i32 {
-    let o = (s.resolve)(v);
+    acceleration_owned(s, v, (s.resolve)(v))
+}
+pub(crate) fn acceleration_owned(s: &Services, v: VehicleRef, o: Owner) -> i32 {
     let r = (s.acceleration_input)(v);
     let speed = i64::from(current_speed_for(o, r.speed));
     let mass = i64::from(unsafe { (*o.state).cache.cached_weight });
@@ -672,7 +683,13 @@ fn update_z(s: &Services, movement: &crate::movement::CachedTable<'_>, v: Vehicl
 pub(crate) fn inclination(s: &Services, v: VehicleRef, new_tile: bool, delta: bool) -> i32 {
     inclination_owned(s, v, (s.resolve)(v), new_tile, delta)
 }
-fn inclination_owned(s: &Services, v: VehicleRef, o: Owner, new_tile: bool, delta: bool) -> i32 {
+pub(crate) fn inclination_owned(
+    s: &Services,
+    v: VehicleRef,
+    o: Owner,
+    new_tile: bool,
+    delta: bool,
+) -> i32 {
     // SAFETY: Only the immutable registry is retained for this entry.
     let movement = crate::movement::CachedTable::new(unsafe { &*s.road.shared });
     let old_z = (s.vehicle.z)(v);
@@ -686,7 +703,9 @@ fn inclination_owned(s: &Services, v: VehicleRef, o: Owner, new_tile: bool, delt
 }
 #[inline]
 pub(crate) fn last_speed(s: &Services, v: VehicleRef) {
-    let o = (s.resolve)(v);
+    last_speed_owned(s, v, (s.resolve)(v));
+}
+pub(crate) fn last_speed_owned(s: &Services, v: VehicleRef, o: Owner) {
     if (s.vehicle.speed)(v) != unsafe { (*o.state).cache.last_speed } {
         (s.vehicle.start_stop_dirty)(v);
         unsafe {
@@ -765,20 +784,19 @@ pub(crate) fn move_incline(
     gs: &crate::vehicle::GroundServices,
     map: crate::map_func::Map,
     v: VehicleRef,
-    x: i32,
-    y: i32,
+    o: Owner,
+    pos: (i32, i32),
     new_tile: bool,
     delta: bool,
 ) -> Moved {
     // Road supplies its synchronous no-reset/no-yield entry dimensions; write_xy
     // is a scalar leaf. They are consumed before any inclination/viewport call.
     let s = gs.physics;
-    (s.vehicle.write_xy)(v, x, y);
+    (s.vehicle.write_xy)(v, pos.0, pos.1);
     // SAFETY: Live shell; index writes end before inclination callbacks.
     unsafe {
         crate::vehicle::occupancy::update_position(s.vehicle, v, map);
     }
-    let o = (s.resolve)(v);
     let old_z = inclination_owned(s, v, o, new_tile, delta);
     Moved {
         old_z,

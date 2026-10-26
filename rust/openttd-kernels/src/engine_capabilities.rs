@@ -56,7 +56,6 @@ pub struct Services {
     loading: extern "C" fn() -> *const crate::engine_loading::Services,
     cargo_classes: extern "C" fn(u8) -> u16,
     multiplier: extern "C" fn(u8) -> u16,
-    cargo_by_label: extern "C" fn(u32) -> u8,
     pool_available: extern "C" fn(usize) -> bool,
     new_temporary: extern "C" fn() -> V,
     destroy_temporary: extern "C" fn(V),
@@ -216,13 +215,13 @@ pub unsafe extern "C" fn openttd_rust_engine_capacity(
                         v,
                     );
                 }
-                if is_valid_cargo_type((s.cargo_by_label)(CT_MAIL))
+                if is_valid_cargo_type(crate::cargo_registry::openttd_rust_cargo_by_label(CT_MAIL))
                     && !new_multipliers
-                    && cargo == (s.cargo_by_label)(CT_MAIL)
+                    && cargo == crate::cargo_registry::openttd_rust_cargo_by_label(CT_MAIL)
                 {
                     return capacity.wrapping_add(extra_mail);
                 }
-                default_cargo = (s.cargo_by_label)(CT_PASSENGERS);
+                default_cargo = crate::cargo_registry::openttd_rust_cargo_by_label(CT_PASSENGERS);
                 capacity
             }
             _ => unreachable!("cargo engine type"),
@@ -239,8 +238,12 @@ pub unsafe extern "C" fn openttd_rust_engine_capacity(
             };
             let cargo_multiplier = (s.multiplier)(cargo);
             capacity = capacity.wrapping_mul(u32::from(cargo_multiplier));
-            if extra_mail > 0 && is_valid_cargo_type((s.cargo_by_label)(CT_MAIL)) {
-                let mail_multiplier = u32::from((s.multiplier)((s.cargo_by_label)(CT_MAIL)));
+            if extra_mail > 0
+                && is_valid_cargo_type(crate::cargo_registry::openttd_rust_cargo_by_label(CT_MAIL))
+            {
+                let mail_multiplier = u32::from((s.multiplier)(
+                    crate::cargo_registry::openttd_rust_cargo_by_label(CT_MAIL),
+                ));
                 capacity = capacity.wrapping_add(
                     (u32::from(default_multiplier)
                         .wrapping_mul(extra_mail)
@@ -552,7 +555,7 @@ crate::abi::layouts! {
     "OpenTTDEngineCapabilitiesServices" ["probe"] => Services {
         resolver, engine, engine_if_valid, kind, ground, id, default_cargo, callbacks, carrying, capacity_config, refit_mask,
         ship_capacity, passenger_capacity, mail_capacity, rail_kind,
-        grf, version, loading, cargo_classes, multiplier, cargo_by_label, pool_available,
+        grf, version, loading, cargo_classes, multiplier, pool_available,
         new_temporary, destroy_temporary, set_engine, set_owner, current_company, vehicle_engine,
         vehicle_engine_object, vehicle_cargo, vehicle_subtype, has_articulated, next_articulated, check, assertions,
     };

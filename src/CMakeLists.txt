@@ -262,6 +262,7 @@ add_files(
     rust/object_ffi.h
     rust/object_resolver_ffi.h
     rust/services_newgrf.h
+    rust/newgrf_bytereader_services.h
     rust/services_object.h
     rust/command_services.h
     rust/ffi.h

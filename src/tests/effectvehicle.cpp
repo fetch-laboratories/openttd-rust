@@ -73,6 +73,32 @@ TEST_CASE("Animated tiles - ordered queue and partial native load publication")
 	for (uint32_t t : saved) openttd_rust_animation_append(t);
 }
 
+TEST_CASE("Vehicle visual cache - canonical alias and independent value copies")
+{
+	REQUIRE(Vehicle::CanAllocateItem(2));
+	auto *a = new EffectVehicle();
+	auto *b = new EffectVehicle();
+	CHECK(&a->vcache.cached_vis_effect == openttd_rust_vehicle_visual_cache(a->rust_grf_cache.state));
+	CHECK(a->vcache.cached_vis_effect == 0);
+	a->vcache.cached_vis_effect = 0x8F;
+	VehicleCache copy = a->vcache;
+	a->vcache.cached_vis_effect = 0x42;
+	CHECK(copy.cached_vis_effect == 0x8F);
+	copy.cached_vis_effect = 0xA3;
+	CHECK(a->vcache.cached_vis_effect == 0x42);
+	b->vcache = copy;
+	CHECK(&b->vcache.cached_vis_effect == openttd_rust_vehicle_visual_cache(b->rust_grf_cache.state));
+	CHECK(b->vcache.cached_vis_effect == 0xA3);
+	copy.cached_vis_effect = 0;
+	CHECK(b->vcache.cached_vis_effect == 0xA3);
+	const VehicleID index = a->index;
+	_vehicle_pool.CleanPool();
+	REQUIRE(Vehicle::CanAllocateItem());
+	auto *reused = new (index) EffectVehicle();
+	CHECK(reused->vcache.cached_vis_effect == 0);
+	_vehicle_pool.CleanPool();
+}
+
 TEST_CASE("Effect vehicles - zero construction, nested save staging and pool cleanup")
 {
 	REQUIRE(Vehicle::CanAllocateItem(2));

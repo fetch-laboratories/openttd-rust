@@ -407,7 +407,13 @@ impl<'a> World<'a> {
         (self.w.ai_event)(v, victims);
         (self.w.game_event)(v, victims);
         (self.w.news)(v, victims);
-        (self.v().large_explosion)(v);
+        crate::effect::openttd_rust_effect_create_rel(
+            v.0.as_ptr(),
+            4,
+            4,
+            8,
+            crate::effectvehicle_func::EV_EXPLOSION_LARGE,
+        );
         if (self.s.disaster_sound)() {
             (self.v().play_sound)(v, 16);
         }

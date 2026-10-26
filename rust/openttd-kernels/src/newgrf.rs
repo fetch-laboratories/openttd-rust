@@ -124,6 +124,7 @@ crate::abi::layouts! {
 
 // Feature identities from newgrf.h, pinned by native static assertions.
 pub const GSF_SOUNDFX: u8 = 12;
+pub const GSF_CARGOES: u8 = 11;
 pub const GSF_END: u8 = 22;
 
 /// Unreserved engine mapping scope.
@@ -172,9 +173,8 @@ pub(crate) fn get_active_cargo_label(
 }
 
 #[unsafe(no_mangle)]
-pub(crate) extern "C" fn openttd_rust_newgrf_active_cargo_label(
-    cargo_by_label: extern "C" fn(u32) -> u8,
-    label: CargoLabel,
-) -> u32 {
-    get_active_cargo_label(label, |label| cargo_by_label(label))
+pub(crate) extern "C" fn openttd_rust_newgrf_active_cargo_label(label: CargoLabel) -> u32 {
+    get_active_cargo_label(label, |label| {
+        crate::cargo_registry::openttd_rust_cargo_by_label(label)
+    })
 }

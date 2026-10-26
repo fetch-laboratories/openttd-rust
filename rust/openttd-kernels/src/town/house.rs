@@ -178,12 +178,6 @@ pub struct HouseReseed {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct ProductionCargo {
-    pub cargo: u8,
-    pub multiplier: u16,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
 pub struct HouseErrors {
     pub demolish: u32,
     pub protected: u32,
@@ -235,7 +229,7 @@ pub struct HouseServices {
     pub set_type: extern "C" fn(u32, u16),
 
     pub delete_inspect: extern "C" fn(u32),
-    pub cargo_translation: extern "C" fn(u16, u8) -> u8,
+    pub cargo_file: extern "C" fn(u16) -> *const std::ffi::c_void,
     pub convert_boolean: extern "C" fn(u16, u16, u16) -> bool,
     pub convert_8bit: extern "C" fn(u16, u16, u16) -> bool,
 
@@ -246,9 +240,7 @@ pub struct HouseServices {
     /// Native `StationFinder` for a 1x1 house tile area, valid until the next call.
     pub station_finder: extern "C" fn(u32) -> *mut c_void,
     pub move_goods: unsafe extern "C" fn(*mut c_void, u8, u32, u16) -> u32,
-    pub production_cargo: extern "C" fn(u8, u32) -> ProductionCargo,
     pub add_cargo: unsafe extern "C" fn(*mut c_void, u8, u32),
-    pub food_cargo: extern "C" fn() -> u8,
     pub scale_cargo: extern "C" fn(u32) -> u32,
     pub cargogen_mode: extern "C" fn() -> u8,
     pub place_houses: extern "C" fn() -> u8,
@@ -655,7 +647,7 @@ impl House<'_> {
     fn generate_original(&self, town: TownRef, effect: u8, rate: u8, stations: &StationFinder) {
         let mut at = 0;
         loop {
-            let cargo = (self.h.production_cargo)(effect, at);
+            let cargo = crate::cargo_registry::production(effect, at);
             if cargo.cargo == INVALID_CARGO {
                 break;
             }
@@ -671,7 +663,7 @@ impl House<'_> {
     fn generate_binomial(&self, town: TownRef, effect: u8, rate: u8, stations: &StationFinder) {
         let mut at = 0;
         loop {
-            let cargo = (self.h.production_cargo)(effect, at);
+            let cargo = crate::cargo_registry::production(effect, at);
             if cargo.cargo == INVALID_CARGO {
                 break;
             }
@@ -725,7 +717,11 @@ impl House<'_> {
                 if cb == CALLBACK_FAILED || cb == PRODUCE_END {
                     break;
                 }
-                let cargo = (self.h.cargo_translation)(house, ((cb >> 8) & 0x7F) as u8);
+                let cargo = crate::cargo_registry::openttd_rust_cargo_translate(
+                    ((cb >> 8) & 0x7F) as u8,
+                    (self.h.cargo_file)(house),
+                    false,
+                );
                 if cargo == INVALID_CARGO {
                     continue;
                 }
@@ -1070,9 +1066,21 @@ impl House<'_> {
             let cb =
                 unsafe { super::resolver::callback(CB_ACCEPT, 0, 0, house, town, tile, prototype) };
             if cb != CALLBACK_FAILED {
-                accepts[0] = (self.h.cargo_translation)(house, (cb & 31) as u8);
-                accepts[1] = (self.h.cargo_translation)(house, ((cb >> 5) & 31) as u8);
-                accepts[2] = (self.h.cargo_translation)(house, ((cb >> 10) & 31) as u8);
+                accepts[0] = crate::cargo_registry::openttd_rust_cargo_translate(
+                    (cb & 31) as u8,
+                    (self.h.cargo_file)(house),
+                    false,
+                );
+                accepts[1] = crate::cargo_registry::openttd_rust_cargo_translate(
+                    ((cb >> 5) & 31) as u8,
+                    (self.h.cargo_file)(house),
+                    false,
+                );
+                accepts[2] = crate::cargo_registry::openttd_rust_cargo_translate(
+                    ((cb >> 10) & 31) as u8,
+                    (self.h.cargo_file)(house),
+                    false,
+                );
             }
         }
         if callbacks & CBM_ACCEPTANCE != 0 {
@@ -1087,7 +1095,9 @@ impl House<'_> {
                     self.add_acceptance(
                         ctx,
                         always,
-                        (self.h.food_cargo)(),
+                        crate::cargo_registry::openttd_rust_cargo_by_label(
+                            crate::cargo_type::CT_FOOD,
+                        ),
                         u32::from((cb >> 8) & 15),
                     );
                 } else {
@@ -1115,7 +1125,11 @@ impl House<'_> {
                 if cb == CALLBACK_FAILED || cb == PRODUCE_END {
                     break;
                 }
-                let cargo = (self.h.cargo_translation)(house, ((cb >> 8) & 0x7F) as u8);
+                let cargo = crate::cargo_registry::openttd_rust_cargo_translate(
+                    ((cb >> 8) & 0x7F) as u8,
+                    (self.h.cargo_file)(house),
+                    false,
+                );
                 if cargo == INVALID_CARGO {
                     continue;
                 }
@@ -1129,7 +1143,7 @@ impl House<'_> {
                 }
                 let mut at = 0;
                 loop {
-                    let cargo = (self.h.production_cargo)(effect, at);
+                    let cargo = crate::cargo_registry::production(effect, at);
                     if cargo.cargo == INVALID_CARGO {
                         break;
                     }
@@ -1475,10 +1489,6 @@ crate::abi::layouts! {
         reseed,
         used,
     };
-    "OpenTTDHouseCargo" ["probe"] => ProductionCargo {
-        cargo,
-        multiplier,
-    };
     "OpenTTDHouseErrors" ["probe"] => HouseErrors {
         demolish,
         protected => is_protected,
@@ -1528,7 +1538,7 @@ crate::abi::layouts! {
         set_type,
 
         delete_inspect,
-        cargo_translation,
+        cargo_file,
         convert_boolean,
         convert_8bit,
 
@@ -1538,9 +1548,7 @@ crate::abi::layouts! {
         station_covers_town,
         station_finder,
         move_goods,
-        production_cargo,
         add_cargo,
-        food_cargo,
         scale_cargo,
         cargogen_mode,
         place_houses,

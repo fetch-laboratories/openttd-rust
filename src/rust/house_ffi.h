@@ -8,6 +8,7 @@
 /** @file house_ffi.h Typed native services for the Rust house lifecycle owner. */
 #ifndef RUST_HOUSE_FFI_H
 #define RUST_HOUSE_FFI_H
+struct GRFFile;
 #include "town_ffi.h"
 #include <cstddef>
 #include <cstdint>
@@ -32,7 +33,6 @@ struct OpenTTDHouseProduction { uint16_t callbacks; uint8_t population, mail; };
 struct OpenTTDHouseRemoval { int64_t cost; uint16_t rating; };
 struct OpenTTDHouseAcceptance { uint8_t accepts[16], amounts[16]; };
 struct OpenTTDHouseReseed { uint32_t reseed; uint8_t used; };
-struct OpenTTDHouseCargo { uint8_t cargo; uint16_t multiplier; };
 struct OpenTTDHouseErrors { uint32_t demolish, is_protected, refuses, sloped, bridge, flat, no_town; };
 /* Synchronous noexcept services; callbacks and commands may reenter Rust,
  * which holds no owner or map reference across any of them. */
@@ -76,7 +76,7 @@ struct OpenTTDHouseServices {
 	void (*set_type)(uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_type);
 
 	void (*delete_inspect)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_inspect);
-	uint8_t (*cargo_translation)(uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_translation);
+	const GRFFile *(*cargo_file)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_file);
 	bool (*convert_boolean)(uint16_t, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(convert_boolean);
 	bool (*convert_8bit)(uint16_t, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(convert_8bit);
 
@@ -86,9 +86,7 @@ struct OpenTTDHouseServices {
 	bool (*station_covers_town)(const OpenTTDStation *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station_covers_town);
 	void *(*station_finder)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_finder);
 	uint32_t (*move_goods)(void *, uint8_t, uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(move_goods);
-	OpenTTDHouseCargo (*production_cargo)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(production_cargo);
 	void (*add_cargo)(void *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(add_cargo);
-	uint8_t (*food_cargo)() noexcept OPENTTD_SERVICE_DEFAULT(food_cargo);
 	uint32_t (*scale_cargo)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(scale_cargo);
 	uint8_t (*cargogen_mode)() noexcept OPENTTD_SERVICE_DEFAULT(cargogen_mode);
 	uint8_t (*place_houses)() noexcept OPENTTD_SERVICE_DEFAULT(place_houses);

@@ -55,7 +55,7 @@ static OpenTTDRailTile RailTile(uint32_t tile, uint8_t direction) noexcept
 		| (HasStationTileRail(t) ? 4U : 0U) | (RustIsRailStation(tile) ? 8U : 0U)
 		| (IsRailWaypointTile(t) ? 16U : 0U) | (IsRailDepotTile(t) ? 32U : 0U)
 		| (IsPlainRailTile(t) ? 64U : 0U) | (IsLevelCrossingTile(t) ? 128U : 0U)
-		| (IsBridgeTile(t) ? 256U : 0U) | (IsTunnelTile(t) ? 512U : 0U);
+		| (IsBridgeTile(t) ? 256U : 0U) | (RustIsTunnelTile(tile) ? 512U : 0U);
 	result.railtype = RustTileRailType(tile);
 	if (IsPlainRailTile(t)) result.tracks = RustRailTracks(tile);
 	if (HasStationTileRail(t)) {

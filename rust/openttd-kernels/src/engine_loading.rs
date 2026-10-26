@@ -9,6 +9,10 @@
     clippy::too_many_lines
 )]
 use crate::{
+    cargo_registry::{
+        openttd_rust_cargo_by_label, openttd_rust_cargo_is_default, openttd_rust_cargo_mask,
+        openttd_rust_cargo_translate, openttd_rust_standard_cargo_mask,
+    },
     engine_type::INVALID_ENGINE,
     game_state::GameState,
     newgrf::{CargoLabel, INVALID_GRFID, get_active_cargo_label},
@@ -285,15 +289,10 @@ pub struct Services {
     disable: extern "C" fn(E),
     old_refittable: extern "C" fn(E) -> bool,
     set_old_refittable: extern "C" fn(E, bool),
-    default_cargo: extern "C" fn(u8) -> bool,
-    cargo_by_label: extern "C" fn(u32) -> u8,
-    cargo_mask: extern "C" fn() -> u64,
-    standard_cargo_mask: extern "C" fn() -> u64,
     cargo_next: extern "C" fn(u32) -> CargoClass,
     cargo_map: extern "C" fn(File, u8) -> u8,
     file_version: extern "C" fn(File) -> u8,
     cargo_list_size: extern "C" fn(File) -> usize,
-    cargo_translation: extern "C" fn(u8, File, bool) -> u8,
     unknown_refit: extern "C" fn(u32, u16, u16),
     climate: extern "C" fn() -> u8,
     variant: extern "C" fn(E) -> u16,
@@ -489,15 +488,10 @@ crate::abi::layouts! {
         disable,
         old_refittable,
         set_old_refittable,
-        default_cargo,
-        cargo_by_label,
-        cargo_mask,
-        standard_cargo_mask,
         cargo_next,
         cargo_map,
         file_version,
         cargo_list_size,
-        cargo_translation,
         unknown_refit,
         climate,
         variant,
@@ -564,13 +558,13 @@ use crate::newgrf_callbacks::{CALLBACK_FAILED, CBID_VEHICLE_CUSTOM_REFIT};
 use crate::vehicle::RailVehicleTypes;
 use crate::vehicle_type::{VEH_AIRCRAFT, VEH_SHIP};
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_engine_translate_refit(s: &Services, mask: u32, file: File) -> u64 {
+pub extern "C" fn openttd_rust_engine_translate_refit(mask: u32, file: File) -> u64 {
     let mut result = 0;
     for bit in 0_u8..32 {
         if mask & (1 << bit) == 0 {
             continue;
         }
-        let cargo = (s.cargo_translation)(bit, file, true);
+        let cargo = openttd_rust_cargo_translate(bit, file, true);
         if is_valid_cargo_type(cargo) {
             result |= 1_u64 << cargo;
         }
@@ -578,7 +572,9 @@ pub extern "C" fn openttd_rust_engine_translate_refit(s: &Services, mask: u32, f
     result
 }
 fn engine_label(s: &Services, shell: E) -> u32 {
-    get_active_cargo_label((s.cargo_label)(shell), |label| (s.cargo_by_label)(label))
+    get_active_cargo_label((s.cargo_label)(shell), |label| {
+        openttd_rust_cargo_by_label(label)
+    })
 }
 fn default_masks(s: &Services, kind: u8, shell: E, id: u16, label: u32) -> (u16, u16) {
     if kind == VEH_AIRCRAFT {
@@ -649,7 +645,7 @@ fn default_masks(s: &Services, kind: u8, shell: E, id: u16, label: u32) -> (u16,
 pub unsafe extern "C" fn openttd_rust_engine_calculate_refits(s: &Services) {
     let mut original_known_cargoes = 0;
     for cargo in 0..NUM_CARGO {
-        if (s.default_cargo)(cargo) {
+        if openttd_rust_cargo_is_default(cargo) {
             original_known_cargoes |= 1_u64 << cargo;
         }
     }
@@ -662,7 +658,7 @@ pub unsafe extern "C" fn openttd_rust_engine_calculate_refits(s: &Services) {
         from = u32::from(e.id) + 1;
         let mut input = (s.refit_inputs)(e.shell);
         if !is_valid_cargo_type(input.cargo) {
-            input.cargo = (s.cargo_by_label)(engine_label(s, e.shell));
+            input.cargo = openttd_rust_cargo_by_label(engine_label(s, e.shell));
             (s.set_cargo)(e.shell, input.cargo);
         }
         let fields = unsafe { openttd_rust_engine_temp_fields(e.id) };
@@ -728,7 +724,10 @@ pub unsafe extern "C" fn openttd_rust_engine_calculate_refits(s: &Services) {
                 }
             }
         }
-        input.mask = (((mask & !not_mask) ^ input.mask) & (s.cargo_mask)() | include) & !exclude;
+        input.mask = (((mask & !not_mask) ^ input.mask)
+            & unsafe { openttd_rust_cargo_mask().read() }
+            | include)
+            & !exclude;
         (s.set_refit)(e.shell, input.mask);
         let file = if default_file.is_null() {
             (s.engine_file)(e.shell)
@@ -774,7 +773,9 @@ pub unsafe extern "C" fn openttd_rust_engine_calculate_refits(s: &Services) {
                 }
             }
         }
-        if is_valid_cargo_type(input.cargo) && (s.cargo_mask)() & (1_u64 << input.cargo) == 0 {
+        if is_valid_cargo_type(input.cargo)
+            && unsafe { openttd_rust_cargo_mask().read() } & (1_u64 << input.cargo) == 0
+        {
             input.cargo = INVALID_CARGO;
             (s.set_cargo)(e.shell, input.cargo);
         }
@@ -817,7 +818,9 @@ pub unsafe extern "C" fn openttd_rust_engine_calculate_refits(s: &Services) {
                 && train.capacity == 0
                 && engine_label(s, e.shell) != CT_INVALID
             {
-                input.cargo = crate::bitmath_func::find_first_bit((s.standard_cargo_mask)());
+                input.cargo = crate::bitmath_func::find_first_bit(unsafe {
+                    openttd_rust_standard_cargo_mask().read()
+                });
                 (s.set_cargo)(e.shell, input.cargo);
             }
         }

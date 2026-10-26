@@ -80,7 +80,6 @@ struct OpenTTDAircraftLeaves {
 	void (OPENTTD_RUST_CALL *viewport)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(viewport);
 	void (OPENTTD_RUST_CALL *rotor_image)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(rotor_image);
 	void (OPENTTD_RUST_CALL *copy_sprite)(OpenTTDVehicle *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(copy_sprite);
-	void (OPENTTD_RUST_CALL *create_effect)(OpenTTDAircraftVehicle, uint8_t, int32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(create_effect);
 	void (OPENTTD_RUST_CALL *truncate_cargo)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(truncate_cargo);
 	void (OPENTTD_RUST_CALL *crash_news)(OpenTTDAircraftVehicle, uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crash_news);
 	void (OPENTTD_RUST_CALL *station_rating)(uint32_t, uint8_t, int32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_rating);

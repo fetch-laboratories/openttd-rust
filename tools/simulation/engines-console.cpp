@@ -59,12 +59,19 @@ static Engine *UnusedEngine(EngineID except = EngineID::Invalid())
 }
 #include "subsidies-console.inc"
 #include "cargomonitor-console.inc"
+#include "cargo-registry-console.inc"
 #include "engine-types-console.inc"
 #include "engine-loading-console.inc"
 static bool EnginesScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
 	if (args[1].starts_with("loading")) return LoadingScenario(args);
+	if (args[1] == "cargo-registry") return CargoRegistryScenario(args);
+	if (args[1] == "cargo-profit" || args[1] == "cargo-rating") {
+		if (args[1] == "cargo-profit") CargoProfitFixture(); else CargoRatingFixture();
+		if (args.size() == 3 && SaveOrLoad(args[2], SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false) != SL_OK) FixtureAbort(__LINE__);
+		return true;
+	}
 	if (args[1].starts_with("types")) return TypesScenario(args);
 	if (args[1].starts_with("monitors")) return MonitorScenario(args);
 	if (args[1].starts_with("subsidies")) return SubsidyScenario(args);

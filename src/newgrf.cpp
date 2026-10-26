@@ -50,6 +50,7 @@
 
 #ifdef WITH_RUST
 #include "rust/engine_loading_services.hpp"
+#include "rust/cargo_registry_ffi.h"
 #endif
 
 #include "safeguards.h"
@@ -353,7 +354,7 @@ EngineID GetNewEngineID(const GRFFile *file, VehicleType type, uint16_t internal
 CargoTypes TranslateRefitMask(uint32_t refit_mask)
 {
 #ifdef WITH_RUST
-	return openttd_rust_engine_translate_refit(&GetRustEngineLoadingServices(), refit_mask, _cur_gps.grffile);
+	return openttd_rust_engine_translate_refit(refit_mask, _cur_gps.grffile);
 #else
 	CargoTypes result = 0;
 	for (uint8_t bit : SetBitIterator(refit_mask)) {
@@ -571,6 +572,10 @@ void ResetPersistentNewGRFData()
  */
  std::span<const CargoLabel> GetCargoTranslationTable(const GRFFile &grffile)
  {
+#ifdef WITH_RUST
+	auto labels = openttd_rust_cargo_translation_table(&grffile);
+	return {reinterpret_cast<const CargoLabel *>(labels.data), labels.size};
+#else
 	 /* Always use the translation table if it's installed. */
 	 if (!grffile.cargo_list.empty()) return grffile.cargo_list;
 
@@ -579,7 +584,8 @@ void ResetPersistentNewGRFData()
 
 	 /* Otherwise use climate-independent "bitnum" table. */
 	 return GetClimateIndependentCargoTranslationTable();
- }
+ #endif
+}
 
 /**
  * Construct the Cargo Mapping
@@ -587,6 +593,9 @@ void ResetPersistentNewGRFData()
  */
 static void BuildCargoTranslationMap()
 {
+#ifdef WITH_RUST
+	openttd_rust_cargo_build_inverse(_cur_gps.grffile);
+#else
 	_cur_gps.grffile->cargo_map.fill(UINT8_MAX);
 
 	auto cargo_list = GetCargoTranslationTable(*_cur_gps.grffile);
@@ -596,6 +605,7 @@ static void BuildCargoTranslationMap()
 		int idx = find_index(cargo_list, cs->label);
 		if (idx >= 0) _cur_gps.grffile->cargo_map[cs->Index()] = idx;
 	}
+#endif
 }
 
 /**
@@ -680,7 +690,7 @@ static CargoLabel GetActiveCargoLabel(const std::initializer_list<CargoLabel> &l
 static CargoLabel GetActiveCargoLabel(const std::variant<CargoLabel, MixedCargoType> &label)
 {
 #ifdef WITH_RUST
-	return CargoLabel{openttd_rust_newgrf_active_cargo_label(OpenTTDCargoByLabel, RustCargoLabel(label))};
+	return CargoLabel{openttd_rust_newgrf_active_cargo_label(RustCargoLabel(label))};
 #else
 	struct visitor {
 		CargoLabel operator()(const CargoLabel &label) { return label; }
@@ -1002,6 +1012,9 @@ static void FinaliseEngineArray()
 /** Check for invalid cargoes */
 void FinaliseCargoArray()
 {
+#ifdef WITH_RUST
+	openttd_rust_cargo_finalise();
+#else
 	for (CargoSpec &cs : CargoSpec::array) {
 		if (cs.town_production_effect == INVALID_TPE) {
 			/* Set default town production effect by cargo label. */
@@ -1017,6 +1030,7 @@ void FinaliseCargoArray()
 			cs.abbrev = STR_NEWGRF_INVALID_CARGO_ABBREV;
 		}
 	}
+#endif
 }
 
 /**

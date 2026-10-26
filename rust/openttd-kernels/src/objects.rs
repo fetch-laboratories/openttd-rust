@@ -330,8 +330,6 @@ pub struct ObjectServices {
     pub restoration: *const crate::water::RestorationServices,
     pub set_owner: unsafe extern "C" fn(u32, u8) -> (),
     pub scale_size_1d: unsafe extern "C" fn(u32) -> u32,
-    pub passengers: unsafe extern "C" fn() -> u8,
-    pub mail: unsafe extern "C" fn() -> u8,
     pub scale_cargo: unsafe extern "C" fn(u32) -> u32,
 }
 
@@ -1447,7 +1445,9 @@ impl World<'_> {
             } else {
                 u32::from(self.get_company_hq_size(tile)) + 1
             };
-            let pass = (self.s.passengers)();
+            let pass = crate::cargo_registry::openttd_rust_cargo_by_label(
+                crate::cargo_type::CT_PASSENGERS,
+            );
             if crate::cargo_type::is_valid_cargo_type(pass) {
                 let entry = cargo.add(usize::from(pass));
                 *entry = (*entry).wrapping_add(if accepted.is_null() { 1 } else { level.max(1) });
@@ -1455,7 +1455,8 @@ impl World<'_> {
                     *accepted |= 1_u64 << pass;
                 }
             }
-            let mail = (self.s.mail)();
+            let mail =
+                crate::cargo_registry::openttd_rust_cargo_by_label(crate::cargo_type::CT_MAIL);
             if crate::cargo_type::is_valid_cargo_type(mail) {
                 let entry = cargo.add(usize::from(mail));
                 *entry = (*entry).wrapping_add(if accepted.is_null() {
@@ -1504,7 +1505,9 @@ impl World<'_> {
             let level = u32::from(self.get_company_hq_size(tile)) + 1;
             (self.s.hq_begin)(frame, tile, level);
             let random = self.shared.random();
-            let pass = (self.s.passengers)();
+            let pass = crate::cargo_registry::openttd_rust_cargo_by_label(
+                crate::cargo_type::CT_PASSENGERS,
+            );
             if crate::cargo_type::is_valid_cargo_type(pass)
                 && random & 255 < 256 / 4 / (6_u32.wrapping_sub(level))
             {
@@ -1516,7 +1519,8 @@ impl World<'_> {
                 (self.s.hq_deliver)(frame, pass, amount, self.owner(tile));
                 crate::witness::hit(crate::witness::OBJECT_HQ_PASS);
             }
-            let mail = (self.s.mail)();
+            let mail =
+                crate::cargo_registry::openttd_rust_cargo_by_label(crate::cargo_type::CT_MAIL);
             if crate::cargo_type::is_valid_cargo_type(mail)
                 && (random >> 8) & 255 < 196 / 4 / (6_u32.wrapping_sub(level))
             {
@@ -2511,8 +2515,6 @@ crate::abi::layouts! {
         restoration,
         set_owner,
         scale_size_1d,
-        passengers,
-        mail,
         scale_cargo,
     };
 }

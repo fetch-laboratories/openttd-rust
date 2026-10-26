@@ -6,7 +6,7 @@
 struct GRFFile;
 enum GameMode : uint8_t;
 struct OpenTTDNewGRFCargoLabel { uint32_t value; bool mixed; };
-extern "C" uint32_t openttd_rust_newgrf_active_cargo_label(uint8_t (*)(uint32_t) noexcept, OpenTTDNewGRFCargoLabel);
+extern "C" uint32_t openttd_rust_newgrf_active_cargo_label(OpenTTDNewGRFCargoLabel);
 struct OpenTTDGlobalVariableServices {
 	uint8_t (*climate)() noexcept OPENTTD_SERVICE_DEFAULT(climate);
 	uint16_t (*date_fraction)() noexcept OPENTTD_SERVICE_DEFAULT(date_fraction);

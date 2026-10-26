@@ -74,5 +74,14 @@ pub const MCT_GRAIN_WHEAT_MAIZE: u32 = 1;
 /// Mixed valuables/gold/diamonds definition.
 pub const MCT_VALUABLES_GOLD_DIAMONDS: u32 = 2;
 
+/// Invalid cargo label.
+pub const CT_INVALID: u32 = u32::MAX;
+
+/// Native food label.
+pub const CT_FOOD: u32 = u32::from_be_bytes(*b"FOOD");
+
+/// Original cargo slot count.
+pub const NUM_ORIGINAL_CARGO: u8 = 12;
+
 /// All cargo bits, including undefined cargo slots.
 pub const ALL_CARGOTYPES: u64 = u64::MAX;
