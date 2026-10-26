@@ -48,6 +48,10 @@
 
 #include "table/strings.h"
 
+#ifdef WITH_RUST
+#include "rust/cargo_registry_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 /* TTDPatch extended GRF format codec
@@ -545,6 +549,10 @@ void ResetPersistentNewGRFData()
  */
  std::span<const CargoLabel> GetCargoTranslationTable(const GRFFile &grffile)
  {
+#ifdef WITH_RUST
+	auto labels = openttd_rust_cargo_translation_table(&grffile);
+	return {reinterpret_cast<const CargoLabel *>(labels.data), labels.size};
+#else
 	 /* Always use the translation table if it's installed. */
 	 if (!grffile.cargo_list.empty()) return grffile.cargo_list;
 
@@ -553,7 +561,8 @@ void ResetPersistentNewGRFData()
 
 	 /* Otherwise use climate-independent "bitnum" table. */
 	 return GetClimateIndependentCargoTranslationTable();
- }
+ #endif
+}
 
 /**
  * Construct the Cargo Mapping
@@ -561,6 +570,9 @@ void ResetPersistentNewGRFData()
  */
 static void BuildCargoTranslationMap()
 {
+#ifdef WITH_RUST
+	openttd_rust_cargo_build_inverse(_cur_gps.grffile);
+#else
 	_cur_gps.grffile->cargo_map.fill(UINT8_MAX);
 
 	auto cargo_list = GetCargoTranslationTable(*_cur_gps.grffile);
@@ -570,6 +582,7 @@ static void BuildCargoTranslationMap()
 		int idx = find_index(cargo_list, cs->label);
 		if (idx >= 0) _cur_gps.grffile->cargo_map[cs->Index()] = idx;
 	}
+#endif
 }
 
 /**
@@ -961,6 +974,9 @@ static void FinaliseEngineArray()
 /** Check for invalid cargoes */
 void FinaliseCargoArray()
 {
+#ifdef WITH_RUST
+	openttd_rust_cargo_finalise();
+#else
 	for (CargoSpec &cs : CargoSpec::array) {
 		if (cs.town_production_effect == INVALID_TPE) {
 			/* Set default town production effect by cargo label. */
@@ -976,6 +992,7 @@ void FinaliseCargoArray()
 			cs.abbrev = STR_NEWGRF_INVALID_CARGO_ABBREV;
 		}
 	}
+#endif
 }
 
 /**

@@ -25,3 +25,6 @@ crate::abi::layouts! {
     "VehicleSoundEvent" ["maintenance"] => VehicleSoundEvent {
     };
 }
+
+/// `VSE_VISUAL_EFFECT`.
+pub const VSE_VISUAL_EFFECT: VehicleSoundEvent = VehicleSoundEvent(6);

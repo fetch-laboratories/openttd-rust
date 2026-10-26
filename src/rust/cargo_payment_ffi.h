@@ -9,6 +9,7 @@
 #ifndef RUST_CARGO_PAYMENT_FFI_H
 #define RUST_CARGO_PAYMENT_FFI_H
 #include "service_defaults.hpp"
+struct OpenTTDCargoRegistryServices;
 struct OpenTTDSubsidyServices;
 struct OpenTTDIndustryResolverServices;
 struct OpenTTDCargoMonitorServices;
@@ -51,7 +52,7 @@ struct OpenTTDCargoPayment {
  * SourceType high 16 bits; industry=0xFFFF means town/house delivery. */
 struct OpenTTDCargoServices {
 	void (OPENTTD_RUST_CALL *spec)(uint8_t, OpenTTDCargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec);
-	uint16_t (OPENTTD_RUST_CALL *callback)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(callback);
+	const OpenTTDCargoRegistryServices *registry;
 	uint32_t (OPENTTD_RUST_CALL *station_read)(uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_read);
 	uint32_t (OPENTTD_RUST_CALL *industry_read)(void *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_read);
 	void (OPENTTD_RUST_CALL *industry_write)(void *, uint8_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_write);

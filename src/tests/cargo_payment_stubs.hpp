@@ -14,7 +14,7 @@ inline OpenTTDCargoServices CargoTestServices()
 {
 	return {
 		.spec = [](uint8_t, OpenTTDCargoSpec *) noexcept { std::abort(); },
-		.callback = [](uint8_t, uint32_t) noexcept -> uint16_t { std::abort(); },
+		.registry = nullptr,
 		.station_read = [](uint16_t, uint8_t, uint8_t) noexcept -> uint32_t { std::abort(); },
 		.industry_read = [](void *, uint8_t, uint32_t) noexcept -> uint32_t { std::abort(); },
 		.industry_write = [](void *, uint8_t, uint32_t, uint32_t) noexcept { std::abort(); },

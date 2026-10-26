@@ -211,3 +211,14 @@ do not expose every transient state: add a narrow direct check only for a named
 unreachable gap. Vehicle ports need applicable #86/#104 evidence; the aircraft fixture is now
 integrated in #132. Each controller still needs its own branch witnesses. Retain
 existing tests.
+
+## Cargo registry views (#467)
+
+One process-wide Rust owner holds cargo label/default/climate tables, masks, sorted/reverse
+order and town-production lists. CargoSpec and per-file GRF storage stay native. Native spans
+alias Rust buffers until the next rebuild; the language-loader sort may precede climate setup.
+Clears and populated views are published before native collation, and each town-list insertion
+is visible before the special-cargo break. Rebuild/reset runs under serialized loading, outside
+callbacks. Runtime lookups retain no container borrow across native services; each cargo
+callback has its own Rust invocation and native virtual/profiler frame, and common Action2 and
+storage are direct Rust callees. This adds no map access permission to #274.

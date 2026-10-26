@@ -59,6 +59,10 @@ static_assert(std::is_trivially_copyable_v<Order> && std::is_trivially_destructi
 
 #endif
 
+#ifdef WITH_RUST
+#include "rust/vehicle_effect_ffi.h"
+#include "rust/effect_ffi.h"
+#endif
 #include "safeguards.h"
 
 static Track ChooseTrainTrack(Train *v, TileIndex tile, DiagDirection enterdir, TrackBits tracks, bool force_res, bool *got_reservation, bool mark_stuck);
@@ -4529,6 +4533,12 @@ uint16_t Train::GetMaxWeight() const
 
 const OpenTTDTrainServices &GetTrainServices() noexcept
 {
+	static const bool bound = []() {
+		openttd_rust_visual_bind(&GetRustVisualServices());
+		openttd_rust_effect_bind(GetRustEffectCreationServices());
+		return true;
+	}();
+	(void)bound;
 	static const OpenTTDTrainServices services{
 		.physics = &GetRustGroundPhysicsServices(),
 		.read_first = TrainReadFirst,
@@ -4679,7 +4689,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.is_station = OpenTTDLegacyMapQuery<uint64_t, RustIsRailStation, OpenTTDTrainHandle, uint32_t>,
 		.is_station_any = TrainIsStationAny,
 		.is_tunnelbridge = TrainIsTunnelbridge,
-		.large_explosion = TrainLargeExplosion,
 		.leave_sound = TrainLeaveSound,
 		.leave_unbunch = TrainLeaveUnbunch,
 		.length_callback = TrainLengthCallback,
@@ -4718,7 +4727,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 
 		.set_signal_state = OpenTTDLegacyMapQuery<void, RustRailSetSignalState, OpenTTDTrainHandle, uint32_t, uint8_t, uint8_t>,
 		.set_tunnel_res = OpenTTDLegacyMapQuery<void, RustSetTunnelBridgeReservation, OpenTTDTrainHandle, uint32_t, uint8_t>,
-		.show_effect = TrainShowEffect,
 		.show_reservation = OpenTTDLegacyMapQuery<uint64_t, RustShowTrackReservation, OpenTTDTrainHandle>,
 		.signal_context = GetRustSignalContext,
 		.signal_has_pbs = OpenTTDLegacyMapQuery<uint64_t, RustHasPbsSignal, OpenTTDTrainHandle, uint32_t, uint8_t>,
@@ -4726,7 +4734,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.signal_type = OpenTTDLegacyMapQuery<uint64_t, RustRailSignalType, OpenTTDTrainHandle, uint32_t, uint8_t>,
 		.sigseg_full = TrainSigsegFull,
 		.sigseg_pbs = TrainSigsegPbs,
-		.small_explosion = TrainSmallExplosion,
 		.speed_default = TrainSpeedDefault,
 		.start_stop_dirty = TrainStartStopDirty,
 		.station = TrainSharedMap<uint64_t, &OpenTTDSharedServices::station_index>,
@@ -4756,12 +4763,11 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 
 		.tunnel_dir = TrainSharedMap<uint64_t, &OpenTTDSharedServices::tunnel_bridge_direction>,
 
-		.update_delta = TrainUpdateDelta,
+		.update_delta = RustVehicleUpdateDelta<OpenTTDTrainHandle>,
 		.user_default = TrainUserDefault,
 		.veh_exit_dir = TrainVehExitDir,
 		.viewport = TrainViewport,
 		.visit_type = TrainVisitType,
-		.vis_effect = TrainVisEffect,
 		.wagon_override = TrainWagonOverride,
 		.wagon_speed_limits = RustSettingRead<uint64_t, RustWagonSpeedLimits, OpenTTDTrainHandle>,
 		.wait_oneway = TrainWaitOneway,

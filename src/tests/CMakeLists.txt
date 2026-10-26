@@ -4,6 +4,7 @@ add_test_files(
     abi_layout.hpp
     bitmath_func.cpp
     company_economy.cpp
+    cargo_registry.cpp
     cargo_payment.cpp
     cargo_payment_stubs.hpp
     fleet.cpp
@@ -24,6 +25,7 @@ add_test_files(
     mock_fontcache.h
     mock_spritecache.cpp
     mock_spritecache.h
+    newgrf_bytereader.cpp
     orders.cpp
     rail_yapf.cpp
     rail_yapf_protocol.hpp

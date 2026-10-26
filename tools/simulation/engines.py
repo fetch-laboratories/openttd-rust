@@ -14,6 +14,10 @@ from .core import (
 
 ADAPTER = ROOT / "tools/simulation/engines-console.cpp"
 REQUIRED = {
+    "cargo-registry": (),
+    "cargo-profit": (),
+    "cargo-profit-reload": (),
+    "cargo-rating-reload": (),
     "types": (),
     "types-reload": (),
     "monitors": (),
@@ -25,6 +29,10 @@ REQUIRED = {
     "subsidies-reload": (),
 }
 EXPECTED = {
+    "cargo-registry": ("registry-controls true",),
+    "cargo-profit": ("profit-controls true",),
+    "cargo-profit-reload": ("profit-controls true",),
+    "cargo-rating-reload": ("rating-controls true",),
     "types": (
         "types-case afterload-masks true",
         "types-case fixedpoint true",
@@ -109,6 +117,8 @@ def scenarios(soak):
             "reliability",
             "reload",
             "monitors",
+            "cargo-registry",
+            "cargo-profit",
             "types",
             "types-reload",
         )
@@ -135,7 +145,7 @@ def adapter(build, folder, env):
         ADAPTER,
         "engines",
         wraps=("_Z18CopyTempEngineDatav",),
-        replace_objects=("saveload.cpp.o",),
+        replace_objects=("saveload.cpp.o", "/newgrf.cpp.o", "/newgrf_act0_cargo.cpp.o"),
     )
 
 
@@ -149,7 +159,13 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     executables = prepared_console("engines", adapter, binaries, builds, folder, env)
     if scenario["engines"] == "monitors":
         economy.monitor_load_probes(scenario, executables, builds, folder, timeout, env)
-    if scenario["engines"] not in ("reload", "subsidies-reload", "types-reload"):
+    if scenario["engines"] not in (
+        "types-reload",
+        "reload",
+        "subsidies-reload",
+        "cargo-profit-reload",
+        "cargo-rating-reload",
+    ):
         return dict(
             scenario,
             executables=executables,
@@ -157,7 +173,14 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         )
     types = scenario["engines"] == "types-reload"
     subsidy = scenario["engines"] == "subsidies-reload"
-    variant, prefix = ("subsidies", "SUBSIDY ") if subsidy else ("commands", "ENGINE ")
+    cargo = scenario["engines"].startswith("cargo-")
+    variant, prefix = (
+        (scenario["engines"].removesuffix("-reload"), "CARGO ")
+        if cargo
+        else ("subsidies", "SUBSIDY ")
+        if subsidy
+        else ("commands", "ENGINE ")
+    )
     if types:
         variant, prefix = "types", "ENGINE "
     saves = {role: folder / role / "engines.sav" for role in executables}
@@ -175,7 +198,9 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     )
     captures = {}
     required = (
-        EXPECTED["types"]
+        EXPECTED[scenario["engines"]]
+        if cargo
+        else EXPECTED["types"]
         if types
         else ("transfer true true",)
         if subsidy
@@ -208,7 +233,9 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         console=[
             "engines_scenario "
             + (
-                "types-inspect"
+                variant
+                if cargo
+                else "types-inspect"
                 if types
                 else "subsidies-inspect"
                 if subsidy
@@ -234,7 +261,9 @@ def check(scenario, run, mode, role, result):
     ):
         raise RuntimeError("type loadphase/mask/command/restoration markers missing")
     component = (
-        "monitor"
+        "cargo"
+        if variant.startswith("cargo-")
+        else "monitor"
         if variant == "monitors"
         else ("subsidy" if variant.startswith("subsidies") else "engine")
     )

@@ -18,34 +18,47 @@ from .play_saves import DISTRIBUTIONS
 
 
 def scenarios(soak):
-    return [
-        {
-            "name": f"economy-{mode}",
-            "kind": "save",
-            "save": str(ROOT / "migration/saves/grok-159-001.sav"),
-            "snapshot_minimum": 0 if mode == "stockpile" else 2,
-            "short_checkpoint": mode == "stockpile",
-            "console": (
-                ["setting order.gradual_loading 0"] if mode == "stockpile" else []
+    return (
+        [
+            dict(
+                name="economy-cargo-profit",
+                kind="save",
+                save=str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
+                engines="cargo-profit-reload",
+                short_checkpoint=True,
+                ticks=1,
             )
-            + DISTRIBUTIONS["cargodist" if mode == "cargodist" else "manual"],
-            "economy": mode,
-            "ticks": 32
-            if mode == "stockpile"
-            else (12 if soak else 4) * SNAPSHOT_TICKS,
-        }
-        for mode in ("manual", "cargodist", "stockpile")
-    ] + [
-        dict(
-            name="subsidies-" + mode,
-            kind="save",
-            save=str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
-            engines="subsidies" + ("-reload" if mode == "reload" else ""),
-            short_checkpoint=True,
-            ticks=1,
-        )
-        for mode in ("control", "reload")
-    ]
+        ]
+        + [
+            {
+                "name": f"economy-{mode}",
+                "kind": "save",
+                "save": str(ROOT / "migration/saves/grok-159-001.sav"),
+                "snapshot_minimum": 0 if mode == "stockpile" else 2,
+                "short_checkpoint": mode == "stockpile",
+                "console": (
+                    ["setting order.gradual_loading 0"] if mode == "stockpile" else []
+                )
+                + DISTRIBUTIONS["cargodist" if mode == "cargodist" else "manual"],
+                "economy": mode,
+                "ticks": 32
+                if mode == "stockpile"
+                else (12 if soak else 4) * SNAPSHOT_TICKS,
+            }
+            for mode in ("manual", "cargodist", "stockpile")
+        ]
+        + [
+            dict(
+                name="subsidies-" + mode,
+                kind="save",
+                save=str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
+                engines="subsidies" + ("-reload" if mode == "reload" else ""),
+                short_checkpoint=True,
+                ticks=1,
+            )
+            for mode in ("control", "reload")
+        ]
+    )
 
 
 def pending(chunks):

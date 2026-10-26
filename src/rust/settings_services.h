@@ -81,4 +81,5 @@ inline uint32_t RustGenerationSeed() noexcept { return _settings_game.game_creat
 /** Adapt legacy callback widths and unused context arguments to a canonical setting read. */
 template <typename Result, auto Read, typename... Args>
 inline Result RustSettingRead(Args...) noexcept { return Read(); }
+inline uint8_t RustVehicleSmokeAmount() noexcept { return _settings_game.vehicle.smoke_amount; }
 #endif /* RUST_SETTINGS_SERVICES_H */

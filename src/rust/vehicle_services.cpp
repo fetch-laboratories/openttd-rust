@@ -130,9 +130,9 @@ static void OPENTTD_RUST_CALL VehicleSvcCheckOrdersOnly(OpenTTDVehicle *v) noexc
 static void OPENTTD_RUST_CALL VehicleSvcWriteCoordinates(OpenTTDVehicle *v, int32_t x, int32_t y, int32_t z) noexcept
 {
 	Vehicle *u = VehicleOf(v);
-	u->x_pos = x;
-	u->y_pos = y;
-	u->z_pos = z;
+	RustWriteVehicleX(u, x);
+	RustWriteVehicleY(u, y);
+	RustWriteVehicleZ(u, z);
 }
 static bool OPENTTD_RUST_CALL VehicleSvcWaitingForUnbunching(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->IsWaitingForUnbunching(); }
 static void OPENTTD_RUST_CALL VehicleSvcLeaveUnbunchingDepot(OpenTTDVehicle *v) noexcept { VehicleOf(v)->LeaveUnbunchingDepot(); }
@@ -146,11 +146,13 @@ static OpenTTDVehicleNewPosition OPENTTD_RUST_CALL VehicleSvcNewPosition(OpenTTD
 static void OPENTTD_RUST_CALL VehicleSvcWriteXY(OpenTTDVehicle *v, int32_t x, int32_t y) noexcept
 {
 	Vehicle *u = VehicleOf(v);
-	u->x_pos = x;
-	u->y_pos = y;
+	RustWriteVehicleX(u, x);
+	RustWriteVehicleY(u, y);
 
 }
 static void OPENTTD_RUST_CALL VehicleSvcBaseViewport(OpenTTDVehicle *v) noexcept { VehicleOf(v)->Vehicle::UpdateViewport(true); }
+uint32_t RustTrainCachedWeight(const Vehicle *v) noexcept { return Train::From(v)->gcache.cached_weight; }
+uint64_t RustTrainRailTypes(const Vehicle *v) noexcept { return Train::From(v)->GetRailTypes().base(); }
 Train *RustTrainGetIfValid(uint32_t id) noexcept { return Train::GetIfValid(VehicleID(id)); }
 OpenTTDVehicle *RustShipGet(uint32_t id) noexcept { return RustVehicle(Ship::Get(VehicleID(id))); }
 static const OpenTTDOrdersLeaves *VehicleOrders() noexcept { return &GetRustOrdersLeaves(); }
@@ -162,7 +164,6 @@ static void OPENTTD_RUST_CALL VehicleSvcUnknownCallbackResult(const OpenTTDEngin
 static void OPENTTD_RUST_CALL VehicleSvcLengthChanged(OpenTTDVehicle *v) noexcept { VehicleLengthChanged(VehicleOf(v)); }
 static bool OPENTTD_RUST_CALL VehicleSvcPlayVehicleSound(OpenTTDVehicle *v, VehicleSoundEvent event) noexcept { return PlayVehicleSound(VehicleOf(v), event); }
 static void OPENTTD_RUST_CALL VehicleSvcPlaySound(OpenTTDVehicle *v, uint16_t sound) noexcept { SndPlayVehicleFx(static_cast<SoundID>(sound), VehicleOf(v)); }
-static void OPENTTD_RUST_CALL VehicleSvcLargeExplosion(OpenTTDVehicle *v) noexcept { CreateEffectVehicleRel(VehicleOf(v), 4, 4, 8, EV_EXPLOSION_LARGE); }
 static void OPENTTD_RUST_CALL VehicleSvcOrderFree(OpenTTDVehicle *v) noexcept { VehicleOf(v)->current_order.Free(); }
 static void OPENTTD_RUST_CALL VehicleSvcOrderDummy(OpenTTDVehicle *v) noexcept
 {
@@ -234,11 +235,11 @@ static uint8_t OPENTTD_RUST_CALL VehicleSvcSubspeed(OpenTTDVehicle *v) noexcept 
 static uint8_t OPENTTD_RUST_CALL VehicleSvcRunning(OpenTTDVehicle *v) noexcept { return RustVehicleRunning(VehicleOf(v)); }
 static int32_t OPENTTD_RUST_CALL VehicleSvcOrderTime(OpenTTDVehicle *v) noexcept { return RustVehicleOrderTime(VehicleOf(v)); }
 static uint8_t OPENTTD_RUST_CALL VehicleSvcVehicleType(OpenTTDVehicle *v) noexcept { return static_cast<uint8_t>(RustVehicleVehicleType(VehicleOf(v))); }
-static void OPENTTD_RUST_CALL VehicleSvcWriteX(OpenTTDVehicle *v, int32_t value) noexcept { VehicleOf(v)->x_pos = value; }
-static void OPENTTD_RUST_CALL VehicleSvcWriteY(OpenTTDVehicle *v, int32_t value) noexcept { VehicleOf(v)->y_pos = value; }
-static void OPENTTD_RUST_CALL VehicleSvcWriteZ(OpenTTDVehicle *v, int32_t value) noexcept { VehicleOf(v)->z_pos = value; }
-static void OPENTTD_RUST_CALL VehicleSvcWriteTile(OpenTTDVehicle *v, uint32_t value) noexcept { VehicleOf(v)->tile = TileIndex(value); }
-static void OPENTTD_RUST_CALL VehicleSvcWriteStatus(OpenTTDVehicle *v, uint8_t value) noexcept { VehicleOf(v)->vehstatus = VehStates{value}; }
+static void OPENTTD_RUST_CALL VehicleSvcWriteX(OpenTTDVehicle *v, int32_t value) noexcept { RustWriteVehicleX(VehicleOf(v), value); }
+static void OPENTTD_RUST_CALL VehicleSvcWriteY(OpenTTDVehicle *v, int32_t value) noexcept { RustWriteVehicleY(VehicleOf(v), value); }
+static void OPENTTD_RUST_CALL VehicleSvcWriteZ(OpenTTDVehicle *v, int32_t value) noexcept { RustWriteVehicleZ(VehicleOf(v), value); }
+static void OPENTTD_RUST_CALL VehicleSvcWriteTile(OpenTTDVehicle *v, uint32_t value) noexcept { RustWriteVehicleTile(VehicleOf(v), TileIndex(value)); }
+static void OPENTTD_RUST_CALL VehicleSvcWriteStatus(OpenTTDVehicle *v, uint8_t value) noexcept { RustWriteVehicleStatus(VehicleOf(v), VehStates{value}); }
 static void OPENTTD_RUST_CALL VehicleSvcWriteSubspeed(OpenTTDVehicle *v, uint8_t value) noexcept { VehicleOf(v)->subspeed = value; }
 static void OPENTTD_RUST_CALL VehicleSvcWriteBreakdownCounter(OpenTTDVehicle *v, uint8_t value) noexcept { VehicleOf(v)->breakdown_ctr = value; }
 static void OPENTTD_RUST_CALL VehicleSvcWriteRunning(OpenTTDVehicle *v, uint8_t value) noexcept { VehicleOf(v)->running_ticks = value; }
@@ -345,7 +346,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.length_changed = VehicleSvcLengthChanged,
 	.play_vehicle_sound = VehicleSvcPlayVehicleSound,
 	.play_sound = VehicleSvcPlaySound,
-	.large_explosion = VehicleSvcLargeExplosion,
 	.order_free = VehicleSvcOrderFree,
 	.order_dummy = VehicleSvcOrderDummy,
 	.start_stop_dirty = VehicleSvcStartStopDirty,
@@ -593,13 +593,6 @@ static OpenTTDVehicleMaintenanceBreakdownSoundState OPENTTD_RUST_CALL Maintenanc
 }
 static void OPENTTD_RUST_CALL MaintenanceBreakdownDelayWrite(OpenTTDVehicle *handle, uint8_t delay) noexcept { VehicleOf(handle)->breakdown_delay = delay; }
 static bool OPENTTD_RUST_CALL MaintenanceSmokeDisabled(OpenTTDVehicle *handle) noexcept { return EngineMiscFlags(RustEngineMiscFlags(RustVehicleGetEngine(handle))).Test(EngineMiscFlag::NoBreakdownSmoke); }
-static OpenTTDVehicleMaintenanceBreakdownSmoke OPENTTD_RUST_CALL MaintenanceSmoke(OpenTTDVehicle *handle) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	EffectVehicle *smoke = CreateEffectVehicleRel(v, 4, 4, 5, EV_BREAKDOWN_SMOKE);
-	return {.shell = RustVehicle(smoke), .delay = RustVehicleBreakdownDelay(v)};
-}
-static void OPENTTD_RUST_CALL MaintenanceSmokeAnimation(OpenTTDVehicle *handle, uint16_t duration) noexcept { EffectVehicle::From(VehicleOf(handle))->SetAnimationState(duration); }
 static void OPENTTD_RUST_CALL MaintenanceAircraftBroken(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->vehstatus.Set(VehState::AircraftBroken); }
 static void OPENTTD_RUST_CALL MaintenanceMarkDirty(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->MarkDirty(); }
 static void OPENTTD_RUST_CALL MaintenanceViewDirty(OpenTTDVehicle *handle) noexcept { SetWindowDirty(WC_VEHICLE_VIEW, VehicleOf(handle)->index); }
@@ -667,8 +660,7 @@ const OpenTTDVehicleMaintenanceServices _rust_vehicle_maintenance_services{
 	.breakdown_sound_state = MaintenanceBreakdownSoundState,
 	.breakdown_delay_write = MaintenanceBreakdownDelayWrite,
 	.smoke_disabled = MaintenanceSmokeDisabled,
-	.smoke = MaintenanceSmoke,
-	.smoke_animation = MaintenanceSmokeAnimation,
+	.smoke_delay = RustVehicleRead<uint8_t, RustVehicleBreakdownDelay>,
 	.aircraft_broken = MaintenanceAircraftBroken,
 	.mark_dirty = MaintenanceMarkDirty,
 	.view_dirty = MaintenanceViewDirty,

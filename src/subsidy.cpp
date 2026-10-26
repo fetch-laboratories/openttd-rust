@@ -674,8 +674,6 @@ const OpenTTDSubsidyServices &GetRustSubsidyServices() noexcept
 		.manual = OpenTTDManualCargoDistribution,
 		.manual_pax = OpenTTDManualPassengerDistribution,
 		.any_manual = []() noexcept { return _settings_game.linkgraph.distribution_pax == DT_MANUAL || _settings_game.linkgraph.distribution_mail == DT_MANUAL || _settings_game.linkgraph.distribution_armoured == DT_MANUAL || _settings_game.linkgraph.distribution_default == DT_MANUAL; },
-		.passenger_count = []() noexcept { return static_cast<uint32_t>(CargoSpec::town_production_cargoes[TPE_PASSENGERS].size()); },
-		.passenger_at = [](uint32_t index) noexcept { return CargoSpec::town_production_cargoes[TPE_PASSENGERS][index]->Index(); },
 		.offered_news = SubsidyOfferedNews, .awarded_news = SubsidyAwardedNews,
 		.offer_expired_news = SubsidyOfferExpiredNews, .withdrawn_news = SubsidyWithdrawnNews,
 		.offer_events = [](uint16_t id) noexcept { AI::BroadcastNewEvent(new ScriptEventSubsidyOffer(SubsidyID(id))); Game::NewEvent(new ScriptEventSubsidyOffer(SubsidyID(id))); },

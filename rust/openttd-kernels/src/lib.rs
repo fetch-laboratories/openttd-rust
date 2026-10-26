@@ -543,9 +543,11 @@ pub extern "C" fn openttd_rust_spiral_equal(left: SpiralState, right: SpiralStat
 }
 
 mod effect;
+mod effectvehicle_func;
 mod encoded;
 mod engine;
 mod engine_capabilities;
+mod vehicle_effect;
 pub use encoded::{
     Descriptor as EncodedDescriptor, Diagnostic as EncodedDiagnostic, View as EncodedView,
 };
@@ -1391,8 +1393,10 @@ pub(crate) mod tile_map;
 pub(crate) mod tree_map;
 pub(crate) mod water_map;
 
+mod cargo_registry;
 mod cargo_type;
 mod cargotype;
+mod container_func;
 mod source_type;
 mod subsidy_base;
 mod tilearea;

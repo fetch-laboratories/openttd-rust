@@ -61,16 +61,14 @@ static OpenTTDRoadYapfFollow RoadFollow(const void *ctx, uint32_t tile, uint8_t 
 	return out;
 }
 
-/** No Follow here: GetSpeedLimit reads only old_tile and the live vehicle. */
+/** No Follow here: query the named limits at the original traversal observation. */
 static OpenTTDRoadYapfTraversal RoadTraversal(const void *ctx, uint32_t tile) noexcept
 {
 	const auto *v = static_cast<const RoadVehicle *>(ctx);
 	OpenTTDRoadYapfTraversal out{};
 	out.display_speed = RustVehicleDisplayMaxSpeed(v);
 	out.order_speed = RustVehicleOrderMaxSpeed(v);
-	CFollowTrackRoad follower(v);
-	follower.old_tile = TileIndex(tile);
-	out.max_speed = follower.GetSpeedLimit(&out.min_speed);
+	out.max_speed = CFollowTrackRoad::GetSpeedLimit(TileIndex(tile), v, &out.min_speed);
 	return out;
 }
 

@@ -227,7 +227,6 @@ pub struct Leaves {
     pub viewport: unsafe extern "C" fn(Vehicle),
     pub rotor_image: unsafe extern "C" fn(Vehicle),
     pub copy_sprite: unsafe extern "C" fn(VehicleRef, VehicleRef),
-    pub create_effect: unsafe extern "C" fn(Vehicle, u8, i32, i32, i32),
     pub truncate_cargo: unsafe extern "C" fn(Vehicle),
     pub crash_news: unsafe extern "C" fn(Vehicle, u16, u32),
     pub station_rating: unsafe extern "C" fn(u32, u8, i32, u32),
@@ -581,7 +580,6 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         position_y(self; vehicle: VehicleRef) -> i32 => (self.vs.y)(vehicle);
         position_coordinates(self; vehicle: VehicleRef, x: i64, y: i64, z: i64) -> () => (self.vs.write_coordinates)(vehicle, x as i32, y as i32, z as i32);
         position_viewport(self; vehicle: VehicleRef) -> () => unsafe { crate::vehicle::occupancy::update_position(self.vs, vehicle, self.map()); (self.vs.base_viewport)(vehicle); };
-        create_effect(self; vehicle: Vehicle, kind: i64, x: i64, y: i64, z: i64) -> () => unsafe { (self.leaves.create_effect)(vehicle, kind as u8, x as i32, y as i32, z as i32) };
         dirty_start_stop(self; vehicle: Vehicle) -> () => (self.vs.start_stop_dirty)(vehicle.base());
         play_sound(self; vehicle: Vehicle, sound: i64) -> () => (self.vs.play_sound)(vehicle.base(), sound as u16);
         truncate_cargo(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.truncate_cargo)(vehicle) };
@@ -841,8 +839,14 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             Some(observed),
         )
     }
-    fn effect(&self, id: Vehicle, x: i64, y: i64, z: i64, kind: u32) {
-        self.create_effect(id, i64::from(kind), x, y, z);
+    fn effect(id: Vehicle, x: i64, y: i64, z: i64, kind: u32) {
+        crate::effect::openttd_rust_effect_create_rel(
+            id.base().0.as_ptr(),
+            x as i32,
+            y as i32,
+            z as i32,
+            kind as u8,
+        );
     }
     fn position(&self, id: Vehicle, x: i64, y: i64, z: i64) {
         let observed = self.position_observations(id);
@@ -1421,7 +1425,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 self.set_direction(id, (self.direction(id) + delta) & 7);
                 self.position_current(id, None);
                 let r = self.random();
-                self.effect(
+                Self::effect(
                     id,
                     i64::from((r & 15).wrapping_sub(4) as i32),
                     i64::from(((r >> 4) & 15).wrapping_sub(4) as i32),
@@ -1458,7 +1462,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 (-5, 5),
                 (0, 6),
             ][self.direction(id) as usize];
-            self.effect(id, x, y, 2, 10);
+            Self::effect(id, x, y, 2, 10);
         }
     }
     fn crash(&self, id: Vehicle, flooded: bool) -> u32 {
@@ -1467,7 +1471,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         victims
     }
     fn crash_airplane(&self, id: Vehicle) {
-        self.effect(id, 4, 4, 8, 5);
+        Self::effect(id, 4, 4, 8, 5);
         let victims = self.crash(id, false);
         self.truncate_cargo(id);
         self.truncate_cargo(self.next(id));
@@ -2621,7 +2625,6 @@ crate::abi::layouts! {
         viewport,
         rotor_image,
         copy_sprite,
-        create_effect,
         truncate_cargo,
         crash_news,
         station_rating,
