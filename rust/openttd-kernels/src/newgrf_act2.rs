@@ -16,11 +16,13 @@
     clippy::cast_sign_loss,
     clippy::if_not_else, // Preserve the original branch order.
 )]
+use crate::bitmath_func::{clr_bit, gb, has_bit, has_exactly_one_bit, sb, set_bit};
 use crate::game_state::GameState;
 use crate::industry_type::{
     INDUSTRY_NUM_INPUTS, INDUSTRY_NUM_OUTPUTS, INDUSTRY_ORIGINAL_NUM_INPUTS,
     INDUSTRY_ORIGINAL_NUM_OUTPUTS,
 };
+use crate::math::is_inside_mm;
 use crate::newgrf::{
     GSF_AIRCRAFT, GSF_AIRPORTS, GSF_AIRPORTTILES, GSF_BADGES, GSF_CANALS, GSF_CARGOES, GSF_END,
     GSF_HOUSES, GSF_INDUSTRIES, GSF_INDUSTRYTILES, GSF_OBJECTS, GSF_RAILTYPES, GSF_ROADSTOPS,
@@ -199,7 +201,7 @@ pub unsafe extern "C" fn openttd_rust_action2_reset(final_reset: bool) {
 unsafe fn callback(s: &Services, l: &LoadingServices, mut value: u16) -> Handle {
     unsafe {
         let file = (*loading::openttd_rust_grf_execution()).grffile;
-        if ((*l.global).file_version)(file) < 8 && value >> 8 == 0xFF {
+        if ((*l.global).file_version)(file) < 8 && gb(u32::from(value), 8, 8) == 0xFF {
             value &= !0xFF00;
         } else {
             value &= !0x8000;
@@ -219,7 +221,7 @@ unsafe fn callback(s: &Services, l: &LoadingServices, mut value: u16) -> Handle 
 }
 unsafe fn group_ref(s: &Services, l: &LoadingServices, setid: u8, kind: u8, id: u16) -> Handle {
     unsafe {
-        if id & 0x8000 != 0 {
+        if has_bit(id, 15) {
             return callback(s, l, id);
         }
         if id == GROUPID_CALLBACK_FAILED {
@@ -245,7 +247,7 @@ unsafe fn create_group(
     id: u16,
 ) -> Handle {
     unsafe {
-        if id & 0x8000 != 0 {
+        if has_bit(id, 15) {
             return callback(s, l, id);
         }
         if !loading::openttd_rust_grf_has_set(feature, u32::from(id)) {
@@ -292,13 +294,13 @@ unsafe fn deterministic<R: Read>(
     line: u32,
 ) -> Result<Handle, ReadError> {
     unsafe {
-        let scope = if kind & 2 != 0 {
+        let scope = if has_bit(kind, 1) {
             VSG_SCOPE_PARENT
         } else {
             VSG_SCOPE_SELF
         };
         // The six dispatch cases prove that the native size switch has no default here.
-        let (size, varsize) = match (kind >> 2) & 3 {
+        let (size, varsize) = match gb(u32::from(kind), 2, 2) {
             0 => (DSG_SIZE_BYTE, VarSize::Byte),
             1 => (DSG_SIZE_WORD, VarSize::Word),
             _ => (DSG_SIZE_DWORD, VarSize::Dword),
@@ -314,15 +316,15 @@ unsafe fn deterministic<R: Read>(
             if variable == 0x7E {
                 *a.subroutine = group_ref(s, l, setid, kind, u16::from(b.byte()?));
             } else {
-                *a.parameter = if (0x60..0x80).contains(&variable) {
+                *a.parameter = if is_inside_mm(usize::from(variable), 0x60, 0x80) {
                     b.byte()?
                 } else {
                     0
                 };
             }
             let varadjust = b.byte()?;
-            *a.shift_num = varadjust & 0x1F;
-            let adjust_type = varadjust >> 6;
+            *a.shift_num = gb(u32::from(varadjust), 0, 5) as u8;
+            let adjust_type = gb(u32::from(varadjust), 6, 2) as u8;
             *a.kind = adjust_type;
             *a.and_mask = b.var_size(varsize)?;
             if adjust_type != DSGA_TYPE_NONE {
@@ -333,7 +335,7 @@ unsafe fn deterministic<R: Read>(
                 *a.add_val = 0;
                 *a.divmod_val = 0;
             }
-            if varadjust & 0x20 == 0 {
+            if !has_bit(varadjust, 5) {
                 break;
             }
         }
@@ -420,27 +422,27 @@ unsafe fn randomized<R: Read>(
     unsafe {
         let group = (s.random_new)(line);
         let fields = (s.random_storage)(group);
-        *fields.scope = if kind & 2 != 0 {
+        *fields.scope = if has_bit(kind, 1) {
             VSG_SCOPE_PARENT
         } else {
             VSG_SCOPE_SELF
         };
-        if kind & 4 != 0 {
+        if has_bit(kind, 2) {
             if feature <= GSF_AIRCRAFT {
                 *fields.scope = VSG_SCOPE_RELATIVE;
             }
             *fields.count = b.byte()?;
         }
         let triggers = b.byte()?;
-        *fields.triggers = triggers & 0x7F;
-        *fields.compare = if triggers & 0x80 != 0 {
+        *fields.triggers = gb(u32::from(triggers), 0, 7) as u8;
+        *fields.compare = if has_bit(triggers, 7) {
             RSG_CMP_ALL
         } else {
             RSG_CMP_ANY
         };
         *fields.lowest_bit = b.byte()?;
         let count = b.byte()?;
-        if !count.is_power_of_two() {
+        if !has_exactly_one_bit(count) {
             (s.random_count)();
         }
         (s.random_reserve)(group, usize::from(count));
@@ -610,17 +612,17 @@ unsafe fn production<R: Read>(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_action2_recolour(image: *mut PalSprite) {
     unsafe {
-        if (*image).pal & (1 << 14) != 0 {
-            (*image).pal &= !(1 << 14);
-            (*image).sprite |= 1 << SPRITE_MODIFIER_OPAQUE;
+        if has_bit((*image).pal, 14) {
+            clr_bit(&mut (*image).pal, 14);
+            set_bit(&mut (*image).sprite, SPRITE_MODIFIER_OPAQUE);
         }
-        if (*image).sprite & (1 << 14) != 0 {
-            (*image).sprite &= !(1 << 14);
-            (*image).sprite |= 1 << PALETTE_MODIFIER_TRANSPARENT;
+        if has_bit((*image).sprite, 14) {
+            clr_bit(&mut (*image).sprite, 14);
+            set_bit(&mut (*image).sprite, PALETTE_MODIFIER_TRANSPARENT);
         }
-        if (*image).sprite & (1 << 15) != 0 {
-            (*image).sprite &= !(1 << 15);
-            (*image).sprite |= 1 << PALETTE_MODIFIER_COLOUR;
+        if has_bit((*image).sprite, 15) {
+            clr_bit(&mut (*image).sprite, 15);
+            set_bit(&mut (*image).sprite, PALETTE_MODIFIER_COLOUR);
         }
     }
 }
@@ -645,10 +647,10 @@ pub(crate) unsafe fn layout_sprite<R: Read>(
             TLF_NOTHING
         };
         openttd_rust_action2_recolour(image);
-        let custom = (((*image).pal & (1 << 15)) != 0) != invert;
-        (*image).pal &= !(1 << 15);
+        let custom = has_bit((*image).pal, 15) != invert;
+        clr_bit(&mut (*image).pal, 15);
         if custom {
-            let index = (*image).sprite & 0x3FFF;
+            let index = gb((*image).sprite, 0, 14);
             if use_sets
                 && (!loading::openttd_rust_grf_has_set(feature, index)
                     || loading::openttd_rust_grf_set_size(feature, index) == 0)
@@ -669,8 +671,8 @@ pub(crate) unsafe fn layout_sprite<R: Read>(
                         u16::MAX
                     };
                 }
-                crate::bitmath_func::sb(&mut (*image).sprite, 0, SPRITE_WIDTH, sprite);
-                (*image).sprite |= 1 << SPRITE_MODIFIER_CUSTOM_SPRITE;
+                sb(&mut (*image).sprite, 0, SPRITE_WIDTH, sprite);
+                set_bit(&mut (*image).sprite, SPRITE_MODIFIER_CUSTOM_SPRITE);
             }
         } else if flags & TLF_SPRITE_VAR10 != 0 && flags & TLF_SPRITE_REG_FLAGS == 0 {
             (s.sprite_var10)();
@@ -678,7 +680,7 @@ pub(crate) unsafe fn layout_sprite<R: Read>(
             return Ok(flags);
         }
         if flags & TLF_CUSTOM_PALETTE != 0 {
-            let index = (*image).pal & 0x3FFF;
+            let index = gb((*image).pal, 0, 14);
             if use_sets
                 && (!loading::openttd_rust_grf_has_set(feature, index)
                     || loading::openttd_rust_grf_set_size(feature, index) == 0)
@@ -698,8 +700,8 @@ pub(crate) unsafe fn layout_sprite<R: Read>(
                         u16::MAX
                     };
                 }
-                crate::bitmath_func::sb(&mut (*image).pal, 0, SPRITE_WIDTH, sprite);
-                (*image).pal |= 1 << SPRITE_MODIFIER_CUSTOM_SPRITE;
+                sb(&mut (*image).pal, 0, SPRITE_WIDTH, sprite);
+                set_bit(&mut (*image).pal, SPRITE_MODIFIER_CUSTOM_SPRITE);
             }
         } else if flags & TLF_PALETTE_VAR10 != 0 && flags & TLF_PALETTE_REG_FLAGS == 0 {
             (s.palette_var10)();
@@ -786,8 +788,8 @@ pub(crate) unsafe fn read_layout<R: Read>(
     layout: *mut Layout,
 ) -> Result<bool, ReadError> {
     unsafe {
-        let has_flags = count & (1 << 6) != 0;
-        count &= !(1 << 6);
+        let has_flags = has_bit(count, 6);
+        clr_bit(&mut count, 6);
         let valid = if allow_var10 {
             TLF_KNOWN_FLAGS
         } else {
