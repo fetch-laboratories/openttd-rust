@@ -476,7 +476,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_evaluate_sprite(
     let result = unsafe {
         newgrf_spritegroup::openttd_rust_resolver_resolve(&*s.common, root, resolver, state, file)
     };
-    if result.kind != 2 {
+    if result.kind != 2 || result.group.is_null() {
         return 0;
     }
     let sprite = (s.sprite)(result.group);

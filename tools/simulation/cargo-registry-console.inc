@@ -88,6 +88,9 @@ static bool CargoRegistryScenario(std::span<std::string_view> args)
 	fmt::print(stderr, "CARGO registry-controls true\n");
 	return true;
 }
+struct CargoNullSpriteResult final : SpriteGroup {
+	ResolverResult Resolve(ResolverObject &) const override { return static_cast<const ResultSpriteGroup *>(nullptr); }
+};
 static void CargoProfitFixture()
 {
 	CargoType cargo = GetCargoTypeByLabel(CT_COAL);
@@ -132,6 +135,8 @@ static void CargoProfitFixture()
 	payment->route_profit = payment->visual_profit = payment->visual_transfer = 0; delete payment; delete packet;
 	cs->group = nullptr; regs.fill(-7);
 	CARGO_REQUIRE(GetCargoCallback(CBID_CARGO_PROFIT_CALC, 7, 19, cs, regs) == CALLBACK_FAILED && regs[0] == -7 && GetCustomCargoSprite(cs) == 0);
+	CargoNullSpriteResult null_sprite; cs->group = &null_sprite;
+	CARGO_REQUIRE(GetCustomCargoSprite(cs) == 0 && GetCargoCallback(CBID_CARGO_PROFIT_CALC, 7, 19, cs, regs) == CALLBACK_FAILED && regs[0] == -7);
 	ResultSpriteGroup sprite(17, 0); cs->group = &sprite;
 	CARGO_REQUIRE(GetCustomCargoSprite(cs) == 0); sprite.num_sprites = 1;
 	CARGO_REQUIRE(GetCustomCargoSprite(cs) == 17);
