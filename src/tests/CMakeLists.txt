@@ -7,6 +7,7 @@ add_test_files(
     cargo_payment.cpp
     cargo_payment_stubs.hpp
     fleet.cpp
+    newgrf_loading.cpp
     engine.cpp
     effectvehicle.cpp
     effect_protocol.hpp

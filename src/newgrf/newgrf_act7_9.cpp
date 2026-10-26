@@ -355,8 +355,3 @@ template <> void GrfActionHandler<0x09>::Reserve(ByteReader &buf) { SkipIf(buf);
 template <> void GrfActionHandler<0x09>::Activation(ByteReader &buf) { SkipIf(buf); }
 
 #endif
-
-#ifdef WITH_RUST
-void InitializePatchFlags() { openttd_rust_grf_patch_flags(&GetRustGrfLoadingServices()); }
-uint32_t GetParamVal(uint8_t param, uint32_t *cond_val) { return openttd_rust_grf_param(&GetRustGrfLoadingServices(), param, cond_val); }
-#endif

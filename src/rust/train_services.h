@@ -595,10 +595,7 @@ static uint64_t TrainWagonOverride(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	return UsesWagonOverride(v);
 }
-static uint64_t TrainWagonSpeedLimits(OpenTTDTrainHandle) noexcept
-{
-	return _settings_game.vehicle.wagon_speed_limits;
-}
+
 static uint64_t TrainWaitOneway(OpenTTDTrainHandle) noexcept
 {
 	return _settings_game.pf.wait_oneway_signal;

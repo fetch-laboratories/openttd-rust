@@ -1,13 +1,20 @@
+/* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
+/** @file newgrf_loading_services.inc Typed native loading services. */
 #ifdef WITH_RUST
-#include "rust/newgrf_loading_ffi.h"
-#include "rust/newgrf_global_ffi.h"
-#include "rust/services_newgrf.h"
-#include "rust/services_cargo.h"
-#include "rust/settings_services.h"
-#include "rust/environment_services.h"
-#include "rust/services_map.h"
-#include "rust/service_table_check.hpp"
+#include "newgrf_loading_ffi.h"
+#include "newgrf_global_ffi.h"
+#include "generic_ffi.h"
+#include "../string_func.h"
+#include "services_newgrf.h"
+#include "services_cargo.h"
+#include "settings_services.h"
+#include "environment_services.h"
+#include "services_map.h"
+#include "service_table_check.hpp"
 /** Each parser catches exactly the DecodeSpecialSprite domain, retaining partial effects. */
+static_assert(GLS_FILESCAN == 0 && GLS_SAFETYSCAN == 1 && GLS_LABELSCAN == 2 && GLS_INIT == 3 && GLS_RESERVE == 4 && GLS_ACTIVATION == 5);
+static_assert(GCS_UNKNOWN == 0 && GCS_DISABLED == 1 && GCS_NOT_FOUND == 2 && GCS_INITIALISED == 3 && GCS_ACTIVATED == 4);
+static_assert(GSF_GLOBALVAR == 8 && GSF_CARGOES == 11 && to_underlying(GrfMiscBit::SecondRockyTileSet) == 6);
 template <void (*Parser)(ByteReader &)>
 static bool ParseGrfAction(const uint8_t *data, size_t size) noexcept
 {
@@ -36,7 +43,7 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.file_for_config = [](const GRFConfig *c) noexcept { auto *f = GetFileByFilename(c->filename); if (f == nullptr) UserError("File '{}' lost in cache.\n", c->filename); return f; },
 		.error = [](GRFConfig *c, uint32_t line, StringID message, bool current) noexcept { auto it = std::ranges::find(c->errors, line, &GRFError::nfo_line); if (it == c->errors.end()) it = c->errors.emplace(it, STR_NEWGRF_ERROR_MSG_FATAL, line, message); if (current) it->param_value[0] = line; return &*it; },
 		.error_name = [](GRFError *e, const GRFConfig *c) noexcept { e->data = c->GetName(); },
-		.networking = []() noexcept { return _networking; },
+		.networking = RustNetworking,
 		.cargo_label = OpenTTDCargoByLabel,
 		.rail_label = [](RailTypeLabel label) noexcept { return GetRailTypeByLabel(label); },
 		.road_label = [](RoadTypeLabel label) noexcept { return GetRoadTypeByLabel(label); },
@@ -65,7 +72,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.skip_act1 = ParseGrfAction<&GrfActionHandler<0x01>::FileScan>,
 		.new_sprite_set = ParseGrfAction<&GrfActionHandler<0x01>::Activation>,
 		.new_sprite_group = ParseGrfAction<&GrfActionHandler<0x02>::Activation>,
-		.grf_unsafe = ParseGrfAction<&GrfActionHandler<0x03>::SafetyScan>,
 		.feature_map_sprite_group = ParseGrfAction<&GrfActionHandler<0x03>::Activation>,
 		.feature_new_name = ParseGrfAction<&GrfActionHandler<0x04>::Activation>,
 		.skip_act5 = ParseGrfAction<&GrfActionHandler<0x05>::FileScan>,
@@ -119,7 +125,7 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.exists = [](const GRFConfig *c, Subdirectory subdir) noexcept { return FioCheckFileExists(c->filename, subdir); },
 		.init_file = [](const GRFConfig *c) noexcept { InitNewGRFFile(*c); },
 		.override_grf = [](uint32_t source, uint32_t target) noexcept { SetNewGRFOverride(source, target); },
-		.too_many = [](GRFConfig *c) noexcept { c->errors.emplace_back(STR_NEWGRF_ERROR_MSG_FATAL, 0, STR_NEWGRF_ERROR_TOO_MANY_NEWGRFS_LOADED); },
+		.too_many = [](GRFConfig *c) noexcept { Debug(grf, 0, "'{}' is not loaded as the maximum number of non-static GRFs has been reached", c->filename); c->errors.emplace_back(STR_NEWGRF_ERROR_MSG_FATAL, 0, STR_NEWGRF_ERROR_TOO_MANY_NEWGRFS_LOADED); },
 		.clear_errors = [](GRFConfig *c) noexcept { c->errors.clear(); },
 		.cleanup_strings = []() noexcept { CleanUpStrings(); },
 		.cleanup_townnames = []() noexcept { CleanUpGRFTownNames(); },
@@ -228,6 +234,16 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		},
 		.baseset_dir = BASESET_DIR,
 		.newgrf_dir = NEWGRF_DIR,
+		.assert_override_size = [](size_t actual, uint32_t expected) noexcept { assert(actual == expected); },
+		.assert_file_match = [](const GRFConfig *c, const GRFFile *f) noexcept { assert(GetFileByGRFID(c->ident.grfid) == f); },
+		.unexpected_large = []() noexcept { GrfMsg(0, "LoadNewGRFFile: Unexpectedly large sprite, disabling"); },
+		.unexpected_real = []() noexcept { GrfMsg(0, "LoadNewGRFFile: Unexpected sprite, disabling"); },
+		.missing_file = [](const GRFConfig *c) noexcept { Debug(grf, 0, "NewGRF file is missing '{}'; disabling", c->filename); },
+		.sprite_grm_failed = [](uint16_t count) noexcept { GrfMsg(0, "ParamSet: GRM: Unable to allocate {} sprites; try changing NewGRF order", count); },
+		.grm_failure = [](uint16_t count, bool engines, bool fatal) noexcept { std::string_view type = engines ? "vehicles" : "cargoes"; if (fatal) { GrfMsg(0, "ParamSet: GRM: Unable to allocate {} {}, deactivating", count, type); } else { GrfMsg(1, "ParamSet: GRM: Unable to allocate {} {}", count, type); } },
+		.unknown_operation = [](uint8_t op) noexcept { GrfMsg(0, "ParamSet: Unknown operation {}, skipping", op); },
+		.id_mismatch = [](uint32_t old_id, uint32_t new_id) noexcept { Debug(grf, 0, "GRFInfo: GRFID {:08X} in FILESCAN stage does not match GRFID {:08X} in INIT/RESERVE/ACTIVATION stage", std::byteswap(old_id), std::byteswap(new_id)); },
+		.invalid_version = [](const GRFConfig *c, uint32_t id, uint8_t version, const uint8_t *name, size_t len) noexcept { Debug(grf, 0, "{}: NewGRF \"{}\" (GRFID {:08X}) uses GRF version {}, which is incompatible with this version of OpenTTD.", c->filename, StrMakeValid({reinterpret_cast<const char *>(name), len}), std::byteswap(id), version); },
 	};
 	return services;
 }

@@ -57,7 +57,6 @@ struct GrfProcessingState {
 	uint32_t &nfo_line = openttd_rust_grf_execution()->nfo_line;
 	int &skip_sprites = openttd_rust_grf_execution()->skip_sprites;
 	std::array<const SpriteGroup *, MAX_SPRITEGROUP + 1> &spritegroups = openttd_rust_grf_execution()->spritegroups;
-	void ClearDataForNextFile() { openttd_rust_grf_clear_file(); }
 	void AddSpriteSets(GrfSpecFeature feature, SpriteID first_sprite, uint first_set, uint numsets, uint numents)
 	{
 		assert(feature < GSF_END);
@@ -243,9 +242,13 @@ GRFFile *GetFileByGRFID(uint32_t grfid);
 GRFError *DisableGrf(StringID message = {}, GRFConfig *config = nullptr);
 void DisableStaticNewGRFInfluencingNonStaticNewGRFs(GRFConfig &c);
 bool HandleChangeInfoResult(std::string_view caller, ChangeInfoResult cir, GrfSpecFeature feature, uint8_t property);
+#ifndef WITH_RUST
 uint32_t GetParamVal(uint8_t param, uint32_t *cond_val);
+#endif
 void GRFUnsafe(ByteReader &);
 
+#ifndef WITH_RUST
 void InitializePatchFlags();
+#endif
 
 #endif /* NEWGRF_INTERNAL_H */

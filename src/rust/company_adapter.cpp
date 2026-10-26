@@ -98,7 +98,6 @@ template <typename T, typename F> static uint32_t NextOwned(uint8_t owner, uint3
 }
 
 /* Finance services. */
-static bool Fin_networking() noexcept { return _networking; }
 static CompanyFinances *Fin_company_finances(uint8_t id) noexcept
 {
 	Company *c = Company::GetIfValid(id);
@@ -388,7 +387,7 @@ const OpenTTDCompanyFinanceServices &GetRustCompanyFinanceServices() noexcept
 {
 	static const OpenTTDCompanyFinanceServices services{
 		.current_company = RustCurrentCompanyID, .set_current_company = RustSetCurrentCompanyID,
-		.networking = Fin_networking, .company_finances = Fin_company_finances,
+		.networking = RustNetworking, .company_finances = Fin_company_finances,
 		.invalidate_company_windows = Fin_invalidate_company_windows,
 		.give_money_message = Fin_give_money_message, .money_animation = Fin_money_animation,
 	};

@@ -121,14 +121,12 @@ static GRFFile *GetFileByFilename(const std::string &filename)
 }
 
 /** Reset all NewGRFData that was used only while processing data */
+#ifndef WITH_RUST
 static void ClearTemporaryNewGRFData(GRFFile *gf)
 {
-#ifdef WITH_RUST
-	openttd_rust_grf_clear_labels(gf);
-#else
 	gf->labels.clear();
-#endif
 }
+#endif
 
 /**
  * Disable a GRF
@@ -381,10 +379,15 @@ void ConvertTTDBasePrice(uint32_t base_pointer, std::string_view error_location,
  */
 void GRFUnsafe(ByteReader &)
 {
+#ifdef WITH_RUST
+	openttd_rust_grf_unsafe(&GetRustGrfLoadingServices());
+#else
+
 	_cur_gps.grfconfig->flags.Set(GRFConfigFlag::Unsafe);
 
 	/* Skip remainder of GRF */
 	_cur_gps.skip_sprites = -1;
+#endif
 }
 
 /** Reset and clear all NewGRFs */
@@ -413,7 +416,9 @@ static void ResetNewGRFErrors()
 #endif
 
 extern void ResetCallbacks(bool final);
+#ifndef WITH_RUST
 extern void ResetGRM();
+#endif
 
 /**
  * Reset all NewGRF loaded data

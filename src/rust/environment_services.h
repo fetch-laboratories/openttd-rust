@@ -9,6 +9,7 @@
 #ifndef RUST_ENVIRONMENT_SERVICES_H
 #define RUST_ENVIRONMENT_SERVICES_H
 #include "../genworld.h"
+#include "../network/network.h"
 #include "../town.h"
 #include <utility>
 #include "../map_func.h"
@@ -16,6 +17,7 @@
 #include "../settings_type.h"
 #include "../landscape.h"
 
+inline bool RustNetworking() noexcept { return _networking; }
 inline uint32_t OpenTTDMapLogY() noexcept { return Map::LogY(); }
 inline uint32_t OpenTTDMapLogX() noexcept { return Map::LogX(); }
 inline bool OpenTTDFreeformEdges() noexcept { return _settings_game.construction.freeform_edges; }

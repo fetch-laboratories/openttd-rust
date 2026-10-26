@@ -78,4 +78,7 @@ inline bool RustDynamicEngines() noexcept { return _settings_game.vehicle.dynami
 inline bool RustInflation() noexcept { return _settings_game.economy.inflation; }
 inline int32_t RustStartingYear() noexcept { return _settings_game.game_creation.starting_year.base(); }
 inline uint32_t RustGenerationSeed() noexcept { return _settings_game.game_creation.generation_seed; }
+/** Adapt legacy callback widths and unused context arguments to a canonical setting read. */
+template <typename Result, auto Read, typename... Args>
+inline Result RustSettingRead(Args...) noexcept { return Read(); }
 #endif /* RUST_SETTINGS_SERVICES_H */

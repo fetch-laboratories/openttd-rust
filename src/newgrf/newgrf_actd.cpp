@@ -493,7 +493,3 @@ template <> void GrfActionHandler<0x0D>::Reserve(ByteReader &buf) { ParamSet(buf
 template <> void GrfActionHandler<0x0D>::Activation(ByteReader &buf) { ParamSet(buf); }
 
 #endif
-
-#ifdef WITH_RUST
-void ResetGRM() { openttd_rust_grf_reset_grm(); }
-#endif
