@@ -25,8 +25,9 @@ Evidence stays in PRs.
   airport/tile definitions #499. All contain the code tip, and the base has
   moved only in docs since. #495 needs one fix commit before its Full and #493
   a scoped adoption review. #156 retains corpus gaps.
-- Queued by the user: testing #503 to #513, typing #500 and #501, the CI
-  matrix change #514 and the issue-form change #502.
+- The user's testing issues #503 to #513, typing #500 and #501, the CI matrix
+  change #514 and the issue-form change #502 are evaluated and ordered by
+  twenty-first steering correction 9; #504 is selected.
 
 ## Twenty-first steering review (2026-10-26, orphans, concurrency, cadence and accessor cost)
 
@@ -127,11 +128,35 @@ Corrections (AGENTS.md carries the rules; apply these in order):
 8. Remove the redundant worktrees `t3-d6418e16`, `t3-9bff1490` and
    `t3-758125c7`; keep one worktree per PR, on its PR branch. Commit the
    roadmap when taking stock or changing the work order, not per integration.
-9. Testing queue (user issues), after #515: #504 coverage measurement first,
-   then #505 sanitizers and #506 threaded/TSan (they can catch the defect
-   classes of #461 and #462, which the harness cannot), then the #503 tier,
-   #507, #508, then #509 to #511. #512's trailer is now a rule; #513 needs no
-   action; #501's first PR rides a maintenance batch. None adds per-PR CI.
+9. Branch slots and the user's testing issues. The next free slots go, in
+   order, to #515, the #275 accessor audit, #514 and #504; from then on testing
+   holds one slot, one item at a time, each selected when the previous one
+   integrates. The order rests on the defects the fork has had: #461 (thread
+   scope), #462 and #75 (reachable branches no scenario ran) and #355 (MSVC
+   ABI).
+   1. #504 coverage, selected now. Audits find coverage gaps by reading code,
+      and #156 holds 234 unranked entries. A measured report ranks them, names
+      default scenarios that add no unique coverage (shortening Full) and gives
+      #507, #508, #505 and #511 their targets. It is reference-only, with no
+      CI cost.
+   2. #503 deep tier with `--soak`, which runs nowhere today; it hosts the long
+      runs below.
+   3. #507, NewGRF sets first: six NewGRF owners are in flight or queued and no
+      play save loads a NewGRF file. Community AIs and the long save follow.
+   4. #505 ASan and UBSan.
+   5. #508 random-command AI, aimed at command code #504 shows unexecuted.
+   6. #511 mutation study, classified with #504's report.
+   7. #506: first a quick-CI check rejecting `thread_local!` outside
+      `#[cfg(test)]` (production has none; #461's class), riding a maintenance
+      batch. The threaded and TSan run follows once its deterministic stop is
+      designed.
+   8. #509 Windows and macOS subset, after #514 changes the cadence run.
+   9. #510 multiplayer spike.
+   #514 carries #502 and #501's gate configuration (ty and ruff `ANN` checking
+   new and converted files) so one bootstrap covers all three; #501's
+   annotation batches ride maintenance PRs. #512's first tally is due at the
+   tenth integration after `4853789508`. #513 needs no action until an
+   improvement is accepted. None of these adds per-PR CI.
 
 | Twentieth-steering correction | Verdict and cost/result |
 | --- | --- |
@@ -295,9 +320,8 @@ alongside maintenance; only timed collection holds games.
    have integrated, within six branches; planning records each owner's
    unintegrated service needs and keeps concurrent owners disjoint.
 4. Catchment, #64/#68/#69, vendored, GUI and platform stay outside this order.
-5. **Testing (queued, unselected):** #504, then #505 and #506, then the #503
-   tier, #507, #508, then #509 to #511; #501's first PR rides a maintenance
-   batch. No per-PR CI is added.
+5. **Testing:** #504 is selected and takes the slot after #514; the rest
+   follow one at a time in the order of twenty-first steering correction 9.
 
 ## Resume checkpoint
 
@@ -316,6 +340,7 @@ rollback target or confirmed regression. Baseline validation passed at
 | Worktrees | | Remove `t3-d6418e16`, `t3-9bff1490`, `t3-758125c7`; one worktree per PR on its PR branch. |
 | #515 and #500 first PR | unstarted | Next maintenance batch after the first ready integration. |
 | #275 accessor audit | unstarted | Twenty-first steering, correction 7; credit against `.local/speed-reference-profiles/`. |
+| #504 coverage | selected, unstarted | First testing item; takes the slot after #514. |
 
 Selection: /root, gpt-6.1-sol, xhigh; planning agents run gpt-6-astra, high.
 Scopes and evidence plans are in the selected issues; PRs carry current task status.
