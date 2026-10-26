@@ -1081,7 +1081,7 @@ static const OpenTTDCargoServices _cargo_services = {
 		const CargoSpec *cs = CargoSpec::Get(cargo);
 		*out = {cs->current_payment.base(), uint8_t(cs->IsValid()), uint8_t(cs->callback_mask.Test(CargoCallbackMask::ProfitCalc)), cs->transit_periods[0], cs->transit_periods[1]};
 	},
-	.callback = [](uint8_t cargo, uint32_t var18) noexcept { return GetCargoCallback(CBID_CARGO_PROFIT_CALC, 0, var18, CargoSpec::Get(cargo)); },
+	.registry = &GetRustCargoRegistryServices(),
 	.station_read = [](uint16_t station, uint8_t field, uint8_t cargo) noexcept -> uint32_t {
 		const Station *st = Station::Get(StationID(station));
 		return field == 0 ? st->owner.base() : HasBit(st->always_accepted, cargo);

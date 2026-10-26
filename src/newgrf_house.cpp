@@ -65,10 +65,10 @@ const OpenTTDHouseResolverServices &GetHouseResolverServices() noexcept
 		.shared = &GetRustSharedServices(),
 		.storage = &GetRustStorageServices(),
 		.larger_towns = OpenTTDLargerTowns,
-		.cargo_by_label = [](uint32_t label) noexcept { return OpenTTDCargoByLabel(CargoLabel{label}); },
+
 		.file = RustResolverGRFFile,
 		.version = RustGRFFileVersion,
-		.cargo_translation = OpenTTDCargoTranslation,
+
 		.nearby = RustSignedNearbyTile,
 		.nearby_info = RustNearbyTileInformation,
 		.terrain = RustTerrainType,

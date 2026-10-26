@@ -10,6 +10,7 @@
 #include "core/overflowsafe_type.hpp"
 #include "core/bitmath_func.hpp"
 #include "tests/cargo_payment_stubs.hpp"
+#include "rust/cargo_registry_ffi.h"
 using Money = OverflowSafeInt64;
 using CargoType = uint8_t;
 using TileIndex = uint32_t;
@@ -47,7 +48,12 @@ int main()
 {
 	OpenTTDCargoServices s = CargoTestServices();
 	s.spec = [](uint8_t, OpenTTDCargoSpec *out) noexcept { *out = {spec.current_payment.base(), uint8_t(spec.valid), uint8_t(spec.callback_mask.value), spec.transit_periods[0], spec.transit_periods[1]}; };
-	s.callback = [](uint8_t, uint32_t arg) noexcept { callback_argument = arg; return callback_value; };
+	static const OpenTTDCargoRegistryServices registry{
+		.spec = [](uint8_t) noexcept -> const CargoSpec * { return &spec; },
+		.invocation = [](const CargoSpec *, OpenTTDCargoInvocation *) noexcept {},
+		.callback_frame = [](const OpenTTDCargoInvocation *invocation, int32_t *, size_t) noexcept -> uint16_t { callback_argument = invocation->param2; return callback_value; },
+	};
+	s.registry = &registry;
 	s.feeder = [](const void *p, uint32_t) noexcept { return static_cast<const CargoPacket *>(p)->feeder.base(); };
 	s.setting = [](uint8_t) noexcept -> uint32_t { return _settings_game.economy.feeder_payment_share; };
 	uint64_t cases = 0;

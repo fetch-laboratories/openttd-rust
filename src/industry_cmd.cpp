@@ -3738,7 +3738,7 @@ static const OpenTTDIndustryServices _industry_services = {
 	.days_since_last_month = []() noexcept -> uint32_t { return TimerGameEconomy::days_since_last_month; },
 	.landscape = OpenTTDLandscapeValue,
 	.economy_type = []() noexcept -> uint8_t { return _settings_game.economy.type; },
-	.passengers = OpenTTDPassengerCargo,
+
 	.fund_only = []() noexcept -> bool { return _settings_game.difficulty.industry_density == ID_FUND_ONLY; },
 	.calendar_year = GetRustSharedServices().calendar_year,
 	.deity = IndustryCommandDeity,
@@ -3847,7 +3847,7 @@ const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices()
 		},
 		.callback_error = RustSpecCallbackError<IndustrySpec, OpenTTDIndustrySpecHandle>,
 		.grf_version = RustSpecGRFVersion<IndustrySpec, OpenTTDIndustrySpecHandle>,
-		.cargo_translation = OpenTTDIndustryCargoTranslation,
+		.cargo_file = RustSpecHandleGRFFile<IndustrySpec, OpenTTDIndustrySpecHandle>,
 		.layout_size = [](const OpenTTDIndustryLayoutHandle *layout) noexcept -> size_t { return reinterpret_cast<const IndustryTileLayout *>(layout)->size(); },
 		.layout_tile = [](const OpenTTDIndustryLayoutHandle *layout, size_t index) noexcept -> OpenTTDIndustryLayoutTile {
 			const auto &tile = (*reinterpret_cast<const IndustryTileLayout *>(layout))[index];
@@ -3913,7 +3913,7 @@ const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept
 			return result;
 		},
 		.callback = OpenTTDIndustryTileCallback,
-		.cargo_translation = OpenTTDIndustryTileCargoTranslation,
+		.cargo_file = RustSpecGRFFile<IndustryTileSpec>,
 	};
 	return services;
 }

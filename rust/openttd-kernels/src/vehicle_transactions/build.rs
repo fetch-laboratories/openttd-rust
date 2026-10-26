@@ -182,7 +182,8 @@ pub(crate) unsafe fn build(
         } else {
             result.capacity.total = (s.display_capacity)(e, &raw mut result.capacity.mail);
             result.capacity.cargo[usize::from(default_cargo)] = result.capacity.total;
-            let mail = (r.mail_cargo)();
+            let mail =
+                crate::cargo_registry::openttd_rust_cargo_by_label(crate::cargo_type::CT_MAIL);
             if (c.valid_cargo)(mail) {
                 result.capacity.cargo[usize::from(mail)] = u32::from(result.capacity.mail);
             }

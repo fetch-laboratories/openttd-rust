@@ -76,3 +76,9 @@ pub const CBID_SOUNDS_AMBIENT_EFFECT: CallbackID = CallbackID(0x144);
 pub const CBID_OBJECT_LAND_SLOPE_CHECK: CallbackID = CallbackID(0x157);
 /// Object colour callback.
 pub const CBID_OBJECT_COLOUR: CallbackID = CallbackID(0x15b);
+
+/// Cargo payment callback from `newgrf_callbacks.h`.
+pub const CBID_CARGO_PROFIT_CALC: CallbackID = CallbackID(0x39);
+
+/// Station cargo rating callback from `newgrf_callbacks.h`.
+pub const CBID_CARGO_STATION_RATING_CALC: CallbackID = CallbackID(0x145);

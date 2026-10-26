@@ -87,6 +87,7 @@
 #include "rust/services_map.h"
 #include "rust/services_station.h"
 #include "rust/services_cargo.h"
+#include "rust/cargo_registry_ffi.h"
 #include "rust/settings_services.h"
 #include "rust/station_command_ffi.h"
 #include "rust/tile_owner_services.h"
@@ -739,9 +740,7 @@ static const OpenTTDStationServices _rust_station_services = {
 		SetWindowDirty(WC_STATION_VIEW, static_cast<BaseStation *>(handle)->index);
 		RustStationMarkTilesDirty(static_cast<BaseStation *>(handle), true);
 	},
-	.rating_callback = [](OpenTTDBaseStation *, uint8_t cargo, uint32_t var10, uint32_t var18) noexcept -> uint16_t {
-		return GetCargoCallback(CBID_CARGO_STATION_RATING_CALC, var10, var18, CargoSpec::Get(cargo));
-	},
+	.cargo_registry = &GetRustCargoRegistryServices(),
 	.with_tiles = [](OpenTTDBaseStation *handle, void *context, OpenTTDStationScope body) noexcept {
 		RustStationTileCursor cursor(Station::From(static_cast<BaseStation *>(handle)));
 		body(context, &cursor);

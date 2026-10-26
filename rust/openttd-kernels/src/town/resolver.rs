@@ -58,10 +58,8 @@ pub struct ResolverServices {
     shared: *const Services,
     storage: *const newgrf_storage::Services,
     larger_towns: extern "C" fn() -> u8,
-    cargo_by_label: extern "C" fn(u32) -> u8,
     file: extern "C" fn(*const c_void) -> *const c_void,
     version: extern "C" fn(*const c_void) -> u8,
-    cargo_translation: extern "C" fn(u8, *const c_void) -> u8,
     nearby: extern "C" fn(u8, u32) -> u32,
     nearby_info: extern "C" fn(u32, bool) -> u32,
     terrain: extern "C" fn(u32) -> u32,
@@ -212,7 +210,7 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
     }
     if (0xBA..=0xC9).contains(&variable) {
         let index = variable - 0xBA;
-        let cargo = (s.cargo_by_label)(if index & 2 == 0 {
+        let cargo = crate::cargo_registry::openttd_rust_cargo_by_label(if index & 2 == 0 {
             CT_PASSENGERS
         } else {
             CT_MAIL
@@ -228,7 +226,7 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
         return if index & 1 == 0 { value } else { value >> 8 };
     }
     if variable == 0xCA || variable == 0xCB {
-        let cargo = (s.cargo_by_label)(if variable == 0xCA {
+        let cargo = crate::cargo_registry::openttd_rust_cargo_by_label(if variable == 0xCA {
             CT_PASSENGERS
         } else {
             CT_MAIL
@@ -567,7 +565,8 @@ unsafe fn acceptance_history(
         let state = crate::station_service::openttd_rust_goods_convert_state(status);
         unsafe { (*context.cast::<Context>()).result |= u32::from(state) };
     }
-    let cargo = (s.cargo_translation)(parameter as u8, (s.file)(ro));
+    let cargo =
+        crate::cargo_registry::openttd_rust_cargo_translate(parameter as u8, (s.file)(ro), false);
     if !is_valid_cargo_type(cargo) {
         return 0;
     }
@@ -598,8 +597,8 @@ crate::abi::layouts! {
     "OpenTTDHouseFileIdentity" ["probe"] => FileIdentity { grfid, has_file };
     "OpenTTDHouseNearbySpec" ["probe"] => NearbySpec { file, local, house_class };
     "OpenTTDHouseResolverServices" ["probe"] => ResolverServices {
-        towns, shared, storage, larger_towns, cargo_by_label, file, version,
-        cargo_translation, nearby, nearby_info, terrain, stage, age, random_bits,
+        towns, shared, storage, larger_towns, file, version,
+        nearby, nearby_info, terrain, stage, age, random_bits,
         random_triggers, search_spec, nearby_spec, file_identity, house_id, house_grfid,
         badges, stations, town_by_id, root, spec_house, local_id, base_scope, evaluate, reseed, unhandled_house, unhandled_town,
     };

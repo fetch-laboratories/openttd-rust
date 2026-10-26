@@ -14,6 +14,8 @@ from .core import (
 
 ADAPTER = ROOT / "tools/simulation/engines-console.cpp"
 REQUIRED = {
+    "cargo-registry": (),
+    "cargo-profit": (),
     "monitors": (),
     "commands": ("rename", "visibility", "control"),
     "preview": ("offer", "accept", "join", "penalty"),
@@ -23,6 +25,8 @@ REQUIRED = {
     "subsidies-reload": (),
 }
 EXPECTED = {
+    "cargo-registry": ("registry-controls true",),
+    "cargo-profit": ("profit-controls true",),
     "monitors": ("controls true",),
     "commands": (
         "company-bits true",
@@ -64,7 +68,15 @@ def scenarios(soak):
             "short_checkpoint": True,
             "ticks": 74 if soak else 1,
         }
-        for mode in ("commands", "preview", "reliability", "reload", "monitors")
+        for mode in (
+            "commands",
+            "preview",
+            "reliability",
+            "reload",
+            "monitors",
+            "cargo-registry",
+            "cargo-profit",
+        )
     ]
 
 
@@ -79,7 +91,12 @@ def game_environment(scenario):
 def adapter(build, folder, env):
     economy.subsidy_reference(folder)
     return console_adapter(
-        build, folder, env, ADAPTER, "engines", replace_objects=("saveload.cpp.o",)
+        build,
+        folder,
+        env,
+        ADAPTER,
+        "engines",
+        replace_objects=("saveload.cpp.o", "newgrf.cpp.o", "newgrf_act0_cargo.cpp.o"),
     )
 
 
@@ -157,7 +174,9 @@ def check(scenario, run, mode, role, result):
         return
     variant = scenario["engines"]
     component = (
-        "monitor"
+        "cargo"
+        if variant.startswith("cargo-")
+        else "monitor"
         if variant == "monitors"
         else ("subsidy" if variant.startswith("subsidies") else "engine")
     )

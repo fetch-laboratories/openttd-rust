@@ -11,6 +11,7 @@
 #include "core/enum_type.hpp"
 #include "sound_type.h"
 #include "rust/animation_save.hpp"
+#include "rust/cargo_registry_ffi.h"
 namespace IndustryReference {
 #include "industry-graphics-reference.inc"
 using TileIndex = uint32_t;
@@ -113,7 +114,6 @@ static bool mutate_accepted;
 static uint8_t GetCargoTranslation(uint8_t cargo, void *)
 {
 	uint8_t result = cargo == 31 ? 255 : (cargo * 3 + 2) % 64;
-	trace.push_back({13, cargo, result, 0});
 	return result;
 }
 static uint16_t GetIndustryTileCallback(uint16_t callback, uint32_t, uint32_t, IndustryGfx, Industry *, TileIndex tile)
@@ -143,7 +143,7 @@ static void CheckAcceptance()
 		return result;
 	};
 	service.callback = [](uint32_t tile, uint16_t gfx, uint16_t callback, uint32_t p1, uint32_t p2) noexcept -> uint16_t { return GetIndustryTileCallback(callback, p1, p2, gfx, Industry::GetByTile(tile), tile); };
-	service.cargo_translation = [](const OpenTTDIndustryTileSpec *spec, uint8_t cargo) noexcept -> uint8_t { return GetCargoTranslation(cargo, reinterpret_cast<const IndustryTileSpec *>(spec)->grf_prop.grffile); };
+	service.cargo_file = [](const OpenTTDIndustryTileSpec *spec) noexcept -> const GRFFile * { return reinterpret_cast<const GRFFile *>(reinterpret_cast<const IndustryTileSpec *>(spec)->grf_prop.grffile); };
 	Industry industry{}; active = &industry;
 	OpenTTDIndustry *owner = openttd_rust_industry_new();
 	uint cases = 0;
@@ -322,5 +322,17 @@ static void Run()
 
 int main()
 {
+	static auto shared = OpenTTDFixtureSharedServices(nullptr, nullptr);
+	static std::array<uint32_t, 32> labels;
+	for (uint32_t cargo = 0; cargo < labels.size(); ++cargo) labels[cargo] = cargo == 31 ? UINT32_MAX : (cargo * 3 + 2) % 64 + 1;
+	static const OpenTTDCargoRegistryServices registry{
+		.shared = &shared,
+		.spec = [](uint8_t cargo) noexcept { return reinterpret_cast<const CargoSpec *>(uintptr_t(cargo + 1)); },
+		.copy_default = [](uint8_t, uint8_t) noexcept {},
+		.clear_specs = [](uint8_t) noexcept {},
+		.label_spec = [](const CargoSpec *spec) noexcept -> OpenTTDCargoLabelSpec { auto id = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(spec)); return {id, static_cast<uint8_t>(id - 1)}; },
+		.file = [](const GRFFile *) noexcept -> OpenTTDCargoFile { return {{labels.data(), labels.size()}, 8, false}; },
+	};
+	openttd_rust_cargo_setup(&registry, 0);
 	IndustryReference::Run();
 }

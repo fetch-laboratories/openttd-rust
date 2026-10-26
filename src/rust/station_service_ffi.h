@@ -8,6 +8,7 @@
 /** @file station_service_ffi.h Canonical Rust station service state and direct world leaves. */
 #ifndef RUST_STATION_SERVICE_FFI_H
 #define RUST_STATION_SERVICE_FFI_H
+struct OpenTTDCargoRegistryServices;
 #include "service_defaults.hpp"
 #include <cstdint>
 #include <cstddef>
@@ -145,7 +146,7 @@ struct OpenTTDStationServices {
 	void (*station_list_invalidation)(OpenTTDBaseStation *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_list_invalidation);
 
 	void (*waiting_redraw)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(waiting_redraw);
-	uint16_t (*rating_callback)(OpenTTDBaseStation *, uint8_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rating_callback);
+	const OpenTTDCargoRegistryServices *cargo_registry;
 	void (*with_tiles)(OpenTTDBaseStation *, void *, OpenTTDStationScope) noexcept OPENTTD_SERVICE_DEFAULT(with_tiles);
 	uint32_t (*tile_next)(void *) noexcept OPENTTD_SERVICE_DEFAULT(tile_next);
 	void (*accept_tile)(void *, uint32_t, uint64_t *) noexcept OPENTTD_SERVICE_DEFAULT(accept_tile);

@@ -1210,7 +1210,7 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 		.set_type = [](uint32_t tile, uint16_t house) noexcept { SetHouseType(TileIndex{tile}, house); },
 
 		.delete_inspect = OpenTTDDeleteHouseInspect,
-		.cargo_translation = RustHouseCargoTranslation,
+		.cargo_file = RustHouseGrf,
 		.convert_boolean = RustHouseConvertBoolean,
 		.convert_8bit = RustHouseConvert8bitBoolean,
 
@@ -1225,13 +1225,8 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 		.move_goods = [](void *finder, uint8_t cargo, uint32_t amount, uint16_t town) noexcept -> uint32_t {
 			return OpenTTDMoveGoodsToStation(cargo, amount, {TownID(town), SourceType::Town}, static_cast<StationFinder *>(finder)->GetStations());
 		},
-		.production_cargo = [](uint8_t effect, uint32_t at) noexcept -> OpenTTDHouseCargo {
-			const auto &cargoes = CargoSpec::town_production_cargoes[effect];
-			if (at >= cargoes.size()) return {INVALID_CARGO, 0};
-			return {cargoes[at]->Index(), cargoes[at]->town_production_multiplier};
-		},
 		.add_cargo = [](void *cargoes, uint8_t cargo, uint32_t amount) noexcept { (*static_cast<CargoArray *>(cargoes))[cargo] += amount; },
-		.food_cargo = OpenTTDFoodCargo,
+
 		.scale_cargo = OpenTTDScaleTownCargo,
 		.cargogen_mode = OpenTTDTownCargoGenMode,
 		.place_houses = OpenTTDPlaceHouses,

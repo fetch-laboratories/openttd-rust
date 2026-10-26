@@ -69,9 +69,9 @@ pub struct State {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct ResultValue {
-    group: Handle,
+    pub(crate) group: Handle,
     callback: u16,
-    kind: u8,
+    pub(crate) kind: u8,
 }
 impl ResultValue {
     fn failed() -> Self {

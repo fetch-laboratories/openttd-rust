@@ -1386,6 +1386,7 @@ pub(crate) mod tile_map;
 pub(crate) mod tree_map;
 pub(crate) mod water_map;
 
+mod cargo_registry;
 mod cargo_type;
 mod cargotype;
 mod source_type;

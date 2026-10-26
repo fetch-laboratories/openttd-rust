@@ -14,6 +14,10 @@
 #include "newgrf_internal.h"
 #include "newgrf_stringmapping.h"
 
+#ifdef WITH_RUST
+#include "../rust/cargo_registry_ffi.h"
+#endif
+
 #include "../safeguards.h"
 
 /**
@@ -25,6 +29,9 @@
  */
 static void MaybeInstallFallbackCargoLabel(uint id, uint last, CargoLabel label)
 {
+#ifdef WITH_RUST
+	openttd_rust_cargo_fallback(_cur_gps.grffile, id, last, label.base());
+#else
 	if (_cur_gps.grffile->cargo_list.empty()) {
 		/* Cargo translation table isn't configured yet, assume it won't be and configure the cargo list as a fallback list. */
 		auto default_cargo_list = GetCargoTranslationTable(*_cur_gps.grffile);
@@ -37,6 +44,7 @@ static void MaybeInstallFallbackCargoLabel(uint id, uint last, CargoLabel label)
 		if (_cur_gps.grffile->cargo_list.size() < last) _cur_gps.grffile->cargo_list.resize(last, CT_INVALID);
 		_cur_gps.grffile->cargo_list[id] = label;
 	}
+#endif
 }
 
 /**

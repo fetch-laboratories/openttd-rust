@@ -47,7 +47,6 @@ struct OpenTTDStationResolverServices {
 	uint32_t (*nearby_info)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(nearby_info);
 	uint32_t (*terrain)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terrain);
 	uint32_t (*badges)(const ResolverObject *, const StationSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(badges);
-	uint8_t (*translate)(uint8_t, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(translate);
 	int32_t (*build_date)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(build_date);
 	TTDPAirportType (*airport_ttd_type)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_ttd_type);
 	OpenTTDStationSpecIdentity (*identity)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(identity);
