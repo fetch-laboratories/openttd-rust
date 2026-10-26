@@ -1423,3 +1423,5 @@ mod newgrf_roadstop;
 
 mod rail;
 mod type_availability;
+
+mod newgrf_class;

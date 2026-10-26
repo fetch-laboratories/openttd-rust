@@ -14,6 +14,10 @@
 #include "../rust/station_resolver_ffi.h"
 #include "../rust/roadstop_resolver_ffi.h"
 #include "../station_base.h"
+#include "../newgrf_station.h"
+#include "../newgrf_roadstop.h"
+#include "../newgrf_airport.h"
+#include "../newgrf_object.h"
 #include "../linkgraph/linkgraph.h"
 #include "../station_func.h"
 #include "../station_kdtree.h"
@@ -74,6 +78,38 @@ TEST_CASE("Shared station traversal - live filtered pool mutation and reentry")
 	};
 	const auto source = Trace(false);
 	CHECK(Trace(true) == source);
+}
+
+TEST_CASE("NewGRF station classes - canonical order, reassignment and first membership")
+{
+	StationClass::Reset();
+	CHECK(StationClass::GetClassCount() == 2);
+	CHECK(StationClass::GetUIClassCount() == 2);
+	CHECK(StationClass::Get(STAT_CLASS_DFLT)->GetSpec(0) == nullptr);
+	CHECK(StationClass::Get(STAT_CLASS_WAYP)->GetSpecCount() == 1);
+	const auto first = StationClass::Allocate('TST1');
+	const auto second = StationClass::Allocate('TST2');
+	CHECK(StationClass::Allocate('TST1') == first);
+	StationSpec a{}, b{};
+	a.class_index = first;
+	a.grf_prop.grfid = 123;
+	a.grf_prop.local_id = 7;
+	b = a;
+	StationClass::Assign(&a);
+	StationClass::Assign(&b);
+	CHECK(a.index == 0);
+	CHECK(b.index == 1);
+	CHECK(StationClass::GetByGrf(123, 7) == &a);
+	a.class_index = second;
+	StationClass::Assign(&a);
+	CHECK(StationClass::GetByGrf(123, 7) == &a);
+	CHECK(StationClass::Get(first)->GetSpecCount() == 2);
+	CHECK(StationClass::Get(second)->GetUISpecCount() == 1);
+	CHECK(StationClass::Get(second)->GetSpec(1) == nullptr);
+	CHECK(StationClass::Get(first)->Specs()[1] == &b);
+	CHECK(StationClass::Classes()[2].global_id == 'TST1');
+	CHECK(IsWaypointClass(*StationClass::Get(StationClass::Allocate(0xFF000001))));
+	StationClass::Reset();
 }
 
 TEST_CASE("Station service - scalar ABI layouts")

@@ -120,11 +120,13 @@ template <>
 	StationClass::Get(StationClass::Allocate(STATION_CLASS_LABEL_WAYPOINT))->Insert(nullptr);
 }
 
+#ifndef WITH_RUST
 template <>
 bool StationClass::IsUIAvailable(uint) const
 {
 	return true;
 }
+#endif
 
 /* Instantiate StationClass. */
 template class NewGRFClass<StationSpec, StationClassID, STAT_CLASS_MAX>;

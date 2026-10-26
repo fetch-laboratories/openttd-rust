@@ -1008,3 +1008,20 @@ pub(crate) fn platform_info(gfx: u8, length: u8, tracks: u8, x: u8, y: u8) -> u3
         false,
     )
 }
+
+/// `newgrf_station.h`: axis-independent layout dimensions.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_station_layout_key(platforms: u8, length: u8) -> u16 {
+    get_station_layout_key(platforms, length)
+}
+pub(crate) const fn get_station_layout_key(platforms: u8, length: u8) -> u16 {
+    (length as u16) << 8 | platforms as u16
+}
+/// Both station and road-stop classes accept the historical high-byte-FF extension.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_is_waypoint_class(global_id: u32) -> bool {
+    is_waypoint_class(global_id)
+}
+pub(crate) const fn is_waypoint_class(global_id: u32) -> bool {
+    global_id == u32::from_be_bytes(*b"WAYP") || global_id >> 24 == 255
+}

@@ -46,11 +46,13 @@ void RoadStopClass::InsertDefaults()
 	RoadStopClass::Get(RoadStopClass::Allocate(ROADSTOP_CLASS_LABEL_WAYPOINT))->Insert(nullptr);
 }
 
+#ifndef WITH_RUST
 template <>
 bool RoadStopClass::IsUIAvailable(uint) const
 {
 	return true;
 }
+#endif
 
 /* Instantiate RoadStopClass. */
 template class NewGRFClass<RoadStopSpec, RoadStopClassID, ROADSTOP_CLASS_MAX>;
