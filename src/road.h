@@ -186,8 +186,13 @@ public:
  */
 inline RoadTypes GetMaskForRoadTramType(RoadTramType rtt)
 {
+#ifdef WITH_RUST
+	extern RoadTypes &_roadtypes_road;
+	extern RoadTypes &_roadtypes_tram;
+#else
 	extern RoadTypes _roadtypes_road;
 	extern RoadTypes _roadtypes_tram;
+#endif
 	return rtt == RTT_ROAD ? _roadtypes_road : _roadtypes_tram;
 }
 
@@ -304,12 +309,19 @@ inline bool RoadNoLevelCrossing(RoadType roadtype)
 
 RoadType GetRoadTypeByLabel(RoadTypeLabel label, bool allow_alternate_labels = true);
 
+#ifndef WITH_RUST
 void ResetRoadTypes();
+#endif
 void InitRoadTypes();
 RoadType AllocateRoadType(RoadTypeLabel label, RoadTramType rtt);
 bool HasAnyRoadTypesAvail(CompanyID company, RoadTramType rtt);
 
+#ifdef WITH_RUST
+extern std::span<RoadType> _sorted_roadtypes;
+extern RoadTypes &_roadtypes_hidden_mask;
+#else
 extern std::vector<RoadType> _sorted_roadtypes;
 extern RoadTypes _roadtypes_hidden_mask;
+#endif
 
 #endif /* ROAD_H */

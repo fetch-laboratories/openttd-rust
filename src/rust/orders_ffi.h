@@ -66,7 +66,7 @@ struct OpenTTDOrdersLeaves {
 	uint64_t (*vehicle_ownership)(void *ctx, void *result) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_ownership);
 	uint64_t (*ticks_per_second)() noexcept OPENTTD_SERVICE_DEFAULT(ticks_per_second);
 	uint64_t (*unit_number)(void *ctx) noexcept OPENTTD_SERVICE_DEFAULT(unit_number);
-	uint64_t (*economy_date)() noexcept OPENTTD_SERVICE_DEFAULT(economy_date);
+	int32_t (*economy_date)() noexcept OPENTTD_SERVICE_DEFAULT(economy_date);
 	uint64_t (*economy_fraction)() noexcept OPENTTD_SERVICE_DEFAULT(economy_fraction);
 	uint64_t (*maximum_date)() noexcept OPENTTD_SERVICE_DEFAULT(maximum_date);
 	uint64_t (*timetable_year_limit)() noexcept OPENTTD_SERVICE_DEFAULT(timetable_year_limit);
@@ -238,7 +238,6 @@ uint64_t openttd_orders_tick_counter() noexcept;
 uint64_t openttd_orders_primary_vehicle(void *ctx) noexcept;
 uint64_t openttd_orders_vehicle_ownership(void *ctx, void *result) noexcept;
 uint64_t openttd_orders_ticks_per_second() noexcept;
-uint64_t openttd_orders_economy_date() noexcept;
 uint64_t openttd_orders_economy_fraction() noexcept;
 uint64_t openttd_orders_maximum_date() noexcept;
 uint64_t openttd_orders_timetable_year_limit() noexcept;

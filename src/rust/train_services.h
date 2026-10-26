@@ -117,10 +117,6 @@ static uint64_t TrainAxisDiag(OpenTTDTrainHandle, uint8_t a) noexcept
 {
 	return AxisToDiagDir(static_cast<Axis>(a));
 }
-static uint64_t TrainBackoff(OpenTTDTrainHandle) noexcept
-{
-	return _settings_game.pf.path_backoff_interval;
-}
 static void TrainBaseViewport(OpenTTDTrainHandle id, uint8_t a) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
@@ -262,10 +258,6 @@ static uint64_t TrainDirDiag(OpenTTDTrainHandle, uint8_t a) noexcept
 {
 	return DirToDiagDir(static_cast<Direction>(a));
 }
-static uint64_t TrainDisasterSound(OpenTTDTrainHandle) noexcept
-{
-	return _settings_client.sound.disaster;
-}
 static void TrainDisconnect(OpenTTDTrainHandle) noexcept
 {
 	FatalError("Disconnecting train");
@@ -304,17 +296,9 @@ static uint64_t TrainIsBridge(OpenTTDTrainHandle, uint32_t a) noexcept
 	return IsBridgeTile(TileIndex(a));
 }
 
-static uint64_t TrainIsRailway(OpenTTDTrainHandle, uint32_t a) noexcept
-{
-	return IsTileType(TileIndex(a), MP_RAILWAY);
-}
 static uint64_t TrainIsStationAny(OpenTTDTrainHandle, uint32_t a) noexcept
 {
 	return IsTileType(TileIndex(a), MP_STATION);
-}
-static uint64_t TrainIsTunnelbridge(OpenTTDTrainHandle, uint32_t a) noexcept
-{
-	return IsTileType(TileIndex(a), MP_TUNNELBRIDGE);
 }
 static void TrainLeaveSound(OpenTTDTrainHandle id) noexcept
 {
@@ -413,10 +397,6 @@ static uint64_t TrainRailTypes(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
 	return RustEngineRailTypes(Engine::Get(v->engine_type));
-}
-static uint64_t TrainReservePaths(OpenTTDTrainHandle) noexcept
-{
-	return _settings_game.pf.reserve_paths;
 }
 static void TrainReserveUnder(OpenTTDTrainHandle id) noexcept
 {

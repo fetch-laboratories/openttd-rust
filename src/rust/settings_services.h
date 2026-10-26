@@ -82,4 +82,6 @@ inline uint32_t RustGenerationSeed() noexcept { return _settings_game.game_creat
 template <typename Result, auto Read, typename... Args>
 inline Result RustSettingRead(Args...) noexcept { return Read(); }
 inline uint8_t RustVehicleSmokeAmount() noexcept { return _settings_game.vehicle.smoke_amount; }
+inline uint8_t RustTrainPathBackoffInterval() noexcept { return _settings_game.pf.path_backoff_interval; }
+inline bool RustTrainReservePaths() noexcept { return _settings_game.pf.reserve_paths; }
 #endif /* RUST_SETTINGS_SERVICES_H */

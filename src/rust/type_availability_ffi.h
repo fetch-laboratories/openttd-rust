@@ -7,7 +7,7 @@
 #include "../road_type.h"
 struct OpenTTDTypeIntroduction { uint32_t label; int32_t date; uint64_t required, introduces; };
 struct OpenTTDRoadTypeConstruction { uint32_t label; int32_t date; bool hidden, town_build; };
-/* Native registries stay canonical. These immutable typed leaves neither reset
+/* Native TypeInfo storage supplies immutable metadata. These leaves neither reset
  * pools nor yield. Engine lifecycle scalar reads end before every callback.
  * Panics and environmental exceptions abort; ordinary play has no throwing leaf. */
 struct OpenTTDTypeAvailabilityServices {
@@ -21,9 +21,6 @@ struct OpenTTDTypeAvailabilityServices {
 	uint64_t (*rail_introduces)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_introduces);
 	uint64_t (*road_introduces)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_introduces);
 	OpenTTDRoadTypeConstruction (*road_construction)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_construction);
-	uint64_t (*rail_hidden)() noexcept OPENTTD_SERVICE_DEFAULT(rail_hidden);
-	uint64_t (*road_hidden)() noexcept OPENTTD_SERVICE_DEFAULT(road_hidden);
-	uint64_t (*road_tram_mask)(RoadTramType) noexcept OPENTTD_SERVICE_DEFAULT(road_tram_mask);
 	uint64_t (*company_railtypes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_railtypes);
 	uint64_t (*company_roadtypes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_roadtypes);
 	void (*set_company_railtypes)(uint8_t, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_company_railtypes);

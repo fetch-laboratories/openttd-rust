@@ -25,10 +25,6 @@ static uint64_t TrainReservationAllCompat(void *, OpenTTDTrainHandle id) noexcep
 	Train *v = static_cast<Train *>(id.shell);
 	return RustAllCompatibleRailTypes(RustTrainRailTypes(v));
 }
-static uint64_t TrainReservationBackoff(void *, OpenTTDTrainHandle id) noexcept
-{
-	return TrainBackoff(id);
-}
 static uint64_t TrainReservationBitsTrack(void *, OpenTTDTrainHandle, uint8_t a) noexcept
 {
 	return TrackBitsToTrack(static_cast<TrackBits>(a));
@@ -92,16 +88,6 @@ static uint64_t TrainReservationIsPbs(void *, OpenTTDTrainHandle, uint32_t a, ui
 	return IsPbsSignal(RustRailSignalType(a, b));
 }
 
-static uint64_t TrainReservationIsRailway(void *, OpenTTDTrainHandle, uint32_t a) noexcept
-{
-	TileIndex t(static_cast<uint32_t>(a));
-	return IsTileType(t, MP_RAILWAY);
-}
-static uint64_t TrainReservationIsTunnel(void *, OpenTTDTrainHandle, uint32_t a) noexcept
-{
-	TileIndex t(static_cast<uint32_t>(a));
-	return IsTileType(t, MP_TUNNELBRIDGE);
-}
 static uint64_t TrainReservationIsWaypoint(void *, OpenTTDTrainHandle, uint32_t a) noexcept
 {
 	TileIndex t(static_cast<uint32_t>(a));
@@ -139,10 +125,6 @@ static uint64_t TrainReservationReachDirs(void *, OpenTTDTrainHandle, uint8_t a)
 static uint64_t TrainReservationReachTracks(void *, OpenTTDTrainHandle, uint8_t a) noexcept
 {
 	return DiagdirReachesTracks(static_cast<DiagDirection>(a));
-}
-static uint64_t TrainReservationReservePaths(void *, OpenTTDTrainHandle id) noexcept
-{
-	return TrainReservePaths(id);
 }
 /* Order has the existing OrderFields layout and trivial copy/destruction. Rust
  * owns each nested snapshot on its stack; no native context survives a call. */

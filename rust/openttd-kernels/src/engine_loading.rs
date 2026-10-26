@@ -279,7 +279,6 @@ pub struct Services {
     close_previews: extern "C" fn(),
     clean_pool: extern "C" fn(),
     railtypes: extern "C" fn(E) -> u64,
-    rail_label: extern "C" fn(u8) -> u32,
     refit_inputs: extern "C" fn(E) -> RefitInputs,
     cargo_label: extern "C" fn(E) -> CargoLabel,
     train_cargo: extern "C" fn(E) -> TrainCargo,
@@ -308,10 +307,6 @@ pub struct Services {
     is_tram: extern "C" fn(E) -> bool,
     set_road_speed: extern "C" fn(E, u16),
     set_roadtype: extern "C" fn(E, u8),
-    road_list_size: extern "C" fn(File, bool) -> usize,
-    road_label: extern "C" fn(File, bool, usize) -> u32,
-    road_by_label: extern "C" fn(u32) -> u8,
-    rail_by_label: extern "C" fn(u32) -> u8,
     set_railtypes: extern "C" fn(E, u64),
     override_log: extern "C" fn(u32, u32),
     vehicle_next: extern "C" fn(u32) -> LoadingVehicle,
@@ -346,7 +341,7 @@ unsafe fn initialize_rail_labels(s: &Services, engine: EngineRef) {
         if railtypes & (1_u64 << rt) == 0 {
             continue;
         }
-        let label = (s.rail_label)(rt);
+        let label = crate::type_registry::rail_label(rt);
         unsafe {
             openttd_rust_engine_temp_labels_push(engine.id, label);
         }
@@ -477,7 +472,6 @@ crate::abi::layouts! {
         close_previews,
         clean_pool,
         railtypes,
-        rail_label,
         refit_inputs,
         cargo_label,
         train_cargo,
@@ -506,10 +500,6 @@ crate::abi::layouts! {
         is_tram,
         set_road_speed,
         set_roadtype,
-        road_list_size,
-        road_label,
-        road_by_label,
-        rail_by_label,
         set_railtypes,
         override_log,
         vehicle_next,
@@ -938,7 +928,6 @@ pub(crate) unsafe fn openttd_rust_engine_finalise(s: &Services) {
     }
 }
 pub(crate) unsafe fn openttd_rust_engine_bind_types(s: &Services) {
-    let shared = unsafe { &*s.shared };
     let mut from = 0;
     loop {
         let e = (s.next)(from);
@@ -964,13 +953,14 @@ pub(crate) unsafe fn openttd_rust_engine_bind_types(s: &Services) {
             (*fields).roadtramtype = (*fields).roadtramtype.wrapping_sub(1);
             (*fields).roadtramtype
         };
-        if usize::from(slot) < (s.road_list_size)(file, tram) {
-            let label = (s.road_label)(file, tram, usize::from(slot));
-            let rt = (s.road_by_label)(label);
-            if rt != INVALID_ROADTYPE && (shared.road_tram_type)(rt).0 == tram {
-                (s.set_roadtype)(e.shell, rt);
-                continue;
-            }
+        let rt = crate::type_registry::openttd_rust_road_translate(
+            crate::services::RoadTramType(tram),
+            slot,
+            file,
+        );
+        if rt != INVALID_ROADTYPE {
+            (s.set_roadtype)(e.shell, rt);
+            continue;
         }
         (s.disable)(e.shell);
     }
@@ -988,7 +978,7 @@ pub(crate) unsafe fn openttd_rust_engine_bind_types(s: &Services) {
         let count = unsafe { (&*TEMP.get())[usize::from(e.id)].labels.len() };
         for index in 0..count {
             let label = unsafe { (&*TEMP.get())[usize::from(e.id)].labels[index] };
-            let rt = (s.rail_by_label)(label);
+            let rt = crate::type_registry::openttd_rust_rail_by_label(label, true);
             if rt != INVALID_RAILTYPE {
                 types |= 1_u64 << rt;
             }

@@ -15,7 +15,11 @@
 #include "road.h"
 #include "newgrf_roadstop.h"
 extern RoadTypeInfo _roadtypes[ROADTYPE_END];
+#ifdef WITH_RUST
+extern RoadTypes &_roadtypes_road;
+#else
 extern RoadTypes _roadtypes_road;
+#endif
 #include "road_func.h"
 #include "landscape.h"
 #include "tile_type.h"

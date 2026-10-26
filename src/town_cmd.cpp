@@ -1069,10 +1069,6 @@ uint32_t OpenTTDNextTownID(uint32_t from) noexcept
 {
 	{ auto range = Town::Iterate(from); auto it = range.begin(); return it == range.end() ? UINT32_MAX : (*it)->index.base(); }
 }
-static uint64_t RustTown_road_mask() noexcept
-{
-	return RustMaskForRoadTramType(RTT_ROAD);
-}
 static bool RustTown_build_bridge(uint32_t tile, uint32_t end, uint32_t bridge, uint32_t road_type, uint32_t execute) noexcept
 {
 	auto flags = CommandFlagsToDCFlags(GetCommandFlags<CMD_BUILD_BRIDGE>());
@@ -1277,7 +1273,6 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.house_count = RustTown_house_count,
 		.update_max_pass = RustTown_update_max_pass,
 		.next_town = GetRustSharedServices().town_next_id,
-		.road_mask = RustTown_road_mask,
 		.build_bridge = RustTown_build_bridge,
 		.build_tunnel = RustTown_build_tunnel,
 		.assert_clear_house = RustTown_assert_clear_house,

@@ -4,7 +4,7 @@
 //! borrow survives a callback; registry observations copy only consumed fields.
 #![allow(unsafe_code)]
 use crate::engine::{EngineRef, RailAvailability, RoadAvailability};
-use crate::services::{RoadTramType, Services as Shared};
+use crate::services::Services as Shared;
 use crate::vehicle::OpenTTDEngine;
 #[repr(C)]
 pub struct Introduction {
@@ -32,9 +32,6 @@ pub struct Services {
     pub rail_introduces: extern "C" fn(u8) -> u64,
     pub road_introduces: extern "C" fn(u8) -> u64,
     pub road_construction: extern "C" fn(u8) -> RoadConstruction,
-    pub rail_hidden: extern "C" fn() -> u64,
-    pub road_hidden: extern "C" fn() -> u64,
-    pub road_tram_mask: extern "C" fn(RoadTramType) -> u64,
     pub company_railtypes: extern "C" fn(u8) -> u64,
     pub company_roadtypes: extern "C" fn(u8) -> u64,
     pub set_company_railtypes: extern "C" fn(u8, u64),
@@ -63,7 +60,7 @@ crate::abi::layouts! {
     "OpenTTDTypeAvailabilityServices" ["engine"] => Services {
         next, rail_availability, road_availability, engine_railtypes, engine_roadtype,
         rail_introduction, road_introduction, rail_introduces, road_introduces,
-        road_construction, rail_hidden, road_hidden, road_tram_mask,
+        road_construction,
         company_railtypes, company_roadtypes, set_company_railtypes,
         set_company_roadtypes, editor, assertions
     };

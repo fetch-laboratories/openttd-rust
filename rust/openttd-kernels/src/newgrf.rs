@@ -127,6 +127,10 @@ pub const GSF_SOUNDFX: u8 = 12;
 pub const GSF_CARGOES: u8 = 11;
 pub const GSF_END: u8 = 22;
 
+/// `GSF_RAILTYPES`.
+pub const GSF_RAILTYPES: u8 = 0x10;
+/// `GSF_ROADTYPES`.
+pub const GSF_ROADTYPES: u8 = 0x12;
 /// Unreserved engine mapping scope.
 pub const INVALID_GRFID: u32 = 0xFFFF_FFFF;
 

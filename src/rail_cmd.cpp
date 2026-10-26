@@ -48,14 +48,25 @@
 #include "rust/movement_ffi.h"
 #endif
 
+#ifdef WITH_RUST
+#include "rust/type_registry_ffi.h"
+#include "rust/type_availability_services.h"
+#endif
+
 #include "safeguards.h"
 
 /** Helper type for lists/vectors of trains */
 typedef std::vector<Train *> TrainList;
 
 RailTypeInfo _railtypes[RAILTYPE_END];
+#ifdef WITH_RUST
+static_assert(sizeof(RailTypes) == sizeof(uint64_t) && alignof(RailTypes) == alignof(uint64_t));
+std::span<RailType> _sorted_railtypes;
+RailTypes &_railtypes_hidden_mask = *reinterpret_cast<RailTypes *>(openttd_rust_rail_hidden_mask());
+#else
 std::vector<RailType> _sorted_railtypes; ///< Sorted list of rail types.
 RailTypes _railtypes_hidden_mask;
+#endif
 
 /** Enum holding the signal offset in the sprite sheet according to the side it is representing. */
 enum SignalOffsets {
@@ -72,15 +83,16 @@ enum SignalOffsets {
 /**
  * Reset all rail type information to its default values.
  */
+#ifndef WITH_RUST
 void ResetRailTypes()
 {
 	static_assert(std::size(_original_railtypes) <= std::size(_railtypes));
-
 	auto insert = std::copy(std::begin(_original_railtypes), std::end(_original_railtypes), std::begin(_railtypes));
 	std::fill(insert, std::end(_railtypes), RailTypeInfo{});
 
 	_railtypes_hidden_mask = {};
 }
+#endif
 
 void ResolveRailTypeGUISprites(RailTypeInfo *rti)
 {
@@ -139,6 +151,9 @@ static bool CompareRailTypes(const RailType &first, const RailType &second)
  */
 void InitRailTypes()
 {
+#ifdef WITH_RUST
+	openttd_rust_rail_init();
+#else
 	_sorted_railtypes.clear();
 	for (RailTypeInfo &rti : _railtypes) {
 		RailType rt = rti.Index();
@@ -150,6 +165,7 @@ void InitRailTypes()
 		_sorted_railtypes.push_back(rt);
 	}
 	std::sort(_sorted_railtypes.begin(), _sorted_railtypes.end(), CompareRailTypes);
+#endif
 }
 
 /**
@@ -157,6 +173,9 @@ void InitRailTypes()
  */
 RailType AllocateRailType(RailTypeLabel label)
 {
+#ifdef WITH_RUST
+	return openttd_rust_rail_allocate(label);
+#else
 	auto it = std::ranges::find(_railtypes, 0, &RailTypeInfo::label);
 	if (it == std::end(_railtypes)) return INVALID_RAILTYPE;
 
@@ -184,7 +203,36 @@ RailType AllocateRailType(RailTypeLabel label)
 	rti.sorting_order = rt << 4 | 7;
 
 	return rt;
+#endif
 }
+
+#ifdef WITH_RUST
+const OpenTTDRailRegistryServices &GetRustRailRegistryServices() noexcept
+{
+	static const OpenTTDRailRegistryServices table = {
+		.default_count = std::size(_original_railtypes),
+		.spec = [](RailType rt) noexcept { return &_railtypes[rt]; },
+		.type_label = [](RailType rt) noexcept { return RustRailTypeLabel(GetRailTypeInfo(rt)); },
+		.alternate = [](RailType rt, uint32_t label) noexcept { return GetRailTypeInfo(rt)->alternate_labels.contains(label); },
+		.clear = [](RailTypeInfo *info) noexcept { *info = RailTypeInfo{}; },
+		.copy_default = [](RailTypeInfo *info, RailType source) noexcept { *info = _original_railtypes[source]; },
+		.resolve_gui = [](RailTypeInfo *info) noexcept { ResolveRailTypeGUISprites(info); },
+		.publication = [](const RailTypeInfo *info) noexcept { return OpenTTDTypePublication{.label = RustRailTypeLabel(info), .hidden = RustRailTypeHidden(info)}; },
+		.sort = [](RailType *data, size_t count) noexcept { std::sort(data, data + count, CompareRailTypes); },
+		.publish_sorted = [](RailType *data, size_t count) noexcept { _sorted_railtypes = {data, count}; },
+		.allocate = [](RailTypeInfo *info, const OpenTTDTypeAllocation *value) noexcept {
+			info->label = value->label;
+			info->alternate_labels.clear();
+			info->compatible_railtypes = RailTypes{value->self};
+			info->powered_railtypes = RailTypes{value->self};
+			info->introduces_railtypes = RailTypes{value->self};
+			info->sorting_order = value->order;
+		},
+	};
+	return table;
+}
+#endif
+
 
 static const uint8_t _track_sloped_sprites[14] = {
 	14, 15, 22, 13,

@@ -37,7 +37,6 @@ struct OpenTTDEngineLoadingServices {
 	void (*close_previews)() noexcept OPENTTD_SERVICE_DEFAULT(close_previews);
 	void (*clean_pool)() noexcept OPENTTD_SERVICE_DEFAULT(clean_pool);
 	uint64_t (*railtypes)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(railtypes);
-	uint32_t (*rail_label)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_label);
 	OpenTTDEngineRefitInputs (*refit_inputs)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(refit_inputs);
 	OpenTTDNewGRFCargoLabel (*cargo_label)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_label);
 	OpenTTDEngineTrainCargo (*train_cargo)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(train_cargo);
@@ -66,10 +65,6 @@ struct OpenTTDEngineLoadingServices {
 	bool (*is_tram)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(is_tram);
 	void (*set_road_speed)(const OpenTTDEngine *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_road_speed);
 	void (*set_roadtype)(const OpenTTDEngine *, RoadType) noexcept OPENTTD_SERVICE_DEFAULT(set_roadtype);
-	size_t (*road_list_size)(const GRFFile *, bool) noexcept OPENTTD_SERVICE_DEFAULT(road_list_size);
-	RoadTypeLabel (*road_label)(const GRFFile *, bool, size_t) noexcept OPENTTD_SERVICE_DEFAULT(road_label);
-	RoadType (*road_by_label)(RoadTypeLabel) noexcept OPENTTD_SERVICE_DEFAULT(road_by_label);
-	RailType (*rail_by_label)(RailTypeLabel) noexcept OPENTTD_SERVICE_DEFAULT(rail_by_label);
 	void (*set_railtypes)(const OpenTTDEngine *, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_railtypes);
 	void (*override_log)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(override_log);
 	OpenTTDEngineLoadingVehicle (*vehicle_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_next);

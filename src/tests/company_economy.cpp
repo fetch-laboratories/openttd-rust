@@ -110,7 +110,11 @@ static void FixtureReset(bool networking, bool server)
 /* The default maps do not load unclassified NewGRF road masks or extreme prices. */
 TEST_CASE("Commands - road price saturation, rounding and independent type masks")
 {
+#ifdef WITH_RUST
+	extern RoadTypes &_roadtypes_road, &_roadtypes_tram;
+#else
 	extern RoadTypes _roadtypes_road, _roadtypes_tram;
+#endif
 	extern RoadTypeInfo _roadtypes[ROADTYPE_END];
 	AutoRestoreBackup<Money> build(_price[PR_BUILD_ROAD], Money(7));
 	AutoRestoreBackup<Money> clear(_price[PR_CLEAR_ROAD], Money(-27));
