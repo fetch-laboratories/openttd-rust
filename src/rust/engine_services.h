@@ -57,6 +57,71 @@ inline bool RustEngineOldRefittable(const OpenTTDEngine *e) noexcept { return En
 inline void RustSetEngineOldRefittable(const OpenTTDEngine *e, bool value) noexcept { const_cast<Engine *>(EngineOf(e))->VehInfo<ShipVehicleInfo>().old_refittable = value; }
 inline void RustSetEngineRoadSpeed(const OpenTTDEngine *e, uint16_t speed) noexcept { const_cast<Engine *>(EngineOf(e))->VehInfo<RoadVehicleInfo>().max_speed = speed; }
 inline void RustSetEngineRoadType(const OpenTTDEngine *e, RoadType rt) noexcept { const_cast<Engine *>(EngineOf(e))->VehInfo<RoadVehicleInfo>().roadtype = rt; }
+inline void RustSetEngineIntro(const OpenTTDEngine *shell, int32_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->info.base_intro = TimerGameCalendar::Date{value}; }
+inline void RustSetEngineDecay(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->info.decay_speed = value; }
+inline void RustSetEngineLife(const OpenTTDEngine *shell, int32_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->info.lifelength = TimerGameCalendar::Year{value}; }
+inline void RustSetEngineModelLife(const OpenTTDEngine *shell, int32_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->info.base_life = TimerGameCalendar::Year{value}; }
+inline void RustSetEngineClimates(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->info.climates = LandscapeTypes{value}; }
+inline void RustSetEngineLoadAmount(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->info.load_amount = value; }
+inline void RustSetEngineCargoLabel(const OpenTTDEngine *shell, uint32_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->info.cargo_label = value; }
+inline void RustSetEngineCallbacks(const OpenTTDEngine *shell, uint16_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->info.callback_mask = VehicleCallbackMasks{value}; }
+inline void RustSetEngineRefitCost(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->info.refit_cost = value; }
+inline void RustSetEngineRetire(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->info.retire_early = value; }
+inline void RustSetEngineMisc(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->info.misc_flags = EngineMiscFlags{value}; }
+inline void RustSetEngineExtra(const OpenTTDEngine *shell, uint32_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->info.extra_flags = static_cast<ExtraEngineFlags>(value); }
+inline void RustSetEngineCargoAge(const OpenTTDEngine *shell, uint16_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->info.cargo_age_period = value; }
+inline void RustSetEngineTrainAi(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RailVehicleInfo>().ai_passenger_only = value; }
+inline void RustSetEngineTrainSpeed(const OpenTTDEngine *shell, uint16_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RailVehicleInfo>().max_speed = value; }
+inline void RustSetEngineTrainPower(const OpenTTDEngine *shell, uint16_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RailVehicleInfo>().power = value; }
+inline void RustSetEngineTrainKind(const OpenTTDEngine *shell, RailVehicleTypes value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RailVehicleInfo>().railveh_type = value; }
+inline void RustSetEngineTrainRunning(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RailVehicleInfo>().running_cost = value; }
+inline void RustSetEngineTrainPrice(const OpenTTDEngine *shell, Price value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RailVehicleInfo>().running_cost_class = value; }
+inline void RustSetEngineTrainImage(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RailVehicleInfo>().image_index = value; }
+inline void RustSetEngineTrainCapacity(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RailVehicleInfo>().capacity = value; }
+inline void RustSetEngineTrainWeight(const OpenTTDEngine *shell, uint16_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RailVehicleInfo>().weight = value; }
+inline void RustSetEngineTrainCost(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RailVehicleInfo>().cost_factor = value; }
+inline void RustSetEngineTrainClass(const OpenTTDEngine *shell, EngineClass value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RailVehicleInfo>().engclass = value; }
+inline void RustSetEngineTrainWagonPower(const OpenTTDEngine *shell, uint16_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RailVehicleInfo>().pow_wag_power = value; }
+inline void RustSetEngineTrainTe(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RailVehicleInfo>().tractive_effort = value; }
+inline void RustSetEngineTrainDrag(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RailVehicleInfo>().air_drag = value; }
+inline void RustSetEngineTrainShorten(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RailVehicleInfo>().shorten_factor = value; }
+inline void RustSetEngineTrainVisual(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RailVehicleInfo>().visual_effect = value; }
+inline void RustSetEngineTrainWagonWeight(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RailVehicleInfo>().pow_wag_weight = value; }
+inline void RustSetEngineTrainUser(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RailVehicleInfo>().user_def_data = value; }
+inline void RustSetEngineTrainCurve(const OpenTTDEngine *shell, int16_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RailVehicleInfo>().curve_speed_mod = value; }
+inline void RustSetEngineRoadRunning(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RoadVehicleInfo>().running_cost = value; }
+inline void RustSetEngineRoadPrice(const OpenTTDEngine *shell, Price value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RoadVehicleInfo>().running_cost_class = value; }
+inline void RustSetEngineRoadImage(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RoadVehicleInfo>().image_index = value; }
+inline void RustSetEngineRoadCapacity(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RoadVehicleInfo>().capacity = value; }
+inline void RustSetEngineRoadCost(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RoadVehicleInfo>().cost_factor = value; }
+inline void RustSetEngineRoadSound(const OpenTTDEngine *shell, SoundID value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RoadVehicleInfo>().sfx = value; }
+inline void RustSetEngineRoadPower(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RoadVehicleInfo>().power = value; }
+inline void RustSetEngineRoadWeight(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RoadVehicleInfo>().weight = value; }
+inline void RustSetEngineRoadTe(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RoadVehicleInfo>().tractive_effort = value; }
+inline void RustSetEngineRoadDrag(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RoadVehicleInfo>().air_drag = value; }
+inline void RustSetEngineRoadVisual(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RoadVehicleInfo>().visual_effect = value; }
+inline void RustSetEngineRoadShorten(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RoadVehicleInfo>().shorten_factor = value; }
+inline void RustSetEngineShipImage(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<ShipVehicleInfo>().image_index = value; }
+inline void RustSetEngineShipCost(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<ShipVehicleInfo>().cost_factor = value; }
+inline void RustSetEngineShipSpeed(const OpenTTDEngine *shell, uint16_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<ShipVehicleInfo>().max_speed = value; }
+inline void RustSetEngineShipCapacity(const OpenTTDEngine *shell, uint16_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<ShipVehicleInfo>().capacity = value; }
+inline void RustSetEngineShipRunning(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<ShipVehicleInfo>().running_cost = value; }
+inline void RustSetEngineShipSound(const OpenTTDEngine *shell, SoundID value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<ShipVehicleInfo>().sfx = value; }
+inline void RustSetEngineShipOcean(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<ShipVehicleInfo>().ocean_speed_frac = value; }
+inline void RustSetEngineShipCanal(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<ShipVehicleInfo>().canal_speed_frac = value; }
+inline void RustSetEngineShipVisual(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<ShipVehicleInfo>().visual_effect = value; }
+inline void RustSetEngineShipAcceleration(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<ShipVehicleInfo>().acceleration = value; }
+inline void RustSetEngineAircraftImage(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<AircraftVehicleInfo>().image_index = value; }
+inline void RustSetEngineAircraftSubtype(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<AircraftVehicleInfo>().subtype = value; }
+inline void RustSetEngineAircraftCost(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<AircraftVehicleInfo>().cost_factor = value; }
+inline void RustSetEngineAircraftSpeed(const OpenTTDEngine *shell, uint16_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<AircraftVehicleInfo>().max_speed = value; }
+inline void RustSetEngineAircraftAcceleration(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<AircraftVehicleInfo>().acceleration = value; }
+inline void RustSetEngineAircraftRunning(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<AircraftVehicleInfo>().running_cost = value; }
+inline void RustSetEngineAircraftPassengers(const OpenTTDEngine *shell, uint16_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<AircraftVehicleInfo>().passenger_capacity = value; }
+inline void RustSetEngineAircraftMail(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<AircraftVehicleInfo>().mail_capacity = value; }
+inline void RustSetEngineAircraftSound(const OpenTTDEngine *shell, SoundID value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<AircraftVehicleInfo>().sfx = value; }
+inline void RustSetEngineAircraftRange(const OpenTTDEngine *shell, uint16_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<AircraftVehicleInfo>().max_range = value; }
+inline void RustSetEngineListPosition(const OpenTTDEngine *e, uint16_t position) noexcept { const_cast<Engine *>(EngineOf(e))->list_position = position; }
 template <typename Result, auto Read, typename Index = uint16_t>
 static Result RustIndexedEngineRead(Index id) noexcept { return Read(RustEngineByID(static_cast<uint16_t>(id))); }
 inline OpenTTDEngineCarrying RustEngineCarrying(const OpenTTDEngine *engine) noexcept
@@ -131,8 +196,10 @@ inline OpenTTDEngineVehicle Engine_vehicle_next(uint32_t from) noexcept
 	const Vehicle *v = VehicleOf(RustNextVehicle(from));
 	return v == nullptr ? OpenTTDEngineVehicle{nullptr, UINT32_MAX, 0, VEH_INVALID} : OpenTTDEngineVehicle{RustVehicle(v), RustVehicleIndexOpaque(v), RustVehicleOwner(v), RustVehicleVehicleType(v)};
 }
-inline uint16_t RustGroundEnginePower(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->type == VEH_TRAIN ? RailVehInfo(v->engine_type)->power : RoadVehInfo(v->engine_type)->power; }
-inline uint16_t RustGroundEngineWeight(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->type == VEH_TRAIN ? RailVehInfo(v->engine_type)->weight : RoadVehInfo(v->engine_type)->weight; }
+inline uint16_t RustRailEnginePower(const RailVehicleInfo *info) noexcept { return info->power; }
+inline uint16_t RustRailEngineWeight(const RailVehicleInfo *info) noexcept { return info->weight; }
+inline uint16_t RustGroundEnginePower(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->type == VEH_TRAIN ? RustRailEnginePower(RailVehInfo(v->engine_type)) : RoadVehInfo(v->engine_type)->power; }
+inline uint16_t RustGroundEngineWeight(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->type == VEH_TRAIN ? RustRailEngineWeight(RailVehInfo(v->engine_type)) : RoadVehInfo(v->engine_type)->weight; }
 inline uint8_t RustGroundEngineTE(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->type == VEH_TRAIN ? RailVehInfo(v->engine_type)->tractive_effort : RoadVehInfo(v->engine_type)->tractive_effort; }
 inline uint8_t RustGroundEngineDrag(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->type == VEH_TRAIN ? RailVehInfo(v->engine_type)->air_drag : RoadVehInfo(v->engine_type)->air_drag; }
 inline uint16_t RustEngineWagonPower(uint16_t engine) noexcept { return RailVehInfo(EngineID(engine))->pow_wag_power; }

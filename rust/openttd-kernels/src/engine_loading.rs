@@ -18,6 +18,7 @@ use crate::{
     newgrf::{CargoLabel, INVALID_GRFID, get_active_cargo_label},
 };
 use std::{collections::BTreeMap, ffi::c_void, ptr};
+pub(crate) mod properties;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -162,7 +163,6 @@ pub struct TempFields {
     cargo_allowed: u16,
     cargo_allowed_required: u16,
     cargo_disallowed: u16,
-    railtypelabels: u16,
     roadtramtype: u8,
     defaultcargo_grf: *const c_void,
     refittability: u8,
@@ -181,7 +181,6 @@ impl Default for TempFields {
             cargo_allowed: 0,
             cargo_allowed_required: 0,
             cargo_disallowed: 0,
-            railtypelabels: 0,
             roadtramtype: 0,
             defaultcargo_grf: ptr::null(),
             refittability: Self::UNSET,
@@ -197,29 +196,21 @@ struct Temp {
     labels: Vec<u32>,
 }
 static TEMP: GameState<Vec<Temp>> = GameState::new(Vec::new());
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_temp_resize(size: usize) {
+pub(crate) unsafe fn openttd_rust_engine_temp_resize(size: usize) {
     let temp = unsafe { &mut *TEMP.get() };
-    let old = temp.len();
     temp.resize_with(size, Temp::default);
-    for (id, entry) in temp.iter_mut().enumerate().skip(old) {
-        entry.fields.railtypelabels = id as u16;
-    }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_temp_clear() {
+pub(crate) unsafe fn openttd_rust_engine_temp_clear() {
     unsafe { &mut *TEMP.get() }.clear();
 }
 fn temp(engine: u16) -> *mut Temp {
     // Vec::as_mut_ptr does not borrow elements; native field aliases stay valid.
     unsafe { (*TEMP.get()).as_mut_ptr().add(usize::from(engine)) }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_temp_fields(engine: u16) -> *mut TempFields {
+pub(crate) unsafe fn openttd_rust_engine_temp_fields(engine: u16) -> *mut TempFields {
     unsafe { ptr::addr_of_mut!((*temp(engine)).fields) }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_temp_refittability(
+pub(crate) unsafe fn openttd_rust_engine_temp_refittability(
     fields: *mut TempFields,
     nonempty: bool,
 ) {
@@ -230,26 +221,11 @@ pub unsafe extern "C" fn openttd_rust_engine_temp_refittability(
         fields.refittability = TempFields::EMPTY;
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_temp_labels_clear(engine: u16) {
+pub(crate) unsafe fn openttd_rust_engine_temp_labels_clear(engine: u16) {
     unsafe { &mut (*temp(engine)).labels }.clear();
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_temp_labels_push(engine: u16, label: u32) {
+pub(crate) unsafe fn openttd_rust_engine_temp_labels_push(engine: u16, label: u32) {
     unsafe { &mut (*temp(engine)).labels }.push(label);
-}
-#[repr(C)]
-pub struct RailLabelView {
-    data: *mut u32,
-    size: usize,
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_temp_labels(engine: u16) -> RailLabelView {
-    let labels = unsafe { &mut (*temp(engine)).labels };
-    RailLabelView {
-        data: labels.as_mut_ptr(),
-        size: labels.len(),
-    }
 }
 
 use crate::vehicle_type::{VEH_COMPANY_END, VEH_TRAIN};
@@ -312,6 +288,11 @@ pub struct Services {
     vehicle_next: extern "C" fn(u32) -> LoadingVehicle,
     reload: extern "C" fn(),
     default_counts: extern "C" fn() -> *const u8,
+    set_position: extern "C" fn(E, u16),
+    order_source: extern "C" fn(E, u16) -> OrderSource,
+    order_slide: extern "C" fn(*mut u16, usize, usize),
+    order_sort: extern "C" fn(*mut u16, usize),
+    order_count: extern "C" fn() -> usize,
 }
 fn default_count(s: &Services, kind: u8) -> u8 {
     unsafe { *(s.default_counts)().add(usize::from(kind)) }
@@ -449,6 +430,7 @@ pub(crate) unsafe fn openttd_rust_engine_temp_initialize(s: &Services) {
 
 crate::abi::layouts! {
     fn abi_layout;
+    "OpenTTDEngineOrderSource" ["engine_loading"] => OrderSource { local, kind => type, grfid };
     "OpenTTDEngineLoadingVehicle" ["engine_loading"] => LoadingVehicle { id, kind => type };
     "OpenTTDEngineLoadingServices" ["engine_loading"] => Services {
         shared,
@@ -505,6 +487,11 @@ crate::abi::layouts! {
         vehicle_next,
         reload,
         default_counts,
+        set_position,
+        order_source,
+        order_slide,
+        order_sort,
+        order_count,
 
 
     };
@@ -514,8 +501,6 @@ crate::abi::layouts! {
     "OpenTTDEngineRefitInputs" ["engine_loading"] => RefitInputs { mask, cargo, custom };
     "OpenTTDEngineTrainCargo" ["engine_loading"] => TrainCargo { capacity, kind };
     "OpenTTDEngineCargoClass" ["engine_loading"] => CargoClass { classes, cargo };
-    "GRFTempEngineData" ["engine_loading"] => TempFields { cargo_allowed, cargo_allowed_required, cargo_disallowed, railtypelabels, roadtramtype, defaultcargo_grf, refittability, rv_max_speed, ctt_include_mask, ctt_exclude_mask };
-    "RustRailLabelView" ["engine_loading"] => RailLabelView { data, size };
 
 }
 #[repr(C)]
@@ -1015,4 +1000,101 @@ pub extern "C" fn openttd_rust_engine_reset_config(s: &Services) -> bool {
 pub struct LoadingVehicle {
     id: u32,
     kind: u8,
+}
+
+#[repr(C)]
+pub struct OrderSource {
+    local: u16,
+    kind: u8,
+    grfid: u32,
+}
+#[derive(Clone, Copy)]
+struct ListOrderChange {
+    engine: u16,
+    target: u16,
+}
+static LIST_ORDER_CHANGES: GameState<Vec<ListOrderChange>> = GameState::new(Vec::new());
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_vehicle_order(engine: u16, target: u16) {
+    unsafe { &mut *LIST_ORDER_CHANGES.get() }.push(ListOrderChange { engine, target });
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_vehicle_order_commit(s: &Services) {
+    let mut ordering: Vec<u16> = (0..(s.order_count)()).map(|id| id as u16).collect();
+    (s.order_sort)(ordering.as_mut_ptr(), ordering.len());
+    let count = unsafe { &*LIST_ORDER_CHANGES.get() }.len();
+    for index in 0..count {
+        let change = unsafe { (&*LIST_ORDER_CHANGES.get())[index] };
+        let engine = (s.resolve)(change.engine);
+        let source = (s.order_source)(engine.shell, change.target);
+        if source.local == change.target {
+            continue;
+        }
+        let target =
+            unsafe { openttd_rust_engine_mapping_get(source.kind, change.target, source.grfid) };
+        if target == INVALID_ENGINE {
+            continue;
+        }
+        let from = ordering.iter().position(|id| *id == change.engine);
+        let to = ordering.iter().position(|id| *id == target);
+        crate::movement::native_assert(unsafe { &*s.shared }, from.is_some() && to.is_some());
+        crate::movement::native_assert(unsafe { &*s.shared }, from != to);
+        // The native assertions abort before these indices are used when enabled.
+        (s.order_slide)(
+            ordering.as_mut_ptr(),
+            from.unwrap_or(ordering.len()),
+            to.unwrap_or(ordering.len()),
+        );
+    }
+    for (index, id) in ordering.into_iter().enumerate() {
+        (s.set_position)((s.resolve)(id).shell, index as u16);
+    }
+    unsafe { &mut *LIST_ORDER_CHANGES.get() }.clear();
+    unsafe { &mut *LIST_ORDER_CHANGES.get() }.shrink_to_fit();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn loading_state_and_order_queue_cross_serialized_threads() {
+        unsafe {
+            openttd_rust_engine_temp_resize(3);
+            (*temp(1)).fields.cargo_allowed = 123;
+            openttd_rust_engine_temp_labels_push(1, crate::rail_type::RAILTYPE_LABEL_RAIL);
+            openttd_rust_engine_temp_refittability(&raw mut (*temp(1)).fields, false);
+            openttd_rust_vehicle_order(1, 7);
+        }
+        std::thread::spawn(|| unsafe {
+            assert_eq!((*temp(1)).fields.cargo_allowed, 123);
+            assert_eq!((*temp(1)).fields.refittability, TempFields::EMPTY);
+            assert_eq!((&*LIST_ORDER_CHANGES.get())[0].target, 7);
+            openttd_rust_engine_temp_refittability(&raw mut (*temp(1)).fields, true);
+            (*temp(1)).fields.ctt_include_mask = 7;
+            openttd_rust_vehicle_order(2, 8);
+        })
+        .join()
+        .unwrap();
+        unsafe {
+            openttd_rust_engine_temp_resize(70);
+            assert_eq!((*temp(1)).fields.ctt_include_mask, 7);
+            assert_eq!(
+                (&(*temp(1)).labels)[0],
+                crate::rail_type::RAILTYPE_LABEL_RAIL
+            );
+            assert_eq!((*temp(1)).fields.refittability, TempFields::NONEMPTY);
+            openttd_rust_engine_temp_refittability(&raw mut (*temp(1)).fields, false);
+            assert_eq!((*temp(1)).fields.refittability, TempFields::NONEMPTY);
+            assert_eq!((*temp(69)).fields.refittability, TempFields::UNSET);
+            assert_eq!((&*LIST_ORDER_CHANGES.get())[1].engine, 2);
+            assert_eq!((&*LIST_ORDER_CHANGES.get())[1].target, 8);
+            openttd_rust_engine_temp_clear();
+            openttd_rust_engine_temp_resize(3);
+            assert_eq!((*temp(1)).fields.cargo_allowed, 0);
+            assert_eq!((*temp(1)).labels, [] as [u32; 0]);
+            assert!((*temp(1)).fields.defaultcargo_grf.is_null());
+            openttd_rust_engine_temp_clear();
+            (*LIST_ORDER_CHANGES.get()).clear();
+        }
+    }
 }

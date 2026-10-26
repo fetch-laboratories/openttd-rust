@@ -58,6 +58,8 @@ pub struct OrderType(pub u8);
 pub struct RailVehicleTypes(pub u8);
 
 impl RailVehicleTypes {
+    /// Native `RAILVEH_SINGLEHEAD`.
+    pub const SINGLEHEAD: Self = Self(0);
     /// Native `RAILVEH_MULTIHEAD`.
     pub const MULTIHEAD: Self = Self(1);
     /// Native `RAILVEH_WAGON`.
@@ -95,7 +97,7 @@ pub use crate::tile_type::{MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
 /// `AM_REALISTIC`.
 pub const AM_REALISTIC: u8 = 1;
 /// `INVALID_PRICE`.
-pub const INVALID_PRICE: u8 = 0xFF;
+pub use crate::economy_type::INVALID_PRICE;
 /// `PROP_AIRCRAFT_SPEED`.
 pub const PROP_AIRCRAFT_SPEED: u8 = 0x0C;
 /// `VEHICLE_LENGTH`.

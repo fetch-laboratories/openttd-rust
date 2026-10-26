@@ -72,6 +72,11 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 		.vehicle_next = [](uint32_t from) noexcept { const Vehicle *v = VehicleOf(RustNextVehicle(from)); return v == nullptr ? OpenTTDEngineLoadingVehicle{UINT32_MAX, VEH_INVALID} : OpenTTDEngineLoadingVehicle{RustVehicleIndexOpaque(v), RustVehicleVehicleType(v)}; },
 		.reload = []() noexcept { ReloadNewGRFData(); },
 		.default_counts = []() noexcept { return _engine_counts; },
+		.set_position = RustSetEngineListPosition,
+		.order_source = [](const OpenTTDEngine *shell, uint16_t target) noexcept { const Engine *e = EngineOf(shell); OpenTTDEngineOrderSource source{.local = e->grf_prop.local_id, .type = VEH_INVALID, .grfid = 0}; if (source.local != target) { source.type = RustEngineType(shell); source.grfid = e->grf_prop.grfid; } return source; },
+		.order_slide = RustVehicleOrderSlide,
+		.order_sort = RustVehicleOrderSort,
+		.order_count = []() noexcept -> size_t { return Engine::GetNumItems(); },
 	};
 	return services;
 }

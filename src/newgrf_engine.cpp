@@ -26,6 +26,10 @@
 #include "newgrf_roadtype.h"
 #include "ship.h"
 
+#ifdef WITH_RUST
+#include "rust/engine_loading_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 void SetWagonOverrideSprites(EngineID engine, CargoType cargo, const SpriteGroup *group, std::span<EngineID> engine_ids)
@@ -1400,6 +1404,7 @@ void TriggerVehicleRandomisation(Vehicle *v, VehicleRandomTrigger trigger)
 
 /* Functions for changing the order of vehicle purchase lists */
 
+#ifndef WITH_RUST
 struct ListOrderChange {
 	EngineID engine; ///< Engine ID
 	uint16_t target; ///< GRF-local ID
@@ -1408,6 +1413,7 @@ struct ListOrderChange {
 };
 
 static std::vector<ListOrderChange> _list_order_changes;
+#endif
 
 /**
  * Record a vehicle ListOrderChange.
@@ -1417,8 +1423,12 @@ static std::vector<ListOrderChange> _list_order_changes;
  */
 void AlterVehicleListOrder(EngineID engine, uint16_t target)
 {
+#ifdef WITH_RUST
+	openttd_rust_vehicle_order(engine.base(), target);
+#else
 	/* Add the list order change to a queue */
 	_list_order_changes.emplace_back(engine, target);
+#endif
 }
 
 /**
@@ -1442,11 +1452,25 @@ static bool EnginePreSort(const EngineID &a, const EngineID &b)
 	return static_cast<int>(engine_a.grf_prop.local_id) < static_cast<int>(engine_b.grf_prop.local_id);
 }
 
+#ifdef WITH_RUST
+void RustVehicleOrderSort(uint16_t *data, size_t size) noexcept
+{
+	std::ranges::sort(std::span(data, size), [](uint16_t a, uint16_t b) { return EnginePreSort(EngineID{a}, EngineID{b}); });
+}
+void RustVehicleOrderSlide(uint16_t *data, size_t from, size_t to) noexcept
+{
+	Slide(data + from, data + from + 1, data + to);
+}
+#endif
+
 /**
  * Determine default engine sorting and execute recorded ListOrderChanges from AlterVehicleListOrder.
  */
 void CommitVehicleListOrderChanges()
 {
+#ifdef WITH_RUST
+	openttd_rust_vehicle_order_commit(&GetRustEngineLoadingServices());
+#else
 	/* Build a list of EngineIDs. EngineIDs are sequential from 0 up to the number of pool items with no gaps. */
 	std::vector<EngineID> ordering(Engine::GetNumItems());
 	std::iota(std::begin(ordering), std::end(ordering), EngineID::Begin());
@@ -1483,6 +1507,7 @@ void CommitVehicleListOrderChanges()
 	/* Clear out the queue */
 	_list_order_changes.clear();
 	_list_order_changes.shrink_to_fit();
+#endif
 }
 
 /**
