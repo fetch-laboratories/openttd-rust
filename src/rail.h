@@ -515,7 +515,9 @@ RailTypes GetRailTypes(bool introduces);
 
 RailType GetRailTypeByLabel(RailTypeLabel label, bool allow_alternate_labels = true);
 
+#ifndef WITH_RUST
 void ResetRailTypes();
+#endif
 void InitRailTypes();
 RailType AllocateRailType(RailTypeLabel label);
 

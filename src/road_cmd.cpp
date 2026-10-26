@@ -87,20 +87,18 @@ RoadTypes _roadtypes_tram; ///< Bitset of tram roadtypes.
 /**
  * Reset all road type information to its default values.
  */
+#ifndef WITH_RUST
 void ResetRoadTypes()
 {
 	static_assert(std::size(_original_roadtypes) <= std::size(_roadtypes));
-#ifdef WITH_RUST
-	openttd_rust_road_reset(&GetRustTypeRegistryServices());
-#else
 	auto insert = std::copy(std::begin(_original_roadtypes), std::end(_original_roadtypes), std::begin(_roadtypes));
 	std::fill(insert, std::end(_roadtypes), RoadTypeInfo{});
 
 	_roadtypes_hidden_mask = {};
 	_roadtypes_road = {ROADTYPE_ROAD};
 	_roadtypes_tram = {ROADTYPE_TRAM};
-#endif
 }
+#endif
 
 void ResolveRoadTypeGUISprites(RoadTypeInfo *rti)
 {

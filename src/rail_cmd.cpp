@@ -83,18 +83,16 @@ enum SignalOffsets {
 /**
  * Reset all rail type information to its default values.
  */
+#ifndef WITH_RUST
 void ResetRailTypes()
 {
 	static_assert(std::size(_original_railtypes) <= std::size(_railtypes));
-#ifdef WITH_RUST
-	openttd_rust_rail_reset(&GetRustTypeRegistryServices());
-#else
 	auto insert = std::copy(std::begin(_original_railtypes), std::end(_original_railtypes), std::begin(_railtypes));
 	std::fill(insert, std::end(_railtypes), RailTypeInfo{});
 
 	_railtypes_hidden_mask = {};
-#endif
 }
+#endif
 
 void ResolveRailTypeGUISprites(RailTypeInfo *rti)
 {

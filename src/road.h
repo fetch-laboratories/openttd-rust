@@ -309,7 +309,9 @@ inline bool RoadNoLevelCrossing(RoadType roadtype)
 
 RoadType GetRoadTypeByLabel(RoadTypeLabel label, bool allow_alternate_labels = true);
 
+#ifndef WITH_RUST
 void ResetRoadTypes();
+#endif
 void InitRoadTypes();
 RoadType AllocateRoadType(RoadTypeLabel label, RoadTramType rtt);
 bool HasAnyRoadTypesAvail(CompanyID company, RoadTramType rtt);

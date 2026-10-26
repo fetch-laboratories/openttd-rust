@@ -23,6 +23,7 @@ REQUIRED = {
     "cargo-profit-reload": (),
     "cargo-rating-reload": (),
     "types": (),
+    "types-definitions": (),
     "types-reload": (),
     "monitors": (),
     "commands": ("rename", "visibility", "control"),
@@ -40,6 +41,16 @@ EXPECTED = {
     "cargo-profit": ("profit-controls true",),
     "cargo-profit-reload": ("profit-controls true",),
     "cargo-rating-reload": ("rating-controls true",),
+    "types-definitions": (
+        "types-case definitions-file-loaded-save true",
+        "types-case definitions-movement true",
+        "types-case definitions-conversion-categories true",
+        "types-case definitions-allocation-order true",
+        "types-case definitions-reordered-tiles true",
+        "types-case definitions-missing-fallbacks true",
+        "types-case definitions-reordered true",
+        "types-case definitions-missing true",
+    ),
     "types": (
         "types-case afterload-masks true",
         "types-case fixedpoint true",
@@ -130,6 +141,7 @@ def scenarios(soak):
             "cargo-profit",
             "types",
             "types-reload",
+            "types-definitions",
         )
     ]
 
