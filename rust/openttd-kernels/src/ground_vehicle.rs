@@ -176,7 +176,7 @@ pub struct Services {
     pub weight_input: extern "C" fn(VehicleRef) -> WeightInput,
     pub acceleration_input: extern "C" fn(VehicleRef) -> AccelerationInput,
     pub speed_input: extern "C" fn(VehicleRef) -> SpeedInput,
-    pub capacity: extern "C" fn(crate::vehicle::EngineRef, VehicleRef, *mut u16) -> u32,
+    pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub cargo_weight: extern "C" fn(*const std::ffi::c_void, u32) -> u64,
     pub train_cargo_weight: extern "C" fn(*const std::ffi::c_void, u32) -> u64,
     pub engine_power: extern "C" fn(VehicleRef) -> u16,
@@ -267,7 +267,14 @@ fn weight_owned(s: &Services, v: VehicleRef, o: Owner, full: bool) -> u16 {
     }
     let r = (s.weight_input)(v);
     let count = if full {
-        (s.capacity)((s.vehicle.engine)(v), v, std::ptr::null_mut())
+        unsafe {
+            crate::engine_capabilities::openttd_rust_engine_capacity(
+                s.capabilities,
+                (s.vehicle.engine)(v).0.as_ptr(),
+                v.0.as_ptr(),
+                std::ptr::null_mut(),
+            )
+        }
     } else {
         // SAFETY: live canonical cargo owner; no borrow survives this read.
         unsafe { crate::cargo_storage::openttd_rust_cargo_list_stored(r.owner) }
@@ -824,7 +831,7 @@ crate::abi::layouts! {
     };
     "OpenTTDGroundWeightInput" ["probe"] => crate::ground_vehicle::WeightInput { cargo, owner, };
     "OpenTTDGroundSpeedInput" ["probe"] => crate::ground_vehicle::SpeedInput { speed, subspeed, };
-    "OpenTTDGroundPhysicsServices" ["probe"] => crate::ground_vehicle::Services { vehicle, road, assertions, resolve, first, power_input, weight_input, acceleration_input, speed_input, capacity, cargo_weight, train_cargo_weight, engine_power, engine_weight, engine_te, engine_drag, wagon_power, wagon_weight, powered, rail_type, rail_acceleration, rail_speed, road_speed, tram, steepness, display_max_speed, viewport, details_dirty, base_crash, depot_tile, };
+    "OpenTTDGroundPhysicsServices" ["probe"] => crate::ground_vehicle::Services { vehicle, road, assertions, resolve, first, power_input, weight_input, acceleration_input, speed_input, capabilities, cargo_weight, train_cargo_weight, engine_power, engine_weight, engine_te, engine_drag, wagon_power, wagon_weight, powered, rail_type, rail_acceleration, rail_speed, road_speed, tram, steepness, display_max_speed, viewport, details_dirty, base_crash, depot_tile, };
     "OpenTTDGroundState" ["probe"] => crate::ground_vehicle::State { cache, flags, };
     "OpenTTDGroundOwner" ["probe"] => crate::ground_vehicle::Owner { state, train, road, kind, };
     "OpenTTDGroundPowerInput" ["probe"] => crate::ground_vehicle::PowerInput { tile, subtype, };

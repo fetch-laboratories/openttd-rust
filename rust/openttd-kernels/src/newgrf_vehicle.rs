@@ -96,7 +96,7 @@ pub struct Services {
     first: unsafe extern "C" fn(V) -> V,
     move_vehicle: unsafe extern "C" fn(V, i32) -> V,
     previous: unsafe extern "C" fn(V) -> V,
-    can_carry: unsafe extern "C" fn(*const OpenTTDEngine) -> bool,
+    pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     cargo_classes: unsafe extern "C" fn(u8) -> u16,
     cargo_bitnum: unsafe extern "C" fn(u8) -> u8,
     cargo_translation: unsafe extern "C" fn(*const c_void, u8) -> u8,
@@ -289,7 +289,10 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
                         if (s.vehicle.vehicle_type)(handle(v)) == 0 {
                             user_data |= (s.vehicle.train_handle)(u).get_user_def_data() as u8;
                         }
-                        if (s.can_carry)((s.vehicle.engine)(handle(u)).0.as_ptr()) {
+                        if crate::engine_capabilities::openttd_rust_engine_can_carry(
+                            s.capabilities,
+                            (s.vehicle.engine)(handle(u)).0.as_ptr(),
+                        ) {
                             let cargo_type = (s.cargo_type)(u);
                             classes |= (s.cargo_classes)(cargo_type) as u8;
                             cargoes[cargo_type as usize] =
@@ -303,7 +306,10 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
                     while !u.is_null() {
                         let cargo_type = (s.cargo_type)(u);
                         if cargo_type == cargo
-                            && (s.can_carry)((s.vehicle.engine)(handle(u)).0.as_ptr())
+                            && crate::engine_capabilities::openttd_rust_engine_can_carry(
+                                s.capabilities,
+                                (s.vehicle.engine)(handle(u)).0.as_ptr(),
+                            )
                         {
                             let subtype = usize::from((s.cargo_subtype)(u));
                             subtypes[subtype] = subtypes[subtype].wrapping_add(1);
@@ -1631,7 +1637,7 @@ crate::abi::layouts! {
     "OpenTTDVehicleOverride" ["vehicle_resolver"] => Override { group, cargo, count };
     "OpenTTDVehicleOverrides" ["vehicle_resolver"] => Overrides { engine, count };
     "OpenTTDVehicleResolverServices" ["vehicle_resolver"] => Services {
-        vehicle, shared, cache, first, move_vehicle => move, previous, can_carry,
+        vehicle, shared, cache, first, move_vehicle => move, previous, capabilities,
         cargo_classes, cargo_bitnum, cargo_translation, grf_version, current_company,
         valid_company, livery, company_info, first_engine, articulated, has_articulated,
         overrides, override_at, override_engine, cached_override, write_override, spritegroup, random_bits, waiting,

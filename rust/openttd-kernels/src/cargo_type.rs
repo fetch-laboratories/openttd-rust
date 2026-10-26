@@ -32,3 +32,6 @@ pub(crate) unsafe fn cargo_array_count(data: *const u32) -> u32 {
 /// Native cargo labels, in their four-character wire encoding.
 pub const CT_PASSENGERS: u32 = u32::from_be_bytes(*b"PASS");
 pub const CT_MAIL: u32 = u32::from_be_bytes(*b"MAIL");
+
+/// All cargo bits, including undefined cargo slots.
+pub const ALL_CARGOTYPES: u64 = u64::MAX;
