@@ -843,6 +843,9 @@ pub(super) unsafe fn partial_read_tests() {
         invalid_price: unused3,
     };
     let reads = ReaderServices {
+        has_data: unused2,
+        peek_dword: unused2,
+        read_bytes: unused3,
         read_byte: byte,
         read_word: word,
         read_dword: unused2,
