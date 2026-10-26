@@ -21,6 +21,7 @@ pub struct TtdpAirportType(pub u8);
 // ordinary-play native exception is reachable; native leaves are noexcept and
 // Rust panics abort. No ownership is transferred across this boundary.
 use crate::airport::{AT_INVALID, INVALID_AIRPORTTILE, NEW_AIRPORT_OFFSET, NEW_AIRPORTTILE_OFFSET};
+use crate::game_state::GameState;
 use crate::newgrf_spritegroup::{VSG_SCOPE_PARENT, VSG_SCOPE_SELF};
 use crate::tile_type::INVALID_TILE;
 use crate::{
@@ -114,20 +115,17 @@ pub struct Services {
     ) -> u16,
     unhandled: extern "C" fn(u8),
 }
-struct Registry(std::cell::UnsafeCell<*const Services>);
-// SAFETY: InitializeGame and every runtime query hold the game-state mutex.
-unsafe impl Sync for Registry {}
-static REGISTRY: Registry = Registry(std::cell::UnsafeCell::new(ptr::null()));
+static REGISTRY: GameState<*const Services> = GameState::new(ptr::null());
 /// Install the immutable process-lifetime services before game/runtime queries.
 /// SAFETY: Serialized initialization; tables outlive every synchronous call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_airport_exchange(
     services: *const Services,
 ) -> *const Services {
-    unsafe { ptr::replace(REGISTRY.0.get(), services) }
+    REGISTRY.exchange(services)
 }
 pub(crate) fn runtime() -> &'static Services {
-    unsafe { &**REGISTRY.0.get() }
+    unsafe { REGISTRY.table() }
 }
 impl Services {
     pub(crate) fn shared(&self) -> &crate::services::Services {
@@ -137,9 +135,7 @@ impl Services {
         unsafe { &*(self.shared().station_commands)() }
     }
     fn map(&self) -> crate::map_func::Map {
-        crate::map_func::Map {
-            log_x: (self.shared().map_log_x)() as u8,
-        }
+        self.shared().map()
     }
 }
 

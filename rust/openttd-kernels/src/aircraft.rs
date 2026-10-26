@@ -36,10 +36,19 @@ pub struct State {
 /// `AIR_SHADOW` from `aircraft.h`.
 pub(crate) const AIR_SHADOW: u8 = 4;
 
-use crate::airport::{AT_OILRIG, HANGAR};
+use crate::airport::{
+    AT_OILRIG, ENDLANDING, ENDTAKEOFF, FLYING, HANGAR, HELIENDLANDING, HELILANDING, HELITAKEOFF,
+    LANDING, STARTTAKEOFF, TAKEOFF,
+};
+use crate::company_type::OWNER_NONE;
 use crate::newgrf_sound::VSE_START;
-use crate::services::{Map, Services, chance16_i};
+use crate::order_type::{
+    OT_CONDITIONAL, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_LEAVESTATION, OT_LOADING, OT_NOTHING,
+};
+use crate::random_func::chance16_i;
+use crate::services::{Map, Services};
 use crate::station::Station;
+use crate::station_type::INVALID_STATION;
 use crate::tile_type::INVALID_TILE;
 use crate::vehicle::PROP_AIRCRAFT_SPEED;
 use crate::vehicle::maintenance;
@@ -47,6 +56,7 @@ use crate::vehicle::{
     AltitudeInputs, Coordinates, DayCost, DirectionProgress, MovementObservations, OpenTTDVehicle,
     PositionObservations, SpeedInputs, TickStatus, VehicleRef, VehicleServices, XY, YEAR_TICKS,
 };
+use crate::vehicle_base::{VS_AIRCRAFT_BROKEN, VS_CRASHED, VS_HIDDEN, VS_STOPPED};
 use std::cell::Cell;
 use std::ffi::c_void;
 use std::ptr::NonNull;
@@ -243,7 +253,6 @@ pub struct Leaves {
     pub range_default: unsafe extern "C" fn(Vehicle) -> u16,
     pub rotor_image_if_changed: unsafe extern "C" fn(Vehicle) -> bool,
     pub update_rotor_image: unsafe extern "C" fn(Vehicle),
-    pub process_orders: unsafe extern "C" fn(Vehicle),
     pub vehicle_crash: unsafe extern "C" fn(Vehicle, bool) -> u32,
     pub send_to_depot: unsafe extern "C" fn(Vehicle, bool) -> bool,
     pub fta_next_position: unsafe extern "C" fn(*const c_void) -> u8,
@@ -262,26 +271,26 @@ impl AirportAccess {
             blocks: Cell::new(None),
         }
     }
-    fn pointer(&self, world: &World<'_>) -> *mut u64 {
+    fn pointer<const COUNTED: bool>(&self, world: &World<'_, COUNTED>) -> *mut u64 {
         self.blocks.get().unwrap_or_else(|| {
             let pointer = world.airport_blocks(self.station);
             self.blocks.set(Some(pointer));
             pointer
         })
     }
-    fn read(&self, world: &World<'_>) -> u64 {
+    fn read<const COUNTED: bool>(&self, world: &World<'_, COUNTED>) -> u64 {
         // SAFETY: One field-sized access to the live canonical mask, ending
         // before any native callback. Reentry observes/mutates the same scalar.
         unsafe { self.pointer(world).read() }
     }
-    fn reserve(&self, world: &World<'_>, bits: u64) {
+    fn reserve<const COUNTED: bool>(&self, world: &World<'_, COUNTED>, bits: u64) {
         let pointer = self.pointer(world);
         // SAFETY: Serial game-state interval; no Rust world reference is formed.
         unsafe {
             pointer.write(pointer.read() | bits);
         }
     }
-    fn release(&self, world: &World<'_>, bits: u64) {
+    fn release<const COUNTED: bool>(&self, world: &World<'_, COUNTED>, bits: u64) {
         let pointer = self.pointer(world);
         // SAFETY: Same short canonical scalar access as reserve.
         unsafe {
@@ -289,39 +298,22 @@ impl AirportAccess {
         }
     }
 }
-struct World<'a> {
+struct World<'a, const COUNTED: bool> {
     leaves: &'a Leaves,
     vs: &'a VehicleServices,
     ss: &'a Services,
     movement: crate::movement::CachedTable<'a>,
     map: Cell<Option<Map>>,
     map_bounds: Cell<Option<(u32, u32)>>,
-    counted: bool,
 }
 const SAMPLE_COUNT: i64 = 73;
 const HELICOPTER_SOUND: i64 = 22;
 const EXPLOSION_SOUND: i64 = 16;
 const SKID_SOUND: i64 = 21;
-const TICKS_PER_YEAR: i64 = YEAR_TICKS;
-const INVALID_STATION: u32 = 65535;
-const OWNER_NONE: i64 = 16;
-const HIDDEN: i64 = 1;
-const STOPPED: i64 = 2;
-const BROKEN: i64 = 64;
-const CRASHED: i64 = 128;
 /// `AircraftSubType::AIR_HELICOPTER` from `aircraft.h`.
 pub const AIR_HELICOPTER: u8 = 0;
 /// `AircraftSubType::AIR_AIRCRAFT` from `aircraft.h`.
 pub const AIR_AIRCRAFT: u8 = 2;
-const TAKEOFF: u8 = 10;
-const STARTTAKEOFF: u8 = 11;
-const ENDTAKEOFF: u8 = 12;
-const HELITAKEOFF: u8 = 13;
-const FLYING: u8 = 14;
-const LANDING: u8 = 15;
-const ENDLANDING: u8 = 16;
-const HELILANDING: u8 = 17;
-const HELIENDLANDING: u8 = 18;
 const NOTHING: u64 = 1 << 30;
 const ZEPPELIN: u64 = 1 << 62;
 const CLOSED: u64 = 1 << 63;
@@ -337,14 +329,10 @@ const HOLD: i64 = 256;
 macro_rules! private_fields {
     ($(($get:ident,$set:ident,$field:ident,$type:ty)),* $(,)?)=>{$(
         fn $get(&self,id:Vehicle)->$type {
-            let ptr=id.state;
-            // SAFETY: Live shell owns a fixed allocation; only this scalar is read.
-            unsafe { (&raw const (*ptr).$field).read() }
+            crate::raw_field::read_field!(id.state, $field)
         }
         fn $set(&self,id:Vehicle,value:$type) {
-            let ptr=id.state;
-            // SAFETY: Serial game-thread scalar access; no reference spans callbacks.
-            unsafe { (&raw mut (*ptr).$field).write(value); }
+            crate::raw_field::write_field!(id.state, $field, value);
         }
     )*};
 }
@@ -356,7 +344,7 @@ macro_rules! scalar_services {
         fn $name(&$receiver, $($arg:$ty),*) -> i64 {
             // SAFETY: No canonical owner borrow survives this noexcept callback.
             let result = $call;
-            $receiver.service_witness(stringify!($name), std::mem::size_of_val(&result));
+            Self::service_witness(stringify!($name), std::mem::size_of_val(&result));
             i64::from(result)
         }
     )*};
@@ -366,19 +354,28 @@ macro_rules! direct_services {
         fn $name(&$receiver, $($arg:$ty),*) -> $ret {
             // SAFETY: No canonical owner borrow survives this noexcept callback.
             let result = $call;
-            $receiver.service_witness(stringify!($name), std::mem::size_of_val(&result));
+            Self::service_witness(stringify!($name), std::mem::size_of_val(&result));
             result
         }
     )*};
 }
-impl World<'_> {
+fn can_use_station(v: Vehicle, st: *const Station) -> i64 {
+    i64::from(unsafe {
+        crate::vehicle_func::can_vehicle_use_station(
+            v.handle,
+            st.cast(),
+            crate::newgrf_airport::runtime(),
+        )
+    })
+}
+impl<const COUNTED: bool> World<'_, COUNTED> {
     /// Count the actual boundary return type before integer promotion. The only
     /// production enable call is `WitnessWriter`'s process-start constructor;
     /// callbacks cannot change it during this synchronous World invocation.
     #[inline]
-    fn service_witness(&self, name: &str, bytes: usize) {
+    fn service_witness(name: &str, bytes: usize) {
         use crate::witness;
-        if !self.counted {
+        if !COUNTED {
             return;
         }
         witness::hit(witness::AIRCRAFT_SERVICES);
@@ -401,7 +398,6 @@ impl World<'_> {
             movement: crate::movement::CachedTable::new(unsafe { &*leaves.shared }),
             map: Cell::new(None),
             map_bounds: Cell::new(None),
-            counted: crate::witness::enabled(),
         }
     }
     // Dimensions are runtime observations captured once when this entry first
@@ -410,8 +406,8 @@ impl World<'_> {
     fn map(&self) -> Map {
         self.map.get().unwrap_or_else(|| {
             let log_x = (self.ss.map_log_x)();
-            self.service_witness("map_log_x", std::mem::size_of_val(&log_x));
-            let map = Map { log_x: log_x as u8 };
+            Self::service_witness("map_log_x", std::mem::size_of_val(&log_x));
+            let map = Map::from_log_x(log_x);
             self.map.set(Some(map));
             map
         })
@@ -419,9 +415,9 @@ impl World<'_> {
     fn map_bounds(&self) -> (u32, u32) {
         self.map_bounds.get().unwrap_or_else(|| {
             let bounds = (self.ss.map_max_x)();
-            self.service_witness("map_max_x", 4);
+            Self::service_witness("map_max_x", 4);
             let y = (self.ss.map_max_y)();
-            self.service_witness("map_max_y", 4);
+            Self::service_witness("map_max_y", 4);
             self.map_bounds.set(Some((bounds, y)));
             (bounds, y)
         })
@@ -455,9 +451,18 @@ impl World<'_> {
     fn check_breakdown(&self, v: Vehicle) {
         unsafe { maintenance::check_vehicle_breakdown(v.base(), self.vs) };
     }
+    fn process_orders(&self, v: Vehicle) {
+        let orders = self.vs.orders();
+        Self::service_witness(
+            "orders",
+            std::mem::size_of::<*const crate::orders::Leaves>(),
+        );
+        // SAFETY: The original live shell survives orders; no state borrow spans reentry.
+        unsafe { crate::orders::openttd_rust_process_orders(v.handle.cast(), orders) };
+    }
     fn random(&self) -> u32 {
         let word = self.ss.random();
-        self.service_witness("random", 4);
+        Self::service_witness("random", 4);
         word
     }
 
@@ -606,7 +611,6 @@ impl World<'_> {
         invalid_scheme(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.invalid_scheme)(vehicle) };
         unreachable(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.unreachable)(vehicle) };
         update_rotor_image(self; v: Vehicle) -> () => unsafe { (self.leaves.update_rotor_image)(v) };
-        process_orders(self; v: Vehicle) -> () => unsafe { (self.leaves.process_orders)(v) };
         enter_depot(self; v: Vehicle) -> () => self.vs.enter_depot(v.base());
         delete_aircraft(self; v: Vehicle) -> () => (self.vs.destroy)(v.base());
     }
@@ -614,14 +618,14 @@ impl World<'_> {
     fn next(&self, v: Vehicle) -> Vehicle {
         {
             let result = unsafe { (self.leaves.next)(v) };
-            self.service_witness("next", std::mem::size_of_val(&result));
+            Self::service_witness("next", std::mem::size_of_val(&result));
             result
         }
     }
     fn station(&self, id: u32) -> *const Station {
         {
             let result = unsafe { (self.leaves.station)(id as u16) };
-            self.service_witness("station", std::mem::size_of_val(&result));
+            Self::service_witness("station", std::mem::size_of_val(&result));
             result
         }
     }
@@ -629,7 +633,7 @@ impl World<'_> {
         // SAFETY: Synchronous noexcept service; no owner borrow spans this call.
         {
             let m = unsafe { (self.leaves.moving)(airport, pos as u8) };
-            self.service_witness("moving", std::mem::size_of_val(&m));
+            Self::service_witness("moving", std::mem::size_of_val(&m));
             Movement {
                 x: i64::from(m.x),
                 y: i64::from(m.y),
@@ -642,7 +646,7 @@ impl World<'_> {
         // SAFETY: Synchronous noexcept service; no owner borrow spans this call.
         {
             let p = (self.vs.new_position)(v.base());
-            self.service_witness("new_position", std::mem::size_of_val(&p));
+            Self::service_witness("new_position", std::mem::size_of_val(&p));
             NewPosition {
                 x: i64::from(p.x),
                 y: i64::from(p.y),
@@ -653,12 +657,12 @@ impl World<'_> {
     fn next_aircraft(&self, last: u32) -> Vehicle {
         {
             let result = unsafe { (self.leaves.next_aircraft)(last) };
-            self.service_witness("next_aircraft", std::mem::size_of_val(&result));
+            Self::service_witness("next_aircraft", std::mem::size_of_val(&result));
             result
         }
     }
     fn station_rating(&self, tile: i64, owner: i64, amount: i64, radius: i64) {
-        self.service_witness("station_rating", 0);
+        Self::service_witness("station_rating", 0);
         // SAFETY: Synchronous noexcept service; no owner borrow spans this call.
         unsafe {
             (self.leaves.station_rating)(tile as u32, owner as u8, amount as i32, radius as u32);
@@ -713,15 +717,6 @@ impl World<'_> {
             self.airport_spec(st),
         ))
     }
-    fn can_use_station(v: Vehicle, st: *const Station) -> i64 {
-        i64::from(unsafe {
-            crate::vehicle_func::can_vehicle_use_station(
-                v.handle,
-                st.cast(),
-                crate::newgrf_airport::runtime(),
-            )
-        })
-    }
     fn hangar_candidate(&self, st: *const Station, vehicle_owner: u8) -> HangarCandidate {
         let owner = self.station_owner(st) as u8;
         let runtime = crate::newgrf_airport::runtime();
@@ -740,14 +735,14 @@ impl World<'_> {
             crate::newgrf_airport::station_by_id(station as u16, crate::newgrf_airport::runtime())
                 .cast();
         let result = unsafe { (self.leaves.hangar_height)(st, self.airport_spec(st)) };
-        self.service_witness("hangar_height", std::mem::size_of_val(&result));
+        Self::service_witness("hangar_height", std::mem::size_of_val(&result));
         i64::from(result)
     }
     fn hangar_exit(&self, v: Vehicle) -> i64 {
         let tile = (self.vs.tile)(v.base());
         let st = self.station(u32::from((self.ss.station_index)(tile)));
         let result = unsafe { (self.leaves.hangar_exit)(st, tile, self.airport_spec(st)) };
-        self.service_witness("hangar_exit", std::mem::size_of_val(&result));
+        Self::service_witness("hangar_exit", std::mem::size_of_val(&result));
         i64::from(result)
     }
     fn valid_airport(&self, id: Vehicle) -> bool {
@@ -757,7 +752,7 @@ impl World<'_> {
     fn airport(&self, id: Vehicle) -> *const c_void {
         let s = self.target_station(id);
         if s.is_null() {
-            World::dummy_airport()
+            Self::dummy_airport()
         } else {
             self.airport_fta(s)
         }
@@ -898,10 +893,10 @@ impl World<'_> {
         self.set_subspeed(id, 0);
         self.set_progress(id, 0);
         let shadow = self.next(id);
-        self.status(shadow, HIDDEN, true);
+        self.status(shadow, i64::from(VS_HIDDEN), true);
         let rotor = self.next(shadow);
         if !rotor.handle.is_null() {
-            self.status(rotor, HIDDEN, true);
+            self.status(rotor, i64::from(VS_HIDDEN), true);
             self.set_current_speed(rotor, 0);
         }
         self.position_current(id, None);
@@ -930,11 +925,13 @@ impl World<'_> {
     }
     fn helicopter_tick(&self, id: Vehicle) {
         let rotor = self.next(self.next(id));
-        if self.vehicle_status(rotor) & HIDDEN != 0 {
+        if self.vehicle_status(rotor) & i64::from(VS_HIDDEN) != 0 {
             return;
         }
         let mut speed = self.current_speed(rotor);
-        if self.order_type(id) == 3 || self.vehicle_status(id) & STOPPED != 0 {
+        if self.order_type(id) == i64::from(OT_LOADING)
+            || self.vehicle_status(id) & i64::from(VS_STOPPED) != 0
+        {
             if speed != 0 {
                 speed = i64::from((speed as u16).wrapping_add(1));
                 self.set_current_speed(rotor, speed);
@@ -976,7 +973,7 @@ impl World<'_> {
         let mut spd = u32::from(input.acceleration).wrapping_mul(77);
         let factor = self.plane_speed() as u32;
         limit = limit.wrapping_mul(factor);
-        if i64::from(input.status) & BROKEN != 0 {
+        if i64::from(input.status) & i64::from(VS_AIRCRAFT_BROKEN) != 0 {
             if 320 < limit {
                 hard = false;
             }
@@ -1038,7 +1035,8 @@ impl World<'_> {
         self.airport_entry(ap, i64::from(rotated)) as u8
     }
     fn next_airport(&self, id: Vehicle) {
-        if matches!(self.order_type(id), 1 | 2) {
+        if matches!(self.order_type(id), kind if kind == i64::from(OT_GOTO_STATION) || kind == i64::from(OT_GOTO_DEPOT))
+        {
             self.set_target(id, self.order_destination(id) as u16);
         }
         let s = self.target_station(id);
@@ -1058,7 +1056,7 @@ impl World<'_> {
         let ap = if valid {
             self.airport_fta(s)
         } else {
-            World::dummy_airport()
+            Self::dummy_airport()
         };
         let rotation = if valid { self.rotation(s) } else { 0 };
         let pos = self.entry_point(id, ap, rotation, tile);
@@ -1066,14 +1064,10 @@ impl World<'_> {
         self.set_previous(id, pos);
     }
     fn controller(&self, id: Vehicle) -> bool {
-        // Acquired after event's orders/loading, never in deleting crashed_tick.
-        // Geometry/layout/map, speed writes/dirtying, direction/new-position,
-        // cache/NewGRF property, sound, position/viewport/rotor and MaybeCrash
-        // callbacks preserve this shell and chain. They may reenter or allocate
-        // other vehicles; pool growth does not move existing shells. MaybeCrash
-        // marks a crash, but destruction occurs on a later crashed_tick only.
-        // This descriptor ends before airport_next's state-handler/depot work;
-        // no load/reset, replacement command or deleting callback is reachable.
+        // Acquired after the event's orders and loading, never in the deleting crashed_tick.
+        // The movement callbacks keep this shell and chain (pool growth does not move shells;
+        // MaybeCrash destroys only on a later crashed_tick). The descriptor ends before
+        // airport_next's state-handler and depot work; callbacks cannot load, reset or yield.
         let observed = self.movement_observations(id);
         let s = self.target_station(id);
         let valid = !s.is_null();
@@ -1091,7 +1085,7 @@ impl World<'_> {
             has_airport = geometry.airport;
         }
         let ap = if tile == INVALID_TILE {
-            World::dummy_airport()
+            Self::dummy_airport()
         } else {
             self.airport_fta(s)
         };
@@ -1243,7 +1237,7 @@ impl World<'_> {
         }
         if flags & BRAKE != 0 && observed.speed() > 50 * self.plane_speed() {
             self.maybe_crash(id);
-            if self.vehicle_status(id) & CRASHED != 0 {
+            if self.vehicle_status(id) & i64::from(VS_CRASHED) != 0 {
                 return false;
             }
         }
@@ -1445,11 +1439,11 @@ impl World<'_> {
         true
     }
     fn smoke(&self, id: Vehicle, mode: bool, status: i64) {
-        if status & BROKEN == 0 {
+        if status & i64::from(VS_AIRCRAFT_BROKEN) == 0 {
             return;
         }
         if self.current_speed(id) < 10 {
-            self.status(id, BROKEN, false);
+            self.status(id, i64::from(VS_AIRCRAFT_BROKEN), false);
             self.set_breakdown_counter(id, 0);
             return;
         }
@@ -1480,7 +1474,7 @@ impl World<'_> {
         let station = if self.valid_airport(id) {
             u32::from(self.target(id))
         } else {
-            INVALID_STATION
+            u32::from(INVALID_STATION)
         };
         self.crash_news(id, i64::from(station), i64::from(victims));
         let tile = self.tile_virt(
@@ -1520,7 +1514,7 @@ impl World<'_> {
             if self.send_to_depot(id, 1) != 0 {
                 self.crash_airplane(id);
             }
-        } else if self.order_type(id) != 2 {
+        } else if self.order_type(id) != i64::from(OT_GOTO_DEPOT) {
             self.free_order(id);
         }
     }
@@ -1529,12 +1523,12 @@ impl World<'_> {
         self.set_subspeed(id, 0);
         self.set_progress(id, 0);
         self.set_direction(id, direction);
-        self.status(id, HIDDEN, false);
+        self.status(id, i64::from(VS_HIDDEN), false);
         let shadow = self.next(id);
-        self.status(shadow, HIDDEN, false);
+        self.status(shadow, i64::from(VS_HIDDEN), false);
         let rotor = self.next(shadow);
         if !rotor.handle.is_null() {
-            self.status(rotor, HIDDEN, false);
+            self.status(rotor, i64::from(VS_HIDDEN), false);
             self.set_current_speed(rotor, 80);
         }
         self.service_in_depot(id);
@@ -1543,7 +1537,7 @@ impl World<'_> {
         self.dirty_depot(id);
     }
     fn terminal(&self, id: Vehicle) {
-        if self.order_type(id) == 2 {
+        if self.order_type(id) == i64::from(OT_GOTO_DEPOT) {
             return;
         }
         let station = u32::from(self.target(id));
@@ -1673,17 +1667,20 @@ impl World<'_> {
                     self.set_state(id, self.layout_heading(ap, self.pos(id)));
                     return;
                 }
-                if self.order_type(id) == 2 && self.vehicle_status(id) & STOPPED != 0 {
+                if self.order_type(id) == i64::from(OT_GOTO_DEPOT)
+                    && self.vehicle_status(id) & i64::from(VS_STOPPED) != 0
+                {
                     self.free_order(id);
                     return;
                 }
                 if self.waiting_unbunching(id) != 0 {
                     return;
                 }
-                if !matches!(self.order_type(id), 1 | 2) {
+                if !matches!(self.order_type(id), kind if kind == i64::from(OT_GOTO_STATION) || kind == i64::from(OT_GOTO_DEPOT))
+                {
                     return;
                 }
-                if self.order_type(id) == 2
+                if self.order_type(id) == i64::from(OT_GOTO_DEPOT)
                     && self.order_destination(id) == i64::from(self.target(id))
                 {
                     self.enter_depot(id);
@@ -1730,16 +1727,18 @@ impl World<'_> {
                     }
                     return;
                 }
-                if self.order_type(id) == 0 {
+                if self.order_type(id) == i64::from(OT_NOTHING) {
                     return;
                 }
                 if self.has_block(id, self.node(ap, self.pos(id)), ap, airport) {
                     return;
                 }
                 let hangar = match self.order_type(id) {
-                    1 => false,
-                    2 => self.order_destination(id) == i64::from(self.target(id)),
-                    7 => return,
+                    kind if kind == i64::from(OT_GOTO_STATION) => false,
+                    kind if kind == i64::from(OT_GOTO_DEPOT) => {
+                        self.order_destination(id) == i64::from(self.target(id))
+                    }
+                    kind if kind == i64::from(OT_CONDITIONAL) => return,
                     _ => {
                         self.free_order(id);
                         true
@@ -1781,8 +1780,8 @@ impl World<'_> {
             }
             FLYING => {
                 let s = airport.station;
-                if World::can_use_station(id, s) != 0
-                    && (self.station_owner(s) == OWNER_NONE
+                if can_use_station(id, s) != 0
+                    && (self.station_owner(s) == i64::from(OWNER_NONE)
                         || self.station_owner(s) == self.owner(id))
                     && airport.read(self) & CLOSED == 0
                 {
@@ -1842,7 +1841,9 @@ impl World<'_> {
                 if self.has_block(id, self.node(ap, self.pos(id)), ap, airport) {
                     return;
                 }
-                if self.order_type(id) == 1 && self.find_terminal(id, ap, airport) {
+                if self.order_type(id) == i64::from(OT_GOTO_STATION)
+                    && self.find_terminal(id, ap, airport)
+                {
                     return;
                 }
                 self.set_state(id, HANGAR);
@@ -1851,7 +1852,9 @@ impl World<'_> {
                 if self.has_block(id, self.node(ap, self.pos(id)), ap, airport) {
                     return;
                 }
-                if self.order_type(id) == 1 && self.find_helipad(id, ap, airport) {
+                if self.order_type(id) == i64::from(OT_GOTO_STATION)
+                    && self.find_helipad(id, ap, airport)
+                {
                     return;
                 }
                 self.set_state(
@@ -1917,7 +1920,7 @@ impl World<'_> {
         }
         let station = self.target_station(id);
         let ap = if station.is_null() {
-            World::dummy_airport()
+            Self::dummy_airport()
         } else {
             self.airport_fta(station)
         };
@@ -1952,10 +1955,10 @@ impl World<'_> {
     }
     fn event(&self, id: Vehicle, pass: u32) -> bool {
         let status = self.vehicle_status(id);
-        if status & CRASHED != 0 {
+        if status & i64::from(VS_CRASHED) != 0 {
             return self.crashed_tick(id);
         }
-        if status & STOPPED != 0 {
+        if status & i64::from(VS_STOPPED) != 0 {
             return true;
         }
         let status = self.handle_breakdown(id);
@@ -1963,14 +1966,16 @@ impl World<'_> {
         self.process_orders(id);
         self.handle_loading(id, i64::from(pass));
         let order_type = self.order_type(id);
-        if matches!(order_type, 3 | 4) {
+        if order_type == i64::from(OT_LOADING) || order_type == i64::from(OT_LEAVESTATION) {
             return true;
         }
         if (ENDTAKEOFF..=HELIENDLANDING).contains(&self.state(id)) {
             self.too_far(id, false);
         } else if self.range_sqr(id) != 0 {
             let current = self.target_station(id);
-            let next = if matches!(order_type, 1 | 2) {
+            let next = if order_type == i64::from(OT_GOTO_STATION)
+                || order_type == i64::from(OT_GOTO_DEPOT)
+            {
                 self.station(self.order_destination(id) as u32)
             } else {
                 std::ptr::null()
@@ -2002,7 +2007,7 @@ impl World<'_> {
         crate::witness::hit(crate::witness::AIRCRAFT_TICKS);
         let gate = self.tick_status(id);
         self.set_tick_counter(id, i64::from(gate.tick.wrapping_add(1)));
-        if i64::from(gate.status) & STOPPED == 0 {
+        if i64::from(gate.status) & i64::from(VS_STOPPED) == 0 {
             self.set_running_ticks(
                 id,
                 i64::from((self.running_ticks(id) as u8).wrapping_add(1)),
@@ -2027,15 +2032,16 @@ impl World<'_> {
             self.service_in_depot(id);
             return;
         }
-        if !matches!(self.order_type(id), 1 | 2) {
+        if !matches!(self.order_type(id), kind if kind == i64::from(OT_GOTO_STATION) || kind == i64::from(OT_GOTO_DEPOT))
+        {
             return;
         }
         let station = self.order_destination(id) as u32;
         let st = self.station(station);
-        if self.has_hangar(st) != 0 && World::can_use_station(id, st) != 0 {
+        if self.has_hangar(st) != 0 && can_use_station(id, st) != 0 {
             self.service_order(id, i64::from(station));
             self.dirty_start_stop(id);
-        } else if self.order_type(id) == 2 {
+        } else if self.order_type(id) == i64::from(OT_GOTO_DEPOT) {
             self.dummy_order(id);
             self.dirty_start_stop(id);
         }
@@ -2050,7 +2056,7 @@ impl World<'_> {
         }
         unsafe { maintenance::economy_age_vehicle(id.base(), self.vs) };
         let day = (self.vs.day)(id.base());
-        self.service_witness("day", 1);
+        Self::service_witness("day", 1);
         let day = day.wrapping_add(1);
         self.set_day_counter(id, i64::from(day));
         if day & 7 == 0 {
@@ -2065,7 +2071,7 @@ impl World<'_> {
         let cost = self.running_cost(id);
         let inputs = self.day_cost(id);
         let ticks = i64::from(inputs.running);
-        let divisor = TICKS_PER_YEAR;
+        let divisor = YEAR_TICKS;
         // Money's saturating multiplication is provided by the shared Money service.
         let cost = cost.saturating_mul(ticks) / divisor;
         self.set_profit(id, inputs.profit.saturating_sub(cost));
@@ -2079,13 +2085,14 @@ impl World<'_> {
             self.y(id).clamp(0, self.map_max_y() * 16),
         );
         let mut best = 0;
-        let mut result = INVALID_STATION;
+        let mut result = u32::from(INVALID_STATION);
         let range = self.range_sqr(id);
-        let mut last = INVALID_STATION;
-        let mut next = INVALID_STATION;
+        let mut last = u32::from(INVALID_STATION);
+        let mut next = u32::from(INVALID_STATION);
         if range != 0 {
-            if self.order_type(id) == 1
-                || (self.order_type(id) == 2 && self.nearest_depot_order(id) == 0)
+            if self.order_type(id) == i64::from(OT_GOTO_STATION)
+                || (self.order_type(id) == i64::from(OT_GOTO_DEPOT)
+                    && self.nearest_depot_order(id) == 0)
             {
                 last = self.last_station(id) as u32;
                 next = self.order_destination(id) as u32;
@@ -2100,7 +2107,7 @@ impl World<'_> {
         let next = self.station(next);
         let engine_subtype = self.engine_subtype(id);
         let owner = self.owner(id) as u8;
-        self.service_witness("for_each_station", 0);
+        Self::service_witness("for_each_station", 0);
         self.ss.for_each_station(|st, _, cursor| {
             let cursor = u32::from(cursor);
             let candidate = self.hangar_candidate(st, owner);
@@ -2131,7 +2138,7 @@ impl World<'_> {
                 }
             }
             let distance = self.distance(vtile, self.airport_tile(st) as u32);
-            if distance < best || result == INVALID_STATION {
+            if distance < best || result == u32::from(INVALID_STATION) {
                 best = distance;
                 result = cursor;
             }
@@ -2156,10 +2163,10 @@ impl World<'_> {
                 continue;
             }
             self.assert_flying(cursor);
-            if self.order_type(cursor) == 2
+            if self.order_type(cursor) == i64::from(OT_GOTO_DEPOT)
                 && self.part_of_orders(cursor) == 0
                 && self.order_destination(cursor) == i64::from(station)
-                && (self.has_hangar(st) == 0 || World::can_use_station(cursor, st) == 0)
+                && (self.has_hangar(st) == 0 || can_use_station(cursor, st) == 0)
             {
                 self.dummy_order(cursor);
                 self.dirty_start_stop(cursor);
@@ -2220,6 +2227,21 @@ pub unsafe extern "C" fn openttd_rust_airport_blocks_destroy(blocks: *mut u64) {
         drop(Box::from_raw(blocks));
     }
 }
+// Witness enablement is fixed by the process-start writer. Select once per
+// synchronous entry; both variants use the same World and service bodies.
+macro_rules! with_world {
+    ($leaves:expr, |$world:ident| $body:block) => {{
+        if crate::witness::enabled() {
+            // SAFETY: The entry supplies live immutable tables for this call.
+            let $world = unsafe { World::<true>::new($leaves) };
+            $body
+        } else {
+            // SAFETY: Same tables and lifetime as the counted specialization.
+            let $world = unsafe { World::<false>::new($leaves) };
+            $body
+        }
+    }};
+}
 /// Run the original controller synchronously over live handles.
 /// # Safety
 /// Handles/state and immutable services satisfy the source lifetime preconditions.
@@ -2227,8 +2249,7 @@ pub unsafe extern "C" fn openttd_rust_airport_blocks_destroy(blocks: *mut u64) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_aircraft_tick(leaves: *const Leaves, id: Vehicle) -> bool {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.tick(id)
+    with_world!(leaves, |w| { w.tick(id) })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2237,8 +2258,9 @@ pub unsafe extern "C" fn openttd_rust_aircraft_tick(leaves: *const Leaves, id: V
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_aircraft_calendar_day(leaves: *const Leaves, id: Vehicle) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.day(id, true);
+    with_world!(leaves, |w| {
+        w.day(id, true);
+    });
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2247,8 +2269,9 @@ pub unsafe extern "C" fn openttd_rust_aircraft_calendar_day(leaves: *const Leave
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_aircraft_economy_day(leaves: *const Leaves, id: Vehicle) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.day(id, false);
+    with_world!(leaves, |w| {
+        w.day(id, false);
+    });
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2263,8 +2286,9 @@ pub unsafe extern "C" fn openttd_rust_aircraft_position(
     z: i32,
 ) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.position(id, i64::from(x), i64::from(y), i64::from(z));
+    with_world!(leaves, |w| {
+        w.position(id, i64::from(x), i64::from(y), i64::from(z));
+    });
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2272,8 +2296,9 @@ pub unsafe extern "C" fn openttd_rust_aircraft_position(
 /// Raw scalar accesses end before noexcept callbacks; no borrow survives reentry.
 pub(crate) unsafe fn enter_hangar(leaves: &Leaves, id: Vehicle) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.enter_hangar(id);
+    with_world!(leaves, |w| {
+        w.enter_hangar(id);
+    });
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2287,8 +2312,9 @@ pub unsafe extern "C" fn openttd_rust_aircraft_cache(
 ) {
     crate::witness::hit(crate::witness::AIRCRAFT_CACHE_ENTRIES);
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.cache(id, range);
+    with_world!(leaves, |w| {
+        w.cache(id, range);
+    });
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2305,20 +2331,21 @@ pub unsafe extern "C" fn openttd_rust_aircraft_flight_bounds(
         crate::witness::hit(crate::witness::AIRCRAFT_DISASTER_ENTRIES);
     }
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    {
-        let (lo, hi) = w.bounds(id, None);
-        if !min.is_null() {
-            unsafe {
-                min.write(lo as i32);
+    with_world!(leaves, |w| {
+        {
+            let (lo, hi) = w.bounds(id, None);
+            if !min.is_null() {
+                unsafe {
+                    min.write(lo as i32);
+                }
+            }
+            if !max.is_null() {
+                unsafe {
+                    max.write(hi as i32);
+                }
             }
         }
-        if !max.is_null() {
-            unsafe {
-                max.write(hi as i32);
-            }
-        }
-    }
+    });
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2335,8 +2362,9 @@ pub unsafe extern "C" fn openttd_rust_aircraft_flight_level(
         crate::witness::hit(crate::witness::AIRCRAFT_DISASTER_ENTRIES);
     }
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.flight_flags(id, flags, takeoff, None) as i32
+    with_world!(leaves, |w| {
+        w.flight_flags(id, flags, takeoff, None) as i32
+    })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2345,8 +2373,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_flight_level(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_aircraft_height(leaves: *const Leaves, id: Vehicle) -> i32 {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.height(id, None) as i32
+    with_world!(leaves, |w| { w.height(id, None) as i32 })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2361,8 +2388,9 @@ pub unsafe extern "C" fn openttd_rust_aircraft_hold_altitude(
         crate::witness::hit(crate::witness::AIRCRAFT_DISASTER_ENTRIES);
     }
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    (w.height(id, None) + if w.subtype(id) == 0 { 184 } else { 150 }) as i32
+    with_world!(leaves, |w| {
+        (w.height(id, None) + if w.subtype(id) == 0 { 184 } else { 150 }) as i32
+    })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2371,8 +2399,9 @@ pub unsafe extern "C" fn openttd_rust_aircraft_hold_altitude(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_aircraft_missing_orders(leaves: *const Leaves, id: Vehicle) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.missing_orders(id);
+    with_world!(leaves, |w| {
+        w.missing_orders(id);
+    });
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2385,8 +2414,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_crash(
     flooded: bool,
 ) -> u32 {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.crash(id, flooded)
+    with_world!(leaves, |w| { w.crash(id, flooded) })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2395,8 +2423,9 @@ pub unsafe extern "C" fn openttd_rust_aircraft_crash(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_aircraft_next_airport(leaves: *const Leaves, id: Vehicle) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.next_airport(id);
+    with_world!(leaves, |w| {
+        w.next_airport(id);
+    });
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2409,8 +2438,9 @@ pub unsafe extern "C" fn openttd_rust_aircraft_leave_hangar(
     direction: u8,
 ) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.leave_hangar(id, i64::from(direction));
+    with_world!(leaves, |w| {
+        w.leave_hangar(id, i64::from(direction));
+    });
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2419,10 +2449,11 @@ pub unsafe extern "C" fn openttd_rust_aircraft_leave_hangar(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_aircraft_order_location(leaves: *const Leaves, id: Vehicle) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    if w.state(id) == FLYING {
-        w.next_airport(id);
-    }
+    with_world!(leaves, |w| {
+        if w.state(id) == FLYING {
+            w.next_airport(id);
+        }
+    });
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2431,8 +2462,9 @@ pub unsafe extern "C" fn openttd_rust_aircraft_order_location(leaves: *const Lea
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_aircraft_replacement(leaves: *const Leaves, station: u16) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.replacement(u32::from(station));
+    with_world!(leaves, |w| {
+        w.replacement(u32::from(station));
+    });
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2444,19 +2476,20 @@ pub unsafe extern "C" fn openttd_rust_aircraft_closest_depot(
     id: Vehicle,
 ) -> u16 {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    {
-        let st = w.target_station(id);
-        if !st.is_null()
-            && w.airport_tile(st) as u32 != INVALID_TILE
-            && World::can_use_station(id, st) != 0
-            && w.has_hangar(st) != 0
+    with_world!(leaves, |w| {
         {
-            w.target(id)
-        } else {
-            w.nearest_hangar(id) as u16
+            let st = w.target_station(id);
+            if !st.is_null()
+                && w.airport_tile(st) as u32 != INVALID_TILE
+                && can_use_station(id, st) != 0
+                && w.has_hangar(st) != 0
+            {
+                w.target(id)
+            } else {
+                w.nearest_hangar(id) as u16
+            }
         }
-    }
+    })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2469,8 +2502,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_event(
     pass: bool,
 ) -> bool {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.event(id, u32::from(pass))
+    with_world!(leaves, |w| { w.event(id, u32::from(pass)) })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2479,13 +2511,14 @@ pub unsafe extern "C" fn openttd_rust_aircraft_event(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_aircraft_release_blocks(leaves: *const Leaves, id: Vehicle) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    let station = w.target_station(id);
-    if !station.is_null() && w.airport_tile(station) as u32 != INVALID_TILE {
-        let ap = w.airport_fta(station);
-        let bits = w.layout_blocks(ap, w.previous(id)) | w.layout_blocks(ap, w.pos(id));
-        AirportAccess::new(station).release(&w, bits);
-    }
+    with_world!(leaves, |w| {
+        let station = w.target_station(id);
+        if !station.is_null() && w.airport_tile(station) as u32 != INVALID_TILE {
+            let ap = w.airport_fta(station);
+            let bits = w.layout_blocks(ap, w.previous(id)) | w.layout_blocks(ap, w.pos(id));
+            AirportAccess::new(station).release(&w, bits);
+        }
+    });
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2497,19 +2530,20 @@ pub unsafe extern "C" fn openttd_rust_aircraft_invalidate_target(
     station: u16,
 ) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    {
-        let mut cursor = Vehicle::invalid();
-        loop {
-            cursor = w.next_aircraft(cursor.id);
-            if cursor.handle.is_null() {
-                break;
-            }
-            if w.subtype(cursor) <= 2 && w.target(cursor) == station {
-                w.set_target(cursor, 65535);
+    with_world!(leaves, |w| {
+        {
+            let mut cursor = Vehicle::invalid();
+            loop {
+                cursor = w.next_aircraft(cursor.id);
+                if cursor.handle.is_null() {
+                    break;
+                }
+                if w.subtype(cursor) <= 2 && w.target(cursor) == station {
+                    w.set_target(cursor, 65535);
+                }
             }
         }
-    }
+    });
 }
 
 crate::abi::layouts! {
@@ -2613,7 +2647,6 @@ crate::abi::layouts! {
         range_default,
         rotor_image_if_changed,
         update_rotor_image,
-        process_orders,
         vehicle_crash,
         send_to_depot,
         fta_next_position,

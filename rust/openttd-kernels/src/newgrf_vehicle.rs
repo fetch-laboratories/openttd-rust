@@ -1,7 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Vehicle invocation state and the single canonical per-shell `NewGRF` cache.
-//! Shells and generic Action2 evaluation remain native. No cache or invocation
-//! borrow spans evaluator reentry. All calls are synchronous; panic aborts.
+//! Vehicle invocation state and the per-shell `NewGRF` cache. Shells and evaluator stack
+//! facades stay native; common Action2 evaluation is in `newgrf_spritegroup.rs`.
 #![allow(
     unsafe_code,
     missing_docs,
@@ -222,12 +221,12 @@ unsafe fn livery(s: &Services, id: u16, v: V) -> *const c_void {
             if !(s.valid_company)(company) {
                 return null();
             }
-            (s.livery)(id, company, crate::vehicle::INVALID_ENGINE, v)
+            (s.livery)(id, company, crate::engine_type::INVALID_ENGINE, v)
         } else {
             let first_engine = if ground(s, v) {
                 (s.first_engine)(v)
             } else {
-                crate::vehicle::INVALID_ENGINE
+                crate::engine_type::INVALID_ENGINE
             };
             (s.livery)(engine(s, v), (s.vehicle.owner)(handle(v)), first_engine, v)
         }
@@ -1053,7 +1052,7 @@ unsafe fn variable(
                     ))
                     .0
                 } else {
-                    crate::airport::ATP_TTDP_LARGE
+                    crate::newgrf_airport::ATP_TTDP_LARGE
                 };
                 return (altitude.min(i32::from(u8::MAX)) as u32) << 8 | u32::from(airport);
             }
@@ -1184,7 +1183,7 @@ unsafe fn variable(
                 if result > u32::from(DIRDIFF_REVERSE) {
                     result |= 8;
                 }
-                if (s.vehicle.status)(handle(u)) & crate::vehicle::VS_HIDDEN != 0 {
+                if (s.vehicle.status)(handle(u)) & crate::vehicle_base::VS_HIDDEN != 0 {
                     result |= 0x80;
                 }
                 let a = (s.vehicle.coordinates)(h);

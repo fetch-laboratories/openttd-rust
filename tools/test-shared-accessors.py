@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the real #249 CLI for every seeded category, upstream scope and ratchet."""
+"""Run the real shared-accessors CLI for every seeded category, upstream scope and ratchet."""
 
 import re
 import subprocess
@@ -84,8 +84,9 @@ with tempfile.TemporaryDirectory() as directory:
     include_caller.write_text("")
     git("add", ".")
     assert "orphan | openttd_rust_dead" in check().stdout
-    port.write_text(original + "\nvoid openttd_rust_dead();\n")
-    assert "orphan | openttd_rust_dead" in check().stdout
+    for declaration in ["void", 'extern "C" void']:
+        port.write_text(original + f"\n{declaration} openttd_rust_dead();\n")
+        assert "orphan | openttd_rust_dead" in check().stdout
     for target, call, orphan in [
         (port, "void Call() { openttd_rust_dead(); }", False),
         (owner, "fn call() { openttd_rust_dead(); }", False),

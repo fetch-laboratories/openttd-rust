@@ -5,10 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Complete selected road command policy. Shared map and pool storage remain
-//! native. Calls retain only copied identities; no Rust world borrow spans a
-//! command, town rating update, vehicle callback or other reentry. Native costs
-//! are stack-owned opaque objects, and panics/environmental exceptions abort.
+//! Road command policy. Map and pool storage stay native; calls keep only copied identities,
+//! and costs are stack-owned opaque native objects.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,
@@ -20,8 +18,9 @@
     clippy::fn_params_excessive_bools
 )]
 use crate::command_type::DoCommandFlag;
-use crate::company::COMPANIES as MAX_COMPANIES;
-use crate::company_type::{INVALID_OWNER, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER};
+use crate::company_type::{
+    INVALID_OWNER, MAX_COMPANIES, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER,
+};
 use crate::rail_cmd::{
     CROSSING_SLOPES, ConvertFrame as Area, CrossingRoad, LEVELCROSSING_TRACKBIT_FACTOR,
     RailCommandServices, TUNNELBRIDGE_TRACKBIT_FACTOR,
@@ -251,9 +250,7 @@ impl<'a> Ctx<'a> {
             commands: unsafe { &*r.command },
             town: unsafe { &*s.town },
             authority: unsafe { &*s.authority },
-            map: Map {
-                log_x: (shared.map_log_x)() as u8,
-            },
+            map: shared.map(),
         }
     }
     fn command(&self, cost: Cost<'_>, flags: u16, tile: u32, body: impl FnMut(u16) -> i64) -> i64 {
@@ -367,27 +364,6 @@ impl<'a> Ctx<'a> {
             }
         });
     }
-    fn no_vehicle(&self, c: Cost<'_>, tile: u32) {
-        unsafe {
-            self.commands.no_vehicle(c.0, tile);
-        }
-    }
-    fn ownership(&self, c: Cost<'_>, owner: u8, tile: u32) {
-        unsafe {
-            (self.commands.ownership)(c.0, owner, tile);
-        }
-    }
-    fn tile_ownership(&self, c: Cost<'_>, tile: u32) {
-        unsafe {
-            (self.commands.tile_ownership)(c.0, tile);
-        }
-    }
-    fn free(&self, c: Cost<'_>, tile: u32, end: u32) {
-        unsafe {
-            self.commands
-                .wormhole_free(c.0, tile, end, core::ptr::null());
-        }
-    }
     fn infrastructure(&self, rt: u8, owner: u8, count: i32) {
         // SAFETY: canonical immutable table; this entry holds no world borrow.
         unsafe {
@@ -438,7 +414,7 @@ impl<'a> Ctx<'a> {
         }
         if owner != OWNER_TOWN {
             if owner != OWNER_NONE {
-                self.ownership(c, owner, 0);
+                c.ownership(self.commands, owner, 0);
             }
             return;
         }
@@ -513,20 +489,24 @@ impl<'a> Ctx<'a> {
             return;
         }
         match self.tile_type(tile) {
-            MP_ROAD => self.no_vehicle(cost, tile),
+            MP_ROAD => cost.no_vehicle(self.commands, tile),
             MP_STATION => {
                 if !(self.shared.is_drive_through_stop)(tile) {
                     cost.error(INVALID_STRING_ID);
                     return;
                 }
-                self.no_vehicle(cost, tile);
+                cost.no_vehicle(self.commands, tile);
             }
             MP_TUNNELBRIDGE => {
                 if (self.shared.tunnel_transport)(tile) != 1 {
                     cost.error(INVALID_STRING_ID);
                     return;
                 }
-                self.free(cost, tile, (self.rail.other_tunnel_bridge_end)(tile));
+                cost.wormhole_free(
+                    self.commands,
+                    tile,
+                    (self.rail.other_tunnel_bridge_end)(tile),
+                );
             }
             _ => {
                 cost.error(INVALID_STRING_ID);
@@ -857,7 +837,7 @@ impl<'a> Ctx<'a> {
                                 w::hit(w::ROAD_COMMANDS_ONEWAY);
                                 let owner = self.owner(tile, rtt);
                                 if owner != OWNER_NONE {
-                                    self.ownership(ret, owner, tile);
+                                    ret.ownership(self.commands, owner, tile);
                                     if !ret.ok() {
                                         cost.take(ret);
                                         return;
@@ -866,7 +846,7 @@ impl<'a> Ctx<'a> {
                                 let old = (self.shared.disallowed_road_directions)(tile);
                                 let new = old ^ toggle;
                                 if old.count_ones() <= new.count_ones() {
-                                    self.no_vehicle(ret, tile);
+                                    ret.no_vehicle(self.commands, tile);
                                     if !ret.ok() {
                                         cost.take(ret);
                                         return;
@@ -885,7 +865,7 @@ impl<'a> Ctx<'a> {
                         if rtt == 1 && existing.is_power_of_two() {
                             let owner = self.owner(tile, rtt);
                             if (self.shared.company_valid)(owner) {
-                                self.ownership(ret, owner, 0);
+                                ret.ownership(self.commands, owner, 0);
                                 if !ret.ok() {
                                     cost.take(ret);
                                     return;
@@ -928,7 +908,7 @@ impl<'a> Ctx<'a> {
                     && company != OWNER_TOWN
                     && company != OWNER_DEITY
                 {
-                    self.tile_ownership(ret, tile);
+                    ret.tile_ownership(self.commands, tile);
                     if !ret.ok() {
                         cost.take(ret);
                         return;
@@ -955,7 +935,7 @@ impl<'a> Ctx<'a> {
                         }
                     };
                     if !clear {
-                        self.no_vehicle(ret, tile);
+                        ret.no_vehicle(self.commands, tile);
                         if !ret.ok() {
                             cost.take(ret);
                             return;
@@ -1028,7 +1008,11 @@ impl<'a> Ctx<'a> {
                         cost.error(self.r.strings.already_built);
                         return;
                     }
-                    self.free(ret, tile, (self.rail.other_tunnel_bridge_end)(tile));
+                    ret.wormhole_free(
+                        self.commands,
+                        tile,
+                        (self.rail.other_tunnel_bridge_end)(tile),
+                    );
                     if !ret.ok() {
                         cost.take(ret);
                         return;
@@ -1073,7 +1057,7 @@ impl<'a> Ctx<'a> {
                     }
                 }
             }
-            self.no_vehicle(ret, tile);
+            ret.no_vehicle(self.commands, tile);
             if !ret.ok() {
                 cost.take(ret);
                 return;
@@ -1416,7 +1400,7 @@ impl<'a> Ctx<'a> {
                     self.rt(tile, 0)
                 }
         {
-            self.tile_ownership(ret, tile);
+            ret.tile_ownership(self.commands, tile);
             if !ret.ok() {
                 cost.take(ret);
                 return;
@@ -1425,7 +1409,7 @@ impl<'a> Ctx<'a> {
                 cost.zero();
                 return;
             }
-            self.no_vehicle(ret, tile);
+            ret.no_vehicle(self.commands, tile);
             if !ret.ok() {
                 cost.take(ret);
                 return;
@@ -1468,12 +1452,12 @@ impl<'a> Ctx<'a> {
     fn remove_depot(&self, cost: Cost<'_>, flags: u16, tile: u32) {
         w::hit(w::ROAD_COMMANDS_DEPOT_REMOVE);
         if (self.shared.current_company)() != OWNER_WATER {
-            self.tile_ownership(cost, tile);
+            cost.tile_ownership(self.commands, tile);
             if !cost.ok() {
                 return;
             }
         }
-        self.no_vehicle(cost, tile);
+        cost.no_vehicle(self.commands, tile);
         if !cost.ok() {
             return;
         }
@@ -1713,8 +1697,8 @@ impl<'a> Ctx<'a> {
     }
     fn convert_owner(&self, tile: u32, num: u32, owner: u8, from: u8, to: u8) {
         let company = (self.shared.current_company)();
-        if u32::from(company) >= MAX_COMPANIES
-            || (u32::from(owner) >= MAX_COMPANIES && owner != OWNER_NONE)
+        if u32::from(company) >= u32::from(MAX_COMPANIES)
+            || (u32::from(owner) >= u32::from(MAX_COMPANIES) && owner != OWNER_NONE)
         {
             return;
         }
@@ -1830,7 +1814,7 @@ impl<'a> Ctx<'a> {
         }
         let owner = self.owner(tile, rtt);
         if !can_convert_unowned_road_type(owner, rtt) {
-            self.ownership(ret, owner, tile);
+            ret.ownership(self.commands, owner, tile);
             if !ret.ok() {
                 error.take(ret);
                 return;
@@ -1847,7 +1831,7 @@ impl<'a> Ctx<'a> {
         }
         if tt != MP_TUNNELBRIDGE {
             if !(self.shared.road_powered)(from, to) {
-                self.no_vehicle(ret, tile);
+                ret.no_vehicle(self.commands, tile);
                 if !ret.ok() {
                     error.take(ret);
                     return;
@@ -1890,7 +1874,7 @@ impl<'a> Ctx<'a> {
                 return;
             }
             if !(self.shared.road_powered)(from, to) {
-                self.free(ret, tile, other);
+                ret.wormhole_free(self.commands, tile, other);
                 if !ret.ok() {
                     error.take(ret);
                     return;
@@ -1944,11 +1928,18 @@ impl<'a> Ctx<'a> {
     }
 }
 
+/// The `Ctx` of an entry's `services` table.
+macro_rules! entry_ctx {
+    ($services:expr) => {
+        // SAFETY: The entry's contract keeps its immutable tables valid until it returns.
+        unsafe { Ctx::new($services) }
+    };
+}
+
 /// Original road `allow_remove` entry.
 /// # Safety
 /// Immutable tables and live native cost/frame slots outlive this synchronous
 /// invocation. Slots are distinct; no native borrow survives reentrant calls.
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_road_allow_remove(
     services: *const RoadCommandServices,
     out: *mut CommandCost,
@@ -1959,8 +1950,7 @@ pub unsafe extern "C" fn openttd_rust_road_allow_remove(
     flags: u16,
     town_check: bool,
 ) {
-    // SAFETY: caller supplies valid immutable native tables.
-    let c = unsafe { Ctx::new(services) };
+    let c = entry_ctx!(services);
     c.allow_remove(c.c(out), tile, bits, owner, rtt, flags, town_check);
 }
 
@@ -1981,8 +1971,7 @@ pub unsafe extern "C" fn openttd_rust_road_build(
     drd: u8,
     town: u16,
 ) {
-    // SAFETY: caller supplies valid immutable native tables.
-    let c = unsafe { Ctx::new(services) };
+    let c = entry_ctx!(services);
     c.build(nested, c.c(out), c.c(ret), flags, tile, bits, rt, drd, town);
 }
 
@@ -2028,8 +2017,7 @@ pub unsafe extern "C" fn openttd_rust_road_build_long(
     end_half: bool,
     ai: bool,
 ) {
-    // SAFETY: caller supplies valid immutable native tables.
-    let c = unsafe { Ctx::new(services) };
+    let c = entry_ctx!(services);
     c.build_long(
         nested,
         c.c(out),
@@ -2067,8 +2055,7 @@ pub unsafe extern "C" fn openttd_rust_road_remove_long(
     start_half: bool,
     end_half: bool,
 ) -> i64 {
-    // SAFETY: caller supplies valid immutable native tables.
-    let c = unsafe { Ctx::new(services) };
+    let c = entry_ctx!(services);
     c.remove_long(
         nested,
         c.c(out),
@@ -2099,8 +2086,7 @@ pub unsafe extern "C" fn openttd_rust_road_build_depot(
     rt: u8,
     dir: u8,
 ) {
-    // SAFETY: caller supplies valid immutable native tables.
-    let c = unsafe { Ctx::new(services) };
+    let c = entry_ctx!(services);
     c.build_depot(c.c(out), c.c(ret), flags, tile, rt, dir);
 }
 
@@ -2117,8 +2103,7 @@ pub unsafe extern "C" fn openttd_rust_road_clear(
     flags: u16,
     tile: u32,
 ) {
-    // SAFETY: caller supplies valid immutable native tables.
-    let c = unsafe { Ctx::new(services) };
+    let c = entry_ctx!(services);
     c.clear_tile(c.c(out), c.c(ret), c.c(scratch), flags, tile);
 }
 
@@ -2131,8 +2116,7 @@ pub unsafe extern "C" fn openttd_rust_road_nearest_towns(
     services: *const RoadCommandServices,
     invalidate: bool,
 ) {
-    // SAFETY: caller supplies valid immutable native tables.
-    let c = unsafe { Ctx::new(services) };
+    let c = entry_ctx!(services);
     c.nearest_towns(invalidate);
 }
 
@@ -2148,8 +2132,7 @@ pub(crate) unsafe fn openttd_rust_road_change_owner(
     old: u8,
     new: u8,
 ) {
-    // SAFETY: caller supplies valid immutable native tables.
-    let c = unsafe { Ctx::new(services) };
+    let c = entry_ctx!(services);
     c.change_owner(c.c(ret), c.c(scratch), tile, old, new);
 }
 
@@ -2167,8 +2150,7 @@ pub unsafe extern "C" fn openttd_rust_road_terraform(
     z: i32,
     slope: u8,
 ) {
-    // SAFETY: caller supplies valid immutable native tables.
-    let c = unsafe { Ctx::new(services) };
+    let c = entry_ctx!(services);
     c.terraform(c.c(out), c.c(scratch), flags, tile, z, slope);
 }
 
@@ -2190,8 +2172,7 @@ pub unsafe extern "C" fn openttd_rust_road_convert(
     rt: u8,
     diagonal: bool,
 ) {
-    // SAFETY: caller supplies valid immutable native tables.
-    let c = unsafe { Ctx::new(services) };
+    let c = entry_ctx!(services);
     c.convert(
         frame,
         area,
@@ -2217,15 +2198,13 @@ pub unsafe extern "C" fn openttd_rust_road_build_above(
     flags: u16,
     tile: u32,
 ) {
-    // SAFETY: caller supplies valid immutable native tables.
-    let c = unsafe { Ctx::new(services) };
+    let c = entry_ctx!(services);
     c.build_above(c.c(out), flags, tile);
 }
 
-/// Removal entry also used by the native road tile loop pending #212.
+/// Original `RemoveRoad` entry.
 /// # Safety
 /// Immutable tables and distinct live cost slots outlive this synchronous call.
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_road_remove(
     services: *const RoadCommandServices,
     out: *mut CommandCost,

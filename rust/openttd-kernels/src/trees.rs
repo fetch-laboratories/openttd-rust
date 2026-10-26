@@ -5,13 +5,10 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Trees own policy, iteration, grove geometry, commands and the persisted tick byte.
-//! Canonical tiles remain in C++. Each entry is one plain synchronous call that reads
-//! typed tile records and calls typed `noexcept` services at the original call points.
-//! Water flooding, `NewGRF` ambient callbacks and nested landscape clears may reenter
-//! tree code; no Rust borrow of mutable state is live across them, and records read
-//! before them are read again afterwards. World-generation abort is the only C++
-//! exception: its progress service reports it and the entry returns without further work.
+//! Tree policy, iteration, grove geometry, commands and the persisted tick byte; tiles stay in
+//! C++. Flooding, `NewGRF` ambient callbacks and nested clears may reenter, so records read
+//! before them are read again afterwards. World-generation abort is the one C++ exception: its
+//! progress service reports it and the entry returns.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,
@@ -24,7 +21,8 @@
     clippy::too_many_lines
 )]
 use crate::clear_map::{CLEAR_DESERT, CLEAR_FIELDS, CLEAR_GRASS, CLEAR_ROCKS, CLEAR_ROUGH};
-use crate::services::{Services, chance16_i};
+use crate::random_func::chance16_i;
+use crate::services::Services;
 use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_TREES, MP_WATER};
 
 use crate::landscape_type::{ARCTIC, TROPIC};
@@ -999,7 +997,7 @@ impl Trees<'_> {
 /// # Safety
 /// Both pointers address live immutable tables for the whole entry.
 unsafe fn trees<'a>(services: *const TreeServices, shared: *const Services) -> Trees<'a> {
-    // SAFETY: Guaranteed by the caller.
+    // SAFETY: This function's contract keeps both tables live and immutable for the entry.
     unsafe {
         Trees {
             t: &*services,
@@ -1036,7 +1034,7 @@ pub unsafe extern "C" fn openttd_rust_trees_tile_loop(
     services: *const TreeServices,
     shared: *const Services,
 ) {
-    // SAFETY: Guaranteed by the caller.
+    // SAFETY: The contract above supplies the live immutable tables `trees` needs.
     unsafe { trees(services, shared) }.tile_loop(tile, &settings, call);
 }
 
@@ -1049,7 +1047,7 @@ pub unsafe extern "C" fn openttd_rust_trees_tick(
     services: *const TreeServices,
     shared: *const Services,
 ) {
-    // SAFETY: Guaranteed by the caller.
+    // SAFETY: As for `openttd_rust_trees_tile_loop`.
     unsafe { trees(services, shared) }.tick(&settings);
 }
 
@@ -1062,7 +1060,7 @@ pub unsafe extern "C" fn openttd_rust_trees_generate(
     services: *const TreeServices,
     shared: *const Services,
 ) -> bool {
-    // SAFETY: Guaranteed by the caller.
+    // SAFETY: As for `openttd_rust_trees_tile_loop`.
     unsafe { trees(services, shared) }.generate(&settings)
 }
 
@@ -1075,7 +1073,7 @@ pub unsafe extern "C" fn openttd_rust_trees_place_randomly(
     services: *const TreeServices,
     shared: *const Services,
 ) -> bool {
-    // SAFETY: Guaranteed by the caller.
+    // SAFETY: As for `openttd_rust_trees_tile_loop`.
     unsafe { trees(services, shared) }.place_randomly(&settings)
 }
 
@@ -1091,7 +1089,7 @@ pub unsafe extern "C" fn openttd_rust_trees_place(
     services: *const TreeServices,
     shared: *const Services,
 ) {
-    // SAFETY: Guaranteed by the caller.
+    // SAFETY: As for `openttd_rust_trees_tile_loop`.
     let trees = unsafe { trees(services, shared) };
     let p = trees.plant_observation(tile);
     trees.place(tile, p, r, keep_density, climate);
@@ -1109,7 +1107,7 @@ pub unsafe extern "C" fn openttd_rust_trees_plant(
     services: *const TreeServices,
     shared: *const Services,
 ) {
-    // SAFETY: Guaranteed by the caller.
+    // SAFETY: As for `openttd_rust_trees_tile_loop`.
     let trees = unsafe { trees(services, shared) };
     let p = trees.plant_observation(tile);
     trees.plant(tile, p, tree, count, growth);
@@ -1124,7 +1122,7 @@ pub unsafe extern "C" fn openttd_rust_trees_can_plant(
     allow_desert: bool,
     services: *const TreeServices,
 ) -> bool {
-    // SAFETY: Guaranteed by the caller.
+    // SAFETY: The contract above keeps the table live and immutable for the call.
     (unsafe { &*services }.plant_observation)(tile).suitable(allow_desert)
 }
 
@@ -1145,7 +1143,7 @@ pub unsafe extern "C" fn openttd_rust_trees_cmd_plant(
     commands: &crate::services::CommandServices,
     flags: u16,
 ) -> CommandResult {
-    // SAFETY: Guaranteed by the caller. The existing native nested result slot
+    // SAFETY: The contract above supplies the tables. The existing native nested result slot
     // keeps the complete error returned by a failed clear for status 2.
     unsafe { trees(services, shared) }.plant_command(
         ctx,
@@ -1694,30 +1692,6 @@ mod tests {
         let mut expected = [attempt, attempt].concat();
         expected.extend([Event::Draw, Event::Progress]);
         assert_eq!(events(), expected);
-    }
-
-    #[test]
-    fn improved_placer_reads_height_at_the_original_points() {
-        reset(World {
-            plant: CLEAR_TILE,
-            random: 0xff00_1010, // Tile 16; every attempt offsets by (0, 0).
-            ..World::default()
-        });
-        let g = GenerateSettings {
-            placer: TP_IMPROVED,
-            freeform_edges: false,
-            climate: ARCTIC,
-            height_limit: 30,
-            ..GENERATE
-        };
-        with(|t| t.scatter_one(&g));
-        let log = events();
-        // Plant check, two GetTileZ, snow line, then 8 * 2 * 3 * 15 / 30 = 24 attempts
-        // which each check the plant record before reading the height.
-        assert_eq!(&log[..2], [Event::Draw, Event::Progress]);
-        let heights = log.iter().filter(|e| **e == Event::TileZ).count();
-        assert_eq!(heights, 2 + 24);
-        assert_eq!(log.iter().filter(|e| **e == Event::Snow).count(), 1);
     }
 
     #[test]

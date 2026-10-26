@@ -5,6 +5,7 @@ import struct
 from pathlib import Path
 
 from . import core, economy
+from .console_adapter import prepared_console
 from .core import ROOT, SNAPSHOT_TICKS, decode_element, field_spans, read_save
 from .play_saves import DISTRIBUTIONS
 
@@ -12,7 +13,7 @@ PREPARE_ORDER = 5
 PREFIX = "normal[0]/"
 VEHICLE = "roadveh[0]/common[0]/"
 CARGODIST = ("cargodist", "stale-refresh", "stale-restrict", "stale-release")
-# LinkRefresher/IncreaseStats branches (#349) reached by real arrivals,
+# LinkRefresher/IncreaseStats branches (vehicle/visits.rs) reached by real arrivals,
 # departures, full-load waits and stale-link refreshes in these inputs.
 VISIT_ROUTES = ["arrival_stats", "full_load_random", "full_load_refresh"]
 VISIT_WITNESSES = {
@@ -117,14 +118,14 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         patches.append((cid, index, field, value))
 
     mode = scenario["station_service"]
-    stations = economy.rows(original, "STNN")
+    stations = core.rows(original, "STNN")
     if not any(row.get(PREFIX + "loading_vehicles") for row in stations.values()):
         raise RuntimeError("station input lacks a real active loading queue")
     if mode in ("acceptance-loss", "full-gradual", "loading-context"):
         front = economy.pending(original)
         if front is None:
             raise RuntimeError("station input lacks staged coal unloading")
-        vehicle = economy.rows(original, "VEHS")[front]
+        vehicle = core.rows(original, "VEHS")[front]
         station = vehicle[VEHICLE + "last_station_visited"]
         cargo = vehicle[VEHICLE + "cargo_type"]
         if mode == "acceptance-loss":
@@ -165,7 +166,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     if mode.startswith(("rating-", "stale-")):
         # Stop transport, retaining the real waiting packet at the first rated
         # passenger station. No expected result is changed with this input.
-        for index, vehicle in economy.rows(original, "VEHS").items():
+        for index, vehicle in core.rows(original, "VEHS").items():
             if vehicle["type"] == 1:
                 patch(
                     "VEHS",
@@ -180,17 +181,17 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         # pauses cannot consume its null-driver iteration budget. Cargodist and
         # stale-refresh retain their live-flow preparation and job coverage.
         delay = (scenario["ticks"] + core.TICKS_PER_DAY - 1) // core.TICKS_PER_DAY + 32
-        for index, job in economy.rows(original, "LGRJ").items():
+        for index, job in core.rows(original, "LGRJ").items():
             patch("LGRJ", index, "join_date", job["join_date"] + delay)
     if mode.startswith("stale-"):
-        date = economy.rows(original, "DATE")[0]["economy_date"]
+        date = core.rows(original, "DATE")[0]["economy_date"]
         old = date - 2000
         # Remove/refresh age the whole edge. Restrict ages only the
         # unrestricted update under a fresh restricted one; release the reverse.
         stamps = {"stale-restrict": (old, date), "stale-release": (date, old)}
         unrestricted, restricted = stamps.get(mode, (old, -1))
         edges = 0
-        for index, row in economy.rows(original, "LGRP").items():
+        for index, row in core.rows(original, "LGRP").items():
             for field in row:
                 if field.endswith("/last_unrestricted_update"):
                     patch("LGRP", index, field, unrestricted)
@@ -271,7 +272,7 @@ def check(scenario, run, mode, role, result):
         kind, []
     )
     core.branch_witnesses(scenario, run, role, "linkgraph", graph_required)
-    # Route prediction and link statistics (#349) on real station visits.
+    # Route prediction and link statistics on real station visits.
     visits = VISIT_WITNESSES.get(kind, [])
     if counts := core.branch_witnesses(scenario, run, role, "vehicle_visits", visits):
         result[f"{mode}_{role}_visit_branches"] = counts
@@ -284,7 +285,7 @@ def check(scenario, run, mode, role, result):
         count, old = result["station_edges"]
         updates = [
             value
-            for row in economy.rows(saved[-1], "LGRP").values()
+            for row in core.rows(saved[-1], "LGRP").values()
             for field, value in row.items()
             if field.endswith("/last_unrestricted_update")
         ]
@@ -298,12 +299,12 @@ def check(scenario, run, mode, role, result):
         queues = [
             row.get(PREFIX + "loading_vehicles", ())
             for chunks in saved
-            for row in economy.rows(chunks, "STNN").values()
+            for row in core.rows(chunks, "STNN").values()
         ]
         fractions = [
             value
             for chunks in saved
-            for row in economy.rows(chunks, "STNN").values()
+            for row in core.rows(chunks, "STNN").values()
             for field, value in row.items()
             if field.endswith("/amount_fract") and value
         ]
@@ -315,13 +316,13 @@ def check(scenario, run, mode, role, result):
         return
     station, cargo = result["station_target"]
     goods = PREFIX + f"goods[{cargo}]/"
-    rows = [economy.rows(chunks, "STNN")[station] for chunks in saved]
+    rows = [core.rows(chunks, "STNN")[station] for chunks in saved]
     if kind == "rating-expire":
         if rows[-1][goods + "status"] & 2 or rows[-1][goods + "last_speed"]:
             result["problems"].append(f"{mode}/{role}: rating did not expire")
     elif kind == "rating-cap":
         counts = [
-            sum(packet["count"] for packet in economy.rows(chunks, "CAPA").values())
+            sum(packet["count"] for packet in core.rows(chunks, "CAPA").values())
             for chunks in (before, saved[-1])
         ]
         if counts[1] >= counts[0]:
@@ -329,14 +330,14 @@ def check(scenario, run, mode, role, result):
         result[f"{mode}_{role}_packet_counts"] = counts
     else:
         front = result["station_front"]
-        vehicle = economy.rows(saved[-1], "VEHS")[front]
+        vehicle = core.rows(saved[-1], "VEHS")[front]
         if kind == "full-gradual":
             if vehicle[VEHICLE + "vehicle_flags"] & 1:
                 result["problems"].append(
                     f"{mode}/{role}: full load finished while cargo unavailable"
                 )
         elif kind == "loading-context":
-            initial = economy.rows(before, "VEHS")[front]
+            initial = core.rows(before, "VEHS")[front]
             actions = vehicle[VEHICLE + "cargo.action_counts"]
             queued = rows[-1][PREFIX + "loading_vehicles"]
             if (
@@ -361,9 +362,10 @@ def check(scenario, run, mode, role, result):
             )
 
 
-# #267: inputs for the unchanged reference bodies and Rust command owner. The
-# private tile callbacks need a fixture translation unit; the pinned source is
-# included verbatim and its ordinary object is replaced only in this executable.
+# Station construction (station_cmd.rs): inputs for the unchanged reference
+# bodies and Rust command owner. The private tile callbacks need a fixture
+# translation unit; the pinned source is included verbatim and its ordinary
+# object is replaced only in this executable.
 COMMAND_SOURCE = r"""
 #include "station_cmd.cpp"
 #include "console_internal.h"
@@ -1057,7 +1059,7 @@ RELOADS = {
     "airport-reload": ("airport", "airport-inspect"),
     "waypoints-reload": ("waypoints", "waypoints-inspect"),
 }
-# #354 road stop owner branches; cache checks run only with desync snapshots.
+# Road stop owner (road_stop.rs) branches; cache checks run only with desync snapshots.
 ROAD_STOPS = (
     "clear_head clear_last clear_split clear_tail enter_bay0 enter_bay1 enter_drive"
     " enter_refused leave_bay leave_drive make_alone make_join make_merge make_parent rebuild"
@@ -1088,62 +1090,37 @@ def adapter(build, folder, env):
 
 
 def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
-    import migration
-
-    from .runtime import prepared_adapter
-
     folder = out / scenario["name"] / "input"
     source = Path(scenario["save"])
     read_save(source)
-    executables = {}
-    for role in ("reference", "candidate"):
-        prepared = prepared_adapter("stations", role, builds, folder / role)
-        if prepared is None:
-            native = (
-                migration.REFERENCE_BUILD
-                if role == "reference" or binaries[role] == binaries["reference"]
-                else ROOT / "build-rust"
-            )
-            lock = (
-                migration.reference_lock(shared=True)
-                if native == migration.REFERENCE_BUILD
-                else migration.candidate_lock(native, shared=True)
-            )
-            with lock:
-                prepared = adapter(native, folder / role, env)
-        executables[role] = prepared
-        for name in core.RUNTIME_DIRECTORIES:
-            if (builds[role] / name).is_dir():
-                (folder / role / name).symlink_to(
-                    builds[role] / name, target_is_directory=True
-                )
+    executables = prepared_console("stations", adapter, binaries, builds, folder, env)
     if binaries["candidate"] == binaries["reference"]:
         executables["candidate"] = executables["reference"]
     scenario = dict(scenario, save=str(source), executables=executables)
     # Reload modes capture the command fixture's save, then inspect it after load.
     capture, inspect = RELOADS.get(scenario["station_commands"], (None, None))
     if capture:
-        saves, logs = {}, {}
-        for role in ("reference", "candidate"):
-            save = folder / role / "stations.sav"
-            run = core.run_game(
-                dict(
-                    scenario,
-                    console=[f'stations_scenario {capture} "{save}"', "unpause"],
-                ),
-                executables[role],
-                builds[role],
-                folder / role / "capture",
-                timeout,
-                env,
-                False,
-            )
-            if run["exit"] or not save.is_file() or "STCMD complete" not in run["log"]:
+        saves = {role: folder / role / "stations.sav" for role in executables}
+        runs = core.capture_pair(
+            lambda role: dict(
+                scenario,
+                console=[f'stations_scenario {capture} "{saves[role]}"', "unpause"],
+            ),
+            executables,
+            builds,
+            folder,
+            timeout,
+            env,
+        )
+        logs = {}
+        for role, run in runs.items():
+            if (
+                run["exit"]
+                or not saves[role].is_file()
+                or "STCMD complete" not in run["log"]
+            ):
                 raise RuntimeError("station reload capture failed")
-            saves[role], logs[role] = (
-                save,
-                [line for line in run["log"] if line.startswith("STCMD ")],
-            )
+            logs[role] = [line for line in run["log"] if line.startswith("STCMD ")]
         differences = core.compare_saves(
             saves["reference"],
             saves["candidate"],
@@ -1355,8 +1332,3 @@ def check_commands(scenario, run, mode, role, result):
     )
     if not any(line.startswith(expected) for line in lines):
         raise RuntimeError("station command scenario did not complete")
-    key = mode + "_station_commands"
-    if role == "reference":
-        result[key] = lines
-    elif result[key] != lines:
-        raise RuntimeError("station costs/errors/ids/RNG differ")

@@ -17,25 +17,25 @@ struct OpenTTDScheduleQueues {
  * Exported spans live only until the next owner mutation; copy in native code
  * before SlObject. Native staging publishes partial state on return and unwind, including recursive null cleanup. */
 struct OpenTTDScheduleServices {
-	OpenTTDLiveGraph *(OPENTTD_LINKGRAPH_CALL *graph_owner)(LinkGraph *) noexcept;
-	void (OPENTTD_LINKGRAPH_CALL *assert_graph)(const LinkGraph *) noexcept;
-	bool (OPENTTD_LINKGRAPH_CALL *can_allocate)() noexcept;
-	void (OPENTTD_LINKGRAPH_CALL *allocation_failure)() noexcept;
-	LinkGraphJob *(OPENTTD_LINKGRAPH_CALL *new_job)(const LinkGraph *) noexcept;
-	void (OPENTTD_LINKGRAPH_CALL *spawn)(LinkGraphJob *) noexcept;
-	bool (OPENTTD_LINKGRAPH_CALL *due)(const LinkGraphJob *) noexcept;
-	bool (OPENTTD_LINKGRAPH_CALL *completed)(const LinkGraphJob *) noexcept;
-	uint16_t (OPENTTD_LINKGRAPH_CALL *graph_index)(const LinkGraphJob *) noexcept;
-	void (OPENTTD_LINKGRAPH_CALL *destroy_job)(LinkGraphJob *) noexcept;
-	bool (OPENTTD_LINKGRAPH_CALL *graph_valid)(uint16_t) noexcept;
-	LinkGraph *(OPENTTD_LINKGRAPH_CALL *graph_get)(uint16_t) noexcept;
-	void (OPENTTD_LINKGRAPH_CALL *abort_job)(LinkGraphJob *) noexcept;
-	LinkGraph *(OPENTTD_LINKGRAPH_CALL *next_graph)(uint32_t *) noexcept;
-	LinkGraphJob *(OPENTTD_LINKGRAPH_CALL *next_job)(uint32_t *) noexcept;
-	void (OPENTTD_LINKGRAPH_CALL *shift_job)(LinkGraphJob *, int32_t) noexcept;
-	void (OPENTTD_LINKGRAPH_CALL *post_pause)(bool) noexcept;
-	void (OPENTTD_LINKGRAPH_CALL *set_pause)() noexcept;
-	void (OPENTTD_LINKGRAPH_CALL *begin_measurement)(void *, bool) noexcept;
+	OpenTTDLiveGraph *(OPENTTD_RUST_CALL *graph_owner)(LinkGraph *) noexcept;
+	void (OPENTTD_RUST_CALL *assert_graph)(const LinkGraph *) noexcept;
+	bool (OPENTTD_RUST_CALL *can_allocate)() noexcept;
+	void (OPENTTD_RUST_CALL *allocation_failure)() noexcept;
+	LinkGraphJob *(OPENTTD_RUST_CALL *new_job)(const LinkGraph *) noexcept;
+	void (OPENTTD_RUST_CALL *spawn)(LinkGraphJob *) noexcept;
+	bool (OPENTTD_RUST_CALL *due)(const LinkGraphJob *) noexcept;
+	bool (OPENTTD_RUST_CALL *completed)(const LinkGraphJob *) noexcept;
+	uint16_t (OPENTTD_RUST_CALL *graph_index)(const LinkGraphJob *) noexcept;
+	void (OPENTTD_RUST_CALL *destroy_job)(LinkGraphJob *) noexcept;
+	bool (OPENTTD_RUST_CALL *graph_valid)(uint16_t) noexcept;
+	LinkGraph *(OPENTTD_RUST_CALL *graph_get)(uint16_t) noexcept;
+	void (OPENTTD_RUST_CALL *abort_job)(LinkGraphJob *) noexcept;
+	LinkGraph *(OPENTTD_RUST_CALL *next_graph)(uint32_t *) noexcept;
+	LinkGraphJob *(OPENTTD_RUST_CALL *next_job)(uint32_t *) noexcept;
+	void (OPENTTD_RUST_CALL *shift_job)(LinkGraphJob *, int32_t) noexcept;
+	void (OPENTTD_RUST_CALL *post_pause)(bool) noexcept;
+	void (OPENTTD_RUST_CALL *set_pause)() noexcept;
+	void (OPENTTD_RUST_CALL *begin_measurement)(void *, bool) noexcept;
 };
 extern "C" {
 void openttd_rust_schedule_queue(const OpenTTDScheduleServices *, LinkGraph *);

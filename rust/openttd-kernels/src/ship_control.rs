@@ -6,6 +6,8 @@
  */
 
 //! Complete ship controller and canonical private scalars. Shared path stays in `ship_yapf`.
+//! Entries keep vehicle shells and their service tables live and serialized through
+//! maintenance calls; no owner borrow spans a callback that can reenter or mutate it.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,
@@ -19,8 +21,13 @@
     clippy::needless_late_init,
     clippy::if_not_else
 )]
+use crate::order_type::{
+    OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT, OT_LEAVESTATION, OT_LOADING,
+};
 use crate::services::Services;
-use crate::vehicle::{VS_STOPPED, VehicleRef, VehicleServices, maintenance};
+use crate::tile_type::{MP_INDUSTRY, MP_TUNNELBRIDGE};
+use crate::vehicle::{VehicleRef, VehicleServices, maintenance};
+use crate::vehicle_base::VS_STOPPED;
 use crate::water_regions::Patch;
 use std::cell::UnsafeCell;
 use std::collections::{HashSet, VecDeque};
@@ -215,7 +222,6 @@ pub struct Leaves {
     pub path_back: extern "C" fn(u32) -> u32,
     pub path_pop: extern "C" fn(u32),
     pub path_clear: extern "C" fn(u32),
-    pub process_orders: extern "C" fn(u32) -> bool,
     pub viewport: extern "C" fn(u32, bool, bool),
     pub base_viewport: extern "C" fn(u32),
     pub visual: extern "C" fn(u32),
@@ -429,14 +435,16 @@ impl Game<'_> {
         best
     }
     fn service(&self, id: u32, v: VehicleRef) {
-        // SAFETY: Live serialized shell; no owner borrow spans these calls.
         if (self.leaves.servint)(id) == 0
-            || !unsafe { maintenance::needs_automatic_servicing(v, self.vs()) }
+            || !unsafe {
+                self.vs()
+                    .maintain(v, maintenance::needs_automatic_servicing)
+            }
         {
             return;
         }
         if (self.leaves.chain_depot)(id) {
-            unsafe { maintenance::service_in_depot(v, self.vs()) };
+            unsafe { self.vs().maintain(v, maintenance::service_in_depot) };
             return;
         }
         let distance = (self.leaves.max_distance)();
@@ -445,7 +453,7 @@ impl Game<'_> {
             (self.leaves.order_depot)(id, depot.id);
             self.destination(id, depot.tile);
             (self.leaves.start_dirty)(id);
-        } else if (self.leaves.order_type)(id) == 2 {
+        } else if (self.leaves.order_type)(id) == u32::from(OT_GOTO_DEPOT) {
             (self.leaves.order_dummy)(id);
             (self.leaves.start_dirty)(id);
         }
@@ -483,7 +491,7 @@ impl Game<'_> {
         let observed_dest = (self.leaves.dest)(id);
         let observed_order_destination = (self.leaves.order_destination)(id);
         let observed_order_type = (self.leaves.order_type)(id);
-        if observed_order_type == 2
+        if observed_order_type == u32::from(OT_GOTO_DEPOT)
             && (self.leaves.is_depot)(observed_tile)
             && (self.leaves.depot_index)(observed_tile) == observed_order_destination
         {
@@ -511,8 +519,7 @@ impl Game<'_> {
         (self.leaves.set_speed)(id, 0);
         self.viewport(id);
         (self.leaves.depot_dirty)(id);
-        // SAFETY: Live serialized shell; no owner borrow spans the call.
-        unsafe { maintenance::service_in_depot(v, self.vs()) };
+        unsafe { self.vs().maintain(v, maintenance::service_in_depot) };
         (self.leaves.leave_unbunch)(id);
         (self.leaves.play_sound)(id);
         (self.leaves.depot_invalidate)(id);
@@ -628,7 +635,7 @@ impl Game<'_> {
             {
                 return true;
             }
-            if (self.leaves.tile_type)(adjacent) == 8
+            if (self.leaves.tile_type)(adjacent) == u32::from(MP_INDUSTRY)
                 && (self.leaves.industry_station)(adjacent) == station
             {
                 return true;
@@ -651,20 +658,28 @@ impl Game<'_> {
         let observed_order_time = (self.leaves.order_time)(id);
         (self.leaves.set_tick)(id, observed_tick.wrapping_add(1) as u8);
         (self.leaves.set_order_time)(id, observed_order_time.wrapping_add(1) as i32);
-        // SAFETY: Live serialized shell; no owner borrow spans the call.
-        let breakdown = unsafe { maintenance::handle_breakdown_status(v, self.vs()) };
+        let breakdown = unsafe { self.vs().maintain(v, maintenance::handle_breakdown_status) };
         if breakdown.broken {
             return;
         }
         if breakdown.status & VS_STOPPED != 0 {
             return;
         }
-        if (self.leaves.process_orders)(id) && (self.leaves.yapf_reverse)(id, false).reverse {
+        // Reacquire with the source strict Ship::Get at the original orders call.
+        // No owner borrow spans the lookup or order mutation/reentry.
+        let orders_vehicle = (self.vs().ship_get)(id);
+        let reverse = unsafe {
+            crate::orders::openttd_rust_process_orders(
+                orders_vehicle.0.as_ptr().cast(),
+                self.vs().orders(),
+            )
+        } != 0;
+        if reverse && (self.leaves.yapf_reverse)(id, false).reverse {
             self.reverse(id, v, INVALID);
             return;
         }
         self.vs().handle_loading(v, false);
-        if (self.leaves.order_type)(id) == 3 {
+        if (self.leaves.order_type)(id) == u32::from(OT_LOADING) {
             return;
         }
         if self.stay_depot(id, v) {
@@ -716,7 +731,7 @@ impl Game<'_> {
                         let observed_direction = (self.leaves.direction)(id);
                         let observed_order_destination = (self.leaves.order_destination)(id);
                         let observed_order_type = (self.leaves.order_type)(id);
-                        if observed_order_type == 4 {
+                        if observed_order_type == u32::from(OT_LEAVESTATION) {
                             (self.leaves.order_free)(id);
                             (self.leaves.start_dirty)(id);
                             let exit =
@@ -727,20 +742,24 @@ impl Game<'_> {
                                 return;
                             }
                         } else if observed_dest != 0 {
-                            if observed_order_type == 6
+                            if observed_order_type == u32::from(OT_GOTO_WAYPOINT)
                                 && (self.leaves.dist_manhattan)(observed_dest, new_tile) <= 3
                             {
                                 crate::witness::hit(crate::witness::SHIP_BUOY);
                                 (self.leaves.timetable)(id);
                                 (self.leaves.order_increment)(id);
                                 (self.leaves.order_dummy)(id);
-                            } else if observed_order_type == 2 && observed_dest == new_tile {
+                            } else if observed_order_type == u32::from(OT_GOTO_DEPOT)
+                                && observed_dest == new_tile
+                            {
                                 if x & 15 == 8 && y & 15 == 8 {
                                     crate::witness::hit(crate::witness::SHIP_DEPOT_ENTER);
                                     self.vs().enter_depot(v);
                                     return;
                                 }
-                            } else if observed_order_type == 1 && (self.leaves.docking)(new_tile) {
+                            } else if observed_order_type == u32::from(OT_GOTO_STATION)
+                                && (self.leaves.docking)(new_tile)
+                            {
                                 let station = observed_order_destination;
                                 if (self.leaves.station_contains)(station, new_tile)
                                     && self.destination_station(new_tile, station)
@@ -812,7 +831,7 @@ impl Game<'_> {
                 }
             } else {
                 crate::witness::hit(crate::witness::SHIP_AQUEDUCT);
-                if (self.leaves.tile_type)(new_tile) != 9
+                if (self.leaves.tile_type)(new_tile) != u32::from(MP_TUNNELBRIDGE)
                     || u32::from(unsafe {
                         crate::movement::enter(self.services, v, new_tile, x as i32, y as i32)
                     }) & 2
@@ -877,6 +896,18 @@ const SUBCOORD: [[(u8, u8, u8); 6]; 4] = [
         (7, 15, 0),
     ],
 ];
+/// The `Game` of an entry's tables; `owner` may read the bound `leaves` table.
+macro_rules! entry_game {
+    ($leaves:ident, $services:ident, $owner:expr) => {{
+        // SAFETY: The service tables remain immutable/live for this entry; owner borrows end before calls.
+        let $leaves = unsafe { &*$leaves };
+        Game {
+            leaves: $leaves,
+            services: unsafe { &*$services },
+            owner: $owner,
+        }
+    }};
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_tick(
     id: u32,
@@ -884,13 +915,7 @@ pub unsafe extern "C" fn openttd_rust_ship_tick(
     leaves: *const Leaves,
     services: *const Services,
 ) -> bool {
-    // SAFETY: The service tables remain immutable/live for this entry; owner borrows end before calls.
-    let leaves = unsafe { &*leaves };
-    let game = Game {
-        leaves,
-        services: unsafe { &*services },
-        owner: (leaves.state_owner)(id),
-    };
+    let game = entry_game!(leaves, services, (leaves.state_owner)(id));
     let observed_running = (game.leaves.running)(id);
     let observed_status = (game.leaves.status)(id);
     if observed_status & 2 == 0 {
@@ -906,15 +931,8 @@ pub unsafe extern "C" fn openttd_rust_ship_calendar_day(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    // SAFETY: The service tables remain immutable/live for this entry; owner borrows end before calls.
-    let leaves = unsafe { &*leaves };
-    let game = Game {
-        leaves,
-        services: unsafe { &*services },
-        owner: (leaves.state_owner)(id),
-    };
-    // SAFETY: Live serialized shell; no owner borrow spans the call.
-    unsafe { maintenance::age_vehicle(vehicle, game.vs()) };
+    let game = entry_game!(leaves, services, (leaves.state_owner)(id));
+    unsafe { game.vs().maintain(vehicle, maintenance::age_vehicle) };
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_economy_day(
@@ -923,22 +941,24 @@ pub unsafe extern "C" fn openttd_rust_ship_economy_day(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    // SAFETY: The service tables remain immutable/live for this entry; owner borrows end before calls.
-    let leaves = unsafe { &*leaves };
-    let game = Game {
-        leaves,
-        services: unsafe { &*services },
-        owner: (leaves.state_owner)(id),
-    };
+    let game = entry_game!(leaves, services, (leaves.state_owner)(id));
     crate::witness::hit(crate::witness::SHIP_ECONOMY_DAY);
-    // SAFETY: Live serialized shell; no owner borrow spans these calls.
-    unsafe { maintenance::economy_age_vehicle(vehicle, game.vs()) };
+    unsafe {
+        game.vs()
+            .maintain(vehicle, maintenance::economy_age_vehicle);
+    };
     let day = (game.leaves.day)(id).wrapping_add(1);
     (game.leaves.set_day)(id, day as u8);
     if day & 7 == 0 {
-        unsafe { maintenance::decrease_vehicle_value(vehicle, game.vs()) };
+        unsafe {
+            game.vs()
+                .maintain(vehicle, maintenance::decrease_vehicle_value);
+        };
     }
-    unsafe { maintenance::check_vehicle_breakdown(vehicle, game.vs()) };
+    unsafe {
+        game.vs()
+            .maintain(vehicle, maintenance::check_vehicle_breakdown);
+    };
     game.service(id, vehicle);
     (game.leaves.check_orders)(id);
     let ticks = (game.leaves.running)(id);
@@ -958,13 +978,7 @@ pub unsafe extern "C" fn openttd_rust_ship_cache(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    // SAFETY: The service tables remain immutable/live for this entry; owner borrows end before calls.
-    let leaves = unsafe { &*leaves };
-    let game = Game {
-        leaves,
-        services: unsafe { &*services },
-        owner: (leaves.state_owner)(id),
-    };
+    let game = entry_game!(leaves, services, (leaves.state_owner)(id));
     game.cache(id, v);
 }
 #[unsafe(no_mangle)]
@@ -974,13 +988,7 @@ pub unsafe extern "C" fn openttd_rust_ship_destination(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    // SAFETY: The service tables remain immutable/live for this entry; owner borrows end before calls.
-    let leaves = unsafe { &*leaves };
-    let game = Game {
-        leaves,
-        services: unsafe { &*services },
-        owner: (leaves.state_owner)(id),
-    };
+    let game = entry_game!(leaves, services, (leaves.state_owner)(id));
     game.destination(id, tile);
 }
 #[unsafe(no_mangle)]
@@ -990,13 +998,7 @@ pub unsafe extern "C" fn openttd_rust_ship_find_depot(
     leaves: *const Leaves,
     services: *const Services,
 ) -> DepotResult {
-    // SAFETY: The service tables remain immutable/live for this entry; owner borrows end before calls.
-    let leaves = unsafe { &*leaves };
-    let game = Game {
-        leaves,
-        services: unsafe { &*services },
-        owner: (leaves.state_owner)(id),
-    };
+    let game = entry_game!(leaves, services, (leaves.state_owner)(id));
     game.depot(id, max_distance)
         .map_or_else(DepotResult::default, |d| DepotResult {
             tile: d.tile,
@@ -1011,13 +1013,7 @@ pub unsafe extern "C" fn openttd_rust_ship_is_destination(
     leaves: *const Leaves,
     services: *const Services,
 ) -> bool {
-    // SAFETY: The service tables remain immutable/live for this entry; owner borrows end before calls.
-    let leaves = unsafe { &*leaves };
-    let game = Game {
-        leaves,
-        services: unsafe { &*services },
-        owner: std::ptr::null_mut(),
-    };
+    let game = entry_game!(leaves, services, std::ptr::null_mut());
     game.destination_station(tile, station)
 }
 #[unsafe(no_mangle)]
@@ -1028,13 +1024,7 @@ pub unsafe extern "C" fn openttd_rust_ship_station_destination(
     leaves: *const Leaves,
     services: *const Services,
 ) -> u32 {
-    // SAFETY: The service tables remain immutable/live for this entry; owner borrows end before calls.
-    let leaves = unsafe { &*leaves };
-    let game = Game {
-        leaves,
-        services: unsafe { &*services },
-        owner: (leaves.state_owner)(id),
-    };
+    let game = entry_game!(leaves, services, (leaves.state_owner)(id));
     {
         if station == (game.leaves.last_station)(id) {
             (game.leaves.set_last_station)(id, 65535);
@@ -1062,13 +1052,7 @@ pub unsafe extern "C" fn openttd_rust_ship_trackdir(
     leaves: *const Leaves,
     services: *const Services,
 ) -> u8 {
-    // SAFETY: The service tables remain immutable/live for this entry; owner borrows end before calls.
-    let leaves = unsafe { &*leaves };
-    let game = Game {
-        leaves,
-        services: unsafe { &*services },
-        owner: (leaves.state_owner)(id),
-    };
+    let game = entry_game!(leaves, services, (leaves.state_owner)(id));
     (if (game.leaves.status)(id) & 128 != 0 {
         255
     } else if game.state() == DEPOT {
@@ -1083,7 +1067,7 @@ pub unsafe extern "C" fn openttd_rust_ship_trackdir(
         )
     }) as u8
 }
-/// Only the Rust vehicle build transaction calls this; C++ no longer builds ships.
+/// Only the Rust vehicle build transaction calls this.
 pub(crate) unsafe fn ship_build(
     id: u32,
     v: VehicleRef,
@@ -1091,13 +1075,7 @@ pub(crate) unsafe fn ship_build(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    // SAFETY: The service tables remain immutable/live for this entry; owner borrows end before calls.
-    let leaves = unsafe { &*leaves };
-    let game = Game {
-        leaves,
-        services: unsafe { &*services },
-        owner: (leaves.state_owner)(id),
-    };
+    let game = entry_game!(leaves, services, (leaves.state_owner)(id));
     crate::witness::hit(crate::witness::SHIP_BUILD);
     let tile = (game.leaves.tile)(id);
     let x = (game.leaves.tile_x)(tile).wrapping_mul(16) + 8;
@@ -1213,7 +1191,6 @@ crate::abi::layouts! {
         path_back,
         path_pop,
         path_clear,
-        process_orders,
         viewport,
         base_viewport,
         visual,

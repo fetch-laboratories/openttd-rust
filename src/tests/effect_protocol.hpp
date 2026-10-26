@@ -19,11 +19,11 @@ struct EffectTestWorld {
 	uint8_t sound = 0; ///< Last sound played: 1 + success, or 0 for none.
 };
 static inline EffectTestWorld *effect_test_world;
-static inline void OPENTTD_EFFECT_CALL EffectTestObserve(void *context, OpenTTDEffectView *view) noexcept
+static inline void OPENTTD_RUST_CALL EffectTestObserve(void *context, OpenTTDEffectView *view) noexcept
 {
 	*view = static_cast<EffectTestWorld *>(context)->view;
 }
-static inline void OPENTTD_EFFECT_CALL EffectTestWrite(void *context, uint8_t field, uint32_t value) noexcept
+static inline void OPENTTD_RUST_CALL EffectTestWrite(void *context, uint8_t field, uint32_t value) noexcept
 {
 	auto &w = *static_cast<EffectTestWorld *>(context);
 	w.writes++;
@@ -36,9 +36,9 @@ static inline void OPENTTD_EFFECT_CALL EffectTestWrite(void *context, uint8_t fi
 		case 6: w.view.spritenum = static_cast<uint8_t>(value); break;
 	}
 }
-static inline void OPENTTD_EFFECT_CALL EffectTestViewport(void *context) noexcept { static_cast<EffectTestWorld *>(context)->viewports++; }
-static inline void OPENTTD_EFFECT_CALL EffectTestSound(void *context, uint8_t success) noexcept { static_cast<EffectTestWorld *>(context)->sound = 1 + success; }
-static inline uint32_t OPENTTD_EFFECT_CALL EffectTestIndustry(int32_t, int32_t, uint32_t *tile) noexcept
+static inline void OPENTTD_RUST_CALL EffectTestViewport(void *context) noexcept { static_cast<EffectTestWorld *>(context)->viewports++; }
+static inline void OPENTTD_RUST_CALL EffectTestSound(void *context, uint8_t success) noexcept { static_cast<EffectTestWorld *>(context)->sound = 1 + success; }
+static inline uint32_t OPENTTD_RUST_CALL EffectTestIndustry(int32_t, int32_t, uint32_t *tile) noexcept
 {
 	auto &w = *effect_test_world;
 	w.queries++;

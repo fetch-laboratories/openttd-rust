@@ -260,7 +260,7 @@ static_assert(TILE_HEIGHT == 8 && TILE_SIZE == 16);
 static_assert(MP_CLEAR == 0 && MP_RAILWAY == 1 && MP_ROAD == 2 && MP_HOUSE == 3 && MP_TREES == 4 && MP_STATION == 5 && MP_WATER == 6 && MP_VOID == 7 && MP_INDUSTRY == 8 && MP_TUNNELBRIDGE == 9 && MP_OBJECT == 10);
 static_assert(INVALID_TILE.base() == UINT32_MAX && TILE_HEIGHT_STEP == 50 && CALLBACK_FAILED == 0xFFFF && INVALID_STRING_ID == 0xFFFF);
 static_assert(SLOPE_FLAT == 0 && SLOPE_W == 1 && SLOPE_S == 2 && SLOPE_E == 4 && SLOPE_N == 8 && SLOPE_STEEP == 0x10 && SLOPE_HALFTILE == 0x20 && SLOPE_HALFTILE_MASK == 0xE0);
-static_assert(DIR_END == 8 && AXIS_Y == 1 && DIAGDIR_NE == 0 && DIAGDIR_SE == 1 && DIAGDIR_SW == 2 && DIAGDIR_NW == 3 && INVALID_DIAGDIR == 0xFF);
+static_assert(DIR_END == 8 && AXIS_Y == 1 && DIAGDIR_BEGIN == 0 && DIAGDIR_END == 4 && DIAGDIR_NE == 0 && DIAGDIR_SE == 1 && DIAGDIR_SW == 2 && DIAGDIR_NW == 3 && INVALID_DIAGDIR == 0xFF);
 static_assert(DIR_N == 0 && DIR_NE == 1 && DIR_E == 2 && DIR_SE == 3 && DIR_S == 4 && DIR_SW == 5 && DIR_W == 6 && DIR_NW == 7);
 static_assert(DIAGDIRDIFF_SAME == 0 && DIAGDIRDIFF_90RIGHT == 1 && DIAGDIRDIFF_REVERSE == 2 && DIAGDIRDIFF_90LEFT == 3 && DIAGDIRDIFF_END == 4);
 static_assert(OWNER_TOWN.base() == 0x0F && OWNER_NONE.base() == 0x10 && OWNER_WATER.base() == 0x11 && OWNER_DEITY.base() == 0x12 && INVALID_OWNER.base() == 0xFF);
@@ -278,7 +278,7 @@ static_assert(AXIS_X == 0 && AXIS_Y == 1 && INVALID_AXIS == 0xFF);
 static_assert(PR_TERRAFORM == 21 && PR_CLEAR_CANAL == 61 && PR_CLEAR_TREES == 26);
 static_assert(to_underlying(DoCommandFlag::AutoReplace) == 6 && to_underlying(DoCommandFlag::NoCargoCapacityCheck) == 7);
 static_assert(AIR_HELICOPTER == 0 && AIR_AIRCRAFT == 2 && AIR_CTOL == 1 && HANGAR == 1);
-static_assert(OT_GOTO_STATION == 1 && OT_GOTO_DEPOT == 2 && OT_LOADING == 3 && OT_LEAVESTATION == 4 && OT_DUMMY == 5 && OT_GOTO_WAYPOINT == 6 && OT_CONDITIONAL == 7 && OT_IMPLICIT == 8);
+static_assert(OT_NOTHING == 0 && OT_GOTO_STATION == 1 && OT_GOTO_DEPOT == 2 && OT_LOADING == 3 && OT_LEAVESTATION == 4 && OT_DUMMY == 5 && OT_GOTO_WAYPOINT == 6 && OT_CONDITIONAL == 7 && OT_IMPLICIT == 8);
 static_assert(INVALID_VEH_ORDER_ID == 0xFF && to_underlying(OrderLoadType::NoLoad) == 4 && to_underlying(OrderUnloadType::Unload) == 1 && to_underlying(OrderUnloadType::Transfer) == 2 && to_underlying(OrderUnloadType::NoUnload) == 4);
 static_assert(to_underlying(StationType::Truck) == 2 && to_underlying(StationType::Bus) == 3);
 static_assert(CARGO_AUTO_REFIT == 0xFD && StationID::Invalid().base() == 0xFFFF);
@@ -290,7 +290,7 @@ static_assert(GVSF_FRONT == 0 && GVSF_ARTICULATED_PART == 1 && GVSF_WAGON == 2 &
 static_assert(CCF_ARRANGE.base() == 3);
 static_assert(PR_BUILD_SIGNALS == 3 && PR_BUILD_DEPOT_TRAIN == 5 && PR_CLEAR_ROUGH == 23 && PR_CLEAR_SIGNALS == 28 && PR_CLEAR_DEPOT_TRAIN == 30 && PR_CLEAR_WATER == 34 && PR_TOWN_ACTION == 56 && PR_BUILD_FOUNDATION == 57);
 static_assert(to_underlying(SourceType::Town) == 1);
-static_assert(AT_OILRIG == 9 && OBJECT_STATUE == 2 && EXPENSES_OTHER == 12 && COMPANY_SPECTATOR.base() == 0xFF && MP_INDUSTRY == 8 && MP_OBJECT == 10);
+static_assert(AT_OILRIG == 9 && OBJECT_STATUE == 2 && EXPENSES_CONSTRUCTION == 0 && EXPENSES_OTHER == 12 && COMPANY_SPECTATOR.base() == 0xFF && MP_INDUSTRY == 8 && MP_OBJECT == 10);
 static_assert(RATING_MINIMUM == -1000 && RATING_MAXIMUM == 1000 && RATING_BRIBE_UP_STEP == 200 && RATING_BRIBE_MAXIMUM == 800 && RATING_BRIBE_DOWN_TO == -50);
 static uint32_t Shared_tile_height(uint32_t tile) noexcept { return TileHeight(TileIndex{tile}); }
 static uint8_t Shared_bridge_axis(uint32_t tile) noexcept { return GetBridgeAxis(TileIndex{tile}); }
@@ -440,13 +440,11 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.tunnel_bridge_direction = MapSvcTunnelBridgeDirection,
 	.tunnel_transport = OpenTTDMapQuery<uint8_t, RustTunnelBridgeTransport, uint32_t>,
 	.update_level_crossing = SharedUpdateLevelCrossing,
-	// Registry: house (#256).
 	.rebuild_town_tree = SharedRebuildTownTree,
 	.recession = SharedRecession,
 	.tick_counter = openttd_orders_tick_counter,
 	.town_count = SharedTownCount,
 
-	// Registry: landscape (#212).
 	.apply_foundation = RustApplyFoundation,
 	.clear_ground = OpenTTDClearGround,
 
@@ -458,7 +456,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.tree_ground = OpenTTDTreeGround,
 	.water_services = []() noexcept { return &GetRustWaterGroundServices(); },
 	.for_each_station = SharedForEachStation,
-	// Registry: road stops (#354).
 	.road_stop_type = SharedRoadStopType,
 	.road_stops = []() noexcept { return &GetRustRoadStopServices(); },
 };

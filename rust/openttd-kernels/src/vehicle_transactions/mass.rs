@@ -1,10 +1,9 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Depot and list command dispatch with retained, transaction-local selection.
-#![allow(clippy::too_many_lines)]
 use super::{CommonServices, ERROR, SelectionServices, depot_list, generate_list};
 use crate::command_type::DoCommandFlag;
+use crate::game_state::GameState;
 use crate::services::{CommandCost, Cost};
-use std::cell::UnsafeCell;
 
 #[repr(C)]
 pub struct ListId {
@@ -25,16 +24,12 @@ pub struct Services {
     pub dont_cancel: u8,
     pub invalid_client: u32,
 }
-struct Pool(UnsafeCell<Vec<Vec<*mut ()>>>);
-// SAFETY: Game-state mutex serializes commands. Active selections are removed
-// from this process-wide pool, and no pool access spans a native callback.
-unsafe impl Sync for Pool {}
-static POOL: Pool = Pool(UnsafeCell::new(Vec::new()));
+static POOL: GameState<Vec<Vec<*mut ()>>> = GameState::new(Vec::new());
 struct List(Vec<*mut ()>);
 impl List {
     fn new() -> Self {
         // SAFETY: Serialized access; nested commands cannot see this active frame.
-        Self(unsafe { (&mut *POOL.0.get()).pop() }.unwrap_or_default())
+        Self(unsafe { (&mut *POOL.get()).pop() }.unwrap_or_default())
     }
 }
 impl Drop for List {
@@ -42,7 +37,7 @@ impl Drop for List {
         self.0.clear();
         // SAFETY: Cleared pointers have no destructors or callbacks.
         unsafe {
-            (&mut *POOL.0.get()).push(std::mem::take(&mut self.0));
+            (&mut *POOL.get()).push(std::mem::take(&mut self.0));
         }
     }
 }

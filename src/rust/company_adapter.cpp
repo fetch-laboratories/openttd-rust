@@ -63,9 +63,6 @@
 #include "settings_services.h"
 #include "environment_services.h"
 #include "vehicle_services.h"
-// Registry: house (#256).
-
-// Registry: landscape (#212).
 #include "services_landscape.h"
 
 #include <memory>

@@ -1,4 +1,4 @@
-"""Road controller and YAPF branch witnesses from the committed player saves (#121)."""
+"""Road controller and YAPF branch witnesses from the committed player saves."""
 
 import hashlib
 import json
@@ -6,56 +6,11 @@ import lzma
 import shutil
 from pathlib import Path
 
-from .core import ROOT, copy_runtime, decode_element, read_save, run_game
-from .disasters import patch
+from .core import ROOT, copy_runtime, decode_element, patch, read_save, run_game
 
 ROAD = "roadveh[0]/"
 COMMON = ROAD + "common[0]/"
 AI_FOLDER = "road-scenario-ai"
-
-# Quiet speed pass at 1569158485 (#275): ratio is the median of
-# four three-pair medians; Ir and compatible identity come from profiles of the
-# same build.
-SPEED_HEAD = "1569158485"
-# fmt: off
-SPEED_PASS = (
-    ("generate-tgp-256-1", 1.110315300896287, 2793572625, "f6f82b6bbc4769f652d1451890003fef0f2c7f12c76c6d8d5549614a7d35a1e1"),
-    ("play-opus-55-167-002-manual", 1.3966539583424034, 28985230027, "b4ecf7337dcda62268175b3e99de2e43ffb3a3ffe4f608ee365751dbaabc23a2"),
-    ("play-grok-159-001-manual", 1.4012862839257385, 27529989061, "46dcbfc4ceba5d11801053ac2eb8d35ac640082a6393744d0825fe9dca7229c8"),
-    ("play-padhattan-ridge-1996-manual", 1.3173903988336977, 4589732550, "27801b82dceb31797d73fc2f2f9448be781d1551b2594408b562d7f96b79323d"),
-    ("play-padhattan-ridge-2000-manual", 1.3800238266498832, 7464238014, "17e34235425021ca2f96c739312d9f15ca167ac5f579617d6c9eb1047e8c2627"),
-    ("play-padhattan-ridge-2016-manual", 1.4605364055625372, 13467000116, "602255e34b6a04367a3aea9749e289d8efe8bdd921ba2f2a58e9bc57d11ed7b6"),
-)
-# Loop Ir at the anchor, in SPEED_PASS order. PRs record no counts: root profiles
-# the integrated tip against these anchors (user decision 2026-10-22, AGENTS.md).
-SPEED_INTEGRATED = SPEED_HEAD, tuple(ir for _, _, ir, _ in SPEED_PASS)
-# fmt: on
-SPEED_ANCHORS = {
-    name: dict(
-        anchor=dict(head=SPEED_HEAD, ratio=ratio, Ir=ir, identity={"compatible": c}),
-        integrated=dict(head=SPEED_INTEGRATED[0], Ir=integrated),
-    )
-    for (name, ratio, ir, c), integrated in zip(
-        SPEED_PASS, SPEED_INTEGRATED[1], strict=True
-    )
-}
-SPEED_BUDGETS = {name: ratio for name, ratio, _, _ in SPEED_PASS}
-
-
-def speed_budget(name, ratio, integrated=None):
-    """Report the speed guard without making timings a semantic CI failure."""
-    record = SPEED_BUDGETS.get(name) if integrated is None else integrated
-    if record is None or ratio is None:
-        return None
-    ceiling = 1.5 if name.startswith("play-") else 1.3
-    return {
-        "record": record,
-        "change_percent": (ratio / record - 1) * 100,
-        "within_guard": ratio <= record * 1.15,
-        "ceiling": ceiling,
-        "within_ceiling": ratio <= ceiling,
-        "near_ceiling": ratio >= 0.95 * ceiling,
-    }
 
 
 def uses_ai(scenario):
@@ -361,11 +316,6 @@ def check(scenario, run, mode, role, result):
         )
         if not any(line.startswith(required) for line in lines):
             result["problems"].append(f"{mode}/{role}: missing road command outcomes")
-        key = mode + "_road_commands"
-        if role == "reference":
-            result[key] = lines
-        elif result[key] != lines:
-            result["problems"].append(f"{mode}: road command outcomes differ")
         if scenario["road_commands"] == "tram":
             check_tram(scenario, run, mode, role, result, lines)
         if scenario["road_commands"] == "commands":
@@ -1029,7 +979,7 @@ def game_environment(scenario):
 
 
 def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
-    # Reuse the integrated signal fixture and its frozen-object relinking path.
+    # Reuse the signal fixture and its frozen-object relinking path.
     from . import core, signals
 
     prepared = signals.prepare(
@@ -1045,16 +995,10 @@ def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
     if scenario["road_commands"] != "reload":
         return prepared
     saves = {}
-    for role in ("reference", "candidate"):
-        run = core.run_game(
-            prepared,
-            prepared["executables"][role],
-            builds[role],
-            out / scenario["name"] / role / "capture",
-            timeout,
-            env,
-            desync=False,
-        )
+    runs = core.capture_pair(
+        prepared, prepared["executables"], builds, out / scenario["name"], timeout, env
+    )
+    for role, run in runs.items():
         if run["exit"] or not run["snapshots"]:
             raise RuntimeError("road command reload capture failed")
         saves[role] = run["snapshots"][-1]

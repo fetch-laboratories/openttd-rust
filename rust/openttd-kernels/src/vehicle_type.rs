@@ -12,4 +12,6 @@ pub const VEH_TRAIN: u8 = 0;
 pub const VEH_ROAD: u8 = 1;
 /// `VEH_SHIP`.
 pub const VEH_SHIP: u8 = 2;
+/// `VEH_AIRCRAFT`.
+pub const VEH_AIRCRAFT: u8 = 3;
 pub const GROUND_ACCELERATION: u32 = 9800;

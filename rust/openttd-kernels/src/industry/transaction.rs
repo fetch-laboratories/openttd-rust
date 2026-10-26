@@ -5,9 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Complete industry construction, funding and prospecting transaction.
-//! The native result is a stack `CommandCost`. Specs and layouts are immutable;
-//! every owner/registry access ends before a command, resolver or allocation call.
+//! Industry construction, funding and prospecting transaction. The result is a native stack
+//! `CommandCost`; specs and layouts are immutable.
 use super::{
     Builder, ConstructionRequest, ConstructionServices, GenerationServices, Industry,
     IndustryCommandServices, IndustryCost, IndustryCostServices, LayoutHandle, LifecycleServices,

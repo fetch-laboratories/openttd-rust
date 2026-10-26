@@ -31,8 +31,7 @@ inline OpenTTDSignalContext GetRustSignalContext() noexcept
 }
 
 /* Preserve native accessor types and assertion policy. The FFI tables adapt
- * only result widths; native consumers inline these same reads without another
- * service-table call or a second definition of the map query. */
+ * only result widths; native consumers inline these same reads. */
 template <typename EngineType>
 inline bool RustRailCompatible(EngineType engine, RailType tile) noexcept { return IsCompatibleRail(engine, tile); }
 template <typename EngineType>
@@ -57,7 +56,7 @@ inline Axis RustCrossingRoadAxis(uint32_t tile) noexcept { return GetCrossingRoa
 inline TransportType RustTunnelBridgeTransport(uint32_t tile) noexcept { return GetTunnelBridgeTransportType(TileIndex(tile)); }
 inline uint32_t RustOtherTunnelBridgeEnd(uint32_t tile) noexcept { return GetOtherTunnelBridgeEnd(TileIndex(tile)).base(); }
 
-/* Rail command, depot and crossing leaves (#265): one native definition each. */
+/* Rail command, depot and crossing leaves (rail_cmd.rs). */
 inline RailType RustInvalidRailType() noexcept { return INVALID_RAILTYPE; }
 inline VehicleAccelerationModel RustRailAccelerationType(RailType type) noexcept { return GetRailTypeInfo(type)->acceleration_type; }
 inline uint16_t RustRailMaxSpeed(RailType type) noexcept { return GetRailTypeInfo(type)->max_speed; }

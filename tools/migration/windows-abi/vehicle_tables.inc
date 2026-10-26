@@ -3,8 +3,8 @@
  * These are boundary/lifetime checks, not a second simulation oracle. */
 template <typename Function> struct VehicleUnused;
 template <typename Result, typename... Args>
-struct VehicleUnused<Result (OPENTTD_VEHICLE_CALL *)(Args...) noexcept> {
-	static Result OPENTTD_VEHICLE_CALL Call(Args...) noexcept
+struct VehicleUnused<Result (OPENTTD_RUST_CALL *)(Args...) noexcept> {
+	static Result OPENTTD_RUST_CALL Call(Args...) noexcept
 	{
 		CHECK(false);
 		if constexpr (!std::is_void_v<Result>) return {};
@@ -75,7 +75,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(vehicle, order_nonstop);
 		VEHICLE_UNUSED(ground, has_articulated);
 		VEHICLE_UNUSED(leaves, max_depot_penalty);
-		VEHICLE_UNUSED(leaves, process_orders);
 		VEHICLE_UNUSED(vehicle, loading);
 		VEHICLE_UNUSED(vehicle, visits);
 		VEHICLE_UNUSED(vehicle, waiting_for_unbunching);

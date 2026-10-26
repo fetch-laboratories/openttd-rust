@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check original retirement against conversion and ownership history (#223)."""
+"""Check original retirement against conversion and ownership history."""
 
 import contextlib
 import importlib.util

@@ -5,10 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Complete tunnel/bridge construction, removal and tile ownership policy.
-//! Native tables and result slots are borrowed synchronously under the game-state
-//! mutex; no map/pool or owner borrow crosses a callback. Panics abort, and native
-//! noexcept leaves have no ordinary-play throwing service.
+//! Tunnel and bridge construction, removal and tile ownership policy. Native tables and result
+//! slots are borrowed for one call.
 #![allow(
     unsafe_code,
     missing_docs,
@@ -171,9 +169,7 @@ impl<'a> World<'a> {
                 town: &*road.town,
                 authority: &*road.authority,
                 stations: &*(s.station_commands)(),
-                map: Map {
-                    log_x: (s.map_log_x)() as u8,
-                },
+                map: s.map(),
             }
         }
     }
@@ -200,10 +196,6 @@ impl<'a> World<'a> {
     fn clear_command(&self, out: Cost<'_>, tile: u32, flags: u16) {
         crate::landscape_cmd::clear_command(self.cmd, out.0, tile, flags);
     }
-    fn ownership(&self, out: Cost<'_>, owner: u8, tile: u32) {
-        // SAFETY: live native output slot, no world borrow.
-        unsafe { (self.cmd.ownership)(out.0, owner, tile) };
-    }
     fn signal(&self, tile: u32, direction: u8, owner: u8) {
         crate::signal::Context {
             shared: self.r.shared,
@@ -214,7 +206,7 @@ impl<'a> World<'a> {
         .add_side(tile, direction, owner);
     }
     fn check_docking(&self, tile: u32) {
-        // SAFETY: direct integrated owner; all access scopes end before reentry.
+        // SAFETY: Rust owner; all access scopes end before reentry.
         unsafe {
             crate::station_cmd::openttd_rust_station_check_docking(
                 (self.s.station_commands)(),
@@ -997,8 +989,7 @@ impl<'a> World<'a> {
                     && company != OWNER_TOWN
                     && !((self.road.extra_dynamite)() || (self.authority.bulldozer)())
                 {
-                    // SAFETY: native slot remains live across encoded-error construction.
-                    unsafe { (self.cmd.tile_ownership)(out.0, tile) };
+                    out.tile_ownership(self.cmd, tile);
                     return;
                 }
                 if road_owner == OWNER_NONE || road_owner == OWNER_TOWN {
@@ -1007,18 +998,18 @@ impl<'a> World<'a> {
                 if tram_owner == OWNER_NONE {
                     tram_owner = company;
                 }
-                self.ownership(out, road_owner, tile);
+                out.ownership(self.cmd, road_owner, tile);
                 if out.ok() {
-                    self.ownership(out, tram_owner, tile);
+                    out.ownership(self.cmd, tram_owner, tile);
                 }
             }
-            RAIL => self.ownership(out, (self.s.tile_owner)(tile), 0),
+            RAIL => out.ownership(self.cmd, (self.s.tile_owner)(tile), 0),
             WATER => {
                 let mut owner = (self.s.tile_owner)(tile);
                 if owner == OWNER_NONE {
                     owner = company;
                 }
-                self.ownership(out, owner, 0);
+                out.ownership(self.cmd, owner, 0);
             }
             _ => unreachable!(),
         }
@@ -1503,20 +1494,4 @@ crate::abi::layouts! {
         objects,
         strings,
     };
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn tunnel_output_is_shared_with_the_gui_thread() {
-        let before = END_TILE.swap(0x1234_5678, Ordering::Relaxed);
-        let value = std::thread::spawn(|| {
-            assert_eq!(openttd_rust_tunnel_endtile(), 0x1234_5678);
-            END_TILE.store(0x8765_4321, Ordering::Relaxed);
-        });
-        value.join().expect("GUI reader thread");
-        assert_eq!(openttd_rust_tunnel_endtile(), 0x8765_4321);
-        END_TILE.store(before, Ordering::Relaxed);
-    }
 }

@@ -72,11 +72,7 @@ def environment():
 def rust_configuration(build: Path):
     """Read the target validated by CMake, refusing portable or stale archive layouts."""
     build = build.resolve()
-    cache = {}
-    for line in (build / "CMakeCache.txt").read_text().splitlines():
-        if line and not line.startswith(("#", "//")) and "=" in line:
-            key, value = line.split("=", 1)
-            cache[key.split(":", 1)[0]] = value
+    cache = cmake_cache(build)
     target = cache.get("RUST_TARGET")
     supported = {
         "x86_64-unknown-linux-gnu": ("Linux", 8),
@@ -353,7 +349,7 @@ def supply_graphics(build):
 
 
 def free_cores():
-    """Cores the 1-minute load leaves idle, read once per run (#355)."""
+    """Cores the 1-minute load leaves idle, read once per run."""
     return max(2, (os.cpu_count() or 2) - round(os.getloadavg()[0]))
 
 

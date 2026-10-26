@@ -1,7 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Road-stop invocation and spec-association policy. Native shells/vectors remain
-//! canonical; all element observations end before resize or Action2 evaluation.
-//! No allocation, map reset, yield or unwind crosses a resolver invocation.
+//! Road-stop invocation and spec-association policy. Shells and vectors stay native; element
+//! observations end before resize or Action2 evaluation. Resolver invocations cannot reset
+//! the map or yield the game-state mutex.
 // Casts preserve the native uint8/uint16 assignments and accessor narrowing.
 #![allow(
     unsafe_code,
@@ -114,9 +114,7 @@ impl Services {
         unsafe { &*self.shared }
     }
     fn map(&self) -> crate::map_func::Map {
-        crate::map_func::Map {
-            log_x: (self.shared().map_log_x)() as u8,
-        }
+        self.shared().map()
     }
     fn random(&self) -> u32 {
         (self.shared().random)(self.shared().context)

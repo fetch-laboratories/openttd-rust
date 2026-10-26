@@ -1,4 +1,4 @@
-"""Reference-built aircraft transport/controller evidence (#86/#136)."""
+"""Reference-built aircraft transport/controller evidence."""
 
 import hashlib
 import json
@@ -14,11 +14,12 @@ from .core import (
     TICKS_PER_DAY,
     copy_runtime,
     decode_element,
+    patch,
     read_save,
+    rows,
     run_game,
     save_moment,
 )
-from .disasters import patch, rows
 from .effects import effect_rows
 from .play_saves import DISTRIBUTIONS
 
@@ -186,16 +187,8 @@ def prepare_aircraft_save(migration, out, timeout):
         )
     raw = run["snapshots"][-1]
     data, chunks = raw.read_bytes(), read_save(raw)
-    begin, end = chunks["GLOG"]["span"]
     destination = ROOT / "migration/saves/aircraft-route.sav"
-    destination.write_bytes(data[:begin] + data[end:])
-    normalized = read_save(destination)
-    if set(normalized) != set(chunks) - {"GLOG"} or any(
-        data[slice(*chunks[cid]["span"])]
-        != destination.read_bytes()[slice(*normalized[cid]["span"])]
-        for cid in normalized
-    ):
-        raise RuntimeError("aircraft input changed outside optional GLOG history")
+    core.strip_glog(data, destination)
     if destination.stat().st_size >= 1_000_000:
         raise RuntimeError("aircraft fixture exceeds committed-save budget")
     if core.read_value(core.Reader(chunks["GSDT"]["elements"][0][1]), 10):
@@ -764,8 +757,8 @@ def check_breakdown(scenario, run, mode, role, result):
         )
     ):
         raise RuntimeError("breakdown loading boundary moved or departed")
-    # Stock engine238 (aircraft 23) is Dinger 100: max speed (74*128)/10=947.
-    # International position38 has NoSpeedClamp/SlowTurn, so neither limit
+    # Stock engine 238 (aircraft 23) is Dinger 100: max speed (74*128)/10=947.
+    # International position 38 has NoSpeedClamp/SlowTurn, so neither limit
     # selects 320 itself.
     if (
         b[common + "tick_counter"] != tick + 1
@@ -929,7 +922,7 @@ def check_control(scenario, run, mode, role, result):
         rows(Path(scenario["save"]), "STNN"),
         *[rows(path, "STNN") for path in run["snapshots"]],
     ]
-    states, pads, groups, waiting = set(), set(), set(), 0
+    states, pads, groups = set(), set(), set()
     rotor_states, shadow_positions = set(), set()
     service, plane_service = False, False
     waiting_details = []
@@ -969,7 +962,6 @@ def check_control(scenario, run, mode, role, result):
                 groups.add(0 if state < 5 else 1)
             prefix = "aircraft[0]/common[0]/"
             if row[prefix + "cur_speed"] == 0 and state in (1, 10, 16, 18):
-                waiting += 1
                 target = row["aircraft[0]/targetairport"]
                 station = stations[sample][target]
                 mask = station["normal[0]/airport.flags"]
@@ -977,8 +969,8 @@ def check_control(scenario, run, mode, role, result):
                 waiting_details.append(
                     [head, state, position, station["normal[0]/airport.type"], mask]
                 )
-                # Unchanged international FTA roots: hangar0 -> entrance block13;
-                # hangar1 -> hangar2-area block16. These source HasBlock paths
+                # Unchanged international FTA roots: hangar 0 -> entrance block 13;
+                # hangar 1 -> hangar 2 area block 16. These source HasBlock paths
                 # reset speed while another aircraft owns the actual next block.
                 if (
                     state == 1
@@ -989,7 +981,7 @@ def check_control(scenario, run, mode, role, result):
                     if mask & (1 << bit):
                         occupied_wait += 1
                         blocked.append((sample, head, target, position, bit))
-                # Helistation buffer16 -> hangar-entry23 takes Hangar2Area16;
+                # Helistation buffer 16 -> hangar entry 23 takes Hangar2Area16;
                 # an aircraft headed to HANGAR waits here for its owner to leave.
                 if (
                     state == 1

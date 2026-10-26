@@ -3,7 +3,7 @@
 import shutil
 from pathlib import Path
 
-from . import companies, disasters, economy
+from . import companies, core, economy
 from .console_adapter import console_adapter, prepared_console
 from .core import (
     ROOT,
@@ -239,10 +239,8 @@ def adapter(build, folder, env):
 def prepare(scenario, binaries, builds, out, timeout, env, result):
     mode = scenario.get("industry")
     if mode == "resolver":
-        from . import rails
-
         folder = out / scenario["name"] / "input"
-        source, _ = rails.normalize(Path(scenario["save"]), folder / "normalized")
+        source, _ = core.normalize(Path(scenario["save"]), folder / "normalized")
         executables = prepared_console(
             "industries", adapter, binaries, builds, folder, env
         )
@@ -256,10 +254,10 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         # Company preparation runs first and builds real AI assets with the
         # unchanged reference. Both roles receive these same reachable settings.
         source = Path(scenario["save"])
-        industries = economy.rows(read_save(source), "INDY")
+        industries = core.rows(read_save(source), "INDY")
         chosen = next(i for i, row in industries.items() if row["prod_level"] >= 4)
         target = source.parent / "industry-transfer.sav"
-        result["industry_input"] = disasters.patch(
+        result["industry_input"] = core.patch(
             source,
             target,
             {
@@ -296,11 +294,11 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         if run["exit"] or not run["snapshots"]:
             raise RuntimeError("industry command reference input failed")
         source = run["snapshots"][-1]
-        industries = economy.rows(read_save(source), "INDY")
+        industries = core.rows(read_save(source), "INDY")
         chosen = next(index for index, row in industries.items() if row["type"] == 0)
         edits = {"CHTS": {0: {"magic_bulldozer.value": int(mode == "clear")}}}
         if mode in PROSPECT_FAILURES:
-            towns = economy.rows(read_save(source), "CITY")
+            towns = core.rows(read_save(source), "CITY")
             if len(towns) != 1 or industries[chosen]["town"] != next(iter(towns)) + 1:
                 raise RuntimeError(
                     "prospect exhaustion requires one town and its coal mine"
@@ -310,7 +308,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 0: {f"random_state[{i}]": word for i, word in enumerate(seed)}
             }
         target = folder / "input.sav"
-        result["industry_input"] = disasters.patch(source, target, edits)
+        result["industry_input"] = core.patch(source, target, edits)
         result["industry_chosen"] = chosen
         return dict(
             scenario,
@@ -341,7 +339,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             raise RuntimeError("reference setup AI did not build the lumber mill")
         source = run["snapshots"][-1]
         target = out / scenario["name"] / "input" / "lumber.sav"
-        result["industry_input"] = disasters.patch(source, target, {})
+        result["industry_input"] = core.patch(source, target, {})
         return dict(scenario, kind="save", save=str(target))
     if mode not in (
         "original",
@@ -366,7 +364,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         raise RuntimeError("industry reference setup failed")
     source = run["snapshots"][-1]
     before = read_save(source)
-    industries = economy.rows(before, "INDY")
+    industries = core.rows(before, "INDY")
     chosen = next(
         index
         for index, row in industries.items()
@@ -394,12 +392,12 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         # deficit reassessment. The reference computes all actual probabilities.
         changes["ITBL"] = {
             index: {"target_count": 0, "wait_count": 0, "max_wait": 1}
-            for index in economy.rows(before, "ITBL")
+            for index in core.rows(before, "ITBL")
         }
         changes["ECMY"] = {0: {"industry_daily_change_counter": 512 << 16}}
     target = folder / "input.sav"
     target.parent.mkdir(parents=True, exist_ok=True)
-    result["industry_input"] = disasters.patch(source, target, changes)
+    result["industry_input"] = core.patch(source, target, changes)
     result["industry_chosen"] = chosen
     return dict(scenario, kind="save", save=str(target), console=console)
 
@@ -454,7 +452,7 @@ def check(scenario, run, mode, role, result):
                 )
         if not run["snapshots"] or not any(
             row["type"] == 5 and row["founder"] < 15
-            for row in economy.rows(read_save(run["snapshots"][-1]), "INDY").values()
+            for row in core.rows(read_save(run["snapshots"][-1]), "INDY").values()
         ):
             result["problems"].append(f"{mode}/{role}: no player-funded oil rig")
         return
@@ -463,7 +461,7 @@ def check(scenario, run, mode, role, result):
     if kind is None or not run["snapshots"]:
         return
     saved = [read_save(path) for path in run["snapshots"]]
-    rows = [economy.rows(chunks, "INDY") for chunks in saved]
+    rows = [core.rows(chunks, "INDY") for chunks in saved]
     facts = {
         "industries": len(rows[-1]),
         "produced_history": max(
@@ -503,7 +501,7 @@ def check(scenario, run, mode, role, result):
         "builder_backoff": max(
             row["max_wait"]
             for chunks in saved
-            for row in economy.rows(chunks, "ITBL").values()
+            for row in core.rows(chunks, "ITBL").values()
         ),
     }
     facts["year_history"] = bool(facts["valid_history"] & (1 << 42))
@@ -563,7 +561,7 @@ def check(scenario, run, mode, role, result):
         ):
             result["problems"].append(f"{mode}/{role}: no player-funded raw industry")
         if kind in PROSPECT_FAILURES:
-            before = economy.rows(read_save(Path(scenario["save"])), "INDY")
+            before = core.rows(read_save(Path(scenario["save"])), "INDY")
 
             def identity(sample):
                 return {
@@ -576,11 +574,11 @@ def check(scenario, run, mode, role, result):
             facts["unchanged_identity"] = all(
                 identity(sample) == identity(before) for sample in rows
             )
-            date = economy.rows(saved[-1], "DATE")[0]
+            date = core.rows(saved[-1], "DATE")[0]
             facts["random_state"] = tuple(date[f"random_state[{i}]"] for i in (0, 1))
             facts["checkpoint"] = (date["tick_counter"], date["economy_date_fract"])
             facts["company_restored"] = (
-                economy.rows(saved[-1], "PLYR")[1]["name"] == "Industry " + kind
+                core.rows(saved[-1], "PLYR")[1]["name"] == "Industry " + kind
             )
             if not facts["unchanged_identity"] or not facts["company_restored"]:
                 result["problems"].append(
@@ -593,7 +591,7 @@ def check(scenario, run, mode, role, result):
                     f"{mode}/{role}: {kind} RNG checkpoint missing: {facts['random_state']} at {facts['checkpoint']}"
                 )
         if kind == "clear":
-            before = economy.rows(read_save(Path(scenario["save"])), "INDY")
+            before = core.rows(read_save(Path(scenario["save"])), "INDY")
             chosen = result["industry_chosen"]
             facts["reused_id"] = (
                 chosen in rows[-1]
@@ -643,14 +641,14 @@ def check(scenario, run, mode, role, result):
                     f"{mode}/{role}: farm fields remained associated"
                 )
     if kind == "control":
-        before = economy.rows(read_save(Path(scenario["save"])), "INDY")
+        before = core.rows(read_save(Path(scenario["save"])), "INDY")
         for index, row in rows[-1].items():
             if index in before and row["prod_level"] != before[index]["prod_level"]:
                 result["problems"].append(
                     f"{mode}/{role}: controlled production changed"
                 )
     if kind == "builder":
-        before = economy.rows(read_save(Path(scenario["save"])), "INDY")
+        before = core.rows(read_save(Path(scenario["save"])), "INDY")
         facts["new_industries"] = len(set(rows[-1]) - set(before))
         if facts["new_industries"] == 0 or facts["builder_backoff"] <= 1:
             result["problems"].append(f"{mode}/{role}: no builder success/backoff")
@@ -720,6 +718,8 @@ def lifecycle_gap():
     import importlib.util
     import subprocess
 
+    import probe
+
     from .core import ROOT
 
     spec = importlib.util.spec_from_file_location(
@@ -746,32 +746,16 @@ def lifecycle_gap():
     )
     bodies = []
     for signature in signatures:
-        start = source.index(signature)
-        end = source.index("{", start) + 1
-        depth = 1
-        while depth:
-            if source[end] == "{":
-                depth += 1
-            elif source[end] == "}":
-                depth -= 1
-            end += 1
-        bodies.append(source[start:end])
+        bodies.append(probe.body(source, signature))
     (out / "industry-lifecycle-reference.inc").write_text("\n\n".join(bodies))
     tile_source = subprocess.check_output(
         ["git", "show", migration.BASELINE["commit"] + ":src/industry_cmd.cpp"],
         cwd=ROOT,
         text=True,
     )
-    start = tile_source.index("static void AddAcceptedCargo_Industry(")
-    end = tile_source.index("{", start) + 1
-    depth = 1
-    while depth:
-        if tile_source[end] == "{":
-            depth += 1
-        elif tile_source[end] == "}":
-            depth -= 1
-        end += 1
-    (out / "industry-acceptance-reference.inc").write_text(tile_source[start:end])
+    (out / "industry-acceptance-reference.inc").write_text(
+        probe.body(tile_source, "static void AddAcceptedCargo_Industry(")
+    )
     animation = []
     for name in (
         "AnimateSugarSieve",
@@ -784,16 +768,7 @@ def lifecycle_gap():
         "AnimateMineTower",
         "AnimateTile_Industry",
     ):
-        start = tile_source.index("static void " + name + "(")
-        end = tile_source.index("{", start) + 1
-        depth = 1
-        while depth:
-            if tile_source[end] == "{":
-                depth += 1
-            elif tile_source[end] == "}":
-                depth -= 1
-            end += 1
-        animation.append(tile_source[start:end])
+        animation.append(probe.body(tile_source, "static void " + name + "("))
     drawing = subprocess.check_output(
         ["git", "show", migration.BASELINE["commit"] + ":src/table/industry_land.h"],
         cwd=ROOT,

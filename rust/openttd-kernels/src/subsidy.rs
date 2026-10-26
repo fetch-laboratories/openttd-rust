@@ -5,20 +5,18 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Canonical subsidy owners, route searches, expiry and delivery awards.
-//! Native pool shells retain identity and allocation order. The game-state mutex
-//! serializes process-wide registration; no owner reference spans any callback.
-//! Native leaves are noexcept and script events enqueue without entering a VM.
-//! Panics abort. Source arithmetic explicitly retains narrowing and wrapping.
+//! Subsidy owners, route searches, expiry and delivery awards. Pool shells keep identity
+//! and allocation order; script events enqueue without entering a VM. Source arithmetic
+//! keeps its narrowing and wrapping.
 #![allow(
     unsafe_code,
     missing_docs,
     clippy::missing_safety_doc,
     clippy::cast_possible_truncation,
     clippy::comparison_chain,
-    clippy::if_not_else,
-    clippy::too_many_lines
+    clippy::if_not_else
 )]
+use crate::game_state::GameState;
 pub use crate::source_type::Source;
 use crate::station::{NearbyIndustryCursor, Station};
 use crate::subsidy_type::PartOfSubsidy;
@@ -31,7 +29,7 @@ use crate::{
     timer_game_common::MONTHS_IN_YEAR,
 };
 use crate::{industry, services::Services as Shared, town};
-use std::{cell::UnsafeCell, ffi::c_void, ptr};
+use std::{ffi::c_void, ptr};
 #[repr(C)]
 pub struct State {
     pub cargo_type: u8,
@@ -95,20 +93,17 @@ struct RegistryState {
     slots: [*mut State; 256],
     limit: u16,
 }
-struct Registry(UnsafeCell<RegistryState>);
-// SAFETY: Native game-state mutex serializes registration, iteration and aliases.
-unsafe impl Sync for Registry {}
-static OWNERS: Registry = Registry(UnsafeCell::new(RegistryState {
+static OWNERS: GameState<RegistryState> = GameState::new(RegistryState {
     slots: [ptr::null_mut(); 256],
     limit: 0,
-}));
+});
 fn owner(id: u16) -> *mut State {
     // SAFETY: Serialized native pool index; no registry borrow crosses callbacks.
-    unsafe { (*OWNERS.0.get()).slots[usize::from(id)] }
+    unsafe { (*OWNERS.get()).slots[usize::from(id)] }
 }
 fn each(mut visit: impl FnMut(u16, *mut State)) {
     let mut id = 0;
-    while id < unsafe { (*OWNERS.0.get()).limit } {
+    while id < unsafe { (*OWNERS.get()).limit } {
         let state = owner(id);
         if !state.is_null() {
             visit(id, state);
@@ -127,8 +122,8 @@ pub extern "C" fn openttd_rust_subsidy_new(id: u16) -> *mut State {
     }));
     // SAFETY: The constructing native pool shell owns this stable allocation.
     unsafe {
-        (*OWNERS.0.get()).slots[usize::from(id)] = state;
-        (*OWNERS.0.get()).limit = (*OWNERS.0.get()).limit.max(id + 1);
+        (*OWNERS.get()).slots[usize::from(id)] = state;
+        (*OWNERS.get()).limit = (*OWNERS.get()).limit.max(id + 1);
     }
     state
 }
@@ -136,11 +131,11 @@ pub extern "C" fn openttd_rust_subsidy_new(id: u16) -> *mut State {
 pub unsafe extern "C" fn openttd_rust_subsidy_destroy(id: u16, state: *mut State) {
     // SAFETY: Native pool destroys exactly once, after every scalar alias ends.
     unsafe {
-        (*OWNERS.0.get()).slots[usize::from(id)] = ptr::null_mut();
-        while (*OWNERS.0.get()).limit > 0
-            && (*OWNERS.0.get()).slots[usize::from((*OWNERS.0.get()).limit - 1)].is_null()
+        (*OWNERS.get()).slots[usize::from(id)] = ptr::null_mut();
+        while (*OWNERS.get()).limit > 0
+            && (*OWNERS.get()).slots[usize::from((*OWNERS.get()).limit - 1)].is_null()
         {
-            (*OWNERS.0.get()).limit -= 1;
+            (*OWNERS.get()).limit -= 1;
         }
         drop(Box::from_raw(state));
     }
@@ -165,9 +160,7 @@ impl Services {
         (self.set_source_flag)(source, flag);
     }
     fn distance_tiles(&self, a: u32, b: u32) -> bool {
-        let map = crate::map_func::Map {
-            log_x: (self.shared().map_log_x)() as u8,
-        };
+        let map = self.shared().map();
         map.distance_manhattan(a, b) <= SUBSIDY_MAX_DISTANCE
     }
     fn distance(&self, a: Source, b: Source) -> bool {
@@ -262,9 +255,7 @@ impl Services {
         }
         let shared = self.shared();
         let xy = unsafe { town::position(owner) };
-        let map = crate::map_func::Map {
-            log_x: (shared.map_log_x)() as u8,
-        };
+        let map = shared.map();
         let mut area = crate::tilearea::TileArea {
             tile: xy,
             w: 1,
@@ -366,7 +357,7 @@ impl Services {
         self.destination(scratch, cargo, Source::industry((self.industry_id)(shell)))
     }
     fn destination(&self, scratch: Cargo, cargo: u8, src: Source) -> bool {
-        let dst = if crate::services::chance16_i(1, 2, self.shared().random()) {
+        let dst = if crate::random_func::chance16_i(1, 2, self.shared().random()) {
             let town = (self.random_town)();
             self.scan(scratch, town.state, true);
             if unsafe { scratch.data.add(usize::from(cargo)).read() < 8 } {

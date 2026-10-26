@@ -227,9 +227,6 @@ pub struct ClearSquareServices {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Services {
-    /// Private controller unit-test callee stub, absent from the game ABI.
-    #[cfg(test)]
-    pub safe_waiting_position: unsafe extern "C" fn(*const Train, u32, u8, bool) -> bool,
     /// Complete synchronous movement owner; immutable process-lifetime table.
     pub movement_services: extern "C" fn() -> *const crate::movement::MovementServices,
     /// Canonical native tile owner write.
@@ -348,7 +345,6 @@ pub struct Services {
     pub road_owner: extern "C" fn(u32) -> u8,
     /// Original native `road_type` map observation.
     pub road_type: extern "C" fn(u32) -> u8,
-    // Registry: road commands (#266).
     /// Canonical native `HasCrossingReservation`.
     pub crossing_reserved: extern "C" fn(u32) -> bool,
     /// Canonical native `SetCrossingReservation`.
@@ -380,7 +376,6 @@ pub struct Services {
     pub snow_line: extern "C" fn() -> u8,
     /// `GetStationIndex`.
     pub station_index: extern "C" fn(u32) -> u16,
-    // Registry: station construction (#267).
     /// Canonical shared `docking_tile` service.
     pub road_commands: extern "C" fn() -> *const crate::road_cmd::RoadCommandServices,
     /// Canonical native station command table.
@@ -447,7 +442,6 @@ pub struct Services {
     pub tunnel_transport: extern "C" fn(u32) -> u8,
     /// Original `UpdateLevelCrossing`; callers retain their original sound argument.
     pub update_level_crossing: extern "C" fn(u32, bool),
-    // Registry: house (#256).
     /// Rebuild the canonical town spatial index.
     pub rebuild_town_tree: extern "C" fn(),
     /// Whether the economy is in recession.
@@ -456,7 +450,6 @@ pub struct Services {
     pub tick_counter: extern "C" fn() -> u64,
     /// Number of towns in the pool.
     pub town_count: extern "C" fn() -> usize,
-    // Registry: landscape (#212).
     /// `ApplyFoundationToSlope`, returning the height added and the modified slope.
     pub apply_foundation: extern "C" fn(Foundation, Slope) -> FoundationSlope,
     /// `GetClearGround`.
@@ -480,7 +473,6 @@ pub struct Services {
     /// canonical service owner and index. Visits may reenter but never add or
     /// delete a station.
     pub for_each_station: extern "C" fn(*mut c_void, StationVisitor),
-    // Registry: road stops (#354).
     /// `GetRoadStopType`.
     pub road_stop_type: extern "C" fn(u32) -> RoadStopType,
     /// Native road stop shells and their vehicle reads.
@@ -510,6 +502,11 @@ pub struct FoundationSlope {
     pub slope: Slope,
 }
 impl Services {
+    /// Capture `Map::LogX()` once for a synchronous entry.
+    #[must_use]
+    pub fn map(&self) -> Map {
+        Map::from_log_x((self.map_log_x)())
+    }
     /// Draw one shared random word.
     #[must_use]
     pub fn random(&self) -> u32 {
@@ -923,7 +920,6 @@ pub fn fixture(
         false
     }
     Services {
-        safe_waiting_position: fixture_safe,
         movement_services: fixture_movement,
         set_tile_owner: zone,
         autoslope: flag0,
@@ -1033,12 +1029,10 @@ pub fn fixture(
         tunnel_bridge_direction: byte,
         tunnel_transport: byte,
         update_level_crossing: fixture_crossing_update,
-        // Registry: house (#256).
         rebuild_town_tree: noop,
         recession: flag0,
         tick_counter: tick0,
         town_count: count0,
-        // Registry: landscape (#212).
         apply_foundation,
         clear_ground,
         has_water_class: flag,
@@ -1049,7 +1043,6 @@ pub fn fixture(
         tree_ground,
         water_services: fixture_water_services,
         for_each_station: fixture_stations,
-        // Registry: road stops (#354).
         road_stop_type: fixture_road_stop_type,
         road_stops: fixture_road_stops,
     }
@@ -1071,11 +1064,6 @@ extern "C" fn fixture_crossing_update(_: u32, _: bool) {}
 #[cfg(test)]
 extern "C" fn fixture_train_trackdir(_: *const Train) -> Trackdir {
     Trackdir(0)
-}
-/// Source `Chance16I` uses uint32 multiplication/addition after uint16 truncation.
-#[must_use]
-pub fn chance16_i(a: u32, b: u32, r: u32) -> bool {
-    (((r & 65535).wrapping_mul(b).wrapping_add(b / 2)) >> 16) < a
 }
 
 #[cfg(test)]
@@ -1103,7 +1091,7 @@ pub(crate) extern "C" fn unused_current_company() -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::random_func::chance16_i;
     #[test]
     fn chance_retains_low_word_rounding_and_u32_wrap() {
         assert!(chance16_i(1, 200, 0));
@@ -1111,10 +1099,9 @@ mod tests {
         assert!(!chance16_i(1, 200, 328));
         assert!(!chance16_i(1, 200, 65535));
         assert!(chance16_i(1, 200, 0xffff_0000));
-        assert_eq!(
-            chance16_i(1, u32::MAX, 65535),
-            ((65535_u32.wrapping_mul(u32::MAX).wrapping_add(u32::MAX / 2)) >> 16) < 1
-        );
+        // 0xffff_ffff + 0x7fff_ffff wraps to 0x7fff_fffe, so the quotient is 32767.
+        assert!(chance16_i(32768, u32::MAX, 1));
+        assert!(!chance16_i(32767, u32::MAX, 1));
     }
 }
 
@@ -1370,7 +1357,7 @@ impl Cost<'_> {
         (self.1.error)(self.0, message);
     }
     pub(crate) fn set(self, money: i64) {
-        (self.1.expense_money)(self.0, 0, money);
+        (self.1.expense_money)(self.0, crate::economy_type::EXPENSES_CONSTRUCTION, money);
     }
     pub(crate) fn add_money(self, money: i64) {
         (self.1.amount)(self.0, money);
@@ -1393,6 +1380,35 @@ impl Cost<'_> {
     }
     pub(crate) fn money(self) -> i64 {
         (self.1.money)(self.0)
+    }
+}
+/// Command checks that write their result into a `Cost`, whose native slot is live for
+/// the synchronous entry; the checks take plain tile, owner and track values.
+impl Cost<'_> {
+    /// `CheckTileOwnership`.
+    pub(crate) fn tile_ownership(self, command: &CommandServices, tile: u32) {
+        // SAFETY: The impl contract above.
+        unsafe { (command.tile_ownership)(self.0, tile) };
+    }
+    /// `CheckOwnership`.
+    pub(crate) fn ownership(self, command: &CommandServices, owner: u8, tile: u32) {
+        // SAFETY: The impl contract above.
+        unsafe { (command.ownership)(self.0, owner, tile) };
+    }
+    /// `EnsureNoVehicleOnGround`.
+    pub(crate) fn no_vehicle(self, command: &CommandServices, tile: u32) {
+        // SAFETY: The impl contract above.
+        unsafe { command.no_vehicle(self.0, tile) };
+    }
+    /// `EnsureNoTrainOnTrackBits`.
+    pub(crate) fn no_train(self, command: &CommandServices, tile: u32, bits: u8) {
+        // SAFETY: The impl contract above.
+        unsafe { command.no_train(self.0, tile, bits) };
+    }
+    /// `TunnelBridgeIsFree` with no ignored vehicle.
+    pub(crate) fn wormhole_free(self, command: &CommandServices, tile: u32, end: u32) {
+        // SAFETY: The impl contract above; a null `ignore` names no vehicle.
+        unsafe { command.wormhole_free(self.0, tile, end, std::ptr::null()) };
     }
 }
 
@@ -1470,11 +1486,6 @@ extern "C" fn unused_tile_add_wrap(_: u32, _: i32, _: i32) -> u32 {
 #[cfg(test)]
 extern "C" fn unused_road_is_tram(_: RoadType) -> bool {
     panic!("unused tram classification");
-}
-
-#[cfg(test)]
-extern "C" fn fixture_safe(_: *const Train, _: u32, _: u8, _: bool) -> bool {
-    false
 }
 
 #[cfg(test)]

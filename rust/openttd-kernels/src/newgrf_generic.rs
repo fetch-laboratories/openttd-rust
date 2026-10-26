@@ -1,19 +1,19 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Generic callback registry and invocation policy. The game-state mutex serializes
-//! all entries. Load/reset cannot run during resolution; files/graphs stay live.
-//! Only registration allocates. Each candidate copies one pointer pair, ending the
-//! registry borrow before Action2; invocations are independent stack values. No
-//! context/register borrow spans evaluation, sound, or other reentrant leaves.
+//! Generic callback registry and invocation policy. Only registration allocates; each
+//! candidate copies one pointer pair before Action2, and invocations are stack values. Load
+//! and reset cannot run during resolution, so files and graphs stay live.
 #![allow(unsafe_code, missing_docs, clippy::cast_possible_truncation)]
+use crate::game_state::GameState;
 use crate::industry_type::IT_INVALID;
 use crate::newgrf::{GSF_END, GSF_SOUNDFX};
 use crate::newgrf_callbacks::{
     CALLBACK_FAILED, CBID_GENERIC_AI_PURCHASE_SELECTION, CBID_SOUNDS_AMBIENT_EFFECT,
 };
 use crate::newgrf_spritegroup::VSG_SCOPE_SELF;
-use crate::services::{Services as Shared, WaterClass, chance16_i};
+use crate::random_func::chance16_i;
+use crate::services::{Services as Shared, WaterClass};
 use crate::tile_type::{MP_CLEAR, MP_TREES, MP_WATER};
-use std::{cell::UnsafeCell, ffi::c_void, ptr};
+use std::{ffi::c_void, ptr};
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct Scope {
@@ -67,20 +67,17 @@ struct Registry {
     native: *const Services,
     groups: [Vec<Callback>; GSF_END as usize],
 }
-struct State(UnsafeCell<Registry>);
-// SAFETY: native loading/game-state serialization excludes concurrent access.
-unsafe impl Sync for State {}
-static STATE: State = State(UnsafeCell::new(Registry {
+static STATE: GameState<Registry> = GameState::new(Registry {
     native: ptr::null(),
     groups: [const { Vec::new() }; GSF_END as usize],
-}));
+});
 fn services() -> &'static Services {
-    unsafe { &*(*STATE.0.get()).native }
+    unsafe { &*(*STATE.get()).native }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_generic_reset(native: *const Services) {
     // SAFETY: load/reset is outside every runtime invocation, before graph destruction.
-    let state = unsafe { &mut *STATE.0.get() };
+    let state = unsafe { &mut *STATE.get() };
     state.native = native;
     for groups in &mut state.groups {
         groups.clear();
@@ -94,7 +91,7 @@ pub extern "C" fn openttd_rust_generic_add(feature: u8, file: *const c_void, gro
     }
     // SAFETY: registration is confined to native load phases; preserve duplicates.
     unsafe {
-        (*STATE.0.get()).groups[usize::from(feature)].push(Callback { file, group });
+        (*STATE.get()).groups[usize::from(feature)].push(Callback { file, group });
     }
 }
 unsafe fn result(
@@ -107,11 +104,11 @@ unsafe fn result(
     let s = services();
     let feature = unsafe { (*invocation).scope.feature };
     crate::movement::native_assert(unsafe { &*s.shared }, feature < GSF_END);
-    let mut index = unsafe { (&(*STATE.0.get()).groups)[usize::from(feature)].len() };
+    let mut index = unsafe { (&(*STATE.get()).groups)[usize::from(feature)].len() };
     while index != 0 {
         index -= 1;
         // SAFETY: loader lifetime excludes mutation. No slice/iterator survives evaluation.
-        let entry = unsafe { (&(*STATE.0.get()).groups)[usize::from(feature)][index] };
+        let entry = unsafe { (&(*STATE.get()).groups)[usize::from(feature)][index] };
         let param1 = if (s.version)(entry.file) >= 8 { v8 } else { v7 };
         unsafe {
             (*invocation).file = entry.file;
@@ -253,7 +250,7 @@ pub extern "C" fn openttd_rust_generic_ai(
 /// The original outer feature gate; tree callers observe it again AFTER return.
 pub fn ambient_enabled() -> bool {
     #[cfg(test)]
-    if unsafe { (*STATE.0.get()).native.is_null() } {
+    if unsafe { (*STATE.get()).native.is_null() } {
         return false;
     }
     (services().enabled)()

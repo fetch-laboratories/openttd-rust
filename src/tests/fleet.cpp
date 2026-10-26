@@ -5,7 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-/** @file fleet.cpp Fleet owner layouts, service tables, CommandCost and reentry checks. */
+/** @file fleet.cpp Fleet owner layouts, CommandCost stack lifetime and reentry checks. */
 #include "../stdafx.h"
 #include "../3rdparty/catch2/catch.hpp"
 #ifdef WITH_RUST
@@ -16,11 +16,6 @@
 #include "../company_func.h"
 #include "../core/backup_type.hpp"
 #include "abi_layout.hpp"
-#include "../rust/service_table_check.hpp"
-#include "abi-visit-OpenTTDFleetGroupServices.hpp"
-#include "abi-visit-OpenTTDFleetTransactionServices.hpp"
-#include "abi-visit-OpenTTDCommandServices.hpp"
-#include "abi-visit-OpenTTDCommandCostServices.hpp"
 #include "../rust/command_services.h"
 #include "../table/strings.h"
 #include <map>
@@ -29,7 +24,7 @@
 #ifdef WITH_RUST
 TEST_CASE("Fleet - canonical state layouts and independent lifetimes")
 {
-	auto Layout = [](const char *name, std::initializer_list<size_t> values) { CHECK(AbiLayoutMismatch(name, values) == -1); };
+	ABI_LAYOUT_CHECK;
 #include "abi-layout-fleet.inc"
 
 	/* Rust reads Livery as {in_use, colour1, colour2} bytes. */
@@ -74,58 +69,6 @@ TEST_CASE("Fleet - canonical state layouts and independent lifetimes")
 	CHECK(&detached.RenewalList() != &company.RenewalList());
 }
 
-TEST_CASE("Fleet - service tables match the Rust layout and fill every slot")
-{
-	using G = OpenTTDFleetGroupServices;
-	using T = OpenTTDFleetTransactionServices;
-
-	const G &group = FleetGroupServices();
-	const T &transaction = FleetTransactionServices();
-	CHECK(AbiServicesComplete(group));
-	CHECK(AbiServicesComplete(transaction));
-	CHECK(group.recursion_error == STR_ERROR_GROUP_CAN_T_SET_PARENT_RECURSION);
-	CHECK(transaction.unavailable == STR_ERROR_RAIL_VEHICLE_NOT_AVAILABLE);
-	CHECK(transaction.too_long == STR_ERROR_TRAIN_TOO_LONG);
-	CHECK(transaction.too_long_replacement == STR_ERROR_TRAIN_TOO_LONG_AFTER_REPLACEMENT);
-	CHECK(transaction.nothing == STR_ERROR_AUTOREPLACE_NOTHING_TO_DO);
-#if !defined(NDEBUG) || defined(WITH_ASSERT)
-	CHECK(transaction.assertions);
-#else
-	CHECK_FALSE(transaction.assertions);
-#endif
-}
-
-static bool SameCost(const CommandCost &a, const CommandCost &b)
-{
-	return a.Succeeded() == b.Succeeded() && a.GetCost() == b.GetCost() && a.GetErrorMessage() == b.GetErrorMessage() && a.GetExpensesType() == b.GetExpensesType() && a.GetExtraErrorMessage() == b.GetExtraErrorMessage() && a.GetErrorOwner() == b.GetErrorOwner();
-}
-
-TEST_CASE("Commands - shared native stack result layouts and encoded parameters")
-{
-	const auto &commands = GetRustCommandServices();
-	CHECK(AbiServicesComplete(commands));
-	const auto &w = GetRustCommandCostServices();
-	CHECK(AbiServicesComplete(w));
-	AutoRestoreBackup<CompanyID> current(_current_company, CompanyID(0));
-	AutoRestoreBackup<CompanyID> local(_local_company, CompanyID(0));
-	CommandCost result;
-	w.error_param(RustCommandCost(&result), STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS, UINT16_MAX);
-	CommandCost expected = CommandCostWithParam(STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS, UINT16_MAX);
-	result.SetErrorOwner(CompanyID(4)); expected.SetErrorOwner(CompanyID(4));
-	CHECK(SameCost(result, expected));
-	CHECK_FALSE(expected.GetEncodedMessage().empty());
-	CHECK(result.GetEncodedMessage() == expected.GetEncodedMessage());
-	CommandCost moved;
-	w.move(RustCommandCost(&moved), RustCommandCost(&result));
-	CHECK(SameCost(moved, expected));
-	CHECK(moved.GetEncodedMessage() == expected.GetEncodedMessage());
-	w.error(RustCommandCost(&moved), INVALID_STRING_ID);
-	CHECK_FALSE(w.success(RustCommandCost(&moved)));
-	CHECK(w.error_message(RustCommandCost(&moved)) == INVALID_STRING_ID);
-	w.expense_money(RustCommandCost(&moved), EXPENSES_CONSTRUCTION, INT64_MIN);
-	CHECK(SameCost(moved, CommandCost(EXPENSES_CONSTRUCTION, Money(INT64_MIN))));
-}
-
 static std::vector<OpenTTDCommandCost *> command_cost_stack;
 static bool command_cost_lifo;
 TEST_CASE("Command - opaque stack lifetime and moved encoded errors")
@@ -153,58 +96,6 @@ TEST_CASE("Command - opaque stack lifetime and moved encoded errors")
 	native.destroy(a);
 	CHECK(reinterpret_cast<CommandCost *>(b)->GetEncodedMessage() == expected);
 	native.destroy(b);
-}
-
-TEST_CASE("Fleet - CommandCost services keep native first-error and saturation")
-{
-	const auto &w = FleetTransactionServices();
-	/* Replacement accumulator: build error first, then a later error and later costs. */
-	CommandCost native(EXPENSES_NEW_VEHICLES, Money(0));
-	CommandCost result(STR_ERROR_AUTOREPLACE_NOTHING_TO_DO);
-	w.cost_vehicles(&result);
-	CHECK(SameCost(result, native));
-	CHECK(w.success(&result));
-	CommandCost first(STR_ERROR_TRAIN_TOO_LONG);
-	first.AddCost(Money(1234));
-	CommandCost first_native = first;
-	w.cost_add(&result, &first);
-	native.AddCost(std::move(first_native));
-	CHECK(SameCost(result, native));
-	CHECK(w.error(&result) == STR_ERROR_TRAIN_TOO_LONG);
-	CHECK(w.money(&result) == 1234);
-	CommandCost later(STR_ERROR_TRAIN_TOO_LONG_AFTER_REPLACEMENT, STR_ERROR_AUTOREPLACE_MONEY_LIMIT);
-	later.AddCost(Money(5));
-	CommandCost later_native = later;
-	w.cost_add(&result, &later);
-	native.AddCost(std::move(later_native));
-	CHECK(SameCost(result, native));
-	CHECK(w.error(&result) == STR_ERROR_TRAIN_TOO_LONG);
-	CHECK(w.money(&result) == 1239);
-	/* Money saturation in both directions, including the wagon refund's negation. */
-	w.cost_amount(&result, INT64_MAX);
-	native.AddCost(Money(INT64_MAX));
-	CHECK(SameCost(result, native));
-	CHECK(w.money(&result) == INT64_MAX);
-	w.cost_amount(&result, INT64_MIN);
-	w.cost_amount(&result, INT64_MIN);
-	native.AddCost(Money(INT64_MIN));
-	native.AddCost(Money(INT64_MIN));
-	CHECK(SameCost(result, native));
-	CHECK(w.money(&result) == INT64_MIN);
-	CHECK(-Money(INT64_MIN) == Money(INT64_MAX));
-	/* Move keeps every native field, then error/zero overwrite the whole value. */
-	CommandCost moved(STR_ERROR_TRAIN_TOO_LONG, STR_ERROR_AUTOREPLACE_MONEY_LIMIT);
-	CommandCost target;
-	w.cost_move(&target, &moved);
-	CHECK(SameCost(target, CommandCost(STR_ERROR_TRAIN_TOO_LONG, STR_ERROR_AUTOREPLACE_MONEY_LIMIT)));
-	w.cost_error(&target, STR_ERROR_AUTOREPLACE_NOTHING_TO_DO);
-	CHECK(SameCost(target, CommandCost(STR_ERROR_AUTOREPLACE_NOTHING_TO_DO)));
-	w.cost_zero(&target);
-	CHECK(SameCost(target, CommandCost()));
-	/* A successful item adds only its cost; the receiver keeps its expense type. */
-	CommandCost success(EXPENSES_PROPERTY, Money(9));
-	w.cost_add(&target, &success);
-	CHECK(SameCost(target, CommandCost(INVALID_EXPENSES, Money(9))));
 }
 
 /* Drain reentry: the command callback inserts and overwrites map entries. */

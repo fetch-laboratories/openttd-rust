@@ -67,8 +67,8 @@ inline OpenTTDRailStep Run(uint32_t limit, uint32_t curve = 29, bool cache = fal
 	follows.clear(); writes.clear(); stats = {}; flushes = limits = red = restored = 0;
 	follow_reads.clear();
 	auto shared = OpenTTDFixtureSharedServices(nullptr, OpenTTDFixtureMapService<uint32_t, void *>, OpenTTDFixtureMapService<uint32_t, int32_t, int32_t, uint32_t *>);
-	/* PBS is now a Rust callee: provide its typed map/follower leaves instead of
-	 * stubbing whole waiting/reservation policies. The synthetic graph is unchanged. */
+	/* PBS is a Rust callee: provide its typed map/follower leaves rather than
+	 * stubbing whole waiting/reservation policies. */
 	std::unique_ptr<OpenTTDTrainState, decltype(&openttd_rust_train_state_destroy)> state{openttd_rust_train_state_new(), openttd_rust_train_state_destroy};
 	OpenTTDRailMapServices rail{};
 	rail.is_rail_depot = [](uint32_t) noexcept { return false; };

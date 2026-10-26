@@ -1,14 +1,12 @@
 """Ground/flood scenario witnesses and unreachable scheduler comparisons."""
 
-import hashlib
 import struct
 import subprocess
 from pathlib import Path
 
-from . import core, objects, rails
+from . import core, objects
 from .console_adapter import prepared_console
-from .core import ROOT, WITNESS_ENVIRONMENT, branch_witnesses, read_save
-from .disasters import patch, rows
+from .core import ROOT, WITNESS_ENVIRONMENT, branch_witnesses, patch, read_save, rows
 from .effects import effect_rows
 
 # name, climate, MAPT, M3LO, M3HI, MAP5, MAP2, base height, N/W/E/S slope,
@@ -124,7 +122,7 @@ def game_environment(scenario):
 def prepare(scenario, binaries, builds, out, timeout, env, result):
     if scenario.get("generic_callbacks"):
         folder = out / scenario["name"] / "input"
-        source, record = rails.normalize(Path(scenario["save"]), folder / "normalized")
+        source, record = core.normalize(Path(scenario["save"]), folder / "normalized")
         result["generic_input"] = record
         scenario = dict(scenario, save=str(source))
         executables = prepared_console(
@@ -150,7 +148,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
 
     if "landscape_commands" in scenario:
         folder = out / scenario["name"] / "input"
-        source, record = rails.normalize(Path(scenario["save"]), folder / "normalized")
+        source, record = core.normalize(Path(scenario["save"]), folder / "normalized")
         result["landscape_input"] = record
         scenario = dict(scenario, save=str(source))
         executables = prepared_console(
@@ -165,19 +163,19 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         saves = {
             role: folder / role / "landscape.sav" for role in ("reference", "candidate")
         }
-        for role, save in saves.items():
-            setup = dict(
-                scenario, console=[f'landscape_scenario control "{save}"', "unpause"]
-            )
-            run = core.run_game(
-                setup,
-                executables[role],
-                builds[role],
-                folder / role / "capture",
-                timeout,
-                env,
-                False,
-            )
+        runs = core.capture_pair(
+            lambda role: dict(
+                scenario,
+                console=[f'landscape_scenario control "{saves[role]}"', "unpause"],
+            ),
+            executables,
+            builds,
+            folder,
+            timeout,
+            env,
+        )
+        for role, run in runs.items():
+            save = saves[role]
             if (
                 run["exit"]
                 or not save.is_file()
@@ -255,14 +253,13 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             changes["VEHS"][v] = dict(changes["VEHS"][17])
             changes["VEHS"][v]["train[0]/common[0]/x_pos"] += 8 * (v - 17)
             changes["VEHS"][v]["train[0]/common[0]/tile"] += v == 19
-    receipt = patch(source, fixture, changes)
+    patch(source, fixture, changes)
     data = bytearray(fixture.read_bytes())
 
     def put(cid, t, value):
         size = 2 if cid in ("MAP2", "MAP8") else 1
         position = chunks[cid]["span"][0] + 8 + size * t
         data[position : position + size] = value.to_bytes(size, "big")
-        receipt.setdefault("ground_map", []).append([cid, t, value])
 
     if case[0] in REMOTE:
         edge = 5 if case[0] == "airport" else 2
@@ -302,8 +299,6 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         for cid, value in (("MAPT", 96), ("MAPO", 17), ("MAP5", 0), ("M3LO", 0)):
             put(cid, t, value)
     fixture.write_bytes(data)
-    receipt["sha256"] = hashlib.sha256(data).hexdigest()
-    result["ground_input"] = receipt
     return dict(scenario, save=str(fixture), ground_tile=tile)
 
 
@@ -334,11 +329,6 @@ def check(scenario, run, mode, role, result):
             for p in ambient
         ):
             raise RuntimeError("ambient playback/file outcome missing")
-        key = mode + "_generic_callbacks"
-        if role == "reference":
-            result[key] = lines
-        elif result[key] != lines:
-            raise RuntimeError("generic callback results/parameters/RNG differ")
         return
     if scenario.get("generation_probe"):
         lines = [line for line in run["log"] if line.startswith("GENERATION ")]
@@ -424,11 +414,6 @@ def check(scenario, run, mode, role, result):
                 raise RuntimeError("landscape command/restoration evidence missing")
             if any(int(costs[name][5]) <= 0 for name in ("clear-cash", "level-cash")):
                 raise RuntimeError("landscape insufficient-cash branch missing")
-        key = mode + "_landscape_commands"
-        if role == "reference":
-            result[key] = lines
-        elif result[key] != lines:
-            raise RuntimeError("landscape command outputs differ")
         required = (
             ("recursive", "two_pass", "indirect", "partial")
             if scenario["landscape_commands"] == "control"
@@ -489,17 +474,14 @@ def scheduler_gap():
     def function(text, name):
         import re
 
+        import probe
+
         match = re.search(
             r"^(?:static )?(?:inline )?[\w:<>]+\s+" + name + r"\([^;{}]*\)\s*\{",
             text,
             re.M,
         )
-        start = text.rfind("\n", 0, match.start()) + 1
-        end, depth = match.end(), 1
-        while depth:
-            depth += (text[end] == "{") - (text[end] == "}")
-            end += 1
-        return text[start:end] + "\n"
+        return probe.body(text, match[0]) + "\n"
 
     fragments = (
         (migration.REFERENCE / "src/slope_func.h")

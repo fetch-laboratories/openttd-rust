@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
-"""Compare scoped encoded-string gaps using verbatim pristine functions and public APIs."""
+"""Compare scoped encoded-string gaps using verbatim pristine functions and public APIs.
 
-import hashlib
+The sanitizer instruments the C++ fixture and adapters and checks Rust
+allocator leaks, not Rust memory accesses.
+"""
+
 import json
 import re
 import resource
-import runpy
 import subprocess
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = runpy.run_path(str(ROOT / "tools/migration.py"))
-REFERENCE = MIGRATION["REFERENCE"].resolve()
-OUT = ROOT / ".local/encoded-comparison"
+import probe
+
 FUNCTIONS = {
     "src/strings.cpp": (
         "EncodedString GetEncodedStringWithArgs(StringID str, std::span<const StringParameter> params)",
@@ -23,37 +22,25 @@ FUNCTIONS = {
         "void FixSCCEncodedNegative(std::string &str)",
     ),
 }
+MODES = {
+    "debug": [],
+    "debug-with-assert": ["-DWITH_ASSERT"],
+    "ndebug": ["-DNDEBUG"],
+    "ndebug-with-assert": ["-DNDEBUG", "-DWITH_ASSERT"],
+}
 
 
-def extract(source, signature):
+def scopes(out, label, source):
     """Retain each complete function verbatim; no reference algorithm reimplementation."""
-    start = source.index(signature + "\n{")
-    # These four functions have balanced braces even inside their comments/literals.
-    opened = source.index("{", start)
-    depth = 1
-    end = opened + 1
-    while depth:
-        if source[end] == "{":
-            depth += 1
-        elif source[end] == "}":
-            depth -= 1
-        end += 1
-    return source[start:end] + "\n"
-
-
-def scopes(label, source):
     header = '#include "stdafx.h"\n#include "strings_func.h"\n#include "core/string_builder.hpp"\n#include "core/string_consumer.hpp"\n#include "core/utf8.hpp"\n#include "table/control_codes.h"\n#ifdef WITH_RUST\n#include "rust/encoded_adapter.hpp"\n#endif\n'
     parts = []
-    hashes = {}
     for filename, signatures in FUNCTIONS.items():
         original = (source / filename).read_text()
         for signature in signatures:
-            text = extract(original, signature)
-            parts.append(text)
-            hashes[signature] = hashlib.sha256(text.encode()).hexdigest()
-    path = OUT / f"{label}-scoped.cpp"
+            parts.append(probe.body(original, signature + "\n{") + "\n")
+    path = out / f"{label}-scoped.cpp"
     path.write_text(header + "\n".join(parts))
-    return path, hashes
+    return path
 
 
 def hexbytes(value):
@@ -207,70 +194,51 @@ def normalized(result):
     return result.returncode, result.stdout, stderr
 
 
+def command(out, label, source, flags):
+    return [
+        probe.compiler(),
+        "-std=c++20",
+        "-O0",
+        "-DFMT_HEADER_ONLY",
+        "-ffunction-sections",
+        "-fdata-sections",
+        "-I",
+        source / "src",
+        probe.ROOT / "tools/migration/encoded-comparison.cpp",
+        out / f"{label}-scoped.cpp",
+        source / "src/core/string_builder.cpp",
+        source / "src/core/string_consumer.cpp",
+        source / "src/core/utf8.cpp",
+        "-Wl,--gc-sections",
+        *flags,
+    ] + (probe.rust() if label == "candidate" else [])
+
+
+def run(argv, data, env=None):
+    return subprocess.run(
+        list(map(str, argv)),
+        input=data,
+        env=env or probe.ENV,
+        capture_output=True,
+        preexec_fn=child_limits,
+    )
+
+
 def main():
-    MIGRATION["ensure_reference"]()
-    OUT.mkdir(parents=True, exist_ok=True)
-    env = MIGRATION["environment"]()
-    archive = MIGRATION["rust_archive"](ROOT / "build-rust")
-    if not archive.exists():
-        raise RuntimeError("Run full native verification first")
+    out = probe.output("encoded-comparison")
     records = list(dict.fromkeys(corpus()))
-    (OUT / "corpus.txt").write_text("\n".join(records) + "\n")
-    commands, hashes, outputs, failures = [], {}, {}, []
-    modes = {
-        "debug": [],
-        "debug-with-assert": ["-DWITH_ASSERT"],
-        "ndebug": ["-DNDEBUG"],
-        "ndebug-with-assert": ["-DNDEBUG", "-DWITH_ASSERT"],
-    }
-    for label, source in (
-        ("reference", REFERENCE),
-        ("candidate", ROOT),
-        ("candidate-cpp", ROOT),
-    ):
-        scoped, hashes[label] = scopes(label, source)
-        for mode, flags in modes.items():
-            binary = OUT / f"{label}-{mode}"
-            command = [
-                "g++",
-                "-std=c++20",
-                "-O0",
-                "-DFMT_HEADER_ONLY",
-                "-ffunction-sections",
-                "-fdata-sections",
-                "-I",
-                str(source / "src"),
-                str(ROOT / "tools/migration/encoded-comparison.cpp"),
-                str(scoped),
-                str(source / "src/core/string_builder.cpp"),
-                str(source / "src/core/string_consumer.cpp"),
-                str(source / "src/core/utf8.cpp"),
-                "-Wl,--gc-sections",
-                "-o",
-                str(binary),
-                *flags,
-            ]
-            if label == "candidate":
-                command.extend(
-                    ["-DWITH_RUST", str(archive), "-ldl", "-lpthread", "-lm"]
-                )
-            commands.append(command)
-            with (OUT / f"{binary.name}-compile.log").open("wb") as log:
-                subprocess.run(
-                    command, env=env, stdout=log, stderr=subprocess.STDOUT, check=True
-                )
+    (out / "corpus.txt").write_text("\n".join(records) + "\n")
+    outputs, failures = {}, []
+    for label, source in probe.LABELS:
+        scopes(out, label, source)
+        for mode, flags in MODES.items():
+            binary = out / f"{label}-{mode}"
+            probe.compile(
+                [*command(out, label, source, flags), "-o", binary], f"{binary}.log"
+            )
             results = []
             for index, record in enumerate(records):
-                command = [str(binary)]
-                result = subprocess.run(
-                    command,
-                    input=(record + "\n").encode(),
-                    env=env,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    preexec_fn=child_limits,
-                )
-                value = normalized(result)
+                value = normalized(run([binary], (record + "\n").encode()))
                 results.append(
                     {
                         "exit_code": value[0],
@@ -286,43 +254,37 @@ def main():
                         {
                             "candidate": label,
                             "mode": mode,
-                            "index": index,
                             "input": record,
                             "expected": outputs["reference", mode][index],
                             "actual": results[-1],
                         }
                     )
             outputs[label, mode] = results
-            (OUT / f"{binary.name}-outputs.json").write_text(
-                json.dumps(results, indent=2) + "\n"
-            )
-    (OUT / "failures.json").write_text(json.dumps(failures, indent=2) + "\n")
     if failures:
+        (out / "failures.json").write_text(json.dumps(failures, indent=2) + "\n")
         raise RuntimeError(
-            f"{len(failures)} encoded discrepancies; see {OUT / 'failures.json'}"
+            f"{len(failures)} encoded discrepancies; see {out / 'failures.json'}"
         )
-    sanitizer = OUT / "candidate-sanitized"
-    compile_command = next(
-        list(command)
-        for command in commands
-        if str(OUT / "candidate-ndebug") in command
+    sanitizer = out / "candidate-sanitized"
+    probe.compile(
+        [
+            *command(out, "candidate", probe.ROOT, MODES["ndebug"]),
+            "-o",
+            sanitizer,
+            "-fsanitize=address,undefined",
+            "-fno-omit-frame-pointer",
+            "-g",
+            "-no-pie",
+        ],
+        f"{sanitizer}.log",
     )
-    compile_command[compile_command.index("-o") + 1] = str(sanitizer)
-    compile_command.extend(
-        ["-fsanitize=address,undefined", "-fno-omit-frame-pointer", "-g", "-no-pie"]
-    )
-    commands.append(compile_command)
-    with (OUT / "sanitized-compile.log").open("wb") as log:
-        subprocess.run(
-            compile_command, env=env, stdout=log, stderr=subprocess.STDOUT, check=True
-        )
-    sanitized_env = env.copy()
-    sanitized_env["ASAN_OPTIONS"] = "detect_leaks=1:abort_on_error=1"
-    sanitized_env["UBSAN_OPTIONS"] = "halt_on_error=1:print_stacktrace=1"
+    sanitized_env = probe.ENV | {
+        "ASAN_OPTIONS": "detect_leaks=1:abort_on_error=1",
+        "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1",
+    }
     expected = b"".join(
         bytes.fromhex(item["stdout_hex"]) for item in outputs["candidate", "ndebug"]
     )
-    sanitized_runs = []
     encoded, numeric = (chr(value).encode() for value in (0xE000, 0xE002))
     exception_bytes = encoded + b"0\x1e" + numeric + b"-xyz"
     exception_input = f"negative {hexbytes(exception_bytes)}\n".encode()
@@ -332,67 +294,23 @@ def main():
         (["--throw"], exception_input),
         (["--copy-throw"], b""),
     ):
-        command = [str(sanitizer), *arguments]
-        result = subprocess.run(
-            command,
-            input=data,
-            env=sanitized_env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            preexec_fn=child_limits,
-        )
-        (
-            OUT
-            / ("sanitized-" + (arguments[0][2:] if arguments else "corpus") + ".log")
-        ).write_bytes(result.stdout + result.stderr)
-        assert result.returncode == 0 and not result.stderr, (
-            command,
-            result.returncode,
-            result.stderr,
-        )
-        if not arguments:
-            assert result.stdout == expected, "Sanitizer corpus output changed"
-        elif arguments == ["--throw"]:
-            assert b"exception " in result.stdout, "Logger exception did not occur"
-        else:
-            assert result.stdout.startswith(b"copy-exception "), (
-                "Output-copy exception did not occur"
-            )
-        sanitized_runs.append(
-            {
-                "command": command,
-                "stdout_sha256": hashlib.sha256(result.stdout).hexdigest(),
-                "passed": True,
-            }
-        )
-    MIGRATION["ensure_reference"]()
-    report = {
-        "baseline": MIGRATION["BASELINE"],
-        "candidate_commit": MIGRATION["git"]("rev-parse", "HEAD"),
-        "candidate_status": MIGRATION["git"]("status", "--porcelain"),
-        "cases": len(records),
-        "modes": modes,
-        "commands": commands,
-        "sanitizers": sanitized_runs,
-        "sanitizer_scope": {
-            "cpp_fixture_and_adapters_instrumented": True,
-            "rust_memory_accesses_instrumented": False,
-            "rust_allocator_leaks_checked": True,
-        },
-        "extracted_functions_sha256": hashes,
-        "reference_source_sha256": {
-            name: hashlib.sha256((REFERENCE / name).read_bytes()).hexdigest()
-            for name in FUNCTIONS
-        },
-        "assertion_policy_counts": {
-            mode: sum(item["exit_code"] != 0 for item in outputs["reference", mode])
-            for mode in modes
-        },
-        "passed": True,
-    }
-    (OUT / "report.json").write_text(json.dumps(report, indent=2) + "\n")
-    print(
-        f"Encoded comparisons passed: {len(records)} cases in four assertion modes through Rust and portable C++; {OUT / 'report.json'}"
+        result = run([sanitizer, *arguments], data, sanitized_env)
+        name = arguments[0][2:] if arguments else "corpus"
+        (out / f"sanitized-{name}.log").write_bytes(result.stdout + result.stderr)
+        if result.returncode or result.stderr:
+            raise RuntimeError(f"Sanitized {name} run failed; see retained log")
+        if not arguments and result.stdout != expected:
+            raise RuntimeError("Sanitizer corpus output changed")
+        if arguments == ["--throw"] and b"exception " not in result.stdout:
+            raise RuntimeError("Logger exception did not occur")
+        if arguments == ["--copy-throw"] and not result.stdout.startswith(
+            b"copy-exception "
+        ):
+            raise RuntimeError("Output-copy exception did not occur")
+    probe.passed(
+        "Encoded comparison",
+        cases=len(records),
+        assertion_modes=len(MODES),
     )
 
 

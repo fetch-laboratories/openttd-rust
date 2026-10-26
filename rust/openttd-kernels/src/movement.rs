@@ -5,9 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Complete tile movement policy. Native map/pools remain canonical; services
-//! are immutable and only copied scalars cross the synchronous boundary. No
-//! native borrow survives a callback, including `NewGRF` foundation callbacks.
+//! Tile movement policy. Map and pools stay native; only copied scalars cross, including
+//! around `NewGRF` foundation callbacks.
 #![allow(
     unsafe_code,
     missing_docs,
@@ -165,34 +164,24 @@ pub struct MovementServices {
     pub industry_callback: extern "C" fn(u32, u16) -> u16,
     pub industry_boolean: extern "C" fn(*const c_void, u16) -> bool,
 }
+/// One accessor per nested table pointer, named after its field.
+macro_rules! nested_tables {
+    ($($vis:vis fn $name:ident -> $ty:ty;)*) => {$(
+        $vis fn $name(&self) -> &$ty {
+            // SAFETY: Only resolved at branches whose native/fixture table supplies this immutable callee.
+            unsafe { &*self.$name }
+        }
+    )*};
+}
 impl MovementServices {
-    pub(crate) fn shared(&self) -> &Services {
-        // SAFETY: Only resolved at branches whose native/fixture table supplies this immutable callee.
-        unsafe { &*self.shared }
-    }
-    fn rail(&self) -> &RailServices {
-        // SAFETY: Only resolved at branches whose native/fixture table supplies this immutable callee.
-        unsafe { &*self.rail }
-    }
-    fn road(&self) -> &RoadServices {
-        // SAFETY: Only resolved at branches whose native/fixture table supplies this immutable callee.
-        unsafe { &*self.road }
-    }
-    fn rail_map(&self) -> &crate::services::RailMapServices {
-        // SAFETY: Only resolved at branches whose native/fixture table supplies this immutable callee.
-        unsafe { &*self.rail_map }
-    }
-    fn train(&self) -> &crate::train::Leaves {
-        // SAFETY: Only resolved at branches whose native/fixture table supplies this immutable callee.
-        unsafe { &*self.train }
-    }
-    fn vehicle(&self) -> &crate::vehicle::VehicleServices {
-        // SAFETY: Only resolved at branches whose native/fixture table supplies this immutable callee.
-        unsafe { &*self.vehicle }
-    }
-    fn road_vehicle(&self) -> &crate::road::Leaves {
-        // SAFETY: Only resolved at branches whose native/fixture table supplies this immutable callee.
-        unsafe { &*self.road_vehicle }
+    nested_tables! {
+        pub(crate) fn shared -> Services;
+        fn rail -> RailServices;
+        fn road -> RoadServices;
+        fn rail_map -> crate::services::RailMapServices;
+        fn train -> crate::train::Leaves;
+        fn vehicle -> crate::vehicle::VehicleServices;
+        fn road_vehicle -> crate::road::Leaves;
     }
     fn foundation(&self, tile: u32, slope: u8) -> u8 {
         w::hit(w::MOVE_FOUNDATION);
@@ -559,9 +548,7 @@ use crate::track_type::{
 use crate::transport_type::{TRANSPORT_RAIL, TRANSPORT_ROAD, TRANSPORT_WATER};
 impl MovementServices {
     fn water_edges(&self, tile: u32, mut bits: u8) -> u8 {
-        let map = crate::services::Map {
-            log_x: (self.shared().map_log_x)() as u8,
-        };
+        let map = self.shared().map();
         if map.tile_x(tile) == 0 {
             w::hit(w::MOVE_WATER_EDGE);
             bits &= !(TRACK_BIT_X | TRACK_BIT_UPPER | TRACK_BIT_RIGHT);
@@ -917,9 +904,9 @@ impl MovementServices {
         (self.vehicle().write_status)(
             v,
             if hidden {
-                status | crate::vehicle::VS_HIDDEN
+                status | crate::vehicle_base::VS_HIDDEN
             } else {
-                status & !crate::vehicle::VS_HIDDEN
+                status & !crate::vehicle_base::VS_HIDDEN
             },
         );
     }

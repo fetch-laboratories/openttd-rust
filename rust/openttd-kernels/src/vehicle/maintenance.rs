@@ -13,10 +13,11 @@
     clippy::struct_field_names
 )]
 use super::{
-    Breakdown, OT_GOTO_DEPOT, OT_LOADING, OrderType, VS_CRASHED, VS_HIDDEN, VS_STOPPED, VehicleRef,
-    VehicleServices, VehicleType,
+    Breakdown, OT_GOTO_DEPOT, OT_LOADING, OrderType, VehicleRef, VehicleServices, VehicleType,
 };
 use crate::newgrf_sound::VSE_BREAKDOWN;
+use crate::timer_game_common::DAYS_IN_LEAP_YEAR;
+use crate::vehicle_base::{VS_CRASHED, VS_HIDDEN, VS_STOPPED};
 use crate::{company::OpenTTDCompany, fleet, services};
 
 use crate::services::{CalendarDate, EconomyDate};
@@ -205,14 +206,11 @@ pub struct Services {
 }
 
 macro_rules! svc {
-    ($counted:ident, $function:expr $(, $arg:expr)*) => {{
-        let result = ($function)($($arg),*);
-        if $counted {
-            crate::witness::hit(crate::witness::VEHICLE_MAINT_CROSSINGS);
-            crate::witness::add(crate::witness::VEHICLE_MAINT_BYTES, std::mem::size_of_val(&result) as u64);
-        }
-        result
-    }};
+    ($counted:ident, $function:expr $(, $arg:expr)*) => {
+        crate::witness::counted!(
+            VEHICLE_MAINT_CROSSINGS, VEHICLE_MAINT_BYTES if $counted, ($function)($($arg),*)
+        )
+    };
 }
 macro_rules! branch {
     ($counted:ident, $name:ident) => {
@@ -329,7 +327,7 @@ unsafe fn replacement_needed<const C: bool>(
     let s = unsafe { &*base.maintenance };
     // SAFETY: needs_service retains the live native owner through this decision.
     let replacement = unsafe { svc!(C, s.replacement, v, company) };
-    if replacement.engine == super::INVALID_ENGINE
+    if replacement.engine == crate::engine_type::INVALID_ENGINE
         || !svc!(C, s.replacement_available, v, replacement.engine)
     {
         return false;
@@ -432,7 +430,7 @@ unsafe fn check_breakdown<const C: bool>(v: VehicleRef, base: &VehicleServices) 
     let random = svc!(C, shared.random, shared.context);
     let trigger = svc!(C, s.breakdown_trigger, v);
     let mut chance = u16::from(trigger.chance) + 1;
-    if services::chance16_i(1, 25, random) {
+    if crate::random_func::chance16_i(1, 25, random) {
         chance += 25;
     }
     let chance = chance.min(255) as u8;
@@ -634,7 +632,7 @@ unsafe fn age<const C: bool>(v: VehicleRef, base: &VehicleServices) {
         s.news_getting_old
     } else if difference == s.anniversaries[0].0 {
         s.news_very_old
-    } else if difference > s.anniversaries[0].0 && difference % 366 == 0 {
+    } else if difference > s.anniversaries[0].0 && difference % DAYS_IN_LEAP_YEAR == 0 {
         s.news_very_old_and
     } else {
         return;
@@ -945,4 +943,19 @@ crate::abi::layouts! {
         news_very_old,
         news_very_old_and,
     };
+}
+impl VehicleServices {
+    /// Run a vehicle-maintenance entry.
+    /// # Safety
+    /// The caller must meet all preconditions of `entry(v, self)`, including a live,
+    /// serialized shell and ending owner borrows before any reentrant callback.
+    #[inline]
+    pub(crate) unsafe fn maintain<R>(
+        &self,
+        v: VehicleRef,
+        entry: unsafe fn(VehicleRef, &VehicleServices) -> R,
+    ) -> R {
+        // SAFETY: The caller satisfies the supplied entry's complete contract.
+        unsafe { entry(v, self) }
+    }
 }

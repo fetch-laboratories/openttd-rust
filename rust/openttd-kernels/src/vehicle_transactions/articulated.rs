@@ -72,7 +72,7 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
                 flip.as_mut_ptr(),
             )
         };
-        if engine == crate::vehicle::INVALID_ENGINE {
+        if engine == crate::engine_type::INVALID_ENGINE {
             return;
         }
         if !(s.pool_available)(1) {

@@ -5,13 +5,10 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Road stops (`roadstop.cpp`) own bay admission, entrance status and the
-//! drive-through entry topology and occupancy. Each native `RoadStop` shell owns
-//! one Rust `State`; the `BaseEntry` stop of a drive-through line owns the shared
-//! `Entries`, which every stop of the line points at. Native shells, the pool,
-//! station stop lists, map tiles and the vehicle hash stay native services.
-//! Stores go through the raw owner pointers, so no reference into a state or
-//! entry survives a service call, and services never reenter road stops.
+//! Road stops (`roadstop.cpp`): bay admission, entrance status and drive-through entry
+//! topology and occupancy. Each `RoadStop` shell owns one `State`; the `BaseEntry` stop of a
+//! drive-through line owns the `Entries` every stop of the line points at. The pool, stop
+//! lists, map and vehicle hash stay native.
 #![allow(unsafe_code, clippy::many_single_char_names)]
 use crate::direction_func::dir_to_diag_dir;
 use crate::direction_type::{DIAGDIR_NE, DIAGDIR_NW, DIAGDIR_SE, DIAGDIR_SW};
@@ -23,7 +20,8 @@ use crate::roadveh::{
 use crate::services::{Map, RoadStopType, Services};
 use crate::station::BaseStation;
 use crate::tile_type::{MP_STATION, TILE_SIZE};
-use crate::vehicle::{GroundServices, VS_CRASHED, VehicleRef, VehicleServices, VehicleType};
+use crate::vehicle::{GroundServices, VehicleRef, VehicleServices, VehicleType};
+use crate::vehicle_base::VS_CRASHED;
 
 /// `RoadStopStatusFlag::Bay0Free`.
 const BAY0_FREE: u8 = 1 << 0;
@@ -118,9 +116,7 @@ pub struct RoadStopServices {
 /// Map dimensions read at the entry's use.
 #[allow(clippy::cast_possible_truncation)] // Map::LogX() is at most 12.
 fn map(s: &Services) -> Map {
-    Map {
-        log_x: (s.map_log_x)() as u8,
-    }
+    s.map()
 }
 
 fn table(s: &Services) -> &RoadStopServices {

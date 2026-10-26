@@ -1,211 +1,60 @@
 #!/usr/bin/env python3
-"""Check generated probes against the deleted lists, without keeping another inventory."""
+"""Check generated ABI probes against their Rust declarations."""
 
-import io
 import os
 import re
 import runpy
 import subprocess
-import tarfile
 import tempfile
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-# Last integrated tree before #284; Quick checks fetch full history.
-BEFORE = "83bd72774e5cc62157f8415ee8c0e9d82fa4eff9"
-CONVERSION = "df9a6c22da0462ef68a918debdc5e715a757291d"
 GENERATOR = runpy.run_path(str(ROOT / "tools/generate-abi.py"))
+LAYOUT = re.compile(r'Layout\("([^"]+)", \{(.*)\}\);')
+ITEM = re.compile(r"\w+\((?:[^()]|\([^()]*\))*\)")
 
 
-def snapshot(revision):
-    with tempfile.TemporaryDirectory() as directory:
-        archive = subprocess.check_output(
-            [
-                "git",
-                "archive",
-                revision,
-                "tools/generate-abi.py",
-                "rust/openttd-kernels/src",
-                "src/rust",
-                "tools/migration",
-            ],
-            cwd=ROOT,
-        )
-        with tarfile.open(fileobj=io.BytesIO(archive)) as files:
-            files.extractall(directory, filter="data")
-        root = Path(directory)
-        converter = runpy.run_path(str(root / "tools/generate-abi.py"))
-        probes = (root / "tools/migration/windows-abi.cpp").read_text()
-        probes += "\n".join(
-            path.read_text()
-            for path in (root / "tools/migration/windows-abi").glob("*.inc")
-        )
-        return converter["generate"](), probes
-
-
-def original(path):
-    return subprocess.check_output(
-        ["git", "show", f"{BEFORE}:{path}"], cwd=ROOT, text=True
-    )
-
-
-def legacy_lists():
+def layouts(fragments):
+    """Map each generated layout name to its fragment and ordered items."""
     result = {}
-    paths = ["tools/migration/windows-abi.cpp"]
-    paths += subprocess.check_output(
-        ["git", "ls-tree", "-r", "--name-only", BEFORE, "src/tests"],
-        cwd=ROOT,
-        text=True,
-    ).splitlines()
-    for path in paths:
-        if not path.endswith(".cpp"):
-            continue
-        source = original(path)
-        aliases = dict(re.findall(r"using\s+(\w+)\s*=\s*([^;]+);", source))
-        for match in re.finditer(
-            r'(?:Layout\(\d+,\s*"[^"]+",|AbiLayoutMismatch\(\d+,)\s*\{(.*?)\}',
-            source,
-            re.S,
-        ):
-            values = re.sub(r"\s+", "", re.sub(r"//[^\n]*", "", match[1])).rstrip(",")
-            name = re.search(r"sizeof\(([^)]+)\)", values)[1]
-            name = aliases.get(name, name)
-            for alias, actual in aliases.items():
-                values = re.sub(r"\b" + alias + r"\b", actual, values)
-            result.setdefault(name, [])
-            if values not in result[name]:
-                result[name].append(values)
-    # The two train slices formerly repeated size/alignment; the new list is complete.
-    for name, lists in result.items():
-        result[name] = lists[0] + "".join(
-            "," + value.split(",", 2)[2] for value in lists[1:]
-        )
+    for path, contents in fragments.items():
+        if path.startswith("abi-layout-"):
+            for line in contents.splitlines():
+                name, values = LAYOUT.fullmatch(line).groups()
+                result[name] = (path, ITEM.findall(values))
     return result
 
 
 class GeneratedAbiTests(unittest.TestCase):
-    def test_every_deleted_probe_and_native_only_list_is_preserved(self):
-        # Freeze the conversion inputs, never today's evolving ABI. Current generation
-        # is tested independently below, so later additions/retirements remain valid.
-        generated, _ = snapshot(CONVERSION)
-        actual = {}
-        for path, contents in generated.items():
-            if not path.endswith(".inc"):
-                continue
-            for name, values in re.findall(
-                r'Layout\("([^"]+)", \{([^\n]+)\}\);', contents
-            ):
-                self.assertNotIn(name, actual)
-                actual[name] = re.sub(r"\s+", "", values)
-        self.assertEqual(legacy_lists(), actual)
-
-    def test_component_split_preserves_layouts_visitors_and_probe_bodies(self):
-        split = "a42498e47f574c78cd1f0a96cfc61c901f397ef2"
-        results = []
-        for revision in (split + "^", split):
-            fragments, probes = snapshot(revision)
-            fragments = {
-                name: sorted(text.splitlines())
-                if name.startswith("abi-layout-")
-                else text
-                for name, text in fragments.items()
-                if name.startswith(("abi-layout-", "abi-visit-"))
-            }
-            functions = dict(
-                re.findall(
-                    r"^(static [^\n]+\([^\n]*\))\n(\{.*?^\})", probes, re.M | re.S
-                )
-            )
-            self.assertGreater(len(functions), 20)
-            results.append((fragments, functions))
-        self.assertEqual(results[0][0], results[1][0])
-        for name, body in results[0][1].items():
-            self.assertEqual(body, results[1][1][name], name)
-
-    def test_generation_and_ground_current_layout_inventory(self):
-        # These owners joined after the historical split. Require their current
-        # module markers and complete field inventories, including data fields.
-        inventory = {
-            "tgp": {"OpenTTDTGPSettings"},
-            "landscape_generation": {
-                "OpenTTDTerrainTemplate",
-                "OpenTTDFlatTileHeight",
-                "OpenTTDGenerationLoop",
-                "OpenTTDLandscapeGenerationSettings",
-                "OpenTTDHeightmapImage",
-                "OpenTTDHeightmapDecoder",
-                "OpenTTDLandscapeGenerationServices",
-            },
-            "ground_vehicle": {
-                "GroundVehicleCache",
-                "OpenTTDGroundState",
-                "OpenTTDGroundOwner",
-                "OpenTTDGroundPowerInput",
-                "OpenTTDGroundWeightInput",
-                "OpenTTDGroundAccelerationInput",
-                "OpenTTDGroundSpeedInput",
-                "OpenTTDGroundPhysicsServices",
-            },
-        }
-        records = {row[0]: row for row in GENERATOR["declarations"]()}
-        current = {
-            "OpenTTDGroundServices": "vehicle",
-            "OpenTTDRoadSpeedRead": "road",
-            "OpenTTDRoadLeaves": "road",
-            "OpenTTDTrainServices": "train",
-            "OpenTTDRoadCommandServices": "road_cmd",
-            "OpenTTDVehiclePostTick": "vehicle/scheduler",
-        }
-        for module, names in inventory.items():
-            source = (ROOT / f"rust/openttd-kernels/src/{module}.rs").read_text()
-            self.assertEqual(source.count("layouts! {\n    fn abi_layout;"), 1)
-            declared = set(re.findall(r'"([^"\n]+)" \["\w+"\] =>', source))
-            self.assertEqual(declared, names)
-            current.update(dict.fromkeys(names, module))
-        for name, module in current.items():
-            source = (ROOT / f"rust/openttd-kernels/src/{module}.rs").read_text()
-            _, _, rust, fields, _, _ = records[name]
-            structure = rust.rsplit("::", 1)[-1]
-            body = re.search(
-                rf"pub struct {structure}\s*\{{(.*?)^\}}", source, re.M | re.S
-            )[1]
-            self.assertEqual(
-                {field for field, _ in fields},
-                set(re.findall(r"^    pub (\w+):", body, re.M)),
-                name,
-            )
-
-    def test_concrete_animation_binding_visitors_are_complete(self):
-        src = ROOT / "rust/openttd-kernels/src"
-        source = (src / "newgrf_animation_base.rs").read_text()
-        body = re.search(r"pub struct Binding.*?\{(.*?)^}", source, re.M | re.S)[1]
-        members = re.findall(r"^    pub (\w+):", body, re.M)
-        self.assertIn("version8", members)
-        records = [r for r in GENERATOR["declarations"]() if "Binding<" in r[2]]
-        self.assertEqual(len(records), 6)
-        headers = ROOT / "src/rust"
-        aliases = dict(
-            re.findall(
-                r"using\s+(\w+)\s*=\s*([^;]+);",
-                (headers / "animation_ffi.h").read_text(),
-            )
-        )
-        bodies = dict(
-            re.findall(
-                r"struct\s+(\w+)\s*\{([^{}]*)\}",
-                (headers / "animation_types.hpp").read_text(),
-            )
-        )
+    def test_each_layout_and_visitor_lists_exactly_its_declared_fields(self):
         fragments = GENERATOR["generate"]()
-        for name, _, _, fields, _, _ in records:
-            body = bodies[aliases.get(name, name).split("<")[0]]
-            callbacks = re.findall(r"\(\s*(?:\w+\s+)?\*(\w+)\)\s*\(", body)
-            if name in aliases:
-                self.assertEqual(callbacks, members, name)
-            self.assertEqual([cpp for _, cpp in fields], callbacks, name)
-            visitor = fragments[f"abi-visit-{name}.hpp"]
-            self.assertEqual(re.findall(r'visit\("(\w+)"', visitor), callbacks, name)
+        generated = layouts(fragments)
+        records = list(GENERATOR["declarations"]())
+        self.assertEqual(set(generated), {name for name, *_ in records})
+        for name, group, _, fields, width, _ in records:
+            with self.subTest(name=name):
+                path, items = generated[name]
+                self.assertEqual(path, f"abi-layout-{group}.inc")
+                self.assertEqual(items[:2], [f"sizeof({name})", f"alignof({name})"])
+                offsets = [
+                    re.fullmatch(rf"offsetof\({re.escape(name)}, (\w+)\)", item)
+                    for item in items[2:]
+                ]
+                cpp = [cpp for _, cpp in fields]
+                self.assertEqual(
+                    [match and match[1] for match in offsets[: len(cpp)]], cpp
+                )
+                self.assertEqual(
+                    items[2 + len(cpp) :],
+                    [f"sizeof(decltype({name}::{dict(fields)[width]}))"]
+                    if width
+                    else [],
+                )
+                visitor = fragments.get(f"abi-visit-{name}.hpp", "")
+                visits = re.findall(r'visit\("(\w+)", table\.(\w+)\);', visitor)
+                self.assertIn(visits, ([], [(field, field) for field in cpp]))
+                self.assertNotIn("reinterpret_cast", visitor)
 
     def test_generation_is_deterministic_and_build_directory_only(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -226,7 +75,7 @@ class GeneratedAbiTests(unittest.TestCase):
             )
         self.assertFalse(list((ROOT / "src").rglob("abi-layout-*.inc")))
 
-    def test_new_tables_aliases_and_callback_retirement(self):
+    def test_synthetic_tree_aliases_widths_and_callback_retirement(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             rust = root / "rust/openttd-kernels/src"
@@ -237,13 +86,47 @@ class GeneratedAbiTests(unittest.TestCase):
             source = rust / "nested" / "probe.rs"
             source.parent.mkdir()
             source.write_text(
-                'layouts! { "Probe" ["new"] => Local { call => callback }; }'
+                "layouts! {\n"
+                '    "Probe" ["new"] => crate::nested::Local {\n'
+                "        call => callback, // Native name differs.\n"
+                "        r#type => kind,\n"
+                "        size,\n"
+                "    } width size: u16;\n"
+                "}\n"
             )
             (headers / "probe.h").write_text(
-                "struct Probe { void (*callback)() noexcept; };"
+                "struct Probe { void (*callback)() noexcept; int r; };"
+            )
+            self.assertEqual(
+                list(GENERATOR["declarations"](root)),
+                [
+                    (
+                        "Probe",
+                        "new",
+                        "crate::nested::Local",
+                        [("call", "callback"), ("r#type", "kind"), ("size", "size")],
+                        "size",
+                        "u16",
+                    )
+                ],
+            )
+            source.write_text(
+                'layouts! { "Probe" ["new"] => Local { call => callback }; }'
             )
             fragments = GENERATOR["generate"](root)
-            self.assertIn("offsetof(Probe, callback)", fragments["abi-layout-new.inc"])
+            self.assertEqual(
+                layouts(fragments),
+                {
+                    "Probe": (
+                        "abi-layout-new.inc",
+                        [
+                            "sizeof(Probe)",
+                            "alignof(Probe)",
+                            "offsetof(Probe, callback)",
+                        ],
+                    )
+                },
+            )
             self.assertIn(
                 'visit("callback", table.callback)', fragments["abi-visit-Probe.hpp"]
             )
@@ -259,28 +142,6 @@ class GeneratedAbiTests(unittest.TestCase):
             source.write_text('layouts! { "Probe" ["new"] => Local {}; }')
             with self.assertRaisesRegex(ValueError, "callbacks absent"):
                 GENERATOR["generate"](root)
-
-    def test_aliases_width_metadata_and_private_layout_modules(self):
-        declarations = list(GENERATOR["declarations"]())
-        self.assertTrue(any(width for *_, width, _ in declarations))
-        pairs = (pair for record in declarations for pair in record[3])
-        self.assertTrue(any(rust != cpp for rust, cpp in pairs))
-        modules = [
-            path
-            for path in (ROOT / "rust/openttd-kernels/src").rglob("*.rs")
-            if "layouts! {" in path.read_text()
-        ]
-        self.assertGreater(len(modules), 10)
-        visitors = "".join(
-            value
-            for key, value in GENERATOR["generate"]().items()
-            if key.startswith("abi-visit-")
-        )
-        for name, _, _, fields, _, _ in declarations:
-            if f"const {name} &table" in visitors:
-                for _, cpp in fields:
-                    self.assertIn(f'visit("{cpp}", table.{cpp});', visitors)
-        self.assertNotIn("reinterpret_cast", visitors)
 
 
 if __name__ == "__main__":

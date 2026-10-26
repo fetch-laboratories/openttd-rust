@@ -1,7 +1,7 @@
 #pragma once
 #include "rust/linkgraph_ffi.h"
 
-static uint8_t OPENTTD_LINKGRAPH_CALL LinkGraphAbort(const void *context) noexcept
+static uint8_t OPENTTD_RUST_CALL LinkGraphAbort(const void *context) noexcept
 {
 	auto *state = static_cast<const std::array<uint32_t, 2> *>(context);
 	return (*state)[0];

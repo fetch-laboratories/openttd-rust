@@ -5,9 +5,9 @@
 use super::{CommonServices, ERROR, SelectionServices, vehicle_ref, vehicle_set};
 use crate::command_type::DoCommandFlag;
 use crate::economy_func::get_price;
+use crate::game_state::GameState;
 use crate::services::{CommandCost, ExpenseType};
 use crate::vehicle::{OpenTTDEngine, OpenTTDVehicle, RailVehicleTypes, VehicleType};
-use std::cell::UnsafeCell;
 use std::ptr;
 
 #[repr(C)]
@@ -112,16 +112,12 @@ struct Frame {
     selection: Vec<u32>,
     results: Vec<Result>,
 }
-struct Idle(UnsafeCell<Vec<Frame>>);
-// SAFETY: All command entries are serialized by the native game-state mutex,
-// including GUI/main-thread commands. No idle-pool access spans a service call.
-unsafe impl Sync for Idle {}
-static IDLE: Idle = Idle(UnsafeCell::new(Vec::new()));
+static IDLE: GameState<Vec<Frame>> = GameState::new(Vec::new());
 struct Transaction(Frame);
 impl Transaction {
     fn new() -> Self {
         // SAFETY: Serialized short access; an active frame is removed from the pool.
-        Self(unsafe { (&mut *IDLE.0.get()).pop() }.unwrap_or_default())
+        Self(unsafe { (&mut *IDLE.get()).pop() }.unwrap_or_default())
     }
 }
 impl Drop for Transaction {
@@ -131,7 +127,7 @@ impl Drop for Transaction {
         // SAFETY: Raw IDs/handles have no dropping callbacks. No borrow survives
         // publishing the now-empty frame; nested commands own distinct frames.
         unsafe {
-            (&mut *IDLE.0.get()).push(std::mem::take(&mut self.0));
+            (&mut *IDLE.get()).push(std::mem::take(&mut self.0));
         }
     }
 }

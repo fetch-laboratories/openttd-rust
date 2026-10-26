@@ -13,10 +13,11 @@
 
 /** @file train_reservation_services.h Direct map/PBS/follower services. */
 
+/* The reservation table's slots take a leading context; the train table's services serve both. */
 template <typename Result, auto Member>
-static Result TrainReservationSharedMap(void *, OpenTTDTrainHandle, uint32_t tile) noexcept
+static Result TrainReservationSharedMap(void *, OpenTTDTrainHandle id, uint32_t tile) noexcept
 {
-	return (GetRustSharedServices().*Member)(tile);
+	return TrainSharedMap<Result, Member>(id, tile);
 }
 
 static uint64_t TrainReservationAllCompat(void *, OpenTTDTrainHandle id) noexcept
@@ -24,9 +25,9 @@ static uint64_t TrainReservationAllCompat(void *, OpenTTDTrainHandle id) noexcep
 	Train *v = static_cast<Train *>(id.shell);
 	return RustAllCompatibleRailTypes(v->GetRailTypes().base());
 }
-static uint64_t TrainReservationBackoff(void *, OpenTTDTrainHandle) noexcept
+static uint64_t TrainReservationBackoff(void *, OpenTTDTrainHandle id) noexcept
 {
-	return _settings_game.pf.path_backoff_interval;
+	return TrainBackoff(id);
 }
 static uint64_t TrainReservationBitsTrack(void *, OpenTTDTrainHandle, uint8_t a) noexcept
 {
@@ -139,9 +140,9 @@ static uint64_t TrainReservationReachTracks(void *, OpenTTDTrainHandle, uint8_t 
 {
 	return DiagdirReachesTracks(static_cast<DiagDirection>(a));
 }
-static uint64_t TrainReservationReservePaths(void *, OpenTTDTrainHandle) noexcept
+static uint64_t TrainReservationReservePaths(void *, OpenTTDTrainHandle id) noexcept
 {
-	return _settings_game.pf.reserve_paths;
+	return TrainReservePaths(id);
 }
 /* Order has the existing OrderFields layout and trivial copy/destruction. Rust
  * owns each nested snapshot on its stack; no native context survives a call. */

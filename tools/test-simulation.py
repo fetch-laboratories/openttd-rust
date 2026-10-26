@@ -17,7 +17,7 @@ from unittest.mock import patch
 from simulation import core as simulate
 from simulation import instructions as ir
 from simulation import runtime
-from simulation.roads import SPEED_BUDGETS, speed_budget
+from simulation.instructions import SPEED_BUDGETS, speed_budget
 
 import migration
 
@@ -399,7 +399,7 @@ class SimulationRuntimeTests(unittest.TestCase):
 
 
 class SimulationSpeedTests(unittest.TestCase):
-    def test_record_guard_and_fixed_ceilings(self):
+    def test_record_and_fixed_ceilings(self):
         from math import inf, nextafter
 
         for name, ceiling in (("play-test", 1.5), ("generate-test", 1.3)):
@@ -407,10 +407,6 @@ class SimulationSpeedTests(unittest.TestCase):
                 report = speed_budget(name, 1.4375)
                 self.assertEqual(report["record"], 1.25)
                 self.assertAlmostEqual(report["change_percent"], 15.0)
-                self.assertTrue(report["within_guard"])
-                self.assertFalse(
-                    speed_budget(name, nextafter(1.4375, inf))["within_guard"]
-                )
                 self.assertEqual(report["ceiling"], ceiling)
                 self.assertTrue(speed_budget(name, ceiling)["within_ceiling"])
                 self.assertFalse(
@@ -540,7 +536,6 @@ class InstructionSpeedTests(unittest.TestCase):
         for step in range(1, 4):
             measurement["Ir"] = 100 * 1.04**step
             report = ir.budget("play-test", measurement, record)
-            self.assertTrue(report["within_guard"])
             record["integrated"] = dict(head=str(step), Ir=measurement["Ir"])
         self.assertAlmostEqual(report["projected_ratio"], 1.5389150592)
         self.assertFalse(report["within_ceiling"])
@@ -778,6 +773,220 @@ class InstructionSpeedTests(unittest.TestCase):
                 configuration.write_text(f"CARGO_PROFILE_RELEASE_DEBUG={effective}\n")
                 self.assertEqual(configured(build, build, [], profile_env), expected)
                 self.assertEqual(configured(build, build, [], {}), not expected)
+
+
+class SpeedPassTests(unittest.TestCase):
+    def test_collection_prepares_before_hold_and_compares_after_release(self):
+        from simulation import speed
+
+        held, events = False, []
+
+        class Hold:
+            def __init__(self, log):
+                pass
+
+            def start(self):
+                nonlocal held
+                held = True
+                events.append("start")
+
+            def release(self):
+                nonlocal held
+                held = False
+                events.append("release")
+
+        def prepare(scenario, binary, build, folder, *args, **kwargs):
+            self.assertFalse(held)
+            return {"dir": folder, "role": binary, "scenario": scenario["name"]}
+
+        def execute(plan):
+            self.assertTrue(held)
+            events.append((plan["scenario"], plan["role"]))
+            return plan
+
+        def read(run):
+            self.assertFalse(held)
+            return dict(
+                run,
+                exit=0,
+                seconds=2 if run["role"] == "candidate" else 1,
+                snapshots=[run["dir"] / "save/autosave/exit.sav"],
+                log=["SAME"],
+                stdout=b"",
+                command=[],
+            )
+
+        compared = []
+
+        def compare(reference, candidate, *args):
+            self.assertFalse(held)
+            self.assertEqual(reference.parts[:-4], candidate.parts[:-4])
+            compared.append(reference)
+            return []
+
+        scenarios = [{"name": f"play-{i}", "ticks": 1} for i in range(6)]
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(speed, "Hold", Hold),
+            patch.object(simulate, "scenario_modules", return_value=[]),
+            patch.object(simulate, "prepare_game", side_effect=prepare),
+            patch.object(simulate, "execute_game", side_effect=execute),
+            patch.object(simulate, "read_game", side_effect=read),
+            patch.object(simulate, "save_moment", return_value=(1, 0, 74)),
+            patch.object(simulate, "compare_saves", side_effect=compare),
+        ):
+            out = Path(directory)
+            roles = {role: role for role in speed.ROLES}
+            speed.collect_games(out, scenarios, roles, roles, {})
+            self.assertEqual(
+                events,
+                ["start"]
+                + [
+                    (scenario["name"], role)
+                    for group in range(4)
+                    for scenario in scenarios
+                    for pair in range(3)
+                    for role in (
+                        ("candidate", "reference")
+                        if (group + pair) % 2
+                        else ("reference", "candidate")
+                    )
+                ]
+                + ["release"],
+            )
+            self.assertEqual(len(compared), 72)
+            for group in range(4):
+                results = json.loads((out / f"group-{group}.json").read_text())[
+                    "results"
+                ]
+                self.assertTrue(all(result["passed"] for result in results))
+                self.assertTrue(
+                    all(
+                        result["plain_speed"]["median_candidate_reference_ratio"] == 2
+                        for result in results
+                    )
+                )
+
+    def test_collection_rejects_changed_profile_and_runtime_before_hold(self):
+        from simulation import speed
+
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            profile = out / "profile.json"
+            profile.write_text("original profile")
+            manifest = dict(
+                head="head",
+                profile=str(profile),
+                profile_sha256=ir.digest(profile.read_bytes()),
+                ld_library_path="libs",
+                runtime_identities={"play-a": "original"},
+            )
+            (out / "manifest.json").write_text(json.dumps(manifest))
+            for changed in ("profile", "runtime"):
+                profile.write_text(
+                    "changed" if changed == "profile" else "original profile"
+                )
+                with (
+                    self.subTest(changed=changed),
+                    patch.object(migration, "git", side_effect=["head", ""]),
+                    patch.object(
+                        migration,
+                        "environment",
+                        return_value={"LD_LIBRARY_PATH": "libs"},
+                    ),
+                    patch.object(
+                        speed,
+                        "prepare_inputs",
+                        return_value=([], {"play-a": "changed"}),
+                    ),
+                    patch.object(speed, "collect_games") as games,
+                    self.assertRaisesRegex(SystemExit, "changed after preparation"),
+                ):
+                    speed.collect(out, migration)
+                games.assert_not_called()
+
+    def test_hold_scans_before_start_returns_and_resumes_on_observer_error(self):
+        from simulation import speed
+
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(speed.os, "kill") as kill,
+        ):
+            hold = speed.Hold(Path(directory) / "observations.jsonl")
+
+            def scan(*args):
+                if not hold.stopped:
+                    hold.stopped.add(123)
+                    return {}
+                raise OSError("observation failed")
+
+            with patch.object(hold, "scan", side_effect=scan):
+                hold.start()
+                self.assertEqual(hold.stopped, {123})
+                with self.assertRaisesRegex(RuntimeError, "observation failed"):
+                    hold.release()
+            kill.assert_called_once_with(123, speed.signal.SIGCONT)
+
+    def test_anchor_is_median_of_group_medians(self):
+        from simulation import speed
+
+        names = ["play-a", "generate-b"]
+        groups = ([1.0, 1.25], [2.0, 1.5], [3.0, 1.75], [4.0, 2.0])
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            profile = out / "profile.json"
+            results = [
+                {"scenario": name, "instruction_speed": {"candidate": {"Ir": 10 + i}}}
+                for i, name in enumerate(names)
+            ]
+            profile.write_text(json.dumps({"results": results}))
+            manifest = {
+                "head": "0123456789abcdef",
+                "profile": str(profile),
+                "identities": {name: name + "-id" for name in names},
+            }
+            (out / "observations.jsonl").write_text(
+                json.dumps({"load": [0.5, 0, 0], "unheld": []}) + "\n"
+            )
+
+            def write(group, ratios, passed=True):
+                results = [
+                    {
+                        "scenario": name,
+                        "passed": passed,
+                        "plain_speed": {
+                            "samples": [{}] * speed.PAIRS,
+                            "median_candidate_reference_ratio": ratio,
+                        },
+                    }
+                    for name, ratio in zip(names, ratios, strict=True)
+                ]
+                path = out / f"group-{group}.json"
+                path.write_text(json.dumps({"results": results}))
+
+            for group, ratios in enumerate(groups):
+                write(group, ratios)
+            with contextlib.redirect_stdout(io.StringIO()) as printed:
+                speed.summarize(out, manifest, names, len(groups))
+            rows = json.loads((out / "anchors.json").read_text())["rows"]
+            self.assertEqual(
+                rows,
+                [
+                    ["play-a", 2.5, 10, "play-a-id"],
+                    ["generate-b", 1.625, 11, "generate-b-id"],
+                ],
+            )
+            self.assertIn('    ("play-a", 2.5, 10, "play-a-id"),', printed.getvalue())
+            for incomplete in (3, len(groups)):
+                with self.subTest(groups=incomplete), self.assertRaises(SystemExit):
+                    write(3, groups[3], passed=incomplete == 3)
+                    speed.summarize(out, manifest, names, incomplete)
+            write(3, groups[3])
+            (out / "observations.jsonl").write_text(
+                json.dumps({"load": [0, 0, 0], "unheld": {"123": "ninja"}}) + "\n"
+            )
+            with self.assertRaisesRegex(SystemExit, "no anchors"):
+                speed.summarize(out, manifest, names, len(groups))
 
 
 if __name__ == "__main__":

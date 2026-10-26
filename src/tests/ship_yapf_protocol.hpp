@@ -50,7 +50,7 @@ inline uint32_t Industry(int32_t, int32_t, uint32_t *) noexcept { return 0; }
 /* Save snapshots cannot distinguish every equal-priority heap shape. Compare
 	* insertion, middle removal and strict improvement directly to unchanged C++.
 	* This is only heap evidence; world/game semantics remain the ships corpus. */
-template <typename Check> void Run(Check check)
+template <typename Check> void Run(Check check, uint32_t limit_follows)
 {
 	struct Node { int32_t estimate; bool operator<(const Node &other) const { return this->estimate < other.estimate; } };
 	std::array<Node, 64> nodes{};
@@ -111,7 +111,9 @@ template <typename Check> void Run(Check check)
 	destination = input.dest_tile;
 	result = openttd_rust_ship_choose(path.get(), &input, &leaves, &services, nullptr, input.tile, 1 << 8, 0, &destination, 1);
 	check(result.found == 0 && result.stats[3] == 1 && result.stats[2] == 1 && result.stats[7] == 1);
-	check(result.stats[1] == 5121 + 15 && result.stats[8] == 8 && draws == 8 && openttd_rust_ship_path_size(path.get()) == 7);
+	/* The fixed-limit search follows as often as the unchanged reference search; the
+	 * restricted retry then follows the 15 tiles left in the 16-tile start region. */
+	check(result.stats[1] == limit_follows + 15 && result.stats[8] == 8 && draws == 8 && openttd_rust_ship_path_size(path.get()) == 7);
 	snake = false;
 	/* Map-derived high-level node limit, with a synthetic one-edge region graph. */
 	region_chain = true; draws = 0;

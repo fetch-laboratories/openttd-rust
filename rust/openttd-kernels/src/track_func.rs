@@ -183,13 +183,23 @@ pub const fn find_first_trackdir(bits: u16) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::Cell;
+
     #[test]
     fn native_asserts_off_retains_header_conversions() {
-        let disabled = |ok: bool| assert!(!ok);
+        let failures = Cell::new(0);
+        let disabled = |ok: bool| {
+            assert!(!ok);
+            failures.set(failures.get() + 1);
+        };
         assert_eq!(axis_to_track(crate::services::Axis(2), disabled).0, 2);
+        assert_eq!(failures.get(), 1);
+        // `AxisToTrackBits` asserts only the axis: the resulting `TRACK_UPPER` is valid.
         assert_eq!(axis_to_track_bits(2, disabled), 4);
+        assert_eq!(failures.get(), 2);
         assert_eq!(track_to_track_bits(8, disabled), 0);
         assert_eq!(diag_dir_to_diag_track(4, disabled), 0);
         assert!(is_reversing_road_trackdir(22, disabled));
+        assert_eq!(failures.get(), 5);
     }
 }

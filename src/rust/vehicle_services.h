@@ -29,6 +29,8 @@ OpenTTDShipState *RustVehicleShipOwner(const Vehicle *v) noexcept;
 OpenTTDTrainHandle RustVehicleTrain(OpenTTDVehicle *v) noexcept;
 bool RustTrainIsEngine(const Vehicle *v) noexcept;
 Train *RustTrainGetIfValid(uint32_t id) noexcept;
+/** Strict Ship::Get lookup, preserving source pool assertions. */
+OpenTTDVehicle *RustShipGet(uint32_t id) noexcept;
 uint32_t RustTrainCachedPower(const Vehicle *v) noexcept;
 uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept;
 inline uint32_t RustVehicleGRFID(const Vehicle *v) noexcept { return v->GetGRFID(); }
@@ -82,7 +84,7 @@ template <class T> inline auto RustVehicleFirst(T *v) noexcept { return v->First
 template <class T> inline auto RustVehicleLast(T *v) noexcept { return v->Last(); }
 /** Signature adapter for existing opaque fleet and orders callbacks. */
 inline void *RustVehicleFirstOpaque(void *v) noexcept { return RustVehicleFirst(static_cast<const Vehicle *>(v)); }
-inline void OPENTTD_VEHICLE_CALL RustVehicleSetDestTile(OpenTTDVehicle *v, uint32_t tile) noexcept { VehicleOf(v)->SetDestTile(TileIndex(tile)); }
+inline void OPENTTD_RUST_CALL RustVehicleSetDestTile(OpenTTDVehicle *v, uint32_t tile) noexcept { VehicleOf(v)->SetDestTile(TileIndex(tile)); }
 inline uint32_t RustVehicleOrderStationLocation(OpenTTDVehicle *v, uint16_t station) noexcept { return VehicleOf(v)->GetOrderStationLocation(StationID(station)).base(); }
 inline uint64_t RustVehicleLegacyOrderStationLocation(void *v, uint16_t station) noexcept { return RustVehicleOrderStationLocation(RustVehicle(static_cast<Vehicle *>(v)), station); }
 template <class T> inline auto RustVehicleNextVehicle(const T *v) noexcept { return v->GetNextVehicle(); }
@@ -217,7 +219,7 @@ inline uint32_t *RustVehicleMotionAddress(Vehicle *v) noexcept { return &v->moti
 /** Typed shell adapter; canonical reads keep their actual return types.
  * Result also preserves existing wider legacy table signatures. */
 template <typename Result, auto Read>
-static Result OPENTTD_VEHICLE_CALL RustVehicleRead(OpenTTDVehicle *shell) noexcept { return static_cast<Result>(Read(VehicleOf(shell))); }
+static Result OPENTTD_RUST_CALL RustVehicleRead(OpenTTDVehicle *shell) noexcept { return static_cast<Result>(Read(VehicleOf(shell))); }
 
 /** Shared legacy opaque-owner adapter; the actual typed read is defined once. */
 template <typename Result, auto Read>
@@ -251,7 +253,7 @@ inline uint8_t RustEngineGRFVersion(const Engine *engine) noexcept
 }
 
 template <class T>
-inline OpenTTDGroundViewportNext OPENTTD_VEHICLE_CALL GroundSvcUpdateViewportThenNext(OpenTTDVehicle *part, OpenTTDVehicle *front) noexcept
+inline OpenTTDGroundViewportNext OPENTTD_RUST_CALL GroundSvcUpdateViewportThenNext(OpenTTDVehicle *part, OpenTTDVehicle *front) noexcept
 {
 	T *u = T::From(VehicleOf(part));
 	/* UpdateViewport may reenter Rust; no Rust borrow survives this call. */
@@ -261,26 +263,26 @@ inline OpenTTDGroundViewportNext OPENTTD_VEHICLE_CALL GroundSvcUpdateViewportThe
 	return {.next = RustVehicle(next), .final_progress = next == nullptr ? RustVehicleProgress(VehicleOf(front)) : uint8_t(0)};
 }
 template <class T>
-inline void OPENTTD_VEHICLE_CALL GroundSvcTurn(OpenTTDVehicle *v, uint8_t direction) noexcept
+inline void OPENTTD_RUST_CALL GroundSvcTurn(OpenTTDVehicle *v, uint8_t direction) noexcept
 {
 	T *u = T::From(VehicleOf(v));
 	u->direction = static_cast<Direction>(direction);
 	RustVehicleUpdateViewport(u, true, true);
 }
 template <class T>
-inline void OPENTTD_VEHICLE_CALL GroundSvcGoToDepotService(OpenTTDVehicle *v, uint16_t depot) noexcept
+inline void OPENTTD_RUST_CALL GroundSvcGoToDepotService(OpenTTDVehicle *v, uint16_t depot) noexcept
 {
 	T *u = T::From(VehicleOf(v));
 	SetBit(u->gv_flags, GVF_SUPPRESS_IMPLICIT_ORDERS);
 	u->current_order.MakeGoToDepot(DepotID(depot), OrderDepotTypeFlag::Service);
 }
 template <class T>
-inline void OPENTTD_VEHICLE_CALL GroundSvcWriteFirstEngine(OpenTTDVehicle *v, uint16_t engine) noexcept
+inline void OPENTTD_RUST_CALL GroundSvcWriteFirstEngine(OpenTTDVehicle *v, uint16_t engine) noexcept
 {
 	RustGroundSetFirstEngine(&T::From(VehicleOf(v))->gcache, EngineID(engine));
 }
 template <class T>
-inline void OPENTTD_VEHICLE_CALL GroundSvcWriteLength(OpenTTDVehicle *part, uint8_t length, OpenTTDVehicle *front, uint16_t total_length) noexcept
+inline void OPENTTD_RUST_CALL GroundSvcWriteLength(OpenTTDVehicle *part, uint8_t length, OpenTTDVehicle *front, uint16_t total_length) noexcept
 {
 	T *u = T::From(VehicleOf(part));
 	u->gcache.cached_veh_length = length;
@@ -290,7 +292,7 @@ inline void OPENTTD_VEHICLE_CALL GroundSvcWriteLength(OpenTTDVehicle *part, uint
 
 template <class T>
 /** The head of `RoadVehUpdateCache`. */
-inline void OPENTTD_VEHICLE_CALL GroundSvcCacheBegin(OpenTTDVehicle *v) noexcept
+inline void OPENTTD_RUST_CALL GroundSvcCacheBegin(OpenTTDVehicle *v) noexcept
 {
 	T *u = T::From(VehicleOf(v));
 	u->InvalidateNewGRFCacheOfChain();
@@ -298,13 +300,13 @@ inline void OPENTTD_VEHICLE_CALL GroundSvcCacheBegin(OpenTTDVehicle *v) noexcept
 }
 
 template <class T>
-inline uint8_t OPENTTD_VEHICLE_CALL GroundSvcCachedLength(OpenTTDVehicle *v) noexcept
+inline uint8_t OPENTTD_RUST_CALL GroundSvcCachedLength(OpenTTDVehicle *v) noexcept
 {
 	return RustGroundCachedLength(T::From(VehicleOf(v)));
 }
 
 template <class T>
-inline bool OPENTTD_VEHICLE_CALL GroundSvcHasArticulated(OpenTTDVehicle *v) noexcept
+inline bool OPENTTD_RUST_CALL GroundSvcHasArticulated(OpenTTDVehicle *v) noexcept
 {
 	return RustGroundHasArticulated(T::From(VehicleOf(v)));
 }

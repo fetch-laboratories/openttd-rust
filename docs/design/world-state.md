@@ -128,17 +128,8 @@ Keep canonical map arrays in C++ and use direct `noexcept` operations for the
 next selected tile-heavy owners. Prefer existing semantic operations and copied
 records over one callback per bitfield; trees already copy ten words per read,
 and water-region traversal calls track/follower services rather than individual
-map fields. The measurements in [PR #116](https://github.com/fetch-laboratories/openttd-rust/pull/116)
-and [PR #114](https://github.com/fetch-laboratories/openttd-rust/pull/114) establish crossing density,
-not a map-access bottleneck. C++ storage ownership remains selected. #212's
-raw tile-type read did not cause its budget miss. The eleventh steering review
-traced that miss to an uninlined dispatch closure and to lambda trampolines.
-New owners use integrated typed services; no transfer is selected.
-
-Historical tree and water measurements, with their limits, are recorded in
-[PR #114](https://github.com/fetch-laboratories/openttd-rust/pull/114) and
-[PR #116](https://github.com/fetch-laboratories/openttd-rust/pull/116). They establish callback
-density; they do not establish a whole-game performance gain or compare raw-array alternatives.
+map fields. C++ storage ownership remains selected. New owners use integrated
+typed services; no transfer is selected.
 
 A future raw view must retain one canonical allocation, pin both C++ and Rust
 size/alignment/offsets, use field-sized raw `ptr::read`/`write` with no Rust
@@ -177,11 +168,23 @@ assertion policy captured once per entry. Assertion-disabled builds gain no new
 panics or rejected inputs. Delete displaced reads and orphan bindings; remaining
 unaudited callers share the canonical native fallback.
 
-The historical experiment compares different owner implementations and skipped
-some native assertions, so it establishes no isolated current saving. Acceptance
-requires assertion-faithful same-base TGP attribution, default mutation/reallocation
-checks, semantic comparisons and the current six-scenario instruction guard.
-This selects a bounded candidate, not a storage transfer or a general raw API.
+The tile scheduler (`tile_loop.rs`) relies on this interval. `Map::Allocate` runs
+only from game reset (`InitializeGame`), the MAPS and legacy loaders and tests,
+and the mutex yield (`GameLoopPause`) only in generation progress and GRF
+scanning, all outside `RunTileLoop`. Tile handlers may mutate tiles and pools,
+run landscape, road and crash commands or queue script events (`InsertEvent`),
+but never reset, load, report progress or run a script VM, and none changes map
+dimensions, climate, tree placement, the tick counter, editor mode or the
+road-rebuild and ambient settings; `_misc_grf_features` changes only on reset and
+GRF `ActionD` loading. So a batch reads those settings once and keeps only
+descriptor metadata across dispatch, ending each field-sized read first. Ambient
+callbacks keep their original RNG position, and the tree adapter rereads the
+feature bit after the call.
+Threaded and arbitrary NewGRF corpus limits are open in #156.
+
+Extending the view requires default mutation/reallocation checks and semantic
+comparisons. This selects a bounded candidate, not a storage transfer or a
+general raw API.
 
 ## Transferring shared storage later
 Root selects a storage port when measured coupling warrants it. Move its canonical

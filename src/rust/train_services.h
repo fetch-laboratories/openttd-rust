@@ -402,11 +402,7 @@ static uint64_t TrainPrice(OpenTTDTrainHandle id, uint32_t a) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	return static_cast<uint64_t>(GetPrice(EngineOf(RustVehicleGetEngine(RustVehicle(v)))->VehInfo<RailVehicleInfo>().running_cost_class, static_cast<uint>(a), RustEngineGRF(RustVehicleGetEngine(RustVehicle(v)))));
 }
-static uint64_t TrainProcessOrders(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	return ProcessOrders(v);
-}
+
 static uint64_t TrainRailvehWagon(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);

@@ -1,7 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Town commands, authority actions and ordered deletion. The native game-state
-//! mutex serializes all access. Immediate owner reads/writes end before every
-//! callback, including deleting callbacks; post-destruction never resolves an ID.
+//! Town commands, authority actions and ordered deletion. Post-destruction code never
+//! resolves an ID.
 use super::founding::{AcceptanceEffect, FoundingServices};
 use super::{Engine, State, TownId, TownRef, engine};
 use crate::command_type::DoCommandFlag;
@@ -114,9 +113,7 @@ impl<'a> Commands<'a> {
         (self.f.resolve)(TownId(id))
     }
     fn map(&self) -> Map {
-        *self.map.get_or_init(|| Map {
-            log_x: (self.shared.map_log_x)() as u8,
-        })
+        *self.map.get_or_init(|| self.shared.map())
     }
     fn size_y(&self) -> u32 {
         *self
@@ -298,7 +295,7 @@ impl<'a> Commands<'a> {
     }
     fn bribe(&self, t: TownRef) {
         let company = (self.shared.current_company)();
-        if crate::services::chance16_i(1, 14, self.shared.random()) {
+        if crate::random_func::chance16_i(1, 14, self.shared.random()) {
             unsafe {
                 (*t.state).simulation.unwanted[usize::from(company)] = 6;
             }
@@ -333,7 +330,7 @@ impl<'a> Commands<'a> {
             }
             w::hit(w::TOWN_COMMAND_BRIBE_FAILED);
         } else {
-            // SAFETY: Canonical owner is live; direct existing rating owner retains scratch/cheat semantics.
+            // SAFETY: The town owner is live; the rating owner keeps its scratch and cheat semantics.
             unsafe {
                 super::openttd_rust_town_change_rating(
                     self.f.growth,

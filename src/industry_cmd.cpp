@@ -3584,12 +3584,9 @@ void TrimIndustryAcceptedProduced(Industry *ind)
 }
 
 #ifdef WITH_RUST
-/** Native world services preserve immediate effects. NewGRF resolver calls are
-	* bounded and cannot run script VMs. Script event services enqueue events only.
-	* Construction, landscape clearing, and industry destruction can reenter migrated
-	* accessors; Rust ends all owner borrows before calling these named services.
-	* Their CommandCost failures are handled by the unchanged native transactions.
-	* Allocation and UI/debug I/O failures terminate inside these noexcept leaves. */
+/** Industry world services with immediate effects. Script event services only enqueue
+	* events; construction, landscape clearing and industry destruction can reenter Rust.
+	* Their CommandCost failures are handled by the native transactions. */
 static void RustIndustryNews(Industry *i, StringID str, bool close) noexcept
 {
 	NewsType nt;

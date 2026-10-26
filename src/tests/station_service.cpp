@@ -78,7 +78,7 @@ TEST_CASE("Shared station traversal - live filtered pool mutation and reentry")
 
 TEST_CASE("Station service - scalar ABI layouts")
 {
-	auto Layout = [](const char *name, std::initializer_list<size_t> values) { CHECK(AbiLayoutMismatch(name, values) == -1); };
+	ABI_LAYOUT_CHECK;
 #include "abi-layout-station_service.inc"
 
 }

@@ -37,23 +37,14 @@ typedef struct OpenTTDCargoFlowServices {
 	void (*reroute)(void *, uint16_t, uint16_t) OPENTTD_SERVICE_DEFAULT(reroute);
 	void (*finish)(void *, uint16_t, uint8_t) OPENTTD_SERVICE_DEFAULT(finish);
 } OpenTTDCargoFlowServices;
-/* Each facade has one opaque owner or a nonowning borrow of a stable map entry.
- * Maps own raw-allocated flow nodes, unchanged by insertion or unrelated erase.
- * Share/origin iterators retain scalar keys only; each read borrows for that call.
- * All operations are serial; job maps are private to their worker until join.
- * No C++ STL object is viewed by Rust. Clone returns an independent owner;
- * map insertion copies the supplied flow. Destroy each owned handle once.
- * A map borrow ends when that entry is erased; no retained Rust reference crosses
- * a service. Services are noexcept, never run script VMs, and may read/mutate
- * canonical cargo through rerouting; raw owner accesses end before each call.
- * Save/load errors remain entirely in C++ adapters. Panics/alloc failures abort.
- * Snapshot and live graph pointers are canonical Rust owners, stable for this
- * application under the game-state mutex; rerouting cannot delete graph shells.
- * read: 0 graph valid,3 live station valid,4 edge count,5 edge flow,6 destination
- * node,8 manual distribution,9 live data empty,10 live graph ID,11 live node ID,
- * 12 job graph ID. Graph queries execute directly in Rust. finish clears data when requested
- * then invalidates the station window. Native thread join precedes application.
- */
+/* Each facade holds one opaque owner or a nonowning borrow of a map entry, valid until that entry is
+ * erased. Maps own raw-allocated flow nodes that insertion and unrelated erasure leave in place; job
+ * maps are private to their worker until join, and rerouting cannot delete graph shells.
+ * Read selectors: 0 graph valid, 3 live station valid, 4 edge count, 5 edge flow, 6 destination node,
+ * 8 manual distribution, 9 live data empty, 10 live graph ID, 11 live node ID, 12 job graph ID.
+ * finish clears data when requested, then invalidates the station window, after the thread join.
+ * Calls are serial; clone and insertion copy into independent owners, destroyed once. Graph owners
+ * stay live under the game-state mutex during application, and callbacks retain no owner references. */
 OpenTTDCargoFlow *openttd_rust_flow_new(uint16_t, uint32_t, uint8_t);
 OpenTTDCargoFlow *openttd_rust_flow_clone(const OpenTTDCargoFlow *);
 void openttd_rust_flow_destroy(OpenTTDCargoFlow *);

@@ -5,10 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Shared tile-kind ownership dispatch. Immutable canonical tables are borrowed;
-//! three distinct, constructed native costs and the full road context belong to
-//! the outer C++ frame. No world borrow survives a callback. Panics abort and
-//! native leaves are noexcept; AI startup remains outside Rust.
+//! Tile-kind ownership dispatch over immutable tables. Three distinct constructed native costs and
+//! the road context belong to the outer C++ frame; AI startup stays in C++.
 #![allow(unsafe_code, missing_docs, clippy::too_many_arguments)]
 use crate::{industry, objects, rail_cmd, road_cmd, services, station_cmd, water_cmd};
 

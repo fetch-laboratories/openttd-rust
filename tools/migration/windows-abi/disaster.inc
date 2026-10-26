@@ -7,7 +7,7 @@ struct DisasterProbe {
 	OpenTTDVehicleTileLinks links{};
 	VehicleType type = VEH_DISASTER;
 };
-static void OPENTTD_DISASTER_CALL DisasterProbeRead(void *context, uint32_t kind, uint32_t, int64_t, int64_t, int64_t *out) noexcept
+static void OPENTTD_RUST_CALL DisasterProbeRead(void *context, uint32_t kind, uint32_t, int64_t, int64_t, int64_t *out) noexcept
 {
 	auto *probe = static_cast<DisasterProbe *>(context); probe->reads++;
 	if (kind == 0) { out[0] = 64; out[1] = 128; out[2] = 63; out[3] = 127; out[4] = 8191; out[5] = 1935; out[6] = 0; out[9] = 1; }
@@ -16,14 +16,14 @@ static void OPENTTD_DISASTER_CALL DisasterProbeRead(void *context, uint32_t kind
 	if (kind == 5) { out[1] = 1; out[2] = 0; }
 	if (kind == 15) out[0] = 1;
 }
-static void OPENTTD_DISASTER_CALL DisasterProbeWrite(void *context, uint32_t, uint32_t, int64_t) noexcept
+static void OPENTTD_RUST_CALL DisasterProbeWrite(void *context, uint32_t, uint32_t, int64_t) noexcept
 {
 	static_cast<DisasterProbe *>(context)->writes++;
 }
 static uint32_t DisasterProbeRandom(void *context) noexcept { auto *probe = static_cast<DisasterProbe *>(context); probe->draws++; return probe->random; }
-static int64_t OPENTTD_DISASTER_CALL DisasterProbeService(void *, const OpenTTDDisasterAction *) noexcept { return 0; }
+static int64_t OPENTTD_RUST_CALL DisasterProbeService(void *, const OpenTTDDisasterAction *) noexcept { return 0; }
 static uint32_t DisasterProbeIndustry(int32_t, int32_t, uint32_t *) noexcept { return 0; }
-static OpenTTDVehicle *OPENTTD_DISASTER_CALL DisasterProbeShell(void *context, uint32_t id) noexcept
+static OpenTTDVehicle *OPENTTD_RUST_CALL DisasterProbeShell(void *context, uint32_t id) noexcept
 {
 	auto *p = static_cast<DisasterProbe *>(context); CHECK(id == 17); p->resolves++;
 	return reinterpret_cast<OpenTTDVehicle *>(p);

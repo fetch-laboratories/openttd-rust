@@ -5,16 +5,12 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Water construction, clearing, restoration and tile policy (#294). Map/pool
-//! identities and `CommandCost` storage remain native. The world mutex serializes
-//! each synchronous entry. No native reference is formed or retained over a
-//! callback; nested clear commands may reenter any owner. Native leaves are
-//! noexcept (no ordinary-play throwing service); panics abort.
+//! Water construction, clearing, restoration and tile policy. Map and pool identities and
+//! `CommandCost` storage stay native; nested clear commands may reenter any owner.
 #![allow(
     unsafe_code,
     missing_docs,
     clippy::too_many_arguments,
-    clippy::too_many_lines,
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
@@ -24,13 +20,13 @@ use crate::command_type::DoCommandFlag;
 use crate::company_type::{INVALID_OWNER, OWNER_NONE, OWNER_WATER};
 use crate::direction_type::INVALID_DIAGDIR;
 use crate::services::{
-    CommandCost, CommandCostServices, CommandServices, Map, Services, WaterClass,
+    CommandCost, CommandCostServices, CommandServices, Cost, Map, Services, WaterClass,
 };
 use crate::slope_func::{
     get_inclined_slope_direction, is_inclined_slope, is_slope_with_one_corner_raised,
 };
 use crate::strings_type::INVALID_STRING_ID;
-use crate::tile_type::INVALID_TILE;
+use crate::tile_type::{INVALID_TILE, MP_WATER};
 use crate::viewport_func::TILE_HEIGHT_STEP;
 use crate::water::{RIVER_OFFSET_DESERT_DISTANCE, WaterServices};
 use crate::witness as w;
@@ -122,9 +118,7 @@ impl World<'_> {
             water,
             size_x,
             size_y: (s.map_max_y)() + 1,
-            map: Map {
-                log_x: size_x.trailing_zeros() as u8,
-            },
+            map: Map::from_log_x(size_x.trailing_zeros()),
         }
     }
     fn error(&self, out: *mut CommandCost, string: u32) {
@@ -147,17 +141,8 @@ impl World<'_> {
     fn clear_command(&self, ret: *mut CommandCost, tile: u32, flags: u16) {
         crate::landscape_cmd::clear_command(self.cmd, ret, tile, flags);
     }
-    fn ownership(&self, ret: *mut CommandCost, tile: u32) {
-        // SAFETY: The facade owns this live native stack slot across reentry.
-        unsafe {
-            (self.cmd.tile_ownership)(ret, tile);
-        }
-    }
-    fn no_vehicle(&self, ret: *mut CommandCost, tile: u32) {
-        // SAFETY: The facade owns this live native stack slot across reentry.
-        unsafe {
-            self.cmd.no_vehicle(ret, tile);
-        }
+    fn cost(&self, ret: *mut CommandCost) -> Cost<'_> {
+        Cost(ret, self.c)
     }
     fn class(&self, t: u32) -> u8 {
         unsafe { ((*self.water.clear).water_class)(t).0 }
@@ -204,7 +189,7 @@ impl World<'_> {
         (self.s.random)(self.s.context) as u8
     }
     fn dirty_neighbours(&self, tile: u32) {
-        // SAFETY: Direct call to the integrated Rust owner with the same tables.
+        // SAFETY: Calls the Rust owner with the same tables.
         unsafe {
             crate::water::dirty_water_neighbours(
                 tile,
@@ -305,15 +290,15 @@ impl World<'_> {
             self.error(out, INVALID_STRING_ID);
             return;
         }
-        self.ownership(ret, tile);
+        self.cost(ret).tile_ownership(self.cmd, tile);
         if self.take_failure(out, ret) {
             return;
         }
         let tile2 = (self.a.other_depot_tile)(tile);
         if flags & DoCommandFlag::BANKRUPT == 0 {
-            self.no_vehicle(ret, tile);
+            self.cost(ret).no_vehicle(self.cmd, tile);
             if !self.failed(ret) {
-                self.no_vehicle(ret, tile2);
+                self.cost(ret).no_vehicle(self.cmd, tile2);
             }
             if self.take_failure(out, ret) {
                 return;
@@ -354,7 +339,7 @@ impl World<'_> {
         let lower = tile.wrapping_sub(delta);
         let upper = tile.wrapping_add(delta);
         for t in [tile, upper, lower] {
-            self.no_vehicle(ret, t);
+            self.cost(ret).no_vehicle(self.cmd, t);
             if self.take_failure(out, ret) {
                 return;
             }
@@ -459,7 +444,7 @@ impl World<'_> {
     }
     fn remove_lock(&self, out: *mut CommandCost, ret: *mut CommandCost, flags: u16, tile: u32) {
         if (self.s.tile_owner)(tile) != OWNER_NONE {
-            self.ownership(ret, tile);
+            self.cost(ret).tile_ownership(self.cmd, tile);
             if self.take_failure(out, ret) {
                 return;
             }
@@ -468,7 +453,7 @@ impl World<'_> {
         let upper = tile.wrapping_add(delta);
         let lower = tile.wrapping_sub(delta);
         for t in [tile, upper, lower] {
-            self.no_vehicle(ret, t);
+            self.cost(ret).no_vehicle(self.cmd, t);
             if self.take_failure(out, ret) {
                 return;
             }
@@ -555,7 +540,7 @@ impl World<'_> {
                     (self.c.amount)(out, (self.c.money)(ret));
                 }
                 if flags & DoCommandFlag::EXECUTE != 0 {
-                    if (self.s.tile_type)(tile) == 6 && self.canal(tile) {
+                    if (self.s.tile_type)(tile) == MP_WATER && self.canal(tile) {
                         let owner = (self.s.tile_owner)(tile);
                         if (self.s.company_valid)(owner) {
                             self.infra(owner, u32::MAX, true);
@@ -612,13 +597,13 @@ impl World<'_> {
                     self.error(out, self.a.strings.edge);
                     return;
                 }
-                self.no_vehicle(ret, tile);
+                self.cost(ret).no_vehicle(self.cmd, tile);
                 if self.take_failure(out, ret) {
                     return;
                 }
                 let owner = (self.s.tile_owner)(tile);
                 if owner != OWNER_WATER && owner != OWNER_NONE {
-                    self.ownership(ret, tile);
+                    self.cost(ret).tile_ownership(self.cmd, tile);
                     if self.take_failure(out, ret) {
                         return;
                     }
@@ -636,7 +621,7 @@ impl World<'_> {
             }
             1 => {
                 let slope = (self.s.tile_slope)(tile);
-                self.no_vehicle(ret, tile);
+                self.cost(ret).no_vehicle(self.cmd, tile);
                 if self.take_failure(out, ret) {
                     return;
                 }

@@ -34,23 +34,15 @@ struct OpenTTDCargoListFields {
 	int64_t feeder_share;
 	uint32_t count, reserved_count, action_counts[4];
 };
-/* All handles are opaque, serially accessed owners. Create/destroy match exactly;
- * C++ pool shells preserve IDs/allocation order. List nodes hold pool-shell handles,
- * never views of C++ objects. Callback tables are synchronous noexcept services;
- * no argument is retained, environmental exceptions terminate, Rust panics abort.
- * Payment callbacks may reenter packet/list getters: Rust ends all owner borrows
- * before payment and writes metadata in source order. Packet save/load writes
- * fields in place; import never dereferences unresolved IDs.
- * Buffers/counts and supplied handles obey original caller validity preconditions.
- * Snapshot callbacks only append to call-local C++ export containers.
- * Next-hop buffers borrow the caller's live StationID span (checked uint16_t
- * representation), only for this call. Rust uses field-sized raw reads rather
- * than references/slices across callbacks; native callers keep storage live
- * and stable for the original synchronous span interval.
- * flow mode0 normal/restricted,1 forced transfer (exclude current + next reverse),
- * 2 reroute (exclude avoid/avoid2). Source rewrite is Rust control, selector3 asks
- * for first flow origin, selector4 asks whether any flows exist.
- */
+/* Handles are opaque owners; C++ pool shells keep IDs and allocation order, and list nodes hold
+ * pool-shell handles. Payment callbacks may reenter packet and list getters; raw owner accesses end
+ * before them, and metadata writes keep their source order. Save/load writes packet fields in place;
+ * import never dereferences
+ * unresolved IDs. Next-hop buffers borrow the caller's StationID span for one call. Flow mode:
+ * 0 normal/restricted, 1 forced transfer (excludes current and next reverse), 2 reroute (excludes
+ * avoid/avoid2); selector 3 asks for the first flow origin, selector 4 whether any flows exist.
+ * Handles are live and serially accessed, create/destroy match once, and callbacks retain no arguments;
+ * next-hop storage stays live and stable for the call, with snapshot output confined to local exports. */
 struct OpenTTDCargoStorageServices {
 	uint8_t (*can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
 	void *(*create)(const OpenTTDCargoPacketFields *) noexcept OPENTTD_SERVICE_DEFAULT(create);
@@ -78,7 +70,7 @@ struct OpenTTDCargoCapacityServices {
 	const OpenTTDCargoStorageServices *cargo;
 };
 const OpenTTDCargoCapacityServices &GetRustCargoCapacityServices() noexcept;
-/* capacity mode0 spreads/shrinks, mode1 transfers. Return1 requires the native
+/* capacity mode 0 spreads/shrinks, mode 1 transfers. Return 1 requires the native
  * ConsistChanged callback after Rust returns (no borrowed part/list survives). */
 extern "C" {
 uint8_t openttd_rust_cargo_capacity(const OpenTTDCargoCapacityServices *, void *, void *, uint8_t, uint8_t);

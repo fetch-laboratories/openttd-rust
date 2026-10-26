@@ -1,9 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Common Action2 execution. Native parsed nodes and payloads are immutable handles;
-//! common invocation fields have one stack allocation for the resolver lifetime.
-//! Entries hold the game-state mutex. Raw field accesses end before every reentrant
-//! call, including procedures and scope/storage operations. Panics abort; native
-//! leaves are noexcept and environmental failures terminate there.
+//! Common Action2 execution. Parsed nodes and payloads are immutable native handles; common
+//! invocation fields have one stack allocation for the resolver lifetime. Procedures and
+//! scope and storage operations can reenter.
 #![allow(
     unsafe_code,
     missing_docs,

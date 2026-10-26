@@ -89,7 +89,6 @@ struct OpenTTDShipLeaves {
 	uint32_t (*path_back)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(path_back);
 	void (*path_pop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(path_pop);
 	void (*path_clear)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(path_clear);
-	bool (*process_orders)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(process_orders);
 	void (*viewport)(uint32_t, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(viewport);
 	void (*base_viewport)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(base_viewport);
 	void (*visual)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(visual);

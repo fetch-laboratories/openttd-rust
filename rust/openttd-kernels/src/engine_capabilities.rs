@@ -18,7 +18,7 @@ use crate::bitmath_func::{gb, has_bit, set_bit64};
 use crate::cargo_type::{
     ALL_CARGOTYPES, CT_MAIL, CT_PASSENGERS, INVALID_CARGO, NUM_CARGO, is_valid_cargo_type,
 };
-use crate::engine_type::NO_DEFAULT_CARGO_MULTIPLIER;
+use crate::engine_type::{INVALID_ENGINE, NO_DEFAULT_CARGO_MULTIPLIER};
 use crate::newgrf_callbacks::{
     CALLBACK_FAILED, CBID_VEHICLE_ARTIC_ENGINE, CBID_VEHICLE_REFIT_CAPACITY, VEHICLE_ARTIC_ENGINE,
     VEHICLE_CARGO_SUFFIX, VEHICLE_REFIT_CAPACITY,
@@ -27,9 +27,7 @@ use crate::newgrf_properties::{
     PROP_AIRCRAFT_MAIL_CAPACITY, PROP_AIRCRAFT_PASSENGER_CAPACITY, PROP_ROADVEH_CARGO_CAPACITY,
     PROP_SHIP_CARGO_CAPACITY, PROP_TRAIN_CARGO_CAPACITY,
 };
-use crate::vehicle::{
-    INVALID_ENGINE, OpenTTDEngine, OpenTTDVehicle, RailVehicleTypes, VehicleType,
-};
+use crate::vehicle::{OpenTTDEngine, OpenTTDVehicle, RailVehicleTypes, VehicleType};
 use std::ffi::c_void;
 use std::ptr::null_mut;
 type E = *const OpenTTDEngine;

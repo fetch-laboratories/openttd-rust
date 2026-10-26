@@ -245,7 +245,7 @@ class RuntimeTests(unittest.TestCase):
                 patch.object(migration, "COMMON_LOCAL", Path(directory)),
                 patch.object(core, "GAME_LOCK", None),
             ):
-                with core.game_slot(False):
+                with core.game_slot():
                     self.assertTrue((Path(directory) / "simulation-game.lock").exists())
 
     @unittest.skipUnless(os.name == "posix", "POSIX cross-process locks")
@@ -255,7 +255,7 @@ class RuntimeTests(unittest.TestCase):
             script = (
                 "from simulation import core; from pathlib import Path; import sys\n"
                 "core.GAME_LOCK = Path(sys.argv[1])\n"
-                "with core.game_slot(True): print('entered', flush=True)\n"
+                "with core.game_slot(): print('entered', flush=True)\n"
             )
             with file_lock(lock, shared=True, label="ordinary game"):
                 with subprocess.Popen(

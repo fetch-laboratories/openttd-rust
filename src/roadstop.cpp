@@ -60,14 +60,14 @@ RoadStop *RoadStop::GetNextRoadStop(const RoadVehicle *v) const
 }
 
 #ifdef WITH_RUST
-static OpenTTDRoadStopDriveRead OPENTTD_VEHICLE_CALL RoadStopDriveRead(OpenTTDVehicle *handle) noexcept
+static OpenTTDRoadStopDriveRead OPENTTD_RUST_CALL RoadStopDriveRead(OpenTTDVehicle *handle) noexcept
 {
 	const RoadVehicle *rv = RoadVehicle::From(VehicleOf(handle));
 	return {.total_length = RustGroundCachedTotalLength(&rv->gcache), .direction = RustVehicleDirection(rv)};
 }
 
 /** The Rebuild filter reads; only road vehicles have the road fields. */
-static OpenTTDRoadStopRebuildRead OPENTTD_VEHICLE_CALL RoadStopRebuildRead(OpenTTDVehicle *handle) noexcept
+static OpenTTDRoadStopRebuildRead OPENTTD_RUST_CALL RoadStopRebuildRead(OpenTTDVehicle *handle) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
 	VehicleType type = RustVehicleVehicleType(v);

@@ -35,7 +35,7 @@ template <class T> static uint32_t DisasterNext(size_t from)
 
 /* These leaves neither allocate nor invoke scripts/NewGRF/logging. Every record
  * is copied before returning. Original source preconditions govern ID access. */
-static void OPENTTD_DISASTER_CALL DisasterRead(void *, uint32_t kind, uint32_t id, int64_t a, int64_t b, int64_t *out) noexcept
+static void OPENTTD_RUST_CALL DisasterRead(void *, uint32_t kind, uint32_t id, int64_t a, int64_t b, int64_t *out) noexcept
 {
 	switch (kind) {
 		case 0:
@@ -93,7 +93,7 @@ static void OPENTTD_DISASTER_CALL DisasterRead(void *, uint32_t kind, uint32_t i
 	}
 }
 
-static void OPENTTD_DISASTER_CALL DisasterWrite(void *, uint32_t field, uint32_t id, int64_t value) noexcept
+static void OPENTTD_RUST_CALL DisasterWrite(void *, uint32_t field, uint32_t id, int64_t value) noexcept
 {
 	Vehicle *v = Vehicle::Get(id);
 	switch (field) {
@@ -116,7 +116,7 @@ static void OPENTTD_DISASTER_CALL DisasterWrite(void *, uint32_t field, uint32_t
 	}
 }
 
-static int64_t OPENTTD_DISASTER_CALL DisasterService(void *, const OpenTTDDisasterAction *request) noexcept
+static int64_t OPENTTD_RUST_CALL DisasterService(void *, const OpenTTDDisasterAction *request) noexcept
 {
 	const auto &step = *request;
 	int64_t response = 0;
@@ -161,7 +161,7 @@ static int64_t OPENTTD_DISASTER_CALL DisasterService(void *, const OpenTTDDisast
 	return response;
 }
 
-static OpenTTDVehicle *OPENTTD_DISASTER_CALL DisasterVehicleShell(void *, uint32_t id) noexcept
+static OpenTTDVehicle *OPENTTD_RUST_CALL DisasterVehicleShell(void *, uint32_t id) noexcept
 {
 	return RustIndexedVehicleRead<OpenTTDVehicle *, RustVehicle>(id);
 }

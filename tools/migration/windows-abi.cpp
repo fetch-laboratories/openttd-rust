@@ -43,6 +43,7 @@
 #include "rust/station_service_ffi.h"
 #include "rust/string_validation_ffi.h"
 #include "rust/town_founding_ffi.h"
+#include "rust/town_ffi.h"
 #include "rust/townname_ffi.h"
 #include "rust/train_ffi.h"
 #include "rust/train_reservation_ffi.h"
@@ -57,7 +58,6 @@
 #include "abi-includes.inc"
 #include "rust/tile_type_access.hpp"
 #include "tests/abi_layout.hpp"
-#include "tests/town_protocol.hpp"
 
 #include <algorithm>
 #include <array>
@@ -103,7 +103,6 @@ static void Layouts()
 
 static void Calls()
 {
-	CheckTownProtocol([](bool condition) { CHECK(condition); });
 	{
 		static OpenTTDTownState *owner = openttd_rust_town_new();
 		OpenTTDSharedServices shared{}; OpenTTDTownLeaves leaves{}; OpenTTDTownNameServices names{}; OpenTTDCommandCostServices costs{}; OpenTTDTownFoundingServices founding{};
@@ -426,14 +425,14 @@ static void Blake2b()
 static size_t x25519_wipes, x25519_last_wipe;
 static unsigned x25519_verifies;
 static bool x25519_wipes_zero;
-static void OPENTTD_CRYPTO_CALL X25519Wipe(void *data, size_t size) noexcept
+static void OPENTTD_RUST_CALL X25519Wipe(void *data, size_t size) noexcept
 {
 	crypto_wipe(data, size);
 	x25519_wipes++; x25519_last_wipe = size;
 	const auto *bytes = static_cast<const uint8_t *>(data);
 	x25519_wipes_zero &= std::all_of(bytes, bytes + size, [](uint8_t x) { return x == 0; });
 }
-static int32_t OPENTTD_CRYPTO_CALL X25519Verify32(const uint8_t *a, const uint8_t *b) noexcept
+static int32_t OPENTTD_RUST_CALL X25519Verify32(const uint8_t *a, const uint8_t *b) noexcept
 {
 	x25519_verifies++;
 	return crypto_verify32(a, b);

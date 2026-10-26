@@ -26,30 +26,24 @@ struct OpenTTDRoadYapfTraversal { int32_t display_speed, max_speed, min_speed; u
 struct OpenTTDRoadYapfArea { uint32_t tile; uint16_t width, height; uint8_t valid, stop, drive_through, next; };
 struct OpenTTDRoadYapfLeaves {
 	const OpenTTDSharedServices *shared; ///< Shared world and movement owner.
-	RoadTramType (OPENTTD_VEHICLE_CALL *road_kind)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(road_kind);
-	OpenTTDRoadYapfTile (OPENTTD_VEHICLE_CALL *tile)(const void *, uint32_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(tile);
-	OpenTTDRoadYapfFollow (OPENTTD_VEHICLE_CALL *follow)(const void *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(follow);
-	OpenTTDRoadYapfTraversal (OPENTTD_VEHICLE_CALL *traversal)(const void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(traversal);
-	uint32_t (OPENTTD_VEHICLE_CALL *closest)(const void *, uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(closest);
-	OpenTTDRoadYapfArea (OPENTTD_VEHICLE_CALL *area)(const void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(area);
+	RoadTramType (OPENTTD_RUST_CALL *road_kind)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(road_kind);
+	OpenTTDRoadYapfTile (OPENTTD_RUST_CALL *tile)(const void *, uint32_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(tile);
+	OpenTTDRoadYapfFollow (OPENTTD_RUST_CALL *follow)(const void *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(follow);
+	OpenTTDRoadYapfTraversal (OPENTTD_RUST_CALL *traversal)(const void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(traversal);
+	uint32_t (OPENTTD_RUST_CALL *closest)(const void *, uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(closest);
+	OpenTTDRoadYapfArea (OPENTTD_RUST_CALL *area)(const void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(area);
 };
 struct OpenTTDRoadYapfResult { uint32_t tile; int32_t cost; uint8_t direction, found; int32_t rounds, open, closed, calcs, distance; };
-/* Input is copied; the opaque vehicle context stays live through this synchronous
- * game-thread call. Leaves access only shared map/pool/settings/follower services,
- * cannot run scripts, throw, or mutate/reenter the Rust search or road owner. No
- * Rust reference into world or canonical road state survives a leaf. The search
- * owns arena, lookup maps, exact-order heap and reconstruction. Only brief direct
- * writes modify #121's canonical path; no second cache or result bridge exists.
- * Tile cost facts are requested only in calc_cost; road-stop occupancy is read
- * there from the Rust road stop owner, never by startup or segment endpoints.
- * Traversal reads current/next ground-vehicle center Z, vehicle speed fields,
- * then CFollowTrackRoad limits for old_tile; it never follows again.
- * Panics/OOM abort; environment failures terminate inside noexcept leaves. */
-OpenTTDRoadYapfResult OPENTTD_VEHICLE_CALL openttd_rust_road_yapf_choose(OpenTTDRoadState *, const OpenTTDRoadYapfInput *, const OpenTTDRoadYapfLeaves *, const void *, uint32_t, uint8_t, uint16_t, uint8_t);
-OpenTTDRoadYapfResult OPENTTD_VEHICLE_CALL openttd_rust_road_yapf_depot(const OpenTTDRoadYapfInput *, const OpenTTDRoadYapfLeaves *, const void *, int32_t);
+/* Input is copied, and the opaque vehicle context stays live for the call. Leaves use only shared
+ * map, pool, settings and follower services and cannot reenter the search or road owner. The search
+ * owns its arena, lookup maps, exact-order heap and reconstruction, and writes the road vehicle's
+ * path directly. Tile costs, including road-stop occupancy, are read only in calc_cost; traversal
+ * reads ground-vehicle center Z and speed, then CFollowTrackRoad limits for old_tile. */
+OpenTTDRoadYapfResult OPENTTD_RUST_CALL openttd_rust_road_yapf_choose(OpenTTDRoadState *, const OpenTTDRoadYapfInput *, const OpenTTDRoadYapfLeaves *, const void *, uint32_t, uint8_t, uint16_t, uint8_t);
+OpenTTDRoadYapfResult OPENTTD_RUST_CALL openttd_rust_road_yapf_depot(const OpenTTDRoadYapfInput *, const OpenTTDRoadYapfLeaves *, const void *, int32_t);
 /* Evidence-only actual-heap probe. Input/Leaves initialized; no leaf is invoked.
  * costs[nodes], commands[count], values[count] readable and output[count] writable
  * disjoint spans. Indices/membership satisfy the original heap preconditions. */
-void OPENTTD_VEHICLE_CALL openttd_rust_road_yapf_heap_probe(const OpenTTDRoadYapfInput *, const OpenTTDRoadYapfLeaves *, const int32_t *, size_t, const uint32_t *, const int32_t *, size_t, uint32_t *);
+void OPENTTD_RUST_CALL openttd_rust_road_yapf_heap_probe(const OpenTTDRoadYapfInput *, const OpenTTDRoadYapfLeaves *, const int32_t *, size_t, const uint32_t *, const int32_t *, size_t, uint32_t *);
 }
 #endif
