@@ -6,7 +6,7 @@ pub(crate) fn build_cost(s: &Services, road_type: u8) -> i64 {
 }
 pub(crate) fn clear_cost(s: &Services, road_type: u8) -> i64 {
     let clear = crate::company::price(41);
-    if (s.road_type_is_road)(road_type) {
+    if crate::road::road_type_is_road(road_type) {
         return clear;
     }
     clear.saturating_sub(build_cost(s, road_type).saturating_mul(3) / 4)

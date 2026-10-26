@@ -1084,12 +1084,34 @@ company, town, deity, editor and generation rules. Engine lifecycle publishes
 derived masks through canonical native company setters, and Rust construction
 owners call availability directly. Native facades retain the portable originals.
 
-C++ retains type registries and their loading/finalization, engine specs, company
-mask storage and presentation. Typed observations carry only consumed metadata;
+C++ retains type specs/defaults, engine specs, company mask storage and
+presentation. The definition owner below supplies canonical registry state and
+loading/finalization policy. Typed observations carry only consumed metadata;
 no lifecycle borrow spans a callback or load. Unsaved masks rebuild through the
 native afterload phase. Live GameScript construction, editor/generation command
-execution, persistent file-loaded custom registries, legacy saves and GUI
-scheduling remain #156 limits. PR #447.
+execution, legacy saves and GUI scheduling remain #156 limits. PR #447.
+
+### Rail/road definitions, translation and saved identity (#476)
+
+`type_registry.rs` and `type_definitions.rs` own rail/road/tram reservation,
+property interpretation, allocation/reset/publication, exact-before-alternate
+lookup, translation and saved-label conversion. Canonical sorted lists, hidden
+and road/tram masks and saved labels are process-wide Rust state. Native spans
+and mask references alias those buffers; native TypeInfo/default tables, strings,
+badges, exact sorting and named GUI sprite resolution retain their representation.
+Per-file label vectors and maps stay in native GRFFile storage; Rust controls their
+initialization and mutation through typed views and storage leaves. Availability
+fixed points remain with the existing introduction owner.
+
+`newgrf_translation.rs` owns one incremental translation-table loader for cargo,
+rail, road and tram. Shared checked Reader/BadgeList operations retain completed
+writes and badge-seen effects on failure; native parser frames rethrow only after
+Rust returns. Native RAIL/ROTT serialization preserves chunk/element order and
+ordinary save/load error frames while appending completed reads to Rust lists.
+Conversion visits the original tile categories through named typed map accessors;
+the shared map descriptor is not expanded. Rendering/resolver ownership, historical
+save variants and GUI scheduling remain outside this component. PR #481.
+
 
 ### Rail signal blocks and fixed work sets (#219)
 

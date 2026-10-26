@@ -331,12 +331,6 @@ pub struct Services {
     pub random: extern "C" fn(*mut c_void) -> u32,
     /// Original `GetAnyRoadBits`, parameterized by `RoadTramType`.
     pub road_bits: extern "C" fn(u32, u8, bool) -> u8,
-    /// Native `GetRoadTramType`, preserving unclassified road mask behavior.
-    pub road_tram_type: extern "C" fn(u8) -> RoadTramType,
-    /// Original `RoadTypeIsTram` predicate.
-    pub road_type_is_tram: extern "C" fn(RoadType) -> bool,
-    /// Native road type classification (the road mask, including unclassified types).
-    pub road_type_is_road: extern "C" fn(u8) -> bool,
     /// Only the road type's construction price multiplier.
     pub road_cost_multiplier: extern "C" fn(u8) -> u16,
     /// Original native `road_depot_direction` map observation.
@@ -747,9 +741,6 @@ crate::abi::layouts! {
         plane_speed,
         random,
         road_bits,
-        road_tram_type,
-        road_type_is_tram,
-        road_type_is_road,
         road_cost_multiplier,
         road_depot_direction,
         road_owner,
@@ -972,9 +963,6 @@ pub fn fixture(
         plane_speed: zero_byte,
         random,
         road_bits: bits,
-        road_tram_type: unused_road_tram_type,
-        road_type_is_tram: unused_road_is_tram,
-        road_type_is_road: unused_company_valid,
         road_cost_multiplier: unused_road_cost_multiplier,
         road_depot_direction: byte,
         road_owner: byte,
@@ -1460,11 +1448,6 @@ extern "C" fn unused_road_cost_multiplier(_: u8) -> u16 {
     panic!("unused road cost multiplier")
 }
 
-#[cfg(test)]
-extern "C" fn unused_road_tram_type(_: u8) -> RoadTramType {
-    panic!("unused road tram type")
-}
-
 /// Native road tile kind.
 #[repr(transparent)]
 #[derive(Clone, Copy)]
@@ -1481,10 +1464,6 @@ extern "C" fn unused_tile_add_wrap(_: u32, _: i32, _: i32) -> u32 {
 }
 
 #[cfg(test)]
-extern "C" fn unused_road_is_tram(_: RoadType) -> bool {
-    panic!("unused tram classification");
-}
-
 #[cfg(test)]
 extern "C" fn fixture_movement() -> *const crate::movement::MovementServices {
     std::ptr::null()

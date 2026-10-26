@@ -1423,3 +1423,10 @@ mod newgrf_roadstop;
 
 mod rail;
 mod type_availability;
+
+pub mod type_registry;
+
+pub mod type_definitions;
+
+pub mod newgrf_internal;
+pub mod newgrf_translation;

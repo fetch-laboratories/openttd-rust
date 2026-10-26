@@ -18,3 +18,12 @@ pub const ROAD_TILE_NORMAL: u8 = 0;
 pub const ROAD_TILE_CROSSING: u8 = 1;
 /// `RoadTileType::Depot`.
 pub const ROAD_TILE_DEPOT: u8 = 2;
+
+/// `SetRoadTypeRoad` delegates to the canonical typed map setter.
+pub fn set_road_type_road(s: &crate::services::Services, tile: u32, rt: u8) {
+    (s.set_road_type)(tile, 0, rt);
+}
+/// `SetRoadTypeTram` delegates to the canonical typed map setter.
+pub fn set_road_type_tram(s: &crate::services::Services, tile: u32, rt: u8) {
+    (s.set_road_type)(tile, 1, rt);
+}

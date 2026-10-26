@@ -185,7 +185,6 @@ const OpenTTDWaterRestorationServices &GetRustWaterRestorationServices() noexcep
 	return services;
 }
 
-static RoadTramType Shared_road_tram_type(uint8_t type) noexcept { return RustRoadTramType(static_cast<RoadType>(type)); }
 
 static uint8_t SharedSnowLine() noexcept { return GetSnowLine(); }
 static int32_t SharedCalendarYear() noexcept { return TimerGameCalendar::year.base(); }
@@ -406,7 +405,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.plane_speed = SharedPlaneSpeed,
 	.random = SharedRandom,
 	.road_bits = Shared_road_bits,
-	.road_tram_type = Shared_road_tram_type, .road_type_is_tram = SharedRoadTypeIsTram, .road_type_is_road = RustRoadTypeIsRoad, .road_cost_multiplier = RustRoadCostMultiplier,
+	.road_cost_multiplier = RustRoadCostMultiplier,
 	.road_depot_direction = Shared_road_depot_direction,
 	.road_owner = Shared_road_owner,
 	.road_type = Shared_road_type,
