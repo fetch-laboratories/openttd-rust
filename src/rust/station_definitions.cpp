@@ -3,6 +3,7 @@
 #include "../stdafx.h"
 #ifdef WITH_RUST
 #include "station_definitions_ffi.h"
+#include "newgrf_bytereader_services.h"
 #include "../newgrf_station.h"
 #include "../newgrf_roadstop.h"
 #include "../newgrf/newgrf_stringmapping.h"
