@@ -323,11 +323,9 @@ uint16_t IndustryOverrideManager::AddEntityID(uint16_t grf_local_id, uint32_t gr
  * checking what is available
  * @param inds Industryspec that comes from the grf decoding process
  */
+#ifndef WITH_RUST
 void IndustryOverrideManager::SetEntitySpec(IndustrySpec &&inds)
 {
-#ifdef WITH_RUST
-	openttd_rust_industry_definition_publish(this->rust_owner, &inds, &GetIndustryDefinitionServices());
-#else
 	/* First step : We need to find if this industry is already specified in the savegame data. */
 	IndustryType ind_id = this->GetID(inds.grf_prop.local_id, inds.grf_prop.grfid);
 
@@ -349,8 +347,8 @@ void IndustryOverrideManager::SetEntitySpec(IndustrySpec &&inds)
 	_industry_specs[ind_id] = std::move(inds);
 	/* ... and mark it as usable*/
 	_industry_specs[ind_id].enabled = true;
-#endif
 }
+#endif
 
 #ifdef WITH_RUST
 uint16_t IndustryTileOverrideManager::AddEntityID(uint16_t grf_local_id, uint32_t grfid, uint16_t substitute_id)
@@ -359,11 +357,9 @@ uint16_t IndustryTileOverrideManager::AddEntityID(uint16_t grf_local_id, uint32_
 }
 #endif
 
+#ifndef WITH_RUST
 void IndustryTileOverrideManager::SetEntitySpec(IndustryTileSpec &&its)
 {
-#ifdef WITH_RUST
-	openttd_rust_industry_tile_definition_publish(this->rust_owner, &its, &GetIndustryDefinitionServices());
-#else
 	IndustryGfx indt_id = this->AddEntityID(its.grf_prop.local_id, its.grf_prop.grfid, its.grf_prop.subst_id);
 
 	if (indt_id == this->invalid_id) {
@@ -384,8 +380,8 @@ void IndustryTileOverrideManager::SetEntitySpec(IndustryTileSpec &&its)
 		this->entity_overrides[i] = this->invalid_id;
 		this->grfid_overrides[i] = 0;
 	}
-#endif
 }
+#endif
 
 /**
  * Method to install the new object data in its proper slot

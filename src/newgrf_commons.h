@@ -270,7 +270,9 @@ public:
 	uint16_t AddEntityID(uint16_t grf_local_id, uint32_t grfid, uint16_t substitute_id) override;
 	uint16_t GetID(uint16_t grf_local_id, uint32_t grfid) const override;
 
+#ifndef WITH_RUST
 	void SetEntitySpec(IndustrySpec &&inds);
+#endif
 };
 
 
@@ -296,7 +298,9 @@ public:
 	uint16_t AddEntityID(uint16_t grf_local_id, uint32_t grfid, uint16_t substitute_id) override;
 #endif
 
+#ifndef WITH_RUST
 	void SetEntitySpec(IndustryTileSpec &&indts);
+#endif
 };
 
 struct AirportSpec;

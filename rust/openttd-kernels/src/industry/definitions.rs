@@ -298,26 +298,6 @@ pub unsafe extern "C" fn openttd_rust_industry_definition_allocate(
     unsafe { allocate(manager, local, grfid, substitute, &*s) }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_definition_publish(
-    manager: *mut override_manager::Manager,
-    spec: *mut SpecHandle,
-    s: *const Services,
-) {
-    unsafe {
-        publish(manager, spec, &*s);
-    }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_tile_definition_publish(
-    manager: *mut override_manager::Manager,
-    spec: *mut TileSpec,
-    s: *const Services,
-) {
-    unsafe {
-        publish_tile(manager, spec, &*s);
-    }
-}
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_definition_reset(climate: u8, s: *const Services) {
     let s = unsafe { &*s };
     for id in 0..crate::industry_type::NEW_INDUSTRYOFFSET {
