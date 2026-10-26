@@ -8,6 +8,7 @@
 #include "../newgrf/newgrf_stringmapping.h"
 #include "newgrf_layout_services.h"
 #include "services_newgrf.h"
+#include "services_station.h"
 #include "newgrf_act3_ffi.h"
 #include "../table/strings.h"
 #include "../safeguards.h"
@@ -78,15 +79,15 @@ const OpenTTDStationDefinitionServices &GetStationDefinitionServices() noexcept
 		.station_custom_assign = [](StationSpec *spec, uint16_t key, const uint8_t *data, size_t count) noexcept -> void { spec->layouts[key].assign(data, data + count); },
 		.station_custom_tile = [](StationSpec *spec, uint16_t key, size_t index, uint8_t value) noexcept -> void { spec->layouts[key][index] = value; },
 		.station_custom_copy = [](StationSpec *spec, const StationSpec *source) noexcept -> void { spec->layouts = source->layouts; },
-		.station_tileflags_size = [](const StationSpec *spec) noexcept -> size_t { return spec->tileflags.size(); },
+		.station_tileflags_size = RustStationTileFlagCount,
 		.station_tileflags_resize = [](StationSpec *spec, size_t count) noexcept -> void { spec->tileflags.resize(count); },
 		.station_pylons = [](StationSpec *spec, uint8_t index, bool set) noexcept -> void { spec->tileflags[index].Set(StationSpec::TileFlag::Pylons, set); },
 		.station_wires = [](StationSpec *spec, uint8_t index, bool set) noexcept -> void { spec->tileflags[index].Set(StationSpec::TileFlag::NoWires, set); },
 		.station_blocked = [](StationSpec *spec, uint8_t index, bool set) noexcept -> void { spec->tileflags[index].Set(StationSpec::TileFlag::Blocked, set); },
 		.station_tileflags_assign = [](StationSpec *spec, const uint8_t *data, size_t count) noexcept -> void { auto flags = reinterpret_cast<const StationSpec::TileFlags *>(data); spec->tileflags.assign(flags, flags + count); },
-		.station_bridge_size = [](const StationSpec *spec) noexcept -> size_t { return spec->bridgeable_info.size(); },
+		.station_bridge_size = RustStationBridgeInfoCount<StationSpec>,
 		.station_bridge_resize = [](StationSpec *spec, size_t count) noexcept -> void { spec->bridgeable_info.resize(count); },
-		.road_bridge_size = [](const RoadStopSpec *spec) noexcept -> size_t { return spec->bridgeable_info.size(); },
+		.road_bridge_size = RustStationBridgeInfoCount<RoadStopSpec>,
 		.station_bridge_height = [](StationSpec *spec, size_t index, uint8_t value) noexcept -> void { spec->bridgeable_info[index].height = value; },
 		.station_bridge_pillars = [](StationSpec *spec, size_t index, uint8_t value) noexcept -> void { spec->bridgeable_info[index].disallowed_pillars = BridgePillarFlags{value}; },
 		.road_bridge_height = [](RoadStopSpec *spec, size_t index, uint8_t value) noexcept -> void { spec->bridgeable_info[index].height = value; },

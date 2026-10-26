@@ -36,6 +36,9 @@
 
 /* Shared canonical road-stop association/container leaves. No element address
  * survives a call; evaluation may mutate storage but cannot reset these shells. */
+inline size_t RustStationTileFlagCount(const StationSpec *spec) noexcept { return spec->tileflags.size(); }
+template <typename Spec>
+inline size_t RustStationBridgeInfoCount(const Spec *spec) noexcept { return spec->bridgeable_info.size(); }
 inline CargoTypes RustStationCargoTriggers(const StationSpec *spec) noexcept { return spec->cargo_triggers; }
 inline uint16_t RustStationAnimationTriggers(const StationSpec *spec) noexcept { return spec->animation.triggers.base(); }
 inline OpenTTDStationSpecTriggers RustStationSpecTriggers(const StationSpec *spec) noexcept { return {RustStationAnimationTriggers(spec), RustStationCargoTriggers(spec)}; }
