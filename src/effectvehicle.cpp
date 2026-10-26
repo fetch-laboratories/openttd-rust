@@ -17,6 +17,9 @@
 #include "effectvehicle_func.h"
 #include "effectvehicle_base.h"
 
+#ifdef WITH_RUST
+#include "rust/vehicle_services.h"
+#endif
 #include "safeguards.h"
 
 
@@ -560,21 +563,7 @@ static const std::array<EffectProcs, EV_END> _effect_procs = {{
 static void OPENTTD_RUST_CALL EffectObserve(void *context, OpenTTDEffectView *view) noexcept
 {
 	auto *v = static_cast<EffectVehicle *>(context);
-	*view = {v->x_pos, v->y_pos, v->z_pos, v->sprite_cache.sprite_seq.seq[0].sprite, v->progress, v->spritenum, v->subtype, static_cast<uint8_t>(_settings_client.sound.ambient)};
-}
-
-static void OPENTTD_RUST_CALL EffectWrite(void *context, uint8_t field, uint32_t value) noexcept
-{
-	auto *v = static_cast<EffectVehicle *>(context);
-	switch (field) {
-		case 0: v->x_pos = static_cast<int32_t>(value); break;
-		case 1: v->y_pos = static_cast<int32_t>(value); break;
-		case 2: v->z_pos = static_cast<int32_t>(value); break;
-		case 3: v->sprite_cache.sprite_seq.Set(value); break;
-		case 4: v->sprite_cache.sprite_seq.seq[0].sprite = value; break;
-		case 5: v->progress = static_cast<uint8_t>(value); break;
-		case 6: v->spritenum = static_cast<uint8_t>(value); break;
-	}
+	*view = {RustVehicleX(v), RustVehicleY(v), RustVehicleZ(v), RustVehicleFirstSprite(v), RustVehicleProgress(v), RustVehicleSprite(v), RustVehicleSubtype(v), static_cast<uint8_t>(_settings_client.sound.ambient)};
 }
 
 static void OPENTTD_RUST_CALL EffectViewport(void *context) noexcept
@@ -590,13 +579,46 @@ static void OPENTTD_RUST_CALL EffectSound(void *context, uint8_t success) noexce
 
 static const OpenTTDEffectLeaves &EffectServices()
 {
-	static const OpenTTDEffectLeaves leaves{EffectObserve, EffectWrite, EffectViewport, EffectSound};
+	static const OpenTTDEffectLeaves leaves{
+		.observe = EffectObserve,
+		.write_x = RustOpaqueVehicleInvoke<RustWriteVehicleX, int32_t>,
+		.write_y = RustOpaqueVehicleInvoke<RustWriteVehicleY, int32_t>,
+		.write_z = RustOpaqueVehicleInvoke<RustWriteVehicleZ, int32_t>,
+		.sprite_sequence = RustOpaqueVehicleInvoke<RustWriteVehicleSpriteSequence, uint32_t>,
+		.sprite = RustOpaqueVehicleInvoke<RustWriteVehicleFirstSprite, uint32_t>,
+		.progress = RustOpaqueVehicleInvoke<RustWriteVehicleProgress, uint8_t>,
+		.spritenum = RustOpaqueVehicleInvoke<RustWriteVehicleSprite, uint8_t>,
+		.viewport = EffectViewport,
+		.sound = EffectSound,
+	};
 	return leaves;
 }
 
-static bool RunEffect(EffectVehicle *v, bool initialize)
+extern "C" const OpenTTDEffectCreationServices *GetRustEffectCreationServices() noexcept
 {
-	if (openttd_rust_effect_run(v->rust_state.get(), v, &EffectServices(), &GetRustSharedServices(), initialize) != 0) return true;
+	static const OpenTTDEffectCreationServices services{
+		.effect = &EffectServices(),
+		.shared = &GetRustSharedServices(),
+		.can_allocate = RustVehicleCanAllocate,
+		.allocate = []() noexcept -> OpenTTDEffectAllocation { auto *v = new EffectVehicle(); return {v, v->rust_state.get()}; },
+		.owner = [](void *shell) noexcept { return static_cast<EffectVehicle *>(shell)->rust_state.get(); },
+		.place = [](void *shell, int32_t x, int32_t y, int32_t z, uint8_t type) noexcept {
+			auto *v = static_cast<EffectVehicle *>(shell);
+			RustVehicleSetSubtype(v, type); RustWriteVehicleX(v, x); RustWriteVehicleY(v, y); RustWriteVehicleZ(v, z); RustWriteVehicleTile(v, TileIndex{});
+		},
+		.delta = RustVehicleUpdateDelta<void *>,
+		.unclickable = RustOpaqueVehicleInvoke<RustVehicleSetUnclickable>,
+		.position = [](const OpenTTDVehicle *shell) noexcept -> OpenTTDEffectPosition {
+			const auto *v = VehicleOf(shell);
+			return {.x = RustVehicleX(v), .y = RustVehicleY(v), .z = RustVehicleZ(v)};
+		},
+	};
+	return &services;
+}
+
+static bool RunEffect(EffectVehicle *v)
+{
+	if (openttd_rust_effect_run(v->rust_state.get(), v, &EffectServices(), &GetRustSharedServices()) != 0) return true;
 	/* Expiry returns before destroying the Rust owner. Vehicle::~Vehicle and
 	 * Pool::FreeItem/PostDestructor run wholly outside any Rust frame/borrow. */
 	delete v;
@@ -614,6 +636,10 @@ static bool RunEffect(EffectVehicle *v, bool initialize)
  */
 EffectVehicle *CreateEffectVehicle(int x, int y, int z, EffectVehicleType type)
 {
+#ifdef WITH_RUST
+	openttd_rust_effect_bind(GetRustEffectCreationServices());
+	return reinterpret_cast<EffectVehicle *>(openttd_rust_effect_create(x, y, z, type));
+#else
 	if (!Vehicle::CanAllocateItem()) return nullptr;
 
 	EffectVehicle *v = new EffectVehicle();
@@ -625,15 +651,12 @@ EffectVehicle *CreateEffectVehicle(int x, int y, int z, EffectVehicleType type)
 	v->UpdateDeltaXY();
 	v->vehstatus = VehState::Unclickable;
 
-#ifdef WITH_RUST
-	RunEffect(v, true);
-#else
 	_effect_procs[type].init_proc(v);
-#endif
 
 	v->UpdatePositionAndViewport();
 
 	return v;
+#endif
 }
 
 /**
@@ -646,9 +669,14 @@ EffectVehicle *CreateEffectVehicle(int x, int y, int z, EffectVehicleType type)
  */
 EffectVehicle *CreateEffectVehicleAbove(int x, int y, int z, EffectVehicleType type)
 {
+#ifdef WITH_RUST
+	openttd_rust_effect_bind(GetRustEffectCreationServices());
+	return reinterpret_cast<EffectVehicle *>(openttd_rust_effect_create_above(x, y, z, type));
+#else
 	int safe_x = Clamp(x, 0, Map::MaxX() * TILE_SIZE);
 	int safe_y = Clamp(y, 0, Map::MaxY() * TILE_SIZE);
 	return CreateEffectVehicle(x, y, GetSlopePixelZ(safe_x, safe_y) + z, type);
+#endif
 }
 
 /**
@@ -662,13 +690,18 @@ EffectVehicle *CreateEffectVehicleAbove(int x, int y, int z, EffectVehicleType t
  */
 EffectVehicle *CreateEffectVehicleRel(const Vehicle *v, int x, int y, int z, EffectVehicleType type)
 {
+#ifdef WITH_RUST
+	openttd_rust_effect_bind(GetRustEffectCreationServices());
+	return reinterpret_cast<EffectVehicle *>(openttd_rust_effect_create_rel(RustVehicle(v), x, y, z, type));
+#else
 	return CreateEffectVehicle(v->x_pos + x, v->y_pos + y, v->z_pos + z, type);
+#endif
 }
 
 bool EffectVehicle::Tick()
 {
 #ifdef WITH_RUST
-	return RunEffect(this, false);
+	return RunEffect(this);
 #else
 	return _effect_procs[this->subtype].tick_proc(this);
 #endif
@@ -696,5 +729,6 @@ TransparencyOption EffectVehicle::GetTransparencyOption() const
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDEffectLeaves.hpp"
-bool CheckAbi_effectvehicle() { return AbiServicesComplete(EffectServices()); }
+#include "abi-visit-OpenTTDEffectCreationServices.hpp"
+bool CheckAbi_effectvehicle() { return AbiServicesComplete(EffectServices()) && AbiServicesComplete(*GetRustEffectCreationServices()); }
 #endif

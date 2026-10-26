@@ -389,7 +389,7 @@ pub struct World {
     pub(crate) station_list_invalidation: extern "C" fn(*mut BaseStation, i32),
 
     pub(crate) waiting_redraw: extern "C" fn(*mut BaseStation),
-    pub(crate) rating_callback: extern "C" fn(*mut BaseStation, u8, u32, u32) -> u16,
+    pub(crate) cargo_registry: *const crate::cargo_registry::Services,
     pub(crate) with_tiles: extern "C" fn(*mut BaseStation, *mut c_void, Scope),
     pub(crate) tile_next: extern "C" fn(*mut c_void) -> u32,
     pub(crate) accept_tile: extern "C" fn(*mut c_void, u32, *mut u64),
@@ -682,7 +682,15 @@ pub unsafe extern "C" fn openttd_rust_station_rating(st: *mut BaseStation, world
             } else {
                 u32::from(kind) + 0x10
             };
-            let cb = (w.rating_callback)(st, cargo, var10, var18);
+            let cb = unsafe {
+                crate::cargo_registry::callback(
+                    &*w.cargo_registry,
+                    cargo,
+                    crate::newgrf_callbacks::CBID_CARGO_STATION_RATING_CALC.0,
+                    var10,
+                    var18,
+                )
+            };
             if cb != 0xffff {
                 skip = true;
                 rating = i32::from(cb & 0x3fff);
@@ -2127,7 +2135,7 @@ crate::abi::layouts! {
         station_list_invalidation,
 
         waiting_redraw,
-        rating_callback,
+        cargo_registry,
         with_tiles,
         tile_next,
         accept_tile,

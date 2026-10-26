@@ -206,7 +206,6 @@ pub struct Leaves {
     pub speed_default: extern "C" fn(u32) -> u32,
     pub age_default: extern "C" fn(u32) -> u32,
     pub speed_frac: extern "C" fn(u32, bool) -> u32,
-    pub update_visual: extern "C" fn(u32),
     pub cache_invalidate: extern "C" fn(u32),
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub sprite_direction: extern "C" fn(u32),
@@ -224,7 +223,6 @@ pub struct Leaves {
     pub path_clear: extern "C" fn(u32),
     pub viewport: extern "C" fn(u32, bool, bool),
     pub base_viewport: extern "C" fn(u32),
-    pub visual: extern "C" fn(u32),
     pub cache: extern "C" fn(u32),
     pub play_sound: extern "C" fn(u32),
     pub yapf_reverse: extern "C" fn(u32, bool) -> ReverseResult,
@@ -484,7 +482,7 @@ impl Game<'_> {
             period as i32,
         ) as u32;
         (self.leaves.set_cargo_age)(id, age as u16);
-        (self.leaves.update_visual)(id);
+        crate::vehicle_effect::openttd_rust_visual_update(v, true);
     }
     fn stay_depot(&self, id: u32, v: VehicleRef) -> bool {
         if !(self.leaves.chain_depot)(id) {
@@ -691,7 +689,13 @@ impl Game<'_> {
         if self.stay_depot(id, v) {
             return;
         }
-        (self.leaves.visual)(id);
+        if crate::vehicle_effect::openttd_rust_visual_eligible(v) {
+            let maximum = current_max_speed(
+                (self.leaves.max_speed)(id) as u16,
+                (self.leaves.order_max_speed)(id) as u16,
+            );
+            crate::vehicle_effect::openttd_rust_visual_show(v, maximum as u32);
+        }
         let observed_direction = (self.leaves.direction)(id);
         let observed_tick = (self.leaves.tick)(id);
         let rotation = u32::from(self.rotation());
@@ -1181,7 +1185,6 @@ crate::abi::layouts! {
         speed_default,
         age_default,
         speed_frac,
-        update_visual,
         cache_invalidate,
         capabilities,
         sprite_direction,
@@ -1199,7 +1202,6 @@ crate::abi::layouts! {
         path_clear,
         viewport,
         base_viewport,
-        visual,
         cache,
         play_sound,
         yapf_reverse,

@@ -933,7 +933,6 @@ const OpenTTDLandscapeCommandServices &GetRustLandscapeCommandServices() noexcep
 		.mark_dirty_height = RustMarkTileDirtyAtHeight,
 		.set_height = RustSetTileHeight,
 		.paused = []() noexcept { return _pause_mode.Any(); },
-		.explosion = [](uint32_t t, bool small) noexcept { RustCreateEffectAbove(TileX(TileIndex{t}) * TILE_SIZE + TILE_SIZE / 2, TileY(TileIndex{t}) * TILE_SIZE + TILE_SIZE / 2, 2, small ? EV_EXPLOSION_SMALL : EV_EXPLOSION_LARGE); },
 	};
 	return services;
 }

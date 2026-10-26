@@ -92,7 +92,6 @@ struct OpenTTDRoadGroundServices {
 	uint32_t (*work_counter)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(work_counter);
 	void (*set_work_counter)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_work_counter);
 	RoadBits (*all_bits)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(all_bits);
-	void (*bulldozer)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bulldozer);
 	RoadBits (*cleanup)(uint32_t, RoadBits) noexcept OPENTTD_SERVICE_DEFAULT(cleanup);
 	const OpenTTDTownLeaves *town;
 	void (*set_road_type)(uint32_t, RoadType) noexcept OPENTTD_SERVICE_DEFAULT(set_road_type);

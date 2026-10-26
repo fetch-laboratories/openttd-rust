@@ -12,6 +12,7 @@
 #include "../roadveh.h"
 #include "../depot_map.h"
 #include "vehicle_services.h"
+#include "services_cargo.h"
 #include "engine_services.h"
 #include "services_rail.h"
 #include "services_map.h"
@@ -27,7 +28,7 @@ static OpenTTDGroundOwner GroundResolve(OpenTTDVehicle *shell) noexcept
 	return {RoadVehicle::From(v)->rust_ground.state, {nullptr, nullptr}, RoadVehicle::From(v)->GetRustState(), v->type};
 }
 static OpenTTDGroundPowerInput GroundPowerInput(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return {v->type == VEH_TRAIN ? RustVehicleTile(v) : 0, RustVehicleSubtype(v)}; }
-static OpenTTDGroundWeightInput GroundWeightInput(OpenTTDVehicle *shell) noexcept { Vehicle *v = VehicleOf(shell); return {CargoSpec::Get(v->cargo_type), RustVehicleCargoOwner(v)}; }
+static OpenTTDGroundWeightInput GroundWeightInput(OpenTTDVehicle *shell) noexcept { Vehicle *v = VehicleOf(shell); return {RustCargoSpec(v->cargo_type), RustVehicleCargoOwner(v)}; }
 static OpenTTDGroundAccelerationInput GroundAccelerationInput(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return {v->type == VEH_TRAIN ? RustVehicleTile(v) : 0, RustVehicleSpeed(v), RustVehicleStatus(v), v->type == VEH_ROAD ? RustRoadVehicleType(RoadVehicle::From(v)) : RoadType{0}}; }
 static OpenTTDGroundSpeedInput GroundSpeedInput(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return {RustVehicleSpeed(v), RustVehicleSubspeed(v)}; }
 static uint64_t GroundCargoWeight(const CargoSpec *cargo, uint32_t count) noexcept { return cargo->WeightOfNUnits(count); }

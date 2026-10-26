@@ -38,7 +38,6 @@ struct OpenTTDLandscapeCommandServices {
 	void (*mark_dirty_height)(uint32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(mark_dirty_height);
 	void (*set_height)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_height);
 	bool (*paused)() noexcept OPENTTD_SERVICE_DEFAULT(paused);
-	void (*explosion)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(explosion);
 };
 const OpenTTDLandscapeCommandServices &GetRustLandscapeCommandServices() noexcept;
 extern "C" {

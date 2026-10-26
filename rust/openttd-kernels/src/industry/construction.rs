@@ -62,7 +62,7 @@ pub struct ConstructionServices {
     pub callback: unsafe extern "C" fn(*mut c_void, u16, u32, u32) -> u16,
     pub callback_error: unsafe extern "C" fn(*const SpecHandle, u16, u16),
     pub grf_version: unsafe extern "C" fn(*const SpecHandle) -> u8,
-    pub cargo_translation: unsafe extern "C" fn(*const SpecHandle, u8) -> u8,
+    pub cargo_file: unsafe extern "C" fn(*const SpecHandle) -> *const std::ffi::c_void,
     pub layout_size: unsafe extern "C" fn(*const LayoutHandle) -> usize,
     pub layout_tile: unsafe extern "C" fn(*const LayoutHandle, usize) -> LayoutTile,
     pub water_class: unsafe extern "C" fn(u32) -> u8,
@@ -190,7 +190,13 @@ fn cargo_callbacks(
             unsafe { (c.callback_error)(spec, callback, res) };
             break;
         }
-        let cargo = unsafe { (c.cargo_translation)(spec, res as u8) };
+        let cargo = unsafe {
+            crate::cargo_registry::openttd_rust_cargo_translate(
+                res as u8,
+                (c.cargo_file)(spec),
+                false,
+            )
+        };
         if !valid(cargo) && !unlimited {
             unsafe {
                 if output {

@@ -92,7 +92,6 @@ pub struct Services {
     pub cargo_cap: extern "C" fn(*mut OpenTTDVehicle) -> u16,
     pub set_capacity: extern "C" fn(*mut OpenTTDVehicle, u16),
     pub write_refit: extern "C" fn(*mut OpenTTDVehicle, u8, u16, u8),
-    pub mail_cargo: extern "C" fn() -> u8,
     pub train_handle: extern "C" fn(*mut OpenTTDVehicle) -> crate::train::Handle,
     pub road_state: extern "C" fn(*mut OpenTTDVehicle) -> *mut crate::road::State,
     pub aircraft_handle: extern "C" fn(*mut OpenTTDVehicle) -> crate::aircraft::Vehicle,
@@ -320,7 +319,8 @@ unsafe fn refit_chain(
         total.total = total.total.wrapping_add(amount);
         mail_total = mail_total.wrapping_add(u32::from(mail));
         total.cargo[usize::from(cargo)] = total.cargo[usize::from(cargo)].wrapping_add(amount);
-        let mail_cargo = (s.mail_cargo)();
+        let mail_cargo =
+            crate::cargo_registry::openttd_rust_cargo_by_label(crate::cargo_type::CT_MAIL);
         if (s.common.valid_cargo)(mail_cargo) {
             total.cargo[usize::from(mail_cargo)] =
                 total.cargo[usize::from(mail_cargo)].wrapping_add(u32::from(mail));
@@ -575,6 +575,6 @@ crate::abi::layouts! {
         train, wagon, road, ship, aircraft, train_run, road_run, ship_run, aircraft_run, auto_refit, refit,
     };
     "OpenTTDVehicleRefitServices" ["probe"] => Services {
-        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, vehicle_engine, has_grf, refit_cost, refit_cargo, engine_kind, rail_kind, price_shift, capabilities, refit_engine, cargo_kind, set_cargo_kind, expense, invalidate_chain, commit, set_refit_cap, refit_cap, cargo_cap, set_capacity, write_refit, mail_cargo, train_handle, road_state, aircraft_handle, road_acceleration, details_ui, lists_ui,
+        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, vehicle_engine, has_grf, refit_cost, refit_cargo, engine_kind, rail_kind, price_shift, capabilities, refit_engine, cargo_kind, set_cargo_kind, expense, invalidate_chain, commit, set_refit_cap, refit_cap, cargo_cap, set_capacity, write_refit, train_handle, road_state, aircraft_handle, road_acceleration, details_ui, lists_ui,
     };
 }

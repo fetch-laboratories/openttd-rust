@@ -143,6 +143,7 @@ int32_t openttd_rust_vehicle_shell_property(const OpenTTDVehicleResolverServices
 uint16_t openttd_rust_vehicle_shell_callback(const OpenTTDVehicleResolverServices *, OpenTTDVehicle *, CallbackID) noexcept;
 NewGRFCache *openttd_rust_vehicle_grf_cache_new();
 void openttd_rust_vehicle_grf_cache_delete(NewGRFCache *);
+uint8_t *openttd_rust_vehicle_visual_cache(NewGRFCache *);
 void openttd_rust_vehicle_grf_invalidate(const OpenTTDVehicleResolverServices *, const Vehicle *, bool);
 void openttd_rust_vehicle_grf_fill(const OpenTTDVehicleResolverServices *, const Vehicle *);
 void openttd_rust_vehicle_resolver_init(const OpenTTDVehicleResolverServices *, OpenTTDVehicleResolverState *, uint16_t, const Vehicle *, uint8_t, bool);

@@ -120,11 +120,6 @@ pub struct BreakdownSoundState {
     pub landscape: services::LandscapeType,
 }
 #[repr(C)]
-pub struct BreakdownSmoke {
-    pub shell: Option<VehicleRef>,
-    pub delay: u8,
-}
-#[repr(C)]
 pub struct Age {
     pub age: CalendarDate,
     pub max_age: CalendarDate,
@@ -176,8 +171,7 @@ pub struct Services {
     pub breakdown_sound_state: extern "C" fn(VehicleRef) -> BreakdownSoundState,
     pub breakdown_delay_write: extern "C" fn(VehicleRef, u8),
     pub smoke_disabled: extern "C" fn(VehicleRef) -> bool,
-    pub smoke: extern "C" fn(VehicleRef) -> BreakdownSmoke,
-    pub smoke_animation: extern "C" fn(VehicleRef, u16),
+    pub smoke_delay: extern "C" fn(VehicleRef) -> u8,
     pub aircraft_broken: extern "C" fn(VehicleRef),
     pub mark_dirty: extern "C" fn(VehicleRef),
     pub view_dirty: extern "C" fn(VehicleRef),
@@ -496,9 +490,16 @@ unsafe fn breakdown_state<const C: bool>(
                     svc!(C, base.play_sound, v, sound);
                 }
                 if svc!(C, base.status, v) & VS_HIDDEN == 0 && !svc!(C, s.smoke_disabled, v) {
-                    let smoke = svc!(C, s.smoke, v);
-                    if let Some(shell) = smoke.shell {
-                        svc!(C, s.smoke_animation, shell, u16::from(smoke.delay) * 2);
+                    let smoke = crate::effect::openttd_rust_effect_create_rel(
+                        v.0.as_ptr(),
+                        4,
+                        4,
+                        5,
+                        crate::effectvehicle_func::EV_BREAKDOWN_SMOKE,
+                    );
+                    let delay = svc!(C, s.smoke_delay, v);
+                    if !smoke.is_null() {
+                        crate::effect::set_animation(smoke, u16::from(delay) * 2);
                         branch!(C, VEHICLE_MAINT_SMOKE);
                     }
                 }
@@ -867,10 +868,6 @@ crate::abi::layouts! {
         kind,
         landscape,
     };
-    "OpenTTDVehicleMaintenanceBreakdownSmoke" ["maintenance"] => BreakdownSmoke {
-        shell,
-        delay,
-    };
     "OpenTTDVehicleMaintenanceAge" ["maintenance"] => Age {
         age,
         max_age,
@@ -915,8 +912,7 @@ crate::abi::layouts! {
         breakdown_sound_state,
         breakdown_delay_write,
         smoke_disabled,
-        smoke,
-        smoke_animation,
+        smoke_delay,
         aircraft_broken,
         mark_dirty,
         view_dirty,

@@ -62,3 +62,14 @@ pub const NCVV_COMPANY_INFORMATION: u8 = 3;
 pub const NCVV_POSITION_IN_VEHICLE: u8 = 4;
 /// `NCVV_END`.
 pub const NCVV_END: u8 = 5;
+
+/// `VESM_NONE`.
+pub const VESM_NONE: u8 = 0;
+/// `VESM_STEAM`.
+pub const VESM_STEAM: u8 = 1;
+/// `VESM_DIESEL`.
+pub const VESM_DIESEL: u8 = 2;
+/// `VESM_ELECTRIC`.
+pub const VESM_ELECTRIC: u8 = 3;
+/// `VESM_END`.
+pub const VESM_END: u8 = 4;

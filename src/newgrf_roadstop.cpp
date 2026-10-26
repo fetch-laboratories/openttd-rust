@@ -778,7 +778,7 @@ const OpenTTDRoadStopResolverServices &GetRoadStopResolverServices() noexcept
 		.group_cargo = RustSpecCargoGroupCargo<RoadStopSpec>,
 		.group_count = RustSpecCargoGroupCount<RoadStopSpec>,
 		.index = RustCustomRoadStopIndex,
-		.is_station = GetRustStationServices().is_station,
+		.is_station = RustStationIsExpected<BaseStation *>,
 		.make_town = [](ResolverObject *ro, Town *town, bool readonly) noexcept { return &static_cast<RoadStopResolverObject *>(ro)->town_scope.emplace(*ro, town, readonly); },
 		.nearby = RustSignedNearbyTile,
 		.nearby_info = RustNearbyTileInformation,

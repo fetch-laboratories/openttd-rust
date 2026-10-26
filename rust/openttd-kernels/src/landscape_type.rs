@@ -4,3 +4,6 @@
 pub const ARCTIC: u8 = 1;
 /// `LandscapeType::Tropic`.
 pub const TROPIC: u8 = 2;
+
+/// Number of original climates.
+pub const NUM_LANDSCAPE: u8 = 4;

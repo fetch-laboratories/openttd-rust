@@ -141,6 +141,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     if scenario["fleet"].startswith(("train", "drain")) or scenario["fleet"] in (
         "resolver",
         "resolver-reload",
+        "effect-emission-train",
         "capabilities",
         "capabilities-reload",
         "transaction-meta",
@@ -155,6 +156,36 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         result["fleet_input"] = record
         scenario = dict(scenario, save=str(source))
     executables = prepared_console("fleet", adapter, binaries, builds, folder, env)
+    if scenario.get("effect_emission_reload"):
+        from . import effects
+
+        runs = capture_pair(scenario, executables, builds, folder, timeout, env)
+        saves = {}
+        for role, run in runs.items():
+            if run["exit"] or not run["snapshots"]:
+                raise RuntimeError("effect-emission reload capture failed")
+            effects.check(scenario, run, "capture", role, result)
+            saves[role] = run["snapshots"][-1]
+        differences = compare_saves(
+            saves["reference"],
+            saves["candidate"],
+            scenario["name"],
+            20,
+            result["stats"],
+        )
+        logs = [
+            [line for line in runs[role]["log"] if line.startswith("FLEET effect-")]
+            for role in ("reference", "candidate")
+        ]
+        if differences or logs[0] != logs[1]:
+            result["differences"].extend(differences)
+            raise RuntimeError("effect-emission reload capture differs")
+        result["effect_emission_capture"] = logs[0]
+        return dict(
+            scenario,
+            executables=executables,
+            role_inputs={role: {"save": str(save)} for role, save in saves.items()},
+        )
     if scenario["fleet"] in ("reload", "resolver-reload", "capabilities-reload"):
         resolver = scenario["fleet"] == "resolver-reload"
         capabilities = scenario["fleet"] == "capabilities-reload"
@@ -505,6 +536,8 @@ def check_real_boundaries(run, mode, role, result):
 
 
 def check(scenario, run, mode, role, result):
+    if scenario.get("effect_emission"):
+        return
     if "fleet" not in scenario or run["exit"] or not run["snapshots"]:
         return
     required = {

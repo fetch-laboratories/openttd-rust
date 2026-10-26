@@ -12,8 +12,25 @@
 #include "newgrf_cargo.h"
 #include "newgrf_spritegroup.h"
 
+#ifdef WITH_RUST
+#include "rust/cargo_resolver.h"
+#include "rust/newgrf_spritegroup_ffi.h"
+#endif
+
 #include "safeguards.h"
 
+#ifdef WITH_RUST
+uint16_t CargoCallbackFrame(const OpenTTDCargoInvocation *invocation, int32_t *regs, size_t count) noexcept
+{
+	CargoResolverObject object(*invocation);
+	return openttd_rust_cargo_evaluate_callback(invocation, &object, object.CommonState(), regs, count);
+}
+uint32_t CargoSpriteFrame(const OpenTTDCargoInvocation *invocation) noexcept
+{
+	CargoResolverObject object(*invocation);
+	return openttd_rust_cargo_evaluate_sprite(invocation, &object, object.CommonState());
+}
+#else
 /** Resolver of cargo. */
 struct CargoResolverObject : public ResolverObject {
 	const CargoSpec *cargospec;
@@ -47,6 +64,8 @@ CargoResolverObject::CargoResolverObject(const CargoSpec *cs, CallbackID callbac
 	this->root_spritegroup = cs->group;
 }
 
+#endif
+
 /**
  * Get the custom sprite for the given cargo type.
  * @param cs Cargo being queried.
@@ -54,18 +73,26 @@ CargoResolverObject::CargoResolverObject(const CargoSpec *cs, CallbackID callbac
  */
 SpriteID GetCustomCargoSprite(const CargoSpec *cs)
 {
+#ifdef WITH_RUST
+	return openttd_rust_cargo_custom_sprite(cs);
+#else
 	CargoResolverObject object(cs);
 	const auto *group = object.Resolve<ResultSpriteGroup>();
 	if (group == nullptr || group->num_sprites == 0) return 0;
 
 	return group->sprite;
+#endif
 }
 
 
 uint16_t GetCargoCallback(CallbackID callback, uint32_t param1, uint32_t param2, const CargoSpec *cs, std::span<int32_t> regs100)
 {
+#ifdef WITH_RUST
+	return openttd_rust_cargo_callback(callback, param1, param2, cs, regs100.data(), regs100.size());
+#else
 	CargoResolverObject object(cs, callback, param1, param2);
 	return object.ResolveCallback(regs100);
+#endif
 }
 
 /**
@@ -79,6 +106,9 @@ uint16_t GetCargoCallback(CallbackID callback, uint32_t param1, uint32_t param2,
  */
 CargoType GetCargoTranslation(uint8_t cargo, const GRFFile *grffile, bool usebit)
 {
+#ifdef WITH_RUST
+	return openttd_rust_cargo_translate(cargo, grffile, usebit);
+#else
 	/* We can't use GetCargoTranslationTable here as the usebit flag changes behaviour. */
 	/* Pre-version 7 uses the bitnum lookup from (standard in v8) instead of climate dependent in some places.. */
 	std::span<const CargoLabel> cargo_list;
@@ -92,4 +122,5 @@ CargoType GetCargoTranslation(uint8_t cargo, const GRFFile *grffile, bool usebit
 
 	if (cargo < cargo_list.size()) return GetCargoTypeByLabel(cargo_list[cargo]);
 	return INVALID_CARGO;
+#endif
 }

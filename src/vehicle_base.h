@@ -110,9 +110,29 @@ struct VehicleCache {
 	uint16_t cached_max_speed = 0; ///< Maximum speed of the consist (minimum of the max speed of all vehicles in the consist).
 	uint16_t cached_cargo_age_period = 0; ///< Number of ticks before carried cargo is aged.
 
+#ifdef WITH_RUST
+private:
+	uint8_t copied_vis_effect = 0;
+public:
+	uint8_t &cached_vis_effect;
+	VehicleCache() : cached_vis_effect(this->copied_vis_effect) {}
+	explicit VehicleCache(uint8_t &visual) : cached_vis_effect(visual) {}
+	VehicleCache(const VehicleCache &other) : cached_max_speed(other.cached_max_speed), cached_cargo_age_period(other.cached_cargo_age_period), copied_vis_effect(other.cached_vis_effect), cached_vis_effect(this->copied_vis_effect) {}
+	VehicleCache &operator=(const VehicleCache &other)
+	{
+		this->cached_max_speed = other.cached_max_speed;
+		this->cached_cargo_age_period = other.cached_cargo_age_period;
+		this->cached_vis_effect = other.cached_vis_effect;
+		return *this;
+	}
+	bool operator==(const VehicleCache &other) const
+	{
+		return this->cached_max_speed == other.cached_max_speed && this->cached_cargo_age_period == other.cached_cargo_age_period && this->cached_vis_effect == other.cached_vis_effect;
+	}
+#else
 	uint8_t cached_vis_effect = 0;  ///< Visual effect to show (see #VisualEffect)
-
 	auto operator<=>(const VehicleCache &) const = default;
+#endif
 };
 
 /** Sprite sequence for a vehicle part. */
@@ -359,7 +379,11 @@ public:
 #else
 	NewGRFCache grf_cache{}; ///< Cache of often used calculated NewGRF values
 #endif
+#ifdef WITH_RUST
+	VehicleCache vcache{*openttd_rust_vehicle_visual_cache(this->rust_grf_cache.state)};
+#else
 	VehicleCache vcache{}; ///< Cache of often used vehicle values.
+#endif
 
 	GroupID group_id = GroupID::Invalid(); ///< Index of group Pool array
 

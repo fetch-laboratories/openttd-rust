@@ -23,7 +23,7 @@ static Result TrainReservationSharedMap(void *, OpenTTDTrainHandle id, uint32_t 
 static uint64_t TrainReservationAllCompat(void *, OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	return RustAllCompatibleRailTypes(v->GetRailTypes().base());
+	return RustAllCompatibleRailTypes(RustTrainRailTypes(v));
 }
 static uint64_t TrainReservationBackoff(void *, OpenTTDTrainHandle id) noexcept
 {

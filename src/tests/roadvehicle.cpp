@@ -294,6 +294,8 @@ TEST_CASE("Road tick prologue - actual scalar places and nonfront entry")
 		static_assert(std::is_same_v<decltype(read.status), const uint8_t *>);
 		static_assert(std::is_same_v<decltype(read.running), const decltype(v->running_ticks) *>);
 		static_assert(std::is_same_v<decltype(read.order_time), const std::remove_reference_t<decltype(v->current_order_time)> *>);
+		CHECK(read.movement.ground == v->rust_ground.state);
+		CHECK(static_cast<void *>(read.movement.ground) != static_cast<void *>(v->GetRustState()));
 		CHECK(read.status == v->vehstatus.base_address());
 		CHECK(read.running == &v->running_ticks);
 		CHECK(read.order_time == &v->current_order_time);
@@ -310,6 +312,27 @@ TEST_CASE("Road tick prologue - actual scalar places and nonfront entry")
 	CHECK(v->tick_counter == 0);
 	CHECK(v->running_ticks == UINT8_MAX);
 	CHECK(v->current_order_time == INT32_MAX);
+	_vehicle_pool.CleanPool();
+}
+TEST_CASE("Road links - ground owners follow the current consist")
+{
+	REQUIRE(Vehicle::CanAllocateItem(3));
+	auto *front = new RoadVehicle();
+	auto *a = new RoadVehicle();
+	auto *b = new RoadVehicle();
+	const auto &leaves = GetRustRoadLeaves();
+	for (auto *tail : {a, b}) {
+		front->SetNext(tail);
+		const auto link = leaves.link(RustVehicle(front));
+		CHECK(link.next == RustVehicle(tail));
+		CHECK(link.next_state == tail->GetRustState());
+		CHECK(link.next_ground == tail->rust_ground.state);
+		CHECK(static_cast<void *>(link.next_ground) != static_cast<void *>(link.next_state));
+		const auto tile = leaves.link_tile(RustVehicle(front));
+		CHECK(tile.link.next_ground == tail->rust_ground.state);
+	}
+	front->SetNext(nullptr);
+	CHECK(leaves.link(RustVehicle(front)).next_ground == nullptr);
 	_vehicle_pool.CleanPool();
 }
 TEST_CASE("Road visual eligibility precedes maximum-speed lookup")

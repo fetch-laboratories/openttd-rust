@@ -1163,8 +1163,7 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 		.restoration = &GetRustWaterRestorationServices(),
 		.set_owner = GetRustSharedServices().set_tile_owner,
 		.scale_size_1d = GetRustIndustryLoopServices().generation->scale_by_size_1d,
-		.passengers = GetRustIndustryLoopServices().production->passengers,
-		.mail = OpenTTDMailCargo,
+
 		.scale_cargo = OpenTTDScaleTownCargo,
 	};
 	return services;

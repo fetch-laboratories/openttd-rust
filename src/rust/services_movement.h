@@ -13,6 +13,7 @@
 #include "vehicle_services.h"
 #include "services_road.h"
 #include "services_rail.h"
+#include "engine_services.h"
 #include "../train.h"
 #include "../ship.h"
 #include "../window_func.h"
@@ -59,6 +60,6 @@ inline OpenTTDMovementFirstSpeed RustMovementFirstSpeed(OpenTTDVehicle *handle) 
 	Vehicle *first = RustVehicleFirst(VehicleOf(handle));
 	return {.first = RustVehicle(first), .speed = RustVehicleSpeed(first)};
 }
-inline uint8_t RustMovementTrainEngineClass(OpenTTDVehicle *handle) noexcept { return RailVehInfo(VehicleOf(handle)->engine_type)->engclass; }
+inline uint8_t RustMovementTrainEngineClass(OpenTTDVehicle *handle) noexcept { return RustRailEngineClass(RailVehInfo(VehicleOf(handle)->engine_type)); }
 inline void RustMovementDepotInvalidate(OpenTTDVehicle *handle) noexcept { RustVehicleInvalidateDepot(VehicleOf(handle)); }
 #endif

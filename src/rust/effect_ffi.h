@@ -23,14 +23,39 @@ typedef struct {
 } OpenTTDEffectView;
 typedef struct OpenTTDEffectLeaves {
 	void (OPENTTD_RUST_CALL *observe)(void *, OpenTTDEffectView *) noexcept OPENTTD_SERVICE_DEFAULT(observe);
-	void (OPENTTD_RUST_CALL *write)(void *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(write);
+	void (OPENTTD_RUST_CALL *write_x)(void *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_x);
+	void (OPENTTD_RUST_CALL *write_y)(void *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_y);
+	void (OPENTTD_RUST_CALL *write_z)(void *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_z);
+	void (OPENTTD_RUST_CALL *sprite_sequence)(void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(sprite_sequence);
+	void (OPENTTD_RUST_CALL *sprite)(void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(sprite);
+	void (OPENTTD_RUST_CALL *progress)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(progress);
+	void (OPENTTD_RUST_CALL *spritenum)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(spritenum);
 	void (OPENTTD_RUST_CALL *viewport)(void *) noexcept OPENTTD_SERVICE_DEFAULT(viewport);
 	void (OPENTTD_RUST_CALL *sound)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(sound);
 
 } OpenTTDEffectLeaves;
+struct OpenTTDVehicle;
+typedef struct EffectVehicle OpenTTDEffectVehicle;
+struct OpenTTDEffectAllocation { void *shell; OpenTTDEffectState *owner; };
+struct OpenTTDEffectPosition { int32_t x, y, z; };
+struct OpenTTDEffectCreationServices {
+	const OpenTTDEffectLeaves *effect;
+	const OpenTTDSharedServices *shared;
+	bool (*can_allocate)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
+	OpenTTDEffectAllocation (*allocate)() noexcept OPENTTD_SERVICE_DEFAULT(allocate);
+	OpenTTDEffectState *(*owner)(void *) noexcept OPENTTD_SERVICE_DEFAULT(owner);
+	void (*place)(void *, int32_t, int32_t, int32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(place);
+	void (*delta)(void *) noexcept OPENTTD_SERVICE_DEFAULT(delta);
+	void (*unclickable)(void *) noexcept OPENTTD_SERVICE_DEFAULT(unclickable);
+	OpenTTDEffectPosition (*position)(const OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(position);
+};
+const OpenTTDEffectCreationServices *GetRustEffectCreationServices() noexcept;
+const OpenTTDEffectCreationServices *openttd_rust_effect_bind(const OpenTTDEffectCreationServices *);
+OpenTTDEffectVehicle *openttd_rust_effect_create(int32_t, int32_t, int32_t, uint8_t);
+OpenTTDEffectVehicle *openttd_rust_effect_create_above(int32_t, int32_t, int32_t, uint8_t);
+OpenTTDEffectVehicle *openttd_rust_effect_create_rel(const OpenTTDVehicle *, int32_t, int32_t, int32_t, uint8_t);
 /* One shell owns one zero-created state. get/set: field 0 uint16 animation, field 1 uint8 substate.
- * Write fields: 0 x, 1 y, 2 z, 3 sprite sequence.Set, 4 scalar sprite, 5 progress, 6 spritenum,
- * written immediately in original order. Sound: 0 fail, 1 success. run returns 1 alive, 0 expiry;
+ * Typed field writes run immediately in original order. Sound: 0 fail, 1 success. run returns 1 alive, 0 expiry;
  * C++ deletes only after return. Save/load get/set use the C++ staging.
  * Tables are live, aligned, immutable and disjoint from the exclusive owner until return; context
  * is its live shell. Leaves cannot reenter, retain pointers or destroy the shell, and observe output
@@ -39,7 +64,8 @@ OpenTTDEffectState *OPENTTD_RUST_CALL openttd_rust_effect_new(void);
 void OPENTTD_RUST_CALL openttd_rust_effect_destroy(OpenTTDEffectState *);
 void OPENTTD_RUST_CALL openttd_rust_effect_set(OpenTTDEffectState *, uint8_t field, uint16_t value);
 uint16_t OPENTTD_RUST_CALL openttd_rust_effect_get(const OpenTTDEffectState *, uint8_t field);
-uint8_t OPENTTD_RUST_CALL openttd_rust_effect_run(OpenTTDEffectState *, void *context, const OpenTTDEffectLeaves *, const OpenTTDSharedServices *, uint8_t initialize);
+uint8_t OPENTTD_RUST_CALL openttd_rust_effect_run(OpenTTDEffectState *, void *context, const OpenTTDEffectLeaves *, const OpenTTDSharedServices *);
+void OPENTTD_RUST_CALL openttd_rust_effect_initialize(OpenTTDEffectState *, void *, uint8_t, const OpenTTDEffectLeaves *, const OpenTTDSharedServices *);
 #ifdef __cplusplus
 }
 #endif

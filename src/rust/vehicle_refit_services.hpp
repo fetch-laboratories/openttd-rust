@@ -65,7 +65,7 @@ const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept
 		.cargo_cap = RustVehicleCargoCap,
 		.set_capacity = RustVehicleSetCargoCap,
 		.write_refit = VehicleRefitWrite,
-		.mail_cargo = OpenTTDMailCargo,
+
 		.train_handle = RustVehicleTrain,
 		.road_state = VehicleRefitRoadState,
 		.aircraft_handle = GetRustAircraftVehicle,

@@ -15,6 +15,7 @@
 #include "services_newgrf.h"
 #include "../newgrf_engine.h"
 #include "generic_resolver.h"
+#include "cargo_resolver.h"
 #include "../newgrf_station.h"
 #include "../newgrf_industries.h"
 #include "../newgrf_industrytiles.h"
@@ -120,7 +121,7 @@ static void ResolverBinding(ResolverObject *ro, OpenTTDResolverBinding *out) noe
 		out->self = &g->generic_scope; out->kind = 11;
 	} else if (auto *o = dynamic_cast<ObjectResolverObject *>(ro)) {
 		out->state = &o->object_scope.context; out->self = &o->object_scope; out->kind = 12;
-	} else if (typeid(*ro) != typeid(ResolverObject)) {
+	} else if (typeid(*ro) != typeid(ResolverObject) && typeid(*ro) != typeid(CargoResolverObject)) {
 		out->kind = 5; // Remaining native feature scope-selection behavior.
 	}
 }
