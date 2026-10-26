@@ -209,7 +209,7 @@ pub struct CommandServicesTable {
     pub distant_join: extern "C" fn() -> bool,
     pub rail_association: *const crate::station_association::Services,
     pub rail_spec_info: extern "C" fn(*const RailSpec) -> RailSpecInfo,
-    pub rail_layout: extern "C" fn(*const RailSpec, u8, u8) -> crate::services::ByteSpan,
+    pub rail_layout: extern "C" fn(*const RailSpec, u16) -> crate::services::ByteSpan,
     pub rail_boolean: extern "C" fn(*const RailSpec, u16, u16) -> bool,
     pub rail_callback_error: extern "C" fn(*const RailSpec, u16, u16),
     pub set_train_area: extern "C" fn(*mut BaseStation, TileArea),
@@ -1410,7 +1410,10 @@ impl Ctx<'_> {
         let spec = crate::newgrf_class::station::spec(class, u32::from(index));
         let delta = if axis == 0 { 1 } else { self.map().size_x() };
         let track_delta = if axis == 0 { self.map().size_x() } else { 1 };
-        let layout = (self.s.rail_layout)(spec, tracks, length);
+        let layout = (self.s.rail_layout)(
+            spec,
+            crate::newgrf_station::get_station_layout_key(tracks, length),
+        );
         for i in 0..tracks {
             for j in 0..length {
                 let t = tile

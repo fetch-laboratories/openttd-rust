@@ -105,7 +105,7 @@ struct OpenTTDStationCommandServices {
 	bool (*distant_join)() noexcept OPENTTD_SERVICE_DEFAULT(distant_join);
 	const OpenTTDStationAssociationServices *rail_association;
 	OpenTTDRailStationSpecInfo (*rail_spec_info)(const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(rail_spec_info);
-	OpenTTDByteSpan (*rail_layout)(const StationSpec *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_layout);
+	OpenTTDByteSpan (*rail_layout)(const StationSpec *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_layout);
 	bool (*rail_boolean)(const StationSpec *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_boolean);
 	void (*rail_callback_error)(const StationSpec *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_callback_error);
 	void (*set_train_area)(BaseStation *, OpenTTDStationArea) noexcept OPENTTD_SERVICE_DEFAULT(set_train_area);

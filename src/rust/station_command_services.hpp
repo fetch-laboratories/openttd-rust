@@ -114,7 +114,7 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.distant_join = RustStationDistantJoin,
 		.rail_association = &GetStationAssociationServices(),
 		.rail_spec_info = [](const StationSpec *spec) noexcept -> OpenTTDRailStationSpecInfo { return {spec->disallowed_platforms, spec->disallowed_lengths, spec->callback_mask.Test(StationCallbackMask::SlopeCheck), spec->callback_mask.Test(StationCallbackMask::Avail)}; },
-		.rail_layout = [](const StationSpec *spec, uint8_t tracks, uint8_t length) noexcept -> OpenTTDByteSpan { if (spec == nullptr) return {nullptr, 0}; auto it = spec->layouts.find(GetStationLayoutKey(tracks, length)); if (it == spec->layouts.end()) return {nullptr, 0}; return {it->second.data(), it->second.size()}; },
+		.rail_layout = [](const StationSpec *spec, uint16_t key) noexcept -> OpenTTDByteSpan { if (spec == nullptr) return {nullptr, 0}; auto it = spec->layouts.find(key); if (it == spec->layouts.end()) return {nullptr, 0}; return {it->second.data(), it->second.size()}; },
 		.rail_boolean = RustStationConvert8bitBoolean,
 		.rail_callback_error = RustSpecCallbackError<StationSpec, StationSpec>,
 		.set_train_area = [](BaseStation *st, OpenTTDStationArea area) noexcept { st->train_station = TileArea(TileIndex{area.tile}, area.w, area.h); },

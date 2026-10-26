@@ -1132,7 +1132,13 @@ def definition_grfs(folder):
         )
 
     def group(feature, index, value):
-        return bytes((2, feature, index, 0x81, 0x1A, 0, 0xFF, 0)) + word(0x8000 | value)
+        result = word(0x8000 | value)
+        return (
+            bytes((2, feature, index, 0x81, 0x1A, 0, 0xFF, 1))
+            + result
+            + b"\0\xff"
+            + result
+        )
 
     def mapping(feature, local, default, specific=()):
         return (

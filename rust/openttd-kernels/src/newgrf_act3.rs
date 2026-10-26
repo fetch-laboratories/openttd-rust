@@ -37,7 +37,7 @@ pub(crate) fn translate_cargo(s: &Services, feature: u8, cargo: u8, file: *const
         return INVALID_CARGO;
     }
     let label = unsafe { table.data.add(usize::from(cargo)).read() };
-    if label == 0 {
+    if label == crate::cargo_type::CT_INVALID {
         unsafe {
             (s.not_available)(cargo);
         }
