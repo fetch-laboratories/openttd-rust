@@ -36,7 +36,7 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 		.railtypes = RustEngineRailTypes,
 		.rail_label = [](RailType rt) noexcept { return GetRailTypeInfo(rt)->label; },
 		.refit_inputs = [](const OpenTTDEngine *shell) noexcept { const auto &ei = EngineOf(shell)->info; return OpenTTDEngineRefitInputs{.mask = RustEngineCargoRefitMask(shell), .cargo = ei.cargo_type, .custom = VehicleCallbackMasks{RustEngineCallbackMask(shell)}.Test(VehicleCallbackMask::CustomRefit)}; },
-		.cargo_label = [](const OpenTTDEngine *shell) noexcept { return RustCargoLabel(EngineOf(shell)->info.cargo_label); },
+		.cargo_label = RustEngineCargoLabel,
 		.train_cargo = [](const OpenTTDEngine *shell) noexcept { return OpenTTDEngineTrainCargo{.capacity = RustEngineRailCapacity(shell), .kind = Engine_rail_kind(shell)}; },
 		.set_cargo = RustSetEngineCargo,
 		.set_refit = RustSetEngineRefitMask,

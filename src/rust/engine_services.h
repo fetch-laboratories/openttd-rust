@@ -18,6 +18,8 @@
 #include "services_rail.h"
 #include "../road.h"
 #include "table/strings.h"
+#include "services_cargo.h"
+inline OpenTTDNewGRFCargoLabel RustEngineCargoLabel(const OpenTTDEngine *e) noexcept { return RustCargoLabel(EngineOf(e)->info.cargo_label); }
 inline uint16_t RustEngineCallbackMask(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.callback_mask.base(); }
 inline uint8_t RustEngineMiscFlags(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.misc_flags.base(); }
 inline bool RustEngineIsTram(const OpenTTDEngine *e) noexcept { return EngineMiscFlags{RustEngineMiscFlags(e)}.Test(EngineMiscFlag::RoadIsTram); }
