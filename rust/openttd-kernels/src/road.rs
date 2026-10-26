@@ -176,10 +176,11 @@ pub unsafe extern "C" fn openttd_rust_road_path_pop(state: *mut State) {
     }
 }
 
-/// Movement settings and map size, read once only by movement entries.
+/// Separate ground owner, movement settings and map size for one movement entry.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Entry {
+    pub ground: *mut crate::ground_vehicle::State,
     pub acceleration_model: u8,
     pub road_side: u8,
     pub queue: bool,
@@ -241,12 +242,13 @@ pub struct SpeedPart {
     pub status: u8,
 }
 
-/// Consist links, read after callbacks which can change the chain.
+/// Consist links and the next shell's separate ground owner, refreshed after callbacks.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Link {
     pub next: Option<VehicleRef>,
     pub next_state: *mut State,
+    pub next_ground: *mut crate::ground_vehicle::State,
 }
 /// Consist links and tile for depot traversal.
 #[repr(C)]
@@ -301,6 +303,7 @@ pub struct Candidate {
     pub state: *mut State,
     pub first: VehicleRef,
     pub first_state: *mut State,
+    pub first_ground: *mut crate::ground_vehicle::State,
     pub index: u32,
     pub x: i32,
     pub y: i32,
@@ -490,6 +493,9 @@ impl Part {
     }
     fn link(v: Option<VehicleRef>, s: *mut State) -> Option<Self> {
         v.map(|v| Self::new(v, s))
+    }
+    fn ground(self, state: *mut crate::ground_vehicle::State) -> crate::ground_vehicle::Owner {
+        crate::ground_vehicle::Owner::for_road(state, self.s.as_ptr())
     }
     fn get(self, field: usize) -> u16 {
         // SAFETY: Live owner; the place read ends before any service call.
@@ -696,11 +702,16 @@ impl Game<'_> {
         }
     }
     /// `RoadVehicle::UpdateSpeed`, returning the distance and stored speed.
-    fn update_speed(&self, front: Part, r: &SpeedRead) -> (i32, u16) {
+    fn update_speed(
+        &self,
+        front: Part,
+        ground: crate::ground_vehicle::Owner,
+        r: &SpeedRead,
+    ) -> (i32, u16) {
         let over = front.overtaking() != 0;
         let (accel, min) = if self.realistic() {
             (
-                crate::ground_vehicle::acceleration(self.gs.physics, front.v)
+                crate::ground_vehicle::acceleration_owned(self.gs.physics, front.v, ground)
                     .wrapping_add(if over { 256 } else { 0 }) as u32,
                 if r.max.status & VS_STOPPED != 0 { 0 } else { 4 },
             )
@@ -809,7 +820,7 @@ impl Game<'_> {
         })
     }
     /// `RoadVehCheckOvertake(v, u)`; pure predicates are evaluated cheapest first.
-    fn overtake(&self, v: Part, s: &Step, u: Part) {
+    fn overtake(&self, v: Part, s: &Step, u: Part, ground: crate::ground_vehicle::Owner) {
         if s.tram {
             return;
         }
@@ -829,17 +840,18 @@ impl Game<'_> {
         if service!(self.gs.has_articulated)(v.v) {
             return;
         }
-        let u_speed =
-            if self.original() || crate::ground_vehicle::acceleration(self.gs.physics, u.v) > 0 {
-                max_speed(
-                    u,
-                    service!(self.l.max_speed_read)(u.v),
-                    self.acceleration_model,
-                    self.l,
-                )
-            } else {
-                i32::from(ur.cur_speed)
-            };
+        let u_speed = if self.original()
+            || crate::ground_vehicle::acceleration_owned(self.gs.physics, u.v, ground) > 0
+        {
+            max_speed(
+                u,
+                service!(self.l.max_speed_read)(u.v),
+                self.acceleration_model,
+                self.l,
+            )
+        } else {
+            i32::from(ur.cur_speed)
+        };
         if u_speed
             >= max_speed(
                 v,
@@ -909,10 +921,20 @@ impl Game<'_> {
         }
     }
     /// x/y store, `UpdatePosition`, `UpdateInclination` and `RoadZPosAffectSpeed`.
-    fn move_to(&self, v: Part, s: &mut Step, x: i32, y: i32, new_tile: bool, delta: bool) {
-        let m = crate::ground_vehicle::move_incline(self.gs, self.map, v.v, x, y, new_tile, delta);
-        s.x = x;
-        s.y = y;
+    fn move_to(
+        &self,
+        v: Part,
+        ground: crate::ground_vehicle::Owner,
+        s: &mut Step,
+        pos: (i32, i32),
+        new_tile: bool,
+        delta: bool,
+    ) {
+        let m = crate::ground_vehicle::move_incline(
+            self.gs, self.map, v.v, ground, pos, new_tile, delta,
+        );
+        s.x = pos.0;
+        s.y = pos.1;
         s.z = m.z;
         s.cur_speed = m.cur_speed;
         if m.old_z == m.z || !self.original() {
@@ -1191,7 +1213,7 @@ impl Game<'_> {
         }
     }
     /// `RoadVehLeaveDepot`.
-    fn leave_depot(&self, v: Part, first: bool) -> bool {
+    fn leave_depot(&self, v: Part, ground: crate::ground_vehicle::Owner, first: bool) -> bool {
         if v.state() != DEPOT {
             return false;
         }
@@ -1237,7 +1259,7 @@ impl Game<'_> {
         unsafe {
             crate::vehicle::occupancy::update_position(self.vs, v.v, self.map);
         }
-        crate::ground_vehicle::inclination(self.gs.physics, v.v, true, true);
+        crate::ground_vehicle::inclination_owned(self.gs.physics, v.v, ground, true, true);
         service!(self.l.depot_exit_dirty)(v.v);
         true
     }
@@ -1306,7 +1328,13 @@ impl Game<'_> {
             && service!(self.ss.road_stop_type)(tile).0 == u8::from(!r.bus)
     }
     /// `IndividualRoadVehicleController`; `s` is a fresh observation of `v`.
-    fn individual(&self, v: Part, prev: Option<Part>, s: &mut Step) -> bool {
+    fn individual(
+        &self,
+        v: Part,
+        ground: crate::ground_vehicle::Owner,
+        prev: Option<Part>,
+        s: &mut Step,
+    ) -> bool {
         if v.overtaking() != 0 {
             if service!(self.ss.tile_type)(s.tile) == MP_STATION {
                 v.set(OVERTAKING, 0);
@@ -1333,7 +1361,7 @@ impl Game<'_> {
                 let e = self.movement_enter(v.v, gp.tile, gp.x, gp.y);
                 Self::observe(s, e);
                 if e.flags & VETS_ENTERED_WORMHOLE != 0 {
-                    self.move_without_speed(v, s, gp.x, gp.y);
+                    self.move_without_speed(v, ground, s, gp.x, gp.y);
                     return true;
                 }
             }
@@ -1476,7 +1504,7 @@ impl Game<'_> {
                 if new_dir != s.direction {
                     self.set_direction(v, s, new_dir);
                 }
-                self.move_to(v, s, x, y, true, true);
+                self.move_to(v, ground, s, (x, y), true, true);
                 return true;
             }
         }
@@ -1520,7 +1548,7 @@ impl Game<'_> {
             if new_dir != s.direction {
                 self.set_direction(v, s, new_dir);
             }
-            self.move_to(v, s, x, y, true, true);
+            self.move_to(v, ground, s, (x, y), true, true);
             return true;
         }
         let link = service!(self.l.link)(v.v);
@@ -1528,7 +1556,7 @@ impl Game<'_> {
             if service!(self.l.is_road_depot_tile)(s.tile)
                 && u16::from(v.frame()) == u16::from(s.length) + 6
             {
-                self.leave_depot(next, false);
+                self.leave_depot(next, next.ground(link.next_ground), false);
             }
         }
         let x = (s.x & !15) + i32::from(rd.0 & 15);
@@ -1538,7 +1566,7 @@ impl Game<'_> {
             if let Some(c) = self.close(v, s.z, x, y, new_dir, true) {
                 let u = Part::new(c.first, c.first_state);
                 if v.overtaking() == 0 {
-                    self.overtake(v, s, u);
+                    self.overtake(v, s, u, u.ground(c.first_ground));
                 }
                 if v.overtaking() == 0 {
                     self.set_speed(v, s, c.first_speed);
@@ -1589,7 +1617,7 @@ impl Game<'_> {
                         && service!(self.l.has_road)(v.v, next)
                     {
                         v.set(FRAME, u16::from(frame) + 1);
-                        self.move_to(v, s, x, y, true, false);
+                        self.move_to(v, ground, s, (x, y), true, false);
                         return true;
                     }
                 }
@@ -1630,39 +1658,58 @@ impl Game<'_> {
         if e.flags & VETS_ENTERED_WORMHOLE == 0 {
             v.set(FRAME, u16::from(v.frame()) + 1);
         }
-        self.move_to(v, s, x, y, false, true);
+        self.move_to(v, ground, s, (x, y), false, true);
         true
     }
     /// Wormhole entry: x/y, `UpdatePosition`, `UpdateInclination(true, true)`.
-    fn move_without_speed(&self, v: Part, s: &mut Step, x: i32, y: i32) {
-        let m = crate::ground_vehicle::move_incline(self.gs, self.map, v.v, x, y, true, true);
+    fn move_without_speed(
+        &self,
+        v: Part,
+        ground: crate::ground_vehicle::Owner,
+        s: &mut Step,
+        x: i32,
+        y: i32,
+    ) {
+        let m =
+            crate::ground_vehicle::move_incline(self.gs, self.map, v.v, ground, (x, y), true, true);
         s.x = x;
         s.y = y;
         s.z = m.z;
         s.cur_speed = m.cur_speed;
     }
     /// One `IndividualRoadVehicleController` pass over the consist.
-    fn consist_step(&self, v: Part, s: &mut Step) -> Option<bool> {
-        if !self.individual(v, None, s) {
+    fn consist_step(
+        &self,
+        v: Part,
+        ground: crate::ground_vehicle::Owner,
+        s: &mut Step,
+    ) -> Option<bool> {
+        if !self.individual(v, ground, None, s) {
             return None;
         }
         let mut prev = v;
-        let link = service!(self.l.link)(v.v);
+        let mut link = service!(self.l.link)(v.v);
         let mut next = Part::link(link.next, link.next_state);
         let traversed_tail = next.is_some();
         while let Some(u) = next {
             let mut us = service!(self.l.step)(u.v);
-            if !self.individual(u, Some(prev), &mut us) {
+            if !self.individual(u, u.ground(link.next_ground), Some(prev), &mut us) {
                 return None;
             }
             prev = u;
-            let link = service!(self.l.link)(u.v);
+            link = service!(self.l.link)(u.v);
             next = Part::link(link.next, link.next_state);
         }
         Some(traversed_tail)
     }
     /// `RoadVehController`.
-    fn controller(&self, v: Part, status: u8, tick: u8) -> bool {
+    fn controller(
+        &self,
+        v: Part,
+        ground: crate::ground_vehicle::Owner,
+        status: u8,
+        tick: u8,
+    ) -> bool {
         let reverse = v.get(REVERSE_CTR);
         if reverse != 0 {
             v.set(REVERSE_CTR, reverse - 1);
@@ -1679,7 +1726,7 @@ impl Game<'_> {
             return true;
         }
         if b.status & VS_STOPPED != 0 {
-            crate::ground_vehicle::last_speed(self.gs.physics, v.v);
+            crate::ground_vehicle::last_speed_owned(self.gs.physics, v.v, ground);
             return true;
         }
         let orders = service!(self.vs.orders)();
@@ -1693,7 +1740,7 @@ impl Game<'_> {
             if service!(self.vs.waiting_for_unbunching)(v.v) {
                 return true;
             }
-            if self.leave_depot(v, true) {
+            if self.leave_depot(v, ground, true) {
                 return true;
             }
         }
@@ -1709,13 +1756,13 @@ impl Game<'_> {
             front: true,
             tram: r.tram,
         };
-        let (mut j, speed) = self.update_speed(v, &r);
+        let (mut j, speed) = self.update_speed(v, ground, &r);
         s.cur_speed = speed;
         let mut adv = advance_distance(s.direction);
         let mut blocked = false;
         while j >= adv {
             j -= adv;
-            let Some(traversed_tail) = self.consist_step(v, &mut s) else {
+            let Some(traversed_tail) = self.consist_step(v, ground, &mut s) else {
                 blocked = true;
                 break;
             };
@@ -1740,7 +1787,7 @@ impl Game<'_> {
                 }
             }
         }
-        crate::ground_vehicle::last_speed(self.gs.physics, v.v);
+        crate::ground_vehicle::last_speed_owned(self.gs.physics, v.v, ground);
         let status = service!(self.vs.status)(v.v);
         let mut final_progress = None;
         let mut next = if status & VS_HIDDEN == 0 {
@@ -1792,7 +1839,7 @@ impl Game<'_> {
         service!(self.vs.write_counters)(v.v, tick, running, order_time);
         // Reload after native writes; discard all places before controller callbacks.
         let status = unsafe { t.status.read() };
-        self.controller(v, status, tick)
+        self.controller(v, v.ground(t.movement.ground), status, tick)
     }
     /// `RoadVehicle::SetDestTile`.
     fn set_dest(&self, v: Part, tile: u32, current: u32) {
@@ -2017,7 +2064,8 @@ pub unsafe extern "C" fn openttd_rust_road_individual(
     let mut g = entry!(leaves, Some(e));
     g.road = road;
     let mut s = service!(g.l.step)(v);
-    g.individual(Part::new(v, state), Part::link(prev, prev_state), &mut s)
+    let v = Part::new(v, state);
+    g.individual(v, v.ground(e.ground), Part::link(prev, prev_state), &mut s)
 }
 /// # Safety
 /// As `openttd_rust_road_tick`.
@@ -2031,7 +2079,8 @@ pub unsafe extern "C" fn openttd_rust_road_leave_depot(
 ) -> bool {
     // SAFETY: Entry record borrowed for this call only.
     let e = unsafe { &*entry };
-    entry!(leaves, Some(e)).leave_depot(Part::new(v, state), first)
+    let v = Part::new(v, state);
+    entry!(leaves, Some(e)).leave_depot(v, v.ground(e.ground), first)
 }
 /// # Safety
 /// As `openttd_rust_road_tick`.
@@ -2191,6 +2240,7 @@ crate::abi::layouts! {
         tile,
     };
     "OpenTTDRoadEntry" ["probe"] => Entry {
+        ground,
         acceleration_model,
         road_side,
         queue,
@@ -2262,6 +2312,7 @@ crate::abi::layouts! {
         state,
         first,
         first_state,
+        first_ground,
         index,
         x,
         y,
@@ -2315,6 +2366,7 @@ crate::abi::layouts! {
     "OpenTTDRoadLink" ["probe"] => Link {
         next,
         next_state,
+        next_ground,
     };
     "OpenTTDRoadLinkTile" ["probe"] => LinkTile {
         link,

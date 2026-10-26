@@ -73,13 +73,13 @@ static OpenTTDRoadPartRead OPENTTD_RUST_CALL RoadSvcPart(OpenTTDVehicle *v) noex
 static OpenTTDRoadLink OPENTTD_RUST_CALL RoadSvcLink(OpenTTDVehicle *v) noexcept
 {
 	const RoadVehicle *next = static_cast<const RoadVehicle *>(RustVehicleNext(RoadOf(v)));
-	return {.next = RustVehicle(next), .next_state = RoadStateOf(next)};
+	return {.next = RustVehicle(next), .next_state = RoadStateOf(next), .next_ground = next == nullptr ? nullptr : next->rust_ground.state};
 }
 static OpenTTDRoadLinkTile OPENTTD_RUST_CALL RoadSvcLinkTile(OpenTTDVehicle *v) noexcept
 {
 	const RoadVehicle *u = RoadOf(v);
 	const RoadVehicle *next = static_cast<const RoadVehicle *>(RustVehicleNext(u));
-	return {.link = {.next = RustVehicle(next), .next_state = RoadStateOf(next)}, .tile = RustVehicleTile(u)};
+	return {.link = {.next = RustVehicle(next), .next_state = RoadStateOf(next), .next_ground = next == nullptr ? nullptr : next->rust_ground.state}, .tile = RustVehicleTile(u)};
 }
 static OpenTTDRoadEntered OPENTTD_RUST_CALL RoadSvcAfterEnterTile(OpenTTDVehicle *v, uint8_t flags) noexcept
 {
@@ -95,7 +95,7 @@ static bool OPENTTD_RUST_CALL RoadSvcCandidate(OpenTTDVehicle *vehicle, OpenTTDV
 	if (u->type != VEH_ROAD || RustVehicleFirst(u) == VehicleOf(probe)) return false;
 	const RoadVehicle *r = RoadVehicle::From(u);
 	const RoadVehicle *first = RustVehicleFirst(r);
-	*out = {.vehicle = vehicle, .state = RoadStateOf(r), .first = RustVehicle(first), .first_state = RoadStateOf(first),
+	*out = {.vehicle = vehicle, .state = RoadStateOf(r), .first = RustVehicle(first), .first_state = RoadStateOf(first), .first_ground = first->rust_ground.state,
 		.index = r->index.base(), .x = RustVehicleX(r), .y = RustVehicleY(r), .z = RustVehicleZ(r), .first_speed = RustVehicleSpeed(first), .direction = RustVehicleDirection(r)};
 	return true;
 }

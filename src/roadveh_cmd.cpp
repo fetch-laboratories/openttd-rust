@@ -52,9 +52,9 @@ const OpenTTDRoadLeaves &GetRustRoadLeaves() noexcept { return GetRoadLeaves(); 
 static OpenTTDRoadMaxSpeedRead RoadMaxSpeedRead(const RoadVehicle *u) noexcept;
 
 /** Settings and map size a road entry may consult, read once per entry. */
-static OpenTTDRoadEntry GetRoadEntry() noexcept
+static OpenTTDRoadEntry GetRoadEntry(const RoadVehicle *v) noexcept
 {
-	return {.acceleration_model = RustRoadAccelerationModel(),
+	return {.ground = v->rust_ground.state, .acceleration_model = RustRoadAccelerationModel(),
 		.road_side = RustRoadSide(), .queue = RustRoadQueue(), .map_log_x = static_cast<uint8_t>(Map::LogX())};
 }
 
@@ -63,7 +63,7 @@ OpenTTDRoadTickRead RustRoadTickRead(const RoadVehicle *v) noexcept
 {
 	OpenTTDRoadTickRead read{.tick = RustVehicleTick(v), .front = v->IsFrontEngine()};
 	if (read.front) {
-		read.movement = GetRoadEntry();
+		read.movement = GetRoadEntry(v);
 		read.order_time = RustVehicleOrderTimeAddress(v);
 		read.running = RustVehicleRunningAddress(v);
 		read.status = RustVehicleStatusAddress(v);
@@ -1119,7 +1119,7 @@ struct RoadDriveEntry {
 bool RoadVehLeaveDepot(RoadVehicle *v, bool first)
 {
 #ifdef WITH_RUST
-	OpenTTDRoadEntry entry = GetRoadEntry();
+	OpenTTDRoadEntry entry = GetRoadEntry(v);
 	return openttd_rust_road_leave_depot(RustVehicle(v), v->GetRustState(), first, &entry, &GetRoadLeaves());
 #else
 	/* Don't leave unless v and following wagons are in the depot. */
@@ -1269,7 +1269,7 @@ static bool CanBuildTramTrackOnTile(CompanyID c, TileIndex t, RoadType rt, RoadB
 bool IndividualRoadVehicleController(RoadVehicle *v, const RoadVehicle *prev)
 {
 #ifdef WITH_RUST
-	OpenTTDRoadEntry entry = GetRoadEntry();
+	OpenTTDRoadEntry entry = GetRoadEntry(v);
 	OpenTTDRoadCommandSlot road;
 	return openttd_rust_road_individual(RustVehicle(v), v->GetRustState(), RustVehicle(prev), prev == nullptr ? nullptr : prev->GetRustState(), &entry, &GetRoadLeaves(), &road);
 #else

@@ -16,13 +16,17 @@
 /** Entries take a live vehicle handle and its owner; consist links carry both.
  * Records are copies taken at the original read points. Leaves are typed noexcept
  * services; visitors run synchronously in pool order and stop when they return
- * false. No owner or path borrow spans a service; panics abort. */
+ * false. Ground pointers name separate stable allocations, surviving controller
+ * callbacks that cannot destroy the current shell; advancing a changed chain
+ * reacquires both owners. No owner or path borrow spans a service; panics abort. */
 struct OpenTTDRoadState;
+struct OpenTTDGroundState;
 struct OpenTTDRoadCommandContext;
 struct OpenTTDRoadCommandSlot;
 struct OpenTTDRoadTramBuildRead { uint8_t owner, road_type; const OpenTTDRoadCommandContext *road; };
 struct OpenTTDRoadPathElement { uint8_t trackdir; uint32_t tile; };
 struct OpenTTDRoadEntry {
+	OpenTTDGroundState *ground;
 	uint8_t acceleration_model;
 	uint8_t road_side;
 	bool queue;
@@ -68,6 +72,7 @@ struct OpenTTDRoadSpeedPart {
 struct OpenTTDRoadLink {
 	OpenTTDVehicle *next;
 	OpenTTDRoadState *next_state;
+	OpenTTDGroundState *next_ground;
 };
 struct OpenTTDRoadLinkTile {
 	OpenTTDRoadLink link;
@@ -103,6 +108,7 @@ struct OpenTTDRoadCandidate {
 	OpenTTDRoadState *state;
 	OpenTTDVehicle *first;
 	OpenTTDRoadState *first_state;
+	OpenTTDGroundState *first_ground;
 	uint32_t index;
 	int32_t x;
 	int32_t y;
