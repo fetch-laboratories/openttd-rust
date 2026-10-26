@@ -1,5 +1,6 @@
 """Engine lifecycle commands, preview, reliability and canonical modern reload."""
 
+import struct
 from pathlib import Path
 
 from . import core, economy

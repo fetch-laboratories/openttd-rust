@@ -1448,8 +1448,6 @@ extern "C" fn unused_road_cost_multiplier(_: u8) -> u16 {
     panic!("unused road cost multiplier")
 }
 
-#[cfg(test)]
-
 /// Native road tile kind.
 #[repr(transparent)]
 #[derive(Clone, Copy)]

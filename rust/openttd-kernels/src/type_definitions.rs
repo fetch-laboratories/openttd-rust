@@ -191,15 +191,15 @@ fn rail_reserve(
             }
             0x1d => {
                 let rt = unsafe { *map.data.add(id as usize) };
-                if rt != INVALID_RAILTYPE {
+                if rt == INVALID_RAILTYPE {
+                    (s.no_label)(id);
+                    skip_labels(reader)?;
+                } else {
                     let info = registry::rail_spec(rt);
                     for _ in 0..reader.byte()? {
                         let label = reader.dword()?.swap_bytes();
                         (s.alternate_label)(info, label);
                     }
-                } else {
-                    (s.no_label)(id);
-                    skip_labels(reader)?;
                 }
             }
             0x0e | 0x0f | 0x18 | 0x19 => skip_labels(reader)?,
@@ -349,15 +349,15 @@ fn road_reserve(
             }
             0x1d => {
                 let rt = unsafe { *map.data.add(id as usize) };
-                if rt != INVALID_ROADTYPE {
+                if rt == INVALID_ROADTYPE {
+                    (s.no_label)(id);
+                    skip_labels(reader)?;
+                } else {
                     let info = registry::road_spec(rt);
                     for _ in 0..reader.byte()? {
                         let label = reader.dword()?.swap_bytes();
                         (s.alternate_label)(info, label);
                     }
-                } else {
-                    (s.no_label)(id);
-                    skip_labels(reader)?;
                 }
             }
             0x0f | 0x18 | 0x19 => skip_labels(reader)?,

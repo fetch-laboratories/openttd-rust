@@ -46,6 +46,7 @@ impl Labels {
     }
 }
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct TypeMap {
     pub(crate) data: *mut u8,
     pub(crate) size: usize,
@@ -114,6 +115,9 @@ static REGISTRY: GameState<Registry> = GameState::new(Registry {
 fn services() -> &'static Services {
     unsafe { &*(*REGISTRY.get()).services }
 }
+pub(crate) fn rail_label(rt: u8) -> u32 {
+    (services().rail().type_label)(rt)
+}
 pub fn rail_hidden() -> u64 {
     unsafe { (*REGISTRY.get()).rail_hidden }
 }
@@ -122,10 +126,10 @@ pub fn road_hidden() -> u64 {
 }
 pub fn road_tram_mask(rtt: RoadTramType) -> u64 {
     unsafe {
-        if !rtt.0 {
-            (*REGISTRY.get()).road
-        } else {
+        if rtt.0 {
             (*REGISTRY.get()).tram
+        } else {
+            (*REGISTRY.get()).road
         }
     }
 }
@@ -312,7 +316,7 @@ pub extern "C" fn openttd_rust_road_allocate(label: u32, rtt: RoadTramType) -> u
         (s.road().allocate)(info, &raw const value);
         unsafe {
             let bit = 1u64 << rt;
-            (*REGISTRY.get()).road = ((*REGISTRY.get()).road & !bit) | if !rtt.0 { bit } else { 0 };
+            (*REGISTRY.get()).road = ((*REGISTRY.get()).road & !bit) | if rtt.0 { 0 } else { bit };
             (*REGISTRY.get()).tram = ((*REGISTRY.get()).tram & !bit) | if rtt.0 { bit } else { 0 };
         }
         return rt;
