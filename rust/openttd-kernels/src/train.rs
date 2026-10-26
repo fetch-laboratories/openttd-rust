@@ -706,11 +706,6 @@ impl<'a> Game<'a> {
         u64::from(self.signal_context().segment(tile, side, owner))
     }
 }
-const PROP_TRAIN_USER_DATA: u32 = 37;
-const PROP_TRAIN_SPEED: u32 = 9;
-const PROP_TRAIN_CARGO_AGE_PERIOD: u32 = 43;
-const PROP_TRAIN_SHORTEN_FACTOR: u32 = 33;
-const PROP_TRAIN_RUNNING_COST_FACTOR: u32 = 13;
 impl Game<'_> {
     fn property(&self, id: Handle, prop: u32, default: u64) -> u64 {
         (self.vs().property)(
@@ -750,7 +745,11 @@ impl Game<'_> {
         }
         u = id;
         while u != Handle::NONE {
-            u.set_user_def_data(self.property(u, PROP_TRAIN_USER_DATA, u.get_user_def_data()));
+            u.set_user_def_data(self.property(
+                u,
+                u32::from(crate::newgrf_properties::PROP_TRAIN_USER_DATA),
+                u.get_user_def_data(),
+            ));
             (self.leaves.invalidate_grf)(id);
             (self.leaves.invalidate_grf)(u);
             u = (self.leaves.read_next)(u);
@@ -792,8 +791,11 @@ impl Game<'_> {
                 if ((self.leaves.railveh_wagon)(u) == 0 || (self.leaves.wagon_speed_limits)(u) != 0)
                     && (self.leaves.wagon_override)(u) == 0
                 {
-                    let speed =
-                        self.property(u, PROP_TRAIN_SPEED, (self.leaves.speed_default)(u)) as u16;
+                    let speed = self.property(
+                        u,
+                        u32::from(crate::newgrf_properties::PROP_TRAIN_SPEED),
+                        (self.leaves.speed_default)(u),
+                    ) as u16;
                     if speed != 0 {
                         max_speed = max_speed.min(speed);
                     }
@@ -825,13 +827,17 @@ impl Game<'_> {
                 u,
                 (self.property(
                     u,
-                    PROP_TRAIN_CARGO_AGE_PERIOD,
+                    u32::from(crate::newgrf_properties::PROP_TRAIN_CARGO_AGE_PERIOD),
                     (self.leaves.cargo_age_default)(u),
                 )) as u16,
             );
             let mut length = u16::MAX;
             if (self.leaves.grf_version)(u) >= 8 {
-                length = self.property(u, PROP_TRAIN_SHORTEN_FACTOR, u64::from(u16::MAX)) as u16;
+                length = self.property(
+                    u,
+                    u32::from(crate::newgrf_properties::PROP_TRAIN_SHORTEN_FACTOR),
+                    u64::from(u16::MAX),
+                ) as u16;
                 if length != u16::MAX && length >= 8 {
                     let vs = self.vs();
                     (vs.unknown_callback_result)(
@@ -1068,7 +1074,7 @@ impl Game<'_> {
             if (self.leaves.cost_class)(u) != (self.leaves.invalid_price)(u) {
                 let mut factor = self.property(
                     u,
-                    PROP_TRAIN_RUNNING_COST_FACTOR,
+                    u32::from(crate::newgrf_properties::PROP_TRAIN_RUNNING_COST_FACTOR),
                     (self.leaves.cost_default)(u),
                 ) as u32;
                 if factor != 0 {

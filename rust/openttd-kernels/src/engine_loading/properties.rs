@@ -24,6 +24,12 @@ use crate::newgrf_bytereader::{
     BadgeList, ByteReader, ReadError, Reader, Services as ReaderServices,
 };
 use crate::newgrf_internal::{CIR_INVALID_ID, CIR_SUCCESS, CIR_UNKNOWN};
+use crate::newgrf_properties::{
+    PROP_TRAIN_CARGO_AGE_PERIOD, PROP_TRAIN_CARGO_CAPACITY, PROP_TRAIN_COST_FACTOR,
+    PROP_TRAIN_CURVE_SPEED_MOD, PROP_TRAIN_POWER, PROP_TRAIN_RUNNING_COST_FACTOR,
+    PROP_TRAIN_SHORTEN_FACTOR, PROP_TRAIN_SPEED, PROP_TRAIN_TRACTIVE_EFFORT, PROP_TRAIN_USER_DATA,
+    PROP_TRAIN_WEIGHT, PROP_VEHICLE_LOAD_AMOUNT,
+};
 use crate::vehicle_func::CUSTOM_VEHICLE_SPRITENUM;
 #[repr(C)]
 pub struct Properties {
@@ -128,18 +134,10 @@ fn common(s: &Properties, e: E, prop: i32, r: &mut Reader<'_>) -> Result<i32, Re
         0x03 => (s.set_life)(e, i32::from(r.byte()?)),
         0x04 => (s.set_model_life)(e, i32::from(r.byte()?)),
         0x06 => (s.set_climates)(e, r.byte()?),
-        0x07 => (s.set_load_amount)(e, r.byte()?),
+        p if p == i32::from(PROP_VEHICLE_LOAD_AMOUNT) => (s.set_load_amount)(e, r.byte()?),
         _ => return Ok(CIR_UNKNOWN),
     }
     Ok(CIR_SUCCESS)
-}
-fn extended(r: &mut Reader<'_>) -> Result<u16, ReadError> {
-    let value = r.byte()?;
-    if value == 255 {
-        r.word()
-    } else {
-        Ok(u16::from(value))
-    }
 }
 fn base_price(pointer: u32) -> Option<u8> {
     const START: u32 = 0x4b34;
@@ -339,11 +337,11 @@ unsafe fn train(
             }
         }
         0x08 => (s.set_train_ai)(e, r.byte()?),
-        0x09 => {
+        p if p == i32::from(PROP_TRAIN_SPEED) => {
             let speed = r.word()?;
             (s.set_train_speed)(e, if speed == 0xffff { 0 } else { speed });
         }
-        0x0b => {
+        p if p == i32::from(PROP_TRAIN_POWER) => {
             let power = r.word()?;
             (s.set_train_power)(e, power);
             if power != 0 {
@@ -354,7 +352,7 @@ unsafe fn train(
                 (s.set_train_kind)(e, RailVehicleTypes::WAGON);
             }
         }
-        0x0d => (s.set_train_running)(e, r.byte()?),
+        p if p == i32::from(PROP_TRAIN_RUNNING_COST_FACTOR) => (s.set_train_running)(e, r.byte()?),
         0x0e => price(s, e, VEH_TRAIN, r.dword()?),
         0x12 => (s.set_train_image)(e, image(s, VEH_TRAIN, r.byte()?)),
         0x13 => {
@@ -368,17 +366,17 @@ unsafe fn train(
             };
             (s.set_train_kind)(e, kind);
         }
-        0x14 => (s.set_train_capacity)(e, r.byte()?),
+        p if p == i32::from(PROP_TRAIN_CARGO_CAPACITY) => (s.set_train_capacity)(e, r.byte()?),
         0x15 => unsafe {
             default_cargo(s, e, id, file, VEH_TRAIN, r)?;
         },
-        0x16 => {
+        p if p == i32::from(PROP_TRAIN_WEIGHT) => {
             let low = r.byte()?;
             let mut weight = u32::from((s.train_weight)(e));
             sb(&mut weight, 0, 8, u32::from(low));
             (s.set_train_weight)(e, weight as u16);
         }
-        0x17 => (s.set_train_cost)(e, r.byte()?),
+        p if p == i32::from(PROP_TRAIN_COST_FACTOR) => (s.set_train_cost)(e, r.byte()?),
         0x18 => {
             (s.ai_rank)();
             r.byte()?;
@@ -407,7 +405,7 @@ unsafe fn train(
             (s.set_train_class)(e, class);
         }
         0x1a => unsafe {
-            openttd_rust_vehicle_order(id, extended(r)?);
+            openttd_rust_vehicle_order(id, r.extended()?);
         },
         0x1b => (s.set_train_wagon_power)(e, r.word()?),
         0x1c => (s.set_refit_cost)(e, r.byte()?),
@@ -415,9 +413,9 @@ unsafe fn train(
             refit(s, e, id, file, r.dword()?);
         },
         0x1e => callbacks(s, e, r, false)?,
-        0x1f => (s.set_train_te)(e, r.byte()?),
+        p if p == i32::from(PROP_TRAIN_TRACTIVE_EFFORT) => (s.set_train_te)(e, r.byte()?),
         0x20 => (s.set_train_drag)(e, r.byte()?),
-        0x21 => (s.set_train_shorten)(e, r.byte()?),
+        p if p == i32::from(PROP_TRAIN_SHORTEN_FACTOR) => (s.set_train_shorten)(e, r.byte()?),
         0x22 => (s.set_train_visual)(e, visual(s, r.byte()?)),
         0x23 => (s.set_train_wagon_weight)(e, r.byte()?),
         0x24 => {
@@ -430,7 +428,7 @@ unsafe fn train(
                 (s.set_train_weight)(e, weight as u16);
             }
         }
-        0x25 => (s.set_train_user)(e, r.byte()?),
+        p if p == i32::from(PROP_TRAIN_USER_DATA) => (s.set_train_user)(e, r.byte()?),
         0x26 => (s.set_retire)(e, r.byte()?),
         0x27 => misc(s, e, r.byte()?),
         0x28 => unsafe {
@@ -440,11 +438,11 @@ unsafe fn train(
             disallowed(id, r.word()?);
         },
         0x2a => (s.set_intro)(e, r.dword()? as i32),
-        0x2b => (s.set_cargo_age)(e, r.word()?),
+        p if p == i32::from(PROP_TRAIN_CARGO_AGE_PERIOD) => (s.set_cargo_age)(e, r.word()?),
         0x2c | 0x2d => unsafe {
             cargo_list(id, file, prop == 0x2c, r)?;
         },
-        0x2e => (s.set_train_curve)(e, r.word()? as i16),
+        p if p == i32::from(PROP_TRAIN_CURVE_SPEED_MOD) => (s.set_train_curve)(e, r.word()? as i16),
         0x2f => (unsafe { &*s.loading }.set_variant)(e, r.word()?),
         0x30 => (s.set_extra)(e, r.dword()?),
         0x31 => callbacks(s, e, r, true)?,
@@ -520,7 +518,7 @@ unsafe fn road(
         },
         0x1f => (s.set_intro)(e, r.dword()? as i32),
         0x20 => unsafe {
-            openttd_rust_vehicle_order(id, extended(r)?);
+            openttd_rust_vehicle_order(id, r.extended()?);
         },
         0x21 => (s.set_road_visual)(e, visual(s, r.byte()?)),
         0x22 => (s.set_cargo_age)(e, r.word()?),
@@ -577,7 +575,7 @@ unsafe fn ship(
         },
         0x1a => (s.set_intro)(e, r.dword()? as i32),
         0x1b => unsafe {
-            openttd_rust_vehicle_order(id, extended(r)?);
+            openttd_rust_vehicle_order(id, r.extended()?);
         },
         0x1c => (s.set_ship_visual)(e, visual(s, r.byte()?)),
         0x1d => (s.set_cargo_age)(e, r.word()?),
@@ -648,7 +646,7 @@ unsafe fn aircraft(
         },
         0x1a => (s.set_intro)(e, r.dword()? as i32),
         0x1b => unsafe {
-            openttd_rust_vehicle_order(id, extended(r)?);
+            openttd_rust_vehicle_order(id, r.extended()?);
         },
         0x1c => (s.set_cargo_age)(e, r.word()?),
         0x1d | 0x1e => unsafe {
@@ -873,7 +871,7 @@ pub(super) unsafe fn partial_read_tests() {
         let bytes = [255, 1];
         let mut cursor = crate::newgrf_bytereader::Cursor::new(bytes.as_ptr(), bytes.len());
         let mut reader = Reader::new((&raw mut cursor).cast(), &reads);
-        assert!(extended(&mut reader).is_err());
+        assert!(reader.extended().is_err());
         assert_eq!(cursor.remaining(), 1);
         let mut cursor = crate::newgrf_bytereader::Cursor::new(bytes.as_ptr(), 0);
         let mut reader = Reader::new((&raw mut cursor).cast(), &reads);

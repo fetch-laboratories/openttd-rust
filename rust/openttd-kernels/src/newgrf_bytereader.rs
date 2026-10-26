@@ -115,6 +115,15 @@ impl<'a> Reader<'a> {
             Err(ReadError)
         }
     }
+    /// Native `ByteReader::ReadExtendedByte`.
+    pub fn extended(&mut self) -> Result<u16, ReadError> {
+        let value = self.byte()?;
+        if value == 255 {
+            self.word()
+        } else {
+            Ok(u16::from(value))
+        }
+    }
     pub fn dword(&mut self) -> Result<u32, ReadError> {
         let mut value = 0;
         if unsafe { (self.services.read_dword)(self.native, &raw mut value) } {
