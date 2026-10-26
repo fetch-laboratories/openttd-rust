@@ -87,7 +87,7 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.motion = [](OpenTTDVehicle * v) noexcept -> uint32_t { return *RustVehicleMotionAddress(VehicleOf(v)); },
 		.build_year = [](OpenTTDVehicle * v) noexcept -> int32_t { return RustVehicleBuildYear(VehicleOf(v)).base(); },
 		.last_service = [](OpenTTDVehicle * v) noexcept -> int32_t { return RustVehicleCalendarService(VehicleOf(v)).base(); },
-		.primary = [](OpenTTDVehicle * v) noexcept -> bool { return RustVehiclePrimary(VehicleOf(v)); },
+		.primary = RustVehicleRead<bool, RustVehiclePrimary>,
 		.train_services = []() noexcept { return &GetTrainServices(); },
 		.road_acceleration = RustRoadAccelerationModel,
 		.order_max_speed = RustVehicleRead<uint16_t, RustVehicleOrderMaxSpeed>,

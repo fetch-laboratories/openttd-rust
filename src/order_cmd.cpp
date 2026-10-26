@@ -99,12 +99,6 @@ extern "C" uint64_t openttd_orders_vehicle_status(void *ctx) noexcept
 	return v->vehstatus.base();
 }
 
-extern "C" uint64_t openttd_orders_primary_vehicle(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return v->IsPrimaryVehicle();
-}
-
 extern "C" uint64_t openttd_orders_vehicle_ownership(void *ctx, void *result) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);

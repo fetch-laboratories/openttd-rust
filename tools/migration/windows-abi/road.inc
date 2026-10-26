@@ -271,12 +271,12 @@ static void RoadBoundary()
 	static uint8_t emission_cache = 0x11;
 	OpenTTDVisualServices emission{
 		.vehicle = &emission_vehicle, .shared = &emission_shared,
-		.gate = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualGate {
+		.gate = [](OpenTTDVehicle *, OpenTTDVisualGate *gate) noexcept {
 			auto &p = *road_abi_probe; p.visual_stage = 1;
-			return {.speed = 2, .status = 0, .smoke = uint8_t(p.visual_eligible ? 2 : 0), .primary = true};
+			*gate = {.speed = 2, .status = 0, .smoke = uint8_t(p.visual_eligible ? 2 : 0), .primary = true};
 		},
 		.show = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualShow { return {2, VEH_ROAD, 2}; },
-		.part = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualPart { return {.cache = &emission_cache, .tile = 100, .kind = VEH_ROAD, .status = 0, .tick = 0}; },
+		.part = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualPart { return {.tile = 100, .kind = VEH_ROAD, .status = 0, .tick = 0, .cache = emission_cache}; },
 		.offset = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualOffset { return {DIR_NE, 8}; },
 		.depot = [](uint32_t) noexcept { return false; }, .tunnel = [](uint32_t) noexcept { return false; },
 	};
