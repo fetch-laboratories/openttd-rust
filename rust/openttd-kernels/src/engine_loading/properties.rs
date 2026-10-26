@@ -133,14 +133,6 @@ fn common(s: &Properties, e: E, prop: i32, r: &mut Reader<'_>) -> Result<i32, Re
     }
     Ok(CIR_SUCCESS)
 }
-fn extended(r: &mut Reader<'_>) -> Result<u16, ReadError> {
-    let value = r.byte()?;
-    if value == 255 {
-        r.word()
-    } else {
-        Ok(u16::from(value))
-    }
-}
 fn base_price(pointer: u32) -> Option<u8> {
     const START: u32 = 0x4b34;
     const SIZE: u32 = 6;
@@ -407,7 +399,7 @@ unsafe fn train(
             (s.set_train_class)(e, class);
         }
         0x1a => unsafe {
-            openttd_rust_vehicle_order(id, extended(r)?);
+            openttd_rust_vehicle_order(id, r.extended()?);
         },
         0x1b => (s.set_train_wagon_power)(e, r.word()?),
         0x1c => (s.set_refit_cost)(e, r.byte()?),
@@ -520,7 +512,7 @@ unsafe fn road(
         },
         0x1f => (s.set_intro)(e, r.dword()? as i32),
         0x20 => unsafe {
-            openttd_rust_vehicle_order(id, extended(r)?);
+            openttd_rust_vehicle_order(id, r.extended()?);
         },
         0x21 => (s.set_road_visual)(e, visual(s, r.byte()?)),
         0x22 => (s.set_cargo_age)(e, r.word()?),
@@ -577,7 +569,7 @@ unsafe fn ship(
         },
         0x1a => (s.set_intro)(e, r.dword()? as i32),
         0x1b => unsafe {
-            openttd_rust_vehicle_order(id, extended(r)?);
+            openttd_rust_vehicle_order(id, r.extended()?);
         },
         0x1c => (s.set_ship_visual)(e, visual(s, r.byte()?)),
         0x1d => (s.set_cargo_age)(e, r.word()?),
@@ -646,7 +638,7 @@ unsafe fn aircraft(
         },
         0x1a => (s.set_intro)(e, r.dword()? as i32),
         0x1b => unsafe {
-            openttd_rust_vehicle_order(id, extended(r)?);
+            openttd_rust_vehicle_order(id, r.extended()?);
         },
         0x1c => (s.set_cargo_age)(e, r.word()?),
         0x1d | 0x1e => unsafe {
@@ -871,7 +863,7 @@ pub(super) unsafe fn partial_read_tests() {
         let bytes = [255, 1];
         let mut cursor = crate::newgrf_bytereader::Cursor::new(bytes.as_ptr(), bytes.len());
         let mut reader = Reader::new((&raw mut cursor).cast(), &reads);
-        assert!(extended(&mut reader).is_err());
+        assert!(reader.extended().is_err());
         assert_eq!(cursor.remaining(), 1);
         let mut cursor = crate::newgrf_bytereader::Cursor::new(bytes.as_ptr(), 0);
         let mut reader = Reader::new((&raw mut cursor).cast(), &reads);
