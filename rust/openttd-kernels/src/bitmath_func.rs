@@ -26,6 +26,12 @@ pub fn sb(value: &mut u32, start: u8, length: u8, data: u32) {
     *value |= data.wrapping_shl(u32::from(start));
 }
 
+/// `AssignBit` for promoted integer fields, preserving the native return value.
+pub fn assign_bit(value: &mut u32, bit: u8, enabled: bool) -> u32 {
+    sb(value, bit, 1, u32::from(enabled));
+    *value
+}
+
 /// `GB` for a 32-bit promoted input. Native defined inputs retain their result;
 /// wrapping shifts avoid introducing a panic for the native out-of-width domain.
 pub const fn gb(value: u32, start: u8, count: u8) -> u32 {

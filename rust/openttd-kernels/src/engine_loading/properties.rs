@@ -15,7 +15,7 @@ use super::{
     openttd_rust_engine_definition, openttd_rust_engine_temp_refittability,
     openttd_rust_engine_translate_refit, openttd_rust_vehicle_order, temp,
 };
-use crate::bitmath_func::sb;
+use crate::bitmath_func::{assign_bit, has_bit, sb, set_bit64};
 use crate::engine_type::{
     AIR_CTOL, AIR_HELI, EC_DIESEL, EC_ELECTRIC, EC_MAGLEV, EC_MONORAIL, EC_STEAM, VE_DEFAULT,
     VE_DISABLE_EFFECT, VE_TYPE_COUNT, VE_TYPE_START,
@@ -198,7 +198,7 @@ fn visual(s: &Properties, value: u8) -> u8 {
     if value == VE_DEFAULT {
         crate::movement::native_assert(
             unsafe { &*(*s.loading).shared },
-            effect & (1 << VE_DISABLE_EFFECT) != 0,
+            has_bit(effect, VE_DISABLE_EFFECT),
         );
         sb(&mut effect, VE_TYPE_START, VE_TYPE_COUNT, 0);
     }
@@ -284,9 +284,9 @@ unsafe fn cargo_list(
         if is_valid_cargo_type(cargo) {
             unsafe {
                 if include {
-                    (*temp(id)).fields.ctt_include_mask |= 1_u64 << cargo;
+                    set_bit64(&mut (*temp(id)).fields.ctt_include_mask, cargo);
                 } else {
-                    (*temp(id)).fields.ctt_exclude_mask |= 1_u64 << cargo;
+                    set_bit64(&mut (*temp(id)).fields.ctt_exclude_mask, cargo);
                 }
             }
         }
@@ -614,14 +614,16 @@ unsafe fn aircraft(
             let subtype = if value == 0 {
                 AIR_HELI
             } else {
-                (s.aircraft_subtype)(e) | AIR_CTOL
+                let mut subtype = u32::from((s.aircraft_subtype)(e));
+                sb(&mut subtype, 0, 1, u32::from(AIR_CTOL));
+                subtype as u8
             };
             (s.set_aircraft_subtype)(e, subtype);
         }
         0x0a => {
             let large = r.byte()? != 0;
             let mut subtype = u32::from((s.aircraft_subtype)(e));
-            sb(&mut subtype, 1, 1, u32::from(large));
+            assign_bit(&mut subtype, 1, large);
             (s.set_aircraft_subtype)(e, subtype as u8);
         }
         0x0b => (s.set_aircraft_cost)(e, r.byte()?),
