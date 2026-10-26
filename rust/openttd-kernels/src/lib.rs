@@ -65,6 +65,7 @@ mod movement;
 mod network_config;
 mod newgrf;
 mod newgrf_animation_base;
+pub mod newgrf_bytereader;
 mod newgrf_callbacks;
 mod newgrf_commons;
 mod newgrf_config;
@@ -1424,8 +1425,6 @@ mod rail;
 mod type_availability;
 
 mod override_manager;
-
-mod newgrf_bytereader;
 
 mod industry_map;
 

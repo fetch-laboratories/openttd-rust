@@ -4,6 +4,7 @@ use super::{
     Services,
     storage::{LayoutBuffer, LayoutTile, Services as Storage},
 };
+use crate::bitmath_func::{gb, sb};
 use crate::cargo_type::INVALID_CARGO;
 use crate::industry_map::GFX_WATERTILE_SPECIALCHECK;
 use crate::industry_type::{
@@ -182,8 +183,8 @@ unsafe fn layouts(
                     tile.gfx = mapped;
                 }
             } else if tile.gfx == GFX_WATERTILE_SPECIALCHECK {
-                tile.ti.x = i16::from(tile.ti.x as i8);
-                tile.ti.y = i16::from(tile.ti.y as i8);
+                tile.ti.x = i16::from(gb(tile.ti.x as u32, 0, 8) as i8);
+                tile.ti.y = i16::from(gb(tile.ti.y as u32, 0, 8) as i8);
                 // Pre-v8 TileIndexDiff shifts a negative x into the y coordinate.
                 if c.version < 8 && tile.ti.x < 0 {
                     tile.ti.y = tile.ti.y.wrapping_add(1);
@@ -271,11 +272,14 @@ unsafe fn tiles(
             0x0a..=0x0c => {
                 let value = r.word()?;
                 let slot = (prop - 0x0a) as usize;
-                let cargo =
-                    crate::cargo_registry::openttd_rust_cargo_translate(value as u8, c.file, false);
+                let cargo = crate::cargo_registry::openttd_rust_cargo_translate(
+                    gb(u32::from(value), 0, 8) as u8,
+                    c.file,
+                    false,
+                );
                 unsafe {
                     (s.set_tile_accepted)(spec, slot, cargo);
-                    (p.set_acceptance)(spec, slot, ((value >> 8).min(16)) as i8);
+                    (p.set_acceptance)(spec, slot, gb(u32::from(value), 8, 8).clamp(0, 16) as i8);
                     (p.invalidate_tile_accepted)(spec, slot);
                 }
             }
@@ -502,8 +506,18 @@ unsafe fn industries(
             0x1c..=0x1e => {
                 let multiples = r.dword()?;
                 unsafe {
-                    (p.set_multiplier)(spec, (prop - 0x1c) as usize, 0, multiples as u16);
-                    (p.set_multiplier)(spec, (prop - 0x1c) as usize, 1, (multiples >> 16) as u16);
+                    (p.set_multiplier)(
+                        spec,
+                        (prop - 0x1c) as usize,
+                        0,
+                        gb(multiples, 0, 16) as u16,
+                    );
+                    (p.set_multiplier)(
+                        spec,
+                        (prop - 0x1c) as usize,
+                        1,
+                        gb(multiples, 16, 16) as u16,
+                    );
                 }
             }
             0x1f => unsafe {
@@ -513,11 +527,15 @@ unsafe fn industries(
                 (p.set_prospecting)(spec, r.dword()?);
             },
             0x21 | 0x22 => {
-                let mask = unsafe { (p.callbacks)(spec) };
-                let shift = ((prop - 0x21) * 8) as u32;
-                let value = (mask & !(0xff << shift)) | (u16::from(r.byte()?) << shift);
+                let mut mask = u32::from(unsafe { (p.callbacks)(spec) });
+                sb(
+                    &mut mask,
+                    ((prop - 0x21) * 8) as u8,
+                    8,
+                    u32::from(r.byte()?),
+                );
                 unsafe {
-                    (p.set_callbacks)(spec, value);
+                    (p.set_callbacks)(spec, mask as u16);
                 }
             }
             0x23 => unsafe {
@@ -632,11 +650,11 @@ unsafe fn industries(
     }
     Ok(result)
 }
-fn finish(status: Result<u8, ReadError>, result: *mut u8) -> bool {
+fn finish(status: &Result<u8, ReadError>, result: *mut u8) -> bool {
     match status {
         Ok(value) => {
             unsafe {
-                ptr::write(result, value);
+                ptr::write(result, *value);
             }
             true
         }
@@ -658,7 +676,7 @@ pub unsafe extern "C" fn openttd_rust_industry_properties(
     let (c, reads, s, p) = unsafe { (&*c, &*reads, &*s, &*p) };
     let mut reader = unsafe { Reader::new(native, reads) };
     finish(
-        unsafe { industries(first, last, prop, c, &mut reader, s, p) },
+        &unsafe { industries(first, last, prop, c, &mut reader, s, p) },
         result,
     )
 }
@@ -677,7 +695,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_properties(
     let (c, reads, s, p) = unsafe { (&*c, &*reads, &*s, &*p) };
     let mut reader = unsafe { Reader::new(native, reads) };
     finish(
-        unsafe { tiles(first, last, prop, c, &mut reader, s, p) },
+        &unsafe { tiles(first, last, prop, c, &mut reader, s, p) },
         result,
     )
 }

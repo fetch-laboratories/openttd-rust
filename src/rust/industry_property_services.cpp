@@ -8,6 +8,7 @@
 #include "../newgrf/newgrf_internal.h"
 #include "../newgrf/newgrf_stringmapping.h"
 #include "industry_property_ffi.h"
+#include "services_newgrf.h"
 #include "../table/build_industry.h"
 #include "../table/strings.h"
 #include "../safeguards.h"
@@ -29,7 +30,7 @@ const OpenTTDIndustryPropertyServices &GetIndustryPropertyServices() noexcept
 		.tile_identity = [](IndustryTileSpec *spec, GRFFile *file, uint16_t id, uint8_t substitute) noexcept { spec->grf_prop.local_id = id; spec->grf_prop.subst_id = substitute; spec->grf_prop.SetGRFFile(file); },
 		.clear_placement_check = [](IndustrySpec *spec) noexcept { spec->check_proc = CHECK_NOTHING; },
 		.clear_animation = [](IndustryTileSpec *spec) noexcept { spec->anim_production = INDUSTRYTILE_NOANIM; spec->anim_next = INDUSTRYTILE_NOANIM; },
-		.callbacks = [](const IndustrySpec *spec) noexcept -> uint16_t { return spec->callback_mask.base(); },
+		.callbacks = RustIndustrySpecCallbackMask<IndustrySpec>,
 		.set_rate = [](IndustrySpec *spec, size_t slot, uint8_t rate) noexcept { spec->production_rate[slot] = rate; },
 		.set_multiplier = [](IndustrySpec *spec, size_t input, size_t output, uint16_t multiplier) noexcept { spec->input_cargo_multiplier[input][output] = multiplier; },
 		.set_conflicting = [](IndustrySpec *spec, size_t slot, uint8_t id) noexcept { spec->conflicting[slot] = id; },

@@ -188,12 +188,11 @@ pub unsafe fn publish_tile(
         }
     }
 }
-fn translate(cargo: Cargo) -> u8 {
+fn translate(label: crate::newgrf::CargoLabel) -> u8 {
     use crate::cargo_registry::openttd_rust_cargo_by_label;
-    openttd_rust_cargo_by_label(crate::newgrf::get_active_cargo_label(
-        cargo.label,
-        |label| openttd_rust_cargo_by_label(label),
-    ))
+    openttd_rust_cargo_by_label(crate::newgrf::get_active_cargo_label(label, |label| {
+        openttd_rust_cargo_by_label(label)
+    }))
 }
 
 #[unsafe(no_mangle)]
@@ -252,7 +251,7 @@ pub unsafe extern "C" fn openttd_rust_industry_definition_finalise(s: *const Ser
             let cargo = unsafe { (s.produced)(spec, i) };
             if !crate::cargo_type::is_valid_cargo_type(cargo.cargo) {
                 unsafe {
-                    (s.set_produced)(spec, i, translate(cargo));
+                    (s.set_produced)(spec, i, translate(cargo.label));
                 }
             }
         }
@@ -260,7 +259,7 @@ pub unsafe extern "C" fn openttd_rust_industry_definition_finalise(s: *const Ser
             let cargo = unsafe { (s.accepted)(spec, i) };
             if !crate::cargo_type::is_valid_cargo_type(cargo.cargo) {
                 unsafe {
-                    (s.set_accepted)(spec, i, translate(cargo));
+                    (s.set_accepted)(spec, i, translate(cargo.label));
                 }
             }
         }
@@ -271,7 +270,7 @@ pub unsafe extern "C" fn openttd_rust_industry_definition_finalise(s: *const Ser
             let cargo = unsafe { (s.tile_accepted)(spec, i) };
             if !crate::cargo_type::is_valid_cargo_type(cargo.cargo) {
                 unsafe {
-                    (s.set_tile_accepted)(spec, i, translate(cargo));
+                    (s.set_tile_accepted)(spec, i, translate(cargo.label));
                 }
             }
         }

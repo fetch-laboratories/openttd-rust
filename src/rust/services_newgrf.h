@@ -27,6 +27,7 @@
 #include "../newgrf/newgrf_internal.h"
 #include "../rev.h"
 inline void RustGRFPlayTileSound(const GRFFile *file, uint16_t sound, uint32_t tile) noexcept { PlayTileSound(file, sound, TileIndex{tile}); }
+template <typename Handle> inline uint16_t RustIndustrySpecCallbackMask(const Handle *spec) noexcept { return reinterpret_cast<const IndustrySpec *>(spec)->callback_mask.base(); }
 inline uint16_t RustIndustrySubstitute(uint8_t industry) noexcept { return GetIndustrySpec(industry)->grf_prop.subst_id; }
 inline int32_t RustHouseAge(uint32_t tile) noexcept { return GetHouseAge(TileIndex{tile}).base(); }
 inline uint8_t RustHouseRandomBits(uint32_t tile) noexcept { return GetHouseRandomBits(TileIndex{tile}); }

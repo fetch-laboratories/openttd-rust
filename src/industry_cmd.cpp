@@ -3848,7 +3848,7 @@ const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices()
 			std::ranges::copy(spec->accepts_cargo, result.accepted);
 			return result;
 		},
-		.callback_mask = [](const OpenTTDIndustrySpecHandle *handle) noexcept -> uint16_t { return reinterpret_cast<const IndustrySpec *>(handle)->callback_mask.base(); },
+		.callback_mask = RustIndustrySpecCallbackMask<OpenTTDIndustrySpecHandle>,
 		.set_town = [](void *shell, const OpenTTDTownHandle *town) noexcept { RustIndustry(shell)->town = const_cast<Town *>(reinterpret_cast<const Town *>(town)); },
 		.calendar_date = GetRustSharedServices().calendar_date,
 		.generating = GetRustSharedServices().clear_square_services.generating_world,
