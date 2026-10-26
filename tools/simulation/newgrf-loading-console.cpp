@@ -29,6 +29,7 @@ static void Require(bool value, const char *name)
 }
 static void Inspect(bool reload)
 {
+	Require(_cur_gps.file == nullptr && _cur_gps.grffile == nullptr && _cur_gps.grfconfig == nullptr && _cur_gps.nfo_line == 0 && _cur_gps.skip_sprites == 0 && std::ranges::all_of(_cur_gps.spritegroups, [](const auto *group) { return group == nullptr; }), "execution-restored");
 	GRFConfig *main = GetGRFConfig(ID("R471"));
 	GRFFile *file = GetFileByGRFID(ID("R471"));
 	Require(main != nullptr && file != nullptr && main->status == GCS_ACTIVATED, "active");
