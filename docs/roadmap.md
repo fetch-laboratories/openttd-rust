@@ -3,21 +3,22 @@
 Root selects here; `AGENTS.md` and `docs/rust-migration.md` define process. Follow
 this roadmap over conflicting issues. Keep about 200 lines; evidence stays in PRs.
 
-## Where the fork stands (2026-10-26, code at `97c32c48b1`)
+## Where the fork stands (2026-10-26, code at `b959f89059`)
 
-- 67 ownership ports. Original C++ retired: 63,130 of 470,612 source lines
-  (13.41%); simulation sources: 54,254 of 102,615 (52.87%). Whole-fork Rust,
-  tooling and glue: 115,422, 40,918 and 41,179 lines. These measures include
-  comments/data, not completed behavior. #480 integrated effects, cargo and
-  road/reader maintenance: 531 retired lines and 744 net glue.
-- Under integrated `04fa3753bf` quiet anchors, the six merged-tip projections
-  are TGP 1.158x, Opus 1.474x, Grok 1.468x, P1996 1.418x, P2000 1.460x and
-  P2016 1.544x. All semantic/compatibility checks pass. Opus, P1996 and P2000
-  rose over 3%; #275 owns attribution and the next maintenance repair. P2016
-  exceeds its ceiling; a quiet pass must follow the repairs. Ready owners proceed.
-- Four owner branches remain: engine loading #474, interpreter #473,
-  industry definitions #479 and rail/road definitions #476. #477 follows.
-  #199 selects the next checker/shared-reader maintenance; #156 retains corpus gaps.
+- 69 ownership ports. Original C++ retired: 65,376 of 470,612 source lines
+  (13.89%); simulation sources: 54,315 of 102,615 (52.93%). Whole-fork Rust,
+  tooling and glue: 118,341, 41,812 and 42,024 lines. These measures include
+  comments/data, not completed behavior. #483 integrated engine loading,
+  the loading interpreter and maintenance: 2,246 retired lines and 845 net glue.
+- Under unchanged `04fa3753bf` quiet anchors, merged-tip projections are TGP
+  1.158x, Opus 1.456x, Grok 1.451x, P1996 1.407x, P2000 1.453x and P2016
+  1.541x. All six semantic/compatibility checks pass. Every play projection
+  fell from `97c32c48b1`; none rose over 3%. #482's visual-boundary repairs
+  are integrated. P2016 exceeds its ceiling; prepared runtimes await a quiet pass.
+- Three owner branches remain: industry definitions #479, rail/road definitions
+  #481 and house definitions #486. Shared checked reads and literal checking
+  are integrated. #199 next shares train predicates and scalar signatures;
+  root supplies common property-disable calls. #156 retains corpus gaps.
 
 ## Twentieth steering review (2026-10-24, recovery and production evidence)
 
@@ -132,6 +133,8 @@ Metrics are `tools/port-metrics.py`: Rust / tooling / C++ glue / C++ retired.
 | #439 | Engine cargo and articulated queries | #446 | `f6cec101d3` | 854 / 452 / 310 / 272; net glue 197 |
 | #466 | Vehicle effect emission, cache and creation | #468 via #480 | `97c32c48b1` | 845 / 461 / 504 / 288; net glue 254 |
 | #467 | Cargo registry, translation and callbacks | #472 via #480 | `97c32c48b1` | 718 / 366 / 370 / 239; net glue 301 |
+| #470 | Engine definitions, identity and finalization | #474 via #483 | `b959f89059` | 1183 / 506 / 456 / 520; net glue 442 |
+| #471 | Staged NewGRF loading interpreter and state | #473 via #483 | `b959f89059` | 1640 / 340 / 442 / 1778; net glue 413 |
 
 Maintenance rows use original retirement and net glue (#223); evidence stays in PRs.
 
@@ -163,23 +166,26 @@ Maintenance rows use original retirement and net glue (#223); evidence stays in 
 | #462 nullable clone refit callback recovery | #463 | direct | `4677a4fe4f` | 6 / 71 / 0 / 0; net glue 0 |
 | #275/#450/#461/#156 source, collector and coverage maintenance | #464, #465 | #469 | `04fa3753bf` | 150 / 121 / 0 / 0; net glue 0 |
 | #275/#199 road boundaries, quiet anchors and checked reads; Windows startup binding | #478; #480 repair | #480 | `97c32c48b1` | #478: 123 / 9 / 200 / 4; net glue 187 |
+| #275/#199 visual boundaries, shared reader and checker; fixture compile repair | #482; #483 repair | #483 | `b959f89059` | #482: 175 / 50 / 42 / 0; net glue 16 |
 
 ## Phase 1: maintenance and coverage
 
-#275 owns the measured rise, forward repair and quiet remeasurement. #199 selects
-diagnostic-literal checker repair (100 net tooling lines) and one shared Rust
-checked-reader API for #475/#476. #168 retains boundary debt without timing gates;
-#312 stays unselected. Closed housekeeping issues are not standing tasks.
+#275 owns quiet remeasurement and attribution of any remaining speed excess.
+#199 selects the audited train/order predicates, settings widths and shared
+sound/date calls, plus common property-disable calls needed by active owners.
+Batch these repairs with quiet anchors. #168 retains boundary debt without
+per-PR timing gates; #312 stays unselected. Closed housekeeping is not standing work.
 
 ## Phase 2: work order
 
-1. **Ready owners:** #473/#474 adopt integrated cargo services, then fresh scoped
-   fixing review and exact-current-base Full. Batch reviewed heads when useful.
-2. **Maintenance:** attribute the #275 rise and fix forward; #199 supplies shared
-   reads and the checker repair. Only timed collection holds builds/profiles/games.
-3. **Whole owners:** complete industry definitions #475 and active rail/road
-   definitions #476; house definitions #477 follow. Reuse canonical state/services;
-   decide necessary cost once. Plan successors when a slot frees.
+1. **Ready owners:** finish #479/#481 evidence, obtain fresh fixing reviews and
+   integrate exact-current-base combinations. Reviewed work gains no new scope.
+2. **Maintenance:** run the prepared #275 quiet pass; #199 supplies selected
+   shared calls. Only timed collection holds builds, profiles and games.
+3. **Whole owners:** complete active industry #475, rail/road #476 and house
+   #477 definitions. Then select station/road-stop definitions and associations
+   #484, followed by complete Action2 graph construction/publication #485.
+   Reuse canonical state/services and decide necessary cost once per owner.
 4. Catchment, #64/#68/#69, vendored, GUI and platform stay outside this order.
 
 ## Resume checkpoint
@@ -188,15 +194,15 @@ Root owns final combinations and speed; completed reports remain in the PRs.
 
 | Item | Saved head | Next action |
 | --- | --- | --- |
-| #470 engine definitions / #474 | `dc0a43263f` | Review passed through `683ce27b2d`; validate/review cargo adoption after provider interruption. |
-| #471 interpreter / #473 | `80abc98b99` | Split reviews pass; integrated cargo adoption and scoped review in progress. |
-| #475 industry definitions / #479 | `3744aad3e5` | Checkpoint passes; bind integrated reader/cargo, then shared finalization helper. |
-| #476 rail/road definitions | `97c32c48b1` base | Implement registry/property/translation/saved-identity owner. |
-| #199 maintenance | selected | Repair literal identity and publish one shared Rust reader API. |
-| #275 speed | `97c32c48b1` | Attribute rise from `04fa3753bf`, repair forward, then quiet pass. |
-| #477 house definitions | selected | Start after ready work within branch and agent limits. |
+| #475 industry definitions / #479 | `1e2e666c2b` | Integrated API/finalization adoption and evidence in progress. |
+| #476 rail/road definitions / #481 | `0d241115de` | Adopted reader/loading consumers; finish native build and candidate scenarios after quiet hold. |
+| #477 house definitions / #486 | `d7efc835ea` | Native build and real-file evidence; adopt integrated shared manager when available. |
+| #199 maintenance | selected | Share audited train/order calls and property-disable operations. |
+| #275 speed | `b959f89059` | Six comparisons pass; frozen runtimes prepared for quiet collection. |
+| #484 station/road-stop definitions | selected next | Begin after ready work within branch and agent limits. |
+| #485 Action2 graph construction | selected after #484 | Complete construction owner, reusing integrated interpreter state. |
 
-macOS cadence passed on `f6cec101d3`; one integration has followed it.
+macOS cadence passed on `f6cec101d3`; two integrations have followed it.
 
 Selection: /root, gpt-6.1-sol, xhigh; planning agents run gpt-6-astra, high.
 Scopes and evidence plans are in the selected issues; PRs carry current task status.
