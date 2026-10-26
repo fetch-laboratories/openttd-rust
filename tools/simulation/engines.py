@@ -371,6 +371,10 @@ def write_type_grfs(folder):
         listing(16, 1, 0x0F, [b"R4BB", b"R4CC"]),
         listing(18, 0, 0x0F, [b"D4BB", b"T4AA"]),
         listing(19, 0, 0x0F, [b"T4BB"]),
+        listing(16, 1, 0x18, [b"R4BB"]),
+        listing(16, 2, 0x19, [b"R4AA"]),
+        listing(18, 0, 0x18, [b"T4AA"]),
+        listing(19, 0, 0x19, [b"D4AA"]),
     ]
     for feature, first in [(16, 1), (18, 0), (19, 0)]:
         a += [
@@ -383,6 +387,9 @@ def write_type_grfs(folder):
             prop(feature, first, 1, 0x1E, b"\0\0"),
         ]
     a += [
+        prop(16, 1, 1, 0x11, b"\x09"),
+        prop(16, 1, 1, 0x12, b"\xff"),
+        prop(16, 1, 1, 0x15, b"\xff"),
         prop(16, 3, 1, 0x17, struct.pack("<I", 1)),
         prop(16, 2, 1, 0x10, b"\x04"),
         prop(18, 1, 1, 0x10, b"\x08"),

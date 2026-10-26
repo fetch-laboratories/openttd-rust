@@ -198,6 +198,7 @@ pub extern "C" fn openttd_rust_rail_init() {
     unsafe {
         (*REGISTRY.get()).rail_sorted.clear();
     }
+    publish_rail_sorted();
     for rt in 0..RAILTYPE_END {
         let spec = (s.rail().spec)(rt);
         (s.rail().resolve_gui)(spec);
@@ -210,6 +211,7 @@ pub extern "C" fn openttd_rust_rail_init() {
                 (*REGISTRY.get()).rail_sorted.push(rt);
             }
         }
+        publish_rail_sorted();
     }
     let (data, count) = unsafe {
         let sorted = &mut (*REGISTRY.get()).rail_sorted;
@@ -333,6 +335,7 @@ pub extern "C" fn openttd_rust_road_init() {
     unsafe {
         (*REGISTRY.get()).road_sorted.clear();
     }
+    publish_road_sorted();
     for rt in 0..ROADTYPE_END {
         let spec = (s.road().spec)(rt);
         (s.road().resolve_gui)(spec);
@@ -345,6 +348,7 @@ pub extern "C" fn openttd_rust_road_init() {
                 (*REGISTRY.get()).road_sorted.push(rt);
             }
         }
+        publish_road_sorted();
     }
     let (data, count) = unsafe {
         let sorted = &mut (*REGISTRY.get()).road_sorted;
@@ -612,4 +616,20 @@ pub(crate) fn rail_spec(rt: u8) -> Handle {
 }
 pub(crate) fn road_spec(rt: u8) -> Handle {
     (services().road().spec)(rt)
+}
+
+fn publish_rail_sorted() {
+    let (data, count) = unsafe {
+        let sorted = &mut (*REGISTRY.get()).rail_sorted;
+        (sorted.as_mut_ptr(), sorted.len())
+    };
+    (services().rail().publish_sorted)(data, count);
+}
+
+fn publish_road_sorted() {
+    let (data, count) = unsafe {
+        let sorted = &mut (*REGISTRY.get()).road_sorted;
+        (sorted.as_mut_ptr(), sorted.len())
+    };
+    (services().road().publish_sorted)(data, count);
 }
