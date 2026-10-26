@@ -14,6 +14,8 @@
 
 #include "../safeguards.h"
 
+#ifndef WITH_RUST
+
 /** Action 0x10 - Define goto label */
 static void DefineGotoLabel(ByteReader &buf)
 {
@@ -35,3 +37,5 @@ template <> void GrfActionHandler<0x10>::LabelScan(ByteReader &buf) { DefineGoto
 template <> void GrfActionHandler<0x10>::Init(ByteReader &) { }
 template <> void GrfActionHandler<0x10>::Reserve(ByteReader &) { }
 template <> void GrfActionHandler<0x10>::Activation(ByteReader &) { }
+
+#endif

@@ -20,14 +20,14 @@ use std::ffi::c_void;
 pub const TRAIN_WIDTH_32_PIXELS: u8 = 3;
 #[repr(C)]
 pub struct Services {
-    climate: unsafe extern "C" fn() -> u8,
+    pub(crate) climate: unsafe extern "C" fn() -> u8,
     date_fraction: unsafe extern "C" fn() -> u16,
     date_to_ymd: unsafe extern "C" fn(i32) -> CalendarYmd,
     disable_elrails: unsafe extern "C" fn() -> bool,
     file_version: unsafe extern "C" fn(*const c_void) -> u8,
     game_mode: unsafe extern "C" fn() -> u8,
     height_limit: unsafe extern "C" fn() -> u8,
-    misc_bits: unsafe extern "C" fn() -> u8,
+    pub(crate) misc_bits: unsafe extern "C" fn() -> u8,
     newgrf_version: unsafe extern "C" fn() -> u32,
     palette: unsafe extern "C" fn(*const c_void) -> u8,
     pitch: unsafe extern "C" fn(*const c_void) -> i32,
@@ -35,7 +35,7 @@ pub struct Services {
     road_side: unsafe extern "C" fn() -> u8,
     shared: *const Shared,
     width: unsafe extern "C" fn(*const c_void) -> u32,
-    ymd_to_date: unsafe extern "C" fn(i32, u8, u8) -> i32,
+    pub(crate) ymd_to_date: unsafe extern "C" fn(i32, u8, u8) -> i32,
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_global_variable(
@@ -126,3 +126,65 @@ crate::abi::layouts! {
 pub const GSF_SOUNDFX: u8 = 12;
 pub const GSF_CARGOES: u8 = 11;
 pub const GSF_END: u8 = 22;
+
+/// Unreserved engine mapping scope.
+pub const INVALID_GRFID: u32 = 0xFFFF_FFFF;
+
+/// Native cargo-label or mixed-cargo alternative from `GetActiveCargoLabel`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct CargoLabel {
+    pub(crate) value: u32,
+    pub(crate) mixed: bool,
+}
+
+/// First existing label, in the order supplied by the definition.
+pub(crate) fn get_active_cargo_label_from_list(
+    labels: &[u32],
+    mut cargo_by_label: impl FnMut(u32) -> u8,
+) -> u32 {
+    for &label in labels {
+        if cargo_by_label(label) != crate::cargo_type::INVALID_CARGO {
+            return label;
+        }
+    }
+    crate::cargo_type::CT_INVALID
+}
+
+/// Resolve a mixed label; a literal label passes through without a lookup.
+pub(crate) fn get_active_cargo_label(
+    label: CargoLabel,
+    cargo_by_label: impl FnMut(u32) -> u8,
+) -> u32 {
+    use crate::cargo_type::{
+        CT_DIAMONDS, CT_FRUIT, CT_GOLD, CT_GRAIN, CT_LIVESTOCK, CT_MAIZE, CT_VALUABLES, CT_WHEAT,
+        MCT_GRAIN_WHEAT_MAIZE, MCT_LIVESTOCK_FRUIT, MCT_VALUABLES_GOLD_DIAMONDS,
+    };
+    if !label.mixed {
+        return label.value;
+    }
+    let labels: &[u32] = match label.value {
+        MCT_LIVESTOCK_FRUIT => &[CT_LIVESTOCK, CT_FRUIT],
+        MCT_GRAIN_WHEAT_MAIZE => &[CT_GRAIN, CT_WHEAT, CT_MAIZE],
+        MCT_VALUABLES_GOLD_DIAMONDS => &[CT_VALUABLES, CT_GOLD, CT_DIAMONDS],
+        _ => unreachable!(),
+    };
+    get_active_cargo_label_from_list(labels, cargo_by_label)
+}
+
+#[unsafe(no_mangle)]
+pub(crate) extern "C" fn openttd_rust_newgrf_active_cargo_label(label: CargoLabel) -> u32 {
+    get_active_cargo_label(label, |label| {
+        crate::cargo_registry::openttd_rust_cargo_by_label(label)
+    })
+}
+// Loading-stage identities from newgrf.h.
+pub const GLS_FILESCAN: u8 = 0;
+pub const GLS_SAFETYSCAN: u8 = 1;
+pub const GLS_LABELSCAN: u8 = 2;
+pub const GLS_INIT: u8 = 3;
+pub const GLS_RESERVE: u8 = 4;
+pub const GLS_ACTIVATION: u8 = 5;
+
+pub const GSF_GLOBALVAR: u8 = 8;
+pub const SECOND_ROCKY_TILE_SET: u8 = 6;

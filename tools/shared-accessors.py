@@ -32,11 +32,20 @@ def git(*args):
     return subprocess.check_output(["git", *args], cwd=ROOT, text=True)
 
 
-def definitions(source):
+def definitions(source, with_literals=False):
     # Mask comments/strings without changing brace positions or line boundaries.
+    literals = {}
+
+    def mask(match):
+        if with_literals and match[0][0] in "\"'":
+            literals[match.start()] = (
+                "LITERAL_" + hashlib.sha256(match[0].encode()).hexdigest().upper()
+            )
+        return re.sub(r"[^\n]", " ", match[0])
+
     source = re.sub(
         r'/\*.*?\*/|//[^\n]*|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'',
-        lambda m: re.sub(r"[^\n]", " ", m[0]),
+        mask,
         source,
         flags=re.S,
     )
@@ -44,7 +53,12 @@ def definitions(source):
         header = " ".join(match["header"].split())
         if header.split("(")[0].strip() in {"if", "while", "switch", "for", "catch"}:
             continue
-        body = source[match.end() : source.find("}", match.end())]
+        start, end = match.end(), source.find("}", match.end())
+        body = source[start:end]
+        for position, literal in reversed(literals.items()):
+            if start <= position < end:
+                offset = position - start
+                body = body[:offset] + literal + body[offset:]
         yield header, body, source[: match.start()].count("\n") + 1
 
 
@@ -139,12 +153,12 @@ def callee_copies(files):
     candidates = [
         (p, h, b, line)
         for p, s in native.items()
-        for h, b, line in definitions(s)
+        for h, b, line in definitions(s, with_literals=True)
         if h.split("(")[0].strip() in bound
     ] + [
         (p, h, b, line)
         for p, t in tables
-        for h, b, line in definitions(t)
+        for h, b, line in definitions(t, with_literals=True)
         if h.startswith("[]")
     ]
     groups, occurrences = {}, Counter()

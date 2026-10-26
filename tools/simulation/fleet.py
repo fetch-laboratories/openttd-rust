@@ -108,6 +108,16 @@ def scenarios(soak):
     cases.append(dict(cases[0], name="fleet-reload", fleet="reload"))
     resolver = next(case for case in cases if case["fleet"] == "resolver")
     cases.append(dict(resolver, name="fleet-resolver-reload", fleet="resolver-reload"))
+    cases.append(
+        {
+            "name": "fleet-engine-loading",
+            "kind": "save",
+            "save": str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
+            "engines": "loading",
+            "short_checkpoint": True,
+            "ticks": 1,
+        }
+    )
     capabilities = next(case for case in cases if case["fleet"] == "capabilities")
     cases.append(
         dict(

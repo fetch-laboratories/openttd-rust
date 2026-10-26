@@ -43,6 +43,8 @@ static_assert(sizeof(DestinationID) >= sizeof(StationID));
 
 #ifdef WITH_RUST
 #include "rust/command_services_ffi.h"
+#include "rust/environment_services.h"
+#include "rust/settings_services.h"
 #include "rust/command_cost_services.h"
 #include "rust/services_map.h"
 #include "rust/vehicle_services.h"
@@ -346,10 +348,7 @@ extern "C" void *openttd_orders_create_backup(void *ctx, uint32_t user) noexcept
 	return OrderBackup::CreateForRust(v, user);
 }
 
-extern "C" uint64_t openttd_orders_networking() noexcept
-{
-	return _networking;
-}
+
 
 extern "C" uint64_t openttd_orders_network_server() noexcept
 {
@@ -644,7 +643,7 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.bus = openttd_orders_bus,
 	.backup_capacity = openttd_orders_backup_capacity,
 	.create_backup = openttd_orders_create_backup,
-	.networking = openttd_orders_networking,
+	.networking = RustSettingRead<uint64_t, RustNetworking>,
 	.network_server = openttd_orders_network_server,
 	.network_client = openttd_orders_network_client,
 	.server_client = openttd_orders_server_client,

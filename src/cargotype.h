@@ -207,7 +207,10 @@ private:
 	friend void SetupCargoForClimate(LandscapeType l);
 	friend void BuildCargoLabelMap();
 	friend inline CargoType GetCargoTypeByLabel(CargoLabel ct);
+
+#ifndef WITH_RUST
 	friend void FinaliseCargoArray();
+#endif
 };
 
 #ifdef WITH_RUST

@@ -16,6 +16,8 @@
 
 #include "../safeguards.h"
 
+#ifndef WITH_RUST
+
 /* Action 0x0E (GLS_SAFETYSCAN) */
 static void SafeGRFInhibit(ByteReader &buf)
 {
@@ -66,3 +68,5 @@ template <> void GrfActionHandler<0x0E>::LabelScan(ByteReader &) { }
 template <> void GrfActionHandler<0x0E>::Init(ByteReader &buf) { GRFInhibit(buf); }
 template <> void GrfActionHandler<0x0E>::Reserve(ByteReader &buf) { GRFInhibit(buf); }
 template <> void GrfActionHandler<0x0E>::Activation(ByteReader &buf) { GRFInhibit(buf); }
+
+#endif

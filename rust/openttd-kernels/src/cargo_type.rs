@@ -32,12 +32,47 @@ pub(crate) unsafe fn cargo_array_count(data: *const u32) -> u32 {
 /// Native cargo labels, in their four-character wire encoding.
 pub const CT_PASSENGERS: u32 = u32::from_be_bytes(*b"PASS");
 pub const CT_MAIL: u32 = u32::from_be_bytes(*b"MAIL");
-
+/// `CT_COAL`.
+pub const CT_COAL: u32 = u32::from_be_bytes(*b"COAL");
+/// `CT_OIL`.
+pub const CT_OIL: u32 = u32::from_be_bytes(*b"OIL_");
+/// `CT_LIVESTOCK`.
+pub const CT_LIVESTOCK: u32 = u32::from_be_bytes(*b"LVST");
+/// `CT_GOODS`.
+pub const CT_GOODS: u32 = u32::from_be_bytes(*b"GOOD");
+/// `CT_GRAIN`.
+pub const CT_GRAIN: u32 = u32::from_be_bytes(*b"GRAI");
+/// `CT_VALUABLES`.
+pub const CT_VALUABLES: u32 = u32::from_be_bytes(*b"VALU");
+/// `CT_WHEAT`.
+pub const CT_WHEAT: u32 = u32::from_be_bytes(*b"WHEA");
+/// `CT_GOLD`.
+pub const CT_GOLD: u32 = u32::from_be_bytes(*b"GOLD");
+/// `CT_FOOD`.
+pub const CT_FOOD: u32 = u32::from_be_bytes(*b"FOOD");
+/// `CT_FRUIT`.
+pub const CT_FRUIT: u32 = u32::from_be_bytes(*b"FRUT");
+/// `CT_MAIZE`.
+pub const CT_MAIZE: u32 = u32::from_be_bytes(*b"MAIZ");
+/// `CT_COPPER_ORE`.
+pub const CT_COPPER_ORE: u32 = u32::from_be_bytes(*b"CORE");
+/// `CT_DIAMONDS`.
+pub const CT_DIAMONDS: u32 = u32::from_be_bytes(*b"DIAM");
+/// `CT_SUGAR`.
+pub const CT_SUGAR: u32 = u32::from_be_bytes(*b"SUGR");
+/// `CT_CANDY`.
+pub const CT_CANDY: u32 = u32::from_be_bytes(*b"SWET");
+/// `CT_COLA`.
+pub const CT_COLA: u32 = u32::from_be_bytes(*b"COLA");
 /// Invalid cargo label.
 pub const CT_INVALID: u32 = u32::MAX;
 
-/// Native food label.
-pub const CT_FOOD: u32 = u32::from_be_bytes(*b"FOOD");
+/// Mixed livestock/fruit definition.
+pub const MCT_LIVESTOCK_FRUIT: u32 = 0;
+/// Mixed grain/wheat/maize definition.
+pub const MCT_GRAIN_WHEAT_MAIZE: u32 = 1;
+/// Mixed valuables/gold/diamonds definition.
+pub const MCT_VALUABLES_GOLD_DIAMONDS: u32 = 2;
 
 /// Original cargo slot count.
 pub const NUM_ORIGINAL_CARGO: u8 = 12;

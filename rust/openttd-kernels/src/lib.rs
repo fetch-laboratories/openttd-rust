@@ -62,12 +62,16 @@ mod map_func;
 mod map_type;
 mod math;
 mod movement;
+mod network_config;
 mod newgrf;
 mod newgrf_animation_base;
+pub mod newgrf_bytereader;
 mod newgrf_callbacks;
 mod newgrf_commons;
+mod newgrf_config;
 mod newgrf_engine;
 mod newgrf_generic;
+mod newgrf_loading;
 mod newgrf_properties;
 mod newgrf_sound;
 mod newgrf_spritegroup;
@@ -542,6 +546,9 @@ mod effect;
 mod effectvehicle_func;
 mod encoded;
 mod engine;
+mod engine_loading;
+mod livery;
+
 mod engine_capabilities;
 mod vehicle_effect;
 pub use encoded::{

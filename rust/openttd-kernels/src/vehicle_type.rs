@@ -15,3 +15,6 @@ pub const VEH_SHIP: u8 = 2;
 /// `VEH_AIRCRAFT`.
 pub const VEH_AIRCRAFT: u8 = 3;
 pub const GROUND_ACCELERATION: u32 = 9800;
+
+/// End of vehicle types buildable by companies.
+pub const VEH_COMPANY_END: u8 = 4;
