@@ -24,6 +24,7 @@
 #include "../safeguards.h"
 
 #ifdef WITH_RUST
+extern "C" uint8_t openttd_rust_shared_tile_type(OpenTTDTileTypeAllocation, uint8_t (*callback)(uint32_t) noexcept, uint32_t tile);
 extern "C" bool openttd_rust_map_read_probe(OpenTTDTileTypeAllocation, const OpenTTDSharedServices *, const OpenTTDClearServices *, const OpenTTDTreeServices *, uint32_t, void (*)(uint32_t) noexcept);
 TEST_CASE("Rust map fields preserve native helpers, mutation and reset")
 {
@@ -32,7 +33,7 @@ TEST_CASE("Rust map fields preserve native helpers, mutation and reset")
 		const auto allocation = GetRustTileTypeAllocation();
 		CHECK(allocation.extended != nullptr);
 		for (const TileIndex tile : {TileXY(1, 1), TileIndex{Map::Size() - 1}}) {
-			for (const uint8_t kind : {0, 1, 4, 6, 7}) {
+			for (const TileType kind : {MP_CLEAR, MP_RAILWAY, MP_ROAD, MP_TREES, MP_WATER, MP_VOID}) {
 				for (uint value = 0; value < 256; value++) {
 					Tile t{tile};
 					t.type() = (kind << 4) | (value & 3);
