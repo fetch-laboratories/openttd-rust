@@ -13,6 +13,7 @@
 #include "../roadveh.h"
 #include "../station_func.h"
 #include "../industry.h"
+#include "industry_shell_services.h"
 #include "../waypoint_base.h"
 #include "../station_kdtree.h"
 #include "../town.h"
@@ -135,6 +136,11 @@ const OpenTTDStationService *OpenTTDStationActivityOwner(const OpenTTDStation *s
 inline Town *OpenTTDBaseStationTown(const BaseStation *st) noexcept { return st->town; }
 inline uint16_t RustStationTownID(const Station *station) noexcept { return RustTownAuthorityIndex(reinterpret_cast<const OpenTTDTownHandle *>(OpenTTDBaseStationTown(station))); }
 inline Station *OpenTTDNextStation(uint32_t from) noexcept { auto range = Station::Iterate(from); return range.empty() ? nullptr : *range.begin(); }
+template <class Handle> inline Handle RustNextStation(uint32_t from) noexcept { return OpenTTDNextStation(from); }
+template <class Handle> inline Handle RustStationIfValid(uint16_t id) noexcept { return Station::GetIfValid(StationID{id}); }
+/** The canonical Rust service owner of a station or waypoint. */
+inline OpenTTDStationService *RustStationServiceOwner(BaseStation *st) noexcept { return st->rust_service.get(); }
+inline OpenTTDStationService *RustStationServiceByID(uint16_t id) noexcept { return RustStationServiceOwner(RustStationGet<BaseStation *>(id)); }
 inline bool RustStationHasAirport(const Station *s) noexcept { return s->facilities.Test(StationFacility::Airport); }
 inline bool RustStationReserved(uint32_t tile) noexcept { return HasStationReservation(TileIndex{tile}); }
 inline void RustSetRailStationReservation(uint32_t tile, bool reserved) noexcept { SetRailStationReservation(TileIndex{tile}, reserved); }
@@ -149,6 +155,7 @@ inline const OpenTTDTownHandle * RustStationStationTown(BaseStation *st) noexcep
 inline void RustStationStationViewInvalidate(BaseStation *st, int32_t data) noexcept { InvalidateWindowData(WC_STATION_VIEW, st->index, data); }
 inline void RustStationDeleteAirportStorage(BaseStation *st) noexcept { delete Station::From(st)->airport.psa; }
 inline Industry *RustStationAssociatedIndustry(BaseStation *st) noexcept { return Station::From(st)->industry; }
+inline BaseStation *RustIndustryNeutralBaseStation(Industry *industry) noexcept { return RustIndustryNeutralStation(industry); }
 inline void RustStationSetStationOwner(BaseStation *st, uint8_t owner) noexcept { st->owner = Owner(owner); }
 inline void RustStationSetFacilities(BaseStation *st, uint8_t facilities) noexcept { st->facilities = StationFacilities(facilities); }
 template <typename TStation>

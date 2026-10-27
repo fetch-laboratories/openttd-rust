@@ -669,9 +669,7 @@ static const OpenTTDStationServices _rust_station_services = {
 	.get = [](uint16_t id) noexcept -> OpenTTDBaseStation * {
 		return BaseStation::GetIfValid(StationID(id));
 	},
-	.owner = [](OpenTTDBaseStation *handle) noexcept -> OpenTTDStationService * {
-		return static_cast<BaseStation *>(handle)->rust_service.get();
-	},
+	.owner = RustStationServiceOwner,
 	.pool_size = []() noexcept -> size_t {
 		return BaseStation::GetPoolSize();
 	},

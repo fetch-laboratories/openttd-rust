@@ -371,10 +371,10 @@ const OpenTTDStationCatchmentServices &GetRustStationCatchmentServices() noexcep
 		.station = &GetRustStationServices(),
 		.visits = &GetRustVehicleVisits(),
 		.station_count = []() noexcept -> size_t { return Station::GetNumItems(); },
-		.station_if_valid = [](uint16_t id) noexcept -> BaseStation * { return Station::GetIfValid(StationID(id)); },
-		.next_station = [](uint32_t from) noexcept -> BaseStation * { return OpenTTDNextStation(from); },
-		.owner = [](BaseStation *st) noexcept { return st->rust_service.get(); },
-		.station_owner = [](uint16_t id) noexcept { return Station::Get(StationID(id))->rust_service.get(); },
+		.station_if_valid = RustStationIfValid<BaseStation *>,
+		.next_station = RustNextStation<BaseStation *>,
+		.owner = RustStationServiceOwner,
+		.station_owner = RustStationServiceByID,
 		.id = RustBaseStationID<BaseStation>,
 		.location = RustStationLocation,
 		.associated_industry = RustStationAssociatedIndustry,
@@ -382,13 +382,13 @@ const OpenTTDStationCatchmentServices &GetRustStationCatchmentServices() noexcep
 			const Station *st = Station::From(handle);
 			return {st->bus_stops != nullptr, st->truck_stops != nullptr, st->train_station.tile.base(), st->ship_station.tile.base(), st->airport.tile.base()};
 		},
-		.modified_catchment = []() noexcept -> bool { return _settings_game.station.modified_catchment; },
+		.modified_catchment = RustModifiedCatchment,
 		.spread = RustStationSpread,
 		.industry_by_id = RustIndustryByID<uint16_t>,
-		.industry_id = [](Industry *industry) noexcept { return RustIndustryID(industry); },
+		.industry_id = RustIndustryID,
 		.industry_owner = RustIndustryCanonicalOwner<Industry *>,
-		.industry_neutral = [](Industry *industry) noexcept -> BaseStation * { return RustIndustryNeutralStation(industry); },
-		.industry_next_id = RustIndustryNextID,
+		.industry_neutral = RustIndustryNeutralBaseStation,
+		.next_industry = OpenTTDNextIndustry,
 	};
 	return services;
 }

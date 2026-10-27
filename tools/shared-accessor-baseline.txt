@@ -33,9 +33,6 @@ src/industry_cmd.cpp | []() noexcept -> uint8_t | 7d6cfe1c70e5ffb9 | 1
 src/industry_cmd.cpp | []() noexcept -> uint8_t | 962e807110e22e26 | 1
 src/industry_cmd.cpp | []() noexcept -> uint8_t | bf71454f2d308e6c | 1
 src/industry_cmd.cpp | []() noexcept -> uint8_t | eb526c61b6569eeb | 1
-src/industry_cmd.cpp | [](OpenTTDIndustryStationHandle *station) noexcept | e578e1424e834e33 | 1
-src/industry_cmd.cpp | [](OpenTTDIndustryStationHandle *station, void *shell, uint32_t tile) noexcept | 7aca589e29338f6e | 1
-src/industry_cmd.cpp | [](void *station, void *industry) noexcept | 5cf80664985a1943 | 1
 src/order_cmd.cpp | [](void *v) noexcept | 3ad12ea0c58a2761 | 1
 src/order_cmd.cpp | [](void *v) noexcept | 5e35106910478995 | 1
 src/order_cmd.cpp | openttd_orders_at_station(void *ctx) noexcept | b6dc88afccb1a28d | 1
@@ -117,7 +114,6 @@ src/rust/train_services.h | TrainWaitPbs(OpenTTDTrainHandle) noexcept | 47e292e7
 src/rust/train_services.h | TrainWaitTwoway(OpenTTDTrainHandle) noexcept | 508c48d22dab543e | 1
 src/saveload/station_sl.cpp | [](void *object, size_t) -> void * | a82c84a1f03246e9 | 1
 src/station_cmd.cpp | []() noexcept -> bool | 29ea639015216c17 | 1
-src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> OpenTTDStationService * | d36f25ba0331f630 | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> bool | 204197618397b80a | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> bool | 525f6f2cbe8d180f | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> void | 13c7c5aa49806d75 | 1

@@ -400,7 +400,7 @@ pub struct CatchmentServices {
     pub industry_id: extern "C" fn(*mut ShellHandle) -> u16,
     pub industry_owner: extern "C" fn(*mut ShellHandle) -> *mut crate::industry::Industry,
     pub industry_neutral: extern "C" fn(*mut ShellHandle) -> *mut BaseStation,
-    pub industry_next_id: extern "C" fn(u32) -> u32,
+    pub next_industry: extern "C" fn(u32) -> *mut ShellHandle,
 }
 
 /// Immutable tables and map dimensions captured once per synchronous entry.
@@ -754,13 +754,11 @@ pub(crate) fn recompute_catchment_for_all(c: &Ctx<'_>) {
         unsafe { (*crate::town::stations_near((c.s.town_owner_by_id)(town))).clear() };
         town = (c.s.town_next_id)(town + 1);
     }
-    let mut industry = (c.c.industry_next_id)(0);
-    while industry != u32::MAX {
-        #[allow(clippy::cast_possible_truncation)]
-        let list = c.industry_stations((c.c.industry_by_id)(industry as u16));
+    let mut industry = (c.c.next_industry)(0);
+    while !industry.is_null() {
         // SAFETY: Live industry owner; immediate mutation.
-        unsafe { (*list).clear() };
-        industry = (c.c.industry_next_id)(industry + 1);
+        unsafe { (*c.industry_stations(industry)).clear() };
+        industry = (c.c.next_industry)(u32::from((c.c.industry_id)(industry)) + 1);
     }
     let mut st = (c.c.next_station)(0);
     while !st.is_null() {
@@ -1185,7 +1183,7 @@ crate::abi::layouts! {
         shared, airport, industry_tile, object, town, station, visits, station_count, station_if_valid,
         next_station, owner, station_owner, id, location, associated_industry, radius_facilities,
         modified_catchment, spread, industry_by_id, industry_id, industry_owner,
-        industry_neutral, industry_next_id,
+        industry_neutral, next_industry,
     };
 }
 

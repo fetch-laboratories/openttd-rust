@@ -214,7 +214,7 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.set_facilities = RustStationSetFacilities,
 		.set_build_date = RustStationSetBuildDate,
 		.associated_industry = RustStationAssociatedIndustry,
-		.industry_neutral = [](Industry *industry) noexcept -> BaseStation * { return RustIndustryNeutralStation(industry); },
+		.industry_neutral = RustIndustryNeutralBaseStation,
 		.clear_industry_neutral = [](Industry *industry) noexcept { industry->neutral_station = nullptr; },
 		.industry_area = [](Industry *industry) noexcept -> OpenTTDStationArea { const auto &a = industry->location; return {a.tile.base(), a.w, a.h}; },
 		.autoslope_axis = [](uint32_t tile, int32_t z, uint8_t slope, uint8_t axis) noexcept { return AutoslopeCheckForAxis(TileIndex{tile}, z, static_cast<Slope>(slope), static_cast<Axis>(axis)); },
