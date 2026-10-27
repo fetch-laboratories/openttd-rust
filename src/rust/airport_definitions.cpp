@@ -7,6 +7,7 @@
 #include "../newgrf_airporttiles.h"
 #include "newgrf_bytereader_services.h"
 #include "services_newgrf.h"
+#include "services_station.h"
 #include "../safeguards.h"
 const OpenTTDAirportDefinitionServices &GetAirportDefinitionServices() noexcept
 {
@@ -38,8 +39,8 @@ const OpenTTDAirportDefinitionServices &GetAirportDefinitionServices() noexcept
 		.tile_set_file = RustSpecSetGRFFile<AirportTileSpec>,
 		.tile_set_override = RustSpecSetOverride<AirportTileSpec>,
 		.tile_badges = RustSpecBadgeList<AirportTileSpec>,
-		.airport_base = AirportSpec::RustRawSpec,
-		.tile_base = [](uint16_t id) noexcept -> AirportTileSpec * { return const_cast<AirportTileSpec *>(AirportTileSpec::Get(id)); },
+		.airport_base = RustAirportSpec<AirportSpec *>,
+		.tile_base = RustAirportTileSpec<AirportTileSpec *>,
 		.airport_default = [](uint16_t id) noexcept -> void { extern const AirportSpec _origin_airport_specs[NEW_AIRPORT_OFFSET]; *AirportSpec::RustRawSpec(id) = _origin_airport_specs[id]; },
 		.airport_clear = [](uint16_t id) noexcept -> void { *AirportSpec::RustRawSpec(id) = AirportSpec{}; },
 		.tile_default = RustAirportTileDefault,

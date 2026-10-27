@@ -1361,8 +1361,8 @@ pub unsafe extern "C" fn openttd_rust_grf_reset(s: &Services) {
         (s.reset_objects)();
         crate::newgrf_class::station::reset(s.station_classes);
         crate::newgrf_class::airport::reset(s.airport_classes);
-        crate::airport_definitions::openttd_rust_airport_definition_reset(s.airports);
-        crate::airport_definitions::openttd_rust_airport_tile_definition_reset(s.airports);
+        crate::airport_definitions::reset(s.airports);
+        crate::airport_definitions::reset_tiles(s.airports);
         crate::newgrf_class::roadstop::reset(s.roadstop_classes);
         (s.reset_water_features)();
         (s.reset_faces)();
@@ -1407,7 +1407,7 @@ unsafe fn after_load(s: &Services) {
         (s.industry_legend)();
         (s.linkstats_legend)();
         crate::airport_definitions::finalise(&*s.airports);
-        crate::airport_definitions::openttd_rust_airport_definition_bind(s.airports);
+        crate::airport_definitions::bind(s.airports);
         (s.townnames)();
         (s.vehicle_list_orders)();
         (s.activate_shore)();

@@ -61,7 +61,7 @@ pub struct Services {
     tile_set_override: unsafe extern "C" fn(*mut TileSpec, u16) -> (),
     tile_badges: unsafe extern "C" fn(*mut TileSpec) -> *mut BadgeList,
     airport_base: unsafe extern "C" fn(u16) -> *mut AirportSpec,
-    tile_base: unsafe extern "C" fn(u16) -> *mut TileSpec,
+    tile_base: unsafe extern "C" fn(u8) -> *mut TileSpec,
     airport_default: unsafe extern "C" fn(u16) -> (),
     airport_clear: unsafe extern "C" fn(u16) -> (),
     tile_default: unsafe extern "C" fn(u16) -> (),
@@ -306,7 +306,7 @@ unsafe fn tile_change(
                     }
                     if spec.is_null() {
                         spec =
-                            (s.tile_new)(file, id as usize, (s.tile_base)(u16::from(substitute)));
+                            (s.tile_new)(file, id as usize, (s.tile_base)(substitute));
                         (s.tile_set_enabled)(spec, true);
                         (s.tile_clear_animation)(spec);
                         (s.tile_set_local)(spec, id as u16);
@@ -378,8 +378,7 @@ macro_rules! parser_entry {
 parser_entry!(openttd_rust_airport_change_info, airport_change);
 parser_entry!(openttd_rust_airport_tile_change_info, tile_change);
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_airport_definition_reset(s: *const Services) {
+pub unsafe fn reset(s: *const Services) {
     let s = unsafe { &*s };
     unsafe {
         for id in 0..u16::from(NEW_AIRPORT_OFFSET) {
@@ -391,8 +390,7 @@ pub unsafe extern "C" fn openttd_rust_airport_definition_reset(s: *const Service
         override_manager::openttd_rust_override_reset(override_manager::airport());
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_airport_tile_definition_reset(s: *const Services) {
+pub unsafe fn reset_tiles(s: *const Services) {
     let s = unsafe { &*s };
     unsafe {
         for id in 0..u16::from(NEW_AIRPORTTILE_OFFSET) {
@@ -406,12 +404,7 @@ pub unsafe extern "C" fn openttd_rust_airport_tile_definition_reset(s: *const Se
 }
 macro_rules! publisher {
     ($entry:ident, $spec:ty, $tile:literal, $identity:ident, $publish:ident, $base:ident, $set_override:ident, $set_enabled:ident, $full:ident) => {
-        #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $entry(
-            manager: *mut Manager,
-            spec: *mut $spec,
-            s: *const Services,
-        ) {
+        unsafe fn $entry(manager: *mut Manager, spec: *mut $spec, s: *const Services) {
             let s = unsafe { &*s };
             let identity = unsafe { (s.$identity)(spec) };
             let (invalid, offset) = unsafe { ((*manager).invalid, (*manager).offset) };
@@ -436,7 +429,7 @@ macro_rules! publisher {
             }
             for i in 0..offset {
                 // Resolve the original slot before inspecting its override entry.
-                let overridden = unsafe { (s.$base)(i) };
+                let overridden = unsafe { (s.$base)(i as _) };
                 let matched = unsafe {
                     (&(*manager).entities)[usize::from(i)] == identity.local
                         && (&(*manager).grfids)[usize::from(i)] == identity.grfid
@@ -455,7 +448,7 @@ macro_rules! publisher {
     };
 }
 publisher!(
-    openttd_rust_airport_definition_publish,
+    publish,
     AirportSpec,
     false,
     airport_identity,
@@ -466,7 +459,7 @@ publisher!(
     airport_full
 );
 publisher!(
-    openttd_rust_airport_tile_definition_publish,
+    publish_tile,
     TileSpec,
     true,
     tile_identity,
@@ -489,7 +482,7 @@ pub unsafe fn finalise(s: &Services) {
             let spec = unsafe { (s.airport_get)(file, id) };
             if !spec.is_null() && unsafe { (s.airport_enabled)(spec) } {
                 unsafe {
-                    openttd_rust_airport_definition_publish(override_manager::airport(), spec, s);
+                    publish(override_manager::airport(), spec, s);
                 }
             }
         }
@@ -498,11 +491,7 @@ pub unsafe fn finalise(s: &Services) {
             let spec = unsafe { (s.tile_get)(file, id) };
             if !spec.is_null() && unsafe { (s.tile_enabled)(spec) } {
                 unsafe {
-                    openttd_rust_airport_tile_definition_publish(
-                        override_manager::airport_tile(),
-                        spec,
-                        s,
-                    );
+                    publish_tile(override_manager::airport_tile(), spec, s);
                 }
             }
         }
@@ -515,8 +504,7 @@ pub unsafe fn finalise(s: &Services) {
         index += 1;
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_airport_definition_bind(s: *const Services) {
+pub unsafe fn bind(s: *const Services) {
     let s = unsafe { &*s };
     for id in 0..NUM_AIRPORTS {
         let spec = unsafe { (s.airport_base)(id) };

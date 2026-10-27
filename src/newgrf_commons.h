@@ -303,7 +303,9 @@ public:
 			OverrideManagerBase(offset, maximum, invalid) {}
 #endif
 
+#ifndef WITH_RUST
 	void SetEntitySpec(AirportSpec &&inds);
+#endif
 };
 
 struct AirportTileSpec;
@@ -318,7 +320,9 @@ public:
 			OverrideManagerBase(offset, maximum, invalid) {}
 #endif
 
+#ifndef WITH_RUST
 	void SetEntitySpec(AirportTileSpec &&ats);
+#endif
 };
 
 struct ObjectSpec;

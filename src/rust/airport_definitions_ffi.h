@@ -5,6 +5,7 @@
 #include "newgrf_bytereader_ffi.h"
 #include "override_manager_ffi.h"
 #include "spec_identity.h"
+#include "../newgrf_airport.h"
 struct AirportSpec;
 struct AirportTileSpec;
 struct AirportTileTable;
@@ -37,7 +38,7 @@ struct OpenTTDAirportDefinitionServices {
 	void (*tile_set_override)(AirportTileSpec *spec, uint16_t value) noexcept OPENTTD_SERVICE_DEFAULT(tile_set_override);
 	std::vector<BadgeID> * (*tile_badges)(AirportTileSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(tile_badges);
 	AirportSpec * (*airport_base)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(airport_base);
-	AirportTileSpec * (*tile_base)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(tile_base);
+	AirportTileSpec * (*tile_base)(uint8_t id) noexcept OPENTTD_SERVICE_DEFAULT(tile_base);
 	void (*airport_default)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(airport_default);
 	void (*airport_clear)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(airport_clear);
 	void (*tile_default)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(tile_default);
@@ -80,10 +81,5 @@ const OpenTTDAirportDefinitionServices &GetAirportDefinitionServices() noexcept;
 extern "C" {
 bool openttd_rust_airport_change_info(const OpenTTDAirportDefinitionServices *, GRFFile *, uint32_t, uint32_t, uint32_t, ByteReader *, uint8_t *);
 bool openttd_rust_airport_tile_change_info(const OpenTTDAirportDefinitionServices *, GRFFile *, uint32_t, uint32_t, uint32_t, ByteReader *, uint8_t *);
-void openttd_rust_airport_definition_reset(const OpenTTDAirportDefinitionServices *);
-void openttd_rust_airport_tile_definition_reset(const OpenTTDAirportDefinitionServices *);
-void openttd_rust_airport_definition_publish(OpenTTDOverrideManager *, AirportSpec *, const OpenTTDAirportDefinitionServices *);
-void openttd_rust_airport_tile_definition_publish(OpenTTDOverrideManager *, AirportTileSpec *, const OpenTTDAirportDefinitionServices *);
-void openttd_rust_airport_definition_bind(const OpenTTDAirportDefinitionServices *);
 }
 #endif

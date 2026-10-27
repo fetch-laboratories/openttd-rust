@@ -82,6 +82,17 @@ def scenarios(soak):
         ]
         + [
             {
+                "name": "stations-airport-" + mode,
+                "kind": "save",
+                "save": str(ROOT / "migration/saves/road-crossing.sav"),
+                "station_commands": "airport-" + mode,
+                "ticks": 512,
+                "short_checkpoint": True,
+            }
+            for mode in ("definitions", "definitions-reload")
+        ]
+        + [
+            {
                 "name": "stations-commands-" + mode,
                 "kind": "save",
                 "save": str(ROOT / "migration/saves/road-crossing.sav"),
@@ -786,6 +797,13 @@ static bool StationCommands(std::span<std::string_view> args)
 	_settings_game.construction.road_stop_on_competitor_road = true;
 	const DoCommandFlags test{DoCommandFlag::NoTestTownRating};
 	const DoCommandFlags exec{DoCommandFlag::Execute, DoCommandFlag::NoTestTownRating};
+	if (args[1].starts_with("airport-definitions")) {
+		bool reload = args[1].ends_with("inspect");
+		if (!reload) { StationNeed(args.size() >= 3, __LINE__); AirportDefinitionLoad(args[2]); }
+		AirportDefinitionFixture(reload ? INVALID_TILE : StationPatch(), test, exec, reload);
+		if (!reload && args.size() == 4) StationNeed(SaveOrLoad(std::string(args[3]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false) == SL_OK, __LINE__);
+		fmt::print(stderr, "STCMD complete\n"); current.Restore(); return true;
+	}
 	if (args[1].starts_with("definitions")) {
 		bool reload = args[1].ends_with("inspect");
 		if (args[1] == "definitions-missing-inspect") { StationDefinitionMissing(); fmt::print(stderr, "STCMD complete\n"); current.Restore(); return true; }
@@ -1080,6 +1098,10 @@ extern "C" void __wrap__Z22IConsoleStdLibRegisterv() { __real__Z22IConsoleStdLib
 
 
 RELOADS = {
+    "airport-definitions-reload": (
+        "airport-definitions",
+        "airport-definitions-inspect",
+    ),
     "reload": ("commands", "inspect"),
     "definitions-reload": ("definitions", "definitions-inspect"),
     "definitions-reordered": ("definitions", "definitions-inspect"),
@@ -1257,6 +1279,101 @@ def definition_grfs(folder, reordered=False):
         )
 
 
+def airport_definition_grfs(folder: Path) -> None:
+    """Real parser files include usable layouts, callbacks and exhausted publication."""
+    from .newgrf_loading import grf, info
+
+    folder.mkdir(parents=True, exist_ok=True)
+
+    def word(value: int) -> bytes:
+        return struct.pack("<H", value)
+
+    def prop(feature: int, local: int, properties: list[tuple[int, bytes]]) -> bytes:
+        return bytes((0, feature, len(properties), 1, local)) + b"".join(
+            bytes((key,)) + value for key, value in properties
+        )
+
+    def callback(feature: int) -> bytes:
+        result = word(0x8003)
+        return (
+            bytes((2, feature, 0, 0x81, 0x1A, 0, 0xFF, 1)) + result + b"\0\xff" + result
+        )
+
+    # Country airport tiles from airport_defaults.h preserve its native hangar/FSM.
+    tiles = (42, 41, 40, 50, 46, 45, 44, 43, 49, 48, 48, 47)
+    layout = b"\1" + struct.pack("<I", 0xFFFFFFFF) + b"\0"
+    for index, gfx in enumerate(tiles):
+        layout += bytes((index % 4, index // 4, gfx)) if index else b"\0\0\xfe\0\0"
+    layout += b"\0\x80"
+    actions = [
+        info(b"A492"),
+        prop(8, 0, [(0x18, b"owner492/badge\0")]),
+        prop(
+            17,
+            0,
+            [
+                (8, b"\0"),
+                (8, b"\1"),
+                (9, b"\0"),
+                (0x0E, b"\x0e"),
+                (0x0F, b"\x08\0"),
+                (0x10, b"\0"),
+                (0x11, b"\1"),
+                (0x12, word(1) + word(0)),
+            ],
+        ),
+        callback(17),
+        bytes((3, 17, 1, 0, 0)) + word(0),
+        prop(
+            13,
+            0,
+            [
+                (8, b"\0"),
+                (8, b"\1"),
+                (0x0A, layout),
+                (0x0C, word(0) + word(0xFFFF)),
+                (0x0D, b"\0"),
+                (0x0E, b"\xff"),
+                (0x0F, b"\x07"),
+                (0x10, word(0xD000)),
+                (0x11, word(123)),
+                (0x12, word(1) + word(0)),
+            ],
+        ),
+        bytes((4, 13, 0xFF, 1)) + word(0xD000) + b"Airport 492\0",
+    ]
+    (folder / "airports.grf").write_bytes(grf(actions, 1))
+    (folder / "competing.grf").write_bytes(
+        grf(
+            [
+                info(b"C492"),
+                prop(17, 0, [(8, b"\0"), (9, b"\0")]),
+                prop(13, 0, [(8, b"\0")]),
+            ],
+            1,
+        )
+    )
+    for feature, identifier, name, property_id, payload in (
+        (13, b"B492", "broken-airport", 0x0C, b"\x34\x12"),
+        (17, b"T492", "broken-tile", 0x0F, b"\x07"),
+    ):
+        (folder / (name + ".grf")).write_bytes(
+            grf(
+                [
+                    info(identifier),
+                    prop(feature, 0, [(8, b"\0"), (property_id, payload)]),
+                ],
+                1,
+            )
+        )
+    exhausted = [info(b"E492")]
+    exhausted += [
+        prop(17, local, [(8, b"\0"), (0x0F, b"\x13\0")]) for local in range(183)
+    ]
+    exhausted += [prop(13, local, [(8, b"\0")]) for local in range(119)]
+    (folder / "exhausted.grf").write_bytes(grf(exhausted, 1))
+
+
 def install(scenario, run_dir):
     if folder := scenario.get("station_definition_dir"):
         from .newgrf_loading import install as install_grfs
@@ -1268,6 +1385,9 @@ def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
     folder = out / scenario["name"] / "input"
     source = Path(scenario["save"])
     read_save(source)
+    if scenario["station_commands"].startswith("airport-definitions"):
+        airport_definition_grfs(folder / "grfs")
+        scenario = dict(scenario, station_definition_dir=str(folder / "grfs"))
     if scenario["station_commands"].startswith("definitions"):
         definition_grfs(folder / "grfs")
         scenario = dict(scenario, station_definition_dir=str(folder / "grfs"))
@@ -1275,11 +1395,7 @@ def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
     if binaries["candidate"] == binaries["reference"]:
         executables["candidate"] = executables["reference"]
     scenario = dict(scenario, save=str(source), executables=executables)
-    extra = (
-        f' "{folder / "grfs"}"'
-        if scenario["station_commands"].startswith("definitions")
-        else ""
-    )
+    extra = f' "{folder / "grfs"}"' if "station_definition_dir" in scenario else ""
     # Reload modes capture the command fixture's save, then inspect it after load.
     capture, inspect = RELOADS.get(scenario["station_commands"], (None, None))
     if capture:
@@ -1335,6 +1451,28 @@ def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
 
 
 def check_commands(scenario, run, mode, role, result):
+    if scenario["station_commands"].startswith("airport-definitions"):
+        markers = [
+            "registry",
+            "class",
+            "spec",
+            "layout",
+            "tile-map",
+            "callbacks",
+            "occupied",
+            "plane",
+            "rng",
+        ]
+        if not scenario["station_commands"].endswith("reload"):
+            markers += ["partial-state", "exhaustion"]
+        for marker in markers:
+            if not any(
+                line.startswith("STCMD airport-def-" + marker) for line in run["log"]
+            ):
+                raise RuntimeError("file-loaded airport evidence missing: " + marker)
+        if "STCMD complete" not in run["log"]:
+            raise RuntimeError("file-loaded airport scenario did not complete")
+        return
     if scenario["station_commands"].startswith("definitions"):
         markers = (
             ("identity", "missing")

@@ -69,7 +69,7 @@ template <typename Spec> inline void RustSpecSetSubstitute(Spec *spec, uint16_t 
 template <typename Spec> inline void RustSpecAnimationFrames(Spec *spec, uint8_t value) noexcept { spec->animation.frames = static_cast<decltype(spec->animation.frames)>(value); }
 template <typename Spec> inline void RustSpecAnimationStatus(Spec *spec, uint8_t value) noexcept { spec->animation.status = static_cast<decltype(spec->animation.status)>(value); }
 template <typename Spec> inline void RustSpecAnimationSpeed(Spec *spec, uint8_t value) noexcept { spec->animation.speed = static_cast<decltype(spec->animation.speed)>(value); }
-template <typename Spec> inline void RustSpecAnimationTriggers(Spec *spec, uint8_t value) noexcept { spec->animation.triggers = static_cast<decltype(spec->animation.triggers)>(value); }
+template <typename Spec, typename Value = uint8_t> inline void RustSpecAnimationTriggers(Spec *spec, Value value) noexcept { spec->animation.triggers = static_cast<decltype(spec->animation.triggers)>(value); }
 template <typename Spec> inline void RustSpecClearAnimation(Spec *spec) noexcept { spec->animation = {}; }
 template <typename Spec> inline std::vector<BadgeID> *RustSpecBadgeList(Spec *spec) noexcept { return &spec->badges; }
 template <typename Spec>

@@ -95,12 +95,16 @@ struct AirportTileSpec {
 	static const AirportTileSpec *Get(StationGfx gfx);
 	static const AirportTileSpec *GetByTile(TileIndex tile);
 
+#ifndef WITH_RUST
 	static void ResetAirportTiles();
+#endif
 
 private:
 	static AirportTileSpec tiles[NUM_AIRPORTTILES];
 
+#ifndef WITH_RUST
 	friend void AirportTileOverrideManager::SetEntitySpec(AirportTileSpec &&airpts);
+#endif
 };
 
 void AnimateAirportTile(TileIndex tile);

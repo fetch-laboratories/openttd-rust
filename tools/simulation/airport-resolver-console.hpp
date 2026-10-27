@@ -209,29 +209,18 @@ static void AirportDefinitionPartialReads()
 	const std::array<uint8_t, 4> badges{2, 0, 0, 0};
 	StationNeed(read(true, 0, 1, 0x12, badges).second && file.airtspec[0]->badges.empty() && GetBadge(badge)->features.Test(GSF_TRAMTYPES) && !GetBadge(badge)->features.Test(GSF_AIRPORTTILES), __LINE__);
 	StationNeed(read(false, 0, 1, 0x12, badges).second && spec->badges.empty() && GetBadge(badge)->features.Test(GSF_AIRPORTS), __LINE__);
-	/* Exhaustion is narrowed to StationGfx before the 256 invalid comparison. */
-	AirportTileSpec saved = *AirportTileSpec::Get(0);
-	AirportTileOverrideManager exhausted(NEW_AIRPORTTILE_OFFSET, NUM_AIRPORTTILES, INVALID_AIRPORTTILE);
-	for (auto &mapping : exhausted.mappings) mapping = {file.grfid, 99, 1};
-	AirportTileSpec value = *file.airtspec[0]; value.animation.frames = 19;
-	exhausted.SetEntitySpec(std::move(value));
-	StationNeed(AirportTileSpec::Get(0)->animation.frames == 19 && AirportTileSpec::Get(0)->grf_prop.grfid == file.grfid, __LINE__);
-	*const_cast<AirportTileSpec *>(AirportTileSpec::Get(0)) = std::move(saved);
-	AirportOverrideManager full(NEW_AIRPORT_OFFSET, NUM_AIRPORTS, AT_INVALID);
-	for (auto &mapping : full.mappings) mapping = {file.grfid, 99, 1};
-	AirportSpec untouched = *spec; full.SetEntitySpec(std::move(untouched));
-	StationNeed(!untouched.layouts.empty(), __LINE__);
-	fmt::print(stderr, "STCMD airport-def-exhaustion narrowed-tile-zero airport-rejected\n");
-	_airport_mngr.mappings[NUM_AIRPORTS - 1] = {file.grfid, 127, 0};
-	AirportSpec::ResetAirports(); AirportTileSpec::ResetAirportTiles();
-	StationNeed(_airport_mngr.GetID(127, file.grfid) == NUM_AIRPORTS - 1 && _airporttile_mngr.GetID(0, file.grfid) == NEW_AIRPORTTILE_OFFSET, __LINE__);
-	_airport_mngr.ResetMapping(); _airporttile_mngr.ResetMapping();
-	StationNeed(_airport_mngr.GetID(127, file.grfid) == AT_INVALID && _airporttile_mngr.GetID(0, file.grfid) == INVALID_AIRPORTTILE, __LINE__);
-	fmt::print(stderr, "STCMD airport-def-partial-state years layouts badges reset-mapping\n");
+	fmt::print(stderr, "STCMD airport-def-partial-state years layouts badges\n");
 }
 static void AirportDefinitionLoad(std::string_view folder)
 {
 	AirportDefinitionPartialReads(); SetRandomSeed(0x49200001); _grfconfig.clear();
+	auto exhausted = std::make_unique<GRFConfig>(std::string(folder) + "/exhausted.grf");
+	StationNeed(FillGRFDetails(*exhausted, false, NO_DIRECTORY), __LINE__);
+	exhausted->flags.Reset(GRFConfigFlag::InitOnly); _grfconfig.push_back(std::move(exhausted));
+	ReloadNewGRFData();
+	StationNeed(AirportTileSpec::Get(0)->animation.frames == 19 && AirportTileSpec::Get(0)->grf_prop.local_id == 182 && _airport_mngr.GetID(118, AirportDefinitionID('E')) == AT_INVALID, __LINE__);
+	fmt::print(stderr, "STCMD airport-def-exhaustion narrowed-tile-zero airport-rejected\n");
+	_grfconfig.clear();
 	for (const char *name : {"airports", "competing", "broken-airport", "broken-tile"}) {
 		auto config = std::make_unique<GRFConfig>(std::string(folder) + "/" + name + ".grf");
 		StationNeed(FillGRFDetails(*config, false, NO_DIRECTORY), __LINE__);

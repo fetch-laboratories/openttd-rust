@@ -70,24 +70,20 @@ AirportTileOverrideManager _airporttile_mngr(NEW_AIRPORTTILE_OFFSET, NUM_AIRPORT
 /**
  * This function initializes the tile array of AirportTileSpec
  */
+#ifndef WITH_RUST
 void AirportTileSpec::ResetAirportTiles()
 {
-#ifdef WITH_RUST
-	openttd_rust_airport_tile_definition_reset(&GetAirportDefinitionServices());
-#else
 	auto insert = std::copy(std::begin(_origin_airporttile_specs), std::end(_origin_airporttile_specs), std::begin(AirportTileSpec::tiles));
 	std::fill(insert, std::end(AirportTileSpec::tiles), AirportTileSpec{});
 
 	/* Reset any overrides that have been set. */
 	_airporttile_mngr.ResetOverride();
-#endif
 }
+#endif
 
+#ifndef WITH_RUST
 void AirportTileOverrideManager::SetEntitySpec(AirportTileSpec &&airpts)
 {
-#ifdef WITH_RUST
-	openttd_rust_airport_tile_definition_publish(this->rust_owner, &airpts, &GetAirportDefinitionServices());
-#else
 	StationGfx airpt_id = this->AddEntityID(airpts.grf_prop.local_id, airpts.grf_prop.grfid, airpts.grf_prop.subst_id);
 
 	if (airpt_id == this->invalid_id) {
@@ -108,8 +104,8 @@ void AirportTileOverrideManager::SetEntitySpec(AirportTileSpec &&airpts)
 		this->entity_overrides[i] = this->invalid_id;
 		this->grfid_overrides[i] = 0;
 	}
-#endif
 }
+#endif
 
 /**
  * Do airporttile gfx ID translation for NewGRFs.
