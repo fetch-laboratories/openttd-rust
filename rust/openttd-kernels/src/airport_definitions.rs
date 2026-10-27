@@ -305,8 +305,7 @@ unsafe fn tile_change(
                         continue;
                     }
                     if spec.is_null() {
-                        spec =
-                            (s.tile_new)(file, id as usize, (s.tile_base)(substitute));
+                        spec = (s.tile_new)(file, id as usize, (s.tile_base)(substitute));
                         (s.tile_set_enabled)(spec, true);
                         (s.tile_clear_animation)(spec);
                         (s.tile_set_local)(spec, id as u16);

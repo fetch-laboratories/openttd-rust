@@ -214,6 +214,7 @@ static void AirportDefinitionPartialReads()
 static void AirportDefinitionLoad(std::string_view folder)
 {
 	AirportDefinitionPartialReads(); SetRandomSeed(0x49200001); _grfconfig.clear();
+	_airport_mngr.ResetMapping(); _airporttile_mngr.ResetMapping();
 	auto exhausted = std::make_unique<GRFConfig>(std::string(folder) + "/exhausted.grf");
 	StationNeed(FillGRFDetails(*exhausted, false, NO_DIRECTORY), __LINE__);
 	exhausted->flags.Reset(GRFConfigFlag::InitOnly); _grfconfig.push_back(std::move(exhausted));
@@ -221,6 +222,7 @@ static void AirportDefinitionLoad(std::string_view folder)
 	StationNeed(AirportTileSpec::Get(0)->animation.frames == 19 && AirportTileSpec::Get(0)->grf_prop.local_id == 182 && _airport_mngr.GetID(118, AirportDefinitionID('E')) == AT_INVALID, __LINE__);
 	fmt::print(stderr, "STCMD airport-def-exhaustion narrowed-tile-zero airport-rejected\n");
 	_grfconfig.clear();
+	_airport_mngr.ResetMapping(); _airporttile_mngr.ResetMapping();
 	for (const char *name : {"airports", "competing", "broken-airport", "broken-tile"}) {
 		auto config = std::make_unique<GRFConfig>(std::string(folder) + "/" + name + ".grf");
 		StationNeed(FillGRFDetails(*config, false, NO_DIRECTORY), __LINE__);
@@ -265,7 +267,7 @@ static void AirportDefinitionFixture(TileIndex origin, DoCommandFlags test, DoCo
 		auto hangar = station->airport.GetHangarTile(0);
 		auto [built, vehicle, refit, capacity, cargo] = Command<CMD_BUILD_VEHICLE>::Do(exec, hangar, engine, false, INVALID_CARGO, INVALID_CLIENT_ID); StationCost("airport-def-aircraft", built); StationNeed(built.Succeeded(), __LINE__);
 		Vehicle *plane = Vehicle::Get(vehicle); plane->name = "Airport definition plane";
-		for (StationID target : {other->index, station->index}) { Order order; order.MakeGoToStation(target); StationNeed(Command<CMD_INSERT_ORDER>::Do(exec, vehicle, VehicleOrderID(plane->GetNumOrders()), order).Succeeded(), __LINE__); }
+		for (StationID target : {other->index, station->index}) { Order order; order.MakeGoToStation(target); order.SetStopLocation(OrderStopLocation::FarEnd); StationNeed(Command<CMD_INSERT_ORDER>::Do(exec, vehicle, VehicleOrderID(plane->GetNumOrders()), order).Succeeded(), __LINE__); }
 		StationNeed(Command<CMD_START_STOP_VEHICLE>::Do(exec, vehicle, false).Succeeded(), __LINE__);
 	}
 	else for (Station *st : Station::Iterate()) if (st->name == "Airport definitions") station = st;

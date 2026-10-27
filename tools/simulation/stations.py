@@ -1300,7 +1300,7 @@ def airport_definition_grfs(folder: Path) -> None:
         )
 
     # Country airport tiles from airport_defaults.h preserve its native hangar/FSM.
-    tiles = (42, 41, 40, 50, 46, 45, 44, 43, 49, 48, 48, 47)
+    tiles = (35, 34, 33, 43, 39, 38, 37, 36, 42, 41, 41, 40)
     layout = b"\1" + struct.pack("<I", 0xFFFFFFFF) + b"\0"
     for index, gfx in enumerate(tiles):
         layout += bytes((index % 4, index // 4, gfx)) if index else b"\0\0\xfe\0\0"
@@ -1315,7 +1315,7 @@ def airport_definition_grfs(folder: Path) -> None:
                 (8, b"\0"),
                 (8, b"\1"),
                 (9, b"\0"),
-                (0x0E, b"\x0e"),
+                (0x0E, b"\x03"),
                 (0x0F, b"\x08\0"),
                 (0x10, b"\0"),
                 (0x11, b"\1"),
