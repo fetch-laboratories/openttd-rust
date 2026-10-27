@@ -49,6 +49,10 @@ DEEP_SET = (
         "simulate-soak",
         migration_command("simulate", "--soak", "--timeout", str(GAME_TIMEOUT)),
     ),
+    Member(
+        "simulate-sanitize",
+        migration_command("simulate", "--sanitize", "--timeout", str(GAME_TIMEOUT)),
+    ),
 )
 
 

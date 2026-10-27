@@ -34,6 +34,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from validation_execution import file_lock  # noqa: E402
 
+from . import sanitizers  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[2]
 
 # Fields that legitimately differ between two runs or two binaries. Mask nothing
@@ -561,6 +563,8 @@ def prepare_game(
     for module in scenario_modules():
         if game_environment := getattr(module, "game_environment", None):
             env.update(game_environment(scenario))
+    if sanitizers.MARKER in env:
+        env.update(sanitizers.environment(run_dir))
     instruction_info = None
     if instructions:
         from . import instructions as profiler
@@ -605,6 +609,8 @@ def execute_game(plan):
         except subprocess.TimeoutExpired:
             code = "timeout"
         seconds = round(time.monotonic() - started, 3)
+    if sanitizers.MARKER in plan["env"]:
+        sanitizers.separate(run_dir)
     return {
         "instructions": plan["instructions"],
         "dir": run_dir,
@@ -1001,6 +1007,8 @@ def run_scenario(
                     if check := getattr(module, "check", None):
                         check(scenario, run, mode, role, result)
                 result[f"{mode}_{role}_seconds"] = run["seconds"]
+                if sanitizers.MARKER in env:
+                    sanitizers.check(run, role, mode, result)
                 if run["exit"] != 0:
                     result["problems"].append(
                         f"{mode}: {role} exited with {run['exit']}"
@@ -1228,6 +1236,11 @@ def main():
         "--timeout", type=int, default=1200, help="seconds per game run"
     )
     parser.add_argument("--list", action="store_true")
+    parser.add_argument(
+        "--sanitize",
+        action="store_true",
+        help="run the ASan and UBSan builds; any unsuppressed report fails (#505)",
+    )
     parser.add_argument("--frozen-runtimes", type=Path, help="CI runtime bundle")
     parser.add_argument(
         "--instructions",
@@ -1259,6 +1272,10 @@ def main():
     if args.benchmark and args.jobs != 1:
         parser.error("--benchmark requires --jobs 1")
 
+    if args.sanitize and (
+        args.instructions or args.benchmark or args.frozen_runtimes or args.self
+    ):
+        parser.error("--sanitize conflicts with timing, frozen and --self runs")
     if args.instructions and (args.benchmark or args.soak):
         parser.error("--instructions conflicts with --benchmark/--soak")
     every = scenario_list(args.soak)
@@ -1348,13 +1365,25 @@ def run_simulation(args, scenarios, migration, out, parser, stamp):
         # reference's runtime while no other worktree can rebuild it,
         # then run without holding the lock.
         with migration.reference_lock(shared=True):
-            shared = migration.REFERENCE_BUILD.resolve()
+            shared = (
+                migration.REFERENCE_BUILD_SANITIZED
+                if args.sanitize
+                else migration.REFERENCE_BUILD
+            ).resolve()
             reference = copy_runtime(shared, shared / "openttd", builds["reference"])
         binaries = {"reference": reference}
         if args.self:
             builds["candidate"], binaries["candidate"] = builds["reference"], reference
         else:
-            candidate = (args.candidate or ROOT / "build-rust/openttd-rust").resolve()
+            candidate = (
+                args.candidate
+                or (
+                    migration.CANDIDATE_BUILD_SANITIZED
+                    if args.sanitize
+                    else ROOT / "build-rust"
+                )
+                / "openttd-rust"
+            ).resolve()
             if not candidate.is_file():
                 parser.error(
                     f"candidate binary {candidate} is missing; run python3 tools/migration.py build"
@@ -1381,6 +1410,8 @@ def run_simulation(args, scenarios, migration, out, parser, stamp):
     with concurrent.futures.ThreadPoolExecutor(args.jobs) as pool:
         # The driver's environment supplies bootstrapped runtime libraries locally.
         env = migration.environment()
+        if args.sanitize:
+            env[sanitizers.MARKER] = "1"
         futures = {
             pool.submit(
                 run_scenario,

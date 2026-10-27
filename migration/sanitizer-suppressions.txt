@@ -1,0 +1,4 @@
+# Sanitizer reports that are original OpenTTD behavior (#505). One entry per line:
+#   <fnmatch pattern over the report signature> # <reason naming the original site and issue>
+# Signatures read "<Sanitizer>: <kind> at <src/file:line>". A report the file does not
+# name fails the scenario in either role; never edit the pinned reference to remove one.

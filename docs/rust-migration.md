@@ -300,8 +300,9 @@ at `nice -n 19` and `ionice -c 3`, on the developer host only, never in GitHub A
 writes `.local/deep/<time>-<commit>/report.json` naming the commit, each member's exit status,
 wall and summed scenario seconds, and each failed scenario's problems and first differences,
 beside a log per member. The set is `DEEP_SET` in `tools/deep.py`; today it is `simulate
---soak` (520 scenarios against the default 445), run through the ordinary driver action with a
-per-game timeout of 7200 s, since idle-priority games run slowly under load. Members share the
+--soak` (520 scenarios against the default 445) and `simulate --sanitize` (the default 445 on
+the sanitizer builds below), each run through the ordinary driver action with a per-game timeout
+of 7200 s, since idle-priority games run slowly under load. Members share the
 ordinary build and game locks. A clone-wide exclusive `deep.lock` (`LOCK_NAME` in
 `tools/deep.py`) is held for a whole deep run and for a speed pass's `collect` from before it
 prepares launches until timed collection ends: a deep run that finds it held exits 0 as
@@ -309,6 +310,31 @@ skipped, and `collect` waits, printing its holders, until a deep run finishes. S
 soak member and mark the report partial; a partial report is a smoke check, not a deep check. Cadence, triage and rotation are in AGENTS.md "Speed". Planned members are listed
 on #503. The soak run's wall time is the report's `seconds` (summed scenario seconds divided by
 the simulate job count, `--jobs // 2`, approximates it).
+
+### Sanitizer builds (#505)
+
+`python3 tools/migration.py build --sanitize` builds both games with
+`-fsanitize=address,undefined -fno-omit-frame-pointer` (`SANITIZER_FLAGS`) in their own trees,
+`.local/build-reference-sanitized` and `build-rust-sanitized`, outside the ordinary build
+directories; `simulate --sanitize` (also the deep member `simulate-sanitize`) builds them and
+runs the scenarios on those binaries only, including the relinked console adapters. It rejects
+`--self`, timing and frozen-runtime runs, because sanitized games say nothing about speed.
+Only C and C++ are instrumented. The pinned stable Rust 1.99 has no `-Zsanitizer`, so the
+Rust archive is linked uninstrumented; ASan still replaces the process allocator, so double
+and mismatched frees, and C++ reads of memory Rust freed, are caught, but out-of-bounds
+accesses inside Rust code are not. Leak detection is off (the original leaks at exit, and the
+launcher's `RLIMIT_NPROC=0` denies LeakSanitizer its thread).
+
+ASan reports go to `sanitizer/asan.<pid>` in the game's run directory. libubsan ignores
+`log_path` and prints to stderr, so after the game `tools/simulation/sanitizers.py` moves its
+reports to `sanitizer/ubsan`, keeping them out of the log the two roles are compared on. Each
+report reduces to a signature, `<Sanitizer>: <kind> at <src/file:line>` (the first source frame
+for ASan), and an unsuppressed signature, in either role, is a scenario problem whose run
+directory is kept. `migration/sanitizer-suppressions.txt` lists reports that are original
+behavior, one `fnmatch` pattern with its reason and issue per line; a suppressed report is
+recorded in the scenario's `notes`, never ignored. A report in the reference alone is therefore
+original behavior to suppress with a reason, and a candidate-only report is a fork defect to
+fix or file. The pinned reference is never edited to remove a report.
 
 ## Native macOS arm64 Rust linkage
 

@@ -42,6 +42,7 @@ def prepared_console(kind, build_adapter, binaries, builds, folder, env):
     """Reuse a prepared console, or relink under its existing native build lock."""
     import migration
 
+    from . import sanitizers
     from .core import ROOT, RUNTIME_DIRECTORIES
     from .runtime import prepared_adapter
 
@@ -51,7 +52,19 @@ def prepared_console(kind, build_adapter, binaries, builds, folder, env):
         executable = prepared_adapter(kind, role, builds, target)
         if executable is None:
             reference = role == "reference" or binaries[role] == binaries["reference"]
-            native = migration.REFERENCE_BUILD if reference else ROOT / "build-rust"
+            sanitized = sanitizers.MARKER in env
+            if reference:
+                native = (
+                    migration.REFERENCE_BUILD_SANITIZED
+                    if sanitized
+                    else migration.REFERENCE_BUILD
+                )
+            else:
+                native = (
+                    migration.CANDIDATE_BUILD_SANITIZED
+                    if sanitized
+                    else ROOT / "build-rust"
+                )
             lock = migration.candidate_lock(native, shared=True)
             if reference:
                 lock = migration.reference_lock(shared=True)

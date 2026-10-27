@@ -39,6 +39,10 @@ COMMON_LOCAL = COMMON_ROOT / ".local"
 # One pinned reference checkout and build per clone, shared by every worktree.
 REFERENCE = COMMON_LOCAL / "reference/openttd"
 REFERENCE_BUILD = COMMON_LOCAL / "build-reference"
+# AddressSanitizer and UndefinedBehaviorSanitizer flavours (#505) build in their own trees.
+REFERENCE_BUILD_SANITIZED = COMMON_LOCAL / "build-reference-sanitized"
+CANDIDATE_BUILD_SANITIZED = ROOT / "build-rust-sanitized"
+SANITIZER_FLAGS = "-fsanitize=address,undefined -fno-omit-frame-pointer"
 BASELINE = json.loads((ROOT / "migration/baseline.json").read_text())
 
 
@@ -379,6 +383,11 @@ def main():
         action="store_true",
         help="Measure the same no-PCH configuration without cache reuse",
     )
+    parser.add_argument(
+        "--sanitize",
+        action="store_true",
+        help="build and simulate the ASan and UBSan flavours of both games (#505)",
+    )
     # simulate forwards any further arguments to tools/simulate.py; deep, scenario selectors.
     args, simulate_args = parser.parse_known_args()
     if simulate_args and args.action not in ("simulate", "deep"):
@@ -387,6 +396,8 @@ def main():
         parser.error("--no-ccache conflicts with --ccache/--ccache-bypass")
     if args.jobs < 1:
         parser.error("--jobs must be positive")
+    if args.sanitize and args.action not in ("build", "simulate"):
+        parser.error("--sanitize applies to build and simulate")
     if args.action == "deep":
         from deep import run_deep
 
@@ -463,6 +474,11 @@ def main():
         return log
 
     builds = {"reference": REFERENCE_BUILD.resolve(), "candidate": ROOT / "build-rust"}
+    if args.sanitize:
+        builds = {
+            "reference": REFERENCE_BUILD_SANITIZED.resolve(),
+            "candidate": CANDIDATE_BUILD_SANITIZED,
+        }
     original_environment = env.copy()
     cache_before = {}
 
@@ -521,6 +537,13 @@ def main():
             "-DCMAKE_DISABLE_FIND_PACKAGE_Grfcodec=ON",
             "-DBUILD_TESTING=ON",
         ]
+        if args.sanitize:
+            # The Rust archive is not instrumented (stable rustc has no -Zsanitizer).
+            common = (
+                [option for option in common if option != "-DBUILD_TESTING=ON"]
+                + [f"-DCMAKE_{kind}_FLAGS={SANITIZER_FLAGS}" for kind in ("C", "CXX")]
+                + [f"-DCMAKE_EXE_LINKER_FLAGS={SANITIZER_FLAGS}"]
+            )
         if args.action == "tools":
             builds = {"candidate": LOCAL / "build-tools-rust"}
             common = [
@@ -625,6 +648,7 @@ def main():
                     str(ROOT / "tools/simulate.py"),
                     "--jobs",
                     str(max(1, args.jobs // 2)),
+                    *(["--sanitize"] if args.sanitize else []),
                     *simulate_args,
                 ],
             )
