@@ -28,9 +28,6 @@
 #include "rust/services_assert.h"
 #include "rust/airport_resolver_ffi.h"
 #endif
-#ifdef WITH_RUST
-#include "rust/airport_definitions_ffi.h"
-#endif
 
 #include "safeguards.h"
 
