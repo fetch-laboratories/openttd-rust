@@ -165,7 +165,7 @@ pub(crate) fn stations_near(state: *mut State) -> *mut crate::station::StationLi
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_stations_near(
     state: *mut State,
-) -> *const crate::station::StationList {
+) -> *mut crate::station::StationList {
     stations_near(state)
 }
 /// `Town::GetCargoSupplied` followed by the original history-period lookup.

@@ -260,6 +260,29 @@ pub fn add_delivery(
         });
     }
 }
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_monitor_add(
+    s: *const Services,
+    cargo: u8,
+    company: u8,
+    amount: u32,
+    source: u16,
+    kind: u8,
+    station: *const Station,
+    state: *mut crate::station_service::Service,
+    destination: u16,
+) {
+    add_delivery(
+        unsafe { &*s },
+        cargo,
+        company,
+        amount,
+        Source { id: source, kind },
+        station,
+        state,
+        destination,
+    );
+}
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDCargoMonitorServices" ["probe"] => Services {

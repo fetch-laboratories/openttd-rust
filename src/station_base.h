@@ -619,7 +619,7 @@ public:
 	IndustryType indtype = IT_INVALID; ///< Industry type to get the name from
 
 #ifdef WITH_RUST
-	const BitmapTileArea catchment_tiles{openttd_rust_station_catchment_tiles(this->rust_service.get())};
+	BitmapTileArea catchment_tiles{openttd_rust_station_catchment_tiles(this->rust_service.get())};
 #else
 	BitmapTileArea catchment_tiles{}; ///< NOSAVE: Set of individual tiles covered by catchment area
 #endif

@@ -27,7 +27,7 @@ static bool MonitorScenario(std::span<std::string_view> args)
 	}
 	if (Industry::GetNumItems() < 2) FixtureAbort(__LINE__);
 	auto ii = Industry::Iterate().begin(); Industry *i = *ii; ++ii; Industry *j = *ii;
-	Backup<IndustryList> near(st->industries_near); st->industries_near = {{0, i}};
+	Backup<FixtureIndustryList> near(FixtureIndustriesOf(st)); FixtureIndustriesOf(st) = {{0, i}};
 	auto industry = EncodeCargoIndustryMonitor(company, cargo, i->index), absent = EncodeCargoIndustryMonitor(company, cargo, j->index);
 	bool good = DecodeMonitorCompany(industry) == company && DecodeMonitorCargoType(industry) == cargo && DecodeMonitorIndustry(industry) == i->index && DecodeMonitorTown(town) == st->town->index;
 	good &= GetPickupAmount(town, false) == 0 && GetDeliveryAmount(town, true) == 0 && GetPickupAmount(town, true) == 0;

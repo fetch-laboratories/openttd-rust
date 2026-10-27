@@ -174,8 +174,6 @@ void ClearCargoPickupMonitoring(CompanyID company = INVALID_OWNER);
 void ClearCargoDeliveryMonitoring(CompanyID company = INVALID_OWNER);
 int32_t GetDeliveryAmount(CargoMonitorID monitor, bool keep_monitoring);
 int32_t GetPickupAmount(CargoMonitorID monitor, bool keep_monitoring);
-#ifndef WITH_RUST
 void AddCargoDelivery(CargoType cargo_type, CompanyID company, uint32_t amount, Source src, const Station *st, IndustryID dest = IndustryID::Invalid());
-#endif
 
 #endif /* CARGOMONITOR_H */

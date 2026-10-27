@@ -162,7 +162,7 @@ pub(crate) fn stations_near(owner: *mut Industry) -> *mut crate::station::Statio
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_stations_near(
     owner: *mut Industry,
-) -> *const crate::station::StationList {
+) -> *mut crate::station::StationList {
     stations_near(owner)
 }
 /// `Industry::location`, from the canonical metadata.

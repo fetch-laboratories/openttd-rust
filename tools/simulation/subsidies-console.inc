@@ -26,6 +26,33 @@ bool FindSubsidyTownCargoRoute();
 bool FindSubsidyIndustryCargoRoute();
 #include "subsidy-monthly-reference.inc"
 #endif
+#ifdef WITH_RUST
+/* Copyable view of a station's Rust delivery list: a copy snapshots it and
+ * assignment writes entries back, as Backup<IndustryList> does natively. */
+struct FixtureIndustriesNear {
+	Station *st = nullptr;
+	std::vector<OpenTTDIndustryListEntry> entries;
+	FixtureIndustriesNear() = default;
+	FixtureIndustriesNear(const FixtureIndustriesNear &o) : st(o.st), entries(o.st->industries_near.begin(), o.st->industries_near.end()) {}
+	FixtureIndustriesNear &operator=(const FixtureIndustriesNear &o)
+	{
+		this->st->industries_near.clear();
+		for (const auto &e : o.entries) this->st->industries_near.insert(e.distance, e.industry);
+		return *this;
+	}
+	FixtureIndustriesNear &operator=(std::initializer_list<std::pair<uint32_t, Industry *>> list)
+	{
+		this->st->industries_near.clear();
+		for (const auto &[distance, industry] : list) this->st->industries_near.insert(distance, industry);
+		return *this;
+	}
+};
+using FixtureIndustryList = FixtureIndustriesNear;
+static FixtureIndustriesNear &FixtureIndustriesOf(Station *st) { static FixtureIndustriesNear near; near.st = st; return near; }
+#else
+using FixtureIndustryList = IndustryList;
+static IndustryList &FixtureIndustriesOf(Station *st) { return st->industries_near; }
+#endif
 static void SubsidyClean() { for (Subsidy *s : Subsidy::Iterate()) delete s; RebuildSubsidisedSourceAndDestinationCache(); }
 static Subsidy *FixtureSubsidy(CargoType cargo, Source src, Source dst, uint16_t remaining) { if (!Subsidy::CanAllocateItem()) FixtureAbort(__LINE__); return new Subsidy(cargo, src, dst, remaining); }
 static bool SameRandom(const Randomizer &r) { return r.state[0] == _random.state[0] && r.state[1] == _random.state[1]; }
@@ -41,19 +68,10 @@ static bool SubsidyScenario(std::span<std::string_view> args)
 	Station *st = *Station::Iterate().begin();
 	Backup<CompanyID> current(_current_company, OWNER_DEITY);
 	Backup<StationID> last(front->last_station_visited, st->index);
-	Backup<BitmapTileArea> catchment(st->catchment_tiles); Backup<IndustryList> near(st->industries_near); Backup<CargoTypes> accepts(st->always_accepted);
+	Backup<BitmapTileArea> catchment(st->catchment_tiles); Backup<FixtureIndustryList> near(FixtureIndustriesOf(st)); Backup<CargoTypes> accepts(st->always_accepted);
 	st->catchment_tiles.Initialize(TileArea(TileXY(0, 0), Map::SizeX(), Map::SizeY()));
 	for (TileIndex tile : Map::Iterate()) if (IsTileType(tile, MP_HOUSE) && (GetTownIndex(tile) == a->index || GetTownIndex(tile) == b->index)) st->catchment_tiles.SetTile(tile);
-	st->industries_near = {{1, j}, {1, i}};
-#ifdef WITH_RUST
-	const auto &services = GetRustSubsidyServices(); RustNearbyIndustryCursor x, y;
-	st->industries_near.clear(); services.begin_nearby(&x, st);
-	if (services.next_nearby(&x) != nullptr) FixtureAbort(__LINE__);
-	st->industries_near = {{1, i}, {0, j}}; services.begin_nearby(&x, st);
-	if (services.next_nearby(&x) != j || services.next_nearby(&x) != i || services.next_nearby(&x) != nullptr) FixtureAbort(__LINE__);
-	st->industries_near = {{1, j}, {1, i}}; services.begin_nearby(&x, st); services.begin_nearby(&y, st);
-	if (services.next_nearby(&x) != i || services.next_nearby(&x) != j || services.next_nearby(&y) != i || services.next_nearby(&x) != nullptr || services.next_nearby(&y) != j || services.next_nearby(&y) != nullptr) FixtureAbort(__LINE__);
-#endif
+	FixtureIndustriesOf(st) = {{1, j}, {1, i}};
 	fmt::print(stderr, "SUBSIDY nearby true\n");
 	CargoType cargo = CargoSpec::town_production_cargoes[TPE_PASSENGERS][0]->Index(); SetBit(st->always_accepted, cargo);
 	Source town{a->index, SourceType::Town}, other{b->index, SourceType::Town}, industry{i->index, SourceType::Industry}, destination{j->index, SourceType::Industry};

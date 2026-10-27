@@ -71,8 +71,12 @@ OpenTTDStationListView openttd_rust_station_list_view(const OpenTTDStationList *
 OpenTTDIndustryListView openttd_rust_station_industries_near(OpenTTDStationService *);
 OpenTTDStationRect *openttd_rust_station_rect(OpenTTDStationService *);
 struct OpenTTDBitmapTileArea *openttd_rust_station_catchment_tiles(OpenTTDStationService *);
-const OpenTTDStationList *openttd_rust_town_stations_near(OpenTTDTownState *);
-const OpenTTDStationList *openttd_rust_industry_stations_near(OpenTTDIndustry *);
+OpenTTDStationList *openttd_rust_town_stations_near(OpenTTDTownState *);
+OpenTTDStationList *openttd_rust_industry_stations_near(OpenTTDIndustry *);
+void openttd_rust_station_list_insert(OpenTTDStationList *, BaseStation *, uint16_t);
+void openttd_rust_station_list_erase(OpenTTDStationList *, uint16_t);
+void openttd_rust_station_industries_insert(OpenTTDStationService *, OpenTTDIndustryListEntry);
+void openttd_rust_station_industries_clear(OpenTTDStationService *);
 bool openttd_rust_station_rect_empty(const OpenTTDStationRect *);
 bool openttd_rust_station_rect_pt_in_extended_rect(const OpenTTDStationRect *, int32_t, int32_t, int32_t);
 bool openttd_rust_station_rect_before_add_tile(OpenTTDStationRect *, uint32_t, uint8_t, const OpenTTDStationCatchmentServices *);
@@ -91,7 +95,7 @@ void openttd_rust_station_acceptance_around(uint32_t, int32_t, int32_t, int32_t,
  */
 template <class TStation>
 class RustStationList {
-	const OpenTTDStationList *list;
+	OpenTTDStationList *list;
 	OpenTTDStationListView View() const { return openttd_rust_station_list_view(this->list); }
 public:
 	class const_iterator {
@@ -109,7 +113,7 @@ public:
 		bool operator==(const const_iterator &other) const = default;
 		uint16_t Id() const { return this->entry->id; }
 	};
-	explicit RustStationList(const OpenTTDStationList *list) : list(list) {}
+	explicit RustStationList(OpenTTDStationList *list) : list(list) {}
 	RustStationList(const RustStationList &) = delete;
 	RustStationList &operator=(const RustStationList &) = delete;
 	const_iterator begin() const { return const_iterator(this->View().data); }
@@ -124,6 +128,9 @@ public:
 		const OpenTTDStationListEntry *at = std::lower_bound(view.data, last, st->index.base(), [](const OpenTTDStationListEntry &e, uint16_t id) { return e.id < id; });
 		return (at != last && at->id == st->index.base()) ? const_iterator(at) : const_iterator(last);
 	}
+	/** Harness fixtures seed nearby sets through the ordered-set operations. */
+	void insert(TStation *st) { openttd_rust_station_list_insert(this->list, st, st->index.base()); }
+	void erase(const TStation *st) { openttd_rust_station_list_erase(this->list, st->index.base()); }
 };
 
 /** Borrowed facade over a station's Rust-owned delivery list. */
@@ -135,5 +142,9 @@ public:
 	RustIndustryList &operator=(const RustIndustryList &) = delete;
 	const OpenTTDIndustryListEntry *begin() const { return openttd_rust_station_industries_near(this->owner).data; }
 	const OpenTTDIndustryListEntry *end() const { auto view = openttd_rust_station_industries_near(this->owner); return view.data + view.size; }
+	/** Harness fixtures seed delivery lists through the ordered-set operations. */
+	void clear() { openttd_rust_station_industries_clear(this->owner); }
+	template <class TIndustry>
+	void insert(uint32_t distance, TIndustry *industry) { openttd_rust_station_industries_insert(this->owner, {distance, industry, industry->index.base()}); }
 };
 #endif /* RUST_STATION_CATCHMENT_FFI_H */
