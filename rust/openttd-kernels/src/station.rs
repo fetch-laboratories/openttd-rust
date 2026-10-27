@@ -418,7 +418,7 @@ impl<'a> Ctx<'a> {
             c,
             s,
             map: s.map(),
-            size_y: (s.map_max_y)() + 1,
+            size_y: (s.map_max_y)().wrapping_add(1),
         }
     }
     /// The catchment table reachable from the shared services.
