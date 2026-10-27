@@ -11,6 +11,7 @@ import subprocess
 import sys
 import time
 from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -40,6 +41,9 @@ COMMON_LOCAL = COMMON_ROOT / ".local"
 REFERENCE = COMMON_LOCAL / "reference/openttd"
 REFERENCE_BUILD = COMMON_LOCAL / "build-reference"
 BASELINE = json.loads((ROOT / "migration/baseline.json").read_text())
+SCENARIO_COVERAGE_PREFIX: ContextVar[str | None] = ContextVar(
+    "scenario_coverage_prefix", default=None
+)
 
 
 def environment():
@@ -66,6 +70,8 @@ def environment():
         prepend("CPATH", deps / "usr/include")
         prepend("PKG_CONFIG_PATH", deps / "usr/lib/x86_64-linux-gnu/pkgconfig")
         env["PKG_CONFIG_SYSROOT_DIR"] = str(deps)
+    if (prefix := SCENARIO_COVERAGE_PREFIX.get()) is not None:
+        env["OPENTTD_COVERAGE_PREFIX"] = prefix
     return env
 
 

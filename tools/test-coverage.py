@@ -138,6 +138,33 @@ class CoverageTests(unittest.TestCase):
             result["unique_lines"], {"one": [("a.cpp", 1)], "two": [("b.cpp", 1)]}
         )
 
+    def test_fresh_hook_environment_keeps_only_current_scenario_prefix(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertNotIn(
+                "OPENTTD_COVERAGE_PREFIX", coverage.migration.environment()
+            )
+            first = coverage.migration.SCENARIO_COVERAGE_PREFIX.set("first")
+            try:
+                self.assertEqual(
+                    coverage.migration.environment()["OPENTTD_COVERAGE_PREFIX"], "first"
+                )
+                second = coverage.migration.SCENARIO_COVERAGE_PREFIX.set("second")
+                try:
+                    self.assertEqual(
+                        coverage.migration.environment()["OPENTTD_COVERAGE_PREFIX"],
+                        "second",
+                    )
+                finally:
+                    coverage.migration.SCENARIO_COVERAGE_PREFIX.reset(second)
+                self.assertEqual(
+                    coverage.migration.environment()["OPENTTD_COVERAGE_PREFIX"], "first"
+                )
+            finally:
+                coverage.migration.SCENARIO_COVERAGE_PREFIX.reset(first)
+            self.assertNotIn(
+                "OPENTTD_COVERAGE_PREFIX", coverage.migration.environment()
+            )
+
     def test_legacy_gcov_function_names(self) -> None:
         trace: coverage.Trace = {
             "files": [

@@ -294,9 +294,20 @@ def measure(
             )
         return last
 
-    result = core.run_scenario(
-        scenario, binaries, builds, folder, 20, timeout, env, game_runner=reference_game
-    )
+    token = migration.SCENARIO_COVERAGE_PREFIX.set(str(prefix))
+    try:
+        result = core.run_scenario(
+            scenario,
+            binaries,
+            builds,
+            folder,
+            20,
+            timeout,
+            env,
+            game_runner=reference_game,
+        )
+    finally:
+        migration.SCENARIO_COVERAGE_PREFIX.reset(token)
     (folder / "result.json").write_text(json.dumps(result, indent=2) + "\n")
     print(f"coverage {name}: {'ok' if result['passed'] else 'FAIL'}", flush=True)
     if not result["passed"]:
