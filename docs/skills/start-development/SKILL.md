@@ -16,15 +16,18 @@ next work. Keep working until the user tells you to stop.
 
 Start by reading AGENTS.md, docs/roadmap.md, docs/rust-migration.md and
 docs/design/world-state.md. The roadmap's latest steering review section holds
-the user's current corrections. Apply them first, then resume from the roadmap's
-checkpoint and work order.
+the user's current corrections. Apply them first. Then run
+`python3 docs/skills/steer/issues.py` and give every unplaced issue a place in
+the roadmap (AGENTS.md: every open issue has one), including issues the user
+opened while you were stopped. Then resume from the roadmap's checkpoint and
+work order.
 
 ## Work loop (repeat indefinitely)
 
-1. Take the first unblocked item in the roadmap's current work order. Fill idle
-   capacity in this order: review and integration of finished work, the Phase 1
-   items, then the next ordered component, only while fewer than six component
-   branches are unintegrated. Keep about five subagents busy within that limit,
+1. Review and integrate finished work first. Fill every other free slot with
+   the highest-ranked unblocked item in the roadmap's work order, which ranks
+   ports, maintenance, testing and housekeeping together; start a new branch
+   only while fewer than six are unintegrated. Keep about five subagents busy within that limit,
    with a fresh agent per task and review round. Close each agent when it
    finishes. At the slot limit, do root work until a slot frees.
 2. Follow the full process for every change: issue (or a checklist item on a
@@ -38,15 +41,23 @@ checkpoint and work order.
    Integrate only the tested combination under strict branch protection.
    For a regression on rust-migration, apply AGENTS.md's automatic rollback
    rule before more integrations; do not assume a fix PR is required.
-3. When fewer than two unstarted components remain ahead of active work, spawn a
-   fresh high-effort planning agent (Astra in Codex) to select the next whole
-   simulation owners, guided by the world-state design and the latest speed
-   profile. Never fall back to utility kernels, src/3rdparty, GUI, paused issues
-   or `deferred-improvement` issues. A simulation owner you set aside after a
-   failed gate stays yours to re-select once a profile shows the fix.
+3. When fewer than two unstarted items remain in the work order, or
+   `issues.py` shows unplaced issues, spawn a fresh high-effort planning agent
+   (Astra in Codex) to rank the next work: candidate owners from the world-state
+   design and every open maintenance, testing and housekeeping issue. Rank by
+   what each item retires, protects or saves: game state still owned by C++,
+   the speed profile's largest net costs, fidelity risk the harness cannot see,
+   recurring cost such as CI time, and design faults already integrated. How
+   easily an item scopes is not a reason to rank it. A port of support code
+   ranks only when a selected game component needs it. Never fall back to
+   utility kernels, src/3rdparty, GUI or `deferred-improvement` issues. Planning also rereads `issues.py`: it places
+   unplaced issues, and returns an excluded or paused item whose recorded
+   condition has been met. A simulation owner you set aside after a failed gate
+   stays yours to re-select once a profile shows the fix.
 4. After every second integration, take stock in "Where the fork stands": C++
    game logic retired, glue and tooling cost, play-save speed ratio, open
-   coverage gaps, and the unintegrated branch count. Profile the merged branch
+   coverage gaps, and the unintegrated branch count. Rerun `issues.py`: place
+   new issues and close any whose remaining scope is done. Profile the merged branch
    for speed in the background and run a speed pass only when AGENTS.md says.
    If retirement stalls, a scenario nears its speed ceiling, or an item stalls
    across review rounds, change course rather than polishing evidence.

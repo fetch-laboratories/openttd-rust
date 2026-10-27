@@ -1,4 +1,4 @@
-<!-- Target rust-migration. About 60 lines; see the evidence budget in AGENTS.md. -->
+<!-- Target rust-migration. See the evidence budget in AGENTS.md. -->
 
 Closes #<issue>. Roadmap item: <phase / issue>.
 
@@ -25,7 +25,7 @@ Agent: <agent path> | Model: <exact model> | Reasoning effort: <effort>
 <!-- Divergences, uncovered input domains, and follow-up issues. "None" is a valid answer. -->
 
 <!--
-Review report (reviewer posts it as a separate comment, about 20 lines):
+Review report (reviewer posts it as a separate comment):
 Agent: <path> | Model: <exact model> | Reasoning effort: <effort>
 Reviewed commit: <sha>
 Findings and fixing commits: <finding -> commit, or why it went to root; or "none">
