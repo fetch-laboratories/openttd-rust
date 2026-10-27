@@ -1218,28 +1218,6 @@ pub unsafe extern "C" fn openttd_rust_disaster_construct(
     });
 }
 /// # Safety
-/// As `openttd_rust_disaster_tick`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_disaster_position(
-    s: *const Services,
-    v: Vehicle,
-    x: i32,
-    y: i32,
-    z: i32,
-) {
-    entry!(s, w, {
-        w.update_position(v, x, y, z);
-    });
-}
-/// # Safety
-/// As `openttd_rust_disaster_tick`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_disaster_image(s: *const Services, v: Vehicle) {
-    entry!(s, w, {
-        w.update_image(v);
-    });
-}
-/// # Safety
 /// As `openttd_rust_disaster_tick`; industry deletion retains source ordering.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_disaster_release_industry(s: *const Services, industry: u16) {
