@@ -28,6 +28,7 @@
 #include "rust/services_assert.h"
 #include "rust/airport_resolver_ffi.h"
 #endif
+
 #include "safeguards.h"
 
 #ifdef WITH_RUST
@@ -65,13 +66,11 @@ const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept
 		.dummy_spec = &AirportSpec::dummy,
 		.dummy_fta = RustDummyAirportFTA(),
 		.fta = RustAirportSpecFTA,
-		.base_spec = [](uint16_t type) noexcept -> const AirportSpec * { return AirportSpec::RustRawSpec(type); },
-		.enabled = [](const AirportSpec *spec) noexcept { return spec->enabled; },
+		.base_spec = RustAirportSpec<const AirportSpec *>,
+		.enabled = RustSpecEnabled<AirportSpec>,
 		.min_year = [](const AirportSpec *spec) noexcept { return spec->min_year.base(); },
 		.max_year = [](const AirportSpec *spec) noexcept { return spec->max_year.base(); },
 		.override_id = RustSpecOverride<AirportSpec>,
-		.manager_grfid = [](uint8_t type) noexcept { return _airport_mngr.GetGRFID(type); },
-		.substitute = [](uint8_t type) noexcept { return _airport_mngr.GetSubstituteID(type); },
 		.never_expire = RustNeverExpireAirports,
 		.station_layout = RustStationAirportLayout,
 		.random = RustStationRandomBits<BaseStation>,
@@ -80,7 +79,7 @@ const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept
 		.tile_root = RustSpecSpriteGroup<AirportTileSpec>,
 		.badges = RustSpecBadges<AirportSpec>,
 		.tile_badges = RustSpecBadges<AirportTileSpec>,
-		.tile_spec = [](uint8_t gfx) noexcept { return AirportTileSpec::Get(gfx); },
+		.tile_spec = RustAirportTileSpec<const AirportTileSpec *>,
 		.tile_override = RustSpecOverride<AirportTileSpec>,
 		.tile_local = RustSpecLocalID<AirportTileSpec>,
 		.tile_grfid = RustSpecGRFID<AirportTileSpec>,
@@ -181,16 +180,13 @@ static_assert(NUM_AIRPORTS == 128 && NEW_AIRPORT_OFFSET == 10 && AT_INVALID == 2
  * @param type index of airport
  * @return A pointer to the corresponding AirportSpec
  */
+#ifndef WITH_RUST
 /* static */ AirportSpec *AirportSpec::GetWithoutOverride(uint8_t type)
 {
 	assert(type < lengthof(AirportSpec::specs));
-
-#ifdef WITH_RUST
-	return AirportSpec::RustRawSpec(type);
-#else
 	return &AirportSpec::specs[type];
-#endif
 }
+#endif
 
 /** Check whether this airport is available to build. */
 bool AirportSpec::IsAvailable() const
@@ -230,6 +226,7 @@ bool AirportSpec::IsWithinMapBounds(uint8_t table, TileIndex tile) const
 /**
  * This function initializes the airportspec array.
  */
+#ifndef WITH_RUST
 void AirportSpec::ResetAirports()
 {
 	extern const AirportSpec _origin_airport_specs[NEW_AIRPORT_OFFSET];
@@ -239,10 +236,12 @@ void AirportSpec::ResetAirports()
 
 	_airport_mngr.ResetOverride();
 }
+#endif
 
 /**
  * Tie all airportspecs to their class.
  */
+#ifndef WITH_RUST
 void BindAirportSpecs()
 {
 	for (int i = 0; i < NUM_AIRPORTS; i++) {
@@ -250,8 +249,10 @@ void BindAirportSpecs()
 		if (as->enabled) AirportClass::Assign(as);
 	}
 }
+#endif
 
 
+#ifndef WITH_RUST
 void AirportOverrideManager::SetEntitySpec(AirportSpec &&as)
 {
 	uint8_t airport_id = this->AddEntityID(as.grf_prop.local_id, as.grf_prop.grfid, as.grf_prop.subst_id);
@@ -275,6 +276,7 @@ void AirportOverrideManager::SetEntitySpec(AirportSpec &&as)
 		this->grfid_overrides[i] = 0;
 	}
 }
+#endif
 
 /* virtual */ uint32_t AirportScopeResolver::GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const
 {

@@ -26,6 +26,10 @@
 #include "newgrf_roadtype.h"
 #include "ship.h"
 
+#ifdef WITH_RUST
+#include "rust/engine_loading_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 void SetWagonOverrideSprites(EngineID engine, CargoType cargo, const SpriteGroup *group, std::span<EngineID> engine_ids)
@@ -1400,6 +1404,7 @@ void TriggerVehicleRandomisation(Vehicle *v, VehicleRandomTrigger trigger)
 
 /* Functions for changing the order of vehicle purchase lists */
 
+#ifndef WITH_RUST
 struct ListOrderChange {
 	EngineID engine; ///< Engine ID
 	uint16_t target; ///< GRF-local ID
@@ -1420,6 +1425,7 @@ void AlterVehicleListOrder(EngineID engine, uint16_t target)
 	/* Add the list order change to a queue */
 	_list_order_changes.emplace_back(engine, target);
 }
+#endif
 
 /**
  * Comparator function to sort engines via scope-GRFID and local ID.
@@ -1442,6 +1448,14 @@ static bool EnginePreSort(const EngineID &a, const EngineID &b)
 	return static_cast<int>(engine_a.grf_prop.local_id) < static_cast<int>(engine_b.grf_prop.local_id);
 }
 
+#ifdef WITH_RUST
+void RustVehicleOrderSort(uint16_t *data, size_t size) noexcept
+{
+	std::ranges::sort(std::span(data, size), [](uint16_t a, uint16_t b) { return EnginePreSort(EngineID{a}, EngineID{b}); });
+}
+#endif
+
+#ifndef WITH_RUST
 /**
  * Determine default engine sorting and execute recorded ListOrderChanges from AlterVehicleListOrder.
  */
@@ -1484,6 +1498,7 @@ void CommitVehicleListOrderChanges()
 	_list_order_changes.clear();
 	_list_order_changes.shrink_to_fit();
 }
+#endif
 
 /**
  * Fill the grf_cache of the given vehicle.

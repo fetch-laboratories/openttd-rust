@@ -46,3 +46,14 @@ pub const VE_TYPE_COUNT: u8 = 2;
 
 /// `EngineMiscFlag::NoDefaultCargoMultiplier`.
 pub const NO_DEFAULT_CARGO_MULTIPLIER: u8 = 1 << 5;
+
+/// `AIR_HELI`.
+pub const AIR_HELI: u8 = 0;
+/// `EC_DIESEL`.
+pub const EC_DIESEL: u8 = 1;
+/// `EC_ELECTRIC`.
+pub const EC_ELECTRIC: u8 = 2;
+/// `EC_MAGLEV`.
+pub const EC_MAGLEV: u8 = 4;
+/// `EngineMiscFlag::Uses2CC`.
+pub const USES_2CC: u8 = 1 << 1;

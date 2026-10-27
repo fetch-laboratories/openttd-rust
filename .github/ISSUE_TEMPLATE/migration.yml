@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Describe a migration task taken from docs/roadmap.md. The original game is the behavioral specification; preserve observed behavior, including quirks. Keep the whole issue to about 60 lines.
+        Describe a migration task taken from docs/roadmap.md. The original game is the behavioral specification; preserve observed behavior, including quirks. Keep it to what the evidence budget in AGENTS.md lists.
   - type: input
     id: attribution
     attributes:

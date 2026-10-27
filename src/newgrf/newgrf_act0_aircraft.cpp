@@ -16,6 +16,11 @@
 #include "newgrf_internal_vehicle.h"
 #include "newgrf_internal.h"
 
+#ifdef WITH_RUST
+#include "../rust/vehicle_properties_ffi.h"
+#include "../rust/newgrf_bytereader_services.h"
+#endif
+
 #include "../safeguards.h"
 
 /**
@@ -28,6 +33,11 @@
  */
 static ChangeInfoResult AircraftVehicleChangeInfo(uint first, uint last, int prop, ByteReader &buf)
 {
+#ifdef WITH_RUST
+	int32_t result = openttd_rust_vehicle_properties(&GetRustVehicleProperties(), &GetRustByteReaderServices(), _cur_gps.grffile, VEH_AIRCRAFT, first, last, prop, &buf);
+	if (result < 0) RustGRFRethrowReadError();
+	return static_cast<ChangeInfoResult>(result);
+#else
 	ChangeInfoResult ret = CIR_SUCCESS;
 
 	for (uint id = first; id < last; ++id) {
@@ -195,6 +205,7 @@ static ChangeInfoResult AircraftVehicleChangeInfo(uint first, uint last, int pro
 	}
 
 	return ret;
+#endif
 }
 
 template <> ChangeInfoResult GrfChangeInfoHandler<GSF_AIRCRAFT>::Reserve(uint, uint, int, ByteReader &) { return CIR_UNHANDLED; }

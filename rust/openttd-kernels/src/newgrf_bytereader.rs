@@ -6,7 +6,10 @@
 #![allow(unsafe_code, missing_docs, clippy::missing_errors_doc)]
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct ReadBounds;
-pub(crate) struct Cursor {
+/// Borrows `len` readable bytes for one decode, with `pos <= len`; callbacks must
+/// preserve the buffer until the decode returns.
+#[repr(C)]
+pub struct Cursor {
     data: *const u8,
     len: usize,
     pos: usize,
@@ -130,9 +133,6 @@ impl<'a> Reader<'a> {
             Err(ReadError)
         }
     }
-    pub fn native(&mut self) -> *mut ByteReader {
-        self.native
-    }
     pub fn byte(&mut self) -> Result<u8, ReadError> {
         let mut value = 0;
         if unsafe { (self.services.read_byte)(self.native, &raw mut value) } {
@@ -187,5 +187,49 @@ impl<'a> Reader<'a> {
 }
 crate::abi::layouts! {
     fn abi_layout;
+    "OpenTTDGrfCursor" ["act2"] => Cursor { data, len, pos };
     "OpenTTDByteReaderServices" ["services"] => Services { has_data, peek_dword, read_bytes, read_byte, read_word, read_dword, skip, read_badges, skip_badges };
+}
+
+/// `ReadVarSize` is called only with 1, 2 or 4 from Action2's six type cases.
+/// The typed size makes the native `NOT_REACHED` default unreachable here.
+#[derive(Clone, Copy)]
+pub(crate) enum VarSize {
+    Byte,
+    Word,
+    Dword,
+}
+pub(crate) trait Read {
+    fn byte(&mut self) -> Result<u8, ReadError>;
+    fn word(&mut self) -> Result<u16, ReadError>;
+    fn dword(&mut self) -> Result<u32, ReadError>;
+    fn var_size(&mut self, size: VarSize) -> Result<u32, ReadError> {
+        match size {
+            VarSize::Byte => self.byte().map(u32::from),
+            VarSize::Word => self.word().map(u32::from),
+            VarSize::Dword => self.dword(),
+        }
+    }
+}
+impl Read for Reader<'_> {
+    fn byte(&mut self) -> Result<u8, ReadError> {
+        self.byte()
+    }
+    fn word(&mut self) -> Result<u16, ReadError> {
+        self.word()
+    }
+    fn dword(&mut self) -> Result<u32, ReadError> {
+        self.dword()
+    }
+}
+impl Read for Cursor {
+    fn byte(&mut self) -> Result<u8, ReadError> {
+        unsafe { self.byte().map_err(|_| ReadError) }
+    }
+    fn word(&mut self) -> Result<u16, ReadError> {
+        unsafe { self.word().map_err(|_| ReadError) }
+    }
+    fn dword(&mut self) -> Result<u32, ReadError> {
+        unsafe { self.dword().map_err(|_| ReadError) }
+    }
 }

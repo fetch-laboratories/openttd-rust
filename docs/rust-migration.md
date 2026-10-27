@@ -376,9 +376,9 @@ after deleting previous outputs.
 
 Server-side protection on `rust-migration` requires `Full validation`, the cheap
 commit/string/script-mode checks, and resolved conversations. Full validation is an explicit
-commit status, published only after the native comparisons, simulation, platform matrix except
-macOS, quick checks and annotation checks succeed for a captured PR merge commit, with the
-status published on its head. Skipped or cancelled jobs cannot satisfy it. Workflow dispatch
+commit status, published only after the native comparisons, simulation, Windows x64, Linux GCC
+SDL2, Emscripten, quick checks and annotation checks succeed for a captured PR merge commit,
+with the status published on its head. Skipped or cancelled jobs cannot satisfy it. Workflow dispatch
 runs the controller from protected `rust-migration`; candidate test jobs have read-only
 permissions and the status publishers never execute candidate code. Required checks must pass on
 the PR head and the branch must be up to date with base (`required_status_checks.strict=true`).
@@ -398,9 +398,13 @@ python3 tools/ci.py request 123 --profile full
 python3 tools/ci.py wait .local/ci-requests/REQUEST.json
 ```
 
-`rust` runs four Cargo checks; `native` adds the Linux matrix and full migration comparison;
-`platform` runs the platform matrix including macOS. All include quick checks. Only `full`
-satisfies the merge gate. Unmergeable or pending-mergeability PRs are refused. The CLI records
+`rust` runs four Cargo checks; `native` adds Linux GCC SDL2 and full migration comparison;
+`platform` diagnoses the entire platform matrix, including macOS, Windows x86, Linux Clang and
+GCC Dedicated. All include quick checks, with Ruff 0.16.8 lint/format and ty 0.0.92 typing.
+Ruff ANN covers new and converted modules; explicit per-file ignores in `ruff.toml` only shrink.
+New and converted modules join the growing `ty.toml` include list; the initial scope is the
+already annotated CI controller and the preflight checker. Existing driver and simulation
+conversions remain on #501. Only `full` satisfies the merge gate. Unmergeable or pending-mergeability PRs are refused. The CLI records
 the SHA and request/run identity and refuses a changed PR head; a changed head, or a base that
 advanced, needs a new full request. `CI_ON_DEMAND=true` enables this scheduling after root
 installs and verifies the required status. With the variable absent, automatic full CI remains
@@ -414,9 +418,9 @@ one, so a burst of merges validates the newest tip and the intermediate pushes s
 cancelled. Markdown-only pushes do not start these workflows, so they cannot displace a pending
 code push. A merged push whose non-Markdown files match the tree marker from the same successful
 full request refreshes native compiler caches without repeating tests or scenarios. Covered
-protected pushes also rebuild the cached Linux GCC and Windows targets to refresh their compiler
-caches. This path skips Cargo checks, CTest, comparison/configuration probes, annotation checks
-and platform evidence; Clang and Emscripten have no compiler cache to refresh. The path is
+protected pushes also rebuild the cached Linux GCC SDL2 and Windows x64 targets to refresh their
+compiler caches. This path skips Cargo checks, CTest, comparison/configuration probes,
+annotation checks and platform evidence; Clang and Emscripten have no compiler cache to refresh. The path is
 derived only from the protected push's matching non-Markdown tree entries, and requested PR
 validation always runs the complete selected suite. A combined tree no full request covered
 receives all native and platform checks. Tree comparisons must be complete; missing or truncated
@@ -441,7 +445,7 @@ GiB (below the 10 GiB repository limit).
 Runner settings are `CI_LINUX_HEAVY`, `CI_LINUX_COMPARISONS`, `CI_LINUX_SIMULATION`,
 `CI_LINUX_PLATFORM` (default `ubuntu-24.04`; Clang only, the cached GCC flavours always use free
 `ubuntu-24.04`), and `CI_MACOS_HEAVY` (default `macos-latest`) and `CI_WINDOWS_HEAVY` (default
-`windows-2022`). Heavy native jobs use `nproc` slots. One full request peaks around 13 jobs;
+`windows-2022`). Heavy native jobs use `nproc` slots. One full request peaks around 10 jobs;
 overlapping requests may queue against account/runner capacity. Runner size and account plan
 remain repository settings. The repository belongs to the `fetch-laboratories` organization,
 where Blacksmith serves the Linux jobs: `CI_LINUX_HEAVY` is `blacksmith-8vcpu-ubuntu-2404` and
@@ -459,11 +463,13 @@ the job average: compile and scenario steps saturate every runner, and setup ste
 one core. Agents authenticate with an org token (`blacksmith org-token create`, admin only),
 never a copy of a person's `~/.blacksmith/credentials`.
 
-macOS runs on `rust-migration`, not per PR (#357). After every fifth integration root runs `gh
-workflow run ci-build.yml --ref rust-migration`, which builds and tests only the two macOS jobs
-at the tip and refreshes their caches, and waits with `gh run watch`; a red result is fixed
-before more integrations. An uncovered protected push also runs them. After two hosted-capacity
-cancellations of a macOS run, root runs `gh variable set CI_MACOS_HEAVY --body
+macOS, Windows x86, Linux Clang and Linux GCC Dedicated run on `rust-migration` after every
+fifth integration (#357, #514). Root runs `gh workflow run ci-build.yml --ref rust-migration`,
+which builds and tests these five jobs (macOS Debug and Release) at the tip, checks their
+annotations and refreshes eligible caches, and waits with `gh run watch`; a red result is fixed
+before more integrations. An uncovered protected push also runs these platforms. A defect
+specific to the cadence platforms can remain undetected until that run and is fixed forward.
+After two hosted-capacity cancellations of a macOS run, root runs `gh variable set CI_MACOS_HEAVY --body
 blacksmith-6vcpu-macos-26`, reruns, and runs `gh variable delete CI_MACOS_HEAVY` when that run
 finishes; setting the variable needs no Blacksmith credentials.
 
@@ -1377,16 +1383,34 @@ setup/allocation control, temporary loading records and rail-label vectors,
 refit-mask computation, variant finalization and road/train binding loops.
 Mappings outlive engine-pool rebuilds. Native EIDS frames serialize canonical
 mapping views in the original engine-ID order; there is no synchronized map.
-Native Action0 ByteReader frames mutate aliases of Rust-owned temporary fields;
-rail-vector views preserve partial parser writes. Field aliases end before
-storage resize/clear; rail-vector views end before vector mutations.
+Vehicle Action0 interpretation extends this same temporary owner (#491); native
+consumers no longer hold temporary-field or rail-vector aliases.
 Rust ends owner borrows before native callbacks, construction and publication.
 Custom-refit evaluation calls the Rust vehicle resolver with the original null
-vehicle context. Specifications, shells, pool allocation, GRF files, parsing,
+vehicle context. Specifications, shells, pool allocation, GRF files, Action0 framing,
 serialization/error frames, badge/livery stores and presentation remain native.
 Typed native leaves are synchronous and noexcept. Historical mappings, pool
 exhaustion, malformed parser sequences, arbitrary GRFs and GUI/network execution
 remain #156 limits. PR #474.
+
+### Vehicle properties and deferred purchase order (#491)
+
+`engine_loading/properties.rs` owns common and all four vehicle Action0 property
+range loops, interpretation and base-price conversion. It mutates the existing
+process-wide `engine_loading.rs` TEMP records, cargo masks and rail-label vectors.
+That owner also holds the deferred purchase-order queue, applies queued changes
+in insertion order, publishes narrowed positions and clears/shrinks the queue.
+Rust reads the type registry's canonical rail-label carrier within one call.
+Specifications, engine shells/pool, file/cargo identity, sound/image validation,
+badge effects and checked ByteReader reads remain native through typed leaves.
+Reader failures return through Rust before the original native exception rethrow;
+partial masks, vectors and badge effects retain their original write order.
+The original native `EnginePreSort` and unstable sort remain shared; Rust calls
+the shared `container_func::slide` port over its local ordering vector.
+Action0 framing, EIDS serialization/error frames and Action3 consumers stay native.
+Historical EIDS, real pool exhaustion, arbitrary GRFs, remaining malformed and
+property/climate combinations, graphics/audio and GUI/network scheduling remain
+#156 limits. PR #495.
 
 ### Engine cargo and articulated query runtime (#439)
 
@@ -1710,6 +1734,20 @@ inspect-window deletion, share canonical typed native leaves with industry consu
 `python3 tools/migration.py simulate town-houses- --jobs 2`, which places every original house
 through `CmdPlaceHouse`. Station removal on house clearance remains a #156 gap. PR #269.
 
+### House definition loading and publication (#477)
+
+`house_definition.rs` owns property decoding, first-substitute allocation policy, local and
+published multitile validation, global publication, earliest-year repair and reset ordering.
+Native HouseSpec shells/defaults, GRF and sprite graphs, string mapping and badge storage remain.
+The checked shared ByteReader preserves prior writes and partial badge-seen effects before
+returning read errors to the decoder's native exception frame. Cargo translation and house
+classes call their existing Rust owners directly. Loading calls house reset/finalisation directly.
+The original property and lifecycle bodies compile only portably. Definition, resolver and
+runtime mapping operations call the canonical Rust override manager registered by the global
+native facade; temporary managers keep independent storage. List and ID errors call the shared
+Rust loading owner directly. Historical HIDS, other climates and unreached property branches
+remain #156 limits. PR #486.
+
 ### House and shared-town NewGRF resolution (#409)
 
 `town/resolver.rs` owns HouseScope/HouseResolver and TownScope/TownResolver query policy,
@@ -2005,9 +2043,9 @@ Rust storage; station/road-stop/airport/object presentation uses one shared regi
 Object-class availability calls the existing Rust eligibility owner.
 
 Canonical native GRF/spec allocations, payload/layout containers, station shells,
-saved slot records, sprite graphs, strings and badges remain native. Checked native
-`ReadSpriteLayoutSprite` and `ReadSpriteLayout` callees preserve their incremental
-writes. A native stack vector carries the temporary sequence payload; Rust drives
+saved slot records, sprite graphs, strings and badges remain native. Direct Rust
+Action2 layout callees preserve their incremental writes through the shared
+reader and opaque native payloads. A native stack vector carries the temporary sequence payload; Rust drives
 every read and its successful move into the layout. Read errors return from Rust
 before the decoder rethrows. Deferred class
 names resolve the spec's current class. Original bodies remain portable-only.
@@ -2046,6 +2084,21 @@ group because native removal leaves a deleted PSA pointer; the retained airport'
 and reloaded. External loading, historical saves, GUI scheduling and that native removal setup
 remain #156 gaps. PR #428, integrated in #444.
 
+### Airport and airport-tile definitions (#492)
+
+`airport_definitions.rs` owns airport/tile Action0 interpretation, allocation decisions,
+reset, ordered publication and override consumption, temporary file-spec cleanup and
+class binding. The integrated manager, class and checked Reader owners are direct Rust
+callees. Native canonical spec payloads, layout storage, defaults, strings, badges, FSMs,
+graphics, stations and APID/ATID save/error frames remain. Rust uses local layout vectors
+and publishes them only after the whole layout property succeeds; earlier scalar reads
+retain their partial effects. Loading is serialized and no owner borrow spans a native
+move, parser service or reset. Original bodies remain portable-only.
+
+Arbitrary external grammar, historical malformed save mappings, remaining layout rotations
+and offset combinations, missing-GRF recovery and GUI/network scheduling remain #156 gaps.
+The existing airport-removal PSA gap is outside this definition owner. PR: #499.
+
 ### Generic NewGRF callbacks (#429)
 
 `newgrf_generic.rs` owns the process-wide ordered feature registry, reverse candidate traversal,
@@ -2073,7 +2126,7 @@ control actions 6/7/9/8/D/E/10, patch flags/variables, GRM, labels, Action6 buff
 reset/status policy and finalization sequencing. One process-wide Rust execution
 carrier owns `_cur_gps`, spriteset maps and spritegroup references; native feature
 parsers hold genuine field aliases. No execution mirror or spec-pool copy exists.
-Native config/GRF/spec objects, parameters, parsed Action2, sprite/file I/O and
+Native config/GRF/spec objects, parameters, sprite/file I/O and
 feature parsers remain. Each named throwing parser catches the original decode
 exception domain and reports failure; Rust applies the bounds-disable policy with
 partial effects retained. File reads do not throw ordinary parsing exceptions.
@@ -2083,6 +2136,25 @@ native file frames preserve file/config restoration and lifetime. Portable bodie
 remain. Arbitrary feature grammars/data sections, historical saves, network clock
 and static influence, remaining GRM/variable/target combinations and GUI scheduling
 remain #156 gaps. PR #473.
+
+### Action2 graph construction and publication (#485)
+
+`newgrf_act2.rs` owns the complete Action2 decoder, callback-result interner,
+range normalization, real-group simplification and tile-layout interpretation.
+The interner is process-wide and stores native pool IDs. Loading dispatch and
+callback reset/final shrink call Rust directly, using the existing execution,
+spriteset, cargo, GRF-version and disable owners. The shared reader dispatches
+Action2 values at the original byte, word and dword widths.
+Native polymorphic sprite groups, final payload vectors, constructors/destructors
+and graphics resources remain canonical. Typed allocation and scalar storage
+bindings retain incremental reads and partial writes; vector element addresses
+expire at vector mutation. Local algorithm vectors live in Rust. Publication
+occurs only at the original final assignment, including explicit null results.
+Checked read failures drop Rust locals and return to the existing decoder error
+boundary. Station definitions call the layout owner directly with the shared reader
+and opaque native payloads; bridge recolouring keeps its native facade. Original bodies remain
+portable. Arbitrary grammars, remaining malformed and advanced-layout combinations,
+historical loading, rendering and network scheduling remain #156 limits. PR #493.
 
 ### Cargo registry, translation and callback lifecycle (#467)
 

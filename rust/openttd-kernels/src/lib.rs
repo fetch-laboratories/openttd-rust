@@ -66,6 +66,7 @@ mod movement;
 mod native_test_support;
 mod network_config;
 mod newgrf;
+mod newgrf_act2;
 mod newgrf_animation_base;
 pub mod newgrf_bytereader;
 mod newgrf_callbacks;
@@ -1426,6 +1427,9 @@ mod newgrf_roadstop;
 mod rail;
 mod type_availability;
 
+mod gfx_type;
+mod house_definition;
+mod newgrf_animation_type;
 mod override_manager;
 
 mod industry_map;
@@ -1440,6 +1444,7 @@ pub mod newgrf_translation;
 
 mod station_association;
 
+mod airport_definitions;
 mod newgrf_layout;
 mod station_definitions;
 

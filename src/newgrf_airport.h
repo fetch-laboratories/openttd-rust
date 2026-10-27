@@ -129,7 +129,9 @@ struct AirportSpec : NewGRFSpecBase<AirportClassID> {
 	std::vector<BadgeID> badges;
 
 	static const AirportSpec *Get(uint8_t type);
+#ifndef WITH_RUST
 	static AirportSpec *GetWithoutOverride(uint8_t type);
+#endif
 #ifdef WITH_RUST
 	/** Canonical array read; callers retain the original branch-specific checks. */
 	static AirportSpec *RustRawSpec(uint16_t type) noexcept;
@@ -138,7 +140,9 @@ struct AirportSpec : NewGRFSpecBase<AirportClassID> {
 	bool IsAvailable() const;
 	bool IsWithinMapBounds(uint8_t table, TileIndex index) const;
 
+#ifndef WITH_RUST
 	static void ResetAirports();
+#endif
 
 	/** Get the index of this spec. */
 	uint8_t GetIndex() const
@@ -152,13 +156,17 @@ struct AirportSpec : NewGRFSpecBase<AirportClassID> {
 private:
 	static AirportSpec specs[NUM_AIRPORTS]; ///< Specs of the airports.
 
+#ifndef WITH_RUST
 	friend void AirportOverrideManager::SetEntitySpec(AirportSpec &&as);
+#endif
 };
 
 /** Information related to airport classes. */
 using AirportClass = NewGRFClass<AirportSpec, AirportClassID, APC_MAX>;
 
+#ifndef WITH_RUST
 void BindAirportSpecs();
+#endif
 
 /** Resolver for the airport scope. */
 struct AirportScopeResolver : public ScopeResolver {

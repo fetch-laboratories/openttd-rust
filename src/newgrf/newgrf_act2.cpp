@@ -22,6 +22,15 @@
 
 #include "../safeguards.h"
 
+#ifdef WITH_RUST
+#include "../rust/newgrf_act2_services.inc"
+
+void MapSpriteMappingRecolour(PalSpriteID *sprite)
+{
+	openttd_rust_action2_recolour(&GetRustAction2Services(), sprite);
+}
+
+#else
 constexpr uint16_t GROUPID_CALLBACK_FAILED = 0x7FFF; ///< Explicit "failure" result.
 constexpr uint16_t GROUPID_CALCULATED_RESULT = 0x7FFE; ///< Return calculated result from VarAction2.
 
@@ -721,9 +730,13 @@ static void NewSpriteGroup(ByteReader &buf)
 	_cur_gps.spritegroups[setid] = act_group;
 }
 
+#endif
+
+#ifndef WITH_RUST
 template <> void GrfActionHandler<0x02>::FileScan(ByteReader &) { }
 template <> void GrfActionHandler<0x02>::SafetyScan(ByteReader &) { }
 template <> void GrfActionHandler<0x02>::LabelScan(ByteReader &) { }
 template <> void GrfActionHandler<0x02>::Init(ByteReader &) { }
 template <> void GrfActionHandler<0x02>::Reserve(ByteReader &) { }
 template <> void GrfActionHandler<0x02>::Activation(ByteReader &buf) { NewSpriteGroup(buf); }
+#endif
