@@ -1133,8 +1133,11 @@ unsafe fn dispatch(
             }
             (13, GLS_INIT | GLS_RESERVE | GLS_ACTIVATION) => return param_set(s, b),
             (2, GLS_ACTIVATION) => {
-                return crate::newgrf_act2::parse(&*s.action2, s, b)
-                    .map_err(|_| crate::newgrf_bytereader::ReadBounds);
+                return if crate::newgrf_act2::openttd_rust_action2_parse(&*s.action2, s, b) {
+                    Ok(())
+                } else {
+                    Err(ReadBounds)
+                };
             }
             (14, GLS_SAFETYSCAN) => return inhibit(s, b, true),
             (14, GLS_INIT | GLS_RESERVE | GLS_ACTIVATION) => return inhibit(s, b, false),

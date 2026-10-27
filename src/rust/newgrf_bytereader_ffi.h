@@ -6,6 +6,11 @@
 #include "../newgrf_badge_type.h"
 #include "../newgrf.h"
 #include "../newgrf/newgrf_bytereader.h"
+struct OpenTTDGrfCursor {
+	const uint8_t *data;
+	size_t len;
+	size_t pos;
+};
 struct OpenTTDByteReaderServices {
 	bool (*has_data)(ByteReader *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(has_data);
 	bool (*peek_dword)(ByteReader *, uint32_t *) noexcept OPENTTD_SERVICE_DEFAULT(peek_dword);

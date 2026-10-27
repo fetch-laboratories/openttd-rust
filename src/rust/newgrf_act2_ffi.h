@@ -114,6 +114,6 @@ const OpenTTDAction2Services &GetRustAction2Services() noexcept;
 extern "C" {
 void openttd_rust_action2_recolour(const OpenTTDAction2Services *, PalSpriteID *);
 void openttd_rust_action2_reset(bool);
-bool openttd_rust_action2_parse(const OpenTTDAction2Services *, const OpenTTDGrfLoadingServices *, const OpenTTDByteReaderServices *, ByteReader *);
+bool openttd_rust_action2_parse(const OpenTTDAction2Services *, const OpenTTDGrfLoadingServices *, OpenTTDGrfCursor *);
 }
 #endif

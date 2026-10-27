@@ -54,16 +54,18 @@ static void Action2PartialRead()
 	AutoRestoreBackup line(_cur_gps.nfo_line, 485U);
 	ResetAction2Callbacks(false);
 	auto parse = [](std::initializer_list<uint8_t> bytes) {
+#ifdef WITH_RUST
+		OpenTTDGrfCursor reader{bytes.begin(), bytes.size(), 0};
+		bool success = openttd_rust_action2_parse(&GetRustAction2Services(), &GetRustGrfLoadingServices(), &reader);
+		return std::pair{!success, reader.len - reader.pos};
+#else
 		ByteReader reader(bytes.begin(), bytes.size());
 		try {
-#ifdef WITH_RUST
-			if (!openttd_rust_action2_parse(&GetRustAction2Services(), &GetRustGrfLoadingServices(), &GetRustByteReaderServices(), &reader)) RustGRFRethrowReadError();
-#else
 			NewSpriteGroup(reader);
-#endif
 			return std::pair{false, reader.Remaining()};
 		}
 		catch (const OTTDByteReaderSignal &) { return std::pair{true, reader.Remaining()}; }
+#endif
 	};
 	Require(!parse({1, 200, 0x81, 0x0C, 0, 255, 1, 3, 128, 0, 255, 255, 127}).first, "action2-first-publication");
 	const auto *published = _cur_gps.spritegroups[200];

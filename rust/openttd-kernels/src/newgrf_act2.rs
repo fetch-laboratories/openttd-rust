@@ -28,7 +28,7 @@ use crate::newgrf::{
     GSF_HOUSES, GSF_INDUSTRIES, GSF_INDUSTRYTILES, GSF_OBJECTS, GSF_RAILTYPES, GSF_ROADSTOPS,
     GSF_ROADTYPES, GSF_ROADVEHICLES, GSF_SHIPS, GSF_STATIONS, GSF_TRAINS, GSF_TRAMTYPES,
 };
-use crate::newgrf_bytereader::{ByteReader, Read, ReadError, Reader, VarSize};
+use crate::newgrf_bytereader::{Cursor, Read, ReadError, VarSize};
 use crate::newgrf_commons::{
     TLF_BB_XY_OFFSET, TLF_BB_Z_OFFSET, TLF_CHILD_X_OFFSET, TLF_CHILD_Y_OFFSET, TLF_CUSTOM_PALETTE,
     TLF_DODRAW, TLF_DRAWING_FLAGS, TLF_KNOWN_FLAGS, TLF_NON_GROUND_FLAGS, TLF_NOTHING, TLF_PALETTE,
@@ -897,11 +897,7 @@ pub(crate) unsafe fn read_layout<R: Read>(
         Ok(false)
     }
 }
-pub(crate) unsafe fn parse<R: Read>(
-    s: &Services,
-    l: &LoadingServices,
-    b: &mut R,
-) -> Result<(), ReadError> {
+unsafe fn parse<R: Read>(s: &Services, l: &LoadingServices, b: &mut R) -> Result<(), ReadError> {
     unsafe {
         let feature = b.byte()?;
         if feature >= GSF_END {
@@ -968,8 +964,7 @@ pub(crate) unsafe fn parse<R: Read>(
 pub unsafe extern "C" fn openttd_rust_action2_parse(
     s: &Services,
     l: &LoadingServices,
-    reads: &crate::newgrf_bytereader::Services,
-    native: *mut ByteReader,
+    reader: &mut Cursor,
 ) -> bool {
-    unsafe { parse(s, l, &mut Reader::new(native, reads)).is_ok() }
+    unsafe { parse(s, l, reader).is_ok() }
 }

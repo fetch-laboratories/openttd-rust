@@ -6,7 +6,10 @@
 #![allow(unsafe_code, missing_docs, clippy::missing_errors_doc)]
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct ReadBounds;
-pub(crate) struct Cursor {
+/// Borrows `len` readable bytes for one decode, with `pos <= len`; callbacks must
+/// preserve the buffer until the decode returns.
+#[repr(C)]
+pub struct Cursor {
     data: *const u8,
     len: usize,
     pos: usize,
@@ -184,6 +187,7 @@ impl<'a> Reader<'a> {
 }
 crate::abi::layouts! {
     fn abi_layout;
+    "OpenTTDGrfCursor" ["act2"] => Cursor { data, len, pos };
     "OpenTTDByteReaderServices" ["services"] => Services { has_data, peek_dword, read_bytes, read_byte, read_word, read_dword, skip, read_badges, skip_badges };
 }
 
