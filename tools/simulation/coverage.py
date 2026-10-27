@@ -26,6 +26,9 @@ GCOVR = [
     "--no-markers",
     "--no-exclude-noncode-lines",
     "--include-internal-functions",
+    # Long cache-check games exceed gcovr's default 32-bit count heuristic.
+    "--gcov-suspicious-hits-threshold",
+    str(2**63),
 ]
 
 

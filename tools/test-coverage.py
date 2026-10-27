@@ -5,6 +5,7 @@ import contextlib
 import io
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -40,6 +41,22 @@ class CoverageTests(unittest.TestCase):
                     env=dict(env, GCOV_PREFIX=str(prefix / "process")),
                     check=True,
                 )
+                if name == "true":
+                    scaled = root / "scaled"
+                    subprocess.run(
+                        [
+                            "gcov-tool",
+                            "rewrite",
+                            "--scale",
+                            str(2**33),
+                            "--output",
+                            str(scaled),
+                            str(prefix / "process"),
+                        ],
+                        check=True,
+                    )
+                    shutil.rmtree(prefix / "process")
+                    scaled.rename(prefix / "process")
                 with (
                     patch.object(coverage.migration, "REFERENCE", root),
                     contextlib.redirect_stdout(io.StringIO()),
@@ -79,7 +96,7 @@ class CoverageTests(unittest.TestCase):
                 for f in result["files"][0]["functions"]
             }
             self.assertEqual(functions["never(int)"]["execution_count"], 0)
-            self.assertEqual(functions["value(int)"]["execution_count"], 2)
+            self.assertEqual(functions["value(int)"]["execution_count"], 1 + 2**33)
             self.assertEqual(functions["value(int)"]["branches_covered"], 2)
             self.assertEqual(result["unique_lines"], {"false": [], "true": []})
             self.assertIn("2 of 3 (66.67%)", coverage.markdown(result))
