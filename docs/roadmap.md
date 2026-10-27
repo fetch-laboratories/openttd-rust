@@ -5,35 +5,31 @@ this roadmap over conflicting issues; it is the current state of the umbrella
 issue #3. Update it in place; `/steer` prunes it.
 Evidence stays in PRs.
 
-## Where the fork stands (2026-10-27, code at `fbf9f1cc5a`)
+## Where the fork stands (2026-10-27, code at `be18afafda`)
 
-- 76 ownership ports. Since the wind-down: #502 (#514 cadence split, #501
-  gate configuration) at `1fae5d498a`, #521 (macOS annotation warnings) at
-  `cf8e561d61`, #517 (#275 ground-vehicle accessor audit) at `7274b59099` and
-  #519 (#515 orphans and accessors, #500's first ID types, #506's
-  `thread_local!` check) at `fbf9f1cc5a`, each at its exact-head Full. #501
-  stays open for its annotation batches. No rollback target is known.
-- The last full source inventory, at `3b3382ce1c`, counted 69,604 of 470,612
-  original lines retired (14.79%), including 54,826 of 102,615 simulation
-  lines (53.43%); whole-fork Rust, tooling and glue were 124,441, 43,590 and
-  44,370 lines. #486, #499 and #521 retire another 896 original lines by their
-  component metrics. #522 (catchment, 700 retired) is in its fixture rework.
-- Speed: the pinned-runtime profile at `c04219b0d8` passed all six identity
-  checks with projections unchanged (TGP 1.1788x, Grok 1.3948x, Opus 1.4018x,
-  P1996 1.3354x, P2000 1.3934x, P2016 1.4695x). At `7274b59099` the identity
-  check fails because #517 changed `Cargo.toml` and CMake (a quiet pass must
-  re-anchor), and raw candidate loop counts rose against `c04219b0d8`:
-  Grok +4.05%, Opus +3.95%, P1996 +2.25%, P2000 +2.81%, P2016 +3.00%, TGP
-  -0.02%. P2016 would project about 1.53x, over its 1.5x ceiling. #517 was
-  meant to save about 1.6% there. Attribution and the fix-forward maintenance
-  PR are in progress under #275; that fix integrates before other maintenance,
-  and the re-anchoring pass follows it.
-- The first split cadence dispatch passed every build and test; its macOS
-  annotation check, first enabled on dispatch by #502, failed on warnings that
-  #521 fixed (its platform run passed both macOS annotation checks).
-- Unintegrated branches: #518 (coverage corpus rerun), #520 (reviewed, base
-  updated over #519 by removing only conflict markers), #522 (catchment) and
-  the coming #275 speed fix. #512's tally is due after two more integrations.
+- 77 ownership ports: catchment #522 (#516) integrated at `4c73c991e9`.
+  Maintenance since the wind-down: #502 (cadence split, typing gates), #521
+  (macOS annotation warnings), #517 (#275 accessor audit), #519 (#515
+  orphans, #500's first ID types, #506's check), #523 (#275 speed recovery)
+  and #520 (#168 disaster boundary), each at its exact-head Full. Eleven
+  integrations since the twenty-first steering review; no rollback target.
+- Whole-fork inventory at `be18afafda`: 71,218 of 470,612 original lines
+  retired (15.13%), including 55,546 of 102,615 simulation lines (54.13%);
+  Rust, tooling and glue are 127,585, 44,489 and 45,227 lines. These measures
+  include comments/data, not completed behavior.
+- Speed: #517's audited reads raised play loop counts 2.2% to 4.0% (P2016
+  +3.0%, projecting about 1.53x). #523 recovered it by restoring callback-path
+  codegen and returning audited pixel heights to their typed services:
+  pinned-runtime counts are within +0.11% of `c04219b0d8` on every scenario
+  (TGP -0.38%). Projections stay at their `c04219b0d8` values (TGP 1.1788x,
+  Grok 1.3948x, Opus 1.4018x, P1996 1.3354x, P2000 1.3934x, P2016 1.4695x),
+  but #517 changed the build identity, so the f492 anchors no longer match;
+  a quiet pass re-anchors once the host is quiet.
+- The tenth-integration cadence dispatch on `4481a442f6` passed every platform
+  and annotation check. #512's first tally (19 finders: review 11, comparison
+  4, scenario 2, CI 2) is posted and the issue closed.
+- Unintegrated branches: #518 (coverage corpus rerun with a longer per-game
+  timeout, about 2.5 hours). Five component slots are free.
 
 ## Twenty-first steering review (2026-10-26, orphans, concurrency, cadence and accessor cost)
 
@@ -289,6 +285,7 @@ Metrics are `tools/port-metrics.py`: Rust / tooling / C++ glue / C++ retired.
 | #491 | Vehicle properties and deferred purchase ordering | #495 | `3b3382ce1c` | 1148 / 338 / 367 / 1031; net glue 290 |
 | #477 | House definition loading and publication | #486 | `fc3bf4b20b` | 714 / 372 / 221 / 532; net glue 193 |
 | #492 | Airport and airport-tile definitions | #499 | `c04219b0d8` | 590 / 297 / 311 / 336; net glue 251 |
+| #516 | Station catchment, rectangles and nearby lists | #522 | `4c73c991e9` | 2216 / 315 / 461 / 702; net glue 204 |
 
 Maintenance rows use original retirement and net glue (#223); evidence stays in PRs.
 Batches before #453 (#358 to #448) are recorded in their PRs.
@@ -308,6 +305,12 @@ Batches before #453 (#358 to #448) are recorded in their PRs.
 | #199 train/order boundaries, loading disable helpers; #275 quiet anchors; town fixture repair | #487; #489 repair | #489 | `da1e7b7ade` | #487: 61 / 8 / 61 / 0; net glue -3 |
 | #275 primary dispatch, compact visual observations and deferred train resolution | #490 | direct | `f4923c79eb` | 28 / 3 / 18 / 0; net glue 1 |
 | #275 road compiler boundaries, shared movement cache and six quiet anchors; direct class resets | #496; #494 combination | #494 | `4853789508` | #496: 55 / 9 / 2 / 0; net glue 0; combination retires 22 class-default lines |
+| #514 cadence split; #501 gate configuration | #502 | direct | `1fae5d498a` | 0 / 118 / 0 / 0; net glue 0 |
+| Cadence annotation warnings; orphan cargo-label export | #521 | direct | `cf8e561d61` | 0 / 0 / 5 / 28; net glue -4 |
+| #275 ground-vehicle accessor audit | #517 | direct | `7274b59099` | 536 / 19 / 42 / 0; net glue 34 |
+| #515 orphans and accessors; #500 first ID types; #506 quick check | #519 | direct | `fbf9f1cc5a` | 328 / 82 / 144 / 13; net glue 66 |
+| #275 recovery of the post-#517 loop rise | #523 | direct | `4481a442f6` | 65 / 0 / 0 / 0; net glue -2 |
+| #168 disaster typed services and direct calls | #520 | direct | `be18afafda` | 1168 / 118 / 323 / 3; net glue 111 |
 
 ## Work order
 
@@ -315,29 +318,22 @@ One ranked list (twenty-first steering, correction 1). Each free slot takes the
 highest unblocked item; finishing review and integration comes first. Rank
 reasons are one line each; scope is in the issues and corrections above.
 
-1. **#275 speed fix for the `7274b59099` rise** (above): attribute per
-   function, fix forward as the next maintenance PR, then a quiet pass
-   re-anchors the identity #517 changed and the #517 credit is recorded.
-2. **#520** (reviewed) integrates after the speed fix; **#522** (ownership)
-   proceeds to its independent review and Full meanwhile.
-3. **#504 coverage**: cheap, no CI cost, measures where the harness is blind
-   across the ownership ports and ranks #156's gaps. Draft #518 is rerunning
-   the whole reference-only corpus at its fixed head; then report, #156
-   update, independent fixing review and Full.
-4. **#516 catchment**, PR #522 (fixture rework, then review): Rust owns station
-   rectangles, catchment bitmaps and nearby lists. It adopts #520's shared
-   `RustIndustryTileIndex` and #519's ID types when they integrate and builds
-   no parallel copy.
-5. **#503** deep tier with `--soak`, which runs nowhere today.
-6. **#507** corpus, NewGRF sets first: no play save loads a NewGRF file.
-7. **#275 tile-loop batch**: #312 trees, houses and water, about 1.6% of the
-   P2016 loop.
-8. **#505** ASan and UBSan.
-9. **#508** random-command AI, aimed at command code #504 shows unexecuted.
-10. **#511** mutation study, classified with #504's report.
-11. **#506** threaded and TSan run, once its deterministic stop is designed.
-12. **#509** Windows and macOS subset; **#510** multiplayer spike.
-13. **#501** annotation batches ride maintenance PRs that touch those tools.
+1. **Quiet speed pass to re-anchor** the six scenarios on the post-#517
+   build identity, once #518's corpus finishes and no builds run; record the
+   anchors in `tools/simulation/instructions.py` through a maintenance PR.
+2. **#504 coverage**, draft #518: report, #156 update, independent fixing
+   review and Full; its report ranks #156 and names default scenarios that
+   add no unique coverage.
+3. **#275 tile-loop batch**: #312 trees, houses and water, about 1.6% of the
+   P2016 loop, attributed against the retained reference profile.
+4. **#503** deep tier with `--soak`, which runs nowhere today.
+5. **#507** corpus, NewGRF sets first: no play save loads a NewGRF file.
+6. **#505** ASan and UBSan.
+7. **#508** random-command AI, aimed at command code #504 shows unexecuted.
+8. **#511** mutation study, classified with #504's report.
+9. **#506** threaded and TSan run, once its deterministic stop is designed.
+10. **#509** Windows and macOS subset; **#510** multiplayer spike.
+11. **#501** annotation batches ride maintenance PRs that touch those tools.
 
 Recurring: profile the current merged tip under the f492 anchors after this
 two-integration stocktake (a quiet pass only under AGENTS.md's in-band rule);
@@ -354,16 +350,15 @@ needs it beyond #516; GUI and platform after the simulation; the six
 ## Resume checkpoint
 
 Resumed 2026-10-27 by a Claude Code root (claude-opus-5-5, xhigh); reviews
-run on gpt-6.1-sol (high) through T3. Code at `fbf9f1cc5a`; no confirmed
-functional regression or rollback target; one speed regression (above).
+run on gpt-6.1-sol (high) through T3. Code at `be18afafda`; no confirmed
+regression or rollback target.
 
 | Item | Head | Next action | Running jobs or CI |
 | --- | --- | --- | --- |
-| #275 speed rise | `7274b59099` profiled | Attribution agent finds the cause and opens the fix-forward PR; then Full, merge, quiet re-anchoring pass. | Attribution running. |
-| #520 disaster services | `ffe0f70cab` (local) | Push after local checks; Full after the speed fix integrates; merge. | Local checks running. |
-| #522 catchment | `e4b038b9b1` | Fixture rework removes four harness-only exports; then independent review, base update, Full. | Implementation agent working. |
-| #518 coverage | `0bf8d71c0e` | Whole-corpus rerun, then report, #156 update, review and Full. | Corpus running in its worktree. |
-| Cadence | split run fixed by #521 | Next dispatch after the tenth integration since steering. | None. |
+| #518 coverage | `0bf8d71c0e` | Corpus finishes, then report, #156 update, independent review and Full. | Corpus run in its worktree since 07:07 UTC. |
+| Quiet speed pass | f492 anchors stale | Run when #518's corpus ends and no builds run; anchors land through a maintenance PR. | None. |
+| Next work | work order 3 to 6 | Start when the Claude session window allows (it was above 60%). | None. |
+| Cadence | green at `4481a442f6` | Next dispatch after the fifteenth integration since steering. | None. |
 
 Selection: /root, gpt-6.1-sol, xhigh; planning agents run gpt-6-astra, high.
 Scopes and evidence plans are in the selected issues; PRs carry current task status.
