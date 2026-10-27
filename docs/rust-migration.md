@@ -1877,11 +1877,11 @@ or stable identities. Owner loads/stores end before depot, road-stop, sound, vie
 calls. Train stopping, crossing occupancy, order stopping, slope/pixel and bridge helpers call
 their integrated Rust owners directly. Road pathfinder track bits and road/ship YAPF plus
 water-region movement queries also call Rust directly; header preconditions follow native
-assertion policy, without valid-input FFI. Road and aircraft controllers acquire
-the shared map descriptor once for fresh movement tile-type, pixel location/slope
-and normal-road bits/status/road-type reads. Native storage and setters remain;
-standalone, train/ship, YAPF and water-region entries retain typed services, as do
-partial fixtures and water-subtype reads. PR #517. Native facades serve remaining native callers;
+assertion policy, without valid-input FFI. Road controllers acquire the shared map
+descriptor once for fresh track-status tile-type and normal-road bits/status/road-type
+reads. Native storage and setters remain; pixel heights, aircraft, standalone,
+train/ship, YAPF and water-region entries retain typed services, as do partial
+fixtures and water-subtype reads. PRs #517 and #523. Native facades serve remaining native callers;
 portable original bodies remain excluded from WITH_RUST. Checks: `python3 tools/migration.py
 rust-checks`, `build`, native ABI tests, the existing rail/road/station scenarios and `python3
 tools/landscape-comparison.py` (foundation and signed-coordinate cases). NewGRF foundations,

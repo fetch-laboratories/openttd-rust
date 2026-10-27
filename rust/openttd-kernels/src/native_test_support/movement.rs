@@ -8,7 +8,7 @@
 //! Native oracle for the private production movement context.
 use super::{Context, MapObservations, table};
 use crate::services::Services;
-use crate::tile_type::{MP_ROAD, TILE_SIZE};
+use crate::tile_type::MP_ROAD;
 
 /// Native map probe uses the production context against unchanged native helpers.
 /// The mutation callback preserves allocation/dimensions and serialization.
@@ -21,29 +21,15 @@ pub(crate) fn map_read_probe(
     // SAFETY: The native probe supplies the same no-reset interval as its entry.
     let observations = MapObservations {
         types: unsafe { crate::map_func::TileTypeAccess::raw(allocation, shared.tile_type) },
-        x: (shared.map_max_x)() + 1,
-        y: (shared.map_max_y)() + 1,
     };
     let s = table(shared);
-    let context = Context {
+    let context = Context::<true> {
         s,
         observations: Some(&observations),
     };
     for pass in 0..2 {
-        let map = crate::map_func::Map::from_log_x(observations.x.trailing_zeros());
-        let x = (map.tile_x(tile) * TILE_SIZE + TILE_SIZE / 2).cast_signed();
-        let y = (map.tile_y(tile) * TILE_SIZE + TILE_SIZE / 2).cast_signed();
-        let expected = (s.pixel_location)(x, y);
-        let actual = context.pixel_location(x, y);
-        let slope = context.pixel_slope(tile);
-        let expected_slope = (s.pixel_slope)(tile);
         let kind = (shared.tile_type)(tile);
-        if actual.tile != expected.tile
-            || actual.kind != expected.kind
-            || context.tile_type(tile) != kind
-            || slope.slope != expected_slope.slope
-            || slope.z != expected_slope.z
-        {
+        if context.tile_type(tile) != kind {
             return false;
         }
         if kind == MP_ROAD && (s.normal_road)(tile) {

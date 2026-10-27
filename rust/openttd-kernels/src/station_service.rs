@@ -1921,6 +1921,8 @@ pub(crate) unsafe fn load_station(
     unsafe { load_station_queue(state, node, w, l, visits, &refit) };
 }
 
+// Out of line so the empty-queue check above stays inlined at the scheduler.
+#[inline(never)]
 unsafe fn load_station_queue(
     state: *mut Service,
     mut node: *mut QueueEntry,
