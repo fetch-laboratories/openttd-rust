@@ -95,10 +95,12 @@ fork; the remaining upstream documentation explains behavior and architecture.
   removes a name greps `tools/simulation/` and `src/tests/` for it: fixtures of
   scenarios not run locally compile only in Full.
 - The selected #274 shared map descriptor is limited to audited scheduler clear,
-  water and tree loops (`docs/design/world-state.md`). C++ retains canonical
-  arrays and writes. Shared header helpers preserve native assertions; raw
-  field loads end before callbacks and descriptor lifetime requires a proved
-  no-reset/no-yield interval. Other entries keep typed services until audited.
+  water and tree loops and the audited road track-status reads retained by #523
+  (`docs/design/world-state.md`). Pixel heights/slopes and other vehicle paths
+  keep typed services. C++ retains canonical arrays and writes. Shared header
+  helpers preserve native assertions; raw field loads end before callbacks and
+  descriptor lifetime requires a proved no-reset/no-yield interval. Other
+  entries keep typed services until audited.
 - Deferral names an owned issue whose result can lift it; a re-selection
   condition that waits on another deferred or unscheduled item is circular. A
   core loop (tile loop, vehicle tick) that misses the retirement ratio gets a
@@ -110,7 +112,9 @@ fork; the remaining upstream documentation explains behavior and architecture.
   out of the work order gets an issue first. Root places every unplaced issue,
   including the user's, when it starts and whenever it plans, and re-checks
   each exclusion's condition; `python3 docs/skills/steer/issues.py` lists
-  them. Work that finishes an issue's remaining scope closes it.
+  them. A historical mention or completed checklist entry is not placement for
+  remaining work; root checks the current action or selection event. Work that
+  finishes an issue's remaining scope closes it.
 - Evidence for game-logic ports is the semantic simulation harness (`python3
   tools/migration.py simulate`, #72) plus the existing tests; a new game-logic
   port integrates only after its harness scenarios exercise the component.
@@ -285,6 +289,9 @@ at lower effort than root, and a fresh reviewer per round. A Claude Code root
 runs implementation and planning on its host's models and keeps independent
 review on `gpt-6.1-sol` (high) through T3 `delegate_task`, so a reviewer's model
 family differs from the implementer's.
+Under a Claude Code root, implementation, fixes and code-touching follow-ups
+run on Opus. Sonnet handles only non-code work such as runs, measurements and
+tracker edits (user decision, 2026-10-27).
 
 Spawn a fresh agent for each task and name it after that task; its name is its
 attribution. Do not reassign a finished agent to unrelated work. Each review
@@ -328,8 +335,10 @@ For substantive changes:
    Root spot-checks the fix commits before integration. Findings that need a
    scope or policy decision go to root unfixed. Commits that only fix CI
    warnings or platform errors, or only record speed medians, need no new
-   review: the implementer or root makes them and CI checks them. Updating a
-   reviewed PR from its base needs no new review when CI passes and the update
+   review: the implementer or root makes them and CI checks them. A simulation
+   behavior fix found by CI, including arithmetic or assertion behavior, needs
+   a fresh scoped review; it is not a warning or platform-build repair. Updating
+   a reviewed PR from its base needs no new review when CI passes and the update
    either has no conflicts in `src/`, `rust/`, `tools/` or `.github/`, or
    resolves each one by keeping both sides' lines unchanged (`git show
    --remerge-diff` removes only conflict markers; root records this on the PR).
@@ -475,7 +484,9 @@ out. `.local/`
 holds only caches and rebuildable output: delete ad hoc output (CI artifacts,
 probe runs, logs, superseded runtimes) once the PR or issue records it. Establish
 file provenance before calling it user-owned; untracked files may be outputs
-left by earlier agents and follow the same cleanup rule.
+left by earlier agents and follow the same cleanup rule. Preserve runtimes,
+libraries and profiles referenced by current speed anchors or active evidence
+until their replacements are recorded; rebuildable does not mean superseded.
 
 Docs-only changes (only `docs/` or `*.md` files, such as roadmap updates and
 skill edits under `docs/skills/`) are committed directly to `rust-migration` as
