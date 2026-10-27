@@ -218,6 +218,7 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 	};
 	return services;
 }
+#include "abi-visit-OpenTTDAirportDefinitionServices.hpp"
 #include "abi-visit-OpenTTDGrfLoadingServices.hpp"
 #include "abi-visit-OpenTTDStationClassServices.hpp"
 #include "abi-visit-OpenTTDRoadStopClassServices.hpp"
@@ -226,6 +227,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 bool CheckAbi_grf_loading()
 {
 	const auto &s = GetRustGrfLoadingServices();
-	return AbiServicesComplete(s) && AbiServicesComplete(*s.station_classes) && AbiServicesComplete(*s.roadstop_classes) && AbiServicesComplete(*s.airport_classes) && AbiServicesComplete(*s.object_classes);
+	return AbiServicesComplete(s) && AbiServicesComplete(*s.airports) && AbiServicesComplete(*s.station_classes) && AbiServicesComplete(*s.roadstop_classes) && AbiServicesComplete(*s.airport_classes) && AbiServicesComplete(*s.object_classes);
 }
 #endif
