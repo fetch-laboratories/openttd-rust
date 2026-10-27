@@ -57,6 +57,8 @@ use crate::vehicle::{
     PositionObservations, SpeedInputs, TickStatus, VehicleRef, VehicleServices, XY, YEAR_TICKS,
 };
 use crate::vehicle_base::{VS_AIRCRAFT_BROKEN, VS_CRASHED, VS_HIDDEN, VS_STOPPED};
+/// `aircraft.h::ROTOR_Z_OFFSET`.
+pub(crate) const ROTOR_Z_OFFSET: i32 = 5;
 use std::cell::Cell;
 use std::ffi::c_void;
 use std::ptr::NonNull;

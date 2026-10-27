@@ -19,3 +19,10 @@ pub const INDUSTRY_NUM_INPUTS: usize = 16;
 pub const INDUSTRY_NUM_OUTPUTS: usize = 16;
 pub const INDUSTRY_ORIGINAL_NUM_INPUTS: usize = 3;
 pub const INDUSTRY_ORIGINAL_NUM_OUTPUTS: usize = 2;
+
+/// `IndustryBehaviour::AirplaneAttacks`.
+pub const AIRPLANE_ATTACKS: u32 = 1 << 11;
+/// `IndustryBehaviour::ChopperAttacks`.
+pub const CHOPPER_ATTACKS: u32 = 1 << 12;
+/// `IndustryBehaviour::CanSubsidence`.
+pub const CAN_SUBSIDENCE: u32 = 1 << 13;

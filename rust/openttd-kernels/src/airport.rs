@@ -84,3 +84,8 @@ pub(crate) fn get_vehicle_pos_on_build(tile: u32, s: &crate::newgrf_airport::Ser
 
 /// Maximum total airport specifications.
 pub const NUM_AIRPORTS: u16 = 128;
+
+/// `airport.h::AT_SMALL`.
+pub(crate) const AT_SMALL: u8 = 0;
+/// `airport.h::AT_LARGE`.
+pub(crate) const AT_LARGE: u8 = 1;

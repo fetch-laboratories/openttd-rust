@@ -1221,15 +1221,16 @@ industry construction reset and square-clearing policy, movement, shadow/rotor u
 target-release hooks, plus each shell's state, flags, image override and destroyer target, and
 the persisted global delay. Original bodies compile only in portable builds. Copied observations
 and direct noexcept shared services preserve original ordering and shared RNG draws. Private
-scalar addresses remain stable through modern and legacy save staging; flight helpers borrow
-only the flags scalar for their call. World clones share an immutable service-table borrow tied
-to the Run/future lifetime (#299), ending on destruction, including cancellation. Production
-uses the process-wide const table; Rust fixtures own separate tables through destruction, and
-native partial tables stay in scope. Callbacks may mutate their separate context, never the
-borrowed table. Movement uses a borrowed typed occupancy context (#377): it resolves each shell
-once, updates the Rust index and calls the base viewport leaf; clear retains native costs.
-Checks: the default `disasters` simulation. Legacy save fixtures, viewport pixels, sound output,
-allocator failure timing and exhaustive NewGRF combinations remain limits. PRs #118 and #300.
+scalar addresses remain stable through modern and legacy save staging; flight helpers use
+only the flags scalar for their call. Each synchronous entry borrows immutable tables and
+resolves its native shell once; typed pool traversal retains original IDs and allocation order.
+Private scalar accesses end before callbacks, including deletion and target-release reentry.
+Aircraft flight helpers and road crashes call their Rust owners directly. Script events queue
+without invoking a VM; deletion, crashes and landscape-clear commands require no throwing
+service protocol. Canonical map, pool and base-vehicle storage stays native. Movement updates
+the Rust occupancy index and calls the base viewport leaf; square clearing retains native costs.
+Legacy save fixtures, viewport pixels, sound output and exhaustive NewGRF combinations remain
+limits. PRs #118, #300 and #520.
 
 ### Road vehicle control and private state
 

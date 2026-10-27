@@ -18,7 +18,11 @@
 
 static_assert(VEH_EFFECT == 4);
 static_assert(VehicleID::Invalid().base() == 1048575);
-static_assert(ST_BIG_SUBMARINE == 14 && ROTOR_Z_OFFSET == 5);
+static_assert(ST_ZEPPELINER == 0 && ST_ZEPPELINER_SHADOW == 1 && ST_SMALL_UFO == 2 && ST_SMALL_UFO_SHADOW == 3);
+static_assert(ST_AIRPLANE == 4 && ST_AIRPLANE_SHADOW == 5 && ST_HELICOPTER == 6 && ST_HELICOPTER_SHADOW == 7 && ST_HELICOPTER_ROTORS == 8);
+static_assert(ST_BIG_UFO == 9 && ST_BIG_UFO_SHADOW == 10 && ST_BIG_UFO_DESTROYER == 11 && ST_BIG_UFO_DESTROYER_SHADOW == 12);
+static_assert(ST_SMALL_SUBMARINE == 13 && ST_BIG_SUBMARINE == 14 && ROTOR_Z_OFFSET == 5);
+static_assert(VehStates{VehState::Unclickable}.base() == 4 && VehStates{VehState::Shadow}.base() == 32);
 static_assert(SPR_BLIMP == 3905 && SPR_BLIMP_CRASHING == 3906 && SPR_BLIMP_CRASHED == 3907);
 static_assert(SPR_UFO_SMALL_SCOUT == 3908 && SPR_UFO_SMALL_SCOUT_DARKER == 3909);
 static_assert(SPR_SUB_SMALL_NE == 3910 && SPR_SUB_LARGE_NE == 3914 && SPR_F_15 == 3918 && SPR_F_15_FIRING == 3919);
@@ -31,6 +35,8 @@ static_assert(TRACK_BIT_ALL == 63 && EV_CRASH_SMOKE == 4 && EV_EXPLOSION_LARGE =
 #include "settings_services.h"
 #include "environment_services.h"
 
+static_assert(to_underlying(IndustryBehaviour::AirplaneAttacks) == 11 && to_underlying(IndustryBehaviour::ChopperAttacks) == 12 && to_underlying(IndustryBehaviour::CanSubsidence) == 13);
+static_assert(AT_SMALL == 0 && AT_LARGE == 1);
 static_assert(SND_12_EXPLOSION == 16 && DIRDIFF_90LEFT == 6);
 
 static OpenTTDDisasterVehicle DisasterHandle(DisasterVehicle *v) noexcept
@@ -48,9 +54,9 @@ static OpenTTDDisasterRoadTarget DisasterRoadHandle(RoadVehicle *v) noexcept
 static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterNextPart(OpenTTDVehicle *v) noexcept
 {
 	Vehicle *next = RustVehicleNext(VehicleOf(v));
-	return DisasterHandle(next == nullptr ? nullptr : DisasterVehicle::From(next));
+	return DisasterHandle(static_cast<DisasterVehicle *>(next));
 }
-static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterResolve(uint32_t id) noexcept { return DisasterHandle(DisasterVehicle::Get(id)); }
+static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterResolve(uint32_t id) noexcept { return DisasterBaseHandle(Vehicle::Get(id)); }
 static OpenTTDDisasterRoadTarget OPENTTD_RUST_CALL DisasterRoadTarget(uint32_t id) noexcept
 {
 	RoadVehicle *target = RoadVehicle::Get(id);
@@ -73,22 +79,6 @@ static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterNextTrain(uint32_t from)
 	for (Train *v : Train::Iterate(from)) return DisasterBaseHandle(v);
 	return DisasterBaseHandle(nullptr);
 }
-static OpenTTDDisasterRoadSelection OPENTTD_RUST_CALL DisasterRoadSelection(OpenTTDVehicle *shell) noexcept
-{
-	const RoadVehicle *v = RoadVehicle::From(VehicleOf(shell));
-	return {.front = RustVehicleFront(v), .disaster = v->disaster_vehicle.base()};
-}
-static OpenTTDDisasterRoadApproach OPENTTD_RUST_CALL DisasterRoadApproach(OpenTTDVehicle *shell) noexcept
-{
-	const Vehicle *v = VehicleOf(shell);
-	return {.x = RustVehicleX(v), .y = RustVehicleY(v), .status = RustVehicleStatus(v), .breakdown = RustVehicleBreakdownCounter(v)};
-}
-static void OPENTTD_RUST_CALL DisasterWriteRoadTarget(OpenTTDVehicle *v, uint32_t disaster) noexcept { RoadVehicle::From(VehicleOf(v))->disaster_vehicle = VehicleID{disaster}; }
-static OpenTTDDisasterTrainSelection OPENTTD_RUST_CALL DisasterTrainSelection(OpenTTDVehicle *shell) noexcept
-{
-	const Vehicle *v = VehicleOf(shell);
-	return {.front = RustVehicleFront(v), .owner = RustVehicleOwner(v), .tile = RustVehicleTile(v), .status = RustVehicleStatus(v)};
-}
 static uint16_t OPENTTD_RUST_CALL DisasterRoadCount(uint8_t company) noexcept { return Company::Get(CompanyID{company})->group_all[VEH_ROAD].num_vehicle; }
 static OpenTTDDisasterStationTarget OPENTTD_RUST_CALL DisasterNextStation(uint32_t from) noexcept
 {
@@ -98,12 +88,10 @@ static OpenTTDDisasterStationTarget OPENTTD_RUST_CALL DisasterNextStation(uint32
 }
 static OpenTTDDisasterIndustryTarget DisasterIndustryHandle(Industry *i) noexcept
 {
-	if (i == nullptr) return {.industry = nullptr, .id = IndustryID::Invalid().base(), .airplane = false, .helicopter = false, .subsidence = false};
-	const auto &behaviour = GetIndustrySpec(i->type)->behaviour;
-	return {.industry = i, .id = i->index.base(), .airplane = behaviour.Test(IndustryBehaviour::AirplaneAttacks), .helicopter = behaviour.Test(IndustryBehaviour::ChopperAttacks), .subsidence = behaviour.Test(IndustryBehaviour::CanSubsidence)};
+	return {.industry = i, .id = i == nullptr ? IndustryID::Invalid().base() : i->index.base()};
 }
 static OpenTTDDisasterIndustryTarget OPENTTD_RUST_CALL DisasterNextIndustry(uint32_t from) noexcept { return DisasterIndustryHandle(OpenTTDNextIndustry(from)); }
-static OpenTTDDisasterIndustryTarget OPENTTD_RUST_CALL DisasterIndustry(uint16_t id) noexcept { return DisasterIndustryHandle(RustIndustryByID(id)); }
+static OpenTTDDisasterIndustryTarget OPENTTD_RUST_CALL DisasterIndustry(uint32_t id) noexcept { return DisasterIndustryHandle(RustIndustryByID(id)); }
 static OpenTTDDisasterIndustryLocation OPENTTD_RUST_CALL DisasterIndustryLocation(void *shell) noexcept
 {
 	const Industry *i = static_cast<Industry *>(shell);
@@ -172,19 +160,20 @@ static const OpenTTDDisasterServices &DisasterServices() noexcept
 		.next_disaster = DisasterNext,
 		.next_road = DisasterNextRoad,
 		.road_target = DisasterRoadTarget,
-		.road_selection = DisasterRoadSelection,
-		.road_approach = DisasterRoadApproach,
-		.write_road_disaster = DisasterWriteRoadTarget,
+		.front = RustVehicleRead<bool, RustVehicleFront>,
+		.road_disaster = RustVehicleRead<uint32_t, RustRoadDisasterTarget>,
+		.breakdown_counter = RustVehicleRead<uint8_t, RustVehicleBreakdownCounter>,
+		.write_road_disaster = RustVehicleInvoke<RustWriteRoadDisasterTarget, uint32_t>,
 		.write_breakdown = RustVehicleInvoke<RustVehicleWriteBreakdown, uint8_t, uint8_t>,
 		.next_vehicle = DisasterNextVehicle,
 		.ground = RustVehicleRead<bool, RustVehicleIsGround>,
 		.next_train = DisasterNextTrain,
-		.train_selection = DisasterTrainSelection,
 		.road_count = DisasterRoadCount,
 		.human = RustCompanyIsHuman,
 		.next_station = DisasterNextStation,
 		.next_industry = DisasterNextIndustry,
 		.industry = DisasterIndustry,
+		.industry_behaviour = RustIndustryBehaviour,
 		.industry_location = DisasterIndustryLocation,
 		.industry_tile = RustIndustryTile,
 		.industry_town = RustIndustryTownIndex,

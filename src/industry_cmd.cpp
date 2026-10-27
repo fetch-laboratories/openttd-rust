@@ -3643,7 +3643,7 @@ static const OpenTTDIndustryServices _industry_services = {
 		return {i, RustIndustryCanonicalOwner(i), RustIndustryID(i), RustIndustrySpecCallbackMask(GetIndustrySpec(i->type))};
 	},
 	.sound_count = [](void *i) noexcept -> uint16_t { return static_cast<uint16_t>(RustIndustrySpec(i)->random_sounds.size()); },
-	.behaviour = [](void *i) noexcept -> uint32_t { return RustIndustrySpec(i)->behaviour.base(); },
+	.behaviour = RustIndustryBehaviour,
 	.location = [](void *handle) noexcept -> OpenTTDIndustryLocation {
 		const Industry *i = RustIndustry(handle);
 		return {i->location.tile.base(), i->location.w, i->location.h};
