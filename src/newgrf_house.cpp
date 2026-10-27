@@ -228,12 +228,6 @@ uint32_t HouseResolverObject::GetDebugID() const
 }
 
 #ifdef WITH_RUST
-void ResetHouseClassIDs()
-{
-	openttd_rust_house_resolver_exchange(&GetHouseResolverServices());
-	openttd_rust_house_classes_reset();
-}
-HouseClassID AllocateHouseClassID(uint8_t grf_class_id, uint32_t grfid) { return openttd_rust_house_class_allocate(grf_class_id, grfid); }
 void InitializeBuildingCounts(Town *t) { openttd_rust_house_counts_init(&GetRustTownServices(), &GetRustSharedServices(), t->growth_owner.get(), HouseSpec::Specs().size()); }
 void InitializeBuildingCounts() { openttd_rust_house_counts_init(&GetRustTownServices(), &GetRustSharedServices(), nullptr, HouseSpec::Specs().size()); }
 #else
