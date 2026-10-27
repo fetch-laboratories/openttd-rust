@@ -201,7 +201,14 @@ const OpenTTDRoadRegistryServices &GetRustRoadRegistryServices() noexcept
 		.default_count = std::size(_original_roadtypes),
 		.spec = [](RoadType rt) noexcept { return &_roadtypes[rt]; },
 		.type_label = [](RoadType rt) noexcept { return RustRoadTypeLabel(GetRoadTypeInfo(rt)); },
-		.labels = []() noexcept { OpenTTDTypeLabelTable labels{}; for (size_t i = 0; i < std::size(_roadtypes); ++i) labels.values[i] = RustRoadTypeLabel(&_roadtypes[i]); return labels; },
+		.labels = []() noexcept -> const RoadTypeLabel * const * {
+			static const auto labels = [] {
+				std::array<const RoadTypeLabel *, ROADTYPE_END> pointers{};
+				for (size_t i = 0; i < pointers.size(); ++i) pointers[i] = &RustRoadTypeLabel(&_roadtypes[i]);
+				return pointers;
+			}();
+			return labels.data();
+		},
 		.alternate = [](RoadType rt, uint32_t label) noexcept { return GetRoadTypeInfo(rt)->alternate_labels.contains(label); },
 		.clear = [](RoadTypeInfo *info) noexcept { *info = RoadTypeInfo{}; },
 		.copy_default = [](RoadTypeInfo *info, RoadType source) noexcept { *info = _original_roadtypes[source]; },

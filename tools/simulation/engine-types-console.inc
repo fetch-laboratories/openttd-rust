@@ -182,8 +182,26 @@ static void DefinitionTrace(const char *phase)
 		}
 	}
 }
+template <typename Info, typename Lookup>
+static void DefinitionLiveLabels(Info *types, size_t count, Lookup lookup)
+{
+	Backup<uint32_t> first(types[0].label, 0x51500001);
+	Backup<uint32_t> last(types[count - 1].label, 0x51500002);
+	TypeRequire(lookup(0x51500001, false) == 0 && lookup(0x51500002, false) == count - 1 && lookup(0x51500003, false) == 0xFF, "definitions-first-last-missing-labels");
+	first.Change(0x51500003);
+	TypeRequire(lookup(0x51500001, false) == 0xFF && lookup(0x51500003, false) == 0, "definitions-live-label-mutation");
+	types[0].alternate_labels.insert(0x51500002);
+	TypeRequire(lookup(0x51500002, true) == count - 1, "definitions-exact-before-alternate");
+	last.Change(0x51500003);
+	TypeRequire(lookup(0x51500003, false) == 0 && lookup(0x51500002, false) == 0xFF && lookup(0x51500002, true) == 0, "definitions-first-match-alternate-order");
+	types[0].alternate_labels.erase(0x51500002);
+	last.Restore();
+	first.Restore();
+}
 static void DefinitionProperties()
 {
+	DefinitionLiveLabels(_railtypes, RAILTYPE_END, GetRailTypeByLabel);
+	DefinitionLiveLabels(_roadtypes, ROADTYPE_END, GetRoadTypeByLabel);
 	auto rail = GetRailTypeByLabel(0x52344141); auto second = GetRailTypeByLabel(0x52344242); auto third = GetRailTypeByLabel(0x52344343);
 	auto road = GetRoadTypeByLabel(0x44344141); auto tram = GetRoadTypeByLabel(0x54344141);
 	TypeRequire(rail != INVALID_RAILTYPE && road != INVALID_ROADTYPE && tram != INVALID_ROADTYPE, "definitions-reserved");

@@ -2,6 +2,9 @@
 /** @file type_registry_ffi.h Rail/road definition ownership and native storage leaves.
  * Serialized loading/reset excludes runtime access. Native specs and file vectors
  * outlive synchronous calls; published spans alias Rust until the next rebuild.
+ * Label pointer tables are immutable; fixed native arrays keep each scalar
+ * address stable across in-place reset/property writes. Serialized access loads
+ * only reached labels and ends scalar reads before any callback.
  * No Rust borrow crosses a callback. Native save/parser error frames retain
  * ordinary exceptions. Environmental leaf failures terminate; Rust panics abort. */
 #ifndef RUST_TYPE_REGISTRY_FFI_H
@@ -14,14 +17,13 @@ class RoadTypeInfo;
 struct GRFFile;
 struct OpenTTDTypePublication { uint32_t label; bool hidden; };
 struct OpenTTDTypeAllocation { uint32_t label; uint64_t self; uint8_t order; };
-struct OpenTTDTypeLabelTable { uint32_t values[RAILTYPE_END]; };
 struct OpenTTDTypeLabels { const uint32_t *data; size_t size; };
 struct OpenTTDTypeMap { uint8_t *data; size_t size; };
 struct OpenTTDRailRegistryServices {
 	uint8_t default_count;
 	RailTypeInfo * (*spec)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(spec);
 	RailTypeLabel (*type_label)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(type_label);
-	OpenTTDTypeLabelTable (*labels)() noexcept OPENTTD_SERVICE_DEFAULT(labels);
+	const RailTypeLabel * const *(*labels)() noexcept OPENTTD_SERVICE_DEFAULT(labels);
 	bool (*alternate)(RailType, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(alternate);
 	void (*clear)(RailTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(clear);
 	void (*copy_default)(RailTypeInfo *, RailType) noexcept OPENTTD_SERVICE_DEFAULT(copy_default);
@@ -35,7 +37,7 @@ struct OpenTTDRoadRegistryServices {
 	uint8_t default_count;
 	RoadTypeInfo * (*spec)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(spec);
 	RoadTypeLabel (*type_label)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(type_label);
-	OpenTTDTypeLabelTable (*labels)() noexcept OPENTTD_SERVICE_DEFAULT(labels);
+	const RoadTypeLabel * const *(*labels)() noexcept OPENTTD_SERVICE_DEFAULT(labels);
 	bool (*alternate)(RoadType, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(alternate);
 	void (*clear)(RoadTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(clear);
 	void (*copy_default)(RoadTypeInfo *, RoadType) noexcept OPENTTD_SERVICE_DEFAULT(copy_default);

@@ -20,6 +20,10 @@
 #include "../rust/engine_services.h"
 #include "../rust/type_availability_ffi.h"
 #include "../rust/type_definitions_ffi.h"
+#include "../rust/type_registry_ffi.h"
+#include "../rail.h"
+#include "../road.h"
+#include "../core/backup_type.hpp"
 #include "../rust/newgrf_translation_ffi.h"
 #include "abi_layout.hpp"
 #endif
@@ -132,3 +136,30 @@ TEST_CASE("Engine capability observations preserve type and zero-capacity gates"
 	}
 #endif
 }
+
+#ifdef WITH_RUST
+template <typename Info, typename Labels>
+static void CheckLiveTypeLabels(Info *types, size_t count, Labels labels)
+{
+	const auto *pointers = labels();
+	for (size_t i = 0; i < count; ++i) CHECK(pointers[i] == &types[i].label);
+	Backup<uint32_t> first(types[0].label, 0x51500001);
+	Backup<uint32_t> last(types[count - 1].label, 0x51500002);
+	CHECK(*pointers[0] == 0x51500001);
+	CHECK(*pointers[count - 1] == 0x51500002);
+	first.Change(0x51500003);
+	CHECK(labels() == pointers);
+	CHECK(*pointers[0] == 0x51500003);
+	CHECK(types[0].label == 0x51500003);
+	last.Restore();
+	first.Restore();
+}
+
+TEST_CASE("Engine type label services expose live canonical scalars", "[rust][engine][abi]")
+{
+	extern RailTypeInfo _railtypes[RAILTYPE_END];
+	extern RoadTypeInfo _roadtypes[ROADTYPE_END];
+	CheckLiveTypeLabels(_railtypes, RAILTYPE_END, GetRustRailRegistryServices().labels);
+	CheckLiveTypeLabels(_roadtypes, ROADTYPE_END, GetRustRoadRegistryServices().labels);
+}
+#endif

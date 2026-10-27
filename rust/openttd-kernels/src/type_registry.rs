@@ -1,7 +1,9 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Rail/road registry policy. Native specs retain their representation; canonical
 //! order, masks and saved labels live here under the native game-state mutex.
-//! File vector/map views last only through the synchronous no-reset call.
+//! File vector/map views last only through the synchronous no-reset call. Native
+//! label addresses belong to fixed arrays and survive in-place writes/reset. The
+//! immutable pointer table is metadata only; field-sized reads end before callbacks.
 #![allow(
     unsafe_code,
     missing_docs,
@@ -20,10 +22,6 @@ type Handle = *const c_void;
 pub struct Publication {
     label: u32,
     hidden: bool,
-}
-#[repr(C)]
-pub struct LabelTable {
-    values: [u32; RAILTYPE_END as usize],
 }
 #[repr(C)]
 pub struct Allocation {
@@ -66,7 +64,7 @@ pub struct RailServices {
     default_count: u8,
     spec: extern "C" fn(u8) -> Handle,
     type_label: extern "C" fn(u8) -> u32,
-    labels: extern "C" fn() -> LabelTable,
+    labels: extern "C" fn() -> *const *const u32,
     alternate: extern "C" fn(u8, u32) -> bool,
     clear: extern "C" fn(Handle),
     copy_default: extern "C" fn(Handle, u8),
@@ -81,7 +79,7 @@ pub struct RoadServices {
     default_count: u8,
     spec: extern "C" fn(u8) -> Handle,
     type_label: extern "C" fn(u8) -> u32,
-    labels: extern "C" fn() -> LabelTable,
+    labels: extern "C" fn() -> *const *const u32,
     alternate: extern "C" fn(u8, u32) -> bool,
     clear: extern "C" fn(Handle),
     copy_default: extern "C" fn(Handle, u8),
@@ -175,7 +173,7 @@ pub extern "C" fn openttd_rust_rail_by_label(label: u32, alternate: bool) -> u8 
     let s = services();
     let labels = (s.rail().labels)();
     for rt in RAILTYPE_BEGIN..RAILTYPE_END {
-        if labels.values[usize::from(rt)] == label {
+        if unsafe { (*labels.add(usize::from(rt))).read() } == label {
             return rt;
         }
     }
@@ -296,7 +294,7 @@ pub extern "C" fn openttd_rust_road_by_label(label: u32, alternate: bool) -> u8 
     let s = services();
     let labels = (s.road().labels)();
     for rt in ROADTYPE_BEGIN..ROADTYPE_END {
-        if labels.values[usize::from(rt)] == label {
+        if unsafe { (*labels.add(usize::from(rt))).read() } == label {
             return rt;
         }
     }
@@ -488,7 +486,6 @@ pub extern "C" fn openttd_rust_road_reverse(rt: u8, file: Handle) -> u8 {
 crate::abi::layouts! {
     fn abi_layout;
  "OpenTTDTypePublication" ["engine"] => Publication { label, hidden };
- "OpenTTDTypeLabelTable" ["engine"] => LabelTable { values };
  "OpenTTDTypeAllocation" ["engine"] => Allocation { label, self_ => self, order };
  "OpenTTDTypeLabels" ["engine"] => Labels { data, size };
  "OpenTTDTypeMap" ["engine"] => TypeMap { data, size };

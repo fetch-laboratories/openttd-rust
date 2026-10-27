@@ -209,7 +209,14 @@ const OpenTTDRailRegistryServices &GetRustRailRegistryServices() noexcept
 		.default_count = std::size(_original_railtypes),
 		.spec = [](RailType rt) noexcept { return &_railtypes[rt]; },
 		.type_label = [](RailType rt) noexcept { return RustRailTypeLabel(GetRailTypeInfo(rt)); },
-		.labels = []() noexcept { OpenTTDTypeLabelTable labels{}; for (size_t i = 0; i < std::size(_railtypes); ++i) labels.values[i] = RustRailTypeLabel(&_railtypes[i]); return labels; },
+		.labels = []() noexcept -> const RailTypeLabel * const * {
+			static const auto labels = [] {
+				std::array<const RailTypeLabel *, RAILTYPE_END> pointers{};
+				for (size_t i = 0; i < pointers.size(); ++i) pointers[i] = &RustRailTypeLabel(&_railtypes[i]);
+				return pointers;
+			}();
+			return labels.data();
+		},
 		.alternate = [](RailType rt, uint32_t label) noexcept { return GetRailTypeInfo(rt)->alternate_labels.contains(label); },
 		.clear = [](RailTypeInfo *info) noexcept { *info = RailTypeInfo{}; },
 		.copy_default = [](RailTypeInfo *info, RailType source) noexcept { *info = _original_railtypes[source]; },
