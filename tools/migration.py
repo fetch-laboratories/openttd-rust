@@ -539,8 +539,6 @@ def main():
                 "-DBUILD_TESTING=OFF",
             ]
         common.extend(compiler_cache_options(cache_executable))
-        if args.action == "coverage":
-            common.append("-DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON")
         for name, build in builds.items():
             with (
                 reference_lock()
