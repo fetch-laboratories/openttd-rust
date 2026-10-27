@@ -84,3 +84,7 @@ pub(crate) fn get_vehicle_pos_on_build(tile: u32, s: &crate::newgrf_airport::Ser
 
 /// Maximum total airport specifications.
 pub const NUM_AIRPORTS: u16 = 128;
+
+pub const NUM_AIRPORTS_PER_GRF: u32 = 128;
+pub const NUM_AIRPORTTILES_PER_GRF: u32 = 255;
+pub const NUM_AIRPORTTILES: u16 = 256;

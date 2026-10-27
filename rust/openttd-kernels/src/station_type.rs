@@ -79,3 +79,6 @@ impl StationID {
 pub struct Station {
     _private: [u8; 0],
 }
+
+/// Maximum modified airport catchment.
+pub const MAX_CATCHMENT: u8 = 10;

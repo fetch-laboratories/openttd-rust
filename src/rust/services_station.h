@@ -139,6 +139,8 @@ inline const OpenTTDStation *OpenTTDStationByTile(uint32_t tile) noexcept { retu
 inline const Station *StationOf(const OpenTTDStation *s) noexcept { return reinterpret_cast<const Station *>(s); }
 /* GetSpec preserves the native dummy-airport fallback. Resolver-specific tile
  * gates remain with their callers; all handles are borrowed synchronously. */
+template <typename Pointer> inline Pointer RustAirportSpec(uint16_t type) noexcept { return AirportSpec::RustRawSpec(type); }
+template <typename Pointer> inline Pointer RustAirportTileSpec(uint8_t gfx) noexcept { return const_cast<AirportTileSpec *>(AirportTileSpec::Get(gfx)); }
 inline const AirportFTAClass *RustAirportSpecFTA(const AirportSpec *spec) noexcept { return spec->fsm; }
 inline TTDPAirportType RustAirportTTDType(const AirportSpec *spec) noexcept { return spec->ttd_airport_type; }
 inline uint32_t RustStationAirportTile(const BaseStation *s) noexcept { return Station::From(s)->airport.tile.base(); }

@@ -1728,6 +1728,20 @@ inspect-window deletion, share canonical typed native leaves with industry consu
 `python3 tools/migration.py simulate town-houses- --jobs 2`, which places every original house
 through `CmdPlaceHouse`. Station removal on house clearance remains a #156 gap. PR #269.
 
+### House definition loading and publication (#477)
+
+`house_definition.rs` owns property decoding, first-substitute allocation policy, local and
+published multitile validation, global publication, earliest-year repair and reset ordering.
+Native HouseSpec shells/defaults, GRF and sprite graphs, string mapping and badge storage remain.
+The checked shared ByteReader preserves prior writes and partial badge-seen effects before
+returning read errors to the decoder's native exception frame. Cargo translation and house
+classes call their existing Rust owners directly. Loading calls house reset/finalisation directly.
+The original property and lifecycle bodies compile only portably. Definition, resolver and
+runtime mapping operations call the canonical Rust override manager registered by the global
+native facade; temporary managers keep independent storage. List and ID errors call the shared
+Rust loading owner directly. Historical HIDS, other climates and unreached property branches
+remain #156 limits. PR #486.
+
 ### House and shared-town NewGRF resolution (#409)
 
 `town/resolver.rs` owns HouseScope/HouseResolver and TownScope/TownResolver query policy,
@@ -2059,6 +2073,21 @@ groups, explicitly reinstalled after reload. Temporary admission builds carry no
 group because native removal leaves a deleted PSA pointer; the retained airport's PSA is saved
 and reloaded. External loading, historical saves, GUI scheduling and that native removal setup
 remain #156 gaps. PR #428, integrated in #444.
+
+### Airport and airport-tile definitions (#492)
+
+`airport_definitions.rs` owns airport/tile Action0 interpretation, allocation decisions,
+reset, ordered publication and override consumption, temporary file-spec cleanup and
+class binding. The integrated manager, class and checked Reader owners are direct Rust
+callees. Native canonical spec payloads, layout storage, defaults, strings, badges, FSMs,
+graphics, stations and APID/ATID save/error frames remain. Rust uses local layout vectors
+and publishes them only after the whole layout property succeeds; earlier scalar reads
+retain their partial effects. Loading is serialized and no owner borrow spans a native
+move, parser service or reset. Original bodies remain portable-only.
+
+Arbitrary external grammar, historical malformed save mappings, remaining layout rotations
+and offset combinations, missing-GRF recovery and GUI/network scheduling remain #156 gaps.
+The existing airport-removal PSA gap is outside this definition owner. PR: #499.
 
 ### Generic NewGRF callbacks (#429)
 

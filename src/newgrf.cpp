@@ -52,6 +52,7 @@
 #include "rust/engine_loading_services.hpp"
 #include "rust/vehicle_properties_services.hpp"
 #include "rust/cargo_registry_ffi.h"
+#include "rust/house_definition_services.hpp"
 #endif
 
 #ifdef WITH_RUST
@@ -1047,6 +1048,7 @@ void FinaliseCargoArray()
 }
 #endif
 
+#ifndef WITH_RUST
 /**
  * Check if a given housespec is valid and disable it if it's not.
  * The housespecs that follow it are used to check the validity of
@@ -1198,6 +1200,8 @@ static void FinaliseHouseArray()
 	}
 }
 
+#endif
+
 /**
  * Add all new industries to the industry array. Industry properties can be set at any
  * time in the GRF file, so we can only add a industry spec to the industry array
@@ -1282,6 +1286,7 @@ static void FinaliseObjectsArray()
  * time in the GRF file, so we can only add a airport spec to the airport array
  * after the file has finished loading.
  */
+#ifndef WITH_RUST
 static void FinaliseAirportsArray()
 {
 	for (auto &file : _grf_files) {
@@ -1304,6 +1309,7 @@ static void FinaliseAirportsArray()
 		file.airtspec.shrink_to_fit();
 	}
 }
+#endif
 
 #ifndef WITH_RUST
 /** Helper class to invoke a GrfActionHandler. */

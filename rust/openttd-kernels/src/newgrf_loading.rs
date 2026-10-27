@@ -104,7 +104,7 @@ pub unsafe extern "C" fn openttd_rust_grf_set_size(feature: u8, set: u32) -> u32
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDGrfLoadingServices" ["grf_loading"] => Services { global, cargo, engine, industry, types, action2, engine_range, parameter, file_id, config_id, config_status, config_flags, set_status, set_flag, set_config_id, set_file_info, config_version, param_count, set_parameter, find_config, find_file, file_for_config, error, error_name, error_property, networking, read_byte, read_word, read_dword, read_block, position, seek, skip, container_version, sprite_offsets, skip_sprite_data, open_cached, open_temporary, scan_name, scan_info, set_pitch, set_width, set_rail_cost, set_misc, safe_change_info, reserve_change_info, feature_change_info, skip_act1, new_sprite_set, feature_map_sprite_group, feature_new_name, skip_act5, graphics_new, skip_act_a, sprite_replace, grf_load_error, grf_comment, feature_town_name, skip_act11, grf_sound, skip_act12, load_font_glyph, translate_grf_strings, static_grf_info, never_expire_airports, max_bridge_length, never_expire_vehicles, station_noise, gradual_loading, signal_side, disable_elrails, build_on_slopes, freight_trains, wagon_speed_limits, allow_town_roads, generating_world, improved_load, dynamic_engines, inflation, starting_year, plane_speed, height_limit, generation_seed, log_x, log_y, read_bounds, unexpected_sprite, multiple_action8, grm_failed, static_desync, list_property_too_long, invalid_id, force_disabled, colourmap_sprite, slopes_sprite, shore_sprite , generic, clock, set_clock, economy_ymd_to_date, config_at, exists, init_file, too_many, clear_errors, cleanup_strings, cleanup_townnames, reset_badges, reset_bridges, reset_prices, reset_currencies, reset_houses, object_classes, reset_objects, station_classes, airport_classes, reset_airports, reset_airporttiles, roadstop_classes, reset_water_features, reset_faces, clear_snowline, reset_files, reset_loaded_features, initialize_sounds, clean_spritegroups, finalise_strings, finalise_badges, finalise_canals, finalise_houses, finalise_objects, sort_industries, industry_legend, linkstats_legend, finalise_airports, bind_airports, townnames, activate_shore, activate_tram_depot, aging_stops, finalise_prices, baseset_dir, newgrf_dir , assert_override_size, assert_file_match, unexpected_large, unexpected_real, missing_file, sprite_grm_failed, grm_failure, unknown_operation, id_mismatch, invalid_version , null_error, unknown_action, handling_action, preloaded_sprite, unexpected_data, unexpected_import, read_bounds_error, reading_file, invalid_format, unsupported_compression, loaded_sprites, unsupported_variable, cfg_real, cfg_unset, cfg_applying, skip_undefined, skip_test, skip_condition, skip_grf_condition, skip_unknown_grf, skip_false, skip_jump, skip_count, loaded_info, inhibiting, defined_label, unknown_patch, grm_reserved, param_defined, sprites_allocated, sprites_using, sprite_operation, grm_feature, unimplemented_target, unknown_target };
+    "OpenTTDGrfLoadingServices" ["grf_loading"] => Services { global, cargo, engine, houses, industry, airports, types, action2, engine_range, parameter, file_id, config_id, config_status, config_flags, set_status, set_flag, set_config_id, set_file_info, config_version, param_count, set_parameter, find_config, find_file, file_for_config, error, error_name, error_property, networking, read_byte, read_word, read_dword, read_block, position, seek, skip, container_version, sprite_offsets, skip_sprite_data, open_cached, open_temporary, scan_name, scan_info, set_pitch, set_width, set_rail_cost, set_misc, safe_change_info, reserve_change_info, feature_change_info, skip_act1, new_sprite_set, feature_map_sprite_group, feature_new_name, skip_act5, graphics_new, skip_act_a, sprite_replace, grf_load_error, grf_comment, feature_town_name, skip_act11, grf_sound, skip_act12, load_font_glyph, translate_grf_strings, static_grf_info, never_expire_airports, max_bridge_length, never_expire_vehicles, station_noise, gradual_loading, signal_side, disable_elrails, build_on_slopes, freight_trains, wagon_speed_limits, allow_town_roads, generating_world, improved_load, dynamic_engines, inflation, starting_year, plane_speed, height_limit, generation_seed, log_x, log_y, read_bounds, unexpected_sprite, multiple_action8, grm_failed, static_desync, list_property_too_long, invalid_id, force_disabled, colourmap_sprite, slopes_sprite, shore_sprite , generic, clock, set_clock, economy_ymd_to_date, config_at, exists, init_file, too_many, clear_errors, cleanup_strings, cleanup_townnames, reset_badges, reset_bridges, reset_prices, reset_currencies, object_classes, reset_objects, station_classes, airport_classes, roadstop_classes, reset_water_features, reset_faces, clear_snowline, reset_files, reset_loaded_features, initialize_sounds, clean_spritegroups, finalise_strings, finalise_badges, finalise_canals, finalise_objects, sort_industries, industry_legend, linkstats_legend, townnames, activate_shore, activate_tram_depot, aging_stops, finalise_prices, baseset_dir, newgrf_dir , assert_override_size, assert_file_match, unexpected_large, unexpected_real, missing_file, sprite_grm_failed, grm_failure, unknown_operation, id_mismatch, invalid_version , null_error, unknown_action, handling_action, preloaded_sprite, unexpected_data, unexpected_import, read_bounds_error, reading_file, invalid_format, unsupported_compression, loaded_sprites, unsupported_variable, cfg_real, cfg_unset, cfg_applying, skip_undefined, skip_test, skip_condition, skip_grf_condition, skip_unknown_grf, skip_false, skip_jump, skip_count, loaded_info, inhibiting, defined_label, unknown_patch, grm_reserved, param_defined, sprites_allocated, sprites_using, sprite_operation, grm_feature, unimplemented_target, unknown_target };
     "OpenTTDGrfEngineRange" ["grf_loading"] => EngineRange { offset, count };
     "OpenTTDGrfClock" ["grf_loading"] => Clock { date, year, date_fract, economy_date, economy_year, economy_date_fract, ticks, display };
     "OpenTTDGrfExecution" ["grf_loading"] => Execution {
@@ -117,7 +117,9 @@ pub struct Services {
     pub(crate) global: *const crate::newgrf::Services,
     cargo: *const crate::cargo_registry::Services,
     engine: *const crate::engine_loading::Services,
+    houses: *const crate::house_definition::Services,
     industry: *const crate::industry::definitions::Services,
+    airports: *const crate::airport_definitions::Services,
     types: *const crate::type_registry::Services,
     action2: *const crate::newgrf_act2::Services,
     engine_range: unsafe extern "C" fn(u8) -> EngineRange,
@@ -225,13 +227,10 @@ pub struct Services {
     reset_bridges: unsafe extern "C" fn(),
     reset_prices: unsafe extern "C" fn(),
     reset_currencies: unsafe extern "C" fn(),
-    reset_houses: unsafe extern "C" fn(),
     object_classes: *const crate::newgrf_class::Services<crate::objects::Spec>,
     reset_objects: unsafe extern "C" fn(),
     station_classes: *const crate::newgrf_class::Services<crate::station_cmd::RailSpec>,
     airport_classes: *const crate::newgrf_class::Services<crate::station_cmd::AirportSpec>,
-    reset_airports: unsafe extern "C" fn(),
-    reset_airporttiles: unsafe extern "C" fn(),
     roadstop_classes: *const crate::newgrf_class::Services<crate::station_cmd::RoadSpec>,
     reset_water_features: unsafe extern "C" fn(),
     reset_faces: unsafe extern "C" fn(),
@@ -243,13 +242,10 @@ pub struct Services {
     finalise_strings: unsafe extern "C" fn(),
     finalise_badges: unsafe extern "C" fn(),
     finalise_canals: unsafe extern "C" fn(),
-    finalise_houses: unsafe extern "C" fn(),
     finalise_objects: unsafe extern "C" fn(),
     sort_industries: unsafe extern "C" fn(),
     industry_legend: unsafe extern "C" fn(),
     linkstats_legend: unsafe extern "C" fn(),
-    finalise_airports: unsafe extern "C" fn(),
-    bind_airports: unsafe extern "C" fn(),
     townnames: unsafe extern "C" fn(),
     activate_shore: unsafe extern "C" fn(),
     activate_tram_depot: unsafe extern "C" fn(),
@@ -1358,14 +1354,14 @@ pub unsafe extern "C" fn openttd_rust_grf_reset(s: &Services) {
         crate::newgrf_generic::openttd_rust_generic_reset(s.generic);
         (s.reset_prices)();
         (s.reset_currencies)();
-        (s.reset_houses)();
+        crate::house_definition::reset(&*s.houses);
         crate::industry::definitions::reset(((*s.global).climate)(), &*s.industry);
         crate::newgrf_class::object::reset(s.object_classes);
         (s.reset_objects)();
         crate::newgrf_class::station::reset(s.station_classes);
         crate::newgrf_class::airport::reset(s.airport_classes);
-        (s.reset_airports)();
-        (s.reset_airporttiles)();
+        crate::airport_definitions::reset(s.airports);
+        crate::airport_definitions::reset_tiles(s.airports);
         crate::newgrf_class::roadstop::reset(s.roadstop_classes);
         (s.reset_water_features)();
         (s.reset_faces)();
@@ -1402,15 +1398,15 @@ unsafe fn after_load(s: &Services) {
         crate::engine_loading::openttd_rust_engine_calculate_refits(&*s.engine);
         crate::engine_loading::openttd_rust_engine_finalise(&*s.engine);
         (s.finalise_canals)();
-        (s.finalise_houses)();
+        crate::house_definition::finalise(&*s.houses);
         crate::industry::definitions::finalise(&*s.industry);
         (s.finalise_objects)();
         crate::cargo_registry::openttd_rust_cargo_sort(s.cargo);
         (s.sort_industries)();
         (s.industry_legend)();
         (s.linkstats_legend)();
-        (s.finalise_airports)();
-        (s.bind_airports)();
+        crate::airport_definitions::finalise(&*s.airports);
+        crate::airport_definitions::bind(s.airports);
         (s.townnames)();
         crate::engine_loading::openttd_rust_vehicle_order_commit(&*s.engine);
         (s.activate_shore)();

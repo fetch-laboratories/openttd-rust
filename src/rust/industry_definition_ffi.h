@@ -3,6 +3,7 @@
 #ifndef RUST_INDUSTRY_DEFINITION_FFI_H
 #define RUST_INDUSTRY_DEFINITION_FFI_H
 #include "service_defaults.hpp"
+#include "spec_identity.h"
 #include "newgrf_global_ffi.h"
 #include "../industry_type.h"
 #include <cstdint>
@@ -12,7 +13,6 @@ struct OpenTTDOverrideManager;
 struct IndustrySpec;
 struct IndustryTileSpec;
 struct GRFFile;
-struct OpenTTDIndustryDefinitionIdentity { uint32_t grfid; uint16_t local, substitute; };
 struct OpenTTDIndustryDefinitionAvailability { bool enabled, has_file; };
 struct OpenTTDIndustryProducedSlots { uint8_t *cargo; OpenTTDNewGRFCargoLabel labels[INDUSTRY_ORIGINAL_NUM_OUTPUTS]; };
 struct OpenTTDIndustryAcceptedSlots { uint8_t *cargo; OpenTTDNewGRFCargoLabel labels[INDUSTRY_ORIGINAL_NUM_INPUTS]; };
@@ -24,8 +24,8 @@ struct OpenTTDIndustryDefinitionServices {
 	IndustrySpec *(*industry)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(industry);
 	IndustryTileSpec *(*tile)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(tile);
 	uint32_t (*grfid)(const IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(grfid);
-	OpenTTDIndustryDefinitionIdentity (*identity)(const IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(identity);
-	OpenTTDIndustryDefinitionIdentity (*tile_identity)(const IndustryTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(tile_identity);
+	OpenTTDSubstituteSpecIdentity (*identity)(const IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(identity);
+	OpenTTDSubstituteSpecIdentity (*tile_identity)(const IndustryTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(tile_identity);
 	OpenTTDIndustryDefinitionAvailability (*availability)(const IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(availability);
 	void (*set_enabled)(IndustrySpec *, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_enabled);
 	void (*set_override)(IndustrySpec *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_override);
