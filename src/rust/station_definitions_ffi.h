@@ -10,12 +10,9 @@ struct RoadStopSpec;
 struct GRFFile;
 struct SpriteGroup;
 using OpenTTDStationSequence = std::vector<DrawTileSeqStruct>;
-struct OpenTTDStationSequenceFields {
-	int8_t *origin_x, *origin_y, *origin_z;
-	uint8_t *extent_x, *extent_y, *extent_z;
-	PalSpriteID *image;
-};
 struct OpenTTDAct3CargoServices;
+struct OpenTTDAction2Services;
+struct OpenTTDGrfLoadingServices;
 struct OpenTTDStationDefinitionServices {
 	StringID empty_string;
 	const OpenTTDAct3CargoServices *cargo;
@@ -72,10 +69,8 @@ struct OpenTTDStationDefinitionServices {
 	NewGRFSpriteLayout * (*station_render_append)(StationSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(station_render_append);
 	void (*station_render_pop)(StationSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(station_render_pop);
 	void (*station_render_copy_append)(StationSpec *spec, const StationSpec *source, size_t index) noexcept OPENTTD_SERVICE_DEFAULT(station_render_copy_append);
-	void (*layout_unlimited)(NewGRFSpriteLayout *layout) noexcept OPENTTD_SERVICE_DEFAULT(layout_unlimited);
-	PalSpriteID * (*layout_ground)(NewGRFSpriteLayout *layout) noexcept OPENTTD_SERVICE_DEFAULT(layout_ground);
 	void (*sequence_reset)(OpenTTDStationSequence *) noexcept OPENTTD_SERVICE_DEFAULT(sequence_reset);
-	OpenTTDStationSequenceFields (*sequence_append)(OpenTTDStationSequence *) noexcept OPENTTD_SERVICE_DEFAULT(sequence_append);
+	DrawTileSeqStruct * (*sequence_append)(OpenTTDStationSequence *) noexcept OPENTTD_SERVICE_DEFAULT(sequence_append);
 	void (*layout_sequence_move)(NewGRFSpriteLayout *, OpenTTDStationSequence *) noexcept OPENTTD_SERVICE_DEFAULT(layout_sequence_move);
 	void (*layout_original)(NewGRFSpriteLayout *layout, uint32_t index) noexcept OPENTTD_SERVICE_DEFAULT(layout_original);
 	void (*station_custom_assign)(StationSpec *spec, uint16_t key, const uint8_t *data, size_t count) noexcept OPENTTD_SERVICE_DEFAULT(station_custom_assign);
@@ -104,14 +99,12 @@ struct OpenTTDStationDefinitionServices {
 	void (*invalid_tile)(uint8_t tile, uint8_t length, uint8_t number) noexcept OPENTTD_SERVICE_DEFAULT(invalid_tile);
 	void (*undefined_publication)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(undefined_publication);
 	void (*duplicate_publication)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(duplicate_publication);
-	bool (*read_layout_sprite)(ByteReader *reader, bool flags, bool invert, bool current, GrfSpecFeature feature, PalSpriteID *sprite, uint8_t *result) noexcept OPENTTD_SERVICE_DEFAULT(read_layout_sprite);
-	bool (*read_layout)(ByteReader *reader, uint32_t count, bool current, GrfSpecFeature feature, bool var10, bool no_z, NewGRFSpriteLayout *layout, bool *disabled) noexcept OPENTTD_SERVICE_DEFAULT(read_layout);
 };
 const OpenTTDStationDefinitionServices &GetStationDefinitionServices() noexcept;
 extern "C" {
 void openttd_rust_station_class_set_name(const StationSpec *, StringID);
 void openttd_rust_roadstop_class_set_name(const RoadStopSpec *, StringID);
-bool openttd_rust_station_change_info(const OpenTTDStationDefinitionServices *, GRFFile *, uint32_t, uint32_t, uint32_t, ByteReader *, OpenTTDStationSequence *, uint8_t *);
+bool openttd_rust_station_change_info(const OpenTTDStationDefinitionServices *, const OpenTTDAction2Services *, const OpenTTDGrfLoadingServices *, GRFFile *, uint32_t, uint32_t, uint32_t, ByteReader *, OpenTTDStationSequence *, uint8_t *);
 bool openttd_rust_roadstop_change_info(const OpenTTDStationDefinitionServices *, GRFFile *, uint32_t, uint32_t, uint32_t, ByteReader *, uint8_t *);
 void openttd_rust_station_map_specific(const OpenTTDStationDefinitionServices *, GRFFile *, uint16_t, uint8_t, const SpriteGroup *);
 void openttd_rust_station_map_default(const OpenTTDStationDefinitionServices *, GRFFile *, uint16_t, const SpriteGroup *);

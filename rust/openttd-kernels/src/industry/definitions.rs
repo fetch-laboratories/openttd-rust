@@ -5,14 +5,9 @@
 use super::{SpecHandle, TileSpec};
 pub(crate) mod properties;
 pub(crate) mod storage;
+use crate::newgrf_commons::SubstituteSpecIdentity as Identity;
 use crate::override_manager::{self, Mapping};
 use std::ffi::c_void;
-#[repr(C)]
-pub struct Identity {
-    pub grfid: u32,
-    pub local: u16,
-    pub substitute: u16,
-}
 #[repr(C)]
 pub struct Availability {
     pub enabled: bool,
@@ -325,7 +320,7 @@ pub unsafe extern "C" fn openttd_rust_industry_definition_reset(climate: u8, s: 
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDIndustryDefinitionIdentity" ["industry"] => Identity { grfid, local, substitute };
+    "OpenTTDSubstituteSpecIdentity" ["industry"] => Identity { grfid, local, substitute };
     "OpenTTDIndustryDefinitionAvailability" ["industry"] => Availability { enabled, has_file };
     "OpenTTDIndustryDefinitionCargo" ["industry"] => Cargo { label, cargo };
     "OpenTTDIndustryDefinitionServices" ["industry"] => Services {

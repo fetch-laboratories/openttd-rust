@@ -17,3 +17,12 @@ pub const RAILTYPE_END: u8 = 64;
 
 /// `RAILTYPE_BEGIN`.
 pub const RAILTYPE_BEGIN: u8 = 0;
+
+/// Native standard railtype labels.
+pub const RAILTYPE_LABEL_RAIL: u32 = u32::from_be_bytes(*b"RAIL");
+/// `RAILTYPE_LABEL_ELECTRIC`.
+pub const RAILTYPE_LABEL_ELECTRIC: u32 = u32::from_be_bytes(*b"ELRL");
+/// `RAILTYPE_LABEL_MONO`.
+pub const RAILTYPE_LABEL_MONO: u32 = u32::from_be_bytes(*b"MONO");
+/// `RAILTYPE_LABEL_MAGLEV`.
+pub const RAILTYPE_LABEL_MAGLEV: u32 = u32::from_be_bytes(*b"MGLV");

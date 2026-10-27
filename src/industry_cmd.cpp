@@ -3976,7 +3976,7 @@ const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices() noexcep
 static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices()
 {
 	static const OpenTTDIndustryTransactionServices services = {
-		.enabled = RustIndustrySpecEnabled<OpenTTDIndustrySpecHandle>,
+		.enabled = RustSpecEnabled<IndustrySpec, OpenTTDIndustrySpecHandle>,
 		.layout_count = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> size_t { return reinterpret_cast<const IndustrySpec *>(spec)->layouts.size(); },
 		.layout = [](const OpenTTDIndustrySpecHandle *spec, size_t index) noexcept -> const OpenTTDIndustryLayoutHandle * { return reinterpret_cast<const OpenTTDIndustryLayoutHandle *>(&reinterpret_cast<const IndustrySpec *>(spec)->layouts[index]); },
 		.raw = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> bool { return reinterpret_cast<const IndustrySpec *>(spec)->IsRawIndustry(); },

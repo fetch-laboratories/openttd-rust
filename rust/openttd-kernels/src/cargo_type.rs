@@ -79,3 +79,6 @@ pub const NUM_ORIGINAL_CARGO: u8 = 12;
 
 /// All cargo bits, including undefined cargo slots.
 pub const ALL_CARGOTYPES: u64 = u64::MAX;
+
+/// `CT_FIZZY_DRINKS`.
+pub const CT_FIZZY_DRINKS: u32 = u32::from_be_bytes(*b"FZDR");

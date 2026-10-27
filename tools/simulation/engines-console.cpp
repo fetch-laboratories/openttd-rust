@@ -65,7 +65,7 @@ static Engine *UnusedEngine(EngineID except = EngineID::Invalid())
 static bool EnginesScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
-	if (args[1].starts_with("loading")) return LoadingScenario(args);
+	if ((args[1].starts_with("loading") || args[1].starts_with("properties"))) return LoadingScenario(args);
 	if (args[1] == "cargo-registry") return CargoRegistryScenario(args);
 	if (args[1] == "cargo-profit" || args[1] == "cargo-rating") {
 		if (args[1] == "cargo-profit") CargoProfitFixture(); else CargoRatingFixture();

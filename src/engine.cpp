@@ -1460,9 +1460,11 @@ void CheckEngines()
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDEngineServices.hpp"
+#include "rust/vehicle_properties_ffi.h"
 #include "abi-visit-OpenTTDEngineLoadingServices.hpp"
+#include "abi-visit-OpenTTDVehicleProperties.hpp"
 #include "abi-visit-OpenTTDTypeAvailabilityServices.hpp"
-bool CheckAbi_engine() { return AbiServicesComplete(GetRustEngineLoadingServices()) && AbiServicesComplete(EngineServices()) && AbiServicesComplete(GetRustTypeAvailabilityServices()); }
+bool CheckAbi_engine() { return AbiServicesComplete(GetRustVehicleProperties()) && AbiServicesComplete(GetRustEngineLoadingServices()) && AbiServicesComplete(EngineServices()) && AbiServicesComplete(GetRustTypeAvailabilityServices()); }
 #endif
 
 #ifdef WITH_RUST

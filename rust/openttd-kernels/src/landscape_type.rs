@@ -7,3 +7,6 @@ pub const TROPIC: u8 = 2;
 
 /// Number of original climates.
 pub const NUM_LANDSCAPE: u8 = 4;
+
+/// `LandscapeType::Toyland`.
+pub const TOYLAND: u8 = 3;

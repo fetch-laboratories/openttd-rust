@@ -235,8 +235,10 @@ void SkipBadgeList(ByteReader &buf);
 std::vector<BadgeID> ReadBadgeList(ByteReader &buf, GrfSpecFeature feature);
 
 void MapSpriteMappingRecolour(PalSpriteID *grf_sprite);
+#ifndef WITH_RUST
 TileLayoutFlags ReadSpriteLayoutSprite(ByteReader &buf, bool read_flags, bool invert_action1_flag, bool use_cur_spritesets, GrfSpecFeature feature, PalSpriteID *grf_sprite, uint16_t *max_sprite_offset = nullptr, uint16_t *max_palette_offset = nullptr);
 bool ReadSpriteLayout(ByteReader &buf, uint num_building_sprites, bool use_cur_spritesets, GrfSpecFeature feature, bool allow_var10, bool no_z_position, NewGRFSpriteLayout *dts);
+#endif
 
 GRFFile *GetFileByGRFID(uint32_t grfid);
 GRFError *DisableGrf(StringID message = {}, GRFConfig *config = nullptr);

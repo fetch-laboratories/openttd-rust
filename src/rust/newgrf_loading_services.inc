@@ -2,7 +2,9 @@
 /** @file newgrf_loading_services.inc Typed native loading services. */
 #ifdef WITH_RUST
 #include "newgrf_loading_ffi.h"
+#include "newgrf_act2_ffi.h"
 #include "industry_definition_ffi.h"
+#include "airport_definitions_ffi.h"
 #include "type_registry_ffi.h"
 #include "newgrf_global_ffi.h"
 #include "generic_ffi.h"
@@ -29,8 +31,11 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.global = &GetRustGlobalVariableServices(),
 		.cargo = &GetRustCargoRegistryServices(),
 		.engine = &GetRustEngineLoadingServices(),
+		.houses = &GetHouseDefinitionServices(),
 		.industry = &GetIndustryDefinitionServices(),
+		.airports = &GetAirportDefinitionServices(),
 		.types = &GetRustTypeRegistryServices(),
+		.action2 = &GetRustAction2Services(),
 		.engine_range = [](GrfSpecFeature feature) noexcept { return OpenTTDGrfEngineRange{_engine_offsets[feature], _engine_counts[feature]}; },
 		.parameter = RustGRFParameter,
 		.file_id = RustGRFFileID,
@@ -74,7 +79,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.feature_change_info = ParseGrfAction<&GrfActionHandler<0x00>::Activation>,
 		.skip_act1 = ParseGrfAction<&GrfActionHandler<0x01>::FileScan>,
 		.new_sprite_set = ParseGrfAction<&GrfActionHandler<0x01>::Activation>,
-		.new_sprite_group = ParseGrfAction<&GrfActionHandler<0x02>::Activation>,
 		.feature_map_sprite_group = ParseGrfAction<&GrfActionHandler<0x03>::Activation>,
 		.feature_new_name = ParseGrfAction<&GrfActionHandler<0x04>::Activation>,
 		.skip_act5 = ParseGrfAction<&GrfActionHandler<0x05>::FileScan>,
@@ -137,13 +141,10 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.reset_bridges = []() noexcept { ResetBridges(); },
 		.reset_prices = []() noexcept { ResetPriceBaseMultipliers(); },
 		.reset_currencies = []() noexcept { ResetCurrencies(); },
-		.reset_houses = []() noexcept { ResetHouses(); },
 		.object_classes = &ObjectClass::GetServices(),
 		.reset_objects = []() noexcept { ResetObjects(); },
 		.station_classes = &StationClass::GetServices(),
 		.airport_classes = &AirportClass::GetServices(),
-		.reset_airports = []() noexcept { AirportSpec::ResetAirports(); },
-		.reset_airporttiles = []() noexcept { AirportTileSpec::ResetAirportTiles(); },
 		.roadstop_classes = &RoadStopClass::GetServices(),
 		.reset_water_features = []() noexcept { _water_feature.fill({}); },
 		.reset_faces = []() noexcept { ResetFaces(); },
@@ -152,20 +153,14 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.reset_loaded_features = []() noexcept { _loaded_newgrf_features.has_2CC = false; _loaded_newgrf_features.used_liveries = 1 << LS_DEFAULT; _loaded_newgrf_features.shore = SHORE_REPLACE_NONE; _loaded_newgrf_features.tram = TRAMWAY_REPLACE_DEPOT_NONE; },
 		.initialize_sounds = []() noexcept { InitializeSoundPool(); },
 		.clean_spritegroups = []() noexcept { _spritegroup_pool.CleanPool(); },
-		.reset_callbacks = []() noexcept { ResetCallbacks(false); },
-		.finish_callbacks = []() noexcept { ResetCallbacks(true); },
 		.finalise_strings = []() noexcept { FinaliseStringMapping(); },
 		.finalise_badges = []() noexcept { FinaliseBadges(); },
 		.finalise_canals = []() noexcept { FinaliseCanals(); },
-		.finalise_houses = []() noexcept { FinaliseHouseArray(); },
 		.finalise_objects = []() noexcept { FinaliseObjectsArray(); },
 		.sort_industries = []() noexcept { SortIndustryTypes(); },
 		.industry_legend = []() noexcept { BuildIndustriesLegend(); },
 		.linkstats_legend = []() noexcept { BuildLinkStatsLegend(); },
-		.finalise_airports = []() noexcept { FinaliseAirportsArray(); },
-		.bind_airports = []() noexcept { BindAirportSpecs(); },
 		.townnames = []() noexcept { InitGRFTownGeneratorNames(); },
-		.vehicle_list_orders = []() noexcept { CommitVehicleListOrderChanges(); },
 		.activate_shore = []() noexcept { ActivateOldShore(); },
 		.activate_tram_depot = []() noexcept { ActivateOldTramDepot(); },
 		.aging_stops = []() noexcept { SetYearEngineAgingStops(); },
@@ -220,7 +215,10 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 	};
 	return services;
 }
+#include "abi-visit-OpenTTDAirportDefinitionServices.hpp"
 #include "abi-visit-OpenTTDGrfLoadingServices.hpp"
+#include "abi-visit-OpenTTDAction2Services.hpp"
+#include "abi-visit-OpenTTDHouseDefinitionServices.hpp"
 #include "abi-visit-OpenTTDStationClassServices.hpp"
 #include "abi-visit-OpenTTDRoadStopClassServices.hpp"
 #include "abi-visit-OpenTTDAirportClassServices.hpp"
@@ -228,6 +226,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 bool CheckAbi_grf_loading()
 {
 	const auto &s = GetRustGrfLoadingServices();
-	return AbiServicesComplete(s) && AbiServicesComplete(*s.station_classes) && AbiServicesComplete(*s.roadstop_classes) && AbiServicesComplete(*s.airport_classes) && AbiServicesComplete(*s.object_classes);
+	return AbiServicesComplete(GetRustAction2Services()) && AbiServicesComplete(s) && AbiServicesComplete(*s.houses) && AbiServicesComplete(*s.airports) && AbiServicesComplete(*s.station_classes) && AbiServicesComplete(*s.roadstop_classes) && AbiServicesComplete(*s.airport_classes) && AbiServicesComplete(*s.object_classes);
 }
 #endif
