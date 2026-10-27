@@ -76,6 +76,21 @@ pub(crate) fn get_tile_z(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<i
     Some(north.min(west).min(east.min(south)))
 }
 
+/// `GetTilePixelSlope`, in pixels rather than height levels.
+#[inline]
+pub(crate) fn get_tile_pixel_slope(
+    m: &TileTypeAccess,
+    tile: u32,
+    x: u32,
+    y: u32,
+) -> Option<crate::services::FoundationSlope> {
+    let (slope, z) = get_tile_slope_z(m, tile, x, y)?;
+    Some(crate::services::FoundationSlope {
+        slope: crate::services::Slope(slope),
+        z: z * crate::tile_type::TILE_HEIGHT.cast_signed(),
+    })
+}
+
 /// Native default probe: compare audited reads with the unchanged typed services.
 /// # Safety
 /// Same allocation contract as the scheduler; all tables are live and immutable.
