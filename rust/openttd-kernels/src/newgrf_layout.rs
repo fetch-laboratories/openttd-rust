@@ -16,16 +16,6 @@ pub(crate) struct Sequence {
     _opaque: [u8; 0],
 }
 #[repr(C)]
-pub(crate) struct SequenceFields {
-    pub origin_x: *mut i8,
-    pub origin_y: *mut i8,
-    pub origin_z: *mut i8,
-    pub extent_x: *mut u8,
-    pub extent_y: *mut u8,
-    pub extent_z: *mut u8,
-    pub image: *mut PalSprite,
-}
-crate::abi::layouts! {
-    fn abi_layout;
-    "OpenTTDStationSequenceFields" ["station_service"] => SequenceFields { origin_x, origin_y, origin_z, extent_x, extent_y, extent_z, image };
+pub(crate) struct LayoutSequence {
+    _opaque: [u8; 0],
 }

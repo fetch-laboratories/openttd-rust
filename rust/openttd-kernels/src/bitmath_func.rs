@@ -19,6 +19,17 @@ pub fn set_bit(value: &mut u32, bit: u8) -> u32 {
     *value
 }
 
+/// `ClrBit` for uint32 fields, preserving the original return value.
+pub fn clr_bit(value: &mut u32, bit: u8) -> u32 {
+    *value &= !1_u32.wrapping_shl(u32::from(bit));
+    *value
+}
+
+/// `HasExactlyOneBit` for byte-sized counts, with C++ integer promotion.
+pub const fn has_exactly_one_bit(value: u8) -> bool {
+    value != 0 && value & value.wrapping_sub(1) == 0
+}
+
 /// `SB` for uint32 fields: clear the destination window, then OR the entire
 /// shifted operand. The original deliberately does not mask the operand.
 pub fn sb(value: &mut u32, start: u8, length: u8, data: u32) {
