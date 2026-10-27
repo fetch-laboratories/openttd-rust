@@ -49,11 +49,12 @@ def node(harness):
     return json.loads(subprocess.check_output(["node", "-e", harness], text=True))
 
 
-def javascript(expression):
+def javascript(expression: str | bool) -> str:
     """Translate one GitHub expression; hyphenated properties become subscripts."""
     if isinstance(expression, bool):
         return json.dumps(expression)
     expression = expression.strip().removeprefix("${{").removesuffix("}}")
+    expression = expression.replace("fromJSON(", "JSON.parse(")
     parts = re.split(r"('[^']*')", expression)
     parts[::2] = [
         re.sub(r"\.([\w-]+)", lambda match: f"[{json.dumps(match[1])}]", part)
@@ -412,6 +413,43 @@ const github = {{paginate: async () => {json.dumps(caches)}, rest: {{actions: {{
 
 
 class PolicyTests(unittest.TestCase):
+    def test_platform_matrix_matches_profile_and_cadence(self) -> None:
+        jobs = workflow("ci-build.yml")["jobs"]
+        # A direct dispatch is the cadence; controller dispatches carry a checkout.
+        dispatch = "workflow_dispatch"
+        all_linux, both_windows = ["clang", "sdl2", "dedicated"], ["x86", "x64"]
+        for profile, checkout, event, heavy, covered, linux, windows, macos in (
+            ("full", "merge", dispatch, "", "", ["sdl2"], ["x64"], False),
+            ("native", "merge", dispatch, "", "", ["sdl2"], [], False),
+            ("platform", "merge", dispatch, "", "", all_linux, both_windows, True),
+            ("", "", dispatch, "", "", ["clang", "dedicated"], ["x86"], True),
+            ("", "", "push", "false", "true", ["sdl2"], ["x64"], False),
+            ("", "", "push", "true", "", all_linux, both_windows, True),
+            ("", "", "pull_request", "true", "", ["sdl2"], ["x64"], True),
+        ):
+            contexts = {
+                "inputs": {"checkout-ref": checkout, "profile": profile},
+                "github": {"event_name": event},
+                "needs": {"policy": {"outputs": {"heavy": heavy, "covered": covered}}},
+            }
+            with self.subTest(profile=profile, event=event, covered=covered):
+                for name, axis, expected in (
+                    ("linux", "flavour", linux),
+                    ("windows", "arch", windows),
+                ):
+                    body = jobs[name]
+                    selected = (
+                        evaluate(body["strategy"]["matrix"][axis], **contexts)
+                        if evaluate(body["if"], **contexts)
+                        else []
+                    )
+                    self.assertEqual(selected, expected)
+                self.assertEqual(evaluate(jobs["macos"]["if"], **contexts), macos)
+                self.assertEqual(
+                    evaluate(jobs["emscripten"]["if"], **contexts),
+                    bool(checkout and profile != "native" or heavy == "true"),
+                )
+
     def test_platform_cache_refresh_is_only_a_covered_protected_push(self):
         build = workflow("ci-build.yml")["jobs"]
         protected = "refs/heads/rust-migration"
@@ -460,7 +498,9 @@ class PolicyTests(unittest.TestCase):
             inputs = {"cache-only": cache_only, "compiler": compiler}
             self.assertEqual(evaluate(linux, inputs=inputs), expected)
 
-    def test_heavy_predicates_bypass_skipped_policy_but_respect_cancellation(self):
+    def test_heavy_predicates_bypass_skipped_policy_but_respect_cancellation(
+        self,
+    ) -> None:
         dispatch = "workflow_dispatch"
         for filename, names in (
             ("ci-build.yml", ("emscripten", "linux", "macos", "windows")),
@@ -475,6 +515,11 @@ class PolicyTests(unittest.TestCase):
                     (True, "head", "true", "full", "push", False),
                     (True, "", "true", "full", "push", False),
                 ]
+                if filename == "ci-build.yml" and name in ("linux", "windows"):
+                    cases += [
+                        (False, "", "", "", dispatch, True),
+                        (True, "", "", "", dispatch, False),
+                    ]
                 if name == "macos":
                     # Full skips macOS; platform, heavy pushes and dispatch run it.
                     cases = [
@@ -521,36 +566,78 @@ class PolicyTests(unittest.TestCase):
             self.assertEqual(first, second)
         first, second = groups("ci-quick.yml")
         self.assertNotEqual(first, second)
-        # A dispatched macOS run never displaces a queued push validation.
+        # A cadence dispatch never displaces a queued push validation.
         dispatched = groups("ci-build.yml", "workflow_dispatch")
         self.assertNotEqual(groups("ci-build.yml"), dispatched)
 
-    def test_platform_annotations_run_after_each_platform_and_gate_completion(self):
+    def test_platform_annotations_run_after_each_platform_and_gate_completion(
+        self,
+    ) -> None:
         jobs = workflow("ci-build.yml")["jobs"]
         for platform in ("emscripten", "linux", "macos", "windows"):
             annotations = jobs[f"annotations_{platform}"]
             self.assertEqual(annotations["needs"], platform)
-            for result in ("success", "failure", "skipped"):
+            for result, event in itertools.product(
+                ("success", "failure", "skipped"),
+                ("pull_request", "workflow_dispatch", "push"),
+            ):
                 needs = {platform: {"result": result}}
-                inputs = {"checkout-ref": "merge"}
-                ran = evaluate(annotations["if"], needs=needs, inputs=inputs, github={})
-                self.assertEqual(ran, result != "skipped")
+                ran = evaluate(
+                    annotations["if"],
+                    needs=needs,
+                    inputs={"checkout-ref": ""},
+                    github={"event_name": event},
+                )
+                self.assertEqual(ran, result != "skipped" and event != "push")
+        self.assertTrue(
+            evaluate(
+                jobs["check_annotations"]["if"],
+                inputs={"checkout-ref": ""},
+                github={"event_name": "workflow_dispatch"},
+                needs={"linux": {"result": "success"}},
+            )
+        )
         run = jobs["complete"]["steps"][0]["run"]
         script = run.split("<<'PY'\n", 1)[1].rsplit("PY\n", 1)[0]
-        required = "linux emscripten windows check_annotations annotations_linux"
-        required += " annotations_emscripten annotations_windows"
-        for failed in (None, "annotations_linux", "windows"):
-            needs = {name: {"result": "success"} for name in required.split()}
-            if failed:
-                needs[failed]["result"] = "failure"
-            with tempfile.TemporaryDirectory() as directory:
-                output = Path(directory) / "output"
-                env = {**os.environ, "PROFILE": "full", "RESULTS": json.dumps(needs)}
-                env["GITHUB_OUTPUT"] = str(output)
-                command = ["python3", "-c", script]
-                result = subprocess.run(command, capture_output=True, env=env)
-                self.assertEqual(result.returncode == 0, failed is None)
-                self.assertEqual(output.exists(), failed is None)
+        for profile, platforms in (
+            ("full", ["linux", "emscripten", "windows"]),
+            ("platform", ["linux", "emscripten", "windows", "macos"]),
+            ("native", ["linux"]),
+        ):
+            required = [
+                "check_annotations",
+                *platforms,
+                *[f"annotations_{name}" for name in platforms],
+            ]
+            cases = [
+                (None, "success"),
+                *itertools.product(
+                    required, ("failure", "skipped", "cancelled", "missing")
+                ),
+            ]
+            for failed, result in cases:
+                needs = {name: {"result": "success"} for name in required}
+                if failed:
+                    if result == "missing":
+                        del needs[failed]
+                    else:
+                        needs[failed]["result"] = result
+                with (
+                    self.subTest(profile=profile, failed=failed, result=result),
+                    tempfile.TemporaryDirectory() as directory,
+                ):
+                    output = Path(directory) / "output"
+                    env = {
+                        **os.environ,
+                        "PROFILE": profile,
+                        "RESULTS": json.dumps(needs),
+                    }
+                    env["GITHUB_OUTPUT"] = str(output)
+                    completed = subprocess.run(
+                        ["python3", "-c", script], capture_output=True, env=env
+                    )
+                    self.assertEqual(completed.returncode == 0, failed is None)
+                    self.assertEqual(output.exists(), failed is None)
 
     def test_coverage_lookup_retries_transients_and_falls_back_only_after_exhaustion(
         self,

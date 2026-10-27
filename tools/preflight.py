@@ -15,13 +15,13 @@ HOOKS_REVISION = "eeb3791aadf0aded5a7cd634c80823f17e87af9c"
 HOOKS_URL = "https://github.com/OpenTTD/OpenTTD-git-hooks.git"
 
 
-def git(repo, *arguments):
+def git(repo: Path, *arguments: str) -> str:
     return subprocess.check_output(
         ["git", "-C", str(repo), *arguments], text=True
     ).strip()
 
 
-def hooks_checkout(supplied=None):
+def hooks_checkout(supplied: Path | None = None) -> Path:
     destination = supplied or (
         migration.COMMON_LOCAL / "tooling/OpenTTD-git-hooks" / HOOKS_REVISION
     )
@@ -44,7 +44,7 @@ def hooks_checkout(supplied=None):
     return destination
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", default="origin/rust-migration")
     parser.add_argument("--head", default="HEAD")

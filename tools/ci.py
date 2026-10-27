@@ -252,7 +252,12 @@ def main() -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     submit = commands.add_parser("request", help="request CI (default: Rust checks)")
     submit.add_argument("pr", type=int)
-    submit.add_argument("--profile", choices=PROFILES, default="rust")
+    submit.add_argument(
+        "--profile",
+        choices=PROFILES,
+        default="rust",
+        help="full gates Windows x64, GCC SDL2 and Emscripten; platform diagnoses the whole matrix",
+    )
     submit.add_argument("--repo")
     submit.add_argument("--request-file", type=Path)
     submit.add_argument(
