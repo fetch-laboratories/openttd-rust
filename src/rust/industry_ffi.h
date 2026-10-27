@@ -140,7 +140,6 @@ typedef struct OpenTTDIndustryServices {
 	void (*tick_trigger)(void *industry) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(tick_trigger);
 	void (*production_callback)(void *industry, uint8_t reason) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(production_callback);
 	uint32_t (*scale_cargo)(uint32_t amount) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(scale_cargo);
-	uint32_t (*move_goods)(void *industry, uint32_t slot, uint32_t amount) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(move_goods);
 	/* Farm fields and lumber mills. */
 	uint32_t (*tile_add_wrap)(uint32_t tile, int32_t x, int32_t y) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(tile_add_wrap);
 	OpenTTDIndustryFarmTile (*farm_tile)(uint32_t tile) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(farm_tile);
@@ -205,8 +204,6 @@ typedef struct OpenTTDIndustryLifecycleServices {
 	void (*delete_inspect)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(delete_inspect);
 	const OpenTTDSubsidyServices *(*subsidies)() OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(subsidies);
 	void (*invalidate_cargo)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(invalidate_cargo);
-	void *(*next_near_station)(void *, void *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(next_near_station);
-	void (*remove_delivery)(void *, void *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(remove_delivery);
 	bool (*belongs)(uint32_t, uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(belongs);
 	OpenTTDIndustryRandomisationSpec (*randomisation_spec)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(randomisation_spec);
 	uint8_t (*random_triggers)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(random_triggers);
@@ -256,7 +253,6 @@ typedef struct OpenTTDIndustryConstructionRequest {
 	uint16_t id, random_bits;
 	uint8_t type, founder;
 } OpenTTDIndustryConstructionRequest;
-typedef bool (*OpenTTDIndustryStationVisit)(void *, OpenTTDIndustryStationHandle *, uint32_t);
 typedef struct OpenTTDIndustryConstructionServices {
 	OpenTTDIndustryCargoLists (*cargo_lists)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(cargo_lists);
 	uint16_t (*callback_mask)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(callback_mask);
@@ -279,11 +275,6 @@ typedef struct OpenTTDIndustryConstructionServices {
 
 	void (*build_window_dirty)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(build_window_dirty);
 	bool (*serve_neutral)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(serve_neutral);
-	void (*insert_near_station)(void *, OpenTTDIndustryStationHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(insert_near_station);
-	void (*clear_near_industries)(OpenTTDIndustryStationHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(clear_near_industries);
-	void (*insert_neutral_industry)(OpenTTDIndustryStationHandle *, void *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(insert_neutral_industry);
-	void (*stations_around)(void *, void *, OpenTTDIndustryStationVisit) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(stations_around);
-	void (*add_delivery)(OpenTTDIndustryStationHandle *, void *, uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(add_delivery);
 } OpenTTDIndustryConstructionServices;
 void openttd_rust_industry_tick(OpenTTDIndustryBuilder *builder, const OpenTTDIndustryTickRecord *record, const OpenTTDIndustryServices *services);
 bool openttd_rust_industry_transport(void *industry, OpenTTDIndustry *owner, uint8_t minimal_cargo, bool recession, const OpenTTDIndustryServices *services);

@@ -89,6 +89,18 @@ impl Map {
     pub fn distance_manhattan(self, a: u32, b: u32) -> u32 {
         self.tile_x(a).abs_diff(self.tile_x(b)) + self.tile_y(a).abs_diff(self.tile_y(b))
     }
+    /// Original `DistanceMax`, the L-infinity norm.
+    #[must_use]
+    pub fn distance_max(self, a: u32, b: u32) -> u32 {
+        self.tile_x(a)
+            .abs_diff(self.tile_x(b))
+            .max(self.tile_y(a).abs_diff(self.tile_y(b)))
+    }
+    /// `TileAddXY`: `tile + TileDiffXY(x, y)` in unsigned arithmetic.
+    #[must_use]
+    pub fn tile_add_xy(self, tile: u32, x: i32, y: i32) -> u32 {
+        tile.wrapping_add(self.diff(x, y))
+    }
     /// Original `DistanceSquare` over captured map dimensions.
     #[must_use]
     pub fn distance_square(self, a: u32, b: u32) -> u32 {
@@ -272,5 +284,5 @@ impl TileTypeAccess {
     }
     // Named, field-sized loads. No Rust reference or record value is formed.
     map_fields! { base: BaseTileLayout => kind: u8, height: u8, m1: u8, m2: u16, m3: u8, m4: u8, m5: u8 }
-    map_fields! { extended: ExtendedTileLayout => m6: u8 }
+    map_fields! { extended: ExtendedTileLayout => m6: u8, m8: u16 }
 }

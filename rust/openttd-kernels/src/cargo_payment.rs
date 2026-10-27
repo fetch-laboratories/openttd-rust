@@ -16,7 +16,6 @@
     clippy::missing_safety_doc,
     clippy::too_many_arguments
 )]
-use crate::station::NearbyIndustryCursor;
 use std::ffi::c_void;
 
 /// Opaque live native `CargoPayment`; never dereferenced by Rust.
@@ -131,9 +130,7 @@ fn deliver(
     periods: u16,
     company: u8,
     source: u32,
-    cursor: *mut NearbyIndustryCursor,
     monitors: &crate::cargomonitor::Services,
-    monitor_cursor: *mut NearbyIndustryCursor,
 ) -> i64 {
     let industry_source = if source >> 16 == 0 {
         source as u16
@@ -143,18 +140,20 @@ fn deliver(
     let mut remaining = pieces;
     let mut accepted_ind = 0_u32;
     let subsidies = unsafe { &*(s.subsidies)() };
-    (subsidies.begin_nearby)(cursor, (subsidies.station)(station));
-    loop {
-        let ind = (subsidies.next_nearby)(cursor).cast::<c_void>();
-        if ind.is_null() || remaining == 0 {
-            break;
+    let native = (subsidies.station)(station);
+    let catchment = crate::station::Ctx::from_shared(subsidies.shared());
+    let state = (catchment.c.station_owner)(crate::station_type::StationID(station));
+    let visit = |near: crate::station::IndustryListEntry| {
+        if remaining == 0 {
+            return false;
         }
-        if (subsidies.industry_id)(ind) == industry_source {
-            continue;
+        let ind = near.industry.cast::<c_void>();
+        if near.id == crate::industry_type::IndustryID(industry_source) {
+            return true;
         }
         let slot = (s.industry_read)(ind, 1, u32::from(cargo));
         if slot == u32::MAX {
-            continue;
+            return true;
         }
         if unsafe {
             crate::industry::resolver::refuses(
@@ -164,11 +163,11 @@ fn deliver(
                 &*s.resolver,
             )
         } {
-            continue;
+            return true;
         }
         let supplier = (s.industry_read)(ind, 2, 0);
         if supplier != 0xff && supplier != (s.station_read)(station, 0, 0) {
-            continue;
+            return true;
         }
         // No owner borrow is alive during a world leaf; include preserves order.
         let destinations = unsafe { &mut (*d).destinations };
@@ -185,11 +184,14 @@ fn deliver(
             company,
             amount,
             crate::source_type::Source::industry(industry_source),
-            (subsidies.station)(station),
-            (subsidies.industry_id)(ind),
-            monitor_cursor,
+            native,
+            state,
+            near.id,
         );
-    }
+        true
+    };
+    // SAFETY: The live station owner; each entry is copied before the services in `visit`.
+    unsafe { crate::station::for_each_industry_near(state, visit) };
     let accepted = if (s.station_read)(station, 1, cargo) != 0 {
         pieces
     } else {
@@ -210,9 +212,9 @@ fn deliver(
             id: source as u16,
             kind: (source >> 16) as u8,
         },
-        (subsidies.station)(station),
-        0xffff,
-        monitor_cursor,
+        native,
+        state,
+        crate::industry_type::IndustryID::INVALID,
     );
     if subsidies.check(
         cargo,
@@ -222,7 +224,6 @@ fn deliver(
             kind: (source >> 16) as u8,
         },
         station,
-        cursor,
     ) {
         profit = match (s.setting)(0) {
             0 => profit.saturating_add(profit >> 1),
@@ -360,9 +361,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_payment_final(
     distance: u32,
     periods: u16,
     source: u32,
-    cursor: *mut NearbyIndustryCursor,
     monitors: *const crate::cargomonitor::Services,
-    monitor_cursor: *mut NearbyIndustryCursor,
 ) {
     let s = unsafe { *s };
     let front = unsafe { (*p).fields.front };
@@ -378,9 +377,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_payment_final(
         periods,
         company,
         source,
-        cursor,
         unsafe { &*monitors },
-        monitor_cursor,
     );
     unsafe {
         (*p).fields.route_profit = (*p).fields.route_profit.saturating_add(profit);

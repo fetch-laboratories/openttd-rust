@@ -29,6 +29,7 @@ struct OpenTTDMovementIncline { int32_t z; uint16_t flags; };
 struct OpenTTDMovementFirstSpeed { OpenTTDVehicle *first; uint16_t speed; };
 struct OpenTTDNormalRoadStatusTail { uint8_t disallowed; bool road_works; };
 struct OpenTTDMovementServices {
+	OpenTTDTileTypeAllocation (*tile_types)() noexcept = nullptr;
 	const OpenTTDSharedServices *shared;
 	const OpenTTDOrdersLeaves *orders;
 	const OpenTTDRailServices *rail;
@@ -76,7 +77,6 @@ struct OpenTTDMovementServices {
 	uint16_t (*industry_callback)(uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_callback);
 	bool (*industry_boolean)(const void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_boolean);
 };
-void RustMovementAssert(bool condition) noexcept;
 const OpenTTDMovementServices &GetRustMovementServices() noexcept;
 extern "C" {
 uint16_t openttd_rust_road_trackdirs(const OpenTTDMovementServices *, uint32_t, RoadTramType);

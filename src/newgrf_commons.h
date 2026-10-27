@@ -250,10 +250,16 @@ public:
 struct HouseSpec;
 class HouseOverrideManager : public OverrideManagerBase {
 public:
+#ifdef WITH_RUST
+	HouseOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid);
+#else
 	HouseOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
 			OverrideManagerBase(offset, maximum, invalid) {}
+#endif
 
+#ifndef WITH_RUST
 	void SetEntitySpec(HouseSpec &&hs);
+#endif
 };
 
 
@@ -267,7 +273,9 @@ public:
 			OverrideManagerBase(offset, maximum, invalid) {}
 #endif
 
+#ifndef WITH_RUST
 	uint16_t AddEntityID(uint16_t grf_local_id, uint32_t grfid, uint16_t substitute_id) override;
+#endif
 	uint16_t GetID(uint16_t grf_local_id, uint32_t grfid) const override;
 
 #ifndef WITH_RUST
@@ -296,10 +304,16 @@ public:
 struct AirportSpec;
 class AirportOverrideManager : public OverrideManagerBase {
 public:
+#ifdef WITH_RUST
+	AirportOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid);
+#else
 	AirportOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
 			OverrideManagerBase(offset, maximum, invalid) {}
+#endif
 
+#ifndef WITH_RUST
 	void SetEntitySpec(AirportSpec &&inds);
+#endif
 };
 
 struct AirportTileSpec;
@@ -307,10 +321,16 @@ class AirportTileOverrideManager : public OverrideManagerBase {
 protected:
 	bool CheckValidNewID(uint16_t testid) override { return testid != 0xFF; }
 public:
+#ifdef WITH_RUST
+	AirportTileOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid);
+#else
 	AirportTileOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
 			OverrideManagerBase(offset, maximum, invalid) {}
+#endif
 
+#ifndef WITH_RUST
 	void SetEntitySpec(AirportTileSpec &&ats);
+#endif
 };
 
 struct ObjectSpec;

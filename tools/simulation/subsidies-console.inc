@@ -36,26 +36,27 @@ static bool SubsidyScenario(std::span<std::string_view> args)
 	SubsidyClean();
 	Vehicle *front = nullptr; for (Vehicle *v : Vehicle::Iterate()) if (v->type == VEH_TRAIN && v->IsPrimaryVehicle() && v->cargo_payment == nullptr) { front = v; break; }
 	if (front == nullptr || Town::GetNumItems() < 2 || Industry::GetNumItems() < 2) FixtureAbort(__LINE__);
-	auto ti = Town::Iterate().begin(); Town *a = *ti; ++ti; Town *b = *ti;
-	auto ii = Industry::Iterate().begin(); Industry *i = *ii; ++ii; Industry *j = *ii;
-	Station *st = *Station::Iterate().begin();
+	CargoType cargo = CargoSpec::town_production_cargoes[TPE_PASSENGERS][0]->Index();
+	/* The loaded catchment of a passenger-accepting station covers town a's houses
+	 * and lists industry j; town b and industry i lie outside it. */
+	Station *st = nullptr; Town *a = nullptr; Industry *j = nullptr;
+	for (Station *candidate : Station::Iterate()) {
+		if (st != nullptr || !HasBit(candidate->always_accepted, cargo) || candidate->industries_near.begin() == candidate->industries_near.end()) continue;
+		BitmapTileIterator it(candidate->catchment_tiles);
+		for (TileIndex tile = it; tile != INVALID_TILE; tile = ++it) {
+			if (!IsTileType(tile, MP_HOUSE)) continue;
+			st = candidate; a = Town::GetByTile(tile); j = candidate->industries_near.begin()->industry; break;
+		}
+	}
+	if (st == nullptr) FixtureAbort(__LINE__);
+	auto covers_town = [st](const Town *t) { BitmapTileIterator it(st->catchment_tiles); for (TileIndex tile = it; tile != INVALID_TILE; tile = ++it) if (IsTileType(tile, MP_HOUSE) && GetTownIndex(tile) == t->index) return true; return false; };
+	auto lists = [st](const Industry *ind) { for (const auto &entry : st->industries_near) if (entry.industry == ind) return true; return false; };
+	Town *b = nullptr; for (Town *t : Town::Iterate()) if (b == nullptr && !covers_town(t)) b = t;
+	Industry *i = nullptr; for (Industry *ind : Industry::Iterate()) if (i == nullptr && !lists(ind)) i = ind;
+	if (b == nullptr || i == nullptr) FixtureAbort(__LINE__);
 	Backup<CompanyID> current(_current_company, OWNER_DEITY);
 	Backup<StationID> last(front->last_station_visited, st->index);
-	Backup<BitmapTileArea> catchment(st->catchment_tiles); Backup<IndustryList> near(st->industries_near); Backup<CargoTypes> accepts(st->always_accepted);
-	st->catchment_tiles.Initialize(TileArea(TileXY(0, 0), Map::SizeX(), Map::SizeY()));
-	for (TileIndex tile : Map::Iterate()) if (IsTileType(tile, MP_HOUSE) && (GetTownIndex(tile) == a->index || GetTownIndex(tile) == b->index)) st->catchment_tiles.SetTile(tile);
-	st->industries_near = {{1, j}, {1, i}};
-#ifdef WITH_RUST
-	const auto &services = GetRustSubsidyServices(); RustNearbyIndustryCursor x, y;
-	st->industries_near.clear(); services.begin_nearby(&x, st);
-	if (services.next_nearby(&x) != nullptr) FixtureAbort(__LINE__);
-	st->industries_near = {{1, i}, {0, j}}; services.begin_nearby(&x, st);
-	if (services.next_nearby(&x) != j || services.next_nearby(&x) != i || services.next_nearby(&x) != nullptr) FixtureAbort(__LINE__);
-	st->industries_near = {{1, j}, {1, i}}; services.begin_nearby(&x, st); services.begin_nearby(&y, st);
-	if (services.next_nearby(&x) != i || services.next_nearby(&x) != j || services.next_nearby(&y) != i || services.next_nearby(&x) != nullptr || services.next_nearby(&y) != j || services.next_nearby(&y) != nullptr) FixtureAbort(__LINE__);
-#endif
 	fmt::print(stderr, "SUBSIDY nearby true\n");
-	CargoType cargo = CargoSpec::town_production_cargoes[TPE_PASSENGERS][0]->Index(); SetBit(st->always_accepted, cargo);
 	Source town{a->index, SourceType::Town}, other{b->index, SourceType::Town}, industry{i->index, SourceType::Industry}, destination{j->index, SourceType::Industry};
 	bool commands = true; for (Source src : {town, industry}) for (Source dst : {town, destination}) { commands &= CmdCreateSubsidy({}, cargo, src, dst).Succeeded(); commands &= CmdCreateSubsidy(DoCommandFlag::Execute, cargo, src, dst).Succeeded(); }
 	commands &= CmdCreateSubsidy(DoCommandFlag::Execute, cargo, town, town).Succeeded(); // duplicates/self routes remain legal
@@ -75,11 +76,11 @@ static bool SubsidyScenario(std::span<std::string_view> args)
 		payment->PayFinalDelivery(cargo, cp, 10, tile);
 		Money expected = multiplier == 0 ? base + (base >> 1) : base * (multiplier + 1);
 		multipliers &= base > 0 && payment->route_profit == expected;
-		for (Subsidy *s : Subsidy::Iterate()) multipliers &= s->awarded == front->owner;
+		for (Subsidy *s : Subsidy::Iterate()) multipliers &= (s->awarded == front->owner) == (s->dst == town || s->dst == destination);
 		payment->route_profit = payment->visual_profit = payment->visual_transfer = 0; delete payment; delete cp;
 	}
 	fmt::print(stderr, "SUBSIDY multipliers {}\n", multipliers);
-	SubsidyClean(); _settings_game.difficulty.subsidy_duration = 65535; Subsidy *s = FixtureSubsidy(cargo, town, other, 0); RebuildSubsidisedSourceAndDestinationCache(); CheckSubsidised(cargo, front->owner, town, st);
+	SubsidyClean(); _settings_game.difficulty.subsidy_duration = 65535; Subsidy *s = FixtureSubsidy(cargo, town, town, 0); RebuildSubsidisedSourceAndDestinationCache(); CheckSubsidised(cargo, front->owner, town, st);
 	#ifdef WITH_RUST
 	if (&s->cargo_type != &s->rust_state->cargo_type || &s->remaining != &s->rust_state->remaining || &s->awarded != &s->rust_state->awarded || &s->src != &s->rust_state->src || &s->dst != &s->rust_state->dst) FixtureAbort(__LINE__);
 #endif
@@ -114,7 +115,7 @@ static bool SubsidyScenario(std::span<std::string_view> args)
 	removed &= Subsidy::GetNumItems() == 0;
 	fmt::print(stderr, "SUBSIDY transfer {} {}\n", transfer, removed);
 	s = FixtureSubsidy(cargo, town, other, 54321); s->awarded = front->owner; RebuildSubsidisedSourceAndDestinationCache();
-	catchment.Restore(); near.Restore(); accepts.Restore(); last.Restore(); current.Restore();
+	last.Restore(); current.Restore();
 	if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
 	return true;
 }

@@ -14,11 +14,16 @@
 #ifdef WITH_RUST
 #include "../rust/engine_ffi.h"
 #include "../rust/engine_loading_ffi.h"
+#include "../rust/vehicle_properties_ffi.h"
 #include "../newgrf/newgrf_internal_vehicle.h"
 
 #include "../rust/engine_services.h"
 #include "../rust/type_availability_ffi.h"
 #include "../rust/type_definitions_ffi.h"
+#include "../rust/type_registry_ffi.h"
+#include "../rail.h"
+#include "../road.h"
+#include "../core/backup_type.hpp"
 #include "../rust/newgrf_translation_ffi.h"
 #include "abi_layout.hpp"
 #endif
@@ -102,35 +107,6 @@ TEST_CASE("Engine mappings preserve reservation, sorted identity and replacement
 	for (const auto &map : saved) for (const auto &entry : map) _engine_mngr.SetID(entry.type, entry.internal_id, entry.grfid, entry.substitute_id, entry.engine);
 }
 
-#ifdef WITH_RUST
-TEST_CASE("Engine loading state crosses serialized game threads and retains partial fields", "[rust][engine][loading]")
-{
-	_gted.resize(3);
-	_gted[EngineID{1}].cargo_allowed = CargoClasses{123};
-	_gted[EngineID{1}].railtypelabels.push_back(RAILTYPE_LABEL_RAIL);
-	_gted[EngineID{1}].UpdateRefittability(false);
-	std::thread game([] {
-		REQUIRE(_gted[EngineID{1}].cargo_allowed.base() == 123);
-		REQUIRE(_gted[EngineID{1}].refittability == GRFTempEngineData::EMPTY);
-		_gted[EngineID{1}].UpdateRefittability(true);
-		_gted[EngineID{1}].ctt_include_mask = 7;
-	});
-	game.join();
-	_gted.resize(70);
-	REQUIRE(_gted[EngineID{1}].ctt_include_mask == 7);
-	REQUIRE(_gted[EngineID{1}].railtypelabels[0] == RAILTYPE_LABEL_RAIL);
-	REQUIRE(_gted[EngineID{1}].refittability == GRFTempEngineData::NONEMPTY);
-	_gted[EngineID{1}].UpdateRefittability(false);
-	REQUIRE(_gted[EngineID{1}].refittability == GRFTempEngineData::NONEMPTY);
-	REQUIRE(_gted[EngineID{69}].refittability == GRFTempEngineData::UNSET);
-	_gted.clear();
-	_gted.resize(3);
-	REQUIRE(_gted[EngineID{1}].cargo_allowed.None());
-	REQUIRE(_gted[EngineID{1}].railtypelabels.empty());
-	REQUIRE(_gted[EngineID{1}].defaultcargo_grf == nullptr);
-	_gted.clear();
-}
-#endif
 
 TEST_CASE("Engine capability observations preserve type and zero-capacity gates", "[rust][engine]")
 {
@@ -160,3 +136,30 @@ TEST_CASE("Engine capability observations preserve type and zero-capacity gates"
 	}
 #endif
 }
+
+#ifdef WITH_RUST
+template <typename Info, typename Labels>
+static void CheckLiveTypeLabels(Info *types, size_t count, Labels labels)
+{
+	const auto *pointers = labels();
+	for (size_t i = 0; i < count; ++i) CHECK(pointers[i] == &types[i].label);
+	Backup<uint32_t> first(types[0].label, 0x51500001);
+	Backup<uint32_t> last(types[count - 1].label, 0x51500002);
+	CHECK(*pointers[0] == 0x51500001);
+	CHECK(*pointers[count - 1] == 0x51500002);
+	first.Change(0x51500003);
+	CHECK(labels() == pointers);
+	CHECK(*pointers[0] == 0x51500003);
+	CHECK(types[0].label == 0x51500003);
+	last.Restore();
+	first.Restore();
+}
+
+TEST_CASE("Engine type label services expose live canonical scalars", "[rust][engine][abi]")
+{
+	extern RailTypeInfo _railtypes[RAILTYPE_END];
+	extern RoadTypeInfo _roadtypes[ROADTYPE_END];
+	CheckLiveTypeLabels(_railtypes, RAILTYPE_END, GetRustRailRegistryServices().labels);
+	CheckLiveTypeLabels(_roadtypes, ROADTYPE_END, GetRustRoadRegistryServices().labels);
+}
+#endif

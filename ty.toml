@@ -1,0 +1,7 @@
+[environment]
+python-version = "3.11"
+extra-paths = ["tools", "tools/simulation"]
+
+[src]
+# Add new modules and each #501 conversion here; this list only grows.
+include = ["tools/ci.py", "tools/deep.py", "tools/preflight.py", "tools/test-deep.py"]

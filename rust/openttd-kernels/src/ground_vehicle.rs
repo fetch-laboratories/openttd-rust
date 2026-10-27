@@ -380,7 +380,7 @@ fn sloped_track_owned(
     let tracks = if o.rail() {
         o.train.track()
     } else {
-        track_status_to_track_bits(movement.get().road_tracks(v, (s.vehicle.tile)(v)))
+        track_status_to_track_bits(movement.road_tracks(v, (s.vehicle.tile)(v)))
     };
     tracks == TRACK_BIT_X || tracks == TRACK_BIT_Y
 }

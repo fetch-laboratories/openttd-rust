@@ -63,6 +63,7 @@
 
 #include "safeguards.h"
 
+#ifndef WITH_RUST
 /**
  * Describes from which directions a specific slope can be flooded (if the tile is floodable at all).
  */
@@ -83,6 +84,7 @@ static const Directions _flood_from_dirs[] = {
 	{DIR_S, DIR_SW, DIR_SE},          // SLOPE_ENW, SLOPE_STEEP_N
 	{DIR_W, DIR_SW, DIR_NW},          // SLOPE_SEN, SLOPE_STEEP_E
 };
+#endif
 
 /**
  * Marks tile dirty if it is a canal or river tile.

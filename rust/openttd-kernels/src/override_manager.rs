@@ -29,13 +29,37 @@ pub struct View {
 struct Registered(UnsafeCell<*mut Manager>);
 // Access is serialized by the native game-state mutex, including initialization.
 unsafe impl Sync for Registered {}
+static HOUSE: Registered = Registered(UnsafeCell::new(ptr::null_mut()));
 static INDUSTRY: Registered = Registered(UnsafeCell::new(ptr::null_mut()));
 static TILE: Registered = Registered(UnsafeCell::new(ptr::null_mut()));
+pub fn house() -> *mut Manager {
+    unsafe { *HOUSE.0.get() }
+}
 pub fn industry() -> *mut Manager {
     unsafe { *INDUSTRY.0.get() }
 }
 pub fn tile() -> *mut Manager {
     unsafe { *TILE.0.get() }
+}
+static AIRPORT: Registered = Registered(UnsafeCell::new(ptr::null_mut()));
+static AIRPORT_TILE: Registered = Registered(UnsafeCell::new(ptr::null_mut()));
+pub fn airport() -> *mut Manager {
+    unsafe { *AIRPORT.0.get() }
+}
+pub fn airport_tile() -> *mut Manager {
+    unsafe { *AIRPORT_TILE.0.get() }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_airport_register_manager(manager: *mut Manager) {
+    unsafe {
+        *AIRPORT.0.get() = manager;
+    }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_airport_tile_register_manager(manager: *mut Manager) {
+    unsafe {
+        *AIRPORT_TILE.0.get() = manager;
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_override_new(
@@ -198,6 +222,44 @@ pub unsafe extern "C" fn openttd_rust_override_allocate(
         }
     }
     invalid
+}
+pub unsafe fn allocate_house(
+    manager: *mut Manager,
+    local: u16,
+    grfid: u32,
+    substitute: u16,
+) -> u16 {
+    // HouseOverrideManager inherits OverrideManagerBase::CheckValidNewID.
+    unsafe extern "C" fn valid(_: *mut c_void, _: u16) -> bool {
+        true
+    }
+    let existing = unsafe { get(manager, local, grfid) };
+    unsafe {
+        openttd_rust_override_allocate(
+            manager,
+            local,
+            grfid,
+            substitute,
+            ptr::null_mut(),
+            existing,
+            valid,
+        )
+    }
+}
+pub unsafe fn pending_override(manager: *const Manager, id: u16) -> (u16, u32) {
+    let m = unsafe { &*manager };
+    (m.entities[usize::from(id)], m.grfids[usize::from(id)])
+}
+pub unsafe fn clear_override(manager: *mut Manager, id: u16) {
+    let m = unsafe { &mut *manager };
+    m.entities[usize::from(id)] = m.invalid;
+    m.grfids[usize::from(id)] = 0;
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_house_register_manager(manager: *mut Manager) {
+    unsafe {
+        *HOUSE.0.get() = manager;
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_register_manager(manager: *mut Manager) {

@@ -12,16 +12,12 @@
 #include <cstdint>
 struct Station;
 struct Industry;
-struct RustNearbyIndustryCursor;
 /** Serialized by the game-state mutex. Native handles/cursors are call-scoped;
  * no map borrow crosses a leaf or SlObject. Leaves cannot reset catchments or
  * pools, yield, retain arguments or throw. Rust panics abort. Save/load keeps
  * SlObject/SlError native, inserting only complete rows, with no transaction. */
 struct OpenTTDCargoMonitorServices {
 	uint16_t (*station_town)(const Station *) noexcept OPENTTD_SERVICE_DEFAULT(station_town);
-	void (*begin_nearby)(RustNearbyIndustryCursor *, const Station *) noexcept OPENTTD_SERVICE_DEFAULT(begin_nearby);
-	Industry *(*next_nearby)(RustNearbyIndustryCursor *) noexcept OPENTTD_SERVICE_DEFAULT(next_nearby);
-	uint16_t (*industry_id)(void *) noexcept OPENTTD_SERVICE_DEFAULT(industry_id);
 	void (*check)(bool) noexcept OPENTTD_SERVICE_DEFAULT(check);
 };
 const OpenTTDCargoMonitorServices &GetRustCargoMonitorServices() noexcept;
@@ -36,7 +32,6 @@ void openttd_rust_monitor_clear_pickups(uint8_t);
 void openttd_rust_monitor_clear_deliveries(uint8_t);
 int32_t openttd_rust_monitor_pickup(uint32_t, bool);
 int32_t openttd_rust_monitor_delivery(uint32_t, bool);
-void openttd_rust_monitor_add(const OpenTTDCargoMonitorServices *, uint8_t, uint8_t, uint32_t, uint16_t, uint8_t, const Station *, uint16_t, RustNearbyIndustryCursor *);
 bool openttd_rust_monitor_next_pickup(bool, uint32_t *, uint32_t *);
 bool openttd_rust_monitor_next_delivery(bool, uint32_t *, uint32_t *);
 void openttd_rust_monitor_insert_pickup(uint32_t, uint32_t);

@@ -34,7 +34,8 @@ use crate::witness as w;
 macro_rules! carrier {
     ($($name:ident),+) => {$(#[repr(transparent)] #[derive(Clone, Copy)] pub struct $name(pub u8);)+};
 }
-carrier!(WaterTileType, LockPart, DepotPart, Axis);
+carrier!(WaterTileType, LockPart, DepotPart);
+pub use crate::direction_type::Axis;
 #[repr(C)]
 pub struct Area {
     _private: [u8; 0],

@@ -16,6 +16,7 @@
 #include "../rust/generation_sea_set.hpp"
 #include "abi_layout.hpp"
 #include "../tile_map.h"
+#include "../road_type.h"
 #include "../rust/landscape_loop_ffi.h"
 #include "landscape_protocol.hpp"
 #include "ground_protocol.hpp"
@@ -23,7 +24,8 @@
 #include "../safeguards.h"
 
 #ifdef WITH_RUST
-extern "C" bool openttd_rust_map_read_probe(OpenTTDTileTypeAllocation, const OpenTTDSharedServices *, const OpenTTDClearServices *, const OpenTTDTreeServices *, uint32_t);
+extern "C" uint8_t openttd_rust_shared_tile_type(OpenTTDTileTypeAllocation, uint8_t (*callback)(uint32_t) noexcept, uint32_t tile);
+extern "C" bool openttd_rust_map_read_probe(OpenTTDTileTypeAllocation, const OpenTTDSharedServices *, const OpenTTDClearServices *, const OpenTTDTreeServices *, uint32_t, void (*)(uint32_t) noexcept);
 TEST_CASE("Rust map fields preserve native helpers, mutation and reset")
 {
 	for (const uint size : {64U, 128U}) {
@@ -31,23 +33,54 @@ TEST_CASE("Rust map fields preserve native helpers, mutation and reset")
 		const auto allocation = GetRustTileTypeAllocation();
 		CHECK(allocation.extended != nullptr);
 		for (const TileIndex tile : {TileXY(1, 1), TileIndex{Map::Size() - 1}}) {
-			for (const uint8_t kind : {0, 4, 6, 7}) {
+			for (const TileType kind : {MP_CLEAR, MP_RAILWAY, MP_ROAD, MP_TREES, MP_WATER, MP_VOID}) {
 				for (uint value = 0; value < 256; value++) {
 					Tile t{tile};
 					t.type() = (kind << 4) | (value & 3);
 					t.m1() = value; t.m2() = value * 257; t.m3() = value;
-					t.m4() = value; t.m5() = value; t.m6() = value;
+					t.m4() = value; t.m5() = kind == MP_ROAD ? value & 63 : value; t.m6() = value;
+					t.m8() = value * 257;
 					SetTileHeight(tile, value);
-					CHECK(openttd_rust_map_read_probe(allocation, &GetRustSharedServices(), &GetRustClearServices(), &GetRustTreeServices(), tile.base()));
+					CHECK(openttd_rust_map_read_probe(allocation, &GetRustSharedServices(), &GetRustClearServices(), &GetRustTreeServices(), tile.base(), [](uint32_t) noexcept {}));
 					auto unchecked = allocation;
 					unchecked.assertions = false;
-					CHECK(openttd_rust_map_read_probe(unchecked, &GetRustSharedServices(), &GetRustClearServices(), &GetRustTreeServices(), tile.base()));
+					CHECK(openttd_rust_map_read_probe(unchecked, &GetRustSharedServices(), &GetRustClearServices(), &GetRustTreeServices(), tile.base(), [](uint32_t) noexcept {}));
 				}
 			}
 		}
 	}
 	Map::Allocate(64, 64);
 }
+TEST_CASE("Rust movement map context rereads native mutations within an entry")
+{
+	for (const uint size : {64U, 128U}) {
+		Map::Allocate(size, 64);
+		for (const bool assertions : {false, true}) {
+			auto allocation = GetRustTileTypeAllocation();
+			allocation.assertions = assertions;
+			for (const TileIndex tile : {TileXY(1, 1), TileIndex{Map::Size() - 1}}) {
+				for (const bool change_type : {false, true}) {
+					Tile t{tile};
+					t.type() = MP_ROAD << 4;
+					t.m3() = 3; t.m4() = INVALID_ROADTYPE; t.m5() = 3;
+					t.m6() = 0; t.m8() = INVALID_ROADTYPE << 6;
+					const auto mutate_fields = [](uint32_t index) noexcept {
+						Tile t{TileIndex{index}};
+						t.m3() = 12; t.m4() = 0; t.m5() = 0x3C;
+						t.m6() = 6 << 3; t.m8() = 0;
+					};
+					const auto mutate_type = [](uint32_t index) noexcept {
+						Tile t{TileIndex{index}};
+						t.type() = MP_CLEAR << 4;
+					};
+					CHECK(openttd_rust_map_read_probe(allocation, &GetRustSharedServices(), &GetRustClearServices(), &GetRustTreeServices(), tile.base(), change_type ? +mutate_type : +mutate_fields));
+				}
+			}
+		}
+	}
+	Map::Allocate(64, 64);
+}
+
 TEST_CASE("Rust ground enum and consumed-record native calls")
 {
 	CHECK(GroundProbe::Run());

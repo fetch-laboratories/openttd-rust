@@ -100,7 +100,7 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.acceleration = [](OpenTTDVehicle * v) noexcept -> uint8_t { return RustVehicleAcceleration(VehicleOf(v)); },
 		.cargo_type = [](OpenTTDVehicle * v) noexcept -> uint8_t { return RustVehicleCargoType(v); },
 		.cargo_subtype = [](OpenTTDVehicle * v) noexcept -> uint8_t { return RustVehicleCargoSubtype(VehicleOf(v)); },
-		.age = [](OpenTTDVehicle * v) noexcept -> int32_t { return RustVehicleAge(VehicleOf(v)).base(); },
+		.age = RustVehicleRead<int32_t, RustVehicleAgeValue>,
 		.max_age = [](OpenTTDVehicle * v) noexcept -> int32_t { return RustVehicleMaxAge(VehicleOf(v)).base(); },
 		.unit = RustVehicleRead<uint16_t, RustVehicleUnitNumber>,
 		.sprite = RustVehicleRead<uint8_t, RustVehicleSprite>,

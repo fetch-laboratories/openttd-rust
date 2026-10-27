@@ -13,20 +13,14 @@ use super::{
 };
 use crate::history_type::LAST_MONTH;
 use crate::newgrf_callbacks::CALLBACK_FAILED;
-use std::{ffi::c_void, ptr};
+use std::ffi::c_void;
 
-#[repr(C)]
-pub struct TownHandle {
-    _private: [u8; 0],
-}
+pub use crate::town_type::TownHandle;
 #[repr(C)]
 pub struct LayoutHandle {
     _private: [u8; 0],
 }
-#[repr(C)]
-pub struct StationHandle {
-    _private: [u8; 0],
-}
+pub use crate::station_type::Station as StationHandle;
 #[repr(C)]
 pub struct CargoLists {
     pub produced: [u8; 16],
@@ -75,15 +69,6 @@ pub struct ConstructionServices {
 
     pub build_window_dirty: unsafe extern "C" fn(),
     pub serve_neutral: unsafe extern "C" fn() -> bool,
-    pub insert_near_station: unsafe extern "C" fn(*mut c_void, *mut StationHandle),
-    pub clear_near_industries: unsafe extern "C" fn(*mut StationHandle),
-    pub insert_neutral_industry: unsafe extern "C" fn(*mut StationHandle, *mut c_void),
-    pub stations_around: unsafe extern "C" fn(
-        *mut c_void,
-        *mut c_void,
-        unsafe extern "C" fn(*mut c_void, *mut StationHandle, u32) -> bool,
-    ),
-    pub add_delivery: unsafe extern "C" fn(*mut StationHandle, *mut c_void, u32),
 }
 const PROD_CHANGE_BUILD: u16 = 0x15f;
 const DECIDE_COLOUR: u16 = 0x14a;
@@ -111,46 +96,46 @@ fn add_location(owner: *mut Industry, tile: u32, size_x: u32) {
             .wrapping_sub(ny) as u16;
     }
 }
-struct Nearby<'a> {
+/// `PopulateStationsNearby`.
+fn populate(
     industry: *mut c_void,
     id: u16,
-    lifecycle: &'a LifecycleServices,
-    construction: &'a ConstructionServices,
-}
-unsafe extern "C" fn visit_station(
-    context: *mut c_void,
-    station: *mut StationHandle,
-    tile: u32,
-) -> bool {
-    let context = unsafe { &*context.cast::<Nearby<'_>>() };
-    if !unsafe { (context.lifecycle.belongs)(tile, context.id) } {
-        return false;
-    }
-    unsafe {
-        (context.construction.insert_near_station)(context.industry, station);
-        (context.construction.add_delivery)(station, context.industry, tile);
-    }
-    false
-}
-fn populate(industry: *mut c_void, id: u16, l: &LifecycleServices, c: &ConstructionServices) {
-    let neutral = unsafe { (l.neutral_station)(industry) };
+    owner: *mut Industry,
+    s: &Services,
+    l: &LifecycleServices,
+    c: &ConstructionServices,
+) {
+    let cc = crate::station::Ctx::from_shared(s.shared());
+    let shell = industry.cast::<crate::industry::tile::ShellHandle>();
+    let neutral = (cc.c.industry_neutral)(shell);
     if !neutral.is_null() && !unsafe { (c.serve_neutral)() } {
+        // The neutral station is used and other nearby stations are ignored.
+        // SAFETY: Live owners; immediate mutations.
         unsafe {
-            (c.insert_near_station)(industry, neutral);
-            (c.clear_near_industries)(neutral);
-            (c.insert_neutral_industry)(neutral, industry);
+            (*super::stations_near(owner)).insert(neutral, (cc.c.id)(neutral));
+            crate::station::set_neutral_industry(
+                (cc.c.owner)(neutral),
+                shell,
+                crate::industry_type::IndustryID(id),
+            );
         }
         return;
     }
-    let mut context = Nearby {
-        industry,
-        id,
-        lifecycle: l,
-        construction: c,
-    };
-    unsafe {
-        (c.stations_around)(industry, ptr::from_mut(&mut context).cast(), visit_station);
-    }
+    crate::station::for_all_stations_around_tiles(super::location(owner), &cc, |st, tile| {
+        if !unsafe { (l.belongs)(tile, id) } {
+            return false;
+        }
+        // SAFETY: Live owner; immediate mutation.
+        unsafe { (*super::stations_near(owner)).insert(st.station, st.id) };
+        crate::station::add_industry_to_deliver(
+            st.station,
+            (cc.c.owner)(st.station),
+            shell,
+            tile,
+            &cc,
+        );
+        false
+    });
 }
 fn cargo_callbacks(
     industry: *mut c_void,
@@ -436,7 +421,7 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
                 .wrapping_mul(r.size_x as i32)
                 .wrapping_add(i32::from(layout.x))) as u32,
         );
-        if layout.gfx != 255 {
+        if layout.gfx != crate::industry_map::GFX_WATERTILE_SPECIALCHECK {
             add_location(owner, tile, r.size_x);
             let water = unsafe { (c.water_class)(tile) };
             unsafe {
@@ -486,6 +471,6 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
         (c.build_window_dirty)();
     }
     if !unsafe { (c.generating)() } {
-        populate(industry, r.id, l, c);
+        populate(industry, r.id, owner, s, l, c);
     }
 }

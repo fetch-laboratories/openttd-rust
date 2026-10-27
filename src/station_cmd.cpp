@@ -577,6 +577,11 @@ static void ShowRejectOrAcceptNews(const Station *st, CargoTypes cargoes, bool r
  */
 CargoArray GetProductionAroundTiles(TileIndex north_tile, int w, int h, int rad)
 {
+#ifdef WITH_RUST
+	CargoArray produced{};
+	openttd_rust_station_production_around(north_tile.base(), w, h, rad, produced.data(), &GetRustStationCatchmentServices());
+	return produced;
+#else
 	CargoArray produced{};
 	FlatSet<IndustryID> industries;
 	TileArea ta = TileArea(north_tile, w, h).Expand(rad);
@@ -602,6 +607,7 @@ CargoArray GetProductionAroundTiles(TileIndex north_tile, int w, int h, int rad)
 	}
 
 	return produced;
+#endif
 }
 
 /**
@@ -615,6 +621,11 @@ CargoArray GetProductionAroundTiles(TileIndex north_tile, int w, int h, int rad)
  */
 CargoArray GetAcceptanceAroundTiles(TileIndex center_tile, int w, int h, int rad, CargoTypes *always_accepted)
 {
+#ifdef WITH_RUST
+	CargoArray acceptance{};
+	openttd_rust_station_acceptance_around(center_tile.base(), w, h, rad, acceptance.data(), always_accepted, &GetRustStationCatchmentServices());
+	return acceptance;
+#else
 	CargoArray acceptance{};
 	if (always_accepted != nullptr) *always_accepted = 0;
 
@@ -628,15 +639,10 @@ CargoArray GetAcceptanceAroundTiles(TileIndex center_tile, int w, int h, int rad
 	}
 
 	return acceptance;
+#endif
 }
 
 #ifdef WITH_RUST
-struct RustStationTileCursor {
-	BitmapTileIterator iterator;
-	CargoArray acceptance{};
-	bool started = false;
-	RustStationTileCursor(Station *st) : iterator(st->catchment_tiles) {}
-};
 struct RustStationTruncation {
 	StationCargoAmountMap amounts;
 	StationCargoAmountMap::iterator iterator;
@@ -645,7 +651,7 @@ static const OpenTTDStationServices _rust_station_services = {
 	.graphs = &GetRustLiveGraphServices(),
 	.station = [](uint16_t id) noexcept -> OpenTTDLoadingStation {
 		Station *st = RustStationGet<Station *>(id);
-		return {.native = st, .base = st, .state = st->rust_service.get()};
+		return {.native = st, .base = st, .state = RustStationServiceOwner(st)};
 	},
 	.station_owner = RustStationOwnerByte<BaseStation>,
 	.station_exclusivity = [](OpenTTDBaseStation *handle) noexcept -> OpenTTDStationExclusivity {
@@ -653,11 +659,6 @@ static const OpenTTDStationServices _rust_station_services = {
 		return {
 			town->exclusive_counter, town->exclusivity.base()
 		};
-	},
-	.station_next = [](void *handle) noexcept -> OpenTTDBaseStation * {
-		auto *cursor = static_cast<std::pair<StationList::const_iterator, StationList::const_iterator> *>(handle);
-		if (cursor->first == cursor->second) return nullptr;
-		return *cursor->first++;
 	},
 	.rating_counts = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> OpenTTDRatingCounts {
 		GoodsEntry &ge = Station::From(static_cast<BaseStation *>(handle))->goods[cargo];
@@ -668,9 +669,7 @@ static const OpenTTDStationServices _rust_station_services = {
 	.get = [](uint16_t id) noexcept -> OpenTTDBaseStation * {
 		return BaseStation::GetIfValid(StationID(id));
 	},
-	.owner = [](OpenTTDBaseStation *handle) noexcept -> OpenTTDStationService * {
-		return static_cast<BaseStation *>(handle)->rust_service.get();
-	},
+	.owner = RustStationServiceOwner,
 	.pool_size = []() noexcept -> size_t {
 		return BaseStation::GetPoolSize();
 	},
@@ -683,7 +682,6 @@ static const OpenTTDStationServices _rust_station_services = {
 	.local_owner = [](OpenTTDBaseStation *handle) noexcept -> bool {
 		return static_cast<BaseStation *>(handle)->owner == _local_company;
 	},
-	.rectangle_empty = RustStationRectangleEmptyHandle<OpenTTDBaseStation *>,
 	.town_statue = [](OpenTTDBaseStation *handle) noexcept -> bool {
 		return Company::IsValidID(static_cast<BaseStation *>(handle)->owner) && OpenTTDBaseStationTown(static_cast<BaseStation *>(handle))->statues.Test(static_cast<BaseStation *>(handle)->owner);
 	},
@@ -722,9 +720,6 @@ static const OpenTTDStationServices _rust_station_services = {
 	},
 
 
-	.watched_animation = [](uint32_t tile, uint64_t cargoes) noexcept -> void {
-		TriggerHouseAnimation_WatchedCargoAccepted(TileIndex(tile), cargoes);
-	},
 	.append_packet = [](OpenTTDBaseStation *handle, uint8_t cargo, uint32_t amount, OpenTTDCargoSource source) noexcept -> void {
 		Station *st = Station::From(static_cast<BaseStation *>(handle));
 		GoodsEntry &ge = st->goods[cargo];
@@ -739,22 +734,6 @@ static const OpenTTDStationServices _rust_station_services = {
 		RustStationMarkTilesDirty(static_cast<BaseStation *>(handle), true);
 	},
 	.cargo_registry = &GetRustCargoRegistryServices(),
-	.with_tiles = [](OpenTTDBaseStation *handle, void *context, OpenTTDStationScope body) noexcept {
-		RustStationTileCursor cursor(Station::From(static_cast<BaseStation *>(handle)));
-		body(context, &cursor);
-	},
-	.tile_next = [](void *handle) noexcept -> uint32_t {
-		auto *cursor = static_cast<RustStationTileCursor *>(handle);
-		if (cursor->started) ++cursor->iterator;
-		cursor->started = true;
-		return static_cast<TileIndex>(cursor->iterator).base();
-	},
-	.accept_tile = [](void *handle, uint32_t tile, uint64_t *always) noexcept {
-		AddAcceptedCargo(TileIndex(tile), static_cast<RustStationTileCursor *>(handle)->acceptance, always);
-	},
-	.acceptance_amounts = [](void *handle) noexcept -> const uint32_t * {
-		return static_cast<RustStationTileCursor *>(handle)->acceptance.data();
-	},
 	.with_truncation = [](OpenTTDBaseStation *handle, uint8_t cargo, uint32_t amount, void *context, OpenTTDStationScope body) noexcept {
 		RustStationTruncation result;
 		GoodsEntry &ge = static_cast<Station *>(handle)->goods[cargo];
@@ -5064,6 +5043,7 @@ void CcMoveStationName(Commands, const CommandCost &result, StationID station_id
 		SetViewportStationRect(st, false);
 	}
 
+#ifndef WITH_RUST
 static void AddNearbyStationsByCatchment(TileIndex tile, StationList &stations, StationList &nearby)
 {
 	for (Station *st : nearby) {
@@ -5092,6 +5072,7 @@ const StationList &StationFinder::GetStations()
 	}
 	return this->stations;
 }
+#endif
 
 
 #ifndef WITH_RUST
@@ -5118,12 +5099,9 @@ static bool CanMoveGoodsToStation(const Station *st, CargoType cargo)
 
 #endif
 
+#ifndef WITH_RUST
 uint MoveGoodsToStation(CargoType cargo, uint amount, Source source, const StationList &all_stations, Owner exclusivity)
 {
-#ifdef WITH_RUST
-	std::pair cursor(all_stations.begin(), all_stations.end());
-	return openttd_rust_station_distribute(cargo, amount, {source.id, source.type}, &cursor, exclusivity.base(), &_rust_station_services, &GetRustVehicleVisits());
-#else
 	/* Return if nothing to do. Also the rounding below fails for 0. */
 	if (all_stations.empty()) return 0;
 	if (amount == 0) return 0;
@@ -5205,8 +5183,8 @@ uint MoveGoodsToStation(CargoType cargo, uint amount, Source source, const Stati
 	}
 
 	return moved;
-#endif
 }
+#endif
 
 void UpdateStationDockingTiles(Station *st)
 {
@@ -6007,9 +5985,11 @@ extern const TileTypeProcs _tile_type_station_procs = {
 #include "abi-visit-OpenTTDStationAssociationServices.hpp"
 #include "abi-visit-OpenTTDStationDefinitionServices.hpp"
 #include "abi-visit-OpenTTDAct3CargoServices.hpp"
+#include "abi-visit-OpenTTDStationCatchmentServices.hpp"
 bool CheckAbi_station_cmd()
 {
-	return AbiServicesComplete(_rust_station_services.environment) &&
+	return AbiServicesComplete(GetRustStationCatchmentServices()) &&
+		AbiServicesComplete(_rust_station_services.environment) &&
 		AbiServicesComplete(_rust_station_services) &&
 		AbiServicesComplete(_rust_station_links) &&
 		AbiServicesComplete(GetRustStationCommandServices()) &&

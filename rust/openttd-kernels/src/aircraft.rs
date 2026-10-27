@@ -41,6 +41,7 @@ use crate::airport::{
     LANDING, STARTTAKEOFF, TAKEOFF,
 };
 use crate::company_type::OWNER_NONE;
+use crate::newgrf_properties::PROP_AIRCRAFT_SPEED;
 use crate::newgrf_sound::VSE_START;
 use crate::order_type::{
     OT_CONDITIONAL, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_LEAVESTATION, OT_LOADING, OT_NOTHING,
@@ -50,13 +51,14 @@ use crate::services::{Map, Services};
 use crate::station::Station;
 use crate::station_type::INVALID_STATION;
 use crate::tile_type::INVALID_TILE;
-use crate::vehicle::PROP_AIRCRAFT_SPEED;
 use crate::vehicle::maintenance;
 use crate::vehicle::{
     AltitudeInputs, Coordinates, DayCost, DirectionProgress, MovementObservations, OpenTTDVehicle,
     PositionObservations, SpeedInputs, TickStatus, VehicleRef, VehicleServices, XY, YEAR_TICKS,
 };
 use crate::vehicle_base::{VS_AIRCRAFT_BROKEN, VS_CRASHED, VS_HIDDEN, VS_STOPPED};
+/// `aircraft.h::ROTOR_Z_OFFSET`.
+pub(crate) const ROTOR_Z_OFFSET: i32 = 5;
 use std::cell::Cell;
 use std::ffi::c_void;
 use std::ptr::NonNull;
@@ -881,7 +883,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         self.copy_sprite(shadow, id.base());
         self.position_viewport(shadow);
         if let Some(rotor) = self.position_next(shadow) {
-            self.position_coordinates(rotor, x, y, z + 5);
+            self.position_coordinates(rotor, x, y, z + i64::from(ROTOR_Z_OFFSET));
             self.position_viewport(rotor);
         }
     }

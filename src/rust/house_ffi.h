@@ -62,7 +62,6 @@ struct OpenTTDHouseServices {
 	OpenTTDHouseRemoval (*removal)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(removal);
 	OpenTTDHouseAcceptance (*acceptance)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(acceptance);
 	uint64_t (*watched)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(watched);
-	uint16_t (*substitute)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(substitute);
 	void (*inc_construction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(inc_construction);
 	void (*reset_age)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(reset_age);
 	void (*set_age)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_age);
@@ -80,13 +79,6 @@ struct OpenTTDHouseServices {
 	bool (*convert_boolean)(uint16_t, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(convert_boolean);
 	bool (*convert_8bit)(uint16_t, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(convert_8bit);
 
-	OpenTTDStation *(*next_near_station)(Town *, OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(next_near_station);
-	void (*erase_near_station)(Town *, OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(erase_near_station);
-	bool (*station_catchment)(const OpenTTDStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_catchment);
-	bool (*station_covers_town)(const OpenTTDStation *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station_covers_town);
-	void *(*station_finder)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_finder);
-	uint32_t (*move_goods)(void *, uint8_t, uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(move_goods);
-	void (*add_cargo)(void *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(add_cargo);
 	uint32_t (*scale_cargo)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(scale_cargo);
 	uint8_t (*cargogen_mode)() noexcept OPENTTD_SERVICE_DEFAULT(cargogen_mode);
 	uint8_t (*place_houses)() noexcept OPENTTD_SERVICE_DEFAULT(place_houses);
@@ -99,9 +91,8 @@ extern "C" {
 void openttd_rust_house_tile_loop(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile);
 void openttd_rust_house_animate(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile);
 void openttd_rust_house_place(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, OpenTTDCommandCost *, uint16_t flags, uint32_t tile, uint16_t house, bool is_protected, bool replace);
-void openttd_rust_house_accepted(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile, uint16_t house, Town *town, void *acceptance, uint64_t *always);
-void openttd_rust_house_produced(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile, void *produced);
-void openttd_rust_house_watched(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile, uint64_t cargoes);
+void openttd_rust_house_accepted(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile, uint16_t house, Town *town, uint32_t *acceptance, uint64_t *always);
+void openttd_rust_house_produced(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile, uint32_t *produced);
 void openttd_rust_house_rebuild_caches(const OpenTTDTownLeaves *, const OpenTTDSharedServices *);
 void openttd_rust_house_update_all(const OpenTTDTownLeaves *, const OpenTTDSharedServices *);
 void openttd_rust_house_age_all(const OpenTTDTownLeaves *, const OpenTTDSharedServices *);

@@ -20,6 +20,7 @@ enum class StationType : uint8_t;
 struct OpenTTDStationService;
 enum class RoadStopType : uint8_t;
 struct OpenTTDStationCommandServices;
+struct OpenTTDStationCatchmentServices;
 struct OpenTTDRoadStopServices;
 struct OpenTTDRoadCommandServices;
 enum class RoadTileType : uint8_t;
@@ -154,6 +155,7 @@ struct OpenTTDSharedServices {
 	uint16_t (*station_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_index);
 	const OpenTTDRoadCommandServices *(*road_commands)() noexcept OPENTTD_SERVICE_DEFAULT(road_commands);
 	const OpenTTDStationCommandServices *(*station_commands)() noexcept OPENTTD_SERVICE_DEFAULT(station_commands);
+	const OpenTTDStationCatchmentServices *(*station_catchment)() noexcept OPENTTD_SERVICE_DEFAULT(station_catchment);
 	bool (*docking_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(docking_tile);
 	uint8_t (*station_gfx)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_gfx);
 	bool (*station_serve_neutral)() noexcept OPENTTD_SERVICE_DEFAULT(station_serve_neutral);
@@ -207,9 +209,6 @@ struct OpenTTDSubsidyServices;
 const OpenTTDSubsidyServices &GetRustSubsidyServices() noexcept;
 inline const OpenTTDSubsidyServices *RustSubsidyServices() noexcept { return &GetRustSubsidyServices(); }
 const OpenTTDSharedServices &GetRustSharedServices() noexcept;
-/* Shared reader ABI used by default allocation/layout/oracle tests, not game
- * dispatch. Zero count selects the existing callback backend. No pointer retained. */
-extern "C" uint8_t openttd_rust_shared_tile_type(OpenTTDTileTypeAllocation, uint8_t (*callback)(uint32_t) noexcept, uint32_t tile);
 /** Shared save/reseed/restore of BOTH original RNG streams. */
 struct OpenTTDRandomSeeds { uint32_t random[2], interactive[2]; };
 struct OpenTTDRandomServices {

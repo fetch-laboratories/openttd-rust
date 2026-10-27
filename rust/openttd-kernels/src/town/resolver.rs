@@ -70,11 +70,7 @@ pub struct ResolverServices {
     search_spec: extern "C" fn(u16) -> SearchSpec,
     nearby_spec: extern "C" fn(u16) -> NearbySpec,
     file_identity: extern "C" fn(u16) -> FileIdentity,
-    house_id: extern "C" fn(u16, u32) -> u16,
-    house_grfid: extern "C" fn(u16) -> u32,
     badges: extern "C" fn(*const c_void, u16, u32) -> u32,
-    stations:
-        extern "C" fn(u32, *mut c_void, extern "C" fn(*mut c_void, *const crate::station::Station)),
     town_by_id: extern "C" fn(u32) -> *mut TownHandle,
     root: extern "C" fn(u16, bool) -> *const c_void,
     spec_house: extern "C" fn(*const c_void) -> u16,
@@ -471,7 +467,13 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
             if !spec.has_file {
                 return 0;
             }
-            let house = (s.house_id)(parameter as u16, spec.grfid);
+            let house = unsafe {
+                crate::override_manager::get(
+                    crate::override_manager::house(),
+                    parameter as u16,
+                    spec.grfid,
+                )
+            };
             if house == INVALID_HOUSE_ID {
                 0
             } else {
@@ -527,7 +529,12 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
             if house < NEW_HOUSE_OFFSET {
                 0
             } else {
-                (s.house_grfid)(house)
+                unsafe {
+                    crate::override_manager::openttd_rust_override_grfid(
+                        crate::override_manager::house(),
+                        house,
+                    )
+                }
             }
         }
         0x7A => (s.badges)(ro, scope.house, parameter),
@@ -545,26 +552,6 @@ unsafe fn acceptance_history(
     parameter: u32,
     map: Map,
 ) -> u32 {
-    struct Context {
-        leaves: *const Leaves,
-        cargo: u8,
-        result: u32,
-    }
-    extern "C" fn visit(context: *mut c_void, station: *const crate::station::Station) {
-        // SAFETY: Synchronous StationFinder traversal supplies live canonical shells.
-        let (leaves, cargo) = unsafe {
-            let c = &*context.cast::<Context>();
-            (c.leaves, c.cargo)
-        };
-        let owner = (unsafe { &*leaves }.station_activity_owner)(station);
-        let fields = unsafe {
-            crate::station_service::openttd_rust_station_service_cargo(owner.cast_mut(), cargo)
-        };
-        let status = unsafe { (*fields).status };
-        // Read only canonical status, then use the shared pure conversion.
-        let state = crate::station_service::openttd_rust_goods_convert_state(status);
-        unsafe { (*context.cast::<Context>()).result |= u32::from(state) };
-    }
     let cargo =
         crate::cargo_registry::openttd_rust_cargo_translate(parameter as u8, (s.file)(ro), false);
     if !is_valid_cargo_type(cargo) {
@@ -576,16 +563,28 @@ unsafe fn acceptance_history(
     let offset = map.diff(i32::from(register as i8), i32::from((register >> 8) as i8));
     let shared = unsafe { &*s.shared };
     let tile = map.wrap_to_map(scope.tile.wrapping_add(offset), (shared.map_max_y)() + 1);
-    let mut context = Context {
-        leaves: s.towns,
-        cargo,
-        result: 0,
-    };
-    (s.stations)(tile, (&raw mut context).cast(), visit);
-    if scope.watched & (1_u64 << cargo) != 0 {
-        context.result |= 1 << 4;
+    let c = crate::station::Ctx::from_shared(shared);
+    let mut stations =
+        crate::station::StationFinder::new(crate::tilearea::TileArea { tile, w: 1, h: 1 });
+    let list = std::ptr::from_ref(stations.get_stations(&c));
+    let mut result = 0;
+    // SAFETY: The call-local finder's set; each visit reads canonical status only.
+    unsafe {
+        crate::station::for_each_station(list, |near| {
+            let fields = crate::station_service::openttd_rust_station_service_cargo(
+                (c.c.owner)(near.station),
+                cargo,
+            );
+            // Read only canonical status, then use the shared pure conversion.
+            result |= u32::from(crate::station_service::openttd_rust_goods_convert_state(
+                (*fields).status,
+            ));
+        });
     }
-    context.result
+    if scope.watched & (1_u64 << cargo) != 0 {
+        result |= 1 << 4;
+    }
+    result
 }
 
 crate::abi::layouts! {
@@ -599,8 +598,8 @@ crate::abi::layouts! {
     "OpenTTDHouseResolverServices" ["probe"] => ResolverServices {
         towns, shared, storage, larger_towns, file, version,
         nearby, nearby_info, terrain, stage, age, random_bits,
-        random_triggers, search_spec, nearby_spec, file_identity, house_id, house_grfid,
-        badges, stations, town_by_id, root, spec_house, local_id, base_scope, evaluate, reseed, unhandled_house, unhandled_town,
+        random_triggers, search_spec, nearby_spec, file_identity,
+        badges, town_by_id, root, spec_house, local_id, base_scope, evaluate, reseed, unhandled_house, unhandled_town,
     };
 }
 

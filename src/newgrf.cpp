@@ -50,7 +50,9 @@
 
 #ifdef WITH_RUST
 #include "rust/engine_loading_services.hpp"
+#include "rust/vehicle_properties_services.hpp"
 #include "rust/cargo_registry_ffi.h"
+#include "rust/house_definition_services.hpp"
 #endif
 
 #ifdef WITH_RUST
@@ -84,9 +86,7 @@ GRFLoadedFeatures _loaded_newgrf_features;
 
 GrfProcessingState _cur_gps;
 
-#ifdef WITH_RUST
-RustEngineTempView _gted;
-#else
+#ifndef WITH_RUST
 TypedIndexContainer<std::vector<GRFTempEngineData>, EngineID> _gted;  ///< Temporary engine data used during NewGRF loading
 #endif
 
@@ -385,6 +385,7 @@ CargoTypes TranslateRefitMask(uint32_t refit_mask)
  * @param error_location Function name for grf error messages
  * @param[out] index If \a base_pointer is valid, \a index is assigned to the matching price; else it is left unchanged
  */
+#ifndef WITH_RUST
 void ConvertTTDBasePrice(uint32_t base_pointer, std::string_view error_location, Price *index)
 {
 	/* Special value for 'none' */
@@ -403,6 +404,8 @@ void ConvertTTDBasePrice(uint32_t base_pointer, std::string_view error_location,
 
 	*index = (Price)((base_pointer - start) / size);
 }
+
+#endif
 
 /**
  * Get the language map associated with a given NewGRF and language.
@@ -659,9 +662,6 @@ GRFFile::GRFFile(const GRFConfig &config)
 	/* Mark price_base_multipliers as 'not set' */
 	this->price_base_multipliers.fill(INVALID_PRICE_MODIFIER);
 
-#ifdef WITH_RUST
-	openttd_rust_type_maps_init(&GetRustTypeRegistryServices(), this);
-#else
 	/* Initialise rail type map with default rail types */
 	this->railtype_map.fill(INVALID_RAILTYPE);
 	this->railtype_map[0] = RAILTYPE_RAIL;
@@ -676,8 +676,6 @@ GRFFile::GRFFile(const GRFConfig &config)
 	/* Initialise tram type map with default tram types */
 	this->tramtype_map.fill(INVALID_ROADTYPE);
 	this->tramtype_map[0] = ROADTYPE_TRAM;
-
-#endif
 
 	/* Copy the initial parameter list */
 	this->param = config.param;
@@ -703,8 +701,6 @@ static CargoLabel GetActiveCargoLabel(const std::initializer_list<CargoLabel> &l
 	return CT_INVALID;
 }
 
-#endif
-
 /**
  * Get active cargo label from either a cargo label or climate-dependent mixed cargo type.
  * @param label Cargo label or climate-dependent mixed cargo type.
@@ -712,9 +708,6 @@ static CargoLabel GetActiveCargoLabel(const std::initializer_list<CargoLabel> &l
  */
 static CargoLabel GetActiveCargoLabel(const std::variant<CargoLabel, MixedCargoType> &label)
 {
-#ifdef WITH_RUST
-	return CargoLabel{openttd_rust_newgrf_active_cargo_label(RustCargoLabel(label))};
-#else
 	struct visitor {
 		CargoLabel operator()(const CargoLabel &label) { return label; }
 		CargoLabel operator()(const MixedCargoType &mixed)
@@ -729,8 +722,8 @@ static CargoLabel GetActiveCargoLabel(const std::variant<CargoLabel, MixedCargoT
 	};
 
 	return std::visit(visitor{}, label);
-#endif
 }
+#endif
 
 /**
  * Precalculate refit masks from cargo classes for all vehicles.
@@ -1050,6 +1043,7 @@ void FinaliseCargoArray()
 }
 #endif
 
+#ifndef WITH_RUST
 /**
  * Check if a given housespec is valid and disable it if it's not.
  * The housespecs that follow it are used to check the validity of
@@ -1201,6 +1195,8 @@ static void FinaliseHouseArray()
 	}
 }
 
+#endif
+
 /**
  * Add all new industries to the industry array. Industry properties can be set at any
  * time in the GRF file, so we can only add a industry spec to the industry array
@@ -1285,6 +1281,7 @@ static void FinaliseObjectsArray()
  * time in the GRF file, so we can only add a airport spec to the airport array
  * after the file has finished loading.
  */
+#ifndef WITH_RUST
 static void FinaliseAirportsArray()
 {
 	for (auto &file : _grf_files) {
@@ -1307,6 +1304,7 @@ static void FinaliseAirportsArray()
 		file.airtspec.shrink_to_fit();
 	}
 }
+#endif
 
 #ifndef WITH_RUST
 /** Helper class to invoke a GrfActionHandler. */
@@ -1746,11 +1744,7 @@ static void AfterLoadGRFs()
 	FinaliseStringMapping();
 
 	/* Clear the action 6 override sprites. */
-#ifdef WITH_RUST
-	openttd_rust_grf_clear_overrides();
-#else
 	_grf_line_to_action6_sprite_override.clear();
-#endif
 
 	FinaliseBadges();
 
@@ -1860,11 +1854,7 @@ static void AfterLoadGRFs()
 
 	/* Deallocate temporary loading data */
 	_gted.clear();
-#ifdef WITH_RUST
-	openttd_rust_grf_clear_grm_sprites();
-#else
 	_grm_sprites.clear();
-#endif
 }
 #endif
 

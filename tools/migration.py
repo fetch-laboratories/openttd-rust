@@ -363,7 +363,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "action",
-        choices=("build", "verify", "tools", "simulate", "coverage", "rust-checks"),
+        choices=(
+            "build",
+            "verify",
+            "tools",
+            "simulate",
+            "coverage",
+            "rust-checks",
+            "deep",
+        ),
         nargs="?",
         default="verify",
     )
@@ -385,14 +393,18 @@ def main():
         action="store_true",
         help="Measure the same no-PCH configuration without cache reuse",
     )
-    # simulate forwards any further arguments to tools/simulate.py.
+    # simulate forwards any further arguments to tools/simulate.py; deep, scenario selectors.
     args, simulate_args = parser.parse_known_args()
-    if simulate_args and args.action not in ("simulate", "coverage"):
+    if simulate_args and args.action not in ("simulate", "coverage", "deep"):
         parser.error(f"unrecognized arguments: {' '.join(simulate_args)}")
     if args.no_ccache and (args.ccache or args.ccache_bypass):
         parser.error("--no-ccache conflicts with --ccache/--ccache-bypass")
     if args.jobs < 1:
         parser.error("--jobs must be positive")
+    if args.action == "deep":
+        from deep import run_deep
+
+        sys.exit(run_deep(ROOT, LOCAL, COMMON_LOCAL, args.jobs, simulate_args))
     started = time.monotonic()
     if args.action != "rust-checks":
         with reference_lock():

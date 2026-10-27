@@ -121,6 +121,8 @@ def main():
             token = str(BUILD / token)
         elif token.endswith((".a", ".so")) and not token.startswith("/"):
             token = str(BUILD / token)
+        if token.endswith(".a") and "cargo-native-test-support/" in token:
+            token = str(probe.migration.rust_archive(BUILD))
         inputs.append(token)
     failures = []
 

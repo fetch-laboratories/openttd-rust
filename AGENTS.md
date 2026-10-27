@@ -145,6 +145,19 @@ fork; the remaining upstream documentation explains behavior and architecture.
   six projections in the roadmap's "Where the fork stands". Compare tips under
   the same anchor; after re-anchoring, recompute the previous tip from its
   retained count.
+- Deep checks (#503) run beside that profile: after every second integration
+  root runs `python3 tools/migration.py deep` on the integrated tip in the
+  background at idle CPU and I/O priority, and skips the turn if one is still
+  running. They run only during sessions (a run a session end interrupts
+  restarts at the next session start on the current tip); wind-down rules are
+  unchanged. Root reads a finished report before the next integration. Deep
+  runs and speed-pass timed collection never overlap: both take one exclusive
+  lock, so a deep run skips while a collection runs and a collection waits for a
+  deep run to finish. A failure
+  does not block integration by itself: root bisects over the integrations since the last clean
+  deep check, and a divergence introduced there is a code regression under the
+  rollback rule, while an older one becomes a fidelity item on #156 or a new
+  issue. If the set grows past about 6 hours, members rotate across checks.
 - If a projection rose more than 3% (provisional) since the previous tip
   profile, root attributes the rise per function to the PRs since and fixes it
   forward; that fix is the next maintenance PR to integrate. A ready ownership
@@ -300,9 +313,10 @@ For substantive changes:
 2. Use an isolated branch and worktree based on `rust-migration`. The
    implementation agent opens a draft PR targeting `rust-migration`, linking the
    issue and recording exact validation commands and limitations. The pre-merge
-   Full covers the platform matrix except macOS, which runs on `rust-migration`
-   after every fifth integration (user decision, 2026-10-22; #357). After two
-   hosted-capacity cancellations of a macOS run, root sets `CI_MACOS_HEAVY` to
+   Full requires Windows x64, Linux GCC SDL2, Emscripten and native evidence.
+   macOS, Windows x86, Linux Clang and Linux GCC Dedicated run on
+   `rust-migration` after every fifth integration (user decisions, 2026-10-22
+   and 2026-10-26; #357, #514). After two hosted-capacity cancellations of a macOS run, root sets `CI_MACOS_HEAVY` to
    `blacksmith-6vcpu-macos-26` for the rerun and deletes it afterwards. Request
    `--profile platform` only to diagnose a suspected platform failure.
 3. A separate reviewer examines the final commit and checks evidence. Fidelity
@@ -391,10 +405,13 @@ crash defect ends with a `Found-by:` trailer naming the check that found it
 (`review`, `scenario NAME`, `comparison TOOL`, `unit test`, `CI JOB`, `deep
 check` or `user`), so #512 can tally where test effort pays. Python tools pass
 `uvx --from ruff==0.16.8 ruff check tools/` and
-`uvx --from ruff==0.16.8 ruff format --check tools/`. New or rewritten Python
-functions annotate every parameter and return type, and fixed-shape data uses
+`uvx --from ruff==0.16.8 ruff format --check tools/`, plus
+`uvx ty@0.0.92 check`. Ruff ANN checks new and converted files; its explicit
+per-file ignores only shrink. Add every new or converted module to the growing
+`ty.toml` include list. New or rewritten Python functions annotate every
+parameter and return type, and fixed-shape data uses
 typed records (`dataclass`, `TypedDict`) rather than bare dicts; existing code
-gains hints and a ty gate incrementally (#501). Before pushing, run
+gains hints incrementally (#501). Before pushing, run
 `python3 tools/preflight.py --base origin/rust-migration`.
 
 Comments say what the code cannot: a quirk of the original, an outside

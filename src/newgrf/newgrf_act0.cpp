@@ -30,6 +30,7 @@
  * @param buf The property value.
  * @return ChangeInfoResult.
  */
+#ifndef WITH_RUST
 ChangeInfoResult CommonVehicleChangeInfo(EngineInfo *ei, int prop, ByteReader &buf)
 {
 	switch (prop) {
@@ -64,6 +65,8 @@ ChangeInfoResult CommonVehicleChangeInfo(EngineInfo *ei, int prop, ByteReader &b
 
 	return CIR_SUCCESS;
 }
+
+#endif
 
 /**
  * Skip a list of badges.

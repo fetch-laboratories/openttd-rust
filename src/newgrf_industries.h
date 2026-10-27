@@ -111,7 +111,9 @@ CommandCost CheckIfCallBackAllowsCreation(TileIndex tile, IndustryType type, siz
 uint32_t GetIndustryProbabilityCallback(IndustryType type, IndustryAvailabilityCallType creation_type, uint32_t default_prob);
 bool IndustryTemporarilyRefusesCargo(Industry *ind, CargoType cargo_type);
 
+#ifndef WITH_RUST
 IndustryType MapNewGRFIndustryType(IndustryType grf_type, uint32_t grf_id);
+#endif
 
 /* in newgrf_industrytiles.cpp*/
 #ifndef WITH_RUST

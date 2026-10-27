@@ -943,7 +943,7 @@ TileIndex _cur_tileloop_tile;
 #endif
 
 #ifdef WITH_RUST
-static OpenTTDLandscapeLoopServices RustLandscapeLoopServices(OpenTTDGroundCall *call, OpenTTDObjectLoopFrame *frame, const OpenTTDRoadCommandContext *road)
+static OpenTTDLandscapeLoopServices RustLandscapeLoopServices(OpenTTDGroundCall *call, const OpenTTDRoadCommandContext *road)
 {
 	return {
 		.shared = &GetRustSharedServices(),
@@ -954,7 +954,6 @@ static OpenTTDLandscapeLoopServices RustLandscapeLoopServices(OpenTTDGroundCall 
 		.town = &GetRustTownServices(),
 		.station_loop = _tile_type_station_procs.tile_loop_proc,
 		.objects = &GetRustObjectServices(),
-		.object_frame = frame,
 	};
 }
 #endif
@@ -969,9 +968,8 @@ void RunTileLoop()
 	static_assert(MIN_MAP_SIZE_BITS == 6 && MAX_MAP_SIZE_BITS == 12 && TILE_UPDATE_FREQUENCY_LOG == 8);
 	static_assert(MP_CLEAR == 0 && MP_RAILWAY == 1 && MP_ROAD == 2 && MP_HOUSE == 3 && MP_TREES == 4 && MP_STATION == 5 && MP_WATER == 6 && MP_VOID == 7 && MP_INDUSTRY == 8 && MP_TUNNELBRIDGE == 9 && MP_OBJECT == 10);
 	OpenTTDGroundCall call;
-	OpenTTDObjectLoopFrame frame;
 	RustRoadCommandContext road;
-	const auto services = RustLandscapeLoopServices(&call, &frame, &road.view);
+	const auto services = RustLandscapeLoopServices(&call, &road.view);
 	/* Preserve the original assertion under the native build assertion policy. */
 	assert(*openttd_rust_tile_loop_cursor() != 0);
 	openttd_rust_run_tile_loop(Map::LogX(), Map::LogY(), GetRustTreeLoopSettings(), &services);
@@ -1030,9 +1028,8 @@ void RunTileLoop()
 struct RustGenerationLoop {
 	PerformanceAccumulator framerate{PFE_GL_LANDSCAPE};
 	OpenTTDGroundCall ground;
-	OpenTTDObjectLoopFrame objects;
 	RustRoadCommandContext road;
-	OpenTTDLandscapeLoopServices services{RustLandscapeLoopServices(&ground, &objects, &road.view)};
+	OpenTTDLandscapeLoopServices services{RustLandscapeLoopServices(&ground, &road.view)};
 	OpenTTDGenerationLoop view{GetRustTreeLoopSettings(), &services};
 };
 struct OpenTTDGenerationFrame {
@@ -2031,11 +2028,10 @@ void CallLandscapeTick()
 bool CheckAbi_landscape()
 {
 	OpenTTDGroundCall call;
-	OpenTTDObjectLoopFrame frame;
 	RustRoadCommandContext road;
 	RustHeightmapDecoder decoder(DFT_HEIGHTMAP_BMP, "");
 	return AbiServicesComplete(GetRustLandscapeGenerationServices()) && AbiServicesComplete(decoder.view) &&
-		AbiServicesComplete(GetRustTileOwnerServices()) && AbiServicesComplete(RustLandscapeLoopServices(&call, &frame, &road.view)) &&
+		AbiServicesComplete(GetRustTileOwnerServices()) && AbiServicesComplete(RustLandscapeLoopServices(&call, &road.view)) &&
 		AbiServicesComplete(GetRustClearServices()) && AbiServicesComplete(GetRustRailGroundServices()) &&
 		AbiServicesComplete(GetRustRoadGroundServices()) && AbiServicesComplete(GetRustTunnelGroundServices()) &&
 		AbiServicesComplete(GetRustWaterGroundServices()) && AbiServicesComplete(GetRustGroundCostServices()) &&
@@ -2044,11 +2040,11 @@ bool CheckAbi_landscape()
 #endif
 
 #ifdef WITH_RUST
-void RustMovementAssert(bool condition) noexcept { assert(condition); }
-
+#include "rust/services_assert.h"
 const OpenTTDMovementServices &GetRustMovementServices() noexcept
 {
 	static const OpenTTDMovementServices services{
+		.tile_types = GetRustTileTypeAllocation,
 		.shared = &GetRustSharedServices(),
 		.orders = &GetRustOrdersLeaves(),
 		.rail = &GetRustRailGroundServices(),
@@ -2067,7 +2063,7 @@ const OpenTTDMovementServices &GetRustMovementServices() noexcept
 		.write_ground_flags = RustMovementWriteGroundFlags,
 		.train_engine_class = RustMovementTrainEngineClass,
 		.depot_invalidate = RustMovementDepotInvalidate,
-		.native_assert = RustMovementAssert,
+		.native_assert = RustAssertCondition,
 		.normal_road_status_tail = RustNormalRoadStatusTail,
 		.pixel_location = RustPixelLocation,
 		.plain_rail = RustMovementPlainRail,

@@ -40,6 +40,7 @@ jobs:
       run: |
         uvx --from ruff==0.16.8 ruff check tools/
         uvx --from ruff==0.16.8 ruff format --check tools/
+        uvx ty@0.0.92 check
         python3 - <<'PY'
         from pathlib import Path
         import subprocess

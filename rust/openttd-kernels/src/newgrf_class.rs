@@ -154,12 +154,12 @@ unsafe fn by_grf<T>(
     ptr::null()
 }
 macro_rules! registry {
-    ($module:ident, $spec:ty, $prefix:literal $(, $set_name:ident)?) => {
+    ($module:ident, $spec:ty, $prefix:literal, [$($assign_export:meta),*] $(, $set_name:ident)?) => {
         pub mod $module {
             use super::*;
             type Spec = $spec;
             static STATE: GameState<Registry<Spec>> = GameState::new(Registry::new());
-            static SERVICES: GameState<*const Services<Spec>> = GameState::new(ptr::null());
+            pub(super) static SERVICES: GameState<*const Services<Spec>> = GameState::new(ptr::null());
             #[unsafe(export_name = concat!($prefix, "_reset"))]
             pub unsafe extern "C" fn reset(s: *const Services<Spec>) {
                 SERVICES.exchange(s);
@@ -193,7 +193,7 @@ macro_rules! registry {
                     unsafe { (*classes().add(usize::from(class))).name = name; }
                 }
             )?
-            #[unsafe(export_name = concat!($prefix, "_assign"))]
+            $(#[$assign_export])*
             pub unsafe extern "C" fn assign(spec: *mut Spec) {
                 let s = unsafe { SERVICES.table() };
                 let class = unsafe { (s.class_index)(spec) };
@@ -246,20 +246,28 @@ registry!(
     station,
     crate::station_cmd::RailSpec,
     "openttd_rust_station_class",
+    [unsafe(export_name = "openttd_rust_station_class_assign")],
     openttd_rust_station_class_set_name
 );
 registry!(
     roadstop,
     crate::station_cmd::RoadSpec,
     "openttd_rust_roadstop_class",
+    [unsafe(export_name = "openttd_rust_roadstop_class_assign")],
     openttd_rust_roadstop_class_set_name
 );
 registry!(
     airport,
     crate::station_cmd::AirportSpec,
-    "openttd_rust_airport_class"
+    "openttd_rust_airport_class",
+    []
 );
-registry!(object, crate::objects::Spec, "openttd_rust_object_class");
+registry!(
+    object,
+    crate::objects::Spec,
+    "openttd_rust_object_class",
+    [unsafe(export_name = "openttd_rust_object_class_assign")]
+);
 
 crate::abi::layouts! {
     fn abi_layout;
@@ -273,6 +281,10 @@ crate::abi::layouts! {
     "OpenTTDRoadStopClassServices" ["station_service"] => Services<crate::station_cmd::RoadSpec> { class_index, set_index, identity, exhausted, object, defaults, default_count, maximum, empty, insert_empty };
     "OpenTTDAirportClassServices" ["station_service"] => Services<crate::station_cmd::AirportSpec> { class_index, set_index, identity, exhausted, object, defaults, default_count, maximum, empty, insert_empty };
     "OpenTTDObjectClassServices" ["station_service"] => Services<crate::objects::Spec> { class_index, set_index, identity, exhausted, object, defaults, default_count, maximum, empty, insert_empty };
+}
+
+pub(crate) unsafe fn station_identity(spec: *const crate::station_cmd::RailSpec) -> Identity {
+    unsafe { (station::SERVICES.table().identity)(spec) }
 }
 
 pub(crate) fn station_label(class: u16) -> u32 {

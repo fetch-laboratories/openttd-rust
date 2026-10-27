@@ -561,8 +561,7 @@ static void OPENTTD_RUST_CALL MaintenanceChanceWrite(OpenTTDVehicle *handle, uin
 static void OPENTTD_RUST_CALL MaintenanceTrigger(OpenTTDVehicle *handle, uint8_t counter, uint8_t delay) noexcept
 {
 	Vehicle *v = VehicleOf(handle);
-	v->breakdown_ctr = counter;
-	v->breakdown_delay = delay;
+	RustVehicleWriteBreakdown(v, counter, delay);
 	v->breakdown_chance = 0;
 }
 static OpenTTDVehicleMaintenanceBreakdownProbe OPENTTD_RUST_CALL MaintenanceBreakdownProbe(OpenTTDVehicle *handle) noexcept
@@ -606,7 +605,7 @@ static OpenTTDVehicleMaintenanceAge OPENTTD_RUST_CALL MaintenanceAge(OpenTTDVehi
 	const Vehicle *v = VehicleOf(handle);
 	return {.age = MaintenanceDate(RustVehicleAge(v)), .max_age = MaintenanceDate(RustVehicleMaxAge(v)), .decay = RustVehicleReliabilityDecay(v)};
 }
-static void OPENTTD_RUST_CALL MaintenanceAgeWrite(OpenTTDVehicle *handle, OpenTTDCalendarDate age) noexcept { VehicleOf(handle)->age = TimerGameCalendar::Date{age.value}; }
+static void OPENTTD_RUST_CALL MaintenanceAgeWrite(OpenTTDVehicle *handle, OpenTTDCalendarDate age) noexcept { RustWriteVehicleAge(VehicleOf(handle), age.value); }
 static void OPENTTD_RUST_CALL MaintenanceDecayWrite(OpenTTDVehicle *handle, uint16_t decay) noexcept { VehicleOf(handle)->reliability_spd_dec = decay; }
 static OpenTTDVehicleMaintenanceWarning OPENTTD_RUST_CALL MaintenanceWarning(OpenTTDVehicle *handle) noexcept
 {

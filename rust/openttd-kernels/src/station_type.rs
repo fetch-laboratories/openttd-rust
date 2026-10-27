@@ -6,8 +6,8 @@
  */
 
 //! Shared `station_type.h` constants, asserted by native compilation.
-pub const NEW_STATION: u16 = 0xFFFD;
-pub const INVALID_STATION: u16 = 0xFFFF;
+pub const NEW_STATION: u16 = StationID::NEW.0;
+pub const INVALID_STATION: u16 = StationID::INVALID.0;
 pub const RAIL_WAYPOINT: u8 = 7;
 pub const ROAD_WAYPOINT: u8 = 8;
 pub const BUOY: u8 = 6;
@@ -53,3 +53,50 @@ pub const SRT_PATH_RESERVATION: u8 = 5;
 
 /// `StationHadVehicleOfType::HVOT_WAYPOINT`.
 pub const HVOT_WAYPOINT: u8 = 1 << 6;
+
+/// Opaque native `BaseStation`; valid only while its native pool shell lives.
+#[repr(C)]
+pub struct BaseStation {
+    _private: [u8; 0],
+}
+
+/// Native `StationID` with its full original integer domain.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct StationID(pub u16);
+impl StationID {
+    /// Native invalid sentinel.
+    pub const INVALID: Self = Self(u16::MAX);
+}
+
+impl StationID {
+    /// Native `NEW_STATION`.
+    pub const NEW: Self = Self(0xFFFD);
+}
+
+/// Opaque native `Station`, distinct from its station/waypoint pool base.
+#[repr(C)]
+pub struct Station {
+    _private: [u8; 0],
+}
+
+/// Maximum modified airport catchment.
+pub const MAX_CATCHMENT: u8 = 10;
+/// `CA_NONE`: catchment without facilities.
+pub const CA_NONE: u32 = 0;
+/// `CA_BUS`, with modified catchment.
+pub const CA_BUS: u32 = 3;
+/// `CA_TRUCK`, with modified catchment.
+pub const CA_TRUCK: u32 = 3;
+/// `CA_TRAIN`, with modified catchment.
+pub const CA_TRAIN: u32 = 4;
+/// `CA_DOCK`, with modified catchment.
+pub const CA_DOCK: u32 = 5;
+/// `CA_UNMODIFIED`: every facility without modified catchment.
+pub const CA_UNMODIFIED: u32 = 4;
+/// `StationType::Rail`.
+pub const STATION_RAIL: u8 = 0;
+/// `StationType::Oilrig`.
+pub const STATION_OILRIG: u8 = 4;
+/// `StationType::Dock`.
+pub const STATION_DOCK: u8 = 5;

@@ -21,31 +21,11 @@ use crate::timer_game_tick::DAY_TICKS;
 use std::ptr::NonNull;
 
 /// Opaque C++ `Vehicle`.
-#[repr(C)]
-pub struct OpenTTDVehicle {
-    _private: [u8; 0],
-}
+pub use crate::vehicle_type::OpenTTDVehicle;
 
 /// Native `VehicleType : uint8_t`. A transparent carrier preserves every byte,
 /// including sentinels and unnamed values, without Rust enum validity constraints.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct VehicleType(pub u8);
-
-impl VehicleType {
-    /// Native `VEH_TRAIN`.
-    pub const TRAIN: Self = Self(0);
-    /// Native `VEH_ROAD`.
-    pub const ROAD: Self = Self(1);
-    /// Native `VEH_SHIP`.
-    pub const SHIP: Self = Self(2);
-    /// Native `VEH_AIRCRAFT`.
-    pub const AIRCRAFT: Self = Self(3);
-    /// Native `VEH_EFFECT`.
-    pub const EFFECT: Self = Self(4);
-    /// Native `VEH_DISASTER`.
-    pub const DISASTER: Self = Self(5);
-}
+pub use crate::vehicle_type::VehicleType;
 
 /// Native `OrderType : uint8_t`, including every unnamed byte pattern.
 #[repr(transparent)]
@@ -58,6 +38,8 @@ pub struct OrderType(pub u8);
 pub struct RailVehicleTypes(pub u8);
 
 impl RailVehicleTypes {
+    /// Native `RAILVEH_SINGLEHEAD`.
+    pub const SINGLEHEAD: Self = Self(0);
     /// Native `RAILVEH_MULTIHEAD`.
     pub const MULTIHEAD: Self = Self(1);
     /// Native `RAILVEH_WAGON`.
@@ -70,10 +52,7 @@ impl RailVehicleTypes {
 pub struct VehicleRef(pub NonNull<OpenTTDVehicle>);
 
 /// Opaque immutable C++ engine context captured before a callback.
-#[repr(C)]
-pub struct OpenTTDEngine {
-    _private: [u8; 0],
-}
+pub use crate::engine_type::OpenTTDEngine;
 #[repr(transparent)]
 #[derive(Clone, Copy)]
 pub struct EngineRef(pub NonNull<OpenTTDEngine>);
@@ -95,9 +74,7 @@ pub use crate::tile_type::{MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
 /// `AM_REALISTIC`.
 pub const AM_REALISTIC: u8 = 1;
 /// `INVALID_PRICE`.
-pub const INVALID_PRICE: u8 = 0xFF;
-/// `PROP_AIRCRAFT_SPEED`.
-pub const PROP_AIRCRAFT_SPEED: u8 = 0x0C;
+pub use crate::economy_type::INVALID_PRICE;
 /// `VEHICLE_LENGTH`.
 pub const VEHICLE_LENGTH: u8 = 8;
 /// `CalendarTime::DAYS_IN_YEAR * Ticks::DAY_TICKS`.

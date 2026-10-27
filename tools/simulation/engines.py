@@ -15,6 +15,8 @@ from .core import (
 
 ADAPTER = ROOT / "tools/simulation/engines-console.cpp"
 REQUIRED = {
+    "properties": (),
+    "properties-reload": (),
     "loading": (),
     "loading-shared": (),
     "loading-reload": (),
@@ -34,6 +36,8 @@ REQUIRED = {
     "subsidies-reload": (),
 }
 EXPECTED = {
+    "properties": ("properties-complete true",),
+    "properties-reload": ("properties-complete true",),
     "loading": ("loading-complete true",),
     "loading-shared": ("loading-complete true",),
     "loading-reload": ("loading-complete true",),
@@ -42,6 +46,10 @@ EXPECTED = {
     "cargo-profit-reload": ("profit-controls true",),
     "cargo-rating-reload": ("rating-controls true",),
     "types-definitions": (
+        "types-case definitions-first-last-missing-labels true",
+        "types-case definitions-live-label-mutation true",
+        "types-case definitions-exact-before-alternate true",
+        "types-case definitions-first-match-alternate-order true",
         "types-case definitions-file-loaded-save true",
         "types-case definitions-movement true",
         "types-case definitions-conversion-categories true",
@@ -127,9 +135,11 @@ def scenarios(soak):
             "save": str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
             "engines": mode,
             "short_checkpoint": True,
-            "ticks": 74 if soak else 1,
+            "ticks": 74 if soak or mode.startswith("properties") else 1,
         }
         for mode in (
+            "properties",
+            "properties-reload",
             "loading-shared",
             "loading-reload",
             "commands",
@@ -157,6 +167,8 @@ def game_environment(scenario):
         and scenario["engines"] != "types-definitions"
     ):
         env["OPENTTD_ENGINE_TYPES"] = "1"
+    if scenario.get("engines", "").startswith("properties"):
+        env["OPENTTD_ENGINE_PROPERTIES"] = "1"
     if folder := scenario.get("engine_loading_dir"):
         env["OPENTTD_ENGINE_LOADING"] = folder
     return env
@@ -170,7 +182,7 @@ def adapter(build, folder, env):
         env,
         ADAPTER,
         "engines",
-        wraps=("_Z18CopyTempEngineDatav",),
+        wraps=("_Z25InitGRFTownGeneratorNamesv",),
         replace_objects=("saveload.cpp.o", "/newgrf.cpp.o", "/newgrf_act0_cargo.cpp.o"),
     )
 
@@ -182,8 +194,11 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     normalized, record = core.normalize(Path(scenario["save"]), folder / "source")
     result["engines_input"] = record
     scenario = dict(scenario, save=str(normalized))
-    if scenario["engines"].startswith("loading"):
-        loading_grfs(folder / "loading-grfs")
+    if scenario["engines"].startswith(("loading", "properties")):
+        loading_grfs(
+            folder / "loading-grfs",
+            properties=scenario["engines"].startswith("properties"),
+        )
         scenario["engine_loading_dir"] = str((folder / "loading-grfs").resolve())
     executables = prepared_console("engines", adapter, binaries, builds, folder, env)
     if scenario["engines"] == "types-definitions":
@@ -192,7 +207,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         return definition_reload(
             scenario, executables, builds, folder, timeout, env, result
         )
-    if scenario["engines"].startswith("loading"):
+    if scenario["engines"].startswith(("loading", "properties")):
         return prepare_loading(
             scenario, executables, builds, folder, timeout, env, result
         )
@@ -295,8 +310,17 @@ def check(scenario, run, mode, role, result):
     if "engines" not in scenario or run["exit"] or not run["snapshots"]:
         return
     variant = scenario["engines"]
-    if variant.startswith("loading"):
-        loading_markers(run["log"], setup=variant != "loading-reload")
+    if variant.startswith(("loading", "properties")):
+        loading_markers(
+            run["log"],
+            setup=not variant.endswith("-reload"),
+            properties=variant.startswith("properties"),
+        )
+        trace = [line for line in run["log"] if line.startswith("ENGINE properties-")]
+        result.setdefault(mode + "_properties_trace", {})[role] = trace
+        pair = result[mode + "_properties_trace"]
+        if len(pair) == 2 and pair["reference"] != pair["candidate"]:
+            raise RuntimeError("unsaved engine property state differs")
     if variant == "types-definitions":
         trace = [line for line in run["log"] if line.startswith("ENGINE definitions-")]
         result.setdefault(mode + "_definitions_trace", {})[role] = trace
@@ -354,7 +378,7 @@ def type_markers(lines, capture):
     return True
 
 
-def loading_grfs(folder):
+def loading_grfs(folder, *, properties=False):
     """Small v1 containers exercise the real FILE/Action0/2/3/4 loading path."""
     import struct
 
@@ -369,7 +393,7 @@ def loading_grfs(folder):
     def extended(value):
         return bytes([value]) if value < 255 else b"\xff" + word(value)
 
-    def properties(feature, first, items, count=1):
+    def properties_record(feature, first, items, count=1):
         return (
             bytes([0, feature, len(items), count])
             + extended(first)
@@ -377,7 +401,7 @@ def loading_grfs(folder):
         )
 
     def table(prop, labels):
-        return properties(8, 0, [(prop, b"".join(labels))], len(labels))
+        return properties_record(8, 0, [(prop, b"".join(labels))], len(labels))
 
     def engine(feature, local, custom=True):
         common = [(0, word(10000)), (3, b"\xff"), (4, b"\xff"), (6, b"\x0f")]
@@ -423,10 +447,12 @@ def loading_grfs(folder):
                 specific = [
                     (prop, b"\1" if prop == 0x15 else data) for prop, data in specific
                 ]
-        result = [properties(feature, local, common + specific)]
+        result = [properties_record(feature, local, common + specific)]
         if custom:
             result.append(
-                properties(feature, local, [((0x31, 0x28, 0x22, 0x22)[feature], b"\2")])
+                properties_record(
+                    feature, local, [((0x31, 0x28, 0x22, 0x22)[feature], b"\2")]
+                )
             )
             # Local CTT slots: include GOODS, exclude PASS, leave MAIL, fail others.
             group = bytes([2, feature, 0, 0x81, 0x18, 0, 0xFF, 3])
@@ -449,14 +475,26 @@ def loading_grfs(folder):
         )
         return result
 
-    for which, version in ((1, 8), (2, 7), (3, 8), (4, 8), (5, 8)):
+    files = [(1, 8), (2, 7), (3, 8), (4, 8), (5, 8)]
+    if properties:
+        files.append((6, 8))
+    for which, version in files:
         sprites = [
             b"\x08"
             + bytes([version])
             + dword(0x4700A000 + which)
             + b"Engine loading fixture\0GPLv2\0"
         ]
-        if which == 5:
+        if which == 6:
+            sprites += engine(0, 500, custom=False)
+            sprites += [
+                properties_record(
+                    0,
+                    500,
+                    [(5, b"\0"), (0x19, b"\x28"), (0x19, b"\x08"), (0x19, b"\x28")],
+                )
+            ]
+        elif which == 5:
             sprites += engine(0, 450, custom=False)
         elif which == 4:
             for local in (1, 65000):
@@ -467,7 +505,9 @@ def loading_grfs(folder):
             if which == 3:
                 for target in (0x4700A002, 0, 0x4700A001):
                     sprites.append(
-                        properties(8, 0, [(0x11, dword(0x4700A003) + dword(target))])
+                        properties_record(
+                            8, 0, [(0x11, dword(0x4700A003) + dword(target))]
+                        )
                     )
             sprites += [
                 table(9, [b"GOOD", b"PASS", b"MAIL", b"MISS"]),
@@ -480,21 +520,21 @@ def loading_grfs(folder):
                 if which < 3:
                     sprites += engine(feature, 0, custom=False)
             if which == 1:
-                sprites.append(properties(0, 350, [(6, bytes(70))], 70))
+                sprites.append(properties_record(0, 350, [(6, bytes(70))], 70))
                 for local in range(301, 316):
                     sprites += engine(0, local, custom=False)
                 sprites += [
-                    properties(0, 301, [(0x28, word(0))]),
-                    properties(0, 302, [(0x28, word(256))]),
-                    properties(0, 303, [(0x34, b"\2\0\2")]),
-                    properties(0, 304, [(5, b"\1")]),
+                    properties_record(0, 301, [(0x28, word(0))]),
+                    properties_record(0, 302, [(0x28, word(256))]),
+                    properties_record(0, 303, [(0x34, b"\2\0\2")]),
+                    properties_record(0, 304, [(5, b"\1")]),
                 ]
                 sprites += [
-                    properties(
+                    properties_record(
                         0, 313, [(0x28, word(6)), (0x29, word(64)), (0x32, word(2))]
                     ),
-                    properties(0, 314, [(0x28, word(16)), (0x29, word(16))]),
-                    properties(0, 315, [(0x15, b"\3")]),
+                    properties_record(0, 314, [(0x28, word(16)), (0x29, word(16))]),
+                    properties_record(0, 315, [(0x15, b"\3")]),
                 ]
                 for local, parent in (
                     (305, 310),
@@ -503,20 +543,134 @@ def loading_grfs(folder):
                     (310, 311),
                     (311, 310),
                 ):
-                    sprites.append(properties(0, local, [(0x2F, word(parent))]))
+                    sprites.append(properties_record(0, local, [(0x2F, word(parent))]))
                 sprites += [
-                    properties(
+                    properties_record(
                         0, 309, [(0x28, word(0)), (0x2C, b"\1\0"), (0x2D, b"\1\0")]
                     )
                 ]
                 for local in (301, 302, 303, 304):
                     sprites += engine(1, local, custom=False)
                 sprites += [
-                    properties(1, 301, [(5, b"\xff")]),
-                    properties(1, 302, [(5, b"\1")]),
-                    properties(1, 303, [(0x1C, b"\1"), (5, b"\2")]),
-                    properties(1, 304, [(0x1C, b"\1"), (5, b"\0")]),
+                    properties_record(1, 301, [(5, b"\xff")]),
+                    properties_record(1, 302, [(5, b"\1")]),
+                    properties_record(1, 303, [(0x1C, b"\1"), (5, b"\2")]),
+                    properties_record(1, 304, [(0x1C, b"\1"), (5, b"\0")]),
                 ]
+                if properties:
+                    for feature in range(4):
+                        for local in (500, 501, 502):
+                            sprites += engine(feature, local, custom=local == 500)
+                        low, high = (
+                            (0x1E, 0x31),
+                            (0x17, 0x28),
+                            (0x12, 0x22),
+                            (0x14, 0x22),
+                        )[feature]
+                        include, exclude = (
+                            (0x2C, 0x2D),
+                            (0x24, 0x25),
+                            (0x1E, 0x1F),
+                            (0x1D, 0x1E),
+                        )[feature]
+                        order = (0x1A, 0x20, 0x1B, 0x1B)[feature]
+                        misc = (0x27, 0x1C, 0x17, 0x17)[feature]
+                        extra = (0x30, 0x27, 0x21, 0x21)[feature]
+                        specific = (
+                            [
+                                (0x0B, word(0)),
+                                (0x13, b"\1"),
+                                (0x0B, word(600)),
+                                (0x13, b"\0"),
+                                (0x13, b"\1"),
+                                (0x0B, word(700)),
+                                (9, word(65535)),
+                                (9, word(80)),
+                                (0x24, b"\3"),
+                                (0x16, b"\x34"),
+                                (0x24, b"\x09"),
+                                (0x24, b"\0"),
+                                (0x16, b"\x56"),
+                                (0x0E, dword(0x4B34 + 6 * 42)),
+                                (0x0E, dword(0x4B35)),
+                                (0x22, b"\xff"),
+                                (0x2E, word(0xFE80)),
+                                (0x17, b"\x35"),
+                                (0x0D, b"\x1d"),
+                            ],
+                            [
+                                (5, b"\xff"),
+                                (5, b"\0"),
+                                (0x08, b"\x80"),
+                                (0x15, b"\x7b"),
+                                (0x13, b"\x7f"),
+                                (0x14, b"\x40"),
+                                (0x0A, dword(0)),
+                                (0x0A, dword(0x4B34 + 6 * 45)),
+                                (0x0A, dword(0xFFFFFFFF)),
+                                (0x21, b"\xff"),
+                                (0x11, b"\x35"),
+                                (0x09, b"\x1d"),
+                            ],
+                            [
+                                (0x0B, b"\xc8"),
+                                (0x23, word(300)),
+                                (0x24, b"\0"),
+                                (0x14, b"\7"),
+                                (0x15, b"\x09"),
+                                (0x0D, word(200)),
+                                (0x1C, b"\xff"),
+                                (0x0A, b"\x35"),
+                                (0x0F, b"\x1d"),
+                            ],
+                            [
+                                (9, b"\1"),
+                                (0x0A, b"\1"),
+                                (9, b"\0"),
+                                (0x0A, b"\1"),
+                                (9, b"\1"),
+                                (0x0A, b"\0"),
+                                (0x0C, b"\x50"),
+                                (0x0F, word(96)),
+                                (0x11, b"\x14"),
+                                (0x0B, b"\x35"),
+                                (0x0E, b"\x1d"),
+                            ],
+                        )[feature]
+                        sprites += [
+                            properties_record(
+                                feature,
+                                500,
+                                [
+                                    (2, b"\x11"),
+                                    (3, b"\x3c"),
+                                    (4, b"\x5a"),
+                                    (7, b"\7"),
+                                    (low, b"\x05"),
+                                    (high, b"\0"),
+                                    (low, b"\x20"),
+                                    (high, b"\2"),
+                                    (misc, b"\2"),
+                                    (extra, dword(0x12340000)),
+                                    (include, b"\2\0\2"),
+                                    (include, b"\1\0"),
+                                    (exclude, b"\1\1"),
+                                ]
+                                + specific,
+                            )
+                        ]
+                        for local, target in (
+                            (500, 502),
+                            (502, 501),
+                            (501, 500),
+                            (500, 500),
+                            (500, 65001),
+                        ):
+                            sprites.append(
+                                properties_record(
+                                    feature, local, [(order, extended(target))]
+                                )
+                            )
         records = [dword(len(sprites))] + sprites
         data = (
             b"".join(word(len(sprite)) + b"\xff" + sprite for sprite in records)
@@ -526,7 +680,10 @@ def loading_grfs(folder):
 
 
 def prepare_loading(scenario, executables, builds, folder, timeout, env, result):
-    if scenario["engines"] != "loading-reload":
+    variant = scenario["engines"]
+    property_mode = variant.startswith("properties")
+    command = "properties" if property_mode else "loading"
+    if not variant.endswith("-reload"):
         return dict(
             scenario,
             executables=executables,
@@ -536,8 +693,8 @@ def prepare_loading(scenario, executables, builds, folder, timeout, env, result)
     runs = core.capture_pair(
         lambda role: dict(
             scenario,
-            console=[f'engines_scenario loading "{saves[role]}"', "unpause"],
-            ticks=1,
+            console=[f'engines_scenario {command} "{saves[role]}"', "unpause"],
+            ticks=74 if property_mode else 1,
         ),
         executables,
         builds,
@@ -553,10 +710,16 @@ def prepare_loading(scenario, executables, builds, folder, timeout, env, result)
             or "ENGINE loading-complete true" not in run["log"]
         ):
             raise RuntimeError("file-loaded engine capture failed")
-        loading_markers(run["log"], setup=True, saving=True)
+        loading_markers(run["log"], setup=True, saving=True, properties=property_mode)
         captures[role] = [
-            line for line in run["log"] if line.startswith("ENGINE loading-")
+            line
+            for line in run["log"]
+            if line.startswith(("ENGINE loading-", "ENGINE properties-"))
         ]
+    if property_mode:
+        if any(not run["snapshots"] for run in runs.values()):
+            raise RuntimeError("file-loaded property movement save missing")
+        saves = {role: run["snapshots"][-1] for role, run in runs.items()}
     differences = compare_saves(
         saves["reference"],
         saves["candidate"],
@@ -572,11 +735,11 @@ def prepare_loading(scenario, executables, builds, folder, timeout, env, result)
         scenario,
         executables=executables,
         role_inputs={role: {"save": str(save)} for role, save in saves.items()},
-        console=["engines_scenario loading-inspect", "unpause"],
+        console=[f"engines_scenario {command}-inspect", "unpause"],
     )
 
 
-def loading_markers(lines, *, setup, saving=False):
+def loading_markers(lines, *, setup, saving=False, properties=False):
     from collections import Counter
 
     counts = Counter(
@@ -585,8 +748,8 @@ def loading_markers(lines, *, setup, saving=False):
         if line.startswith("ENGINE loading-case ") and line.endswith(" true")
     )
     expected = {
-        "file-scan": 5,
-        "file-identity": 5,
+        "file-scan": 6 if properties else 5,
+        "file-identity": 6 if properties else 5,
         "cargo-inputs": 1,
         "scopes-overrides": 4,
         "custom-refit-v8": 4,
@@ -620,6 +783,46 @@ def loading_markers(lines, *, setup, saving=False):
         if setup
         else {"reloaded-vehicle": 4, "reloaded-count": 4}
     )
+    if properties:
+        expected.update(
+            {
+                "properties-common": 4,
+                "properties-masks": 4,
+                "properties-order": 4,
+                "properties-train": 1,
+                "properties-road": 1,
+                "properties-ship": 1,
+                "properties-aircraft": 1,
+                "properties-traction": 1,
+                "properties-2cc": 1,
+            }
+        )
+        expected["properties-start"] = 4
+        expected["properties-orders"] = 4
+        if not setup:
+            expected["properties-movement"] = 1
+        if setup:
+            expected.update(
+                {
+                    "properties-partial-range": 4,
+                    "properties-partial-badges": 4,
+                    "properties-partial-order": 4,
+                }
+            )
+        if "ENGINE properties-complete true" not in lines:
+            raise RuntimeError("engine property completion missing")
+        for category in ("state", "built") + (() if setup else ("movement",)):
+            observed = [
+                line.split()[2]
+                for line in lines
+                if line.startswith(f"ENGINE properties-{category} ")
+            ]
+            if sorted(observed) != ["0", "1", "2", "3"]:
+                raise RuntimeError(
+                    "engine property four-type records missing: " + category
+                )
+        if sum(line.startswith("ENGINE properties-rng ") for line in lines) != 1:
+            raise RuntimeError("engine property RNG record missing")
     if saving:
         expected["save-eids"] = 1
     for label, count in expected.items():

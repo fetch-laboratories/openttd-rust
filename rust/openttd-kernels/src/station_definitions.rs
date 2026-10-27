@@ -10,19 +10,17 @@
     clippy::too_many_lines,
     clippy::too_many_arguments,
     clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
     clippy::cast_possible_wrap
 )]
 use crate::newgrf_act2::{self, Services as Action2Services};
 use crate::newgrf_bytereader::{BadgeList, ByteReader, ReadError, Reader};
+use crate::newgrf_internal::{CIR_DISABLED, CIR_INVALID_ID, CIR_SUCCESS, CIR_UNKNOWN};
 use crate::newgrf_layout::{Layout, LayoutSequence, Sequence};
 use crate::newgrf_loading::Services as LoadingServices;
 use crate::station_cmd::{RailSpec, RoadSpec};
 use std::ffi::c_void;
 const NUM_STATIONS_PER_GRF: u32 = u16::MAX as u32 - 1;
-const CIR_SUCCESS: u8 = 0;
-const CIR_DISABLED: u8 = 1;
-const CIR_UNKNOWN: u8 = 3;
-const CIR_INVALID_ID: u8 = 4;
 const GSF_STATIONS: u8 = crate::newgrf::GSF_STATIONS;
 const GSF_ROADSTOPS: u8 = crate::newgrf::GSF_ROADSTOPS;
 #[repr(C)]
@@ -128,7 +126,7 @@ unsafe fn station_change(
     prop: u32,
     sequence: *mut Sequence,
     reader: &mut Reader<'_>,
-) -> Result<u8, ReadError> {
+) -> Result<i32, ReadError> {
     unsafe {
         if last > NUM_STATIONS_PER_GRF {
             (s.station_invalid)(last);
@@ -360,7 +358,7 @@ unsafe fn station_change(
         Ok(result)
     }
 }
-fn ignore_road_property(prop: u32, reader: &mut Reader<'_>) -> Result<u8, ReadError> {
+fn ignore_road_property(prop: u32, reader: &mut Reader<'_>) -> Result<i32, ReadError> {
     match prop {
         0x09 | 0x0c | 0x0f | 0x11 => {
             reader.byte()?;
@@ -387,7 +385,7 @@ unsafe fn road_change(
     last: u32,
     prop: u32,
     reader: &mut Reader<'_>,
-) -> Result<u8, ReadError> {
+) -> Result<i32, ReadError> {
     unsafe {
         if last > crate::newgrf_roadstop::NUM_ROADSTOPS_PER_GRF {
             (s.road_invalid)(last);
@@ -492,7 +490,7 @@ pub unsafe extern "C" fn openttd_rust_station_change_info(
     } {
         Ok(value) => {
             unsafe {
-                output.write(value);
+                output.write(value as u8);
             }
             true
         }
@@ -514,7 +512,7 @@ pub unsafe extern "C" fn openttd_rust_roadstop_change_info(
     match unsafe { road_change(s, file, first, last, prop, &mut reader) } {
         Ok(value) => {
             unsafe {
-                output.write(value);
+                output.write(value as u8);
             }
             true
         }

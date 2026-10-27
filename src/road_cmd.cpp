@@ -48,6 +48,7 @@
 
 #ifdef WITH_RUST
 #include "rust/ground_services.h"
+#include "rust/services_assert.h"
 #include "rust/road_command_services.h"
 #include "rust/services_road.h"
 #include "rust/town_ffi.h"
@@ -136,11 +137,9 @@ static bool CompareRoadTypes(const RoadType &first, const RoadType &second)
 /**
  * Resolve sprites of custom road types
  */
+#ifndef WITH_RUST
 void InitRoadTypes()
 {
-#ifdef WITH_RUST
-	openttd_rust_road_init();
-#else
 	_sorted_roadtypes.clear();
 	for (RoadTypeInfo &rti : _roadtypes) {
 		RoadType rt = rti.Index();
@@ -152,17 +151,15 @@ void InitRoadTypes()
 		_sorted_roadtypes.push_back(rt);
 	}
 	std::sort(_sorted_roadtypes.begin(), _sorted_roadtypes.end(), CompareRoadTypes);
-#endif
 }
+#endif
 
 /**
  * Allocate a new road type label
  */
+#ifndef WITH_RUST
 RoadType AllocateRoadType(RoadTypeLabel label, RoadTramType rtt)
 {
-#ifdef WITH_RUST
-	return openttd_rust_road_allocate(label, rtt);
-#else
 	auto it = std::ranges::find(_roadtypes, 0, &RoadTypeInfo::label);
 	if (it == std::end(_roadtypes)) return INVALID_ROADTYPE;
 
@@ -195,8 +192,8 @@ RoadType AllocateRoadType(RoadTypeLabel label, RoadTramType rtt)
 	_roadtypes_tram.Set(rt, rtt == RTT_TRAM);
 
 	return rt;
-#endif
 }
+#endif
 
 #ifdef WITH_RUST
 const OpenTTDRoadRegistryServices &GetRustRoadRegistryServices() noexcept
@@ -205,6 +202,14 @@ const OpenTTDRoadRegistryServices &GetRustRoadRegistryServices() noexcept
 		.default_count = std::size(_original_roadtypes),
 		.spec = [](RoadType rt) noexcept { return &_roadtypes[rt]; },
 		.type_label = [](RoadType rt) noexcept { return RustRoadTypeLabel(GetRoadTypeInfo(rt)); },
+		.labels = []() noexcept -> const RoadTypeLabel * const * {
+			static const auto labels = [] {
+				std::array<const RoadTypeLabel *, ROADTYPE_END> pointers{};
+				for (size_t i = 0; i < pointers.size(); ++i) pointers[i] = &RustRoadTypeLabel(&_roadtypes[i]);
+				return pointers;
+			}();
+			return labels.data();
+		},
 		.alternate = [](RoadType rt, uint32_t label) noexcept { return GetRoadTypeInfo(rt)->alternate_labels.contains(label); },
 		.clear = [](RoadTypeInfo *info) noexcept { *info = RoadTypeInfo{}; },
 		.copy_default = [](RoadTypeInfo *info, RoadType source) noexcept { *info = _original_roadtypes[source]; },
@@ -1379,7 +1384,7 @@ struct DrawRoadTileStruct {
 static Foundation GetRoadFoundation(Slope tileh, RoadBits bits)
 {
 #ifdef WITH_RUST
-	return openttd_rust_road_foundation(tileh, bits, RustMovementAssert);
+	return openttd_rust_road_foundation(tileh, bits, RustAssertCondition);
 #else
 	/* Flat land and land without a road doesn't require a foundation */
 	if (tileh == SLOPE_FLAT || bits == ROAD_NONE) return FOUNDATION_NONE;

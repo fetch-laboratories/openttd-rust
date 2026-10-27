@@ -112,7 +112,13 @@ visitors. No field address beyond #377's links is exposed. Aircraft and road
 reuse existing call-local map dimensions: their synchronous controller callbacks
 (orders, GRF/sound, movement, crash, viewport) cannot reset/load the map or yield
 the game-state mutex. Nested entries own fresh metadata; train/ship and other
-entries still read dimensions per update. No map allocation descriptor is added.
+entries still read dimensions per update. Road movement observations also
+acquire the canonical base/extended tile descriptor lazily once per entry. Only
+the track-status tile type and normal-road bits/status/road-type reads use it;
+fields are reloaded after native mutations. Partial fixture tables retain the
+typed backend. Pixel heights, aircraft, standalone movement, train, ship, YAPF and
+water-region entries remain callback-backed; water subtype has no audited runtime consumer. Descriptor
+metadata shares the controller's no-reset/no-load/no-yield interval above.
 
 Per-field callbacks inside tile or vehicle loops may dominate runtime. Prefer
 copied records for fields observed together and batches only where the original

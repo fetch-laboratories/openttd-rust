@@ -20,27 +20,20 @@ use crate::services::{
     CommandCost, CommandCostServices, CommandServices, Map, Services, TownHandle,
 };
 use crate::slope_func::{get_slope_max_z, is_steep_slope};
-use crate::station::Station;
 use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_type::{INVALID_TILE, MP_HOUSE};
 use crate::witness;
-use std::cell::{Cell, OnceCell};
-use std::ffi::c_void;
+use std::cell::{OnceCell, RefCell};
 
 use crate::house::NEW_HOUSE_OFFSET;
 const PRODUCE_END: u16 = 0x20FF;
-// Building flags.
-const NOT_SLOPED: u8 = 1 << 1;
-const SIZE_2X1: u8 = 1 << 2;
-const SIZE_1X2: u8 = 1 << 3;
-const SIZE_2X2: u8 = 1 << 4;
-const ANIMATED: u8 = 1 << 5;
-const CHURCH: u8 = 1 << 6;
-const STADIUM: u8 = 1 << 7;
-const HAS_1_TILE: u8 = 1 | SIZE_2X1 | SIZE_1X2 | SIZE_2X2;
-const HAS_2_TILES: u8 = SIZE_2X1 | SIZE_1X2 | SIZE_2X2;
-const TILES_X: u8 = SIZE_2X1 | SIZE_2X2;
-const TILES_Y: u8 = SIZE_1X2 | SIZE_2X2;
+use crate::house::{
+    BUILDING_2_TILES_X as TILES_X, BUILDING_2_TILES_Y as TILES_Y,
+    BUILDING_HAS_1_TILE as HAS_1_TILE, BUILDING_HAS_2_TILES as HAS_2_TILES,
+    BUILDING_IS_ANIMATED as ANIMATED, BUILDING_IS_CHURCH as CHURCH, BUILDING_IS_STADIUM as STADIUM,
+    BUILDING_NOT_SLOPED as NOT_SLOPED, BUILDING_SIZE_1X2 as SIZE_1X2,
+    BUILDING_SIZE_2X1 as SIZE_2X1, BUILDING_SIZE_2X2 as SIZE_2X2,
+};
 // House callback mask bits and callback IDs.
 const CBM_ANIM_LOOP: u16 = 1 << 2;
 const CBM_ANIM_STAGE: u16 = 1 << 3;
@@ -215,7 +208,6 @@ pub struct HouseServices {
     pub removal: extern "C" fn(u16) -> HouseRemoval,
     pub acceptance: extern "C" fn(u16) -> HouseAcceptance,
     pub watched: extern "C" fn(u16) -> u64,
-    pub substitute: extern "C" fn(u16) -> u16,
     pub inc_construction: extern "C" fn(u32),
     pub reset_age: extern "C" fn(u32),
     pub set_age: extern "C" fn(u32, u8),
@@ -233,14 +225,6 @@ pub struct HouseServices {
     pub convert_boolean: extern "C" fn(u16, u16, u16) -> bool,
     pub convert_8bit: extern "C" fn(u16, u16, u16) -> bool,
 
-    pub next_near_station: unsafe extern "C" fn(*mut TownHandle, *mut Station) -> *mut Station,
-    pub erase_near_station: unsafe extern "C" fn(*mut TownHandle, *mut Station),
-    pub station_catchment: unsafe extern "C" fn(*const Station, u32) -> bool,
-    pub station_covers_town: unsafe extern "C" fn(*const Station, u16) -> bool,
-    /// Native `StationFinder` for a 1x1 house tile area, valid until the next call.
-    pub station_finder: extern "C" fn(u32) -> *mut c_void,
-    pub move_goods: unsafe extern "C" fn(*mut c_void, u8, u32, u16) -> u32,
-    pub add_cargo: unsafe extern "C" fn(*mut c_void, u8, u32),
     pub scale_cargo: extern "C" fn(u32) -> u32,
     pub cargogen_mode: extern "C" fn() -> u8,
     pub place_houses: extern "C" fn() -> u8,
@@ -248,12 +232,22 @@ pub struct HouseServices {
     pub errors: HouseErrors,
 }
 
-/// `TileLoop_Town`'s `StationFinder`. The original computes its station list on
-/// the first `GetStations`; the native finder is likewise requested only when
-/// cargo moves, then reused for the rest of the tile.
-struct StationFinder {
-    tile: u32,
-    native: Cell<*mut c_void>,
+/// `TileLoop_Town`'s call-local `StationFinder`, computed on the first
+/// `GetStations` and reused for the rest of the tile; the catchment tables are
+/// captured with it.
+struct StationFinder<'a> {
+    finder: RefCell<crate::station::StationFinder>,
+    catchment: OnceCell<crate::station::Ctx<'a>>,
+}
+
+/// `produced[cargo]++` in the caller's 64-entry array.
+/// # Safety
+/// `cargoes` names 64 writable values.
+unsafe fn add_one(cargoes: *mut u32, cargo: u8) {
+    unsafe {
+        let slot = cargoes.add(usize::from(cargo));
+        *slot = (*slot).wrapping_add(1);
+    }
 }
 
 /// Immutable native tables for one synchronous entry.
@@ -295,7 +289,7 @@ pub(super) fn north_part(leaves: &Leaves, house: &mut u16, map: Map) -> u32 {
     }
     0
 }
-impl House<'_> {
+impl<'a> House<'a> {
     fn map(&self) -> Map {
         *self
             .map
@@ -363,31 +357,40 @@ impl House<'_> {
     }
     /// `RemoveNearbyStations`: ordered set traversal; erasure keeps the successor.
     fn remove_nearby_stations(&self, town: TownRef, tile: u32, flags: u8, map: Map) {
-        // SAFETY: The entry resolved the live town. The services return live
-        // stations; erasure removes only set membership, leaving each shell
-        // valid for upper_bound. No owner borrow spans any service.
+        let c = crate::station::Ctx::from_shared(self.s);
+        let list = super::stations_near(town.state);
+        // SAFETY: The entry resolved the live town; erasure removes only set
+        // membership and traversal resumes after the visited station.
         unsafe {
-            let mut station = (self.h.next_near_station)(town.shell, std::ptr::null_mut());
-            while !station.is_null() {
-                let mut covers = (self.h.station_catchment)(station, tile);
+            crate::station::for_each_station(list, |near| {
+                let state = (c.c.owner)(near.station);
+                let mut covers = crate::station::tile_is_in_catchment(state, tile, &c);
                 if flags & TILES_Y != 0 {
-                    covers |=
-                        (self.h.station_catchment)(station, tile.wrapping_add(map.diff(0, 1)));
+                    covers |= crate::station::tile_is_in_catchment(
+                        state,
+                        tile.wrapping_add(map.diff(0, 1)),
+                        &c,
+                    );
                 }
                 if flags & TILES_X != 0 {
-                    covers |=
-                        (self.h.station_catchment)(station, tile.wrapping_add(map.diff(1, 0)));
+                    covers |= crate::station::tile_is_in_catchment(
+                        state,
+                        tile.wrapping_add(map.diff(1, 0)),
+                        &c,
+                    );
                 }
                 if flags & SIZE_2X2 != 0 {
-                    covers |=
-                        (self.h.station_catchment)(station, tile.wrapping_add(map.diff(1, 1)));
+                    covers |= crate::station::tile_is_in_catchment(
+                        state,
+                        tile.wrapping_add(map.diff(1, 1)),
+                        &c,
+                    );
                 }
-                if covers && !(self.h.station_covers_town)(station, town.id.0) {
+                if covers && !crate::station::catchment_covers_town(state, town.id.0, &c) {
                     witness::hit(W_STATION_REMOVED);
-                    (self.h.erase_near_station)(town.shell, station);
+                    (*list).erase(near.id);
                 }
-                station = (self.h.next_near_station)(town.shell, station);
-            }
+            });
         }
     }
     fn clear_part(&self, town: TownRef, tile: u32, house: u16) {
@@ -606,7 +609,7 @@ impl House<'_> {
         town: TownRef,
         cargo: u8,
         mut amount: u32,
-        stations: &StationFinder,
+        stations: &StationFinder<'a>,
         recession: bool,
     ) {
         if amount == 0 {
@@ -629,13 +632,27 @@ impl House<'_> {
             .production
             .wrapping_add(amount);
         }
-        let mut finder = stations.native.get();
-        if finder.is_null() {
-            finder = (self.h.station_finder)(stations.tile);
-            stations.native.set(finder);
-        }
-        // SAFETY: The native finder stays live until the next tile requests one.
-        let moved = unsafe { (self.h.move_goods)(finder, cargo, amount, town.id.0) };
+        let c = stations
+            .catchment
+            .get_or_init(|| crate::station::Ctx::from_shared(self.s));
+        let mut finder = stations.finder.borrow_mut();
+        let list = std::ptr::from_ref(finder.get_stations(c));
+        let source = crate::cargo_storage::Source {
+            id: town.id.0,
+            source_type: crate::source_type::Source::TOWN,
+        };
+        // SAFETY: The call-local finder's set outlives the delivery and no
+        // service can reach it.
+        let moved = unsafe {
+            crate::station::move_goods_to_station(
+                cargo,
+                amount,
+                source,
+                list,
+                crate::company_type::INVALID_OWNER,
+                c,
+            )
+        };
         // SAFETY: As above; the row is still the live canonical entry.
         unsafe {
             (*row).history[usize::from(THIS_MONTH)].transported = (*row).history
@@ -644,7 +661,7 @@ impl House<'_> {
             .wrapping_add(moved);
         }
     }
-    fn generate_original(&self, town: TownRef, effect: u8, rate: u8, stations: &StationFinder) {
+    fn generate_original(&self, town: TownRef, effect: u8, rate: u8, stations: &StationFinder<'a>) {
         let mut at = 0;
         loop {
             let cargo = crate::cargo_registry::production(effect, at);
@@ -660,7 +677,7 @@ impl House<'_> {
             }
         }
     }
-    fn generate_binomial(&self, town: TownRef, effect: u8, rate: u8, stations: &StationFinder) {
+    fn generate_binomial(&self, town: TownRef, effect: u8, rate: u8, stations: &StationFinder<'a>) {
         let mut at = 0;
         loop {
             let cargo = crate::cargo_registry::production(effect, at);
@@ -705,8 +722,10 @@ impl House<'_> {
         }
         let r = self.s.random();
         let stations = StationFinder {
-            tile,
-            native: Cell::new(std::ptr::null_mut()),
+            finder: RefCell::new(crate::station::StationFinder::new(
+                crate::tilearea::TileArea { tile, w: 1, h: 1 },
+            )),
+            catchment: OnceCell::new(),
         };
         if spec.callbacks & CBM_PRODUCE != 0 {
             for i in 0..256 {
@@ -1039,14 +1058,17 @@ impl House<'_> {
                 .build_house(id, tile, u32::from(house), random, completed, protected);
         }
     }
-    fn add_acceptance(&self, ctx: *mut c_void, always: *mut u64, cargo: u8, amount: u32) {
+    /// `AddAcceptedCargoSetMask`.
+    fn add_acceptance(acceptance: *mut u32, always: *mut u64, cargo: u8, amount: u32) {
         if cargo == INVALID_CARGO || amount == 0 {
             return;
         }
-        // SAFETY: Native stack-owned CargoArray outlives this synchronous entry.
-        unsafe { (self.h.add_cargo)(ctx, cargo, amount) };
-        // SAFETY: Native stack-owned mask outlives this synchronous entry.
-        unsafe { *always |= 1 << cargo };
+        // SAFETY: The caller's 64-entry cargo array and mask outlive this entry.
+        unsafe {
+            let slot = acceptance.add(usize::from(cargo));
+            *slot = (*slot).wrapping_add(amount);
+            *always |= 1 << cargo;
+        }
     }
     /// `AddAcceptedCargoOfHouse`; `INVALID_TILE` with a null town is a prototype.
     fn accepted(
@@ -1054,7 +1076,7 @@ impl House<'_> {
         tile: u32,
         house: u16,
         town: *mut TownHandle,
-        ctx: *mut c_void,
+        ctx: *mut u32,
         always: *mut u64,
     ) {
         let spec = (self.h.acceptance)(house);
@@ -1089,10 +1111,10 @@ impl House<'_> {
                 super::resolver::callback(CB_ACCEPTANCE, 0, 0, house, town, tile, prototype)
             };
             if cb != CALLBACK_FAILED {
-                self.add_acceptance(ctx, always, accepts[0], u32::from(cb & 15));
-                self.add_acceptance(ctx, always, accepts[1], u32::from((cb >> 4) & 15));
+                Self::add_acceptance(ctx, always, accepts[0], u32::from(cb & 15));
+                Self::add_acceptance(ctx, always, accepts[1], u32::from((cb >> 4) & 15));
                 if (self.l.climate)() != 0 && cb & (1 << 12) != 0 {
-                    self.add_acceptance(
+                    Self::add_acceptance(
                         ctx,
                         always,
                         crate::cargo_registry::openttd_rust_cargo_by_label(
@@ -1101,17 +1123,22 @@ impl House<'_> {
                         u32::from((cb >> 8) & 15),
                     );
                 } else {
-                    self.add_acceptance(ctx, always, accepts[2], u32::from((cb >> 8) & 15));
+                    Self::add_acceptance(ctx, always, accepts[2], u32::from((cb >> 8) & 15));
                 }
                 return;
             }
         }
         for (cargo, amount) in accepts.into_iter().zip(spec.amounts) {
-            self.add_acceptance(ctx, always, cargo, u32::from(amount));
+            Self::add_acceptance(ctx, always, cargo, u32::from(amount));
         }
     }
+    /// `AddAcceptedCargo_Town`.
+    fn accepted_tile(&self, tile: u32, acceptance: *mut u32, always: *mut u64) {
+        let entry = (self.h.entry)(tile);
+        self.accepted(tile, entry.house, entry.town.shell, acceptance, always);
+    }
     /// `AddProducedCargo_Town`.
-    fn produced(&self, tile: u32, ctx: *mut c_void) {
+    fn produced(&self, tile: u32, produced: *mut u32) {
         let entry = (self.h.entry)(tile);
         let house = entry.house;
         let spec = (self.h.production)(house);
@@ -1133,8 +1160,8 @@ impl House<'_> {
                 if cargo == INVALID_CARGO {
                     continue;
                 }
-                // SAFETY: Native stack-owned CargoArray outlives this entry.
-                unsafe { (self.h.add_cargo)(ctx, cargo, 1) };
+                // SAFETY: The caller's 64-entry cargo array outlives this entry.
+                unsafe { add_one(produced, cargo) };
             }
         } else {
             for (effect, rate) in [(1, spec.population), (2, spec.mail)] {
@@ -1147,8 +1174,8 @@ impl House<'_> {
                     if cargo.cargo == INVALID_CARGO {
                         break;
                     }
-                    // SAFETY: Native stack-owned CargoArray outlives this entry.
-                    unsafe { (self.h.add_cargo)(ctx, cargo.cargo, 1) };
+                    // SAFETY: The caller's 64-entry cargo array outlives this entry.
+                    unsafe { add_one(produced, cargo.cargo) };
                     at += 1;
                 }
             }
@@ -1275,7 +1302,12 @@ impl House<'_> {
             }
             let house = (self.h.clean_type)(tile);
             if !(self.l.house_availability)(house).enabled && house >= NEW_HOUSE_OFFSET {
-                (self.h.set_type)(tile, (self.h.substitute)(house));
+                (self.h.set_type)(tile, unsafe {
+                    crate::override_manager::openttd_rust_override_substitute(
+                        crate::override_manager::house(),
+                        house,
+                    )
+                });
             }
         }
         let map = self.map();
@@ -1377,22 +1409,36 @@ pub unsafe extern "C" fn openttd_rust_house_accepted(
     tile: u32,
     id: u16,
     town: *mut TownHandle,
-    acceptance: *mut c_void,
+    acceptance: *mut u32,
     always: *mut u64,
 ) {
     house(leaves, services).accepted(tile, id, town, acceptance, always);
+}
+/// `AddAcceptedCargo_Town`, for the shared tile dispatch.
+/// # Safety
+/// Live tables; `acceptance` names 64 values and `always` is writable.
+pub(crate) unsafe fn accepted_tile(
+    leaves: *const Leaves,
+    services: *const Services,
+    tile: u32,
+    acceptance: *mut u32,
+    always: *mut u64,
+) {
+    house(leaves, services).accepted_tile(tile, acceptance, always);
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_house_produced(
     leaves: *const Leaves,
     services: *const Services,
     tile: u32,
-    produced: *mut c_void,
+    produced: *mut u32,
 ) {
     house(leaves, services).produced(tile, produced);
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_house_watched(
+/// `TriggerHouseAnimation_WatchedCargoAccepted`.
+/// # Safety
+/// Live immutable tables; `tile` is a house tile.
+pub(crate) unsafe fn watched_cargo_accepted(
     leaves: *const Leaves,
     services: *const Services,
     tile: u32,
@@ -1524,7 +1570,6 @@ crate::abi::layouts! {
         removal,
         acceptance,
         watched,
-        substitute,
         inc_construction,
         reset_age,
         set_age,
@@ -1542,13 +1587,6 @@ crate::abi::layouts! {
         convert_boolean,
         convert_8bit,
 
-        next_near_station,
-        erase_near_station,
-        station_catchment,
-        station_covers_town,
-        station_finder,
-        move_goods,
-        add_cargo,
         scale_cargo,
         cargogen_mode,
         place_houses,

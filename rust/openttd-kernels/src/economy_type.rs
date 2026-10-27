@@ -61,3 +61,8 @@ pub const PR_BUILD_WAYPOINT_BUOY: usize = 54;
 pub const PR_CLEAR_WAYPOINT_BUOY: usize = 55;
 /// `ROAD_STOP_TRACKBIT_FACTOR`.
 pub const ROAD_STOP_TRACKBIT_FACTOR: u32 = 2;
+
+/// `PR_END`.
+pub const PR_END: u8 = 71;
+/// `INVALID_PRICE`.
+pub const INVALID_PRICE: u8 = 255;

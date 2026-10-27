@@ -123,6 +123,7 @@ static constexpr uint MAX_CATCHMENT = 10; ///< Maximum catchment for airports wi
 
 static const uint MAX_LENGTH_STATION_NAME_CHARS = 32; ///< The maximum length of a station name in characters including '\0'
 
+#ifndef WITH_RUST
 struct StationCompare {
 	bool operator() (const Station *lhs, const Station *rhs) const;
 };
@@ -144,5 +145,6 @@ public:
 	StationFinder(const TileArea &area) : TileArea(area) {}
 	const StationList &GetStations();
 };
+#endif
 
 #endif /* STATION_TYPE_H */

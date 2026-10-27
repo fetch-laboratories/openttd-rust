@@ -18,7 +18,11 @@
 
 static_assert(VEH_EFFECT == 4);
 static_assert(VehicleID::Invalid().base() == 1048575);
-static_assert(ST_BIG_SUBMARINE == 14 && ROTOR_Z_OFFSET == 5);
+static_assert(ST_ZEPPELINER == 0 && ST_ZEPPELINER_SHADOW == 1 && ST_SMALL_UFO == 2 && ST_SMALL_UFO_SHADOW == 3);
+static_assert(ST_AIRPLANE == 4 && ST_AIRPLANE_SHADOW == 5 && ST_HELICOPTER == 6 && ST_HELICOPTER_SHADOW == 7 && ST_HELICOPTER_ROTORS == 8);
+static_assert(ST_BIG_UFO == 9 && ST_BIG_UFO_SHADOW == 10 && ST_BIG_UFO_DESTROYER == 11 && ST_BIG_UFO_DESTROYER_SHADOW == 12);
+static_assert(ST_SMALL_SUBMARINE == 13 && ST_BIG_SUBMARINE == 14 && ROTOR_Z_OFFSET == 5);
+static_assert(VehStates{VehState::Unclickable}.base() == 4 && VehStates{VehState::Shadow}.base() == 32);
 static_assert(SPR_BLIMP == 3905 && SPR_BLIMP_CRASHING == 3906 && SPR_BLIMP_CRASHED == 3907);
 static_assert(SPR_UFO_SMALL_SCOUT == 3908 && SPR_UFO_SMALL_SCOUT_DARKER == 3909);
 static_assert(SPR_SUB_SMALL_NE == 3910 && SPR_SUB_LARGE_NE == 3914 && SPR_F_15 == 3918 && SPR_F_15_FIRING == 3919);
@@ -27,181 +31,191 @@ static_assert(SPR_ROTOR_MOVING_1 == 3902 && SPR_ROTOR_MOVING_3 == 3904);
 static_assert(MP_CLEAR == 0 && MP_RAILWAY == 1 && MP_HOUSE == 3 && MP_TREES == 4 && MP_WATER == 6 && MP_INDUSTRY == 8);
 static_assert(TRACK_BIT_ALL == 63 && EV_CRASH_SMOKE == 4 && EV_EXPLOSION_LARGE == 5 && EV_EXPLOSION_SMALL == 7);
 
-template <class T> static uint32_t DisasterNext(size_t from)
-{
-	for (const T *item : T::Iterate(from)) return item->index.base();
-	return VehicleID::Invalid().base();
-}
+#include "company_services.h"
+#include "settings_services.h"
+#include "environment_services.h"
 
-/* These leaves neither allocate nor invoke scripts/NewGRF/logging. Every record
- * is copied before returning. Original source preconditions govern ID access. */
-static void OPENTTD_RUST_CALL DisasterRead(void *, uint32_t kind, uint32_t id, int64_t a, int64_t b, int64_t *out) noexcept
-{
-	switch (kind) {
-		case 0:
-			out[0] = Map::SizeX(); out[1] = Map::SizeY(); out[2] = Map::MaxX(); out[3] = Map::MaxY(); out[4] = Map::Size() - 1;
-			out[5] = TimerGameCalendar::year.base(); out[6] = _settings_game.difficulty.disasters; out[7] = _settings_client.sound.disaster;
-			out[8] = _settings_game.construction.freeform_edges; out[9] = a == 0 ? 0 : RustVehicleCanAllocate(a);
-			break;
-		case 1: {
-			const Vehicle *v = Vehicle::Get(id);
-			out[0] = v->subtype; out[1] = RustVehicleX(v); out[2] = RustVehicleY(v); out[3] = RustVehicleZ(v); out[4] = v->tile.base(); out[5] = v->dest_tile.base();
-			out[6] = RustVehicleDirection(v); out[7] = RustVehicleAge(v).base(); out[8] = v->tick_counter; out[9] = v->owner.base(); out[10] = v->vehstatus.base();
-			out[11] = v->Next() == nullptr ? VehicleID::Invalid().base() : v->Next()->index.base(); out[12] = RustVehicleFirstSprite(v);
-			out[13] = RustVehicleFront(v); out[14] = v->IsGroundVehicle(); out[15] = v->type; out[16] = RustVehicleBreakdownCounter(v); out[17] = RustVehicleBreakdownDelay(v);
-			if (v->type == VEH_ROAD) { const RoadVehicle *r = RoadVehicle::From(v); out[18] = r->GetCrashedCounter(); out[19] = r->disaster_vehicle.base(); }
-			break;
-		}
-		case 2: {
-			const Industry *i = RustIndustryByID(id); const auto &behaviour = GetIndustrySpec(i->type)->behaviour;
-			out[0] = i->location.tile.base(); out[1] = i->type; out[2] = behaviour.Test(IndustryBehaviour::AirplaneAttacks);
-			out[3] = behaviour.Test(IndustryBehaviour::ChopperAttacks); out[4] = behaviour.Test(IndustryBehaviour::CanSubsidence); out[5] = OpenTTDIndustryTown(i)->index.base();
-			break;
-		}
-		case 3: { const Station *s = Station::Get(id); out[0] = RustStationAirportTile(s); out[1] = s->airport.type; break; }
-		case 4: out[0] = Company::Get(id)->group_all[VEH_ROAD].num_vehicle; break;
-		case 5: {
-			TileIndex tile{id}; out[0] = IsValidTile(tile); if (!out[0]) break;
-			out[1] = SharedTileType(id);
-			if (out[1] == MP_RAILWAY) out[2] = RustTileOwnerValue(id);
-			out[4] = IsTileType(tile, MP_RAILWAY) && RustRailIsDepot(id); out[5] = RustAirportTile(id);
-			if (out[5]) out[6] = MapSvcStationIndex(id);
-			if (IsTileType(tile, MP_INDUSTRY)) out[7] = GetIndustryIndex(tile).base();
-			out[8] = RustPlainRailTile(id); break;
-		}
-		case 6: {
-			size_t from = static_cast<uint32_t>(a) == VehicleID::Invalid().base() ? 0 : a + 1;
-			switch (id) {
-				case 0: out[0] = DisasterNext<Company>(from); break;
-				case 1: out[0] = DisasterNext<RoadVehicle>(from); break;
-				case 2: out[0] = DisasterNext<Vehicle>(from); break;
-				case 3: out[0] = DisasterNext<Train>(from); break;
-				case 4: { const Station *st = OpenTTDNextStation(static_cast<uint32_t>(from)); out[0] = st == nullptr ? VehicleID::Invalid().base() : RustBaseStationID(st); break; }
-				case 5: { const Industry *i = OpenTTDNextIndustry(static_cast<uint32_t>(from)); out[0] = i == nullptr ? VehicleID::Invalid().base() : i->index.base(); break; }
-				case 6: out[0] = DisasterNext<DisasterVehicle>(from); break;
-			}
-			break;
-		}
-		case 7: out[0] = reinterpret_cast<intptr_t>(DisasterVehicle::Get(id)->rust_state.get()); break;
-		case 9: out[0] = GetDirectionTowards(Vehicle::Get(id), a, b); break;
-		case 10: { auto gp = GetNewVehiclePos(Vehicle::Get(id)); out[0] = gp.x; out[1] = gp.y; break; }
-		case 11: out[0] = RustIndustryByID(id)->TileBelongsToIndustry(TileIndex{static_cast<uint32_t>(a)}); break;
-		case 12: out[0] = SharedTileAddWrap(id, a, b); break;
-		case 13: out[0] = TileOffsByDiagDir(static_cast<DiagDirection>(a)); break;
-		case 14: out[0] = DisasterVehicle::GetIfValid(id) != nullptr; break;
-		case 15: out[0] = Company::IsHumanID(CompanyID{static_cast<uint8_t>(id)}); break;
-	}
-}
+static_assert(to_underlying(IndustryBehaviour::AirplaneAttacks) == 11 && to_underlying(IndustryBehaviour::ChopperAttacks) == 12 && to_underlying(IndustryBehaviour::CanSubsidence) == 13);
+static_assert(AT_SMALL == 0 && AT_LARGE == 1);
+static_assert(SND_12_EXPLOSION == 16 && DIRDIFF_90LEFT == 6);
 
-static void OPENTTD_RUST_CALL DisasterWrite(void *, uint32_t field, uint32_t id, int64_t value) noexcept
+static OpenTTDDisasterVehicle DisasterHandle(DisasterVehicle *v) noexcept
 {
-	Vehicle *v = Vehicle::Get(id);
-	switch (field) {
-		case 0: RustVehicleSetSubtype(v, static_cast<uint8_t>(value)); break;
-		case 1: RustWriteVehicleX(v, value); break;
-		case 2: RustWriteVehicleY(v, value); break;
-		case 3: RustWriteVehicleZ(v, value); break;
-		case 4: RustWriteVehicleTile(v, TileIndex{static_cast<uint32_t>(value)}); break;
-		case 5: v->dest_tile = TileIndex{static_cast<uint32_t>(value)}; break;
-		case 6: v->direction = static_cast<Direction>(value); break;
-		case 7: v->age = TimerGameCalendar::Date{static_cast<int32_t>(value)}; break;
-		case 8: v->tick_counter = value; break;
-		case 9: RustVehicleSetOwner(RustVehicle(v), static_cast<uint8_t>(value)); break;
-		case 10: RustWriteVehicleStatus(v, VehStates{static_cast<uint8_t>(value)}); break;
-		case 11: RustVehicleSetNext(v, Vehicle::Get(static_cast<uint32_t>(value))); break;
-		case 12: RustWriteVehicleSpriteSequence(v, value); break;
-		case 16: v->breakdown_ctr = value; break;
-		case 17: v->breakdown_delay = value; break;
-		case 19: RoadVehicle::From(v)->disaster_vehicle = VehicleID{static_cast<uint32_t>(value)}; break;
-	}
+	return {.handle = RustVehicle(v), .state = v == nullptr ? nullptr : v->rust_state.get(), .id = v == nullptr ? VehicleID::Invalid().base() : RustVehicleIndexOpaque(v)};
 }
-
-static int64_t OPENTTD_RUST_CALL DisasterService(void *, const OpenTTDDisasterAction *request) noexcept
+static OpenTTDDisasterVehicle DisasterBaseHandle(Vehicle *v) noexcept
 {
-	const auto &step = *request;
-	int64_t response = 0;
-	switch (step.kind) {
-		case 5: response = GetAircraftFlightLevel(DisasterVehicle::Get(step.id)); break;
-		case 6: { int z; GetAircraftFlightLevelBounds(DisasterVehicle::Get(step.id), &z, nullptr); response = z; break; }
-		case 9: SndPlayVehicleFx(SND_12_EXPLOSION, Vehicle::Get(step.id)); break;
-		case 10: RustPlayTileSound(step.id, SND_12_EXPLOSION); break;
-		case 11:
-			switch (step.other) {
-				case 0: AddTileNewsItem(GetEncodedString(STR_NEWS_DISASTER_ZEPPELIN, step.a), NewsType::Accident, TileIndex{step.id}); break;
-				case 1: AddTileNewsItem(GetEncodedString(STR_NEWS_DISASTER_SMALL_UFO), NewsType::Accident, TileIndex{step.id}); break;
-				case 2: AddIndustryNewsItem(GetEncodedString(STR_NEWS_DISASTER_AIRPLANE_OIL_REFINERY, step.a), NewsType::Accident, IndustryID{static_cast<uint16_t>(step.id)}); break;
-				case 3: AddIndustryNewsItem(GetEncodedString(STR_NEWS_DISASTER_HELICOPTER_FACTORY, step.a), NewsType::Accident, IndustryID{static_cast<uint16_t>(step.id)}); break;
-				case 4: AddTileNewsItem(GetEncodedString(STR_NEWS_DISASTER_BIG_UFO, step.a), NewsType::Accident, TileIndex{step.id}); break;
-				case 5: AddTileNewsItem(GetEncodedString(STR_NEWS_DISASTER_COAL_MINE_SUBSIDENCE, step.a), NewsType::Accident, TileIndex{step.id}); break;
-			}
-			break;
-		case 12:
-			if (step.other == 0) { AI::NewEvent(CompanyID{RustTileOwnerValue(step.id)}, new ScriptEventDisasterZeppelinerCrashed(StationID(MapSvcStationIndex(step.id)))); }
-			else if (step.other == 1) { AI::NewEvent(CompanyID{RustTileOwnerValue(step.id)}, new ScriptEventDisasterZeppelinerCleared(StationID{static_cast<uint16_t>(step.a)})); }
-			else {
-				RoadVehicle *target = RoadVehicle::Get(step.id);
-				AI::NewEvent(target->owner, new ScriptEventVehicleCrashed(target->index, target->tile, ScriptEventVehicleCrashed::CRASH_RV_UFO, step.a, target->owner));
-				Game::NewEvent(new ScriptEventVehicleCrashed(target->index, target->tile, ScriptEventVehicleCrashed::CRASH_RV_UFO, step.a, target->owner));
-			}
-			break;
-		case 13: {
-			Station *st = Station::Get(step.id);
-			if (step.other) st->airport.blocks.Set({AirportBlock::Zeppeliner, AirportBlock::RunwayIn});
-			else st->airport.blocks.Reset({AirportBlock::Zeppeliner, AirportBlock::RunwayIn});
-			break;
-		}
-		case 15: response = (new DisasterVehicle(step.a, step.b, static_cast<Direction>(step.c), static_cast<DisasterSubType>(step.id), VehicleID{step.other}))->index.base(); break;
-		case 18: RustUpdateSignals(); break;
-		case 20: ResetIndustryConstructionStage(TileIndex{step.id}); MarkTileDirtyByTile(TileIndex{step.id}); break;
-		case 21: response = ClosestTownFromTile(TileIndex{step.id}, UINT_MAX)->index.base(); break;
-		case 24: RustVehicleUpdateDelta(DisasterVehicle::Get(step.id)); break;
-	}
-	return response;
+	return {.handle = RustVehicle(v), .state = nullptr, .id = v == nullptr ? VehicleID::Invalid().base() : RustVehicleIndexOpaque(v)};
 }
-
-static OpenTTDVehicle *OPENTTD_RUST_CALL DisasterVehicleShell(void *, uint32_t id) noexcept
+static OpenTTDDisasterRoadTarget DisasterRoadHandle(RoadVehicle *v) noexcept
 {
-	return RustIndexedVehicleRead<OpenTTDVehicle *, RustVehicle>(id);
+	return {.handle = RustVehicle(v), .state = v == nullptr ? nullptr : v->GetRustState(), .id = v == nullptr ? VehicleID::Invalid().base() : RustVehicleIndexOpaque(v)};
 }
-
-static int64_t RunDisaster(uint32_t operation, uint32_t id = 0, int64_t a = 0, int64_t b = 0, int64_t c = 0, int64_t d = 0)
+static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterNextPart(OpenTTDVehicle *v) noexcept
 {
-	const OpenTTDDisasterOccupancy occupancy{.commands = GetRustOccupancyCommands(), .vehicle = DisasterVehicleShell};
-	std::unique_ptr<OpenTTDDisasterRun, decltype(&openttd_rust_disaster_destroy)> run{
-		openttd_rust_disaster_create(operation, id, a, b, c, d, nullptr, DisasterRead, DisasterWrite, &GetRustSharedServices(), &occupancy, DisasterService), openttd_rust_disaster_destroy};
-	int64_t response = 0;
-	for (;;) {
-		auto step = openttd_rust_disaster_advance(run.get(), response);
-		response = 0;
-		switch (step.kind) {
-			case 0: return step.a;
-			case 2: delete Vehicle::Get(step.id); break;
-			case 14: response = RoadVehicle::Get(step.id)->Crash(); break;
-			case 17: {
-				Backup<CompanyID> cur_company(_current_company, step.other == 0 ? OWNER_WATER : OWNER_NONE);
-				Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, TileIndex{step.id});
-				cur_company.Restore(); break;
-			}
-		}
-	}
+	Vehicle *next = RustVehicleNext(VehicleOf(v));
+	return DisasterHandle(static_cast<DisasterVehicle *>(next));
+}
+static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterResolve(uint32_t id) noexcept { return DisasterBaseHandle(Vehicle::Get(id)); }
+static OpenTTDDisasterRoadTarget OPENTTD_RUST_CALL DisasterRoadTarget(uint32_t id) noexcept
+{
+	RoadVehicle *target = RoadVehicle::Get(id);
+	assert(target != nullptr && target->type == VEH_ROAD && target->IsFrontEngine());
+	return DisasterRoadHandle(target);
+}
+static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterNext(uint32_t from) noexcept
+{
+	for (DisasterVehicle *v : DisasterVehicle::Iterate(from)) return DisasterHandle(v);
+	return DisasterHandle(nullptr);
+}
+static OpenTTDDisasterRoadTarget OPENTTD_RUST_CALL DisasterNextRoad(uint32_t from) noexcept
+{
+	for (RoadVehicle *v : RoadVehicle::Iterate(from)) return DisasterRoadHandle(v);
+	return DisasterRoadHandle(nullptr);
+}
+static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterNextVehicle(uint32_t from) noexcept { return DisasterBaseHandle(VehicleOf(RustNextVehicle(from))); }
+static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterNextTrain(uint32_t from) noexcept
+{
+	for (Train *v : Train::Iterate(from)) return DisasterBaseHandle(v);
+	return DisasterBaseHandle(nullptr);
+}
+static uint16_t OPENTTD_RUST_CALL DisasterRoadCount(uint8_t company) noexcept { return RustCompanyRoadVehicleCount(Company::Get(CompanyID{company})); }
+static OpenTTDDisasterStationTarget OPENTTD_RUST_CALL DisasterNextStation(uint32_t from) noexcept
+{
+	const Station *st = OpenTTDNextStation(from);
+	return st == nullptr ? OpenTTDDisasterStationTarget{.next = UINT32_MAX, .tile = INVALID_TILE.base(), .airport_type = 0} :
+		OpenTTDDisasterStationTarget{.next = uint32_t{RustBaseStationID(st)} + 1, .tile = RustStationAirportTile(st), .airport_type = st->airport.type};
+}
+static OpenTTDDisasterIndustryTarget DisasterIndustryHandle(Industry *i) noexcept
+{
+	return {.industry = i, .id = i == nullptr ? IndustryID::Invalid().base() : RustIndustryID(i)};
+}
+static OpenTTDDisasterIndustryTarget OPENTTD_RUST_CALL DisasterNextIndustry(uint32_t from) noexcept { return DisasterIndustryHandle(OpenTTDNextIndustry(from)); }
+static OpenTTDDisasterIndustryTarget OPENTTD_RUST_CALL DisasterIndustry(uint32_t id) noexcept { return DisasterIndustryHandle(RustIndustryByID(id)); }
+static OpenTTDDisasterIndustryLocation OPENTTD_RUST_CALL DisasterIndustryLocation(void *shell) noexcept
+{
+	Industry *i = static_cast<Industry *>(shell);
+	return {.tile = RustIndustryTile(shell), .town = RustTownAuthorityIndex(OpenTTDIndustryTownHandle(i))};
+}
+static void OPENTTD_RUST_CALL DisasterAirportBlocks(uint16_t id, bool blocked) noexcept
+{
+	Station *st = Station::Get(id);
+	if (blocked) st->airport.blocks.Set({AirportBlock::Zeppeliner, AirportBlock::RunwayIn});
+	else st->airport.blocks.Reset({AirportBlock::Zeppeliner, AirportBlock::RunwayIn});
+}
+static void OPENTTD_RUST_CALL DisasterZeppelinCrashed(uint32_t tile) noexcept
+{
+	AI::NewEvent(CompanyID{RustTileOwnerValue(tile)}, new ScriptEventDisasterZeppelinerCrashed(StationID(MapSvcStationIndex(tile))));
+}
+static void OPENTTD_RUST_CALL DisasterZeppelinCleared(uint32_t tile, uint16_t station) noexcept
+{
+	AI::NewEvent(CompanyID{RustTileOwnerValue(tile)}, new ScriptEventDisasterZeppelinerCleared(StationID{station}));
+}
+static void OPENTTD_RUST_CALL DisasterRoadCrashed(OpenTTDVehicle *shell, uint32_t victims) noexcept
+{
+	const Vehicle *target = VehicleOf(shell);
+	AI::NewEvent(target->owner, new ScriptEventVehicleCrashed(target->index, target->tile, ScriptEventVehicleCrashed::CRASH_RV_UFO, victims, target->owner));
+	Game::NewEvent(new ScriptEventVehicleCrashed(target->index, target->tile, ScriptEventVehicleCrashed::CRASH_RV_UFO, victims, target->owner));
+}
+static void OPENTTD_RUST_CALL DisasterZeppelinNews(uint32_t tile, uint16_t station) noexcept { AddTileNewsItem(GetEncodedString(STR_NEWS_DISASTER_ZEPPELIN, station), NewsType::Accident, TileIndex{tile}); }
+static void OPENTTD_RUST_CALL DisasterSmallUfoNews(uint32_t tile) noexcept { AddTileNewsItem(GetEncodedString(STR_NEWS_DISASTER_SMALL_UFO), NewsType::Accident, TileIndex{tile}); }
+static void OPENTTD_RUST_CALL DisasterAirplaneNews(uint16_t industry, uint16_t town) noexcept { AddIndustryNewsItem(GetEncodedString(STR_NEWS_DISASTER_AIRPLANE_OIL_REFINERY, town), NewsType::Accident, IndustryID{industry}); }
+static void OPENTTD_RUST_CALL DisasterHelicopterNews(uint16_t industry, uint16_t town) noexcept { AddIndustryNewsItem(GetEncodedString(STR_NEWS_DISASTER_HELICOPTER_FACTORY, town), NewsType::Accident, IndustryID{industry}); }
+static void OPENTTD_RUST_CALL DisasterBigUfoNews(uint32_t tile, uint16_t town) noexcept { AddTileNewsItem(GetEncodedString(STR_NEWS_DISASTER_BIG_UFO, town), NewsType::Accident, TileIndex{tile}); }
+static void OPENTTD_RUST_CALL DisasterCoalNews(uint32_t tile, uint16_t town) noexcept { AddTileNewsItem(GetEncodedString(STR_NEWS_DISASTER_COAL_MINE_SUBSIDENCE, town), NewsType::Accident, TileIndex{tile}); }
+static void OPENTTD_RUST_CALL DisasterClear(uint32_t tile, uint8_t company) noexcept
+{
+	Backup<CompanyID> cur_company(_current_company, CompanyID{company});
+	Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, TileIndex{tile});
+	cur_company.Restore();
+}
+static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterCreate(int32_t x, int32_t y, uint8_t direction, uint8_t subtype, uint32_t target) noexcept
+{
+	return DisasterHandle(new DisasterVehicle(x, y, static_cast<Direction>(direction), static_cast<DisasterSubType>(subtype), VehicleID{target}));
+}
+static const OpenTTDDisasterServices &DisasterServices() noexcept
+{
+	static const OpenTTDDisasterServices services{
+		.shared = &GetRustSharedServices(),
+		.vehicles = &GetRustVehicleServices(),
+		.occupancy = GetRustOccupancyCommands(),
+		.environment = &GetRustEnvironmentServices(),
+		.rail_map = &GetRustRailMapServices(),
+		.aircraft = &GetRustAircraftLeaves(),
+		.road = &GetRustRoadLeaves(),
+		.age = RustVehicleRead<int32_t, RustVehicleAgeValue>,
+		.write_age = RustVehicleInvoke<RustWriteVehicleAge, int32_t>,
+		.write_sprite = RustVehicleInvoke<RustWriteVehicleSpriteSequence, SpriteID>,
+		.first_sprite = RustVehicleRead<SpriteID, RustVehicleFirstSprite>,
+		.write_first_sprite = RustVehicleInvoke<RustWriteVehicleFirstSprite, SpriteID>,
+		.write_subtype = RustVehicleInvoke<RustVehicleSetSubtype, uint8_t>,
+		.write_owner = RustVehicleSetOwner,
+		.set_next = RustTypedVehicleSetNext,
+		.next_part = DisasterNextPart,
+		.update_delta = RustVehicleUpdateDelta<OpenTTDVehicle *>,
+		.toward = RustVehicleDirectionTowards,
+		.create = DisasterCreate,
+		.resolve = DisasterResolve,
+		.next_disaster = DisasterNext,
+		.next_road = DisasterNextRoad,
+		.road_target = DisasterRoadTarget,
+		.front = RustVehicleRead<bool, RustVehicleFront>,
+		.road_disaster = RustVehicleRead<uint32_t, RustRoadDisasterTarget>,
+		.breakdown_counter = RustVehicleRead<uint8_t, RustVehicleBreakdownCounter>,
+		.write_road_disaster = RustVehicleInvoke<RustWriteRoadDisasterTarget, uint32_t>,
+		.write_breakdown = RustVehicleInvoke<RustVehicleWriteBreakdown, uint8_t, uint8_t>,
+		.next_vehicle = DisasterNextVehicle,
+		.ground = RustVehicleRead<bool, RustVehicleIsGround>,
+		.next_train = DisasterNextTrain,
+		.road_count = DisasterRoadCount,
+		.human = RustCompanyIsHuman,
+		.next_station = DisasterNextStation,
+		.next_industry = DisasterNextIndustry,
+		.industry = DisasterIndustry,
+		.industry_behaviour = RustIndustryBehaviour,
+		.industry_location = DisasterIndustryLocation,
+		.industry_tile = RustIndustryTile,
+		.industry_index = RustIndustryTileIndex,
+		.industry_belongs = RustIndustryTileBelongs,
+		.reset_industry_tile = RustResetIndustryConstruction,
+		.airport_tile = RustAirportTile,
+		.airport_blocks = DisasterAirportBlocks,
+		.zeppelin_crashed = DisasterZeppelinCrashed,
+		.zeppelin_cleared = DisasterZeppelinCleared,
+		.road_crashed = DisasterRoadCrashed,
+		.zeppelin_news = DisasterZeppelinNews,
+		.small_ufo_news = DisasterSmallUfoNews,
+		.airplane_news = DisasterAirplaneNews,
+		.helicopter_news = DisasterHelicopterNews,
+		.big_ufo_news = DisasterBigUfoNews,
+		.coal_news = DisasterCoalNews,
+		.clear = DisasterClear,
+		.update_signals = RustUpdateSignals,
+		.disasters_enabled = RustDisastersEnabled,
+		.can_allocate = RustVehicleCanAllocate,
+		.town_index = RustTownAuthorityIndex,
+	};
+	return services;
 }
 
 DisasterVehicle::DisasterVehicle(int x, int y, Direction direction, DisasterSubType subtype, VehicleID target) :
 	SpecializedVehicleBase(), rust_state{openttd_rust_disaster_state_create(target.base())}
 {
-	RunDisaster(3, this->index.base(), x, y, direction, subtype);
+	openttd_rust_disaster_construct(&DisasterServices(), DisasterHandle(this), x, y, direction, subtype);
 }
-void DisasterVehicle::UpdatePosition(int x, int y, int z) { RunDisaster(4, this->index.base(), x, y, z); }
-void DisasterVehicle::UpdateImage() { RunDisaster(9, this->index.base()); }
-bool DisasterVehicle::Tick() { return RunDisaster(0, this->index.base()) != 0; }
-void StartupDisasters() { RunDisaster(2); }
-void ReleaseDisastersTargetingIndustry(IndustryID industry) { RunDisaster(5, industry.base()); }
+bool DisasterVehicle::Tick() { return openttd_rust_disaster_tick(&DisasterServices(), DisasterHandle(this)); }
+void StartupDisasters() { openttd_rust_disaster_startup(&DisasterServices()); }
+void ReleaseDisastersTargetingIndustry(IndustryID industry) { openttd_rust_disaster_release_industry(&DisasterServices(), industry.base()); }
 void ReleaseDisasterVehicle(VehicleID vehicle)
 {
 	DisasterVehicle *v = DisasterVehicle::GetIfValid(vehicle);
 	if (v == nullptr) return;
 	assert(v->subtype == ST_SMALL_UFO);
 	assert(v->State() != 0);
-	RunDisaster(6, vehicle.base());
+	openttd_rust_disaster_release_vehicle(&DisasterServices(), DisasterHandle(v));
 }
-static const IntervalTimer<TimerGameEconomy> _economy_disaster_daily({TimerGameEconomy::DAY, TimerGameEconomy::Priority::DISASTER}, [](auto) { RunDisaster(1); });
+static const IntervalTimer<TimerGameEconomy> _economy_disaster_daily({TimerGameEconomy::DAY, TimerGameEconomy::Priority::DISASTER}, [](auto) { openttd_rust_disaster_daily(&DisasterServices()); });
+
+#include "service_table_check.hpp"
+#include "abi-visit-OpenTTDDisasterServices.hpp"
+bool CheckAbi_disaster_vehicle() { return AbiServicesComplete(DisasterServices()); }

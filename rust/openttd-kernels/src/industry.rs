@@ -34,7 +34,7 @@ mod transaction;
 pub use transaction::*;
 mod commands;
 pub use commands::*;
-mod tile;
+pub(crate) mod tile;
 pub use tile::*;
 mod construction;
 pub use construction::*;
@@ -149,6 +149,37 @@ pub struct Industry {
     text: Vec<u8>,
     produced: Vec<Produced>,
     accepted: Vec<Accepted>,
+    stations_near: crate::station::StationList,
+}
+/// The industry's nearby station set, for immediate borrows only.
+pub(crate) fn stations_near(owner: *mut Industry) -> *mut crate::station::StationList {
+    // SAFETY: Live owner supplied by the caller's resolved shell.
+    unsafe { &raw mut (*owner).stations_near }
+}
+/// Native `Industry::stations_near` facade storage.
+/// # Safety
+/// `owner` is live; the alias ends with the owner.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_industry_stations_near(
+    owner: *mut Industry,
+) -> *mut crate::station::StationList {
+    stations_near(owner)
+}
+/// `Industry::location`, from the canonical metadata.
+pub(crate) fn location(owner: *mut Industry) -> TileArea {
+    // SAFETY: Live owner supplied by the caller's resolved shell.
+    unsafe { lifecycle::location(owner) }
+}
+/// `Industry::IsCargoAccepted()`: any slot holds a valid cargo.
+pub(crate) fn is_cargo_accepted(owner: *mut Industry) -> bool {
+    (0..accepted_count(owner)).any(|slot| valid(unsafe { (*accepted(owner, slot)).cargo }))
+}
+/// Visit each produced slot's cargo in slot order.
+pub(crate) fn for_each_produced_cargo(owner: *mut Industry, mut visit: impl FnMut(u8)) {
+    for slot in 0..produced_count(owner) {
+        // SAFETY: Live owner; immediate copy before the visit.
+        visit(unsafe { (*produced(owner, slot)).cargo });
+    }
 }
 #[repr(C)]
 #[derive(Default, Clone, Copy)]
@@ -403,7 +434,6 @@ pub struct Services {
     pub tick_trigger: unsafe extern "C" fn(*mut c_void),
     pub production_callback: unsafe extern "C" fn(*mut c_void, u8),
     pub scale_cargo: unsafe extern "C" fn(u32) -> u32,
-    pub move_goods: unsafe extern "C" fn(*mut c_void, u32, u32) -> u32,
     pub tile_add_wrap: unsafe extern "C" fn(u32, i32, i32) -> u32,
     pub farm_tile: unsafe extern "C" fn(u32) -> FarmTile,
     pub snow_line: unsafe extern "C" fn() -> u8,
@@ -691,6 +721,7 @@ pub unsafe extern "C" fn openttd_rust_industry_transport(
 ) -> bool {
     let s = unsafe { &*services };
     let mut moved = false;
+    let mut catchment = None;
     for n in 0..produced_count(owner) {
         let p = produced(owner, n);
         let mut cw = unsafe { u32::from((*p).waiting).min(255) };
@@ -708,7 +739,22 @@ pub unsafe extern "C" fn openttd_rust_industry_transport(
                 .first
                 .wrapping_add(cw as u16);
         }
-        let am = unsafe { (s.move_goods)(i, n as u32, cw) };
+        let c = catchment.get_or_insert_with(|| crate::station::Ctx::from_shared(s.shared()));
+        let source = crate::cargo_storage::Source {
+            id: (c.c.industry_id)(i.cast()).0,
+            source_type: crate::source_type::Source::INDUSTRY,
+        };
+        // SAFETY: Live owner; the station set is re-read between observations.
+        let am = unsafe {
+            crate::station::move_goods_to_station(
+                (*p).cargo,
+                cw,
+                source,
+                stations_near(owner),
+                (*owner).metadata.exclusive_consumer,
+                c,
+            )
+        };
         unsafe {
             (*p).history[usize::from(THIS_MONTH)].second = (*p).history[usize::from(THIS_MONTH)]
                 .second
@@ -1917,11 +1963,6 @@ crate::abi::layouts! {
 
         build_window_dirty,
         serve_neutral,
-        insert_near_station,
-        clear_near_industries,
-        insert_neutral_industry,
-        stations_around,
-        add_delivery,
     };
     "OpenTTDIndustryGenerationInfo" ["industry"] => crate::industry::GenerationInfo {
         appear,
@@ -1992,8 +2033,6 @@ crate::abi::layouts! {
         delete_inspect,
         subsidies,
         invalidate_cargo,
-        next_near_station,
-        remove_delivery,
         belongs,
         randomisation_spec,
         random_triggers,
@@ -2067,7 +2106,6 @@ crate::abi::layouts! {
         tick_trigger,
         production_callback,
         scale_cargo,
-        move_goods,
         tile_add_wrap,
         farm_tile,
         snow_line,

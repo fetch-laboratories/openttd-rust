@@ -52,17 +52,15 @@ IndustryTileOverrideManager _industile_mngr(NEW_INDUSTRYTILEOFFSET, NUM_INDUSTRY
  * @param grf_id The GRF of the local type.
  * @return The industry type in the global scope.
  */
+#ifndef WITH_RUST
 IndustryType MapNewGRFIndustryType(IndustryType grf_type, uint32_t grf_id)
 {
-#ifdef WITH_RUST
-	return openttd_rust_industry_map_type(grf_type, grf_id);
-#else
 	if (grf_type == IT_INVALID) return IT_INVALID;
 	if (!HasBit(grf_type, 7)) return GB(grf_type, 0, 7);
 
 	return _industry_mngr.GetID(GB(grf_type, 0, 7), grf_id);
-#endif
 }
+#endif
 
 /**
  * Make an analysis of a tile and check for its belonging to the same

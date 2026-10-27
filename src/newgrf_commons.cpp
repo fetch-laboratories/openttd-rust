@@ -92,6 +92,21 @@ OverrideManagerBase::~OverrideManagerBase() { openttd_rust_override_delete(this-
 #endif
 
 #ifdef WITH_RUST
+HouseOverrideManager::HouseOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
+		OverrideManagerBase(offset, maximum, invalid)
+{
+	if (this == &_house_mngr) openttd_rust_house_register_manager(this->rust_owner);
+}
+AirportOverrideManager::AirportOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
+		OverrideManagerBase(offset, maximum, invalid)
+{
+	if (this == &_airport_mngr) openttd_rust_airport_register_manager(this->rust_owner);
+}
+AirportTileOverrideManager::AirportTileOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
+		OverrideManagerBase(offset, maximum, invalid)
+{
+	if (this == &_airporttile_mngr) openttd_rust_airport_tile_register_manager(this->rust_owner);
+}
 IndustryOverrideManager::IndustryOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
 		OverrideManagerBase(offset, maximum, invalid)
 {
@@ -240,6 +255,7 @@ uint16_t OverrideManagerBase::GetSubstituteID(uint16_t entity_id) const
  * It will find itself the proper slot on which it will go
  * @param hs HouseSpec read from the grf file, ready for inclusion
  */
+#ifndef WITH_RUST
 void HouseOverrideManager::SetEntitySpec(HouseSpec &&hs)
 {
 	HouseID house_id = this->AddEntityID(hs.grf_prop.local_id, hs.grf_prop.grfid, hs.grf_prop.subst_id);
@@ -266,6 +282,7 @@ void HouseOverrideManager::SetEntitySpec(HouseSpec &&hs)
 		this->grfid_overrides[i] = 0;
 	}
 }
+#endif
 
 /**
  * Return the ID (if ever available) of a previously inserted entity.
@@ -297,11 +314,9 @@ uint16_t IndustryOverrideManager::GetID(uint16_t grf_local_id, uint32_t grfid) c
  * @param substitute_id industry from which data has been copied
  * @return a free entity id (slotid) if ever one has been found, or Invalid_ID marker otherwise
  */
+#ifndef WITH_RUST
 uint16_t IndustryOverrideManager::AddEntityID(uint16_t grf_local_id, uint32_t grfid, uint16_t substitute_id)
 {
-#ifdef WITH_RUST
-	return openttd_rust_industry_definition_allocate(this->rust_owner, grf_local_id, grfid, substitute_id, &GetIndustryDefinitionServices());
-#else
 	/* This entity hasn't been defined before, so give it an ID now. */
 	for (uint16_t id = 0; id < this->max_entities; id++) {
 		/* Skip overridden industries */
@@ -327,8 +342,8 @@ uint16_t IndustryOverrideManager::AddEntityID(uint16_t grf_local_id, uint32_t gr
 	}
 
 	return this->invalid_id;
-#endif
 }
+#endif
 
 /**
  * Method to install the new industry data in its proper slot

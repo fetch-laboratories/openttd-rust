@@ -22,6 +22,7 @@ inline uint32_t RustMaximumDepotPenalty() noexcept { return _settings_game.pf.ya
 inline uint8_t RustPlaneSpeed() noexcept { return _settings_game.vehicle.plane_speed; }
 inline uint8_t RustPlaneCrashes() noexcept { return _settings_game.vehicle.plane_crashes; }
 inline bool RustServiceAtHelipad() noexcept { return _settings_game.order.serviceathelipad; }
+inline bool RustDisastersEnabled() noexcept { return _settings_game.difficulty.disasters; }
 inline bool RustDisasterSound() noexcept { return _settings_client.sound.disaster; }
 inline bool RustNeverExpireAirports() noexcept { return _settings_game.station.never_expire_airports; }
 inline bool RustNeverExpireVehicles() noexcept { return _settings_game.vehicle.never_expire_vehicles; }
@@ -49,6 +50,7 @@ inline uint8_t OpenTTDTownCargoGenMode() noexcept { return _settings_game.econom
 inline uint8_t OpenTTDPlaceHouses() noexcept { return _settings_game.economy.place_houses; }
 inline bool RustServeNeutralIndustries() noexcept { return _settings_game.station.serve_neutral_industries; }
 inline uint8_t RustStationSpread() noexcept { return _settings_game.station.station_spread; }
+inline bool RustModifiedCatchment() noexcept { return _settings_game.station.modified_catchment; }
 inline bool RustStationStopOnTownRoad() noexcept { return _settings_game.construction.road_stop_on_town_road; }
 inline bool RustStationStopOnCompetitorRoad() noexcept { return _settings_game.construction.road_stop_on_competitor_road; }
 inline bool RustStationNoiseEnabled() noexcept { return _settings_game.economy.station_noise_level; }

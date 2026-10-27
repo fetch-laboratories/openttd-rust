@@ -20,6 +20,7 @@ mod auth;
 mod base_consist;
 mod base_station_base;
 mod binaryheap;
+mod bitmap_type;
 mod bitmath_func;
 mod bridge;
 mod bridge_map;
@@ -36,6 +37,7 @@ mod consumer;
 mod direction_func;
 mod direction_type;
 mod disaster;
+mod disaster_vehicle;
 mod economy_func;
 mod economy_type;
 mod engine_type;
@@ -62,6 +64,8 @@ mod map_func;
 mod map_type;
 mod math;
 mod movement;
+#[cfg(feature = "native-test-support")]
+mod native_test_support;
 mod network_config;
 mod newgrf;
 mod newgrf_act2;
@@ -1425,6 +1429,9 @@ mod newgrf_roadstop;
 mod rail;
 mod type_availability;
 
+mod gfx_type;
+mod house_definition;
+mod newgrf_animation_type;
 mod override_manager;
 
 mod industry_map;
@@ -1439,7 +1446,13 @@ pub mod newgrf_translation;
 
 mod station_association;
 
+mod airport_definitions;
 mod newgrf_layout;
 mod station_definitions;
 
 mod newgrf_act3;
+
+/// Opaque native industry pool shell, distinct from its Rust state owner.
+pub use industry_type::Industry as NativeIndustry;
+/// Native vehicle pool identity with its full base-type domain.
+pub use vehicle_type::VehicleID;

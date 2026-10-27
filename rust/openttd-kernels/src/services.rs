@@ -156,10 +156,7 @@ pub struct CommandServices {
 }
 
 /// Opaque native town shell. Its address identifies the shell, not the Rust owner.
-#[repr(C)]
-pub struct TownHandle {
-    _private: [u8; 0],
-}
+pub use crate::town_type::TownHandle;
 
 /// Synchronous borrowed bytes, including embedded NULs. The producing entry
 /// specifies lifetime; no native callback may retain this view after mutation.
@@ -174,19 +171,6 @@ pub struct ByteSpan {
 
 pub use crate::map_func::TileTypeAllocation;
 pub(crate) use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAccess};
-
-/// # Safety
-/// For nonzero counts, uphold `TileTypeAccess::raw`'s validity/serialization
-/// contract for this call. The callback is the original noexcept accessor or an
-/// equivalent live fixture; it keeps the native out-of-range assertion policy.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_shared_tile_type(
-    allocation: TileTypeAllocation,
-    callback: extern "C" fn(u32) -> u8,
-    tile: u32,
-) -> u8 {
-    unsafe { TileTypeAccess::raw(allocation, callback) }.read(tile)
-}
 
 /// Opaque native `Train` shell; never dereferenced in Rust.
 #[repr(C)]
@@ -374,6 +358,8 @@ pub struct Services {
     pub road_commands: extern "C" fn() -> *const crate::road_cmd::RoadCommandServices,
     /// Canonical native station command table.
     pub station_commands: extern "C" fn() -> *const crate::station_cmd::CommandServicesTable,
+    /// Canonical native station catchment table.
+    pub station_catchment: extern "C" fn() -> *const crate::station::CatchmentServices,
     /// Original docking flag.
     pub docking_tile: extern "C" fn(u32) -> bool,
     /// Canonical shared `station_gfx` service.
@@ -762,6 +748,7 @@ crate::abi::layouts! {
         station_index,
         road_commands,
         station_commands,
+        station_catchment,
         docking_tile,
         station_gfx,
         station_serve_neutral,
@@ -984,6 +971,7 @@ pub fn fixture(
         station_index: short,
         road_commands: fixture_road_commands,
         station_commands: fixture_station_commands,
+        station_catchment: fixture_station_catchment,
         docking_tile: flag,
         station_gfx: byte,
         station_serve_neutral: flag0,
@@ -1161,9 +1149,7 @@ pub struct SignalType(pub u8);
 #[derive(Clone, Copy)]
 pub struct SignalState(pub u8);
 /// Native `Axis` with its unchanged uint8 representation.
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct Axis(pub u8);
+pub use crate::direction_type::Axis;
 /// Native `TransportType` with its unchanged uint8 representation.
 #[repr(transparent)]
 #[derive(Clone, Copy)]
@@ -1441,6 +1427,10 @@ extern "C" fn fixture_water_services() -> *const crate::water::WaterServices {
 #[cfg(test)]
 extern "C" fn fixture_station_commands() -> *const crate::station_cmd::CommandServicesTable {
     panic!("unused station command table");
+}
+#[cfg(test)]
+extern "C" fn fixture_station_catchment() -> *const crate::station::CatchmentServices {
+    panic!("unused station catchment table");
 }
 
 #[cfg(test)]

@@ -28,10 +28,6 @@ static_assert(AirportBlocks{AirportBlock::AirportClosed}.base() == (uint64_t{1} 
  * The record contains opaque pointers only; Rust never views C++ object layout. */
 
 
-static const OpenTTDStation *OPENTTD_RUST_CALL Aircraft_station(uint16_t id) noexcept
-{
-	return RustStation(Station::GetIfValid(id));
-}
 
 
 
@@ -102,11 +98,6 @@ static uint16_t OPENTTD_RUST_CALL Aircraft_engine_sound(OpenTTDAircraftVehicle v
 static uint8_t OPENTTD_RUST_CALL Aircraft_airport_entry(const void * ap, uint8_t direction) noexcept
 {
 	return static_cast<const AirportFTAClass *>(ap)->entry_points[direction];
-}
-
-static uint8_t OPENTTD_RUST_CALL Aircraft_direction_towards(OpenTTDAircraftVehicle vehicle, int32_t x, int32_t y) noexcept
-{
-	return GetDirectionTowards(VehicleOf(vehicle.handle), x, y);
 }
 
 static int32_t OPENTTD_RUST_CALL Aircraft_hangar_height(const OpenTTDStation *station, const AirportSpec *spec) noexcept
@@ -361,7 +352,7 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.engine_subtype = Aircraft_engine_subtype,
 	.engine_sound = Aircraft_engine_sound,
 	.airport_entry = Aircraft_airport_entry,
-	.direction_towards = Aircraft_direction_towards,
+	.direction_towards = RustVehicleHandleInvoke<RustVehicleDirectionTowards, OpenTTDAircraftVehicle, int32_t, int32_t>,
 	.hangar_height = Aircraft_hangar_height,
 	.terminal_count = Aircraft_terminal_count,
 	.hangar_exit = Aircraft_hangar_exit,
@@ -438,7 +429,7 @@ ClosestDepot Aircraft::FindClosestDepot()
 Station *GetTargetAirportIfValid(const Aircraft *v)
 {
 	assert(v->type == VEH_AIRCRAFT);
-	Station *st = Station::GetIfValid(v->targetairport);
+	Station *st = RustStationIfValid<Station *>(v->targetairport.base());
 	return st == nullptr || RustStationAirportTile(st) == INVALID_TILE.base() ? nullptr : st;
 }
 void ReleaseAircraftAirportBlocks(const Aircraft *v) { openttd_rust_aircraft_release_blocks(&_aircraft_leaves, RustAircraftVehicle(const_cast<Aircraft *>(v))); }

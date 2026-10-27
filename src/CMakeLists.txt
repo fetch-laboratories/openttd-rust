@@ -251,6 +251,7 @@ add_files(
     landscape.cpp
     rust/company_adapter.cpp
     rust/services.cpp
+    rust/airport_definitions.cpp
     rust/station_definitions.cpp
     rust/witness.cpp
     rust/vehicle_services.cpp

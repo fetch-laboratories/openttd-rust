@@ -43,22 +43,75 @@ use crate::tile_type::{
 };
 use crate::vehicle_type::{VEH_ROAD, VEH_SHIP, VEH_TRAIN};
 use crate::witness as w;
-use std::cell::Cell;
+use std::cell::{Cell, OnceCell};
 use std::ffi::c_void;
 
-/// Entry-local lazy reuse of the immutable registry, never map or owner state.
+/// Entry-local lazy registry reuse, with map metadata only for audited entries.
 /// Native `GetRustMovementServices` is static const and never reset, even on load.
 /// Fixtures retain their tables until entry return; reentry cannot replace either table.
-#[derive(Clone)]
 pub(crate) struct CachedTable<'a> {
     shared: &'a Services,
     resolved: Cell<Option<&'a MovementServices>>,
+    audited: bool,
+    observations: OnceCell<Option<MapObservations>>,
+}
+impl Clone for CachedTable<'_> {
+    fn clone(&self) -> Self {
+        Self {
+            shared: self.shared,
+            resolved: self.resolved.clone(),
+            audited: self.audited,
+            observations: OnceCell::new(),
+        }
+    }
 }
 impl<'a> CachedTable<'a> {
     pub(crate) fn new(shared: &'a Services) -> Self {
         Self {
             shared,
             resolved: Cell::new(None),
+            audited: false,
+            observations: OnceCell::new(),
+        }
+    }
+    /// # Safety
+    /// Road entries exclude map reset/load and mutex yield through all
+    /// synchronous orders, GRF/sound, movement, crash and viewport callbacks.
+    pub(crate) unsafe fn audited(shared: &'a Services) -> Self {
+        Self {
+            audited: true,
+            ..Self::new(shared)
+        }
+    }
+    #[inline]
+    fn observed(&self) -> Context<'_, true> {
+        let s = self.get();
+        let observations = self
+            .observations
+            .get_or_init(|| {
+                let allocation = (s.tile_types?)();
+                if allocation.count == 0 {
+                    return None;
+                }
+                // SAFETY: The audited constructor bounds metadata to this entry.
+                Some(MapObservations {
+                    types: unsafe {
+                        crate::map_func::TileTypeAccess::raw(allocation, self.shared.tile_type)
+                    },
+                })
+            })
+            .as_ref();
+        Context { s, observations }
+    }
+    pub(crate) fn road_tracks(&self, v: VehicleRef, tile: u32) -> u32 {
+        if self.audited {
+            let s = self.observed();
+            let kind = (s.road_kind)(v);
+            s.track_status(tile, TRANSPORT_ROAD, u32::from(kind.0), INVALID_DIAGDIR)
+        } else {
+            let s = self.get();
+            let kind = (s.road_kind)(v);
+            s.track_status(tile, TRANSPORT_ROAD, u32::from(kind.0), INVALID_DIAGDIR)
         }
     }
     pub(crate) fn get(&self) -> &'a MovementServices {
@@ -71,6 +124,61 @@ impl<'a> CachedTable<'a> {
         table
     }
 }
+
+struct MapObservations {
+    types: crate::map_func::TileTypeAccess,
+}
+/// Keeps only allocation metadata; each original observation loads fresh scalars.
+/// `AUDITED` is false for native-callback entries, which compile without map branches.
+struct Context<'a, const AUDITED: bool> {
+    s: &'a MovementServices,
+    observations: Option<&'a MapObservations>,
+}
+impl<const AUDITED: bool> std::ops::Deref for Context<'_, AUDITED> {
+    type Target = MovementServices;
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        self.s
+    }
+}
+impl<const AUDITED: bool> Context<'_, AUDITED> {
+    #[inline]
+    fn map(&self) -> Option<&MapObservations> {
+        if AUDITED { self.observations } else { None }
+    }
+    #[inline]
+    fn tile_type(&self, tile: u32) -> u8 {
+        self.map()
+            .map_or_else(|| (self.shared().tile_type)(tile), |m| m.types.read(tile))
+    }
+    #[inline]
+    fn normal_road_bits(&self, tile: u32, kind: crate::services::RoadTramType) -> RoadBits {
+        self.map()
+            .and_then(|m| crate::road_map::get_road_bits(&m.types, tile, kind))
+            .unwrap_or_else(|| (self.shared().normal_road_bits)(tile, u8::from(kind.0)))
+    }
+    #[inline]
+    fn normal_road_status_tail(&self, tile: u32) -> NormalRoadStatusTail {
+        self.map()
+            .and_then(|m| {
+                Some(NormalRoadStatusTail {
+                    disallowed: crate::road_map::get_disallowed_road_directions(&m.types, tile)?,
+                    road_works: crate::road_map::has_road_works(&m.types, tile)?,
+                })
+            })
+            .unwrap_or_else(|| (self.s.normal_road_status_tail)(tile))
+    }
+    #[inline]
+    fn has_tile_road_type(&self, tile: u32, kind: crate::services::RoadTramType) -> bool {
+        self.map()
+            .and_then(|m| crate::road_map::has_tile_road_type(&m.types, self.shared(), tile, kind))
+            .unwrap_or_else(|| (self.s.has_tile_road_type)(tile, kind))
+    }
+}
+
+#[cfg(feature = "native-test-support")]
+#[path = "native_test_support/movement.rs"]
+pub(crate) mod native_test_support;
 
 #[repr(C)]
 pub struct NormalRoadStatusTail {
@@ -119,6 +227,7 @@ pub struct FirstSpeed {
 }
 #[repr(C)]
 pub struct MovementServices {
+    pub tile_types: Option<extern "C" fn() -> crate::map_func::TileTypeAllocation>,
     pub shared: *const Services,
     pub orders: *const crate::orders::Leaves,
     pub rail: *const RailServices,
@@ -185,9 +294,11 @@ impl MovementServices {
         fn vehicle -> crate::vehicle::VehicleServices;
         fn road_vehicle -> crate::road::Leaves;
     }
+}
+impl<const AUDITED: bool> Context<'_, AUDITED> {
     fn foundation(&self, tile: u32, slope: u8) -> u8 {
         w::hit(w::MOVE_FOUNDATION);
-        let kind = (self.shared().tile_type)(tile);
+        let kind = self.tile_type(tile);
         match kind {
             MP_RAILWAY => {
                 if (self.plain_rail)(tile) {
@@ -332,6 +443,33 @@ impl MovementServices {
         )
     }
 }
+impl MovementServices {
+    #[inline]
+    fn context(&self) -> Context<'_, false> {
+        Context {
+            s: self,
+            observations: None,
+        }
+    }
+    #[inline]
+    pub(crate) fn pixel_z_at(&self, x: i32, y: i32, ground: bool) -> i32 {
+        self.context().pixel_z_at(x, y, ground)
+    }
+    #[inline]
+    fn pixel_z<const GROUND: bool>(&self, tile: u32, x: u32, y: u32, kind: u8) -> i32 {
+        self.context().pixel_z::<GROUND>(tile, x, y, kind)
+    }
+    #[inline]
+    fn foundation(&self, tile: u32, slope: u8) -> u8 {
+        self.context().foundation(tile, slope)
+    }
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn track_status(&self, tile: u32, mode: u8, sub: u32, side: u8) -> u32 {
+        self.context().track_status(tile, mode, sub, side)
+    }
+}
+
 /// # Safety
 /// Immutable native table; map remains live/serialized for this synchronous call.
 #[unsafe(no_mangle)]
@@ -548,7 +686,7 @@ use crate::track_type::{
     TRACKDIR_BIT_Y_NW, TRACKDIR_BIT_Y_SE,
 };
 use crate::transport_type::{TRANSPORT_RAIL, TRANSPORT_ROAD, TRANSPORT_WATER};
-impl MovementServices {
+impl<const AUDITED: bool> Context<'_, AUDITED> {
     fn water_edges(&self, tile: u32, mut bits: u8) -> u8 {
         let map = self.shared().map();
         if map.tile_x(tile) == 0 {
@@ -568,7 +706,7 @@ impl MovementServices {
     pub(crate) fn track_status(&self, tile: u32, mode: u8, sub: u32, side: u8) -> u32 {
         let mut bits = TRACK_BIT_NONE;
         let mut red = 0;
-        match (self.shared().tile_type)(tile) {
+        match self.tile_type(tile) {
             MP_RAILWAY => {
                 w::hit(w::MOVE_TRACK_RAIL);
                 if mode == TRANSPORT_WATER
@@ -644,12 +782,14 @@ impl MovementServices {
                     }
                     TRANSPORT_ROAD => {
                         let tram = sub != 0;
-                        if !(self.has_tile_road_type)(tile, crate::services::RoadTramType(tram)) {
+                        if !self.has_tile_road_type(tile, crate::services::RoadTramType(tram)) {
                             return 0;
                         }
                         match (self.shared().road_tile_kind)(tile).0 {
                             ROAD_TILE_NORMAL => {
-                                let road = (self.shared().normal_road_bits)(tile, u8::from(tram)).0;
+                                let road = self
+                                    .normal_road_bits(tile, crate::services::RoadTramType(tram))
+                                    .0;
                                 if side != INVALID_DIAGDIR
                                     && crate::road_func::diag_dir_to_road_bits(side, |ok| {
                                         (self.native_assert)(ok);
@@ -661,7 +801,7 @@ impl MovementServices {
                                 let (disallowed, road_works) = if tram {
                                     (0, (self.shared().has_road_works)(tile))
                                 } else {
-                                    let tail = (self.normal_road_status_tail)(tile);
+                                    let tail = self.normal_road_status_tail(tile);
                                     (tail.disallowed, tail.road_works)
                                 };
                                 let multiplier = [0x101, 0x100, 1, 0][usize::from(disallowed)];
@@ -772,10 +912,9 @@ impl MovementServices {
                     }
                     TRANSPORT_ROAD => {
                         if (self.shared().is_any_road_stop)(tile) {
-                            if !(self.has_tile_road_type)(
-                                tile,
-                                crate::services::RoadTramType(sub != 0),
-                            ) {
+                            if !self
+                                .has_tile_road_type(tile, crate::services::RoadTramType(sub != 0))
+                            {
                                 return 0;
                             }
                             if (self.shared().is_bay_stop)(tile) {
@@ -853,10 +992,7 @@ impl MovementServices {
                 let transport = (self.shared().tunnel_transport)(tile);
                 if transport != mode
                     || (transport == TRANSPORT_ROAD
-                        && !(self.has_tile_road_type)(
-                            tile,
-                            crate::services::RoadTramType(sub != 0),
-                        ))
+                        && !self.has_tile_road_type(tile, crate::services::RoadTramType(sub != 0)))
                 {
                     return 0;
                 }
@@ -1402,10 +1538,6 @@ impl MovementServices {
             self.track_status(tile, TRANSPORT_WATER, 0, side),
         ))
     }
-    pub(crate) fn road_tracks(&self, v: VehicleRef, tile: u32) -> u32 {
-        let kind = (self.road_kind)(v);
-        self.track_status(tile, TRANSPORT_ROAD, u32::from(kind.0), INVALID_DIAGDIR)
-    }
 }
 
 pub(crate) fn depot_ticks(shared: &Services, v: crate::train::Handle) -> i32 {
@@ -1481,6 +1613,7 @@ crate::abi::layouts! {
         road_works,
     };
     "OpenTTDMovementServices" ["landscape"] => MovementServices {
+        tile_types,
         shared,
         orders,
         rail,

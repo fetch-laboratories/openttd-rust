@@ -16,6 +16,7 @@
 #include "town_cmd.h"
 #include "townname_func.h"
 #include "house.h"
+#include "tile_cmd.h"
 #include "genworld.h"
 #include "strings_func.h"
 #include "error.h"
@@ -27,6 +28,10 @@
 #include "economy_func.h"
 #include "town_map.h"
 #include "newgrf_spritegroup.h"
+#include "newgrf_house.h"
+#include "newgrf_cargo.h"
+#include "newgrf_config.h"
+#include "newgrf_badge.h"
 #include "animated_tile_func.h"
 #include "station_base.h"
 #include "station_kdtree.h"
@@ -543,9 +548,149 @@ static bool CommandsScenario(std::span<std::string_view> args)
 }
 #include "saveload/saveload.cpp"
 #include "storage-console.inc"
+/* File-loaded house definitions exercise production parsing, publication and growth. */
+static constexpr uint32_t HOUSE_DEFINITION_GRF = 0x37373448; // H477 in file byte order.
+static void HouseDefinitionNeed(bool value, const char *name)
+{
+	fmt::print(stderr, "TOWN definition {} {}\n", name, value);
+	if (!value) std::abort();
+}
+static const HouseSpec *DefinitionSpec(uint16_t local, uint32_t grfid = HOUSE_DEFINITION_GRF)
+{
+	HouseID id = _house_mngr.GetID(local, grfid);
+	HouseDefinitionNeed(id != INVALID_HOUSE_ID, "mapped");
+	return HouseSpec::Get(id);
+}
+static void InspectHouseDefinitions()
+{
+	const auto *north = DefinitionSpec(0), *part = DefinitionSpec(1), *properties = DefinitionSpec(2);
+	HouseDefinitionNeed(north->enabled && part->enabled && north->Index() + 1 == part->Index() && north->building_flags == BuildingFlags{BuildingFlag::Size1x2}, "multitile");
+	HouseDefinitionNeed(north->population == 41 && part->population == 0 && part->building_availability.None(), "population-parts");
+	HouseDefinitionNeed(north->grf_prop.subst_id == 7 && north->min_year == CalendarTime::MIN_YEAR && north->max_year == CalendarTime::MAX_YEAR, "substitute-early");
+	HouseDefinitionNeed(HouseSpec::Get(7)->grf_prop.override_id == north->Index() && HouseSpec::Get(0)->grf_prop.override_id == INVALID_HOUSE_ID, "override-first");
+	for (uint16_t local : {3, 5, 7, 9}) HouseDefinitionNeed(_house_mngr.GetID(local, HOUSE_DEFINITION_GRF) == INVALID_HOUSE_ID, "invalid-local");
+	HouseDefinitionNeed(!DefinitionSpec(12)->enabled && DefinitionSpec(12)->building_flags.None() && DefinitionSpec(13)->enabled, "global-gap-flags");
+	HouseDefinitionNeed(DefinitionSpec(10)->cargo_acceptance[2] == 0 && DefinitionSpec(10)->accepts_cargo[2] == INVALID_CARGO && DefinitionSpec(10)->min_year == CalendarTime::MAX_YEAR && DefinitionSpec(10)->max_year == TimerGameCalendar::Year{2070}, "signed-cargo-years");
+	HouseDefinitionNeed(properties->population == 73 && properties->mail_generation == 29 && properties->callback_mask.base() == 0x1234 && properties->processing_time == 63 && properties->animation.speed == 2, "properties");
+	HouseDefinitionNeed(properties->min_year == 2345 && properties->max_year == CalendarTime::MAX_YEAR && properties->watched_cargoes == (CargoTypes{1} << GetCargoTypeByLabel(CT_PASSENGERS) | CargoTypes{1} << GetCargoTypeByLabel(CT_MAIL)), "year-watch");
+	HouseDefinitionNeed(properties->cargo_acceptance[0] == 7 && properties->accepts_cargo[0] == GetCargoTypeByLabel(CT_PASSENGERS) && properties->cargo_acceptance[1] == 9 && properties->accepts_cargo[2] == INVALID_CARGO && properties->cargo_acceptance[2] == 0, "variable-cargo");
+	for (auto [grfid, name] : {std::pair{0x37373442U, "partial-colours"}, std::pair{0x37373443U, "partial-cargo"}}) {
+		const auto *config = GetGRFConfig(grfid);
+		HouseDefinitionNeed(config != nullptr && config->status == GCS_DISABLED && config->errors.size() == 1 && config->errors.front().message == STR_NEWGRF_ERROR_READ_BOUNDS, "read-error");
+		const auto *spec = DefinitionSpec(0, grfid);
+		if (grfid == 0x37373442U) HouseDefinitionNeed(spec->population == 77 && spec->random_colour[0] == COLOUR_PALE_GREEN && spec->random_colour[1] == COLOUR_PINK && spec->random_colour[2] == COLOUR_ORANGE && spec->random_colour[3] == COLOUR_GREEN, name);
+		else HouseDefinitionNeed(spec->accepts_cargo[0] == GetCargoTypeByLabel(CT_MAIL) && spec->cargo_acceptance[0] == 8 && spec->accepts_cargo_label[0] == CT_PASSENGERS, name);
+	}
+	const auto *badge_spec = DefinitionSpec(0, 0x37373444U);
+	const auto *partial = GetBadgeByLabel("house/partial"), *keep = GetBadgeByLabel("house/keep");
+	HouseDefinitionNeed(GetGRFConfig(0x37373444U)->status == GCS_DISABLED && badge_spec->badges.size() == 1 && badge_spec->badges.front() == keep->index && partial->features.Test(GSF_HOUSES), "partial-badge-seen");
+	const auto *oversized = GetGRFConfig(0x3737344cU);
+	HouseDefinitionNeed(oversized->status == GCS_DISABLED && oversized->errors.front().message == STR_NEWGRF_ERROR_LIST_PROPERTY_TOO_LONG && oversized->errors.front().param_value[1] == 0x23 && DefinitionSpec(0, 0x3737344cU)->population == 53, "list-limit");
+	const auto *invalid_id = GetGRFConfig(0x37373449U);
+	HouseDefinitionNeed(invalid_id->status == GCS_DISABLED && invalid_id->errors.size() == 1 && invalid_id->errors.front().message == STR_NEWGRF_ERROR_INVALID_ID && DefinitionSpec(0, 0x37373449U)->population == 54, "invalid-id");
+	for (HouseID id = 0; id < HouseSpec::Specs().size(); ++id) {
+		const auto *spec = HouseSpec::Get(id);
+		fmt::print(stderr, "TOWN definition-state {} {} {} {} {} {} {} {} {}\n", id, spec->enabled, spec->building_flags.base(), spec->building_availability.base(), spec->population, spec->min_year.base(), spec->max_year.base(), spec->grf_prop.override_id, spec->watched_cargoes);
+		for (uint i = 0; i < HOUSE_NUM_ACCEPTS; ++i) fmt::print(stderr, "TOWN definition-cargo {} {} {} {}\n", id, i, spec->accepts_cargo[i], spec->cargo_acceptance[i]);
+	}
+}
+static size_t OccupiedDefinitionTiles()
+{
+	size_t count = 0;
+	for (TileIndex tile{}; tile < Map::Size(); ++tile) {
+		if (!IsTileType(tile, MP_HOUSE)) continue;
+		HouseID id = GetHouseType(tile);
+		if (id != _house_mngr.GetID(0, HOUSE_DEFINITION_GRF) && id != _house_mngr.GetID(1, HOUSE_DEFINITION_GRF)) continue;
+		++count;
+		if (count == 1) {
+			auto check_mapping = [&] {
+				HouseResolverObject resolver(id, tile, Town::GetByTile(tile));
+				bool available = true;
+				HouseDefinitionNeed(resolver.house_scope.GetVariable(0x67, 0, available) == HOUSE_DEFINITION_GRF && available, "resolver-grfid");
+				const uint32_t count = resolver.house_scope.GetVariable(0x61, HouseSpec::Get(id)->grf_prop.local_id, available);
+				HouseDefinitionNeed((count & 0xFF) == std::min<uint>(255, Town::GetByTile(tile)->cache.building_counts.id_count[id]) && (count & 0xFF) > 0 && available, "resolver-local-id");
+			};
+			check_mapping();
+			{
+				HouseOverrideManager temporary(NEW_HOUSE_OFFSET, NUM_HOUSES, INVALID_HOUSE_ID);
+				temporary.mappings[id] = {.grfid = 0xBAD, .entity_id = 0, .substitute_id = 0};
+				check_mapping();
+				HouseOverrideManager copied = temporary;
+				check_mapping();
+				copied = _house_mngr;
+				check_mapping();
+			}
+			check_mapping();
+		}
+		CargoArray accepted{}, produced{}; CargoTypes always = 0;
+		AddAcceptedCargo(tile, accepted, &always); AddProducedCargo(tile, produced);
+		for (CargoType cargo = 0; cargo < NUM_CARGO; ++cargo) {
+			if (accepted[cargo] != 0 || produced[cargo] != 0) fmt::print(stderr, "TOWN definition-tile-cargo {} {} {} {} {}\n", tile.base(), cargo, accepted[cargo], produced[cargo], always);
+		}
+		fmt::print(stderr, "TOWN definition-tile {} {} {} {}\n", tile.base(), id, GetTownIndex(tile).base(), GetHouseBuildingStage(tile));
+	}
+	return count;
+}
+static bool HouseDefinitionsScenario(std::span<std::string_view> args)
+{
+	if (args[1] == "definitions-inspect") {
+		InspectHouseDefinitions();
+		HouseDefinitionNeed(OccupiedDefinitionTiles() > 0, "occupied-reload");
+		fmt::print(stderr, "TOWN definition-reloaded true\n");
+		return true;
+	}
+	if (args.size() < 4) return false;
+	SetRandomSeed(0x47700001);
+	_grfconfig.clear();
+	for (const char *name : {"houses", "conflict", "colours", "cargo", "badges", "oversized", "invalid-id"}) {
+		auto config = std::make_unique<GRFConfig>(std::string(args[2]) + "/" + name + ".grf");
+		HouseDefinitionNeed(FillGRFDetails(*config, false, NO_DIRECTORY), "file-scan");
+		config->flags.Reset(GRFConfigFlag::InitOnly);
+		_grfconfig.push_back(std::move(config));
+	}
+	_house_mngr.mappings[124] = {.grfid = HOUSE_DEFINITION_GRF, .entity_id = 12, .substitute_id = 7};
+	_house_mngr.mappings[126] = {.grfid = HOUSE_DEFINITION_GRF, .entity_id = 13, .substitute_id = 8};
+	ReloadNewGRFData();
+	InspectHouseDefinitions();
+	Backup<GameMode> mode(_game_mode, GM_EDITOR);
+	Backup<CompanyID> owner(_current_company, OWNER_DEITY);
+	Backup<bool> roads(_settings_game.economy.allow_town_roads, true);
+	auto [cost, unused, town_id] = CmdFoundTown(DoCommandFlag::Execute, Site(), TSZ_LARGE, true, TL_2X2_GRID, false, 0, "Definition town");
+	HouseDefinitionNeed(cost.Succeeded(), "founding");
+	HouseDefinitionNeed(OccupiedDefinitionTiles() > 0, "natural-placement");
+	Town *town = Town::Get(town_id);
+	uint population = town->cache.population;
+	HouseDefinitionNeed(CmdExpandTown(DoCommandFlag::Execute, town_id, 128, {TownExpandMode::Buildings, TownExpandMode::Roads}).Succeeded(), "expand-command");
+	HouseDefinitionNeed(town->cache.population > population, "growth");
+	fmt::print(stderr, "TOWN definition-population {} {}\n", population, town->cache.population);
+	HouseID before = _house_mngr.GetID(0, HOUSE_DEFINITION_GRF);
+	ResetNewGRFData();
+	HouseDefinitionNeed(_house_mngr.GetID(0, HOUSE_DEFINITION_GRF) == before && HouseSpec::Specs().size() == NEW_HOUSE_OFFSET, "reset-keeps-hids");
+	ReloadNewGRFData();
+	InspectHouseDefinitions();
+	HouseDefinitionNeed(_house_mngr.GetID(0, HOUSE_DEFINITION_GRF) == before && OccupiedDefinitionTiles() > 0, "reload-keeps-hids");
+	mode.Restore(); owner.Restore(); roads.Restore();
+	fmt::print(stderr, "TOWN definition-rng {} {} {} {}\n", _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]);
+	HouseDefinitionNeed(SaveOrLoad(std::string(args[3]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false) == SL_OK, "save");
+	std::vector<std::pair<TileIndex, HouseID>> substitutes;
+	for (TileIndex tile{}; tile < Map::Size(); ++tile) {
+		if (!IsTileType(tile, MP_HOUSE)) continue;
+		HouseID id = GetCleanHouseType(tile);
+		if (_house_mngr.GetGRFID(id) == HOUSE_DEFINITION_GRF) substitutes.emplace_back(tile, _house_mngr.GetSubstituteID(id));
+	}
+	std::erase_if(_grfconfig, [](const auto &config) { return config->ident.grfid == HOUSE_DEFINITION_GRF; });
+	ReloadNewGRFData();
+	HouseDefinitionNeed(!substitutes.empty() && _house_mngr.GetID(0, HOUSE_DEFINITION_GRF) == before, "missing-keeps-hids");
+	/* GetHouseType applies any remaining GRF override to the stored substitute. */
+	for (auto [tile, substitute] : substitutes) HouseDefinitionNeed(IsTileType(tile, MP_HOUSE) && GetCleanHouseType(tile) == substitute, "missing-substitute");
+	fmt::print(stderr, "TOWN definition-missing-rng {} {} {} {}\n", _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]);
+	fmt::print(stderr, "TOWN definition-complete true\n");
+	return true;
+}
 static bool TownsScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
+	if (args[1].starts_with("definitions")) return HouseDefinitionsScenario(args);
 	if (args[1].starts_with("storage")) return StorageScenario(args);
 	if (args[1] == "authority" || args[1] == "authority-inspect") return CommandsScenario(args);
 	if (args[1] == "inspect") {

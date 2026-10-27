@@ -103,7 +103,6 @@ static OpenTTDLandscapeLoopServices services{
 	.town = nullptr,
 	.station_loop = LandscapeStationLoop,
 	.objects = &objects,
-	.object_frame = nullptr,
 };
 static void RustRun()
 {

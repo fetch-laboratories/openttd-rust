@@ -22,6 +22,7 @@
 #include "timer/timer_game_economy.h"
 #ifdef WITH_RUST
 #	include "rust/industry_adapter.hpp"
+#	include "rust/station_catchment_ffi.h"
 #endif
 
 
@@ -189,7 +190,11 @@ struct Industry : IndustryPool::PoolItem<&_industry_pool> {
 #endif ///< flags overriding standard behaviours
 
 	PartsOfSubsidy part_of_subsidy{}; ///< NOSAVE: is this industry a source/destination of a subsidy?
+#ifdef WITH_RUST
+	RustStationList<Station> stations_near{openttd_rust_industry_stations_near(production_owner.get())};
+#else
 	StationList stations_near{}; ///< NOSAVE: List of nearby stations.
+#endif
 	mutable std::string cached_name{}; ///< NOSAVE: Cache of the resolved name of the industry
 
 #ifdef WITH_RUST

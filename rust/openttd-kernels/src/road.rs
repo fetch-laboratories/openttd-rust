@@ -629,7 +629,7 @@ impl Game<'_> {
                 vs: &*l.vehicle,
                 gs: &*l.ground,
                 ss: &*l.shared,
-                movement: crate::movement::CachedTable::new(&*l.shared),
+                movement: crate::movement::CachedTable::audited(&*l.shared),
                 acceleration_model,
                 road_side,
                 queue,
@@ -795,7 +795,7 @@ impl Game<'_> {
         if !service!(self.l.has_road)(v.v, tile) {
             return true;
         }
-        let ts = self.movement.get().road_tracks(v.v, tile);
+        let ts = self.movement.road_tracks(v.v, tile);
         let trackdirs = ts & 0x3f3f;
         let red = (ts >> 16) & 0x3f3f;
         let trackbits = (trackdirs | (trackdirs >> 8)) & 0x3f;
@@ -1116,7 +1116,7 @@ impl Game<'_> {
     }
     /// `RoadFindPathToDest`.
     fn path(&self, v: Part, s: &Step, tile: u32, entry: u8) -> u8 {
-        let ts = self.movement.get().road_tracks(v.v, tile);
+        let ts = self.movement.road_tracks(v.v, tile);
         let red = (ts >> 16) & 0x3f3f;
         let mut trackdirs = ts & 0x3f3f;
         let p = service!(self.l.path_read)(v.v);
