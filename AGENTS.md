@@ -151,7 +151,9 @@ fork; the remaining upstream documentation explains behavior and architecture.
   running. They run only during sessions (a run a session end interrupts
   restarts at the next session start on the current tip); wind-down rules are
   unchanged. Root reads a finished report before the next integration. Deep
-  runs yield to speed-pass timed collection like other harness games. A failure
+  runs and speed-pass timed collection never overlap: both take one exclusive
+  lock, so a deep run skips while a collection runs and a collection waits for a
+  deep run to finish. A failure
   does not block integration by itself: root bisects over the integrations since the last clean
   deep check, and a divergence introduced there is a code regression under the
   rollback rule, while an older one becomes a fidelity item on #156 or a new

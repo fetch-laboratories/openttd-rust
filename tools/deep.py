@@ -23,7 +23,9 @@ from typing import TypedDict
 
 from validation_execution import run_logged
 
-# A game stopped by a speed pass's hold still counts wall time against its timeout.
+# One exclusive clone-wide lock: a deep run and a speed pass's timed collection never overlap.
+LOCK_NAME = "deep.lock"
+# Idle-priority games run slowly under load.
 GAME_TIMEOUT = 7200
 SHOWN_DIFFERENCES = 3
 
@@ -140,7 +142,7 @@ def run_deep(
     commit = git(root, "rev-parse", "HEAD")
     if git(root, "status", "--short"):
         sys.exit("deep requires a clean checkout: the report names its commit")
-    with single_run(common_local / "deep.lock") as acquired:
+    with single_run(common_local / LOCK_NAME) as acquired:
         if not acquired:
             print("deep: another deep run is active; skipped", flush=True)
             return 0

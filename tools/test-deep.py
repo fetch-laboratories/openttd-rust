@@ -8,11 +8,14 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from collections.abc import Sequence
 from pathlib import Path
+from types import SimpleNamespace
 
 import deep
+from simulation import speed
 
 # Stands in for `migration.py simulate --soak`: records its own priority, writes a
 # simulate-style report with one failing scenario and prints the `Report:` line.
@@ -106,13 +109,40 @@ class DeepTests(unittest.TestCase):
             self.assertIn("idle", priority["ionice"])
 
     def test_active_run_is_skipped_without_a_report(self) -> None:
-        with deep.single_run(self.common / "deep.lock") as held:
+        with deep.single_run(self.common / deep.LOCK_NAME) as held:
             self.assertTrue(held)
             code, output = self.run_deep()
         self.assertEqual(code, 0)
         self.assertIn("skipped", output)
         self.assertFalse((self.local / "deep").exists())
         self.assertFalse((self.drop / "priority.json").exists())
+
+    def test_deep_skips_while_a_speed_collection_holds_the_lock(self) -> None:
+        driver = SimpleNamespace(COMMON_LOCAL=self.common)
+        with speed.collection_lock(driver):
+            code, output = self.run_deep()
+        self.assertEqual(code, 0)
+        self.assertIn("skipped", output)
+        self.assertFalse((self.local / "deep").exists())
+        self.assertFalse((self.drop / "priority.json").exists())
+
+    def test_speed_collection_waits_while_deep_runs(self) -> None:
+        driver = SimpleNamespace(COMMON_LOCAL=self.common)
+        started, entered = threading.Event(), threading.Event()
+
+        def collect() -> None:
+            started.set()
+            with speed.collection_lock(driver):
+                entered.set()
+
+        waiter = threading.Thread(target=collect)
+        with deep.single_run(self.common / deep.LOCK_NAME) as held:
+            self.assertTrue(held)
+            waiter.start()
+            self.assertTrue(started.wait(5))
+            self.assertFalse(entered.wait(0.5))
+        self.assertTrue(entered.wait(5))
+        waiter.join()
 
     def test_clean_matching_member_passes(self) -> None:
         code, _ = self.run_deep(["pass"])
@@ -136,7 +166,7 @@ class DeepTests(unittest.TestCase):
 
     def test_lock_is_released_after_a_run(self) -> None:
         self.run_deep()
-        with deep.single_run(self.common / "deep.lock") as free:
+        with deep.single_run(self.common / deep.LOCK_NAME) as free:
             self.assertTrue(free)
 
     def test_dirty_checkout_is_refused(self) -> None:
