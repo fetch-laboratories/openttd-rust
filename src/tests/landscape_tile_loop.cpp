@@ -16,6 +16,7 @@
 #include "../rust/generation_sea_set.hpp"
 #include "abi_layout.hpp"
 #include "../tile_map.h"
+#include "../road_type.h"
 #include "../rust/landscape_loop_ffi.h"
 #include "landscape_protocol.hpp"
 #include "ground_protocol.hpp"

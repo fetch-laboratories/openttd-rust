@@ -171,15 +171,13 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
         _ => {}
     }
     let kind = map.read(tile);
-    crate::movement::map_read_probe(allocation, s, tile, mutate)
-        && (!allocation.assertions
-            || kind == 0
-            || crate::clear_map::is_snow_tile(&map, tile).is_none())
+    (!allocation.assertions || kind == 0 || crate::clear_map::is_snow_tile(&map, tile).is_none())
         && (!allocation.assertions
             || kind == 4
             || crate::tree_map::get_tree_type(&map, tile).is_none())
         && (!allocation.assertions || kind == 6 || crate::water_map::is_coast(&map, tile).is_none())
         && (allocation.assertions || crate::clear_map::is_snow_tile(&map, tile).is_some())
+        && crate::movement::map_read_probe(allocation, s, tile, mutate)
 }
 
 /// `IsTileOwner`.
