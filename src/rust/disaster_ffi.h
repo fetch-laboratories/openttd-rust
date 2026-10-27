@@ -17,26 +17,18 @@ extern "C" {
 #endif
 typedef struct { uint32_t image_override, target; uint16_t state; uint8_t flags; } OpenTTDDisasterState;
 typedef struct { uint32_t kind, id, other; int64_t a, b, c, d; } OpenTTDDisasterAction;
-typedef struct OpenTTDDisasterRun OpenTTDDisasterRun;
 struct OpenTTDOccupancyCommands;
 struct OpenTTDVehicle;
 typedef struct {
 	const struct OpenTTDOccupancyCommands *commands;
 	struct OpenTTDVehicle *(OPENTTD_RUST_CALL *vehicle)(void *, uint32_t) noexcept;
 } OpenTTDDisasterOccupancy;
-/* Rust state follows its shell's lifetime; scalar serialization addresses are stable until
- * destruction. Keep the shared service and occupancy tables live and immutable through run
- * destruction, including suspended actions. Only delete (2), RoadVehicle::Crash (14) and
- * CMD_LANDSCAPE_CLEAR (17) return actions, for lifetime, NewGRF and nested release hooks; C++
- * completes them and owns continuation cleanup on exceptions.
- * Read/write leaves cannot reenter; occupancy pointees stay live and immutable through suspension
- * and nested World clones. Shared flight helpers access flags only within their call. */
+/* Rust state follows its shell's lifetime. Services are synchronous and noexcept;
+ * private scalar accesses end before callbacks, including deletion and reentry. */
 OpenTTDDisasterState *OPENTTD_RUST_CALL openttd_rust_disaster_state_create(uint32_t);
 void OPENTTD_RUST_CALL openttd_rust_disaster_state_destroy(OpenTTDDisasterState *);
 uint16_t *OPENTTD_RUST_CALL openttd_rust_disaster_delay(void);
-OpenTTDDisasterRun *OPENTTD_RUST_CALL openttd_rust_disaster_create(uint32_t, uint32_t, int64_t, int64_t, int64_t, int64_t, void *, void (OPENTTD_RUST_CALL *)(void *, uint32_t, uint32_t, int64_t, int64_t, int64_t *), void (OPENTTD_RUST_CALL *)(void *, uint32_t, uint32_t, int64_t), const OpenTTDSharedServices *, const OpenTTDDisasterOccupancy *, int64_t (OPENTTD_RUST_CALL *)(void *, const OpenTTDDisasterAction *));
-OpenTTDDisasterAction OPENTTD_RUST_CALL openttd_rust_disaster_advance(OpenTTDDisasterRun *, int64_t);
-void OPENTTD_RUST_CALL openttd_rust_disaster_destroy(OpenTTDDisasterRun *);
+int64_t OPENTTD_RUST_CALL openttd_rust_disaster_run(uint32_t, uint32_t, int64_t, int64_t, int64_t, int64_t, void *, void (OPENTTD_RUST_CALL *)(void *, uint32_t, uint32_t, int64_t, int64_t, int64_t *), void (OPENTTD_RUST_CALL *)(void *, uint32_t, uint32_t, int64_t), const OpenTTDSharedServices *, const OpenTTDDisasterOccupancy *, int64_t (OPENTTD_RUST_CALL *)(void *, const OpenTTDDisasterAction *) noexcept);
 #ifdef __cplusplus
 }
 #endif

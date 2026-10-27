@@ -121,6 +121,13 @@ static int64_t OPENTTD_RUST_CALL DisasterService(void *, const OpenTTDDisasterAc
 	const auto &step = *request;
 	int64_t response = 0;
 	switch (step.kind) {
+		case 2: delete Vehicle::Get(step.id); break;
+		case 14: response = RoadVehicle::Get(step.id)->Crash(); break;
+		case 17: {
+			Backup<CompanyID> cur_company(_current_company, step.other == 0 ? OWNER_WATER : OWNER_NONE);
+			Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, TileIndex{step.id});
+			cur_company.Restore(); break;
+		}
 		case 5: response = GetAircraftFlightLevel(DisasterVehicle::Get(step.id)); break;
 		case 6: { int z; GetAircraftFlightLevelBounds(DisasterVehicle::Get(step.id), &z, nullptr); response = z; break; }
 		case 9: SndPlayVehicleFx(SND_12_EXPLOSION, Vehicle::Get(step.id)); break;
@@ -167,23 +174,7 @@ static OpenTTDVehicle *OPENTTD_RUST_CALL DisasterVehicleShell(void *, uint32_t i
 static int64_t RunDisaster(uint32_t operation, uint32_t id = 0, int64_t a = 0, int64_t b = 0, int64_t c = 0, int64_t d = 0)
 {
 	const OpenTTDDisasterOccupancy occupancy{.commands = GetRustOccupancyCommands(), .vehicle = DisasterVehicleShell};
-	std::unique_ptr<OpenTTDDisasterRun, decltype(&openttd_rust_disaster_destroy)> run{
-		openttd_rust_disaster_create(operation, id, a, b, c, d, nullptr, DisasterRead, DisasterWrite, &GetRustSharedServices(), &occupancy, DisasterService), openttd_rust_disaster_destroy};
-	int64_t response = 0;
-	for (;;) {
-		auto step = openttd_rust_disaster_advance(run.get(), response);
-		response = 0;
-		switch (step.kind) {
-			case 0: return step.a;
-			case 2: delete Vehicle::Get(step.id); break;
-			case 14: response = RoadVehicle::Get(step.id)->Crash(); break;
-			case 17: {
-				Backup<CompanyID> cur_company(_current_company, step.other == 0 ? OWNER_WATER : OWNER_NONE);
-				Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, TileIndex{step.id});
-				cur_company.Restore(); break;
-			}
-		}
-	}
+	return openttd_rust_disaster_run(operation, id, a, b, c, d, nullptr, DisasterRead, DisasterWrite, &GetRustSharedServices(), &occupancy, DisasterService);
 }
 
 DisasterVehicle::DisasterVehicle(int x, int y, Direction direction, DisasterSubType subtype, VehicleID target) :

@@ -22,10 +22,7 @@ use crate::services::Services;
 use crate::tile_type::INVALID_TILE;
 use std::cell::Cell;
 use std::ffi::c_void;
-use std::future::Future;
-use std::pin::Pin;
 use std::rc::Rc;
-use std::task::{Context as PollContext, Poll, Waker};
 
 #[repr(C)]
 pub struct State {
@@ -47,25 +44,8 @@ pub struct Action {
 }
 static mut DELAY: u16 = 0;
 struct Channel {
-    action: Cell<Action>,
-    response: Cell<i64>,
     vehicle: Cell<Option<(u32, [i64; 24])>>,
     world: Cell<Option<[i64; 24]>>,
-}
-struct Request {
-    channel: Rc<Channel>,
-    action: Option<Action>,
-}
-impl Future for Request {
-    type Output = i64;
-    fn poll(mut self: Pin<&mut Self>, _: &mut PollContext<'_>) -> Poll<i64> {
-        if let Some(action) = self.action.take() {
-            self.channel.action.set(action);
-            Poll::Pending
-        } else {
-            Poll::Ready(self.channel.response.get())
-        }
-    }
 }
 #[derive(Clone)]
 struct World<'a> {
@@ -236,20 +216,8 @@ impl World<'_> {
                 .tile_y(tile),
         )
     }
-    async fn action(&self, kind: u32, id: u32, other: u32, a: i64, b: i64, c: i64, d: i64) -> i64 {
-        Request {
-            channel: self.channel.clone(),
-            action: Some(Action {
-                kind,
-                id,
-                other,
-                a,
-                b,
-                c,
-                d,
-            }),
-        }
-        .await
+    fn action(&self, kind: u32, id: u32, other: u32, a: i64, b: i64, c: i64, d: i64) -> i64 {
+        self.service(kind, id, other, a, b, c, d)
     }
     fn service(&self, kind: u32, id: u32, other: u32, a: i64, b: i64, c: i64, d: i64) -> i64 {
         // No world/private owner reference survives the synchronous wrapper. The
@@ -281,8 +249,8 @@ impl World<'_> {
     fn chance(&self, b: u32) -> bool {
         chance16_i(1, b, self.random())
     }
-    async fn delete(&self, id: u32) -> i64 {
-        self.action(2, id, 0, 0, 0, 0, 0).await;
+    fn delete(&self, id: u32) -> i64 {
+        self.action(2, id, 0, 0, 0, 0, 0);
         0
     }
     fn flight(&self, id: u32) -> i64 {
@@ -398,7 +366,7 @@ impl World<'_> {
         self.set(id, NEXT, i64::from(next));
     }
 
-    async fn clear(&self, tile: u32) {
+    fn clear(&self, tile: u32) {
         // Keep full native result construction, error observation and destruction;
         // the occupancy traversal itself never returns through a native facade.
         let failed = unsafe {
@@ -416,11 +384,11 @@ impl World<'_> {
         let t = self.tile(tile);
         match t[1] {
             1 if self.read(15, t[2] as u32, 0, 0)[0] != 0 && t[4] == 0 => {
-                self.action(17, tile, 0, 0, 0, 0, 0).await;
+                self.action(17, tile, 0, 0, 0, 0, 0);
                 self.service(18, 0, 0, 0, 0, 0, 0);
             }
             3 => {
-                self.action(17, tile, 1, 0, 0, 0, 0).await;
+                self.action(17, tile, 1, 0, 0, 0, 0);
             }
             0 | 4 => {
                 crate::ground::clear_square(tile, self.services);
@@ -449,7 +417,7 @@ fn distance(ax: i64, ay: i64, bx: i64, by: i64) -> i64 {
     i64::from((delta(ax, bx) as i32).wrapping_add(delta(ay, by) as i32))
 }
 
-async fn zeppelin(w: World<'_>, id: u32) -> i64 {
+fn zeppelin(w: World<'_>, id: u32) -> i64 {
     let tick = w.increment(id, TICK);
     if w.state(id) < 2 {
         if tick & 1 != 0 {
@@ -480,7 +448,7 @@ async fn zeppelin(w: World<'_>, id: u32) -> i64 {
             }
         }
         if w.v(id, Y) >= ((w.world()[1] + 9) * 16 - 1) {
-            return w.delete(id).await;
+            return w.delete(id);
         }
         return 1;
     }
@@ -503,7 +471,7 @@ async fn zeppelin(w: World<'_>, id: u32) -> i64 {
         let y = w.v(id, Y);
         let z = w.flight(id);
         w.update_position(id, x, y, z);
-        return w.delete(id).await;
+        return w.delete(id);
     }
     let x = w.v(id, X);
     let y = w.v(id, Y);
@@ -536,7 +504,7 @@ async fn zeppelin(w: World<'_>, id: u32) -> i64 {
     }
     1
 }
-async fn small_ufo(w: World<'_>, id: u32) -> i64 {
+fn small_ufo(w: World<'_>, id: u32) -> i64 {
     let tick = w.increment(id, TICK);
     w.set_image(id, if tick & 8 != 0 { 3909 } else { 3908 });
     if w.state(id) == 0 {
@@ -561,7 +529,7 @@ async fn small_ufo(w: World<'_>, id: u32) -> i64 {
             company = w.next(0, company);
         }
         if n == 0 {
-            return w.delete(id).await;
+            return w.delete(id);
         }
         n = w.range(n);
         let mut target = w.next(1, INVALID);
@@ -572,7 +540,7 @@ async fn small_ufo(w: World<'_>, id: u32) -> i64 {
                 n = n.wrapping_sub(1);
                 if old == 0 {
                     if t[CRASHED] != 0 || t[BACKLINK] as u32 != INVALID {
-                        return w.delete(id).await;
+                        return w.delete(id);
                     }
                     w.set(id, DEST, i64::from(target));
                     w.set(id, AGE, 0);
@@ -601,7 +569,7 @@ async fn small_ufo(w: World<'_>, id: u32) -> i64 {
     if z <= w.v(target, Z) {
         w.increment(id, AGE);
         if w.v(target, STATUS) & 1 == 0 && w.v(target, CRASHED) == 0 {
-            let victims = w.action(14, target, 0, 0, 0, 0, 0).await;
+            let victims = w.action(14, target, 0, 0, 0, 0, 0);
             w.set(target, BACKLINK, i64::from(INVALID));
             w.news(1, w.v(target, TILE) as u32, 0);
             w.service(12, target, 2, victims, 0, 0, 0);
@@ -610,11 +578,11 @@ async fn small_ufo(w: World<'_>, id: u32) -> i64 {
     if w.v(id, AGE) > 50 {
         w.effect_rel(id, 0, 7, 8, 5);
         w.sound_vehicle(id);
-        return w.delete(id).await;
+        return w.delete(id);
     }
     1
 }
-async fn aircraft(w: World<'_>, id: u32, leave_top: bool) -> i64 {
+fn aircraft(w: World<'_>, id: u32, leave_top: bool) -> i64 {
     let tick = w.increment(id, TICK);
     w.set_image(
         id,
@@ -628,7 +596,7 @@ async fn aircraft(w: World<'_>, id: u32, leave_top: bool) -> i64 {
     let z = w.flight(id);
     w.update_position(id, gp[0], gp[1], z);
     if (leave_top && gp[0] < -160) || (!leave_top && gp[0] > (w.world()[0] + 9) * 16 - 1) {
-        return w.delete(id).await;
+        return w.delete(id);
     }
     match w.state(id) {
         2 => {
@@ -701,7 +669,7 @@ fn valid_train(w: &World<'_>, id: u32) -> bool {
         && w.tile(t[TILE] as u32)[8] != 0
         && t[STATUS] & 128 == 0
 }
-async fn big_ufo(w: World<'_>, id: u32) -> i64 {
+fn big_ufo(w: World<'_>, id: u32) -> i64 {
     w.increment(id, TICK);
     if w.state(id) == 1 {
         let dest = w.v(id, DEST) as u32;
@@ -713,7 +681,7 @@ async fn big_ufo(w: World<'_>, id: u32) -> i64 {
             return 1;
         }
         if w.tile(w.v(id, DEST) as u32)[0] == 0 {
-            return w.delete(id).await;
+            return w.delete(id);
         }
         let z = w.slope(w.v(id, X), w.v(id, Y));
         if z < w.v(id, Z) {
@@ -733,7 +701,7 @@ async fn big_ufo(w: World<'_>, id: u32) -> i64 {
         let town = w.service(21, w.v(id, DEST) as u32, 0, 0, 0, 0, 0);
         w.news(4, w.v(id, TILE) as u32, town);
         if w.read(0, 0, 2, 0)[9] == 0 {
-            return w.delete(id).await;
+            return w.delete(id);
         }
         let y = w.v(id, Y);
         let destroyer = w.create_vehicle(-96, y, 5, 11, id);
@@ -763,7 +731,7 @@ async fn big_ufo(w: World<'_>, id: u32) -> i64 {
             train = w.next(3, train);
         }
         if n == 0 {
-            return w.delete(id).await;
+            return w.delete(id);
         }
         n = w.range(n);
         train = w.next(3, INVALID);
@@ -782,13 +750,13 @@ async fn big_ufo(w: World<'_>, id: u32) -> i64 {
     }
     1
 }
-async fn destroyer(w: World<'_>, id: u32) -> i64 {
+fn destroyer(w: World<'_>, id: u32) -> i64 {
     w.increment(id, TICK);
     let gp = w.position(id);
     let z = w.flight(id);
     w.update_position(id, gp[0], gp[1], z);
     if gp[0] > (w.world()[0] + 9) * 16 - 1 {
-        return w.delete(id).await;
+        return w.delete(id);
     }
     if w.state(id) == 0 {
         let target = w.target(id);
@@ -798,7 +766,7 @@ async fn destroyer(w: World<'_>, id: u32) -> i64 {
         w.set_state(id, 1);
         w.effect_rel(target, 0, 7, 8, 5);
         w.sound_vehicle(target);
-        w.delete(target).await;
+        w.delete(target);
         for _ in 0..80 {
             let r = w.random();
             World::effect_above(
@@ -812,17 +780,17 @@ async fn destroyer(w: World<'_>, id: u32) -> i64 {
             for dx in -3..3 {
                 let tile = w.read(12, w.v(id, TILE) as u32, dx, dy)[0] as u32;
                 if tile != INVALID_TILE {
-                    w.clear(tile).await;
+                    w.clear(tile);
                 }
             }
         }
     }
     1
 }
-async fn submarine(w: World<'_>, id: u32) -> i64 {
+fn submarine(w: World<'_>, id: u32) -> i64 {
     w.increment(id, TICK);
     if w.increment(id, AGE) > 8880 {
-        return w.delete(id).await;
+        return w.delete(id);
     }
     if w.v(id, TICK) & 1 == 0 {
         return 1;
@@ -842,20 +810,20 @@ async fn submarine(w: World<'_>, id: u32) -> i64 {
     w.set(id, DIR, dir);
     1
 }
-async fn tick(w: World<'_>, id: u32) -> i64 {
+fn tick(w: World<'_>, id: u32) -> i64 {
     match w.v(id, SUBTYPE) {
-        0 => zeppelin(w, id).await,
-        2 => small_ufo(w, id).await,
-        4 => aircraft(w, id, true).await,
-        6 => aircraft(w, id, false).await,
+        0 => zeppelin(w, id),
+        2 => small_ufo(w, id),
+        4 => aircraft(w, id, true),
+        6 => aircraft(w, id, false),
         8 => rotors(&w, id),
-        9 => big_ufo(w, id).await,
-        11 => destroyer(w, id).await,
-        13 | 14 => submarine(w, id).await,
+        9 => big_ufo(w, id),
+        11 => destroyer(w, id),
+        13 | 14 => submarine(w, id),
         _ => 1,
     }
 }
-async fn initialize(w: World<'_>, kind: u32) -> i64 {
+fn initialize(w: World<'_>, kind: u32) -> i64 {
     let count = if kind == 3 {
         3
     } else if kind >= 5 {
@@ -956,7 +924,7 @@ async fn initialize(w: World<'_>, kind: u32) -> i64 {
                             let dir = w.random() & 3;
                             let step = w.read(13, 0, i64::from(dir), 0)[0] as u32;
                             for _ in 0..30 {
-                                w.clear(tile).await;
+                                w.clear(tile);
                                 tile = tile.wrapping_add(step);
                                 if w.tile(tile)[0] == 0 {
                                     break;
@@ -980,7 +948,7 @@ fn reset_delay(w: &World<'_>) {
         DELAY = delay as u16;
     }
 }
-async fn schedule(w: World<'_>, startup: bool) -> i64 {
+fn schedule(w: World<'_>, startup: bool) -> i64 {
     if !startup {
         // SAFETY: Same exclusive game-thread scalar boundary as serialization.
         let delay = unsafe { DELAY.wrapping_sub(1) };
@@ -1019,7 +987,7 @@ async fn schedule(w: World<'_>, startup: bool) -> i64 {
         return 0;
     }
     let kind = available[w.range(length as u32) as usize];
-    initialize(w, kind).await
+    initialize(w, kind)
 }
 fn construct(w: &World<'_>, id: u32, x: i64, y: i64, dir: i64, subtype: u32) -> i64 {
     w.set(id, STATUS, 4);
@@ -1069,11 +1037,11 @@ fn release_vehicle(w: &World<'_>, id: u32) -> i64 {
     w.set(id, AGE, 0);
     0
 }
-async fn run(w: World<'_>, operation: u32, id: u32, a: i64, b: i64, c: i64, d: i64) -> i64 {
+fn run(w: World<'_>, operation: u32, id: u32, a: i64, b: i64, c: i64, d: i64) -> i64 {
     match operation {
-        0 => tick(w, id).await,
-        1 => schedule(w, false).await,
-        2 => schedule(w, true).await,
+        0 => tick(w, id),
+        1 => schedule(w, false),
+        2 => schedule(w, true),
         3 => construct(&w, id, a, b, c, d as u32),
         4 => {
             w.update_position(id, a, b, c);
@@ -1082,20 +1050,16 @@ async fn run(w: World<'_>, operation: u32, id: u32, a: i64, b: i64, c: i64, d: i
         5 => release_industry(&w, id),
         6 => release_vehicle(&w, id),
         7 => {
-            w.clear(id).await;
+            w.clear(id);
             0
         }
-        8 => initialize(w, id).await,
+        8 => initialize(w, id),
         9 => {
             w.update_image(id);
             0
         }
         _ => 0,
     }
-}
-pub struct Run<'a> {
-    channel: Rc<Channel>,
-    future: Pin<Box<dyn Future<Output = i64> + 'a>>,
 }
 /// Allocate the private owner. The target uses the original `VehicleID` sentinel.
 #[unsafe(no_mangle)]
@@ -1122,80 +1086,21 @@ pub unsafe extern "C" fn openttd_rust_disaster_state_destroy(state: *mut State) 
 pub extern "C" fn openttd_rust_disaster_delay() -> *mut u16 {
     &raw mut DELAY
 }
-/// Create one component continuation; arguments and IDs follow original preconditions.
+/// Run one synchronous entry; callbacks are nonthrowing and may reenter.
 /// # Safety
-/// Context and callbacks stay live until destruction; the shared and occupancy tables and
-/// their pointees stay immutable and live through destruction, suspension and all `World`
-/// clones (see `disaster_ffi.h`). Returned actions 2, 14 and 17 run deletion, `Crash` and clear
-/// callbacks on the C++ stack.
+/// Handles, contexts and immutable tables satisfy the original source lifetimes.
+/// Private scalar accesses end before callbacks; panics abort across FFI.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_disaster_create<'a>(
-    operation: u32,
-    id: u32,
-    a: i64,
-    b: i64,
-    c: i64,
-    d: i64,
+pub unsafe extern "C" fn openttd_rust_disaster_run(
+    operation: u32, id: u32, a: i64, b: i64, c: i64, d: i64,
     context: *mut c_void,
     read: unsafe extern "C" fn(*mut c_void, u32, u32, i64, i64, *mut i64),
     write: unsafe extern "C" fn(*mut c_void, u32, u32, i64),
-    services: &'a Services,
-    occupancy: &'a Occupancy,
+    services: &Services, occupancy: &Occupancy,
     service: unsafe extern "C" fn(*mut c_void, *const Action) -> i64,
-) -> *mut Run<'a> {
-    let channel = Rc::new(Channel {
-        action: Cell::new(Action::default()),
-        response: Cell::new(0),
-        vehicle: Cell::new(None),
-        world: Cell::new(None),
-    });
-    let w = World {
-        context,
-        read,
-        write,
-        services,
-        occupancy,
-        service,
-        channel: channel.clone(),
-    };
-    Box::into_raw(Box::new(Run {
-        channel,
-        future: Box::pin(run(w, operation, id, a, b, c, d)),
-    }))
-}
-/// Resume after the prior C++ action completes. Kind 0 contains the final result.
-/// # Safety
-/// `owner` is live/exclusive for this call; source-valid callback contracts hold.
-/// Returned actions retain no Rust owner/world references. Panics abort, never unwind.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_disaster_advance(
-    owner: *mut Run<'_>,
-    response: i64,
-) -> Action {
-    // SAFETY: One invocation exclusively polls its separate continuation allocation.
-    let run = unsafe { &mut *owner };
-    run.channel.response.set(response);
-    run.channel.vehicle.set(None);
-    run.channel.world.set(None);
-    let mut context = PollContext::from_waker(Waker::noop());
-    match run.future.as_mut().poll(&mut context) {
-        Poll::Pending => run.channel.action.get(),
-        Poll::Ready(result) => Action {
-            a: result,
-            ..Action::default()
-        },
-    }
-}
-/// Cancel/drop the continuation exactly once, including while an action is suspended.
-/// # Safety
-/// Owner is a live create result with no active advance call; no action borrows it.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_disaster_destroy(owner: *mut Run<'_>) {
-    // SAFETY: Table stays live through drop of the future and its World clones.
-    // Cancellation calls no world service and releases every table borrow.
-    unsafe {
-        drop(Box::from_raw(owner));
-    }
+) -> i64 {
+    let channel = Rc::new(Channel { vehicle: Cell::new(None), world: Cell::new(None) });
+    run(World { context, read, write, services, occupancy, service, channel }, operation, id, a, b, c, d)
 }
 
 crate::abi::layouts! {
@@ -1218,456 +1123,3 @@ crate::abi::layouts! {
     };
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::services::{CommandCost, CommandCostServices, CommandCostStorage};
-    use crate::vehicle::{self, VehicleRef, VehicleServices};
-    static INDEX_TEST: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    struct Fixture {
-        world: [i64; 24],
-        vehicle: [i64; 24],
-        private: State,
-        writes: u32,
-        reads: u32,
-        disaster_in_pool: bool,
-        rng: u32,
-        draws: u32,
-        calls: Vec<Action>,
-        viewport_age: Option<i64>,
-        links: vehicle::occupancy::Links,
-    }
-    impl Default for Fixture {
-        fn default() -> Self {
-            let mut world = [0; 24];
-            world[..10].copy_from_slice(&[64, 128, 63, 127, 8191, 1935, 1, 0, 1, 1]);
-            let mut vehicle = [0; 24];
-            vehicle[NEXT] = i64::from(INVALID);
-            Self {
-                world,
-                vehicle,
-                private: State {
-                    image_override: 0,
-                    target: INVALID,
-                    state: 0,
-                    flags: 0,
-                },
-                writes: 0,
-                reads: 0,
-                disaster_in_pool: false,
-                rng: 5,
-                draws: 0,
-                calls: Vec::new(),
-                viewport_age: None,
-                links: vehicle::occupancy::Links {
-                    next: std::ptr::null_mut(),
-                    prev: std::ptr::null_mut(),
-                    current: std::ptr::null_mut(),
-                },
-            }
-        }
-    }
-    unsafe extern "C" fn read(
-        context: *mut c_void,
-        kind: u32,
-        id: u32,
-        a: i64,
-        _b: i64,
-        out: *mut i64,
-    ) {
-        // SAFETY: Tests own a stable fixture; only this synchronous callback accesses it.
-        let fixture = unsafe { &mut *context.cast::<Fixture>() };
-        fixture.reads += 1;
-        let mut record = [0i64; 24];
-        match kind {
-            0 => record = fixture.world,
-            1 => record = fixture.vehicle,
-            6 => {
-                record[0] = i64::from(
-                    if id == 6 && fixture.disaster_in_pool && a as u32 == INVALID {
-                        17
-                    } else {
-                        INVALID
-                    },
-                );
-            }
-            7 => record[0] = (&raw mut fixture.private) as usize as i64,
-            13 => {
-                record[0] = if a == 0 {
-                    -1
-                } else if a == 1 {
-                    fixture.world[0]
-                } else if a == 2 {
-                    1
-                } else {
-                    -fixture.world[0]
-                }
-            }
-            14 => record[0] = 1,
-            _ => {}
-        }
-        // SAFETY: Caller supplies exactly 24 writable copied slots.
-        unsafe {
-            std::ptr::copy_nonoverlapping(record.as_ptr(), out, 24);
-        }
-    }
-    unsafe extern "C" fn write(context: *mut c_void, field: u32, _id: u32, value: i64) {
-        // SAFETY: One canonical scalar write into the exclusive test fixture.
-        let fixture = unsafe { &mut *context.cast::<Fixture>() };
-        fixture.writes += 1;
-        fixture.vehicle[field as usize] = value;
-    }
-    extern "C" fn random(context: *mut c_void) -> u32 {
-        // SAFETY: The call-scoped exclusive fixture has no active Rust borrow.
-        let fixture = unsafe { &mut *context.cast::<Fixture>() };
-        fixture.draws += 1;
-        fixture.rng
-    }
-    extern "C" fn industry(_: i32, _: i32, _: *mut u32) -> u32 {
-        0
-    }
-    unsafe extern "C" fn service(context: *mut c_void, request: *const Action) -> i64 {
-        // SAFETY: Call-scoped fixture/request; no borrow spans nested world access.
-        let fixture = unsafe { &mut *context.cast::<Fixture>() };
-        let action = unsafe { *request };
-        fixture.calls.push(action);
-        match action.kind {
-            5 => {
-                fixture.private.flags = 0xab;
-                100
-            }
-            6 => 100,
-            15 => 16 + fixture.calls.iter().filter(|a| a.kind == 15).count() as i64,
-            _ => 0,
-        }
-    }
-    // Unused typed slots abort if a controller starts using an unmodelled leaf.
-    macro_rules! unused {
-        ($($arg:ty),* $(; $result:ty)?) => {{
-            extern "C" fn unused($(_: $arg),*) $(-> $result)? { panic!("unexpected fixture leaf") }
-            unused
-        }};
-    }
-    unsafe extern "C" fn shell(context: *mut c_void, _: u32) -> VehicleRef {
-        VehicleRef(std::ptr::NonNull::new(context.cast()).unwrap())
-    }
-    extern "C" fn links(v: VehicleRef) -> *mut vehicle::occupancy::Links {
-        unsafe { &raw mut (*v.0.as_ptr().cast::<Fixture>()).links }
-    }
-    extern "C" fn tile(v: VehicleRef) -> u32 {
-        unsafe { (*v.0.as_ptr().cast::<Fixture>()).vehicle[TILE] as u32 }
-    }
-    extern "C" fn occupancy_update(v: VehicleRef) -> vehicle::occupancy::UpdateObservation {
-        vehicle::occupancy::UpdateObservation {
-            links: links(v),
-            tile: tile(v),
-        }
-    }
-    extern "C" fn kind(_: VehicleRef) -> u8 {
-        vehicle::VehicleType::DISASTER.0
-    }
-    extern "C" fn log_x() -> u32 {
-        6
-    }
-    extern "C" fn viewport(v: VehicleRef) {
-        // The actual owner must have indexed the shell before entering the leaf.
-        assert!(unsafe { vehicle::occupancy::OnTile::new(&VEHICLES, tile(v)).get() } == Some(v));
-        unsafe {
-            vehicle::occupancy::update(&VEHICLES, v, true);
-        }
-        let f = unsafe { &mut *v.0.as_ptr().cast::<Fixture>() };
-        f.calls.push(Action {
-            kind: 4,
-            ..Action::default()
-        });
-        if let Some(age) = f.viewport_age {
-            f.vehicle[AGE] = age;
-        }
-    }
-    const VEHICLES: VehicleServices = VehicleServices {
-        tile_links: links,
-        occupancy_update,
-        occupancy_near: unused!(vehicle::VehicleRef ; vehicle::occupancy::NearObservation),
-        map_log_x: log_x,
-        assertions: true,
-        train_handle: unused!(*mut vehicle::OpenTTDVehicle ; crate::train::Handle),
-        write_counters: unused!(vehicle::VehicleRef, u8, u8, i32),
-        waiting_for_unbunching: unused!(vehicle::VehicleRef ; bool),
-        leave_unbunching_depot: unused!(vehicle::VehicleRef),
-        reset_depot_unbunching: unused!(vehicle::VehicleRef),
-        enter_depot: unused!(vehicle::VehicleRef, *const vehicle::visits::Services),
-        pathfinding_result: unused!(vehicle::VehicleRef, bool),
-        new_position: unused!(vehicle::VehicleRef ; vehicle::NewPosition),
-        write_xy: unused!(vehicle::VehicleRef, i32, i32),
-        base_viewport: viewport,
-        newgrf: unused!(; *const crate::newgrf_vehicle::Services),
-        property: unused!(*const crate::newgrf_vehicle::Services, vehicle::VehicleRef, u8, i32 ; i32),
-        callback: unused!(*const crate::newgrf_vehicle::Services, vehicle::VehicleRef, crate::newgrf_callbacks::CallbackID ; u16),
-        unknown_callback_result: unused!(
-            vehicle::EngineRef,
-            crate::newgrf_callbacks::CallbackID,
-            u16
-        ),
-        length_changed: unused!(vehicle::VehicleRef),
-        play_vehicle_sound: unused!(vehicle::VehicleRef, crate::newgrf_sound::VehicleSoundEvent ; bool),
-        play_sound: unused!(vehicle::VehicleRef, u16),
-        order_free: unused!(vehicle::VehicleRef),
-        order_dummy: unused!(vehicle::VehicleRef),
-        start_stop_dirty: unused!(vehicle::VehicleRef),
-        destroy: unused!(vehicle::VehicleRef),
-        check_orders: unused!(vehicle::VehicleRef ; u8),
-        day: unused!(vehicle::VehicleRef ; u8),
-        write_day: unused!(vehicle::VehicleRef, u8),
-        write_direction: unused!(vehicle::VehicleRef, u8),
-        write_speed: unused!(vehicle::VehicleRef, u16),
-        last_station: unused!(vehicle::VehicleRef ; u16),
-        write_last_station: unused!(vehicle::VehicleRef, u16),
-        set_dest_tile: unused!(vehicle::VehicleRef, u32),
-        write_dest: unused!(vehicle::VehicleRef, u32),
-        write_progress: unused!(vehicle::VehicleRef, u8),
-        write_max_speed: unused!(vehicle::VehicleRef, u16),
-        previous_tile: unused!(vehicle::VehicleRef ; vehicle::PreviousTile),
-        detach_last: unused!(
-            vehicle::VehicleRef,
-            vehicle::VehicleRef,
-            vehicle::VehicleRef
-        ),
-        next: unused!(vehicle::VehicleRef ; Option<vehicle::VehicleRef>),
-        engine_id: unused!(vehicle::VehicleRef ; u16),
-        engine: unused!(vehicle::VehicleRef ; vehicle::EngineRef),
-        engine_for_length: unused!(vehicle::VehicleRef ; vehicle::EngineForLength),
-        write_tick: unused!(vehicle::VehicleRef, u8),
-        direction: unused!(vehicle::VehicleRef ; u8),
-        status: unused!(vehicle::VehicleRef ; u8),
-        tile,
-        progress: unused!(vehicle::VehicleRef ; u8),
-        dest_tile: unused!(vehicle::VehicleRef ; u32),
-        order_type: unused!(vehicle::VehicleRef ; u8),
-        order_destination: unused!(vehicle::VehicleRef ; u16),
-        order_nonstop: unused!(vehicle::VehicleRef ; u8),
-        subtype: unused!(vehicle::VehicleRef ; u8),
-        x: unused!(vehicle::VehicleRef ; i32),
-        y: unused!(vehicle::VehicleRef ; i32),
-        z: unused!(vehicle::VehicleRef ; i32),
-        tick: unused!(vehicle::VehicleRef ; u8),
-        owner: unused!(vehicle::VehicleRef ; u8),
-        speed: unused!(vehicle::VehicleRef ; u16),
-        subspeed: unused!(vehicle::VehicleRef ; u8),
-        running: unused!(vehicle::VehicleRef ; u8),
-        order_time: unused!(vehicle::VehicleRef ; i32),
-        vehicle_type: kind,
-        write_x: unused!(vehicle::VehicleRef, i32),
-        write_y: unused!(vehicle::VehicleRef, i32),
-        write_z: unused!(vehicle::VehicleRef, i32),
-        write_tile: unused!(vehicle::VehicleRef, u32),
-        write_status: unused!(vehicle::VehicleRef, u8),
-        write_subspeed: unused!(vehicle::VehicleRef, u8),
-        write_breakdown_counter: unused!(vehicle::VehicleRef, u8),
-        write_running: unused!(vehicle::VehicleRef, u8),
-        write_order_time: unused!(vehicle::VehicleRef, i32),
-        write_profit: unused!(vehicle::VehicleRef, i64),
-        write_economy_service: unused!(vehicle::VehicleRef, i32),
-        write_calendar_service: unused!(vehicle::VehicleRef, i32),
-        write_breakdowns: unused!(vehicle::VehicleRef, u8),
-        write_reliability: unused!(vehicle::VehicleRef, u16),
-        write_cargo_age: unused!(vehicle::VehicleRef, u16),
-        coordinates: unused!(vehicle::VehicleRef ; vehicle::Coordinates),
-        xy: unused!(vehicle::VehicleRef ; vehicle::XY),
-        speed_inputs: unused!(vehicle::VehicleRef ; vehicle::SpeedInputs),
-        direction_progress: unused!(vehicle::VehicleRef ; vehicle::DirectionProgress),
-        tick_status: unused!(vehicle::VehicleRef ; vehicle::TickStatus),
-        day_cost: unused!(vehicle::VehicleRef ; vehicle::DayCost),
-        make_dummy: unused!(vehicle::VehicleRef),
-        loading: unused!(vehicle::VehicleRef, bool, *const vehicle::visits::Services),
-        check_orders_only: unused!(vehicle::VehicleRef),
-        write_coordinates: unused!(vehicle::VehicleRef, i32, i32, i32),
-        altitude_inputs: unused!(vehicle::VehicleRef ; vehicle::AltitudeInputs),
-        position_observations: unused!(vehicle::VehicleRef ; vehicle::PositionObservations),
-        movement_observations: unused!(vehicle::VehicleRef ; vehicle::MovementObservations),
-        max_speed: unused!(vehicle::VehicleRef ; u16),
-        maintenance: std::ptr::null(),
-        visits: unused!( ; *const vehicle::visits::Services),
-        orders: unused!( ; *const crate::orders::Leaves),
-        ship_get: unused!(u32 ; vehicle::VehicleRef),
-    };
-    // Existing tests never clear; the native ABI fixture below covers full costs.
-    const OCCUPANCY: Occupancy = Occupancy {
-        commands: &COMMANDS,
-        vehicle: shell,
-    };
-    const COMMANDS: vehicle::occupancy::Commands = vehicle::occupancy::Commands {
-        vehicles: &VEHICLES,
-        max_pixel_z: unused!(u32; i32),
-        costs: &COSTS,
-        vehicle_error: 0,
-    };
-    const COSTS: CommandCostServices = CommandCostServices {
-        construct: unused!(*mut CommandCostStorage ; *mut CommandCost),
-        destroy: unused!(*mut CommandCost),
-        zero: unused!(*mut CommandCost),
-        error: unused!(*mut CommandCost, u32),
-        expense_money: unused!(*mut CommandCost, u8, i64),
-        error_param: unused!(*mut CommandCost, u32, u64),
-        add: unused!(*mut CommandCost, *mut CommandCost),
-        move_cost: unused!(*mut CommandCost, *mut CommandCost),
-        amount: unused!(*mut CommandCost, i64),
-        success: unused!(*const CommandCost ; bool),
-        error_message: unused!(*const CommandCost ; u32),
-        money: unused!(*const CommandCost ; i64),
-        expense: unused!(*const CommandCost ; crate::services::ExpenseType),
-        make_error: unused!(*mut CommandCost, u32),
-    };
-    fn owner(services: &Services, operation: u32, id: u32) -> *mut Run<'_> {
-        // SAFETY: Fixture and immutable table remain stable through run destruction;
-        // leaves never reenter. Reuse the table's raw context so no new exclusive
-        // fixture borrow invalidates it. The table is separate from fixture storage.
-        unsafe {
-            openttd_rust_disaster_create(
-                operation,
-                id,
-                0,
-                0,
-                0,
-                0,
-                services.context,
-                read,
-                write,
-                services,
-                &OCCUPANCY,
-                service,
-            )
-        }
-    }
-    fn advance(run: *mut Run<'_>, response: i64) -> Action {
-        // SAFETY: Tests hold the live exclusive owner and complete each action before resuming.
-        unsafe { openttd_rust_disaster_advance(run, response) }
-    }
-    fn destroy(run: *mut Run<'_>) {
-        // SAFETY: No advance or world reference is active.
-        unsafe {
-            openttd_rust_disaster_destroy(run);
-        }
-    }
-    #[test]
-    fn cancelling_suspended_deletion_calls_no_world_service() {
-        let _guard = INDEX_TEST.lock().unwrap();
-        let mut fixture = Fixture::default();
-        fixture.vehicle[SUBTYPE] = 13;
-        fixture.vehicle[AGE] = 8880;
-        let services =
-            crate::services::fixture(std::ptr::from_mut(&mut fixture).cast(), random, industry);
-        let run = owner(&services, 0, 17);
-        let channel = unsafe { Rc::downgrade(&(*run).channel) };
-        assert_eq!(advance(run, 0).kind, 2);
-        let counts = (fixture.reads, fixture.writes, fixture.draws);
-        destroy(run);
-        assert_eq!((fixture.reads, fixture.writes, fixture.draws), counts);
-        assert!(channel.upgrade().is_none());
-    }
-    #[test]
-    fn submarine_expiry_wraps_tick_before_returning_delete() {
-        let _guard = INDEX_TEST.lock().unwrap();
-        let mut fixture = Fixture::default();
-        fixture.vehicle[SUBTYPE] = 13;
-        fixture.vehicle[TICK] = 255;
-        fixture.vehicle[AGE] = 8880;
-        let services =
-            crate::services::fixture(std::ptr::from_mut(&mut fixture).cast(), random, industry);
-        let run = owner(&services, 0, 17);
-        let action = advance(run, 0);
-        assert_eq!((action.kind, action.id), (2, 17));
-        assert_eq!((fixture.vehicle[TICK], fixture.vehicle[AGE]), (0, 8881));
-        assert_eq!(advance(run, 0).a, 0);
-        destroy(run);
-    }
-    #[test]
-    fn flight_helper_mutates_stable_private_flags_synchronously() {
-        let _guard = INDEX_TEST.lock().unwrap();
-        let mut fixture = Fixture::default();
-        fixture.vehicle[TICK] = 1;
-        let address = &raw mut fixture.private;
-        let services =
-            crate::services::fixture(std::ptr::from_mut(&mut fixture).cast(), random, industry);
-        let run = owner(&services, 0, 17);
-        assert_eq!(advance(run, 0).kind, 0);
-        assert_eq!(
-            (&raw mut fixture.private, fixture.private.flags),
-            (address, 0xab)
-        );
-        assert_eq!(
-            fixture.calls.iter().map(|a| a.kind).collect::<Vec<_>>(),
-            [5, 4]
-        );
-        destroy(run);
-    }
-    #[test]
-    fn big_ufo_initializer_uses_map_max_x_for_y_on_rectangular_maps() {
-        let _guard = INDEX_TEST.lock().unwrap();
-        let mut fixture = Fixture::default();
-        let services =
-            crate::services::fixture(std::ptr::from_mut(&mut fixture).cast(), random, industry);
-        let run = owner(&services, 8, 4);
-        assert_eq!(advance(run, 0).kind, 0);
-        let creations: Vec<_> = fixture.calls.iter().filter(|a| a.kind == 15).collect();
-        assert_eq!(
-            (
-                creations[0].id,
-                creations[0].a,
-                creations[0].b,
-                creations[0].c
-            ),
-            (9, 88, 1007, 7)
-        );
-        assert_eq!(
-            (creations[1].id, creations[1].a, creations[1].b),
-            (10, 88, 1007)
-        );
-        assert_eq!(fixture.vehicle[DEST], i64::from(64 * 64 + 32));
-        assert_eq!(fixture.vehicle[NEXT], 18);
-        assert_eq!(fixture.draws, 1);
-        destroy(run);
-    }
-    #[test]
-    fn industry_release_commits_private_state_before_return() {
-        let _guard = INDEX_TEST.lock().unwrap();
-        let mut fixture = Fixture::default();
-        fixture.vehicle[SUBTYPE] = 4;
-        fixture.private.state = 1;
-        fixture.vehicle[DEST] = 99;
-        fixture.disaster_in_pool = true;
-        let services =
-            crate::services::fixture(std::ptr::from_mut(&mut fixture).cast(), random, industry);
-        let release = owner(&services, 5, 99);
-        assert_eq!(advance(release, 0).kind, 0);
-        assert_eq!(fixture.private.state, 3);
-        destroy(release);
-    }
-    #[test]
-    fn direct_service_refreshes_canonical_age_before_phase_transition() {
-        let _guard = INDEX_TEST.lock().unwrap();
-        let mut fixture = Fixture::default();
-        fixture.vehicle[TICK] = 1;
-        fixture.private.state = 1;
-        fixture.viewport_age = Some(37);
-        let services =
-            crate::services::fixture(std::ptr::from_mut(&mut fixture).cast(), random, industry);
-        let run = owner(&services, 0, 17);
-        assert_eq!(advance(run, 0).kind, 0);
-        assert_eq!((fixture.private.state, fixture.vehicle[AGE]), (2, 0));
-        destroy(run);
-    }
-    #[test]
-    fn failed_pool_capacity_consumes_no_initializer_rng() {
-        let _guard = INDEX_TEST.lock().unwrap();
-        for kind in 0..7 {
-            let mut fixture = Fixture::default();
-            fixture.world[9] = 0;
-            let services =
-                crate::services::fixture(std::ptr::from_mut(&mut fixture).cast(), random, industry);
-            let run = owner(&services, 8, kind);
-            assert_eq!(advance(run, 0).kind, 0);
-            assert_eq!((fixture.writes, fixture.draws), (0, 0));
-            destroy(run);
-        }
-    }
-}
