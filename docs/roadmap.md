@@ -5,31 +5,35 @@ this roadmap over conflicting issues; it is the current state of the umbrella
 issue #3. Update it in place; `/steer` prunes it.
 Evidence stays in PRs.
 
-## Where the fork stands (2026-10-27, code at `be18afafda`)
+## Where the fork stands (2026-10-27, code at `35202d9eda`, base `c8e6b270eb`)
 
-- 77 ownership ports: catchment #522 (#516) integrated at `4c73c991e9`.
-  Maintenance since the wind-down: #502 (cadence split, typing gates), #521
-  (macOS annotation warnings), #517 (#275 accessor audit), #519 (#515
-  orphans, #500's first ID types, #506's check), #523 (#275 speed recovery)
-  and #520 (#168 disaster boundary), each at its exact-head Full. Eleven
-  integrations since the twenty-first steering review; no rollback target.
-- Whole-fork inventory at `be18afafda`: 71,218 of 470,612 original lines
-  retired (15.13%), including 55,546 of 102,615 simulation lines (54.13%);
-  Rust, tooling and glue are 127,585, 44,489 and 45,227 lines. These measures
-  include comments/data, not completed behavior.
-- Speed: #517's audited reads raised play loop counts 2.2% to 4.0% (P2016
-  +3.0%, projecting about 1.53x). #523 recovered it by restoring callback-path
-  codegen and returning audited pixel heights to their typed services:
-  pinned-runtime counts are within +0.11% of `c04219b0d8` on every scenario
-  (TGP -0.38%). Projections stay at their `c04219b0d8` values (TGP 1.1788x,
-  Grok 1.3948x, Opus 1.4018x, P1996 1.3354x, P2000 1.3934x, P2016 1.4695x),
-  but #517 changed the build identity, so the f492 anchors no longer match;
-  a quiet pass re-anchors once the host is quiet.
-- The tenth-integration cadence dispatch on `4481a442f6` passed every platform
-  and annotation check. #512's first tally (19 finders: review 11, comparison
-  4, scenario 2, CI 2) is posted and the issue closed.
-- Unintegrated branches: #518 (coverage corpus rerun with a longer per-game
-  timeout, about 2.5 hours). Five component slots are free.
+- 77 ownership ports; catchment #522 (#516) is the newest, at `4c73c991e9`.
+  This session integrated #502 (cadence split, typing gates), #521 (macOS
+  annotation warnings), #517 (#275 accessor audit), #519 (#515 orphans, #500
+  first ID types, #506 check), #522, #523 (#275 speed recovery), #520 (#168
+  disaster boundary) and #524 (#503 deep tier), each at its exact-head Full.
+  Twelve integrations since the twenty-first steering review; no rollback.
+- Last whole-fork inventory, measured at `be18afafda` (before #524, which
+  changes only tooling and docs): 71,218 of 470,612 original lines retired
+  (15.13%), including 55,546 of 102,615 simulation lines (54.13%); Rust,
+  tooling and glue 127,585, 44,489 and 45,227 lines. Not refreshed at
+  wind-down; it counts comments and data, not completed behavior.
+- Speed: #517 raised play loop counts 2.2% to 4.0% (P2016 +3.0%, projecting
+  about 1.53x); #523 recovered it to within +0.11% of `c04219b0d8` on every
+  scenario. The last valid projections, at `c04219b0d8`, are TGP 1.1788x,
+  Grok 1.3948x, Opus 1.4018x, P1996 1.3354x, P2000 1.3934x and P2016
+  1.4695x. #517 changed the build identity, so the f492 anchors no longer
+  match and a quiet pass must re-anchor before projections resume.
+- Deep tier: the first full `deep` on `35202d9eda` ran 520 soak scenarios in
+  5,958 s; 519 were equal. `town-commands` (soak seed 12345) asserts in
+  `DrawShoreTile` in both games, a fixture defect diagnosed on #503 with no
+  divergence. Coverage #518 measured the pinned original: 84.96% of lines and
+  53.97% of branches, with 338 of 438 scenarios adding no unique line.
+- CI: the cadence dispatch on `4481a442f6` passed every platform and
+  annotation check. Post-merge `CI - Build` run 40494671472 failed after a
+  10-minute Linux dependency-install timeout before building; it was not
+  retried and is not a code regression. #512's first tally is posted and the
+  issue closed.
 
 ## Twenty-first steering review (2026-10-26, orphans, concurrency, cadence and accessor cost)
 
@@ -351,18 +355,23 @@ needs it beyond #516; GUI and platform after the simulation; the six
 
 ## Resume checkpoint
 
-Resumed 2026-10-27 by a Claude Code root (claude-opus-5-5, xhigh); reviews
-run on gpt-6.1-sol (high) through T3. Code at `be18afafda`; no confirmed
-regression or rollback target.
+Paused at the user's request on 2026-10-27 (13:11 UTC check) by a Claude Code
+root (claude-opus-5-5, xhigh); reviews ran on gpt-6.1-sol through T3. Base
+`c8e6b270eb`, code through #524 at `35202d9eda`. No confirmed code regression
+and no rollback target; no recovery was started. No tested combination is
+ready to merge. Implementation and code fixes under a Claude Code root run on
+Opus, never Sonnet (user, 2026-10-27). Preserve every listed worktree and
+branch; fetch the recorded head before continuing.
 
-| Item | Head | Next action | Running jobs or CI |
+| Item | Saved head | Next action | Pending CI or jobs |
 | --- | --- | --- | --- |
-| #518 coverage | `7a62683bd1` | Corpus complete (438 of 438; 84.96% of lines, 53.97% of branches; 338 scenarios add no unique line). Fixing review, then Full. | Review running. |
-| #275 tile-loop batch | no PR yet | Attribute and repair tree, house and water excess; review, Full. | Implementation agent working. |
-| Quiet speed pass | f492 anchors stale since #517 | Runs after the tile-loop batch integrates (one pass re-anchors and credits it), with no builds running; anchors land through a maintenance PR. | None. |
-| #507 NewGRF sets / #525 | `719aba14a2` | Reviewed; waits on the user's #526 decision on distributing the GPL binaries' source. | None. |
-| #505 sanitizers | no PR yet | ASan/UBSan flavours of both games as a deep-set member. | Implementation agent working. |
-| Deep check | `35202d9eda`: 519 of 520 equal | `town-commands` soak leaves a flat shore tile both games assert on in `DrawShoreTile` (fixture defect, no divergence); fix in progress under #503, then rerun. | Fixture agent working. |
+| #504 coverage / #518 | `8b06daebe4` | Whole review and the scoped resolution review are recorded with no remaining findings. Check Full run 40509687920 at this head; merge if it passed and the base has not moved, otherwise update from base and request a new Full. Keep the 15 GB run directory in its worktree until merge. | Full 40509687920 pending; the root waiter was stopped. |
+| #275 tile-loop batch | `a2023ed2be` (unvalidated checkpoint, no PR) | Validate (build, `trees-*`, `landscape-*` and water scenarios, Cargo checks, ctest, accessors, ABI, preflight), re-profile against the baseline on #312, open the draft PR, then independent review. | None. |
+| #503 deep fixture | `79afd87ac4` (branch, no commits) | Repair the `town-commands` oil-rig sea and bridge fixtures with terraform and canal commands instead of raw height writes, per the diagnosis on #503; then rerun `deep`. | None. |
+| #505 sanitizers | `f85ed2dceb` (unvalidated checkpoint, no PR) | Implement the harness side (`tools/simulation/sanitizers.py`, report capture, suppressions, adapter relinking, deep member) per #505's status comment, then build and run a sanitized subset. `7c240877fe` on `testing/sanitizers505` is an unreviewed Sonnet sketch kept for provenance. | None. |
+| #507 NewGRF sets / #525 | `719aba14a2` | Parked on the user's #526 decision; then base update (conflicts reported), Full and merge. | No successful Full. |
+| Quiet speed pass | f492 anchors stale | After the tile-loop batch integrates, with no builds running; anchors land through a maintenance PR. | None. |
+| Recurring | due | Tip profile (pinned runtime) and deep check after every second integration; planning when the work order runs short. | None. |
 | Cadence | green at `4481a442f6` | Next dispatch after the fifteenth integration since steering. | None. |
 
 Selection: /root, gpt-6.1-sol, xhigh; planning agents run gpt-6-astra, high.
