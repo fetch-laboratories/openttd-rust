@@ -11,7 +11,6 @@
 #include "service_defaults.hpp"
 #include <cstdint>
 struct Station;
-struct OpenTTDStationService;
 struct Industry;
 /** Serialized by the game-state mutex. Native handles/cursors are call-scoped;
  * no map borrow crosses a leaf or SlObject. Leaves cannot reset catchments or
@@ -23,7 +22,6 @@ struct OpenTTDCargoMonitorServices {
 };
 const OpenTTDCargoMonitorServices &GetRustCargoMonitorServices() noexcept;
 extern "C" {
-void openttd_rust_monitor_add(const OpenTTDCargoMonitorServices *, uint8_t, uint8_t, uint32_t, uint16_t, uint8_t, const Station *, OpenTTDStationService *, uint16_t);
 uint32_t openttd_rust_monitor_encode_industry(uint8_t, uint8_t, uint16_t, void (*)(bool) noexcept);
 uint32_t openttd_rust_monitor_encode_town(uint8_t, uint8_t, uint16_t, void (*)(bool) noexcept);
 uint8_t openttd_rust_monitor_company(uint32_t);

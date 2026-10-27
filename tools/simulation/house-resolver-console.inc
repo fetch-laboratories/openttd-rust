@@ -3,6 +3,7 @@
  * from external-GRF-free saves. Every transient spec/group is restored. */
 #include "newgrf_house.h"
 #include "newgrf_town.h"
+#include "station_map.h"
 extern void RebuildTownCaches();
 static void HouseResolverScenario(const std::vector<std::pair<TileIndex, HouseID>> &sites)
 {
@@ -111,22 +112,40 @@ static void HouseResolverScenario(const std::vector<std::pair<TileIndex, HouseID
 	require(run("count-clamps", CBID_HOUSE_PRODUCE_CARGO, 0x44, 0, false, tile) == 0x04FF01FF);
 
 	/* Ordered StationFinder must OR canonical acceptance histories. It is
-	 * call-local, independent of TileLoop_Town's static finder. */
+	 * call-local, independent of TileLoop_Town's static finder. Four one-tile
+	 * rail stations within reach of every part take CmdBuildRailStation's
+	 * rectangle, tile and catchment steps, which enter them in the town's nearby
+	 * set; the replaced tiles are restored afterwards. */
+	struct SavedTile { TileIndex tile; uint8_t type, height, m1, m3, m4, m5, m6, m7; uint16_t m2, m8; };
+	std::vector<SavedTile> saved;
 	std::vector<Station *> stations;
-	for (uint8_t state : {4, 8, 16, 32}) {
+	const std::array<uint8_t, 4> states{4, 8, 16, 32};
+	for (TileIndex near : TileArea(tile, 2, 2).Expand(3)) {
+		if (stations.size() == states.size()) break;
+		if (!IsTileType(near, MP_CLEAR) && !IsTileType(near, MP_TREES) && !(IsTileType(near, MP_ROAD) && IsNormalRoad(near))) continue;
 		require(Station::CanAllocateItem());
-		Station *station = new Station(tile); _station_kdtree.Insert(station->index); station->town = town; station->owner = OWNER_NONE;
-		station->goods[cargo].status = GoodsEntry::States{state};
-		station->catchment_tiles.Initialize(TileArea(tile, 2, 2));
-		for (TileIndex part : parts) station->catchment_tiles.SetTile(part);
-		town->stations_near.insert(station); stations.push_back(station);
+		Tile raw(near);
+		saved.push_back({near, raw.type(), raw.height(), raw.m1(), raw.m3(), raw.m4(), raw.m5(), raw.m6(), raw.m7(), raw.m2(), raw.m8()});
+		Station *station = new Station(near); _station_kdtree.Insert(station->index); station->town = town; station->owner = OWNER_NONE;
+		station->goods[cargo].status = GoodsEntry::States{states[stations.size()]};
+		station->rect.BeforeAddTile(near, StationRect::ADD_FORCE);
+		MakeRailStation(near, OWNER_NONE, station->index, AXIS_X, 0, RAILTYPE_RAIL);
+		station->train_station = TileArea(near, 1, 1); station->facilities.Set(StationFacility::Train);
+		station->RecomputeCatchment();
+		stations.push_back(station);
 	}
+	require(stations.size() == states.size());
+	for (Station *station : stations) require(town->stations_near.find(station) != town->stations_near.end());
 	offset = 0;
 	require(run("acceptance-history", CBID_HOUSE_ANIMATION_TRIGGER_WATCHED_CARGO_ACCEPTED, 0x64, 0, false, tile) == 31);
 	offset = 0xFFFF;
 	require(run("signed-offset", CBID_HOUSE_ANIMATION_TRIGGER_WATCHED_CARGO_ACCEPTED, 0x64, 0, false, parts[3]) == 31);
 	run("invalid-cargo", CBID_HOUSE_ANIMATION_TRIGGER_WATCHED_CARGO_ACCEPTED, 0x64, 255, false, tile);
-	for (auto *station : stations) { town->stations_near.erase(station); delete station; }
+	for (auto *station : stations) delete station;
+	for (const SavedTile &t : saved) {
+		Tile raw(t.tile);
+		raw.type() = t.type; raw.height() = t.height; raw.m1() = t.m1; raw.m2() = t.m2; raw.m3() = t.m3; raw.m4() = t.m4; raw.m5() = t.m5; raw.m6() = t.m6; raw.m7() = t.m7; raw.m8() = t.m8;
+	}
 	/* Preserve signed ratings, high-byte aliases, transported percentages,
 	 * native history periods and null/unavailable parent behavior. */
 	const auto old_rating = town->ratings[0]; town->ratings[0] = -1234;

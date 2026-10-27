@@ -16,7 +16,6 @@
 #ifdef WITH_RUST
 #include "rust/cargomonitor_ffi.h"
 #include "rust/services_station.h"
-#include "rust/industry_shell_services.h"
 #include "rust/services_assert.h"
 #include "rust/town_services.h"
 const OpenTTDCargoMonitorServices &GetRustCargoMonitorServices() noexcept
@@ -31,10 +30,6 @@ void ClearCargoPickupMonitoring(CompanyID company) { openttd_rust_monitor_clear_
 void ClearCargoDeliveryMonitoring(CompanyID company) { openttd_rust_monitor_clear_deliveries(company.base()); }
 int32_t GetPickupAmount(CargoMonitorID monitor, bool keep) { return openttd_rust_monitor_pickup(monitor, keep); }
 int32_t GetDeliveryAmount(CargoMonitorID monitor, bool keep) { return openttd_rust_monitor_delivery(monitor, keep); }
-void AddCargoDelivery(CargoType cargo, CompanyID company, uint32_t amount, Source src, const Station *st, IndustryID dest)
-{
-	openttd_rust_monitor_add(&GetRustCargoMonitorServices(), cargo, company.base(), amount, src.id, uint8_t(src.type), st, RustStationServiceOwner(const_cast<Station *>(st)), dest.base());
-}
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDCargoMonitorServices.hpp"
 bool CheckAbi_cargomonitor() { return AbiServicesComplete(GetRustCargoMonitorServices()); }

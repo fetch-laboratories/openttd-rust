@@ -1031,41 +1031,6 @@ pub unsafe extern "C" fn openttd_rust_station_industries_near(
         size: entries.len(),
     }
 }
-/// Native `StationList::insert`, for harness fixtures that seed a nearby set.
-/// # Safety
-/// `list` is live and not borrowed; `station` is live while it is a member.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_list_insert(
-    list: *mut StationList,
-    station: *mut BaseStation,
-    id: u16,
-) {
-    unsafe { (*list).insert(station, id) };
-}
-/// Native `StationList::erase`, for harness fixtures that seed a nearby set.
-/// # Safety
-/// `list` is live and not borrowed.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_list_erase(list: *mut StationList, id: u16) {
-    unsafe { (*list).erase(id) };
-}
-/// Native `IndustryList::insert`, for harness fixtures that seed a delivery list.
-/// # Safety
-/// `state` is a live station owner; the industry is live while it is a member.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_industries_insert(
-    state: *mut Service,
-    entry: IndustryListEntry,
-) {
-    unsafe { (*catchment(state)).industries_near.insert(entry) };
-}
-/// Native `IndustryList::clear`, for harness fixtures that seed a delivery list.
-/// # Safety
-/// `state` is a live station owner.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_industries_clear(state: *mut Service) {
-    unsafe { (*catchment(state)).industries_near.clear() };
-}
 /// The canonical rectangle aliased by `BaseStation::rect`.
 /// # Safety
 /// `state` is live; the alias ends with the owner.
