@@ -9,6 +9,7 @@ import struct
 import subprocess
 import threading
 from pathlib import Path
+from typing import Any, TypedDict
 
 from . import core
 from .console_adapter import prepared_console
@@ -593,19 +594,24 @@ def growth_scenarios(soak):
     return scenarios
 
 
-def house_definition_fixtures(folder):
+class HouseDefinitionCapture(TypedDict):
+    definition_rows: int
+    hids: int
+
+
+def house_definition_fixtures(folder: Path) -> None:
     """Documented Action0 house properties loaded from actual GRF files."""
     from .newgrf_loading import grf, info
 
     folder.mkdir(parents=True, exist_ok=True)
 
-    def word(value):
+    def word(value: int) -> bytes:
         return struct.pack("<H", value)
 
-    def prop(local, number, data):
+    def prop(local: int, number: int, data: bytes) -> bytes:
         return bytes((0, 7, 1, 1, local, number)) + data
 
-    def definition(local, substitute, **values):
+    def definition(local: int, substitute: int, **values: bytes) -> list[bytes]:
         return [prop(local, 8, bytes((substitute,)))] + [
             prop(local, int(number, 16), data) for number, data in values.items()
         ]
@@ -699,7 +705,15 @@ def house_definition_fixtures(folder):
         (folder / f"{name}.grf").write_bytes(grf(actions, 2))
 
 
-def prepare_house_definitions(scenario, binaries, builds, out, timeout, env, result):
+def prepare_house_definitions(
+    scenario: dict[str, Any],
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: float,
+    env: dict[str, str],
+    result: dict[str, Any],
+) -> dict[str, Any]:
     folder = out / scenario["name"] / "input"
     house_definition_fixtures(folder / "grfs")
     executables = prepared_console("towns", adapter, binaries, builds, folder, env)
@@ -742,10 +756,10 @@ def prepare_house_definitions(scenario, binaries, builds, out, timeout, env, res
         raise RuntimeError(
             "house definition eligibility, placement, cargo or RNG differs"
         )
-    result["house_definition_capture"] = {
-        "definition_rows": len(traces["reference"]),
-        "hids": len(read_save(saves["reference"])["HIDS"]["elements"]),
-    }
+    result["house_definition_capture"] = HouseDefinitionCapture(
+        definition_rows=len(traces["reference"]),
+        hids=len(read_save(saves["reference"])["HIDS"]["elements"]),
+    )
     return dict(
         scenario,
         kind="save",
