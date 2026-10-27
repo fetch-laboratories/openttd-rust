@@ -150,6 +150,21 @@ pub struct State {
     id_counts: Vec<u16>,
     class_counts: Vec<u16>,
     growth: GrowthFields,
+    stations_near: crate::station::StationList,
+}
+/// The town's nearby station set, for immediate borrows only.
+pub(crate) fn stations_near(state: *mut State) -> *mut crate::station::StationList {
+    // SAFETY: Live owner supplied by the caller's resolved town.
+    unsafe { &raw mut (*state).stations_near }
+}
+/// Native `Town::stations_near` facade storage.
+/// # Safety
+/// `state` is live; the alias ends with the owner.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_town_stations_near(
+    state: *mut State,
+) -> *mut crate::station::StationList {
+    stations_near(state)
 }
 /// `Town::GetCargoSupplied` followed by the original history-period lookup.
 /// SAFETY: Live serialized canonical owner; the returned value is a copy.
@@ -702,7 +717,6 @@ pub struct Leaves {
     pub make_house: extern "C" fn(u32, u32, u32, u32),
 
     pub population_changed: extern "C" fn(u32),
-    pub nearby_stations: extern "C" fn(u32, u32, u32),
     pub house_count: extern "C" fn() -> u32,
     pub update_max_pass: extern "C" fn(u32),
     pub next_town: extern "C" fn(u32) -> u32,
@@ -1846,7 +1860,30 @@ impl Engine<'_> {
                 protected,
             );
         }
-        (self.leaves.nearby_stations)(town, tile, size);
+        let flags = size as u8;
+        let area = crate::tilearea::TileArea {
+            tile,
+            w: if flags & crate::house::BUILDING_2_TILES_X != 0 {
+                2
+            } else {
+                1
+            },
+            h: if flags & crate::house::BUILDING_2_TILES_Y != 0 {
+                2
+            } else {
+                1
+            },
+        };
+        let list = stations_near(self.owner);
+        crate::station::for_all_stations_around_tiles(
+            area,
+            &crate::station::Ctx::from_shared(self.services),
+            |near, _| {
+                // SAFETY: Live town owner; immediate mutation.
+                unsafe { (*list).insert(near.station, near.id) };
+                true
+            },
+        );
         // SAFETY: Pure immediate owner mutation, without native callbacks.
         unsafe {
             update_radius(self.owner);
@@ -2533,7 +2570,6 @@ crate::abi::layouts! {
         make_house,
 
         population_changed,
-        nearby_stations,
         house_count,
         update_max_pass,
         next_town,

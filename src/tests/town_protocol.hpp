@@ -18,6 +18,7 @@
 #include "../rust/ground_ffi.h"
 #include "../rust/movement_ffi.h"
 #include "../rust/landscape_command_ffi.h"
+#include "../rust/station_catchment_ffi.h"
 #include <algorithm>
 #include <array>
 #include <memory>
@@ -79,7 +80,6 @@ static inline uint32_t TownProtocol_exchange_company(uint32_t company) noexcept 
 static inline uint16_t TownProtocol_house_class(uint16_t id) noexcept { return id == 2 ? 0 : town_protocol_world->house_class; }
 static inline void TownProtocol_make_house(uint32_t tile, uint32_t town, uint32_t house, uint32_t construction) noexcept { TownProtocolLeaf(10, tile, town, house, construction); }
 static inline void TownProtocol_population_changed(uint32_t) noexcept { town_protocol_world->population = openttd_rust_town_simulation(town_protocol_world->owner)->population; }
-static inline void TownProtocol_nearby_stations(uint32_t town, uint32_t tile, uint32_t size) noexcept { TownProtocolLeaf(15, town, tile, size, 0); }
 static inline uint32_t TownProtocol_house_count() noexcept { return static_cast<uint32_t>(TownProtocolLeaf(17, 0, 0, 0, 0)); }
 static inline void TownProtocol_update_max_pass(uint32_t town) noexcept { TownProtocolLeaf(19, town, 0, 0, 0); }
 static inline uint32_t TownProtocol_next_town(uint32_t from) noexcept { return static_cast<uint32_t>(TownProtocolLeaf(20, 0, from, 0, 0)); }
@@ -138,7 +138,6 @@ static inline OpenTTDHouseServices TownProtocolHouses()
 	houses.town = [](uint32_t) noexcept -> OpenTTDTownRef { town_protocol_world->owner_reads++; return {nullptr, town_protocol_world->owner, 0}; };
 	houses.loop_spec = [](uint16_t id) noexcept -> OpenTTDHouseLoopSpec { return {.callbacks = TownProtocol_house_callbacks(id), .flags = TownProtocol_house_flags(id), .population = TownProtocol_house_population(id), .mail = 0, .minimum_life = 0}; };
 	houses.delete_inspect = [](uint32_t) noexcept {};
-	houses.next_near_station = [](Town *, OpenTTDStation *) noexcept -> OpenTTDStation * { return nullptr; };
 	houses.cargogen_mode = []() noexcept -> uint8_t { return 0; };
 	houses.place_houses = []() noexcept -> uint8_t { return 2; };
 	houses.company_human = [](uint8_t) noexcept { return true; };
@@ -196,7 +195,6 @@ static inline OpenTTDTownLeaves TownProtocolServices()
 		.make_house = TownProtocol_make_house,
 
 		.population_changed = TownProtocol_population_changed,
-		.nearby_stations = TownProtocol_nearby_stations,
 		.house_count = TownProtocol_house_count,
 		.update_max_pass = TownProtocol_update_max_pass,
 		.next_town = TownProtocol_next_town,
@@ -261,6 +259,11 @@ template <typename Check> void CheckTownProtocol(Check check)
 	services.clear_square_services.docking = [](uint32_t) noexcept { return false; };
 	services.clear_square_services.generating_world = []() noexcept { return false; };
 	services.water_services = []() noexcept { return &town_protocol_water; };
+	/* No stations exist, so placed houses find no nearby station. */
+	static OpenTTDStationCatchmentServices catchment{};
+	catchment.shared = &services;
+	catchment.station_count = []() noexcept -> size_t { return 0; };
+	services.station_catchment = []() noexcept -> const OpenTTDStationCatchmentServices * { return &catchment; };
 	services.map_log_x = []() noexcept -> uint32_t { return 6; };
 	services.map_max_x = []() noexcept -> uint32_t { return 63; };
 	services.map_max_y = []() noexcept -> uint32_t { return 63; };

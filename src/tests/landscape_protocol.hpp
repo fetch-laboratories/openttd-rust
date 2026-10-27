@@ -60,7 +60,6 @@ template<typename Check> void Run(Check check)
 		.town = nullptr,
 		.station_loop = Visit<5>,
 		.objects = &objects,
-		.object_frame = nullptr,
 	};
 	const OpenTTDTreeLoopSettings settings{.tick_counter = 1, .size_x = 64, .climate = 0, .extra = 0, .ambient = false};
 	const auto saved_cursor = *openttd_rust_tile_loop_cursor();

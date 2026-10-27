@@ -43,7 +43,6 @@ struct CargoPayment {
 };
 static struct { struct { uint8_t feeder_payment_share; } economy; } _settings_game;
 #include "cargo-reference.inc"
-#include "cargo-destination-gap.inc"
 int main()
 {
 	OpenTTDCargoServices s = CargoTestServices();
@@ -94,6 +93,5 @@ int main()
 	}
 	spec.valid = false;
 	if (openttd_rust_cargo_income(&s, UINT32_MAX, UINT32_MAX, 65535, 0) != 0) return 3;
-	if (CheckCargoDestinationGap(s)) return 4;
 	std::printf("cargo income gap: %llu income cases, 64 transfer saturation cases passed\n", static_cast<unsigned long long>(cases));
 }

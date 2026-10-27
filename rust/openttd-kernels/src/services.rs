@@ -358,6 +358,8 @@ pub struct Services {
     pub road_commands: extern "C" fn() -> *const crate::road_cmd::RoadCommandServices,
     /// Canonical native station command table.
     pub station_commands: extern "C" fn() -> *const crate::station_cmd::CommandServicesTable,
+    /// Canonical native station catchment table.
+    pub station_catchment: extern "C" fn() -> *const crate::station::CatchmentServices,
     /// Original docking flag.
     pub docking_tile: extern "C" fn(u32) -> bool,
     /// Canonical shared `station_gfx` service.
@@ -746,6 +748,7 @@ crate::abi::layouts! {
         station_index,
         road_commands,
         station_commands,
+        station_catchment,
         docking_tile,
         station_gfx,
         station_serve_neutral,
@@ -968,6 +971,7 @@ pub fn fixture(
         station_index: short,
         road_commands: fixture_road_commands,
         station_commands: fixture_station_commands,
+        station_catchment: fixture_station_catchment,
         docking_tile: flag,
         station_gfx: byte,
         station_serve_neutral: flag0,
@@ -1423,6 +1427,10 @@ extern "C" fn fixture_water_services() -> *const crate::water::WaterServices {
 #[cfg(test)]
 extern "C" fn fixture_station_commands() -> *const crate::station_cmd::CommandServicesTable {
     panic!("unused station command table");
+}
+#[cfg(test)]
+extern "C" fn fixture_station_catchment() -> *const crate::station::CatchmentServices {
+    panic!("unused station catchment table");
 }
 
 #[cfg(test)]

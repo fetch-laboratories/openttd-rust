@@ -3567,11 +3567,13 @@ extern const TileTypeProcs _tile_type_industry_procs = {
 	nullptr, // check_build_above_proc
 };
 
+#ifndef WITH_RUST
 bool IndustryCompare::operator() (const IndustryListEntry &lhs, const IndustryListEntry &rhs) const
 {
 	/* Compare by distance first and use index as a tiebreaker. */
 	return std::tie(lhs.distance, lhs.industry->index) < std::tie(rhs.distance, rhs.industry->index);
 }
+#endif
 
 /**
  * Remove unused industry accepted/produced slots -- entries after the last slot with valid cargo.
@@ -3663,10 +3665,6 @@ static const OpenTTDIndustryServices _industry_services = {
 	},
 	.production_callback = [](void *i, uint8_t reason) noexcept { IndustryProductionCallback(RustIndustry(i), reason); },
 	.scale_cargo = OpenTTDScaleIndustryCargo,
-	.move_goods = [](void *handle, uint32_t slot, uint32_t amount) noexcept -> uint32_t {
-		Industry *i = RustIndustry(handle);
-		return OpenTTDMoveGoodsToStation(i->produced[slot].cargo, amount, {i->index, SourceType::Industry}, i->stations_near, i->exclusive_consumer);
-	},
 	.tile_add_wrap = SharedTileAddWrap,
 	.farm_tile = [](uint32_t index) noexcept -> OpenTTDIndustryFarmTile {
 		TileIndex tile(index);
@@ -3779,12 +3777,6 @@ static const OpenTTDIndustryLifecycleServices _industry_lifecycle_services = {
 	.delete_inspect = OpenTTDDeleteIndustryInspect,
 	.subsidies = RustSubsidyServices,
 	.invalidate_cargo = [](uint16_t industry) noexcept { CargoPacket::InvalidateAllFrom({IndustryID(industry), SourceType::Industry}); },
-	.next_near_station = [](void *shell, void *previous) noexcept -> void * {
-		const StationList &stations = static_cast<Industry *>(shell)->stations_near;
-		auto next = previous == nullptr ? stations.begin() : stations.upper_bound(static_cast<Station *>(previous));
-		return next == stations.end() ? nullptr : *next;
-	},
-	.remove_delivery = [](void *station, void *industry) noexcept { static_cast<Station *>(station)->RemoveIndustryToDeliver(static_cast<Industry *>(industry)); },
 	.belongs = [](uint32_t tile, uint16_t industry) noexcept -> bool { return IsTileType(TileIndex(tile), MP_INDUSTRY) && RustIndustryTileIndex(tile) == industry; },
 	.randomisation_spec = IndustryRandomisationSpec,
 	.random_triggers = [](uint32_t tile) noexcept -> uint8_t { return GetIndustryRandomTriggers(TileIndex(tile)).base(); },
@@ -3872,13 +3864,6 @@ const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices()
 
 		.build_window_dirty = []() noexcept { SetWindowDirty(WC_BUILD_INDUSTRY, 0); },
 		.serve_neutral = GetRustSharedServices().station_serve_neutral,
-		.insert_near_station = [](void *shell, OpenTTDIndustryStationHandle *station) noexcept { RustIndustry(shell)->stations_near.insert(reinterpret_cast<Station *>(station)); },
-		.clear_near_industries = [](OpenTTDIndustryStationHandle *station) noexcept { reinterpret_cast<Station *>(station)->industries_near.clear(); },
-		.insert_neutral_industry = [](OpenTTDIndustryStationHandle *station, void *shell) noexcept { reinterpret_cast<Station *>(station)->industries_near.insert(IndustryListEntry{0, RustIndustry(shell)}); },
-		.stations_around = [](void *shell, void *context, OpenTTDIndustryStationVisit visit) noexcept {
-			ForAllStationsAroundTiles(RustIndustry(shell)->location, [context, visit](Station *station, TileIndex tile) { return visit(context, reinterpret_cast<OpenTTDIndustryStationHandle *>(station), tile.base()); });
-		},
-		.add_delivery = [](OpenTTDIndustryStationHandle *station, void *shell, uint32_t tile) noexcept { reinterpret_cast<Station *>(station)->AddIndustryToDeliver(RustIndustry(shell), TileIndex(tile)); },
 	};
 	return services;
 }

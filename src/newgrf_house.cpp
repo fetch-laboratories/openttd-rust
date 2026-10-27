@@ -80,10 +80,6 @@ const OpenTTDHouseResolverServices &GetHouseResolverServices() noexcept
 		.nearby_spec = HouseNearbySpec,
 		.file_identity = [](uint16_t house) noexcept -> OpenTTDHouseFileIdentity { const auto *spec = RustHouseSpec(house); return {.grfid = RustSpecGRFID(spec), .has_file = RustSpecHasGRFFile(spec)}; },
 		.badges = RustHouseBadges,
-		.stations = [](uint32_t tile, void *context, void (*visit)(void *, const Station *)) noexcept {
-			StationFinder finder(TileArea(TileIndex{tile}, 1, 1));
-			for (const Station *station : finder.GetStations()) visit(context, station);
-		},
 		.town_by_id = OpenTTDTownShellByID,
 		.root = RustHouseSpriteGroup,
 		.spec_house = [](const HouseSpec *spec) noexcept -> uint16_t { return spec - HouseSpec::Get(0); },
@@ -721,12 +717,7 @@ void AnimateNewHouseTile(TileIndex tile)
 #endif
 }
 
-#ifdef WITH_RUST
-void TriggerHouseAnimation_WatchedCargoAccepted(TileIndex tile, CargoTypes trigger_cargoes)
-{
-	openttd_rust_house_watched(&GetRustTownServices(), &GetRustSharedServices(), tile.base(), trigger_cargoes);
-}
-#else
+#ifndef WITH_RUST
 void TriggerHouseAnimation_ConstructionStageChanged(TileIndex tile, bool first_call)
 {
 	const HouseSpec *hs = HouseSpec::Get(GetHouseType(tile));

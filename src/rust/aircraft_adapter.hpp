@@ -28,10 +28,6 @@ static_assert(AirportBlocks{AirportBlock::AirportClosed}.base() == (uint64_t{1} 
  * The record contains opaque pointers only; Rust never views C++ object layout. */
 
 
-static const OpenTTDStation *OPENTTD_RUST_CALL Aircraft_station(uint16_t id) noexcept
-{
-	return RustStation(Station::GetIfValid(id));
-}
 
 
 
@@ -433,7 +429,7 @@ ClosestDepot Aircraft::FindClosestDepot()
 Station *GetTargetAirportIfValid(const Aircraft *v)
 {
 	assert(v->type == VEH_AIRCRAFT);
-	Station *st = Station::GetIfValid(v->targetairport);
+	Station *st = RustStationIfValid<Station *>(v->targetairport.base());
 	return st == nullptr || RustStationAirportTile(st) == INVALID_TILE.base() ? nullptr : st;
 }
 void ReleaseAircraftAirportBlocks(const Aircraft *v) { openttd_rust_aircraft_release_blocks(&_aircraft_leaves, RustAircraftVehicle(const_cast<Aircraft *>(v))); }

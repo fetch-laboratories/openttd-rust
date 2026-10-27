@@ -114,7 +114,7 @@ impl Ctx<'_> {
                 return INVALID_STATION;
             }
         }
-        if !(self.s.rect_contains)(st, tile) {
+        if !self.rect_contains(st, tile) {
             out.error(self.s.strings.unsuitable);
             return INVALID_STATION;
         }
@@ -365,8 +365,8 @@ impl Ctx<'_> {
                     return cost.take(ret);
                 }
             }
-            (self.s.before_add_rect)(
-                ret.0,
+            self.before_add_rect(
+                ret,
                 wp,
                 TileArea {
                     tile: start,
@@ -395,8 +395,8 @@ impl Ctx<'_> {
         }
         let owner = (self.shared.tile_owner)(start);
         (self.s.set_station_owner)(wp, owner);
-        (self.s.before_add_rect)(
-            ret.0,
+        self.before_add_rect(
+            ret,
             wp,
             TileArea {
                 tile: start,
@@ -569,7 +569,7 @@ impl Ctx<'_> {
             if (self.world().station_owner)(wp) != (self.shared.current_company)() {
                 return cost.error(self.s.strings.waypoint_close);
             }
-            (self.s.before_add_rect)(ret.0, wp, area, ADD_TEST);
+            self.before_add_rect(ret, wp, area, ADD_TEST);
             if !ret.ok() {
                 return cost.take(ret);
             }
@@ -601,7 +601,7 @@ impl Ctx<'_> {
         }
         let owner = (self.shared.current_company)();
         (self.s.set_station_owner)(wp, owner);
-        (self.s.before_add_rect)(ret.0, wp, area, ADD_TRY);
+        self.before_add_rect(ret, wp, area, ADD_TRY);
         unsafe {
             crate::newgrf_roadstop::openttd_rust_roadstop_assign(
                 spec,
@@ -647,7 +647,7 @@ impl Ctx<'_> {
                 self.remove_road_tile(ret, ret, tile, flags, i32::from(specindex.value), true);
             }
             (self.s.road_waypoint_area_add)(wp, tile);
-            (self.s.before_add_tile)(ret.0, wp, tile, ADD_TRY);
+            self.before_add_tile(ret, wp, tile, ADD_TRY);
             let update = |rt, company, count| unsafe {
                 crate::road_cmd::update_company_road_infrastructure(
                     (self.shared.road_commands)(),
@@ -728,7 +728,7 @@ impl Ctx<'_> {
             (self.s.set_location)(wp, tile);
             (self.s.waypoint_view_invalidate)(wp);
         }
-        (self.s.before_add_tile)(ret.0, wp, tile, ADD_TRY);
+        self.before_add_tile(ret, wp, tile, ADD_TRY);
         (self.s.set_string_id)(wp, self.s.strings.buoy_name);
         (self.s.set_facility_bits)(wp, FACILITY_DOCK);
         (self.s.set_station_owner)(wp, OWNER_NONE);
@@ -792,7 +792,7 @@ impl Ctx<'_> {
                     self.s.restoration,
                 );
             }
-            (self.s.after_remove_tile)(wp, tile);
+            self.after_remove_tile(wp, tile);
             (self.s.virtual_coord)(wp);
             self.reset_delete_counter(wp);
         }

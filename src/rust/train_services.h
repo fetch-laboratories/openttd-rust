@@ -459,7 +459,7 @@ static void TrainStartStopDirty(OpenTTDTrainHandle id) noexcept
 static uint64_t TrainStationDest(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	return Station::Get(v->current_order.GetDestination().ToStationID())->train_station.tile.base();
+	return RustStationTrainTile(Station::Get(v->current_order.GetDestination().ToStationID()));
 }
 static uint64_t TrainStoppedInDepot(OpenTTDTrainHandle id) noexcept
 {

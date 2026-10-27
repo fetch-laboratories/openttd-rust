@@ -50,6 +50,7 @@ inline uint8_t OpenTTDTownCargoGenMode() noexcept { return _settings_game.econom
 inline uint8_t OpenTTDPlaceHouses() noexcept { return _settings_game.economy.place_houses; }
 inline bool RustServeNeutralIndustries() noexcept { return _settings_game.station.serve_neutral_industries; }
 inline uint8_t RustStationSpread() noexcept { return _settings_game.station.station_spread; }
+inline bool RustModifiedCatchment() noexcept { return _settings_game.station.modified_catchment; }
 inline bool RustStationStopOnTownRoad() noexcept { return _settings_game.construction.road_stop_on_town_road; }
 inline bool RustStationStopOnCompetitorRoad() noexcept { return _settings_game.construction.road_stop_on_competitor_road; }
 inline bool RustStationNoiseEnabled() noexcept { return _settings_game.economy.station_noise_level; }

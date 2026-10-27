@@ -5,35 +5,35 @@ this roadmap over conflicting issues; it is the current state of the umbrella
 issue #3. Update it in place; `/steer` prunes it.
 Evidence stays in PRs.
 
-## Where the fork stands (2026-10-27, code at `cf8e561d61`)
+## Where the fork stands (2026-10-27, code at `fbf9f1cc5a`)
 
-- 76 ownership ports; no port integrated since houses #486 (`fc3bf4b20b`) and
-  airports #499 (`c04219b0d8`). #502 (#514 cadence split, #501 gate
-  configuration) integrated at `1fae5d498a` after its bootstrap Full; #501
+- 76 ownership ports. Since the wind-down: #502 (#514 cadence split, #501
+  gate configuration) at `1fae5d498a`, #521 (macOS annotation warnings) at
+  `cf8e561d61`, #517 (#275 ground-vehicle accessor audit) at `7274b59099` and
+  #519 (#515 orphans and accessors, #500's first ID types, #506's
+  `thread_local!` check) at `fbf9f1cc5a`, each at its exact-head Full. #501
   stays open for its annotation batches. No rollback target is known.
 - The last full source inventory, at `3b3382ce1c`, counted 69,604 of 470,612
   original lines retired (14.79%), including 54,826 of 102,615 simulation
   lines (53.43%); whole-fork Rust, tooling and glue were 124,441, 43,590 and
-  44,370 lines. #486 and #499 retire another 868 original lines by their
-  component metrics. These measures include comments/data, not completed
-  behavior.
-- The instruction profile at `c04219b0d8` (pinned zlib/liblzma runtime per
-  `docs/rust-migration.md`) passed all six semantic and f492-anchor identity
-  checks: TGP 1.1788x, Grok 1.3948x, Opus 1.4018x, P1996 1.3354x,
-  P2000 1.3934x and P2016 1.4695x. Play loop counts sit 1.0% to 1.8% below
-  their anchors and TGP 0.01% above, so no projection rose and P2016 stays in
-  band without a quiet-pass trigger. A run without the pinned runtime fails
-  identity; the runtime directory now carries its provenance and packages.
-- The first split cadence dispatch on `1fae5d498a` passed every build and test
-  (Clang, GCC Dedicated, Windows x86, macOS Debug and Release), but the macOS
-  annotation check, which #502 first enables on dispatch, failed on
-  release-only unused assertion parameters, a portable-only flood table and
-  an orphaned `WITH_RUST` cargo-label body and export. #521 fixed them at
-  `cf8e561d61`; its platform run passed both macOS annotation checks.
-- Unintegrated branches: #517, #518, #519, #520 and #516 (implementation
-  started). #517's base update merged cleanly; #519's conflict resolution and
-  #520's whole-PR fixing review are recorded on their PRs. #512's tally is due
-  after three more integrations.
+  44,370 lines. #486, #499 and #521 retire another 896 original lines by their
+  component metrics. #522 (catchment, 700 retired) is in its fixture rework.
+- Speed: the pinned-runtime profile at `c04219b0d8` passed all six identity
+  checks with projections unchanged (TGP 1.1788x, Grok 1.3948x, Opus 1.4018x,
+  P1996 1.3354x, P2000 1.3934x, P2016 1.4695x). At `7274b59099` the identity
+  check fails because #517 changed `Cargo.toml` and CMake (a quiet pass must
+  re-anchor), and raw candidate loop counts rose against `c04219b0d8`:
+  Grok +4.05%, Opus +3.95%, P1996 +2.25%, P2000 +2.81%, P2016 +3.00%, TGP
+  -0.02%. P2016 would project about 1.53x, over its 1.5x ceiling. #517 was
+  meant to save about 1.6% there. Attribution and the fix-forward maintenance
+  PR are in progress under #275; that fix integrates before other maintenance,
+  and the re-anchoring pass follows it.
+- The first split cadence dispatch passed every build and test; its macOS
+  annotation check, first enabled on dispatch by #502, failed on warnings that
+  #521 fixed (its platform run passed both macOS annotation checks).
+- Unintegrated branches: #518 (coverage corpus rerun), #520 (reviewed, base
+  updated over #519 by removing only conflict markers), #522 (catchment) and
+  the coming #275 speed fix. #512's tally is due after two more integrations.
 
 ## Twenty-first steering review (2026-10-26, orphans, concurrency, cadence and accessor cost)
 
@@ -315,18 +315,16 @@ One ranked list (twenty-first steering, correction 1). Each free slot takes the
 highest unblocked item; finishing review and integration comes first. Rank
 reasons are one line each; scope is in the issues and corrections above.
 
-1. **Integrate the reviewed drafts one at a time** (they overlap in shared
-   modules), each after a current-base update, a scoped review of any
-   substantive conflict resolution and an exact-head Full: #521 (cadence
-   warnings) integrated first; then #517, #519 and #520.
-2. **#275 ground-vehicle accessor credit**: after #517 integrates, attribute
-   its net P2016 instruction savings against the retained reference profile;
-   trains (1.57x) are the next attribution target.
+1. **#275 speed fix for the `7274b59099` rise** (above): attribute per
+   function, fix forward as the next maintenance PR, then a quiet pass
+   re-anchors the identity #517 changed and the #517 credit is recorded.
+2. **#520** (reviewed) integrates after the speed fix; **#522** (ownership)
+   proceeds to its independent review and Full meanwhile.
 3. **#504 coverage**: cheap, no CI cost, measures where the harness is blind
    across the ownership ports and ranks #156's gaps. Draft #518 is rerunning
    the whole reference-only corpus at its fixed head; then report, #156
    update, independent fixing review and Full.
-4. **#516 catchment** (implementation started): Rust owns station
+4. **#516 catchment**, PR #522 (fixture rework, then review): Rust owns station
    rectangles, catchment bitmaps and nearby lists. It adopts #520's shared
    `RustIndustryTileIndex` and #519's ID types when they integrate and builds
    no parallel copy.
@@ -356,18 +354,16 @@ needs it beyond #516; GUI and platform after the simulation; the six
 ## Resume checkpoint
 
 Resumed 2026-10-27 by a Claude Code root (claude-opus-5-5, xhigh); reviews
-run on gpt-6.1-sol (high) through T3. Code at `cf8e561d61`; no confirmed
-regression or rollback target.
+run on gpt-6.1-sol (high) through T3. Code at `fbf9f1cc5a`; no confirmed
+functional regression or rollback target; one speed regression (above).
 
 | Item | Head | Next action | Running jobs or CI |
 | --- | --- | --- | --- |
-| #517 accessor audit | `054681bb3e` | Update from base after #521, exact-head Full, merge; then the #275 credit. | Earlier Full cancelled when #521 took precedence. |
-| #519 typed maintenance | `e8e4e002f5` | Resolution reviewed; update from base after #517, Full, merge. | None. |
-| #520 disaster services | `dcaa6de130` | Fixing review recorded; root spot-checked; update from base, Full, merge. | None. |
+| #275 speed rise | `7274b59099` profiled | Attribution agent finds the cause and opens the fix-forward PR; then Full, merge, quiet re-anchoring pass. | Attribution running. |
+| #520 disaster services | `ffe0f70cab` (local) | Push after local checks; Full after the speed fix integrates; merge. | Local checks running. |
+| #522 catchment | `e4b038b9b1` | Fixture rework removes four harness-only exports; then independent review, base update, Full. | Implementation agent working. |
 | #518 coverage | `0bf8d71c0e` | Whole-corpus rerun, then report, #156 update, review and Full. | Corpus running in its worktree. |
-| #516 catchment | not yet pushed | Implementation agent working from `00fa948d09`. | Local builds only. |
-| Profile | `c04219b0d8` measured | Next after two more integrations, with the pinned runtime. | None. |
-| Cadence | first split run red on macOS annotations | #521's platform run on its head confirms the fix; next dispatch after the tenth integration since steering. | None. |
+| Cadence | split run fixed by #521 | Next dispatch after the tenth integration since steering. | None. |
 
 Selection: /root, gpt-6.1-sol, xhigh; planning agents run gpt-6-astra, high.
 Scopes and evidence plans are in the selected issues; PRs carry current task status.

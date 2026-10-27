@@ -466,7 +466,7 @@ void SubsidyMonthlyLoop()
 {
 #ifdef WITH_RUST
 	CargoArray scratch{};
-	openttd_rust_subsidy_monthly(&GetRustSubsidyServices(), {&scratch, scratch.data()});
+	openttd_rust_subsidy_monthly(&GetRustSubsidyServices(), {scratch.data()});
 #else
 	bool modified = false;
 
@@ -553,8 +553,7 @@ static const IntervalTimer<TimerGameEconomy> _economy_subsidies_monthly({TimerGa
 bool CheckSubsidised(CargoType cargo_type, CompanyID company, Source src, const Station *st)
 {
 #ifdef WITH_RUST
-	RustNearbyIndustryCursor cursor;
-	return openttd_rust_subsidy_check(&GetRustSubsidyServices(), cargo_type, company.base(), src, RustBaseStationID(st), &cursor);
+	return openttd_rust_subsidy_check(&GetRustSubsidyServices(), cargo_type, company.base(), src, RustBaseStationID(st));
 #else
 	/* If the source isn't subsidised, don't continue */
 	if (!src.IsValid()) return false;
@@ -682,10 +681,6 @@ const OpenTTDSubsidyServices &GetRustSubsidyServices() noexcept
 		.expired_events = [](uint16_t id) noexcept { AI::BroadcastNewEvent(new ScriptEventSubsidyExpired(SubsidyID(id))); Game::NewEvent(new ScriptEventSubsidyExpired(SubsidyID(id))); },
 		.dirty = []() noexcept { InvalidateWindowData(WC_SUBSIDIES_LIST, 0); },
 		.station = RustStationGet<const Station *>,
-		.station_empty = RustStationRectangleEmptyHandle<const Station *>,
-		.catchment = RustStationCatchment,
-		.begin_nearby = BeginNearbyIndustries,
-		.next_nearby = NextNearbyIndustry,
 		.assert_destination = [](Source source) noexcept { if (source.type == SourceType::Town) { assert(Town::Get(source.ToTownID())->cache.part_of_subsidy.Test(PartOfSubsidy::Destination)); } else { assert(Industry::Get(source.ToIndustryID())->part_of_subsidy.Test(PartOfSubsidy::Destination)); } },
 	};
 	return services;

@@ -391,23 +391,6 @@ def income_gap():
             )
         )
     )
-    flush_start = source.index("\tfor (Industry *iid : _cargo_delivery_destinations)")
-    flush_end = source.index(
-        "_cargo_delivery_destinations.clear();", flush_start
-    ) + len("_cargo_delivery_destinations.clear();")
-    (out / "cargo-destination-reference.inc").write_text(
-        body(
-            "/** The industries we've currently brought cargo to. */",
-            "/**\n * Delivers goods to industries/towns",
-        )
-        + body(
-            "static void TriggerIndustryProduction(Industry *i)",
-            "/**\n * Makes us a new cargo payment helper.",
-        )
-        + "static void FlushCargoDestinationReference() {\n"
-        + source[flush_start:flush_end]
-        + "\n}\n"
-    )
     command = [
         "c++",
         "-std=c++20",

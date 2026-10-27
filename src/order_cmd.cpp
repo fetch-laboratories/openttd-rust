@@ -217,14 +217,9 @@ extern "C" uint64_t openttd_orders_at_station(void *ctx) noexcept
 	return IsTileType(v->tile, MP_STATION);
 }
 
-extern "C" uint64_t openttd_orders_ship_station_tile(uint16_t destination) noexcept
-{
-	return Station::Get(StationID(destination))->ship_station.tile.base();
-}
-
 extern "C" uint64_t openttd_orders_valid_station(uint16_t destination) noexcept
 {
-	return Station::GetIfValid(StationID(destination)) != nullptr;
+	return RustStationIfValid<Station *>(destination) != nullptr;
 }
 
 extern "C" uint64_t openttd_orders_station_owner(uint16_t destination) noexcept
