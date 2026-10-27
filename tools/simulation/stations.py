@@ -1450,6 +1450,24 @@ def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
     )
 
 
+def check_airport_definition_state(snapshots: list[Path], log: list[str]) -> None:
+    """Require saved custom identities and actual flight after the build commands."""
+    state = read_save(snapshots[-1])
+    grfid = int.from_bytes(b"A492", "little")
+    for chunk, index in (("APID", 10), ("ATID", 74)):
+        row = core.rows(state, chunk).get(index)
+        if row is None or tuple(
+            row[field] for field in ("grfid", "entity_id", "substitute_id")
+        ) != (grfid, 0, 0):
+            raise RuntimeError("airport definition identity absent from " + chunk)
+    line = next(line for line in log if line.startswith("STCMD airport-def-plane "))
+    vehicle, x, y, z = map(int, line.split()[2:])
+    row = core.rows(state)[vehicle]
+    prefix = "aircraft[0]/common[0]/"
+    if tuple(row[prefix + field] for field in ("x_pos", "y_pos", "z_pos")) == (x, y, z):
+        raise RuntimeError("file-loaded airport aircraft did not move")
+
+
 def check_commands(scenario, run, mode, role, result):
     if scenario["station_commands"].startswith("airport-definitions"):
         markers = [
@@ -1472,6 +1490,7 @@ def check_commands(scenario, run, mode, role, result):
                 raise RuntimeError("file-loaded airport evidence missing: " + marker)
         if "STCMD complete" not in run["log"]:
             raise RuntimeError("file-loaded airport scenario did not complete")
+        check_airport_definition_state(run["snapshots"], run["log"])
         return
     if scenario["station_commands"].startswith("definitions"):
         markers = (
