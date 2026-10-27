@@ -1425,6 +1425,9 @@ mod newgrf_roadstop;
 mod rail;
 mod type_availability;
 
+mod gfx_type;
+mod house_definition;
+mod newgrf_animation_type;
 mod override_manager;
 
 mod industry_map;

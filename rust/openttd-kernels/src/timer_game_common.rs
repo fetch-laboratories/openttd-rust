@@ -31,3 +31,7 @@ pub const fn is_leap_year(year: i32) -> bool {
 
 /// `CalendarTime::MAX_DATE` (last day of year 5,000,000).
 pub const MAX_DATE: i32 = 365 * 5_000_001 + 5_000_000 / 4 - 5_000_000 / 100 + 5_000_000 / 400;
+
+/// Calendar year limits from `TimerGameConst`.
+pub const MIN_YEAR: i32 = 0;
+pub const MAX_YEAR: i32 = 5_000_000;

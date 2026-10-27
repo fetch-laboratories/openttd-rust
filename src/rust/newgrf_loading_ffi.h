@@ -30,6 +30,7 @@ bool openttd_rust_grf_has_set(uint8_t, uint32_t);
 uint32_t openttd_rust_grf_set_sprite(uint8_t, uint32_t);
 uint32_t openttd_rust_grf_set_size(uint8_t, uint32_t);
 }
+struct OpenTTDHouseDefinitionServices;
 struct OpenTTDEngineLoadingServices;
 struct OpenTTDIndustryDefinitionServices;
 struct OpenTTDTypeRegistryServices;
@@ -42,6 +43,7 @@ struct OpenTTDGrfLoadingServices {
 	const OpenTTDGlobalVariableServices * global;
 	const OpenTTDCargoRegistryServices *cargo;
 	const OpenTTDEngineLoadingServices *engine;
+	const OpenTTDHouseDefinitionServices *houses;
 	const OpenTTDIndustryDefinitionServices *industry;
 	const OpenTTDTypeRegistryServices *types;
 	const OpenTTDAction2Services *action2;
@@ -150,7 +152,6 @@ struct OpenTTDGrfLoadingServices {
 	void (*reset_bridges)() noexcept OPENTTD_SERVICE_DEFAULT(reset_bridges);
 	void (*reset_prices)() noexcept OPENTTD_SERVICE_DEFAULT(reset_prices);
 	void (*reset_currencies)() noexcept OPENTTD_SERVICE_DEFAULT(reset_currencies);
-	void (*reset_houses)() noexcept OPENTTD_SERVICE_DEFAULT(reset_houses);
 	const OpenTTDObjectClassServices *object_classes;
 	void (*reset_objects)() noexcept OPENTTD_SERVICE_DEFAULT(reset_objects);
 	const OpenTTDStationClassServices *station_classes;
@@ -168,7 +169,6 @@ struct OpenTTDGrfLoadingServices {
 	void (*finalise_strings)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_strings);
 	void (*finalise_badges)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_badges);
 	void (*finalise_canals)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_canals);
-	void (*finalise_houses)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_houses);
 	void (*finalise_objects)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_objects);
 	void (*sort_industries)() noexcept OPENTTD_SERVICE_DEFAULT(sort_industries);
 	void (*industry_legend)() noexcept OPENTTD_SERVICE_DEFAULT(industry_legend);

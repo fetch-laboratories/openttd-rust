@@ -92,10 +92,10 @@ struct HouseClassMapping {
 	uint32_t grfid;     ///< The GRF ID of the file this class belongs to
 	uint8_t  class_id;  ///< The class id within the grf file
 };
-#endif
 
 void ResetHouseClassIDs();
 HouseClassID AllocateHouseClassID(uint8_t grf_class_id, uint32_t grfid);
+#endif
 
 void InitializeBuildingCounts();
 void InitializeBuildingCounts(Town *t);

@@ -30,6 +30,7 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.global = &GetRustGlobalVariableServices(),
 		.cargo = &GetRustCargoRegistryServices(),
 		.engine = &GetRustEngineLoadingServices(),
+		.houses = &GetHouseDefinitionServices(),
 		.industry = &GetIndustryDefinitionServices(),
 		.types = &GetRustTypeRegistryServices(),
 		.action2 = &GetRustAction2Services(),
@@ -138,7 +139,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.reset_bridges = []() noexcept { ResetBridges(); },
 		.reset_prices = []() noexcept { ResetPriceBaseMultipliers(); },
 		.reset_currencies = []() noexcept { ResetCurrencies(); },
-		.reset_houses = []() noexcept { ResetHouses(); },
 		.object_classes = &ObjectClass::GetServices(),
 		.reset_objects = []() noexcept { ResetObjects(); },
 		.station_classes = &StationClass::GetServices(),
@@ -156,7 +156,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.finalise_strings = []() noexcept { FinaliseStringMapping(); },
 		.finalise_badges = []() noexcept { FinaliseBadges(); },
 		.finalise_canals = []() noexcept { FinaliseCanals(); },
-		.finalise_houses = []() noexcept { FinaliseHouseArray(); },
 		.finalise_objects = []() noexcept { FinaliseObjectsArray(); },
 		.sort_industries = []() noexcept { SortIndustryTypes(); },
 		.industry_legend = []() noexcept { BuildIndustriesLegend(); },
@@ -220,6 +219,7 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 }
 #include "abi-visit-OpenTTDGrfLoadingServices.hpp"
 #include "abi-visit-OpenTTDAction2Services.hpp"
+#include "abi-visit-OpenTTDHouseDefinitionServices.hpp"
 #include "abi-visit-OpenTTDStationClassServices.hpp"
 #include "abi-visit-OpenTTDRoadStopClassServices.hpp"
 #include "abi-visit-OpenTTDAirportClassServices.hpp"
@@ -227,6 +227,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 bool CheckAbi_grf_loading()
 {
 	const auto &s = GetRustGrfLoadingServices();
-	return AbiServicesComplete(GetRustAction2Services()) && AbiServicesComplete(s) && AbiServicesComplete(*s.station_classes) && AbiServicesComplete(*s.roadstop_classes) && AbiServicesComplete(*s.airport_classes) && AbiServicesComplete(*s.object_classes);
+	return AbiServicesComplete(GetRustAction2Services()) && AbiServicesComplete(s) && AbiServicesComplete(*s.houses) && AbiServicesComplete(*s.station_classes) && AbiServicesComplete(*s.roadstop_classes) && AbiServicesComplete(*s.airport_classes) && AbiServicesComplete(*s.object_classes);
 }
 #endif

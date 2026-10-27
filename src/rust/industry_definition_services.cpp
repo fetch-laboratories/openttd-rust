@@ -45,7 +45,7 @@ const OpenTTDIndustryDefinitionServices &GetIndustryDefinitionServices() noexcep
 		.climate_available = [](const IndustrySpec *spec, uint8_t climate) noexcept { return spec->climate_availability.Test(static_cast<LandscapeType>(climate)); },
 		.reset_tile = [](uint16_t id) noexcept { _industry_tile_specs[id] = _origin_industry_tile_specs[id]; },
 		.clear_tile = [](uint16_t id) noexcept { _industry_tile_specs[id] = IndustryTileSpec{}; },
-		.file = [](size_t index) noexcept { auto files = GetAllGRFFiles(); return index < files.size() ? const_cast<GRFFile *>(&files[index]) : nullptr; },
+		.file = RustGRFFileAtOrNull,
 		.industry_count = [](const GRFFile *file) noexcept { return file->industryspec.size(); },
 		.tile_count = [](const GRFFile *file) noexcept { return file->indtspec.size(); },
 		.file_industry = [](GRFFile *file, size_t index) noexcept { return file->industryspec[index].get(); },

@@ -70,8 +70,6 @@ pub struct ResolverServices {
     search_spec: extern "C" fn(u16) -> SearchSpec,
     nearby_spec: extern "C" fn(u16) -> NearbySpec,
     file_identity: extern "C" fn(u16) -> FileIdentity,
-    house_id: extern "C" fn(u16, u32) -> u16,
-    house_grfid: extern "C" fn(u16) -> u32,
     badges: extern "C" fn(*const c_void, u16, u32) -> u32,
     stations:
         extern "C" fn(u32, *mut c_void, extern "C" fn(*mut c_void, *const crate::station::Station)),
@@ -471,7 +469,13 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
             if !spec.has_file {
                 return 0;
             }
-            let house = (s.house_id)(parameter as u16, spec.grfid);
+            let house = unsafe {
+                crate::override_manager::get(
+                    crate::override_manager::house(),
+                    parameter as u16,
+                    spec.grfid,
+                )
+            };
             if house == INVALID_HOUSE_ID {
                 0
             } else {
@@ -527,7 +531,12 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
             if house < NEW_HOUSE_OFFSET {
                 0
             } else {
-                (s.house_grfid)(house)
+                unsafe {
+                    crate::override_manager::openttd_rust_override_grfid(
+                        crate::override_manager::house(),
+                        house,
+                    )
+                }
             }
         }
         0x7A => (s.badges)(ro, scope.house, parameter),
@@ -599,7 +608,7 @@ crate::abi::layouts! {
     "OpenTTDHouseResolverServices" ["probe"] => ResolverServices {
         towns, shared, storage, larger_towns, file, version,
         nearby, nearby_info, terrain, stage, age, random_bits,
-        random_triggers, search_spec, nearby_spec, file_identity, house_id, house_grfid,
+        random_triggers, search_spec, nearby_spec, file_identity,
         badges, stations, town_by_id, root, spec_house, local_id, base_scope, evaluate, reseed, unhandled_house, unhandled_town,
     };
 }

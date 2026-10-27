@@ -250,10 +250,16 @@ public:
 struct HouseSpec;
 class HouseOverrideManager : public OverrideManagerBase {
 public:
+#ifdef WITH_RUST
+	HouseOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid);
+#else
 	HouseOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
 			OverrideManagerBase(offset, maximum, invalid) {}
+#endif
 
+#ifndef WITH_RUST
 	void SetEntitySpec(HouseSpec &&hs);
+#endif
 };
 
 
