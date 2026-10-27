@@ -18,10 +18,8 @@ use crate::newgrf_callbacks::CALLBACK_FAILED;
 use crate::slope_func::{get_slope_max_z, is_steep_slope};
 use std::{ffi::c_void, ptr};
 
-#[repr(C)]
-pub struct ShellHandle {
-    _private: [u8; 0],
-}
+/// The native `Industry` pool shell.
+pub use crate::industry_type::Industry as ShellHandle;
 #[repr(C)]
 pub struct TileIndustry {
     pub shell: *mut ShellHandle,

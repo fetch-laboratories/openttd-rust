@@ -85,7 +85,6 @@ struct OpenTTDTownLeaves {
 	void (*make_house)(uint32_t tile, uint32_t town, uint32_t house, uint32_t construction) noexcept OPENTTD_SERVICE_DEFAULT(make_house);
 
 	void (*population_changed)(uint32_t town) noexcept OPENTTD_SERVICE_DEFAULT(population_changed);
-	void (*nearby_stations)(uint32_t town, uint32_t tile, uint32_t size) noexcept OPENTTD_SERVICE_DEFAULT(nearby_stations);
 	uint32_t (*house_count)() noexcept OPENTTD_SERVICE_DEFAULT(house_count);
 	void (*update_max_pass)(uint32_t town) noexcept OPENTTD_SERVICE_DEFAULT(update_max_pass);
 	uint32_t (*next_town)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_town);

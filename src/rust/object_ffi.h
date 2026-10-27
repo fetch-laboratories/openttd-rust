@@ -29,7 +29,6 @@ struct Object;
 struct Town;
 enum class WaterClass : uint8_t;
 enum class ObjectAnimationTrigger : uint8_t;
-struct OpenTTDObjectLoopFrame;
 struct OpenTTDObjectGenerationFrame;
 struct OpenTTDObjectArea { uint32_t tile; uint16_t width, height; };
 struct OpenTTDObjectIdentity { Object *object; OpenTTDObjectArea area; uint16_t kind; };
@@ -117,9 +116,6 @@ struct OpenTTDObjectServices {
 	OpenTTDObjectPrice (*clear_price)(const ObjectSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(clear_price);
 	void (*set_hq)(uint8_t owner, uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(set_hq);
 	OpenTTDTownRef (*statue_town)(Object *) noexcept OPENTTD_SERVICE_DEFAULT(statue_town);
-	void (*hq_begin)(OpenTTDObjectLoopFrame *frame, uint32_t tile, uint32_t level) noexcept OPENTTD_SERVICE_DEFAULT(hq_begin);
-	void (*hq_deliver)(OpenTTDObjectLoopFrame *frame, uint8_t cargo, uint32_t amount, uint8_t owner) noexcept OPENTTD_SERVICE_DEFAULT(hq_deliver);
-	void (*hq_end)(OpenTTDObjectLoopFrame *frame) noexcept OPENTTD_SERVICE_DEFAULT(hq_end);
 	bool (*boolean_callback)(const ObjectSpec *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(boolean_callback);
 	void (*close_inspect)(uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(close_inspect);
 	bool (*progress_set)(OpenTTDObjectGenerationFrame *frame, uint32_t total) noexcept OPENTTD_SERVICE_DEFAULT(progress_set);
@@ -153,7 +149,7 @@ void openttd_rust_object_colours(const OpenTTDObjectServices * services, uint8_t
 void openttd_rust_object_build_command(const OpenTTDObjectServices * services, OpenTTDCommandCost * out, OpenTTDCommandCost * tmp, OpenTTDCommandCost * aux, uint16_t flags, uint32_t tile, uint16_t kind, uint8_t view);
 void openttd_rust_object_build_area(const OpenTTDObjectServices * services, OpenTTDCommandCost * out, OpenTTDCommandCost * ret, OpenTTDCommandCost * tmp, OpenTTDCommandCost * aux, OpenTTDCommandCost * last, uint16_t flags, uint32_t tile, uint32_t start, uint16_t kind, uint8_t view, bool diagonal);
 void openttd_rust_object_cargo(const OpenTTDObjectServices * services, uint32_t tile, uint32_t * cargo, uint64_t * accepted);
-void openttd_rust_object_tile_loop(const OpenTTDObjectServices * services, OpenTTDObjectLoopFrame * frame, OpenTTDGroundCall * call, uint32_t tile);
+void openttd_rust_object_tile_loop(const OpenTTDObjectServices * services, OpenTTDGroundCall * call, uint32_t tile);
 bool openttd_rust_object_generate(const OpenTTDObjectServices * services, OpenTTDCommandCost * out, OpenTTDCommandCost * tmp, OpenTTDCommandCost * aux, OpenTTDObjectGenerationFrame * frame);
 void openttd_rust_object_terraform(const OpenTTDObjectServices * services, OpenTTDCommandCost * out, uint32_t tile, uint16_t flags, int32_t z, Slope slope);
 void openttd_rust_object_build_above(const OpenTTDObjectServices * services, OpenTTDCommandCost * out, uint32_t tile, uint16_t flags, int32_t height);

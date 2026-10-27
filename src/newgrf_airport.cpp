@@ -66,6 +66,7 @@ const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept
 		.dummy_spec = &AirportSpec::dummy,
 		.dummy_fta = RustDummyAirportFTA(),
 		.fta = RustAirportSpecFTA,
+		.catchment = [](const AirportSpec *spec) noexcept { return spec->catchment; },
 		.base_spec = RustAirportSpec<const AirportSpec *>,
 		.enabled = RustSpecEnabled<AirportSpec>,
 		.min_year = [](const AirportSpec *spec) noexcept { return spec->min_year.base(); },

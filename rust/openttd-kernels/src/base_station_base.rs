@@ -8,3 +8,4 @@
 //! `base_station_base.h` station-rectangle modes, asserted by native compilation.
 pub const ADD_TEST: u8 = 0;
 pub const ADD_TRY: u8 = 1;
+pub const ADD_FORCE: u8 = 2;

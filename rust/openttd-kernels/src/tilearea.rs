@@ -48,6 +48,17 @@ impl TileArea {
         let bottom2 = top2 + u32::from(other.h) - 1;
         !(left2 > right1 || right2 < left1 || top2 > bottom1 || bottom2 < top1)
     }
+    /// Original `Contains`, including its empty-width return before the assertion.
+    #[must_use]
+    pub fn contains(self, tile: u32, map: Map, check: impl FnOnce(bool)) -> bool {
+        if self.w == 0 {
+            return false;
+        }
+        check(self.w != 0 && self.h != 0);
+        // `IsInsideBS` in unsigned arithmetic.
+        map.tile_x(tile).wrapping_sub(map.tile_x(self.tile)) < u32::from(self.w)
+            && map.tile_y(tile).wrapping_sub(map.tile_y(self.tile)) < u32::from(self.h)
+    }
     /// Original `Expand`, including its clipping to the full map dimensions.
     #[allow(
         clippy::cast_possible_truncation,
@@ -77,5 +88,47 @@ impl TileArea {
                 })
             })
             .take_while(|&tile| tile != crate::tile_type::INVALID_TILE)
+    }
+}
+
+/// `OrthogonalTileIterator`, which copies the area geometry at construction.
+#[derive(Clone, Copy)]
+pub struct OrthogonalTileIterator {
+    /// Current tile, `INVALID_TILE` at the end.
+    pub tile: u32,
+    w: i32,
+    x: i32,
+    y: i32,
+}
+impl OrthogonalTileIterator {
+    /// Construct over `ta`; an empty extent starts at `INVALID_TILE`.
+    #[must_use]
+    pub fn new(ta: TileArea) -> Self {
+        Self {
+            tile: if ta.w == 0 || ta.h == 0 {
+                crate::tile_type::INVALID_TILE
+            } else {
+                ta.tile
+            },
+            w: i32::from(ta.w),
+            x: i32::from(ta.w),
+            y: i32::from(ta.h),
+        }
+    }
+    /// `operator++`, asserting that the end has not been reached.
+    pub fn advance(&mut self, map: Map, check: impl FnOnce(bool)) {
+        check(self.tile != crate::tile_type::INVALID_TILE);
+        self.x -= 1;
+        if self.x > 0 {
+            self.tile = self.tile.wrapping_add(1);
+        } else {
+            self.y -= 1;
+            if self.y > 0 {
+                self.x = self.w;
+                self.tile = self.tile.wrapping_add(map.diff(1 - self.w, 1));
+            } else {
+                self.tile = crate::tile_type::INVALID_TILE;
+            }
+        }
     }
 }
