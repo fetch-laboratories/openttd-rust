@@ -22,8 +22,10 @@ inline uint16_t OpenTTDIndustryTileCallback(uint32_t tile, uint16_t gfx, uint16_
 	return GetIndustryTileCallback(static_cast<CallbackID>(callback), parameter1, parameter2, gfx, RustIndustryByTile(tile), TileIndex(tile));
 }
 inline uint16_t RustIndustryID(void *industry) noexcept { return static_cast<Industry *>(industry)->index.base(); }
-inline uint32_t RustIndustryBehaviour(void *industry) noexcept { return GetIndustrySpec(static_cast<Industry *>(industry)->type)->behaviour.base(); }
+inline uint32_t RustIndustrySpecBehaviour(const IndustrySpec *spec) noexcept { return spec->behaviour.base(); }
+inline uint32_t RustIndustryBehaviour(void *industry) noexcept { return RustIndustrySpecBehaviour(GetIndustrySpec(static_cast<Industry *>(industry)->type)); }
 inline uint32_t RustIndustryTile(void *industry) noexcept { return static_cast<Industry *>(industry)->location.tile.base(); }
 inline uint16_t RustIndustryTileIndex(uint32_t tile) noexcept { return GetIndustryIndex(TileIndex{tile}).base(); }
+inline bool RustIndustryTileBelongs(void *industry, uint32_t tile) noexcept { return static_cast<Industry *>(industry)->TileBelongsToIndustry(TileIndex{tile}); }
 inline void RustResetIndustryConstruction(uint32_t tile) noexcept { ResetIndustryConstructionStage(TileIndex{tile}); }
 #endif /* RUST_SERVICES_INDUSTRY_H */

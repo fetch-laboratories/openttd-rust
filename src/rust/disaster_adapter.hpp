@@ -79,7 +79,7 @@ static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterNextTrain(uint32_t from)
 	for (Train *v : Train::Iterate(from)) return DisasterBaseHandle(v);
 	return DisasterBaseHandle(nullptr);
 }
-static uint16_t OPENTTD_RUST_CALL DisasterRoadCount(uint8_t company) noexcept { return Company::Get(CompanyID{company})->group_all[VEH_ROAD].num_vehicle; }
+static uint16_t OPENTTD_RUST_CALL DisasterRoadCount(uint8_t company) noexcept { return RustCompanyRoadVehicleCount(Company::Get(CompanyID{company})); }
 static OpenTTDDisasterStationTarget OPENTTD_RUST_CALL DisasterNextStation(uint32_t from) noexcept
 {
 	const Station *st = OpenTTDNextStation(from);
@@ -95,9 +95,8 @@ static OpenTTDDisasterIndustryTarget OPENTTD_RUST_CALL DisasterIndustry(uint32_t
 static OpenTTDDisasterIndustryLocation OPENTTD_RUST_CALL DisasterIndustryLocation(void *shell) noexcept
 {
 	const Industry *i = static_cast<Industry *>(shell);
-	return {.tile = i->location.tile.base(), .town = OpenTTDIndustryTown(i)->index.base()};
+	return {.tile = RustIndustryTile(shell), .town = OpenTTDIndustryTown(i)->index.base()};
 }
-static bool OPENTTD_RUST_CALL DisasterIndustryBelongs(void *shell, uint32_t tile) noexcept { return static_cast<Industry *>(shell)->TileBelongsToIndustry(TileIndex{tile}); }
 static void OPENTTD_RUST_CALL DisasterAirportBlocks(uint16_t id, bool blocked) noexcept
 {
 	Station *st = Station::Get(id);
@@ -177,7 +176,7 @@ static const OpenTTDDisasterServices &DisasterServices() noexcept
 		.industry_location = DisasterIndustryLocation,
 		.industry_tile = RustIndustryTile,
 		.industry_index = RustIndustryTileIndex,
-		.industry_belongs = DisasterIndustryBelongs,
+		.industry_belongs = RustIndustryTileBelongs,
 		.reset_industry_tile = RustResetIndustryConstruction,
 		.airport_tile = RustAirportTile,
 		.airport_blocks = DisasterAirportBlocks,

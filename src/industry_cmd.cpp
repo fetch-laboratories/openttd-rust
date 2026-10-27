@@ -3646,11 +3646,11 @@ static const OpenTTDIndustryServices _industry_services = {
 	.behaviour = RustIndustryBehaviour,
 	.location = [](void *handle) noexcept -> OpenTTDIndustryLocation {
 		const Industry *i = RustIndustry(handle);
-		return {i->location.tile.base(), i->location.w, i->location.h};
+		return {RustIndustryTile(handle), i->location.w, i->location.h};
 	},
 	.industry_sound = [](void *handle, uint32_t index) noexcept {
 		Industry *i = RustIndustry(handle);
-		RustPlayTileSound(i->location.tile.base(), GetIndustrySpec(i->type)->random_sounds[index]);
+		RustPlayTileSound(RustIndustryTile(handle), GetIndustrySpec(i->type)->random_sounds[index]);
 	},
 	.play_sound = RustPlayTileSoundBySound,
 	.special_effect = [](void *handle, uint32_t random, uint32_t parameter) noexcept -> uint16_t {
@@ -3694,7 +3694,7 @@ static const OpenTTDIndustryServices _industry_services = {
 		Tile neighbour{index_tile + TileOffsByDiagDir(dir)};
 		return !RustClearFieldTile(neighbour) || RustFieldFence(neighbour, ReverseDiagDir(dir)) == 0;
 	},
-	.tile_completed = [](void *i, uint32_t tile) noexcept -> bool { return !RustIndustry(i)->TileBelongsToIndustry(TileIndex(tile)) || IsIndustryCompleted(TileIndex(tile)); },
+	.tile_completed = [](void *i, uint32_t tile) noexcept -> bool { return !RustIndustryTileBelongs(i, tile) || IsIndustryCompleted(TileIndex(tile)); },
 	.harvest = [](uint32_t tile) noexcept {
 		if (_settings_client.sound.ambient) RustPlayTileSound(tile, SND_38_LUMBER_MILL_1);
 		AutoRestoreBackup<CompanyID> current(_current_company, OWNER_NONE);
@@ -3703,7 +3703,7 @@ static const OpenTTDIndustryServices _industry_services = {
 	.observe = [](void *handle, OpenTTDIndustryObservation *out) noexcept {
 		Industry *i = RustIndustry(handle);
 		const IndustrySpec *spec = GetIndustrySpec(i->type);
-		*out = {RustIndustryCanonicalOwner(i), spec->behaviour.base(), RustIndustrySpecCallbackMask(spec), spec->life_type.base(), uint8_t(spec->UsesOriginalEconomy()), i->type,
+		*out = {RustIndustryCanonicalOwner(i), RustIndustrySpecBehaviour(spec), RustIndustrySpecCallbackMask(spec), spec->life_type.base(), uint8_t(spec->UsesOriginalEconomy()), i->type,
 			spec->production_up_text, spec->production_down_text, spec->closure_text};
 	},
 	.production_rate = [](void *i, uint32_t slot) noexcept -> uint8_t { return RustIndustrySpec(i)->production_rate[slot]; },
@@ -3733,7 +3733,7 @@ static const OpenTTDIndustryServices _industry_services = {
 	.total = []() noexcept -> uint32_t { return GetCurrentTotalNumberOfIndustries(); },
 	.type_info = [](uint8_t type) noexcept -> OpenTTDIndustryTypeInfo {
 		const IndustrySpec *spec = GetIndustrySpec(type);
-		return {spec->behaviour.base(), spec->enabled, !spec->layouts.empty(), spec->appear_ingame[to_underlying(_settings_game.game_creation.landscape)]};
+		return {RustIndustrySpecBehaviour(spec), spec->enabled, !spec->layouts.empty(), spec->appear_ingame[to_underlying(_settings_game.game_creation.landscape)]};
 	},
 	.resolver = &GetIndustryResolverServices(),
 	.scale_by_map_size = OpenTTDMapScaleSize,
@@ -3765,7 +3765,7 @@ static const OpenTTDIndustryLifecycleServices _industry_lifecycle_services = {
 	.cleanup_tile = [](uint32_t index) noexcept -> OpenTTDIndustryCleanupTile {
 		TileIndex tile(index);
 		auto type = SharedTileType(index);
-		return {type == MP_INDUSTRY ? GetIndustryIndex(tile).base() : uint16_t{0xFFFF}, static_cast<uint8_t>(type), type == MP_STATION && IsOilRig(tile)};
+		return {type == MP_INDUSTRY ? RustIndustryTileIndex(index) : uint16_t{0xFFFF}, static_cast<uint8_t>(type), type == MP_STATION && IsOilRig(tile)};
 	},
 	.delete_tile_inspect = OpenTTDDeleteIndustryTileInspect,
 	.restoration = &GetRustWaterRestorationServices(),
@@ -3787,7 +3787,7 @@ static const OpenTTDIndustryLifecycleServices _industry_lifecycle_services = {
 		return next == stations.end() ? nullptr : *next;
 	},
 	.remove_delivery = [](void *station, void *industry) noexcept { static_cast<Station *>(station)->RemoveIndustryToDeliver(static_cast<Industry *>(industry)); },
-	.belongs = [](uint32_t tile, uint16_t industry) noexcept -> bool { return IsTileType(TileIndex(tile), MP_INDUSTRY) && GetIndustryIndex(TileIndex(tile)) == IndustryID(industry); },
+	.belongs = [](uint32_t tile, uint16_t industry) noexcept -> bool { return IsTileType(TileIndex(tile), MP_INDUSTRY) && RustIndustryTileIndex(tile) == industry; },
 	.randomisation_spec = IndustryRandomisationSpec,
 	.random_triggers = [](uint32_t tile) noexcept -> uint8_t { return GetIndustryRandomTriggers(TileIndex(tile)).base(); },
 	.set_random_triggers = [](uint32_t tile, uint8_t bits) noexcept { SetIndustryRandomTriggers(TileIndex(tile), IndustryRandomTriggers(bits)); },
@@ -3805,7 +3805,7 @@ const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices()
 {
 	static const OpenTTDIndustryGenerationServices services = {
 		.spec = [](uint8_t type) noexcept -> const OpenTTDIndustrySpecHandle * { return reinterpret_cast<const OpenTTDIndustrySpecHandle *>(GetIndustrySpec(type)); },
-		.spec_behaviour = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> uint32_t { return reinterpret_cast<const IndustrySpec *>(spec)->behaviour.base(); },
+		.spec_behaviour = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> uint32_t { return RustIndustrySpecBehaviour(reinterpret_cast<const IndustrySpec *>(spec)); },
 		.info = [](const OpenTTDIndustrySpecHandle *handle) noexcept -> OpenTTDIndustryGenerationInfo {
 			const auto *spec = reinterpret_cast<const IndustrySpec *>(handle);
 			return {spec->appear_creation[to_underlying(_settings_game.game_creation.landscape)], spec->enabled, !spec->layouts.empty()};
