@@ -2075,6 +2075,21 @@ group because native removal leaves a deleted PSA pointer; the retained airport'
 and reloaded. External loading, historical saves, GUI scheduling and that native removal setup
 remain #156 gaps. PR #428, integrated in #444.
 
+### Airport and airport-tile definitions (#492)
+
+`airport_definitions.rs` owns airport/tile Action0 interpretation, allocation decisions,
+reset, ordered publication and override consumption, temporary file-spec cleanup and
+class binding. The integrated manager, class and checked Reader owners are direct Rust
+callees. Native canonical spec payloads, layout storage, defaults, strings, badges, FSMs,
+graphics, stations and APID/ATID save/error frames remain. Rust uses local layout vectors
+and publishes them only after the whole layout property succeeds; earlier scalar reads
+retain their partial effects. Loading is serialized and no owner borrow spans a native
+move, parser service or reset. Original bodies remain portable-only.
+
+Arbitrary external grammar, historical malformed save mappings, remaining layout rotations
+and offset combinations, missing-GRF recovery and GUI/network scheduling remain #156 gaps.
+The existing airport-removal PSA gap is outside this definition owner. PR: #499.
+
 ### Generic NewGRF callbacks (#429)
 
 `newgrf_generic.rs` owns the process-wide ordered feature registry, reverse candidate traversal,

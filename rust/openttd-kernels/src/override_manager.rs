@@ -41,6 +41,26 @@ pub fn industry() -> *mut Manager {
 pub fn tile() -> *mut Manager {
     unsafe { *TILE.0.get() }
 }
+static AIRPORT: Registered = Registered(UnsafeCell::new(ptr::null_mut()));
+static AIRPORT_TILE: Registered = Registered(UnsafeCell::new(ptr::null_mut()));
+pub fn airport() -> *mut Manager {
+    unsafe { *AIRPORT.0.get() }
+}
+pub fn airport_tile() -> *mut Manager {
+    unsafe { *AIRPORT_TILE.0.get() }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_airport_register_manager(manager: *mut Manager) {
+    unsafe {
+        *AIRPORT.0.get() = manager;
+    }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_airport_tile_register_manager(manager: *mut Manager) {
+    unsafe {
+        *AIRPORT_TILE.0.get() = manager;
+    }
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_override_new(
     offset: u16,

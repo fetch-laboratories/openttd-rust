@@ -10,6 +10,7 @@
 #define RUST_SERVICES_NEWGRF_H
 #include "../command_type.h"
 #include "newgrf_class_ffi.h"
+#include "spec_identity.h"
 #include "../newgrf.h"
 #include "../newgrf_commons.h"
 #include "../newgrf_debug.h"
@@ -30,7 +31,6 @@
 #include "../rev.h"
 inline void RustGRFErrorProperty(GRFError *error, uint32_t property) noexcept { error->param_value[1] = property; }
 inline void RustGRFPlayTileSound(const GRFFile *file, uint16_t sound, uint32_t tile) noexcept { PlayTileSound(file, sound, TileIndex{tile}); }
-template <typename Handle> inline bool RustIndustrySpecEnabled(const Handle *spec) noexcept { return reinterpret_cast<const IndustrySpec *>(spec)->enabled; }
 template <typename Handle> inline uint16_t RustIndustrySpecCallbackMask(const Handle *spec) noexcept { return reinterpret_cast<const IndustrySpec *>(spec)->callback_mask.base(); }
 inline uint16_t RustIndustrySubstitute(uint8_t industry) noexcept { return GetIndustrySpec(industry)->grf_prop.subst_id; }
 inline int32_t RustHouseAge(uint32_t tile) noexcept { return GetHouseAge(TileIndex{tile}).base(); }
@@ -41,7 +41,6 @@ inline size_t RustHouseSpecCount() noexcept { return HouseSpec::Specs().size(); 
 inline uint32_t RustHouseSpecCount32() noexcept { return static_cast<uint32_t>(RustHouseSpecCount()); }
 inline uint8_t RustTownHousePopulation(const HouseSpec *spec) noexcept { return spec->population; }
 inline uint16_t RustHouseAvailability(const HouseSpec *spec) noexcept { return spec->building_availability.base(); }
-inline bool RustHouseEnabled(const HouseSpec *spec) noexcept { return spec->enabled; }
 inline int32_t RustHouseMinYear(const HouseSpec *spec) noexcept { return spec->min_year.base(); }
 inline uint8_t RustTownHouseFlags(const HouseSpec *spec) noexcept { return spec->building_flags.base(); }
 inline uint16_t RustTownHouseCallbacks(const HouseSpec *spec) noexcept { return spec->callback_mask.base(); }
@@ -74,6 +73,16 @@ template <typename Spec>
 inline void RustSpecSetGRFFile(Spec *spec, const GRFFile *file) noexcept { spec->grf_prop.SetGRFFile(file); }
 template <typename Spec>
 inline void RustSpecSetCargoGroup(Spec *spec, CargoType cargo, const SpriteGroup *group) noexcept { spec->grf_prop.SetSpriteGroup(cargo, group); }
+template <typename Spec, typename Handle = Spec> inline bool RustSpecEnabled(const Handle *spec) noexcept { return reinterpret_cast<const Spec *>(spec)->enabled; }
+template <typename Spec> inline void RustSpecSetEnabled(Spec *spec, bool value) noexcept { spec->enabled = value; }
+template <typename Spec> inline void RustSpecSetOverride(Spec *spec, uint16_t value) noexcept { spec->grf_prop.override_id = value; }
+template <typename Spec> inline void RustSpecSetSubstitute(Spec *spec, uint16_t value) noexcept { spec->grf_prop.subst_id = value; }
+template <typename Spec> inline void RustSpecAnimationFrames(Spec *spec, uint8_t value) noexcept { spec->animation.frames = static_cast<decltype(spec->animation.frames)>(value); }
+template <typename Spec> inline void RustSpecAnimationStatus(Spec *spec, uint8_t value) noexcept { spec->animation.status = static_cast<decltype(spec->animation.status)>(value); }
+template <typename Spec> inline void RustSpecAnimationSpeed(Spec *spec, uint8_t value) noexcept { spec->animation.speed = static_cast<decltype(spec->animation.speed)>(value); }
+template <typename Spec, typename Value = uint8_t> inline void RustSpecAnimationTriggers(Spec *spec, Value value) noexcept { spec->animation.triggers = static_cast<decltype(spec->animation.triggers)>(value); }
+template <typename Spec> inline void RustSpecClearAnimation(Spec *spec) noexcept { spec->animation = {}; }
+template <typename Spec> inline std::vector<BadgeID> *RustSpecBadgeList(Spec *spec) noexcept { return &spec->badges; }
 template <typename Spec>
 inline void RustSpecSetLocalID(Spec *spec, uint16_t id) noexcept { spec->grf_prop.local_id = id; }
 template <typename Spec>
@@ -143,6 +152,7 @@ template <typename Spec> inline uint16_t RustSpecOverride(const Spec *spec) noex
 template <typename Spec> inline uint16_t RustSpecSubstitute(const Spec *spec) noexcept { return spec->grf_prop.subst_id; }
 template <typename Spec> inline uint32_t RustSpecGRFID(const Spec *spec) noexcept { return spec->grf_prop.grfid; }
 template <typename Spec> inline uint16_t RustSpecLocalID(const Spec *spec) noexcept { return spec->grf_prop.local_id; }
+template <typename Spec> inline OpenTTDSubstituteSpecIdentity RustSpecSubstituteIdentity(const Spec *spec) noexcept { return {RustSpecGRFID(spec), RustSpecLocalID(spec), RustSpecSubstitute(spec)}; }
 template <typename Spec> inline OpenTTDGRFClassIdentity RustSpecIdentity(const Spec *spec) noexcept { return {RustSpecGRFID(spec), RustSpecLocalID(spec)}; }
 template <typename Spec> inline const SpriteGroup *RustSpecSpriteGroup(const Spec *spec, bool live) noexcept { return spec->grf_prop.GetSpriteGroup(live); }
 inline const SpriteGroup *RustHouseSpriteGroup(uint16_t house, bool live) noexcept { return RustSpecSpriteGroup(RustHouseSpec(house), live); }

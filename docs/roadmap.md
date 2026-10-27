@@ -5,30 +5,39 @@ this roadmap over conflicting issues; it is the current state of the umbrella
 issue #3. Update it in place; `/steer` prunes it.
 Evidence stays in PRs.
 
-## Where the fork stands (2026-10-26, code at `3b3382ce1c`)
+## Where the fork stands (2026-10-26, code at `c04219b0d8`)
 
-- 74 ownership ports. Original C++ retired: 69,604 of 470,612 source lines
-  (14.79%); simulation sources: 54,826 of 102,615 (53.43%). Whole-fork Rust,
-  tooling and glue: 124,441, 43,590 and 44,370 lines. These measures include
-  comments/data, not completed behavior. Two integrations since the latest
-  steering add two owners and 1,739 original retired lines.
-- Houses #486 and airports #499 have passing whole-port fixing reviews and
-  await current-base Full. Integrated orphan/shared-accessor debt remains in
-  #515. The accessor draft #517 needs its native-oracle exports moved into
-  test-only archive support before a fresh scoped review. #156 retains the
-  concrete coverage gaps; #518 is measuring the original default corpus.
-- The six-scenario profile at `5e39efe901` passes semantic and f492-anchor
-  compatibility checks. Projections are unchanged: TGP 1.1783x, Grok 1.3948x,
-  Opus 1.4018x, P1996 1.3354x, P2000 1.3934x and P2016 1.4695x. P2016 stays
-  in band without a quiet-pass trigger. The profile of the current tip is
-  next; the accessor repair still needs merged-tip net-cost attribution.
-- Six unintegrated components: houses #486, airports #499, the reviewed CI
-  batch #502, accessors #517, coverage #518 and the selected #515 maintenance
-  batch. The redundant worktrees are removed. The outstanding macOS Debug
-  rerun passed; both base configurations are green.
-- The issue audit finds 35 open issues, zero unplaced and four explicit
-  exclusions. Their return conditions remain unchanged; #69's catchment subset
-  is planned under #516. Testing, typing and CI work retain their ranked places.
+- 76 ownership ports. Houses #486 integrated at `fc3bf4b20b` and airports
+  #499 at `c04219b0d8`, each after current-base, exact-head Full and fixing
+  review. Their component metrics are respectively 714 Rust, 372 tooling,
+  532 original retired and 193 net glue; and 590 Rust, 297 tooling,
+  336 original retired and 251 net glue. No rollback target is known.
+- The last full source inventory, at `3b3382ce1c`, counted 69,604 of 470,612
+  original lines retired (14.79%), including 54,826 of 102,615 simulation
+  lines (53.43%); whole-fork Rust, tooling and glue were 124,441, 43,590 and
+  44,370 lines. The two later owners retire another 868 original lines by
+  their component metrics. No new full inventory was launched at wind-down;
+  these measures include comments/data, not completed behavior.
+- The six-scenario profile at `3b3382ce1c` passed semantic and f492-anchor
+  compatibility checks. All projections remain unchanged: TGP 1.1783x,
+  Grok 1.3948x, Opus 1.4018x, P1996 1.3354x, P2000 1.3934x and
+  P2016 1.4695x. P2016 stays in band without a quiet-pass trigger. The
+  next instruction profile is due on `c04219b0d8`; it was not started.
+- Five drafts remain: reviewed CI #502, reviewed accessors #517, coverage
+  #518, reviewed typed maintenance #519 and unvalidated disaster checkpoint
+  #520. #517's native-oracle support blocker is resolved; its merged-tip
+  net-cost attribution remains due. #519's selected-manager fixture gap is
+  fixed and reviewed, but its base conflicts remain. #156 retains the
+  existing coverage limits. The incomplete reference-only corpus remains
+  running; no coverage success or corrected aggregate is published.
+- Both base macOS configurations passed. Four integrations since the latest
+  steering leave the next platform cadence one integration away and #512's
+  tally six integrations away. No CI variable was changed. Post-merge and
+  docs-push CI are not awaited during the requested wind-down.
+- The last issue-placement audit found zero unplaced issues. Exclusion return
+  conditions remain unchanged; #69's catchment subset is planned under #516.
+  Catchment, new reviews, base updates, repairs, checks and profiles are
+  stopped until the user resumes development.
 
 ## Twenty-first steering review (2026-10-26, orphans, concurrency, cadence and accessor cost)
 
@@ -352,23 +361,32 @@ needs it beyond #516; GUI and platform after the simulation; the six
 
 ## Resume checkpoint
 
-Two ownership integrations complete at `3b3382ce1c`; no confirmed regression or
-rollback target. Root prepares house Full after this stocktake. Coverage runs
-on the reference only, and accessor/test-support and audit maintenance continue
-independently. The base macOS Debug and Release configurations both passed.
+Paused at the user's request after #486 (`fc3bf4b20b`) and #499
+(`c04219b0d8`) integrated. No confirmed regression or rollback target.
+The sole allowed Full finished successfully and its tested airport combination
+merged before this docs-only checkpoint. No further integration is authorized
+while paused. Every unfinished branch/worktree and its artifacts is preserved;
+fetch the recorded PR head before continuing a preserved worktree.
 
-| Item | Saved head | Next action |
-| --- | --- | --- |
-| #477 houses / #486 | `0f5ad521ea` | Whole-port review passes. Update from current base, review substantive resolutions, request Full. |
-| #492 airports / #499 | `905ae6869d` | Whole-port fixing review passes. Prepare final base and Full after houses. |
-| #514, #502, #501 gate configuration / #502 | `71e0ad7341` | Independent review passes. Root owns current-base preparation and workflow bootstrap Full after the remaining owners. |
-| #275 instruction profile | `5e39efe901` | Six semantic/identity passes; projections unchanged. Profile current `3b3382ce1c` in the background. |
-| #515, #500 first definitions, #506 quick guard | selected | `maintenance515_typed_boundaries` owns one batch; reserve services held by the remaining owner drafts. |
-| #275 accessor audit / #517 | `d2f2a85e75` reviewed | `repair517_native_test_support` isolates test-only probe exports, preserving native oracles; fresh scoped review, then Full. |
-| #504 coverage / #518 | implementation active | `coverage504_reference_report` completes the reference-only corpus and report; the PR carries live checkpoints and failures. |
-| #516 catchment | planned, queued | Scope and service inventory are in the issue. Start after #486/#499 and a free branch slot. |
-| Cadence | two integrations since steering | Next platform cadence after three further integrations; #512 tally after eight. |
-| #497, #498 | parked | Return per correction 2. |
+| Item | Saved head | Next action | Running jobs or CI |
+| --- | --- | --- | --- |
+| #514, #501 gate configuration / #502 | `71e0ad7341` | Reviewed. Update from base, review substantive resolutions if required, then root's workflow bootstrap Full. Temporarily unset CI_ON_DEMAND only when ready; restore true after merge. | No Full requested; required status remains pending. |
+| #275 accessor audit / #517 | `bc65c47b49` | Whole and native-support reviews pass. Update from base, scoped resolution review if required, then exact-head Full. Attribute net instruction savings after integration. | No task jobs or Full requested. |
+| #504 coverage / #518 | `0bf8d71c0e` | Finish the surviving corpus or rerun if lost. Rerun only economy-stockpile with the propagation fix; replace its old trace, regenerate corrected aggregate, publish/update #156, then independent fixing review and Full. Do not accept the current partial result. | Driver PID 233388, corpus PID 233449, execution session 31222 remained live after the agent exited; 208 of 438 merged traces at handoff, no failures then. Depends on the Codex app-server remaining alive. Exact run directory/continuation are in the PR status. No Full requested. |
+| #515, #500 first definitions, #506 quick guard / #519 | `c6607692f4` | Whole-batch and selected-owner fixture reviews pass. Root spot-checks the final fixture fix, updates the conflicting base, obtains scoped conflict-resolution review, then requests exact-head Full. | Final affected build and 26 native/ABI tests passed; reviewer stopped, no jobs. No Full requested. |
+| #168 disaster direct services / #520 | `f8439162bf` | Unvalidated checkpoint. Finish native ABI fixture migration and remaining boundary audit, then own build/Cargo/native/disasters-* evidence, independent fixing review, base preparation and Full. | Clean retained worktree; no task jobs or Full requested. No final-head validation claimed. |
+| #275 instruction profile | `3b3382ce1c` measured | Six projections unchanged. Profile integrated `c04219b0d8` on resume; no quiet-pass trigger established. | Due, not started. |
+| #516 catchment | planned, queued | House/airport interfaces are integrated. Start only after resume, a free component slot and the higher-ranked ready work. | Not started. |
+| Cadence | four integrations since steering | Next platform cadence after one further integration; #512 tally after six. | No cadence run started. |
+| #497, #498 | parked | Return per correction 2. | No jobs. |
+
+Airport Full passed; post-merge and docs-push CI outcomes were not awaited.
+The other drafts' pending Full statuses represent missing validation, not active
+Full runs. Coverage is the only intentionally retained local job. Its survival
+across app-server shutdown is not guaranteed. No stockpile rerun, aggregate,
+new implementation, review, repair, build, simulation, CI request/retry or
+instruction profile was started during wind-down. Later results do not resume
+work without the user's instruction.
 
 Selection: /root, gpt-6.1-sol, xhigh; planning agents run gpt-6-astra, high.
 Scopes and evidence plans are in the selected issues; PRs carry current task status.

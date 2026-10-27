@@ -47,7 +47,7 @@ public:
 	static const OpenTTDGRFClassServices<Tspec> &GetServices();
 	static void Reset();
 	static Tindex Allocate(uint32_t global_id);
-	static void Assign(Tspec *spec) { assert(static_cast<size_t>(spec->class_index) < Ops::count()); Ops::assign(spec); }
+	static void Assign(Tspec *spec) requires requires { Ops::assign; } { assert(static_cast<size_t>(spec->class_index) < Ops::count()); Ops::assign(spec); }
 	static uint GetClassCount() { return Ops::count(); }
 	static uint GetUIClassCount() { return Ops::ui_count(); }
 	static NewGRFClass *Get(Tindex class_index) { assert(static_cast<size_t>(class_index) < Ops::count()); return static_cast<NewGRFClass *>(Ops::classes()) + class_index; }

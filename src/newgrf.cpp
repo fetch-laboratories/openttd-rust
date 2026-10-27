@@ -1291,6 +1291,7 @@ static void FinaliseObjectsArray()
  * time in the GRF file, so we can only add a airport spec to the airport array
  * after the file has finished loading.
  */
+#ifndef WITH_RUST
 static void FinaliseAirportsArray()
 {
 	for (auto &file : _grf_files) {
@@ -1313,6 +1314,7 @@ static void FinaliseAirportsArray()
 		file.airtspec.shrink_to_fit();
 	}
 }
+#endif
 
 #ifndef WITH_RUST
 /** Helper class to invoke a GrfActionHandler. */
