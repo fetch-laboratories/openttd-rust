@@ -1549,6 +1549,27 @@ unchanged-reference private callbacks in fixture executables. Default #320 cases
 NewGRF programs, legacy and unusual occupied/reservation branches remain #156 gaps. PRs #303 and
 #323.
 
+### Station catchment, nearby sets and rectangles (#516)
+
+Each station service owner holds its `StationRect`, catchment bitmap and ordered delivery list;
+town and industry Rust owners hold their nearby-station sets. `station.rs` owns rectangle
+maintenance, catchment radius/rectangle, delivery-list maintenance, nearby-list removal,
+`CatchmentCoversTown`, `RecomputeCatchment(ForAll)`, `ForAllStationsAroundTiles`, the lazy
+`StationFinder` and the around-tile production/acceptance scans; `bitmap_type.rs` owns bitmap
+storage, geometry and the live cursor, and `tile_cmd.rs` the accepted/produced cargo dispatch to
+the Rust house, industry and HQ owners. Rust consumers (station acceptance and watched cargo,
+`MoveGoodsToStation`, delivery, subsidy and cargo-monitor scans, industry construction,
+destruction and production, house loop/removal/placement, the house resolver, the HQ loop and
+station commands) use this state directly. C++ keeps pool shells, map storage, specs and
+presentation; native `rect`, `catchment_tiles`, `industries_near` and `stations_near` are
+borrowed facades, and native GUI, script, settings, afterload, cachecheck and saveload callers
+reach Rust through the remaining `Station`/`StationRect` methods and the around-tile functions.
+One typed catchment table is reached through the shared services. State remains NOSAVE. Checks:
+the default `stations-commands-catchment` and `stations-commands-catchment-reload` scenarios and
+the affected station, subsidy, cargo-monitor, house, industry and object scenarios. The nearby-set
+insert/erase/clear exports serve only harness fixtures; waypoint and buoy candidates in the
+nearby search and the `BeforeAddTile` try-mode assertion remain #156 gaps. PR #522.
+
 ### Cargo storage and movement (#139)
 
 Rust owns packet fields, ordered station/vehicle lists, count/age/feeder/action/reservation
@@ -1718,7 +1739,8 @@ north-part normalisation, `ClearTile_Town`/`ClearTownHouse`/`RemoveNearbyStation
 NewGRF house tile loop, `CanDeleteHouse`, animation triggers and rerandomisation. It writes the
 sole Rust town owner directly and ends each owner access before any callback, command or station
 service. House resolution (#409) shares its north-part helper. C++ keeps stack virtual facades,
-common Action2, `StationFinder`/`MoveGoodsToStation`; original bodies compile only portably.
+common Action2; the tile loop uses the call-local Rust `StationFinder` (#516); original bodies
+compile only portably.
 Narrow phase observations replace whole tile/spec copies; projections compose canonical
 spec-field readers. Each entry reuses its town and map context, including construction triggers
 and rebuilds. Town count, recession, autoslope, foundation price, tick counter and animated-tile
@@ -1749,7 +1771,7 @@ root/scope selection, process-wide ordered house classes and count reset. Count/
 and north-part queries call canonical Rust town/house owners. Lifecycle, construction,
 foundation and animation enter the resolver directly; displaced table callbacks and native
 helper bodies are excluded with WITH_RUST. C++ retains stack virtual facades, Action2,
-specs/override managers, map/pool shells and one ordered call-local StationFinder. Var64 reads
+specs/override managers and map/pool shells; Var64 uses the call-local Rust StationFinder and reads
 canonical Rust cargo status and uses the shared GoodsEntry conversion. No new map view is
 exposed. Native leaves are noexcept; no ordinary-play throwing service is used. Save/load
 exceptions stay native. Contexts end before load/reset/yield; owner/container borrows end before
@@ -1812,7 +1834,7 @@ Rust owns each subsidy's canonical scalars, all route searches, creation/deity c
 source/destination cache rebuild and deletion, monthly generation/expiry, delivery awards and
 company transfer/deletion. Native SUBS descriptors and GUI/script readers alias the sole Rust
 allocation; original bodies stay portable. C++ retains pool identity/allocation order,
-map/catchment and cargo specifications, news formatting and event enqueueing through typed
+cargo specifications, news formatting and event enqueueing through typed
 noexcept leaves. Payment, company and industry owners call Rust directly; no owner borrow spans
 a callback. The deity command retains duplicate/self/distant routes, and monthly policy keeps
 RNG short circuits, 1001 attempts, u16 wrapping/narrowing and expiry's bypass of both
