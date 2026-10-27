@@ -1,7 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Shared constants of `industry_type.h`.
 pub const NUM_INDUSTRYTYPES: u8 = 240;
-pub const INVALID_INDUSTRY: u16 = 0xffff;
+pub const INVALID_INDUSTRY: u16 = IndustryID::INVALID.0;
 pub const IT_INVALID: u8 = 0xff;
 pub const NEW_INDUSTRYTILEOFFSET: u16 = 175;
 pub const INVALID_INDUSTRYTILE: u16 = 512;
@@ -19,3 +19,18 @@ pub const INDUSTRY_NUM_INPUTS: usize = 16;
 pub const INDUSTRY_NUM_OUTPUTS: usize = 16;
 pub const INDUSTRY_ORIGINAL_NUM_INPUTS: usize = 3;
 pub const INDUSTRY_ORIGINAL_NUM_OUTPUTS: usize = 2;
+
+/// Native `IndustryID` with its full original integer domain.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IndustryID(pub u16);
+impl IndustryID {
+    /// Native invalid sentinel.
+    pub const INVALID: Self = Self(u16::MAX);
+}
+
+/// Opaque native `Industry`; valid only while its native pool shell lives.
+#[repr(C)]
+pub struct Industry {
+    _private: [u8; 0],
+}

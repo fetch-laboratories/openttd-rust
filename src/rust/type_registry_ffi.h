@@ -2,6 +2,9 @@
 /** @file type_registry_ffi.h Rail/road definition ownership and native storage leaves.
  * Serialized loading/reset excludes runtime access. Native specs and file vectors
  * outlive synchronous calls; published spans alias Rust until the next rebuild.
+ * Label pointer tables are immutable; fixed native arrays keep each scalar
+ * address stable across in-place reset/property writes. Serialized access loads
+ * only reached labels and ends scalar reads before any callback.
  * No Rust borrow crosses a callback. Native save/parser error frames retain
  * ordinary exceptions. Environmental leaf failures terminate; Rust panics abort. */
 #ifndef RUST_TYPE_REGISTRY_FFI_H
@@ -20,6 +23,7 @@ struct OpenTTDRailRegistryServices {
 	uint8_t default_count;
 	RailTypeInfo * (*spec)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(spec);
 	RailTypeLabel (*type_label)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(type_label);
+	const RailTypeLabel * const *(*labels)() noexcept OPENTTD_SERVICE_DEFAULT(labels);
 	bool (*alternate)(RailType, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(alternate);
 	void (*clear)(RailTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(clear);
 	void (*copy_default)(RailTypeInfo *, RailType) noexcept OPENTTD_SERVICE_DEFAULT(copy_default);
@@ -33,6 +37,7 @@ struct OpenTTDRoadRegistryServices {
 	uint8_t default_count;
 	RoadTypeInfo * (*spec)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(spec);
 	RoadTypeLabel (*type_label)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(type_label);
+	const RoadTypeLabel * const *(*labels)() noexcept OPENTTD_SERVICE_DEFAULT(labels);
 	bool (*alternate)(RoadType, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(alternate);
 	void (*clear)(RoadTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(clear);
 	void (*copy_default)(RoadTypeInfo *, RoadType) noexcept OPENTTD_SERVICE_DEFAULT(copy_default);
@@ -60,17 +65,12 @@ uint64_t *openttd_rust_rail_hidden_mask();
 uint64_t *openttd_rust_road_hidden_mask();
 uint64_t *openttd_rust_road_mask();
 uint64_t *openttd_rust_tram_mask();
-void openttd_rust_rail_init();
-void openttd_rust_road_init();
-RailType openttd_rust_rail_allocate(uint32_t);
-RoadType openttd_rust_road_allocate(uint32_t, RoadTramType);
 RailType openttd_rust_rail_by_label(uint32_t, bool);
 RoadType openttd_rust_road_by_label(uint32_t, bool);
 RailType openttd_rust_rail_translate(uint8_t, const GRFFile *);
 RoadType openttd_rust_road_translate(RoadTramType, uint8_t, const GRFFile *);
 uint8_t openttd_rust_rail_reverse(RailType, const GRFFile *);
 uint8_t openttd_rust_road_reverse(RoadType, const GRFFile *);
-void openttd_rust_type_maps_init(const OpenTTDTypeRegistryServices *, GRFFile *);
 void openttd_rust_rail_saved_convert(const OpenTTDSharedServices *, const OpenTTDRailMapServices *, uint32_t);
 void openttd_rust_road_saved_convert(const OpenTTDSharedServices *, uint32_t);
 void openttd_rust_rail_saved_reserve();

@@ -22,3 +22,19 @@ pub const RATING_BRIBE_UP_STEP: i32 = 200;
 pub const RATING_BRIBE_MAXIMUM: i32 = 800;
 /// Rating after a failed bribe.
 pub const RATING_BRIBE_DOWN_TO: i32 = -50;
+
+/// Native `TownID`; all uint16 values remain representable.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct TownId(pub u16);
+
+/// Opaque native `Town`; valid only while its native pool shell lives.
+#[repr(C)]
+pub struct TownHandle {
+    _private: [u8; 0],
+}
+
+impl TownId {
+    /// Native `TownID::Invalid()`.
+    pub const INVALID: Self = Self(u16::MAX);
+}

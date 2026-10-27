@@ -662,9 +662,6 @@ GRFFile::GRFFile(const GRFConfig &config)
 	/* Mark price_base_multipliers as 'not set' */
 	this->price_base_multipliers.fill(INVALID_PRICE_MODIFIER);
 
-#ifdef WITH_RUST
-	openttd_rust_type_maps_init(&GetRustTypeRegistryServices(), this);
-#else
 	/* Initialise rail type map with default rail types */
 	this->railtype_map.fill(INVALID_RAILTYPE);
 	this->railtype_map[0] = RAILTYPE_RAIL;
@@ -679,8 +676,6 @@ GRFFile::GRFFile(const GRFConfig &config)
 	/* Initialise tram type map with default tram types */
 	this->tramtype_map.fill(INVALID_ROADTYPE);
 	this->tramtype_map[0] = ROADTYPE_TRAM;
-
-#endif
 
 	/* Copy the initial parameter list */
 	this->param = config.param;
@@ -1749,11 +1744,7 @@ static void AfterLoadGRFs()
 	FinaliseStringMapping();
 
 	/* Clear the action 6 override sprites. */
-#ifdef WITH_RUST
-	openttd_rust_grf_clear_overrides();
-#else
 	_grf_line_to_action6_sprite_override.clear();
-#endif
 
 	FinaliseBadges();
 
@@ -1863,11 +1854,7 @@ static void AfterLoadGRFs()
 
 	/* Deallocate temporary loading data */
 	_gted.clear();
-#ifdef WITH_RUST
-	openttd_rust_grf_clear_grm_sprites();
-#else
 	_grm_sprites.clear();
-#endif
 }
 #endif
 

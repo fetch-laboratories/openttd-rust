@@ -125,8 +125,6 @@ const OpenTTDStationAssociationServices &GetStationAssociationServices() noexcep
 		.clear = RustStationSpecClear,
 		.set_slot = RustStationSetSpecSlot,
 		.rebind = RustStationRebindSpec,
-		.identity = RustSpecIdentity<StationSpec>,
-		.custom_index = RustCustomStationIndex,
 		.set_cached = RustStationSetCachedTriggers,
 	};
 	return services;

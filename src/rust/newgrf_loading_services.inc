@@ -72,7 +72,7 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.scan_info = [](GRFConfig *c, uint32_t id, const uint8_t *data, size_t size) noexcept { AddGRFTextToList(c->info, 0x7F, id, true, {reinterpret_cast<const char *>(data), size}); },
 		.set_pitch = [](GRFFile *f, uint32_t value) noexcept { f->traininfo_vehicle_pitch = value; },
 		.set_width = [](GRFFile *f, uint32_t value) noexcept { f->traininfo_vehicle_width = value; },
-		.set_rail_cost = [](RailType rt, uint16_t value) noexcept { extern RailTypeInfo _railtypes[RAILTYPE_END]; _railtypes[rt].cost_multiplier = value; },
+		.set_rail_cost = [](RailType rt, uint16_t value) noexcept { extern RailTypeInfo _railtypes[RAILTYPE_END]; RustSetRailCostMultiplier(&_railtypes[rt], value); },
 		.set_misc = [](uint8_t value) noexcept { _misc_grf_features = GrfMiscBits(value); },
 		.safe_change_info = ParseGrfAction<&GrfActionHandler<0x00>::SafetyScan>,
 		.reserve_change_info = ParseGrfAction<&GrfActionHandler<0x00>::Reserve>,

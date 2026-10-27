@@ -46,6 +46,10 @@ EXPECTED = {
     "cargo-profit-reload": ("profit-controls true",),
     "cargo-rating-reload": ("rating-controls true",),
     "types-definitions": (
+        "types-case definitions-first-last-missing-labels true",
+        "types-case definitions-live-label-mutation true",
+        "types-case definitions-exact-before-alternate true",
+        "types-case definitions-first-match-alternate-order true",
         "types-case definitions-file-loaded-save true",
         "types-case definitions-movement true",
         "types-case definitions-conversion-categories true",
@@ -178,7 +182,7 @@ def adapter(build, folder, env):
         env,
         ADAPTER,
         "engines",
-        wraps=("_Z18CopyTempEngineDatav",),
+        wraps=("_Z25InitGRFTownGeneratorNamesv",),
         replace_objects=("saveload.cpp.o", "/newgrf.cpp.o", "/newgrf_act0_cargo.cpp.o"),
     )
 

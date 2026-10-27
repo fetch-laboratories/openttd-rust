@@ -8,17 +8,47 @@
 //! `company_type.h` owner values. `services.cpp` asserts every value.
 
 /// `OWNER_TOWN`.
-pub const OWNER_TOWN: u8 = 0x0F;
+pub const OWNER_TOWN: u8 = Owner::TOWN.0;
 /// `OWNER_NONE`.
-pub const OWNER_NONE: u8 = 0x10;
+pub const OWNER_NONE: u8 = Owner::NONE.0;
 /// `OWNER_WATER`.
-pub const OWNER_WATER: u8 = 0x11;
+pub const OWNER_WATER: u8 = Owner::WATER.0;
 /// `OWNER_DEITY`.
-pub const OWNER_DEITY: u8 = 0x12;
+pub const OWNER_DEITY: u8 = Owner::DEITY.0;
 /// `MAX_COMPANIES`.
 pub const MAX_COMPANIES: u8 = 0x0F;
 /// `INVALID_OWNER`.
-pub const INVALID_OWNER: u8 = 0xFF;
+pub const INVALID_OWNER: u8 = Owner::INVALID.0;
 
 /// `COMPANY_SPECTATOR`.
-pub const COMPANY_SPECTATOR: u8 = 0xFF;
+pub const COMPANY_SPECTATOR: u8 = CompanyID::SPECTATOR.0;
+
+/// Opaque native `Company`; valid only while its native pool shell lives.
+#[repr(C)]
+pub struct OpenTTDCompany {
+    _private: [u8; 0],
+}
+
+/// Native `CompanyID` with its full original integer domain.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CompanyID(pub u8);
+impl CompanyID {
+    /// Native invalid sentinel.
+    pub const INVALID: Self = Self(u8::MAX);
+}
+
+/// Native `Owner` is the same type as `CompanyID`.
+pub type Owner = CompanyID;
+impl CompanyID {
+    /// Native `OWNER_TOWN`.
+    pub const TOWN: Self = Self(0x0F);
+    /// Native `OWNER_NONE`.
+    pub const NONE: Self = Self(0x10);
+    /// Native `OWNER_WATER`.
+    pub const WATER: Self = Self(0x11);
+    /// Native `OWNER_DEITY`.
+    pub const DEITY: Self = Self(0x12);
+    /// Native `COMPANY_SPECTATOR`.
+    pub const SPECTATOR: Self = Self(0xFF);
+}

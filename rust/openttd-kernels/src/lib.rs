@@ -1449,3 +1449,8 @@ mod newgrf_layout;
 mod station_definitions;
 
 mod newgrf_act3;
+
+/// Opaque native industry pool shell, distinct from its Rust state owner.
+pub use industry_type::Industry as NativeIndustry;
+/// Native vehicle pool identity with its full base-type domain.
+pub use vehicle_type::VehicleID;
