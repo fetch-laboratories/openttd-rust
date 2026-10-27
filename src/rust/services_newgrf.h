@@ -56,6 +56,8 @@ inline void RustUnhandledScopeVariable(uint8_t variable) noexcept { Debug(grf, 1
  * the original non-null resolver/file preconditions; nothing is cached. */
 inline const GRFFile *RustResolverGRFFile(const ResolverObject *resolver) noexcept { return resolver->grffile; }
 inline uint32_t RustGRFFileID(const GRFFile *file) noexcept { return file->grfid; }
+inline size_t RustGRFFileCount() noexcept { return GetAllGRFFiles().size(); }
+inline GRFFile *RustGRFFileAt(size_t index) noexcept { return const_cast<GRFFile *>(&GetAllGRFFiles()[index]); }
 inline GRFFile *RustGRFFileByID(uint32_t id) noexcept { return GetFileByGRFID(id); }
 inline uint32_t RustResolverGRFFileID(const ResolverObject *resolver) noexcept { return RustGRFFileID(RustResolverGRFFile(resolver)); }
 inline uint8_t RustGRFFileVersion(const GRFFile *file) noexcept { return file->grf_version; }
