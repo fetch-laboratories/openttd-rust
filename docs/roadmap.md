@@ -318,12 +318,11 @@ One ranked list (twenty-first steering, correction 1). Each free slot takes the
 highest unblocked item; finishing review and integration comes first. Rank
 reasons are one line each; scope is in the issues and corrections above.
 
-1. **Quiet speed pass to re-anchor** the six scenarios on the post-#517
-   build identity, once #518's corpus finishes and no builds run; record the
-   anchors in `tools/simulation/instructions.py` through a maintenance PR.
-2. **#504 coverage**, draft #518: report, #156 update, independent fixing
-   review and Full; its report ranks #156 and names default scenarios that
-   add no unique coverage.
+1. **#504 coverage**, draft #518: fixing review and Full; its report ranks
+   #156 and names default scenarios that add no unique coverage.
+2. **Quiet speed pass to re-anchor** the six scenarios on the post-#517
+   build identity, after item 3 integrates and with no builds running; record
+   the anchors through a maintenance PR.
 3. **#275 tile-loop batch**: #312 trees, houses and water, about 1.6% of the
    P2016 loop, attributed against the retained reference profile.
 4. **#503** deep tier with `--soak`, which runs nowhere today.
@@ -342,6 +341,8 @@ tally at the tenth integration after `4853789508`; `issues.py` at start, when
 planning and when taking stock. #168's selector audit and #199's mirror audit
 ride the items above that touch those modules.
 
+#526 (question): how the fork distributes the GPL NewGRF binaries #525 commits; #525 integrates once the user decides.
+
 Parked, each with what brings it back: #497 and #498 (correction 2); #64 and
 #68, vendored code, after the simulation; the rest of #69 when a selected port
 needs it beyond #516; GUI and platform after the simulation; the six
@@ -355,11 +356,13 @@ regression or rollback target.
 
 | Item | Head | Next action | Running jobs or CI |
 | --- | --- | --- | --- |
-| #518 coverage | `0bf8d71c0e` | Corpus finishes, then report, #156 update, independent review and Full. | Corpus run in its worktree since 07:07 UTC. |
-| Quiet speed pass | f492 anchors stale | Run when #518's corpus ends and no builds run; anchors land through a maintenance PR. | None. |
-| Next work | work order 3 to 6 | Start when the Claude session window allows (it was above 60%). | None. |
+| #518 coverage | `7a62683bd1` | Corpus complete (438 of 438; 84.96% of lines, 53.97% of branches; 338 scenarios add no unique line). Fixing review, then Full. | Review running. |
+| #275 tile-loop batch | no PR yet | Attribute and repair tree, house and water excess; review, Full. | Implementation agent working. |
+| Quiet speed pass | f492 anchors stale since #517 | Runs after the tile-loop batch integrates (one pass re-anchors and credits it), with no builds running; anchors land through a maintenance PR. | None. |
+| #507 NewGRF sets / #525 | `719aba14a2` | Reviewed; waits on the user's #526 decision on distributing the GPL binaries' source. | None. |
+| #505 sanitizers | no PR yet | ASan/UBSan flavours of both games as a deep-set member. | Implementation agent working. |
+| Deep check | `35202d9eda`: 519 of 520 equal | `town-commands` soak leaves a flat shore tile both games assert on in `DrawShoreTile` (fixture defect, no divergence); fix in progress under #503, then rerun. | Fixture agent working. |
 | Cadence | green at `4481a442f6` | Next dispatch after the fifteenth integration since steering. | None. |
-| Deep check | not yet run | First full `deep` on the integrated tip after this tool integrates; read its report before the next integration. | None. |
 
 Selection: /root, gpt-6.1-sol, xhigh; planning agents run gpt-6-astra, high.
 Scopes and evidence plans are in the selected issues; PRs carry current task status.
