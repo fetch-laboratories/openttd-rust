@@ -2044,7 +2044,11 @@ bool CheckAbi_landscape()
 #endif
 
 #ifdef WITH_RUST
-void RustMovementAssert([[maybe_unused]] bool condition) noexcept { assert(condition); }
+void RustMovementAssert(bool condition) noexcept
+{
+	[[maybe_unused]] const bool checked = condition;
+	assert(checked);
+}
 
 const OpenTTDMovementServices &GetRustMovementServices() noexcept
 {
