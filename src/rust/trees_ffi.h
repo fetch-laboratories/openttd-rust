@@ -38,7 +38,7 @@ struct OpenTTDTreeLoopSettings {
 	uint64_t tick_counter;
 	uint32_t size_x;
 	uint8_t climate, extra;
-	bool ambient;
+	bool ambient, ambient_callback;
 };
 struct OpenTTDTreeTickSettings {
 	uint64_t tick_counter;

@@ -247,16 +247,18 @@ pub extern "C" fn openttd_rust_generic_ai(
     }
     answer
 }
-/// The original outer feature gate; tree callers observe it again AFTER return.
+/// The original outer feature gate of `AmbientSoundEffect`.
 #[inline(always)]
 #[allow(clippy::inline_always)]
 pub fn ambient_enabled() -> bool {
     (services().enabled)()
 }
+/// `AmbientSoundEffect` with its gate already observed: once per batch by the tile
+/// scheduler (`trees::LoopSettings`), at the call by native entries.
 #[inline(always)]
 #[allow(clippy::inline_always)]
-pub fn ambient(tile: u32) {
-    if ambient_enabled() {
+pub fn ambient(enabled: bool, tile: u32) {
+    if enabled {
         ambient_callback(tile);
     }
 }
@@ -308,52 +310,3 @@ crate::abi::layouts! {
     "OpenTTDGenericServices" ["probe"] => Services { shared, version, cargo_map, cargo_bitnum, industry_substitute, evaluate, common, enabled, ambient, terrain, water_class, sound, unsupported, unhandled };
 }
 
-#[cfg(test)]
-pub(crate) fn with_disabled_fixture<R>(
-    enabled: extern "C" fn() -> bool,
-    f: impl FnOnce() -> R,
-) -> R {
-    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    extern "C" fn unused0<R>() -> R {
-        panic!("unexpected generic fixture service");
-    }
-    extern "C" fn unused1<A, R>(_: A) -> R {
-        panic!("unexpected generic fixture service");
-    }
-    extern "C" fn unused2<A, B, R>(_: A, _: B) -> R {
-        panic!("unexpected generic fixture service");
-    }
-    extern "C" fn unused3<A, B, C, R>(_: A, _: B, _: C) -> R {
-        panic!("unexpected generic fixture service");
-    }
-    struct Restore(*const Services);
-    impl Drop for Restore {
-        fn drop(&mut self) {
-            // SAFETY: The fixture mutex remains held until after restoration.
-            unsafe {
-                (*STATE.get()).native = self.0;
-            }
-        }
-    }
-    let _lock = LOCK.lock().unwrap();
-    let native = Services {
-        shared: ptr::null(),
-        version: unused1,
-        cargo_map: unused2,
-        cargo_bitnum: unused1,
-        industry_substitute: unused1,
-        evaluate: unused3,
-        common: ptr::null(),
-        enabled,
-        ambient: unused0,
-        terrain: unused1,
-        water_class: unused1,
-        sound: unused3,
-        unsupported: unused1,
-        unhandled: unused1,
-    };
-    // SAFETY: The mutex serializes fixture entries; no registration or callback uses graphs.
-    let before = unsafe { ptr::replace(&raw mut (*STATE.get()).native, &raw const native) };
-    let _restore = Restore(before);
-    f()
-}
