@@ -23,9 +23,11 @@
 use crate::base_station_base::{ADD_FORCE, ADD_TEST, ADD_TRY};
 use crate::bitmap_type::{BitmapTileArea, BitmapTileIterator};
 use crate::industry::tile::ShellHandle;
+use crate::industry_type::IndustryID;
 use crate::map_func::Map;
 use crate::services::Services;
 use crate::station_service::Service;
+use crate::station_type::StationID;
 use crate::station_type::{
     BUOY, CA_BUS, CA_DOCK, CA_NONE, CA_TRAIN, CA_TRUCK, CA_UNMODIFIED, MAX_CATCHMENT,
     RAIL_WAYPOINT, ROAD_WAYPOINT, STATION_AIRPORT, STATION_BUS, STATION_DOCK, STATION_OILRIG,
@@ -113,7 +115,7 @@ impl StationRect {
     }
     /// `AfterRemoveTile`: shrink edges while no station tile remains on them.
     #[allow(clippy::cast_possible_wrap)]
-    pub fn after_remove_tile(&mut self, id: u16, tile: u32, c: &Ctx<'_>) -> bool {
+    pub fn after_remove_tile(&mut self, id: StationID, tile: u32, c: &Ctx<'_>) -> bool {
         let mut x = c.map.tile_x(tile) as i32;
         let mut y = c.map.tile_y(tile) as i32;
         loop {
@@ -155,7 +157,7 @@ impl StationRect {
     }
     /// `AfterRemoveRect`: the second corner is skipped once the first empties.
     #[allow(clippy::cast_possible_wrap)]
-    pub fn after_remove_rect(&mut self, id: u16, ta: TileArea, c: &Ctx<'_>) -> bool {
+    pub fn after_remove_rect(&mut self, id: StationID, ta: TileArea, c: &Ctx<'_>) -> bool {
         let x = c.map.tile_x(ta.tile);
         let y = c.map.tile_y(ta.tile);
         c.check(self.pt_in_extended_rect(x as i32, y as i32, 0));
@@ -181,7 +183,7 @@ impl StationRect {
 /// `StationRect::ScanForStationTiles`.
 #[allow(clippy::cast_sign_loss)]
 fn scan_for_station_tiles(
-    id: u16,
+    id: StationID,
     left: i32,
     top: i32,
     right: i32,
@@ -194,7 +196,7 @@ fn scan_for_station_tiles(
         c.map.tile_xy(right as u32, bottom as u32),
     );
     ta.tiles(c.map)
-        .any(|tile| (c.s.tile_type)(tile) == MP_STATION && (c.s.station_index)(tile) == id)
+        .any(|tile| (c.s.tile_type)(tile) == MP_STATION && c.station_index(tile) == id)
 }
 
 /// One `StationList` member; the set orders by station ID.
@@ -204,20 +206,20 @@ pub struct StationListEntry {
     /// Live member station.
     pub station: *mut BaseStation,
     /// Its pool index, the `StationCompare` key.
-    pub id: u16,
+    pub id: StationID,
 }
 /// `StationList`: a station set ordered by `StationCompare`.
 #[derive(Default)]
 pub struct StationList(Vec<StationListEntry>);
 impl StationList {
     /// `insert`, ignoring a station already present.
-    pub fn insert(&mut self, station: *mut BaseStation, id: u16) {
+    pub fn insert(&mut self, station: *mut BaseStation, id: StationID) {
         if let Err(at) = self.0.binary_search_by_key(&id, |e| e.id) {
             self.0.insert(at, StationListEntry { station, id });
         }
     }
     /// `erase` by key.
-    pub fn erase(&mut self, id: u16) {
+    pub fn erase(&mut self, id: StationID) {
         if let Ok(at) = self.0.binary_search_by_key(&id, |e| e.id) {
             self.0.remove(at);
         }
@@ -228,7 +230,7 @@ impl StationList {
     }
     /// `begin()` for `previous == None`, else `upper_bound(previous)`.
     #[must_use]
-    pub fn next_after(&self, previous: Option<u16>) -> Option<StationListEntry> {
+    pub fn next_after(&self, previous: Option<StationID>) -> Option<StationListEntry> {
         let at = previous.map_or(0, |id| self.0.partition_point(|e| e.id <= id));
         self.0.get(at).copied()
     }
@@ -263,7 +265,7 @@ pub struct IndustryListEntry {
     /// Live industry shell.
     pub industry: *mut ShellHandle,
     /// Its pool index, the `IndustryCompare` tie-breaker.
-    pub id: u16,
+    pub id: IndustryID,
 }
 /// `IndustryList`: ordered by distance, then industry index.
 #[derive(Default)]
@@ -379,19 +381,19 @@ pub struct CatchmentServices {
     /// `MoveGoodsToStation`'s vehicle visit services.
     pub visits: *const crate::vehicle::visits::Services,
     pub station_count: extern "C" fn() -> usize,
-    pub station_if_valid: extern "C" fn(u16) -> *mut BaseStation,
+    pub station_if_valid: extern "C" fn(StationID) -> *mut BaseStation,
     pub next_station: extern "C" fn(u32) -> *mut BaseStation,
     pub owner: extern "C" fn(*mut BaseStation) -> *mut Service,
     /// `Station::Get(id)`'s owner.
-    pub station_owner: extern "C" fn(u16) -> *mut Service,
-    pub id: extern "C" fn(*mut BaseStation) -> u16,
+    pub station_owner: extern "C" fn(StationID) -> *mut Service,
+    pub id: extern "C" fn(*mut BaseStation) -> StationID,
     pub location: extern "C" fn(*const BaseStation) -> u32,
     pub associated_industry: extern "C" fn(*mut BaseStation) -> *mut ShellHandle,
     pub radius_facilities: extern "C" fn(*mut BaseStation) -> RadiusFacilities,
     pub modified_catchment: extern "C" fn() -> bool,
     pub spread: extern "C" fn() -> u8,
-    pub industry_by_id: extern "C" fn(u16) -> *mut ShellHandle,
-    pub industry_id: extern "C" fn(*mut ShellHandle) -> u16,
+    pub industry_by_id: extern "C" fn(IndustryID) -> *mut ShellHandle,
+    pub industry_id: extern "C" fn(*mut ShellHandle) -> IndustryID,
     pub industry_owner: extern "C" fn(*mut ShellHandle) -> *mut crate::industry::Industry,
     pub industry_neutral: extern "C" fn(*mut ShellHandle) -> *mut BaseStation,
     pub next_industry: extern "C" fn(u32) -> *mut ShellHandle,
@@ -432,9 +434,12 @@ impl<'a> Ctx<'a> {
     fn town_by_tile(&self, tile: u32) -> *mut crate::town::State {
         (self.s.town_owner_by_id)(u32::from((self.s.town_index)(tile)))
     }
-    fn industry_index(&self, tile: u32) -> u16 {
+    fn industry_index(&self, tile: u32) -> IndustryID {
         // SAFETY: Live immutable table.
-        unsafe { ((*self.c.industry_tile).industry_index)(tile) }
+        IndustryID(unsafe { ((*self.c.industry_tile).industry_index)(tile) })
+    }
+    fn station_index(&self, tile: u32) -> StationID {
+        StationID((self.s.station_index)(tile))
     }
     fn industry_stations(&self, industry: *mut ShellHandle) -> *mut StationList {
         crate::industry::stations_near((self.c.industry_owner)(industry))
@@ -569,7 +574,7 @@ pub(crate) unsafe fn remove_industry_to_deliver(state: *mut Service, ind: *mut S
 pub(crate) unsafe fn set_neutral_industry(
     state: *mut Service,
     industry: *mut ShellHandle,
-    id: u16,
+    id: IndustryID,
 ) {
     unsafe {
         let list = &mut (*catchment(state)).industries_near;
@@ -582,7 +587,7 @@ pub(crate) unsafe fn set_neutral_industry(
     }
 }
 /// `FlatSet::insert` into a local sorted vector.
-fn flat_insert(set: &mut Vec<u16>, id: u16) {
+fn flat_insert<T: Ord>(set: &mut Vec<T>, id: T) {
     if let Err(at) = set.binary_search(&id) {
         set.insert(at, id);
     }
@@ -697,7 +702,7 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
     );
     let id = (c.c.id)(st);
     for tile in ta.tiles(c.map) {
-        if (c.s.tile_type)(tile) != MP_STATION || (c.s.station_index)(tile) != id {
+        if (c.s.tile_type)(tile) != MP_STATION || c.station_index(tile) != id {
             continue;
         }
         let radius = tile_catchment_radius(tile, st, c);
@@ -752,12 +757,12 @@ pub(crate) fn recompute_catchment_for_all(c: &Ctx<'_>) {
     while !industry.is_null() {
         // SAFETY: Live industry owner; immediate mutation.
         unsafe { (*c.industry_stations(industry)).clear() };
-        industry = (c.c.next_industry)(u32::from((c.c.industry_id)(industry)) + 1);
+        industry = (c.c.next_industry)(u32::from((c.c.industry_id)(industry).0) + 1);
     }
     let mut st = (c.c.next_station)(0);
     while !st.is_null() {
         recompute_catchment(st, true, c);
-        st = (c.c.next_station)(u32::from((c.c.id)(st)) + 1);
+        st = (c.c.next_station)(u32::from((c.c.id)(st).0) + 1);
     }
 }
 
@@ -785,7 +790,7 @@ pub(crate) fn for_all_stations_around_tiles(
         if (c.s.tile_type)(tile) != MP_STATION {
             continue;
         }
-        flat_insert(&mut seen, (c.s.station_index)(tile));
+        flat_insert(&mut seen, c.station_index(tile));
     }
     for id in seen {
         let st = (c.c.station_if_valid)(id);
@@ -1179,17 +1184,17 @@ mod tests {
         let mut list = StationList::default();
         let p = |n: usize| std::ptr::without_provenance_mut::<BaseStation>(n);
         for id in [7, 3, 9, 3] {
-            list.insert(p(usize::from(id)), id);
+            list.insert(p(usize::from(id)), StationID(id));
         }
         assert_eq!(
-            list.entries().iter().map(|e| e.id).collect::<Vec<_>>(),
+            list.entries().iter().map(|e| e.id.0).collect::<Vec<_>>(),
             [3, 7, 9]
         );
         let mut seen = Vec::new();
         let raw = &raw mut list;
         unsafe {
             for_each_station(raw, |e| {
-                seen.push(e.id);
+                seen.push(e.id.0);
                 (*raw).erase(e.id);
             });
         }
@@ -1205,10 +1210,14 @@ mod tests {
             list.insert(IndustryListEntry {
                 distance,
                 industry: p(usize::from(id)),
-                id,
+                id: IndustryID(id),
             });
         }
-        let order: Vec<_> = list.entries().iter().map(|e| (e.distance, e.id)).collect();
+        let order: Vec<_> = list
+            .entries()
+            .iter()
+            .map(|e| (e.distance, e.id.0))
+            .collect();
         assert_eq!(order, [(1, 9), (4, 1), (4, 2)]);
         assert_eq!(list.position(p(2)), Some(2));
     }

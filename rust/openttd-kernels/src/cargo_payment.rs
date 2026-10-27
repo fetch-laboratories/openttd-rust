@@ -142,13 +142,13 @@ fn deliver(
     let subsidies = unsafe { &*(s.subsidies)() };
     let native = (subsidies.station)(station);
     let catchment = crate::station::Ctx::from_shared(subsidies.shared());
-    let state = (catchment.c.station_owner)(station);
+    let state = (catchment.c.station_owner)(crate::station_type::StationID(station));
     let visit = |near: crate::station::IndustryListEntry| {
         if remaining == 0 {
             return false;
         }
         let ind = near.industry.cast::<c_void>();
-        if near.id == industry_source {
+        if near.id == crate::industry_type::IndustryID(industry_source) {
             return true;
         }
         let slot = (s.industry_read)(ind, 1, u32::from(cargo));
@@ -214,7 +214,7 @@ fn deliver(
         },
         native,
         state,
-        0xffff,
+        crate::industry_type::IndustryID::INVALID,
     );
     if subsidies.check(
         cargo,

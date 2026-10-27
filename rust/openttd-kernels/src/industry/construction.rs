@@ -113,7 +113,11 @@ fn populate(
         // SAFETY: Live owners; immediate mutations.
         unsafe {
             (*super::stations_near(owner)).insert(neutral, (cc.c.id)(neutral));
-            crate::station::set_neutral_industry((cc.c.owner)(neutral), shell, id);
+            crate::station::set_neutral_industry(
+                (cc.c.owner)(neutral),
+                shell,
+                crate::industry_type::IndustryID(id),
+            );
         }
         return;
     }

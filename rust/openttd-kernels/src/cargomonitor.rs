@@ -223,7 +223,7 @@ pub fn add_delivery(
     source: Source,
     station: *const Station,
     state: *mut crate::station_service::Service,
-    destination: u16,
+    destination: crate::industry_type::IndustryID,
 ) {
     if amount == 0 {
         return;
@@ -252,7 +252,7 @@ pub fn add_delivery(
         crate::station::for_each_industry_near(state, |near| {
             if near.id == destination {
                 DELIVERIES.add(
-                    openttd_rust_monitor_encode_industry(company, cargo, near.id, s.check),
+                    openttd_rust_monitor_encode_industry(company, cargo, near.id.0, s.check),
                     amount,
                 );
             }

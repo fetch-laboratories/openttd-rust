@@ -741,7 +741,7 @@ pub unsafe extern "C" fn openttd_rust_industry_transport(
         }
         let c = catchment.get_or_insert_with(|| crate::station::Ctx::from_shared(s.shared()));
         let source = crate::cargo_storage::Source {
-            id: (c.c.industry_id)(i.cast()),
+            id: (c.c.industry_id)(i.cast()).0,
             source_type: crate::source_type::Source::INDUSTRY,
         };
         // SAFETY: Live owner; the station set is re-read between observations.
