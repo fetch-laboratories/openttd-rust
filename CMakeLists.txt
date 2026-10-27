@@ -302,7 +302,7 @@ target_link_libraries(openttd
 
 target_link_libraries(openttd_test PRIVATE openttd_lib)
 if(OPTION_RUST)
-    target_link_libraries(openttd PRIVATE openttd_rust)
+    target_link_libraries(openttd openttd_rust)
     target_link_libraries(openttd_test PRIVATE openttd_rust_native_test_support)
 endif()
 if(ANDROID)
