@@ -20,6 +20,7 @@
 #include "../rust/newgrf_bytereader_services.h"
 #include "../rust/newgrf_loading_ffi.h"
 #include "../newgrf.h"
+#include "../newgrf_spritegroup.h"
 #include "../rust/newgrf_global_ffi.h"
 #include "../object_base.h"
 #include "../industrytype.h"
@@ -100,19 +101,43 @@ TEST_CASE("NewGRF - industry tile manager retains virtual allocation")
 	CHECK(water.AddEntityID(1, 17, 0) == 254);
 	CHECK(water.AddEntityID(2, 17, 0) == 256);
 }
+static uint32_t IndustryMappingCount(uint8_t local, bool &available)
+{
+	RustIndustryOwner owner{openttd_rust_industry_new(), openttd_rust_industry_destroy};
+	RustIndustryBuilderOwner builder{openttd_rust_industry_builder_new(), openttd_rust_industry_builder_destroy};
+	openttd_rust_industry_registry_insert(builder.get(), NUM_INDUSTRYTYPES - 1, 0);
+	const OpenTTDIndustryResolverContext context{.owner = owner.get(), .industry = nullptr, .town = nullptr, .tile = INVALID_TILE.base(), .random_bits = 0, .id = 0, .type = 0};
+	ResolverObject resolver(nullptr);
+	const auto saved = openttd_rust_storage_temp_get(0x100);
+	openttd_rust_storage_temp_store(0x100, 0x475475);
+	/* Var 67 counts the current industry but excludes it from the closest-distance search. */
+	const auto result = openttd_rust_industry_variable(&context, &resolver, 0x67, local, &available, builder.get(), &GetIndustryResolverServices());
+	openttd_rust_storage_temp_store(0x100, saved);
+	return result;
+}
 TEST_CASE("NewGRF - temporary managers preserve canonical industry owner")
 {
 	const auto saved = _industry_mngr.mappings[NUM_INDUSTRYTYPES - 1];
 	_industry_mngr.mappings[NUM_INDUSTRYTYPES - 1] = {0x475475, 126, 0};
+	auto check_owner = [] {
+		bool available = true;
+		CHECK(IndustryMappingCount(126, available) == 0x1FFFF);
+		CHECK(available);
+		CHECK(_industry_mngr.GetID(126, 0x475475) == NUM_INDUSTRYTYPES - 1);
+	};
 	{
 		IndustryOverrideManager temporary(2, 6, 99);
 		temporary.mappings[3] = {0x475475, 126, 0};
-		CHECK(_industry_mngr.GetID(126, 0x475475) == NUM_INDUSTRYTYPES - 1);
+		check_owner();
 		IndustryOverrideManager copy = temporary;
+		check_owner();
 		copy = _industry_mngr;
 		CHECK(copy.GetID(126, 0x475475) == NUM_INDUSTRYTYPES - 1);
+		copy.mappings[NUM_INDUSTRYTYPES - 1] = {};
+		copy.mappings[3] = {0x475475, 126, 0};
+		check_owner();
 	}
-	CHECK(_industry_mngr.GetID(126, 0x475475) == NUM_INDUSTRYTYPES - 1);
+	check_owner();
 	_industry_mngr.mappings[NUM_INDUSTRYTYPES - 1] = saved;
 }
 TEST_CASE("NewGRF - temporary managers preserve canonical tile owner")
@@ -140,12 +165,19 @@ TEST_CASE("NewGRF - temporary managers preserve canonical tile owner")
 TEST_CASE("NewGRF - industry mapping is shared across serialized threads")
 {
 	const auto saved = _industry_mngr.mappings[NUM_INDUSTRYTYPES - 1];
-	_industry_mngr.mappings[NUM_INDUSTRYTYPES - 1] = {0x475475, 127, 0};
-	uint16_t result = IT_INVALID;
-	std::thread worker([&result] { result = _industry_mngr.GetID(127, 0x475475); });
+	_industry_mngr.mappings[NUM_INDUSTRYTYPES - 1] = {0x475475, 126, 0};
+	uint32_t result = 0;
+	uint16_t native_result = IT_INVALID;
+	bool available = true;
+	std::thread worker([&] {
+		result = IndustryMappingCount(126, available);
+		native_result = _industry_mngr.GetID(126, 0x475475);
+	});
 	worker.join();
 	_industry_mngr.mappings[NUM_INDUSTRYTYPES - 1] = saved;
-	CHECK(result == NUM_INDUSTRYTYPES - 1);
+	CHECK(result == 0x1FFFF);
+	CHECK(available);
+	CHECK(native_result == NUM_INDUSTRYTYPES - 1);
 }
 TEST_CASE("Industry - canonical allocation and history lifetime")
 {
