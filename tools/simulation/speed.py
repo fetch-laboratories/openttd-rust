@@ -17,6 +17,9 @@ import threading
 import time
 from pathlib import Path
 
+from deep import LOCK_NAME
+from validation_execution import file_lock
+
 from . import core, instructions
 
 GROUPS, PAIRS = 4, 3
@@ -245,6 +248,11 @@ class Hold:
             raise RuntimeError("speed-pass process observation failed") from self.error
 
 
+def collection_lock(migration):
+    """Wait for any deep run (tools/deep.py) and keep it out until released."""
+    return file_lock(migration.COMMON_LOCAL / LOCK_NAME, label="deep check")
+
+
 def collect(out, migration):
     manifest = json.loads((out / "manifest.json").read_text())
     if not manifest["profile"]:
@@ -264,10 +272,11 @@ def collect(out, migration):
     bundle = out / "frozen"
     builds = {role: bundle / f"{role}-runtime" for role in ROLES}
     binaries = {role: builds[role] / NAMES[role] for role in ROLES}
-    scenarios, identities = prepare_inputs(out, binaries, builds, env)
-    if identities != manifest["runtime_identities"]:
-        sys.exit("runtime, libraries or inputs changed after preparation")
-    collect_games(out, scenarios, binaries, builds, env)
+    with collection_lock(migration):
+        scenarios, identities = prepare_inputs(out, binaries, builds, env)
+        if identities != manifest["runtime_identities"]:
+            sys.exit("runtime, libraries or inputs changed after preparation")
+        collect_games(out, scenarios, binaries, builds, env)
     return summarize(out, manifest, [s["name"] for s in scenarios], GROUPS)
 
 

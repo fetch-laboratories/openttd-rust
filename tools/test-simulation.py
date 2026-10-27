@@ -899,6 +899,7 @@ class SpeedPassTests(unittest.TestCase):
                         "prepare_inputs",
                         return_value=([], {"play-a": "changed"}),
                     ),
+                    patch.object(migration, "COMMON_LOCAL", out),
                     patch.object(speed, "collect_games") as games,
                     self.assertRaisesRegex(SystemExit, "changed after preparation"),
                 ):
