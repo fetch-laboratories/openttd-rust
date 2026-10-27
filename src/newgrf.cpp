@@ -50,6 +50,7 @@
 
 #ifdef WITH_RUST
 #include "rust/engine_loading_services.hpp"
+#include "rust/vehicle_properties_services.hpp"
 #include "rust/cargo_registry_ffi.h"
 #endif
 
@@ -84,9 +85,7 @@ GRFLoadedFeatures _loaded_newgrf_features;
 
 GrfProcessingState _cur_gps;
 
-#ifdef WITH_RUST
-RustEngineTempView _gted;
-#else
+#ifndef WITH_RUST
 TypedIndexContainer<std::vector<GRFTempEngineData>, EngineID> _gted;  ///< Temporary engine data used during NewGRF loading
 #endif
 
@@ -385,6 +384,7 @@ CargoTypes TranslateRefitMask(uint32_t refit_mask)
  * @param error_location Function name for grf error messages
  * @param[out] index If \a base_pointer is valid, \a index is assigned to the matching price; else it is left unchanged
  */
+#ifndef WITH_RUST
 void ConvertTTDBasePrice(uint32_t base_pointer, std::string_view error_location, Price *index)
 {
 	/* Special value for 'none' */
@@ -403,6 +403,8 @@ void ConvertTTDBasePrice(uint32_t base_pointer, std::string_view error_location,
 
 	*index = (Price)((base_pointer - start) / size);
 }
+
+#endif
 
 /**
  * Get the language map associated with a given NewGRF and language.

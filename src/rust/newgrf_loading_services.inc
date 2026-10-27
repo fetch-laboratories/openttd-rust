@@ -164,7 +164,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.finalise_airports = []() noexcept { FinaliseAirportsArray(); },
 		.bind_airports = []() noexcept { BindAirportSpecs(); },
 		.townnames = []() noexcept { InitGRFTownGeneratorNames(); },
-		.vehicle_list_orders = []() noexcept { CommitVehicleListOrderChanges(); },
 		.activate_shore = []() noexcept { ActivateOldShore(); },
 		.activate_tram_depot = []() noexcept { ActivateOldTramDepot(); },
 		.aging_stops = []() noexcept { SetYearEngineAgingStops(); },

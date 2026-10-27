@@ -176,7 +176,6 @@ struct OpenTTDGrfLoadingServices {
 	void (*finalise_airports)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_airports);
 	void (*bind_airports)() noexcept OPENTTD_SERVICE_DEFAULT(bind_airports);
 	void (*townnames)() noexcept OPENTTD_SERVICE_DEFAULT(townnames);
-	void (*vehicle_list_orders)() noexcept OPENTTD_SERVICE_DEFAULT(vehicle_list_orders);
 	void (*activate_shore)() noexcept OPENTTD_SERVICE_DEFAULT(activate_shore);
 	void (*activate_tram_depot)() noexcept OPENTTD_SERVICE_DEFAULT(activate_tram_depot);
 	void (*aging_stops)() noexcept OPENTTD_SERVICE_DEFAULT(aging_stops);

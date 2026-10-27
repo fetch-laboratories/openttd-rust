@@ -14,6 +14,7 @@
 #ifdef WITH_RUST
 #include "../rust/engine_ffi.h"
 #include "../rust/engine_loading_ffi.h"
+#include "../rust/vehicle_properties_ffi.h"
 #include "../newgrf/newgrf_internal_vehicle.h"
 
 #include "../rust/engine_services.h"
@@ -102,35 +103,6 @@ TEST_CASE("Engine mappings preserve reservation, sorted identity and replacement
 	for (const auto &map : saved) for (const auto &entry : map) _engine_mngr.SetID(entry.type, entry.internal_id, entry.grfid, entry.substitute_id, entry.engine);
 }
 
-#ifdef WITH_RUST
-TEST_CASE("Engine loading state crosses serialized game threads and retains partial fields", "[rust][engine][loading]")
-{
-	_gted.resize(3);
-	_gted[EngineID{1}].cargo_allowed = CargoClasses{123};
-	_gted[EngineID{1}].railtypelabels.push_back(RAILTYPE_LABEL_RAIL);
-	_gted[EngineID{1}].UpdateRefittability(false);
-	std::thread game([] {
-		REQUIRE(_gted[EngineID{1}].cargo_allowed.base() == 123);
-		REQUIRE(_gted[EngineID{1}].refittability == GRFTempEngineData::EMPTY);
-		_gted[EngineID{1}].UpdateRefittability(true);
-		_gted[EngineID{1}].ctt_include_mask = 7;
-	});
-	game.join();
-	_gted.resize(70);
-	REQUIRE(_gted[EngineID{1}].ctt_include_mask == 7);
-	REQUIRE(_gted[EngineID{1}].railtypelabels[0] == RAILTYPE_LABEL_RAIL);
-	REQUIRE(_gted[EngineID{1}].refittability == GRFTempEngineData::NONEMPTY);
-	_gted[EngineID{1}].UpdateRefittability(false);
-	REQUIRE(_gted[EngineID{1}].refittability == GRFTempEngineData::NONEMPTY);
-	REQUIRE(_gted[EngineID{69}].refittability == GRFTempEngineData::UNSET);
-	_gted.clear();
-	_gted.resize(3);
-	REQUIRE(_gted[EngineID{1}].cargo_allowed.None());
-	REQUIRE(_gted[EngineID{1}].railtypelabels.empty());
-	REQUIRE(_gted[EngineID{1}].defaultcargo_grf == nullptr);
-	_gted.clear();
-}
-#endif
 
 TEST_CASE("Engine capability observations preserve type and zero-capacity gates", "[rust][engine]")
 {
