@@ -359,6 +359,7 @@ regression or rollback target.
 | Quiet speed pass | f492 anchors stale | Run when #518's corpus ends and no builds run; anchors land through a maintenance PR. | None. |
 | Next work | work order 3 to 6 | Start when the Claude session window allows (it was above 60%). | None. |
 | Cadence | green at `4481a442f6` | Next dispatch after the fifteenth integration since steering. | None. |
+| Deep check | not yet run | First full `deep` on the integrated tip after this tool integrates; read its report before the next integration. | None. |
 
 Selection: /root, gpt-6.1-sol, xhigh; planning agents run gpt-6-astra, high.
 Scopes and evidence plans are in the selected issues; PRs carry current task status.

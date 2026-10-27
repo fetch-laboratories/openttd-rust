@@ -293,6 +293,22 @@ reset anchor Ir alone. Profiles run alongside other agents. Factor 2 is provisio
 wall sensitivity to loop Ir ranges from 0.75 (TGP) to 1.54 (P2016) (#356). Memory stalls,
 excluded work and kernel/I/O costs remain outside the proxy.
 
+## Deep checks
+
+`python3 tools/migration.py deep [SELECTOR...]` (#503) runs the deep set on a clean checkout
+at `nice -n 19` and `ionice -c 3`, on the developer host only, never in GitHub Actions. It
+writes `.local/deep/<time>-<commit>/report.json` naming the commit, each member's exit status,
+wall and summed scenario seconds, and each failed scenario's problems and first differences,
+beside a log per member. The set is `DEEP_SET` in `tools/deep.py`; today it is `simulate
+--soak` (520 scenarios against the default 445), run through the ordinary driver action with a
+per-game timeout of 7200 s so a speed pass's hold cannot time a stopped game out. Members are
+ordinary harness games: they share the build and game locks and stop under a speed pass's
+timed collection. A clone-wide `deep.lock` makes a second run exit 0 as skipped. Selectors go
+to the soak member and mark the report partial; a partial report is a smoke check, not a
+deep check. Cadence, triage and rotation are in AGENTS.md "Speed". Planned members are listed
+on #503. The soak run's wall time is the report's `seconds` (summed scenario seconds divided by
+the simulate job count, `--jobs // 2`, approximates it).
+
 ## Native macOS arm64 Rust linkage
 
 CMake verifies the pinned `rustc -vV` host against the actual C++ platform, architecture and
