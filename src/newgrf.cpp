@@ -466,8 +466,8 @@ static void ResetNewGRFErrors()
 }
 #endif
 
-extern void ResetCallbacks(bool final);
 #ifndef WITH_RUST
+extern void ResetCallbacks(bool final);
 extern void ResetGRM();
 #endif
 

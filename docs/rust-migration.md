@@ -2019,9 +2019,9 @@ Rust storage; station/road-stop/airport/object presentation uses one shared regi
 Object-class availability calls the existing Rust eligibility owner.
 
 Canonical native GRF/spec allocations, payload/layout containers, station shells,
-saved slot records, sprite graphs, strings and badges remain native. Checked native
-`ReadSpriteLayoutSprite` and `ReadSpriteLayout` callees preserve their incremental
-writes. A native stack vector carries the temporary sequence payload; Rust drives
+saved slot records, sprite graphs, strings and badges remain native. Direct Rust
+Action2 layout callees preserve their incremental writes through the shared
+reader and opaque native payloads. A native stack vector carries the temporary sequence payload; Rust drives
 every read and its successful move into the layout. Read errors return from Rust
 before the decoder rethrows. Deferred class
 names resolve the spec's current class. Original bodies remain portable-only.
@@ -2087,7 +2087,7 @@ control actions 6/7/9/8/D/E/10, patch flags/variables, GRM, labels, Action6 buff
 reset/status policy and finalization sequencing. One process-wide Rust execution
 carrier owns `_cur_gps`, spriteset maps and spritegroup references; native feature
 parsers hold genuine field aliases. No execution mirror or spec-pool copy exists.
-Native config/GRF/spec objects, parameters, parsed Action2, sprite/file I/O and
+Native config/GRF/spec objects, parameters, sprite/file I/O and
 feature parsers remain. Each named throwing parser catches the original decode
 exception domain and reports failure; Rust applies the bounds-disable policy with
 partial effects retained. File reads do not throw ordinary parsing exceptions.
@@ -2097,6 +2097,25 @@ native file frames preserve file/config restoration and lifetime. Portable bodie
 remain. Arbitrary feature grammars/data sections, historical saves, network clock
 and static influence, remaining GRM/variable/target combinations and GUI scheduling
 remain #156 gaps. PR #473.
+
+### Action2 graph construction and publication (#485)
+
+`newgrf_act2.rs` owns the complete Action2 decoder, callback-result interner,
+range normalization, real-group simplification and tile-layout interpretation.
+The interner is process-wide and stores native pool IDs. Loading dispatch and
+callback reset/final shrink call Rust directly, using the existing execution,
+spriteset, cargo, GRF-version and disable owners. The shared reader dispatches
+Action2 values at the original byte, word and dword widths.
+Native polymorphic sprite groups, final payload vectors, constructors/destructors
+and graphics resources remain canonical. Typed allocation and scalar storage
+bindings retain incremental reads and partial writes; vector element addresses
+expire at vector mutation. Local algorithm vectors live in Rust. Publication
+occurs only at the original final assignment, including explicit null results.
+Checked read failures drop Rust locals and return to the existing decoder error
+boundary. Station definitions call the layout owner directly with the shared reader
+and opaque native payloads; bridge recolouring keeps its native facade. Original bodies remain
+portable. Arbitrary grammars, remaining malformed and advanced-layout combinations,
+historical loading, rendering and network scheduling remain #156 limits. PR #493.
 
 ### Cargo registry, translation and callback lifecycle (#467)
 
