@@ -41,8 +41,8 @@ class Line(TypedDict):
 
 
 class Function(TypedDict):
-    name: str
-    demangled_name: str
+    name: NotRequired[str]
+    demangled_name: NotRequired[str]
     lineno: int
     execution_count: int
 
@@ -131,7 +131,8 @@ def summarize(merged: Trace, scenarios: Iterable[tuple[str, Trace]]) -> Report:
                     [
                         line
                         for line in source["lines"]
-                        if line.get("function_name") == function["name"]
+                        if line.get("function_name")
+                        == function.get("name", function.get("demangled_name"))
                     ]
                 ),
             )

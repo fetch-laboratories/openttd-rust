@@ -75,7 +75,8 @@ class CoverageTests(unittest.TestCase):
                 dict(lines=3, lines_covered=2, branches=4, branches_covered=2),
             )
             functions = {
-                f["demangled_name"]: f for f in result["files"][0]["functions"]
+                f.get("demangled_name", f.get("name")): f
+                for f in result["files"][0]["functions"]
             }
             self.assertEqual(functions["never(int)"]["execution_count"], 0)
             self.assertEqual(functions["value(int)"]["execution_count"], 2)
@@ -119,6 +120,36 @@ class CoverageTests(unittest.TestCase):
         self.assertEqual(
             result["unique_lines"], {"one": [("a.cpp", 1)], "two": [("b.cpp", 1)]}
         )
+
+    def test_legacy_gcov_function_names(self) -> None:
+        trace: coverage.Trace = {
+            "files": [
+                {
+                    "file": "original.cpp",
+                    "functions": [
+                        {
+                            "demangled_name": "value(int)",
+                            "lineno": 1,
+                            "execution_count": 1,
+                        }
+                    ],
+                    "lines": [
+                        {
+                            "function_name": "value(int)",
+                            "line_number": 1,
+                            "count": 1,
+                            "branches": [{"count": 1}, {"count": 0}],
+                        }
+                    ],
+                }
+            ]
+        }
+        function = coverage.summarize(trace, [("one", trace)])["files"][0]["functions"][
+            0
+        ]
+        self.assertEqual(function["lines_covered"], 1)
+        self.assertEqual(function["branches_covered"], 1)
+        self.assertEqual(function["branches"], 2)
 
     def test_empty_original_report_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
