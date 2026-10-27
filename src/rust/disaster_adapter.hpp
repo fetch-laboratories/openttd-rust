@@ -41,15 +41,15 @@ static_assert(SND_12_EXPLOSION == 16 && DIRDIFF_90LEFT == 6);
 
 static OpenTTDDisasterVehicle DisasterHandle(DisasterVehicle *v) noexcept
 {
-	return {.handle = RustVehicle(v), .state = v == nullptr ? nullptr : v->rust_state.get(), .id = v == nullptr ? VehicleID::Invalid().base() : v->index.base()};
+	return {.handle = RustVehicle(v), .state = v == nullptr ? nullptr : v->rust_state.get(), .id = v == nullptr ? VehicleID::Invalid().base() : RustVehicleIndexOpaque(v)};
 }
 static OpenTTDDisasterVehicle DisasterBaseHandle(Vehicle *v) noexcept
 {
-	return {.handle = RustVehicle(v), .state = nullptr, .id = v == nullptr ? VehicleID::Invalid().base() : v->index.base()};
+	return {.handle = RustVehicle(v), .state = nullptr, .id = v == nullptr ? VehicleID::Invalid().base() : RustVehicleIndexOpaque(v)};
 }
 static OpenTTDDisasterRoadTarget DisasterRoadHandle(RoadVehicle *v) noexcept
 {
-	return {.handle = RustVehicle(v), .state = v == nullptr ? nullptr : v->GetRustState(), .id = v == nullptr ? VehicleID::Invalid().base() : v->index.base()};
+	return {.handle = RustVehicle(v), .state = v == nullptr ? nullptr : v->GetRustState(), .id = v == nullptr ? VehicleID::Invalid().base() : RustVehicleIndexOpaque(v)};
 }
 static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterNextPart(OpenTTDVehicle *v) noexcept
 {
@@ -88,14 +88,14 @@ static OpenTTDDisasterStationTarget OPENTTD_RUST_CALL DisasterNextStation(uint32
 }
 static OpenTTDDisasterIndustryTarget DisasterIndustryHandle(Industry *i) noexcept
 {
-	return {.industry = i, .id = i == nullptr ? IndustryID::Invalid().base() : i->index.base()};
+	return {.industry = i, .id = i == nullptr ? IndustryID::Invalid().base() : RustIndustryID(i)};
 }
 static OpenTTDDisasterIndustryTarget OPENTTD_RUST_CALL DisasterNextIndustry(uint32_t from) noexcept { return DisasterIndustryHandle(OpenTTDNextIndustry(from)); }
 static OpenTTDDisasterIndustryTarget OPENTTD_RUST_CALL DisasterIndustry(uint32_t id) noexcept { return DisasterIndustryHandle(RustIndustryByID(id)); }
 static OpenTTDDisasterIndustryLocation OPENTTD_RUST_CALL DisasterIndustryLocation(void *shell) noexcept
 {
-	const Industry *i = static_cast<Industry *>(shell);
-	return {.tile = RustIndustryTile(shell), .town = OpenTTDIndustryTown(i)->index.base()};
+	Industry *i = static_cast<Industry *>(shell);
+	return {.tile = RustIndustryTile(shell), .town = RustTownAuthorityIndex(OpenTTDIndustryTownHandle(i))};
 }
 static void OPENTTD_RUST_CALL DisasterAirportBlocks(uint16_t id, bool blocked) noexcept
 {
