@@ -347,21 +347,24 @@ needs it beyond #516; GUI and platform after the simulation; the six
 
 ## Resume checkpoint
 
-Paused at the user's request; the twenty-first steering applies on resume. No
-rollback target or confirmed regression. Baseline validation passed at
-`4853789508`; the macOS Release job passed and Debug was cancelled once.
+Development resumed under the twenty-first steering. No rollback target or
+confirmed regression. Five delegated tasks own the four drafts and the CI
+maintenance batch; root prepares the accessor audit and serializes integration.
+Baseline validation passed at `4853789508`; the macOS Release job passed and
+Debug is being rerun after its first capacity cancellation.
 
 | Item | Saved head | Next action |
 | --- | --- | --- |
-| #491 vehicle properties / #495 | `85674c615d` | Fix commit from the steering comment (orphan facade and export, `Slide` port); fresh scoped review; Full; matching-head merge. |
-| #485 Action2 / #493 | `5f7b996386` | Fresh scoped review of the adoption resolutions, then Full. |
-| #477 houses / #486 | `e956d15b2c` | Native tests and 11 house/loading scenarios; scoped adoption review; Full. |
-| #492 airports / #499 | `ff917b3cf7` | Fix the `StationGfx` compile error; finish file-loaded/reload and parser evidence; whole-port review. |
-| macOS check | code `4853789508` | Rerun the Debug job; `CI_MACOS_HEAVY` only after a second cancellation. |
+| #491 vehicle properties / #495 | `85674c615d` | `fix495_order_callee` removes the orphan facade/export and ports `Slide`; fresh scoped review, then Full. |
+| #485 Action2 / #493 | `5f7b996386` | `review493_adoption` reviews and fixes the adoption resolutions, then root prepares Full. |
+| #477 houses / #486 | `e956d15b2c` | `finish486_house_evidence` runs native tests and 11 scenarios, fixing failures; fresh review, then Full. |
+| #492 airports / #499 | `ff917b3cf7` | `finish499_airport_definitions` fixes compilation and completes file-loaded/reload and parser evidence; whole-port review. |
+| #514, #502, #501 gate configuration / #502 | implementation active | `ci514_cadence_and_gates` reuses the form PR for the cadence and typing gate batch; root owns workflow review and bootstrap Full. |
+| macOS check | code `4853789508` | Debug rerun requested; `CI_MACOS_HEAVY` only after a second capacity cancellation. |
 | #275 instruction profile | `f4923c79eb` | Due after the next integration. |
-| Worktrees | | Remove `t3-d6418e16`, `t3-9bff1490`, `t3-758125c7`; one worktree per PR on its PR branch. |
+| Worktrees | five open PRs | Redundant trees removed; each resumed PR has one fresh delegated worktree on its actual PR branch. |
 | #515 and #500 first PR | unstarted | Next maintenance batch after the first ready integration. |
-| #275 accessor audit | unstarted | Twenty-first steering, correction 7; credit against `.local/speed-reference-profiles/`. |
+| #275 accessor audit | root inspecting | Twenty-first steering, correction 7; credit against the retained reference profile. |
 | #504 coverage | selected, unstarted | Work order item 4. |
 | #516 catchment | queued for planning | Planning agent writes scope and service needs; work order item 7. |
 | #497, #498 | parked | Return per correction 2. |
