@@ -41,7 +41,6 @@ inline size_t RustHouseSpecCount() noexcept { return HouseSpec::Specs().size(); 
 inline uint32_t RustHouseSpecCount32() noexcept { return static_cast<uint32_t>(RustHouseSpecCount()); }
 inline uint8_t RustTownHousePopulation(const HouseSpec *spec) noexcept { return spec->population; }
 inline uint16_t RustHouseAvailability(const HouseSpec *spec) noexcept { return spec->building_availability.base(); }
-inline bool RustHouseEnabled(const HouseSpec *spec) noexcept { return spec->enabled; }
 inline int32_t RustHouseMinYear(const HouseSpec *spec) noexcept { return spec->min_year.base(); }
 inline uint8_t RustTownHouseFlags(const HouseSpec *spec) noexcept { return spec->building_flags.base(); }
 inline uint16_t RustTownHouseCallbacks(const HouseSpec *spec) noexcept { return spec->callback_mask.base(); }
