@@ -20,7 +20,7 @@ on:
     - rust-migration
     # Markdown-only pushes never queue, so they cannot displace a pending code push below.
     paths-ignore: ['**.md']
-  # Root runs macOS alone on rust-migration after every fifth integration (#357).
+  # Root runs the cadence platforms after every fifth integration (#357, #514).
   workflow_dispatch:
 
 permissions:
@@ -55,36 +55,22 @@ jobs:
 
   linux:
     needs: policy
-    if: ${{ !cancelled() && (inputs.checkout-ref != '' || needs.policy.outputs.heavy == 'true' || needs.policy.outputs.covered == 'true') }}
+    if: ${{ !cancelled() && (inputs.checkout-ref != '' || needs.policy.outputs.heavy == 'true' || needs.policy.outputs.covered == 'true' || github.event_name == 'workflow_dispatch') }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-        - name: Clang
-          compiler: clang
-          cxxcompiler: clang++
-          libraries: libsdl2-dev
-        - name: GCC - SDL2
-          compiler: gcc
-          cxxcompiler: g++
-          libraries: libsdl2-dev
-        - name: GCC - Dedicated
-          compiler: gcc
-          cxxcompiler: g++
-          libraries: grfcodec
-          extra-cmake-parameters: -DOPTION_DEDICATED=ON -DCMAKE_CXX_FLAGS_INIT="-DRANDOM_DEBUG" -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON
-          # Compile without SDL / SDL2, as that should compile fine too.
+        flavour: ${{ fromJSON((inputs.profile == 'platform' || (github.event_name == 'push' && needs.policy.outputs.heavy == 'true')) && '["clang","sdl2","dedicated"]' || (inputs.checkout-ref == '' && github.event_name == 'workflow_dispatch') && '["clang","dedicated"]' || '["sdl2"]') }}
 
-    name: Linux (${{ matrix.name }})
+    name: Linux (${{ matrix.flavour == 'clang' && 'Clang' || matrix.flavour == 'dedicated' && 'GCC - Dedicated' || 'GCC - SDL2' }})
 
     uses: ./.github/workflows/ci-linux.yml
 
     with:
       checkout-ref: ${{ inputs.checkout-ref }}
-      compiler: ${{ matrix.compiler }}
-      cxxcompiler: ${{ matrix.cxxcompiler }}
-      libraries: ${{ matrix.libraries }}
-      extra-cmake-parameters: ${{ matrix.extra-cmake-parameters }}
+      compiler: ${{ matrix.flavour == 'clang' && 'clang' || 'gcc' }}
+      cxxcompiler: ${{ matrix.flavour == 'clang' && 'clang++' || 'g++' }}
+      libraries: ${{ matrix.flavour == 'dedicated' && 'grfcodec' || 'libsdl2-dev' }}
+      extra-cmake-parameters: ${{ matrix.flavour == 'dedicated' && '-DOPTION_DEDICATED=ON -DCMAKE_CXX_FLAGS_INIT="-DRANDOM_DEBUG" -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON' || '' }}
       cache-only: ${{ inputs.checkout-ref == '' && github.event_name == 'push' && github.ref == 'refs/heads/rust-migration' && needs.policy.outputs.covered == 'true' }}
 
   macos:
@@ -117,13 +103,11 @@ jobs:
 
   windows:
     needs: policy
-    if: ${{ !cancelled() && (inputs.checkout-ref != '' || needs.policy.outputs.heavy == 'true' || needs.policy.outputs.covered == 'true') && inputs.profile != 'native' }}
+    if: ${{ !cancelled() && (inputs.checkout-ref != '' || needs.policy.outputs.heavy == 'true' || needs.policy.outputs.covered == 'true' || github.event_name == 'workflow_dispatch') && inputs.profile != 'native' }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-        - arch: x86
-        - arch: x64
+        arch: ${{ fromJSON((inputs.profile == 'platform' || (github.event_name == 'push' && needs.policy.outputs.heavy == 'true')) && '["x86","x64"]' || (inputs.checkout-ref == '' && github.event_name == 'workflow_dispatch') && '["x86"]' || '["x64"]') }}
 
     name: Windows (${{ matrix.arch }})
 
@@ -138,7 +122,7 @@ jobs:
   annotations_emscripten:
     name: Check emscripten annotations
     needs: emscripten
-    if: always() && needs.emscripten.result != 'skipped' && (inputs.checkout-ref != '' || github.event_name == 'pull_request')
+    if: always() && needs.emscripten.result != 'skipped' && (inputs.checkout-ref != '' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
     - uses: OpenTTD/actions/annotation-check@v6
@@ -146,7 +130,7 @@ jobs:
   annotations_linux:
     name: Check linux annotations
     needs: linux
-    if: always() && needs.linux.result != 'skipped' && (inputs.checkout-ref != '' || github.event_name == 'pull_request')
+    if: always() && needs.linux.result != 'skipped' && (inputs.checkout-ref != '' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
     - uses: OpenTTD/actions/annotation-check@v6
@@ -154,7 +138,7 @@ jobs:
   annotations_macos:
     name: Check macos annotations
     needs: macos
-    if: always() && needs.macos.result != 'skipped' && (inputs.checkout-ref != '' || github.event_name == 'pull_request')
+    if: always() && needs.macos.result != 'skipped' && (inputs.checkout-ref != '' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
     - uses: OpenTTD/actions/annotation-check@v6
@@ -162,7 +146,7 @@ jobs:
   annotations_windows:
     name: Check windows annotations
     needs: windows
-    if: always() && needs.windows.result != 'skipped' && (inputs.checkout-ref != '' || github.event_name == 'pull_request')
+    if: always() && needs.windows.result != 'skipped' && (inputs.checkout-ref != '' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
     - uses: OpenTTD/actions/annotation-check@v6
@@ -179,7 +163,7 @@ jobs:
     - annotations_macos
     - annotations_windows
 
-    if: always() && (inputs.checkout-ref != '' || (github.event_name == 'pull_request' && needs.linux.result != 'skipped'))
+    if: always() && (inputs.checkout-ref != '' || ((github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') && needs.linux.result != 'skipped'))
 
     runs-on: ubuntu-latest
 
