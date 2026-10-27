@@ -25,12 +25,23 @@ rows = [
     dict(scenario="b", seconds=4.0, passed=False, problems=["end moments differ"],
          differences=[dict(chunk="PLYR", element=i) for i in range(5)]),
 ]
+if "advance-head" in sys.argv[3:]:
+    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit",
+                    "--allow-empty", "--quiet", "-m", "Add: next commit"], check=True)
+if "dirty" in sys.argv[3:]:
+    open("stray.txt", "w").write("edit")
+if any(s in sys.argv[3:] for s in ("pass", "advance-head", "dirty")):
+    rows[1].update(passed=True, problems=[], differences=[])
+passed = all(row["passed"] for row in rows)
 report = os.path.join(out, "report.json")
-json.dump(dict(passed=False, results=rows), open(report, "w"))
+head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+status = subprocess.check_output(["git", "status", "--short"], text=True).strip()
+json.dump(dict(passed=passed, results=rows, candidate_commit=head, candidate_status=status),
+          open(report, "w"))
 json.dump(dict(nice=os.nice(0), ionice=ionice.stdout, args=sys.argv[2:]),
           open(os.path.join(out, "priority.json"), "w"))
 print("Report: " + report)
-sys.exit(1)
+sys.exit(0 if passed else 1)
 """
 
 
@@ -46,6 +57,7 @@ class DeepTests(unittest.TestCase):
             + ["--quiet", "-m", "Add: nothing"],
         ):
             subprocess.run(["git", *command], cwd=self.root, check=True)
+        (self.root / ".git/info/exclude").write_text(".local/\n")
         self.head = subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=self.root, text=True
         ).strip()
@@ -101,6 +113,26 @@ class DeepTests(unittest.TestCase):
         self.assertIn("skipped", output)
         self.assertFalse((self.local / "deep").exists())
         self.assertFalse((self.drop / "priority.json").exists())
+
+    def test_clean_matching_member_passes(self) -> None:
+        code, _ = self.run_deep(["pass"])
+        self.assertEqual(code, 0)
+        self.assertTrue(self.only_report()["passed"])
+
+    def test_member_from_a_later_commit_is_rejected(self) -> None:
+        code, _ = self.run_deep(["advance-head"])
+        report = self.only_report()
+        self.assertEqual(code, 1)
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["commit"], self.head)
+        self.assertIn("commit", report["results"][0]["problems"][0])
+
+    def test_member_from_a_dirty_checkout_is_rejected(self) -> None:
+        code, _ = self.run_deep(["dirty"])
+        report = self.only_report()
+        self.assertEqual(code, 1)
+        self.assertFalse(report["passed"])
+        self.assertIn("dirty", report["results"][0]["problems"][0])
 
     def test_lock_is_released_after_a_run(self) -> None:
         self.run_deep()

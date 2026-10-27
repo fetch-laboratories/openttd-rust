@@ -19,6 +19,7 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TypedDict
 
 from validation_execution import run_logged
 
@@ -49,6 +50,12 @@ DEEP_SET = (
 )
 
 
+class Failure(TypedDict):
+    scenario: str
+    problems: list[str]
+    differences: list[dict[str, object]]
+
+
 @dataclass
 class Result:
     name: str
@@ -60,7 +67,8 @@ class Result:
     simulation_report: str | None = None
     scenarios: int = 0
     scenario_seconds: float = 0.0
-    failures: list[dict[str, object]] = field(default_factory=list)
+    failures: list[Failure] = field(default_factory=list)
+    problems: list[str] = field(default_factory=list)
 
 
 def git(root: Path, *arguments: str) -> str:
@@ -90,13 +98,17 @@ def low_priority(command: list[str]) -> list[str]:
     return [*prefix, *command]
 
 
-def summarize(result: Result) -> None:
+def summarize(result: Result, commit: str) -> None:
     """Fill the outcome from the `Report:` line of the member's simulate log."""
     found = re.findall(r"Report: (\S+report\.json)", Path(result.log).read_text())
     if not found:
         return
     result.simulation_report = found[-1]
     simulation = json.loads(Path(found[-1]).read_text())
+    if simulation["candidate_commit"] != commit:
+        result.problems.append("member commit differs from the deep-check commit")
+    if simulation["candidate_status"]:
+        result.problems.append("member ran from a dirty checkout")
     rows = simulation["results"]
     result.scenarios = len(rows)
     result.scenario_seconds = round(sum(row["seconds"] for row in rows), 1)
@@ -109,7 +121,12 @@ def summarize(result: Result) -> None:
         for row in rows
         if not row["passed"]
     ]
-    result.passed = result.exit == 0 and simulation["passed"] and not result.failures
+    result.passed = (
+        result.exit == 0
+        and simulation["passed"]
+        and not result.failures
+        and not result.problems
+    )
 
 
 def run_deep(
@@ -143,7 +160,7 @@ def run_deep(
             result = Result(
                 member.name, command, code, round(time.monotonic() - begun, 1), str(log)
             )
-            summarize(result)
+            summarize(result, commit)
             results.append(result)
         report = {
             "schema_version": 1,
@@ -164,5 +181,7 @@ def run_deep(
             f"{len(result.failures)} failed, exit {result.exit}, {result.seconds} s",
             flush=True,
         )
+        for problem in result.problems:
+            print(f"     {problem}", flush=True)
     print(f"Deep report: {out / 'report.json'}", flush=True)
     return 0 if report["passed"] else 1
