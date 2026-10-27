@@ -1453,20 +1453,14 @@ void RustVehicleOrderSort(uint16_t *data, size_t size) noexcept
 {
 	std::ranges::sort(std::span(data, size), [](uint16_t a, uint16_t b) { return EnginePreSort(EngineID{a}, EngineID{b}); });
 }
-void RustVehicleOrderSlide(uint16_t *data, size_t from, size_t to) noexcept
-{
-	Slide(data + from, data + from + 1, data + to);
-}
 #endif
 
+#ifndef WITH_RUST
 /**
  * Determine default engine sorting and execute recorded ListOrderChanges from AlterVehicleListOrder.
  */
 void CommitVehicleListOrderChanges()
 {
-#ifdef WITH_RUST
-	openttd_rust_vehicle_order_commit(&GetRustEngineLoadingServices());
-#else
 	/* Build a list of EngineIDs. EngineIDs are sequential from 0 up to the number of pool items with no gaps. */
 	std::vector<EngineID> ordering(Engine::GetNumItems());
 	std::iota(std::begin(ordering), std::end(ordering), EngineID::Begin());
@@ -1503,8 +1497,8 @@ void CommitVehicleListOrderChanges()
 	/* Clear out the queue */
 	_list_order_changes.clear();
 	_list_order_changes.shrink_to_fit();
-#endif
 }
+#endif
 
 /**
  * Fill the grf_cache of the given vehicle.

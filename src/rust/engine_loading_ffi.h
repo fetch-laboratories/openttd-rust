@@ -73,15 +73,12 @@ struct OpenTTDEngineLoadingServices {
 	const uint8_t *(*default_counts)() noexcept OPENTTD_SERVICE_DEFAULT(default_counts);
 	void (*set_position)(const OpenTTDEngine *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_position);
 	OpenTTDEngineOrderSource (*order_source)(const OpenTTDEngine *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(order_source);
-	void (*order_slide)(uint16_t *, size_t, size_t) noexcept OPENTTD_SERVICE_DEFAULT(order_slide);
 	void (*order_sort)(uint16_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(order_sort);
 	size_t (*order_count)() noexcept OPENTTD_SERVICE_DEFAULT(order_count);
 };
 const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept;
 void RustVehicleOrderSort(uint16_t *, size_t) noexcept;
-void RustVehicleOrderSlide(uint16_t *, size_t, size_t) noexcept;
 extern "C" {
-void openttd_rust_vehicle_order_commit(const OpenTTDEngineLoadingServices *);
 bool openttd_rust_engine_reset_config(const OpenTTDEngineLoadingServices *);
 const GRFFile *openttd_rust_engine_current_override(const OpenTTDEngineLoadingServices *, const GRFFile *);
 void openttd_rust_engine_set_override(const OpenTTDEngineLoadingServices *, uint32_t, uint32_t);

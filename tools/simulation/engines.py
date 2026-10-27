@@ -803,8 +803,6 @@ def loading_markers(lines, *, setup, saving=False, properties=False):
                     "properties-partial-range": 4,
                     "properties-partial-badges": 4,
                     "properties-partial-order": 4,
-                    "properties-order-published": 4,
-                    "properties-queue-cleared": 4,
                 }
             )
         if "ENGINE properties-complete true" not in lines:

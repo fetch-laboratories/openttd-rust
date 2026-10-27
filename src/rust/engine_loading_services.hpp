@@ -74,7 +74,6 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 		.default_counts = []() noexcept { return _engine_counts; },
 		.set_position = RustSetEngineListPosition,
 		.order_source = [](const OpenTTDEngine *shell, uint16_t target) noexcept { const Engine *e = EngineOf(shell); OpenTTDEngineOrderSource source{.local = RustSpecLocalID(e), .type = VEH_INVALID, .grfid = 0}; if (source.local != target) { source.type = RustEngineType(shell); source.grfid = RustSpecGRFID(e); } return source; },
-		.order_slide = RustVehicleOrderSlide,
 		.order_sort = RustVehicleOrderSort,
 		.order_count = []() noexcept -> size_t { return Engine::GetNumItems(); },
 	};

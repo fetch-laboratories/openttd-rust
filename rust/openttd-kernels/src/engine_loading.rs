@@ -290,7 +290,6 @@ pub struct Services {
     default_counts: extern "C" fn() -> *const u8,
     set_position: extern "C" fn(E, u16),
     order_source: extern "C" fn(E, u16) -> OrderSource,
-    order_slide: extern "C" fn(*mut u16, usize, usize),
     order_sort: extern "C" fn(*mut u16, usize),
     order_count: extern "C" fn() -> usize,
 }
@@ -489,7 +488,6 @@ crate::abi::layouts! {
         default_counts,
         set_position,
         order_source,
-        order_slide,
         order_sort,
         order_count,
 
@@ -1017,8 +1015,7 @@ static LIST_ORDER_CHANGES: GameState<Vec<ListOrderChange>> = GameState::new(Vec:
 pub(crate) unsafe fn openttd_rust_vehicle_order(engine: u16, target: u16) {
     unsafe { &mut *LIST_ORDER_CHANGES.get() }.push(ListOrderChange { engine, target });
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_order_commit(s: &Services) {
+pub(crate) unsafe fn openttd_rust_vehicle_order_commit(s: &Services) {
     let mut ordering: Vec<u16> = (0..(s.order_count)()).map(|id| id as u16).collect();
     (s.order_sort)(ordering.as_mut_ptr(), ordering.len());
     let count = unsafe { &*LIST_ORDER_CHANGES.get() }.len();
@@ -1039,11 +1036,9 @@ pub unsafe extern "C" fn openttd_rust_vehicle_order_commit(s: &Services) {
         crate::movement::native_assert(unsafe { &*s.shared }, from.is_some() && to.is_some());
         crate::movement::native_assert(unsafe { &*s.shared }, from != to);
         // The native assertions abort before these indices are used when enabled.
-        (s.order_slide)(
-            ordering.as_mut_ptr(),
-            from.unwrap_or(ordering.len()),
-            to.unwrap_or(ordering.len()),
-        );
+        let from = from.unwrap_or(ordering.len());
+        let to = to.unwrap_or(ordering.len());
+        crate::container_func::slide(&mut ordering, from, from + 1, to);
     }
     for (index, id) in ordering.into_iter().enumerate() {
         (s.set_position)((s.resolve)(id).shell, index as u16);

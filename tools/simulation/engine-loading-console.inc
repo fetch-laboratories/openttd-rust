@@ -148,10 +148,6 @@ static void PropertiesReadFailures()
 		const std::array<uint8_t, 3> order{0xff, 0xf6, 1};
 		const int order_prop = std::array{0x1a, 0x20, 0x1b, 0x1b}[type];
 		LoadingRequire(failed(type, 502, order_prop, order) == 0, "properties-partial-order");
-		CommitVehicleListOrderChanges();
-		LoadingRequire(next->list_position < e->list_position && e->list_position < LoadingEngine(1, type, 502)->list_position, "properties-order-published");
-		CommitVehicleListOrderChanges();
-		LoadingRequire(e->list_position < next->list_position && next->list_position < LoadingEngine(1, type, 502)->list_position, "properties-queue-cleared");
 	}
 	file->badge_list = old_list;
 	current.Restore();

@@ -1399,7 +1399,8 @@ Specifications, engine shells/pool, file/cargo identity, sound/image validation,
 badge effects and checked ByteReader reads remain native through typed leaves.
 Reader failures return through Rust before the original native exception rethrow;
 partial masks, vectors and badge effects retain their original write order.
-The original native `EnginePreSort`, unstable sort and `Slide` remain shared.
+The original native `EnginePreSort` and unstable sort remain shared; Rust calls
+the shared `container_func::slide` port over its local ordering vector.
 Action0 framing, EIDS serialization/error frames and Action3 consumers stay native.
 Historical EIDS, real pool exhaustion, arbitrary GRFs, remaining malformed and
 property/climate combinations, graphics/audio and GUI/network scheduling remain
