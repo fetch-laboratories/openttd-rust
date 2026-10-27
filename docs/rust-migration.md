@@ -213,7 +213,11 @@ modes compare their exit saves.
   (`tools/simulation/aircraft.py`) observes a small plane and helicopter between two airports,
   requiring movement, loaded cargo, flying state and paid delivery.
   `tools/aircraft-scenario-ai/README.md` records its setup details, reproduction commands and
-  limits.
+  limits. `newgrf-sets-arctic` (#507; `-long` with `--soak`) generates an arctic map with three
+  GPL OpenGFX+ sets loaded from files (`migration/newgrf/README.md`) through `[newgrf]` with
+  their Action14 default parameters, which the original applies only in the GUI. A scenario AI
+  builds a train and two buses from them. Both roles must finish building and save the three
+  sets, and the candidate must hit the common Action2 and industry resolver witnesses.
 - Masks (`MASKS`, with reasons and hit counts in the report): the random save id, build
   revision/NewGRF version, and `round_trip_time`, which the original saves uninitialized (#83);
   ports touching it need their own check.

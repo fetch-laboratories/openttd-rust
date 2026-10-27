@@ -1,0 +1,330 @@
+OpenGFX+ Trains
+-----------------------------------
+
+This version: OpenGFX+ Trains 0.3.0
+
+Contents:
+
+1 About
+2 This NewGRF in detail
+  2.1 Parameters
+  2.2 Rolling stock
+3 License
+4 Credits
+5 Development
+  5.1 Obtaining the source
+  5.2 Requirements
+  5.3 Using the Makefile
+
+
+-------
+1 About
+-------
+
+OpenGFX+ Trains enhances the rolling stock for rail, e-rail, monorail and
+maglev in a design matching OpenGFX style.
+
+* Cargo support:
+	It provides wagons which support all cargos known at the time of
+	writing, many of which have their unique graphics representation.
+
+* Auto-Refit:
+	The wagons allow refitting between different cargos appropriate for
+	the wagon type, depending on the change they can be even refit
+	free-of-charge in a station or at a cost in a depot (i.e. when stakes
+	need adding to a flatbed wagon or thorough cleaning when refitting
+	from oil to water).
+
+* Enhanced graphics:
+	It also provides enhanced graphics support for multiple-unit trains
+	thus that the passenger, mail and valuable wagons match the engine in
+	a common livery for the SH125, Manley-Morel, Dash and Turbotrain.
+
+* Detailed choice of available rolling stock:
+	You can choose independent of the map the rolling stock for every
+	climate as well as selectively enable or disable only certain
+	railtypes. Select your preference in the NewGRF parameters. See
+	section 2.1 for details.
+
+* Adjust costs to match other train NewGRFs:
+	OpenGFX+ Trains tries to match its purchase and running costs to other
+	train NewGRFs found active. You can also set these cost factors
+	manually. See section 2.1 for details.
+
+Name of this Repo:  OpenGFX+ Trains 0.3.0
+Repository version: 294
+GRF_ID:             "OG+" 02
+MD5 sum:            4e0b2d42462f295f36afba90d239a323  ogfx-trains.grf
+
+
+
+-----------------------
+2 This NewGRF in detail
+-----------------------
+
+The minimum required OpenTTD version for this NewGRF is 1.2.0-beta1 or r23670.
+
+
+
+2.1 Parameters:
+---------------
+
+Choice of rolling stock:
+	This NewGRF allows you to select via parameter which engines shall be
+	provided. You can choose from
+	* automatic (choose by climate; default)
+	* temperate
+	* arctic
+	* tropical
+	* toyland
+	* all climates
+	* all climates but toyland
+
+	Further you can choose only some railtypes, each separately selectable.
+	By default all railtypes are activated:
+	* rail+erail
+	* monorail
+	* maglev
+
+Purchase and running costs can be configured:
+	You can either manuall select the level of running and purchase costs
+	with respect to the default values or let the NewGRF automatically con-
+	figure these costs. In the presence of other rail NewGRFs it will try
+	to adjust these costs in order to match the other set(s). It will try
+	to match in the following order (last set wins):
+
+	- NARS2 (North American Renewal Trainset, grfID 44440302)
+	- UKRS2 (UK Renewal Trainset (grfID 44440111)
+	- Tropical Refurbishment Set (grfID 44444040
+	- 2cc Trainset v2 (grfID 27711003)
+	- Japanese Trainset v2 (grfID 535A0D00)
+	- Swedish Trains (grfID 41490006)
+
+2.2 Rolling stock
+-----------------
+
+2.2.1 Engines
+-------------
+The engines are mostly the same as the default vehicles as shipped with
+OpenTTD's base sets. Differences are:
+
+- Multiple units with special liveries for wagons:
+	SH125, Dash, Manley-Morel, Turbotrain, T.I.M, Asiastar.
+- Turbotrain is shorter than in base sets:
+	its engine and passenger and mail wagons are 7/8 length.
+
+2.2.2 Wagons
+------------
+The number of wagons has been reduced with respect to the default
+wagons, but they can now be refitted, so that for every cargo within
+the game you'll find at least one wagon which supports transporting it:
+
+- passenger wagon (Refit in station, free):
+    passengers and tourists
+- mail wagon (No refit options)
+    mail
+- armoured wagon (Refit in station, free):
+    valuables, gold, diamonds
+- bulk wagon:
+    group 1 (Refit in station from any cargo including group 2, free):
+		coal, iron ore, bauxite, cement, copper ore, gravel, sand, clay,
+		sulphur, fertilizer, scrap metal, lumber (wood chips)
+    group 2 (Refit in station at half cost. Refit from group 1 only
+		in depot):
+		grains, maize, wheat, fruit, fruit & vegetables, toffee, sugar,
+		cotton candy, sugar beet, cereal
+- piece goods wagon (Refit in station, free):
+    goods, food, paper, fruits, fruit + vegetables, farm supplies,
+    engineering supplies, manufacturing supplies, wool
+- lifestock wagon (No refit options):
+    livestock
+- refrigerator wagon (Refit in station, half cost.
+    OpenTTD 1.2.0 or nightlies newer than r22713: Cargo ages slower, thus
+    pays more than when transported in other wagons:
+    fish, food, fruits, fruits and vegetables, milk
+- flatbed wagon (Refit in station within one group, free, refit in depot
+	between groups):
+	vehicle group:
+		farm supplies, engineering supplies, vehicles
+	stake group:
+		wood, lumber, metal, steel, glass, manufacturing supplies, bubbles,
+		fizzy drinks, batteries
+	flatbed (container):
+		goods
+- tank wagon:
+	group 1 (Refit in station from any cargo, including group 2, free):
+		oil, fuel oil, cement, chemicals
+	group 2 (Only refit in station at half costs from within this group):
+		water, milk, rubber, dyes, cola
+
+Some wagons change their look after a certain date, new wagons will look
+different from the older wagons. By default this transition year is for
+rail wagons 1970.
+
+
+
+---------
+3 License
+---------
+
+OpenGFX+ Trains trainset for OpenTTD and TTDPatch
+Copyright (C) 2010-2011 by the OpenGFX+ Trains team (see below)
+
+This program is free software; you can redistribute it and/or modify it
+under the terms of the GNU General Public License version 2 (or, at your
+discretion, any later version) as published by the Free Software Foundation.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
+for more details.
+
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the
+Free Software Foundation, Inc.
+1 Franklin Street, Fifth Floor
+Boston, MA 02110-1301
+USA.
+
+
+
+---------
+4 Credits
+---------
+
+Authors:
+    Lead programmer:            Ingo von Borstel (aka planetmaker)
+    General coding:             Terkhen
+Graphics:
+    Toyland rail wagons:        molace
+    Temperate rail wagons:      DanMacK, Uzurpator, Zephyris, molace
+    Tropical rail wagons:       DanMacK, Uzurpator, Zephyris, molace
+    Arctic rail wagons:         DanMacK, Uzurpator, Zephyris, molace
+
+    Single trains and consits:
+        Turner Turbo train:     DanMacK
+        Flatbed wagon ENSP      Zephyris
+    Cargo sprites:
+        ENSP, FMSP, VEHI:       andythenorth
+
+Translations:
+    Chinese (traditional)       2006TTD
+    Croation:                   Voyager1
+    Dutch:                      Hirundo, Yexo
+    English:                    planetmaker
+    French:                     peetleouf
+    Norwegian Bokmal:           DJNekkid
+    Portuguese (Brazilian)      prppedro
+    Russian                     akasoft
+    Serbian:                    etran
+    Spanish:                    Terkhen
+    Swedish:                    AndersI
+
+Special thanks to #openttdcoop and especially Ammler who provides and
+works a lot on maintaining the Development Zone where this repository is
+hosted and who also frequently gives much valuable input. Thanks also to
+Alberth, Terkhen Yexo, Rubidium and Ammler who frequently give valuable
+input in form of advice and patches to this project. Last but not least
+thanks to all the NewGRF authors whose NewGRFs can be my playground for
+this project.
+
+
+
+-------------
+5 Development
+-------------
+
+5.1 Obtaining the source
+------------------------
+
+The source code can be obtained from the #openttdcoop DevZone at
+http://dev.openttdcoop.org/projects/ogfx-trains or via anonymous
+mercurial checkout
+hg clone http://hg.openttdcoop.org/ogfx-trains
+
+5.2 Requirements
+----------------
+
+In order to build this newgrf from source you need:
+- python 2.5 ... 2.7 with yacc, pil, ply modules installed
+- NML r1789
+- make 3.80+
+- gcc as pre-processor
+- mercurial (recommended)
+- md5sum (or md5 on Mac, recommended)
+- some small shell tools: cat, sed
+
+and optionally:
+- unix2dos possibly for conversion of the documentation files
+- tar for creating bundles
+- zip for creating bundles
+
+Windows only:
+On Windows systems this means that you'll need to install MinGW and MSys
+in order to obtain a posix compatible environment. Then the makefile can
+be called the very same way as it is on linux and mac systems.
+MinGW/MSys contain the above mentioned programmes and can be obtained
+from http://www.mingw.org/
+That site also features an excellent walk-through o how to install it.
+
+5.3 Using the Makefile
+----------------------
+
+The Makefile offers different targets. A brief overview is given here:
+
+all:
+	This is the default target, if also no parameter is given to
+	make. It will simply build the grf file, if it needs building
+
+depend:
+	Re-run the dependency check. Usually not manually needed.
+
+docs:
+	Build the documentation files
+
+bundle:
+	This target will create a directory called "<name>-nightly" and
+	copy the grf file there and the documentation files, readme.txt,
+	changelog.txt and license.txt
+
+bundle_zip
+	This will zip the bundle directory into one zip for distribution
+
+bundle_tar
+	This will tar the bundle directory into a tar archive for
+	distribution or upload to bananas
+
+bundle_src
+	Creates a source bundle
+
+install:
+	This will create a tar archive (like bundle_tar) and copy it
+	into the INSTALLDIR as specified in Makefile.local (or the
+	default dir, if that isn't defined). Don't rely on a good
+	detection of the default installation directory. It's
+	especially bound to fail on windows machines.
+
+distclean:
+	This phony target cleans everything from a source bundle which
+	wasn't shipped.
+
+clean:
+	This phony target will delete all files which this Makefile will
+	create
+
+mrproper:
+	This phony target will delete also all directories created by
+	different Makefile targets
+
+remake:
+	It's a shortcut for first cleaning the dir and then making the
+	grf anew.
+
+addcheck:
+	Check whether there are some files required but not part of the
+	repository.
+
+check:
+	Check the md5sum of the built newgrf against the supplied md5sum
+	(Intended to be used when building from tar balls)
+
