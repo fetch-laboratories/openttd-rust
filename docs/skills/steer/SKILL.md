@@ -60,7 +60,7 @@ Run these together:
 
 - `git fetch`, then `git log` from the steering commit to `origin/rust-migration`, and
   `git diff <steer>..origin/rust-migration -- AGENTS.md docs/ .github/`.
-  A loosened rule is a red flag.
+  A loosened rule is a red flag unless the user directed it.
 - `docs/roadmap.md` in full, including its resume checkpoint.
 - CI on `rust-migration` (`gh run list --branch rust-migration`). Note PR checks and
   how many runs were cancelled.
@@ -69,13 +69,20 @@ Run these together:
   Before quoting a progress figure, confirm it counts original C++ retired,
   not glue removed.
 - `git worktree list` and disk use.
+- `python3 docs/skills/steer/issues.py`: every open issue's place in the roadmap,
+  unplaced and excluded first, and the full text of each roadmap exclusion line.
 
 Then post a short status line to the user and continue.
 
 Judge each standing correction from the last two steering reviews, your own
-rules included: applied, slipped, reinterpreted, or harmful as written. For
-each, note what it cost root (agent hours, CI runs, PRs parked) against what it
-caught. Trace each problem you find to the rule, roadmap action or user message
+rules included, and each rule changed outside a steering review since the last
+one (from that diff, its commit messages and any note under the latest steering
+review): applied, slipped, reinterpreted, or harmful as written. For each, note
+what it cost root (agent hours, CI runs, PRs parked) against what it caught.
+A user-directed change found harmful goes back to the user with its evidence;
+do not revert it yourself. A change no root session has run under yet has no
+effects to judge: copy it, with what to watch, into your new steering review
+section so the following review judges it. Trace each problem you find to the rule, roadmap action or user message
 that produced it. Relax or remove a harmful rule before adding a new one.
 
 Watch for the patterns root has repeated before:
@@ -88,8 +95,16 @@ Watch for the patterns root has repeated before:
 - **Finite prompts**: the last prompt ended because its listed items ran out.
 - **Artificial hurdles**: a gate, budget or ordering that parks work without
   catching defects, including deferrals that wait on each other.
+- **Passed over**: an issue with no place in the roadmap, a component excluded
+  without an issue, or an exclusion with no condition that brings it back,
+  copied forward review after review. Finished work left open counts too.
 
-Done when every standing correction has a verdict and a cost.
+Done when every standing correction has a verdict and a cost, and every issue
+`issues.py` reports as unplaced or excluded, and every exclusion line it prints,
+has a verdict: selected, queued behind a named event, excluded with the
+condition that brings it back, or closed. Judge each issue on its merits
+against AGENTS.md's priorities and the defects it would catch; ordering a list
+is not a verdict.
 
 ## 3. Audit independently
 
@@ -159,7 +174,9 @@ a one-off finding. Each correction lands in exactly one authoritative place:
 - **Roadmap**: rewrite "Where the fork stands" and the work order. Add an "Nth
   steering review" section with findings and corrections. `/start-development`
   tells root to apply that section first, so state each action plainly. Fold
-  older steering sections into the compact "still in force" paragraph. This is
+  older steering sections into the compact "still in force" paragraph; an
+  exclusion keeps its return condition there, and one without a condition gets
+  a verdict instead of being copied. This is
   the roadmap's only pruning, so also collapse completed rows that no longer
   guide work, drop superseded text, and move per-PR plans to their PRs or
   issues.
