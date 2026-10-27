@@ -63,7 +63,7 @@ class CoverageTests(unittest.TestCase):
                     env,
                 )
             merged = json.loads((root / "merged.json").read_text())
-            result = coverage.summarize(merged, traces)
+            result = coverage.summarize(merged, traces.items())
             self.assertEqual(
                 result["totals"],
                 dict(lines=3, lines_covered=2, branches=4, branches_covered=2),
@@ -107,7 +107,7 @@ class CoverageTests(unittest.TestCase):
         second = trace([("a.cpp", 2, "g"), ("b.cpp", 1, "h")])
         result = coverage.summarize(
             trace([("a.cpp", 1, "f<int>"), ("a.cpp", 2, "g"), ("b.cpp", 1, "h")]),
-            {"one": first, "two": second},
+            iter((("one", first), ("two", second))),
         )
         self.assertEqual(result["totals"]["lines"], 3)
         self.assertEqual(

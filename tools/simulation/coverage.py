@@ -7,7 +7,7 @@ import json
 import re
 import shutil
 import sys
-from collections import Counter
+from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict
@@ -102,7 +102,7 @@ def reached(trace: Trace) -> set[tuple[str, int]]:
     }
 
 
-def summarize(merged: Trace, scenarios: dict[str, Trace]) -> Report:
+def summarize(merged: Trace, scenarios: Iterable[tuple[str, Trace]]) -> Report:
     """Keep physical lines unique across template instances; retain compiler branches."""
     files: list[FileSummary] = []
     for source in merged["files"]:
@@ -124,8 +124,15 @@ def summarize(merged: Trace, scenarios: dict[str, Trace]) -> Report:
                 file=source["file"], **counts(source["lines"]), functions=functions
             )
         )
-    hits = {name: reached(trace) for name, trace in scenarios.items()}
-    frequency = Counter(point for points in hits.values() for point in points)
+    owners: dict[tuple[str, int], str | None] = {}
+    unique: dict[str, list[tuple[str, int]]] = {}
+    for name, trace in scenarios:
+        unique[name] = []
+        for point in reached(trace):
+            owners[point] = None if point in owners else name
+    for point, owner in sorted(owners.items()):
+        if owner is not None:
+            unique[owner].append(point)
     return {
         "totals": Counts(
             lines=sum(file["lines"] for file in files),
@@ -134,10 +141,7 @@ def summarize(merged: Trace, scenarios: dict[str, Trace]) -> Report:
             branches_covered=sum(file["branches_covered"] for file in files),
         ),
         "files": files,
-        "unique_lines": {
-            name: sorted(point for point in points if frequency[point] == 1)
-            for name, points in hits.items()
-        },
+        "unique_lines": unique,
     }
 
 
@@ -237,7 +241,7 @@ def measure(
     build: Path,
     filters: list[str],
     timeout: int,
-) -> tuple[str, Trace]:
+) -> str:
     name = scenario["name"]
     folder = out / "runs" / name
     folder.mkdir(parents=True)
@@ -280,7 +284,7 @@ def measure(
     output = out / "traces" / f"{name}.json"
     collect(prefix, output, build, filters, env)
     shutil.rmtree(folder)
-    return name, json.loads(output.read_text())
+    return name
 
 
 def main() -> None:
@@ -353,7 +357,7 @@ def main() -> None:
                 )
                 for s in scenarios
             ]
-            traces = dict(
+            names = sorted(
                 future.result() for future in concurrent.futures.as_completed(futures)
             )
         checked(
@@ -369,10 +373,16 @@ def main() -> None:
             out / "merge.log",
             env,
         )
-        report = summarize(json.loads((out / "merged.json").read_text()), traces)
+        report = summarize(
+            json.loads((out / "merged.json").read_text()),
+            (
+                (name, json.loads((out / "traces" / f"{name}.json").read_text()))
+                for name in names
+            ),
+        )
         report.update(
             baseline=migration.BASELINE,
-            scenarios=sorted(traces),
+            scenarios=names,
             uninstrumented_sources=sorted(
                 set(inventory) - {f["file"] for f in report["files"]}
             ),
