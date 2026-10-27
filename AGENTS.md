@@ -16,9 +16,13 @@ fork; the remaining upstream documentation explains behavior and architecture.
 - The goal is a game whose simulation runs in Rust. Prioritize game code: map
   generation, landscape and tile loops, towns, industries, vehicles, cargo,
   economy, link graph, pathfinding, and the commands that change them. Port
-  support code only when a selected game component needs it. Vendored libraries
-  (`src/3rdparty`), GUI rendering and platform code come last. Upstream
-  unit-test coverage alone is not a reason to select a component.
+  support code only when a selected game component needs it; a port that keeps
+  the data in C++ behind one setter per field is support code. Vendored
+  libraries (`src/3rdparty`), GUI rendering and platform code come last.
+  Upstream unit-test coverage alone is not a reason to select a component.
+  This orders what to port, not ports against other work: the roadmap keeps
+  one work order for ports, maintenance, testing and housekeeping, ranked by
+  what each item retires, protects or saves.
 - Prefer ownership ports: Rust owns the component's state and control flow, and
   C++ keeps only a thin facade plus callbacks for shared services (`Random`,
   pools, map access, progress). With `WITH_RUST` defined the original C++ body
@@ -69,7 +73,11 @@ fork; the remaining upstream documentation explains behavior and architecture.
   types on both sides and tables use designated initializers. A C++ class type
   (`PoolID`, `StrongType`) crosses as its base type, because MSVC returns class
   types through a hidden pointer (#355). Existing ports convert under #168 and
-  #199. Allocation on a hot path or per call where the original has none,
+  #199. Rust-side IDs and pool pointers use the shared `repr(transparent)`
+  newtypes and opaque marker types from the header modules once #500's first
+  PR adds them; a new port adopts them from the start, and existing modules
+  convert when a maintenance batch touches them, never as a whole-fork sweep
+  while drafts are open. Allocation on a hot path or per call where the original has none,
   opcode dispatch, whole-record copies and a Rust-to-C++-to-Rust bounce into
   code Rust owns are design faults: they are fixed before integration whatever
   the timing, and root grants no exceptions.
@@ -81,7 +89,11 @@ fork; the remaining upstream documentation explains behavior and architecture.
   each existing wrapper of it as a finding. Command ports share one set of
   command-check services. A PR that adds a shared accessor deletes the
   integrated copies, and a PR that removes a caller deletes the export,
-  declaration or callback field it orphans.
+  declaration or callback field it orphans. A test or harness caller does not
+  keep a `WITH_RUST` body or `openttd_rust_*` export alive: the fixture moves
+  onto the Rust entry and the body goes. Before requesting Full, a PR that
+  removes a name greps `tools/simulation/` and `src/tests/` for it: fixtures of
+  scenarios not run locally compile only in Full.
 - The selected #274 shared map descriptor is limited to audited scheduler clear,
   water and tree loops (`docs/design/world-state.md`). C++ retains canonical
   arrays and writes. Shared header helpers preserve native assertions; raw
@@ -91,6 +103,14 @@ fork; the remaining upstream documentation explains behavior and architecture.
   condition that waits on another deferred or unscheduled item is circular. A
   core loop (tile loop, vehicle tick) that misses the retirement ratio gets a
   boundary fix, not abandonment.
+- Every open issue has a place in the roadmap: in the work order, selected or
+  queued behind the event that selects it; on a tracker's checklist; or
+  excluded on a line stating what brings it back (an owned issue's result, or
+  a policy such as vendored-last or `deferred-improvement`). A component left
+  out of the work order gets an issue first. Root places every unplaced issue,
+  including the user's, when it starts and whenever it plans, and re-checks
+  each exclusion's condition; `python3 docs/skills/steer/issues.py` lists
+  them. Work that finishes an issue's remaining scope closes it.
 - Evidence for game-logic ports is the semantic simulation harness (`python3
   tools/migration.py simulate`, #72) plus the existing tests; a new game-logic
   port integrates only after its harness scenarios exercise the component.
@@ -129,15 +149,27 @@ fork; the remaining upstream documentation explains behavior and architecture.
   profile, root attributes the rise per function to the PRs since and fixes it
   forward; that fix is the next maintenance PR to integrate. A ready ownership
   PR proceeds meanwhile; it does not wait for a future maintenance base.
-- A speed pass runs only when a tip projection comes within 5% of its ceiling
-  (1.425x play, 1.235x generation). It re-measures the six wall ratios on a
+- A speed pass runs when a tip projection first comes within 5% of its ceiling
+  (1.425x play, 1.235x generation). While a scenario stays in band, a further
+  pass runs only after its projection has risen at least 3% over its anchor or
+  a repair batch crediting at least 1.5% of its loop count has integrated;
+  otherwise the instruction projection is the record (provisional: the three
+  2026-10-26 passes spread 3.3% on P2016 while all six repairs together
+  credited 1.13% of its loop count). It re-measures the six wall ratios on a
   quiet host (no builds, links or other timed games) as the median of four
   interleaved three-pair medians, and records them with their loop counts as the
   new anchors. If no measured ratio is in its band, the pass ends there.
   Otherwise it profiles that scenario with callgrind, counts boundary cost as
   the overhead beyond what the original spends inline on the same work, ranks
   those net costs (never gross callback counts), turns the two or three largest
-  into maintenance PRs, then re-measures.
+  into maintenance PRs, then re-measures. A candidate crediting under 0.5% of
+  the scenario's loop count stays a note on #275, and candidates batch until
+  they credit 1% together (provisional). Each profile keeps its candidate
+  `callgrind.out` under `.local/simulation/` until the next profile replaces
+  it. Attribution compares inclusive costs under `StateGameLoop()` (or
+  `_GenerateWorld()`) with a retained reference profile of the same scenario in
+  `.local/speed-reference-profiles/`, because the reference Ir cache keeps no
+  per-function data.
 - A pass runs alongside other work: only its timed collection pauses builds,
   links, profiles and other games. Prepare runtimes before the hold and release
   it when the last timed game exits; parsing, attribution and reports run after
@@ -152,20 +184,25 @@ fork; the remaining upstream documentation explains behavior and architecture.
 Evidence must be checkable, not exhaustive prose. Spend effort on code and on
 checks that run; do not restate them in paragraphs.
 
-- Issue: scope, affected interfaces, evidence plan and acceptance criteria;
-  about 60 lines at most, leaving design detail to the implementation.
+- Issue: scope, affected interfaces, evidence plan and acceptance criteria,
+  leaving design detail to the implementation.
 - PR description: what moved, what stays in C++, exact commands, known limits,
   and the output of `python3 tools/port-metrics.py` (the roadmap progress
-  metric); about 60 lines at most. Integration PRs link the component PRs
-  instead of re-describing them. `.github/PULL_REQUEST_TEMPLATE.md` and the
-  migration issue form follow this budget.
-- Component entry in `docs/rust-migration.md`: about 25 lines at most, saying
-  what Rust owns, what stays in C++, open limits and the PR. Review status,
-  witness counts and costs stay in the PR.
-- Roadmap: forward-looking, about 200 lines at most. A completed item becomes
-  one table row (issue, PR, commit, metrics); its evidence stays in the PR. The
-  resume checkpoint is a short status table, not a log: CI run IDs, executable
-  hashes, probe values and per-PR plans go in the PR or issue.
+  metric). Integration PRs link the component PRs instead of re-describing
+  them. `.github/PULL_REQUEST_TEMPLATE.md` and the migration issue form follow
+  this budget.
+- Component entry in `docs/rust-migration.md`: what Rust owns, what stays in
+  C++, open limits and the PR. Review status, witness counts and costs stay in
+  the PR.
+- These are contents, not line counts (user decision, 2026-10-26). Leave out
+  what belongs elsewhere, but never drop a needed fact, limit or step to make a
+  document shorter.
+- Roadmap: forward-looking, with no line cap. Edits update it in place: a
+  completed item becomes one table row (issue, PR, commit, metrics) and its
+  evidence stays in the PR. The resume checkpoint replaces the previous one and
+  is a short status table, not a log: CI run IDs, executable hashes, probe
+  values and per-PR plans go in the PR or issue. No edit deletes or folds
+  another section to make room; each `/steer` run prunes the roadmap.
 - Evidence is the exact-head CI runs plus the commands recorded in the PR.
   Comments and docs carry no receipt bundles, executable hashes or `.local/`
   paths, which nobody else can check. Tooling that a rule depends on, such as
@@ -182,18 +219,21 @@ checks that run; do not restate them in paragraphs.
   behavior existing checks cannot distinguish; tracing pure helpers only to
   reproduce the source call sequence is not required.
 - Infrastructure work (CI, caches, evidence plumbing, not scenario or test
-  support within an ownership port) states a tooling budget in its issue and
-  prefers platform defaults and settings (LRU cache eviction, concurrency
-  groups) over custom controllers. Root may accept a draft up to about 25% over
-  its budget and may raise a budget once; a second raise is a `question` issue
-  for the user. Its review fixes only defects that can change a game comparison
-  or a speed decision on this host or in CI; hypothetical ones go in the PR's
-  limits.
-- Review report: reviewed commit, findings with their fixing commits (or why one
-  went to root), and one line each naming the functions or files compared
-  against the original body, any new callback that duplicates a shared accessor,
-  and any WITH_RUST body, export or declaration the PR leaves without a caller
-  (each one is a finding). Do not narrate further when there are no findings.
+  support within an ownership port) states an expected tooling size in its
+  issue and prefers platform defaults and settings (LRU cache eviction,
+  concurrency groups) over custom controllers. Root decides its cost at the
+  first draft as for an ownership port: a bounded repair, or the necessary cost
+  with a specific explanation in the PR. An overrun alone parks nothing and
+  needs no user decision (user decision, 2026-10-26). Its review fixes only
+  defects that can change a game comparison or a speed decision on this host or
+  in CI; hypothetical ones go in the PR's limits.
+- Review report: a first line `Reviewed commit: <sha>`, findings with their
+  fixing commits (or why one went to root) and the check that found each, and
+  one line each naming the functions or files compared against the original
+  body, any new callback that duplicates a shared accessor, and any WITH_RUST
+  body, export or declaration the PR leaves without a production caller (each
+  one is a finding; the line names every `WITH_RUST` body and `openttd_rust_*`
+  export the PR touches and the production caller found for it). Do not narrate further when there are no findings.
   Branches the harness does not reach go in the coverage tracker (#156), not
   only in the disposition.
 - One PR per ownership port, targeting `rust-migration` directly. Small
@@ -203,7 +243,8 @@ checks that run; do not restate them in paragraphs.
   one reviewer and one Full run. An item that fails review or CI leaves the
   batch for the next one rather than holding it. A fix that a draft or a live
   crash needs may go alone. Batch ready, reviewed components in one integration
-  PR when that avoids serial Full runs.
+  PR only when their diffs touch disjoint files; components that overlap
+  integrate one at a time, each at its own reviewed head.
 
 ## Agent team and review
 
@@ -301,6 +342,9 @@ shared layer in its final typed form, and other drafts adopt it when they
 update from base. A shared service or shared-path fix (command protocol,
 clearing, prices, restoration) that more than one draft needs is built once, as
 root's own small PR from `rust-migration`; no draft builds a parallel copy.
+Concurrent owners need disjoint unintegrated services: an owner whose shared
+service another draft is still building starts after that service integrates,
+and planning selects concurrent owners accordingly.
 Integrate drafts in order of readiness: none waits for another draft's
 services, and a reviewed PR gains no new scope before it integrates.
 
@@ -342,9 +386,15 @@ C/C++ uses tabs; Rust uses `cargo fmt`. The inherited commit checker examines
 every commit's diff and title: fix style in the introducing commit, and use
 supported prefixes such as `Add:`, `Change:`, `Fix:`, `Doc:` or `Update:`,
 including on integration merges (`Merge:` is rejected). Use ASCII without tabs
-in commit messages, including their bodies. Python tools pass
+in commit messages, including their bodies. A commit that fixes a fidelity or
+crash defect ends with a `Found-by:` trailer naming the check that found it
+(`review`, `scenario NAME`, `comparison TOOL`, `unit test`, `CI JOB`, `deep
+check` or `user`), so #512 can tally where test effort pays. Python tools pass
 `uvx --from ruff==0.16.8 ruff check tools/` and
-`uvx --from ruff==0.16.8 ruff format --check tools/`. Before pushing, run
+`uvx --from ruff==0.16.8 ruff format --check tools/`. New or rewritten Python
+functions annotate every parameter and return type, and fixed-shape data uses
+typed records (`dataclass`, `TypedDict`) rather than bare dicts; existing code
+gains hints and a ty gate incrementally (#501). Before pushing, run
 `python3 tools/preflight.py --base origin/rust-migration`.
 
 Comments say what the code cannot: a quirk of the original, an outside

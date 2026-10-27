@@ -37,6 +37,16 @@ inline int32_t RustHouseAge(uint32_t tile) noexcept { return GetHouseAge(TileInd
 inline uint8_t RustHouseRandomBits(uint32_t tile) noexcept { return GetHouseRandomBits(TileIndex{tile}); }
 inline uint8_t RustHouseRandomTriggers(uint32_t tile) noexcept { return GetHouseRandomTriggers(TileIndex{tile}).base(); }
 inline const HouseSpec *RustHouseSpec(uint16_t house) noexcept { return HouseSpec::Get(house); }
+inline size_t RustHouseSpecCount() noexcept { return HouseSpec::Specs().size(); }
+inline uint32_t RustHouseSpecCount32() noexcept { return static_cast<uint32_t>(RustHouseSpecCount()); }
+inline uint8_t RustTownHousePopulation(const HouseSpec *spec) noexcept { return spec->population; }
+inline uint16_t RustHouseAvailability(const HouseSpec *spec) noexcept { return spec->building_availability.base(); }
+inline bool RustHouseEnabled(const HouseSpec *spec) noexcept { return spec->enabled; }
+inline int32_t RustHouseMinYear(const HouseSpec *spec) noexcept { return spec->min_year.base(); }
+inline uint8_t RustTownHouseFlags(const HouseSpec *spec) noexcept { return spec->building_flags.base(); }
+inline uint16_t RustTownHouseCallbacks(const HouseSpec *spec) noexcept { return spec->callback_mask.base(); }
+inline uint64_t RustHouseWatched(const HouseSpec *spec) noexcept { return spec->watched_cargoes; }
+inline uint64_t RustHouseWatchedByID(uint16_t house) noexcept { return RustHouseWatched(RustHouseSpec(house)); }
 inline uint16_t RustTownHouseClass(const HouseSpec *spec) noexcept { return spec->class_id; }
 inline uint16_t RustTownHouseClass(uint16_t house) noexcept { return RustTownHouseClass(RustHouseSpec(house)); }
 
@@ -46,7 +56,9 @@ inline void RustUnhandledScopeVariable(uint8_t variable) noexcept { Debug(grf, 1
  * the original non-null resolver/file preconditions; nothing is cached. */
 inline const GRFFile *RustResolverGRFFile(const ResolverObject *resolver) noexcept { return resolver->grffile; }
 inline uint32_t RustGRFFileID(const GRFFile *file) noexcept { return file->grfid; }
-inline GRFFile *RustGRFFileAt(size_t index) noexcept { auto files = GetAllGRFFiles(); return index < files.size() ? const_cast<GRFFile *>(&files[index]) : nullptr; }
+inline size_t RustGRFFileCount() noexcept { return GetAllGRFFiles().size(); }
+inline GRFFile *RustGRFFileAt(size_t index) noexcept { return const_cast<GRFFile *>(&GetAllGRFFiles()[index]); }
+inline GRFFile *RustGRFFileAtOrNull(size_t index) noexcept { return index < RustGRFFileCount() ? RustGRFFileAt(index) : nullptr; }
 inline GRFFile *RustGRFFileByID(uint32_t id) noexcept { return GetFileByGRFID(id); }
 inline uint32_t RustResolverGRFFileID(const ResolverObject *resolver) noexcept { return RustGRFFileID(RustResolverGRFFile(resolver)); }
 inline uint8_t RustGRFFileVersion(const GRFFile *file) noexcept { return file->grf_version; }

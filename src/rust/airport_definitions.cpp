@@ -13,7 +13,7 @@ const OpenTTDAirportDefinitionServices &GetAirportDefinitionServices() noexcept
 {
 	static const OpenTTDAirportDefinitionServices services{
 		.reader = &GetRustByteReaderServices(),
-		.file = RustGRFFileAt,
+		.file = RustGRFFileAtOrNull,
 		.file_id = RustGRFFileID,
 		.airport_count = [](const GRFFile *file) noexcept -> size_t { return file->airportspec.size(); },
 		.airport_resize = [](GRFFile *file, size_t count) noexcept -> void { file->airportspec.resize(count); },

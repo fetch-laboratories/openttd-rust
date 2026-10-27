@@ -8,11 +8,14 @@
     missing_docs,
     clippy::missing_safety_doc,
     clippy::too_many_lines,
+    clippy::too_many_arguments,
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap
 )]
+use crate::newgrf_act2::{self, Services as Action2Services};
 use crate::newgrf_bytereader::{BadgeList, ByteReader, ReadError, Reader};
-use crate::newgrf_layout::{Layout, PalSprite, Sequence, SequenceFields};
+use crate::newgrf_layout::{Layout, LayoutSequence, Sequence};
+use crate::newgrf_loading::Services as LoadingServices;
 use crate::station_cmd::{RailSpec, RoadSpec};
 use std::ffi::c_void;
 const NUM_STATIONS_PER_GRF: u32 = u16::MAX as u32 - 1;
@@ -79,10 +82,8 @@ pub struct Services {
     station_render_append: unsafe extern "C" fn(*mut RailSpec) -> *mut Layout,
     station_render_pop: unsafe extern "C" fn(*mut RailSpec) -> (),
     station_render_copy_append: unsafe extern "C" fn(*mut RailSpec, *const RailSpec, usize) -> (),
-    layout_unlimited: unsafe extern "C" fn(*mut Layout) -> (),
-    layout_ground: unsafe extern "C" fn(*mut Layout) -> *mut PalSprite,
     sequence_reset: unsafe extern "C" fn(*mut Sequence),
-    sequence_append: unsafe extern "C" fn(*mut Sequence) -> SequenceFields,
+    sequence_append: unsafe extern "C" fn(*mut Sequence) -> *mut LayoutSequence,
     layout_sequence_move: unsafe extern "C" fn(*mut Layout, *mut Sequence),
     layout_original: unsafe extern "C" fn(*mut Layout, u32) -> (),
     station_custom_assign: unsafe extern "C" fn(*mut RailSpec, u16, *const u8, usize) -> (),
@@ -111,33 +112,16 @@ pub struct Services {
     invalid_tile: unsafe extern "C" fn(u8, u8, u8) -> (),
     undefined_publication: unsafe extern "C" fn(u16) -> (),
     duplicate_publication: unsafe extern "C" fn(u16) -> (),
-    read_layout_sprite: unsafe extern "C" fn(
-        *mut ByteReader,
-        bool,
-        bool,
-        bool,
-        u8,
-        *mut PalSprite,
-        *mut u8,
-    ) -> bool,
-    read_layout: unsafe extern "C" fn(
-        *mut ByteReader,
-        u32,
-        bool,
-        u8,
-        bool,
-        bool,
-        *mut Layout,
-        *mut bool,
-    ) -> bool,
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDStationDefinitionServices" ["station_service"] => Services { empty_string, cargo, reader, file_version, station_resize, station_count, station_get, station_new, station_class, station_name, station_class_name, station_badges, station_cargo_triggers, station_frames, station_status, station_speed, station_triggers, station_callback_mask, station_flags, station_has_file, station_set_group, station_set_file, station_set_local, road_resize, road_count, road_get, road_new, road_class, road_name, road_class_name, road_badges, road_cargo_triggers, road_frames, road_status, road_speed, road_triggers, road_callback_mask, road_flags, road_has_file, road_set_group, road_set_file, road_set_local, station_disallowed_platforms, station_disallowed_lengths, station_cargo_threshold, road_stop_type, road_draw_mode, road_build_cost, road_clear_cost, station_render_clear, station_render_reserve, station_render_size, station_render_append, station_render_pop, station_render_copy_append, layout_unlimited, layout_ground, sequence_reset, sequence_append, layout_sequence_move, layout_original, station_custom_assign, station_custom_tile, station_custom_copy, station_tileflags_size, station_tileflags_resize, station_pylons, station_wires, station_blocked, station_tileflags_assign, station_bridge_size, station_bridge_resize, road_bridge_size, station_bridge_height, station_bridge_pillars, road_bridge_height, road_bridge_pillars, station_invalid, road_invalid, station_undefined, road_undefined, odd_layout, missing_sprite, missing_custom, invalid_tile, undefined_publication, duplicate_publication, read_layout_sprite, read_layout };
+    "OpenTTDStationDefinitionServices" ["station_service"] => Services { empty_string, cargo, reader, file_version, station_resize, station_count, station_get, station_new, station_class, station_name, station_class_name, station_badges, station_cargo_triggers, station_frames, station_status, station_speed, station_triggers, station_callback_mask, station_flags, station_has_file, station_set_group, station_set_file, station_set_local, road_resize, road_count, road_get, road_new, road_class, road_name, road_class_name, road_badges, road_cargo_triggers, road_frames, road_status, road_speed, road_triggers, road_callback_mask, road_flags, road_has_file, road_set_group, road_set_file, road_set_local, station_disallowed_platforms, station_disallowed_lengths, station_cargo_threshold, road_stop_type, road_draw_mode, road_build_cost, road_clear_cost, station_render_clear, station_render_reserve, station_render_size, station_render_append, station_render_pop, station_render_copy_append, sequence_reset, sequence_append, layout_sequence_move, layout_original, station_custom_assign, station_custom_tile, station_custom_copy, station_tileflags_size, station_tileflags_resize, station_pylons, station_wires, station_blocked, station_tileflags_assign, station_bridge_size, station_bridge_resize, road_bridge_size, station_bridge_height, station_bridge_pillars, road_bridge_height, road_bridge_pillars, station_invalid, road_invalid, station_undefined, road_undefined, odd_layout, missing_sprite, missing_custom, invalid_tile, undefined_publication, duplicate_publication };
 }
 
 unsafe fn station_change(
     s: &Services,
+    action2: &Action2Services,
+    loading: &LoadingServices,
     file: *mut c_void,
     first: u32,
     last: u32,
@@ -179,24 +163,25 @@ unsafe fn station_change(
                     (s.station_render_reserve)(spec, tiles);
                     for tile in 0..tiles {
                         let layout = (s.station_render_append)(spec);
-                        (s.layout_unlimited)(layout);
+                        let fields = (action2.layout_storage)(layout);
+                        fields.consistent_max_offset.write(u32::from(u16::MAX));
                         if reader.has_data(4) && reader.peek_dword()? == 0 {
                             reader.skip(4)?;
                             (s.layout_original)(layout, u32::from(tile) % 8);
                             continue;
                         }
-                        let mut flags = 0;
-                        if !(s.read_layout_sprite)(
-                            reader.native(),
+                        newgrf_act2::layout_sprite(
+                            action2,
+                            loading,
+                            reader,
                             false,
                             false,
                             false,
                             GSF_STATIONS,
-                            (s.layout_ground)(layout),
-                            &raw mut flags,
-                        ) {
-                            return Err(ReadError);
-                        }
+                            fields.ground,
+                            std::ptr::null_mut(),
+                            std::ptr::null_mut(),
+                        )?;
                         if crate::newgrf_loading::is_disabled() {
                             return Ok(CIR_DISABLED);
                         }
@@ -206,24 +191,26 @@ unsafe fn station_change(
                             if delta_x == 0x80 {
                                 break;
                             }
-                            let fields = (s.sequence_append)(sequence);
-                            fields.origin_x.write(delta_x as i8);
-                            fields.origin_y.write(reader.byte()? as i8);
-                            fields.origin_z.write(reader.byte()? as i8);
+                            let item = (s.sequence_append)(sequence);
+                            let fields = (action2.sequence_storage)(item);
+                            fields.x.write(delta_x as i8);
+                            fields.y.write(reader.byte()? as i8);
+                            fields.z.write(reader.byte()? as i8);
                             fields.extent_x.write(reader.byte()?);
                             fields.extent_y.write(reader.byte()?);
                             fields.extent_z.write(reader.byte()?);
-                            if !(s.read_layout_sprite)(
-                                reader.native(),
+                            newgrf_act2::layout_sprite(
+                                action2,
+                                loading,
+                                reader,
                                 false,
                                 true,
                                 false,
                                 GSF_STATIONS,
                                 fields.image,
-                                &raw mut flags,
-                            ) {
-                                return Err(ReadError);
-                            }
+                                std::ptr::null_mut(),
+                                std::ptr::null_mut(),
+                            )?;
                             if crate::newgrf_loading::is_disabled() {
                                 return Ok(CIR_DISABLED);
                             }
@@ -321,20 +308,17 @@ unsafe fn station_change(
                     for _ in 0..tiles {
                         let layout = (s.station_render_append)(spec);
                         let count = reader.byte()?;
-                        let mut disabled = false;
-                        if !(s.read_layout)(
-                            reader.native(),
+                        if newgrf_act2::read_layout(
+                            action2,
+                            loading,
+                            reader,
                             u32::from(count),
                             false,
                             GSF_STATIONS,
                             true,
                             false,
                             layout,
-                            &raw mut disabled,
-                        ) {
-                            return Err(ReadError);
-                        }
-                        if disabled {
+                        )? {
                             return Ok(CIR_DISABLED);
                         }
                     }
@@ -481,6 +465,8 @@ unsafe fn road_change(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_change_info(
     s: *const Services,
+    action2: *const Action2Services,
+    loading: *const LoadingServices,
     file: *mut c_void,
     first: u32,
     last: u32,
@@ -491,7 +477,19 @@ pub unsafe extern "C" fn openttd_rust_station_change_info(
 ) -> bool {
     let s = unsafe { &*s };
     let mut reader = unsafe { Reader::new(native, &*s.reader) };
-    match unsafe { station_change(s, file, first, last, prop, sequence, &mut reader) } {
+    match unsafe {
+        station_change(
+            s,
+            &*action2,
+            &*loading,
+            file,
+            first,
+            last,
+            prop,
+            sequence,
+            &mut reader,
+        )
+    } {
         Ok(value) => {
             unsafe {
                 output.write(value);

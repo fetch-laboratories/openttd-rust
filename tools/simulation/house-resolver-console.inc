@@ -7,6 +7,16 @@ extern void RebuildTownCaches();
 static void HouseResolverScenario(const std::vector<std::pair<TileIndex, HouseID>> &sites)
 {
 	auto require = [](bool condition) { if (!condition) std::abort(); };
+#ifdef WITH_RUST
+	auto reset_classes = [] {
+		openttd_rust_house_resolver_exchange(&GetHouseResolverServices());
+		openttd_rust_house_classes_reset();
+	};
+	auto allocate_class = openttd_rust_house_class_allocate;
+#else
+	auto reset_classes = ResetHouseClassIDs;
+	auto allocate_class = AllocateHouseClassID;
+#endif
 	auto origin = std::ranges::find_if(sites, [](const auto &s) { return HouseSpec::Get(s.second)->building_flags.Test(BuildingFlag::Size2x2); });
 	require(origin != sites.end());
 	const TileIndex tile = origin->first;
@@ -19,10 +29,10 @@ static void HouseResolverScenario(const std::vector<std::pair<TileIndex, HouseID
 	GRFFile grf, foreign; grf.grfid = 0x40912345; grf.grf_version = 8; foreign.grfid = 0x40954321; foreign.grf_version = 7;
 	const CargoType cargo = GetCargoTypeByLabel(CT_PASSENGERS);
 	require(IsValidCargoType(cargo)); grf.cargo_list = {CT_PASSENGERS};
-	ResetHouseClassIDs();
-	require(AllocateHouseClassID(42, grf.grfid) == 1 && AllocateHouseClassID(42, foreign.grfid) == 2 && AllocateHouseClassID(42, grf.grfid) == 1);
-	ResetHouseClassIDs();
-	require(AllocateHouseClassID(7, foreign.grfid) == 1 && AllocateHouseClassID(42, grf.grfid) == 2);
+	reset_classes();
+	require(allocate_class(42, grf.grfid) == 1 && allocate_class(42, foreign.grfid) == 2 && allocate_class(42, grf.grfid) == 1);
+	reset_classes();
+	require(allocate_class(7, foreign.grfid) == 1 && allocate_class(42, grf.grfid) == 2);
 	HouseSpec::Specs().resize(first + 4);
 	for (size_t i = 0; i < parts.size(); ++i) {
 		old_ids[i] = GetHouseType(parts[i]);
@@ -147,6 +157,6 @@ static void HouseResolverScenario(const std::vector<std::pair<TileIndex, HouseID
 	require(null_town.GetScope()->GetVariable(0x41, 0, available) == UINT32_MAX && !available);
 	fmt::print(stderr, "HOUSE_RESOLVER parent-readonly-null true\n");
 	for (size_t i = 0; i < parts.size(); ++i) { SetHouseType(parts[i], old_ids[i]); _house_mngr.mappings[first + i] = old_mappings[i]; }
-	HouseSpec::Specs().resize(old_size); ResetHouseClassIDs(); RebuildTownCaches();
+	HouseSpec::Specs().resize(old_size); reset_classes(); RebuildTownCaches();
 	fmt::print(stderr, "HOUSE_RESOLVER construction-production-var44-var64-var65 true\n");
 }

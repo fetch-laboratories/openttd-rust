@@ -92,6 +92,11 @@ OverrideManagerBase::~OverrideManagerBase() { openttd_rust_override_delete(this-
 #endif
 
 #ifdef WITH_RUST
+HouseOverrideManager::HouseOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
+		OverrideManagerBase(offset, maximum, invalid)
+{
+	if (this == &_house_mngr) openttd_rust_house_register_manager(this->rust_owner);
+}
 AirportOverrideManager::AirportOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
 		OverrideManagerBase(offset, maximum, invalid)
 {
@@ -250,6 +255,7 @@ uint16_t OverrideManagerBase::GetSubstituteID(uint16_t entity_id) const
  * It will find itself the proper slot on which it will go
  * @param hs HouseSpec read from the grf file, ready for inclusion
  */
+#ifndef WITH_RUST
 void HouseOverrideManager::SetEntitySpec(HouseSpec &&hs)
 {
 	HouseID house_id = this->AddEntityID(hs.grf_prop.local_id, hs.grf_prop.grfid, hs.grf_prop.subst_id);
@@ -276,6 +282,7 @@ void HouseOverrideManager::SetEntitySpec(HouseSpec &&hs)
 		this->grfid_overrides[i] = 0;
 	}
 }
+#endif
 
 /**
  * Return the ID (if ever available) of a previously inserted entity.

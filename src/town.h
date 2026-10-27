@@ -466,7 +466,9 @@ TileIndexDiff GetHouseNorthPart(HouseID &house);
 
 Town *CalcClosestTownFromTile(TileIndex tile, uint threshold = UINT_MAX);
 
+#ifndef WITH_RUST
 void ResetHouses();
+#endif
 
 /** Town actions of a company. */
 enum class TownAction : uint8_t {

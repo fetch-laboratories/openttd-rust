@@ -3,10 +3,10 @@
 #include "../stdafx.h"
 #ifdef WITH_RUST
 #include "station_definitions_ffi.h"
+#include "newgrf_bytereader_services.h"
 #include "../newgrf_station.h"
 #include "../newgrf_roadstop.h"
 #include "../newgrf/newgrf_stringmapping.h"
-#include "newgrf_layout_services.h"
 #include "services_newgrf.h"
 #include "services_station.h"
 #include "newgrf_act3_ffi.h"
@@ -70,10 +70,8 @@ const OpenTTDStationDefinitionServices &GetStationDefinitionServices() noexcept
 		.station_render_append = [](StationSpec *spec) noexcept -> NewGRFSpriteLayout * { return &spec->renderdata.emplace_back(); },
 		.station_render_pop = [](StationSpec *spec) noexcept -> void { spec->renderdata.pop_back(); },
 		.station_render_copy_append = [](StationSpec *spec, const StationSpec *source, size_t index) noexcept -> void { spec->renderdata.emplace_back(source->renderdata[index]); },
-		.layout_unlimited = [](NewGRFSpriteLayout *layout) noexcept -> void { layout->consistent_max_offset = UINT16_MAX; },
-		.layout_ground = [](NewGRFSpriteLayout *layout) noexcept -> PalSpriteID * { return &layout->ground; },
 		.sequence_reset = [](OpenTTDStationSequence *sequence) noexcept { OpenTTDStationSequence{}.swap(*sequence); },
-		.sequence_append = [](OpenTTDStationSequence *sequence) noexcept -> OpenTTDStationSequenceFields { auto &item = sequence->emplace_back(); return {&item.origin.x, &item.origin.y, &item.origin.z, &item.extent.x, &item.extent.y, &item.extent.z, &item.image}; },
+		.sequence_append = [](OpenTTDStationSequence *sequence) noexcept -> DrawTileSeqStruct * { return &sequence->emplace_back(); },
 		.layout_sequence_move = [](NewGRFSpriteLayout *layout, OpenTTDStationSequence *sequence) noexcept { layout->seq = std::move(*sequence); },
 		.layout_original = [](NewGRFSpriteLayout *layout, uint32_t index) noexcept -> void { extern const DrawTileSpriteSpan _station_display_datas_rail[8]; const auto &span = _station_display_datas_rail[index]; layout->ground = span.ground; layout->seq.insert(layout->seq.end(), span.GetSequence().begin(), span.GetSequence().end()); },
 		.station_custom_assign = [](StationSpec *spec, uint16_t key, const uint8_t *data, size_t count) noexcept -> void { spec->layouts[key].assign(data, data + count); },
@@ -102,8 +100,6 @@ const OpenTTDStationDefinitionServices &GetStationDefinitionServices() noexcept
 		.invalid_tile = [](uint8_t tile, uint8_t length, uint8_t number) noexcept -> void { GrfMsg(1, "StationChangeInfo: Invalid tile {} in layout {}x{}", tile, length, number); },
 		.undefined_publication = [](uint16_t id) noexcept -> void { GrfMsg(1, "MapSpriteGroup: {} undefined, skipping", id); },
 		.duplicate_publication = [](uint16_t id) noexcept -> void { GrfMsg(1, "MapSpriteGroup: {} mapped multiple times, skipping", id); },
-		.read_layout_sprite = RustGRFReadSpriteLayoutSprite,
-		.read_layout = RustGRFReadSpriteLayout,
 	};
 	return services;
 }

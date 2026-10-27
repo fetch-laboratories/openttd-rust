@@ -50,7 +50,9 @@
 
 #ifdef WITH_RUST
 #include "rust/engine_loading_services.hpp"
+#include "rust/vehicle_properties_services.hpp"
 #include "rust/cargo_registry_ffi.h"
+#include "rust/house_definition_services.hpp"
 #endif
 
 #ifdef WITH_RUST
@@ -84,9 +86,7 @@ GRFLoadedFeatures _loaded_newgrf_features;
 
 GrfProcessingState _cur_gps;
 
-#ifdef WITH_RUST
-RustEngineTempView _gted;
-#else
+#ifndef WITH_RUST
 TypedIndexContainer<std::vector<GRFTempEngineData>, EngineID> _gted;  ///< Temporary engine data used during NewGRF loading
 #endif
 
@@ -385,6 +385,7 @@ CargoTypes TranslateRefitMask(uint32_t refit_mask)
  * @param error_location Function name for grf error messages
  * @param[out] index If \a base_pointer is valid, \a index is assigned to the matching price; else it is left unchanged
  */
+#ifndef WITH_RUST
 void ConvertTTDBasePrice(uint32_t base_pointer, std::string_view error_location, Price *index)
 {
 	/* Special value for 'none' */
@@ -403,6 +404,8 @@ void ConvertTTDBasePrice(uint32_t base_pointer, std::string_view error_location,
 
 	*index = (Price)((base_pointer - start) / size);
 }
+
+#endif
 
 /**
  * Get the language map associated with a given NewGRF and language.
@@ -464,8 +467,8 @@ static void ResetNewGRFErrors()
 }
 #endif
 
-extern void ResetCallbacks(bool final);
 #ifndef WITH_RUST
+extern void ResetCallbacks(bool final);
 extern void ResetGRM();
 #endif
 
@@ -1050,6 +1053,7 @@ void FinaliseCargoArray()
 }
 #endif
 
+#ifndef WITH_RUST
 /**
  * Check if a given housespec is valid and disable it if it's not.
  * The housespecs that follow it are used to check the validity of
@@ -1200,6 +1204,8 @@ static void FinaliseHouseArray()
 		}
 	}
 }
+
+#endif
 
 /**
  * Add all new industries to the industry array. Industry properties can be set at any

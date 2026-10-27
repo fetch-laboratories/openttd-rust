@@ -1377,16 +1377,34 @@ setup/allocation control, temporary loading records and rail-label vectors,
 refit-mask computation, variant finalization and road/train binding loops.
 Mappings outlive engine-pool rebuilds. Native EIDS frames serialize canonical
 mapping views in the original engine-ID order; there is no synchronized map.
-Native Action0 ByteReader frames mutate aliases of Rust-owned temporary fields;
-rail-vector views preserve partial parser writes. Field aliases end before
-storage resize/clear; rail-vector views end before vector mutations.
+Vehicle Action0 interpretation extends this same temporary owner (#491); native
+consumers no longer hold temporary-field or rail-vector aliases.
 Rust ends owner borrows before native callbacks, construction and publication.
 Custom-refit evaluation calls the Rust vehicle resolver with the original null
-vehicle context. Specifications, shells, pool allocation, GRF files, parsing,
+vehicle context. Specifications, shells, pool allocation, GRF files, Action0 framing,
 serialization/error frames, badge/livery stores and presentation remain native.
 Typed native leaves are synchronous and noexcept. Historical mappings, pool
 exhaustion, malformed parser sequences, arbitrary GRFs and GUI/network execution
 remain #156 limits. PR #474.
+
+### Vehicle properties and deferred purchase order (#491)
+
+`engine_loading/properties.rs` owns common and all four vehicle Action0 property
+range loops, interpretation and base-price conversion. It mutates the existing
+process-wide `engine_loading.rs` TEMP records, cargo masks and rail-label vectors.
+That owner also holds the deferred purchase-order queue, applies queued changes
+in insertion order, publishes narrowed positions and clears/shrinks the queue.
+Rust reads the type registry's canonical rail-label carrier within one call.
+Specifications, engine shells/pool, file/cargo identity, sound/image validation,
+badge effects and checked ByteReader reads remain native through typed leaves.
+Reader failures return through Rust before the original native exception rethrow;
+partial masks, vectors and badge effects retain their original write order.
+The original native `EnginePreSort` and unstable sort remain shared; Rust calls
+the shared `container_func::slide` port over its local ordering vector.
+Action0 framing, EIDS serialization/error frames and Action3 consumers stay native.
+Historical EIDS, real pool exhaustion, arbitrary GRFs, remaining malformed and
+property/climate combinations, graphics/audio and GUI/network scheduling remain
+#156 limits. PR #495.
 
 ### Engine cargo and articulated query runtime (#439)
 
@@ -1710,6 +1728,20 @@ inspect-window deletion, share canonical typed native leaves with industry consu
 `python3 tools/migration.py simulate town-houses- --jobs 2`, which places every original house
 through `CmdPlaceHouse`. Station removal on house clearance remains a #156 gap. PR #269.
 
+### House definition loading and publication (#477)
+
+`house_definition.rs` owns property decoding, first-substitute allocation policy, local and
+published multitile validation, global publication, earliest-year repair and reset ordering.
+Native HouseSpec shells/defaults, GRF and sprite graphs, string mapping and badge storage remain.
+The checked shared ByteReader preserves prior writes and partial badge-seen effects before
+returning read errors to the decoder's native exception frame. Cargo translation and house
+classes call their existing Rust owners directly. Loading calls house reset/finalisation directly.
+The original property and lifecycle bodies compile only portably. Definition, resolver and
+runtime mapping operations call the canonical Rust override manager registered by the global
+native facade; temporary managers keep independent storage. List and ID errors call the shared
+Rust loading owner directly. Historical HIDS, other climates and unreached property branches
+remain #156 limits. PR #486.
+
 ### House and shared-town NewGRF resolution (#409)
 
 `town/resolver.rs` owns HouseScope/HouseResolver and TownScope/TownResolver query policy,
@@ -2001,9 +2033,9 @@ Rust storage; station/road-stop/airport/object presentation uses one shared regi
 Object-class availability calls the existing Rust eligibility owner.
 
 Canonical native GRF/spec allocations, payload/layout containers, station shells,
-saved slot records, sprite graphs, strings and badges remain native. Checked native
-`ReadSpriteLayoutSprite` and `ReadSpriteLayout` callees preserve their incremental
-writes. A native stack vector carries the temporary sequence payload; Rust drives
+saved slot records, sprite graphs, strings and badges remain native. Direct Rust
+Action2 layout callees preserve their incremental writes through the shared
+reader and opaque native payloads. A native stack vector carries the temporary sequence payload; Rust drives
 every read and its successful move into the layout. Read errors return from Rust
 before the decoder rethrows. Deferred class
 names resolve the spec's current class. Original bodies remain portable-only.
@@ -2084,7 +2116,7 @@ control actions 6/7/9/8/D/E/10, patch flags/variables, GRM, labels, Action6 buff
 reset/status policy and finalization sequencing. One process-wide Rust execution
 carrier owns `_cur_gps`, spriteset maps and spritegroup references; native feature
 parsers hold genuine field aliases. No execution mirror or spec-pool copy exists.
-Native config/GRF/spec objects, parameters, parsed Action2, sprite/file I/O and
+Native config/GRF/spec objects, parameters, sprite/file I/O and
 feature parsers remain. Each named throwing parser catches the original decode
 exception domain and reports failure; Rust applies the bounds-disable policy with
 partial effects retained. File reads do not throw ordinary parsing exceptions.
@@ -2094,6 +2126,25 @@ native file frames preserve file/config restoration and lifetime. Portable bodie
 remain. Arbitrary feature grammars/data sections, historical saves, network clock
 and static influence, remaining GRM/variable/target combinations and GUI scheduling
 remain #156 gaps. PR #473.
+
+### Action2 graph construction and publication (#485)
+
+`newgrf_act2.rs` owns the complete Action2 decoder, callback-result interner,
+range normalization, real-group simplification and tile-layout interpretation.
+The interner is process-wide and stores native pool IDs. Loading dispatch and
+callback reset/final shrink call Rust directly, using the existing execution,
+spriteset, cargo, GRF-version and disable owners. The shared reader dispatches
+Action2 values at the original byte, word and dword widths.
+Native polymorphic sprite groups, final payload vectors, constructors/destructors
+and graphics resources remain canonical. Typed allocation and scalar storage
+bindings retain incremental reads and partial writes; vector element addresses
+expire at vector mutation. Local algorithm vectors live in Rust. Publication
+occurs only at the original final assignment, including explicit null results.
+Checked read failures drop Rust locals and return to the existing decoder error
+boundary. Station definitions call the layout owner directly with the shared reader
+and opaque native payloads; bridge recolouring keeps its native facade. Original bodies remain
+portable. Arbitrary grammars, remaining malformed and advanced-layout combinations,
+historical loading, rendering and network scheduling remain #156 limits. PR #493.
 
 ### Cargo registry, translation and callback lifecycle (#467)
 

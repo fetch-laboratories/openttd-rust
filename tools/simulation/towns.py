@@ -9,6 +9,7 @@ import struct
 import subprocess
 import threading
 from pathlib import Path
+from typing import Any, TypedDict
 
 from . import core
 from .console_adapter import prepared_console
@@ -593,6 +594,180 @@ def growth_scenarios(soak):
     return scenarios
 
 
+class HouseDefinitionCapture(TypedDict):
+    definition_rows: int
+    hids: int
+
+
+def house_definition_fixtures(folder: Path) -> None:
+    """Documented Action0 house properties loaded from actual GRF files."""
+    from .newgrf_loading import grf, info
+
+    folder.mkdir(parents=True, exist_ok=True)
+
+    def word(value: int) -> bytes:
+        return struct.pack("<H", value)
+
+    def prop(local: int, number: int, data: bytes) -> bytes:
+        return bytes((0, 7, 1, 1, local, number)) + data
+
+    def definition(local: int, substitute: int, **values: bytes) -> list[bytes]:
+        return [prop(local, 8, bytes((substitute,)))] + [
+            prop(local, int(number, 16), data) for number, data in values.items()
+        ]
+
+    main = [info(b"H477")]
+    # Properties before the first 08 consume their original lengths, including
+    # variable data, without constructing a shell.
+    main += [prop(100, 9, b"\xff"), prop(100, 0x23, b"\x02\x00\x07\x01\x09")]
+    main += definition(
+        0,
+        7,
+        **{
+            "0b": b"\x29",
+            "13": word(0xF81F),
+            "21": word(2100),
+            "22": word(65535),
+            "14": b"\x01",
+        },
+    )
+    main += definition(1, 8)
+    # Repeated 08 must preserve the first substitute and all modified fields.
+    main += [prop(0, 8, b"\x00"), prop(0, 0x15, b"\x07")]
+    main += definition(
+        2,
+        0,
+        **{
+            "0b": b"\x49",
+            "0c": b"\x1d",
+            "13": word(0),
+            "14": b"\x34",
+            "1d": b"\x12",
+            "16": b"\xff",
+            "1b": b"\x00",
+            "1c": b"\x08",
+            "21": word(2345),
+            "22": word(65535),
+            "15": b"\x07",
+        },
+    )
+    main += [
+        prop(2, 0x20, b"\x01\x00"),
+        prop(2, 0x20, b"\x02\x02\xff"),
+        prop(2, 0x23, b"\x02\x00\x07\x02\x09"),
+    ]
+    # Missing/nonpart neighbour, population on a part, substitute size mismatch,
+    # and an available part without a north-tile size each fail local validation.
+    main += definition(3, 7) + definition(4, 0, **{"13": word(0)})
+    main += definition(5, 7) + definition(6, 8, **{"0b": b"\x01"})
+    main += definition(7, 0, **{"09": b"\x08"}) + definition(8, 8)
+    main += definition(9, 8, **{"13": word(0x101F)})
+    main += definition(10, 0, **{"13": word(0), "0f": b"\x80", "0a": word(0x9697)})
+    # Retained nonconsecutive HIDS entries exercise the second validation pass.
+    main += definition(12, 7, **{"13": word(0)}) + definition(13, 8)
+    # Disable original houses after all substitutes have copied their defaults.
+    main += [bytes((0, 7, 1, 110, 0, 8)) + b"\xff" * 110]
+    conflict = [info(b"O477")] + definition(0, 0, **{"13": word(0), "15": b"\x07"})
+    colours = (
+        [info(b"B477")]
+        + definition(0, 0, **{"13": word(0), "0b": b"\x4d"})
+        + [prop(0, 0x17, b"\x01\x02")]
+    )
+    cargo = (
+        [info(b"C477")]
+        + definition(0, 0, **{"13": word(0)})
+        + [prop(0, 0x23, b"\x01\x02")]
+    )
+    badges = [
+        info(b"D477"),
+        bytes((0, 8, 1, 2, 0, 0x18)) + b"house/keep\x00house/partial\x00",
+    ] + definition(0, 0, **{"13": word(0)})
+    badges += [prop(0, 0x24, word(1) + word(0)), prop(0, 0x24, word(2) + word(1))]
+    oversized = (
+        [info(b"L477")]
+        + definition(0, 0, **{"13": word(0), "0b": b"\x35"})
+        + [prop(0, 0x23, b"\x11")]
+    )
+    invalid_id = (
+        [info(b"I477")]
+        + definition(0, 0, **{"13": word(0), "0b": b"\x36"})
+        + [bytes((0, 7, 1, 1, 255)) + word(65535) + b"\x08\x00"]
+    )
+    for name, actions in (
+        ("houses", main),
+        ("conflict", conflict),
+        ("colours", colours),
+        ("cargo", cargo),
+        ("badges", badges),
+        ("oversized", oversized),
+        ("invalid-id", invalid_id),
+    ):
+        (folder / f"{name}.grf").write_bytes(grf(actions, 2))
+
+
+def prepare_house_definitions(
+    scenario: dict[str, Any],
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: float,
+    env: dict[str, str],
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    folder = out / scenario["name"] / "input"
+    house_definition_fixtures(folder / "grfs")
+    executables = prepared_console("towns", adapter, binaries, builds, folder, env)
+    scenario = dict(
+        scenario, executables=executables, house_definition_dir=str(folder / "grfs")
+    )
+    saves = {role: folder / role / "houses.sav" for role in executables}
+    runs = core.capture_pair(
+        lambda role: dict(
+            scenario,
+            console=[f'towns_scenario definitions "{folder / "grfs"}" "{saves[role]}"'],
+            ticks=1,
+        ),
+        executables,
+        builds,
+        folder,
+        timeout,
+        env,
+    )
+    for role, run in runs.items():
+        if (
+            run["exit"]
+            or not saves[role].is_file()
+            or "TOWN definition-complete true" not in run["log"]
+        ):
+            raise RuntimeError("house definition file-loaded capture failed: " + role)
+    differences = core.compare_saves(
+        saves["reference"],
+        saves["candidate"],
+        scenario["name"],
+        10,
+        {"chunks": 0, "elements": 0, "masked": {}},
+    )
+    traces = {
+        role: [line for line in run["log"] if line.startswith("TOWN definition")]
+        for role, run in runs.items()
+    }
+    if differences or traces["reference"] != traces["candidate"]:
+        result["differences"].extend(differences)
+        raise RuntimeError(
+            "house definition eligibility, placement, cargo or RNG differs"
+        )
+    result["house_definition_capture"] = HouseDefinitionCapture(
+        definition_rows=len(traces["reference"]),
+        hids=len(read_save(saves["reference"])["HIDS"]["elements"]),
+    )
+    return dict(
+        scenario,
+        kind="save",
+        role_inputs={role: {"save": str(save)} for role, save in saves.items()},
+        console=["towns_scenario definitions-inspect", "unpause"],
+    )
+
+
 def adapter(build, folder, env):
     import probe
 
@@ -623,6 +798,10 @@ def adapter(build, folder, env):
 
 
 def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
+    if scenario["town_founding"] == "definitions":
+        return prepare_house_definitions(
+            scenario, binaries, builds, out, timeout, env, result
+        )
     folder = out / scenario["name"] / "input"
     executables = prepared_console("towns", adapter, binaries, builds, folder, env)
     scenario = dict(scenario, executables=executables)
@@ -868,6 +1047,14 @@ def house_scenarios(soak):
         )
         cases.append(scenario)
     cases.append(dict(cases[0], name="town-houses-reload", house_reload=True))
+    definitions = founding_scenarios(soak)[0]
+    definitions.update(
+        name="town-house-definitions-reload",
+        town_founding="definitions",
+        ticks=1,
+        short_checkpoint=True,
+    )
+    cases.append(definitions)
     return cases
 
 
@@ -1273,7 +1460,12 @@ def check_bribes(scenario, run, mode, role, result):
 
 
 def check(scenario, run, mode, role, result):
-    if scenario.get("town_founding") == "storage" and not run["exit"]:
+    if scenario.get("town_founding") == "definitions" and not run["exit"]:
+        if "TOWN definition-reloaded true" not in run["log"]:
+            raise RuntimeError(
+                "house definition HIDS/occupied tile reload witness missing"
+            )
+    elif scenario.get("town_founding") == "storage" and not run["exit"]:
         if "STORAGE reloaded true" not in run["log"] or not any(
             line.startswith("STORAGE action2 ") for line in run["log"]
         ):
@@ -1373,6 +1565,17 @@ def check(scenario, run, mode, role, result):
 
 
 def install(scenario, run_dir):
+    if "house_definition_dir" in scenario:
+        for personal in (
+            ".openttd",
+            ".openttd-rust",
+            "xdg-data/openttd",
+            "xdg-data/openttd-rust",
+        ):
+            target = run_dir / personal / "newgrf/owner477"
+            target.mkdir(parents=True, exist_ok=True)
+            for source in Path(scenario["house_definition_dir"]).glob("*.grf"):
+                shutil.copy2(source, target / source.name)
     if "town_style" in scenario:
         shutil.copytree(scenario["scenario_ai"], run_dir / "ai/town-names")
 
