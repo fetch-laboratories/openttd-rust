@@ -301,9 +301,11 @@ writes `.local/deep/<time>-<commit>/report.json` naming the commit, each member'
 wall and summed scenario seconds, and each failed scenario's problems and first differences,
 beside a log per member. The set is `DEEP_SET` in `tools/deep.py`; today it is `simulate
 --soak` (520 scenarios against the default 445), run through the ordinary driver action with a
-per-game timeout of 7200 s so a speed pass's hold cannot time a stopped game out. Members are
-ordinary harness games: they share the build and game locks and stop under a speed pass's
-timed collection. A clone-wide `deep.lock` makes a second run exit 0 as skipped. Selectors go
+per-game timeout of 7200 s, including time spent stopped by a speed pass. Members share the
+ordinary build and game locks. The speed pass stops their build and game processes by name,
+but its polling does not prevent launches during timed collection; launch coordination remains
+open on #503. A hold longer than the timeout can still fail a game. A clone-wide `deep.lock`
+makes a second run exit 0 as skipped. Selectors go
 to the soak member and mark the report partial; a partial report is a smoke check, not a
 deep check. Cadence, triage and rotation are in AGENTS.md "Speed". Planned members are listed
 on #503. The soak run's wall time is the report's `seconds` (summed scenario seconds divided by

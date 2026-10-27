@@ -149,9 +149,10 @@ fork; the remaining upstream documentation explains behavior and architecture.
   root runs `python3 tools/migration.py deep` on the integrated tip in the
   background at idle CPU and I/O priority, and skips the turn if one is still
   running. They run only during sessions (a run a session end interrupts
-  restarts at the next session start on the current tip), and root reads a
-  finished report before the next integration. A failure does not block
-  integration by itself: root bisects over the integrations since the last clean
+  restarts at the next session start on the current tip); wind-down rules are
+  unchanged. Root reads a finished report before the next integration. Deep
+  runs yield to speed-pass timed collection like other harness games. A failure
+  does not block integration by itself: root bisects over the integrations since the last clean
   deep check, and a divergence introduced there is a code regression under the
   rollback rule, while an older one becomes a fidelity item on #156 or a new
   issue. If the set grows past about 6 hours, members rotate across checks.
