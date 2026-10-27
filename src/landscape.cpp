@@ -2053,6 +2053,7 @@ void RustMovementAssert(bool condition) noexcept
 const OpenTTDMovementServices &GetRustMovementServices() noexcept
 {
 	static const OpenTTDMovementServices services{
+		.tile_types = GetRustTileTypeAllocation,
 		.shared = &GetRustSharedServices(),
 		.orders = &GetRustOrdersLeaves(),
 		.rail = &GetRustRailGroundServices(),

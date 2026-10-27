@@ -139,12 +139,22 @@ def check_build(out, label, build, target, windows):
     debug = configuration["build_type"] == "Debug"
     if not windows and configuration["assertions"] != ("ON" if debug else "OFF"):
         raise RuntimeError("Unexpected C++ assertion option for this matrix mode")
-    built, configured = (
-        re.findall(r"native-static-libs: ([^\r\n]+)", (build / log).read_text())[-1:]
-        for log in ("rust-build.log", "rust-native-libs.log")
-    )
-    if not built or built != configured:
-        raise RuntimeError("Archive native libraries differ from the configure query")
+    logs = ["rust-build.log"]
+    if label != "tools":
+        logs.append("rust-native-test-build.log")
+    elif (build / "cargo-native-test-support").exists():
+        raise RuntimeError("Tools-only build contains native-test support")
+    configured = re.findall(
+        r"native-static-libs: ([^\r\n]+)", (build / "rust-native-libs.log").read_text()
+    )[-1:]
+    for log in logs:
+        built = re.findall(
+            r"native-static-libs: ([^\r\n]+)", (build / log).read_text()
+        )[-1:]
+        if not built or built != configured:
+            raise RuntimeError(
+                f"{log}: native libraries differ from the configure query"
+            )
     count = 2 if label == "tools" else 5 if windows else 4
     commands = json.loads((build / "compile_commands.json").read_text())
     for consumer, (suffix, binary) in list(CONSUMERS.items())[:count]:

@@ -175,19 +175,6 @@ pub struct ByteSpan {
 pub use crate::map_func::TileTypeAllocation;
 pub(crate) use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAccess};
 
-/// # Safety
-/// For nonzero counts, uphold `TileTypeAccess::raw`'s validity/serialization
-/// contract for this call. The callback is the original noexcept accessor or an
-/// equivalent live fixture; it keeps the native out-of-range assertion policy.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_shared_tile_type(
-    allocation: TileTypeAllocation,
-    callback: extern "C" fn(u32) -> u8,
-    tile: u32,
-) -> u8 {
-    unsafe { TileTypeAccess::raw(allocation, callback) }.read(tile)
-}
-
 /// Opaque native `Train` shell; never dereferenced in Rust.
 #[repr(C)]
 pub struct Train {

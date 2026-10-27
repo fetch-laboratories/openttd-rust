@@ -62,6 +62,8 @@ mod map_func;
 mod map_type;
 mod math;
 mod movement;
+#[cfg(feature = "native-test-support")]
+mod native_test_support;
 mod network_config;
 mod newgrf;
 mod newgrf_act2;

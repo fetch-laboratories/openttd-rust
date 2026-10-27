@@ -272,5 +272,5 @@ impl TileTypeAccess {
     }
     // Named, field-sized loads. No Rust reference or record value is formed.
     map_fields! { base: BaseTileLayout => kind: u8, height: u8, m1: u8, m2: u16, m3: u8, m4: u8, m5: u8 }
-    map_fields! { extended: ExtendedTileLayout => m6: u8 }
+    map_fields! { extended: ExtendedTileLayout => m6: u8, m8: u16 }
 }
