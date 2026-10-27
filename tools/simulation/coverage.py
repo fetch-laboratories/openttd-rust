@@ -18,7 +18,15 @@ from validation_execution import run_logged  # noqa: E402
 import migration  # noqa: E402
 from simulation import core  # noqa: E402
 
-GCOVR = ["uvx", "--from", "gcovr==8.4", "gcovr"]
+GCOVR = [
+    "uvx",
+    "--from",
+    "gcovr==8.4",
+    "gcovr",
+    "--no-markers",
+    "--no-exclude-noncode-lines",
+    "--include-internal-functions",
+]
 
 
 class Branch(TypedDict):
