@@ -104,11 +104,6 @@ static uint8_t OPENTTD_RUST_CALL Aircraft_airport_entry(const void * ap, uint8_t
 	return static_cast<const AirportFTAClass *>(ap)->entry_points[direction];
 }
 
-static uint8_t OPENTTD_RUST_CALL Aircraft_direction_towards(OpenTTDAircraftVehicle vehicle, int32_t x, int32_t y) noexcept
-{
-	return GetDirectionTowards(VehicleOf(vehicle.handle), x, y);
-}
-
 static int32_t OPENTTD_RUST_CALL Aircraft_hangar_height(const OpenTTDStation *station, const AirportSpec *spec) noexcept
 {
 	return GetTileMaxPixelZ(RustStationHangarTile(StationOf(station), 0, spec));
@@ -361,7 +356,7 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.engine_subtype = Aircraft_engine_subtype,
 	.engine_sound = Aircraft_engine_sound,
 	.airport_entry = Aircraft_airport_entry,
-	.direction_towards = Aircraft_direction_towards,
+	.direction_towards = RustVehicleHandleInvoke<RustVehicleDirectionTowards, OpenTTDAircraftVehicle, int32_t, int32_t>,
 	.hangar_height = Aircraft_hangar_height,
 	.terminal_count = Aircraft_terminal_count,
 	.hangar_exit = Aircraft_hangar_exit,
