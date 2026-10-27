@@ -117,7 +117,7 @@ fn bigger(
         return;
     }
     let gfx = unsafe { (t.gfx)(tile) };
-    if gfx >= 175 {
+    if gfx >= crate::industry_type::NEW_INDUSTRYTILEOFFSET {
         return;
     }
     match gfx {

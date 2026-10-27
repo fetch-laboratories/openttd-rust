@@ -17,10 +17,14 @@
 #include "../table/strings.h"
 #include "../safeguards.h"
 
-static OpenTTDIndustryDefinitionCargo DefinitionCargo(CargoType cargo, const std::variant<CargoLabel, MixedCargoType> &label) noexcept
+template <typename Slots, size_t N>
+static Slots DefinitionCargo(uint8_t *cargo, const std::array<std::variant<CargoLabel, MixedCargoType>, N> &labels) noexcept
 {
-	if (IsValidCargoType(cargo)) return {{0, false}, cargo};
-	return {RustCargoLabel(label), cargo};
+	Slots slots{.cargo = cargo, .labels = {}};
+	for (size_t i = 0; i < std::size(slots.labels); ++i) {
+		if (!IsValidCargoType(cargo[i])) slots.labels[i] = RustCargoLabel(labels[i]);
+	}
+	return slots;
 }
 const OpenTTDIndustryDefinitionServices &GetIndustryDefinitionServices() noexcept
 {
@@ -53,9 +57,11 @@ const OpenTTDIndustryDefinitionServices &GetIndustryDefinitionServices() noexcep
 		.clear_file = [](GRFFile *file) noexcept { file->industryspec.clear(); file->industryspec.shrink_to_fit(); file->indtspec.clear(); file->indtspec.shrink_to_fit(); },
 		.conflicting = [](IndustrySpec *spec) noexcept { return spec->conflicting; },
 		.invalid_name = [](IndustrySpec *spec) noexcept { spec->name = STR_NEWGRF_INVALID_INDUSTRYTYPE; },
-		.produced = [](const IndustrySpec *spec, size_t slot) noexcept { return DefinitionCargo(spec->produced_cargo[slot], spec->produced_cargo_label[slot]); },
-		.accepted = [](const IndustrySpec *spec, size_t slot) noexcept { return DefinitionCargo(spec->accepts_cargo[slot], spec->accepts_cargo_label[slot]); },
-		.tile_accepted = [](const IndustryTileSpec *spec, size_t slot) noexcept { return DefinitionCargo(spec->accepts_cargo[slot], spec->accepts_cargo_label[slot]); },
+		.cargo = [](IndustrySpec *spec) noexcept { return OpenTTDIndustryDefinitionCargo{
+			.produced = DefinitionCargo<OpenTTDIndustryProducedSlots>(spec->produced_cargo.data(), spec->produced_cargo_label),
+			.accepted = DefinitionCargo<OpenTTDIndustryAcceptedSlots>(spec->accepts_cargo.data(), spec->accepts_cargo_label),
+		}; },
+		.tile_cargo = [](IndustryTileSpec *spec) noexcept { return DefinitionCargo<OpenTTDIndustryAcceptedSlots>(spec->accepts_cargo.data(), spec->accepts_cargo_label); },
 		.set_produced = [](IndustrySpec *spec, size_t slot, uint8_t cargo) noexcept { spec->produced_cargo[slot] = cargo; },
 		.set_accepted = [](IndustrySpec *spec, size_t slot, uint8_t cargo) noexcept { spec->accepts_cargo[slot] = cargo; },
 		.set_tile_accepted = [](IndustryTileSpec *spec, size_t slot, uint8_t cargo) noexcept { spec->accepts_cargo[slot] = cargo; },

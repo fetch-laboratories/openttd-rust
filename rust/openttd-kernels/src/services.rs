@@ -156,10 +156,7 @@ pub struct CommandServices {
 }
 
 /// Opaque native town shell. Its address identifies the shell, not the Rust owner.
-#[repr(C)]
-pub struct TownHandle {
-    _private: [u8; 0],
-}
+pub use crate::town_type::TownHandle;
 
 /// Synchronous borrowed bytes, including embedded NULs. The producing entry
 /// specifies lifetime; no native callback may retain this view after mutation.
@@ -174,19 +171,6 @@ pub struct ByteSpan {
 
 pub use crate::map_func::TileTypeAllocation;
 pub(crate) use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAccess};
-
-/// # Safety
-/// For nonzero counts, uphold `TileTypeAccess::raw`'s validity/serialization
-/// contract for this call. The callback is the original noexcept accessor or an
-/// equivalent live fixture; it keeps the native out-of-range assertion policy.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_shared_tile_type(
-    allocation: TileTypeAllocation,
-    callback: extern "C" fn(u32) -> u8,
-    tile: u32,
-) -> u8 {
-    unsafe { TileTypeAccess::raw(allocation, callback) }.read(tile)
-}
 
 /// Opaque native `Train` shell; never dereferenced in Rust.
 #[repr(C)]
@@ -1165,9 +1149,7 @@ pub struct SignalType(pub u8);
 #[derive(Clone, Copy)]
 pub struct SignalState(pub u8);
 /// Native `Axis` with its unchanged uint8 representation.
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct Axis(pub u8);
+pub use crate::direction_type::Axis;
 /// Native `TransportType` with its unchanged uint8 representation.
 #[repr(transparent)]
 #[derive(Clone, Copy)]

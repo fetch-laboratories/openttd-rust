@@ -15,18 +15,12 @@ use crate::history_type::LAST_MONTH;
 use crate::newgrf_callbacks::CALLBACK_FAILED;
 use std::ffi::c_void;
 
-#[repr(C)]
-pub struct TownHandle {
-    _private: [u8; 0],
-}
+pub use crate::town_type::TownHandle;
 #[repr(C)]
 pub struct LayoutHandle {
     _private: [u8; 0],
 }
-#[repr(C)]
-pub struct StationHandle {
-    _private: [u8; 0],
-}
+pub use crate::station_type::Station as StationHandle;
 #[repr(C)]
 pub struct CargoLists {
     pub produced: [u8; 16],
@@ -423,7 +417,7 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
                 .wrapping_mul(r.size_x as i32)
                 .wrapping_add(i32::from(layout.x))) as u32,
         );
-        if layout.gfx != 255 {
+        if layout.gfx != crate::industry_map::GFX_WATERTILE_SPECIALCHECK {
             add_location(owner, tile, r.size_x);
             let water = unsafe { (c.water_class)(tile) };
             unsafe {

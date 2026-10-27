@@ -376,9 +376,9 @@ after deleting previous outputs.
 
 Server-side protection on `rust-migration` requires `Full validation`, the cheap
 commit/string/script-mode checks, and resolved conversations. Full validation is an explicit
-commit status, published only after the native comparisons, simulation, platform matrix except
-macOS, quick checks and annotation checks succeed for a captured PR merge commit, with the
-status published on its head. Skipped or cancelled jobs cannot satisfy it. Workflow dispatch
+commit status, published only after the native comparisons, simulation, Windows x64, Linux GCC
+SDL2, Emscripten, quick checks and annotation checks succeed for a captured PR merge commit,
+with the status published on its head. Skipped or cancelled jobs cannot satisfy it. Workflow dispatch
 runs the controller from protected `rust-migration`; candidate test jobs have read-only
 permissions and the status publishers never execute candidate code. Required checks must pass on
 the PR head and the branch must be up to date with base (`required_status_checks.strict=true`).
@@ -398,9 +398,13 @@ python3 tools/ci.py request 123 --profile full
 python3 tools/ci.py wait .local/ci-requests/REQUEST.json
 ```
 
-`rust` runs four Cargo checks; `native` adds the Linux matrix and full migration comparison;
-`platform` runs the platform matrix including macOS. All include quick checks. Only `full`
-satisfies the merge gate. Unmergeable or pending-mergeability PRs are refused. The CLI records
+`rust` runs four Cargo checks; `native` adds Linux GCC SDL2 and full migration comparison;
+`platform` diagnoses the entire platform matrix, including macOS, Windows x86, Linux Clang and
+GCC Dedicated. All include quick checks, with Ruff 0.16.8 lint/format and ty 0.0.92 typing.
+Ruff ANN covers new and converted modules; explicit per-file ignores in `ruff.toml` only shrink.
+New and converted modules join the growing `ty.toml` include list; the initial scope is the
+already annotated CI controller and the preflight checker. Existing driver and simulation
+conversions remain on #501. Only `full` satisfies the merge gate. Unmergeable or pending-mergeability PRs are refused. The CLI records
 the SHA and request/run identity and refuses a changed PR head; a changed head, or a base that
 advanced, needs a new full request. `CI_ON_DEMAND=true` enables this scheduling after root
 installs and verifies the required status. With the variable absent, automatic full CI remains
@@ -414,9 +418,9 @@ one, so a burst of merges validates the newest tip and the intermediate pushes s
 cancelled. Markdown-only pushes do not start these workflows, so they cannot displace a pending
 code push. A merged push whose non-Markdown files match the tree marker from the same successful
 full request refreshes native compiler caches without repeating tests or scenarios. Covered
-protected pushes also rebuild the cached Linux GCC and Windows targets to refresh their compiler
-caches. This path skips Cargo checks, CTest, comparison/configuration probes, annotation checks
-and platform evidence; Clang and Emscripten have no compiler cache to refresh. The path is
+protected pushes also rebuild the cached Linux GCC SDL2 and Windows x64 targets to refresh their
+compiler caches. This path skips Cargo checks, CTest, comparison/configuration probes,
+annotation checks and platform evidence; Clang and Emscripten have no compiler cache to refresh. The path is
 derived only from the protected push's matching non-Markdown tree entries, and requested PR
 validation always runs the complete selected suite. A combined tree no full request covered
 receives all native and platform checks. Tree comparisons must be complete; missing or truncated
@@ -441,7 +445,7 @@ GiB (below the 10 GiB repository limit).
 Runner settings are `CI_LINUX_HEAVY`, `CI_LINUX_COMPARISONS`, `CI_LINUX_SIMULATION`,
 `CI_LINUX_PLATFORM` (default `ubuntu-24.04`; Clang only, the cached GCC flavours always use free
 `ubuntu-24.04`), and `CI_MACOS_HEAVY` (default `macos-latest`) and `CI_WINDOWS_HEAVY` (default
-`windows-2022`). Heavy native jobs use `nproc` slots. One full request peaks around 13 jobs;
+`windows-2022`). Heavy native jobs use `nproc` slots. One full request peaks around 10 jobs;
 overlapping requests may queue against account/runner capacity. Runner size and account plan
 remain repository settings. The repository belongs to the `fetch-laboratories` organization,
 where Blacksmith serves the Linux jobs: `CI_LINUX_HEAVY` is `blacksmith-8vcpu-ubuntu-2404` and
@@ -459,11 +463,13 @@ the job average: compile and scenario steps saturate every runner, and setup ste
 one core. Agents authenticate with an org token (`blacksmith org-token create`, admin only),
 never a copy of a person's `~/.blacksmith/credentials`.
 
-macOS runs on `rust-migration`, not per PR (#357). After every fifth integration root runs `gh
-workflow run ci-build.yml --ref rust-migration`, which builds and tests only the two macOS jobs
-at the tip and refreshes their caches, and waits with `gh run watch`; a red result is fixed
-before more integrations. An uncovered protected push also runs them. After two hosted-capacity
-cancellations of a macOS run, root runs `gh variable set CI_MACOS_HEAVY --body
+macOS, Windows x86, Linux Clang and Linux GCC Dedicated run on `rust-migration` after every
+fifth integration (#357, #514). Root runs `gh workflow run ci-build.yml --ref rust-migration`,
+which builds and tests these five jobs (macOS Debug and Release) at the tip, checks their
+annotations and refreshes eligible caches, and waits with `gh run watch`; a red result is fixed
+before more integrations. An uncovered protected push also runs these platforms. A defect
+specific to the cadence platforms can remain undetected until that run and is fixed forward.
+After two hosted-capacity cancellations of a macOS run, root runs `gh variable set CI_MACOS_HEAVY --body
 blacksmith-6vcpu-macos-26`, reruns, and runs `gh variable delete CI_MACOS_HEAVY` when that run
 finishes; setting the variable needs no Blacksmith credentials.
 
@@ -1871,7 +1877,11 @@ or stable identities. Owner loads/stores end before depot, road-stop, sound, vie
 calls. Train stopping, crossing occupancy, order stopping, slope/pixel and bridge helpers call
 their integrated Rust owners directly. Road pathfinder track bits and road/ship YAPF plus
 water-region movement queries also call Rust directly; header preconditions follow native
-assertion policy, without valid-input FFI. Native facades serve remaining native callers;
+assertion policy, without valid-input FFI. Road and aircraft controllers acquire
+the shared map descriptor once for fresh movement tile-type, pixel location/slope
+and normal-road bits/status/road-type reads. Native storage and setters remain;
+standalone, train/ship, YAPF and water-region entries retain typed services, as do
+partial fixtures and water-subtype reads. PR #517. Native facades serve remaining native callers;
 portable original bodies remain excluded from WITH_RUST. Checks: `python3 tools/migration.py
 rust-checks`, `build`, native ABI tests, the existing rail/road/station scenarios and `python3
 tools/landscape-comparison.py` (foundation and signed-coordinate cases). NewGRF foundations,

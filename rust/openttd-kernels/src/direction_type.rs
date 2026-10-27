@@ -52,17 +52,33 @@ pub const DIAGDIRDIFF_90LEFT: u8 = 3;
 /// `DIAGDIRDIFF_END`.
 pub const DIAGDIRDIFF_END: u8 = 4;
 /// `AXIS_X`.
-pub const AXIS_X: u8 = 0;
+pub const AXIS_X: u8 = Axis::X.0;
 /// `AXIS_Y`.
-pub const AXIS_Y: u8 = 1;
+pub const AXIS_Y: u8 = Axis::Y.0;
 /// `INVALID_AXIS`.
-pub const INVALID_AXIS: u8 = 0xFF;
+pub const INVALID_AXIS: u8 = Axis::INVALID.0;
 
 /// `AXIS_END`.
-pub const AXIS_END: u8 = 2;
+pub const AXIS_END: u8 = Axis::END.0;
 
 pub const DIRDIFF_REVERSE: u8 = 4;
 pub const DIRDIFF_SAME: u8 = 0;
 
 /// `DIRDIFF_90RIGHT`.
 pub const DIRDIFF_90RIGHT: u8 = 2;
+
+/// Native `Axis`, including unnamed uint8 values.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct Axis(pub u8);
+
+impl Axis {
+    /// Native `AXIS_X`.
+    pub const X: Self = Self(0);
+    /// Native `AXIS_Y`.
+    pub const Y: Self = Self(1);
+    /// Native `AXIS_END`.
+    pub const END: Self = Self(2);
+    /// Native `INVALID_AXIS`.
+    pub const INVALID: Self = Self(0xFF);
+}

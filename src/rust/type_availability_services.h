@@ -5,8 +5,8 @@
 #include "type_availability_ffi.h"
 #include "../rail.h"
 #include "../road.h"
-inline RailTypeLabel RustRailTypeLabel(const RailTypeInfo *rti) noexcept { return rti->label; }
-inline RoadTypeLabel RustRoadTypeLabel(const RoadTypeInfo *rti) noexcept { return rti->label; }
+inline const RailTypeLabel &RustRailTypeLabel(const RailTypeInfo *rti) noexcept { return rti->label; }
+inline const RoadTypeLabel &RustRoadTypeLabel(const RoadTypeInfo *rti) noexcept { return rti->label; }
 inline bool RustRailTypeHidden(const RailTypeInfo *rti) noexcept { return rti->flags.Test(RailTypeFlag::Hidden); }
 inline bool RustRoadTypeHidden(const RoadTypeInfo *rti) noexcept { return rti->flags.Test(RoadTypeFlag::Hidden); }
 inline uint64_t RustRailTypeIntroduces(const RailTypeInfo *rti) noexcept { return rti->introduces_railtypes.base(); }

@@ -45,8 +45,10 @@ inline uint16_t RustStationAnimationTriggers(const StationSpec *spec) noexcept {
 inline OpenTTDStationSpecTriggers RustStationSpecTriggers(const StationSpec *spec) noexcept { return {RustStationAnimationTriggers(spec), RustStationCargoTriggers(spec)}; }
 inline size_t RustStationSpecCount(const BaseStation *st) noexcept { return st->speclist.size(); }
 inline const StationSpec *RustStationSlotSpec(const BaseStation *st, size_t index) noexcept { return st->speclist[index].spec; }
-inline OpenTTDStationSpecVacancy RustStationSlotVacancy(const BaseStation *st, size_t index) noexcept { const auto &slot = st->speclist[index]; return {slot.spec, slot.grfid}; }
-inline OpenTTDGRFClassIdentity RustStationSlotKey(const BaseStation *st, size_t index) noexcept { const auto &slot = st->speclist[index]; return {slot.grfid, slot.localidx}; }
+inline uint32_t RustStationSlotGRFID(const BaseStation *st, size_t index) noexcept { return st->speclist[index].grfid; }
+inline uint16_t RustStationSlotLocalID(const BaseStation *st, size_t index) noexcept { return st->speclist[index].localidx; }
+inline OpenTTDStationSpecVacancy RustStationSlotVacancy(const BaseStation *st, size_t index) noexcept { return {RustStationSlotSpec(st, index), RustStationSlotGRFID(st, index)}; }
+inline OpenTTDGRFClassIdentity RustStationSlotKey(const BaseStation *st, size_t index) noexcept { return {RustStationSlotGRFID(st, index), RustStationSlotLocalID(st, index)}; }
 inline void RustStationSpecResize(BaseStation *st, size_t size) noexcept { st->speclist.resize(size); }
 inline void RustStationSpecClear(BaseStation *st) noexcept { st->speclist.clear(); }
 inline void RustStationRebindSpec(BaseStation *st, size_t index, const StationSpec *spec) noexcept { st->speclist[index].spec = spec; }

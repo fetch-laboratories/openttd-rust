@@ -401,6 +401,7 @@ def check(scenario, run, mode, role, result):
 COMMAND_SOURCE = r"""
 #include "station_cmd.cpp"
 #include "console_internal.h"
+// TYPE_RESERVE_FIXTURE
 #include "clear_map.h"
 #include "order_cmd.h"
 #include "waypoint_cmd.h"
@@ -1127,7 +1128,7 @@ static bool StationCommands(std::span<std::string_view> args)
 		if (args[1] == "railtype-63") {
 			RailType last = RAILTYPE_RAIL;
 			for (uint32_t label = 1; ; label++) {
-				RailType rt = AllocateRailType(label);
+				RailType rt = static_cast<RailType>(ReserveFixtureType<GSF_RAILTYPES>(label));
 				if (rt == INVALID_RAILTYPE) break;
 				company->avail_railtypes.Set(rt); last = rt;
 			}
@@ -1276,6 +1277,9 @@ def adapter(build, folder, env):
     source = folder / "station-commands.cpp"
     source.write_text(
         COMMAND_SOURCE.replace(
+            "// TYPE_RESERVE_FIXTURE",
+            (ROOT / "tools/simulation/type-reserve-fixture.hpp").read_text(),
+        ).replace(
             "// OWNER399",
             (ROOT / "tools/simulation/station-resolver-console.hpp").read_text()
             + (ROOT / "tools/simulation/airport-resolver-console.hpp").read_text(),

@@ -662,9 +662,6 @@ GRFFile::GRFFile(const GRFConfig &config)
 	/* Mark price_base_multipliers as 'not set' */
 	this->price_base_multipliers.fill(INVALID_PRICE_MODIFIER);
 
-#ifdef WITH_RUST
-	openttd_rust_type_maps_init(&GetRustTypeRegistryServices(), this);
-#else
 	/* Initialise rail type map with default rail types */
 	this->railtype_map.fill(INVALID_RAILTYPE);
 	this->railtype_map[0] = RAILTYPE_RAIL;
@@ -679,8 +676,6 @@ GRFFile::GRFFile(const GRFConfig &config)
 	/* Initialise tram type map with default tram types */
 	this->tramtype_map.fill(INVALID_ROADTYPE);
 	this->tramtype_map[0] = ROADTYPE_TRAM;
-
-#endif
 
 	/* Copy the initial parameter list */
 	this->param = config.param;
@@ -706,8 +701,6 @@ static CargoLabel GetActiveCargoLabel(const std::initializer_list<CargoLabel> &l
 	return CT_INVALID;
 }
 
-#endif
-
 /**
  * Get active cargo label from either a cargo label or climate-dependent mixed cargo type.
  * @param label Cargo label or climate-dependent mixed cargo type.
@@ -715,9 +708,6 @@ static CargoLabel GetActiveCargoLabel(const std::initializer_list<CargoLabel> &l
  */
 static CargoLabel GetActiveCargoLabel(const std::variant<CargoLabel, MixedCargoType> &label)
 {
-#ifdef WITH_RUST
-	return CargoLabel{openttd_rust_newgrf_active_cargo_label(RustCargoLabel(label))};
-#else
 	struct visitor {
 		CargoLabel operator()(const CargoLabel &label) { return label; }
 		CargoLabel operator()(const MixedCargoType &mixed)
@@ -732,8 +722,8 @@ static CargoLabel GetActiveCargoLabel(const std::variant<CargoLabel, MixedCargoT
 	};
 
 	return std::visit(visitor{}, label);
-#endif
 }
+#endif
 
 /**
  * Precalculate refit masks from cargo classes for all vehicles.
@@ -1754,11 +1744,7 @@ static void AfterLoadGRFs()
 	FinaliseStringMapping();
 
 	/* Clear the action 6 override sprites. */
-#ifdef WITH_RUST
-	openttd_rust_grf_clear_overrides();
-#else
 	_grf_line_to_action6_sprite_override.clear();
-#endif
 
 	FinaliseBadges();
 
@@ -1868,11 +1854,7 @@ static void AfterLoadGRFs()
 
 	/* Deallocate temporary loading data */
 	_gted.clear();
-#ifdef WITH_RUST
-	openttd_rust_grf_clear_grm_sprites();
-#else
 	_grm_sprites.clear();
-#endif
 }
 #endif
 

@@ -16,6 +16,7 @@
 
 #ifdef WITH_RUST
 #include "../rust/type_definitions_ffi.h"
+#include "../rust/services_rail.h"
 #include "../rust/newgrf_bytereader_services.h"
 #endif
 
@@ -30,7 +31,7 @@ static const OpenTTDRailProperties &GetRustRailProperties() noexcept
 		.build_caption = [](RailTypeInfo *info, uint16_t value) noexcept { AddStringForMapping(GRFStringID{value}, &info->strings.build_caption); },
 		.replace_text = [](RailTypeInfo *info, uint16_t value) noexcept { AddStringForMapping(GRFStringID{value}, &info->strings.replace_text); },
 		.name = [](RailTypeInfo *info, uint16_t value) noexcept { AddStringForMapping(GRFStringID{value}, &info->strings.name); },
-		.cost_multiplier = [](RailTypeInfo *info, uint16_t value) noexcept { info->cost_multiplier = value; },
+		.cost_multiplier = RustSetRailCostMultiplier,
 		.max_speed = [](RailTypeInfo *info, uint16_t value) noexcept { info->max_speed = value; },
 		.map_colour = [](RailTypeInfo *info, uint8_t value) noexcept { info->map_colour = PixelColour{value}; },
 		.introduction_date = [](RailTypeInfo *info, int32_t value) noexcept { info->introduction_date = TimerGameCalendar::Date(value); },

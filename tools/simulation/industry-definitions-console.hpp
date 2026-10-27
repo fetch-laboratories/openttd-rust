@@ -66,18 +66,24 @@ static void DefinitionInspect(bool reused)
 }
 static void DefinitionClimateReset()
 {
+	SavedRandomSeeds before, after;
+	SaveRandomSeeds(&before);
+	const auto defaults = std::pair{GetIndustrySpec(0)->enabled, GetIndustrySpec(27)->enabled};
 	Backup<LandscapeType> climate(_settings_game.game_creation.landscape);
 	_industry_mngr.mappings[NUM_INDUSTRYTYPES - 1] = {0x475475, 127, 0};
 	_industry_mngr.Add(126, 0x475475, 0);
 	_settings_game.game_creation.landscape = LandscapeType::Toyland;
-	ResetIndustries();
+	ResetNewGRFData();
 	DefinitionRequire(!GetIndustrySpec(0)->enabled && GetIndustrySpec(27)->enabled && _industry_mngr.GetID(127, 0x475475) == NUM_INDUSTRYTYPES - 1 && _industry_mngr.GetID(126, 0x475475) == IT_INVALID, "climate-and-reset-lifetimes");
 	_settings_game.game_creation.landscape = LandscapeType::Arctic;
-	ResetIndustries();
+	ResetNewGRFData();
 	DefinitionRequire(GetIndustrySpec(0)->enabled && !GetIndustrySpec(27)->enabled, "arctic-reset");
 	_industry_mngr.ResetMapping();
 	climate.Restore();
-	ResetIndustries();
+	ResetNewGRFData();
+	DefinitionRequire(GetIndustrySpec(0)->enabled == defaults.first && GetIndustrySpec(27)->enabled == defaults.second, "restored-climate-defaults");
+	SaveRandomSeeds(&after);
+	DefinitionRequire(before.random.state[0] == after.random.state[0] && before.random.state[1] == after.random.state[1] && before.interactive_random.state[0] == after.interactive_random.state[0] && before.interactive_random.state[1] == after.interactive_random.state[1], "climate-reset-rng");
 }
 static bool IndustryDefinitionsScenario(std::span<std::string_view> args)
 {

@@ -8,7 +8,7 @@
 //! `engine_type.h` values. `services.cpp` asserts every value.
 
 /// `EngineID::Invalid()`.
-pub const INVALID_ENGINE: u16 = 0xFFFF;
+pub const INVALID_ENGINE: u16 = EngineID::INVALID.0;
 /// `AIR_CTOL`.
 pub const AIR_CTOL: u8 = 1;
 
@@ -57,3 +57,18 @@ pub const EC_ELECTRIC: u8 = 2;
 pub const EC_MAGLEV: u8 = 4;
 /// `EngineMiscFlag::Uses2CC`.
 pub const USES_2CC: u8 = 1 << 1;
+
+/// Opaque native `Engine`; valid only while its native pool shell lives.
+#[repr(C)]
+pub struct OpenTTDEngine {
+    _private: [u8; 0],
+}
+
+/// Native `EngineID` with its full original integer domain.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct EngineID(pub u16);
+impl EngineID {
+    /// Native invalid sentinel.
+    pub const INVALID: Self = Self(u16::MAX);
+}

@@ -79,7 +79,6 @@ const SpriteGroup *openttd_rust_industry_tile_root(const OpenTTDIndustryResolver
 TownScopeResolver *openttd_rust_industry_resolver_town(const OpenTTDIndustryResolverContext *, ResolverObject *, const OpenTTDIndustryResolverServices *);
 ScopeResolver *openttd_rust_industry_resolver_scope(const OpenTTDIndustryResolverContext *, ResolverObject *, ScopeResolver *, uint8_t, uint8_t, const OpenTTDIndustryResolverServices *);
 ScopeResolver *openttd_rust_industry_tile_scope(ResolverObject *, ScopeResolver *, ScopeResolver *, uint8_t, uint8_t, const OpenTTDIndustryResolverServices *);
-uint8_t openttd_rust_industry_map_type(uint8_t, uint32_t);
 uint32_t openttd_rust_industry_probability(uint8_t, uint8_t, uint32_t, const OpenTTDIndustryResolverServices *);
 bool openttd_rust_industry_refuses(Industry *, OpenTTDIndustry *, uint8_t, const OpenTTDIndustryResolverServices *);
 }

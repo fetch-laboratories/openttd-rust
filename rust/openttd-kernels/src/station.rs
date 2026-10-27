@@ -35,16 +35,10 @@ use crate::tile_type::{INVALID_TILE, MP_HOUSE, MP_INDUSTRY, MP_STATION};
 use crate::tilearea::TileArea;
 
 /// A native `Station`, distinct from the shared station/waypoint pool base.
-#[repr(C)]
-pub struct Station {
-    _private: [u8; 0],
-}
+pub use crate::station_type::Station;
 
 /// A native `BaseStation`, which may also be a waypoint.
-#[repr(C)]
-pub struct BaseStation {
-    _private: [u8; 0],
-}
+pub use crate::station_type::BaseStation;
 
 /// `StationRect`: the station spread rectangle, aliased by the native `Rect` facade.
 #[repr(C)]
