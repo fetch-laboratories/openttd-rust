@@ -176,7 +176,6 @@ static const OpenTTDDisasterServices &DisasterServices() noexcept
 		.industry_behaviour = RustIndustryBehaviour,
 		.industry_location = DisasterIndustryLocation,
 		.industry_tile = RustIndustryTile,
-		.industry_town = RustIndustryTownIndex,
 		.industry_index = RustIndustryTileIndex,
 		.industry_belongs = DisasterIndustryBelongs,
 		.reset_industry_tile = RustResetIndustryConstruction,

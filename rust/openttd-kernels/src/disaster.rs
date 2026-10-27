@@ -29,11 +29,13 @@ use crate::random_func::chance16_i;
 use crate::services::Services as Shared;
 use crate::sprites::{
     SPR_AH_64A, SPR_AH_64A_FIRING, SPR_BLIMP, SPR_BLIMP_CRASHED, SPR_BLIMP_CRASHING, SPR_F_15,
-    SPR_F_15_FIRING, SPR_ROTOR_MOVING_1, SPR_ROTOR_MOVING_3, SPR_SUB_LARGE_NE, SPR_SUB_SMALL_NE,
-    SPR_UFO_HARVESTER, SPR_UFO_SMALL_SCOUT, SPR_UFO_SMALL_SCOUT_DARKER, SPR_XCOM_SKYRANGER,
+    SPR_F_15_FIRING, SPR_ROTOR_MOVING_1, SPR_ROTOR_MOVING_3, SPR_SUB_LARGE_NE, SPR_SUB_LARGE_NW,
+    SPR_SUB_LARGE_SE, SPR_SUB_LARGE_SW, SPR_SUB_SMALL_NE, SPR_SUB_SMALL_NW, SPR_SUB_SMALL_SE,
+    SPR_SUB_SMALL_SW, SPR_UFO_HARVESTER, SPR_UFO_SMALL_SCOUT, SPR_UFO_SMALL_SCOUT_DARKER,
+    SPR_XCOM_SKYRANGER,
 };
 use crate::tile_type::{
-    INVALID_TILE, MP_CLEAR, MP_HOUSE, MP_INDUSTRY, MP_RAILWAY, MP_TREES, MP_WATER, TILE_SIZE,
+    INVALID_TILE, MP_CLEAR, MP_HOUSE, MP_INDUSTRY, MP_RAILWAY, MP_TREES, TILE_SIZE,
 };
 use crate::vehicle::{OpenTTDVehicle, VehicleRef, VehicleServices};
 use crate::vehicle_base::{VS_CRASHED, VS_HIDDEN, VS_SHADOW, VS_UNCLICKABLE};
@@ -48,6 +50,28 @@ pub struct State {
     pub flags: u8,
 }
 static mut DELAY: u16 = 0;
+/// `_disaster_images_4`, indexed by `Direction`.
+const SMALL_SUBMARINE_IMAGES: [u32; 8] = [
+    SPR_SUB_SMALL_NE,
+    SPR_SUB_SMALL_NE,
+    SPR_SUB_SMALL_SE,
+    SPR_SUB_SMALL_SE,
+    SPR_SUB_SMALL_SW,
+    SPR_SUB_SMALL_SW,
+    SPR_SUB_SMALL_NW,
+    SPR_SUB_SMALL_NW,
+];
+/// `_disaster_images_5`, indexed by `Direction`.
+const BIG_SUBMARINE_IMAGES: [u32; 8] = [
+    SPR_SUB_LARGE_NE,
+    SPR_SUB_LARGE_NE,
+    SPR_SUB_LARGE_SE,
+    SPR_SUB_LARGE_SE,
+    SPR_SUB_LARGE_SW,
+    SPR_SUB_LARGE_SW,
+    SPR_SUB_LARGE_NW,
+    SPR_SUB_LARGE_NW,
+];
 use crate::fleet::INVALID_VEHICLE;
 
 /// A live native shell and its separate Rust owner; null marks the end of iteration.
@@ -154,7 +178,6 @@ pub struct Services {
     pub industry_behaviour: extern "C" fn(*mut c_void) -> u32,
     pub industry_location: extern "C" fn(*mut c_void) -> IndustryLocation,
     pub industry_tile: extern "C" fn(*mut c_void) -> u32,
-    pub industry_town: extern "C" fn(*mut c_void) -> u16,
     pub industry_index: extern "C" fn(u32) -> u16,
     pub industry_belongs: extern "C" fn(*mut c_void, u32) -> bool,
     pub reset_industry_tile: extern "C" fn(u32),
@@ -198,7 +221,7 @@ impl<'a> World<'a> {
         self.shared.random()
     }
     fn random_tile(&self) -> u32 {
-        self.random() & (self.map().size_x() * self.size_y() - 1)
+        self.map().wrap_to_map(self.random(), self.size_y())
     }
     fn chance(&self, denominator: u32) -> bool {
         chance16_i(1, denominator, self.random())
@@ -289,8 +312,8 @@ impl<'a> World<'a> {
                 ST_HELICOPTER_ROTORS => SPR_ROTOR_MOVING_1,
                 ST_BIG_UFO | ST_BIG_UFO_SHADOW => SPR_UFO_HARVESTER,
                 ST_BIG_UFO_DESTROYER | ST_BIG_UFO_DESTROYER_SHADOW => SPR_XCOM_SKYRANGER,
-                ST_SMALL_SUBMARINE => SPR_SUB_SMALL_NE + u32::from(dir) / 2,
-                _ => SPR_SUB_LARGE_NE + u32::from(dir) / 2,
+                ST_SMALL_SUBMARINE => SMALL_SUBMARINE_IMAGES[usize::from(dir)],
+                _ => BIG_SUBMARINE_IMAGES[usize::from(dir)],
             };
         }
         (self.s.write_sprite)(v.shell(), image);
@@ -597,17 +620,14 @@ impl<'a> World<'a> {
                 self.set_age(v, 0);
                 let i = (self.s.industry)(self.dest(v));
                 self.destruct_industry(i.industry);
-                let town = (self.s.industry_town)(i.industry);
+                let location = (self.s.industry_location)(i.industry);
                 if leave_top {
-                    (self.s.airplane_news)(i.id, town);
+                    (self.s.airplane_news)(i.id, location.town);
                 } else {
-                    (self.s.helicopter_news)(i.id, town);
+                    (self.s.helicopter_news)(i.id, location.town);
                 }
                 if (self.shared.disaster_sound)() {
-                    (self.shared.play_sound)(
-                        (self.s.industry_tile)(i.industry),
-                        crate::sound_type::SND_12_EXPLOSION,
-                    );
+                    (self.shared.play_sound)(location.tile, crate::sound_type::SND_12_EXPLOSION);
                 }
             }
         } else if v.state() == 0 {
@@ -968,7 +988,7 @@ impl<'a> World<'a> {
             }
             5 | 6 => {
                 let r = self.random();
-                let tile = r & (self.map().size_x() * self.size_y() - 1);
+                let tile = self.map().wrap_to_map(r, self.size_y());
                 let x = (self.map().tile_x(tile) * TILE_SIZE + TILE_SIZE / 2) as i32;
                 let (y, dir) = if r & 0x8000_0000 != 0 {
                     (
@@ -986,8 +1006,7 @@ impl<'a> World<'a> {
                         DIR_SE,
                     )
                 };
-                if (self.shared.tile_type)(self.map().tile_virt_xy(x as u32, y as u32)) != MP_WATER
-                {
+                if !(self.shared.is_water_tile)(self.map().tile_virt_xy(x as u32, y as u32)) {
                     return;
                 }
                 (self.s.create)(x, y, dir, kind + 8, INVALID_VEHICLE);
@@ -1012,7 +1031,7 @@ impl<'a> World<'a> {
                                     location.tile.wrapping_add(self.map().diff(1, 1)),
                                     location.town,
                                 );
-                                let mut tile = (self.s.industry_tile)(i.industry);
+                                let mut tile = location.tile;
                                 let dir = (self.random() & 3) as u8;
                                 let step = self.map().offs_by_diag_dir(dir);
                                 for _ in 0..30 {
@@ -1245,7 +1264,7 @@ crate::abi::layouts! {
     "OpenTTDDisasterIndustryTarget" ["probe"] => IndustryTarget { industry, id, };
     "OpenTTDDisasterIndustryLocation" ["probe"] => IndustryLocation { tile, town, };
     "OpenTTDDisasterStationTarget" ["probe"] => StationTarget { next, tile, airport_type, };
-    "OpenTTDDisasterServices" ["probe"] => Services { shared, vehicles, occupancy, environment, rail_map, aircraft, road, age, write_age, write_sprite, first_sprite, write_first_sprite, write_subtype, write_owner, set_next, next_part, update_delta, toward, create, resolve, next_disaster, next_road, road_target, front, road_disaster, breakdown_counter, write_road_disaster, write_breakdown, next_vehicle, ground, next_train, road_count, human, next_station, next_industry, industry, industry_behaviour, industry_location, industry_tile, industry_town, industry_index, industry_belongs, reset_industry_tile, airport_tile, airport_blocks, zeppelin_crashed, zeppelin_cleared, road_crashed, zeppelin_news, small_ufo_news, airplane_news, helicopter_news, big_ufo_news, coal_news, clear, update_signals, disasters_enabled, can_allocate, town_index, };
+    "OpenTTDDisasterServices" ["probe"] => Services { shared, vehicles, occupancy, environment, rail_map, aircraft, road, age, write_age, write_sprite, first_sprite, write_first_sprite, write_subtype, write_owner, set_next, next_part, update_delta, toward, create, resolve, next_disaster, next_road, road_target, front, road_disaster, breakdown_counter, write_road_disaster, write_breakdown, next_vehicle, ground, next_train, road_count, human, next_station, next_industry, industry, industry_behaviour, industry_location, industry_tile, industry_index, industry_belongs, reset_industry_tile, airport_tile, airport_blocks, zeppelin_crashed, zeppelin_cleared, road_crashed, zeppelin_news, small_ufo_news, airplane_news, helicopter_news, big_ufo_news, coal_news, clear, update_signals, disasters_enabled, can_allocate, town_index, };
 }
 
 #[cfg(test)]

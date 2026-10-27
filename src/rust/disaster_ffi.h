@@ -81,7 +81,6 @@ struct OpenTTDDisasterServices {
 	uint32_t (OPENTTD_RUST_CALL *industry_behaviour)(void *) noexcept OPENTTD_SERVICE_DEFAULT(industry_behaviour);
 	OpenTTDDisasterIndustryLocation (OPENTTD_RUST_CALL *industry_location)(void *) noexcept OPENTTD_SERVICE_DEFAULT(industry_location);
 	uint32_t (OPENTTD_RUST_CALL *industry_tile)(void *) noexcept OPENTTD_SERVICE_DEFAULT(industry_tile);
-	uint16_t (OPENTTD_RUST_CALL *industry_town)(void *) noexcept OPENTTD_SERVICE_DEFAULT(industry_town);
 	uint16_t (OPENTTD_RUST_CALL *industry_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_index);
 	bool (OPENTTD_RUST_CALL *industry_belongs)(void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_belongs);
 	void (OPENTTD_RUST_CALL *reset_industry_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(reset_industry_tile);

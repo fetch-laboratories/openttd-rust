@@ -3,7 +3,6 @@
 #ifndef RUST_SERVICES_INDUSTRY_H
 #define RUST_SERVICES_INDUSTRY_H
 #include "../industry.h"
-#include "../town.h"
 #include "../newgrf_industrytiles.h"
 #include "services_ffi.h"
 #include "../industry_map.h"
@@ -25,7 +24,6 @@ inline uint16_t OpenTTDIndustryTileCallback(uint32_t tile, uint16_t gfx, uint16_
 inline uint16_t RustIndustryID(void *industry) noexcept { return static_cast<Industry *>(industry)->index.base(); }
 inline uint32_t RustIndustryBehaviour(void *industry) noexcept { return GetIndustrySpec(static_cast<Industry *>(industry)->type)->behaviour.base(); }
 inline uint32_t RustIndustryTile(void *industry) noexcept { return static_cast<Industry *>(industry)->location.tile.base(); }
-inline uint16_t RustIndustryTownIndex(void *industry) noexcept { return OpenTTDIndustryTown(static_cast<Industry *>(industry))->index.base(); }
 inline uint16_t RustIndustryTileIndex(uint32_t tile) noexcept { return GetIndustryIndex(TileIndex{tile}).base(); }
 inline void RustResetIndustryConstruction(uint32_t tile) noexcept { ResetIndustryConstructionStage(TileIndex{tile}); }
 #endif /* RUST_SERVICES_INDUSTRY_H */

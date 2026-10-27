@@ -30,8 +30,20 @@ pub const SPR_UFO_SMALL_SCOUT: u32 = 3908;
 pub const SPR_UFO_SMALL_SCOUT_DARKER: u32 = 3909;
 /// `SPR_SUB_SMALL_NE`.
 pub const SPR_SUB_SMALL_NE: u32 = 3910;
+/// `SPR_SUB_SMALL_SE`.
+pub const SPR_SUB_SMALL_SE: u32 = 3911;
+/// `SPR_SUB_SMALL_SW`.
+pub const SPR_SUB_SMALL_SW: u32 = 3912;
+/// `SPR_SUB_SMALL_NW`.
+pub const SPR_SUB_SMALL_NW: u32 = 3913;
 /// `SPR_SUB_LARGE_NE`.
 pub const SPR_SUB_LARGE_NE: u32 = 3914;
+/// `SPR_SUB_LARGE_SE`.
+pub const SPR_SUB_LARGE_SE: u32 = 3915;
+/// `SPR_SUB_LARGE_SW`.
+pub const SPR_SUB_LARGE_SW: u32 = 3916;
+/// `SPR_SUB_LARGE_NW`.
+pub const SPR_SUB_LARGE_NW: u32 = 3917;
 /// `SPR_F_15`.
 pub const SPR_F_15: u32 = 3918;
 /// `SPR_F_15_FIRING`.
