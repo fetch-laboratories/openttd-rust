@@ -1566,9 +1566,10 @@ borrowed facades, and native GUI, script, settings, afterload, cachecheck and sa
 reach Rust through the remaining `Station`/`StationRect` methods and the around-tile functions.
 One typed catchment table is reached through the shared services. State remains NOSAVE. Checks:
 the default `stations-commands-catchment` and `stations-commands-catchment-reload` scenarios and
-the affected station, subsidy, cargo-monitor, house, industry and object scenarios. The nearby-set
-insert/erase/clear exports serve only harness fixtures; waypoint and buoy candidates in the
-nearby search and the `BeforeAddTile` try-mode assertion remain #156 gaps. PR #522.
+the affected station, subsidy, cargo-monitor, house, industry and object scenarios, whose
+fixtures reach nearby state only through loaded catchments, final deliveries and recomputed
+stations. Waypoint and buoy candidates in the nearby search and the `BeforeAddTile` try-mode
+assertion remain #156 gaps. PR #522.
 
 ### Cargo storage and movement (#139)
 
