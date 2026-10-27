@@ -7,3 +7,6 @@
 
 //! Shared `sound_type.h` values.
 pub const SND_05_TRAIN_THROUGH_TUNNEL: u16 = 3;
+
+/// `SND_12_EXPLOSION`.
+pub const SND_12_EXPLOSION: u16 = 16;

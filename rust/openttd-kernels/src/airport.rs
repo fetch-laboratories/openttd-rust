@@ -88,3 +88,7 @@ pub const NUM_AIRPORTS: u16 = 128;
 pub const NUM_AIRPORTS_PER_GRF: u32 = 128;
 pub const NUM_AIRPORTTILES_PER_GRF: u32 = 255;
 pub const NUM_AIRPORTTILES: u16 = 256;
+/// `airport.h::AT_SMALL`.
+pub(crate) const AT_SMALL: u8 = 0;
+/// `airport.h::AT_LARGE`.
+pub(crate) const AT_LARGE: u8 = 1;

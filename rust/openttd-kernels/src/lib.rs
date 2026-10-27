@@ -37,6 +37,7 @@ mod consumer;
 mod direction_func;
 mod direction_type;
 mod disaster;
+mod disaster_vehicle;
 mod economy_func;
 mod economy_type;
 mod engine_type;

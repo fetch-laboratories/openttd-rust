@@ -104,7 +104,9 @@ inline Vehicle *RustVehicleNext(const Vehicle *v) noexcept { return v->Next(); }
 /** Chain, subtype and unit leaves shared by consist transactions and controllers. */
 inline Vehicle *RustVehiclePrevious(const Vehicle *v) noexcept { return v->Previous(); }
 inline void RustVehicleSetNext(Vehicle *v, Vehicle *next) noexcept { v->SetNext(next); }
-inline void RustOpaqueVehicleSetNext(void *v, void *next) noexcept { RustVehicleSetNext(static_cast<Vehicle *>(v), static_cast<Vehicle *>(next)); }
+inline void RustTypedVehicleSetNext(OpenTTDVehicle *v, OpenTTDVehicle *next) noexcept { RustVehicleSetNext(VehicleOf(v), VehicleOf(next)); }
+inline uint8_t RustVehicleDirectionTowards(OpenTTDVehicle *v, int32_t x, int32_t y) noexcept { return GetDirectionTowards(VehicleOf(v), x, y); }
+inline void RustOpaqueVehicleSetNext(void *v, void *next) noexcept { RustTypedVehicleSetNext(RustVehicle(static_cast<Vehicle *>(v)), RustVehicle(static_cast<Vehicle *>(next))); }
 inline Vehicle *RustVehicleLastEnginePart(Vehicle *v) noexcept { return v->GetLastEnginePart(); }
 inline void RustVehicleSetServiceInterval(Vehicle *v, uint16_t interval) noexcept { v->SetServiceInterval(interval); }
 inline void RustVehicleSetSubtype(Vehicle *v, uint8_t subtype) noexcept { v->subtype = subtype; }
@@ -166,6 +168,10 @@ inline uint8_t RustVehicleBreakdownsSinceService(const Vehicle *v) noexcept { re
 inline uint16_t RustVehicleReliability(const Vehicle *v) noexcept { return v->reliability; }
 inline uint16_t RustVehicleReliabilityDecay(const Vehicle *v) noexcept { return v->reliability_spd_dec; }
 inline TimerGameCalendar::Date RustVehicleAge(const Vehicle *v) noexcept { return v->age; }
+inline int32_t RustVehicleAgeValue(const Vehicle *v) noexcept { return RustVehicleAge(v).base(); }
+inline void RustWriteVehicleAge(Vehicle *v, int32_t age) noexcept { v->age = TimerGameCalendar::Date{age}; }
+inline void RustVehicleWriteBreakdown(Vehicle *v, uint8_t counter, uint8_t delay) noexcept { v->breakdown_ctr = counter; v->breakdown_delay = delay; }
+inline bool RustVehicleIsGround(const Vehicle *v) noexcept { return v->IsGroundVehicle(); }
 inline TimerGameCalendar::Date RustVehicleMaxAge(const Vehicle *v) noexcept { return v->max_age; }
 inline TimerGameEconomy::Date RustVehicleEconomyAge(const Vehicle *v) noexcept { return v->economy_age; }
 inline TimerGameEconomy::Date RustVehicleLastService(const Vehicle *v) noexcept { return v->date_of_last_service; }
@@ -246,6 +252,12 @@ inline uint32_t *RustVehicleMotionAddress(Vehicle *v) noexcept { return &v->moti
 template <typename Result, auto Read>
 static Result OPENTTD_RUST_CALL RustVehicleRead(OpenTTDVehicle *shell) noexcept { return static_cast<Result>(Read(VehicleOf(shell))); }
 
+/** Typed signature adapter; each operation keeps its canonical definition. */
+template <auto Operation, typename... Args>
+static auto OPENTTD_RUST_CALL RustVehicleInvoke(OpenTTDVehicle *shell, Args... args) noexcept { return Operation(VehicleOf(shell), args...); }
+/** Native compound handles retain their existing signature around a shared leaf. */
+template <auto Operation, typename Handle, typename... Args>
+static auto OPENTTD_RUST_CALL RustVehicleHandleInvoke(Handle vehicle, Args... args) noexcept { return Operation(vehicle.handle, args...); }
 /** Shared legacy opaque-owner adapter; the actual typed read is defined once. */
 template <typename Result, auto Read>
 static Result RustOpaqueVehicleRead(void *shell) noexcept { return Read(static_cast<Vehicle *>(shell)); }

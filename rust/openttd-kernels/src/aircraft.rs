@@ -57,6 +57,8 @@ use crate::vehicle::{
     PositionObservations, SpeedInputs, TickStatus, VehicleRef, VehicleServices, XY, YEAR_TICKS,
 };
 use crate::vehicle_base::{VS_AIRCRAFT_BROKEN, VS_CRASHED, VS_HIDDEN, VS_STOPPED};
+/// `aircraft.h::ROTOR_Z_OFFSET`.
+pub(crate) const ROTOR_Z_OFFSET: i32 = 5;
 use std::cell::Cell;
 use std::ffi::c_void;
 use std::ptr::NonNull;
@@ -881,7 +883,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         self.copy_sprite(shadow, id.base());
         self.position_viewport(shadow);
         if let Some(rotor) = self.position_next(shadow) {
-            self.position_coordinates(rotor, x, y, z + 5);
+            self.position_coordinates(rotor, x, y, z + i64::from(ROTOR_Z_OFFSET));
             self.position_viewport(rotor);
         }
     }

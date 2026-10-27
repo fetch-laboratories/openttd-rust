@@ -67,6 +67,8 @@ pub const DIRDIFF_SAME: u8 = 0;
 /// `DIRDIFF_90RIGHT`.
 pub const DIRDIFF_90RIGHT: u8 = 2;
 
+/// `DIRDIFF_90LEFT`.
+pub const DIRDIFF_90LEFT: u8 = 6;
 /// Native `Axis`, including unnamed uint8 values.
 #[repr(transparent)]
 #[derive(Clone, Copy)]

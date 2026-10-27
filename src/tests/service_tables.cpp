@@ -36,6 +36,7 @@ static_assert(!OPENTTD_SERVICE_RETURN_TYPE<GRFStringID>);
 	X(roadveh_cmd) \
 	X(roadstop) \
 	X(effectvehicle) \
+	X(disaster_vehicle) \
 	X(services) \
 	X(vehicle_services) \
 	X(ground_physics) \

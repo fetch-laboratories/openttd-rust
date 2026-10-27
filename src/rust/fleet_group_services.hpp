@@ -22,7 +22,6 @@ static uint8_t FleetGroup_vehicle_owner(void *shell) noexcept { auto *v = static
 static uint16_t FleetGroup_vehicle_group(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->group_id.base(); }
 static uint16_t FleetGroup_vehicle_engine(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return RustVehicleEngineID(v); }
 static bool FleetGroup_countable(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->IsEngineCountable(); }
-static bool FleetGroup_ground(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->IsGroundVehicle(); }
 static void * FleetGroup_first_shared(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->FirstShared(); }
 static void * FleetGroup_next_shared(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->NextShared(); }
 static void FleetGroup_set_membership(void *shell, uint16_t id) noexcept { static_cast<Vehicle *>(shell)->group_id = GroupID(id); }
@@ -76,7 +75,7 @@ static const OpenTTDFleetGroupServices _fleet_group_services{
 	.old_enough = RustOpaqueVehicleRead<bool, RustVehicleOldEnough>,
 	.primary = RustOpaqueVehicleRead<bool, RustVehiclePrimary>,
 	.countable = FleetGroup_countable,
-	.ground = FleetGroup_ground,
+	.ground = RustOpaqueVehicleRead<bool, RustVehicleIsGround>,
 	.front = RustOpaqueVehicleRead<bool, RustVehicleFront>,
 	.next_part = RustOpaqueVehicleRead<void *, RustVehicleNext>,
 	.first_shared = FleetGroup_first_shared,

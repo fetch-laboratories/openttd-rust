@@ -126,7 +126,7 @@ static OpenTTDCompanyVehicleCounts Co_company_vehicle_counts(uint8_t id) noexcep
 	/* Special owners are not companies; the original takeover limit is not reached for them. */
 	const Company *c = Company::GetIfValid(id);
 	if (c == nullptr) return {};
-	return {c->group_all[VEH_TRAIN].num_vehicle, c->group_all[VEH_ROAD].num_vehicle, c->group_all[VEH_SHIP].num_vehicle, c->group_all[VEH_AIRCRAFT].num_vehicle};
+	return {c->group_all[VEH_TRAIN].num_vehicle, RustCompanyRoadVehicleCount(c), c->group_all[VEH_SHIP].num_vehicle, c->group_all[VEH_AIRCRAFT].num_vehicle};
 }
 static OpenTTDCompanyVehicleCounts Co_vehicle_limits() noexcept
 {

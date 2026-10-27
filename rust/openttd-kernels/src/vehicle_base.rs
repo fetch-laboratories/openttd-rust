@@ -73,3 +73,8 @@ pub const VESM_DIESEL: u8 = 2;
 pub const VESM_ELECTRIC: u8 = 3;
 /// `VESM_END`.
 pub const VESM_END: u8 = 4;
+
+/// `VehState::Unclickable`.
+pub const VS_UNCLICKABLE: u8 = 1 << 2;
+/// `VehState::Shadow`.
+pub const VS_SHADOW: u8 = 1 << 5;

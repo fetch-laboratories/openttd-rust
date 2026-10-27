@@ -65,9 +65,11 @@ struct DisasterVehicle final : public SpecializedVehicle<DisasterVehicle, VEH_DI
 	/** We want to 'destruct' the right class. */
 	virtual ~DisasterVehicle() = default;
 
+#ifndef WITH_RUST
 	void UpdatePosition(int x, int y, int z);
-	void UpdateDeltaXY() override;
 	void UpdateImage();
+#endif
+	void UpdateDeltaXY() override;
 	bool Tick() override;
 };
 
