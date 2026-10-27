@@ -94,6 +94,7 @@ pub(crate) fn get_tile_pixel_slope(
 /// Native default probe: compare audited reads with the unchanged typed services.
 /// # Safety
 /// Same allocation contract as the scheduler; all tables are live and immutable.
+/// Mutation preserves the allocation/dimensions and cannot reset/load/yield.
 #[unsafe(no_mangle)]
 #[allow(unsafe_code)]
 pub unsafe extern "C" fn openttd_rust_map_read_probe(
@@ -102,6 +103,7 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
     clear: *const crate::ground::ClearServices,
     trees: *const crate::trees::TreeServices,
     tile: u32,
+    mutate: extern "C" fn(u32),
 ) -> bool {
     let (s, c, trees) = unsafe { (&*shared, &*clear, &*trees) };
     let map = unsafe { TileTypeAccess::raw(allocation, s.tile_type) };
@@ -169,7 +171,10 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
         _ => {}
     }
     let kind = map.read(tile);
-    (!allocation.assertions || kind == 0 || crate::clear_map::is_snow_tile(&map, tile).is_none())
+    crate::movement::map_read_probe(allocation, s, tile, mutate)
+        && (!allocation.assertions
+            || kind == 0
+            || crate::clear_map::is_snow_tile(&map, tile).is_none())
         && (!allocation.assertions
             || kind == 4
             || crate::tree_map::get_tree_type(&map, tile).is_none())

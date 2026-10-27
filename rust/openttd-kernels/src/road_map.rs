@@ -33,14 +33,17 @@ pub const ROADSIDE_GRASS_ROAD_WORKS: Roadside = Roadside(6);
 
 /// `GetRoadTileType`, retaining its `IsTileType` assertion.
 #[inline]
-pub(crate) fn get_road_tile_type(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<u8> {
+pub(crate) fn get_road_tile_type(
+    m: &crate::map_func::TileTypeAccess,
+    tile: u32,
+) -> Option<crate::services::RoadTileKind> {
     m.require_type(tile, crate::tile_type::MP_ROAD)?;
-    Some(m.m5(tile)? >> 6)
+    Some(crate::services::RoadTileKind(m.m5(tile)? >> 6))
 }
 /// `IsNormalRoad`.
 #[inline]
 pub(crate) fn is_normal_road(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<bool> {
-    Some(get_road_tile_type(m, tile)? == ROAD_TILE_NORMAL)
+    Some(get_road_tile_type(m, tile)?.0 == ROAD_TILE_NORMAL)
 }
 #[inline]
 fn require_normal_road(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<()> {
@@ -103,9 +106,9 @@ pub(crate) fn get_road_type_road(
     m: &crate::map_func::TileTypeAccess,
     s: &crate::services::Services,
     tile: u32,
-) -> Option<u8> {
+) -> Option<crate::services::RoadType> {
     require_may_have_road(m, s, tile)?;
-    Some(m.m4(tile)? & 63)
+    Some(crate::services::RoadType(m.m4(tile)? & 63))
 }
 /// `GetRoadTypeTram`, with the canonical `MayHaveRoad` precondition.
 #[inline]
@@ -113,9 +116,11 @@ pub(crate) fn get_road_type_tram(
     m: &crate::map_func::TileTypeAccess,
     s: &crate::services::Services,
     tile: u32,
-) -> Option<u8> {
+) -> Option<crate::services::RoadType> {
     require_may_have_road(m, s, tile)?;
-    Some(u8::try_from((m.m8(tile)? >> 6) & 63).expect("six-bit road type"))
+    Some(crate::services::RoadType(
+        u8::try_from((m.m8(tile)? >> 6) & 63).expect("six-bit road type"),
+    ))
 }
 /// `GetRoadType`.
 #[inline]
@@ -124,7 +129,7 @@ pub(crate) fn get_road_type(
     s: &crate::services::Services,
     tile: u32,
     kind: crate::services::RoadTramType,
-) -> Option<u8> {
+) -> Option<crate::services::RoadType> {
     if kind.0 == crate::road_type::RTT_TRAM.0 {
         get_road_type_tram(m, s, tile)
     } else {
@@ -139,5 +144,5 @@ pub(crate) fn has_tile_road_type(
     tile: u32,
     kind: crate::services::RoadTramType,
 ) -> Option<bool> {
-    Some(get_road_type(m, s, tile, kind)? != crate::road_type::INVALID_ROADTYPE)
+    Some(get_road_type(m, s, tile, kind)?.0 != crate::road_type::INVALID_ROADTYPE)
 }
