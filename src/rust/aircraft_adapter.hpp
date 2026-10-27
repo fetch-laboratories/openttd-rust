@@ -434,7 +434,7 @@ ClosestDepot Aircraft::FindClosestDepot()
 Station *GetTargetAirportIfValid(const Aircraft *v)
 {
 	assert(v->type == VEH_AIRCRAFT);
-	Station *st = Station::GetIfValid(v->targetairport);
+	Station *st = RustStationIfValid<Station *>(v->targetairport.base());
 	return st == nullptr || RustStationAirportTile(st) == INVALID_TILE.base() ? nullptr : st;
 }
 void ReleaseAircraftAirportBlocks(const Aircraft *v) { openttd_rust_aircraft_release_blocks(&_aircraft_leaves, RustAircraftVehicle(const_cast<Aircraft *>(v))); }

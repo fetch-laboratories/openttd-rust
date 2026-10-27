@@ -651,7 +651,7 @@ static const OpenTTDStationServices _rust_station_services = {
 	.graphs = &GetRustLiveGraphServices(),
 	.station = [](uint16_t id) noexcept -> OpenTTDLoadingStation {
 		Station *st = RustStationGet<Station *>(id);
-		return {.native = st, .base = st, .state = st->rust_service.get()};
+		return {.native = st, .base = st, .state = RustStationServiceOwner(st)};
 	},
 	.station_owner = RustStationOwnerByte<BaseStation>,
 	.station_exclusivity = [](OpenTTDBaseStation *handle) noexcept -> OpenTTDStationExclusivity {
