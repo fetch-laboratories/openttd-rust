@@ -33,7 +33,7 @@ int32_t GetPickupAmount(CargoMonitorID monitor, bool keep) { return openttd_rust
 int32_t GetDeliveryAmount(CargoMonitorID monitor, bool keep) { return openttd_rust_monitor_delivery(monitor, keep); }
 void AddCargoDelivery(CargoType cargo, CompanyID company, uint32_t amount, Source src, const Station *st, IndustryID dest)
 {
-	openttd_rust_monitor_add(&GetRustCargoMonitorServices(), cargo, company.base(), amount, src.id, uint8_t(src.type), st, st->rust_service.get(), dest.base());
+	openttd_rust_monitor_add(&GetRustCargoMonitorServices(), cargo, company.base(), amount, src.id, uint8_t(src.type), st, RustStationServiceOwner(const_cast<Station *>(st)), dest.base());
 }
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDCargoMonitorServices.hpp"

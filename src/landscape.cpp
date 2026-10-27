@@ -2040,8 +2040,7 @@ bool CheckAbi_landscape()
 #endif
 
 #ifdef WITH_RUST
-void RustMovementAssert(bool condition) noexcept { assert(condition); }
-
+#include "rust/services_assert.h"
 const OpenTTDMovementServices &GetRustMovementServices() noexcept
 {
 	static const OpenTTDMovementServices services{
@@ -2063,7 +2062,7 @@ const OpenTTDMovementServices &GetRustMovementServices() noexcept
 		.write_ground_flags = RustMovementWriteGroundFlags,
 		.train_engine_class = RustMovementTrainEngineClass,
 		.depot_invalidate = RustMovementDepotInvalidate,
-		.native_assert = RustMovementAssert,
+		.native_assert = RustAssertCondition,
 		.normal_road_status_tail = RustNormalRoadStatusTail,
 		.pixel_location = RustPixelLocation,
 		.plain_rail = RustMovementPlainRail,
