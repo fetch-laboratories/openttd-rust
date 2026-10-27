@@ -1,10 +1,18 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file airport-resolver-console.hpp Actual transient Action2 programs on both games. */
 #include "newgrf_airporttiles.h"
+static AirportSpec *AirportFixtureBaseSpec(uint8_t type)
+{
+#ifdef WITH_RUST
+	return AirportSpec::RustRawSpec(type);
+#else
+	return AirportSpec::GetWithoutOverride(type);
+#endif
+}
 static void StationAirportFixture(TileIndex origin, DoCommandFlags test, DoCommandFlags exec, bool reloaded = false)
 {
 	GRFFile file; file.badge_list = {BadgeID{0}, BadgeID{1}}; file.grfid = 0x41503418; file.grf_version = 8;
-	auto *spec = AirportSpec::GetWithoutOverride(AT_SMALL); AirportSpec saved = *spec;
+	auto *spec = AirportFixtureBaseSpec(AT_SMALL); AirportSpec saved = *spec;
 	spec->badges = {BadgeID{0}}; spec->grf_prop.grffile = &file; spec->grf_prop.grfid = file.grfid; spec->grf_prop.local_id = 41;
 	auto gfx = spec->layouts[0].tiles.front().gfx;
 	auto *ats = const_cast<AirportTileSpec *>(AirportTileSpec::Get(gfx)); AirportTileSpec saved_tile = *ats;
@@ -146,7 +154,7 @@ static void StationAirportFixture(TileIndex origin, DoCommandFlags test, DoComma
 	}
 	st->airport.tile = north;
 	/* Live selection: missing/disabled custom, substitute and its override. */
-	std::vector<EntityIDMapping> mappings(_airport_mngr.mappings.begin(), _airport_mngr.mappings.end()); auto *new_spec = AirportSpec::GetWithoutOverride(NEW_AIRPORT_OFFSET); AirportSpec saved_new = *new_spec;
+	std::vector<EntityIDMapping> mappings(_airport_mngr.mappings.begin(), _airport_mngr.mappings.end()); auto *new_spec = AirportFixtureBaseSpec(NEW_AIRPORT_OFFSET); AirportSpec saved_new = *new_spec;
 	for (bool enabled : {false, true}) for (uint32_t grfid : {0U, file.grfid}) for (uint16_t substitute : {uint16_t{AT_INVALID}, uint16_t{AT_SMALL}}) {
 		new_spec->enabled = enabled; new_spec->grf_prop.override_id = AT_INVALID; _airport_mngr.mappings[NEW_AIRPORT_OFFSET] = {grfid, 0, substitute};
 		for (uint16_t over : {uint16_t{AT_INVALID}, uint16_t{AT_LARGE}}) { spec->grf_prop.override_id = over; fmt::print(stderr, "STCMD airport-selection {} {} {} {} {}\n", enabled, grfid, substitute, over, AirportSpec::Get(NEW_AIRPORT_OFFSET)->GetIndex()); }
@@ -184,7 +192,7 @@ static void AirportDefinitionPartialReads()
 	StationNeed(!read(false, 0, 1, 8, zero).second, __LINE__);
 	auto *spec = file.airportspec[0].get(); auto fsm = spec->fsm;
 	StationNeed(!read(false, 0, 1, 8, one).second && file.airportspec[0].get() == spec && spec->grf_prop.subst_id == 0 && spec->fsm == fsm, __LINE__);
-	StationNeed(!read(false, 7, 8, 8, disable).second && !AirportSpec::GetWithoutOverride(7)->enabled, __LINE__);
+	StationNeed(!read(false, 7, 8, 8, disable).second && !AirportFixtureBaseSpec(7)->enabled, __LINE__);
 	std::array<uint8_t, 4> years{0x34, 0x12, 0xff, 0xff};
 	for (size_t n = 0; n <= years.size(); n++) {
 		spec->min_year = TimerGameCalendar::Year{1}; spec->max_year = TimerGameCalendar::Year{2};
@@ -239,13 +247,13 @@ static void AirportDefinitionFixture(TileIndex origin, DoCommandFlags test, DoCo
 	uint16_t type = _airport_mngr.GetID(0, grfid), gfx = _airporttile_mngr.GetID(0, grfid);
 	StationNeed(type == NEW_AIRPORT_OFFSET && gfx == NEW_AIRPORTTILE_OFFSET, __LINE__);
 	const auto *spec = AirportSpec::Get(type); const auto *tile_spec = AirportTileSpec::Get(gfx);
-	StationNeed(AirportSpec::GetWithoutOverride(0)->grf_prop.override_id == type && !AirportSpec::GetWithoutOverride(0)->enabled && spec->grf_prop.subst_id == 0 && spec->size_x == 4 && spec->size_y == 3 && spec->layouts.size() == 1 && spec->layouts[0].rotation == DIR_N && spec->layouts[0].tiles.size() == 12 && spec->layouts[0].tiles[0].gfx == gfx, __LINE__);
+	StationNeed(AirportFixtureBaseSpec(0)->grf_prop.override_id == type && !AirportFixtureBaseSpec(0)->enabled && spec->grf_prop.subst_id == 0 && spec->size_x == 4 && spec->size_y == 3 && spec->layouts.size() == 1 && spec->layouts[0].rotation == DIR_N && spec->layouts[0].tiles.size() == 12 && spec->layouts[0].tiles[0].gfx == gfx, __LINE__);
 	StationNeed(spec->min_year == 0 && spec->max_year == CalendarTime::MAX_YEAR && spec->catchment == MAX_CATCHMENT && spec->noise_level == 7 && spec->maintenance_cost == 123 && spec->IsAvailable() && GetString(spec->name) == "Airport 492", __LINE__);
 	StationNeed(AirportTileSpec::Get(0)->grf_prop.override_id == gfx && !AirportTileSpec::Get(0)->enabled && tile_spec->animation.frames == 8 && tile_spec->animation.speed == 0 && tile_spec->grf_prop.subst_id == 0 && tile_spec->badges == spec->badges && tile_spec->badges.size() == 1 && GetBadge(tile_spec->badges[0])->features.Test(GSF_TRAMTYPES), __LINE__);
 	for (char initial : {'B', 'T'}) { auto *config = GetGRFConfig(AirportDefinitionID(initial)); StationNeed(config != nullptr && config->status == GCS_DISABLED && config->errors.size() == 1 && config->errors[0].message == STR_NEWGRF_ERROR_READ_BOUNDS, __LINE__); }
 	fmt::print(stderr, "STCMD airport-def-registry {} {} {} {} {}\n", type, gfx, spec->index, spec->class_index, AirportClass::GetClassCount());
 	for (AirportClassID c = APC_BEGIN; c < AirportClass::GetClassCount(); c++) { const auto *klass = AirportClass::Get(c); for (uint i = 0; i < klass->GetSpecCount(); i++) fmt::print(stderr, "STCMD airport-def-class {} {} {}\n", c, i, klass->GetSpec(i)->GetIndex()); }
-	for (uint id = 0; id < NUM_AIRPORTS; id++) { auto *value = AirportSpec::GetWithoutOverride(id); if (value->grf_prop.grfid || value->grf_prop.override_id != AT_INVALID) fmt::print(stderr, "STCMD airport-def-spec {} {} {} {} {} {}\n", id, value->enabled, value->grf_prop.grfid, value->grf_prop.local_id, value->grf_prop.subst_id, value->grf_prop.override_id); }
+	for (uint id = 0; id < NUM_AIRPORTS; id++) { auto *value = AirportFixtureBaseSpec(id); if (value->grf_prop.grfid || value->grf_prop.override_id != AT_INVALID) fmt::print(stderr, "STCMD airport-def-spec {} {} {} {} {} {}\n", id, value->enabled, value->grf_prop.grfid, value->grf_prop.local_id, value->grf_prop.subst_id, value->grf_prop.override_id); }
 	for (const auto &part : spec->layouts[0].tiles) fmt::print(stderr, "STCMD airport-def-layout {} {} {}\n", part.ti.x, part.ti.y, part.gfx);
 	for (uint id = 0; id < NUM_AIRPORTTILES; id++) { const auto &map = _airporttile_mngr.mappings[id]; if (map.grfid) fmt::print(stderr, "STCMD airport-def-tile-map {} {} {} {}\n", id, map.grfid, map.entity_id, map.substitute_id); }
 	Station *station = nullptr;

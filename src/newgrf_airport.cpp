@@ -180,16 +180,13 @@ static_assert(NUM_AIRPORTS == 128 && NEW_AIRPORT_OFFSET == 10 && AT_INVALID == 2
  * @param type index of airport
  * @return A pointer to the corresponding AirportSpec
  */
+#ifndef WITH_RUST
 /* static */ AirportSpec *AirportSpec::GetWithoutOverride(uint8_t type)
 {
 	assert(type < lengthof(AirportSpec::specs));
-
-#ifdef WITH_RUST
-	return AirportSpec::RustRawSpec(type);
-#else
 	return &AirportSpec::specs[type];
-#endif
 }
+#endif
 
 /** Check whether this airport is available to build. */
 bool AirportSpec::IsAvailable() const

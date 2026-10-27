@@ -129,7 +129,9 @@ struct AirportSpec : NewGRFSpecBase<AirportClassID> {
 	std::vector<BadgeID> badges;
 
 	static const AirportSpec *Get(uint8_t type);
+#ifndef WITH_RUST
 	static AirportSpec *GetWithoutOverride(uint8_t type);
+#endif
 #ifdef WITH_RUST
 	/** Canonical array read; callers retain the original branch-specific checks. */
 	static AirportSpec *RustRawSpec(uint16_t type) noexcept;
