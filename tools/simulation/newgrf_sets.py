@@ -5,8 +5,9 @@ configuration, so loading, Action2/3 and callbacks run on real programs; the
 scenario AI builds a train and buses from them."""
 
 import shutil
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import NotRequired, TypedDict
 
 from .core import (
     ROOT,
@@ -39,7 +40,30 @@ REQUIRED = {
     ),
 }
 
-Scenario = dict[str, Any]
+
+class Scenario(TypedDict):
+    name: str
+    kind: str
+    seed: int
+    map_log2: int
+    land_generator: int
+    newgrf_sets: bool
+    ticks: int
+    console: list[str]
+    settings: Mapping[str, Mapping[str, str | int]]
+    scenario_ai: NotRequired[str]
+    witnesses: NotRequired[bool]
+
+
+class Run(TypedDict):
+    exit: int
+    dir: Path
+    log: list[str]
+    snapshots: list[Path]
+
+
+class Result(TypedDict, total=False):
+    newgrf_sets_witnesses: dict[str, dict[str, dict[str, int]]]
 
 
 def scenarios(soak: bool) -> list[Scenario]:
@@ -99,10 +123,10 @@ def game_environment(scenario: Scenario) -> dict[str, str]:
 
 def check(
     scenario: Scenario,
-    run: dict[str, Any],
+    run: Run,
     mode: str,
     role: str,
-    result: dict[str, Any],
+    result: Result,
 ) -> None:
     if not uses_ai(scenario) or run["exit"]:
         return
