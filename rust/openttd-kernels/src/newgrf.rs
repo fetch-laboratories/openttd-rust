@@ -177,13 +177,6 @@ pub(crate) fn get_active_cargo_label(
     };
     get_active_cargo_label_from_list(labels, cargo_by_label)
 }
-
-#[unsafe(no_mangle)]
-pub(crate) extern "C" fn openttd_rust_newgrf_active_cargo_label(label: CargoLabel) -> u32 {
-    get_active_cargo_label(label, |label| {
-        crate::cargo_registry::openttd_rust_cargo_by_label(label)
-    })
-}
 // Loading-stage identities from newgrf.h.
 pub const GLS_FILESCAN: u8 = 0;
 pub const GLS_SAFETYSCAN: u8 = 1;
