@@ -13,19 +13,18 @@ static void Disasters()
 {
 	using StateOwner = std::unique_ptr<OpenTTDDisasterState, decltype(&openttd_rust_disaster_state_destroy)>;
 	DisasterProbe probe;
-	const OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(&probe, DisasterProbeRandom, DisasterProbeIndustry);
+	OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(&probe, DisasterProbeRandom, DisasterProbeIndustry);
 	OpenTTDVehicleServices vehicles{};
 	vehicles.subtype = [](OpenTTDVehicle *) noexcept { return uint8_t{13}; };
 	vehicles.tick = [](OpenTTDVehicle *v) noexcept { return reinterpret_cast<DisasterProbe *>(v)->tick; };
 	vehicles.write_tick = [](OpenTTDVehicle *v, uint8_t tick) noexcept { reinterpret_cast<DisasterProbe *>(v)->tick = tick; };
 	vehicles.destroy = [](OpenTTDVehicle *v) noexcept { reinterpret_cast<DisasterProbe *>(v)->deletes++; };
-	OpenTTDDisasterServices services{
-		.shared = &shared,
-		.vehicles = &vehicles,
-		.age = [](OpenTTDVehicle *v) noexcept { return reinterpret_cast<DisasterProbe *>(v)->age; },
-		.write_age = [](OpenTTDVehicle *v, int32_t age) noexcept { reinterpret_cast<DisasterProbe *>(v)->age = age; },
-		.disasters_enabled = []() noexcept { return false; },
-	};
+	OpenTTDDisasterServices services{};
+	services.shared = &shared;
+	services.vehicles = &vehicles;
+	services.age = [](OpenTTDVehicle *v) noexcept { return reinterpret_cast<DisasterProbe *>(v)->age; };
+	services.write_age = [](OpenTTDVehicle *v, int32_t age) noexcept { reinterpret_cast<DisasterProbe *>(v)->age = age; };
+	services.disasters_enabled = []() noexcept { return false; };
 	StateOwner state(openttd_rust_disaster_state_create(1048575), openttd_rust_disaster_state_destroy);
 	const OpenTTDDisasterVehicle vehicle{.handle = reinterpret_cast<OpenTTDVehicle *>(&probe), .state = state.get(), .id = 17};
 	auto *address = state.get(); state->state = 65535; state->flags = 0xAB; state->image_override = UINT32_MAX;
@@ -53,6 +52,24 @@ static void Disasters()
 	CHECK(openttd_rust_disaster_tick(&services, vehicle));
 	CHECK(probe.tick == 2 && probe.viewports == 1 && probe.draws == 2 && probe.deletes == 1);
 	openttd_rust_occupancy_update(&vehicles, vehicle.handle, true);
-	std::printf("disaster_private_counter_direct_rng_delete_rotor_occupancy passed\n");
+	services.disasters_enabled = []() noexcept { return true; };
+	services.can_allocate = [](size_t count) noexcept { CHECK(count >= 1 && count <= 3); return false; };
+	struct CapacityCase { int32_t (*year)() noexcept; uint32_t random; };
+	const CapacityCase cases[] = {
+		{[]() noexcept { return 1930; }, 0},
+		{[]() noexcept { return 1955; }, 0},
+		{[]() noexcept { return 1965; }, 32768},
+		{[]() noexcept { return 1990; }, 0},
+		{[]() noexcept { return 2010; }, 0},
+		{[]() noexcept { return 1940; }, 65535},
+		{[]() noexcept { return 2000; }, 65535},
+	};
+	for (const auto &test : cases) {
+		shared.calendar_year = test.year;
+		probe.random = test.random; probe.draws = 0; *delay = 1;
+		openttd_rust_disaster_daily(&services);
+		CHECK(probe.draws == 2 && probe.deletes == 1 && probe.viewports == 1);
+	}
+	std::printf("disaster_private_counter_direct_rng_delete_rotor_capacity passed\n");
 }
 ABI_PROBE(Disasters);

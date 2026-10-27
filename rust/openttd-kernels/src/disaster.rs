@@ -21,8 +21,16 @@ use crate::direction_type::{DIR_NE, DIR_NW, DIR_SE, DIR_SW, DIRDIFF_90LEFT, DIRD
 use crate::map_func::Map;
 use crate::random_func::chance16_i;
 use crate::services::Services as Shared;
-use crate::tile_type::{INVALID_TILE, TILE_SIZE};
+use crate::sprites::{
+    SPR_AH_64A, SPR_AH_64A_FIRING, SPR_BLIMP, SPR_BLIMP_CRASHED, SPR_BLIMP_CRASHING, SPR_F_15,
+    SPR_F_15_FIRING, SPR_ROTOR_MOVING_1, SPR_ROTOR_MOVING_3, SPR_SUB_LARGE_NE, SPR_SUB_SMALL_NE,
+    SPR_UFO_HARVESTER, SPR_UFO_SMALL_SCOUT, SPR_UFO_SMALL_SCOUT_DARKER, SPR_XCOM_SKYRANGER,
+};
+use crate::tile_type::{
+    INVALID_TILE, MP_CLEAR, MP_HOUSE, MP_INDUSTRY, MP_RAILWAY, MP_TREES, MP_WATER, TILE_SIZE,
+};
 use crate::vehicle::{OpenTTDVehicle, VehicleRef, VehicleServices};
+use crate::vehicle_base::{VS_CRASHED, VS_HIDDEN};
 use std::ffi::c_void;
 use std::ptr::NonNull;
 
@@ -161,6 +169,7 @@ pub struct Services {
     pub industry: extern "C" fn(u16) -> IndustryTarget,
     pub industry_location: extern "C" fn(*mut c_void) -> IndustryLocation,
     pub industry_tile: extern "C" fn(*mut c_void) -> u32,
+    pub industry_town: extern "C" fn(*mut c_void) -> u16,
     pub industry_index: extern "C" fn(u32) -> u16,
     pub industry_belongs: extern "C" fn(*mut c_void, u32) -> bool,
     pub reset_industry_tile: extern "C" fn(u32),
@@ -288,15 +297,15 @@ impl<'a> World<'a> {
             let subtype = (self.v.subtype)(v.shell());
             let dir = (self.v.direction)(v.shell());
             image = match subtype {
-                0 | 1 => 3905,
-                2 | 3 => 3908,
-                4 | 5 => 3918,
-                6 | 7 => 3922,
-                8 => 3902,
-                9 | 10 => 3920,
-                11 | 12 => 3921,
-                13 => 3910 + u32::from(dir) / 2,
-                _ => 3914 + u32::from(dir) / 2,
+                0 | 1 => SPR_BLIMP,
+                2 | 3 => SPR_UFO_SMALL_SCOUT,
+                4 | 5 => SPR_F_15,
+                6 | 7 => SPR_AH_64A,
+                8 => SPR_ROTOR_MOVING_1,
+                9 | 10 => SPR_UFO_HARVESTER,
+                11 | 12 => SPR_XCOM_SKYRANGER,
+                13 => SPR_SUB_SMALL_NE + u32::from(dir) / 2,
+                _ => SPR_SUB_LARGE_NE + u32::from(dir) / 2,
             };
         }
         (self.s.write_sprite)(v.shell(), image);
@@ -341,11 +350,6 @@ impl<'a> World<'a> {
             (self.v.play_sound)(v.shell(), crate::sound_type::SND_12_EXPLOSION);
         }
     }
-    fn sound_tile(&self, tile: u32) {
-        if (self.shared.disaster_sound)() {
-            (self.shared.play_sound)(tile, crate::sound_type::SND_12_EXPLOSION);
-        }
-    }
     fn clear(&self, tile: u32) {
         let failed = unsafe {
             let c = &*self.s.occupancy;
@@ -358,7 +362,7 @@ impl<'a> World<'a> {
             return;
         }
         match (self.shared.tile_type)(tile) {
-            1 => {
+            MP_RAILWAY => {
                 if (self.s.human)((self.shared.tile_owner)(tile))
                     && !(unsafe { &*self.s.rail_map }.is_rail_depot)(tile)
                 {
@@ -366,8 +370,8 @@ impl<'a> World<'a> {
                     (self.s.update_signals)();
                 }
             }
-            3 => (self.s.clear)(tile, crate::company_type::OWNER_NONE),
-            0 | 4 => crate::ground::clear_square(tile, self.shared),
+            MP_HOUSE => (self.s.clear)(tile, crate::company_type::OWNER_NONE),
+            MP_CLEAR | MP_TREES => crate::ground::clear_square(tile, self.shared),
             _ => {}
         }
     }
@@ -437,9 +441,9 @@ impl<'a> World<'a> {
         if age == 1 {
             Self::effect_rel(v, 0, 7, 8, crate::effectvehicle_func::EV_EXPLOSION_LARGE);
             self.sound_vehicle(v);
-            v.set_image(3906);
+            v.set_image(SPR_BLIMP_CRASHING);
         } else if age == 70 {
-            v.set_image(3907);
+            v.set_image(SPR_BLIMP_CRASHED);
         } else if age <= 300 {
             if self.tick(v) & 7 == 0 {
                 let r = self.random();
@@ -459,7 +463,11 @@ impl<'a> World<'a> {
     }
     fn small_ufo(&self, v: Vehicle) -> bool {
         let tick = self.increment_tick(v);
-        v.set_image(if tick & 8 != 0 { 3909 } else { 3908 });
+        v.set_image(if tick & 8 != 0 {
+            SPR_UFO_SMALL_SCOUT_DARKER
+        } else {
+            SPR_UFO_SMALL_SCOUT
+        });
         if v.state() == 0 {
             let map = self.map();
             let dest = self.dest(v);
@@ -520,7 +528,7 @@ impl<'a> World<'a> {
         let t = (self.s.road_approach)(target.shell());
         let p = self.xy(v);
         let dist = distance(p.x, p.y, t.x, t.y) as u32;
-        if dist < TILE_SIZE && t.status & 1 == 0 && t.breakdown == 0 {
+        if dist < TILE_SIZE && t.status & VS_HIDDEN == 0 && t.breakdown == 0 {
             (self.s.write_breakdown)(target.shell(), 3, 140);
         }
         (self.v.write_direction)(v.shell(), (self.s.toward)(v.shell(), t.x, t.y));
@@ -532,7 +540,7 @@ impl<'a> World<'a> {
         self.update_position(v, gp.x, gp.y, z);
         if z <= (self.v.z)(target.shell()) {
             self.increment_age(v);
-            if (self.v.status)(target.shell()) & 1 == 0
+            if (self.v.status)(target.shell()) & VS_HIDDEN == 0
                 && unsafe { crate::road::crashed_counter(target.state) } == 0
             {
                 let victims = unsafe {
@@ -558,7 +566,11 @@ impl<'a> World<'a> {
     fn aircraft(&self, v: Vehicle, leave_top: bool) -> bool {
         let tick = self.increment_tick(v);
         v.set_image(if v.state() == 1 && tick & 4 != 0 {
-            if leave_top { 3919 } else { 3923 }
+            if leave_top {
+                SPR_F_15_FIRING
+            } else {
+                SPR_AH_64A_FIRING
+            }
         } else {
             0
         });
@@ -593,13 +605,18 @@ impl<'a> World<'a> {
                 self.set_age(v, 0);
                 let i = (self.s.industry)(self.dest(v) as u16);
                 self.destruct_industry(i.industry);
-                let location = (self.s.industry_location)(i.industry);
+                let town = (self.s.industry_town)(i.industry);
                 if leave_top {
-                    (self.s.airplane_news)(i.id, location.town);
+                    (self.s.airplane_news)(i.id, town);
                 } else {
-                    (self.s.helicopter_news)(i.id, location.town);
+                    (self.s.helicopter_news)(i.id, town);
                 }
-                self.sound_tile((self.s.industry_tile)(i.industry));
+                if (self.shared.disaster_sound)() {
+                    (self.shared.play_sound)(
+                        (self.s.industry_tile)(i.industry),
+                        crate::sound_type::SND_12_EXPLOSION,
+                    );
+                }
             }
         } else if v.state() == 0 {
             let p = self.xy(v);
@@ -609,7 +626,7 @@ impl<'a> World<'a> {
                 return true;
             }
             let tile = self.map().tile_virt_xy(x as u32, p.y as u32);
-            if (self.shared.tile_type)(tile) != 8 {
+            if (self.shared.tile_type)(tile) != MP_INDUSTRY {
                 return true;
             }
             let industry = (self.s.industry_index)(tile);
@@ -627,7 +644,14 @@ impl<'a> World<'a> {
             return true;
         }
         let image = (self.s.first_sprite)(v.shell()).wrapping_add(1);
-        (self.s.write_first_sprite)(v.shell(), if image > 3904 { 3902 } else { image });
+        (self.s.write_first_sprite)(
+            v.shell(),
+            if image > SPR_ROTOR_MOVING_3 {
+                SPR_ROTOR_MOVING_1
+            } else {
+                image
+            },
+        );
         self.viewport(v);
         true
     }
@@ -636,7 +660,7 @@ impl<'a> World<'a> {
         t.front
             && (self.s.human)(t.owner)
             && (self.shared.is_plain_rail)(t.tile)
-            && t.status & 128 == 0
+            && t.status & VS_CRASHED == 0
     }
     fn big_ufo(&self, v: Vehicle) -> bool {
         self.increment_tick(v);
@@ -814,7 +838,7 @@ impl<'a> World<'a> {
                 tile,
                 crate::direction_type::INVALID_DIAGDIR,
             );
-            if bits == 63 && !self.chance(90) {
+            if bits == u32::from(crate::track_type::TRACK_BIT_ALL) && !self.chance(90) {
                 let gp = (self.v.new_position)(v.shell());
                 self.update_position(v, gp.x, gp.y, (self.v.z)(v.shell()));
                 return true;
@@ -948,7 +972,8 @@ impl<'a> World<'a> {
                         DIR_SE,
                     )
                 };
-                if (self.shared.tile_type)(self.map().tile_virt_xy(x as u32, y as u32)) != 6 {
+                if (self.shared.tile_type)(self.map().tile_virt_xy(x as u32, y as u32)) != MP_WATER
+                {
                     return;
                 }
                 (self.s.create)(x, y, dir, kind + 8, INVALID_VEHICLE);
@@ -1205,5 +1230,30 @@ crate::abi::layouts! {
     "OpenTTDDisasterRoadSelection" ["probe"] => RoadSelection { front, disaster, };
     "OpenTTDDisasterRoadApproach" ["probe"] => RoadApproach { x, y, status, breakdown, };
     "OpenTTDDisasterTrainSelection" ["probe"] => TrainSelection { front, owner, tile, status, };
-    "OpenTTDDisasterServices" ["probe"] => Services { shared, vehicles, occupancy, environment, rail_map, aircraft, road, age, write_age, write_sprite, first_sprite, write_first_sprite, write_subtype, write_owner, set_next, next_part, update_delta, toward, create, resolve, next_disaster, next_road, road_target, road_selection, road_approach, write_road_disaster, write_breakdown, next_vehicle, ground, next_train, train_selection, road_count, human, next_station, next_industry, industry, industry_location, industry_tile, industry_index, industry_belongs, reset_industry_tile, airport_tile, airport_blocks, zeppelin_crashed, zeppelin_cleared, road_crashed, zeppelin_news, small_ufo_news, airplane_news, helicopter_news, big_ufo_news, coal_news, clear, update_signals, disasters_enabled, can_allocate, town_index, };
+    "OpenTTDDisasterServices" ["probe"] => Services { shared, vehicles, occupancy, environment, rail_map, aircraft, road, age, write_age, write_sprite, first_sprite, write_first_sprite, write_subtype, write_owner, set_next, next_part, update_delta, toward, create, resolve, next_disaster, next_road, road_target, road_selection, road_approach, write_road_disaster, write_breakdown, next_vehicle, ground, next_train, train_selection, road_count, human, next_station, next_industry, industry, industry_location, industry_tile, industry_town, industry_index, industry_belongs, reset_industry_tile, airport_tile, airport_blocks, zeppelin_crashed, zeppelin_cleared, road_crashed, zeppelin_news, small_ufo_news, airplane_news, helicopter_news, big_ufo_news, coal_news, clear, update_signals, disasters_enabled, can_allocate, town_index, };
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn persisted_delay_is_process_wide_across_serialized_threads() {
+        let address = super::openttd_rust_disaster_delay() as usize;
+        // SAFETY: The worker runs after this access and is joined before the next.
+        unsafe {
+            (address as *mut u16).write(41);
+        }
+        std::thread::spawn(move || {
+            let worker = super::openttd_rust_disaster_delay();
+            assert_eq!(worker as usize, address);
+            unsafe {
+                assert_eq!(worker.read(), 41);
+                worker.write(73);
+            }
+        })
+        .join()
+        .unwrap();
+        unsafe {
+            assert_eq!((address as *const u16).read(), 73);
+        }
+    }
 }

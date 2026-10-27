@@ -51,7 +51,12 @@ static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterNextPart(OpenTTDVehicle 
 	return DisasterHandle(next == nullptr ? nullptr : DisasterVehicle::From(next));
 }
 static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterResolve(uint32_t id) noexcept { return DisasterHandle(DisasterVehicle::Get(id)); }
-static OpenTTDDisasterRoadTarget OPENTTD_RUST_CALL DisasterRoadTarget(uint32_t id) noexcept { return DisasterRoadHandle(RoadVehicle::Get(id)); }
+static OpenTTDDisasterRoadTarget OPENTTD_RUST_CALL DisasterRoadTarget(uint32_t id) noexcept
+{
+	RoadVehicle *target = RoadVehicle::Get(id);
+	assert(target != nullptr && target->type == VEH_ROAD && target->IsFrontEngine());
+	return DisasterRoadHandle(target);
+}
 static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterNext(uint32_t from) noexcept
 {
 	for (DisasterVehicle *v : DisasterVehicle::Iterate(from)) return DisasterHandle(v);
@@ -104,8 +109,6 @@ static OpenTTDDisasterIndustryLocation OPENTTD_RUST_CALL DisasterIndustryLocatio
 	const Industry *i = static_cast<Industry *>(shell);
 	return {.tile = i->location.tile.base(), .town = OpenTTDIndustryTown(i)->index.base()};
 }
-static uint32_t OPENTTD_RUST_CALL DisasterIndustryTile(void *shell) noexcept { return static_cast<Industry *>(shell)->location.tile.base(); }
-static uint16_t OPENTTD_RUST_CALL DisasterIndustryIndex(uint32_t tile) noexcept { return GetIndustryIndex(TileIndex{tile}).base(); }
 static bool OPENTTD_RUST_CALL DisasterIndustryBelongs(void *shell, uint32_t tile) noexcept { return static_cast<Industry *>(shell)->TileBelongsToIndustry(TileIndex{tile}); }
 static void OPENTTD_RUST_CALL DisasterAirportBlocks(uint16_t id, bool blocked) noexcept
 {
@@ -183,10 +186,11 @@ static const OpenTTDDisasterServices &DisasterServices() noexcept
 		.next_industry = DisasterNextIndustry,
 		.industry = DisasterIndustry,
 		.industry_location = DisasterIndustryLocation,
-		.industry_tile = DisasterIndustryTile,
-		.industry_index = DisasterIndustryIndex,
+		.industry_tile = RustIndustryTile,
+		.industry_town = RustIndustryTownIndex,
+		.industry_index = RustIndustryTileIndex,
 		.industry_belongs = DisasterIndustryBelongs,
-		.reset_industry_tile = [](uint32_t tile) noexcept { ResetIndustryConstructionStage(TileIndex{tile}); },
+		.reset_industry_tile = RustResetIndustryConstruction,
 		.airport_tile = RustAirportTile,
 		.airport_blocks = DisasterAirportBlocks,
 		.zeppelin_crashed = DisasterZeppelinCrashed,
