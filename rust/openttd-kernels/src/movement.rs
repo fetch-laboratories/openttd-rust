@@ -482,12 +482,15 @@ impl MovementServices {
             observations: None,
         }
     }
+    #[inline]
     pub(crate) fn pixel_z_at(&self, x: i32, y: i32, ground: bool) -> i32 {
         self.context().pixel_z_at(x, y, ground)
     }
+    #[inline]
     fn pixel_z<const GROUND: bool>(&self, tile: u32, x: u32, y: u32, kind: u8) -> i32 {
         self.context().pixel_z::<GROUND>(tile, x, y, kind)
     }
+    #[inline]
     fn foundation(&self, tile: u32, slope: u8) -> u8 {
         self.context().foundation(tile, slope)
     }
