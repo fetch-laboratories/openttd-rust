@@ -40,7 +40,7 @@ static_assert(LinkGraphSchedule::SPAWN_JOIN_TICK == 21 && EconomyTime::SECONDS_P
 using ScheduleDate = TimerGameEconomy::Date;
 constinit const OpenTTDScheduleServices LinkGraphSchedule::services = {
 	.graph_owner = LiveGraphOwner,
-	.assert_graph = +[](const LinkGraph *g) noexcept { assert(g == LinkGraph::Get(g->index)); },
+	.assert_graph = +[]([[maybe_unused]] const LinkGraph *g) noexcept { assert(g == LinkGraph::Get(g->index)); },
 	.can_allocate = +[]() noexcept { return LinkGraphJob::CanAllocateItem(); },
 	.allocation_failure = +[]() noexcept { NOT_REACHED(); },
 	.new_job = +[](const LinkGraph *g) noexcept { return new LinkGraphJob(*g); },

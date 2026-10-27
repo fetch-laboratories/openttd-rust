@@ -706,8 +706,6 @@ static CargoLabel GetActiveCargoLabel(const std::initializer_list<CargoLabel> &l
 	return CT_INVALID;
 }
 
-#endif
-
 /**
  * Get active cargo label from either a cargo label or climate-dependent mixed cargo type.
  * @param label Cargo label or climate-dependent mixed cargo type.
@@ -715,9 +713,6 @@ static CargoLabel GetActiveCargoLabel(const std::initializer_list<CargoLabel> &l
  */
 static CargoLabel GetActiveCargoLabel(const std::variant<CargoLabel, MixedCargoType> &label)
 {
-#ifdef WITH_RUST
-	return CargoLabel{openttd_rust_newgrf_active_cargo_label(RustCargoLabel(label))};
-#else
 	struct visitor {
 		CargoLabel operator()(const CargoLabel &label) { return label; }
 		CargoLabel operator()(const MixedCargoType &mixed)
@@ -732,8 +727,8 @@ static CargoLabel GetActiveCargoLabel(const std::variant<CargoLabel, MixedCargoT
 	};
 
 	return std::visit(visitor{}, label);
-#endif
 }
+#endif
 
 /**
  * Precalculate refit masks from cargo classes for all vehicles.
