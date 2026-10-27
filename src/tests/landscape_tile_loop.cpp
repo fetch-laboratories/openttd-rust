@@ -64,12 +64,10 @@ TEST_CASE("Rust movement map context rereads native mutations within an entry")
 					t.type() = MP_ROAD << 4;
 					t.m3() = 3; t.m4() = INVALID_ROADTYPE; t.m5() = 3;
 					t.m6() = 0; t.m8() = INVALID_ROADTYPE << 6;
-					SetTileHeight(tile, 0);
 					const auto mutate_fields = [](uint32_t index) noexcept {
 						Tile t{TileIndex{index}};
 						t.m3() = 12; t.m4() = 0; t.m5() = 0x3C;
 						t.m6() = 6 << 3; t.m8() = 0;
-						SetTileHeight(TileIndex{index}, 2);
 					};
 					const auto mutate_type = [](uint32_t index) noexcept {
 						Tile t{TileIndex{index}};
