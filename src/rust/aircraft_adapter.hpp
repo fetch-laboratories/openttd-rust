@@ -30,7 +30,7 @@ static_assert(AirportBlocks{AirportBlock::AirportClosed}.base() == (uint64_t{1} 
 
 static const OpenTTDStation *OPENTTD_RUST_CALL Aircraft_station(uint16_t id) noexcept
 {
-	return RustStation(Station::GetIfValid(id));
+	return RustStation(RustStationIfValid<Station *>(id));
 }
 
 

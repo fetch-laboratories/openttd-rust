@@ -78,7 +78,7 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.rail_bridge_info = [](const StationSpec *spec) noexcept -> OpenTTDStationBridgeInfo { return {spec->bridgeable_info.data(), RustStationBridgeInfoCount(spec)}; },
 		.road_bridge_info = [](const RoadStopSpec *spec) noexcept -> OpenTTDStationBridgeInfo { return {spec->bridgeable_info.data(), RustStationBridgeInfoCount(spec)}; },
 		.southern_bridge_end = [](uint32_t tile) noexcept { return GetSouthernBridgeEnd(TileIndex{tile}).base(); },
-		.train_area = [](const BaseStation *st) noexcept -> OpenTTDStationArea { return {st->train_station.tile.base(), st->train_station.w, st->train_station.h}; },
+		.train_area = [](const BaseStation *st) noexcept -> OpenTTDStationArea { return {RustStationTrainTile(st), st->train_station.w, st->train_station.h}; },
 		.rail_spec = RustAnimationRailSpec,
 		.links = &_rust_station_links,
 		.location = RustStationLocation,

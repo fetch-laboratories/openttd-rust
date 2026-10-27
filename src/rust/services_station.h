@@ -124,6 +124,8 @@ template <typename Pointer> inline Pointer RustAirportSpec(uint16_t type) noexce
 template <typename Pointer> inline Pointer RustAirportTileSpec(uint8_t gfx) noexcept { return const_cast<AirportTileSpec *>(AirportTileSpec::Get(gfx)); }
 inline const AirportFTAClass *RustAirportSpecFTA(const AirportSpec *spec) noexcept { return spec->fsm; }
 inline TTDPAirportType RustAirportTTDType(const AirportSpec *spec) noexcept { return spec->ttd_airport_type; }
+inline uint32_t RustStationTrainTile(const BaseStation *s) noexcept { return s->train_station.tile.base(); }
+inline uint32_t RustStationShipTile(const BaseStation *s) noexcept { return Station::From(s)->ship_station.tile.base(); }
 inline uint32_t RustStationAirportTile(const BaseStation *s) noexcept { return Station::From(s)->airport.tile.base(); }
 inline uint8_t RustStationAirportLayout(const BaseStation *st) noexcept { return Station::From(st)->airport.layout; }
 inline uint8_t RustStationAirportType(const BaseStation *s) noexcept { return Station::From(s)->airport.type; }
@@ -141,7 +143,7 @@ inline Station *OpenTTDNextStation(uint32_t from) noexcept { auto range = Statio
 template <class Handle> inline Handle RustNextStation(uint32_t from) noexcept { return OpenTTDNextStation(from); }
 template <class Handle> inline Handle RustStationIfValid(uint16_t id) noexcept { return Station::GetIfValid(StationID{id}); }
 /** The canonical Rust service owner of a station or waypoint. */
-inline OpenTTDStationService *RustStationServiceOwner(BaseStation *st) noexcept { return st->rust_service.get(); }
+template <class TStation> inline OpenTTDStationService *RustStationServiceOwner(TStation *st) noexcept { return st->rust_service.get(); }
 inline OpenTTDStationService *RustStationServiceByID(uint16_t id) noexcept { return RustStationServiceOwner(RustStationGet<BaseStation *>(id)); }
 inline bool RustStationHasAirport(const Station *s) noexcept { return s->facilities.Test(StationFacility::Airport); }
 inline bool RustStationReserved(uint32_t tile) noexcept { return HasStationReservation(TileIndex{tile}); }
