@@ -142,6 +142,7 @@ inline uint16_t RustStationTownID(const Station *station) noexcept { return Rust
 inline Station *OpenTTDNextStation(uint32_t from) noexcept { auto range = Station::Iterate(from); return range.empty() ? nullptr : *range.begin(); }
 template <class Handle> inline Handle RustNextStation(uint32_t from) noexcept { return OpenTTDNextStation(from); }
 template <class Handle> inline Handle RustStationIfValid(uint16_t id) noexcept { return Station::GetIfValid(StationID{id}); }
+inline const OpenTTDStation *Aircraft_station(uint16_t id) noexcept { return RustStation(RustStationIfValid<Station *>(id)); }
 /** The canonical Rust service owner of a station or waypoint. */
 template <class TStation> inline OpenTTDStationService *RustStationServiceOwner(TStation *st) noexcept { return st->rust_service.get(); }
 inline OpenTTDStationService *RustStationServiceByID(uint16_t id) noexcept { return RustStationServiceOwner(RustStationGet<BaseStation *>(id)); }

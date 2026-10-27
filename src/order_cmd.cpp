@@ -217,11 +217,6 @@ extern "C" uint64_t openttd_orders_at_station(void *ctx) noexcept
 	return IsTileType(v->tile, MP_STATION);
 }
 
-extern "C" uint64_t openttd_orders_ship_station_tile(uint16_t destination) noexcept
-{
-	return RustStationShipTile(RustStationGet<Station *>(destination));
-}
-
 extern "C" uint64_t openttd_orders_valid_station(uint16_t destination) noexcept
 {
 	return RustStationIfValid<Station *>(destination) != nullptr;

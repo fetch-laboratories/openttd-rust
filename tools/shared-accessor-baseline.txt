@@ -49,7 +49,6 @@ src/order_cmd.cpp | openttd_orders_last_station(void *ctx) noexcept | 37d09a120f
 src/order_cmd.cpp | openttd_orders_local_owner(void *ctx) noexcept | a3e1ec70f0a18e8e | 1
 src/order_cmd.cpp | openttd_orders_reverse_train(void *ctx) noexcept | 23ee8c2c4d232dff | 1
 src/order_cmd.cpp | openttd_orders_review_setting() noexcept | 1419e52784b2f36e | 1
-src/order_cmd.cpp | openttd_orders_ship_station_tile(uint16_t destination) noexcept | bb04aad8d8fd5aba | 1
 src/order_cmd.cpp | openttd_orders_station_owner(uint16_t destination) noexcept | c181e3b70687df7f | 1
 src/order_cmd.cpp | openttd_orders_station_tile(uint16_t destination) noexcept | 6bd6189b29cba5aa | 1
 src/order_cmd.cpp | openttd_orders_timetable_dirty(void *ctx) noexcept | 46e7dd5322c3c04a | 1

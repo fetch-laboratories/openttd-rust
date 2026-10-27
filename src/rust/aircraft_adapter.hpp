@@ -28,10 +28,6 @@ static_assert(AirportBlocks{AirportBlock::AirportClosed}.base() == (uint64_t{1} 
  * The record contains opaque pointers only; Rust never views C++ object layout. */
 
 
-static const OpenTTDStation *OPENTTD_RUST_CALL Aircraft_station(uint16_t id) noexcept
-{
-	return RustStation(RustStationIfValid<Station *>(id));
-}
 
 
 
