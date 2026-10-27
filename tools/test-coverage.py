@@ -44,8 +44,14 @@ class CoverageTests(unittest.TestCase):
                     patch.object(coverage.migration, "REFERENCE", root),
                     contextlib.redirect_stdout(io.StringIO()),
                 ):
-                    coverage.collect(prefix, root / f"{name}.json", root, [], env)
-                traces[name] = json.loads((root / f"{name}.json").read_text())
+                    coverage.collect(
+                        prefix,
+                        root / f"{name}.json",
+                        root,
+                        coverage.source_filters(["original.cpp"], root),
+                        env,
+                    )
+                traces[name] = coverage.read_trace(root / f"{name}.json")
             with contextlib.redirect_stdout(io.StringIO()):
                 coverage.checked(
                     [
@@ -113,6 +119,13 @@ class CoverageTests(unittest.TestCase):
         self.assertEqual(
             result["unique_lines"], {"one": [("a.cpp", 1)], "two": [("b.cpp", 1)]}
         )
+
+    def test_empty_original_report_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "empty.json"
+            path.write_text('{"files": []}')
+            with self.assertRaisesRegex(RuntimeError, "Empty original coverage"):
+                coverage.read_trace(path)
 
     def test_missing_profiles_fail(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

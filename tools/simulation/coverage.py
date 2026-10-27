@@ -93,6 +93,24 @@ def counts(lines: list[Line]) -> Counts:
     )
 
 
+def source_filters(inventory: list[str], root: Path) -> list[str]:
+    # gcovr detects absolute filters by their leading slash, before parsing regex.
+    return [
+        "--filter",
+        re.escape(str(root))
+        + "/(?:"
+        + "|".join(re.escape(path) for path in inventory)
+        + ")$",
+    ]
+
+
+def read_trace(path: Path) -> Trace:
+    trace: Trace = json.loads(path.read_text())
+    if not trace["files"] or not any(source["functions"] for source in trace["files"]):
+        raise RuntimeError(f"Empty original coverage: {path}")
+    return trace
+
+
 def reached(trace: Trace) -> set[tuple[str, int]]:
     return {
         (source["file"], line["line_number"])
@@ -310,12 +328,7 @@ def main() -> None:
         ).splitlines()
         if metrics.simulation_source(path)
     ]
-    filters = [
-        "--filter",
-        "(?:"
-        + "|".join(re.escape(str(migration.REFERENCE / path)) for path in inventory)
-        + ")$",
-    ]
+    filters = source_filters(inventory, migration.REFERENCE)
     env = migration.environment()
     runtime = out / "reference-runtime"
     with migration.candidate_lock(args.build, shared=True):
@@ -342,6 +355,7 @@ def main() -> None:
             out / "zero.log",
             env,
         )
+        read_trace(out / "traces/zero.json")
         scenarios = core.scenario_list(False)
         for module in core.scenario_modules():
             if hasattr(module, "AI_FOLDER"):
@@ -357,9 +371,15 @@ def main() -> None:
                 )
                 for s in scenarios
             ]
-            names = sorted(
-                future.result() for future in concurrent.futures.as_completed(futures)
-            )
+            try:
+                names = sorted(
+                    future.result()
+                    for future in concurrent.futures.as_completed(futures)
+                )
+            except Exception:
+                for future in futures:
+                    future.cancel()
+                raise
         checked(
             [
                 *GCOVR,
@@ -374,11 +394,8 @@ def main() -> None:
             env,
         )
         report = summarize(
-            json.loads((out / "merged.json").read_text()),
-            (
-                (name, json.loads((out / "traces" / f"{name}.json").read_text()))
-                for name in names
-            ),
+            read_trace(out / "merged.json"),
+            ((name, read_trace(out / "traces" / f"{name}.json")) for name in names),
         )
         report.update(
             baseline=migration.BASELINE,
