@@ -17,7 +17,7 @@ pub const VEH_AIRCRAFT: u8 = VehicleType::AIRCRAFT.0;
 pub const GROUND_ACCELERATION: u32 = 9800;
 
 /// End of vehicle types buildable by companies.
-pub const VEH_COMPANY_END: u8 = 4;
+pub const VEH_COMPANY_END: u8 = VehicleType::COMPANY_END.0;
 
 /// Opaque native `Vehicle`; valid only while its native pool shell lives.
 #[repr(C)]
@@ -39,8 +39,10 @@ impl VehicleType {
     pub const SHIP: Self = Self(2);
     /// Native `VEH_AIRCRAFT`.
     pub const AIRCRAFT: Self = Self(3);
+    /// Native `VEH_COMPANY_END`.
+    pub const COMPANY_END: Self = Self(4);
     /// Native `VEH_EFFECT`.
-    pub const EFFECT: Self = Self(4);
+    pub const EFFECT: Self = Self::COMPANY_END;
     /// Native `VEH_DISASTER`.
     pub const DISASTER: Self = Self(5);
 }

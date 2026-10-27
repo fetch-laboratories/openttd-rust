@@ -4,6 +4,7 @@
 #define RUST_INDUSTRY_DEFINITION_FFI_H
 #include "service_defaults.hpp"
 #include "newgrf_global_ffi.h"
+#include "../industry_type.h"
 #include <cstdint>
 #include <cstddef>
 struct OpenTTDIndustryGenerationServices;
@@ -13,8 +14,8 @@ struct IndustryTileSpec;
 struct GRFFile;
 struct OpenTTDIndustryDefinitionIdentity { uint32_t grfid; uint16_t local, substitute; };
 struct OpenTTDIndustryDefinitionAvailability { bool enabled, has_file; };
-struct OpenTTDIndustryProducedSlots { uint8_t *cargo; OpenTTDNewGRFCargoLabel labels[2]; };
-struct OpenTTDIndustryAcceptedSlots { uint8_t *cargo; OpenTTDNewGRFCargoLabel labels[3]; };
+struct OpenTTDIndustryProducedSlots { uint8_t *cargo; OpenTTDNewGRFCargoLabel labels[INDUSTRY_ORIGINAL_NUM_OUTPUTS]; };
+struct OpenTTDIndustryAcceptedSlots { uint8_t *cargo; OpenTTDNewGRFCargoLabel labels[INDUSTRY_ORIGINAL_NUM_INPUTS]; };
 struct OpenTTDIndustryDefinitionCargo { OpenTTDIndustryProducedSlots produced; OpenTTDIndustryAcceptedSlots accepted; };
 /** Native specs remain canonical. Load/reset is serialized by the game-state mutex;
  * leaves never yield or reset definitions. No borrowed spec survives vector cleanup. */

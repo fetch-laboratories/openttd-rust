@@ -14,7 +14,7 @@ class RoadTypeInfo;
 struct GRFFile;
 struct OpenTTDTypePublication { uint32_t label; bool hidden; };
 struct OpenTTDTypeAllocation { uint32_t label; uint64_t self; uint8_t order; };
-struct OpenTTDTypeLabelTable { uint32_t values[64]; };
+struct OpenTTDTypeLabelTable { uint32_t values[RAILTYPE_END]; };
 struct OpenTTDTypeLabels { const uint32_t *data; size_t size; };
 struct OpenTTDTypeMap { uint8_t *data; size_t size; };
 struct OpenTTDRailRegistryServices {

@@ -6,6 +6,7 @@
 use super::{SpecHandle, TileSpec};
 pub(crate) mod properties;
 pub(crate) mod storage;
+use crate::industry_type::{INDUSTRY_ORIGINAL_NUM_INPUTS, INDUSTRY_ORIGINAL_NUM_OUTPUTS};
 use crate::override_manager::{self, Mapping};
 use std::ffi::c_void;
 #[repr(C)]
@@ -37,8 +38,8 @@ impl<const N: usize> CargoSlots<N> {
 }
 #[repr(C)]
 pub struct IndustryCargo {
-    produced: CargoSlots<2>,
-    accepted: CargoSlots<3>,
+    produced: CargoSlots<INDUSTRY_ORIGINAL_NUM_OUTPUTS>,
+    accepted: CargoSlots<INDUSTRY_ORIGINAL_NUM_INPUTS>,
 }
 #[repr(C)]
 pub struct Services {
@@ -71,7 +72,7 @@ pub struct Services {
     pub conflicting: unsafe extern "C" fn(*mut SpecHandle) -> *mut u8,
     pub invalid_name: unsafe extern "C" fn(*mut SpecHandle),
     pub cargo: unsafe extern "C" fn(*mut SpecHandle) -> IndustryCargo,
-    pub tile_cargo: unsafe extern "C" fn(*mut TileSpec) -> CargoSlots<3>,
+    pub tile_cargo: unsafe extern "C" fn(*mut TileSpec) -> CargoSlots<INDUSTRY_ORIGINAL_NUM_INPUTS>,
     pub set_produced: unsafe extern "C" fn(*mut SpecHandle, usize, u8),
     pub set_accepted: unsafe extern "C" fn(*mut SpecHandle, usize, u8),
     pub set_tile_accepted: unsafe extern "C" fn(*mut TileSpec, usize, u8),
@@ -317,8 +318,8 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDIndustryDefinitionIdentity" ["industry"] => Identity { grfid, local, substitute };
     "OpenTTDIndustryDefinitionAvailability" ["industry"] => Availability { enabled, has_file };
-    "OpenTTDIndustryProducedSlots" ["industry"] => CargoSlots<2> { cargo, labels };
-    "OpenTTDIndustryAcceptedSlots" ["industry"] => CargoSlots<3> { cargo, labels };
+    "OpenTTDIndustryProducedSlots" ["industry"] => CargoSlots<INDUSTRY_ORIGINAL_NUM_OUTPUTS> { cargo, labels };
+    "OpenTTDIndustryAcceptedSlots" ["industry"] => CargoSlots<INDUSTRY_ORIGINAL_NUM_INPUTS> { cargo, labels };
     "OpenTTDIndustryDefinitionCargo" ["industry"] => IndustryCargo { produced, accepted };
     "OpenTTDIndustryDefinitionServices" ["industry"] => Services {
         generation, industry, tile, grfid, identity, tile_identity, availability, set_enabled, set_override, set_tile_override, set_tile_enabled, publish, publish_tile, industry_full, tile_full, reset_industry, clear_industry, climate_available, reset_tile, clear_tile, file, industry_count, tile_count, file_industry, file_tile, clear_file, conflicting, invalid_name, cargo, tile_cargo, set_produced, set_accepted, set_tile_accepted

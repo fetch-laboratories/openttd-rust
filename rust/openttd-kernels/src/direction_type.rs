@@ -59,7 +59,7 @@ pub const AXIS_Y: u8 = Axis::Y.0;
 pub const INVALID_AXIS: u8 = Axis::INVALID.0;
 
 /// `AXIS_END`.
-pub const AXIS_END: u8 = 2;
+pub const AXIS_END: u8 = Axis::END.0;
 
 pub const DIRDIFF_REVERSE: u8 = 4;
 pub const DIRDIFF_SAME: u8 = 0;
@@ -77,6 +77,8 @@ impl Axis {
     pub const X: Self = Self(0);
     /// Native `AXIS_Y`.
     pub const Y: Self = Self(1);
+    /// Native `AXIS_END`.
+    pub const END: Self = Self(2);
     /// Native `INVALID_AXIS`.
     pub const INVALID: Self = Self(0xFF);
 }

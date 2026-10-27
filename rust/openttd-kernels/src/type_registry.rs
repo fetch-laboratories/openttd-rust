@@ -23,7 +23,7 @@ pub struct Publication {
 }
 #[repr(C)]
 pub struct LabelTable {
-    values: [u32; 64],
+    values: [u32; RAILTYPE_END as usize],
 }
 #[repr(C)]
 pub struct Allocation {
