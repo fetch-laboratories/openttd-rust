@@ -85,7 +85,6 @@ template <> struct RustGRFClassOps<RoadStopSpec> {
 extern "C" {
 void openttd_rust_airport_class_reset(const OpenTTDGRFClassServices<AirportSpec> *);
 uint16_t openttd_rust_airport_class_allocate(uint32_t, uint16_t, uint32_t);
-void openttd_rust_airport_class_assign(AirportSpec *);
 void * openttd_rust_airport_class_classes();
 uint32_t openttd_rust_airport_class_count();
 uint32_t openttd_rust_airport_class_ui_count();
@@ -98,7 +97,6 @@ const AirportSpec * openttd_rust_airport_class_by_grf(uint32_t, uint16_t);
 template <> struct RustGRFClassOps<AirportSpec> {
 	static constexpr auto reset = openttd_rust_airport_class_reset;
 	static constexpr auto allocate = openttd_rust_airport_class_allocate;
-	static constexpr auto assign = openttd_rust_airport_class_assign;
 	static constexpr auto classes = openttd_rust_airport_class_classes;
 	static constexpr auto count = openttd_rust_airport_class_count;
 	static constexpr auto ui_count = openttd_rust_airport_class_ui_count;

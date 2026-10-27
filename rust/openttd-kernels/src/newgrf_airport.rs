@@ -77,8 +77,6 @@ pub struct Services {
     min_year: extern "C" fn(*const AirportSpec) -> i32,
     max_year: extern "C" fn(*const AirportSpec) -> i32,
     override_id: extern "C" fn(*const AirportSpec) -> u16,
-    manager_grfid: extern "C" fn(u8) -> u32,
-    substitute: extern "C" fn(u8) -> u16,
     never_expire: extern "C" fn() -> bool,
     station_layout: extern "C" fn(*const BaseStation) -> u8,
     random: extern "C" fn(*mut BaseStation) -> u16,
@@ -173,10 +171,21 @@ pub(crate) fn get(kind: u8, s: &Services) -> *const AirportSpec {
     (s.check)(u16::from(kind) < crate::airport::NUM_AIRPORTS);
     let mut spec = (s.base_spec)(u16::from(kind));
     if kind >= NEW_AIRPORT_OFFSET && !(s.enabled)(spec) {
-        if (s.manager_grfid)(kind) == 0 {
+        if unsafe {
+            crate::override_manager::openttd_rust_override_grfid(
+                crate::override_manager::airport(),
+                u16::from(kind),
+            )
+        } == 0
+        {
             return spec;
         }
-        let substitute = (s.substitute)(kind) as u8;
+        let substitute = unsafe {
+            crate::override_manager::openttd_rust_override_substitute(
+                crate::override_manager::airport(),
+                u16::from(kind),
+            )
+        } as u8;
         if u16::from(substitute) == AT_INVALID {
             return spec;
         }
@@ -544,7 +553,7 @@ pub(crate) fn tile_callback(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAirportResolverState" ["probe"] => State { station, spec, tile_spec, tile, layout, town, };
-    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, by_tile, station_id, facilities, get_station, check, engine_if_valid, engine_id, engine_kind, engine_subtype, primary_road_stop, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, base_spec, enabled, min_year, max_year, override_id, manager_grfid, substitute, never_expire, station_layout, random, build_date, root, tile_root, badges, tile_badges, tile_spec, tile_override, tile_local, tile_grfid, tile_has_groups, tile_substitute, belongs, tile_random, nearby, nearby_info, terrain, frame, version, grfid, base_scope, town_scope, evaluate_tile, unhandled, };
+    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, by_tile, station_id, facilities, get_station, check, engine_if_valid, engine_id, engine_kind, engine_subtype, primary_road_stop, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, base_spec, enabled, min_year, max_year, override_id, never_expire, station_layout, random, build_date, root, tile_root, badges, tile_badges, tile_spec, tile_override, tile_local, tile_grfid, tile_has_groups, tile_substitute, belongs, tile_random, nearby, nearby_info, terrain, frame, version, grfid, base_scope, town_scope, evaluate_tile, unhandled, };
 }
 
 #[unsafe(no_mangle)]

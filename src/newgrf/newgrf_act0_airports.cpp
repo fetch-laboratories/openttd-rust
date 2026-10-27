@@ -15,6 +15,11 @@
 #include "newgrf_internal.h"
 #include "newgrf_stringmapping.h"
 
+#ifdef WITH_RUST
+#include "../rust/airport_definitions_ffi.h"
+#include "../rust/newgrf_bytereader_services.h"
+#endif
+
 #include "../safeguards.h"
 
 /**
@@ -27,6 +32,11 @@
  */
 static ChangeInfoResult AirportChangeInfo(uint first, uint last, int prop, ByteReader &buf)
 {
+#ifdef WITH_RUST
+	uint8_t result;
+	if (!openttd_rust_airport_change_info(&GetAirportDefinitionServices(), _cur_gps.grffile, first, last, prop, &buf, &result)) RustGRFRethrowReadError();
+	return static_cast<ChangeInfoResult>(result);
+#else
 	ChangeInfoResult ret = CIR_SUCCESS;
 
 	if (last > NUM_AIRPORTS_PER_GRF) {
@@ -171,10 +181,16 @@ static ChangeInfoResult AirportChangeInfo(uint first, uint last, int prop, ByteR
 	}
 
 	return ret;
+#endif
 }
 
 static ChangeInfoResult AirportTilesChangeInfo(uint first, uint last, int prop, ByteReader &buf)
 {
+#ifdef WITH_RUST
+	uint8_t result;
+	if (!openttd_rust_airport_tile_change_info(&GetAirportDefinitionServices(), _cur_gps.grffile, first, last, prop, &buf, &result)) RustGRFRethrowReadError();
+	return static_cast<ChangeInfoResult>(result);
+#else
 	ChangeInfoResult ret = CIR_SUCCESS;
 
 	if (last > NUM_AIRPORTTILES_PER_GRF) {
@@ -259,6 +275,7 @@ static ChangeInfoResult AirportTilesChangeInfo(uint first, uint last, int prop, 
 	}
 
 	return ret;
+#endif
 }
 
 template <> ChangeInfoResult GrfChangeInfoHandler<GSF_AIRPORTS>::Reserve(uint, uint, int, ByteReader &) { return CIR_UNHANDLED; }

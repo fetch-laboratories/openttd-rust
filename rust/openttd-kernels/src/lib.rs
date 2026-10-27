@@ -1442,6 +1442,7 @@ pub mod newgrf_translation;
 
 mod station_association;
 
+mod airport_definitions;
 mod newgrf_layout;
 mod station_definitions;
 

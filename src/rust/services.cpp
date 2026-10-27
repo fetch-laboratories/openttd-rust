@@ -705,3 +705,6 @@ static_assert(VESM_END == 4);
 static_assert(VE_OFFSET_COUNT == 4 && VE_TYPE_COUNT == 2);
 static_assert(CalendarTime::MAX_DATE.base() == 1826212865 && CalendarTime::DAYS_IN_YEAR == 365);
 static_assert(RAILTYPE_END == 64 && ROADTYPE_END == 63);
+static_assert(NUM_AIRPORTS_PER_GRF == 128 && NUM_AIRPORTTILES_PER_GRF == 255);
+static_assert(GSF_AIRPORTS == 0x0D && GSF_TRAMTYPES == 0x13);
+static_assert(MAX_CATCHMENT == 10 && CalendarTime::MAX_YEAR.base() == 5000000);

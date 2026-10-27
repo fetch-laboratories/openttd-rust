@@ -999,7 +999,7 @@ static uint8_t RustTownRoadFlags(uint8_t id) noexcept { return GetRoadTypeInfo(s
 static OpenTTDTownHouseAvailability RustTownHouseAvailability(uint16_t id) noexcept
 {
 	const auto *hs = HouseSpec::Get(id);
-	return {.zones = RustHouseAvailability(hs), .override_id = RustSpecOverride(hs), .class_id = RustTownHouseClass(hs), .probability = hs->probability, .enabled = RustHouseEnabled(hs)};
+	return {.zones = RustHouseAvailability(hs), .override_id = RustSpecOverride(hs), .class_id = RustTownHouseClass(hs), .probability = hs->probability, .enabled = RustSpecEnabled<HouseSpec>(hs)};
 }
 static OpenTTDTownHousePlacement RustTownHousePlacement(uint16_t id) noexcept
 {
