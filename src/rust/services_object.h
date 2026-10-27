@@ -14,7 +14,6 @@
 #include "../newgrf_object.h"
 #include "generation_services.hpp"
 #include <optional>
-struct OpenTTDObjectLoopFrame { std::optional<StationFinder> stations; };
 struct OpenTTDObjectGenerationFrame { std::exception_ptr cancellation; };
 inline Object *RustObjectByTile(uint32_t tile) noexcept { return Object::GetByTile(TileIndex{tile}); }
 inline const ObjectSpec *RustObjectSpecByTile(uint32_t tile) noexcept { return ObjectSpec::GetByTile(TileIndex{tile}); }

@@ -39,10 +39,6 @@ inline OpenTTDNewGRFCargoLabel RustCargoLabel(const std::variant<CargoLabel, Mix
 {
 	return std::visit([](auto value) { if constexpr (std::is_same_v<decltype(value), CargoLabel>) return OpenTTDNewGRFCargoLabel{value.base(), false}; else return OpenTTDNewGRFCargoLabel{value, true}; }, label);
 }
-inline uint OpenTTDMoveGoodsToStation(CargoType cargo, uint amount, Source source, const StationList &stations, Owner exclusivity = INVALID_OWNER) noexcept
-{
-	return MoveGoodsToStation(cargo, amount, source, stations, exclusivity);
-}
 /* Legacy tables specialize the shared meanings without another native copy. */
 inline uint OpenTTDScaleTownCargo(uint amount) noexcept { return OpenTTDScaleCargo(amount, true); }
 inline uint OpenTTDScaleIndustryCargo(uint amount) noexcept { return OpenTTDScaleCargo(amount, false); }

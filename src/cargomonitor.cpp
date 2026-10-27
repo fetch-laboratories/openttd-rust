@@ -23,8 +23,7 @@ const OpenTTDCargoMonitorServices &GetRustCargoMonitorServices() noexcept
 {
 	static const OpenTTDCargoMonitorServices services = {
 		.station_town = RustStationTownID,
-		.begin_nearby = BeginNearbyIndustries, .next_nearby = NextNearbyIndustry,
-		.industry_id = RustIndustryID, .check = RustAssertCondition,
+		.check = RustAssertCondition,
 	};
 	return services;
 }
@@ -32,11 +31,6 @@ void ClearCargoPickupMonitoring(CompanyID company) { openttd_rust_monitor_clear_
 void ClearCargoDeliveryMonitoring(CompanyID company) { openttd_rust_monitor_clear_deliveries(company.base()); }
 int32_t GetPickupAmount(CargoMonitorID monitor, bool keep) { return openttd_rust_monitor_pickup(monitor, keep); }
 int32_t GetDeliveryAmount(CargoMonitorID monitor, bool keep) { return openttd_rust_monitor_delivery(monitor, keep); }
-void AddCargoDelivery(CargoType cargo, CompanyID company, uint32_t amount, Source src, const Station *st, IndustryID dest)
-{
-	RustNearbyIndustryCursor cursor;
-	openttd_rust_monitor_add(&GetRustCargoMonitorServices(), cargo, company.base(), amount, src.id, uint8_t(src.type), st, dest.base(), &cursor);
-}
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDCargoMonitorServices.hpp"
 bool CheckAbi_cargomonitor() { return AbiServicesComplete(GetRustCargoMonitorServices()); }

@@ -56,3 +56,21 @@ pub const HVOT_WAYPOINT: u8 = 1 << 6;
 
 /// Maximum modified airport catchment.
 pub const MAX_CATCHMENT: u8 = 10;
+/// `CA_NONE`: catchment without facilities.
+pub const CA_NONE: u32 = 0;
+/// `CA_BUS`, with modified catchment.
+pub const CA_BUS: u32 = 3;
+/// `CA_TRUCK`, with modified catchment.
+pub const CA_TRUCK: u32 = 3;
+/// `CA_TRAIN`, with modified catchment.
+pub const CA_TRAIN: u32 = 4;
+/// `CA_DOCK`, with modified catchment.
+pub const CA_DOCK: u32 = 5;
+/// `CA_UNMODIFIED`: every facility without modified catchment.
+pub const CA_UNMODIFIED: u32 = 4;
+/// `StationType::Rail`.
+pub const STATION_RAIL: u8 = 0;
+/// `StationType::Oilrig`.
+pub const STATION_OILRIG: u8 = 4;
+/// `StationType::Dock`.
+pub const STATION_DOCK: u8 = 5;

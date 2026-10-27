@@ -11,6 +11,32 @@
 #define BITMAP_TYPE_HPP
 
 
+#ifdef WITH_RUST
+#include "rust/bitmap_ffi.h"
+/**
+ * Facade over a Rust-owned bitmap, either allocated for this object or
+ * borrowed from its owner. The live geometry is the storage's leading TileArea.
+ */
+class BitmapTileArea {
+	OpenTTDBitmapTileArea *bitmap;
+	bool owned;
+public:
+	BitmapTileArea() : bitmap(openttd_rust_bitmap_new()), owned(true) {}
+	BitmapTileArea(const TileArea &ta) : BitmapTileArea() { this->Initialize(ta); }
+	explicit BitmapTileArea(OpenTTDBitmapTileArea *storage) : bitmap(storage), owned(false) {}
+	BitmapTileArea(const BitmapTileArea &) = delete;
+	BitmapTileArea &operator=(const BitmapTileArea &) = delete;
+	~BitmapTileArea() { if (this->owned) openttd_rust_bitmap_destroy(this->bitmap); }
+
+	/** The live inherited geometry. */
+	operator const TileArea &() const { return *reinterpret_cast<const TileArea *>(this->bitmap); }
+	void Reset() { openttd_rust_bitmap_reset(this->bitmap); }
+	void Initialize(const TileArea &ta) { openttd_rust_bitmap_initialize(this->bitmap, {ta.tile.base(), ta.w, ta.h}); }
+	void SetTile(TileIndex tile) { openttd_rust_bitmap_set(this->bitmap, tile.base(), true, &GetRustSharedServices()); }
+	bool HasTile(TileIndex tile) const { return openttd_rust_bitmap_has(this->bitmap, tile.base(), &GetRustSharedServices()); }
+};
+
+#else
 /** Represents a tile area containing containing individually set tiles.
  * Each tile must be contained within the preallocated area.
  * A std::vector<bool> is used to mark which tiles are contained.
@@ -102,6 +128,8 @@ public:
 	}
 };
 
+#endif
+
 /** Iterator to iterate over all tiles belonging to a bitmaptilearea. */
 class BitmapTileIterator : public OrthogonalTileIterator {
 protected:
@@ -130,5 +158,6 @@ public:
 		return std::make_unique<BitmapTileIterator>(*this);
 	}
 };
+
 
 #endif /* BITMAP_TYPE_HPP */

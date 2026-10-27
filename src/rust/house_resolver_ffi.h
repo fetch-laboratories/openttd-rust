@@ -58,7 +58,6 @@ struct OpenTTDHouseResolverServices {
 	OpenTTDHouseNearbySpec (*nearby_spec)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(nearby_spec);
 	OpenTTDHouseFileIdentity (*file_identity)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(file_identity);
 	uint32_t (*badges)(const ResolverObject *, uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(badges);
-	void (*stations)(uint32_t, void *, void (*)(void *, const Station *)) noexcept OPENTTD_SERVICE_DEFAULT(stations);
 	Town *(*town_by_id)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_by_id);
 	const SpriteGroup *(*root)(uint16_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(root);
 	uint16_t (*spec_house)(const HouseSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_house);

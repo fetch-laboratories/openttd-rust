@@ -29,6 +29,16 @@
 #include "linkgraph/linkgraphschedule.h"
 
 #include "table/strings.h"
+#ifdef WITH_RUST
+#include "rust/services_station.h"
+#include "rust/services_industry.h"
+#include "rust/industry_shell_services.h"
+#include "rust/settings_services.h"
+#include "rust/airport_resolver_ffi.h"
+#include "rust/object_resolver_ffi.h"
+#include "rust/town_ffi.h"
+#include "rust/vehicle_visits_ffi.h"
+#endif
 
 #include "safeguards.h"
 
@@ -307,6 +317,82 @@ void Station::MarkTilesDirty(bool cargo_change) const
 	return length;
 }
 
+#ifdef WITH_RUST
+uint Station::GetCatchmentRadius() const
+{
+	return openttd_rust_station_catchment_radius(const_cast<Station *>(this), &GetRustStationCatchmentServices());
+}
+
+void Station::RemoveFromAllNearbyLists()
+{
+	openttd_rust_station_remove_from_nearby_lists(this, &GetRustStationCatchmentServices());
+}
+
+void Station::RecomputeCatchment(bool no_clear_nearby_lists)
+{
+	openttd_rust_station_recompute_catchment(this, no_clear_nearby_lists, &GetRustStationCatchmentServices());
+}
+
+/* static */ void Station::RecomputeCatchmentForAll()
+{
+	openttd_rust_station_recompute_catchment_for_all(&GetRustStationCatchmentServices());
+}
+
+bool StationRect::PtInExtendedRect(int x, int y, int distance) const
+{
+	return openttd_rust_station_rect_pt_in_extended_rect(reinterpret_cast<const OpenTTDStationRect *>(this), x, y, distance);
+}
+
+bool StationRect::IsEmpty() const
+{
+	return openttd_rust_station_rect_empty(reinterpret_cast<const OpenTTDStationRect *>(this));
+}
+
+CommandCost StationRect::BeforeAddTile(TileIndex tile, StationRectMode mode)
+{
+	if (openttd_rust_station_rect_before_add_tile(reinterpret_cast<OpenTTDStationRect *>(this), tile.base(), mode, &GetRustStationCatchmentServices())) return CommandCost();
+	return CommandCost(STR_ERROR_STATION_TOO_SPREAD_OUT);
+}
+
+CommandCost StationRect::BeforeAddRect(TileIndex tile, int w, int h, StationRectMode mode)
+{
+	if (openttd_rust_station_rect_before_add_rect(reinterpret_cast<OpenTTDStationRect *>(this), tile.base(), w, h, mode, &GetRustStationCatchmentServices())) return CommandCost();
+	return CommandCost(STR_ERROR_STATION_TOO_SPREAD_OUT);
+}
+
+const OpenTTDStationCatchmentServices &GetRustStationCatchmentServices() noexcept
+{
+	static const OpenTTDStationCatchmentServices services = {
+		.shared = &GetRustSharedServices(),
+		.airport = &GetAirportResolverServices(),
+		.industry_tile = &GetIndustryTileServices(),
+		.object = &GetRustObjectServices(),
+		.town = &GetRustTownServices(),
+		.station = &GetRustStationServices(),
+		.visits = &GetRustVehicleVisits(),
+		.station_count = []() noexcept -> size_t { return Station::GetNumItems(); },
+		.station_if_valid = [](uint16_t id) noexcept -> BaseStation * { return Station::GetIfValid(StationID(id)); },
+		.next_station = [](uint32_t from) noexcept -> BaseStation * { return OpenTTDNextStation(from); },
+		.owner = [](BaseStation *st) noexcept { return st->rust_service.get(); },
+		.station_owner = [](uint16_t id) noexcept { return Station::Get(StationID(id))->rust_service.get(); },
+		.id = RustBaseStationID<BaseStation>,
+		.location = RustStationLocation,
+		.associated_industry = RustStationAssociatedIndustry,
+		.radius_facilities = [](BaseStation *handle) noexcept -> OpenTTDStationRadiusFacilities {
+			const Station *st = Station::From(handle);
+			return {st->bus_stops != nullptr, st->truck_stops != nullptr, st->train_station.tile.base(), st->ship_station.tile.base(), st->airport.tile.base()};
+		},
+		.modified_catchment = []() noexcept -> bool { return _settings_game.station.modified_catchment; },
+		.spread = RustStationSpread,
+		.industry_by_id = RustIndustryByID<uint16_t>,
+		.industry_id = [](Industry *industry) noexcept { return RustIndustryID(industry); },
+		.industry_owner = RustIndustryCanonicalOwner<Industry *>,
+		.industry_neutral = [](Industry *industry) noexcept -> BaseStation * { return RustIndustryNeutralStation(industry); },
+		.industry_next_id = RustIndustryNextID,
+	};
+	return services;
+}
+#else
 /**
  * Get the catchment size of an individual station tile.
  * @param tile Station tile to get catchment size of.
@@ -711,6 +797,8 @@ StationRect& StationRect::operator = (const Rect &src)
 	return *this;
 }
 
+#endif
+
 /**
  * Calculates the maintenance cost of all airports of a company.
  * @param owner Company.
@@ -729,7 +817,9 @@ Money AirportMaintenanceCost(Owner owner)
 	return total_cost >> 3;
 }
 
+#ifndef WITH_RUST
 bool StationCompare::operator() (const Station *lhs, const Station *rhs) const
 {
 	return lhs->index < rhs->index;
 }
+#endif

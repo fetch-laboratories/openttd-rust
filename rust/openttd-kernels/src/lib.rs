@@ -20,6 +20,7 @@ mod auth;
 mod base_consist;
 mod base_station_base;
 mod binaryheap;
+mod bitmap_type;
 mod bitmath_func;
 mod bridge;
 mod bridge_map;

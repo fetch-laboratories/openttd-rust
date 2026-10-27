@@ -17,6 +17,7 @@
 #include "services_bridge.h"
 #include "services_viewport.h"
 #include "station_command_ffi.h"
+#include "station_catchment_ffi.h"
 #include "road_command_ffi.h"
 #include "road_stop_ffi.h"
 #include "presentation_services.h"
@@ -287,7 +288,8 @@ static_assert(std::is_same_v<DoCommandFlags::BaseType, uint16_t>);
 static_assert(NEW_STATION.base() == 0xFFFD && StationID::Invalid().base() == 0xFFFF);
 static_assert(to_underlying(StationType::RailWaypoint) == 7 && to_underlying(StationType::RoadWaypoint) == 8 && to_underlying(StationType::Buoy) == 6);
 static_assert(StationFacilities(StationFacility::Train).base() == 1 && StationFacilities(StationFacility::TruckStop).base() == 2 && StationFacilities(StationFacility::BusStop).base() == 4 && StationFacilities(StationFacility::Dock).base() == 16);
-static_assert(MAX_LENGTH_STATION_NAME_CHARS == 32 && StationRect::ADD_TEST == 0 && StationRect::ADD_TRY == 1);
+static_assert(MAX_LENGTH_STATION_NAME_CHARS == 32 && StationRect::ADD_TEST == 0 && StationRect::ADD_TRY == 1 && StationRect::ADD_FORCE == 2);
+static_assert(CA_NONE == 0 && CA_BUS == 3 && CA_TRUCK == 3 && CA_TRAIN == 4 && CA_DOCK == 5 && CA_UNMODIFIED == 4);
 static_assert(PR_BUILD_STATION_TRUCK == 13 && PR_BUILD_WAYPOINT_RAIL == 52 && PR_BUILD_WAYPOINT_BUOY == 54 && PR_CLEAR_WAYPOINT_BUOY == 55 && ROAD_STOP_TRACKBIT_FACTOR == 2);
 static_assert(to_underlying(RailTileType::Normal) == 0 && TRACK_BIT_X == 1 && TRACK_BIT_Y == 2 && AXIS_END == 2);
 static_assert(ROAD_X == 10 && ROAD_Y == 5);
@@ -298,6 +300,7 @@ static_assert(AIR_HELICOPTER == 0 && AIR_AIRCRAFT == 2 && AIR_CTOL == 1 && HANGA
 static_assert(OT_NOTHING == 0 && OT_GOTO_STATION == 1 && OT_GOTO_DEPOT == 2 && OT_LOADING == 3 && OT_LEAVESTATION == 4 && OT_DUMMY == 5 && OT_GOTO_WAYPOINT == 6 && OT_CONDITIONAL == 7 && OT_IMPLICIT == 8);
 static_assert(INVALID_VEH_ORDER_ID == 0xFF && to_underlying(OrderLoadType::NoLoad) == 4 && to_underlying(OrderUnloadType::Unload) == 1 && to_underlying(OrderUnloadType::Transfer) == 2 && to_underlying(OrderUnloadType::NoUnload) == 4);
 static_assert(to_underlying(StationType::Truck) == 2 && to_underlying(StationType::Bus) == 3);
+static_assert(to_underlying(StationType::Rail) == 0 && to_underlying(StationType::Airport) == 1 && to_underlying(StationType::Oilrig) == 4 && to_underlying(StationType::Dock) == 5);
 static_assert(CARGO_AUTO_REFIT == 0xFD && StationID::Invalid().base() == 0xFFFF);
 static_assert(LinkGraph::MIN_TIMEOUT_DISTANCE == 32 && LinkGraph::STALE_LINK_DEPOT_TIMEOUT.base() == 1024 && LinkGraph::COMPRESSION_INTERVAL.base() == 256);
 static_assert(EconomyTime::INVALID_DATE.base() == -1 && INVALID_NODE == UINT16_MAX && LinkGraphID::Invalid().base() == UINT16_MAX);
@@ -306,7 +309,7 @@ static_assert(VL_STANDARD == 0 && VL_SHARED_ORDERS == 1 && VL_STATION_LIST == 2 
 static_assert(GVSF_FRONT == 0 && GVSF_ARTICULATED_PART == 1 && GVSF_WAGON == 2 && GVSF_ENGINE == 3 && GVSF_FREE_WAGON == 4 && GVSF_MULTIHEADED == 5);
 static_assert(CCF_ARRANGE.base() == 3);
 static_assert(PR_BUILD_SIGNALS == 3 && PR_BUILD_DEPOT_TRAIN == 5 && PR_CLEAR_ROUGH == 23 && PR_CLEAR_SIGNALS == 28 && PR_CLEAR_DEPOT_TRAIN == 30 && PR_CLEAR_WATER == 34 && PR_TOWN_ACTION == 56 && PR_BUILD_FOUNDATION == 57);
-static_assert(to_underlying(SourceType::Town) == 1);
+static_assert(to_underlying(SourceType::Town) == 1 && to_underlying(SourceType::Headquarters) == 2);
 static_assert(AT_OILRIG == 9 && OBJECT_STATUE == 2 && EXPENSES_CONSTRUCTION == 0 && EXPENSES_OTHER == 12 && COMPANY_SPECTATOR.base() == 0xFF && MP_INDUSTRY == 8 && MP_OBJECT == 10);
 static_assert(RATING_MINIMUM == -1000 && RATING_MAXIMUM == 1000 && RATING_BRIBE_UP_STEP == 200 && RATING_BRIBE_MAXIMUM == 800 && RATING_BRIBE_DOWN_TO == -50);
 static uint32_t Shared_tile_height(uint32_t tile) noexcept { return TileHeight(TileIndex{tile}); }
@@ -427,6 +430,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.station_index = MapSvcStationIndex,
 	.road_commands = []() noexcept { return &GetRustRoadCommandServices(); },
 	.station_commands = []() noexcept { return &GetRustStationCommandServices(); },
+	.station_catchment = []() noexcept { return &GetRustStationCatchmentServices(); },
 	.docking_tile = OpenTTDIsDockingTile,
 	.station_gfx = [](uint32_t tile) noexcept { return GetStationGfx(TileIndex{tile}); },
 	.station_serve_neutral = RustServeNeutralIndustries,

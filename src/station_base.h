@@ -582,6 +582,7 @@ private:
 	}
 };
 
+#ifndef WITH_RUST
 struct IndustryListEntry {
 	uint distance = 0;
 	Industry *industry = nullptr;
@@ -594,6 +595,7 @@ struct IndustryCompare {
 };
 
 typedef std::set<IndustryListEntry, IndustryCompare> IndustryList;
+#endif
 
 /** Station data structure */
 struct Station final : SpecializedStation<Station, false> {
@@ -616,7 +618,11 @@ public:
 
 	IndustryType indtype = IT_INVALID; ///< Industry type to get the name from
 
+#ifdef WITH_RUST
+	const BitmapTileArea catchment_tiles{openttd_rust_station_catchment_tiles(this->rust_service.get())};
+#else
 	BitmapTileArea catchment_tiles{}; ///< NOSAVE: Set of individual tiles covered by catchment area
+#endif
 
 	StationHadVehicleOfType had_vehicle_of_type{};
 
@@ -642,7 +648,11 @@ public:
 
 #endif
 
+#ifdef WITH_RUST
+	RustIndustryList industries_near{this->rust_service.get()};
+#else
 	IndustryList industries_near{}; ///< Cached list of industries near the station that can accept cargo, @see DeliverGoodsToIndustry()
+#endif
 	Industry *industry = nullptr; ///< NOSAVE: Associated industry for neutral stations. (Rebuilt on load from Industry->st)
 
 	Station(TileIndex tile = INVALID_TILE);
@@ -664,10 +674,12 @@ public:
 	static void RecomputeCatchmentForAll();
 
 	uint GetCatchmentRadius() const;
+#ifndef WITH_RUST
 	Rect GetCatchmentRect() const;
 	bool CatchmentCoversTown(TownID t) const;
 	void AddIndustryToDeliver(Industry *ind, TileIndex tile);
 	void RemoveIndustryToDeliver(Industry *ind);
+#endif
 	void RemoveFromAllNearbyLists();
 
 	inline bool TileIsInCatchment(TileIndex tile) const
@@ -727,6 +739,7 @@ public:
 
 void RebuildStationKdtree();
 
+#ifndef WITH_RUST
 /**
  * Call a function on all stations that have any part of the requested area within their catchment.
  * @tparam Func The type of function to call
@@ -767,5 +780,6 @@ void ForAllStationsAroundTiles(const TileArea &ta, Func func)
 		}
 	}
 }
+#endif
 
 #endif /* STATION_BASE_H */

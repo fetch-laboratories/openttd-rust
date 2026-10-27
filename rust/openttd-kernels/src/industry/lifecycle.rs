@@ -50,8 +50,6 @@ pub struct LifecycleServices {
     pub delete_inspect: unsafe extern "C" fn(u16),
     pub subsidies: extern "C" fn() -> *const crate::subsidy::Services,
     pub invalidate_cargo: unsafe extern "C" fn(u16),
-    pub next_near_station: unsafe extern "C" fn(*mut c_void, *mut c_void) -> *mut c_void,
-    pub remove_delivery: unsafe extern "C" fn(*mut c_void, *mut c_void),
     pub belongs: unsafe extern "C" fn(u32, u16) -> bool,
     pub randomisation_spec: unsafe extern "C" fn(u32) -> RandomisationSpec,
     pub random_triggers: unsafe extern "C" fn(u32) -> u8,
@@ -166,14 +164,12 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
         (&*(w.subsidies)()).delete_with(crate::subsidy::Source::industry(id));
         (w.invalidate_cargo)(id);
     }
-    let mut previous = ptr::null_mut();
-    loop {
-        let station = unsafe { (w.next_near_station)(industry, previous) };
-        if station.is_null() {
-            break;
-        }
-        unsafe { (w.remove_delivery)(station, industry) };
-        previous = station;
+    let c = crate::station::Ctx::from_shared(s.shared());
+    // SAFETY: Live industry owner; the visits mutate only station delivery lists.
+    unsafe {
+        crate::station::for_each_station(super::stations_near(owner), |near| {
+            crate::station::remove_industry_to_deliver((c.c.owner)(near.station), industry.cast());
+        });
     }
 }
 

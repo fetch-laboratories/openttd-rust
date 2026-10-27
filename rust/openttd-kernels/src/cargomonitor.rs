@@ -23,11 +23,10 @@ use crate::{
     company_type::INVALID_OWNER,
     overflowsafe_type::add_u32,
     source_type::Source,
-    station::{NearbyIndustryCursor, Station},
+    station::Station,
 };
 use std::{
     collections::BTreeMap,
-    ffi::c_void,
     ops::Bound::{Excluded, Unbounded},
 };
 
@@ -211,13 +210,11 @@ pub extern "C" fn openttd_rust_monitor_insert_delivery(key: u32, amount: u32) {
 #[repr(C)]
 pub struct Services {
     pub station_town: extern "C" fn(*const Station) -> u16,
-    pub begin_nearby: extern "C" fn(*mut NearbyIndustryCursor, *const Station),
-    pub next_nearby: extern "C" fn(*mut NearbyIndustryCursor) -> *mut crate::industry::ShellHandle,
-    pub industry_id: extern "C" fn(*mut c_void) -> u16,
     pub check: extern "C" fn(bool),
 }
-/// `AddCargoDelivery`. `station` is resolved at the caller's original source point.
-/// No reference into either map spans a world observation or traversal operation.
+/// `AddCargoDelivery`. `station` and its owner `state` are resolved at the
+/// caller's original source point. No reference into either map spans a world
+/// observation or traversal operation.
 pub fn add_delivery(
     s: &Services,
     cargo: u8,
@@ -225,8 +222,8 @@ pub fn add_delivery(
     amount: u32,
     source: Source,
     station: *const Station,
+    state: *mut crate::station_service::Service,
     destination: u16,
-    cursor: *mut NearbyIndustryCursor,
 ) {
     if amount == 0 {
         return;
@@ -250,48 +247,22 @@ pub fn add_delivery(
         openttd_rust_monitor_encode_town(company, cargo, town, s.check),
         amount,
     );
-    (s.begin_nearby)(cursor, station);
-    loop {
-        let industry = (s.next_nearby)(cursor);
-        if industry.is_null() {
-            break;
-        }
-        let id = (s.industry_id)(industry.cast());
-        if id != destination {
-            continue;
-        }
-        DELIVERIES.add(
-            openttd_rust_monitor_encode_industry(company, cargo, id, s.check),
-            amount,
-        );
+    // SAFETY: The caller's live station owner; each entry is copied before use.
+    unsafe {
+        crate::station::for_each_industry_near(state, |near| {
+            if near.id == destination {
+                DELIVERIES.add(
+                    openttd_rust_monitor_encode_industry(company, cargo, near.id, s.check),
+                    amount,
+                );
+            }
+            true
+        });
     }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_monitor_add(
-    s: *const Services,
-    cargo: u8,
-    company: u8,
-    amount: u32,
-    source: u16,
-    kind: u8,
-    station: *const Station,
-    destination: u16,
-    cursor: *mut NearbyIndustryCursor,
-) {
-    add_delivery(
-        unsafe { &*s },
-        cargo,
-        company,
-        amount,
-        Source { id: source, kind },
-        station,
-        destination,
-        cursor,
-    );
 }
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDCargoMonitorServices" ["probe"] => Services {
-        station_town, begin_nearby, next_nearby, industry_id, check,
+        station_town, check,
     };
 }

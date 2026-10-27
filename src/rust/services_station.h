@@ -95,28 +95,8 @@ inline bool RustRoadStopHasAnimationTrigger(BaseStation *s, uint8_t trigger) noe
 inline size_t RustRoadStopTileDataCount(BaseStation *s) noexcept { return s->custom_roadstop_tile_data.size(); }
 inline uint32_t RustRoadStopDataTile(BaseStation *s, size_t i) noexcept { return s->custom_roadstop_tile_data[i].tile.base(); }
 inline const StationSpec *RustAnimationRailSpec(uint32_t tile) noexcept { return GetStationSpec(TileIndex{tile}); }
-inline bool RustStationRectangleEmpty(const BaseStation *station) noexcept { return station->rect.IsEmpty(); }
 /** `&st->goods[cargo].GetOrCreateData().cargo`'s Rust owner. */
 inline OpenTTDCargoList *RustStationCargoOwner(OpenTTDStation *st, uint8_t cargo) noexcept { return static_cast<Station *>(st)->goods[cargo].GetOrCreateData().cargo.RustOwner(); }
-template <class Handle> inline bool RustStationRectangleEmptyHandle(Handle handle) noexcept { return RustStationRectangleEmpty(static_cast<const BaseStation *>(handle)); }
-inline void RustStationCatchment(const Station *station, void *context, void (*visit)(void *, uint32_t)) noexcept
-{
-	BitmapTileIterator it(station->catchment_tiles);
-	for (TileIndex tile = it; tile != INVALID_TILE; tile = ++it) visit(context, tile.base());
-}
-/** Native entry-frame storage; bind at each original scan. Serialized callbacks
- * cannot rebuild catchments/remove industries/reset the world; no Rust layout view. */
-struct RustNearbyIndustryCursor { IndustryList::const_iterator current, end; bool started; };
-inline void BeginNearbyIndustries(RustNearbyIndustryCursor *cursor, const Station *station) noexcept
-{
-	*cursor = {station->industries_near.begin(), station->industries_near.end(), false};
-}
-inline Industry *NextNearbyIndustry(RustNearbyIndustryCursor *cursor) noexcept
-{
-	if (cursor->started) ++cursor->current;
-	cursor->started = true;
-	return cursor->current == cursor->end ? nullptr : cursor->current->industry;
-}
 inline uint8_t RustAirportLayoutHeading(const AirportFTAClass *airport, uint32_t index) noexcept { return airport->layout[index].heading; }
 inline uint8_t OpenTTDAirportLayoutHeading(const void *airport, uint8_t index) noexcept { return RustAirportLayoutHeading(static_cast<const AirportFTAClass *>(airport), index); }
 inline uint8_t RustAirportFlags(const AirportFTAClass *airport) noexcept { return airport->flags.base(); }

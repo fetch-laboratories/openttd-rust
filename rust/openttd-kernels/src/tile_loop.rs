@@ -79,7 +79,6 @@ pub struct Services {
     pub town: *const town::Leaves,
     pub station_loop: extern "C" fn(u32),
     pub objects: *const crate::objects::ObjectServices,
-    pub object_frame: *mut crate::objects::LoopFrame,
 }
 
 // The measured scheduler budget requires dispatch inside the LFSR loop; an
@@ -170,7 +169,7 @@ unsafe fn dispatch(
         },
         9 => unsafe { ground::tunnel_tile_loop(tile, g.climate, g.tunnel, s.shared) },
         10 => unsafe {
-            crate::objects::openttd_rust_object_tile_loop(s.objects, s.object_frame, g.call, tile);
+            crate::objects::openttd_rust_object_tile_loop(s.objects, g.call, tile);
         },
         // The source dispatch table has handlers only for original live tile types.
         _ => unsafe { std::hint::unreachable_unchecked() },
@@ -248,6 +247,5 @@ crate::abi::layouts! {
         town,
         station_loop,
         objects,
-        object_frame,
     };
 }

@@ -514,22 +514,13 @@ uint32_t GetWorldPopulation()
 #endif
 
 #ifdef WITH_RUST
-/* TileLoop_Town's finder, requested by the Rust house tile loop only when it
- * moves cargo and reused for the rest of that tile. One house tile loop runs at
- * a time under the game-state mutex and none nests, so one slot serves them. */
-static void *RustHouseStationFinder(uint32_t tile) noexcept
-{
-	static std::optional<StationFinder> stations;
-	stations.emplace(TileArea(TileIndex{tile}, 1, 1));
-	return &*stations;
-}
 static void AddProducedCargo_Town(TileIndex tile, CargoArray &produced)
 {
-	openttd_rust_house_produced(&GetRustTownServices(), &GetRustSharedServices(), tile.base(), &produced);
+	openttd_rust_house_produced(&GetRustTownServices(), &GetRustSharedServices(), tile.base(), produced.data());
 }
 void AddAcceptedCargoOfHouse(TileIndex tile, HouseID house, const HouseSpec *, Town *t, CargoArray &acceptance, CargoTypes &always_accepted)
 {
-	openttd_rust_house_accepted(&GetRustTownServices(), &GetRustSharedServices(), tile.base(), house, t, &acceptance, &always_accepted);
+	openttd_rust_house_accepted(&GetRustTownServices(), &GetRustSharedServices(), tile.base(), house, t, acceptance.data(), &always_accepted);
 }
 #else
 /**
@@ -1045,15 +1036,6 @@ static void RustTown_population_changed(uint32_t town) noexcept
 	if (_settings_client.gui.population_in_label) t->UpdateVirtCoord();
 	InvalidateWindowData(WC_TOWN_DIRECTORY, 0, TDIWD_POPULATION_CHANGE);
 }
-static void RustTown_nearby_stations(uint32_t town, uint32_t tile, uint32_t size) noexcept
-{
-	{
-			Town *t = Town::Get(TownID(town));
-			BuildingFlags flags(static_cast<uint8_t>(size));
-			ForAllStationsAroundTiles(TileArea(TileIndex{tile}, flags.Any(BUILDING_2_TILES_X) ? 2 : 1, flags.Any(BUILDING_2_TILES_Y) ? 2 : 1), [t](Station *st, TileIndex) { t->stations_near.insert(st); return true; });
-
-		}
-}
 static void RustTown_update_max_pass(uint32_t town) noexcept
 {
 	UpdateTownMaxPass(Town::Get(TownID(town)));
@@ -1203,18 +1185,6 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 		.convert_boolean = RustHouseConvertBoolean,
 		.convert_8bit = RustHouseConvert8bitBoolean,
 
-		.next_near_station = [](Town *t, Station *previous) noexcept -> Station * {
-			auto next = previous == nullptr ? t->stations_near.begin() : t->stations_near.upper_bound(previous);
-			return next == t->stations_near.end() ? nullptr : *next;
-		},
-		.erase_near_station = [](Town *t, Station *st) noexcept { t->stations_near.erase(st); },
-		.station_catchment = [](const Station *st, uint32_t tile) noexcept { return st->TileIsInCatchment(TileIndex{tile}); },
-		.station_covers_town = [](const Station *st, uint16_t town) noexcept { return st->CatchmentCoversTown(TownID(town)); },
-		.station_finder = RustHouseStationFinder,
-		.move_goods = [](void *finder, uint8_t cargo, uint32_t amount, uint16_t town) noexcept -> uint32_t {
-			return OpenTTDMoveGoodsToStation(cargo, amount, {TownID(town), SourceType::Town}, static_cast<StationFinder *>(finder)->GetStations());
-		},
-		.add_cargo = [](void *cargoes, uint8_t cargo, uint32_t amount) noexcept { (*static_cast<CargoArray *>(cargoes))[cargo] += amount; },
 
 		.scale_cargo = OpenTTDScaleTownCargo,
 		.cargogen_mode = OpenTTDTownCargoGenMode,
@@ -1261,7 +1231,6 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.make_house = RustTown_make_house,
 
 		.population_changed = RustTown_population_changed,
-		.nearby_stations = RustTown_nearby_stations,
 		.house_count = RustHouseSpecCount32,
 		.update_max_pass = RustTown_update_max_pass,
 		.next_town = GetRustSharedServices().town_next_id,

@@ -184,10 +184,6 @@ pub struct Object {
     _private: [u8; 0],
 }
 #[repr(C)]
-pub struct LoopFrame {
-    _private: [u8; 0],
-}
-#[repr(C)]
 pub struct GenerationFrame {
     _private: [u8; 0],
 }
@@ -317,9 +313,6 @@ pub struct ObjectServices {
     pub clear_price: unsafe extern "C" fn(*const Spec) -> Price,
     pub set_hq: unsafe extern "C" fn(u8, u32) -> (),
     pub statue_town: unsafe extern "C" fn(*mut Object) -> crate::town::TownRef,
-    pub hq_begin: unsafe extern "C" fn(*mut LoopFrame, u32, u32) -> (),
-    pub hq_deliver: unsafe extern "C" fn(*mut LoopFrame, u8, u32, u8) -> (),
-    pub hq_end: unsafe extern "C" fn(*mut LoopFrame) -> (),
     pub boolean_callback: unsafe extern "C" fn(*const Spec, u16, u16) -> bool,
     pub close_inspect: unsafe extern "C" fn(u32) -> (),
     pub progress_set: unsafe extern "C" fn(*mut GenerationFrame, u32) -> bool,
@@ -1471,7 +1464,7 @@ impl World<'_> {
         }
         crate::witness::hit(crate::witness::OBJECT_CARGO);
     }
-    fn tile_loop(&self, tile: u32, frame: *mut LoopFrame, call: *mut crate::ground::Call) {
+    fn tile_loop(&self, tile: u32, call: *mut crate::ground::Call) {
         unsafe {
             let policy = (self.s.loop_policy)(tile);
             if policy.flags & ANIMATION != 0 {
@@ -1503,7 +1496,28 @@ impl World<'_> {
                 return;
             }
             let level = u32::from(self.get_company_hq_size(tile)) + 1;
-            (self.s.hq_begin)(frame, tile, level);
+            crate::movement::native_assert(self.shared, level < 6);
+            let mut stations =
+                crate::station::StationFinder::new(crate::tilearea::TileArea { tile, w: 2, h: 2 });
+            let catchment = std::cell::OnceCell::new();
+            let mut deliver = |cargo: u8, amount: u32| {
+                let c = catchment.get_or_init(|| crate::station::Ctx::from_shared(self.shared));
+                let list = std::ptr::from_ref(stations.get_stations(c));
+                let source = crate::cargo_storage::Source {
+                    id: u16::from(self.owner(tile)),
+                    source_type: crate::source_type::Source::HEADQUARTERS,
+                };
+                // The call-local finder's set outlives the delivery and no
+                // service can reach it.
+                crate::station::move_goods_to_station(
+                    cargo,
+                    amount,
+                    source,
+                    list,
+                    crate::company_type::INVALID_OWNER,
+                    c,
+                );
+            };
             let random = self.shared.random();
             let pass = crate::cargo_registry::openttd_rust_cargo_by_label(
                 crate::cargo_type::CT_PASSENGERS,
@@ -1516,7 +1530,7 @@ impl World<'_> {
                     amount = (amount + 1) >> 1;
                 }
                 amount = (self.s.scale_cargo)(amount);
-                (self.s.hq_deliver)(frame, pass, amount, self.owner(tile));
+                deliver(pass, amount);
                 crate::witness::hit(crate::witness::OBJECT_HQ_PASS);
             }
             let mail =
@@ -1529,10 +1543,9 @@ impl World<'_> {
                     amount = (amount + 1) >> 1;
                 }
                 amount = (self.s.scale_cargo)(amount);
-                (self.s.hq_deliver)(frame, mail, amount, self.owner(tile));
+                deliver(mail, amount);
                 crate::witness::hit(crate::witness::OBJECT_HQ_MAIL);
             }
-            (self.s.hq_end)(frame);
         }
         crate::witness::hit(crate::witness::OBJECT_LOOP);
     }
@@ -2266,12 +2279,11 @@ pub unsafe extern "C" fn openttd_rust_object_cargo(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_tile_loop(
     s: *const ObjectServices,
-    frame: *mut LoopFrame,
     call: *mut crate::ground::Call,
     tile: u32,
 ) {
     let w = unsafe { World::new::<false>(&*s) };
-    w.tile_loop(tile, frame, call);
+    w.tile_loop(tile, call);
 }
 
 /// Synchronous object owner entry.
@@ -2502,9 +2514,6 @@ crate::abi::layouts! {
         clear_price,
         set_hq,
         statue_town,
-        hq_begin,
-        hq_deliver,
-        hq_end,
         boolean_callback,
         close_inspect,
         progress_set,

@@ -18,7 +18,7 @@
 )]
 use crate::game_state::GameState;
 pub use crate::source_type::Source;
-use crate::station::{NearbyIndustryCursor, Station};
+use crate::station::Station;
 use crate::subsidy_type::PartOfSubsidy;
 use crate::{
     cargo_type::{INVALID_CARGO, NUM_CARGO, is_valid_cargo_type},
@@ -46,7 +46,6 @@ impl State {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Cargo {
-    pub object: *mut c_void,
     pub data: *mut u32,
 }
 #[repr(C)]
@@ -81,10 +80,6 @@ pub struct Services {
     pub expired_events: extern "C" fn(u16),
     pub dirty: extern "C" fn(),
     pub station: extern "C" fn(u16) -> *const Station,
-    pub station_empty: extern "C" fn(*const Station) -> bool,
-    pub catchment: extern "C" fn(*const Station, *mut c_void, extern "C" fn(*mut c_void, u32)),
-    pub begin_nearby: extern "C" fn(*mut NearbyIndustryCursor, *const Station),
-    pub next_nearby: extern "C" fn(*mut NearbyIndustryCursor) -> *mut industry::ShellHandle,
     pub assert_destination: extern "C" fn(Source),
 }
 struct RegistryState {
@@ -139,7 +134,7 @@ pub unsafe extern "C" fn openttd_rust_subsidy_destroy(id: u16, state: *mut State
     }
 }
 impl Services {
-    fn shared(&self) -> &Shared {
+    pub(crate) fn shared(&self) -> &Shared {
         unsafe { &*self.shared }
     }
     fn industry(&self) -> &industry::Services {
@@ -279,7 +274,7 @@ impl Services {
                         tile,
                         entry.house,
                         entry.town.shell,
-                        scratch.object,
+                        scratch.data,
                         &raw mut always,
                     );
                 } else {
@@ -287,7 +282,7 @@ impl Services {
                         self.town,
                         self.shared,
                         tile,
-                        scratch.object,
+                        scratch.data,
                     );
                 }
             }
@@ -464,14 +459,7 @@ impl Services {
             self.rebuild();
         }
     }
-    pub(crate) fn check(
-        &self,
-        cargo: u8,
-        company: u8,
-        src: Source,
-        station: u16,
-        cursor: *mut NearbyIndustryCursor,
-    ) -> bool {
+    pub(crate) fn check(&self, cargo: u8, company: u8, src: Source, station: u16) -> bool {
         if !src.is_valid()
             || src.kind > Source::TOWN
             || !(self.has_source_flag)(src, PartOfSubsidy::Source)
@@ -481,12 +469,11 @@ impl Services {
         // The original lazily creates a vector only after the first applicable
         // town destination. A fixed membership set preserves first-discovery
         // semantics without allocating on the cargo-delivery hot path.
-        let station = (self.station)(station);
-        let mut towns = TownsNear {
-            services: self,
-            bits: [0; 1024],
-        };
-        if !(self.station_empty)(station) {
+        let catchment = crate::station::Ctx::from_shared(self.shared());
+        let station_state = (catchment.c.station_owner)(station);
+        let mut towns = [0_u64; 1024];
+        // SAFETY: The live station owner; immediate read.
+        if !unsafe { crate::station::rect_is_empty(station_state) } {
             let mut needed = false;
             each(|_, state| {
                 needed |= unsafe {
@@ -497,7 +484,19 @@ impl Services {
                 };
             });
             if needed {
-                (self.catchment)(station, (&raw mut towns).cast(), catchment_tile);
+                let shared = self.shared();
+                // SAFETY: The live station owner; the visits read only the map and caches.
+                unsafe {
+                    crate::station::for_each_catchment_tile(station_state, &catchment, |tile| {
+                        if (shared.tile_type)(tile) != crate::tile_type::MP_HOUSE {
+                            return;
+                        }
+                        let town = (shared.town_index)(tile);
+                        if (self.has_source_flag)(Source::town(town), PartOfSubsidy::Destination) {
+                            towns[usize::from(town) / 64] |= 1 << (town % 64);
+                        }
+                    });
+                }
             }
         }
         let mut subsidised = false;
@@ -514,22 +513,20 @@ impl Services {
                 return;
             }
             if dst.kind == Source::INDUSTRY {
-                (self.begin_nearby)(cursor, station);
-                loop {
-                    let industry = (self.next_nearby)(cursor);
-                    if industry.is_null() {
-                        break;
-                    }
-                    if (self.industry_id)(industry.cast()) != dst.id {
-                        continue;
-                    }
-                    (self.assert_destination)(dst);
-                    subsidised = true;
-                    if unsafe { !(*state).is_awarded() } {
-                        self.award(id, company);
-                    }
+                // SAFETY: The live station owner; each entry is copied before the award.
+                unsafe {
+                    crate::station::for_each_industry_near(station_state, |near| {
+                        if near.id == dst.id {
+                            (self.assert_destination)(dst);
+                            subsidised = true;
+                            if !(*state).is_awarded() {
+                                self.award(id, company);
+                            }
+                        }
+                        true
+                    });
                 }
-            } else if towns.bits[usize::from(dst.id) / 64] & (1 << (dst.id % 64)) != 0 {
+            } else if towns[usize::from(dst.id) / 64] & (1 << (dst.id % 64)) != 0 {
                 (self.assert_destination)(dst);
                 subsidised = true;
                 if unsafe { !(*state).is_awarded() } {
@@ -538,23 +535,6 @@ impl Services {
             }
         });
         subsidised
-    }
-}
-struct TownsNear<'a> {
-    services: &'a Services,
-    bits: [u64; 1024],
-}
-extern "C" fn catchment_tile(context: *mut c_void, tile: u32) {
-    // SAFETY: Synchronous visitor receives the live stack context; scalar map
-    // and cache reads finish before any callback. No native state is borrowed.
-    let cache = unsafe { &mut *context.cast::<TownsNear<'_>>() };
-    let shared = cache.services.shared();
-    if (shared.tile_type)(tile) != crate::tile_type::MP_HOUSE {
-        return;
-    }
-    let town = (shared.town_index)(tile);
-    if (cache.services.has_source_flag)(Source::town(town), PartOfSubsidy::Destination) {
-        cache.bits[usize::from(town) / 64] |= 1 << (town % 64);
     }
 }
 #[unsafe(no_mangle)]
@@ -599,16 +579,15 @@ pub unsafe extern "C" fn openttd_rust_subsidy_check(
     company: u8,
     src: Source,
     station: u16,
-    cursor: *mut NearbyIndustryCursor,
 ) -> bool {
-    unsafe { &*s }.check(cargo, company, src, station, cursor)
+    unsafe { &*s }.check(cargo, company, src, station)
 }
 
 crate::abi::layouts! {
     fn abi_layout;
     "Source" ["probe"] => crate::subsidy::Source { id, kind => type, };
     "OpenTTDSubsidyState" ["probe"] => State { cargo_type, remaining, awarded, src, dst, };
-    "OpenTTDSubsidyCargo" ["probe"] => Cargo { object, data, };
+    "OpenTTDSubsidyCargo" ["probe"] => Cargo { data, };
     "OpenTTDSubsidyServices" ["probe"] => Services {
         shared,
         town,
@@ -640,10 +619,6 @@ crate::abi::layouts! {
         expired_events,
         dirty,
         station,
-        station_empty,
-        catchment,
-        begin_nearby,
-        next_nearby,
         assert_destination,
     };
 }
