@@ -114,8 +114,8 @@ static void HouseResolverScenario(const std::vector<std::pair<TileIndex, HouseID
 	/* Ordered StationFinder must OR canonical acceptance histories. It is
 	 * call-local, independent of TileLoop_Town's static finder. Four one-tile
 	 * rail stations within reach of every part take CmdBuildRailStation's
-	 * rectangle, tile and catchment steps, which enter them in the town's nearby
-	 * set; the replaced tiles are restored afterwards. */
+	 * rectangle and tile steps; the settings-path catchment recompute enters
+	 * them in the town's nearby set. The replaced tiles are restored afterwards. */
 	struct SavedTile { TileIndex tile; uint8_t type, height, m1, m3, m4, m5, m6, m7; uint16_t m2, m8; };
 	std::vector<SavedTile> saved;
 	std::vector<Station *> stations;
@@ -131,10 +131,10 @@ static void HouseResolverScenario(const std::vector<std::pair<TileIndex, HouseID
 		station->rect.BeforeAddTile(near, StationRect::ADD_FORCE);
 		MakeRailStation(near, OWNER_NONE, station->index, AXIS_X, 0, RAILTYPE_RAIL);
 		station->train_station = TileArea(near, 1, 1); station->facilities.Set(StationFacility::Train);
-		station->RecomputeCatchment();
 		stations.push_back(station);
 	}
 	require(stations.size() == states.size());
+	Station::RecomputeCatchmentForAll();
 	for (Station *station : stations) require(town->stations_near.find(station) != town->stations_near.end());
 	offset = 0;
 	require(run("acceptance-history", CBID_HOUSE_ANIMATION_TRIGGER_WATCHED_CARGO_ACCEPTED, 0x64, 0, false, tile) == 31);

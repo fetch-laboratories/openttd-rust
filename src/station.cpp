@@ -328,11 +328,6 @@ void Station::RemoveFromAllNearbyLists()
 	openttd_rust_station_remove_from_nearby_lists(this, &GetRustStationCatchmentServices());
 }
 
-void Station::RecomputeCatchment(bool no_clear_nearby_lists)
-{
-	openttd_rust_station_recompute_catchment(this, no_clear_nearby_lists, &GetRustStationCatchmentServices());
-}
-
 /* static */ void Station::RecomputeCatchmentForAll()
 {
 	openttd_rust_station_recompute_catchment_for_all(&GetRustStationCatchmentServices());

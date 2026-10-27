@@ -1100,17 +1100,6 @@ pub unsafe extern "C" fn openttd_rust_station_rect_before_add_rect(
     unsafe { *r = copy };
     ok
 }
-/// Native `Station::RecomputeCatchment`.
-/// # Safety
-/// `st` is a live station; `c` is the live catchment table.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_recompute_catchment(
-    st: *mut BaseStation,
-    no_clear_nearby_lists: bool,
-    c: *const CatchmentServices,
-) {
-    recompute_catchment(st, no_clear_nearby_lists, &unsafe { Ctx::new(c) });
-}
 /// Native `Station::RecomputeCatchmentForAll`.
 /// # Safety
 /// `c` is the live catchment table.

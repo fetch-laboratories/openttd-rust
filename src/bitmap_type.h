@@ -24,16 +24,14 @@ public:
 	BitmapTileArea() : bitmap(openttd_rust_bitmap_new()), owned(true) {}
 	BitmapTileArea(const TileArea &ta) : BitmapTileArea() { this->Initialize(ta); }
 	explicit BitmapTileArea(OpenTTDBitmapTileArea *storage) : bitmap(storage), owned(false) {}
-	/** An owned, independent copy. */
-	BitmapTileArea(const BitmapTileArea &other) : BitmapTileArea() { *this = other; }
-	BitmapTileArea &operator=(const BitmapTileArea &other);
+	BitmapTileArea(const BitmapTileArea &) = delete;
+	BitmapTileArea &operator=(const BitmapTileArea &) = delete;
 	~BitmapTileArea() { if (this->owned) openttd_rust_bitmap_destroy(this->bitmap); }
 
 	/** The live inherited geometry. */
 	operator const TileArea &() const { return *reinterpret_cast<const TileArea *>(this->bitmap); }
-	void Reset() { openttd_rust_bitmap_reset(this->bitmap); }
 	void Initialize(const TileArea &ta) { openttd_rust_bitmap_initialize(this->bitmap, {ta.tile.base(), ta.w, ta.h}); }
-	void SetTile(TileIndex tile) { openttd_rust_bitmap_set(this->bitmap, tile.base(), true, &GetRustSharedServices()); }
+	void SetTile(TileIndex tile) { openttd_rust_bitmap_set(this->bitmap, tile.base(), &GetRustSharedServices()); }
 	bool HasTile(TileIndex tile) const { return openttd_rust_bitmap_has(this->bitmap, tile.base(), &GetRustSharedServices()); }
 };
 
@@ -160,20 +158,6 @@ public:
 	}
 };
 
-#ifdef WITH_RUST
-/** Copy the geometry and set tiles into this storage, owned or borrowed. */
-inline BitmapTileArea &BitmapTileArea::operator=(const BitmapTileArea &other)
-{
-	if (this == &other) return *this;
-	const TileArea &area = other;
-	this->Initialize(area);
-	/* An empty source has no tiles; iterating it would step from INVALID_TILE. */
-	if (area.w == 0 || area.h == 0) return *this;
-	BitmapTileIterator it(other);
-	for (TileIndex tile = it; tile != INVALID_TILE; tile = ++it) this->SetTile(tile);
-	return *this;
-}
-#endif
 
 
 #endif /* BITMAP_TYPE_HPP */

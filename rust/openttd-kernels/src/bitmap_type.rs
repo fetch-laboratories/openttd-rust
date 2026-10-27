@@ -83,12 +83,6 @@ impl BitmapTileArea {
         let index = self.index(tile, map);
         self.data[index] = true;
     }
-    /// `ClrTile`, asserting containment.
-    pub fn clr_tile(&mut self, tile: u32, map: Map, check: impl Fn(bool)) {
-        check(self.area.contains(tile, map, &check));
-        let index = self.index(tile, map);
-        self.data[index] = false;
-    }
     /// `HasTile`.
     pub fn has_tile(&self, tile: u32, map: Map, check: impl Fn(bool)) -> bool {
         self.area.contains(tile, map, check) && self.data[self.index(tile, map)]
@@ -152,13 +146,6 @@ pub extern "C" fn openttd_rust_bitmap_new() -> *mut BitmapTileArea {
 pub unsafe extern "C" fn openttd_rust_bitmap_destroy(bitmap: *mut BitmapTileArea) {
     drop(unsafe { Box::from_raw(bitmap) });
 }
-/// Native `Reset`.
-/// # Safety
-/// Live bitmap with no other borrow.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_bitmap_reset(bitmap: *mut BitmapTileArea) {
-    unsafe { (*bitmap).reset() };
-}
 /// Native `Initialize(const TileArea &)`.
 /// # Safety
 /// Live bitmap with no other borrow.
@@ -169,24 +156,18 @@ pub unsafe extern "C" fn openttd_rust_bitmap_initialize(
 ) {
     unsafe { (*bitmap).initialize(area) };
 }
-/// Native `SetTile`/`ClrTile`.
+/// Native `SetTile`.
 /// # Safety
 /// Live bitmap with no other borrow; `shared` is the live shared table.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_bitmap_set(
     bitmap: *mut BitmapTileArea,
     tile: u32,
-    value: bool,
     shared: *const crate::services::Services,
 ) {
     let s = unsafe { &*shared };
     let map = Map::from_log_x((s.map_log_x)());
-    let check = |ok| crate::movement::native_assert(s, ok);
-    if value {
-        unsafe { (*bitmap).set_tile(tile, map, check) };
-    } else {
-        unsafe { (*bitmap).clr_tile(tile, map, check) };
-    }
+    unsafe { (*bitmap).set_tile(tile, map, |ok| crate::movement::native_assert(s, ok)) };
 }
 /// Native `HasTile`.
 /// # Safety
@@ -227,8 +208,6 @@ mod tests {
         b.set_tile(m.tile_xy(4, 5), m, |ok| assert!(ok));
         assert!(b.has_tile(m.tile_xy(4, 5), m, |ok| assert!(ok)));
         assert!(!b.has_tile(m.tile_xy(5, 5), m, |ok| assert!(ok)));
-        b.clr_tile(m.tile_xy(4, 5), m, |ok| assert!(ok));
-        assert!(!b.has_tile(m.tile_xy(4, 5), m, |ok| assert!(ok)));
         b.reset();
         assert_eq!((b.area.tile, b.area.w, b.area.h), (INVALID_TILE, 0, 0));
         assert!(!b.has_tile(m.tile_xy(4, 5), m, |ok| assert!(ok)));
@@ -243,7 +222,7 @@ mod tests {
             w: 3,
             h: 2,
         });
-        for (x, y) in [(3, 1), (1, 2), (2, 1)] {
+        for (x, y) in [(3, 1), (2, 1)] {
             b.set_tile(m.tile_xy(x, y), m, |ok| assert!(ok));
         }
         let ptr = &raw mut b;
@@ -251,11 +230,14 @@ mod tests {
         let mut seen = Vec::new();
         while it.tile() != INVALID_TILE {
             seen.push(it.tile());
-            // Clearing a later tile during iteration hides it, as the native pointer does.
-            unsafe { (*ptr).clr_tile(m.tile_xy(1, 2), m, |ok| assert!(ok)) };
+            // Setting a later tile during iteration shows it, as the native pointer does.
+            unsafe { (*ptr).set_tile(m.tile_xy(1, 2), m, |ok| assert!(ok)) };
             unsafe { it.advance(ptr, m, |ok| assert!(ok)) };
         }
-        assert_eq!(seen, vec![m.tile_xy(2, 1), m.tile_xy(3, 1)]);
+        assert_eq!(
+            seen,
+            vec![m.tile_xy(2, 1), m.tile_xy(3, 1), m.tile_xy(1, 2)]
+        );
     }
 
     #[test]
