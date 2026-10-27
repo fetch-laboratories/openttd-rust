@@ -188,6 +188,7 @@ review judges them by their effects):
 | Testing issues queued; #514 the next workflow PR | `1f2bc8e228` | Testing work starting ahead of ready owners or #515 |
 | Steer judges user rule changes and carries untested ones forward | `bcbfa60afb`, `805c0111c8` | Applied by this review at no cost |
 | Every open issue has a place in the roadmap; root runs `docs/skills/steer/issues.py` at start, when planning and when taking stock (user-directed after this review found catchment, the testing set, #312 and #198 passed over) | twenty-first review | Unplaced and excluded counts at each steer; exclusion lines without a return condition; time root spends placing issues |
+| Under a Claude Code root, Sonnet writes no code: implementation, fixes and code-touching follow-ups run on Opus; Sonnet only for non-code tasks such as runs, measurements and tracker edits (user, 2026-10-27) | this session | Sonnet-authored commits in PRs; cost of Opus-only implementation |
 
 ## Earlier steering, still in force
 
