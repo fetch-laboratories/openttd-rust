@@ -297,11 +297,9 @@ uint16_t IndustryOverrideManager::GetID(uint16_t grf_local_id, uint32_t grfid) c
  * @param substitute_id industry from which data has been copied
  * @return a free entity id (slotid) if ever one has been found, or Invalid_ID marker otherwise
  */
+#ifndef WITH_RUST
 uint16_t IndustryOverrideManager::AddEntityID(uint16_t grf_local_id, uint32_t grfid, uint16_t substitute_id)
 {
-#ifdef WITH_RUST
-	return openttd_rust_industry_definition_allocate(this->rust_owner, grf_local_id, grfid, substitute_id, &GetIndustryDefinitionServices());
-#else
 	/* This entity hasn't been defined before, so give it an ID now. */
 	for (uint16_t id = 0; id < this->max_entities; id++) {
 		/* Skip overridden industries */
@@ -327,8 +325,8 @@ uint16_t IndustryOverrideManager::AddEntityID(uint16_t grf_local_id, uint32_t gr
 	}
 
 	return this->invalid_id;
-#endif
 }
+#endif
 
 /**
  * Method to install the new industry data in its proper slot

@@ -37,9 +37,7 @@ use crate::tile_type::{
 };
 use crate::timer_game_tick::TOWN_GROWTH_TICKS;
 
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct TownId(pub u16);
+pub use crate::town_type::TownId;
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct TownRef {

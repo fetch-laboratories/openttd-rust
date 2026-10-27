@@ -159,7 +159,7 @@ macro_rules! registry {
             use super::*;
             type Spec = $spec;
             static STATE: GameState<Registry<Spec>> = GameState::new(Registry::new());
-            static SERVICES: GameState<*const Services<Spec>> = GameState::new(ptr::null());
+            pub(super) static SERVICES: GameState<*const Services<Spec>> = GameState::new(ptr::null());
             #[unsafe(export_name = concat!($prefix, "_reset"))]
             pub unsafe extern "C" fn reset(s: *const Services<Spec>) {
                 SERVICES.exchange(s);
@@ -273,6 +273,10 @@ crate::abi::layouts! {
     "OpenTTDRoadStopClassServices" ["station_service"] => Services<crate::station_cmd::RoadSpec> { class_index, set_index, identity, exhausted, object, defaults, default_count, maximum, empty, insert_empty };
     "OpenTTDAirportClassServices" ["station_service"] => Services<crate::station_cmd::AirportSpec> { class_index, set_index, identity, exhausted, object, defaults, default_count, maximum, empty, insert_empty };
     "OpenTTDObjectClassServices" ["station_service"] => Services<crate::objects::Spec> { class_index, set_index, identity, exhausted, object, defaults, default_count, maximum, empty, insert_empty };
+}
+
+pub(crate) unsafe fn station_identity(spec: *const crate::station_cmd::RailSpec) -> Identity {
+    unsafe { (station::SERVICES.table().identity)(spec) }
 }
 
 pub(crate) fn station_label(class: u16) -> u32 {

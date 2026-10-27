@@ -7,6 +7,9 @@
 #include "industry_cmd.h"
 #include "saveload/saveload.h"
 #include "table/strings.h"
+#ifdef WITH_RUST
+#include "rust/industry_definition_ffi.h"
+#endif
 
 static uint32_t DefinitionGRFID(const char *text)
 {
@@ -70,14 +73,26 @@ static void DefinitionClimateReset()
 	_industry_mngr.mappings[NUM_INDUSTRYTYPES - 1] = {0x475475, 127, 0};
 	_industry_mngr.Add(126, 0x475475, 0);
 	_settings_game.game_creation.landscape = LandscapeType::Toyland;
+#ifdef WITH_RUST
+	openttd_rust_industry_definition_reset(to_underlying(_settings_game.game_creation.landscape), &GetIndustryDefinitionServices());
+#else
 	ResetIndustries();
+#endif
 	DefinitionRequire(!GetIndustrySpec(0)->enabled && GetIndustrySpec(27)->enabled && _industry_mngr.GetID(127, 0x475475) == NUM_INDUSTRYTYPES - 1 && _industry_mngr.GetID(126, 0x475475) == IT_INVALID, "climate-and-reset-lifetimes");
 	_settings_game.game_creation.landscape = LandscapeType::Arctic;
+#ifdef WITH_RUST
+	openttd_rust_industry_definition_reset(to_underlying(_settings_game.game_creation.landscape), &GetIndustryDefinitionServices());
+#else
 	ResetIndustries();
+#endif
 	DefinitionRequire(GetIndustrySpec(0)->enabled && !GetIndustrySpec(27)->enabled, "arctic-reset");
 	_industry_mngr.ResetMapping();
 	climate.Restore();
+#ifdef WITH_RUST
+	openttd_rust_industry_definition_reset(to_underlying(_settings_game.game_creation.landscape), &GetIndustryDefinitionServices());
+#else
 	ResetIndustries();
+#endif
 }
 static bool IndustryDefinitionsScenario(std::span<std::string_view> args)
 {

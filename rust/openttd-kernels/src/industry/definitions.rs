@@ -1,7 +1,8 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Industry definition allocation and publication. Native specs hold tables and graphs;
 //! mapping/override state is canonical Rust storage. All calls run under the game-state
-//! mutex. References to manager storage end before native leaves or reentrant owners.
+//! mutex. Cargo array pointers expire at return; cargo translation cannot mutate specs.
+//! References to manager storage end before native leaves or reentrant owners.
 use super::{SpecHandle, TileSpec};
 pub(crate) mod properties;
 pub(crate) mod storage;
@@ -19,9 +20,25 @@ pub struct Availability {
     pub has_file: bool,
 }
 #[repr(C)]
-pub struct Cargo {
-    pub label: crate::newgrf::CargoLabel,
-    pub cargo: u8,
+pub struct CargoSlots<const N: usize> {
+    cargo: *mut u8,
+    labels: [crate::newgrf::CargoLabel; N],
+}
+impl<const N: usize> CargoSlots<N> {
+    unsafe fn translate(self) {
+        for i in 0..N {
+            if !crate::cargo_type::is_valid_cargo_type(unsafe { self.cargo.add(i).read() }) {
+                unsafe {
+                    self.cargo.add(i).write(translate(self.labels[i]));
+                }
+            }
+        }
+    }
+}
+#[repr(C)]
+pub struct IndustryCargo {
+    produced: CargoSlots<2>,
+    accepted: CargoSlots<3>,
 }
 #[repr(C)]
 pub struct Services {
@@ -53,9 +70,8 @@ pub struct Services {
     pub clear_file: unsafe extern "C" fn(*mut c_void),
     pub conflicting: unsafe extern "C" fn(*mut SpecHandle) -> *mut u8,
     pub invalid_name: unsafe extern "C" fn(*mut SpecHandle),
-    pub produced: unsafe extern "C" fn(*const SpecHandle, usize) -> Cargo,
-    pub accepted: unsafe extern "C" fn(*const SpecHandle, usize) -> Cargo,
-    pub tile_accepted: unsafe extern "C" fn(*const TileSpec, usize) -> Cargo,
+    pub cargo: unsafe extern "C" fn(*mut SpecHandle) -> IndustryCargo,
+    pub tile_cargo: unsafe extern "C" fn(*mut TileSpec) -> CargoSlots<3>,
     pub set_produced: unsafe extern "C" fn(*mut SpecHandle, usize, u8),
     pub set_accepted: unsafe extern "C" fn(*mut SpecHandle, usize, u8),
     pub set_tile_accepted: unsafe extern "C" fn(*mut TileSpec, usize, u8),
@@ -245,46 +261,20 @@ pub unsafe fn finalise(s: &Services) {
                 (s.invalid_name)(spec);
             }
         }
-        for i in 0..crate::industry_type::INDUSTRY_ORIGINAL_NUM_OUTPUTS {
-            let cargo = unsafe { (s.produced)(spec, i) };
-            if !crate::cargo_type::is_valid_cargo_type(cargo.cargo) {
-                unsafe {
-                    (s.set_produced)(spec, i, translate(cargo.label));
-                }
-            }
-        }
-        for i in 0..crate::industry_type::INDUSTRY_ORIGINAL_NUM_INPUTS {
-            let cargo = unsafe { (s.accepted)(spec, i) };
-            if !crate::cargo_type::is_valid_cargo_type(cargo.cargo) {
-                unsafe {
-                    (s.set_accepted)(spec, i, translate(cargo.label));
-                }
-            }
+        let cargo = unsafe { (s.cargo)(spec) };
+        unsafe {
+            cargo.produced.translate();
+            cargo.accepted.translate();
         }
     }
     for id in 0..crate::industry_type::NUM_INDUSTRYTILES {
         let spec = unsafe { (s.tile)(id) };
-        for i in 0..crate::industry_type::INDUSTRY_ORIGINAL_NUM_INPUTS {
-            let cargo = unsafe { (s.tile_accepted)(spec, i) };
-            if !crate::cargo_type::is_valid_cargo_type(cargo.cargo) {
-                unsafe {
-                    (s.set_tile_accepted)(spec, i, translate(cargo.label));
-                }
-            }
+        unsafe {
+            (s.tile_cargo)(spec).translate();
         }
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_definition_allocate(
-    manager: *mut override_manager::Manager,
-    local: u16,
-    grfid: u32,
-    substitute: u16,
-    s: *const Services,
-) -> u16 {
-    unsafe { allocate(manager, local, grfid, substitute, &*s) }
-}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_definition_reset(climate: u8, s: *const Services) {
     let s = unsafe { &*s };
@@ -327,8 +317,10 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDIndustryDefinitionIdentity" ["industry"] => Identity { grfid, local, substitute };
     "OpenTTDIndustryDefinitionAvailability" ["industry"] => Availability { enabled, has_file };
-    "OpenTTDIndustryDefinitionCargo" ["industry"] => Cargo { label, cargo };
+    "OpenTTDIndustryProducedSlots" ["industry"] => CargoSlots<2> { cargo, labels };
+    "OpenTTDIndustryAcceptedSlots" ["industry"] => CargoSlots<3> { cargo, labels };
+    "OpenTTDIndustryDefinitionCargo" ["industry"] => IndustryCargo { produced, accepted };
     "OpenTTDIndustryDefinitionServices" ["industry"] => Services {
-        generation, industry, tile, grfid, identity, tile_identity, availability, set_enabled, set_override, set_tile_override, set_tile_enabled, publish, publish_tile, industry_full, tile_full, reset_industry, clear_industry, climate_available, reset_tile, clear_tile, file, industry_count, tile_count, file_industry, file_tile, clear_file, conflicting, invalid_name, produced, accepted, tile_accepted, set_produced, set_accepted, set_tile_accepted
+        generation, industry, tile, grfid, identity, tile_identity, availability, set_enabled, set_override, set_tile_override, set_tile_enabled, publish, publish_tile, industry_full, tile_full, reset_industry, clear_industry, climate_available, reset_tile, clear_tile, file, industry_count, tile_count, file_industry, file_tile, clear_file, conflicting, invalid_name, cargo, tile_cargo, set_produced, set_accepted, set_tile_accepted
     };
 }

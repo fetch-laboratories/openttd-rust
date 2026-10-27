@@ -107,12 +107,12 @@ TEST_CASE("NewGRF - temporary managers preserve canonical industry owner")
 	{
 		IndustryOverrideManager temporary(2, 6, 99);
 		temporary.mappings[3] = {0x475475, 126, 0};
-		CHECK(openttd_rust_industry_map_type(254, 0x475475) == NUM_INDUSTRYTYPES - 1);
+		CHECK(_industry_mngr.GetID(126, 0x475475) == NUM_INDUSTRYTYPES - 1);
 		IndustryOverrideManager copy = temporary;
 		copy = _industry_mngr;
 		CHECK(copy.GetID(126, 0x475475) == NUM_INDUSTRYTYPES - 1);
 	}
-	CHECK(openttd_rust_industry_map_type(254, 0x475475) == NUM_INDUSTRYTYPES - 1);
+	CHECK(_industry_mngr.GetID(126, 0x475475) == NUM_INDUSTRYTYPES - 1);
 	_industry_mngr.mappings[NUM_INDUSTRYTYPES - 1] = saved;
 }
 TEST_CASE("NewGRF - temporary managers preserve canonical tile owner")

@@ -7,14 +7,49 @@
 
 //! Shared `vehicle_type.h` transport identities.
 /// `VEH_TRAIN`.
-pub const VEH_TRAIN: u8 = 0;
+pub const VEH_TRAIN: u8 = VehicleType::TRAIN.0;
 /// `VEH_ROAD`.
-pub const VEH_ROAD: u8 = 1;
+pub const VEH_ROAD: u8 = VehicleType::ROAD.0;
 /// `VEH_SHIP`.
-pub const VEH_SHIP: u8 = 2;
+pub const VEH_SHIP: u8 = VehicleType::SHIP.0;
 /// `VEH_AIRCRAFT`.
-pub const VEH_AIRCRAFT: u8 = 3;
+pub const VEH_AIRCRAFT: u8 = VehicleType::AIRCRAFT.0;
 pub const GROUND_ACCELERATION: u32 = 9800;
 
 /// End of vehicle types buildable by companies.
 pub const VEH_COMPANY_END: u8 = 4;
+
+/// Opaque native `Vehicle`; valid only while its native pool shell lives.
+#[repr(C)]
+pub struct OpenTTDVehicle {
+    _private: [u8; 0],
+}
+
+/// Native `VehicleType`, including unnamed uint8 values.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct VehicleType(pub u8);
+
+impl VehicleType {
+    /// Native `VEH_TRAIN`.
+    pub const TRAIN: Self = Self(0);
+    /// Native `VEH_ROAD`.
+    pub const ROAD: Self = Self(1);
+    /// Native `VEH_SHIP`.
+    pub const SHIP: Self = Self(2);
+    /// Native `VEH_AIRCRAFT`.
+    pub const AIRCRAFT: Self = Self(3);
+    /// Native `VEH_EFFECT`.
+    pub const EFFECT: Self = Self(4);
+    /// Native `VEH_DISASTER`.
+    pub const DISASTER: Self = Self(5);
+}
+
+/// Native `VehicleID` with its full original integer domain.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct VehicleID(pub u32);
+impl VehicleID {
+    /// Native invalid sentinel.
+    pub const INVALID: Self = Self(0xFFFFF);
+}

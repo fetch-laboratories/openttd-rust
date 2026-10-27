@@ -267,7 +267,9 @@ public:
 			OverrideManagerBase(offset, maximum, invalid) {}
 #endif
 
+#ifndef WITH_RUST
 	uint16_t AddEntityID(uint16_t grf_local_id, uint32_t grfid, uint16_t substitute_id) override;
+#endif
 	uint16_t GetID(uint16_t grf_local_id, uint32_t grfid) const override;
 
 #ifndef WITH_RUST

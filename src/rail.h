@@ -518,8 +518,10 @@ RailType GetRailTypeByLabel(RailTypeLabel label, bool allow_alternate_labels = t
 #ifndef WITH_RUST
 void ResetRailTypes();
 #endif
+#ifndef WITH_RUST
 void InitRailTypes();
 RailType AllocateRailType(RailTypeLabel label);
+#endif
 
 #ifdef WITH_RUST
 extern std::span<RailType> _sorted_railtypes;

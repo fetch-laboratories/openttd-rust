@@ -994,7 +994,6 @@ static_assert(OWNER_TOWN.base() == 15 && OWNER_NONE.base() == 16);
 static_assert(CalendarTime::MAX_DATE.base() == 1826212865);
 static uint8_t RustTown_growth_rate() noexcept { return _settings_game.economy.town_growth_rate; }
 static bool RustTown_allow_crossings() noexcept { return _settings_game.economy.allow_town_level_crossings; }
-static bool RustTown_allow_roads() noexcept { return _settings_game.economy.allow_town_roads; }
 static uint8_t RustTownRoadFlags(uint8_t id) noexcept { return GetRoadTypeInfo(static_cast<RoadType>(id))->flags.base(); }
 static OpenTTDTownHouseAvailability RustTownHouseAvailability(uint16_t id) noexcept
 {
@@ -1245,7 +1244,7 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.climate = OpenTTDLandscapeValue,
 		.highest_snow_line = OpenTTDHighestSnowLine,
 		.calendar_year = GetRustSharedServices().calendar_year,
-		.allow_roads = RustTown_allow_roads,
+		.allow_roads = RustAllowTownRoads,
 		.road_flags = RustTownRoadFlags,
 		.house_availability = RustTownHouseAvailability,
 		.house_placement = RustTownHousePlacement,

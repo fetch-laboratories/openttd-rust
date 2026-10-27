@@ -11,6 +11,7 @@
 #include "openttd.h"
 #include "genworld.h"
 #include "core/random_func.hpp"
+#include "type-reserve-fixture.hpp"
 extern RailTypeInfo _railtypes[RAILTYPE_END];
 extern RoadTypeInfo _roadtypes[ROADTYPE_END];
 #ifdef WITH_RUST
@@ -18,9 +19,7 @@ extern RoadTypes &_roadtypes_road, &_roadtypes_tram;
 #else
 extern RoadTypes _roadtypes_road, _roadtypes_tram;
 #endif
-static std::array<RailTypeInfo, RAILTYPE_END> TypeOriginalRail;
-static std::array<RoadTypeInfo, ROADTYPE_END> TypeOriginalRoad;
-static RoadTypes TypeOriginalRoadMask, TypeOriginalTramMask;
+static bool RestoreTypeInputs = false;
 static bool TypesInstalled = false;
 static void TypeRequire(bool value, const char *label)
 {
@@ -29,11 +28,8 @@ static void TypeRequire(bool value, const char *label)
 }
 static void InstallTypeInputs()
 {
-	std::copy(std::begin(_railtypes), std::end(_railtypes), TypeOriginalRail.begin());
-	std::copy(std::begin(_roadtypes), std::end(_roadtypes), TypeOriginalRoad.begin());
-	TypeOriginalRoadMask = _roadtypes_road; TypeOriginalTramMask = _roadtypes_tram;
-	for (uint i = 4; i < RAILTYPE_END; ++i) if (AllocateRailType(0x54520000 + i) != i) FixtureAbort(__LINE__);
-	for (uint i = 2; i < ROADTYPE_END; ++i) if (AllocateRoadType(0x54520000 + i, i == 61 ? RTT_TRAM : RTT_ROAD) != i) FixtureAbort(__LINE__);
+	for (uint i = 4; i < RAILTYPE_END; ++i) if (ReserveFixtureType<GSF_RAILTYPES>(0x54520000 + i) != i) FixtureAbort(__LINE__);
+	for (uint i = 2; i < ROADTYPE_END; ++i) if ((i == 61 ? ReserveFixtureType<GSF_TRAMTYPES>(0x54520000 + i) : ReserveFixtureType<GSF_ROADTYPES>(0x54520000 + i)) != i) FixtureAbort(__LINE__);
 	const auto date = TimerGameCalendar::date;
 	/* Default type zero otherwise date-introduces itself from an empty mask.
 	 * These declared inputs isolate engine publication and explicit mask seeds. */
@@ -58,16 +54,14 @@ static void InstallTypeInputs()
 	_railtypes[62].flags.Set(RailTypeFlag::Hidden);
 	_roadtypes[58].flags.Set(RoadTypeFlag::Hidden);
 	_roadtypes[59].flags.Set(RoadTypeFlag::Hidden); _roadtypes[59].flags.Set(RoadTypeFlag::TownBuild);
-	InitRailTypes(); InitRoadTypes();
 	TypesInstalled = true;
 }
-extern "C" void __real__Z18CopyTempEngineDatav();
-extern "C" void __wrap__Z18CopyTempEngineDatav()
+extern "C" void __real__Z25InitGRFTownGeneratorNamesv();
+extern "C" void __wrap__Z25InitGRFTownGeneratorNamesv()
 {
-	__real__Z18CopyTempEngineDatav();
-	if (std::getenv("OPENTTD_ENGINE_TYPES") == nullptr) return;
-	/* Actual load phase: sprites/specs and saved lifecycle are available, but
-	 * AfterLoadGame has not yet rebuilt the unsaved Company type masks. */
+	__real__Z25InitGRFTownGeneratorNamesv();
+	if (std::getenv("OPENTTD_ENGINE_TYPES") == nullptr || RestoreTypeInputs) return;
+	/* The production loader initializes types after town-name finalization. */
 	InstallTypeInputs();
 	fmt::print(stderr, "ENGINE types-loadphase true\n");
 }
@@ -257,7 +251,7 @@ static bool DefinitionScenario(std::span<std::string_view> args)
 		DefinitionLoad({"types-a.grf", "types-b.grf", "types-mismatch.grf"});
 		TypeRequire(GetRoadTramType(GetRoadTypeByLabel(0x54344141)) == RTT_TRAM, "definitions-reserve-mismatch");
 		DefinitionLoad({"types-a.grf", "types-b.grf", "types-full.grf"});
-		TypeRequire(AllocateRailType(0x46554c4c) == INVALID_RAILTYPE && AllocateRoadType(0x46554c4c, RTT_ROAD) == INVALID_ROADTYPE, "definitions-exhaustion");
+		TypeRequire(ReserveFixtureType<GSF_RAILTYPES>(0x46554c4c) == INVALID_RAILTYPE && ReserveFixtureType<GSF_ROADTYPES>(0x46554c4c) == INVALID_ROADTYPE, "definitions-exhaustion");
 		DefinitionLoad({"types-a.grf", "types-b.grf"}); DefinitionProperties();
 		TypeRequire(GetRailTypeByLabel(0x58303030) == INVALID_RAILTYPE && GetRoadTypeByLabel(0x59303030) == INVALID_ROADTYPE, "definitions-reset");
 		TileIndex base = TypeFlatArea(14);
@@ -385,8 +379,9 @@ static bool TypesScenario(std::span<std::string_view> args)
 		for (uint dx : {0, 2, 4, 6}) MakeClear(tile + TileDiffXY(dx, 0), CLEAR_GRASS, 3);
 		c->infrastructure = infra;
 	}
-	std::copy(TypeOriginalRail.begin(), TypeOriginalRail.end(), std::begin(_railtypes)); std::copy(TypeOriginalRoad.begin(), TypeOriginalRoad.end(), std::begin(_roadtypes));
-	_roadtypes_road = TypeOriginalRoadMask; _roadtypes_tram = TypeOriginalTramMask; InitRailTypes(); InitRoadTypes();
+	RestoreTypeInputs = true;
+	ReloadNewGRFData();
+	RestoreTypeInputs = false;
 	for (Company *other : Company::Iterate()) { other->avail_railtypes = GetCompanyRailTypes(other->index); other->avail_roadtypes = GetCompanyRoadTypes(other->index); }
 	TypeRequire(_railtypes[60].label == 0 && _roadtypes[60].label == 0, "restoration");
 	fmt::print(stderr, "ENGINE types-complete true\n");

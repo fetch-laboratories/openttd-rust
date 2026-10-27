@@ -156,10 +156,7 @@ pub struct CommandServices {
 }
 
 /// Opaque native town shell. Its address identifies the shell, not the Rust owner.
-#[repr(C)]
-pub struct TownHandle {
-    _private: [u8; 0],
-}
+pub use crate::town_type::TownHandle;
 
 /// Synchronous borrowed bytes, including embedded NULs. The producing entry
 /// specifies lifetime; no native callback may retain this view after mutation.
@@ -1161,9 +1158,7 @@ pub struct SignalType(pub u8);
 #[derive(Clone, Copy)]
 pub struct SignalState(pub u8);
 /// Native `Axis` with its unchanged uint8 representation.
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct Axis(pub u8);
+pub use crate::direction_type::Axis;
 /// Native `TransportType` with its unchanged uint8 representation.
 #[repr(transparent)]
 #[derive(Clone, Copy)]

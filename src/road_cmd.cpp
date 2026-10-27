@@ -136,11 +136,9 @@ static bool CompareRoadTypes(const RoadType &first, const RoadType &second)
 /**
  * Resolve sprites of custom road types
  */
+#ifndef WITH_RUST
 void InitRoadTypes()
 {
-#ifdef WITH_RUST
-	openttd_rust_road_init();
-#else
 	_sorted_roadtypes.clear();
 	for (RoadTypeInfo &rti : _roadtypes) {
 		RoadType rt = rti.Index();
@@ -152,17 +150,15 @@ void InitRoadTypes()
 		_sorted_roadtypes.push_back(rt);
 	}
 	std::sort(_sorted_roadtypes.begin(), _sorted_roadtypes.end(), CompareRoadTypes);
-#endif
 }
+#endif
 
 /**
  * Allocate a new road type label
  */
+#ifndef WITH_RUST
 RoadType AllocateRoadType(RoadTypeLabel label, RoadTramType rtt)
 {
-#ifdef WITH_RUST
-	return openttd_rust_road_allocate(label, rtt);
-#else
 	auto it = std::ranges::find(_roadtypes, 0, &RoadTypeInfo::label);
 	if (it == std::end(_roadtypes)) return INVALID_ROADTYPE;
 
@@ -195,8 +191,8 @@ RoadType AllocateRoadType(RoadTypeLabel label, RoadTramType rtt)
 	_roadtypes_tram.Set(rt, rtt == RTT_TRAM);
 
 	return rt;
-#endif
 }
+#endif
 
 #ifdef WITH_RUST
 const OpenTTDRoadRegistryServices &GetRustRoadRegistryServices() noexcept
@@ -205,6 +201,7 @@ const OpenTTDRoadRegistryServices &GetRustRoadRegistryServices() noexcept
 		.default_count = std::size(_original_roadtypes),
 		.spec = [](RoadType rt) noexcept { return &_roadtypes[rt]; },
 		.type_label = [](RoadType rt) noexcept { return RustRoadTypeLabel(GetRoadTypeInfo(rt)); },
+		.labels = []() noexcept { OpenTTDTypeLabelTable labels{}; for (size_t i = 0; i < std::size(_roadtypes); ++i) labels.values[i] = RustRoadTypeLabel(&_roadtypes[i]); return labels; },
 		.alternate = [](RoadType rt, uint32_t label) noexcept { return GetRoadTypeInfo(rt)->alternate_labels.contains(label); },
 		.clear = [](RoadTypeInfo *info) noexcept { *info = RoadTypeInfo{}; },
 		.copy_default = [](RoadTypeInfo *info, RoadType source) noexcept { *info = _original_roadtypes[source]; },

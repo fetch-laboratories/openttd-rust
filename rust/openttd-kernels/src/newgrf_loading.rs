@@ -1418,8 +1418,8 @@ unsafe fn after_load(s: &Services) {
         crate::engine_loading::openttd_rust_vehicle_order_commit(&*s.engine);
         (s.activate_shore)();
         (s.activate_tram_depot)();
-        crate::type_registry::openttd_rust_rail_init();
-        crate::type_registry::openttd_rust_road_init();
+        crate::type_registry::rail_init();
+        crate::type_registry::road_init();
         crate::engine_loading::openttd_rust_engine_bind_types(&*s.engine);
         (s.aging_stops)();
         (s.finalise_prices)();

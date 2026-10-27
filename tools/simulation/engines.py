@@ -178,7 +178,7 @@ def adapter(build, folder, env):
         env,
         ADAPTER,
         "engines",
-        wraps=("_Z18CopyTempEngineDatav",),
+        wraps=("_Z25InitGRFTownGeneratorNamesv",),
         replace_objects=("saveload.cpp.o", "/newgrf.cpp.o", "/newgrf_act0_cargo.cpp.o"),
     )
 

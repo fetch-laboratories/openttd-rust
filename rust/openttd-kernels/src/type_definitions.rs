@@ -180,7 +180,7 @@ fn rail_reserve(
                 let label = reader.dword()?.swap_bytes();
                 let mut rt = registry::openttd_rust_rail_by_label(label, false);
                 if rt == INVALID_RAILTYPE {
-                    rt = registry::openttd_rust_rail_allocate(label);
+                    rt = registry::rail_allocate(label);
                 }
                 unsafe {
                     *map.data.add(id as usize) = rt;
@@ -335,7 +335,7 @@ fn road_reserve(
                 let label = reader.dword()?.swap_bytes();
                 let mut rt = registry::openttd_rust_road_by_label(label, false);
                 if rt == INVALID_ROADTYPE {
-                    rt = registry::openttd_rust_road_allocate(label, rtt);
+                    rt = registry::road_allocate(label, rtt);
                 } else if crate::road::get_road_tram_type(rt).0 != rtt.0 {
                     (s.reserve_mismatch)(id);
                     return Ok(CIR_INVALID_ID);

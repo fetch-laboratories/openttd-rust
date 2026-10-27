@@ -9,8 +9,9 @@
     clippy::cast_possible_truncation
 )]
 use crate::newgrf_class::Identity;
-use crate::station::BaseStation;
 use crate::station_cmd::{RailSpec, SpecIndex};
+use crate::station_type::BaseStation;
+use crate::tile_type::TileIndex;
 use std::ptr;
 const NUM_STATIONSSPECS_PER_STATION: usize = 255;
 #[repr(C)]
@@ -36,8 +37,6 @@ pub struct Services {
     clear: unsafe extern "C" fn(*mut BaseStation),
     set_slot: unsafe extern "C" fn(*mut BaseStation, u8, *const RailSpec, u32, u16),
     rebind: unsafe extern "C" fn(*mut BaseStation, usize, *const RailSpec),
-    identity: unsafe extern "C" fn(*const RailSpec) -> Identity,
-    custom_index: unsafe extern "C" fn(u32) -> u32,
     set_cached: unsafe extern "C" fn(*mut BaseStation, u16, u64),
 }
 pub(crate) fn allocate(
@@ -88,9 +87,6 @@ pub(crate) fn allocate(
 }
 pub(crate) fn cache(native: *const Services, st: *mut BaseStation) {
     let s = unsafe { &*native };
-    unsafe {
-        (s.set_cached)(st, 0, 0);
-    }
     let mut anim = 0;
     let mut cargo = 0;
     for i in 0..unsafe { (s.count)(st) } {
@@ -101,9 +97,9 @@ pub(crate) fn cache(native: *const Services, st: *mut BaseStation) {
         let triggers = unsafe { (s.triggers)(spec) };
         anim |= triggers.animation;
         cargo |= triggers.cargo;
-        unsafe {
-            (s.set_cached)(st, anim, cargo);
-        }
+    }
+    unsafe {
+        (s.set_cached)(st, anim, cargo);
     }
 }
 pub(crate) fn assign(
@@ -121,7 +117,7 @@ pub(crate) fn assign(
             (s.resize)(st, usize::from(index) + 1);
         }
     }
-    let identity = unsafe { (s.identity)(spec) };
+    let identity = unsafe { crate::newgrf_class::station_identity(spec) };
     unsafe {
         (s.set_slot)(st, index, spec, identity.grfid, identity.local_id);
     }
@@ -138,12 +134,14 @@ pub(crate) fn deallocate(native: *const Services, st: *mut BaseStation, index: u
         crate::tile_type::INVALID_TILE,
         crate::newgrf_station::TA_WHOLE,
     );
-    let map = unsafe { &*s.shared }.map();
+    let shared = unsafe { &*s.shared };
+    let command = unsafe { &*(shared.station_commands)() };
+    let map = shared.map();
     for y in 0..area.h {
         for x in 0..area.w {
-            let tile = area.tile.wrapping_add(map.diff(i32::from(x), i32::from(y)));
-            if (animation.rail_belongs)(st, tile)
-                && unsafe { (s.custom_index)(tile) } == u32::from(index)
+            let tile = TileIndex(area.tile.wrapping_add(map.diff(i32::from(x), i32::from(y))));
+            if (animation.rail_belongs)(st, tile.0)
+                && (command.custom_rail_index)(tile.0) == u32::from(index)
             {
                 return;
             }
@@ -228,5 +226,5 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStationSpecTriggers" ["station_service"] => Triggers { animation, cargo };
     "OpenTTDStationSpecVacancy" ["station_service"] => Vacancy { spec, grfid };
-    "OpenTTDStationAssociationServices" ["station_service"] => Services { triggers, shared, roadstop, count, vacancy, spec, key, resize, clear, set_slot, rebind, identity, custom_index, set_cached };
+    "OpenTTDStationAssociationServices" ["station_service"] => Services { triggers, shared, roadstop, count, vacancy, spec, key, resize, clear, set_slot, rebind, set_cached };
 }

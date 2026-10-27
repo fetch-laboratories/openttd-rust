@@ -141,11 +141,9 @@ static int WhoCanServiceIndustry(Industry *ind);
  * It adjusts the enabling of the industry too, based on climate availability.
  * This will allow for clearer testings
  */
+#ifndef WITH_RUST
 void ResetIndustries()
 {
-#ifdef WITH_RUST
-	openttd_rust_industry_definition_reset(to_underlying(_settings_game.game_creation.landscape), &GetIndustryDefinitionServices());
-#else
 	auto industry_insert = std::copy(std::begin(_origin_industry_specs), std::end(_origin_industry_specs), std::begin(_industry_specs));
 	std::fill(industry_insert, std::end(_industry_specs), IndustrySpec{});
 
@@ -160,8 +158,8 @@ void ResetIndustries()
 	/* Reset any overrides that have been set. */
 	_industile_mngr.ResetOverride();
 	_industry_mngr.ResetOverride();
-#endif
 }
+#endif
 
 /**
  * Retrieve the type for this industry.  Although it is accessed by a tile,

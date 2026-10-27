@@ -312,8 +312,10 @@ RoadType GetRoadTypeByLabel(RoadTypeLabel label, bool allow_alternate_labels = t
 #ifndef WITH_RUST
 void ResetRoadTypes();
 #endif
+#ifndef WITH_RUST
 void InitRoadTypes();
 RoadType AllocateRoadType(RoadTypeLabel label, RoadTramType rtt);
+#endif
 bool HasAnyRoadTypesAvail(CompanyID company, RoadTramType rtt);
 
 #ifdef WITH_RUST

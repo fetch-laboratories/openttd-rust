@@ -11,10 +11,7 @@
 use crate::services::RoadTramType;
 use crate::{
     game_state::GameState,
-    rail_type::{
-        INVALID_RAILTYPE, RAILTYPE_BEGIN, RAILTYPE_ELECTRIC, RAILTYPE_END, RAILTYPE_MAGLEV,
-        RAILTYPE_MONO, RAILTYPE_RAIL,
-    },
+    rail_type::{INVALID_RAILTYPE, RAILTYPE_BEGIN, RAILTYPE_END, RAILTYPE_RAIL},
     road_type::{INVALID_ROADTYPE, ROADTYPE_BEGIN, ROADTYPE_END, ROADTYPE_ROAD, ROADTYPE_TRAM},
 };
 use std::{ffi::c_void, ptr};
@@ -23,6 +20,10 @@ type Handle = *const c_void;
 pub struct Publication {
     label: u32,
     hidden: bool,
+}
+#[repr(C)]
+pub struct LabelTable {
+    values: [u32; 64],
 }
 #[repr(C)]
 pub struct Allocation {
@@ -65,6 +66,7 @@ pub struct RailServices {
     default_count: u8,
     spec: extern "C" fn(u8) -> Handle,
     type_label: extern "C" fn(u8) -> u32,
+    labels: extern "C" fn() -> LabelTable,
     alternate: extern "C" fn(u8, u32) -> bool,
     clear: extern "C" fn(Handle),
     copy_default: extern "C" fn(Handle, u8),
@@ -79,6 +81,7 @@ pub struct RoadServices {
     default_count: u8,
     spec: extern "C" fn(u8) -> Handle,
     type_label: extern "C" fn(u8) -> u32,
+    labels: extern "C" fn() -> LabelTable,
     alternate: extern "C" fn(u8, u32) -> bool,
     clear: extern "C" fn(Handle),
     copy_default: extern "C" fn(Handle, u8),
@@ -170,8 +173,9 @@ pub extern "C" fn openttd_rust_rail_by_label(label: u32, alternate: bool) -> u8 
         return INVALID_RAILTYPE;
     }
     let s = services();
+    let labels = (s.rail().labels)();
     for rt in RAILTYPE_BEGIN..RAILTYPE_END {
-        if (s.rail().type_label)(rt) == label {
+        if labels.values[usize::from(rt)] == label {
             return rt;
         }
     }
@@ -184,8 +188,7 @@ pub extern "C" fn openttd_rust_rail_by_label(label: u32, alternate: bool) -> u8 
     }
     INVALID_RAILTYPE
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_rail_allocate(label: u32) -> u8 {
+pub(crate) fn rail_allocate(label: u32) -> u8 {
     let s = services();
     for rt in RAILTYPE_BEGIN..RAILTYPE_END {
         if (s.rail().type_label)(rt) != 0 {
@@ -203,8 +206,7 @@ pub extern "C" fn openttd_rust_rail_allocate(label: u32) -> u8 {
     }
     INVALID_RAILTYPE
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_rail_init() {
+pub(crate) fn rail_init() {
     let s = services();
     unsafe {
         (*REGISTRY.get()).rail_sorted.clear();
@@ -292,8 +294,9 @@ pub extern "C" fn openttd_rust_road_by_label(label: u32, alternate: bool) -> u8 
         return INVALID_ROADTYPE;
     }
     let s = services();
+    let labels = (s.road().labels)();
     for rt in ROADTYPE_BEGIN..ROADTYPE_END {
-        if (s.road().type_label)(rt) == label {
+        if labels.values[usize::from(rt)] == label {
             return rt;
         }
     }
@@ -306,8 +309,7 @@ pub extern "C" fn openttd_rust_road_by_label(label: u32, alternate: bool) -> u8 
     }
     INVALID_ROADTYPE
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_road_allocate(label: u32, rtt: RoadTramType) -> u8 {
+pub(crate) fn road_allocate(label: u32, rtt: RoadTramType) -> u8 {
     let s = services();
     for rt in ROADTYPE_BEGIN..ROADTYPE_END {
         if (s.road().type_label)(rt) != 0 {
@@ -330,8 +332,7 @@ pub extern "C" fn openttd_rust_road_allocate(label: u32, rtt: RoadTramType) -> u
     }
     INVALID_ROADTYPE
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_road_init() {
+pub(crate) fn road_init() {
     let s = services();
     unsafe {
         (*REGISTRY.get()).road_sorted.clear();
@@ -484,36 +485,15 @@ pub extern "C" fn openttd_rust_road_reverse(rt: u8, file: Handle) -> u8 {
         .position(|v| *v == label)
         .map_or(0xff, |index| index as u8)
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_type_maps_init(s: *const Services, file: Handle) {
-    let s = unsafe { &*s };
-    for (map, invalid, defaults) in [
-        (
-            (s.rail_map)(file),
-            INVALID_RAILTYPE,
-            &[
-                RAILTYPE_RAIL,
-                RAILTYPE_ELECTRIC,
-                RAILTYPE_MONO,
-                RAILTYPE_MAGLEV,
-            ][..],
-        ),
-        ((s.road_map)(file), INVALID_ROADTYPE, &[ROADTYPE_ROAD][..]),
-        ((s.tram_map)(file), INVALID_ROADTYPE, &[ROADTYPE_TRAM][..]),
-    ] {
-        let entries = unsafe { std::slice::from_raw_parts_mut(map.data, map.size) };
-        entries.fill(invalid);
-        entries[..defaults.len()].copy_from_slice(defaults);
-    }
-}
 crate::abi::layouts! {
     fn abi_layout;
  "OpenTTDTypePublication" ["engine"] => Publication { label, hidden };
+ "OpenTTDTypeLabelTable" ["engine"] => LabelTable { values };
  "OpenTTDTypeAllocation" ["engine"] => Allocation { label, self_ => self, order };
  "OpenTTDTypeLabels" ["engine"] => Labels { data, size };
  "OpenTTDTypeMap" ["engine"] => TypeMap { data, size };
- "OpenTTDRailRegistryServices" ["engine"] => RailServices { default_count, spec, type_label, alternate, clear, copy_default, resolve_gui, publication, sort, publish_sorted, allocate };
- "OpenTTDRoadRegistryServices" ["engine"] => RoadServices { default_count, spec, type_label, alternate, clear, copy_default, resolve_gui, publication, sort, publish_sorted, allocate };
+ "OpenTTDRailRegistryServices" ["engine"] => RailServices { default_count, spec, type_label, labels, alternate, clear, copy_default, resolve_gui, publication, sort, publish_sorted, allocate };
+ "OpenTTDRoadRegistryServices" ["engine"] => RoadServices { default_count, spec, type_label, labels, alternate, clear, copy_default, resolve_gui, publication, sort, publish_sorted, allocate };
  "OpenTTDTypeRegistryServices" ["engine"] => Services { rail, road, rail_labels, road_labels, tram_labels, rail_map, road_map, tram_map };
 }
 
