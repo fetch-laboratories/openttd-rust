@@ -17,14 +17,13 @@
 #include "town_ffi.h"
 struct OpenTTDIndustry;
 struct Industry;
-struct RustNearbyIndustryCursor;
 struct OpenTTDIndustryServices;
 /** Native aliases address this sole Rust allocation. Calls are serialized by the
  * game-state mutex. No owner borrow survives allocation, news, events or deletion;
  * noexcept shared leaves terminate environmental failures and never run a VM. */
 struct OpenTTDSubsidyState { CargoType cargo_type; uint16_t remaining; CompanyID awarded; Source src, dst; };
-/** Native stack CargoArray and the actual contiguous scalar data it owns. */
-struct OpenTTDSubsidyCargo { void *object; uint32_t *data; };
+/** The contiguous scalar data of a native stack CargoArray. */
+struct OpenTTDSubsidyCargo { uint32_t *data; };
 struct OpenTTDSubsidyServices {
 	const OpenTTDSharedServices * shared;
 	const OpenTTDTownLeaves * town;
@@ -56,10 +55,6 @@ struct OpenTTDSubsidyServices {
 	void (*expired_events)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(expired_events);
 	void (*dirty)() noexcept OPENTTD_SERVICE_DEFAULT(dirty);
 	const Station *(*station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
-	bool (*station_empty)(const Station *) noexcept OPENTTD_SERVICE_DEFAULT(station_empty);
-	void (*catchment)(const Station *, void *, void (*)(void *, uint32_t)) noexcept OPENTTD_SERVICE_DEFAULT(catchment);
-	void (*begin_nearby)(RustNearbyIndustryCursor *, const Station *) noexcept OPENTTD_SERVICE_DEFAULT(begin_nearby);
-	Industry *(*next_nearby)(RustNearbyIndustryCursor *) noexcept OPENTTD_SERVICE_DEFAULT(next_nearby);
 	void (*assert_destination)(Source) noexcept OPENTTD_SERVICE_DEFAULT(assert_destination);
 };
 extern "C" {
@@ -69,6 +64,6 @@ void openttd_rust_subsidy_rebuild(const OpenTTDSubsidyServices *);
 void openttd_rust_subsidy_delete_with(const OpenTTDSubsidyServices *, Source);
 bool openttd_rust_subsidy_command(const OpenTTDSubsidyServices *, uint16_t, CargoType, Source, Source);
 void openttd_rust_subsidy_monthly(const OpenTTDSubsidyServices *, OpenTTDSubsidyCargo);
-bool openttd_rust_subsidy_check(const OpenTTDSubsidyServices *, CargoType, uint8_t, Source, uint16_t, RustNearbyIndustryCursor *);
+bool openttd_rust_subsidy_check(const OpenTTDSubsidyServices *, CargoType, uint8_t, Source, uint16_t);
 }
 #endif /* RUST_SUBSIDY_FFI_H */

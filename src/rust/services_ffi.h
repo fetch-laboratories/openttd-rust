@@ -20,6 +20,7 @@ enum class StationType : uint8_t;
 struct OpenTTDStationService;
 enum class RoadStopType : uint8_t;
 struct OpenTTDStationCommandServices;
+struct OpenTTDStationCatchmentServices;
 struct OpenTTDRoadStopServices;
 struct OpenTTDRoadCommandServices;
 enum class RoadTileType : uint8_t;
@@ -154,6 +155,7 @@ struct OpenTTDSharedServices {
 	uint16_t (*station_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_index);
 	const OpenTTDRoadCommandServices *(*road_commands)() noexcept OPENTTD_SERVICE_DEFAULT(road_commands);
 	const OpenTTDStationCommandServices *(*station_commands)() noexcept OPENTTD_SERVICE_DEFAULT(station_commands);
+	const OpenTTDStationCatchmentServices *(*station_catchment)() noexcept OPENTTD_SERVICE_DEFAULT(station_catchment);
 	bool (*docking_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(docking_tile);
 	uint8_t (*station_gfx)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_gfx);
 	bool (*station_serve_neutral)() noexcept OPENTTD_SERVICE_DEFAULT(station_serve_neutral);

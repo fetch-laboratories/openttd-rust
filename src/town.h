@@ -19,6 +19,7 @@
 #include "cargotype.h"
 #ifdef WITH_RUST
 #include "rust/town_owner.hpp"
+#include "rust/station_catchment_ffi.h"
 #endif
 
 template <typename T>
@@ -317,7 +318,11 @@ struct Town : TownPool::PoolItem<&_town_pool> {
 		return it->history[LAST_MONTH].PctTransported();
 	}
 
+#ifdef WITH_RUST
+	RustStationList<Station> stations_near{openttd_rust_town_stations_near(growth_owner.get())};
+#else
 	StationList stations_near{}; ///< NOSAVE: List of nearby stations.
+#endif
 
 #ifdef WITH_RUST
 	uint16_t &time_until_rebuild = simulation.time_until_rebuild;

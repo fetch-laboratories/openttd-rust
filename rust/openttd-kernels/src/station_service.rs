@@ -76,6 +76,13 @@ pub struct Service {
     // Each entry is raw-owned: native iterators retain raw pointers, so even a
     // temporary Box/&mut reborrow on a surviving entry would invalidate them.
     queue: Vec<*mut QueueEntry>,
+    catchment: crate::station::Catchment,
+}
+/// The station's catchment state, for immediate borrows only.
+/// # Safety
+/// `state` is a live owner.
+pub(crate) unsafe fn catchment(state: *mut Service) -> *mut crate::station::Catchment {
+    unsafe { &raw mut (*state).catchment }
 }
 /// Clear every goods rating at the failed-bribe point, without crossing back
 /// into the native station shell.
@@ -121,6 +128,7 @@ pub extern "C" fn openttd_rust_station_service_new() -> *mut Service {
         },
         cargo: [CargoFields::default(); 64],
         queue: Vec::new(),
+        catchment: crate::station::Catchment::default(),
     }))
 }
 #[unsafe(no_mangle)]
@@ -359,7 +367,6 @@ pub struct World {
     pub(crate) station: extern "C" fn(u16) -> LoadingStation,
     pub(crate) station_owner: extern "C" fn(*mut BaseStation) -> u8,
     pub(crate) station_exclusivity: extern "C" fn(*mut BaseStation) -> StationExclusivity,
-    pub(crate) station_next: extern "C" fn(*mut c_void) -> *mut BaseStation,
     pub(crate) rating_counts: extern "C" fn(*mut BaseStation, u8) -> RatingCounts,
     pub(crate) get: extern "C" fn(u16) -> *mut BaseStation,
     pub(crate) owner: extern "C" fn(*mut BaseStation) -> *mut Service,
@@ -369,7 +376,6 @@ pub struct World {
     pub(crate) in_use: extern "C" fn(*mut BaseStation) -> bool,
     pub(crate) is_station: extern "C" fn(*mut BaseStation) -> bool,
     pub(crate) local_owner: extern "C" fn(*mut BaseStation) -> bool,
-    pub(crate) rectangle_empty: extern "C" fn(*mut BaseStation) -> bool,
     pub(crate) town_statue: extern "C" fn(*mut BaseStation) -> bool,
     pub(crate) select_goods: extern "C" fn() -> bool,
     pub(crate) rating_cheat: extern "C" fn() -> bool,
@@ -383,17 +389,12 @@ pub struct World {
     pub(crate) acceptance_redraw: extern "C" fn(*mut BaseStation),
     pub(crate) delete_station: extern "C" fn(*mut BaseStation),
 
-    pub(crate) watched_animation: extern "C" fn(u32, u64),
     pub(crate) append_packet:
         extern "C" fn(*mut BaseStation, u8, u32, crate::cargo_storage::Source),
     pub(crate) station_list_invalidation: extern "C" fn(*mut BaseStation, i32),
 
     pub(crate) waiting_redraw: extern "C" fn(*mut BaseStation),
     pub(crate) cargo_registry: *const crate::cargo_registry::Services,
-    pub(crate) with_tiles: extern "C" fn(*mut BaseStation, *mut c_void, Scope),
-    pub(crate) tile_next: extern "C" fn(*mut c_void) -> u32,
-    pub(crate) accept_tile: extern "C" fn(*mut c_void, u32, *mut u64),
-    pub(crate) acceptance_amounts: extern "C" fn(*mut c_void) -> *const u32,
     pub(crate) with_truncation: extern "C" fn(*mut BaseStation, u8, u32, *mut c_void, Scope),
     pub(crate) truncate_next: extern "C" fn(*mut c_void) -> TruncatedSource,
     pub(crate) shared: *const crate::services::Services,
@@ -536,28 +537,11 @@ pub unsafe extern "C" fn openttd_rust_station_acceptance(
     let state = (w.owner)(st);
     let old = unsafe { acceptance_mask(state) };
     let mut acceptance = [0_u32; 64];
-    if u32::from((w.rectangle_empty)(st)) == 0 {
+    // SAFETY: Live owner; the tile procs cannot reset this station's catchment.
+    if !unsafe { crate::station::rect_is_empty(state) } {
+        let c = crate::station::Ctx::from_shared(unsafe { &*w.shared });
         let always = unsafe { &raw mut (*state).fields.always_accepted };
-        unsafe {
-            always.write(0);
-        }
-        let mut body = |tiles| {
-            loop {
-                let tile = (w.tile_next)(tiles);
-                if tile == u32::MAX {
-                    break;
-                }
-                (w.accept_tile)(tiles, tile, always);
-            }
-            let amounts = (w.acceptance_amounts)(tiles);
-            // SAFETY: native CargoArray belongs to this synchronous stack frame;
-            // the scan is complete and this copy ends before another service.
-            unsafe {
-                std::ptr::copy_nonoverlapping(amounts, acceptance.as_mut_ptr(), 64);
-            }
-        };
-        let (context, callback) = scope_context(&mut body);
-        (w.with_tiles)(st, context, callback);
+        acceptance = unsafe { crate::station::acceptance_around_station(state, always, &c) };
     }
     let facilities = u32::from((w.facilities)(st));
     for cargo in 0..64 {
@@ -603,21 +587,17 @@ pub unsafe extern "C" fn openttd_rust_station_watched(st: *mut BaseStation, worl
     if cargoes == 0 {
         return;
     }
-    // The immutable shared table outlives this entry and every native tile frame.
+    // The immutable shared table outlives this entry.
     let shared = unsafe { &*w.shared };
-    let mut body = |tiles| {
-        loop {
-            let tile = (w.tile_next)(tiles);
-            if tile == u32::MAX {
-                break;
-            }
+    let c = crate::station::Ctx::from_shared(shared);
+    // SAFETY: Live owner; house animation triggers cannot reset its catchment.
+    unsafe {
+        crate::station::for_each_catchment_tile(state, &c, |tile| {
             if (shared.tile_type)(tile) == crate::tile_type::MP_HOUSE {
-                (w.watched_animation)(tile, cargoes);
+                crate::town::house::watched_cargo_accepted(c.c.town, shared, tile, cargoes);
             }
-        }
-    };
-    let (context, callback) = scope_context(&mut body);
-    (w.with_tiles)(st, context, callback);
+        });
+    }
 }
 // Preserve the complete source rating loop and its immediate mutation order.
 #[allow(clippy::too_many_lines)]
@@ -859,12 +839,15 @@ unsafe fn admit(
     (w.waiting_redraw)(st);
     amount
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_distribute(
+/// `MoveGoodsToStation` over a live station set.
+/// # Safety
+/// `stations`, `world` and `visits` are live for the call; the set may be
+/// re-read between station observations.
+pub(crate) unsafe fn distribute(
     cargo: u8,
     mut amount: u32,
     source: crate::cargo_storage::Source,
-    stations: *mut c_void,
+    stations: *const crate::station::StationList,
     exclusivity: u8,
     world: *const World,
     visits: &Visits,
@@ -875,44 +858,44 @@ pub unsafe extern "C" fn openttd_rust_station_distribute(
     let w = unsafe { &*world };
     let mut used = Vec::new();
     let mut first = None;
-    loop {
-        let st = (w.station_next)(stations);
-        if st.is_null() {
-            break;
-        }
-        let owner = (w.station_owner)(st);
-        if exclusivity != 255 && exclusivity != owner {
-            continue;
-        }
-        if owner != 16 {
-            let observed = (w.station_exclusivity)(st);
-            if observed.counter > 0 && observed.exclusive != owner {
-                continue;
+    // SAFETY: Caller contract; observations below do not change station sets.
+    unsafe {
+        crate::station::for_each_station(stations, |entry| {
+            let st = entry.station;
+            let owner = (w.station_owner)(st);
+            if exclusivity != 255 && exclusivity != owner {
+                return;
             }
-        }
-        let ge = unsafe { cp((w.owner)(st), cargo) };
-        let rating = unsafe { (*ge).rating };
-        if rating == 0 {
-            continue;
-        }
-        if u32::from((w.select_goods)()) != 0 && unsafe { (*ge).last_speed } == 0 {
-            continue;
-        }
-        let passenger = u32::from((w.passenger_cargo)(cargo)) != 0;
-        if u32::from((w.facilities)(st)) == if passenger { 2 } else { 4 } {
-            continue;
-        }
-        let observed = (st, owner as usize, u32::from(rating), 0_u32);
-        if let Some(first) = first {
-            if used.is_empty() {
-                used.reserve(2);
-                used.push(first);
+            if owner != 16 {
+                let observed = (w.station_exclusivity)(st);
+                if observed.counter > 0 && observed.exclusive != owner {
+                    return;
+                }
             }
-            used.push(observed);
-        } else {
-            first = Some(observed);
-        }
-    }
+            let ge = cp((w.owner)(st), cargo);
+            let rating = (*ge).rating;
+            if rating == 0 {
+                return;
+            }
+            if u32::from((w.select_goods)()) != 0 && (*ge).last_speed == 0 {
+                return;
+            }
+            let passenger = u32::from((w.passenger_cargo)(cargo)) != 0;
+            if u32::from((w.facilities)(st)) == if passenger { 2 } else { 4 } {
+                return;
+            }
+            let observed = (st, owner as usize, u32::from(rating), 0_u32);
+            if let Some(first) = first {
+                if used.is_empty() {
+                    used.reserve(2);
+                    used.push(first);
+                }
+                used.push(observed);
+            } else {
+                first = Some(observed);
+            }
+        });
+    };
     let Some((st, _, rating, _)) = first else {
         return 0;
     };
@@ -2108,7 +2091,6 @@ crate::abi::layouts! {
         station,
         station_owner,
         station_exclusivity,
-        station_next,
         rating_counts,
         get,
         owner,
@@ -2118,7 +2100,6 @@ crate::abi::layouts! {
         in_use,
         is_station,
         local_owner,
-        rectangle_empty,
         town_statue,
         select_goods,
         rating_cheat,
@@ -2132,16 +2113,11 @@ crate::abi::layouts! {
         acceptance_redraw,
         delete_station,
 
-        watched_animation,
         append_packet,
         station_list_invalidation,
 
         waiting_redraw,
         cargo_registry,
-        with_tiles,
-        tile_next,
-        accept_tile,
-        acceptance_amounts,
         with_truncation,
         truncate_next,
         shared,

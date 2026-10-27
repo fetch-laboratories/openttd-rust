@@ -13,6 +13,7 @@
 #include "../roadveh.h"
 #include "../station_func.h"
 #include "../industry.h"
+#include "industry_shell_services.h"
 #include "../waypoint_base.h"
 #include "../station_kdtree.h"
 #include "../town.h"
@@ -97,28 +98,8 @@ inline bool RustRoadStopHasAnimationTrigger(BaseStation *s, uint8_t trigger) noe
 inline size_t RustRoadStopTileDataCount(BaseStation *s) noexcept { return s->custom_roadstop_tile_data.size(); }
 inline uint32_t RustRoadStopDataTile(BaseStation *s, size_t i) noexcept { return s->custom_roadstop_tile_data[i].tile.base(); }
 inline const StationSpec *RustAnimationRailSpec(uint32_t tile) noexcept { return GetStationSpec(TileIndex{tile}); }
-inline bool RustStationRectangleEmpty(const BaseStation *station) noexcept { return station->rect.IsEmpty(); }
 /** `&st->goods[cargo].GetOrCreateData().cargo`'s Rust owner. */
 inline OpenTTDCargoList *RustStationCargoOwner(OpenTTDStation *st, uint8_t cargo) noexcept { return static_cast<Station *>(st)->goods[cargo].GetOrCreateData().cargo.RustOwner(); }
-template <class Handle> inline bool RustStationRectangleEmptyHandle(Handle handle) noexcept { return RustStationRectangleEmpty(static_cast<const BaseStation *>(handle)); }
-inline void RustStationCatchment(const Station *station, void *context, void (*visit)(void *, uint32_t)) noexcept
-{
-	BitmapTileIterator it(station->catchment_tiles);
-	for (TileIndex tile = it; tile != INVALID_TILE; tile = ++it) visit(context, tile.base());
-}
-/** Native entry-frame storage; bind at each original scan. Serialized callbacks
- * cannot rebuild catchments/remove industries/reset the world; no Rust layout view. */
-struct RustNearbyIndustryCursor { IndustryList::const_iterator current, end; bool started; };
-inline void BeginNearbyIndustries(RustNearbyIndustryCursor *cursor, const Station *station) noexcept
-{
-	*cursor = {station->industries_near.begin(), station->industries_near.end(), false};
-}
-inline Industry *NextNearbyIndustry(RustNearbyIndustryCursor *cursor) noexcept
-{
-	if (cursor->started) ++cursor->current;
-	cursor->started = true;
-	return cursor->current == cursor->end ? nullptr : cursor->current->industry;
-}
 inline uint8_t RustAirportLayoutHeading(const AirportFTAClass *airport, uint32_t index) noexcept { return airport->layout[index].heading; }
 inline uint8_t OpenTTDAirportLayoutHeading(const void *airport, uint8_t index) noexcept { return RustAirportLayoutHeading(static_cast<const AirportFTAClass *>(airport), index); }
 inline uint8_t RustAirportFlags(const AirportFTAClass *airport) noexcept { return airport->flags.base(); }
@@ -143,6 +124,8 @@ template <typename Pointer> inline Pointer RustAirportSpec(uint16_t type) noexce
 template <typename Pointer> inline Pointer RustAirportTileSpec(uint8_t gfx) noexcept { return const_cast<AirportTileSpec *>(AirportTileSpec::Get(gfx)); }
 inline const AirportFTAClass *RustAirportSpecFTA(const AirportSpec *spec) noexcept { return spec->fsm; }
 inline TTDPAirportType RustAirportTTDType(const AirportSpec *spec) noexcept { return spec->ttd_airport_type; }
+inline uint32_t RustStationTrainTile(const BaseStation *s) noexcept { return s->train_station.tile.base(); }
+inline uint32_t RustStationShipTile(const BaseStation *s) noexcept { return Station::From(s)->ship_station.tile.base(); }
 inline uint32_t RustStationAirportTile(const BaseStation *s) noexcept { return Station::From(s)->airport.tile.base(); }
 inline uint8_t RustStationAirportLayout(const BaseStation *st) noexcept { return Station::From(st)->airport.layout; }
 inline uint8_t RustStationAirportType(const BaseStation *s) noexcept { return Station::From(s)->airport.type; }
@@ -157,6 +140,12 @@ const OpenTTDStationService *OpenTTDStationActivityOwner(const OpenTTDStation *s
 inline Town *OpenTTDBaseStationTown(const BaseStation *st) noexcept { return st->town; }
 inline uint16_t RustStationTownID(const Station *station) noexcept { return RustTownAuthorityIndex(reinterpret_cast<const OpenTTDTownHandle *>(OpenTTDBaseStationTown(station))); }
 inline Station *OpenTTDNextStation(uint32_t from) noexcept { auto range = Station::Iterate(from); return range.empty() ? nullptr : *range.begin(); }
+template <class Handle> inline Handle RustNextStation(uint32_t from) noexcept { return OpenTTDNextStation(from); }
+template <class Handle> inline Handle RustStationIfValid(uint16_t id) noexcept { return Station::GetIfValid(StationID{id}); }
+inline const OpenTTDStation *Aircraft_station(uint16_t id) noexcept { return RustStation(RustStationIfValid<Station *>(id)); }
+/** The canonical Rust service owner of a station or waypoint. */
+template <class TStation> inline OpenTTDStationService *RustStationServiceOwner(TStation *st) noexcept { return st->rust_service.get(); }
+inline OpenTTDStationService *RustStationServiceByID(uint16_t id) noexcept { return RustStationServiceOwner(RustStationGet<BaseStation *>(id)); }
 inline bool RustStationHasAirport(const Station *s) noexcept { return s->facilities.Test(StationFacility::Airport); }
 inline bool RustStationReserved(uint32_t tile) noexcept { return HasStationReservation(TileIndex{tile}); }
 inline void RustSetRailStationReservation(uint32_t tile, bool reserved) noexcept { SetRailStationReservation(TileIndex{tile}, reserved); }
@@ -171,6 +160,7 @@ inline const OpenTTDTownHandle * RustStationStationTown(BaseStation *st) noexcep
 inline void RustStationStationViewInvalidate(BaseStation *st, int32_t data) noexcept { InvalidateWindowData(WC_STATION_VIEW, st->index, data); }
 inline void RustStationDeleteAirportStorage(BaseStation *st) noexcept { delete Station::From(st)->airport.psa; }
 inline Industry *RustStationAssociatedIndustry(BaseStation *st) noexcept { return Station::From(st)->industry; }
+inline BaseStation *RustIndustryNeutralBaseStation(Industry *industry) noexcept { return RustIndustryNeutralStation(industry); }
 inline void RustStationSetStationOwner(BaseStation *st, uint8_t owner) noexcept { st->owner = Owner(owner); }
 inline void RustStationSetFacilities(BaseStation *st, uint8_t facilities) noexcept { st->facilities = StationFacilities(facilities); }
 template <typename TStation>

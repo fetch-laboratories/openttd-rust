@@ -20,6 +20,8 @@ impl Source {
     pub const INDUSTRY: u8 = 0;
     /// `SourceType::Town`.
     pub const TOWN: u8 = 1;
+    /// `SourceType::Headquarters`.
+    pub const HEADQUARTERS: u8 = 2;
     /// A town source.
     #[must_use]
     pub const fn town(id: u16) -> Self {

@@ -119,6 +119,8 @@ def scenarios(soak):
                 "resolver-reload",
                 "airport",
                 "airport-reload",
+                "catchment",
+                "catchment-reload",
             )
         ]
     )
@@ -408,6 +410,9 @@ COMMAND_SOURCE = r"""
 #include "engine_func.h"
 #include "newgrf_cargo.h"
 #include "saveload/saveload.h"
+#include "settings_func.h"
+#include "industry_cmd.h"
+#include "town_cmd.h"
 static void StationNeed(bool value, int line) { if (!value) { fmt::print(stderr, "STCMD setup-failure {}\n", line); std::abort(); } }
 static void StationCost(const char *label, const CommandCost &cost)
 {
@@ -777,6 +782,148 @@ static void StationGraphs()
 	}
 	fmt::print(stderr, "STCMD complete\n");
 }
+/* #516: normalized catchment, rectangle and nearby-set state. Both games read it
+ * through their native station, town and industry readers. */
+static void CatchmentDump(const char *label)
+{
+	for (const Station *st : Station::Iterate()) {
+		const TileArea &area = st->catchment_tiles;
+		uint64_t hash = 0; uint count = 0;
+		if (area.w != 0 && area.h != 0) {
+			BitmapTileIterator it(st->catchment_tiles);
+			for (TileIndex t = it; t != INVALID_TILE; t = ++it) { hash = hash * 1000003 + t.base(); ++count; }
+		}
+		fmt::print(stderr, "STCMD catchment {} station {} rect {} {} {} {} empty {} radius {} area {} {} {} tiles {} {}", label, st->index.base(), st->rect.left, st->rect.top, st->rect.right, st->rect.bottom, st->rect.IsEmpty(), st->GetCatchmentRadius(), area.tile.base(), area.w, area.h, count, hash);
+		for (const auto &entry : st->industries_near) fmt::print(stderr, " ind {}:{}", entry.industry->index.base(), entry.distance);
+		fmt::print(stderr, "\n");
+	}
+	for (const Town *t : Town::Iterate()) {
+		if (t->stations_near.empty()) continue;
+		fmt::print(stderr, "STCMD catchment {} town {}", label, t->index.base());
+		for (const Station *st : t->stations_near) fmt::print(stderr, " {}", st->index.base());
+		fmt::print(stderr, "\n");
+	}
+	for (const Industry *i : Industry::Iterate()) {
+		fmt::print(stderr, "STCMD catchment {} industry {} size {}", label, i->index.base(), i->stations_near.size());
+		for (const Station *st : i->stations_near) fmt::print(stderr, " {}", st->index.base());
+		fmt::print(stderr, "\n");
+	}
+}
+static void CatchmentCargo(const char *label, TileIndex tile, int w, int h, int rad)
+{
+	CargoTypes always = 0;
+	CargoArray acceptance = GetAcceptanceAroundTiles(tile, w, h, rad, &always);
+	CargoArray null_mask = GetAcceptanceAroundTiles(tile, w, h, rad);
+	CargoArray produced = GetProductionAroundTiles(tile, w, h, rad);
+	fmt::print(stderr, "STCMD catchment-cargo {} always {}", label, always);
+	for (CargoType c = 0; c < NUM_CARGO; ++c) {
+		if (acceptance[c] != 0 || produced[c] != 0 || null_mask[c] != 0) fmt::print(stderr, " {}:{}/{}/{}", c, acceptance[c], null_mask[c], produced[c]);
+	}
+	fmt::print(stderr, "\n");
+	for (Station *st : Station::Iterate()) {
+		UpdateStationAcceptance(st, false);
+		fmt::print(stderr, "STCMD catchment-acceptance {} {} {} {}\n", label, st->index.base(), GetAcceptanceMask(st), st->always_accepted);
+	}
+}
+static void CatchmentSetting(const char *name, int32_t value)
+{
+	IConsoleSetSetting(name, value);
+	fmt::print(stderr, "STCMD catchment-setting {} {}\n", name, value);
+}
+static void StationCatchmentFixture(TileIndex origin, const DoCommandFlags &test, const DoCommandFlags &exec)
+{
+	auto tile = [origin](int x, int y) { return origin + TileDiffXY(x, y); };
+	Backup<PlaceHouses> place(_settings_game.economy.place_houses, PH_ALLOWED_CONSTRUCTED);
+	/* Houses through the real deity command: each placement scans nearby stations. */
+	std::vector<TileIndex> houses;
+	auto place_house = [&](TileIndex t) {
+		Backup<CompanyID> deity(_current_company, OWNER_DEITY);
+		for (const HouseSpec &spec : HouseSpec::Specs()) {
+			if (spec.Index() >= NEW_HOUSE_OFFSET) break;
+			if (!spec.enabled || !spec.building_flags.Test(BuildingFlag::Size1x1)) continue;
+			if (Command<CMD_PLACE_HOUSE>::Do({}, t, spec.Index(), false, false).Failed()) continue;
+			StationCost("catchment-house", Command<CMD_PLACE_HOUSE>::Do(DoCommandFlag::Execute, t, spec.Index(), false, false));
+			houses.push_back(t);
+			break;
+		}
+		deity.Restore();
+	};
+	place_house(tile(4, 4));
+	CatchmentDump("houses-before");
+	auto rail = [&](DoCommandFlags f, TileIndex t, StationID join, uint8_t n, uint8_t len) { return Command<CMD_BUILD_RAIL_STATION>::Do(f, t, RAILTYPE_RAIL, AXIS_X, n, len, STAT_CLASS_DFLT, 0, join, true); };
+	StationCost("catchment-rail", rail(exec, tile(6, 6), NEW_STATION, 1, 5));
+	StationNeed(IsRailStationTile(tile(6, 6)), __LINE__);
+	StationID station = GetStationIndex(tile(6, 6));
+	CatchmentDump("rail");
+	place_house(tile(9, 4)); place_house(tile(12, 8));
+	CatchmentDump("houses-after");
+	/* Distant join with a truck bay, then a refused spread at a reduced limit. */
+	StationCost("catchment-truck", Command<CMD_BUILD_ROAD_STOP>::Do(exec, tile(6, 14), 1, 1, RoadStopType::Truck, false, DIAGDIR_NE, ROADTYPE_ROAD, ROADSTOP_CLASS_DFLT, 0, station, false));
+	CatchmentDump("truck");
+	Backup<uint8_t> spread(_settings_game.station.station_spread, 8);
+	StationCost("catchment-spread-test", rail(test, tile(6, 24), station, 1, 1));
+	StationCost("catchment-spread", rail(exec, tile(6, 24), station, 1, 1));
+	CatchmentDump("spread-refused");
+	spread.Restore();
+	StationCost("catchment-spread-ok", rail(exec, tile(6, 16), station, 1, 1));
+	CatchmentDump("spread-ok");
+	/* Industry construction inside an existing catchment populates its nearby set. */
+	{
+		Backup<CompanyID> deity(_current_company, OWNER_DEITY);
+		/* An accepting industry beside the platform reaches the delivery list. */
+		for (IndustryType type = 0; type < NUM_INDUSTRYTYPES; ++type) {
+			const IndustrySpec *spec = GetIndustrySpec(type);
+			if (!spec->enabled || !IsValidCargoType(spec->accepts_cargo[0])) continue;
+			if (Command<CMD_BUILD_INDUSTRY>::Do({}, tile(7, 8), type, 0, false, 12345).Failed()) continue;
+			StationCost("catchment-industry", Command<CMD_BUILD_INDUSTRY>::Do(DoCommandFlag::Execute, tile(7, 8), type, 0, false, 12345));
+			break;
+		}
+		deity.Restore();
+	}
+	CatchmentDump("industry");
+	CatchmentCargo("industry", tile(6, 6), 5, 1, 4);
+	/* Settings through their real paths, in both directions. */
+	CatchmentSetting("station.modified_catchment", 0); CatchmentDump("unmodified");
+	CatchmentSetting("station.modified_catchment", 1); CatchmentDump("modified");
+	/* An oil rig station replaces industry land; neutral serving in both directions. */
+	StationNeed(Industry::CanAllocateItem(), __LINE__);
+	Industry *rig = new Industry(); rig->location = TileArea(tile(20, 20), 1, 1); rig->town = *Town::Iterate().begin(); rig->type = 5;
+	MakeIndustry(tile(20, 20), rig->index, 0, 0, WaterClass::Sea);
+	StationCost("catchment-rig-neighbour", Command<CMD_BUILD_RAIL_STATION>::Do(exec, tile(20, 17), RAILTYPE_RAIL, AXIS_X, 1, 1, STAT_CLASS_DFLT, 0, NEW_STATION, true));
+	CatchmentDump("rig-before");
+	BuildOilRig(tile(20, 20)); StationNeed(IsOilRig(tile(20, 20)), __LINE__);
+	CatchmentDump("rig-serve");
+	CatchmentSetting("station.serve_neutral_industries", 0); CatchmentDump("rig-neutral");
+	CatchmentCargo("rig-neutral", tile(20, 20), 1, 1, 4);
+	CatchmentSetting("station.serve_neutral_industries", 1); CatchmentDump("rig-serve-again");
+	DeleteOilRig(tile(20, 20)); StationNeed(rig->neutral_station == nullptr, __LINE__); delete rig;
+	CatchmentDump("rig-removed");
+	/* A hole in the platform, then an edge, then the remaining tiles. */
+	StationCost("catchment-hole", Command<CMD_REMOVE_FROM_RAIL_STATION>::Do(exec, tile(8, 6), tile(8, 6), true));
+	CatchmentDump("hole");
+	StationCost("catchment-edge", Command<CMD_REMOVE_FROM_RAIL_STATION>::Do(exec, tile(10, 6), tile(10, 6), true));
+	CatchmentDump("edge");
+	/* The last covered house of a town leaves its nearby set. */
+	if (!houses.empty()) {
+		Backup<CompanyID> deity(_current_company, OWNER_DEITY);
+		StationCost("catchment-house-clear", Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, houses.front()));
+		deity.Restore();
+	}
+	CatchmentDump("house-cleared");
+	CatchmentCargo("final", tile(6, 6), 5, 1, 4);
+	place.Restore();
+}
+static void StationCatchmentInspect(const DoCommandFlags &exec)
+{
+	CatchmentDump("reloaded");
+	Station *found = nullptr;
+	for (Station *st : Station::Iterate()) if (found == nullptr && st->facilities.Test(StationFacility::Train)) found = st;
+	StationNeed(found != nullptr, __LINE__);
+	TileIndex t = found->train_station.tile;
+	StationCost("catchment-reload-remove", Command<CMD_REMOVE_FROM_RAIL_STATION>::Do(exec, t, t, true));
+	CatchmentDump("reloaded-mutated");
+	CatchmentCargo("reloaded", found->xy, 1, 1, 4);
+}
 // OWNER399
 static bool StationCommands(std::span<std::string_view> args)
 {
@@ -825,6 +972,7 @@ static bool StationCommands(std::span<std::string_view> args)
 		StationRoadResolverReload(false); StationRoadStops("reloaded"); fmt::print(stderr, "STCMD complete\n");
 		current.Restore(); return true;
 	}
+	if (args[1] == "catchment-inspect") { StationCatchmentInspect(exec); fmt::print(stderr, "STCMD complete\n"); current.Restore(); return true; }
 	if (args[1] == "inspect") {
 		Station *found = nullptr;
 		for (Station *st : Station::Iterate()) if (st->name == "Migration station") found = st;
@@ -835,6 +983,7 @@ static bool StationCommands(std::span<std::string_view> args)
 	} else {
 		TileIndex origin = StationPatch();
 		auto tile = [origin](int x, int y) { return origin + TileDiffXY(x, y); };
+		if (args[1] == "catchment") { StationCatchmentFixture(origin, test, exec); fmt::print(stderr, "STCMD complete\n"); if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false); current.Restore(); return true; }
 		if (args[1] == "airport") { StationAirportFixture(origin, test, exec); fmt::print(stderr, "STCMD complete\n"); if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false); current.Restore(); return true; }
 		if (args[1] == "resolver") { StationResolverFixture(origin, exec); fmt::print(stderr, "STCMD complete\n"); if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false); current.Restore(); return true; }
 		if (args[1] == "waypoints") {
@@ -1110,6 +1259,7 @@ RELOADS = {
     "road-stops-reload": ("road-stops", "road-stops-inspect"),
     "resolver-reload": ("resolver", "resolver-inspect"),
     "airport-reload": ("airport", "airport-inspect"),
+    "catchment-reload": ("catchment", "catchment-inspect"),
     "waypoints-reload": ("waypoints", "waypoints-inspect"),
 }
 # Road stop owner (road_stop.rs) branches; cache checks run only with desync snapshots.
@@ -1698,6 +1848,45 @@ def check_commands(scenario, run, mode, role, result):
             line.startswith("STCMD resolver-mask ") for line in run["log"]
         ) != (9 if waypoint else 15):
             raise RuntimeError("road-stop owner reseed matrix incomplete")
+    if scenario["station_commands"].startswith("catchment"):
+        reload = scenario["station_commands"].endswith("reload")
+        required = [] if reload else ["build_rail", "build_road", "build_oilrig"]
+        phases = (
+            ["reloaded", "reloaded-mutated"]
+            if reload
+            else [
+                "houses-before",
+                "rail",
+                "houses-after",
+                "truck",
+                "spread-refused",
+                "spread-ok",
+                "industry",
+                "unmodified",
+                "modified",
+                "rig-before",
+                "rig-serve",
+                "rig-neutral",
+                "rig-serve-again",
+                "rig-removed",
+                "hole",
+                "edge",
+                "house-cleared",
+            ]
+        )
+        for phase in phases:
+            if not any(
+                line.startswith(f"STCMD catchment {phase} station ")
+                for line in run["log"]
+            ):
+                raise RuntimeError("catchment phase missing: " + phase)
+        cargo = ["reloaded"] if reload else ["industry", "rig-neutral", "final"]
+        for label in cargo:
+            if not any(
+                line.startswith(f"STCMD catchment-cargo {label} ")
+                for line in run["log"]
+            ):
+                raise RuntimeError("catchment cargo phase missing: " + label)
     if scenario["station_commands"] != "linkgraph":
         core.branch_witnesses(scenario, run, role, "station_command", required)
     lines = [line for line in run["log"] if line.startswith("STCMD ")]

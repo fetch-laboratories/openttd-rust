@@ -50,7 +50,6 @@ struct OpenTTDLandscapeLoopServices {
 	const OpenTTDTownLeaves *town;
 	void (*station_loop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_loop);
 	const OpenTTDObjectServices *objects;
-	OpenTTDObjectLoopFrame *object_frame;
 };
 const OpenTTDTreeServices &GetRustTreeServices() noexcept;
 OpenTTDTreeLoopSettings GetRustTreeLoopSettings() noexcept;

@@ -117,7 +117,6 @@ struct OpenTTDStationServices {
 	OpenTTDLoadingStation (*station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
 	uint8_t (*station_owner)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_owner);
 	OpenTTDStationExclusivity (*station_exclusivity)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_exclusivity);
-	OpenTTDBaseStation * (*station_next)(void *) noexcept OPENTTD_SERVICE_DEFAULT(station_next);
 	OpenTTDRatingCounts (*rating_counts)(OpenTTDBaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rating_counts);
 	OpenTTDBaseStation * (*get)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(get);
 	OpenTTDStationService * (*owner)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(owner);
@@ -127,7 +126,6 @@ struct OpenTTDStationServices {
 	bool (*in_use)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(in_use);
 	bool (*is_station)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(is_station);
 	bool (*local_owner)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(local_owner);
-	bool (*rectangle_empty)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(rectangle_empty);
 	bool (*town_statue)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(town_statue);
 	bool (*select_goods)() noexcept OPENTTD_SERVICE_DEFAULT(select_goods);
 	bool (*rating_cheat)() noexcept OPENTTD_SERVICE_DEFAULT(rating_cheat);
@@ -141,16 +139,11 @@ struct OpenTTDStationServices {
 	void (*acceptance_redraw)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(acceptance_redraw);
 	void (*delete_station)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(delete_station);
 
-	void (*watched_animation)(uint32_t, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(watched_animation);
 	void (*append_packet)(OpenTTDBaseStation *, uint8_t, uint32_t, OpenTTDCargoSource) noexcept OPENTTD_SERVICE_DEFAULT(append_packet);
 	void (*station_list_invalidation)(OpenTTDBaseStation *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_list_invalidation);
 
 	void (*waiting_redraw)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(waiting_redraw);
 	const OpenTTDCargoRegistryServices *cargo_registry;
-	void (*with_tiles)(OpenTTDBaseStation *, void *, OpenTTDStationScope) noexcept OPENTTD_SERVICE_DEFAULT(with_tiles);
-	uint32_t (*tile_next)(void *) noexcept OPENTTD_SERVICE_DEFAULT(tile_next);
-	void (*accept_tile)(void *, uint32_t, uint64_t *) noexcept OPENTTD_SERVICE_DEFAULT(accept_tile);
-	const uint32_t * (*acceptance_amounts)(void *) noexcept OPENTTD_SERVICE_DEFAULT(acceptance_amounts);
 	void (*with_truncation)(OpenTTDBaseStation *, uint8_t, uint32_t, void *, OpenTTDStationScope) noexcept OPENTTD_SERVICE_DEFAULT(with_truncation);
 	OpenTTDTruncatedSource (*truncate_next)(void *) noexcept OPENTTD_SERVICE_DEFAULT(truncate_next);
 	const OpenTTDSharedServices *shared;
@@ -286,7 +279,6 @@ void openttd_rust_station_stale(OpenTTDBaseStation *, const OpenTTDStationServic
 void openttd_rust_station_reroute(OpenTTDBaseStation *, uint8_t, uint16_t, uint16_t, const OpenTTDStationServices *, const OpenTTDStationLinks *);
 void openttd_rust_station_monthly(const OpenTTDStationServices *);
 void openttd_rust_station_modify_rating(OpenTTDStationService *, int32_t);
-uint32_t openttd_rust_station_distribute(uint8_t, uint32_t, OpenTTDCargoSource, void *, uint8_t, const OpenTTDStationServices *, const OpenTTDVehicleVisits *);
 
 }
 #endif

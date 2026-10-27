@@ -40,6 +40,7 @@
 
 #ifdef WITH_RUST
 #include "rust/ground_services.h"
+#include "rust/services_assert.h"
 #include "rust/services_landscape.h"
 #include "rust/environment_services.h"
 #endif
@@ -375,7 +376,7 @@ static const TrackBits _valid_tracks_on_leveled_foundation[15] = {
 Foundation GetRailFoundation(Slope tileh, TrackBits bits)
 {
 #ifdef WITH_RUST
-	return openttd_rust_rail_foundation(tileh, bits, RustMovementAssert);
+	return openttd_rust_rail_foundation(tileh, bits, RustAssertCondition);
 #else
 	if (bits == TRACK_BIT_NONE) return FOUNDATION_NONE;
 

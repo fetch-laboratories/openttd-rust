@@ -54,13 +54,6 @@ pub struct BridgeSpan {
     pub size: usize,
 }
 #[repr(C)]
-pub struct Bounds {
-    pub left: i32,
-    pub top: i32,
-    pub right: i32,
-    pub bottom: i32,
-}
-#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct SpecIndex {
     pub value: u8,
@@ -179,11 +172,9 @@ pub struct CommandServicesTable {
     pub train_area: unsafe extern "C" fn(*const BaseStation) -> TileArea,
     pub rail_spec: extern "C" fn(u32) -> *const RailSpec,
     pub links: *const crate::station_service::Links,
-    pub bounds: extern "C" fn(*mut BaseStation) -> Bounds,
     pub location: extern "C" fn(*const BaseStation) -> u32,
     pub move_sign: extern "C" fn(*mut BaseStation, u32),
     pub virtual_coord: extern "C" fn(*mut BaseStation),
-    pub catchment: extern "C" fn(*mut BaseStation, bool),
     pub catchment_dirty: extern "C" fn(),
     pub facility_widget: extern "C" fn(*mut BaseStation, u8),
     pub select_invalidate: extern "C" fn(),
@@ -199,11 +190,9 @@ pub struct CommandServicesTable {
     pub set_town: extern "C" fn(*mut BaseStation, *const crate::services::TownHandle),
     pub default_name: extern "C" fn(*mut BaseStation, u32, u8),
     pub have_rating: extern "C" fn(*mut BaseStation, u8),
-    pub before_add_rect: extern "C" fn(*mut CommandCost, *mut BaseStation, TileArea, u8),
     pub road_waypoint: extern "C" fn(*mut BaseStation) -> bool,
     pub name_equals: extern "C" fn(*mut BaseStation, *const u8, usize) -> bool,
     pub set_name: extern "C" fn(*mut BaseStation, *const u8, usize),
-    pub rect_contains: extern "C" fn(*mut BaseStation, u32) -> bool,
     pub flip_airport_closed: extern "C" fn(*mut BaseStation),
     pub closed_widget: extern "C" fn(*mut BaseStation),
     pub distant_join: extern "C" fn() -> bool,
@@ -233,7 +222,6 @@ pub struct CommandServicesTable {
     pub set_tile_flags: extern "C" fn(u32, bool, bool, bool),
     pub station_infrastructure: extern "C" fn(u8, u32),
     pub mark_tiles: extern "C" fn(*mut BaseStation, bool),
-    pub after_remove_tile: extern "C" fn(*mut BaseStation, u32),
     pub reset_facilities: extern "C" fn(*mut BaseStation, u8),
     pub orders_dirty: extern "C" fn(),
     pub vehicle: *const crate::vehicle::VehicleServices,
@@ -251,7 +239,6 @@ pub struct CommandServicesTable {
     pub set_stop_next: extern "C" fn(*mut Stop, *mut Stop),
     pub add_stop_area: extern "C" fn(*mut BaseStation, bool, u32),
     pub clear_stop_area: extern "C" fn(*mut BaseStation, bool),
-    pub before_add_tile: extern "C" fn(*mut CommandCost, *mut BaseStation, u32, u8),
     pub make_drive_stop: extern "C" fn(u32, u8, u8, u8, u16, u8, u8, u8, u8),
     pub make_bay_stop: extern "C" fn(u32, u8, u16, u8, u8, u8, u8),
     pub delete_stop: extern "C" fn(*mut Stop),
@@ -295,7 +282,6 @@ pub struct CommandServicesTable {
     pub close_hangar: extern "C" fn(u32),
     pub close_airport_tile_inspect: extern "C" fn(u32),
     pub delete_airport_storage: extern "C" fn(*mut BaseStation),
-    pub after_remove_rect: extern "C" fn(*mut BaseStation, TileArea),
     pub clear_airport: extern "C" fn(*mut BaseStation),
     pub close_airport_inspect: extern "C" fn(*mut BaseStation),
     pub ship: *const crate::ship_control::Leaves,
@@ -317,11 +303,6 @@ pub struct CommandServicesTable {
     pub set_airport_kind_rotation: extern "C" fn(*mut BaseStation, u8, u8),
     pub set_facilities: extern "C" fn(*mut BaseStation, u8),
     pub set_build_date: extern "C" fn(*mut BaseStation, i32),
-    pub with_nearby: unsafe extern "C" fn(
-        *mut BaseStation,
-        *mut std::ffi::c_void,
-        unsafe extern "C" fn(*mut std::ffi::c_void, *mut BaseStation),
-    ),
     pub associated_industry: extern "C" fn(*mut BaseStation) -> *mut Industry,
     pub industry_neutral: extern "C" fn(*mut Industry) -> *mut BaseStation,
     pub clear_industry_neutral: extern "C" fn(*mut Industry),
@@ -369,6 +350,75 @@ impl<'a> Ctx<'a> {
             command: unsafe { &*s.command },
             map: std::cell::Cell::new(None),
         }
+    }
+    /// The catchment tables for this entry.
+    fn catchment(&self) -> crate::station::Ctx<'a> {
+        crate::station::Ctx::from_shared(self.shared)
+    }
+    /// `st->rect`, for immediate access only.
+    fn rect(&self, st: *mut BaseStation) -> *mut crate::station::StationRect {
+        // SAFETY: Live station owner.
+        unsafe { crate::station::rect((self.world().owner)(st)) }
+    }
+    /// `*out = st->rect.BeforeAddRect(area, mode)`.
+    fn before_add_rect(&self, out: Cost<'_>, st: *mut BaseStation, area: TileArea, mode: u8) {
+        let c = self.catchment();
+        let r = self.rect(st);
+        // SAFETY: Local copy; no borrow spans the setting reads.
+        let mut rect = unsafe { *r };
+        let ok = rect.before_add_rect(area.tile, i32::from(area.w), i32::from(area.h), mode, &c);
+        unsafe { *r = rect };
+        if ok {
+            out.zero();
+        } else {
+            out.error(self.s.strings.spread);
+        }
+    }
+    /// `*out = st->rect.BeforeAddTile(tile, mode)`.
+    fn before_add_tile(&self, out: Cost<'_>, st: *mut BaseStation, tile: u32, mode: u8) {
+        let c = self.catchment();
+        let r = self.rect(st);
+        // SAFETY: Local copy; no borrow spans the setting reads.
+        let mut rect = unsafe { *r };
+        let ok = rect.before_add_tile(tile, mode, &c);
+        unsafe { *r = rect };
+        if ok {
+            out.zero();
+        } else {
+            out.error(self.s.strings.spread);
+        }
+    }
+    /// `st->rect.AfterRemoveTile(st, tile)`.
+    fn after_remove_tile(&self, st: *mut BaseStation, tile: u32) {
+        let c = self.catchment();
+        let id = (c.c.id)(st);
+        let r = self.rect(st);
+        // SAFETY: Local copy; no borrow spans the map scans.
+        let mut rect = unsafe { *r };
+        rect.after_remove_tile(id, tile, &c);
+        unsafe { *r = rect };
+    }
+    /// `st->rect.AfterRemoveRect(st, area)`.
+    fn after_remove_rect(&self, st: *mut BaseStation, area: TileArea) {
+        let c = self.catchment();
+        let id = (c.c.id)(st);
+        let r = self.rect(st);
+        // SAFETY: Local copy; no borrow spans the map scans.
+        let mut rect = unsafe { *r };
+        rect.after_remove_rect(id, area, &c);
+        unsafe { *r = rect };
+    }
+    /// `st->rect.PtInExtendedRect(TileX(tile), TileY(tile))`.
+    #[allow(clippy::cast_possible_wrap)]
+    fn rect_contains(&self, st: *mut BaseStation, tile: u32) -> bool {
+        let map = self.map();
+        // SAFETY: Live owner; immediate copy.
+        let rect = unsafe { *self.rect(st) };
+        rect.pt_in_extended_rect(map.tile_x(tile) as i32, map.tile_y(tile) as i32, 0)
+    }
+    /// `Station::From(st)->RecomputeCatchment(no_clear)`.
+    fn recompute_catchment(&self, st: *mut BaseStation, no_clear_nearby_lists: bool) {
+        crate::station::recompute_catchment(st, no_clear_nearby_lists, &self.catchment());
     }
     fn map(&self) -> Map {
         if let Some(map) = self.map.get() {
@@ -630,10 +680,12 @@ impl Ctx<'_> {
         }
     }
     fn sign_coord(&self, st: *mut BaseStation) {
-        if (self.world().rectangle_empty)(st) {
+        let owner = (self.world().owner)(st);
+        // SAFETY: Live owner; immediate reads.
+        if unsafe { crate::station::rect_is_empty(owner) } {
             return;
         }
-        let b = (self.s.bounds)(st);
+        let b = unsafe { *crate::station::rect(owner) };
         let xy = (self.s.location)(st);
         let x = (self.map().tile_x(xy) as i32).clamp(b.left, b.right) as u32;
         let y = (self.map().tile_y(xy) as i32).clamp(b.top, b.bottom) as u32;
@@ -671,7 +723,7 @@ impl Ctx<'_> {
         (self.s.virtual_coord)(st);
         (self.command.infrastructure_dirty)((self.world().station_owner)(st));
         if adding {
-            (self.s.catchment)(st, false);
+            self.recompute_catchment(st, false);
             (self.s.catchment_dirty)();
             (self.world().station_list_invalidation)(st, 0);
         } else {
@@ -686,7 +738,7 @@ impl Ctx<'_> {
             (self.s.select_invalidate)();
         } else {
             self.delete_if_empty(st);
-            (self.s.catchment)(st, false);
+            self.recompute_catchment(st, false);
         }
     }
     fn join(
@@ -815,7 +867,7 @@ impl Ctx<'_> {
                 out.error(0xffff);
                 return st;
             }
-            (self.s.before_add_rect)(out.0, st, area, 0);
+            self.before_add_rect(out, st, area, 0);
             if !out.ok() {
                 return st;
             }
@@ -907,7 +959,7 @@ impl Ctx<'_> {
                 return 0xffff;
             }
         }
-        if !(self.s.rect_contains)(st, tile) {
+        if !self.rect_contains(st, tile) {
             out.error(self.s.strings.unsuitable);
             return 0xffff;
         }
@@ -1480,8 +1532,8 @@ impl Ctx<'_> {
         }
         (self.s.set_train_area)(st, area);
         (self.s.add_facility)(st, 0, area.tile);
-        (self.s.before_add_rect)(
-            ret.0,
+        self.before_add_rect(
+            ret,
             st,
             TileArea {
                 tile,
@@ -1772,7 +1824,7 @@ impl Ctx<'_> {
             }
             (self.s.station_infrastructure)(owner, u32::MAX);
             (self.command.infrastructure_dirty)(owner);
-            (self.s.after_remove_tile)(st, tile);
+            self.after_remove_tile(st, tile);
             self.signals().add_track(tile, track, owner);
             (self.rail().layout_changed)(tile, track);
             crate::station_association::deallocate(self.s.rail_association, st, index as u8);
@@ -1847,7 +1899,7 @@ impl Ctx<'_> {
             }
             (self.s.mark_tiles)(st, false);
             (self.s.catchment_dirty)();
-            (self.s.catchment)(st, false);
+            self.recompute_catchment(st, false);
         }
     }
     fn remove_rail_all_inner(
@@ -1919,7 +1971,7 @@ impl Ctx<'_> {
         };
         self.remove_rail_all_inner(cost, ret, error, flags, st, waypoint);
         if !waypoint && flags & 1 != 0 {
-            (self.s.catchment)(st, false);
+            self.recompute_catchment(st, false);
         }
     }
 }
@@ -2412,7 +2464,7 @@ impl Ctx<'_> {
             }
             (self.s.add_stop_area)(st, truck, tile);
             (self.s.add_facility)(st, if truck { 1 } else { 2 }, tile);
-            (self.s.before_add_tile)(ret.0, st, tile, 1);
+            self.before_add_tile(ret, st, tile, 1);
             let owner = (self.world().station_owner)(st);
             let id = (self.links().graphs.station_id)(st);
             if drive {
@@ -2608,7 +2660,7 @@ impl Ctx<'_> {
                 (self.s.delete_stop)(stop);
                 self.retarget_road_vehicles(id, tile);
             }
-            (self.s.after_remove_tile)(st, tile);
+            self.after_remove_tile(st, tile);
             if !waypoint && replacement < 0 {
                 self.tiles_changed(st, false, if truck { 2 } else { 3 });
             }
@@ -3073,7 +3125,7 @@ impl Ctx<'_> {
         }
         (self.s.add_facility)(st, 3, tile);
         (self.s.set_airport_details)(st, airport, layout, rotation);
-        (self.s.before_add_rect)(ret.0, st, area, 1);
+        self.before_add_rect(ret, st, area, 1);
         let owner = (self.world().station_owner)(st);
         let id = (self.links().graphs.station_id)(st);
         for t in self.airport_tiles(spec, layout, tile) {
@@ -3174,7 +3226,7 @@ impl Ctx<'_> {
         }
         if flags & 1 != 0 {
             (self.s.delete_airport_storage)(st);
-            (self.s.after_remove_rect)(st, area);
+            self.after_remove_rect(st, area);
             (self.s.clear_airport)(st);
             (self.s.reset_facilities)(st, 8);
             (self.s.orders_dirty)();
@@ -3473,7 +3525,7 @@ impl Ctx<'_> {
             (self.s.ship_area_add)(st, tile);
             (self.s.ship_area_add)(st, flat);
             (self.s.add_facility)(st, 4, tile);
-            (self.s.before_add_rect)(ret.0, st, area, 1);
+            self.before_add_rect(ret, st, area, 1);
             let owner = (self.world().station_owner)(st);
             if water == 1
                 && !((self.shared.has_water_class)(flat)
@@ -3551,8 +3603,8 @@ impl Ctx<'_> {
                     &*self.s.restoration,
                 );
             }
-            (self.s.after_remove_tile)(st, land);
-            (self.s.after_remove_tile)(st, water);
+            self.after_remove_tile(st, land);
+            self.after_remove_tile(st, water);
             let area = self.shrink(st, (self.s.ship_area)(st), 5);
             (self.s.set_ship_area)(st, area);
             self.update_docking(st);
@@ -3646,15 +3698,30 @@ impl Ctx<'_> {
         (self.s.set_facilities)(st, 24);
         (self.s.set_build_date)(st, (self.shared.calendar_date)());
         self.update_docking(st);
-        (self.s.before_add_tile)(ret.0, st, tile, 2);
+        self.before_add_tile(ret, st, tile, 2);
         (self.s.virtual_coord)(st);
+        // The industry tile became a station tile, which may change neighbouring
+        // catchments. RecomputeCatchment cannot remove nearby industries here,
+        // so the industry's set is moved out first.
         if (self.shared.station_serve_neutral)() {
-            let mut context = OilrigNearby { c: self };
-            unsafe {
-                (self.s.with_nearby)(st, (&raw mut context).cast(), oilrig_nearby_visit);
+            let c = self.catchment();
+            let industry = (c.c.associated_industry)(st);
+            let list = crate::industry::stations_near((c.c.industry_owner)(industry));
+            // SAFETY: Live industry owner; the set is moved into a local before the visits.
+            let nearby = unsafe { std::mem::take(&mut *list) };
+            unsafe { (*list).clear() };
+            for near in nearby.entries() {
+                self.recompute_catchment(near.station, true);
+                unsafe {
+                    crate::station_service::openttd_rust_station_acceptance(
+                        near.station,
+                        self.s.station,
+                        1,
+                    );
+                }
             }
         }
-        (self.s.catchment)(st, false);
+        self.recompute_catchment(st, false);
         unsafe {
             crate::station_service::openttd_rust_station_acceptance(st, self.s.station, 0);
         }
@@ -3698,16 +3765,6 @@ impl Ctx<'_> {
             }
         }
         false
-    }
-}
-struct OilrigNearby<'a> {
-    c: &'a Ctx<'a>,
-}
-unsafe extern "C" fn oilrig_nearby_visit(context: *mut std::ffi::c_void, st: *mut BaseStation) {
-    let c = unsafe { (*context.cast::<OilrigNearby<'_>>()).c };
-    (c.s.catchment)(st, true);
-    unsafe {
-        crate::station_service::openttd_rust_station_acceptance(st, c.s.station, 1);
     }
 }
 /// # Safety
@@ -4151,11 +4208,9 @@ crate::abi::layouts! {
         train_area,
         rail_spec,
         links,
-        bounds,
         location,
         move_sign,
         virtual_coord,
-        catchment,
         catchment_dirty,
         facility_widget,
         select_invalidate,
@@ -4166,11 +4221,9 @@ crate::abi::layouts! {
         set_town,
         default_name,
         have_rating,
-        before_add_rect,
         road_waypoint,
         name_equals,
         set_name,
-        rect_contains,
         flip_airport_closed,
         closed_widget,
         distant_join,
@@ -4199,7 +4252,6 @@ crate::abi::layouts! {
         set_tile_flags,
         station_infrastructure,
         mark_tiles,
-        after_remove_tile,
         reset_facilities,
         orders_dirty,
         vehicle,
@@ -4217,7 +4269,6 @@ crate::abi::layouts! {
         set_stop_next,
         add_stop_area,
         clear_stop_area,
-        before_add_tile,
         make_drive_stop,
         make_bay_stop,
         delete_stop,
@@ -4261,7 +4312,6 @@ crate::abi::layouts! {
         close_hangar,
         close_airport_tile_inspect,
         delete_airport_storage,
-        after_remove_rect,
         clear_airport,
         close_airport_inspect,
         ship,
@@ -4283,7 +4333,6 @@ crate::abi::layouts! {
         set_airport_kind_rotation,
         set_facilities,
         set_build_date,
-        with_nearby,
         associated_industry,
         industry_neutral,
         clear_industry_neutral,
@@ -4370,12 +4419,6 @@ crate::abi::layouts! {
     "OpenTTDStationBridgeInfo" ["probe"] => BridgeSpan {
         data,
         size,
-    };
-    "OpenTTDStationBounds" ["probe"] => Bounds {
-        left,
-        top,
-        right,
-        bottom,
     };
     "OpenTTDStationSpecIndex" ["probe"] => SpecIndex {
         value,
