@@ -25,7 +25,7 @@ pub(crate) fn map_read_probe(
         y: (shared.map_max_y)() + 1,
     };
     let s = table(shared);
-    let context = Context {
+    let context = Context::<true> {
         s,
         observations: Some(&observations),
     };

@@ -31,6 +31,7 @@ pub(crate) fn is_valid_tile(m: &TileTypeAccess, t: u32, count: u32) -> Option<bo
 fn tile_height(m: &TileTypeAccess, t: u32) -> Option<i32> {
     Some(i32::from(m.height(t)?))
 }
+#[inline]
 #[allow(clippy::cast_possible_truncation)] // trailing_zeros is in 0..=32.
 fn corners(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<[i32; 4]> {
     m.available(t)?;
@@ -47,6 +48,7 @@ fn corners(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<[i32; 4]> {
     ])
 }
 /// `GetTileSlopeGivenHeight`, also called by `GetTileSlopeZ` in the original.
+#[inline]
 fn get_tile_slope_given_height([n, w, e, s]: [i32; 4]) -> (u8, i32) {
     use crate::slope_func::{SLOPE_E, SLOPE_FLAT, SLOPE_N, SLOPE_S, SLOPE_STEEP, SLOPE_W};
     let low = n.min(w).min(e.min(s));
