@@ -594,7 +594,11 @@ def main():
                         str(build),
                         "--parallel",
                         str(args.jobs),
-                        *(["--target", "openttd"] if args.action == "coverage" else []),
+                        *(
+                            ["--target", "openttd", "regression_files"]
+                            if args.action == "coverage"
+                            else []
+                        ),
                     ],
                 )
                 if instruction_mode:
