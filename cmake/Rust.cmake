@@ -230,6 +230,36 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     target_link_options(openttd_rust INTERFACE "/MAP:${CMAKE_BINARY_DIR}/$<TARGET_PROPERTY:NAME>.map")
 endif()
 
+# Native oracles add code only; each executable links exactly one Rust archive.
+if(NOT OPTION_TOOLS_ONLY)
+    set(RUST_TEST_TARGET_DIR "${CMAKE_BINARY_DIR}/cargo-native-test-support")
+    set(RUST_TEST_ARCHIVE "${RUST_TEST_TARGET_DIR}/${RUST_TARGET}/release/${RUST_ARCHIVE_NAME}")
+    file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/rust-native-test-build-configuration.txt"
+        CONTENT "${RUST_CONFIGURATION}features=native-test-support\n")
+    add_custom_command(OUTPUT "${RUST_TEST_ARCHIVE}"
+        COMMAND ${CMAKE_COMMAND} -E env ${RUST_BUILD_ENV} "CARGO_TARGET_DIR=${RUST_TEST_TARGET_DIR}" "${CMAKE_COMMAND}"
+            "-DCARGO=${CARGO_EXECUTABLE}" "-DSOURCE=${CMAKE_SOURCE_DIR}" "-DTARGET=${RUST_TARGET}"
+            "-DFEATURES=native-test-support" "-DLOG=${CMAKE_BINARY_DIR}/rust-native-test-build.log"
+            "-DCONFIGURATION=${CMAKE_BINARY_DIR}/rust-native-test-build-configuration.txt"
+            -P "${CMAKE_SOURCE_DIR}/cmake/BuildRust.cmake"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        DEPENDS ${RUST_INPUTS} "${CMAKE_SOURCE_DIR}/Cargo.toml" "${CMAKE_SOURCE_DIR}/Cargo.lock"
+            "${CMAKE_SOURCE_DIR}/rust-toolchain.toml" "${CMAKE_SOURCE_DIR}/cmake/BuildRust.cmake"
+            "${CMAKE_SOURCE_DIR}/cmake/Rust.cmake"
+            "${CMAKE_BINARY_DIR}/rust-native-test-build-configuration.txt"
+        COMMENT "Building native-test Rust support for ${RUST_TARGET}" VERBATIM)
+    add_custom_target(openttd_rust_native_test_support_build DEPENDS "${RUST_TEST_ARCHIVE}")
+    add_library(openttd_rust_native_test_support STATIC IMPORTED)
+    set_target_properties(openttd_rust_native_test_support PROPERTIES IMPORTED_LOCATION "${RUST_TEST_ARCHIVE}")
+    add_dependencies(openttd_rust_native_test_support openttd_rust_native_test_support_build)
+    foreach(RUST_PROPERTY INTERFACE_COMPILE_DEFINITIONS INTERFACE_LINK_LIBRARIES INTERFACE_LINK_OPTIONS)
+        get_target_property(RUST_VALUE openttd_rust ${RUST_PROPERTY})
+        if(RUST_VALUE)
+            set_property(TARGET openttd_rust_native_test_support PROPERTY ${RUST_PROPERTY} "${RUST_VALUE}")
+        endif()
+    endforeach()
+endif()
+
 # Derive native ABI checks from the same declarations compiled by Rust.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 file(GLOB_RECURSE RUST_ABI_INPUTS CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/rust/openttd-kernels/src/*.rs" "${CMAKE_SOURCE_DIR}/src/rust/*.h*" "${CMAKE_SOURCE_DIR}/tools/migration/windows-abi/*.inc")

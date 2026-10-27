@@ -174,7 +174,9 @@ struct IndustryTileSpec {
 /* industry_cmd.cpp*/
 const IndustrySpec *GetIndustrySpec(IndustryType thistype);    ///< Array of industries data
 const IndustryTileSpec *GetIndustryTileSpec(IndustryGfx gfx);  ///< Array of industry tiles data
+#ifndef WITH_RUST
 void ResetIndustries();
+#endif
 
 /* writable arrays of specs */
 extern IndustrySpec _industry_specs[NUM_INDUSTRYTYPES];

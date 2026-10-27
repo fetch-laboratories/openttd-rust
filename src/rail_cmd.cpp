@@ -149,11 +149,9 @@ static bool CompareRailTypes(const RailType &first, const RailType &second)
 /**
  * Resolve sprites of custom rail types
  */
+#ifndef WITH_RUST
 void InitRailTypes()
 {
-#ifdef WITH_RUST
-	openttd_rust_rail_init();
-#else
 	_sorted_railtypes.clear();
 	for (RailTypeInfo &rti : _railtypes) {
 		RailType rt = rti.Index();
@@ -165,17 +163,15 @@ void InitRailTypes()
 		_sorted_railtypes.push_back(rt);
 	}
 	std::sort(_sorted_railtypes.begin(), _sorted_railtypes.end(), CompareRailTypes);
-#endif
 }
+#endif
 
 /**
  * Allocate a new rail type label
  */
+#ifndef WITH_RUST
 RailType AllocateRailType(RailTypeLabel label)
 {
-#ifdef WITH_RUST
-	return openttd_rust_rail_allocate(label);
-#else
 	auto it = std::ranges::find(_railtypes, 0, &RailTypeInfo::label);
 	if (it == std::end(_railtypes)) return INVALID_RAILTYPE;
 
@@ -203,8 +199,8 @@ RailType AllocateRailType(RailTypeLabel label)
 	rti.sorting_order = rt << 4 | 7;
 
 	return rt;
-#endif
 }
+#endif
 
 #ifdef WITH_RUST
 const OpenTTDRailRegistryServices &GetRustRailRegistryServices() noexcept
@@ -213,6 +209,14 @@ const OpenTTDRailRegistryServices &GetRustRailRegistryServices() noexcept
 		.default_count = std::size(_original_railtypes),
 		.spec = [](RailType rt) noexcept { return &_railtypes[rt]; },
 		.type_label = [](RailType rt) noexcept { return RustRailTypeLabel(GetRailTypeInfo(rt)); },
+		.labels = []() noexcept -> const RailTypeLabel * const * {
+			static const auto labels = [] {
+				std::array<const RailTypeLabel *, RAILTYPE_END> pointers{};
+				for (size_t i = 0; i < pointers.size(); ++i) pointers[i] = &RustRailTypeLabel(&_railtypes[i]);
+				return pointers;
+			}();
+			return labels.data();
+		},
 		.alternate = [](RailType rt, uint32_t label) noexcept { return GetRailTypeInfo(rt)->alternate_labels.contains(label); },
 		.clear = [](RailTypeInfo *info) noexcept { *info = RailTypeInfo{}; },
 		.copy_default = [](RailTypeInfo *info, RailType source) noexcept { *info = _original_railtypes[source]; },

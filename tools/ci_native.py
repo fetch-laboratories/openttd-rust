@@ -216,7 +216,7 @@ def pack(bundle, count):
         ["ninja", "-t", "commands", "openttd_test"], cwd=ROOT / "build-rust", text=True
     ).splitlines()[-1]
     for token in shlex.split(command):
-        if not token.endswith((".o", ".a")):
+        if not token.endswith((".o", ".a")) or "cargo-native-test-support/" in token:
             continue
         path = Path(token)
         path = path if path.is_absolute() else ROOT / "build-rust" / path

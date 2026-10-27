@@ -396,7 +396,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             leaves,
             vs: unsafe { &*leaves.vehicle },
             ss: unsafe { &*leaves.shared },
-            movement: crate::movement::CachedTable::new(unsafe { &*leaves.shared }),
+            movement: unsafe { crate::movement::CachedTable::audited(&*leaves.shared) },
             map: Cell::new(None),
             map_bounds: Cell::new(None),
         }
@@ -506,7 +506,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         engine_sound(self; v: Vehicle) => unsafe { (self.leaves.engine_sound)(v) };
         engine_reliability(self; v: Vehicle) => (self.maintenance().engine_reliability)(v.base());
         vehicle_type(self; v: Vehicle) => (self.vs.vehicle_type)(v.base());
-        slope(self; x: i64, y: i64) => self.movement.get().pixel_z_at(x as i32,y as i32,false);
+        slope(self; x: i64, y: i64) => self.movement.pixel_z_at(x as i32,y as i32,false);
         // Original unsigned TileHeight * TILE_HEIGHT narrows to int before widening.
         tile_height(self; tile: i64) => (self.ss.tile_height)(tile as u32).wrapping_mul(crate::tile_type::TILE_HEIGHT) as i32;
         airport_entry(self; ap: *const c_void, direction: i64) => unsafe { (self.leaves.airport_entry)(ap, direction as u8) };

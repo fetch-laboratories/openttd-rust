@@ -160,13 +160,13 @@ static void Inspect(bool reload)
 	auto processed = layout->ProcessRegisters(tile_resolver, &stage);
 	Require(stage == 0 && processed.GetLayout().GetSequence().size() == 1 && processed.GetLayout().ground.sprite == 1, "action2-layout-consumer");
 	for (uint8_t variant = 0; variant < 3; variant++) {
-		const auto *spec = GetIndustrySpec(MapNewGRFIndustryType(variant | 0x80, file->grfid));
+		const auto *spec = GetIndustrySpec(_industry_mngr.GetID(variant, file->grfid));
 		const auto *wrapper = dynamic_cast<const DeterministicSpriteGroup *>(spec->grf_prop.GetSpriteGroup(true));
 		const auto *production = dynamic_cast<const IndustryProductionSpriteGroup *>(wrapper->ranges[0].result.group);
 		Require(production != nullptr && production->version == variant && (variant != 0 || (production->subtract_input[0] == -2 && production->add_output[0] == 7)), "action2-production-parsed");
 		if (reload) {
 			bool found = false;
-			for (const Industry *industry : Industry::Iterate()) found |= industry->type == MapNewGRFIndustryType(variant | 0x80, file->grfid) && industry->produced[0].waiting >= 7;
+			for (const Industry *industry : Industry::Iterate()) found |= industry->type == _industry_mngr.GetID(variant, file->grfid) && industry->produced[0].waiting >= 7;
 			Require(found, "action2-industry-reload");
 		}
 	}
@@ -192,7 +192,7 @@ static void Action2Consumers()
 	AutoRestoreBackup founder(_current_company, OWNER_DEITY);
 	AutoRestoreBackup multiple(_settings_game.economy.multiple_industry_per_town, true);
 	for (uint8_t variant = 0; variant < 3; variant++) {
-		IndustryType type = MapNewGRFIndustryType(variant | 0x80, file->grfid);
+		IndustryType type = _industry_mngr.GetID(variant, file->grfid);
 		bool built = false;
 		for (uint32_t n = 1; n < Map::Size() && !built; n += 17) {
 			TileIndex tile(n);

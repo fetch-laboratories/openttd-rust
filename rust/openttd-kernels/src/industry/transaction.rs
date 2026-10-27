@@ -290,7 +290,7 @@ impl Engine<'_> {
             if current == u32::MAX {
                 return self.fail(self.e.site);
             }
-            if gfx == 255 {
+            if gfx == crate::industry_map::GFX_WATERTILE_SPECIALCHECK {
                 if !(self.s.shared().is_water_tile)(current)
                     || (self.s.shared().tile_slope)(current) != 0
                 {
@@ -367,7 +367,7 @@ impl Engine<'_> {
             let gfx = unsafe { (self.c.translated_gfx)(part.gfx) };
             let current =
                 unsafe { (self.s.tile_add_wrap)(tile, i32::from(part.x), i32::from(part.y)) };
-            if gfx != 255 {
+            if gfx != crate::industry_map::GFX_WATERTILE_SPECIALCHECK {
                 let spec = unsafe { (self.t.spec)(gfx) };
                 if unsafe { (self.x.shape_callback)(spec) } {
                     custom_shape = true;
@@ -442,7 +442,7 @@ impl Engine<'_> {
         let (mut max_x, mut max_y) = (0_i32, 0_i32);
         for n in 0..unsafe { (self.c.layout_size)(layout) } {
             let part = unsafe { (self.c.layout_tile)(layout, n) };
-            if part.gfx == 255 {
+            if part.gfx == crate::industry_map::GFX_WATERTILE_SPECIALCHECK {
                 continue;
             }
             max_x = max_x.max(i32::from(part.x));

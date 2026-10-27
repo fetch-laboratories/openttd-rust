@@ -10,10 +10,7 @@
 //! owner is retired.
 
 /// A native `Station`, distinct from the shared station/waypoint pool base.
-#[repr(C)]
-pub struct Station {
-    _private: [u8; 0],
-}
+pub use crate::station_type::Station;
 
 /// Opaque native entry-frame iterator storage; never read or retained by Rust.
 #[repr(C)]
@@ -22,7 +19,4 @@ pub struct NearbyIndustryCursor {
 }
 
 /// A native `BaseStation`, which may also be a waypoint.
-#[repr(C)]
-pub struct BaseStation {
-    _private: [u8; 0],
-}
+pub use crate::station_type::BaseStation;

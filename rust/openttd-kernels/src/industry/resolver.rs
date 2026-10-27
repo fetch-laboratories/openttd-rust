@@ -792,12 +792,6 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_scope(
     }
 }
 /// # Safety
-/// Live mapping manager throughout the call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_map_type(kind: u8, grfid: u32) -> u8 {
-    map_type(kind, grfid)
-}
-/// # Safety
 /// Live specs/table, callback may synchronously reenter with its own stack context.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_probability(

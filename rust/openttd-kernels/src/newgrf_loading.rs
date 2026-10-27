@@ -1355,10 +1355,7 @@ pub unsafe extern "C" fn openttd_rust_grf_reset(s: &Services) {
         (s.reset_prices)();
         (s.reset_currencies)();
         crate::house_definition::reset(&*s.houses);
-        crate::industry::definitions::openttd_rust_industry_definition_reset(
-            ((*s.global).climate)(),
-            s.industry,
-        );
+        crate::industry::definitions::reset(((*s.global).climate)(), &*s.industry);
         crate::newgrf_class::object::reset(s.object_classes);
         (s.reset_objects)();
         crate::newgrf_class::station::reset(s.station_classes);
@@ -1414,8 +1411,8 @@ unsafe fn after_load(s: &Services) {
         crate::engine_loading::openttd_rust_vehicle_order_commit(&*s.engine);
         (s.activate_shore)();
         (s.activate_tram_depot)();
-        crate::type_registry::openttd_rust_rail_init();
-        crate::type_registry::openttd_rust_road_init();
+        crate::type_registry::rail_init();
+        crate::type_registry::road_init();
         crate::engine_loading::openttd_rust_engine_bind_types(&*s.engine);
         (s.aging_stops)();
         (s.finalise_prices)();

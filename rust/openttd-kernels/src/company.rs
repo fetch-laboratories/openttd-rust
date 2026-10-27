@@ -69,10 +69,7 @@ pub struct Economy {
 }
 /// Opaque native `Company`. Pool services lend its address while the shell is
 /// live; Rust never dereferences it or retains an owner borrow across callbacks.
-#[repr(C)]
-pub struct OpenTTDCompany {
-    _private: [u8; 0],
-}
+pub use crate::company_type::OpenTTDCompany;
 
 /// A live pool company and its canonical finance storage; `id == u32::MAX` ends.
 #[repr(C)]
