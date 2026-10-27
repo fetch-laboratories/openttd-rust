@@ -614,14 +614,14 @@ fn update_z_inclination(
     o: Owner,
 ) {
     let xy = (s.vehicle.xy)(v);
-    let z = movement.pixel_z_at(xy.x, xy.y, true);
+    let z = movement.get().pixel_z_at(xy.x, xy.y, true);
     (s.vehicle.write_z)(v, z);
     unsafe {
         (*o.state).flags &= !SLOPE_FLAGS;
     }
     if sloped_track_owned(s, movement, v, o) {
         let xy = (s.vehicle.xy)(v);
-        let middle = movement.pixel_z_at(
+        let middle = movement.get().pixel_z_at(
             (xy.x & !(TILE_UNIT_MASK as i32)) | (TILE_SIZE / 2) as i32,
             (xy.y & !(TILE_UNIT_MASK as i32)) | (TILE_SIZE / 2) as i32,
             true,
@@ -643,7 +643,7 @@ fn update_z(s: &Services, movement: &crate::movement::CachedTable<'_>, v: Vehicl
     if unsafe { (*o.state).flags } & SLOPE_FLAGS != 0 {
         if !o.rail() && reversing(s, v) {
             let xy = (s.vehicle.xy)(v);
-            let z = movement.pixel_z_at(xy.x, xy.y, true);
+            let z = movement.get().pixel_z_at(xy.x, xy.y, true);
             (s.vehicle.write_z)(v, z);
             return;
         }
@@ -679,7 +679,7 @@ fn update_z(s: &Services, movement: &crate::movement::CachedTable<'_>, v: Vehicl
     if s.assertions {
         let z = (s.vehicle.z)(v);
         let xy = (s.vehicle.xy)(v);
-        assert_eq!(z, movement.pixel_z_at(xy.x, xy.y, true));
+        assert_eq!(z, movement.get().pixel_z_at(xy.x, xy.y, true));
     }
 }
 pub(crate) fn inclination(

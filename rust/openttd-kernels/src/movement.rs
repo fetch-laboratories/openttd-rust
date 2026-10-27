@@ -75,7 +75,7 @@ impl<'a> CachedTable<'a> {
         }
     }
     /// # Safety
-    /// Road/aircraft entries exclude map reset/load and mutex yield through all
+    /// Road entries exclude map reset/load and mutex yield through all
     /// synchronous orders, GRF/sound, movement, crash and viewport callbacks.
     pub(crate) unsafe fn audited(shared: &'a Services) -> Self {
         Self {
@@ -98,19 +98,10 @@ impl<'a> CachedTable<'a> {
                     types: unsafe {
                         crate::map_func::TileTypeAccess::raw(allocation, self.shared.tile_type)
                     },
-                    x: (self.shared.map_max_x)() + 1,
-                    y: (self.shared.map_max_y)() + 1,
                 })
             })
             .as_ref();
         Context { s, observations }
-    }
-    pub(crate) fn pixel_z_at(&self, x: i32, y: i32, ground: bool) -> i32 {
-        if self.audited {
-            self.observed().pixel_z_at(x, y, ground)
-        } else {
-            self.get().pixel_z_at(x, y, ground)
-        }
     }
     pub(crate) fn road_tracks(&self, v: VehicleRef, tile: u32) -> u32 {
         if self.audited {
@@ -136,8 +127,6 @@ impl<'a> CachedTable<'a> {
 
 struct MapObservations {
     types: crate::map_func::TileTypeAccess,
-    x: u32,
-    y: u32,
 }
 /// Keeps only allocation metadata; each original observation loads fresh scalars.
 /// `AUDITED` is false for native-callback entries, which compile without map branches.
@@ -161,26 +150,6 @@ impl<const AUDITED: bool> Context<'_, AUDITED> {
     fn tile_type(&self, tile: u32) -> u8 {
         self.map()
             .map_or_else(|| (self.shared().tile_type)(tile), |m| m.types.read(tile))
-    }
-    #[inline]
-    fn pixel_location(&self, x: i32, y: i32) -> crate::services::PixelLocation {
-        self.map().map_or_else(
-            || (self.s.pixel_location)(x, y),
-            |m| {
-                let tile = crate::map_func::Map::from_log_x(m.x.trailing_zeros())
-                    .tile_virt_xy(x as u32, y as u32);
-                crate::services::PixelLocation {
-                    tile,
-                    kind: m.types.read(tile),
-                }
-            },
-        )
-    }
-    #[inline]
-    fn pixel_slope(&self, tile: u32) -> FoundationSlope {
-        self.map()
-            .and_then(|m| crate::tile_map::get_tile_pixel_slope(&m.types, tile, m.x, m.y))
-            .unwrap_or_else(|| (self.s.pixel_slope)(tile))
     }
     #[inline]
     fn normal_road_bits(&self, tile: u32, kind: crate::services::RoadTramType) -> RoadBits {
@@ -400,7 +369,7 @@ impl<const AUDITED: bool> Context<'_, AUDITED> {
     }
     #[inline]
     pub(crate) fn pixel_z_at(&self, x: i32, y: i32, ground: bool) -> i32 {
-        let p = self.pixel_location(x, y);
+        let p = (self.pixel_location)(x, y);
         // One named body for constant Rust callers and the dynamic native entry.
         // Resolve the native location before selecting the ground specialization.
         if ground {
@@ -422,7 +391,7 @@ impl<const AUDITED: bool> Context<'_, AUDITED> {
         let mut p = if kind == MP_VOID {
             (self.outside_pixel_slope)(x >> 4, y >> 4)
         } else {
-            self.pixel_slope(tile)
+            (self.pixel_slope)(tile)
         };
         if matches!(kind, MP_RAILWAY | MP_ROAD) {
             if p.slope.0 == SLOPE_FLAT {
