@@ -276,9 +276,7 @@ pub unsafe fn finalise(s: &Services) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_definition_reset(climate: u8, s: *const Services) {
-    let s = unsafe { &*s };
+pub(crate) unsafe fn reset(climate: u8, s: &Services) {
     for id in 0..crate::industry_type::NEW_INDUSTRYOFFSET {
         unsafe {
             (s.reset_industry)(id);

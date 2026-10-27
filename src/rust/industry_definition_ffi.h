@@ -55,7 +55,4 @@ struct OpenTTDIndustryDefinitionServices {
 	void (*set_tile_accepted)(IndustryTileSpec *, size_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_accepted);
 };
 const OpenTTDIndustryDefinitionServices &GetIndustryDefinitionServices() noexcept;
-extern "C" {
-void openttd_rust_industry_definition_reset(uint8_t, const OpenTTDIndustryDefinitionServices *);
-}
 #endif
