@@ -357,7 +357,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "action",
-        choices=("build", "verify", "tools", "simulate", "rust-checks"),
+        choices=("build", "verify", "tools", "simulate", "coverage", "rust-checks"),
         nargs="?",
         default="verify",
     )
@@ -381,7 +381,7 @@ def main():
     )
     # simulate forwards any further arguments to tools/simulate.py.
     args, simulate_args = parser.parse_known_args()
-    if simulate_args and args.action != "simulate":
+    if simulate_args and args.action not in ("simulate", "coverage"):
         parser.error(f"unrecognized arguments: {' '.join(simulate_args)}")
     if args.no_ccache and (args.ccache or args.ccache_bypass):
         parser.error("--no-ccache conflicts with --ccache/--ccache-bypass")
@@ -420,7 +420,7 @@ def main():
         "candidate_commit": git("rev-parse", "HEAD"),
         "candidate_status": git("status", "--short"),
         "action": args.action,
-        "candidate_rust_enabled": args.action != "rust-checks",
+        "candidate_rust_enabled": args.action not in ("coverage", "rust-checks"),
         "started_at": stamp,
         "commands": [],
         "compiler_cache": {
@@ -459,6 +459,8 @@ def main():
         return log
 
     builds = {"reference": REFERENCE_BUILD.resolve(), "candidate": ROOT / "build-rust"}
+    if args.action == "coverage":
+        builds = {"reference": LOCAL / "build-reference-coverage"}
     original_environment = env.copy()
     cache_before = {}
 
@@ -525,9 +527,26 @@ def main():
                 "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
                 "-DOPTION_USE_ASSERTS=OFF",
             ]
+        if args.action == "coverage":
+            common += [
+                "-DCMAKE_C_COMPILER=gcc",
+                "-DCMAKE_CXX_COMPILER=g++",
+                "-DCMAKE_C_FLAGS=--coverage",
+                "-DCMAKE_CXX_FLAGS=--coverage",
+                "-DCMAKE_C_FLAGS_RELWITHDEBINFO=-O0 -g -DNDEBUG",
+                "-DCMAKE_CXX_FLAGS_RELWITHDEBINFO=-O0 -g -DNDEBUG",
+                "-DCMAKE_EXE_LINKER_FLAGS=--coverage",
+                "-DBUILD_TESTING=OFF",
+            ]
         common.extend(compiler_cache_options(cache_executable))
+        if args.action == "coverage":
+            common.append("-DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON")
         for name, build in builds.items():
-            with reference_lock() if name == "reference" else candidate_lock(build):
+            with (
+                reference_lock()
+                if name == "reference" and args.action != "coverage"
+                else candidate_lock(build)
+            ):
                 # Other worktrees rebuild the shared pinned reference concurrently;
                 # its record stays bound to the executable digest instead.
                 if name != "reference":
@@ -571,7 +590,14 @@ def main():
                     supply_graphics(build)
                 run(
                     f"{name}-build",
-                    ["cmake", "--build", str(build), "--parallel", str(args.jobs)],
+                    [
+                        "cmake",
+                        "--build",
+                        str(build),
+                        "--parallel",
+                        str(args.jobs),
+                        *(["--target", "openttd"] if args.action == "coverage" else []),
+                    ],
                 )
                 if instruction_mode:
                     from simulation.instructions import record_build
@@ -619,6 +645,19 @@ def main():
                 [
                     sys.executable,
                     str(ROOT / "tools/simulate.py"),
+                    "--jobs",
+                    str(max(1, args.jobs // 2)),
+                    *simulate_args,
+                ],
+            )
+        if args.action == "coverage":
+            run(
+                "coverage",
+                [
+                    sys.executable,
+                    str(ROOT / "tools/simulation/coverage.py"),
+                    "--build",
+                    str(builds["reference"]),
                     "--jobs",
                     str(max(1, args.jobs // 2)),
                     *simulate_args,
