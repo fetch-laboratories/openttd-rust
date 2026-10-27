@@ -692,7 +692,12 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 ["AIPL", "configuration", "reference setup AI restored"]
             )
             record["sha256"] = hashlib.sha256(destination.read_bytes()).hexdigest()
-        if "range_probe" not in scenario and not (folder / "range-check.log").exists():
+        # --self (and coverage) have no candidate archive; the probe stays C++ only.
+        if (
+            binaries["candidate"] != binaries["reference"]
+            and "range_probe" not in scenario
+            and not (folder / "range-check.log").exists()
+        ):
             import migration
 
             result["aircraft_range_gap"] = finite_range_probe(
