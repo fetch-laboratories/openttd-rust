@@ -24,7 +24,7 @@ pub struct Services {
     date_fraction: unsafe extern "C" fn() -> u16,
     date_to_ymd: unsafe extern "C" fn(i32) -> CalendarYmd,
     disable_elrails: unsafe extern "C" fn() -> bool,
-    file_version: unsafe extern "C" fn(*const c_void) -> u8,
+    pub(crate) file_version: unsafe extern "C" fn(*const c_void) -> u8,
     game_mode: unsafe extern "C" fn() -> u8,
     height_limit: unsafe extern "C" fn() -> u8,
     pub(crate) misc_bits: unsafe extern "C" fn() -> u8,
@@ -195,9 +195,41 @@ pub const GLS_ACTIVATION: u8 = 5;
 pub const GSF_GLOBALVAR: u8 = 8;
 pub const SECOND_ROCKY_TILE_SET: u8 = 6;
 
+/// `GSF_TRAINS`.
+pub const GSF_TRAINS: u8 = 0;
+
+/// `GSF_ROADVEHICLES`.
+pub const GSF_ROADVEHICLES: u8 = 1;
+
+/// `GSF_SHIPS`.
+pub const GSF_SHIPS: u8 = 2;
+
+/// `GSF_AIRCRAFT`.
+pub const GSF_AIRCRAFT: u8 = 3;
+
+/// `GSF_STATIONS`.
+pub const GSF_STATIONS: u8 = 4;
+
+/// `GSF_CANALS`.
+pub const GSF_CANALS: u8 = 5;
+
 /// `GSF_HOUSES`.
 pub const GSF_HOUSES: u8 = 7;
-/// Station GRF feature.
-pub const GSF_STATIONS: u8 = 4;
-/// Road-stop GRF feature.
+
+/// `GSF_AIRPORTS`.
+pub const GSF_AIRPORTS: u8 = 13;
+
+/// `GSF_OBJECTS`.
+pub const GSF_OBJECTS: u8 = 15;
+
+/// `GSF_AIRPORTTILES`.
+pub const GSF_AIRPORTTILES: u8 = 17;
+
+/// `GSF_TRAMTYPES`.
+pub const GSF_TRAMTYPES: u8 = 19;
+
+/// `GSF_ROADSTOPS`.
 pub const GSF_ROADSTOPS: u8 = 20;
+
+/// `GSF_BADGES`.
+pub const GSF_BADGES: u8 = 21;

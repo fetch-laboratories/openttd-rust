@@ -38,6 +38,7 @@ struct OpenTTDGenericServices;
 struct OpenTTDCargoRegistryServices;
 struct OpenTTDGrfClock { int32_t date, year; uint16_t date_fract; int32_t economy_date, economy_year; uint16_t economy_date_fract; uint64_t ticks; uint8_t display; };
 struct OpenTTDGrfEngineRange { uint8_t offset, count; };
+struct OpenTTDAction2Services;
 struct OpenTTDGrfLoadingServices {
 	const OpenTTDGlobalVariableServices * global;
 	const OpenTTDCargoRegistryServices *cargo;
@@ -45,6 +46,7 @@ struct OpenTTDGrfLoadingServices {
 	const OpenTTDHouseDefinitionServices *houses;
 	const OpenTTDIndustryDefinitionServices *industry;
 	const OpenTTDTypeRegistryServices *types;
+	const OpenTTDAction2Services *action2;
 	OpenTTDGrfEngineRange (*engine_range)(GrfSpecFeature) noexcept OPENTTD_SERVICE_DEFAULT(engine_range);
 	uint32_t (*parameter)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(parameter);
 	uint32_t (*file_id)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(file_id);
@@ -88,7 +90,6 @@ struct OpenTTDGrfLoadingServices {
 	bool (*feature_change_info)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(feature_change_info);
 	bool (*skip_act1)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(skip_act1);
 	bool (*new_sprite_set)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(new_sprite_set);
-	bool (*new_sprite_group)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(new_sprite_group);
 	bool (*feature_map_sprite_group)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(feature_map_sprite_group);
 	bool (*feature_new_name)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(feature_new_name);
 	bool (*skip_act5)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(skip_act5);
@@ -165,8 +166,6 @@ struct OpenTTDGrfLoadingServices {
 	void (*reset_loaded_features)() noexcept OPENTTD_SERVICE_DEFAULT(reset_loaded_features);
 	void (*initialize_sounds)() noexcept OPENTTD_SERVICE_DEFAULT(initialize_sounds);
 	void (*clean_spritegroups)() noexcept OPENTTD_SERVICE_DEFAULT(clean_spritegroups);
-	void (*reset_callbacks)() noexcept OPENTTD_SERVICE_DEFAULT(reset_callbacks);
-	void (*finish_callbacks)() noexcept OPENTTD_SERVICE_DEFAULT(finish_callbacks);
 	void (*finalise_strings)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_strings);
 	void (*finalise_badges)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_badges);
 	void (*finalise_canals)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_canals);
@@ -177,7 +176,6 @@ struct OpenTTDGrfLoadingServices {
 	void (*finalise_airports)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_airports);
 	void (*bind_airports)() noexcept OPENTTD_SERVICE_DEFAULT(bind_airports);
 	void (*townnames)() noexcept OPENTTD_SERVICE_DEFAULT(townnames);
-	void (*vehicle_list_orders)() noexcept OPENTTD_SERVICE_DEFAULT(vehicle_list_orders);
 	void (*activate_shore)() noexcept OPENTTD_SERVICE_DEFAULT(activate_shore);
 	void (*activate_tram_depot)() noexcept OPENTTD_SERVICE_DEFAULT(activate_tram_depot);
 	void (*aging_stops)() noexcept OPENTTD_SERVICE_DEFAULT(aging_stops);

@@ -26,12 +26,12 @@ pub const VSG_SCOPE_PARENT: u8 = 1;
 pub const VSG_SCOPE_RELATIVE: u8 = 2;
 // Header enum values stay byte carriers: unnamed adjustment operations retain
 // the original default-to-value behavior rather than becoming an FFI enum guard.
-const DSG_SIZE_BYTE: u8 = 0;
-const DSG_SIZE_WORD: u8 = 1;
+pub(crate) const DSG_SIZE_BYTE: u8 = 0;
+pub(crate) const DSG_SIZE_WORD: u8 = 1;
 const DSGA_TYPE_DIV: u8 = 1;
 const DSGA_TYPE_MOD: u8 = 2;
-const RSG_CMP_ANY: u8 = 0;
-const DSGA_OP_ADD: u8 = 0;
+pub(crate) const RSG_CMP_ANY: u8 = 0;
+pub(crate) const DSGA_OP_ADD: u8 = 0;
 const DSGA_OP_SUB: u8 = 1;
 const DSGA_OP_SMIN: u8 = 2;
 const DSGA_OP_SMAX: u8 = 3;
@@ -54,7 +54,7 @@ const DSGA_OP_UCMP: u8 = 19;
 const DSGA_OP_SHL: u8 = 20;
 const DSGA_OP_SHR: u8 = 21;
 const DSGA_OP_SAR: u8 = 22;
-type Handle = *const c_void;
+pub(crate) type Handle = *const c_void;
 type Resolver = *mut c_void;
 #[repr(C)]
 pub struct State {
@@ -90,10 +90,10 @@ impl ResultValue {
     }
 }
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct GroupResult {
-    group: Handle,
-    calculated_result: bool,
+    pub(crate) group: Handle,
+    pub(crate) calculated_result: bool,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -144,9 +144,9 @@ pub struct Adjust {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Range {
-    result: GroupResult,
-    low: u32,
-    high: u32,
+    pub(crate) result: GroupResult,
+    pub(crate) low: u32,
+    pub(crate) high: u32,
 }
 #[repr(C)]
 pub struct Services {
@@ -979,3 +979,7 @@ crate::abi::layouts! {
     "OpenTTDGroupRange" ["storage"] => Range { result, low, high };
     "OpenTTDSpriteGroupServices" ["storage"] => Services { adjust, airport, global, house, industry, industry_builder, loaded, loaded_count, loading, loading_count, native, node, object, parameter, profile_end, profile_enter, random_bits, random_group, random_triggers, range, resolver_binding, roadstop, scope, scope_binding, storage, store_psa, tile_random_check, unhandled_scope, variable, vehicle };
 }
+
+pub(crate) const DSG_SIZE_DWORD: u8 = 2;
+pub(crate) const DSGA_TYPE_NONE: u8 = 0;
+pub(crate) const RSG_CMP_ALL: u8 = 1;

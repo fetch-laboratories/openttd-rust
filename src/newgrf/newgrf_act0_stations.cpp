@@ -16,6 +16,8 @@
 
 #ifdef WITH_RUST
 #include "../rust/station_definitions_ffi.h"
+#include "../rust/newgrf_act2_ffi.h"
+#include "../rust/newgrf_loading_ffi.h"
 #include "../rust/newgrf_bytereader_services.h"
 #endif
 
@@ -39,7 +41,7 @@ static ChangeInfoResult StationChangeInfo(uint first, uint last, int prop, ByteR
 #ifdef WITH_RUST
 	OpenTTDStationSequence sequence;
 	uint8_t result;
-	if (!openttd_rust_station_change_info(&GetStationDefinitionServices(), _cur_gps.grffile, first, last, prop, &buf, &sequence, &result)) RustGRFRethrowReadError();
+	if (!openttd_rust_station_change_info(&GetStationDefinitionServices(), &GetRustAction2Services(), &GetRustGrfLoadingServices(), _cur_gps.grffile, first, last, prop, &buf, &sequence, &result)) RustGRFRethrowReadError();
 	return static_cast<ChangeInfoResult>(result);
 #else
 	ChangeInfoResult ret = CIR_SUCCESS;

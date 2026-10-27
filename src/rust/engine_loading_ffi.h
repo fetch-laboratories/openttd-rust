@@ -8,6 +8,7 @@
 #include "../road_type.h"
 #include "newgrf_vehicle_ffi.h"
 #include "newgrf_global_ffi.h"
+struct OpenTTDEngineOrderSource { uint16_t local; VehicleType type; uint32_t grfid; };
 struct OpenTTDEngineLoadingVehicle { uint32_t id; VehicleType type; };
 struct OpenTTDEngineRefitInputs { CargoTypes mask; CargoType cargo; bool custom; };
 struct OpenTTDEngineTrainCargo { uint8_t capacity; RailVehicleTypes kind; };
@@ -70,8 +71,13 @@ struct OpenTTDEngineLoadingServices {
 	OpenTTDEngineLoadingVehicle (*vehicle_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_next);
 	void (*reload)() noexcept OPENTTD_SERVICE_DEFAULT(reload);
 	const uint8_t *(*default_counts)() noexcept OPENTTD_SERVICE_DEFAULT(default_counts);
+	void (*set_position)(const OpenTTDEngine *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_position);
+	OpenTTDEngineOrderSource (*order_source)(const OpenTTDEngine *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(order_source);
+	void (*order_sort)(uint16_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(order_sort);
+	size_t (*order_count)() noexcept OPENTTD_SERVICE_DEFAULT(order_count);
 };
 const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept;
+void RustVehicleOrderSort(uint16_t *, size_t) noexcept;
 extern "C" {
 bool openttd_rust_engine_reset_config(const OpenTTDEngineLoadingServices *);
 const GRFFile *openttd_rust_engine_current_override(const OpenTTDEngineLoadingServices *, const GRFFile *);
