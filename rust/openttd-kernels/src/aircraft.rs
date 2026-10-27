@@ -883,7 +883,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         self.copy_sprite(shadow, id.base());
         self.position_viewport(shadow);
         if let Some(rotor) = self.position_next(shadow) {
-            self.position_coordinates(rotor, x, y, z + 5);
+            self.position_coordinates(rotor, x, y, z + i64::from(ROTOR_Z_OFFSET));
             self.position_viewport(rotor);
         }
     }
