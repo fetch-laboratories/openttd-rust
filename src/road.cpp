@@ -131,7 +131,7 @@ RoadBits CleanUpRoadBits(const TileIndex tile, RoadBits org_rb)
 bool HasRoadTypeAvail(const CompanyID company, RoadType roadtype)
 {
 #ifdef WITH_RUST
-	return openttd_rust_has_road_type(&GetRustSharedServices(), &GetRustTypeAvailabilityServices(), company.base(), roadtype);
+	return openttd_rust_has_road_type(&GetRustSharedServices(), &GetRustTypeAvailabilityServices(), company.base(), roadtype) != 0;
 #else
 	if (company == OWNER_DEITY || company == OWNER_TOWN || _game_mode == GM_EDITOR || _generating_world) {
 		const RoadTypeInfo *rti = GetRoadTypeInfo(roadtype);

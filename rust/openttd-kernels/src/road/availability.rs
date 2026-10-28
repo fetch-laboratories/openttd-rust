@@ -19,7 +19,11 @@ pub extern "C" fn openttd_rust_has_road_type(
     s: &Services,
     company: u8,
     rt: u8,
-) -> bool {
+) -> u8 {
+    u8::from(has_road_type(shared, s, company, rt))
+}
+/// `HasRoadTypeAvail`, retaining the original construction and company gates.
+pub fn has_road_type(shared: &Shared, s: &Services, company: u8, rt: u8) -> bool {
     if company == OWNER_DEITY
         || company == OWNER_TOWN
         || (s.editor)()
@@ -52,8 +56,7 @@ pub extern "C" fn openttd_rust_has_any_road_types(
     available & get_mask_for_road_tram_type(rtt) != 0
 }
 pub fn val_param_road_type(shared: &Shared, rt: u8) -> bool {
-    rt < ROADTYPE_END
-        && openttd_rust_has_road_type(shared, services(shared), (shared.current_company)(), rt)
+    rt < ROADTYPE_END && has_road_type(shared, services(shared), (shared.current_company)(), rt)
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_val_road_type(shared: &Shared, rt: u8) -> bool {

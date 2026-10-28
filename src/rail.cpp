@@ -76,7 +76,7 @@ RailType GetTileRailType(Tile tile)
 bool HasRailTypeAvail(const CompanyID company, const RailType railtype)
 {
 #ifdef WITH_RUST
-	return openttd_rust_has_rail_type(&GetRustTypeAvailabilityServices(), company.base(), railtype);
+	return openttd_rust_has_rail_type(&GetRustTypeAvailabilityServices(), company.base(), railtype) != 0;
 #else
 	return !_railtypes_hidden_mask.Test(railtype) && Company::Get(company)->avail_railtypes.Test(railtype);
 #endif

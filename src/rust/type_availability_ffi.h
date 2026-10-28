@@ -30,13 +30,15 @@ struct OpenTTDTypeAvailabilityServices {
 };
 const OpenTTDTypeAvailabilityServices &GetRustTypeAvailabilityServices() noexcept;
 extern "C" {
-bool openttd_rust_has_rail_type(const OpenTTDTypeAvailabilityServices *, uint8_t, RailType);
+/* Pinned Rust 1.99 can return noncanonical bool bytes for these bit predicates.
+ * Their wire results are uint8_t 0/1; logical APIs and callbacks remain bool. */
+uint8_t openttd_rust_has_rail_type(const OpenTTDTypeAvailabilityServices *, uint8_t, RailType);
 bool openttd_rust_has_any_rail_types(const OpenTTDTypeAvailabilityServices *, uint8_t);
 bool openttd_rust_val_rail_type(const OpenTTDSharedServices *, RailType);
 uint64_t openttd_rust_add_date_rail_types(const OpenTTDTypeAvailabilityServices *, uint64_t, int32_t);
 uint64_t openttd_rust_company_rail_types(const OpenTTDSharedServices *, const OpenTTDTypeAvailabilityServices *, uint8_t, bool);
 uint64_t openttd_rust_rail_types(const OpenTTDSharedServices *, const OpenTTDTypeAvailabilityServices *, bool);
-bool openttd_rust_has_road_type(const OpenTTDSharedServices *, const OpenTTDTypeAvailabilityServices *, uint8_t, RoadType);
+uint8_t openttd_rust_has_road_type(const OpenTTDSharedServices *, const OpenTTDTypeAvailabilityServices *, uint8_t, RoadType);
 bool openttd_rust_has_any_road_types(const OpenTTDTypeAvailabilityServices *, uint8_t, RoadTramType);
 bool openttd_rust_val_road_type(const OpenTTDSharedServices *, RoadType);
 uint64_t openttd_rust_add_date_road_types(const OpenTTDTypeAvailabilityServices *, uint64_t, int32_t);

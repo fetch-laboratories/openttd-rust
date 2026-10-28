@@ -17,7 +17,11 @@ pub fn get_all_introduces_rail_types(s: &Services, mut types: u64) -> u64 {
     introduces
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_has_rail_type(s: &Services, company: u8, rt: u8) -> bool {
+pub extern "C" fn openttd_rust_has_rail_type(s: &Services, company: u8, rt: u8) -> u8 {
+    u8::from(has_rail_type(s, company, rt))
+}
+/// `HasRailTypeAvail`, retaining the original hidden-mask short circuit.
+pub fn has_rail_type(s: &Services, company: u8, rt: u8) -> bool {
     let bit = 1u64.wrapping_shl(u32::from(rt));
     crate::type_registry::rail_hidden() & bit == 0 && (s.company_railtypes)(company) & bit != 0
 }
@@ -27,8 +31,7 @@ pub extern "C" fn openttd_rust_has_any_rail_types(s: &Services, company: u8) -> 
     available & !crate::type_registry::rail_hidden() != 0
 }
 pub fn val_param_rail_type(shared: &Shared, rt: u8) -> bool {
-    rt < RAILTYPE_END
-        && openttd_rust_has_rail_type(services(shared), (shared.current_company)(), rt)
+    rt < RAILTYPE_END && has_rail_type(services(shared), (shared.current_company)(), rt)
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_val_rail_type(shared: &Shared, rt: u8) -> bool {
