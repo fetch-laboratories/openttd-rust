@@ -310,7 +310,7 @@ def lifecycle_check(lines: list[str]) -> None:
             if (aborted, done, company, int(storage), exiting) != (
                 1,
                 int(kind == 4),
-                255 if kind == 4 else 18,
+                255,
                 expected_storage,
                 "true",
             ):

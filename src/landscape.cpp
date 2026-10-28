@@ -1097,6 +1097,8 @@ OpenTTDLandscapeGenerationCall::OpenTTDLandscapeGenerationCall() : heightmap{
 	.finish = this->decoder.view.finish,
 }
 {
+	static_assert(GWP_LANDSCAPE == 1 && GWP_RIVER == 2 && GWM_HEIGHTMAP == 3 && LG_ORIGINAL == 0 && LG_TERRAGENESIS == 1 && MAX_TILE_HEIGHT == 255);
+	static_assert(SPR_MAPGEN_BEGIN == 4845 && TILE_UPDATE_FREQUENCY == 256);
 	const auto &g = _settings_game.game_creation;
 	this->settings = {
 		.max_search_nodes = static_cast<int32_t>(_settings_game.pf.yapf.max_search_nodes),

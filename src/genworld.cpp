@@ -65,6 +65,11 @@
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDWorldServices.hpp"
 
+static_assert(GWM_EMPTY == 1 && GWP_MAP_INIT == 0 && GWP_ROUGH_ROCKY == 3 && GWP_OBJECT == 7 && GWP_GAME_INIT == 9 && GWP_RUNTILELOOP == 10 && GWP_RUNSCRIPT == 11 && GWP_GAME_START == 12);
+static_assert(GM_MENU == 0 && GM_EDITOR == 2 && SM_EDITOR == 4 && SM_MENU == 6);
+static_assert(MAP_HEIGHT_LIMIT_AUTO_MINIMUM == 30 && MAP_HEIGHT_LIMIT_AUTO_CEILING_ROOM == 15 && DEF_SNOWLINE_HEIGHT == 10 && MAX_MAP_HEIGHT_LIMIT == 255);
+static_assert(GENERATE_NEW_SEED == UINT32_MAX && PSM_ENTER_GAMELOOP == 0 && PSM_LEAVE_GAMELOOP == 1);
+
 void StartupCompanies();
 void InitializeGame(uint size_x, uint size_y, bool reset_date, bool reset_settings);
 std::exception_ptr TakeTreeGenerationException() noexcept;

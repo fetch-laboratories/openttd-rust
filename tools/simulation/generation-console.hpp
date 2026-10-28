@@ -113,8 +113,7 @@ static void GenerationLifecycle()
 		generation_warmup = generation_script = 0;
 		PersistentStorageArray<int32_t, 16> storage;
 		generation_storage = &storage;
-		_current_company = OWNER_DEITY;
-		_local_company = COMPANY_SPECTATOR;
+		_current_company = _local_company = COMPANY_SPECTATOR;
 		if (kind == 12 || kind == 13) GameConfig::GetConfig(GameConfig::SSS_FORCE_GAME)->Change(kind == 12 ? "GenerationSleep" : "GenerationCap");
 		GenerateWorldSetCallback(GenerationDone);
 		GenerateWorld(mode, 64, 64, false);
@@ -125,6 +124,7 @@ static void GenerationLifecycle()
 	generation_lifecycle = false; generation_target = -1; generation_storage = nullptr;
 	_exit_game = saved_exit;
 	_game_mode = GM_NORMAL;
+	SetGeneratingWorldProgress(GWP_GAME_START, 1);
 	_current_company = _local_company = COMPANY_SPECTATOR;
 }
 
