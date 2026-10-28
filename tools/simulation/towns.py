@@ -601,7 +601,7 @@ class HouseDefinitionCapture(TypedDict):
 
 def house_definition_fixtures(folder: Path) -> None:
     """Documented Action0 house properties loaded from actual GRF files."""
-    from .newgrf_loading import grf, info
+    from .newgrf_loading import action2, grf, info
 
     folder.mkdir(parents=True, exist_ok=True)
 
@@ -693,6 +693,25 @@ def house_definition_fixtures(folder: Path) -> None:
         + definition(0, 0, **{"13": word(0), "0b": b"\x36"})
         + [bytes((0, 7, 1, 1, 255)) + word(65535) + b"\x08\x00"]
     )
+    # Equal houses whose AllowConstruction callback (0x17) answers 0 and 1.
+    # They share local 0's long introduction year, so EnsureEarlyHouse repairs
+    # all three together.
+    reject = [info(b"R477")]
+    for local in (0, 1):
+        reject += definition(
+            local,
+            0,
+            **{
+                "13": word(0xF81F),
+                "21": word(2100),
+                "22": word(65535),
+                "14": b"\x01",
+            },
+        )
+        reject += [
+            action2(7, local, [(0x8000 | local, 0x17, 0x17)]),
+            bytes((3, 7, 1, local, 0)) + word(local),
+        ]
     for name, actions in (
         ("houses", main),
         ("conflict", conflict),
@@ -701,6 +720,7 @@ def house_definition_fixtures(folder: Path) -> None:
         ("badges", badges),
         ("oversized", oversized),
         ("invalid-id", invalid_id),
+        ("reject", reject),
     ):
         (folder / f"{name}.grf").write_bytes(grf(actions, 2))
 

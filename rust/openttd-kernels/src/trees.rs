@@ -7,8 +7,9 @@
 
 //! Tree policy, iteration, grove geometry, commands and the persisted tick byte; tiles stay in
 //! C++. Flooding, `NewGRF` ambient callbacks and nested clears may reenter, so records read
-//! before them are read again afterwards. World-generation abort is the one C++ exception: its
-//! progress service reports it and the entry returns.
+//! before them are read again afterwards; the tile loop reads single fields where the source
+//! does. World-generation abort is the one C++ exception: its progress service reports it and
+//! the entry returns.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,
@@ -146,7 +147,8 @@ pub struct ClearObservation {
     pub species: u8,
 }
 
-/// `TileLoop_Trees` settings, read once per entry.
+/// `TileLoop_Trees` settings, read once per entry. `ambient` is the client sound
+/// setting; `ambient_callback` is the `NewGRF` feature gate of `AmbientSoundEffect`.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct LoopSettings {
@@ -155,6 +157,7 @@ pub struct LoopSettings {
     pub climate: u8,
     pub extra: u8,
     pub ambient: bool,
+    pub ambient_callback: bool,
 }
 
 /// `OnTick_Trees` settings, read once per entry.
@@ -280,18 +283,6 @@ fn random_tree_type(climate: u8, zone: u8, seed: u32) -> u8 {
     (seed.wrapping_mul(count) / 256).wrapping_add(base) as u8
 }
 
-/// `TreesOnTileCanSpread`.
-fn can_spread(climate: u8, extra: u8, zone: u8) -> bool {
-    if climate == TROPIC {
-        return match zone {
-            ZONE_DESERT => false,
-            ZONE_RAINFOREST => extra == ETP_SPREAD_ALL || extra == ETP_SPREAD_RAINFOREST,
-            _ => extra == ETP_SPREAD_ALL,
-        };
-    }
-    extra == ETP_SPREAD_ALL
-}
-
 fn is_rainforest_tree(tree: u8) -> bool {
     (TREE_RAINFOREST..TREE_CACTUS).contains(&tree)
 }
@@ -331,19 +322,47 @@ impl Trees<'_> {
     fn plant_observation(&self, tile: u32) -> PlantObservation {
         (self.t.plant_observation)(tile)
     }
-    fn tree_observation(&self, tile: u32) -> TreeObservation {
+    /// One field read at its original observation point. Without the audited map, or when a
+    /// native assertion fails, the record accessor reads it; its first read asserts the same.
+    #[inline]
+    fn field(
+        &self,
+        tile: u32,
+        read: fn(&crate::services::TileTypeAccess, u32) -> Option<u8>,
+        pick: fn(TreeObservation) -> u8,
+    ) -> u8 {
         self.map
-            .and_then(|map| {
-                Some(TreeObservation {
-                    ground: crate::tree_map::get_tree_ground(map, tile)?,
-                    density: crate::tree_map::get_tree_density(map, tile)?,
-                    species: crate::tree_map::get_tree_type(map, tile)?,
-                    count: crate::tree_map::get_tree_count(map, tile)?,
-                    growth: crate::tree_map::get_tree_growth(map, tile)?,
-                    zone: crate::tile_map::get_tropic_zone(map, tile)?,
-                })
-            })
-            .unwrap_or_else(|| (self.t.tree_observation)(tile))
+            .and_then(|map| read(map, tile))
+            .unwrap_or_else(|| pick((self.t.tree_observation)(tile)))
+    }
+    fn ground(&self, tile: u32) -> u8 {
+        self.field(tile, crate::tree_map::get_tree_ground, |t| t.ground)
+    }
+    fn density(&self, tile: u32) -> u8 {
+        self.field(tile, crate::tree_map::get_tree_density, |t| t.density)
+    }
+    fn species(&self, tile: u32) -> u8 {
+        self.field(tile, crate::tree_map::get_tree_type, |t| t.species)
+    }
+    fn count(&self, tile: u32) -> u8 {
+        self.field(tile, crate::tree_map::get_tree_count, |t| t.count)
+    }
+    fn growth(&self, tile: u32) -> u8 {
+        self.field(tile, crate::tree_map::get_tree_growth, |t| t.growth)
+    }
+    fn zone(&self, tile: u32) -> u8 {
+        self.field(tile, crate::tile_map::get_tropic_zone, |t| t.zone)
+    }
+    /// `TreesOnTileCanSpread`; the zone is read only in the tropic climate.
+    fn can_spread(&self, tile: u32, s: &LoopSettings) -> bool {
+        if s.climate == TROPIC {
+            return match self.zone(tile) {
+                ZONE_DESERT => false,
+                ZONE_RAINFOREST => s.extra == ETP_SPREAD_ALL || s.extra == ETP_SPREAD_RAINFOREST,
+                _ => s.extra == ETP_SPREAD_ALL,
+            };
+        }
+        s.extra == ETP_SPREAD_ALL
     }
     fn random(&self) -> u32 {
         self.s.random()
@@ -351,11 +370,8 @@ impl Trees<'_> {
     fn dirty(&self, tile: u32) {
         (self.s.mark_dirty)(tile);
     }
-    /// `SetTreeGroundDensity`, keeping the local record equal to the map.
-    fn set_ground(&self, tile: u32, t: &mut TreeObservation, ground: u8, density: u32) {
+    fn set_ground(&self, tile: u32, ground: u8, density: u32) {
         (self.t.set_ground_density)(tile, ground, density);
-        t.ground = ground;
-        t.density = (density & 3) as u8;
     }
 
     /// `PlantTreesOnTile` from a record read since the last effect on this tile.
@@ -612,11 +628,11 @@ impl Trees<'_> {
     }
 
     /// `TileLoopTreesDesert`.
-    fn loop_desert(&self, tile: u32, t: &mut TreeObservation, s: &LoopSettings) {
-        match t.zone {
+    fn loop_desert(&self, tile: u32, s: &LoopSettings) {
+        match self.zone(tile) {
             ZONE_DESERT => {
-                if t.ground != GROUND_SNOW_DESERT {
-                    self.set_ground(tile, t, GROUND_SNOW_DESERT, 3);
+                if self.ground(tile) != GROUND_SNOW_DESERT {
+                    self.set_ground(tile, GROUND_SNOW_DESERT, 3);
                     self.dirty(tile);
                 }
             }
@@ -630,8 +646,8 @@ impl Trees<'_> {
         }
     }
 
-    /// `TileLoopTreesAlps`.
-    fn loop_alps(&self, tile: u32, t: &mut TreeObservation, s: &LoopSettings) {
+    /// `TileLoopTreesAlps`. Repeated source reads with no write between are read once.
+    fn loop_alps(&self, tile: u32, s: &LoopSettings) {
         let k = self
             .map
             .and_then(|map| {
@@ -641,46 +657,47 @@ impl Trees<'_> {
             .wrapping_sub(i32::from((self.t.snow_line)()))
             .wrapping_add(1);
         if k < 0 {
-            match t.ground {
-                GROUND_SNOW_DESERT => self.set_ground(tile, t, GROUND_GRASS, 3),
-                GROUND_ROUGH_SNOW => self.set_ground(tile, t, GROUND_ROUGH, 3),
+            match self.ground(tile) {
+                GROUND_SNOW_DESERT => self.set_ground(tile, GROUND_GRASS, 3),
+                GROUND_ROUGH_SNOW => self.set_ground(tile, GROUND_ROUGH, 3),
                 _ => return,
             }
         } else {
             let density = (k as u32).min(3);
-            if t.ground != GROUND_SNOW_DESERT && t.ground != GROUND_ROUGH_SNOW {
-                let ground = if t.ground == GROUND_ROUGH {
+            let ground = self.ground(tile);
+            if ground != GROUND_SNOW_DESERT && ground != GROUND_ROUGH_SNOW {
+                let ground = if ground == GROUND_ROUGH {
                     GROUND_ROUGH_SNOW
                 } else {
                     GROUND_SNOW_DESERT
                 };
-                self.set_ground(tile, t, ground, density);
-            } else if u32::from(t.density) != density {
-                let ground = t.ground;
-                self.set_ground(tile, t, ground, density);
+                self.set_ground(tile, ground, density);
             } else {
-                if t.density == 3 {
-                    let r = self.random();
-                    if chance16_i(1, 200, r) && s.ambient {
-                        let sound = if r & 0x8000_0000 != 0 {
-                            ARCTIC_SNOW_2
-                        } else {
-                            ARCTIC_SNOW_1
-                        };
-                        (self.s.play_sound)(tile, sound);
+                let current = self.density(tile);
+                if u32::from(current) == density {
+                    if current == 3 {
+                        let r = self.random();
+                        if chance16_i(1, 200, r) && s.ambient {
+                            let sound = if r & 0x8000_0000 != 0 {
+                                ARCTIC_SNOW_2
+                            } else {
+                                ARCTIC_SNOW_1
+                            };
+                            (self.s.play_sound)(tile, sound);
+                        }
                     }
+                    return;
                 }
-                return;
+                self.set_ground(tile, ground, density);
             }
         }
         self.dirty(tile);
     }
 
-    /// `TileLoop_Trees`.
+    /// `TileLoop_Trees`. Fields are read where the source reads them, so flooding and the
+    /// ambient callback are observed, and growth fields only behind the growth gate.
     fn tile_loop(&self, tile: u32, s: &LoopSettings, call: *mut crate::ground::Call) {
-        let mut t = self.tree_observation(tile);
-        let shore = t.ground == GROUND_SHORE;
-        if shore {
+        if self.ground(tile) == GROUND_SHORE {
             // SAFETY: The native caller owns an independent stack result context;
             // flooding may reenter trees but no owner state is borrowed here.
             unsafe {
@@ -688,6 +705,7 @@ impl Trees<'_> {
                     crate::water::water_tile_loop(
                         tile,
                         MP_TREES,
+                        false,
                         s.size_x,
                         map.count() / s.size_x,
                         call,
@@ -701,18 +719,12 @@ impl Trees<'_> {
             };
         } else {
             match s.climate {
-                TROPIC => self.loop_desert(tile, &mut t, s),
-                ARCTIC => self.loop_alps(tile, &mut t, s),
+                TROPIC => self.loop_desert(tile, s),
+                ARCTIC => self.loop_alps(tile, s),
                 _ => (),
             }
         }
-        // Flooding and a NewGRF ambient callback may have changed the map.
-        crate::newgrf_generic::ambient(tile);
-        // Preserve the native adapter's POST-call enable observation.
-        let enabled = crate::newgrf_generic::ambient_enabled();
-        if enabled || shore {
-            t = self.tree_observation(tile);
-        }
+        crate::newgrf_generic::ambient(s.ambient_callback, tile);
 
         let x = tile & s.size_x.wrapping_sub(1);
         let y = tile >> s.size_x.trailing_zeros();
@@ -721,10 +733,12 @@ impl Trees<'_> {
             .wrapping_add(y.wrapping_mul(9))
             .wrapping_add((s.tick_counter >> 8) as u32);
 
-        if cycle & 7 == 7 && t.ground == GROUND_GRASS && t.density < 3 {
-            let density = u32::from(t.density) + 1;
-            self.set_ground(tile, &mut t, GROUND_GRASS, density);
-            self.dirty(tile);
+        if cycle & 7 == 7 && self.ground(tile) == GROUND_GRASS {
+            let density = self.density(tile);
+            if density < 3 {
+                self.set_ground(tile, GROUND_GRASS, u32::from(density) + 1);
+                self.dirty(tile);
+            }
         }
 
         if s.extra == ETP_NO_GROWTH_NO_SPREAD || cycle % 16 != 15 {
@@ -732,20 +746,23 @@ impl Trees<'_> {
         }
 
         let mut tile = tile;
-        match t.growth {
+        match self.growth(tile) {
             GROWN => {
-                if s.climate == TROPIC && t.species != TREE_CACTUS && t.zone == ZONE_DESERT {
+                if s.climate == TROPIC
+                    && self.species(tile) != TREE_CACTUS
+                    && self.zone(tile) == ZONE_DESERT
+                {
                     (self.t.add_growth)(tile, 1);
                 } else {
                     match self.random() & 7 {
                         0 => (self.t.add_growth)(tile, 1),
-                        1 if t.count < 4 && can_spread(s.climate, s.extra, t.zone) => {
+                        1 if self.count(tile) < 4 && self.can_spread(tile, s) => {
                             (self.t.add_count)(tile, 1);
                             (self.t.set_growth)(tile, GROWING1);
                         }
                         1 | 2 => {
-                            if can_spread(s.climate, s.extra, t.zone) {
-                                let tree = t.species;
+                            if self.can_spread(tile, s) {
+                                let tree = self.species(tile);
                                 let (dx, dy) = DIRECTION_OFFSETS[(self.random() % 8) as usize];
                                 let diff = dy.wrapping_mul(s.size_x as i32).wrapping_add(dx);
                                 tile = tile.wrapping_add(diff as u32);
@@ -769,25 +786,30 @@ impl Trees<'_> {
                 }
             }
             DEAD => {
-                if !can_spread(s.climate, s.extra, t.zone) {
+                if !self.can_spread(tile, s) {
                     (self.t.set_growth)(tile, GROWING1);
-                } else if t.count > 1 {
+                } else if self.count(tile) > 1 {
                     (self.t.add_count)(tile, -1);
                     (self.t.set_growth)(tile, GROWN);
                 } else {
-                    let density = u32::from(t.density);
-                    match t.ground {
+                    match self.ground(tile) {
                         GROUND_SHORE => (self.s.make_shore)(tile),
-                        GROUND_GRASS => (self.t.make_clear)(tile, CLEAR_GRASS, density),
+                        GROUND_GRASS => {
+                            let density = u32::from(self.density(tile));
+                            (self.t.make_clear)(tile, CLEAR_GRASS, density);
+                        }
                         GROUND_ROUGH => (self.t.make_clear)(tile, CLEAR_ROUGH, 3),
                         GROUND_ROUGH_SNOW => {
+                            let density = u32::from(self.density(tile));
                             (self.t.make_clear)(tile, CLEAR_ROUGH, 3);
                             (self.s.make_snow)(tile, density);
                         }
                         _ if s.climate == TROPIC => {
+                            let density = u32::from(self.density(tile));
                             (self.t.make_clear)(tile, CLEAR_DESERT, density);
                         }
                         _ => {
+                            let density = u32::from(self.density(tile));
                             (self.t.make_clear)(tile, CLEAR_GRASS, 3);
                             (self.s.make_snow)(tile, density);
                         }
@@ -1017,64 +1039,48 @@ pub(crate) unsafe fn tile_loop(
     owner.tile_loop(tile, &settings, call);
 }
 
-/// `TileLoop_Trees` for one `MP_TREES` tile.
-/// # Safety
-/// Tables are live and immutable; game thread only. Services are `noexcept`.
-/// Any reached water command uses the caller's live, independent stack result context.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_trees_tile_loop(
-    tile: u32,
-    settings: LoopSettings,
-    call: *mut crate::ground::Call,
-    services: *const TreeServices,
-    shared: *const Services,
-) {
-    // SAFETY: The contract above supplies the live immutable tables `trees` needs.
-    unsafe { trees(services, shared) }.tile_loop(tile, &settings, call);
-}
-
 /// `OnTick_Trees`.
 /// # Safety
-/// As for `openttd_rust_trees_tile_loop`.
+/// Tables are live and immutable; game thread only. Services are `noexcept`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_trees_tick(
     settings: TickSettings,
     services: *const TreeServices,
     shared: *const Services,
 ) {
-    // SAFETY: As for `openttd_rust_trees_tile_loop`.
+    // SAFETY: The caller supplies live immutable tables for this serialized entry.
     unsafe { trees(services, shared) }.tick(&settings);
 }
 
 /// `GenerateTrees`; true when a progress service reported world-generation abort.
 /// # Safety
-/// As for `openttd_rust_trees_tile_loop`.
+/// Tables are live and immutable; game thread only. Services are `noexcept`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_trees_generate(
     settings: GenerateSettings,
     services: *const TreeServices,
     shared: *const Services,
 ) -> bool {
-    // SAFETY: As for `openttd_rust_trees_tile_loop`.
+    // SAFETY: The caller supplies live immutable tables for this serialized entry.
     unsafe { trees(services, shared) }.generate(&settings)
 }
 
 /// `PlaceTreesRandomly`; true when a progress service reported world-generation abort.
 /// # Safety
-/// As for `openttd_rust_trees_tile_loop`.
+/// Tables are live and immutable; game thread only. Services are `noexcept`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_trees_place_randomly(
     settings: GenerateSettings,
     services: *const TreeServices,
     shared: *const Services,
 ) -> bool {
-    // SAFETY: As for `openttd_rust_trees_tile_loop`.
+    // SAFETY: The caller supplies live immutable tables for this serialized entry.
     unsafe { trees(services, shared) }.place_randomly(&settings)
 }
 
 /// `PlaceTree` on a tile suitable for trees.
 /// # Safety
-/// As for `openttd_rust_trees_tile_loop`.
+/// Tables are live and immutable; game thread only. Services are `noexcept`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_trees_place(
     tile: u32,
@@ -1084,7 +1090,7 @@ pub unsafe extern "C" fn openttd_rust_trees_place(
     services: *const TreeServices,
     shared: *const Services,
 ) {
-    // SAFETY: As for `openttd_rust_trees_tile_loop`.
+    // SAFETY: The caller supplies live immutable tables for this serialized entry.
     let trees = unsafe { trees(services, shared) };
     let p = trees.plant_observation(tile);
     trees.place(tile, p, r, keep_density, climate);
@@ -1092,7 +1098,7 @@ pub unsafe extern "C" fn openttd_rust_trees_place(
 
 /// `PlantTreesOnTile` on a tile suitable for trees.
 /// # Safety
-/// As for `openttd_rust_trees_tile_loop`.
+/// Tables are live and immutable; game thread only. Services are `noexcept`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_trees_plant(
     tile: u32,
@@ -1102,7 +1108,7 @@ pub unsafe extern "C" fn openttd_rust_trees_plant(
     services: *const TreeServices,
     shared: *const Services,
 ) {
-    // SAFETY: As for `openttd_rust_trees_tile_loop`.
+    // SAFETY: The caller supplies live immutable tables for this serialized entry.
     let trees = unsafe { trees(services, shared) };
     let p = trees.plant_observation(tile);
     trees.plant(tile, p, tree, count, growth);
@@ -1123,7 +1129,8 @@ pub unsafe extern "C" fn openttd_rust_trees_can_plant(
 
 /// `CmdPlantTree`. The context is passed back to its command services only.
 /// # Safety
-/// As for `openttd_rust_trees_tile_loop`; `ctx` lives for the call.
+/// Tables are live and immutable; game thread only. Services are `noexcept`.
+/// `ctx` and the independent nested command result live for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_trees_cmd_plant(
     ctx: *mut Command,
@@ -1259,6 +1266,7 @@ crate::abi::layouts! {
         climate,
         extra,
         ambient,
+        ambient_callback,
     };
     "OpenTTDTreeTickSettings" ["probe"] => TickSettings {
         tick_counter,
@@ -1313,7 +1321,6 @@ mod tests {
         Dirty,
         Zone(u8),
         Water,
-        Ambient,
         Sound(u16),
         Rating(bool),
         Begin(u32, u32, bool),
@@ -1466,10 +1473,6 @@ mod tests {
         }; }
         WATER.with(std::ptr::from_ref)
     }
-    extern "C" fn ambient_disabled() -> bool {
-        log(Event::Ambient);
-        false
-    }
     extern "C" fn sound(_: u32, id: u16) {
         log(Event::Sound(id));
     }
@@ -1579,12 +1582,10 @@ mod tests {
     };
     fn with<R>(f: impl FnOnce(&Trees) -> R) -> R {
         let shared = shared();
-        crate::newgrf_generic::with_disabled_fixture(ambient_disabled, || {
-            f(&Trees {
-                t: &SERVICES,
-                s: &shared,
-                map: None,
-            })
+        f(&Trees {
+            t: &SERVICES,
+            s: &shared,
+            map: None,
         })
     }
     const CLEAR_TILE: PlantObservation = PlantObservation {
@@ -1701,9 +1702,10 @@ mod tests {
             climate: 0,
             extra: ETP_SPREAD_ALL,
             ambient: true,
+            ambient_callback: false,
         };
         with(|t| t.tile_loop(0, &s, std::ptr::null_mut()));
-        assert_eq!(events(), [Event::Tree, Event::Ambient, Event::Ambient]);
+        assert_eq!(events(), [Event::Tree]);
     }
 
     #[test]
@@ -1714,6 +1716,7 @@ mod tests {
             climate: 0,
             extra: ETP_NO_SPREAD,
             ambient: false,
+            ambient_callback: false,
         };
         let tree = TreeObservation {
             ground: GROUND_GRASS,
@@ -1731,8 +1734,9 @@ mod tests {
             events(),
             [
                 Event::Tree,
-                Event::Ambient,
-                Event::Ambient,
+                Event::Tree,
+                Event::Tree,
+                Event::Tree,
                 Event::Write("add_growth"),
                 Event::Dirty
             ]
@@ -1750,8 +1754,7 @@ mod tests {
             [
                 Event::Tree,
                 Event::Water,
-                Event::Ambient,
-                Event::Ambient,
+                Event::Tree,
                 Event::Tree,
                 Event::Write("add_growth"),
                 Event::Dirty
@@ -1778,6 +1781,7 @@ mod tests {
             climate: ARCTIC,
             extra: ETP_SPREAD_ALL,
             ambient: true,
+            ambient_callback: false,
         };
         with(|t| t.tile_loop(0, &s, std::ptr::null_mut()));
         assert_eq!(
@@ -1786,10 +1790,10 @@ mod tests {
                 Event::Tree,
                 Event::TileZ,
                 Event::Snow,
+                Event::Tree,
+                Event::Tree,
                 Event::Draw,
-                Event::Sound(ARCTIC_SNOW_2),
-                Event::Ambient,
-                Event::Ambient
+                Event::Sound(ARCTIC_SNOW_2)
             ]
         );
     }
