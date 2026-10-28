@@ -3,7 +3,9 @@
 `simulation/commands.py` uses the ordinary scenario AI installer and core game,
 log, checkpoint and exit-save comparisons. Company zero retains its existing
 assets; preparation changes its AI flag, money and AIPL configuration. Generated
-inputs come from a one-tick reference game. Both roles receive the same input.
+inputs come from a one-tick reference game with an idle script company created
+through `start_ai`. The configuration helper restarts that script for the actual
+command run. Both roles receive the same input.
 
 The script builds a small road depot and bus with two depot orders on a flat
 patch. Its Park-Miller PRNG never calls the game's Random. Initial infrastructure,
@@ -33,7 +35,8 @@ per case (2,000 per family). The existing deep soak member discovers these cases
 
 ```sh
 python3 tools/migration.py simulate commands-play-1 --jobs 2
-python3 tools/migration.py simulate --soak commands --jobs 2
+python3 tools/migration.py simulate --soak commands-play-{1,48271,1234567} \
+  commands-generated-{1,48271,1234567} --jobs 2
 python3 tools/test-command-scenarios.py
 ```
 

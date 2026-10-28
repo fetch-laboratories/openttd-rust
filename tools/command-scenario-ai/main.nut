@@ -17,6 +17,7 @@ class MigrationCommands extends AIController {
 		if (!ok) throw AIError.GetLastErrorString();
 	}
 	function Start() {
+		if (COMMAND_SETUP) while (true) this.Sleep(1000);
 		AIController.SetCommandDelay(1);
 		AIRoad.SetCurrentRoadType(AIRoad.ROADTYPE_ROAD);
 		local railtype = AIRailTypeList().Begin();

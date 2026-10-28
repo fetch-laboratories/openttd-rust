@@ -45,7 +45,7 @@ def scenarios(soak: bool) -> list[Scenario]:
                 "kind": kind,
                 "command_seed": seed,
                 "command_count": count,
-                "ticks": max(5000, count * 3 + 5000),
+                "ticks": count * 8 + 5000 if soak else 6080,
                 "console": ["unpause"],
             }
             if kind == "save":
@@ -70,6 +70,7 @@ def install(scenario: dict[str, Any], run_dir: Path) -> None:
     (folder / "parameters.nut").write_text(
         f"COMMAND_SEED <- {scenario['command_seed']};\n"
         f"COMMAND_COUNT <- {scenario['command_count']};\n"
+        f"COMMAND_SETUP <- {str(scenario.get('command_setup', False)).lower()};\n"
     )
 
 
@@ -86,9 +87,13 @@ def prepare(
         return scenario
     folder = out / scenario["name"] / "input"
     if scenario["kind"] == "generate":
-        setup = {k: v for k, v in scenario.items() if k != "command_seed"}
         run = core.run_game(
-            dict(setup, ticks=1),
+            dict(
+                scenario,
+                command_setup=True,
+                ticks=1,
+                console=["start_ai MigrationCommands", "unpause"],
+            ),
             binaries["reference"],
             builds["reference"],
             folder / "generate",
@@ -99,10 +104,15 @@ def prepare(
         if run["exit"] or not run["snapshots"]:
             raise RuntimeError("command map generation did not produce a save")
         source = run["snapshots"][-1]
+        if set(core.rows(source, "PLYR")) != {0}:
+            raise RuntimeError("command generation did not create its actor company")
     else:
         source = Path(scenario["save"])
     normalized, record = core.normalize(source, folder)
-    if dict(core.read_save(normalized)["AIPL"]["elements"])[0] != core.EMPTY_AI:
+    if (
+        scenario["kind"] == "save"
+        and dict(core.read_save(normalized)["AIPL"]["elements"])[0] != core.EMPTY_AI
+    ):
         raise RuntimeError("command source already has an AI in company zero")
     prepared = folder / "command-input.sav"
     record["actor"] = core.patch(
@@ -122,7 +132,9 @@ def outcomes(lines: list[str], count: int, seed: int) -> list[Outcome]:
         for fields in [line.split("COMMAND ", 1)[1].split(" ", 4)]
     ]
     if [row.index for row in records] != list(range(count)):
-        raise ValueError("command log is missing, duplicated or incomplete")
+        raise ValueError(
+            f"command log is missing, duplicated or incomplete: {len(records)} of {count}"
+        )
     if any(
         row.command.split(".")[0] != FAMILIES[i % 6] for i, row in enumerate(records)
     ):
