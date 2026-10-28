@@ -6,6 +6,7 @@ extra-paths = ["tools", "tools/simulation"]
 # Add new modules and each #501 conversion here; this list only grows.
 include = [
     "tools/ci.py",
+    "tools/validation_execution.py",
     "tools/simulation/clocks.py",
     "tools/simulation/generated.py",
     "tools/deep.py",

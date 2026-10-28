@@ -559,13 +559,36 @@ unsafe fn get_cargo_produced(owner: *const Industry, cargo: u8) -> Option<usize>
         .position(|p| p.cargo == cargo)
 }
 /// `Industry::GetCargoAccepted`, with the same validity and ordering contract.
-unsafe fn get_cargo_accepted(owner: *const Industry, cargo: u8) -> Option<usize> {
+pub(crate) unsafe fn get_cargo_accepted(owner: *const Industry, cargo: u8) -> Option<usize> {
     if !valid(cargo) {
         return None;
     }
     unsafe { &(*owner).accepted }
         .iter()
         .position(|a| a.cargo == cargo)
+}
+/// SAFETY: Live serialized industry owner; observe after the refusal callback.
+pub(crate) unsafe fn exclusive_supplier(owner: *const Industry) -> crate::company_type::CompanyID {
+    unsafe { crate::company_type::CompanyID((*owner).metadata.exclusive_supplier) }
+}
+/// SAFETY: Live accepted slot selected by `GetCargoAccepted`; the date leaf cannot resize slots.
+pub(crate) unsafe fn accept_delivery(
+    owner: *mut Industry,
+    slot: usize,
+    pieces: u32,
+    date: impl FnOnce() -> i32,
+) -> u32 {
+    let a = accepted(owner, slot);
+    let amount = pieces.min(u32::from(u16::MAX - unsafe { (*a).waiting }));
+    unsafe {
+        (*a).waiting = (*a).waiting.wrapping_add(amount as u16);
+        let history = openttd_rust_industry_history(a).cast::<[Pair; RECORDS]>();
+        let count = &mut (*history)[usize::from(THIS_MONTH)].first;
+        *count = count.wrapping_add(amount as u16);
+    }
+    let now = date();
+    unsafe { (*a).last_accepted = now };
+    amount
 }
 fn transported(p: Pair) -> u32 {
     u32::from(p.pct_transported())
@@ -1529,6 +1552,101 @@ pub struct ProductionResult {
     pub num_output: u8,
     pub present: u8,
 }
+/// Native `IndustriesResolverObject` in caller-owned stack storage; checked by C++.
+#[repr(C, align(16))]
+pub struct ProductionStorage {
+    storage: [std::mem::MaybeUninit<u8>; 1024],
+}
+/// One live native production resolver. Rust never inspects its representation.
+#[repr(C)]
+pub struct ProductionContext {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct DeliveryServices {
+    pub construct:
+        unsafe extern "C" fn(*mut ProductionStorage, *mut ShellHandle) -> *mut ProductionContext,
+    pub destroy: unsafe extern "C" fn(*mut ProductionContext),
+    pub resolve: unsafe extern "C" fn(*mut ProductionContext, u32, u32, *mut ProductionResult),
+    pub input_multiplier: unsafe extern "C" fn(*const SpecHandle, usize, usize) -> u16,
+}
+/// SAFETY: Live serialized industry, immutable services and spec; callbacks retain no owner borrows.
+pub(crate) unsafe fn trigger_delivery(
+    shell: *mut ShellHandle,
+    owner: *mut Industry,
+    id: crate::industry_type::IndustryID,
+    resolver: &resolver::ResolverServices,
+    services: &Services,
+    delivery: &DeliveryServices,
+) {
+    use crate::newgrf_callbacks::{
+        INDUSTRY_PRODUCTION_256_TICKS, INDUSTRY_PRODUCTION_CARGO_ARRIVAL,
+    };
+    let spec = resolver.spec(unsafe { (*owner).metadata.kind });
+    let mask = unsafe { (resolver.construction().callback_mask)(spec) };
+    unsafe { (*owner).fields.was_cargo_delivered = 1 };
+    if mask & (INDUSTRY_PRODUCTION_CARGO_ARRIVAL | INDUSTRY_PRODUCTION_256_TICKS) != 0 {
+        if mask & INDUSTRY_PRODUCTION_CARGO_ARRIVAL != 0 {
+            let mut storage = std::mem::MaybeUninit::<ProductionStorage>::uninit();
+            let context = unsafe { (delivery.construct)(storage.as_mut_ptr(), shell) };
+            let behaviour = resolver.behaviour(spec);
+            production_callback(
+                shell.cast(),
+                owner,
+                behaviour,
+                0,
+                services,
+                |random, parameter, result| unsafe {
+                    (delivery.resolve)(context, random, parameter, result);
+                },
+            );
+            unsafe { (delivery.destroy)(context) };
+        } else {
+            unsafe { (services.set_dirty)(shell.cast()) };
+        }
+    } else {
+        for input in 0..accepted_count(owner) {
+            let a = accepted(owner, input);
+            let waiting = unsafe { (*a).waiting };
+            if waiting == 0 || !valid(unsafe { (*a).cargo }) {
+                continue;
+            }
+            for output in 0..produced_count(owner) {
+                let p = produced(owner, output);
+                if !valid(unsafe { (*p).cargo }) {
+                    continue;
+                }
+                let old = unsafe { (*p).waiting };
+                let multiplier = unsafe { (delivery.input_multiplier)(spec, input, output) };
+                let product = i32::from(waiting).wrapping_mul(i32::from(multiplier));
+                unsafe {
+                    (*p).waiting =
+                        i32::from(old).wrapping_add(product / 256).clamp(0, 65535) as u16;
+                };
+            }
+            unsafe { (*a).waiting = 0 };
+        }
+    }
+    unsafe {
+        openttd_rust_industry_randomise(
+            shell.cast(),
+            owner,
+            id.0,
+            crate::industry_type::RANDOM_TRIGGER_CARGO_RECEIVED,
+            services.shared().map().size_x(),
+            services,
+            resolver.lifecycle(),
+        );
+        openttd_rust_industry_animate(
+            owner,
+            id.0,
+            crate::industry_type::ANIMATION_TRIGGER_CARGO_RECEIVED,
+            services.shared().map().size_x(),
+            services,
+            resolver.lifecycle(),
+        );
+    }
+}
 pub type Resolve = unsafe extern "C" fn(*mut c_void, u32, u32, *mut ProductionResult);
 /// # Safety
 /// Live industry and local bounded C++ resolver context for this call. Resolution
@@ -1544,7 +1662,25 @@ pub unsafe extern "C" fn openttd_rust_industry_production_callback(
     resolve: Resolve,
     services: *const Services,
 ) {
-    let s = unsafe { &*services };
+    production_callback(
+        i,
+        owner,
+        behaviour,
+        reason,
+        unsafe { &*services },
+        |random, parameter, result| unsafe {
+            resolve(context, random, parameter, result);
+        },
+    );
+}
+fn production_callback(
+    i: *mut c_void,
+    owner: *mut Industry,
+    behaviour: u32,
+    reason: u8,
+    s: &Services,
+    mut resolve: impl FnMut(u32, u32, *mut ProductionResult),
+) {
     let random = if behaviour & (1 << 15) != 0 {
         rand(s)
     } else {
@@ -1573,9 +1709,7 @@ pub unsafe extern "C" fn openttd_rust_industry_production_callback(
             num_output: 0,
             present: 0,
         };
-        unsafe {
-            resolve(context, random, parameter, &raw mut result);
-        }
+        resolve(random, parameter, &raw mut result);
         if result.present == 0 {
             break;
         }
@@ -2138,6 +2272,8 @@ crate::abi::layouts! {
         calendar_year,
         deity,
     };
+    "OpenTTDIndustryProductionStorage" ["industry"] => ProductionStorage { storage, };
+    "OpenTTDIndustryDeliveryServices" ["industry"] => DeliveryServices { construct, destroy, resolve, input_multiplier, };
     "OpenTTDIndustryProductionResult" ["industry"] => ProductionResult {
         subtract,
         add,
@@ -2188,4 +2324,57 @@ crate::abi::layouts! {
         layouts,
         appear,
     };
+}
+
+#[cfg(test)]
+mod delivery_tests {
+    use super::*;
+
+    #[test]
+    fn delivery_uses_first_valid_slot_and_preserves_history() {
+        let mut industry = Industry {
+            accepted: vec![
+                Accepted {
+                    cargo: 7,
+                    waiting: 65530,
+                    ..Accepted::default()
+                },
+                Accepted {
+                    cargo: 7,
+                    waiting: 42,
+                    ..Accepted::default()
+                },
+                Accepted {
+                    cargo: 255,
+                    ..Accepted::default()
+                },
+            ],
+            ..Industry::default()
+        };
+        let owner = &raw mut industry;
+        unsafe {
+            assert_eq!(get_cargo_accepted(owner, 7), Some(0));
+            assert_eq!(get_cargo_accepted(owner, 255), None);
+            assert_eq!(get_cargo_accepted(owner, 8), None);
+            // Saturated stockpiles still create history and update last_accepted.
+            for (pieces, amount, waiting, date) in [(20, 5, 65535, -12), (20, 0, 65535, 73)] {
+                assert_eq!(accept_delivery(owner, 0, pieces, || date), amount);
+                assert_eq!(industry.accepted[0].waiting, waiting);
+                assert_eq!(industry.accepted[0].last_accepted, date);
+                assert_eq!(
+                    (*industry.accepted[0].history)[usize::from(THIS_MONTH)].first,
+                    5
+                );
+                assert_eq!(industry.accepted[1].waiting, 42);
+                assert!(industry.accepted[1].history.is_null());
+            }
+            industry.accepted[0].waiting = 0;
+            (*industry.accepted[0].history)[usize::from(THIS_MONTH)].first = 65530;
+            let history = industry.accepted[0].history;
+            assert_eq!(accept_delivery(owner, 0, 10, || 99), 10);
+            assert_eq!(industry.accepted[0].history, history);
+            assert_eq!((*history)[usize::from(THIS_MONTH)].first, 4);
+            assert_eq!((*history)[usize::from(LAST_MONTH)].first, 0);
+        }
+    }
 }

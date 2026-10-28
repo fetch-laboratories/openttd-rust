@@ -156,7 +156,7 @@ inline void RustStationHaveRating(BaseStation *st, uint8_t owner) noexcept { Ope
 inline void RustStationRailTriggers(BaseStation *st, const StationSpec *spec) noexcept { st->cached_anim_triggers.Set(spec->animation.triggers); }
 inline void RustStationResetFacilities(BaseStation *st, uint8_t bits) noexcept { st->facilities.Reset(StationFacilities(bits)); }
 inline void RustStationRoadTriggers(BaseStation *st, const RoadStopSpec *spec) noexcept { st->cached_roadstop_anim_triggers.Set(spec->animation.triggers); }
-inline const OpenTTDTownHandle * RustStationStationTown(BaseStation *st) noexcept { return reinterpret_cast<const OpenTTDTownHandle *>(OpenTTDBaseStationTown(st)); }
+template <class TStation> inline const OpenTTDTownHandle * RustStationStationTown(TStation *st) noexcept { return reinterpret_cast<const OpenTTDTownHandle *>(OpenTTDBaseStationTown(st)); }
 inline void RustStationStationViewInvalidate(BaseStation *st, int32_t data) noexcept { InvalidateWindowData(WC_STATION_VIEW, st->index, data); }
 inline void RustStationDeleteAirportStorage(BaseStation *st) noexcept { delete Station::From(st)->airport.psa; }
 inline Industry *RustStationAssociatedIndustry(BaseStation *st) noexcept { return Station::From(st)->industry; }
@@ -213,7 +213,7 @@ inline uint8_t Aircraft_airport_type(const OpenTTDStation *s) noexcept
 inline uint8_t Aircraft_station_owner(const OpenTTDStation *s) noexcept
 {
 	const Station *st = StationOf(s);
-	return OpenTTDStationOwner(st).base();
+	return RustStationOwnerByte(st);
 }
 
 inline void RustStationIndexInsert(BaseStation *st) noexcept { _station_kdtree.Insert(st->index); }
