@@ -73,9 +73,9 @@ lines remain (17.3% retired).
 | 1. Simulation logic | Simulation-inventory `.cpp` | 11,258 (75.7%), of which about 6,900 is drawing (phase 5) and about 4,300 game logic | No non-drawing simulation function body compiles under `WITH_RUST` |
 | 2. Simulation storage | Simulation headers: map accessors about 2,600, pool classes about 2,200, other helpers and types about 5,700; data tables 12,957 (25.2%) shared with later phases | 10,464 (16.2%) | Every pool and the map arrays are owned by Rust; C++ reads them through facades |
 | 3. Simulation data readers | Save/load 13,064; script API and hosts 12,379; network 9,607; NewGRF outside the inventory 5,550 | 40,600 (about 6%) | These run in Rust; the Squirrel VM may stay C++ until phase 6 |
-| 4. Support | Core, strings, settings, viewport, graphics and misc | 36,057 (2.2%) | Remaining non-GUI support runs in Rust |
-| 5. Interface | GUI 50,616; platform and rendering backends 14,885; simulation drawing about 6,900 | about 72,400 (0%) | No C++ GUI, drawing or platform code; evidence is screenshots and recordings of original and fork attached to each PR |
-| 6. Vendored | Squirrel, ICU, fmt, catch2, monocypher, nlohmann JSON, md5, OpenGL headers, social API | 55,895 (0.9%) | Each is replaced by a maintained Rust crate that reproduces what the game observes, or ported. Squirrel is decided when phase 6 reaches it, when deviation may be acceptable |
+| 4. Support | Core, strings, settings, viewport, graphics and misc | 36,057 (2.2%) | Not planned yet |
+| 5. Interface | GUI 50,616; platform and rendering backends 14,885; simulation drawing about 6,900 | about 72,400 (0%) | Not planned yet |
+| 6. Vendored | ICU, fmt, catch2, monocypher, nlohmann JSON, md5, OpenGL headers, Squirrel, social API | 55,895 (0.9%) | Not planned yet |
 
 Upstream unit tests (2,248) retire with the code they test.
 
@@ -84,9 +84,8 @@ Status:
   cover most of its game logic.
 - Phase 2 starts with #563.
 - Phase 3 gets its first planning round now, so spare slots take its work.
-- Phases 4 to 6 are planned when phase 3 is under way, or earlier where a phase
-  3 port needs them.
-- A vendored replacement can land as soon as its last C++ caller moves to Rust.
+- Phases 4 to 6 are not planned until each becomes the next phase (user
+  direction, 2026-10-28).
 
 ## Twenty-third steering review (2026-10-28, leftover game logic, storage and boundary faults)
 

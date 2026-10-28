@@ -62,7 +62,8 @@ Then resume from the roadmap's checkpoint and work order.
    already integrated. How easily an item scopes is not a reason to rank it.
    Within phases 1 and 2, a port of support code ranks only when a selected
    game component needs it. Never fall back to utility kernels or
-   `deferred-improvement` issues. Planning also rereads `issues.py`: it places
+   `deferred-improvement` issues, and plan nothing beyond the next phase.
+   Planning also rereads `issues.py`: it places
    unplaced issues, and returns an excluded or paused item whose recorded
    condition has been met. A simulation owner you set aside after a failed gate
    stays yours to re-select once a profile shows the fix.

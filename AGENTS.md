@@ -26,8 +26,10 @@ fork; the remaining upstream documentation explains behavior and architecture.
   5. GUI, simulation drawing and platform backends;
   6. vendored libraries (`src/3rdparty`).
 
-  A free slot takes the highest-ranked ready item of the earliest phase with
-  ready work. Later phases fill the slots that earlier phases leave free (user
+  No phase is planned beyond the next one, and no decision about a later phase
+  is made unless it affects the current or next phase (user direction,
+  2026-10-28). A free slot takes the highest-ranked ready item of the earliest
+  phase with ready work. Later phases fill the slots that earlier phases leave free (user
   decision, 2026-10-28). Within phases 1 and 2, port support code only when a
   selected game component needs it; a port that keeps the data in C++ behind
   one setter per field is support code. A vendored library is replaced by a
@@ -148,10 +150,8 @@ fork; the remaining upstream documentation explains behavior and architecture.
   wait for it. Phases 3 to 6 reuse the harness where it observes their output
   (saves, script commands, multiplayer sessions). Each phase's first issue
   names the evidence for what the harness cannot see, such as network packets
-  or script API results. For graphical work (GUI, drawing, rendering),
-  screenshots and screen recordings of the original and the fork in the same
-  state, attached to the PR, are evidence and need no CI check (user decision,
-  2026-10-28).
+  or script API results. Screenshots and screen recordings attached to a PR
+  can be used as evidence for graphical work (user decision, 2026-10-28).
   Extend the harness's scenarios rather than writing a per-component comparison
   tool. Add a narrow comparison against unchanged reference bodies only for a
   concrete gap the harness cannot reach, and name that gap in the PR. Any check
@@ -162,8 +162,7 @@ fork; the remaining upstream documentation explains behavior and architecture.
   and expected results together merely to make checks pass. Existing test
   success establishes covered behavior, not complete game equivalence.
 - Compare semantic state. Screenshots alone and compressed-save byte equality
-  cannot establish equivalent simulation; they remain evidence for graphical
-  output. Retain small failures and explain
+  cannot establish equivalent simulation. Retain small failures and explain
   discrepancies before accepting changes.
 - Record changes, checks and remaining limits in PRs. Migration documentation
   records design decisions and open limits, not evidence or review history.
