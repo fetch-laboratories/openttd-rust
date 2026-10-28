@@ -121,7 +121,8 @@ def freeze(out: Path) -> tuple[dict[str, Path], dict[str, Identity]]:
                 revision = fixture_revision(revision, identities["reference"].revision)
                 source = folder / "fixture-revision.cpp"
                 source.write_text(
-                    revision
+                    '#include "stdafx.h"\n#include "core/format.hpp"\n'
+                    + revision
                     + '\nextern "C" void __real__Z22IConsoleStdLibRegisterv();\n'
                     'extern "C" void __wrap__Z22IConsoleStdLibRegisterv() {\n'
                     "\t__real__Z22IConsoleStdLibRegisterv();\n"
