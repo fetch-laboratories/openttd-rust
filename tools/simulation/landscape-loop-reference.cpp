@@ -112,6 +112,7 @@ static void RustRun()
 		.climate = 0,
 		.extra = 0,
 		.ambient = false,
+		.ambient_callback = false,
 	};
 	/* Each nested entry has its own immutable table, like the native facade. */
 	auto batch_services = services;

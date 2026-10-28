@@ -244,6 +244,7 @@ OpenTTDTreeLoopSettings GetRustTreeLoopSettings() noexcept
 		.climate = to_underlying(_settings_game.game_creation.landscape),
 		.extra = _settings_game.construction.extra_tree_placement,
 		.ambient = _settings_client.sound.ambient,
+		.ambient_callback = RustAmbientSoundEnabled(),
 	};
 }
 

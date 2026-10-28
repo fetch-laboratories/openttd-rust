@@ -103,6 +103,7 @@ unsafe fn dispatch(
                 tile,
                 g.climate,
                 g.editor,
+                settings.ambient_callback,
                 settings.size_x,
                 g.clear,
                 s.shared,
@@ -146,6 +147,7 @@ unsafe fn dispatch(
             water::water_tile_loop(
                 tile,
                 tile_type,
+                settings.ambient_callback,
                 settings.size_x,
                 size_y,
                 g.call,
