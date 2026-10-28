@@ -496,7 +496,7 @@ pub unsafe extern "C" fn openttd_rust_engine_start_all(s: *const Services) {
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
     let s = unsafe { &*s };
     let date = unsafe { call!(&*s.shared, calendar_date) }.min(
-        crate::timer_game_common::calendar_ymd_to_date(AGING_STOPS, 0, 1),
+        crate::timer_game_common::calendar_ymd_to_date(unsafe { AGING_STOPS }, 0, 1),
     );
     let aging = crate::timer_game_common::calendar_date_to_ymd(date);
     let shared = unsafe { &*s.shared };

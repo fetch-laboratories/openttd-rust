@@ -32,8 +32,7 @@
 #include "../linkgraph/linkgraph.h"
 
 #ifdef WITH_RUST
-#include "../rust/clock_ffi.h"
-#include <exception>
+#include "../rust/clock_native.hpp"
 #endif
 
 #include "../safeguards.h"
@@ -59,13 +58,19 @@ bool TimerGameEconomy::UsingWallclockUnits(bool newgame)
 	return GetRustClockServices().using_wallclock_units(newgame);
 }
 template <>
+void IntervalTimer<TimerGameEconomy>::Elapsed([[maybe_unused]] TimerGameEconomy::TElapsed trigger)
+{
+	this->callback(1);
+}
+template <>
+void TimeoutTimer<TimerGameEconomy>::Elapsed([[maybe_unused]] TimerGameEconomy::TElapsed trigger)
+{
+	this->callback();
+}
+template <>
 bool TimerManager<TimerGameEconomy>::Elapsed([[maybe_unused]] TimerGameEconomy::TElapsed delta)
 {
-	assert(delta == 1);
-	std::exception_ptr scheduled_console_exception;
-	bool progressed = openttd_rust_economy_elapsed(&GetRustClockServices(), reinterpret_cast<OpenTTDConsoleException *>(&scheduled_console_exception));
-	if (scheduled_console_exception) std::rethrow_exception(scheduled_console_exception);
-	return progressed;
+	return RustClockElapsed<openttd_rust_economy_elapsed>(GetRustClockServices(), delta);
 }
 #else
 TimerGameEconomy::Year TimerGameEconomy::year = {};

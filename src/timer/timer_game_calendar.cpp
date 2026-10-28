@@ -27,8 +27,7 @@
 #include "../vehicle_base.h"
 
 #ifdef WITH_RUST
-#include "../rust/clock_ffi.h"
-#include <exception>
+#include "../rust/clock_native.hpp"
 #endif
 
 #include "../safeguards.h"
@@ -50,13 +49,19 @@ void TimerGameCalendar::SetDate(Date date, DateFract fract)
 	openttd_rust_calendar_set_date(date.base(), fract);
 }
 template <>
+void IntervalTimer<TimerGameCalendar>::Elapsed([[maybe_unused]] TimerGameCalendar::TElapsed trigger)
+{
+	this->callback(1);
+}
+template <>
+void TimeoutTimer<TimerGameCalendar>::Elapsed([[maybe_unused]] TimerGameCalendar::TElapsed trigger)
+{
+	this->callback();
+}
+template <>
 bool TimerManager<TimerGameCalendar>::Elapsed([[maybe_unused]] TimerGameCalendar::TElapsed delta)
 {
-	assert(delta == 1);
-	std::exception_ptr scheduled_console_exception;
-	bool progressed = openttd_rust_calendar_elapsed(&GetRustClockServices(), reinterpret_cast<OpenTTDConsoleException *>(&scheduled_console_exception));
-	if (scheduled_console_exception) std::rethrow_exception(scheduled_console_exception);
-	return progressed;
+	return RustClockElapsed<openttd_rust_calendar_elapsed>(GetRustClockServices(), delta);
 }
 #else
 TimerGameCalendar::Year TimerGameCalendar::year = {};

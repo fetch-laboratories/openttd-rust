@@ -53,9 +53,7 @@
 #include "table/strings.h"
 
 #ifdef WITH_RUST
-#include "rust/clock_timer.h"
-#include "script/script_fatalerror.hpp"
-#include <exception>
+#include "rust/clock_native.hpp"
 #endif
 
 #include "safeguards.h"
@@ -84,13 +82,7 @@ static void RunScheduledMonthlyConsole()
 }
 static bool RelayScheduledMonthlyConsole(const void *, void *exception) noexcept
 {
-	try {
-		RunScheduledMonthlyConsole();
-		return true;
-	} catch (const Script_FatalError &) {
-		*static_cast<std::exception_ptr *>(exception) = std::current_exception();
-		return false;
-	}
+	return RustClockRelayScheduledConsole(RunScheduledMonthlyConsole, exception);
 }
 static const IntervalTimer<TimerGameCalendar> _scheduled_monthly_timer({TimerGameCalendar::MONTH, TimerGameCalendar::Priority::NONE}, RustClockCallback{RelayScheduledMonthlyConsole, nullptr});
 #else

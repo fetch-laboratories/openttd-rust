@@ -13,25 +13,13 @@
 #include "timer_manager.h"
 
 
-/** Virtual elapsed dispatch is retained only for native timer managers. */
-template <typename TTimerType>
-class TimerElapsed {
-protected:
-	virtual void Elapsed(typename TTimerType::TElapsed delta) = 0;
-	friend class TimerManager<TTimerType>;
-};
-#ifdef WITH_RUST
-template <typename TTimerType> requires IsRustGameClock<TTimerType>
-class TimerElapsed<TTimerType> {};
-#endif
-
 /**
  * The base where every other type of timer is derived from.
  *
  * Never use this class directly yourself.
  */
 template <typename TTimerType>
-class BaseTimer : public TimerElapsed<TTimerType> {
+class BaseTimer {
 public:
 	using TPeriod = typename TTimerType::TPeriod;
 	using TElapsed = typename TTimerType::TElapsed;
@@ -60,6 +48,10 @@ public:
 
 	TPeriod period; ///< The period of the timer.
 	TStorage storage = {}; ///< The storage of the timer.
+
+protected:
+	virtual void Elapsed(TElapsed delta) = 0;
+	friend class TimerManager<TTimerType>;
 };
 
 /**
@@ -92,7 +84,7 @@ public:
 #ifdef WITH_RUST
 		if constexpr (IsRustGameClock<TTimerType>) {
 			RustClockBind(*this, {[](const void *context, void *) noexcept {
-				static_cast<const IntervalTimer *>(context)->callback(1);
+				const_cast<IntervalTimer *>(static_cast<const IntervalTimer *>(context))->Elapsed(1);
 				return true;
 			}, this}, nullptr);
 		}
@@ -121,7 +113,7 @@ public:
 private:
 	std::function<void(uint)> callback;
 
-	void Elapsed(TElapsed count);
+	void Elapsed(TElapsed count) override;
 };
 
 /**
@@ -151,7 +143,7 @@ public:
 #ifdef WITH_RUST
 		if constexpr (IsRustGameClock<TTimerType>) {
 			RustClockBind(*this, {[](const void *context, void *) noexcept {
-				static_cast<const TimeoutTimer *>(context)->callback();
+				const_cast<TimeoutTimer *>(static_cast<const TimeoutTimer *>(context))->Elapsed(1);
 				return true;
 			}, this}, &this->fired);
 		}
@@ -204,7 +196,11 @@ public:
 private:
 	std::function<void()> callback;
 
-	void Elapsed(TElapsed count);
+	void Elapsed(TElapsed count) override;
 };
+
+#ifdef WITH_RUST
+#include "../rust/clock_registration.hpp"
+#endif
 
 #endif /* TIMER_H */

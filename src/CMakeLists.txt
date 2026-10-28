@@ -258,6 +258,8 @@ add_files(
     rust/vehicle_services.h
     rust/vehicle_ffi.h
     rust/clock_ffi.h
+    rust/clock_native.hpp
+    rust/clock_registration.hpp
     rust/clock_state.h
     rust/clock_timer.h
     rust/services_ffi.h

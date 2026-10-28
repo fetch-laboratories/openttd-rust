@@ -74,6 +74,7 @@ def scenario_modules():
     from . import (
         aircraft,
         cargo_storage,
+        clocks,
         companies,
         disasters,
         economy,
@@ -114,7 +115,9 @@ def scenario_modules():
         aircraft,
         disasters,
         economy,
+        clocks,
         roads,
+        clocks,
         companies,
         stations,
         industries,

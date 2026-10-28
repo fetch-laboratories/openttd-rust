@@ -539,7 +539,8 @@ void SubsidyMonthlyLoop()
 	modified |= passenger_subsidy || town_subsidy || industry_subsidy;
 
 	if (modified) InvalidateWindowData(WC_SUBSIDIES_LIST, 0);
-}#endif
+}
+#endif
 
 #ifdef WITH_RUST
 static const IntervalTimer<TimerGameEconomy> _economy_subsidies_monthly({TimerGameEconomy::MONTH, TimerGameEconomy::Priority::SUBSIDY}, RustClockCallback{openttd_rust_clock_subsidy_monthly, &GetRustSubsidyServices()});
