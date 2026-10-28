@@ -101,11 +101,7 @@ pub unsafe extern "C" fn openttd_rust_engine_mapping_use(
         map[index].grfid = grfid;
         let position = map.partition_point(|m| m.key() < key(grfid, local));
         // Slide relocates after computing lower_bound on the modified list.
-        if position > index {
-            map[index..position].rotate_left(1);
-        } else {
-            map[position..=index].rotate_right(1);
-        }
+        crate::container_func::slide(map, index, index + 1, position);
     }
     engine
 }

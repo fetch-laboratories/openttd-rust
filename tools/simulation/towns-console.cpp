@@ -77,6 +77,18 @@ static void Cost(const char *label, const CommandCost &cost, Money money = 0, To
 	fmt::print(stderr, "TOWN cost {} {} {} {} {} {}\n", label, cost.Succeeded(), cost.GetCost(), cost.GetErrorMessage(), money, id.base());
 }
 static void Cost(const char *label, const std::tuple<CommandCost, Money, TownID> &result) { const auto &[cost, money, id] = result; Cost(label, cost, money, id); }
+
+/** Move every corner in [x0, x1] x [y0, y1] to height through the original terraform command, so neighbouring slopes stay valid. */
+static void LevelCorners(uint x0, uint x1, uint y0, uint y1, uint height, const char *label)
+{
+	for (uint y = y0; y <= y1; ++y) for (uint x = x0; x <= x1; ++x) {
+		TileIndex corner = TileXY(x, y);
+		while (TileHeight(corner) != height) {
+			CommandCost cost = std::get<0>(Command<CMD_TERRAFORM_LAND>::Do(DoCommandFlag::Execute, corner, SLOPE_N, TileHeight(corner) < height));
+			if (cost.Failed()) { Cost(label, cost); std::abort(); }
+		}
+	}
+}
 /* Observe the real presentation request, then forward it unchanged. The null
  * driver cannot establish rendered errors or authority-window refreshes. */
 static uint bribe_errors;
@@ -459,7 +471,13 @@ static bool CommandsScenario(std::span<std::string_view> args)
 	for (uint y = 6; y < 23; ++y) for (uint x = 6; x < 23; ++x) {
 		TileIndex sea = TileXY(x, y); CommandCost cleared = Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, sea);
 		if (cleared.Failed()) { Cost("fixture-sea", cleared); std::abort(); }
-		SetTileHeight(sea, 0); MakeSea(sea);
+	}
+	/* Level corners 6..23 through CMD_TERRAFORM_LAND, which also adjusts and clears the neighbouring tiles. */
+	LevelCorners(6, 23, 6, 23, 0, "fixture-sea-level");
+	for (uint y = 6; y < 23; ++y) for (uint x = 6; x < 23; ++x) {
+		TileIndex sea = TileXY(x, y);
+		if (!IsTileType(sea, MP_CLEAR) || GetTileSlope(sea) != SLOPE_FLAT || TileHeight(sea) != 0) std::abort();
+		MakeSea(sea);
 	}
 	IndustryID oilrig = IndustryID::Invalid();
 	std::set<IndustryID> original_industries; for (const Industry *i : Industry::Iterate()) original_industries.insert(i->index);
@@ -500,8 +518,9 @@ static bool CommandsScenario(std::span<std::string_view> args)
 	for (uint y = 40; y <= 44; ++y) for (uint x = 40; x <= 50; ++x) {
 		TileIndex at = TileXY(x, y); CommandCost clear = Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, at);
 		if (clear.Failed()) { Cost("fixture-bridge-clear", clear); std::abort(); }
-		SetTileHeight(at, 1); MakeClear(at, CLEAR_GRASS, 3);
 	}
+	LevelCorners(40, 51, 40, 45, 1, "fixture-bridge-level");
+	for (uint y = 40; y <= 44; ++y) for (uint x = 40; x <= 50; ++x) MakeClear(TileXY(x, y), CLEAR_GRASS, 3);
 	bool bridge_built = false;
 	owner.Change(OWNER_TOWN);
 	for (TileIndex at = TileXY(5, 5); at < Map::Size() - Map::SizeX() * 5; ++at) {
@@ -631,6 +650,19 @@ static size_t OccupiedDefinitionTiles()
 	}
 	return count;
 }
+/* R477 houses 0 and 1 differ only in their AllowConstruction answer (0 and 1). */
+static constexpr uint32_t HOUSE_ALLOW_GRF = 0x37373452; // R477 in file byte order.
+static std::pair<uint, uint> AllowConstructionTiles()
+{
+	const HouseID rejected = _house_mngr.GetID(0, HOUSE_ALLOW_GRF), allowed = _house_mngr.GetID(1, HOUSE_ALLOW_GRF);
+	std::pair<uint, uint> counts{};
+	for (TileIndex tile{}; tile < Map::Size(); ++tile) {
+		if (!IsTileType(tile, MP_HOUSE)) continue;
+		counts.first += GetHouseType(tile) == rejected;
+		counts.second += GetHouseType(tile) == allowed;
+	}
+	return counts;
+}
 static bool HouseDefinitionsScenario(std::span<std::string_view> args)
 {
 	if (args[1] == "definitions-inspect") {
@@ -642,7 +674,7 @@ static bool HouseDefinitionsScenario(std::span<std::string_view> args)
 	if (args.size() < 4) return false;
 	SetRandomSeed(0x47700001);
 	_grfconfig.clear();
-	for (const char *name : {"houses", "conflict", "colours", "cargo", "badges", "oversized", "invalid-id"}) {
+	for (const char *name : {"houses", "conflict", "colours", "cargo", "badges", "oversized", "invalid-id", "reject"}) {
 		auto config = std::make_unique<GRFConfig>(std::string(args[2]) + "/" + name + ".grf");
 		HouseDefinitionNeed(FillGRFDetails(*config, false, NO_DIRECTORY), "file-scan");
 		config->flags.Reset(GRFConfigFlag::InitOnly);
@@ -652,16 +684,26 @@ static bool HouseDefinitionsScenario(std::span<std::string_view> args)
 	_house_mngr.mappings[126] = {.grfid = HOUSE_DEFINITION_GRF, .entity_id = 13, .substitute_id = 8};
 	ReloadNewGRFData();
 	InspectHouseDefinitions();
+	for (uint16_t local : {0, 1}) {
+		const auto *spec = DefinitionSpec(local, HOUSE_ALLOW_GRF);
+		HouseDefinitionNeed(spec->enabled && spec->callback_mask.Test(HouseCallbackMask::AllowConstruction) && spec->min_year == CalendarTime::MIN_YEAR, "allow-construction-spec");
+	}
 	Backup<GameMode> mode(_game_mode, GM_EDITOR);
 	Backup<CompanyID> owner(_current_company, OWNER_DEITY);
 	Backup<bool> roads(_settings_game.economy.allow_town_roads, true);
 	auto [cost, unused, town_id] = CmdFoundTown(DoCommandFlag::Execute, Site(), TSZ_LARGE, true, TL_2X2_GRID, false, 0, "Definition town");
 	HouseDefinitionNeed(cost.Succeeded(), "founding");
 	HouseDefinitionNeed(OccupiedDefinitionTiles() > 0, "natural-placement");
+	const auto founded = AllowConstructionTiles();
+	fmt::print(stderr, "TOWN definition-allow-construction founding {} {}\n", founded.first, founded.second);
+	HouseDefinitionNeed(founded.first == 0 && founded.second > 0, "allow-construction-founding");
 	Town *town = Town::Get(town_id);
 	uint population = town->cache.population;
 	HouseDefinitionNeed(CmdExpandTown(DoCommandFlag::Execute, town_id, 128, {TownExpandMode::Buildings, TownExpandMode::Roads}).Succeeded(), "expand-command");
 	HouseDefinitionNeed(town->cache.population > population, "growth");
+	const auto expanded = AllowConstructionTiles();
+	fmt::print(stderr, "TOWN definition-allow-construction expansion {} {}\n", expanded.first, expanded.second);
+	HouseDefinitionNeed(expanded.first == 0 && expanded.second > founded.second, "allow-construction-expansion");
 	fmt::print(stderr, "TOWN definition-population {} {}\n", population, town->cache.population);
 	HouseID before = _house_mngr.GetID(0, HOUSE_DEFINITION_GRF);
 	ResetNewGRFData();
