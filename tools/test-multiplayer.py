@@ -122,6 +122,12 @@ class MultiplayerTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             multiplayer.check(self.session, self.source)
 
+    def test_received_sync_that_skips_rng_comparison_fails(self) -> None:
+        path = Path(self.session.directory) / "client/stderr.log"
+        path.write_text(CLIENT + "Missed frame for sync-test: 124 / 125\n")
+        with self.assertRaises(RuntimeError):
+            multiplayer.check(self.session, self.source)
+
     def test_swapped_sessions_compare_every_chunk_including_aipl(self) -> None:
         other = self.root / "other-session"
         shutil.copytree(self.session.directory, other)

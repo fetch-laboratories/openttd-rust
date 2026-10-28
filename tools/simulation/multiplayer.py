@@ -344,11 +344,11 @@ def check(result: Session, source: Path) -> None:
     ):
         raise RuntimeError("missing fixture executable identity")
     if re.search(
-        r"Sync error|sync_err|SendError\(\)|Receive_SERVER_ERROR\(\)|connection lost|has been disconnected",
+        r"Sync error|sync_err|Missed frame for sync-test|SendError\(\)|Receive_SERVER_ERROR\(\)|connection lost|has been disconnected",
         server + client,
         re.I,
     ):
-        raise RuntimeError("desync or unexpected network disconnect")
+        raise RuntimeError("desync, skipped sync test or unexpected network disconnect")
     initial = core.rows(source, "DATE")[0]
     dates = []
     for side in ("server", "client"):
