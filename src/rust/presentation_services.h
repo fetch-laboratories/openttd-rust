@@ -9,10 +9,12 @@
 #ifndef RUST_PRESENTATION_SERVICES_H
 #define RUST_PRESENTATION_SERVICES_H
 #include "../string_func.h"
+#include "../debug.h"
 #include "../gfx_func.h"
 #include "../town_type.h"
 #include "../window_func.h"
 inline void OpenTTDInvalidateTownView(uint16_t town) noexcept { InvalidateWindowData(WC_TOWN_VIEW, TownID(town)); }
 inline void RustScreenDirty() noexcept { MarkWholeScreenDirty(); }
 inline size_t RustUtf8Length(const uint8_t *text, size_t length) noexcept { return Utf8StringLength(std::string_view(reinterpret_cast<const char *>(text), length)); }
+inline void RustDebugNewMap(uint32_t seed) noexcept { Debug(desync, 1, "new_map: {:08x}", seed); }
 #endif /* RUST_PRESENTATION_SERVICES_H */

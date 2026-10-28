@@ -7,17 +7,27 @@
 #include "core/random_func.hpp"
 extern "C" void __real__Z26SetGeneratingWorldProgress16GenWorldProgressj(GenWorldProgress, uint);
 extern "C" void __real__Z31IncreaseGeneratingWorldProgress16GenWorldProgress(GenWorldProgress);
-extern "C" void __real__Z29GenerateWorldSetAbortCallbackPFvvE(GWAbortProc *);
+#ifdef WITH_RUST
+#include "rust/world_generation_ffi.h"
+#define GENERATION_REAL_ABORT __real_openttd_rust_world_set_abort_callback
+#define GENERATION_WRAP_ABORT __wrap_openttd_rust_world_set_abort_callback
+static void GenerationSetAbort(GWAbortProc *proc) { openttd_rust_world_set_abort_callback(proc); }
+#else
+#define GENERATION_REAL_ABORT __real__Z29GenerateWorldSetAbortCallbackPFvvE
+#define GENERATION_WRAP_ABORT __wrap__Z29GenerateWorldSetAbortCallbackPFvvE
+static void GenerationSetAbort(GWAbortProc *proc) { GenerateWorldSetAbortCallback(proc); }
+#endif
+extern "C" void GENERATION_REAL_ABORT(GWAbortProc *);
 static int generation_cancel = -1, generation_events = 0, generation_cleanup = 0;
 static GWAbortProc *generation_abort = nullptr;
 static bool generation_heightmap = false;
 static uint generation_landscape_steps = 0, generation_river_steps = 0;
 static void GenerationSnapshot(std::string_view name);
 static void GenerationCleanup() { generation_cleanup++; generation_abort(); }
-extern "C" void __wrap__Z29GenerateWorldSetAbortCallbackPFvvE(GWAbortProc *callback)
+extern "C" void GENERATION_WRAP_ABORT(GWAbortProc *callback)
 {
 	generation_abort = callback;
-	__real__Z29GenerateWorldSetAbortCallbackPFvvE(generation_cancel >= 0 && callback != nullptr ? GenerationCleanup : callback);
+	GENERATION_REAL_ABORT(generation_cancel >= 0 && callback != nullptr ? GenerationCleanup : callback);
 }
 static void GenerationProgress(GenWorldProgress stage)
 {
@@ -50,7 +60,7 @@ static void GenerationCancellation()
 		generation_events = generation_cleanup = 0; bool caught = false;
 		try { GenerateLandscape(GWM_NEWGAME); } catch (AbortGenerateWorldSignal &) { caught = true; }
 		fmt::print(stderr, "GENERATION cancel {} {} {} {}\n", generation_cancel, caught, generation_events, generation_cleanup);
-		GenerateWorldSetAbortCallback(nullptr);
+		GenerationSetAbort(nullptr);
 	}
 	generation_cancel = -1;
 }

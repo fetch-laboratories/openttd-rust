@@ -13,6 +13,8 @@
 #include "../rust/movement_ffi.h"
 #include "../rust/landscape_command_ffi.h"
 #include "../rust/landscape_generation_ffi.h"
+#include "../rust/world_generation_ffi.h"
+#include <thread>
 #include "../rust/generation_sea_set.hpp"
 #include "abi_layout.hpp"
 #include "../tile_map.h"
@@ -95,6 +97,7 @@ TEST_CASE("Rust shared tile-type allocation and all native byte values")
 {
 	ABI_LAYOUT_CHECK;
 #include "abi-layout-landscape.inc"
+#include "abi-layout-genworld.inc"
 	Map::Allocate(128, 64);
 	const auto allocation = GetRustTileTypeAllocation();
 	const auto &shared = GetRustSharedServices();
@@ -170,5 +173,41 @@ TEST_CASE("Rust generation sea identity preserves native flattening iteration")
 		CHECK(tile == INVALID_TILE.base());
 		boundary.Destroy();
 	}
+}
+#endif
+
+#ifdef WITH_RUST
+TEST_CASE("Rust world generation shares native lvalues across serialized threads")
+{
+	bool *address = &_generating_world;
+	bool before = _generating_world;
+	bool same_address = false, aborted = false;
+	std::thread first([&] { same_address = openttd_rust_generating_world() == address; _generating_world = true; AbortGeneratingWorld(); });
+	first.join();
+	CHECK(_generating_world);
+	CHECK(same_address);
+	OpenTTDWorldServices services{.exit_game = []() noexcept { return false; }};
+	std::thread second([&] { aborted = openttd_rust_world_aborted(&services); *openttd_rust_generating_world() = false; });
+	second.join();
+	CHECK_FALSE(_generating_world);
+	CHECK(aborted);
+	_generating_world = before;
+}
+static int world_callback_value;
+TEST_CASE("Rust world generation replaces transient callbacks before invoking them")
+{
+	OpenTTDWorldServices services{
+		.game_mode = []() noexcept { return GM_EDITOR; },
+		.callback = [](OpenTTDWorldFrame *, GWDoneProc *proc) noexcept { proc(); return true; },
+		.abort_mode = [](bool editor) noexcept { CHECK(editor); },
+	};
+	world_callback_value = 0;
+	openttd_rust_world_set_abort_callback([] { world_callback_value = 1; });
+	openttd_rust_world_set_abort_callback([] { world_callback_value = 2; });
+	CHECK(openttd_rust_world_handle_abort(&services, nullptr));
+	CHECK(world_callback_value == 2);
+	openttd_rust_world_set_abort_callback(nullptr);
+	CHECK(openttd_rust_world_handle_abort(&services, nullptr));
+	CHECK(world_callback_value == 2);
 }
 #endif

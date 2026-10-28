@@ -9,6 +9,11 @@ use std::{
     ops::Bound::{Excluded, Unbounded},
 };
 
+/// Native `PSM_ENTER_GAMELOOP`.
+pub const PSM_ENTER_GAMELOOP: u8 = 0;
+/// Native `PSM_LEAVE_GAMELOOP`.
+pub const PSM_LEAVE_GAMELOOP: u8 = 1;
+
 type Check = extern "C" fn(bool);
 /// Stable allocation owned by one native shell; aliases point at `storage`.
 pub struct Payload<const N: usize> {

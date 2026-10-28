@@ -943,7 +943,7 @@ TileIndex _cur_tileloop_tile;
 #endif
 
 #ifdef WITH_RUST
-static OpenTTDLandscapeLoopServices RustLandscapeLoopServices(OpenTTDGroundCall *call, const OpenTTDRoadCommandContext *road)
+OpenTTDLandscapeLoopServices RustLandscapeLoopServices(OpenTTDGroundCall *call, const OpenTTDRoadCommandContext *road) noexcept
 {
 	return {
 		.shared = &GetRustSharedServices(),
@@ -1025,18 +1025,7 @@ void RunTileLoop()
 #include "rust/heightmap_services.hpp"
 #include "rust/tgp_ffi.h"
 
-struct RustGenerationLoop {
-	PerformanceAccumulator framerate{PFE_GL_LANDSCAPE};
-	OpenTTDGroundCall ground;
-	RustRoadCommandContext road;
-	OpenTTDLandscapeLoopServices services{RustLandscapeLoopServices(&ground, &road.view)};
-	OpenTTDGenerationLoop view{GetRustTreeLoopSettings(), &services};
-};
-struct OpenTTDGenerationFrame {
-	std::exception_ptr cancellation;
-	RustGenerationSeaSet sea;
-	std::optional<RustGenerationLoop> loop;
-};
+#include "rust/landscape_generation_frame.hpp"
 
 const OpenTTDLandscapeGenerationServices &GetRustLandscapeGenerationServices() noexcept
 {
@@ -1051,7 +1040,6 @@ const OpenTTDLandscapeGenerationServices &GetRustLandscapeGenerationServices() n
 		.increase_progress = [](OpenTTDGenerationFrame *f, GenWorldProgress stage) noexcept { return RunGenerationProgress(f, [=] { RustIncreaseGeneratingWorldProgress(stage); }); },
 		.begin_loop = [](OpenTTDGenerationFrame *f) noexcept -> const OpenTTDGenerationLoop * { return &f->loop.emplace().view; },
 		.end_loop = [](OpenTTDGenerationFrame *f) noexcept { f->loop.reset(); },
-		.set_abort_callback = [](void (*callback)()) noexcept { GenerateWorldSetAbortCallback(callback); },
 		.tgp_settings = RustTGPSettings,
 		.terrain_template = [](uint32_t index) noexcept {
 			const Sprite *templ = GetSprite(index, SpriteType::MapGen);
@@ -1103,21 +1091,14 @@ void InitializeLandscape()
 }
 
 #ifdef WITH_RUST
-bool GenerateLandscape(uint8_t mode)
+OpenTTDLandscapeGenerationCall::OpenTTDLandscapeGenerationCall() : heightmap{
+	.context = &this->decoder,
+	.read = [](void *ctx, OpenTTDHeightmapImage *out) noexcept { return static_cast<RustHeightmapDecoder *>(ctx)->Read(_file_to_saveload.ftype.detailed, _file_to_saveload.name, out); },
+	.finish = this->decoder.view.finish,
+}
 {
-	static_assert(GWP_LANDSCAPE == 1 && GWP_RIVER == 2 && GWM_HEIGHTMAP == 3 && LG_ORIGINAL == 0 && LG_TERRAGENESIS == 1 && MAX_TILE_HEIGHT == 255);
-	static_assert(SPR_MAPGEN_BEGIN == 4845 && TILE_UPDATE_FREQUENCY == 256);
-	OpenTTDGenerationFrame frame;
-	/* Resolve file selection only after the first progress call, as the source
-	 * does. No filename view is retained across a progress/yield boundary. */
-	RustHeightmapDecoder decoder(DFT_HEIGHTMAP_BMP, "");
-	const OpenTTDHeightmapDecoder heightmap{
-		.context = &decoder,
-		.read = [](void *ctx, OpenTTDHeightmapImage *out) noexcept { return static_cast<RustHeightmapDecoder *>(ctx)->Read(_file_to_saveload.ftype.detailed, _file_to_saveload.name, out); },
-		.finish = decoder.view.finish,
-	};
 	const auto &g = _settings_game.game_creation;
-	const OpenTTDLandscapeGenerationSettings settings{
+	this->settings = {
 		.max_search_nodes = static_cast<int32_t>(_settings_game.pf.yapf.max_search_nodes),
 		.climate = to_underlying(g.landscape), .generator = g.land_generator,
 		.rivers = g.amount_of_rivers, .min_river_length = g.min_river_length, .route_random = g.river_route_random,
@@ -1126,8 +1107,12 @@ bool GenerateLandscape(uint8_t mode)
 		.height_limit = _settings_game.construction.map_height_limit, .rotation = g.heightmap_rotation, .heightmap_height = g.heightmap_height,
 		.freeform = _settings_game.construction.freeform_edges,
 	};
-	bool generated = openttd_rust_generate_landscape(&GetRustLandscapeGenerationServices(), &frame, &heightmap, settings, mode);
-	if (frame.cancellation) std::rethrow_exception(frame.cancellation);
+}
+bool GenerateLandscape(uint8_t mode)
+{
+	OpenTTDLandscapeGenerationCall call;
+	bool generated = openttd_rust_generate_landscape(&GetRustLandscapeGenerationServices(), &call.frame, &call.heightmap, call.settings, mode);
+	if (call.frame.cancellation) std::rethrow_exception(call.frame.cancellation);
 	return generated;
 }
 #else

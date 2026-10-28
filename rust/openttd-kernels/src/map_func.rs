@@ -64,6 +64,11 @@ impl Map {
     pub fn wrap_to_map(self, tile: u32, size_y: u32) -> u32 {
         tile & (self.size_x() * size_y - 1)
     }
+    /// `RandomTileSeed`, using the original `Map::WrapToMap` helper.
+    #[must_use]
+    pub fn random_tile_seed(self, size_y: u32, random: u32) -> u32 {
+        self.wrap_to_map(random, size_y)
+    }
     /// `Map::MaxX`.
     #[must_use]
     pub fn max_x(self) -> u32 {

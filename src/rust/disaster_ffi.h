@@ -104,6 +104,7 @@ struct OpenTTDDisasterServices {
 /* Tables are immutable and live through each synchronous entry and reentry.
  * Shell/owner accesses end before callbacks, especially deletion. No exception
  * crosses this boundary; environmental failures terminate in noexcept services. */
+const OpenTTDDisasterServices &DisasterServices() noexcept;
 extern "C" {
 OpenTTDDisasterState *OPENTTD_RUST_CALL openttd_rust_disaster_state_create(uint32_t);
 void OPENTTD_RUST_CALL openttd_rust_disaster_state_destroy(OpenTTDDisasterState *);

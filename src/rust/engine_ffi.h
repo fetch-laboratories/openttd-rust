@@ -98,6 +98,7 @@ struct OpenTTDEngineServices {
 	void (*screen_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(screen_dirty);
 	size_t (*utf8_length)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(utf8_length);
 };
+const OpenTTDEngineServices &EngineServices() noexcept;
 extern "C" {
 void openttd_rust_engine_reliability(const OpenTTDEngineServices *, OpenTTDEngineRef, bool);
 void openttd_rust_engine_start_one(const OpenTTDEngineServices *, OpenTTDEngineRef, OpenTTDEngineYMD, uint32_t);

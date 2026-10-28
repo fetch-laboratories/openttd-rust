@@ -37,6 +37,8 @@ inline uint8_t RustCurrentCompanyID() noexcept { return OpenTTDCurrentCompany().
 inline void RustSetCurrentCompanyID(uint8_t company) noexcept { OpenTTDSetCurrentCompany(CompanyID(company)); }
 inline void RustInfrastructureDirty(uint8_t owner) noexcept { DirtyCompanyInfrastructureWindows(CompanyID(owner)); }
 inline bool RustIsLocalCompany() noexcept { return IsLocalCompany(); }
+inline void RustSetLocalCompany(uint8_t company) noexcept { SetLocalCompany(CompanyID(company)); }
+inline void RustRestoreGenerationCompanies(uint8_t company) noexcept { _current_company = _local_company = CompanyID(company); }
 inline uint8_t RustLocalCompanyID() noexcept { return _local_company.base(); }
 /** Shared pool traversal preserves the native ascending ID order. */
 inline Company *RustCompanyNext(uint32_t from) noexcept

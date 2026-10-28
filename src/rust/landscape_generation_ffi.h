@@ -34,7 +34,6 @@ struct OpenTTDLandscapeGenerationServices {
 	bool (*increase_progress)(OpenTTDGenerationFrame *, GenWorldProgress) noexcept OPENTTD_SERVICE_DEFAULT(increase_progress);
 	const OpenTTDGenerationLoop *(*begin_loop)(OpenTTDGenerationFrame *) noexcept OPENTTD_SERVICE_DEFAULT(begin_loop);
 	void (*end_loop)(OpenTTDGenerationFrame *) noexcept OPENTTD_SERVICE_DEFAULT(end_loop);
-	void (*set_abort_callback)(void (*)()) noexcept OPENTTD_SERVICE_DEFAULT(set_abort_callback);
 	OpenTTDTGPSettings (*tgp_settings)() noexcept OPENTTD_SERVICE_DEFAULT(tgp_settings);
 	OpenTTDTerrainTemplate (*terrain_template)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terrain_template);
 	OpenTTDFlatTileHeight (*flat_height)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(flat_height);

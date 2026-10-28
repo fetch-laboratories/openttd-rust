@@ -344,6 +344,7 @@ static void TileLoop_Clear(TileIndex tile)
 
 #endif
 
+#ifndef WITH_RUST
 void GenerateClearTile()
 {
 	uint i, gi;
@@ -385,7 +386,6 @@ get_out:;
 	} while (--i);
 }
 
-#ifndef WITH_RUST
 static TrackStatus GetTileTrackStatus_Clear(TileIndex, TransportType, uint, DiagDirection)
 {
 	return 0;

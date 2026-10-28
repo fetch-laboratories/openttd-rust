@@ -6,4 +6,6 @@ pub struct GameMode(pub u8);
 impl GameMode {
     /// Main menu mode.
     pub const MENU: Self = Self(0);
+    /// Scenario editor mode.
+    pub const EDITOR: Self = Self(2);
 }

@@ -178,7 +178,7 @@ static void RethrowTreeGenerationAbort(bool aborted)
 	if (aborted) std::rethrow_exception(std::exchange(_tree_generation_abort, nullptr));
 }
 
-static OpenTTDTreeGenerateSettings TreeGenerateSettings()
+OpenTTDTreeGenerateSettings TreeGenerateSettings() noexcept
 {
 	return {
 		.size = Map::Size(), .size_x = Map::SizeX(), .size_y = Map::SizeY(),
@@ -210,9 +210,9 @@ void PlaceTreesRandomly()
 	RethrowTreeGenerationAbort(openttd_rust_trees_place_randomly(TreeGenerateSettings(), &_tree_services, &GetRustSharedServices()));
 }
 
-void GenerateTrees()
+std::exception_ptr TakeTreeGenerationException() noexcept
 {
-	RethrowTreeGenerationAbort(openttd_rust_trees_generate(TreeGenerateSettings(), &_tree_services, &GetRustSharedServices()));
+	return std::exchange(_tree_generation_abort, nullptr);
 }
 
 CommandCost CmdPlantTree(DoCommandFlags flags, TileIndex tile, TileIndex start_tile, uint8_t tree_to_plant, bool diagonal)

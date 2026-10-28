@@ -109,7 +109,6 @@ pub struct GenerationServices {
     pub increase_progress: extern "C" fn(*mut Frame, Progress) -> bool,
     pub begin_loop: extern "C" fn(*mut Frame) -> *const Loop,
     pub end_loop: extern "C" fn(*mut Frame),
-    pub set_abort_callback: extern "C" fn(Option<extern "C" fn()>),
     pub tgp_settings: extern "C" fn() -> crate::tgp::Input,
     pub terrain_template: extern "C" fn(u32) -> Template,
     pub flat_height: extern "C" fn(u32) -> FlatHeight,
@@ -1369,6 +1368,6 @@ crate::abi::layouts! {
     "OpenTTDHeightmapImage" ["landscape"] => crate::landscape_generation::Image { width, height, data, };
     "OpenTTDHeightmapDecoder" ["landscape"] => crate::landscape_generation::Decoder { context, read, finish, };
     "OpenTTDLandscapeGenerationServices" ["landscape"] => crate::landscape_generation::GenerationServices {
-        shared, clear, water, trees, landscape_commands, water_commands, set_progress, increase_progress, begin_loop, end_loop, set_abort_callback, tgp_settings, terrain_template, flat_height, river, set_snow_line, not_reached, river_debug, assert_condition, sea_construct, sea_destroy, sea_insert, sea_contains, sea_size, sea_first, sea_next, set_height, inner_tile, make_void, screen_dirty, surrounded_by_water, set_freeform, clear_bridge_middle,
+        shared, clear, water, trees, landscape_commands, water_commands, set_progress, increase_progress, begin_loop, end_loop, tgp_settings, terrain_template, flat_height, river, set_snow_line, not_reached, river_debug, assert_condition, sea_construct, sea_destroy, sea_insert, sea_contains, sea_size, sea_first, sea_next, set_height, inner_tile, make_void, screen_dirty, surrounded_by_water, set_freeform, clear_bridge_middle,
     };
 }

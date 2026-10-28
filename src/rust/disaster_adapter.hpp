@@ -134,7 +134,7 @@ static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterCreate(int32_t x, int32_
 {
 	return DisasterHandle(new DisasterVehicle(x, y, static_cast<Direction>(direction), static_cast<DisasterSubType>(subtype), VehicleID{target}));
 }
-static const OpenTTDDisasterServices &DisasterServices() noexcept
+const OpenTTDDisasterServices &DisasterServices() noexcept
 {
 	static const OpenTTDDisasterServices services{
 		.shared = &GetRustSharedServices(),
