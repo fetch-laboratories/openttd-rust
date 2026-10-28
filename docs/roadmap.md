@@ -65,8 +65,10 @@ compatible rerun passed. The failed attempt remains incompatible and uncredited.
   repair an older road/rail boolean ABI defect and a shared house-fixture
   temporary lifetime. A rebuilt historical production crate reproduces the
   road defect; no recent integration rollback is justified. The
-  changed-input original coverage recomputation is running on a fixed checkout
-  containing #542/#544/#545.
+  changed-input original coverage run on fixed source containing #542/#544/#545
+  failed on two 600-second water-ferry snapshot timeouts; 259 of 449 cases
+  passed and 188 have no outcome. Final percentages are unavailable. Diagnose
+  the retained run before retrying.
 - #535's 14-case sanitizer subset compared equal in 607.7 seconds. A real-game
   positive control captured five original animation-shift keys in 121.3 seconds
   with no candidate-only report. Fixing review is complete; the full sanitizer
@@ -394,7 +396,7 @@ pinned zlib/lzma/Brotli runtime; incompatible historical reports stay uncredited
 | --- | --- | --- |
 | #509 and #529 | CI_ON_DEMAND is true; twenty-third integration complete. Windows/macOS semantic cadence passed; both issues are closed. | Retain the normal fifth-integration cadence and #156's actual limits. |
 | #275 | Twenty-second-tip profile passes all six comparisons/identities; P2016 projects 1.5246x. Loading/acceptance estimate about 1.065% is selected as one batch. | Implement the bounded pair; no PR speed check or new quiet collection. Next instruction profile is due after the twenty-fourth integration. |
-| #505/#503/#550 | Fixed-source soak passed 521 cases/8,396 snapshots; full sanitizer member and changed-input original coverage remain active. #552's four-export and house repairs pass focused evidence. | Read final reports, give #552 fresh fixing review and Full; skip overlapping deep launch. Preserve active checkouts. |
+| #505/#503/#550 | Fixed-source soak passed 521 cases/8,396 snapshots; full sanitizer member remains active. Changed-input coverage failed on two timeouts; no final percentages. #552's four-export and house repairs pass focused evidence. | Read final reports, give #552 fresh fixing review and Full; skip overlapping deep launch. Preserve active checkouts. |
 | #511 | Completed and closed: 31 detections, nine classified survivors, zero invalid/inconclusive; source/build restored. | Use #156's scoped findings; further samples are selective. |
 | #168/#199/#500 and #501 | #553 delivery/industry and bounded typing checks pass; necessary cost is accepted. | Give the final implementation head fresh fixing review and current-base Full. |
 | #546/#551 | #547 integrated after fixing review and exact-head Full; #546 is closed. Session lifecycle/pause implementation is assigned. | Judge its first concrete retirement/glue/tooling cost; preserve direct ownership and named exception frames. |
