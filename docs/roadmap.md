@@ -29,11 +29,11 @@ this roadmap over conflicting issues; it is the current state of umbrella issue
   Reviewed #534 repairs that fixture and the selected observation/helper gaps.
 - #535's 14-case sanitizer subset compared equal in 607.7 seconds. A real-game
   positive control captured five original animation-shift keys in 121.3 seconds
-  with no candidate-only report. A fresh review is running; the full sanitizer
+  with no candidate-only report. Fixing review is complete; the full sanitizer
   set's runtime remains unmeasured. #511 has 40 prepared mutants and a baseline
   build running, with no mutant outcomes yet.
-- Three component PRs remain: reviewed #534/#536 and sanitizer #535. The two
-  reviewed diffs are disjoint and will share one integration Full. Historical
+- Three component PRs remain: reviewed #534/#535/#536. Their changed files
+  are disjoint and they will share one integration Full. Historical
   duplicate checkouts and the pinned speed runtime remain for their evidence.
   #529 is reopened for its ten-job post-integration acceptance check; the first
   two dependency installs passed. Fourteen integrations since the previous
@@ -224,7 +224,7 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
     concrete gaps above; neither depends on the deferred owners.
 10. **#501 typing and remaining #168/#199/#500 debt, plus #537.** Carry
     annotations on touched #505/#527 tooling; #537 (testing-off candidate link)
-    joins the next maintenance batch. At the first stocktake after item 2 integrates,
+    joins the next maintenance batch. At the first stocktake after item 1 integrates,
     select the next concrete selector, observation or ID conversion slice from
     these trackers using measured cost or a source defect; do not launch a
     whole-fork sweep. Disaster conversion is complete.
@@ -259,15 +259,15 @@ Excluded, with return conditions checked by this review:
 ## Resume checkpoint
 
 Codex root resumed on 2026-10-28 and integrated #518 after exact-head Full.
-The reviewed observation and tile-loop changes are disjoint and selected for one
-integration PR. No confirmed code regression requires rollback. Fetch remote
+The reviewed observation, sanitizer and tile-loop changes are disjoint and
+selected for one integration PR. No confirmed code regression requires rollback. Fetch remote
 PR heads before resuming historical local task branches.
 
 | Item | Current state | Next action |
 | --- | --- | --- |
 | #529 follow-up | Retry integrated in #533; issue reopened with two successful post-integration Linux installs recorded. | Record the next eight qualifying Linux jobs, then close if acceptance holds. |
-| #156/#503 batch and #275/#312 | #534 at `6b1d906684` and #536 at `4092053251` are reviewed and ready. Root checked the reviews, fixing commits and disjoint changed-file sets. | Prepare one integration PR from current base, preserving both reviewed heads; request its exact-head Full. The statue fixture's pre-existing temporary invalid terrain remains on #156. |
-| #505 | #535 at `71cf31197d`: sandbox repair and real-game positive control passed. Root accepts 448 tooling lines as necessary; a fresh independent review is running. | Read its findings, spot-check any fixes, then prepare current-base Full when integration is available. |
+| #156/#503 batch, #505 and #275/#312 | #534 at `6b1d906684`, #535 at `1cd5475659` and #536 at `4092053251` are reviewed and ready. Root checked the reviews, fixing commits and pairwise disjoint changed-file sets. | Prepare one integration PR from current base, preserving all three reviewed heads; request its exact-head Full. The statue fixture's pre-existing temporary invalid terrain remains on #156. |
+| #505 | #535's fixing review repaired ccache-relative report paths and ASan source identity; root spot-checked the fixes. All targeted checks passed. Root accepts 551 tooling lines, including the bounded repairs and regression cases, as necessary. | Integrate with the selected batch, then read the first full sanitized deep run and decide its runtime budget. |
 | #511 | Forty town-growth mutants prepared; root's unmodified baseline build is running. No mutant has been compiled or tested. | Finish the build and six-scenario baseline, then execute and classify individual mutants, stopping between units for the quiet hold. |
 | Quiet pass | Anchors incompatible; retained pre-batch runtime is protected from cleanup. | After the bounded tile batch, profile the merged tip, prepare frozen inputs and collect before launching deep. Reuse previous-tip counts only with a matching identity. |
 | #527 | Source-driven clock boundary and evidence brief are on the issue; no implementation branch yet. | Start a fresh ownership agent from integrated base; preserve live callback ordering, native alias lifetimes and the named console exception relay. |
