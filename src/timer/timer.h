@@ -48,6 +48,9 @@ public:
 
 	TPeriod period; ///< The period of the timer.
 	TStorage storage = {}; ///< The storage of the timer.
+#ifdef WITH_RUST
+	[[no_unique_address]] std::conditional_t<IsRustGameClock<TTimerType>, RustClockBinding, RustEmptyClockBinding> clock_binding{};
+#endif
 
 protected:
 	virtual void Elapsed(TElapsed delta) = 0;

@@ -73,13 +73,11 @@ bool openttd_rust_calendar_elapsed(const OpenTTDClockServices *, OpenTTDConsoleE
 bool openttd_rust_economy_elapsed(const OpenTTDClockServices *, OpenTTDConsoleException *) noexcept;
 bool openttd_rust_calendar_valid(OpenTTDClockPeriod) noexcept;
 bool openttd_rust_economy_valid(OpenTTDEconomyClockPeriod) noexcept;
-void openttd_rust_calendar_register(const OpenTTDNativeClockTimer *, const OpenTTDClockPeriod *) noexcept;
-void openttd_rust_economy_register(const OpenTTDNativeClockTimer *, const OpenTTDEconomyClockPeriod *) noexcept;
+void openttd_rust_calendar_register(const OpenTTDNativeClockTimer *, const OpenTTDClockPeriod *, const RustClockBinding *) noexcept;
+void openttd_rust_economy_register(const OpenTTDNativeClockTimer *, const OpenTTDEconomyClockPeriod *, const RustClockBinding *) noexcept;
 void openttd_rust_calendar_unregister(const OpenTTDNativeClockTimer *, OpenTTDClockPeriod) noexcept;
 void openttd_rust_economy_unregister(const OpenTTDNativeClockTimer *, OpenTTDEconomyClockPeriod) noexcept;
-void openttd_rust_calendar_change(const OpenTTDNativeClockTimer *, OpenTTDClockPeriod *, OpenTTDClockPeriod, void (*)(bool) noexcept) noexcept;
-void openttd_rust_economy_change(const OpenTTDNativeClockTimer *, OpenTTDEconomyClockPeriod *, OpenTTDEconomyClockPeriod, void (*)(bool) noexcept) noexcept;
-void openttd_rust_calendar_bind(const OpenTTDNativeClockTimer *, OpenTTDClockPeriod, RustClockCallback, bool *) noexcept;
-void openttd_rust_economy_bind(const OpenTTDNativeClockTimer *, OpenTTDEconomyClockPeriod, RustClockCallback, bool *) noexcept;
+void openttd_rust_calendar_change(const OpenTTDNativeClockTimer *, OpenTTDClockPeriod *, const RustClockBinding *, OpenTTDClockPeriod, void (*)(bool) noexcept) noexcept;
+void openttd_rust_economy_change(const OpenTTDNativeClockTimer *, OpenTTDEconomyClockPeriod *, const RustClockBinding *, OpenTTDEconomyClockPeriod, void (*)(bool) noexcept) noexcept;
 }
 #endif

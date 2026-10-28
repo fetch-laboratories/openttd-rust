@@ -11,6 +11,11 @@
 #include <thread>
 #include <cstdio>
 
+// Clock probes use no script configuration; native settings own empty config pointers.
+class AIConfig {};
+class GameConfig {};
+ScriptConfigSettings::ScriptConfigSettings() = default;
+ScriptConfigSettings::~ScriptConfigSettings() = default;
 GameMode _game_mode = GM_NORMAL;
 GameSettings _settings_game{}, _settings_newgame{};
 #ifdef WITH_RUST
@@ -61,7 +66,7 @@ static void Subscriptions()
 	using Interval = IntervalTimer<C>;
 	std::vector<int> calls;
 	std::array<std::optional<Interval>, 3> ordered;
-	for (int i : {2, 1, 0}) ordered[i].emplace(C::TPeriod{C::MONTH, C::NONE}, [&, i](auto) { calls.push_back(i); });
+	for (int i : {2, 1, 0}) ordered[i].emplace(C::TPeriod{C::MONTH, C::NONE}, [&, i](auto) { calls.push_back(i); if (i == 2) ordered[i]->SetInterval({C::YEAR, C::NONE}); });
 	std::optional<Interval> added;
 	bool first = true;
 	Interval daily({C::DAY, C::NONE}, [&](auto) {
@@ -73,9 +78,10 @@ static void Subscriptions()
 		added.emplace(C::TPeriod{C::DAY, C::NONE}, [&](auto) { calls.push_back(8); });
 	});
 	CalendarEnd(); TimerManager<C>::Elapsed(1);
-	Check("snapshot-live-order", calls == std::vector<int>{9, 0, 2, 1});
+	Check("snapshot-live-order", calls == std::vector<int>{9, 0, 2, 1, 2});
+	TimerManager<C>::RegisterTimer(*added);
 	CalendarDay();
-	Check("added-next-snapshot", calls == std::vector<int>{9, 0, 2, 1, 8});
+	Check("added-next-snapshot", calls == std::vector<int>{9, 0, 2, 1, 2, 8});
 }
 static void Timeouts()
 {

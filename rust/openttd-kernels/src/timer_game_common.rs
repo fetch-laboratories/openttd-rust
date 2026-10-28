@@ -258,11 +258,16 @@ pub struct Callback {
     pub invoke: unsafe extern "C" fn(*const c_void, *mut ConsoleException) -> bool,
     pub context: *const c_void,
 }
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Binding {
+    pub callback: Callback,
+    pub fired: *mut bool,
+}
 #[derive(Clone, Copy)]
 pub(crate) struct Subscription {
     period: *const Period,
-    callback: Option<Callback>,
-    fired: *mut bool,
+    binding: *const Binding,
 }
 type Registry = BTreeMap<(u8, u8, usize), Subscription>;
 static CALENDAR: GameState<Registry> = GameState::new(BTreeMap::new());
@@ -283,16 +288,12 @@ unsafe fn register(
     registry: &GameState<Registry>,
     timer: *const NativeClockTimer,
     period: *const Period,
+    binding: *const Binding,
 ) {
     unsafe {
-        (&mut *registry.get()).insert(
-            key(timer, period.read()),
-            Subscription {
-                period,
-                callback: None,
-                fired: std::ptr::null_mut(),
-            },
-        );
+        (&mut *registry.get())
+            .entry(key(timer, period.read()))
+            .or_insert(Subscription { period, binding });
     }
 }
 unsafe fn unregister(
@@ -304,73 +305,61 @@ unsafe fn unregister(
         (&mut *registry.get()).remove(&key(timer, period));
     }
 }
-unsafe fn bind(
-    registry: &GameState<Registry>,
-    timer: *const NativeClockTimer,
-    period: Period,
-    callback: Callback,
-    fired: *mut bool,
-) {
-    let entry = unsafe {
-        (&mut *registry.get())
-            .get_mut(&key(timer, period))
-            .unwrap_unchecked()
-    };
-    entry.callback = Some(callback);
-    entry.fired = fired;
-}
 unsafe fn change(
     registry: &GameState<Registry>,
     timer: *const NativeClockTimer,
     period: *mut Period,
+    binding: *const Binding,
     new_period: Period,
     assert_valid: extern "C" fn(bool),
 ) {
-    let entry = unsafe {
-        (&mut *registry.get())
-            .remove(&key(timer, period.read()))
-            .unwrap_unchecked()
-    };
     unsafe {
+        unregister(registry, timer, period.read());
         period.write(new_period);
     }
     assert_valid(valid(registry, new_period));
     unsafe {
-        (&mut *registry.get()).insert(key(timer, new_period), entry);
+        register(registry, timer, period, binding);
     }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_calendar_change(
     timer: *const NativeClockTimer,
     period: *mut Period,
+    binding: *const Binding,
     new_period: Period,
     assert_valid: extern "C" fn(bool),
 ) {
     unsafe {
-        change(&CALENDAR, timer, period, new_period, assert_valid);
+        change(&CALENDAR, timer, period, binding, new_period, assert_valid);
     }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_economy_change(
     timer: *const NativeClockTimer,
     period: *mut Period,
+    binding: *const Binding,
     new_period: Period,
     assert_valid: extern "C" fn(bool),
 ) {
     unsafe {
-        change(&ECONOMY, timer, period, new_period, assert_valid);
+        change(&ECONOMY, timer, period, binding, new_period, assert_valid);
     }
 }
 macro_rules! registry_entries {
-    ($registry:ident, $valid:ident, $register:ident, $unregister:ident, $bind:ident) => {
+    ($registry:ident, $valid:ident, $register:ident, $unregister:ident) => {
         #[unsafe(no_mangle)]
         pub extern "C" fn $valid(period: Period) -> bool {
             valid(&$registry, period)
         }
         #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $register(timer: *const NativeClockTimer, period: *const Period) {
+        pub unsafe extern "C" fn $register(
+            timer: *const NativeClockTimer,
+            period: *const Period,
+            binding: *const Binding,
+        ) {
             unsafe {
-                register(&$registry, timer, period);
+                register(&$registry, timer, period, binding);
             }
         }
         #[unsafe(no_mangle)]
@@ -379,32 +368,19 @@ macro_rules! registry_entries {
                 unregister(&$registry, timer, period);
             }
         }
-        #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $bind(
-            timer: *const NativeClockTimer,
-            period: Period,
-            callback: Callback,
-            fired: *mut bool,
-        ) {
-            unsafe {
-                bind(&$registry, timer, period, callback, fired);
-            }
-        }
     };
 }
 registry_entries!(
     CALENDAR,
     openttd_rust_calendar_valid,
     openttd_rust_calendar_register,
-    openttd_rust_calendar_unregister,
-    openttd_rust_calendar_bind
+    openttd_rust_calendar_unregister
 );
 registry_entries!(
     ECONOMY,
     openttd_rust_economy_valid,
     openttd_rust_economy_register,
-    openttd_rust_economy_unregister,
-    openttd_rust_economy_bind
+    openttd_rust_economy_unregister
 );
 pub(crate) fn calendar_snapshot() -> Vec<Subscription> {
     unsafe { (&*CALENDAR.get()).values().copied().collect() }
@@ -418,20 +394,21 @@ pub(crate) unsafe fn dispatch(
     exception: *mut ConsoleException,
 ) -> bool {
     for timer in timers {
-        if !timer.fired.is_null() && unsafe { timer.fired.read() } {
+        let fired = unsafe { std::ptr::addr_of!((*timer.binding).fired).read() };
+        if !fired.is_null() && unsafe { fired.read() } {
             continue;
         }
         if unsafe { timer.period.read().trigger } != trigger {
             continue;
         }
-        // Derived callback members are bound only after BaseTimer's registration finishes.
-        let callback = unsafe { timer.callback.unwrap_unchecked() };
+        // BaseTimer registers before derived construction binds the opaque closure.
+        let callback = unsafe { std::ptr::addr_of!((*timer.binding).callback).read() };
         if !unsafe { (callback.invoke)(callback.context, exception) } {
             return false;
         }
-        if !timer.fired.is_null() {
+        if !fired.is_null() {
             unsafe {
-                timer.fired.write(true);
+                fired.write(true);
             }
         }
     }
@@ -557,5 +534,6 @@ crate::abi::layouts! {
     "OpenTTDClockPeriod" ["clocks"] => Period { trigger, priority };
     "OpenTTDEconomyClockPeriod" ["clocks"] => Period { trigger, priority };
     "RustClockCallback" ["clocks"] => Callback { invoke, context };
+    "RustClockBinding" ["clocks"] => Binding { callback, fired };
     "OpenTTDClockServices" ["clocks"] => ClockServices { shared, game_mode, minutes_per_calendar_year, using_wallclock_units, vehicle_id, vehicle_shift_dates, next_graph, graph_owner };
 }

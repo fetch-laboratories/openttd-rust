@@ -12,6 +12,11 @@ struct RustClockCallback {
 	bool (*invoke)(const void *, void *) noexcept;
 	const void *context;
 };
+struct RustClockBinding {
+	RustClockCallback callback{};
+	bool *fired = nullptr;
+};
+struct RustEmptyClockBinding {};
 void RustClockRegister(BaseTimer<TimerGameCalendar> &timer) noexcept;
 void RustClockRegister(BaseTimer<TimerGameEconomy> &timer) noexcept;
 void RustClockUnregister(BaseTimer<TimerGameCalendar> &timer) noexcept;
