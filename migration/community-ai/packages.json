@@ -41,6 +41,18 @@
     "license": "GPL-2.0-or-later"
   },
   {
+    "name": "ShipAI",
+    "version": "11",
+    "publisher": "https://www.tt-forums.net/viewtopic.php?f=65&t=75531",
+    "kind": "ai",
+    "uid": "53484950",
+    "md5": "9a15ec3277536016a7fcc08cfd0a21ae",
+    "sha256": "db8c17a6fafe8bf4536936b699763afb1dd9c9a64d73e81603d73b81101a3407",
+    "dependencies": [],
+    "metadata": "https://github.com/OpenTTD/BaNaNaS/blob/75a904f4fe1e7bc8cde4c272462fcbaae181e836/ai/53484950/versions/20261025T175108Z.yaml",
+    "license": "GPL-2.0-only"
+  },
+  {
     "name": "Pathfinder.Rail",
     "version": "1",
     "publisher": "",

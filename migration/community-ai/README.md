@@ -32,26 +32,32 @@ sources, GPLv2 license texts and all packaged notices. No source offer is made.
 | [Graph.AyStar](https://github.com/OpenTTD/BaNaNaS/blob/75a904f4fe1e7bc8cde4c272462fcbaae181e836/ai-library/4752412a/versions/20090117T163452Z.yaml) | 4 | GPL-2.0-only | `e84be4afae4953b48318b31137208fff4a9948afbb5efb32ca5e8ab2df0eadc7` |
 | [Graph.AyStar](https://github.com/OpenTTD/BaNaNaS/blob/75a904f4fe1e7bc8cde4c272462fcbaae181e836/ai-library/4752412a/versions/20090605T220117Z.yaml) | 6 | GPL-2.0-only | `0482bc32839e28210a6a371097b826cd59923b9db246922de9096051b07d4efd` |
 | [Queue.BinaryHeap](https://github.com/OpenTTD/BaNaNaS/blob/75a904f4fe1e7bc8cde4c272462fcbaae181e836/ai-library/51554248/versions/20090117T163656Z.yaml) | 1 | GPL-2.0-only | `474461d9cea10b41f9e62945d2482b266dfa91ea70b5f41d8654e513e7331e3d` |
+| [ShipAI](https://github.com/OpenTTD/BaNaNaS/blob/75a904f4fe1e7bc8cde4c272462fcbaae181e836/ai/53484950/versions/20261025T175108Z.yaml) | 11 | GPL-2.0-only | `db8c17a6fafe8bf4536936b699763afb1dd9c9a64d73e81603d73b81101a3407` |
 
 SimpleAI is Brumi's GPLv2 script; its readme states version 2, and its Terraform
 helper retains krinn's GPLv2-or-later notice. AdmiralAI retains Thijs Marinussen's
 GPLv2-or-later notices. trAIns retains Luis Henrique O. Rios's GPLv2-or-later
-notices. The six library packages retain the OpenTTD NoAI Developers Team's
-authorship in `library.nut` and their GPLv2 license text. All nine archives contain
+notices. ShipAI retains mmuszkow's authorship and its GPLv2 license text. The six
+library packages retain the OpenTTD NoAI Developers Team's authorship in `library.nut` and their GPLv2 license text. All ten archives contain
 only source and text files; no source build or additional binary asset is needed.
 
 SimpleAI imports Pathfinder.Road 4 and Pathfinder.Rail 1, which import
 Graph.AyStar 6 and 4 respectively. Both AyStar versions import Queue.BinaryHeap 1.
-AdmiralAI imports Queue.FibonacciHeap 2. trAIns has no external library import.
+AdmiralAI imports Queue.FibonacciHeap 2. trAIns and ShipAI have no external
+library imports.
 The installed set contains exactly those versions. The releases declare API
-versions 1.2, 1.0 and 1.0 respectively; OpenTTD's compatibility scripts remain
+versions 1.2, 1.0, 1.0 and 1.2 respectively; OpenTTD's compatibility scripts remain
 part of each normal runtime. trAIns' upload version is 2.1, while its `GetVersion`
 returns 2 and its `CanLoadFromVersion` returns false. Loading a saved trAIns
 company therefore restarts that AI as the original does; the other AIs use their
-own Save/Load implementations. The save compares their opaque AIPL data too.
+own Save/Load implementations. The save compares their opaque AIPL data too. AdmiralAI uses its supported
+`use_trains=0` setting: its unmodified rail builder asserted during original-only
+arctic generation. SimpleAI and trAIns retain rail operation; their original
+sources and the pinned game are unchanged. The fixed ordering occupies AI
+company IDs 0 through 3 in null-driver generated games.
 
 The module registers one default generated case (two years, seed 507, temperate,
-256x256, three community AIs) and one short fixed-save reload. With `--soak`,
+256x256, four community AIs) and one short fixed-save reload. With `--soak`,
 the generated games run ten years in temperate and arctic, and the fixed-save
 reload runs two years. Years budget 366 days, covering leap days. Both ordinary
 and snapshot modes compare every semantic checkpoint and end state through the
@@ -73,7 +79,7 @@ python3 tools/migration.py simulate community-ai --soak --jobs 2
 ```
 
 Generate the vanilla 256x256 arctic fixed save using only the unchanged pinned
-original, after twenty years of play by these three AIs:
+original, after twenty years of play by these four AIs:
 
 ```sh
 python3 tools/migration.py build --jobs 2

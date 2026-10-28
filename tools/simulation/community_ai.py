@@ -19,7 +19,7 @@ from . import core
 INPUTS = core.ROOT / "migration/community-ai"
 FIXTURE = core.ROOT / "migration/saves/community-arctic-1970.sav"
 YEAR = 366 * core.TICKS_PER_DAY
-SCRIPTS = ("SimpleAI", "AdmiralAI", "trAIns")
+SCRIPTS = ("SimpleAI", "AdmiralAI", "trAIns", "ShipAI")
 
 
 @dataclass(frozen=True)
@@ -130,7 +130,13 @@ def generated(climate: str, years: int) -> Scenario:
         map_log2=8,
         land_generator=1,
         ticks=years * YEAR,
-        console=[*(f"start_ai {name}" for name in SCRIPTS), "unpause"],
+        console=[
+            *(
+                f"start_ai {name}" + (" use_trains=0" if name == "AdmiralAI" else "")
+                for name in SCRIPTS
+            ),
+            "unpause",
+        ],
         settings={
             "game_creation": {"landscape": climate, "starting_year": 1950},
             "difficulty": {"terrain_type": 1, "quantity_sea_lakes": 0},
@@ -203,12 +209,12 @@ def activity(run: Run, source: Path | None = None) -> Activity:
     snapshots = ([source] if source else []) + run["snapshots"]
     for path in snapshots:
         companies = core.rows(path, "PLYR")
-        for cid in range(1, 4):
+        for cid in range(len(SCRIPTS)):
             company = companies.get(cid)
             if company is None or not company["is_ai"]:
                 raise RuntimeError(f"community AI {cid} missing from {path.name}")
             reader = core.Reader(dict(core.read_save(path)["AIPL"]["elements"])[cid])
-            if reader.take(reader.gamma()).decode() != SCRIPTS[cid - 1]:
+            if reader.take(reader.gamma()).decode() != SCRIPTS[cid]:
                 raise RuntimeError(f"community AI {cid} was replaced")
             observed.loans.setdefault(cid, []).append(company["current_loan"])
             observed.bankruptcy_months[cid] = max(
@@ -229,7 +235,7 @@ def activity(run: Run, source: Path | None = None) -> Activity:
             kind = ("train", "roadveh", "ship", "aircraft")[vehicle["type"]]
             prefix = f"{kind}[0]/common[0]/"
             owner = vehicle[prefix + "owner"]
-            if owner in range(1, 4):
+            if owner in range(len(SCRIPTS)):
                 counts[f"{owner}:{kind}"] += 1
                 poses.setdefault(vid, set()).add(
                     (vehicle[prefix + "x_pos"], vehicle[prefix + "y_pos"])
@@ -242,6 +248,28 @@ def activity(run: Run, source: Path | None = None) -> Activity:
         cid: sorted(set(values)) for cid, values in observed.loans.items()
     }
     return observed
+
+
+@dataclass(frozen=True)
+class CommandTrace:
+    sha256: str
+    successful: dict[str, int]
+
+
+def command_trace(run_dir: Path) -> CommandTrace:
+    digest = hashlib.sha256()
+    counts: Counter[str] = Counter()
+    timestamp = re.compile(r"^\[[^\]]*\] ")
+    command = re.compile(
+        r"^cmd: [0-9a-f]{8}; [0-9a-f]{2}; ([0-9a-f]{2}); .*\((Cmd\w+)\)$"
+    )
+    with (run_dir / "save/autosave/commands-out.log").open() as stream:
+        for line in stream:
+            normalized = timestamp.sub("", line).replace(str(run_dir), "<run>")
+            digest.update(normalized.encode())
+            if match := command.match(normalized):
+                counts[f"{match[1]}:{match[2]}"] += 1
+    return CommandTrace(digest.hexdigest(), dict(counts))
 
 
 def check(
@@ -257,29 +285,23 @@ def check(
         raise RuntimeError("community game did not finish")
     if any("died unexpectedly" in line or "[S]" in line for line in run["log"]):
         raise RuntimeError("community script failed")
-    commands = (run["dir"] / "save/autosave/commands-out.log").read_text()
-    commands = re.sub(r"(?m)^\[[^\]]*\] ", "", commands).replace(
-        str(run["dir"]), "<run>"
-    )
+    trace = command_trace(run["dir"])
     key = f"{mode}_community_commands"
-    digest = hashlib.sha256(commands.encode()).hexdigest()
     if role == "reference":
-        result[key] = digest
-    elif result[key] != digest:
+        result[key] = trace.sha256
+    elif result[key] != trace.sha256:
         raise RuntimeError("complete community command/debug logs differ")
     observed = activity(
         run, Path(scenario["save"]) if scenario["kind"] == "save" else None
     )
-    executed = re.findall(r"^cmd: .*?; ([0-9a-f]{2}); .*\((Cmd\w+)\)$", commands, re.M)
-    observed.commands = dict(Counter(f"{cid}:{name}" for cid, name in executed))
-    for cid in range(1, 4):
+    observed.commands = trace.successful
+    for cid in range(len(SCRIPTS)):
         if observed.income[cid] <= 0 or observed.delivered[cid] <= 0:
             raise RuntimeError(
                 f"community AI {cid} has no transport revenue/deliveries"
             )
         if scenario["kind"] == "generate" and not any(
-            owner == f"{cid:02x}" and name.startswith("CmdBuild")
-            for owner, name in executed
+            name.startswith(f"{cid:02x}:CmdBuild") for name in trace.successful
         ):
             raise RuntimeError(f"community AI {cid} did not construct anything")
     if (mode == "snapshots" or scenario["kind"] == "save") and not observed.moved:
