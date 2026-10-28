@@ -143,6 +143,32 @@ static void ExpireEffect(EffectVehicle *v)
 	CHECK_FALSE(v->Tick());
 }
 
+TEST_CASE("Effect vehicles - first sprite mutation and sequence replacement")
+{
+	MockEnvironment::Instance();
+	Map::Allocate(64, 64);
+	ResetVehicleHash();
+	auto *v = CreateEffectVehicle(40, 50, 60, EV_BREAKDOWN_SMOKE);
+	REQUIRE(v != nullptr);
+	v->SetAnimationState(3);
+	auto &sequence = v->sprite_cache.sprite_seq;
+	sequence.count = 2;
+	sequence.seq[0] = {3738, 17};
+	sequence.seq[1] = {3740, 19};
+	v->progress = 7;
+	REQUIRE(v->Tick());
+	CHECK(sequence.seq[0].sprite == 3739);
+	CHECK(sequence.count == 2);
+	CHECK(sequence.seq[0].pal == 17);
+	sequence.seq[0].sprite = 3740;
+	v->progress = 15;
+	REQUIRE(v->Tick());
+	CHECK(sequence.seq[0].sprite == 3737);
+	CHECK(sequence.count == 1);
+	CHECK(sequence.seq[0].pal == 0);
+	ExpireEffect(v);
+}
+
 TEST_CASE("Effect vehicles - all factory variants and relative terrain coordinates")
 {
 	MockEnvironment::Instance();
