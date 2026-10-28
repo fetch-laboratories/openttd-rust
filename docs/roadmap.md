@@ -266,11 +266,11 @@ reviewer commit is ahead of its implementation checkout.
 
 | Item | Current state | Next action |
 | --- | --- | --- |
-| #528-#532 | Docs rules pushed; #528 and #532 on agent branches; #531 `ci.py` and #529 on root's branch. | Batch into one maintenance PR, fresh reviewer, Full; close each issue on integration. |
+| #528-#532 | #530 closed; #528, #529, #531 and #532 in draft PR #533; gpt-6.1-sol review running; `/root/issue528-rpath-precedence` checks whether #528's DT_RPATH overrides harness `LD_LIBRARY_PATH` runtimes. | Apply review and RPATH findings, update base, Full, merge; close the issues. Then update #518 from base so its Full gets the apt retry. |
 | #518 | Reviewed; final Full failed on package installation. | Update base, apply ordinary conflict-review rule, request exact-head Full. Preserve final report through integration. |
-| #156/#503 batch | `testing/deep503-town-commands` has diagnosis, no implementation. | Repair terrain and the selected observation/helper/type items; one fixing review and Full. |
-| #525/#526 | Draft; source-distribution finding remains. | Fetch reviewer head, research/package matching sources or replace fixtures within scope; review changed scope and validate. |
-| #275/#312 | `maintenance/speed275-tile-loop` has unvalidated tree checkpoint. | Touched semantic/Cargo/native checks, draft and review; speed measured after integration. |
+| #156/#503 batch | `/root/issue503-156-fixture-batch` (Opus) implementing on `testing/deep503-town-commands`. | Fresh review and one Full when its draft PR is ready. |
+| #525/#526 | `/root/issue525-526-newgrf-corpus` (Opus) resolving the source-distribution finding from the reviewer head. | Fresh review of the changed scope, then Full. |
+| #275/#312 | `/root/issue275-312-tile-loop` (Opus) validating the tree checkpoint into a draft PR. | Review; speed measured after integration. |
 | #505 | `testing/sanitizers505-opus` is partial and unvalidated. | Continue harness/report/suppression/deep integration from its issue status, then sanitized subset. The earlier Sonnet sketch is provenance, not reviewed implementation. |
 | Quiet pass | Existing anchors incompatible. | After bounded tile batch, before a new deep launch when both are due; prepare dependencies before the hold. |
 | #527 | Issue selected, no branch. | Start from integrated base when a slot and rank permit; assess first concrete ownership boundary. |
