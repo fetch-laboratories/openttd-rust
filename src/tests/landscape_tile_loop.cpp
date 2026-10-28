@@ -15,6 +15,7 @@
 #include "../rust/landscape_generation_ffi.h"
 #include "../rust/world_generation_ffi.h"
 #include "../rust/session_ffi.h"
+#include "../core/backup_type.hpp"
 #include <thread>
 #include "../rust/generation_sea_set.hpp"
 #include "abi_layout.hpp"
@@ -198,10 +199,10 @@ TEST_CASE("Rust world generation shares native lvalues across serialized threads
 static int world_callback_value;
 TEST_CASE("Rust world generation replaces transient callbacks before invoking them")
 {
+	AutoRestoreBackup<GameMode> mode(_game_mode, GM_EDITOR);
+	AutoRestoreBackup<SwitchMode> switching(_switch_mode, SM_NONE);
 	OpenTTDWorldServices services{
-		.game_mode = []() noexcept { return GM_EDITOR; },
-		.callback = [](OpenTTDWorldFrame *, GWDoneProc *proc) noexcept { proc(); return true; },
-		.abort_mode = [](SwitchMode mode) noexcept { CHECK(mode == SM_EDITOR); },
+		.callback = [](OpenTTDWorldFrame *, GWDoneProc *proc) noexcept { CHECK(_switch_mode == SM_EDITOR); proc(); return true; },
 	};
 	world_callback_value = 0;
 	openttd_rust_world_set_abort_callback([] { world_callback_value = 1; });
@@ -211,5 +212,6 @@ TEST_CASE("Rust world generation replaces transient callbacks before invoking th
 	openttd_rust_world_set_abort_callback(nullptr);
 	CHECK(openttd_rust_world_handle_abort(&services, nullptr));
 	CHECK(world_callback_value == 2);
+	CHECK(_switch_mode == SM_EDITOR);
 }
 #endif
