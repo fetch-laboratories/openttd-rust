@@ -95,6 +95,10 @@ Watch for the patterns root has repeated before:
 - **Finite prompts**: the last prompt ended because its listed items ran out.
 - **Artificial hurdles**: a gate, budget or ordering that parks work without
   catching defects, including deferrals that wait on each other.
+- **Shell workarounds**: subagent commands prefixed with `cd <worktree> &&`,
+  hand-made worktrees for implementation agents, blocked `sleep`, polling
+  loops, `timeout N bash -c 'sleep'`, or hand-written environment prefixes.
+  Each repeat means a spawn, brief or tool is missing a permanent fix.
 - **Passed over**: an issue with no place in the roadmap, a component excluded
   without an issue, or an exclusion with no condition that brings it back,
   copied forward review after review. Finished work left open counts too.
@@ -115,7 +119,10 @@ provider default and does not require switching model families. Independence
 comes from fresh audit agents comparing the source themselves, rather than
 relying on root's review conclusions. Launch these in one message as background
 subagents. They read and measure, and leave root's worktrees, branches, profiles
-and `.local/` output as they found them.
+and `.local/` output as they found them. A long measurement runs in the
+background and the agent ends its turn rather than sleeping (AGENTS.md); an
+agent that changes code is spawned with T3 worktree isolation, not briefed to
+`cd` into a hand-made worktree.
 
 - **Fidelity**: one per large port integrated since the last steering, or
   about to integrate. Pick the largest by retired lines first, up to four.

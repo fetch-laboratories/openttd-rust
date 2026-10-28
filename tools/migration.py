@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import platform
+import shlex
 import shutil
 import subprocess
 import sys
@@ -46,16 +47,21 @@ SCENARIO_COVERAGE_PREFIX: ContextVar[str | None] = ContextVar(
 )
 
 
+def bootstrapped(name: str) -> Path:
+    """Bootstrapped toolchains/dependencies live in the main checkout; worktrees
+    use them directly instead of needing per-worktree symlinks."""
+    return LOCAL / name if (LOCAL / name).exists() else COMMON_LOCAL / name
+
+
+def deps_libraries() -> Path:
+    return bootstrapped("deps") / "usr/lib/x86_64-linux-gnu"
+
+
 def environment():
     env = os.environ.copy()
 
     def prepend(name, value):
         env[name] = str(value) + (os.pathsep + env[name] if env.get(name) else "")
-
-    # Bootstrapped toolchains/dependencies live in the main checkout; worktrees
-    # use them directly instead of needing per-worktree symlinks.
-    def bootstrapped(name):
-        return LOCAL / name if (LOCAL / name).exists() else COMMON_LOCAL / name
 
     if (bootstrapped("cargo") / "bin").exists():
         env["CARGO_HOME"] = str(bootstrapped("cargo"))
@@ -64,7 +70,7 @@ def environment():
     deps = bootstrapped("deps")
     if deps.exists():
         prepend("PATH", deps / "usr/bin")
-        prepend("LD_LIBRARY_PATH", deps / "usr/lib/x86_64-linux-gnu")
+        prepend("LD_LIBRARY_PATH", deps_libraries())
         prepend("CMAKE_PREFIX_PATH", deps / "usr")
         prepend("CMAKE_INCLUDE_PATH", deps / "usr/include")
         prepend("CPATH", deps / "usr/include")
@@ -73,6 +79,29 @@ def environment():
     if (prefix := SCENARIO_COVERAGE_PREFIX.get()) is not None:
         env["OPENTTD_COVERAGE_PREFIX"] = prefix
     return env
+
+
+def shell_exports() -> str:
+    """Shell exports for each variable environment() sets or changes."""
+    env = environment()
+    return "".join(
+        f"export {name}={shlex.quote(value)}\n"
+        for name, value in sorted(env.items())
+        if os.environ.get(name) != value
+    )
+
+
+def deps_build_options() -> list[str]:
+    """Let bare host binaries and CTest load the bootstrapped libraries.
+
+    DT_RPATH rather than DT_RUNPATH, because only DT_RPATH also serves the
+    libraries' own dependencies (libicuuc.so needs libicudata.so)."""
+    if not bootstrapped("deps").exists():
+        return []
+    return [
+        f"-DCMAKE_BUILD_RPATH={deps_libraries()}",
+        "-DCMAKE_EXE_LINKER_FLAGS=-Wl,--disable-new-dtags",
+    ]
 
 
 def rust_configuration(build: Path):
@@ -371,6 +400,7 @@ def main():
             "coverage",
             "rust-checks",
             "deep",
+            "env",
         ),
         nargs="?",
         default="verify",
@@ -401,6 +431,9 @@ def main():
         parser.error("--no-ccache conflicts with --ccache/--ccache-bypass")
     if args.jobs < 1:
         parser.error("--jobs must be positive")
+    if args.action == "env":
+        print(shell_exports(), end="")
+        return
     if args.action == "deep":
         from deep import run_deep
 
@@ -575,6 +608,7 @@ def main():
                     else [
                         "-DBINARY_NAME=openttd-rust",
                         "-DOPTION_RUST=ON",
+                        *deps_build_options(),
                     ]
                 )
                 if args.action == "tools":

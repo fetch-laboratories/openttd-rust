@@ -16,6 +16,8 @@ PROFILES = ("rust", "native", "platform", "full")
 WORKFLOW = "ci-request.yml"
 PROTECTED_REF = "rust-migration"
 CONTEXT = "Full validation"
+# Under the agent shell's 10-minute command cap, so a foreground wait returns.
+WAIT_TIMEOUT = 540
 
 
 def gh(*args: str) -> str:
@@ -225,6 +227,10 @@ def verify_completion(record: dict, run: dict) -> None:
         )
 
 
+class WaitTimeout(Exception):
+    """The run is still going when the wait ends; resuming is not a failure."""
+
+
 def wait(path: Path, timeout: int, interval: int) -> None:
     deadline = time.monotonic() + timeout
     previous = None
@@ -241,8 +247,9 @@ def wait(path: Path, timeout: int, interval: int) -> None:
             print(f"{record['profile']} CI passed for {record['head']}")
             return
         if time.monotonic() >= deadline:
-            raise ValueError(
-                f"Timed out waiting for CI; resume with: python3 tools/ci.py wait {path}"
+            raise WaitTimeout(
+                f"CI still running after {timeout} seconds; "
+                f"resume with: python3 tools/ci.py wait {path}"
             )
         time.sleep(min(interval, max(0, deadline - time.monotonic())))
 
@@ -269,14 +276,14 @@ def main() -> int:
     for command in ("status", "wait"):
         check = commands.add_parser(command)
         check.add_argument("request_file", type=Path)
-        check.add_argument("--timeout", type=int, default=3600)
+        check.add_argument("--timeout", type=int, default=WAIT_TIMEOUT)
         check.add_argument("--interval", type=int, default=15)
     args = parser.parse_args()
     try:
         if args.command == "request":
             path = request(args)
             if args.wait:
-                wait(path, 3600, 15)
+                wait(path, WAIT_TIMEOUT, 15)
         elif args.command == "wait":
             if args.timeout <= 0 or args.interval <= 0:
                 raise ValueError("Timeout and interval must be positive")
@@ -289,6 +296,9 @@ def main() -> int:
             if run and run["status"] == "completed":
                 verify_completion(record, run)
         return 0
+    except WaitTimeout as timeout:
+        print(timeout)
+        return 2
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         print(f"CI request failed: {error}", file=sys.stderr)
         if isinstance(error, subprocess.CalledProcessError) and error.stderr:

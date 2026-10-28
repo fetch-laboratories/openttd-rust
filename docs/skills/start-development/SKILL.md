@@ -19,8 +19,9 @@ docs/design/world-state.md. The roadmap's latest steering review section holds
 the user's current corrections. Apply them first. Then run
 `python3 docs/skills/steer/issues.py` and give every unplaced issue a place in
 the roadmap (AGENTS.md: every open issue has one), including issues the user
-opened while you were stopped. Then resume from the roadmap's checkpoint and
-work order.
+opened while you were stopped. Run `python3 tools/housekeeping.py`, read its
+dry run, and rerun it with `--apply` to remove stale worktrees and output.
+Then resume from the roadmap's checkpoint and work order.
 
 ## Work loop (repeat indefinitely)
 
@@ -29,12 +30,17 @@ work order.
    ports, maintenance, testing and housekeeping together; start a new branch
    only while fewer than six are unintegrated. Keep about five subagents busy within that limit,
    with a fresh agent per task and review round. Close each agent when it
-   finishes. At the slot limit, do root work until a slot frees.
+   finishes. At the slot limit, do root work until a slot frees. In Claude
+   Code, spawn code-touching agents with T3 `delegate_task` and
+   `isolation: "worktree"`; T3 binds their shell to the worktree and removes
+   it when their PR closes. Every brief with a long job (build, simulation,
+   coverage, CI wait) says to launch it in the background and end the turn,
+   never to sleep or poll; root waits on its own jobs the same way.
 2. Follow the full process for every change: issue (or a checklist item on a
    batch's tracking issue), isolated worktree, PR, independent attributed
    review naming what was compared, in which the reviewer fixes its findings
    and you spot-check its fix commits, green required CI, integration and
-   worktree removal. Commit roadmap updates when you take stock (step 4) or
+   cleanup (`python3 tools/housekeeping.py`, then `--apply`). Commit roadmap updates when you take stock (step 4) or
    change the work order, not after every integration; PR and issue state
    carry the rest. Update from base when preparing final Full or resolving a
    blocking conflict; batch ready work when it avoids repeated validation.
