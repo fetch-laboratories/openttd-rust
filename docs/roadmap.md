@@ -51,10 +51,10 @@ under these anchors are unavailable. The compatible pre-batch report is retained
 - #534/#535/#536 integrated in #538 and platform tooling #540 integrated after
   exact-head Full. Three drafts remain: #539 clock ownership, #541 effect
   maintenance and #542 threaded/TSan evidence. #539's fixing review removed
-  orphan Gregorian facades; affected validation remains. #541 is reviewed and
-  locally validated. #542's native pairs/repetitions and runtime TLS mutation
+  orphan Gregorian facades and passed affected validation. #541 is reviewed
+  and locally validated. #542's native pairs/repetitions and runtime TLS mutation
   passed; game TSan and review remain. The next maintenance integration also
-  records the six measured anchors.
+  combines both disjoint reviewed components and records the six anchors in #543.
 - #529 has seven successful dependency installs recorded toward ten, with the
   next Full install ready to record. The fifteenth-integration platform cadence
   passed. #509 stays open until the new semantic subset passes on Windows/macOS
@@ -304,8 +304,8 @@ until the validated anchor replacement lands.
 | #275 | Quiet pass completed all 144 games with six compatible identities; P2016 measured 1.5229x. | Land all six anchors, obtain matching original function evidence and select net-cost repairs. |
 | #505/#503 | The repaired-fixture normal soak and full sanitized deep member are running on integrated #540. Full sanitizer runtime remains unmeasured. | Read reports before further integration once finished; classify original versus candidate-only faults and measure cost. |
 | #511 | Completed and closed: 31 detections, nine classified survivors, zero invalid/inconclusive; source/build restored. | Use #156's scoped findings; further samples are selective. |
-| #527 | #539's fixing review removed unused Gregorian facades at ff5f35ec4a; affected clocks validation is running. | Spot-check fixes, finish review evidence, update from base for final Full. |
-| #537/#168 | #541 at eb9f652a96 passes local checks and independent review. Root accepts its bounded cost. | Include ready work and measured anchors in one current-base maintenance Full. |
+| #527 | #539's finding is fixed at ff5f35ec4a, affected validation passed and root checked the fix. | Combined with disjoint #541 and measured anchors in #543 for one current-base Full. |
+| #537/#168 | #541 at eb9f652a96 passes local checks and review; root accepted its bounded cost. | Integration #543 combines it with reviewed #539 and anchors; Full pending. |
 | #506 | #542's 24 native games pass; its TLS mutant fails threaded queries while null cases pass. Source restored; ordinary build needs restoration before reuse. | Collect/triage real game TSan reports after rebuilding; review and Full remain. |
 | #525/#526 | Parked by the user; draft #525 closed at ccc28e2ed0. | None until user reselects it. |
 Selection: root; planning agents use gpt-6-astra, high. The start-development
