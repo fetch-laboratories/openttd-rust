@@ -158,6 +158,8 @@ def prepare(
     if "clocks" not in scenario:
         return scenario
     folder = out / scenario["name"] / "input"
+    normalized, _ = core.normalize(Path(scenario["save"]), folder / "source")
+    scenario = {**scenario, "save": str(normalized)}
     native_probes(folder / "native", env)
     executables = prepared_console("clocks", adapter, binaries, builds, folder, env)
     saves = {role: folder / role / "fractions.sav" for role in executables}

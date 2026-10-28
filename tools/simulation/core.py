@@ -117,7 +117,6 @@ def scenario_modules():
         economy,
         clocks,
         roads,
-        clocks,
         companies,
         stations,
         industries,
