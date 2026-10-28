@@ -1753,10 +1753,11 @@ impl Game<'_> {
             crate::ground_vehicle::last_speed_owned(self.gs.physics, v.v, ground);
             return true;
         }
-        let orders = service!(self.vs.orders)();
+        // SAFETY: The getter returns the immutable process-wide orders table.
+        let orders = unsafe { &*service!(self.vs.orders)() };
         // SAFETY: The original live shell survives orders; no owner borrow spans reentry.
-        unsafe { crate::orders::openttd_rust_process_orders(v.v.0.as_ptr().cast(), &*orders) };
-        self.vs.handle_loading(v.v, false);
+        unsafe { crate::orders::openttd_rust_process_orders(v.v.0.as_ptr().cast(), orders) };
+        self.vs.handle_loading(v.v, false, orders);
         if service!(self.vs.order_type)(v.v) == OT_LOADING {
             return true;
         }
