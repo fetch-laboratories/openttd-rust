@@ -31,7 +31,7 @@ use crate::clear_map::{CLEAR_DESERT, CLEAR_ROCKS, CLEAR_ROUGH};
 use crate::company_type::CompanyID;
 use crate::game_state::GameState;
 use crate::landscape_generation;
-use crate::openttd::GameMode;
+use crate::openttd::{GameMode, SwitchMode};
 use crate::raw_field::{read_field, write_field};
 use crate::services::ClearGroundType;
 use crate::tile_type::{DEF_SNOWLINE_HEIGHT, MAX_MAP_HEIGHT_LIMIT, MP_CLEAR, TileIndex};
@@ -178,6 +178,7 @@ pub struct WorldServices {
     pub script_exists: extern "C" fn() -> bool,
     pub script_sleeping: extern "C" fn() -> bool,
     pub trash_company: extern "C" fn(*mut Frame),
+    pub company_valid: extern "C" fn(*mut Frame) -> bool,
     pub restore_company: extern "C" fn(*mut Frame),
     pub callback: extern "C" fn(*mut Frame, Callback) -> bool,
     pub exception_kind: extern "C" fn(*mut Frame) -> u8,
@@ -185,7 +186,7 @@ pub struct WorldServices {
     pub dedicated: extern "C" fn() -> bool,
     pub exit_game: extern "C" fn() -> bool,
     pub set_exit: extern "C" fn(),
-    pub abort_mode: extern "C" fn(bool),
+    pub abort_mode: extern "C" fn(SwitchMode),
     pub switch_mode: extern "C" fn(*mut Frame) -> bool,
     pub debug_start: extern "C" fn(),
     pub debug_done: extern "C" fn(),
@@ -204,6 +205,7 @@ pub extern "C" fn openttd_rust_world_set_callback(callback: Callback) {
     write_field!(INFO.get(), done, callback);
 }
 #[unsafe(no_mangle)]
+#[inline(never)]
 pub extern "C" fn openttd_rust_world_set_abort_callback(callback: Callback) {
     write_field!(INFO.get(), abort_callback, callback);
 }
@@ -224,7 +226,11 @@ pub unsafe extern "C" fn openttd_rust_world_handle_abort(
     s: &WorldServices,
     frame: *mut Frame,
 ) -> bool {
-    (s.abort_mode)((s.game_mode)() == GameMode::EDITOR);
+    (s.abort_mode)(if (s.game_mode)() == GameMode::EDITOR {
+        SwitchMode::EDITOR
+    } else {
+        SwitchMode::MENU
+    });
     if let Some(callback) = read_field!(INFO.get(), abort_callback) {
         return (s.callback)(frame, Some(callback));
     }
@@ -614,7 +620,9 @@ pub unsafe extern "C" fn openttd_rust_world_generate(s: &WorldServices, frame: *
         Err(_) => {
             world.cleanup();
             world.storage_mode(crate::newgrf_storage::PSM_LEAVE_GAMELOOP, true);
-            (s.restore_company)(frame);
+            if (s.company_valid)(frame) {
+                (s.restore_company)(frame);
+            }
             if (s.dedicated)() {
                 (s.debug_abort)();
                 (s.set_exit)();
@@ -632,5 +640,5 @@ crate::abi::layouts! {
     "OpenTTDWorldLandscape" ["genworld"] => LandscapeCall { frame, decoder, settings, };
     "OpenTTDWorldTown" ["genworld"] => TownCall { frame, names, road, layout, };
     "OpenTTDWorldObject" ["genworld"] => ObjectCall { frame, out, tmp, aux, };
-"OpenTTDWorldServices" ["genworld"] => WorldServices { landscape,company,town,industry,industry_generation,objects,engines,disasters,modal,set_modal,local_company,set_local_company,restore_companies,initialize,prepare_progress,settings,estimate_height,height_limit,game_mode,seed,set_seed,interactive_random,random_seed,load_sprites,rail_labels,road_labels,building_counts,string_widths,reset_windows,setup_windows,unshow_error,close_windows,hide_windows,show_progress,show_windows,reset_object,show_grf_error,randomizers,startup_companies,place_cursor,scroll,busy,close_progress,show_error,dirty,set_progress,increase_progress,town_roads,freeform,count_land,landscape_begin,landscape_end,town_begin,town_end,industry_builder,industry_begin,industry_end,object_begin,object_end,tree_settings,tree_end,loop_begin,loop_end,advance_tick,script_start,script_loop,script_exists,script_sleeping,trash_company,restore_company,callback,exception_kind,storage_discard,dedicated,exit_game,set_exit,abort_mode,switch_mode,debug_start,debug_done,debug_abort,debug_map,desync,save, };
+"OpenTTDWorldServices" ["genworld"] => WorldServices { landscape,company,town,industry,industry_generation,objects,engines,disasters,modal,set_modal,local_company,set_local_company,restore_companies,initialize,prepare_progress,settings,estimate_height,height_limit,game_mode,seed,set_seed,interactive_random,random_seed,load_sprites,rail_labels,road_labels,building_counts,string_widths,reset_windows,setup_windows,unshow_error,close_windows,hide_windows,show_progress,show_windows,reset_object,show_grf_error,randomizers,startup_companies,place_cursor,scroll,busy,close_progress,show_error,dirty,set_progress,increase_progress,town_roads,freeform,count_land,landscape_begin,landscape_end,town_begin,town_end,industry_builder,industry_begin,industry_end,object_begin,object_end,tree_settings,tree_end,loop_begin,loop_end,advance_tick,script_start,script_loop,script_exists,script_sleeping,trash_company,company_valid,restore_company,callback,exception_kind,storage_discard,dedicated,exit_game,set_exit,abort_mode,switch_mode,debug_start,debug_done,debug_abort,debug_map,desync,save, };
 }

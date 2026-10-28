@@ -138,6 +138,8 @@ void DoClearSquare(TileIndex tile);
 void RunTileLoop();
 
 void InitializeLandscape();
+#ifndef WITH_RUST
 bool GenerateLandscape(uint8_t mode);
+#endif
 
 #endif /* LANDSCAPE_H */

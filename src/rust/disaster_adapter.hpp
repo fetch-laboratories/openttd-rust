@@ -205,7 +205,6 @@ DisasterVehicle::DisasterVehicle(int x, int y, Direction direction, DisasterSubT
 	openttd_rust_disaster_construct(&DisasterServices(), DisasterHandle(this), x, y, direction, subtype);
 }
 bool DisasterVehicle::Tick() { return openttd_rust_disaster_tick(&DisasterServices(), DisasterHandle(this)); }
-void StartupDisasters() { openttd_rust_disaster_startup(&DisasterServices()); }
 void ReleaseDisastersTargetingIndustry(IndustryID industry) { openttd_rust_disaster_release_industry(&DisasterServices(), industry.base()); }
 void ReleaseDisasterVehicle(VehicleID vehicle)
 {

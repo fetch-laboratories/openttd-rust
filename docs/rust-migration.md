@@ -2360,3 +2360,21 @@ catches Script_FatalError, returns through Rust snapshot cleanup, then rethrows 
 the native Elapsed facade. Original bodies remain portable. Historical save
 versions, full external-AI memory-limit failures and GUI/network scheduling remain
 coverage limits. PR #539.
+
+### World-generation lifecycle (#546)
+
+`genworld.rs` owns process-wide generation mode, dimensions, saved local company,
+done/abort callbacks, abort request and the canonical generating bool. It owns setup,
+complete generation orchestration, rough/rocky terrain, warm-up, completion and cleanup.
+Landscape, towns, industries, objects, trees, economy, engines, disasters, storage and
+tile scheduling enter their existing Rust owners directly. The native `_GenerateWorld()`
+frame and its actual `GenerateWorld` call preserve the Callgrind entry.
+
+Native map/pool allocation, presentation, resource scratch, the CompanyID backup and
+actual callbacks remain. Progress/abortion, script startup/execution, completion callbacks,
+initialization/resource loading, mode switching and save/load keep native exception frames;
+Rust returns before an ordinary exception is handled or rethrown. Per-phase scratch is
+constructed and destroyed at the original calls. Native `_generating_world` lvalues alias
+stable Rust bool storage under the game-state mutex. No owner borrow or raw map descriptor
+spans progress/yield or callback reentry. GUI scheduling, arbitrary scripts/NewGRFs and
+unexercised exception combinations remain #156 coverage limits. PR: #547.

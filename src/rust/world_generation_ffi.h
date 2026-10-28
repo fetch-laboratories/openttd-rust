@@ -87,6 +87,7 @@ struct OpenTTDWorldServices {
 	bool (*script_exists)() noexcept OPENTTD_SERVICE_DEFAULT(script_exists);
 	bool (*script_sleeping)() noexcept OPENTTD_SERVICE_DEFAULT(script_sleeping);
 	void (*trash_company)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(trash_company);
+	bool (*company_valid)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(company_valid);
 	void (*restore_company)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(restore_company);
 	bool (*callback)(OpenTTDWorldFrame *, GWDoneProc *) noexcept OPENTTD_SERVICE_DEFAULT(callback);
 	uint8_t (*exception_kind)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(exception_kind);
@@ -94,7 +95,7 @@ struct OpenTTDWorldServices {
 	bool (*dedicated)() noexcept OPENTTD_SERVICE_DEFAULT(dedicated);
 	bool (*exit_game)() noexcept OPENTTD_SERVICE_DEFAULT(exit_game);
 	void (*set_exit)() noexcept OPENTTD_SERVICE_DEFAULT(set_exit);
-	void (*abort_mode)(bool) noexcept OPENTTD_SERVICE_DEFAULT(abort_mode);
+	void (*abort_mode)(SwitchMode) noexcept OPENTTD_SERVICE_DEFAULT(abort_mode);
 	bool (*switch_mode)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(switch_mode);
 	void (*debug_start)() noexcept OPENTTD_SERVICE_DEFAULT(debug_start);
 	void (*debug_done)() noexcept OPENTTD_SERVICE_DEFAULT(debug_done);
@@ -105,7 +106,6 @@ struct OpenTTDWorldServices {
 };
 const OpenTTDWorldServices &GetRustWorldServices() noexcept;
 extern "C" {
-bool *openttd_rust_generating_world();
 void openttd_rust_world_set_callback(GWDoneProc *);
 void openttd_rust_world_set_abort_callback(GWAbortProc *);
 void openttd_rust_world_request_abort();

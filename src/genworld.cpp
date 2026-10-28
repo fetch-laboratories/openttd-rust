@@ -50,6 +50,7 @@
 
 #ifdef WITH_RUST
 #include "rust/world_generation_ffi.h"
+#include "industry.h"
 #include "rust/landscape_generation_frame.hpp"
 #include "rust/industry_generation_adapter.hpp"
 #include "rust/services_object.h"
@@ -66,7 +67,6 @@
 
 void StartupCompanies();
 void InitializeGame(uint size_x, uint size_y, bool reset_date, bool reset_settings);
-OpenTTDIndustryBuilder *RustIndustryBuilderState() noexcept;
 std::exception_ptr TakeTreeGenerationException() noexcept;
 
 struct RustWorldTownScratch { OpenTTDTownFoundingFrame frame; RustRoadCommandContext road; };
@@ -160,7 +160,7 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.object_end = [](OpenTTDWorldFrame *f) noexcept { f->cancellation = f->objects->frame.cancellation; f->objects.reset(); },
 		.tree_settings = TreeGenerateSettings,
 		.tree_end = [](OpenTTDWorldFrame *f) noexcept { f->cancellation = TakeTreeGenerationException(); },
-		.loop_begin = [](OpenTTDWorldFrame *f) noexcept { return &f->loop.emplace().view; },
+		.loop_begin = [](OpenTTDWorldFrame *f) noexcept -> const OpenTTDGenerationLoop * { return &f->loop.emplace().view; },
 		.loop_end = [](OpenTTDWorldFrame *f) noexcept { f->loop.reset(); },
 		.advance_tick = []() noexcept { TimerGameTick::counter++; },
 		.script_start = [](OpenTTDWorldFrame *f) noexcept { return WorldException(f, [] { Game::StartNew(); }); },
@@ -168,14 +168,15 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.script_exists = []() noexcept { return Game::GetInstance() != nullptr; },
 		.script_sleeping = []() noexcept { return Game::GetInstance()->IsSleeping(); },
 		.trash_company = [](OpenTTDWorldFrame *f) noexcept { f->company->Trash(); },
-		.restore_company = [](OpenTTDWorldFrame *f) noexcept { if (f->company->IsValid()) f->company->Restore(); },
+		.company_valid = [](OpenTTDWorldFrame *f) noexcept { return f->company->IsValid(); },
+		.restore_company = [](OpenTTDWorldFrame *f) noexcept { f->company->Restore(); },
 		.callback = [](OpenTTDWorldFrame *f, GWDoneProc *proc) noexcept { return WorldException(f, [=] { proc(); }); },
 		.exception_kind = WorldExceptionKind,
 		.storage_discard = RustStorageDiscard,
 		.dedicated = []() noexcept { return _network_dedicated; },
-		.exit_game = []() noexcept { return _exit_game; },
+		.exit_game = []() noexcept -> bool { return _exit_game; },
 		.set_exit = []() noexcept { _exit_game = true; },
-		.abort_mode = [](bool editor) noexcept { _switch_mode = editor ? SM_EDITOR : SM_MENU; },
+		.abort_mode = [](SwitchMode mode) noexcept { _switch_mode = mode; },
 		.switch_mode = [](OpenTTDWorldFrame *f) noexcept { return WorldException(f, [] { SwitchToMode(_switch_mode); }); },
 		.debug_start = []() noexcept { Debug(net, 3, "Generating map, please wait..."); },
 		.debug_done = []() noexcept { Debug(net, 3, "Map generated, starting game"); },
@@ -189,7 +190,12 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 
 bool CheckAbi_genworld() { return AbiServicesComplete(GetRustWorldServices()); }
 
-/* Keep this native symbol and actual GenerateWorld call for the Callgrind entry. */
+/* Callgrind selects this native frame, including its actual GenerateWorld call. */
+#ifdef _MSC_VER
+__declspec(noinline)
+#else
+__attribute__((noinline))
+#endif
 static void _GenerateWorld()
 {
 	OpenTTDWorldFrame frame;

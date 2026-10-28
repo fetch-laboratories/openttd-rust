@@ -9,6 +9,7 @@ extern "C" void __real__Z26SetGeneratingWorldProgress16GenWorldProgressj(GenWorl
 extern "C" void __real__Z31IncreaseGeneratingWorldProgress16GenWorldProgress(GenWorldProgress);
 #ifdef WITH_RUST
 #include "rust/world_generation_ffi.h"
+#include "rust/landscape_generation_frame.hpp"
 #define GENERATION_REAL_ABORT __real_openttd_rust_world_set_abort_callback
 #define GENERATION_WRAP_ABORT __wrap_openttd_rust_world_set_abort_callback
 static void GenerationSetAbort(GWAbortProc *proc) { openttd_rust_world_set_abort_callback(proc); }
@@ -18,6 +19,17 @@ static void GenerationSetAbort(GWAbortProc *proc) { openttd_rust_world_set_abort
 static void GenerationSetAbort(GWAbortProc *proc) { GenerateWorldSetAbortCallback(proc); }
 #endif
 extern "C" void GENERATION_REAL_ABORT(GWAbortProc *);
+static bool GenerationLandscape(uint8_t mode)
+{
+#ifdef WITH_RUST
+	OpenTTDLandscapeGenerationCall call;
+	bool generated = openttd_rust_generate_landscape(&GetRustLandscapeGenerationServices(), &call.frame, &call.heightmap, call.settings, mode);
+	if (call.frame.cancellation) std::rethrow_exception(call.frame.cancellation);
+	return generated;
+#else
+	return GenerateLandscape(mode);
+#endif
+}
 static int generation_cancel = -1, generation_events = 0, generation_cleanup = 0;
 static GWAbortProc *generation_abort = nullptr;
 static bool generation_heightmap = false;
@@ -75,8 +87,10 @@ static void GenerationOuterProgress(GenWorldProgress stage, bool set)
 }
 static void GenerationLifecycle()
 {
-	extern bool _in_modal_progress, _exit_game;
-	AutoRestoreBackup<bool> modal(_in_modal_progress, false), dedicated(_network_dedicated, true), exit(_exit_game, false);
+	extern bool _in_modal_progress;
+	bool saved_exit = _exit_game;
+	AutoRestoreBackup<bool> modal(_in_modal_progress, false), dedicated(_network_dedicated, true);
+	_exit_game = false;
 	AutoRestoreBackup<SwitchMode> switching(_switch_mode, _switch_mode);
 	generation_lifecycle = true;
 	for (int kind = 0; kind < 16; kind++) {
@@ -104,11 +118,12 @@ static void GenerationLifecycle()
 		if (kind == 12 || kind == 13) GameConfig::GetConfig(GameConfig::SSS_FORCE_GAME)->Change(kind == 12 ? "GenerationSleep" : "GenerationCap");
 		GenerateWorldSetCallback(GenerationDone);
 		GenerateWorld(mode, 64, 64, false);
-		fmt::print(stderr, "GENERATION lifecycle {} {} {} {} {} {} {} {} {} {} {} {} {}\n", kind, mode, _settings_game.construction.map_height_limit, generation_done, generation_outer_cleanup, generation_outer_abort, _current_company.base(), _local_company.base(), _generating_world, storage.GetValue(0), _exit_game, generation_warmup, generation_script);
+		fmt::print(stderr, "GENERATION lifecycle {} {} {} {} {} {} {} {} {} {} {} {} {}\n", kind, mode, _settings_game.construction.map_height_limit, generation_done, generation_outer_cleanup, generation_outer_abort, _current_company.base(), _local_company.base(), _generating_world, storage.GetValue(0), _exit_game.load(), generation_warmup, generation_script);
 		GenerationSnapshot("lifecycle");
 		if (kind == 12 || kind == 13) { Game::Uninitialize(true); GameConfig::GetConfig(GameConfig::SSS_FORCE_GAME)->Change(std::nullopt); }
 	}
 	generation_lifecycle = false; generation_target = -1; generation_storage = nullptr;
+	_exit_game = saved_exit;
 	_game_mode = GM_NORMAL;
 	_current_company = _local_company = COMPANY_SPECTATOR;
 }
@@ -144,7 +159,7 @@ static void GenerationCancellation()
 	AutoRestoreBackup<SwitchMode> mode(_switch_mode, _switch_mode);
 	for (generation_cancel = 0; generation_cancel < 3; generation_cancel++) {
 		generation_events = generation_cleanup = 0; bool caught = false;
-		try { GenerateLandscape(GWM_NEWGAME); } catch (AbortGenerateWorldSignal &) { caught = true; }
+		try { GenerationLandscape(GWM_NEWGAME); } catch (AbortGenerateWorldSignal &) { caught = true; }
 		fmt::print(stderr, "GENERATION cancel {} {} {} {}\n", generation_cancel, caught, generation_events, generation_cleanup);
 		GenerationSetAbort(nullptr);
 	}
@@ -194,7 +209,7 @@ static bool GenerationScenario(std::span<std::string_view> args)
 			InitializeLandscape();
 			generation_landscape_steps = generation_river_steps = 0;
 			generation_heightmap = true;
-			bool generated = GenerateLandscape(GWM_HEIGHTMAP);
+			bool generated = GenerationLandscape(GWM_HEIGHTMAP);
 			generation_heightmap = false;
 			fmt::print(stderr, "GENERATION success {} {} {} {}\n", landscape, generated, generation_landscape_steps, generation_river_steps);
 			GenerationSnapshot("heightmap-generated");
@@ -203,7 +218,7 @@ static bool GenerationScenario(std::span<std::string_view> args)
 	{
 		AutoRestoreBackup<std::string> filename(_file_to_saveload.name, "generation-missing.bmp");
 		AutoRestoreBackup<DetailedFileType> type(_file_to_saveload.ftype.detailed, DFT_HEIGHTMAP_BMP);
-		fmt::print(stderr, "GENERATION missing {} {}\n", loaded, GenerateLandscape(GWM_HEIGHTMAP));
+		fmt::print(stderr, "GENERATION missing {} {}\n", loaded, GenerationLandscape(GWM_HEIGHTMAP));
 	}
 	FlatEmptyWorld(7); GenerationSnapshot("flat");
 	for (TileIndex index : Map::Iterate()) {

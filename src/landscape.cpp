@@ -1108,13 +1108,7 @@ OpenTTDLandscapeGenerationCall::OpenTTDLandscapeGenerationCall() : heightmap{
 		.freeform = _settings_game.construction.freeform_edges,
 	};
 }
-bool GenerateLandscape(uint8_t mode)
-{
-	OpenTTDLandscapeGenerationCall call;
-	bool generated = openttd_rust_generate_landscape(&GetRustLandscapeGenerationServices(), &call.frame, &call.heightmap, call.settings, mode);
-	if (call.frame.cancellation) std::rethrow_exception(call.frame.cancellation);
-	return generated;
-}
+
 #else
 static const uint8_t _genterrain_tbl_1[5] = { 10, 22, 33, 37, 4  };
 static const uint8_t _genterrain_tbl_2[5] = {  0,  0,  0,  0, 33 };

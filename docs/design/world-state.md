@@ -229,3 +229,22 @@ is visible before the special-cargo break. Rebuild/reset runs under serialized l
 callbacks. Runtime lookups retain no container borrow across native services; each cargo
 callback has its own Rust invocation and native virtual/profiler frame, and common Action2 and
 storage are direct Rust callees. This adds no map access permission to #274.
+
+## World-generation lifecycle (#546)
+
+Generation state has one process-wide Rust allocation with static lifetime. C++ receives
+only the address of its bool subobject for `_generating_world`: both languages use the
+one-byte, one-aligned bool representation, and all writes store false or true. The address
+never changes or crosses reset allocation; Rust accesses fields through raw field-sized
+operations, never a reference that could exclude native aliases. Startup precedes the game
+thread, and subsequent accesses use the game-state mutex on both GUI threads.
+
+Native CompanyID backup and landscape/town/industry/object frames remain native objects;
+Rust receives opaque typed pointers and consumed scalar metadata, without a layout view of
+StrongType, STL or pool objects. The backup retains its native destructor/restoration
+contract. Native wrappers catch progress abortion, script and completion callbacks and
+save/load errors before returning across FFI. Resource frames outlive those Rust entries,
+and Rust chooses source cleanup, storage rollback and company restoration before native
+mode switching can reenter generation. No owner borrow spans those calls. Scheduler map
+descriptors live only inside each existing audited loop interval and expire before the
+next progress update. This adds no map-view permission.

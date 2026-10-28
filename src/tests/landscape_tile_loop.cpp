@@ -199,7 +199,7 @@ TEST_CASE("Rust world generation replaces transient callbacks before invoking th
 	OpenTTDWorldServices services{
 		.game_mode = []() noexcept { return GM_EDITOR; },
 		.callback = [](OpenTTDWorldFrame *, GWDoneProc *proc) noexcept { proc(); return true; },
-		.abort_mode = [](bool editor) noexcept { CHECK(editor); },
+		.abort_mode = [](SwitchMode mode) noexcept { CHECK(mode == SM_EDITOR); },
 	};
 	world_callback_value = 0;
 	openttd_rust_world_set_abort_callback([] { world_callback_value = 1; });
