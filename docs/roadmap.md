@@ -8,7 +8,10 @@ this roadmap over conflicting issues; it is the current state of umbrella issue
 
 - 79 ownership ports. Whole-fork inventory: 72,102 of 470,612 original lines
   retired (15.32%), including 56,403 of 103,451 simulation lines (54.52%). Rust,
-  tooling and glue total 129,354, 51,058 and 46,170 lines.
+  tooling and glue total 129,354, 51,058 and 46,170 lines. All of these count
+  comments and blank lines. In code lines alone, a rough steering count gives
+  17.3% of the whole fork and 63.0% of simulation code (37,014 of 58,736). #564
+  moves the metric to code lines.
 - What the remaining 47,835 simulation-inventory lines are: 26,113 blank,
   comment or preprocessor lines; 10,464 header code (class layouts and inline
   accessors, which retire only when their data and C++ callers move); 11,258
@@ -225,21 +228,24 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
    to its scope.
 3. **#558 differing-road-type town growth.** Fresh fixing review and final Full;
    the 100 tooling lines are already accepted.
-4. **#560 track follower ownership.** Start now. Planning range: about 430
+4. **#564 tooling batch.** Code-line metrics from a pinned standard counter
+   (user decision, 2026-10-28), the orphan-export check, T3 task-worktree
+   cleanup, and the 1.6x ceiling with the three-pass record in `speed_budget`.
+   One PR that runs alongside the owners; the metric change lands before the
+   next planning round, which reads it.
+5. **#560 track follower ownership.** Start now. Planning range: about 430
    retired, net glue -50 to +80. It removes the road YAPF follow crossing
    (1.29% of P2016; `RoadTile` and `RoadTraversal` are 3.6% of Grok).
-5. **#562 station naming, tile loop and lifecycle.** Start now, concurrently
+6. **#562 station naming, tile loop and lifecycle.** Start now, concurrently
    with #560. Planning range: 450 to 500 retired, 150 to 220 net glue. If its
    first checkpoint shows costly destructor glue, swap the slot to engine runtime
    (queued below) rather than shrinking scope.
-6. **#563 vehicle storage design.** A planning agent at high effort produces the
+7. **#563 vehicle storage design.** A planning agent at high effort produces the
    design note and the first storage implementation issue. No branch.
-7. **#561 company identity.** Start when a slot frees after item 2. Planning
+8. **#561 company identity.** Start when a slot frees after item 2. Planning
    range: 450 to 550 retired, 120 to 200 net glue.
-8. **#168 audit batch**, after #554 integrates: the checklist in the #168
+9. **#168 audit batch**, after #554 integrates: the checklist in the #168
    comment of 2026-10-28.
-9. **#564 tooling batch:** the orphan-export check, T3 task-worktree cleanup,
-   and the 1.6x ceiling with the three-pass record in `speed_budget`.
 10. **#168/#199/#500 completed-job flow publication; #501 `tools/probe.py`
     typing.** Unchanged: select only the completed link-graph job service
     table. Zero retirement, 120 to 250 Rust, -30 to +80 net glue.
