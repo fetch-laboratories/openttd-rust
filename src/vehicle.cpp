@@ -65,6 +65,7 @@
 
 #ifdef WITH_RUST
 #include "rust/vehicle_maintenance_ffi.h"
+#include "rust/presentation_services.h"
 #include "rust/vehicle_services.h"
 #include "rust/command_cost_services.h"
 #include "rust/vehicle_visits_ffi.h"
@@ -139,7 +140,7 @@ static void VehicleVisitRefitFailedNews(OpenTTDVehicle *handle) noexcept
 static void VehicleVisitCostAnimation(OpenTTDVehicle *handle, int64_t cost) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
-	if (v->owner == _local_company) ShowCostOrIncomeAnimation(v->x_pos, v->y_pos, v->z_pos, cost);
+	if (v->owner == _local_company) RustCostOrIncomeAnimation(v->x_pos, v->y_pos, v->z_pos, cost);
 }
 static void VehicleVisitWaitingNews(OpenTTDVehicle *handle) noexcept
 {

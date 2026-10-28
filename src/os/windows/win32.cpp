@@ -115,6 +115,10 @@ void CreateConsole()
 	if (_has_console) return;
 	_has_console = true;
 
+	/* AllocConsole replaces standard handles; retain redirected diagnostics. */
+	DWORD error_type = GetFileType(GetStdHandle(STD_ERROR_HANDLE));
+	if (error_type == FILE_TYPE_DISK || error_type == FILE_TYPE_PIPE) return;
+
 	if (!AllocConsole()) return;
 
 	hand = GetStdHandle(STD_OUTPUT_HANDLE);

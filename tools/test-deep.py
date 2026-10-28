@@ -13,6 +13,7 @@ import unittest
 from collections.abc import Sequence
 from pathlib import Path
 from types import SimpleNamespace
+from typing import TypedDict, cast
 
 import deep
 from simulation import speed
@@ -22,6 +23,8 @@ from simulation import speed
 FAKE_SIMULATE = """
 import json, os, subprocess, sys
 out = sys.argv[1]
+head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+status = subprocess.check_output(["git", "status", "--short"], text=True).strip()
 ionice = subprocess.run(["ionice", "-p", str(os.getpid())], capture_output=True, text=True)
 rows = [
     dict(scenario="a", seconds=2.5, passed=True, problems=[], differences=[]),
@@ -32,13 +35,11 @@ if "advance-head" in sys.argv[3:]:
     subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit",
                     "--allow-empty", "--quiet", "-m", "Add: next commit"], check=True)
 if "dirty" in sys.argv[3:]:
-    open("stray.txt", "w").write("edit")
+    open("source.txt", "w").write("edit")
 if any(s in sys.argv[3:] for s in ("pass", "advance-head", "dirty", "sanitized")):
     rows[1].update(passed=True, problems=[], differences=[])
 passed = all(row["passed"] for row in rows)
 report = os.path.join(out, "report.json")
-head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-status = subprocess.check_output(["git", "status", "--short"], text=True).strip()
 sanitizers = dict(original={"UBSan src/a.cpp in f: overflow": ["a"]}, candidate_only={})
 json.dump(dict(passed=passed, results=rows, candidate_commit=head, candidate_status=status,
                sanitizers=sanitizers if "sanitized" in sys.argv[3:] else None),
@@ -50,14 +51,38 @@ sys.exit(0 if passed else 1)
 """
 
 
+class SourcePayload(TypedDict):
+    commit: str
+    status: str
+
+
+class ResultPayload(TypedDict):
+    scenarios: int
+    scenario_seconds: float
+    failures: list[deep.Failure]
+    problems: list[str]
+    original_reports: dict[str, list[str]]
+    source_before: SourcePayload
+    source_after: SourcePayload
+
+
+class ReportPayload(TypedDict):
+    commit: str
+    partial: bool
+    passed: bool
+    results: list[ResultPayload]
+
+
 class DeepTests(unittest.TestCase):
     def setUp(self) -> None:
         self.scratch = tempfile.TemporaryDirectory()
         self.addCleanup(self.scratch.cleanup)
         self.root = Path(self.scratch.name) / "repo"
         self.root.mkdir()
+        (self.root / "source.txt").write_text("original")
         for command in (
             ["init", "--quiet"],
+            ["add", "source.txt"],
             ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty"]
             + ["--quiet", "-m", "Add: nothing"],
         ):
@@ -85,10 +110,10 @@ class DeepTests(unittest.TestCase):
             )
         return code, output.getvalue()
 
-    def only_report(self) -> dict:
+    def only_report(self) -> ReportPayload:
         (path,) = (self.local / "deep").glob("*/report.json")
         self.assertTrue(path.parent.name.endswith(self.head[:12]))
-        return json.loads(path.read_text())
+        return cast(ReportPayload, json.loads(path.read_text()))
 
     def test_report_names_commit_and_failures_at_idle_priority(self) -> None:
         code, output = self.run_deep(["sel"])
@@ -160,20 +185,54 @@ class DeepTests(unittest.TestCase):
         )
         self.assertIn("1 sanitizer reports also in the original", output)
 
+    def sentinel(self, root: Path, jobs: int, selectors: Sequence[str]) -> list[str]:
+        self.fail("a second member must not run after source drift")
+
+    def drifting_member(self) -> None:
+        self.members += (deep.Member("sentinel", self.sentinel),)
+
+    def test_source_drift_before_member_prevents_execution(self) -> None:
+        def drift(root: Path, jobs: int, selectors: Sequence[str]) -> list[str]:
+            (root / "source.txt").write_text("edited before launch")
+            return self.command(root, jobs, selectors)
+
+        self.members = (
+            deep.Member("drift", drift),
+            deep.Member("sentinel", self.sentinel),
+        )
+        code, _ = self.run_deep(["pass"])
+        self.assertEqual(code, 1)
+        (result,) = self.only_report()["results"]
+        self.assertIn("before", result["problems"][0])
+        self.assertFalse((self.drop / "priority.json").exists())
+        with deep.single_run(self.common / deep.LOCK_NAME) as free:
+            self.assertTrue(free)
+
     def test_member_from_a_later_commit_is_rejected(self) -> None:
+        self.drifting_member()
         code, _ = self.run_deep(["advance-head"])
         report = self.only_report()
         self.assertEqual(code, 1)
         self.assertFalse(report["passed"])
         self.assertEqual(report["commit"], self.head)
-        self.assertIn("commit", report["results"][0]["problems"][0])
+        (result,) = report["results"]
+        self.assertIn("commit", result["problems"][0])
+        self.assertEqual(result["source_before"], {"commit": self.head, "status": ""})
+        self.assertNotEqual(result["source_after"]["commit"], self.head)
+        with deep.single_run(self.common / deep.LOCK_NAME) as free:
+            self.assertTrue(free)
 
     def test_member_from_a_dirty_checkout_is_rejected(self) -> None:
+        self.drifting_member()
         code, _ = self.run_deep(["dirty"])
         report = self.only_report()
         self.assertEqual(code, 1)
         self.assertFalse(report["passed"])
-        self.assertIn("dirty", report["results"][0]["problems"][0])
+        (result,) = report["results"]
+        self.assertIn("dirty", result["problems"][0])
+        self.assertEqual(result["source_after"]["status"], "M source.txt")
+        with deep.single_run(self.common / deep.LOCK_NAME) as free:
+            self.assertTrue(free)
 
     def test_lock_is_released_after_a_run(self) -> None:
         self.run_deep()

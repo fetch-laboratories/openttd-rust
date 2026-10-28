@@ -10,3 +10,6 @@ pub const SND_05_TRAIN_THROUGH_TUNNEL: u16 = 3;
 
 /// `SND_12_EXPLOSION`.
 pub const SND_12_EXPLOSION: u16 = 16;
+
+/// `SND_14_CASHTILL`.
+pub const SND_14_CASHTILL: u16 = 18;
