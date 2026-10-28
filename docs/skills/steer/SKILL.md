@@ -210,9 +210,9 @@ When a correction reverses a direction the user gave root, the steering section
 says so in one line: what it reverses, and why.
 
 Commit `AGENTS.md`, the roadmap and any restart-prompt edit (step 5) as one
-docs-only commit pushed straight to `rust-migration`, with a title like
-`Doc: Steer migration toward <corrections> [skip ci]`. Earlier steering commits
-landed the same way. Confirm `origin/rust-migration` has it.
+docs-only commit on `rust-migration`, with a title like
+`Doc: Steer migration toward <corrections> [skip ci]`. The user reviews it from
+your report; push it once it is settled (AGENTS.md, "Standards and commands").
 
 ## 5. Check /start-development
 
@@ -230,8 +230,8 @@ Tell the user, briefly:
 
 - the verdict on root's track;
 - what the audits found, with numbers;
-- what you changed, with issue and commit links, and any user direction it
-  reverses;
+- what you changed, with issue links and the commit hash, and any user
+  direction it reverses;
 - anything only the user can supply, such as a new play save or a policy decision.
 
 If the focus asked you to restart root, launch it once `origin/rust-migration`

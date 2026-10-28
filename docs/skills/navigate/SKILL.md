@@ -100,12 +100,13 @@ Rewrite the roadmap's "Phases" section as the chart root starts from: the
 position table from step 1, each phase's size, exit criterion and status, and
 the actions root takes first. It replaces the previous navigation's chart.
 
-Commit every edit as one docs-only commit pushed straight to
-`rust-migration`, titled `Doc: Navigate toward <correction> [skip ci]`, or
-`Doc: Navigate, course holds [skip ci]` when only the position changed.
-Confirm `origin/rust-migration` has it.
+Commit every edit as one docs-only commit on `rust-migration`, titled
+`Doc: Navigate toward <correction> [skip ci]`, or
+`Doc: Navigate, course holds [skip ci]` when only the position changed. The
+user reviews it from your report; push it once it is settled (AGENTS.md,
+"Standards and commands").
 
 ## 5. Report
 
 Tell the user, in a few lines: the position table, the verdict on the course,
-and each change with its commit and issue links.
+and each change with its issue links and the commit hash.

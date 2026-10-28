@@ -548,9 +548,15 @@ libraries and profiles referenced by current speed anchors or active evidence
 until their replacements are recorded; rebuildable does not mean superseded.
 
 Docs-only changes (only `docs/` or `*.md` files, such as roadmap updates and
-skill edits under `docs/skills/`) are committed directly to `rust-migration` as
-a single commit, without a PR. Any agent, including a user-directed Claude Code
-session, pushes its docs-only change as soon as it is done, without asking the
-user first. Everything else (code, tools, workflows, saves) goes through a PR
+skill edits under `docs/skills/`) are committed directly to `rust-migration`
+without a PR, one commit per change, and pushed without asking the user. An
+agent working on its own pushes its change as soon as it is done. In a session
+where the user reviews the edits, a change is done once it is settled: commit
+it locally right away, fold each correction the user makes into that unpushed
+commit (`git commit --amend`, retitled to describe the final text), and push
+when the user approves it or moves to another subject, or before root or a
+delegate needs it on origin. Corrections to a change already pushed collect in
+one new commit the same way. A session that starts with docs-only commits
+ahead of `origin/rust-migration` pushes them first. Everything else (code, tools, workflows, saves) goes through a PR
 that passes CI before it merges; never merge past CI with `--admin`. Preserve
 upstream copyright notices, credits and GPLv2.
