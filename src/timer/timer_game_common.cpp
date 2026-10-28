@@ -43,21 +43,6 @@ const OpenTTDClockServices &GetRustClockServices() noexcept
 	};
 	return services;
 }
-template <class T>
-typename TimerGame<T>::YearMonthDay TimerGame<T>::CalendarConvertDateToYMD(Date date)
-{
-	auto ymd = openttd_rust_calendar_date_to_ymd(date.base());
-	return {Year{ymd.year}, ymd.month, ymd.day};
-}
-template <class T>
-typename TimerGame<T>::Date TimerGame<T>::CalendarConvertYMDToDate(Year year, Month month, Day day)
-{
-	return Date{openttd_rust_calendar_ymd_to_date(year.base(), month, day)};
-}
-template TimerGame<Calendar>::YearMonthDay TimerGame<Calendar>::CalendarConvertDateToYMD(Date date);
-template TimerGame<Economy>::YearMonthDay TimerGame<Economy>::CalendarConvertDateToYMD(Date date);
-template TimerGame<Calendar>::Date TimerGame<Calendar>::CalendarConvertYMDToDate(Year year, Month month, Day day);
-template TimerGame<Economy>::Date TimerGame<Economy>::CalendarConvertYMDToDate(Year year, Month month, Day day);
 #else
 #define M(a, b) ((a << 5) | b)
 static constexpr uint16_t _month_date_from_year_day[] = {
