@@ -413,6 +413,7 @@ COMMAND_SOURCE = r"""
 #include "settings_func.h"
 #include "industry_cmd.h"
 #include "town_cmd.h"
+#include <set>
 static void StationNeed(bool value, int line) { if (!value) { fmt::print(stderr, "STCMD setup-failure {}\n", line); std::abort(); } }
 static void StationCost(const char *label, const CommandCost &cost)
 {
@@ -882,10 +883,13 @@ static void StationCatchmentFixture(TileIndex origin, const DoCommandFlags &test
 			const IndustrySpec *spec = GetIndustrySpec(type);
 			if (!spec->enabled || !IsValidCargoType(spec->accepts_cargo[0])) continue;
 			if (Command<CMD_BUILD_INDUSTRY>::Do({}, tile(7, 8), type, 0, false, 12345).Failed()) continue;
+			/* The layout need not cover its origin tile, so the new industry is the one absent before. */
+			std::set<const Industry *> existing;
+			for (const Industry *i : Industry::Iterate()) existing.insert(i);
 			CommandCost cost = Command<CMD_BUILD_INDUSTRY>::Do(DoCommandFlag::Execute, tile(7, 8), type, 0, false, 12345);
 			StationCost("catchment-industry", cost);
-			StationNeed(cost.Succeeded() && IsTileType(tile(7, 8), MP_INDUSTRY), __LINE__);
-			built = Industry::GetByTile(tile(7, 8));
+			for (Industry *i : Industry::Iterate()) if (!existing.contains(i)) built = i;
+			StationNeed(cost.Succeeded() && built != nullptr, __LINE__);
 			break;
 		}
 		deity.Restore();
