@@ -48,6 +48,7 @@ def report(root: Path, other: str = "Pause", global_name: str = "_pause_mode") -
         f"    #0 {other}() {root}/src/command.cpp:22 (openttd+0x2)\n\n"
         f"  Location is global '{global_name}' of size 1 at 0x123 (openttd+0x3)\n\n"
         "SUMMARY: ThreadSanitizer: data race\n==================\n"
+        "ThreadSanitizer: reported 1 warnings\n"
     )
 
 
@@ -101,19 +102,19 @@ class ThreadedTests(unittest.TestCase):
             "    #0 <null> <null> (libdbus.so+0x111)\n\n"
             "  Mutex M0 acquired here while holding mutex M1 in main thread:\n"
             "    #0 <null> <null> (libdbus.so+0x222)\n\n"
-            "SUMMARY: ThreadSanitizer: lock-order-inversion\n==================\n"
+            "SUMMARY: ThreadSanitizer: lock-order-inversion (potential deadlock)\n==================\n"
         )
+        text = race + lock + "ThreadSanitizer: reported 2 warnings\n"
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory)
             folder = run / sanitizers.REPORTS
             folder.mkdir()
             path = folder / "report.42"
-            path.write_text(race + lock)
+            path.write_text(text)
             original = thread_sanitizer.findings(run, (), ())
             self.assertEqual(len(original.reports), 2)
             path.write_text(
-                (race + lock)
-                .replace("at 0x123", "at 0xabc")
+                text.replace("at 0x123", "at 0xabc")
                 .replace("at 0x120", "at 0xdef")
                 .replace("T8", "T99")
                 .replace("pid=42", "pid=99")
@@ -129,7 +130,7 @@ class ThreadedTests(unittest.TestCase):
                 ("libgallium.so+0x789", "libgallium.so+0x999"),
                 ("libdbus.so+0x222", "libdbus.so+0x999"),
             ):
-                path.write_text((race + lock).replace(old, new))
+                path.write_text(text.replace(old, new))
                 changed = thread_sanitizer.findings(run, (), ())
                 self.assertEqual(
                     len(
@@ -139,6 +140,48 @@ class ThreadedTests(unittest.TestCase):
                     ),
                     1,
                 )
+
+    def test_lock_cycle_preserves_directed_stack_order(self) -> None:
+        def lock_report(offsets: tuple[str, ...]) -> str:
+            nodes = [f"M{i}" for i in range(len(offsets))]
+            cycle = " => ".join(f"{node} (0x123)" for node in nodes) + " => M0"
+            stacks = "".join(
+                f"  Mutex {nodes[(i + 1) % len(nodes)]} acquired here while holding mutex {node} in main thread:\n"
+                f"    #0 <null> <null> (libfixture.so+{offset})\n\n"
+                for i, (node, offset) in enumerate(zip(nodes, offsets, strict=True))
+            )
+            return (
+                "==================\nWARNING: ThreadSanitizer: lock-order-inversion (potential deadlock) (pid=42)\n"
+                f"  Cycle in lock order graph: {cycle}\n\n{stacks}"
+                "SUMMARY: ThreadSanitizer: lock-order-inversion (potential deadlock)\n"
+                "==================\nThreadSanitizer: reported 1 warnings\n"
+            )
+
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            (run / sanitizers.REPORTS).mkdir()
+            path = run / sanitizers.REPORTS / "report.42"
+            path.write_text(lock_report(("0xa", "0xb", "0xc")))
+            original = thread_sanitizer.findings(run, (), ())
+            for offsets, equal in (
+                (("0xb", "0xc", "0xa"), True),
+                (("0xa", "0xc", "0xb"), False),
+            ):
+                path.write_text(lock_report(offsets))
+                self.assertEqual(
+                    original.reports.keys()
+                    == thread_sanitizer.findings(run, (), ()).reports.keys(),
+                    equal,
+                )
+            for invalid in (
+                lock_report(("0xa", "0xb", "0xc")).replace(" => M0\n", " => M1\n"),
+                lock_report(("0xa", "0xb", "0xc")).replace(
+                    "  Cycle in lock order graph:", "  Missing cycle:"
+                ),
+            ):
+                path.write_text(invalid)
+                with self.assertRaises(RuntimeError):
+                    thread_sanitizer.findings(run, (), ())
 
     def test_conflict_stacks_and_global_identity(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -169,14 +212,37 @@ class ThreadedTests(unittest.TestCase):
                 self.assertEqual(len(comparison.reference_only), 1)
                 self.assertEqual(comparison.original, [])
             for invalid in (
+                "",
                 "FATAL: ThreadSanitizer: unexpected memory mapping",
                 "WARNING: ThreadSanitizer: other (pid=42)",
                 report(source).replace("  Previous write", "  Missing write"),
                 report(source).replace("  Location is global", "  Missing global"),
+                report(source).split("SUMMARY:")[0],
+                report(source).rsplit("==================", 1)[0],
+                report(source).replace("reported 1 warnings", "reported 2 warnings"),
+                report(source).replace("SUMMARY:", "Missing summary:"),
             ):
                 (run / sanitizers.REPORTS / "report.42").write_text(invalid)
                 with self.assertRaises(RuntimeError):
                     thread_sanitizer.findings(run, (source,), ())
+
+    def test_stack_location_normalizes_worker_thread_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            (run / sanitizers.REPORTS).mkdir()
+            path = run / sanitizers.REPORTS / "report.42"
+            text = re.sub(
+                r"  Location is global .+",
+                "  Location is stack of thread T2.",
+                report(run),
+            )
+            path.write_text(text)
+            original = thread_sanitizer.findings(run, (run,), ())
+            path.write_text(text.replace("T2", "T99"))
+            self.assertEqual(
+                original.reports.keys(),
+                thread_sanitizer.findings(run, (run,), ()).reports.keys(),
+            )
 
     def test_runtime_control(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

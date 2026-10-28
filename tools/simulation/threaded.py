@@ -264,7 +264,7 @@ def main() -> int:
             "kind": "save",
             "save": str(source),
             "ticks": 0,
-            "snapshot_minimum": 0,
+            "snapshot_minimum": 1,
             "moment": moment,
             "tile": tile,
         }
