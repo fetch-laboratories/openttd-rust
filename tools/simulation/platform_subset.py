@@ -152,7 +152,11 @@ def main(arguments: list[str]) -> int:
     with (
         migration.reference_lock(shared=True) if original else contextlib.nullcontext()
     ):
-        frozen = core.copy_runtime(binary.parent, binary, runtime)
+        if original:
+            migration.ensure_reference()
+        frozen = core.copy_runtime(
+            binary.parent, binary, runtime, candidate=not original
+        )
     if original:
         shutil.copytree(runtime / "baseset/opengfx", bundle / "opengfx")
     else:
