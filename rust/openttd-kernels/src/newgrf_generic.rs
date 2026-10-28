@@ -309,4 +309,3 @@ crate::abi::layouts! {
     "OpenTTDGenericResult" ["probe"] => Result { file, result };
     "OpenTTDGenericServices" ["probe"] => Services { shared, version, cargo_map, cargo_bitnum, industry_substitute, evaluate, common, enabled, ambient, terrain, water_class, sound, unsupported, unhandled };
 }
-

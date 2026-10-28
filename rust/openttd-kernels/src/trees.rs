@@ -7,8 +7,9 @@
 
 //! Tree policy, iteration, grove geometry, commands and the persisted tick byte; tiles stay in
 //! C++. Flooding, `NewGRF` ambient callbacks and nested clears may reenter, so records read
-//! before them are read again afterwards; the tile loop reads single fields where the source does. World-generation abort is the one C++ exception: its
-//! progress service reports it and the entry returns.
+//! before them are read again afterwards; the tile loop reads single fields where the source
+//! does. World-generation abort is the one C++ exception: its progress service reports it and
+//! the entry returns.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,
@@ -281,7 +282,6 @@ fn random_tree_type(climate: u8, zone: u8, seed: u32) -> u8 {
     };
     (seed.wrapping_mul(count) / 256).wrapping_add(base) as u8
 }
-
 
 fn is_rainforest_tree(tree: u8) -> bool {
     (TREE_RAINFOREST..TREE_CACTUS).contains(&tree)

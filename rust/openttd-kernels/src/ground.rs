@@ -446,7 +446,9 @@ pub(crate) unsafe fn rail_tile_loop(
         // result context; no result is live before this source early return.
         // `TileLoop_Water` observes this railway tile's type.
         unsafe {
-            crate::water::water_tile_loop(tile, 1, false, size_x, size_y, call, water, shared, types);
+            crate::water::water_tile_loop(
+                tile, 1, false, size_x, size_y, call, water, shared, types,
+            );
         };
         return;
     }
