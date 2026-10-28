@@ -38,13 +38,15 @@ COMMON_ROOT = _common_root()
 COMMON_LOCAL = COMMON_ROOT / ".local"
 # One pinned reference checkout and build per clone, shared by every worktree.
 REFERENCE = COMMON_LOCAL / "reference/openttd"
-REFERENCE_BUILD = COMMON_LOCAL / "build-reference"
-# The ASan and UBSan flavours (#505) build in their own trees. Stable rustc accepts
-# -Zsanitizer only under RUSTC_BOOTSTRAP; the precompiled std stays uninstrumented.
-SANITIZED_BUILDS = {
-    "reference": COMMON_LOCAL / "build-reference-sanitized",
-    "candidate": ROOT / "build-rust-sanitized",
-}
+# The ASan and UBSan flavours (#505) build in their own trees. --sanitize exports
+# SANITIZE_VARIABLE, so simulate, its adapters and its scenario modules see them too.
+SANITIZE_VARIABLE = "OPENTTD_SANITIZE"
+SANITIZE = os.environ.get(SANITIZE_VARIABLE) == "1"
+SANITIZED = "-sanitized" if SANITIZE else ""
+REFERENCE_BUILD = COMMON_LOCAL / f"build-reference{SANITIZED}"
+CANDIDATE_BUILD = ROOT / f"build-rust{SANITIZED}"
+# Stable rustc accepts -Zsanitizer only under RUSTC_BOOTSTRAP; the precompiled std
+# stays uninstrumented.
 SANITIZER_FLAGS = "-fsanitize=address,undefined -fno-omit-frame-pointer"
 RUST_SANITIZER_FLAGS = "-Zsanitizer=address -Cforce-frame-pointers=yes"
 BASELINE = json.loads((ROOT / "migration/baseline.json").read_text())
@@ -400,8 +402,12 @@ def main():
         parser.error("--no-ccache conflicts with --ccache/--ccache-bypass")
     if args.jobs < 1:
         parser.error("--jobs must be positive")
+    args.sanitize = args.sanitize or SANITIZE
     if args.sanitize and args.action not in ("build", "simulate"):
         parser.error("--sanitize applies to build and simulate")
+    if args.sanitize and not SANITIZE:
+        exported = os.environ | {SANITIZE_VARIABLE: "1"}
+        os.execve(sys.executable, [sys.executable, *sys.argv], exported)
     if args.action == "deep":
         from deep import run_deep
 
@@ -415,7 +421,10 @@ def main():
     if args.sanitize:
         if instruction_mode:
             parser.error("--sanitize conflicts with --instructions")
-        env |= {"RUSTFLAGS": RUST_SANITIZER_FLAGS, "RUSTC_BOOTSTRAP": "1"}
+        env |= {
+            "RUSTFLAGS": RUST_SANITIZER_FLAGS,
+            "RUSTC_BOOTSTRAP": "1",
+        }
     if instruction_mode:
         env["CARGO_PROFILE_RELEASE_DEBUG"] = "line-tables-only"
     env["CARGO_BUILD_JOBS"] = str(args.jobs)
@@ -481,9 +490,8 @@ def main():
             raise RuntimeError(f"{name} failed; see {log}")
         return log
 
-    builds = {"reference": REFERENCE_BUILD.resolve(), "candidate": ROOT / "build-rust"}
-    if args.sanitize:
-        builds = {role: build.resolve() for role, build in SANITIZED_BUILDS.items()}
+    candidate_build = ROOT / CANDIDATE_BUILD.name
+    builds = {"reference": REFERENCE_BUILD.resolve(), "candidate": candidate_build}
     original_environment = env.copy()
     cache_before = {}
 
@@ -652,7 +660,6 @@ def main():
                     str(ROOT / "tools/simulate.py"),
                     "--jobs",
                     str(max(1, args.jobs // 2)),
-                    *(["--sanitize"] if args.sanitize else []),
                     *simulate_args,
                 ],
             )

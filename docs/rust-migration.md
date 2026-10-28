@@ -299,16 +299,48 @@ excluded work and kernel/I/O costs remain outside the proxy.
 at `nice -n 19` and `ionice -c 3`, on the developer host only, never in GitHub Actions. It
 writes `.local/deep/<time>-<commit>/report.json` naming the commit, each member's exit status,
 wall and summed scenario seconds, and each failed scenario's problems and first differences,
-beside a log per member. The set is `DEEP_SET` in `tools/deep.py`; today it is `simulate
---soak` (520 scenarios against the default 445), run through the ordinary driver action with a
-per-game timeout of 7200 s, since idle-priority games run slowly under load. Members share the
+beside a log per member. The set is `DEEP_SET` in `tools/deep.py`: `simulate --soak` (520
+scenarios against the default 445), then `simulate --sanitize` (below), each run through the
+ordinary driver action with a per-game timeout of 7200 s, since idle-priority games run slowly
+under load. Members share the
 ordinary build and game locks. A clone-wide exclusive `deep.lock` (`LOCK_NAME` in
 `tools/deep.py`) is held for a whole deep run and for a speed pass's `collect` from before it
 prepares launches until timed collection ends: a deep run that finds it held exits 0 as
-skipped, and `collect` waits, printing its holders, until a deep run finishes. Selectors go to the
-soak member and mark the report partial; a partial report is a smoke check, not a deep check. Cadence, triage and rotation are in AGENTS.md "Speed". Planned members are listed
+skipped, and `collect` waits, printing its holders, until a deep run finishes. Selectors go to
+every member and mark the report partial; a partial report is a smoke check, not a deep check. Cadence, triage and rotation are in AGENTS.md "Speed". Planned members are listed
 on #503. The soak run's wall time is the report's `seconds` (summed scenario seconds divided by
 the simulate job count, `--jobs // 2`, approximates it).
+
+### Sanitized games
+
+`python3 tools/migration.py build|simulate --sanitize` (#505) builds both games with
+`-fsanitize=address,undefined` in `build-reference-sanitized` (shared, beside the reference
+build) and `build-rust-sanitized`, with testing off, and runs the selected default scenarios on
+them. The Rust archive is ASan-instrumented with `-Zsanitizer=address` under `RUSTC_BOOTSTRAP=1`
+on the pinned toolchain; Rust has no UBSan, and its precompiled standard library is not
+instrumented. The driver re-executes itself with `OPENTTD_SANITIZE=1`, which points
+`migration.REFERENCE_BUILD` and `migration.CANDIDATE_BUILD` at the sanitized trees for the
+driver, simulate, its relinked console adapters and the scenario modules alike.
+
+`tools/simulation/sanitizers.py` gives each game its options: leak detection off (the
+launcher's `RLIMIT_NPROC=0` leaves LeakSanitizer no thread), stack traces, and
+`tools/simulation/ubsan-suppressions.txt`. GCC's UBSan runtime writes its reports to stderr
+whatever `log_path` says and, at its first report, replaces the common flags with
+`UBSAN_OPTIONS`, so both variables carry `log_path` and `detect_leaks`. UBSan blocks are removed
+from the compared debug log; ASan reports are read from the run's `sanitizer/` files. A report
+key is the kind, the source path relative to its tree, the first frame outside the sanitizer
+runtime and the message with numbers replaced, since line numbers and values differ between
+the trees. Per scenario, a key in both roles is original behaviour (recorded in the result and in
+the report's `sanitizers.original`, and in the deep report's `original_reports`); a
+candidate-only key is a scenario problem; a reference-only key is recorded, usually a site Rust
+replaced. A suppression entry names undefined behaviour the sanitized reference reports in the
+same scenario, with its original site.
+
+Limits: games inside scenario preparation (`capture_pair` and fixture runs) are sanitized but
+their reports are not compared; ASan stops a game at its first report; reference-gap probes
+that scenario preparation compiles still link the ordinary `build-rust` archive, so a sanitized
+run needs a current ordinary candidate build, which the deep set's soak member provides.
+`--instructions`, `--benchmark` and `--frozen-runtimes` are refused.
 
 ## Native macOS arm64 Rust linkage
 
