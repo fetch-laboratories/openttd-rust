@@ -39,16 +39,17 @@ class MigrationCommands extends AIController {
 		this.Setup(AIVehicle.IsValidVehicle(bus));
 		this.Setup(AIOrder.AppendOrder(bus, depot, AIOrder.OF_NONE));
 		this.Setup(AIOrder.AppendOrder(bus, depot, AIOrder.OF_SERVICE_IF_NEEDED));
-		local vehicles = [bus], anchors = [base, rail, stop, earth, 0, width - 1, size - width, size - 1];
-		foreach (id, unused in AIVehicleList()) { vehicles.append(id); anchors.append(AIVehicle.GetLocation(id)); }
+		local vehicles = [bus], anchors = [[base, rail, stop, earth], [depot], [0, width - 1, size - width, size - 1]];
+		foreach (id, unused in AIVehicleList()) { vehicles.append(id); anchors[1].append(AIVehicle.GetLocation(id)); }
 		for (local tile = 0; tile < size; tile++) {
-			if (AIRail.IsRailTile(tile) || AIRoad.IsRoadTile(tile) || AITile.IsStationTile(tile)) anchors.append(tile);
+			if (AIRail.IsRailTile(tile) || AIRoad.IsRoadTile(tile) || AITile.IsStationTile(tile)) anchors[0].append(tile);
 		}
 		print("COMMAND-BEGIN " + COMMAND_SEED + " " + COMMAND_COUNT + " " + bus + " " + base);
 		this.state = COMMAND_SEED;
 		for (local index = 0; index < COMMAND_COUNT; index++) {
 			local family = index % 6, round = index / 6;
-			local op = this.Draw(6), tile = anchors[this.Draw(anchors.len())];
+			local op = this.Draw(6), context = this.Draw(3);
+			local tile = anchors[context][this.Draw(anchors[context].len())];
 			local dx = this.Draw(5) - 2, dy = this.Draw(5) - 2;
 			local x = AIMap.GetTileX(tile) + dx, y = AIMap.GetTileY(tile) + dy;
 			// Keep out-of-map coordinates as an invalid tile, never wrap a row.
@@ -131,7 +132,7 @@ class MigrationCommands extends AIController {
 				}
 			}
 			ok = family == 4 && op >= 4 ? value != AIVehicle.VEHICLE_INVALID : value;
-			print("COMMAND " + index + " " + name + " " + args + " " + value + " " + (ok ? "OK" : AIError.GetLastErrorString()));
+			print("COMMAND " + index + " " + name + " " + (round < 4 ? "bootstrap" : ["infrastructure", "vehicle", "edge"][context]) + ":" + args + " " + value + " " + (ok ? "OK" : AIError.GetLastErrorString()));
 			this.Sleep(1);
 		}
 		print("COMMAND-END " + COMMAND_COUNT + " " + this.state);

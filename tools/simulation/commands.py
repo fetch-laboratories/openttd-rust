@@ -128,9 +128,9 @@ def outcomes(lines: list[str], count: int, seed: int) -> list[Outcome]:
     ):
         raise ValueError("command family schedule differs")
     state = seed
-    # Every command takes eight draws; rail takes one additional track draw.
+    # Every command takes nine draws; rail takes one additional track draw.
     for i in range(count):
-        for _ in range(9 if i % 6 == 0 else 8):
+        for _ in range(10 if i % 6 == 0 else 9):
             state = state * 48271 % 2147483647
     markers = [
         line.split("COMMAND-END ", 1)[1] for line in lines if "COMMAND-END " in line
@@ -150,6 +150,14 @@ def outcomes(lines: list[str], count: int, seed: int) -> list[Outcome]:
         }
         if observed != {False, True}:
             raise ValueError(f"command {family} lacks successful and failed activity")
+    for family in FAMILIES:
+        contexts = {
+            row.arguments.split(":", 1)[0]
+            for row in records
+            if row.command.startswith(family + ".")
+        }
+        if not {"infrastructure", "vehicle", "edge"} <= contexts:
+            raise ValueError(f"command {family} lacks required location contexts")
     for command in ("order.move", "order.skip", "order.flags"):
         if not any(row.command == command and row.outcome == "OK" for row in records):
             raise ValueError(f"required command activity absent: {command}")

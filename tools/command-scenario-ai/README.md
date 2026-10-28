@@ -7,14 +7,16 @@ inputs come from a one-tick reference game. Both roles receive the same input.
 
 The script builds a small road depot and bus with two depot orders on a flat
 patch. Its Park-Miller PRNG never calls the game's Random. Initial infrastructure,
-vehicle locations and map corners anchor random nearby coordinates; out-of-map
+vehicle locations and map corners form three equally selected contexts for random
+nearby coordinates; out-of-map
 coordinates become an invalid tile instead of wrapping a row. Six interleaved
 families get equal command counts. A short opening sequence guarantees successful
 and failed activity, including order MOVE, SKIP and an actual flags change. Each
 command records its index, API operation, argument carrier, return value and
 `AIError.GetLastErrorString()` on failure. The report retains every outcome and
 per-operation success/error-string counts. Missing or incomplete logs, wrong RNG
-completion, absent family success/failure and missing order activity fail.
+completion, absent family success/failure or location context and missing order
+activity fail.
 
 The source audit uses `src/script/api/script_{rail,road,order,vehicle,tile}.cpp`:
 rail track/depot/signal/conversion, road build/remove/depot/conversion, bus/truck

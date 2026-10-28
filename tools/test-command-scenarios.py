@@ -38,16 +38,13 @@ def log() -> list[str]:
         "vehicle.refit",
         "terraform.level",
     ]
-    state = 1
     lines = ["COMMAND-BEGIN 1 24 10 100"]
     for i, command in enumerate(names):
-        for _ in range(9 if i % 6 == 0 else 8):
-            state = state * 48271 % 2147483647
         ok = i < 6 or command in ("order.skip", "order.flags")
         lines.append(
-            f"COMMAND {i} {command} 100,101 {str(ok).lower()} {'OK' if ok else 'ERR_PRECONDITION_FAILED'}"
+            f"COMMAND {i} {command} {('infrastructure', 'vehicle', 'edge')[i // 6 % 3]}:100,101 {str(ok).lower()} {'OK' if ok else 'ERR_PRECONDITION_FAILED'}"
         )
-    return [*lines, f"COMMAND-END 24 {state}"]
+    return [*lines, f"COMMAND-END 24 {pow(48271, 220, 2147483647)}"]
 
 
 class Commands(unittest.TestCase):
@@ -62,6 +59,7 @@ class Commands(unittest.TestCase):
             [line.replace("ERR_PRECONDITION_FAILED", "OK") for line in valid],
             [line.replace("order.flags", "order.skip") for line in valid],
             [line.replace("station.bus", "road.build") for line in valid],
+            [line.replace("vehicle:100", "infrastructure:100") for line in valid],
             [line.replace("COMMAND-BEGIN 1", "COMMAND-BEGIN 2") for line in valid],
             [line.replace("COMMAND-END 24", "COMMAND-END 23") for line in valid],
         ):
