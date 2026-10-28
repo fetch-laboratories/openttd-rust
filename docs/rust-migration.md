@@ -695,8 +695,9 @@ profiles, CI request records and any folder holding a `provenance.json`, so a pi
 runtime records its provenance there. Unknown entries are listed as kept for a decision by
 hand. A live worktree's own `.local` stays with that worktree. Linux proc descriptors protect
 same-user writable output files and their containing candidates during planning and immediately
-before deletion, using paths and file identity. Unreadable same-user descriptors prevent
-removal; a process opening output after planning can therefore keep a listed candidate.
+before deletion, using paths and file identity. If descriptor inspection is incomplete, each
+regular file must admit a kernel read lease; live writers or unavailable leases retain the
+candidate. A process opening output after planning can therefore keep a listed candidate.
 
 ### Automatic rollback (user-authorized, 2026-10-22)
 
