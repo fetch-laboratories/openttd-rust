@@ -44,12 +44,15 @@ REFERENCE = COMMON_LOCAL / "reference/openttd"
 # SANITIZE_VARIABLE, so simulate, its adapters and its scenario modules see them too.
 SANITIZE_VARIABLE = "OPENTTD_SANITIZE"
 SANITIZE = os.environ.get(SANITIZE_VARIABLE) == "1"
-SANITIZED = "-sanitized" if SANITIZE else ""
+TSAN_VARIABLE = "OPENTTD_TSAN"
+TSAN = os.environ.get(TSAN_VARIABLE) == "1"
+SANITIZED = "-sanitized" if SANITIZE else "-tsan" if TSAN else ""
 REFERENCE_BUILD = COMMON_LOCAL / f"build-reference{SANITIZED}"
 CANDIDATE_BUILD = ROOT / f"build-rust{SANITIZED}"
 # Stable rustc accepts -Zsanitizer only under RUSTC_BOOTSTRAP; the precompiled std
 # stays uninstrumented.
 SANITIZER_FLAGS = "-fsanitize=address,undefined -fno-omit-frame-pointer"
+TSAN_FLAGS = "-fsanitize=thread -fno-omit-frame-pointer"
 RUST_SANITIZER_FLAGS = "-Zsanitizer=address -Cforce-frame-pointers=yes"
 BASELINE = json.loads((ROOT / "migration/baseline.json").read_text())
 SCENARIO_COVERAGE_PREFIX: ContextVar[str | None] = ContextVar(
@@ -438,6 +441,12 @@ def main():
         action="store_true",
         help="build or simulate the ASan and UBSan flavours of both games",
     )
+    parser.add_argument(
+        "--tsan", action="store_true", help="C++ ThreadSanitizer builds"
+    )
+    parser.add_argument(
+        "--threaded", action="store_true", help="SDL offscreen scenarios"
+    )
     # simulate forwards any further arguments to tools/simulate.py; deep, scenario selectors.
     args, simulate_args = parser.parse_known_args()
     if simulate_args and args.action not in ("simulate", "coverage", "deep"):
@@ -450,10 +459,20 @@ def main():
         print(shell_exports(), end="")
         return
     args.sanitize = args.sanitize or SANITIZE
-    if args.sanitize and args.action not in ("build", "simulate"):
-        parser.error("--sanitize applies to build and simulate")
-    if args.sanitize and not SANITIZE:
-        exported = os.environ | {SANITIZE_VARIABLE: "1"}
+    args.tsan = args.tsan or TSAN
+    if args.sanitize and (args.tsan or args.threaded):
+        parser.error("--sanitize conflicts with --tsan/--threaded")
+    if (args.sanitize or args.tsan or args.threaded) and args.action not in (
+        "build",
+        "simulate",
+    ):
+        parser.error("sanitizer/threaded options apply to build and simulate")
+    if args.action == "simulate" and args.tsan and not args.threaded:
+        parser.error("--tsan simulation requires --threaded")
+    if (args.sanitize and not SANITIZE) or (args.tsan and not TSAN):
+        exported = os.environ | {
+            SANITIZE_VARIABLE if args.sanitize else TSAN_VARIABLE: "1"
+        }
         os.execve(sys.executable, [sys.executable, *sys.argv], exported)
     if args.action == "deep":
         from deep import run_deep
@@ -465,6 +484,8 @@ def main():
             ensure_reference()
     env = environment()
     instruction_mode = args.action == "simulate" and "--instructions" in simulate_args
+    if (args.tsan or args.threaded) and instruction_mode:
+        parser.error("--tsan/--threaded conflicts with --instructions")
     if args.sanitize:
         if instruction_mode:
             parser.error("--sanitize conflicts with --instructions")
@@ -599,9 +620,9 @@ def main():
             "-DCMAKE_DISABLE_FIND_PACKAGE_Grfcodec=ON",
             "-DBUILD_TESTING=ON",
         ]
-        if args.sanitize:
+        if args.sanitize or args.tsan:
             common += [
-                f"-DCMAKE_{kind}_FLAGS={SANITIZER_FLAGS}"
+                f"-DCMAKE_{kind}_FLAGS={TSAN_FLAGS if args.tsan else SANITIZER_FLAGS}"
                 for kind in ("C", "CXX", "EXE_LINKER")
             ]
         if args.action == "tools":
@@ -678,7 +699,11 @@ def main():
                 run(
                     f"{name}-build",
                     ["cmake", "--build", str(build), "--parallel", str(args.jobs)]
-                    + (targets if args.sanitize or args.action == "coverage" else []),
+                    + (
+                        targets
+                        if args.sanitize or args.tsan or args.action == "coverage"
+                        else []
+                    ),
                 )
                 if instruction_mode:
                     from simulation.instructions import record_build
@@ -725,7 +750,14 @@ def main():
                 "simulate",
                 [
                     sys.executable,
-                    str(ROOT / "tools/simulate.py"),
+                    str(
+                        ROOT
+                        / (
+                            "tools/simulation/threaded.py"
+                            if args.threaded
+                            else "tools/simulate.py"
+                        )
+                    ),
                     "--jobs",
                     str(max(1, args.jobs // 2)),
                     *simulate_args,

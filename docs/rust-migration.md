@@ -324,7 +324,8 @@ beside a log per member. The set is `DEEP_SET` in `tools/deep.py`: `simulate --s
 scenarios against the default 445), then `simulate --sanitize` (below), each run through the
 ordinary driver action with a per-game timeout of 7200 s, since idle-priority games run slowly
 under load. Members share the
-ordinary build and game locks. A clone-wide exclusive `deep.lock` (`LOCK_NAME` in
+ordinary build and game locks. The threaded and C++ TSan members follow (#506).
+A clone-wide exclusive `deep.lock` (`LOCK_NAME` in
 `tools/deep.py`) is held for a whole deep run and for a speed pass's `collect` from before it
 prepares launches until timed collection ends: a deep run that finds it held exits 0 as
 skipped, and `collect` waits, printing its holders, until a deep run finishes. Selectors go to
@@ -333,6 +334,37 @@ on #503. The soak run's wall time is the report's `seconds` (summed scenario sec
 the simulate job count, `--jobs // 2`, approximates it).
 
 ### Sanitized games
+
+`python3 tools/migration.py simulate --threaded` (#506) compares the unchanged road
+Opus and Padhattan 2000 inputs through SDL offscreen, retaining native graph workers.
+The scenario-local console adapter queries the same occupied road tile on the game
+thread and then on main through `QueueOnMainThread`, under the driver's existing
+mutex, requiring the production occupancy predicate and clearing query to reject it.
+It checks saturated landscaping credits, distinct threads, and the calendar phase.
+The next-month console callback saves during calendar advancement, before economy
+and tick advancement; it is not an end-of-tick save. `scrollto instant` removes
+camera timing without another mask. Selecting `32bpp-anim` explicitly avoids an
+asynchronous startup blitter switch and its timing-dependent log order.
+The existing decoder compares every snapshot,
+RNG and complete combined output, using only existing masks and GLOG normalization.
+Each input also gets an independent same-build pair in both plain and desync modes.
+All runs, including full reports, are retained; missing saves or markers fail.
+
+`build|simulate --tsan` selects separate `build-reference-tsan` and `build-rust-tsan`
+trees; simulation additionally requires `--threaded`. C++ compile/link flags are
+`-fsanitize=thread -fno-omit-frame-pointer`. This option is mutually exclusive with
+`--sanitize`; it uses neither ASan archives/options nor Rust instrumentation.
+Reports classify both conflicting game/library stacks and global or allocation
+identity, normalized for source trees, line numbers, addresses and thread IDs.
+Unsymbolized library frames retain module offsets as code identities. Lock-order
+warnings retain their acquisition stacks. Both-role, reference-only and
+candidate-only findings remain separate; unknown reports fail. Full native reports
+remain alongside the saves. Classification collects each input's fixed repetitions
+by actual executable: a reference same-build pair never supplies candidate reports.
+C++ TSan cannot see uninstrumented Rust accesses, so a
+reference-only finding can reflect an access moved to Rust. These two fixed inputs
+do not establish arbitrary SDL determinism, interactive RNG equality or Rust race
+freedom. The deep set runs both ordinary threaded and TSan comparisons.
 
 `python3 tools/migration.py build|simulate --sanitize` (#505) builds both games with
 `-fsanitize=address,undefined` in `build-reference-sanitized` (shared, beside the reference
