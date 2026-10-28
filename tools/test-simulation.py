@@ -1058,6 +1058,35 @@ class SpeedPassTests(unittest.TestCase):
 
 
 class PlatformSubsetTests(unittest.TestCase):
+    def test_generation_requires_no_jobs_before_and_after_initialization(self) -> None:
+        for recalc_time, jobs in (
+            (0, {}),
+            (18000, {}),
+            (18000, {0: {"join_date": 999999}}),
+        ):
+            with (
+                self.subTest(recalc_time=recalc_time, jobs=jobs),
+                patch.object(platform_subset.core, "read_save", return_value={}),
+                patch.object(
+                    platform_subset.core,
+                    "rows",
+                    side_effect=lambda _state, chunk, recalc_time=recalc_time, jobs=jobs: (
+                        {
+                            "PATS": {0: {"linkgraph.recalc_time": recalc_time}},
+                            "DATE": {0: {"economy_date": 0}},
+                            "LGRJ": jobs,
+                        }[chunk]
+                    ),
+                ),
+            ):
+                case = {"kind": "generate", "ticks": 56388}
+                run = {"snapshots": [Path("checkpoint.sav")]}
+                if jobs:
+                    with self.assertRaisesRegex(ValueError, "unexpectedly has"):
+                        platform_subset.check_no_join(case, run)
+                else:
+                    platform_subset.check_no_join(case, run)
+
     def test_prepared_inputs_are_identical_and_reject_a_due_join(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

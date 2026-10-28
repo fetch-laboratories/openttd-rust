@@ -118,17 +118,21 @@ def scenarios(output: Path) -> list[Scenario]:
 def check_no_join(case: Scenario, run: dict[str, Any]) -> None:
     for path in run["snapshots"]:
         state = core.read_save(path)
+        jobs = core.rows(state, "LGRJ")
+        if case["kind"] == "generate":
+            if jobs:
+                raise ValueError(
+                    "Unserved generated map unexpectedly has link-graph jobs"
+                )
+            continue
         date = core.rows(state, "DATE")[0]["economy_date"]
-        end = case.get("platform_end_date", date + (case["ticks"] + 73) // 74)
+        end = case["platform_end_date"]
         if date > end or core.rows(state, "PATS")[0]["linkgraph.recalc_time"] != 9000:
             raise ValueError("Platform fixture exceeded its fixed no-join interval")
-        jobs = core.rows(state, "LGRJ")
         if any(job["join_date"] <= end for job in jobs.values()):
             raise ValueError(
                 "Platform fixture has a link-graph join due during its run"
             )
-        if case["kind"] == "generate" and jobs:
-            raise ValueError("Unserved generated map unexpectedly has link-graph jobs")
 
 
 def main(arguments: list[str]) -> int:
