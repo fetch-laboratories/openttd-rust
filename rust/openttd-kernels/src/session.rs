@@ -995,6 +995,8 @@ crate::abi::layouts! {
 
 /// # Safety
 /// The native setup and profiling frames stay live through synchronous generation.
+/// A nonnull callback pointer is readable at entry; its nullable value is copied
+/// before setup and never borrowed across generation or callback reentry.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_session_generate(
     s: &Services,
@@ -1003,8 +1005,10 @@ pub unsafe extern "C" fn openttd_rust_session_generate(
     x: u32,
     y: u32,
     reset: bool,
-    callback: crate::genworld::Callback,
+    callback: *const crate::genworld::Callback,
 ) -> bool {
-    crate::genworld::set_native_callback(callback);
+    if !callback.is_null() {
+        crate::genworld::set_native_callback(unsafe { callback.read() });
+    }
     (Session { s, frame }).generate(kind, x, y, reset).is_ok()
 }

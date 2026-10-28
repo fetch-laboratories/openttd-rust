@@ -162,7 +162,7 @@ OpenTTDIndustryTickRecord RustIndustryTickRecord() noexcept;
 OpenTTDVehicleSchedulerTables RustVehicleSchedulerTables(OpenTTDCommandCost *refit = nullptr, OpenTTDCommandCost *temporary = nullptr) noexcept;
 OpenTTDScheduleTime RustScheduleTime() noexcept;
 extern "C" {
-bool openttd_rust_session_generate(const OpenTTDSessionServices *, OpenTTDSessionFrame *, GenWorldMode, uint32_t, uint32_t, bool, GWDoneProc *);
+bool openttd_rust_session_generate(const OpenTTDSessionServices *, OpenTTDSessionFrame *, GenWorldMode, uint32_t, uint32_t, bool, GWDoneProc *const *);
 bool openttd_rust_session_intro(const OpenTTDSessionServices *, OpenTTDSessionFrame *, bool);
 void openttd_rust_session_settings(const OpenTTDSessionServices *);
 bool openttd_rust_session_switch(const OpenTTDSessionServices *, OpenTTDSessionFrame *, SwitchMode);

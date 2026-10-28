@@ -84,7 +84,7 @@ void GenerateWorldSetCallback(GWDoneProc *proc);
 void GenerateWorldSetAbortCallback(GWAbortProc *proc);
 void GenerateWorld(GenWorldMode mode, uint size_x, uint size_y, bool reset_settings = true);
 #else
-void GenerateWorld(GenWorldMode mode, uint size_x, uint size_y, bool reset_settings = true, GWDoneProc *callback = nullptr);
+void GenerateWorld(GenWorldMode mode, uint size_x, uint size_y, bool reset_settings = true, GWDoneProc *const *callback = nullptr);
 #endif
 void AbortGeneratingWorld();
 bool IsGeneratingWorldAborted();

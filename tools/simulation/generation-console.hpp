@@ -85,6 +85,49 @@ static void GenerationOuterProgress(GenWorldProgress stage, bool set)
 	GenerationSetAbort(GenerationOuterAbort);
 	HandleGeneratingWorldAbortion();
 }
+static void GenerationNative(GWDoneProc *const *callback = nullptr)
+{
+#ifdef WITH_RUST
+	GenerateWorld(GWM_EMPTY, 64, 64, false, callback);
+#else
+	if (callback != nullptr) GenerateWorldSetCallback(*callback);
+	GenerateWorld(GWM_EMPTY, 64, 64, false);
+#endif
+}
+struct GenerationCallbackFailure {};
+static int generation_callback_case, generation_callback_dispatch;
+static void GenerationSecond() { generation_callback_dispatch = generation_callback_dispatch * 10 + 2; }
+static void GenerationFirst()
+{
+	extern bool _in_modal_progress;
+	generation_callback_dispatch = generation_callback_dispatch * 10 + 1;
+	fmt::print(stderr, "GENERATION callback-stage {} {} {} {} {} {} {}\n", generation_callback_case, generation_callback_dispatch, _in_modal_progress, _generating_world, _current_company.base(), _local_company.base(), generation_outer_cleanup);
+	if (generation_callback_dispatch != 1 || generation_callback_case < 3 || generation_callback_case > 6) return;
+	GWDoneProc *replacement = generation_callback_case == 4 ? nullptr : GenerationSecond;
+	GenerationNative(generation_callback_case == 3 ? nullptr : &replacement);
+	if (generation_callback_case != 6) throw GenerationCallbackFailure{};
+}
+static void GenerationCallbacks()
+{
+	extern bool _in_modal_progress;
+	for (generation_callback_case = 0; generation_callback_case < 8; generation_callback_case++) {
+		generation_callback_dispatch = generation_outer_cleanup = 0;
+		_current_company = _local_company = COMPANY_SPECTATOR;
+		GWDoneProc *first = GenerationFirst;
+		GWDoneProc *replacement = generation_callback_case == 2 ? GenerationSecond : nullptr;
+		SetModalProgress(true);
+		GenerationNative(&first);
+		if (generation_callback_case == 1 || generation_callback_case == 2) GenerationNative(&replacement);
+		for (int attempt = 0; attempt < 2; attempt++) {
+			SetModalProgress(false);
+			generation_outer_cleanup = 0;
+			bool caught = false;
+			try { GenerationNative(generation_callback_case == 7 && attempt == 0 ? &replacement : nullptr); }
+			catch (GenerationCallbackFailure &) { caught = true; }
+			fmt::print(stderr, "GENERATION callback-result {} {} {} {} {} {} {} {} {}\n", generation_callback_case, attempt, generation_callback_dispatch, caught, _in_modal_progress, generation_outer_cleanup, _generating_world, _current_company.base(), _local_company.base());
+		}
+	}
+}
 static void GenerationLifecycle()
 {
 	extern bool _in_modal_progress;
@@ -116,7 +159,8 @@ static void GenerationLifecycle()
 		_current_company = _local_company = COMPANY_SPECTATOR;
 		if (kind == 12 || kind == 13) GameConfig::GetConfig(GameConfig::SSS_FORCE_GAME)->Change(kind == 12 ? "GenerationSleep" : "GenerationCap");
 #ifdef WITH_RUST
-		GenerateWorld(mode, 64, 64, false, GenerationDone);
+		GWDoneProc *done = GenerationDone;
+		GenerateWorld(mode, 64, 64, false, &done);
 #else
 		GenerateWorldSetCallback(GenerationDone);
 		GenerateWorld(mode, 64, 64, false);
@@ -125,6 +169,7 @@ static void GenerationLifecycle()
 		GenerationSnapshot("lifecycle");
 		if (kind == 12 || kind == 13) { Game::Uninitialize(true); GameConfig::GetConfig(GameConfig::SSS_FORCE_GAME)->Change(std::nullopt); }
 	}
+	GenerationCallbacks();
 	generation_lifecycle = false; generation_target = -1; generation_storage = nullptr;
 	_exit_game = saved_exit;
 	_game_mode = GM_NORMAL;

@@ -214,7 +214,7 @@ bool RustRunWorldGeneration(OpenTTDSessionFrame *frame) noexcept
 {
 	return SessionException(frame, [] { _GenerateWorld(); });
 }
-void GenerateWorld(GenWorldMode mode, uint size_x, uint size_y, bool reset_settings, GWDoneProc *callback)
+void GenerateWorld(GenWorldMode mode, uint size_x, uint size_y, bool reset_settings, GWDoneProc *const *callback)
 {
 	OpenTTDSessionFrame frame;
 	openttd_rust_session_generate(&GetRustSessionServices(), &frame, mode, size_x, size_y, reset_settings, callback);
