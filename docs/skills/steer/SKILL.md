@@ -23,29 +23,13 @@ User focus for this run, if any: $ARGUMENTS (in Codex, any text sent with `$stee
 A focus that names a question (disk, CI, a crashed root, housekeeping) is
 answered first, down to its root cause. Read it broadly: housekeeping covers
 code, tests and refactoring as well as docs. Tell the user at the start which
-of steps 3 and 4 still run, and land the answer through step 5 with what root
-does next. A focus that asks you to restart root is handled in step 7.
+of steps 2 and 3 still run, and land the answer through step 4 with what root
+does next. A focus that asks you to restart root is handled in step 6.
 
 Attribution on every issue, comment and commit body you write:
 `Agent: /root (<host> steering review) | Model: <your exact model ID> | Reasoning effort: <as reported by host, else "not reported to the agent by host">`.
 
-## 1. Take a bearing
-
-Before reading anything else, launch one fresh background subagent to measure
-the project against its goal. Its brief holds only the goal sentence from
-AGENTS.md's first "Migration method" bullet, the last steering commit (step
-2's `git log` search), and the paths of the repository and the pinned original
-(`.local/reference/openttd`). It reads the code and git history, not
-`AGENTS.md`, `docs/`, issues, PRs or transcripts, so it carries none of root's
-framing. It reports:
-
-- original C++ code lines (not comments or blank lines) retired and remaining
-  across the whole fork, by area, now and at the last steering commit;
-- what it would work on next to reach the goal, and why.
-
-Read its report with the step 4 audits.
-
-## 2. Load the last steering
+## 1. Load the last steering
 
 1. Find the last steering commit: `git log --format='%h %ad %s' --date=short | grep -i 'Doc: .*Steer'`.
    Its message and the roadmap's "steering review" section state the standing
@@ -70,7 +54,7 @@ Read its report with the step 4 audits.
 Done when you can list each standing correction, the issue that tracks it, and
 the review or message that introduced it.
 
-## 3. Survey root's work since then
+## 2. Survey root's work since then
 
 Run these together:
 
@@ -81,7 +65,7 @@ Run these together:
 - CI on `rust-migration` (`gh run list --branch rust-migration`). Note PR checks and
   how many runs were cancelled.
 - Open PRs and issues, and the latest review reports on the integrated and pending PRs.
-- `python3 tools/port-metrics.py`, plus the PR-reported metrics and speed ratios.
+- `python3 tools/port-metrics.py --whole-fork`, plus the PR-reported metrics and speed ratios.
   Before quoting a progress figure, confirm it counts original C++ retired,
   not glue removed.
 - `git worktree list` and disk use.
@@ -129,7 +113,7 @@ condition that brings it back, or closed. Judge each issue on its merits
 against AGENTS.md's priorities and the defects it would catch; ordering a list
 is not a verdict.
 
-## 4. Audit independently
+## 3. Audit independently
 
 The value of this session is an audit that does not depend on root's reviews.
 Use the current host's native subagents: Codex subagents when running in Codex,
@@ -184,18 +168,12 @@ where they apply, and name what it compared. Relay a short summary to the
 user as each audit returns. Before acting on a load-bearing claim, such as red CI,
 a reachable divergence or a perf attribution, check it yourself.
 
-Done when every audit, the bearing included, has reported and every claim you
-will act on is verified.
+Done when every audit has reported and every claim you will act on is verified.
 
-## 5. Correct course
+## 4. Correct course
 
 Choose a few high-leverage corrections. A systemic pattern counts for more than
-a one-off finding. A gap between the bearing (step 1) and root's work order
-counts most: remaining code the order does not reach, or next work the bearing
-names that the order lacks. From its numbers, state what share of the remaining
-code the work order covers and how many steering periods the current phase
-needs at the current rate. Each correction lands in exactly one authoritative
-place:
+a one-off finding. Each correction lands in exactly one authoritative place:
 
 - **Rule change** goes in `AGENTS.md`, phrased as the target behavior.
 - **New work** gets an issue: problem with measurements, scope, evidence and
@@ -227,12 +205,12 @@ Write each correction as the outcome you want, with its bounds attached:
 When a correction reverses a direction the user gave root, the steering section
 says so in one line: what it reverses, and why.
 
-Commit `AGENTS.md`, the roadmap and any restart-prompt edit (step 6) as one
+Commit `AGENTS.md`, the roadmap and any restart-prompt edit (step 5) as one
 docs-only commit pushed straight to `rust-migration`, with a title like
 `Doc: Steer migration toward <corrections> [skip ci]`. Earlier steering commits
 landed the same way. Confirm `origin/rust-migration` has it.
 
-## 6. Check /start-development
+## 5. Check /start-development
 
 `docs/skills/start-development/SKILL.md` is root's restart prompt. It stays
 unchanged by default: it sends root to the roadmap's latest steering review,
@@ -240,9 +218,9 @@ and that section carries this review's corrections. Edit the prompt only when
 this review shows it needs improving, for example because root stopped early,
 misread it, or needs a new standing step in its work loop. Keep it open-ended:
 finishing the listed items triggers planning the next work, and only the user
-ends the assignment. Include any edit in the step 5 commit.
+ends the assignment. Include any edit in the step 4 commit.
 
-## 7. Report and hand off
+## 6. Report and hand off
 
 Tell the user, briefly:
 
