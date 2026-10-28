@@ -130,11 +130,15 @@ The fork executable is `build-rust/openttd-rust`; Cargo artifacts reside in the 
 `build-rust/cargo` directory. CMake tracks the Rust sources, manifests, lockfile, and toolchain
 file to rebuild the archive and affected executables. The reference executable is
 `.local/build-reference/openttd` in the main checkout. Most in-game branding remains original.
-When using this host's extracted dependencies, launch with their library path:
+When the driver bootstrapped `.local/deps`, it links the fork's game and test executables with
+that library directory as their build RPATH, so `./build-rust/openttd-rust -X`,
+`./build-rust/openttd_test` and bare `ctest` in `build-rust` run from a plain shell. The
+reference executable and anything run outside the driver (Cargo, other binaries) take the
+driver's environment from the `env` subcommand:
 
 ```sh
-LD_LIBRARY_PATH="$PWD/.local/deps/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-  ./build-rust/openttd-rust -X
+eval "$(python3 tools/migration.py env)"
+cargo check --workspace --locked
 ```
 
 `-X` avoids global game folders. Use separate development configuration and saves.
@@ -563,6 +567,26 @@ current head with `--match-head-commit`, then record and close the included comp
 batches small: the integration merge is the automatic rollback unit. A stack organizes dependent
 PRs but does not itself combine validation runs. No extra local integration build or full local
 simulation run is required.
+
+### Housekeeping
+
+`python3 tools/housekeeping.py` lists stale worktrees and `.local` output with each item's
+size and reason; `--apply` removes exactly its `remove` lines. Root runs it at session start and
+after integrations, reading the dry run before `--apply`. It removes a linked worktree (never
+the main checkout or `.local/reference`) whose branch merged into `origin/rust-migration` or
+whose PR merged or closed, through `git worktree remove` without `--force`, so a dirty or locked
+one stays. It then deletes the local branch when that branch merged or origin holds the same
+head. A branch at a base commit with no PR is a task not yet committed and stays. In the main
+checkout's `.local` it removes finished runs under `simulation`, `verification`, `coverage` and
+`deep` whose report's `candidate_commit` (or a deep report's `commit`) is an ancestor of
+`origin/rust-migration`, keeping other finished runs as possible open-PR evidence and reports
+without a commit as unclassified, plus unfinished runs idle for 12 hours and loose logs, clearing
+read-only bits first. It
+keeps the current deep report and the runs it names, each scenario's newest candidate profile
+(`callgrind.out`), shared builds, caches, toolchains, locks, the reference, retained speed
+profiles, CI request records and any folder holding a `provenance.json`, so a pinned anchor
+runtime records its provenance there. Unknown entries are listed as kept for a decision by
+hand. A live worktree's own `.local` stays with that worktree.
 
 ### Automatic rollback (user-authorized, 2026-10-22)
 

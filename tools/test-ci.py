@@ -914,6 +914,39 @@ class RequestTests(unittest.TestCase):
                 self.assertEqual(ci.main(), 1)
             ci.verify_children({"failed_jobs": []})
 
+    def test_wait_returns_within_shell_cap_and_names_resume_command(self) -> None:
+        running = {"status": "in_progress", "html_url": RUN, "failed_jobs": []}
+        record = {"profile": "full", "head": HEAD}
+        clock = itertools.count(0, 100)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "request.json"
+            with (
+                patch.object(ci, "status", return_value=(record, running)),
+                patch.object(ci.time, "monotonic", side_effect=lambda: next(clock)),
+                patch.object(ci.time, "sleep") as sleep,
+                patch("builtins.print"),
+            ):
+                with self.assertRaisesRegex(
+                    ci.WaitTimeout, f"resume with: python3 tools/ci.py wait {path}$"
+                ):
+                    ci.wait(path, 540, 15)
+            self.assertTrue(sleep.called)
+            for argv in (
+                ["ci.py", "wait", str(path)],
+                ["ci.py", "request", "170", "--wait"],
+            ):
+                with (
+                    patch("sys.argv", argv),
+                    patch.object(ci, "request", return_value=path),
+                    patch.object(
+                        ci, "wait", side_effect=ci.WaitTimeout("resume")
+                    ) as waited,
+                    patch("builtins.print") as printed,
+                ):
+                    self.assertEqual(ci.main(), 2)
+                self.assertLess(waited.call_args.args[1], 600)
+                printed.assert_called_once()
+
     def test_successful_run_without_full_status_is_rejected(self):
         record = {
             "repository": "example/fork",

@@ -4,4 +4,12 @@ extra-paths = ["tools", "tools/simulation"]
 
 [src]
 # Add new modules and each #501 conversion here; this list only grows.
-include = ["tools/ci.py", "tools/deep.py", "tools/preflight.py", "tools/test-deep.py"]
+include = [
+    "tools/ci.py",
+    "tools/deep.py",
+    "tools/housekeeping.py",
+    "tools/preflight.py",
+    "tools/test-deep.py",
+    "tools/test-housekeeping.py",
+    "tools/test-migration-env.py",
+]

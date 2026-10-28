@@ -87,9 +87,10 @@ Remove only verified merged work; do not close unfinished PRs just to stop.
 - The roadmap's resume checkpoint and the count of unintegrated branches.
 - Running local jobs (cmake, ninja, cargo, openttd, tools/*.py), mapped to
   their worktrees.
-- Cleanup only for work already verified as merged, and it is optional: if a
-  removal fails, the checkpoint lists the worktree for resume. Leave cache/log
-  audits and unrelated housekeeping for normal development.
+- Cleanup only for work already verified as merged, and it is optional: root
+  may run `python3 tools/housekeeping.py` and, after reading its dry run,
+  `--apply`; the checkpoint lists each worktree it keeps for resume. Leave
+  cache/log audits and unrelated housekeeping for normal development.
 
 Verify rather than trust the roadmap or root's messages.
 
