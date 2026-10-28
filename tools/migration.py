@@ -551,7 +551,6 @@ def main():
             "-DBUILD_TESTING=ON",
         ]
         if args.sanitize:
-            common[-1] = "-DBUILD_TESTING=OFF"
             common += [
                 f"-DCMAKE_{kind}_FLAGS={SANITIZER_FLAGS}"
                 for kind in ("C", "CXX", "EXE_LINKER")
@@ -608,9 +607,13 @@ def main():
                     report["rust_configuration"] = rust_configuration(build)
                 if args.action != "tools":
                     supply_graphics(build)
+                # Sanitized trees build only the game and its runtime data: the test
+                # executables would also run under ASan during test discovery.
+                targets = ["--target", "openttd", "regression_files"]
                 run(
                     f"{name}-build",
-                    ["cmake", "--build", str(build), "--parallel", str(args.jobs)],
+                    ["cmake", "--build", str(build), "--parallel", str(args.jobs)]
+                    + (targets if args.sanitize else []),
                 )
                 if instruction_mode:
                     from simulation.instructions import record_build

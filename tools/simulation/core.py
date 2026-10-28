@@ -1152,24 +1152,25 @@ def run_scenario(
                     }
             if benchmark_repetitions and (result["differences"] or result["problems"]):
                 break  # Preserve the first failing repetition instead of overwriting it.
-        if sanitizer_reports:
-            from .sanitizers import compare as compare_reports
-
-            comparison = compare_reports(sanitizer_reports)
-            texts = sanitizer_reports["candidate"].reports
-            result["sanitizer"] = {
-                **asdict(comparison),
-                "reports": {
-                    key: texts[key]
-                    for key in comparison.original + comparison.candidate_only
-                },
-            }
-            for key in comparison.candidate_only:
-                result["problems"].append(f"candidate-only sanitizer report: {key}")
     except (
         Exception
     ) as error:  # Record and continue, so the report covers every scenario.
         result["problems"].append(f"harness error: {type(error).__name__}: {error}")
+    # A game ASan stopped can end the scenario early; its reports still count.
+    if len(sanitizer_reports) == 2:
+        from .sanitizers import compare as compare_reports
+
+        comparison = compare_reports(sanitizer_reports)
+        texts = sanitizer_reports["candidate"].reports
+        result["sanitizer"] = {
+            **asdict(comparison),
+            "reports": {
+                key: texts[key]
+                for key in comparison.original + comparison.candidate_only
+            },
+        }
+        for key in comparison.candidate_only:
+            result["problems"].append(f"candidate-only sanitizer report: {key}")
     ratios = [
         sample["candidate_reference_ratio"]
         for sample in result["plain_speed"]["samples"]
