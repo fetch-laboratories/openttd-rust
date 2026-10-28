@@ -199,6 +199,11 @@ def prepare(
     provenance = json.loads(FIXTURE.with_suffix(".json").read_text())
     if record["source_sha256"] != provenance["sha256"]:
         raise RuntimeError("community save differs from its provenance")
+    if (
+        hashlib.sha256((INPUTS / "packages.json").read_bytes()).hexdigest()
+        != provenance["packages_sha256"]
+    ):
+        raise RuntimeError("community packages differ from the save's provenance")
     result["community_input"] = record
     return dict(scenario, save=str(path))
 
@@ -209,11 +214,14 @@ def activity(run: Run, source: Path | None = None) -> Activity:
     snapshots = ([source] if source else []) + run["snapshots"]
     for path in snapshots:
         companies = core.rows(path, "PLYR")
+        chunk = core.read_save(path)["AIPL"]
         for cid in range(len(SCRIPTS)):
             company = companies.get(cid)
             if company is None or not company["is_ai"]:
                 raise RuntimeError(f"community AI {cid} missing from {path.name}")
-            reader = core.Reader(dict(core.read_save(path)["AIPL"]["elements"])[cid])
+            reader = core.Reader(dict(chunk["elements"])[cid])
+            # SaveReal_AIPL writes slot configuration before the running AI.
+            core.read_object(reader, chunk["header"], "", {})
             if reader.take(reader.gamma()).decode() != SCRIPTS[cid]:
                 raise RuntimeError(f"community AI {cid} was replaced")
             observed.loans.setdefault(cid, []).append(company["current_loan"])
