@@ -128,7 +128,7 @@ def game_environment(scenario):
     )
 
 
-def adapter(build, folder, env):
+def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
     """Include unchanged signal.cpp to expose portable private sets to inspection.
 
     The adapter replaces its ordinary signal object; the pinned source is never
@@ -145,7 +145,9 @@ def adapter(build, folder, env):
     )
     source = folder / "signals-source.cpp"
     source.write_text(
-        signal.read_text()
+        f'#line 1 "{signal}"\n'
+        + signal.read_text()
+        + f'\n#line 1 "{source}"\n'
         + (core.ROOT / "tools/simulation/pbs-console.cpp")
         .read_text()
         .split("// PBS registration")[0]

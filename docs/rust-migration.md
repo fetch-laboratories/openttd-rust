@@ -160,6 +160,23 @@ in the default native tests. `tools/test-generated-abi.py` checks that every gen
 visitor names exactly its declared fields, and parses a synthetic tree.
 Cross-language signature assertions are not generated.
 
+## Original simulation coverage
+
+`python3 tools/migration.py coverage --jobs 4` builds only the pinned original,
+with GCC coverage instrumentation in the worktree's ignored
+`.local/build-reference-coverage`, then runs the current default scenario set.
+Preparation and both snapshot and plain game modes count toward each scenario;
+per-process `GCOV_PREFIX` directories prevent counter contention. Fixture adapters
+inherit the same compile/link instrumentation. Pinned gcovr 8.4 merges the
+counters and writes JSON with per-file/per-function line and branch coverage,
+per-scenario unique original lines, and a Markdown summary under `.local/coverage`.
+The simulation source inventory comes from `tools/port-metrics.py`. This Linux,
+`-O0` measurement includes compiler exception edges; files without emitted code
+are listed separately. It guides coverage work and scenario selection, provides
+no equivalence or integration evidence, and runs outside CI. Re-measure after
+scenario inputs change. Failed reference runs retain their diagnostics and fail
+the action. `--timeout` overrides the per-game limit (600 seconds by default).
+
 ## Compiler cache, shared reference and CI time
 
 Every worktree of a clone shares the main checkout's pinned reference checkout

@@ -4,9 +4,10 @@
 import _thread
 import os
 import sys
+import uuid
 
 
-def main():
+def main() -> None:
     if sys.platform != "linux":
         sys.exit("deterministic simulation requires Linux RLIMIT_NPROC")
 
@@ -23,6 +24,10 @@ def main():
         # Root and privileged capabilities can bypass this limit. Never silently
         # run threaded jobs and reintroduce wall-time-dependent pause iterations.
         sys.exit("RLIMIT_NPROC did not prevent threads; run as an unprivileged user")
+    if prefix := os.environ.get("OPENTTD_COVERAGE_PREFIX"):
+        os.environ["GCOV_PREFIX"] = os.path.join(prefix, uuid.uuid4().hex)
+        os.environ["GCOV_PREFIX_STRIP"] = "0"
+        os.environ["GCOV_EXIT_AT_ERROR"] = "1"
     os.execvpe(sys.argv[1], sys.argv[1:], os.environ)
 
 
