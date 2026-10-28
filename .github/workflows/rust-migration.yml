@@ -169,6 +169,13 @@ jobs:
       run: |
         tar -xf .local/native-inputs/native-runtimes.tar -C .local
         python3 tools/ci_native.py unpack .local/native-inputs/native-support.tar
+    - name: Cache pinned community source packages
+      uses: actions/cache@v4
+      with:
+        path: .local/community-ai
+        key: community-ai-${{ hashFiles('migration/community-ai/packages.json') }}
+    - name: Validate required community inputs
+      run: python3 -m tools.simulation.community_ai fetch
     - name: Compare assigned simulation inventory
       run: python3 tools/ci_native.py shard ${{ matrix.shard }} --jobs "$(nproc)" --output .local/shard-${{ matrix.shard }}.json
     - name: Collect simulation evidence
