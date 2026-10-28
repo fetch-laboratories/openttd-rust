@@ -76,6 +76,10 @@
 #include "rust/command_cost_services.h"
 #endif
 
+#ifdef WITH_RUST
+#include "rust/clock_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 
@@ -136,7 +140,7 @@ CompanyScoreParts &GetRustCompanyScores()
 	return *scores;
 }
 /** Calendar year and difficulty read by inflation, price and startup entries. */
-static OpenTTDEconomySettings RustEconomySettings()
+OpenTTDEconomySettings RustEconomySettings() noexcept
 {
 	const auto &d = _settings_game.difficulty;
 	return {.year = TimerGameCalendar::year.base(), .max_loan = d.max_loan, .initial_interest = d.initial_interest,
@@ -2531,39 +2535,46 @@ void LoadUnloadStation(Station *st)
 #endif
 }
 
+#ifdef WITH_RUST
+OpenTTDEconomyMonth RustEconomyClockMonth() noexcept
+{
+	return {.month = TimerGameEconomy::month, .infinite_money = _settings_game.difficulty.infinite_money,
+		.maintenance = _settings_game.economy.infrastructure_maintenance, .fluctuating = _settings_game.difficulty.economy};
+}
+#endif
+
 /**
  * Every calendar month update of inflation.
  */
+#ifdef WITH_RUST
+static const IntervalTimer<TimerGameCalendar> _calendar_inflation_monthly({TimerGameCalendar::MONTH, TimerGameCalendar::Priority::COMPANY}, RustClockCallback{openttd_rust_clock_economy_calendar_month, &GetRustClockCompanyServices()});
+#else
 static const IntervalTimer<TimerGameCalendar> _calendar_inflation_monthly({TimerGameCalendar::MONTH, TimerGameCalendar::Priority::COMPANY}, [](auto)
 {
-#ifdef WITH_RUST
-	const OpenTTDEconomySettings settings = RustEconomySettings();
-	openttd_rust_economy_calendar_month(&GetRustCompanyServices(), &settings);
-#else
 	if (_settings_game.economy.inflation) {
 		AddInflation();
 		RecomputePrices();
 	}
-#endif /* WITH_RUST */
+
 });
+#endif
+
 
 /**
  * Every economy month update of company economic data, plus economy fluctuations.
  */
+#ifdef WITH_RUST
+static const IntervalTimer<TimerGameEconomy> _economy_companies_monthly({ TimerGameEconomy::MONTH, TimerGameEconomy::Priority::COMPANY }, RustClockCallback{openttd_rust_clock_economy_month, &GetRustClockCompanyServices()});
+#else
 static const IntervalTimer<TimerGameEconomy> _economy_companies_monthly({ TimerGameEconomy::MONTH, TimerGameEconomy::Priority::COMPANY }, [](auto)
 {
-#ifdef WITH_RUST
-	const OpenTTDEconomyMonth month{
-		.month = TimerGameEconomy::month, .infinite_money = _settings_game.difficulty.infinite_money,
-		.maintenance = _settings_game.economy.infrastructure_maintenance, .fluctuating = _settings_game.difficulty.economy,
-	};
-	openttd_rust_economy_month(&GetRustCompanyServices(), &month);
-#else
 	CompaniesGenStatistics();
 	CompaniesPayInterest();
 	HandleEconomyFluctuations();
-#endif /* WITH_RUST */
+
 });
+#endif
+
 
 #ifndef WITH_RUST
 static void DoAcquireCompany(Company *c, bool hostile_takeover)

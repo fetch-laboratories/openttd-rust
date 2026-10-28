@@ -104,6 +104,10 @@
 #include "rust/services_linkgraph.h"
 #endif
 
+#ifdef WITH_RUST
+#include "rust/clock_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 /**
@@ -4839,19 +4843,21 @@ void OnTick_Station()
 }
 
 /** Economy monthly loop for stations. */
+#ifdef WITH_RUST
+static const IntervalTimer<TimerGameEconomy> _economy_stations_monthly({TimerGameEconomy::MONTH, TimerGameEconomy::Priority::STATION}, RustClockCallback{openttd_rust_clock_station_monthly, &_rust_station_services});
+#else
 static const IntervalTimer<TimerGameEconomy> _economy_stations_monthly({TimerGameEconomy::MONTH, TimerGameEconomy::Priority::STATION}, [](auto)
 {
-#ifdef WITH_RUST
-	openttd_rust_station_monthly(&_rust_station_services);
-#else
 	for (Station *st : Station::Iterate()) {
 		for (GoodsEntry &ge : st->goods) {
 			ge.status.Set(GoodsEntry::State::LastMonth, ge.status.Test(GoodsEntry::State::CurrentMonth));
 			ge.status.Reset(GoodsEntry::State::CurrentMonth);
 		}
 	}
-#endif
+
 });
+#endif
+
 
 /**
  * Forcibly modify station ratings near a given tile.

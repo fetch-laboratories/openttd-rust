@@ -2328,8 +2328,7 @@ impl Engine<'_> {
         (self.leaves.dirty_authority)(town);
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_monthly_all(
+pub(crate) unsafe fn openttd_rust_town_monthly_all(
     leaves: *const Leaves,
     services: *const Services,
     month: u8,

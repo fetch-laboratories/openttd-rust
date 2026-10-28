@@ -227,32 +227,39 @@ impl Controller<'_> {
     fn state(&mut self) -> &mut State {
         unsafe { &mut *self.owner }
     }
-    fn write(&mut self, field: u8, value: u32) {
-        match field {
-            0 => self.v.x = value as i32,
-            1 => self.v.y = value as i32,
-            2 => self.v.z = value as i32,
-            3 | 4 => self.v.sprite = value,
-            5 => self.v.progress = value as u8,
-            6 => self.v.spritenum = value as u8,
-            _ => {} // Only the seven private field constants above reach this helper.
-        }
-        match field {
-            0 => (self.leaves.write_x)(self.context, value as i32),
-            1 => (self.leaves.write_y)(self.context, value as i32),
-            2 => (self.leaves.write_z)(self.context, value as i32),
-            3 => (self.leaves.sprite_sequence)(self.context, value),
-            4 => (self.leaves.sprite)(self.context, value),
-            5 => (self.leaves.progress)(self.context, value as u8),
-            6 => (self.leaves.spritenum)(self.context, value as u8),
-            _ => unreachable!(),
-        }
+    fn set_x(&mut self, value: i32) {
+        self.v.x = value;
+        (self.leaves.write_x)(self.context, value);
+    }
+    fn set_y(&mut self, value: i32) {
+        self.v.y = value;
+        (self.leaves.write_y)(self.context, value);
+    }
+    fn set_z(&mut self, value: i32) {
+        self.v.z = value;
+        (self.leaves.write_z)(self.context, value);
+    }
+    fn set_sprite_sequence(&mut self, value: u32) {
+        self.v.sprite = value;
+        (self.leaves.sprite_sequence)(self.context, value);
+    }
+    fn set_first_sprite(&mut self, value: u32) {
+        self.v.sprite = value;
+        (self.leaves.sprite)(self.context, value);
+    }
+    fn set_progress(&mut self, value: u8) {
+        self.v.progress = value;
+        (self.leaves.progress)(self.context, value);
+    }
+    fn set_spritenum(&mut self, value: u8) {
+        self.v.spritenum = value;
+        (self.leaves.spritenum)(self.context, value);
     }
     fn increment(&mut self) -> bool {
         if self.v.sprite == LAST[usize::from(self.v.subtype)] {
             return false;
         }
-        self.write(4, self.v.sprite.wrapping_add(1));
+        self.set_first_sprite(self.v.sprite.wrapping_add(1));
         true
     }
     fn viewport(&self) {
@@ -264,22 +271,19 @@ impl Controller<'_> {
     fn init(&mut self) {
         if self.v.subtype == 0 {
             let r = self.services.random();
-            self.write(3, INITIAL[0] + (r & 7));
-            self.write(5, (r >> 16) & 7);
+            self.set_sprite_sequence(INITIAL[0] + (r & 7));
+            self.set_progress(((r >> 16) & 7) as u8);
             return;
         }
-        self.write(3, INITIAL[usize::from(self.v.subtype)]);
+        self.set_sprite_sequence(INITIAL[usize::from(self.v.subtype)]);
         if self.v.subtype == 9 {
-            self.write(6, 0);
+            self.set_spritenum(0);
         }
-        self.write(
-            5,
-            match self.v.subtype {
-                1 | 4 | 10 | 11 => 12,
-                3 => 1,
-                _ => 0,
-            },
-        );
+        self.set_progress(match self.v.subtype {
+            1 | 4 | 10 | 11 => 12,
+            3 => 1,
+            _ => 0,
+        });
         if self.v.subtype == 8 {
             self.state().animation = 0;
             self.state().substate = 0;
@@ -295,7 +299,7 @@ impl Controller<'_> {
         }
         let mut animation;
         if self.v.spritenum == 0 {
-            self.write(4, self.v.sprite.wrapping_add(1));
+            self.set_first_sprite(self.v.sprite.wrapping_add(1));
             if self.v.sprite < 4754 {
                 self.viewport();
                 return true;
@@ -305,7 +309,7 @@ impl Controller<'_> {
             } else {
                 6
             };
-            self.write(6, spritenum);
+            self.set_spritenum(spritenum as u8);
             animation = 0;
         } else {
             animation = u32::from(self.state().animation) + 1;
@@ -316,7 +320,7 @@ impl Controller<'_> {
         }
         if b.1 == 4 && b.0 == 1 {
             if self.v.z > 180 || chance16_i(1, 96, self.services.random()) {
-                self.write(6, 5);
+                self.set_spritenum(5);
                 if self.v.ambient != 0 {
                     (self.leaves.sound)(self.context, 0);
                 }
@@ -335,10 +339,10 @@ impl Controller<'_> {
         }
         self.state().animation = animation as u16;
         let b = BUBBLES[usize::from(self.v.spritenum) - 1][animation as usize];
-        self.write(0, self.v.x.wrapping_add(b.0) as u32);
-        self.write(1, self.v.y.wrapping_add(b.1) as u32);
-        self.write(2, self.v.z.wrapping_add(b.2) as u32);
-        self.write(3, 4748 + b.3);
+        self.set_x(self.v.x.wrapping_add(b.0));
+        self.set_y(self.v.y.wrapping_add(b.1));
+        self.set_z(self.v.z.wrapping_add(b.2));
+        self.set_sprite_sequence(4748 + b.3);
         self.viewport();
         true
     }
@@ -347,36 +351,36 @@ impl Controller<'_> {
         match self.v.subtype {
             0 => {
                 if self.v.progress > 0 {
-                    self.write(5, u32::from(self.v.progress - 1));
+                    self.set_progress(self.v.progress - 1);
                     return true;
                 }
                 if self.industry(&mut 0) == 0 {
                     return false;
                 }
                 if !self.increment() {
-                    self.write(3, 3701);
+                    self.set_sprite_sequence(3701);
                 }
-                self.write(5, 7);
+                self.set_progress(7);
                 self.viewport();
             }
             3 => {
                 if self.v.progress < 2 {
-                    self.write(5, u32::from(self.v.progress + 1));
+                    self.set_progress(self.v.progress + 1);
                     return true;
                 }
-                self.write(5, 0);
+                self.set_progress(0);
                 if !self.increment() {
                     return false;
                 }
                 self.viewport();
             }
             _ => {
-                self.write(5, u32::from(self.v.progress.wrapping_add(1)));
+                self.set_progress(self.v.progress.wrapping_add(1));
                 match self.v.subtype {
                     1 | 4 | 10 | 11 => {
                         let mut moved = false;
                         if self.v.progress & (if self.v.subtype == 1 { 7 } else { 3 }) == 0 {
-                            self.write(2, self.v.z.wrapping_add(1) as u32);
+                            self.set_z(self.v.z.wrapping_add(1));
                             moved = true;
                         }
                         if self.v.progress & 15 == 4 {
@@ -391,7 +395,7 @@ impl Controller<'_> {
                     }
                     2 => {
                         if self.v.progress & 3 == 0 {
-                            self.write(2, self.v.z.wrapping_add(1) as u32);
+                            self.set_z(self.v.z.wrapping_add(1));
                             self.viewport();
                         } else if self.v.progress & 7 == 1 {
                             if !self.increment() {
@@ -411,7 +415,7 @@ impl Controller<'_> {
                     6 => {
                         if self.v.progress & 7 == 0 {
                             if !self.increment() {
-                                self.write(3, 3737);
+                                self.set_sprite_sequence(3737);
                             }
                             self.viewport();
                         }
@@ -422,9 +426,9 @@ impl Controller<'_> {
                             return true;
                         }
                         let b = BULLDOZER[usize::from(self.state().animation)];
-                        self.write(3, 1416 + b.1);
-                        self.write(0, self.v.x.wrapping_add(INC[b.0].0) as u32);
-                        self.write(1, self.v.y.wrapping_add(INC[b.0].1) as u32);
+                        self.set_sprite_sequence(1416 + b.1);
+                        self.set_x(self.v.x.wrapping_add(INC[b.0].0));
+                        self.set_y(self.v.y.wrapping_add(INC[b.0].1));
                         self.state().substate = self.state().substate.wrapping_add(1);
                         if self.state().substate >= b.2 {
                             self.state().substate = 0;
@@ -460,29 +464,32 @@ pub unsafe extern "C" fn openttd_rust_effect_destroy(owner: *mut State) {
     drop(unsafe { Box::from_raw(owner) });
 }
 /// # Safety
-/// Owner is live/aligned; field is 0 animation or 1 substate. Synchronous access
-/// is serialized and no callback is active. Original narrowing is preserved.
+/// Owner is live/aligned and access is serialized with no active callback.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_effect_set(owner: *mut State, field: u8, value: u16) {
-    let s = unsafe { &mut *owner };
-    if field == 0 {
-        s.animation = value;
-    } else {
-        s.substate = value as u8;
-    }
+pub unsafe extern "C" fn openttd_rust_effect_set_animation(owner: *mut State, value: u16) {
+    unsafe { (*owner).animation = value };
 }
 /// # Safety
-/// Same live/serialized owner contract as set; no pointer/reference is retained.
+/// Same live/serialized owner contract as `openttd_rust_effect_set_animation`.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_effect_get(owner: *const State, field: u8) -> u16 {
-    let s = unsafe { &*owner };
-    if field == 0 {
-        s.animation
-    } else {
-        u16::from(s.substate)
-    }
+pub unsafe extern "C" fn openttd_rust_effect_get_animation(owner: *const State) -> u16 {
+    unsafe { (*owner).animation }
+}
+/// # Safety
+/// Same live/serialized owner contract as `openttd_rust_effect_set_animation`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_effect_set_substate(owner: *mut State, value: u8) {
+    unsafe { (*owner).substate = value };
+}
+/// # Safety
+/// Same live/serialized owner contract as `openttd_rust_effect_set_animation`.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_effect_get_substate(owner: *const State) -> u8 {
+    unsafe { (*owner).substate }
 }
 /// # Safety
 /// Owner is live and exclusive for this invocation and context is its live C++ shell; tables
@@ -670,7 +677,7 @@ pub extern "C" fn openttd_rust_effect_create_rel(
 pub(crate) fn set_animation(shell: *mut c_void, duration: u16) {
     let owner = (creation().owner)(shell);
     unsafe {
-        (*owner).animation = duration;
+        openttd_rust_effect_set_animation(owner, duration);
     }
 }
 
@@ -679,6 +686,6 @@ pub(crate) fn set_animation(shell: *mut c_void, duration: u16) {
 pub(crate) fn set_substate(shell: *mut c_void, value: u8) {
     let owner = (creation().owner)(shell);
     unsafe {
-        (*owner).substate = value;
+        openttd_rust_effect_set_substate(owner, value);
     }
 }

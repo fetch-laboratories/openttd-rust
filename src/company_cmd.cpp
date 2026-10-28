@@ -55,6 +55,10 @@
 #include "rust/command_cost_native_services.h"
 #endif
 
+#ifdef WITH_RUST
+#include "rust/clock_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 void ClearEnginesHiddenFlagOfCompany(CompanyID cid);
@@ -899,20 +903,24 @@ void OnTick_Companies()
 #endif /* WITH_RUST */
 }
 
+#ifdef WITH_RUST
+OpenTTDCompanyYear RustCompanyClockYear() noexcept
+{
+	Company *local = Company::GetIfValid(_local_company);
+	return {.local_finances = local == nullptr ? nullptr : &local->Finances(), .local = _local_company.base(),
+		.show_finances = _settings_client.gui.show_finances, .new_year_sound = _settings_client.sound.new_year};
+}
+#endif
+
 /**
  * A year has passed, update the economic data of all companies, and perhaps show the
  * financial overview window of the local company.
  */
+#ifdef WITH_RUST
+static const IntervalTimer<TimerGameEconomy> _economy_companies_yearly({TimerGameEconomy::YEAR, TimerGameEconomy::Priority::COMPANY}, RustClockCallback{openttd_rust_clock_company_yearly, &GetRustClockCompanyServices()});
+#else
 static const IntervalTimer<TimerGameEconomy> _economy_companies_yearly({TimerGameEconomy::YEAR, TimerGameEconomy::Priority::COMPANY}, [](auto)
 {
-#ifdef WITH_RUST
-	Company *local = Company::GetIfValid(_local_company);
-	const OpenTTDCompanyYear year{
-		.local_finances = local == nullptr ? nullptr : &local->Finances(), .local = _local_company.base(),
-		.show_finances = _settings_client.gui.show_finances, .new_year_sound = _settings_client.sound.new_year,
-	};
-	openttd_rust_company_yearly(&GetRustCompanyServices(), &year);
-#else
 	/* Copy statistics */
 	for (Company *c : Company::Iterate()) {
 		/* Move expenses to previous years. */
@@ -930,8 +938,10 @@ static const IntervalTimer<TimerGameEconomy> _economy_companies_yearly({TimerGam
 			if (_settings_client.sound.new_year) SndPlayFx(SND_00_GOOD_YEAR);
 		}
 	}
-#endif /* WITH_RUST */
+
 });
+#endif
+
 
 /**
  * Fill the CompanyNewsInformation struct with the required data.

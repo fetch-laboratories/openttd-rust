@@ -377,4 +377,5 @@ inline void RustVehicleDetailsDirty(OpenTTDVehicle *shell) noexcept { SetWindowD
 
 template <typename Handle>
 inline uint32_t RustVehicleBaseCrashHandle(Handle vehicle, bool flooded) noexcept { return RustVehicleBaseCrash(vehicle.handle, flooded); }
+inline void RustVehicleShiftDates(OpenTTDVehicle *v, int32_t days) noexcept { VehicleOf(v)->ShiftDates(TimerGameEconomy::Date{days}); }
 #endif /* RUST_VEHICLE_SERVICES_H */

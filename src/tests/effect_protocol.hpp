@@ -86,10 +86,10 @@ template <typename Check> void CheckEffectProtocol(Check check)
 	RustAnimationScope animation_scope(animation);
 
 	auto owner = std::unique_ptr<OpenTTDEffectState, decltype(&openttd_rust_effect_destroy)>(openttd_rust_effect_new(), openttd_rust_effect_destroy);
-	check(openttd_rust_effect_get(owner.get(), 0) == 0 && openttd_rust_effect_get(owner.get(), 1) == 0);
-	openttd_rust_effect_set(owner.get(), 0, 65535);
-	openttd_rust_effect_set(owner.get(), 1, 511);
-	check(openttd_rust_effect_get(owner.get(), 1) == 255);
+	check(openttd_rust_effect_get_animation(owner.get()) == 0 && openttd_rust_effect_get_substate(owner.get()) == 0);
+	openttd_rust_effect_set_animation(owner.get(), 65535);
+	openttd_rust_effect_set_substate(owner.get(), static_cast<uint8_t>(511));
+	check(openttd_rust_effect_get_substate(owner.get()) == 255);
 	const std::array<uint32_t, 12> sprites{3708,3079,3073,3084,2040,3709,3737,3725,1416,4751,2040,2040};
 	const std::array<uint8_t, 12> progress{7,12,0,1,12,0,0,0,0,0,12,12};
 	auto run = [&](uint8_t init = 0) -> uint8_t {
@@ -101,17 +101,17 @@ template <typename Check> void CheckEffectProtocol(Check check)
 		w.view = {13,-9,21,0,0,99,subtype,1};
 		check(run(1) == 1 && w.view.sprite == sprites[subtype] && w.view.progress == progress[subtype]);
 		check(w.view.x == 13 && w.view.y == -9 && w.view.z == 21);
-		check(openttd_rust_effect_get(owner.get(), 0) == (subtype < 8 ? 65535 : 0));
-		check(openttd_rust_effect_get(owner.get(), 1) == (subtype < 8 ? 255 : 0));
+		check(openttd_rust_effect_get_animation(owner.get()) == (subtype < 8 ? 65535 : 0));
+		check(openttd_rust_effect_get_substate(owner.get()) == (subtype < 8 ? 255 : 0));
 		check(w.view.spritenum == (subtype == 9 ? 0 : 99));
 	}
 	check(w.draws == 1);
 	for (uint16_t duration : {uint16_t{0}, uint16_t{1}, uint16_t{65535}}) {
 		w.view = {0,0,0,3740,255,0,6,0};
-		openttd_rust_effect_set(owner.get(), 0, duration);
+		openttd_rust_effect_set_animation(owner.get(), duration);
 		check(run() == (duration == 1 ? 0 : 1));
 		check(w.view.progress == 0 && w.view.sprite == 3737 && w.writes == 2 && w.viewports == 1);
-		check(openttd_rust_effect_get(owner.get(), 0) == static_cast<uint16_t>(duration - 1));
+		check(openttd_rust_effect_get_animation(owner.get()) == static_cast<uint16_t>(duration - 1));
 	}
 	w.view = {0,0,0,UINT32_MAX,3,0,5,0};
 	check(run() == 1 && w.view.sprite == 0);
@@ -119,24 +119,24 @@ template <typename Check> void CheckEffectProtocol(Check check)
 	check(run() == 0 && w.writes == 1); // Deletion occurs only after return.
 	for (uint32_t random : {0U, 682U, 683U, 65536U}) {
 		w.view = {10,20,180,4748,3,1,9,1}; w.random = random; w.draws = 0;
-		openttd_rust_effect_set(owner.get(), 0, 3);
+		openttd_rust_effect_set_animation(owner.get(), 3);
 		check(run() == 1 && w.draws == 1);
 		const bool burst = random != 683;
 		check(w.view.spritenum == (burst ? 5 : 1));
 		check(w.sound == (burst ? 1 : 0));
-		check(w.view.z == 181 && openttd_rust_effect_get(owner.get(), 0) == 0);
+		check(w.view.z == 181 && openttd_rust_effect_get_animation(owner.get()) == 0);
 	}
 	w.view = {10,20,181,4748,3,1,9,1}; w.draws = 0;
-	openttd_rust_effect_set(owner.get(), 0, 3);
+	openttd_rust_effect_set_animation(owner.get(), 3);
 	check(run() == 1 && w.draws == 0 && w.view.spritenum == 5 && w.sound == 1 && w.view.z == 182);
 	for (uint32_t industry : {0U, 1U, 2U}) {
 		w.view = {10,20,100,4748,3,6,9,1}; w.industry = industry; w.queries = 0;
-		openttd_rust_effect_set(owner.get(), 0, 77);
+		openttd_rust_effect_set_animation(owner.get(), 77);
 		check(run() == 1 && w.queries == 1 && w.sound == 2 && w.animated == (industry == 2 ? 123 : 0));
-		check(openttd_rust_effect_get(owner.get(), 0) == 79 && w.view.sprite == 4758 && w.view.x == 10 && w.view.y == 20 && w.view.z == 100);
+		check(openttd_rust_effect_get_animation(owner.get()) == 79 && w.view.sprite == 4758 && w.view.x == 10 && w.view.y == 20 && w.view.z == 100);
 	}
 	w.view = {0,0,0,4757,3,5,9,0};
-	openttd_rust_effect_set(owner.get(), 0, 3);
+	openttd_rust_effect_set_animation(owner.get(), 3);
 	check(run() == 0 && w.writes == 1);
 	owner.reset();
 	effect_test_world = nullptr;

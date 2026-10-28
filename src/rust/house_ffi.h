@@ -95,6 +95,5 @@ void openttd_rust_house_accepted(const OpenTTDTownLeaves *, const OpenTTDSharedS
 void openttd_rust_house_produced(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile, uint32_t *produced);
 void openttd_rust_house_rebuild_caches(const OpenTTDTownLeaves *, const OpenTTDSharedServices *);
 void openttd_rust_house_update_all(const OpenTTDTownLeaves *, const OpenTTDSharedServices *);
-void openttd_rust_house_age_all(const OpenTTDTownLeaves *, const OpenTTDSharedServices *);
 }
 #endif /* RUST_HOUSE_FFI_H */

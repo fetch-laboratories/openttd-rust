@@ -12,6 +12,7 @@
 #include "services_map.h"
 #include "services_rail.h"
 #include "disaster_ffi.h"
+#include "clock_ffi.h"
 #include "vehicle_services.h"
 #include "disaster_counter.h"
 #include "services_ffi.h"
@@ -214,7 +215,7 @@ void ReleaseDisasterVehicle(VehicleID vehicle)
 	assert(v->State() != 0);
 	openttd_rust_disaster_release_vehicle(&DisasterServices(), DisasterHandle(v));
 }
-static const IntervalTimer<TimerGameEconomy> _economy_disaster_daily({TimerGameEconomy::DAY, TimerGameEconomy::Priority::DISASTER}, [](auto) { openttd_rust_disaster_daily(&DisasterServices()); });
+static const IntervalTimer<TimerGameEconomy> _economy_disaster_daily({TimerGameEconomy::DAY, TimerGameEconomy::Priority::DISASTER}, RustClockCallback{openttd_rust_clock_disaster_daily, &DisasterServices()});
 
 #include "service_table_check.hpp"
 #include "abi-visit-OpenTTDDisasterServices.hpp"

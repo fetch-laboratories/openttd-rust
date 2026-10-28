@@ -129,6 +129,11 @@ class PortMetricsTests(unittest.TestCase):
             "src/map_func.h",
             "src/openttd.cpp",
             "src/pathfinder/yapf/yapf.hpp",
+            *(
+                f"src/timer/timer_game_{clock}.{ext}"
+                for clock in ("calendar", "economy", "common")
+                for ext in ("cpp", "h")
+            ),
         ):
             self.assertTrue(METRICS.simulation_source(path), path)
         for path in (
@@ -138,6 +143,10 @@ class PortMetricsTests(unittest.TestCase):
             "src/3rdparty/foo.cpp",
             "src/os/unix/unix.cpp",
             "src/core/pool_type.hpp",
+            "src/timer/timer.h",
+            "src/timer/timer_manager.h",
+            "src/timer/timer_game_realtime.cpp",
+            "src/timer/timer_game_tick.h",
         ):
             self.assertFalse(METRICS.simulation_source(path), path)
 

@@ -1460,11 +1460,7 @@ pub unsafe extern "C" fn openttd_rust_house_update_all(
 ) {
     house(leaves, services).update_all();
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_house_age_all(
-    leaves: *const Leaves,
-    services: *const Services,
-) {
+pub(crate) unsafe fn openttd_rust_house_age_all(leaves: *const Leaves, services: *const Services) {
     house(leaves, services).age_all();
 }
 

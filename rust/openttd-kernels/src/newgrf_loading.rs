@@ -104,9 +104,9 @@ pub unsafe extern "C" fn openttd_rust_grf_set_size(feature: u8, set: u32) -> u32
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDGrfLoadingServices" ["grf_loading"] => Services { global, cargo, engine, houses, industry, airports, types, action2, engine_range, parameter, file_id, config_id, config_status, config_flags, set_status, set_flag, set_config_id, set_file_info, config_version, param_count, set_parameter, find_config, find_file, file_for_config, error, error_name, error_property, networking, read_byte, read_word, read_dword, read_block, position, seek, skip, container_version, sprite_offsets, skip_sprite_data, open_cached, open_temporary, scan_name, scan_info, set_pitch, set_width, set_rail_cost, set_misc, safe_change_info, reserve_change_info, feature_change_info, skip_act1, new_sprite_set, feature_map_sprite_group, feature_new_name, skip_act5, graphics_new, skip_act_a, sprite_replace, grf_load_error, grf_comment, feature_town_name, skip_act11, grf_sound, skip_act12, load_font_glyph, translate_grf_strings, static_grf_info, never_expire_airports, max_bridge_length, never_expire_vehicles, station_noise, gradual_loading, signal_side, disable_elrails, build_on_slopes, freight_trains, wagon_speed_limits, allow_town_roads, generating_world, improved_load, dynamic_engines, inflation, starting_year, plane_speed, height_limit, generation_seed, log_x, log_y, read_bounds, unexpected_sprite, multiple_action8, grm_failed, static_desync, list_property_too_long, invalid_id, force_disabled, colourmap_sprite, slopes_sprite, shore_sprite , generic, clock, set_clock, economy_ymd_to_date, config_at, exists, init_file, too_many, clear_errors, cleanup_strings, cleanup_townnames, reset_badges, reset_bridges, reset_prices, reset_currencies, object_classes, reset_objects, station_classes, airport_classes, roadstop_classes, reset_water_features, reset_faces, clear_snowline, reset_files, reset_loaded_features, initialize_sounds, clean_spritegroups, finalise_strings, finalise_badges, finalise_canals, finalise_objects, sort_industries, industry_legend, linkstats_legend, townnames, activate_shore, activate_tram_depot, aging_stops, finalise_prices, baseset_dir, newgrf_dir , assert_override_size, assert_file_match, unexpected_large, unexpected_real, missing_file, sprite_grm_failed, grm_failure, unknown_operation, id_mismatch, invalid_version , null_error, unknown_action, handling_action, preloaded_sprite, unexpected_data, unexpected_import, read_bounds_error, reading_file, invalid_format, unsupported_compression, loaded_sprites, unsupported_variable, cfg_real, cfg_unset, cfg_applying, skip_undefined, skip_test, skip_condition, skip_grf_condition, skip_unknown_grf, skip_false, skip_jump, skip_count, loaded_info, inhibiting, defined_label, unknown_patch, grm_reserved, param_defined, sprites_allocated, sprites_using, sprite_operation, grm_feature, unimplemented_target, unknown_target };
+    "OpenTTDGrfLoadingServices" ["grf_loading"] => Services { global, cargo, engine, houses, industry, airports, types, action2, engine_range, parameter, file_id, config_id, config_status, config_flags, set_status, set_flag, set_config_id, set_file_info, config_version, param_count, set_parameter, find_config, find_file, file_for_config, error, error_name, error_property, networking, read_byte, read_word, read_dword, read_block, position, seek, skip, container_version, sprite_offsets, skip_sprite_data, open_cached, open_temporary, scan_name, scan_info, set_pitch, set_width, set_rail_cost, set_misc, safe_change_info, reserve_change_info, feature_change_info, skip_act1, new_sprite_set, feature_map_sprite_group, feature_new_name, skip_act5, graphics_new, skip_act_a, sprite_replace, grf_load_error, grf_comment, feature_town_name, skip_act11, grf_sound, skip_act12, load_font_glyph, translate_grf_strings, static_grf_info, never_expire_airports, max_bridge_length, never_expire_vehicles, station_noise, gradual_loading, signal_side, disable_elrails, build_on_slopes, freight_trains, wagon_speed_limits, allow_town_roads, generating_world, improved_load, dynamic_engines, inflation, starting_year, plane_speed, height_limit, generation_seed, log_x, log_y, read_bounds, unexpected_sprite, multiple_action8, grm_failed, static_desync, list_property_too_long, invalid_id, force_disabled, colourmap_sprite, slopes_sprite, shore_sprite , generic, clock, set_clock, using_wallclock_units, config_at, exists, init_file, too_many, clear_errors, cleanup_strings, cleanup_townnames, reset_badges, reset_bridges, reset_prices, reset_currencies, object_classes, reset_objects, station_classes, airport_classes, roadstop_classes, reset_water_features, reset_faces, clear_snowline, reset_files, reset_loaded_features, initialize_sounds, clean_spritegroups, finalise_strings, finalise_badges, finalise_canals, finalise_objects, sort_industries, industry_legend, linkstats_legend, townnames, activate_shore, activate_tram_depot, aging_stops, finalise_prices, baseset_dir, newgrf_dir , assert_override_size, assert_file_match, unexpected_large, unexpected_real, missing_file, sprite_grm_failed, grm_failure, unknown_operation, id_mismatch, invalid_version , null_error, unknown_action, handling_action, preloaded_sprite, unexpected_data, unexpected_import, read_bounds_error, reading_file, invalid_format, unsupported_compression, loaded_sprites, unsupported_variable, cfg_real, cfg_unset, cfg_applying, skip_undefined, skip_test, skip_condition, skip_grf_condition, skip_unknown_grf, skip_false, skip_jump, skip_count, loaded_info, inhibiting, defined_label, unknown_patch, grm_reserved, param_defined, sprites_allocated, sprites_using, sprite_operation, grm_feature, unimplemented_target, unknown_target };
     "OpenTTDGrfEngineRange" ["grf_loading"] => EngineRange { offset, count };
-    "OpenTTDGrfClock" ["grf_loading"] => Clock { date, year, date_fract, economy_date, economy_year, economy_date_fract, ticks, display };
+    "OpenTTDGrfClock" ["grf_loading"] => Clock { ticks, display };
     "OpenTTDGrfExecution" ["grf_loading"] => Execution {
         stage, spriteid, file, grffile, grfconfig, nfo_line, skip_sprites, spritegroups
     };
@@ -215,7 +215,7 @@ pub struct Services {
     generic: *const crate::newgrf_generic::Services,
     clock: unsafe extern "C" fn() -> Clock,
     set_clock: unsafe extern "C" fn(*const Clock),
-    economy_ymd_to_date: unsafe extern "C" fn(i32, u8, u8) -> i32,
+    using_wallclock_units: unsafe extern "C" fn(bool) -> bool,
     config_at: unsafe extern "C" fn(usize) -> *mut c_void,
     exists: unsafe extern "C" fn(*const c_void, u8) -> bool,
     init_file: unsafe extern "C" fn(*const c_void),
@@ -1330,15 +1330,46 @@ pub unsafe extern "C" fn openttd_rust_grf_load_file(
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Clock {
-    date: i32,
-    year: i32,
-    date_fract: u16,
-    economy_date: i32,
-    economy_year: i32,
-    economy_date_fract: u16,
     ticks: u64,
     display: u8,
 }
+#[derive(Clone, Copy)]
+struct SavedClock {
+    date: crate::services::CalendarDate,
+    year: crate::timer_game_calendar::CalendarYear,
+    date_fract: u16,
+    economy_date: crate::services::EconomyDate,
+    economy_year: crate::timer_game_economy::EconomyYear,
+    economy_date_fract: u16,
+    native: Clock,
+}
+impl SavedClock {
+    unsafe fn read(s: &Services) -> Self {
+        use crate::timer_game_common as clock;
+        Self {
+            date: clock::calendar_date(),
+            year: clock::calendar_year(),
+            date_fract: clock::calendar_fraction(),
+            economy_date: clock::economy_date(),
+            economy_year: clock::economy_year(),
+            economy_date_fract: clock::economy_fraction(),
+            native: unsafe { (s.clock)() },
+        }
+    }
+    unsafe fn restore(self, s: &Services) {
+        use crate::timer_game_common as clock;
+        clock::write_calendar_date(self.date);
+        clock::write_calendar_year(self.year);
+        clock::write_calendar_fraction(self.date_fract);
+        clock::write_economy_date(self.economy_date);
+        clock::write_economy_year(self.economy_year);
+        clock::write_economy_fraction(self.economy_date_fract);
+        unsafe {
+            (s.set_clock)(&raw const self.native);
+        }
+    }
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_grf_reset(s: &Services) {
     unsafe {
@@ -1423,20 +1454,29 @@ unsafe fn after_load(s: &Services) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_grf_load(s: &Services, load_index: u32, num_baseset: u32) {
     unsafe {
-        let saved = (s.clock)();
+        let saved = SavedClock::read(s);
         if (s.networking)() {
             let year = (s.starting_year)();
-            let clock = Clock {
-                year,
-                date: ((*s.global).ymd_to_date)(year, 0, 1),
+            let clock = SavedClock {
+                year: crate::timer_game_calendar::CalendarYear(year),
+                date: crate::services::CalendarDate(
+                    crate::timer_game_common::calendar_ymd_to_date(year, 0, 1),
+                ),
                 date_fract: 0,
-                economy_year: year,
-                economy_date: (s.economy_ymd_to_date)(year, 0, 1),
+                economy_year: crate::timer_game_economy::EconomyYear(year),
+                economy_date: crate::services::EconomyDate(crate::timer_game_economy::ymd_to_date(
+                    year,
+                    0,
+                    1,
+                    (s.using_wallclock_units)(false),
+                )),
                 economy_date_fract: 0,
-                ticks: 0,
-                display: 0,
+                native: Clock {
+                    ticks: 0,
+                    display: 0,
+                },
             };
-            (s.set_clock)(&raw const clock);
+            clock.restore(s);
         }
         openttd_rust_grf_patch_flags(s);
         openttd_rust_grf_reset(s);
@@ -1534,7 +1574,7 @@ pub unsafe extern "C" fn openttd_rust_grf_load(s: &Services, load_index: u32, nu
         (*execution()).grffile = ptr::null_mut();
         openttd_rust_grf_clear_file();
         after_load(s);
-        (s.set_clock)(&raw const saved);
+        saved.restore(s);
     }
 }
 

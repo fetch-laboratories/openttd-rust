@@ -2312,3 +2312,19 @@ excludes callback execution, and no registry/container borrow spans a service or
 Arbitrary external GRF loading, historical saves and GUI scheduling remain #156 gaps. Runtime
 fixture graphs are reconstructed after actual reload and do not establish file-loaded
 persistence. PR #472.
+
+### Calendar and economy clocks (#527)
+
+Rust owns all ten canonical process-wide clock fields, specialized subscriptions,
+Gregorian and wallclock conversion, advancement and daily/monthly/yearly dispatch.
+Native Year/Date subobjects are placement-constructed once in the shared Rust
+carrier; inline field aliases and save/load adapters use those same addresses.
+Native timer shells retain their identities, periods, fired flags and opaque
+closures. One local daily snapshot survives subscription mutation; Rust reloads
+live period and timeout state before each visit and writes fired after a successful
+callback. Existing migrated owners are direct Rust callees; vehicle, presentation
+and network operations remain typed native services. The scheduled-console relay
+catches Script_FatalError, returns through Rust snapshot cleanup, then rethrows in
+the native Elapsed facade. Original bodies remain portable. Historical save
+versions, full external-AI memory-limit failures and GUI/network scheduling remain
+coverage limits. PR #539.
