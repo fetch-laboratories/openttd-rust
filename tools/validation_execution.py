@@ -11,23 +11,36 @@ import subprocess
 import sys
 import time
 import uuid
+from collections.abc import Generator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
+from typing import BinaryIO, Literal, TypedDict, cast
 
 HEARTBEAT_SECONDS = 15
+PathArgument = str | os.PathLike[str]
+
+
+class LockHolder(TypedDict):
+    """Diagnostic metadata for one cooperating validation process."""
+
+    pid: int
+    host: str
+    label: str
+    mode: Literal["shared", "exclusive"]
+    started_at: float
 
 
 def run_logged(
-    command,
+    command: Sequence[PathArgument],
     *,
-    cwd,
-    env,
-    log,
-    phase,
-    heartbeat=HEARTBEAT_SECONDS,
-    stream=False,
-    timeout=None,
-):
+    cwd: PathArgument | None,
+    env: Mapping[str, str] | None,
+    log: PathArgument,
+    phase: str,
+    heartbeat: float = HEARTBEAT_SECONDS,
+    stream: bool = False,
+    timeout: float | None = None,
+) -> int:
     """Retain complete output and report bounded progress even for quiet commands."""
     log = Path(log)
     print(f"{phase}: {' '.join(map(str, command))}; log: {log}", flush=True)
@@ -59,10 +72,10 @@ def run_logged(
                 if code is None and timeout is not None and now - started >= timeout:
                     raise subprocess.TimeoutExpired(command, timeout)
                 if stream:
-                    with log.open("rb") as reader:
-                        reader.seek(position)
-                        text = decoder.decode(reader.read(), final=code is not None)
-                        position = reader.tell()
+                    with log.open("rb") as log_reader:
+                        log_reader.seek(position)
+                        text = decoder.decode(log_reader.read(), final=code is not None)
+                        position = log_reader.tell()
                     if text:
                         print(text, end="", flush=True)
                 if code is not None:
@@ -89,7 +102,13 @@ def run_logged(
 
 
 @contextmanager
-def file_lock(path, *, shared=False, label=None, heartbeat=HEARTBEAT_SECONDS):
+def file_lock(
+    path: PathArgument,
+    *,
+    shared: bool = False,
+    label: str | None = None,
+    heartbeat: float = HEARTBEAT_SECONDS,
+) -> Generator[None, None, None]:
     """Coordinate cooperating processes and expose waiting/holder metadata.
 
     POSIX shared locks let ordinary games overlap. Windows uses exclusive byte
@@ -103,22 +122,22 @@ def file_lock(path, *, shared=False, label=None, heartbeat=HEARTBEAT_SECONDS):
     if os.name == "nt":
         import msvcrt
 
-        def acquire(handle):
+        def acquire(handle: BinaryIO) -> None:
             handle.seek(0)
             msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
 
-        def release(handle):
+        def release(handle: BinaryIO) -> None:
             handle.seek(0)
             msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
     else:
         import fcntl
 
-        def acquire(handle):
+        def acquire(handle: BinaryIO) -> None:
             fcntl.flock(
                 handle, (fcntl.LOCK_SH if shared else fcntl.LOCK_EX) | fcntl.LOCK_NB
             )
 
-        def release(handle):
+        def release(handle: BinaryIO) -> None:
             fcntl.flock(handle, fcntl.LOCK_UN)
 
     with path.open("a+b") as handle:
@@ -138,10 +157,10 @@ def file_lock(path, *, shared=False, label=None, heartbeat=HEARTBEAT_SECONDS):
                 waited = True
                 now = time.monotonic()
                 if now >= next_notice:
-                    owners = []
+                    owners: list[LockHolder] = []
                     for owner in holders.glob("*.json"):
                         try:
-                            data = json.loads(owner.read_text())
+                            data = cast(LockHolder, json.loads(owner.read_text()))
                             if (
                                 os.name == "posix"
                                 and data["host"] == socket.gethostname()
@@ -158,17 +177,14 @@ def file_lock(path, *, shared=False, label=None, heartbeat=HEARTBEAT_SECONDS):
                 time.sleep(min(0.1, heartbeat))
         owner = holders / f"{os.getpid()}-{uuid.uuid4().hex}.json"
         try:
-            owner.write_text(
-                json.dumps(
-                    {
-                        "pid": os.getpid(),
-                        "host": socket.gethostname(),
-                        "label": label,
-                        "mode": "shared" if shared else "exclusive",
-                        "started_at": time.time(),
-                    }
-                )
-            )
+            holder: LockHolder = {
+                "pid": os.getpid(),
+                "host": socket.gethostname(),
+                "label": label,
+                "mode": "shared" if shared else "exclusive",
+                "started_at": time.time(),
+            }
+            owner.write_text(json.dumps(holder))
             if waited:
                 print(
                     f"{label}: acquired after {time.monotonic() - started:.1f}s; lock: {path}",
@@ -187,6 +203,5 @@ if __name__ == "__main__":
         ready, _, _ = select.select([reader], [], [], 0.1)
         if ready and not os.read(reader, 1):
             os.killpg(os.getpgrp(), signal.SIGKILL)
-    sys.exit(
-        process.returncode if process.returncode >= 0 else 128 - process.returncode
-    )
+    returncode = cast(int, process.returncode)
+    sys.exit(returncode if returncode >= 0 else 128 - returncode)

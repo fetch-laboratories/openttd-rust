@@ -329,6 +329,16 @@ typedef struct OpenTTDIndustryProductionResult {
 	int32_t subtract[256], add[256], again;
 	uint8_t cargo_input[256], cargo_output[256], version, num_input, num_output, present;
 } OpenTTDIndustryProductionResult;
+/** A native resolver lives here from construct to destroy; no pointer escapes this call. */
+struct alignas(16) OpenTTDIndustryProductionStorage { uint8_t storage[1024]; };
+struct OpenTTDIndustryProductionContext;
+struct OpenTTDIndustrySpecHandle;
+struct OpenTTDIndustryDeliveryServices {
+	OpenTTDIndustryProductionContext *(*construct)(OpenTTDIndustryProductionStorage *, Industry *) noexcept OPENTTD_SERVICE_DEFAULT(construct);
+	void (*destroy)(OpenTTDIndustryProductionContext *) noexcept OPENTTD_SERVICE_DEFAULT(destroy);
+	void (*resolve)(OpenTTDIndustryProductionContext *, uint32_t, uint32_t, OpenTTDIndustryProductionResult *) noexcept OPENTTD_SERVICE_DEFAULT(resolve);
+	uint16_t (*input_multiplier)(const OpenTTDIndustrySpecHandle *, size_t, size_t) noexcept OPENTTD_SERVICE_DEFAULT(input_multiplier);
+};
 typedef void (*OpenTTDIndustryResolve)(void *context, uint32_t random, uint32_t parameter, OpenTTDIndustryProductionResult *out);
 void openttd_rust_industry_production_callback(void *industry, OpenTTDIndustry *owner, void *context, uint32_t behaviour, uint8_t reason, OpenTTDIndustryResolve resolve, const OpenTTDIndustryServices *services);
 /** Minimal live tile lookup; no persistent shell observation. */
@@ -448,6 +458,7 @@ bool openttd_rust_industry_slope_refused(uint8_t current, uint8_t refused);
 }
 #endif
 #ifdef __cplusplus
+const OpenTTDIndustryDeliveryServices &GetIndustryDeliveryServices() noexcept;
 const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept;
 const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices() noexcept;
 const OpenTTDIndustryCostServices &GetIndustryCostServices() noexcept;

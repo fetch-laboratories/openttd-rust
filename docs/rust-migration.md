@@ -1783,8 +1783,11 @@ reference aliases. Cargo/refusal/production/randomisation/animation and vehicle-
 uses the NewGRF evaluator, without script VM entry or payment/destination reentry; wrappers are
 noexcept. Payment settlement borrows typed canonical vehicle/finance services and transfer/final
 payment read feeder shares directly from the Rust cargo-storage owner. Payment fronts and station
-IDs use shared boundary types; delivery/industry selectors and packed source remain under #168,
-#199 and #500. Money saturates arithmetic but retains native shifts; callback unsigned products,
+IDs, delivery sources and destination industry handles use shared boundary types. Delivery
+updates the canonical station, industry, company and town Rust owners directly. Production
+resolution keeps one native resolver in caller-owned stack storage across the Rust repeat loop;
+randomisation and animation call their Rust owners directly. Remaining boundary conversions stay
+under #168, #199 and #500. Money saturates arithmetic but retains native shifts; callback unsigned products,
 BigMulS narrowing, stockpile limits and ordered randomisation/animation are explicit. Checks:
 the default `economy` simulation. NewGRF resolver execution, legacy CAPY files and every
 industry layout are not exhausted. Production cargo callback fixtures accompany #467; the narrow

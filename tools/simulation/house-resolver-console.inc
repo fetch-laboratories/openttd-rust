@@ -120,7 +120,9 @@ static void HouseResolverScenario(const std::vector<std::pair<TileIndex, HouseID
 	std::vector<SavedTile> saved;
 	std::vector<Station *> stations;
 	const std::array<uint8_t, 4> states{4, 8, 16, 32};
-	for (TileIndex near : TileArea(tile, 2, 2).Expand(3)) {
+	TileArea nearby(tile, 2, 2);
+	nearby.Expand(3);
+	for (TileIndex near : nearby) {
 		if (stations.size() == states.size()) break;
 		if (!IsTileType(near, MP_CLEAR) && !IsTileType(near, MP_TREES) && !(IsTileType(near, MP_ROAD) && IsNormalRoad(near))) continue;
 		require(Station::CanAllocateItem());
