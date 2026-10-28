@@ -130,11 +130,15 @@ The fork executable is `build-rust/openttd-rust`; Cargo artifacts reside in the 
 `build-rust/cargo` directory. CMake tracks the Rust sources, manifests, lockfile, and toolchain
 file to rebuild the archive and affected executables. The reference executable is
 `.local/build-reference/openttd` in the main checkout. Most in-game branding remains original.
-When using this host's extracted dependencies, launch with their library path:
+When the driver bootstrapped `.local/deps`, it links the fork's game and test executables with
+that library directory as their build RPATH, so `./build-rust/openttd-rust -X`,
+`./build-rust/openttd_test` and bare `ctest` in `build-rust` run from a plain shell. The
+reference executable and anything run outside the driver (Cargo, other binaries) take the
+driver's environment from the `env` subcommand:
 
 ```sh
-LD_LIBRARY_PATH="$PWD/.local/deps/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-  ./build-rust/openttd-rust -X
+eval "$(python3 tools/migration.py env)"
+cargo check --workspace --locked
 ```
 
 `-X` avoids global game folders. Use separate development configuration and saves.
