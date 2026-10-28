@@ -65,6 +65,10 @@ DEEP_SET = (
             "simulate", "--threaded", "--tsan", "--timeout", str(GAME_TIMEOUT)
         ),
     ),
+    Member(
+        "simulate-multiplayer",
+        migration_command("simulate", "--multiplayer", "--timeout", str(GAME_TIMEOUT)),
+    ),
 )
 
 

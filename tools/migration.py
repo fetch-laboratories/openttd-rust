@@ -447,6 +447,9 @@ def main():
     parser.add_argument(
         "--threaded", action="store_true", help="SDL offscreen scenarios"
     )
+    parser.add_argument(
+        "--multiplayer", action="store_true", help="deep-tier mixed multiplayer"
+    )
     # simulate forwards any further arguments to tools/simulate.py; deep, scenario selectors.
     args, simulate_args = parser.parse_known_args()
     if simulate_args and args.action not in ("simulate", "coverage", "deep"):
@@ -460,6 +463,15 @@ def main():
         return
     args.sanitize = args.sanitize or SANITIZE
     args.tsan = args.tsan or TSAN
+    if args.multiplayer and (
+        args.action != "simulate"
+        or args.sanitize
+        or args.tsan
+        or args.threaded
+        or "--instructions" in simulate_args
+        or "--benchmark" in simulate_args
+    ):
+        parser.error("--multiplayer requires ordinary simulate without profiling")
     if args.sanitize and (args.tsan or args.threaded):
         parser.error("--sanitize conflicts with --tsan/--threaded")
     if (args.sanitize or args.tsan or args.threaded) and args.action not in (
@@ -755,6 +767,8 @@ def main():
                         / (
                             "tools/simulation/threaded.py"
                             if args.threaded
+                            else "tools/simulation/multiplayer.py"
+                            if args.multiplayer
                             else "tools/simulate.py"
                         )
                     ),

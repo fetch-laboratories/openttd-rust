@@ -13,6 +13,7 @@ include = [
     "tools/preflight.py",
     "tools/simulation/commands.py",
     "tools/simulation/community_ai.py",
+    "tools/simulation/multiplayer.py",
     "tools/simulation/platform_subset.py",
     "tools/simulation/sanitizers.py",
     "tools/simulation/threaded.py",
@@ -22,5 +23,6 @@ include = [
     "tools/test-deep.py",
     "tools/test-housekeeping.py",
     "tools/test-migration-env.py",
+    "tools/test-multiplayer.py",
     "tools/test-sanitizers.py",
 ]
