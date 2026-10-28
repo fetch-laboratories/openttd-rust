@@ -77,6 +77,18 @@ static void Cost(const char *label, const CommandCost &cost, Money money = 0, To
 	fmt::print(stderr, "TOWN cost {} {} {} {} {} {}\n", label, cost.Succeeded(), cost.GetCost(), cost.GetErrorMessage(), money, id.base());
 }
 static void Cost(const char *label, const std::tuple<CommandCost, Money, TownID> &result) { const auto &[cost, money, id] = result; Cost(label, cost, money, id); }
+
+/** Move every corner in [x0, x1] x [y0, y1] to height through the original terraform command, so neighbouring slopes stay valid. */
+static void LevelCorners(uint x0, uint x1, uint y0, uint y1, uint height, const char *label)
+{
+	for (uint y = y0; y <= y1; ++y) for (uint x = x0; x <= x1; ++x) {
+		TileIndex corner = TileXY(x, y);
+		while (TileHeight(corner) != height) {
+			CommandCost cost = std::get<0>(Command<CMD_TERRAFORM_LAND>::Do(DoCommandFlag::Execute, corner, SLOPE_N, TileHeight(corner) < height));
+			if (cost.Failed()) { Cost(label, cost); std::abort(); }
+		}
+	}
+}
 /* Observe the real presentation request, then forward it unchanged. The null
  * driver cannot establish rendered errors or authority-window refreshes. */
 static uint bribe_errors;
@@ -459,7 +471,13 @@ static bool CommandsScenario(std::span<std::string_view> args)
 	for (uint y = 6; y < 23; ++y) for (uint x = 6; x < 23; ++x) {
 		TileIndex sea = TileXY(x, y); CommandCost cleared = Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, sea);
 		if (cleared.Failed()) { Cost("fixture-sea", cleared); std::abort(); }
-		SetTileHeight(sea, 0); MakeSea(sea);
+	}
+	/* Level corners 6..23 through CMD_TERRAFORM_LAND, which also adjusts and clears the neighbouring tiles. */
+	LevelCorners(6, 23, 6, 23, 0, "fixture-sea-level");
+	for (uint y = 6; y < 23; ++y) for (uint x = 6; x < 23; ++x) {
+		TileIndex sea = TileXY(x, y);
+		if (!IsTileType(sea, MP_CLEAR) || GetTileSlope(sea) != SLOPE_FLAT || TileHeight(sea) != 0) std::abort();
+		MakeSea(sea);
 	}
 	IndustryID oilrig = IndustryID::Invalid();
 	std::set<IndustryID> original_industries; for (const Industry *i : Industry::Iterate()) original_industries.insert(i->index);
@@ -500,8 +518,9 @@ static bool CommandsScenario(std::span<std::string_view> args)
 	for (uint y = 40; y <= 44; ++y) for (uint x = 40; x <= 50; ++x) {
 		TileIndex at = TileXY(x, y); CommandCost clear = Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, at);
 		if (clear.Failed()) { Cost("fixture-bridge-clear", clear); std::abort(); }
-		SetTileHeight(at, 1); MakeClear(at, CLEAR_GRASS, 3);
 	}
+	LevelCorners(40, 51, 40, 45, 1, "fixture-bridge-level");
+	for (uint y = 40; y <= 44; ++y) for (uint x = 40; x <= 50; ++x) MakeClear(TileXY(x, y), CLEAR_GRASS, 3);
 	bool bridge_built = false;
 	owner.Change(OWNER_TOWN);
 	for (TileIndex at = TileXY(5, 5); at < Map::Size() - Map::SizeX() * 5; ++at) {

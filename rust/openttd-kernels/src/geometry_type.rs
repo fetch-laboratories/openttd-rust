@@ -13,3 +13,13 @@ pub fn rect_contains(left: i32, top: i32, right: i32, bottom: i32, x: i32, y: i3
     x.wrapping_sub(left) as u32 <= right.wrapping_sub(left) as u32
         && y.wrapping_sub(top) as u32 <= bottom.wrapping_sub(top) as u32
 }
+
+/// `Rect::Width`.
+pub fn rect_width(left: i32, right: i32) -> i32 {
+    right.wrapping_sub(left).wrapping_add(1)
+}
+
+/// `Rect::Height`.
+pub fn rect_height(top: i32, bottom: i32) -> i32 {
+    bottom.wrapping_sub(top).wrapping_add(1)
+}

@@ -22,6 +22,7 @@
 
 use crate::base_station_base::{ADD_FORCE, ADD_TEST, ADD_TRY};
 use crate::bitmap_type::{BitmapTileArea, BitmapTileIterator};
+use crate::geometry_type::{rect_height, rect_width};
 use crate::industry::tile::ShellHandle;
 use crate::industry_type::IndustryID;
 use crate::map_func::Map;
@@ -88,8 +89,8 @@ impl StationRect {
                 right: x.max(self.right),
                 bottom: y.max(self.bottom),
             };
-            let w = new_rect.right - new_rect.left + 1;
-            let h = new_rect.bottom - new_rect.top + 1;
+            let w = rect_width(new_rect.left, new_rect.right);
+            let h = rect_height(new_rect.top, new_rect.bottom);
             if mode != ADD_FORCE && (w > i32::from((c.c.spread)()) || h > i32::from((c.c.spread)()))
             {
                 c.check(mode != ADD_TRY);

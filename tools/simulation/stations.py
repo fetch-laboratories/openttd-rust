@@ -842,12 +842,17 @@ static void StationCatchmentFixture(TileIndex origin, const DoCommandFlags &test
 			if (spec.Index() >= NEW_HOUSE_OFFSET) break;
 			if (!spec.enabled || !spec.building_flags.Test(BuildingFlag::Size1x1)) continue;
 			if (Command<CMD_PLACE_HOUSE>::Do({}, t, spec.Index(), false, false).Failed()) continue;
-			StationCost("catchment-house", Command<CMD_PLACE_HOUSE>::Do(DoCommandFlag::Execute, t, spec.Index(), false, false));
+			CommandCost placed = Command<CMD_PLACE_HOUSE>::Do(DoCommandFlag::Execute, t, spec.Index(), false, false);
+			StationCost("catchment-house", placed);
+			StationNeed(placed.Succeeded() && IsTileType(t, MP_HOUSE), __LINE__);
 			houses.push_back(t);
 			break;
 		}
 		deity.Restore();
+		StationNeed(!houses.empty() && houses.back() == t, __LINE__);
 	};
+	/* Membership through the shared nearby lists, not the dumped labels alone. */
+	auto town_near = [](const Town *t, const Station *st) { for (const Station *s : t->stations_near) if (s == st) return true; return false; };
 	place_house(tile(4, 4));
 	CatchmentDump("houses-before");
 	auto rail = [&](DoCommandFlags f, TileIndex t, StationID join, uint8_t n, uint8_t len) { return Command<CMD_BUILD_RAIL_STATION>::Do(f, t, RAILTYPE_RAIL, AXIS_X, n, len, STAT_CLASS_DFLT, 0, join, true); };
@@ -855,6 +860,7 @@ static void StationCatchmentFixture(TileIndex origin, const DoCommandFlags &test
 	StationNeed(IsRailStationTile(tile(6, 6)), __LINE__);
 	StationID station = GetStationIndex(tile(6, 6));
 	CatchmentDump("rail");
+	StationNeed(town_near(Town::GetByTile(tile(4, 4)), Station::Get(station)), __LINE__);
 	place_house(tile(9, 4)); place_house(tile(12, 8));
 	CatchmentDump("houses-after");
 	/* Distant join with a truck bay, then a refused spread at a reduced limit. */
@@ -871,14 +877,25 @@ static void StationCatchmentFixture(TileIndex origin, const DoCommandFlags &test
 	{
 		Backup<CompanyID> deity(_current_company, OWNER_DEITY);
 		/* An accepting industry beside the platform reaches the delivery list. */
+		Industry *built = nullptr;
 		for (IndustryType type = 0; type < NUM_INDUSTRYTYPES; ++type) {
 			const IndustrySpec *spec = GetIndustrySpec(type);
 			if (!spec->enabled || !IsValidCargoType(spec->accepts_cargo[0])) continue;
 			if (Command<CMD_BUILD_INDUSTRY>::Do({}, tile(7, 8), type, 0, false, 12345).Failed()) continue;
-			StationCost("catchment-industry", Command<CMD_BUILD_INDUSTRY>::Do(DoCommandFlag::Execute, tile(7, 8), type, 0, false, 12345));
+			CommandCost cost = Command<CMD_BUILD_INDUSTRY>::Do(DoCommandFlag::Execute, tile(7, 8), type, 0, false, 12345);
+			StationCost("catchment-industry", cost);
+			StationNeed(cost.Succeeded() && IsTileType(tile(7, 8), MP_INDUSTRY), __LINE__);
+			built = Industry::GetByTile(tile(7, 8));
 			break;
 		}
 		deity.Restore();
+		/* PopulateStationsNearby and Station::AddIndustryToDeliver, observed before any later recompute. */
+		StationNeed(built != nullptr, __LINE__);
+		const Station *st = Station::Get(station);
+		bool industry_near = false, delivers = false;
+		for (const Station *s : built->stations_near) industry_near |= s == st;
+		for (const auto &entry : st->industries_near) delivers |= entry.industry == built;
+		StationNeed(industry_near && delivers, __LINE__);
 	}
 	CatchmentDump("industry");
 	CatchmentCargo("industry", tile(6, 6), 5, 1, 4);
