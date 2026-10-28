@@ -578,7 +578,10 @@ whose PR merged or closed, through `git worktree remove` without `--force`, so a
 one stays. It then deletes the local branch when that branch merged or origin holds the same
 head. A branch at a base commit with no PR is a task not yet committed and stays. In the main
 checkout's `.local` it removes finished runs under `simulation`, `verification`, `coverage` and
-`deep`, unfinished ones idle for 12 hours, and loose logs, clearing read-only bits first. It
+`deep` whose report's `candidate_commit` (or a deep report's `commit`) is an ancestor of
+`origin/rust-migration`, keeping other finished runs as possible open-PR evidence and reports
+without a commit as unclassified, plus unfinished runs idle for 12 hours and loose logs, clearing
+read-only bits first. It
 keeps the current deep report and the runs it names, each scenario's newest candidate profile
 (`callgrind.out`), shared builds, caches, toolchains, locks, the reference, retained speed
 profiles, CI request records and any folder holding a `provenance.json`, so a pinned anchor

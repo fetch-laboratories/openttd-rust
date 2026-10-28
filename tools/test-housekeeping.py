@@ -3,6 +3,7 @@
 
 import contextlib
 import io
+import json
 import os
 import stat
 import subprocess
@@ -98,12 +99,17 @@ class HousekeepingTests(unittest.TestCase):
     def fixture_local(self) -> None:
         local = self.main / ".local"
         sim = local / "simulation"
+        integrated = git(self.main, "rev-parse", "HEAD").strip()
+        candidate = json.dumps({"candidate_commit": integrated})
+        # An open PR's head is not on the base, so its runs may be its evidence.
+        open_head = git(self.top / "trees/open", "rev-parse", "HEAD").strip()
+        unintegrated = json.dumps({"candidate_commit": open_head})
         profile = "scenario/plain/candidate/callgrind.out"
         stale = read_only(sim / "20260101T000000Z-1/ro").parent
-        write(stale / "report.json")
-        write(sim / "20260102T000000Z-2/report.json")
+        write(stale / "report.json", candidate)
+        write(sim / "20260102T000000Z-2/report.json", candidate)
         write(sim / "20260102T000000Z-2" / profile)
-        write(sim / "20260103T000000Z-3/report.json")
+        write(sim / "20260103T000000Z-3/report.json", candidate)
         write(sim / "20260103T000000Z-3" / profile)
         write(sim / "20260104T000000Z-4/report.json")
         write(sim / "20260105T000000Z-5/scenario/log")
@@ -115,14 +121,17 @@ class HousekeepingTests(unittest.TestCase):
         os.utime(coverage, (old, old))
         os.utime(coverage / "zero.log", (old, old))
         current = f'{{"simulation_report": "{sim}/20260104T000000Z-4/report.json"}}'
-        write(local / "deep/20260101T000000Z-aaaa/report.json", "{}")
+        deep_old = json.dumps({"commit": integrated})
+        write(local / "deep/20260101T000000Z-aaaa/report.json", deep_old)
         write(local / "deep/20260102T000000Z-bbbb/report.json", current)
         self.removable |= {
             stale,
             sim / "20260102T000000Z-2",
             interrupted,
             coverage,
-            write(local / "verification/20260101T000000.000000Z/report.json").parent,
+            write(
+                local / "verification/20260101T000000.000000Z/report.json", candidate
+            ).parent,
             local / "deep/20260101T000000Z-aaaa",
             write(local / "adhoc.log"),
             write(local / "comparison-logs/a.log").parent,
@@ -134,6 +143,8 @@ class HousekeepingTests(unittest.TestCase):
             sim / "20260103T000000Z-3",
             sim / "20260104T000000Z-4",
             sim / "20260105T000000Z-5",
+            write(sim / "20260109T000000Z-9/report.json", unintegrated).parent,
+            write(sim / "20260110T000000Z-10/report.json", "{}").parent,
             local / "deep/20260102T000000Z-bbbb",
             runtime,
             write(local / "compiler-cache/entry").parent,

@@ -7,6 +7,7 @@ or locked one is kept. Output in a live worktree's own `.local` stays with that 
 """
 
 import argparse
+import json
 import os
 import re
 import shutil
@@ -147,6 +148,26 @@ def touched(path: Path) -> float:
     return max([path.stat().st_mtime] + [c.lstat().st_mtime for c in path.iterdir()])
 
 
+def finished(main: Path, report: Path) -> tuple[bool, str]:
+    """A finished run is removable once the commit its report names is integrated."""
+    try:
+        value = json.loads(report.read_text())
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        value = None
+    # Simulation and verification reports name candidate_commit; deep reports, commit.
+    fields = value if isinstance(value, dict) else {}
+    commit = fields.get("candidate_commit", fields.get("commit"))
+    if not isinstance(commit, str) or not commit:
+        return False, "unclassified run output"
+    ancestor = subprocess.run(
+        ["git", "-C", str(main), "merge-base", "--is-ancestor", commit, BASE],
+        capture_output=True,
+    )
+    if ancestor.returncode:
+        return False, f"candidate {commit[:12]} not integrated; may be open-PR evidence"
+    return True, f"finished run of integrated {commit[:12]}"
+
+
 def plan_local(local: Path, now: float) -> list[Item]:
     keep: dict[Path, str] = {}
     deep = max((r.parent for r in local.glob("deep/*/report.json")), default=None)
@@ -169,7 +190,9 @@ def plan_local(local: Path, now: float) -> list[Item]:
                 if run in keep:
                     items.append(Item(run, False, keep[run]))
                 elif (run / "report.json").exists():
-                    items.append(Item(run, True, "finished run output"))
+                    items.append(
+                        Item(run, *finished(local.parent, run / "report.json"))
+                    )
                 elif now - touched(run) < RUNNING_SECONDS:
                     items.append(Item(run, False, "no report.json; may be running"))
                 else:
