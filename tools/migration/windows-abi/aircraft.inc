@@ -1,5 +1,6 @@
 #pragma once
 #include "rust/aircraft_ffi.h"
+#include "rust/vehicle_visits_ffi.h"
 #include "aircraft-boundary.hpp"
 
 #include "vehicle_tables.inc"
@@ -13,6 +14,9 @@ static struct AircraftBoundaryProbe {
 	OpenTTDAircraftLeaves leaves;
 	OpenTTDAircraftVehicle vehicle;
 	std::unique_ptr<ControllerOrders> order_owner;
+	OpenTTDVehicleCommonServices common{};
+	OpenTTDVehicleRefitServices refit{};
+	OpenTTDVehicleVisits visits{};
 	OpenTTDVehicleTileLinks links[2];
 	uint64_t blocks = UINT64_MAX;
 	unsigned orders = 0, deleted = 0, ticks = 0, rotor_reads = 0, moves = 0;
@@ -37,10 +41,13 @@ static void AircraftDirectBoundary()
 	vehicle.visits = []() noexcept -> const OpenTTDVehicleVisits * {
 		auto &o = *aircraft_probe.order_owner;
 		CHECK(o.vehicle->current.type == 3 || o.vehicle->current.type == 5);
-		CHECK(o.visits.refit->common->orders == &o.services);
-		return &o.visits;
+		CHECK(aircraft_probe.visits.refit->common->orders == &o.services);
+		return &aircraft_probe.visits;
 	};
 	p.order_owner = std::make_unique<ControllerOrders>(&vehicle);
+	p.common.orders = &p.order_owner->services;
+	p.refit.common = &p.common;
+	p.visits.refit = &p.refit;
 	vehicle.orders = []() noexcept -> const OpenTTDOrdersLeaves * { return &aircraft_probe.order_owner->services; };
 	p.order_owner->services.vehicle_type = [](void *) noexcept { return uint64_t{3}; };
 	p.order_owner->services.vehicle = [](void *shell) noexcept { CHECK(shell == aircraft_probe.vehicle.handle); return aircraft_probe.order_owner->vehicle.get(); };

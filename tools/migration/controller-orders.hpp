@@ -3,7 +3,6 @@
 #ifndef OPENTTD_CONTROLLER_ORDERS_HPP
 #define OPENTTD_CONTROLLER_ORDERS_HPP
 #include "rust/orders_ffi.h"
-#include "rust/vehicle_visits_ffi.h"
 #include <memory>
 #include <new>
 
@@ -20,9 +19,6 @@ struct ControllerOrders {
 		openttd_rust_order_vector_delete};
 	OpenTTDConsistState consist{};
 	OpenTTDOrdersLeaves services{};
-	OpenTTDVehicleCommonServices common{};
-	OpenTTDVehicleRefitServices refit{};
-	OpenTTDVehicleVisits visits{};
 
 	explicit ControllerOrders(const OpenTTDVehicleServices *base)
 	{
@@ -33,9 +29,6 @@ struct ControllerOrders {
 		OpenTTDOrderFields order{.type = 1, .flags = 0, .destination = 1, .refit_cargo = 254, .max_speed = UINT16_MAX};
 		openttd_rust_order_vector_insert(vector.get(), 0, &order);
 		services.base = base;
-		common.orders = &services;
-		refit.common = &common;
-		visits.refit = &refit;
 		services.list = [](void *shell) noexcept { return static_cast<ControllerOrders *>(shell)->list.get(); };
 		services.vector = [](void *shell) noexcept { return static_cast<ControllerOrders *>(shell)->vector.get(); };
 		services.at_station = [](void *) noexcept { return uint64_t{0}; };
