@@ -11,6 +11,7 @@
 #include "mock_environment.h"
 #ifdef WITH_RUST
 #include "../rust/station_service_ffi.h"
+#include "../engine_type.h"
 #include "../rust/vehicle_visits_ffi.h"
 #include "../rust/station_association_ffi.h"
 #include "../rust/station_definitions_ffi.h"
