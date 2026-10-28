@@ -248,8 +248,8 @@ modes compare their exit saves.
   `StartNewThread` failure paths compute link graphs and write saves synchronously; graph
   scheduling, join dates and loaded LGRJ jobs remain unchanged. This prevents late workers from
   consuming null driver iterations while the simulation is paused. A thread-creation probe
-  rejects hosts where privileges bypass the limit. Other platforms are not supported by this
-  offline comparison policy. There are no timing retries or truncated logs. Active GameScripts
+  rejects hosts where privileges bypass the limit. The ordinary suite requires this
+  offline comparison policy; the bounded cadence subset below uses native graph workers. There are no timing retries or truncated logs. Active GameScripts
   remain outside the corpus.
 - Both executable/runtime trees are copied before scenarios, dereferencing data symlinks; the
   reference copy holds its shared build lock. Keep the candidate build idle during its initial
@@ -503,10 +503,32 @@ never a copy of a person's `~/.blacksmith/credentials`.
 
 macOS, Windows x86, Linux Clang and Linux GCC Dedicated run on `rust-migration` after every
 fifth integration (#357, #514). Root runs `gh workflow run ci-build.yml --ref rust-migration`,
-which builds and tests these five jobs (macOS Debug and Release) at the tip, checks their
-annotations and refreshes eligible caches, and waits with `gh run watch`; a red result is fixed
+which builds and tests these platforms (macOS Debug and Release) at the tip, checks their
+annotations and refreshes eligible caches; a red result is fixed
 before more integrations. An uncovered protected push also runs these platforms. A defect
 specific to the cadence platforms can remain undetected until that run and is fixed forward.
+The same dispatch adds Windows x64 and a Linux pinned-reference job for #509. Windows x64
+and macOS arm64 Release compare five distinct prepared platform cases against that run's
+Linux output: three manual play saves, `generate-tgp-128-1` and `aircraft-route-manual`.
+`python3 tools/simulate.py platform --reference-binary PATH --output DIR` produces the
+reference bundle; `platform --stored-reference DIR --candidate PATH --output OTHER` consumes
+it. This subset never runs in ordinary PR Full, and a missing case, snapshot, reference
+artifact or mismatched workflow run/commit fails.
+
+These cases retain the source scenarios' full tick intervals, normalize input GLOG history,
+set saved `linkgraph.recalc_time` to 9000 and move existing job join dates to the initial
+economy date plus 4500 days. Prepared input hashes must match Linux. Every checkpoint requires
+all job joins to exceed the fixed end date. Native workers calculate only job-local annotations;
+`GetLinkGraphJobDesc` saves the immutable graph/settings/join date, while the job destructor
+publishes flows after the scheduler's due-date guard. Thus worker completion cannot cause a
+join pause during the bounded interval. `gui.threaded_saves=false` makes saves synchronous on
+all hosts. The bundle supplies identical OpenGFX bytes. Both plain and desync modes retain the
+shared decoder, full checkpoint/end-state/log comparisons and existing masks; no platform mask
+is added. Reports label these `platform-no-join-*`; they exclude job joins, cargodist, regression
+AIs, custom console adapters, GUI scheduling, networking and other scenarios that require the
+ordinary fallback. Platform execution and the resulting narrowing of #156 remain #509
+acceptance work until root runs the changed cadence workflow.
+
 After two hosted-capacity cancellations of a macOS run, root runs `gh variable set CI_MACOS_HEAVY --body
 blacksmith-6vcpu-macos-26`, reruns, and runs `gh variable delete CI_MACOS_HEAVY` when that run
 finishes; setting the variable needs no Blacksmith credentials.

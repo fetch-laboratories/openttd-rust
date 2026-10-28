@@ -205,7 +205,12 @@ def runs(step, cache_only, steps):
     """Evaluate a ci-linux or ci-windows step condition on a protected push."""
     return evaluate(
         step.get("if", True),
-        inputs={"cache-only": cache_only, "rust": True, "compiler": "gcc"},
+        inputs={
+            "cache-only": cache_only,
+            "rust": True,
+            "compiler": "gcc",
+            "semantic-subset": False,
+        },
         github={"event_name": "push", "ref": "refs/heads/rust-migration"},
         steps=steps,
     )
@@ -422,7 +427,7 @@ class PolicyTests(unittest.TestCase):
             ("full", "merge", dispatch, "", "", ["sdl2"], ["x64"], False),
             ("native", "merge", dispatch, "", "", ["sdl2"], [], False),
             ("platform", "merge", dispatch, "", "", all_linux, both_windows, True),
-            ("", "", dispatch, "", "", ["clang", "dedicated"], ["x86"], True),
+            ("", "", dispatch, "", "", ["clang", "dedicated"], both_windows, True),
             ("", "", "push", "false", "true", ["sdl2"], ["x64"], False),
             ("", "", "push", "true", "", all_linux, both_windows, True),
             ("", "", "pull_request", "true", "", ["sdl2"], ["x64"], True),
@@ -448,6 +453,39 @@ class PolicyTests(unittest.TestCase):
                 self.assertEqual(
                     evaluate(jobs["emscripten"]["if"], **contexts),
                     bool(checkout and profile != "native" or heavy == "true"),
+                )
+
+    def test_semantic_subset_requires_the_protected_cadence(self) -> None:
+        jobs = workflow("ci-build.yml")["jobs"]
+        for event, checkout, branch, expected in (
+            ("workflow_dispatch", "", "rust-migration", True),
+            ("workflow_dispatch", "merge", "rust-migration", False),
+            ("workflow_dispatch", "", "feature", False),
+            ("pull_request", "", "feature", False),
+            ("push", "", "rust-migration", False),
+        ):
+            self.assertEqual(
+                evaluate(
+                    jobs["platform-reference"]["if"],
+                    inputs={"checkout-ref": checkout},
+                    github={"event_name": event, "ref": "refs/heads/" + branch},
+                ),
+                expected,
+            )
+        for name, matrix, selected in (
+            ("windows", {"arch": "x64"}, True),
+            ("windows", {"arch": "x86"}, False),
+            ("macos", {"name": "arm64 - Release"}, True),
+            ("macos", {"name": "arm64 - Debug"}, False),
+        ):
+            for result in ("success", "failure", "skipped"):
+                self.assertEqual(
+                    evaluate(
+                        jobs[name]["with"]["semantic-subset"],
+                        matrix=matrix,
+                        needs={"platform-reference": {"result": result}},
+                    ),
+                    selected and result == "success",
                 )
 
     def test_platform_cache_refresh_is_only_a_covered_protected_push(self):

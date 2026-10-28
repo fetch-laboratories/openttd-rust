@@ -492,6 +492,7 @@ def run_game(
     *,
     isolate=False,
     instructions=False,
+    native_threads: bool = False,
 ):
     """Run one binary on one scenario in an isolated personal directory.
 
@@ -510,6 +511,7 @@ def run_game(
                 desync,
                 isolate=isolate,
                 instructions=instructions,
+                native_threads=native_threads,
             )
         )
     )
@@ -526,6 +528,7 @@ def prepare_game(
     *,
     isolate=False,
     instructions=False,
+    native_threads: bool = False,
 ):
     """Prepare a launch without executing or decoding a game."""
     prepare_run_dir(scenario, build, run_dir)
@@ -577,6 +580,7 @@ def prepare_game(
         timeout=timeout,
         isolate=isolate,
         instructions=instruction_info,
+        native_threads=native_threads,
     )
 
 
@@ -591,7 +595,9 @@ def execute_game(plan):
         started = time.monotonic()
         try:
             code = (benchmark_run if plan["isolate"] else subprocess.run)(
-                [
+                command
+                if plan.get("native_threads")
+                else [
                     sys.executable,
                     str(ROOT / "tools/simulation/game_launcher.py"),
                     *command,
