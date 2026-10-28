@@ -28,3 +28,6 @@ crate::abi::layouts! {
 
 /// `VSE_VISUAL_EFFECT`.
 pub const VSE_VISUAL_EFFECT: VehicleSoundEvent = VehicleSoundEvent(6);
+
+/// `VSE_LOAD_UNLOAD`.
+pub const VSE_LOAD_UNLOAD: VehicleSoundEvent = VehicleSoundEvent(9);

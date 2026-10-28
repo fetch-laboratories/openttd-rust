@@ -235,6 +235,13 @@ modes compare their exit saves.
   requiring movement, loaded cargo, flying state and paid delivery.
   `tools/aircraft-scenario-ai/README.md` records its setup details, reproduction commands and
   limits.
+- Community scripts and the larger vanilla arctic save (#507) use
+  `tools/simulation/community_ai.py`. Complete source packages are pinned downloads
+  validated on every use and cached by the ordinary Actions cache. One generated
+  game and one short reload run by default; temperate/arctic ten-year games stay
+  in soak. The [input README](../migration/community-ai/README.md) records sources,
+  configuration and generation. The eventual same-NewGRF save remains unselected
+  while #525/#526 are user-parked.
 - Masks (`MASKS`, with reasons and hit counts in the report): the random save id, build
   revision/NewGRF version, and `round_trip_time`, which the original saves uninitialized (#83);
   ports touching it need their own check.
@@ -320,7 +327,9 @@ excluded work and kernel/I/O costs remain outside the proxy.
 at `nice -n 19` and `ionice -c 3`, on the developer host only, never in GitHub Actions. It
 writes `.local/deep/<time>-<commit>/report.json` naming the commit, each member's exit status,
 wall and summed scenario seconds, and each failed scenario's problems and first differences,
-beside a log per member. The set is `DEEP_SET` in `tools/deep.py`: `simulate --soak` (520
+beside a log per member. HEAD and cleanliness are checked independently before and after
+each member. Drift retains the observed state in a failed report, stops the set and releases
+the lock; operational runs use a fixed isolated checkout. The set is `DEEP_SET` in `tools/deep.py`: `simulate --soak` (520
 scenarios against the default 445), then `simulate --sanitize` (below), each run through the
 ordinary driver action with a per-game timeout of 7200 s, since idle-priority games run slowly
 under load. Members share the
@@ -676,7 +685,7 @@ simulation run is required.
 ### Housekeeping
 
 `python3 tools/housekeeping.py` lists stale worktrees and `.local` output with each item's
-size and reason; `--apply` removes exactly its `remove` lines. Root runs it at session start and
+size and reason; `--apply` removes eligible `remove` entries after a final live-output check. Root runs it at session start and
 after integrations, reading the dry run before `--apply`. It removes a linked worktree (never
 the main checkout or `.local/reference`) whose branch merged into `origin/rust-migration` or
 whose PR merged or closed, through `git worktree remove` without `--force`, so a dirty or locked
@@ -691,7 +700,11 @@ keeps the current deep report and the runs it names, each scenario's newest cand
 (`callgrind.out`), shared builds, caches, toolchains, locks, the reference, retained speed
 profiles, CI request records and any folder holding a `provenance.json`, so a pinned anchor
 runtime records its provenance there. Unknown entries are listed as kept for a decision by
-hand. A live worktree's own `.local` stays with that worktree.
+hand. A live worktree's own `.local` stays with that worktree. Linux proc descriptors protect
+same-user writable output files and their containing candidates during planning and immediately
+before deletion, using paths and file identity. If descriptor inspection is incomplete, each
+regular file must admit a kernel read lease; live writers or unavailable leases retain the
+candidate. A process opening output after planning can therefore keep a listed candidate.
 
 ### Automatic rollback (user-authorized, 2026-10-22)
 
@@ -1749,7 +1762,10 @@ flush. C++ retains pool shells, canonical world and packet storage, loading/rese
 checks and UI. Cargo callbacks enter the Rust registry/common Action2 owner directly. CAPY saves the repr(C) payment in place through `CargoPayment`
 reference aliases. Cargo/refusal/production/randomisation/animation and vehicle-sound resolution
 uses the NewGRF evaluator, without script VM entry or payment/destination reentry; wrappers are
-noexcept. Money saturates arithmetic but retains native shifts; callback unsigned products,
+noexcept. Payment settlement borrows typed canonical vehicle/finance services and transfer/final
+payment read feeder shares directly from the Rust cargo-storage owner. Payment fronts and station
+IDs use shared boundary types; delivery/industry selectors and packed source remain under #168,
+#199 and #500. Money saturates arithmetic but retains native shifts; callback unsigned products,
 BigMulS narrowing, stockpile limits and ordered randomisation/animation are explicit. Checks:
 the default `economy` simulation. NewGRF resolver execution, legacy CAPY files and every
 industry layout are not exhausted. Production cargo callback fixtures accompany #467; the narrow

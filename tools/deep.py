@@ -75,6 +75,16 @@ class Failure(TypedDict):
 
 
 @dataclass
+class SourceState:
+    commit: str
+    status: str
+
+
+def source_state(root: Path) -> SourceState:
+    return SourceState(git(root, "rev-parse", "HEAD"), git(root, "status", "--short"))
+
+
+@dataclass
 class Result:
     name: str
     command: list[str]
@@ -87,6 +97,8 @@ class Result:
     scenario_seconds: float = 0.0
     failures: list[Failure] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)
+    source_before: SourceState | None = None
+    source_after: SourceState | None = None
     # Sanitizer reports raised by both games, with their scenarios (#505).
     original_reports: dict[str, list[str]] = field(default_factory=dict)
 
@@ -175,15 +187,38 @@ def run_deep(
         for member in members:
             command = member.command(root, jobs, selectors)
             log = out / f"{member.name}.log"
+            before = source_state(root)
             begun = time.monotonic()
-            code = run_logged(
-                low_priority(command), cwd=root, env=env, log=log, phase=member.name
+            log.touch()
+            coherent = before.commit == commit and not before.status
+            code = (
+                run_logged(
+                    low_priority(command), cwd=root, env=env, log=log, phase=member.name
+                )
+                if coherent
+                else 1
             )
             result = Result(
                 member.name, command, code, round(time.monotonic() - begun, 1), str(log)
             )
-            summarize(result, commit)
+            after = source_state(root)
+            result.source_before, result.source_after = before, after
+            if coherent:
+                summarize(result, commit)
+            for phase, state in (("before", before), ("after", after)):
+                if state.commit != commit:
+                    result.problems.append(
+                        f"source commit drift {phase} member: {state.commit}"
+                    )
+                if state.status:
+                    result.problems.append(
+                        f"source dirty {phase} member: {state.status}"
+                    )
+            if result.problems:
+                result.passed = False
             results.append(result)
+            if not coherent or after.commit != commit or after.status:
+                break
         report = {
             "schema_version": 1,
             "commit": commit,

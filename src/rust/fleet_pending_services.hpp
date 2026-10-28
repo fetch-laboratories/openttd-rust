@@ -6,6 +6,7 @@
  */
 
 #include "company_services.h"
+#include "presentation_services.h"
 
 /* Typed tick-end services. Rust owns ordering and policy; native CommandCost
  * and presentation encoding stay on the native caller stack. Vehicle, owner,
@@ -14,7 +15,6 @@ static void FleetPending_restart(void *shell) noexcept { static_cast<Vehicle *>(
 static uint32_t FleetPending_reserve(uint8_t company) noexcept { return RustCompanyRenewReserve(Company::Get(CompanyID(company))); }
 static void FleetPending_subtract(int64_t amount) noexcept { SubtractMoneyFromCompany(CommandCost(EXPENSES_NEW_VEHICLES, Money(amount))); }
 static void FleetPending_command(void *out, uint32_t id) noexcept { *static_cast<CommandCost *>(out) = Command<CMD_AUTOREPLACE_VEHICLE>::Do(DoCommandFlag::Execute, VehicleID(id)); }
-static void FleetPending_animation(int32_t x, int32_t y, int32_t z, int64_t amount) noexcept { ShowCostOrIncomeAnimation(x, y, z, Money(amount)); }
 static void FleetPending_length_news(uint32_t id) noexcept { AddVehicleAdviceNewsItem(AdviceType::AutorenewFailed, GetEncodedString(STR_ERROR_TRAIN_TOO_LONG_AFTER_REPLACEMENT, VehicleID(id)), VehicleID(id)); }
 static void FleetPending_failed_news(uint32_t id, uint32_t error) noexcept { AddVehicleAdviceNewsItem(AdviceType::AutorenewFailed, GetEncodedString(STR_NEWS_VEHICLE_AUTORENEW_FAILED, VehicleID(id), error, std::monostate{}), VehicleID(id)); }
 static const OpenTTDFleetPendingServices _fleet_pending_services{
@@ -26,7 +26,7 @@ static const OpenTTDFleetPendingServices _fleet_pending_services{
 	.reserve = FleetPending_reserve,
 	.subtract = FleetPending_subtract,
 	.command = FleetPending_command,
-	.animation = FleetPending_animation,
+	.animation = RustCostOrIncomeAnimation,
 	.length_news = FleetPending_length_news,
 	.failed_news = FleetPending_failed_news,
 	.cash = STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY,

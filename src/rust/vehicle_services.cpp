@@ -234,7 +234,6 @@ static int32_t OPENTTD_RUST_CALL VehicleSvcX(OpenTTDVehicle *v) noexcept { retur
 static int32_t OPENTTD_RUST_CALL VehicleSvcY(OpenTTDVehicle *v) noexcept { return RustVehicleY(VehicleOf(v)); }
 static int32_t OPENTTD_RUST_CALL VehicleSvcZ(OpenTTDVehicle *v) noexcept { return RustVehicleZ(VehicleOf(v)); }
 static uint8_t OPENTTD_RUST_CALL VehicleSvcTick(OpenTTDVehicle *v) noexcept { return RustVehicleTick(VehicleOf(v)); }
-static uint8_t OPENTTD_RUST_CALL VehicleSvcOwner(OpenTTDVehicle *v) noexcept { return RustVehicleOwner(VehicleOf(v)); }
 static uint16_t OPENTTD_RUST_CALL VehicleSvcSpeed(OpenTTDVehicle *v) noexcept { return RustVehicleSpeed(VehicleOf(v)); }
 static uint8_t OPENTTD_RUST_CALL VehicleSvcSubspeed(OpenTTDVehicle *v) noexcept { return RustVehicleSubspeed(VehicleOf(v)); }
 static uint8_t OPENTTD_RUST_CALL VehicleSvcRunning(OpenTTDVehicle *v) noexcept { return RustVehicleRunning(VehicleOf(v)); }
@@ -386,7 +385,7 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.y = VehicleSvcY,
 	.z = VehicleSvcZ,
 	.tick = VehicleSvcTick,
-	.owner = VehicleSvcOwner,
+	.owner = RustVehicleOwnerOf,
 	.speed = VehicleSvcSpeed,
 	.subspeed = VehicleSvcSubspeed,
 	.running = VehicleSvcRunning,

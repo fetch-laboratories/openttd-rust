@@ -284,6 +284,27 @@ def fresh_generators(out, tools, exe):
             raise RuntimeError(f"Fresh generator output {name} is missing or empty")
 
 
+def redirected_console(out: Path, build: Path) -> None:
+    """The GUI executable must retain stderr supplied by its caller."""
+    command = [str(build / "openttd.exe"), "-X", "-d", "invaliddebug=1", "-h"]
+    for name in ("pipe", "file"):
+        log = out / f"redirected-console-{name}.log"
+        with log.open("wb") as output:
+            result = subprocess.run(
+                command,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE if name == "pipe" else output,
+                timeout=30,
+            )
+            if name == "pipe":
+                output.write(result.stderr)
+        if (
+            result.returncode
+            or b"Unknown debug level 'invaliddebug'" not in log.read_bytes()
+        ):
+            raise RuntimeError(f"Windows redirected diagnostics missing: {log}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--target", required=True)
@@ -297,6 +318,7 @@ def main():
     check_build(out, "game", args.build.resolve(), args.target, windows)
     configuration = check_build(out, "tools", tools, args.target, windows)
     if windows:
+        redirected_console(out, args.build.resolve())
         refusals(out, configuration)
     freshness(out, tools, configuration)
     fresh_generators(out, tools, ".exe" if windows else "")

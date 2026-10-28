@@ -6,6 +6,7 @@
  */
 /** @file company_adapter.cpp Typed noexcept shared-world services for the Rust company owner. */
 #include "../stdafx.h"
+#include "presentation_services.h"
 #ifdef WITH_RUST
 #include "../ai/ai.hpp"
 #include "../aircraft.h"
@@ -114,7 +115,7 @@ static void Fin_give_money_message(uint8_t dest, int64_t amount) noexcept
 static void Fin_money_animation(uint32_t t, int64_t amount) noexcept
 {
 	TileIndex tile(t);
-	ShowCostOrIncomeAnimation(TileX(tile) * TILE_SIZE, TileY(tile) * TILE_SIZE, GetTilePixelZ(tile), amount);
+	RustCostOrIncomeAnimation(TileX(tile) * TILE_SIZE, TileY(tile) * TILE_SIZE, GetTilePixelZ(tile), amount);
 }
 
 /* Company identity and lifecycle services. */
