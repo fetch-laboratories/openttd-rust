@@ -117,7 +117,7 @@ static void GenerationLifecycle()
 		if (kind == 12 || kind == 13) GameConfig::GetConfig(GameConfig::SSS_FORCE_GAME)->Change(kind == 12 ? "GenerationSleep" : "GenerationCap");
 		GenerateWorldSetCallback(GenerationDone);
 		GenerateWorld(mode, 64, 64, false);
-		fmt::print(stderr, "GENERATION lifecycle {} {} {} {} {} {} {} {} {} {} {} {} {}\n", kind, mode, _settings_game.construction.map_height_limit, generation_done, generation_outer_cleanup, generation_outer_abort, _current_company.base(), _local_company.base(), _generating_world, storage.GetValue(0), _exit_game.load(), generation_warmup, generation_script);
+		fmt::print(stderr, "GENERATION lifecycle {} {} {} {} {} {} {} {} {} {} {} {} {} {}\n", kind, mode, _settings_game.construction.map_height_limit, generation_done, generation_outer_cleanup, generation_outer_abort, _current_company.base(), _local_company.base(), _generating_world, storage.GetValue(0), _exit_game.load(), generation_warmup, generation_script, _game_mode);
 		GenerationSnapshot("lifecycle");
 		if (kind == 12 || kind == 13) { Game::Uninitialize(true); GameConfig::GetConfig(GameConfig::SSS_FORCE_GAME)->Change(std::nullopt); }
 	}

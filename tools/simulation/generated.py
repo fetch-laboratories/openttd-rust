@@ -300,8 +300,8 @@ def lifecycle_check(lines: list[str]) -> None:
         raise RuntimeError("missing complete default world lifecycle evidence")
     for row in rows:
         kind, mode, height, done, cleanup, aborted, company, local = map(int, row[:8])
-        generating, storage, exiting, warmup, script = row[8:]
-        if generating != "false" or local != 255 or cleanup < 1:
+        generating, storage, exiting, warmup, script, active_mode = row[8:]
+        if generating != "false" or (kind != 14 and local != 255) or cleanup < 1:
             raise RuntimeError(
                 f"world cleanup or local-company restoration failed: {row}"
             )
@@ -326,6 +326,12 @@ def lifecycle_check(lines: list[str]) -> None:
                 raise RuntimeError(f"failed heightmap fallback height changed: {row}")
             if kind == 10 and height != 30:
                 raise RuntimeError(f"original automatic height changed: {row}")
+        if kind == 14 and (active_mode != "0" or company != local):
+            raise RuntimeError(
+                "nondedicated abortion did not enter the intro company context"
+            )
+        if kind in (8, 9, 10, 12, 13) and int(warmup) != 1280:
+            raise RuntimeError("nonempty generation skipped tile warm-up")
         if kind == 12 and not 0 < int(script) < 2500:
             raise RuntimeError("GameScript did not reach explicit sleep")
         if kind == 13 and int(script) != 2500:
