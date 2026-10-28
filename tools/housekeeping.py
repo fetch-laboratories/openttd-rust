@@ -9,10 +9,12 @@ live worktree's own `.local` stays with that worktree.
 
 import argparse
 import errno
+import fcntl
 import json
 import os
 import re
 import shutil
+import signal
 import stat
 import subprocess
 import sys
@@ -191,11 +193,30 @@ def open_outputs() -> tuple[list[OutputHandle], str | None]:
     return handles, None
 
 
+def lease_refusal(paths: list[Path]) -> str | None:
+    """Check for writers through the kernel when proc hides a process's descriptors."""
+    for path in paths:
+        try:
+            if not stat.S_ISREG(path.stat().st_mode):
+                continue
+            descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+            try:
+                # Lease breaks use the normally ignored SIGURG instead of fatal SIGIO.
+                fcntl.fcntl(descriptor, fcntl.F_SETOWN, os.getpid())
+                fcntl.fcntl(descriptor, fcntl.F_SETSIG, signal.SIGURG)
+                fcntl.fcntl(descriptor, fcntl.F_SETLEASE, fcntl.F_RDLCK)
+            finally:
+                os.close(descriptor)
+        except OSError as error:
+            if error.errno == errno.EAGAIN:
+                return "live open output handle"
+            return f"cannot inspect output candidate: {error}"
+    return None
+
+
 def output_refusal(
     path: Path, handles: list[OutputHandle], error: str | None
 ) -> str | None:
-    if error is not None:
-        return error
     target = path.resolve()
     if any(
         handle.path == target or handle.path.is_relative_to(target)
@@ -214,6 +235,8 @@ def output_refusal(
             return "live open output handle"
     except OSError as inspection_error:
         return f"cannot inspect output candidate: {inspection_error}"
+    if error is not None:
+        return lease_refusal(paths)
     return None
 
 

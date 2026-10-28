@@ -268,12 +268,27 @@ class HousekeepingTests(unittest.TestCase):
         with held_output(path, unreadable=True) as child:
             (self.proc / str(child.pid)).symlink_to(Path("/proc") / str(child.pid))
             self.assertNotIn(path, self.run_main())
-            self.assertIn("cannot inspect", housekeeping.remove(self.main, item) or "")
+            self.assertEqual(
+                housekeeping.remove(self.main, item), "live open output handle"
+            )
             child_write(child)
             self.assertEqual(path.read_text(), "xvisible\n")
         self.assertIn(path, self.run_main())
         self.assertIsNone(housekeeping.remove(self.main, item))
         self.assertFalse(path.exists())
+
+    def test_unreadable_process_does_not_keep_unrelated_closed_outputs(self) -> None:
+        path = write(self.main / ".local/private.log")
+        closed = write(self.main / ".local/closed.log")
+        with held_output(path, unreadable=True) as child:
+            (self.proc / str(child.pid)).symlink_to(Path("/proc") / str(child.pid))
+            listed = self.run_main()
+            self.assertNotIn(path, listed)
+            self.assertIn(closed, listed)
+            self.run_main("--apply")
+            self.assertFalse(closed.exists())
+            child_write(child)
+            self.assertEqual(path.read_text(), "xvisible\n")
 
     def test_opened_after_planning_is_protected_at_removal(self) -> None:
         path = write(self.main / ".local/late.log")
