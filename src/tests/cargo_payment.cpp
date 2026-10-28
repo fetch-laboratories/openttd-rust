@@ -71,8 +71,8 @@ TEST_CASE("Cargo payment - settlement order, Money boundaries and cleanup")
 		std::vector<uint8_t> actual;
 		for (auto [op, first, second] : settlement) actual.push_back(op);
 		CHECK(actual == order);
-		CHECK(finances.money == (valid_company ? -INT64_MAX : 0));
-		CHECK(finances.yearly_expenses[0][EXPENSES_TRAIN_REVENUE] == (valid_company ? INT64_MAX : 0));
+		CHECK(finances.money.base() == (valid_company ? -INT64_MAX : 0));
+		CHECK(finances.yearly_expenses[0][EXPENSES_TRAIN_REVENUE].base() == (valid_company ? INT64_MAX : 0));
 		CHECK(std::get<1>(settlement[valid_company ? 4 : 3]) == (transfer ? 744 : 1000));
 		CHECK(std::get<2>(settlement[settlement.size() - 2]) == INT64_MAX);
 		CHECK(current == 17);
