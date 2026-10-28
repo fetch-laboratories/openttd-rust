@@ -198,32 +198,37 @@ One ranked list. Each free slot takes the highest unblocked item that fits the
 six-branch limit and disjoint-service rule; completing review/integration takes
 priority. A lower rank can run while a higher one waits. Scopes live in issues.
 
-1. **#504 / #518 coverage integration.** The completed report can guide the
+1. **#528-#532 agent workflow fixes.** Repeated shell workarounds without a
+   permanent fix: #530 and #531's rules are in AGENTS.md and the skills; one
+   maintenance PR carries #528 (host RPATH, `migration.py env`), #531's
+   `ci.py wait` default, #532 (`tools/housekeeping.py`) and #529 (Linux apt
+   install timeouts). Close each issue when its part integrates.
+2. **#504 / #518 coverage integration.** The completed report can guide the
    rest; update base and retry final Full after the infrastructure failure.
-2. **#156 observation and #503 fixture repairs, with #199/#500 helpers/types.**
+3. **#156 observation and #503 fixture repairs, with #199/#500 helpers/types.**
    One maintenance batch makes existing claimed evidence distinguish wrong
    behavior and restores valid deep terrain. Reuse the fixture worktree.
-3. **#507 / #525 real NewGRF corpus, source packaging under #526.** Highest
+4. **#507 / #525 real NewGRF corpus, source packaging under #526.** Highest
    broad integration gap across recently migrated loaders and resolvers.
-4. **#275 / #312 tile-loop batch, followed by identity-required re-anchoring.**
+5. **#275 / #312 tile-loop batch, followed by identity-required re-anchoring.**
    There is measured excess and limited headroom; actual savings are unknown.
-5. **#511 targeted mutation study.** Measure observation quality before removing
+6. **#511 targeted mutation study.** Measure observation quality before removing
    scenarios or expanding random input. Use #518 and the new observation gaps.
-6. **#505 ASan/UBSan.** Continue the existing checkpoint; compare both games
+7. **#505 ASan/UBSan.** Continue the existing checkpoint; compare both games
    and distinguish original failures from candidate-only boundary faults.
-7. **#527 calendar/economy clocks.** Recurring simulation state and dispatch
+8. **#527 calendar/economy clocks.** Recurring simulation state and dispatch
    ownership with existing evidence infrastructure, no external prerequisite.
-8. **#509 platform semantic subset.** Concrete MSVC defect history and an
+9. **#509 platform semantic subset.** Concrete MSVC defect history and an
    existing cadence make this more useful than speculative corpus expansion.
-9. **#506 threaded execution and TSan.** The quick guard is integrated; complete
-   deterministic stopping and prove the specified thread-local mutation fails.
-10. **#508 seeded random-command AI.** Target measured unexecuted command
+10. **#506 threaded execution and TSan.** The quick guard is integrated; complete
+    deterministic stopping and prove the specified thread-local mutation fails.
+11. **#508 seeded random-command AI.** Target measured unexecuted command
     branches and compare command outcomes as well as terminal state.
-11. **#507 remaining community AI and large-map corpus**, then **#510 mixed
+12. **#507 remaining community AI and large-map corpus**, then **#510 mixed
     multiplayer feasibility**. Broaden integration evidence after the cheaper
     concrete gaps above; neither depends on the deferred owners.
-12. **#501 typing and remaining #168/#199/#500 debt.** Carry annotations on
-    touched #505/#527 tooling. At the first stocktake after item 2 integrates,
+13. **#501 typing and remaining #168/#199/#500 debt.** Carry annotations on
+    touched #505/#527 tooling. At the first stocktake after item 3 integrates,
     select the next concrete selector, observation or ID conversion slice from
     these trackers using measured cost or a source defect; do not launch a
     whole-fork sweep. Disaster conversion is complete.
@@ -261,6 +266,7 @@ reviewer commit is ahead of its implementation checkout.
 
 | Item | Current state | Next action |
 | --- | --- | --- |
+| #528-#532 | Docs rules pushed; #528 and #532 on agent branches; #531 `ci.py` and #529 on root's branch. | Batch into one maintenance PR, fresh reviewer, Full; close each issue on integration. |
 | #518 | Reviewed; final Full failed on package installation. | Update base, apply ordinary conflict-review rule, request exact-head Full. Preserve final report through integration. |
 | #156/#503 batch | `testing/deep503-town-commands` has diagnosis, no implementation. | Repair terrain and the selected observation/helper/type items; one fixing review and Full. |
 | #525/#526 | Draft; source-distribution finding remains. | Fetch reviewer head, research/package matching sources or replace fixtures within scope; review changed scope and validate. |

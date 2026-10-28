@@ -292,6 +292,12 @@ family differs from the implementer's.
 Under a Claude Code root, implementation, fixes and code-touching follow-ups
 run on Opus. Sonnet handles only non-code work such as runs, measurements and
 tracker edits (user decision, 2026-10-27).
+A Claude Code root spawns each code-touching agent through T3 `delegate_task`
+with `isolation: "worktree"`. T3 creates the worktree from root's commit, binds
+the agent's shell to it so no command needs a `cd` prefix, and removes it when
+the PR opened from it closes. The agent names its branch and opens its PR from
+that worktree. Root makes worktrees by hand (under `.local/worktrees`) only for
+its own small PRs and for reviews.
 
 Spawn a fresh agent for each task and name it after that task; its name is its
 attribution. Do not reassign a finished agent to unrelated work. Each review
@@ -300,6 +306,15 @@ attributed review reports. Close each agent when its task ends. At the host's
 slot limit, root works through its own queue (integration, spot-checking fix
 commits, roadmap) until a slot frees. Root leaves host state alone: no archiving
 threads or editing host databases to free slots.
+
+Long jobs (builds, simulations, coverage corpora, deep checks, CI) run in the
+background, and the agent ends its turn; the host notifies it when the job
+exits. In Claude Code that is Bash `run_in_background`, and a T3 child also
+passes the task ID to `t3_background_wait` so its thread stays working.
+`python3 tools/ci.py wait` runs the same way, and on timeout prints its resume
+command. No agent sleeps, polls in a loop or wraps a sleep in `timeout`.
+A brief for a long job states this, and a subagent whose only remaining work is
+waiting reports and stops.
 
 Sessions can end without warning. Implementation agents push their branch at
 every passing milestone, and before a long check, handoff or expected usage
