@@ -339,7 +339,6 @@ struct OpenTTDIndustryDeliveryServices {
 	void (*resolve)(OpenTTDIndustryProductionContext *, uint32_t, uint32_t, OpenTTDIndustryProductionResult *) noexcept OPENTTD_SERVICE_DEFAULT(resolve);
 	uint16_t (*input_multiplier)(const OpenTTDIndustrySpecHandle *, size_t, size_t) noexcept OPENTTD_SERVICE_DEFAULT(input_multiplier);
 };
-const OpenTTDIndustryDeliveryServices &GetIndustryDeliveryServices() noexcept;
 typedef void (*OpenTTDIndustryResolve)(void *context, uint32_t random, uint32_t parameter, OpenTTDIndustryProductionResult *out);
 void openttd_rust_industry_production_callback(void *industry, OpenTTDIndustry *owner, void *context, uint32_t behaviour, uint8_t reason, OpenTTDIndustryResolve resolve, const OpenTTDIndustryServices *services);
 /** Minimal live tile lookup; no persistent shell observation. */
@@ -459,6 +458,7 @@ bool openttd_rust_industry_slope_refused(uint8_t current, uint8_t refused);
 }
 #endif
 #ifdef __cplusplus
+const OpenTTDIndustryDeliveryServices &GetIndustryDeliveryServices() noexcept;
 const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept;
 const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices() noexcept;
 const OpenTTDIndustryCostServices &GetIndustryCostServices() noexcept;
