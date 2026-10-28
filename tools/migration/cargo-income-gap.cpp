@@ -11,6 +11,7 @@
 #include "core/bitmath_func.hpp"
 #include "tests/cargo_payment_stubs.hpp"
 #include "rust/cargo_registry_ffi.h"
+#include "rust/cargo_storage_ffi.h"
 using Money = OverflowSafeInt64;
 using CargoType = uint8_t;
 using TileIndex = uint32_t;
@@ -53,8 +54,7 @@ int main()
 		.callback_frame = [](const OpenTTDCargoInvocation *invocation, int32_t *, size_t) noexcept -> uint16_t { callback_argument = invocation->param2; return callback_value; },
 	};
 	s.registry = &registry;
-	s.feeder = [](const void *p, uint32_t) noexcept { return static_cast<const CargoPacket *>(p)->feeder.base(); };
-	s.setting = [](uint8_t) noexcept -> uint32_t { return _settings_game.economy.feeder_payment_share; };
+	s.feeder_payment_share = []() noexcept -> uint8_t { return _settings_game.economy.feeder_payment_share; };
 	uint64_t cases = 0;
 	for (int64_t payment : {INT64_MIN, int64_t(INT32_MIN), int64_t(-1), int64_t(0), int64_t(6000), int64_t(INT32_MAX), INT64_MAX}) {
 		for (uint8_t p1 : {0, 20, 255}) for (uint8_t p2 : {0, 20, 224, 225, 255}) {
@@ -83,8 +83,11 @@ int main()
 				CargoPayment reference{Money(initial)};
 				auto *candidate = openttd_rust_cargo_payment_new(nullptr, 0xFFFF);
 				candidate->fields = {nullptr, INT64_MIN, INT64_MAX, initial};
-				auto expected = reference.PayTransfer(0, &packet, 65535, 0);
-				auto actual = openttd_rust_cargo_payment_transfer(candidate, &s, 0, &packet, 65535, 250, 45);
+				OpenTTDCargoPacket candidate_packet{};
+				candidate_packet.feeder_share = feeder;
+				candidate_packet.count = 1;
+				auto expected = reference.PayTransfer(0, &packet, 1, 0);
+				auto actual = openttd_rust_cargo_payment_transfer(candidate, &s, 0, &candidate_packet, 1, 250, 45);
 				const auto &state = candidate->fields;
 				if (actual != expected.base() || state.visual_transfer != reference.visual_transfer.base() || state.route_profit != INT64_MIN || state.visual_profit != INT64_MAX) return 2;
 				openttd_rust_cargo_payment_destroy(candidate, nullptr, 1);

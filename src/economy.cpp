@@ -65,6 +65,7 @@
 #include "rust/cargo_registry_ffi.h"
 #include "rust/services_cargo.h"
 #include "rust/company_adapter.h"
+#include "rust/presentation_services.h"
 #include "rust/tile_owner_services.h"
 #include "rust/vehicle_services.h"
 #include "rust/company_services.h"
@@ -1147,29 +1148,21 @@ static const OpenTTDCargoServices _cargo_services = {
 			default: NOT_REACHED();
 		}
 	},
-	.vehicle_read = [](void *handle, uint8_t field) noexcept -> uint32_t {
-		const Vehicle *v = static_cast<Vehicle *>(handle);
-		return field == 0 ? v->last_station_visited.base() : v->owner.base();
-	},
-	.settle = [](void *handle, uint8_t op, int64_t first, int64_t second) noexcept -> uint32_t {
-		Vehicle *v = static_cast<Vehicle *>(handle);
-		switch (op) {
-			case 0: v->cargo_payment = nullptr; break;
-			case 1: { auto previous = _current_company; _current_company = v->owner; return previous.base(); }
-			case 2: SubtractMoneyFromCompany(CommandCost(v->GetExpenseType(true), Money(first))); break;
-			case 3: v->profit_this_year += Money(first); break;
-			case 4: return IsLocalCompany();
-			case 5: ShowFeederIncomeAnimation(v->x_pos, v->y_pos, v->z_pos, Money(first), Money(second)); break;
-			case 6: ShowCostOrIncomeAnimation(v->x_pos, v->y_pos, v->z_pos, Money(second)); break;
-			case 7: _current_company = CompanyID(first); break;
-			case 8: return PlayVehicleSound(v, VSE_LOAD_UNLOAD);
-			case 9: SndPlayVehicleFx(SND_14_CASHTILL, v); break;
-			default: NOT_REACHED();
-		}
-		return 0;
-	},
-	.feeder = [](const void *packet, uint32_t count) noexcept -> int64_t { return static_cast<const CargoPacket *>(packet)->GetFeederShare(count).base(); },
-	.setting = [](uint8_t field) noexcept -> uint32_t { return field == 0 ? _settings_game.difficulty.subsidy_multiplier : _settings_game.economy.feeder_payment_share; },
+	.last_station = RustVehicleLastStationVisited,
+	.vehicle_owner = RustVehicleOwnerOf,
+	.detach_payment = [](OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->cargo_payment = nullptr; },
+	.finance = &GetRustCompanyFinanceServices(),
+	.vehicles = &GetRustVehicleServices(),
+	.local_company = RustIsLocalCompany,
+	.expense = RustVehicleExpense,
+	.profit = RustVehicleRead<int64_t, RustVehicleProfit>,
+	.x = RustVehicleRead<int32_t, RustVehicleX>,
+	.y = RustVehicleRead<int32_t, RustVehicleY>,
+	.z = RustVehicleRead<int32_t, RustVehicleZ>,
+	.cost_animation = RustCostOrIncomeAnimation,
+	.feeder_animation = RustFeederIncomeAnimation,
+	.subsidy_multiplier = []() noexcept -> uint8_t { return _settings_game.difficulty.subsidy_multiplier; },
+	.feeder_payment_share = []() noexcept -> uint8_t { return _settings_game.economy.feeder_payment_share; },
 };
 
 static OpenTTDCargoDelivery *GetCargoDeliveryState()
@@ -1184,9 +1177,9 @@ Money GetTransportedGoodsIncome(uint num_pieces, uint dist, uint16_t transit_per
 }
 
 CargoPayment::CargoPayment() : rust_state(openttd_rust_cargo_payment_new(nullptr, StationID::Invalid().base())) {}
-CargoPayment::CargoPayment(Vehicle *front) : rust_state(openttd_rust_cargo_payment_new(front, front->last_station_visited.base())) {}
+CargoPayment::CargoPayment(Vehicle *front) : rust_state(openttd_rust_cargo_payment_new(RustVehicle(front), RustVehicleLastStationVisited(RustVehicle(front)))) {}
 CargoPayment::~CargoPayment() { openttd_rust_cargo_payment_destroy(this->rust_state, &_cargo_services, CleaningPool()); }
-Vehicle *CargoPayment::GetFront() const { return static_cast<Vehicle *>(openttd_rust_cargo_payment_front(this->rust_state)); }
+Vehicle *CargoPayment::GetFront() const { return VehicleOf(openttd_rust_cargo_payment_front(this->rust_state)); }
 void CargoPayment::AfterLoad()
 {
 	this->GetFront()->cargo_payment = this;
@@ -1196,11 +1189,11 @@ void CargoPayment::PayFinalDelivery(CargoType cargo, const CargoPacket *cp, uint
 {
 	assert(int(count) > 0);
 	Source source = cp->GetSource();
-	openttd_rust_cargo_payment_final(this->rust_state, GetCargoDeliveryState(), &_cargo_services, cargo, cp, count, cp->GetDistance(current_tile), cp->GetPeriodsInTransit(), source.id | (uint32_t(source.type) << 16), &GetRustCargoMonitorServices());
+	openttd_rust_cargo_payment_final(this->rust_state, GetCargoDeliveryState(), &_cargo_services, cargo, cp->RustOwner(), count, cp->GetDistance(current_tile), cp->GetPeriodsInTransit(), source.id | (uint32_t(source.type) << 16), &GetRustCargoMonitorServices());
 }
 Money CargoPayment::PayTransfer(CargoType cargo, const CargoPacket *cp, uint count, TileIndex current_tile)
 {
-	return openttd_rust_cargo_payment_transfer(this->rust_state, &_cargo_services, cargo, cp, count, cp->GetDistance(current_tile), cp->GetPeriodsInTransit());
+	return openttd_rust_cargo_payment_transfer(this->rust_state, &_cargo_services, cargo, cp->RustOwner(), count, cp->GetDistance(current_tile), cp->GetPeriodsInTransit());
 }
 #else
 Money GetTransportedGoodsIncome(uint num_pieces, uint dist, uint16_t transit_periods, CargoType cargo_type)

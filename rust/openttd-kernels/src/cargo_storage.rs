@@ -117,7 +117,7 @@ const KEEP: usize = 2;
 const LOAD: usize = crate::cargopacket::MTA_LOAD as usize;
 const INVALID: u16 = u16::MAX;
 
-fn share(p: Packet, amount: u32) -> i64 {
+pub(crate) fn share(p: Packet, amount: u32) -> i64 {
     p.feeder_share.saturating_mul(i64::from(amount as i32)) / i64::from(i32::from(p.count))
 }
 unsafe fn read(p: *const Packet) -> Packet {

@@ -7,10 +7,13 @@ import json
 import os
 import stat
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
+from collections.abc import Generator
 from pathlib import Path
+from unittest.mock import patch
 
 import housekeeping
 
@@ -50,11 +53,60 @@ def pr_state(repo: Path, branch: str) -> str | None:
     return PR_STATES.get(branch)
 
 
+@contextlib.contextmanager
+def held_output(path: Path) -> Generator[subprocess.Popen[str]]:
+    """The pipe confirms open before planning and keeps the descriptor live until close."""
+    child = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            """
+import sys
+with open(sys.argv[1], "a") as output:
+    print("ready", flush=True)
+    for command in sys.stdin:
+        if command.strip() == "close":
+            break
+        output.write("visible\\n")
+        output.flush()
+        print("written", flush=True)
+""",
+            str(path),
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert child.stdout is not None
+        assert child.stdout.readline() == "ready\n"
+        yield child
+    finally:
+        if child.stdin is not None:
+            child.stdin.close()
+        child.wait(timeout=10)
+        if child.stdout is not None:
+            child.stdout.close()
+
+
+def child_write(child: subprocess.Popen[str]) -> None:
+    assert child.stdin is not None and child.stdout is not None
+    child.stdin.write("write\n")
+    child.stdin.flush()
+    assert child.stdout.readline() == "written\n"
+
+
 class HousekeepingTests(unittest.TestCase):
     def setUp(self) -> None:
         scratch = tempfile.TemporaryDirectory()
         self.addCleanup(scratch.cleanup)
         self.top = Path(scratch.name)
+        self.proc = self.top / "proc"
+        self.proc.mkdir()
+        (self.proc / str(os.getpid())).symlink_to(Path("/proc") / str(os.getpid()))
+        proc_patch = patch.object(housekeeping, "PROC_ROOT", self.proc)
+        proc_patch.start()
+        self.addCleanup(proc_patch.stop)
         # TemporaryDirectory cleanup cannot enter a read-only folder that survives.
         self.addCleanup(housekeeping.writable, self.top)
         origin, self.main = self.top / "origin.git", self.top / "main"
@@ -177,6 +229,45 @@ class HousekeepingTests(unittest.TestCase):
         self.assertFalse(earlier.exists())
         self.assertTrue((later / "scenario/plain/candidate/callgrind.out").is_file())
         self.assertTrue((replacement / "other/plain/candidate/callgrind.out").is_file())
+
+    def test_live_outputs_and_parents_survive_until_close(self) -> None:
+        local = self.main / ".local"
+        for path in (local / "live.log", local / "coverage/old/output.log"):
+            with self.subTest(path=path):
+                write(path)
+                with held_output(path) as child:
+                    (self.proc / str(child.pid)).symlink_to(
+                        Path("/proc") / str(child.pid)
+                    )
+                    old = time.time() - 2 * housekeeping.RUNNING_SECONDS
+                    for entry in (path, path.parent):
+                        os.utime(entry, (old, old))
+                    target = path if path.parent == local else path.parent
+                    self.assertNotIn(target, self.run_main())
+                    self.run_main("--apply")
+                    child_write(child)
+                    self.assertEqual(path.read_text(), "xvisible\n")
+                os.utime(path, (old, old))
+                os.utime(path.parent, (old, old))
+                self.assertIn(target, self.run_main())
+                self.run_main("--apply")
+                self.assertFalse(target.exists())
+
+    def test_opened_after_planning_is_protected_at_removal(self) -> None:
+        path = write(self.main / ".local/late.log")
+        item = next(
+            i
+            for i in housekeeping.plan_local(path.parent, time.time())
+            if i.path == path
+        )
+        self.assertTrue(item.remove)
+        with held_output(path) as child:
+            (self.proc / str(child.pid)).symlink_to(Path("/proc") / str(child.pid))
+            self.assertIn("live", housekeeping.remove(self.main, item) or "")
+            child_write(child)
+            self.assertEqual(path.read_text(), "xvisible\n")
+        self.assertIsNone(housekeeping.remove(self.main, item))
+        self.assertFalse(path.exists())
 
     def run_main(self, *arguments: str) -> list[Path]:
         output = io.StringIO()
