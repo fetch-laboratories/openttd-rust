@@ -373,6 +373,25 @@ reference-only finding can reflect an access moved to Rust. These two fixed inpu
 do not establish arbitrary SDL determinism, interactive RNG equality or Rust race
 freedom. The deep set runs both ordinary threaded and TSan comparisons.
 
+`python3 tools/migration.py simulate --multiplayer` (#510) runs only in the host's
+deep tier. An unchanged dedicated original and an SDL offscreen fork client run
+the Opus play save, then swap roles. The candidate fixture relinks only the
+generated revision object, replacing the revision text, tagged flag and NewGRF
+version with the reference constants; native game objects and executables are
+identified and left unchanged. Unmodified builds reject the join with wrong
+revision. This establishes neither release-version nor arbitrary NewGRF
+interoperability. The original revision source and executable remain unchanged.
+
+The paused server waits for the initial sync ACK/ACTIVE before unpausing. Both
+processes save at the next calendar-month callback; the client sends normal QUIT
+before server shutdown. The member requires matching sync records, real threads,
+stop saves, changed RNG and progress, successful exits and no unexpected network
+errors. Equivalent-role saves across swapped sessions compare through the existing
+decoder, including AIPL; a network client intentionally omits the server's AI
+configuration. Network-frame origins remain independent. Full logs, commands,
+identity records and failures are retained. This exercises spectator networking
+and server unpause, leaving client construction commands outside its evidence.
+
 `python3 tools/migration.py build|simulate --sanitize` (#505) builds both games with
 `-fsanitize=address,undefined` in `build-reference-sanitized` (shared, beside the reference
 build) and `build-rust-sanitized`, building only the game and its runtime data, and runs the
