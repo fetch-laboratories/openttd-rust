@@ -83,7 +83,7 @@ static void Trees()
 	shared.water_services = []() noexcept { return &water; };
 	shared.map_max_x = []() noexcept { return 63U; };
 	shared.map_max_y = []() noexcept { return 63U; };
-	shared.tile_type = [](uint32_t tile) noexcept { return static_cast<uint8_t>(tile == 1 ? 4 : 5); };
+	shared.tile_type = [](uint32_t tile) noexcept { return static_cast<uint8_t>(tile == 1 || tile == 2 ? 4 : 5); };
 	shared.tree_ground = [](uint32_t tile) noexcept {
 		/* A water observation reenters trees; no owner borrow spans the call. */
 		++tree_probe.waters;
