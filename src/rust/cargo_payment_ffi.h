@@ -43,7 +43,8 @@ struct OpenTTDCargoPayment {
  * own unbound nearby-industry cursors that begin binds per scan; delivery finishes its scan before
  * subsidy checks reuse it. Money add, sub, neg and multiply saturate. Each shell owns one payment;
  * the delivery owner lives for the process. Destroy accepts a null table only when cleaning.
- * Owner, table and outputs are live, nonnull and exclusive; all table entries have the declared ABI.
+ * Owners and outputs are live, nonnull and exclusive; tables are immutable and shareable.
+ * All table entries have the declared ABI.
  * Resolvers cannot run script VMs or mutate payment/destination storage; callbacks retain no pointers,
  * and unresolved front handles are not dereferenced before load fixup. */
 /* Leaf selectors. Station read: 0 owner, 1 always-accepted(cargo). Industry read: 1 accepted-slot(cargo)

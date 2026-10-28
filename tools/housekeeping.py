@@ -2,8 +2,9 @@
 """List, and with `--apply` remove, stale worktrees and ad hoc `.local` output (#532).
 
 A dry run prints each candidate with its size and reason; `--apply` removes exactly the
-`remove` lines. Worktrees go through `git worktree remove` without `--force`, so a dirty
-or locked one is kept. Output in a live worktree's own `.local` stays with that worktree.
+`remove` lines unless a live output handle appears before deletion. Worktrees go through `git worktree remove` without `--force`, so a dirty
+or locked one is kept. Live output handles are checked again before removal. Output in a
+live worktree's own `.local` stays with that worktree.
 """
 
 import argparse
