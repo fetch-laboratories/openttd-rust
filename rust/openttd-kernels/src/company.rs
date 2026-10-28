@@ -1563,8 +1563,7 @@ pub unsafe extern "C" fn openttd_rust_company_update_rating(
 }
 /// Economy month: `CompaniesGenStatistics`, `CompaniesPayInterest`,
 /// `HandleEconomyFluctuations`.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_economy_month(s: &Services, m: &Month) {
+pub(crate) fn openttd_rust_economy_month(s: &Services, m: &Month) {
     statistics(s, m);
     interest(s, m);
     fluctuations(s, m);
@@ -1580,8 +1579,7 @@ pub extern "C" fn openttd_rust_economy_recompute_prices(s: &Services, es: &Econo
     recompute(s, es);
 }
 /// Calendar-month inflation timer body.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_economy_calendar_month(s: &Services, es: &EconomySettings) {
+pub(crate) fn openttd_rust_economy_calendar_month(s: &Services, es: &EconomySettings) {
     if es.inflation {
         inflation(true, es.year);
         recompute(s, es);
@@ -1689,8 +1687,7 @@ pub unsafe extern "C" fn openttd_rust_company_on_tick(s: &Services, t: &mut Tick
 /// Yearly company statistics timer body.
 /// # Safety
 /// `y.local_finances` is the live owner of `y.local` when that is a company.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_company_yearly(s: &Services, y: &Year) {
+pub(crate) unsafe fn openttd_rust_company_yearly(s: &Services, y: &Year) {
     companies(s, |p, id| {
         write_field!(p, expenses[2], read_field!(p, expenses[1]));
         write_field!(p, expenses[1], read_field!(p, expenses[0]));

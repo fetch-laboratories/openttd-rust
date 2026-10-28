@@ -26,8 +26,44 @@
 #include "timer_game_calendar.h"
 #include "../vehicle_base.h"
 
+#ifdef WITH_RUST
+#include "../rust/clock_native.hpp"
+#endif
+
 #include "../safeguards.h"
 
+#ifdef WITH_RUST
+
+TimerGameCalendar::YearMonthDay TimerGameCalendar::ConvertDateToYMD(Date date)
+{
+	auto ymd = openttd_rust_calendar_date_to_ymd(date.base());
+	return {Year{ymd.year}, ymd.month, ymd.day};
+}
+TimerGameCalendar::Date TimerGameCalendar::ConvertYMDToDate(Year year, Month month, Day day)
+{
+	return Date{openttd_rust_calendar_ymd_to_date(year.base(), month, day)};
+}
+void TimerGameCalendar::SetDate(Date date, DateFract fract)
+{
+	assert(fract < Ticks::DAY_TICKS);
+	openttd_rust_calendar_set_date(date.base(), fract);
+}
+template <>
+void IntervalTimer<TimerGameCalendar>::Elapsed([[maybe_unused]] TimerGameCalendar::TElapsed trigger)
+{
+	this->callback(1);
+}
+template <>
+void TimeoutTimer<TimerGameCalendar>::Elapsed([[maybe_unused]] TimerGameCalendar::TElapsed trigger)
+{
+	this->callback();
+}
+template <>
+bool TimerManager<TimerGameCalendar>::Elapsed([[maybe_unused]] TimerGameCalendar::TElapsed delta)
+{
+	return RustClockElapsed<openttd_rust_calendar_elapsed>(GetRustClockServices(), delta);
+}
+#else
 TimerGameCalendar::Year TimerGameCalendar::year = {};
 TimerGameCalendar::Month TimerGameCalendar::month = {};
 TimerGameCalendar::Date TimerGameCalendar::date = {};
@@ -181,3 +217,5 @@ void TimerManager<TimerGameCalendar>::Validate(TimerGameCalendar::TPeriod period
 	}
 }
 #endif /* WITH_ASSERT */
+
+#endif /* WITH_RUST */

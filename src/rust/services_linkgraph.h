@@ -26,4 +26,9 @@ inline OpenTTDLinkGraph *RustLinkGraphAllocate(uint8_t cargo) noexcept
 	return new LinkGraph(cargo);
 }
 inline void RustLinkGraphAllocationFailure() noexcept { Debug(misc, 0, "Can't allocate link graph"); }
+inline LinkGraph *RustLinkGraphNext(uint32_t *from) noexcept
+{
+	for (LinkGraph *g : LinkGraph::Iterate(*from)) { *from = g->index.base() + 1U; return g; }
+	return nullptr;
+}
 #endif /* RUST_SERVICES_LINKGRAPH_H */

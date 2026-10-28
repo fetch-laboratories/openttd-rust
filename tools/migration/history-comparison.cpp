@@ -13,7 +13,9 @@
 #include <iostream>
 #include <stdexcept>
 
+#ifndef WITH_RUST
 TimerGameEconomy::Month TimerGameEconomy::month = {};
+#endif
 
 struct Fatal {};
 [[noreturn]] void NOT_REACHED(const std::source_location) { throw Fatal{}; }

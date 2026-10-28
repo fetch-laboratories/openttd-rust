@@ -75,6 +75,7 @@
 #include "../slope_func.h"
 #include "tile_type_access.hpp"
 #include "../effectvehicle_func.h"
+#include "clock_ffi.h"
 #include "../safeguards.h"
 static_assert(VE_OFFSET_START == 0);
 static_assert(VE_OFFSET_CENTRE == 8);
@@ -188,7 +189,6 @@ const OpenTTDWaterRestorationServices &GetRustWaterRestorationServices() noexcep
 
 
 static uint8_t SharedSnowLine() noexcept { return GetSnowLine(); }
-static int32_t SharedCalendarYear() noexcept { return TimerGameCalendar::year.base(); }
 
 OpenTTDTileTypeAllocation GetRustTileTypeAllocation() noexcept
 {
@@ -343,8 +343,6 @@ static bool SharedNoJetcrash() noexcept { return _cheats.no_jetcrash.value; }
 static uint8_t SharedPlaneCrashes() noexcept { return RustPlaneCrashes(); }
 static bool SharedServiceAtHelipad() noexcept { return RustServiceAtHelipad(); }
 static bool SharedDisasterSound() noexcept { return RustDisasterSound(); }
-static int32_t SharedEconomyDate() noexcept { return TimerGameEconomy::date.base(); }
-static int32_t SharedCalendarDate() noexcept { return TimerGameCalendar::date.base(); }
 
 static size_t SharedTownCount() noexcept { return Town::GetNumItems(); }
 static bool SharedRecession() noexcept { return EconomyIsInRecession(); }
@@ -365,8 +363,8 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.bridge_axis = Shared_bridge_axis,
 	.bridge_speed = MapSvcBridgeSpeed,
 	.build_on_slopes = RustBuildOnSlopes,
-	.calendar_date = SharedCalendarDate,
-	.calendar_year = SharedCalendarYear,
+	.calendar_date = openttd_rust_clock_calendar_date,
+	.calendar_year = openttd_rust_clock_calendar_year,
 	.clear_square_services = {
 
 		.docking = OpenTTDIsDockingTile,
@@ -383,7 +381,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.disaster_sound = SharedDisasterSound,
 	.distance_from_edge = Shared_distance_from_edge,
 	.drive_through_axis = Shared_drive_through_axis,
-	.economy_date = SharedEconomyDate,
+	.economy_date = openttd_rust_clock_economy_date,
 	.forbid_90_deg = RustForbid90Deg,
 	.free_train_reservation = SharedFreeTrainReservation,
 	.has_road_type = Shared_has_road_type,

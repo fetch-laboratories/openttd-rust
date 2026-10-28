@@ -31,8 +31,48 @@
 #include "../vehicle_base.h"
 #include "../linkgraph/linkgraph.h"
 
+#ifdef WITH_RUST
+#include "../rust/clock_native.hpp"
+#endif
+
 #include "../safeguards.h"
 
+#ifdef WITH_RUST
+
+TimerGameEconomy::YearMonthDay TimerGameEconomy::ConvertDateToYMD(Date date)
+{
+	auto ymd = openttd_rust_economy_date_to_ymd(date.base(), UsingWallclockUnits());
+	return {Year{ymd.year}, ymd.month, ymd.day};
+}
+TimerGameEconomy::Date TimerGameEconomy::ConvertYMDToDate(Year year, Month month, Day day)
+{
+	return Date{openttd_rust_economy_ymd_to_date(year.base(), month, day, UsingWallclockUnits())};
+}
+void TimerGameEconomy::SetDate(Date date, DateFract fract)
+{
+	assert(fract < Ticks::DAY_TICKS);
+	openttd_rust_economy_set_date(date.base(), fract, UsingWallclockUnits());
+}
+bool TimerGameEconomy::UsingWallclockUnits(bool newgame)
+{
+	return GetRustClockServices().using_wallclock_units(newgame);
+}
+template <>
+void IntervalTimer<TimerGameEconomy>::Elapsed([[maybe_unused]] TimerGameEconomy::TElapsed trigger)
+{
+	this->callback(1);
+}
+template <>
+void TimeoutTimer<TimerGameEconomy>::Elapsed([[maybe_unused]] TimerGameEconomy::TElapsed trigger)
+{
+	this->callback();
+}
+template <>
+bool TimerManager<TimerGameEconomy>::Elapsed([[maybe_unused]] TimerGameEconomy::TElapsed delta)
+{
+	return RustClockElapsed<openttd_rust_economy_elapsed>(GetRustClockServices(), delta);
+}
+#else
 TimerGameEconomy::Year TimerGameEconomy::year = {};
 TimerGameEconomy::Month TimerGameEconomy::month = {};
 TimerGameEconomy::Date TimerGameEconomy::date = {};
@@ -209,3 +249,5 @@ void TimerManager<TimerGameEconomy>::Validate(TimerGameEconomy::TPeriod period)
 	}
 }
 #endif /* WITH_ASSERT */
+
+#endif /* WITH_RUST */

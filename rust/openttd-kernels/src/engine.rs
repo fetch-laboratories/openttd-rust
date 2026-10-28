@@ -209,8 +209,6 @@ pub struct Services {
     pub ai_road_disabled: unsafe extern "C" fn() -> bool,
     pub ai_ship_disabled: unsafe extern "C" fn() -> bool,
     pub ai_aircraft_disabled: unsafe extern "C" fn() -> bool,
-    pub date_to_ymd: unsafe extern "C" fn(i32) -> Ymd,
-    pub ymd_to_date: unsafe extern "C" fn(i32, u8, u8) -> i32,
     pub enabled: unsafe extern "C" fn(*const OpenTTDEngine) -> bool,
     pub climate: unsafe extern "C" fn(*const OpenTTDEngine) -> bool,
     pub rail_kind: unsafe extern "C" fn(*const OpenTTDEngine) -> RailVehicleTypes,
@@ -376,7 +374,11 @@ unsafe fn start_one(s: &Services, e: EngineRef, aging: Ymd, seed: u32) {
         );
     }
     let r = call!(shared, random, shared.context);
-    let cutoff = unsafe { call!(s, ymd_to_date, settings.starting_year.wrapping_add(2), 0, 1) };
+    let cutoff = crate::timer_game_common::calendar_ymd_to_date(
+        settings.starting_year.wrapping_add(2),
+        0,
+        1,
+    );
     let intro = if cfg.base_intro <= cutoff {
         cfg.base_intro
     } else {
@@ -384,7 +386,7 @@ unsafe fn start_one(s: &Services, e: EngineRef, aging: Ymd, seed: u32) {
     };
     write_field!(e.state, intro_date, intro);
     if intro <= settings.date {
-        let ymd = unsafe { call!(s, date_to_ymd, intro) };
+        let ymd = crate::timer_game_common::calendar_date_to_ymd(intro);
         let aging_months = aging
             .year
             .wrapping_mul(12)
@@ -483,7 +485,7 @@ pub unsafe extern "C" fn openttd_rust_engine_aging_stops(s: *const Services) {
         let date = cfg
             .base_intro
             .wrapping_add(cfg.lifelength.wrapping_mul(DAYS_IN_LEAP_YEAR) / 2);
-        year = year.max(unsafe { call!(s, date_to_ymd, date) }.year);
+        year = year.max(crate::timer_game_common::calendar_date_to_ymd(date).year);
     }
     unsafe {
         AGING_STOPS = year;
@@ -493,9 +495,10 @@ pub unsafe extern "C" fn openttd_rust_engine_aging_stops(s: *const Services) {
 pub unsafe extern "C" fn openttd_rust_engine_start_all(s: *const Services) {
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
     let s = unsafe { &*s };
-    let date = unsafe { call!(&*s.shared, calendar_date) }
-        .min(unsafe { call!(s, ymd_to_date, AGING_STOPS, 0, 1) });
-    let aging = unsafe { call!(s, date_to_ymd, date) };
+    let date = unsafe { call!(&*s.shared, calendar_date) }.min(
+        crate::timer_game_common::calendar_ymd_to_date(unsafe { AGING_STOPS }, 0, 1),
+    );
+    let aging = crate::timer_game_common::calendar_date_to_ymd(date);
     let shared = unsafe { &*s.shared };
     let seed = call!(shared, random, shared.context);
     let mut from = 0;
@@ -703,8 +706,7 @@ unsafe fn preview_company(s: &Services, e: EngineRef) -> u8 {
     }
     best
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_daily(s: *const Services) {
+pub(crate) unsafe fn openttd_rust_engine_daily(s: *const Services) {
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
     let s = unsafe { &*s };
     let date = unsafe { call!(&*s.shared, calendar_date) };
@@ -1289,8 +1291,6 @@ crate::abi::layouts! {
         ai_road_disabled,
         ai_ship_disabled,
         ai_aircraft_disabled,
-        date_to_ymd,
-        ymd_to_date,
         enabled,
         climate,
         rail_kind,

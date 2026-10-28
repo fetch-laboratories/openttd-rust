@@ -9,6 +9,7 @@
 #include "../3rdparty/catch2/catch.hpp"
 #include "../3rdparty/fmt/format.h"
 #ifdef WITH_RUST
+#include "../rust/clock_ffi.h"
 #include "../company_func.h"
 #include "../company_base.h"
 #include "../economy_type.h"
@@ -216,8 +217,8 @@ TEST_CASE("Company economy - network deferred deletion and synchronous pool iter
 			fixture_companies[i]->Finances().current_loan = 100000;
 			fixture_companies[i]->Finances().months_of_bankruptcy = 9;
 		}
-		const OpenTTDEconomyMonth month{.month = 1, .infinite_money = false, .maintenance = false, .fluctuating = false};
-		openttd_rust_economy_month(&fixture_services, &month);
+		const OpenTTDClockCompany clock{.services = &fixture_services, .month = []() noexcept { return OpenTTDEconomyMonth{.month = 1, .infinite_money = false, .maintenance = false, .fluctuating = false}; }};
+		openttd_rust_clock_economy_month(&clock, nullptr);
 		CHECK(fixture_current == 18);
 		if (mode == 2) CHECK(fixture_trace == std::vector<std::string>{"admin 1", "admin 2"});
 		else CHECK(fixture_trace == std::vector<std::string>{"post 1", "post 2"});

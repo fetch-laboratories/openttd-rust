@@ -11,6 +11,9 @@
 #define TIMER_GAME_CALENDAR_H
 
 #include "timer_game_common.h"
+#ifdef WITH_RUST
+#include "../rust/clock_state.h"
+#endif
 
 /**
  * Timer that is increased every 27ms, and counts towards ticks / days / months / years.
@@ -27,11 +30,31 @@
  */
 class TimerGameCalendar : public TimerGame<struct Calendar> {
 public:
+#ifdef WITH_RUST
+	inline static Year &year = GetRustClockState().calendar_year; ///< Current year, starting at 0.
+#else
 	static Year year; ///< Current year, starting at 0.
+#endif
+#ifdef WITH_RUST
+	inline static Month &month = GetRustClockState().calendar_month; ///< Current month (0..11).
+#else
 	static Month month; ///< Current month (0..11).
+#endif
+#ifdef WITH_RUST
+	inline static Date &date = GetRustClockState().calendar_date; ///< Current date in days (day counter).
+#else
 	static Date date; ///< Current date in days (day counter).
+#endif
+#ifdef WITH_RUST
+	inline static DateFract &date_fract = GetRustClockState().calendar_fraction; ///< Fractional part of the day.
+#else
 	static DateFract date_fract; ///< Fractional part of the day.
+#endif
+#ifdef WITH_RUST
+	inline static uint16_t &sub_date_fract = GetRustClockState().calendar_subfraction; ///< Subpart of date_fract that we use when calendar days are slower than economy days.
+#else
 	static uint16_t sub_date_fract; ///< Subpart of date_fract that we use when calendar days are slower than economy days.
+#endif
 
 	static YearMonthDay ConvertDateToYMD(Date date);
 	static Date ConvertYMDToDate(Year year, Month month, Day day);

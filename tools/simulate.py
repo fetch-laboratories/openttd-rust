@@ -22,4 +22,8 @@ if __name__ == "__main__":
         from simulation.speed import main as speed
 
         sys.exit(speed(sys.argv[2:]))
+    if sys.argv[1:2] == ["platform"]:
+        from simulation.platform_subset import main as platform
+
+        sys.exit(platform(sys.argv[2:]))
     sys.exit(main())

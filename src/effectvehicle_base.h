@@ -41,7 +41,7 @@ struct EffectVehicle final : public SpecializedVehicle<EffectVehicle, VEH_EFFECT
 	uint16_t GetAnimationState() const
 	{
 #ifdef WITH_RUST
-		return openttd_rust_effect_get(this->rust_state.get(), 0);
+		return openttd_rust_effect_get_animation(this->rust_state.get());
 #else
 		return this->animation_state;
 #endif
@@ -49,7 +49,7 @@ struct EffectVehicle final : public SpecializedVehicle<EffectVehicle, VEH_EFFECT
 	uint8_t GetAnimationSubstate() const
 	{
 #ifdef WITH_RUST
-		return static_cast<uint8_t>(openttd_rust_effect_get(this->rust_state.get(), 1));
+		return openttd_rust_effect_get_substate(this->rust_state.get());
 #else
 		return this->animation_substate;
 #endif
@@ -57,7 +57,7 @@ struct EffectVehicle final : public SpecializedVehicle<EffectVehicle, VEH_EFFECT
 	void SetAnimationState(uint16_t state)
 	{
 #ifdef WITH_RUST
-		openttd_rust_effect_set(this->rust_state.get(), 0, state);
+		openttd_rust_effect_set_animation(this->rust_state.get(), state);
 #else
 		this->animation_state = state;
 #endif
@@ -65,7 +65,7 @@ struct EffectVehicle final : public SpecializedVehicle<EffectVehicle, VEH_EFFECT
 	void SetAnimationSubstate(uint8_t state)
 	{
 #ifdef WITH_RUST
-		openttd_rust_effect_set(this->rust_state.get(), 1, state);
+		openttd_rust_effect_set_substate(this->rust_state.get(), state);
 #else
 		this->animation_substate = state;
 #endif

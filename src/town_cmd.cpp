@@ -89,6 +89,10 @@
 #include "table/strings.h"
 #include "table/town_land.h"
 
+#ifdef WITH_RUST
+#include "rust/clock_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 /* Initialize the town-pool */
@@ -4776,11 +4780,14 @@ Town::SuppliedHistory SumHistory(std::span<const Town::SuppliedHistory> history)
 #endif
 }
 
+#ifdef WITH_RUST
+static const OpenTTDClockTown clock_town{&GetRustTownServices(), &GetRustSharedServices()};
+#endif
+#ifdef WITH_RUST
+static const IntervalTimer<TimerGameEconomy> _economy_towns_monthly({TimerGameEconomy::MONTH, TimerGameEconomy::Priority::TOWN}, RustClockCallback{openttd_rust_clock_town_monthly, &clock_town});
+#else
 static const IntervalTimer<TimerGameEconomy> _economy_towns_monthly({TimerGameEconomy::MONTH, TimerGameEconomy::Priority::TOWN}, [](auto)
 {
-#ifdef WITH_RUST
-	openttd_rust_town_monthly_all(&GetRustTownServices(), &GetRustSharedServices(), TimerGameEconomy::month);
-#else
 	for (Town *t : Town::Iterate()) {
 		/* Check for active town actions and decrement their counters. */
 		if (t->road_build_months != 0) t->road_build_months--;
@@ -4806,21 +4813,25 @@ static const IntervalTimer<TimerGameEconomy> _economy_towns_monthly({TimerGameEc
 
 		SetWindowDirty(WC_TOWN_VIEW, t->index);
 	}
-#endif
-});
 
+});
+#endif
+
+
+#ifdef WITH_RUST
+static const IntervalTimer<TimerGameEconomy> _economy_towns_yearly({TimerGameEconomy::YEAR, TimerGameEconomy::Priority::TOWN}, RustClockCallback{openttd_rust_clock_town_yearly, &clock_town});
+#else
 static const IntervalTimer<TimerGameEconomy> _economy_towns_yearly({TimerGameEconomy::YEAR, TimerGameEconomy::Priority::TOWN}, [](auto)
 {
-#ifdef WITH_RUST
-	openttd_rust_house_age_all(&GetRustTownServices(), &GetRustSharedServices());
-#else
 	/* Increment house ages */
 	for (const auto t : Map::Iterate()) {
 		if (!IsTileType(t, MP_HOUSE)) continue;
 		IncrementHouseAge(t);
 	}
-#endif
+
 });
+#endif
+
 
 #ifndef WITH_RUST
 static CommandCost TerraformTile_Town(TileIndex tile, DoCommandFlags flags, int z_new, Slope tileh_new)
