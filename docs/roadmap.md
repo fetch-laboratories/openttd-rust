@@ -58,6 +58,36 @@ this roadmap over conflicting issues; it is the current state of umbrella issue
   vcpkg (HTTP 502 from gitlab.xiph.org), and the macOS jobs got no hosted
   runner. No rollback applies.
 
+## Phases
+
+The goal is a complete Rust rewrite (AGENTS.md "Migration method"). Phases
+overlap: each free slot takes ready work from the earliest phase that has some,
+and later phases fill the rest (user decision, 2026-10-28). Code lines below are
+a rough steering count at `ae371d9313`, excluding comments, blank lines and
+preprocessor lines; #564 replaces it with a standard counter and root keeps this
+table current at each stocktake. Whole fork: 234,980 of 284,249 original code
+lines remain (17.3% retired).
+
+| Phase | Area | Code lines left (retired) | Exit criterion |
+| --- | --- | --- | --- |
+| 1. Simulation logic | Simulation-inventory `.cpp` | 11,258 (75.7%), of which about 6,900 is drawing (phase 5) and about 4,300 game logic | No non-drawing simulation function body compiles under `WITH_RUST` |
+| 2. Simulation storage | Simulation headers: map accessors about 2,600, pool classes about 2,200, other helpers and types about 5,700; data tables 12,957 (25.2%) shared with later phases | 10,464 (16.2%) | Every pool and the map arrays are owned by Rust; C++ reads them through facades |
+| 3. Simulation data readers | Save/load 13,064; script API and hosts 12,379; network 9,607; NewGRF outside the inventory 5,550 | 40,600 (about 6%) | These run in Rust; the Squirrel VM may stay C++ until phase 6 |
+| 4. Support | Core, strings, settings, viewport, graphics and misc | 36,057 (2.2%) | Remaining non-GUI support runs in Rust |
+| 5. Interface | GUI 50,616; platform and rendering backends 14,885; simulation drawing about 6,900 | about 72,400 (0%) | No C++ GUI, drawing or platform code; it needs a GUI evidence design before its first port |
+| 6. Vendored | Squirrel, ICU, fmt, catch2, monocypher, nlohmann JSON, md5, OpenGL headers, social API | 55,895 (0.9%) | Each is replaced by a maintained Rust crate that reproduces what the game observes, or ported; Squirrel gets its own port |
+
+Upstream unit tests (2,248) retire with the code they test.
+
+Status:
+- Phase 1 is nearly done: #560, #561 and #562 plus the queued helper candidates
+  cover most of its game logic.
+- Phase 2 starts with #563.
+- Phase 3 gets its first planning round now, so spare slots take its work.
+- Phases 4 to 6 are planned when phase 3 is under way, or earlier where a phase
+  3 port needs them.
+- A vendored replacement can land as soon as its last C++ caller moves to Rust.
+
 ## Twenty-third steering review (2026-10-28, leftover game logic, storage and boundary faults)
 
 Agent: /root (Claude Code steering review) | Model: claude-opus-5-5 | Reasoning effort: not reported to the agent by host.
@@ -79,6 +109,13 @@ orphans that fixing reviews missed:
 Root's ownership selections had drifted to lifecycle and dispatcher code
 where net glue roughly equals retirement. The only queued owner, #559, retired
 less than its glue, outside the simulation inventory.
+
+The root cause was the goal itself. AGENTS.md and the restart prompt named the
+goal as "a game whose simulation runs in Rust". That lane is three-quarters
+done, while the whole rewrite is 17% done and nothing planned the rest. So
+every planning round looked for ever smaller simulation leftovers, testing
+tools and repairs. The goal is now the complete rewrite in six overlapping
+phases (user direction and decisions, 2026-10-28; "Phases" above).
 
 Apply these corrections through the work order below:
 
@@ -130,7 +167,17 @@ Apply these corrections through the work order below:
    need them. Finish #558. Rank #503's coverage continuation last and recollect
    coverage only when a planned testing item needs the numbers, not after every
    scenario change.
-8. **Cadence.** Re-dispatch the cadence run on the current tip and read it
+8. **Work toward the whole rewrite.**
+   - Plan and fill slots by phase. AGENTS.md and the restart prompt now state
+     the full-rewrite goal, the six overlapping phases and the vendored policy
+     (Rust crates where one reproduces observable behavior).
+   - Start phase 3 now. A planning agent sizes save/load, the script API,
+     network and the NewGRF remainder into ownership candidates, each with
+     the evidence that shows its output (work order item 8). The first phase 3
+     owner takes the next spare slot.
+   - Save/load chunk handlers for a pool move with that pool's storage port
+     where they share it.
+9. **Cadence.** Re-dispatch the cadence run on the current tip and read it
    before the next integration. If macOS gets no runner again, that is its
    second hosted-capacity cancellation and the `CI_MACOS_HEAVY` rule applies. A
    repeat of the vcpkg 502 selects a vcpkg binary cache, not retries.
@@ -141,11 +188,15 @@ AGENTS.md changes:
 - Spread glue ranks the crossing-removing port above repair batches.
 - Storage ports (every pool, then the map) are ownership ports in the work
   order; pools and map access are C++ services only until their port.
+- The goal is the complete rewrite in six overlapping phases; vendored
+  libraries become Rust crates where one fits; later phases' first issues name
+  their evidence (user decisions, 2026-10-28).
 - No C++ frame is kept for attribution.
 - The review report cites #564's orphan check once it integrates.
 
-The restart prompt now plans when fewer than three ownership items remain,
-includes storage ports, and gives the planner no preferred candidate.
+The restart prompt now states the full-rewrite goal. It plans by phase,
+keeping three ownership items in the current phase and the next phase queued,
+and gives the planner no preferred candidate.
 
 | Twenty-second correction | Verdict and cost/result |
 | --- | --- |
@@ -250,14 +301,20 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
    (queued below) rather than shrinking scope.
 7. **#563 vehicle storage design.** A planning agent at high effort produces the
    design note and the first storage implementation issue. No branch.
-8. **#561 company identity.** Start when a slot frees after item 2. Planning
+8. **Phase 3 planning.** A planning agent at high effort sizes save/load, the
+   script API and hosts, network and the NewGRF remainder into ownership
+   candidates, naming for each the evidence that observes its output (saves,
+   script commands, multiplayer sessions, packets). Root creates issues for the
+   top three. The first starts in the next spare slot, before the items below.
+   No branch.
+9. **#561 company identity.** Start when a slot frees after item 2. Planning
    range: 450 to 550 retired, 120 to 200 net glue.
-9. **#168 audit batch**, after #554 integrates: the checklist in the #168
+10. **#168 audit batch**, after #554 integrates: the checklist in the #168
    comment of 2026-10-28.
-10. **#168/#199/#500 completed-job flow publication; #501 `tools/probe.py`
+11. **#168/#199/#500 completed-job flow publication; #501 `tools/probe.py`
     typing.** Unchanged: select only the completed link-graph job service
     table. Zero retirement, 120 to 250 Rust, -30 to +80 net glue.
-11. **#503 coverage continuation.** The bounded original-only clock-preparation
+12. **#503 coverage continuation.** The bounded original-only clock-preparation
     fix (at most 30 production and 50 test lines), then the 119 unfinished
     traces with provenance checks. Preserve the fixed checkout and failed
     attempts.
@@ -297,9 +354,12 @@ Excluded, with return conditions checked by this review:
   them; none of #560 to #563 does.
 - #69's remaining tile-list/support work is deferred until a selected simulation
   component needs it; catchment's rectangle/bitmap part is complete in #522.
-- #64 and #68 are vendored cryptography, deferred until after simulation
-  ownership. New GUI/platform ownership under #3 follows simulation; #509's
-  completed validation and recurring cadence are not excluded by that policy.
+- #64 and #68 hand-port monocypher algorithms. Under the vendored policy they
+  become maintained Rust crates that reproduce the game's observable
+  cryptography. They return when phase 3's network ports reach authentication,
+  or with phase 6, whichever comes first. Phase 5 GUI and platform ownership
+  under #3 follows its own evidence design; #509's completed validation and
+  recurring cadence are unaffected.
 - #12, #26, #41, #67, #71 and #83 are behavior improvements deferred until
   near-full reproduction under #513's original-default setting policy.
   #513 needs implementation when the first such improvement is accepted.
@@ -318,8 +378,8 @@ running.
 | #557 | Reviewed head `9db71fb247`; local checks and fixing review pass. No Full at any head; branch is behind. | Keep it with disjoint #554 in the combination. Keep the same-revision ordinary-build prerequisite for sanitizer-only rounds. |
 | #554/#557 combination | Unpushed branch `integrate/session-and-deep-rotation`, head `e9b72a04ec`, in `.local/worktrees/integration554557`. | After #554's fixes, update from current base, inspect conflicts, open the integration PR and run Full for its final head. |
 | #558 | Draft head `c919a1a298`. The ordinary semantic case and isolated M23 sensitivity pass. No fresh fixing review and no Full yet. | Fresh fixing review, current base, exact-head Full. |
-| #560, #561, #562, #563 | Selected by this review; not started. | Follow the work order. |
-| #503 | Coverage has 330 of 449 complete traces; the clock-preparation fix is not started. | Work order item 11. |
+| #560, #561, #562, #563, phase 3 planning | Selected by this review; not started. | Follow the work order. |
+| #503 | Coverage has 330 of 449 complete traces; the clock-preparation fix is not started. | Work order item 12. |
 | Profiles and deep | Profile24 complete. The rotated deep run is due after #557. The next profile follows the twenty-sixth integration. | Keep due work pending and preserve anchor and runtime dependencies. |
 
 Worktrees kept for the unfinished tasks and their evidence:

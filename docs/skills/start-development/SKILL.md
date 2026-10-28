@@ -10,9 +10,10 @@ You are root for the OpenTTD-Rust migration in /home/fetch/projects/openttd-rust
 Agent: /root | Model: gpt-6.1-sol | Reasoning effort: xhigh
 (On a host other than Codex, name that host's exact model and reported effort.)
 
-This is a continuous assignment with no finish line: a complete OpenTTD whose
-simulation runs in Rust. Finishing the listed items is the trigger to plan the
-next work. Keep working until the user tells you to stop.
+This is a continuous assignment with no finish line: a complete Rust rewrite of
+OpenTTD, simulation first, in the overlapping phases AGENTS.md and the roadmap's
+"Phases" define. Finishing the listed items is the trigger to plan the next
+work. Keep working until the user tells you to stop.
 
 Start by reading AGENTS.md, docs/roadmap.md, docs/rust-migration.md and
 docs/design/world-state.md. The roadmap's latest steering review section holds
@@ -47,25 +48,26 @@ Then resume from the roadmap's checkpoint and work order.
    Integrate only the tested combination under strict branch protection.
    For a regression on rust-migration, apply AGENTS.md's automatic rollback
    rule before more integrations; do not assume a fix PR is required.
-3. When fewer than three unstarted ownership items (game-logic or
-   shared-storage ports) or fewer than two unstarted items overall remain in
-   the work order, or `issues.py` shows unplaced issues, spawn a fresh
-   high-effort planning agent (Astra in Codex) to rank the next work: candidate
-   owners from the remaining simulation inventory, shared-storage ports (every
-   pool, then the map; AGENTS.md and the world-state design), and every open
+3. Plan when the earliest unfinished phase has fewer than three unstarted
+   ownership items, the next phase has none queued, fewer than two unstarted
+   items remain overall, or `issues.py` shows unplaced issues. Spawn a fresh
+   high-effort planning agent (Astra in Codex) to rank the next work: owners
+   from the remaining code of the current and next phase (AGENTS.md, the
+   roadmap's "Phases" and the world-state design for storage), and every open
    maintenance, testing and housekeeping issue. The brief names no preferred
-   candidate; the planner sizes the actual remaining code. Rank by
-   what each item retires, protects or saves: game state still owned by C++,
-   the speed profile's largest net costs, fidelity risk the harness cannot see,
-   recurring cost such as CI time, and design faults already integrated. How
-   easily an item scopes is not a reason to rank it. A port of support code
-   ranks only when a selected game component needs it. Never fall back to
-   utility kernels, src/3rdparty, GUI or `deferred-improvement` issues. Planning also rereads `issues.py`: it places
+   candidate; the planner sizes the actual remaining code. Rank by phase, then
+   by what each item retires, protects or saves: C++ code and state still
+   owned by C++, the speed profile's largest net costs, fidelity risk the
+   harness cannot see, recurring cost such as CI time, and design faults
+   already integrated. How easily an item scopes is not a reason to rank it.
+   Within phases 1 and 2, a port of support code ranks only when a selected
+   game component needs it. Never fall back to utility kernels or
+   `deferred-improvement` issues. Planning also rereads `issues.py`: it places
    unplaced issues, and returns an excluded or paused item whose recorded
    condition has been met. A simulation owner you set aside after a failed gate
    stays yours to re-select once a profile shows the fix.
-4. After every second integration, take stock in "Where the fork stands": C++
-   game logic retired, glue and tooling cost, play-save speed ratio, open
+4. After every second integration, take stock in "Where the fork stands": code
+   lines retired per phase, glue and tooling cost, play-save speed ratio, open
    coverage gaps, and the unintegrated branch count. Rerun `issues.py`: place
    new issues and close any whose remaining scope is done. Profile the merged branch
    for speed in the background and run a speed pass only when AGENTS.md says.

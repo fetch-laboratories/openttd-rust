@@ -13,16 +13,30 @@ fork; the remaining upstream documentation explains behavior and architecture.
 
 ## Migration method
 
-- The goal is a game whose simulation runs in Rust. Prioritize game code: map
-  generation, landscape and tile loops, towns, industries, vehicles, cargo,
-  economy, link graph, pathfinding, and the commands that change them. Port
-  support code only when a selected game component needs it; a port that keeps
-  the data in C++ behind one setter per field is support code. Vendored
-  libraries (`src/3rdparty`), GUI rendering and platform code come last.
-  Upstream unit-test coverage alone is not a reason to select a component.
-  This orders what to port, not ports against other work: the roadmap keeps
-  one work order for ports, maintenance, testing and housekeeping, ranked by
-  what each item retires, protects or saves.
+- The goal is a complete Rust rewrite of OpenTTD: every original C++ line
+  retires (user direction, 2026-10-28). The work runs in overlapping phases,
+  sized with exit criteria in the roadmap's "Phases":
+  1. simulation logic: map generation, landscape and tile loops, towns,
+     industries, vehicles, cargo, economy, link graph, pathfinding and the
+     commands that change them;
+  2. simulation storage: every pool, then the map;
+  3. the code that reads simulation data: save/load, the script API, network
+     and NewGRF;
+  4. support code: core, strings, settings, viewport and graphics;
+  5. GUI, simulation drawing and platform backends;
+  6. vendored libraries (`src/3rdparty`).
+
+  A free slot takes the highest-ranked ready item of the earliest phase with
+  ready work. Later phases fill the slots that earlier phases leave free (user
+  decision, 2026-10-28). Within phases 1 and 2, port support code only when a
+  selected game component needs it; a port that keeps the data in C++ behind
+  one setter per field is support code. A vendored library is replaced by a
+  maintained Rust crate where one reproduces the behavior the game observes,
+  and ported otherwise (user decision, 2026-10-28); Squirrel's VM needs its own
+  port. Upstream unit-test coverage alone is not a reason to select a
+  component. This orders what to port, not ports against other work: the
+  roadmap keeps one work order for ports, maintenance, testing and
+  housekeeping, ranked by what each item retires, protects or saves.
 - Prefer ownership ports: Rust owns the component's state and control flow, and
   C++ keeps only a thin facade plus callbacks for shared services (`Random`,
   pools, map access, progress) whose storage has not moved yet. With `WITH_RUST` defined the original C++ body
@@ -37,9 +51,9 @@ fork; the remaining upstream documentation explains behavior and architecture.
   stations, orders, towns, industries, companies and the rest), then the map
   arrays. C++ code not yet ported (drawing, GUI, save/load, scripts, network)
   reads moved data through facades over Rust storage until it is ported in
-  turn. Storage ports are ownership ports: the work order ranks them beside
-  leftover game logic by the code they retire and the glue they remove, with
-  no separate gate.
+  turn. Storage ports are phase 2 ownership ports: the work order ranks them
+  beside leftover game logic by the code they retire and the glue they remove,
+  with no separate gate.
 - Keep the full game running throughout migration. Preserve networking, saves,
   mods, interface, and shared random-number behavior, including the exact
   sequence of random draws.
@@ -130,7 +144,11 @@ fork; the remaining upstream documentation explains behavior and architecture.
   tools/migration.py simulate`, #72) plus the existing tests; a new game-logic
   port integrates only after its harness scenarios exercise the component.
   Fidelity fixes to existing ports (such as #75) are not new ports and do not
-  wait for it.
+  wait for it. Phases 3 to 6 reuse the harness where it observes their output
+  (saves, script commands, multiplayer sessions). Each phase's first issue
+  names the evidence for what the harness cannot see, such as GUI output,
+  network packets or script API results; screenshots alone remain
+  insufficient.
   Extend the harness's scenarios rather than writing a per-component comparison
   tool. Add a narrow comparison against unchanged reference bodies only for a
   concrete gap the harness cannot reach, and name that gap in the PR. Any check
