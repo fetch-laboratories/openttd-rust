@@ -452,7 +452,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     fn check_breakdown(&self, v: Vehicle) {
         unsafe { maintenance::check_vehicle_breakdown(v.base(), self.vs) };
     }
-    fn process_orders(&self, v: Vehicle) {
+    fn process_orders(&self, v: Vehicle) -> &'static crate::orders::Leaves {
         let orders = self.vs.orders();
         Self::service_witness(
             "orders",
@@ -460,6 +460,11 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         );
         // SAFETY: The original live shell survives orders; no state borrow spans reentry.
         unsafe { crate::orders::openttd_rust_process_orders(v.handle.cast(), orders) };
+        orders
+    }
+    fn handle_loading(&self, v: Vehicle, second: bool, orders: &'static crate::orders::Leaves) {
+        self.vs.handle_loading(v.base(), second, orders);
+        Self::service_witness("handle_loading", 0);
     }
     fn random(&self) -> u32 {
         let word = self.ss.random();
@@ -597,7 +602,6 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
 
         destination_too_far(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.destination_too_far)(vehicle) };
         delete_range_news(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.delete_range_news)(vehicle) };
-        handle_loading(self; vehicle: Vehicle, second: i64) -> () => self.vs.handle_loading(vehicle.base(), second != 0);
         service_order(self; vehicle: Vehicle, station: i64) -> () => unsafe { (self.leaves.service_order)(vehicle, station as u16) };
         dummy_order(self; vehicle: Vehicle) -> () => (self.vs.make_dummy)(vehicle.base());
         check_orders(self; vehicle: Vehicle) -> () => (self.vs.check_orders_only)(vehicle.base());
@@ -1969,8 +1973,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         }
         let status = self.handle_breakdown(id);
         self.smoke(id, pass != 0, status);
-        self.process_orders(id);
-        self.handle_loading(id, i64::from(pass));
+        let orders = self.process_orders(id);
+        self.handle_loading(id, pass != 0, orders);
         let order_type = self.order_type(id);
         if order_type == i64::from(OT_LOADING) || order_type == i64::from(OT_LEAVESTATION) {
             return true;

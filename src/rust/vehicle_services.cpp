@@ -413,7 +413,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.tick_status = VehicleSvcTickStatus,
 	.day_cost = VehicleSvcDayCost,
 	.make_dummy = VehicleSvcMakeDummy,
-	.loading = openttd_rust_visit_handle_loading,
 	.check_orders_only = VehicleSvcCheckOrdersOnly,
 	.write_coordinates = VehicleSvcWriteCoordinates,
 	.altitude_inputs = VehicleSvcAltitudeInputs,

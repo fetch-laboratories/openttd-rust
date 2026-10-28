@@ -1742,7 +1742,9 @@ maintenance, catchment radius/rectangle, delivery-list maintenance, nearby-list 
 `CatchmentCoversTown`, `RecomputeCatchment(ForAll)`, `ForAllStationsAroundTiles`, the lazy
 `StationFinder` and the around-tile production/acceptance scans; `bitmap_type.rs` owns bitmap
 storage, geometry and the live cursor, and `tile_cmd.rs` the accepted/produced cargo dispatch to
-the Rust house, industry and HQ owners. Rust consumers (station acceptance and watched cargo,
+the Rust house, industry and HQ owners. Acceptance inlines the shared bitmap/orthogonal advance
+helpers; native assertion services resolve only for false conditions (PR #555).
+Rust consumers (station acceptance and watched cargo,
 `MoveGoodsToStation`, delivery, subsidy and cargo-monitor scans, industry construction,
 destruction and production, house loop/removal/placement, the house resolver, the HQ loop and
 station commands) use this state directly. C++ keeps pool shells, map storage, specs and
@@ -2078,7 +2080,9 @@ bridge-speed branches remain #156 gaps. PR #374.
 `rust/openttd-kernels/src/vehicle/visits.rs` owns `BeginLoading`, `HandleLoading`,
 `LeaveStation`, `CancelReservation`, `ResetRefitCaps`, `CalcPercentVehicleFilled`,
 `VehicleEnterDepot` with depot-entry recording, all of `LinkRefresher` and both `IncreaseStats`
-overloads. It calls the Rust orders, station loading (`prepare_unload`), cargo storage, refit
+overloads. Controllers retain an immutable orders table across `ProcessOrders`, then read the
+current order kind before resolving the guarded visits table for the out-of-line loading/dummy
+body (PR #555). It calls the Rust orders, station loading (`prepare_unload`), cargo storage, refit
 command, train/ship state, maintenance and pending-autoreplace owners directly, including
 aircraft hangar entry. Train, ship, aircraft, road, orders, station-command and loading callers
 reach it through `VehicleServices::visits`; the C++ member functions are thin facades for the
