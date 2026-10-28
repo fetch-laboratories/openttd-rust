@@ -13,6 +13,10 @@ on:
       full_arch:
         required: true
         type: string
+      semantic-subset:
+        required: false
+        type: boolean
+        default: false
       rust:
         required: false
         type: boolean
@@ -218,6 +222,27 @@ jobs:
     - name: Check native Rust consumers, freshness and fresh generators
       if: inputs.rust
       run: python3 tools/check-rust-platform.py --target aarch64-apple-darwin --build build --tools .local/build-tools-macos --output .local/macos-evidence
+
+    - uses: actions/download-artifact@v4
+      if: inputs.semantic-subset
+      with:
+        name: platform-reference
+        path: .local/platform-reference
+
+    - name: Compare the platform semantic subset with Linux
+      if: inputs.semantic-subset
+      shell: bash
+      run: python3 tools/simulate.py platform --stored-reference .local/platform-reference --candidate build/openttd --output .local/platform-semantic
+
+    - uses: actions/upload-artifact@v4
+      if: always() && inputs.semantic-subset
+      with:
+        name: platform-semantic-macos-${{ inputs.arch }}
+        path: |
+          .local/platform-semantic/report.json
+          .local/platform-semantic/validation
+        include-hidden-files: true
+        if-no-files-found: error
 
     - name: Retain native Rust evidence
       if: always() && inputs.rust

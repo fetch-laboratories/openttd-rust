@@ -73,8 +73,46 @@ jobs:
       extra-cmake-parameters: ${{ matrix.flavour == 'dedicated' && '-DOPTION_DEDICATED=ON -DCMAKE_CXX_FLAGS_INIT="-DRANDOM_DEBUG" -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON' || '' }}
       cache-only: ${{ inputs.checkout-ref == '' && github.event_name == 'push' && github.ref == 'refs/heads/rust-migration' && needs.policy.outputs.covered == 'true' }}
 
+  platform-reference:
+    if: inputs.checkout-ref == '' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/rust-migration'
+    runs-on: ${{ vars.CI_LINUX_HEAVY || 'ubuntu-24.04' }}
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        persist-credentials: false
+    - uses: ./.github/actions/native-environment
+    - uses: ./.github/actions/native-cache
+    - name: Build the pinned Linux reference
+      env:
+        CCACHE_CONFIGPATH: ${{ github.workspace }}/migration/ccache.conf
+        CCACHE_DIR: ${{ github.workspace }}/.local/compiler-cache/reference
+        CCACHE_BASEDIR: ${{ github.workspace }}
+      run: |
+        cmake -S .local/reference/openttd -B .local/build-reference -GNinja \
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOPTION_USE_ASSERTS=ON -DBUILD_TESTING=OFF \
+          -DCMAKE_DISABLE_FIND_PACKAGE_Grfcodec=ON \
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+        cmake --build .local/build-reference --target openttd --parallel "$(nproc)"
+        python3 -c 'import sys; sys.path.insert(0, "tools"); import migration; migration.supply_graphics(migration.REFERENCE_BUILD)'
+    - name: Capture and validate the bounded Linux reference subset
+      run: python3 tools/simulate.py platform --reference-binary .local/build-reference/openttd --output .local/platform-reference
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: platform-reference
+        path: |
+          .local/platform-reference/bundle.json
+          .local/platform-reference/report.json
+          .local/platform-reference/captures
+          .local/platform-reference/opengfx
+        include-hidden-files: true
+        if-no-files-found: error
+        retention-days: 7
+        compression-level: 1
+
   macos:
-    needs: policy
+    needs: [policy, platform-reference]
     # Full validation and covered pushes skip macOS (#357).
     if: ${{ !cancelled() && (inputs.checkout-ref != '' || needs.policy.outputs.heavy == 'true' || github.event_name == 'workflow_dispatch') && inputs.profile != 'native' && inputs.profile != 'full' }}
     strategy:
@@ -99,15 +137,16 @@ jobs:
       rust: true
       arch: ${{ matrix.arch }}
       full_arch: ${{ matrix.full_arch }}
+      semantic-subset: ${{ needs.platform-reference.result == 'success' && matrix.name == 'arm64 - Release' }}
       extra-cmake-parameters: ${{ matrix.extra-cmake-parameters }}
 
   windows:
-    needs: policy
+    needs: [policy, platform-reference]
     if: ${{ !cancelled() && (inputs.checkout-ref != '' || needs.policy.outputs.heavy == 'true' || needs.policy.outputs.covered == 'true' || github.event_name == 'workflow_dispatch') && inputs.profile != 'native' }}
     strategy:
       fail-fast: false
       matrix:
-        arch: ${{ fromJSON((inputs.profile == 'platform' || (github.event_name == 'push' && needs.policy.outputs.heavy == 'true')) && '["x86","x64"]' || (inputs.checkout-ref == '' && github.event_name == 'workflow_dispatch') && '["x86"]' || '["x64"]') }}
+        arch: ${{ fromJSON((inputs.profile == 'platform' || (github.event_name == 'push' && needs.policy.outputs.heavy == 'true')) && '["x86","x64"]' || (inputs.checkout-ref == '' && github.event_name == 'workflow_dispatch') && '["x86","x64"]' || '["x64"]') }}
 
     name: Windows (${{ matrix.arch }})
 
@@ -117,6 +156,7 @@ jobs:
       checkout-ref: ${{ inputs.checkout-ref }}
       rust: true
       arch: ${{ matrix.arch }}
+      semantic-subset: ${{ needs.platform-reference.result == 'success' && matrix.arch == 'x64' }}
       cache-only: ${{ inputs.checkout-ref == '' && github.event_name == 'push' && github.ref == 'refs/heads/rust-migration' && needs.policy.outputs.covered == 'true' }}
 
   annotations_emscripten:
@@ -154,6 +194,7 @@ jobs:
   check_annotations:
     name: Check Annotations
     needs:
+    - platform-reference
     - emscripten
     - linux
     - macos
@@ -168,6 +209,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - name: Require the cadence reference
+      if: inputs.checkout-ref == '' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/rust-migration'
+      env:
+        RESULT: ${{ needs.platform-reference.result }}
+      run: test "$RESULT" = success
     - name: Check annotations
       uses: OpenTTD/actions/annotation-check@v6
 

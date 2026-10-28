@@ -14,6 +14,10 @@ on:
       arch:
         required: true
         type: string
+      semantic-subset:
+        required: false
+        type: boolean
+        default: false
       rust:
         required: false
         type: boolean
@@ -221,6 +225,27 @@ jobs:
       run: |
         export PATH="$(dirname "$(command -v cl.exe)"):$PATH"
         python tools/check-rust-platform.py --target "$RUST_TARGET" --build build --tools .local/build-tools-windows --output .local/windows-evidence
+
+    - uses: actions/download-artifact@v4
+      if: inputs.semantic-subset
+      with:
+        name: platform-reference
+        path: .local/platform-reference
+
+    - name: Compare the platform semantic subset with Linux
+      if: inputs.semantic-subset
+      shell: bash
+      run: python tools/simulate.py platform --stored-reference .local/platform-reference --candidate build/openttd.exe --output .local/platform-semantic
+
+    - uses: actions/upload-artifact@v4
+      if: always() && inputs.semantic-subset
+      with:
+        name: platform-semantic-windows-${{ inputs.arch }}
+        path: |
+          .local/platform-semantic/report.json
+          .local/platform-semantic/validation
+        include-hidden-files: true
+        if-no-files-found: error
 
     - name: Retain native Windows Rust and test evidence
       if: always() && inputs.rust && !inputs.cache-only

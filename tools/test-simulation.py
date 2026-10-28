@@ -16,10 +16,12 @@ from unittest.mock import patch
 
 from simulation import core as simulate
 from simulation import instructions as ir
-from simulation import runtime
+from simulation import platform_subset, runtime
 from simulation.instructions import SPEED_BUDGETS, speed_budget
 
 import migration
+
+simulate.scenario_modules()
 
 
 class SimulationDeterminismTests(unittest.TestCase):
@@ -1056,6 +1058,90 @@ class SpeedPassTests(unittest.TestCase):
                             self.assertEqual(
                                 speed.summarize(out, manifest, names, len(groups)), 0
                             )
+
+
+class PlatformSubsetTests(unittest.TestCase):
+    def test_generation_requires_no_jobs_before_and_after_initialization(self) -> None:
+        for recalc_time, jobs in (
+            (0, {}),
+            (18000, {}),
+            (18000, {0: {"join_date": 999999}}),
+        ):
+            with (
+                self.subTest(recalc_time=recalc_time, jobs=jobs),
+                patch.object(platform_subset.core, "read_save", return_value={}),
+                patch.object(
+                    platform_subset.core,
+                    "rows",
+                    side_effect=lambda _state, chunk, recalc_time=recalc_time, jobs=jobs: (
+                        {
+                            "PATS": {0: {"linkgraph.recalc_time": recalc_time}},
+                            "DATE": {0: {"economy_date": 0}},
+                            "LGRJ": jobs,
+                        }[chunk]
+                    ),
+                ),
+            ):
+                case = {"kind": "generate", "ticks": 56388}
+                run = {"snapshots": [Path("checkpoint.sav")]}
+                if jobs:
+                    with self.assertRaisesRegex(ValueError, "unexpectedly has"):
+                        platform_subset.check_no_join(case, run)
+                else:
+                    platform_subset.check_no_join(case, run)
+
+    def test_prepared_inputs_are_identical_and_reject_a_due_join(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = platform_subset.scenarios(root / "one")
+            second = platform_subset.scenarios(root / "two")
+            for a, b in zip(first, second, strict=True):
+                self.assertEqual(a["ticks"], 56388)
+                self.assertEqual(a["settings"]["gui"]["threaded_saves"], "false")
+                if a["kind"] != "save":
+                    continue
+                source = Path(a["save"])
+                self.assertEqual(source.read_bytes(), Path(b["save"]).read_bytes())
+                platform_subset.check_no_join(a, {"snapshots": [source]})
+                jobs = simulate.rows(source, "LGRJ")
+                target = root / "due.sav"
+                simulate.patch(
+                    source,
+                    target,
+                    {"LGRJ": {next(iter(jobs)): {"join_date": a["platform_end_date"]}}},
+                )
+                with self.assertRaisesRegex(ValueError, "join due"):
+                    platform_subset.check_no_join(a, {"snapshots": [target]})
+
+    def test_stored_capture_requires_every_record_and_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            value = platform_subset.identity()
+            for name in platform_subset.NAMES:
+                for mode, _ in platform_subset.MODES:
+                    key = f"{name}/{mode}"
+                    folder = root / "captures" / key
+                    (folder / "save/autosave").mkdir(parents=True)
+                    (folder / "stdout.log").write_bytes(b"")
+                    (folder / "stderr.log").write_bytes(b"")
+                    (folder / "save/autosave/exit.sav").write_bytes(b"snapshot")
+                    value["captures"][key] = {
+                        "exit": 0,
+                        "seconds": 1.0,
+                        "command": [],
+                        "snapshots": ["exit.sav"],
+                    }
+            manifest = root / "bundle.json"
+            manifest.write_text(json.dumps(value))
+            self.assertEqual(platform_subset.load_bundle(root), value)
+            first = next(iter(value["captures"]))
+            (root / "captures" / first / "save/autosave/exit.sav").unlink()
+            with self.assertRaisesRegex(ValueError, "Missing or failed"):
+                platform_subset.load_bundle(root)
+            value["captures"].pop(first)
+            manifest.write_text(json.dumps(value))
+            with self.assertRaisesRegex(ValueError, "omitted"):
+                platform_subset.load_bundle(root)
 
 
 if __name__ == "__main__":
