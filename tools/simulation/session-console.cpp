@@ -8,6 +8,7 @@
 #include "company_func.h"
 #include "core/backup_type.hpp"
 #include "core/random_func.hpp"
+#include "timer/timer.h"
 #include "timer/timer_game_calendar.h"
 #include "timer/timer_game_economy.h"
 #include "timer/timer_game_tick.h"
@@ -19,6 +20,9 @@
 #include "network/network.h"
 #include "genworld.h"
 #include "script/script_fatalerror.hpp"
+#ifdef WITH_RUST
+#include "rust/clock_native.hpp"
+#endif
 extern void MakeNewgameSettingsLive();
 extern bool SafeLoad(const std::string &, SaveLoadOperation, DetailedFileType, GameMode, Subdirectory, std::shared_ptr<LoadFilter>);
 extern bool _in_modal_progress;
@@ -64,7 +68,6 @@ extern "C" void __wrap__ZN4Game8GameLoopEv()
 	if (session_failure == 2) SessionThrow();
 	__real__ZN4Game8GameLoopEv();
 }
-static bool SessionThrowCommand(std::span<std::string_view>) { SessionThrow(); return true; }
 static void SessionExceptions()
 {
 	using C = TimerGameCalendar;
@@ -74,7 +77,14 @@ static void SessionExceptions()
 		session_storage = &storage; session_failure = phase;
 		C::SetDate(C::ConvertYMDToDate(C::Year{2000}, 0, 31), phase == 1 ? 73 : 1);
 		E::date_fract = 5;
-		if (phase == 1) IConsoleCmdExec("schedule on-next-calendar-month session-failure.scr");
+		std::optional<IntervalTimer<C>> throwing;
+		if (phase == 1) {
+#ifdef WITH_RUST
+			throwing.emplace(C::TPeriod{C::MONTH, C::NONE}, RustClockCallback{[](const void *, void *exception) noexcept { return RustClockRelayScheduledConsole(SessionThrow, exception); }, nullptr});
+#else
+			throwing.emplace(C::TPeriod{C::MONTH, C::NONE}, [](auto) { SessionThrow(); });
+#endif
+		}
 		auto company = _current_company;
 		auto tick = TimerGameTick::counter;
 		bool caught = false;
@@ -153,8 +163,11 @@ static bool SessionScenario(std::span<std::string_view> args)
 	SessionSave(folder, "missing-load");
 	SessionCheck("partial-load", !SafeLoad(std::string(std::getenv("HOME")) + "/partial.sav", SLO_LOAD, DFT_GAME_FILE, GM_NORMAL, NO_DIRECTORY, nullptr));
 	SessionSave(folder, "partial-load");
-	_file_to_saveload.SetMode(FIOS_TYPE_FILE, SLO_LOAD); _file_to_saveload.name = folder + "/normal.sav";
+	_file_to_saveload.SetMode(FIOS_TYPE_SCENARIO, SLO_LOAD); _file_to_saveload.name = folder + "/normal.sav";
+	SwitchToMode(SM_LOAD_GAME); SessionSave(folder, "play-scenario");
+	_file_to_saveload.SetMode(FIOS_TYPE_FILE, SLO_LOAD);
 	SwitchToMode(SM_RELOADGAME); SessionSave(folder, "reload-save");
+	SwitchToMode(SM_MENU); SessionSave(folder, "intro");
 	_switch_mode = SM_EDITOR; GameLoop(); SessionSave(folder, "outer-editor");
 	_switch_mode = SM_NEWGAME; GameLoop(); _pause_mode = {}; SessionSave(folder, "final");
 	session_active = false;
@@ -165,5 +178,4 @@ extern "C" void __wrap__Z22IConsoleStdLibRegisterv()
 {
 	__real__Z22IConsoleStdLibRegisterv();
 	IConsole::CmdRegister("session_scenario", SessionScenario);
-	IConsole::CmdRegister("session_throw", SessionThrowCommand);
 }

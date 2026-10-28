@@ -22,7 +22,9 @@ STATES = (
     "reload-scenario",
     "missing-load",
     "partial-load",
+    "play-scenario",
     "reload-save",
+    "intro",
     "outer-editor",
     "final",
 )
@@ -78,7 +80,6 @@ def install(scenario: Scenario, run_dir: Path) -> None:
     if not scenario.get("session"):
         return
     landscape.install({"generation_probe": True}, run_dir)
-    (run_dir / "session-failure.scr").write_text("session_throw\n")
     if partial := scenario.get("partial"):
         data = Path(partial).read_bytes()
         (run_dir / "partial.sav").write_bytes(data[: len(data) // 2])
@@ -165,7 +166,7 @@ def prepare(
             }
             if capture["exit"] or required - observed:
                 raise RuntimeError(
-                    f"{mode}: {role} incomplete session evidence: {required - observed}"
+                    f"{mode}: {role} incomplete session evidence: exit {capture['exit']}, missing {required - observed}"
                 )
             entry_observations(lines)
             if mode == "plain":
