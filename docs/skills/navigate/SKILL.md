@@ -50,12 +50,14 @@ the measurement:
 - **Rate**: code lines retired per day over the fork's history and over each
   of the last several steering periods (`--head` measures a past commit;
   `git log --format='%h %ad %s' | grep -i 'Doc: .*Steer'` lists them).
-- **Arrival**: the date the remaining code retires at the recent rate, and how
-  far it moved since the last navigation (`git log --format='%h %ad %s' |
-  grep 'Doc: Navigate'`; its figures are in the roadmap's "Phases" section).
+- **Arrival**: the date the remaining code retires at the recent rate. It is a
+  vanity figure for the report only: no verdict or correction rests on it, and
+  it stays out of the roadmap.
 
-Done when one table holds the done and remaining code lines by area, the
-rate, the arrival, and each one's change since the last navigation.
+Done when one table holds the done and remaining code lines by area and the
+rate, each with its change since the last navigation (`git log
+--format='%h %ad %s' | grep 'Doc: Navigate'`; its figures are in the
+roadmap's "Phases" section).
 
 ## 2. Read the course
 
@@ -108,6 +110,5 @@ Confirm `origin/rust-migration` has it.
 
 ## 5. Report
 
-Tell the user, in a few lines: the position table, the arrival and how far it
-moved, the verdict on the course, and each change with its commit and issue
-links.
+Tell the user, in a few lines: the position table, the arrival, the verdict
+on the course, and each change with its commit and issue links.
