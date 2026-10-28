@@ -52,6 +52,34 @@ def report(root: Path, other: str = "Pause", global_name: str = "_pause_mode") -
 
 
 class ThreadedTests(unittest.TestCase):
+    def test_reports_keep_actual_roles_in_same_build_pairs(self) -> None:
+        reference, candidate = sanitizers.Findings(), sanitizers.Findings()
+        # A reference repeat's second slot is still the original executable.
+        reference.add("original-repeat-only", "full original report")
+        reference.add("shared", "original shared report")
+        candidate.add("shared", "candidate shared report")
+        candidate.add("candidate-only", "full candidate report")
+        result: threaded.Result = {
+            "scenario": "paired",
+            "passed": True,
+            "seconds": 0,
+            "problems": [],
+            "differences": [],
+            "sanitizer": {},
+        }
+        threaded.finish_reports(
+            result, {"reference": reference, "candidate": candidate}
+        )
+        self.assertEqual(result["sanitizer"]["original"], ["shared"])
+        self.assertEqual(
+            result["sanitizer"]["reference_only"], ["original-repeat-only"]
+        )
+        self.assertEqual(result["sanitizer"]["candidate_only"], ["candidate-only"])
+        self.assertEqual(
+            result["problems"], ["candidate-only sanitizer report: candidate-only"]
+        )
+        self.assertFalse(result["passed"])
+
     def test_library_atomic_race_allocation_and_lock_order(self) -> None:
         race = (
             "==================\nWARNING: ThreadSanitizer: data race (pid=42)\n"

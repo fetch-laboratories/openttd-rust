@@ -8,7 +8,9 @@ import re
 import subprocess
 import sys
 import time
+from dataclasses import asdict
 from datetime import datetime, timezone
+from functools import partial
 from pathlib import Path
 from typing import TypedDict, cast
 
@@ -16,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from validation_execution import run_logged  # noqa: E402
 
 import migration  # noqa: E402
-from simulation import core, thread_sanitizer  # noqa: E402
+from simulation import core, sanitizers, thread_sanitizer  # noqa: E402
 from simulation.console_adapter import console_adapter  # noqa: E402
 
 
@@ -116,6 +118,7 @@ def prepare(
         "-g",
         scenario["save"],
         "-vsdl",
+        "-b32bpp-anim",
         "-snull",
         "-mnull",
         "-r",
@@ -145,6 +148,7 @@ def run_game(
     desync: bool,
     *,
     isolate: bool = False,
+    reports: dict[str, sanitizers.Findings] | None = None,
 ) -> Run:
     # Keep successful native runs too: full TSan reports and same-build repetitions are evidence.
     run_dir = run_dir.parents[2] / "native" / run_dir.relative_to(run_dir.parents[2])
@@ -177,14 +181,32 @@ def run_game(
         ),
     )
     if migration.TSAN:
-        run["sanitizer"] = thread_sanitizer.findings(
+        found = thread_sanitizer.findings(
             run_dir,
             (migration.REFERENCE.resolve(), core.ROOT),
             (migration.REFERENCE_BUILD, migration.CANDIDATE_BUILD),
         )
+        if reports is None:
+            raise RuntimeError(
+                "TSan run has no collection for its actual executable role"
+            )
+        for key, text in found.reports.items():
+            reports[build.name.removesuffix("-runtime")].add(key, text)
     check(scenario, run)
     run["stdout"] = (run_dir / "console.log").read_bytes()
     return run
+
+
+def finish_reports(result: Result, reports: dict[str, sanitizers.Findings]) -> None:
+    """Classify the fixed repetitions by executable, including same-build pairs."""
+    comparison = sanitizers.compare(reports)
+    result["sanitizer"] = {
+        **asdict(comparison),
+        "reports": reports["reference"].reports | reports["candidate"].reports,
+    }
+    for key in comparison.candidate_only:
+        result["problems"].append(f"candidate-only sanitizer report: {key}")
+    result["passed"] = result["passed"] and not comparison.candidate_only
 
 
 def main() -> int:
@@ -232,6 +254,8 @@ def main() -> int:
             builds[role] = build
     results: list[Result] = []
     for name, moment, tile in selected:
+        reports = {role: sanitizers.Findings() for role in ("reference", "candidate")}
+        group: list[Result] = []
         source, _ = core.normalize(
             core.ROOT / f"migration/saves/{name}.sav", out / "inputs" / name
         )
@@ -272,13 +296,18 @@ def main() -> int:
                     20,
                     args.timeout,
                     migration.environment(),
-                    game_runner=run_game,
+                    game_runner=partial(run_game, reports=reports),
                     prepared=True,
                 ),
             )
             results.append(result)
+            group.append(result)
+        if migration.TSAN:
+            finish_reports(group[0], reports)
+        for result in group:
             print(
-                f"{'ok' if result['passed'] else 'FAIL'} {result['scenario']}: {result['problems']}",
+                f"{'ok' if result['passed'] else 'FAIL'} {result['scenario']}: "
+                f"{len(result['differences'])} differences; {result['problems']}",
                 flush=True,
             )
     report = {

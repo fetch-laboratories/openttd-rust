@@ -343,7 +343,9 @@ mutex, requiring the production occupancy predicate and clearing query to reject
 It checks saturated landscaping credits, distinct threads, and the calendar phase.
 The next-month console callback saves during calendar advancement, before economy
 and tick advancement; it is not an end-of-tick save. `scrollto instant` removes
-camera timing without another mask. The existing decoder compares every snapshot,
+camera timing without another mask. Selecting `32bpp-anim` explicitly avoids an
+asynchronous startup blitter switch and its timing-dependent log order.
+The existing decoder compares every snapshot,
 RNG and complete combined output, using only existing masks and GLOG normalization.
 Each input also gets an independent same-build pair in both plain and desync modes.
 All runs, including full reports, are retained; missing saves or markers fail.
@@ -357,7 +359,9 @@ identity, normalized for source trees, line numbers, addresses and thread IDs.
 Unsymbolized library frames retain module offsets as code identities. Lock-order
 warnings retain their acquisition stacks. Both-role, reference-only and
 candidate-only findings remain separate; unknown reports fail. Full native reports
-remain alongside the saves. C++ TSan cannot see uninstrumented Rust accesses, so a
+remain alongside the saves. Classification collects each input's fixed repetitions
+by actual executable: a reference same-build pair never supplies candidate reports.
+C++ TSan cannot see uninstrumented Rust accesses, so a
 reference-only finding can reflect an access moved to Rust. These two fixed inputs
 do not establish arbitrary SDL determinism, interactive RNG equality or Rust race
 freedom. The deep set runs both ordinary threaded and TSan comparisons.
