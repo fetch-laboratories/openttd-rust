@@ -1,0 +1,123 @@
+[
+  {
+    "name": "SimpleAI",
+    "version": "14",
+    "publisher": "http://www.tt-forums.net/viewtopic.php?f=65&t=44809",
+    "kind": "ai",
+    "uid": "534d504c",
+    "md5": "b3137bbd0c73641cf510ead06e36dab6",
+    "sha256": "dba08d42e0c712584509634b99b8ce4970e02336cfe02aa1133ea9e6cf89754a",
+    "dependencies": [
+      "5046524c-Pathfinder.Rail-1.tar.gz",
+      "5046524f-Pathfinder.Road-4.tar.gz"
+    ],
+    "metadata": "https://github.com/OpenTTD/BaNaNaS/blob/75a904f4fe1e7bc8cde4c272462fcbaae181e836/ai/534d504c/versions/20190120T143508Z.yaml",
+    "license": "GPL-2.0-only"
+  },
+  {
+    "name": "AdmiralAI",
+    "version": "25",
+    "publisher": "http://www.tt-forums.net/viewtopic.php?f=65&t=38057",
+    "kind": "ai",
+    "uid": "41444d4c",
+    "md5": "4ccd92fb8f8f01045145be99a28e14a6",
+    "sha256": "d976e6e440dc832c88a31c446411bc1786e75623e8edcb7b42ce2c9d814c016c",
+    "dependencies": [
+      "51554648-Queue.FibonacciHeap-2.tar.gz"
+    ],
+    "metadata": "https://github.com/OpenTTD/BaNaNaS/blob/75a904f4fe1e7bc8cde4c272462fcbaae181e836/ai/41444d4c/versions/20100812T231406Z.yaml",
+    "license": "GPL-2.0-or-later"
+  },
+  {
+    "name": "trAIns",
+    "version": "2.1",
+    "publisher": "http://www.luisrios.eti.br/public/en_us/research/trains/",
+    "kind": "ai",
+    "uid": "54524149",
+    "md5": "c4c069dc797674e545411b59867ad0c2",
+    "sha256": "8f8553e61e6115bcbff9e2ed2f635eee128c79911afa5ca2e19cb877ad9d7110",
+    "dependencies": [],
+    "metadata": "https://github.com/OpenTTD/BaNaNaS/blob/75a904f4fe1e7bc8cde4c272462fcbaae181e836/ai/54524149/versions/20140803T230851Z.yaml",
+    "license": "GPL-2.0-or-later"
+  },
+  {
+    "name": "Pathfinder.Rail",
+    "version": "1",
+    "publisher": "",
+    "kind": "ai-library",
+    "uid": "5046524c",
+    "md5": "e6b1d198257d580e65a97ca584adb2b5",
+    "sha256": "aee7bac9259851b11e391de517542b5eb0a3a4a3dae7a0c9b055f5f66a6d5434",
+    "dependencies": [
+      "4752412a-Graph.AyStar-4.tar.gz"
+    ],
+    "metadata": "https://github.com/OpenTTD/BaNaNaS/blob/75a904f4fe1e7bc8cde4c272462fcbaae181e836/ai-library/5046524c/versions/20090117T163549Z.yaml",
+    "license": "GPL-2.0-only"
+  },
+  {
+    "name": "Pathfinder.Road",
+    "version": "4",
+    "publisher": "http://dev.openttdcoop.org/projects/lib-pathfinderroad",
+    "kind": "ai-library",
+    "uid": "5046524f",
+    "md5": "999de61cd3a10680b4ff91547299dc53",
+    "sha256": "a26081bcbec2846a3e1bdb617cda0f957541e352337e8905a3340ce82683a3a9",
+    "dependencies": [
+      "4752412a-Graph.AyStar-6.tar.gz"
+    ],
+    "metadata": "https://github.com/OpenTTD/BaNaNaS/blob/75a904f4fe1e7bc8cde4c272462fcbaae181e836/ai-library/5046524f/versions/20120819T204911Z.yaml",
+    "license": "GPL-2.0-only"
+  },
+  {
+    "name": "Queue.FibonacciHeap",
+    "version": "2",
+    "publisher": "http://dev.openttdcoop.org/projects/lib-fibonacciheap",
+    "kind": "ai-library",
+    "uid": "51554648",
+    "md5": "1cfcb44b5b2ea788f95842716bc53c9d",
+    "sha256": "19849ccef9cbc8dd63558b1d58224ee9f860d4d355379c7f6f758703504a917f",
+    "dependencies": [],
+    "metadata": "https://github.com/OpenTTD/BaNaNaS/blob/75a904f4fe1e7bc8cde4c272462fcbaae181e836/ai-library/51554648/versions/20090615T114617Z.yaml",
+    "license": "GPL-2.0-only"
+  },
+  {
+    "name": "Graph.AyStar",
+    "version": "4",
+    "publisher": "",
+    "kind": "ai-library",
+    "uid": "4752412a",
+    "md5": "4afad59243616532a64e8da4565a7aa7",
+    "sha256": "e84be4afae4953b48318b31137208fff4a9948afbb5efb32ca5e8ab2df0eadc7",
+    "dependencies": [
+      "51554248-Queue.BinaryHeap-1.tar.gz"
+    ],
+    "metadata": "https://github.com/OpenTTD/BaNaNaS/blob/75a904f4fe1e7bc8cde4c272462fcbaae181e836/ai-library/4752412a/versions/20090117T163452Z.yaml",
+    "license": "GPL-2.0-only"
+  },
+  {
+    "name": "Graph.AyStar",
+    "version": "6",
+    "publisher": "",
+    "kind": "ai-library",
+    "uid": "4752412a",
+    "md5": "f385497c3c922bfd9f61e1bc33b3a4dc",
+    "sha256": "0482bc32839e28210a6a371097b826cd59923b9db246922de9096051b07d4efd",
+    "dependencies": [
+      "51554248-Queue.BinaryHeap-1.tar.gz"
+    ],
+    "metadata": "https://github.com/OpenTTD/BaNaNaS/blob/75a904f4fe1e7bc8cde4c272462fcbaae181e836/ai-library/4752412a/versions/20090605T220117Z.yaml",
+    "license": "GPL-2.0-only"
+  },
+  {
+    "name": "Queue.BinaryHeap",
+    "version": "1",
+    "publisher": "",
+    "kind": "ai-library",
+    "uid": "51554248",
+    "md5": "8ce55e1397e9c51f8032c3a8a29e9cf5",
+    "sha256": "474461d9cea10b41f9e62945d2482b266dfa91ea70b5f41d8654e513e7331e3d",
+    "dependencies": [],
+    "metadata": "https://github.com/OpenTTD/BaNaNaS/blob/75a904f4fe1e7bc8cde4c272462fcbaae181e836/ai-library/51554248/versions/20090117T163656Z.yaml",
+    "license": "GPL-2.0-only"
+  }
+]

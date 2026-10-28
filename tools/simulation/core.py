@@ -75,6 +75,7 @@ def scenario_modules():
     from . import (
         aircraft,
         cargo_storage,
+        community_ai,
         companies,
         disasters,
         economy,
@@ -103,6 +104,7 @@ def scenario_modules():
         landscape,
         objects,
         play_saves,
+        community_ai,
         towns,
         trees,
         effects,
