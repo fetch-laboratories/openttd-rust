@@ -139,11 +139,12 @@ fork; the remaining upstream documentation explains behavior and architecture.
 ## Speed
 
 - Speed is checked on the merged branch; PRs run no speed check of their own
-  (user decision, 2026-10-22). The ceilings are 1.5x the original for play saves
-  and 1.3x for generation (#282). A scenario is over its ceiling when the mean
-  of its last three quiet-pass ratios exceeds it; one pass above it leaves the
-  scenario in band (provisional: P2016's five passes spread 1.453x to 1.523x,
-  mean 1.486x, while its loop count moved about 1.3%).
+  (user decision, 2026-10-22). The ceilings are 1.6x the original for play saves
+  (user decision, 2026-10-28) and 1.3x for generation (#282). Ceiling and band
+  decisions use a scenario's record: the mean of its last three quiet-pass
+  ratios, carried forward by the projection's growth term below, never one pass
+  alone (provisional: P2016's five passes spread 1.453x to 1.523x, mean
+  1.486x, while its loop count moved about 1.3%).
 - A projection is the anchor's measured ratio times (1 + 2 x the growth of the
   game loop's callgrind instruction count over the anchor), from
   `SPEED_ANCHORS`; counts do not depend on host load. After every second
@@ -169,8 +170,8 @@ fork; the remaining upstream documentation explains behavior and architecture.
   profile, root attributes the rise per function to the PRs since and fixes it
   forward; that fix is the next maintenance PR to integrate. A ready ownership
   PR proceeds meanwhile; it does not wait for a future maintenance base.
-- A speed pass runs when a tip projection first comes within 5% of its ceiling
-  (1.425x play, 1.235x generation). While a scenario stays in band, a further
+- A speed pass runs when a tip's record first comes within 5% of its ceiling
+  (1.52x play, 1.235x generation). While a scenario stays in band, a further
   pass runs only after its projection has risen at least 3% over its anchor or
   a repair batch crediting at least 1.5% of its loop count has integrated;
   otherwise the instruction projection is the record (provisional: the three

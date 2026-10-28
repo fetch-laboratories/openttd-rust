@@ -24,9 +24,11 @@ this roadmap over conflicting issues; it is the current state of umbrella issue
   before retired 3,353 lines. Fifteen Full runs: 13 passed, two failed on real
   defects (a history fixture definition, a native-only linkage warning), none
   cancelled.
-- Speed: P2016's quiet anchors over five passes were 1.4838x, 1.5023x,
-  1.4534x, 1.4695x and 1.5229x (mean 1.486x); it is in band under AGENTS.md's
-  mean-of-three rule, not over its ceiling. On P2016 the loop gap over the
+- Speed: the play-save ceiling is 1.6x (user decision, 2026-10-28; it was
+  1.5x), so the band starts at 1.52x. P2016's quiet anchors over five passes
+  were 1.4838x, 1.5023x, 1.4534x, 1.4695x and 1.5229x. Its record, the mean of
+  the last three carried forward by the last profile's growth, is about
+  1.485x: below its band, as are all other scenarios. On P2016 the loop gap over the
   original is 29.9% of instructions, and 99% of it is boundary glue spread over
   about 1,500 wrapper functions (#275 comment of 2026-10-28). #555's loading and
   acceptance repair integrated; its estimated 1.065% is uncredited until the
@@ -98,14 +100,17 @@ Apply these corrections through the work order below:
    glue dominates P2016's gap. This applies world-state.md's existing condition
    ("when measured coupling warrants it"); it is not a new direction.
 4. **Speed.**
-   - P2016 is in band; AGENTS.md now judges a breach on the mean of three
-     passes.
-   - Select one #275 batch after #554 integrates: the station tick's single
-     typed read per station (1.44%) and in-Rust assertion conditions with
-     cached service tables (0.52%). Integrating it with #555 should cross the
-     1.5% credited-repair trigger for the next pass.
+   - The user raised the play-save ceiling to 1.6x. AGENTS.md now judges
+     ceilings and bands on a record that averages the last three passes. No
+     scenario is in its band, so no speed pass or repair batch is due.
+   - The station tick's single typed read per station (1.44%) and in-Rust
+     assertion conditions with cached service tables (0.52%) stay notes on
+     #275. They are selected when a scenario's record enters its band.
    - Do no further attribution research on 0.1% to 0.3% candidates. Speed
      beyond that comes from #560 and #563.
+   - #564 carries the tooling change: `speed_budget` reports the 1.6x
+     ceiling and the three-pass record. Until it integrates, the report's
+     ceiling field lags AGENTS.md.
 5. **Exclude #559 with its return condition** (issue comment). This reverses
    root's own selection, not a user direction.
 6. **Maintenance from the audits.** Take the #168 batch (clock-table bounce,
@@ -122,7 +127,8 @@ Apply these corrections through the work order below:
    repeat of the vcpkg 502 selects a vcpkg binary cache, not retries.
 
 AGENTS.md changes:
-- A ceiling breach needs the mean of three passes.
+- The play-save ceiling is 1.6x (user decision); ceiling and band decisions
+  use the mean of the last three passes, carried forward by growth.
 - Spread glue ranks the crossing-removing port above repair batches.
 - No C++ frame is kept for attribution.
 - The review report cites #564's orphan check once it integrates.
@@ -153,7 +159,7 @@ includes storage ports, and gives the planner no preferred candidate.
 | Parked #525/#526 NewGRF corpus | User decision; stays excluded until the user reselects it. |
 
 New since this review, for the next steer to judge:
-- The mean-of-three breach rule and the factor-2 projection. The anchors give wall/Ir excess ratios of 0.98 to 1.23 on the play saves, and `projection()` floors at the anchor, so it never shows a repair.
+- The three-pass record rule and the factor-2 projection. The anchors give wall/Ir excess ratios of 0.98 to 1.23 on the play saves, and `projection()` floors at the anchor, so it never shows a repair.
 - Whether three concurrent leftover owners keep retirement per net glue near the planning audit's 2 to 5.
 - Whether #563's design names a storage port with a measured Ir removal.
 - Whether #564's check ends orphan findings at review.
@@ -230,17 +236,14 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
    design note and the first storage implementation issue. No branch.
 7. **#561 company identity.** Start when a slot frees after item 2. Planning
    range: 450 to 550 retired, 120 to 200 net glue.
-8. **#275 station-tick and assertion batch**, after #554 integrates (it touches
-   `OnTick_Station`). One maintenance PR, zero retirement, an estimated 1.96% of
-   the P2016 loop. The next profile credits it; with #555 it should trigger the
-   next quiet pass.
-9. **#168 audit batch**, after #554 integrates: the checklist in the #168
+8. **#168 audit batch**, after #554 integrates: the checklist in the #168
    comment of 2026-10-28.
-10. **#564 tooling batch:** the orphan-export check and T3 task-worktree cleanup.
-11. **#168/#199/#500 completed-job flow publication; #501 `tools/probe.py`
+9. **#564 tooling batch:** the orphan-export check, T3 task-worktree cleanup,
+   and the 1.6x ceiling with the three-pass record in `speed_budget`.
+10. **#168/#199/#500 completed-job flow publication; #501 `tools/probe.py`
     typing.** Unchanged: select only the completed link-graph job service
     table. Zero retirement, 120 to 250 Rust, -30 to +80 net glue.
-12. **#503 coverage continuation.** The bounded original-only clock-preparation
+11. **#503 coverage continuation.** The bounded original-only clock-preparation
     fix (at most 30 production and 50 test lines), then the 119 unfinished
     traces with provenance checks. Preserve the fixed checkout and failed
     attempts.
@@ -292,7 +295,7 @@ running.
 | #554/#557 combination | Unpushed branch `integrate/session-and-deep-rotation`, head `e9b72a04ec`, in `.local/worktrees/integration554557`. | After #554's fixes, update from current base, inspect conflicts, open the integration PR and run Full for its final head. |
 | #558 | Draft head `c919a1a298`. The ordinary semantic case and isolated M23 sensitivity pass. No fresh fixing review and no Full yet. | Fresh fixing review, current base, exact-head Full. |
 | #560, #561, #562, #563 | Selected by this review; not started. | Follow the work order. |
-| #503 | Coverage has 330 of 449 complete traces; the clock-preparation fix is not started. | Work order item 12. |
+| #503 | Coverage has 330 of 449 complete traces; the clock-preparation fix is not started. | Work order item 11. |
 | Profiles and deep | Profile24 complete. The rotated deep run is due after #557. The next profile follows the twenty-sixth integration. | Keep due work pending and preserve anchor and runtime dependencies. |
 
 Worktrees kept for the unfinished tasks and their evidence:
