@@ -204,26 +204,24 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
 2. **#156 observation and #503 fixture repairs, with #199/#500 helpers/types.**
    One maintenance batch makes existing claimed evidence distinguish wrong
    behavior and restores valid deep terrain. Reuse the fixture worktree.
-3. **#507 / #525 real NewGRF corpus, source packaging under #526.** Highest
-   broad integration gap across recently migrated loaders and resolvers.
-4. **#275 / #312 tile-loop batch, followed by identity-required re-anchoring.**
+3. **#275 / #312 tile-loop batch, followed by identity-required re-anchoring.**
    There is measured excess and limited headroom; actual savings are unknown.
-5. **#511 targeted mutation study.** Measure observation quality before removing
+4. **#511 targeted mutation study.** Measure observation quality before removing
    scenarios or expanding random input. Use #518 and the new observation gaps.
-6. **#505 ASan/UBSan.** Continue the existing checkpoint; compare both games
+5. **#505 ASan/UBSan.** Continue the existing checkpoint; compare both games
    and distinguish original failures from candidate-only boundary faults.
-7. **#527 calendar/economy clocks.** Recurring simulation state and dispatch
+6. **#527 calendar/economy clocks.** Recurring simulation state and dispatch
    ownership with existing evidence infrastructure, no external prerequisite.
-8. **#509 platform semantic subset.** Concrete MSVC defect history and an
+7. **#509 platform semantic subset.** Concrete MSVC defect history and an
    existing cadence make this more useful than speculative corpus expansion.
-9. **#506 threaded execution and TSan.** The quick guard is integrated; complete
+8. **#506 threaded execution and TSan.** The quick guard is integrated; complete
    deterministic stopping and prove the specified thread-local mutation fails.
-10. **#508 seeded random-command AI.** Target measured unexecuted command
-    branches and compare command outcomes as well as terminal state.
-11. **#507 remaining community AI and large-map corpus**, then **#510 mixed
+9. **#508 seeded random-command AI.** Target measured unexecuted command
+   branches and compare command outcomes as well as terminal state.
+10. **#507 remaining community AI and large-map corpus**, then **#510 mixed
     multiplayer feasibility**. Broaden integration evidence after the cheaper
     concrete gaps above; neither depends on the deferred owners.
-12. **#501 typing and remaining #168/#199/#500 debt.** Carry annotations on
+11. **#501 typing and remaining #168/#199/#500 debt.** Carry annotations on
     touched #505/#527 tooling. At the first stocktake after item 2 integrates,
     select the next concrete selector, observation or ID conversion slice from
     these trackers using measured cost or a source defect; do not launch a
@@ -240,6 +238,10 @@ not just a textual mention. After twelve integrations since the previous steer,
 the next platform cadence is the fifteenth; #512's first tally is finished.
 
 Excluded, with return conditions checked by this review:
+- #507's NewGRF corpus (#525, #526) is parked by the user (2026-10-28) until
+  the user reselects it. The resume plan on #507 keeps the sets uncommitted,
+  fetched by pinned hash into `.local/` and cached in CI; #525's branch stays
+  on origin.
 - #497 Action3 and #498 object definitions remain parked until a selected
   simulation component needs their data in Rust; then replan for owned storage.
   A free slot alone is not that event, and #527 needs neither.
@@ -254,22 +256,22 @@ Excluded, with return conditions checked by this review:
 
 ## Resume checkpoint
 
-A Claude Code root (2026-10-28) integrated #533 and runs Opus agents in T3
-worktrees on items 2, 3, 4 and 6; each keeps its status on its PR. No confirmed code
-regression requires rollback. Fetch the remote PR head before resuming a local
-checkout.
+The Claude Code root (2026-10-28) integrated #533 and wound down at the user's
+request; review agents were allowed to finish. No confirmed code regression
+requires rollback. Fetch the remote PR head before resuming a local checkout;
+older T3 worktrees of #534, #535 and #536 are behind their remote heads.
 
 | Item | Current state | Next action |
 | --- | --- | --- |
 | #529 follow-up | #533 integrated; the apt retry has run in one Full. | Record the Install dependencies step duration over the next ten Linux jobs on #529. |
-| #518 | Reviewed; final Full failed on package installation (#529, now fixed). | Update base, apply ordinary conflict-review rule, request exact-head Full. Preserve final report through integration. |
-| #156/#503 batch | Draft PR #534; terrain repair passes the town-commands default and soak scenarios; `/root/issue503-156-fixture-validate` (Opus) runs the remaining scenarios and adds the house-rejection item. | Fresh review and one Full. Root decides whether the statue fixture's direct corner-height writes need the same terraform treatment. |
-| #525/#526 | Trains 0.3.0 source archive committed with a byte-identical rebuild. User decision 2026-10-28: drop Road Vehicles, replace Industries with FIRS 5.2.0 plus its source; `/root/issue525-firs-corpus` (Opus) implements and reruns the scenarios. | Fresh review of the changed scope, then Full. |
-| #275/#312 | `/root/issue275-312-tile-loop` (Opus) validated the tree checkpoint (head `173dd67b77`) and opens a draft PR; houses and water stay notes on #275. | Review; speed measured after integration. |
-| #505 | Draft PR #535; `/root/issue505-sanitizers` (Opus) builds the sanitized candidate and runs the subset. | Review and Full when the subset and report are complete. |
+| #518 | Updated from base at `2992371c70`; one `tools/migration.py` conflict kept both `coverage` and `env`; `/root/review518-conflict` reviews the resolution. | Read that report, then request exact-head Full and integrate. Preserve final report through integration. |
+| #156/#503 batch | Draft PR #534; town-commands default and soak pass; `/root/issue503-156-fixture-validate` checkpoints its scenario results and the house-rejection item at wind-down. | Read the PR status comment, finish the listed checks and items, then fresh review and Full. Decide the statue fixture's direct height writes. |
+| #525/#526 | Parked by the user; draft closed at `ccc28e2ed0`. | None until the user reselects it. |
+| #275/#312 | PR #536 at `173dd67b77`; 80 of 80 trees/landscape/water scenarios equal; `/root/review536-tile-loop` fidelity review. | Spot-check review fixes, update base, Full, integrate; measure speed on the merged tip. |
+| #505 | Draft PR #535; `/root/issue505-sanitizers` checkpoints the sanitized subset at wind-down. | Read the PR status comment and continue from it. |
 | Quiet pass | Existing anchors incompatible. | After bounded tile batch, before a new deep launch when both are due; prepare dependencies before the hold. |
 | #527 | Issue selected, no branch. | Start from integrated base when a slot and rank permit; assess first concrete ownership boundary. |
-| Jobs | No steering-launched jobs; prior session jobs stopped. | Resume cadence from integrated counts and read retained failures before selecting work. |
+| Jobs | No root-launched jobs remain. One integration (#533) since the #524 deep check. | Profile and deep check after the next integration. |
 
 Selection: root; planning agents use gpt-6-astra, high. The start-development
 skill remains open-ended and unchanged; completing this order triggers planning.
