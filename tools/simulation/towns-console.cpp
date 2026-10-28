@@ -688,7 +688,7 @@ static bool RoadTypeGrowthScenario()
 	std::vector<RoadBits> before(Map::Size(), ROAD_NONE);
 	uint converted = 0;
 	for (TileIndex tile : Map::Iterate()) {
-		if (!IsNormalRoad(tile)) continue;
+		if (!IsTileType(tile, MP_ROAD) || !IsNormalRoad(tile)) continue;
 		before[tile.base()] = GetRoadBits(tile, RTT_ROAD);
 		converted += GetRoadTypeRoad(tile) == alternate;
 	}
@@ -697,7 +697,7 @@ static bool RoadTypeGrowthScenario()
 	HouseDefinitionNeed(CmdExpandTown(DoCommandFlag::Execute, (*Town::Iterate().begin())->index, 128, {TownExpandMode::Roads}).Succeeded(), "road-growth-expansion");
 	uint added = 0, changed = 0;
 	for (TileIndex tile : Map::Iterate()) {
-		if (!IsNormalRoad(tile)) continue;
+		if (!IsTileType(tile, MP_ROAD) || !IsNormalRoad(tile)) continue;
 		RoadBits bits = GetRoadBits(tile, RTT_ROAD);
 		added += before[tile.base()] == ROAD_NONE && bits != ROAD_NONE;
 		changed += before[tile.base()] != ROAD_NONE && before[tile.base()] != bits;
