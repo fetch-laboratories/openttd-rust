@@ -14,9 +14,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from simulation import community_ai, platform_subset, runtime
 from simulation import core as simulate
 from simulation import instructions as ir
-from simulation import platform_subset, runtime
 from simulation.instructions import SPEED_BUDGETS, speed_budget
 
 import migration
@@ -1142,6 +1142,56 @@ class PlatformSubsetTests(unittest.TestCase):
             manifest.write_text(json.dumps(value))
             with self.assertRaisesRegex(ValueError, "omitted"):
                 platform_subset.load_bundle(root)
+
+
+class CommunityInputTests(unittest.TestCase):
+    def test_reload_requires_the_generation_package_manifest(self) -> None:
+        scenario = community_ai.scenarios(False)[-1]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest = root / "packages.json"
+            original = (community_ai.INPUTS / manifest.name).read_bytes()
+            for changed in (False, True):
+                manifest.write_bytes(original + (b"\n" if changed else b""))
+                with (
+                    self.subTest(changed=changed),
+                    patch.object(community_ai, "INPUTS", root),
+                ):
+                    if changed:
+                        with self.assertRaisesRegex(RuntimeError, "packages differ"):
+                            community_ai.prepare(scenario, {}, {}, root, 1, {}, {})
+                    else:
+                        community_ai.prepare(scenario, {}, {}, root, 1, {}, {})
+
+    def test_running_ai_identity_is_distinct_from_slot_configuration(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source, _ = simulate.normalize(community_ai.FIXTURE, Path(directory))
+            chunks = simulate.read_save(source)
+        chunk = chunks["AIPL"]
+        elements = dict(chunk["elements"])
+        body = elements[0]
+        reader = simulate.Reader(body)
+        simulate.read_object(reader, chunk["header"], "", {})
+        start = reader.pos
+        reader.take(reader.gamma())
+        for replaced in (False, True):
+            # The configured SimpleAI prefix stays intact after native fallback.
+            elements[0] = (
+                body[:start] + b"\x07%_dummy" + body[reader.pos :] if replaced else body
+            )
+            chunks["AIPL"] = dict(chunk, elements=list(elements.items()))
+            run = community_ai.Run(
+                dir=Path("unused"), exit=0, snapshots=[source], log=[]
+            )
+            with (
+                self.subTest(replaced=replaced),
+                patch.object(simulate, "read_save", return_value=chunks),
+            ):
+                if replaced:
+                    with self.assertRaisesRegex(RuntimeError, "AI 0 was replaced"):
+                        community_ai.activity(run)
+                else:
+                    community_ai.activity(run)
 
 
 if __name__ == "__main__":
