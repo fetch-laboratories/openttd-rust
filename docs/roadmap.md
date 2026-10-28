@@ -74,8 +74,8 @@ lines remain (17.3% retired).
 | 2. Simulation storage | Simulation headers: map accessors about 2,600, pool classes about 2,200, other helpers and types about 5,700; data tables 12,957 (25.2%) shared with later phases | 10,464 (16.2%) | Every pool and the map arrays are owned by Rust; C++ reads them through facades |
 | 3. Simulation data readers | Save/load 13,064; script API and hosts 12,379; network 9,607; NewGRF outside the inventory 5,550 | 40,600 (about 6%) | These run in Rust; the Squirrel VM may stay C++ until phase 6 |
 | 4. Support | Core, strings, settings, viewport, graphics and misc | 36,057 (2.2%) | Remaining non-GUI support runs in Rust |
-| 5. Interface | GUI 50,616; platform and rendering backends 14,885; simulation drawing about 6,900 | about 72,400 (0%) | No C++ GUI, drawing or platform code; it needs a GUI evidence design before its first port |
-| 6. Vendored | Squirrel, ICU, fmt, catch2, monocypher, nlohmann JSON, md5, OpenGL headers, social API | 55,895 (0.9%) | Each is replaced by a maintained Rust crate that reproduces what the game observes, or ported; Squirrel gets its own port |
+| 5. Interface | GUI 50,616; platform and rendering backends 14,885; simulation drawing about 6,900 | about 72,400 (0%) | No C++ GUI, drawing or platform code; evidence is screenshots and recordings of original and fork attached to each PR |
+| 6. Vendored | Squirrel, ICU, fmt, catch2, monocypher, nlohmann JSON, md5, OpenGL headers, social API | 55,895 (0.9%) | Each is replaced by a maintained Rust crate that reproduces what the game observes, or ported. Squirrel is decided when phase 6 reaches it, when deviation may be acceptable |
 
 Upstream unit tests (2,248) retire with the code they test.
 
@@ -189,8 +189,9 @@ AGENTS.md changes:
 - Storage ports (every pool, then the map) are ownership ports in the work
   order; pools and map access are C++ services only until their port.
 - The goal is the complete rewrite in six overlapping phases; vendored
-  libraries become Rust crates where one fits; later phases' first issues name
-  their evidence (user decisions, 2026-10-28).
+  libraries become Rust crates where one fits, and Squirrel waits for phase 6;
+  screenshots and recordings attached to PRs are evidence for graphical work
+  (user decisions, 2026-10-28).
 - No C++ frame is kept for attribution.
 - The review report cites #564's orphan check once it integrates.
 
@@ -358,7 +359,7 @@ Excluded, with return conditions checked by this review:
   become maintained Rust crates that reproduce the game's observable
   cryptography. They return when phase 3's network ports reach authentication,
   or with phase 6, whichever comes first. Phase 5 GUI and platform ownership
-  under #3 follows its own evidence design; #509's completed validation and
+  under #3 uses PR screenshots and recordings as evidence; #509's completed validation and
   recurring cadence are unaffected.
 - #12, #26, #41, #67, #71 and #83 are behavior improvements deferred until
   near-full reproduction under #513's original-default setting policy.
