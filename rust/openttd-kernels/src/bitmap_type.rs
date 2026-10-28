@@ -12,6 +12,7 @@
 //! bitmap ends before the caller's next callback.
 #![allow(unsafe_code)]
 
+use crate::geometry_type::{rect_height, rect_width};
 use crate::map_func::Map;
 use crate::tile_type::INVALID_TILE;
 use crate::tilearea::{OrthogonalTileIterator, TileArea};
@@ -66,8 +67,8 @@ impl BitmapTileArea {
     pub fn initialize_rect(&mut self, left: i32, top: i32, right: i32, bottom: i32, map: Map) {
         self.initialize(TileArea {
             tile: map.tile_xy(left as u32, top as u32),
-            w: right.wrapping_sub(left).wrapping_add(1) as u16,
-            h: bottom.wrapping_sub(top).wrapping_add(1) as u16,
+            w: rect_width(left, right) as u16,
+            h: rect_height(top, bottom) as u16,
         });
     }
     /// `Initialize(const TileArea &)`; the logical allocation is `Index(w, h)`.

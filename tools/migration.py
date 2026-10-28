@@ -40,7 +40,17 @@ COMMON_ROOT = _common_root()
 COMMON_LOCAL = COMMON_ROOT / ".local"
 # One pinned reference checkout and build per clone, shared by every worktree.
 REFERENCE = COMMON_LOCAL / "reference/openttd"
-REFERENCE_BUILD = COMMON_LOCAL / "build-reference"
+# The ASan and UBSan flavours (#505) build in their own trees. --sanitize exports
+# SANITIZE_VARIABLE, so simulate, its adapters and its scenario modules see them too.
+SANITIZE_VARIABLE = "OPENTTD_SANITIZE"
+SANITIZE = os.environ.get(SANITIZE_VARIABLE) == "1"
+SANITIZED = "-sanitized" if SANITIZE else ""
+REFERENCE_BUILD = COMMON_LOCAL / f"build-reference{SANITIZED}"
+CANDIDATE_BUILD = ROOT / f"build-rust{SANITIZED}"
+# Stable rustc accepts -Zsanitizer only under RUSTC_BOOTSTRAP; the precompiled std
+# stays uninstrumented.
+SANITIZER_FLAGS = "-fsanitize=address,undefined -fno-omit-frame-pointer"
+RUST_SANITIZER_FLAGS = "-Zsanitizer=address -Cforce-frame-pointers=yes"
 BASELINE = json.loads((ROOT / "migration/baseline.json").read_text())
 SCENARIO_COVERAGE_PREFIX: ContextVar[str | None] = ContextVar(
     "scenario_coverage_prefix", default=None
@@ -423,6 +433,11 @@ def main():
         action="store_true",
         help="Measure the same no-PCH configuration without cache reuse",
     )
+    parser.add_argument(
+        "--sanitize",
+        action="store_true",
+        help="build or simulate the ASan and UBSan flavours of both games",
+    )
     # simulate forwards any further arguments to tools/simulate.py; deep, scenario selectors.
     args, simulate_args = parser.parse_known_args()
     if simulate_args and args.action not in ("simulate", "coverage", "deep"):
@@ -434,6 +449,12 @@ def main():
     if args.action == "env":
         print(shell_exports(), end="")
         return
+    args.sanitize = args.sanitize or SANITIZE
+    if args.sanitize and args.action not in ("build", "simulate"):
+        parser.error("--sanitize applies to build and simulate")
+    if args.sanitize and not SANITIZE:
+        exported = os.environ | {SANITIZE_VARIABLE: "1"}
+        os.execve(sys.executable, [sys.executable, *sys.argv], exported)
     if args.action == "deep":
         from deep import run_deep
 
@@ -444,6 +465,13 @@ def main():
             ensure_reference()
     env = environment()
     instruction_mode = args.action == "simulate" and "--instructions" in simulate_args
+    if args.sanitize:
+        if instruction_mode:
+            parser.error("--sanitize conflicts with --instructions")
+        env |= {
+            "RUSTFLAGS": RUST_SANITIZER_FLAGS,
+            "RUSTC_BOOTSTRAP": "1",
+        }
     if instruction_mode:
         env["CARGO_PROFILE_RELEASE_DEBUG"] = "line-tables-only"
     env["CARGO_BUILD_JOBS"] = str(args.jobs)
@@ -509,7 +537,8 @@ def main():
             raise RuntimeError(f"{name} failed; see {log}")
         return log
 
-    builds = {"reference": REFERENCE_BUILD.resolve(), "candidate": ROOT / "build-rust"}
+    candidate_build = ROOT / CANDIDATE_BUILD.name
+    builds = {"reference": REFERENCE_BUILD.resolve(), "candidate": candidate_build}
     if args.action == "coverage":
         builds = {"reference": LOCAL / "build-reference-coverage"}
     original_environment = env.copy()
@@ -570,6 +599,11 @@ def main():
             "-DCMAKE_DISABLE_FIND_PACKAGE_Grfcodec=ON",
             "-DBUILD_TESTING=ON",
         ]
+        if args.sanitize:
+            common += [
+                f"-DCMAKE_{kind}_FLAGS={SANITIZER_FLAGS}"
+                for kind in ("C", "CXX", "EXE_LINKER")
+            ]
         if args.action == "tools":
             builds = {"candidate": LOCAL / "build-tools-rust"}
             common = [
@@ -638,20 +672,13 @@ def main():
                     report["rust_configuration"] = rust_configuration(build)
                 if args.action != "tools":
                     supply_graphics(build)
+                # Sanitized trees build only the game and its runtime data: the test
+                # executables would also run under ASan during test discovery.
+                targets = ["--target", "openttd", "regression_files"]
                 run(
                     f"{name}-build",
-                    [
-                        "cmake",
-                        "--build",
-                        str(build),
-                        "--parallel",
-                        str(args.jobs),
-                        *(
-                            ["--target", "openttd", "regression_files"]
-                            if args.action == "coverage"
-                            else []
-                        ),
-                    ],
+                    ["cmake", "--build", str(build), "--parallel", str(args.jobs)]
+                    + (targets if args.sanitize or args.action == "coverage" else []),
                 )
                 if instruction_mode:
                     from simulation.instructions import record_build

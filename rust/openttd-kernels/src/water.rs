@@ -666,15 +666,18 @@ pub unsafe extern "C" fn openttd_rust_water_tile_loop(
     unsafe {
         let types = TileTypeAccess::callback((*s).tile_type);
         let tile_type = types.read(tile);
-        water_tile_loop(tile, tile_type, size_x, size_y, call, w, s, &types);
+        let ambient = tile_type == 6 && crate::newgrf_generic::ambient_enabled();
+        water_tile_loop(tile, tile_type, ambient, size_x, size_y, call, w, s, &types);
     };
 }
-/// Original `TileLoop_Water` after its caller has read `GetTileType(tile)`.
+/// Original `TileLoop_Water` after its caller has read `GetTileType(tile)`; `ambient` is
+/// the caller's observation of the `AmbientSoundEffect` gate, used only on water tiles.
 #[allow(clippy::inline_always, clippy::too_many_arguments)]
 #[inline(always)]
 pub(crate) unsafe fn water_tile_loop(
     tile: u32,
     tile_type: u8,
+    ambient: bool,
     size_x: u32,
     size_y: u32,
     call: *mut Call,
@@ -685,7 +688,7 @@ pub(crate) unsafe fn water_tile_loop(
     if tile_type == 6 {
         // SAFETY: Live immutable tables; no owner access spans ambient sound.
         let water = unsafe { &*w };
-        crate::newgrf_generic::ambient(tile);
+        crate::newgrf_generic::ambient(ambient, tile);
         if crate::water_map::is_non_flooding_water_tile(types, tile)
             .unwrap_or_else(|| (water.non_flooding)(tile))
         {

@@ -28,6 +28,7 @@ import subprocess
 import sys
 import threading
 import time
+from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -127,6 +128,13 @@ def scenario_modules():
 def adapter_modules():
     """Families whose console adapter relinks the game; runtime bundles carry each."""
     return [module for module in scenario_modules() if hasattr(module, "adapter")]
+
+
+def sanitized():
+    """Whether the driver's --sanitize selected the ASan and UBSan trees (#505)."""
+    import migration
+
+    return migration.SANITIZE
 
 
 def scenario_list(soak):
@@ -561,6 +569,10 @@ def prepare_game(
     for module in scenario_modules():
         if game_environment := getattr(module, "game_environment", None):
             env.update(game_environment(scenario))
+    if sanitized():
+        from . import sanitizers
+
+        env.update(sanitizers.environment(run_dir))
     instruction_info = None
     if instructions:
         from . import instructions as profiler
@@ -625,11 +637,23 @@ def read_game(run):
     )  # title screen
     if (autosave / "exit.sav").is_file():
         snapshots.append(autosave / "exit.sav")
+    log = log_lines(run_dir)
+    sanitizer = None
+    if sanitized():
+        import migration
+
+        from . import sanitizers
+
+        roots = (migration.REFERENCE.resolve(), ROOT)
+        builds = (migration.REFERENCE_BUILD, migration.CANDIDATE_BUILD)
+        log, sanitizer = sanitizers.split_log(log, roots, builds)
+        sanitizers.file_findings(run_dir, roots, sanitizer, builds)
     return {
         **run,
         "snapshots": snapshots,
-        "log": log_lines(run_dir),
+        "log": log,
         "stdout": (run_dir / "stdout.log").read_bytes(),
+        "sanitizer": sanitizer,
     }
 
 
@@ -934,6 +958,7 @@ def run_scenario(
         "snapshots": 0,
         "stats": {"chunks": 0, "elements": 0, "masked": {}},
     }
+    sanitizer_reports = {}
 
     def compare(mode, snapshot):
         records = compare_saves(
@@ -997,6 +1022,12 @@ def run_scenario(
             result[f"{mode}_end_moments"] = moments
             same_end = clean and moments[0] == moments[1]
             for role, run in runs.items():
+                if run.get("sanitizer") is not None:
+                    from .sanitizers import Findings
+
+                    found = sanitizer_reports.setdefault(role, Findings())
+                    for key, text in run["sanitizer"].reports.items():
+                        found.add(key, text)
                 for module in scenario_modules():
                     if check := getattr(module, "check", None):
                         check(scenario, run, mode, role, result)
@@ -1126,6 +1157,21 @@ def run_scenario(
         Exception
     ) as error:  # Record and continue, so the report covers every scenario.
         result["problems"].append(f"harness error: {type(error).__name__}: {error}")
+    # A game ASan stopped can end the scenario early; its reports still count.
+    if len(sanitizer_reports) == 2:
+        from .sanitizers import compare as compare_reports
+
+        comparison = compare_reports(sanitizer_reports)
+        texts = sanitizer_reports["candidate"].reports
+        result["sanitizer"] = {
+            **asdict(comparison),
+            "reports": {
+                key: texts[key]
+                for key in comparison.original + comparison.candidate_only
+            },
+        }
+        for key in comparison.candidate_only:
+            result["problems"].append(f"candidate-only sanitizer report: {key}")
     ratios = [
         sample["candidate_reference_ratio"]
         for sample in result["plain_speed"]["samples"]
@@ -1216,7 +1262,7 @@ def main():
     parser.add_argument(
         "--candidate",
         type=Path,
-        help="candidate binary (default: build-rust/openttd-rust)",
+        help="candidate binary (default: openttd-rust in migration.CANDIDATE_BUILD)",
     )
     parser.add_argument(
         "--jobs", type=int, default=max(1, min(4, (os.cpu_count() or 2) // 2))
@@ -1261,6 +1307,12 @@ def main():
 
     if args.instructions and (args.benchmark or args.soak):
         parser.error("--instructions conflicts with --benchmark/--soak")
+    if migration.SANITIZE and (
+        args.instructions or args.benchmark or args.frozen_runtimes
+    ):
+        parser.error(
+            "sanitized games take no --instructions, --benchmark or --frozen-runtimes"
+        )
     every = scenario_list(args.soak)
     if args.instructions:
         from .instructions import SPEED_BUDGETS
@@ -1324,6 +1376,16 @@ def main():
     return 0 if report["passed"] else 1
 
 
+def sanitizer_summary(results):
+    """Each sanitizer report key with the scenarios that raised it, by category."""
+    summary = {"original": {}, "candidate_only": {}, "reference_only": {}}
+    for result in results:
+        for category, keys in summary.items():
+            for key in result.get("sanitizer", {}).get(category, []):
+                keys.setdefault(key, []).append(result["scenario"])
+    return summary
+
+
 def run_simulation(args, scenarios, migration, out, parser, stamp):
     candidate_commit = migration.git("rev-parse", "HEAD")
     candidate_status = migration.git("status", "--short")
@@ -1354,7 +1416,9 @@ def run_simulation(args, scenarios, migration, out, parser, stamp):
         if args.self:
             builds["candidate"], binaries["candidate"] = builds["reference"], reference
         else:
-            candidate = (args.candidate or ROOT / "build-rust/openttd-rust").resolve()
+            candidate = (
+                args.candidate or migration.CANDIDATE_BUILD / "openttd-rust"
+            ).resolve()
             if not candidate.is_file():
                 parser.error(
                     f"candidate binary {candidate} is missing; run python3 tools/migration.py build"
@@ -1440,6 +1504,7 @@ def run_simulation(args, scenarios, migration, out, parser, stamp):
         "known_failures": {
             ":".join(key): issue for key, issue in KNOWN_FAILURES.items()
         },
+        "sanitizers": sanitizer_summary(results) if migration.SANITIZE else None,
         "masked_differences": {
             key: sum(r["stats"]["masked"].get(key, 0) for r in results)
             for key in sorted({k for r in results for k in r["stats"]["masked"]})

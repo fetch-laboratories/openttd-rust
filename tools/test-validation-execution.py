@@ -370,7 +370,13 @@ class NarrowChecksTests(unittest.TestCase):
 class NativeJobLimitTests(unittest.TestCase):
     initialize_repo = RuntimeTests.initialize_repo
 
-    def test_cmake_child_cargo_inherits_driver_job_budget(self):
+    def test_cmake_child_cargo_inherits_driver_job_budget(self) -> None:
+        shared_caches = {
+            migration.COMMON_LOCAL / f"build-reference{suffix}" / "CMakeCache.txt": None
+            for suffix in ("", "-sanitized")
+        }
+        for cache in shared_caches:
+            shared_caches[cache] = cache.read_bytes() if cache.exists() else None
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.initialize_repo(root)
@@ -385,6 +391,9 @@ class NativeJobLimitTests(unittest.TestCase):
             cmake.write_text(
                 f"#!{sys.executable}\nimport sys,subprocess\nfrom pathlib import Path\n"
                 "args=sys.argv[1:]\n"
+                "root=Path(__file__).resolve().parents[1]\n"
+                "for flag in ('-S', '-B', '--build'):\n"
+                "    if flag in args: Path(args[args.index(flag)+1]).resolve().relative_to(root)\n"
                 "if '--build' in args:\n"
                 "    build=Path(args[args.index('--build')+1])\n"
                 "    subprocess.run(['cargo'],check=True)\n"
@@ -399,7 +408,11 @@ class NativeJobLimitTests(unittest.TestCase):
             with (
                 patch.object(migration, "ROOT", root),
                 patch.object(migration, "LOCAL", root / ".local"),
+                patch.object(migration, "COMMON_LOCAL", root / ".local"),
+                patch.object(migration, "REFERENCE", root / "reference"),
                 patch.object(migration, "REFERENCE_BUILD", root / "reference-build"),
+                patch.object(migration, "CANDIDATE_BUILD", root / "build-rust"),
+                patch.object(migration, "SANITIZE", False),
                 patch.object(
                     migration, "git", side_effect=lambda *args: git(*args, cwd=root)
                 ),
@@ -424,7 +437,15 @@ class NativeJobLimitTests(unittest.TestCase):
                 next((root / ".local/verification").glob("*/report.json")).read_text()
             )
             self.assertTrue(report["passed"])
+            for cache, before in shared_caches.items():
+                self.assertEqual(cache.read_bytes() if cache.exists() else None, before)
             for role in ("reference", "candidate"):
+                build = root / (
+                    "reference-build" if role == "reference" else "build-rust"
+                )
+                self.assertEqual(
+                    (build / "CMakeCache.txt").read_text(), "fixture configuration"
+                )
                 command = next(
                     c for c in report["commands"] if c["name"] == f"{role}-build"
                 )
