@@ -10,6 +10,8 @@
 #include "disaster_ffi.h"
 #include "clock_ffi.h"
 struct OpenTTDWorldFrame;
+struct OpenTTDSessionServices;
+struct OpenTTDSessionFrame;
 struct OpenTTDWorldSettings { uint8_t height_limit, flat_height, heightmap_height, generator; };
 struct OpenTTDWorldLandscape { OpenTTDGenerationFrame *frame; const OpenTTDHeightmapDecoder *decoder; OpenTTDLandscapeGenerationSettings settings; };
 struct OpenTTDWorldTown { OpenTTDTownFoundingFrame *frame; OpenTTDTownNameFrame *names; const OpenTTDRoadCommandContext *road; TownLayout layout; };
@@ -35,7 +37,9 @@ struct OpenTTDWorldServices {
 	void (*prepare_progress)() noexcept OPENTTD_SERVICE_DEFAULT(prepare_progress);
 	OpenTTDWorldSettings (*settings)() noexcept OPENTTD_SERVICE_DEFAULT(settings);
 	void (*height_limit)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(height_limit);
-	GameMode (*game_mode)() noexcept OPENTTD_SERVICE_DEFAULT(game_mode);
+	const OpenTTDSessionServices *session;
+	OpenTTDSessionFrame *(*session_frame)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(session_frame);
+	bool (*session_end)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(session_end);
 	uint32_t (*seed)() noexcept OPENTTD_SERVICE_DEFAULT(seed);
 	void (*set_seed)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_seed);
 	uint32_t (*interactive_random)() noexcept OPENTTD_SERVICE_DEFAULT(interactive_random);
@@ -91,8 +95,6 @@ struct OpenTTDWorldServices {
 	bool (*dedicated)() noexcept OPENTTD_SERVICE_DEFAULT(dedicated);
 	bool (*exit_game)() noexcept OPENTTD_SERVICE_DEFAULT(exit_game);
 	void (*set_exit)() noexcept OPENTTD_SERVICE_DEFAULT(set_exit);
-	void (*abort_mode)(SwitchMode) noexcept OPENTTD_SERVICE_DEFAULT(abort_mode);
-	bool (*switch_mode)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(switch_mode);
 	void (*debug_start)() noexcept OPENTTD_SERVICE_DEFAULT(debug_start);
 	void (*debug_done)() noexcept OPENTTD_SERVICE_DEFAULT(debug_done);
 	void (*debug_abort)() noexcept OPENTTD_SERVICE_DEFAULT(debug_abort);

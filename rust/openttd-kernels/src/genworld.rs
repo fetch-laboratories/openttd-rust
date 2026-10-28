@@ -41,6 +41,8 @@ use crate::tile_type::{DEF_SNOWLINE_HEIGHT, MAX_MAP_HEIGHT_LIMIT, MP_CLEAR, Tile
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Mode(pub u8);
 pub const GWM_EMPTY: Mode = Mode(1);
+pub const GWM_NEWGAME: Mode = Mode(0);
+pub const GWM_RANDOM: Mode = Mode(2);
 pub const MAP_HEIGHT_LIMIT_AUTO_MINIMUM: u32 = 30;
 pub const MAP_HEIGHT_LIMIT_AUTO_CEILING_ROOM: u32 = 15;
 pub const GENERATE_NEW_SEED: u32 = u32::MAX;
@@ -53,13 +55,30 @@ pub const GWP_RUNSCRIPT: Progress = Progress(11);
 pub const GWP_GAME_START: Progress = Progress(12);
 pub type Callback = Option<extern "C" fn()>;
 
+#[derive(Clone, Copy)]
+enum Completion {
+    Native(Callback),
+    NewGame,
+    Editor,
+}
+pub(crate) fn session_callback(editor: bool) {
+    write_field!(
+        INFO.get(),
+        done,
+        if editor {
+            Completion::Editor
+        } else {
+            Completion::NewGame
+        }
+    );
+}
 struct Info {
     abort: bool,
     mode: Mode,
     local_company: CompanyID,
     size_x: u32,
     size_y: u32,
-    done: Callback,
+    done: Completion,
     abort_callback: Callback,
     generating: bool,
 }
@@ -71,7 +90,7 @@ static INFO: GameState<Info> = GameState::new(Info {
     local_company: CompanyID(0),
     size_x: 0,
     size_y: 0,
-    done: None,
+    done: Completion::Native(None),
     abort_callback: None,
     generating: false,
 });
@@ -126,7 +145,9 @@ pub struct WorldServices {
     pub prepare_progress: extern "C" fn(),
     pub settings: extern "C" fn() -> Settings,
     pub height_limit: extern "C" fn(u8),
-    pub game_mode: extern "C" fn() -> crate::openttd::GameMode,
+    pub session: *const crate::session::Services,
+    pub session_frame: extern "C" fn(*mut Frame) -> *mut crate::session::Frame,
+    pub session_end: extern "C" fn(*mut Frame) -> bool,
     pub seed: extern "C" fn() -> u32,
     pub set_seed: extern "C" fn(u32),
     pub interactive_random: extern "C" fn() -> u32,
@@ -182,8 +203,6 @@ pub struct WorldServices {
     pub dedicated: extern "C" fn() -> bool,
     pub exit_game: extern "C" fn() -> bool,
     pub set_exit: extern "C" fn(),
-    pub abort_mode: extern "C" fn(SwitchMode),
-    pub switch_mode: extern "C" fn(*mut Frame) -> bool,
     pub debug_start: extern "C" fn(),
     pub debug_done: extern "C" fn(),
     pub debug_abort: extern "C" fn(),
@@ -198,7 +217,7 @@ pub extern "C" fn openttd_rust_generating_world() -> *mut bool {
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_world_set_callback(callback: Callback) {
-    write_field!(INFO.get(), done, callback);
+    write_field!(INFO.get(), done, Completion::Native(callback));
 }
 #[unsafe(no_mangle)]
 #[inline(never)]
@@ -222,7 +241,7 @@ pub unsafe extern "C" fn openttd_rust_world_handle_abort(
     s: &WorldServices,
     frame: *mut Frame,
 ) -> bool {
-    (s.abort_mode)(if (s.game_mode)() == GameMode::EDITOR {
+    crate::session::set_pending(if crate::session::mode() == GameMode::EDITOR {
         SwitchMode::EDITOR
     } else {
         SwitchMode::MENU
@@ -267,7 +286,7 @@ pub unsafe extern "C" fn openttd_rust_world_setup(
     let g = (s.settings)();
     if g.height_limit == 0 {
         let mode = read_field!(INFO.get(), mode);
-        let height = if mode == GWM_EMPTY && (s.game_mode)() != GameMode::MENU {
+        let height = if mode == GWM_EMPTY && crate::session::mode() != GameMode::MENU {
             u32::from(g.flat_height)
         } else if mode.0 == GWM_HEIGHTMAP {
             u32::from(g.heightmap_height)
@@ -343,7 +362,7 @@ impl World<'_> {
         write_field!(INFO.get(), generating, false);
         (self.s.busy)(false);
         (self.s.set_modal)(false);
-        write_field!(INFO.get(), done, None);
+        write_field!(INFO.get(), done, Completion::Native(None));
         write_field!(INFO.get(), abort_callback, None);
         (self.s.close_progress)();
         (self.s.show_error)();
@@ -533,7 +552,7 @@ impl World<'_> {
                     (a.make_void)(map.tile_xy(0, y));
                 }
             }
-            if (s.game_mode)() != GameMode::MENU {
+            if crate::session::mode() != GameMode::MENU {
                 let g = (s.settings)();
                 unsafe {
                     landscape_generation::openttd_rust_flat_empty_world(
@@ -553,7 +572,7 @@ impl World<'_> {
         } else {
             self.clear_tiles()?;
             (s.count_land)();
-            if (s.game_mode)() != GameMode::EDITOR {
+            if crate::session::mode() != GameMode::EDITOR {
                 self.populate()?;
             }
         }
@@ -576,7 +595,7 @@ impl World<'_> {
                 (s.advance_tick)();
                 self.increase(GWP_RUNTILELOOP)?;
             }
-            if (s.game_mode)() != GameMode::EDITOR && (s.script_exists)() {
+            if crate::session::mode() != GameMode::EDITOR && (s.script_exists)() {
                 self.set_progress(GWP_RUNSCRIPT, 2500)?;
                 write_field!(INFO.get(), generating, true);
                 for _ in 0..2500 {
@@ -593,12 +612,19 @@ impl World<'_> {
         (s.reset_object)();
         (s.trash_company)(self.frame);
         (s.restore_companies)(read_field!(INFO.get(), local_company));
-        if (s.game_mode)() != GameMode::MENU {
+        if crate::session::mode() != GameMode::MENU {
             (s.show_windows)();
         }
         self.set_progress(GWP_GAME_START, 1)?;
-        if let Some(callback) = read_field!(INFO.get(), done) {
-            native((s.callback)(self.frame, Some(callback)))?;
+        match read_field!(INFO.get(), done) {
+            Completion::Native(Some(callback)) => native((s.callback)(self.frame, Some(callback)))?,
+            Completion::Native(None) => {}
+            Completion::Editor => (s.set_local_company)(CompanyID::NONE),
+            Completion::NewGame => {
+                let frame = (s.session_frame)(self.frame);
+                crate::session::new_game_done(unsafe { &*s.session }, frame);
+                native((s.session_end)(self.frame))?;
+            }
         }
         self.increase(GWP_GAME_START)?;
         self.cleanup();
@@ -632,8 +658,14 @@ pub unsafe extern "C" fn openttd_rust_world_generate(s: &WorldServices, frame: *
             if (s.dedicated)() {
                 (s.debug_abort)();
                 (s.set_exit)();
-            } else if !(s.switch_mode)(frame) {
-                return 2;
+            } else {
+                let call = (s.session_frame)(frame);
+                unsafe {
+                    crate::session::switch(&*s.session, call, crate::session::pending());
+                }
+                if !(s.session_end)(frame) {
+                    return 2;
+                }
             }
             1
         }
@@ -664,7 +696,9 @@ crate::abi::layouts! {
         prepare_progress,
         settings,
         height_limit,
-        game_mode,
+        session,
+        session_frame,
+        session_end,
         seed,
         set_seed,
         interactive_random,
@@ -720,8 +754,6 @@ crate::abi::layouts! {
         dedicated,
         exit_game,
         set_exit,
-        abort_mode,
-        switch_mode,
         debug_start,
         debug_done,
         debug_abort,

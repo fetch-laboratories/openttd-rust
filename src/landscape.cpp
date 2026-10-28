@@ -1978,6 +1978,7 @@ void OnTick_Industry();
 void OnTick_Companies();
 void OnTick_LinkGraph();
 
+#ifndef WITH_RUST
 void CallLandscapeTick()
 {
 	{
@@ -1992,6 +1993,7 @@ void CallLandscapeTick()
 	OnTick_Companies();
 	OnTick_LinkGraph();
 }
+#endif
 
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"

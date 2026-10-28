@@ -65,19 +65,15 @@ constinit const OpenTTDScheduleServices LinkGraphSchedule::services = {
 		else PerformanceMeasurer::SetInactive(PFE_GL_LINKGRAPH);
 	},
 };
-static OpenTTDScheduleTime ScheduleTime() { return {_rust_shared_services.economy_date(), TimerGameEconomy::date_fract, _settings_game.linkgraph.recalc_interval}; }
+OpenTTDScheduleTime RustScheduleTime() noexcept { return {_rust_shared_services.economy_date(), TimerGameEconomy::date_fract, _settings_game.linkgraph.recalc_interval}; }
 void LinkGraphSchedule::Queue(LinkGraph *g) { openttd_rust_schedule_queue(&services, g); }
 void LinkGraphSchedule::Dequeue(LinkGraph *g) { openttd_rust_schedule_dequeue(g); }
 void LinkGraphSchedule::SpawnAll() { openttd_rust_schedule_spawn_all(&services); }
 void LinkGraphSchedule::Clear() { openttd_rust_schedule_clear(&services); }
 void LinkGraphSchedule::ShiftDates(TimerGameEconomy::Date interval) { openttd_rust_schedule_shift(&services, interval.base()); }
-void StateGameLoop_LinkGraphPauseControl() { openttd_rust_schedule_pause(&LinkGraphSchedule::services, ScheduleTime(), _pause_mode.Test(PauseMode::LinkGraph), _pause_mode.None()); }
+
 void AfterLoad_LinkGraphPauseControl() { openttd_rust_schedule_after_load(&LinkGraphSchedule::services); }
-void OnTick_LinkGraph()
-{
-	std::optional<PerformanceMeasurer> measurement;
-	openttd_rust_schedule_tick(&LinkGraphSchedule::services, ScheduleTime(), _networking && !_network_server, &measurement);
-}
+
 LinkGraphSchedule::LinkGraphSchedule() = default;
 LinkGraphSchedule::~LinkGraphSchedule() { this->Clear(); }
 #else

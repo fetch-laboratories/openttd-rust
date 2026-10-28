@@ -16,7 +16,9 @@ class AIConfig {};
 class GameConfig {};
 ScriptConfigSettings::ScriptConfigSettings() = default;
 ScriptConfigSettings::~ScriptConfigSettings() = default;
+#ifndef WITH_RUST
 GameMode _game_mode = GM_NORMAL;
+#endif
 GameSettings _settings_game{}, _settings_newgame{};
 #ifdef WITH_RUST
 #include "rust/clock_native.hpp"
@@ -157,6 +159,7 @@ static void Exceptions()
 }
 int main(int argc, char **)
 {
+	_game_mode = GM_NORMAL;
 	_settings_game.economy.minutes_per_calendar_year = CalendarTime::DEF_MINUTES_PER_YEAR;
 	_settings_game.economy.timekeeping_units = TKU_CALENDAR;
 	if (argc > 1) {

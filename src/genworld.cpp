@@ -50,6 +50,7 @@
 
 #ifdef WITH_RUST
 #include "rust/world_generation_ffi.h"
+#include "rust/session_native.hpp"
 #include "industry.h"
 #include "rust/landscape_generation_frame.hpp"
 #include "rust/industry_generation_adapter.hpp"
@@ -84,6 +85,7 @@ struct OpenTTDWorldFrame {
 	std::optional<OpenTTDIndustryGenerationContext> industry;
 	std::optional<RustWorldObjectScratch> objects;
 	std::optional<RustGenerationLoop> loop;
+	std::optional<OpenTTDSessionFrame> session;
 };
 /* Game::StartNew/GameLoop, completion callbacks, sprite loading, InitializeGame,
 	* mode switching and SaveOrLoad may throw. Their native frames outlive Rust. */
@@ -121,7 +123,9 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.prepare_progress = []() noexcept { PrepareGenerateWorldProgress(); },
 		.settings = []() noexcept { return OpenTTDWorldSettings{RustMapHeightLimit(), _settings_game.game_creation.se_flat_world_height, _settings_game.game_creation.heightmap_height, _settings_game.game_creation.land_generator}; },
 		.height_limit = RustSetMapHeightLimit,
-		.game_mode = RustGameMode,
+		.session = &GetRustSessionServices(),
+		.session_frame = [](OpenTTDWorldFrame *f) noexcept { return &f->session.emplace(); },
+		.session_end = [](OpenTTDWorldFrame *f) noexcept { f->cancellation = f->session->exception; f->session.reset(); return !f->cancellation; },
 		.seed = RustGenerationSeed,
 		.set_seed = RustSetGenerationSeed,
 		.interactive_random = []() noexcept { return InteractiveRandom(); },
@@ -181,8 +185,6 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.dedicated = []() noexcept { return _network_dedicated; },
 		.exit_game = []() noexcept -> bool { return _exit_game; },
 		.set_exit = []() noexcept { _exit_game = true; },
-		.abort_mode = [](SwitchMode mode) noexcept { _switch_mode = mode; },
-		.switch_mode = [](OpenTTDWorldFrame *f) noexcept { return WorldException(f, [] { SwitchToMode(_switch_mode); }); },
 		.debug_start = []() noexcept { Debug(net, 3, "Generating map, please wait..."); },
 		.debug_done = []() noexcept { Debug(net, 3, "Map generated, starting game"); },
 		.debug_abort = []() noexcept { Debug(net, 0, "Generating map failed; closing server"); },

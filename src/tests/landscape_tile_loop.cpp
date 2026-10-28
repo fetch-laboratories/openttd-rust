@@ -14,6 +14,7 @@
 #include "../rust/landscape_command_ffi.h"
 #include "../rust/landscape_generation_ffi.h"
 #include "../rust/world_generation_ffi.h"
+#include "../rust/session_ffi.h"
 #include <thread>
 #include "../rust/generation_sea_set.hpp"
 #include "abi_layout.hpp"
@@ -98,6 +99,7 @@ TEST_CASE("Rust shared tile-type allocation and all native byte values")
 	ABI_LAYOUT_CHECK;
 #include "abi-layout-landscape.inc"
 #include "abi-layout-genworld.inc"
+#include "abi-layout-session.inc"
 	Map::Allocate(128, 64);
 	const auto allocation = GetRustTileTypeAllocation();
 	const auto &shared = GetRustSharedServices();

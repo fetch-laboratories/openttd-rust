@@ -108,8 +108,13 @@ extern void ShowOSErrorBox(std::string_view buf, bool system);
 extern std::string _config_file;
 
 bool _save_config = false;
+#ifndef WITH_RUST
 bool _request_newgrf_scan = false;
 NewGRFScanCallback *_request_newgrf_scan_callback = nullptr;
+#endif
+#ifdef WITH_RUST
+#include "rust/session_native.hpp"
+#endif
 
 /**
  * Error handling for fatal user errors.
@@ -324,6 +329,11 @@ static void ShutdownGame()
  */
 static void LoadIntroGame(bool load_newgrfs = true)
 {
+#ifdef WITH_RUST
+	OpenTTDSessionFrame frame;
+	openttd_rust_session_intro(&GetRustSessionServices(), &frame, load_newgrfs);
+	frame.Rethrow();
+#else
 	_game_mode = GM_MENU;
 
 	if (load_newgrfs) ResetGRFConfig(false);
@@ -347,10 +357,14 @@ static void LoadIntroGame(bool load_newgrfs = true)
 	CheckForMissingGlyphs();
 
 	MusicLoop(); // ensure music is correct
+#endif
 }
 
 void MakeNewgameSettingsLive()
 {
+#ifdef WITH_RUST
+	openttd_rust_session_settings(&GetRustSessionServices());
+#else
 	for (CompanyID c = CompanyID::Begin(); c < MAX_COMPANIES; ++c) {
 		_settings_game.script_config.ai[c].reset();
 	}
@@ -360,6 +374,7 @@ void MakeNewgameSettingsLive()
 	 * Also initialise old settings needed for savegame conversion. */
 	_settings_game = _settings_newgame;
 	_old_vds = _settings_client.company.vehicle;
+#endif
 }
 
 void OpenBrowser(const std::string &url)
@@ -827,6 +842,7 @@ void HandleExitGameRequest()
 	}
 }
 
+#ifndef WITH_RUST
 /**
  * Triggers everything required to set up a saved scenario for a new game.
  */
@@ -928,6 +944,8 @@ static void MakeNewEditorWorld()
 	GenerateWorld(GWM_EMPTY, 1 << _settings_game.game_creation.map_x, 1 << _settings_game.game_creation.map_y);
 }
 
+#endif
+
 /**
  * Load the specified savegame but on error do different things.
  * If loading fails due to corrupt savegame, bad version, etc. go back to
@@ -940,6 +958,15 @@ static void MakeNewEditorWorld()
  */
 bool SafeLoad(const std::string &filename, SaveLoadOperation fop, DetailedFileType dft, GameMode newgm, Subdirectory subdir, std::shared_ptr<LoadFilter> lf = nullptr)
 {
+#ifdef WITH_RUST
+	assert(fop == SLO_LOAD);
+	assert(dft == DFT_GAME_FILE || (lf == nullptr && dft == DFT_OLD_GAME_FILE));
+	OpenTTDSessionLoad input{filename, fop, dft, subdir, std::move(lf)};
+	OpenTTDSessionFrame frame;
+	bool result = openttd_rust_session_safe_load(&GetRustSessionServices(), &frame, &input, newgm);
+	frame.Rethrow();
+	return result;
+#else
 	assert(fop == SLO_LOAD);
 	assert(dft == DFT_GAME_FILE || (lf == nullptr && dft == DFT_OLD_GAME_FILE));
 	GameMode ogm = _game_mode;
@@ -991,6 +1018,7 @@ bool SafeLoad(const std::string &filename, SaveLoadOperation fop, DetailedFileTy
 		case GM_EDITOR: MakeNewEditorWorld(); break;
 	}
 	return false;
+#endif
 }
 
 static void UpdateSocialIntegration(GameMode game_mode)
@@ -1017,6 +1045,11 @@ static void UpdateSocialIntegration(GameMode game_mode)
 
 void SwitchToMode(SwitchMode new_mode)
 {
+#ifdef WITH_RUST
+	OpenTTDSessionFrame frame;
+	openttd_rust_session_switch(&GetRustSessionServices(), &frame, new_mode);
+	frame.Rethrow();
+#else
 	/* If we are saving something, the network stays in its current state */
 	if (new_mode != SM_SAVE_GAME) {
 		/* If the network is active, make it not-active */
@@ -1198,6 +1231,7 @@ void SwitchToMode(SwitchMode new_mode)
 
 		default: NOT_REACHED();
 	}
+#endif
 }
 
 
@@ -1209,6 +1243,11 @@ void SwitchToMode(SwitchMode new_mode)
  */
 void StateGameLoop()
 {
+#ifdef WITH_RUST
+	OpenTTDSessionFrame frame;
+	openttd_rust_session_state_loop(&GetRustSessionServices(), &frame);
+	frame.Rethrow();
+#else
 	if (!_networking || _network_server) {
 		StateGameLoop_LinkGraphPauseControl();
 	}
@@ -1283,6 +1322,7 @@ void StateGameLoop()
 	}
 
 	assert(IsLocalCompany());
+#endif
 }
 
 /** Interval for regular autosaves. Initialized at zero to disable till settings are loaded. */
@@ -1326,15 +1366,24 @@ void ChangeAutosaveFrequency(bool reset)
  */
 bool RequestNewGRFScan(NewGRFScanCallback *callback)
 {
+#ifdef WITH_RUST
+	return openttd_rust_session_scan(callback);
+#else
 	if (_request_newgrf_scan) return false;
 
 	_request_newgrf_scan = true;
 	_request_newgrf_scan_callback = callback;
 	return true;
+#endif
 }
 
 void GameLoop()
 {
+#ifdef WITH_RUST
+	OpenTTDSessionFrame frame;
+	openttd_rust_session_game_loop(&GetRustSessionServices(), &frame);
+	frame.Rethrow();
+#else
 	if (_game_mode == GM_BOOTSTRAP) {
 		/* Check for UDP stuff */
 		if (_network_available) NetworkBackgroundLoop();
@@ -1393,4 +1442,9 @@ void GameLoop()
 	SoundDriver::GetInstance()->MainLoop();
 	MusicLoop();
 	SocialIntegration::RunCallbacks();
+#endif
 }
+
+#ifdef WITH_RUST
+#include "rust/session_services.inc"
+#endif

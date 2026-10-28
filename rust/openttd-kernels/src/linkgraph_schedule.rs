@@ -14,7 +14,7 @@ struct Job {
     _opaque: [u8; 0],
 }
 #[repr(C)]
-struct Time {
+pub(crate) struct Time {
     date: i32,
     fract: u16,
     interval: u16,
@@ -170,7 +170,7 @@ extern "C" fn openttd_rust_schedule_shift(s: &Services, interval: i32) {
     }
 }
 #[unsafe(no_mangle)]
-extern "C" fn openttd_rust_schedule_tick(
+pub(crate) extern "C" fn openttd_rust_schedule_tick(
     s: &Services,
     time: Time,
     client: bool,
@@ -189,7 +189,12 @@ extern "C" fn openttd_rust_schedule_tick(
     }
 }
 #[unsafe(no_mangle)]
-extern "C" fn openttd_rust_schedule_pause(s: &Services, time: Time, paused: bool, unpaused: bool) {
+pub(crate) extern "C" fn openttd_rust_schedule_pause(
+    s: &Services,
+    time: Time,
+    paused: bool,
+    unpaused: bool,
+) {
     if paused {
         if !unfinished(s) {
             (s.post_pause)(false);

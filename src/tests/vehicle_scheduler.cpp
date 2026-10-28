@@ -21,6 +21,7 @@
 #include "../rust/fleet_ffi.h"
 #ifdef WITH_RUST
 #include "../rust/company_adapter.h"
+#include "../rust/session_ffi.h"
 #endif
 #include "../safeguards.h"
 
@@ -98,7 +99,13 @@ TEST_CASE("Base vehicle scheduler - production deletion, reuse and reallocation 
 		for (bool mutate : {true, false}) {
 			_lifetime_mutate = mutate;
 			if (production) {
+#ifdef WITH_RUST
+				CommandCost replacement, refit, temporary;
+				const auto tables = RustVehicleSchedulerTables(reinterpret_cast<OpenTTDCommandCost *>(&refit), reinterpret_cast<OpenTTDCommandCost *>(&temporary));
+				openttd_rust_vehicle_ticks(&tables, _game_mode == GM_NORMAL, TimerGameEconomy::date_fract, &replacement);
+#else
 				CallVehicleTicks();
+#endif
 			} else {
 				for (Vehicle *v : Vehicle::Iterate()) v->Tick();
 			}
