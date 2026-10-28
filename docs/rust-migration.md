@@ -42,8 +42,10 @@ shared random-number behavior.
   in C++ (for example the map arrays).
 - **Facade**: the C++ function or method that keeps the original signature and forwards to Rust
   under `WITH_RUST`; the original body stays in the `#else` branch for portable builds.
-- **Leaf**: a typed `noexcept` C++ service that Rust calls for a shared operation (map access,
-  `Random`, sound, viewport) and that returns without reentering the calling owner.
+- **Leaf**: a typed `noexcept` C++ service that Rust calls for a shared operation (`Random`,
+  sound, viewport, or a field of a record whose storage has not moved) and that returns without
+  reentering the calling owner. Map fields and moved records are read in place, not through
+  leaves.
 - **Service table**: a designated-initializer C++ struct of typed leaf function pointers (for
   example `OpenTTDTreeServices`) that Rust borrows for a call; each field is one named service,
   never an opcode.

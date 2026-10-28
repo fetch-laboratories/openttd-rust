@@ -69,7 +69,9 @@ Then resume from the roadmap's checkpoint and work order.
    condition has been met. A simulation owner you set aside after a failed gate
    stays yours to re-select once a profile shows the fix.
 4. After every second integration, take stock in "Where the fork stands": code
-   lines retired per phase, glue and tooling cost, play-save speed ratio, open
+   lines retired per phase, the C++ the Rust build still compiles (original
+   plus glue), the boundary's size (exports and callback slots), tooling cost,
+   play-save speed ratio, open
    coverage gaps, and the unintegrated branch count. Rerun `issues.py`: place
    new issues and close any whose remaining scope is done. Profile the merged branch
    for speed in the background and run a speed pass only when AGENTS.md says.

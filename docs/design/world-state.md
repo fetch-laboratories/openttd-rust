@@ -30,7 +30,8 @@ tasks require [roadmap](../roadmap.md) selection; this note moves no code.
 
 Rust owns component-private state and complete control flow. C++ initially owns
 map arrays, live pools and shared services. Its facade supplies operations on tile
-indices and typed pool IDs, with copied scalar records where useful; it retains
+indices and typed pool IDs; map fields are read in place through the shared map
+view, and pool records move to shared layouts through storage ports. It retains
 neither the migrated algorithm nor a second authoritative copy.
 Original bodies remain compiled only without `WITH_RUST`. #73 owns the temporary
 height map; #74 owns its computation snapshot, with scheduling/save/load/join in
@@ -48,8 +49,9 @@ No Rust reference into world storage survives an operation that can mutate,
 reallocate or destroy it. Resolve IDs when needed under the source's lifetime
 rules; reacquiring an ID alone does not make reuse safe. Document callback reentry
 for each component and release affected owner borrows before it can reenter.
-Shared services (`Random`, map and pool accessors) are `noexcept` C++ wrappers
-that Rust calls directly, so ports keep the original control flow. Environmental
+Shared services (`Random`, pool operations, and the accessors of records not yet
+moved) are `noexcept` C++ wrappers that Rust calls directly, so ports keep the
+original control flow. Environmental
 failures (allocation, debug/log I/O, developer-only defines such as `RANDOM_DEBUG`)
 terminate inside the wrapper; they are not simulation behavior. Script VMs and
 save/load errors use a return-to-C++ action protocol where an ordinary-play C++
@@ -117,56 +119,57 @@ acquire the canonical base/extended tile descriptor lazily once per entry. Only
 the track-status tile type and normal-road bits/status/road-type reads use it;
 fields are reloaded after native mutations. Partial fixture tables retain the
 typed backend. Pixel heights, aircraft, standalone movement, train, ship, YAPF and
-water-region entries remain callback-backed; water subtype has no audited runtime consumer. Descriptor
-metadata shares the controller's no-reset/no-load/no-yield interval above.
+water-region entries are still callback-backed; #565 moves them to the shared map
+view, hottest first. Descriptor metadata shares the controller's
+no-reset/no-load/no-yield interval above.
 
-Per-field callbacks inside tile or vehicle loops may dominate runtime. Prefer
-copied records for fields observed together and batches only where the original
-has no intervening observable operation. Do not batch RNG or defer writes across
-callbacks. A later bounded raw map view needs a proved exclusive access interval
-and explicit layout/lifetime rules; it is not the default interface. Measure
-crossings per update, copied bytes and elapsed time on the same harness scenarios
-before enlarging the boundary. Keep source computation out of callback bodies.
+Data crosses the boundary in place; operations cross as calls. A call per field,
+or a reader written for one call site, makes boundary cost grow with the work
+done and the interface grow with call sites: the 2026-10-28 P2016 profile spent
+349M glue calls, 79 per vehicle tick, and they were 99% of the gap to the
+original (#275). Map fields are read through the shared map view below; pool
+records move to shared layouts through storage ports ("Transferring shared
+storage"). Until a record's storage port, entries use that record's shared typed
+accessors. Do not batch RNG or defer writes across callbacks, and keep source
+computation out of callback bodies.
 
-## Map access decision (#108, accepted 2026-10-04)
+## Map access decision (#108, revised 2026-10-28)
 
-Keep canonical map arrays in C++ and use direct `noexcept` operations for the
-next selected tile-heavy owners. Prefer existing semantic operations and copied
-records over one callback per bitfield; trees already copy ten words per read,
-and water-region traversal calls track/follower services rather than individual
-map fields. C++ storage ownership remains selected. New owners use integrated
-typed services; no transfer is selected.
+C++ keeps the canonical map allocation, its setters and save adapters until the
+map storage port. Rust simulation code reads and writes map fields in place
+through the shared map view, at every entry, instead of typed per-field or
+per-predicate services. The 2026-10-04 decision kept typed services; the profile
+above showed their cost, and the view's interval holds for the whole game loop.
 
-A future raw view must retain one canonical allocation, pin both C++ and Rust
-size/alignment/offsets, use field-sized raw `ptr::read`/`write` with no Rust
-references/slices over shared arrays, and refresh pointers at each component
-entry. End its access scope before callbacks that may reenter, replace the map,
-or run arbitrary code. Prove a serial access interval excluding concurrent map reset or mutation.
-C++ field references may alias those pointers; absence of Rust references does
-not permit concurrent conflicting access. Preserve original
-observation/write order rather than copying a whole tile back after a callback.
+The view retains one canonical allocation, pins both C++ and Rust
+size/alignment/offsets, uses field-sized raw `ptr::read`/`write` with no Rust
+references/slices over shared arrays, and refreshes pointers at each component
+entry. End its access scope before callbacks that may load, reset or replace the
+map, or yield the game-state mutex. C++ field references may alias those
+pointers; absence of Rust references does not permit concurrent conflicting
+access. Preserve original observation/write order rather than copying a whole
+tile back after a callback.
 
-Moving allocation to Rust adds reset, destruction, allocator and C++ object-
-lifetime obligations without itself removing calls or aliases. Do not couple
-that move to the next simulation port. `Map::Allocate` covers new-game, modern
-and legacy load, and tests. Existing field-wise save adapters remain unchanged;
-serialization reads live fields before the asynchronous compression thread starts.
-Link-graph workers use private graph copies and map dimensions, not tile arrays;
-retain the existing job join/reset ordering. Portable builds keep the C++ owner.
+`Map::Allocate` covers new-game, modern and legacy load, and tests. Existing
+field-wise save adapters remain unchanged; serialization reads live fields before
+the asynchronous compression thread starts. Link-graph workers use private graph
+copies and map dimensions, not tile arrays; retain the existing job join/reset
+ordering. Portable builds keep the C++ owner.
 
-### Selected shared map view (#274, 2026-10-21)
+### Shared map view (#274, extended by #565)
 
-The selected maintenance PR extends the existing tile-type allocation/access
-descriptor with canonical base/extended pointers and count. Its first consumers
-are scheduler-dispatched clear, water and tree tile loops, including shore-water
-reentry. Other entries retain typed native services until separately audited.
+The view is the tile-type allocation/access descriptor with canonical
+base/extended pointers and count. Its first consumers were the scheduler-dispatched
+clear, water and tree tile loops, including shore-water reentry, and road
+track-status reads (#523); #565 extends it to every Rust simulation entry.
 Storage, allocation, setters, save adapters and worker ordering stay in C++.
 
-Acquire once at an audited entry under the game-state mutex. Use field-sized raw
-loads, no Rust references/slices, and reload after mutations at the original
-observation points. Descriptor metadata may survive only callbacks proved unable
-to reset/replace the map or yield; end its lifetime before any unproved callback.
-Same-thread reentry needs this proof even while the mutex remains held.
+Acquire at an entry under the game-state mutex. Use field-sized raw loads, no
+Rust references/slices, and reload after mutations at the original observation
+points. The interval is proved once for the game loop and command execution
+(below), not per entry; descriptor metadata ends before any callback that can
+load, reset or replace the map or yield, such as generation progress. Same-thread
+reentry keeps the descriptor only within that interval.
 
 Define each source helper once in its header-named Rust module. Generated named
 ABI probes pin both layouts; preserve native helper assertions under the native
@@ -174,10 +177,11 @@ assertion policy captured once per entry. Assertion-disabled builds gain no new
 panics or rejected inputs. Delete displaced reads and orphan bindings; remaining
 unaudited callers share the canonical native fallback.
 
-The tile scheduler (`tile_loop.rs`) relies on this interval. `Map::Allocate` runs
-only from game reset (`InitializeGame`), the MAPS and legacy loaders and tests,
-and the mutex yield (`GameLoopPause`) only in generation progress and GRF
-scanning, all outside `RunTileLoop`. Tile handlers may mutate tiles and pools,
+Every entry relies on this interval. `Map::Allocate` runs only from game reset
+(`InitializeGame`), the MAPS and legacy loaders and tests, and the mutex yield
+(`GameLoopPause`) only in generation progress and GRF scanning, all outside the
+game loop and command execution. A change that adds a reset or yield site inside
+them re-proves the interval. In the tile scheduler (`tile_loop.rs`), tile handlers may mutate tiles and pools,
 run landscape, road and crash commands or queue script events (`InsertEvent`),
 but never reset, load, report progress or run a script VM, and none changes map
 dimensions, climate, tree placement, the tick counter, editor mode or the
@@ -189,22 +193,35 @@ original RNG position, and the tree loop reads each field after them, where the
 source reads it.
 Threaded and arbitrary NewGRF corpus limits are open in #156.
 
-Extending the view requires default mutation/reallocation checks and semantic
-comparisons. This selects a bounded candidate, not a storage transfer or a
-general raw API.
+Each converted entry keeps its semantic scenarios; default native checks cover
+mutation and reallocation. The view is map access only, not a storage transfer.
 
 ## Transferring shared storage
 Storage ports are selected work (user direction, 2026-10-28): the rewrite moves
 every pool and finally the map arrays into Rust, so their object classes and
 accessors retire like any other original code. Order them by the code they
-retire and the glue they remove: per-tick vehicle records first (#563), then the
-other pools, then the map, whose design must also replace the outstanding C++
-tile references described above. Move a port's canonical
-owner, accessors, allocation/reset and destruction together;
-retain C++ facades for remaining callers. Map fields keep their encodings. Pools
-keep IDs, first-free selection, iteration and hook order; changing to a compacting
-arena or generational IDs is not a compatible shortcut. Any retained C++ object
-shell owns only the fields not yet migrated, never a synchronized second copy.
+retire, the crossings they remove and the glue they delete: per-tick vehicle
+records first (#563), then the other pools, then the map's definitions and
+allocation. Move a port's canonical owner, accessors, allocation/reset and
+destruction together.
+
+A moved record is defined once, in Rust, with a C-compatible layout. Its C++
+declaration is generated from that definition (extending `layouts!` and
+`tools/generate-abi.py`) and its layout is checked on every CI compiler, so
+remaining C++ callers (GUI, drawing, save adapters, scripts, NewGRF callbacks)
+keep inline accessors that read and write the same memory. No exported call per
+field, and no synchronized second copy. Operations with behavior (allocation,
+deletion, iteration with hooks, virtual dispatch) cross as calls. Each port
+deletes the per-field services and reader carriers its record replaces. A
+polymorphic C++ shell (vtable, STL members) stays opaque to Rust and owns only
+the fields not yet migrated; the shared record sits in it or beside it, as each
+design states. C++ tile references point into the one map allocation, so the
+map's storage port moves that allocation without replacing them.
+
+Map fields keep their encodings. Pools keep IDs, first-free selection, iteration
+and hook order; changing to a compacting arena or generational IDs is not a
+compatible shortcut. Drawing reads these records every frame and no current
+check times it; #566 measures it.
 
 ## Saves and evidence
 Keep chunk IDs, versions, field widths and reference numbering unchanged.

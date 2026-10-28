@@ -14,8 +14,10 @@ fork; the remaining upstream documentation explains behavior and architecture.
 ## Migration method
 
 - The goal is a complete Rust rewrite of OpenTTD: every original C++ line
-  retires (user direction, 2026-10-28). The work runs in overlapping phases,
-  sized with exit criteria in the roadmap's "Phases":
+  retires (user direction, 2026-10-28). The fork's own C++ glue retires with
+  it, so the distance to the goal is the C++ the Rust build still compiles,
+  original plus glue. The work runs in overlapping phases, sized with exit
+  criteria in the roadmap's "Phases":
   1. simulation logic: map generation, landscape and tile loops, towns,
      industries, vehicles, cargo, economy, link graph, pathfinding and the
      commands that change them;
@@ -41,8 +43,9 @@ fork; the remaining upstream documentation explains behavior and architecture.
   roadmap keeps one work order for ports, maintenance, testing and
   housekeeping, ranked by what each item retires, protects or saves.
 - Prefer ownership ports: Rust owns the component's state and control flow, and
-  C++ keeps only a thin facade plus callbacks for shared services (`Random`,
-  pools, map access, progress) whose storage has not moved yet. With `WITH_RUST` defined the original C++ body
+  C++ keeps only a thin facade plus calls for shared operations (`Random`,
+  allocation, progress, sound) and for the fields of records whose storage has
+  not moved yet. With `WITH_RUST` defined the original C++ body
   is not compiled; it remains in the `#else` of `#ifdef WITH_RUST` (or under
   `#ifndef WITH_RUST`) for portable builds. Do not extract an algorithmic
   fragment while C++ keeps the surrounding state and loop, unless the roadmap
@@ -52,11 +55,16 @@ fork; the remaining upstream documentation explains behavior and architecture.
   2026-10-28). Once a component's control flow runs in Rust, a storage port
   moves its records into Rust: pool objects (vehicles first, #563; then
   stations, orders, towns, industries, companies and the rest), then the map
-  arrays. C++ code not yet ported (drawing, GUI, save/load, scripts, network)
-  reads moved data through facades over Rust storage until it is ported in
-  turn. Storage ports are phase 2 ownership ports: the work order ranks them
-  beside leftover game logic by the code they retire and the glue they remove,
-  with no separate gate.
+  arrays. A moved record is defined once, in Rust, with a C-compatible layout;
+  its C++ declaration is generated and its layout checked at build, so both
+  languages read and write its fields in place. C++ code not yet ported
+  (drawing, GUI, save/load, scripts, network) keeps inline accessors over that
+  shared layout until it is ported in turn, never a call per field; only
+  operations (allocation, deletion, iteration with hooks, virtual behavior)
+  cross as calls. A storage port deletes the per-field services and reader
+  carriers it replaces. Storage ports are phase 2 ownership ports: the work
+  order ranks them beside leftover game logic by the code they retire, the
+  crossings they remove and the glue they delete, with no separate gate.
 - Keep the full game running throughout migration. Preserve networking, saves,
   mods, interface, and shared random-number behavior, including the exact
   sequence of random draws.
@@ -71,9 +79,10 @@ fork; the remaining upstream documentation explains behavior and architecture.
   single-player commands on the main thread and the game loop on `ottd:game`,
   serialized by the game-state mutex. The `-vnull` harness runs one thread and
   cannot see the difference.
-- Call shared services directly. Rust calls `Random`, map and pool accessors and
-  other shared services through `noexcept` C++ wrappers and keeps the original's
-  control flow, so a port reads like the C++ body it replaces. Environmental
+- Call shared services directly. Rust calls `Random`, pool operations and
+  other shared services, and the field accessors of records whose storage has
+  not moved, through `noexcept` C++ wrappers and keeps the original's control
+  flow, so a port reads like the C++ body it replaces. Environmental
   failures are not simulation behavior: allocation failure, I/O errors in debug
   or log output, and paths that need developer-only defines such as
   `RANDOM_DEBUG`. An exception escaping a wrapper terminates. Return control to
@@ -94,9 +103,14 @@ fork; the remaining upstream documentation explains behavior and architecture.
   no async, future, task or mailbox machinery, and crossing the boundary
   allocates nothing per call. Where the original builds a local container, the
   port uses a local `Vec`, not process-wide unsafe scratch. Each service is its
-  own typed `noexcept` function, not an opcode switch or positional array. Each
-  entry resolves its owner once and reads, once, only the fields it uses:
-  neither a whole-record view nor a call per field. Services return their real
+  own typed `noexcept` function, not an opcode switch or positional array. Data
+  crosses in place, not by call: a field of the map or of a record whose layout
+  is shared is a field-sized raw load or store at the original's observation
+  point. Until a record's storage port, an entry resolves its owner once and
+  reads its fields through that record's shared typed accessors. A reader
+  function or carrier struct written for one call site is a design fault: the
+  boundary then grows with call sites instead of data types, and the storage
+  port must delete it again. Services return their real
   types on both sides and tables use designated initializers. A C++ class type
   (`PoolID`, `StrongType`) crosses as its base type, because MSVC returns class
   types through a hidden pointer (#355). Existing ports convert under #168 and
@@ -121,14 +135,17 @@ fork; the remaining upstream documentation explains behavior and architecture.
   onto the Rust entry and the body goes. Before requesting Full, a PR that
   removes a name greps `tools/simulation/` and `src/tests/` for it: fixtures of
   scenarios not run locally compile only in Full.
-- The selected #274 shared map descriptor is limited to audited scheduler clear,
-  water and tree loops and the audited road track-status reads retained by #523
-  (`docs/design/world-state.md`). Pixel heights/slopes and other vehicle paths
-  keep typed services. C++ retains canonical arrays and writes until a map
-  storage port moves them. Shared header
-  helpers preserve native assertions; raw field loads end before callbacks and
-  descriptor lifetime requires a proved no-reset/no-yield interval. Other
-  entries keep typed services until audited.
+- Simulation code in Rust reads and writes the map arrays in place through the
+  shared map descriptor (`docs/design/world-state.md`), not through a service
+  per field or predicate. Its interval is proved once, not per entry:
+  `Map::Allocate` (new game and the loaders) and the game-state mutex yield
+  (generation progress, GRF scanning) run outside the game loop and command
+  execution, and a change that adds a reset or yield site there re-proves it.
+  Raw field loads use no Rust references and end before a callback that can
+  load, reset or yield; shared header helpers preserve native assertions. C++
+  keeps canonical map storage and its accessors until the map storage port.
+  Existing typed map services retire hottest first (#565) and otherwise when a
+  port touches them.
 - Deferral names an owned issue whose result can lift it; a re-selection
   condition that waits on another deferred or unscheduled item is circular. A
   core loop (tile loop, vehicle tick) that misses the retirement ratio gets a
