@@ -17,9 +17,11 @@
     clippy::too_many_arguments
 )]
 use crate::company_type::CompanyID;
+use crate::industry_type::{Industry as ShellHandle, IndustryID};
+use crate::source_type::Source;
+use crate::station_type::Station;
 use crate::station_type::StationID;
 use crate::vehicle_type::OpenTTDVehicle;
-use std::ffi::c_void;
 
 /// Opaque live native `CargoPayment`; never dereferenced by Rust.
 #[repr(C)]
@@ -48,14 +50,12 @@ pub struct Fields {
 pub struct Services {
     pub(crate) spec: extern "C" fn(u8, *mut Spec),
     pub(crate) registry: *const crate::cargo_registry::Services,
-    pub(crate) station_read: extern "C" fn(u16, u8, u8) -> u32,
-    pub(crate) industry_read: extern "C" fn(*mut c_void, u8, u32) -> u32,
-    pub(crate) industry_write: extern "C" fn(*mut c_void, u8, u32, u32),
+    pub(crate) station_company: extern "C" fn(*const Station) -> CompanyID,
+    pub(crate) town_acceptance_effect: extern "C" fn(u8) -> u8,
+    pub(crate) station_town: extern "C" fn(*const Station) -> *const crate::town_type::TownHandle,
     pub(crate) resolver: *const crate::industry::resolver::ResolverServices,
-    pub(crate) accept: extern "C" fn(*mut c_void, u32, u32),
-    pub(crate) statistics: extern "C" fn(u16, u8, u8, u32, u8),
     pub(crate) subsidies: extern "C" fn() -> *const crate::subsidy::Services,
-    pub(crate) industry_effect: extern "C" fn(*mut c_void, u8),
+    pub(crate) industry_delivery: *const crate::industry::DeliveryServices,
     pub(crate) last_station: extern "C" fn(*mut OpenTTDVehicle) -> StationID,
     pub(crate) vehicle_owner: extern "C" fn(*mut OpenTTDVehicle) -> CompanyID,
     pub(crate) detach_payment: extern "C" fn(*mut OpenTTDVehicle),
@@ -80,7 +80,7 @@ pub struct Payment {
 }
 #[derive(Default)]
 pub struct Delivery {
-    destinations: Vec<*mut c_void>,
+    destinations: Vec<*mut ShellHandle>,
 }
 
 fn income(s: &Services, pieces: u32, distance: u32, periods: u16, cargo: u8) -> i64 {
@@ -138,48 +138,43 @@ fn deliver(
     s: &Services,
     pieces: u32,
     cargo: u8,
-    station: u16,
+    station: StationID,
     distance: u32,
     periods: u16,
-    company: u8,
-    source: u32,
+    company: CompanyID,
+    source: Source,
     monitors: &crate::cargomonitor::Services,
 ) -> i64 {
-    let industry_source = if source >> 16 == 0 {
-        source as u16
+    let industry_source = if source.kind == Source::INDUSTRY {
+        IndustryID(source.id)
     } else {
-        0xffff
+        IndustryID::INVALID
     };
     let mut remaining = pieces;
     let mut accepted_ind = 0_u32;
     let subsidies = unsafe { &*(s.subsidies)() };
-    let native = (subsidies.station)(station);
+    let native = (subsidies.station)(station.0);
     let catchment = crate::station::Ctx::from_shared(subsidies.shared());
-    let state = (catchment.c.station_owner)(crate::station_type::StationID(station));
+    let state = (catchment.c.station_owner)(station);
     let visit = |near: crate::station::IndustryListEntry| {
         if remaining == 0 {
             return false;
         }
-        let ind = near.industry.cast::<c_void>();
-        if near.id == crate::industry_type::IndustryID(industry_source) {
+        let ind = near.industry;
+        if near.id == industry_source {
             return true;
         }
-        let slot = (s.industry_read)(ind, 1, u32::from(cargo));
-        if slot == u32::MAX {
+        let owner = (subsidies.industry_owner)(ind.cast());
+        let Some(slot) = (unsafe { crate::industry::get_cargo_accepted(owner, cargo) }) else {
+            return true;
+        };
+        if unsafe { crate::industry::resolver::refuses(ind.cast(), owner, cargo, &*s.resolver) } {
             return true;
         }
-        if unsafe {
-            crate::industry::resolver::refuses(
-                ind,
-                (subsidies.industry_owner)(ind),
-                cargo,
-                &*s.resolver,
-            )
-        } {
-            return true;
-        }
-        let supplier = (s.industry_read)(ind, 2, 0);
-        if supplier != 0xff && supplier != (s.station_read)(station, 0, 0) {
+        let supplier = unsafe { crate::industry::exclusive_supplier(owner) };
+        if supplier.0 != crate::company_type::INVALID_OWNER
+            && supplier != (s.station_company)(native)
+        {
             return true;
         }
         // No owner borrow is alive during a world leaf; include preserves order.
@@ -187,16 +182,19 @@ fn deliver(
         if !destinations.contains(&ind) {
             destinations.push(ind);
         }
-        let amount = remaining.min(65535 - (s.industry_read)(ind, 3, slot));
-        (s.accept)(ind, slot, amount);
+        let amount = unsafe {
+            crate::industry::accept_delivery(owner, slot, remaining, || {
+                (subsidies.shared().economy_date)()
+            })
+        };
         remaining -= amount;
         accepted_ind += amount;
         crate::cargomonitor::add_delivery(
             monitors,
             cargo,
-            company,
+            company.0,
             amount,
-            crate::source_type::Source::industry(industry_source),
+            Source::industry(industry_source.0),
             native,
             state,
             near.id,
@@ -205,39 +203,33 @@ fn deliver(
     };
     // SAFETY: The live station owner; each entry is copied before the services in `visit`.
     unsafe { crate::station::for_each_industry_near(state, visit) };
-    let accepted = if (s.station_read)(station, 1, cargo) != 0 {
+    let accepted = if unsafe { crate::station_service::always_accepts(state, cargo) } {
         pieces
     } else {
         accepted_ind
     };
     if accepted > 0 {
-        (s.statistics)(station, cargo, company, accepted, 0);
+        unsafe { crate::station_service::record_delivery(state, cargo) };
     }
-    (s.statistics)(station, cargo, company, accepted, 1);
-    (s.statistics)(station, cargo, company, accepted, 2);
+    let finance = unsafe { &*s.finance };
+    let finances = (finance.company_finances)(company.0);
+    unsafe { crate::company::record_delivery(finances, cargo, accepted) };
+    let effect = (s.town_acceptance_effect)(cargo);
+    let town = (s.station_town)(native);
+    let town = (subsidies.shared().town_owner)(town);
+    unsafe { crate::town::record_delivery(town, effect, accepted) };
     let mut profit = income(s, accepted, distance, periods, cargo);
     crate::cargomonitor::add_delivery(
         monitors,
         cargo,
-        company,
+        company.0,
         accepted - accepted_ind,
-        crate::source_type::Source {
-            id: source as u16,
-            kind: (source >> 16) as u8,
-        },
+        source,
         native,
         state,
         crate::industry_type::IndustryID::INVALID,
     );
-    if subsidies.check(
-        cargo,
-        company,
-        crate::subsidy::Source {
-            id: source as u16,
-            kind: (source >> 16) as u8,
-        },
-        station,
-    ) {
+    if subsidies.check(cargo, company.0, source, station.0) {
         profit = match (s.subsidy_multiplier)() {
             0 => profit.saturating_add(profit >> 1),
             1 => profit.saturating_mul(2),
@@ -246,36 +238,6 @@ fn deliver(
         };
     }
     profit
-}
-
-fn trigger(ind: *mut c_void, s: &Services) {
-    let mask = (s.industry_read)(ind, 4, 0);
-    (s.industry_effect)(ind, 0); // was_cargo_delivered
-    if mask & 3 != 0 {
-        (s.industry_effect)(ind, if mask & 1 != 0 { 1 } else { 2 });
-    } else {
-        for input in 0..(s.industry_read)(ind, 5, 0) {
-            let waiting = (s.industry_read)(ind, 3, input);
-            if waiting == 0 || (s.industry_read)(ind, 7, input) == 255 {
-                continue;
-            }
-            for output in 0..(s.industry_read)(ind, 6, 0) {
-                if (s.industry_read)(ind, 8, output) == 255 {
-                    continue;
-                }
-                let old = (s.industry_read)(ind, 9, output);
-                let multiplier = (s.industry_read)(ind, 10, (input << 16) | output);
-                // uint16 operands promote to int; valid multipliers' product is
-                // within int32 in the defined source domain. Match native bits.
-                let product = (waiting as i32).wrapping_mul(multiplier as i32);
-                let result = (old as i32).wrapping_add(product / 256).clamp(0, 65535);
-                (s.industry_write)(ind, 0, output, result as u32);
-            }
-            (s.industry_write)(ind, 1, input, 0);
-        }
-    }
-    (s.industry_effect)(ind, 3);
-    (s.industry_effect)(ind, 4);
 }
 
 #[unsafe(no_mangle)]
@@ -405,7 +367,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_payment_final(
     count: u32,
     distance: u32,
     periods: u16,
-    source: u32,
+    source: Source,
     monitors: *const crate::cargomonitor::Services,
 ) {
     let s = unsafe { &*s };
@@ -417,10 +379,10 @@ pub unsafe extern "C" fn openttd_rust_cargo_payment_final(
         s,
         count,
         cargo,
-        station.0,
+        station,
         distance,
         periods,
-        company.0,
+        company,
         source,
         unsafe { &*monitors },
     );
@@ -459,7 +421,18 @@ pub unsafe extern "C" fn openttd_rust_cargo_delivery_flush(d: *mut Delivery, s: 
     let mut index = 0;
     while index < unsafe { (*d).destinations.len() } {
         let ind = unsafe { (&(*d).destinations)[index] };
-        trigger(ind, s);
+        let subsidies = unsafe { &*(s.subsidies)() };
+        let owner = (subsidies.industry_owner)(ind.cast());
+        unsafe {
+            crate::industry::trigger_delivery(
+                ind,
+                owner,
+                IndustryID((subsidies.industry_id)(ind.cast())),
+                &*s.resolver,
+                &*subsidies.industry,
+                &*s.industry_delivery,
+            )
+        };
         index += 1;
     }
     unsafe {
@@ -489,14 +462,12 @@ crate::abi::layouts! {
     "OpenTTDCargoServices" ["probe"] => Services {
         spec,
         registry,
-        station_read,
-        industry_read,
-        industry_write,
+        station_company,
+        town_acceptance_effect,
+        station_town,
         resolver,
-        accept,
-        statistics,
         subsidies,
-        industry_effect,
+        industry_delivery,
         last_station,
         vehicle_owner,
         detach_payment,

@@ -40,3 +40,8 @@ impl IndustryID {
 pub struct Industry {
     _private: [u8; 0],
 }
+
+/// IndustryRandomTrigger::CargoReceived.
+pub const RANDOM_TRIGGER_CARGO_RECEIVED: u8 = 2;
+/// IndustryAnimationTrigger::CargoReceived.
+pub const ANIMATION_TRIGGER_CARGO_RECEIVED: u8 = 3;

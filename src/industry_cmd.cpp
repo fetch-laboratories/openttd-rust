@@ -4048,6 +4048,7 @@ static OpenTTDIndustryTransactionContext GetIndustryTransactionContext()
 #include "abi-visit-OpenTTDIndustryDefinitionServices.hpp"
 #include "abi-visit-OpenTTDIndustryPropertyServices.hpp"
 #include "abi-visit-OpenTTDIndustryServices.hpp"
+#include "abi-visit-OpenTTDIndustryDeliveryServices.hpp"
 #include "abi-visit-OpenTTDIndustryLifecycleServices.hpp"
 #include "abi-visit-OpenTTDIndustryGenerationServices.hpp"
 #include "abi-visit-OpenTTDIndustryConstructionServices.hpp"
@@ -4059,7 +4060,8 @@ static OpenTTDIndustryTransactionContext GetIndustryTransactionContext()
 #include "abi-visit-OpenTTDEnvironmentServices.hpp"
 bool CheckAbi_industry_cmd()
 {
-	return AbiServicesComplete(GetIndustryDefinitionServices()) &&
+	return AbiServicesComplete(GetIndustryDeliveryServices()) &&
+		AbiServicesComplete(GetIndustryDefinitionServices()) &&
 		AbiServicesComplete(GetIndustryPropertyServices()) &&
 		AbiServicesComplete(GetIndustryGenerationServices().environment) &&
 		AbiServicesComplete(GetIndustryResolverServices()) &&
