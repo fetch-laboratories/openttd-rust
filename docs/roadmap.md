@@ -4,15 +4,15 @@ Root selects here; `AGENTS.md` and `docs/rust-migration.md` define process. Foll
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-10-28, code at `3b75d5c5fb`)
+## Where the fork stands (2026-10-28, code at `db624a6f00`)
 
 - 77 ownership ports. Since the twenty-first steering at `07c0d2e2e8`, five
-  owners and nine maintenance PRs integrated, retiring 3,353 more original
+  owners and twelve maintenance PRs integrated, retiring 3,353 more original
   lines, including 784 in the current simulation inventory. No confirmed code
   regression requires rollback.
 - Whole-fork inventory: 71,218 of 470,612 original lines retired (15.13%),
   including 55,546 of 102,615 simulation lines (54.13%). Rust, tooling and glue
-  total 127,585, 46,322 and 45,227 lines. These measure source retirement, not
+  total 127,557, 46,956 and 45,226 lines. These measure source retirement, not
   completed behavior. #527 adds the omitted simulation clock files and refreshes
   the denominator; #518 did not expand that reviewed inventory.
 - Speed: existing anchors remain incompatible with current build settings.
@@ -26,18 +26,22 @@ this roadmap over conflicting issues; it is the current state of umbrella issue
   338 of 438 scenarios with zero unique lines remain investigation candidates,
   not proven redundant behavioral tests. The first #503 deep set had 519 equal
   of 520 scenarios; both games hit the same invalid terrain fixture assertion.
-  Reviewed #534 repairs that fixture and the selected observation/helper gaps.
+  #534 integrated through #538, repairing that fixture and the selected
+  observation/helper gaps; the next normal deep report remains due.
 - #535's 14-case sanitizer subset compared equal in 607.7 seconds. A real-game
   positive control captured five original animation-shift keys in 121.3 seconds
   with no candidate-only report. Fixing review is complete; the full sanitizer
-  set's runtime remains unmeasured. #511 has 40 prepared mutants and a baseline
-  build running, with no mutant outcomes yet.
-- Three component PRs remain: reviewed #534/#535/#536. Their changed files
-  are disjoint and they will share one integration Full. Historical
-  duplicate checkouts and the pinned speed runtime remain for their evidence.
-  #529 is reopened for its ten-job post-integration acceptance check; the first
-  two dependency installs passed. Fourteen integrations since the previous
-  steering make the next integration the platform cadence point.
+  set's runtime remains unmeasured. #511 has a passing six-case baseline and
+  forty mutants executing; confirmed prefix outcomes distinguish semantic kills,
+  source-probe kills and unclassified survivors.
+- #534/#535/#536 integrated together in #538 after its scoped merge-resolution
+  review and exact-head Full. Two component drafts remain: #539 clock ownership
+  and #540 platform semantics. The next selected maintenance batch carries #537
+  and #168's effect selectors; #506's researched threaded implementation is
+  unblocked. Historical evidence checkouts and the pinned speed runtime remain.
+- #529 has four successful dependency installs recorded toward ten. The
+  fifteenth-integration platform cadence is running; read its result before the
+  next integration. #509's new semantic subset is not part of that existing run.
 
 ## Twenty-second steering review (2026-10-27, observable evidence and clock ownership)
 
@@ -195,6 +199,9 @@ C++ retired; net glue is separate.
 | #503 deep runner and mutual exclusion | #524 | direct | `35202d9eda` | 0 / 390 / 0 / 0; net glue 0 |
 | #528 host RPATH and `migration.py env`; #529 apt retry; #531 `ci.py wait`; #532 housekeeping | #533 | direct | `f0a576839d` | 0 / 727 / 0 / 0; net glue 0 |
 | #504 original simulation coverage | #518 | direct | `3b75d5c5fb` | 0 / 743 / 0 / 0; net glue 0 |
+| #156/#503 observations and terrain; #199/#500 helpers/types | #534 | #538 | `db624a6f00` | 17 / 96 / 4 / 0; net glue 0 |
+| #505 sanitizer game comparison and report identity | #535 | #538 | `db624a6f00` | 0 / 551 / 0 / 0; net glue 0 |
+| #275/#312 tile ambient observations and orphan removal | #536 | #538 | `db624a6f00` | 151 / 17 / 4 / 0; net glue -1 |
 
 ## Work order
 
@@ -202,33 +209,42 @@ One ranked list. Each free slot takes the highest unblocked item that fits the
 six-branch limit and disjoint-service rule; completing review/integration takes
 priority. A lower rank can run while a higher one waits. Scopes live in issues.
 
-1. **#156 observation and #503 fixture repairs, with #199/#500 helpers/types.**
-   One maintenance batch makes existing claimed evidence distinguish wrong
-   behavior and restores valid deep terrain. Reuse the fixture worktree.
-2. **#275 / #312 tile-loop batch, followed by identity-required re-anchoring.**
-   There is measured excess and limited headroom; actual savings are unknown.
-3. **#511 targeted mutation study.** Measure observation quality before removing
-   scenarios or expanding random input. Use #518 and the new observation gaps.
-4. **#505 ASan/UBSan.** Continue the existing checkpoint; compare both games
-   and distinguish original failures from candidate-only boundary faults.
-5. **#527 calendar/economy clocks.** Recurring simulation state and dispatch
-   ownership with existing evidence infrastructure, no external prerequisite.
-6. **#509 platform semantic subset.** Concrete MSVC defect history and an
-   existing cadence make this more useful than speculative corpus expansion.
-7. **#506 threaded execution and TSan.** The quick guard is integrated; complete
-   deterministic stopping and prove the specified thread-local mutation fails.
+1. **#537 testing-off link repair and #168 effect selectors.** One maintenance
+   batch moves the crypto ABI source definitions under `OPTION_RUST`, retaining
+   the existing test-target behavior, and replaces effect-controller mutation
+   selectors plus animation/substate export selectors with named typed calls.
+   Reuse canonical vehicle services; preserve sequence replacement versus
+   first-sprite mutation. Existing effects evidence gains only the compact real
+   sequence/palette check missing from its mock. Planning estimate: no original
+   retirement, 20–60 net Rust lines, 2–10 net glue and 0–30 native-test support.
+2. **#275 / #312 merged-tip identity renewal.** The tile batch is integrated;
+   no saving is established. Profile the clean tip, freeze compatible runtimes
+   and collect all six quiet anchors before another deep launch. Retain the
+   pre-batch count and runtime until compatible previous-tip comparison finishes.
+3. **#511 targeted mutation study.** Complete the running forty-mutant sample,
+   classify survivors by reachability and observation, then select actual gaps.
+4. **#505 ASan/UBSan.** Tooling is integrated. Read the first full sanitized deep
+   member, distinguish original failures from candidate-only faults and decide
+   the measured runtime budget.
+5. **#527 calendar/economy clocks.** Draft #539 owns recurring simulation state
+   and dispatch; judge its first concrete cost and obtain independent review.
+6. **#509 platform semantic subset.** Draft #540 uses distinct prepared no-join
+   inputs, full durations and strict state comparisons. Fix its generated-map
+   invariant, finish Linux evidence, then review and bootstrap its workflows.
+   Keep #509 open until actual Windows/macOS cadence success.
+7. **#506 threaded execution and TSan.** Research established deterministic
+   monthly-console stopping under SDL offscreen. Implement that evidence,
+   demonstrate the canonical occupancy TLS mutation and classify both games'
+   TSan reports; game instrumentation and the mutation remain untested.
 8. **#508 seeded random-command AI.** Target measured unexecuted command
    branches and compare command outcomes as well as terminal state.
 9. **#507 remaining community AI and large-map corpus**, then **#510 mixed
-    multiplayer feasibility**. Broaden integration evidence after the cheaper
-    concrete gaps above; neither depends on the deferred owners.
-10. **#501 typing and remaining #168/#199/#500 debt, plus #537.** Carry
-    annotations on touched #505/#527 tooling; #537 (testing-off candidate link)
-    joins the next maintenance batch. At the first stocktake after item 1 integrates,
-    select the next concrete selector, observation or ID conversion slice from
-    these trackers using measured cost or a source defect; do not launch a
-    whole-fork sweep. Disaster conversion is complete.
-
+    multiplayer feasibility**. Broaden integration evidence after the concrete
+    gaps above; neither depends on the deferred owners.
+10. **#501 typing and remaining #168/#199/#500 debt.** Carry annotations on
+    touched #505/#527/#509/#506 tooling. The selected effect batch is the next
+    #168 action; root selects the following #199 observation or #500 identity
+    conversion at that batch's integration stocktake. No whole-fork sweep.
 Recurring: instruction profiles and deep checks after every second integration,
 subject to the existing running-deep skip and quiet collection lock. Read completed
 reports before integration. Until the identity-required pass, keep raw counts and
@@ -236,8 +252,8 @@ label incompatible projections unavailable. Retain active anchors and their
 runtime dependencies. #503 also owns adding changed-input coverage recomputation
 after #518 integrates and the later deep members as their issues complete.
 Run `issues.py` at start/planning/stocktake and check actual current placement,
-not just a textual mention. After fourteen integrations since the previous steer,
-the next integration is the fifteenth and requests the platform cadence; #512's first tally is finished.
+not just a textual mention. The fifteenth-integration platform cadence is running after #538; the next
+cadence is the twentieth integration. #512's first tally is finished.
 
 Excluded, with return conditions checked by this review:
 - #507's NewGRF corpus (#525, #526) is parked by the user (2026-10-28) until
@@ -258,22 +274,21 @@ Excluded, with return conditions checked by this review:
 
 ## Resume checkpoint
 
-Codex root resumed on 2026-10-28 and integrated #518 after exact-head Full.
-The reviewed observation, sanitizer and tile-loop changes are disjoint and
-selected for one integration PR. No confirmed code regression requires rollback. Fetch remote
-PR heads before resuming historical local task branches.
+Codex root integrated #518 and the reviewed #534/#535/#536 batch through #538.
+No confirmed code regression requires rollback. Fetch remote PR heads before
+resuming historical local branches; preserve active evidence dependencies.
 
 | Item | Current state | Next action |
 | --- | --- | --- |
-| #529 follow-up | Retry integrated in #533; issue reopened with two successful post-integration Linux installs recorded. | Record the next eight qualifying Linux jobs, then close if acceptance holds. |
-| #156/#503 batch, #505 and #275/#312 | #534 at `6b1d906684`, #535 at `1cd5475659` and #536 at `4092053251` are reviewed and ready. Root checked the reviews, fixing commits and pairwise disjoint changed-file sets. | Prepare one integration PR from current base, preserving all three reviewed heads; request its exact-head Full. The statue fixture's pre-existing temporary invalid terrain remains on #156. |
-| #505 | #535's fixing review repaired ccache-relative report paths and ASan source identity; root spot-checked the fixes. All targeted checks passed. Root accepts 551 tooling lines, including the bounded repairs and regression cases, as necessary. | Integrate with the selected batch, then read the first full sanitized deep run and decide its runtime budget. |
-| #511 | Forty town-growth mutants prepared; root's unmodified baseline build is running. No mutant has been compiled or tested. | Finish the build and six-scenario baseline, then execute and classify individual mutants, stopping between units for the quiet hold. |
-| Quiet pass | Anchors incompatible; retained pre-batch runtime is protected from cleanup. | After the bounded tile batch, profile the merged tip, prepare frozen inputs and collect before launching deep. Reuse previous-tip counts only with a matching identity. |
-| #527 | Source-driven clock boundary and evidence brief are on the issue; no implementation branch yet. | Start a fresh ownership agent from integrated base; preserve live callback ordering, native alias lifetimes and the named console exception relay. |
-| #537 and remaining debt | Testing-off link defect diagnosed on #537; reviewed PRs gain no scope. | Carry its bounded CMake repair in the next maintenance batch. Select the next #168/#199/#500 slice at the first stocktake after #534 integrates. |
-| Jobs and cadence | Mutation baseline build running. Two integrations (#533/#518) since the last deep set; instruction profile and deep are due. | Launch the merged-tip instruction profile in the background. Quiet collection precedes deep; read finished evidence before integration. The next integration requests platform cadence. |
-| #525/#526 | Parked by the user; draft closed at `ccc28e2ed0`. | None until the user reselects it. |
-
+| Cadence and #529 | Fifteenth-integration platform run is active. Four qualifying dependency installs passed. | Read the cadence before integration; record the next six qualifying installs. |
+| #156/#503 observations | #534 integrated; selected helper/type and observation repairs are complete. | Read the next normal deep report. Temporary invalid statue-fixture terrain remains on #156. |
+| #505 | #535 integrated with its fixing review; 551 tooling lines accepted as necessary. | Run and triage the full sanitized deep member after quiet collection. |
+| #511 | Six-case baseline passed; forty mutants are executing. Semantic and source-probe kills are distinct; survivors await classification. | Finish and classify the sample, stopping between units for the quiet hold. |
+| Quiet pass | Pre-batch six-scenario profile passed at `5d8f4c7c7f`; incompatible anchors remain unavailable. The retained runtime is protected. | Profile merged tip, prepare frozen inputs and collect before deep. Reuse previous counts only with compatible identities. |
+| #527 | Ownership draft #539 is active. | Judge its concrete cost, finish local evidence and obtain a fresh fixing review. |
+| #509 | Draft #540 has local tooling checks; Linux games found an overstrict generated-map guard after three passing saved cases. | Repair the guard, rerun Linux evidence, review the current-base draft and bootstrap Full. |
+| #537/#168 | Root selected one maintenance batch: testing-off crypto ABI linkage and effect selector removal. | Implement from integrated base with existing services, one fixing reviewer and one Full. |
+| #506 | SDL offscreen stopping/repetition research passed; game TSan and TLS mutation remain untested. | Implement the bounded threaded/deep member using the integrated sanitizer plumbing. |
+| #525/#526 | Parked by the user; draft #525 is closed at `ccc28e2ed0`. | None until the user reselects it. |
 Selection: root; planning agents use gpt-6-astra, high. The start-development
 skill remains open-ended and unchanged; completing this order triggers planning.
