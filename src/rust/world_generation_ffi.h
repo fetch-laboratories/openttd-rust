@@ -34,7 +34,6 @@ struct OpenTTDWorldServices {
 	bool (*initialize)(OpenTTDWorldFrame *, uint32_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(initialize);
 	void (*prepare_progress)() noexcept OPENTTD_SERVICE_DEFAULT(prepare_progress);
 	OpenTTDWorldSettings (*settings)() noexcept OPENTTD_SERVICE_DEFAULT(settings);
-	uint32_t (*estimate_height)() noexcept OPENTTD_SERVICE_DEFAULT(estimate_height);
 	void (*height_limit)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(height_limit);
 	GameMode (*game_mode)() noexcept OPENTTD_SERVICE_DEFAULT(game_mode);
 	uint32_t (*seed)() noexcept OPENTTD_SERVICE_DEFAULT(seed);
@@ -42,9 +41,6 @@ struct OpenTTDWorldServices {
 	uint32_t (*interactive_random)() noexcept OPENTTD_SERVICE_DEFAULT(interactive_random);
 	void (*random_seed)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(random_seed);
 	bool (*load_sprites)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(load_sprites);
-	void (*rail_labels)() noexcept OPENTTD_SERVICE_DEFAULT(rail_labels);
-	void (*road_labels)() noexcept OPENTTD_SERVICE_DEFAULT(road_labels);
-	void (*building_counts)() noexcept OPENTTD_SERVICE_DEFAULT(building_counts);
 	void (*string_widths)() noexcept OPENTTD_SERVICE_DEFAULT(string_widths);
 	void (*reset_windows)() noexcept OPENTTD_SERVICE_DEFAULT(reset_windows);
 	void (*setup_windows)() noexcept OPENTTD_SERVICE_DEFAULT(setup_windows);

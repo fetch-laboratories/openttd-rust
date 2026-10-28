@@ -120,7 +120,6 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.initialize = [](OpenTTDWorldFrame *f, uint32_t x, uint32_t y, bool reset) noexcept { return WorldException(f, [=] { InitializeGame(x, y, true, reset); }); },
 		.prepare_progress = []() noexcept { PrepareGenerateWorldProgress(); },
 		.settings = []() noexcept { return OpenTTDWorldSettings{RustMapHeightLimit(), _settings_game.game_creation.se_flat_world_height, _settings_game.game_creation.heightmap_height, _settings_game.game_creation.land_generator}; },
-		.estimate_height = []() noexcept { return GetEstimationTGPMapHeight(); },
 		.height_limit = RustSetMapHeightLimit,
 		.game_mode = RustGameMode,
 		.seed = RustGenerationSeed,
@@ -128,9 +127,6 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.interactive_random = []() noexcept { return InteractiveRandom(); },
 		.random_seed = [](uint32_t value) noexcept { _random.SetSeed(value); },
 		.load_sprites = [](OpenTTDWorldFrame *f) noexcept { return WorldException(f, [] { GfxLoadSprites(); }); },
-		.rail_labels = []() noexcept { SetCurrentRailTypeLabelList(); },
-		.road_labels = []() noexcept { SetCurrentRoadTypeLabelList(); },
-		.building_counts = []() noexcept { InitializeBuildingCounts(); },
 		.string_widths = []() noexcept { LoadStringWidthTable(); },
 		.reset_windows = []() noexcept { ResetWindowSystem(); },
 		.setup_windows = []() noexcept { SetupColoursAndInitialWindow(); },
@@ -165,7 +161,11 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.object_end = [](OpenTTDWorldFrame *f) noexcept { f->cancellation = f->objects->frame.cancellation; f->objects.reset(); },
 		.tree_settings = TreeGenerateSettings,
 		.tree_end = [](OpenTTDWorldFrame *f) noexcept { f->cancellation = TakeTreeGenerationException(); },
-		.loop_begin = [](OpenTTDWorldFrame *f) noexcept -> const OpenTTDGenerationLoop * { return &f->loop.emplace().view; },
+		.loop_begin = [](OpenTTDWorldFrame *f) noexcept -> const OpenTTDGenerationLoop * {
+			auto &loop = f->loop.emplace();
+			assert(*openttd_rust_tile_loop_cursor() != 0);
+			return &loop.view;
+		},
 		.loop_end = [](OpenTTDWorldFrame *f) noexcept { f->loop.reset(); },
 		.advance_tick = []() noexcept { TimerGameTick::counter++; },
 		.script_start = [](OpenTTDWorldFrame *f) noexcept { return WorldException(f, [] { Game::StartNew(); }); },

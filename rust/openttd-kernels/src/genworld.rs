@@ -125,7 +125,6 @@ pub struct WorldServices {
     pub initialize: extern "C" fn(*mut Frame, u32, u32, bool) -> bool,
     pub prepare_progress: extern "C" fn(),
     pub settings: extern "C" fn() -> Settings,
-    pub estimate_height: extern "C" fn() -> u32,
     pub height_limit: extern "C" fn(u8),
     pub game_mode: extern "C" fn() -> crate::openttd::GameMode,
     pub seed: extern "C" fn() -> u32,
@@ -133,9 +132,6 @@ pub struct WorldServices {
     pub interactive_random: extern "C" fn() -> u32,
     pub random_seed: extern "C" fn(u32),
     pub load_sprites: extern "C" fn(*mut Frame) -> bool,
-    pub rail_labels: extern "C" fn(),
-    pub road_labels: extern "C" fn(),
-    pub building_counts: extern "C" fn(),
     pub string_widths: extern "C" fn(),
     pub reset_windows: extern "C" fn(),
     pub setup_windows: extern "C" fn(),
@@ -276,7 +272,8 @@ pub unsafe extern "C" fn openttd_rust_world_setup(
         } else if mode.0 == GWM_HEIGHTMAP {
             u32::from(g.heightmap_height)
         } else if g.generator == LG_TERRAGENESIS {
-            (s.estimate_height)()
+            let input = unsafe { ((*s.landscape).tgp_settings)() };
+            unsafe { crate::tgp::openttd_rust_tgp_estimate(&raw const input) }
         } else {
             0
         };
@@ -292,9 +289,18 @@ pub unsafe extern "C" fn openttd_rust_world_setup(
     if !(s.load_sprites)(frame) {
         return false;
     }
-    (s.rail_labels)();
-    (s.road_labels)();
-    (s.building_counts)();
+    crate::type_registry::openttd_rust_rail_saved_current();
+    crate::type_registry::openttd_rust_road_saved_current();
+    let town = unsafe { &*s.town };
+    let growth = unsafe { &*town.growth };
+    unsafe {
+        crate::town::resolver::openttd_rust_house_counts_init(
+            growth,
+            &*town.shared,
+            std::ptr::null_mut(),
+            (growth.house_count)() as usize,
+        );
+    }
     (s.string_widths)();
     (s.reset_windows)();
     (s.setup_windows)();
@@ -640,5 +646,87 @@ crate::abi::layouts! {
     "OpenTTDWorldLandscape" ["genworld"] => LandscapeCall { frame, decoder, settings, };
     "OpenTTDWorldTown" ["genworld"] => TownCall { frame, names, road, layout, };
     "OpenTTDWorldObject" ["genworld"] => ObjectCall { frame, out, tmp, aux, };
-"OpenTTDWorldServices" ["genworld"] => WorldServices { landscape,company,town,industry,industry_generation,objects,engines,disasters,modal,set_modal,local_company,set_local_company,restore_companies,initialize,prepare_progress,settings,estimate_height,height_limit,game_mode,seed,set_seed,interactive_random,random_seed,load_sprites,rail_labels,road_labels,building_counts,string_widths,reset_windows,setup_windows,unshow_error,close_windows,hide_windows,show_progress,show_windows,reset_object,show_grf_error,randomizers,startup_companies,place_cursor,scroll,busy,close_progress,show_error,dirty,set_progress,increase_progress,town_roads,freeform,count_land,landscape_begin,landscape_end,town_begin,town_end,industry_builder,industry_begin,industry_end,object_begin,object_end,tree_settings,tree_end,loop_begin,loop_end,advance_tick,script_start,script_loop,script_exists,script_sleeping,trash_company,company_valid,restore_company,callback,exception_kind,storage_discard,dedicated,exit_game,set_exit,abort_mode,switch_mode,debug_start,debug_done,debug_abort,debug_map,desync,save, };
+    "OpenTTDWorldServices" ["genworld"] => WorldServices {
+        landscape,
+        company,
+        town,
+        industry,
+        industry_generation,
+        objects,
+        engines,
+        disasters,
+        modal,
+        set_modal,
+        local_company,
+        set_local_company,
+        restore_companies,
+        initialize,
+        prepare_progress,
+        settings,
+        height_limit,
+        game_mode,
+        seed,
+        set_seed,
+        interactive_random,
+        random_seed,
+        load_sprites,
+        string_widths,
+        reset_windows,
+        setup_windows,
+        unshow_error,
+        close_windows,
+        hide_windows,
+        show_progress,
+        show_windows,
+        reset_object,
+        show_grf_error,
+        randomizers,
+        startup_companies,
+        place_cursor,
+        scroll,
+        busy,
+        close_progress,
+        show_error,
+        dirty,
+        set_progress,
+        increase_progress,
+        town_roads,
+        freeform,
+        count_land,
+        landscape_begin,
+        landscape_end,
+        town_begin,
+        town_end,
+        industry_builder,
+        industry_begin,
+        industry_end,
+        object_begin,
+        object_end,
+        tree_settings,
+        tree_end,
+        loop_begin,
+        loop_end,
+        advance_tick,
+        script_start,
+        script_loop,
+        script_exists,
+        script_sleeping,
+        trash_company,
+        company_valid,
+        restore_company,
+        callback,
+        exception_kind,
+        storage_discard,
+        dedicated,
+        exit_game,
+        set_exit,
+        abort_mode,
+        switch_mode,
+        debug_start,
+        debug_done,
+        debug_abort,
+        debug_map,
+        desync,
+        save,
+    };
 }
