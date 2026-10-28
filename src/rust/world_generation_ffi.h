@@ -99,7 +99,7 @@ struct OpenTTDWorldServices {
 	void (*debug_start)() noexcept OPENTTD_SERVICE_DEFAULT(debug_start);
 	void (*debug_done)() noexcept OPENTTD_SERVICE_DEFAULT(debug_done);
 	void (*debug_abort)() noexcept OPENTTD_SERVICE_DEFAULT(debug_abort);
-	void (*debug_map)() noexcept OPENTTD_SERVICE_DEFAULT(debug_map);
+	void (*debug_map)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_map);
 	bool (*desync)() noexcept OPENTTD_SERVICE_DEFAULT(desync);
 	bool (*save)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(save);
 };

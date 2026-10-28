@@ -39,6 +39,7 @@ def adapter(build, folder, env):
         ROOT / "tools/simulation/objects-console.cpp",
         "objects",
         wraps=(
+            "_Z16SetModalProgressb",
             "_Z26SetGeneratingWorldProgress16GenWorldProgressj",
             "_Z31IncreaseGeneratingWorldProgress16GenWorldProgress",
             "openttd_rust_world_set_abort_callback"

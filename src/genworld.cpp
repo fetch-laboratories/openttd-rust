@@ -180,7 +180,7 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.debug_start = []() noexcept { Debug(net, 3, "Generating map, please wait..."); },
 		.debug_done = []() noexcept { Debug(net, 3, "Map generated, starting game"); },
 		.debug_abort = []() noexcept { Debug(net, 0, "Generating map failed; closing server"); },
-		.debug_map = []() noexcept { RustDebugNewMap(RustGenerationSeed()); },
+		.debug_map = RustDebugNewMap,
 		.desync = []() noexcept { return _debug_desync_level > 0; },
 		.save = [](OpenTTDWorldFrame *f) noexcept { return WorldException(f, [] { std::string name = fmt::format("dmp_cmds_{:08x}_{:08x}.sav", _settings_game.game_creation.generation_seed, TimerGameEconomy::date); SaveOrLoad(name, SLO_SAVE, DFT_GAME_FILE, AUTOSAVE_DIR, false); }); },
 	};

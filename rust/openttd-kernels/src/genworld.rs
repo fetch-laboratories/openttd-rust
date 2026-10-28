@@ -190,7 +190,7 @@ pub struct WorldServices {
     pub debug_start: extern "C" fn(),
     pub debug_done: extern "C" fn(),
     pub debug_abort: extern "C" fn(),
-    pub debug_map: extern "C" fn(),
+    pub debug_map: extern "C" fn(u32),
     pub desync: extern "C" fn() -> bool,
     pub save: extern "C" fn(*mut Frame) -> bool,
 }
@@ -300,9 +300,8 @@ pub unsafe extern "C" fn openttd_rust_world_setup(
     let a = unsafe { &*s.landscape };
     let shared = unsafe { &*a.shared };
     let map = shared.map();
-    (s.scroll)(TileIndex(
-        map.tile_xy(map.size_x() / 2, ((shared.map_max_y)() + 1) / 2),
-    ));
+    let size_y = (shared.map_max_y)() + 1;
+    (s.scroll)(TileIndex(map.tile_xy(map.size_x() / 2, size_y / 2)));
     true
 }
 #[derive(Clone, Copy)]
@@ -487,6 +486,7 @@ impl World<'_> {
         }
         (s.loop_end)(self.frame);
     }
+    #[allow(clippy::if_not_else)]
     fn generate(&self) -> Result<(), Failure> {
         let s = self.s;
         write_field!(INFO.get(), generating, true);
@@ -594,7 +594,7 @@ impl World<'_> {
         if (s.dedicated)() {
             (s.debug_done)();
         }
-        (s.debug_map)();
+        (s.debug_map)((s.seed)());
         if (s.desync)() {
             native((s.save)(self.frame))?;
         }

@@ -1,12 +1,40 @@
 """generated scenario evidence."""
 
+import shutil
+from pathlib import Path
+from typing import NotRequired, TypedDict
+
 from . import core, objects
 from .console_adapter import prepared_console
 from .core import SNAPSHOT_TICKS, TICKS_PER_DAY
 
 
-def scenarios(soak):
-    scenarios = [
+class Scenario(TypedDict):
+    name: str
+    kind: str
+    ticks: int
+    test: NotRequired[str]
+    seed: NotRequired[int]
+    map_log2: NotRequired[int]
+    map_log2_y: NotRequired[int]
+    land_generator: NotRequired[int]
+    generation_owner: NotRequired[str]
+    settings: NotRequired[dict[str, dict[str, str | int]]]
+    witnesses: NotRequired[list[str]]
+    executables: NotRequired[dict[str, Path]]
+    console: NotRequired[list[str]]
+
+
+class Run(TypedDict):
+    log: list[str]
+
+
+class Result(TypedDict, total=False):
+    generation_witnesses: dict[str, dict[str, int]]
+
+
+def scenarios(soak: bool) -> list[Scenario]:
+    scenarios: list[Scenario] = [
         {
             "name": "regression-regression",
             "kind": "regression",
@@ -174,10 +202,21 @@ def scenarios(soak):
             },
         )
     )
+    scenarios.append(
+        {
+            "name": "generate-lifecycle",
+            "kind": "generate",
+            "seed": 12345,
+            "map_log2": 6,
+            "land_generator": 1,
+            "generation_owner": "lifecycle",
+            "ticks": SNAPSHOT_TICKS + TICKS_PER_DAY,
+        }
+    )
     return scenarios
 
 
-def game_environment(scenario):
+def game_environment(scenario: Scenario) -> dict[str, str]:
     return (
         core.WITNESS_ENVIRONMENT
         if scenario.get("generation_owner") and scenario.get("witnesses")
@@ -185,7 +224,15 @@ def game_environment(scenario):
     )
 
 
-def prepare(scenario, binaries, builds, out, timeout, env, result):
+def prepare(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: Result,
+) -> Scenario:
     if not scenario.get("generation_owner"):
         return scenario
     executables = prepared_console(
@@ -196,19 +243,22 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         out / scenario["name"] / "input",
         env,
     )
-    return dict(
-        scenario,
-        executables=executables,
-        console=["generation_scenario " + scenario["generation_owner"]],
-    )
+    return {
+        **scenario,
+        "executables": executables,
+        "console": ["generation_scenario " + scenario["generation_owner"]],
+    }
 
 
-def check(scenario, run, mode, role, result):
+def check(scenario: Scenario, run: Run, mode: str, role: str, result: Result) -> None:
     if not scenario.get("generation_owner"):
         return
     lines = [line for line in run["log"] if line.startswith("GENERATION ")]
     if not any(line.startswith("GENERATION map early ") for line in lines):
         raise RuntimeError("missing early map/RNG snapshot")
+    if scenario["generation_owner"] == "lifecycle":
+        lifecycle_check(lines)
+        return
     required = ["initialize", "fix_slopes", "watering"]
     required += ["tgp" if scenario["land_generator"] else "original"]
     climate = scenario["settings"]["game_creation"]["landscape"]
@@ -231,5 +281,56 @@ def check(scenario, run, mode, role, result):
         result.setdefault("generation_witnesses", {})[mode] = counts
 
 
-def game_args(scenario):
+def game_args(scenario: Scenario) -> list[str]:
     return ["-d", "yapf=3"] if scenario.get("name") == "generate-river-search" else []
+
+
+def install(scenario: Scenario, run_dir: Path) -> None:
+    if scenario.get("generation_owner") == "lifecycle":
+        shutil.copytree(
+            core.ROOT / "tools/simulation/generation-game", run_dir / "game"
+        )
+
+
+def lifecycle_check(lines: list[str]) -> None:
+    rows = [
+        line.split()[2:] for line in lines if line.startswith("GENERATION lifecycle ")
+    ]
+    if len(rows) != 16 or [int(row[0]) for row in rows] != list(range(16)):
+        raise RuntimeError("missing complete default world lifecycle evidence")
+    for row in rows:
+        kind, mode, height, done, cleanup, aborted, company, local = map(int, row[:8])
+        generating, storage, exiting, warmup, script = row[8:]
+        if generating != "false" or local != 255 or cleanup < 1:
+            raise RuntimeError(
+                f"world cleanup or local-company restoration failed: {row}"
+            )
+        if kind < 6:
+            expected_storage = 33 if kind in (1, 2, 3, 5) else 0
+            if (aborted, done, company, int(storage), exiting) != (
+                1,
+                int(kind == 4),
+                255 if kind == 4 else 18,
+                expected_storage,
+                "true",
+            ):
+                raise RuntimeError(f"world abort partial effects changed: {row}")
+        elif kind != 14:
+            if (done, aborted, company, exiting) != (1, 0, 255, "false"):
+                raise RuntimeError(f"world completion failed: {row}")
+            if kind in (6, 7, 11, 15) and (mode, height, int(warmup)) != (1, 56, 0):
+                raise RuntimeError(
+                    f"empty editor automatic height/reset changed: {row}"
+                )
+            if kind == 8 and (mode, height) != (3, 78):
+                raise RuntimeError(f"failed heightmap fallback height changed: {row}")
+            if kind == 10 and height != 30:
+                raise RuntimeError(f"original automatic height changed: {row}")
+        if kind == 12 and not 0 < int(script) < 2500:
+            raise RuntimeError("GameScript did not reach explicit sleep")
+        if kind == 13 and int(script) != 2500:
+            raise RuntimeError("GameScript did not reach the 2500-iteration cap")
+    if rows[14][5] != "1" or rows[14][10] != "false":
+        raise RuntimeError(
+            "nondedicated abortion did not return through mode switching"
+        )
