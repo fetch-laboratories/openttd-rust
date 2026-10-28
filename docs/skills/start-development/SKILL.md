@@ -47,10 +47,14 @@ Then resume from the roadmap's checkpoint and work order.
    Integrate only the tested combination under strict branch protection.
    For a regression on rust-migration, apply AGENTS.md's automatic rollback
    rule before more integrations; do not assume a fix PR is required.
-3. When fewer than two unstarted items remain in the work order, or
-   `issues.py` shows unplaced issues, spawn a fresh high-effort planning agent
-   (Astra in Codex) to rank the next work: candidate owners from the world-state
-   design and every open maintenance, testing and housekeeping issue. Rank by
+3. When fewer than three unstarted ownership items (game-logic or
+   shared-storage ports) or fewer than two unstarted items overall remain in
+   the work order, or `issues.py` shows unplaced issues, spawn a fresh
+   high-effort planning agent (Astra in Codex) to rank the next work: candidate
+   owners from the remaining simulation inventory, shared-storage ports whose
+   coupling the speed profile measures (world-state design), and every open
+   maintenance, testing and housekeeping issue. The brief names no preferred
+   candidate; the planner sizes the actual remaining code. Rank by
    what each item retires, protects or saves: game state still owned by C++,
    the speed profile's largest net costs, fidelity risk the harness cannot see,
    recurring cost such as CI time, and design faults already integrated. How

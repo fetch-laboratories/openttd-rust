@@ -140,7 +140,10 @@ fork; the remaining upstream documentation explains behavior and architecture.
 
 - Speed is checked on the merged branch; PRs run no speed check of their own
   (user decision, 2026-10-22). The ceilings are 1.5x the original for play saves
-  and 1.3x for generation (#282).
+  and 1.3x for generation (#282). A scenario is over its ceiling when the mean
+  of its last three quiet-pass ratios exceeds it; one pass above it leaves the
+  scenario in band (provisional: P2016's five passes spread 1.453x to 1.523x,
+  mean 1.486x, while its loop count moved about 1.3%).
 - A projection is the anchor's measured ratio times (1 + 2 x the growth of the
   game loop's callgrind instruction count over the anchor), from
   `SPEED_ANCHORS`; counts do not depend on host load. After every second
@@ -181,12 +184,18 @@ fork; the remaining upstream documentation explains behavior and architecture.
   those net costs (never gross callback counts), turns the two or three largest
   into maintenance PRs, then re-measures. A candidate crediting under 0.5% of
   the scenario's loop count stays a note on #275, and candidates batch until
-  they credit 1% together (provisional). Each profile keeps its candidate
+  they credit 1% together (provisional). Where the net cost is glue spread
+  over many functions rather than a few (P2016, 2026-10-28: glue was 99% of
+  its gap and the top ten glue functions held 25% of it), the ownership or
+  storage port that removes the hot crossings ranks above another repair
+  batch, and attribution stops at the candidates those thresholds select.
+  Each profile keeps its candidate
   `callgrind.out` under `.local/simulation/` until the next profile replaces
   it. Attribution compares inclusive costs under `StateGameLoop()` (or
-  `_GenerateWorld()`) with a retained reference profile of the same scenario in
+  `_GenerateWorld()`), or under the Rust entry that replaces it in the
+  candidate, with a retained reference profile of the same scenario in
   `.local/speed-reference-profiles/`, because the reference Ir cache keeps no
-  per-function data.
+  per-function data. No C++ frame is kept only for attribution.
 - A pass runs alongside other work: only its timed collection pauses builds,
   links, profiles and other games. Prepare runtimes before the hold and release
   it when the last timed game exits; parsing, attribution and reports run after
@@ -250,7 +259,9 @@ checks that run; do not restate them in paragraphs.
   body, any new callback that duplicates a shared accessor, and any WITH_RUST
   body, export or declaration the PR leaves without a production caller (each
   one is a finding; the line names every `WITH_RUST` body and `openttd_rust_*`
-  export the PR touches and the production caller found for it). Do not narrate further when there are no findings.
+  export the PR touches and the production caller found for it; once #564's
+  quick-CI orphan-export check integrates, the line cites it for exports and
+  names `WITH_RUST` bodies only). Do not narrate further when there are no findings.
   Branches the harness does not reach go in the coverage tracker (#156), not
   only in the disposition.
 - One PR per ownership port, targeting `rust-migration` directly. Small
