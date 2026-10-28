@@ -571,7 +571,7 @@ pub(crate) unsafe fn get_cargo_accepted(owner: *const Industry, cargo: u8) -> Op
 pub(crate) unsafe fn exclusive_supplier(owner: *const Industry) -> crate::company_type::CompanyID {
     unsafe { crate::company_type::CompanyID((*owner).metadata.exclusive_supplier) }
 }
-/// SAFETY: Live accepted slot selected by GetCargoAccepted; the date leaf cannot resize slots.
+/// SAFETY: Live accepted slot selected by `GetCargoAccepted`; the date leaf cannot resize slots.
 pub(crate) unsafe fn accept_delivery(
     owner: *mut Industry,
     slot: usize,
@@ -1552,7 +1552,7 @@ pub struct ProductionResult {
     pub num_output: u8,
     pub present: u8,
 }
-/// Native IndustriesResolverObject in caller-owned stack storage; checked by C++.
+/// Native `IndustriesResolverObject` in caller-owned stack storage; checked by C++.
 #[repr(C, align(16))]
 pub struct ProductionStorage {
     storage: [std::mem::MaybeUninit<u8>; 1024],
@@ -1620,7 +1620,8 @@ pub(crate) unsafe fn trigger_delivery(
                 let multiplier = unsafe { (delivery.input_multiplier)(spec, input, output) };
                 let product = i32::from(waiting).wrapping_mul(i32::from(multiplier));
                 unsafe {
-                    (*p).waiting = i32::from(old).wrapping_add(product / 256).clamp(0, 65535) as u16
+                    (*p).waiting =
+                        i32::from(old).wrapping_add(product / 256).clamp(0, 65535) as u16;
                 };
             }
             unsafe { (*a).waiting = 0 };
@@ -2331,23 +2332,25 @@ mod delivery_tests {
 
     #[test]
     fn delivery_uses_first_valid_slot_and_preserves_history() {
-        let mut industry = Industry::default();
-        industry.accepted = vec![
-            Accepted {
-                cargo: 7,
-                waiting: 65530,
-                ..Accepted::default()
-            },
-            Accepted {
-                cargo: 7,
-                waiting: 42,
-                ..Accepted::default()
-            },
-            Accepted {
-                cargo: 255,
-                ..Accepted::default()
-            },
-        ];
+        let mut industry = Industry {
+            accepted: vec![
+                Accepted {
+                    cargo: 7,
+                    waiting: 65530,
+                    ..Accepted::default()
+                },
+                Accepted {
+                    cargo: 7,
+                    waiting: 42,
+                    ..Accepted::default()
+                },
+                Accepted {
+                    cargo: 255,
+                    ..Accepted::default()
+                },
+            ],
+            ..Industry::default()
+        };
         let owner = &raw mut industry;
         unsafe {
             assert_eq!(get_cargo_accepted(owner, 7), Some(0));

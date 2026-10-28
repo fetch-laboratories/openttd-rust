@@ -88,13 +88,13 @@ pub(crate) unsafe fn catchment(state: *mut Service) -> *mut crate::station::Catc
 pub(crate) unsafe fn always_accepts(state: *const Service, cargo: u8) -> bool {
     unsafe { (*state).fields.always_accepted & (1_u64 << cargo) != 0 }
 }
-/// Record the original GoodsEntry delivery history bits.
+/// Record the original `GoodsEntry` delivery history bits.
 /// SAFETY: Live serialized station owner and valid cargo slot.
 pub(crate) unsafe fn record_delivery(state: *mut Service, cargo: u8) {
     use crate::station_base::{GE_ACCEPTED_BIGTICK, GE_CURRENT_MONTH, GE_EVER_ACCEPTED};
     unsafe {
         (*cp(state, cargo)).status |=
-            (1 << GE_EVER_ACCEPTED) | (1 << GE_CURRENT_MONTH) | (1 << GE_ACCEPTED_BIGTICK)
+            (1 << GE_EVER_ACCEPTED) | (1 << GE_CURRENT_MONTH) | (1 << GE_ACCEPTED_BIGTICK);
     };
 }
 /// Clear every goods rating at the failed-bribe point, without crossing back

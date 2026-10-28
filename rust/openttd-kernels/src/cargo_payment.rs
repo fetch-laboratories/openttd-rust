@@ -431,7 +431,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_delivery_flush(d: *mut Delivery, s: 
                 &*s.resolver,
                 &*subsidies.industry,
                 &*s.industry_delivery,
-            )
+            );
         };
         index += 1;
     }
