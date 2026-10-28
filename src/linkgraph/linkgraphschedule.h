@@ -100,7 +100,9 @@ public:
 #endif
 };
 
+#ifndef WITH_RUST
 void StateGameLoop_LinkGraphPauseControl();
+#endif
 void AfterLoad_LinkGraphPauseControl();
 
 #endif /* LINKGRAPHSCHEDULE_H */

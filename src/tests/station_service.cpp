@@ -34,7 +34,7 @@
 #include "../rust/station_queue_save.hpp"
 #include "../rust/services_ffi.h"
 
-extern void OnTick_Station();
+
 
 TEST_CASE("Shared station traversal - live filtered pool mutation and reentry")
 {
@@ -373,7 +373,7 @@ TEST_CASE("Station service - indexed shells, retirement and pool reuse")
 	const auto old_mode = _game_mode;
 	TimerGameTick::counter = (250 - id.base() % 250) % 250;
 	_game_mode = GM_NORMAL;
-	OnTick_Station(); // Real empty-station expiry uses ordinary destruction.
+	openttd_rust_station_tick(&GetRustStationServices(), &GetRustStationLinks(), &GetRustVehicleVisits()); // Empty-station expiry uses ordinary destruction.
 	CHECK_FALSE(BaseStation::IsValidID(id));
 	REQUIRE(BaseStation::CanAllocateItem());
 	st = new Station(TileIndex(1));

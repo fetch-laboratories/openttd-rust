@@ -114,12 +114,12 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.objects = &GetRustObjectServices(),
 		.engines = &EngineServices(),
 		.disasters = &DisasterServices(),
-		.modal = []() noexcept { return HasModalProgress(); },
+		.modal = RustHasModalProgress,
 		.set_modal = [](bool value) noexcept { SetModalProgress(value); },
 		.local_company = RustLocalCompanyID,
 		.set_local_company = RustSetLocalCompany,
 		.restore_companies = RustRestoreGenerationCompanies,
-		.initialize = [](OpenTTDWorldFrame *f, uint32_t x, uint32_t y, bool reset) noexcept { return WorldException(f, [=] { InitializeGame(x, y, true, reset); }); },
+		.initialize = [](OpenTTDWorldSetupFrame *f, uint32_t x, uint32_t y, bool reset) noexcept { try { InitializeGame(x, y, true, reset); } catch (...) { f->cancellation = std::current_exception(); return false; } return true; },
 		.prepare_progress = []() noexcept { PrepareGenerateWorldProgress(); },
 		.settings = []() noexcept { return OpenTTDWorldSettings{RustMapHeightLimit(), _settings_game.game_creation.se_flat_world_height, _settings_game.game_creation.heightmap_height, _settings_game.game_creation.land_generator}; },
 		.height_limit = RustSetMapHeightLimit,
@@ -130,7 +130,7 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.set_seed = RustSetGenerationSeed,
 		.interactive_random = []() noexcept { return InteractiveRandom(); },
 		.random_seed = [](uint32_t value) noexcept { _random.SetSeed(value); },
-		.load_sprites = [](OpenTTDWorldFrame *f) noexcept { return WorldException(f, [] { GfxLoadSprites(); }); },
+		.load_sprites = [](OpenTTDWorldSetupFrame *f) noexcept { try { GfxLoadSprites(); } catch (...) { f->cancellation = std::current_exception(); return false; } return true; },
 		.string_widths = []() noexcept { LoadStringWidthTable(); },
 		.reset_windows = []() noexcept { ResetWindowSystem(); },
 		.setup_windows = []() noexcept { SetupColoursAndInitialWindow(); },
@@ -182,9 +182,9 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.callback = [](OpenTTDWorldFrame *f, GWDoneProc *proc) noexcept { return WorldException(f, [=] { proc(); }); },
 		.exception_kind = WorldExceptionKind,
 		.storage_discard = RustStorageDiscard,
-		.dedicated = []() noexcept { return _network_dedicated; },
-		.exit_game = []() noexcept -> bool { return _exit_game; },
-		.set_exit = []() noexcept { _exit_game = true; },
+		.dedicated = RustNetworkDedicated,
+		.exit_game = RustExitGame,
+		.set_exit = RustSetExitGame,
 		.debug_start = []() noexcept { Debug(net, 3, "Generating map, please wait..."); },
 		.debug_done = []() noexcept { Debug(net, 3, "Map generated, starting game"); },
 		.debug_abort = []() noexcept { Debug(net, 0, "Generating map failed; closing server"); },
@@ -210,12 +210,15 @@ static void _GenerateWorld()
 	uint8_t result = openttd_rust_world_generate(&GetRustWorldServices(), &frame);
 	if (result == 2) std::rethrow_exception(frame.cancellation);
 }
+bool RustRunWorldGeneration(OpenTTDSessionFrame *frame) noexcept
+{
+	return SessionException(frame, [] { _GenerateWorld(); });
+}
 void GenerateWorld(GenWorldMode mode, uint size_x, uint size_y, bool reset_settings)
 {
-	OpenTTDWorldFrame frame;
-	bool ready = openttd_rust_world_setup(&GetRustWorldServices(), &frame, mode, size_x, size_y, reset_settings);
-	if (frame.cancellation) std::rethrow_exception(frame.cancellation);
-	if (ready) _GenerateWorld();
+	OpenTTDSessionFrame frame;
+	openttd_rust_session_generate(&GetRustSessionServices(), &frame, mode, size_x, size_y, reset_settings);
+	frame.Rethrow();
 }
 void GenerateWorldSetCallback(GWDoneProc *proc) { openttd_rust_world_set_callback(proc); }
 void AbortGeneratingWorld() { openttd_rust_world_request_abort(); }

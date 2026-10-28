@@ -1970,6 +1970,7 @@ bool GenerateLandscape(uint8_t mode)
 
 #endif /* WITH_RUST */
 
+#ifndef WITH_RUST
 void OnTick_Town();
 void OnTick_Trees();
 void OnTick_Station();
@@ -1978,7 +1979,6 @@ void OnTick_Industry();
 void OnTick_Companies();
 void OnTick_LinkGraph();
 
-#ifndef WITH_RUST
 void CallLandscapeTick()
 {
 	{

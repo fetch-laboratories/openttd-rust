@@ -336,7 +336,7 @@ extern "C" void *openttd_orders_create_backup(void *ctx, uint32_t user) noexcept
 
 extern "C" uint64_t openttd_orders_network_server() noexcept
 {
-	return _network_server;
+	return RustNetworkServer();
 }
 
 extern "C" uint64_t openttd_orders_network_client() noexcept

@@ -95,7 +95,9 @@
 
 #include "safeguards.h"
 
+#ifndef WITH_RUST
 void CallLandscapeTick();
+#endif
 void DoPaletteAnimations();
 void MusicLoop();
 void CallWindowGameTickEvent();
@@ -1241,6 +1243,13 @@ void SwitchToMode(SwitchMode new_mode)
  * The state must not be changed from anywhere but here.
  * That check is enforced in DoCommand.
  */
+#ifdef WITH_RUST
+#ifdef _MSC_VER
+__declspec(noinline)
+#else
+__attribute__((noinline))
+#endif
+#endif
 void StateGameLoop()
 {
 #ifdef WITH_RUST

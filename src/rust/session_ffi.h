@@ -13,7 +13,7 @@ struct NewGRFScanCallback;
 struct OpenTTDSessionFrame;
 struct OpenTTDSessionLoad;
 struct OpenTTDSessionDimensions { uint32_t x, y; };
-struct OpenTTDSessionNewgame { bool gui, pause; Colours primary, secondary; bool secondary_used; };
+struct OpenTTDSessionSecondaryColour { Colours colour; bool used; };
 /* Serialized entries; native resource/exception frames live on their callers' stacks.
 	* No state access spans a callback, progress yield, reset or network reentry. */
 struct OpenTTDSessionServices {
@@ -33,7 +33,7 @@ struct OpenTTDSessionServices {
 	bool (*modal)() noexcept OPENTTD_SERVICE_DEFAULT(modal);
 	void (*network_reboot)() noexcept OPENTTD_SERVICE_DEFAULT(network_reboot);
 	void (*network_disconnect)() noexcept OPENTTD_SERVICE_DEFAULT(network_disconnect);
-	void (*network_server_start)() noexcept OPENTTD_SERVICE_DEFAULT(network_server_start);
+	bool (*network_server_start)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(network_server_start);
 	void (*network_background)() noexcept OPENTTD_SERVICE_DEFAULT(network_background);
 	void (*network_start_game)() noexcept OPENTTD_SERVICE_DEFAULT(network_start_game);
 	void (*network_join)() noexcept OPENTTD_SERVICE_DEFAULT(network_join);
@@ -74,7 +74,10 @@ struct OpenTTDSessionServices {
 	void (*leave_survey)() noexcept OPENTTD_SERVICE_DEFAULT(leave_survey);
 	AbstractFileType (*file_kind)() noexcept OPENTTD_SERVICE_DEFAULT(file_kind);
 	OpenTTDSessionDimensions (*map_dimensions)() noexcept OPENTTD_SERVICE_DEFAULT(map_dimensions);
-	OpenTTDSessionNewgame (*newgame_settings)() noexcept OPENTTD_SERVICE_DEFAULT(newgame_settings);
+	bool (*has_gui)() noexcept OPENTTD_SERVICE_DEFAULT(has_gui);
+	bool (*pause_on_newgame)() noexcept OPENTTD_SERVICE_DEFAULT(pause_on_newgame);
+	Colours (*starting_colour)() noexcept OPENTTD_SERVICE_DEFAULT(starting_colour);
+	OpenTTDSessionSecondaryColour (*secondary_colour)() noexcept OPENTTD_SERVICE_DEFAULT(secondary_colour);
 	bool (*disable_elrails)() noexcept OPENTTD_SERVICE_DEFAULT(disable_elrails);
 	void (*settings_elrail)(bool) noexcept OPENTTD_SERVICE_DEFAULT(settings_elrail);
 	void (*company_settings)() noexcept OPENTTD_SERVICE_DEFAULT(company_settings);
@@ -105,7 +108,9 @@ struct OpenTTDSessionServices {
 	bool (*state_loop)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(state_loop);
 	bool (*real_time)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(real_time);
 	bool (*scan)(OpenTTDSessionFrame *, NewGRFScanCallback *) noexcept OPENTTD_SERVICE_DEFAULT(scan);
-	bool (*generate)(OpenTTDSessionFrame *, GenWorldMode, uint32_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(generate);
+	OpenTTDWorldSetupFrame *(*world_setup_begin)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(world_setup_begin);
+	bool (*world_setup_end)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(world_setup_end);
+	bool (*world_run)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(world_run);
 	bool (*heightmap_screenshot)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(heightmap_screenshot);
 	bool (*desync_save)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(desync_save);
 	SaveOrLoadResult (*load)(OpenTTDSessionFrame *, OpenTTDSessionLoad *) noexcept OPENTTD_SERVICE_DEFAULT(load);
@@ -150,12 +155,13 @@ struct OpenTTDSessionServices {
 };
 const OpenTTDSessionServices &GetRustSessionServices() noexcept;
 void RustAskUnsafeUnpause() noexcept;
+bool RustRunWorldGeneration(OpenTTDSessionFrame *) noexcept;
 OpenTTDTreeTickSettings RustTreeTickSettings() noexcept;
 OpenTTDIndustryTickRecord RustIndustryTickRecord() noexcept;
-OpenTTDCompanyLandscaping RustLandscapingRates() noexcept;
 OpenTTDVehicleSchedulerTables RustVehicleSchedulerTables(OpenTTDCommandCost *refit = nullptr, OpenTTDCommandCost *temporary = nullptr) noexcept;
 OpenTTDScheduleTime RustScheduleTime() noexcept;
 extern "C" {
+bool openttd_rust_session_generate(const OpenTTDSessionServices *, OpenTTDSessionFrame *, GenWorldMode, uint32_t, uint32_t, bool);
 bool openttd_rust_session_intro(const OpenTTDSessionServices *, OpenTTDSessionFrame *, bool);
 void openttd_rust_session_settings(const OpenTTDSessionServices *);
 bool openttd_rust_session_switch(const OpenTTDSessionServices *, OpenTTDSessionFrame *, SwitchMode);

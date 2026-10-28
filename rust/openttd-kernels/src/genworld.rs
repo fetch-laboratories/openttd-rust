@@ -99,6 +99,11 @@ pub struct Frame {
     _private: [u8; 0],
 }
 #[repr(C)]
+pub struct SetupFrame {
+    _opaque: [u8; 0],
+}
+
+#[repr(C)]
 pub struct Settings {
     pub height_limit: u8,
     pub flat_height: u8,
@@ -141,7 +146,7 @@ pub struct WorldServices {
     pub local_company: extern "C" fn() -> CompanyID,
     pub set_local_company: extern "C" fn(CompanyID),
     pub restore_companies: extern "C" fn(CompanyID),
-    pub initialize: extern "C" fn(*mut Frame, u32, u32, bool) -> bool,
+    pub initialize: extern "C" fn(*mut SetupFrame, u32, u32, bool) -> bool,
     pub prepare_progress: extern "C" fn(),
     pub settings: extern "C" fn() -> Settings,
     pub height_limit: extern "C" fn(u8),
@@ -152,7 +157,7 @@ pub struct WorldServices {
     pub set_seed: extern "C" fn(u32),
     pub interactive_random: extern "C" fn() -> u32,
     pub random_seed: extern "C" fn(u32),
-    pub load_sprites: extern "C" fn(*mut Frame) -> bool,
+    pub load_sprites: extern "C" fn(*mut SetupFrame) -> bool,
     pub string_widths: extern "C" fn(),
     pub reset_windows: extern "C" fn(),
     pub setup_windows: extern "C" fn(),
@@ -257,7 +262,7 @@ pub unsafe extern "C" fn openttd_rust_world_handle_abort(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_world_setup(
     s: &WorldServices,
-    frame: *mut Frame,
+    frame: *mut SetupFrame,
     mode: Mode,
     size_x: u32,
     size_y: u32,

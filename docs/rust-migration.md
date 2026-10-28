@@ -2394,3 +2394,21 @@ constructed and destroyed at the original calls. Native `_generating_world` lval
 stable Rust bool storage under the game-state mutex. No owner borrow or raw map descriptor
 spans progress/yield or callback reentry. GUI scheduling, arbitrary scripts/NewGRFs and
 unexercised exception combinations remain #156 coverage limits. PR: #547.
+
+### Simulation-session lifecycle and pause control (#551)
+
+`session.rs` owns canonical game mode, pending switch and pause bits, scan requests,
+scan callbacks and the one-time survey prompt. Native lvalues alias stable Rust
+storage under the game-state mutex. Rust owns StateGameLoop, GameLoop, mode
+switching, SafeLoad recovery, intro/new-game/editor startup and completion,
+settings publication and CmdPause decisions. Existing clock, company, landscape,
+vehicle, tile, animation and generation owners are direct Rust callees; arbitrary
+native generation callbacks and native network reentry remain supported.
+
+Native allocation/decoding, script VMs, networking algorithms, presentation leaves,
+chrono samples and resource/profiling objects remain in C++. Named stack exception
+frames preserve CompanyID restoration while retaining the original persistent-storage
+partial effects. Calendar non-advancement and a recorded scheduled-console exception
+have distinct outcomes. The native StateGameLoop and _GenerateWorld profiling entries
+remain. External GUI/network scheduling, historical saves and arbitrary script-error
+combinations remain #156 limits. PR #554.

@@ -1,6 +1,12 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Complete simulation-session lifecycle. Native resources and genuine exception frames stay native.
-#![allow(unsafe_code, missing_docs, clippy::too_many_lines)]
+#![allow(
+    unsafe_code,
+    missing_docs,
+    clippy::too_many_lines,
+    clippy::if_not_else,
+    clippy::verbose_bit_mask
+)]
 use crate::company_type::{CompanyID, MAX_COMPANIES};
 use crate::game_state::GameState;
 use crate::openttd::{GameMode, PauseMode, SwitchMode};
@@ -26,12 +32,9 @@ pub struct Dimensions {
     pub y: u32,
 }
 #[repr(C)]
-pub struct Newgame {
-    pub gui: bool,
-    pub pause: bool,
-    pub primary: u8,
-    pub secondary: u8,
-    pub secondary_used: bool,
+pub struct SecondaryColour {
+    pub colour: u8,
+    pub used: bool,
 }
 #[repr(C)]
 pub struct Services {
@@ -51,7 +54,7 @@ pub struct Services {
     pub modal: extern "C" fn() -> bool,
     pub network_reboot: extern "C" fn(),
     pub network_disconnect: extern "C" fn(),
-    pub network_server_start: extern "C" fn(),
+    pub network_server_start: extern "C" fn(*mut Frame) -> bool,
     pub network_background: extern "C" fn(),
     pub network_start_game: extern "C" fn(),
     pub network_join: extern "C" fn(),
@@ -92,7 +95,10 @@ pub struct Services {
     pub leave_survey: extern "C" fn(),
     pub file_kind: extern "C" fn() -> FileKind,
     pub map_dimensions: extern "C" fn() -> Dimensions,
-    pub newgame_settings: extern "C" fn() -> Newgame,
+    pub has_gui: extern "C" fn() -> bool,
+    pub pause_on_newgame: extern "C" fn() -> bool,
+    pub starting_colour: extern "C" fn() -> u8,
+    pub secondary_colour: extern "C" fn() -> SecondaryColour,
     pub disable_elrails: extern "C" fn() -> bool,
     pub settings_elrail: extern "C" fn(bool),
     pub company_settings: extern "C" fn(),
@@ -123,7 +129,9 @@ pub struct Services {
     pub state_loop: extern "C" fn(*mut Frame) -> bool,
     pub real_time: extern "C" fn(*mut Frame) -> bool,
     pub scan: extern "C" fn(*mut Frame, *mut ScanCallback) -> bool,
-    pub generate: extern "C" fn(*mut Frame, crate::genworld::Mode, u32, u32, bool) -> bool,
+    pub world_setup_begin: extern "C" fn(*mut Frame) -> *mut crate::genworld::SetupFrame,
+    pub world_setup_end: extern "C" fn(*mut Frame) -> bool,
+    pub world_run: extern "C" fn(*mut Frame) -> bool,
     pub heightmap_screenshot: extern "C" fn(*mut Frame) -> bool,
     pub desync_save: extern "C" fn(*mut Frame) -> bool,
     pub load: extern "C" fn(*mut Frame, *mut Load) -> LoadResult,
@@ -276,7 +284,16 @@ impl Session<'_> {
         complete(!(self.s.failed)(self.frame))
     }
     fn generate(&self, kind: crate::genworld::Mode, x: u32, y: u32, reset: bool) -> Outcome {
-        complete((self.s.generate)(self.frame, kind, x, y, reset))
+        let s = self.s;
+        let setup = (s.world_setup_begin)(self.frame);
+        let ready = unsafe {
+            crate::genworld::openttd_rust_world_setup(&*(s.world)(), setup, kind, x, y, reset)
+        };
+        complete((s.world_setup_end)(self.frame))?;
+        if ready {
+            complete((s.world_run)(self.frame))?;
+        }
+        Ok(())
     }
     fn sized_world(&self, kind: crate::genworld::Mode, reset: bool) -> Outcome {
         let size = (self.s.map_dimensions)();
@@ -296,7 +313,7 @@ impl Session<'_> {
             self.generate(crate::genworld::GWM_EMPTY, 64, 64, true)?;
             (s.set_local_company)(CompanyID::SPECTATOR);
         } else {
-            (s.set_local_company)(CompanyID(0));
+            (s.set_local_company)(CompanyID::BEGIN);
         }
         (s.fix_title_zoom)();
         set_pause(0);
@@ -318,10 +335,9 @@ impl Session<'_> {
     fn new_game_done(&self) -> Outcome {
         let s = self.s;
         (s.settings_elrail)((s.disable_elrails)());
-        let settings = (s.newgame_settings)();
-        if !settings.gui {
+        if !(s.has_gui)() {
             self.start_game(true)?;
-            if (s.newgame_settings)().pause {
+            if (s.pause_on_newgame)() {
                 (s.post_pause)(PauseMode::NORMAL, true);
             }
             return Ok(());
@@ -329,18 +345,18 @@ impl Session<'_> {
         complete((s.startup_company)(self.frame))?;
         (s.company_settings)();
         // COLOUR_END selects the original random colour.
-        let settings = (s.newgame_settings)();
-        if settings.primary != COLOUR_END {
-            (s.company_colour)(true, settings.primary);
+        let colour = (s.starting_colour)();
+        if colour != COLOUR_END {
+            (s.company_colour)(true, colour);
         }
-        let settings = (s.newgame_settings)();
-        if settings.secondary != COLOUR_END && settings.secondary_used {
-            (s.company_colour)(false, settings.secondary);
+        let secondary = (s.secondary_colour)();
+        if secondary.colour != COLOUR_END && secondary.used {
+            (s.company_colour)(false, secondary.colour);
         }
         self.start_game(false)?;
         (s.rail_gui)();
         (s.road_gui)();
-        if (s.newgame_settings)().pause {
+        if (s.pause_on_newgame)() {
             (s.post_pause)(PauseMode::NORMAL, true);
         }
         (s.check_engines)();
@@ -426,7 +442,7 @@ impl Session<'_> {
                         openttd_rust_session_settings(s);
                         (s.reset_grf)(false);
                     }
-                    (s.network_server_start)();
+                    complete((s.network_server_start)(self.frame))?;
                 } else {
                     (s.clear_server_requested)();
                 }
@@ -547,7 +563,7 @@ impl Session<'_> {
                 self.sized_world(crate::genworld::GWM_RANDOM, true)?;
                 (s.dirty)();
             }
-            _ => (unsafe { &*(*((s.world)())).landscape }.assert_condition)(false),
+            _ => (unsafe { &*(*((s.world)())).landscape }.not_reached)(),
         }
         Ok(())
     }
@@ -604,13 +620,13 @@ impl Session<'_> {
         unsafe {
             if calendar {
                 crate::vehicle::scheduler::openttd_rust_vehicle_calendar_day(
-                    &tables,
+                    &raw const tables,
                     mode() == GameMode::NORMAL,
                     usize::from(crate::timer_game_common::calendar_fraction()),
                 );
             } else {
                 crate::vehicle::scheduler::openttd_rust_vehicle_ticks(
-                    &tables,
+                    &raw const tables,
                     mode() == GameMode::NORMAL,
                     usize::from(crate::timer_game_common::economy_fraction()),
                     (s.vehicle_cost)(self.frame).cast(),
@@ -835,9 +851,158 @@ pub(crate) unsafe fn switch(s: &Services, frame: *mut Frame, mode: SwitchMode) -
 }
 
 crate::abi::layouts! {
- fn abi_layout;
- "OpenTTDSessionDimensions" ["session"] => Dimensions { x, y, };
- "OpenTTDSessionNewgame" ["session"] => Newgame { gui, pause, primary, secondary, secondary_used, };
- "OpenTTDSessionState" ["session"] => State { mode, switch_mode, pause, };
- "OpenTTDSessionServices" ["session"] => Services { clock, company, shared, schedule, world, networking, network_server, dedicated, server_requested, clear_server_requested, network_available, exit_game, set_exit, modal, network_reboot, network_disconnect, network_server_start, network_background, network_start_game, network_join, kill_ai, load_config, reset_session_stats, reset_file_mode, generate_id, reset_windows, setup_windows, fix_title_zoom, release_cursor, check_glyphs, music, rail_gui, road_gui, check_engines, check_industries, close_saveload, joining_social, ask_survey, process_async_save, sprite_lru, remote_messages, palette, sound, social_callbacks, news, window_tick, check_caches, reset_engine_overrides, dirty, set_local_company, first_playable_company, reload_config, reset_grf, autosave_frequency, leave_survey, file_kind, map_dimensions, newgame_settings, disable_elrails, settings_elrail, company_settings, company_colour, post_pause, reset_ai_config, reset_game_config, publish_settings, publish_old_settings, newgame_year, fallback_sound_warning, show_sound_warning, survey_ask, show_load_error, social_mode, load_failed_debug, pause_query, pause_change, pause_dirty, full_animation, reconnect_due, console_script, game_script, ai_script, startup_company, network_loop, network_reconnect, state_loop, real_time, scan, generate, heightmap_screenshot, desync_save, load, intro_load, save, failed, console_exception, state_begin, company_begin, company_restore, scripts_begin, scripts_end, paused_measurements, scripts_enabled, assert_local_company, desync_level, tick_timer, tile_loop_begin, tile_loop_end, vehicle_tables, vehicle_cost, vehicle_end, landscaping, schedule_time, town, trees, station, links, visits, tree_tick, industry_tick, industry_builder, company_tick, post_ai, road_begin, road_end, landscape_begin, landscape_end, schedule_measurement, schedule_end, };
+    fn abi_layout;
+    "OpenTTDSessionDimensions" ["session"] => Dimensions { x, y, };
+    "OpenTTDSessionSecondaryColour" ["session"] => SecondaryColour { colour, used, };
+    "OpenTTDSessionState" ["session"] => State { mode, switch_mode, pause, };
+    "OpenTTDSessionServices" ["session"] => Services{
+        clock,
+        company,
+        shared,
+        schedule,
+        world,
+        networking,
+        network_server,
+        dedicated,
+        server_requested,
+        clear_server_requested,
+        network_available,
+        exit_game,
+        set_exit,
+        modal,
+        network_reboot,
+        network_disconnect,
+        network_server_start,
+        network_background,
+        network_start_game,
+        network_join,
+        kill_ai,
+        load_config,
+        reset_session_stats,
+        reset_file_mode,
+        generate_id,
+        reset_windows,
+        setup_windows,
+        fix_title_zoom,
+        release_cursor,
+        check_glyphs,
+        music,
+        rail_gui,
+        road_gui,
+        check_engines,
+        check_industries,
+        close_saveload,
+        joining_social,
+        ask_survey,
+        process_async_save,
+        sprite_lru,
+        remote_messages,
+        palette,
+        sound,
+        social_callbacks,
+        news,
+        window_tick,
+        check_caches,
+        reset_engine_overrides,
+        dirty,
+        set_local_company,
+        first_playable_company,
+        reload_config,
+        reset_grf,
+        autosave_frequency,
+        leave_survey,
+        file_kind,
+        map_dimensions,
+        has_gui,
+        pause_on_newgame,
+        starting_colour,
+        secondary_colour,
+        disable_elrails,
+        settings_elrail,
+        company_settings,
+        company_colour,
+        post_pause,
+        reset_ai_config,
+        reset_game_config,
+        publish_settings,
+        publish_old_settings,
+        newgame_year,
+        fallback_sound_warning,
+        show_sound_warning,
+        survey_ask,
+        show_load_error,
+        social_mode,
+        load_failed_debug,
+        pause_query,
+        pause_change,
+        pause_dirty,
+        full_animation,
+        reconnect_due,
+        console_script,
+        game_script,
+        ai_script,
+        startup_company,
+        network_loop,
+        network_reconnect,
+        state_loop,
+        real_time,
+        scan,
+        world_setup_begin,
+        world_setup_end,
+        world_run,
+        heightmap_screenshot,
+        desync_save,
+        load,
+        intro_load,
+        save,
+        failed,
+        console_exception,
+        state_begin,
+        company_begin,
+        company_restore,
+        scripts_begin,
+        scripts_end,
+        paused_measurements,
+        scripts_enabled,
+        assert_local_company,
+        desync_level,
+        tick_timer,
+        tile_loop_begin,
+        tile_loop_end,
+        vehicle_tables,
+        vehicle_cost,
+        vehicle_end,
+        landscaping,
+        schedule_time,
+        town,
+        trees,
+        station,
+        links,
+        visits,
+        tree_tick,
+        industry_tick,
+        industry_builder,
+        company_tick,
+        post_ai,
+        road_begin,
+        road_end,
+        landscape_begin,
+        landscape_end,
+        schedule_measurement,
+        schedule_end,
+    };
+}
+
+/// # Safety
+/// The native setup and profiling frames stay live through synchronous generation.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_session_generate(
+    s: &Services,
+    frame: *mut Frame,
+    kind: crate::genworld::Mode,
+    x: u32,
+    y: u32,
+    reset: bool,
+) -> bool {
+    (Session { s, frame }).generate(kind, x, y, reset).is_ok()
 }

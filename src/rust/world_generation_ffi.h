@@ -10,6 +10,7 @@
 #include "disaster_ffi.h"
 #include "clock_ffi.h"
 struct OpenTTDWorldFrame;
+struct OpenTTDWorldSetupFrame;
 struct OpenTTDSessionServices;
 struct OpenTTDSessionFrame;
 struct OpenTTDWorldSettings { uint8_t height_limit, flat_height, heightmap_height, generator; };
@@ -33,7 +34,7 @@ struct OpenTTDWorldServices {
 	uint8_t (*local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
 	void (*set_local_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_local_company);
 	void (*restore_companies)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(restore_companies);
-	bool (*initialize)(OpenTTDWorldFrame *, uint32_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(initialize);
+	bool (*initialize)(OpenTTDWorldSetupFrame *, uint32_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(initialize);
 	void (*prepare_progress)() noexcept OPENTTD_SERVICE_DEFAULT(prepare_progress);
 	OpenTTDWorldSettings (*settings)() noexcept OPENTTD_SERVICE_DEFAULT(settings);
 	void (*height_limit)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(height_limit);
@@ -44,7 +45,7 @@ struct OpenTTDWorldServices {
 	void (*set_seed)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_seed);
 	uint32_t (*interactive_random)() noexcept OPENTTD_SERVICE_DEFAULT(interactive_random);
 	void (*random_seed)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(random_seed);
-	bool (*load_sprites)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(load_sprites);
+	bool (*load_sprites)(OpenTTDWorldSetupFrame *) noexcept OPENTTD_SERVICE_DEFAULT(load_sprites);
 	void (*string_widths)() noexcept OPENTTD_SERVICE_DEFAULT(string_widths);
 	void (*reset_windows)() noexcept OPENTTD_SERVICE_DEFAULT(reset_windows);
 	void (*setup_windows)() noexcept OPENTTD_SERVICE_DEFAULT(setup_windows);
@@ -109,7 +110,7 @@ void openttd_rust_world_set_abort_callback(GWAbortProc *);
 void openttd_rust_world_request_abort();
 bool openttd_rust_world_aborted(const OpenTTDWorldServices *);
 bool openttd_rust_world_handle_abort(const OpenTTDWorldServices *, OpenTTDWorldFrame *);
-bool openttd_rust_world_setup(const OpenTTDWorldServices *, OpenTTDWorldFrame *, GenWorldMode, uint32_t, uint32_t, bool);
+bool openttd_rust_world_setup(const OpenTTDWorldServices *, OpenTTDWorldSetupFrame *, GenWorldMode, uint32_t, uint32_t, bool);
 uint8_t openttd_rust_world_generate(const OpenTTDWorldServices *, OpenTTDWorldFrame *);
 }
 #endif /* RUST_WORLD_GENERATION_FFI_H */
