@@ -76,11 +76,14 @@ reach the destination?
 - **Rules**: each rule, design decision or exclusion that, followed literally,
   keeps code in C++ with no end point, steers selection away from the
   remaining code, or spends root's time on work the destination does not need.
+  Rigidity is the usual cause: a hard limit, fixed threshold or mandatory
+  procedure where the agent's judgment toward the destination would do better.
 - **Metrics**: what each figure root and steer select or report by counts, and
   whether it measures distance to the destination.
 - **Rate**: why it rose or fell, and which part of the course explains it.
-- **Autonomy**: each point where the system waits on the user or hands them a
-  decision the destination already answers.
+- **Autonomy**: each point where the system waits on the user, parks work
+  until they decide, or requires handing them a decision the destination
+  already answers. The open outlet for an agent to ask the user stays.
 
 Done when every part has a verdict, and each failure names the text that
 causes it, by file and line.
