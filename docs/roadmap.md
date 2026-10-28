@@ -4,38 +4,40 @@ Root selects here; `AGENTS.md` and `docs/rust-migration.md` define process. Foll
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-10-27, code at `35202d9eda`)
+## Where the fork stands (2026-10-28, code at `3b75d5c5fb`)
 
 - 77 ownership ports. Since the twenty-first steering at `07c0d2e2e8`, five
-  owners and seven maintenance PRs integrated, retiring 3,353 more original
-  lines, including 784 in the current simulation inventory. No rollback and no
-  new confirmed reachable divergence in this steering review.
+  owners and nine maintenance PRs integrated, retiring 3,353 more original
+  lines, including 784 in the current simulation inventory. No confirmed code
+  regression requires rollback.
 - Whole-fork inventory: 71,218 of 470,612 original lines retired (15.13%),
   including 55,546 of 102,615 simulation lines (54.13%). Rust, tooling and glue
-  total 127,585, 44,872 and 45,227 lines. These include comments and data and
-  measure retirement, not completed behavior. The simulation inventory omits
-  `src/timer/`; #527 adds the selected clock sources and refreshes its denominator.
-- Speed: #517 raised play loop counts by about 2.25% to 4.05%. #523 recovered
-  P2016 to +0.11337% against `c04219b0d8` at its measured commit `1813a11c79`.
-  The later retained baseline `90f6ae311c` is +0.81531% against `c04219b0d8`;
-  this later change is not attributed by the steering audit. #517/#523 earned
-  no demonstrated aggregate optimization credit. The last valid projections,
-  at `c04219b0d8`, are TGP 1.1788x, Grok 1.3948x, Opus 1.4018x, P1996
-  1.3354x, P2000 1.3934x and P2016 1.4695x. Current build identity differs from
-  the f492 anchors; renew them before publishing new projections. Details: #275.
-- Deep: #524 implemented the runner. The first 520-case soak set completed in
-  5,958.6 seconds; 519 compared equal and both games hit the same invalid
-  terrain fixture assertion in `town-commands`. Repair scope is on #503.
-  Coverage #518 measured 84.96% of emitted lines and 53.97% of compiler branches
-  in the current original simulation-source inventory; those figures exclude
-  timers. Its 338 of 438 scenarios with zero unique lines are investigation
-  candidates, not proven redundant behavioral tests.
-- CI: the period contained 16 Full requests: 12 passed, three cancelled and one
-  failed, totalling 198.9 elapsed minutes including queue/finalization, not billed
-  runner-minutes. #518's failure and the latest post-merge failure were Linux
-  dependency-download timeouts before compilation. The cadence at `4481a442f6`
-  passed. Five selected unfinished worktrees and two draft PRs remain, within
-  the six-branch limit. #512's first defect tally is complete and closed.
+  total 127,585, 46,322 and 45,227 lines. These measure source retirement, not
+  completed behavior. #527 adds the omitted simulation clock files and refreshes
+  the denominator; #518 did not expand that reviewed inventory.
+- Speed: existing anchors remain incompatible with current build settings.
+  The last valid projections at `c04219b0d8` were TGP 1.1788x, Grok 1.3948x,
+  Opus 1.4018x, P1996 1.3354x, P2000 1.3934x and P2016 1.4695x. Retained
+  pre-batch P2016 loop Ir at `90f6ae311c` is 13,544,626,923; its runtime and
+  counts are preserved. #536 has no measured saving. Renew all six anchors
+  after the bounded tile batch, before a new deep launch. Details: #275/#312.
+- Coverage #518 integrated after exact-head Full passed. Its original-only
+  report measured 84.96% of emitted lines and 53.97% of compiler branches;
+  338 of 438 scenarios with zero unique lines remain investigation candidates,
+  not proven redundant behavioral tests. The first #503 deep set had 519 equal
+  of 520 scenarios; both games hit the same invalid terrain fixture assertion.
+  Reviewed #534 repairs that fixture and the selected observation/helper gaps.
+- #535's 14-case sanitizer subset compared equal in 607.7 seconds. A real-game
+  positive control captured five original animation-shift keys in 121.3 seconds
+  with no candidate-only report. A fresh review is running; the full sanitizer
+  set's runtime remains unmeasured. #511 has 40 prepared mutants and a baseline
+  build running, with no mutant outcomes yet.
+- Three component PRs remain: reviewed #534/#536 and sanitizer #535. The two
+  reviewed diffs are disjoint and will share one integration Full. Historical
+  duplicate checkouts and the pinned speed runtime remain for their evidence.
+  #529 is reopened for its ten-job post-integration acceptance check; the first
+  two dependency installs passed. Fourteen integrations since the previous
+  steering make the next integration the platform cadence point.
 
 ## Twenty-second steering review (2026-10-27, observable evidence and clock ownership)
 
@@ -192,6 +194,7 @@ C++ retired; net glue is separate.
 | #168 disaster typed services and direct calls | #520 | direct | `be18afafda` | 1168 / 118 / 323 / 3; net glue 111 |
 | #503 deep runner and mutual exclusion | #524 | direct | `35202d9eda` | 0 / 390 / 0 / 0; net glue 0 |
 | #528 host RPATH and `migration.py env`; #529 apt retry; #531 `ci.py wait`; #532 housekeeping | #533 | direct | `f0a576839d` | 0 / 727 / 0 / 0; net glue 0 |
+| #504 original simulation coverage | #518 | direct | `3b75d5c5fb` | 0 / 743 / 0 / 0; net glue 0 |
 
 ## Work order
 
@@ -199,29 +202,27 @@ One ranked list. Each free slot takes the highest unblocked item that fits the
 six-branch limit and disjoint-service rule; completing review/integration takes
 priority. A lower rank can run while a higher one waits. Scopes live in issues.
 
-1. **#504 / #518 coverage integration.** The completed report can guide the
-   rest; update base and retry final Full after the infrastructure failure.
-2. **#156 observation and #503 fixture repairs, with #199/#500 helpers/types.**
+1. **#156 observation and #503 fixture repairs, with #199/#500 helpers/types.**
    One maintenance batch makes existing claimed evidence distinguish wrong
    behavior and restores valid deep terrain. Reuse the fixture worktree.
-3. **#275 / #312 tile-loop batch, followed by identity-required re-anchoring.**
+2. **#275 / #312 tile-loop batch, followed by identity-required re-anchoring.**
    There is measured excess and limited headroom; actual savings are unknown.
-4. **#511 targeted mutation study.** Measure observation quality before removing
+3. **#511 targeted mutation study.** Measure observation quality before removing
    scenarios or expanding random input. Use #518 and the new observation gaps.
-5. **#505 ASan/UBSan.** Continue the existing checkpoint; compare both games
+4. **#505 ASan/UBSan.** Continue the existing checkpoint; compare both games
    and distinguish original failures from candidate-only boundary faults.
-6. **#527 calendar/economy clocks.** Recurring simulation state and dispatch
+5. **#527 calendar/economy clocks.** Recurring simulation state and dispatch
    ownership with existing evidence infrastructure, no external prerequisite.
-7. **#509 platform semantic subset.** Concrete MSVC defect history and an
+6. **#509 platform semantic subset.** Concrete MSVC defect history and an
    existing cadence make this more useful than speculative corpus expansion.
-8. **#506 threaded execution and TSan.** The quick guard is integrated; complete
+7. **#506 threaded execution and TSan.** The quick guard is integrated; complete
    deterministic stopping and prove the specified thread-local mutation fails.
-9. **#508 seeded random-command AI.** Target measured unexecuted command
+8. **#508 seeded random-command AI.** Target measured unexecuted command
    branches and compare command outcomes as well as terminal state.
-10. **#507 remaining community AI and large-map corpus**, then **#510 mixed
+9. **#507 remaining community AI and large-map corpus**, then **#510 mixed
     multiplayer feasibility**. Broaden integration evidence after the cheaper
     concrete gaps above; neither depends on the deferred owners.
-11. **#501 typing and remaining #168/#199/#500 debt, plus #537.** Carry
+10. **#501 typing and remaining #168/#199/#500 debt, plus #537.** Carry
     annotations on touched #505/#527 tooling; #537 (testing-off candidate link)
     joins the next maintenance batch. At the first stocktake after item 2 integrates,
     select the next concrete selector, observation or ID conversion slice from
@@ -235,8 +236,8 @@ label incompatible projections unavailable. Retain active anchors and their
 runtime dependencies. #503 also owns adding changed-input coverage recomputation
 after #518 integrates and the later deep members as their issues complete.
 Run `issues.py` at start/planning/stocktake and check actual current placement,
-not just a textual mention. After twelve integrations since the previous steer,
-the next platform cadence is the fifteenth; #512's first tally is finished.
+not just a textual mention. After fourteen integrations since the previous steer,
+the next integration is the fifteenth and requests the platform cadence; #512's first tally is finished.
 
 Excluded, with return conditions checked by this review:
 - #507's NewGRF corpus (#525, #526) is parked by the user (2026-10-28) until
@@ -257,22 +258,22 @@ Excluded, with return conditions checked by this review:
 
 ## Resume checkpoint
 
-The Claude Code root (2026-10-28) integrated #533 and wound down at the user's
-request; review agents were allowed to finish. No confirmed code regression
-requires rollback. Fetch the remote PR head before resuming a local checkout;
-older T3 worktrees of #534, #535 and #536 are behind their remote heads.
+Codex root resumed on 2026-10-28 and integrated #518 after exact-head Full.
+The reviewed observation and tile-loop changes are disjoint and selected for one
+integration PR. No confirmed code regression requires rollback. Fetch remote
+PR heads before resuming historical local task branches.
 
 | Item | Current state | Next action |
 | --- | --- | --- |
-| #529 follow-up | #533 integrated; the apt retry has run in one Full. | Record the Install dependencies step duration over the next ten Linux jobs on #529. |
-| #518 | Updated from base at `2992371c70`; the conflict-resolution review found nothing. | Request exact-head Full at `2992371c70` (update from base first if base moved, with the ordinary conflict-review rule), then integrate. Preserve final report through integration. |
-| #156/#503 batch | Draft PR #534 at `6b1d906684`: all item-2 checks done, including the house-rejection item; the scenarios listed in the PR pass. Statue fixture's raw height writes leave transient invalid terrain in both games and are unchanged. | Mark ready, fresh independent review, then Full. Decide whether the statue fixture needs a terraform-based restore. |
+| #529 follow-up | Retry integrated in #533; issue reopened with two successful post-integration Linux installs recorded. | Record the next eight qualifying Linux jobs, then close if acceptance holds. |
+| #156/#503 batch and #275/#312 | #534 at `6b1d906684` and #536 at `4092053251` are reviewed and ready. Root checked the reviews, fixing commits and disjoint changed-file sets. | Prepare one integration PR from current base, preserving both reviewed heads; request its exact-head Full. The statue fixture's pre-existing temporary invalid terrain remains on #156. |
+| #505 | #535 at `71cf31197d`: sandbox repair and real-game positive control passed. Root accepts 448 tooling lines as necessary; a fresh independent review is running. | Read its findings, spot-check any fixes, then prepare current-base Full when integration is available. |
+| #511 | Forty town-growth mutants prepared; root's unmodified baseline build is running. No mutant has been compiled or tested. | Finish the build and six-scenario baseline, then execute and classify individual mutants, stopping between units for the quiet hold. |
+| Quiet pass | Anchors incompatible; retained pre-batch runtime is protected from cleanup. | After the bounded tile batch, profile the merged tip, prepare frozen inputs and collect before launching deep. Reuse previous-tip counts only with a matching identity. |
+| #527 | Source-driven clock boundary and evidence brief are on the issue; no implementation branch yet. | Start a fresh ownership agent from integrated base; preserve live callback ordering, native alias lifetimes and the named console exception relay. |
+| #537 and remaining debt | Testing-off link defect diagnosed on #537; reviewed PRs gain no scope. | Carry its bounded CMake repair in the next maintenance batch. Select the next #168/#199/#500 slice at the first stocktake after #534 integrates. |
+| Jobs and cadence | Mutation baseline build running. Two integrations (#533/#518) since the last deep set; instruction profile and deep are due. | Launch the merged-tip instruction profile in the background. Quiet collection precedes deep; read finished evidence before integration. The next integration requests platform cadence. |
 | #525/#526 | Parked by the user; draft closed at `ccc28e2ed0`. | None until the user reselects it. |
-| #275/#312 | PR #536 at `4092053251`; fidelity review fixed the orphan `openttd_rust_trees_tile_loop` export and moved the ABI fixture; root spot-checked the fixes. | Request exact-head Full (update from base first if base moved), integrate, then measure speed on the merged tip against #312's pre-batch counts. |
-| #505 | Draft PR #535 at `85b045d0b6`; the sanitized 14-scenario subset matched with zero sanitizer reports, not yet shown to reach the games. Its driver changes let `tools/test-validation-execution.py` overwrite the shared reference build cache (root note on #535). | Fix the sandbox escape before running preflight there; run a positive control at a known original UB site, triage, record runtime and tooling size, then review. |
-| Quiet pass | Existing anchors incompatible. | After bounded tile batch, before a new deep launch when both are due; prepare dependencies before the hold. |
-| #527 | Issue selected, no branch. | Start from integrated base when a slot and rank permit; assess first concrete ownership boundary. |
-| Jobs | No root-launched jobs remain. One integration (#533) since the #524 deep check. | Profile and deep check after the next integration. |
 
 Selection: root; planning agents use gpt-6-astra, high. The start-development
 skill remains open-ended and unchanged; completing this order triggers planning.
