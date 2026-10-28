@@ -31,10 +31,10 @@ static CargoSpec spec;
 const CargoSpec *CargoSpec::Get(CargoType) { return &spec; }
 static uint16_t GetCargoCallback(uint16_t, uint32_t, uint32_t arg, const CargoSpec *) { callback_argument = arg; return callback_value; }
 struct CargoPacket {
-	Money feeder;
+	Money feeder_share;
 	uint32_t distance;
-	uint16_t periods;
-	Money GetFeederShare(uint) const { return this->feeder; }
+	uint16_t periods, count;
+	Money GetFeederShare(uint part) const { return this->feeder_share * part / static_cast<uint>(this->count); }
 	uint32_t GetDistance(TileIndex) const { return this->distance; }
 	uint16_t GetPeriodsInTransit() const { return this->periods; }
 };
@@ -79,15 +79,15 @@ int main()
 		for (int64_t feeder : {INT64_MIN, int64_t(-1), int64_t(0), INT64_MAX}) {
 			for (uint8_t share : {0, 75, 100, 255}) {
 				_settings_game.economy.feeder_payment_share = share;
-				CargoPacket packet{Money(feeder), 250, 45};
+				CargoPacket packet{Money(feeder), 250, 45, 65535};
 				CargoPayment reference{Money(initial)};
 				auto *candidate = openttd_rust_cargo_payment_new(nullptr, 0xFFFF);
 				candidate->fields = {nullptr, INT64_MIN, INT64_MAX, initial};
 				OpenTTDCargoPacket candidate_packet{};
 				candidate_packet.feeder_share = feeder;
-				candidate_packet.count = 1;
-				auto expected = reference.PayTransfer(0, &packet, 1, 0);
-				auto actual = openttd_rust_cargo_payment_transfer(candidate, &s, 0, &candidate_packet, 1, 250, 45);
+				candidate_packet.count = packet.count;
+				auto expected = reference.PayTransfer(0, &packet, 65535, 0);
+				auto actual = openttd_rust_cargo_payment_transfer(candidate, &s, 0, &candidate_packet, 65535, 250, 45);
 				const auto &state = candidate->fields;
 				if (actual != expected.base() || state.visual_transfer != reference.visual_transfer.base() || state.route_profit != INT64_MIN || state.visual_profit != INT64_MAX) return 2;
 				openttd_rust_cargo_payment_destroy(candidate, nullptr, 1);
