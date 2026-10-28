@@ -221,8 +221,9 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
 10. **#507 remaining community AI and large-map corpus**, then **#510 mixed
     multiplayer feasibility**. Broaden integration evidence after the cheaper
     concrete gaps above; neither depends on the deferred owners.
-11. **#501 typing and remaining #168/#199/#500 debt.** Carry annotations on
-    touched #505/#527 tooling. At the first stocktake after item 2 integrates,
+11. **#501 typing and remaining #168/#199/#500 debt, plus #537.** Carry
+    annotations on touched #505/#527 tooling; #537 (testing-off candidate link)
+    joins the next maintenance batch. At the first stocktake after item 2 integrates,
     select the next concrete selector, observation or ID conversion slice from
     these trackers using measured cost or a source defect; do not launch a
     whole-fork sweep. Disaster conversion is complete.
@@ -264,11 +265,11 @@ older T3 worktrees of #534, #535 and #536 are behind their remote heads.
 | Item | Current state | Next action |
 | --- | --- | --- |
 | #529 follow-up | #533 integrated; the apt retry has run in one Full. | Record the Install dependencies step duration over the next ten Linux jobs on #529. |
-| #518 | Updated from base at `2992371c70`; one `tools/migration.py` conflict kept both `coverage` and `env`; `/root/review518-conflict` reviews the resolution. | Read that report, then request exact-head Full and integrate. Preserve final report through integration. |
-| #156/#503 batch | Draft PR #534; town-commands default and soak pass; `/root/issue503-156-fixture-validate` checkpoints its scenario results and the house-rejection item at wind-down. | Read the PR status comment, finish the listed checks and items, then fresh review and Full. Decide the statue fixture's direct height writes. |
+| #518 | Updated from base at `2992371c70`; the conflict-resolution review found nothing. | Request exact-head Full at `2992371c70` (update from base first if base moved, with the ordinary conflict-review rule), then integrate. Preserve final report through integration. |
+| #156/#503 batch | Draft PR #534 at `6b1d906684`: all item-2 checks done, including the house-rejection item; the scenarios listed in the PR pass. Statue fixture's raw height writes leave transient invalid terrain in both games and are unchanged. | Mark ready, fresh independent review, then Full. Decide whether the statue fixture needs a terraform-based restore. |
 | #525/#526 | Parked by the user; draft closed at `ccc28e2ed0`. | None until the user reselects it. |
 | #275/#312 | PR #536 at `173dd67b77`; 80 of 80 trees/landscape/water scenarios equal; `/root/review536-tile-loop` fidelity review. | Spot-check review fixes, update base, Full, integrate; measure speed on the merged tip. |
-| #505 | Draft PR #535; `/root/issue505-sanitizers` checkpoints the sanitized subset at wind-down. | Read the PR status comment and continue from it. |
+| #505 | Draft PR #535 at `85b045d0b6`, unvalidated; a sanitized 14-scenario subset from `958468fdb2` may still be running in its T3 worktree. Its driver changes let `tools/test-validation-execution.py` overwrite the shared reference build cache (root note on #535). | Fix the test sandbox escape before running preflight on that branch; read or rerun the subset at the head, triage candidate-only reports, record runtime and the tooling size, then review. |
 | Quiet pass | Existing anchors incompatible. | After bounded tile batch, before a new deep launch when both are due; prepare dependencies before the hold. |
 | #527 | Issue selected, no branch. | Start from integrated base when a slot and rank permit; assess first concrete ownership boundary. |
 | Jobs | No root-launched jobs remain. One integration (#533) since the #524 deep check. | Profile and deep check after the next integration. |
