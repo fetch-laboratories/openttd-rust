@@ -235,6 +235,13 @@ modes compare their exit saves.
   requiring movement, loaded cargo, flying state and paid delivery.
   `tools/aircraft-scenario-ai/README.md` records its setup details, reproduction commands and
   limits.
+- Community scripts and the larger vanilla arctic save (#507) use
+  `tools/simulation/community_ai.py`. Complete source packages are pinned downloads
+  validated on every use and cached by the ordinary Actions cache. One generated
+  game and one short reload run by default; temperate/arctic ten-year games stay
+  in soak. The [input README](../migration/community-ai/README.md) records sources,
+  configuration and generation. The eventual same-NewGRF save remains unselected
+  while #525/#526 are user-parked.
 - Masks (`MASKS`, with reasons and hit counts in the report): the random save id, build
   revision/NewGRF version, and `round_trip_time`, which the original saves uninitialized (#83);
   ports touching it need their own check.

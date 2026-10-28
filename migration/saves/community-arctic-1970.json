@@ -1,0 +1,44 @@
+{
+  "reference_commit": "14ec60f248547d4d062a1160f0fc26d742319888",
+  "license": "GPL-2.0-only",
+  "scenario": {
+    "name": "community-ai-arctic",
+    "kind": "generate",
+    "community_ai": "arctic",
+    "seed": 507,
+    "map_log2": 8,
+    "land_generator": 1,
+    "ticks": 541680,
+    "console": [
+      "start_ai SimpleAI",
+      "start_ai AdmiralAI use_trains=0",
+      "start_ai trAIns",
+      "start_ai ShipAI",
+      "unpause"
+    ],
+    "settings": {
+      "game_creation": {
+        "landscape": "arctic",
+        "starting_year": 1950
+      },
+      "difficulty": {
+        "terrain_type": 1,
+        "quantity_sea_lakes": 0
+      },
+      "pf": {
+        "forbid_90_deg": "false"
+      },
+      "construction": {
+        "build_on_slopes": "true"
+      }
+    }
+  },
+  "sha256": "b3714b1ce9a7a78f5c87a734bf41e9ddd71448efbbceddcf965ca55349ccb9be",
+  "packages_sha256": "0dfc2c0b99a3d360d6776d8307a1be46017091e741a869e03743e0aba5205e8f",
+  "command": "python3 -m tools.simulation.community_ai generate",
+  "end_moment": [
+    719543,
+    0,
+    542960
+  ]
+}
