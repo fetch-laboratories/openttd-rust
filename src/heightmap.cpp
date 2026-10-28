@@ -574,11 +574,9 @@ bool LoadHeightmap(DetailedFileType dft, std::string_view filename)
  * Make an empty world where all tiles are of height 'tile_height'.
  * @param tile_height of the desired new empty world
  */
+#ifndef WITH_RUST
 void FlatEmptyWorld(uint8_t tile_height)
 {
-#ifdef WITH_RUST
-	openttd_rust_flat_empty_world(&GetRustLandscapeGenerationServices(), tile_height, _settings_game.construction.freeform_edges, _settings_game.construction.map_height_limit);
-#else
 	int edge_distance = _settings_game.construction.freeform_edges ? 0 : 2;
 	for (uint row = edge_distance; row < Map::SizeY() - edge_distance; row++) {
 		for (uint col = edge_distance; col < Map::SizeX() - edge_distance; col++) {
@@ -588,5 +586,5 @@ void FlatEmptyWorld(uint8_t tile_height)
 
 	FixSlopes();
 	MarkWholeScreenDirty();
-#endif
 }
+#endif /* WITH_RUST */

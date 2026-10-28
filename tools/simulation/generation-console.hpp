@@ -222,7 +222,12 @@ static bool GenerationScenario(std::span<std::string_view> args)
 		AutoRestoreBackup<DetailedFileType> type(_file_to_saveload.ftype.detailed, DFT_HEIGHTMAP_BMP);
 		fmt::print(stderr, "GENERATION missing {} {}\n", loaded, GenerationLandscape(GWM_HEIGHTMAP));
 	}
-	FlatEmptyWorld(7); GenerationSnapshot("flat");
+#ifdef WITH_RUST
+	openttd_rust_flat_empty_world(&GetRustLandscapeGenerationServices(), 7, _settings_game.construction.freeform_edges, _settings_game.construction.map_height_limit);
+#else
+	FlatEmptyWorld(7);
+#endif
+	GenerationSnapshot("flat");
 	for (TileIndex index : Map::Iterate()) {
 		Tile t{index}; auto &v = map[index.base()];
 		t.type() = v[0]; t.height() = v[1]; t.m2() = v[2]; t.m1() = v[3]; t.m3() = v[4]; t.m4() = v[5]; t.m5() = v[6]; t.m6() = v[7]; t.m7() = v[8]; t.m8() = v[9];
