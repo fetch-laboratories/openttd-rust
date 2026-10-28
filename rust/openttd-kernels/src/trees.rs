@@ -1039,64 +1039,48 @@ pub(crate) unsafe fn tile_loop(
     owner.tile_loop(tile, &settings, call);
 }
 
-/// `TileLoop_Trees` for one `MP_TREES` tile.
-/// # Safety
-/// Tables are live and immutable; game thread only. Services are `noexcept`.
-/// Any reached water command uses the caller's live, independent stack result context.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_trees_tile_loop(
-    tile: u32,
-    settings: LoopSettings,
-    call: *mut crate::ground::Call,
-    services: *const TreeServices,
-    shared: *const Services,
-) {
-    // SAFETY: The contract above supplies the live immutable tables `trees` needs.
-    unsafe { trees(services, shared) }.tile_loop(tile, &settings, call);
-}
-
 /// `OnTick_Trees`.
 /// # Safety
-/// As for `openttd_rust_trees_tile_loop`.
+/// Tables are live and immutable; game thread only. Services are `noexcept`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_trees_tick(
     settings: TickSettings,
     services: *const TreeServices,
     shared: *const Services,
 ) {
-    // SAFETY: As for `openttd_rust_trees_tile_loop`.
+    // SAFETY: The caller supplies live immutable tables for this serialized entry.
     unsafe { trees(services, shared) }.tick(&settings);
 }
 
 /// `GenerateTrees`; true when a progress service reported world-generation abort.
 /// # Safety
-/// As for `openttd_rust_trees_tile_loop`.
+/// Tables are live and immutable; game thread only. Services are `noexcept`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_trees_generate(
     settings: GenerateSettings,
     services: *const TreeServices,
     shared: *const Services,
 ) -> bool {
-    // SAFETY: As for `openttd_rust_trees_tile_loop`.
+    // SAFETY: The caller supplies live immutable tables for this serialized entry.
     unsafe { trees(services, shared) }.generate(&settings)
 }
 
 /// `PlaceTreesRandomly`; true when a progress service reported world-generation abort.
 /// # Safety
-/// As for `openttd_rust_trees_tile_loop`.
+/// Tables are live and immutable; game thread only. Services are `noexcept`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_trees_place_randomly(
     settings: GenerateSettings,
     services: *const TreeServices,
     shared: *const Services,
 ) -> bool {
-    // SAFETY: As for `openttd_rust_trees_tile_loop`.
+    // SAFETY: The caller supplies live immutable tables for this serialized entry.
     unsafe { trees(services, shared) }.place_randomly(&settings)
 }
 
 /// `PlaceTree` on a tile suitable for trees.
 /// # Safety
-/// As for `openttd_rust_trees_tile_loop`.
+/// Tables are live and immutable; game thread only. Services are `noexcept`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_trees_place(
     tile: u32,
@@ -1106,7 +1090,7 @@ pub unsafe extern "C" fn openttd_rust_trees_place(
     services: *const TreeServices,
     shared: *const Services,
 ) {
-    // SAFETY: As for `openttd_rust_trees_tile_loop`.
+    // SAFETY: The caller supplies live immutable tables for this serialized entry.
     let trees = unsafe { trees(services, shared) };
     let p = trees.plant_observation(tile);
     trees.place(tile, p, r, keep_density, climate);
@@ -1114,7 +1098,7 @@ pub unsafe extern "C" fn openttd_rust_trees_place(
 
 /// `PlantTreesOnTile` on a tile suitable for trees.
 /// # Safety
-/// As for `openttd_rust_trees_tile_loop`.
+/// Tables are live and immutable; game thread only. Services are `noexcept`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_trees_plant(
     tile: u32,
@@ -1124,7 +1108,7 @@ pub unsafe extern "C" fn openttd_rust_trees_plant(
     services: *const TreeServices,
     shared: *const Services,
 ) {
-    // SAFETY: As for `openttd_rust_trees_tile_loop`.
+    // SAFETY: The caller supplies live immutable tables for this serialized entry.
     let trees = unsafe { trees(services, shared) };
     let p = trees.plant_observation(tile);
     trees.plant(tile, p, tree, count, growth);
@@ -1145,7 +1129,8 @@ pub unsafe extern "C" fn openttd_rust_trees_can_plant(
 
 /// `CmdPlantTree`. The context is passed back to its command services only.
 /// # Safety
-/// As for `openttd_rust_trees_tile_loop`; `ctx` lives for the call.
+/// Tables are live and immutable; game thread only. Services are `noexcept`.
+/// `ctx` and the independent nested command result live for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_trees_cmd_plant(
     ctx: *mut Command,
