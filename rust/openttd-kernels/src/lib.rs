@@ -87,6 +87,7 @@ mod newgrf_storage;
 mod node_hash;
 mod object_type;
 mod objects;
+mod openttd;
 mod order_type;
 mod overflowsafe_type;
 mod packet;
@@ -1408,7 +1409,9 @@ mod container_func;
 mod source_type;
 mod subsidy_base;
 mod tilearea;
+mod timer_game_calendar;
 mod timer_game_common;
+mod timer_game_economy;
 mod timer_game_tick;
 
 mod subsidy_type;

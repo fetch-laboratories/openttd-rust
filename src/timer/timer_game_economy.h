@@ -11,6 +11,9 @@
 #define TIMER_GAME_ECONOMY_H
 
 #include "timer_game_common.h"
+#ifdef WITH_RUST
+#include "../rust/clock_state.h"
+#endif
 
 /**
  * Timer that is increased every 27ms, and counts towards economy time units, expressed in days / months / years.
@@ -31,12 +34,32 @@
  */
 class TimerGameEconomy : public TimerGame<struct Economy> {
 public:
+#ifdef WITH_RUST
+	inline static Year &year = GetRustClockState().economy_year; ///< Current year, starting at 0.
+#else
 	static Year year; ///< Current year, starting at 0.
+#endif
+#ifdef WITH_RUST
+	inline static Month &month = GetRustClockState().economy_month; ///< Current month (0..11).
+#else
 	static Month month; ///< Current month (0..11).
+#endif
+#ifdef WITH_RUST
+	inline static Date &date = GetRustClockState().economy_date; ///< Current date in days (day counter).
+#else
 	static Date date; ///< Current date in days (day counter).
+#endif
+#ifdef WITH_RUST
+	inline static DateFract &date_fract = GetRustClockState().economy_fraction; ///< Fractional part of the day.
+#else
 	static DateFract date_fract; ///< Fractional part of the day.
+#endif
 
+#ifdef WITH_RUST
+	inline static uint &days_since_last_month = GetRustClockState().days_since_last_month; ///< Number of days that have elapsed since the last month.
+#else
 	static uint days_since_last_month; ///< Number of days that have elapsed since the last month.
+#endif
 
 	static YearMonthDay ConvertDateToYMD(Date date);
 	static Date ConvertYMDToDate(Year year, Month month, Day day);

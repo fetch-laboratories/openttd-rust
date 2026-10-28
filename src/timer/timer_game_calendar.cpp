@@ -28,6 +28,34 @@
 
 #include "../safeguards.h"
 
+#ifdef WITH_RUST
+#include "../rust/clock_ffi.h"
+#include <exception>
+
+TimerGameCalendar::YearMonthDay TimerGameCalendar::ConvertDateToYMD(Date date)
+{
+	auto ymd = openttd_rust_calendar_date_to_ymd(date.base());
+	return {Year{ymd.year}, ymd.month, ymd.day};
+}
+TimerGameCalendar::Date TimerGameCalendar::ConvertYMDToDate(Year year, Month month, Day day)
+{
+	return Date{openttd_rust_calendar_ymd_to_date(year.base(), month, day)};
+}
+void TimerGameCalendar::SetDate(Date date, DateFract fract)
+{
+	assert(fract < Ticks::DAY_TICKS);
+	openttd_rust_calendar_set_date(date.base(), fract);
+}
+template <>
+bool TimerManager<TimerGameCalendar>::Elapsed([[maybe_unused]] TimerGameCalendar::TElapsed delta)
+{
+	assert(delta == 1);
+	std::exception_ptr scheduled_console_exception;
+	bool progressed = openttd_rust_calendar_elapsed(&GetRustClockServices(), reinterpret_cast<OpenTTDConsoleException *>(&scheduled_console_exception));
+	if (scheduled_console_exception) std::rethrow_exception(scheduled_console_exception);
+	return progressed;
+}
+#else
 TimerGameCalendar::Year TimerGameCalendar::year = {};
 TimerGameCalendar::Month TimerGameCalendar::month = {};
 TimerGameCalendar::Date TimerGameCalendar::date = {};
@@ -181,3 +209,5 @@ void TimerManager<TimerGameCalendar>::Validate(TimerGameCalendar::TPeriod period
 	}
 }
 #endif /* WITH_ASSERT */
+
+#endif /* WITH_RUST */

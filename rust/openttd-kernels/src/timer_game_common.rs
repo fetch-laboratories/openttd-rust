@@ -5,7 +5,13 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Shared time constants from `timer_game_common.h`.
+//! Shared Gregorian conversion, canonical clock storage and subscription dispatch.
+#![allow(
+    unsafe_code,
+    missing_docs,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
 /// `CalendarTime::MONTHS_IN_YEAR`.
 pub const MONTHS_IN_YEAR: u32 = 12;
 /// `TimerGameConst::DAYS_IN_YEAR`.
@@ -35,3 +41,407 @@ pub const MAX_DATE: i32 = 365 * 5_000_001 + 5_000_000 / 4 - 5_000_000 / 100 + 5_
 /// Calendar year limits from `TimerGameConst`.
 pub const MIN_YEAR: i32 = 0;
 pub const MAX_YEAR: i32 = 5_000_000;
+
+// Native StrongType subobjects are placement-constructed once before publishing aliases.
+// Storage lives through native static timer destruction. Access is serialized by the
+// game-state mutex; raw field accesses end before any callback can reenter either owner.
+#[repr(C)]
+pub struct ClockState {
+    pub calendar_year: crate::timer_game_calendar::CalendarYear,
+    pub calendar_date: crate::services::CalendarDate,
+    pub economy_year: crate::timer_game_economy::EconomyYear,
+    pub economy_date: crate::services::EconomyDate,
+    pub days_since_last_month: u32,
+    pub calendar_fraction: u16,
+    pub calendar_subfraction: u16,
+    pub economy_fraction: u16,
+    pub calendar_month: u8,
+    pub economy_month: u8,
+}
+static CLOCK: crate::game_state::GameState<std::mem::MaybeUninit<ClockState>> =
+    crate::game_state::GameState::new(std::mem::MaybeUninit::zeroed());
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_clock_storage() -> *mut ClockState {
+    CLOCK.get().cast()
+}
+macro_rules! clock_field {
+    ($read:ident, $write:ident, $field:ident, $ty:ty) => {
+        pub fn $read() -> $ty {
+            unsafe { std::ptr::addr_of!((*CLOCK.get().cast::<ClockState>()).$field).read() }
+        }
+        pub fn $write(value: $ty) {
+            unsafe {
+                std::ptr::addr_of_mut!((*CLOCK.get().cast::<ClockState>()).$field).write(value);
+            }
+        }
+    };
+}
+clock_field!(
+    calendar_year,
+    write_calendar_year,
+    calendar_year,
+    crate::timer_game_calendar::CalendarYear
+);
+clock_field!(
+    calendar_date,
+    write_calendar_date,
+    calendar_date,
+    crate::services::CalendarDate
+);
+clock_field!(
+    economy_year,
+    write_economy_year,
+    economy_year,
+    crate::timer_game_economy::EconomyYear
+);
+clock_field!(
+    economy_date,
+    write_economy_date,
+    economy_date,
+    crate::services::EconomyDate
+);
+clock_field!(
+    days_since_last_month,
+    write_days_since_last_month,
+    days_since_last_month,
+    u32
+);
+clock_field!(
+    calendar_fraction,
+    write_calendar_fraction,
+    calendar_fraction,
+    u16
+);
+clock_field!(
+    calendar_subfraction,
+    write_calendar_subfraction,
+    calendar_subfraction,
+    u16
+);
+clock_field!(
+    economy_fraction,
+    write_economy_fraction,
+    economy_fraction,
+    u16
+);
+clock_field!(calendar_month, write_calendar_month, calendar_month, u8);
+clock_field!(economy_month, write_economy_month, economy_month, u8);
+
+const ACCUM_DAYS: [i32; 12] = [0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335];
+const MONTH_DATE: [u16; 366] = {
+    let mut table = [0; 366];
+    let mut index = 0;
+    let mut month = 0;
+    while month < 12 {
+        let end = if month == 11 {
+            366
+        } else {
+            ACCUM_DAYS[month + 1]
+        };
+        let mut day = 1;
+        while index < end as usize {
+            table[index] = ((month as u16) << 5) | day;
+            day += 1;
+            index += 1;
+        }
+        month += 1;
+    }
+    table
+};
+/// `TimerGame::DateAtStartOfYear`, including signed division and integer width.
+pub const fn date_at_start_of_year(year: i32) -> i32 {
+    let prev = year.wrapping_sub(1);
+    let leap_years = if year == 0 {
+        0
+    } else {
+        (prev / 4)
+            .wrapping_sub(prev / 100)
+            .wrapping_add(prev / 400)
+            .wrapping_add(1)
+    };
+    year.wrapping_mul(DAYS_IN_YEAR).wrapping_add(leap_years)
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_calendar_date_to_ymd(date: i32) -> crate::services::CalendarYmd {
+    calendar_date_to_ymd(date)
+}
+pub fn calendar_date_to_ymd(date: i32) -> crate::services::CalendarYmd {
+    let mut year = 400 * (date / (DAYS_IN_YEAR * 400 + 97));
+    let mut rem = date % (DAYS_IN_YEAR * 400 + 97);
+    if rem >= DAYS_IN_YEAR * 100 + 25 {
+        year += 100;
+        rem -= DAYS_IN_YEAR * 100 + 25;
+        year += 100 * (rem / (DAYS_IN_YEAR * 100 + 24));
+        rem %= DAYS_IN_YEAR * 100 + 24;
+    }
+    if !is_leap_year(year) && rem >= DAYS_IN_YEAR * 4 {
+        year += 4;
+        rem -= DAYS_IN_YEAR * 4;
+    }
+    year += 4 * (rem / (DAYS_IN_YEAR * 4 + 1));
+    rem %= DAYS_IN_YEAR * 4 + 1;
+    while rem
+        >= if is_leap_year(year) {
+            DAYS_IN_LEAP_YEAR
+        } else {
+            DAYS_IN_YEAR
+        }
+    {
+        rem -= if is_leap_year(year) {
+            DAYS_IN_LEAP_YEAR
+        } else {
+            DAYS_IN_YEAR
+        };
+        year += 1;
+    }
+    if !is_leap_year(year) && rem >= ACCUM_DAYS[2] - 1 {
+        rem += 1;
+    }
+    // timer_game_common.cpp requires a Gregorian date whose year-day indexes its table.
+    let x = unsafe { *MONTH_DATE.get_unchecked(rem as usize) };
+    crate::services::CalendarYmd {
+        year,
+        month: (x >> 5) as u8,
+        day: (x & 0x1f) as u8,
+    }
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_calendar_ymd_to_date(year: i32, month: u8, day: u8) -> i32 {
+    calendar_ymd_to_date(year, month, day)
+}
+pub fn calendar_ymd_to_date(year: i32, month: u8, day: u8) -> i32 {
+    // Native callers supply a month indexing _accum_days_for_month.
+    let mut days = unsafe { *ACCUM_DAYS.get_unchecked(usize::from(month)) } + i32::from(day) - 1;
+    if !is_leap_year(year) && days >= ACCUM_DAYS[2] {
+        days -= 1;
+    }
+    date_at_start_of_year(year).wrapping_add(days)
+}
+
+use crate::game_state::GameState;
+use std::collections::BTreeMap;
+use std::ffi::c_void;
+#[repr(C)]
+pub struct NativeClockTimer {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+pub struct ConsoleException {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Period {
+    pub trigger: u8,
+    pub priority: u8,
+}
+pub const DAY: u8 = 0;
+pub const WEEK: u8 = 1;
+pub const MONTH: u8 = 2;
+pub const QUARTER: u8 = 3;
+pub const YEAR: u8 = 4;
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Callback {
+    pub invoke: unsafe extern "C" fn(*const c_void, *mut ConsoleException) -> bool,
+    pub context: *const c_void,
+}
+#[derive(Clone, Copy)]
+pub(crate) struct Subscription {
+    period: *const Period,
+    callback: Option<Callback>,
+    fired: *mut bool,
+}
+type Registry = BTreeMap<(u8, u8, usize), Subscription>;
+static CALENDAR: GameState<Registry> = GameState::new(BTreeMap::new());
+static ECONOMY: GameState<Registry> = GameState::new(BTreeMap::new());
+fn key(timer: *const NativeClockTimer, period: Period) -> (u8, u8, usize) {
+    (period.trigger, period.priority, timer as usize)
+}
+fn valid(registry: &GameState<Registry>, period: Period) -> bool {
+    period.priority == 0
+        || unsafe {
+            !(&*registry.get()).values().any(|t| {
+                let live = t.period.read();
+                live.trigger == period.trigger && live.priority == period.priority
+            })
+        }
+}
+unsafe fn register(
+    registry: &GameState<Registry>,
+    timer: *const NativeClockTimer,
+    period: *const Period,
+) {
+    unsafe {
+        (&mut *registry.get()).insert(
+            key(timer, period.read()),
+            Subscription {
+                period,
+                callback: None,
+                fired: std::ptr::null_mut(),
+            },
+        );
+    }
+}
+unsafe fn unregister(
+    registry: &GameState<Registry>,
+    timer: *const NativeClockTimer,
+    period: Period,
+) {
+    unsafe {
+        (&mut *registry.get()).remove(&key(timer, period));
+    }
+}
+unsafe fn bind(
+    registry: &GameState<Registry>,
+    timer: *const NativeClockTimer,
+    period: Period,
+    callback: Callback,
+    fired: *mut bool,
+) {
+    let entry = unsafe {
+        (&mut *registry.get())
+            .get_mut(&key(timer, period))
+            .unwrap_unchecked()
+    };
+    entry.callback = Some(callback);
+    entry.fired = fired;
+}
+unsafe fn change(
+    registry: &GameState<Registry>,
+    timer: *const NativeClockTimer,
+    period: *mut Period,
+    new_period: Period,
+    assert_valid: extern "C" fn(bool),
+) {
+    let entry = unsafe {
+        (&mut *registry.get())
+            .remove(&key(timer, period.read()))
+            .unwrap_unchecked()
+    };
+    unsafe {
+        period.write(new_period);
+    }
+    assert_valid(valid(registry, new_period));
+    unsafe {
+        (&mut *registry.get()).insert(key(timer, new_period), entry);
+    }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_calendar_change(
+    timer: *const NativeClockTimer,
+    period: *mut Period,
+    new_period: Period,
+    assert_valid: extern "C" fn(bool),
+) {
+    unsafe {
+        change(&CALENDAR, timer, period, new_period, assert_valid);
+    }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_economy_change(
+    timer: *const NativeClockTimer,
+    period: *mut Period,
+    new_period: Period,
+    assert_valid: extern "C" fn(bool),
+) {
+    unsafe {
+        change(&ECONOMY, timer, period, new_period, assert_valid);
+    }
+}
+macro_rules! registry_entries {
+    ($registry:ident, $valid:ident, $register:ident, $unregister:ident, $bind:ident) => {
+        #[unsafe(no_mangle)]
+        pub extern "C" fn $valid(period: Period) -> bool {
+            valid(&$registry, period)
+        }
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn $register(timer: *const NativeClockTimer, period: *const Period) {
+            unsafe {
+                register(&$registry, timer, period);
+            }
+        }
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn $unregister(timer: *const NativeClockTimer, period: Period) {
+            unsafe {
+                unregister(&$registry, timer, period);
+            }
+        }
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn $bind(
+            timer: *const NativeClockTimer,
+            period: Period,
+            callback: Callback,
+            fired: *mut bool,
+        ) {
+            unsafe {
+                bind(&$registry, timer, period, callback, fired);
+            }
+        }
+    };
+}
+registry_entries!(
+    CALENDAR,
+    openttd_rust_calendar_valid,
+    openttd_rust_calendar_register,
+    openttd_rust_calendar_unregister,
+    openttd_rust_calendar_bind
+);
+registry_entries!(
+    ECONOMY,
+    openttd_rust_economy_valid,
+    openttd_rust_economy_register,
+    openttd_rust_economy_unregister,
+    openttd_rust_economy_bind
+);
+pub(crate) fn calendar_snapshot() -> Vec<Subscription> {
+    unsafe { (&*CALENDAR.get()).values().copied().collect() }
+}
+pub(crate) fn economy_snapshot() -> Vec<Subscription> {
+    unsafe { (&*ECONOMY.get()).values().copied().collect() }
+}
+pub(crate) unsafe fn dispatch(
+    timers: &[Subscription],
+    trigger: u8,
+    exception: *mut ConsoleException,
+) -> bool {
+    for timer in timers {
+        if !timer.fired.is_null() && unsafe { timer.fired.read() } {
+            continue;
+        }
+        if unsafe { timer.period.read().trigger } != trigger {
+            continue;
+        }
+        // Derived callback members are bound only after BaseTimer's registration finishes.
+        let callback = unsafe { timer.callback.unwrap_unchecked() };
+        if !unsafe { (callback.invoke)(callback.context, exception) } {
+            return false;
+        }
+        if !timer.fired.is_null() {
+            unsafe {
+                timer.fired.write(true);
+            }
+        }
+    }
+    true
+}
+#[repr(C)]
+pub struct ClockServices {
+    pub shared: *const crate::services::Services,
+    pub game_mode: extern "C" fn() -> crate::openttd::GameMode,
+    pub minutes_per_calendar_year: extern "C" fn() -> u16,
+    pub using_wallclock_units: extern "C" fn(bool) -> bool,
+    pub vehicle_id: extern "C" fn(*const c_void) -> u32,
+    pub vehicle_shift_dates: extern "C" fn(crate::vehicle::VehicleRef, i32),
+    pub next_graph: extern "C" fn(*mut u32) -> *mut crate::linkgraph::NativeGraph,
+    pub graph_owner:
+        extern "C" fn(*mut crate::linkgraph::NativeGraph) -> *mut crate::linkgraph::live::Graph,
+}
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDClockState" ["clocks"] => ClockState { calendar_year, calendar_date, economy_year, economy_date, days_since_last_month, calendar_fraction, calendar_subfraction, economy_fraction, calendar_month, economy_month };
+    "OpenTTDClockPeriod" ["clocks"] => Period { trigger, priority };
+    "OpenTTDEconomyClockPeriod" ["clocks"] => Period { trigger, priority };
+    "RustClockCallback" ["clocks"] => Callback { invoke, context };
+    "OpenTTDClockServices" ["clocks"] => ClockServices { shared, game_mode, minutes_per_calendar_year, using_wallclock_units, vehicle_id, vehicle_shift_dates, next_graph, graph_owner };
+}

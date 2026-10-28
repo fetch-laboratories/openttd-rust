@@ -52,10 +52,7 @@ constinit const OpenTTDScheduleServices LinkGraphSchedule::services = {
 	.graph_valid = RustLinkGraphValid,
 	.graph_get = RustLinkGraphGet,
 	.abort_job = +[](LinkGraphJob *j) noexcept { j->AbortJob(); },
-	.next_graph = +[](uint32_t *from) noexcept -> LinkGraph * {
-		for (LinkGraph *g : LinkGraph::Iterate(*from)) { *from = g->index.base() + 1U; return g; }
-		return nullptr;
-	},
+	.next_graph = RustLinkGraphNext,
 	.next_job = +[](uint32_t *from) noexcept -> LinkGraphJob * {
 		for (LinkGraphJob *j : LinkGraphJob::Iterate(*from)) { *from = j->index.base() + 1U; return j; }
 		return nullptr;

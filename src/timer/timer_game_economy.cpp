@@ -33,6 +33,38 @@
 
 #include "../safeguards.h"
 
+#ifdef WITH_RUST
+#include "../rust/clock_ffi.h"
+#include <exception>
+
+TimerGameEconomy::YearMonthDay TimerGameEconomy::ConvertDateToYMD(Date date)
+{
+	auto ymd = openttd_rust_economy_date_to_ymd(date.base(), UsingWallclockUnits());
+	return {Year{ymd.year}, ymd.month, ymd.day};
+}
+TimerGameEconomy::Date TimerGameEconomy::ConvertYMDToDate(Year year, Month month, Day day)
+{
+	return Date{openttd_rust_economy_ymd_to_date(year.base(), month, day, UsingWallclockUnits())};
+}
+void TimerGameEconomy::SetDate(Date date, DateFract fract)
+{
+	assert(fract < Ticks::DAY_TICKS);
+	openttd_rust_economy_set_date(date.base(), fract, UsingWallclockUnits());
+}
+bool TimerGameEconomy::UsingWallclockUnits(bool newgame)
+{
+	return GetRustClockServices().using_wallclock_units(newgame);
+}
+template <>
+bool TimerManager<TimerGameEconomy>::Elapsed([[maybe_unused]] TimerGameEconomy::TElapsed delta)
+{
+	assert(delta == 1);
+	std::exception_ptr scheduled_console_exception;
+	bool progressed = openttd_rust_economy_elapsed(&GetRustClockServices(), reinterpret_cast<OpenTTDConsoleException *>(&scheduled_console_exception));
+	if (scheduled_console_exception) std::rethrow_exception(scheduled_console_exception);
+	return progressed;
+}
+#else
 TimerGameEconomy::Year TimerGameEconomy::year = {};
 TimerGameEconomy::Month TimerGameEconomy::month = {};
 TimerGameEconomy::Date TimerGameEconomy::date = {};
@@ -209,3 +241,5 @@ void TimerManager<TimerGameEconomy>::Validate(TimerGameEconomy::TPeriod period)
 	}
 }
 #endif /* WITH_ASSERT */
+
+#endif /* WITH_RUST */

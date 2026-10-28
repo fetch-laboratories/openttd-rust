@@ -18,6 +18,79 @@
 
 #include "../safeguards.h"
 
+#ifdef WITH_RUST
+#include "../rust/clock_ffi.h"
+#include "../rust/environment_services.h"
+#include "../rust/settings_services.h"
+#include "../rust/services_linkgraph.h"
+#include "../rust/vehicle_services.h"
+#include "timer.h"
+
+const OpenTTDClockServices &GetRustClockServices() noexcept
+{
+	static const OpenTTDClockServices services{
+		.shared = &GetRustSharedServices(),
+		.game_mode = RustGameMode,
+		.minutes_per_calendar_year = RustMinutesPerCalendarYear,
+		.using_wallclock_units = RustUsingWallclockUnits,
+		.vehicle_id = RustVehicleIndexOpaque,
+		.vehicle_shift_dates = RustVehicleShiftDates,
+		.next_graph = RustLinkGraphNext,
+		.graph_owner = LiveGraphOwner,
+	};
+	return services;
+}
+void RustClockRegister(BaseTimer<TimerGameCalendar> &timer) noexcept
+{
+	assert(openttd_rust_calendar_valid(timer.period));
+	openttd_rust_calendar_register(reinterpret_cast<OpenTTDNativeClockTimer *>(&timer), &timer.period);
+}
+void RustClockRegister(BaseTimer<TimerGameEconomy> &timer) noexcept
+{
+	assert(openttd_rust_economy_valid(timer.period));
+	openttd_rust_economy_register(reinterpret_cast<OpenTTDNativeClockTimer *>(&timer), &timer.period);
+}
+void RustClockUnregister(BaseTimer<TimerGameCalendar> &timer) noexcept
+{
+	openttd_rust_calendar_unregister(reinterpret_cast<OpenTTDNativeClockTimer *>(&timer), timer.period);
+}
+void RustClockUnregister(BaseTimer<TimerGameEconomy> &timer) noexcept
+{
+	openttd_rust_economy_unregister(reinterpret_cast<OpenTTDNativeClockTimer *>(&timer), timer.period);
+}
+static void AssertClockPeriod([[maybe_unused]] bool valid) noexcept { assert(valid); }
+void RustClockChangePeriod(BaseTimer<TimerGameCalendar> &timer, uint8_t trigger, uint8_t priority) noexcept
+{
+	openttd_rust_calendar_change(reinterpret_cast<OpenTTDNativeClockTimer *>(&timer), &timer.period, {static_cast<TimerGameCalendar::Trigger>(trigger), static_cast<TimerGameCalendar::Priority>(priority)}, AssertClockPeriod);
+}
+void RustClockChangePeriod(BaseTimer<TimerGameEconomy> &timer, uint8_t trigger, uint8_t priority) noexcept
+{
+	openttd_rust_economy_change(reinterpret_cast<OpenTTDNativeClockTimer *>(&timer), &timer.period, {static_cast<TimerGameEconomy::Trigger>(trigger), static_cast<TimerGameEconomy::Priority>(priority)}, AssertClockPeriod);
+}
+void RustClockBind(BaseTimer<TimerGameCalendar> &timer, RustClockCallback callback, bool *fired) noexcept
+{
+	openttd_rust_calendar_bind(reinterpret_cast<OpenTTDNativeClockTimer *>(&timer), timer.period, callback, fired);
+}
+void RustClockBind(BaseTimer<TimerGameEconomy> &timer, RustClockCallback callback, bool *fired) noexcept
+{
+	openttd_rust_economy_bind(reinterpret_cast<OpenTTDNativeClockTimer *>(&timer), timer.period, callback, fired);
+}
+template <class T>
+typename TimerGame<T>::YearMonthDay TimerGame<T>::CalendarConvertDateToYMD(Date date)
+{
+	auto ymd = openttd_rust_calendar_date_to_ymd(date.base());
+	return {Year{ymd.year}, ymd.month, ymd.day};
+}
+template <class T>
+typename TimerGame<T>::Date TimerGame<T>::CalendarConvertYMDToDate(Year year, Month month, Day day)
+{
+	return Date{openttd_rust_calendar_ymd_to_date(year.base(), month, day)};
+}
+template TimerGame<Calendar>::YearMonthDay TimerGame<Calendar>::CalendarConvertDateToYMD(Date date);
+template TimerGame<Economy>::YearMonthDay TimerGame<Economy>::CalendarConvertDateToYMD(Date date);
+template TimerGame<Calendar>::Date TimerGame<Calendar>::CalendarConvertYMDToDate(Year year, Month month, Day day);
+template TimerGame<Economy>::Date TimerGame<Economy>::CalendarConvertYMDToDate(Year year, Month month, Day day);
+#else
 #define M(a, b) ((a << 5) | b)
 static constexpr uint16_t _month_date_from_year_day[] = {
 	M(0, 1), M(0, 2), M(0, 3), M(0, 4), M(0, 5), M(0, 6), M(0, 7), M(0, 8), M(0, 9), M(0, 10), M(0, 11), M(0, 12), M(0, 13), M(0, 14), M(0, 15), M(0, 16), M(0, 17), M(0, 18), M(0, 19), M(0, 20), M(0, 21), M(0, 22), M(0, 23), M(0, 24), M(0, 25), M(0, 26), M(0, 27), M(0, 28), M(0, 29), M(0, 30), M(0, 31),
@@ -137,3 +210,5 @@ template TimerGame<struct Economy>::YearMonthDay TimerGame<struct Economy>::Cale
 
 template TimerGame<struct Calendar>::Date TimerGame<struct Calendar>::CalendarConvertYMDToDate(Year year, Month month, Day day);
 template TimerGame<struct Economy>::Date TimerGame<struct Economy>::CalendarConvertYMDToDate(Year year, Month month, Day day);
+
+#endif /* WITH_RUST */

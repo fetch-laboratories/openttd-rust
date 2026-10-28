@@ -13,13 +13,25 @@
 #include "timer_manager.h"
 
 
+/** Virtual elapsed dispatch is retained only for native timer managers. */
+template <typename TTimerType>
+class TimerElapsed {
+protected:
+	virtual void Elapsed(typename TTimerType::TElapsed delta) = 0;
+	friend class TimerManager<TTimerType>;
+};
+#ifdef WITH_RUST
+template <typename TTimerType> requires IsRustGameClock<TTimerType>
+class TimerElapsed<TTimerType> {};
+#endif
+
 /**
  * The base where every other type of timer is derived from.
  *
  * Never use this class directly yourself.
  */
 template <typename TTimerType>
-class BaseTimer {
+class BaseTimer : public TimerElapsed<TTimerType> {
 public:
 	using TPeriod = typename TTimerType::TPeriod;
 	using TElapsed = typename TTimerType::TElapsed;
@@ -49,16 +61,7 @@ public:
 	TPeriod period; ///< The period of the timer.
 	TStorage storage = {}; ///< The storage of the timer.
 
-protected:
-	/**
-	 * Called by the timer manager to notify the timer that the given amount of time has elapsed.
-	 *
-	 * @param delta Depending on the time type, this is either in milliseconds or in ticks.
-	 */
-	virtual void Elapsed(TElapsed delta) = 0;
 
-	/* To ensure only TimerManager can access Elapsed. */
-	friend class TimerManager<TTimerType>;
 };
 
 /**
@@ -88,7 +91,22 @@ public:
 		BaseTimer<TTimerType>(interval),
 		callback(std::move(callback))
 	{
+#ifdef WITH_RUST
+		if constexpr (IsRustGameClock<TTimerType>) {
+			RustClockBind(*this, {[](const void *context, void *) noexcept {
+				static_cast<const IntervalTimer *>(context)->callback(1);
+				return true;
+			}, this}, nullptr);
+		}
+#endif
 	}
+
+#ifdef WITH_RUST
+	[[nodiscard]] IntervalTimer(const TPeriod interval, RustClockCallback callback) requires IsRustGameClock<TTimerType> : BaseTimer<TTimerType>(interval)
+	{
+		RustClockBind(*this, callback, nullptr);
+	}
+#endif
 
 	/**
 	 * Set a new interval for the timer.
@@ -105,7 +123,7 @@ public:
 private:
 	std::function<void(uint)> callback;
 
-	void Elapsed(TElapsed count) override;
+	void Elapsed(TElapsed count);
 };
 
 /**
@@ -132,6 +150,14 @@ public:
 		fired(!start),
 		callback(std::move(callback))
 	{
+#ifdef WITH_RUST
+		if constexpr (IsRustGameClock<TTimerType>) {
+			RustClockBind(*this, {[](const void *context, void *) noexcept {
+				static_cast<const TimeoutTimer *>(context)->callback();
+				return true;
+			}, this}, &this->fired);
+		}
+#endif
 	}
 
 	/**
@@ -180,7 +206,7 @@ public:
 private:
 	std::function<void()> callback;
 
-	void Elapsed(TElapsed count) override;
+	void Elapsed(TElapsed count);
 };
 
 #endif /* TIMER_H */
