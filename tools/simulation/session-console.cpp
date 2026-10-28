@@ -19,8 +19,6 @@
 #include "network/network.h"
 #include "genworld.h"
 #include "script/script_fatalerror.hpp"
-#include <thread>
-extern void GameLoop();
 extern void MakeNewgameSettingsLive();
 extern bool SafeLoad(const std::string &, SaveLoadOperation, DetailedFileType, GameMode, Subdirectory, std::shared_ptr<LoadFilter>);
 extern bool _in_modal_progress;
@@ -96,14 +94,6 @@ struct SessionScan final : NewGRFScanCallback {
 		delete this;
 	}
 };
-static void SessionAliases()
-{
-	auto mode = _game_mode; auto switching = _switch_mode; auto paused = _pause_mode;
-	auto *mode_address = &_game_mode; auto *switch_address = &_switch_mode; auto *pause_address = &_pause_mode;
-	std::thread first([] { _game_mode = GM_EDITOR; _switch_mode = SM_RESTARTGAME; _pause_mode = PauseMode::GameScript; }); first.join();
-	SessionCheck("thread-write", _game_mode == GM_EDITOR && _switch_mode == SM_RESTARTGAME && _pause_mode == PauseMode::GameScript);
-	std::thread second([&] { SessionCheck("thread-alias", mode_address == &_game_mode && switch_address == &_switch_mode && pause_address == &_pause_mode && _game_mode == GM_EDITOR && _switch_mode == SM_RESTARTGAME && _pause_mode == PauseMode::GameScript); _game_mode = mode; _switch_mode = switching; _pause_mode = paused; }); second.join();
-}
 static bool SessionScenario(std::span<std::string_view> args)
 {
 	if (session_active) return true;
@@ -113,7 +103,6 @@ static bool SessionScenario(std::span<std::string_view> args)
 	const std::string folder(args[2]);
 	AutoRestoreBackup<bool> modal(_in_modal_progress, false), networking(_networking, false), dedicated(_network_dedicated, false), available(_network_available, false);
 	_pause_mode = {}; _switch_mode = SM_NONE; _game_mode = GM_NORMAL;
-	SessionAliases();
 	for (Company *c : Company::Iterate()) {
 #ifdef WITH_RUST
 		auto &f = c->Finances();

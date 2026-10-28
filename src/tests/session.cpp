@@ -21,6 +21,7 @@ TEST_CASE("Session pause - all command inputs and unsaved native aliases")
 	CHECK(_game_mode == GM_EDITOR); CHECK(_switch_mode == SM_RELOADGAME); CHECK(_pause_mode == PauseMode::Normal);
 	std::thread second([&] {
 		CHECK(mode_address == &_game_mode); CHECK(switch_address == &_switch_mode); CHECK(pause_address == &_pause_mode);
+		CHECK(openttd_rust_session_storage() == &GetRustSessionState());
 		CHECK(_game_mode == GM_EDITOR); CHECK(_switch_mode == SM_RELOADGAME); CHECK(_pause_mode == PauseMode::Normal);
 	}); second.join();
 	auto services = GetRustSessionServices();
@@ -42,6 +43,9 @@ TEST_CASE("Session pause - all command inputs and unsaved native aliases")
 			CHECK(_pause_mode.None());
 		}
 	}
+	_pause_mode = PauseMode::Normal;
+	std::thread command([&] { CHECK(openttd_rust_session_pause(&services, PauseMode::GameScript, true, true)); }); command.join();
+	CHECK(_pause_mode.base() == 0x21);
 	_pause_mode = PauseMode::Error;
 	CHECK(openttd_rust_session_pause(&services, PauseMode::Normal, false, true));
 	CHECK(_pause_mode == PauseMode::Error); CHECK(session_queries == 1);

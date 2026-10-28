@@ -61,7 +61,7 @@ static bool LandscapeScenario(std::span<std::string_view> args)
 	spec->size = OBJECT_SIZE_1X1; spec->flags = {}; Object::CanAllocateItem(); BuildObject(OBJECT_TRANSMITTER, object, c->index);
 	ResetScratch(); { RecursiveCommandCounter nested; LandscapeResult("partial-clear", CmdClearArea({DoCommandFlag::Execute, DoCommandFlag::Auto}, object, object - 1, false)); }
 	LandscapeResult("object-remove", Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, object)); original.Restore();
-	{ AutoRestoreBackup<decltype(_game_mode)> editor(_game_mode, GM_EDITOR); bool before = _generating_world;
+	{ AutoRestoreBackup<GameMode> editor(_game_mode, GM_EDITOR); bool before = _generating_world;
 		terraform("editor", tile, SLOPE_N, true, DoCommandFlag::Execute); fmt::print(stderr, "LANDSCAPE editor-restored {}\n", _generating_world == before); }
 	{ AutoRestoreBackup<bool> edges(_settings_game.construction.freeform_edges, false); terraform("edge", TileXY(1, 1), SLOPE_N, true, {}); }
 	{ AutoRestoreBackup<bool> edges(_settings_game.construction.freeform_edges, true); uint height = TileHeight(TileIndex{});

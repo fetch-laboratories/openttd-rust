@@ -145,8 +145,6 @@ def prepare(
             lines = [line for line in capture["log"] if line.startswith("SESSION ")]
             captures[f"{mode}-{role}"] = lines
             required = {
-                "thread-write",
-                "thread-alias",
                 "clock-exception",
                 "script-exception",
                 "scan-request",
