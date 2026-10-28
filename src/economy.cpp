@@ -69,6 +69,7 @@
 #include "rust/tile_owner_services.h"
 #include "rust/vehicle_services.h"
 #include "rust/company_services.h"
+#include "rust/settings_services.h"
 #include "rust/industry_shell_services.h"
 #include "rust/industry_resolver_ffi.h"
 #include "rust/vehicle_visits_ffi.h"
@@ -1150,7 +1151,7 @@ static const OpenTTDCargoServices _cargo_services = {
 	},
 	.last_station = RustVehicleLastStationVisited,
 	.vehicle_owner = RustVehicleOwnerOf,
-	.detach_payment = [](OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->cargo_payment = nullptr; },
+	.detach_payment = RustVehicleDetachPayment,
 	.finance = &GetRustCompanyFinanceServices(),
 	.vehicles = &GetRustVehicleServices(),
 	.local_company = RustIsLocalCompany,
@@ -1161,8 +1162,8 @@ static const OpenTTDCargoServices _cargo_services = {
 	.z = RustVehicleRead<int32_t, RustVehicleZ>,
 	.cost_animation = RustCostOrIncomeAnimation,
 	.feeder_animation = RustFeederIncomeAnimation,
-	.subsidy_multiplier = []() noexcept -> uint8_t { return _settings_game.difficulty.subsidy_multiplier; },
-	.feeder_payment_share = []() noexcept -> uint8_t { return _settings_game.economy.feeder_payment_share; },
+	.subsidy_multiplier = RustSubsidyMultiplier,
+	.feeder_payment_share = RustFeederPaymentShare,
 };
 
 static OpenTTDCargoDelivery *GetCargoDeliveryState()
