@@ -1,5 +1,6 @@
 #pragma once
 #include "rust/trees_ffi.h"
+#include "rust/landscape_loop_ffi.h"
 
 // ABI/reentry probe, not simulation evidence. The full game harness compares map/DATE.
 struct TreeProbe {
@@ -82,7 +83,7 @@ static void Trees()
 	shared.water_services = []() noexcept { return &water; };
 	shared.map_max_x = []() noexcept { return 63U; };
 	shared.map_max_y = []() noexcept { return 63U; };
-	shared.tile_type = [](uint32_t) noexcept { return uint8_t{4}; };
+	shared.tile_type = [](uint32_t tile) noexcept { return static_cast<uint8_t>(tile == 1 || tile == 2 ? 4 : 5); };
 	shared.tree_ground = [](uint32_t tile) noexcept {
 		/* A water observation reenters trees; no owner borrow spans the call. */
 		++tree_probe.waters;
@@ -113,7 +114,20 @@ static void Trees()
 		{.build_price = 15, .size = 4096, .climate = 0, .editor = false, .execute = false, .company_valid = false}, &tree_probe_services, &shared, nullptr, &commands, 0);
 	CHECK(command.cost == 30 && command.status == 0);
 	tree_probe.plant.tile_type = 0;
-	openttd_rust_trees_tile_loop(1, {.tick_counter = 0, .size_x = 64, .climate = 0, .extra = 2, .ambient = false}, nullptr, &tree_probe_services, &shared);
+	const OpenTTDLandscapeLoopServices loop{
+		.shared = &shared,
+		.tile_types = {},
+		.trees = &tree_probe_services,
+		.industry = {},
+		.ground = {},
+		.town = nullptr,
+		.station_loop = TreeUnused<void, uint32_t>,
+		.objects = nullptr,
+	};
+	const uint32_t cursor = *openttd_rust_tile_loop_cursor();
+	*openttd_rust_tile_loop_cursor() = 1;
+	openttd_rust_run_tile_loop(6, 6, {.tick_counter = 1, .size_x = 64, .climate = 0, .extra = 2, .ambient = false, .ambient_callback = false}, &loop);
+	*openttd_rust_tile_loop_cursor() = cursor;
 	CHECK(tree_probe.waters == 1 && tree_probe.clears == 1 && tree_probe.nested_cost == 40 && tree_probe.writes == 1);
 	openttd_rust_trees_initialize();
 	CHECK(*counter == 0 && counter == openttd_rust_tree_counter());

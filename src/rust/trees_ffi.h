@@ -38,7 +38,7 @@ struct OpenTTDTreeLoopSettings {
 	uint64_t tick_counter;
 	uint32_t size_x;
 	uint8_t climate, extra;
-	bool ambient;
+	bool ambient, ambient_callback;
 };
 struct OpenTTDTreeTickSettings {
 	uint64_t tick_counter;
@@ -97,9 +97,7 @@ struct OpenTTDTreeServices {
 };
 
 extern "C" {
-/* Plain synchronous entries; original game preconditions apply. Panics abort.
- * The tile loop borrows an independent native stack result context for water commands. */
-void openttd_rust_trees_tile_loop(uint32_t tile, OpenTTDTreeLoopSettings, OpenTTDGroundCall *, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
+/* Plain synchronous entries; original game preconditions apply. Panics abort. */
 void openttd_rust_trees_tick(OpenTTDTreeTickSettings, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
 bool openttd_rust_trees_generate(OpenTTDTreeGenerateSettings, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
 bool openttd_rust_trees_place_randomly(OpenTTDTreeGenerateSettings, const OpenTTDTreeServices *, const OpenTTDSharedServices *);

@@ -380,7 +380,7 @@ const OpenTTDStationCatchmentServices &GetRustStationCatchmentServices() noexcep
 		.modified_catchment = RustModifiedCatchment,
 		.spread = RustStationSpread,
 		.industry_by_id = RustIndustryByID<uint16_t>,
-		.industry_id = RustIndustryID,
+		.industry_id = RustIndustryID<Industry *>,
 		.industry_owner = RustIndustryCanonicalOwner<Industry *>,
 		.industry_neutral = RustIndustryNeutralBaseStation,
 		.next_industry = OpenTTDNextIndustry,

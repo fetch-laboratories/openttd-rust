@@ -242,6 +242,7 @@ pub(crate) unsafe fn clear_tile_loop(
     tile: u32,
     climate: LandscapeType,
     editor: bool,
+    ambient: bool,
     size_x: u32,
     clear: *const ClearServices,
     shared: *const Services,
@@ -250,7 +251,7 @@ pub(crate) unsafe fn clear_tile_loop(
     let climate = climate.0;
     // SAFETY: Caller supplies immutable live tables. No state borrow crosses a call.
     let (c, s) = unsafe { (&*clear, &*shared) };
-    crate::newgrf_generic::ambient(tile);
+    crate::newgrf_generic::ambient(ambient, tile);
     if climate == 1 {
         let k = crate::tile_map::get_tile_z(map, tile, size_x, map.count() / size_x)
             .unwrap_or_else(|| (s.tile_z)(tile))
@@ -445,7 +446,9 @@ pub(crate) unsafe fn rail_tile_loop(
         // result context; no result is live before this source early return.
         // `TileLoop_Water` observes this railway tile's type.
         unsafe {
-            crate::water::water_tile_loop(tile, 1, size_x, size_y, call, water, shared, types);
+            crate::water::water_tile_loop(
+                tile, 1, false, size_x, size_y, call, water, shared, types,
+            );
         };
         return;
     }

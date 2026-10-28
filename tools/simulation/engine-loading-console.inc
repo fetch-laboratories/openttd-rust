@@ -149,6 +149,12 @@ static void PropertiesReadFailures()
 		const int order_prop = std::array{0x1a, 0x20, 0x1b, 0x1b}[type];
 		LoadingRequire(failed(type, 502, order_prop, order) == 0, "properties-partial-order");
 	}
+	/* RailVehicleChangeInfo maps speed 0xFFFF to 0; the file's later speed property overwrites it. */
+	const auto &train = LoadingEngine(1, VEH_TRAIN, 500)->VehInfo<RailVehicleInfo>();
+	const bool loaded = train.max_speed == 80;
+	const std::array<uint8_t, 2> sentinel{0xff, 0xff};
+	ByteReader speed(sentinel.data(), sentinel.size());
+	LoadingRequire(loaded && call(VEH_TRAIN, 500, 501, 0x09, speed) == CIR_SUCCESS && speed.Remaining() == 0 && train.max_speed == 0, "properties-train-speed-sentinel");
 	file->badge_list = old_list;
 	current.Restore();
 	ReloadNewGRFData();

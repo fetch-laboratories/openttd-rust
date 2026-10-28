@@ -10,7 +10,9 @@ include = [
     "tools/housekeeping.py",
     "tools/preflight.py",
     "tools/simulation/platform_subset.py",
+    "tools/simulation/sanitizers.py",
     "tools/test-deep.py",
     "tools/test-housekeeping.py",
     "tools/test-migration-env.py",
+    "tools/test-sanitizers.py",
 ]
