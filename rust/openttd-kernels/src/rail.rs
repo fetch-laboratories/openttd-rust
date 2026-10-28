@@ -34,8 +34,8 @@ pub fn val_param_rail_type(shared: &Shared, rt: u8) -> bool {
     rt < RAILTYPE_END && has_rail_type(services(shared), (shared.current_company)(), rt)
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_val_rail_type(shared: &Shared, rt: u8) -> bool {
-    val_param_rail_type(shared, rt)
+pub extern "C" fn openttd_rust_val_rail_type(shared: &Shared, rt: u8) -> u8 {
+    u8::from(val_param_rail_type(shared, rt))
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_add_date_rail_types(

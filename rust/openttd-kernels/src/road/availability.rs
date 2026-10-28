@@ -59,8 +59,8 @@ pub fn val_param_road_type(shared: &Shared, rt: u8) -> bool {
     rt < ROADTYPE_END && has_road_type(shared, services(shared), (shared.current_company)(), rt)
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_val_road_type(shared: &Shared, rt: u8) -> bool {
-    val_param_road_type(shared, rt)
+pub extern "C" fn openttd_rust_val_road_type(shared: &Shared, rt: u8) -> u8 {
+    u8::from(val_param_road_type(shared, rt))
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_add_date_road_types(

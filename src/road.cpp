@@ -180,7 +180,7 @@ bool HasAnyRoadTypesAvail(CompanyID company, RoadTramType rtt)
 bool ValParamRoadType(RoadType roadtype)
 {
 #ifdef WITH_RUST
-	return openttd_rust_val_road_type(&GetRustSharedServices(), roadtype);
+	return openttd_rust_val_road_type(&GetRustSharedServices(), roadtype) != 0;
 #else
 	return roadtype < ROADTYPE_END && HasRoadTypeAvail(_current_company, roadtype);
 #endif

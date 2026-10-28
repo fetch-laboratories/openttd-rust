@@ -106,7 +106,7 @@ bool HasAnyRailTypesAvail(const CompanyID company)
 bool ValParamRailType(const RailType rail)
 {
 #ifdef WITH_RUST
-	return openttd_rust_val_rail_type(&GetRustSharedServices(), rail);
+	return openttd_rust_val_rail_type(&GetRustSharedServices(), rail) != 0;
 #else
 	return rail < RAILTYPE_END && HasRailTypeAvail(_current_company, rail);
 #endif
