@@ -1,5 +1,6 @@
 #pragma once
 #include "rust/disaster_ffi.h"
+#include "rust/clock_ffi.h"
 
 struct DisasterProbe {
 	uint32_t draws = 0, random = 0, viewports = 0, deletes = 0, clears = 0, signals = 0, news = 0, tile_types = 0;
@@ -43,9 +44,9 @@ static void Disasters()
 	const OpenTTDDisasterVehicle vehicle{.handle = reinterpret_cast<OpenTTDVehicle *>(&probe), .state = state.get(), .id = 17};
 	auto *address = state.get(); state->state = 65535; state->flags = 0xAB; state->image_override = UINT32_MAX;
 	uint16_t *delay = openttd_rust_disaster_delay(); *delay = 0;
-	openttd_rust_disaster_daily(&services); CHECK(*delay == 65535 && probe.draws == 0);
+	openttd_rust_clock_disaster_daily(&services, nullptr); CHECK(*delay == 65535 && probe.draws == 0);
 	*delay = 1; probe.random = 511;
-	openttd_rust_disaster_daily(&services); CHECK(*delay == 1241 && probe.draws == 1);
+	openttd_rust_clock_disaster_daily(&services, nullptr); CHECK(*delay == 1241 && probe.draws == 1);
 	probe.random = 0;
 	openttd_rust_disaster_startup(&services); CHECK(*delay == 730 && probe.draws == 2);
 	CHECK(delay == openttd_rust_disaster_delay() && state.get() == address && state->state == 65535 && state->flags == 0xAB && state->image_override == UINT32_MAX);
@@ -106,7 +107,7 @@ static void Disasters()
 	auto subside = [&]() {
 		probe.script = {0, UINT32_MAX, 0, 0}; probe.scripted = 0; probe.draws = 0; *delay = 1;
 		_disaster_cost_calls.clear();
-		openttd_rust_disaster_daily(&services);
+		openttd_rust_clock_disaster_daily(&services, nullptr);
 		CHECK(probe.draws == 4 && probe.scripted == 4 && *delay == 730);
 		CHECK(_disaster_cost_calls == std::vector<int>({1, 2, 3, 4, 5}));
 	};
@@ -137,7 +138,7 @@ static void Disasters()
 	for (const auto &test : cases) {
 		shared.calendar_year = test.year;
 		probe.random = test.random; probe.draws = 0; *delay = 1;
-		openttd_rust_disaster_daily(&services);
+		openttd_rust_clock_disaster_daily(&services, nullptr);
 		CHECK(probe.draws == 2 && probe.deletes == 1 && probe.viewports == 1);
 	}
 	_disaster_probe = nullptr;

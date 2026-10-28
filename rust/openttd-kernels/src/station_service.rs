@@ -772,8 +772,7 @@ pub unsafe extern "C" fn openttd_rust_station_rating(st: *mut BaseStation, world
     }
     (w.rating_redraw)(st, u32::from(waiting_changed) != 0);
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_monthly(world: *const World) {
+pub(crate) unsafe fn openttd_rust_station_monthly(world: *const World) {
     let w = unsafe { &*world };
     for id in 0..(w.pool_size)() {
         let st = (w.get)(id as u16);

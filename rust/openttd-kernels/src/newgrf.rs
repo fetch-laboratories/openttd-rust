@@ -11,7 +11,7 @@
 )]
 use crate::bitmath_func::{gb, sb};
 use crate::rail_type::{RAILTYPE_ELECTRIC, RAILTYPE_MAGLEV, RAILTYPE_MONO, RAILTYPE_RAIL};
-use crate::services::{CalendarYmd, Services as Shared};
+use crate::services::Services as Shared;
 use crate::timer_game_common::{
     DAYS_TILL_ORIGINAL_BASE_YEAR, ORIGINAL_BASE_YEAR, ORIGINAL_MAX_YEAR, is_leap_year,
 };
@@ -21,8 +21,6 @@ pub const TRAIN_WIDTH_32_PIXELS: u8 = 3;
 #[repr(C)]
 pub struct Services {
     pub(crate) climate: unsafe extern "C" fn() -> u8,
-    date_fraction: unsafe extern "C" fn() -> u16,
-    date_to_ymd: unsafe extern "C" fn(i32) -> CalendarYmd,
     disable_elrails: unsafe extern "C" fn() -> bool,
     pub(crate) file_version: unsafe extern "C" fn(*const c_void) -> u8,
     game_mode: unsafe extern "C" fn() -> u8,
@@ -35,7 +33,6 @@ pub struct Services {
     road_side: unsafe extern "C" fn() -> u8,
     shared: *const Shared,
     width: unsafe extern "C" fn(*const c_void) -> u32,
-    pub(crate) ymd_to_date: unsafe extern "C" fn(i32, u8, u8) -> i32,
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_global_variable(
@@ -55,8 +52,8 @@ pub unsafe extern "C" fn openttd_rust_global_variable(
                     - ORIGINAL_BASE_YEAR) as u32
             }
             0x02 => {
-                let ymd = (s.date_to_ymd)((shared.calendar_date)());
-                let first = (s.ymd_to_date)(ymd.year, 0, 1);
+                let ymd = crate::timer_game_common::calendar_date_to_ymd((shared.calendar_date)());
+                let first = crate::timer_game_common::calendar_ymd_to_date(ymd.year, 0, 1);
                 u32::from(ymd.month)
                     | (u32::from(ymd.day) - 1) << 8
                     | u32::from(is_leap_year(ymd.year)) << 15
@@ -64,7 +61,7 @@ pub unsafe extern "C" fn openttd_rust_global_variable(
             }
             0x03 => u32::from((s.climate)()),
             0x06 => u32::from((s.road_side)()) << 4,
-            0x09 => u32::from((s.date_fraction)()) * 885,
+            0x09 => u32::from(crate::timer_game_common::calendar_fraction()) * 885,
             0x0A => gb((shared.tick_counter)() as u32, 0, 16),
             0x0B => (2 << 24) | (6 << 20) | (1 << 16) | 1382,
             0x0D => u32::from((s.palette)(file)),
@@ -119,7 +116,7 @@ pub unsafe extern "C" fn openttd_rust_global_variable(
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDGlobalVariableServices" ["storage"] => Services { climate, date_fraction, date_to_ymd, disable_elrails, file_version, game_mode, height_limit, misc_bits, newgrf_version, palette, pitch, rail_cost, road_side, shared, width, ymd_to_date };
+    "OpenTTDGlobalVariableServices" ["storage"] => Services { climate, disable_elrails, file_version, game_mode, height_limit, misc_bits, newgrf_version, palette, pitch, rail_cost, road_side, shared, width };
 }
 
 // Feature identities from newgrf.h, pinned by native static assertions.

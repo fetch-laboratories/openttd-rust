@@ -37,7 +37,7 @@ struct OpenTTDAirportDefinitionServices;
 struct OpenTTDTypeRegistryServices;
 struct OpenTTDGenericServices;
 struct OpenTTDCargoRegistryServices;
-struct OpenTTDGrfClock { int32_t date, year; uint16_t date_fract; int32_t economy_date, economy_year; uint16_t economy_date_fract; uint64_t ticks; uint8_t display; };
+struct OpenTTDGrfClock { uint64_t ticks; uint8_t display; };
 struct OpenTTDGrfEngineRange { uint8_t offset, count; };
 struct OpenTTDAction2Services;
 struct OpenTTDGrfLoadingServices {
@@ -142,7 +142,7 @@ struct OpenTTDGrfLoadingServices {
 	const OpenTTDGenericServices *generic;
 	OpenTTDGrfClock (*clock)() noexcept OPENTTD_SERVICE_DEFAULT(clock);
 	void (*set_clock)(const OpenTTDGrfClock *) noexcept OPENTTD_SERVICE_DEFAULT(set_clock);
-	int32_t (*economy_ymd_to_date)(int32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(economy_ymd_to_date);
+	bool (*using_wallclock_units)(bool) noexcept OPENTTD_SERVICE_DEFAULT(using_wallclock_units);
 	GRFConfig *(*config_at)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(config_at);
 	bool (*exists)(const GRFConfig *, Subdirectory) noexcept OPENTTD_SERVICE_DEFAULT(exists);
 	void (*init_file)(const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(init_file);

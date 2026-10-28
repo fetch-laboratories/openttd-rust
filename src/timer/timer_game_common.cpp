@@ -16,8 +16,34 @@
 #include "timer_game_calendar.h"
 #include "timer_game_economy.h"
 
+#ifdef WITH_RUST
+#include "../rust/clock_ffi.h"
+#include "../rust/environment_services.h"
+#include "../rust/settings_services.h"
+#include "../rust/services_linkgraph.h"
+#include "../rust/vehicle_services.h"
+#include "timer.h"
+#endif
+
 #include "../safeguards.h"
 
+#ifdef WITH_RUST
+
+const OpenTTDClockServices &GetRustClockServices() noexcept
+{
+	static const OpenTTDClockServices services{
+		.shared = &GetRustSharedServices(),
+		.game_mode = RustGameMode,
+		.minutes_per_calendar_year = RustMinutesPerCalendarYear,
+		.using_wallclock_units = RustUsingWallclockUnits,
+		.vehicle_id = RustVehicleIndexOpaque,
+		.vehicle_shift_dates = RustVehicleShiftDates,
+		.next_graph = RustLinkGraphNext,
+		.graph_owner = LiveGraphOwner,
+	};
+	return services;
+}
+#else
 #define M(a, b) ((a << 5) | b)
 static constexpr uint16_t _month_date_from_year_day[] = {
 	M(0, 1), M(0, 2), M(0, 3), M(0, 4), M(0, 5), M(0, 6), M(0, 7), M(0, 8), M(0, 9), M(0, 10), M(0, 11), M(0, 12), M(0, 13), M(0, 14), M(0, 15), M(0, 16), M(0, 17), M(0, 18), M(0, 19), M(0, 20), M(0, 21), M(0, 22), M(0, 23), M(0, 24), M(0, 25), M(0, 26), M(0, 27), M(0, 28), M(0, 29), M(0, 30), M(0, 31),
@@ -137,3 +163,5 @@ template TimerGame<struct Economy>::YearMonthDay TimerGame<struct Economy>::Cale
 
 template TimerGame<struct Calendar>::Date TimerGame<struct Calendar>::CalendarConvertYMDToDate(Year year, Month month, Day day);
 template TimerGame<struct Economy>::Date TimerGame<struct Economy>::CalendarConvertYMDToDate(Year year, Month month, Day day);
+
+#endif /* WITH_RUST */

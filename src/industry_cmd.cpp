@@ -102,6 +102,10 @@ static bool IndustryCommandDeity() noexcept { return OpenTTDCurrentCompany() == 
 #include "rust/industry_property_ffi.h"
 #endif
 
+#ifdef WITH_RUST
+#include "rust/clock_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 IndustryPool _industry_pool("Industry");
@@ -3319,11 +3323,14 @@ static void ChangeIndustryProduction(Industry *i, bool monthly)
  * For small maps, it implies that less than one change per month is required, while on bigger maps,
  * it would be way more. The daily loop handles those changes.
  */
+#ifdef WITH_RUST
+static const OpenTTDClockIndustry clock_industry{RustIndustryBuilderState(), &GetIndustryRustServices()};
+#endif
+#ifdef WITH_RUST
+static const IntervalTimer<TimerGameEconomy> _economy_industries_daily({TimerGameEconomy::DAY, TimerGameEconomy::Priority::INDUSTRY}, RustClockCallback{openttd_rust_clock_industry_daily, &clock_industry});
+#else
 static const IntervalTimer<TimerGameEconomy> _economy_industries_daily({TimerGameEconomy::DAY, TimerGameEconomy::Priority::INDUSTRY}, [](auto)
 {
-#ifdef WITH_RUST
-	openttd_rust_industry_daily(RustIndustryBuilderState(), &GetIndustryRustServices());
-#else
 	_economy.industry_daily_change_counter += _economy.industry_daily_increment;
 
 
@@ -3365,14 +3372,16 @@ static const IntervalTimer<TimerGameEconomy> _economy_industries_daily({TimerGam
 
 	/* production-change */
 	InvalidateWindowData(WC_INDUSTRY_DIRECTORY, 0, IDIWD_PRODUCTION_CHANGE);
-#endif
-});
 
+});
+#endif
+
+
+#ifdef WITH_RUST
+static const IntervalTimer<TimerGameEconomy> _economy_industries_monthly({TimerGameEconomy::MONTH, TimerGameEconomy::Priority::INDUSTRY}, RustClockCallback{openttd_rust_clock_industry_monthly, &clock_industry});
+#else
 static const IntervalTimer<TimerGameEconomy> _economy_industries_monthly({TimerGameEconomy::MONTH, TimerGameEconomy::Priority::INDUSTRY}, [](auto)
 {
-#ifdef WITH_RUST
-	openttd_rust_industry_monthly(RustIndustryBuilderState(), &GetIndustryRustServices());
-#else
 	Backup<CompanyID> cur_company(_current_company, OWNER_NONE);
 
 	_industry_builder.EconomyMonthlyLoop();
@@ -3391,8 +3400,10 @@ static const IntervalTimer<TimerGameEconomy> _economy_industries_monthly({TimerG
 
 	/* production-change */
 	InvalidateWindowData(WC_INDUSTRY_DIRECTORY, 0, IDIWD_PRODUCTION_CHANGE);
-#endif
+
 });
+#endif
+
 
 
 void InitializeIndustries()

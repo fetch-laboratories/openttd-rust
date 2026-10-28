@@ -1274,11 +1274,7 @@ pub unsafe extern "C" fn openttd_rust_industry_build_try(b: *mut Builder, s: *co
 /// # Safety
 /// Live builder and original ordered daily timer invocation. The company services
 /// temporarily change and restore the original current company.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_daily(
-    builder: *mut Builder,
-    services: *const Services,
-) {
+pub(crate) unsafe fn openttd_rust_industry_daily(builder: *mut Builder, services: *const Services) {
     let s = unsafe { &*services };
     let b = build_fields(builder);
     unsafe {
@@ -1316,8 +1312,7 @@ pub unsafe extern "C" fn openttd_rust_industry_daily(
 /// # Safety
 /// Live builder and original ordered monthly invocation. Destruction happens only
 /// after statistics and with all Rust owner borrows ended; next ID matches pool order.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_monthly(
+pub(crate) unsafe fn openttd_rust_industry_monthly(
     builder: *mut Builder,
     services: *const Services,
 ) {

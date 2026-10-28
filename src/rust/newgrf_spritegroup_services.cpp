@@ -7,7 +7,6 @@
 #include "../newgrf.h"
 #include "../debug.h"
 #include "newgrf_global_ffi.h"
-#include "services_timer.h"
 #include "settings_services.h"
 #include "services_rail.h"
 #include "services_industry.h"
@@ -181,8 +180,6 @@ const OpenTTDGlobalVariableServices &GetRustGlobalVariableServices() noexcept
 {
 	static const OpenTTDGlobalVariableServices services{
 		.climate = OpenTTDLandscapeValue,
-		.date_fraction = RustCalendarDateFraction,
-		.date_to_ymd = RustCalendarDateToYMD,
 		.disable_elrails = RustDisableElrails,
 		.file_version = RustGRFFileVersion,
 		.game_mode = RustGameMode,
@@ -195,7 +192,6 @@ const OpenTTDGlobalVariableServices &GetRustGlobalVariableServices() noexcept
 		.road_side = RustRoadSide,
 		.shared = &GetRustSharedServices(),
 		.width = RustGRFTrainWidth,
-		.ymd_to_date = RustCalendarYMDToDate,
 	};
 	return services;
 }

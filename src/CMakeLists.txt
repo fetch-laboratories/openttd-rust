@@ -257,6 +257,11 @@ add_files(
     rust/vehicle_services.cpp
     rust/vehicle_services.h
     rust/vehicle_ffi.h
+    rust/clock_ffi.h
+    rust/clock_native.hpp
+    rust/clock_registration.hpp
+    rust/clock_state.h
+    rust/clock_timer.h
     rust/services_ffi.h
     rust/command_cost_ffi.h
     rust/command_cost_services.h
@@ -352,7 +357,6 @@ add_files(
     rust/newgrf_spritegroup_services.cpp
     rust/newgrf_spritegroup_ffi.h
     rust/newgrf_global_ffi.h
-    rust/services_timer.h
     rust/newgrf_storage_services.cpp
     rust/industry_definition_services.cpp
     rust/industry_property_services.cpp

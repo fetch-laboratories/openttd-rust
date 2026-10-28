@@ -66,8 +66,10 @@ public:
 		return year_as_int % 4 == 0 && (year_as_int % 100 != 0 || year_as_int % 400 == 0);
 	}
 
+#ifndef WITH_RUST
 	static YearMonthDay CalendarConvertDateToYMD(Date date);
 	static Date CalendarConvertYMDToDate(Year year, Month month, Day day);
+#endif
 
 	/**
 	 * Calculate the year of a given date.
