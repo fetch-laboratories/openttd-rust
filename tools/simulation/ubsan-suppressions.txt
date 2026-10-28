@@ -1,0 +1,4 @@
+# UBSan suppressions for sanitized harness games (#505), loaded by sanitizers.py.
+# An entry names undefined behaviour proven present in the pinned original: the
+# sanitized reference reports it in the same scenario. Each entry is preceded by a
+# comment naming the original site and the scenario that showed it.

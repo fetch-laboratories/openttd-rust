@@ -190,6 +190,8 @@ class SimulationRuntimeTests(unittest.TestCase):
                 "ROOT = Path(__file__).resolve().parents[1]\n"
                 "LOCAL = COMMON_LOCAL = ROOT / '.local'\n"
                 "REFERENCE_BUILD = ROOT / 'reference'\n"
+                "CANDIDATE_BUILD = ROOT / 'build-rust'\n"
+                "SANITIZE = False\n"
                 "def reference_lock(shared=False): return nullcontext()\n"
                 "def environment(): return {}\n"
                 "def git(*args):\n"
@@ -345,6 +347,7 @@ class SimulationRuntimeTests(unittest.TestCase):
                         (root / "tools/migration.py").write_text(
                             "from pathlib import Path\n"
                             "LOCAL = COMMON_LOCAL = Path(__file__).resolve().parents[1] / '.local'\n"
+                            "SANITIZE = False\n"
                         )
 
                         def prepare(*args, crash=crash):

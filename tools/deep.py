@@ -49,6 +49,12 @@ DEEP_SET = (
         "simulate-soak",
         migration_command("simulate", "--soak", "--timeout", str(GAME_TIMEOUT)),
     ),
+    # Runs second: reference-gap probes in scenario preparation link the ordinary
+    # candidate archive, which the soak member has just built (#505).
+    Member(
+        "simulate-sanitized",
+        migration_command("simulate", "--sanitize", "--timeout", str(GAME_TIMEOUT)),
+    ),
 )
 
 
@@ -71,6 +77,8 @@ class Result:
     scenario_seconds: float = 0.0
     failures: list[Failure] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)
+    # Sanitizer reports raised by both games, with their scenarios (#505).
+    original_reports: dict[str, list[str]] = field(default_factory=dict)
 
 
 def git(root: Path, *arguments: str) -> str:
@@ -111,6 +119,8 @@ def summarize(result: Result, commit: str) -> None:
         result.problems.append("member commit differs from the deep-check commit")
     if simulation["candidate_status"]:
         result.problems.append("member ran from a dirty checkout")
+    if sanitizers := simulation.get("sanitizers"):
+        result.original_reports = sanitizers["original"]
     rows = simulation["results"]
     result.scenarios = len(rows)
     result.scenario_seconds = round(sum(row["seconds"] for row in rows), 1)
@@ -185,5 +195,10 @@ def run_deep(
         )
         for problem in result.problems:
             print(f"     {problem}", flush=True)
+        if result.original_reports:
+            print(
+                f"     {len(result.original_reports)} sanitizer reports also in the original",
+                flush=True,
+            )
     print(f"Deep report: {out / 'report.json'}", flush=True)
     return 0 if report["passed"] else 1

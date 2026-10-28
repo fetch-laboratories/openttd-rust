@@ -33,13 +33,15 @@ if "advance-head" in sys.argv[3:]:
                     "--allow-empty", "--quiet", "-m", "Add: next commit"], check=True)
 if "dirty" in sys.argv[3:]:
     open("stray.txt", "w").write("edit")
-if any(s in sys.argv[3:] for s in ("pass", "advance-head", "dirty")):
+if any(s in sys.argv[3:] for s in ("pass", "advance-head", "dirty", "sanitized")):
     rows[1].update(passed=True, problems=[], differences=[])
 passed = all(row["passed"] for row in rows)
 report = os.path.join(out, "report.json")
 head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 status = subprocess.check_output(["git", "status", "--short"], text=True).strip()
-json.dump(dict(passed=passed, results=rows, candidate_commit=head, candidate_status=status),
+sanitizers = dict(original={"UBSan src/a.cpp in f: overflow": ["a"]}, candidate_only={})
+json.dump(dict(passed=passed, results=rows, candidate_commit=head, candidate_status=status,
+               sanitizers=sanitizers if "sanitized" in sys.argv[3:] else None),
           open(report, "w"))
 json.dump(dict(nice=os.nice(0), ionice=ionice.stdout, args=sys.argv[2:]),
           open(os.path.join(out, "priority.json"), "w"))
@@ -148,6 +150,15 @@ class DeepTests(unittest.TestCase):
         code, _ = self.run_deep(["pass"])
         self.assertEqual(code, 0)
         self.assertTrue(self.only_report()["passed"])
+
+    def test_original_sanitizer_reports_are_recorded_without_failing(self) -> None:
+        code, output = self.run_deep(["sanitized"])
+        self.assertEqual(code, 0)
+        (result,) = self.only_report()["results"]
+        self.assertEqual(
+            result["original_reports"], {"UBSan src/a.cpp in f: overflow": ["a"]}
+        )
+        self.assertIn("1 sanitizer reports also in the original", output)
 
     def test_member_from_a_later_commit_is_rejected(self) -> None:
         code, _ = self.run_deep(["advance-head"])
