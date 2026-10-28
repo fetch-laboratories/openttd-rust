@@ -97,7 +97,8 @@ class MigrationCommands extends AIController {
 					case 5: args = this.Arguments([tile, front, a % 2 == 0]); value = AIRail.RemoveRailStationTileRectangle(tile, front, a % 2 == 0); break;
 				}
 			} else if (family == 3) {
-				if (round < 4) { op = round; vehicle = bus; a = round == 3 ? 255 : 0; b = 1; }
+				if (round < 4) { op = round; vehicle = bus; a = round == 3 ? 254 : 0; b = 1; }
+				if (round == 1) a = 1 - AIOrder.ResolveOrderPosition(bus, AIOrder.ORDER_CURRENT);
 				local flags = round == 2 ? AIOrder.OF_NONE : AIOrder.OF_SERVICE_IF_NEEDED;
 				name = ["order.move", "order.skip", "order.flags", "order.remove", "order.append", "order.conditional"][op];
 				switch (op) {
