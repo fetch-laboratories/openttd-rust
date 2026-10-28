@@ -54,15 +54,19 @@ def pr_state(repo: Path, branch: str) -> str | None:
 
 
 @contextlib.contextmanager
-def held_output(path: Path) -> Generator[subprocess.Popen[str]]:
+def held_output(
+    path: Path, unreadable: bool = False
+) -> Generator[subprocess.Popen[str]]:
     """The pipe confirms open before planning and keeps the descriptor live until close."""
     child = subprocess.Popen(
         [
             sys.executable,
             "-c",
             """
-import sys
+import ctypes, sys
 with open(sys.argv[1], "a") as output:
+    if sys.argv[2] == "unreadable":
+        assert ctypes.CDLL(None).prctl(4, 0, 0, 0, 0) == 0
     print("ready", flush=True)
     for command in sys.stdin:
         if command.strip() == "close":
@@ -72,6 +76,7 @@ with open(sys.argv[1], "a") as output:
         print("written", flush=True)
 """,
             str(path),
+            "unreadable" if unreadable else "readable",
         ],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
@@ -252,6 +257,23 @@ class HousekeepingTests(unittest.TestCase):
                 self.assertIn(target, self.run_main())
                 self.run_main("--apply")
                 self.assertFalse(target.exists())
+
+    def test_unreadable_same_user_output_prevents_deletion(self) -> None:
+        path = write(self.main / ".local/private.log")
+        item = next(
+            i
+            for i in housekeeping.plan_local(path.parent, time.time())
+            if i.path == path
+        )
+        with held_output(path, unreadable=True) as child:
+            (self.proc / str(child.pid)).symlink_to(Path("/proc") / str(child.pid))
+            self.assertNotIn(path, self.run_main())
+            self.assertIn("cannot inspect", housekeeping.remove(self.main, item) or "")
+            child_write(child)
+            self.assertEqual(path.read_text(), "xvisible\n")
+        self.assertIn(path, self.run_main())
+        self.assertIsNone(housekeeping.remove(self.main, item))
+        self.assertFalse(path.exists())
 
     def test_opened_after_planning_is_protected_at_removal(self) -> None:
         path = write(self.main / ".local/late.log")
