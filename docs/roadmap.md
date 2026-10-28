@@ -4,15 +4,15 @@ Root selects here; `AGENTS.md` and `docs/rust-migration.md` define process. Foll
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-10-28, code at `a297bed748`)
+## Where the fork stands (2026-10-28, code at `467b89bcbd`)
 
 - 78 ownership ports. Since the twenty-first steering at `07c0d2e2e8`, six
-  owners and seventeen maintenance PRs integrated, retiring 3,872 more original
+  owners and eighteen maintenance PRs integrated, retiring 3,872 more original
   lines, including 1,276 in the current simulation inventory. No confirmed code
   regression requires rollback.
 - Whole-fork inventory: 71,737 of 470,612 original lines retired (15.24%),
   including 56,038 of 103,451 simulation lines (54.17%). Rust, tooling and glue
-  total 128,318, 49,725 and 45,736 lines. These measure source retirement, not
+  total 128,381, 50,080 and 45,804 lines. These measure source retirement, not
   completed behavior. #527 added the omitted simulation clock files and refreshed
   the denominator; #518 did not expand that reviewed inventory.
 - The identity-renewal quiet pass at `755609b8ea` completed all 144 games with
@@ -24,23 +24,29 @@ this roadmap over conflicting issues; it is the current state of umbrella issue
   Instruction-site attribution estimates station and orders replacements at
   0.206% and 0.094% of P2016, only 0.301% combined after required work and
   replacement costs. Neither clears the existing thresholds; keep these as
-  notes on #275 and rank the remaining net costs. Neither the batch's
+  notes on #275. Loading dispatch and immutable-table replacement estimate
+  0.729%, including a narrow 0.540% loading proposal; no 1% batch is selected.
+  Find another qualifying disjoint net cost without re-crediting these notes.
+  Neither the batch's
   instruction reduction nor the notes establish isolated savings for #536.
 
-| Scenario | Pre-batch `5d8f4c7c7f` under current anchors | Quiet anchor `755609b8ea` | Integrated profile `39691f38dd` |
+| Scenario | Pre-batch `5d8f4c7c7f` under current anchors | Quiet anchor `755609b8ea` | Last profile `e52d475713` |
 | --- | --- | --- | --- |
 | TGP | 1.2289x | 1.1117x | 1.1120x |
 | Grok | 1.3903x | 1.3871x | 1.3957x |
 | Opus | 1.3970x | 1.3939x | 1.4030x |
-| P1996 | 1.3617x | 1.3366x | 1.3445x |
+| P1996 | 1.3617x | 1.3366x | 1.3449x |
 | P2000 | 1.4181x | 1.4006x | 1.4064x |
-| P2016 | 1.5331x | 1.5229x | 1.5230x |
+| P2016 | 1.5331x | 1.5229x | 1.5271x |
 
 The historical `90f6ae311c` identities remain incompatible; its projections
 under these anchors are unavailable. The compatible pre-batch report is retained.
 All six current-profile identities and canonical comparisons passed. No projection
 rose by 3% over the preceding compatible profile; no new quiet pass is triggered.
-P2016 remains above its ceiling, with net-cost attribution active.
+P2016 remains above its ceiling, with net-cost attribution active. The first
+twentieth-tip attempt rejected changed host Brotli dependencies. Recovering the
+two recorded library bytes restored all six quiet and current identities; the
+compatible rerun passed. The failed attempt remains incompatible and uncredited.
 - Coverage #518 integrated after exact-head Full passed. Its original-only
   report measured 84.96% of emitted lines and 53.97% of compiler branches;
   338 of 438 scenarios with zero unique lines remain investigation candidates,
@@ -52,7 +58,9 @@ P2016 remains above its ceiling, with net-cost attribution active.
   artifacts with new headers. No semantic differences were reported; this is
   invalid mixed-source evidence. The fixed isolated restart passed all 521
   soak scenarios and 8,396 snapshots in 5,551.9 seconds. Its full sanitized
-  member is running; #503 also owns precise source-drift rejection in #548.
+  member is running; #548 integrated precise source-drift rejection. The
+  changed-input original coverage recomputation is running on a fixed checkout
+  containing #542/#544/#545.
 - #535's 14-case sanitizer subset compared equal in 607.7 seconds. A real-game
   positive control captured five original animation-shift keys in 121.3 seconds
   with no candidate-only report. Fixing review is complete; the full sanitizer
@@ -69,17 +77,19 @@ P2016 remains above its ceiling, with net-cost attribution active.
   #545 community AI/large-save evidence integrated after fixing review and
   exact-head bootstrap Full, preserving the integrated threaded/command tooling.
   C++ TSan found five shared Mesa identities and no candidate-only findings;
-  Rust remains uninstrumented. Two drafts remain: #548 payment/deep/output
-  maintenance and #547 complete world-generation lifecycle. Both passed their
-  focused local evidence; root accepted their concrete costs and owns fresh
-  review, current-base Full and serial integration.
+  Rust remains uninstrumented. #548 payment/deep/output maintenance integrated
+  after fixing review, affected checks and exact-head Full. #547 complete
+  world-generation lifecycle and #549 durable mixed multiplayer remain as two
+  reviewed branches; their local evidence passes and necessary costs are
+  accepted. Root owns fix spot-checks, current-base Full and serial integration.
 - #529 closed after ten successful qualifying dependency installs. The
   fifteenth-integration platform cadence passed; #545 is the twentieth
   integration. Its cadence passed all five macOS semantic cases and other
   platform builds. Windows x64 lost redirected diagnostics through native
   console setup, causing strict log/witness failures; #548 carries the bounded
-  repair and file/pipe checks. No game-state regression is established. #509
-  stays open until the Windows semantic retry passes.
+  repair. Its Full passed actual Windows file/pipe checks. No game-state
+  regression is established. #509 stays open until the Windows semantic
+  cadence retry passes on the integrated repair.
 
 ## Twenty-second steering review (2026-10-27, observable evidence and clock ownership)
 
@@ -246,6 +256,7 @@ C++ retired; net glue is separate.
 | #508 seeded random-command semantic scenarios | #544 | direct | `d26b9447bc` | 0 / 501 / 0 / 0; net glue 0 |
 | #506 threaded semantic and C++ TSan evidence | #542 | direct | `18fb574219` | 0 / 933 / 0 / 0; net glue 0 |
 | #507 community AI and larger vanilla save | #545 | direct | `a297bed748` | 0 / 440 / 0 / 0; net glue 0 |
+| #168/#199/#500 payment boundaries; #503 evidence; #509 Windows diagnostics | #548 | direct | `467b89bcbd` | 113 / 378 / 140 / 0; net glue 68 |
 
 ## Work order
 
@@ -253,35 +264,33 @@ One ranked list. Each free slot takes the highest unblocked item that fits the
 six-branch limit and disjoint-service rule; completing review/integration takes
 priority. A lower rank can run while a higher one waits. Scopes live in issues.
 
-1. **Review and integrate ready #548 and #547.** Root accepted both concrete
-   costs; fresh fixing reviews and separate current-base Full runs remain.
-   #548 includes the twentieth-cadence Windows output repair; integrate it
-   first and retry platform semantics before claiming #509 complete. The
-   overlapping components integrate serially. #545 is integrated; NewGRFs
-   remain user-parked.
+1. **Integrate reviewed #547 and #549.** Their affected checks pass and root
+   accepted the concrete costs. Root checked #547's direct-owner, assertion
+   and orphan fixes; check #549's missed-sync repair. Separate current-base
+   Full runs remain. #548 is integrated; retry platform semantics before
+   claiming #509 complete. The overlapping components integrate serially.
+   NewGRFs remain user-parked.
 2. **#275 measured P2016 ceiling repair.** Anchors are integrated. Attribute
    lookup, call and spill work at instruction addresses/call sites, including
    required original inline work and each proposed replacement. Station tick
-   observations and orders resolution estimate only 0.301% together and remain
-   notes without measured savings;
-   select repairs only under the existing 0.5% individual/1% batch rule.
+   observations, orders resolution and normal-road observations stay notes.
+   Loading dispatch and immutable-table estimates total 0.729%; its loading
+   portion narrowly clears 0.5%. No batch clears 1%; identify another qualifying
+   disjoint net cost and preserve initialization, callback freshness and source
+   control flow. These unbuilt estimates establish no measured savings.
    #312's implemented tree narrowing is complete, without isolated speed credit.
-3. **#168/#199/#500 payment boundaries and #503 deep protection.** One bounded
-   maintenance batch replaces CargoPayment vehicle/settlement/settings selectors
-   with named typed calls, removes the feeder owner bounce and borrows service
-   tables. Reuse canonical company, vehicle, finance, sound and presentation
-   services; adopt shared Vehicle/StationID/CompanyID interfaces. Preserve
-   detachment, company restoration, Money saturation and callback order.
-   Remaining delivery/industry selectors become the next concrete conversion
-   when this batch integrates; no whole-fork sweep or speed credit.
-   Include live-output protection in housekeeping at planning and apply time,
-   plus deep source checks before/after each member that reject drift, retain
-   an invalid report and stop before another member. Launch deep from a fixed
-   isolated checkout. Use existing locks/driver machinery, no process controller.
-   #548 is locally validated, with root repairs for inaccessible unrelated proc
-   descriptors and Windows diagnostic capture. Accepted necessary cost: zero
-   retirement, 113 Rust, 65 net glue and 378 tooling lines. The Windows file/pipe
-   checks run on the actual executable in existing platform validation.
+3. **#168/#199/#500 delivery and industry boundaries.** #548 completed the
+   payment lifecycle/settlement/income and #503 evidence protection. Its
+   integration selects the next bounded maintenance batch: replace station_read,
+   industry_read/write, accept, statistics and industry_effect in CargoPayment
+   deliver/trigger with named typed operations. Reuse existing station,
+   industry, company and town owners and canonical Source/IndustryID/ShellHandle.
+   Preserve observation points, saturation, callback ordering/reentry and pool
+   semantics; remove displaced selectors, wrappers and fixture bindings. No
+   whole-fork conversion, new raw-map permission or speed credit is selected.
+   Carry the existing Cargo/native/economy/subsidy evidence. Root decides cost
+   at the first draft; plan zero retirement, 150–300 Rust lines changed,
+   30–100 net glue and 50–100 native/tooling support lines.
 4. **#546 complete world-generation lifecycle ownership.** Rust owns canonical
    generation state, setup/orchestration/warm-up/completion/cleanup and the
    remaining rough/rocky generation callee. Preserve native aliases and the
@@ -291,16 +300,18 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
    Extend existing generated/heightmap/cancellation evidence for empty/editor,
    fallback, reset, outer rollback and GameScript startup. Estimate: 300–350
    retired lines, 600–1,000 Rust, 250–400 net glue and 200–300 test/tooling lines;
-   #547 passes all six focused scenarios. Root accepted its necessary 353
-   retired lines, 658 Rust, 363 net glue and 287 tooling lines for complete
-   native resource/exception composition and default lifecycle evidence.
+   #547 passes all six focused scenarios; fixing review and affected checks
+   passed. Its final metrics are 365 retired lines, 746 Rust, 344 net glue and
+   293 tooling lines. Necessary native resource/exception composition and
+   default lifecycle evidence remain accepted after the required fixes.
 5. **#505 ASan/UBSan.** Tooling is integrated. Read the first full sanitized deep
    member, distinguish original failures from candidate-only faults and decide
    the measured runtime budget.
 6. **#509 platform semantic subset.** Tooling #540 is integrated with reviewed
    prepared no-join inputs, full durations and strict comparisons. Keep the
    issue open until actual Windows/macOS semantic cadence success. macOS passed
-   at the twentieth cadence; Windows awaits #548's diagnostic repair and retry.
+   at the twentieth cadence. #548's actual Windows pipe/file checks passed;
+   the integrated semantic cadence retry remains.
 7. **#510 durable mixed multiplayer evidence.** The bounded spike succeeded
    in both role orders: 24 sync packets each, normal shutdown, matching stop
    moments/RNG and equal same-role saves across all 62 chunks. Unmodified
@@ -308,8 +319,10 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
    tag and NewGRF identity limitation; implement the selected deep member using
    existing launcher/freezer/console/decoder services, with strict sync, exit
    and same-role state comparisons. Start the next maintenance batch from the
-   integrated base; do not expand reviewed #548. Judge its concrete cost at
-   the first draft against the issue's roughly 100-line planning estimate.
+   integrated base; #549 implements it and passes both role orders in 137.3
+   seconds. Its 663-line first-draft cost is accepted for runtime identity,
+   process cleanup and strict protocol/state failure checks. Fixing review
+   repaired missed-sync detection; root owns spot-check, base update and Full.
 8. **#501 incremental typing; #156 selective observation work.** Carry typing
    on touched tooling. Preserve #511's confirmed presentation limits and subset
    input gaps; further mutation samples are selective, without recurring
@@ -351,16 +364,16 @@ on the pinned zlib/lzma runtime; the incompatible historical report is archived.
 
 | Item | Current state | Next action |
 | --- | --- | --- |
-| #509 and #529 | CI_ON_DEMAND is true; twentieth integration complete. All five macOS semantics passed; Windows failed on redirected output. #529 remains closed. | Review/integrate #548's repair, then retry normal cadence; keep #509 open. |
-| #275 | P2016 measured 1.5229x; station/orders estimate 0.301% combined and stay notes. Twentieth-tip instruction profile is due. | Rank remaining net costs; preserve unmatched raw-profile labels and existing anchors. |
+| #509 and #529 | CI_ON_DEMAND is true; twenty-first integration complete. #548 Full passed Windows pipe/file diagnostics; macOS semantics already passed. #529 remains closed. | Retry normal semantic cadence on integrated repair; keep #509 open until Windows passes. |
+| #275 | Twentieth-tip profile passes all six comparisons/identities; P2016 projects 1.5271x. Loading/table estimate is 0.729%, no 1% batch. | Find another qualifying disjoint net cost; record no measured savings. Next profile is due after the twenty-second integration. |
 | #505/#503 | Fixed-source integrated #543 soak passed 521 cases/8,396 snapshots; full sanitizer member is running. | Read the sanitizer report and measured runtime; skip overlapping deep launch. Preserve active checkout. |
 | #511 | Completed and closed: 31 detections, nine classified survivors, zero invalid/inconclusive; source/build restored. | Use #156's scoped findings; further samples are selective. |
-| #168/#199/#500 and #503 | #548 passed local payment/deep/cleanup checks; root added Windows output repair and accepted cost. | Fresh fixing review, current-base Full and integration; then select delivery/industry selector conversion. |
-| #546 | #547 passes all six focused scenarios, Cargo/native checks and 1,165 assertions; concrete cost accepted. | Fresh fixing review, then current-base Full after #548. |
+| #168/#199/#500 and #503 | #548 integrated after exact-head Full; next delivery/industry selectors are selected on all three trackers. | Implement the bounded next maintenance batch from integrated source. Preserve active deep/coverage work. |
+| #546 | #547 fixing review and affected validation pass, including 1,165 assertions; root checked the fixes. | Update from current base and request final Full. |
 | #506 | #542 integrated after fixing review and exact-head Full; issue closed. | Future deep runs include native/TSan members; preserve #156's uninstrumented Rust and remaining lifecycle limits. |
 | #508 | #544 integrated after exact-head Full; issue closed. | Keep histograms and scoped #156 limits; six soak variants join the next current-source deep run. |
 | #507 | #545 integrated after exact-head bootstrap Full; community/large vanilla evidence complete. | Keep NewGRFs user-parked; issue remains open for that scope. |
-| #510 | Both-role SDL spike passed sync, same-role saves and RNG with fixture identity matching. | Implement durable deep member; no unmodified-release interoperability claim. |
+| #510 | Durable #549 passes both role orders; necessary cost accepted and missed-sync review repair passed regression checks. | Root fix spot-check, base update and separate Full after #547. No unmodified-release interoperability claim. |
 | #525/#526 | Parked by the user; draft #525 closed at ccc28e2ed0. | None until user reselects it. |
 Selection: root; planning agents use gpt-6-astra, high. The start-development
 skill remains open-ended and unchanged; completing this order triggers planning.
