@@ -2,23 +2,28 @@
 """List, and with `--apply` remove, stale worktrees and ad hoc `.local` output (#532).
 
 A dry run prints each candidate with its size and reason; `--apply` removes exactly the
-`remove` lines. Worktrees go through `git worktree remove` without `--force`, so a dirty
-or locked one is kept. Output in a live worktree's own `.local` stays with that worktree.
+`remove` lines unless a live output handle appears before deletion. Worktrees go through `git worktree remove` without `--force`, so a dirty
+or locked one is kept. Live output handles are checked again before removal. Output in a
+live worktree's own `.local` stays with that worktree.
 """
 
 import argparse
+import errno
+import fcntl
 import json
 import os
 import re
 import shutil
+import signal
 import stat
 import subprocess
 import sys
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
+PROC_ROOT = Path("/proc")
 BASE = "origin/rust-migration"
 # Per-run output folders; every other `.local` entry is kept unless listed below.
 OUTPUT = ("simulation", "verification", "coverage", "deep")
@@ -141,7 +146,108 @@ def plan_worktrees(
             items.append(Item(tree.path, False, f"{reason}, but dirty", True))
         else:
             items.append(Item(tree.path, True, reason, True, branch))
-    return items
+    return protect_outputs(items)
+
+
+@dataclass(frozen=True)
+class OutputHandle:
+    path: Path
+    device: int
+    inode: int
+
+
+def open_outputs() -> tuple[list[OutputHandle], str | None]:
+    """Snapshot writable regular-file FDs; an unreadable live process prevents removal."""
+    handles: list[OutputHandle] = []
+    try:
+        for process in PROC_ROOT.iterdir():
+            if not process.name.isdecimal():
+                continue
+            try:
+                if process.stat().st_uid != os.geteuid():
+                    continue
+                for fd in (process / "fd").iterdir():
+                    try:
+                        info = fd.stat()
+                        if not stat.S_ISREG(info.st_mode):
+                            continue
+                        fields = dict(
+                            line.split(":", 1)
+                            for line in (process / "fdinfo" / fd.name)
+                            .read_text()
+                            .splitlines()
+                        )
+                        if int(fields["flags"], 8) & os.O_ACCMODE == os.O_RDONLY:
+                            continue
+                        handles.append(
+                            OutputHandle(fd.resolve(), info.st_dev, info.st_ino)
+                        )
+                    except OSError as error:
+                        if error.errno not in (errno.ENOENT, errno.ESRCH):
+                            raise
+            except OSError as error:
+                if error.errno not in (errno.ENOENT, errno.ESRCH):
+                    raise
+    except OSError as error:
+        return handles, f"cannot inspect live output handles: {error}"
+    return handles, None
+
+
+def lease_refusal(paths: list[Path]) -> str | None:
+    """Check for writers through the kernel when proc hides a process's descriptors."""
+    for path in paths:
+        try:
+            if not stat.S_ISREG(path.stat().st_mode):
+                continue
+            descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+            try:
+                # Lease breaks use the normally ignored SIGURG instead of fatal SIGIO.
+                fcntl.fcntl(descriptor, fcntl.F_SETOWN, os.getpid())
+                fcntl.fcntl(descriptor, fcntl.F_SETSIG, signal.SIGURG)
+                fcntl.fcntl(descriptor, fcntl.F_SETLEASE, fcntl.F_RDLCK)
+            finally:
+                os.close(descriptor)
+        except OSError as error:
+            if error.errno == errno.EAGAIN:
+                return "live open output handle"
+            return f"cannot inspect output candidate: {error}"
+    return None
+
+
+def output_refusal(
+    path: Path, handles: list[OutputHandle], error: str | None
+) -> str | None:
+    target = path.resolve()
+    if any(
+        handle.path == target or handle.path.is_relative_to(target)
+        for handle in handles
+    ):
+        return "live open output handle"
+    identities = {(handle.device, handle.inode) for handle in handles}
+    try:
+        paths = [path]
+        if path.is_dir() and not path.is_symlink():
+            paths.extend(path.rglob("*"))
+        if any(
+            (info.st_dev, info.st_ino) in identities
+            for info in (p.stat() for p in paths)
+        ):
+            return "live open output handle"
+    except OSError as inspection_error:
+        return f"cannot inspect output candidate: {inspection_error}"
+    if error is not None:
+        return lease_refusal(paths)
+    return None
+
+
+def protect_outputs(items: list[Item]) -> list[Item]:
+    handles, error = open_outputs()
+    return [
+        replace(item, remove=False, reason=reason)
+        if item.remove and (reason := output_refusal(item.path, handles, error))
+        else item
+        for item in items
+    ]
 
 
 def touched(path: Path) -> float:
@@ -215,7 +321,7 @@ def plan_local(local: Path, now: float) -> list[Item]:
             items.append(Item(entry, True, "ad hoc log"))
         else:
             items.append(Item(entry, False, "unknown; remove by hand if ad hoc output"))
-    return items
+    return protect_outputs(items)
 
 
 def plan(repo: Path, pr_state: PrState, now: float) -> list[Item]:
@@ -258,6 +364,9 @@ def writable(path: Path) -> None:
 def remove(main: Path, item: Item) -> str | None:
     """Remove ITEM; return the refusal when git keeps it."""
     writable(item.path)
+    handles, error = open_outputs()
+    if refusal := output_refusal(item.path, handles, error):
+        return refusal
     if not item.worktree:
         if item.path.is_dir() and not item.path.is_symlink():
             shutil.rmtree(item.path)

@@ -1492,14 +1492,9 @@ void TileLoop_Water(TileIndex tile)
 
 #endif
 
-#ifdef WITH_RUST
-#include "rust/landscape_generation_ffi.h"
-#endif
+#ifndef WITH_RUST
 void ConvertGroundTilesIntoWaterTiles()
 {
-#ifdef WITH_RUST
-	openttd_rust_convert_ground_water(&GetRustLandscapeGenerationServices());
-#else
 	for (const auto tile : Map::Iterate()) {
 		auto [slope, z] = GetTileSlopeZ(tile);
 		if (IsTileType(tile, MP_CLEAR) && z == 0) {
@@ -1531,8 +1526,8 @@ void ConvertGroundTilesIntoWaterTiles()
 			}
 		}
 	}
-#endif
 }
+#endif /* WITH_RUST */
 
 #ifndef WITH_RUST
 static TrackStatus GetTileTrackStatus_Water(TileIndex tile, TransportType mode, uint, DiagDirection)

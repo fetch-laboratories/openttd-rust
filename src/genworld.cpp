@@ -48,6 +48,183 @@
 #include "safeguards.h"
 
 
+#ifdef WITH_RUST
+#include "rust/world_generation_ffi.h"
+#include "industry.h"
+#include "rust/landscape_generation_frame.hpp"
+#include "rust/industry_generation_adapter.hpp"
+#include "rust/services_object.h"
+#include "rust/object_resolver_ffi.h"
+#include "rust/company_services.h"
+#include "rust/company_adapter.h"
+#include "rust/settings_services.h"
+#include "rust/environment_services.h"
+#include "rust/presentation_services.h"
+#include "rust/newgrf_storage_ffi.h"
+#include "rust/services_map.h"
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDWorldServices.hpp"
+
+static_assert(GWM_EMPTY == 1 && GWP_MAP_INIT == 0 && GWP_ROUGH_ROCKY == 3 && GWP_OBJECT == 7 && GWP_GAME_INIT == 9 && GWP_RUNTILELOOP == 10 && GWP_RUNSCRIPT == 11 && GWP_GAME_START == 12);
+static_assert(GM_MENU == 0 && GM_EDITOR == 2 && SM_EDITOR == 4 && SM_MENU == 6);
+static_assert(MAP_HEIGHT_LIMIT_AUTO_MINIMUM == 30 && MAP_HEIGHT_LIMIT_AUTO_CEILING_ROOM == 15 && DEF_SNOWLINE_HEIGHT == 10 && MAX_MAP_HEIGHT_LIMIT == 255);
+static_assert(GENERATE_NEW_SEED == UINT32_MAX && PSM_ENTER_GAMELOOP == 0 && PSM_LEAVE_GAMELOOP == 1);
+
+void StartupCompanies();
+void InitializeGame(uint size_x, uint size_y, bool reset_date, bool reset_settings);
+std::exception_ptr TakeTreeGenerationException() noexcept;
+
+struct RustWorldTownScratch { OpenTTDTownFoundingFrame frame; RustRoadCommandContext road; };
+struct RustWorldObjectScratch { OpenTTDObjectGenerationFrame frame; CommandCost out, tmp, aux; };
+struct OpenTTDWorldFrame {
+	std::exception_ptr cancellation;
+	std::optional<Backup<CompanyID>> company;
+	std::optional<OpenTTDLandscapeGenerationCall> landscape;
+	std::optional<RustWorldTownScratch> town;
+	std::optional<OpenTTDIndustryGenerationContext> industry;
+	std::optional<RustWorldObjectScratch> objects;
+	std::optional<RustGenerationLoop> loop;
+};
+/* Game::StartNew/GameLoop, completion callbacks, sprite loading, InitializeGame,
+	* mode switching and SaveOrLoad may throw. Their native frames outlive Rust. */
+template <typename F>
+static bool WorldException(OpenTTDWorldFrame *frame, F &&operation) noexcept
+{
+	try { operation(); }
+	catch (...) { frame->cancellation = std::current_exception(); return false; }
+	return true;
+}
+static uint8_t WorldExceptionKind(OpenTTDWorldFrame *frame) noexcept
+{
+	if (!frame->cancellation) return 0;
+	try { std::rethrow_exception(frame->cancellation); }
+	catch (AbortGenerateWorldSignal &) { return 1; }
+	catch (...) { return 2; }
+}
+const OpenTTDWorldServices &GetRustWorldServices() noexcept
+{
+	static const OpenTTDWorldServices services{
+		.landscape = &GetRustLandscapeGenerationServices(),
+		.company = &GetRustClockCompanyServices(),
+		.town = &GetRustTownFoundingServices(),
+		.industry = &GetIndustryRustServices(),
+		.industry_generation = &GetIndustryGenerationServices(),
+		.objects = &GetRustObjectServices(),
+		.engines = &EngineServices(),
+		.disasters = &DisasterServices(),
+		.modal = []() noexcept { return HasModalProgress(); },
+		.set_modal = [](bool value) noexcept { SetModalProgress(value); },
+		.local_company = RustLocalCompanyID,
+		.set_local_company = RustSetLocalCompany,
+		.restore_companies = RustRestoreGenerationCompanies,
+		.initialize = [](OpenTTDWorldFrame *f, uint32_t x, uint32_t y, bool reset) noexcept { return WorldException(f, [=] { InitializeGame(x, y, true, reset); }); },
+		.prepare_progress = []() noexcept { PrepareGenerateWorldProgress(); },
+		.settings = []() noexcept { return OpenTTDWorldSettings{RustMapHeightLimit(), _settings_game.game_creation.se_flat_world_height, _settings_game.game_creation.heightmap_height, _settings_game.game_creation.land_generator}; },
+		.height_limit = RustSetMapHeightLimit,
+		.game_mode = RustGameMode,
+		.seed = RustGenerationSeed,
+		.set_seed = RustSetGenerationSeed,
+		.interactive_random = []() noexcept { return InteractiveRandom(); },
+		.random_seed = [](uint32_t value) noexcept { _random.SetSeed(value); },
+		.load_sprites = [](OpenTTDWorldFrame *f) noexcept { return WorldException(f, [] { GfxLoadSprites(); }); },
+		.string_widths = []() noexcept { LoadStringWidthTable(); },
+		.reset_windows = []() noexcept { ResetWindowSystem(); },
+		.setup_windows = []() noexcept { SetupColoursAndInitialWindow(); },
+		.unshow_error = []() noexcept { UnshowCriticalError(); },
+		.close_windows = []() noexcept { CloseAllNonVitalWindows(); },
+		.hide_windows = []() noexcept { HideVitalWindows(); },
+		.show_progress = []() noexcept { ShowGenerateWorldProgress(); },
+		.show_windows = []() noexcept { ShowVitalWindows(); },
+		.reset_object = []() noexcept { ResetObjectToPlace(); },
+		.show_grf_error = []() noexcept { ShowNewGRFError(); },
+		.randomizers = []() noexcept { ScriptObject::InitializeRandomizers(); },
+		.startup_companies = []() noexcept { StartupCompanies(); },
+		.place_cursor = []() noexcept { SetObjectToPlace(SPR_CURSOR_ZZZ, PAL_NONE, HT_NONE, WC_MAIN_WINDOW, 0); },
+		.scroll = [](uint32_t tile) noexcept { ScrollMainWindowToTile(TileIndex(tile), true); },
+		.busy = [](bool value) noexcept { SetMouseCursorBusy(value); },
+		.close_progress = []() noexcept { CloseWindowByClass(WC_MODAL_PROGRESS); },
+		.show_error = []() noexcept { ShowFirstError(); },
+		.dirty = RustScreenDirty,
+		.set_progress = [](OpenTTDWorldFrame *f, GenWorldProgress p, uint32_t total) noexcept { return RunGenerationProgress(f, [=] { RustSetGeneratingWorldProgress(p, total); }); },
+		.increase_progress = [](OpenTTDWorldFrame *f, GenWorldProgress p) noexcept { return RunGenerationProgress(f, [=] { RustIncreaseGeneratingWorldProgress(p); }); },
+		.town_roads = []() noexcept { return CheckTownRoadTypes(); },
+		.freeform = OpenTTDFreeformEdges,
+		.count_land = RustCountLandTiles,
+		.landscape_begin = [](OpenTTDWorldFrame *f) noexcept { auto &c = f->landscape.emplace(); return OpenTTDWorldLandscape{&c.frame, &c.heightmap, c.settings}; },
+		.landscape_end = [](OpenTTDWorldFrame *f) noexcept { f->cancellation = f->landscape->frame.cancellation; f->landscape.reset(); return !f->cancellation; },
+		.town_begin = [](OpenTTDWorldFrame *f) noexcept { auto &t = f->town.emplace(); return OpenTTDWorldTown{&t.frame, &t.frame.names, &t.road.view, _settings_game.economy.town_layout}; },
+		.town_end = [](OpenTTDWorldFrame *f) noexcept { f->cancellation = f->town->frame.cancellation; f->town.reset(); return !f->cancellation; },
+		.industry_builder = RustIndustryBuilderState,
+		.industry_begin = [](OpenTTDWorldFrame *f) noexcept { return &f->industry.emplace(); },
+		.industry_end = [](OpenTTDWorldFrame *f) noexcept { f->cancellation = f->industry->cancellation; f->industry.reset(); },
+		.object_begin = [](OpenTTDWorldFrame *f) noexcept { auto &o = f->objects.emplace(); return OpenTTDWorldObject{&o.frame, RustCommandCost(&o.out), RustCommandCost(&o.tmp), RustCommandCost(&o.aux)}; },
+		.object_end = [](OpenTTDWorldFrame *f) noexcept { f->cancellation = f->objects->frame.cancellation; f->objects.reset(); },
+		.tree_settings = TreeGenerateSettings,
+		.tree_end = [](OpenTTDWorldFrame *f) noexcept { f->cancellation = TakeTreeGenerationException(); },
+		.loop_begin = [](OpenTTDWorldFrame *f) noexcept -> const OpenTTDGenerationLoop * {
+			auto &loop = f->loop.emplace();
+			assert(*openttd_rust_tile_loop_cursor() != 0);
+			return &loop.view;
+		},
+		.loop_end = [](OpenTTDWorldFrame *f) noexcept { f->loop.reset(); },
+		.advance_tick = []() noexcept { TimerGameTick::counter++; },
+		.script_start = [](OpenTTDWorldFrame *f) noexcept { return WorldException(f, [] { Game::StartNew(); }); },
+		.script_loop = [](OpenTTDWorldFrame *f) noexcept { return WorldException(f, [] { Game::GameLoop(); }); },
+		.script_exists = []() noexcept { return Game::GetInstance() != nullptr; },
+		.script_sleeping = []() noexcept { return Game::GetInstance()->IsSleeping(); },
+		.trash_company = [](OpenTTDWorldFrame *f) noexcept { f->company->Trash(); },
+		.company_valid = [](OpenTTDWorldFrame *f) noexcept { return f->company->IsValid(); },
+		.restore_company = [](OpenTTDWorldFrame *f) noexcept { f->company->Restore(); },
+		.callback = [](OpenTTDWorldFrame *f, GWDoneProc *proc) noexcept { return WorldException(f, [=] { proc(); }); },
+		.exception_kind = WorldExceptionKind,
+		.storage_discard = RustStorageDiscard,
+		.dedicated = []() noexcept { return _network_dedicated; },
+		.exit_game = []() noexcept -> bool { return _exit_game; },
+		.set_exit = []() noexcept { _exit_game = true; },
+		.abort_mode = [](SwitchMode mode) noexcept { _switch_mode = mode; },
+		.switch_mode = [](OpenTTDWorldFrame *f) noexcept { return WorldException(f, [] { SwitchToMode(_switch_mode); }); },
+		.debug_start = []() noexcept { Debug(net, 3, "Generating map, please wait..."); },
+		.debug_done = []() noexcept { Debug(net, 3, "Map generated, starting game"); },
+		.debug_abort = []() noexcept { Debug(net, 0, "Generating map failed; closing server"); },
+		.debug_map = RustDebugNewMap,
+		.desync = []() noexcept { return _debug_desync_level > 0; },
+		.save = [](OpenTTDWorldFrame *f) noexcept { return WorldException(f, [] { std::string name = fmt::format("dmp_cmds_{:08x}_{:08x}.sav", _settings_game.game_creation.generation_seed, TimerGameEconomy::date); SaveOrLoad(name, SLO_SAVE, DFT_GAME_FILE, AUTOSAVE_DIR, false); }); },
+	};
+	return services;
+}
+
+bool CheckAbi_genworld() { return AbiServicesComplete(GetRustWorldServices()); }
+
+/* Callgrind selects this native frame, including its actual GenerateWorld call. */
+#ifdef _MSC_VER
+__declspec(noinline)
+#else
+__attribute__((noinline))
+#endif
+static void _GenerateWorld()
+{
+	OpenTTDWorldFrame frame;
+	frame.company.emplace(_current_company, OWNER_NONE);
+	uint8_t result = openttd_rust_world_generate(&GetRustWorldServices(), &frame);
+	if (result == 2) std::rethrow_exception(frame.cancellation);
+}
+void GenerateWorld(GenWorldMode mode, uint size_x, uint size_y, bool reset_settings)
+{
+	OpenTTDWorldFrame frame;
+	bool ready = openttd_rust_world_setup(&GetRustWorldServices(), &frame, mode, size_x, size_y, reset_settings);
+	if (frame.cancellation) std::rethrow_exception(frame.cancellation);
+	if (ready) _GenerateWorld();
+}
+void GenerateWorldSetCallback(GWDoneProc *proc) { openttd_rust_world_set_callback(proc); }
+void AbortGeneratingWorld() { openttd_rust_world_request_abort(); }
+bool IsGeneratingWorldAborted() { return openttd_rust_world_aborted(&GetRustWorldServices()); }
+void HandleGeneratingWorldAbortion()
+{
+	OpenTTDWorldFrame frame;
+	if (!openttd_rust_world_handle_abort(&GetRustWorldServices(), &frame)) std::rethrow_exception(frame.cancellation);
+	throw AbortGenerateWorldSignal();
+}
+#else
 void GenerateClearTile();
 void GenerateIndustries();
 void GenerateObjects();
@@ -351,6 +528,8 @@ void GenerateWorld(GenWorldMode mode, uint size_x, uint size_y, bool reset_setti
 
 	_GenerateWorld();
 }
+
+#endif /* WITH_RUST */
 
 /**
  * Load town data from _file_to_saveload, place towns at the appropriate locations, and expand them to their target populations.

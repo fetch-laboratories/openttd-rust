@@ -101,6 +101,7 @@ static void Layouts()
 #include "abi-layout-scheduler.inc"
 #include "abi-layout-maintenance.inc"
 #include "abi-layout-landscape.inc"
+#include "abi-layout-genworld.inc"
 
 	CHECK(openttd_rust_abi_layout_named("unknown", 0) == SIZE_MAX);
 	CHECK(openttd_rust_abi_layout_named("OpenTTDTrainServices", SIZE_MAX) == SIZE_MAX);

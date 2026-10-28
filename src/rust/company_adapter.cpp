@@ -6,6 +6,7 @@
  */
 /** @file company_adapter.cpp Typed noexcept shared-world services for the Rust company owner. */
 #include "../stdafx.h"
+#include "presentation_services.h"
 #ifdef WITH_RUST
 #include "../ai/ai.hpp"
 #include "../aircraft.h"
@@ -114,7 +115,7 @@ static void Fin_give_money_message(uint8_t dest, int64_t amount) noexcept
 static void Fin_money_animation(uint32_t t, int64_t amount) noexcept
 {
 	TileIndex tile(t);
-	ShowCostOrIncomeAnimation(TileX(tile) * TILE_SIZE, TileY(tile) * TILE_SIZE, GetTilePixelZ(tile), amount);
+	RustCostOrIncomeAnimation(TileX(tile) * TILE_SIZE, TileY(tile) * TILE_SIZE, GetTilePixelZ(tile), amount);
 }
 
 /* Company identity and lifecycle services. */
@@ -267,7 +268,6 @@ static void Co_acquisition_windows(uint8_t id) noexcept
 
 /* Ownership transfer services. */
 static void Co_clients_to_spectators(uint8_t id) noexcept { NetworkClientsToSpectators(CompanyID(id)); }
-static void Co_set_local_company(uint8_t id) noexcept { SetLocalCompany(CompanyID(id)); }
 static uint32_t Co_town_next(uint32_t from, uint8_t old, OpenTTDCompanyTownRights *out) noexcept
 {
 	for (const Town *t : Town::Iterate(from)) {
@@ -439,7 +439,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.assert_new_ai_slot = Co_assert_new_ai_slot, .company_bankrupt_news = Co_company_bankrupt_news,
 		.stop_ai = Co_stop_ai, .delete_company = Co_delete_company, .company_removed = Co_company_removed,
 		.merger_news = Co_merger_news, .acquisition_windows = Co_acquisition_windows,
-		.clients_to_spectators = Co_clients_to_spectators, .set_local_company = Co_set_local_company,
+		.clients_to_spectators = Co_clients_to_spectators, .set_local_company = RustSetLocalCompany,
 		.subsidies = RustSubsidyServices,
 		.town_next = Co_town_next, .town_rating = Co_town_rating,
 		.set_town_rating = Co_set_town_rating, .set_town_exclusivity = Co_set_town_exclusivity,

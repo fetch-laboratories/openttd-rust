@@ -39,9 +39,12 @@ def adapter(build, folder, env):
         ROOT / "tools/simulation/objects-console.cpp",
         "objects",
         wraps=(
+            "_Z16SetModalProgressb",
             "_Z26SetGeneratingWorldProgress16GenWorldProgressj",
             "_Z31IncreaseGeneratingWorldProgress16GenWorldProgress",
-            "_Z29GenerateWorldSetAbortCallbackPFvvE",
+            "openttd_rust_world_set_abort_callback"
+            if (build / "openttd-rust").exists()
+            else "_Z29GenerateWorldSetAbortCallbackPFvvE",
             "_Z13PlayTileSoundPK7GRFFiletN10StrongType7TypedefIj12TileIndexTagJNS2_7CompareENS2_7IntegerENS2_10CompatibleIiEENS7_IlEEEEE",
             "_ZN11BaseStation19SetRoadStopTileDataEN10StrongType7TypedefIj12TileIndexTagJNS0_7CompareENS0_7IntegerENS0_10CompatibleIiEENS5_IlEEEEEhb",
             "_Z19MarkTileDirtyByTileN10StrongType7TypedefIj12TileIndexTagJNS_7CompareENS_7IntegerENS_10CompatibleIiEENS4_IlEEEEEii",

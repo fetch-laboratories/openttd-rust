@@ -95,11 +95,9 @@ struct HouseClassMapping {
 
 void ResetHouseClassIDs();
 HouseClassID AllocateHouseClassID(uint8_t grf_class_id, uint32_t grfid);
-#endif
 
 void InitializeBuildingCounts();
 void InitializeBuildingCounts(Town *t);
-#ifndef WITH_RUST
 void IncreaseBuildingCount(Town *t, HouseID house_id);
 void DecreaseBuildingCount(Town *t, HouseID house_id);
 #endif

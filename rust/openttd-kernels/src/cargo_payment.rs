@@ -16,6 +16,9 @@
     clippy::missing_safety_doc,
     clippy::too_many_arguments
 )]
+use crate::company_type::CompanyID;
+use crate::station_type::StationID;
+use crate::vehicle_type::OpenTTDVehicle;
 use std::ffi::c_void;
 
 /// Opaque live native `CargoPayment`; never dereferenced by Rust.
@@ -36,13 +39,12 @@ pub struct Spec {
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct Fields {
-    pub(crate) front: *mut c_void,
+    pub(crate) front: *mut OpenTTDVehicle,
     pub(crate) route_profit: i64,
     pub(crate) visual_profit: i64,
     pub(crate) visual_transfer: i64,
 }
 #[repr(C)]
-#[derive(Clone, Copy)]
 pub struct Services {
     pub(crate) spec: extern "C" fn(u8, *mut Spec),
     pub(crate) registry: *const crate::cargo_registry::Services,
@@ -54,23 +56,34 @@ pub struct Services {
     pub(crate) statistics: extern "C" fn(u16, u8, u8, u32, u8),
     pub(crate) subsidies: extern "C" fn() -> *const crate::subsidy::Services,
     pub(crate) industry_effect: extern "C" fn(*mut c_void, u8),
-    pub(crate) vehicle_read: extern "C" fn(*mut c_void, u8) -> u32,
-    pub(crate) settle: extern "C" fn(*mut c_void, u8, i64, i64) -> u32,
-    pub(crate) feeder: extern "C" fn(*const c_void, u32) -> i64,
-    pub(crate) setting: extern "C" fn(u8) -> u32,
+    pub(crate) last_station: extern "C" fn(*mut OpenTTDVehicle) -> StationID,
+    pub(crate) vehicle_owner: extern "C" fn(*mut OpenTTDVehicle) -> CompanyID,
+    pub(crate) detach_payment: extern "C" fn(*mut OpenTTDVehicle),
+    pub(crate) finance: *const crate::company::FinanceServices,
+    pub(crate) vehicles: *const crate::vehicle::VehicleServices,
+    pub(crate) local_company: extern "C" fn() -> bool,
+    pub(crate) expense: extern "C" fn(*mut OpenTTDVehicle, bool) -> crate::services::ExpenseType,
+    pub(crate) profit: extern "C" fn(*mut OpenTTDVehicle) -> i64,
+    pub(crate) x: extern "C" fn(*mut OpenTTDVehicle) -> i32,
+    pub(crate) y: extern "C" fn(*mut OpenTTDVehicle) -> i32,
+    pub(crate) z: extern "C" fn(*mut OpenTTDVehicle) -> i32,
+    pub(crate) cost_animation: extern "C" fn(i32, i32, i32, i64),
+    pub(crate) feeder_animation: extern "C" fn(i32, i32, i32, i64, i64),
+    pub(crate) subsidy_multiplier: extern "C" fn() -> u8,
+    pub(crate) feeder_payment_share: extern "C" fn() -> u8,
 }
 /// Rust-allocated payment with the `OpenTTDCargoPayment` C layout (ABI layout 60).
 #[repr(C)]
 pub struct Payment {
     pub(crate) fields: Fields,
-    pub(crate) station: u16,
+    pub(crate) station: StationID,
 }
 #[derive(Default)]
 pub struct Delivery {
     destinations: Vec<*mut c_void>,
 }
 
-fn income(s: Services, pieces: u32, distance: u32, periods: u16, cargo: u8) -> i64 {
+fn income(s: &Services, pieces: u32, distance: u32, periods: u16, cargo: u8) -> i64 {
     let mut cs = Spec::default();
     (s.spec)(cargo, &raw mut cs);
     if cs.valid == 0 {
@@ -122,7 +135,7 @@ fn income(s: Services, pieces: u32, distance: u32, periods: u16, cargo: u8) -> i
 
 fn deliver(
     d: *mut Delivery,
-    s: Services,
+    s: &Services,
     pieces: u32,
     cargo: u8,
     station: u16,
@@ -225,7 +238,7 @@ fn deliver(
         },
         station,
     ) {
-        profit = match (s.setting)(0) {
+        profit = match (s.subsidy_multiplier)() {
             0 => profit.saturating_add(profit >> 1),
             1 => profit.saturating_mul(2),
             2 => profit.saturating_mul(3),
@@ -235,7 +248,7 @@ fn deliver(
     profit
 }
 
-fn trigger(ind: *mut c_void, s: Services) {
+fn trigger(ind: *mut c_void, s: &Services) {
     let mask = (s.industry_read)(ind, 4, 0);
     (s.industry_effect)(ind, 0); // was_cargo_delivered
     if mask & 3 != 0 {
@@ -266,7 +279,10 @@ fn trigger(ind: *mut c_void, s: Services) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_cargo_payment_new(front: *mut c_void, station: u16) -> *mut Payment {
+pub extern "C" fn openttd_rust_cargo_payment_new(
+    front: *mut OpenTTDVehicle,
+    station: StationID,
+) -> *mut Payment {
     Box::into_raw(Box::new(Payment {
         fields: Fields {
             front,
@@ -276,14 +292,16 @@ pub extern "C" fn openttd_rust_cargo_payment_new(front: *mut c_void, station: u1
     }))
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_cargo_payment_front(p: *const Payment) -> *mut c_void {
+pub unsafe extern "C" fn openttd_rust_cargo_payment_front(
+    p: *const Payment,
+) -> *mut OpenTTDVehicle {
     unsafe { (*p).fields.front }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_cargo_payment_afterload(p: *mut Payment, s: *const Services) {
-    let s = unsafe { *s };
+    let s = unsafe { &*s };
     let front = unsafe { (*p).fields.front };
-    let station = (s.vehicle_read)(front, 0) as u16;
+    let station = (s.last_station)(front);
     unsafe {
         (*p).station = station;
     }
@@ -296,33 +314,60 @@ pub unsafe extern "C" fn openttd_rust_cargo_payment_destroy(
 ) {
     let fields = unsafe { (*p).fields };
     if cleaning == 0 {
-        let s = unsafe { *s };
-        (s.settle)(fields.front, 0, 0, 0); // detach before visual zero test
+        let s = unsafe { &*s };
+        (s.detach_payment)(fields.front);
         if fields.visual_profit != 0 || fields.visual_transfer != 0 {
-            let old_company = (s.settle)(fields.front, 1, 0, 0);
-            (s.settle)(fields.front, 2, fields.route_profit.saturating_neg(), 0);
-            (s.settle)(
-                fields.front,
-                3,
+            let finance = unsafe { &*s.finance };
+            let vehicles = unsafe { &*s.vehicles };
+            let old_company = CompanyID((finance.current_company)());
+            let company = (s.vehicle_owner)(fields.front);
+            (finance.set_current_company)(company.0);
+            let expense = (s.expense)(fields.front, true);
+            let finances = (finance.company_finances)(company.0);
+            // SAFETY: The front's owner is the live company selected above.
+            if !finances.is_null() {
+                unsafe {
+                    crate::company::subtract_money(
+                        finance,
+                        finances,
+                        company.0,
+                        fields.route_profit.saturating_neg(),
+                        expense.0,
+                    );
+                }
+            }
+            // SAFETY: Settlement retains its live native front until all callbacks return.
+            let front = crate::vehicle::VehicleRef(unsafe {
+                std::ptr::NonNull::new_unchecked(fields.front)
+            });
+            let profit = (s.profit)(fields.front).saturating_add(
                 fields
                     .visual_profit
                     .saturating_add(fields.visual_transfer)
                     .wrapping_shl(8),
-                0,
             );
+            (vehicles.write_profit)(front, profit);
             if fields.route_profit != 0
-                && (s.settle)(fields.front, 4, 0, 0) != 0
-                && (s.settle)(fields.front, 8, 0, 0) == 0
+                && (s.local_company)()
+                && !(vehicles.play_vehicle_sound)(front, crate::newgrf_sound::VSE_LOAD_UNLOAD)
             {
-                (s.settle)(fields.front, 9, 0, 0);
+                (vehicles.play_sound)(front, crate::sound_type::SND_14_CASHTILL);
             }
-            (s.settle)(
-                fields.front,
-                if fields.visual_transfer != 0 { 5 } else { 6 },
-                fields.visual_transfer,
-                fields.visual_profit.saturating_neg(),
-            );
-            (s.settle)(fields.front, 7, i64::from(old_company), 0);
+            let x_pos = (s.x)(fields.front);
+            let y_pos = (s.y)(fields.front);
+            let z_pos = (s.z)(fields.front);
+            if fields.visual_transfer != 0 {
+                (s.feeder_animation)(
+                    x_pos,
+                    y_pos,
+                    z_pos,
+                    fields.visual_transfer,
+                    fields.visual_profit.saturating_neg(),
+                );
+            } else {
+                (s.cost_animation)(x_pos, y_pos, z_pos, fields.visual_profit.saturating_neg());
+            }
+            (finance.set_current_company)(old_company.0);
         }
     }
     unsafe {
@@ -334,16 +379,16 @@ pub unsafe extern "C" fn openttd_rust_cargo_payment_transfer(
     p: *mut Payment,
     s: *const Services,
     cargo: u8,
-    packet: *const c_void,
+    packet: *const crate::cargo_storage::Packet,
     count: u32,
     distance: u32,
     periods: u16,
 ) -> i64 {
-    let s = unsafe { *s };
-    let feeder = (s.feeder)(packet, count).saturating_neg();
+    let s = unsafe { &*s };
+    let feeder = crate::cargo_storage::share(unsafe { packet.read() }, count).saturating_neg();
     let profit = feeder
         .saturating_add(income(s, count, distance, periods, cargo))
-        .saturating_mul(i64::from((s.setting)(1) as i32))
+        .saturating_mul(i64::from((s.feeder_payment_share)()))
         / 100;
     unsafe {
         (*p).fields.visual_transfer = (*p).fields.visual_transfer.saturating_add(profit);
@@ -356,33 +401,34 @@ pub unsafe extern "C" fn openttd_rust_cargo_payment_final(
     d: *mut Delivery,
     s: *const Services,
     cargo: u8,
-    packet: *const c_void,
+    packet: *const crate::cargo_storage::Packet,
     count: u32,
     distance: u32,
     periods: u16,
     source: u32,
     monitors: *const crate::cargomonitor::Services,
 ) {
-    let s = unsafe { *s };
+    let s = unsafe { &*s };
     let front = unsafe { (*p).fields.front };
     let station = unsafe { (*p).station };
-    let company = (s.vehicle_read)(front, 1) as u8;
+    let company = (s.vehicle_owner)(front);
     let profit = deliver(
         d,
         s,
         count,
         cargo,
-        station,
+        station.0,
         distance,
         periods,
-        company,
+        company.0,
         source,
         unsafe { &*monitors },
     );
     unsafe {
         (*p).fields.route_profit = (*p).fields.route_profit.saturating_add(profit);
     }
-    let visual = profit.saturating_sub((s.feeder)(packet, count));
+    let visual =
+        profit.saturating_sub(crate::cargo_storage::share(unsafe { packet.read() }, count));
     unsafe {
         (*p).fields.visual_profit = (*p).fields.visual_profit.saturating_add(visual);
     }
@@ -395,7 +441,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_income(
     periods: u16,
     cargo: u8,
 ) -> i64 {
-    income(unsafe { *s }, pieces, distance, periods, cargo)
+    income(unsafe { &*s }, pieces, distance, periods, cargo)
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_delivery_new() -> *mut Delivery {
@@ -409,7 +455,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_delivery_destroy(d: *mut Delivery) {
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_cargo_delivery_flush(d: *mut Delivery, s: *const Services) {
-    let s = unsafe { *s };
+    let s = unsafe { &*s };
     let mut index = 0;
     while index < unsafe { (*d).destinations.len() } {
         let ind = unsafe { (&(*d).destinations)[index] };
@@ -451,9 +497,20 @@ crate::abi::layouts! {
         statistics,
         subsidies,
         industry_effect,
-        vehicle_read,
-        settle,
-        feeder,
-        setting,
+        last_station,
+        vehicle_owner,
+        detach_payment,
+        finance,
+        vehicles,
+        local_company,
+        expense,
+        profit,
+        x,
+        y,
+        z,
+        cost_animation,
+        feeder_animation,
+        subsidy_multiplier,
+        feeder_payment_share,
     };
 }

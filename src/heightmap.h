@@ -23,7 +23,9 @@ enum HeightmapRotation : uint8_t {
 
 bool GetHeightmapDimensions(DetailedFileType dft, std::string_view filename, uint *x, uint *y);
 bool LoadHeightmap(DetailedFileType dft, std::string_view filename);
+#ifndef WITH_RUST
 void FlatEmptyWorld(uint8_t tile_height);
+#endif
 void FixSlopes();
 
 #endif /* HEIGHTMAP_H */

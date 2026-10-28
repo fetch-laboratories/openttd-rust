@@ -903,13 +903,9 @@ static bool TryBuildTransmitter()
 }
 #endif
 
+#ifndef WITH_RUST
 void GenerateObjects()
 {
-#ifdef WITH_RUST
-	OpenTTDObjectGenerationFrame frame;
-	CommandCost out, tmp, aux;
-	if (!openttd_rust_object_generate(&GetRustObjectServices(), RustCommandCost(&out), RustCommandCost(&tmp), RustCommandCost(&aux), &frame)) std::rethrow_exception(frame.cancellation);
-#else
 	/* Set a guestimate on how much we progress */
 	SetGeneratingWorldProgress(GWP_OBJECT, (uint)ObjectSpec::Count());
 
@@ -965,8 +961,8 @@ void GenerateObjects()
 		}
 		IncreaseGeneratingWorldProgress(GWP_OBJECT);
 	}
-#endif
 }
+#endif
 
 static void ChangeTileOwner_Object(TileIndex tile, Owner old_owner, Owner new_owner)
 {

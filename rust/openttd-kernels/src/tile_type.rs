@@ -87,3 +87,8 @@ impl TileType {
     /// Native `MP_OBJECT`.
     pub const OBJECT: Self = Self(10);
 }
+
+/// `MAX_MAP_HEIGHT_LIMIT`.
+pub const MAX_MAP_HEIGHT_LIMIT: u32 = MAX_TILE_HEIGHT;
+/// `DEF_SNOWLINE_HEIGHT`.
+pub const DEF_SNOWLINE_HEIGHT: u8 = 10;

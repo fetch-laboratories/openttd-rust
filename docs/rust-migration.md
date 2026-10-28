@@ -327,7 +327,9 @@ excluded work and kernel/I/O costs remain outside the proxy.
 at `nice -n 19` and `ionice -c 3`, on the developer host only, never in GitHub Actions. It
 writes `.local/deep/<time>-<commit>/report.json` naming the commit, each member's exit status,
 wall and summed scenario seconds, and each failed scenario's problems and first differences,
-beside a log per member. The set is `DEEP_SET` in `tools/deep.py`: `simulate --soak` (520
+beside a log per member. HEAD and cleanliness are checked independently before and after
+each member. Drift retains the observed state in a failed report, stops the set and releases
+the lock; operational runs use a fixed isolated checkout. The set is `DEEP_SET` in `tools/deep.py`: `simulate --soak` (520
 scenarios against the default 445), then `simulate --sanitize` (below), each run through the
 ordinary driver action with a per-game timeout of 7200 s, since idle-priority games run slowly
 under load. Members share the
@@ -702,7 +704,7 @@ simulation run is required.
 ### Housekeeping
 
 `python3 tools/housekeeping.py` lists stale worktrees and `.local` output with each item's
-size and reason; `--apply` removes exactly its `remove` lines. Root runs it at session start and
+size and reason; `--apply` removes eligible `remove` entries after a final live-output check. Root runs it at session start and
 after integrations, reading the dry run before `--apply`. It removes a linked worktree (never
 the main checkout or `.local/reference`) whose branch merged into `origin/rust-migration` or
 whose PR merged or closed, through `git worktree remove` without `--force`, so a dirty or locked
@@ -717,7 +719,11 @@ keeps the current deep report and the runs it names, each scenario's newest cand
 (`callgrind.out`), shared builds, caches, toolchains, locks, the reference, retained speed
 profiles, CI request records and any folder holding a `provenance.json`, so a pinned anchor
 runtime records its provenance there. Unknown entries are listed as kept for a decision by
-hand. A live worktree's own `.local` stays with that worktree.
+hand. A live worktree's own `.local` stays with that worktree. Linux proc descriptors protect
+same-user writable output files and their containing candidates during planning and immediately
+before deletion, using paths and file identity. If descriptor inspection is incomplete, each
+regular file must admit a kernel read lease; live writers or unavailable leases retain the
+candidate. A process opening output after planning can therefore keep a listed candidate.
 
 ### Automatic rollback (user-authorized, 2026-10-22)
 
@@ -1775,7 +1781,10 @@ flush. C++ retains pool shells, canonical world and packet storage, loading/rese
 checks and UI. Cargo callbacks enter the Rust registry/common Action2 owner directly. CAPY saves the repr(C) payment in place through `CargoPayment`
 reference aliases. Cargo/refusal/production/randomisation/animation and vehicle-sound resolution
 uses the NewGRF evaluator, without script VM entry or payment/destination reentry; wrappers are
-noexcept. Money saturates arithmetic but retains native shifts; callback unsigned products,
+noexcept. Payment settlement borrows typed canonical vehicle/finance services and transfer/final
+payment read feeder shares directly from the Rust cargo-storage owner. Payment fronts and station
+IDs use shared boundary types; delivery/industry selectors and packed source remain under #168,
+#199 and #500. Money saturates arithmetic but retains native shifts; callback unsigned products,
 BigMulS narrowing, stockpile limits and ordered randomisation/animation are explicit. Checks:
 the default `economy` simulation. NewGRF resolver execution, legacy CAPY files and every
 industry layout are not exhausted. Production cargo callback fixtures accompany #467; the narrow
@@ -2386,3 +2395,21 @@ catches Script_FatalError, returns through Rust snapshot cleanup, then rethrows 
 the native Elapsed facade. Original bodies remain portable. Historical save
 versions, full external-AI memory-limit failures and GUI/network scheduling remain
 coverage limits. PR #539.
+
+### World-generation lifecycle (#546)
+
+`genworld.rs` owns process-wide generation mode, dimensions, saved local company,
+done/abort callbacks, abort request and the canonical generating bool. It owns setup,
+complete generation orchestration, rough/rocky terrain, warm-up, completion and cleanup.
+Landscape, towns, industries, objects, trees, economy, engines, disasters, storage and
+tile scheduling enter their existing Rust owners directly. The native `_GenerateWorld()`
+frame and its actual `GenerateWorld` call preserve the Callgrind entry.
+
+Native map/pool allocation, presentation, resource scratch, the CompanyID backup and
+actual callbacks remain. Progress/abortion, script startup/execution, completion callbacks,
+initialization/resource loading, mode switching and save/load keep native exception frames;
+Rust returns before an ordinary exception is handled or rethrown. Per-phase scratch is
+constructed and destroyed at the original calls. Native `_generating_world` lvalues alias
+stable Rust bool storage under the game-state mutex. No owner borrow or raw map descriptor
+spans progress/yield or callback reentry. GUI scheduling, arbitrary scripts/NewGRFs and
+unexercised exception combinations remain #156 coverage limits. PR: #547.

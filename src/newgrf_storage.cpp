@@ -19,14 +19,14 @@ INSTANTIATE_POOL_METHODS(PersistentStorage)
 
 #ifdef WITH_RUST
 BasePersistentStorageArray::~BasePersistentStorageArray() = default;
-static void StorageDiscard(void *shell) noexcept
+void RustStorageDiscard(void *shell) noexcept
 {
 	auto *it = static_cast<BasePersistentStorageArray *>(shell);
 	Debug(desync, 2, "warning: discarding persistent storage changes: Feature {}, GrfID {:08X}, Tile {}", it->feature, std::byteswap(it->grfid), it->tile);
 }
 void BasePersistentStorageArray::SwitchMode(PersistentStorageMode mode, bool ignore_prev_mode)
 {
-	openttd_rust_storage_switch_mode(mode, ignore_prev_mode, RustAssertCondition, StorageDiscard);
+	openttd_rust_storage_switch_mode(mode, ignore_prev_mode, RustAssertCondition, RustStorageDiscard);
 }
 #else
 /** The changed storage arrays */
