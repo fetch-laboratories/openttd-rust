@@ -25,11 +25,21 @@ fork; the remaining upstream documentation explains behavior and architecture.
   what each item retires, protects or saves.
 - Prefer ownership ports: Rust owns the component's state and control flow, and
   C++ keeps only a thin facade plus callbacks for shared services (`Random`,
-  pools, map access, progress). With `WITH_RUST` defined the original C++ body
+  pools, map access, progress) whose storage has not moved yet. With `WITH_RUST` defined the original C++ body
   is not compiled; it remains in the `#else` of `#ifdef WITH_RUST` (or under
   `#ifndef WITH_RUST`) for portable builds. Do not extract an algorithmic
   fragment while C++ keeps the surrounding state and loop, unless the roadmap
   names it as a stepping stone.
+- The data moves too: the rewrite retires every C++ line, including the
+  object classes and map accessors in the headers (user direction,
+  2026-10-28). Once a component's control flow runs in Rust, a storage port
+  moves its records into Rust: pool objects (vehicles first, #563; then
+  stations, orders, towns, industries, companies and the rest), then the map
+  arrays. C++ code not yet ported (drawing, GUI, save/load, scripts, network)
+  reads moved data through facades over Rust storage until it is ported in
+  turn. Storage ports are ownership ports: the work order ranks them beside
+  leftover game logic by the code they retire and the glue they remove, with
+  no separate gate.
 - Keep the full game running throughout migration. Preserve networking, saves,
   mods, interface, and shared random-number behavior, including the exact
   sequence of random draws.
@@ -97,7 +107,8 @@ fork; the remaining upstream documentation explains behavior and architecture.
 - The selected #274 shared map descriptor is limited to audited scheduler clear,
   water and tree loops and the audited road track-status reads retained by #523
   (`docs/design/world-state.md`). Pixel heights/slopes and other vehicle paths
-  keep typed services. C++ retains canonical arrays and writes. Shared header
+  keep typed services. C++ retains canonical arrays and writes until a map
+  storage port moves them. Shared header
   helpers preserve native assertions; raw field loads end before callbacks and
   descriptor lifetime requires a proved no-reset/no-yield interval. Other
   entries keep typed services until audited.

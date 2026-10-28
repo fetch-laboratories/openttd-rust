@@ -193,8 +193,13 @@ Extending the view requires default mutation/reallocation checks and semantic
 comparisons. This selects a bounded candidate, not a storage transfer or a
 general raw API.
 
-## Transferring shared storage later
-Root selects a storage port when measured coupling warrants it. Move its canonical
+## Transferring shared storage
+Storage ports are selected work (user direction, 2026-10-28): the rewrite moves
+every pool and finally the map arrays into Rust, so their object classes and
+accessors retire like any other original code. Order them by the code they
+retire and the glue they remove: per-tick vehicle records first (#563), then the
+other pools, then the map, whose design must also replace the outstanding C++
+tile references described above. Move a port's canonical
 owner, accessors, allocation/reset and destruction together;
 retain C++ facades for remaining callers. Map fields keep their encodings. Pools
 keep IDs, first-free selection, iteration and hook order; changing to a compacting

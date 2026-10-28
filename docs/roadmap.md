@@ -14,7 +14,9 @@ this roadmap over conflicting issues; it is the current state of umbrella issue
   moves the metric to code lines.
 - What the remaining 47,835 simulation-inventory lines are: 26,113 blank,
   comment or preprocessor lines; 10,464 header code (class layouts and inline
-  accessors, which retire only when their data and C++ callers move); 11,258
+  accessors, which retire when their data and C++ callers move: about 2,600
+  code lines of map accessors, 2,200 of pool object classes and 5,700 of other
+  inline helpers and types); 11,258
   `.cpp` code, of which about 6,900 is drawing or tile description and about
   4,100 is non-drawing function bodies of five or more lines. Most game-logic
   control flow already runs in Rust. What remains is leftover helpers that Rust
@@ -97,11 +99,15 @@ Apply these corrections through the work order below:
    Each issue carries its scope, its evidence and a planning range. Root
    decides each cost once at the first checkpoint. Keep `GetPlatformLength`
    with #560.
-3. **Design the first shared-storage port (#563).** A planning agent writes the
-   world-state design note now and opens the implementation issue. Per-tick
-   vehicle records and the `X::Tick` dispatch shells come first, because their
-   glue dominates P2016's gap. This applies world-state.md's existing condition
-   ("when measured coupling warrants it"); it is not a new direction.
+3. **Move the data: storage ports are part of the rewrite** (user direction,
+   2026-10-28; AGENTS.md "Migration method", world-state.md "Transferring
+   shared storage"). Game-logic ports alone stop at about 70% of simulation
+   code: the remaining header code (map accessors, pool object classes) retires
+   only when the data it describes moves. A planning agent writes #563's design
+   note now and opens the first implementation issue. Per-tick vehicle records
+   and the `X::Tick` dispatch shells come first, because their glue dominates
+   P2016's gap. Then the other pools, then the map. Storage and leftover game
+   logic run side by side within the branch limit.
 4. **Speed.**
    - The user raised the play-save ceiling to 1.6x. AGENTS.md now judges
      ceilings and bands on a record that averages the last three passes. No
@@ -133,6 +139,8 @@ AGENTS.md changes:
 - The play-save ceiling is 1.6x (user decision); ceiling and band decisions
   use the mean of the last three passes, carried forward by growth.
 - Spread glue ranks the crossing-removing port above repair batches.
+- Storage ports (every pool, then the map) are ownership ports in the work
+  order; pools and map access are C++ services only until their port.
 - No C++ frame is kept for attribution.
 - The review report cites #564's orphan check once it integrates.
 
@@ -260,6 +268,14 @@ candidate; ranges come from the steering planning audit:
 - Town helpers: `ClosestTownFromTile`, `UpdateTownMaxPass`, road-type introduction, `GetTownRadiusGroup`, `CleanUpRoadBits`, `GetClosestWaterDistance`. 250 to 330 retired, 60 to 120 net glue.
 - Vehicle base lifecycle: `Crash`, `HandlePathfindingResult`, `PreDestructor`/`~Vehicle`, unit numbers, `SendToDepot`, shared-order links, the yearly timer. 450 to 550 retired, 200 to 300 net glue; sequence it with #563.
 
+Queued storage ports, after #563's first port; each gets a design section in
+world-state.md and an issue when selected:
+- The rest of the vehicle pool, after #563's per-tick records.
+- Stations and road stops (`station_base.h`, `base_station_base.h`, `roadstop_base.h`), with cargo lists and flows.
+- Orders and order lists (`order_base.h`).
+- Towns and industries (`town.h`, `industry.h`), then companies, groups, engines and the smaller pools.
+- The map arrays and their accessors (`map_func.h`, `tile_map.h` and the `*_map.h` files), last among storage. The design must replace the C++ code's outstanding tile references and extend or replace the #274 descriptor.
+
 Recurring:
 - The next instruction profile follows the twenty-sixth integration.
 - After #557 integrates, launch the due rotated deep run under the existing lock at idle priority.
@@ -275,8 +291,10 @@ Excluded, with return conditions checked by this review:
   user reselects it. The resume plan on #507 keeps the sets uncommitted,
   fetched by pinned hash into `.local/` and cached in CI; #525's branch stays
   on origin.
-- #497 Action3 and #498 object definitions remain parked until a selected
-  simulation component needs their data in Rust; none of #560 to #563 does.
+- #497 Action3 and #498 object definitions return with the storage port of the
+  data they publish (Action3 bindings with the vehicle pool's storage, object
+  definitions with the object pool's), or earlier if a selected owner needs
+  them; none of #560 to #563 does.
 - #69's remaining tile-list/support work is deferred until a selected simulation
   component needs it; catchment's rectangle/bitmap part is complete in #522.
 - #64 and #68 are vendored cryptography, deferred until after simulation

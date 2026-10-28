@@ -51,8 +51,8 @@ Then resume from the roadmap's checkpoint and work order.
    shared-storage ports) or fewer than two unstarted items overall remain in
    the work order, or `issues.py` shows unplaced issues, spawn a fresh
    high-effort planning agent (Astra in Codex) to rank the next work: candidate
-   owners from the remaining simulation inventory, shared-storage ports whose
-   coupling the speed profile measures (world-state design), and every open
+   owners from the remaining simulation inventory, shared-storage ports (every
+   pool, then the map; AGENTS.md and the world-state design), and every open
    maintenance, testing and housekeeping issue. The brief names no preferred
    candidate; the planner sizes the actual remaining code. Rank by
    what each item retires, protects or saves: game state still owned by C++,
