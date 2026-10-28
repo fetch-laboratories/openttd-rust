@@ -93,10 +93,10 @@ impl ResolverServices {
     fn generation(&self) -> &GenerationServices {
         unsafe { &*self.generation }
     }
-    fn construction(&self) -> &ConstructionServices {
+    pub(crate) fn construction(&self) -> &ConstructionServices {
         unsafe { &*self.construction }
     }
-    fn lifecycle(&self) -> &LifecycleServices {
+    pub(crate) fn lifecycle(&self) -> &LifecycleServices {
         unsafe { &*self.lifecycle }
     }
     fn tile(&self) -> &TileServices {
@@ -111,10 +111,10 @@ impl ResolverServices {
     fn belongs(&self, tile: u32, id: u16) -> bool {
         unsafe { (self.lifecycle().belongs)(tile, id) }
     }
-    fn spec(&self, kind: u8) -> *const SpecHandle {
+    pub(crate) fn spec(&self, kind: u8) -> *const SpecHandle {
         unsafe { (self.generation().spec)(kind) }
     }
-    fn behaviour(&self, spec: *const SpecHandle) -> u32 {
+    pub(crate) fn behaviour(&self, spec: *const SpecHandle) -> u32 {
         unsafe { (self.generation().spec_behaviour)(spec) }
     }
 }

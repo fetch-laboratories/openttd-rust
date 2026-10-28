@@ -1087,65 +1087,12 @@ static const OpenTTDCargoServices _cargo_services = {
 		*out = {cs->current_payment.base(), uint8_t(cs->IsValid()), uint8_t(cs->callback_mask.Test(CargoCallbackMask::ProfitCalc)), cs->transit_periods[0], cs->transit_periods[1]};
 	},
 	.registry = &GetRustCargoRegistryServices(),
-	.station_read = [](uint16_t station, uint8_t field, uint8_t cargo) noexcept -> uint32_t {
-		const Station *st = Station::Get(StationID(station));
-		return field == 0 ? st->owner.base() : HasBit(st->always_accepted, cargo);
-	},
-	.industry_read = [](void *handle, uint8_t field, uint32_t slot) noexcept -> uint32_t {
-		const Industry *i = static_cast<Industry *>(handle);
-		switch (field) {
-			case 1: {
-				auto it = i->GetCargoAccepted(slot);
-				return it == std::end(i->accepted) ? UINT32_MAX : it - std::begin(i->accepted);
-			}
-			case 2: return i->exclusive_supplier.base();
-			case 3: return i->accepted[slot].waiting;
-			case 4: {
-				auto mask = GetIndustrySpec(i->type)->callback_mask;
-				return uint32_t(mask.Test(IndustryCallbackMask::ProductionCargoArrival)) | (uint32_t(mask.Test(IndustryCallbackMask::Production256Ticks)) << 1);
-			}
-			case 5: return static_cast<uint32_t>(i->accepted.size());
-			case 6: return static_cast<uint32_t>(i->produced.size());
-			case 7: return i->accepted[slot].cargo;
-			case 8: return i->produced[slot].cargo;
-			case 9: return i->produced[slot].waiting;
-			case 10: return GetIndustrySpec(i->type)->input_cargo_multiplier[slot >> 16][slot & 0xFFFF];
-			default: NOT_REACHED();
-		}
-	},
-	.industry_write = [](void *handle, uint8_t field, uint32_t slot, uint32_t value) noexcept {
-		Industry *i = static_cast<Industry *>(handle);
-		if (field == 0) i->produced[slot].waiting = value;
-		else i->accepted[slot].waiting = value;
-	},
+	.station_company = RustStationOwnerByte<const Station>,
+	.town_acceptance_effect = RustCargoTownAcceptanceEffect,
+	.station_town = RustStationStationTown<const Station>,
 	.resolver = &GetIndustryResolverServices(),
-	.accept = [](void *handle, uint32_t slot, uint32_t amount) noexcept {
-		auto &accepted = static_cast<Industry *>(handle)->accepted[slot];
-		accepted.waiting += amount;
-		accepted.GetOrCreateHistory()[THIS_MONTH].accepted += amount;
-		accepted.last_accepted = TimerGameEconomy::date;
-	},
-	.statistics = [](uint16_t station, uint8_t cargo, uint8_t company, uint32_t amount, uint8_t field) noexcept {
-		Station *st = Station::Get(StationID(station));
-		switch (field) {
-			case 0: st->goods[cargo].status.Set({GoodsEntry::State::EverAccepted, GoodsEntry::State::CurrentMonth, GoodsEntry::State::AcceptedBigtick}); break;
-			case 1: Company::Get(CompanyID(company))->Finances().cur_economy.delivered_cargo[cargo] += amount; break;
-			case 2: st->town->received[RustCargoSpec(cargo)->town_acceptance_effect].new_act += amount; break;
-			default: NOT_REACHED();
-		}
-	},
 	.subsidies = RustSubsidyServices,
-	.industry_effect = [](void *handle, uint8_t op) noexcept {
-		Industry *i = static_cast<Industry *>(handle);
-		switch (op) {
-			case 0: i->was_cargo_delivered = true; break;
-			case 1: IndustryProductionCallback(i, 0); break;
-			case 2: SetWindowDirty(WC_INDUSTRY_VIEW, i->index); break;
-			case 3: TriggerIndustryRandomisation(i, IndustryRandomTrigger::CargoReceived); break;
-			case 4: TriggerIndustryAnimation(i, IndustryAnimationTrigger::CargoReceived); break;
-			default: NOT_REACHED();
-		}
-	},
+	.industry_delivery = &GetIndustryDeliveryServices(),
 	.last_station = RustVehicleLastStationVisited,
 	.vehicle_owner = RustVehicleOwnerOf,
 	.detach_payment = RustVehicleDetachPayment,
@@ -1187,7 +1134,7 @@ void CargoPayment::PayFinalDelivery(CargoType cargo, const CargoPacket *cp, uint
 {
 	assert(int(count) > 0);
 	Source source = cp->GetSource();
-	openttd_rust_cargo_payment_final(this->rust_state, GetCargoDeliveryState(), &_cargo_services, cargo, cp->RustOwner(), count, cp->GetDistance(current_tile), cp->GetPeriodsInTransit(), source.id | (uint32_t(source.type) << 16), &GetRustCargoMonitorServices());
+	openttd_rust_cargo_payment_final(this->rust_state, GetCargoDeliveryState(), &_cargo_services, cargo, cp->RustOwner(), count, cp->GetDistance(current_tile), cp->GetPeriodsInTransit(), source, &GetRustCargoMonitorServices());
 }
 Money CargoPayment::PayTransfer(CargoType cargo, const CargoPacket *cp, uint count, TileIndex current_tile)
 {

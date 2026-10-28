@@ -4,15 +4,15 @@ Root selects here; `AGENTS.md` and `docs/rust-migration.md` define process. Foll
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-10-28, code at `9e6d9d70e8`)
+## Where the fork stands (2026-10-28, code at `3443388264`)
 
 - 79 ownership ports. Since the twenty-first steering at `07c0d2e2e8`, seven
-  owners and nineteen maintenance PRs integrated, retiring 4,237 more original
+  owners and twenty-one maintenance PRs integrated, retiring 4,237 more original
   lines, including 1,641 in the current simulation inventory. No confirmed code
   regression requires rollback.
 - Whole-fork inventory: 72,102 of 470,612 original lines retired (15.32%),
   including 56,403 of 103,451 simulation lines (54.52%). Rust, tooling and glue
-  total 129,122, 51,020 and 46,148 lines. These measure source retirement, not
+  total 129,320, 51,037 and 46,173 lines. These measure source retirement, not
   completed behavior. #527 added the omitted simulation clock files and refreshed
   the denominator; #518 did not expand that reviewed inventory.
 - The identity-renewal quiet pass at `755609b8ea` completed all 144 games with
@@ -29,8 +29,8 @@ this roadmap over conflicting issues; it is the current state of umbrella issue
   original work and replacement costs. Root selects that pair as one repair
   batch; register allocation remains unmeasured and can erase either margin.
   The separate immutable orders-table row stays an unselected note.
-  Neither the batch's
-  instruction reduction nor the notes establish isolated savings for #536.
+  Neither the batch's estimated reduction nor the notes establish isolated
+  savings for #536.
 
 | Scenario | Pre-batch `5d8f4c7c7f` under current anchors | Quiet anchor `755609b8ea` | Last profile `ba3095f768` |
 | --- | --- | --- | --- |
@@ -60,19 +60,26 @@ compatible rerun passed. The failed attempt remains incompatible and uncredited.
   build failures after the live checkout advanced across #543, mixing old
   artifacts with new headers. No semantic differences were reported; this is
   invalid mixed-source evidence. The fixed isolated restart passed all 521
-  soak scenarios and 8,396 snapshots in 5,551.9 seconds. Its full sanitized
-  member is running; #548 integrated precise source-drift rejection. #550/#552
-  repair an older road/rail boolean ABI defect and a shared house-fixture
-  temporary lifetime. A rebuilt historical production crate reproduces the
-  road defect; no recent integration rollback is justified. The
-  changed-input original coverage run on fixed source containing #542/#544/#545
-  failed on two 600-second water-ferry snapshot timeouts; 259 of 449 cases
-  passed and 188 have no outcome. Final percentages are unavailable. Diagnose
-  the retained run before retrying.
+  soak scenarios and 8,396 snapshots. The complete two-member run took 6.06
+  hours; the sanitized member took 4.50 hours, with 442 of 446 cases passing.
+  Its four failing cases were the older road/rail boolean ABI defect and shared
+  house-fixture temporary lifetime, now repaired by reviewed #552 through #556.
+  A historical production rebuild reproduces the road defect, so no recent
+  integration rollback is justified. The shared original ScriptDate enum read
+  in the Squirrel subsidy binding remains recorded on #156, without suppression.
+  Root accepts the sanitizer member's measured cost and selects alternating
+  soak/sanitizer rounds, each retaining threaded, TSan and multiplayer members.
+  #503 owns a small explicit member selector and accurate partial-report metadata;
+  prebuild ordinary probe dependencies before a sanitizer-only round.
+  The changed-input original coverage run passed 259 of 449 cases before two
+  600-second ferry snapshot timeouts; 188 cases have no outcome. Both ferries
+  continued progressing. Earlier successful coverage used a 1,800-second bound
+  on unchanged ferry inputs. Continue only the 190 unfinished cases at that bound,
+  retaining complete traces and failed outputs. Final percentages remain unavailable.
 - #535's 14-case sanitizer subset compared equal in 607.7 seconds. A real-game
   positive control captured five original animation-shift keys in 121.3 seconds
   with no candidate-only report. Fixing review is complete; the full sanitizer
-  set's runtime remains unmeasured. #511 completed 40 valid mutants: 31
+  member's measured runtime and finding dispositions are complete; #505 is closed. #511 completed 40 valid mutants: 31
   detections and nine survivors, with two unsaved presentation limits and seven
   missing fault-sensitive subset inputs. The 41-minute study is closed; #156
   retains its scoped findings, and no recurring mutation controller is selected.
@@ -88,11 +95,11 @@ compatible rerun passed. The failed attempt remains incompatible and uncredited.
   Rust remains uninstrumented. #548 payment/deep/output maintenance integrated
   after fixing review, affected checks and exact-head Full. #547 complete
   world-generation lifecycle integrated as the twenty-second integration after
-  fixing review, root spot-checks and exact-head Full. Three components remain:
-  #551 session lifecycle, #552 sanitizer repairs and #553 delivery/industry
-  maintenance. #549 multiplayer integrated as the twenty-third integration
-  after fixing review and exact-head Full; #510 is closed. The newly selected
-  loading/acceptance batch will be the fourth unintegrated component.
+  fixing review, root spot-checks and exact-head Full. #549 multiplayer integrated
+  as the twenty-third integration; #510 is closed. Reviewed, disjoint #552 and
+  #553 integrated through #556 as the twenty-fourth integration after exact-head
+  Full, including the native-only C++ linkage warning repair. Two components
+  remain: #554 session lifecycle and #555 loading/acceptance maintenance.
   Each integrates at its own tested head where shared files overlap.
 - #529 closed after ten successful qualifying dependency installs. The
   fifteenth-integration platform cadence passed; #545 is the twentieth
@@ -272,6 +279,8 @@ C++ retired; net glue is separate.
 | #507 community AI and larger vanilla save | #545 | direct | `a297bed748` | 0 / 440 / 0 / 0; net glue 0 |
 | #168/#199/#500 payment boundaries; #503 evidence; #509 Windows diagnostics | #548 | direct | `467b89bcbd` | 113 / 378 / 140 / 0; net glue 68 |
 | #510 mixed multiplayer semantic comparison | #549 | direct | `9e6d9d70e8` | 0 / 669 / 0 / 0; net glue 0 |
+| #550 four boolean wire returns and shared house fixture | #552 | #556 | `3443388264` | 16 / 3 / 58 / 0; net glue 50 |
+| #168/#199/#500 payment delivery; #501 execution typing | #553 | #556 | `3443388264` | 291 / 49 / 81 / 0; net glue -25 |
 
 ## Work order
 
@@ -279,93 +288,60 @@ One ranked list. Each free slot takes the highest unblocked item that fits the
 six-branch limit and disjoint-service rule; completing review/integration takes
 priority. A lower rank can run while a higher one waits. Scopes live in issues.
 
-1. **Review and integrate #552 and #553.** #549 is integrated. #552 repairs
-   four demonstrated road/rail availability/validation wire returns and the
-   shared house-fixture lifetime. Logical APIs and service callbacks stay bool;
-   the four exports use canonical byte carriers under pinned Rust 1.99.
-   Cargo, 2,331 native assertions and affected ordinary/sanitized cases pass;
-   unchanged house evidence is retained. Necessary cost remains accepted:
-   16 Rust, 3 tooling, 50 net glue and zero retirement, with 48 native test
-   lines. #553's delivery/industry and typing checks also pass; root accepts
-   its 291 Rust, 49 tooling, minus 25 net glue and zero retirement. Give each
-   a fresh fixing review, then integrate in readiness order through separate
-   current-base Full gates where files overlap. NewGRFs remain user-parked.
-2. **#275 loading/acceptance repair batch.** Root selects the two qualifying
-   estimates: loading 73,011,340 Ir and acceptance 70,874,325 Ir, about 1.065%
-   together at the latest P2016 count. Loading keeps an immutable table address
-   caller-local across ProcessOrders, reads owner/type fresh in a direct Rust
-   inline guard, and resolves visits only on OT_LOADING/OT_DUMMY slow paths.
-   Preserve guarded initialization and mutable-state reacquisition; remove the
-   displaced loading slot/export/declaration. Acceptance inlines the existing
-   canonical bitmap/orthogonal helpers and resolves the same native assertion
-   service only for false conditions. Preserve native NDEBUG policy, fresh
-   membership after cargo callbacks, geometry/arithmetic/bounds, empty/default
-   cursors and short borrows. No raw descriptor, second cursor or copied bitmap.
-   Existing orders/visits, station/catchment/iterator and P2016 semantics supply
-   evidence. Inspect emitted code during ordinary implementation, with no PR
-   instruction/wall speed check. Plan zero retirement, 30–100 net Rust lines,
-   neutral or shrinking glue and up to 60 support lines; judge the first draft.
-   One fixing review and Full cover ready items; an unready item leaves it.
-   Actual register allocation can erase the narrow margins. Station tick,
-   orders resolution, immutable orders-table binding and road notes remain
-   unselected. Only merged-tip measurement establishes savings.
-   #312's implemented tree narrowing is complete, without isolated speed credit.
-3. **#168/#199/#500 delivery and industry boundaries.** #548 completed the
-   payment lifecycle/settlement/income and #503 evidence protection. Its
-   integration selects the next bounded maintenance batch: replace station_read,
-   industry_read/write, accept, statistics and industry_effect in CargoPayment
-   deliver/trigger with named typed operations. Reuse existing station,
-   industry, company and town owners and canonical Source/IndustryID/ShellHandle.
-   Preserve observation points, saturation, callback ordering/reentry and pool
-   semantics; remove displaced selectors, wrappers and fixture bindings. No
-   whole-fork conversion, new raw-map permission or speed credit is selected.
-   Carry the existing Cargo/native/economy/subsidy evidence. Root decides cost
-   at the first draft; plan zero retirement, 150–300 Rust lines changed,
-   30–100 net glue and 50–100 native/tooling support lines.
-4. **#551 complete simulation-session lifecycle and pause control.** #547's
-   integration selects this owner alongside the disjoint delivery/industry
-   maintenance. Move StateGameLoop, GameLoop, SwitchToMode, SafeLoad,
-   intro/new-game/editor startup and completion, settings publication,
-   NewGRF-scan requests and CmdPause control. Rust owns canonical mode,
-   pending switch, pause/scan-request state and private persistent state;
-   preserve native aliases, chrono/resource semantics and genuine exception
-   frames. Keep the native atomic exit flag and exact profiling entries.
-   Compose existing Rust owners directly and remove displaced callbacks;
-   release state before load/reset, progress yields, network reentry and
-   callbacks. No new raw-map access. Default evidence must distinguish normal,
-   paused, modal/editor, restart/reload and failed-load partial effects through
-   actual entries, plus unsaved thread/alias and exception observations.
-   Planning ranges: 1,000–1,500 Rust, 450–650 net glue and 250–400 support;
-   root decides actual retirement/glue/tooling cost at the first concrete
-   checkpoint. Complete command execution remains an alternative after this
-   owner's checkpoint, not a concurrent selection.
-5. **#505 ASan/UBSan.** Tooling is integrated. Read the first full sanitized deep
-   member, distinguish original failures from candidate-only faults and decide
-   the measured runtime budget.
-6. **Recurring platform semantic cadence.** #509 is complete: macOS passed
-   at the twentieth cadence, and Windows passed all five full-duration cases
-   on the integrated #548 repair. Keep the prepared no-join inputs, strict
-   comparisons and #156's bounded limits. The next ordinary cadence is due
-   after the twenty-fifth integration; no per-PR semantic platform job is added.
-7. **#501 incremental typing; #156 selective observation work.** Select the
-   bounded validation_execution.py annotations and typed holder records for
-   the delivery batch if ready; preserve subprocess/locking behavior and its
-   existing tests, add ty scope and remove the ANN exemption. Unready typing
-   leaves the batch. After #552's road-type validation repair integrates, add
-   TownCanGrowRoad inputs with differing road types, observing resulting
-   growth/RNG. Preserve #511's other input and presentation gaps; further
-   mutation samples remain selective.
-Recurring: instruction profiles and deep checks after every second integration,
-subject to the existing running-deep skip and quiet collection lock. Read completed
-reports before integration. Keep incompatible projections unavailable. Retain active anchors and their
-runtime dependencies. #503 owns the single changed-input coverage recomputation
-after #542/#544/#545 integrate, along with their applicable deep membership.
-Run `issues.py` at start/planning/stocktake and check actual current placement,
-not just a textual mention. The twentieth-integration cadence and retry passed
-after #548's diagnostic repair. #512's first tally is finished. Launch the
-next instruction profile after the twenty-fourth integration; the fixed-source
-twenty-second profile is complete. Skip another deep run while the fixed-source
-sanitizer member is still active.
+1. **Review and integrate #554, complete session lifecycle and pause control.**
+   All selected semantic scenarios and final native failed-load checks pass.
+   Rust owns complete loop/mode/load/startup/settings/scan/pause control and
+   canonical process-wide state; preserve native aliases, chrono/resource and
+   genuine exception frames, the atomic exit flag and profiling entries. Root
+   accepts 593 original lines retired, 1,145 Rust, 445 net glue and 398 tooling
+   as the necessary cost of this boundary and default saved/unsaved evidence.
+   A fresh fixing reviewer compares every replaced body and caller before root's
+   current-base Full. Complete command execution remains a later alternative,
+   rather than a concurrent owner. NewGRFs remain user-parked.
+2. **#275 loading/acceptance maintenance, draft #555.** Both repairs are pushed;
+   Cargo, native and nine semantic cases pass. The final aircraft fixture check
+   failed during compilation and returns to its owner before independent review.
+   Root accepts 58 Rust and 30 tooling lines added, three glue lines removed and
+   zero retirement; canonical helper changes and production-path fixture migration
+   explain the cost. Preserve guarded initialization, fresh mutable observations,
+   native assertion policy and direct Rust dispatch. The selected unbuilt pair
+   estimates about 1.065% of P2016, with narrow margins that register allocation
+   can erase. Inspect emitted code without a PR speed check. One fixing reviewer
+   and current-base Full cover ready items; an unready item leaves the batch.
+   Station tick, orders resolution, immutable orders-table field binding and road
+   notes stay unselected. Only merged-tip measurement establishes savings.
+3. **#503 bounded evidence recovery and deep rotation.** Continue the 190 unfinished
+   original-coverage cases on fixed source using the retained binary, traces and
+   existing measurement/aggregation helpers, with the previously successful
+   1,800-second bound. Preserve the failed attempt and collect a separate final
+   report only after all 449 traces exist. No full-corpus restart or replacement
+   coverage runner is selected. The completed deep set exceeds about six hours;
+   select a small tracked member flag, expected 30–60 tooling lines, retaining
+   the default full set and marking rotation explicitly in reports. Alternate
+   soak versus sanitizer rounds with threaded/TSan/multiplayer in each. Sanitizer
+   probes require the ordinary candidate archive before that round starts.
+   Review and integrate this bounded infrastructure before the pending rotated
+   twenty-fourth-integration run; do not overlap timed speed collection.
+4. **Recurring platform cadence.** #509 is closed after macOS and Windows passed
+   all five full-duration prepared cases. Keep strict comparisons and #156's
+   bounded limits. The next normal cadence follows the twenty-fifth integration.
+5. **#156 selective observation; #501 and remaining boundary maintenance.** #553
+   completed delivery/industry selectors and validation_execution.py typing.
+   #168/#199/#500 and #501 remain open for incremental conversion, with their
+   next bounded slices selected at #551's integration stocktake. Now that #552
+   is integrated, add TownCanGrowRoad inputs with differing road types and observe
+   actual growth/RNG. Preserve #511's other input and presentation limits;
+   further mutation studies remain selective.
+
+Recurring: profile the integrated twenty-fourth tip now, retaining the pinned
+runtime and complete six-case identities. No rise over 3% or new quiet-pass
+trigger was established by the twenty-second profile. Read finished deep reports
+before integration. The prior deep set is terminal and classified; the next run
+awaits the selected bounded rotation support. Keep incompatible projections
+unavailable and preserve active anchors, traces and runtime dependencies. Root
+runs issues.py at stocktake and checks each current action and exclusion condition.
+A fresh planning agent ranks the next owner and remaining maintenance; selection
+remains with root. The previous corpus result measures reachability, not equivalence.
 
 Excluded, with return conditions checked by this review:
 - #507's NewGRF corpus (#525, #526) is parked by the user (2026-10-28) until
@@ -386,20 +362,19 @@ Excluded, with return conditions checked by this review:
 
 ## Resume checkpoint
 
-Codex root integrated #548 payment/evidence maintenance, #547 complete world
-generation and #549 multiplayer evidence. #509 and #510 are closed. The older
-road/rail ABI and house-fixture sanitizer faults are assigned to #552. Fetch
-remote heads before resuming historical branches. Active anchors depend on the
-pinned zlib/lzma/Brotli runtime; incompatible historical reports stay uncredited.
+Codex root integrated reviewed #552/#553 through #556 as the twenty-fourth
+integration. #550 and #505 are complete; no confirmed recent regression requires
+rollback. The two remaining components are #554 and #555. Active anchors depend
+on the pinned zlib/lzma/Brotli runtime; incompatible reports remain uncredited.
 
 | Item | Current state | Next action |
 | --- | --- | --- |
-| #509 and #529 | CI_ON_DEMAND is true; twenty-third integration complete. Windows/macOS semantic cadence passed; both issues are closed. | Retain the normal fifth-integration cadence and #156's actual limits. |
-| #275 | Twenty-second-tip profile passes all six comparisons/identities; P2016 projects 1.5246x. Loading/acceptance estimate about 1.065% is selected as one batch. | Implement the bounded pair; no PR speed check or new quiet collection. Next instruction profile is due after the twenty-fourth integration. |
-| #505/#503/#550 | Fixed-source soak passed 521 cases/8,396 snapshots; full sanitizer member remains active. Changed-input coverage failed on two timeouts; no final percentages. #552's four-export and house repairs pass focused evidence. | Read final reports, give #552 fresh fixing review and Full; skip overlapping deep launch. Preserve active checkouts. |
+| #509 and #529 | CI_ON_DEMAND is true; twenty-fourth integration complete. Windows/macOS semantic cadence passed; both issues are closed. | Retain the normal fifth-integration cadence and #156's actual limits. |
+| #275 | Twenty-second-tip profile passes; P2016 projects 1.5246x. #555 implements the selected pair; final fixture compilation needs repair. | Profile the twenty-fourth tip; finish #555 validation and fixing review. No PR speed check or new quiet collection. |
+| #505/#503/#550 | Completed deep set took 6.06 hours; all four sanitized failures map to #552, now integrated. Shared original ScriptDate report is retained. #505/#550 are closed. Coverage has 259 complete traces and 190 unfinished cases. | Continue bounded coverage at 1,800 seconds; implement explicit member rotation before the next deep run. Preserve fixed checkouts and failures. |
 | #511 | Completed and closed: 31 detections, nine classified survivors, zero invalid/inconclusive; source/build restored. | Use #156's scoped findings; further samples are selective. |
-| #168/#199/#500 and #501 | #553 delivery/industry and bounded typing checks pass; necessary cost is accepted. | Give the final implementation head fresh fixing review and current-base Full. |
-| #546/#551 | #547 integrated after fixing review and exact-head Full; #546 is closed. Session lifecycle/pause implementation is assigned. | Judge its first concrete retirement/glue/tooling cost; preserve direct ownership and named exception frames. |
+| #168/#199/#500 and #501 | #553 delivery/industry and execution typing integrated through reviewed, Full-tested #556. Trackers remain open. | Select the next bounded conversions at #551 integration stocktake. |
+| #546/#551 | #546 is closed. #554 session implementation and focused evidence pass; necessary cost is accepted. | Fresh fixing review, root spot-check, base update and exact-head Full. |
 | #506 | #542 integrated after fixing review and exact-head Full; issue closed. | Future deep runs include native/TSan members; preserve #156's uninstrumented Rust and remaining lifecycle limits. |
 | #508 | #544 integrated after exact-head Full; issue closed. | Keep histograms and scoped #156 limits; six soak variants join the next current-source deep run. |
 | #507 | #545 integrated after exact-head bootstrap Full; community/large vanilla evidence complete. | Keep NewGRFs user-parked; issue remains open for that scope. |
