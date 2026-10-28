@@ -52,6 +52,66 @@ def report(root: Path, other: str = "Pause", global_name: str = "_pause_mode") -
 
 
 class ThreadedTests(unittest.TestCase):
+    def test_library_atomic_race_allocation_and_lock_order(self) -> None:
+        race = (
+            "==================\nWARNING: ThreadSanitizer: data race (pid=42)\n"
+            "  Write of size 1 at 0x123 by main thread (mutexes: write M0):\n"
+            "    #0 pthread_mutex_destroy ../../src/libsanitizer/tsan/a.cpp:3 (libtsan.so+0x1)\n"
+            "    #1 <null> <null> (libgallium.so+0x123)\n\n"
+            "  Previous atomic read of size 1 at 0x123 by thread T8:\n"
+            "    #0 pthread_mutex_lock ../../src/libsanitizer/tsan/a.cpp:4 (libtsan.so+0x2)\n"
+            "    #1 <null> <null> (libgallium.so+0x456)\n\n"
+            "  Location is heap block of size 120 at 0x120 allocated by main thread:\n"
+            "    #0 calloc ../../src/libsanitizer/tsan/a.cpp:5 (libtsan.so+0x3)\n"
+            "    #1 <null> <null> (libgallium.so+0x789)\n\n"
+            "SUMMARY: ThreadSanitizer: data race\n==================\n"
+        )
+        lock = (
+            "==================\nWARNING: ThreadSanitizer: lock-order-inversion (potential deadlock) (pid=42)\n"
+            "  Cycle in lock order graph: M0 (0x123) => M1 (0x456) => M0\n\n"
+            "  Mutex M1 acquired here while holding mutex M0 in main thread:\n"
+            "    #0 <null> <null> (libdbus.so+0x111)\n\n"
+            "  Mutex M0 acquired here while holding mutex M1 in main thread:\n"
+            "    #0 <null> <null> (libdbus.so+0x222)\n\n"
+            "SUMMARY: ThreadSanitizer: lock-order-inversion\n==================\n"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            folder = run / sanitizers.REPORTS
+            folder.mkdir()
+            path = folder / "report.42"
+            path.write_text(race + lock)
+            original = thread_sanitizer.findings(run, (), ())
+            self.assertEqual(len(original.reports), 2)
+            path.write_text(
+                (race + lock)
+                .replace("at 0x123", "at 0xabc")
+                .replace("at 0x120", "at 0xdef")
+                .replace("T8", "T99")
+                .replace("pid=42", "pid=99")
+                .replace("M0", "M9")
+                .replace("M1", "M8")
+            )
+            self.assertEqual(
+                original.reports.keys(),
+                thread_sanitizer.findings(run, (), ()).reports.keys(),
+            )
+            for old, new in (
+                ("libgallium.so+0x456", "libgallium.so+0x999"),
+                ("libgallium.so+0x789", "libgallium.so+0x999"),
+                ("libdbus.so+0x222", "libdbus.so+0x999"),
+            ):
+                path.write_text((race + lock).replace(old, new))
+                changed = thread_sanitizer.findings(run, (), ())
+                self.assertEqual(
+                    len(
+                        sanitizers.compare(
+                            {"reference": original, "candidate": changed}
+                        ).candidate_only
+                    ),
+                    1,
+                )
+
     def test_conflict_stacks_and_global_identity(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

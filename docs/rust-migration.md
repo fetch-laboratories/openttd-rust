@@ -352,8 +352,10 @@ All runs, including full reports, are retained; missing saves or markers fail.
 trees; simulation additionally requires `--threaded`. C++ compile/link flags are
 `-fsanitize=thread -fno-omit-frame-pointer`. This option is mutually exclusive with
 `--sanitize`; it uses neither ASan archives/options nor Rust instrumentation.
-Reports classify both conflicting game stacks and global identity, normalized for
-source trees, line numbers, addresses and thread IDs. Both-role, reference-only and
+Reports classify both conflicting game/library stacks and global or allocation
+identity, normalized for source trees, line numbers, addresses and thread IDs.
+Unsymbolized library frames retain module offsets as code identities. Lock-order
+warnings retain their acquisition stacks. Both-role, reference-only and
 candidate-only findings remain separate; unknown reports fail. Full native reports
 remain alongside the saves. C++ TSan cannot see uninstrumented Rust accesses, so a
 reference-only finding can reflect an access moved to Rust. These two fixed inputs
