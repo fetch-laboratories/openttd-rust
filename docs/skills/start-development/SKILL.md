@@ -19,8 +19,9 @@ docs/design/world-state.md. The roadmap's latest steering review section holds
 the user's current corrections. Apply them first. Then run
 `python3 docs/skills/steer/issues.py` and give every unplaced issue a place in
 the roadmap (AGENTS.md: every open issue has one), including issues the user
-opened while you were stopped. Then resume from the roadmap's checkpoint and
-work order.
+opened while you were stopped. Run `python3 tools/housekeeping.py`, read its
+dry run, and rerun it with `--apply` to remove stale worktrees and output.
+Then resume from the roadmap's checkpoint and work order.
 
 ## Work loop (repeat indefinitely)
 
@@ -39,7 +40,7 @@ work order.
    batch's tracking issue), isolated worktree, PR, independent attributed
    review naming what was compared, in which the reviewer fixes its findings
    and you spot-check its fix commits, green required CI, integration and
-   worktree removal. Commit roadmap updates when you take stock (step 4) or
+   cleanup (`python3 tools/housekeeping.py`, then `--apply`). Commit roadmap updates when you take stock (step 4) or
    change the work order, not after every integration; PR and issue state
    carry the rest. Update from base when preparing final Full or resolving a
    blocking conflict; batch ready work when it avoids repeated validation.

@@ -568,6 +568,23 @@ batches small: the integration merge is the automatic rollback unit. A stack org
 PRs but does not itself combine validation runs. No extra local integration build or full local
 simulation run is required.
 
+### Housekeeping
+
+`python3 tools/housekeeping.py` lists stale worktrees and `.local` output with each item's
+size and reason; `--apply` removes exactly its `remove` lines. Root runs it at session start and
+after integrations, reading the dry run before `--apply`. It removes a linked worktree (never
+the main checkout or `.local/reference`) whose branch merged into `origin/rust-migration` or
+whose PR merged or closed, through `git worktree remove` without `--force`, so a dirty or locked
+one stays. It then deletes the local branch when that branch merged or origin holds the same
+head. A branch at a base commit with no PR is a task not yet committed and stays. In the main
+checkout's `.local` it removes finished runs under `simulation`, `verification`, `coverage` and
+`deep`, unfinished ones idle for 12 hours, and loose logs, clearing read-only bits first. It
+keeps the current deep report and the runs it names, the newest candidate profile
+(`callgrind.out`), shared builds, caches, toolchains, locks, the reference, retained speed
+profiles, CI request records and any folder holding a `provenance.json`, so a pinned anchor
+runtime records its provenance there. Unknown entries are listed as kept for a decision by
+hand. A live worktree's own `.local` stays with that worktree.
+
 ### Automatic rollback (user-authorized, 2026-10-22)
 
 A confirmed breaking merge with no later code is removed without asking, during
