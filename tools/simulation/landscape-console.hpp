@@ -6,6 +6,19 @@
 #include "vehicle_base.h"
 #include "vehicle_func.h"
 #include "tunnelbridge_cmd.h"
+#ifdef WITH_RUST
+#include "rust/landscape_generation_frame.hpp"
+#endif
+static void GenericRunTileLoop()
+{
+#ifdef WITH_RUST
+	RustGenerationLoop loop;
+	assert(*openttd_rust_tile_loop_cursor() != 0);
+	openttd_rust_run_tile_loop(Map::LogX(), Map::LogY(), loop.view.settings, loop.view.services);
+#else
+	RunTileLoop();
+#endif
+}
 static void LandscapeResult(const char *name, const CommandCost &cost, Money cash = 0, TileIndex error = INVALID_TILE)
 {
 	fmt::print(stderr, "LANDSCAPE {} {} {} {} {} {}\n", name, cost.Succeeded(), cost.GetCost(), cost.GetErrorMessage(), cash, error.base());
@@ -199,7 +212,7 @@ static void GenericPrograms()
 #else
 		cursor = tile;
 #endif
-		 RunTileLoop();
+		GenericRunTileLoop();
 		GenericNeed(_random.state[0] == expected_rng.state[0] && _random.state[1] == expected_rng.state[1]);
 		GenericNeed(generic_sound_calls == uint(mode == 3));
 		if (mode == 3) GenericNeed(generic_sound_file == &first && generic_sound_id == 4 && generic_sound_tile == tile && registers.GetRegister(0x100) == static_cast<int32_t>(packed) && registers.GetRegister(0x101) == CBID_SOUNDS_AMBIENT_EFFECT && registers.GetRegister(0x102) == 0);
@@ -220,7 +233,7 @@ static void GenericPrograms()
 #else
 		cursor = tile;
 #endif
-		RunTileLoop(); yes.tree_mutation = INVALID_TILE;
+		GenericRunTileLoop(); yes.tree_mutation = INVALID_TILE;
 		GenericNeed(IsTileType(tile, MP_TREES) && GetTreeGrowth(tile) == TreeGrowthStage::Growing1 && GetTreeCount(tile) == 2 && GetTreeGround(tile) == TREE_GROUND_GRASS && GetTreeDensity(tile) == 2);
 		GenericNeed(generic_sound_calls == 1 && _random.state[0] == expected_rng.state[0] && _random.state[1] == expected_rng.state[1]);
 		fmt::print(stderr, "GENERIC tree-ambient-reread true\n");
@@ -236,7 +249,7 @@ static void GenericPrograms()
 #else
 	cursor = tile;
 #endif
-	RunTileLoop(); GenericNeed(generic_sound_calls == 0 && _random.state[0] == expected_rng.state[0] && _random.state[1] == expected_rng.state[1]);
+	GenericRunTileLoop(); GenericNeed(generic_sound_calls == 0 && _random.state[0] == expected_rng.state[0] && _random.state[1] == expected_rng.state[1]);
 	fmt::print(stderr, "GENERIC ambient-unavailable-all-fail true\n");
 	cursor = saved_cursor; uint i = 0; for (Tile one : Map::Iterate()) one.type() = types[i++];
 	for (uint i = 0; i < 3; ++i) SetTileHeight(corner_tiles[i], corner_heights[i]);

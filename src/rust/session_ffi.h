@@ -155,6 +155,7 @@ struct OpenTTDSessionServices {
 };
 const OpenTTDSessionServices &GetRustSessionServices() noexcept;
 void RustAskUnsafeUnpause() noexcept;
+void RustSaveDesyncGame();
 bool RustRunWorldGeneration(OpenTTDSessionFrame *) noexcept;
 OpenTTDTreeTickSettings RustTreeTickSettings() noexcept;
 OpenTTDIndustryTickRecord RustIndustryTickRecord() noexcept;

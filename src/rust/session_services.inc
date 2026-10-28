@@ -15,7 +15,7 @@ static void RustSessionRealtime()
 		last_time = now;
 	}
 }
-static void RustSessionDesyncSave()
+void RustSaveDesyncGame()
 {
 	std::string name = fmt::format("dmp_cmds_{:08x}_{:08x}.sav", _settings_game.game_creation.generation_seed, TimerGameEconomy::date);
 	SaveOrLoad(name, SLO_SAVE, DFT_GAME_FILE, AUTOSAVE_DIR, false);
@@ -48,8 +48,8 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 		.reset_session_stats = []() noexcept { _game_session_stats.start_time = std::chrono::steady_clock::now(); _game_session_stats.savegame_size = std::nullopt; },
 		.reset_file_mode = []() noexcept { _file_to_saveload.SetMode(FIOS_TYPE_INVALID, SLO_INVALID); },
 		.generate_id = []() noexcept { GenerateSavegameId(); },
-		.reset_windows = []() noexcept { ResetWindowSystem(); },
-		.setup_windows = []() noexcept { SetupColoursAndInitialWindow(); },
+		.reset_windows = RustResetWindowSystem,
+		.setup_windows = RustSetupColoursAndInitialWindow,
 		.fix_title_zoom = []() noexcept { FixTitleGameZoom(); },
 		.release_cursor = []() noexcept { _cursor.fix_at = false; },
 		.check_glyphs = []() noexcept { CheckForMissingGlyphs(); },
@@ -118,7 +118,7 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 		.world_setup_end = [](OpenTTDSessionFrame *f) noexcept { f->exception = f->setup->cancellation; f->setup.reset(); return !f->exception; },
 		.world_run = RustRunWorldGeneration,
 		.heightmap_screenshot = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { MakeHeightmapScreenshot(_file_to_saveload.name); }); },
-		.desync_save = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { RustSessionDesyncSave(); }); },
+		.desync_save = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, RustSaveDesyncGame); },
 		.load = [](OpenTTDSessionFrame *f, OpenTTDSessionLoad *load) noexcept { SaveOrLoadResult result = SL_ERROR; SessionException(f, [&] { result = load == nullptr ? SaveOrLoad(_file_to_saveload.name, _file_to_saveload.file_op, _file_to_saveload.ftype.detailed, NO_DIRECTORY) : load->filter == nullptr ? SaveOrLoad(load->filename, load->operation, load->type, load->subdir) : LoadWithFilter(std::move(load->filter)); }); return result; },
 		.intro_load = [](OpenTTDSessionFrame *f) noexcept { SaveOrLoadResult result = SL_ERROR; SessionException(f, [&] { result = SaveOrLoad("opntitle.dat", SLO_LOAD, DFT_GAME_FILE, BASESET_DIR); }); return result; },
 		.save = [](OpenTTDSessionFrame *f) noexcept { SaveOrLoadResult result = SL_ERROR; SessionException(f, [&] { result = SaveOrLoad(_file_to_saveload.name, SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY); }); return result; },
@@ -137,7 +137,7 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 			return true;
 #endif
 		},
-		.assert_local_company = []() noexcept { assert(IsLocalCompany()); },
+		.assert_local_company = []() noexcept { assert(RustIsLocalCompany()); },
 		.desync_level = []() noexcept { return _debug_desync_level; },
 		.tick_timer = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { TimerManager<TimerGameTick>::Elapsed(1); }); },
 		.tile_loop_begin = [](OpenTTDSessionFrame *f) noexcept -> const OpenTTDGenerationLoop * { assert(*openttd_rust_tile_loop_cursor() != 0); return &f->loop.emplace().view; },

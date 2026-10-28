@@ -132,8 +132,8 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.random_seed = [](uint32_t value) noexcept { _random.SetSeed(value); },
 		.load_sprites = [](OpenTTDWorldSetupFrame *f) noexcept { try { GfxLoadSprites(); } catch (...) { f->cancellation = std::current_exception(); return false; } return true; },
 		.string_widths = []() noexcept { LoadStringWidthTable(); },
-		.reset_windows = []() noexcept { ResetWindowSystem(); },
-		.setup_windows = []() noexcept { SetupColoursAndInitialWindow(); },
+		.reset_windows = RustResetWindowSystem,
+		.setup_windows = RustSetupColoursAndInitialWindow,
 		.unshow_error = []() noexcept { UnshowCriticalError(); },
 		.close_windows = []() noexcept { CloseAllNonVitalWindows(); },
 		.hide_windows = []() noexcept { HideVitalWindows(); },
@@ -190,7 +190,7 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.debug_abort = []() noexcept { Debug(net, 0, "Generating map failed; closing server"); },
 		.debug_map = RustDebugNewMap,
 		.desync = []() noexcept { return _debug_desync_level > 0; },
-		.save = [](OpenTTDWorldFrame *f) noexcept { return WorldException(f, [] { std::string name = fmt::format("dmp_cmds_{:08x}_{:08x}.sav", _settings_game.game_creation.generation_seed, TimerGameEconomy::date); SaveOrLoad(name, SLO_SAVE, DFT_GAME_FILE, AUTOSAVE_DIR, false); }); },
+		.save = [](OpenTTDWorldFrame *f) noexcept { return WorldException(f, RustSaveDesyncGame); },
 	};
 	return services;
 }

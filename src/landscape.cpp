@@ -945,6 +945,8 @@ TileIndex _cur_tileloop_tile;
 #ifdef WITH_RUST
 OpenTTDLandscapeLoopServices RustLandscapeLoopServices(OpenTTDGroundCall *call, const OpenTTDRoadCommandContext *road) noexcept
 {
+	static_assert(MIN_MAP_SIZE_BITS == 6 && MAX_MAP_SIZE_BITS == 12 && TILE_UPDATE_FREQUENCY_LOG == 8);
+	static_assert(MP_CLEAR == 0 && MP_RAILWAY == 1 && MP_ROAD == 2 && MP_HOUSE == 3 && MP_TREES == 4 && MP_STATION == 5 && MP_WATER == 6 && MP_VOID == 7 && MP_INDUSTRY == 8 && MP_TUNNELBRIDGE == 9 && MP_OBJECT == 10);
 	return {
 		.shared = &GetRustSharedServices(),
 		.tile_types = GetRustTileTypeAllocation(),
@@ -961,19 +963,10 @@ OpenTTDLandscapeLoopServices RustLandscapeLoopServices(OpenTTDGroundCall *call, 
 /**
  * Gradually iterate over all tiles on the map, calling their TileLoopProcs once every TILE_UPDATE_FREQUENCY ticks.
  */
+#ifndef WITH_RUST
 void RunTileLoop()
 {
 	PerformanceAccumulator framerate(PFE_GL_LANDSCAPE);
-#ifdef WITH_RUST
-	static_assert(MIN_MAP_SIZE_BITS == 6 && MAX_MAP_SIZE_BITS == 12 && TILE_UPDATE_FREQUENCY_LOG == 8);
-	static_assert(MP_CLEAR == 0 && MP_RAILWAY == 1 && MP_ROAD == 2 && MP_HOUSE == 3 && MP_TREES == 4 && MP_STATION == 5 && MP_WATER == 6 && MP_VOID == 7 && MP_INDUSTRY == 8 && MP_TUNNELBRIDGE == 9 && MP_OBJECT == 10);
-	OpenTTDGroundCall call;
-	RustRoadCommandContext road;
-	const auto services = RustLandscapeLoopServices(&call, &road.view);
-	/* Preserve the original assertion under the native build assertion policy. */
-	assert(*openttd_rust_tile_loop_cursor() != 0);
-	openttd_rust_run_tile_loop(Map::LogX(), Map::LogY(), GetRustTreeLoopSettings(), &services);
-#else
 
 	/* The pseudorandom sequence of tiles is generated using a Galois linear feedback
 	 * shift register (LFSR). This allows a deterministic pseudorandom ordering, but
@@ -1009,8 +1002,8 @@ void RunTileLoop()
 	}
 
 	_cur_tileloop_tile = tile;
-#endif
 }
+#endif
 
 #ifdef WITH_RUST
 #include "rust/landscape_generation_ffi.h"
