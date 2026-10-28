@@ -55,6 +55,16 @@ DEEP_SET = (
         "simulate-sanitized",
         migration_command("simulate", "--sanitize", "--timeout", str(GAME_TIMEOUT)),
     ),
+    Member(
+        "simulate-threaded",
+        migration_command("simulate", "--threaded", "--timeout", str(GAME_TIMEOUT)),
+    ),
+    Member(
+        "simulate-tsan",
+        migration_command(
+            "simulate", "--threaded", "--tsan", "--timeout", str(GAME_TIMEOUT)
+        ),
+    ),
 )
 
 
