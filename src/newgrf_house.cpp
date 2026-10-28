@@ -223,10 +223,7 @@ uint32_t HouseResolverObject::GetDebugID() const
 #endif
 }
 
-#ifdef WITH_RUST
-void InitializeBuildingCounts(Town *t) { openttd_rust_house_counts_init(&GetRustTownServices(), &GetRustSharedServices(), t->growth_owner.get(), HouseSpec::Specs().size()); }
-void InitializeBuildingCounts() { openttd_rust_house_counts_init(&GetRustTownServices(), &GetRustSharedServices(), nullptr, HouseSpec::Specs().size()); }
-#else
+#ifndef WITH_RUST
 void ResetHouseClassIDs()
 {
 	_class_mapping.clear();

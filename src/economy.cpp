@@ -1008,12 +1008,9 @@ void StartupIndustryDailyChanges(bool init_counter)
 #endif
 }
 
+#ifndef WITH_RUST
 void StartupEconomy()
 {
-#ifdef WITH_RUST
-	const OpenTTDEconomySettings settings = RustEconomySettings();
-	openttd_rust_economy_startup(&GetRustCompanyServices(), &settings);
-#else
 	_economy.interest_rate = _settings_game.difficulty.initial_interest;
 	_economy.infl_amount = _settings_game.difficulty.initial_interest;
 	_economy.infl_amount_pr = std::max(0, _settings_game.difficulty.initial_interest - 1);
@@ -1032,8 +1029,8 @@ void StartupEconomy()
 
 	StartupIndustryDailyChanges(true); // As we are starting a new game, initialize the counter too
 
-#endif /* WITH_RUST */
 }
+#endif /* WITH_RUST */
 
 /**
  * Resets economy to initial values

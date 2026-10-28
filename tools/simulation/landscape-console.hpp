@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file landscape-console.hpp Identical landscape transaction inputs in both games. */
 #include "terraform_cmd.h"
+#include "genworld.h"
 #include "clear_map.h"
 #include "vehicle_base.h"
 #include "vehicle_func.h"

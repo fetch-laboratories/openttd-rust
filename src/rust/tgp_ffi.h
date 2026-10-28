@@ -21,5 +21,4 @@ struct OpenTTDTGPSettings {
 	uint32_t creation_log_y;
 };
 OpenTTDTGPSettings RustTGPSettings() noexcept;
-extern "C" uint32_t openttd_rust_tgp_estimate(const OpenTTDTGPSettings *);
 #endif /* TGP_FFI_H */

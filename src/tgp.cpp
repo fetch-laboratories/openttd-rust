@@ -39,12 +39,6 @@ OpenTTDTGPSettings RustTGPSettings() noexcept
 		.creation_log_y = _settings_game.game_creation.map_y,
 	};
 }
-
-uint GetEstimationTGPMapHeight()
-{
-	auto settings = RustTGPSettings();
-	return openttd_rust_tgp_estimate(&settings);
-}
 #else /* WITH_RUST */
 /*
  *

@@ -34,7 +34,9 @@ void TileLoop_Water(TileIndex tile);
 #endif
 bool FloodHalftile(TileIndex t);
 
+#ifndef WITH_RUST
 void ConvertGroundTilesIntoWaterTiles();
+#endif
 
 void DrawShipDepotSprite(int x, int y, Axis axis, DepotPart part);
 void DrawWaterClassGround(const struct TileInfo *ti);

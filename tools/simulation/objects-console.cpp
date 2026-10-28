@@ -344,7 +344,15 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 		Backup<bool> generating(_generating_world, true);
 		for (cancellation = 0; cancellation < 2; cancellation++) {
 			bool caught = false;
-			try { GenerateObjects(); } catch (AbortGenerateWorldSignal &) { caught = true; }
+			try {
+#ifdef WITH_RUST
+				OpenTTDObjectGenerationFrame frame;
+				CommandCost out, tmp, aux;
+				if (!openttd_rust_object_generate(&GetRustObjectServices(), RustCommandCost(&out), RustCommandCost(&tmp), RustCommandCost(&aux), &frame)) std::rethrow_exception(frame.cancellation);
+#else
+				GenerateObjects();
+#endif
+			} catch (AbortGenerateWorldSignal &) { caught = true; }
 			fmt::print(stderr, "OBJECT cancellation {} {}\n", cancellation, caught);
 		}
 		cancellation = -1;

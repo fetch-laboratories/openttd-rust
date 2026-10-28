@@ -96,6 +96,7 @@ struct OpenTTDTreeServices {
 	void (*command_debit)(OpenTTDTreeCommand *) noexcept OPENTTD_SERVICE_DEFAULT(command_debit);
 };
 
+OpenTTDTreeGenerateSettings TreeGenerateSettings() noexcept;
 extern "C" {
 /* Plain synchronous entries; original game preconditions apply. Panics abort. */
 void openttd_rust_trees_tick(OpenTTDTreeTickSettings, const OpenTTDTreeServices *, const OpenTTDSharedServices *);

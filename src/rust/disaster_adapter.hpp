@@ -134,7 +134,7 @@ static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterCreate(int32_t x, int32_
 {
 	return DisasterHandle(new DisasterVehicle(x, y, static_cast<Direction>(direction), static_cast<DisasterSubType>(subtype), VehicleID{target}));
 }
-static const OpenTTDDisasterServices &DisasterServices() noexcept
+const OpenTTDDisasterServices &DisasterServices() noexcept
 {
 	static const OpenTTDDisasterServices services{
 		.shared = &GetRustSharedServices(),
@@ -205,7 +205,6 @@ DisasterVehicle::DisasterVehicle(int x, int y, Direction direction, DisasterSubT
 	openttd_rust_disaster_construct(&DisasterServices(), DisasterHandle(this), x, y, direction, subtype);
 }
 bool DisasterVehicle::Tick() { return openttd_rust_disaster_tick(&DisasterServices(), DisasterHandle(this)); }
-void StartupDisasters() { openttd_rust_disaster_startup(&DisasterServices()); }
 void ReleaseDisastersTargetingIndustry(IndustryID industry) { openttd_rust_disaster_release_industry(&DisasterServices(), industry.base()); }
 void ReleaseDisasterVehicle(VehicleID vehicle)
 {

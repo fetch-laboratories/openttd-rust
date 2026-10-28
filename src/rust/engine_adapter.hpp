@@ -140,7 +140,7 @@ static void Engine_no_engines(int32_t date) noexcept
 	if (date < INT32_MAX) ShowErrorMessage(GetEncodedString(STR_ERROR_NO_VEHICLES_AVAILABLE_YET), GetEncodedString(STR_ERROR_NO_VEHICLES_AVAILABLE_YET_EXPLANATION, TimerGameCalendar::Date{date}), WL_WARNING);
 	else ShowErrorMessage(GetEncodedString(STR_ERROR_NO_VEHICLES_AVAILABLE_AT_ALL), GetEncodedString(STR_ERROR_NO_VEHICLES_AVAILABLE_AT_ALL_EXPLANATION), WL_WARNING);
 }
-static const OpenTTDEngineServices &EngineServices() noexcept
+const OpenTTDEngineServices &EngineServices() noexcept
 {
 	static const OpenTTDEngineServices services{
 		.shared = &GetRustSharedServices(),
