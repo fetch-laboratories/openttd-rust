@@ -4,15 +4,15 @@ Root selects here; `AGENTS.md` and `docs/rust-migration.md` define process. Foll
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-10-28, code at `d26b9447bc`)
+## Where the fork stands (2026-10-28, code at `18fb574219`)
 
 - 78 ownership ports. Since the twenty-first steering at `07c0d2e2e8`, six
-  owners and fifteen maintenance PRs integrated, retiring 3,872 more original
+  owners and sixteen maintenance PRs integrated, retiring 3,872 more original
   lines, including 1,276 in the current simulation inventory. No confirmed code
   regression requires rollback.
 - Whole-fork inventory: 71,737 of 470,612 original lines retired (15.24%),
   including 56,038 of 103,451 simulation lines (54.17%). Rust, tooling and glue
-  total 128,318, 48,362 and 45,736 lines. These measure source retirement, not
+  total 128,318, 49,286 and 45,736 lines. These measure source retirement, not
   completed behavior. #527 added the omitted simulation clock files and refreshed
   the denominator; #518 did not expand that reviewed inventory.
 - The identity-renewal quiet pass at `755609b8ea` completed all 144 games with
@@ -25,17 +25,20 @@ this roadmap over conflicting issues; it is the current state of umbrella issue
   any repair clears the existing credit thresholds. Neither the batch's
   instruction reduction nor the notes establish isolated savings for #536.
 
-| Scenario | Previous tip `5d8f4c7c7f` projected under new anchors | Quiet anchor `755609b8ea` |
-| --- | --- | --- |
-| TGP | 1.2289x | 1.1117x |
-| Grok | 1.3903x | 1.3871x |
-| Opus | 1.3970x | 1.3939x |
-| P1996 | 1.3617x | 1.3366x |
-| P2000 | 1.4181x | 1.4006x |
-| P2016 | 1.5331x | 1.5229x |
+| Scenario | Pre-batch `5d8f4c7c7f` under current anchors | Quiet anchor `755609b8ea` | Integrated profile `39691f38dd` |
+| --- | --- | --- | --- |
+| TGP | 1.2289x | 1.1117x | 1.1120x |
+| Grok | 1.3903x | 1.3871x | 1.3957x |
+| Opus | 1.3970x | 1.3939x | 1.4030x |
+| P1996 | 1.3617x | 1.3366x | 1.3445x |
+| P2000 | 1.4181x | 1.4006x | 1.4064x |
+| P2016 | 1.5331x | 1.5229x | 1.5230x |
 
 The historical `90f6ae311c` identities remain incompatible; its projections
 under these anchors are unavailable. The compatible pre-batch report is retained.
+All six current-profile identities and canonical comparisons passed. No projection
+rose by 3% over the preceding compatible profile; no new quiet pass is triggered.
+P2016 remains above its ceiling, with net-cost attribution active.
 - Coverage #518 integrated after exact-head Full passed. Its original-only
   report measured 84.96% of emitted lines and 53.97% of compiler branches;
   338 of 438 scenarios with zero unique lines remain investigation candidates,
@@ -59,13 +62,13 @@ under these anchors are unavailable. The compatible pre-batch report is retained
   exposed a history fixture definition conflicting with the new clock alias;
   the portable-only definition repair passed the existing comparison and Full.
   #544's reviewed random-command scenarios integrated after exact-head Full;
-  #508 is closed. Two drafts remain: #542 threaded/TSan and #545 community
-  AI/large-save evidence. Fixing review is complete and root checked the fixes;
-  current-base Full remains. C++ TSan found five shared Mesa identities and no
+  #508 is closed. #542 also integrated after fixing review and exact-head Full; #506 is closed.
+  Only #545 community AI/large-save evidence remains as an existing draft. Its
+  fixing review is complete and root checked the fixes; bootstrap Full remains. C++ TSan found five shared Mesa identities and no
   candidate-only findings; Rust remains uninstrumented. Root selects payment
   boundaries/deep protection and complete world-generation ownership next.
 - #529 closed after ten successful qualifying dependency installs. The
-  fifteenth-integration platform cadence passed; #544 is the eighteenth
+  fifteenth-integration platform cadence passed; #542 is the nineteenth
   integration. #509 stays open until the new semantic subset passes on
   Windows/macOS at the normal twentieth-integration cadence.
 
@@ -232,6 +235,7 @@ C++ retired; net glue is separate.
 | #509 prepared platform semantic comparison | #540 | direct | `c5b522f1eb` | 0 / 402 / 0 / 0; net glue 0 |
 | #537 testing-off linkage; #168 typed effect mutations | #541 | #543 | `74cea95cf8` | 78 / 0 / 49 / 0; net glue 28 |
 | #508 seeded random-command semantic scenarios | #544 | direct | `d26b9447bc` | 0 / 501 / 0 / 0; net glue 0 |
+| #506 threaded semantic and C++ TSan evidence | #542 | direct | `18fb574219` | 0 / 933 / 0 / 0; net glue 0 |
 
 ## Work order
 
@@ -239,11 +243,10 @@ One ranked list. Each free slot takes the highest unblocked item that fits the
 six-branch limit and disjoint-service rule; completing review/integration takes
 priority. A lower rank can run while a higher one waits. Scopes live in issues.
 
-1. **Finish #542/#545 integration in readiness order.** Fixing reviews are
-   complete; root checked their report-framing/identity/completeness repairs.
-   Update each from the current integrated base for its exact-head Full.
-   #545 changes a cache workflow and needs root's inspected bootstrap Full.
-   Their shared tooling files require separate integrations.
+1. **Finish #545 integration.** Fixing review is complete; root checked its
+   manifest-provenance and running-AI identity guards. Update from the current
+   integrated base and request the inspected workflow's bootstrap Full. Preserve
+   the integrated #542/#544 tooling. NewGRFs remain user-parked.
 2. **#275 measured P2016 ceiling repair.** Anchors are integrated. Attribute
    lookup, call and spill work at instruction addresses/call sites, including
    required original inline work and each proposed replacement. Station tick
@@ -296,8 +299,8 @@ reports before integration. Keep incompatible projections unavailable. Retain ac
 runtime dependencies. #503 owns the single changed-input coverage recomputation
 after #542/#544/#545 integrate, along with their applicable deep membership.
 Run `issues.py` at start/planning/stocktake and check actual current placement,
-not just a textual mention. The fifteenth-integration platform cadence passed after #538; #544 was the
-eighteenth integration. The next cadence is the twentieth integration. #512's first tally is finished.
+not just a textual mention. The fifteenth-integration platform cadence passed after #538; #542 was the
+nineteenth integration. The next cadence is the twentieth integration. #512's first tally is finished.
 
 Excluded, with return conditions checked by this review:
 - #507's NewGRF corpus (#525, #526) is parked by the user (2026-10-28) until
@@ -319,19 +322,19 @@ Excluded, with return conditions checked by this review:
 ## Resume checkpoint
 
 Codex root integrated #543's clocks, effect/linkage maintenance and anchors,
-then #544's reviewed command evidence. No confirmed code regression requires rollback. Fetch
+then #544's command and #542's threaded evidence. No confirmed code regression requires rollback. Fetch
 remote heads before resuming historical branches. Active anchors still depend
 on the pinned zlib/lzma runtime; the incompatible historical report is archived.
 
 | Item | Current state | Next action |
 | --- | --- | --- |
-| #509 and #529 | Platform tooling integrated; CI_ON_DEMAND is true. #529 closed after ten successful installs; eighteenth integration complete. | Run platform semantics at normal twentieth-integration cadence. |
+| #509 and #529 | Platform tooling integrated; CI_ON_DEMAND is true. #529 closed after ten successful installs; nineteenth integration complete. | Run platform semantics at normal twentieth-integration cadence. |
 | #275 | Six anchors integrated; P2016 measured 1.5229x. Original repeat differences are assigned, but no proposed repair has certified threshold credit. | Attribute removable call-site work and replacement costs; preserve unmatched raw-profile labels. |
 | #505/#503 | Mixed-source post-#540 soak is invalid; 61 adapter builds failed, no semantic differences. Fixed-source full set restarted on isolated integrated #543 code. | Read the isolated reports; measure sanitizer cost and classify findings. Preserve the active checkout. |
 | #511 | Completed and closed: 31 detections, nine classified survivors, zero invalid/inconclusive; source/build restored. | Use #156's scoped findings; further samples are selective. |
 | #168/#199/#500 and #503 | Payment lifecycle/settlement/income and deep/cleanup protection are selected as one maintenance batch; source planning is complete. | Implement from the integrated base; this batch's integration selects delivery/industry selector conversion next. |
 | #546 | Complete world-generation lifecycle selected; issue and bounded evidence/cost plan are recorded. | Start ownership implementation from the integrated base beside maintenance. |
-| #506 | #542's 48 ordinary/TSan games and TLS mutation evidence pass; fixing review complete at e0b91a92de. Root checked fixes. | Current-base update and Full; preserve #535/#539 and source-instrumentation limits. |
+| #506 | #542 integrated after fixing review and exact-head Full; issue closed. | Future deep runs include native/TSan members; preserve #156's uninstrumented Rust and remaining lifecycle limits. |
 | #508 | #544 integrated after exact-head Full; issue closed. | Keep histograms and scoped #156 limits; six soak variants join the next current-source deep run. |
 | #507 | #545's self/candidate evidence passes; fixing review complete at 62ed47a764. Root checked manifest/running-AI guards. | Current-base update and bootstrap Full. Keep NewGRFs parked. |
 | #525/#526 | Parked by the user; draft #525 closed at ccc28e2ed0. | None until user reselects it. |
