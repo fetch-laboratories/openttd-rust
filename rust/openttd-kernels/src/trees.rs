@@ -674,9 +674,7 @@ impl Trees<'_> {
                 self.set_ground(tile, ground, density);
             } else {
                 let current = self.density(tile);
-                if u32::from(current) != density {
-                    self.set_ground(tile, ground, density);
-                } else {
+                if u32::from(current) == density {
                     if current == 3 {
                         let r = self.random();
                         if chance16_i(1, 200, r) && s.ambient {
@@ -690,6 +688,7 @@ impl Trees<'_> {
                     }
                     return;
                 }
+                self.set_ground(tile, ground, density);
             }
         }
         self.dirty(tile);
