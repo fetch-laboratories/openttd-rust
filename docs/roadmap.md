@@ -4,15 +4,15 @@ Root selects here; `AGENTS.md` and `docs/rust-migration.md` define process. Foll
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-10-28, code at `3443388264`)
+## Where the fork stands (2026-10-28, code at `06ed8c4a6f`)
 
 - 79 ownership ports. Since the twenty-first steering at `07c0d2e2e8`, seven
-  owners and twenty-one maintenance PRs integrated, retiring 4,237 more original
+  owners and twenty-two maintenance PRs integrated, retiring 4,237 more original
   lines, including 1,641 in the current simulation inventory. No confirmed code
   regression requires rollback.
 - Whole-fork inventory: 72,102 of 470,612 original lines retired (15.32%),
   including 56,403 of 103,451 simulation lines (54.52%). Rust, tooling and glue
-  total 129,320, 51,037 and 46,173 lines. These measure source retirement, not
+  total 129,354, 51,058 and 46,170 lines. These measure source retirement, not
   completed behavior. #527 added the omitted simulation clock files and refreshed
   the denominator; #518 did not expand that reviewed inventory.
 - The identity-renewal quiet pass at `755609b8ea` completed all 144 games with
@@ -32,18 +32,18 @@ this roadmap over conflicting issues; it is the current state of umbrella issue
   Neither the batch's estimated reduction nor the notes establish isolated
   savings for #536.
 
-| Scenario | Pre-batch `5d8f4c7c7f` under current anchors | Quiet anchor `755609b8ea` | Last profile `ba3095f768` |
+| Scenario | Pre-batch `5d8f4c7c7f` under current anchors | Quiet anchor `755609b8ea` | Last profile `7f62b1bcba` |
 | --- | --- | --- | --- |
-| TGP | 1.2289x | 1.1117x | 1.1130x |
-| Grok | 1.3903x | 1.3871x | 1.3960x |
-| Opus | 1.3970x | 1.3939x | 1.4033x |
-| P1996 | 1.3617x | 1.3366x | 1.3437x |
-| P2000 | 1.4181x | 1.4006x | 1.4075x |
-| P2016 | 1.5331x | 1.5229x | 1.5246x |
+| TGP | 1.2289x | 1.1117x | 1.1122x |
+| Grok | 1.3903x | 1.3871x | 1.3945x |
+| Opus | 1.3970x | 1.3939x | 1.4022x |
+| P1996 | 1.3617x | 1.3366x | 1.3445x |
+| P2000 | 1.4181x | 1.4006x | 1.4062x |
+| P2016 | 1.5331x | 1.5229x | 1.5263x |
 
 The historical `90f6ae311c` identities remain incompatible; its projections
 under these anchors are unavailable. The compatible pre-batch report is retained.
-The twenty-second-tip profile passed all six identities and canonical comparisons.
+The twenty-fourth-tip profile passed all six identities and canonical comparisons.
 No projection
 rose by 3% over the preceding compatible profile; no new quiet pass is triggered.
 P2016 remains above its ceiling, with net-cost attribution active. The first
@@ -71,11 +71,12 @@ compatible rerun passed. The failed attempt remains incompatible and uncredited.
   soak/sanitizer rounds, each retaining threaded, TSan and multiplayer members.
   #503 owns a small explicit member selector and accurate partial-report metadata;
   prebuild ordinary probe dependencies before a sanitizer-only round.
-  The changed-input original coverage run passed 259 of 449 cases before two
-  600-second ferry snapshot timeouts; 188 cases have no outcome. Both ferries
-  continued progressing. Earlier successful coverage used a 1,800-second bound
-  on unchanged ferry inputs. Continue only the 190 unfinished cases at that bound,
-  retaining complete traces and failed outputs. Final percentages remain unavailable.
+  The changed-input original coverage collection now has 330 of 449 complete
+  traces after 3.78 hours combined. Both ferries passed at the previously successful
+  1,800-second bound. The continuation stopped on an original-only clock-preparation
+  dependency on the absent candidate Rust build; 119 cases remain unfinished.
+  Its bounded fix is selected but not started. Preserve both attempts and the
+  fixed checkout; final percentages remain unavailable.
 - #535's 14-case sanitizer subset compared equal in 607.7 seconds. A real-game
   positive control captured five original animation-shift keys in 121.3 seconds
   with no candidate-only report. Fixing review is complete; the full sanitizer
@@ -98,8 +99,10 @@ compatible rerun passed. The failed attempt remains incompatible and uncredited.
   fixing review, root spot-checks and exact-head Full. #549 multiplayer integrated
   as the twenty-third integration; #510 is closed. Reviewed, disjoint #552 and
   #553 integrated through #556 as the twenty-fourth integration after exact-head
-  Full, including the native-only C++ linkage warning repair. Two components
-  remain: #554 session lifecycle and #555 loading/acceptance maintenance.
+  Full, including the native-only C++ linkage warning repair. Three components
+  remain: #554 session lifecycle, #557 explicit deep-member selection and #558
+  differing-road-type evidence. #555 loading/acceptance maintenance integrated
+  as the twenty-fifth integration after fixing review and exact-head Full.
   Each integrates at its own tested head where shared files overlap.
 - #529 closed after ten successful qualifying dependency installs. The
   fifteenth-integration platform cadence passed; #545 is the twentieth
@@ -281,6 +284,7 @@ C++ retired; net glue is separate.
 | #510 mixed multiplayer semantic comparison | #549 | direct | `9e6d9d70e8` | 0 / 669 / 0 / 0; net glue 0 |
 | #550 four boolean wire returns and shared house fixture | #552 | #556 | `3443388264` | 16 / 3 / 58 / 0; net glue 50 |
 | #168/#199/#500 payment delivery; #501 execution typing | #553 | #556 | `3443388264` | 291 / 49 / 81 / 0; net glue -25 |
+| #275 loading dispatch and acceptance traversal | #555 | direct | `06ed8c4a6f` | 58 / 30 / 0 / 0; net glue -3 |
 
 ## Work order
 
@@ -288,60 +292,68 @@ One ranked list. Each free slot takes the highest unblocked item that fits the
 six-branch limit and disjoint-service rule; completing review/integration takes
 priority. A lower rank can run while a higher one waits. Scopes live in issues.
 
-1. **Review and integrate #554, complete session lifecycle and pause control.**
-   All selected semantic scenarios and final native failed-load checks pass.
-   Rust owns complete loop/mode/load/startup/settings/scan/pause control and
-   canonical process-wide state; preserve native aliases, chrono/resource and
-   genuine exception frames, the atomic exit flag and profiling entries. Root
-   accepts 593 original lines retired, 1,145 Rust, 445 net glue and 398 tooling
-   as the necessary cost of this boundary and default saved/unsaved evidence.
-   A fresh fixing reviewer compares every replaced body and caller before root's
-   current-base Full. Complete command execution remains a later alternative,
-   rather than a concurrent owner. NewGRFs remain user-parked.
-2. **#275 loading/acceptance maintenance, draft #555.** Both repairs are pushed;
-   Cargo, native and nine semantic cases pass. The final aircraft fixture check
-   failed during compilation and returns to its owner before independent review.
-   Root accepts 58 Rust and 30 tooling lines added, three glue lines removed and
-   zero retirement; canonical helper changes and production-path fixture migration
-   explain the cost. Preserve guarded initialization, fresh mutable observations,
-   native assertion policy and direct Rust dispatch. The selected unbuilt pair
-   estimates about 1.065% of P2016, with narrow margins that register allocation
-   can erase. Inspect emitted code without a PR speed check. One fixing reviewer
-   and current-base Full cover ready items; an unready item leaves the batch.
-   Station tick, orders resolution, immutable orders-table field binding and road
-   notes stay unselected. Only merged-tip measurement establishes savings.
-3. **#503 bounded evidence recovery and deep rotation.** Continue the 190 unfinished
-   original-coverage cases on fixed source using the retained binary, traces and
-   existing measurement/aggregation helpers, with the previously successful
-   1,800-second bound. Preserve the failed attempt and collect a separate final
-   report only after all 449 traces exist. No full-corpus restart or replacement
-   coverage runner is selected. The completed deep set exceeds about six hours;
-   select a small tracked member flag, expected 30–60 tooling lines, retaining
-   the default full set and marking rotation explicitly in reports. Alternate
-   soak versus sanitizer rounds with threaded/TSan/multiplayer in each. Sanitizer
-   probes require the ordinary candidate archive before that round starts.
-   Review and integrate this bounded infrastructure before the pending rotated
-   twenty-fourth-integration run; do not overlap timed speed collection.
-4. **Recurring platform cadence.** #509 is closed after macOS and Windows passed
-   all five full-duration prepared cases. Keep strict comparisons and #156's
-   bounded limits. The next normal cadence follows the twenty-fifth integration.
-5. **#156 selective observation; #501 and remaining boundary maintenance.** #553
-   completed delivery/industry selectors and validation_execution.py typing.
-   #168/#199/#500 and #501 remain open for incremental conversion, with their
-   next bounded slices selected at #551's integration stocktake. Now that #552
-   is integrated, add TownCanGrowRoad inputs with differing road types and observe
-   actual growth/RNG. Preserve #511's other input and presentation limits;
-   further mutation studies remain selective.
+1. **Integrate reviewed #554 session lifecycle and #557 deep rotation.**
+   Whole-port and callback-resolution fixing reviews are complete. Root checked
+   the fixes; omitted versus explicitly null native completion and callback
+   reentry/throw behavior compare against the unchanged original. Both components
+   are ready, with disjoint file sets. Prepare one conflict-free current-base
+   integration combination and exact-head Full. Necessary cost remains accepted;
+   no new approval gate is added for review evidence. No component speed check.
+2. **#503 original-only coverage preparation.** The retained continuation reached
+   330 of 449 complete traces, including both ferries at 1,800 seconds. It stopped
+   before the clock game on an unnecessary candidate Rust comparison dependency.
+   Select the bounded original-only preparation fix on #503: expected at most
+   30 production and 50 test tooling lines. Preserve clock game inputs/adapters
+   and the mandatory candidate/reference probe when games differ. No candidate
+   build workaround, corpus restart or replacement runner. After fixing review
+   and Full, authorize only the 119 unfinished cases with explicit provenance
+   and identity checks before reusing the 330 traces. Final percentages remain
+   unavailable; preserve the fixed checkout and failed attempts.
+3. **#156 differing-road-type town growth, draft #558.** The default case uses
+   production conversion and expansion commands, requires physical road growth,
+   and compares complete saved state/logs and RNG. The ordinary case passes;
+   one OR-to-AND fault changes map and game RNG, with no harness errors. Source
+   and ordinary build restoration are verified. Root accepts 100 tooling lines,
+   zero Rust/glue/retirement. Give it fresh fixing review and final Full; keep
+   other #511 input/presentation limits open. It does not hold the ready batch.
+4. **#559 complete command invocation ownership, after #551/#554 integrates.**
+   Move complete Do/Post/Unsafe/Execute admission, nested test/execute, results,
+   company/storage policy, signal/pause marking and callback order to the existing
+   Rust command owner. Bind migrated commands directly to Rust with typed arguments
+   and all tuple results; native commands keep named typed leaves. Keep native
+   serialization, messages, network enqueueing and genuine exception/resource
+   frames, including AI startup and outer script suspension. Reuse session state;
+   no concurrent session/global-service owner. Plan 320–420 retired lines,
+   1,000–1,800 Rust, 500–900 net glue and 250–400 support, judged once at the first
+   concrete checkpoint. The central command files remain outside the current
+   simulation inventory; report whole-fork retirement honestly. Goal/story
+   ownership is an unselected alternative, not concurrent work.
+5. **#168/#199/#500 completed-job flow publication; #501 bounded typing.** After
+   #551 integrates, select only the completed link-graph job service table: replace
+   numeric ReadCargoFlowJob selectors with consumed typed observations and remove
+   CargoFlowReroute's native bounce by calling the Rust station rerouting owner.
+   Adopt shared station/graph/node identities and reuse canonical distribution,
+   membership and invalidation services. Preserve validity/erase ordering, fresh
+   membership and borrow termination. Other flow selectors remain queued. Plan
+   zero retirement, 120–250 Rust, minus 30 to plus 80 net glue and 40–100 support.
+   Reuse cargodist/manual, pending-job reload and station-removal evidence; add a
+   real default manual-reroute input observing destinations, removal and RNG.
+   Carry tools/probe.py typing if ready (12 functions, roughly 20–50 net tooling),
+   preserving comparison behavior, adding ty and shrinking ANN exemptions.
+6. **Normal platform cadence.** #509 is closed; the twenty-fifth-integration
+   dispatch remains pending on the integrated #555 tip. Read its Windows/macOS semantic
+   and platform outcomes before another integration; fix failures forward under
+   the existing process. No per-PR semantic platform job is selected.
 
-Recurring: profile the integrated twenty-fourth tip now, retaining the pinned
-runtime and complete six-case identities. No rise over 3% or new quiet-pass
-trigger was established by the twenty-second profile. Read finished deep reports
-before integration. The prior deep set is terminal and classified; the next run
-awaits the selected bounded rotation support. Keep incompatible projections
-unavailable and preserve active anchors, traces and runtime dependencies. Root
-runs issues.py at stocktake and checks each current action and exclusion condition.
-A fresh planning agent ranks the next owner and remaining maintenance; selection
-remains with root. The previous corpus result measures reachability, not equivalence.
+Recurring: the twenty-fourth instruction profile is complete; P2016 projects
+1.5263x, with no rise over 3% and no new quiet-pass trigger. #555 has no isolated
+measured credit yet. The next profile follows the twenty-sixth integration.
+The prior deep report is terminal and classified. After #557 integrates, launch
+the due current-tip rotated run with the existing lock and idle priority; alternate
+soak versus sanitizer rounds, retaining threaded/TSan/multiplayer. A sanitizer
+round without soak first builds the ordinary candidate at the same revision for
+reference-gap linkage. Preserve anchors, raw traces, frozen runtimes and failed
+outputs. Root checks actual issue placement and exclusion conditions at stocktake.
 
 Excluded, with return conditions checked by this review:
 - #507's NewGRF corpus (#525, #526) is parked by the user (2026-10-28) until
@@ -362,23 +374,38 @@ Excluded, with return conditions checked by this review:
 
 ## Resume checkpoint
 
-Codex root integrated reviewed #552/#553 through #556 as the twenty-fourth
-integration. #550 and #505 are complete; no confirmed recent regression requires
-rollback. The two remaining components are #554 and #555. Active anchors depend
-on the pinned zlib/lzma/Brotli runtime; incompatible reports remain uncredited.
+Paused at the user's request. Code remains at `06ed8c4a6f` (#555, the
+twenty-fifth integration); this checkpoint is a docs-only update. No confirmed
+code regression or rollback target exists. No subagent, build, simulation, deep
+check or instruction profile is running. The cadence dispatch below remains
+pending; later results do not restart this wind-down.
 
-| Item | Current state | Next action |
+| Item | Saved state | Next action on resume |
 | --- | --- | --- |
-| #509 and #529 | CI_ON_DEMAND is true; twenty-fourth integration complete. Windows/macOS semantic cadence passed; both issues are closed. | Retain the normal fifth-integration cadence and #156's actual limits. |
-| #275 | Twenty-second-tip profile passes; P2016 projects 1.5246x. #555 implements the selected pair; final fixture compilation needs repair. | Profile the twenty-fourth tip; finish #555 validation and fixing review. No PR speed check or new quiet collection. |
-| #505/#503/#550 | Completed deep set took 6.06 hours; all four sanitized failures map to #552, now integrated. Shared original ScriptDate report is retained. #505/#550 are closed. Coverage has 259 complete traces and 190 unfinished cases. | Continue bounded coverage at 1,800 seconds; implement explicit member rotation before the next deep run. Preserve fixed checkouts and failures. |
-| #511 | Completed and closed: 31 detections, nine classified survivors, zero invalid/inconclusive; source/build restored. | Use #156's scoped findings; further samples are selective. |
-| #168/#199/#500 and #501 | #553 delivery/industry and execution typing integrated through reviewed, Full-tested #556. Trackers remain open. | Select the next bounded conversions at #551 integration stocktake. |
-| #546/#551 | #546 is closed. #554 session implementation and focused evidence pass; necessary cost is accepted. | Fresh fixing review, root spot-check, base update and exact-head Full. |
-| #506 | #542 integrated after fixing review and exact-head Full; issue closed. | Future deep runs include native/TSan members; preserve #156's uninstrumented Rust and remaining lifecycle limits. |
-| #508 | #544 integrated after exact-head Full; issue closed. | Keep histograms and scoped #156 limits; six soak variants join the next current-source deep run. |
-| #507 | #545 integrated after exact-head bootstrap Full; community/large vanilla evidence complete. | Keep NewGRFs user-parked; issue remains open for that scope. |
-| #510 | #549 integrated after fixing review and exact-head Full; issue closed. | Future deep runs include the member. Retain #156's spectator/handshake/network limits. |
-| #525/#526 | Parked by the user; draft #525 closed at ccc28e2ed0. | None until user reselects it. |
-Selection: root; planning agents use gpt-6-astra, high. The start-development
-skill remains open-ended and unchanged; completing this order triggers planning.
+| #554 | Reviewed head `6058f4b898`; whole-port and scoped fixing reviews and affected checks pass. No Full at any head; branch is behind. | Read cadence results, then update the saved combination from current base and request exact-head Full. |
+| #557 | Reviewed head `9db71fb247`; local checks and fixing review pass. No Full at any head; branch is behind. | Keep it with disjoint #554 in the combination; retain the same-revision ordinary-build prerequisite for sanitizer-only rounds. |
+| #554/#557 combination | Unpushed branch `integrate/session-and-deep-rotation`, head `e9b72a04ec`, in `.local/worktrees/integration554557`. No integration PR or Full was requested. | Preserve it. On resume, update from current base, inspect conflicts, then open the integration PR and request Full for its final head. Nothing can merge during this wind-down. |
+| #558 | Draft head `c919a1a298`; ordinary semantic case and isolated M23 sensitivity pass, with source and ordinary build restored. Fresh fixing review has not started; no Full. | Obtain fresh fixing review, prepare current base and run exact-head Full. Preserve the other #511 gaps. |
+| #503 | Coverage has 330 of 449 complete traces; 119 remain. The original-only clock-preparation fix is selected but not started. Collection and recovery are terminal; no final percentages. | Implement/review/integrate the bounded fix before authorizing a provenance-explicit continuation. Preserve the fixed checkout and all traces; no corpus restart or candidate-build workaround. |
+| #559 | Command invocation ownership is queued behind #554. No implementation or new planning is running. | Start only after #554 integrates, from integrated rust-migration. |
+| Cadence | Run `40719341427`, ci-build.yml dispatch at `06ed8c4a6f`, remains queued/pending at wind-down. #555's Full and tip push CI passed. | Read the cadence result before any further integration. Do not wait on or retry it during wind-down. |
+| Profiles and deep | Profile24 is complete; all six comparisons/identities pass and P2016 projects 1.5263x. No new quiet pass is triggered. The rotated deep run remains due, awaiting #557; the next instruction profile follows integration26. | Keep due work pending until resume and preserve anchor/runtime dependencies. |
+
+Worktrees kept for the unfinished tasks and their evidence:
+
+| Purpose | Retained worktree(s) |
+| --- | --- |
+| Unpushed combination | `.local/worktrees/integration554557` |
+| #554 implementation and reviews | `/home/fetch/.t3/worktrees/openttd-rust/t3-50116b81`, `t3-d8fb8d59` and `t3-32d82fdf`; root's older validation is in `.local/worktrees/repair554-callback`. Fetch the reviewed head rather than trusting an older local branch. |
+| #557 implementation and review | `/home/fetch/.t3/worktrees/openttd-rust/t3-a73f1edd` and `t3-dfe15b32` |
+| #558 implementation, passing case and retained failures | `.local/worktrees/town-road-input` |
+| Fixed original coverage | `/home/fetch/.t3/worktrees/openttd-rust/t3-117e7bcf` at `e52d475713` |
+| Completed deep and instruction evidence | `.local/worktrees/deep-74cea95cf8`, `.local/worktrees/profile-after18-544`, `.local/worktrees/profile-after20-545`, and `/home/fetch/.t3/worktrees/openttd-rust/t3-1ef78f07` and `t3-e3e3aaeb` |
+| Optional merged-only cleanup, deferred | #555's `.local/worktrees/final555`, `/home/fetch/.t3/worktrees/openttd-rust/t3-44edd90d` and `t3-c2c51eb8`; its CI evidence is archived before removal. |
+
+Relative project paths are under `/home/fetch/projects/openttd-rust`; shortened
+T3 names share `/home/fetch/.t3/worktrees/openttd-rust/`. All other historical
+research worktrees, the pinned original and frozen speed runtime remain preserved.
+No new implementation, review, build, game, CI request or retry starts here.
+The user separately requested a new Claude Opus 5.5/xhigh project-root thread
+with prompt `/steer` after this checkpoint is pushed and the report is written.
