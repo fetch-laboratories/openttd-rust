@@ -169,7 +169,8 @@ def simulation_source(path):
     name = Path(path).stem
     return "gui" not in name.split("_") and (
         path.startswith(("src/linkgraph/", "src/pathfinder/"))
-        or path in {
+        or path
+        in {
             "src/timer/timer_game_calendar.cpp",
             "src/timer/timer_game_calendar.h",
             "src/timer/timer_game_economy.cpp",
