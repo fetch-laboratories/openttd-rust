@@ -52,6 +52,12 @@
 
 #include "table/strings.h"
 
+#ifdef WITH_RUST
+#include "rust/clock_timer.h"
+#include "script/script_fatalerror.hpp"
+#include <exception>
+#endif
+
 #include "safeguards.h"
 
 /* scriptfile handling */
@@ -62,9 +68,6 @@ static std::string _scheduled_monthly_script; ///< Script scheduled to execute b
 
 /** Timer that runs every month of game time for the 'schedule' console command. */
 #ifdef WITH_RUST
-#include "rust/clock_timer.h"
-#include "script/script_fatalerror.hpp"
-#include <exception>
 static void RunScheduledMonthlyConsole()
 {
 	if (_scheduled_monthly_script.empty()) {

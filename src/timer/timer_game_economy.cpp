@@ -31,11 +31,14 @@
 #include "../vehicle_base.h"
 #include "../linkgraph/linkgraph.h"
 
-#include "../safeguards.h"
-
 #ifdef WITH_RUST
 #include "../rust/clock_ffi.h"
 #include <exception>
+#endif
+
+#include "../safeguards.h"
+
+#ifdef WITH_RUST
 
 TimerGameEconomy::YearMonthDay TimerGameEconomy::ConvertDateToYMD(Date date)
 {

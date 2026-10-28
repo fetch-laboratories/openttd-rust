@@ -13,7 +13,6 @@
 #include "engine_services.h"
 #include "presentation_services.h"
 #include "environment_services.h"
-#include "services_timer.h"
 #include "type_availability_services.h"
 static_assert(MAX_COMPANIES == 15 && OWNER_DEITY.base() == 18 && MAX_LENGTH_ENGINE_NAME_CHARS == 32);
 const OpenTTDTypeAvailabilityServices &GetRustTypeAvailabilityServices() noexcept
@@ -170,8 +169,6 @@ static const OpenTTDEngineServices &EngineServices() noexcept
 		.ai_road_disabled = RustAIRoadDisabled,
 		.ai_ship_disabled = RustAIShipDisabled,
 		.ai_aircraft_disabled = RustAIAircraftDisabled,
-		.date_to_ymd = RustCalendarDateToYMD,
-		.ymd_to_date = RustCalendarYMDToDate,
 		.enabled = Engine_enabled,
 		.climate = RustEngineClimate,
 		.rail_kind = Engine_rail_kind,

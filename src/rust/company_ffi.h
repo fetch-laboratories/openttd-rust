@@ -210,10 +210,8 @@ void OPENTTD_RUST_CALL openttd_rust_company_update_landscaping_limits(const Open
 int64_t OPENTTD_RUST_CALL openttd_rust_company_value(const OpenTTDCompanyServices *, const CompanyFinances *, uint8_t, bool);
 int64_t OPENTTD_RUST_CALL openttd_rust_company_hostile_takeover_value(const OpenTTDCompanyServices *, const CompanyFinances *, uint8_t);
 int32_t OPENTTD_RUST_CALL openttd_rust_company_update_rating(const OpenTTDCompanyServices *, CompanyFinances *, uint8_t, bool);
-void OPENTTD_RUST_CALL openttd_rust_economy_month(const OpenTTDCompanyServices *, const OpenTTDEconomyMonth *);
 bool OPENTTD_RUST_CALL openttd_rust_economy_add_inflation(bool, int32_t);
 void OPENTTD_RUST_CALL openttd_rust_economy_recompute_prices(const OpenTTDCompanyServices *, const OpenTTDEconomySettings *);
-void OPENTTD_RUST_CALL openttd_rust_economy_calendar_month(const OpenTTDCompanyServices *, const OpenTTDEconomySettings *);
 void OPENTTD_RUST_CALL openttd_rust_economy_reset_price_multipliers();
 void OPENTTD_RUST_CALL openttd_rust_economy_set_price_multiplier(uint32_t, int32_t);
 void OPENTTD_RUST_CALL openttd_rust_economy_startup(const OpenTTDCompanyServices *, const OpenTTDEconomySettings *);
@@ -224,7 +222,6 @@ int64_t OPENTTD_RUST_CALL openttd_rust_company_max_loan(const CompanyFinances *)
 bool OPENTTD_RUST_CALL openttd_rust_company_startup(const OpenTTDCompanyServices *, OpenTTDCompanyStartup *);
 bool OPENTTD_RUST_CALL openttd_rust_company_competitor_timeout(const OpenTTDCompanyServices *, const OpenTTDCompanyCompetitors *);
 bool OPENTTD_RUST_CALL openttd_rust_company_on_tick(const OpenTTDCompanyServices *, OpenTTDCompanyTick *);
-void OPENTTD_RUST_CALL openttd_rust_company_yearly(const OpenTTDCompanyServices *, const OpenTTDCompanyYear *);
 bool OPENTTD_RUST_CALL openttd_rust_company_takeover_allowed(const OpenTTDCompanyServices *, uint8_t, uint8_t);
 bool OPENTTD_RUST_CALL openttd_rust_company_control(const OpenTTDCompanyServices *, const OpenTTDTileOwnerContext *, OpenTTDCompanyControl *);
 void OPENTTD_RUST_CALL openttd_rust_company_change_ownership(const OpenTTDCompanyServices *, const OpenTTDTileOwnerContext *, uint8_t, uint8_t);

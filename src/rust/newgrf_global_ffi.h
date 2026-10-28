@@ -8,8 +8,6 @@ enum GameMode : uint8_t;
 struct OpenTTDNewGRFCargoLabel { uint32_t value; bool mixed; };
 struct OpenTTDGlobalVariableServices {
 	uint8_t (*climate)() noexcept OPENTTD_SERVICE_DEFAULT(climate);
-	uint16_t (*date_fraction)() noexcept OPENTTD_SERVICE_DEFAULT(date_fraction);
-	OpenTTDCalendarYMD (*date_to_ymd)(int32_t) noexcept OPENTTD_SERVICE_DEFAULT(date_to_ymd);
 	bool (*disable_elrails)() noexcept OPENTTD_SERVICE_DEFAULT(disable_elrails);
 	uint8_t (*file_version)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(file_version);
 	GameMode (*game_mode)() noexcept OPENTTD_SERVICE_DEFAULT(game_mode);
@@ -22,7 +20,6 @@ struct OpenTTDGlobalVariableServices {
 	uint8_t (*road_side)() noexcept OPENTTD_SERVICE_DEFAULT(road_side);
 	const OpenTTDSharedServices *shared;
 	uint32_t (*width)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(width);
-	int32_t (*ymd_to_date)(int32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(ymd_to_date);
 };
 const OpenTTDGlobalVariableServices &GetRustGlobalVariableServices() noexcept;
 extern "C" bool openttd_rust_global_variable(const OpenTTDGlobalVariableServices *, uint8_t, uint32_t *, const GRFFile *);

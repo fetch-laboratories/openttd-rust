@@ -60,8 +60,6 @@ public:
 
 	TPeriod period; ///< The period of the timer.
 	TStorage storage = {}; ///< The storage of the timer.
-
-
 };
 
 /**

@@ -26,11 +26,14 @@
 #include "timer_game_calendar.h"
 #include "../vehicle_base.h"
 
-#include "../safeguards.h"
-
 #ifdef WITH_RUST
 #include "../rust/clock_ffi.h"
 #include <exception>
+#endif
+
+#include "../safeguards.h"
+
+#ifdef WITH_RUST
 
 TimerGameCalendar::YearMonthDay TimerGameCalendar::ConvertDateToYMD(Date date)
 {

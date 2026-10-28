@@ -3,7 +3,9 @@
 #![allow(
     unsafe_code,
     missing_docs,
+    clippy::wildcard_imports,
     clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
     clippy::cast_sign_loss
 )]
 use crate::services::{CalendarYmd, EconomyDate};
@@ -89,7 +91,9 @@ pub unsafe extern "C" fn openttd_rust_economy_elapsed(
         if !unsafe { dispatch(&timers, MONTH, console_exception) } {
             return false;
         }
-        if economy_month() % 3 == 0 && !unsafe { dispatch(&timers, QUARTER, console_exception) } {
+        if economy_month().is_multiple_of(3)
+            && !unsafe { dispatch(&timers, QUARTER, console_exception) }
+        {
             return false;
         }
     }
@@ -117,7 +121,7 @@ pub unsafe extern "C" fn openttd_rust_economy_elapsed(
         }
         let mut from = 0;
         loop {
-            let graph = (services.next_graph)(&mut from);
+            let graph = (services.next_graph)(&raw mut from);
             if graph.is_null() {
                 break;
             }

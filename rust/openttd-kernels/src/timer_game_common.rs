@@ -127,6 +127,18 @@ clock_field!(
 clock_field!(calendar_month, write_calendar_month, calendar_month, u8);
 clock_field!(economy_month, write_economy_month, economy_month, u8);
 
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_clock_calendar_date() -> i32 {
+    calendar_date().0
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_clock_calendar_year() -> i32 {
+    calendar_year().0
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_clock_economy_date() -> i32 {
+    economy_date().0
+}
 const ACCUM_DAYS: [i32; 12] = [0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335];
 const MONTH_DATE: [u16; 366] = {
     let mut table = [0; 366];
@@ -437,8 +449,110 @@ pub struct ClockServices {
     pub graph_owner:
         extern "C" fn(*mut crate::linkgraph::NativeGraph) -> *mut crate::linkgraph::live::Graph,
 }
+#[repr(C)]
+pub struct ClockIndustry {
+    pub builder: *mut crate::industry::Builder,
+    pub services: *const crate::industry::Services,
+}
+#[repr(C)]
+pub struct ClockTown {
+    pub leaves: *const crate::town::Leaves,
+    pub shared: *const crate::services::Services,
+}
+#[repr(C)]
+pub struct ClockCompany {
+    pub services: *const crate::company::Services,
+    pub settings: extern "C" fn() -> crate::company::EconomySettings,
+    pub month: extern "C" fn() -> crate::company::Month,
+    pub year: extern "C" fn() -> crate::company::Year,
+}
+macro_rules! owner_callback {
+    ($name:ident, $ty:ty, $s:ident, $body:block) => {
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn $name(context: *const c_void, _: *mut ConsoleException) -> bool {
+            let $s = unsafe { &*context.cast::<$ty>() };
+            unsafe { $body }
+            true
+        }
+    };
+}
+owner_callback!(openttd_rust_clock_industry_daily, ClockIndustry, c, {
+    crate::industry::openttd_rust_industry_daily(c.builder, c.services);
+});
+owner_callback!(openttd_rust_clock_industry_monthly, ClockIndustry, c, {
+    crate::industry::openttd_rust_industry_monthly(c.builder, c.services);
+});
+owner_callback!(
+    openttd_rust_clock_engine_daily,
+    crate::engine::Services,
+    s,
+    {
+        crate::engine::openttd_rust_engine_daily(s);
+    }
+);
+owner_callback!(
+    openttd_rust_clock_engine_monthly,
+    crate::engine::Services,
+    s,
+    {
+        crate::engine::openttd_rust_engine_monthly(s);
+    }
+);
+owner_callback!(
+    openttd_rust_clock_station_monthly,
+    crate::station_service::World,
+    s,
+    {
+        crate::station_service::openttd_rust_station_monthly(s);
+    }
+);
+owner_callback!(
+    openttd_rust_clock_subsidy_monthly,
+    crate::subsidy::Services,
+    s,
+    {
+        let mut cargo = [0; crate::cargo_type::NUM_CARGO as usize];
+        crate::subsidy::openttd_rust_subsidy_monthly(
+            s,
+            crate::subsidy::Cargo {
+                data: cargo.as_mut_ptr(),
+            },
+        );
+    }
+);
+owner_callback!(openttd_rust_clock_town_monthly, ClockTown, c, {
+    crate::town::openttd_rust_town_monthly_all(c.leaves, c.shared, economy_month());
+});
+owner_callback!(openttd_rust_clock_town_yearly, ClockTown, c, {
+    crate::town::house::openttd_rust_house_age_all(c.leaves, c.shared);
+});
+owner_callback!(
+    openttd_rust_clock_disaster_daily,
+    crate::disaster::Services,
+    s,
+    {
+        crate::disaster::openttd_rust_disaster_daily(s);
+    }
+);
+owner_callback!(openttd_rust_clock_economy_month, ClockCompany, c, {
+    crate::company::openttd_rust_economy_month(&*c.services, &(c.month)());
+});
+owner_callback!(
+    openttd_rust_clock_economy_calendar_month,
+    ClockCompany,
+    c,
+    {
+        crate::company::openttd_rust_economy_calendar_month(&*c.services, &(c.settings)());
+    }
+);
+owner_callback!(openttd_rust_clock_company_yearly, ClockCompany, c, {
+    crate::company::openttd_rust_company_yearly(&*c.services, &(c.year)());
+});
 crate::abi::layouts! {
     fn abi_layout;
+    "OpenTTDClockIndustry" ["clocks"] => ClockIndustry { builder, services };
+    "OpenTTDClockTown" ["clocks"] => ClockTown { leaves, shared };
+    "OpenTTDClockCompany" ["clocks"] => ClockCompany { services, settings, month, year };
     "OpenTTDClockState" ["clocks"] => ClockState { calendar_year, calendar_date, economy_year, economy_date, days_since_last_month, calendar_fraction, calendar_subfraction, economy_fraction, calendar_month, economy_month };
     "OpenTTDClockPeriod" ["clocks"] => Period { trigger, priority };
     "OpenTTDEconomyClockPeriod" ["clocks"] => Period { trigger, priority };

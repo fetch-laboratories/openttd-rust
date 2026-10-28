@@ -18,8 +18,9 @@
 #include "timer/timer_game_economy.h"
 #ifdef WITH_RUST
 #include "rust/subsidy_ffi.h"
+#include "rust/clock_ffi.h"
 #include "rust/services_station.h"
-void SubsidyMonthlyLoop();
+static void SubsidyMonthlyLoop() { openttd_rust_clock_subsidy_monthly(&GetRustSubsidyServices(), nullptr); }
 #else
 bool FindSubsidyPassengerRoute();
 bool FindSubsidyTownCargoRoute();

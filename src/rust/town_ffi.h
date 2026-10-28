@@ -127,7 +127,6 @@ OpenTTDTownSuppliedHistory openttd_rust_town_sum_history(const OpenTTDTownSuppli
 void openttd_rust_town_rating_test(bool);
 int32_t openttd_rust_town_rating(const OpenTTDTownState *, uintptr_t, uint8_t);
 void openttd_rust_town_change_rating(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, OpenTTDTownState *, uint32_t, uintptr_t, uint8_t, int32_t, int32_t, bool, bool);
-void openttd_rust_town_monthly_all(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint8_t);
 OpenTTDTownState *openttd_rust_town_new();
 void openttd_rust_town_destroy(OpenTTDTownState *);
 OpenTTDTownGrowthFields *openttd_rust_town_growth(OpenTTDTownState *);

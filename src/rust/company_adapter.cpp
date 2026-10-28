@@ -67,6 +67,7 @@
 #include "services_landscape.h"
 
 #include <memory>
+#include "clock_ffi.h"
 #include "../safeguards.h"
 
 extern void CompanyAdminRemove(CompanyID, CompanyRemoveReason);
@@ -389,6 +390,17 @@ const OpenTTDCompanyFinanceServices &GetRustCompanyFinanceServices() noexcept
 		.networking = RustNetworking, .company_finances = Fin_company_finances,
 		.invalidate_company_windows = Fin_invalidate_company_windows,
 		.give_money_message = Fin_give_money_message, .money_animation = Fin_money_animation,
+	};
+	return services;
+}
+
+const OpenTTDClockCompany &GetRustClockCompanyServices() noexcept
+{
+	static const OpenTTDClockCompany services{
+		.services = &GetRustCompanyServices(),
+		.settings = RustEconomySettings,
+		.month = RustEconomyClockMonth,
+		.year = RustCompanyClockYear,
 	};
 	return services;
 }

@@ -16,8 +16,6 @@
 #include "timer_game_calendar.h"
 #include "timer_game_economy.h"
 
-#include "../safeguards.h"
-
 #ifdef WITH_RUST
 #include "../rust/clock_ffi.h"
 #include "../rust/environment_services.h"
@@ -25,6 +23,11 @@
 #include "../rust/services_linkgraph.h"
 #include "../rust/vehicle_services.h"
 #include "timer.h"
+#endif
+
+#include "../safeguards.h"
+
+#ifdef WITH_RUST
 
 const OpenTTDClockServices &GetRustClockServices() noexcept
 {

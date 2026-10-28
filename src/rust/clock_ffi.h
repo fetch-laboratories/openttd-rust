@@ -5,6 +5,7 @@
 #include "clock_state.h"
 #include "clock_timer.h"
 #include "services_ffi.h"
+#include "company_ffi.h"
 #include "service_defaults.hpp"
 #include "../openttd.h"
 #include "../timer/timer_game_calendar.h"
@@ -26,8 +27,42 @@ struct OpenTTDClockServices {
 	LinkGraph *(*next_graph)(uint32_t *) noexcept OPENTTD_SERVICE_DEFAULT(next_graph);
 	OpenTTDLiveGraph *(*graph_owner)(LinkGraph *) noexcept OPENTTD_SERVICE_DEFAULT(graph_owner);
 };
+struct OpenTTDIndustryBuilder;
+struct OpenTTDIndustryServices;
+struct OpenTTDTownLeaves;
+struct OpenTTDCompanyServices;
+struct OpenTTDEconomySettings;
+struct OpenTTDEconomyMonth;
+struct OpenTTDCompanyYear;
+struct OpenTTDClockIndustry { OpenTTDIndustryBuilder *builder; const OpenTTDIndustryServices *services; };
+struct OpenTTDClockTown { const OpenTTDTownLeaves *leaves; const OpenTTDSharedServices *shared; };
+struct OpenTTDClockCompany {
+	const OpenTTDCompanyServices *services;
+	OpenTTDEconomySettings (*settings)() noexcept OPENTTD_SERVICE_DEFAULT(settings);
+	OpenTTDEconomyMonth (*month)() noexcept OPENTTD_SERVICE_DEFAULT(month);
+	OpenTTDCompanyYear (*year)() noexcept OPENTTD_SERVICE_DEFAULT(year);
+};
+const OpenTTDClockCompany &GetRustClockCompanyServices() noexcept;
+OpenTTDEconomySettings RustEconomySettings() noexcept;
+OpenTTDEconomyMonth RustEconomyClockMonth() noexcept;
+OpenTTDCompanyYear RustCompanyClockYear() noexcept;
 const OpenTTDClockServices &GetRustClockServices() noexcept;
 extern "C" {
+bool openttd_rust_clock_industry_daily(const void *, void *) noexcept;
+bool openttd_rust_clock_industry_monthly(const void *, void *) noexcept;
+bool openttd_rust_clock_engine_daily(const void *, void *) noexcept;
+bool openttd_rust_clock_engine_monthly(const void *, void *) noexcept;
+bool openttd_rust_clock_station_monthly(const void *, void *) noexcept;
+bool openttd_rust_clock_subsidy_monthly(const void *, void *) noexcept;
+bool openttd_rust_clock_town_monthly(const void *, void *) noexcept;
+bool openttd_rust_clock_town_yearly(const void *, void *) noexcept;
+bool openttd_rust_clock_disaster_daily(const void *, void *) noexcept;
+bool openttd_rust_clock_economy_month(const void *, void *) noexcept;
+bool openttd_rust_clock_economy_calendar_month(const void *, void *) noexcept;
+bool openttd_rust_clock_company_yearly(const void *, void *) noexcept;
+int32_t openttd_rust_clock_calendar_date();
+int32_t openttd_rust_clock_calendar_year();
+int32_t openttd_rust_clock_economy_date();
 OpenTTDClockState *openttd_rust_clock_storage();
 OpenTTDCalendarYMD openttd_rust_calendar_date_to_ymd(int32_t);
 int32_t openttd_rust_calendar_ymd_to_date(int32_t, uint8_t, uint8_t);

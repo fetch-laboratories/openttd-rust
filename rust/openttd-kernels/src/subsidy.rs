@@ -568,8 +568,7 @@ pub unsafe extern "C" fn openttd_rust_subsidy_command(
     }
     true
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_subsidy_monthly(s: *const Services, scratch: Cargo) {
+pub(crate) unsafe fn openttd_rust_subsidy_monthly(s: *const Services, scratch: Cargo) {
     unsafe { &*s }.monthly(scratch);
 }
 #[unsafe(no_mangle)]

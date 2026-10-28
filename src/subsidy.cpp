@@ -41,6 +41,10 @@
 #include "rust/services_cargo.h"
 #include "rust/services_station.h"
 #endif
+#ifdef WITH_RUST
+#include "rust/clock_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 SubsidyPool _subsidy_pool("Subsidy"); ///< Pool for the subsidies.
@@ -462,12 +466,9 @@ bool FindSubsidyCargoDestination(CargoType cargo_type, Source src)
 #endif
 
 /** Perform the economy monthly update of open subsidies, and try to create a new one. */
+#ifndef WITH_RUST
 void SubsidyMonthlyLoop()
 {
-#ifdef WITH_RUST
-	CargoArray scratch{};
-	openttd_rust_subsidy_monthly(&GetRustSubsidyServices(), {scratch.data()});
-#else
 	bool modified = false;
 
 	for (Subsidy *s : Subsidy::Iterate()) {
@@ -538,9 +539,14 @@ void SubsidyMonthlyLoop()
 	modified |= passenger_subsidy || town_subsidy || industry_subsidy;
 
 	if (modified) InvalidateWindowData(WC_SUBSIDIES_LIST, 0);
-#endif
-}
+}#endif
+
+#ifdef WITH_RUST
+static const IntervalTimer<TimerGameEconomy> _economy_subsidies_monthly({TimerGameEconomy::MONTH, TimerGameEconomy::Priority::SUBSIDY}, RustClockCallback{openttd_rust_clock_subsidy_monthly, &GetRustSubsidyServices()});
+#else
 static const IntervalTimer<TimerGameEconomy> _economy_subsidies_monthly({TimerGameEconomy::MONTH, TimerGameEconomy::Priority::SUBSIDY}, [](auto) { SubsidyMonthlyLoop(); });
+#endif
+
 
 /**
  * Tests whether given delivery is subsidised and possibly awards the subsidy to delivering company

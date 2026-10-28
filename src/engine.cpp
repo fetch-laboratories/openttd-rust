@@ -47,6 +47,10 @@ void ShowEnginePreviewWindow(EngineID engine);
 #include "rust/engine_loading_ffi.h"
 #endif
 
+#ifdef WITH_RUST
+#include "rust/clock_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 EnginePool _engine_pool("Engine");
@@ -1034,11 +1038,11 @@ static bool IsVehicleTypeDisabled(VehicleType type, bool ai)
 #endif
 
 /** Daily check to offer an exclusive engine preview to the companies. */
+#ifdef WITH_RUST
+static const IntervalTimer<TimerGameCalendar> _calendar_engines_daily({TimerGameCalendar::DAY, TimerGameCalendar::Priority::ENGINE}, RustClockCallback{openttd_rust_clock_engine_daily, &EngineServices()});
+#else
 static const IntervalTimer<TimerGameCalendar> _calendar_engines_daily({TimerGameCalendar::DAY, TimerGameCalendar::Priority::ENGINE}, [](auto)
 {
-#ifdef WITH_RUST
-	openttd_rust_engine_daily(&EngineServices());
-#else
 	for (Company *c : Company::Iterate()) {
 		c->avail_railtypes = AddDateIntroducedRailTypes(c->avail_railtypes, TimerGameCalendar::date);
 		c->avail_roadtypes = AddDateIntroducedRoadTypes(c->avail_roadtypes, TimerGameCalendar::date);
@@ -1074,8 +1078,10 @@ static const IntervalTimer<TimerGameCalendar> _calendar_engines_daily({TimerGame
 			}
 		}
 	}
-#endif
+
 });
+#endif
+
 
 /**
  * Clear the 'hidden' flag for all engines of a new company.
@@ -1285,10 +1291,15 @@ void CalendarEnginesMonthlyLoop()
 #endif
 }
 
+#ifdef WITH_RUST
+static const IntervalTimer<TimerGameCalendar> _calendar_engines_monthly({TimerGameCalendar::MONTH, TimerGameCalendar::Priority::ENGINE}, RustClockCallback{openttd_rust_clock_engine_monthly, &EngineServices()});
+#else
 static const IntervalTimer<TimerGameCalendar> _calendar_engines_monthly({TimerGameCalendar::MONTH, TimerGameCalendar::Priority::ENGINE}, [](auto)
 {
 	CalendarEnginesMonthlyLoop();
 });
+#endif
+
 
 /**
  * Is \a name still free as name for an engine?

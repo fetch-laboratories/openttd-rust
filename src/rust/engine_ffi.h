@@ -67,8 +67,6 @@ struct OpenTTDEngineServices {
 	bool (*ai_road_disabled)() noexcept OPENTTD_SERVICE_DEFAULT(ai_road_disabled);
 	bool (*ai_ship_disabled)() noexcept OPENTTD_SERVICE_DEFAULT(ai_ship_disabled);
 	bool (*ai_aircraft_disabled)() noexcept OPENTTD_SERVICE_DEFAULT(ai_aircraft_disabled);
-	OpenTTDEngineYMD (*date_to_ymd)(int32_t) noexcept OPENTTD_SERVICE_DEFAULT(date_to_ymd);
-	int32_t (*ymd_to_date)(int32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(ymd_to_date);
 	bool (*enabled)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(enabled);
 	bool (*climate)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(climate);
 	RailVehicleTypes (*rail_kind)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(rail_kind);
@@ -105,7 +103,6 @@ void openttd_rust_engine_reliability(const OpenTTDEngineServices *, OpenTTDEngin
 void openttd_rust_engine_start_one(const OpenTTDEngineServices *, OpenTTDEngineRef, OpenTTDEngineYMD, uint32_t);
 void openttd_rust_engine_aging_stops(const OpenTTDEngineServices *);
 void openttd_rust_engine_start_all(const OpenTTDEngineServices *);
-void openttd_rust_engine_daily(const OpenTTDEngineServices *);
 void openttd_rust_engine_monthly(const OpenTTDEngineServices *);
 void openttd_rust_engine_clear_hidden(const OpenTTDEngineServices *, uint8_t);
 bool openttd_rust_engine_buildable(const OpenTTDEngineServices *, OpenTTDEngineRef, VehicleType, uint8_t);

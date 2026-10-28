@@ -1,6 +1,11 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Canonical calendar state and advancement. Native aliases use the same stable storage.
-#![allow(unsafe_code, missing_docs, clippy::cast_possible_truncation)]
+#![allow(
+    unsafe_code,
+    missing_docs,
+    clippy::wildcard_imports,
+    clippy::cast_possible_truncation
+)]
 use crate::timer_game_common::{self as common, *};
 use crate::timer_game_tick::DAY_TICKS;
 

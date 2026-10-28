@@ -277,7 +277,6 @@ void openttd_rust_station_watched(OpenTTDBaseStation *, const OpenTTDStationServ
 void openttd_rust_station_tick(const OpenTTDStationServices *, const OpenTTDStationLinks *, const OpenTTDVehicleVisits *);
 void openttd_rust_station_stale(OpenTTDBaseStation *, const OpenTTDStationServices *, const OpenTTDStationLinks *, const OpenTTDVehicleVisits *);
 void openttd_rust_station_reroute(OpenTTDBaseStation *, uint8_t, uint16_t, uint16_t, const OpenTTDStationServices *, const OpenTTDStationLinks *);
-void openttd_rust_station_monthly(const OpenTTDStationServices *);
 void openttd_rust_station_modify_rating(OpenTTDStationService *, int32_t);
 
 }

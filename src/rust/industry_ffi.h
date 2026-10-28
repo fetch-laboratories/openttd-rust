@@ -281,8 +281,6 @@ bool openttd_rust_industry_transport(void *industry, OpenTTDIndustry *owner, uin
 void openttd_rust_industry_farm(void *industry, uint16_t id, OpenTTDIndustryMap map, const OpenTTDIndustryServices *services);
 void openttd_rust_industry_recompute(void *industry, OpenTTDIndustry *owner, const OpenTTDIndustryServices *services);
 void openttd_rust_industry_daily_start(OpenTTDIndustryBuilder *builder, uint32_t map_bits, uint8_t init_counter);
-void openttd_rust_industry_daily(OpenTTDIndustryBuilder *builder, const OpenTTDIndustryServices *services);
-void openttd_rust_industry_monthly(OpenTTDIndustryBuilder *builder, const OpenTTDIndustryServices *services);
 void openttd_rust_industry_build_type_reset(OpenTTDIndustryBuildFields *fields);
 /** Native stack cost operations consumed by industry policy. */
 #ifdef __cplusplus
