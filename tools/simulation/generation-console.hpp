@@ -124,6 +124,8 @@ static void GenerationLifecycle()
 	generation_lifecycle = false; generation_target = -1; generation_storage = nullptr;
 	_exit_game = saved_exit;
 	_game_mode = GM_NORMAL;
+	/* The enclosing new-game callback still owes its final progress increment. */
+	SetModalProgress(true);
 	SetGeneratingWorldProgress(GWP_GAME_START, 1);
 	_current_company = _local_company = COMPANY_SPECTATOR;
 }
