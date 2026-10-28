@@ -315,10 +315,11 @@ the simulate job count, `--jobs // 2`, approximates it).
 
 `python3 tools/migration.py build|simulate --sanitize` (#505) builds both games with
 `-fsanitize=address,undefined` in `build-reference-sanitized` (shared, beside the reference
-build) and `build-rust-sanitized`, with testing off, and runs the selected default scenarios on
-them. The Rust archive is ASan-instrumented with `-Zsanitizer=address` under `RUSTC_BOOTSTRAP=1`
-on the pinned toolchain; Rust has no UBSan, and its precompiled standard library is not
-instrumented. The driver re-executes itself with `OPENTTD_SANITIZE=1`, which points
+build) and `build-rust-sanitized`, building only the game and its runtime data, and runs the
+selected default scenarios on them. The Rust archive is ASan-instrumented with
+`-Zsanitizer=address` under `RUSTC_BOOTSTRAP=1` on the pinned toolchain; Rust has no UBSan, and
+its precompiled standard library is not instrumented. The driver re-executes itself with
+`OPENTTD_SANITIZE=1`, which points
 `migration.REFERENCE_BUILD` and `migration.CANDIDATE_BUILD` at the sanitized trees for the
 driver, simulate, its relinked console adapters and the scenario modules alike.
 
@@ -330,8 +331,9 @@ whatever `log_path` says and, at its first report, replaces the common flags wit
 from the compared debug log; ASan reports are read from the run's `sanitizer/` files. A report
 key is the kind, the source path relative to its tree, the first frame outside the sanitizer
 runtime and the message with numbers replaced, since line numbers and values differ between
-the trees. Per scenario, a key in both roles is original behaviour (recorded in the result and in
-the report's `sanitizers.original`, and in the deep report's `original_reports`); a
+the trees. Paths rewritten by ccache resolve against each role's compilation directory before
+comparison. Per scenario, a key in both roles is original behaviour (recorded in the result,
+in the report's `sanitizers.original`, and in the deep report's `original_reports`); a
 candidate-only key is a scenario problem; a reference-only key is recorded, usually a site Rust
 replaced. A suppression entry names undefined behaviour the sanitized reference reports in the
 same scenario, with its original site.

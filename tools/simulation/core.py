@@ -644,9 +644,10 @@ def read_game(run):
 
         from . import sanitizers
 
-        roots = (ROOT, migration.REFERENCE.resolve())
-        log, sanitizer = sanitizers.split_log(log, roots)
-        sanitizers.file_findings(run_dir, roots, sanitizer)
+        roots = (migration.REFERENCE.resolve(), ROOT)
+        builds = (migration.REFERENCE_BUILD, migration.CANDIDATE_BUILD)
+        log, sanitizer = sanitizers.split_log(log, roots, builds)
+        sanitizers.file_findings(run_dir, roots, sanitizer, builds)
     return {
         **run,
         "snapshots": snapshots,

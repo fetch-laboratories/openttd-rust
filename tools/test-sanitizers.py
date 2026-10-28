@@ -68,17 +68,102 @@ class SanitizedGameTests(unittest.TestCase):
                             stderr=err,
                         )
                     self.assertEqual(launched.returncode, exit_code)
-                    with patch.object(migration, "SANITIZE", True):
+                    with (
+                        patch.object(migration, "SANITIZE", True),
+                        patch.object(migration, "CANDIDATE_BUILD", root),
+                    ):
                         run = core.read_game({"dir": run_dir})
                     self.assertEqual(run["log"], ["dbg: before", "dbg: after 0"])
                     reports = run["sanitizer"].reports
                     self.assertEqual({key.split()[0] for key in reports}, kinds)
                     self.assertIn(UBSAN.format("probe.cpp"), reports)
                     if "ASan" in kinds:
-                        self.assertIn("ASan heap-use-after-free in main", reports)
+                        self.assertTrue(
+                            any(
+                                key.startswith("ASan heap-use-after-free at ")
+                                and key.endswith("/probe.cpp in main")
+                                for key in reports
+                            ),
+                            reports,
+                        )
 
 
 class ReportTests(unittest.TestCase):
+    def test_ccache_relative_paths_match_between_game_builds(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            reference = root / ".local/reference/openttd"
+            roles = {}
+            for role, source in (
+                ("reference", "../reference/openttd/src/a.cpp"),
+                ("candidate", "../src/a.cpp"),
+            ):
+                run_dir = root / role
+                run_dir.mkdir()
+                (run_dir / "stdout.log").write_bytes(b"")
+                (run_dir / "stderr.log").write_text(
+                    f"{source}:3:7: runtime error: shift exponent 64\n"
+                    f"    #0 0x5c5 in Foo(int) {source}:3\n\n"
+                    "[t] dbg: unchanged\n"
+                )
+                (run_dir / sanitizers.REPORTS).mkdir()
+                (run_dir / sanitizers.REPORTS / "report.42").write_text(
+                    "==42==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x1\n"
+                    f"    #0 0x55 in Foo(int) {source}:{5 if role == 'reference' else 9}\n"
+                )
+                with (
+                    patch.object(migration, "SANITIZE", True),
+                    patch.object(migration, "REFERENCE", reference),
+                    patch.object(
+                        migration,
+                        "REFERENCE_BUILD",
+                        root / ".local/build-reference-sanitized",
+                    ),
+                    patch.object(
+                        migration, "CANDIDATE_BUILD", root / "build-rust-sanitized"
+                    ),
+                    patch.object(core, "ROOT", root),
+                ):
+                    run = core.read_game({"dir": run_dir})
+                self.assertEqual(run["log"], ["dbg: unchanged"])
+                roles[role] = run["sanitizer"]
+            self.assertEqual(
+                sanitizers.compare(roles),
+                sanitizers.Comparison(
+                    [
+                        "ASan heap-buffer-overflow at src/a.cpp in Foo(int)",
+                        "UBSan src/a.cpp in Foo(int): shift exponent N",
+                    ],
+                    [],
+                    [],
+                ),
+            )
+
+    def test_asan_faults_in_different_files_are_not_shared(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            roles = {}
+            for role, source in (
+                ("reference", "src/a.cpp"),
+                ("candidate", "src/b.cpp"),
+            ):
+                run_dir = root / role
+                (run_dir / sanitizers.REPORTS).mkdir(parents=True)
+                (run_dir / sanitizers.REPORTS / "report.42").write_text(
+                    "==42==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x1\n"
+                    f"    #0 0x55 in Read() {root}/{source}:5\n"
+                )
+                roles[role] = sanitizers.Findings()
+                sanitizers.file_findings(run_dir, (root,), roles[role])
+            self.assertEqual(
+                sanitizers.compare(roles),
+                sanitizers.Comparison(
+                    [],
+                    ["ASan heap-buffer-overflow at src/b.cpp in Read()"],
+                    ["ASan heap-buffer-overflow at src/a.cpp in Read()"],
+                ),
+            )
+
     def test_log_splitting(self) -> None:
         frame = "    #0 0x5c5 in Foo(int) {}/src/a.cpp:3"
         cases = (
@@ -129,7 +214,9 @@ class ReportTests(unittest.TestCase):
             sanitizers.file_findings(run_dir, (), findings)
             self.assertEqual(
                 list(findings.reports),
-                ["ASan heap-buffer-overflow in openttd_kernels::town::grow"],
+                [
+                    "ASan heap-buffer-overflow at rust/town.rs in openttd_kernels::town::grow"
+                ],
             )
 
     def test_comparison_categories(self) -> None:

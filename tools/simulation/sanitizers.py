@@ -49,26 +49,33 @@ def environment(run_dir: Path) -> dict[str, str]:
     }
 
 
-def relative(path: str, roots: Sequence[Path]) -> str:
-    for root in roots:
-        prefix = f"{root}/"
-        if path.startswith(prefix):
-            return path.removeprefix(prefix)
+def relative(path: str, roots: Sequence[Path], builds: Sequence[Path] = ()) -> str:
+    """Match paired source/build trees, with nested source roots listed first."""
+    # ccache rewrites source paths relative to the original compilation directory.
+    locations = (
+        [(root, Path(path)) for root in roots]
+        if Path(path).is_absolute()
+        else [(root, build / path) for root, build in zip(roots, builds, strict=False)]
+    )
+    for root, location in locations:
+        resolved = location.resolve()
+        if resolved.is_relative_to(root):
+            return str(resolved.relative_to(root))
     return path
 
 
-def function_of(lines: Iterable[str]) -> str:
+def frame_of(lines: Iterable[str]) -> tuple[str, str]:
     """The first frame outside the sanitizer runtime, without its Rust hash."""
     for line in lines:
         if (found := FRAME.match(line)) and "libsanitizer" not in (
             found["location"] or ""
         ):
-            return RUST_HASH.sub("", found["function"])
-    return "?"
+            return RUST_HASH.sub("", found["function"]), found["location"] or "?"
+    return "?", "?"
 
 
 def split_log(
-    lines: Sequence[str], roots: Sequence[Path]
+    lines: Sequence[str], roots: Sequence[Path], builds: Sequence[Path] = ()
 ) -> tuple[list[str], Findings]:
     """Remove UBSan report blocks from a debug log and return them as findings."""
     kept: list[str] = []
@@ -89,24 +96,32 @@ def split_log(
         if end < len(lines) and not lines[end]:
             end += 1  # The blank line that closes a report.
         message = NUMBER.sub("N", report["message"])
-        path = relative(report["path"], roots)
+        path = relative(report["path"], roots, builds)
         findings.add(
-            f"UBSan {path} in {function_of(block)}: {message}", "\n".join(block)
+            f"UBSan {path} in {frame_of(block)[0]}: {message}", "\n".join(block)
         )
         index = end
     return kept, findings
 
 
-def file_findings(run_dir: Path, roots: Sequence[Path], findings: Findings) -> None:
+def file_findings(
+    run_dir: Path,
+    roots: Sequence[Path],
+    findings: Findings,
+    builds: Sequence[Path] = (),
+) -> None:
     """Reports in the run's log_path files: ASan's, and UBSan's should one land there."""
     for path in sorted((run_dir / REPORTS).glob("report.*")):
         text = path.read_text(errors="replace")
-        for key, block in split_log(text.splitlines(), roots)[1].reports.items():
+        _, reports = split_log(text.splitlines(), roots, builds)
+        for key, block in reports.reports.items():
             findings.add(key, block)
         if found := ASAN_REPORT.search(text):
             tail = text[found.end() :].splitlines()
+            function, location = frame_of(tail)
+            source = relative(re.sub(r":\d+(?::\d+)?$", "", location), roots, builds)
             findings.add(
-                f"ASan {found['kind']} in {function_of(tail)}", text[found.start() :]
+                f"ASan {found['kind']} at {source} in {function}", text[found.start() :]
             )
 
 
