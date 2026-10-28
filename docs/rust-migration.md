@@ -579,7 +579,7 @@ one stays. It then deletes the local branch when that branch merged or origin ho
 head. A branch at a base commit with no PR is a task not yet committed and stays. In the main
 checkout's `.local` it removes finished runs under `simulation`, `verification`, `coverage` and
 `deep`, unfinished ones idle for 12 hours, and loose logs, clearing read-only bits first. It
-keeps the current deep report and the runs it names, the newest candidate profile
+keeps the current deep report and the runs it names, each scenario's newest candidate profile
 (`callgrind.out`), shared builds, caches, toolchains, locks, the reference, retained speed
 profiles, CI request records and any folder holding a `provenance.json`, so a pinned anchor
 runtime records its provenance there. Unknown entries are listed as kept for a decision by

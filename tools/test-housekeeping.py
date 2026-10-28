@@ -146,6 +146,27 @@ class HousekeepingTests(unittest.TestCase):
             write(local / "mystery/output").parent,
         }
 
+    def test_partial_profile_keeps_other_scenarios_until_replaced(self) -> None:
+        simulation = self.main / ".local/simulation"
+        earlier = simulation / "20260103T000000Z-3"
+        later = simulation / "20260107T000000Z-7"
+        write(earlier / "other/plain/candidate/callgrind.out")
+        write(later / "scenario/plain/candidate/callgrind.out")
+        write(later / "report.json", "{}")
+        self.assertNotIn(earlier, self.run_main())
+        self.run_main("--apply")
+        self.assertTrue((earlier / "other/plain/candidate/callgrind.out").is_file())
+        self.assertTrue((later / "scenario/plain/candidate/callgrind.out").is_file())
+
+        replacement = simulation / "20260108T000000Z-8"
+        write(replacement / "other/plain/candidate/callgrind.out")
+        write(replacement / "report.json", "{}")
+        self.assertIn(earlier, self.run_main())
+        self.run_main("--apply")
+        self.assertFalse(earlier.exists())
+        self.assertTrue((later / "scenario/plain/candidate/callgrind.out").is_file())
+        self.assertTrue((replacement / "other/plain/candidate/callgrind.out").is_file())
+
     def run_main(self, *arguments: str) -> list[Path]:
         output = io.StringIO()
         with contextlib.redirect_stdout(output):

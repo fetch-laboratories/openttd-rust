@@ -154,12 +154,13 @@ def plan_local(local: Path, now: float) -> list[Item]:
         keep[deep] = "current deep report"
         for folder, name in REFERENCE.findall((deep / "report.json").read_text()):
             keep.setdefault(local / folder / name, "referenced by the deep report")
-    profiles = [
-        local / "simulation" / out.relative_to(local / "simulation").parts[0]
-        for out in local.glob("simulation/*/**/callgrind.out")
-    ]
-    if profiles:
-        keep.setdefault(max(profiles), "current candidate profile")
+    profiles: dict[Path, Path] = {}
+    simulation = local / "simulation"
+    for out in sorted(simulation.glob("*/**/candidate/callgrind.out")):
+        relative = out.relative_to(simulation)
+        profiles[Path(*relative.parts[1:])] = simulation / relative.parts[0]
+    for run in profiles.values():
+        keep.setdefault(run, "current candidate profile")
     items = []
     for entry in sorted(local.iterdir()) if local.is_dir() else []:
         name = entry.name
