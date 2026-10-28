@@ -8,8 +8,8 @@ disable-model-invocation: true
 
 The user runs root for long autonomous sessions, usually `gpt-6.1-sol` xhigh in
 Codex (Astra before 2026-10-08) and sometimes Claude Opus in Claude Code, and
-runs this review between them in either host. Your
-job is to check that root is still on the path to a game whose simulation runs in Rust, find what it
+runs this review between them in either host. Your job is to check that root
+is still on the path to a complete Rust rewrite of OpenTTD, find what it
 cannot see in its own work, and correct the *system*: rules, roadmap order,
 issues and PR comments. Root's team does the implementation. You edit docs,
 issues and PR comments, and you leave code changes to root's PR process.
@@ -23,13 +23,29 @@ User focus for this run, if any: $ARGUMENTS (in Codex, any text sent with `$stee
 A focus that names a question (disk, CI, a crashed root, housekeeping) is
 answered first, down to its root cause. Read it broadly: housekeeping covers
 code, tests and refactoring as well as docs. Tell the user at the start which
-of steps 2 and 3 still run, and land the answer through step 4 with what root
-does next. A focus that asks you to restart root is handled in step 6.
+of steps 3 and 4 still run, and land the answer through step 5 with what root
+does next. A focus that asks you to restart root is handled in step 7.
 
 Attribution on every issue, comment and commit body you write:
 `Agent: /root (<host> steering review) | Model: <your exact model ID> | Reasoning effort: <as reported by host, else "not reported to the agent by host">`.
 
-## 1. Load the last steering
+## 1. Take a bearing
+
+Before reading anything else, launch one fresh background subagent to measure
+the project against its goal. Its brief holds only the goal sentence from
+AGENTS.md's first "Migration method" bullet, the last steering commit (step
+2's `git log` search), and the paths of the repository and the pinned original
+(`.local/reference/openttd`). It reads the code and git history, not
+`AGENTS.md`, `docs/`, issues, PRs or transcripts, so it carries none of root's
+framing. It reports:
+
+- original C++ code lines (not comments or blank lines) retired and remaining
+  across the whole fork, by area, now and at the last steering commit;
+- what it would work on next to reach the goal, and why.
+
+Read its report with the step 4 audits.
+
+## 2. Load the last steering
 
 1. Find the last steering commit: `git log --format='%h %ad %s' --date=short | grep -i 'Doc: .*Steer'`.
    Its message and the roadmap's "steering review" section state the standing
@@ -54,7 +70,7 @@ Attribution on every issue, comment and commit body you write:
 Done when you can list each standing correction, the issue that tracks it, and
 the review or message that introduced it.
 
-## 2. Survey root's work since then
+## 3. Survey root's work since then
 
 Run these together:
 
@@ -99,6 +115,9 @@ Watch for the patterns root has repeated before:
   hand-made worktrees for implementation agents, blocked `sleep`, polling
   loops, `timeout N bash -c 'sleep'`, or hand-written environment prefixes.
   Each repeat means a spawn, brief or tool is missing a permanent fix.
+- **Running dry**: each planning round finds smaller items in the same area,
+  or retirement per period falls, while the rest of the goal has no queued
+  work. The finding is the area, not its next item.
 - **Passed over**: an issue with no place in the roadmap, a component excluded
   without an issue, or an exclusion with no condition that brings it back,
   copied forward review after review. Finished work left open counts too.
@@ -110,7 +129,7 @@ condition that brings it back, or closed. Judge each issue on its merits
 against AGENTS.md's priorities and the defects it would catch; ordering a list
 is not a verdict.
 
-## 3. Audit independently
+## 4. Audit independently
 
 The value of this session is an audit that does not depend on root's reviews.
 Use the current host's native subagents: Codex subagents when running in Codex,
@@ -165,12 +184,18 @@ where they apply, and name what it compared. Relay a short summary to the
 user as each audit returns. Before acting on a load-bearing claim, such as red CI,
 a reachable divergence or a perf attribution, check it yourself.
 
-Done when every audit has reported and every claim you will act on is verified.
+Done when every audit, the bearing included, has reported and every claim you
+will act on is verified.
 
-## 4. Correct course
+## 5. Correct course
 
 Choose a few high-leverage corrections. A systemic pattern counts for more than
-a one-off finding. Each correction lands in exactly one authoritative place:
+a one-off finding. A gap between the bearing (step 1) and root's work order
+counts most: remaining code the order does not reach, or next work the bearing
+names that the order lacks. From its numbers, state what share of the remaining
+code the work order covers and how many steering periods the current phase
+needs at the current rate. Each correction lands in exactly one authoritative
+place:
 
 - **Rule change** goes in `AGENTS.md`, phrased as the target behavior.
 - **New work** gets an issue: problem with measurements, scope, evidence and
@@ -202,12 +227,12 @@ Write each correction as the outcome you want, with its bounds attached:
 When a correction reverses a direction the user gave root, the steering section
 says so in one line: what it reverses, and why.
 
-Commit `AGENTS.md`, the roadmap and any restart-prompt edit (step 5) as one
+Commit `AGENTS.md`, the roadmap and any restart-prompt edit (step 6) as one
 docs-only commit pushed straight to `rust-migration`, with a title like
 `Doc: Steer migration toward <corrections> [skip ci]`. Earlier steering commits
 landed the same way. Confirm `origin/rust-migration` has it.
 
-## 5. Check /start-development
+## 6. Check /start-development
 
 `docs/skills/start-development/SKILL.md` is root's restart prompt. It stays
 unchanged by default: it sends root to the roadmap's latest steering review,
@@ -215,9 +240,9 @@ and that section carries this review's corrections. Edit the prompt only when
 this review shows it needs improving, for example because root stopped early,
 misread it, or needs a new standing step in its work loop. Keep it open-ended:
 finishing the listed items triggers planning the next work, and only the user
-ends the assignment. Include any edit in the step 4 commit.
+ends the assignment. Include any edit in the step 5 commit.
 
-## 6. Report and hand off
+## 7. Report and hand off
 
 Tell the user, briefly:
 
