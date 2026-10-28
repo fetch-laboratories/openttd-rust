@@ -1003,6 +1003,8 @@ pub unsafe extern "C" fn openttd_rust_session_generate(
     x: u32,
     y: u32,
     reset: bool,
+    callback: crate::genworld::Callback,
 ) -> bool {
+    crate::genworld::set_native_callback(callback);
     (Session { s, frame }).generate(kind, x, y, reset).is_ok()
 }

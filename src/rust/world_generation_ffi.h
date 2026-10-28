@@ -105,7 +105,6 @@ struct OpenTTDWorldServices {
 };
 const OpenTTDWorldServices &GetRustWorldServices() noexcept;
 extern "C" {
-void openttd_rust_world_set_callback(GWDoneProc *);
 void openttd_rust_world_set_abort_callback(GWAbortProc *);
 void openttd_rust_world_request_abort();
 bool openttd_rust_world_aborted(const OpenTTDWorldServices *);

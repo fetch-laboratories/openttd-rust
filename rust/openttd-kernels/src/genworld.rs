@@ -220,8 +220,7 @@ pub struct WorldServices {
 pub extern "C" fn openttd_rust_generating_world() -> *mut bool {
     unsafe { std::ptr::addr_of_mut!((*INFO.get()).generating) }
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_world_set_callback(callback: Callback) {
+pub(crate) fn set_native_callback(callback: Callback) {
     write_field!(INFO.get(), done, Completion::Native(callback));
 }
 #[unsafe(no_mangle)]

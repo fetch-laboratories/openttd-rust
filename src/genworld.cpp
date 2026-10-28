@@ -214,13 +214,12 @@ bool RustRunWorldGeneration(OpenTTDSessionFrame *frame) noexcept
 {
 	return SessionException(frame, [] { _GenerateWorld(); });
 }
-void GenerateWorld(GenWorldMode mode, uint size_x, uint size_y, bool reset_settings)
+void GenerateWorld(GenWorldMode mode, uint size_x, uint size_y, bool reset_settings, GWDoneProc *callback)
 {
 	OpenTTDSessionFrame frame;
-	openttd_rust_session_generate(&GetRustSessionServices(), &frame, mode, size_x, size_y, reset_settings);
+	openttd_rust_session_generate(&GetRustSessionServices(), &frame, mode, size_x, size_y, reset_settings, callback);
 	frame.Rethrow();
 }
-void GenerateWorldSetCallback(GWDoneProc *proc) { openttd_rust_world_set_callback(proc); }
 void AbortGeneratingWorld() { openttd_rust_world_request_abort(); }
 bool IsGeneratingWorldAborted() { return openttd_rust_world_aborted(&GetRustWorldServices()); }
 void HandleGeneratingWorldAbortion()

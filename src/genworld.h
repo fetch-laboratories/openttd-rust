@@ -79,11 +79,13 @@ enum GenWorldProgress : uint8_t {
 class AbortGenerateWorldSignal { };
 
 /* genworld.cpp */
-void GenerateWorldSetCallback(GWDoneProc *proc);
 #ifndef WITH_RUST
+void GenerateWorldSetCallback(GWDoneProc *proc);
 void GenerateWorldSetAbortCallback(GWAbortProc *proc);
-#endif
 void GenerateWorld(GenWorldMode mode, uint size_x, uint size_y, bool reset_settings = true);
+#else
+void GenerateWorld(GenWorldMode mode, uint size_x, uint size_y, bool reset_settings = true, GWDoneProc *callback = nullptr);
+#endif
 void AbortGeneratingWorld();
 bool IsGeneratingWorldAborted();
 void HandleGeneratingWorldAbortion();
