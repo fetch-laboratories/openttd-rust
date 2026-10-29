@@ -14,6 +14,7 @@ struct Job {
     _opaque: [u8; 0],
 }
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub(crate) struct Time {
     date: i32,
     fract: u16,
