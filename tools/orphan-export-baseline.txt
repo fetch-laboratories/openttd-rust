@@ -12,9 +12,7 @@ no production user | openttd_rust_convert_ground_water
 no production user | openttd_rust_disaster_startup
 no production user | openttd_rust_economy_startup
 no production user | openttd_rust_effect_initialize
-no production user | openttd_rust_flat_empty_world
 no production user | openttd_rust_fleet_pending_add
-no production user | openttd_rust_generate_landscape
 no production user | openttd_rust_generic_reset
 no production user | openttd_rust_ground_abi_calls
 no production user | openttd_rust_house_animate
@@ -55,4 +53,3 @@ no production user | openttd_rust_train_state_set_cached_tilt
 no production user | openttd_rust_trees_clear_tile
 no production user | openttd_rust_trees_generate
 no production user | openttd_rust_vehicle_cursor_next
-no production user | openttd_rust_world_set_abort_callback

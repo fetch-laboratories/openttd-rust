@@ -369,7 +369,7 @@ unsafe fn variable(
         }
         0xfa => {
             let date = if c.station.is_null() {
-                (shared.calendar_date)()
+                crate::timer_game_common::calendar_date().0
             } else {
                 unsafe { (s.build_date)(c.station) }
             };

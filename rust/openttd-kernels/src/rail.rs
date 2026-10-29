@@ -62,7 +62,7 @@ pub extern "C" fn openttd_rust_add_date_rail_types(
     }
 }
 // Whole engine traversal stays in Rust, with ascending IDs and original gates.
-fn engine_types(shared: &Shared, s: &Services, company: Option<u8>, introduces: bool) -> u64 {
+fn engine_types(s: &Services, company: Option<u8>, introduces: bool) -> u64 {
     let mut types = 0;
     let mut from = 0;
     loop {
@@ -80,7 +80,7 @@ fn engine_types(shared: &Shared, s: &Services, company: Option<u8>, introduces: 
             continue;
         }
         if let Some(company) = company
-            && !unsafe { company_available(e, company, shared) }
+            && !unsafe { company_available(e, company) }
         {
             continue;
         }
@@ -101,21 +101,20 @@ fn engine_types(shared: &Shared, s: &Services, company: Option<u8>, introduces: 
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_company_rail_types(
-    shared: &Shared,
     s: &Services,
     company: u8,
     introduces: bool,
 ) -> u64 {
-    let types = engine_types(shared, s, Some(company), introduces);
+    let types = engine_types(s, Some(company), introduces);
     if introduces {
-        openttd_rust_add_date_rail_types(s, types, (shared.calendar_date)())
+        openttd_rust_add_date_rail_types(s, types, crate::timer_game_common::calendar_date().0)
     } else {
         types
     }
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_rail_types(shared: &Shared, s: &Services, introduces: bool) -> u64 {
-    let types = engine_types(shared, s, None, introduces);
+pub extern "C" fn openttd_rust_rail_types(s: &Services, introduces: bool) -> u64 {
+    let types = engine_types(s, None, introduces);
     if introduces {
         openttd_rust_add_date_rail_types(s, types, MAX_DATE)
     } else {

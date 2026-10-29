@@ -234,7 +234,7 @@ RoadTypes AddDateIntroducedRoadTypes(RoadTypes current, TimerGameCalendar::Date 
 RoadTypes GetCompanyRoadTypes(CompanyID company, bool introduces)
 {
 #ifdef WITH_RUST
-	return RoadTypes{openttd_rust_company_road_types(&GetRustSharedServices(), &GetRustTypeAvailabilityServices(), company.base(), introduces)};
+	return RoadTypes{openttd_rust_company_road_types( &GetRustTypeAvailabilityServices(), company.base(), introduces)};
 #else
 	RoadTypes rts{};
 
@@ -266,7 +266,7 @@ RoadTypes GetCompanyRoadTypes(CompanyID company, bool introduces)
 RoadTypes GetRoadTypes(bool introduces)
 {
 #ifdef WITH_RUST
-	return RoadTypes{openttd_rust_road_types(&GetRustSharedServices(), &GetRustTypeAvailabilityServices(), introduces)};
+	return RoadTypes{openttd_rust_road_types( &GetRustTypeAvailabilityServices(), introduces)};
 #else
 	RoadTypes rts{};
 
