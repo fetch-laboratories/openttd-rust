@@ -1,8 +1,8 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 #ifndef SIMULATION_SESSION_FIXTURE_HPP
 #define SIMULATION_SESSION_FIXTURE_HPP
-#include "rust/session_ffi.h"
-#include "rust/fleet_ffi.h"
+#include "../../src/rust/session_ffi.h"
+#include "../../src/rust/fleet_ffi.h"
 #include "../../src/rust/animation_save.hpp"
 #include "../../src/rust/newgrf_storage_ffi.h"
 #include "../../src/newgrf_storage.h"
