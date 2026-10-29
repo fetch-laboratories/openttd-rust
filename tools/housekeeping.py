@@ -254,11 +254,22 @@ def open_outputs() -> tuple[list[OutputHandle], str | None]:
     return handles, None
 
 
+def output_info(path: Path) -> os.stat_result:
+    """A dangling runtime link has no target whose open writers need protection."""
+    try:
+        return path.stat()
+    except FileNotFoundError:
+        info = path.lstat()
+        if not stat.S_ISLNK(info.st_mode):
+            raise
+        return info
+
+
 def lease_refusal(paths: list[Path]) -> str | None:
     """Check for writers through the kernel when proc hides a process's descriptors."""
     for path in paths:
         try:
-            if not stat.S_ISREG(path.stat().st_mode):
+            if not stat.S_ISREG(output_info(path).st_mode):
                 continue
             descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
             try:
@@ -291,7 +302,7 @@ def output_refusal(
             paths.extend(path.rglob("*"))
         if any(
             (info.st_dev, info.st_ino) in identities
-            for info in (p.stat() for p in paths)
+            for info in (output_info(p) for p in paths)
         ):
             return "live open output handle"
     except OSError as inspection_error:

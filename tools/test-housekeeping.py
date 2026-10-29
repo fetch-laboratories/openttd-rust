@@ -254,6 +254,34 @@ class HousekeepingTests(unittest.TestCase):
             )
         self.assertFalse(next(item.remove for item in items if item.path == tree))
 
+    def test_dangling_runtime_link_keeps_live_target_protection(self) -> None:
+        tree = self.t3_tree("t3-runtime-links")
+        runtime = tree / ".local/runtime"
+        runtime.mkdir(parents=True)
+        (runtime / "game").symlink_to(self.top / "missing-game")
+        target = write(self.top / "target.log")
+        (runtime / "output").symlink_to(target)
+        with held_output(target) as child:
+            (self.proc / str(child.pid)).symlink_to(Path("/proc") / str(child.pid))
+            handles, _ = housekeeping.open_outputs()
+            for error in (None, "hidden process descriptors"):
+                with self.subTest(error=error):
+                    self.assertEqual(
+                        housekeeping.output_refusal(
+                            tree, handles if error is None else [], error
+                        ),
+                        "live open output handle",
+                    )
+            child_write(child)
+            self.assertEqual(target.read_text(), "xvisible\n")
+        for error in (None, "hidden process descriptors"):
+            with self.subTest(error=error):
+                self.assertIsNone(housekeeping.output_refusal(tree, [], error))
+        item = housekeeping.Item(tree, True, "finished T3 task", True)
+        self.assertIsNone(housekeeping.remove(self.main, item))
+        self.assertFalse(tree.exists())
+        self.assertEqual(target.read_text(), "xvisible\n")
+
     def fixture_local(self) -> None:
         local = self.main / ".local"
         sim = local / "simulation"
