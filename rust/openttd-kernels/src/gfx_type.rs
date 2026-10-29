@@ -17,9 +17,6 @@ pub const COLOUR_DARK_BLUE: u8 = 0;
 /// `COLOUR_PALE_GREEN`.
 pub const COLOUR_PALE_GREEN: u8 = 1;
 
-/// `COLOUR_PINK`.
-pub const COLOUR_PINK: u8 = 2;
-
 /// `COLOUR_YELLOW`.
 pub const COLOUR_YELLOW: u8 = 3;
 

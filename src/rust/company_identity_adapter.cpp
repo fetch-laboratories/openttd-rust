@@ -27,6 +27,14 @@
 #include "presentation_services.h"
 #include "company_identity_ffi.h"
 #include "town_name_ffi.h"
+static_assert(MAX_COMPANIES == 15 && MAX_LENGTH_COMPANY_NAME_CHARS == 32 && MAX_LENGTH_PRESIDENT_NAME_CHARS == 32);
+static_assert(COLOUR_END == 16 && INVALID_COLOUR == 255);
+static_assert(COLOUR_DARK_BLUE == 0 && COLOUR_PALE_GREEN == 1 && COLOUR_YELLOW == 3 && COLOUR_RED == 4 && COLOUR_LIGHT_BLUE == 5 && COLOUR_GREEN == 6 && COLOUR_DARK_GREEN == 7 && COLOUR_BLUE == 8);
+static_assert(COLOUR_CREAM == 9 && COLOUR_MAUVE == 10 && COLOUR_PURPLE == 11 && COLOUR_ORANGE == 12 && COLOUR_BROWN == 13 && COLOUR_GREY == 14 && COLOUR_WHITE == 15);
+static_assert(LS_DEFAULT == 0 && LS_STEAM == 1 && LS_DIESEL == 2 && LS_ELECTRIC == 3 && LS_MONORAIL == 4 && LS_MAGLEV == 5 && LS_DMU == 6 && LS_EMU == 7);
+static_assert(LS_PASSENGER_WAGON_STEAM == 8 && LS_PASSENGER_WAGON_DIESEL == 9 && LS_PASSENGER_WAGON_ELECTRIC == 10 && LS_PASSENGER_WAGON_MONORAIL == 11 && LS_PASSENGER_WAGON_MAGLEV == 12 && LS_FREIGHT_WAGON == 13);
+static_assert(LS_BUS == 14 && LS_TRUCK == 15 && LS_PASSENGER_SHIP == 16 && LS_FREIGHT_SHIP == 17 && LS_HELICOPTER == 18 && LS_SMALL_PLANE == 19 && LS_LARGE_PLANE == 20 && LS_PASSENGER_TRAM == 21 && LS_FREIGHT_TRAM == 22 && LS_END == 23);
+static_assert(to_underlying(EngineMiscFlag::RailIsMU) == 2 && to_underlying(EngineMiscFlag::RoadIsTram) == 0 && AIR_FAST == 2);
 void Identity_admin_update(uint8_t id) noexcept { CompanyAdminUpdate(Company::Get(CompanyID{id})); }
 struct CompanyNames { std::string candidate, other; };
 // Rust supplies call-local placement storage. No container or field snapshot crosses.

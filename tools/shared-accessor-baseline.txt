@@ -68,12 +68,10 @@ src/rust/aircraft_adapter.hpp | Aircraft_nearest_depot_order(OpenTTDAircraftVehi
 src/rust/aircraft_adapter.hpp | Aircraft_part_of_orders(OpenTTDAircraftVehicle vehicle) noexcept | 42a2fa6130a76f6a | 1
 src/rust/aircraft_adapter.hpp | Aircraft_service_interval(OpenTTDAircraftVehicle vehicle) noexcept | 0841847ee09aa8ff | 1
 src/rust/company_adapter.cpp | Co_aircraft_is_normal(uint32_t id) noexcept | 83a0e1036f160164 | 1
-src/rust/company_adapter.cpp | Co_company_is_ai(uint8_t id) noexcept | 0931792824cde127 | 1
 src/rust/company_adapter.cpp | Co_map_size() noexcept | b49ebe1aff917479 | 1
 src/rust/company_adapter.cpp | Co_station_facility_count(uint32_t id) noexcept | 19b651266161c5ee | 1
 src/rust/company_adapter.cpp | Co_vehicle_service_interval_is_custom(uint32_t id) noexcept | df7f6be000c1cef1 | 1
 src/rust/company_adapter.cpp | [](const Station *st) | 7599e8780f547b28 | 1
-src/rust/fleet_group_services.hpp | FleetGroup_company_livery(uint8_t owner) noexcept | 502ec0f6fa5ed147 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_head(uint8_t company) noexcept | f3fae9779eabda33 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_keep_length(uint8_t owner) noexcept | ad49c9eeaeecb3c1 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_release_number(uint8_t owner, uint16_t number) noexcept | e0e39efee41a55f6 | 1

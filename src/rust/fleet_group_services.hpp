@@ -37,7 +37,6 @@ static bool FleetGroup_can_allocate() noexcept { return Group::CanAllocateItem()
 static uint16_t FleetGroup_allocate(uint8_t owner, uint8_t type) noexcept { return (new Group(CompanyID(owner), static_cast<VehicleType>(type)))->index.base(); }
 static uint16_t FleetGroup_use_number(uint8_t owner) noexcept { auto *c = Company::Get(CompanyID(owner)); return c->freegroups.UseID(c->freegroups.NextID()); }
 static void FleetGroup_release_number(uint8_t owner, uint16_t number) noexcept { Company::Get(CompanyID(owner))->freegroups.ReleaseID(number); }
-static const uint8_t * FleetGroup_company_livery(uint8_t owner) noexcept { return reinterpret_cast<const uint8_t *>(Identity_livery(Identity_company(owner), LS_DEFAULT)); }
 static bool FleetGroup_keep_length(uint8_t owner) noexcept { return Company::Get(CompanyID(owner))->settings.renew_keep_length; }
 static void FleetGroup_delete_group(uint16_t id) noexcept { delete Group::Get(GroupID(id)); }
 static void FleetGroup_invalid_parent(uint16_t id, uint16_t parent) noexcept { Debug(misc, 2, "Group {} has invalid parent {}", GroupID(id), GroupID(parent)); }
@@ -95,7 +94,7 @@ static const OpenTTDFleetGroupServices _fleet_group_services{
 	.allocate = FleetGroup_allocate,
 	.use_number = FleetGroup_use_number,
 	.release_number = FleetGroup_release_number,
-	.company_livery = FleetGroup_company_livery,
+	.company_livery = Identity_default_livery,
 	.keep_length = FleetGroup_keep_length,
 	.delete_group = FleetGroup_delete_group,
 	.invalid_parent = FleetGroup_invalid_parent,

@@ -733,7 +733,9 @@ impl<'a> World<'a> {
         let companies = unsafe { &*self.a.company };
         if flags & DoCommandFlag::QUERY_COST == 0
             || (valid_company
-                && (companies.company_is_ai)(company)
+                && (companies.identity.is_ai)((companies.identity.company)(
+                    crate::company_type::CompanyID(company),
+                ))
                 && company != (companies.local_company)())
         {
             if flags & DoCommandFlag::QUERY_COST != 0 {
