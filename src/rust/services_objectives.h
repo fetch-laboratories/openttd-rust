@@ -26,13 +26,13 @@ inline uint32_t * RustObjectives_goal_dst(Goal * p) noexcept { return reinterpre
 inline EncodedString * RustObjectives_goal_text(Goal * p) noexcept { return reinterpret_cast<EncodedString *>(&p->text); }
 inline EncodedString * RustObjectives_goal_progress(Goal * p) noexcept { return reinterpret_cast<EncodedString *>(&p->progress); }
 inline bool * RustObjectives_goal_completed(Goal * p) noexcept { return reinterpret_cast<bool *>(&p->completed); }
-inline uint32_t RustObjectives_goal_count() noexcept { return Goal::GetNumItems(); }
+inline uint32_t RustObjectives_goal_count() noexcept { return static_cast<uint32_t>(Goal::GetNumItems()); }
 inline bool RustObjectives_goal_can_allocate() noexcept { return Goal::CanAllocateItem(); }
 inline StoryPage * RustObjectives_page(uint32_t id) noexcept { return StoryPage::GetIfValid(id); }
 inline uint8_t * RustObjectives_page_company(StoryPage * p) noexcept { return reinterpret_cast<uint8_t *>(&p->company); }
 inline EncodedString * RustObjectives_page_title(StoryPage * p) noexcept { return reinterpret_cast<EncodedString *>(&p->title); }
 inline int32_t * RustObjectives_page_date(StoryPage * p) noexcept { return reinterpret_cast<int32_t *>(&p->date); }
-inline uint32_t RustObjectives_page_count() noexcept { return StoryPage::GetNumItems(); }
+inline uint32_t RustObjectives_page_count() noexcept { return static_cast<uint32_t>(StoryPage::GetNumItems()); }
 inline bool RustObjectives_page_can_allocate() noexcept { return StoryPage::CanAllocateItem(); }
 inline StoryPageElement * RustObjectives_element(uint16_t id) noexcept { return StoryPageElement::GetIfValid(StoryPageElementID(id)); }
 inline uint16_t * RustObjectives_element_page(StoryPageElement * p) noexcept { return reinterpret_cast<uint16_t *>(&p->page); }
@@ -40,7 +40,7 @@ inline uint8_t * RustObjectives_element_type(StoryPageElement * p) noexcept { re
 inline EncodedString * RustObjectives_element_text(StoryPageElement * p) noexcept { return reinterpret_cast<EncodedString *>(&p->text); }
 inline uint32_t * RustObjectives_element_referenced_id(StoryPageElement * p) noexcept { return reinterpret_cast<uint32_t *>(&p->referenced_id); }
 inline void RustObjectives_element_destroy(StoryPageElement * p) noexcept { delete p; }
-inline uint32_t RustObjectives_element_count() noexcept { return StoryPageElement::GetNumItems(); }
+inline uint32_t RustObjectives_element_count() noexcept { return static_cast<uint32_t>(StoryPageElement::GetNumItems()); }
 inline bool RustObjectives_element_can_allocate() noexcept { return StoryPageElement::CanAllocateItem(); }
 inline LeagueTableElement * RustObjectives_entry(uint16_t id) noexcept { return LeagueTableElement::GetIfValid(LeagueTableElementID(id)); }
 inline uint8_t * RustObjectives_entry_company(LeagueTableElement * p) noexcept { return reinterpret_cast<uint8_t *>(&p->company); }
