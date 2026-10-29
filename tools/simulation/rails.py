@@ -26,7 +26,7 @@ AI_FOLDER = "rail-scenario-ai"
 
 # Exact unchanged pinned bodies: transient PBSTileInfo/train_on_res and trigger order
 # are not serialized. Both adapter roles compile the same source without editing it.
-def pbs_reference(folder):
+def pbs_reference(folder: Path) -> None:
     baseline = json.loads((ROOT / "migration/baseline.json").read_text())["commit"]
     original = subprocess.check_output(
         ["git", "show", f"{baseline}:src/pbs.cpp"], cwd=ROOT, text=True
@@ -46,33 +46,38 @@ def pbs_reference(folder):
     body = "".join(f"#define {name} PbsOriginal{name}\n" for name in names)
     body += "TrackBits PbsOriginalGetReservedTrackbits(TileIndex);\nbool PbsOriginalIsSafeWaitingPosition(const Train *, TileIndex, Trackdir, bool, bool);\n"
     body += "inline bool PbsOriginalHasReservedTracks(TileIndex t, TrackBits b) { return (PbsOriginalGetReservedTrackbits(t) & b) != TRACK_BIT_NONE; }\n"
-    body += (
-        original[original.index("TrackBits GetReservedTrackbits") :]
-        .replace("t->track", "PbsTrainTrack(t)")
-        .replace("v->railtypes", "PbsTrainRailTypes(v)")
-    )
     header = subprocess.check_output(
         ["git", "show", f"{baseline}:src/pathfinder/follow_track.hpp"],
         cwd=ROOT,
         text=True,
     )
-    mask = header[header.index("\tinline bool MaskReservedTracks()") :]
+    follower = header[header.index("template <TransportType") : header.rfind("#endif")]
+    body += follower.replace("CFollowTrack", "PbsOriginalFollowTrack")
     body += (
-        "struct PbsOriginalMask : CFollowTrackRail { using CFollowTrackRail::CFollowTrackRail; "
-        "static bool DoTrackMasking() { return true; }\n"
-        + mask[: mask.index("\nprotected:")]
-        + "};\n"
+        original[original.index("TrackBits GetReservedTrackbits") :]
+        .replace("t->track", "PbsTrainTrack(t)")
+        .replace("v->railtypes", "PbsTrainRailTypes(v)")
+        .replace("CFollowTrack", "PbsOriginalFollowTrack")
     )
+    body += "using PbsOriginalMask = PbsOriginalFollowTrackFreeRail;\n"
     body += "".join(f"#undef {name}\n" for name in names)
     (folder / "pbs-original.hpp").write_text(body)
 
 
-def adapter(build, folder, env):
+def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
     folder.mkdir(parents=True, exist_ok=True)
     pbs_reference(folder)
     source = folder / "pbs-source.cpp"
     source.write_text((ROOT / "tools/simulation/pbs-console.cpp").read_text())
-    return console_adapter(build, folder, env, source, "rails", wraps=pbs_wraps(build))
+    return console_adapter(
+        build,
+        folder,
+        env,
+        source,
+        "rails",
+        wraps=pbs_wraps(build),
+        native_test_support=True,
+    )
 
 
 PBS_WRAPS = (

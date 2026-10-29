@@ -6,7 +6,7 @@
  */
 
 //! Bridge height helpers from `bridge_map.h`/`bridge_map.cpp`.
-#![allow(unsafe_code)]
+#![allow(unsafe_code, clippy::cast_possible_truncation)]
 use crate::direction_func::diag_dir_to_axis;
 use crate::services::{Foundation, Services};
 /// `GetBridgeHeight`. Each original operation remains a named shared callee.
@@ -40,5 +40,13 @@ impl crate::map_func::World<'_> {
     pub(crate) fn bridge(&self, t: u32) -> bool {
         self.check(self.kind(t) == crate::tile_type::MP_TUNNELBRIDGE);
         Self::byte(self.types.m5(t)) & 128 != 0
+    }
+}
+
+impl crate::map_func::World<'_> {
+    /// `GetBridgeType`, preserving `IsBridgeTile`'s assertion.
+    pub(crate) fn bridge_type(&self, t: u32) -> u8 {
+        self.check(self.kind(t) == crate::tile_type::MP_TUNNELBRIDGE && self.bridge(t));
+        crate::bitmath_func::gb(u32::from(Self::byte(self.types.m6(t))), 2, 4) as u8
     }
 }

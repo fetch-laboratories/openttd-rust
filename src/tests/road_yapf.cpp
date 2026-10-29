@@ -119,8 +119,8 @@ OpenTTDFollowTrackState Follow(uint32_t tile, uint8_t td)
 {
 	OpenTTDFollowTrackState ft{};
 	const auto &s = FollowerFixture::active->shared;
-	openttd_rust_follower_init(&ft, &s, TRANSPORT_ROAD, reinterpret_cast<Vehicle *>(FollowerFixture::active->Vehicle()), 0, 0, true, false, true);
-	if (!openttd_rust_follower_follow(&s, &ft, tile, td)) ft.new_td_bits = TRACKDIR_BIT_NONE;
+	openttd_test_follower_init(&ft, &s, TRANSPORT_ROAD, reinterpret_cast<Vehicle *>(FollowerFixture::active->Vehicle()), 0, 0, true, false, true);
+	if (!openttd_test_follower_follow(&s, &ft, tile, td)) ft.new_td_bits = TRACKDIR_BIT_NONE;
 	return ft;
 }
 struct Follower {};

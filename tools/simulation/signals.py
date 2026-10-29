@@ -167,6 +167,7 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
         source,
         "signals",
         wraps=pbs_wraps(build),
+        native_test_support=True,
         replace_objects=("/src/signal.cpp.o",),
     )
 

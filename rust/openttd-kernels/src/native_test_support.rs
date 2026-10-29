@@ -5,7 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Native allocation and unchanged-helper oracles; linked only by `openttd_test`.
+//! Native evidence bridges; linked by `openttd_test` and fixture-only game adapters.
 #![allow(unsafe_code, clippy::too_many_lines)]
 use crate::map_func::{TileTypeAccess, TileTypeAllocation};
 use crate::tile_map::{get_tile_slope, get_tile_z, get_tropic_zone};
@@ -110,4 +110,76 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
         && (!allocation.assertions || kind == 6 || crate::water_map::is_coast(&map, tile).is_none())
         && (allocation.assertions || crate::clear_map::is_snow_tile(&map, tile).is_some())
         && crate::movement::native_test_support::map_read_probe(allocation, s, tile, mutate)
+}
+
+use crate::follow_track::{State, mask_reserved_tracks, speed_limit};
+use crate::pbs::Pbs;
+use crate::services::Services;
+use crate::vehicle::{OpenTTDVehicle, VehicleRef};
+
+/// # Safety
+/// The output is writable; services and optional native vehicle remain live and serialized.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_follower_init(
+    out: *mut State,
+    s: *const Services,
+    mode: u8,
+    v: *mut OpenTTDVehicle,
+    owner: u8,
+    types: u64,
+    allow90: bool,
+    masking: bool,
+    from_vehicle: bool,
+) {
+    let s = unsafe { &*s };
+    let v = std::ptr::NonNull::new(v).map(VehicleRef);
+    let state = if from_vehicle {
+        State::vehicle(s, mode, v, types, allow90, masking)
+    } else {
+        State::new(s, mode, v, owner, types, allow90, masking)
+    };
+    unsafe {
+        out.write(state);
+    }
+}
+/// # Safety
+/// The stack follower and shared game world remain live and serialized throughout the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_follower_follow(
+    s: *const Services,
+    state: *mut State,
+    tile: u32,
+    td: u8,
+) -> bool {
+    unsafe { (&mut *state).follow(&*s, tile, td) }
+}
+/// # Safety
+/// Same stack follower and serialized world contract as Follow.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_follower_mask(s: *const Services, state: *mut State) -> bool {
+    let s = unsafe { &*s };
+    let state = unsafe { &mut *state };
+    if !state.masking {
+        return true;
+    }
+    let mut out = state.output();
+    let result = mask_reserved_tracks(Pbs::acquire(s), &mut out);
+    state.restore(out);
+    result
+}
+/// # Safety
+/// Shared services and optional vehicle stay live under the game-state mutex.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_follower_speed(
+    s: *const Services,
+    mode: u8,
+    v: *mut OpenTTDVehicle,
+    tile: u32,
+) -> i32 {
+    speed_limit(
+        unsafe { &*s },
+        mode,
+        std::ptr::NonNull::new(v).map(VehicleRef),
+        tile,
+    )
 }

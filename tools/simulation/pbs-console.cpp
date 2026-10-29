@@ -13,6 +13,7 @@
 #include "road_map.h"
 #include "water_map.h"
 #ifdef WITH_RUST
+#include "tests/follower_probe.hpp"
 #include "rust/animation_ffi.h"
 #include "rust/pbs_ffi.h"
 #include "rust/station_resolver_ffi.h"
@@ -86,11 +87,11 @@ static bool PbsCheckMask(TileIndex tile, Trackdir td)
 	if (!ft.Follow(tile, td)) return false;
 #ifdef WITH_RUST
 	OpenTTDFollowTrackState actual{};
-	openttd_rust_follower_init(&actual, &GetRustSharedServices(), TRANSPORT_RAIL, nullptr, 0, 0, true, true, false);
+	openttd_test_follower_init(&actual, &GetRustSharedServices(), TRANSPORT_RAIL, nullptr, 0, 0, true, true, false);
 	actual.old_tile = ft.old_tile; actual.old_td = ft.old_td; actual.new_tile = ft.new_tile; actual.new_td_bits = ft.new_td_bits;
 	actual.exitdir = ft.exitdir; actual.is_station = ft.is_station; actual.tiles_skipped = ft.tiles_skipped;
 	const bool expected = ft.MaskReservedTracks();
-	PbsRequire(openttd_rust_follower_mask(&GetRustSharedServices(), &actual) == expected && actual.new_td_bits == ft.new_td_bits && actual.err == ft.err);
+	PbsRequire(openttd_test_follower_mask(&GetRustSharedServices(), &actual) == expected && actual.new_td_bits == ft.new_td_bits && actual.err == ft.err);
 #else
 	ft.MaskReservedTracks();
 #endif
@@ -156,6 +157,14 @@ static bool PbsProbe([[maybe_unused]] std::span<std::string_view> args)
 	}
 	PbsMapRestore(original); _random = random; fmt::print(stderr, "PBS checked {}\nPBS ends {} {}\n", checked, ends[0], ends[1]); PbsRequire(checked != 0); return true;
 }
+#ifndef WITH_RUST
+using FollowerProbeRail = CFollowTrackRail;
+using FollowerProbeRailNo90 = CFollowTrackRailNo90;
+using FollowerProbeFreeRail = CFollowTrackFreeRail;
+using FollowerProbeRoad = CFollowTrackRoad;
+using FollowerProbeWater = CFollowTrackWater;
+#endif
+
 /* Transient follower outputs are not saved. Both roles call their production
  * follower over the same named map cases; rails.py compares every output row. */
 template <typename Follower>
@@ -181,17 +190,17 @@ static bool FollowerProbe([[maybe_unused]] std::span<std::string_view> args)
 		for (uint y = 38; y <= 44; ++y) for (uint x = 36; x <= 45; ++x) { const TileIndex t = TileXY(x, y); MakeClear(t, CLEAR_GRASS, 3); Tile(t).height() = 0; }
 	};
 	const auto rail = [&](TrackBits bits = TRACK_BIT_X) { clear(); MakeRailNormal(old, Owner(0), bits, RAILTYPE_RAIL); MakeRailNormal(tile, Owner(0), bits, RAILTYPE_RAIL); };
-	CFollowTrackRail ft{Owner(0), RailTypes(1)};
+	FollowerProbeRail ft{Owner(0), RailTypes(1)};
 	rail(); FollowerCase("rail", ft, old, TRACKDIR_X_NE, true, 0);
 	SetTileOwner(tile, Owner(1)); FollowerCase("owner", ft, old, TRACKDIR_X_NE, false, 4);
 	rail(); SetRailType(tile, RAILTYPE_MONO); FollowerCase("rail_type", ft, old, TRACKDIR_X_NE, false, 2);
 	rail(); MakeClear(tile, CLEAR_GRASS, 3); FollowerCase("no_way", ft, old, TRACKDIR_X_NE, false, 4);
 	rail(); MakeRailNormal(old, Owner(0), TRACK_BIT_UPPER, RAILTYPE_RAIL); MakeRailNormal(tile, Owner(0), TRACK_BIT_LEFT, RAILTYPE_RAIL);
-	CFollowTrackRailNo90 no90{Owner(0), RailTypes(1)};
+	FollowerProbeRailNo90 no90{Owner(0), RailTypes(1)};
 	FollowerCase("ninety", no90, old, TRACKDIR_UPPER_E, false, 3);
 	FollowerCase("ninety_allowed", ft, old, TRACKDIR_UPPER_E, true, 0);
 	rail(); SetTrackReservation(tile, TRACK_BIT_X);
-	CFollowTrackFreeRail free{Owner(0), RailTypes(1)};
+	FollowerProbeFreeRail free{Owner(0), RailTypes(1)};
 	FollowerCase("reserved", free, old, TRACKDIR_X_NE, false, 5, true);
 	rail(); MakeRailDepot(old, Owner(0), DepotID(0), DIAGDIR_SW, RAILTYPE_RAIL);
 	FollowerCase("depot_reverse", ft, old, TRACKDIR_X_NE, true, 0);
@@ -218,7 +227,7 @@ static bool FollowerProbe([[maybe_unused]] std::span<std::string_view> args)
 	const auto road = [&](RoadBits bits = ROAD_X, bool tram = false) {
 		clear(); for (const TileIndex t : {old, tile}) MakeRoadNormal(t, bits, tram ? INVALID_ROADTYPE : ROADTYPE_ROAD, tram ? ROADTYPE_TRAM : INVALID_ROADTYPE, TownID(0), Owner(0), Owner(0));
 	};
-	CFollowTrackRoad rv{v};
+	FollowerProbeRoad rv{v};
 	road(); FollowerCase("road", rv, old, TRACKDIR_X_NE, true, 0);
 	MakeClear(tile, CLEAR_GRASS, 3); FollowerCase("road_end_reverse", rv, old, TRACKDIR_X_NE, true, 0);
 	road(); MakeRoadDepot(tile, Owner(1), DepotID(0), DIAGDIR_SW, ROADTYPE_ROAD);
@@ -231,7 +240,7 @@ static bool FollowerProbe([[maybe_unused]] std::span<std::string_view> args)
 	MakeRoadStop(old, Owner(0), station->index, RoadStopType::Bus, ROADTYPE_ROAD, INVALID_ROADTYPE, DIAGDIR_SW);
 	FollowerCase("stop_reverse", rv, old, TRACKDIR_X_NE, true, 0);
 	v->roadtype = ROADTYPE_TRAM; v->compatible_roadtypes = RoadTypes{uint64_t{1} << ROADTYPE_TRAM};
-	CFollowTrackRoad tram{v};
+	FollowerProbeRoad tram{v};
 	road(ROAD_NE, true); FollowerCase("tram_reverse", tram, old, TRACKDIR_X_SW, true, 0);
 	road(ROAD_X, true); MakeRoadNormal(tile, ROAD_NE, INVALID_ROADTYPE, ROADTYPE_TRAM, TownID(0), Owner(0), Owner(0));
 	FollowerCase("tram_wrong_side", tram, old, TRACKDIR_X_NE, false, 4);
@@ -241,7 +250,7 @@ static bool FollowerProbe([[maybe_unused]] std::span<std::string_view> args)
 	road(ROAD_NE, true); FollowerCase("tram_bad_exit", tram, old, TRACKDIR_Y_SE, false, 4);
 	v->owner = owner; v->roadtype = type; v->compatible_roadtypes = compatible;
 	clear(); MakeSea(old); MakeSea(tile);
-	CFollowTrackWater water;
+	FollowerProbeWater water;
 	FollowerCase("water", water, old, TRACKDIR_X_NE, true, 0);
 	PbsMapRestore(original); _random = random; _interactive_random = interactive;
 	return true;

@@ -13,7 +13,7 @@
 #include "../track_type.h"
 #include "../rail_type.h"
 #include "follower_fixture.hpp"
-#include "../rust/follow_track_ffi.h"
+#include "follower_probe.hpp"
 #include <array>
 #include <memory>
 #include <vector>
@@ -45,8 +45,8 @@ inline OpenTTDFollowTrackState Follow(uint32_t tile, uint8_t td)
 {
 	OpenTTDFollowTrackState ft{};
 	const auto &world = FollowerFixture::active->shared;
-	openttd_rust_follower_init(&ft, &world, TRANSPORT_RAIL, nullptr, 0, 1, true, false, false);
-	if (!openttd_rust_follower_follow(&world, &ft, tile, td)) ft.new_td_bits = TRACKDIR_BIT_NONE;
+	openttd_test_follower_init(&ft, &world, TRANSPORT_RAIL, nullptr, 0, 1, true, false, false);
+	if (!openttd_test_follower_follow(&world, &ft, tile, td)) ft.new_td_bits = TRACKDIR_BIT_NONE;
 	return ft;
 }
 inline uint8_t Station(uint32_t, uint32_t) noexcept { return 0; }
