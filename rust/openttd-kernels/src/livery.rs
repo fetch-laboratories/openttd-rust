@@ -26,6 +26,7 @@ pub const LS_FREIGHT_TRAM: u8 = 22;
 pub const LS_END: u8 = 23;
 /// Shared native livery layout; used only through raw field accesses.
 #[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct Livery {
     pub in_use: u8,
     pub colour1: u8,

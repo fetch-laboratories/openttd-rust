@@ -326,10 +326,10 @@ pub(crate) fn reset_livery(s: &Services, c: *mut OpenTTDCompany) {
         let g = unsafe { (s.groups.group)(id as u16) }.cast::<crate::fleet::GroupFields>();
         if read_field!(g, owner) == owner {
             unsafe {
-                let p = std::ptr::addr_of_mut!((*g).livery).cast::<u8>();
-                p.write(0);
-                p.add(1).write((s.colour)(c));
-                p.add(2).write((s.colour)(c));
+                let l = std::ptr::addr_of_mut!((*g).livery);
+                write_field!(l, in_use, 0);
+                write_field!(l, colour1, (s.colour)(c));
+                write_field!(l, colour2, (s.colour)(c));
             }
         }
     }
@@ -559,7 +559,8 @@ pub(crate) fn engine_livery(
                 cargo = (s.engine_cargo)(e);
             }
             if !is_valid_cargo_type(cargo) {
-                cargo = crate::cargo_registry::openttd_rust_cargo_by_label(crate::cargo_type::CT_GOODS);
+                cargo =
+                    crate::cargo_registry::openttd_rust_cargo_by_label(crate::cargo_type::CT_GOODS);
             }
             assert!(is_valid_cargo_type(cargo));
             if (s.engine_kind)(e) == RailVehicleTypes::WAGON {
@@ -625,16 +626,23 @@ pub(crate) fn engine_livery(
                 cargo = (s.engine_cargo)(e);
             }
             if !is_valid_cargo_type(cargo) {
-                cargo = crate::cargo_registry::openttd_rust_cargo_by_label(crate::cargo_type::CT_GOODS);
+                cargo =
+                    crate::cargo_registry::openttd_rust_cargo_by_label(crate::cargo_type::CT_GOODS);
             }
             assert!(is_valid_cargo_type(cargo));
             if (s.engine_misc)(e) & ROAD_IS_TRAM != 0 {
-                if crate::cargotype::is_cargo_in_class((s.cargo_classes)(cargo), crate::cargotype::PASSENGERS) {
+                if crate::cargotype::is_cargo_in_class(
+                    (s.cargo_classes)(cargo),
+                    crate::cargotype::PASSENGERS,
+                ) {
                     LS_PASSENGER_TRAM
                 } else {
                     LS_FREIGHT_TRAM
                 }
-            } else if crate::cargotype::is_cargo_in_class((s.cargo_classes)(cargo), crate::cargotype::PASSENGERS) {
+            } else if crate::cargotype::is_cargo_in_class(
+                (s.cargo_classes)(cargo),
+                crate::cargotype::PASSENGERS,
+            ) {
                 LS_BUS
             } else {
                 LS_TRUCK
@@ -645,10 +653,14 @@ pub(crate) fn engine_livery(
                 cargo = (s.engine_cargo)(e);
             }
             if !is_valid_cargo_type(cargo) {
-                cargo = crate::cargo_registry::openttd_rust_cargo_by_label(crate::cargo_type::CT_GOODS);
+                cargo =
+                    crate::cargo_registry::openttd_rust_cargo_by_label(crate::cargo_type::CT_GOODS);
             }
             assert!(is_valid_cargo_type(cargo));
-            if crate::cargotype::is_cargo_in_class((s.cargo_classes)(cargo), crate::cargotype::PASSENGERS) {
+            if crate::cargotype::is_cargo_in_class(
+                (s.cargo_classes)(cargo),
+                crate::cargotype::PASSENGERS,
+            ) {
                 LS_PASSENGER_SHIP
             } else {
                 LS_FREIGHT_SHIP

@@ -27,7 +27,7 @@ inline void Identity_set_name(Company *c, OpenTTDByteSpan text) noexcept { if (t
 inline OpenTTDByteSpan Identity_president(const Company *c) noexcept { return {reinterpret_cast<const uint8_t *>(c->president_name.data()), c->president_name.size()}; }
 inline void Identity_set_president(Company *c, OpenTTDByteSpan text) noexcept { if (text.size == 0) c->president_name.clear(); else c->president_name.assign(reinterpret_cast<const char *>(text.data), text.size); }
 inline Livery * Identity_livery(Company *c, LiveryScheme scheme) noexcept { return &c->livery[scheme]; }
-inline const uint8_t *Identity_default_livery(uint8_t owner) noexcept { return reinterpret_cast<const uint8_t *>(Identity_livery(Identity_company(owner), LS_DEFAULT)); }
+inline const Livery *Identity_default_livery(uint8_t owner) noexcept { return Identity_livery(Identity_company(owner), LS_DEFAULT); }
 inline CompanyManagerFace * Identity_face(Company *c) noexcept { return &c->face; }
 void Identity_admin_update(uint8_t id) noexcept;
 inline void Identity_reset_colourmap() noexcept { ResetVehicleColourMap(); }
