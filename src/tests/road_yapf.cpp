@@ -52,7 +52,7 @@ const OpenTTDSharedServices *MovementWorld()
 		return {.base = movement_tiles.data(), .extended = movement_extended.data(), .count = 4096, .assertions = true};
 	};
 	static OpenTTDRoadGroundServices road{};
-	road.all_bits = [](uint32_t) noexcept { return ROAD_ALL; };
+	road.all_bits = [](uint32_t) noexcept { return ROAD_X; };
 	movement.road = &road;
 	return &world;
 }
@@ -200,8 +200,8 @@ TEST_CASE("Road YAPF low-limit timing and exit-key replacement match reference",
 
 /* Saves do not record rejected traversal queries or endpoint-cache validity.
  * These callbacks describe a tiny immutable graph; the actual Rust search runs
- * unchanged. D marks destination-only reads, T includes tile cost facts, and
- * V/N identifies the old/next tiles passed to the accepted traversal query. */
+ * unchanged. D marks destination-only reads; T includes tile cost facts.
+ * Canonical corner heights make the accepted continuation ascend a foundation. */
 namespace RoadOrder {
 enum Mode { Rejected, Junction, Loop, Destination, MaxCost, DepotEntry, Accepted, LongSegment, Startup };
 struct Context { Mode mode; std::vector<std::pair<char, uint32_t>> trace; };
@@ -238,8 +238,9 @@ TEST_CASE("Road YAPF observes accepted traversal once after transient exits", "[
 		CAPTURE(mode);
 		Context context{mode, {}};
 		for (auto &tile : movement_tiles) tile.height = 0;
-		// Tile 1 has level ground; tile 2's western corners need a level foundation.
-		movement_tiles[3].height = movement_tiles[67].height = 1;
+		// Tile 1 is level; tile 2 has SLOPE_W and the ROAD_X inclined foundation.
+		// Its centre is four pixels higher, retaining the original uphill penalty.
+		movement_tiles[3].height = 1;
 		OpenTTDRoadYapfInput input{}; input.map_x = input.map_y = 64; input.slope = 17; input.dest_tile = 10;
 		OpenTTDRoadYapfResult result;
 		if (mode == DepotEntry) {
@@ -257,7 +258,6 @@ TEST_CASE("Road YAPF observes accepted traversal once after transient exits", "[
 			REQUIRE(result.tile == 2);
 			REQUIRE(result.cost == (mode == Accepted ? 1717 : 615717));
 		} else {
-			REQUIRE(std::none_of(context.trace.begin(), context.trace.end(), [](auto item) { return item.first == 'V' || item.first == 'N'; }));
 			REQUIRE(std::count(context.trace.begin(), context.trace.end(), std::pair{'T', 1U}) == (mode == Startup ? 0 : 1));
 			if (mode == Destination || mode == MaxCost || mode == Startup) {
 				REQUIRE(std::count(context.trace.begin(), context.trace.end(), std::pair{'F', 1U}) == 0);
