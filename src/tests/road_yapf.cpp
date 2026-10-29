@@ -109,6 +109,7 @@ TEST_CASE("Road YAPF origin masks match shared track constants", "[road][rust]")
 #include "../pathfinder/yapf/yapf_base.hpp"
 #include "../pathfinder/follow_track.hpp"
 #include "follower_fixture.hpp"
+#include "follower_probe.hpp"
 namespace RoadLimit {
 inline uint32_t goal, start = 32 + 32 * 64;
 OpenTTDRoadYapfTile ProbeTile(const void *, uint32_t tile, uint8_t, bool) noexcept
