@@ -341,15 +341,18 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
 5. **#199 integrated-fault batch**, after #582: #569's service copies, duplicate
    fields and orphan declaration, #577's single-use carriers, and the
    `CargoFlow` bounce once #568 integrates.
-6. **Queued phase-1 owners under #3.** Root issues each before implementation:
-   - world-input generation (heightmap input and town-data import);
-   - complete NewGRF town-name storage and generation plus ActionF;
-   - clear-ground clearing;
-   - editor tree-group mutation;
-   - sign and depot naming;
-   - simulation-setting transitions.
+6. **Queued phase-1 owners under #3**, sized by issues-phase1 (remaining code
+   lines, estimated net glue):
+   1. #587 simulation-setting transitions (317, +90 to +170);
+   2. #584 world-input generation, heightmap input and town-data import (276,
+      +90 to +160);
+   3. #585 NewGRF town-name storage and generation plus ActionF (168, +40 to
+      +85);
+   4. #586 sign and depot naming (90 selected, +35 to +70);
+   5. clear-ground clearing (22) and editor tree-group mutation (36): one small
+      PR beside the ground and tree owners; root issues it when a slot takes it.
 
-   Measure the real remaining bodies; do not fall back to utility helpers. Port
+   Do not fall back to utility helpers. Port
    support code only where the component needs it, and keep an operation on
    data that stays in C++ as one call, not a service per field. Vehicle base
    lifecycle runs after #570, on its movement and consist record contract
