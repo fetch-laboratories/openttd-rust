@@ -395,7 +395,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.is_bridge = Shared_is_bridge,
 	.is_drive_through_stop = Shared_is_drive_through_stop,
 	.is_level_crossing = MapSvcIsLevelCrossing,
-	.is_normal_road = Shared_is_normal_road,
+	.is_normal_road_tile = Shared_is_normal_road_tile,
 	.is_plain_rail = RustPlainRailTile,
 	.is_road_depot = Shared_is_road_depot,
 	.is_sea = Shared_is_sea,

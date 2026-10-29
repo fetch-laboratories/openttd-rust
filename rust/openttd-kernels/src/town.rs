@@ -1285,7 +1285,7 @@ impl Engine<'_> {
                 || !(((self.services.is_water_tile)(end)
                     && (slope != 0 || !(self.services.is_sea)(end)))
                     || (self.services.is_plain_rail)(end)
-                    || ((self.services.is_normal_road)(end)
+                    || ((self.services.is_normal_road_tile)(end)
                         && (self.services.disallowed_road_directions)(end) != 0))
             {
                 break;

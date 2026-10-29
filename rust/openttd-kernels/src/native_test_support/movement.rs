@@ -44,7 +44,7 @@ pub(crate) fn map_read_probe(
         } else if world.types.assertions() == station.is_some() {
             return false;
         }
-        if kind == MP_ROAD && (shared.is_normal_road)(tile) {
+        if kind == MP_ROAD && (shared.is_normal_road_tile)(tile) {
             if world.disallowed_road_directions(tile) != (shared.disallowed_road_directions)(tile)
                 || world.has_road_works(tile) != (shared.has_road_works)(tile)
             {
