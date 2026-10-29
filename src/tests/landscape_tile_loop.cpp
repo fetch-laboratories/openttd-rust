@@ -28,6 +28,21 @@
 #include "../safeguards.h"
 
 #ifdef WITH_RUST
+TEST_CASE("Session tile fixtures restore storage mode across nested entries")
+{
+	static bool nested;
+	nested = false;
+	SessionFixture fixture;
+	fixture.tiles.station_loop = [](uint32_t) noexcept {
+		if (nested) return;
+		nested = true;
+		SessionFixture inner;
+		CHECK(inner.Run());
+	};
+	CHECK(fixture.Run());
+	CHECK(nested);
+	CHECK(fixture.Run());
+}
 extern "C" uint8_t openttd_rust_shared_tile_type(OpenTTDTileTypeAllocation, uint8_t (*callback)(uint32_t) noexcept, uint32_t tile);
 extern "C" bool openttd_rust_map_read_probe(OpenTTDTileTypeAllocation, const OpenTTDSharedServices *, const OpenTTDClearServices *, const OpenTTDTreeServices *, uint32_t, void (*)(uint32_t) noexcept);
 TEST_CASE("Rust map fields preserve native helpers, mutation and reset")

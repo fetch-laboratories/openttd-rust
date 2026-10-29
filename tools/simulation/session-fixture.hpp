@@ -3,6 +3,9 @@
 #define SIMULATION_SESSION_FIXTURE_HPP
 #include "rust/session_ffi.h"
 #include "rust/fleet_ffi.h"
+#include "../../src/rust/animation_save.hpp"
+#include "../../src/rust/newgrf_storage_ffi.h"
+#include "../../src/newgrf_storage.h"
 /* Narrow owner fixtures enter the production state loop. Unrelated phases use
  * empty typed worlds; each fixture replaces only its observed native services. */
 struct SessionFixture {
@@ -29,6 +32,11 @@ struct SessionFixture {
 	OpenTTDScheduleServices schedule{};
 	OpenTTDSessionServices services{};
 	OpenTTDIndustryBuilder *builder = openttd_rust_industry_builder_new();
+	bool animate = false;
+	bool in_loop = false;
+	bool skip_animation = false;
+	OpenTTDAnimationServices animation{};
+	std::optional<RustAnimationScope> animation_scope;
 	static inline size_t empty_extent = 0;
 	static void Nothing() noexcept {}
 	static void FrameNothing(OpenTTDSessionFrame *) noexcept {}
@@ -37,6 +45,8 @@ struct SessionFixture {
 		active = this;
 		shared.map_log_x = []() noexcept -> uint32_t { return 6; };
 		shared.tile_type = [](uint32_t) noexcept -> uint8_t { return 5; };
+		animation.shared = &shared;
+		animation.state = [](uint32_t) noexcept { return AnimatedTileState::Animated; };
 		tiles.shared = &shared;
 		tiles.station_loop = [](uint32_t) noexcept {};
 		group.current_company = []() noexcept -> uint8_t { return 0; };
@@ -74,14 +84,20 @@ struct SessionFixture {
 		services.state_frame_begin = [](OpenTTDSessionFrameStorage *p) noexcept { return reinterpret_cast<OpenTTDSessionFrame *>(p); };
 		services.state_frame_end = [](OpenTTDSessionFrame *, OpenTTDSessionFrame *) noexcept { return true; };
 		services.state_begin = FrameNothing;
-		services.tile_loop_begin = [](OpenTTDSessionFrame *) noexcept -> const OpenTTDGenerationLoop * { return &active->loop; };
+		services.tile_loop_begin = [](OpenTTDSessionFrame *) noexcept -> const OpenTTDGenerationLoop * { active->in_loop = true; return &active->loop; };
 		services.tile_loop_end = FrameNothing;
 		services.map_log_y = []() noexcept -> uint32_t { return 6; };
 		services.vehicle_tables = [](OpenTTDSessionFrame *, bool) noexcept { return active->tables; };
 		services.vehicle_cost = [](OpenTTDSessionFrame *) noexcept -> OpenTTDCommandCost * { return nullptr; };
 		services.vehicle_end = FrameNothing;
-		services.landscape_begin = FrameNothing;
-		services.landscape_end = FrameNothing;
+		services.landscape_begin = [](OpenTTDSessionFrame *) noexcept {
+			active->in_loop = true;
+			if (active->skip_animation) active->animation_scope.emplace(active->animation);
+		};
+		services.landscape_end = [](OpenTTDSessionFrame *) noexcept {
+			active->animation_scope.reset();
+			active->skip_animation = false;
+		};
 		services.road_begin = [](OpenTTDSessionFrame *) noexcept -> const OpenTTDRoadCommandContext * { return nullptr; };
 		services.road_end = FrameNothing;
 		services.town = &towns;
@@ -108,6 +124,11 @@ struct SessionFixture {
 	~SessionFixture() { openttd_rust_industry_builder_destroy(builder); active = previous; }
 	bool Run(GameMode mode = GM_EDITOR, PauseModes paused = {})
 	{
+		// Nested tile probes enter a fresh session while their outer fixture is
+		// already in storage's game-loop mode. Restore that outer mode on return.
+		const bool outer_loop = previous != nullptr && previous->in_loop;
+		if (outer_loop) openttd_rust_storage_switch_mode(PSM_LEAVE_GAMELOOP, true, storage.assert_condition, world.storage_discard);
+		skip_animation = !animate && mode != GM_EDITOR;
 		const auto clocks = *openttd_rust_clock_storage();
 		if (mode != GM_EDITOR) { TimerGameEconomy::date_fract = 0; TimerGameCalendar::date_fract = 0; }
 		const auto saved_cursor = *openttd_rust_tile_loop_cursor();
@@ -117,6 +138,11 @@ struct SessionFixture {
 		_game_mode = mode;
 		_pause_mode = paused;
 		const bool result = openttd_rust_session_state_loop(&services, nullptr);
+		// An injected phase failure intentionally leaves the production storage
+		// mode entered; the narrow fixture must not leak it into its next case.
+		openttd_rust_storage_switch_mode(PSM_LEAVE_GAMELOOP, true, storage.assert_condition, world.storage_discard);
+		in_loop = false;
+		if (outer_loop) openttd_rust_storage_switch_mode(PSM_ENTER_GAMELOOP, false, previous->storage.assert_condition, previous->world.storage_discard);
 		*openttd_rust_clock_storage() = clocks;
 		_game_mode = saved_mode;
 		_pause_mode = saved_pause;
