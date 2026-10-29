@@ -54,7 +54,6 @@ pub struct Services {
     pub shared: &'static Shared,
     pub catchment: &'static crate::station::CatchmentServices,
     pub commands: extern "C" fn() -> *const crate::station_cmd::CommandServicesTable,
-    pub visits: extern "C" fn() -> *const crate::vehicle::visits::Services,
     pub aircraft: extern "C" fn() -> *const crate::aircraft::Leaves,
     pub storage: extern "C" fn() -> *const crate::cargo_storage::Services,
     pub allocation: extern "C" fn() -> crate::map_func::TileTypeAllocation,
@@ -529,7 +528,7 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
         }
         return;
     }
-    let visits = unsafe { &*(s.visits)() };
+    let visits = unsafe { &*s.catchment.visits };
     loop {
         let front = unsafe { crate::station_service::openttd_rust_station_queue_first(state) };
         if front.is_null() {
@@ -672,5 +671,5 @@ pub(crate) fn airport_maintenance(s: &Services, owner: u8) -> i64 {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStationNames" ["probe"] => Names { base, central, airport, oilfield, docks, heliport, mines, lakeside, woods, forest, valley, heights, north, south, east, west, transfer, halt, exchange, annexe, sidings, branch, upper, lower, fallback, undefined, null };
-    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, commands, visits, aircraft, storage, allocation, check, climate, names, town, industry_type, set_industry_type, spec, spec_name, spec_enabled, spec_life, set_random_bits, freeform, cargo_classes, forest, stop_data, stop_count, stop_tile, stop_random, stop_frame, stop_set_random, stop_set_frame, stop_append, stop_swap_pop, by_tile, as_station, cleaning_pool, cargo, flows, delete_airport_storage, invalidate_list, invalidate_lists, close_view, orders, delete_news, remove_index, sign_valid, remove_sign, next_vehicle, vehicle_id, last_loading, airport_maintenance, maintenance_price };
+    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, commands, aircraft, storage, allocation, check, climate, names, town, industry_type, set_industry_type, spec, spec_name, spec_enabled, spec_life, set_random_bits, freeform, cargo_classes, forest, stop_data, stop_count, stop_tile, stop_random, stop_frame, stop_set_random, stop_set_frame, stop_append, stop_swap_pop, by_tile, as_station, cleaning_pool, cargo, flows, delete_airport_storage, invalidate_list, invalidate_lists, close_view, orders, delete_news, remove_index, sign_valid, remove_sign, next_vehicle, vehicle_id, last_loading, airport_maintenance, maintenance_price };
 }

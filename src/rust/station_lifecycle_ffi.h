@@ -25,7 +25,6 @@ struct OpenTTDStationLifecycleServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDStationCatchmentServices *catchment;
 	const OpenTTDStationCommandServices *(*commands)() noexcept OPENTTD_SERVICE_DEFAULT(commands);
-	const OpenTTDVehicleVisits *(*visits)() noexcept OPENTTD_SERVICE_DEFAULT(visits);
 	const OpenTTDAircraftLeaves *(*aircraft)() noexcept OPENTTD_SERVICE_DEFAULT(aircraft);
 	const OpenTTDCargoStorageServices *(*storage)() OPENTTD_SERVICE_DEFAULT(storage);
 	OpenTTDTileTypeAllocation (*allocation)() noexcept OPENTTD_SERVICE_DEFAULT(allocation);

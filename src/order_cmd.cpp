@@ -405,7 +405,7 @@ extern "C" void openttd_orders_append_station(void *ctx, uint16_t station) noexc
 
 extern "C" void openttd_orders_invalidate_station_list() noexcept
 {
-	InvalidateWindowClassesData(WC_STATION_LIST, 0);
+	RustStationListClassesInvalidate();
 }
 
 extern "C" void openttd_orders_command_error(void *ctx, uint32_t error, uint32_t detail) noexcept

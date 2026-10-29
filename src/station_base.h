@@ -658,7 +658,9 @@ public:
 	Station(TileIndex tile = INVALID_TILE);
 	~Station();
 
+#ifndef WITH_RUST
 	void AddFacility(StationFacility new_facility_bit, TileIndex facil_xy);
+#endif
 
 	void MarkTilesDirty(bool cargo_change) const;
 
