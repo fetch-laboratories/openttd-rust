@@ -179,7 +179,9 @@ impl<const AUDITED: bool> Context<'_, AUDITED> {
     }
     #[inline]
     fn normal_road(&self, tile: u32) -> bool {
-        self.tile_type(tile) == MP_ROAD && self.road_tile_kind(tile).0 == ROAD_TILE_NORMAL
+        self.map()
+            .and_then(|m| crate::road_map::is_normal_road(&m.types, tile))
+            .unwrap_or_else(|| (self.shared().road_tile_kind)(tile).0 == ROAD_TILE_NORMAL)
     }
     fn map_value<T>(&self, value: Option<T>) -> T {
         if value.is_none() {
