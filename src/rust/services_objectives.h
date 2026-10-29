@@ -142,6 +142,7 @@ inline const OpenTTDObjectivesServices &GetRustObjectivesServices() noexcept
 	return services;
 }
 static_assert(COLOUR_END == 16 && SPBC_END == 55);
+static_assert(VEH_INVALID == 255 && VEH_COMPANY_END == 4);
 static_assert(GT_NONE == 0 && GT_TILE == 1 && GT_INDUSTRY == 2 && GT_TOWN == 3 && GT_COMPANY == 4 && GT_STORY_PAGE == 5);
 static_assert(LT_NONE == 0 && LT_TILE == 1 && LT_INDUSTRY == 2 && LT_TOWN == 3 && LT_COMPANY == 4 && LT_STORY_PAGE == 5);
 static_assert(SPET_TEXT == 0 && SPET_LOCATION == 1 && SPET_GOAL == 2 && SPET_BUTTON_PUSH == 3 && SPET_BUTTON_TILE == 4 && SPET_BUTTON_VEHICLE == 5);

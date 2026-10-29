@@ -25,7 +25,7 @@ impl StoryPageButtonData {
     }
     pub fn validate_vehicle_type(&self) -> bool {
         let kind = ((self.0 >> 16) & 0xFF) as u8;
-        kind == u8::MAX || kind < crate::vehicle_type::VEH_COMPANY_END
+        kind == crate::vehicle_type::VEH_INVALID || kind < crate::vehicle_type::VEH_COMPANY_END
     }
 }
 #[unsafe(no_mangle)]
