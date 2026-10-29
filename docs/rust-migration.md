@@ -2450,3 +2450,14 @@ constructed and destroyed at the original calls. Native `_generating_world` lval
 stable Rust bool storage under the game-state mutex. No owner borrow or raw map descriptor
 spans progress/yield or callback reentry. GUI scheduling, arbitrary scripts/NewGRFs and
 unexercised exception combinations remain #156 coverage limits. PR: #547.
+
+### Goals, story pages and league commands (#572)
+
+Rust owns destination/content validation, command test/execute policy, page and
+element ordering and deletion, goal mutations, league ratings/links and GS event
+eligibility. Native pools retain records and strings through canonical typed
+record accessors and allocation/deletion operations. The page destructor calls
+the same Rust lifecycle policy; pool cleanup keeps its original early exit.
+Native button packing/getters, windows, rendering, save/load and script VM
+execution remain in C++. No record storage or presentation pixel equivalence is
+claimed; window presentation remains a #156 limit. PR pending.

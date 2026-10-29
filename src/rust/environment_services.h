@@ -17,6 +17,7 @@
 #include "../settings_type.h"
 #include "../landscape.h"
 
+inline bool RustNetworkServer() noexcept { return _network_server; }
 inline bool RustNetworking() noexcept { return _networking; }
 inline uint32_t OpenTTDMapLogY() noexcept { return Map::LogY(); }
 inline uint32_t OpenTTDMapLogX() noexcept { return Map::LogX(); }

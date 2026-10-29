@@ -12,6 +12,7 @@ include = [
     "tools/ci.py",
     "tools/validation_execution.py",
     "tools/simulation/clocks.py",
+    "tools/simulation/objectives.py",
     "tools/simulation/generated.py",
     "tools/deep.py",
     "tools/housekeeping.py",
