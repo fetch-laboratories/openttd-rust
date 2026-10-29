@@ -8,6 +8,7 @@
 #include <iterator>
 #include <limits>
 #include <memory>
+#include <optional>
 #include "rust/aircraft_ffi.h"
 #include "rust/movement_ffi.h"
 #include "rust/vehicle_maintenance_ffi.h"
