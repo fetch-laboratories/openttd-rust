@@ -109,6 +109,5 @@ void openttd_rust_world_set_abort_callback(GWAbortProc *);
 void openttd_rust_world_request_abort();
 bool openttd_rust_world_aborted(const OpenTTDWorldServices *);
 bool openttd_rust_world_handle_abort(const OpenTTDWorldServices *, OpenTTDWorldFrame *);
-bool openttd_rust_world_setup(const OpenTTDWorldServices *, OpenTTDWorldSetupFrame *, GenWorldMode, uint32_t, uint32_t, bool);
 }
 #endif /* RUST_WORLD_GENERATION_FFI_H */

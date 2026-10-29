@@ -258,8 +258,7 @@ pub unsafe extern "C" fn openttd_rust_world_handle_abort(
 /// # Safety
 /// Live call-local native frame and immutable services. Native exceptions return
 /// through the frame; no owner borrow spans initialization, resources or progress.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_world_setup(
+pub(crate) unsafe fn setup(
     s: &WorldServices,
     frame: *mut SetupFrame,
     mode: Mode,

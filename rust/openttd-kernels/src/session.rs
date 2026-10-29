@@ -294,9 +294,7 @@ impl Session<'_> {
     fn generate(&self, kind: crate::genworld::Mode, x: u32, y: u32, reset: bool) -> Outcome {
         let s = self.s;
         let setup = (s.world_setup_begin)(self.frame);
-        let ready = unsafe {
-            crate::genworld::openttd_rust_world_setup(&*(s.world)(), setup, kind, x, y, reset)
-        };
+        let ready = unsafe { crate::genworld::setup(&*(s.world)(), setup, kind, x, y, reset) };
         complete((s.world_setup_end)(self.frame))?;
         if ready {
             complete(crate::genworld::generate(s, self.frame))?;
@@ -719,15 +717,13 @@ impl Session<'_> {
             crate::animated_tile::run();
             (s.landscape_end)(self.frame);
             let exception = (s.console_exception)(self.frame);
-            let advanced = unsafe {
-                crate::timer_game_calendar::openttd_rust_calendar_elapsed(&*s.clock, exception)
-            };
+            let advanced = unsafe { crate::timer_game_calendar::elapsed(&*s.clock, exception) };
             self.checked()?;
             if advanced {
                 self.vehicles(true);
             }
             unsafe {
-                crate::timer_game_economy::openttd_rust_economy_elapsed(&*s.clock, exception);
+                crate::timer_game_economy::elapsed(&*s.clock, exception);
             }
             self.checked()?;
             complete((s.tick_timer)(self.frame))?;
