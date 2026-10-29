@@ -186,7 +186,7 @@ static bool FollowerProbe([[maybe_unused]] std::span<std::string_view> args)
 	SetTileOwner(tile, Owner(1)); FollowerCase("owner", ft, old, TRACKDIR_X_NE, false, 4);
 	rail(); SetRailType(tile, RAILTYPE_MONO); FollowerCase("rail_type", ft, old, TRACKDIR_X_NE, false, 2);
 	rail(); MakeClear(tile, CLEAR_GRASS, 3); FollowerCase("no_way", ft, old, TRACKDIR_X_NE, false, 4);
-	rail(); MakeRailNormal(old, Owner(0), TRACK_BIT_UPPER, RAILTYPE_RAIL); MakeRailNormal(tile, Owner(0), TRACK_BIT_LOWER, RAILTYPE_RAIL);
+	rail(); MakeRailNormal(old, Owner(0), TRACK_BIT_UPPER, RAILTYPE_RAIL); MakeRailNormal(tile, Owner(0), TRACK_BIT_LEFT, RAILTYPE_RAIL);
 	CFollowTrackRailNo90 no90{Owner(0), RailTypes(1)};
 	FollowerCase("ninety", no90, old, TRACKDIR_UPPER_E, false, 3);
 	FollowerCase("ninety_allowed", ft, old, TRACKDIR_UPPER_E, true, 0);
