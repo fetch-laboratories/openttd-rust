@@ -26,6 +26,9 @@
 #include "rust/landscape_loop_ffi.h"
 
 #include "session-fixture.hpp"
+
+[[noreturn]] void NOT_REACHED(const std::source_location) { std::abort(); }
+
 namespace LandscapeReference {
 // Avoid ADL into the candidate header helpers while calling pinned originals.
 #define CornerToTrackBits ReferenceCornerToTrackBits
