@@ -923,3 +923,35 @@ pub unsafe extern "C" fn openttd_rust_remove_league_table_element(
         true
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::openttd_rust_story_storage;
+
+    #[test]
+    fn story_storage_is_shared_between_serialized_threads() {
+        // SAFETY: This test is the sole story-state user; spawn/join serializes each access.
+        unsafe {
+            let state = openttd_rust_story_storage();
+            let page = std::ptr::addr_of_mut!((*state).page_next_sort);
+            let element = std::ptr::addr_of_mut!((*state).element_next_sort);
+            let old_page = page.read();
+            let old_element = element.read();
+            page.write(123);
+            element.write(456);
+            let address = std::thread::spawn(|| {
+                let worker = openttd_rust_story_storage();
+                assert_eq!(std::ptr::addr_of!((*worker).page_next_sort).read(), 123);
+                assert_eq!(std::ptr::addr_of!((*worker).element_next_sort).read(), 456);
+                std::ptr::addr_of_mut!((*worker).element_next_sort).write(789);
+                worker as usize
+            })
+            .join()
+            .unwrap();
+            assert_eq!(address, state as usize);
+            assert_eq!(element.read(), 789);
+            page.write(old_page);
+            element.write(old_element);
+        }
+    }
+}

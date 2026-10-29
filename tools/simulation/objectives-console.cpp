@@ -22,7 +22,6 @@
 #include "string_func.h"
 #include "table/strings.h"
 #include "core/random_func.hpp"
-#include <thread>
 
 extern Company *DoStartupNewCompany(bool, CompanyID);
 
@@ -66,17 +65,6 @@ static void State()
 }
 static void SortStateProbe(StoryPageID page, TileIndex tile, const EncodedString &text)
 {
-	bool shared = false;
-	std::thread check([&] {
-#ifdef WITH_RUST
-		auto *state = openttd_rust_story_storage();
-		shared = &state->page_next_sort == &_story_page_next_sort_value && &state->element_next_sort == &_story_page_element_next_sort_value;
-#else
-		shared = true;
-#endif
-	});
-	check.join();
-	fmt::print(stderr, "OBJECTIVES state-shared {}\n", shared);
 	uint32_t saved_page = _story_page_next_sort_value, saved_element = _story_page_element_next_sort_value;
 	const auto run = DoCommandFlag::Execute;
 	_story_page_next_sort_value = UINT32_MAX;

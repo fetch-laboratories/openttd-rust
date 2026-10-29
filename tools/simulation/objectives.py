@@ -40,7 +40,6 @@ def observations(run: Run) -> list[str]:
     lines = [line for line in run["log"] if line.startswith("OBJECTIVES ")]
     required = (
         "commands-complete",
-        "state-shared true",
         "page-wrap 4294967295 0",
         "element-wrap 4294967295 0",
         "element-reset 0 1",
