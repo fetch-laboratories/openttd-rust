@@ -2487,3 +2487,15 @@ entries for the candidate and original C++ bodies for the reference. Native reso
 objects use call-local opaque stack capacity with compile-time size/alignment checks.
 External GUI/network scheduling, historical saves and arbitrary script-error
 combinations remain #156 limits. PR #554.
+
+### Goals, story pages and league commands (#572)
+
+Rust owns destination/content validation, command test/execute policy, page and
+element ordering and deletion, goal mutations, league ratings/links and GS event
+eligibility. Rust owns both process-wide next-sort counters; stable native aliases
+preserve the loader's assignments. Native pools retain records and strings through canonical typed
+record accessors and allocation/deletion operations. The page destructor calls
+the same Rust lifecycle policy; pool cleanup keeps its original early exit.
+Native button packing/getters, windows, rendering, save/load and script VM
+execution remain in C++. No record storage or presentation pixel equivalence is
+claimed; window presentation remains a #156 limit. [PR #578](https://github.com/fetch-laboratories/openttd-rust/pull/578).
