@@ -35,6 +35,7 @@ struct SessionFixture {
 	bool animate = false;
 	bool in_loop = false;
 	bool skip_animation = false;
+	OpenTTDSharedServices animation_shared{};
 	OpenTTDAnimationServices animation{};
 	std::optional<RustAnimationScope> animation_scope;
 	static inline size_t empty_extent = 0;
@@ -45,7 +46,8 @@ struct SessionFixture {
 		active = this;
 		shared.map_log_x = []() noexcept -> uint32_t { return 6; };
 		shared.tile_type = [](uint32_t) noexcept -> uint8_t { return 5; };
-		animation.shared = &shared;
+		animation_shared.tile_type = [](uint32_t) noexcept -> uint8_t { return MP_VOID; };
+		animation.shared = &animation_shared;
 		animation.state = [](uint32_t) noexcept { return AnimatedTileState::Animated; };
 		tiles.shared = &shared;
 		tiles.station_loop = [](uint32_t) noexcept {};
