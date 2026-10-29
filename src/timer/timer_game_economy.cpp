@@ -67,11 +67,6 @@ void TimeoutTimer<TimerGameEconomy>::Elapsed([[maybe_unused]] TimerGameEconomy::
 {
 	this->callback();
 }
-template <>
-bool TimerManager<TimerGameEconomy>::Elapsed([[maybe_unused]] TimerGameEconomy::TElapsed delta)
-{
-	return RustClockElapsed<openttd_rust_economy_elapsed>(GetRustClockServices(), delta);
-}
 #else
 TimerGameEconomy::Year TimerGameEconomy::year = {};
 TimerGameEconomy::Month TimerGameEconomy::month = {};

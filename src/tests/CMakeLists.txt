@@ -33,6 +33,7 @@ add_test_files(
     road_yapf.cpp
     roadvehicle.cpp
     vehicle_scheduler.cpp
+    session.cpp
     service_tables.cpp
     station_service.cpp
     spiral_iterator_state.cpp

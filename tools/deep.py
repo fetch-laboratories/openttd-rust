@@ -4,6 +4,14 @@
 checked-out commit at idle CPU and I/O priority and writes one `report.json` under
 `.local/deep/`. Members are ordinary driver actions, so they build, hold the shared
 build locks and yield to a speed pass's timed collection like any other harness game.
+
+Repeat `--member NAME` to run a subset once in canonical order; case selectors still
+go to every selected member. Subsets are recorded as partial rotations. Before a
+`simulate-sanitized` round without `simulate-soak`, run
+`python3 tools/migration.py build --jobs 2` at the same source revision: reference-gap
+probes link the ordinary candidate archive.
+`complete` means the unfiltered full set produced source-coherent reports; `passed`
+records success independently.
 """
 
 import fcntl
@@ -174,7 +182,18 @@ def run_deep(
     jobs: int,
     selectors: Sequence[str],
     members: Sequence[Member] = DEEP_SET,
+    *,
+    member_names: Sequence[str] = (),
 ) -> int:
+    names = set(member_names)
+    if unknown := names - {member.name for member in members}:
+        raise ValueError(
+            f"unknown deep members: {', '.join(sorted(unknown))}; "
+            f"choose from: {', '.join(member.name for member in members)}"
+        )
+    selected = [member for member in members if not names or member.name in names]
+    rotation = len(selected) < len(members)
+    partial = bool(selectors) or rotation
     commit = git(root, "rev-parse", "HEAD")
     if git(root, "status", "--short"):
         sys.exit("deep requires a clean checkout: the report names its commit")
@@ -188,7 +207,7 @@ def run_deep(
         out.mkdir(parents=True)
         env = dict(os.environ, PYTHONUNBUFFERED="1")
         results: list[Result] = []
-        for member in members:
+        for member in selected:
             command = member.command(root, jobs, selectors)
             log = out / f"{member.name}.log"
             before = source_state(root)
@@ -228,7 +247,15 @@ def run_deep(
             "commit": commit,
             "started_at": stamp,
             "selectors": list(selectors),
-            "partial": bool(selectors),
+            "selected_members": [member.name for member in selected],
+            "rotation": rotation,
+            "partial": partial,
+            "complete": not partial
+            and len(results) == len(members)
+            and all(
+                result.simulation_report is not None and not result.problems
+                for result in results
+            ),
             "jobs": jobs,
             "seconds": round(time.monotonic() - started, 1),
             "results": [asdict(result) for result in results],

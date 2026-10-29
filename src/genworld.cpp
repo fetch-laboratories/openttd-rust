@@ -50,6 +50,7 @@
 
 #ifdef WITH_RUST
 #include "rust/world_generation_ffi.h"
+#include "rust/session_native.hpp"
 #include "industry.h"
 #include "rust/landscape_generation_frame.hpp"
 #include "rust/industry_generation_adapter.hpp"
@@ -84,6 +85,7 @@ struct OpenTTDWorldFrame {
 	std::optional<OpenTTDIndustryGenerationContext> industry;
 	std::optional<RustWorldObjectScratch> objects;
 	std::optional<RustGenerationLoop> loop;
+	std::optional<OpenTTDSessionFrame> session;
 };
 /* Game::StartNew/GameLoop, completion callbacks, sprite loading, InitializeGame,
 	* mode switching and SaveOrLoad may throw. Their native frames outlive Rust. */
@@ -112,24 +114,26 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.objects = &GetRustObjectServices(),
 		.engines = &EngineServices(),
 		.disasters = &DisasterServices(),
-		.modal = []() noexcept { return HasModalProgress(); },
+		.modal = RustHasModalProgress,
 		.set_modal = [](bool value) noexcept { SetModalProgress(value); },
 		.local_company = RustLocalCompanyID,
 		.set_local_company = RustSetLocalCompany,
 		.restore_companies = RustRestoreGenerationCompanies,
-		.initialize = [](OpenTTDWorldFrame *f, uint32_t x, uint32_t y, bool reset) noexcept { return WorldException(f, [=] { InitializeGame(x, y, true, reset); }); },
+		.initialize = [](OpenTTDWorldSetupFrame *f, uint32_t x, uint32_t y, bool reset) noexcept { try { InitializeGame(x, y, true, reset); } catch (...) { f->cancellation = std::current_exception(); return false; } return true; },
 		.prepare_progress = []() noexcept { PrepareGenerateWorldProgress(); },
 		.settings = []() noexcept { return OpenTTDWorldSettings{RustMapHeightLimit(), _settings_game.game_creation.se_flat_world_height, _settings_game.game_creation.heightmap_height, _settings_game.game_creation.land_generator}; },
 		.height_limit = RustSetMapHeightLimit,
-		.game_mode = RustGameMode,
+		.session = &GetRustSessionServices(),
+		.session_frame = [](OpenTTDWorldFrame *f) noexcept { return &f->session.emplace(); },
+		.session_end = [](OpenTTDWorldFrame *f) noexcept { f->cancellation = f->session->exception; f->session.reset(); return !f->cancellation; },
 		.seed = RustGenerationSeed,
 		.set_seed = RustSetGenerationSeed,
 		.interactive_random = []() noexcept { return InteractiveRandom(); },
 		.random_seed = [](uint32_t value) noexcept { _random.SetSeed(value); },
-		.load_sprites = [](OpenTTDWorldFrame *f) noexcept { return WorldException(f, [] { GfxLoadSprites(); }); },
+		.load_sprites = [](OpenTTDWorldSetupFrame *f) noexcept { try { GfxLoadSprites(); } catch (...) { f->cancellation = std::current_exception(); return false; } return true; },
 		.string_widths = []() noexcept { LoadStringWidthTable(); },
-		.reset_windows = []() noexcept { ResetWindowSystem(); },
-		.setup_windows = []() noexcept { SetupColoursAndInitialWindow(); },
+		.reset_windows = RustResetWindowSystem,
+		.setup_windows = RustSetupColoursAndInitialWindow,
 		.unshow_error = []() noexcept { UnshowCriticalError(); },
 		.close_windows = []() noexcept { CloseAllNonVitalWindows(); },
 		.hide_windows = []() noexcept { HideVitalWindows(); },
@@ -178,44 +182,41 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.callback = [](OpenTTDWorldFrame *f, GWDoneProc *proc) noexcept { return WorldException(f, [=] { proc(); }); },
 		.exception_kind = WorldExceptionKind,
 		.storage_discard = RustStorageDiscard,
-		.dedicated = []() noexcept { return _network_dedicated; },
-		.exit_game = []() noexcept -> bool { return _exit_game; },
-		.set_exit = []() noexcept { _exit_game = true; },
-		.abort_mode = [](SwitchMode mode) noexcept { _switch_mode = mode; },
-		.switch_mode = [](OpenTTDWorldFrame *f) noexcept { return WorldException(f, [] { SwitchToMode(_switch_mode); }); },
+		.dedicated = RustNetworkDedicated,
+		.exit_game = RustExitGame,
+		.set_exit = RustSetExitGame,
 		.debug_start = []() noexcept { Debug(net, 3, "Generating map, please wait..."); },
 		.debug_done = []() noexcept { Debug(net, 3, "Map generated, starting game"); },
 		.debug_abort = []() noexcept { Debug(net, 0, "Generating map failed; closing server"); },
 		.debug_map = RustDebugNewMap,
-		.desync = []() noexcept { return _debug_desync_level > 0; },
-		.save = [](OpenTTDWorldFrame *f) noexcept { return WorldException(f, [] { std::string name = fmt::format("dmp_cmds_{:08x}_{:08x}.sav", _settings_game.game_creation.generation_seed, TimerGameEconomy::date); SaveOrLoad(name, SLO_SAVE, DFT_GAME_FILE, AUTOSAVE_DIR, false); }); },
+		.desync_level = RustDesyncLevel,
+		.save = [](OpenTTDWorldFrame *f) noexcept { return WorldException(f, RustSaveDesyncGame); },
 	};
 	return services;
 }
 
 bool CheckAbi_genworld() { return AbiServicesComplete(GetRustWorldServices()); }
 
-/* Callgrind selects this native frame, including its actual GenerateWorld call. */
-#ifdef _MSC_VER
-__declspec(noinline)
-#else
-__attribute__((noinline))
-#endif
-static void _GenerateWorld()
+static_assert(sizeof(OpenTTDWorldFrame) <= sizeof(OpenTTDSessionFrameStorage));
+static_assert(alignof(OpenTTDWorldFrame) <= alignof(OpenTTDSessionFrameStorage));
+OpenTTDWorldFrame *RustWorldFrameBegin(OpenTTDSessionFrameStorage *storage) noexcept
 {
-	OpenTTDWorldFrame frame;
-	frame.company.emplace(_current_company, OWNER_NONE);
-	uint8_t result = openttd_rust_world_generate(&GetRustWorldServices(), &frame);
-	if (result == 2) std::rethrow_exception(frame.cancellation);
+	auto *frame = new (storage) OpenTTDWorldFrame;
+	frame->company.emplace(_current_company, OWNER_NONE);
+	return frame;
 }
-void GenerateWorld(GenWorldMode mode, uint size_x, uint size_y, bool reset_settings)
+bool RustWorldFrameEnd(OpenTTDSessionFrame *parent, OpenTTDWorldFrame *frame, uint8_t result) noexcept
 {
-	OpenTTDWorldFrame frame;
-	bool ready = openttd_rust_world_setup(&GetRustWorldServices(), &frame, mode, size_x, size_y, reset_settings);
-	if (frame.cancellation) std::rethrow_exception(frame.cancellation);
-	if (ready) _GenerateWorld();
+	if (result == 2) parent->exception = frame->cancellation;
+	std::destroy_at(frame);
+	return result != 2;
 }
-void GenerateWorldSetCallback(GWDoneProc *proc) { openttd_rust_world_set_callback(proc); }
+void GenerateWorld(GenWorldMode mode, uint size_x, uint size_y, bool reset_settings, GWDoneProc *const *callback)
+{
+	OpenTTDSessionFrame frame;
+	openttd_rust_session_generate(&GetRustSessionServices(), &frame, mode, size_x, size_y, reset_settings, callback);
+	frame.Rethrow();
+}
 void AbortGeneratingWorld() { openttd_rust_world_request_abort(); }
 bool IsGeneratingWorldAborted() { return openttd_rust_world_aborted(&GetRustWorldServices()); }
 void HandleGeneratingWorldAbortion()

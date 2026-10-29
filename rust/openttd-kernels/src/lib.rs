@@ -1464,3 +1464,7 @@ pub use vehicle_type::VehicleID;
 mod tunnel_map;
 
 mod depot_map;
+mod session;
+
+mod fileio_type;
+mod saveload;

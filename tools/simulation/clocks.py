@@ -89,12 +89,6 @@ def native_probes(folder: Path, env: dict[str, str]) -> None:
                                 text, f"void {timer}<TimerGame{clock}>::Elapsed"
                             )
                         )
-                    bodies.append(
-                        "template <>\n"
-                        + probe.body(
-                            text, f"bool TimerManager<TimerGame{clock}>::Elapsed"
-                        )
-                    )
             else:
                 for clock in ("common", "calendar", "economy"):
                     text = (source / f"src/timer/timer_game_{clock}.cpp").read_text()

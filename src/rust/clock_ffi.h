@@ -19,7 +19,6 @@ using OpenTTDClockPeriod = TimerGameCalendar::TPeriod;
 using OpenTTDEconomyClockPeriod = TimerGameEconomy::TPeriod;
 struct OpenTTDClockServices {
 	const OpenTTDSharedServices *shared;
-	GameMode (*game_mode)() noexcept OPENTTD_SERVICE_DEFAULT(game_mode);
 	uint16_t (*minutes_per_calendar_year)() noexcept OPENTTD_SERVICE_DEFAULT(minutes_per_calendar_year);
 	bool (*using_wallclock_units)(bool) noexcept OPENTTD_SERVICE_DEFAULT(using_wallclock_units);
 	uint32_t (*vehicle_id)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_id);
@@ -69,8 +68,6 @@ OpenTTDCalendarYMD openttd_rust_economy_date_to_ymd(int32_t, bool) noexcept;
 int32_t openttd_rust_economy_ymd_to_date(int32_t, uint8_t, uint8_t, bool) noexcept;
 void openttd_rust_calendar_set_date(int32_t, uint16_t) noexcept;
 void openttd_rust_economy_set_date(int32_t, uint16_t, bool) noexcept;
-bool openttd_rust_calendar_elapsed(const OpenTTDClockServices *, OpenTTDConsoleException *) noexcept;
-bool openttd_rust_economy_elapsed(const OpenTTDClockServices *, OpenTTDConsoleException *) noexcept;
 bool openttd_rust_calendar_valid(OpenTTDClockPeriod) noexcept;
 bool openttd_rust_economy_valid(OpenTTDEconomyClockPeriod) noexcept;
 void openttd_rust_calendar_register(const OpenTTDNativeClockTimer *, const OpenTTDClockPeriod *, const RustClockBinding *) noexcept;

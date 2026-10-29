@@ -293,6 +293,15 @@ def install(scenario: Scenario, run_dir: Path) -> None:
 
 
 def lifecycle_check(lines: list[str]) -> None:
+    callbacks = [
+        line.split()[2:4]
+        for line in lines
+        if line.startswith("GENERATION callback-result ")
+    ]
+    if callbacks != [
+        [str(kind), str(attempt)] for kind in range(8) for attempt in range(2)
+    ]:
+        raise RuntimeError("missing native completion registration/dispatch evidence")
     rows = [
         line.split()[2:] for line in lines if line.startswith("GENERATION lifecycle ")
     ]

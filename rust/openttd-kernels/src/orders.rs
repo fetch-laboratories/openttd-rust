@@ -557,7 +557,7 @@ pub struct Leaves {
     pub backup_capacity: extern "C" fn() -> u64,
     pub create_backup: unsafe extern "C" fn(ctx: *mut c_void, user: u32) -> *mut c_void,
     pub networking: extern "C" fn() -> u64,
-    pub network_server: extern "C" fn() -> u64,
+    pub network_server: extern "C" fn() -> bool,
     pub network_client: extern "C" fn() -> u64,
     pub server_client: extern "C" fn() -> u64,
     pub default_group: extern "C" fn() -> u64,
@@ -4117,7 +4117,7 @@ impl Control {
     }
     fn backup_tile_clear(&self, a: u64, b: u64) -> u64 {
         let g = self.g;
-        let user = if (g.0.networking)() != 0 && (g.0.network_server)() == 0 {
+        let user = if (g.0.networking)() != 0 && !(g.0.network_server)() {
             (g.0.network_client)() as u32
         } else {
             (g.0.server_client)() as u32

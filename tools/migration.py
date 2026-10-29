@@ -401,7 +401,7 @@ def free_cores():
     return max(2, (os.cpu_count() or 2) - round(os.getloadavg()[0]))
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "action",
@@ -450,10 +450,24 @@ def main():
     parser.add_argument(
         "--multiplayer", action="store_true", help="deep-tier mixed multiplayer"
     )
+    parser.add_argument(
+        "--member",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help=(
+            "deep only: repeat to select members once in canonical order (default: all); "
+            "case selectors still go to every selected member. Before simulate-sanitized "
+            "without simulate-soak, run python3 tools/migration.py build --jobs 2 "
+            "at the same source revision for ordinary reference-gap probe linkage"
+        ),
+    )
     # simulate forwards any further arguments to tools/simulate.py; deep, scenario selectors.
     args, simulate_args = parser.parse_known_args()
     if simulate_args and args.action not in ("simulate", "coverage", "deep"):
         parser.error(f"unrecognized arguments: {' '.join(simulate_args)}")
+    if args.member and args.action != "deep":
+        parser.error("--member applies only to deep")
     if args.no_ccache and (args.ccache or args.ccache_bypass):
         parser.error("--no-ccache conflicts with --ccache/--ccache-bypass")
     if args.jobs < 1:
@@ -489,7 +503,18 @@ def main():
     if args.action == "deep":
         from deep import run_deep
 
-        sys.exit(run_deep(ROOT, LOCAL, COMMON_LOCAL, args.jobs, simulate_args))
+        try:
+            code = run_deep(
+                ROOT,
+                LOCAL,
+                COMMON_LOCAL,
+                args.jobs,
+                simulate_args,
+                member_names=args.member,
+            )
+        except ValueError as error:
+            parser.error(str(error))
+        sys.exit(code)
     started = time.monotonic()
     if args.action != "rust-checks":
         with reference_lock():
