@@ -878,7 +878,6 @@ const OpenTTDStationLifecycleServices &GetRustStationLifecycleServices() noexcep
 		.as_station = RustAnimationStation,
 		.cleaning_pool = []() noexcept { return Station::CleaningPool(); },
 		.cargo = RustStationExistingCargoOwner,
-		.flows = [](BaseStation *st, uint8_t cargo) noexcept { auto &ge = Station::From(st)->goods[cargo]; return ge.HasData() ? ge.GetData().flows.RustState() : nullptr; },
 		.delete_airport_storage = RustStationDeleteAirportStorage,
 		.invalidate_list = RustStationListInvalidation,
 		.invalidate_lists = RustStationListClassesInvalidate,

@@ -6,7 +6,7 @@
  */
 
 //! Shared `station_map.h` helpers for live map fields and remaining typed services.
-use crate::bitmath_func::gb;
+use crate::bitmath_func::{gb, has_bit, sb, toggle_bit};
 use crate::map_func::TileTypeAccess;
 use crate::services::Services;
 use crate::station_type::{
@@ -124,15 +124,9 @@ pub(crate) fn is_hangar_tile(tile: u32, s: &crate::newgrf_airport::Services) -> 
     (s.shared().tile_type)(tile) == MP_STATION && is_hangar(tile, s)
 }
 
-/// `GetStationType`, preserving its native assertion policy.
-pub(crate) fn get_station_type(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<u8> {
-    m.require_type(tile, MP_STATION)?;
-    Some((m.m6(tile)? >> 3) & 15)
-}
 fn require_road_waypoint(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<()> {
     m.available(tile)?;
-    if m.assertions() && (m.read(tile) != MP_STATION || get_station_type(m, tile)? != ROAD_WAYPOINT)
-    {
+    if m.assertions() && (m.read(tile) != MP_STATION || !is_road_waypoint(m, TileIndex(tile))?) {
         return None;
     }
     Some(())
@@ -140,30 +134,39 @@ fn require_road_waypoint(m: &crate::map_func::TileTypeAccess, tile: u32) -> Opti
 /// `IsRoadWaypointOnSnowOrDesert`.
 pub(crate) fn road_waypoint_snow(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<bool> {
     require_road_waypoint(m, tile)?;
-    Some(m.m8(tile)? & (1 << 15) != 0)
+    Some(has_bit(m.m8(tile)?, 15))
 }
 /// `ToggleRoadWaypointOnSnowOrDesert`.
+#[allow(clippy::cast_possible_truncation)] // The source stores back into uint16_t.
 pub(crate) fn toggle_road_waypoint_snow(
     m: &crate::map_func::TileTypeAccess,
     tile: u32,
 ) -> Option<()> {
     require_road_waypoint(m, tile)?;
-    m.set_m8(tile, m.m8(tile)? ^ (1 << 15))
+    let mut value = u32::from(m.m8(tile)?);
+    toggle_bit(&mut value, 15);
+    m.set_m8(tile, value as u16)
 }
 /// `GetRoadWaypointRoadside`.
+#[allow(clippy::cast_possible_truncation)] // GB returns the original two-bit value.
 pub(crate) fn road_waypoint_roadside(
     m: &crate::map_func::TileTypeAccess,
     tile: u32,
 ) -> Option<crate::services::Roadside> {
     require_road_waypoint(m, tile)?;
-    Some(crate::services::Roadside((m.m3(tile)? >> 2) & 3))
+    Some(crate::services::Roadside(
+        gb(u32::from(m.m3(tile)?), 2, 2) as u8
+    ))
 }
 /// `SetRoadWaypointRoadside`.
+#[allow(clippy::cast_possible_truncation)] // SB stores back into the source byte.
 pub(crate) fn set_road_waypoint_roadside(
     m: &crate::map_func::TileTypeAccess,
     tile: u32,
     value: crate::services::Roadside,
 ) -> Option<()> {
     require_road_waypoint(m, tile)?;
-    m.set_m3(tile, (m.m3(tile)? & !0b1100) | ((value.0 & 3) << 2))
+    let mut bits = u32::from(m.m3(tile)?);
+    sb(&mut bits, 2, 2, u32::from(value.0));
+    m.set_m3(tile, bits as u8)
 }

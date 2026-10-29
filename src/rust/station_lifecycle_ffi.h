@@ -53,7 +53,6 @@ struct OpenTTDStationLifecycleServices {
 	Station *(*as_station)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(as_station);
 	bool (*cleaning_pool)() noexcept OPENTTD_SERVICE_DEFAULT(cleaning_pool);
 	const OpenTTDCargoList *(*cargo)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo);
-	OpenTTDCargoFlowMap *(*flows)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(flows);
 	void (*delete_airport_storage)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(delete_airport_storage);
 	void (*invalidate_list)(BaseStation *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_list);
 	void (*invalidate_lists)() noexcept OPENTTD_SERVICE_DEFAULT(invalidate_lists);

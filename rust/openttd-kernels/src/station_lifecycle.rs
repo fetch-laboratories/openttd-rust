@@ -86,7 +86,6 @@ pub struct Services {
     pub as_station: extern "C" fn(*mut BaseStation) -> *mut crate::station::Station,
     pub cleaning_pool: extern "C" fn() -> bool,
     pub cargo: extern "C" fn(*mut BaseStation, u8) -> *const crate::cargo_storage::List,
-    pub flows: extern "C" fn(*mut BaseStation, u8) -> *mut crate::cargo_flow::FlowMap,
     pub delete_airport_storage: extern "C" fn(*mut BaseStation),
     pub invalidate_list: extern "C" fn(*mut BaseStation, i32),
     pub invalidate_lists: extern "C" fn(),
@@ -385,8 +384,9 @@ pub(crate) unsafe fn tile_loop(tile: u32, call: *mut crate::ground::Call, s: &Se
     let map = s.shared.map();
     let size_y = (s.shared.map_max_y)() + 1;
     let st = (s.by_tile)(tile);
-    match crate::station_map::get_station_type(&m, tile)
-        .unwrap_or_else(|| (s.shared.station_type)(tile).0)
+    match crate::station_map::get_station_type(&m, TileIndex(tile))
+        .unwrap_or_else(|| (s.shared.station_type)(tile))
+        .0
     {
         STATION_AIRPORT => {
             crate::animated_tile::openttd_rust_trigger_airport_tile(
@@ -402,7 +402,8 @@ pub(crate) unsafe fn tile_loop(tile: u32, call: *mut crate::ground::Call, s: &Se
             crate::cargo_type::INVALID_CARGO,
         ),
         STATION_DOCK | STATION_OILRIG | BUOY => {
-            if crate::station_map::get_station_type(&m, tile) == Some(STATION_DOCK)
+            if crate::station_map::get_station_type(&m, TileIndex(tile))
+                .is_some_and(|kind| kind.0 == STATION_DOCK)
                 && crate::tile_map::get_tile_slope(&m, tile, map.size_x(), size_y).unwrap()
                     != crate::slope_func::SLOPE_FLAT
             {
@@ -529,6 +530,8 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
         crate::aircraft::invalidate_target(c.aircraft, id.0);
     }
     let graphs = w.graphs;
+    let links = unsafe { &*c.links };
+    let storage = unsafe { &*(s.storage)() };
     for cargo in 0..NUM_CARGO {
         let graph = (graphs.get_if_valid)((graphs.graph_id)(st, cargo));
         if graph.is_null() {
@@ -539,7 +542,8 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
         while node < unsafe { &*owner }.size() {
             let other_id = unsafe { &*owner }.nodes[usize::from(node)].station;
             let other = (w.get)(other_id);
-            let flows = (s.flows)(other, cargo);
+            let goods = (links.goods_entry)(other, cargo);
+            let flows = (storage.flow_map)(goods.cast());
             if !flows.is_null() {
                 unsafe {
                     crate::cargo_flow::openttd_rust_flow_map_erase(flows, id.0);
@@ -601,7 +605,6 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
         );
     }
     (s.delete_news)(id);
-    let storage = (s.storage)();
     for cargo in 0..NUM_CARGO {
         let list = (s.cargo)(st, cargo);
         if !list.is_null() {
@@ -653,5 +656,5 @@ pub(crate) fn airport_maintenance(s: &Services, owner: u8) -> i64 {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStationNames" ["probe"] => Names { base, central, airport, oilfield, docks, heliport, mines, lakeside, woods, forest, valley, heights, north, south, east, west, transfer, halt, exchange, annexe, sidings, branch, upper, lower, fallback, undefined, null };
-    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, storage, allocation, check, climate, names, town, industry_type, set_industry_type, spec, spec_name, spec_enabled, spec_life, set_random_bits, freeform, cargo_classes, forest, stop_data, stop_count, stop_tile, stop_random, stop_frame, stop_set_random, stop_set_frame, stop_append, stop_swap_pop, by_tile, as_station, cleaning_pool, cargo, flows, delete_airport_storage, invalidate_list, invalidate_lists, close_view, delete_news, remove_index, sign_valid, remove_sign, next_vehicle, vehicle_id, last_loading, airport_maintenance, maintenance_price };
+    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, storage, allocation, check, climate, names, town, industry_type, set_industry_type, spec, spec_name, spec_enabled, spec_life, set_random_bits, freeform, cargo_classes, forest, stop_data, stop_count, stop_tile, stop_random, stop_frame, stop_set_random, stop_set_frame, stop_append, stop_swap_pop, by_tile, as_station, cleaning_pool, cargo, delete_airport_storage, invalidate_list, invalidate_lists, close_view, delete_news, remove_index, sign_valid, remove_sign, next_vehicle, vehicle_id, last_loading, airport_maintenance, maintenance_price };
 }
