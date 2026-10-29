@@ -7,9 +7,25 @@
     clippy::cast_possible_truncation
 )]
 use crate::command_type::DoCommandFlag;
-use crate::story_base::*;
-use crate::window_type::*;
-use crate::{company_type::CompanyID, goal_type::*, league_type::*, story_type::*};
+use crate::story_base::{
+    SPET_BUTTON_PUSH, SPET_BUTTON_TILE, SPET_BUTTON_VEHICLE, SPET_GOAL, SPET_LOCATION, SPET_TEXT,
+    StoryPageButtonData,
+};
+use crate::window_type::{
+    WC_COMPANY_LEAGUE, WC_GOAL_QUESTION, WC_GOALS_LIST, WC_MAIN_TOOLBAR, WC_STORY_BOOK,
+};
+use crate::{
+    company_type::CompanyID,
+    goal_type::{
+        GOAL_QUESTION_BUTTON_COUNT, GQT_END, GQT_QUESTION, GT_COMPANY, GT_INDUSTRY, GT_NONE,
+        GT_STORY_PAGE, GT_TILE, GT_TOWN, Goal, GoalID,
+    },
+    league_type::{
+        LT_COMPANY, LT_INDUSTRY, LT_NONE, LT_STORY_PAGE, LT_TILE, LT_TOWN, LeagueTableElement,
+        LeagueTableElementID, LeagueTableID,
+    },
+    story_type::{StoryPage, StoryPageElement, StoryPageElementID, StoryPageID},
+};
 #[repr(C)]
 pub struct EncodedString {
     _private: [u8; 0],
@@ -59,8 +75,6 @@ pub struct Services {
     pub element_next: extern "C" fn(u32) -> *mut StoryPageElement,
     pub element_id: unsafe extern "C" fn(*mut StoryPageElement) -> u16,
     pub page_cleaning: extern "C" fn() -> bool,
-    pub page_sort: extern "C" fn() -> *mut u32,
-    pub element_sort: extern "C" fn() -> *mut u32,
     pub table_can_allocate: extern "C" fn() -> bool,
     pub table_allocate: unsafe extern "C" fn(
         *const EncodedString,
@@ -104,10 +118,30 @@ impl Services {
 }
 
 crate::abi::layouts! {
- fn abi_layout;
- "OpenTTDObjectivesServices" ["probe"] => Services { shared, map_allocation, goal, goal_company, goal_type, goal_dst, goal_text, goal_progress, goal_completed, goal_destroy, goal_count, goal_can_allocate, page, page_company, page_title, page_date, page_destroy, page_count, page_can_allocate, element, element_page, element_type, element_text, element_referenced_id, element_destroy, element_count, element_can_allocate, entry, entry_company, entry_table, entry_rating, entry_text, entry_score, entry_link_type, entry_link_target, entry_destroy, entry_can_allocate, goal_allocate, page_allocate, element_allocate, element_next, element_id, page_cleaning, page_sort, element_sort, table_can_allocate, table_allocate, entry_allocate, local_company, networking, network_server, own_client, client_valid, company_pool_valid, industry_valid, town_valid, vehicle_valid, text_empty, text_assign, window_data, window_classes, window_close, question_show, story_show, question_event, push_event, tile_event, vehicle_event };
+    fn abi_layout;
+    "OpenTTDStoryState" ["probe"] => StoryState { page_next_sort, element_next_sort };
+    "OpenTTDObjectivesServices" ["probe"] => Services { shared, map_allocation, goal, goal_company, goal_type, goal_dst, goal_text, goal_progress, goal_completed, goal_destroy, goal_count, goal_can_allocate, page, page_company, page_title, page_date, page_destroy, page_count, page_can_allocate, element, element_page, element_type, element_text, element_referenced_id, element_destroy, element_count, element_can_allocate, entry, entry_company, entry_table, entry_rating, entry_text, entry_score, entry_link_type, entry_link_target, entry_destroy, entry_can_allocate, goal_allocate, page_allocate, element_allocate, element_next, element_id, page_cleaning, table_can_allocate, table_allocate, entry_allocate, local_company, networking, network_server, own_client, client_valid, company_pool_valid, industry_valid, town_valid, vehicle_valid, text_empty, text_assign, window_data, window_classes, window_close, question_show, story_show, question_event, push_event, tile_event, vehicle_event };
 }
 
+// Native loader aliases and Rust control share one process-wide allocation. Accesses
+// hold the game-state mutex; raw field loads/stores end before every callback.
+#[repr(C)]
+pub struct StoryState {
+    pub page_next_sort: u32,
+    pub element_next_sort: u32,
+}
+static STORY: crate::game_state::GameState<std::mem::MaybeUninit<StoryState>> =
+    crate::game_state::GameState::new(std::mem::MaybeUninit::zeroed());
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_story_storage() -> *mut StoryState {
+    STORY.get().cast()
+}
+fn page_sort() -> *mut u32 {
+    unsafe { std::ptr::addr_of_mut!((*STORY.get().cast::<StoryState>()).page_next_sort) }
+}
+fn element_sort() -> *mut u32 {
+    unsafe { std::ptr::addr_of_mut!((*STORY.get().cast::<StoryState>()).element_next_sort) }
+}
 fn execute(flags: u16) -> bool {
     flags & DoCommandFlag::EXECUTE != 0
 }
@@ -460,10 +494,10 @@ pub unsafe extern "C" fn openttd_rust_create_story_page(
         }
         if execute(flags) {
             if (s.page_count)() == 0 {
-                (s.page_sort)().write(0);
+                page_sort().write(0);
             }
             let id = (s.page_allocate)(
-                *(s.page_sort)(),
+                *page_sort(),
                 crate::timer_game_common::calendar_date().0,
                 company.0,
                 text,
@@ -472,7 +506,7 @@ pub unsafe extern "C" fn openttd_rust_create_story_page(
             if (s.page_count)() == 1 {
                 s.toolbar_dirty();
             }
-            let next = (s.page_sort)();
+            let next = page_sort();
             next.write((*next).wrapping_add(1));
             result.write(StoryPageID(id));
         }
@@ -521,9 +555,9 @@ pub unsafe extern "C" fn openttd_rust_create_story_page_element(
         }
         if execute(flags) {
             if (s.element_count)() == 0 {
-                (s.element_sort)().write(0);
+                element_sort().write(0);
             }
-            let id = (s.element_allocate)(*(s.element_sort)(), kind, page.0);
+            let id = (s.element_allocate)(*element_sort(), kind, page.0);
             update_element(
                 s,
                 (s.element)(StoryPageElementID(id)),
@@ -532,7 +566,7 @@ pub unsafe extern "C" fn openttd_rust_create_story_page_element(
                 text,
             );
             (s.window_classes)(WC_STORY_BOOK, i32::from(page.0));
-            let next = (s.element_sort)();
+            let next = element_sort();
             next.write((*next).wrapping_add(1));
             result.write(StoryPageElementID(id));
         }

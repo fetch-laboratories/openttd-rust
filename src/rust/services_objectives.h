@@ -58,8 +58,6 @@ inline uint16_t RustObjectives_element_allocate(uint32_t sort, uint8_t type, uin
 inline StoryPageElement * RustObjectives_element_next(uint32_t from) noexcept { for (auto *p : StoryPageElement::Iterate(from)) return p; return nullptr; }
 inline uint16_t RustObjectives_element_id(StoryPageElement * p) noexcept { return p->index.base(); }
 inline bool RustObjectives_page_cleaning() noexcept { return StoryPage::CleaningPool(); }
-inline uint32_t * RustObjectives_page_sort() noexcept { return &_story_page_next_sort_value; }
-inline uint32_t * RustObjectives_element_sort() noexcept { return &_story_page_element_next_sort_value; }
 inline bool RustObjectives_table_can_allocate() noexcept { return LeagueTable::CanAllocateItem(); }
 inline uint8_t RustObjectives_table_allocate(const EncodedString * title, const EncodedString * header, const EncodedString * footer) noexcept { return (new LeagueTable(*title, *header, *footer))->index.base(); }
 inline uint16_t RustObjectives_entry_allocate(uint8_t table, int64_t rating, uint8_t company, const EncodedString * text, const EncodedString * score, uint8_t type, uint32_t target) noexcept { return (new LeagueTableElement(LeagueTableID(table), rating, CompanyID(company), *text, *score, Link(LinkType(type), target)))->index.base(); }
@@ -125,8 +123,6 @@ inline const OpenTTDObjectivesServices &GetRustObjectivesServices() noexcept
 		.element_next = RustObjectives_element_next,
 		.element_id = RustObjectives_element_id,
 		.page_cleaning = RustObjectives_page_cleaning,
-		.page_sort = RustObjectives_page_sort,
-		.element_sort = RustObjectives_element_sort,
 		.table_can_allocate = RustObjectives_table_can_allocate,
 		.table_allocate = RustObjectives_table_allocate,
 		.entry_allocate = RustObjectives_entry_allocate,

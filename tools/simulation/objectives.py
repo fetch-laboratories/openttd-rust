@@ -40,6 +40,10 @@ def observations(run: Run) -> list[str]:
     lines = [line for line in run["log"] if line.startswith("OBJECTIVES ")]
     required = (
         "commands-complete",
+        "state-shared true",
+        "page-wrap 4294967295 0",
+        "element-wrap 4294967295 0",
+        "element-reset 0 1",
         "state-complete",
         "events-complete 6",
         "result goal-global-private false",
@@ -125,10 +129,29 @@ def check(
 ) -> None:
     if "objectives" in scenario:
         lines = [line for line in run["log"] if line.startswith("OBJECTIVES ")]
-        if (
-            lines != result["objectives_state"]
-            or "OBJECTIVES state-complete" not in lines
-        ):
+        state_end = (
+            lines.index("OBJECTIVES state-complete") + 1
+            if "OBJECTIVES state-complete" in lines
+            else 0
+        )
+        if not state_end or lines[:state_end] != result["objectives_state"]:
             raise RuntimeError(
                 f"{mode}/{role}: missing or changed objectives reload state"
             )
+
+        for marker in (
+            "result reload-page true",
+            "result reload-element true",
+            "loaded-sorts ",
+            "reload-complete",
+        ):
+            if sum(line.startswith("OBJECTIVES " + marker) for line in lines) != 1:
+                raise RuntimeError(
+                    f"{mode}/{role}: missing native loader sort assignment evidence"
+                )
+        captures = result.setdefault("objectives_reload", {})
+        if captures and lines != next(iter(captures.values())):
+            raise RuntimeError(
+                f"{mode}/{role}: objectives reload commands/sort state differ"
+            )
+        captures[role] = lines

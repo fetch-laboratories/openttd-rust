@@ -52,8 +52,6 @@ struct OpenTTDObjectivesServices {
 	StoryPageElement * (*element_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(element_next);
 	uint16_t (*element_id)(StoryPageElement *) noexcept OPENTTD_SERVICE_DEFAULT(element_id);
 	bool (*page_cleaning)() noexcept OPENTTD_SERVICE_DEFAULT(page_cleaning);
-	uint32_t * (*page_sort)() noexcept OPENTTD_SERVICE_DEFAULT(page_sort);
-	uint32_t * (*element_sort)() noexcept OPENTTD_SERVICE_DEFAULT(element_sort);
 	bool (*table_can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(table_can_allocate);
 	uint8_t (*table_allocate)(const EncodedString *, const EncodedString *, const EncodedString *) noexcept OPENTTD_SERVICE_DEFAULT(table_allocate);
 	uint16_t (*entry_allocate)(uint8_t, int64_t, uint8_t, const EncodedString *, const EncodedString *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(entry_allocate);

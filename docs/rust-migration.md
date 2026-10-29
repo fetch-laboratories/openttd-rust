@@ -2455,7 +2455,8 @@ unexercised exception combinations remain #156 coverage limits. PR: #547.
 
 Rust owns destination/content validation, command test/execute policy, page and
 element ordering and deletion, goal mutations, league ratings/links and GS event
-eligibility. Native pools retain records and strings through canonical typed
+eligibility. Rust owns both process-wide next-sort counters; stable native aliases
+preserve the loader's assignments. Native pools retain records and strings through canonical typed
 record accessors and allocation/deletion operations. The page destructor calls
 the same Rust lifecycle policy; pool cleanup keeps its original early exit.
 Native button packing/getters, windows, rendering, save/load and script VM

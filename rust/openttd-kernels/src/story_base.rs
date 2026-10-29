@@ -1,6 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Packed button data from `story_base.h`; native facades preserve setter assertions.
-#![allow(missing_docs)]
+#![allow(unsafe_code, missing_docs, clippy::cast_possible_truncation)]
 pub const SPET_TEXT: u8 = 0;
 pub const SPET_LOCATION: u8 = 1;
 pub const SPET_GOAL: u8 = 2;

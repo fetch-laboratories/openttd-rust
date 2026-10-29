@@ -22,6 +22,7 @@
 #include "string_func.h"
 #include "table/strings.h"
 #include "core/random_func.hpp"
+#include <thread>
 
 static bool capture_events = false;
 static unsigned event_count = 0;
@@ -61,10 +62,53 @@ static void State()
 	fmt::print(stderr, "OBJECTIVES rng {} {}\n", _random.state[0], _random.state[1]);
 	fmt::print(stderr, "OBJECTIVES state-complete\n");
 }
+static void SortStateProbe(StoryPageID page, TileIndex tile, const EncodedString &text)
+{
+	bool shared = false;
+	std::thread check([&] {
+#ifdef WITH_RUST
+		auto *state = openttd_rust_story_storage();
+		shared = &state->page_next_sort == &_story_page_next_sort_value && &state->element_next_sort == &_story_page_element_next_sort_value;
+#else
+		shared = true;
+#endif
+	});
+	check.join();
+	fmt::print(stderr, "OBJECTIVES state-shared {}\n", shared);
+	uint32_t saved_page = _story_page_next_sort_value, saved_element = _story_page_element_next_sort_value;
+	const auto run = DoCommandFlag::Execute;
+	_story_page_next_sort_value = UINT32_MAX;
+	auto wrapped = Created(Observe<CMD_CREATE_STORY_PAGE>("page-sort-wrap", run, CompanyID::Invalid(), text));
+	fmt::print(stderr, "OBJECTIVES page-wrap {} {}\n", StoryPage::Get(wrapped)->sort_value, _story_page_next_sort_value);
+	Observe<CMD_REMOVE_STORY_PAGE>("page-sort-cleanup", run, wrapped);
+	_story_page_next_sort_value = saved_page;
+	auto primer = Created(Observe<CMD_CREATE_STORY_PAGE_ELEMENT>("element-sort-primer", run, tile, page, SPET_TEXT, 0, text));
+	_story_page_element_next_sort_value = UINT32_MAX;
+	auto element = Created(Observe<CMD_CREATE_STORY_PAGE_ELEMENT>("element-sort-wrap", run, tile, page, SPET_TEXT, 0, text));
+	fmt::print(stderr, "OBJECTIVES element-wrap {} {}\n", StoryPageElement::Get(element)->sort_value, _story_page_element_next_sort_value);
+	Observe<CMD_REMOVE_STORY_PAGE_ELEMENT>("element-sort-cleanup", run, element);
+	Observe<CMD_REMOVE_STORY_PAGE_ELEMENT>("element-sort-primer-cleanup", run, primer);
+	_story_page_element_next_sort_value = UINT32_MAX;
+	auto reset = Created(Observe<CMD_CREATE_STORY_PAGE_ELEMENT>("element-sort-reset", run, tile, page, SPET_TEXT, 0, text));
+	fmt::print(stderr, "OBJECTIVES element-reset {} {}\n", StoryPageElement::Get(reset)->sort_value, _story_page_element_next_sort_value);
+	Observe<CMD_REMOVE_STORY_PAGE_ELEMENT>("element-sort-reset-cleanup", run, reset);
+	_story_page_element_next_sort_value = saved_element;
+}
 static bool ObjectivesScenario([[maybe_unused]] uint8_t argc, const char * const *argv)
 {
 	if (argc < 2) return false;
-	if (std::string_view(argv[1]) == "inspect") { State(); return true; }
+	if (std::string_view(argv[1]) == "inspect") {
+		State();
+		Backup<CompanyID> actor(_current_company, OWNER_DEITY);
+		const auto text = GetEncodedString(STR_JUST_RAW_STRING, "reload");
+		uint32_t page_sort = _story_page_next_sort_value, element_sort = _story_page_element_next_sort_value;
+		auto page = Created(Observe<CMD_CREATE_STORY_PAGE>("reload-page", DoCommandFlag::Execute, CompanyID::Invalid(), text));
+		auto element = Created(Observe<CMD_CREATE_STORY_PAGE_ELEMENT>("reload-element", DoCommandFlag::Execute, TileXY(10, 10), page, SPET_TEXT, 0, text));
+		fmt::print(stderr, "OBJECTIVES loaded-sorts {} {} {} {}\n", page_sort, StoryPage::Get(page)->sort_value, element_sort, StoryPageElement::Get(element)->sort_value);
+		fmt::print(stderr, "OBJECTIVES reload-complete\n");
+		actor.Restore();
+		return true;
+	}
 	Backup<CompanyID> actor(_current_company, OWNER_DEITY);
 	const auto run = DoCommandFlag::Execute;
 	const CompanyID global = CompanyID::Invalid(), company = (*Company::Iterate().begin())->index;
@@ -72,6 +116,7 @@ static bool ObjectivesScenario([[maybe_unused]] uint8_t argc, const char * const
 	for (const Company *c : Company::Iterate()) if (c->index != company) { other = c->index; break; }
 	if (other == global) { auto *c = DoStartupNewCompany(false); if (c == nullptr) std::abort(); other = c->index; _current_company = OWNER_DEITY; }
 	const EncodedString text = GetEncodedString(STR_JUST_RAW_STRING, "objectives"), empty;
+	if (StoryPage::GetNumItems() == 0) _story_page_next_sort_value = UINT32_MAX;
 	const StoryPageID page = Created(Observe<CMD_CREATE_STORY_PAGE>("page-global", run, global, text));
 	const StoryPageID private_page = Created(Observe<CMD_CREATE_STORY_PAGE>("page-company", run, company, empty));
 	const StoryPageID other_page = Created(Observe<CMD_CREATE_STORY_PAGE>("page-other", run, other, text));
@@ -80,6 +125,7 @@ static bool ObjectivesScenario([[maybe_unused]] uint8_t argc, const char * const
 	const GoalID goal = Created(Observe<CMD_CREATE_GOAL>("goal-global", run, global, GT_STORY_PAGE, page.base(), text));
 	const GoalID private_goal = Created(Observe<CMD_CREATE_GOAL>("goal-company", run, company, GT_STORY_PAGE, private_page.base(), text));
 	const TileIndex tile = TileXY(10, 10);
+	SortStateProbe(page, tile, text);
 	for (uint8_t kind = 0; kind <= 6; ++kind) {
 		uint32_t valid = 0;
 		if (kind == GT_TILE) valid = tile.base();
@@ -118,7 +164,7 @@ static bool ObjectivesScenario([[maybe_unused]] uint8_t argc, const char * const
 	const auto vehicle_button = element("element-vehicle", page, SPET_BUTTON_VEHICLE, 0);
 	Observe<CMD_CREATE_STORY_PAGE_ELEMENT>("element-goal-refused", run, tile, page, SPET_GOAL, private_goal.base(), empty);
 	for (uint8_t kind = 0; kind <= 6; ++kind) for (uint32_t ref : {UINT32_MAX, 0x03000000U, 0x0000FF00U, 0x00FE0000U}) {
-		Observe<CMD_CREATE_STORY_PAGE_ELEMENT>(fmt::format("element-invalid-{}-{}", kind, ref), {}, INVALID_TILE, page, StoryPageElementType(kind), ref, empty);
+		Observe<CMD_CREATE_STORY_PAGE_ELEMENT>(fmt::format("element-invalid-{}-{}", kind, ref), {}, kind == SPET_LOCATION ? INVALID_TILE : TileIndex{}, page, StoryPageElementType(kind), ref, empty);
 	}
 	Observe<CMD_UPDATE_STORY_PAGE_ELEMENT>("element-update-refused", run, INVALID_TILE, location, 0, text);
 	Observe<CMD_UPDATE_STORY_PAGE_ELEMENT>("element-update", run, tile + 1, location, 0, text);
@@ -129,8 +175,8 @@ static bool ObjectivesScenario([[maybe_unused]] uint8_t argc, const char * const
 	{
 		Backup<CompanyID> player(_current_company, company);
 		Observe<CMD_CREATE_GOAL>("company-refusal", run, global, GT_NONE, 0, text);
-		Observe<CMD_STORY_PAGE_BUTTON>("button-push-test", {}, INVALID_TILE, push, VehicleID::Invalid());
-		Observe<CMD_STORY_PAGE_BUTTON>("button-push", run, INVALID_TILE, push, VehicleID::Invalid());
+		Observe<CMD_STORY_PAGE_BUTTON>("button-push-test", {}, TileIndex{}, push, VehicleID::Invalid());
+		Observe<CMD_STORY_PAGE_BUTTON>("button-push", run, TileIndex{}, push, VehicleID::Invalid());
 		Observe<CMD_STORY_PAGE_BUTTON>("button-tile-invalid", run, INVALID_TILE, tile_button, VehicleID::Invalid());
 		Observe<CMD_STORY_PAGE_BUTTON>("button-tile", run, tile, tile_button, VehicleID::Invalid());
 		Observe<CMD_STORY_PAGE_BUTTON>("button-vehicle-invalid", run, tile, vehicle_button, VehicleID::Invalid());
@@ -160,7 +206,8 @@ static bool ObjectivesScenario([[maybe_unused]] uint8_t argc, const char * const
 	{
 		Backup<bool> server(_network_server, true);
 		Observe<CMD_GOAL_QUESTION>("question-missing-client-test", {}, 46, UINT32_MAX, true, 1, GQT_QUESTION, text);
-		Observe<CMD_GOAL_QUESTION>("question-missing-client-execute", run, 46, UINT32_MAX, true, 1, GQT_QUESTION, text);
+		/* Network replay executes after its earlier test; the client can leave in between. */
+		Outcome("question-missing-client-execute", CmdGoalQuestion(run, 46, UINT32_MAX, true, 1, GQT_QUESTION, text));
 		server.Restore();
 	}
 	capture_events = false;

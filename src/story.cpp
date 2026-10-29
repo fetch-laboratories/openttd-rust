@@ -33,8 +33,10 @@
 #include "safeguards.h"
 
 
+#ifndef WITH_RUST
 uint32_t _story_page_element_next_sort_value;
 uint32_t _story_page_next_sort_value;
+#endif
 
 StoryPageElementPool _story_page_element_pool("StoryPageElement");
 StoryPagePool _story_page_pool("StoryPage");
