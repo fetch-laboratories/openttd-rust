@@ -52,6 +52,10 @@ jobs:
       env:
         BASE_REF: ${{ inputs.base-ref || github.event.pull_request.base.sha || github.event.before }}
       run: python3 tools/shared-accessors.py --base-ref "$BASE_REF"
+    - name: Reject orphan Rust exports and declarations
+      env:
+        BASE_REF: ${{ inputs.base-ref || github.event.pull_request.base.sha || github.event.before }}
+      run: python3 tools/orphan-exports.py --base-ref "$BASE_REF"
     - name: Check strings and script mode enforcement
       run: |
         python3 .github/unused-strings.py

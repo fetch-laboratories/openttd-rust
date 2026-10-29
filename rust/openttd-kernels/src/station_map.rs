@@ -5,12 +5,52 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Shared station predicates from `station_map.h`, through typed map services.
+//! Shared `station_map.h` helpers for live map fields and remaining typed services.
+use crate::bitmath_func::gb;
+use crate::map_func::TileTypeAccess;
 use crate::services::Services;
 use crate::station_type::{
     RAIL_WAYPOINT, ROAD_WAYPOINT, STATION_AIRPORT, STATION_BUS, STATION_TRUCK,
 };
-use crate::tile_type::MP_STATION;
+use crate::tile_type::{MP_STATION, TileIndex};
+
+/// `GetStationType`, including its native tile-type assertion policy.
+#[inline]
+#[allow(clippy::cast_possible_truncation)] // GB returns the original four-bit value.
+pub(crate) fn get_station_type(
+    m: &TileTypeAccess,
+    tile: TileIndex,
+) -> Option<crate::services::StationType> {
+    m.require_type(tile.0, MP_STATION)?;
+    Some(crate::services::StationType(
+        gb(u32::from(m.m6(tile.0)?), 3, 4) as u8,
+    ))
+}
+
+/// `IsTruckStop`.
+#[inline]
+pub(crate) fn is_truck_stop(m: &TileTypeAccess, tile: TileIndex) -> Option<bool> {
+    Some(get_station_type(m, tile)?.0 == STATION_TRUCK)
+}
+
+/// `IsBusStop`.
+#[inline]
+pub(crate) fn is_bus_stop(m: &TileTypeAccess, tile: TileIndex) -> Option<bool> {
+    Some(get_station_type(m, tile)?.0 == STATION_BUS)
+}
+
+/// `IsRoadWaypoint`.
+#[inline]
+pub(crate) fn is_road_waypoint(m: &TileTypeAccess, tile: TileIndex) -> Option<bool> {
+    Some(get_station_type(m, tile)?.0 == ROAD_WAYPOINT)
+}
+
+/// `IsAnyRoadStop`, preserving the source predicate order.
+#[inline]
+pub(crate) fn is_any_road_stop(m: &TileTypeAccess, tile: TileIndex) -> Option<bool> {
+    m.require_type(tile.0, MP_STATION)?;
+    Some(is_truck_stop(m, tile)? || is_bus_stop(m, tile)? || is_road_waypoint(m, tile)?)
+}
 
 /// `IsAirport`; the station type leaf keeps its native assertion.
 pub(crate) fn is_airport(tile: u32, s: &Services) -> bool {

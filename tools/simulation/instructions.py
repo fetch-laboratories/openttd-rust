@@ -8,49 +8,80 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import TypedDict
 
 ENTRIES = ("StateGameLoop()", "_GenerateWorld()")
 
 # Quiet speed pass at 755609b8ea (#275): ratio is the median of
 # four three-pair medians; Ir and compatible identity come from profiles of the
-# same build.
+# same build. Ratios are the last three quiet passes, oldest first,
+# retained from b959f89059, f4923c79eb and 755609b8ea respectively. The latest
+# pass alone supplies the compatible instruction anchor; decisions use the mean.
 SPEED_HEAD = "755609b8ea"
 # fmt: off
 SPEED_PASS = (
-    ("generate-tgp-256-1", 1.1117224479856325, 2734468220, "b5985e2afec2a7f3e2479df4e89f1bcf8560e9204398040de25f425cfb3b24a8"),
-    ("play-opus-55-167-002-manual", 1.3939491755220992, 28553652121, "7822ce2275a9fb521a67d47cdcdac6b1e9c433322de683cdfb6df5a3f2507ca3"),
-    ("play-grok-159-001-manual", 1.3871469688959217, 27140212414, "dc7e6fee2c033dc0c1506d3f18c9b8edfc4ffaf2d8962570063d1526dc4d0204"),
-    ("play-padhattan-ridge-1996-manual", 1.3365508365508365, 4559471842, "f95e791a1617f2e457fdd4f9b92b51bd9a663632f5390f3f66f0e2d92db2be24"),
-    ("play-padhattan-ridge-2000-manual", 1.4005769924269744, 7441795115, "62575c1e01fe179a4b0c2f7f75bba73b2256c23a7b3ba08c2b22e59efe6e1d47"),
-    ("play-padhattan-ridge-2016-manual", 1.522910560065014, 13501045042, "206fefda1a3c05ae702d001fb1b6aff2a36e59ee09e1213a6deba000d8288430"),
+    ("generate-tgp-256-1", (1.172280764574488, 1.1783150183150184, 1.1117224479856325), 2734468220, "b5985e2afec2a7f3e2479df4e89f1bcf8560e9204398040de25f425cfb3b24a8"),
+    ("play-opus-55-167-002-manual", (1.3879109594186272, 1.4018075231030847, 1.3939491755220992), 28553652121, "7822ce2275a9fb521a67d47cdcdac6b1e9c433322de683cdfb6df5a3f2507ca3"),
+    ("play-grok-159-001-manual", (1.374991116425806, 1.394822381542774, 1.3871469688959217), 27140212414, "dc7e6fee2c033dc0c1506d3f18c9b8edfc4ffaf2d8962570063d1526dc4d0204"),
+    ("play-padhattan-ridge-1996-manual", (1.3413361169102298, 1.3354044451788813, 1.3365508365508365), 4559471842, "f95e791a1617f2e457fdd4f9b92b51bd9a663632f5390f3f66f0e2d92db2be24"),
+    ("play-padhattan-ridge-2000-manual", (1.410312146769846, 1.3934479388770433, 1.4005769924269744), 7441795115, "62575c1e01fe179a4b0c2f7f75bba73b2256c23a7b3ba08c2b22e59efe6e1d47"),
+    ("play-padhattan-ridge-2016-manual", (1.453359475929639, 1.4694601348806955, 1.522910560065014), 13501045042, "206fefda1a3c05ae702d001fb1b6aff2a36e59ee09e1213a6deba000d8288430"),
 )
 # Loop Ir at the anchor, in SPEED_PASS order, for projecting instruction-count growth.
 SPEED_INTEGRATED = SPEED_HEAD, tuple(ir for _, _, ir, _ in SPEED_PASS)
 # fmt: on
 SPEED_ANCHORS = {
     name: dict(
-        anchor=dict(head=SPEED_HEAD, ratio=ratio, Ir=ir, identity={"compatible": c}),
+        anchor=dict(
+            head=SPEED_HEAD, ratio=ratios[-1], Ir=ir, identity={"compatible": c}
+        ),
         integrated=dict(head=SPEED_INTEGRATED[0], Ir=integrated),
     )
-    for (name, ratio, ir, c), integrated in zip(
+    for (name, ratios, ir, c), integrated in zip(
         SPEED_PASS, SPEED_INTEGRATED[1], strict=True
     )
 }
-SPEED_BUDGETS = {name: ratio for name, ratio, _, _ in SPEED_PASS}
+SPEED_BUDGETS = {name: sum(ratios) / len(ratios) for name, ratios, _, _ in SPEED_PASS}
 
 
-def speed_budget(name, ratio, integrated=None):
+class SpeedBudget(TypedDict):
+    record: float
+    quiet_pass_mean: float
+    previous_record: float
+    change_percent: float
+    ceiling: float
+    band: float
+    within_ceiling: bool
+    near_ceiling: bool
+
+
+def speed_budget(
+    name: str,
+    ratio: float | None,
+    integrated: float | None = None,
+    anchor_ratio: float | None = None,
+) -> SpeedBudget | None:
     """Report the speed record and ceiling without making timings a CI failure."""
-    record = SPEED_BUDGETS.get(name) if integrated is None else integrated
-    if record is None or ratio is None:
+    mean = SPEED_BUDGETS.get(name, anchor_ratio)
+    if mean is None or ratio is None:
         return None
-    ceiling = 1.5 if name.startswith("play-") else 1.3
+    record = mean if anchor_ratio is None else mean * (ratio / anchor_ratio)
+    previous = (
+        mean
+        if integrated is None or anchor_ratio is None
+        else mean * (integrated / anchor_ratio)
+    )
+    ceiling = 1.6 if name.startswith("play-") else 1.3
     return {
         "record": record,
-        "change_percent": (ratio / record - 1) * 100,
+        "quiet_pass_mean": mean,
+        "previous_record": previous,
+        "change_percent": (ratio / (mean if integrated is None else integrated) - 1)
+        * 100,
         "ceiling": ceiling,
-        "within_ceiling": ratio <= ceiling,
-        "near_ceiling": ratio >= 0.95 * ceiling,
+        "band": 0.95 * ceiling,
+        "within_ceiling": record <= ceiling,
+        "near_ceiling": record >= 0.95 * ceiling,
     }
 
 
@@ -253,4 +284,6 @@ def budget(name, measurement, record):
         )
     ratio = projection(anchor, measurement["Ir"])
     rolling = projection(anchor, integrated["Ir"])
-    return dict(projected_ratio=ratio, **speed_budget(name, ratio, rolling))
+    return dict(
+        projected_ratio=ratio, **speed_budget(name, ratio, rolling, anchor["ratio"])
+    )

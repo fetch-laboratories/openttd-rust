@@ -385,7 +385,10 @@ def summarize(out, manifest, names, groups):
         f"{sum(bool(entry['unheld']) for entry in loads)} with unheld processes"
     )
     print(f'SPEED_HEAD = "{manifest["head"][:10]}"\nSPEED_PASS = (')
-    for row in rows:
+    history = {name: ratios for name, ratios, _, _ in instructions.SPEED_PASS}
+    for name, ratio, ir, identity in rows:
+        ratios = (*history.get(name, ())[-2:], ratio)
+        row = (name, ratios, ir, identity)
         print(f"    {row!r},".replace("'", '"'))
     print(")")
     return 0
