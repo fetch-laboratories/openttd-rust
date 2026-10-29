@@ -66,8 +66,9 @@ The current verification setup targets native Linux and needs a C++20 compiler, 
 Python 3.11 or newer, SDL2 development files, and the normal OpenTTD libraries described in
 `COMPILING.md`. OpenGFX supplies free graphics for regression games; commercial game assets are
 unnecessary. The verification driver requires the pinned Rust toolchain and always configures
-the candidate with `OPTION_RUST=ON`. Ordinary CMake builds still default to `OPTION_RUST=OFF`,
-which compiles the original C++ bodies. Rust linkage supports native GNU/Linux (64-bit x86 or
+the candidate with `OPTION_RUST=ON`, which is also the CMake default. Only the Emscripten CI
+build still sets `OPTION_RUST=OFF`, which compiles the original C++ bodies, until #581's
+Emscripten step. Rust linkage supports native GNU/Linux (64-bit x86 or
 ARM) and native macOS arm64. The scoped native Windows MSVC mode is described below. Other
 platforms, cross compilation, and macOS universal/Intel configurations reject an enabled Rust
 option. #581 builds Rust on every CI configuration, including Emscripten, then removes the
