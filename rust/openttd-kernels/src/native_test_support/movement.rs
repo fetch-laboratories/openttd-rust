@@ -8,7 +8,7 @@
 //! Native oracle for the private production movement context.
 use super::{Context, MapObservations, table};
 use crate::services::Services;
-use crate::tile_type::MP_ROAD;
+use crate::tile_type::{MP_ROAD, MP_STATION, TileIndex};
 
 /// Native map probe uses the production context against unchanged native helpers.
 /// The mutation callback preserves allocation/dimensions and serialization.
@@ -30,6 +30,19 @@ pub(crate) fn map_read_probe(
     for pass in 0..2 {
         let kind = (shared.tile_type)(tile);
         if context.tile_type(tile) != kind {
+            return false;
+        }
+        if crate::road_map::may_have_road(&observations.types, TileIndex(tile))
+            != Some((shared.may_have_road)(tile))
+        {
+            return false;
+        }
+        let station = crate::station_map::get_station_type(&observations.types, TileIndex(tile));
+        if kind == MP_STATION {
+            if station.map(|kind| kind.0) != Some((shared.station_type)(tile).0) {
+                return false;
+            }
+        } else if observations.types.assertions() == station.is_some() {
             return false;
         }
         if kind == MP_ROAD && (s.normal_road)(tile) {
@@ -66,7 +79,6 @@ pub(crate) fn map_read_probe(
         } else if observations.types.assertions()
             && crate::road_map::has_tile_road_type(
                 &observations.types,
-                shared,
                 tile,
                 crate::road_type::RTT_ROAD,
             )
@@ -83,7 +95,6 @@ pub(crate) fn map_read_probe(
             .is_none()
                 || crate::road_map::has_tile_road_type(
                     &observations.types,
-                    shared,
                     tile,
                     crate::road_type::RTT_TRAM,
                 )
