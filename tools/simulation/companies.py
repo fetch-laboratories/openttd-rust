@@ -388,10 +388,19 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             if differences or traces[0] != traces[1]:
                 result["differences"].extend(differences)
                 raise RuntimeError("company identity capture differs")
+            rng = [
+                line.split()
+                for line in traces[0]
+                if line.startswith("COMPANY-IDENTITY rng ")
+            ]
+            if len(rng) != 1 or len(rng[0]) != 6:
+                raise RuntimeError("company capture lacks an unambiguous RNG record")
+            first, second = (int(value) for value in rng[0][-2:])
+            record["interactive_reload"] = [first, second]
             scenario = dict(
                 scenario,
                 role_inputs={role: {"save": str(save)} for role, save in saves.items()},
-                console=["fleet_scenario company-inspect", "unpause"],
+                console=[f"fleet_scenario company-resume {first} {second}", "unpause"],
             )
         return scenario
     return dict(scenario, save=str(prepared))
@@ -472,6 +481,14 @@ def check(scenario, run, mode, role, result):
                 raise RuntimeError("company identity commands did not complete")
         if not any(line.startswith("COMPANY-IDENTITY rng ") for line in log):
             raise RuntimeError("company identity lacks both RNG streams")
+        if scenario["console"][0].startswith("fleet_scenario company-resume "):
+            if not any(
+                line.startswith("COMPANY-IDENTITY command face-after-reload true ")
+                for line in log
+            ):
+                raise RuntimeError(
+                    "company identity did not consume the reloaded RNG input"
+                )
         if (
             after[1]["name_1"] == after[2]["name_1"]
             and after[1]["name_2"] == after[2]["name_2"]

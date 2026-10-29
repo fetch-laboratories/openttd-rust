@@ -1269,6 +1269,12 @@ static UnitID _drain_unit = 0;
 #include "company-identity-console.inc"
 static bool FleetScenario(std::span<std::string_view> args)
 {
+	if (args.size() == 4 && args[1] == "company-resume") {
+		auto first = ParseInteger<uint32_t>(args[2]), second = ParseInteger<uint32_t>(args[3]);
+		if (!first.has_value() || !second.has_value()) FixtureAbort(__LINE__);
+		CompanyIdentityResume(*first, *second);
+		return true;
+	}
 	if (args.size() != 2) return false;
 	if (args[1] == "company-identity") { CompanyIdentityProbe(); return true; }
 	if (args[1] == "company-inspect") { CompanyIdentityInspect(); return true; }

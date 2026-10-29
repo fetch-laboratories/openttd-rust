@@ -2,6 +2,7 @@
 /** @file company-identity-console.inc Company identity production-command witnesses. */
 #include "company_cmd.h"
 #include "company_manager_face.h"
+#include "core/string_consumer.hpp"
 
 static void CompanyIdentityInspect()
 {
@@ -33,7 +34,14 @@ static void CompanyIdentityResult(std::string_view label, const CommandCost &cos
 static void CompanyIdentityProbe()
 {
 	Backup<CompanyID> company(_current_company, CompanyID(1));
+	/* The save restores only _random; UI randomness is an explicit fixture input. */
+	_interactive_random.SetSeed(0x561C0F1U);
 	if (Company::GetNumItems() != MAX_COMPANIES) FixtureAbort(__LINE__);
+	SavedRandomSeeds before, after;
+	SaveRandomSeeds(&before);
+	CompanyIdentityResult("capacity", Command<CMD_COMPANY_CTRL>::Do(DoCommandFlag::Execute, CCA_NEW_AI, CompanyID::Invalid(), CRR_NONE, static_cast<ClientID>(0)), true);
+	SaveRandomSeeds(&after);
+	if (Company::GetNumItems() != MAX_COMPANIES || !SameRandom(before, after)) FixtureAbort(__LINE__);
 	Company *c = Company::Get(_current_company);
 	CompanyIdentityResult("rename", Command<CMD_RENAME_COMPANY>::Do(DoCommandFlag::Execute, "Identity Company"), true);
 	CompanyIdentityResult("rename-self", Command<CMD_RENAME_COMPANY>::Do({}, "Identity Company"), false);
@@ -41,6 +49,10 @@ static void CompanyIdentityProbe()
 	_current_company = CompanyID(2);
 	CompanyIdentityResult("rename-collision", Command<CMD_RENAME_COMPANY>::Do(DoCommandFlag::Execute, "Identity Company"), false);
 	CompanyIdentityResult("president-collision", Command<CMD_RENAME_PRESIDENT>::Do(DoCommandFlag::Execute, "Identity President"), false);
+	CompanyIdentityResult("president-auto-company", Command<CMD_RENAME_PRESIDENT>::Do(DoCommandFlag::Execute, "Identity Second"), true);
+	if (Company::Get(CompanyID(2))->name != "Identity Second Transport") FixtureAbort(__LINE__);
+	CompanyIdentityResult("auto-company-reset", Command<CMD_RENAME_COMPANY>::Do(DoCommandFlag::Execute, ""), true);
+	CompanyIdentityResult("auto-president-reset", Command<CMD_RENAME_PRESIDENT>::Do(DoCommandFlag::Execute, ""), true);
 	_current_company = CompanyID(1);
 	CompanyIdentityResult("name-length", Command<CMD_RENAME_COMPANY>::Do({}, std::string(MAX_LENGTH_COMPANY_NAME_CHARS, 'x')), false);
 	CompanyIdentityResult("president-length", Command<CMD_RENAME_PRESIDENT>::Do({}, std::string(MAX_LENGTH_PRESIDENT_NAME_CHARS, 'x')), false);
@@ -49,6 +61,7 @@ static void CompanyIdentityProbe()
 	for (uint style : {GetNumCompanyManagerFaceStyles(), 65536U, UINT_MAX}) {
 		CompanyIdentityResult("face-style", Command<CMD_SET_COMPANY_MANAGER_FACE>::Do({}, style, 0U), false);
 	}
+	CompanyIdentityResult("face-bits", Command<CMD_SET_COMPANY_MANAGER_FACE>::Do({}, 0U, UINT32_MAX), false);
 	CompanyManagerFace face;
 	for (uint i = 0; i < 8; i++) {
 		RandomiseCompanyManagerFace(face, _interactive_random);
@@ -65,6 +78,7 @@ static void CompanyIdentityProbe()
 	CompanyIdentityResult("group-colour", Command<CMD_SET_GROUP_LIVERY>::Do(DoCommandFlag::Execute, child, false, COLOUR_RED), true);
 	CompanyIdentityResult("colour-duplicate", Command<CMD_SET_COMPANY_COLOUR>::Do({}, LS_DEFAULT, true, Company::Get(CompanyID(2))->colour), false);
 	CompanyIdentityResult("colour-invalid-default", Command<CMD_SET_COMPANY_COLOUR>::Do({}, LS_DEFAULT, true, INVALID_COLOUR), false);
+	CompanyIdentityResult("colour-range", Command<CMD_SET_COMPANY_COLOUR>::Do({}, LS_BUS, true, static_cast<Colours>(COLOUR_END)), false);
 	CompanyIdentityResult("colour-invalid-scheme", Command<CMD_SET_COMPANY_COLOUR>::Do({}, LS_END, true, COLOUR_BLUE), false);
 	Colours unused = COLOUR_BEGIN;
 	for (; unused < COLOUR_END; unused = static_cast<Colours>(unused + 1)) {
@@ -85,5 +99,18 @@ static void CompanyIdentityProbe()
 	}
 	CompanyIdentityInspect();
 	fmt::print(stderr, "COMPANY-IDENTITY complete true\n");
+	company.Restore();
+}
+
+static void CompanyIdentityResume(uint32_t first, uint32_t second)
+{
+	/* Carry the observed interactive stream separately from the native save format. */
+	_interactive_random.state[0] = first;
+	_interactive_random.state[1] = second;
+	Backup<CompanyID> company(_current_company, CompanyID(1));
+	CompanyManagerFace face;
+	RandomiseCompanyManagerFace(face, _interactive_random);
+	CompanyIdentityResult("face-after-reload", Command<CMD_SET_COMPANY_MANAGER_FACE>::Do(DoCommandFlag::Execute, face.style, face.bits), true);
+	CompanyIdentityInspect();
 	company.Restore();
 }
