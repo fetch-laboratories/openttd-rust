@@ -85,6 +85,8 @@ static void Trees()
 	shared.map_max_x = []() noexcept { return 63U; };
 	shared.map_max_y = []() noexcept { return 63U; };
 	shared.tile_type = [](uint32_t tile) noexcept { return static_cast<uint8_t>(tile == 1 || tile == 2 ? 4 : 5); };
+	/* Station tiles reach no station arm. */
+	shared.station_type = [](uint32_t) noexcept { return StationType::End; };
 	shared.tree_ground = [](uint32_t tile) noexcept {
 		/* A water observation reenters trees; no owner borrow spans the call. */
 		++tree_probe.waters;
@@ -126,6 +128,9 @@ static void Trees()
 		{.build_price = 15, .size = 4096, .climate = 0, .editor = false, .execute = false, .company_valid = false}, &tree_probe_services, &shared, nullptr, &commands, 0);
 	CHECK(command.cost == 30 && command.status == 0);
 	tree_probe.plant.tile_type = 0;
+	OpenTTDRoadStopResolverServices roadstops{};
+	roadstops.by_tile = [](uint32_t) noexcept -> BaseStation * { return nullptr; };
+	const OpenTTDStationLifecycleServices station{.shared = &shared, .roadstop = &roadstops};
 	const OpenTTDLandscapeLoopServices loop{
 		.shared = &shared,
 		.tile_types = {},
@@ -133,7 +138,7 @@ static void Trees()
 		.industry = {},
 		.ground = {},
 		.town = nullptr,
-		.station = nullptr,
+		.station = &station,
 		.objects = nullptr,
 	};
 	const uint32_t cursor = *openttd_rust_tile_loop_cursor();
