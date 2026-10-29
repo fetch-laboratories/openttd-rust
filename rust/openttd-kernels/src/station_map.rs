@@ -6,6 +6,7 @@
  */
 
 //! Shared `station_map.h` helpers for live map fields and remaining typed services.
+use crate::bitmath_func::gb;
 use crate::map_func::TileTypeAccess;
 use crate::services::Services;
 use crate::station_type::{
@@ -15,12 +16,15 @@ use crate::tile_type::{MP_STATION, TileIndex};
 
 /// `GetStationType`, including its native tile-type assertion policy.
 #[inline]
+#[allow(clippy::cast_possible_truncation)] // GB returns the original four-bit value.
 pub(crate) fn get_station_type(
     m: &TileTypeAccess,
     tile: TileIndex,
 ) -> Option<crate::services::StationType> {
     m.require_type(tile.0, MP_STATION)?;
-    Some(crate::services::StationType((m.m6(tile.0)? >> 3) & 15))
+    Some(crate::services::StationType(
+        gb(u32::from(m.m6(tile.0)?), 3, 4) as u8,
+    ))
 }
 
 /// `IsTruckStop`.
