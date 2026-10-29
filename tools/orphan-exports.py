@@ -18,7 +18,12 @@ DECLARATION = re.compile(
 
 
 def violations(files: dict[str, str]) -> set[str]:
-    exports, declarations, references = set(), set(), set()
+    exports, declarations, boundary_declarations, references = (
+        set(),
+        set(),
+        set(),
+        set(),
+    )
     for path, text in files.items():
         if path.startswith("rust/") and path.endswith(".rs"):
             exports.update(
@@ -29,12 +34,14 @@ def violations(files: dict[str, str]) -> set[str]:
             # extern "C" was masked with other strings; it isn't needed to find
             # names, but leaving its prefix would hide a one-line declaration.
             source = re.sub(r"\bextern\s+(?=\w)", "", source)
+            found = set(DECLARATION.findall(source))
+            declarations.update(found)
             if path.startswith("src/rust/"):
-                declarations.update(DECLARATION.findall(source))
+                boundary_declarations.update(found)
             references.update(re.findall(NAME, DECLARATION.sub("", source)))
     return {f"no declaration | {name}" for name in exports - declarations} | {
         f"no production user | {name}"
-        for name in exports | declarations
+        for name in exports | boundary_declarations
         if name not in references
     }
 

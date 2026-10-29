@@ -31,8 +31,8 @@ class OrphanTests(unittest.TestCase):
             + export("table")
             + export("orphan")
             + 'const EXAMPLE: &str = r#"#[no_mangle] pub extern "C" fn openttd_rust_fake() {}"#;',
-            "src/rust/ffi.h": 'extern "C" void openttd_rust_call();\n'
-            "const Thing *openttd_rust_table(\n int, void (*callback)());\n"
+            "src/owner.h": 'extern "C" void openttd_rust_call();\n',
+            "src/rust/ffi.h": "const Thing *openttd_rust_table(\n int, void (*callback)());\n"
             "void openttd_rust_orphan();\n",
             "src/owner.cpp": "void Run() { openttd_rust_call(); }\n"
             "const Services table{.callback = openttd_rust_table};\n"

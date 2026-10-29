@@ -680,7 +680,7 @@ claim of behavioral completion. Historical roadmap rows retain their labelled le
 
 `python3 tools/orphan-exports.py --base-ref origin/rust-migration` checks quick CI's
 production-use rule independently of the shared-accessor heuristic. Rust exports require a
-`src/rust/` declaration, and exports/declarations require a production C++ reference under
+production C++ declaration, and exports/`src/rust/` declarations require a production C++ reference under
 `src/`. A service-table binding counts; comments, strings, declarations, `src/tests/`, tooling
 and Windows ABI fixtures do not. Existing violations are named in
 `tools/orphan-export-baseline.txt`, which must shrink when fixed and cannot grow against the

@@ -1,9 +1,4 @@
-no declaration | openttd_rust_animate_tile
-no declaration | openttd_rust_generating_world
-no declaration | openttd_rust_ground_destroy
-no declaration | openttd_rust_ground_new
 no declaration | openttd_rust_map_read_probe
-no declaration | openttd_rust_may_animate
 no declaration | openttd_rust_shared_tile_type
 no declaration | openttd_rust_tgp_estimate
 no production user | openttd_rust_abi_layout_named
