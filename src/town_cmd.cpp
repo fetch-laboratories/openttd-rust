@@ -1209,7 +1209,6 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.allow_crossings = RustTown_allow_crossings,
 		.climate = OpenTTDLandscapeValue,
 		.highest_snow_line = OpenTTDHighestSnowLine,
-		.calendar_year = openttd_rust_clock_calendar_year,
 		.allow_roads = RustAllowTownRoads,
 		.road_flags = RustTownRoadFlags,
 		.house_availability = RustTownHouseAvailability,

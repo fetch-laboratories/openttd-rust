@@ -248,8 +248,8 @@ public:
 	LinkGraph &operator=(const LinkGraph &) = delete;
 	void Init(uint size) { assert(this->Size() == 0); openttd_rust_live_graph_init(this->owner, size); }
 	void ShiftDates(TimerGameEconomy::Date interval) { openttd_rust_live_graph_shift(this->owner, interval.base()); }
-	void Compress() { openttd_rust_live_graph_compress(this->owner, TimerGameEconomy::date.base()); }
-	void Merge(LinkGraph *other) { openttd_rust_live_graph_merge(this, other, TimerGameEconomy::date.base(), &GetRustLiveGraphServices()); }
+	void Compress() { openttd_rust_live_graph_compress(this->owner); }
+	void Merge(LinkGraph *other) { openttd_rust_live_graph_merge(this, other, &GetRustLiveGraphServices()); }
 	OpenTTDLiveGraph *RustState() const { return this->owner; }
 	int32_t &SaveCompression() { return *openttd_rust_live_graph_date(this->owner); }
 	uint8_t &SaveCargo() { return *openttd_rust_live_graph_cargo(this->owner); }

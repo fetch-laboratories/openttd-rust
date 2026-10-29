@@ -48,7 +48,9 @@ pub unsafe extern "C" fn openttd_rust_global_variable(
                 .wrapping_sub(DAYS_TILL_ORIGINAL_BASE_YEAR)
                 .max(0) as u32,
             0x01 => {
-                ((shared.calendar_year)().clamp(ORIGINAL_BASE_YEAR, ORIGINAL_MAX_YEAR)
+                (crate::timer_game_common::calendar_year()
+                    .0
+                    .clamp(ORIGINAL_BASE_YEAR, ORIGINAL_MAX_YEAR)
                     - ORIGINAL_BASE_YEAR) as u32
             }
             0x02 => {
@@ -112,7 +114,7 @@ pub unsafe extern "C" fn openttd_rust_global_variable(
             0x21 => (s.newgrf_version)(),
             0x22 => crate::settings_type::SP_CUSTOM,
             0x23 => crate::timer_game_common::calendar_date().0 as u32,
-            0x24 => (shared.calendar_year)() as u32,
+            0x24 => crate::timer_game_common::calendar_year().0 as u32,
             _ => return false,
         };
         value.write(result);

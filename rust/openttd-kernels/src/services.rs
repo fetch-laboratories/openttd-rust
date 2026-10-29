@@ -813,9 +813,6 @@ pub fn fixture(
     extern "C" fn zero_byte() -> u8 {
         0
     }
-    extern "C" fn zero_year() -> i32 {
-        0
-    }
     extern "C" fn byte(_: u32) -> u8 {
         0
     }
@@ -894,8 +891,6 @@ pub fn fixture(
         bridge_axis: byte,
         bridge_speed: short,
         build_on_slopes: flag0,
-        calendar_date: zero_year,
-        calendar_year: zero_year,
         clear_square_services: ClearSquareServices {
             docking: flag,
             generating_world: flag0,
@@ -911,7 +906,6 @@ pub fn fixture(
         disaster_sound: flag0,
         distance_from_edge: word,
         drive_through_axis: byte,
-        economy_date: zero_year,
         forbid_90_deg: flag0,
         free_train_reservation: train,
         has_road_type: flag,

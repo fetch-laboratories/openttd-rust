@@ -198,7 +198,6 @@ pub struct Services {
     pub seed_config: unsafe extern "C" fn(*const OpenTTDEngine) -> SeedConfig,
     pub base_intro: unsafe extern "C" fn(*const OpenTTDEngine) -> i32,
     pub aging_year: unsafe extern "C" fn(*const OpenTTDEngine) -> AgingYear,
-    pub calendar_year: unsafe extern "C" fn() -> i32,
     pub never_expire: unsafe extern "C" fn() -> bool,
     pub start_settings: unsafe extern "C" fn() -> StartSettings,
     pub train_limit: unsafe extern "C" fn() -> u16,
@@ -495,7 +494,7 @@ pub unsafe extern "C" fn openttd_rust_engine_aging_stops(s: *const Services) {
 pub unsafe extern "C" fn openttd_rust_engine_start_all(s: *const Services) {
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
     let s = unsafe { &*s };
-    let date = unsafe { call!(&*s.shared, calendar_date) }.min(
+    let date = crate::timer_game_common::calendar_date().0.min(
         crate::timer_game_common::calendar_ymd_to_date(unsafe { AGING_STOPS }, 0, 1),
     );
     let aging = crate::timer_game_common::calendar_date_to_ymd(date);
@@ -709,7 +708,7 @@ unsafe fn preview_company(s: &Services, e: EngineRef) -> u8 {
 pub(crate) unsafe fn openttd_rust_engine_daily(s: *const Services) {
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
     let s = unsafe { &*s };
-    let date = unsafe { call!(&*s.shared, calendar_date) };
+    let date = crate::timer_game_common::calendar_date().0;
     let mut from = 0;
     loop {
         let c = unsafe { call!(s, company_next, from) };
@@ -737,7 +736,7 @@ pub(crate) unsafe fn openttd_rust_engine_daily(s: *const Services) {
             );
         }
     }
-    if unsafe { call!(s, calendar_year) } >= unsafe { AGING_STOPS } {
+    if crate::timer_game_common::calendar_year().0 >= unsafe { AGING_STOPS } {
         crate::witness::hit(crate::witness::ENGINE_CUTOFF);
         return;
     }
@@ -878,11 +877,11 @@ unsafe fn available(s: &Services, e: EngineRef, date: i32) {
 pub unsafe extern "C" fn openttd_rust_engine_monthly(s: *const Services) {
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
     let s = unsafe { &*s };
-    if unsafe { call!(s, calendar_year) } >= unsafe { AGING_STOPS } {
+    if crate::timer_game_common::calendar_year().0 >= unsafe { AGING_STOPS } {
         crate::witness::hit(crate::witness::ENGINE_CUTOFF);
         return;
     }
-    let date = unsafe { call!(&*s.shared, calendar_date) };
+    let date = crate::timer_game_common::calendar_date().0;
     let mut refresh = false;
     let mut from = 0;
     loop {
@@ -1280,7 +1279,6 @@ crate::abi::layouts! {
         seed_config,
         base_intro,
         aging_year,
-        calendar_year,
         never_expire,
         start_settings,
         train_limit,

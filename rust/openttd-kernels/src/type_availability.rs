@@ -45,7 +45,7 @@ pub fn services(shared: &Shared) -> &Services {
     unsafe { &*(shared.type_availability)() }
 }
 /// Read canonical lifecycle scalars without borrowing the owner across reentry.
-pub unsafe fn company_available(e: EngineRef, company: u8, shared: &Shared) -> bool {
+pub unsafe fn company_available(e: EngineRef, company: u8) -> bool {
     // SAFETY: next resolved one live engine shell/owner; reads end before leaves.
     let available = unsafe { std::ptr::addr_of!((*e.state).company_avail).read() };
     u64::from(available) & 1u64.wrapping_shl(u32::from(company)) != 0

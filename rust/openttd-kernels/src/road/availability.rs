@@ -106,7 +106,7 @@ fn engine_types(shared: &Shared, s: &Services, company: Option<u8>, introduces: 
             continue;
         }
         if let Some(company) = company {
-            if !unsafe { company_available(e, company, shared) } {
+            if !unsafe { company_available(e, company) } {
                 continue;
             }
         }

@@ -175,6 +175,7 @@ static bool BuildRoad(uint32_t town, uint32_t tile, uint32_t bits, uint32_t type
 static bool BuildTunnel(uint32_t tile, uint32_t type, uint32_t execute) noexcept { return TunnelCommand(tile, type, execute != 0).Succeeded(); }
 static bool Candidate()
 {
+	AutoRestoreBackup<decltype(GetRustClockState().calendar_year)> calendar_year_scope(GetRustClockState().calendar_year, decltype(GetRustClockState().calendar_year){1950});
 	AutoRestoreBackup<uint64_t> road_mask(*openttd_rust_road_mask(), 1);
 	openttd_rust_town_simulation(world->owner)->population = world->town.cache.population;
 	auto leaves = TownProtocolServices();
