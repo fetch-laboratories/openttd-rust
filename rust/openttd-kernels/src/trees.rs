@@ -1381,6 +1381,9 @@ mod tests {
             make_snow,
             water_services,
             movement_services,
+            map_log_x: water_map_log_x,
+            map_max_x: water_map_max,
+            map_max_y: water_map_max,
             tile_type: water_type,
             play_sound: sound,
             clear_square_services: crate::services::ClearSquareServices {
@@ -1476,6 +1479,12 @@ mod tests {
             movement
         }; }
         MOVEMENT.with(std::ptr::from_ref)
+    }
+    extern "C" fn water_map_log_x() -> u32 {
+        6
+    }
+    extern "C" fn water_map_max() -> u32 {
+        63
     }
     extern "C" fn water_map() -> crate::map_func::TileTypeAllocation {
         use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation};
