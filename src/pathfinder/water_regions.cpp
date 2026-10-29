@@ -25,11 +25,12 @@
 #ifdef WITH_RUST
 #include "../rust/water_regions_ffi.h"
 #include "../rust/services_ffi.h"
+#include "../rust/services_bridge.h"
 
 static uint32_t WaterAqueduct(uint32_t tile) noexcept
 {
 	const TileIndex t{tile};
-	return IsBridgeTile(t) && GetTunnelBridgeTransportType(t) == TRANSPORT_WATER ? GetOtherBridgeEnd(t).base() : INVALID_TILE.base();
+	return IsBridgeTile(t) && GetTunnelBridgeTransportType(t) == TRANSPORT_WATER ? RustOtherBridgeEnd(tile) : INVALID_TILE.base();
 }
 
 static void WaterDebug(uint8_t operation, int32_t x, int32_t y) noexcept

@@ -90,7 +90,7 @@ const OpenTTDTunnelBridgeServices &GetRustTunnelBridgeServices() noexcept
 		.max_bridge_height = RustMaxBridgeHeight,
 		.max_tunnel_length = RustMaxTunnelLength,
 		.crossing_tunnels = []() noexcept -> bool { return _cheats.crossing_tunnels.value; },
-		.other_bridge_end = [](uint32_t t) noexcept -> uint32_t { return GetOtherBridgeEnd(TileIndex{t}).base(); },
+		.other_bridge_end = RustOtherBridgeEnd,
 		.northern_bridge_end = [](uint32_t t) noexcept -> uint32_t { return GetNorthernBridgeEnd(TileIndex{t}).base(); },
 		.bridge_type = RustBridgeType,
 		.is_tunnel = RustIsTunnel,

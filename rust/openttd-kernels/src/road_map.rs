@@ -154,6 +154,7 @@ pub(crate) fn has_tile_road_type(
     Some(get_road_type(m, tile, kind)?.0 != crate::road_type::INVALID_ROADTYPE)
 }
 
+#[allow(clippy::cast_possible_truncation)] // GB returns the original field width.
 impl crate::map_func::World<'_> {
     pub(crate) fn normal_road(&self, t: u32) -> bool {
         self.kind(t) == crate::tile_type::MP_ROAD
@@ -170,7 +171,7 @@ impl crate::map_func::World<'_> {
     }
     pub(crate) fn road_depot_dir(&self, t: u32) -> u8 {
         self.check(self.road_depot(t));
-        Self::byte(self.types.m5(t)) & 3
+        crate::bitmath_func::gb(u32::from(Self::byte(self.types.m5(t))), 0, 2) as u8
     }
     pub(crate) fn road_type(&self, t: u32, tram: bool) -> u8 {
         get_road_type(&self.types, t, crate::services::RoadTramType(tram))

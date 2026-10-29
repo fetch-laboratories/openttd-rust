@@ -1840,6 +1840,7 @@ crate::abi::layouts! {
         rear_virtual_tile,
         dest_tile,
         length,
+        speed,
         order_destination,
         td,
         rear_td,

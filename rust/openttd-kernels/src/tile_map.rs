@@ -93,6 +93,7 @@ pub(crate) fn tile_hash_2bit(x: u32, y: u32) -> u32 {
     tile_hash(x, y) & 3
 }
 
+#[allow(clippy::cast_possible_truncation)] // GB returns the original field width.
 impl crate::map_func::World<'_> {
     pub(crate) fn owner(&self, t: u32) -> u8 {
         self.check(t < self.types.count() && self.kind(t) != crate::tile_type::MP_VOID);
@@ -100,6 +101,6 @@ impl crate::map_func::World<'_> {
             self.kind(t) != crate::tile_type::MP_HOUSE
                 && self.kind(t) != crate::tile_type::MP_INDUSTRY,
         );
-        Self::byte(self.types.m1(t)) & 0x1f
+        crate::bitmath_func::gb(u32::from(Self::byte(self.types.m1(t))), 0, 5) as u8
     }
 }

@@ -6,13 +6,16 @@
  */
 
 //! Shared `station_map.h` helpers for live map fields and remaining typed services.
-use crate::bitmath_func::gb;
+use crate::bitmath_func::{gb, has_bit};
 use crate::map_func::TileTypeAccess;
 use crate::services::Services;
 use crate::station_type::{
     RAIL_WAYPOINT, ROAD_WAYPOINT, STATION_AIRPORT, STATION_BUS, STATION_TRUCK,
 };
 use crate::tile_type::{MP_STATION, TileIndex};
+
+/// `GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET`.
+pub const GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET: u8 = 4;
 
 /// `GetStationType`, including its native tile-type assertion policy.
 #[inline]
@@ -151,28 +154,45 @@ impl crate::map_func::World<'_> {
             )
     }
     pub(crate) fn bay_stop(&self, t: u32) -> bool {
-        self.station_road_stop(t) && Self::byte(self.types.m5(t)) < 4
+        self.station_road_stop(t) && self.station_gfx(t) < GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET
     }
     pub(crate) fn bay_dir(&self, t: u32) -> u8 {
         self.check(self.bay_stop(t));
+        self.station_gfx(t)
+    }
+    /// `GetStationGfx`.
+    pub(crate) fn station_gfx(&self, t: u32) -> u8 {
+        self.check(self.kind(t) == MP_STATION);
         Self::byte(self.types.m5(t))
+    }
+    /// `GetStationIndex`.
+    pub(crate) fn station_index(&self, t: u32) -> crate::station_type::StationID {
+        self.check(self.kind(t) == MP_STATION);
+        crate::station_type::StationID(Self::word(self.types.m2(t)))
+    }
+    /// `IsStationTileBlocked`.
+    pub(crate) fn station_blocked(&self, t: u32) -> bool {
+        self.check(self.has_station_rail(t));
+        has_bit(Self::byte(self.types.m3(t)), 0)
     }
     pub(crate) fn station_axis(&self, t: u32) -> u8 {
         self.check(self.has_station_rail(t));
-        Self::byte(self.types.m5(t)) & 1
+        u8::from(has_bit(self.station_gfx(t), 0))
     }
     pub(crate) fn station_reserved(&self, t: u32) -> bool {
         self.check(self.has_station_rail(t));
-        Self::byte(self.types.m6(t)) & 4 != 0
+        has_bit(Self::byte(self.types.m6(t)), 2)
     }
     pub(crate) fn compatible_station(&self, t: u32, start: u32) -> bool {
         self.check(self.rail_station(start));
         self.rail_station(t)
-            && Self::byte(self.types.m3(t)) & 1 == 0
-            && (crate::pbs::Pbs::acquire(self.shared).0.compatible)(self.rail_type(t))
-                & (1_u64 << self.rail_type(start))
-                != 0
+            && !self.station_blocked(t)
+            && crate::rail::is_compatible_rail(
+                self.shared,
+                self.rail_type(t),
+                self.rail_type(start),
+            )
             && self.station_axis(t) == self.station_axis(start)
-            && Self::word(self.types.m2(t)) == Self::word(self.types.m2(start))
+            && self.station_index(t) == self.station_index(start)
     }
 }

@@ -70,7 +70,7 @@ impl State {
     ) -> Self {
         let m = crate::movement::table(s);
         m.native_assert_call(mode != ROAD || v.is_some());
-        m.native_assert_call(mode != RAIL || railtypes != u64::MAX);
+        m.native_assert_call(mode != RAIL || railtypes != crate::rail_type::INVALID_RAILTYPES);
         Self {
             veh: v.map_or(std::ptr::null_mut(), |v| v.0.as_ptr()),
             railtypes,
@@ -108,7 +108,7 @@ impl State {
         let owner = v.map_or(crate::company_type::INVALID_OWNER, |v| {
             (m.vehicle().owner)(v)
         });
-        let types = if mode == RAIL && types == u64::MAX {
+        let types = if mode == RAIL && types == crate::rail_type::INVALID_RAILTYPES {
             (m.vehicle().train_handle)(v.unwrap().0.as_ptr()).get_compatible_railtypes()
         } else {
             types
@@ -438,7 +438,7 @@ pub(crate) fn platform_length_station(w: &World<'_>, mut tile: u32, dir: u8) -> 
     let start = tile;
     let mut length: u32 = 0;
     w.check(w.rail_station(tile));
-    w.check(dir < 4);
+    w.check(dir < crate::direction_type::DIAGDIR_END);
     loop {
         length = length.wrapping_add(1);
         tile = w.dimensions.add_diag(tile, dir);
@@ -452,7 +452,7 @@ pub(crate) fn speed_limit(s: &Services, mode: u8, v: Option<VehicleRef>, tile: u
     let m = crate::movement::table(s);
     let mut speed = i32::MAX;
     if mode != WATER && w.kind(tile) == crate::tile_type::MP_TUNNELBRIDGE && w.bridge(tile) {
-        speed = i32::from((m.bridge_type_speed)(u32::from(w.bridge_type(tile))));
+        speed = i32::from((m.bridge_type_speed)(w.bridge_type(tile)));
         if mode == ROAD {
             speed *= 2;
         }
@@ -525,7 +525,7 @@ pub unsafe extern "C" fn openttd_rust_platform_length(
     if directional {
         return platform_length_station(&w, tile, dir);
     }
-    w.check(w.rail_station(tile) && World::word(w.types.m2(tile)) == station);
+    w.check(w.rail_station(tile) && w.station_index(tile).0 == station);
     let delta = w.dimensions.offs_by_axis(w.station_axis(tile));
     let mut t = tile;
     let mut len: u32 = 0;
@@ -572,7 +572,14 @@ pub(crate) fn rail(
     result
 }
 pub(crate) fn water(s: &Services, tile: u32, td: u8) -> (State, bool) {
-    let mut state = State::vehicle(s, WATER, None, u64::MAX, true, false);
+    let mut state = State::vehicle(
+        s,
+        WATER,
+        None,
+        crate::rail_type::INVALID_RAILTYPES,
+        true,
+        false,
+    );
     let ok = state.follow(s, tile, td);
     (state, ok)
 }

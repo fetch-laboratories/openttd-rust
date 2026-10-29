@@ -39,14 +39,14 @@ pub unsafe extern "C" fn openttd_rust_bridge_height(s: *const Services, tile: u3
 impl crate::map_func::World<'_> {
     pub(crate) fn bridge(&self, t: u32) -> bool {
         self.check(self.kind(t) == crate::tile_type::MP_TUNNELBRIDGE);
-        Self::byte(self.types.m5(t)) & 128 != 0
+        crate::bitmath_func::has_bit(Self::byte(self.types.m5(t)), 7)
     }
 }
 
 impl crate::map_func::World<'_> {
     /// `GetBridgeType`, preserving `IsBridgeTile`'s assertion.
-    pub(crate) fn bridge_type(&self, t: u32) -> u8 {
+    pub(crate) fn bridge_type(&self, t: u32) -> u32 {
         self.check(self.kind(t) == crate::tile_type::MP_TUNNELBRIDGE && self.bridge(t));
-        crate::bitmath_func::gb(u32::from(Self::byte(self.types.m6(t))), 2, 4) as u8
+        crate::bitmath_func::gb(u32::from(Self::byte(self.types.m6(t))), 2, 4)
     }
 }

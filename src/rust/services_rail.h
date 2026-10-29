@@ -54,7 +54,6 @@ inline void RustRailSetSignalGreen(uint32_t tile, uint8_t td, uint8_t green) noe
 inline Axis RustRailStationAxis(uint32_t tile) noexcept { return GetRailStationAxis(TileIndex(tile)); }
 inline Axis RustCrossingRoadAxis(uint32_t tile) noexcept { return GetCrossingRoadAxis(TileIndex(tile)); }
 inline TransportType RustTunnelBridgeTransport(uint32_t tile) noexcept { return GetTunnelBridgeTransportType(TileIndex(tile)); }
-inline uint32_t RustOtherBridgeEnd(uint32_t tile) noexcept { return GetOtherBridgeEnd(TileIndex{tile}).base(); }
 inline uint32_t RustOtherTunnelBridgeEnd(uint32_t tile) noexcept { return GetOtherTunnelBridgeEnd(TileIndex(tile)).base(); }
 
 /* Rail command, depot and crossing leaves (rail_cmd.rs). */
