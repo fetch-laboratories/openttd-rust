@@ -6,6 +6,9 @@
 #include "services_ffi.h"
 struct Goal; struct StoryPage; struct StoryPageElement; struct LeagueTableElement; class EncodedString;
 struct OpenTTDCompanyServices;
+struct OpenTTDOrdersLeaves;
+struct OpenTTDSubsidyServices;
+struct OpenTTDRoadCommandServices;
 /** Records and strings stay in native pools. Pointers address their live fields;
  * no pointer or borrow survives destruction, pool cleanup or a reentrant callback.
  * Commands hold the game-state mutex. Events enqueue without entering the VM. */
@@ -55,10 +58,10 @@ struct OpenTTDObjectivesServices {
 	bool (*table_can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(table_can_allocate);
 	uint8_t (*table_allocate)(const EncodedString *, const EncodedString *, const EncodedString *) noexcept OPENTTD_SERVICE_DEFAULT(table_allocate);
 	uint16_t (*entry_allocate)(uint8_t, int64_t, uint8_t, const EncodedString *, const EncodedString *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(entry_allocate);
-	uint32_t (*own_client)() noexcept OPENTTD_SERVICE_DEFAULT(own_client);
+	const OpenTTDOrdersLeaves *orders;
 	bool (*client_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(client_valid);
-	bool (*industry_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_valid);
-	bool (*town_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_valid);
+	const OpenTTDSubsidyServices *subsidy;
+	const OpenTTDRoadCommandServices *road_commands;
 	bool (*vehicle_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_valid);
 	bool (*text_empty)(const EncodedString *) noexcept OPENTTD_SERVICE_DEFAULT(text_empty);
 	void (*text_assign)(EncodedString *, const EncodedString *) noexcept OPENTTD_SERVICE_DEFAULT(text_assign);

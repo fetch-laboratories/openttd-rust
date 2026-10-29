@@ -4,6 +4,8 @@
 #define RUST_OBJECTIVES_SERVICES_H
 #include "objectives_ffi.h"
 #include "company_adapter.h"
+#include "orders_ffi.h"
+#include "road_command_ffi.h"
 #include "../goal_base.h"
 #include "../story_base.h"
 #include "../league_base.h"
@@ -59,10 +61,7 @@ inline bool RustObjectives_page_cleaning() noexcept { return StoryPage::Cleaning
 inline bool RustObjectives_table_can_allocate() noexcept { return LeagueTable::CanAllocateItem(); }
 inline uint8_t RustObjectives_table_allocate(const EncodedString * title, const EncodedString * header, const EncodedString * footer) noexcept { return (new LeagueTable(*title, *header, *footer))->index.base(); }
 inline uint16_t RustObjectives_entry_allocate(uint8_t table, int64_t rating, uint8_t company, const EncodedString * text, const EncodedString * score, uint8_t type, uint32_t target) noexcept { return (new LeagueTableElement(LeagueTableID(table), rating, CompanyID(company), *text, *score, Link(LinkType(type), target)))->index.base(); }
-inline uint32_t RustObjectives_own_client() noexcept { return static_cast<uint32_t>(_network_own_client_id); }
 inline bool RustObjectives_client_valid(uint32_t id) noexcept { return NetworkClientInfo::GetByClientID(ClientID(id)) != nullptr; }
-inline bool RustObjectives_industry_valid(uint32_t id) noexcept { return Industry::IsValidID(id); }
-inline bool RustObjectives_town_valid(uint32_t id) noexcept { return Town::IsValidID(id); }
 inline bool RustObjectives_vehicle_valid(uint32_t id) noexcept { return Vehicle::IsValidID(VehicleID(id)); }
 inline bool RustObjectives_text_empty(const EncodedString * text) noexcept { return text->empty(); }
 inline void RustObjectives_text_assign(EncodedString * to, const EncodedString * text) noexcept { *to = *text; }
@@ -123,10 +122,10 @@ inline const OpenTTDObjectivesServices &GetRustObjectivesServices() noexcept
 		.table_can_allocate = RustObjectives_table_can_allocate,
 		.table_allocate = RustObjectives_table_allocate,
 		.entry_allocate = RustObjectives_entry_allocate,
-		.own_client = RustObjectives_own_client,
+		.orders = &GetRustOrdersLeaves(),
 		.client_valid = RustObjectives_client_valid,
-		.industry_valid = RustObjectives_industry_valid,
-		.town_valid = RustObjectives_town_valid,
+		.subsidy = &GetRustSubsidyServices(),
+		.road_commands = &GetRustRoadCommandServices(),
 		.vehicle_valid = RustObjectives_vehicle_valid,
 		.text_empty = RustObjectives_text_empty,
 		.text_assign = RustObjectives_text_assign,

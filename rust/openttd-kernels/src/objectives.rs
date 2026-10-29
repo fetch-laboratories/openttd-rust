@@ -90,10 +90,10 @@ pub struct Services {
         u8,
         u32,
     ) -> LeagueTableElementID,
-    pub own_client: extern "C" fn() -> u32,
+    pub orders: *const crate::orders::Leaves,
     pub client_valid: extern "C" fn(u32) -> bool,
-    pub industry_valid: extern "C" fn(u32) -> bool,
-    pub town_valid: extern "C" fn(u32) -> bool,
+    pub subsidy: *const crate::subsidy::Services,
+    pub road_commands: *const crate::road_cmd::RoadCommandServices,
     pub vehicle_valid: extern "C" fn(u32) -> bool,
     pub text_empty: unsafe extern "C" fn(*const EncodedString) -> bool,
     pub text_assign: unsafe extern "C" fn(*mut EncodedString, *const EncodedString),
@@ -119,7 +119,7 @@ impl Services {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStoryState" ["probe"] => StoryState { page_next_sort, element_next_sort };
-    "OpenTTDObjectivesServices" ["probe"] => Services { shared, company, map_allocation, goal, goal_company, goal_type, goal_dst, goal_text, goal_progress, goal_completed, goal_count, goal_can_allocate, page, page_company, page_title, page_date, page_count, page_can_allocate, element, element_page, element_type, element_text, element_referenced_id, element_destroy, element_count, element_can_allocate, entry, entry_company, entry_table, entry_rating, entry_text, entry_score, entry_link_type, entry_link_target, entry_destroy, entry_can_allocate, goal_allocate, page_allocate, element_allocate, element_next, element_id, page_cleaning, table_can_allocate, table_allocate, entry_allocate, own_client, client_valid, industry_valid, town_valid, vehicle_valid, text_empty, text_assign, window_data, window_classes, window_close, question_show, story_show, question_event, push_event, tile_event, vehicle_event };
+    "OpenTTDObjectivesServices" ["probe"] => Services { shared, company, map_allocation, goal, goal_company, goal_type, goal_dst, goal_text, goal_progress, goal_completed, goal_count, goal_can_allocate, page, page_company, page_title, page_date, page_count, page_can_allocate, element, element_page, element_type, element_text, element_referenced_id, element_destroy, element_count, element_can_allocate, entry, entry_company, entry_table, entry_rating, entry_text, entry_score, entry_link_type, entry_link_target, entry_destroy, entry_can_allocate, goal_allocate, page_allocate, element_allocate, element_next, element_id, page_cleaning, table_can_allocate, table_allocate, entry_allocate, orders, client_valid, subsidy, road_commands, vehicle_valid, text_empty, text_assign, window_data, window_classes, window_close, question_show, story_show, question_event, push_event, tile_event, vehicle_event };
 }
 
 // Native loader aliases and Rust control share one process-wide allocation. Accesses
@@ -151,6 +151,14 @@ impl Services {
     fn company_valid(&self, company: CompanyID) -> bool {
         (self.shared().company_valid)(company.0)
     }
+    fn industry_valid(&self, id: u32) -> bool {
+        u16::try_from(id).is_ok_and(|id| unsafe {
+            ((*self.subsidy).valid_source)(crate::source_type::Source::industry(id))
+        })
+    }
+    fn town_valid(&self, id: u32) -> bool {
+        u16::try_from(id).is_ok_and(|id| unsafe { ((*self.road_commands).town_valid)(id) })
+    }
     fn tile_valid(&self, tile: u32) -> bool {
         let allocation = (self.map_allocation)();
         // SAFETY: command/lifecycle execution holds the mutex and cannot reset or yield the map.
@@ -179,8 +187,8 @@ pub unsafe extern "C" fn openttd_rust_valid_goal_destination(
     match kind {
         GT_NONE => dest == 0,
         GT_TILE => s.tile_valid(dest),
-        GT_INDUSTRY => (s.industry_valid)(dest),
-        GT_TOWN => (s.town_valid)(dest),
+        GT_INDUSTRY => s.industry_valid(dest),
+        GT_TOWN => s.town_valid(dest),
         // Company::IsValidID takes the full u32; IDs above u8 lie past the company pool.
         GT_COMPANY => u8::try_from(dest).is_ok_and(|id| s.company_valid(CompanyID(id))),
         GT_STORY_PAGE => {
@@ -372,7 +380,7 @@ pub unsafe extern "C" fn openttd_rust_goal_question(
     }
     if execute(flags) {
         if is_client {
-            if target != (s.own_client)() {
+            if target != unsafe { ((*s.orders).network_client)() as u32 } {
                 return true;
             }
         } else {
@@ -784,8 +792,8 @@ pub extern "C" fn openttd_rust_valid_link(s: &Services, kind: u8, target: u32) -
     match kind {
         LT_NONE => target == 0,
         LT_TILE => s.tile_valid(target),
-        LT_INDUSTRY => (s.industry_valid)(target),
-        LT_TOWN => (s.town_valid)(target),
+        LT_INDUSTRY => s.industry_valid(target),
+        LT_TOWN => s.town_valid(target),
         LT_COMPANY => u8::try_from(target).is_ok_and(|id| s.company_valid(CompanyID(id))),
         LT_STORY_PAGE => !(s.page)(target).is_null(),
         _ => false,
