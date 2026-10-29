@@ -1382,7 +1382,6 @@ mod tests {
             water_services,
             movement_services,
             tile_type: water_type,
-            tree_ground: water,
             play_sound: sound,
             clear_square_services: crate::services::ClearSquareServices {
                 docking: clear_flag,
@@ -1458,10 +1457,6 @@ mod tests {
     extern "C" fn make_snow(_: u32, _: u32) {
         log(Event::Write("snow"));
     }
-    extern "C" fn water(_: u32) -> crate::services::TreeGround {
-        log(Event::Water);
-        crate::services::TreeGround(0)
-    }
     extern "C" fn water_type(_: u32) -> u8 {
         MP_TREES
     }
@@ -1473,7 +1468,7 @@ mod tests {
         }; }
         WATER.with(std::ptr::from_ref)
     }
-    // Water entries use the same immutable tree tiles as `water_type`.
+    // Resolving the view observes water entry; its ground stays dry, as in the fixture.
     extern "C" fn movement_services() -> *const crate::movement::MovementServices {
         thread_local! { static MOVEMENT: crate::movement::MovementServices = {
             let mut movement = crate::train_reservation::tests::movement_table();
@@ -1502,6 +1497,9 @@ mod tests {
                 m8: 0,
             }
         }; 4096];
+        if WORLD.with_borrow(|w| w.tree.ground == GROUND_SHORE) {
+            log(Event::Water);
+        }
         TileTypeAllocation {
             base: BASE.as_ptr(),
             extended: EXTENDED.as_ptr(),
