@@ -150,7 +150,7 @@ struct SessionFixture {
 		*openttd_rust_clock_storage() = clocks;
 		_game_mode = saved_mode;
 		_pause_mode = saved_pause;
-		if (saved_cursor == 0) *openttd_rust_tile_loop_cursor() = 0;
+		if (loop.services == &tiles || saved_cursor == 0) *openttd_rust_tile_loop_cursor() = saved_cursor;
 		return result;
 	}
 };
