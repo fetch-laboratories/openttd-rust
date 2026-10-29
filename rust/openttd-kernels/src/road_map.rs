@@ -146,3 +146,8 @@ pub(crate) fn has_tile_road_type(
 ) -> Option<bool> {
     Some(get_road_type(m, s, tile, kind)?.0 != crate::road_type::INVALID_ROADTYPE)
 }
+
+/// `Roadside::Barren`.
+pub const ROADSIDE_BARREN: Roadside = Roadside(0);
+/// `Roadside::Grass`.
+pub const ROADSIDE_GRASS: Roadside = Roadside(1);

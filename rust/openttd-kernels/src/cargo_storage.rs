@@ -1199,7 +1199,12 @@ unsafe fn walk(
         n = next;
     }
 }
-unsafe fn truncate_station(l: *mut List, s: Services, max_move: u32, origins: *mut c_void) -> u32 {
+pub(crate) unsafe fn truncate_station(
+    l: *mut List,
+    s: Services,
+    max_move: u32,
+    origins: *mut c_void,
+) -> u32 {
     let max_move = max_move.min(unsafe { fields(l) }.count);
     let previous = unsafe { fields(l) }.count;
     let mut moved = 0_u32;

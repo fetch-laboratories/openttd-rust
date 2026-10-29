@@ -31,6 +31,10 @@
 #include "table/strings.h"
 #ifdef WITH_RUST
 #include "rust/services_station.h"
+#include "rust/station_lifecycle_ffi.h"
+#include "rust/station_command_ffi.h"
+#include "rust/services_assert.h"
+#include "rust/services_cargo.h"
 #include "rust/services_industry.h"
 #include "rust/industry_shell_services.h"
 #include "rust/settings_services.h"
@@ -95,6 +99,9 @@ Station::Station(TileIndex tile) :
  */
 Station::~Station()
 {
+#ifdef WITH_RUST
+	openttd_rust_station_destruct(&GetRustStationLifecycleServices(), this);
+#else
 	if (CleaningPool()) {
 		for (GoodsEntry &ge : this->goods) {
 			if (!ge.HasData()) continue;
@@ -176,6 +183,7 @@ Station::~Station()
 
 	_station_kdtree.Remove(this->index);
 	if (this->sign.kdtree_valid) _viewport_sign_kdtree.Remove(ViewportSignKdtreeItem::MakeStation(this->index));
+#endif
 }
 
 
@@ -190,6 +198,9 @@ void BaseStation::PostDestructor(size_t)
 
 bool BaseStation::SetRoadStopTileData(TileIndex tile, uint8_t data, bool animation)
 {
+#ifdef WITH_RUST
+	return openttd_rust_station_stop_data(&GetRustStationLifecycleServices(), this, tile.base(), data, animation);
+#else
 	for (RoadStopTileData &tile_data : this->custom_roadstop_tile_data) {
 		if (tile_data.tile == tile) {
 			uint8_t &v = animation ? tile_data.animation_frame : tile_data.random_bits;
@@ -204,10 +215,14 @@ bool BaseStation::SetRoadStopTileData(TileIndex tile, uint8_t data, bool animati
 	tile_data.random_bits = animation ? 0 : data;
 	this->custom_roadstop_tile_data.push_back(tile_data);
 	return data != 0;
+#endif
 }
 
 void BaseStation::RemoveRoadStopTileData(TileIndex tile)
 {
+#ifdef WITH_RUST
+	openttd_rust_station_remove_stop_data(&GetRustStationLifecycleServices(), this, tile.base());
+#else
 	for (RoadStopTileData &tile_data : this->custom_roadstop_tile_data) {
 		if (tile_data.tile == tile) {
 			tile_data = this->custom_roadstop_tile_data.back();
@@ -215,6 +230,7 @@ void BaseStation::RemoveRoadStopTileData(TileIndex tile)
 			return;
 		}
 	}
+#endif
 }
 
 /**
@@ -243,6 +259,7 @@ RoadStop *Station::GetPrimaryRoadStop(const RoadVehicle *v) const
  * Called when new facility is built on the station. If it is the first facility
  * it initializes also 'xy' and 'random_bits' members
  */
+#ifndef WITH_RUST
 void Station::AddFacility(StationFacility new_facility_bit, TileIndex facil_xy)
 {
 	if (this->facilities.None()) {
@@ -254,6 +271,7 @@ void Station::AddFacility(StationFacility new_facility_bit, TileIndex facil_xy)
 	this->build_date = TimerGameCalendar::date;
 	SetWindowClassesDirty(WC_VEHICLE_ORDERS);
 }
+#endif
 
 /**
  * Marks the tiles of the station as dirty.
@@ -801,6 +819,9 @@ StationRect& StationRect::operator = (const Rect &src)
  */
 Money AirportMaintenanceCost(Owner owner)
 {
+#ifdef WITH_RUST
+	return Money(openttd_rust_station_airport_maintenance(&GetRustStationLifecycleServices(), owner.base()));
+#else
 	Money total_cost = 0;
 
 	for (const Station *st : Station::Iterate()) {
@@ -810,11 +831,83 @@ Money AirportMaintenanceCost(Owner owner)
 	}
 	/* 3 bits fraction for the maintenance cost factor. */
 	return total_cost >> 3;
+#endif
 }
 
 #ifndef WITH_RUST
 bool StationCompare::operator() (const Station *lhs, const Station *rhs) const
 {
 	return lhs->index < rhs->index;
+}
+#endif
+
+#ifdef WITH_RUST
+const OpenTTDStationLifecycleServices &GetRustStationLifecycleServices() noexcept
+{
+	static_assert(STR_SV_STNAME_FALLBACK - STR_SV_STNAME <= 256);
+	static const OpenTTDStationLifecycleServices services{
+		.shared = &GetRustSharedServices(),
+		.catchment = &GetRustStationCatchmentServices(),
+		.commands = []() noexcept { return &GetRustStationCommandServices(); },
+		.visits = RustVehicleVisits,
+		.aircraft = []() noexcept { return &GetRustAircraftLeaves(); },
+		.storage = CargoStorageServices,
+		.allocation = GetRustTileTypeAllocation,
+		.check = RustAssertCondition,
+		.climate = OpenTTDLandscapeValue,
+		.names = {
+			.base = STR_SV_STNAME, .central = STR_SV_STNAME_CENTRAL, .airport = STR_SV_STNAME_AIRPORT,
+			.oilfield = STR_SV_STNAME_OILFIELD, .docks = STR_SV_STNAME_DOCKS, .heliport = STR_SV_STNAME_HELIPORT,
+			.mines = STR_SV_STNAME_MINES, .lakeside = STR_SV_STNAME_LAKESIDE, .woods = STR_SV_STNAME_WOODS,
+			.forest = STR_SV_STNAME_FOREST, .valley = STR_SV_STNAME_VALLEY, .heights = STR_SV_STNAME_HEIGHTS,
+			.north = STR_SV_STNAME_NORTH, .south = STR_SV_STNAME_SOUTH, .east = STR_SV_STNAME_EAST, .west = STR_SV_STNAME_WEST,
+			.transfer = STR_SV_STNAME_TRANSFER, .halt = STR_SV_STNAME_HALT, .exchange = STR_SV_STNAME_EXCHANGE,
+			.annexe = STR_SV_STNAME_ANNEXE, .sidings = STR_SV_STNAME_SIDINGS, .branch = STR_SV_STNAME_BRANCH,
+			.upper = STR_SV_STNAME_UPPER, .lower = STR_SV_STNAME_LOWER, .fallback = STR_SV_STNAME_FALLBACK,
+			.undefined = STR_UNDEFINED, .null = STR_NULL,
+		},
+		.town = RustStationStationTown<BaseStation>,
+		.industry_type = [](BaseStation *st) noexcept { return Station::From(st)->indtype; },
+		.set_industry_type = [](BaseStation *st, uint8_t type) noexcept { Station::From(st)->indtype = type; },
+		.spec = [](uint8_t type) noexcept { return GetIndustrySpec(type); },
+		.spec_name = [](const IndustrySpec *spec) noexcept -> uint32_t { return spec->station_name; },
+		.spec_enabled = RustSpecEnabled<IndustrySpec>,
+		.spec_life = [](const IndustrySpec *spec) noexcept { return spec->life_type.base(); },
+		.set_random_bits = RustStationSetRandomBits,
+		.freeform = OpenTTDFreeformEdges,
+		.cargo_classes = RustCargoClasses,
+		.forest = [](uint32_t tile) noexcept { return IsTileForestIndustry(TileIndex{tile}); },
+		.stop_data = [](BaseStation *st, size_t index) noexcept { return &st->custom_roadstop_tile_data[index]; },
+		.stop_count = RustRoadStopTileDataCount,
+		.stop_tile = [](const RoadStopTileData *data) noexcept { return data->tile.base(); },
+		.stop_random = [](const RoadStopTileData *data) noexcept { return data->random_bits; },
+		.stop_frame = [](const RoadStopTileData *data) noexcept { return data->animation_frame; },
+		.stop_set_random = [](RoadStopTileData *data, uint8_t bits) noexcept { data->random_bits = bits; },
+		.stop_set_frame = [](RoadStopTileData *data, uint8_t frame) noexcept { data->animation_frame = frame; },
+		.stop_append = [](BaseStation *st, uint32_t tile, uint8_t random, uint8_t frame) noexcept { st->custom_roadstop_tile_data.push_back({TileIndex{tile}, random, frame}); },
+		.stop_swap_pop = [](BaseStation *st, size_t index) noexcept { st->custom_roadstop_tile_data[index] = st->custom_roadstop_tile_data.back(); st->custom_roadstop_tile_data.pop_back(); },
+		.by_tile = RustBaseStationByTile,
+		.airport_animation = [](BaseStation *st, uint32_t tile, uint8_t trigger) noexcept { TriggerAirportTileAnimation(Station::From(st), TileIndex{tile}, static_cast<AirportAnimationTrigger>(trigger)); },
+		.rail_animation = [](BaseStation *st, uint32_t tile, uint8_t trigger) noexcept { TriggerStationAnimation(st, TileIndex{tile}, static_cast<StationAnimationTrigger>(trigger)); },
+		.road_animation = [](BaseStation *st, uint32_t tile, uint8_t trigger) noexcept { TriggerRoadStopAnimation(st, TileIndex{tile}, static_cast<StationAnimationTrigger>(trigger)); },
+		.cleaning_pool = []() noexcept { return Station::CleaningPool(); },
+		.cargo = RustStationExistingCargoOwner,
+		.flows = [](BaseStation *st, uint8_t cargo) noexcept { auto &ge = Station::From(st)->goods[cargo]; return ge.HasData() ? ge.GetData().flows.RustState() : nullptr; },
+		.delete_airport_storage = RustStationDeleteAirportStorage,
+		.invalidate_list = RustStationListInvalidation,
+		.invalidate_lists = []() noexcept { InvalidateWindowClassesData(WC_STATION_LIST, 0); },
+		.close_view = [](uint16_t id) noexcept { CloseWindowById(WC_STATION_VIEW, StationID{id}); },
+		.remove_orders = [](uint16_t id) noexcept { RemoveOrderFromAllVehicles(OT_GOTO_STATION, StationID{id}); },
+		.delete_news = [](uint16_t id) noexcept { DeleteStationNews(StationID{id}); },
+		.remove_index = [](uint16_t id) noexcept { _station_kdtree.Remove(StationID{id}); },
+		.sign_valid = [](BaseStation *st) noexcept { return st->sign.kdtree_valid; },
+		.remove_sign = [](uint16_t id) noexcept { _viewport_sign_kdtree.Remove(ViewportSignKdtreeItem::MakeStation(StationID{id})); },
+		.next_vehicle = [](uint32_t from) noexcept { auto range = Vehicle::Iterate(from); return range.empty() ? nullptr : RustVehicle(*range.begin()); },
+		.vehicle_id = [](OpenTTDVehicle *v) noexcept { return RustVehicleIndexOpaque(v); },
+		.last_loading = [](OpenTTDVehicle *v) noexcept { return VehicleOf(v)->last_loading_station.base(); },
+		.airport_maintenance = [](const AirportSpec *spec) noexcept { return spec->maintenance_cost; },
+		.maintenance_price = PR_INFRASTRUCTURE_AIRPORT,
+	};
+	return services;
 }
 #endif

@@ -83,3 +83,47 @@ pub(crate) fn is_hangar(tile: u32, s: &crate::newgrf_airport::Services) -> bool 
 pub(crate) fn is_hangar_tile(tile: u32, s: &crate::newgrf_airport::Services) -> bool {
     (s.shared().tile_type)(tile) == MP_STATION && is_hangar(tile, s)
 }
+
+/// `GetStationType`, preserving its native assertion policy.
+pub(crate) fn get_station_type(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<u8> {
+    m.require_type(tile, MP_STATION)?;
+    Some((m.m6(tile)? >> 3) & 15)
+}
+fn require_road_waypoint(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<()> {
+    m.available(tile)?;
+    if m.assertions() && (m.read(tile) != MP_STATION || get_station_type(m, tile)? != ROAD_WAYPOINT)
+    {
+        return None;
+    }
+    Some(())
+}
+/// `IsRoadWaypointOnSnowOrDesert`.
+pub(crate) fn road_waypoint_snow(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<bool> {
+    require_road_waypoint(m, tile)?;
+    Some(m.m8(tile)? & (1 << 15) != 0)
+}
+/// `ToggleRoadWaypointOnSnowOrDesert`.
+pub(crate) fn toggle_road_waypoint_snow(
+    m: &crate::map_func::TileTypeAccess,
+    tile: u32,
+) -> Option<()> {
+    require_road_waypoint(m, tile)?;
+    m.set_m8(tile, m.m8(tile)? ^ (1 << 15))
+}
+/// `GetRoadWaypointRoadside`.
+pub(crate) fn road_waypoint_roadside(
+    m: &crate::map_func::TileTypeAccess,
+    tile: u32,
+) -> Option<crate::services::Roadside> {
+    require_road_waypoint(m, tile)?;
+    Some(crate::services::Roadside((m.m3(tile)? >> 2) & 3))
+}
+/// `SetRoadWaypointRoadside`.
+pub(crate) fn set_road_waypoint_roadside(
+    m: &crate::map_func::TileTypeAccess,
+    tile: u32,
+    value: crate::services::Roadside,
+) -> Option<()> {
+    require_road_waypoint(m, tile)?;
+    m.set_m3(tile, (m.m3(tile)? & !12) | ((value.0 & 3) << 2))
+}

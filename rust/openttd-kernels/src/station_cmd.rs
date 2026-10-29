@@ -188,7 +188,7 @@ pub struct CommandServicesTable {
     pub new_station: extern "C" fn(u32) -> *mut BaseStation,
     pub index_insert: extern "C" fn(*mut BaseStation),
     pub set_town: extern "C" fn(*mut BaseStation, *const crate::services::TownHandle),
-    pub default_name: extern "C" fn(*mut BaseStation, u32, u8),
+    pub lifecycle: *const crate::station_lifecycle::Services,
     pub have_rating: extern "C" fn(*mut BaseStation, u8),
     pub road_waypoint: extern "C" fn(*mut BaseStation) -> bool,
     pub name_equals: extern "C" fn(*mut BaseStation, *const u8, usize) -> bool,
@@ -202,7 +202,6 @@ pub struct CommandServicesTable {
     pub rail_boolean: extern "C" fn(*const RailSpec, u16, u16) -> bool,
     pub rail_callback_error: extern "C" fn(*const RailSpec, u16, u16),
     pub set_train_area: extern "C" fn(*mut BaseStation, TileArea),
-    pub add_facility: extern "C" fn(*mut BaseStation, u8, u32),
     pub rail_triggers: extern "C" fn(*mut BaseStation, *const RailSpec),
     pub reserved: extern "C" fn(u32) -> bool,
     pub last_train:
@@ -246,7 +245,6 @@ pub struct CommandServicesTable {
     pub custom_road_index: extern "C" fn(u32) -> u32,
     pub stop_random_bits: extern "C" fn(*mut BaseStation, u32, u8),
 
-    pub remove_stop_tile_data: extern "C" fn(*mut BaseStation, u32),
     pub close_stop_inspect: extern "C" fn(u32),
     pub road_waypoint_area: extern "C" fn(*mut BaseStation) -> TileArea,
     pub set_road_waypoint_area: extern "C" fn(*mut BaseStation, TileArea),
@@ -881,7 +879,12 @@ impl Ctx<'_> {
                 (self.s.index_insert)(st);
                 let town = (self.shared.closest_town)(area.tile, u32::MAX);
                 (self.s.set_town)(st, town);
-                (self.s.default_name)(st, area.tile, name);
+                (self.s.set_string_id)(
+                    st,
+                    crate::station_lifecycle::generate_name(st, area.tile, name, unsafe {
+                        &*self.s.lifecycle
+                    }),
+                );
                 let current = (self.shared.current_company)();
                 if (self.shared.company_valid)(current) {
                     (self.s.have_rating)(st, current);
@@ -1531,7 +1534,7 @@ impl Ctx<'_> {
             return;
         }
         (self.s.set_train_area)(st, area);
-        (self.s.add_facility)(st, 0, area.tile);
+        crate::station_lifecycle::add_facility(st, 0, area.tile, unsafe { &*self.s.lifecycle });
         self.before_add_rect(
             ret,
             st,
@@ -2463,7 +2466,9 @@ impl Ctx<'_> {
                 (self.s.set_stop_next)(tail, stop);
             }
             (self.s.add_stop_area)(st, truck, tile);
-            (self.s.add_facility)(st, if truck { 1 } else { 2 }, tile);
+            crate::station_lifecycle::add_facility(st, if truck { 1 } else { 2 }, tile, unsafe {
+                &*self.s.lifecycle
+            });
             self.before_add_tile(ret, st, tile, 1);
             let owner = (self.world().station_owner)(st);
             let id = (self.links().graphs.station_id)(st);
@@ -2664,7 +2669,7 @@ impl Ctx<'_> {
             if !waypoint && replacement < 0 {
                 self.tiles_changed(st, false, if truck { 2 } else { 3 });
             }
-            (self.s.remove_stop_tile_data)(st, tile);
+            crate::station_lifecycle::remove_stop_data(st, tile, unsafe { &*self.s.lifecycle });
             if specindex as i32 != replacement {
                 unsafe {
                     crate::newgrf_roadstop::openttd_rust_roadstop_deallocate(
@@ -3123,7 +3128,7 @@ impl Ctx<'_> {
         unsafe {
             noise_ptr.write(noise_ptr.read().wrapping_add(noise as u16));
         }
-        (self.s.add_facility)(st, 3, tile);
+        crate::station_lifecycle::add_facility(st, 3, tile, unsafe { &*self.s.lifecycle });
         (self.s.set_airport_details)(st, airport, layout, rotation);
         self.before_add_rect(ret, st, area, 1);
         let owner = (self.world().station_owner)(st);
@@ -3524,7 +3529,7 @@ impl Ctx<'_> {
         if flags & 1 != 0 {
             (self.s.ship_area_add)(st, tile);
             (self.s.ship_area_add)(st, flat);
-            (self.s.add_facility)(st, 4, tile);
+            crate::station_lifecycle::add_facility(st, 4, tile, unsafe { &*self.s.lifecycle });
             self.before_add_rect(ret, st, area, 1);
             let owner = (self.world().station_owner)(st);
             if water == 1
@@ -3683,7 +3688,10 @@ impl Ctx<'_> {
         let st = (self.s.new_station)(tile);
         (self.s.index_insert)(st);
         (self.s.set_town)(st, (self.shared.closest_town)(tile, u32::MAX));
-        (self.s.default_name)(st, tile, 3);
+        (self.s.set_string_id)(
+            st,
+            crate::station_lifecycle::generate_name(st, tile, 3, unsafe { &*self.s.lifecycle }),
+        );
         (self.s.associate_industry)(st, tile);
         crate::animated_tile::openttd_rust_animation_delete(tile, false);
         (self.s.make_oilrig)(
@@ -4219,7 +4227,7 @@ crate::abi::layouts! {
         new_station,
         index_insert,
         set_town,
-        default_name,
+        lifecycle,
         have_rating,
         road_waypoint,
         name_equals,
@@ -4233,7 +4241,6 @@ crate::abi::layouts! {
         rail_boolean,
         rail_callback_error,
         set_train_area,
-        add_facility,
         rail_triggers,
         reserved,
         last_train,
@@ -4276,7 +4283,6 @@ crate::abi::layouts! {
         custom_road_index,
         stop_random_bits,
 
-        remove_stop_tile_data,
         close_stop_inspect,
         road_waypoint_area,
         set_road_waypoint_area,

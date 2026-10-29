@@ -102,6 +102,8 @@
 #include "rust/services_road.h"
 #include "rust/vehicle_visits_ffi.h"
 #include "rust/services_linkgraph.h"
+#include "rust/station_lifecycle_ffi.h"
+#include "rust/ground_services.h"
 #endif
 
 #ifdef WITH_RUST
@@ -179,6 +181,7 @@ CommandCost GetStationAround(TileArea ta, StationID closest_station, CompanyID c
 
 #endif
 
+#ifndef WITH_RUST
 /**
  * Function to check whether the given tile matches some criterion.
  * @param tile the tile to check
@@ -422,6 +425,8 @@ static StringID GenerateStationName(Station *st, TileIndex tile, StationNaming n
 	}
 	return STR_SV_STNAME_FALLBACK;
 }
+#endif
+
 
 /**
  * Find the closest deleted station of the current company
@@ -4167,14 +4172,14 @@ static TrackStatus GetTileTrackStatus_Station(TileIndex tile, TransportType mode
 
 
 #ifdef WITH_RUST
-static void TileLoop_Station(uint32_t tile_index) noexcept
+static void TileLoop_Station(uint32_t tile) noexcept
+{
+	OpenTTDGroundCall call;
+	openttd_rust_station_tile_loop(&GetRustStationLifecycleServices(), tile, &call);
+}
 #else
 static void TileLoop_Station(TileIndex tile)
-#endif
 {
-#ifdef WITH_RUST
-	const TileIndex tile{tile_index};
-#endif
 	auto *st = BaseStation::GetByTile(tile);
 	switch (GetStationType(tile)) {
 		case StationType::Airport:
@@ -4241,6 +4246,8 @@ static void TileLoop_Station(TileIndex tile)
 		default: break;
 	}
 }
+
+#endif
 
 
 #ifndef WITH_RUST

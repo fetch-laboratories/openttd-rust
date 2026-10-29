@@ -45,3 +45,6 @@ pub struct Industry {
 pub const RANDOM_TRIGGER_CARGO_RECEIVED: u8 = 2;
 /// `IndustryAnimationTrigger::CargoReceived`.
 pub const ANIMATION_TRIGGER_CARGO_RECEIVED: u8 = 3;
+
+/// `IndustryLifeType::Extractive` mask.
+pub const LIFE_EXTRACTIVE: u8 = 1;
