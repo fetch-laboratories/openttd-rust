@@ -24,7 +24,7 @@ inline void RustCompanyAssignVehicleUnit(uint32_t id, uint8_t company) noexcept
 	auto &units = Company::Get(CompanyID(company))->freeunits[v->type];
 	v->unitnumber = RustCompanyUseVehicleUnit(CompanyID(company), v->type, units.NextID());
 }
-inline bool OpenTTDCompanyIsValid(uint8_t company) noexcept { return Company::IsValidID(CompanyID(company)); }
+template <typename Index> inline bool OpenTTDCompanyIsValid(Index company) noexcept { return Company::IsValidID(company); }
 inline bool RustCompanyIsHuman(uint8_t company) noexcept { return Company::IsHumanID(CompanyID{company}); }
 inline uint16_t RustCompanyRoadVehicleCount(const Company *company) noexcept { return company->group_all[VEH_ROAD].num_vehicle; }
 inline bool OpenTTDCompanyIsValidHuman(uint8_t company) noexcept { return Company::IsValidHumanID(CompanyID(company)); }

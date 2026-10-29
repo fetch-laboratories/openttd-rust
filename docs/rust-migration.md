@@ -2460,4 +2460,4 @@ record accessors and allocation/deletion operations. The page destructor calls
 the same Rust lifecycle policy; pool cleanup keeps its original early exit.
 Native button packing/getters, windows, rendering, save/load and script VM
 execution remain in C++. No record storage or presentation pixel equivalence is
-claimed; window presentation remains a #156 limit. PR pending.
+claimed; window presentation remains a #156 limit. [PR #578](https://github.com/fetch-laboratories/openttd-rust/pull/578).

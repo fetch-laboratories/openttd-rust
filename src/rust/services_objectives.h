@@ -65,7 +65,6 @@ inline uint8_t RustObjectives_table_allocate(const EncodedString * title, const 
 inline uint16_t RustObjectives_entry_allocate(uint8_t table, int64_t rating, uint8_t company, const EncodedString * text, const EncodedString * score, uint8_t type, uint32_t target) noexcept { return (new LeagueTableElement(LeagueTableID(table), rating, CompanyID(company), *text, *score, Link(LinkType(type), target)))->index.base(); }
 inline uint32_t RustObjectives_own_client() noexcept { return static_cast<uint32_t>(_network_own_client_id); }
 inline bool RustObjectives_client_valid(uint32_t id) noexcept { return NetworkClientInfo::GetByClientID(ClientID(id)) != nullptr; }
-inline bool RustObjectives_company_pool_valid(uint32_t id) noexcept { return Company::IsValidID(id); }
 inline bool RustObjectives_industry_valid(uint32_t id) noexcept { return Industry::IsValidID(id); }
 inline bool RustObjectives_town_valid(uint32_t id) noexcept { return Town::IsValidID(id); }
 inline bool RustObjectives_vehicle_valid(uint32_t id) noexcept { return Vehicle::IsValidID(VehicleID(id)); }
@@ -136,7 +135,7 @@ inline const OpenTTDObjectivesServices &GetRustObjectivesServices() noexcept
 		.network_server = RustNetworkServer,
 		.own_client = RustObjectives_own_client,
 		.client_valid = RustObjectives_client_valid,
-		.company_pool_valid = RustObjectives_company_pool_valid,
+		.company_pool_valid = OpenTTDCompanyIsValid,
 		.industry_valid = RustObjectives_industry_valid,
 		.town_valid = RustObjectives_town_valid,
 		.vehicle_valid = RustObjectives_vehicle_valid,
