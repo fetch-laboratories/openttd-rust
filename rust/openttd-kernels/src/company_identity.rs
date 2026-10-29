@@ -15,7 +15,7 @@ use crate::livery::{
     LS_FREIGHT_TRAM, LS_FREIGHT_WAGON, LS_HELICOPTER, LS_LARGE_PLANE, LS_MAGLEV, LS_MONORAIL,
     LS_PASSENGER_SHIP, LS_PASSENGER_TRAM, LS_PASSENGER_WAGON_DIESEL, LS_PASSENGER_WAGON_ELECTRIC,
     LS_PASSENGER_WAGON_MAGLEV, LS_PASSENGER_WAGON_MONORAIL, LS_PASSENGER_WAGON_STEAM,
-    LS_SMALL_PLANE, LS_STEAM, LS_TRUCK, Livery,
+    LS_SMALL_PLANE, LS_STEAM, LS_TRUCK, Livery, PRIMARY, SECONDARY,
 };
 use crate::raw_field::{read_field, write_field};
 use crate::services::{ByteSpan, Services as Shared};
@@ -341,10 +341,10 @@ pub(crate) fn update_liveries(s: &Services, c: *mut OpenTTDCompany) {
     let default = (s.livery)(c, LS_DEFAULT);
     for scheme in 1..LS_END {
         let l = (s.livery)(c, scheme);
-        if read_field!(l, in_use) & 1 == 0 {
+        if read_field!(l, in_use) & PRIMARY == 0 {
             write_field!(l, colour1, read_field!(default, colour1));
         }
-        if read_field!(l, in_use) & 2 == 0 {
+        if read_field!(l, in_use) & SECONDARY == 0 {
             write_field!(l, colour2, read_field!(default, colour2));
         }
     }
@@ -404,7 +404,7 @@ pub extern "C" fn openttd_rust_company_colour(
     if execute {
         let l = (s.livery)(c, scheme);
         let default = (s.livery)(c, LS_DEFAULT);
-        let flag = if primary { 1 } else { 2 };
+        let flag = if primary { PRIMARY } else { SECONDARY };
         if scheme != LS_DEFAULT {
             let flags = read_field!(l, in_use);
             write_field!(
@@ -437,13 +437,17 @@ pub extern "C" fn openttd_rust_company_colour(
                 update_liveries(s, c);
             }
         }
-        if read_field!(l, in_use) & 3 != 0 {
-            write_field!(default, in_use, read_field!(default, in_use) | 1);
+        if read_field!(l, in_use) & (PRIMARY | SECONDARY) != 0 {
+            write_field!(default, in_use, read_field!(default, in_use) | PRIMARY);
         } else {
-            write_field!(default, in_use, read_field!(default, in_use) & !3);
+            write_field!(
+                default,
+                in_use,
+                read_field!(default, in_use) & !(PRIMARY | SECONDARY)
+            );
             for i in LS_DEFAULT..LS_END {
-                if read_field!((s.livery)(c, i), in_use) & 3 != 0 {
-                    write_field!(default, in_use, read_field!(default, in_use) | 1);
+                if read_field!((s.livery)(c, i), in_use) & (PRIMARY | SECONDARY) != 0 {
+                    write_field!(default, in_use, read_field!(default, in_use) | PRIMARY);
                     break;
                 }
             }

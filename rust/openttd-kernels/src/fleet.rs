@@ -18,7 +18,7 @@
     clippy::many_single_char_names,
     clippy::struct_field_names
 )]
-use crate::livery::Livery;
+use crate::livery::{Livery, PRIMARY, SECONDARY};
 use crate::raw_field::{read_field, write_field};
 use crate::vehicle::OpenTTDVehicle;
 use std::collections::{BTreeMap, BTreeSet};
@@ -610,10 +610,10 @@ unsafe fn propagate_livery(w: &GroupServices, id: u16, reset: bool) {
     let mut from = 0;
     while let Some(child) = unsafe { child_after(g, from) } {
         let cg = unsafe { group(w, child) };
-        if read_field!(cg, livery.in_use) & 1 == 0 {
+        if read_field!(cg, livery.in_use) & PRIMARY == 0 {
             write_field!(cg, livery.colour1, read_field!(g, livery.colour1));
         }
-        if read_field!(cg, livery.in_use) & 2 == 0 {
+        if read_field!(cg, livery.in_use) & SECONDARY == 0 {
             write_field!(cg, livery.colour2, read_field!(g, livery.colour2));
         }
         unsafe { propagate_livery(w, child, reset) };
@@ -750,12 +750,12 @@ unsafe fn alter_group(
                 unsafe { openttd_rust_fleet_child_change(pg.cast(), u32::from(id), true) };
             }
             unsafe { update_autoreplace(w, owner) };
-            if read_field!(g, livery.in_use) & 3 != 3 {
+            if read_field!(g, livery.in_use) & (PRIMARY | SECONDARY) != (PRIMARY | SECONDARY) {
                 let inherited = unsafe { parent_livery(w, g) };
-                if read_field!(g, livery.in_use) & 1 == 0 {
+                if read_field!(g, livery.in_use) & PRIMARY == 0 {
                     write_field!(g, livery.colour1, read_field!(inherited, colour1));
                 }
-                if read_field!(g, livery.in_use) & 2 == 0 {
+                if read_field!(g, livery.in_use) & SECONDARY == 0 {
                     write_field!(g, livery.colour2, read_field!(inherited, colour2));
                 }
                 unsafe {
@@ -931,10 +931,10 @@ pub(crate) unsafe fn company_liveries(w: &GroupServices, company: u8) {
         let g = unsafe { group(w, id as u16) };
         if read_field!(g, owner) == company && read_field!(g, parent) == INVALID_GROUP {
             let inherited = unsafe { (w.company_livery)(company) };
-            if read_field!(g, livery.in_use) & 1 == 0 {
+            if read_field!(g, livery.in_use) & PRIMARY == 0 {
                 write_field!(g, livery.colour1, read_field!(inherited, colour1));
             }
-            if read_field!(g, livery.in_use) & 2 == 0 {
+            if read_field!(g, livery.in_use) & SECONDARY == 0 {
                 write_field!(g, livery.colour2, read_field!(inherited, colour2));
             }
             unsafe { propagate_livery(w, id as u16, false) };
@@ -1099,7 +1099,7 @@ unsafe fn set_livery(w: &GroupServices, flags: u32, id: u16, primary: bool, mut 
         return ERROR;
     }
     if flags & 1 != 0 {
-        let mask = if primary { 1 } else { 2 };
+        let mask = if primary { PRIMARY } else { SECONDARY };
         if colour == 255 {
             write_field!(g, livery.in_use, read_field!(g, livery.in_use) & !mask);
             let inherited = unsafe { parent_livery(w, g) };

@@ -24,6 +24,10 @@ pub const LS_LARGE_PLANE: u8 = 20;
 pub const LS_PASSENGER_TRAM: u8 = 21;
 pub const LS_FREIGHT_TRAM: u8 = 22;
 pub const LS_END: u8 = 23;
+/// Mask for `Livery::Flag::Primary`.
+pub const PRIMARY: u8 = 1 << 0;
+/// Mask for `Livery::Flag::Secondary`.
+pub const SECONDARY: u8 = 1 << 1;
 /// Shared native livery layout; used only through raw field accesses.
 #[repr(C)]
 #[derive(Clone, Copy, Default)]

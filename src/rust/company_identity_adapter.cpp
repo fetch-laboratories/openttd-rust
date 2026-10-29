@@ -29,6 +29,7 @@
 #include "company_identity_ffi.h"
 #include "town_name_ffi.h"
 static_assert(MAX_COMPANIES == 15 && MAX_LENGTH_COMPANY_NAME_CHARS == 32 && MAX_LENGTH_PRESIDENT_NAME_CHARS == 32);
+static_assert(to_underlying(Livery::Flag::Primary) == 0 && to_underlying(Livery::Flag::Secondary) == 1);
 static_assert(COLOUR_END == 16 && INVALID_COLOUR == 255);
 static_assert(COLOUR_DARK_BLUE == 0 && COLOUR_PALE_GREEN == 1 && COLOUR_YELLOW == 3 && COLOUR_RED == 4 && COLOUR_LIGHT_BLUE == 5 && COLOUR_GREEN == 6 && COLOUR_DARK_GREEN == 7 && COLOUR_BLUE == 8);
 static_assert(COLOUR_CREAM == 9 && COLOUR_MAUVE == 10 && COLOUR_PURPLE == 11 && COLOUR_ORANGE == 12 && COLOUR_BROWN == 13 && COLOUR_GREY == 14 && COLOUR_WHITE == 15);
