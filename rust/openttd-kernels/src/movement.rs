@@ -171,7 +171,7 @@ impl<const AUDITED: bool> Context<'_, AUDITED> {
     #[inline]
     fn has_tile_road_type(&self, tile: u32, kind: crate::services::RoadTramType) -> bool {
         self.map()
-            .and_then(|m| crate::road_map::has_tile_road_type(&m.types, self.shared(), tile, kind))
+            .and_then(|m| crate::road_map::has_tile_road_type(&m.types, tile, kind))
             .unwrap_or_else(|| (self.s.has_tile_road_type)(tile, kind))
     }
 }
