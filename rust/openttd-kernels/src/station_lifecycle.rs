@@ -345,7 +345,7 @@ pub(crate) unsafe fn tile_loop(
             if crate::station_map::get_station_type(m, TileIndex(tile))
                 .is_some_and(|kind| kind.0 == STATION_DOCK)
                 && !crate::tile_map::is_tile_flat(m, tile, size_x, size_y)
-                    .unwrap_or_else(|| (s.commands().tile_flat)(tile))
+                    .unwrap()
             {
                 return;
             }
