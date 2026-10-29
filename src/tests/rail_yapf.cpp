@@ -153,16 +153,20 @@ TEST_CASE("Rail YAPF observes Follow then optional masking then speed limits")
 			CHECK(std::count(reads.begin(), reads.end(), 's') == 0);
 			continue;
 		}
-		REQUIRE(std::count(reads.begin(), reads.end(), 's') > 0);
-		size_t begin = 0;
-		for (size_t i = 0; i < reads.size(); ++i) {
-			if (reads[i] == 'f') begin = i;
-			if (reads[i] != 's') continue;
-			REQUIRE(reads[begin] == 'f');
-			const auto masked = std::count(reads.begin() + begin + 1, reads.begin() + i, 'r');
-			CHECK((masked != 0) == (kind == 3 && !fail));
-			if (masked != 0) CHECK(reads[i - 1] == 'r');
+		std::string expected;
+		if (fail) {
+			expected = "fs"; // One failed search-node follow; no child segments.
+		} else {
+			// max_nodes=1 expands two search nodes, each with four reachable
+			// child trackdirs. PfFollowNode masks only the search-node follow;
+			// PfCalcCost follows each child segment without reservation masking.
+			for (unsigned round = 0; round < 2; ++round) {
+				if (kind == 3) expected += 'f'; // IsSafeWaitingPosition probe.
+				expected += kind == 3 ? "frs" : "fs";
+				for (unsigned child = 0; child < 4; ++child) expected += "fs";
+			}
 		}
+		CHECK(std::string(reads.begin(), reads.end()) == expected);
 	}
 	RailYapfProbe::follow_fail = false;
 	openttd_rust_rail_invalidate();

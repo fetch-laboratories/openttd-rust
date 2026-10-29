@@ -141,10 +141,27 @@ public:
 		}
 	}
 	bool PfCalcCost(Node &node, const Follower *) {
-		node.cost = node.parent->cost + (IsDiagonalTrackdir(node.key.td) ? 100 : 71);
-		if (this->PfDetectDestination(node)) return true;
-		if (this->max_cost > 0 && node.cost > this->max_cost) return false;
-		return true; // Every interior tile is a junction; a segment ends here.
+		int segment_cost = 0;
+		TileIndex tile = node.key.tile;
+		Trackdir td = node.key.td;
+		for (;;) {
+			segment_cost += IsDiagonalTrackdir(td) ? 100 : 71;
+			if (tile.base() == goal) break;
+			if (this->max_cost > 0 && node.parent->cost + segment_cost > this->max_cost) return false;
+			const auto ft = Follow(tile.base(), td);
+			if (ft.new_td_bits == TRACKDIR_BIT_NONE || KillFirstBit(ft.new_td_bits) != TRACKDIR_BIT_NONE) break;
+			const Trackdir next_td = static_cast<Trackdir>(FindFirstBit(ft.new_td_bits));
+			if (ft.new_tile == node.key.tile && next_td == node.key.td) return false;
+			// The flat grid has no slope/speed penalty. The depot approach can
+			// have one continuation, so PfCalcCost walks to its segment exit.
+			segment_cost += ft.tiles_skipped * YAPF_TILE_LENGTH;
+			tile = ft.new_tile;
+			td = next_td;
+		}
+		node.segment_last_tile = tile;
+		node.segment_last_td = td;
+		node.cost = node.parent->cost + segment_cost;
+		return true;
 	}
 	bool PfCalcEstimate(Node &node) { node.estimate = node.cost; return true; }
 	char TransportTypeChar() const { return 'r'; }
@@ -157,6 +174,7 @@ TEST_CASE("Road YAPF low-limit timing and exit-key replacement match reference",
 	for (uint32_t t = 0; t < map.base.size(); ++t) map.Tile(t, MP_ROAD, 15);
 	auto leaves = probe_leaves; leaves.shared = &map.shared; leaves.tile = RoadLimit::ProbeTile;
 	for (int limit : {0, 1, 2, 7}) for (uint32_t distance : {2U, 10U}) for (int max_cost : {0, 70, 71, 100}) {
+		CAPTURE(limit, distance, max_cost);
 		RoadLimit::goal = RoadLimit::start - distance;
 		map.base[RoadLimit::goal].m5 = 0x82;
 		RoadLimit::Search reference(limit, max_cost);
