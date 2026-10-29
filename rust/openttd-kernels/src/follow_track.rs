@@ -19,7 +19,12 @@ use crate::map_func::World;
 use crate::pbs::Pbs;
 use crate::services::Services;
 use crate::tile_type::TileIndex;
-use crate::track_func::*;
+use crate::track_func::{
+    diagdir_reaches_trackdirs, reverse_trackdir, track_bits_to_trackdir_bits,
+    track_status_to_trackdir_bits, track_to_track_bits, track_to_trackdir_bits,
+    trackdir_bits_to_track_bits, trackdir_crosses_trackdirs, trackdir_to_exitdir,
+    trackdir_to_trackdir_bits, tracks_overlap,
+};
 use crate::train_reservation::Follow;
 use crate::transport_type::{
     TRANSPORT_RAIL as RAIL, TRANSPORT_ROAD as ROAD, TRANSPORT_WATER as WATER,
@@ -119,7 +124,7 @@ impl State {
     fn single_tram(&self, w: &World<'_>, tile: u32) -> u8 {
         w.check(self.tram(w));
         if w.normal_road(tile) {
-            use crate::road_type::*;
+            use crate::road_type::{ROAD_NE, ROAD_NW, ROAD_SE, ROAD_SW};
             return match w.road_bits(tile, true) {
                 ROAD_NW => 3,
                 ROAD_SW => 2,
@@ -441,7 +446,9 @@ pub(crate) fn speed_limit(s: &Services, mode: u8, v: Option<VehicleRef>, tile: u
     let m = crate::movement::table(s);
     let mut speed = i32::MAX;
     if mode != WATER && w.kind(tile) == crate::tile_type::MP_TUNNELBRIDGE && w.bridge(tile) {
-        speed = i32::from((m.bridge_type_speed)((w.byte(w.types.m6(tile)) >> 2) & 15));
+        speed = i32::from((m.bridge_type_speed)(
+            (World::byte(w.types.m6(tile)) >> 2) & 15,
+        ));
         if mode == ROAD {
             speed *= 2;
         }
@@ -580,7 +587,7 @@ pub unsafe extern "C" fn openttd_rust_platform_length(
     if directional {
         return platform_length_station(&w, tile, dir);
     }
-    w.check(w.rail_station(tile) && w.word(w.types.m2(tile)) == station);
+    w.check(w.rail_station(tile) && World::word(w.types.m2(tile)) == station);
     let delta = w.dimensions.offs_by_axis(w.station_axis(tile));
     let mut t = tile;
     let mut len: u32 = 0;

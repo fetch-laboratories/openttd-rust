@@ -100,6 +100,6 @@ impl crate::map_func::World<'_> {
             self.kind(t) != crate::tile_type::MP_HOUSE
                 && self.kind(t) != crate::tile_type::MP_INDUSTRY,
         );
-        self.byte(self.types.m1(t)) & 0x1f
+        Self::byte(self.types.m1(t)) & 0x1f
     }
 }

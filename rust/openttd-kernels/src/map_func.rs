@@ -320,10 +320,10 @@ impl<'a> World<'a> {
     pub(crate) fn kind(&self, t: u32) -> u8 {
         self.types.read(t)
     }
-    pub(crate) fn byte(&self, value: Option<u8>) -> u8 {
+    pub(crate) fn byte(value: Option<u8>) -> u8 {
         value.expect("live map scalar")
     }
-    pub(crate) fn word(&self, value: Option<u16>) -> u16 {
+    pub(crate) fn word(value: Option<u16>) -> u16 {
         value.expect("live map scalar")
     }
 }

@@ -10,6 +10,6 @@
 impl crate::map_func::World<'_> {
     pub(crate) fn tunnel(&self, t: u32) -> bool {
         self.check(self.kind(t) == crate::tile_type::MP_TUNNELBRIDGE);
-        self.byte(self.types.m5(t)) & 128 == 0
+        Self::byte(self.types.m5(t)) & 128 == 0
     }
 }

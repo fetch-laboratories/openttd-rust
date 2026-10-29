@@ -163,7 +163,7 @@ impl crate::map_func::World<'_> {
     }
     pub(crate) fn road_depot_dir(&self, t: u32) -> u8 {
         self.check(self.road_depot(t));
-        self.byte(self.types.m5(t)) & 3
+        Self::byte(self.types.m5(t)) & 3
     }
     pub(crate) fn road_type(&self, t: u32, tram: bool) -> u8 {
         get_road_type(

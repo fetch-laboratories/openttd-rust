@@ -40,20 +40,20 @@ pub const RAIL_TILE_DEPOT: u8 = 3;
 impl crate::map_func::World<'_> {
     pub(crate) fn plain_rail(&self, t: u32) -> bool {
         self.kind(t) == crate::tile_type::MP_RAILWAY
-            && self.byte(self.types.m5(t)) >> 6 <= RAIL_TILE_SIGNALS
+            && Self::byte(self.types.m5(t)) >> 6 <= RAIL_TILE_SIGNALS
     }
     pub(crate) fn rail_depot(&self, t: u32) -> bool {
         self.kind(t) == crate::tile_type::MP_RAILWAY
-            && self.byte(self.types.m5(t)) >> 6 == RAIL_TILE_DEPOT
+            && Self::byte(self.types.m5(t)) >> 6 == RAIL_TILE_DEPOT
     }
     pub(crate) fn rail_type(&self, t: u32) -> u8 {
-        (self.word(self.types.m8(t)) & 63) as u8
+        (Self::word(self.types.m8(t)) & 63) as u8
     }
     pub(crate) fn tracks(&self, t: u32) -> u8 {
         self.check(self.plain_rail(t));
-        self.byte(self.types.m5(t)) & 63
+        Self::byte(self.types.m5(t)) & 63
     }
     pub(crate) fn rail_depot_dir(&self, t: u32) -> u8 {
-        self.byte(self.types.m5(t)) & 3
+        Self::byte(self.types.m5(t)) & 3
     }
 }

@@ -437,16 +437,16 @@ impl Search<'_> {
             let current_z = center_z(tile);
             let next_z = center_z(f.tile);
             let shared = unsafe { &*self.leaves.shared };
-            let m = crate::movement::table(shared);
-            let v = crate::vehicle::VehicleRef(
+            let movement = crate::movement::table(shared);
+            let vehicle = crate::vehicle::VehicleRef(
                 std::ptr::NonNull::new(self.context.cast_mut().cast()).unwrap(),
             );
-            let display_speed = (m.train().physics.display_max_speed)(v);
-            let order_speed = (m.order_speed)(v);
+            let display_speed = (movement.train().physics.display_max_speed)(vehicle);
+            let order_speed = (movement.order_speed)(vehicle);
             let max_speed = crate::follow_track::speed_limit(
                 shared,
                 crate::transport_type::TRANSPORT_ROAD,
-                Some(v),
+                Some(vehicle),
                 tile,
             );
             let facts = Traversal {

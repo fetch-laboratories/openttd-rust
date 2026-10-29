@@ -125,15 +125,15 @@ pub extern "C" fn openttd_rust_rail_types(shared: &Shared, s: &Services, introdu
 
 impl crate::map_func::World<'_> {
     pub(crate) fn tile_rail_type(&self, t: u32) -> u8 {
-        use crate::tile_type::*;
+        use crate::tile_type::{MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
         match self.kind(t) {
             MP_RAILWAY => return self.rail_type(t),
-            MP_ROAD if self.byte(self.types.m5(t)) >> 6 == crate::road_map::ROAD_TILE_CROSSING => {
+            MP_ROAD if Self::byte(self.types.m5(t)) >> 6 == crate::road_map::ROAD_TILE_CROSSING => {
                 return self.rail_type(t);
             }
             MP_STATION if self.has_station_rail(t) => return self.rail_type(t),
             MP_TUNNELBRIDGE
-                if (self.byte(self.types.m5(t)) >> 2) & 3
+                if (Self::byte(self.types.m5(t)) >> 2) & 3
                     == crate::transport_type::TRANSPORT_RAIL =>
             {
                 return self.rail_type(t);

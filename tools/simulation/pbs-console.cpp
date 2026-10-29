@@ -4,11 +4,14 @@
 #include "viewport_func.h"
 #include "vehicle_func.h"
 #include "newgrf_station.h"
+#include "ship.h"
 #include "pathfinder/follow_track.hpp"
 #include "console_internal.h"
 #include "console_func.h"
 #include "bridge_map.h"
 #include "clear_map.h"
+#include "road_map.h"
+#include "water_map.h"
 #ifdef WITH_RUST
 #include "rust/animation_ffi.h"
 #include "rust/pbs_ffi.h"
@@ -86,7 +89,10 @@ static bool PbsCheckMask(TileIndex tile, Trackdir td)
 	openttd_rust_follower_init(&actual, &GetRustSharedServices(), TRANSPORT_RAIL, nullptr, 0, 0, true, true, false);
 	actual.old_tile = ft.old_tile; actual.old_td = ft.old_td; actual.new_tile = ft.new_tile; actual.new_td_bits = ft.new_td_bits;
 	actual.exitdir = ft.exitdir; actual.is_station = ft.is_station; actual.tiles_skipped = ft.tiles_skipped;
+	const bool expected = ft.MaskReservedTracks();
 	PbsRequire(openttd_rust_follower_mask(&GetRustSharedServices(), &actual) == expected && actual.new_td_bits == ft.new_td_bits && actual.err == ft.err);
+#else
+	ft.MaskReservedTracks();
 #endif
 	return true;
 }
@@ -150,6 +156,97 @@ static bool PbsProbe([[maybe_unused]] std::span<std::string_view> args)
 	}
 	PbsMapRestore(original); _random = random; fmt::print(stderr, "PBS checked {}\nPBS ends {} {}\n", checked, ends[0], ends[1]); PbsRequire(checked != 0); return true;
 }
+/* Transient follower outputs are not saved. Both roles call their production
+ * follower over the same named map cases; rails.py compares every output row. */
+template <typename Follower>
+static void FollowerCase(const char *name, Follower &ft, TileIndex tile, Trackdir td, bool success, uint8_t error, bool mask = false)
+{
+	bool followed = ft.Follow(tile, td);
+	if (mask && followed) followed = ft.MaskReservedTracks();
+	if (followed != success || ft.err != error) { fmt::print(stderr, "FOLLOWER failed {} {} {}\n", name, followed, uint8_t(ft.err)); std::abort(); }
+	int minimum = -1;
+	const int maximum = ft.GetSpeedLimit(&minimum);
+	fmt::print(stderr, "FOLLOWER {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {}\n", name,
+		followed, ft.old_tile.base(), uint8_t(ft.old_td), ft.new_tile.base(), uint16_t(ft.new_td_bits), uint8_t(ft.exitdir),
+		ft.is_tunnel, ft.is_bridge, ft.is_station, ft.tiles_skipped, uint8_t(ft.err), minimum, maximum,
+		_random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]);
+}
+static bool FollowerProbe([[maybe_unused]] std::span<std::string_view> args)
+{
+	const auto original = PbsMapRead();
+	const Randomizer random = _random, interactive = _interactive_random;
+	_random.SetSeed(0x560); _interactive_random.SetSeed(0x560560);
+	const TileIndex tile = TileXY(40, 40), old = tile + 1;
+	const auto clear = [&]() {
+		for (uint y = 38; y <= 44; ++y) for (uint x = 36; x <= 45; ++x) { const TileIndex t = TileXY(x, y); MakeClear(t, CLEAR_GRASS, 3); Tile(t).height() = 0; }
+	};
+	const auto rail = [&](TrackBits bits = TRACK_BIT_X) { clear(); MakeRailNormal(old, Owner(0), bits, RAILTYPE_RAIL); MakeRailNormal(tile, Owner(0), bits, RAILTYPE_RAIL); };
+	CFollowTrackRail ft{Owner(0), RailTypes(1)};
+	rail(); FollowerCase("rail", ft, old, TRACKDIR_X_NE, true, 0);
+	SetTileOwner(tile, Owner(1)); FollowerCase("owner", ft, old, TRACKDIR_X_NE, false, 4);
+	rail(); SetRailType(tile, RAILTYPE_MONO); FollowerCase("rail_type", ft, old, TRACKDIR_X_NE, false, 2);
+	rail(); MakeClear(tile, CLEAR_GRASS, 3); FollowerCase("no_way", ft, old, TRACKDIR_X_NE, false, 4);
+	rail(); MakeRailNormal(old, Owner(0), TRACK_BIT_UPPER, RAILTYPE_RAIL); MakeRailNormal(tile, Owner(0), TRACK_BIT_LOWER, RAILTYPE_RAIL);
+	CFollowTrackRailNo90 no90{Owner(0), RailTypes(1)};
+	FollowerCase("ninety", no90, old, TRACKDIR_UPPER_E, false, 3);
+	FollowerCase("ninety_allowed", ft, old, TRACKDIR_UPPER_E, true, 0);
+	rail(); SetTrackReservation(tile, TRACK_BIT_X);
+	CFollowTrackFreeRail free{Owner(0), RailTypes(1)};
+	FollowerCase("reserved", free, old, TRACKDIR_X_NE, false, 5, true);
+	rail(); MakeRailDepot(old, Owner(0), DepotID(0), DIAGDIR_SW, RAILTYPE_RAIL);
+	FollowerCase("depot_reverse", ft, old, TRACKDIR_X_NE, true, 0);
+	rail(); MakeRailTunnel(tile, Owner(0), DIAGDIR_SW, RAILTYPE_RAIL);
+	FollowerCase("tunnel_wrong_side", ft, old, TRACKDIR_X_NE, false, 4);
+	rail(); MakeRailBridgeRamp(tile, Owner(0), 0, DIAGDIR_SW, RAILTYPE_RAIL);
+	FollowerCase("bridge_wrong_side", ft, old, TRACKDIR_X_NE, false, 4);
+	clear(); MakeRailTunnel(old, Owner(0), DIAGDIR_NE, RAILTYPE_RAIL); MakeRailTunnel(tile - 2, Owner(0), DIAGDIR_SW, RAILTYPE_RAIL);
+	FollowerCase("tunnel_skip", ft, old, TRACKDIR_X_NE, true, 0);
+	clear(); MakeRailBridgeRamp(old, Owner(0), 0, DIAGDIR_NE, RAILTYPE_RAIL); MakeRailBridgeRamp(tile - 2, Owner(0), 0, DIAGDIR_SW, RAILTYPE_RAIL);
+	for (TileIndex t = tile; t > tile - 2; --t) SetBridgeMiddle(t, AXIS_X);
+	FollowerCase("bridge_skip", ft, old, TRACKDIR_X_NE, true, 0);
+	Station *station = nullptr; for (Station *s : Station::Iterate()) if (s->facilities.Test(StationFacility::Train)) { station = s; break; }
+	PbsRequire(station != nullptr);
+	rail(); for (uint i = 0; i < 3; ++i) MakeRailStation(tile - i, Owner(0), station->index, AXIS_X, 0, RAILTYPE_RAIL);
+	FollowerCase("platform_skip", ft, old, TRACKDIR_X_NE, true, 0);
+	fmt::print(stderr, "FOLLOWER platform_lengths {} {}\n", station->GetPlatformLength(tile - 1), station->GetPlatformLength(tile - 1, DIAGDIR_NE));
+	SetRailStationReservation(tile - 1, true);
+	FollowerCase("platform_reserved", free, old, TRACKDIR_X_NE, false, 5, true);
+	RoadVehicle *v = nullptr; for (RoadVehicle *r : RoadVehicle::Iterate()) { v = r; break; }
+	PbsRequire(v != nullptr);
+	const Owner owner = v->owner; const RoadType type = v->roadtype; const RoadTypes compatible = v->compatible_roadtypes;
+	v->owner = Owner(0); v->roadtype = ROADTYPE_ROAD; v->compatible_roadtypes = RoadTypes{1};
+	const auto road = [&](RoadBits bits = ROAD_X, bool tram = false) {
+		clear(); for (const TileIndex t : {old, tile}) MakeRoadNormal(t, bits, tram ? INVALID_ROADTYPE : ROADTYPE_ROAD, tram ? ROADTYPE_TRAM : INVALID_ROADTYPE, TownID(0), Owner(0), Owner(0));
+	};
+	CFollowTrackRoad rv{v};
+	road(); FollowerCase("road", rv, old, TRACKDIR_X_NE, true, 0);
+	MakeClear(tile, CLEAR_GRASS, 3); FollowerCase("road_end_reverse", rv, old, TRACKDIR_X_NE, true, 0);
+	road(); MakeRoadDepot(tile, Owner(1), DepotID(0), DIAGDIR_SW, ROADTYPE_ROAD);
+	FollowerCase("road_owner_reverse", rv, old, TRACKDIR_X_NE, true, 1);
+	road(); v->compatible_roadtypes = RoadTypes{};
+	FollowerCase("road_type_reverse", rv, old, TRACKDIR_X_NE, true, 2);
+	v->compatible_roadtypes = RoadTypes{1};
+	road(); MakeRoadStop(tile, Owner(0), station->index, RoadStopType::Bus, ROADTYPE_ROAD, INVALID_ROADTYPE, DIAGDIR_NE);
+	FollowerCase("stop_wrong_side", rv, old, TRACKDIR_X_NE, true, 4);
+	MakeRoadStop(old, Owner(0), station->index, RoadStopType::Bus, ROADTYPE_ROAD, INVALID_ROADTYPE, DIAGDIR_SW);
+	FollowerCase("stop_reverse", rv, old, TRACKDIR_X_NE, true, 0);
+	v->roadtype = ROADTYPE_TRAM; v->compatible_roadtypes = RoadTypes{uint64_t{1} << ROADTYPE_TRAM};
+	CFollowTrackRoad tram{v};
+	road(ROAD_NE, true); FollowerCase("tram_reverse", tram, old, TRACKDIR_X_SW, true, 0);
+	road(ROAD_X, true); MakeRoadNormal(tile, ROAD_NE, INVALID_ROADTYPE, ROADTYPE_TRAM, TownID(0), Owner(0), Owner(0));
+	FollowerCase("tram_wrong_side", tram, old, TRACKDIR_X_NE, false, 4);
+	road(ROAD_X, true); v->compatible_roadtypes = RoadTypes{};
+	FollowerCase("tram_type", tram, old, TRACKDIR_X_NE, false, 2);
+	v->compatible_roadtypes = RoadTypes{uint64_t{1} << ROADTYPE_TRAM};
+	road(ROAD_NE, true); FollowerCase("tram_bad_exit", tram, old, TRACKDIR_Y_SE, false, 4);
+	v->owner = owner; v->roadtype = type; v->compatible_roadtypes = compatible;
+	clear(); MakeSea(old); MakeSea(tile);
+	CFollowTrackWater water;
+	FollowerCase("water", water, old, TRACKDIR_X_NE, true, 0);
+	PbsMapRestore(original); _random = random; _interactive_random = interactive;
+	return true;
+}
+
 // PBS registration
 extern "C" void __real__Z22IConsoleStdLibRegisterv();
-extern "C" void __wrap__Z22IConsoleStdLibRegisterv() { __real__Z22IConsoleStdLibRegisterv(); IConsole::CmdRegister("pbs_probe", PbsProbe); }
+extern "C" void __wrap__Z22IConsoleStdLibRegisterv() { __real__Z22IConsoleStdLibRegisterv(); IConsole::CmdRegister("pbs_probe", PbsProbe); IConsole::CmdRegister("follower_probe", FollowerProbe); }

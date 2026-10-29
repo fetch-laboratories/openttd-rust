@@ -9,6 +9,6 @@
 impl crate::map_func::World<'_> {
     pub(crate) fn tunnel_bridge_dir(&self, t: u32) -> u8 {
         self.check(self.kind(t) == crate::tile_type::MP_TUNNELBRIDGE);
-        self.byte(self.types.m5(t)) & 3
+        Self::byte(self.types.m5(t)) & 3
     }
 }
