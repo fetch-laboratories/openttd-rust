@@ -103,6 +103,8 @@
 #include "rust/vehicle_visits_ffi.h"
 #include "rust/services_linkgraph.h"
 #include "rust/station_lifecycle_ffi.h"
+#include "rust/station_resolver_ffi.h"
+#include "rust/newgrf_vehicle_ffi.h"
 #endif
 
 #ifdef WITH_RUST
@@ -798,10 +800,10 @@ static const OpenTTDStationLinks _rust_station_links = {
 	},
 	.last_service = RustVehicleLastServiceOf,
 	.cargo_type = RustVehicleCargoType,
-	.storage = CargoStorageServices,
+	.storage = []() noexcept { return GetStationResolverServices().cargo; },
 	.goods_entry = RustStationGoodsEntry,
-	.station_cargo = RustStationExistingCargoOwner,
-	.vehicle_cargo = RustVehicleRead<OpenTTDCargoList *, RustVehicleCargoOwner>,
+	.station_cargo = GetStationResolverServices().cargo_owner,
+	.vehicle_cargo = GetRustVehicleResolverServices().cargo_owner,
 };
 const OpenTTDStationServices &GetRustStationServices() noexcept { return _rust_station_services; }
 const OpenTTDStationLinks &GetRustStationLinks() noexcept { return _rust_station_links; }
