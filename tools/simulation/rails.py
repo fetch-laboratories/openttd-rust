@@ -51,7 +51,25 @@ def pbs_reference(folder: Path) -> None:
         cwd=ROOT,
         text=True,
     )
+    station = subprocess.check_output(
+        ["git", "show", f"{baseline}:src/station.cpp"], cwd=ROOT, text=True
+    )
+    signature = (
+        "uint Station::GetPlatformLength(TileIndex tile, DiagDirection dir) const"
+    )
+    platform = station[station.index(signature) + len(signature) :]
+    platform = platform[: platform.index("\n}") + 2]
+    body += (
+        "inline uint PbsOriginalPlatformLength(const BaseStation *station, TileIndex tile, DiagDirection dir) {\n"
+        "if (!Station::IsExpected(station)) return 1;\n"
+        + platform[platform.index("{") + 1 :]
+        + "\n"
+    )
     follower = header[header.index("template <TransportType") : header.rfind("#endif")]
+    follower = follower.replace(
+        "BaseStation::GetByTile(this->new_tile)->GetPlatformLength(this->new_tile, TrackdirToExitdir(this->old_td))",
+        "PbsOriginalPlatformLength(BaseStation::GetByTile(this->new_tile), this->new_tile, TrackdirToExitdir(this->old_td))",
+    )
     body += follower.replace("CFollowTrack", "PbsOriginalFollowTrack").replace(
         "Train::From(v)->compatible_railtypes",
         "PbsTrainCompatibleRailTypes(Train::From(v))",
