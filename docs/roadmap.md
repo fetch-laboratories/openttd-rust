@@ -4,39 +4,53 @@ Root selects here; `AGENTS.md` and `docs/rust-migration.md` define process. Foll
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-10-28, code at `7105e24d49`)
+## Where the fork stands (2026-10-29, code at `06a644505a`)
 
 Agent: /root | Model: gpt-6.1-sol | Reasoning effort: xhigh.
 
-- 79 ownership ports. The integrated #564 counter is now the standard:
-  Pygments 2.19.2 code lines, excluding comments, blanks and preprocessor-only
-  lines. Whole fork: 50,111 of 284,355 original lines retired (17.62%);
-  simulation source/header buckets: 37,599 of 61,148 (61.49%). Rust and
-  tooling total 115,670 and 46,650 code lines. Historical completed-row metrics
-  below retain their original counting method; do not add them to these totals.
-- Distance to the complete rewrite: 234,244 original plus 32,299 fork glue is
-  **266,543 compiled C++ code lines, 93.74% of the original**. The boundary is
-  1,305 Rust C exports and 3,957 callback slots, including private and
-  restricted-visibility definitions. These count interfaces, not dynamic calls.
-- Integration 27 (#567) supplied code/area/distance/boundary metrics, shrinking
-  orphan enforcement, conservative T3 cleanup and the three-pass speed record.
-  Integration 28 (#571) supplied the canonical station/road/tunnel-bridge helper
-  path for the two active owners: 72 Rust code lines and 4 net glue, no original
-  retirement. Both passed independent review and current-base exact-head Full.
-  On-demand CI is restored. Four component branches remain (#554, #557, #568,
-  #569); #565 and #572 take the two available slots.
-- The source buckets are not pure phase inventories. Logic's 12,124 remaining
-  lines include at least 4,115 identified drawing/description/viewport body
-  lines, other presentation and already-ported facade signatures. Storage's
-  11,425 includes 321 executable follower-header lines. Script/network buckets
-  include 931/2,862 GUI lines; excluding those gives 41,158 remaining original
-  lines in the four phase-3 reader families. The fresh ranking corrected old
-  engine/group double credit and reduced the vehicle-base lifecycle estimate
-  from 450–550 to 190–240 original code lines.
-- Speed uses the mean of the last three quiet passes, carried by the compatible
-  instruction projection, with ceilings 1.6x play and 1.3x generation. Profile28
-  matched all six comparisons; counts were below compatible anchor counts, so
-  the projection floor applies. Every record is below its 1.52x/1.235x band:
+- Integration 29 landed the reviewed session-lifecycle owner and deep-rotation
+  tooling through #577 at `7473e63624`. Integration 30 landed the complete
+  track follower and platform scans through #569 at `06a644505a`. Both passed
+  current-base exact-head Full; #569's merged tree equals its validated tree.
+  No confirmed merged-branch regression or rollback occurred. Details and
+  head-specific evidence remain in the linked PRs.
+
+| Integration | Issues / PR | Merge commit | Original C++ retired | Rust added | Net C++ glue | Tooling added |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| 29 | #551 / #554 and #503 / #557, combined in [#577](https://github.com/fetch-laboratories/openttd-rust/pull/577) | `7473e63624` | 429 | 1,118 | +319 | 919 |
+| 30 | #560 / [#569](https://github.com/fetch-laboratories/openttd-rust/pull/569) | `06a644505a` | 362 | 1,234 | -30 | 205 |
+
+- These are existing per-PR code metrics against their respective bases. The
+  #569 figures were measured at `90d995522c`; its later repairs only added or
+  reordered include directives. No measurement was launched for wind-down.
+  The last whole-fork inventory remains integration 28 at `7105e24d49`, using
+  Pygments 2.19.2 and excluding comments, blanks and preprocessor-only lines:
+  79 ownership ports then; 50,111 of 284,355 original lines retired (17.62%);
+  simulation source/header buckets 37,599 of 61,148 (61.49%); Rust 115,670 and
+  tooling 46,650 code lines. Historical completed rows retain their counting
+  method and are not additive whole-fork inventories.
+- That last inventory's distance was 234,244 original plus 32,299 fork glue:
+  **266,543 compiled C++ code lines, 93.74% of the original**. Its boundary was
+  1,305 Rust C exports and 3,957 callback slots, including private/restricted
+  definitions. These totals and the phase-area table below have not been
+  recounted after integrations 29/30; do not present them as new tip measures.
+- Source buckets are not pure phase inventories. At that inventory, logic's
+  12,124 remaining lines included at least 4,115 drawing/description/viewport
+  body lines and other presentation/facade signatures. Storage's 11,425
+  included 321 executable follower-header lines, now addressed by #569.
+  Script/network buckets included 931/2,862 GUI lines; excluding those gave
+  41,158 remaining original lines in the four phase-3 reader families. The
+  earlier source-sized ranking corrected engine/group double credit and put
+  remaining vehicle-base lifecycle at 190–240 original code lines.
+- Five unintegrated component branches remain: #568, #576, #578, #579 and #580.
+  All are paused at the user's request; their heads and next actions are in
+  the checkpoint. No new component, review, planner or repair round was
+  started under wind-down. #579 has not received independent review.
+- Speed still uses the mean of three quiet passes carried by the compatible
+  instruction projection, with ceilings 1.6x play and 1.3x generation. The
+  latest completed profile is profile28 on `7105e24d49`: all six comparisons
+  matched, counts were below compatible anchors, and the projection floor
+  applied. Those decision records were below the 1.52x/1.235x bands:
 
 | Scenario | Latest quiet anchor | Profile28 projection | Three-pass record |
 | --- | ---: | ---: | ---: |
@@ -47,27 +61,25 @@ Agent: /root | Model: gpt-6.1-sol | Reasoning effort: xhigh.
 | P2000 | 1.4006x | 1.4006x | 1.4014x |
 | P2016 | 1.5229x | 1.5229x | 1.4819x |
 
-- These are projections/records, not new wall measurements. Profile28 on fixed
-  code `7105e24d49` matched all six comparisons, with compatible anchor
-  identities and lower instruction counts than profile26. No projection rose;
-  no quiet pass or extra attribution is selected. Retain compatible anchors and
-  candidate profiles. The due rotated deep run follows #557. Profile28 gives
-  P2016 13,268,112,902 loop
-  instructions; the retained profile attributed 99% of its original gap to
-  widely spread boundary glue, so ownership/storage remains the useful repair.
-- Evidence: original coverage retains 330 of 449 completed traces; the bounded
-  original-only clock preparation and 119 unfinished traces remain selected.
-  #558's differing-road input is integrated. The earlier deep sanitizer found
-  production noncanonical bool returns and a fixture lifetime bug, fixed in
-  #552; the previous soak passed 521 scenarios. No new deep result is claimed.
-  #568 has 20 focused scenario passes before helper adoption; #569 still has
-  fixture failures. #554's new internal-call cleanup passes focused checks
-  and requires a fresh scoped review before its #557 combination.
-- CI: #569 remains a draft. The cadence retry passed Windows x64/x86, macOS Debug/Release, Linux
-  Clang/Dedicated and prepared Windows/macOS semantic comparisons. The next
-  platform cadence follows integration 30. Failed follower checks are on its
-  draft, not a merged-branch regression. All open issues are audited again at
-  this stocktake; user-parked NewGRF corpus work remains parked.
+- These are retained records/projections, not new wall measurements or a
+  projection for integration 30. Retain compatible anchors and candidate
+  profiles. Integration 30 makes the instruction profile, next deep check and
+  fifth-integration platform cadence due; none was launched during wind-down.
+  Read the existing deep result before starting another deep run.
+- The existing idle-priority `simulate-sanitized` deep member remains running
+  on fixed code `7473e63624` in `.local/worktrees/deep-after29-577`. No finished
+  report was available at this checkpoint; no pass is claimed. It is a rotated
+  member, not completion of all five deep members. Leave it running and record
+  its result when it finishes.
+- Original coverage remains 330 of 449 completed traces; bounded original-only
+  clock preparation and 119 unfinished traces remain selected. The earlier
+  noncanonical-bool/fixture sanitizer defects were fixed in #552; the previous
+  soak passed 521 scenarios. Current source/evidence gaps remain on #156.
+- Required Full passed for #577 and #569. #569's earlier candidate failures
+  were repaired before its final Full and were not regressions on the dispatch
+  base `7473e63624`. No manual CI request remains pending. Automatic
+  post-merge/docs-push CI is not awaited here; inspect its state on resume.
+  The wider platform cadence is due after integration 30 and was not requested.
 
 ## Phases
 
@@ -424,44 +436,30 @@ Excluded, with return conditions checked by this review:
   near-full reproduction under #513's original-default setting policy.
   #513 needs implementation when the first such improvement is accepted.
 
-## Resume checkpoint (2026-10-29, integration 28)
+## Resume checkpoint (2026-10-29, integration 30)
 
-Integrated code is `7105e24d49`; all six component slots are occupied by #554,
-#557, #568, #569, #576 (#565) and #578 (#572).
-Root serializes final integration; ordinary issue/PR status carries detailed
-validation and the single task comments carry running checks.
+Paused at the user's request. Integrated code is `06a644505a`: #577 at
+`7473e63624` is integration 29, and #569 is integration 30 after successful
+current-base exact-head Full. No rollback was needed. Five component branches
+remain; all unfinished worktrees and branches are preserved. The objectives
+owner saved its work and was cancelled; no company-identity reviewer started.
 
-| Item | Saved state | Next action on resume |
+| Remaining draft | Pushed head | Next action on resume |
 | --- | --- | --- |
-| #564 / #567 and #199 / #571 | Integrated 27/28 at `d8704269c7` / `7105e24d49`, reviewed and exact-head Full passed. CI_ON_DEMAND restored; watches off. | Verified merged-only cleanup; no further source work. |
-| #554 | Internal-call cleanup passed scoped review; current base adopted without source conflicts. | Finish the standalone landscape probe link repair and carry it into #577. |
-| #557 | Reviewed `9db71fb247`; no Full; behind base. | Preserve ordinary-build prerequisite and combine with final #554. |
-| #554/#557 combination / #577 | Reviewed combination; Full failed a standalone landscape probe link, while game builds and simulation shards passed. | Adopt the fixture repair and current docs base, inspect source conflicts, then request exact-head Full again. |
-| #560 / #569 | `3c8fc5c365` contains #571, both YAPF fixture repairs and the duplicate-module/baseline repairs. Verification and follower semantics running. | Read results, finish affected evidence and metrics, then independent review. |
-| #562 / #568 | Helper adoption passed 20 scenarios and touched checks; review fixed one duplicate spec lookup at `d6738e9d4e`. Targeted checks pending. | Spot-check the fix and results, then final base adoption and Full. |
-| #565 / #576 | `797591efb0` passes local validation and 50 semantic scenarios; final net glue +13 is within root's accepted bounded cost. | Independent review; preserve the documented #569 fixture overlap and remaining #565 scope. |
-| #572 / #578 | Draft objectives owner; validation pending and the first cost disposition requires Rust ownership of both story sort counters. | Complete the bounded state repair and checks, then independent review. |
-| #561 | Corrected sizing and existing group-owner reuse; queued after #554/#557. | Start when that combination integrates and a slot is available. |
-| #563 / #570 / #566 | Design accepted in world-state.md; #563 closed; records and drawing queued. | Assign under earliest-ready phase order; #566 before storage integration. |
-| #573 / #574 / #575; #497 / #498 | Phase-3 issues queued from the fresh source-sized survey; definition issues include canonical payload ownership. | No implementation yet; select disjoint complete owners when earlier phases leave slots. |
-| #503 | 330 of 449 original traces complete; bounded clock preparation unstarted. | Work order item 11; deep rotation after #557. |
-| Profiles | Profile28 at `7105e24d49` matches all six comparisons; no projection rose and every decision record remains below band. | Retain compatible anchors and candidate traces. Next profile after integration30; no quiet pass due. |
+| #562 / #568 | `d6738e9d4eafa1f1e7cc3c5693f94c10bb8f0c14` | Source review and targeted compilation/boundary checks are complete. Resolve the base conflict, obtain a fresh conflict review, then request current-base exact-head Full. |
+| #565 / #576 | `6dfe4a45797d97cd909a305c77bb9dd28c5d736b` | Final reviewer validation was read and recorded on the PR: affected Rust/native/landscape checks pass. Update from base, preserving both #569's follower fixture and the canonical map inputs in `src/tests/road_yapf.cpp`; fresh conflict review if it conflicts, then Full. Remaining #565 scope stays open. |
+| #572 / #578 | `14b99180cf88da722a1d0ea3424d9ea6e2e94673` | Story counters now live in Rust; native/Cargo evidence is tied to `b602dc3a79`, with later fixture/storage checks recorded in the PR. Objectives comparison after fixture repairs is unrun; final metrics/preflight remain pending. Run it, handle actual failures and the base conflict, then fresh independent review and Full. Owner stopped; no running job. |
+| #561 / #579 | `6046787dd506f378b5456a7c2f211d185e6f5dd3` | Implementation/local validation complete. Start a fresh independent complete-owner review, then final base adoption and Full. No review was started during wind-down. |
+| #168 / #580 | `d34f1c8799ece3566f8f80ed23074de554de1fc1` | Rust/native/focused semantic checks pass. Adopt #569's now-integrated canonical relinking helper, finish generation-abort fixture migration/export retirement and related audits, then independent review and Full. No running job. |
 
-Worktrees kept for the unfinished tasks and their evidence:
-
-| Purpose | Retained worktree(s) |
+| Running or due work | Saved state / next action |
 | --- | --- |
-| Unpushed combination | `.local/worktrees/integration554557` |
-| #554 older implementation and reviews | `/home/fetch/.t3/worktrees/openttd-rust/t3-50116b81`, `t3-d8fb8d59` and `t3-32d82fdf`; root's older validation is in `.local/worktrees/repair554-callback`. Fetch the reviewed head rather than trusting an older local branch. |
-| #557 implementation and review | `/home/fetch/.t3/worktrees/openttd-rust/t3-a73f1edd` and `t3-dfe15b32` |
-| Current implementations | #554: `/home/fetch/.t3/worktrees/openttd-rust/t3-e40e2681`; #568: `t3-070c9aac`; #569: `t3-2eb3d6fd`. |
-| Instruction profiles26/28 | `.local/worktrees/profile-after26-558` retains the completed profile; `.local/worktrees/profile-after28-571` is the next fixed source at `7105e24d49`. |
-| Fixed original coverage | `/home/fetch/.t3/worktrees/openttd-rust/t3-117e7bcf` at `e52d475713` |
-| Completed deep and instruction evidence | `.local/worktrees/deep-74cea95cf8`, `.local/worktrees/profile-after18-544`, `.local/worktrees/profile-after20-545`, and `/home/fetch/.t3/worktrees/openttd-rust/t3-1ef78f07` and `t3-e3e3aaeb` (profile24's six candidate profiles) |
-| Merged-only cleanup | #555's final integration, implementation and review worktrees were removed by startup housekeeping. |
+| Existing #503 deep check | Idle-priority `simulate-sanitized` member on `7473e63624`, running since about 04:50 UTC in `.local/worktrees/deep-after29-577`. Leave it running; read and record its finished report. No finished report was available when this checkpoint was written. |
+| Instruction profile after integration 30 | Due, not launched. Retain profile28/compatible anchors and candidate traces; take the new merged-tip profile on resume. No new speed result is claimed. |
+| Next deep rotation | Due, not launched. Read the running member's result and avoid starting a duplicate while it runs. |
+| Fifth-integration platform cadence | Due after integration 30, not requested during wind-down. |
+| CI | #569's permitted final Full passed and its tested combination merged; no manual request remains pending. Automatic post-merge/docs-push checks are not awaited and their later state is unknown here. |
 
-Relative project paths are under `/home/fetch/projects/openttd-rust`; shortened
-T3 names share `/home/fetch/.t3/worktrees/openttd-rust/`. Other research
-worktrees hold no evidence named here. Integrated housekeeping remains conservative
-when foreign process working directories cannot be inspected; do not weaken it
-to force removal.
+Keep the pinned reference unchanged. Preserve unfinished checkouts and existing
+profile/deep evidence. The work order and all other roadmap sections were left
+unchanged during this wind-down; navigation/steering resumes from this checkpoint.
