@@ -7,6 +7,7 @@
 
 /** @file orders.cpp Typed order storage lifetime and native ABI agreement. */
 #include "../stdafx.h"
+#include "../rust/clock_ffi.h"
 #include "../3rdparty/catch2/catch.hpp"
 #include "../order_base.h"
 #include "../base_consist.h"
@@ -60,7 +61,7 @@ TEST_CASE("Orders timetable - signed native economy dates cross into Rust")
 	leaves.vector = [](void *v) noexcept { return static_cast<TimetableDateFixture *>(v)->orders.GetRustOwner(); };
 	leaves.primary_vehicle = [](void *) noexcept -> uint64_t { return 1; };
 	leaves.vehicle_ownership = [](void *, void *) noexcept -> uint64_t { return 1; };
-	leaves.economy_date = GetRustSharedServices().economy_date;
+	leaves.economy_date = openttd_rust_clock_economy_date;
 	leaves.tick_counter = []() noexcept -> uint64_t { return UINT64_MAX; };
 	leaves.economy_fraction = []() noexcept -> uint64_t { return 0; };
 	leaves.maximum_date = []() noexcept -> uint64_t { return INT32_MAX; };

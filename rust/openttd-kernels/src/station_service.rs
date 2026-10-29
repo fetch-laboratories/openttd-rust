@@ -830,7 +830,7 @@ unsafe fn admit(
             st,
             cargo,
             amount,
-            (*w.shared).economy_date,
+            crate::timer_game_common::openttd_rust_clock_economy_date,
             w.graphs,
             visits.schedule,
         );

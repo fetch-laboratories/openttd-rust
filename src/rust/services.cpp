@@ -363,8 +363,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.bridge_axis = Shared_bridge_axis,
 	.bridge_speed = MapSvcBridgeSpeed,
 	.build_on_slopes = RustBuildOnSlopes,
-	.calendar_date = openttd_rust_clock_calendar_date,
-	.calendar_year = openttd_rust_clock_calendar_year,
 	.clear_square_services = {
 
 		.docking = OpenTTDIsDockingTile,
@@ -381,7 +379,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.disaster_sound = SharedDisasterSound,
 	.distance_from_edge = Shared_distance_from_edge,
 	.drive_through_axis = Shared_drive_through_axis,
-	.economy_date = openttd_rust_clock_economy_date,
 	.forbid_90_deg = RustForbid90Deg,
 	.free_train_reservation = SharedFreeTrainReservation,
 	.has_road_type = Shared_has_road_type,

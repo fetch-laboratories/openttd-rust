@@ -8,6 +8,7 @@
 /** @file order_cmd.cpp Handling of orders. */
 
 #include "stdafx.h"
+#include "rust/clock_ffi.h"
 #include "debug.h"
 #include "command_func.h"
 #include "company_func.h"
@@ -577,7 +578,7 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.vehicle_ownership = openttd_orders_vehicle_ownership,
 	.ticks_per_second = openttd_orders_ticks_per_second,
 	.unit_number = RustOpaqueVehicleRead<uint64_t, RustVehicleUnitNumber>,
-	.economy_date = GetRustSharedServices().economy_date,
+	.economy_date = openttd_rust_clock_economy_date,
 	.economy_fraction = openttd_orders_economy_fraction,
 	.maximum_date = openttd_orders_maximum_date,
 	.timetable_year_limit = openttd_orders_timetable_year_limit,

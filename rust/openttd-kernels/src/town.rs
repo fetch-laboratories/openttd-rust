@@ -1082,7 +1082,9 @@ impl Engine<'_> {
                 continue;
             }
             let date = rti.introduction_date;
-            if (0..1_826_212_865).contains(&date) && date > (self.services.calendar_date)() {
+            if (0..1_826_212_865).contains(&date)
+                && date > crate::timer_game_common::calendar_date().0
+            {
                 continue;
             }
             let speed = if rti.max_speed == 0 {

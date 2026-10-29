@@ -49,7 +49,7 @@ pub unsafe fn company_available(e: EngineRef, company: u8, shared: &Shared) -> b
     // SAFETY: next resolved one live engine shell/owner; reads end before leaves.
     let available = unsafe { std::ptr::addr_of!((*e.state).company_avail).read() };
     u64::from(available) & 1u64.wrapping_shl(u32::from(company)) != 0
-        || (shared.calendar_date)()
+        || crate::timer_game_common::calendar_date().0
             >= unsafe { std::ptr::addr_of!((*e.state).intro_date).read() }
                 .wrapping_add(crate::timer_game_common::DAYS_IN_YEAR)
 }

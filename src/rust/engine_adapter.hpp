@@ -6,6 +6,7 @@
  */
 
 /** @file engine_adapter.hpp Native pool/configuration/display services only. */
+#include "clock_ffi.h"
 #include "engine_ffi.h"
 #include "vehicle_services.h"
 #include "company_services.h"
@@ -158,7 +159,7 @@ const OpenTTDEngineServices &EngineServices() noexcept
 		.seed_config = Engine_seed_config,
 		.base_intro = RustEngineBaseIntro,
 		.aging_year = Engine_aging_year,
-		.calendar_year = GetRustSharedServices().calendar_year,
+		.calendar_year = openttd_rust_clock_calendar_year,
 		.never_expire = RustNeverExpireVehicles,
 		.start_settings = Engine_start_settings,
 		.train_limit = RustTrainLimit,

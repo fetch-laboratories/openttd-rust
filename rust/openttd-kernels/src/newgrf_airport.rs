@@ -204,13 +204,13 @@ pub(crate) fn available(spec: *const AirportSpec, s: &Services) -> bool {
     if !(s.enabled)(spec) {
         return false;
     }
-    if (s.shared().calendar_year)() < (s.min_year)(spec) {
+    if crate::timer_game_common::calendar_year().0 < (s.min_year)(spec) {
         return false;
     }
     if (s.never_expire)() {
         return true;
     }
-    (s.shared().calendar_year)() <= (s.max_year)(spec)
+    crate::timer_game_common::calendar_year().0 <= (s.max_year)(spec)
 }
 pub(crate) fn in_bounds(spec: *const AirportSpec, layout: u8, tile: u32, s: &Services) -> bool {
     let c = s.commands();

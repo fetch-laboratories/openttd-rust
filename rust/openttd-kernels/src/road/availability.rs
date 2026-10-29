@@ -33,7 +33,9 @@ pub fn has_road_type(shared: &Shared, s: &Services, company: u8, rt: u8) -> bool
         if info.label == 0 {
             return false;
         }
-        if (0..MAX_DATE).contains(&info.date) && info.date > (shared.calendar_date)() {
+        if (0..MAX_DATE).contains(&info.date)
+            && info.date > crate::timer_game_common::calendar_date().0
+        {
             return false;
         }
         !info.hidden || info.town_build
@@ -129,7 +131,7 @@ pub extern "C" fn openttd_rust_company_road_types(
 ) -> u64 {
     let types = engine_types(shared, s, Some(company), introduces);
     if introduces {
-        openttd_rust_add_date_road_types(s, types, (shared.calendar_date)())
+        openttd_rust_add_date_road_types(s, types, crate::timer_game_common::calendar_date().0)
     } else {
         types
     }

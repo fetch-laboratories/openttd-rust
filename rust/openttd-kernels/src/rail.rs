@@ -108,7 +108,7 @@ pub extern "C" fn openttd_rust_company_rail_types(
 ) -> u64 {
     let types = engine_types(shared, s, Some(company), introduces);
     if introduces {
-        openttd_rust_add_date_rail_types(s, types, (shared.calendar_date)())
+        openttd_rust_add_date_rail_types(s, types, crate::timer_game_common::calendar_date().0)
     } else {
         types
     }

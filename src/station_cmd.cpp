@@ -756,7 +756,7 @@ static const OpenTTDStationServices _rust_station_services = {
 static const OpenTTDStationLinks _rust_station_links = {
 	.graphs = &GetRustLiveGraphServices(),
 	.automatic_distribution = OpenTTDAutomaticCargoDistribution,
-	.date = GetRustSharedServices().economy_date,
+	.date = openttd_rust_clock_economy_date,
 	.edge = [](OpenTTDBaseStation *from, uint16_t destination) noexcept -> OpenTTDStationEdge {
 		Station *to = Station::Get(StationID(destination));
 		return {to, OpenTTDDistanceManhattan(RustStationLocation(from), RustStationLocation(to))};

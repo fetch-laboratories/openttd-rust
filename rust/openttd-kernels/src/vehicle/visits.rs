@@ -223,7 +223,7 @@ pub(crate) fn increase_stats(
                     live::openttd_rust_live_graph_merge(
                         second,
                         graph,
-                        (s.shared.economy_date)(),
+                        crate::timer_game_common::economy_date().0,
                         l.graphs,
                     );
                 }
@@ -235,7 +235,7 @@ pub(crate) fn increase_stats(
                     live::openttd_rust_live_graph_merge(
                         graph,
                         second,
-                        (s.shared.economy_date)(),
+                        crate::timer_game_common::economy_date().0,
                         l.graphs,
                     );
                 }
@@ -253,7 +253,7 @@ pub(crate) fn increase_stats(
                 usage,
                 time,
                 modes,
-                (s.shared.economy_date)(),
+                crate::timer_game_common::economy_date().0,
                 l.graphs.assertions,
             );
         }

@@ -184,7 +184,7 @@ fn deliver(
         }
         let amount = unsafe {
             crate::industry::accept_delivery(owner, slot, remaining, || {
-                (subsidies.shared().economy_date)()
+                crate::timer_game_common::economy_date().0
             })
         };
         remaining -= amount;
