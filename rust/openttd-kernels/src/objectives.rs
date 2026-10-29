@@ -179,13 +179,7 @@ impl Services {
         (self.window_data)(WC_MAIN_TOOLBAR, 0, 0);
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_valid_goal_destination(
-    s: &Services,
-    company: CompanyID,
-    kind: u8,
-    dest: u32,
-) -> bool {
+unsafe fn valid_goal_destination(s: &Services, company: CompanyID, kind: u8, dest: u32) -> bool {
     match kind {
         GT_NONE => dest == 0,
         GT_TILE => s.tile_valid(TileIndex(dest)),
@@ -224,7 +218,7 @@ pub unsafe extern "C" fn openttd_rust_create_goal(
             || !s.deity()
             || (s.text_empty)(text)
             || (company != CompanyID::INVALID && !s.company_valid(company))
-            || !openttd_rust_valid_goal_destination(s, company, kind, dest)
+            || !valid_goal_destination(s, company, kind, dest)
         {
             return false;
         }
@@ -277,7 +271,7 @@ pub unsafe extern "C" fn openttd_rust_set_goal_destination(
         if goal.is_null() {
             return false;
         }
-        if !openttd_rust_valid_goal_destination(s, *(s.goal_company)(goal), kind, dest) {
+        if !valid_goal_destination(s, *(s.goal_company)(goal), kind, dest) {
             return false;
         }
         if execute(flags) {

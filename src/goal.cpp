@@ -35,11 +35,9 @@
 GoalPool _goal_pool("Goal");
 INSTANTIATE_POOL_METHODS(Goal)
 
+#ifndef WITH_RUST
 /* static */ bool Goal::IsValidGoalDestination(CompanyID company, GoalType type, GoalTypeID dest)
 {
-#ifdef WITH_RUST
-	return openttd_rust_valid_goal_destination(&GetRustObjectivesServices(), company.base(), type, dest);
-#else
 	switch (type) {
 		case GT_NONE:
 			if (dest != 0) return false;
@@ -71,8 +69,8 @@ INSTANTIATE_POOL_METHODS(Goal)
 		default: return false;
 	}
 	return true;
-#endif
 }
+#endif
 
 /**
  * Create a new goal.

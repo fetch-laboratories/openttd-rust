@@ -99,7 +99,6 @@ bool openttd_rust_create_league_table_element(const OpenTTDObjectivesServices *,
 bool openttd_rust_update_league_table_element_data(const OpenTTDObjectivesServices *, uint16_t, uint16_t, uint8_t, const EncodedString *, uint8_t, uint32_t);
 bool openttd_rust_update_league_table_element_score(const OpenTTDObjectivesServices *, uint16_t, uint16_t, int64_t, const EncodedString *);
 bool openttd_rust_remove_league_table_element(const OpenTTDObjectivesServices *, uint16_t, uint16_t);
-bool openttd_rust_valid_goal_destination(const OpenTTDObjectivesServices *, uint8_t, uint8_t, uint32_t);
 bool openttd_rust_valid_link(const OpenTTDObjectivesServices *, uint8_t, uint32_t);
 void openttd_rust_story_page_destruct(const OpenTTDObjectivesServices *, uint16_t);
 bool openttd_rust_story_button_validate_colour(uint32_t);
