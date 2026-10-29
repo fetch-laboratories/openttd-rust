@@ -307,6 +307,14 @@ impl<'a> World<'a> {
         shared: &'a crate::services::Services,
         movement: &crate::movement::MovementServices,
     ) -> Self {
+        Self::with_dimensions(shared, movement, shared.map())
+    }
+    /// Use dimensions already acquired by the entry instead of calling `Map::LogX` again.
+    pub(crate) fn with_dimensions(
+        shared: &'a crate::services::Services,
+        movement: &crate::movement::MovementServices,
+        dimensions: Map,
+    ) -> Self {
         // SAFETY: Game-loop and command entries exclude map reset/load/mutex yield.
         let types = unsafe {
             TileTypeAccess::raw(
@@ -317,7 +325,7 @@ impl<'a> World<'a> {
         Self {
             types,
             shared,
-            dimensions: shared.map(),
+            dimensions,
         }
     }
     pub(crate) fn check(&self, condition: bool) {

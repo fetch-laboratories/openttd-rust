@@ -678,7 +678,12 @@ pub unsafe extern "C" fn openttd_rust_water_tile_loop(
     // SAFETY: Same synchronous table contract as the in-crate scheduler entry;
     // the descriptor ends before this synchronous native entry returns.
     unsafe {
-        let map = crate::map_func::World::new(&*s);
+        let shared = &*s;
+        let map = crate::map_func::World::with_dimensions(
+            shared,
+            crate::movement::table(shared),
+            crate::map_func::Map::from_log_x(size_x.trailing_zeros()),
+        );
         let types = &map.types;
         let tile_type = types.read(tile);
         let ambient = tile_type == 6 && crate::newgrf_generic::ambient_enabled();
@@ -730,7 +735,7 @@ pub unsafe extern "C" fn openttd_rust_flood_halftile(
             w,
             s,
             &map.types,
-            ((*s).map_max_x)().wrapping_add(1),
+            map.dimensions.size_x(),
             ((*s).map_max_y)().wrapping_add(1),
         )
     }
@@ -752,7 +757,7 @@ pub unsafe extern "C" fn openttd_rust_flooding_behaviour(
                 w,
                 s,
                 &map.types,
-                ((*s).map_max_x)().wrapping_add(1),
+                map.dimensions.size_x(),
                 ((*s).map_max_y)().wrapping_add(1),
             )
         }
@@ -769,7 +774,11 @@ pub(crate) unsafe fn dirty_water_neighbours(
     s: &Services,
 ) {
     // SAFETY: Serialized native entry; no map references are formed.
-    let map = crate::map_func::World::new(s);
+    let map = crate::map_func::World::with_dimensions(
+        s,
+        crate::movement::table(s),
+        crate::map_func::Map::from_log_x(size_x.trailing_zeros()),
+    );
     unsafe { World::new(w, s, &map.types, size_x, size_y) }.dirty_neighbours(tile);
 }
 /// # Safety
@@ -783,7 +792,12 @@ pub unsafe extern "C" fn openttd_rust_clear_neighbour_flooding(
     s: *const Services,
 ) {
     // SAFETY: Serialized native entry; no map references are formed.
-    let map = crate::map_func::World::new(unsafe { &*s });
+    let shared = unsafe { &*s };
+    let map = crate::map_func::World::with_dimensions(
+        shared,
+        crate::movement::table(shared),
+        crate::map_func::Map::from_log_x(size_x.trailing_zeros()),
+    );
     let world = unsafe { World::new(w, s, &map.types, size_x, size_y) };
     for direction in 0..8 {
         let target = offset(tile, direction, size_x);
