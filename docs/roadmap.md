@@ -412,27 +412,26 @@ Excluded, with return conditions checked by this review:
   near-full reproduction under #513's original-default setting policy. #513
   needs implementation when the first such improvement is accepted.
 
-## Resume checkpoint (2026-10-29, integration 30)
+## Resume checkpoint (2026-10-29, root session after integration 30)
 
-Paused at the user's request after integration 30 (`06a644505a`); no rollback
-was needed. Five component branches remain, with every unfinished worktree and
-branch preserved. Start with the twenty-fourth steering review above.
+Root resumed at 14:30 UTC on `70193e535e` and applied the twenty-fourth steering
+review. Six component branches are open, at the limit. Each draft's agent keeps
+its status comment on its PR.
 
-| Remaining draft | Pushed head | Next action on resume |
+| Draft | Owner task | Next action on resume |
 | --- | --- | --- |
-| #562 / #568 | `d6738e9d4e` | 1. Resolve the base conflict and make the steering fixes in its PR comment. 2. One fresh scoped review of both. 3. Current-base exact-head Full. |
-| #565 / #576 | `6dfe4a4579` | 1. Update from base, preserving #569's follower fixture and the canonical map inputs in `src/tests/road_yapf.cpp`. 2. Adopt `map_func::World` in place of `MapObservations` and `WaterServices::map`. 3. Fresh conflict review, then Full. The rest of #565 follows in item 4. |
-| #572 / #578 | `14b99180cf` | 1. Run the objectives comparison after the fixture repairs, and the final metrics and preflight. 2. Resolve the base conflict. 3. Fresh independent review, which checks rebound callees and its own map-fetch slot (PR comment). 4. Full. |
-| #561 / #579 | `6046787dd5` | 1. Fresh independent review, which fixes the steering findings in its PR comment. 2. Final base adoption and Full. |
-| #168 / #580 | `d34f1c8799` | 1. Adopt #569's integrated relinking helper. 2. Finish the generation-abort fixture migration and export retirement. 3. Independent review. 4. Full. |
+| #562 / #568 | fix568 (Opus) | Steering fixes 1-5 and base update, then a fresh scoped review and Full. |
+| #565 / #576 | update576 (Opus) | Base update and `map_func::World` adoption, then a fresh conflict review and Full. Root's #565 item-1 PR follows its integration. |
+| #572 / #578 | finish578 (Opus) | Objectives comparison, boundary fixes and base update, then a fresh review and Full. |
+| #561 / #579 | review579 (gpt-6.1-sol) | Base update and independent review with fixes, then Full. |
+| #168 / #580 | finish580 (Opus) | Relinking-helper adoption and fixture migration, then a fresh review and Full. |
+| #581 PR-A / #583 | root | Platform-profile CI, then an independent review and Full. PR-E takes the next free branch. |
 
 | Running or due work | Saved state / next action |
 | --- | --- |
-| #503 deep check | `simulate-sanitized` on `7473e63624` in `.local/worktrees/deep-after29-577`, running since 04:50 UTC. Leave it running; read and record its report. |
-| Instruction profile after integration 30 | Due. Keep profile28 and the compatible anchors. |
-| Next deep rotation | Due once the running member's report is read. |
-| Fifth-integration platform cadence | Due after integration 30. |
-| CI | No manual request is pending. Post-merge and docs-push runs on `06a644505a` and `91f8120cf2` passed. |
+| Deep rotation (sanitized, threaded, TSan, multiplayer) | Running detached on `06a644505a` in `.local/worktrees/deep-after30-569` (locked); exit status lands in `deep-after30-569.done`. The interrupted after-29 run's one failure is ASan `_interactive_random` nondeterminism (#156), not a regression. |
+| Instruction profile after integration 30 | Running detached in `.local/worktrees/profile-after30-569`; exit status in `profile-after30-569.done`. Keep profile28 and the compatible anchors. |
+| Fifth-integration platform cadence | Run 40893525725 on `70193e535e`. A red result is fixed before more integrations. |
 
 Keep the pinned reference unchanged. Preserve unfinished checkouts and existing
 profile and deep evidence.
