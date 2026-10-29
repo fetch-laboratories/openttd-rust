@@ -53,6 +53,7 @@ struct OpenTTDRoadStopResolverServices {
 	void (*set_cached)(BaseStation *, uint16_t, CargoTypes) noexcept OPENTTD_SERVICE_DEFAULT(set_cached);
 	void (*set_random_bits)(BaseStation *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_random_bits);
 	void (*set_slot)(BaseStation *, uint8_t, const RoadStopSpec *, uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_slot);
+	void (*set_tile_random)(BaseStation *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_random);
 	void (*set_waiting)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_waiting);
 	const OpenTTDSharedServices *shared;
 	uint32_t (*slot_grfid)(const BaseStation *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(slot_grfid);

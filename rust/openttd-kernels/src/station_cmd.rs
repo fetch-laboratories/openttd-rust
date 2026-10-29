@@ -243,7 +243,9 @@ pub struct CommandServicesTable {
     pub delete_stop: extern "C" fn(*mut Stop),
     pub set_custom_road_index: extern "C" fn(u32, u8),
     pub custom_road_index: extern "C" fn(u32) -> u32,
+    pub stop_random_bits: extern "C" fn(*mut BaseStation, u32, u8),
 
+    pub remove_stop_tile_data: extern "C" fn(*mut BaseStation, u32),
     pub close_stop_inspect: extern "C" fn(u32),
     pub road_waypoint_area: extern "C" fn(*mut BaseStation) -> TileArea,
     pub set_road_waypoint_area: extern "C" fn(*mut BaseStation, TileArea),
@@ -1141,7 +1143,13 @@ impl Ctx<'_> {
     }
     fn buildable_area(&self, tile: u32, w: u16, h: u16) -> bool {
         (self.shared.tile_valid)(tile)
-            && (self.shared.tile_add_wrap)(tile, i32::from(w) - 1, i32::from(h) - 1) != u32::MAX
+            && self.map().tile_add_wrap(
+                tile,
+                i32::from(w) - 1,
+                i32::from(h) - 1,
+                (self.shared.map_max_y)() + 1,
+                (self.world().environment.freeform_edges)(),
+            ) != crate::tile_type::INVALID_TILE
     }
     fn free_reservation(&self, train: *mut crate::services::Train) {
         unsafe {
@@ -2508,12 +2516,10 @@ impl Ctx<'_> {
             (self.s.station_infrastructure)(owner, 1);
             (self.s.set_custom_road_index)(tile, specindex.value);
             if !spec.is_null() {
-                crate::station_lifecycle::set_stop_data(
+                (self.s.stop_random_bits)(
                     st,
                     tile,
                     ((self.shared.random)(self.shared.context) & 255) as u8,
-                    false,
-                    unsafe { &*self.s.lifecycle },
                 );
                 crate::animated_tile::openttd_rust_trigger_roadstop(
                     st,
@@ -2670,7 +2676,7 @@ impl Ctx<'_> {
             if !waypoint && replacement < 0 {
                 self.tiles_changed(st, false, if truck { 2 } else { 3 });
             }
-            crate::station_lifecycle::remove_stop_data(st, tile, unsafe { &*self.s.lifecycle });
+            (self.s.remove_stop_tile_data)(st, tile);
             if specindex as i32 != replacement {
                 unsafe {
                     crate::newgrf_roadstop::openttd_rust_roadstop_deallocate(
@@ -4282,7 +4288,9 @@ crate::abi::layouts! {
         delete_stop,
         set_custom_road_index,
         custom_road_index,
+        stop_random_bits,
 
+        remove_stop_tile_data,
         close_stop_inspect,
         road_waypoint_area,
         set_road_waypoint_area,

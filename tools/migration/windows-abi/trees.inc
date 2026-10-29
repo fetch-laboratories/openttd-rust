@@ -133,7 +133,6 @@ static void Trees()
 		.industry = {},
 		.ground = {},
 		.town = nullptr,
-		.station_loop = TreeUnused<void, const OpenTTDStationLifecycleServices *, uint32_t, OpenTTDGroundCall *>,
 		.station = nullptr,
 		.objects = nullptr,
 	};

@@ -20,7 +20,6 @@ use crate::vehicle::VehicleRef;
 use crate::vehicle_type::VehicleID;
 use std::ptr::NonNull;
 
-use crate::base_station_base::RoadStopTileData;
 use crate::industry::SpecHandle as IndustrySpec;
 /// Process-lifetime string constants from `table/strings.h`.
 #[repr(C)]
@@ -57,7 +56,6 @@ pub struct Names {
 pub struct Services {
     pub shared: &'static Shared,
     pub catchment: &'static crate::station::CatchmentServices,
-    pub storage: extern "C" fn() -> *const crate::cargo_storage::Services,
     pub allocation: extern "C" fn() -> crate::map_func::TileTypeAllocation,
     pub check: extern "C" fn(bool),
     pub climate: extern "C" fn() -> u8,
@@ -70,39 +68,20 @@ pub struct Services {
     pub spec_enabled: extern "C" fn(*const IndustrySpec) -> bool,
     pub spec_life: extern "C" fn(*const IndustrySpec) -> u8,
     pub set_random_bits: extern "C" fn(*mut BaseStation, u16),
-    pub freeform: extern "C" fn() -> bool,
     pub cargo_classes: extern "C" fn(u8) -> u16,
     pub forest: extern "C" fn(u32) -> bool,
-    pub stop_data: extern "C" fn(*mut BaseStation, usize) -> *mut RoadStopTileData,
-    pub stop_count: extern "C" fn(*mut BaseStation) -> usize,
-    pub stop_tile: extern "C" fn(*const RoadStopTileData) -> TileIndex,
-    pub stop_random: extern "C" fn(*const RoadStopTileData) -> u8,
-    pub stop_frame: extern "C" fn(*const RoadStopTileData) -> u8,
-    pub stop_set_random: extern "C" fn(*mut RoadStopTileData, u8),
-    pub stop_set_frame: extern "C" fn(*mut RoadStopTileData, u8),
-    pub stop_append: extern "C" fn(*mut BaseStation, TileIndex, u8, u8),
-    pub stop_swap_pop: extern "C" fn(*mut BaseStation, usize),
-    pub by_tile: extern "C" fn(u32) -> *mut BaseStation,
+    pub roadstop: *const crate::newgrf_roadstop::Services,
     pub as_station: extern "C" fn(*mut BaseStation) -> *mut crate::station::Station,
     pub cleaning_pool: extern "C" fn() -> bool,
-    pub cargo: extern "C" fn(*mut BaseStation, u8) -> *const crate::cargo_storage::List,
-    pub delete_airport_storage: extern "C" fn(*mut BaseStation),
-    pub invalidate_list: extern "C" fn(*mut BaseStation, i32),
-    pub invalidate_lists: extern "C" fn(),
     pub close_view: extern "C" fn(StationID),
     pub delete_news: extern "C" fn(StationID),
     pub remove_index: extern "C" fn(StationID),
     pub sign_valid: extern "C" fn(*mut BaseStation) -> bool,
     pub remove_sign: extern "C" fn(StationID),
-    pub next_vehicle: extern "C" fn(VehicleID) -> Option<VehicleRef>,
     pub vehicle_id: extern "C" fn(VehicleRef) -> VehicleID,
     pub last_loading: extern "C" fn(VehicleRef) -> StationID,
     pub airport_maintenance: extern "C" fn(*const crate::station_cmd::AirportSpec) -> u16,
     pub maintenance_price: usize,
-}
-/// Canonical native table, resolved without invoking a Rust-owned operation.
-pub(crate) fn services(shared: &Shared) -> &Services {
-    unsafe { &*(*(shared.station_commands)()).lifecycle }
 }
 impl Services {
     fn commands(&self) -> &crate::station_cmd::CommandServicesTable {
@@ -177,7 +156,7 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
     let m = s.map_access();
     let map = s.shared.map();
     let size_y = (s.shared.map_max_y)() + 1;
-    let freeform = (s.freeform)();
+    let freeform = (unsafe { &*s.catchment.station }.environment.freeform_edges)();
     let n = &s.names;
     let town = (s.town)(st);
     let mut info = NameInformation {
@@ -333,58 +312,19 @@ pub(crate) fn add_facility(st: *mut BaseStation, facility: u8, tile: u32, s: &Se
     (c.orders_dirty)();
 }
 
-/// `BaseStation::SetRoadStopTileData`, over the canonical native container.
-pub(crate) fn set_stop_data(
-    st: *mut BaseStation,
+/// `TileLoop_Station`. The scheduler's map descriptor remains valid through the
+/// original tile callbacks under the game-loop interval in world-state.md.
+pub(crate) unsafe fn tile_loop(
     tile: u32,
-    data: u8,
-    animation: bool,
+    call: *mut crate::ground::Call,
     s: &Services,
-) -> bool {
-    for i in 0..(s.stop_count)(st) {
-        let entry = (s.stop_data)(st, i);
-        if (s.stop_tile)(entry).0 != tile {
-            continue;
-        }
-        let old = if animation {
-            (s.stop_frame)(entry)
-        } else {
-            (s.stop_random)(entry)
-        };
-        if old == data {
-            return false;
-        }
-        if animation {
-            (s.stop_set_frame)(entry, data);
-        } else {
-            (s.stop_set_random)(entry, data);
-        }
-        return true;
-    }
-    (s.stop_append)(
-        st,
-        TileIndex(tile),
-        if animation { 0 } else { data },
-        if animation { data } else { 0 },
-    );
-    data != 0
-}
-pub(crate) fn remove_stop_data(st: *mut BaseStation, tile: u32, s: &Services) {
-    for i in 0..(s.stop_count)(st) {
-        if (s.stop_tile)((s.stop_data)(st, i)).0 == tile {
-            (s.stop_swap_pop)(st, i);
-            return;
-        }
-    }
-}
-/// `TileLoop_Station`. The map descriptor remains valid through the original tile
-/// callbacks under the game-loop interval in world-state.md.
-pub(crate) unsafe fn tile_loop(tile: u32, call: *mut crate::ground::Call, s: &Services) {
-    let m = s.map_access();
-    let map = s.shared.map();
-    let size_y = (s.shared.map_max_y)() + 1;
-    let st = (s.by_tile)(tile);
-    match crate::station_map::get_station_type(&m, TileIndex(tile))
+    m: &TileTypeAccess,
+    size_x: u32,
+    size_y: u32,
+) {
+    let map = crate::map_func::Map::from_log_x(size_x.trailing_zeros());
+    let st = unsafe { ((*s.roadstop).by_tile)(tile) };
+    match crate::station_map::get_station_type(m, TileIndex(tile))
         .unwrap_or_else(|| (s.shared.station_type)(tile))
         .0
     {
@@ -402,10 +342,10 @@ pub(crate) unsafe fn tile_loop(tile: u32, call: *mut crate::ground::Call, s: &Se
             crate::cargo_type::INVALID_CARGO,
         ),
         STATION_DOCK | STATION_OILRIG | BUOY => {
-            if crate::station_map::get_station_type(&m, TileIndex(tile))
+            if crate::station_map::get_station_type(m, TileIndex(tile))
                 .is_some_and(|kind| kind.0 == STATION_DOCK)
-                && crate::tile_map::get_tile_slope(&m, tile, map.size_x(), size_y).unwrap()
-                    != crate::slope_func::SLOPE_FLAT
+                && !crate::tile_map::is_tile_flat(m, tile, size_x, size_y)
+                    .unwrap_or_else(|| (s.commands().tile_flat)(tile))
             {
                 return;
             }
@@ -414,12 +354,12 @@ pub(crate) unsafe fn tile_loop(tile: u32, call: *mut crate::ground::Call, s: &Se
                     tile,
                     MP_STATION,
                     false,
-                    map.size_x(),
+                    size_x,
                     size_y,
                     call,
                     (s.shared.water_services)(),
                     s.shared,
-                    &m,
+                    m,
                 );
             }
         }
@@ -430,22 +370,22 @@ pub(crate) unsafe fn tile_loop(tile: u32, call: *mut crate::ground::Call, s: &Se
             crate::cargo_type::INVALID_CARGO,
         ),
         ROAD_WAYPOINT => {
-            let snow = || crate::station_map::road_waypoint_snow(&m, tile).unwrap();
+            let snow = || crate::station_map::road_waypoint_snow(m, tile).unwrap();
             let change = match (s.climate)() {
                 crate::landscape_type::ARCTIC => {
                     snow()
-                        != (crate::tile_map::get_tile_z(&m, tile, map.size_x(), size_y).unwrap()
+                        != (crate::tile_map::get_tile_z(m, tile, size_x, size_y).unwrap()
                             > i32::from((s.shared.snow_line)()))
                 }
                 crate::landscape_type::TROPIC => {
-                    crate::tile_map::get_tropic_zone(&m, tile).unwrap()
+                    crate::tile_map::get_tropic_zone(m, tile).unwrap()
                         == crate::tile_type::TROPICZONE_DESERT
                         && !snow()
                 }
                 _ => false,
             };
             if change {
-                crate::station_map::toggle_road_waypoint_snow(&m, tile).unwrap();
+                crate::station_map::toggle_road_waypoint_snow(m, tile).unwrap();
                 (s.shared.mark_dirty)(tile);
             }
             let town = (s.shared.closest_town)(tile, u32::MAX);
@@ -459,10 +399,10 @@ pub(crate) unsafe fn tile_loop(tile: u32, call: *mut crate::ground::Call, s: &Se
             } else {
                 ROADSIDE_GRASS
             };
-            let current = crate::station_map::road_waypoint_roadside(&m, tile).unwrap();
+            let current = crate::station_map::road_waypoint_roadside(m, tile).unwrap();
             if current != new {
                 crate::station_map::set_road_waypoint_roadside(
-                    &m,
+                    m,
                     tile,
                     if current == ROADSIDE_BARREN {
                         new
@@ -483,26 +423,16 @@ pub(crate) unsafe fn tile_loop(tile: u32, call: *mut crate::ground::Call, s: &Se
         _ => {}
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_tile_loop(
-    s: &Services,
-    tile: u32,
-    call: *mut crate::ground::Call,
-) {
-    unsafe {
-        tile_loop(tile, call, s);
-    }
-}
-
 /// `Station::~Station`; the native destructor retains only member destruction.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut BaseStation) {
     let c = s.commands();
     let w = unsafe { &*c.station };
+    let links = unsafe { &*c.links };
     let state = (w.owner)(st);
     if (s.cleaning_pool)() {
         for cargo in 0..NUM_CARGO {
-            let list = (s.cargo)(st, cargo);
+            let list = (links.station_cargo)(st, cargo);
             if !list.is_null() {
                 unsafe {
                     crate::cargo_storage::openttd_rust_cargo_list_clear(list.cast_mut());
@@ -530,8 +460,7 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
         crate::aircraft::invalidate_target(c.aircraft, id.0);
     }
     let graphs = w.graphs;
-    let links = unsafe { &*c.links };
-    let storage = unsafe { &*(s.storage)() };
+    let storage = unsafe { &*(links.storage)() };
     for cargo in 0..NUM_CARGO {
         let graph = (graphs.get_if_valid)((graphs.graph_id)(st, cargo));
         if graph.is_null() {
@@ -577,7 +506,7 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
     }
     let vehicles = unsafe { &*c.vehicle };
     let mut from = VehicleID(0);
-    while let Some(v) = (s.next_vehicle)(from) {
+    while let Some(v) = (s.shared.vehicle_next)(from.0) {
         from = VehicleID((s.vehicle_id)(v).0.wrapping_add(1));
         if (vehicles.last_station)(v) == id.0 {
             (vehicles.write_last_station)(v, INVALID_STATION);
@@ -589,11 +518,11 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
     unsafe {
         crate::station::openttd_rust_station_remove_from_nearby_lists(st, s.catchment);
     }
-    (s.delete_airport_storage)(st);
+    (c.delete_airport_storage)(st);
     if (w.station_owner)(st) == crate::company_type::OWNER_NONE {
-        (s.invalidate_lists)();
+        (c.station_list_classes_invalidate)();
     } else {
-        (s.invalidate_list)(st, 0);
+        (w.station_list_invalidation)(st, 0);
     }
     (s.close_view)(id);
     unsafe {
@@ -606,7 +535,7 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
     }
     (s.delete_news)(id);
     for cargo in 0..NUM_CARGO {
-        let list = (s.cargo)(st, cargo);
+        let list = (links.station_cargo)(st, cargo);
         if !list.is_null() {
             unsafe {
                 crate::cargo_storage::truncate_station(
@@ -656,5 +585,5 @@ pub(crate) fn airport_maintenance(s: &Services, owner: u8) -> i64 {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStationNames" ["probe"] => Names { base, central, airport, oilfield, docks, heliport, mines, lakeside, woods, forest, valley, heights, north, south, east, west, transfer, halt, exchange, annexe, sidings, branch, upper, lower, fallback, undefined, null };
-    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, storage, allocation, check, climate, names, town, industry_type, set_industry_type, spec, spec_name, spec_enabled, spec_life, set_random_bits, freeform, cargo_classes, forest, stop_data, stop_count, stop_tile, stop_random, stop_frame, stop_set_random, stop_set_frame, stop_append, stop_swap_pop, by_tile, as_station, cleaning_pool, cargo, delete_airport_storage, invalidate_list, invalidate_lists, close_view, delete_news, remove_index, sign_valid, remove_sign, next_vehicle, vehicle_id, last_loading, airport_maintenance, maintenance_price };
+    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, allocation, check, climate, names, town, industry_type, set_industry_type, spec, spec_name, spec_enabled, spec_life, set_random_bits, cargo_classes, forest, roadstop, as_station, cleaning_pool, close_view, delete_news, remove_index, sign_valid, remove_sign, vehicle_id, last_loading, airport_maintenance, maintenance_price };
 }

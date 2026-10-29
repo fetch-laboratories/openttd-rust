@@ -49,7 +49,6 @@ struct OpenTTDLandscapeLoopServices {
 	OpenTTDIndustryLoopServices industry;
 	OpenTTDGroundLoopServices ground;
 	const OpenTTDTownLeaves *town;
-	void (*station_loop)(const OpenTTDStationLifecycleServices *, uint32_t, OpenTTDGroundCall *) OPENTTD_SERVICE_DEFAULT(station_loop);
 	const OpenTTDStationLifecycleServices *station;
 	const OpenTTDObjectServices *objects;
 };

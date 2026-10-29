@@ -3,6 +3,10 @@
 #include "tree_map.h"
 #ifdef WITH_RUST
 #include "rust/ground_services.h"
+#include "../tools/simulation/session-fixture.hpp"
+#include "rust/landscape_generation_frame.hpp"
+#else
+extern TileIndex _cur_tileloop_tile;
 #endif
 #include "linkgraph/linkgraphschedule.h"
 
@@ -75,6 +79,36 @@ static void Station562Names(TileIndex origin, DoCommandFlags exec)
 	for (Station *st : seeds) delete st;
 	Station562Rng("names");
 }
+/* One scheduler batch from the tile with every other tile void in both games. Void
+ * tiles flood no neighbour above sea level and draw no random bits. */
+static void Station562TileLoop(TileIndex tile)
+{
+	std::vector<uint8_t> types;
+	for (const TileIndex at : Map::Iterate()) {
+		Tile one(at); types.push_back(one.type());
+		if (at != tile) one.type() = MP_VOID << 4;
+	}
+	AutoRestoreBackup<decltype(TimerGameTick::counter)> tick(TimerGameTick::counter, 1);
+#ifdef WITH_RUST
+	auto &cursor = *openttd_rust_tile_loop_cursor();
+	const auto saved_cursor = cursor;
+	cursor = tile.base();
+	RustGenerationLoop loop;
+	SessionFixture fixture;
+	fixture.shared.map_log_x = OpenTTDMapLogX;
+	fixture.services.map_log_y = OpenTTDMapLogY;
+	fixture.loop = loop.view;
+	StationNeed(fixture.Run(_game_mode), __LINE__);
+#else
+	auto &cursor = _cur_tileloop_tile;
+	const auto saved_cursor = cursor;
+	cursor = tile;
+	RunTileLoop();
+#endif
+	cursor = saved_cursor;
+	uint i = 0;
+	for (const TileIndex at : Map::Iterate()) Tile(at).type() = types[i++];
+}
 static void Station562Waypoints(TileIndex tile, DoCommandFlags exec, bool arctic, bool reload)
 {
 	if (!reload) {
@@ -95,11 +129,7 @@ static void Station562Waypoints(TileIndex tile, DoCommandFlags exec, bool arctic
 	for (int phase = 0; phase < 6; ++phase) {
 		if (phase == 2) { _settings_game.game_creation.snow_line_height = 2; SetTropicZone(tile, TROPICZONE_NORMAL); }
 		if (phase == 4) const_cast<Town *>(town)->cache.squared_town_zone_radius.fill(UINT32_MAX);
-#ifdef WITH_RUST
-		OpenTTDGroundCall call; openttd_rust_station_tile_loop(&GetRustStationLifecycleServices(), tile.base(), &call);
-#else
-		TileLoop_Station(tile);
-#endif
+		Station562TileLoop(tile);
 		StationNeed(IsRoadWaypointOnSnowOrDesert(tile) == (!arctic || phase < 2), __LINE__);
 		StationNeed(GetRoadWaypointRoadside(tile) == (phase == 0 || phase == 4 ? Roadside::Barren : phase == 5 ? Roadside::Paved : Roadside::Grass), __LINE__);
 		fmt::print(stderr, "STCMD owner562-ground {} {} {} {}\n", arctic, phase, IsRoadWaypointOnSnowOrDesert(tile), to_underlying(GetRoadWaypointRoadside(tile)));

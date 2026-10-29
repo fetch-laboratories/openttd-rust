@@ -32,6 +32,7 @@
 #ifdef WITH_RUST
 #include "rust/services_station.h"
 #include "rust/station_lifecycle_ffi.h"
+#include "rust/roadstop_resolver_ffi.h"
 #include "rust/station_command_ffi.h"
 #include "rust/services_assert.h"
 #include "rust/services_cargo.h"
@@ -193,7 +194,6 @@ void BaseStation::PostDestructor(size_t)
 	InvalidateWindowData(WC_SELECT_STATION, 0, 0);
 }
 
-#ifndef WITH_RUST
 bool BaseStation::SetRoadStopTileData(TileIndex tile, uint8_t data, bool animation)
 {
 	for (RoadStopTileData &tile_data : this->custom_roadstop_tile_data) {
@@ -222,7 +222,6 @@ void BaseStation::RemoveRoadStopTileData(TileIndex tile)
 		}
 	}
 }
-#endif
 
 /**
  * Get the primary road stop (the first road stop) that the given vehicle can load/unload.
@@ -842,7 +841,6 @@ const OpenTTDStationLifecycleServices &GetRustStationLifecycleServices() noexcep
 	static const OpenTTDStationLifecycleServices services{
 		.shared = &GetRustSharedServices(),
 		.catchment = &GetRustStationCatchmentServices(),
-		.storage = CargoStorageServices,
 		.allocation = GetRustTileTypeAllocation,
 		.check = RustAssertCondition,
 		.climate = OpenTTDLandscapeValue,
@@ -865,31 +863,16 @@ const OpenTTDStationLifecycleServices &GetRustStationLifecycleServices() noexcep
 		.spec_enabled = RustSpecEnabled<IndustrySpec>,
 		.spec_life = RustIndustrySpecLife,
 		.set_random_bits = RustStationSetRandomBits,
-		.freeform = OpenTTDFreeformEdges,
 		.cargo_classes = RustCargoClasses,
 		.forest = [](uint32_t tile) noexcept { return IsTileForestIndustry(TileIndex{tile}); },
-		.stop_data = RustRoadStopData,
-		.stop_count = RustRoadStopTileDataCount,
-		.stop_tile = RustRoadStopDataTile,
-		.stop_random = RustRoadStopDataRandom,
-		.stop_frame = RustRoadStopDataFrame,
-		.stop_set_random = RustRoadStopDataSetRandom,
-		.stop_set_frame = RustRoadStopDataSetFrame,
-		.stop_append = [](BaseStation *st, uint32_t tile, uint8_t random, uint8_t frame) noexcept { st->custom_roadstop_tile_data.push_back({TileIndex{tile}, random, frame}); },
-		.stop_swap_pop = [](BaseStation *st, size_t index) noexcept { st->custom_roadstop_tile_data[index] = st->custom_roadstop_tile_data.back(); st->custom_roadstop_tile_data.pop_back(); },
-		.by_tile = RustBaseStationByTile,
+		.roadstop = &GetRoadStopResolverServices(),
 		.as_station = RustAnimationStation,
 		.cleaning_pool = []() noexcept { return Station::CleaningPool(); },
-		.cargo = RustStationExistingCargoOwner,
-		.delete_airport_storage = RustStationDeleteAirportStorage,
-		.invalidate_list = RustStationListInvalidation,
-		.invalidate_lists = RustStationListClassesInvalidate,
 		.close_view = [](uint16_t id) noexcept { CloseWindowById(WC_STATION_VIEW, StationID{id}); },
 		.delete_news = [](uint16_t id) noexcept { DeleteStationNews(StationID{id}); },
 		.remove_index = [](uint16_t id) noexcept { _station_kdtree.Remove(StationID{id}); },
 		.sign_valid = RustStationSignValid,
 		.remove_sign = [](uint16_t id) noexcept { _viewport_sign_kdtree.Remove(ViewportSignKdtreeItem::MakeStation(StationID{id})); },
-		.next_vehicle = RustNextVehicle,
 		.vehicle_id = RustVehicleIndex<OpenTTDVehicle *>,
 		.last_loading = RustVehicleLastLoadingStation,
 		.airport_maintenance = RustAirportSpecMaintenance,

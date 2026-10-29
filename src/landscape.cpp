@@ -955,7 +955,6 @@ OpenTTDLandscapeLoopServices RustLandscapeLoopServices(OpenTTDGroundCall *call, 
 		.industry = GetRustIndustryLoopServices(),
 		.ground = {.clear = &GetRustClearServices(), .rail = &GetRustRailGroundServices(), .road = &GetRustRoadGroundServices(), .road_command = road, .tunnel = &GetRustTunnelGroundServices(), .water = &GetRustWaterGroundServices(), .costs = &GetRustGroundCostServices(), .call = call, .climate = OpenTTDLandscape(), .editor = OpenTTDEditor(), .rebuild = _settings_game.economy.mod_road_rebuild},
 		.town = &GetRustTownServices(),
-		.station_loop = openttd_rust_station_tile_loop,
 		.station = &GetRustStationLifecycleServices(),
 		.objects = &GetRustObjectServices(),
 	};
@@ -1994,7 +1993,6 @@ void CallLandscapeTick()
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDLandscapeGenerationServices.hpp"
 #include "abi-visit-OpenTTDHeightmapDecoder.hpp"
-#include "abi-visit-OpenTTDLandscapeLoopServices.hpp"
 #include "abi-visit-OpenTTDMovementServices.hpp"
 #include "abi-visit-OpenTTDTileOwnerServices.hpp"
 #include "abi-visit-OpenTTDClearServices.hpp"
@@ -2005,11 +2003,9 @@ void CallLandscapeTick()
 #include "abi-visit-OpenTTDGroundCostServices.hpp"
 bool CheckAbi_landscape()
 {
-	OpenTTDGroundCall call;
-	RustRoadCommandContext road;
 	RustHeightmapDecoder decoder(DFT_HEIGHTMAP_BMP, "");
 	return AbiServicesComplete(GetRustLandscapeGenerationServices()) && AbiServicesComplete(decoder.view) &&
-		AbiServicesComplete(GetRustTileOwnerServices()) && AbiServicesComplete(RustLandscapeLoopServices(&call, &road.view)) &&
+		AbiServicesComplete(GetRustTileOwnerServices()) &&
 		AbiServicesComplete(GetRustClearServices()) && AbiServicesComplete(GetRustRailGroundServices()) &&
 		AbiServicesComplete(GetRustRoadGroundServices()) && AbiServicesComplete(GetRustTunnelGroundServices()) &&
 		AbiServicesComplete(GetRustWaterGroundServices()) && AbiServicesComplete(GetRustGroundCostServices()) &&

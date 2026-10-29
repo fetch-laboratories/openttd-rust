@@ -61,6 +61,14 @@ extern "C" void __wrap__Z13PlayTileSoundPK7GRFFiletN10StrongType7TypedefIj12Tile
 	__real__Z13PlayTileSoundPK7GRFFiletN10StrongType7TypedefIj12TileIndexTagJNS2_7CompareENS2_7IntegerENS2_10CompatibleIiEENS7_IlEEEEE(f, s, t);
 	AnimationTrace("sound-exit");
 }
+extern "C" bool __real__ZN11BaseStation19SetRoadStopTileDataEN10StrongType7TypedefIj12TileIndexTagJNS0_7CompareENS0_7IntegerENS0_10CompatibleIiEENS5_IlEEEEEhb(BaseStation *, TileIndex, uint8_t, bool);
+extern "C" bool __wrap__ZN11BaseStation19SetRoadStopTileDataEN10StrongType7TypedefIj12TileIndexTagJNS0_7CompareENS0_7IntegerENS0_10CompatibleIiEENS5_IlEEEEEhb(BaseStation *s, TileIndex t, uint8_t f, bool a)
+{
+	AnimationTrace(a ? "setter-enter" : "random-enter");
+	bool changed = __real__ZN11BaseStation19SetRoadStopTileDataEN10StrongType7TypedefIj12TileIndexTagJNS0_7CompareENS0_7IntegerENS0_10CompatibleIiEENS5_IlEEEEEhb(s, t, f, a);
+	AnimationTrace(changed ? "setter-changed" : "setter-unchanged");
+	return changed;
+}
 extern "C" void __real__Z19MarkTileDirtyByTileN10StrongType7TypedefIj12TileIndexTagJNS_7CompareENS_7IntegerENS_10CompatibleIiEENS4_IlEEEEEii(TileIndex, int, int);
 extern "C" void __wrap__Z19MarkTileDirtyByTileN10StrongType7TypedefIj12TileIndexTagJNS_7CompareENS_7IntegerENS_10CompatibleIiEENS4_IlEEEEEii(TileIndex t, int b, int h)
 {
@@ -353,11 +361,7 @@ static void AnimationBindingsProbe()
 	Backup<std::vector<SpecMapping<RoadStopSpec>>> road_specs(rs->roadstop_speclist);
 	Backup<std::vector<RoadStopTileData>> road_data(rs->custom_roadstop_tile_data);
 	const auto road_index = GetCustomRoadStopSpecIndex(tiles[4]); rs->roadstop_speclist.resize(2); rs->roadstop_speclist[1].spec = &road; SetCustomRoadStopSpecIndex(tiles[4], 1);
-	AnimationBindingProbe("roadstop", tiles[4], &road, RoadStopCallbackMask::AnimationSpeed, RoadStopCallbackMask::AnimationNextFrame, AnimateRoadStopTile, [rs, t = tiles[4]](int value) { if (value >= 0) {
-			auto it = std::ranges::find(rs->custom_roadstop_tile_data, t, &RoadStopTileData::tile);
-			if (it == rs->custom_roadstop_tile_data.end()) rs->custom_roadstop_tile_data.push_back({t, 0, static_cast<uint8_t>(value)});
-			else it->animation_frame = value;
-		} return rs->GetRoadStopAnimationFrame(t); }, [&road](bool bits) { road.flags.Set(RoadStopSpecFlag::Cb141RandomBits, bits); });
+	AnimationBindingProbe("roadstop", tiles[4], &road, RoadStopCallbackMask::AnimationSpeed, RoadStopCallbackMask::AnimationNextFrame, AnimateRoadStopTile, [rs, t = tiles[4]](int value) { if (value >= 0) rs->SetRoadStopAnimationFrame(t, value); return rs->GetRoadStopAnimationFrame(t); }, [&road](bool bits) { road.flags.Set(RoadStopSpecFlag::Cb141RandomBits, bits); });
 	const auto zero_queue = AnimationQueue(); const auto zero_state = GetAnimatedTileState(tiles[4]);
 	rs->custom_roadstop_tile_data.clear();
 	fmt::print(stderr, "OBJECT animation-road-zero {}", rs->GetRoadStopAnimationFrame(tiles[4]));
