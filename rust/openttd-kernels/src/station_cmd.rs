@@ -243,7 +243,6 @@ pub struct CommandServicesTable {
     pub delete_stop: extern "C" fn(*mut Stop),
     pub set_custom_road_index: extern "C" fn(u32, u8),
     pub custom_road_index: extern "C" fn(u32) -> u32,
-    pub stop_random_bits: extern "C" fn(*mut BaseStation, u32, u8),
 
     pub remove_stop_tile_data: extern "C" fn(*mut BaseStation, u32),
     pub close_stop_inspect: extern "C" fn(u32),
@@ -2516,11 +2515,13 @@ impl Ctx<'_> {
             (self.s.station_infrastructure)(owner, 1);
             (self.s.set_custom_road_index)(tile, specindex.value);
             if !spec.is_null() {
-                (self.s.stop_random_bits)(
-                    st,
-                    tile,
-                    ((self.shared.random)(self.shared.context) & 255) as u8,
-                );
+                unsafe {
+                    ((*self.s.roadstop_resolver).set_tile_random)(
+                        st,
+                        tile,
+                        ((self.shared.random)(self.shared.context) & 255) as u8,
+                    );
+                }
                 crate::animated_tile::openttd_rust_trigger_roadstop(
                     st,
                     tile,
@@ -4288,7 +4289,6 @@ crate::abi::layouts! {
         delete_stop,
         set_custom_road_index,
         custom_road_index,
-        stop_random_bits,
 
         remove_stop_tile_data,
         close_stop_inspect,

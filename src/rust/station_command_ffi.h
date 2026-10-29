@@ -145,7 +145,6 @@ struct OpenTTDStationCommandServices {
 	void (*delete_stop)(RoadStop *) noexcept OPENTTD_SERVICE_DEFAULT(delete_stop);
 	void (*set_custom_road_index)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_custom_road_index);
 	uint32_t (*custom_road_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(custom_road_index);
-	void (*stop_random_bits)(BaseStation *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(stop_random_bits);
 
 	void (*remove_stop_tile_data)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(remove_stop_tile_data);
 	void (*close_stop_inspect)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(close_stop_inspect);
