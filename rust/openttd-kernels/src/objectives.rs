@@ -427,7 +427,7 @@ pub extern "C" fn openttd_rust_goal_question_answer(
 }
 unsafe fn verify_element(
     s: &Services,
-    page: StoryPageID,
+    page: *mut StoryPage,
     kind: u8,
     tile: TileIndex,
     reference: u32,
@@ -443,7 +443,7 @@ unsafe fn verify_element(
                 if goal.is_null() {
                     return false;
                 }
-                !(*(s.page_company)((s.page)(u32::from(page.0))) == CompanyID::INVALID
+                !(*(s.page_company)(page) == CompanyID::INVALID
                     && *(s.goal_company)(goal) != CompanyID::INVALID)
             }
             SPET_BUTTON_PUSH => button.validate_colour() && button.validate_flags(),
@@ -553,11 +553,11 @@ pub unsafe extern "C" fn openttd_rust_create_story_page_element(
                 count = count.wrapping_add(1);
             }
         });
-        if count >= 128
-            || !s.deity()
-            || (s.page)(u32::from(page.0)).is_null()
-            || !verify_element(s, page, kind, tile, reference, text)
-        {
+        if count >= 128 || !s.deity() {
+            return false;
+        }
+        let page_record = (s.page)(u32::from(page.0));
+        if page_record.is_null() || !verify_element(s, page_record, kind, tile, reference, text) {
             return false;
         }
         if execute(flags) {
@@ -593,7 +593,12 @@ pub unsafe extern "C" fn openttd_rust_update_story_page_element(
         }
         let page = *(s.element_page)(element);
         let kind = *(s.element_type)(element);
-        if !verify_element(s, page, kind, tile, reference, text) {
+        let page_record = if kind == SPET_GOAL {
+            (s.page)(u32::from(page.0))
+        } else {
+            std::ptr::null_mut()
+        };
+        if !verify_element(s, page_record, kind, tile, reference, text) {
             return false;
         }
         if execute(flags) {
