@@ -125,7 +125,6 @@ const OpenTTDCompanyIdentityServices &GetRustCompanyIdentityServices() noexcept
 	.wagon_override = RustVehicleRead<bool, RustVehicleUsesWagonOverride>,
 	.cargo_freight = Identity_cargo_freight,
 	.cargo_passengers = Identity_cargo_passengers,
-	.goods = Identity_goods,
 	.vehicle_id = RustVehicleRead<uint32_t, RustVehicleIndexOpaque>,
 	.invalidate_vehicle = RustVehicleInvoke<RustVehicleInvalidateNewGRFCache>,
 	.vehicle_owner = RustVehicleOwnerOf,

@@ -69,7 +69,6 @@ struct OpenTTDCompanyIdentityServices {
 	bool (*wagon_override)(OpenTTDVehicle *v) noexcept OPENTTD_SERVICE_DEFAULT(wagon_override);
 	bool (*cargo_freight)(uint8_t cargo) noexcept OPENTTD_SERVICE_DEFAULT(cargo_freight);
 	bool (*cargo_passengers)(uint8_t cargo) noexcept OPENTTD_SERVICE_DEFAULT(cargo_passengers);
-	uint8_t (*goods)() noexcept OPENTTD_SERVICE_DEFAULT(goods);
 	uint32_t (*vehicle_id)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_id);
 	void (*invalidate_vehicle)(OpenTTDVehicle *v) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_vehicle);
 	uint8_t (*vehicle_owner)(OpenTTDVehicle *v) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_owner);
