@@ -60,7 +60,7 @@ struct SessionFixture {
 		tables = {.scheduler = &scheduler, .pending = &pending, .transaction = &transaction, .group = &group};
 		towns.environment.editor = []() noexcept { return true; };
 		stations.environment.editor = []() noexcept { return true; };
-		companies.company_next = [](uint32_t) noexcept { return OpenTTDCompanyRef{nullptr, 0}; };
+		companies.company_next = [](uint32_t) noexcept { return OpenTTDCompanyRef{nullptr, UINT32_MAX}; };
 		world.industry = &industries;
 		clock.shared = &shared;
 		clock.minutes_per_calendar_year = []() noexcept -> uint16_t { return 0; };
