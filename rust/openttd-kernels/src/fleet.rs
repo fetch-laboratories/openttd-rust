@@ -1353,18 +1353,6 @@ pub unsafe extern "C" fn openttd_rust_fleet_update_autoreplace(
     let w = unsafe { &*services };
     unsafe { update_autoreplace(w, company) }
 }
-/// Synchronous original fleet `company_liveries` control.
-/// # Safety
-/// Static typed noexcept services; live native arguments and game-thread owners.
-/// Field accesses end before callbacks. Panics or escaping exceptions abort.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_fleet_company_liveries(
-    services: *const GroupServices,
-    company: u8,
-) {
-    let w = unsafe { &*services };
-    unsafe { company_liveries(w, company) }
-}
 /// Synchronous original fleet `create_group` control.
 /// # Safety
 /// Static typed noexcept services; live native arguments and game-thread owners.

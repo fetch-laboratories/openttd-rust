@@ -56,7 +56,7 @@ TEST_CASE("Company economy - canonical owner layouts and property copy lifetime"
 
 TEST_CASE("Company identity - process-wide colour alias and face bit truncation")
 {
-	AutoRestoreBackup<Colours> colour(_company_colours[CompanyID(0)]);
+	AutoRestoreBackup<Colours> colour(_company_colours[CompanyID(0)], _company_colours[CompanyID(0)]);
 	CHECK(reinterpret_cast<uint8_t *>(&_company_colours[CompanyID(0)]) == openttd_rust_company_colours());
 	std::thread worker([] { _company_colours[CompanyID(0)] = COLOUR_RED; });
 	worker.join();

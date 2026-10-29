@@ -36,13 +36,13 @@ static_assert(LS_DEFAULT == 0 && LS_STEAM == 1 && LS_DIESEL == 2 && LS_ELECTRIC 
 static_assert(LS_PASSENGER_WAGON_STEAM == 8 && LS_PASSENGER_WAGON_DIESEL == 9 && LS_PASSENGER_WAGON_ELECTRIC == 10 && LS_PASSENGER_WAGON_MONORAIL == 11 && LS_PASSENGER_WAGON_MAGLEV == 12 && LS_FREIGHT_WAGON == 13);
 static_assert(LS_BUS == 14 && LS_TRUCK == 15 && LS_PASSENGER_SHIP == 16 && LS_FREIGHT_SHIP == 17 && LS_HELICOPTER == 18 && LS_SMALL_PLANE == 19 && LS_LARGE_PLANE == 20 && LS_PASSENGER_TRAM == 21 && LS_FREIGHT_TRAM == 22 && LS_END == 23);
 static_assert(to_underlying(EngineMiscFlag::RailIsMU) == 2 && to_underlying(EngineMiscFlag::RoadIsTram) == 0 && AIR_FAST == 2);
-void Identity_admin_update(uint8_t id) noexcept { CompanyAdminUpdate(Company::Get(CompanyID{id})); }
 struct CompanyNames { std::string candidate, other; };
 // Rust supplies call-local placement storage. No container or field snapshot crosses.
 static_assert(sizeof(CompanyNames) <= sizeof(OpenTTDCompanyNameStorage));
 static_assert(alignof(CompanyNames) <= alignof(OpenTTDCompanyNameStorage));
 static CompanyNames &Names(OpenTTDCompanyNameStorage *p) noexcept { return *std::launder(reinterpret_cast<CompanyNames *>(p)); }
 #include "company_identity_services.h"
+void Identity_admin_update(uint8_t id) noexcept { CompanyAdminUpdate(Company::Get(CompanyID{id})); }
 static void Identity_name_frame_init(OpenTTDCompanyNameStorage *slot) noexcept { new (slot) CompanyNames{}; }
 static void Identity_name_frame_drop(OpenTTDCompanyNameStorage *slot) noexcept { Names(slot).~CompanyNames(); }
 static OpenTTDByteSpan Identity_render(OpenTTDCompanyNameStorage *slot, uint32_t str, uint32_t param) noexcept { auto &s = Names(slot).candidate; s = GetString(str, param); return {reinterpret_cast<const uint8_t *>(s.data()), s.size()}; }
@@ -70,7 +70,6 @@ const OpenTTDFaceServices &GetRustFaceServices() noexcept
 	};
 	return services;
 }
-extern const OpenTTDFleetGroupServices &FleetGroupServices();
 const OpenTTDCompanyIdentityServices &GetRustCompanyIdentityServices() noexcept
 {
 	static const OpenTTDCompanyIdentityServices services{

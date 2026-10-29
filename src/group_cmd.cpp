@@ -380,11 +380,9 @@ static void PropagateChildLivery(const Group *g, bool reset_cache)
  * colours set to default.
  * @param c Company to update.
  */
+#ifndef WITH_RUST
 void UpdateCompanyGroupLiveries(const Company *c)
 {
-#ifdef WITH_RUST
-	openttd_rust_fleet_company_liveries(&_fleet_group_services, c->index.base());
-#else
 	for (Group *g : Group::Iterate()) {
 		if (g->owner == c->index && g->parent == GroupID::Invalid()) {
 			if (!g->livery.in_use.Test(Livery::Flag::Primary)) g->livery.colour1 = c->livery[LS_DEFAULT].colour1;
@@ -392,8 +390,8 @@ void UpdateCompanyGroupLiveries(const Company *c)
 			PropagateChildLivery(g, false);
 		}
 	}
-#endif /* WITH_RUST */
 }
+#endif /* WITH_RUST */
 
 
 /**

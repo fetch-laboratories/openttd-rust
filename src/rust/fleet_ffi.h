@@ -195,7 +195,6 @@ void openttd_rust_fleet_min_age(const OpenTTDFleetGroupServices *, void *);
 void openttd_rust_fleet_update_afterload(const OpenTTDFleetGroupServices *);
 void openttd_rust_fleet_update_profits(const OpenTTDFleetGroupServices *);
 void openttd_rust_fleet_update_autoreplace(const OpenTTDFleetGroupServices *, uint8_t);
-void openttd_rust_fleet_company_liveries(const OpenTTDFleetGroupServices *, uint8_t);
 uint32_t openttd_rust_fleet_create_group(const OpenTTDFleetGroupServices *, uint32_t, uint8_t, uint16_t, uint16_t *);
 uint32_t openttd_rust_fleet_delete_group(const OpenTTDFleetGroupServices *, uint32_t, uint16_t);
 uint32_t openttd_rust_fleet_alter_group(const OpenTTDFleetGroupServices *, uint32_t, uint8_t, uint16_t, uint16_t, const uint8_t *, size_t);

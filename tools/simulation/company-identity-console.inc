@@ -15,6 +15,14 @@ static void CompanyIdentityInspect()
 	for (const Group *g : Group::Iterate()) {
 		fmt::print(stderr, "COMPANY-IDENTITY group {} {} {} {} {} {}\n", g->index.base(), g->owner.base(), g->parent.base(), g->livery.in_use.base(), to_underlying(g->livery.colour1), to_underlying(g->livery.colour2));
 	}
+	for (const Engine *e : Engine::Iterate()) {
+		fmt::print(stderr, "COMPANY-IDENTITY engine-scheme {} {}\n", e->index.base(), to_underlying(GetEngineLiveryScheme(e->index, EngineID::Invalid(), nullptr)));
+	}
+	for (const Vehicle *v : Vehicle::Iterate()) {
+		if (!IsCompanyBuildableVehicleType(v->type) || !Engine::IsValidID(v->engine_type)) continue;
+		EngineID parent = v == v->First() ? EngineID::Invalid() : v->First()->engine_type;
+		fmt::print(stderr, "COMPANY-IDENTITY vehicle-scheme {} {}\n", v->index.base(), to_underlying(GetEngineLiveryScheme(v->engine_type, parent, v)));
+	}
 	fmt::print(stderr, "COMPANY-IDENTITY rng {} {} {} {}\n", _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]);
 }
 static void CompanyIdentityResult(std::string_view label, const CommandCost &cost, bool success)
