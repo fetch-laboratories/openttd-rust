@@ -9,6 +9,7 @@
 #include "../league_base.h"
 #include "../industry.h"
 #include "../town.h"
+#include "../vehicle_base.h"
 #include "../gui.h"
 #include "../window_func.h"
 #include "../game/game.hpp"
