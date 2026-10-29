@@ -179,7 +179,7 @@ impl crate::map_func::World<'_> {
         crate::bitmath_func::gb(u32::from(Self::byte(self.types.m1(t))), 0, 5) as u8
     }
     /// `Map::SizeX` and `Map::SizeY` of the acquired allocation.
-    fn size(&self) -> (u32, u32) {
+    pub(crate) fn size(&self) -> (u32, u32) {
         (
             self.dimensions.size_x(),
             self.types.count() >> self.dimensions.log_x,

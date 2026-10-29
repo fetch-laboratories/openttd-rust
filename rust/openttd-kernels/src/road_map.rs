@@ -166,8 +166,7 @@ impl crate::map_func::World<'_> {
     }
     /// `IsNormalRoadTile`.
     pub(crate) fn is_normal_road_tile(&self, t: u32) -> bool {
-        self.kind(t) == crate::tile_type::MP_ROAD
-            && self.is_normal_road(t)
+        self.kind(t) == crate::tile_type::MP_ROAD && self.is_normal_road(t)
     }
     /// `GetDisallowedRoadDirections`.
     pub(crate) fn disallowed_road_directions(&self, t: u32) -> u8 {

@@ -121,19 +121,15 @@ pub(crate) unsafe fn restore(
     let map = crate::map_func::World::new(s);
     let mut class = crate::water_map::get_water_class(&map.types, tile)
         .unwrap_or_else(|| unsafe { (&*water.clear).water_class }(tile).0);
-    let slope_z = crate::tile_map::get_tile_slope_z(
-        &map.types,
-        tile,
-        map.dimensions.size_x(),
-        (s.map_max_y)().wrapping_add(1),
-    )
-    .map_or_else(
-        || (s.tile_slope_z)(tile),
-        |(slope, z)| crate::services::FoundationSlope {
-            z,
-            slope: crate::services::Slope(slope),
-        },
-    );
+    let slope_z =
+        crate::tile_map::get_tile_slope_z(&map.types, tile, map.dimensions.size_x(), map.size().1)
+            .map_or_else(
+                || (s.tile_slope_z)(tile),
+                |(slope, z)| crate::services::FoundationSlope {
+                    z,
+                    slope: crate::services::Slope(slope),
+                },
+            );
     if slope_z.slope.0 != 0 {
         if class == 1 {
             if (s.company_valid)(owner) {
@@ -730,16 +726,8 @@ pub unsafe extern "C" fn openttd_rust_flood_halftile(
     // SAFETY: Serialized native entry; no borrowed state crosses commands. Half
     // flooding uses the canonical descriptor and original map dimensions.
     let map = crate::map_func::World::new(unsafe { &*s });
-    unsafe {
-        World::new(
-            w,
-            s,
-            &map.types,
-            map.dimensions.size_x(),
-            ((*s).map_max_y)().wrapping_add(1),
-        )
-    }
-    .half_flood(tile, call)
+    unsafe { World::new(w, s, &map.types, map.dimensions.size_x(), map.size().1) }
+        .half_flood(tile, call)
 }
 /// # Safety
 /// Live immutable service tables; valid original tile argument.
@@ -752,16 +740,8 @@ pub unsafe extern "C" fn openttd_rust_flooding_behaviour(
     // SAFETY: Serialized native entry; scalar reads end before callbacks.
     let map = crate::map_func::World::new(unsafe { &*s });
     FloodingBehaviour(
-        unsafe {
-            World::new(
-                w,
-                s,
-                &map.types,
-                map.dimensions.size_x(),
-                ((*s).map_max_y)().wrapping_add(1),
-            )
-        }
-        .behaviour(tile),
+        unsafe { World::new(w, s, &map.types, map.dimensions.size_x(), map.size().1) }
+            .behaviour(tile),
     )
 }
 /// # Safety

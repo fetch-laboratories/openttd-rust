@@ -656,7 +656,7 @@ use crate::track_type::{
 use crate::transport_type::{TRANSPORT_RAIL, TRANSPORT_ROAD, TRANSPORT_WATER};
 impl Context<'_> {
     fn water_edges(&self, tile: u32, mut bits: u8) -> u8 {
-        let map = self.shared().map();
+        let map = self.world.dimensions;
         if map.tile_x(tile) == 0 {
             w::hit(w::MOVE_WATER_EDGE);
             bits &= !(TRACK_BIT_X | TRACK_BIT_UPPER | TRACK_BIT_RIGHT);
