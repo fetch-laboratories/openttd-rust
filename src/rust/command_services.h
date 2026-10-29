@@ -13,4 +13,7 @@
 #include "../command_type.h"
 #include "../company_func.h"
 #include "../vehicle_func.h"
+#include "../misc_cmd.h"
+#include "../command_func.h"
+inline void RustPostPause(PauseMode mode, bool pause) noexcept { Command<CMD_PAUSE>::Post(mode, pause); }
 #endif /* RUST_COMMAND_SERVICES_H */

@@ -11,6 +11,7 @@
 #include "vehicle_base.h"
 #include "linkgraph/linkgraph.h"
 #include "saveload/saveload.h"
+#include "clock-fixture.hpp"
 
 static void Check(const char *label, bool value)
 {
@@ -26,7 +27,7 @@ static void MaxEconomy(bool wallclock)
 	std::vector<std::pair<LinkGraph *, E::Date>> graphs;
 	for (Vehicle *v : Vehicle::Iterate()) vehicles.emplace_back(v, v->date_of_last_service);
 	for (LinkGraph *g : LinkGraph::Iterate()) graphs.emplace_back(g, g->LastCompression());
-	TimerManager<E>::Elapsed(1);
+	FixtureClockElapsed<E>();
 	bool shifted = !vehicles.empty() && !graphs.empty();
 	for (auto [vehicle, date] : vehicles) shifted &= vehicle->date_of_last_service == std::max(date - 366, E::Date{0});
 	for (auto [graph, date] : graphs) shifted &= graph->LastCompression() == date - 366;
@@ -47,35 +48,35 @@ static bool ClocksScenario(std::span<std::string_view> args)
 	C::SetDate(calendar_date, 17); E::SetDate(economy_date, 37);
 	Check("setdate-fractions", C::sub_date_fract == 19 && E::days_since_last_month == 23);
 	_game_mode = GM_MENU;
-	Check("menu-frozen", !TimerManager<C>::Elapsed(1) && !TimerManager<E>::Elapsed(1) && C::date_fract == 17 && E::date_fract == 37);
+	Check("menu-frozen", !FixtureClockElapsed<C>() && !FixtureClockElapsed<E>() && C::date_fract == 17 && E::date_fract == 37);
 	_game_mode = GM_NORMAL;
 	_settings_game.economy.minutes_per_calendar_year = 0;
-	Check("calendar-frozen", !TimerManager<C>::Elapsed(1) && C::date_fract == 17);
+	Check("calendar-frozen", !FixtureClockElapsed<C>() && C::date_fract == 17);
 	_settings_game.economy.minutes_per_calendar_year = 24;
 	C::sub_date_fract = 73;
-	bool slowed = !TimerManager<C>::Elapsed(1) && C::sub_date_fract == 147 && C::date_fract == 17;
-	slowed &= TimerManager<C>::Elapsed(1) && C::sub_date_fract == 73 && C::date_fract == 18;
+	bool slowed = !FixtureClockElapsed<C>() && C::sub_date_fract == 147 && C::date_fract == 17;
+	slowed &= FixtureClockElapsed<C>() && C::sub_date_fract == 73 && C::date_fract == 18;
 	_settings_game.economy.minutes_per_calendar_year = CalendarTime::MAX_MINUTES_PER_YEAR;
 	C::sub_date_fract = 65535;
-	slowed &= !TimerManager<C>::Elapsed(1) && C::sub_date_fract == 73 && C::date_fract == 18;
+	slowed &= !FixtureClockElapsed<C>() && C::sub_date_fract == 73 && C::date_fract == 18;
 	Check("slowed-widths", slowed);
 	_settings_game.economy.minutes_per_calendar_year = CalendarTime::DEF_MINUTES_PER_YEAR;
 	for (int year : {0, 1900, 2000}) {
 		C::SetDate(C::ConvertYMDToDate(C::Year{year}, 1, 28), 73);
-		TimerManager<C>::Elapsed(1);
+		FixtureClockElapsed<C>();
 		auto ymd = C::ConvertDateToYMD(C::date);
 		bool leap = year != 1900;
 		Check("leap-century", ymd.year == year && ymd.month == (leap ? 1 : 2) && ymd.day == (leap ? 29 : 1));
 	}
 	C::SetDate(C::ConvertYMDToDate(CalendarTime::MAX_YEAR + 1, 0, 1) - 1, 73);
-	TimerManager<C>::Elapsed(1);
+	FixtureClockElapsed<C>();
 	Check("calendar-max", C::year == CalendarTime::MAX_YEAR && C::date == C::ConvertYMDToDate(CalendarTime::MAX_YEAR, 0, 1) && C::sub_date_fract == 0);
 	_settings_newgame.economy.timekeeping_units = TKU_WALLCLOCK;
 	_settings_game.economy.timekeeping_units = TKU_CALENDAR;
 	Check("newgame-units", E::UsingWallclockUnits(true) && !E::UsingWallclockUnits());
 	_settings_game.economy.timekeeping_units = TKU_WALLCLOCK;
 	E::SetDate(E::ConvertYMDToDate(E::Year{2000}, 0, 30), 73);
-	TimerManager<E>::Elapsed(1);
+	FixtureClockElapsed<E>();
 	auto ymd = E::ConvertDateToYMD(E::date);
 	Check("wallclock-month", ymd.year == 2000 && ymd.month == 1 && ymd.day == 1);
 	MaxEconomy(false); MaxEconomy(true);

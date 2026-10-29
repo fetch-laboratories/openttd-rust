@@ -122,3 +122,38 @@ pub extern "C" fn openttd_rust_rail_types(shared: &Shared, s: &Services, introdu
         types
     }
 }
+
+impl crate::map_func::World<'_> {
+    pub(crate) fn tile_rail_type(&self, t: u32) -> u8 {
+        use crate::tile_type::{MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
+        match self.kind(t) {
+            MP_RAILWAY => return self.rail_type(t),
+            MP_ROAD
+                if crate::road_map::get_road_tile_type(&self.types, t)
+                    .expect("road tile")
+                    .0
+                    == crate::road_map::ROAD_TILE_CROSSING =>
+            {
+                return self.rail_type(t);
+            }
+            MP_STATION if self.has_station_rail(t) => return self.rail_type(t),
+            MP_TUNNELBRIDGE
+                if crate::tunnelbridge_map::get_tunnel_bridge_transport_type(
+                    &self.types,
+                    crate::tile_type::TileIndex(t),
+                )
+                .expect("tunnel or bridge tile")
+                .0 == crate::transport_type::TRANSPORT_RAIL =>
+            {
+                return self.rail_type(t);
+            }
+            _ => {}
+        }
+        crate::rail_type::INVALID_RAILTYPE
+    }
+}
+
+/// `IsCompatibleRail(RailType, RailType)`, retaining the canonical type table.
+pub(crate) fn is_compatible_rail(s: &crate::services::Services, engine: u8, tile: u8) -> bool {
+    (crate::pbs::Pbs::acquire(s).0.compatible)(engine) & (1_u64 << tile) != 0
+}

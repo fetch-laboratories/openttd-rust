@@ -1,3 +1,6 @@
+#ifdef WITH_RUST
+#include "session-fixture.hpp"
+#endif
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /* Native loaders remain compiled unchanged so fixtures exercise their real publication phases. */
 #include "newgrf.cpp"
@@ -164,7 +167,12 @@ static void CargoProfitFixture()
 	*cs = saved;
 	fmt::print(stderr, "CARGO profit-controls true\n");
 }
+#ifdef WITH_RUST
+#include "rust/station_service_ffi.h"
+#include "rust/vehicle_visits_ffi.h"
+#else
 extern void OnTick_Station();
+#endif
 static void CargoRatingFixture()
 {
 	CargoType cargo = GetCargoTypeByLabel(CT_PASSENGERS);
@@ -189,7 +197,11 @@ static void CargoRatingFixture()
 		ge.rating = 128; ge.time_since_pickup = 4; ge.last_speed = 100; ge.max_waiting_cargo = 321;
 		observer.SetRegister(0x102, -1);
 		Randomizer before = _random;
+#ifdef WITH_RUST
+		FixtureStationTick(GetRustStationServices(), GetRustStationLinks(), GetRustVehicleVisits());
+#else
 		OnTick_Station();
+#endif
 		CARGO_REQUIRE(observer.GetRegister(0x102) == CBID_CARGO_STATION_RATING_CALC && observer.GetRegister(0x101) == 0x11 && observer.GetRegister(0x100) == (5 | (321 << 8) | (100 << 24)));
 		if (value != CALLBACK_FAILED) CARGO_REQUIRE(ge.rating == (value == 255 ? 130 : 126));
 		fmt::print(stderr, "CARGO rating {} {} {} {} {} {} {} {} {}\n", value, ge.rating, observer.GetRegister(0x100), observer.GetRegister(0x101), observer.GetRegister(0x102), before.state[0], before.state[1], _random.state[0], _random.state[1]);

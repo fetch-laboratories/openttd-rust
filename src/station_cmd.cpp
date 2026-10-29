@@ -4811,11 +4811,10 @@ static void StationHandleSmallTick(BaseStation *st)
 
 #endif
 
+#ifndef WITH_RUST
 void OnTick_Station()
 {
-#ifdef WITH_RUST
-	openttd_rust_station_tick(&_rust_station_services, &_rust_station_links, &GetRustVehicleVisits());
-#else
+
 	if (_game_mode == GM_EDITOR) return;
 
 	for (BaseStation *st : BaseStation::Iterate()) {
@@ -4839,8 +4838,9 @@ void OnTick_Station()
 			if (Station::IsExpected(st)) TriggerAirportAnimation(Station::From(st), AirportAnimationTrigger::AcceptanceTick);
 		}
 	}
-#endif
+
 }
+#endif
 
 /** Economy monthly loop for stations. */
 #ifdef WITH_RUST

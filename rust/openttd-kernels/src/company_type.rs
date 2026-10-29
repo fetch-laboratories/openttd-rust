@@ -34,6 +34,8 @@ pub struct OpenTTDCompany {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CompanyID(pub u8);
 impl CompanyID {
+    /// Native first company ID.
+    pub const BEGIN: Self = Self(0);
     /// Native invalid sentinel.
     pub const INVALID: Self = Self(u8::MAX);
 }

@@ -202,7 +202,9 @@ bool HasVehicleNearTileXY(int32_t x, int32_t y, uint max_dist, UnaryPred &&predi
 
 void VehicleServiceInDepot(Vehicle *v);
 uint CountVehiclesInChain(const Vehicle *v);
+#ifndef WITH_RUST
 void CallVehicleTicks();
+#endif
 uint8_t CalcPercentVehicleFilled(const Vehicle *v, StringID *colour);
 
 void VehicleLengthChanged(const Vehicle *u);
@@ -221,7 +223,9 @@ void DecreaseVehicleValue(Vehicle *v);
 void CheckVehicleBreakdown(Vehicle *v);
 void EconomyAgeVehicle(Vehicle *v);
 void AgeVehicle(Vehicle *v);
+#ifndef WITH_RUST
 void RunVehicleCalendarDayProc();
+#endif
 
 UnitID GetFreeUnitNumber(VehicleType type);
 

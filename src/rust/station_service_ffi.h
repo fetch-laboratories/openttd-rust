@@ -240,7 +240,6 @@ struct OpenTTDStationLoading {
 	void (*deliver_to_transfer)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(deliver_to_transfer);
 	void (*deliver_to_keep)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(deliver_to_keep);
 	bool (*has_cargo_for)(OpenTTDStation *, uint8_t, void *) noexcept OPENTTD_SERVICE_DEFAULT(has_cargo_for);
-	uint32_t (*platform_length)(OpenTTDStation *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(platform_length);
 	uint32_t (*vehicle_tile)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_tile);
 	uint32_t (*station_cargo_total)(OpenTTDStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_cargo_total);
 	OpenTTDNativeCargoPayment * (*get_payment)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(get_payment);
@@ -274,7 +273,6 @@ struct OpenTTDCommandCost;
 void openttd_rust_station_load(OpenTTDStationService *, const OpenTTDStationServices *, const OpenTTDStationLoading *, const OpenTTDVehicleVisits *, OpenTTDCommandCost *, OpenTTDCommandCost *);
 void openttd_rust_station_acceptance(OpenTTDBaseStation *, const OpenTTDStationServices *, uint8_t);
 void openttd_rust_station_watched(OpenTTDBaseStation *, const OpenTTDStationServices *);
-void openttd_rust_station_tick(const OpenTTDStationServices *, const OpenTTDStationLinks *, const OpenTTDVehicleVisits *);
 void openttd_rust_station_stale(OpenTTDBaseStation *, const OpenTTDStationServices *, const OpenTTDStationLinks *, const OpenTTDVehicleVisits *);
 void openttd_rust_station_reroute(OpenTTDBaseStation *, uint8_t, uint16_t, uint16_t, const OpenTTDStationServices *, const OpenTTDStationLinks *);
 void openttd_rust_station_modify_rating(OpenTTDStationService *, int32_t);

@@ -6,7 +6,7 @@
  */
 
 //! Bridge height helpers from `bridge_map.h`/`bridge_map.cpp`.
-#![allow(unsafe_code)]
+#![allow(unsafe_code, clippy::cast_possible_truncation)]
 use crate::direction_func::diag_dir_to_axis;
 use crate::services::{Foundation, Services};
 /// `GetBridgeHeight`. Each original operation remains a named shared callee.
@@ -34,4 +34,19 @@ pub(crate) fn get_bridge_pixel_height(tile: u32, s: &Services) -> i32 {
 pub unsafe extern "C" fn openttd_rust_bridge_height(s: *const Services, tile: u32) -> i32 {
     // SAFETY: canonical native table; no world borrow is formed.
     get_bridge_height(tile, unsafe { &*s })
+}
+
+impl crate::map_func::World<'_> {
+    pub(crate) fn bridge(&self, t: u32) -> bool {
+        self.check(self.kind(t) == crate::tile_type::MP_TUNNELBRIDGE);
+        crate::bitmath_func::has_bit(Self::byte(self.types.m5(t)), 7)
+    }
+}
+
+impl crate::map_func::World<'_> {
+    /// `GetBridgeType`, preserving `IsBridgeTile`'s assertion.
+    pub(crate) fn bridge_type(&self, t: u32) -> u32 {
+        self.check(self.kind(t) == crate::tile_type::MP_TUNNELBRIDGE && self.bridge(t));
+        crate::bitmath_func::gb(u32::from(Self::byte(self.types.m6(t))), 2, 4)
+    }
 }

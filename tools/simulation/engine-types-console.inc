@@ -12,6 +12,7 @@
 #include "genworld.h"
 #include "core/random_func.hpp"
 #include "type-reserve-fixture.hpp"
+#include "clock-fixture.hpp"
 extern RailTypeInfo _railtypes[RAILTYPE_END];
 extern RoadTypeInfo _roadtypes[ROADTYPE_END];
 #ifdef WITH_RUST
@@ -19,6 +20,8 @@ extern RoadTypes &_roadtypes_road, &_roadtypes_tram;
 #else
 extern RoadTypes _roadtypes_road, _roadtypes_tram;
 #endif
+
+
 static bool RestoreTypeInputs = false;
 static bool TypesInstalled = false;
 static void TypeRequire(bool value, const char *label)
@@ -367,7 +370,7 @@ static bool TypesScenario(std::span<std::string_view> args)
 		c->avail_railtypes = RailTypes{RAILTYPE_RAIL}; c->avail_roadtypes = RoadTypes{ROADTYPE_ROAD};
 		TypeConstruction(c, tile, 0, 60, false, "rail-before"); TypeConstruction(c, tile + TileDiffXY(2, 0), 1, 60, false, "road-before"); TypeConstruction(c, tile + TileDiffXY(4, 0), 1, 61, false, "tram-before");
 		/* Native daily timer calls the actual engine lifecycle publication path. */
-		TimerGameCalendar::SetDate(date, 73); TimerManager<TimerGameCalendar>::Elapsed(1);
+		TimerGameCalendar::SetDate(date, 73); FixtureClockElapsed<TimerGameCalendar>();
 		TypeRequire(c->avail_railtypes.All(railchain) && c->avail_roadtypes.All(roadchain), "daily-publication");
 		fmt::print(stderr, "ENGINE types-masks daily {:016x} {:016x}\n", c->avail_railtypes.base(), c->avail_roadtypes.base());
 		TypeConstruction(c, tile, 0, 60, true, "rail-after"); TypeConstruction(c, tile + TileDiffXY(2, 0), 1, 60, true, "road-after"); TypeConstruction(c, tile + TileDiffXY(4, 0), 1, 61, true, "tram-after");

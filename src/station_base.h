@@ -668,9 +668,9 @@ public:
 
 	void AfterStationTileSetChange(bool adding, StationType type);
 
+#ifndef WITH_RUST
 	uint GetPlatformLength(TileIndex tile, DiagDirection dir) const override;
 	uint GetPlatformLength(TileIndex tile) const override;
-#ifndef WITH_RUST
 	void RecomputeCatchment(bool no_clear_nearby_lists = false);
 #endif
 	static void RecomputeCatchmentForAll();

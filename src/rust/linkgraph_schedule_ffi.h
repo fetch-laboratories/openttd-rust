@@ -3,6 +3,7 @@
 #ifndef RUST_LINKGRAPH_SCHEDULE_FFI_H
 #define RUST_LINKGRAPH_SCHEDULE_FFI_H
 #include "linkgraph_ffi.h"
+enum class PauseMode : uint8_t;
 struct OpenTTDLiveGraph;
 class LinkGraphJob;
 struct OpenTTDScheduleTime { int32_t date; uint16_t fract, interval; };
@@ -33,8 +34,7 @@ struct OpenTTDScheduleServices {
 	LinkGraph *(OPENTTD_RUST_CALL *next_graph)(uint32_t *) noexcept;
 	LinkGraphJob *(OPENTTD_RUST_CALL *next_job)(uint32_t *) noexcept;
 	void (OPENTTD_RUST_CALL *shift_job)(LinkGraphJob *, int32_t) noexcept;
-	void (OPENTTD_RUST_CALL *post_pause)(bool) noexcept;
-	void (OPENTTD_RUST_CALL *set_pause)() noexcept;
+	void (OPENTTD_RUST_CALL *post_pause)(PauseMode, bool) noexcept;
 	void (OPENTTD_RUST_CALL *begin_measurement)(void *, bool) noexcept;
 };
 extern "C" {
@@ -43,8 +43,6 @@ void openttd_rust_schedule_dequeue(LinkGraph *);
 void openttd_rust_schedule_spawn_all(const OpenTTDScheduleServices *);
 void openttd_rust_schedule_clear(const OpenTTDScheduleServices *);
 void openttd_rust_schedule_shift(const OpenTTDScheduleServices *, int32_t);
-void openttd_rust_schedule_tick(const OpenTTDScheduleServices *, OpenTTDScheduleTime, bool, void *);
-void openttd_rust_schedule_pause(const OpenTTDScheduleServices *, OpenTTDScheduleTime, bool, bool);
 void openttd_rust_schedule_after_load(const OpenTTDScheduleServices *);
 void openttd_rust_schedule_export(OpenTTDScheduleQueues *);
 void openttd_rust_schedule_import(const OpenTTDScheduleQueues *);

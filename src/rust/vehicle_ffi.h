@@ -303,7 +303,5 @@ void openttd_rust_occupancy_near_advance(const OpenTTDVehicleServices *, OpenTTD
 }
 extern "C" {
 OpenTTDVehicle *openttd_rust_vehicle_cursor_next(const OpenTTDVehicleSchedulerServices *, OpenTTDVehiclePoolCursor *, size_t *);
-void openttd_rust_vehicle_calendar_day(const OpenTTDVehicleSchedulerTables *, bool, size_t);
-void openttd_rust_vehicle_ticks(const OpenTTDVehicleSchedulerTables *, bool, size_t, void *);
 }
 #endif /* RUST_VEHICLE_FFI_H */

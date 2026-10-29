@@ -16,6 +16,7 @@
 #include "../core/random_func.hpp"
 #include "mock_environment.h"
 #ifdef WITH_RUST
+#include "../../tools/simulation/session-fixture.hpp"
 #include "effect_protocol.hpp"
 #endif
 #include "../safeguards.h"
@@ -50,8 +51,31 @@ TEST_CASE("Animated tiles - ordered queue and partial native load publication")
 	CHECK(openttd_rust_animation_at(0) == 1);
 	CHECK(openttd_rust_animation_at(1) == 3);
 	openttd_rust_animation_delete(1, false); states[3] = AnimatedTileState::None;
-	openttd_rust_animation_run(); // Process the swapped-in final entry.
+	{
+		SessionFixture unrelated;
+		CHECK(unrelated.Run(GM_NORMAL));
+		CHECK(openttd_rust_animation_count() == 2);
+		CHECK(states[1] == AnimatedTileState::Deleted);
+		CHECK(states[3] == AnimatedTileState::None);
+	}
+	SessionFixture fixture;
+	fixture.animate = true;
+	auto clock = GetRustClockServices();
+	clock.minutes_per_calendar_year = []() noexcept -> uint16_t { return 0; };
+	fixture.services.clock = &clock;
+	fixture.services.desync_level = []() noexcept -> int32_t { return 0; };
+	fixture.services.check_caches = SessionFixture::Nothing;
+	fixture.services.company_begin = SessionFixture::FrameNothing;
+	fixture.services.console_exception = [](OpenTTDSessionFrame *) noexcept -> OpenTTDConsoleException * { return nullptr; };
+	fixture.services.failed = [](OpenTTDSessionFrame *) noexcept { return false; };
+	fixture.services.tick_timer = [](OpenTTDSessionFrame *) noexcept { return false; };
+	// Stop at the real tick-timer exception boundary after processing animation.
+	CHECK_FALSE(fixture.Run(GM_NORMAL));
 	CHECK(openttd_rust_animation_count() == 0);
+	{
+		SessionFixture after_failure;
+		CHECK(after_failure.Run()); // The prior injected failure leaves no storage mode behind.
+	}
 	try {
 		RustAnimationSave loading(true);
 		RustAnimationSave::Tiles().resize(3);

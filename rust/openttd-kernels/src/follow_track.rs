@@ -5,16 +5,472 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Reservation masking from `CFollowTrackT` in `follow_track.hpp`.
+//! Complete stack-owned `CFollowTrackT` rail, road and water follower.
+#![allow(
+    unsafe_code,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::too_many_arguments
+)]
+use crate::company_type::Owner;
+use crate::direction_func::reverse_diag_dir;
+use crate::map_func::World;
 use crate::pbs::Pbs;
+use crate::services::Services;
+use crate::tile_type::TileIndex;
 use crate::track_func::{
-    track_bits_to_trackdir_bits, track_to_track_bits, track_to_trackdir_bits,
-    trackdir_bits_to_track_bits, tracks_overlap,
+    diagdir_reaches_trackdirs, reverse_trackdir, track_bits_to_trackdir_bits,
+    track_status_to_trackdir_bits, track_to_track_bits, track_to_trackdir_bits,
+    trackdir_bits_to_track_bits, trackdir_crosses_trackdirs, trackdir_to_exitdir,
+    trackdir_to_trackdir_bits, tracks_overlap,
 };
 use crate::train_reservation::Follow;
-
-/// `CFollowTrackT::EC_RESERVED`.
+use crate::transport_type::{
+    TRANSPORT_RAIL as RAIL, TRANSPORT_ROAD as ROAD, TRANSPORT_WATER as WATER,
+};
+use crate::vehicle::{OpenTTDVehicle, VehicleRef};
+const EC_NONE: u8 = 0;
+const EC_OWNER: u8 = 1;
+const EC_RAIL_ROAD_TYPE: u8 = 2;
+const EC_90DEG: u8 = 3;
+const EC_NO_WAY: u8 = 4;
 const EC_RESERVED: u8 = 5;
+
+/// The complete follower state; C++ facades alias this stack record in place.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct State {
+    pub veh: *mut OpenTTDVehicle,
+    pub railtypes: u64,
+    pub old_tile: TileIndex,
+    pub new_tile: TileIndex,
+    pub tiles_skipped: i32,
+    pub new_td_bits: u16,
+    pub veh_owner: Owner,
+    pub old_td: u8,
+    pub exitdir: u8,
+    pub is_tunnel: bool,
+    pub is_bridge: bool,
+    pub is_station: bool,
+    pub err: u8,
+    pub mode: u8,
+    pub allow90: bool,
+    pub masking: bool,
+}
+impl State {
+    pub(crate) fn new(
+        s: &Services,
+        mode: u8,
+        v: Option<VehicleRef>,
+        owner: u8,
+        railtypes: u64,
+        allow90: bool,
+        masking: bool,
+    ) -> Self {
+        let m = crate::movement::table(s);
+        m.native_assert_call(mode != ROAD || v.is_some());
+        m.native_assert_call(mode != RAIL || railtypes != crate::rail_type::INVALID_RAILTYPES);
+        Self {
+            veh: v.map_or(std::ptr::null_mut(), |v| v.0.as_ptr()),
+            railtypes,
+            old_tile: TileIndex::INVALID,
+            new_tile: TileIndex::INVALID,
+            tiles_skipped: 0,
+            new_td_bits: 0,
+            veh_owner: crate::company_type::CompanyID(owner),
+            old_td: crate::track_type::INVALID_TRACKDIR,
+            exitdir: crate::direction_type::INVALID_DIAGDIR,
+            is_tunnel: false,
+            is_bridge: false,
+            is_station: false,
+            err: EC_NONE,
+            mode,
+            allow90,
+            masking,
+        }
+    }
+    pub(crate) fn vehicle(
+        s: &Services,
+        mode: u8,
+        v: Option<VehicleRef>,
+        types: u64,
+        allow90: bool,
+        masking: bool,
+    ) -> Self {
+        let m = crate::movement::table(s);
+        m.native_assert_call(
+            mode != RAIL
+                || v.is_some_and(|v| {
+                    (m.vehicle().vehicle_type)(v) == crate::vehicle_type::VEH_TRAIN
+                }),
+        );
+        let owner = v.map_or(crate::company_type::INVALID_OWNER, |v| {
+            (m.vehicle().owner)(v)
+        });
+        let types = if mode == RAIL && types == crate::rail_type::INVALID_RAILTYPES {
+            (m.vehicle().train_handle)(v.unwrap().0.as_ptr()).get_compatible_railtypes()
+        } else {
+            types
+        };
+        Self::new(s, mode, v, owner, types, allow90, masking)
+    }
+    fn vehicle_ref(&self) -> VehicleRef {
+        VehicleRef(std::ptr::NonNull::new(self.veh).expect("live vehicle"))
+    }
+    fn tram(&self, w: &World<'_>) -> bool {
+        self.mode == ROAD && (crate::movement::table(w.shared).road_kind)(self.vehicle_ref()).0
+    }
+    fn single_tram(&self, w: &World<'_>, tile: u32) -> u8 {
+        w.check(self.tram(w));
+        if w.normal_road(tile) {
+            use crate::road_type::{ROAD_NE, ROAD_NW, ROAD_SE, ROAD_SW};
+            return match w.road_bits(tile, true) {
+                ROAD_NW => crate::direction_type::DIAGDIR_NW,
+                ROAD_SW => crate::direction_type::DIAGDIR_SW,
+                ROAD_SE => crate::direction_type::DIAGDIR_SE,
+                ROAD_NE => crate::direction_type::DIAGDIR_NE,
+                _ => crate::direction_type::INVALID_DIAGDIR,
+            };
+        }
+        crate::direction_type::INVALID_DIAGDIR
+    }
+    fn query(&mut self, w: &World<'_>) -> bool {
+        self.new_td_bits = if self.mode == RAIL && w.plain_rail(self.new_tile.0) {
+            u16::from(w.tracks(self.new_tile.0)) * 0x101
+        } else if self.mode == ROAD {
+            crate::pathfinder_func::road_trackdirs(
+                crate::movement::table(w.shared),
+                self.new_tile.0,
+                self.tram(w),
+            )
+        } else {
+            track_status_to_trackdir_bits(crate::movement::track_status(
+                w.shared,
+                self.new_tile.0,
+                self.mode,
+                0,
+                crate::direction_type::INVALID_DIAGDIR,
+            ))
+        };
+        self.new_td_bits != 0
+    }
+    fn reverse_state(&mut self, dir: u8) {
+        self.new_tile.0 = self.old_tile.0;
+        self.new_td_bits = trackdir_to_trackdir_bits(reverse_trackdir(self.old_td));
+        self.exitdir = dir;
+        self.tiles_skipped = 0;
+        self.is_tunnel = false;
+        self.is_bridge = false;
+        self.is_station = false;
+    }
+    fn forced_reverse(&mut self, w: &World<'_>) -> bool {
+        if self.mode != WATER && w.depot(self.old_tile.0, self.mode) {
+            let dir = if self.mode == RAIL {
+                w.rail_depot_dir(self.old_tile.0)
+            } else {
+                w.road_depot_dir(self.old_tile.0)
+            };
+            if dir != self.exitdir {
+                self.reverse_state(dir);
+                return true;
+            }
+        }
+        if self.mode == ROAD
+            && ((self.tram(w)
+                && self.single_tram(w, self.old_tile.0)
+                    == reverse_diag_dir(self.exitdir, |ok| w.check(ok)))
+                || (w.bay_stop(self.old_tile.0)
+                    && w.bay_dir(self.old_tile.0)
+                        == reverse_diag_dir(self.exitdir, |ok| w.check(ok))))
+        {
+            self.reverse_state(reverse_diag_dir(self.exitdir, |ok| w.check(ok)));
+            return true;
+        }
+        false
+    }
+    fn try_reverse(&mut self, w: &World<'_>) -> bool {
+        if self.mode == ROAD && !self.tram(w) {
+            self.exitdir = reverse_diag_dir(self.exitdir, |ok| w.check(ok));
+            self.new_tile.0 = self.old_tile.0;
+            self.query(w);
+            self.new_td_bits &= diagdir_reaches_trackdirs(self.exitdir);
+            if self.new_td_bits != 0 {
+                return true;
+            }
+        }
+        self.err = EC_NO_WAY;
+        false
+    }
+    fn can_exit(&mut self, w: &World<'_>) -> bool {
+        if self.mode == ROAD
+            && w.bay_stop(self.old_tile.0)
+            && w.bay_dir(self.old_tile.0) != self.exitdir
+        {
+            self.err = EC_NO_WAY;
+            return false;
+        }
+        if self.tram(w) {
+            let dir = self.single_tram(w, self.old_tile.0);
+            if dir != crate::direction_type::INVALID_DIAGDIR && dir != self.exitdir {
+                self.err = EC_NO_WAY;
+                return false;
+            }
+        }
+        if self.mode == ROAD
+            && w.depot(self.old_tile.0, self.mode)
+            && w.road_depot_dir(self.old_tile.0) != self.exitdir
+        {
+            self.err = EC_NO_WAY;
+            return false;
+        }
+        true
+    }
+    fn tile_exit(&mut self, w: &World<'_>) {
+        self.is_station = false;
+        self.is_bridge = false;
+        self.is_tunnel = false;
+        self.tiles_skipped = 0;
+        if w.kind(self.old_tile.0) == crate::tile_type::MP_TUNNELBRIDGE {
+            let dir = w.tunnel_bridge_dir(self.old_tile.0);
+            if dir == self.exitdir {
+                if w.tunnel(self.old_tile.0) {
+                    self.is_tunnel = true;
+                    self.new_tile.0 = (w.shared.other_tunnel_end)(self.old_tile.0);
+                } else {
+                    self.is_bridge = true;
+                    self.new_tile.0 =
+                        (crate::movement::table(w.shared).other_bridge_end)(self.old_tile.0);
+                }
+                self.tiles_skipped = crate::tunnelbridge::get_tunnel_bridge_length(
+                    w.dimensions,
+                    self.new_tile.0,
+                    self.old_tile.0,
+                ) as i32;
+                return;
+            }
+            w.check(reverse_diag_dir(dir, |ok| w.check(ok)) == self.exitdir);
+        }
+        self.new_tile.0 = w.dimensions.add_diag(self.old_tile.0, self.exitdir);
+        self.is_station = (self.mode == RAIL && w.has_station_rail(self.new_tile.0))
+            || (self.mode == ROAD && w.station_road_stop(self.new_tile.0));
+    }
+    fn can_enter(&mut self, w: &World<'_>) -> bool {
+        if self.mode == ROAD
+            && w.bay_stop(self.new_tile.0)
+            && reverse_diag_dir(w.bay_dir(self.new_tile.0), |ok| w.check(ok)) != self.exitdir
+        {
+            self.err = EC_NO_WAY;
+            return false;
+        }
+        if self.tram(w) {
+            let dir = self.single_tram(w, self.new_tile.0);
+            if dir != crate::direction_type::INVALID_DIAGDIR
+                && dir != reverse_diag_dir(self.exitdir, |ok| w.check(ok))
+            {
+                self.err = EC_NO_WAY;
+                return false;
+            }
+        }
+        if self.mode == ROAD && w.depot(self.new_tile.0, self.mode) {
+            if reverse_diag_dir(w.road_depot_dir(self.new_tile.0), |ok| w.check(ok)) != self.exitdir
+            {
+                self.err = EC_NO_WAY;
+                return false;
+            }
+            if w.owner(self.new_tile.0) != self.veh_owner.0 {
+                self.err = EC_OWNER;
+                return false;
+            }
+        }
+        if self.mode == RAIL
+            && w.depot(self.new_tile.0, self.mode)
+            && reverse_diag_dir(w.rail_depot_dir(self.new_tile.0), |ok| w.check(ok)) != self.exitdir
+        {
+            self.err = EC_NO_WAY;
+            return false;
+        }
+        if self.mode == RAIL && w.owner(self.new_tile.0) != self.veh_owner.0 {
+            self.err = EC_NO_WAY;
+            return false;
+        }
+        if self.mode == RAIL
+            && self.railtypes != 0
+            && self.railtypes & (1_u64 << w.tile_rail_type(self.new_tile.0)) == 0
+        {
+            self.err = EC_RAIL_ROAD_TYPE;
+            return false;
+        }
+        if self.mode == ROAD {
+            let rt = w.road_type(self.new_tile.0, self.tram(w));
+            if (crate::movement::table(w.shared).road_compatible)(self.vehicle_ref())
+                & (1_u64 << rt)
+                == 0
+            {
+                self.err = EC_RAIL_ROAD_TYPE;
+                return false;
+            }
+        }
+        if w.kind(self.new_tile.0) == crate::tile_type::MP_TUNNELBRIDGE {
+            if w.tunnel(self.new_tile.0) {
+                if !self.is_tunnel && w.tunnel_bridge_dir(self.new_tile.0) != self.exitdir {
+                    self.err = EC_NO_WAY;
+                    return false;
+                }
+            } else if !self.is_bridge && w.tunnel_bridge_dir(self.new_tile.0) != self.exitdir {
+                self.err = EC_NO_WAY;
+                return false;
+            }
+        }
+        if self.mode == RAIL && self.is_station {
+            let length = platform_length(w, self.new_tile.0, trackdir_to_exitdir(self.old_td));
+            self.tiles_skipped = length.wrapping_sub(1) as i32;
+            self.new_tile.0 = self.new_tile.0.wrapping_add(
+                w.dimensions
+                    .offs_by_diag_dir(self.exitdir)
+                    .wrapping_mul(self.tiles_skipped as u32),
+            );
+        }
+        true
+    }
+    pub(crate) fn follow(&mut self, s: &Services, tile: u32, td: u8) -> bool {
+        let w = World::new(s);
+        self.old_tile.0 = tile;
+        self.old_td = td;
+        self.err = EC_NONE;
+        if w.types.assertions() {
+            w.check(
+                (self.tram(&w)
+                    && self.single_tram(&w, self.old_tile.0)
+                        != crate::direction_type::INVALID_DIAGDIR)
+                    || {
+                        let sub =
+                            u32::from(self.mode == ROAD && !self.veh.is_null() && self.tram(&w));
+                        track_status_to_trackdir_bits(crate::movement::track_status(
+                            s,
+                            self.old_tile.0,
+                            self.mode,
+                            sub,
+                            crate::direction_type::INVALID_DIAGDIR,
+                        )) & trackdir_to_trackdir_bits(self.old_td)
+                            != 0
+                    },
+            );
+        }
+        self.exitdir = trackdir_to_exitdir(self.old_td);
+        if self.forced_reverse(&w) {
+            return true;
+        }
+        if !self.can_exit(&w) {
+            return false;
+        }
+        self.tile_exit(&w);
+        if !self.query(&w) {
+            return self.try_reverse(&w);
+        }
+        self.new_td_bits &= diagdir_reaches_trackdirs(self.exitdir);
+        if self.new_td_bits == 0 || !self.can_enter(&w) {
+            if self.mode == ROAD && !self.tram(&w) && self.try_reverse(&w) {
+                return true;
+            }
+            if self.new_td_bits == 0 {
+                self.err = EC_NO_WAY;
+            }
+            return false;
+        }
+        if (self.mode != RAIL && !self.allow90)
+            || (self.mode == RAIL
+                && (Pbs::acquire(s).0.rail90)(
+                    w.tile_rail_type(self.old_tile.0),
+                    w.tile_rail_type(self.new_tile.0),
+                    !self.allow90,
+                ))
+        {
+            self.new_td_bits &= !trackdir_crosses_trackdirs(self.old_td);
+            if self.new_td_bits == 0 {
+                self.err = EC_90DEG;
+                return false;
+            }
+        }
+        true
+    }
+    pub(crate) fn output(&self) -> Follow {
+        Follow {
+            old_tile: self.old_tile.0,
+            new_tile: self.new_tile.0,
+            skipped: self.tiles_skipped,
+            dirs: self.new_td_bits,
+            old_td: self.old_td,
+            exitdir: self.exitdir,
+            tunnel: u8::from(self.is_tunnel),
+            bridge: u8::from(self.is_bridge),
+            station: u8::from(self.is_station),
+            error: self.err,
+        }
+    }
+    pub(crate) fn restore(&mut self, f: Follow) {
+        self.old_tile.0 = f.old_tile;
+        self.new_tile.0 = f.new_tile;
+        self.tiles_skipped = f.skipped;
+        self.new_td_bits = f.dirs;
+        self.old_td = f.old_td;
+        self.exitdir = f.exitdir;
+        self.is_tunnel = f.tunnel != 0;
+        self.is_bridge = f.bridge != 0;
+        self.is_station = f.station != 0;
+        self.err = f.error;
+    }
+}
+/// Virtual `BaseStation::GetPlatformLength(tile, dir)`: waypoints return one.
+pub(crate) fn platform_length(w: &World<'_>, tile: u32, dir: u8) -> u32 {
+    // Preserve BaseStation::GetByTile and virtual station/waypoint dispatch.
+    // Native pool identity is resolved once, using the existing shared leaves.
+    let station = (Pbs::acquire(w.shared).0.station)(tile);
+    // SAFETY: These immutable process-lifetime tables contain only operations.
+    let catchment = unsafe { &*(w.shared.station_catchment)() };
+    let stations = unsafe { &*catchment.station };
+    if !(stations.is_station)(station) {
+        return 1;
+    }
+    platform_length_station(w, tile, dir)
+}
+pub(crate) fn platform_length_station(w: &World<'_>, mut tile: u32, dir: u8) -> u32 {
+    let start = tile;
+    let mut length: u32 = 0;
+    w.check(w.rail_station(tile));
+    w.check(dir < crate::direction_type::DIAGDIR_END);
+    loop {
+        length = length.wrapping_add(1);
+        tile = w.dimensions.add_diag(tile, dir);
+        if !w.compatible_station(tile, start) {
+            return length;
+        }
+    }
+}
+pub(crate) fn speed_limit(s: &Services, mode: u8, v: Option<VehicleRef>, tile: u32) -> i32 {
+    let w = World::new(s);
+    let m = crate::movement::table(s);
+    let mut speed = i32::MAX;
+    if mode != WATER && w.kind(tile) == crate::tile_type::MP_TUNNELBRIDGE && w.bridge(tile) {
+        speed = i32::from((m.bridge_type_speed)(w.bridge_type(tile)));
+        if mode == ROAD {
+            speed *= 2;
+        }
+    }
+    let limit = if mode == RAIL {
+        (m.train().physics.rail_speed)(crate::services::RailType(w.rail_type(tile)))
+    } else if mode == ROAD {
+        (m.road_type_speed)(crate::services::RoadType(
+            w.road_type(tile, (m.road_kind)(v.unwrap()).0),
+        ))
+    } else {
+        0
+    };
+    if limit > 0 {
+        speed = speed.min(i32::from(limit));
+    }
+    speed
+}
 
 /// `MaskReservedTracks` for a rail follower with `DoTrackMasking()` enabled.
 /// The caller invokes it only after native Follow succeeds. All accesses are
@@ -27,7 +483,7 @@ pub(crate) fn mask_reserved_tracks(pbs: Pbs<'_>, ft: &mut Follow) -> bool {
             .new_tile
             .wrapping_sub(diff.wrapping_mul(ft.skipped as u32));
         while tile != ft.new_tile {
-            if (pbs.0.station_reserved)(tile) {
+            if World::new(pbs.shared()).station_reserved(tile) {
                 ft.dirs = 0;
                 ft.error = EC_RESERVED;
                 return false;
@@ -55,15 +511,71 @@ pub(crate) fn mask_reserved_tracks(pbs: Pbs<'_>, ft: &mut Follow) -> bool {
     true
 }
 
-/// Default unchanged-body probe for transient masking outputs absent from saves.
-/// # Safety
-/// Native world/services and the call-local follower output remain live, and
-/// Follow's original preconditions hold. No pointer is retained; panics abort.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_follow_mask(
-    services: *const crate::pbs::PbsServices,
-    ft: *mut Follow,
+/// `Station::GetPlatformLength(tile)` on the resolved native station identity.
+pub(crate) fn platform_length_full(
+    w: &World<'_>,
+    station: *mut crate::station_type::BaseStation,
+    tile: u32,
+) -> u32 {
+    if w.types.assertions() {
+        // SAFETY: The immutable table and resolved station outlive this scan.
+        let stations = unsafe { &*(w.shared.station_catchment)() };
+        w.check(w.rail_station(tile) && w.station_index(tile) == (stations.id)(station));
+    }
+    let delta = w.dimensions.offs_by_axis(w.station_axis(tile));
+    let mut t = tile;
+    let mut len: u32 = 0;
+    loop {
+        t = t.wrapping_sub(delta);
+        len = len.wrapping_add(1);
+        if !w.compatible_station(t, tile) {
+            break;
+        }
+    }
+    t = tile;
+    loop {
+        t = t.wrapping_add(delta);
+        len = len.wrapping_add(1);
+        if !w.compatible_station(t, tile) {
+            break;
+        }
+    }
+    len.wrapping_sub(1)
+}
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDFollowTrackState" ["probe"] => crate::follow_track::State { veh, railtypes, old_tile, new_tile, tiles_skipped, new_td_bits, veh_owner, old_td, exitdir, is_tunnel, is_bridge, is_station, err, mode, allow90, masking, };
+}
+
+pub(crate) fn rail(
+    s: &Services,
+    v: crate::train::Handle,
+    owner: u8,
+    types: u64,
+    out: &mut Follow,
+    tile: u32,
+    td: u8,
 ) -> bool {
-    mask_reserved_tracks(Pbs(unsafe { &*services }), unsafe { &mut *ft })
+    let vehicle = std::ptr::NonNull::new(v.shell.cast()).map(VehicleRef);
+    let mut state = if vehicle.is_some() {
+        State::vehicle(s, RAIL, vehicle, types, true, false)
+    } else {
+        State::new(s, RAIL, None, owner, types, true, false)
+    };
+    state.restore(*out);
+    let result = state.follow(s, tile, td);
+    *out = state.output();
+    result
+}
+pub(crate) fn water(s: &Services, tile: u32, td: u8) -> (State, bool) {
+    let mut state = State::vehicle(
+        s,
+        WATER,
+        None,
+        crate::rail_type::INVALID_RAILTYPES,
+        true,
+        false,
+    );
+    let ok = state.follow(s, tile, td);
+    (state, ok)
 }

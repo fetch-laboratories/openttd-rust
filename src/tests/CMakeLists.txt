@@ -8,6 +8,7 @@ add_test_files(
     cargo_payment.cpp
     cargo_payment_stubs.hpp
     fleet.cpp
+    follower_probe.hpp
     newgrf_loading.cpp
     engine.cpp
     effectvehicle.cpp
@@ -32,6 +33,7 @@ add_test_files(
     road_yapf.cpp
     roadvehicle.cpp
     vehicle_scheduler.cpp
+    session.cpp
     service_tables.cpp
     station_service.cpp
     spiral_iterator_state.cpp

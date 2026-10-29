@@ -9,7 +9,7 @@
 #ifndef WATER_REGIONS_PROTOCOL_HPP
 #define WATER_REGIONS_PROTOCOL_HPP
 #include "../rust/water_regions_ffi.h"
-#include "../rust/movement_ffi.h"
+#include "follower_fixture.hpp"
 #include <algorithm>
 #include <array>
 #include <memory>
@@ -18,19 +18,12 @@
 namespace WaterProbe {
 inline std::array<bool, 32 * 32> water;
 inline uint32_t tracks_calls, follow_calls;
-inline uint8_t WaterType(uint32_t tile) noexcept { ++tracks_calls; return water[tile] ? 6 : 0; }
-inline uint32_t OPENTTD_RUST_CALL WaterProbeFollow(uint32_t tile, uint8_t dir, uint8_t *bridge) noexcept
+inline uint8_t WaterType(uint32_t tile) noexcept
 {
-	++follow_calls;
-	*bridge = 0;
-	/* Synthetic four-neighbour graph, accepting the real movement trackdirs. */
-	constexpr uint8_t exit[]{0, 1, 0, 1, 2, 1, 0, 0, 2, 3, 3, 2, 3, 0};
-	dir = exit[dir];
-	const int x = tile % 32, y = tile / 32;
-	constexpr int dx[] = {-1, 0, 1, 0}, dy[] = {0, 1, 0, -1};
-	const int nx = x + dx[dir], ny = y + dy[dir];
-	if (nx < 0 || ny < 0 || nx >= 32 || ny >= 32 || !water[nx + ny * 32]) return UINT32_MAX;
-	return nx + ny * 32;
+	++tracks_calls;
+	/* The real follower also queries the tile just beyond this fixture's map. */
+	if (tile >= water.size()) return MP_VOID;
+	return water[tile] ? MP_WATER : MP_CLEAR;
 }
 inline uint32_t OPENTTD_RUST_CALL Aqueduct(uint32_t) noexcept { return UINT32_MAX; }
 inline void OPENTTD_RUST_CALL WaterProbeDebug(uint8_t, int32_t, int32_t) noexcept {}
@@ -39,21 +32,17 @@ inline void OPENTTD_RUST_CALL WaterProbeDebug(uint8_t, int32_t, int32_t) noexcep
  * the ship AI corpus cannot reach: YAPF visitors do not execute world commands. */
 template <typename Check> void Run(Check check)
 {
-	static OpenTTDSharedServices world{};
+	FollowerFixture map{32, 32};
+	auto &world = map.shared;
 	world.tile_type = WaterType;
-	world.map_log_x = []() noexcept -> uint32_t { return 5; };
-	static OpenTTDMovementServices movement{};
-	movement.shared = &world;
-	movement.water_type = [](uint32_t) noexcept { return static_cast<WaterTileType>(0); };
-	movement.tile_flat = [](uint32_t) noexcept { return true; };
-	world.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
-	const OpenTTDWaterLeaves leaves{.shared = &world, .follow = WaterProbeFollow, .aqueduct = Aqueduct, .debug = WaterProbeDebug};
+	const OpenTTDWaterLeaves leaves{.shared = &world, .aqueduct = Aqueduct, .debug = WaterProbeDebug};
+	const auto fill = [&](bool value) { water.fill(value); for (uint32_t t = 0; t < water.size(); ++t) map.Tile(t, value ? MP_WATER : MP_CLEAR); };
 	using Owner = std::unique_ptr<OpenTTDWaterRegions, decltype(&openttd_rust_water_destroy)>;
 	using Cursor = std::unique_ptr<OpenTTDWaterVisit, decltype(&openttd_rust_water_visit_destroy)>;
 	Owner owner{openttd_rust_water_new(32, 32), openttd_rust_water_destroy};
-	water.fill(false);
+	fill(false);
 	check(openttd_rust_water_label(owner.get(), &leaves, 0) == 0);
-	water.fill(true);
+	fill(true);
 	openttd_rust_water_invalidate(owner.get(), &leaves, 0);
 	check(openttd_rust_water_label(owner.get(), &leaves, 0) == 1);
 	const auto queries = tracks_calls;
@@ -72,19 +61,19 @@ template <typename Check> void Run(Check check)
 	aliased.reset();
 	/* Reentrant visitor removes the east connection. The next side must refresh. */
 	for (uint32_t y = 0; y < 16; y++) {
-		water[16 + y * 32] = false;
+		water[16 + y * 32] = false; map.Tile(16 + y * 32, MP_CLEAR);
 		openttd_rust_water_invalidate(owner.get(), &leaves, 16 + y * 32);
 	}
 	check(openttd_rust_water_visit_next(owner.get(), &leaves, visit.get(), {0, 0, 1}, &next) == 0);
 	visit.reset(); // Same cleanup used when a C++ visitor throws.
-	water.fill(false);
-	water[0] = true; water[2] = true;
+	fill(false);
+	water[0] = true; water[2] = true; map.Tile(0, MP_WATER); map.Tile(2, MP_WATER);
 	openttd_rust_water_invalidate(owner.get(), &leaves, 0);
 	openttd_rust_water_snapshot(owner.get(), &leaves, 0, &snapshot);
 	check(snapshot.patches == 2 && snapshot.labels[0] == 1 && snapshot.labels[2] == 2 && snapshot.labels[1] == 0);
 	/* Replacement map gets fresh private validity and labels. */
 	owner.reset(openttd_rust_water_new(32, 32));
-	water.fill(false);
+	fill(false);
 	check(openttd_rust_water_label(owner.get(), &leaves, 0) == 0);
 }
 }

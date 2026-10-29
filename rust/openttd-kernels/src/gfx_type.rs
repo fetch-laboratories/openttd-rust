@@ -5,5 +5,5 @@ pub const COLOUR_BLUE: u8 = 8;
 pub const COLOUR_ORANGE: u8 = 12;
 pub const COLOUR_GREEN: u8 = 6;
 
-/// End of native Colours.
-pub const COLOUR_END: u8 = 16;
+/// End of the native Colours enumeration, also the random-colour setting.
+pub(crate) const COLOUR_END: u8 = 16;

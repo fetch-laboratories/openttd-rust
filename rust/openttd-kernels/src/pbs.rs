@@ -47,12 +47,6 @@ pub struct PbsServices {
     pub blocking: extern "C" fn(u32, u8) -> bool,
     pub has_pbs: extern "C" fn(u32, u8) -> bool,
     pub index: extern "C" fn(*const std::ffi::c_void) -> u32,
-    pub follow: unsafe extern "C" fn(
-        crate::train::Handle,
-        u8,
-        u64,
-        *mut crate::train_reservation::Follow,
-    ) -> bool,
 }
 #[derive(Clone, Copy)]
 pub(crate) struct Pbs<'a>(pub &'a PbsServices);
@@ -296,10 +290,7 @@ impl<'a> Pbs<'a> {
         self.reserved(tile) & tracks != 0
     }
     fn follow(self, v: Handle, owner: u8, types: u64, ft: &mut Follow, tile: u32, td: u8) -> bool {
-        ft.old_tile = tile;
-        ft.old_td = td;
-        // SAFETY: live shell (or no vehicle), typed stack output; follower does not retain it.
-        unsafe { (self.0.follow)(v, owner, types, ft) }
+        crate::follow_track::rail(self.shared(), v, owner, types, ft, tile, td)
     }
     fn is_depot(self, tile: u32) -> bool {
         crate::rail_map::is_rail_depot_tile(self.shared(), self.rail(), tile)
@@ -752,6 +743,5 @@ crate::abi::layouts! {
         blocking,
         has_pbs,
         index,
-        follow,
     };
 }

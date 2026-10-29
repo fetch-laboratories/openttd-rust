@@ -1,5 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file linkgraph-schedule-reference.cpp Controlled workers for otherwise unreachable scheduler branches. */
+#define WITH_RUST
+#include "stdafx.h"
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -9,29 +11,26 @@
 #include <list>
 #include <optional>
 #include <vector>
-#include "rust/linkgraph_schedule_ffi.h"
+#include "session-fixture.hpp"
 #define NOT_REACHED() std::abort()
 static std::vector<std::array<int, 3>> trace;
-struct Date { int32_t value; int32_t base() const { return value; } bool operator==(int value) const { return this->value == value; } };
-struct TimerGameEconomy { using Date = ::Date; inline static Date date{0}; inline static uint16_t date_fract = 0; };
-namespace EconomyTime { static constexpr int SECONDS_PER_DAY = 2; }
-static struct { struct { uint16_t recalc_interval = 4; } linkgraph; } _settings_game;
+using Date = TimerGameEconomy::Date;
+static struct { struct { uint16_t recalc_interval = 4; } linkgraph; } fixture_settings;
 static bool _networking, _network_server, candidate;
-enum class PauseMode { LinkGraph = 1 };
+
 static struct {
 	int bits = 0;
 	bool Test(PauseMode) const { return this->bits & 1; }
 	bool None() const { return this->bits == 0; }
-	void Set(PauseMode) { this->bits |= 1; trace.push_back({8, 1, 0}); }
-} _pause_mode;
-static constexpr int CMD_PAUSE = 0, PFE_GL_LINKGRAPH = 0;
+	void Set(PauseMode) { this->bits |= 1; }
+} fixture_pause_mode;
+static constexpr int PFE_GL_LINKGRAPH = 0;
 template <int> struct Command { static void Post(PauseMode, bool paused) { trace.push_back({7, paused, 0}); } };
 struct PerformanceMeasurer {
 	explicit PerformanceMeasurer(int) { trace.push_back({9, 1, 0}); }
 	~PerformanceMeasurer() { trace.push_back({9, 2, 0}); }
 	static void SetInactive(int) { trace.push_back({9, 0, 0}); }
 };
-using LinkGraphID = uint16_t;
 static std::array<LinkGraph *, 4> graphs;
 static std::array<LinkGraphJob *, 4> jobs;
 static std::array<int, 2> QueueSizes();
@@ -65,6 +64,7 @@ public:
 	uint16_t LinkGraphIndex() const { return this->graph; }
 };
 namespace reference {
+using LinkGraphID = uint16_t;
 class LinkGraphSchedule {
 public:
 	inline static const uint16_t SPAWN_JOIN_TICK = 21;
@@ -75,7 +75,11 @@ public:
 #include "scheduler-queue-original.inc"
 };
 LinkGraphSchedule LinkGraphSchedule::instance;
+#define _pause_mode fixture_pause_mode
+#define _settings_game fixture_settings
 #include "scheduler-original.inc"
+#undef _settings_game
+#undef _pause_mode
 }
 static const OpenTTDScheduleServices services{
 	.graph_owner = [](LinkGraph *g) noexcept { return g->owner; },
@@ -93,9 +97,8 @@ static const OpenTTDScheduleServices services{
 	.abort_job = [](LinkGraphJob *j) noexcept { j->AbortJob(); },
 	.next_graph = [](uint32_t *from) noexcept -> LinkGraph * { while (*from < graphs.size()) { auto *g = graphs[(*from)++]; if (g != nullptr) return g; } return nullptr; },
 	.next_job = [](uint32_t *from) noexcept -> LinkGraphJob * { while (*from < jobs.size()) { auto *j = jobs[(*from)++]; if (j != nullptr) return j; } return nullptr; },
-	.shift_job = [](LinkGraphJob *j, int32_t interval) noexcept { j->ShiftJoinDate({interval}); },
-	.post_pause = [](bool paused) noexcept { Command<CMD_PAUSE>::Post(PauseMode::LinkGraph, paused); },
-	.set_pause = []() noexcept { _pause_mode.Set(PauseMode::LinkGraph); },
+	.shift_job = [](LinkGraphJob *j, int32_t interval) noexcept { j->ShiftJoinDate(Date{interval}); },
+	.post_pause = [](PauseMode mode, bool paused) noexcept { Command<CMD_PAUSE>::Post(mode, paused); },
 	.begin_measurement = [](void *p, bool client) noexcept { if (client) static_cast<std::optional<PerformanceMeasurer> *>(p)->emplace(PFE_GL_LINKGRAPH); else PerformanceMeasurer::SetInactive(PFE_GL_LINKGRAPH); },
 };
 static auto &ref = reference::LinkGraphSchedule::instance;
@@ -122,15 +125,38 @@ static void Queue(LinkGraph *g) { if (candidate) openttd_rust_schedule_queue(&se
 static void Recycle() { static std::optional<LinkGraph> replacement; replacement.emplace(1, 2, 19); graphs[1] = &*replacement; Queue(graphs[1]); Queue(graphs[1]); }
 static void Tick(int date, int fract, bool client = false)
 {
-	TimerGameEconomy::date = {date}; TimerGameEconomy::date_fract = fract; _networking = client;
-	if (candidate) { std::optional<PerformanceMeasurer> m; openttd_rust_schedule_tick(&services, {date, static_cast<uint16_t>(fract), 4}, client, &m); }
+	TimerGameEconomy::date = TimerGameEconomy::Date{date}; TimerGameEconomy::date_fract = fract; _networking = client;
+	if (candidate) {
+		SessionFixture fixture;
+		std::optional<PerformanceMeasurer> m;
+		static void *measurement; measurement = &m;
+		fixture.services.schedule = &services;
+		fixture.services.networking = []() noexcept { return _networking; };
+		fixture.services.schedule_time = []() noexcept { return OpenTTDScheduleTime{TimerGameEconomy::date.base(), TimerGameEconomy::date_fract, 4}; };
+		fixture.services.schedule_measurement = [](OpenTTDSessionFrame *) noexcept { return measurement; };
+		if (!fixture.Run()) std::abort();
+	}
 	else reference::OnTick_LinkGraph();
 }
 static void Pause(int bits, bool load = false)
 {
-	_pause_mode.bits = bits; TimerGameEconomy::date = {1}; TimerGameEconomy::date_fract = 19;
-	if (candidate) { if (load) openttd_rust_schedule_after_load(&services); else openttd_rust_schedule_pause(&services, {1, 19, 4}, bits & 1, bits == 0); }
+	fixture_pause_mode.bits = bits; TimerGameEconomy::date = TimerGameEconomy::Date{1}; TimerGameEconomy::date_fract = 19;
+	if (candidate) {
+		SessionFixture fixture;
+		fixture.services.schedule = &services;
+		if (load) { _pause_mode = {}; openttd_rust_schedule_after_load(&services); fixture_pause_mode.bits = _pause_mode.Test(PauseMode::LinkGraph) ? 1 : 0; }
+		else {
+			fixture.services.networking = []() noexcept { return false; };
+			fixture.services.modal = []() noexcept { return true; };
+			fixture.services.paused_measurements = SessionFixture::Nothing;
+			fixture.services.scripts_enabled = []() noexcept { return false; };
+			fixture.services.schedule_time = []() noexcept { return OpenTTDScheduleTime{1, 19, 4}; };
+			PauseModes pause; if (bits & 1) pause.Set(PauseMode::LinkGraph); if (bits & 2) pause.Set(PauseMode::Normal);
+			if (!fixture.Run(GM_EDITOR, pause)) std::abort();
+		}
+	}
 	else { if (load) reference::AfterLoad_LinkGraphPauseControl(); else reference::StateGameLoop_LinkGraphPauseControl(); }
+	if (load && fixture_pause_mode.bits & 1) trace.push_back({8, 1, 0});
 }
 static auto Run(bool rust)
 {
@@ -147,7 +173,7 @@ static auto Run(bool rust)
 	Import({&small}, {second}); recycle = true; Tick(1, 21); recycle = false; Capture(); // Destruction recycles graph ID and queues duplicates.
 	auto *listed = new LinkGraphJob(small); auto *unlisted = new LinkGraphJob(unqueued); Import({&small}, {listed});
 	if (candidate) { openttd_rust_schedule_spawn_all(&services); openttd_rust_schedule_shift(&services, -17); openttd_rust_schedule_clear(&services); }
-	else { ref.SpawnAll(); ref.ShiftDates({-17}); ref.Clear(); }
+	else { ref.SpawnAll(); ref.ShiftDates(Date{-17}); ref.Clear(); }
 	for (auto *g : LinkGraph::Iterate()) { trace.push_back({30, g->tag, candidate ? *openttd_rust_live_graph_date(g->owner) : g->date}); trace.push_back({31, g->tag, candidate ? *openttd_rust_live_node_fields(g->owner, 0).last_update : g->node_date}); }
 	Capture(); assert(jobs[listed->index] == listed && jobs[unlisted->index] == unlisted); // Clear must not delete.
 	auto result = trace; for (auto *j : jobs) delete j; Import({}, {}); return result;
