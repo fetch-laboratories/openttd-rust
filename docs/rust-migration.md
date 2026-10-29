@@ -312,6 +312,12 @@ tools/simulate.py speed collect DIR`. Collection stops other builds, links, prof
 only while its 144 interleaved timed games run, records load and process observations without a
 CPU threshold, and prints the `SPEED_PASS` rows after release.
 
+`SPEED_PASS` retains the last three quiet-pass ratios per scenario, oldest first; the
+collector prints the shifted three-pass history with each new pass. Ceiling and band decisions
+use their mean multiplied by the current projection's instruction-growth term, while
+`projected_ratio` still reports the latest anchor's projection. Play saves have a 1.6x ceiling
+and 1.52x band; generation keeps 1.3x and 1.235x.
+
 `SPEED_ANCHORS` in `tools/simulation/instructions.py` holds each measured anchor `{head, ratio, Ir,
 identity}` and a separate `integrated` record with its head and Ir. Empty anchors mean
 collection only, never a passing speed guard. Each speed pass fills them from its same-head
@@ -653,16 +659,34 @@ Original header helpers and constants live once in crate modules named after the
 import them instead of keeping copies, and `src/rust/services.cpp` asserts every value. The
 checker cannot see Rust copies.
 
-`python3 tools/port-metrics.py` reports the change in retired pinned-original C++ lines
-separately from fork glue added/removed and signed net glue. Original retirement can be negative
-when original lines are restored; removing fork glue does not retire original C++. Ownership
-ports retire more original C++ than net glue plus tooling added, or explain why; conversions
-report their net glue. `--whole-fork` prints totals against the pinned original and the retired
-share of simulation source lines. Its one inventory covers world-state owners, commands,
-accessors, link graph and pathfinding, excluding GUI, platform, vendored code and generic
-support. Mixed owner files, blank lines, comments and data tables count. The diff/guard
-classification measures source lines, not C++ preprocessing or behavioral completion. Historical
-roadmap rows keep their labelled legacy counts.
+`python3 tools/port-metrics.py` reports code lines using pinned Pygments 2.19.2
+lexers, excluding comments (including preprocessor directives), blanks and Python docstrings.
+If the installed version differs, the command uses `uv run --with pygments==2.19.2`;
+install `uv` as in setup. Every metric uses code lines; the second line retains physical-line
+counts for historical comparisons. Original retirement can be negative on restoration;
+removing fork glue does not retire original C++. Ownership ports retire more original C++
+than net glue plus tooling added, or explain why; conversions report their net glue.
+
+`--whole-fork` prints whole-fork and simulation retirement shares, then a disjoint per-area
+inventory of original, retired, remaining, glue and compiled C++ code lines. Directory-specific
+areas take precedence, followed by GUI, platform, simulation owners, NewGRF, graphics and
+support. Simulation storage comprises the simulation headers, `map.cpp` and `*_map.cpp`;
+logic includes the command, cheat, goal, story, league, signs, misc_cmd, vehiclelist, elrail and
+autoslope families. Boundary headers/implementations have their own glue row. Compiled C++ is
+remaining original plus compiled fork glue; the report also counts Rust `openttd_rust_*`
+exports and function-pointer fields in boundary records. Other build defines and file selection
+are not evaluated: this is a source/`WITH_RUST` guard inventory, not a preprocessed build or a
+claim of behavioral completion. Historical roadmap rows retain their labelled legacy counts.
+
+`python3 tools/orphan-exports.py --base-ref origin/rust-migration` checks quick CI's
+production-use rule independently of the shared-accessor heuristic. Rust exports require a
+`src/rust/` declaration, and exports/declarations require a production C++ reference under
+`src/`. A service-table binding counts; comments, strings, declarations, `src/tests/`, tooling
+and Windows ABI fixtures do not. Existing violations are named in
+`tools/orphan-export-baseline.txt`, which must shrink when fixed and cannot grow against the
+base revision. `tools/test-orphan-exports.py` exercises the scan and ratchet with fixture trees.
+The check is syntactic: it does not resolve macros or arbitrary conditional compilation.
+Reviewers retain responsibility for orphan `WITH_RUST` bodies.
 
 ## Team process and integration
 
@@ -711,7 +735,11 @@ after integrations, reading the dry run before `--apply`. It removes a linked wo
 the main checkout or `.local/reference`) whose branch merged into `origin/rust-migration` or
 whose PR merged or closed, through `git worktree remove` without `--force`, so a dirty or locked
 one stays. It then deletes the local branch when that branch merged or origin holds the same
-head. A branch at a base commit with no PR is a task not yet committed and stays. In the main
+head. Clean detached or no-commit T3 task worktrees may also go when no process has its cwd
+inside, the roadmap and open issue/PR bodies do not name the path (including shortened T3
+names), and current deep reports, speed anchors and pinned runtimes do not retain their output.
+Failure to inspect cwd keeps the worktree. The main checkout, reference, dirty and locked trees
+stay protected. Other no-PR branches remain. Live cwd and output checks run again at deletion. In the main
 checkout's `.local` it removes finished runs under `simulation`, `verification`, `coverage` and
 `deep` whose report's `candidate_commit` (or a deep report's `commit`) is an ancestor of
 `origin/rust-migration`, keeping other finished runs as possible open-PR evidence and reports

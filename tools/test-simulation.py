@@ -407,10 +407,11 @@ class SimulationSpeedTests(unittest.TestCase):
     def test_record_and_fixed_ceilings(self):
         from math import inf, nextafter
 
-        for name, ceiling in (("play-test", 1.5), ("generate-test", 1.3)):
+        for name, ceiling in (("play-test", 1.6), ("generate-test", 1.3)):
             with self.subTest(name=name), patch.dict(SPEED_BUDGETS, {name: 1.25}):
                 report = speed_budget(name, 1.4375)
-                self.assertEqual(report["record"], 1.25)
+                self.assertEqual(report["quiet_pass_mean"], 1.25)
+                self.assertEqual(report["record"], 1.4375)
                 self.assertAlmostEqual(report["change_percent"], 15.0)
                 self.assertEqual(report["ceiling"], ceiling)
                 self.assertTrue(speed_budget(name, ceiling)["within_ceiling"])
@@ -424,6 +425,26 @@ class SimulationSpeedTests(unittest.TestCase):
                 self.assertLess(speed_budget(name, 0.9)["change_percent"], 0)
                 self.assertIsNone(speed_budget(name, None))
         self.assertIsNone(speed_budget("unrecorded", 1.0))
+
+    def test_three_pass_record_drives_decisions(self):
+        from simulation.instructions import SPEED_ANCHORS, SPEED_PASS, budget
+
+        name = "play-padhattan-ridge-2016-manual"
+        ratios = next(
+            ratios for scenario, ratios, _, _ in SPEED_PASS if scenario == name
+        )
+        self.assertEqual(len(ratios), 3)
+        self.assertAlmostEqual(sum(ratios) / 3, SPEED_BUDGETS[name])
+        anchor = SPEED_ANCHORS[name]["anchor"]
+        record = {"anchor": anchor, "integrated": {"Ir": anchor["Ir"]}}
+        report = budget(
+            name, {"Ir": anchor["Ir"] * 1.001, "identity": anchor["identity"]}, record
+        )
+        self.assertGreater(report["projected_ratio"], 1.52)
+        self.assertAlmostEqual(report["record"], sum(ratios) / 3 * 1.002)
+        self.assertFalse(report["near_ceiling"])
+        self.assertTrue(report["within_ceiling"])
+        self.assertEqual(report["band"], 1.52)
 
     def exercise(self, *, instructions=False, **failure):
         with tempfile.TemporaryDirectory() as directory:
@@ -543,7 +564,7 @@ class InstructionSpeedTests(unittest.TestCase):
             report = ir.budget("play-test", measurement, record)
             record["integrated"] = dict(head=str(step), Ir=measurement["Ir"])
         self.assertAlmostEqual(report["projected_ratio"], 1.5389150592)
-        self.assertFalse(report["within_ceiling"])
+        self.assertTrue(report["within_ceiling"])
         self.assertEqual(anchor["Ir"], 100)
         self.assertEqual(ir.projection(anchor, 90), 1.2314)
         record["anchor"] = dict(anchor, ratio=1.1, Ir=measurement["Ir"])

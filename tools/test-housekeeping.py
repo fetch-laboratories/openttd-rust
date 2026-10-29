@@ -153,6 +153,107 @@ class HousekeepingTests(unittest.TestCase):
             git(tree, "push", "--quiet", "-u", "origin", name)
         return tree
 
+    def t3_tree(self, name: str, detached: bool = False) -> Path:
+        tree = self.top / ".t3/worktrees/openttd-rust" / name
+        git(
+            self.main,
+            "worktree",
+            "add",
+            "--quiet",
+            *(["--detach"] if detached else ["-b", name]),
+            str(tree),
+        )
+        return tree
+
+    def test_finished_t3_and_protected_tasks(self) -> None:
+        finished = self.t3_tree("t3-finished")
+        detached = self.t3_tree("t3-detached", detached=True)
+        protected = [
+            self.t3_tree("t3-" + name)
+            for name in (
+                "dirty",
+                "locked",
+                "issue",
+                "checkpoint",
+                "deep",
+                "anchor",
+                "pinned",
+                "open",
+            )
+        ]
+        dirty, locked, issue, checkpoint, deep, anchor, pinned, open_tree = protected
+        write(dirty / "untracked")
+        git(self.main, "worktree", "lock", str(locked))
+        write(deep / ".local/output")
+        write(anchor / ".local/output")
+        write(pinned / ".local/runtime/provenance.json", "{}")
+        write(
+            self.main / ".local/deep/99999999/report.json",
+            json.dumps({"output": str(deep / ".local/output")}),
+        )
+        write(
+            self.main / "tools/simulation/instructions.py",
+            f'RUNTIME = "{anchor}/.local/output"',
+        )
+        references = f"Open issue body: {issue}\nResume checkpoint: `{checkpoint.name}`"
+        with patch.dict(PR_STATES, {open_tree.name: "OPEN"}):
+            items = housekeeping.plan_worktrees(
+                self.main,
+                housekeeping.list_worktrees(self.main)[1:],
+                pr_state,
+                references,
+            )
+        candidates = {item.path: item for item in items}
+        self.assertTrue(candidates[finished].remove)
+        self.assertTrue(candidates[detached].remove)
+        for tree in protected:
+            self.assertFalse(candidates[tree].remove, (tree, candidates[tree].reason))
+        for tree in (finished, detached):
+            self.assertIsNone(
+                housekeeping.remove(self.main, candidates[tree], references)
+            )
+            self.assertFalse(tree.exists())
+        for tree in protected:
+            self.assertTrue(tree.exists())
+
+    def test_cwd_and_references_are_rechecked_at_removal(self) -> None:
+        tree = self.t3_tree("t3-cwd")
+        item = next(
+            i
+            for i in housekeeping.plan_worktrees(
+                self.main, housekeeping.list_worktrees(self.main)[1:], pr_state
+            )
+            if i.path == tree
+        )
+        self.assertTrue(item.remove)
+        cwd = self.proc / "123/cwd"
+        cwd.parent.mkdir()
+        folder = tree / "src"
+        folder.mkdir()
+        cwd.symlink_to(folder)
+        self.assertIn("cwd", housekeeping.remove(self.main, item) or "")
+        self.assertTrue(tree.exists())
+        cwd.unlink()
+        self.assertIn(
+            "referenced", housekeeping.remove(self.main, item, str(tree)) or ""
+        )
+        self.assertIsNone(housekeeping.remove(self.main, item))
+
+    def test_uninspectable_cwd_keeps_worktree(self) -> None:
+        tree = self.t3_tree("t3-hidden-cwd")
+        original = Path.resolve
+
+        def resolve(path: Path, strict: bool = False) -> Path:
+            if path.name == "cwd":
+                raise PermissionError("hidden cwd")
+            return original(path, strict=strict)
+
+        with patch.object(Path, "resolve", resolve):
+            items = housekeeping.plan_worktrees(
+                self.main, housekeeping.list_worktrees(self.main)[1:], pr_state
+            )
+        self.assertFalse(next(item.remove for item in items if item.path == tree))
+
     def fixture_local(self) -> None:
         local = self.main / ".local"
         sim = local / "simulation"
@@ -309,7 +410,9 @@ class HousekeepingTests(unittest.TestCase):
     def run_main(self, *arguments: str) -> list[Path]:
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            code = housekeeping.main([*arguments, "--repo", str(self.main)], pr_state)
+            code = housekeeping.main(
+                [*arguments, "--repo", str(self.main)], pr_state, lambda _: ""
+            )
         self.assertEqual(code, 0)
         lines = output.getvalue().splitlines()
         removals = [line for line in lines if line.startswith("remove ")]
