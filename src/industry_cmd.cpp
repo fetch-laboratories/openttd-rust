@@ -3682,7 +3682,7 @@ static const OpenTTDIndustryServices _industry_services = {
 	},
 	.production_callback = [](void *i, uint8_t reason) noexcept { IndustryProductionCallback(RustIndustry(i), reason); },
 	.scale_cargo = OpenTTDScaleIndustryCargo,
-	.tile_add_wrap = SharedTileAddWrap,
+	.environment = &GetRustEnvironmentServices(),
 	.farm_tile = [](uint32_t index) noexcept -> OpenTTDIndustryFarmTile {
 		TileIndex tile(index);
 		const auto type = SharedTileType(index);

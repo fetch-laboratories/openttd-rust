@@ -757,6 +757,10 @@ impl Engine<'_> {
     fn size_x(&self) -> u32 {
         self.map().size_x()
     }
+    fn distance_from_edge(&self, tile: u32) -> u32 {
+        self.map()
+            .distance_from_edge(tile, (self.services.map_max_y)() + 1)
+    }
     fn position(&self) -> u32 {
         // SAFETY: Stable live owner; each immediate field read ends before services.
         unsafe { position(self.owner) }
@@ -1120,7 +1124,7 @@ impl Engine<'_> {
         false
     }
     fn road_allowed(&self, town: u32, tile: u32, dir: u32) -> bool {
-        if (self.services.distance_from_edge)(tile) == 0
+        if self.distance_from_edge(tile) == 0
             || ((self.services.bridge_above)(tile)
                 && u32::from((self.services.bridge_axis)(tile)) == (dir & 1))
         {
@@ -1213,7 +1217,7 @@ impl Engine<'_> {
         }
     }
     fn extra_house(&self, town: u32, tile: u32, modes: u32) -> bool {
-        if (self.services.distance_from_edge)(tile) == 0 {
+        if self.distance_from_edge(tile) == 0 {
             return false;
         }
         let mut count = 0;

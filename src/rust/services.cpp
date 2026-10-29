@@ -276,7 +276,6 @@ OpenTTDTownRef OpenTTDTownResolveByID(uint32_t id) noexcept
 }
 
 static bool Shared_tile_valid(uint32_t tile) noexcept { return IsValidTile(TileIndex{tile}); }
-static uint32_t Shared_distance_from_edge(uint32_t tile) noexcept { return DistanceFromEdge(TileIndex{tile}); }
 static int32_t Shared_tile_max_z(uint32_t tile) noexcept { return OpenTTDTileMaxZ(TileIndex{tile}); }
 static_assert(TILE_HEIGHT == 8 && TILE_SIZE == 16);
 /* Values of the shared Rust header modules (tile_type.rs, slope_func.rs and the like). */
@@ -381,7 +380,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.depot_index = MapSvcDepotIndex,
 	.disallowed_road_directions = Shared_disallowed_road_directions,
 	.disaster_sound = SharedDisasterSound,
-	.distance_from_edge = Shared_distance_from_edge,
 	.drive_through_axis = Shared_drive_through_axis,
 	.economy_date = openttd_rust_clock_economy_date,
 	.forbid_90_deg = RustForbid90Deg,
@@ -452,7 +450,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.tile_owner = RustTileOwnerValue,
 	.tile_slope = SharedTileSlope,
 	.tile_type = SharedTileType,
-	.tile_add_wrap = SharedTileAddWrap,
 	.tile_valid = Shared_tile_valid,
 	.tile_slope_z = RustTileSlopeZ,
 	.tile_z = SharedTileZ,

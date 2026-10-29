@@ -182,7 +182,7 @@ impl<'a> Founding<'a> {
     }
     fn placement_error(&self, tile: Tile, surrounding: bool) -> Option<u32> {
         w::hit(w::TOWN_PLACEMENT);
-        if observed!((self.shared.distance_from_edge)(tile.0)) < 12 {
+        if self.map().distance_from_edge(tile.0, self.size_y()) < 12 {
             return Some(self.s.edge_error);
         }
         if observed!((self.s.close_to_town)(tile, 20)) {
