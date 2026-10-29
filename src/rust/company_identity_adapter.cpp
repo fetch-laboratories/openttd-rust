@@ -13,6 +13,7 @@
 #include "../group.h"
 #include "../town.h"
 #include "../object.h"
+#include "../smallmap_gui.h"
 #include "../vehicle_func.h"
 #include "../vehicle_base.h"
 #include "../newgrf_engine.h"
@@ -111,7 +112,7 @@ const OpenTTDCompanyIdentityServices &GetRustCompanyIdentityServices() noexcept
 	.current = RustCurrentCompanyID,
 	.dirty = RustScreenDirty,
 	.utf8_length = RustUtf8Length,
-	.reset_colourmap = ResetVehicleColourMap,
+	.reset_colourmap = Identity_reset_colourmap,
 	.engine = RustEngineByID,
 	.engine_type = RustEngineType,
 	.engine_cargo = RustEngineDefaultCargo,

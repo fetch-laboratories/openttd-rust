@@ -6,6 +6,7 @@
 #include "../company_base.h"
 #include "../company_manager_face.h"
 #include "../object.h"
+#include "../vehicle_func.h"
 #include "services_cargo.h"
 inline Company * Identity_company(uint8_t id) noexcept { return Company::Get(CompanyID{id}); }
 inline uint8_t Identity_company_id(const Company *c) noexcept { return c->index.base(); }
@@ -29,6 +30,7 @@ inline Livery * Identity_livery(Company *c, LiveryScheme scheme) noexcept { retu
 inline const uint8_t *Identity_default_livery(uint8_t owner) noexcept { return reinterpret_cast<const uint8_t *>(Identity_livery(Identity_company(owner), LS_DEFAULT)); }
 inline CompanyManagerFace * Identity_face(Company *c) noexcept { return &c->face; }
 void Identity_admin_update(uint8_t id) noexcept;
+inline void Identity_reset_colourmap() noexcept { ResetVehicleColourMap(); }
 inline void Identity_object_colours(Company *c) noexcept { UpdateObjectColours(c); }
 inline bool Identity_cargo_freight(uint8_t cargo) noexcept { return RustCargoSpec(cargo)->is_freight; }
 inline bool Identity_cargo_passengers(uint8_t cargo) noexcept { return IsCargoInClass(cargo, CargoClass::Passengers); }

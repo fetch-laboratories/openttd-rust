@@ -65,6 +65,7 @@ TEST_CASE("Company identity - process-wide colour alias and face bit truncation"
 	FaceVar var{.type = FaceVarType::Sprite, .position = 0, .offset = 3, .length = 5, .valid_values = 6, .data = SpriteID(0)};
 	CompanyManagerFace face{0, UINT32_MAX, {}};
 	CHECK(var.GetBits(face) == 31);
+	CHECK(var.ScaleBits(31) == 5);
 	var.ChangeBits(face, 0);
 	CHECK(var.GetBits(face) == 1);
 	face.bits = UINT32_MAX;

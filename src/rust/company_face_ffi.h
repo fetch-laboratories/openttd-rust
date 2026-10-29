@@ -28,6 +28,7 @@ struct OpenTTDFaceServices {
 };
 const OpenTTDFaceServices &GetRustFaceServices() noexcept;
 extern "C" {
+uint32_t openttd_rust_face_scale_bits(const OpenTTDFaceServices *, const FaceVar *, uint32_t);
 uint32_t openttd_rust_face_get_bits(const OpenTTDFaceServices *, const FaceVar *, const CompanyManagerFace *);
 void openttd_rust_face_set_bits(const OpenTTDFaceServices *, const FaceVar *, CompanyManagerFace *, uint32_t);
 void openttd_rust_face_change_bits(const OpenTTDFaceServices *, const FaceVar *, CompanyManagerFace *, int8_t);

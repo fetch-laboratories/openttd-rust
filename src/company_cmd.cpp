@@ -11,6 +11,7 @@
 #include "company_base.h"
 #include "company_func.h"
 #include "company_gui.h"
+#include "object.h"
 #include "core/backup_type.hpp"
 #include "town.h"
 #include "news_func.h"
@@ -63,7 +64,6 @@
 #include "safeguards.h"
 
 void ClearEnginesHiddenFlagOfCompany(CompanyID cid);
-void UpdateObjectColours(const Company *c);
 
 CompanyID _local_company;   ///< Company controlled by the human player at this client. Can also be #COMPANY_SPECTATOR.
 CompanyID _current_company; ///< Company currently doing an action.

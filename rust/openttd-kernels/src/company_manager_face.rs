@@ -128,6 +128,19 @@ pub(crate) fn random(s: &Services, face: *mut Face, r: *mut Randomizer) {
     style(s, face, value);
     random_bits(s, face, (s.vars)((s.style)(face)), r);
 }
+/// Original `FaceVar` scaling used when loading old face encodings.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_face_scale_bits(
+    s: &Services,
+    var: *const FaceVar,
+    value: u32,
+) -> u32 {
+    let length = u32::from((s.length)(var));
+    assert!(value < 1u32.wrapping_shl(length));
+    value
+        .wrapping_mul(u32::from((s.valid_values)(var)))
+        .wrapping_shr(length)
+}
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_face_get_bits(
     s: &Services,

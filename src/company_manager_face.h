@@ -98,6 +98,7 @@ struct FaceVar {
 	{
 		return GB(cmf.bits, this->offset, this->length) < this->valid_values;
 	}
+#endif /* WITH_RUST */
 
 	/**
 	 * Scales a company manager's face bits variable to the correct scope
@@ -107,10 +108,13 @@ struct FaceVar {
 	 */
 	inline uint ScaleBits(uint val) const
 	{
+#ifdef WITH_RUST
+		return openttd_rust_face_scale_bits(&GetRustFaceServices(), this, val);
+#else
 		assert(val < (1U << this->length));
 		return (val * this->valid_values) >> this->length;
-	}
 #endif /* WITH_RUST */
+	}
 
 	/**
 	 * Gets the sprite to draw.
