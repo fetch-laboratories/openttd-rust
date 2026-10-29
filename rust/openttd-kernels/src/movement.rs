@@ -23,6 +23,7 @@
 )]
 use crate::direction_func::diag_dir_to_axis;
 use crate::ground::{RailServices, RoadServices};
+use crate::map_func::World;
 use crate::rail_map::{
     RAIL_GROUND_HALF_TILE_WATER, RAIL_TILE_DEPOT, RAIL_TILE_NORMAL, RAIL_TILE_SIGNALS,
 };
@@ -53,7 +54,7 @@ pub(crate) struct CachedTable<'a> {
     shared: &'a Services,
     resolved: Cell<Option<&'a MovementServices>>,
     audited: bool,
-    observations: OnceCell<Option<MapObservations>>,
+    world: OnceCell<World<'a>>,
 }
 impl Clone for CachedTable<'_> {
     fn clone(&self) -> Self {
@@ -61,7 +62,7 @@ impl Clone for CachedTable<'_> {
             shared: self.shared,
             resolved: self.resolved.clone(),
             audited: self.audited,
-            observations: OnceCell::new(),
+            world: OnceCell::new(),
         }
     }
 }
@@ -71,7 +72,7 @@ impl<'a> CachedTable<'a> {
             shared,
             resolved: Cell::new(None),
             audited: false,
-            observations: OnceCell::new(),
+            world: OnceCell::new(),
         }
     }
     /// # Safety
@@ -84,25 +85,11 @@ impl<'a> CachedTable<'a> {
         }
     }
     #[inline]
-    fn observed(&self) -> Context<'_, true> {
+    fn observed(&self) -> Context<'_> {
         let s = self.get();
-        let observations = self
-            .observations
-            .get_or_init(|| {
-                let allocation = (s.tile_types?)();
-                if allocation.count == 0 {
-                    return None;
-                }
-                // SAFETY: The audited constructor bounds metadata to this entry.
-                Some(MapObservations {
-                    dimensions: self.shared.map(),
-                    types: unsafe {
-                        crate::map_func::TileTypeAccess::raw(allocation, self.shared.tile_type)
-                    },
-                })
-            })
-            .as_ref();
-        Context { s, observations }
+        // The audited constructor bounds the descriptor to this entry.
+        let world = self.world.get_or_init(|| World::with_table(s.shared(), s));
+        Context { s, world }
     }
     pub(crate) fn road_tracks(&self, v: VehicleRef, tile: u32) -> u32 {
         if self.audited {
@@ -126,106 +113,22 @@ impl<'a> CachedTable<'a> {
     }
 }
 
-struct MapObservations {
-    dimensions: crate::map_func::Map,
-    types: crate::map_func::TileTypeAccess,
-}
 /// Keeps only allocation metadata; each original observation loads fresh scalars.
-/// `AUDITED` is false for native-callback entries, which compile without map branches.
-struct Context<'a, const AUDITED: bool> {
+struct Context<'a> {
     s: &'a MovementServices,
-    observations: Option<&'a MapObservations>,
+    world: &'a World<'a>,
 }
-impl<const AUDITED: bool> std::ops::Deref for Context<'_, AUDITED> {
+impl std::ops::Deref for Context<'_> {
     type Target = MovementServices;
     #[inline]
     fn deref(&self) -> &Self::Target {
         self.s
     }
 }
-impl<const AUDITED: bool> Context<'_, AUDITED> {
-    #[inline]
-    fn map(&self) -> Option<&MapObservations> {
-        if AUDITED { self.observations } else { None }
-    }
-    #[inline]
-    fn tile_type(&self, tile: u32) -> u8 {
-        self.map()
-            .map_or_else(|| (self.shared().tile_type)(tile), |m| m.types.read(tile))
-    }
-    #[inline]
-    fn normal_road_bits(&self, tile: u32, kind: crate::services::RoadTramType) -> RoadBits {
-        self.map()
-            .and_then(|m| crate::road_map::get_road_bits(&m.types, tile, kind))
-            .unwrap_or_else(|| (self.shared().normal_road_bits)(tile, u8::from(kind.0)))
-    }
-    #[inline]
-    fn disallowed_road_directions(&self, tile: u32) -> u8 {
-        self.map()
-            .and_then(|m| crate::road_map::get_disallowed_road_directions(&m.types, tile))
-            .unwrap_or_else(|| (self.shared().disallowed_road_directions)(tile))
-    }
-    #[inline]
-    fn has_road_works(&self, tile: u32) -> bool {
-        self.map()
-            .and_then(|m| crate::road_map::has_road_works(&m.types, tile))
-            .unwrap_or_else(|| (self.shared().has_road_works)(tile))
-    }
-    #[inline]
-    fn road_tile_kind(&self, tile: u32) -> crate::services::RoadTileKind {
-        self.map()
-            .and_then(|m| crate::road_map::get_road_tile_type(&m.types, tile))
-            .unwrap_or_else(|| (self.shared().road_tile_kind)(tile))
-    }
-    #[inline]
-    fn normal_road(&self, tile: u32) -> bool {
-        self.map()
-            .and_then(|m| crate::road_map::is_normal_road(&m.types, tile))
-            .unwrap_or_else(|| (self.shared().road_tile_kind)(tile).0 == ROAD_TILE_NORMAL)
-    }
-    fn map_value<T>(&self, value: Option<T>) -> T {
-        if value.is_none() {
-            (self.native_assert)(false);
-        }
-        value.expect("native map precondition")
-    }
-    fn pixel_slope(&self, tile: u32, outside: Option<(u32, u32)>) -> FoundationSlope {
-        let types = &self.map().expect("entry map descriptor").types;
-        let map = self.map().expect("entry map descriptor");
-        let width = map.dimensions.size_x();
-        let height = types.count() >> map.dimensions.log_x;
-        let (slope, z) = self.map_value(if let Some((x, y)) = outside {
-            crate::tile_map::get_tile_pixel_slope_outside_map(
-                types,
-                x.cast_signed(),
-                y.cast_signed(),
-                width,
-                height,
-            )
-        } else {
-            crate::tile_map::get_tile_pixel_slope(types, tile, width, height)
-        });
-        FoundationSlope {
-            z,
-            slope: Slope(slope),
-        }
-    }
-    fn max_pixel_z(&self, tile: u32) -> i32 {
-        self.map_value(crate::tile_map::get_tile_max_pixel_z(
-            &self.map().expect("entry map descriptor").types,
-            tile,
-            self.map()
-                .expect("entry map descriptor")
-                .dimensions
-                .size_x(),
-            self.map().expect("entry map descriptor").types.count()
-                >> self.map().expect("entry map descriptor").dimensions.log_x,
-        ))
-    }
+impl Context<'_> {
     #[inline]
     fn has_tile_road_type(&self, tile: u32, kind: crate::services::RoadTramType) -> bool {
-        self.map()
-            .and_then(|m| crate::road_map::has_tile_road_type(&m.types, tile, kind))
+        crate::road_map::has_tile_road_type(&self.world.types, tile, kind)
             .unwrap_or_else(|| (self.s.has_tile_road_type)(tile, kind))
     }
 }
@@ -349,10 +252,10 @@ impl MovementServices {
         fn road_vehicle -> crate::road::Leaves;
     }
 }
-impl<const AUDITED: bool> Context<'_, AUDITED> {
+impl Context<'_> {
     fn foundation(&self, tile: u32, slope: u8) -> u8 {
         w::hit(w::MOVE_FOUNDATION);
-        let kind = self.tile_type(tile);
+        let kind = self.world.kind(tile);
         match kind {
             MP_RAILWAY => {
                 if (self.plain_rail)(tile) {
@@ -364,7 +267,7 @@ impl<const AUDITED: bool> Context<'_, AUDITED> {
                 }
             }
             MP_ROAD => {
-                if self.normal_road(tile) {
+                if self.world.is_normal_road(tile) {
                     road_foundation(slope, (self.road().all_bits)(tile).0, |ok| {
                         (self.native_assert)(ok);
                     })
@@ -424,11 +327,10 @@ impl<const AUDITED: bool> Context<'_, AUDITED> {
     #[inline]
     pub(crate) fn pixel_z_at(&self, x: i32, y: i32, ground: bool) -> i32 {
         let tile = self
-            .map()
-            .expect("entry map descriptor")
+            .world
             .dimensions
             .tile_virt_xy(x.cast_unsigned(), y.cast_unsigned());
-        let kind = self.tile_type(tile);
+        let kind = self.world.kind(tile);
         // One named body for constant Rust callers and the dynamic native entry.
         // Observe the live tile type before selecting the ground specialization.
         if ground {
@@ -442,15 +344,20 @@ impl<const AUDITED: bool> Context<'_, AUDITED> {
         w::hit(w::MOVE_PIXEL_Z);
         if matches!(kind, MP_HOUSE | MP_INDUSTRY | MP_STATION)
             || (kind == MP_RAILWAY && !(self.plain_rail)(tile))
-            || (kind == MP_ROAD && !self.normal_road(tile))
+            || (kind == MP_ROAD && !self.world.is_normal_road(tile))
             || (kind == MP_OBJECT && !(self.owned_land)(tile))
         {
-            return self.max_pixel_z(tile);
+            return self.world.tile_max_pixel_z(tile);
         }
-        let mut p = if kind == MP_VOID {
-            self.pixel_slope(tile, Some((x >> 4, y >> 4)))
+        let (slope, z) = if kind == MP_VOID {
+            self.world
+                .tile_pixel_slope_outside_map((x >> 4).cast_signed(), (y >> 4).cast_signed())
         } else {
-            self.pixel_slope(tile, None)
+            self.world.tile_pixel_slope(tile)
+        };
+        let mut p = FoundationSlope {
+            z,
+            slope: Slope(slope),
         };
         if matches!(kind, MP_RAILWAY | MP_ROAD) {
             if p.slope.0 == SLOPE_FLAT {
@@ -504,21 +411,12 @@ impl<const AUDITED: bool> Context<'_, AUDITED> {
 }
 impl MovementServices {
     #[inline]
-    fn with_context<R>(&self, f: impl FnOnce(Context<'_, true>) -> R) -> R {
-        let observations = self.tile_types.and_then(|acquire| {
-            let allocation = acquire();
-            (allocation.count != 0).then(|| MapObservations {
-                dimensions: self.shared().map(),
-                // SAFETY: The globally proved interval excludes reset/load/yield during
-                // game-loop/command entries. Standalone terrain calls end before return.
-                types: unsafe {
-                    crate::map_func::TileTypeAccess::raw(allocation, self.shared().tile_type)
-                },
-            })
-        });
+    fn with_context<R>(&self, f: impl FnOnce(Context<'_>) -> R) -> R {
+        // Standalone terrain and track-status calls end the descriptor before return.
+        let world = World::with_table(self.shared(), self);
         f(Context {
             s: self,
-            observations: observations.as_ref(),
+            world: &world,
         })
     }
     #[inline]
@@ -756,7 +654,7 @@ use crate::track_type::{
     TRACKDIR_BIT_Y_NW, TRACKDIR_BIT_Y_SE,
 };
 use crate::transport_type::{TRANSPORT_RAIL, TRANSPORT_ROAD, TRANSPORT_WATER};
-impl<const AUDITED: bool> Context<'_, AUDITED> {
+impl Context<'_> {
     fn water_edges(&self, tile: u32, mut bits: u8) -> u8 {
         let map = self.shared().map();
         if map.tile_x(tile) == 0 {
@@ -776,7 +674,7 @@ impl<const AUDITED: bool> Context<'_, AUDITED> {
     pub(crate) fn track_status(&self, tile: u32, mode: u8, sub: u32, side: u8) -> u32 {
         let mut bits = TRACK_BIT_NONE;
         let mut red = 0;
-        match self.tile_type(tile) {
+        match self.world.kind(tile) {
             MP_RAILWAY => {
                 w::hit(w::MOVE_TRACK_RAIL);
                 if mode == TRANSPORT_WATER
@@ -855,11 +753,9 @@ impl<const AUDITED: bool> Context<'_, AUDITED> {
                         if !self.has_tile_road_type(tile, crate::services::RoadTramType(tram)) {
                             return 0;
                         }
-                        match self.road_tile_kind(tile).0 {
+                        match self.world.road_tile_type(tile).0 {
                             ROAD_TILE_NORMAL => {
-                                let road = self
-                                    .normal_road_bits(tile, crate::services::RoadTramType(tram))
-                                    .0;
+                                let road = self.world.road_bits(tile, tram);
                                 if side != INVALID_DIAGDIR
                                     && crate::road_func::diag_dir_to_road_bits(side, |ok| {
                                         (self.native_assert)(ok);
@@ -869,11 +765,11 @@ impl<const AUDITED: bool> Context<'_, AUDITED> {
                                     return 0;
                                 }
                                 let (disallowed, road_works) = if tram {
-                                    (0, self.has_road_works(tile))
+                                    (0, self.world.has_road_works(tile))
                                 } else {
                                     (
-                                        self.disallowed_road_directions(tile),
-                                        self.has_road_works(tile),
+                                        self.world.disallowed_road_directions(tile),
+                                        self.world.has_road_works(tile),
                                     )
                                 };
                                 let multiplier = [0x101, 0x100, 1, 0][usize::from(disallowed)];
@@ -1014,9 +910,7 @@ impl<const AUDITED: bool> Context<'_, AUDITED> {
                 if mode != TRANSPORT_WATER {
                     return 0;
                 }
-                bits = match self
-                    .map()
-                    .and_then(|m| crate::water_map::get_water_tile_type(&m.types, tile))
+                bits = match crate::water_map::get_water_tile_type(&self.world.types, tile)
                     .unwrap_or_else(|| (self.water_type)(tile).0)
                 {
                     0 => {

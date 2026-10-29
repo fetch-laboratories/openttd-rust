@@ -300,14 +300,19 @@ pub(crate) struct World<'a> {
 }
 impl<'a> World<'a> {
     pub(crate) fn new(shared: &'a crate::services::Services) -> Self {
-        let movement = crate::movement::table(shared);
-        // SAFETY: Game-loop and command entries exclude map reset/load/mutex yield.
-        let types = unsafe {
-            TileTypeAccess::raw(
-                (movement.tile_types.expect("native map descriptor"))(),
-                shared.tile_type,
-            )
-        };
+        Self::with_table(shared, crate::movement::table(shared))
+    }
+    /// `new` for an entry that already resolved its movement table. A fixture table
+    /// without a descriptor reads every field through the original accessor.
+    pub(crate) fn with_table(
+        shared: &'a crate::services::Services,
+        movement: &crate::movement::MovementServices,
+    ) -> Self {
+        let types = movement.tile_types.map_or_else(
+            || TileTypeAccess::callback(shared.tile_type),
+            // SAFETY: Game-loop and command entries exclude map reset/load/mutex yield.
+            |acquire| unsafe { TileTypeAccess::raw(acquire(), shared.tile_type) },
+        );
         Self {
             types,
             shared,

@@ -156,9 +156,27 @@ pub(crate) fn has_tile_road_type(
 
 #[allow(clippy::cast_possible_truncation)] // GB returns the original field width.
 impl crate::map_func::World<'_> {
-    pub(crate) fn normal_road(&self, t: u32) -> bool {
+    /// `GetRoadTileType`.
+    pub(crate) fn road_tile_type(&self, t: u32) -> crate::services::RoadTileKind {
+        get_road_tile_type(&self.types, t).unwrap_or_else(|| (self.shared.road_tile_kind)(t))
+    }
+    /// `IsNormalRoad`.
+    pub(crate) fn is_normal_road(&self, t: u32) -> bool {
+        self.road_tile_type(t).0 == ROAD_TILE_NORMAL
+    }
+    /// `IsNormalRoadTile`.
+    pub(crate) fn is_normal_road_tile(&self, t: u32) -> bool {
         self.kind(t) == crate::tile_type::MP_ROAD
             && is_normal_road(&self.types, t).unwrap_or_else(|| (self.shared.is_normal_road)(t))
+    }
+    /// `GetDisallowedRoadDirections`.
+    pub(crate) fn disallowed_road_directions(&self, t: u32) -> u8 {
+        get_disallowed_road_directions(&self.types, t)
+            .unwrap_or_else(|| (self.shared.disallowed_road_directions)(t))
+    }
+    /// `HasRoadWorks`.
+    pub(crate) fn has_road_works(&self, t: u32) -> bool {
+        has_road_works(&self.types, t).unwrap_or_else(|| (self.shared.has_road_works)(t))
     }
     pub(crate) fn road_bits(&self, t: u32, tram: bool) -> u8 {
         get_road_bits(&self.types, t, crate::services::RoadTramType(tram))

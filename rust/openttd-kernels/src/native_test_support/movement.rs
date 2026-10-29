@@ -6,7 +6,7 @@
  */
 
 //! Native oracle for the private production movement context.
-use super::{Context, MapObservations, table};
+use super::{Context, table};
 use crate::services::Services;
 use crate::tile_type::{MP_ROAD, MP_STATION, TileIndex};
 
@@ -19,55 +19,48 @@ pub(crate) fn map_read_probe(
     mutate: extern "C" fn(u32),
 ) -> bool {
     // SAFETY: The native probe supplies the same no-reset interval as its entry.
-    let observations = MapObservations {
-        dimensions: shared.map(),
+    let world = crate::map_func::World {
         types: unsafe { crate::map_func::TileTypeAccess::raw(allocation, shared.tile_type) },
+        shared,
+        dimensions: shared.map(),
     };
     let s = table(shared);
-    let context = Context::<true> {
-        s,
-        observations: Some(&observations),
-    };
+    let context = Context { s, world: &world };
     for pass in 0..2 {
         let kind = (shared.tile_type)(tile);
-        if context.tile_type(tile) != kind {
+        if world.kind(tile) != kind {
             return false;
         }
-        if crate::road_map::may_have_road(&observations.types, TileIndex(tile))
+        if crate::road_map::may_have_road(&world.types, TileIndex(tile))
             != Some((shared.may_have_road)(tile))
         {
             return false;
         }
-        let station = crate::station_map::get_station_type(&observations.types, TileIndex(tile));
+        let station = crate::station_map::get_station_type(&world.types, TileIndex(tile));
         if kind == MP_STATION {
             if station.map(|kind| kind.0) != Some((shared.station_type)(tile).0) {
                 return false;
             }
-        } else if observations.types.assertions() == station.is_some() {
+        } else if world.types.assertions() == station.is_some() {
             return false;
         }
         if kind == MP_ROAD && (shared.is_normal_road)(tile) {
-            if context.disallowed_road_directions(tile) != (shared.disallowed_road_directions)(tile)
-                || context.has_road_works(tile) != (shared.has_road_works)(tile)
+            if world.disallowed_road_directions(tile) != (shared.disallowed_road_directions)(tile)
+                || world.has_road_works(tile) != (shared.has_road_works)(tile)
             {
                 return false;
             }
             for kind in [crate::road_type::RTT_ROAD, crate::road_type::RTT_TRAM] {
-                if context.normal_road_bits(tile, kind)
-                    != (shared.normal_road_bits)(tile, u8::from(kind.0))
+                if world.road_bits(tile, kind.0)
+                    != (shared.normal_road_bits)(tile, u8::from(kind.0)).0
                 {
                     return false;
                 }
             }
-        } else if observations.types.assertions()
-            && (crate::road_map::get_road_bits(
-                &observations.types,
-                tile,
-                crate::road_type::RTT_ROAD,
-            )
-            .is_some()
-                || crate::road_map::get_disallowed_road_directions(&observations.types, tile)
-                    .is_some())
+        } else if world.types.assertions()
+            && (crate::road_map::get_road_bits(&world.types, tile, crate::road_type::RTT_ROAD)
+                .is_some()
+                || crate::road_map::get_disallowed_road_directions(&world.types, tile).is_some())
         {
             return false;
         }
@@ -77,25 +70,17 @@ pub(crate) fn map_read_probe(
                     return false;
                 }
             }
-        } else if observations.types.assertions()
-            && crate::road_map::has_tile_road_type(
-                &observations.types,
-                tile,
-                crate::road_type::RTT_ROAD,
-            )
-            .is_some()
+        } else if world.types.assertions()
+            && crate::road_map::has_tile_road_type(&world.types, tile, crate::road_type::RTT_ROAD)
+                .is_some()
         {
             return false;
         }
-        if !observations.types.assertions()
-            && (crate::road_map::get_road_bits(
-                &observations.types,
-                tile,
-                crate::road_type::RTT_TRAM,
-            )
-            .is_none()
+        if !world.types.assertions()
+            && (crate::road_map::get_road_bits(&world.types, tile, crate::road_type::RTT_TRAM)
+                .is_none()
                 || crate::road_map::has_tile_road_type(
-                    &observations.types,
+                    &world.types,
                     tile,
                     crate::road_type::RTT_TRAM,
                 )

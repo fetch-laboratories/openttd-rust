@@ -178,7 +178,7 @@ Define each source helper once in its header-named Rust module. Generated named
 ABI probes pin both layouts; preserve native helper assertions under the native
 assertion policy. Assertion-disabled builds gain no new panics or rejected
 inputs. A helper whose precondition fails calls the native assertion, as the
-original accessor does (`map_value` in movement.rs), never the C++ accessor, so
+original accessor does (`World::asserted` in tile_map.rs), never the C++ accessor, so
 a conversion deletes the service it replaces with its orphan bindings. Callers
 not yet converted keep their typed service until a port touches them.
 
@@ -203,8 +203,8 @@ mutation and reallocation. The view is map access only, not a storage transfer.
 
 #565's first maintenance batch extends the descriptor to standalone movement
 track-status and pixel-Z calls (including outside-map terrain), and water-ground
-restoration, flooding, tile-loop and neighbour entries. Cached road-controller
-entries keep their existing descriptor reuse. Pixel location, pixel slope,
+restoration, flooding, tile-loop and neighbour entries, each through
+`map_func::World`. Cached road-controller entries keep one `World` per entry. Pixel location, pixel slope,
 maximum pixel height and normal-road status-tail callbacks are removed; the
 header-named terrain helpers load canonical corner heights at each observation.
 The native assertion service retains failed-precondition behavior. Water/road

@@ -178,4 +178,38 @@ impl crate::map_func::World<'_> {
         );
         crate::bitmath_func::gb(u32::from(Self::byte(self.types.m1(t))), 0, 5) as u8
     }
+    /// `Map::SizeX` and `Map::SizeY` of the acquired allocation.
+    fn size(&self) -> (u32, u32) {
+        (
+            self.dimensions.size_x(),
+            self.types.count() >> self.dimensions.log_x,
+        )
+    }
+    fn asserted<T>(&self, value: Option<T>) -> T {
+        value.unwrap_or_else(|| {
+            self.check(false);
+            unreachable!("native map precondition")
+        })
+    }
+    /// `GetTilePixelSlope`.
+    pub(crate) fn tile_pixel_slope(&self, t: u32) -> (u8, i32) {
+        let (x, y) = self.size();
+        self.asserted(get_tile_pixel_slope(&self.types, t, x, y))
+    }
+    /// `GetTilePixelSlopeOutsideMap`.
+    pub(crate) fn tile_pixel_slope_outside_map(&self, x: i32, y: i32) -> (u8, i32) {
+        let (width, height) = self.size();
+        self.asserted(get_tile_pixel_slope_outside_map(
+            &self.types,
+            x,
+            y,
+            width,
+            height,
+        ))
+    }
+    /// `GetTileMaxPixelZ`.
+    pub(crate) fn tile_max_pixel_z(&self, t: u32) -> i32 {
+        let (x, y) = self.size();
+        self.asserted(get_tile_max_pixel_z(&self.types, t, x, y))
+    }
 }
