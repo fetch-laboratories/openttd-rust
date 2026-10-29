@@ -24,6 +24,8 @@
 #include "core/random_func.hpp"
 #include <thread>
 
+extern Company *DoStartupNewCompany(bool, CompanyID);
+
 static bool capture_events = false;
 static unsigned event_count = 0;
 extern "C" void __real__ZN4Game8NewEventEP11ScriptEvent(ScriptEvent *);
@@ -94,13 +96,13 @@ static void SortStateProbe(StoryPageID page, TileIndex tile, const EncodedString
 	Observe<CMD_REMOVE_STORY_PAGE_ELEMENT>("element-sort-reset-cleanup", run, reset);
 	_story_page_element_next_sort_value = saved_element;
 }
-static bool ObjectivesScenario([[maybe_unused]] uint8_t argc, const char * const *argv)
+static bool ObjectivesScenario(std::span<std::string_view> args)
 {
-	if (argc < 2) return false;
-	if (std::string_view(argv[1]) == "inspect") {
+	if (args.size() < 2) return false;
+	if (args[1] == "inspect") {
 		State();
 		Backup<CompanyID> actor(_current_company, OWNER_DEITY);
-		const auto text = GetEncodedString(STR_JUST_RAW_STRING, "reload");
+		const auto text = GetEncodedString(STR_JUST_RAW_STRING, std::string_view("reload"));
 		uint32_t page_sort = _story_page_next_sort_value, element_sort = _story_page_element_next_sort_value;
 		auto page = Created(Observe<CMD_CREATE_STORY_PAGE>("reload-page", DoCommandFlag::Execute, CompanyID::Invalid(), text));
 		auto element = Created(Observe<CMD_CREATE_STORY_PAGE_ELEMENT>("reload-element", DoCommandFlag::Execute, TileXY(10, 10), page, SPET_TEXT, 0, text));
@@ -114,8 +116,8 @@ static bool ObjectivesScenario([[maybe_unused]] uint8_t argc, const char * const
 	const CompanyID global = CompanyID::Invalid(), company = (*Company::Iterate().begin())->index;
 	CompanyID other = global;
 	for (const Company *c : Company::Iterate()) if (c->index != company) { other = c->index; break; }
-	if (other == global) { auto *c = DoStartupNewCompany(false); if (c == nullptr) std::abort(); other = c->index; _current_company = OWNER_DEITY; }
-	const EncodedString text = GetEncodedString(STR_JUST_RAW_STRING, "objectives"), empty;
+	if (other == global) { auto *c = DoStartupNewCompany(false, CompanyID::Invalid()); if (c == nullptr) std::abort(); other = c->index; _current_company = OWNER_DEITY; }
+	const EncodedString text = GetEncodedString(STR_JUST_RAW_STRING, std::string_view("objectives")), empty;
 	if (StoryPage::GetNumItems() == 0) _story_page_next_sort_value = UINT32_MAX;
 	const StoryPageID page = Created(Observe<CMD_CREATE_STORY_PAGE>("page-global", run, global, text));
 	const StoryPageID private_page = Created(Observe<CMD_CREATE_STORY_PAGE>("page-company", run, company, empty));
@@ -232,7 +234,7 @@ static bool ObjectivesScenario([[maybe_unused]] uint8_t argc, const char * const
 	for (unsigned i = 0; i < 128; ++i) Observe<CMD_CREATE_STORY_PAGE_ELEMENT>(fmt::format("page-cap-{}", i), run, tile, other_page, SPET_TEXT, 0, text);
 	Observe<CMD_CREATE_STORY_PAGE_ELEMENT>("page-cap-refused", run, tile, other_page, SPET_TEXT, 0, text);
 	State();
-	if (argc != 3 || SaveOrLoad(argv[2], SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false) != SL_OK) std::abort();
+	if (args.size() != 3 || SaveOrLoad(args[2], SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false) != SL_OK) std::abort();
 	fmt::print(stderr, "OBJECTIVES commands-complete\n");
 	actor.Restore();
 	return true;
