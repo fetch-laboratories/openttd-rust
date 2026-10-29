@@ -226,7 +226,7 @@ TEST_CASE("Road YAPF observes accepted traversal once after transient exits", "[
 		/* Raising tile 128's north corner gives it SLOPE_N under ROAD_X, so its
 		 * centre is above flat tile 129 and the accepted step pays the uphill penalty. */
 		map.base[128].height = 1;
-		map.shared.apply_foundation = [](Foundation f, Slope slope) noexcept -> OpenTTDFoundationSlope { int z = ApplyFoundationToSlope(f, slope); return {.z = z, .slope = slope}; };
+		map.shared.apply_foundation = GetRustSharedServices().apply_foundation;
 		OpenTTDRoadGroundServices road{};
 		road.all_bits = [](uint32_t t) noexcept { return static_cast<RoadBits>(FollowerFixture::active->base[t].m5 & 15); };
 		map.movement.road = &road;
