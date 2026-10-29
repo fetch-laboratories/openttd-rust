@@ -11,6 +11,8 @@ use crate::story_base::{
     SPET_BUTTON_PUSH, SPET_BUTTON_TILE, SPET_BUTTON_VEHICLE, SPET_GOAL, SPET_LOCATION, SPET_TEXT,
     StoryPageButtonData,
 };
+use crate::tile_type::TileIndex;
+use crate::vehicle_type::VehicleID;
 use crate::window_type::{
     WC_COMPANY_LEAGUE, WC_GOAL_QUESTION, WC_GOALS_LIST, WC_MAIN_TOOLBAR, WC_STORY_BOOK,
 };
@@ -94,7 +96,7 @@ pub struct Services {
     pub client_valid: extern "C" fn(u32) -> bool,
     pub subsidy: *const crate::subsidy::Services,
     pub road_commands: *const crate::road_cmd::RoadCommandServices,
-    pub vehicle_valid: extern "C" fn(u32) -> bool,
+    pub vehicle_valid: extern "C" fn(VehicleID) -> bool,
     pub text_empty: unsafe extern "C" fn(*const EncodedString) -> bool,
     pub text_assign: unsafe extern "C" fn(*mut EncodedString, *const EncodedString),
     pub window_data: extern "C" fn(u16, u32, i32),
@@ -104,8 +106,8 @@ pub struct Services {
     pub story_show: extern "C" fn(CompanyID, StoryPageID),
     pub question_event: extern "C" fn(u16, CompanyID, u32),
     pub push_event: extern "C" fn(CompanyID, StoryPageID, StoryPageElementID),
-    pub tile_event: extern "C" fn(CompanyID, StoryPageID, StoryPageElementID, u32),
-    pub vehicle_event: extern "C" fn(CompanyID, StoryPageID, StoryPageElementID, u32),
+    pub tile_event: extern "C" fn(CompanyID, StoryPageID, StoryPageElementID, TileIndex),
+    pub vehicle_event: extern "C" fn(CompanyID, StoryPageID, StoryPageElementID, VehicleID),
 }
 impl Services {
     fn shared(&self) -> &crate::services::Services {
@@ -159,12 +161,12 @@ impl Services {
     fn town_valid(&self, id: u32) -> bool {
         u16::try_from(id).is_ok_and(|id| unsafe { ((*self.road_commands).town_valid)(id) })
     }
-    fn tile_valid(&self, tile: u32) -> bool {
+    fn tile_valid(&self, tile: TileIndex) -> bool {
         let allocation = (self.map_allocation)();
         // SAFETY: command/lifecycle execution holds the mutex and cannot reset or yield the map.
         let map =
             unsafe { crate::map_func::TileTypeAccess::raw(allocation, self.shared().tile_type) };
-        crate::tile_map::is_valid_tile(&map, tile, allocation.count).unwrap()
+        crate::tile_map::is_valid_tile(&map, tile.0, allocation.count).unwrap()
     }
     fn goal_dirty(&self, company: CompanyID) {
         if company == CompanyID::INVALID {
@@ -186,7 +188,7 @@ pub unsafe extern "C" fn openttd_rust_valid_goal_destination(
 ) -> bool {
     match kind {
         GT_NONE => dest == 0,
-        GT_TILE => s.tile_valid(dest),
+        GT_TILE => s.tile_valid(TileIndex(dest)),
         GT_INDUSTRY => s.industry_valid(dest),
         GT_TOWN => s.town_valid(dest),
         // Company::IsValidID takes the full u32; IDs above u8 lie past the company pool.
@@ -433,7 +435,7 @@ unsafe fn verify_element(
     s: &Services,
     page: StoryPageID,
     kind: u8,
-    tile: u32,
+    tile: TileIndex,
     reference: u32,
     text: *const EncodedString,
 ) -> bool {
@@ -467,7 +469,7 @@ unsafe fn verify_element(
 unsafe fn update_element(
     s: &Services,
     element: *mut StoryPageElement,
-    tile: u32,
+    tile: TileIndex,
     reference: u32,
     text: *const EncodedString,
 ) {
@@ -476,7 +478,7 @@ unsafe fn update_element(
             SPET_TEXT => (s.text_assign)((s.element_text)(element), text),
             SPET_LOCATION => {
                 (s.text_assign)((s.element_text)(element), text);
-                (s.element_referenced_id)(element).write(tile);
+                (s.element_referenced_id)(element).write(tile.0);
             }
             SPET_GOAL => (s.element_referenced_id)(element).write(reference),
             SPET_BUTTON_PUSH | SPET_BUTTON_TILE | SPET_BUTTON_VEHICLE => {
@@ -539,7 +541,7 @@ unsafe fn each_element(s: &Services, mut visit: impl FnMut(*mut StoryPageElement
 pub unsafe extern "C" fn openttd_rust_create_story_page_element(
     s: &Services,
     flags: u16,
-    tile: u32,
+    tile: TileIndex,
     page: StoryPageID,
     kind: u8,
     reference: u32,
@@ -582,7 +584,7 @@ pub unsafe extern "C" fn openttd_rust_create_story_page_element(
 pub unsafe extern "C" fn openttd_rust_update_story_page_element(
     s: &Services,
     flags: u16,
-    tile: u32,
+    tile: TileIndex,
     id: StoryPageElementID,
     reference: u32,
     text: *const EncodedString,
@@ -745,9 +747,9 @@ pub unsafe extern "C" fn openttd_rust_remove_story_page_element(
 pub unsafe extern "C" fn openttd_rust_story_page_button(
     s: &Services,
     flags: u16,
-    tile: u32,
+    tile: TileIndex,
     id: StoryPageElementID,
-    reference: crate::vehicle_type::VehicleID,
+    reference: VehicleID,
 ) -> bool {
     unsafe {
         let element = (s.element)(id);
@@ -775,11 +777,11 @@ pub unsafe extern "C" fn openttd_rust_story_page_button(
                 }
             }
             SPET_BUTTON_VEHICLE => {
-                if !(s.vehicle_valid)(reference.0) {
+                if !(s.vehicle_valid)(reference) {
                     return false;
                 }
                 if execute(flags) {
-                    (s.vehicle_event)(current, page, id, reference.0);
+                    (s.vehicle_event)(current, page, id, reference);
                 }
             }
             _ => return false,
@@ -791,7 +793,7 @@ pub unsafe extern "C" fn openttd_rust_story_page_button(
 pub extern "C" fn openttd_rust_valid_link(s: &Services, kind: u8, target: u32) -> bool {
     match kind {
         LT_NONE => target == 0,
-        LT_TILE => s.tile_valid(target),
+        LT_TILE => s.tile_valid(TileIndex(target)),
         LT_INDUSTRY => s.industry_valid(target),
         LT_TOWN => s.town_valid(target),
         LT_COMPANY => u8::try_from(target).is_ok_and(|id| s.company_valid(CompanyID(id))),
