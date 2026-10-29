@@ -34,11 +34,11 @@ Agent: /root | Model: gpt-6.1-sol | Reasoning effort: xhigh.
   engine/group double credit and reduced the vehicle-base lifecycle estimate
   from 450–550 to 190–240 original code lines.
 - Speed uses the mean of the last three quiet passes, carried by the compatible
-  instruction projection, with ceilings 1.6x play and 1.3x generation. Profile26
+  instruction projection, with ceilings 1.6x play and 1.3x generation. Profile28
   matched all six comparisons; counts were below compatible anchor counts, so
   the projection floor applies. Every record is below its 1.52x/1.235x band:
 
-| Scenario | Latest quiet anchor | Profile26 projection | Three-pass record |
+| Scenario | Latest quiet anchor | Profile28 projection | Three-pass record |
 | --- | ---: | ---: | ---: |
 | TGP | 1.1117x | 1.1117x | 1.1541x |
 | Grok | 1.3871x | 1.3871x | 1.3857x |
@@ -47,10 +47,12 @@ Agent: /root | Model: gpt-6.1-sol | Reasoning effort: xhigh.
 | P2000 | 1.4006x | 1.4006x | 1.4014x |
 | P2016 | 1.5229x | 1.5229x | 1.4819x |
 
-- These are projections/records, not new wall measurements. No quiet pass or
-  extra attribution is selected. The integration-28 profile follows on fixed
-  code `7105e24d49`; retain compatible anchors and candidate profiles. The due
-  rotated deep run follows #557. Profile26 gives P2016 13,271,006,581 loop
+- These are projections/records, not new wall measurements. Profile28 on fixed
+  code `7105e24d49` matched all six comparisons, with compatible anchor
+  identities and lower instruction counts than profile26. No projection rose;
+  no quiet pass or extra attribution is selected. Retain compatible anchors and
+  candidate profiles. The due rotated deep run follows #557. Profile28 gives
+  P2016 13,268,112,902 loop
   instructions; the retained profile attributed 99% of its original gap to
   widely spread boundary glue, so ownership/storage remains the useful repair.
 - Evidence: original coverage retains 330 of 449 completed traces; the bounded
@@ -331,12 +333,12 @@ six-branch limit and disjoint-service rule; completing review/integration takes
 priority. A lower rank can run while a higher one waits. Scopes live in issues.
 
 1. **Finish existing components in readiness order.** #554's internal clock/
-   setup export cleanup is pushed at `fe7c4ec429`; Cargo/build/clocks/session
-   pass and a fresh scoped review follows. Preserve reviewed #557, combine the
-   final heads on current base, inspect conflicts and run exact-head Full.
-   #568 adopts integrated #571, then gets independent review and Full. #569
-   finishes its two remaining native fixture failures, adopts #571, completes
-   evidence, then gets review and Full. No reviewed owner gains new scope.
+   setup cleanup passed scoped review; its reviewed #557 combination is #577.
+   Repair the standalone probe link failure, then run current-base exact-head
+   Full again. #568 adopted #571 and completed source review with one accessor
+   fix; inspect its checks before final base adoption and Full. #569 adopted
+   #571 and repaired its fixtures; finish verification, evidence and review.
+   No reviewed owner gains new scope.
 2. **#565 map fields in place.** The common helper is integrated; assign the
    next available component slot now. Convert the hottest road/water, pixel
    height and slope crossings and delete their wrappers/slots. Keep follower
@@ -422,27 +424,28 @@ Excluded, with return conditions checked by this review:
   near-full reproduction under #513's original-default setting policy.
   #513 needs implementation when the first such improvement is accepted.
 
-## Resume checkpoint (2026-10-28, integration 28)
+## Resume checkpoint (2026-10-29, integration 28)
 
-Integrated code is `7105e24d49`; this stocktake selects #565/#572 for the two
-free slots. The four existing components remain #554, #557, #568 and #569.
+Integrated code is `7105e24d49`; all six component slots are occupied by #554,
+#557, #568, #569, #576 (#565) and #578 (#572).
 Root serializes final integration; ordinary issue/PR status carries detailed
 validation and the single task comments carry running checks.
 
 | Item | Saved state | Next action on resume |
 | --- | --- | --- |
 | #564 / #567 and #199 / #571 | Integrated 27/28 at `d8704269c7` / `7105e24d49`, reviewed and exact-head Full passed. CI_ON_DEMAND restored; watches off. | Verified merged-only cleanup; no further source work. |
-| #554 | Root repair `fe7c4ec429` pushed; Cargo/build and clocks/session semantics pass. | Fresh scoped review, then combine its final head with reviewed #557. |
+| #554 | Internal-call cleanup passed scoped review; current base adopted without source conflicts. | Finish the standalone landscape probe link repair and carry it into #577. |
 | #557 | Reviewed `9db71fb247`; no Full; behind base. | Preserve ordinary-build prerequisite and combine with final #554. |
-| #554/#557 combination | Saved unpushed older branch/worktree remains. | Reassemble on current base; inspect source conflicts; integration PR and exact-head Full. |
-| #560 / #569 | Root checkpoint `d9c4f42d2f`; Python checks/preflight pass; 214/216 native pass, two fixture cases still fail. Semantics unrun. | Finish fixture fidelity, adopt integrated #571, evidence, metrics and independent review. |
-| #562 / #568 | Handoff `bd54247bee`; 20 affected scenarios and targeted checks pass. | Adopt #571, run touched checks, then independent review and Full. |
-| #565 / #572 | Selected for the two available component slots. | Assign map-boundary maintenance and the complete objectives owner; keep at most six branches. |
+| #554/#557 combination / #577 | Reviewed combination; Full failed a standalone landscape probe link, while game builds and simulation shards passed. | Adopt the fixture repair and current docs base, inspect source conflicts, then request exact-head Full again. |
+| #560 / #569 | `3c8fc5c365` contains #571, both YAPF fixture repairs and the duplicate-module/baseline repairs. Verification and follower semantics running. | Read results, finish affected evidence and metrics, then independent review. |
+| #562 / #568 | Helper adoption passed 20 scenarios and touched checks; review fixed one duplicate spec lookup at `d6738e9d4e`. Targeted checks pending. | Spot-check the fix and results, then final base adoption and Full. |
+| #565 / #576 | `797591efb0` passes local validation and 50 semantic scenarios; final net glue +13 is within root's accepted bounded cost. | Independent review; preserve the documented #569 fixture overlap and remaining #565 scope. |
+| #572 / #578 | Draft objectives owner; validation pending and the first cost disposition requires Rust ownership of both story sort counters. | Complete the bounded state repair and checks, then independent review. |
 | #561 | Corrected sizing and existing group-owner reuse; queued after #554/#557. | Start when that combination integrates and a slot is available. |
 | #563 / #570 / #566 | Design accepted in world-state.md; #563 closed; records and drawing queued. | Assign under earliest-ready phase order; #566 before storage integration. |
 | #573 / #574 / #575; #497 / #498 | Phase-3 issues queued from the fresh source-sized survey; definition issues include canonical payload ownership. | No implementation yet; select disjoint complete owners when earlier phases leave slots. |
 | #503 | 330 of 449 original traces complete; bounded clock preparation unstarted. | Work order item 11; deep rotation after #557. |
-| Profiles | Profile26 complete, all records below band; profile28 source fixed at `7105e24d49`. | Launch/read profile28; retain compatible anchors and candidate traces. No quiet pass due. |
+| Profiles | Profile28 at `7105e24d49` matches all six comparisons; no projection rose and every decision record remains below band. | Retain compatible anchors and candidate traces. Next profile after integration30; no quiet pass due. |
 
 Worktrees kept for the unfinished tasks and their evidence:
 
