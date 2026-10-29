@@ -425,19 +425,25 @@ Excluded, with return conditions checked by this review:
 
 ## Resume checkpoint
 
-Paused at the user's request. Code remains at `06ed8c4a6f` (#555, the
-twenty-fifth integration). No confirmed code regression or rollback target
-exists. No subagent, build, simulation, deep check or instruction profile is
-running.
+Resumed under Codex root (`gpt-6.1-sol`, xhigh). Code remains at `06ed8c4a6f`
+(#555, the twenty-fifth integration). No confirmed code regression or rollback
+target exists. Five delegated tasks cover #564, #554's boundary repair, #558's
+fresh review, #560 and #562. These reserve all six unintegrated component
+branches, including #557. Issue placement is complete; startup housekeeping
+removed 2.8 GB of merged worktrees and stale output. Cadence CI is running;
+its result must be read before integration. No deep check or instruction
+profile is due before the events below.
 
 | Item | Saved state | Next action on resume |
 | --- | --- | --- |
-| Cadence | Run `40719341427` at `06ed8c4a6f` failed on infrastructure: vcpkg libogg 502 on both Windows jobs, and no macOS runner. | Re-dispatch (work order item 2) and read it before any further integration. |
-| #554 | Reviewed head `6058f4b898`; no Full at any head; branch is behind. The steering audit's four boundary items must be fixed first. | Apply the PR comment's items, run a fresh fixing review, then go to the combination row. |
+| Cadence | Re-dispatched on the current integrated tip; run link is in root's status on #3. The previous failure was vcpkg libogg 502 and macOS hosted capacity. | Read before integration. A repeat 502 selects a binary-cache repair; a second macOS capacity cancellation selects the temporary Blacksmith runner. |
+| #564 | Tooling implementation assigned to `/root/tooling564`; draft and checks pending. | Review the first concrete cost and metric output, then assign independent review. Its metric lands before the next ranking round. |
+| #554 | `/root/session554-boundary` is applying the four steering corrections to reviewed head `6058f4b898`; no Full, branch behind. | Fresh fixing review after the repair, then go to the combination row. |
 | #557 | Reviewed head `9db71fb247`; local checks and fixing review pass. No Full at any head; branch is behind. | Keep it with disjoint #554 in the combination. Keep the same-revision ordinary-build prerequisite for sanitizer-only rounds. |
 | #554/#557 combination | Unpushed branch `integrate/session-and-deep-rotation`, head `e9b72a04ec`, in `.local/worktrees/integration554557`. | After #554's fixes, update from current base, inspect conflicts, open the integration PR and run Full for its final head. |
-| #558 | Draft head `c919a1a298`. The ordinary semantic case and isolated M23 sensitivity pass. No fresh fixing review and no Full yet. | Fresh fixing review, current base, exact-head Full. |
-| #560, #561, #562, #563, phase 3 planning | Selected by this review; not started. | Follow the work order. |
+| #558 | Fresh fixing review assigned to `/root/review558` at draft head `c919a1a298`. The ordinary semantic case and isolated M23 sensitivity pass; no Full. | Spot-check any fixes, update from current base and request exact-head Full. |
+| #560 and #562 | Ownership assigned to `/root/follower560` and `/root/station562`, respectively, from integrated base. `GetPlatformLength` stays with #560. | Assess each first concrete boundary and cost, then independent review of completed heads. |
+| #561, #563, phase 3 planning | Selected; waiting for slots. | #563's design takes the next agent slot; #561 waits for the #554/#557 integration. Ranking waits for #564's metric. |
 | #565, #566 | Selected by the 2026-10-28 navigation; not started. #563's design brief and #564's metric item changed with them. | Follow the work order. |
 | #503 | Coverage has 330 of 449 complete traces; the clock-preparation fix is not started. | Work order item 14. |
 | Profiles and deep | Profile24 complete. The rotated deep run is due after #557. The next profile follows the twenty-sixth integration. | Keep due work pending and preserve anchor and runtime dependencies. |
@@ -452,7 +458,7 @@ Worktrees kept for the unfinished tasks and their evidence:
 | #558 implementation, passing case and retained failures | `.local/worktrees/town-road-input` |
 | Fixed original coverage | `/home/fetch/.t3/worktrees/openttd-rust/t3-117e7bcf` at `e52d475713` |
 | Completed deep and instruction evidence | `.local/worktrees/deep-74cea95cf8`, `.local/worktrees/profile-after18-544`, `.local/worktrees/profile-after20-545`, and `/home/fetch/.t3/worktrees/openttd-rust/t3-1ef78f07` and `t3-e3e3aaeb` (profile24's six candidate profiles) |
-| Merged-only cleanup | #555's `.local/worktrees/final555`, `/home/fetch/.t3/worktrees/openttd-rust/t3-44edd90d` and `t3-c2c51eb8`; housekeeping removes them on resume. |
+| Merged-only cleanup | #555's final integration, implementation and review worktrees were removed by startup housekeeping. |
 
 Relative project paths are under `/home/fetch/projects/openttd-rust`; shortened
 T3 names share `/home/fetch/.t3/worktrees/openttd-rust/`. Other research
