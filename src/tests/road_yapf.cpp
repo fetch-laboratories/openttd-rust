@@ -203,10 +203,11 @@ TEST_CASE("Road YAPF low-limit timing and exit-key replacement match reference",
 	}
 }
 
-/* Production traversal reads heights and observes vehicle/type limits only after
+/* Vehicle/type limits are observed once per accepted continuation, after
  * transient rejection, destination, junction and cost-limit checks. */
 namespace RoadOrder {
 inline uint32_t goal;
+inline std::vector<char> limits;
 OpenTTDRoadYapfTile Tile(const void *, uint32_t tile, uint8_t, bool) noexcept {
 	OpenTTDRoadYapfTile out{}; out.type = FollowerFixture::active->shared.tile_type(tile); out.depot = tile == goal; out.depot_dir = DIAGDIR_SW; return out;
 }
@@ -229,13 +230,18 @@ TEST_CASE("Road YAPF observes accepted traversal once after transient exits", "[
 		OpenTTDRoadGroundServices road{};
 		road.all_bits = [](uint32_t t) noexcept { return static_cast<RoadBits>(FollowerFixture::active->base[t].m5 & 15); };
 		map.movement.road = &road;
-		map.movement.road_type_speed = [](RoadType) noexcept -> uint16_t { return 40; };
+		RoadOrder::limits.clear();
+		map.physics.display_max_speed = [](OpenTTDVehicle *) noexcept -> int32_t { RoadOrder::limits.push_back('D'); return 100; };
+		map.movement.order_speed = [](OpenTTDVehicle *) noexcept -> uint16_t { RoadOrder::limits.push_back('O'); return 40; };
+		map.movement.road_type_speed = [](RoadType) noexcept -> uint16_t { RoadOrder::limits.push_back('R'); return 40; };
 		auto leaves = probe_leaves; leaves.shared = &map.shared; leaves.tile = RoadOrder::Tile;
 		OpenTTDRoadYapfInput input{}; input.map_x = input.map_y = 64; input.tile = 130; input.slope = 17;
 		auto result = openttd_rust_road_yapf_depot(&input, &leaves, map.Vehicle(), mode == MaxCost ? 99 : 0);
 		if (mode == Accepted) {
+			CHECK((RoadOrder::limits == std::vector<char>{'D', 'O', 'R'}));
 			CHECK(result.found == 1); CHECK(result.cost == 417);
 		} else {
+			CHECK(RoadOrder::limits.empty());
 			if (mode == Destination) { CHECK(result.found == 1); CHECK(result.cost == 100); }
 			if (mode == Startup) { CHECK(result.found == 1); CHECK(result.cost == 0); }
 			if (mode == Rejected || mode == MaxCost) CHECK(result.found == 0);
