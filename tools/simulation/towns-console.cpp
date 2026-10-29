@@ -48,6 +48,7 @@
 #include "water_map.h"
 #include "road_map.h"
 #include "road_cmd.h"
+#include "road.h"
 #include "object_map.h"
 #include "tunnelbridge_cmd.h"
 #include <map>
@@ -663,6 +664,49 @@ static std::pair<uint, uint> AllowConstructionTiles()
 	}
 	return counts;
 }
+static bool RoadTypeGrowthScenario()
+{
+	/* TownCanGrowRoad permits a slower town-buildable type while GetTownRoadType prefers ROAD. */
+	extern RoadTypeInfo _roadtypes[ROADTYPE_END];
+	const RoadType alternate = static_cast<RoadType>(2);
+	_roadtypes[alternate] = _roadtypes[ROADTYPE_ROAD];
+	_roadtypes[alternate].label = 0x54475232;
+	_roadtypes[alternate].max_speed = 1;
+	_roadtypes[alternate].flags.Set(RoadTypeFlag::TownBuild);
+	_roadtypes[alternate].powered_roadtypes.Set(alternate);
+	_roadtypes[ROADTYPE_ROAD].powered_roadtypes.Set(alternate);
+#ifdef WITH_RUST
+	extern RoadTypes &_roadtypes_road;
+#else
+	extern RoadTypes _roadtypes_road;
+#endif
+	_roadtypes_road.Set(alternate);
+	Backup<CompanyID> owner(_current_company, OWNER_DEITY);
+	HouseDefinitionNeed(Town::GetNumItems() > 0, "road-growth-town");
+	HouseDefinitionNeed(GetTownRoadType() == ROADTYPE_ROAD, "road-growth-selected");
+	HouseDefinitionNeed(Command<CMD_CONVERT_ROAD>::Do(DoCommandFlag::Execute, TileXY(Map::SizeX() - 2, Map::SizeY() - 2), TileXY(1, 1), alternate, false).Succeeded(), "road-growth-conversion");
+	std::vector<RoadBits> before(Map::Size(), ROAD_NONE);
+	uint converted = 0;
+	for (TileIndex tile : Map::Iterate()) {
+		if (!IsTileType(tile, MP_ROAD) || !IsNormalRoad(tile)) continue;
+		before[tile.base()] = GetRoadBits(tile, RTT_ROAD);
+		converted += GetRoadTypeRoad(tile) == alternate;
+	}
+	HouseDefinitionNeed(converted > 0, "road-growth-input");
+	fmt::print(stderr, "TOWN road-growth input {} {} {} {}\n", GetTownRoadType(), alternate, _roadtypes[alternate].flags.base(), converted);
+	HouseDefinitionNeed(CmdExpandTown(DoCommandFlag::Execute, (*Town::Iterate().begin())->index, 128, {TownExpandMode::Roads}).Succeeded(), "road-growth-expansion");
+	uint added = 0, changed = 0;
+	for (TileIndex tile : Map::Iterate()) {
+		if (!IsTileType(tile, MP_ROAD) || !IsNormalRoad(tile)) continue;
+		RoadBits bits = GetRoadBits(tile, RTT_ROAD);
+		added += before[tile.base()] == ROAD_NONE && bits != ROAD_NONE;
+		changed += before[tile.base()] != ROAD_NONE && before[tile.base()] != bits;
+	}
+	HouseDefinitionNeed(added + changed > 0, "road-growth-physical-change");
+	fmt::print(stderr, "TOWN road-growth output {} {} {} {} {} {}\n", added, changed, _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]);
+	owner.Restore();
+	return true;
+}
 static bool HouseDefinitionsScenario(std::span<std::string_view> args)
 {
 	if (args[1] == "definitions-inspect") {
@@ -732,6 +776,7 @@ static bool HouseDefinitionsScenario(std::span<std::string_view> args)
 static bool TownsScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
+	if (args[1] == "road-types") return RoadTypeGrowthScenario();
 	if (args[1].starts_with("definitions")) return HouseDefinitionsScenario(args);
 	if (args[1].starts_with("storage")) return StorageScenario(args);
 	if (args[1] == "authority" || args[1] == "authority-inspect") return CommandsScenario(args);
