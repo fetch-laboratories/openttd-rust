@@ -82,9 +82,12 @@ static void Trees()
 		.news = TreeUnused<void, OpenTTDVehicle *, uint32_t>,
 	};
 	shared.water_services = []() noexcept { return &water; };
-	/* Water entries resolve the map view through this registry; without a descriptor
-	 * every map field is read through tile_type. */
-	static const OpenTTDMovementServices movement{};
+	static std::array<TileBaseStorage, 4096> map_tiles{};
+	static const std::array<TileExtendedStorage, 4096> map_extended{};
+	for (uint32_t tile = 0; tile < map_tiles.size(); ++tile) map_tiles[tile].type = (tile == 1 || tile == 2 ? MP_TREES : MP_STATION) << 4;
+	static const OpenTTDMovementServices movement{
+		.tile_types = []() noexcept -> OpenTTDTileTypeAllocation { return {map_tiles.data(), map_extended.data(), 4096, true}; },
+	};
 	shared.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
 	shared.map_log_x = []() noexcept { return 6U; };
 	shared.map_max_x = []() noexcept { return 63U; };

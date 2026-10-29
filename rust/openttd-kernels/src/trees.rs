@@ -1473,12 +1473,41 @@ mod tests {
         }; }
         WATER.with(std::ptr::from_ref)
     }
-    // Water entries resolve the map view through the movement registry; this one
-    // has no descriptor, so every map field is read through `tile_type`.
+    // Water entries use the same immutable tree tiles as `water_type`.
     extern "C" fn movement_services() -> *const crate::movement::MovementServices {
-        thread_local! { static MOVEMENT: crate::movement::MovementServices =
-        crate::train_reservation::tests::movement_table(); }
+        thread_local! { static MOVEMENT: crate::movement::MovementServices = {
+            let mut movement = crate::train_reservation::tests::movement_table();
+            movement.tile_types = Some(water_map);
+            movement
+        }; }
         MOVEMENT.with(std::ptr::from_ref)
+    }
+    extern "C" fn water_map() -> crate::map_func::TileTypeAllocation {
+        use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation};
+        static BASE: [BaseTileLayout; 4096] = [const {
+            BaseTileLayout {
+                kind: MP_TREES << 4,
+                height: 0,
+                m2: 0,
+                m1: 0,
+                m3: 0,
+                m4: 0,
+                m5: 0,
+            }
+        }; 4096];
+        static EXTENDED: [ExtendedTileLayout; 4096] = [const {
+            ExtendedTileLayout {
+                m6: 0,
+                m7: 0,
+                m8: 0,
+            }
+        }; 4096];
+        TileTypeAllocation {
+            base: BASE.as_ptr(),
+            extended: EXTENDED.as_ptr(),
+            count: 4096,
+            assertions: true,
+        }
     }
     extern "C" fn sound(_: u32, id: u16) {
         log(Event::Sound(id));
