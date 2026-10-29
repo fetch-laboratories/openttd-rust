@@ -1468,3 +1468,10 @@ mod session;
 
 mod fileio_type;
 mod saveload;
+
+mod goal_type;
+mod league_type;
+mod objectives;
+mod story_base;
+mod story_type;
+mod window_type;

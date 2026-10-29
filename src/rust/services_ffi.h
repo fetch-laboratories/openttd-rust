@@ -90,8 +90,6 @@ struct OpenTTDSharedServices {
 	uint8_t (*bridge_axis)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bridge_axis);
 	uint16_t (*bridge_speed)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bridge_speed);
 	bool (*build_on_slopes)() noexcept OPENTTD_SERVICE_DEFAULT(build_on_slopes);
-	int32_t (*calendar_date)() noexcept OPENTTD_SERVICE_DEFAULT(calendar_date);
-	int32_t (*calendar_year)() noexcept OPENTTD_SERVICE_DEFAULT(calendar_year);
 	OpenTTDClearSquareServices clear_square_services;
 	const OpenTTDTownHandle *(*calc_closest_town)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(calc_closest_town);
 	const OpenTTDTownHandle *(*closest_town)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(closest_town);
@@ -104,7 +102,6 @@ struct OpenTTDSharedServices {
 	bool (*disaster_sound)() noexcept OPENTTD_SERVICE_DEFAULT(disaster_sound);
 	uint32_t (*distance_from_edge)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(distance_from_edge);
 	uint8_t (*drive_through_axis)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(drive_through_axis);
-	int32_t (*economy_date)() noexcept OPENTTD_SERVICE_DEFAULT(economy_date);
 	bool (*forbid_90_deg)() noexcept OPENTTD_SERVICE_DEFAULT(forbid_90_deg);
 	void (*free_train_reservation)(const Train *) noexcept OPENTTD_SERVICE_DEFAULT(free_train_reservation);
 	bool (*has_road_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_road_type);

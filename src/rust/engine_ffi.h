@@ -56,7 +56,6 @@ struct OpenTTDEngineServices {
 	OpenTTDEngineSeed (*seed_config)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(seed_config);
 	int32_t (*base_intro)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(base_intro);
 	OpenTTDEngineYear (*aging_year)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(aging_year);
-	int32_t (*calendar_year)() noexcept OPENTTD_SERVICE_DEFAULT(calendar_year);
 	bool (*never_expire)() noexcept OPENTTD_SERVICE_DEFAULT(never_expire);
 	OpenTTDEngineStartSettings (*start_settings)() noexcept OPENTTD_SERVICE_DEFAULT(start_settings);
 	uint16_t (*train_limit)() noexcept OPENTTD_SERVICE_DEFAULT(train_limit);
