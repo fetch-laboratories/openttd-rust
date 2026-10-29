@@ -3643,7 +3643,7 @@ static void RustIndustryNews(Industry *i, StringID str, bool close) noexcept
 }
 
 static Industry *RustIndustry(void *handle) noexcept { return static_cast<Industry *>(handle); }
-static const IndustrySpec *RustIndustrySpec(void *handle) noexcept { return GetIndustrySpec(RustIndustry(handle)->type); }
+static const IndustrySpec *RustIndustrySpec(void *handle) noexcept { return RustIndustryTypeSpec(RustIndustry(handle)->type); }
 
 /** One typed noexcept slot per original operation, in industry_ffi.h order. */
 static const OpenTTDIndustryServices _industry_services = {
