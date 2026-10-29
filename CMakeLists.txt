@@ -24,14 +24,6 @@ if (EMSCRIPTEN)
 endif()
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
-if(APPLE AND OPTION_RUST)
-    if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
-        set(CMAKE_OSX_DEPLOYMENT_TARGET 11.0 CACHE STRING "macOS deployment minimum" FORCE)
-    endif()
-else()
-    set(CMAKE_OSX_DEPLOYMENT_TARGET 10.15)
-endif()
-
 # Use GNUInstallDirs to allow customisation
 # but set our own default data and bin dir
 if(NOT CMAKE_INSTALL_DATADIR)
@@ -45,6 +37,14 @@ include(GNUInstallDirs)
 include(Options)
 set_options()
 set_directory_options()
+
+if(APPLE AND OPTION_RUST)
+    if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+        set(CMAKE_OSX_DEPLOYMENT_TARGET 11.0 CACHE STRING "macOS deployment minimum" FORCE)
+    endif()
+else()
+    set(CMAKE_OSX_DEPLOYMENT_TARGET 10.15)
+endif()
 
 include(Static)
 set_static_if_needed()
