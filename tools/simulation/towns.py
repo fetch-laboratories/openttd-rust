@@ -825,6 +825,8 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
     folder = out / scenario["name"] / "input"
     executables = prepared_console("towns", adapter, binaries, builds, folder, env)
     scenario = dict(scenario, executables=executables)
+    if scenario["town_founding"] == "road-types":
+        return dict(scenario, console=["towns_scenario road-types", "unpause"])
     if scenario["town_founding"] == "storage":
         from .core import normalize
 
@@ -1100,6 +1102,40 @@ def game_environment(scenario):
     )
 
 
+class TownRoadTypeGrowthCapture(TypedDict):
+    selected_type: int
+    existing_type: int
+    converted_tiles: int
+    added_road_tiles: int
+    changed_road_tiles: int
+    random_state: tuple[int, int, int, int]
+
+
+def check_road_type_growth(run: dict[str, Any]) -> TownRoadTypeGrowthCapture:
+    inputs = [line for line in run["log"] if line.startswith("TOWN road-growth input ")]
+    outputs = [
+        line for line in run["log"] if line.startswith("TOWN road-growth output ")
+    ]
+    if len(inputs) != 1 or len(outputs) != 1:
+        raise RuntimeError("town road-type growth observations missing")
+    selected, existing, flags, converted = map(int, inputs[0].split()[3:])
+    added, changed, r0, r1, i0, i1 = map(int, outputs[0].split()[3:])
+    if selected == existing or not flags & 16 or converted <= 0:
+        raise RuntimeError(
+            "town growth did not use a differing town-buildable road type"
+        )
+    if added + changed <= 0:
+        raise RuntimeError("town road-type growth did not change physical roads")
+    return TownRoadTypeGrowthCapture(
+        selected_type=selected,
+        existing_type=existing,
+        converted_tiles=converted,
+        added_road_tiles=added,
+        changed_road_tiles=changed,
+        random_state=(r0, r1, i0, i1),
+    )
+
+
 def scenarios(soak):
     scenarios = []
     for style, label in enumerate(TOWN_STYLES):
@@ -1132,6 +1168,21 @@ def scenarios(soak):
         + command_scenarios(soak)
         + [
             {
+                "name": "town-growth-differing-road-type",
+                "kind": "generate",
+                "seed": 1,
+                "map_log2": 7,
+                "land_generator": 1,
+                "town_founding": "road-types",
+                "short_checkpoint": True,
+                "ticks": 1,
+                "settings": {
+                    "difficulty": {"number_towns": 4},
+                    "game_creation": {"custom_town_number": 12},
+                    "economy": {"town_layout": 0},
+                },
+            },
+            {
                 "name": "town-storage-reload",
                 "witnesses": not soak,
                 "kind": "save",
@@ -1139,7 +1190,7 @@ def scenarios(soak):
                 "town_founding": "storage",
                 "short_checkpoint": True,
                 "ticks": 1,
-            }
+            },
         ]
     )
 
@@ -1480,7 +1531,9 @@ def check_bribes(scenario, run, mode, role, result):
 
 
 def check(scenario, run, mode, role, result):
-    if scenario.get("town_founding") == "definitions" and not run["exit"]:
+    if scenario.get("town_founding") == "road-types" and not run["exit"]:
+        result[f"{mode}_{role}_road_type_growth"] = check_road_type_growth(run)
+    elif scenario.get("town_founding") == "definitions" and not run["exit"]:
         if "TOWN definition-reloaded true" not in run["log"]:
             raise RuntimeError(
                 "house definition HIDS/occupied tile reload witness missing"
