@@ -10,6 +10,7 @@
 #define TESTS_LANDSCAPE_PROTOCOL_HPP
 #include "../tile_cmd.h"
 #include "../rust/landscape_loop_ffi.h"
+#include "../rust/station_lifecycle_ffi.h"
 #include "../rust/tile_owner_ffi.h"
 #include "../rust/abi_ffi.h"
 #include <array>
@@ -18,7 +19,7 @@
 namespace LandscapeProbe {
 static_assert(std::is_same_v<TileLoopProc, void(uint32_t) noexcept>);
 static_assert(std::is_same_v<decltype(&openttd_rust_run_tile_loop), void (*)(unsigned int, unsigned int, OpenTTDTreeLoopSettings, const OpenTTDLandscapeLoopServices *)>);
-static_assert(std::is_same_v<decltype(OpenTTDLandscapeLoopServices::station_loop), TileLoopProc *>);
+static_assert(std::is_same_v<decltype(OpenTTDLandscapeLoopServices::station_loop), decltype(&openttd_rust_station_tile_loop)>);
 static inline uint32_t calls, reads, seen, expected_tile;
 static inline bool passed;
 static constexpr std::array<uint8_t, 4> NATIVE_TYPES{5, 10, 10, 5}; // Other kinds dispatch to Rust owners.
@@ -58,7 +59,8 @@ template<typename Check> void Run(Check check)
 		.industry = {},
 		.ground = {},
 		.town = nullptr,
-		.station_loop = Visit<5>,
+		.station_loop = [](const OpenTTDStationLifecycleServices *, uint32_t tile, OpenTTDGroundCall *) { Visit<5>(tile); },
+		.station = nullptr,
 		.objects = &objects,
 	};
 	const OpenTTDTreeLoopSettings settings{.tick_counter = 1, .size_x = 64, .climate = 0, .extra = 0, .ambient = false, .ambient_callback = false};

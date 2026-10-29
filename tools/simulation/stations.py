@@ -121,6 +121,14 @@ def scenarios(soak):
                 "airport-reload",
                 "catchment",
                 "catchment-reload",
+                "owner562-names",
+                "owner562-names-reload",
+                "owner562-arctic",
+                "owner562-arctic-reload",
+                "owner562-tropic",
+                "owner562-tropic-reload",
+                "owner562-delete",
+                "owner562-delete-reload",
             )
         ]
     )
@@ -966,6 +974,15 @@ static bool StationCommands(std::span<std::string_view> args)
 	_settings_game.construction.road_stop_on_competitor_road = true;
 	const DoCommandFlags test{DoCommandFlag::NoTestTownRating};
 	const DoCommandFlags exec{DoCommandFlag::Execute, DoCommandFlag::NoTestTownRating};
+	if (args[1].starts_with("owner562-")) {
+		bool reload = args[1].ends_with("inspect"), stage = args[1].ends_with("stage");
+		TileIndex origin = reload ? INVALID_TILE : StationPatch();
+		if (args[1].starts_with("owner562-names")) { if (reload) Station562InspectNames(); else Station562Names(origin, exec); }
+		else if (args[1].starts_with("owner562-delete")) Station562Delete(origin, reload, stage);
+		else Station562Waypoints(reload ? INVALID_TILE : origin + TileDiffXY(2, 2), exec, args[1].starts_with("owner562-arctic"), reload);
+		if (!reload && args.size() == 3) StationNeed(SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false) == SL_OK, __LINE__);
+		fmt::print(stderr, "STCMD complete\n"); current.Restore(); return true;
+	}
 	if (args[1].starts_with("airport-definitions")) {
 		bool reload = args[1].ends_with("inspect");
 		if (!reload) { StationNeed(args.size() >= 3, __LINE__); AirportDefinitionLoad(args[2]); }
@@ -1269,6 +1286,10 @@ extern "C" void __wrap__Z22IConsoleStdLibRegisterv() { __real__Z22IConsoleStdLib
 
 
 RELOADS = {
+    "owner562-names-reload": ("owner562-names", "owner562-names-inspect"),
+    "owner562-arctic-reload": ("owner562-arctic", "owner562-arctic-inspect"),
+    "owner562-tropic-reload": ("owner562-tropic", "owner562-tropic-inspect"),
+    "owner562-delete-reload": ("owner562-delete-stage", "owner562-delete-inspect"),
     "airport-definitions-reload": (
         "airport-definitions",
         "airport-definitions-inspect",
@@ -1303,7 +1324,8 @@ def adapter(build, folder, env):
         ).replace(
             "// OWNER399",
             (ROOT / "tools/simulation/station-resolver-console.hpp").read_text()
-            + (ROOT / "tools/simulation/airport-resolver-console.hpp").read_text(),
+            + (ROOT / "tools/simulation/airport-resolver-console.hpp").read_text()
+            + (ROOT / "tools/simulation/station-lifecycle-console.hpp").read_text(),
         )
     )
     return console_adapter(
@@ -1644,6 +1666,21 @@ def check_airport_definition_state(snapshots: list[Path], log: list[str]) -> Non
 
 
 def check_commands(scenario, run, mode, role, result):
+    if scenario["station_commands"].startswith("owner562-"):
+        kind = scenario["station_commands"].split("-")[1]
+        required = {
+            "names": "STCMD owner562-name ",
+            "arctic": "STCMD owner562-ground true 3 false 1",
+            "tropic": "STCMD owner562-ground false 3 true 1",
+            "delete": "STCMD owner562-delete after 5 1 0",
+        }[kind]
+        if not any(line.startswith(required) for line in run["log"]):
+            raise RuntimeError("station owner fixture did not reach " + kind)
+        if "STCMD complete" not in run["log"] or not any(
+            line.startswith("STCMD owner562-rng ") for line in run["log"]
+        ):
+            raise RuntimeError("station owner fixture lacks completion or RNG evidence")
+        return
     if scenario["station_commands"].startswith("airport-definitions"):
         markers = [
             "registry",

@@ -3805,7 +3805,7 @@ const OpenTTDIndustryLifecycleServices &GetIndustryLifecycleRustServices() { ret
 const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices()
 {
 	static const OpenTTDIndustryGenerationServices services = {
-		.spec = [](uint8_t type) noexcept -> const OpenTTDIndustrySpecHandle * { return reinterpret_cast<const OpenTTDIndustrySpecHandle *>(GetIndustrySpec(type)); },
+		.spec = RustIndustryTypeSpec<OpenTTDIndustrySpecHandle>,
 		.spec_behaviour = RustIndustrySpecHandleBehaviour,
 		.info = [](const OpenTTDIndustrySpecHandle *handle) noexcept -> OpenTTDIndustryGenerationInfo {
 			const auto *spec = reinterpret_cast<const IndustrySpec *>(handle);

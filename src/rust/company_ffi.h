@@ -87,6 +87,7 @@ struct OpenTTDCompanyFinanceServices {
  * index for the next item of that owner, in pool order.
  */
 struct OpenTTDObjectServices;
+struct OpenTTDStationLifecycleServices;
 struct OpenTTDCompanyServices {
 	const OpenTTDCompanyFinanceServices *finance;
 	const OpenTTDSharedServices *shared;
@@ -111,7 +112,7 @@ struct OpenTTDCompanyServices {
 	int64_t (OPENTTD_RUST_CALL *road_maintenance_cost)(uint8_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_maintenance_cost);
 	int64_t (OPENTTD_RUST_CALL *canal_maintenance_cost)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(canal_maintenance_cost);
 	int64_t (OPENTTD_RUST_CALL *station_maintenance_cost)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_maintenance_cost);
-	int64_t (OPENTTD_RUST_CALL *airport_maintenance_cost)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_maintenance_cost);
+	const OpenTTDStationLifecycleServices *(OPENTTD_RUST_CALL *station_lifecycle)() noexcept OPENTTD_SERVICE_DEFAULT(station_lifecycle);
 	void (OPENTTD_RUST_CALL *recession_news)(bool) noexcept OPENTTD_SERVICE_DEFAULT(recession_news);
 	OpenTTDCompanyPriceBase (OPENTTD_RUST_CALL *price_base)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(price_base);
 	uint32_t (OPENTTD_RUST_CALL *cargo_next)(uint32_t, int64_t *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_next);

@@ -9,3 +9,9 @@
 pub const ADD_TEST: u8 = 0;
 pub const ADD_TRY: u8 = 1;
 pub const ADD_FORCE: u8 = 2;
+
+/// Native road-stop tile-data element; valid until the vector mutates.
+#[repr(C)]
+pub struct RoadStopTileData {
+    _private: [u8; 0],
+}

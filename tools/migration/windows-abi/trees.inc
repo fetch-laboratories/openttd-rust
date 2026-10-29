@@ -121,7 +121,8 @@ static void Trees()
 		.industry = {},
 		.ground = {},
 		.town = nullptr,
-		.station_loop = TreeUnused<void, uint32_t>,
+		.station_loop = TreeUnused<void, const OpenTTDStationLifecycleServices *, uint32_t, OpenTTDGroundCall *>,
+		.station = nullptr,
 		.objects = nullptr,
 	};
 	const uint32_t cursor = *openttd_rust_tile_loop_cursor();

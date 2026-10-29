@@ -56,7 +56,6 @@ inline void RustStationSetSpecSlot(BaseStation *st, uint8_t index, const Station
 inline uint32_t RustCustomStationIndex(uint32_t tile) noexcept { return GetCustomStationSpecIndex(TileIndex{tile}); }
 inline void RustStationSetCachedTriggers(BaseStation *st, uint16_t animation, CargoTypes cargo) noexcept { st->cached_anim_triggers = StationAnimationTriggers(animation); st->cached_cargo_triggers = cargo; }
 inline uint8_t RustRoadStopRandomBits(const BaseStation *st, uint32_t tile) noexcept { return st->GetRoadStopRandomBits(TileIndex(tile)); }
-inline void RustRoadStopSetRandomBits(BaseStation *st, uint32_t tile, uint8_t bits) noexcept { st->SetRoadStopRandomBits(TileIndex(tile), bits); }
 inline uint8_t RustRoadStopAnimationFrame(BaseStation *st, uint32_t tile) noexcept { return st->GetRoadStopAnimationFrame(TileIndex(tile)); }
 inline size_t RustRoadStopSpecCount(const BaseStation *st) noexcept { return st->roadstop_speclist.size(); }
 inline const RoadStopSpec *RustRoadStopSlotSpec(const BaseStation *st, size_t index) noexcept { return st->roadstop_speclist[index].spec; }
@@ -96,7 +95,9 @@ inline bool RustStationAirportMember(const Station *st, uint32_t tile) noexcept 
 inline bool RustStationHasAnimationTrigger(BaseStation *s, uint8_t trigger) noexcept { return s->cached_anim_triggers.Test(static_cast<StationAnimationTrigger>(trigger)); }
 inline bool RustRoadStopHasAnimationTrigger(BaseStation *s, uint8_t trigger) noexcept { return s->cached_roadstop_anim_triggers.Test(static_cast<StationAnimationTrigger>(trigger)); }
 inline size_t RustRoadStopTileDataCount(BaseStation *s) noexcept { return s->custom_roadstop_tile_data.size(); }
-inline uint32_t RustRoadStopDataTile(BaseStation *s, size_t i) noexcept { return s->custom_roadstop_tile_data[i].tile.base(); }
+inline RoadStopTileData *RustRoadStopData(BaseStation *, size_t) noexcept;
+inline uint32_t RustRoadStopDataTile(const RoadStopTileData *) noexcept;
+inline uint32_t RustRoadStopDataTile(BaseStation *s, size_t i) noexcept { return RustRoadStopDataTile(RustRoadStopData(s, i)); }
 inline const StationSpec *RustAnimationRailSpec(uint32_t tile) noexcept { return GetStationSpec(TileIndex{tile}); }
 /** `&st->goods[cargo].GetOrCreateData().cargo`'s Rust owner. */
 inline OpenTTDCargoList *RustStationCargoOwner(OpenTTDStation *st, uint8_t cargo) noexcept { return static_cast<Station *>(st)->goods[cargo].GetOrCreateData().cargo.RustOwner(); }
@@ -237,4 +238,15 @@ inline uint8_t RustStationWaitingTriggers(TStation *st) noexcept { return st->wa
 inline void RustStationSetWaitingTriggers(BaseStation *station, uint8_t triggers) noexcept { station->waiting_random_triggers = StationRandomTriggers(triggers); }
 inline void RustStationSetRandomBits(BaseStation *station, uint16_t bits) noexcept { station->random_bits = bits; }
 inline uint64_t RustStationCachedCargoTriggers(BaseStation *station) noexcept { return station->cached_cargo_triggers; }
+inline void RustStationListClassesInvalidate() noexcept { InvalidateWindowClassesData(WC_STATION_LIST, 0); }
+inline uint8_t RustStationIndustryType(BaseStation *st) noexcept { return Station::From(st)->indtype; }
+inline void RustStationSetIndustryType(BaseStation *st, uint8_t type) noexcept { Station::From(st)->indtype = type; }
+inline RoadStopTileData *RustRoadStopData(BaseStation *st, size_t index) noexcept { return &st->custom_roadstop_tile_data[index]; }
+inline uint32_t RustRoadStopDataTile(const RoadStopTileData *data) noexcept { return data->tile.base(); }
+inline uint8_t RustRoadStopDataRandom(const RoadStopTileData *data) noexcept { return data->random_bits; }
+inline uint8_t RustRoadStopDataFrame(const RoadStopTileData *data) noexcept { return data->animation_frame; }
+inline void RustRoadStopDataSetRandom(RoadStopTileData *data, uint8_t bits) noexcept { data->random_bits = bits; }
+inline void RustRoadStopDataSetFrame(RoadStopTileData *data, uint8_t frame) noexcept { data->animation_frame = frame; }
+inline uint16_t RustAirportSpecMaintenance(const AirportSpec *spec) noexcept { return spec->maintenance_cost; }
+inline const GoodsEntry *RustStationGoodsEntry(BaseStation *st, uint8_t cargo) noexcept { return &Station::From(st)->goods[cargo]; }
 #endif /* RUST_SERVICES_STATION_H */

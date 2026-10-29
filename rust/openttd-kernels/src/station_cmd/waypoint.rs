@@ -683,7 +683,9 @@ impl Ctx<'_> {
             );
             (self.s.set_custom_road_index)(tile, specindex.value);
             if !spec.is_null() {
-                (self.s.stop_random_bits)(wp, tile, 0);
+                crate::station_lifecycle::set_stop_data(wp, tile, 0, false, unsafe {
+                    &*self.s.lifecycle
+                });
             }
             (self.s.station_infrastructure)(owner, 1);
             (self.shared.mark_dirty)(tile);

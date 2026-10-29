@@ -799,15 +799,10 @@ static const OpenTTDStationLinks _rust_station_links = {
 	},
 	.last_service = RustVehicleLastServiceOf,
 	.cargo_type = RustVehicleCargoType,
-	.reroute = [](OpenTTDBaseStation *handle, OpenTTDVehicle *vehicle, uint8_t cargo, uint16_t avoid, uint16_t avoid2) noexcept -> void {
-		GoodsEntry &ge = static_cast<Station *>(handle)->goods[cargo];
-		if (vehicle == nullptr) {
-			if (ge.HasData()) ge.GetData().cargo.Reroute(UINT_MAX, &ge.GetData().cargo, StationID(avoid), StationID(avoid2), &ge);
-		} else {
-			Vehicle *v = VehicleOf(vehicle);
-			v->cargo.Reroute(UINT_MAX, &v->cargo, StationID(avoid), StationID(avoid2), &ge);
-		}
-	},
+	.storage = CargoStorageServices,
+	.goods_entry = RustStationGoodsEntry,
+	.station_cargo = RustStationExistingCargoOwner,
+	.vehicle_cargo = RustVehicleRead<OpenTTDCargoList *, RustVehicleCargoOwner>,
 };
 const OpenTTDStationServices &GetRustStationServices() noexcept { return _rust_station_services; }
 const OpenTTDStationLinks &GetRustStationLinks() noexcept { return _rust_station_links; }
@@ -5999,9 +5994,11 @@ extern const TileTypeProcs _tile_type_station_procs = {
 #include "abi-visit-OpenTTDStationDefinitionServices.hpp"
 #include "abi-visit-OpenTTDAct3CargoServices.hpp"
 #include "abi-visit-OpenTTDStationCatchmentServices.hpp"
+#include "abi-visit-OpenTTDStationLifecycleServices.hpp"
 bool CheckAbi_station_cmd()
 {
-	return AbiServicesComplete(GetRustStationCatchmentServices()) &&
+	return AbiServicesComplete(GetRustStationLifecycleServices()) &&
+		AbiServicesComplete(GetRustStationCatchmentServices()) &&
 		AbiServicesComplete(_rust_station_services.environment) &&
 		AbiServicesComplete(_rust_station_services) &&
 		AbiServicesComplete(_rust_station_links) &&

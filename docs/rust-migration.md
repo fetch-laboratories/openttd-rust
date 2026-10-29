@@ -1721,7 +1721,7 @@ deletion/reuse and docking-neighbour decisions. `water_cmd.cpp` docking eligibil
 registration belong to this owner. Original command bodies compile only in portable builds. The
 existing station cargo service state remains canonical; there is no second station owner or save
 layout. C++ retains shell/spec/road-stop allocation, NewGRF resolvers, spatial indices,
-rendering/description and the hot tile-loop/animation/vehicle-entry/track/slope services.
+rendering/description and the vehicle-entry/track/slope services.
 Entries use borrowed typed synchronous tables, shared Rust command pre/post checks, prices,
 clear-square/water restoration and native result slots. No ordinary-play script VM or save/load
 exception crosses the boundary. Rust ends owner access before reentry and calls owned
@@ -1735,6 +1735,18 @@ unchanged-reference private callbacks in fixture executables. Default #320 cases
 `AllocateRailType`), builtin tram, airport noise and reload cases remain required. External
 NewGRF programs, legacy and unusual occupied/reservation branches remain #156 gaps. PRs #303 and
 #323.
+
+### Station naming, tile loop and lifecycle (#562)
+
+`station_lifecycle.rs` owns default naming and suffix/industry-name exclusion, station tile
+loops, destructor ordering, road-stop tile-data mutation, facility addition and airport
+maintenance. It shares the station service owner and calls the Rust queue, aircraft, order,
+link-graph, flow, cargo and catchment owners directly. Station map fields use the shared map
+descriptor; industry-map lookups preserve the original helper assertions and pool operations.
+C++ retains pool shells, unmoved record fields, the road-stop tile-data vector, native member
+destruction, spatial indices, news and windows. Each destructor owner access ends before a
+callback; the native destructor is one Rust call followed by ordinary member destruction.
+`GetPlatformLength` remains with #560. PR #568.
 
 ### Station catchment, nearby sets and rectangles (#516)
 

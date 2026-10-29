@@ -35,6 +35,7 @@
 #include "rust/station_command_ffi.h"
 #include "rust/services_assert.h"
 #include "rust/services_cargo.h"
+#include "rust/orders_ffi.h"
 #include "rust/services_industry.h"
 #include "rust/industry_shell_services.h"
 #include "rust/settings_services.h"
@@ -114,14 +115,10 @@ Station::~Station()
 		this->loading_vehicles.front()->LeaveStation();
 	}
 
-#ifdef WITH_RUST
-	InvalidateAircraftTargetStation(this->index);
-#else
 	for (Aircraft *a : Aircraft::Iterate()) {
 		if (!a->IsNormalAircraft()) continue;
 		if (a->targetairport == this->index) a->targetairport = StationID::Invalid();
 	}
-#endif
 
 	for (CargoType cargo = 0; cargo < NUM_CARGO; ++cargo) {
 		LinkGraph *lg = LinkGraph::GetIfValid(this->goods[cargo].link_graph);
@@ -867,45 +864,43 @@ const OpenTTDStationLifecycleServices &GetRustStationLifecycleServices() noexcep
 			.undefined = STR_UNDEFINED, .null = STR_NULL,
 		},
 		.town = RustStationStationTown<BaseStation>,
-		.industry_type = [](BaseStation *st) noexcept { return Station::From(st)->indtype; },
-		.set_industry_type = [](BaseStation *st, uint8_t type) noexcept { Station::From(st)->indtype = type; },
-		.spec = [](uint8_t type) noexcept { return GetIndustrySpec(type); },
-		.spec_name = [](const IndustrySpec *spec) noexcept -> uint32_t { return spec->station_name; },
+		.industry_type = RustStationIndustryType,
+		.set_industry_type = RustStationSetIndustryType,
+		.spec = RustIndustryTypeSpec<IndustrySpec>,
+		.spec_name = RustIndustrySpecStationName,
 		.spec_enabled = RustSpecEnabled<IndustrySpec>,
-		.spec_life = [](const IndustrySpec *spec) noexcept { return spec->life_type.base(); },
+		.spec_life = RustIndustrySpecLife,
 		.set_random_bits = RustStationSetRandomBits,
 		.freeform = OpenTTDFreeformEdges,
 		.cargo_classes = RustCargoClasses,
 		.forest = [](uint32_t tile) noexcept { return IsTileForestIndustry(TileIndex{tile}); },
-		.stop_data = [](BaseStation *st, size_t index) noexcept { return &st->custom_roadstop_tile_data[index]; },
+		.stop_data = RustRoadStopData,
 		.stop_count = RustRoadStopTileDataCount,
-		.stop_tile = [](const RoadStopTileData *data) noexcept { return data->tile.base(); },
-		.stop_random = [](const RoadStopTileData *data) noexcept { return data->random_bits; },
-		.stop_frame = [](const RoadStopTileData *data) noexcept { return data->animation_frame; },
-		.stop_set_random = [](RoadStopTileData *data, uint8_t bits) noexcept { data->random_bits = bits; },
-		.stop_set_frame = [](RoadStopTileData *data, uint8_t frame) noexcept { data->animation_frame = frame; },
+		.stop_tile = RustRoadStopDataTile,
+		.stop_random = RustRoadStopDataRandom,
+		.stop_frame = RustRoadStopDataFrame,
+		.stop_set_random = RustRoadStopDataSetRandom,
+		.stop_set_frame = RustRoadStopDataSetFrame,
 		.stop_append = [](BaseStation *st, uint32_t tile, uint8_t random, uint8_t frame) noexcept { st->custom_roadstop_tile_data.push_back({TileIndex{tile}, random, frame}); },
 		.stop_swap_pop = [](BaseStation *st, size_t index) noexcept { st->custom_roadstop_tile_data[index] = st->custom_roadstop_tile_data.back(); st->custom_roadstop_tile_data.pop_back(); },
 		.by_tile = RustBaseStationByTile,
-		.airport_animation = [](BaseStation *st, uint32_t tile, uint8_t trigger) noexcept { TriggerAirportTileAnimation(Station::From(st), TileIndex{tile}, static_cast<AirportAnimationTrigger>(trigger)); },
-		.rail_animation = [](BaseStation *st, uint32_t tile, uint8_t trigger) noexcept { TriggerStationAnimation(st, TileIndex{tile}, static_cast<StationAnimationTrigger>(trigger)); },
-		.road_animation = [](BaseStation *st, uint32_t tile, uint8_t trigger) noexcept { TriggerRoadStopAnimation(st, TileIndex{tile}, static_cast<StationAnimationTrigger>(trigger)); },
+		.as_station = RustAnimationStation,
 		.cleaning_pool = []() noexcept { return Station::CleaningPool(); },
 		.cargo = RustStationExistingCargoOwner,
 		.flows = [](BaseStation *st, uint8_t cargo) noexcept { auto &ge = Station::From(st)->goods[cargo]; return ge.HasData() ? ge.GetData().flows.RustState() : nullptr; },
 		.delete_airport_storage = RustStationDeleteAirportStorage,
 		.invalidate_list = RustStationListInvalidation,
-		.invalidate_lists = []() noexcept { InvalidateWindowClassesData(WC_STATION_LIST, 0); },
+		.invalidate_lists = RustStationListClassesInvalidate,
 		.close_view = [](uint16_t id) noexcept { CloseWindowById(WC_STATION_VIEW, StationID{id}); },
-		.remove_orders = [](uint16_t id) noexcept { RemoveOrderFromAllVehicles(OT_GOTO_STATION, StationID{id}); },
+		.orders = []() { return &GetRustOrdersLeaves(); },
 		.delete_news = [](uint16_t id) noexcept { DeleteStationNews(StationID{id}); },
 		.remove_index = [](uint16_t id) noexcept { _station_kdtree.Remove(StationID{id}); },
 		.sign_valid = [](BaseStation *st) noexcept { return st->sign.kdtree_valid; },
 		.remove_sign = [](uint16_t id) noexcept { _viewport_sign_kdtree.Remove(ViewportSignKdtreeItem::MakeStation(StationID{id})); },
-		.next_vehicle = [](uint32_t from) noexcept { auto range = Vehicle::Iterate(from); return range.empty() ? nullptr : RustVehicle(*range.begin()); },
-		.vehicle_id = [](OpenTTDVehicle *v) noexcept { return RustVehicleIndexOpaque(v); },
-		.last_loading = [](OpenTTDVehicle *v) noexcept { return VehicleOf(v)->last_loading_station.base(); },
-		.airport_maintenance = [](const AirportSpec *spec) noexcept { return spec->maintenance_cost; },
+		.next_vehicle = RustNextVehicle,
+		.vehicle_id = RustVehicleIndex<OpenTTDVehicle *>,
+		.last_loading = RustVehicleLastLoadingStation,
+		.airport_maintenance = RustAirportSpecMaintenance,
 		.maintenance_price = PR_INFRASTRUCTURE_AIRPORT,
 	};
 	return services;

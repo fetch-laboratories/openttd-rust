@@ -15,6 +15,7 @@ struct OpenTTDStationCommandServices;
 struct IndustrySpec;
 struct RoadStopTileData;
 struct AirportSpec;
+struct OpenTTDOrdersLeaves;
 struct OpenTTDStationNames {
 	uint32_t base, central, airport, oilfield, docks, heliport, mines, lakeside, woods, forest;
 	uint32_t valley, heights, north, south, east, west, transfer, halt, exchange, annexe, sidings;
@@ -52,9 +53,7 @@ struct OpenTTDStationLifecycleServices {
 	void (*stop_append)(BaseStation *, uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(stop_append);
 	void (*stop_swap_pop)(BaseStation *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(stop_swap_pop);
 	BaseStation *(*by_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(by_tile);
-	void (*airport_animation)(BaseStation *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_animation);
-	void (*rail_animation)(BaseStation *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_animation);
-	void (*road_animation)(BaseStation *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_animation);
+	Station *(*as_station)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(as_station);
 	bool (*cleaning_pool)() noexcept OPENTTD_SERVICE_DEFAULT(cleaning_pool);
 	const OpenTTDCargoList *(*cargo)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo);
 	OpenTTDCargoFlowMap *(*flows)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(flows);
@@ -62,7 +61,7 @@ struct OpenTTDStationLifecycleServices {
 	void (*invalidate_list)(BaseStation *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_list);
 	void (*invalidate_lists)() noexcept OPENTTD_SERVICE_DEFAULT(invalidate_lists);
 	void (*close_view)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(close_view);
-	void (*remove_orders)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(remove_orders);
+	const OpenTTDOrdersLeaves *(*orders)() OPENTTD_SERVICE_DEFAULT(orders);
 	void (*delete_news)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_news);
 	void (*remove_index)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(remove_index);
 	bool (*sign_valid)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(sign_valid);
@@ -74,6 +73,7 @@ struct OpenTTDStationLifecycleServices {
 	size_t maintenance_price;
 };
 const OpenTTDStationLifecycleServices &GetRustStationLifecycleServices() noexcept;
+inline const OpenTTDStationLifecycleServices *RustStationLifecycleServices() noexcept { return &GetRustStationLifecycleServices(); }
 extern "C" {
 void openttd_rust_station_destruct(const OpenTTDStationLifecycleServices *, BaseStation *);
 bool openttd_rust_station_stop_data(const OpenTTDStationLifecycleServices *, BaseStation *, uint32_t, uint8_t, bool);

@@ -805,7 +805,6 @@ const OpenTTDRoadStopResolverServices &GetRoadStopResolverServices() noexcept
 		.set_cached = RustRoadStopSetCachedTriggers,
 		.set_random_bits = RustStationSetRandomBits,
 		.set_slot = RustRoadStopSetSpecSlot,
-		.set_tile_random = RustRoadStopSetRandomBits,
 		.set_waiting = RustStationSetWaitingTriggers,
 		.shared = &GetRustSharedServices(),
 		.slot_grfid = RustRoadStopSlotGRFID,

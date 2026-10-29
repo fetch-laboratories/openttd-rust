@@ -49,6 +49,7 @@
 #ifdef WITH_RUST
 #include "rust/ffi.h"
 #include "rust/landscape_loop_ffi.h"
+#include "rust/station_lifecycle_ffi.h"
 #include "rust/services_object.h"
 #include "rust/tile_owner_services.h"
 #include "rust/road_command_services.h"
@@ -952,7 +953,8 @@ OpenTTDLandscapeLoopServices RustLandscapeLoopServices(OpenTTDGroundCall *call, 
 		.industry = GetRustIndustryLoopServices(),
 		.ground = {.clear = &GetRustClearServices(), .rail = &GetRustRailGroundServices(), .road = &GetRustRoadGroundServices(), .road_command = road, .tunnel = &GetRustTunnelGroundServices(), .water = &GetRustWaterGroundServices(), .costs = &GetRustGroundCostServices(), .call = call, .climate = OpenTTDLandscape(), .editor = OpenTTDEditor(), .rebuild = _settings_game.economy.mod_road_rebuild},
 		.town = &GetRustTownServices(),
-		.station_loop = _tile_type_station_procs.tile_loop_proc,
+		.station_loop = openttd_rust_station_tile_loop,
+		.station = &GetRustStationLifecycleServices(),
 		.objects = &GetRustObjectServices(),
 	};
 }

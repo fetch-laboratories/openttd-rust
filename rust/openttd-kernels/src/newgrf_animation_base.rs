@@ -239,7 +239,13 @@ impl Frame<BaseStation> for RoadFrame {
         (a.road_frame)(o, t)
     }
     fn set(a: &Services, o: *mut BaseStation, t: u32, f: u8) -> bool {
-        (a.set_road_frame)(o, t, f)
+        crate::station_lifecycle::set_stop_data(
+            o,
+            t,
+            f,
+            true,
+            crate::station_lifecycle::services(a.shared()),
+        )
     }
 }
 fn sound<S, O, E: Callback<S, O>>(

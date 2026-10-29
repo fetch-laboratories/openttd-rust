@@ -257,15 +257,13 @@ fn scale_by_size(size: u32, n: u32) -> u32 {
 
 /// `TileAddWrap` for the generation map geometry.
 fn tile_add_wrap(g: &GenerateSettings, tile: u32, x: i32, y: i32) -> u32 {
-    let nx = (tile % g.size_x).wrapping_add(x as u32);
-    let ny = (tile / g.size_x).wrapping_add(y as u32);
-    if (nx == 0 || ny == 0) && g.freeform_edges {
-        return INVALID_TILE;
-    }
-    if nx >= g.size_x.wrapping_sub(1) || ny >= g.size_y.wrapping_sub(1) {
-        return INVALID_TILE;
-    }
-    ny.wrapping_mul(g.size_x).wrapping_add(nx)
+    crate::map_func::Map::from_log_x(g.size_x.trailing_zeros()).tile_add_wrap(
+        tile,
+        x,
+        y,
+        g.size_y,
+        g.freeform_edges,
+    )
 }
 
 /// `GetRandomTreeType`; the zone is used only in the tropic climate.

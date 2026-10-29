@@ -47,7 +47,6 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 		.set_state = [](uint32_t t, AnimatedTileState s) noexcept { SetAnimatedTileState(TileIndex{t}, s); },
 		.house_spec = RustHouseSpec,
 		.road_frame = RustRoadStopAnimationFrame,
-		.set_road_frame = [](BaseStation *s, uint32_t t, uint8_t f) noexcept { return s->SetRoadStopAnimationFrame(TileIndex{t}, f); },
 		.rail_area = OpenTTDAnimationRailArea,
 		.rail_belongs = [](BaseStation *s, uint32_t t) noexcept { return s->TileBelongsToRailStation(TileIndex{t}); },
 		.station_triggers = RustStationHasAnimationTrigger,

@@ -1,7 +1,9 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Constants shared from `station_base.h`.
+#![allow(unsafe_code)]
 
 /// `INITIAL_STATION_RATING`.
+
 pub const INITIAL_STATION_RATING: u8 = 175;
 
 /// `GoodsEntry::State` positions from the native header.
@@ -39,4 +41,39 @@ pub(crate) fn airport_has_hangar(
     s: &crate::newgrf_airport::Services,
 ) -> bool {
     (s.has_hangar)(st, crate::newgrf_airport::station_spec(st.cast_mut(), s))
+}
+
+/// Native `GoodsEntry`; storage remains in the station shell.
+#[repr(C)]
+pub struct GoodsEntry {
+    _private: [u8; 0],
+}
+/// `GoodsEntry::GetVia(source, excluded, excluded2)` over its resolved flow map.
+/// # Safety
+/// The map is live and serialized; the random callback changes only the RNG.
+pub(crate) unsafe fn goods_get_via(
+    map: *mut crate::cargo_flow::FlowMap,
+    source: u16,
+    excluded: u16,
+    excluded2: u16,
+    random: extern "C" fn() -> u32,
+) -> u16 {
+    if map.is_null() {
+        return crate::station_type::INVALID_STATION;
+    }
+    let entry = unsafe { crate::cargo_flow::openttd_rust_flow_map_at(map, u32::from(source), 1) };
+    if entry.found == 0 {
+        return crate::station_type::INVALID_STATION;
+    }
+    let mut restricted = 0;
+    unsafe {
+        crate::cargo_flow::openttd_rust_flow_via(
+            entry.flow,
+            2,
+            excluded,
+            excluded2,
+            &raw mut restricted,
+            random,
+        )
+    }
 }
