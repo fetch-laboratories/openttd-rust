@@ -132,7 +132,7 @@ static void Trees()
 	tree_probe.plant.tile_type = 0;
 	const OpenTTDLandscapeLoopServices loop{
 		.shared = &shared,
-		.tile_types = {},
+		.tile_types = movement.tile_types(),
 		.trees = &tree_probe_services,
 		.industry = {},
 		.ground = {},
