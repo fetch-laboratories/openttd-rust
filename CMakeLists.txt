@@ -465,7 +465,7 @@ if(OPTION_RUST AND BUILD_TESTING)
     target_link_libraries(openttd_rust_abi PRIVATE openttd_rust)
     if(NOT MSVC AND NOT APPLE)
         # GCC emits the original headers' unused non-inline static helpers at -O0, such as
-        # ScaleByCargoScale reading _settings_game, which this probe does not link.
+        # ScaleByInverseCargoScale reading _settings_game, which this probe does not link.
         target_compile_options(openttd_rust_abi PRIVATE -ffunction-sections)
         target_link_options(openttd_rust_abi PRIVATE -Wl,--gc-sections)
     endif()
