@@ -19,8 +19,9 @@ use crate::livery::{
 };
 use crate::raw_field::{read_field, write_field};
 use crate::services::{ByteSpan, Services as Shared};
+use crate::tile_type::TileIndex;
 use crate::vehicle::RailVehicleTypes;
-use crate::vehicle_type::OpenTTDVehicle;
+use crate::vehicle_type::{OpenTTDVehicle, VehicleID, VehicleType};
 use std::mem::MaybeUninit;
 type Town = crate::town_type::TownHandle;
 use crate::company_manager_face::Face;
@@ -59,7 +60,7 @@ pub struct Services {
     pub set_president_parts: extern "C" fn(*mut OpenTTDCompany, u32) -> (),
     pub colour: extern "C" fn(*mut OpenTTDCompany) -> u8,
     pub set_colour: extern "C" fn(*mut OpenTTDCompany, u8) -> (),
-    pub last_build: extern "C" fn(*mut OpenTTDCompany) -> u32,
+    pub last_build: extern "C" fn(*mut OpenTTDCompany) -> TileIndex,
     pub is_ai: extern "C" fn(*mut OpenTTDCompany) -> bool,
     pub name: extern "C" fn(*mut OpenTTDCompany) -> ByteSpan,
     pub set_name: extern "C" fn(*mut OpenTTDCompany, ByteSpan) -> (),
@@ -84,7 +85,7 @@ pub struct Services {
     pub utf8_length: extern "C" fn(*const u8, usize) -> usize,
     pub reset_colourmap: extern "C" fn() -> (),
     pub engine: extern "C" fn(EngineID) -> *const OpenTTDEngine,
-    pub engine_type: extern "C" fn(*const OpenTTDEngine) -> u8,
+    pub engine_type: extern "C" fn(*const OpenTTDEngine) -> VehicleType,
     pub engine_cargo: extern "C" fn(*const OpenTTDEngine) -> u8,
     pub engine_kind: extern "C" fn(*const OpenTTDEngine) -> RailVehicleTypes,
     pub engine_class: extern "C" fn(*const OpenTTDEngine) -> u8,
@@ -97,7 +98,7 @@ pub struct Services {
     pub cargo_freight: extern "C" fn(u8) -> bool,
     pub cargo_passengers: extern "C" fn(u8) -> bool,
     pub goods: extern "C" fn() -> u8,
-    pub vehicle_id: extern "C" fn(*const std::ffi::c_void) -> u32,
+    pub vehicle_id: extern "C" fn(*mut OpenTTDVehicle) -> VehicleID,
     pub invalidate_vehicle: extern "C" fn(*mut OpenTTDVehicle) -> (),
     pub vehicle_owner: extern "C" fn(*mut OpenTTDVehicle) -> CompanyID,
 }
@@ -232,10 +233,10 @@ pub(crate) fn generate_colour(s: &Services) -> u8 {
         .expect("NOT_REACHED")
 }
 pub(crate) fn generate_name(s: &Services, c: *mut OpenTTDCompany) {
-    if (s.name_id)(c) != s.strings.unnamed || (s.last_build)(c) == 0 {
+    if (s.name_id)(c) != s.strings.unnamed || (s.last_build)(c).0 == 0 {
         return;
     }
-    let t = (s.shared.closest_town)((s.last_build)(c), u32::MAX);
+    let t = (s.shared.closest_town)((s.last_build)(c).0, u32::MAX);
     let town = (s.shared.town_owner)(t);
     let simulation = unsafe { crate::town::openttd_rust_town_simulation(town) };
     let mut slot = NameStorage::new();
@@ -455,7 +456,7 @@ pub extern "C" fn openttd_rust_company_colour(
         let mut from = 0;
         while let Some(v) = (s.shared.vehicle_next)(from) {
             let shell = v.0.as_ptr();
-            from = (s.vehicle_id)(shell.cast()) + 1;
+            from = (s.vehicle_id)(shell).0 + 1;
             if (s.vehicle_owner)(shell) == id {
                 (s.invalidate_vehicle)(shell);
             }
@@ -544,7 +545,7 @@ pub(crate) fn engine_livery(
         (s.vehicle_cargo)(v)
     };
     let mut e = (s.engine)(engine);
-    match (s.engine_type)(e) {
+    match (s.engine_type)(e).0 {
         crate::vehicle_type::VEH_TRAIN => {
             if !v.is_null()
                 && parent != EngineID::INVALID

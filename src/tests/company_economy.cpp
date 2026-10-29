@@ -305,6 +305,7 @@ TEST_CASE("Company economy - competitor posts return to the caller before each P
  * effects (allocated company, no new-company events, no network announcement). */
 TEST_CASE("Company economy - AI startup continuation and abandoned frames")
 {
+	AutoRestoreBackup<Colours> colour(_company_colours[CompanyID(2)], _company_colours[CompanyID(2)]);
 	RustTileOwnerContext ownership;
 	FixtureReset(false, false);
 	OpenTTDCompanyControl abandoned{.result = {}, .startup = {}, .client = 0, .action = static_cast<uint8_t>(CCA_NEW_AI), .target = 255, .reason = 0, .execute = true, .stage = 0};
