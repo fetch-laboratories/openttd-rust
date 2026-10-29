@@ -9,6 +9,7 @@
 #include "../stdafx.h"
 #include "../3rdparty/catch2/catch.hpp"
 #include "../misc/binaryheap.hpp"
+#include "../pathfinder/pathfinder_type.h"
 #include "../track_func.h"
 #include "../roadveh.h"
 #ifdef WITH_RUST
