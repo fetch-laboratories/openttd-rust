@@ -241,16 +241,19 @@ pub(crate) fn generate_name(s: &Services, c: *mut OpenTTDCompany) {
     let simulation = unsafe { crate::town::openttd_rust_town_simulation(town) };
     let mut slot = NameStorage::new();
     let mut names = Names::new(s, &mut slot);
-    let town_type = u32::from(read_field!(simulation, townnametype));
     let mut str = s.strings.andco;
     let mut parts;
     let town_name = unsafe { crate::town::names::openttd_rust_town_name(town).size == 0 }
-        && town_type >= s.strings.town_begin
-        && town_type < s.strings.town_end;
+        && crate::math::is_inside_mm(
+            usize::from(read_field!(simulation, townnametype)),
+            s.strings.town_begin as usize,
+            s.strings.town_end as usize,
+        );
     let mut try_town = town_name;
     loop {
         if try_town {
-            str = town_type - s.strings.town_begin + s.strings.company_begin;
+            str = u32::from(read_field!(simulation, townnametype)) - s.strings.town_begin
+                + s.strings.company_begin;
             parts = read_field!(simulation, townnameparts);
         } else if (s.president_id)(c) == s.strings.president_generated {
             parts = (s.president_parts)(c);
