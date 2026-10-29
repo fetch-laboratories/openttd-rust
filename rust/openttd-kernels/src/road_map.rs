@@ -150,35 +150,32 @@ pub(crate) fn has_tile_road_type(
 impl crate::map_func::World<'_> {
     pub(crate) fn normal_road(&self, t: u32) -> bool {
         self.kind(t) == crate::tile_type::MP_ROAD
-            && self.byte(self.types.m5(t)) >> 6 == ROAD_TILE_NORMAL
+            && is_normal_road(&self.types, t).unwrap_or_else(|| (self.shared.is_normal_road)(t))
     }
     pub(crate) fn road_bits(&self, t: u32, tram: bool) -> u8 {
-        self.check(self.normal_road(t));
-        self.byte(if tram {
-            self.types.m3(t)
-        } else {
-            self.types.m5(t)
-        }) & 15
+        get_road_bits(&self.types, t, crate::services::RoadTramType(tram))
+            .unwrap_or_else(|| (self.shared.normal_road_bits)(t, u8::from(tram)))
+            .0
     }
     pub(crate) fn road_depot(&self, t: u32) -> bool {
         self.kind(t) == crate::tile_type::MP_ROAD
-            && self.byte(self.types.m5(t)) >> 6 == ROAD_TILE_DEPOT
+            && get_road_tile_type(&self.types, t).is_some_and(|kind| kind.0 == ROAD_TILE_DEPOT)
     }
     pub(crate) fn road_depot_dir(&self, t: u32) -> u8 {
         self.check(self.road_depot(t));
         self.byte(self.types.m5(t)) & 3
     }
     pub(crate) fn road_type(&self, t: u32, tram: bool) -> u8 {
-        self.check(matches!(
-            self.kind(t),
-            crate::tile_type::MP_ROAD
-                | crate::tile_type::MP_STATION
-                | crate::tile_type::MP_TUNNELBRIDGE
-        ));
-        if tram {
-            ((self.word(self.types.m8(t)) >> 6) & 63) as u8
-        } else {
-            self.byte(self.types.m4(t)) & 63
-        }
+        get_road_type(
+            &self.types,
+            self.shared,
+            t,
+            crate::services::RoadTramType(tram),
+        )
+        .unwrap_or_else(|| {
+            self.check(false);
+            unreachable!("native road-type precondition")
+        })
+        .0
     }
 }

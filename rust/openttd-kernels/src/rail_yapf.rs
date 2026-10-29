@@ -1795,15 +1795,6 @@ crate::abi::layouts! {
         signal_type,
         oneway,
     };
-    "OpenTTDRailFollow" ["probe"] => FollowStep {
-        tile,
-        skipped,
-        dirs,
-        followed,
-        error,
-        station,
-        exitdir,
-    };
     "OpenTTDRailLeaves" ["probe"] => Leaves {
         train,
         tile,
@@ -1857,9 +1848,5 @@ crate::abi::layouts! {
         order,
         nearest_depot,
         complex_waypoint,
-    };
-    "OpenTTDRailSpeed" ["probe"] => Speed {
-        min_speed,
-        max_speed,
     };
 }

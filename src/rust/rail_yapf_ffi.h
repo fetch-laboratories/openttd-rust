@@ -27,13 +27,6 @@ struct OpenTTDRailTile {
 	uint8_t railtype, tracks, station_track, tunnel_dir;
 	uint8_t uphill, signal_along, signal_against, signal_green, signal_type, oneway;
 };
-struct OpenTTDRailFollow {
-	uint32_t tile;
-	int32_t skipped;
-	uint16_t dirs;
-	uint8_t followed, error, station, exitdir;
-};
-struct OpenTTDRailSpeed { int32_t min_speed, max_speed; };
 struct OpenTTDRailTrain {
 	uint64_t compatible, all_compatible;
 	uint32_t tile, rear_tile, virtual_tile, rear_virtual_tile, dest_tile, length, speed;

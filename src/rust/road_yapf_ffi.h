@@ -21,8 +21,6 @@ struct OpenTTDRoadYapfTile {
 	uint16_t station;
 	uint8_t type, station_type, depot, depot_dir, crossing, waypoint, drive_through;
 };
-struct OpenTTDRoadYapfFollow { uint32_t tile; int32_t skipped; uint16_t dirs; uint8_t followed; };
-struct OpenTTDRoadYapfTraversal { int32_t display_speed, max_speed, min_speed; uint16_t order_speed; };
 struct OpenTTDRoadYapfArea { uint32_t tile; uint16_t width, height; uint8_t valid, stop, drive_through, next; };
 struct OpenTTDRoadYapfLeaves {
 	const OpenTTDSharedServices *shared; ///< Shared world and movement owner.

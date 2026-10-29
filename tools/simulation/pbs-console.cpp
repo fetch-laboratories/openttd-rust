@@ -82,12 +82,11 @@ static bool PbsCheckMask(TileIndex tile, Trackdir td)
 	PbsOriginalMask ft{GetTileOwner(tile), GetRailTypeInfo(GetTileRailType(tile))->compatible_railtypes};
 	if (!ft.Follow(tile, td)) return false;
 #ifdef WITH_RUST
-	OpenTTDTrainReservationFollow actual{ft.old_tile.base(), ft.new_tile.base(), ft.tiles_skipped, ft.new_td_bits, ft.old_td, ft.exitdir,
-		static_cast<uint8_t>(ft.is_tunnel), static_cast<uint8_t>(ft.is_bridge), static_cast<uint8_t>(ft.is_station), ft.err};
-	bool expected = ft.MaskReservedTracks();
-	PbsRequire(openttd_rust_follow_mask(&GetPbsServices(), &actual) == expected && actual.dirs == ft.new_td_bits && actual.error == ft.err);
-#else
-	ft.MaskReservedTracks();
+	OpenTTDFollowTrackState actual{};
+	openttd_rust_follower_init(&actual, &GetRustSharedServices(), TRANSPORT_RAIL, nullptr, 0, 0, true, true, false);
+	actual.old_tile = ft.old_tile; actual.old_td = ft.old_td; actual.new_tile = ft.new_tile; actual.new_td_bits = ft.new_td_bits;
+	actual.exitdir = ft.exitdir; actual.is_station = ft.is_station; actual.tiles_skipped = ft.tiles_skipped;
+	PbsRequire(openttd_rust_follower_mask(&GetRustSharedServices(), &actual) == expected && actual.new_td_bits == ft.new_td_bits && actual.err == ft.err);
 #endif
 	return true;
 }

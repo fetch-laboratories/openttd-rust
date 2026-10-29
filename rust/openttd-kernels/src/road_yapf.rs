@@ -273,7 +273,7 @@ impl Search<'_> {
         );
         let followed = state.follow(s, tile, td);
         Follow {
-            tile: state.new_tile,
+            tile: state.new_tile.0,
             skipped: state.tiles_skipped,
             dirs: state.new_td_bits,
             followed: u8::from(followed),
@@ -806,12 +806,6 @@ crate::abi::layouts! {
         waypoint,
         drive_through,
     };
-    "OpenTTDRoadYapfFollow" ["probe"] => Follow {
-        tile,
-        skipped,
-        dirs,
-        followed,
-    };
     "OpenTTDRoadYapfArea" ["probe"] => Area {
         tile,
         width,
@@ -820,12 +814,6 @@ crate::abi::layouts! {
         stop,
         drive_through,
         next,
-    };
-    "OpenTTDRoadYapfTraversal" ["probe"] => Traversal {
-        display_speed,
-        max_speed,
-        min_speed,
-        order_speed,
     };
     "OpenTTDRoadYapfLeaves" ["probe"] => crate::road_yapf::Leaves {
         shared,

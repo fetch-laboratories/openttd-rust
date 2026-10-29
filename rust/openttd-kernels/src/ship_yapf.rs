@@ -451,7 +451,7 @@ fn low_search(
         stats[1] += 1;
         let (ft, ok) = crate::follow_track::water(services, parent.tile, parent.td);
         let f = Follow {
-            tile: ft.new_tile,
+            tile: ft.new_tile.0,
             skipped: ft.tiles_skipped,
             dirs: ft.new_td_bits,
             followed: u8::from(ok),
@@ -562,7 +562,7 @@ fn random_path(
     for _ in 0..length {
         let (ft, ok) = crate::follow_track::water(services, tile, td);
         let f = Follow {
-            tile: ft.new_tile,
+            tile: ft.new_tile.0,
             skipped: ft.tiles_skipped,
             dirs: ft.new_td_bits,
             followed: u8::from(ok),
@@ -963,12 +963,6 @@ crate::abi::layouts! {
         visit_next,
         visit_destroy,
         debug,
-    };
-    "OpenTTDShipFollow" ["probe"] => Follow {
-        tile,
-        skipped,
-        dirs,
-        followed,
     };
     "OpenTTDShipTile" ["probe"] => Tile {
         ships,

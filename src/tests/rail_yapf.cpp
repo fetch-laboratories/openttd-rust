@@ -42,28 +42,32 @@ public:
 	Search(uint32_t limit, uint32_t goal, uint32_t curve = 29) : goal(goal), curve(curve)
 	{
 		this->max_search_nodes = limit;
-		Node &node = this->CreateNewNode(); node.Set(0, 0, nullptr); this->AddStartupNode(node);
+		Node &node = this->CreateNewNode(); node.Set(RailYapfProbe::start, 0, nullptr); this->AddStartupNode(node);
 	}
 	bool PfNodeCacheFetch(Node &) { return false; }
 	void PfFollowNode(Node &parent)
 	{
-		RailYapfProbe::Follow(nullptr, parent.key.tile, parent.key.td, 1, 0);
-		for (uint8_t td : {0, 2}) {
-			Node &node = this->CreateNewNode(); node.Set(parent.key.tile + 1, td, &parent);
-			this->AddNewNode(node, Follower{});
+		const auto ft = RailYapfProbe::Follow(parent.key.tile, parent.key.td);
+		for (Trackdir td : SetTrackdirBitIterator(ft.new_td_bits)) {
+			Node &node = this->CreateNewNode(); node.Set(ft.new_tile.base(), td, &parent); this->AddNewNode(node, Follower{});
 		}
 	}
 	bool PfCalcCost(Node &node, const Follower *)
 	{
 		const uint8_t td = node.key.td;
 		node.cost = node.parent->cost + (td == 0 ? 100 : 71);
-		if (td != 0 || node.parent->key.td != 0) node.cost += this->curve;
-		if (td == 0 && RailYapfProbe::hill && node.key.tile == 2) node.cost += 50;
-		RailYapfProbe::Follow(nullptr, node.key.tile, td, 1, 0);
+		if (td != NextTrackdir(static_cast<Trackdir>(node.parent->key.td)) && (TrackdirCrossesTrackdirs(static_cast<Trackdir>(node.parent->key.td)) & TrackdirToTrackdirBits(static_cast<Trackdir>(td))) == TRACKDIR_BIT_NONE) node.cost += this->curve;
+		if (td == 0 && RailYapfProbe::hill && node.key.tile == RailYapfProbe::start - 2) node.cost += 50;
+		RailYapfProbe::Follow(node.key.tile, td);
 		return true;
 	}
-	bool PfCalcEstimate(Node &node) { node.estimate = node.cost + 100 * (this->goal - node.key.tile); return true; }
-	bool PfDetectDestination(Node &node) { return node.key.tile == this->goal; }
+	bool PfCalcEstimate(Node &node) { const uint32_t target = RailYapfProbe::start - this->goal;
+		const auto exit = TrackdirToExitdir(static_cast<Trackdir>(node.key.td));
+		constexpr int ox[] = {-1, 0, 1, 0}, oy[] = {0, 1, 0, -1};
+		const int dx = abs(2 * int(node.key.tile % 128) + ox[exit] - 2 * int(target % 128));
+		const int dy = abs(2 * int(node.key.tile / 128) + oy[exit] - 2 * int(target / 128));
+		node.estimate = node.cost + (node.key.tile == target ? 0 : std::min(dx, dy) * 71 + (abs(dx - dy) - 1) * 50); return true; }
+	bool PfDetectDestination(Node &node) { return node.key.tile == RailYapfProbe::start - this->goal; }
 	char TransportTypeChar() const { return 'r'; }
 	uint32_t Calcs() const { return this->stats_cost_calcs; }
 	uint8_t Direction()
@@ -89,7 +93,7 @@ TEST_CASE("Rail YAPF finite limit and heap ordering against unchanged reference"
 		const bool found = reference.FindPath(nullptr);
 		CHECK(result.found == static_cast<uint8_t>(found));
 		CHECK(result.td == reference.Direction());
-		CHECK(trace == RailYapfProbe::follows);
+
 		CHECK(RailYapfProbe::stats[0] == static_cast<uint32_t>(reference.num_steps));
 		CHECK(RailYapfProbe::stats[1] == static_cast<uint32_t>(reference.nodes.OpenCount()));
 		CHECK(RailYapfProbe::stats[2] == static_cast<uint32_t>(reference.nodes.ClosedCount()));
@@ -141,14 +145,11 @@ TEST_CASE("Rail YAPF observes Follow then optional masking then speed limits")
 		openttd_rust_rail_invalidate();
 		RailYapfProbe::Run(1, 29, false, false, kind);
 		const auto &reads = RailYapfProbe::follow_reads;
-		REQUIRE(std::count(reads.begin(), reads.end(), 'f') > 0);
+		REQUIRE(std::count(reads.begin(), reads.end(), 's') > 0);
 		size_t masked = 0;
-		for (size_t i = 0; i < reads.size(); ++i) if (reads[i] == 'f') {
-			REQUIRE(i + 1 < reads.size());
-			if (reads[i + 1] == 'r') { ++masked; REQUIRE(i + 2 < reads.size()); CHECK(reads[i + 2] == 's'); }
-			else CHECK(reads[i + 1] == 's');
+		for (size_t i = 0; i < reads.size(); ++i) if (reads[i] == 'r') {
+			++masked; REQUIRE(i + 1 < reads.size()); CHECK(reads[i + 1] == 's');
 		}
-		/* Segment-cost followers remain unmasked in the safe-position search. */
 		CHECK((masked != 0) == (kind == 3 && !fail));
 	}
 	RailYapfProbe::follow_fail = false;

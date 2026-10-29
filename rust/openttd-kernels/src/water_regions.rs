@@ -152,7 +152,11 @@ impl Regions {
                     crate::witness::hit(crate::witness::WATER_FOLLOWS);
                     let (ft, followed) =
                         crate::follow_track::water(unsafe { &*leaves.shared }, tile, dir);
-                    let next = if followed { ft.new_tile } else { INVALID_TILE };
+                    let next = if followed {
+                        ft.new_tile.0
+                    } else {
+                        INVALID_TILE
+                    };
                     let bridge = u8::from(ft.is_bridge);
                     if next == INVALID_TILE {
                         continue;

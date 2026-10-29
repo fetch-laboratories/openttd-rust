@@ -23,7 +23,6 @@ struct OpenTTDShipYapfInput {
 	uint8_t trackdir, ocean_frac, canal_frac, station;
 	uint32_t unit_number;
 };
-struct OpenTTDShipFollow { uint32_t tile; int32_t skipped; uint16_t dirs; uint8_t followed; };
 struct OpenTTDShipTile { uint32_t ships; uint8_t docking, sea, lock_middle, destination; };
 struct OpenTTDShipYapfResult { uint8_t direction, found, origin; uint32_t stats[13]; };
 struct OpenTTDShipYapfDestination { uint32_t tile; bool station; };
