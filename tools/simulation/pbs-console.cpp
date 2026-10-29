@@ -69,6 +69,13 @@ static RailTypes PbsTrainRailTypes(const Train *v) {
 	return v->railtypes;
 #endif
 }
+static RailTypes PbsTrainCompatibleRailTypes(const Train *v) {
+#ifdef WITH_RUST
+	return v->GetCompatibleRailTypes();
+#else
+	return v->compatible_railtypes;
+#endif
+}
 #include "pbs-original.hpp"
 using PbsMap = std::vector<std::array<uint16_t, 10>>;
 static PbsMap PbsMapRead()

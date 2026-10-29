@@ -52,7 +52,10 @@ def pbs_reference(folder: Path) -> None:
         text=True,
     )
     follower = header[header.index("template <TransportType") : header.rfind("#endif")]
-    body += follower.replace("CFollowTrack", "PbsOriginalFollowTrack")
+    body += follower.replace("CFollowTrack", "PbsOriginalFollowTrack").replace(
+        "Train::From(v)->compatible_railtypes",
+        "PbsTrainCompatibleRailTypes(Train::From(v))",
+    )
     body += (
         original[original.index("TrackBits GetReservedTrackbits") :]
         .replace("t->track", "PbsTrainTrack(t)")
