@@ -86,7 +86,7 @@ impl Services {
     fn check(&self) -> extern "C" fn(bool) {
         crate::movement::table(self.shared).native_assert
     }
-    fn climate(&self) -> u8 {
+    fn climate() -> u8 {
         unsafe { ((*crate::animated_tile::services().industries).landscape)() }
     }
     fn map_access(&self) -> TileTypeAccess {
@@ -262,7 +262,7 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
         && (count_around(tile, map, size_y, freeform, |t| m.read(t) == MP_TREES) >= 8
             || count_around(tile, map, size_y, freeform, |t| (s.forest)(t)) >= 2)
     {
-        return if s.climate() == crate::landscape_type::TROPIC {
+        return if Services::climate() == crate::landscape_type::TROPIC {
             n.forest
         } else {
             n.woods
@@ -374,7 +374,7 @@ pub(crate) unsafe fn tile_loop(
         ),
         ROAD_WAYPOINT => {
             let snow = || crate::station_map::road_waypoint_snow(m, tile).unwrap();
-            let change = match s.climate() {
+            let change = match Services::climate() {
                 crate::landscape_type::ARCTIC => {
                     snow()
                         != (crate::tile_map::get_tile_z(m, tile, size_x, size_y).unwrap()
