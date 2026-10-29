@@ -1,10 +1,10 @@
 # OpenTTD-Rust migration
 
-OpenTTD-Rust is an independent experiment in incremental C++ to Rust migration. The original
-game's observable behavior is the specification, including quirks retained for historical
-fidelity. Record possible improvements in fork GitHub issues, deferred until near-full Rust
-reproduction. Game-simulation code takes priority, with Rust owning component state;
-`docs/roadmap.md` sets current work and `AGENTS.md` states the selection rules.
+OpenTTD-Rust is an independent experiment that rewrites OpenTTD in Rust incrementally, until no
+original C++ line remains. The original game's observable behavior is the specification,
+including quirks retained for historical fidelity. Record possible improvements in fork GitHub
+issues, deferred until near-full Rust reproduction. `AGENTS.md` states the goal, the phases and
+the selection rules; `docs/roadmap.md` sets current work.
 
 ## Repository and reference
 
@@ -41,7 +41,7 @@ shared random-number behavior.
   write it in place and keep no mirror; "canonical native" means the authoritative copy remains
   in C++ (for example the map arrays).
 - **Facade**: the C++ function or method that keeps the original signature and forwards to Rust
-  under `WITH_RUST`; the original body stays in the `#else` branch for portable builds.
+  under `WITH_RUST`; until #581's sweep, the original body stays in the `#else` branch.
 - **Leaf**: a typed `noexcept` C++ service that Rust calls for a shared operation (`Random`,
   sound, viewport, or a field of a record whose storage has not moved) and that returns without
   reentering the calling owner. Map fields and moved records are read in place, not through
@@ -66,11 +66,12 @@ The current verification setup targets native Linux and needs a C++20 compiler, 
 Python 3.11 or newer, SDL2 development files, and the normal OpenTTD libraries described in
 `COMPILING.md`. OpenGFX supplies free graphics for regression games; commercial game assets are
 unnecessary. The verification driver requires the pinned Rust toolchain and always configures
-the candidate with `OPTION_RUST=ON`. Ordinary CMake builds default to `OPTION_RUST=OFF`,
-preserving the original portable C++ path. Rust linkage supports native GNU/Linux (64-bit x86 or
+the candidate with `OPTION_RUST=ON`. Ordinary CMake builds still default to `OPTION_RUST=OFF`,
+which compiles the original C++ bodies. Rust linkage supports native GNU/Linux (64-bit x86 or
 ARM) and native macOS arm64. The scoped native Windows MSVC mode is described below. Other
 platforms, cross compilation, and macOS universal/Intel configurations reject an enabled Rust
-option; their portable fallback remains migration work (#3).
+option. #581 builds Rust on every CI configuration, including Emscripten, then removes the
+option and the fallback bodies.
 
 On Ubuntu with administrator access:
 
@@ -441,7 +442,8 @@ CMake verifies the pinned `rustc -vV` host against the actual C++ platform, arch
 resolved SDK and minimum supplied to Rust through `SDKROOT` and `MACOSX_DEPLOYMENT_TARGET` (see
 Rust's [Darwin target
 documentation](https://doc.rust-lang.org/rustc/platform-support/apple-darwin.html)). Intel
-packaging, additional Windows CRT modes and Emscripten host/target builds remain separate tasks.
+packaging and additional Windows CRT modes remain separate tasks; Emscripten host/target builds
+are #581.
 
 Archives live at `<build>/cargo/<validated-target>/release/libopenttd_kernels.a`.
 `tools/migration.py` exposes `rust_configuration(build)` and `rust_archive(build)`; all
@@ -804,7 +806,7 @@ reach are tracked in #156.
 Unless an entry says otherwise, these properties hold for every port:
 
 - With `OPTION_RUST=ON` (`WITH_RUST`) the C++ facade calls Rust; with it off, the original C++
-  bodies compile unchanged. Rust on further platforms is #3.
+  bodies compile unchanged. #581 makes Rust the only build and deletes those bodies.
 - Rust panics and Rust allocation failure abort (`panic = "abort"` in both profiles); the C ABI
   never unwinds, and no C++ exception crosses a Rust frame. Identical resource-exhaustion timing
   is not claimed.

@@ -154,7 +154,7 @@ tile back after a callback.
 field-wise save adapters remain unchanged; serialization reads live fields before
 the asynchronous compression thread starts. Link-graph workers use private graph
 copies and map dimensions, not tile arrays; retain the existing job join/reset
-ordering. Portable builds keep the C++ owner.
+ordering.
 
 ### Shared map view (#274, extended by #565)
 
@@ -295,7 +295,9 @@ Agent: /root/storage563 | Model: gpt-6-astra | Reasoning effort: high.
 This is the selected phase 2 design. Its first implementation issue is
 [#570](https://github.com/fetch-laboratories/openttd-rust/issues/570). Root queues that issue in the roadmap; implementation starts when its branch
 and agent slots are available. #564's metric precedes the next ranking round, not this
-already-selected design. The first port is one ownership change with three
+already-selected design. Its implementation starts after #581 retires the build
+without Rust, so each moved record has one definition and no C++-owned copy for a
+fallback build. The first port is one ownership change with three
 implementation checkpoints: shared records and native adaptation; retirement of
 the displaced data boundary; direct Tick dispatch. A record-only scaffold does
 not complete it.
@@ -582,7 +584,7 @@ Tick already return to Rust through native facades; call their owners directly
 as well. On effect expiry, end the controller borrow and invoke the canonical
 native delete operation; do not retain `RunEffect` merely for this trampoline.
 Base Tick still returns true. Native `Tick` bodies/declarations with no remaining
-production caller compile only in the portable build. Fixtures do not keep
+production caller are deleted. Fixtures do not keep
 orphan production exports alive.
 
 Bind immutable controller service tables once at scheduler entry, preserving

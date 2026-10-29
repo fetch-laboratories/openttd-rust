@@ -32,8 +32,8 @@ Agent: /root | Model: gpt-6.1-sol | Reasoning effort: xhigh.
 - That last inventory's distance was 234,244 original plus 32,299 fork glue:
   **266,543 compiled C++ code lines, 93.74% of the original**. Its boundary was
   1,305 Rust C exports and 3,957 callback slots, including private/restricted
-  definitions. These totals and the phase-area table below have not been
-  recounted after integrations 29/30; do not present them as new tip measures.
+  definitions. Navigation recounted the whole fork at `06a644505a`, after
+  integrations 29 and 30; the "Phases" chart below holds that inventory.
 - Source buckets are not pure phase inventories. At that inventory, logic's
   12,124 remaining lines included at least 4,115 drawing/description/viewport
   body lines and other presentation/facade signatures. Storage's 11,425
@@ -87,69 +87,86 @@ Agent: /root (Claude Code navigation) | Model: claude-opus-5-5 | Reasoning effor
 
 The goal is a complete Rust rewrite (AGENTS.md "Migration method"). Each free
 slot takes ready work from the earliest phase, and later phases fill the rest
-(user decision, 2026-10-28). The navigation established the phases; #564 now
-provides the standard source-area table at code `7105e24d49`. Source areas are
-an accounting classification and do not move drawing or executable header
-logic into a different phase.
+(user decision, 2026-10-28). Position at code `06a644505a` in code lines from
+`python3 tools/port-metrics.py --whole-fork`, with the change since the
+previous navigation's inventory at `7105e24d49` in parentheses. Source areas
+are an accounting classification: they do not move drawing or executable
+header logic into a different phase.
 
-| Area | Original code lines | Retired | Left | Glue added | Compiled C++ |
+| Area | Original | Retired | Left | Glue added | Compiled C++ |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Simulation logic | 47,424 | 35,300 | 12,124 | 6,767 | 18,891 |
-| Simulation storage | 13,724 | 2,299 | 11,425 | 1,310 | 12,735 |
+| Simulation logic | 47,424 | 35,744 (+444) | 11,680 | 6,698 (-69) | 18,378 (-513) |
+| Simulation storage | 13,724 | 2,643 (+344) | 11,081 | 1,312 (+2) | 12,393 (-342) |
 | NewGRF | 10,785 | 5,218 | 5,567 | 423 | 5,990 |
 | Save/load | 13,388 | 536 | 12,852 | 585 | 13,437 |
 | Script API | 14,908 | 878 | 14,030 | 453 | 14,483 |
 | Network | 12,713 | 211 | 12,502 | 182 | 12,684 |
 | Support | 21,617 | 665 | 20,952 | 424 | 21,376 |
-| Graphics and viewport | 10,985 | 1 | 10,984 | 1 | 10,985 |
+| Graphics and viewport | 10,985 | 4 (+3) | 10,981 | 1 | 10,982 (-3) |
 | GUI | 52,179 | 117 | 52,062 | 165 | 52,227 |
 | Platform | 11,941 | 0 | 11,941 | 2 | 11,943 |
 | Data tables | 17,295 | 4,364 | 12,931 | 0 | 12,931 |
 | Vendored | 55,148 | 522 | 54,626 | 163 | 54,789 |
-| Upstream tests | 2,248 | 0 | 2,248 | 4,491 | 6,739 |
-| Boundary layer | 0 | 0 | 0 | 17,333 | 17,333 |
-| **Whole fork** | **284,355** | **50,111 (17.62%)** | **234,244** | **32,299** | **266,543** |
+| Upstream tests | 2,248 | 0 | 2,248 | 4,683 (+192) | 6,931 (+192) |
+| Boundary layer | 0 | 0 | 0 | 17,497 (+164) | 17,497 (+164) |
+| **Whole fork** | **284,355** | **50,902 (17.90%, +791)** | **233,453** | **32,588 (+289)** | **266,041 (93.56%, -502)** |
 
-The 1,305 exports and 3,957 callback slots include restricted/private fields.
-The earlier navigation's physical-line and manual area/rate estimates are
-superseded by this code-line inventory; retired original and added glue remain
-separate. The source tool does not preprocess every platform define.
+The boundary has 1,297 Rust exports (-8) and 4,074 callback slots (+117).
+Rust totals 117,779 code lines (+2,109) and tooling 47,674 (+1,024).
+"Compiled C++" counts the Rust build. The Linux and Emscripten CI builds have
+no Rust and still compile all 284,355 original lines; #581 ends that.
 
-Why the course changed. Ports moved control flow into Rust and left the data
-in C++, and the rules then forbade the cheap ways to reach that data: shared
-layouts ("neither a whole-record view nor a call per field") and map reads
-outside audited loops ("until audited"). So every field read became a call into
-C++, and each call site got its own reader (`TrainLoco26Read`). Speed loss and
-glue both grow with this boundary. The phase 2 plan would then have turned the
-boundary around: Rust storage behind exported calls, read by about 117,000
-lines of C++ GUI, drawing, save/load, script, network and NewGRF code, with
-drawing never timed.
-AGENTS.md, world-state.md and #563 now state the outcome instead. Data crosses
-in place through layouts defined once in Rust, and only operations cross as
-calls. The map is read in place from every Rust entry under one proved interval
-(#565), and drawing gets measured (#566).
+| Period (steering commits) | Days | Retired | Per day | Compiled C++ change |
+| --- | ---: | ---: | ---: | ---: |
+| Fork start to 10-09 | 7.0 | 24,228 | 3,470 | -7,428 |
+| 10-09 to 10-21 | 11.3 | 7,987 | 705 | -1,485 |
+| 10-21 to 10-27 | 6.4 | 17,321 | 2,720 | -8,995 |
+| 10-27 to 10-28 (22nd to 23rd steering) | 1.0 | 575 | 550 | +92 |
+| Previous navigation to now | 0.4 | 791 | 1,830 | -498 |
+| **Whole history** | **26.3** | **50,902** | **1,930** | **-18,314** |
+
+Days are calendar days, including pauses; root ran about half of the last two.
+Glue took 64% of all retirement: compiled C++ fell 695 lines per day while
+original C++ retired at 1,930. The 22nd steering's testing round explains the
+10-28 dip: 5,459 tooling lines against 575 retired. Phase 2 storage ports
+(#565, #570) remain the course's fix for the glue.
+
+Why the course changed. Every port kept the original body under `#else` for
+builds without Rust, and four CI configurations are such builds: Linux GCC
+SDL2 and Emscripten in every required Full, and Linux Clang and Dedicated at
+cadence. So no rule ever deleted an original line, the required Full spent two
+builds on code the Rust game does not run, and phase 2 would have needed a
+second, C++-owned definition of each record it moves, which #570's design
+lacks. #581 now builds Rust on every configuration and deletes the fallback in
+one mechanical sweep, before #570 starts. AGENTS.md also told the work order to
+rank storage "beside leftover game logic", against the user's earliest-phase
+rule; root followed the user's rule, and the text now says so. Generated C++
+declarations count as compiled C++. Root read the course only at restart, so
+each steering and navigation stopped it; it now rereads changed course
+documents at each stocktake and planning round.
 
 | Phase | Left | Exit criterion | Status |
 | --- | --- | --- | --- |
-| 1. Simulation logic | 12,124 in the logic source bucket, including drawing; executable headers add selected phase-1 bodies | No non-drawing function body of the inventory or the command families compiles under `WITH_RUST` | Nearly done: #560, #562, #561 and the queued candidates; #559 is excluded with its return condition |
-| 2. Simulation storage | 11,425 in the storage source bucket, including some executable headers; credit only moved records/operations and deleted glue | Every pool record and the map arrays are defined once in Rust and read in place by both languages. C++ calls Rust only for operations, and no per-field service or per-call-site reader remains for moved data | Starts with #563's design and #565 |
-| 3. Simulation data readers | 41,158 after excluding script/network GUI: save/load 12,852, script 13,099, network 9,640, NewGRF 5,567 | These run in Rust; the Squirrel VM may stay C++ until phase 6 | First planning complete; #573–#575 and definition owners queued |
-| 4. Support | 31,936 support/graphics bucket lines; data tables (12,931) retire with their consumers | Not planned yet | Not planned until it is the next phase (user direction, 2026-10-28) |
-| 5. Interface | 67,796 GUI/platform lines including script/network GUI, plus drawing in other buckets | Not planned yet | As above |
+| 1. Simulation logic | 11,680 in the logic bucket, of which about 4,100 are drawing, description and viewport bodies (phase 5) | No non-drawing function body of the inventory or the command families compiles in the Rust build | Nearly done: #562, #561 and #572 in draft (#568, #579, #578), the queued owners in work order item 7; #559 excluded with its return condition |
+| 2. Simulation storage | 11,081 in the storage bucket; credit only moved records and operations, and deleted glue | Every pool record and the map arrays are defined once in Rust and read in place by both languages. C++ calls Rust only for operations, and no per-field service or per-call-site reader remains for moved data | #565 in draft (#576). #581 lands before #570; #566 runs beside #570 |
+| 3. Simulation data readers | 41,158 after excluding script and network GUI: save/load 12,852, script 13,099, network 9,640, NewGRF 5,567 | These run in Rust; the Squirrel VM may stay C++ until phase 6 | #573 to #575, #497 and #498 queued |
+| 4. Support | 31,933 support and graphics lines; data tables (12,931) retire with their consumers | Not planned yet | Not planned until it is the next phase (user direction, 2026-10-28) |
+| 5. Interface | 67,796 GUI and platform lines including script and network GUI, plus drawing in other buckets | Not planned yet | As above |
 | 6. Vendored | 54,626 | Not planned yet | As above |
 
 Upstream unit tests (2,248) retire with the code they test.
 
 Root's first actions from this chart:
-1. #564's metric item (distance and boundary size per area) lands before the
-   next planning round, which reads it. "Where the fork stands" then reports
-   the compiled C++ and the boundary size at every stocktake.
-2. #563's design follows the shared-layout outcome (its body and the comment of
-   2026-10-28).
-3. #565 starts in the next free slot. New phase 1 ports (#560, #561, #562) read
-   the map in place and use each record's shared typed accessors. They add no
-   per-call-site reader.
-4. #566 runs beside #563, so the first storage port reports its drawing cost.
+1. #581 at the top of the work order. Its first PR turns on Rust in the Linux
+   jobs (a flag) and adds the Emscripten target; its second removes
+   `OPTION_RUST` and runs the `unifdef` sweep. Drafts adopt the sweep by
+   rerunning its recorded command (AGENTS.md, step 3).
+2. #570 starts after the sweep integrates. #570 also makes
+   `tools/port-metrics.py` count the C++ declarations it generates.
+3. Phase 2 takes every slot that ready phase 1 work leaves free, ranked by code
+   retired, crossings removed and glue deleted.
+4. Before each stocktake and planning round, reread AGENTS.md, this chart and
+   the latest steering section if they changed (`/start-development`, step 4).
 
 ## Twenty-third steering review (2026-10-28, leftover game logic, storage and boundary faults)
 
@@ -236,7 +253,7 @@ Apply these corrections through the work order below:
      (Rust crates where one reproduces observable behavior).
    - Start phase 3 now. A planning agent sizes save/load, the script API,
      network and the NewGRF remainder into ownership candidates, each with
-     the evidence that shows its output (work order item 9). The first phase 3
+     the evidence that shows its output (work order item 10). The first phase 3
      owner takes the next spare slot.
    - Save/load chunk handlers for a pool move with that pool's storage port
      where they share it.
@@ -344,53 +361,62 @@ One ranked list. Each free slot takes the highest unblocked item that fits the
 six-branch limit and disjoint-service rule; completing review/integration takes
 priority. A lower rank can run while a higher one waits. Scopes live in issues.
 
-1. **Finish existing components in readiness order.** #554's internal clock/
+1. **#581 Rust on every CI configuration and retirement of the portable
+   fallback.** Navigation item, ranked first. First PR: `-DOPTION_RUST=ON` in
+   the Linux GCC SDL2, Clang and Dedicated jobs and the `wasm32-unknown-emscripten`
+   target for Emscripten. Second PR: remove `OPTION_RUST` and run the recorded
+   `unifdef -DWITH_RUST -m` sweep. Drafts adopt it by rerunning that command
+   (AGENTS.md step 3). Expected tooling about 150 CI/CMake lines; zero retirement
+   change, since guarded bodies already count as retired.
+2. **Finish existing components in readiness order.** #554's internal clock/
    setup cleanup passed scoped review; its reviewed #557 combination is #577.
    Repair the standalone probe link failure, then run current-base exact-head
    Full again. #568 adopted #571 and completed source review with one accessor
    fix; inspect its checks before final base adoption and Full. #569 adopted
    #571 and repaired its fixtures; finish verification, evidence and review.
    No reviewed owner gains new scope.
-2. **#565 map fields in place.** The common helper is integrated; assign the
+3. **#565 map fields in place.** The common helper is integrated; assign the
    next available component slot now. Convert the hottest road/water, pixel
    height and slope crossings and delete their wrappers/slots. Keep follower
    ownership in #560, reuse the integrated typed helpers, and coordinate shared
    files so no parallel service copy is built. Planning net glue -300 to -800.
-3. **#561 company identity.** Start after the #554/#557 combination, preserving
+4. **#561 company identity.** Start after the #554/#557 combination, preserving
    the session/startup boundary sequence. Updated code estimate: 350–430 retired,
    80–180 net glue, 80–160 evidence/tooling. Group livery and engine mapping
    already run in Rust and get no second retirement credit.
-4. **#572 goals/story/league ownership.** Selected for the other free phase-1
-   component slot while item 3 waits. Complete command/event/lifecycle policy;
+5. **#572 goals/story/league ownership.** Selected for the other free phase-1
+   component slot while item 4 waits. Complete command/event/lifecycle policy;
    518 original source code lines, estimated 490–530 retired and 120–230 net
    glue. Required default command-result/GS-event evidence is in the issue.
-5. **#168 clock/world audit batch**, after #554 integrates. Bound it to the
+6. **#168 clock/world audit batch**, after #554 integrates. Bound it to the
    current checklist; fix bounces, the duplicate company writer and obsolete
    exports with the integrated ratchet. Add #156's ordinary single-player
    completion observation if ready; it does not hold the batch.
-6. **Queued phase-1 owners under #3.** Root issues each before implementation:
-   world-input generation (heightmap input and town-data import, after item 5),
+7. **Queued phase-1 owners under #3.** Root issues each before implementation:
+   world-input generation (heightmap input and town-data import, after item 6),
    complete NewGRF town-name storage/generation plus ActionF, clear-ground
    clearing, editor tree-group mutation, sign/depot naming and simulation-setting
    transitions. Measure real remaining bodies; no utility helper fallback.
    Vehicle base lifecycle is sequenced **after #570**, using its canonical
    movement/consist record contract; estimate 190–240 retired and 70–160 net
    glue. It never runs concurrently in the overlapping vehicle files.
-7. **#566 drawing workload and #570 first shared vehicle records.** Assign
-   phase 2 when earlier ready phase-1 items leave a slot. #570 follows the
+8. **#566 drawing workload and #570 first shared vehicle records.** Assign
+   phase 2 to every slot that ready phase-1 items leave free; #570 starts after
+   #581's sweep integrates and makes `tools/port-metrics.py` count the C++
+   declarations it generates. #570 follows the
    accepted world-state design and deletes replaced readers plus direct Tick
    bounces; estimated net glue -500 to -1,100, instruction credit 0.86% is a
    retained-profile model, not a measurement. Start #566 beside it and obtain
    its reference/candidate pixels and drawing Ir before storage integration.
    Drawing tooling estimate remains 150–250 lines.
-8. **Queued later phase-2 pools.** Remaining vehicle pool, then stations/road
+9. **Queued later phase-2 pools.** Remaining vehicle pool, then stations/road
    stops, orders/lists, towns/industries, companies/groups/engines and smaller
    pools, then map allocation/definitions. Move coupled save adapters with each
    record owner, generate native declarations and verify layout, and delete
    displaced readers/services. Native inline accessors retire with consumers;
    source-header totals are not a retirement promise. Each gets an issue and
    design section when selected. Object instances are distinct from ObjectSpec.
-9. **Phase-3 reader queue.** The fresh #564-based survey is complete. Queue
+10. **Phase-3 reader queue.** The fresh #564-based survey is complete. Queue
    #573 codec/chunk execution, #574 game network protocol/queues and #575 script
    host/commands/events, with explicit unsaved-output evidence in each issue.
    Respect earliest-ready phase order and stable affected save/session contracts;
@@ -400,10 +426,10 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
    owners, not parsers deferred behind unrelated instance pools. Remaining
    afterload/legacy, chunk, script API/config and other network/NewGRF families
    remain reader selections under #3. Plan no phases 4–6 or Squirrel port.
-10. **#168/#199/#500 completed-job flow publication; #501 probe typing.**
+11. **#168/#199/#500 completed-job flow publication; #501 probe typing.**
     Select the existing completed link-graph job service table and bounded
     tools/probe.py typing only. Zero retirement; estimated -30 to +80 net glue.
-11. **#503 coverage continuation.** The bounded original-only clock-preparation
+12. **#503 coverage continuation.** The bounded original-only clock-preparation
     fix (at most 30 production and 50 test lines), then 119 unfinished traces
     with provenance checks against the retained 330. Preserve the fixed checkout
     and failed attempts; no recollection solely to fill a slot.

@@ -15,9 +15,10 @@ fork; the remaining upstream documentation explains behavior and architecture.
 
 - The goal is a complete Rust rewrite of OpenTTD: every original C++ line
   retires (user direction, 2026-10-28). The fork's own C++ glue retires with
-  it, so the distance to the goal is the C++ the Rust build still compiles,
-  original plus glue. The work runs in overlapping phases, sized with exit
-  criteria in the roadmap's "Phases":
+  it, so the distance to the goal is the C++ the fork's builds still compile,
+  original plus glue. A build without Rust compiles every original line, so
+  the Rust build becomes the only one (#581). The work runs in overlapping
+  phases, sized with exit criteria in the roadmap's "Phases":
   1. simulation logic: map generation, landscape and tile loops, towns,
      industries, vehicles, cargo, economy, link graph, pathfinding and the
      commands that change them;
@@ -45,9 +46,11 @@ fork; the remaining upstream documentation explains behavior and architecture.
 - Prefer ownership ports: Rust owns the component's state and control flow, and
   C++ keeps only a thin facade plus calls for shared operations (`Random`,
   allocation, progress, sound) and for the fields of records whose storage has
-  not moved yet. With `WITH_RUST` defined the original C++ body
-  is not compiled; it remains in the `#else` of `#ifdef WITH_RUST` (or under
-  `#ifndef WITH_RUST`) for portable builds. Do not extract an algorithmic
+  not moved yet. The Rust build does not compile the original C++ body. Until
+  #581 makes Rust the only build, the body stays in the `#else` of
+  `#ifdef WITH_RUST` (or under `#ifndef WITH_RUST`); #581's sweep then deletes
+  every such body, later ports delete the body they replace, and the pinned
+  reference worktree remains the original for review. Do not extract an algorithmic
   fragment while C++ keeps the surrounding state and loop, unless the roadmap
   names it as a stepping stone.
 - The data moves too: the rewrite retires every C++ line, including the
@@ -56,15 +59,17 @@ fork; the remaining upstream documentation explains behavior and architecture.
   moves its records into Rust: pool objects (vehicles first, #563; then
   stations, orders, towns, industries, companies and the rest), then the map
   arrays. A moved record is defined once, in Rust, with a C-compatible layout;
-  its C++ declaration is generated and its layout checked at build, so both
+  its C++ declaration is generated, counted as compiled C++ glue by
+  `tools/port-metrics.py`, and its layout checked at build, so both
   languages read and write its fields in place. C++ code not yet ported
   (drawing, GUI, save/load, scripts, network) keeps inline accessors over that
   shared layout until it is ported in turn, never a call per field; only
   operations (allocation, deletion, iteration with hooks, virtual behavior)
   cross as calls. A storage port deletes the per-field services and reader
-  carriers it replaces. Storage ports are phase 2 ownership ports: the work
-  order ranks them beside leftover game logic by the code they retire, the
-  crossings they remove and the glue they delete, with no separate gate.
+  carriers it replaces. Storage ports are phase 2 ownership ports, ranked
+  within phase 2 by the code they retire, the crossings they remove and the
+  glue they delete. Under the phase order above they take every slot that
+  ready phase 1 work leaves free, with no further gate.
 - Keep the full game running throughout migration. Preserve networking, saves,
   mods, interface, and shared random-number behavior, including the exact
   sequence of random draws.
@@ -417,7 +422,8 @@ For substantive changes:
    a reviewed PR from its base needs no new review when CI passes and the update
    either has no conflicts in `src/`, `rust/`, `tools/` or `.github/`, or
    resolves each one by keeping both sides' lines unchanged (`git show
-   --remerge-diff` removes only conflict markers; root records this on the PR).
+   --remerge-diff` removes only conflict markers) or by rerunning #581's
+   recorded `unifdef` command on the PR's side; root records this on the PR.
    Otherwise a fresh reviewer checks and fixes only the conflict resolution.
 4. Root integrates only the combination Full tested. Update a PR from base when
    preparing its final Full or resolving a blocking conflict, not continuously.
