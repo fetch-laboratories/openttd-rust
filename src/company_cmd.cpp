@@ -49,6 +49,7 @@
 
 #ifdef WITH_RUST
 #include "rust/company_adapter.h"
+#include "rust/company_identity_ffi.h"
 #include "rust/tile_owner_services.h"
 #include "rust/company_services.h"
 #include "rust/command_services_ffi.h"
@@ -66,7 +67,12 @@ void UpdateObjectColours(const Company *c);
 
 CompanyID _local_company;   ///< Company controlled by the human player at this client. Can also be #COMPANY_SPECTATOR.
 CompanyID _current_company; ///< Company currently doing an action.
-TypedIndexContainer<std::array<Colours, MAX_COMPANIES>, CompanyID> _company_colours; ///< NOSAVE: can be determined from company structs.
+#ifdef WITH_RUST
+static_assert(sizeof(TypedIndexContainer<std::array<Colours, MAX_COMPANIES>, CompanyID>) == MAX_COMPANIES);
+TypedIndexContainer<std::array<Colours, MAX_COMPANIES>, CompanyID> &_company_colours = *new (openttd_rust_company_colours()) TypedIndexContainer<std::array<Colours, MAX_COMPANIES>, CompanyID>{};
+#else
+TypedIndexContainer<std::array<Colours, MAX_COMPANIES>, CompanyID> _company_colours;
+#endif ///< NOSAVE: can be determined from company structs.
 std::string _company_manager_face; ///< for company manager face storage in openttd.cfg
 #ifndef WITH_RUST
 uint _cur_company_tick_index;             ///< used to generate a name for one company that doesn't have a name yet per tick
@@ -205,6 +211,7 @@ void DrawCompanyIcon(CompanyID c, int x, int y)
  * @param cmf the fact to check
  * @return true if and only if the face is valid
  */
+#ifndef WITH_RUST
 static bool IsValidCompanyManagerFace(CompanyManagerFace cmf)
 {
 	if (cmf.style >= GetNumCompanyManagerFaceStyles()) return false;
@@ -217,6 +224,7 @@ static bool IsValidCompanyManagerFace(CompanyManagerFace cmf)
 
 	return true;
 }
+#endif /* WITH_RUST */
 
 static CompanyMask _dirty_company_finances{}; ///< Bitmask of company finances that should be marked dirty.
 
@@ -479,6 +487,7 @@ CommandCost CheckTileOwnership(TileIndex tile)
  * Generate the name of a company from the last build coordinate.
  * @param c Company to give a name.
  */
+#ifndef WITH_RUST
 static void GenerateCompanyName(Company *c)
 {
 	if (c->name_1 != STR_SV_UNNAMED) return;
@@ -531,7 +540,9 @@ bad_town_name:;
 		goto verify_name;
 	}
 }
+#endif /* WITH_RUST */
 
+#ifndef WITH_RUST
 /** Sorting weights for the company colours. */
 static const uint8_t _colour_sort[COLOUR_END] = {2, 2, 3, 2, 3, 2, 3, 2, 3, 2, 2, 2, 3, 1, 1, 1};
 /** Similar colours, so we can try to prevent same coloured companies. */
@@ -554,10 +565,13 @@ static const Colours _similar_colour[COLOUR_END][2] = {
 	{ COLOUR_GREY,       INVALID_COLOUR    }, // COLOUR_WHITE
 };
 
+#endif /* WITH_RUST */
+
 /**
  * Generate a company colour.
  * @return Generated company colour.
  */
+#ifndef WITH_RUST
 static Colours GenerateCompanyColour()
 {
 	Colours colours[COLOUR_END];
@@ -608,11 +622,13 @@ static Colours GenerateCompanyColour()
 
 	NOT_REACHED();
 }
+#endif /* WITH_RUST */
 
 /**
  * Generate a random president name of a company.
  * @param c Company that needs a new president name.
  */
+#ifndef WITH_RUST
 static void GeneratePresidentName(Company *c)
 {
 	for (;;) {
@@ -634,6 +650,7 @@ restart:;
 		return;
 	}
 }
+#endif /* WITH_RUST */
 
 /**
  * Reset the livery schemes to the company's primary colour.
@@ -642,6 +659,9 @@ restart:;
  */
 void ResetCompanyLivery(Company *c)
 {
+#ifdef WITH_RUST
+	openttd_rust_company_reset_livery(&GetRustCompanyIdentityServices(), c);
+#else
 	for (LiveryScheme scheme = LS_BEGIN; scheme < LS_END; scheme++) {
 		c->livery[scheme].in_use.Reset();
 		c->livery[scheme].colour1 = c->colour;
@@ -655,6 +675,7 @@ void ResetCompanyLivery(Company *c)
 			g->livery.colour2 = c->colour;
 		}
 	}
+#endif /* WITH_RUST */
 }
 
 /**
@@ -1193,6 +1214,9 @@ CommandCost CmdCompanyAllowListCtrl(DoCommandFlags flags, CompanyAllowListCtrlAc
  */
 CommandCost CmdSetCompanyManagerFace(DoCommandFlags flags, uint style, uint32_t bits)
 {
+#ifdef WITH_RUST
+	return openttd_rust_company_manager_face(&GetRustCompanyIdentityServices(), style, bits, flags.Test(DoCommandFlag::Execute)) ? CommandCost() : CMD_ERROR;
+#else
 	CompanyManagerFace tmp_face{style, bits, {}};
 	if (!IsValidCompanyManagerFace(tmp_face)) return CMD_ERROR;
 
@@ -1204,6 +1228,7 @@ CommandCost CmdSetCompanyManagerFace(DoCommandFlags flags, uint style, uint32_t 
 		MarkWholeScreenDirty();
 	}
 	return CommandCost();
+#endif /* WITH_RUST */
 }
 
 /**
@@ -1213,11 +1238,15 @@ CommandCost CmdSetCompanyManagerFace(DoCommandFlags flags, uint style, uint32_t 
  */
 void UpdateCompanyLiveries(Company *c)
 {
+#ifdef WITH_RUST
+	openttd_rust_company_update_liveries(&GetRustCompanyIdentityServices(), c);
+#else
 	for (int i = 1; i < LS_END; i++) {
 		if (!c->livery[i].in_use.Test(Livery::Flag::Primary)) c->livery[i].colour1 = c->livery[LS_DEFAULT].colour1;
 		if (!c->livery[i].in_use.Test(Livery::Flag::Secondary)) c->livery[i].colour2 = c->livery[LS_DEFAULT].colour2;
 	}
 	UpdateCompanyGroupLiveries(c);
+#endif /* WITH_RUST */
 }
 
 /**
@@ -1230,6 +1259,9 @@ void UpdateCompanyLiveries(Company *c)
  */
 CommandCost CmdSetCompanyColour(DoCommandFlags flags, LiveryScheme scheme, bool primary, Colours colour)
 {
+#ifdef WITH_RUST
+	return openttd_rust_company_colour(&GetRustCompanyIdentityServices(), scheme, primary, colour, flags.Test(DoCommandFlag::Execute)) ? CommandCost() : CMD_ERROR;
+#else
 	if (scheme >= LS_END || (colour >= COLOUR_END && colour != INVALID_COLOUR)) return CMD_ERROR;
 
 	/* Default scheme can't be reset to invalid. */
@@ -1305,6 +1337,7 @@ CommandCost CmdSetCompanyColour(DoCommandFlags flags, LiveryScheme scheme, bool 
 		UpdateObjectColours(c);
 	}
 	return CommandCost();
+#endif /* WITH_RUST */
 }
 
 /**
@@ -1312,6 +1345,7 @@ CommandCost CmdSetCompanyColour(DoCommandFlags flags, LiveryScheme scheme, bool 
  * @param name Name to search.
  * @return \c true if the name us unique (that is, not in use), else \c false.
  */
+#ifndef WITH_RUST
 static bool IsUniqueCompanyName(const std::string &name)
 {
 	for (const Company *c : Company::Iterate()) {
@@ -1320,6 +1354,7 @@ static bool IsUniqueCompanyName(const std::string &name)
 
 	return true;
 }
+#endif /* WITH_RUST */
 
 /**
  * Change the name of the company.
@@ -1329,6 +1364,10 @@ static bool IsUniqueCompanyName(const std::string &name)
  */
 CommandCost CmdRenameCompany(DoCommandFlags flags, const std::string &text)
 {
+#ifdef WITH_RUST
+	uint8_t result = openttd_rust_company_rename(&GetRustCompanyIdentityServices(), {reinterpret_cast<const uint8_t *>(text.data()), text.size()}, flags.Test(DoCommandFlag::Execute));
+	return result == 0 ? CommandCost() : result == 2 ? CommandCost(STR_ERROR_NAME_MUST_BE_UNIQUE) : CMD_ERROR;
+#else
 	bool reset = text.empty();
 
 	if (!reset) {
@@ -1352,6 +1391,7 @@ CommandCost CmdRenameCompany(DoCommandFlags flags, const std::string &text)
 	}
 
 	return CommandCost();
+#endif /* WITH_RUST */
 }
 
 /**
@@ -1359,6 +1399,7 @@ CommandCost CmdRenameCompany(DoCommandFlags flags, const std::string &text)
  * @param name Name to search.
  * @return \c true if the name us unique (that is, not in use), else \c false.
  */
+#ifndef WITH_RUST
 static bool IsUniquePresidentName(const std::string &name)
 {
 	for (const Company *c : Company::Iterate()) {
@@ -1367,6 +1408,7 @@ static bool IsUniquePresidentName(const std::string &name)
 
 	return true;
 }
+#endif /* WITH_RUST */
 
 /**
  * Change the name of the president.
@@ -1376,6 +1418,10 @@ static bool IsUniquePresidentName(const std::string &name)
  */
 CommandCost CmdRenamePresident(DoCommandFlags flags, const std::string &text)
 {
+#ifdef WITH_RUST
+	uint8_t result = openttd_rust_president_rename(&GetRustCompanyIdentityServices(), {reinterpret_cast<const uint8_t *>(text.data()), text.size()}, flags.Test(DoCommandFlag::Execute));
+	return result == 0 ? CommandCost() : result == 2 ? CommandCost(STR_ERROR_NAME_MUST_BE_UNIQUE) : CMD_ERROR;
+#else
 	bool reset = text.empty();
 
 	if (!reset) {
@@ -1406,6 +1452,7 @@ CommandCost CmdRenamePresident(DoCommandFlags flags, const std::string &text)
 	}
 
 	return CommandCost();
+#endif /* WITH_RUST */
 }
 
 /**
@@ -1575,11 +1622,15 @@ FaceVars GetCompanyManagerFaceVars(uint style)
  */
 void SetCompanyManagerFaceStyle(CompanyManagerFace &cmf, uint style)
 {
+#ifdef WITH_RUST
+	openttd_rust_face_style(&GetRustFaceServices(), &cmf, style);
+#else
 	const FaceSpec *spec = GetCompanyManagerFaceSpec(style);
 	assert(spec != nullptr);
 
 	cmf.style = style;
 	cmf.style_label = spec->label;
+#endif /* WITH_RUST */
 }
 
 /**
@@ -1590,8 +1641,12 @@ void SetCompanyManagerFaceStyle(CompanyManagerFace &cmf, uint style)
  */
 void RandomiseCompanyManagerFace(CompanyManagerFace &cmf, Randomizer &randomizer)
 {
+#ifdef WITH_RUST
+	openttd_rust_face_random(&GetRustFaceServices(), &cmf, &randomizer);
+#else
 	SetCompanyManagerFaceStyle(cmf, randomizer.Next(GetNumCompanyManagerFaceStyles()));
 	RandomiseCompanyManagerFaceBits(cmf, GetCompanyManagerFaceVars(cmf.style), randomizer);
+#endif /* WITH_RUST */
 }
 
 /**
@@ -1603,6 +1658,9 @@ void RandomiseCompanyManagerFace(CompanyManagerFace &cmf, Randomizer &randomizer
  */
 uint32_t MaskCompanyManagerFaceBits(const CompanyManagerFace &cmf, FaceVars vars)
 {
+#ifdef WITH_RUST
+	return openttd_rust_face_mask(&GetRustFaceServices(), cmf.bits, {vars.data(), vars.size()});
+#else
 	CompanyManagerFace face{};
 
 	for (auto var : SetBitIterator(GetActiveFaceVars(cmf, vars))) {
@@ -1610,6 +1668,7 @@ uint32_t MaskCompanyManagerFaceBits(const CompanyManagerFace &cmf, FaceVars vars
 	}
 
 	return face.bits;
+#endif /* WITH_RUST */
 }
 
 /**
@@ -1668,17 +1727,8 @@ std::optional<CompanyManagerFace> ParseCompanyManagerFaceCode(std::string_view s
 #ifdef WITH_RUST
 /* Identity and networking services of the Rust company owner; each runs the
  * original statements consecutively, without a decision between them. */
-void RustCompanyGenerateName(uint8_t id) noexcept { GenerateCompanyName(Company::Get(id)); }
-uint8_t RustCompanyGenerateColour() noexcept { return GenerateCompanyColour(); }
-void RustCompanySetColour(uint8_t id, uint8_t colour) noexcept
-{
-	Company *c = Company::Get(id);
-	c->colour = static_cast<Colours>(colour);
-	ResetCompanyLivery(c);
-	_company_colours[c->index] = c->colour;
-}
 /** DoStartupNewCompany from the inaugurated years to the legend windows. */
-void RustCompanySetup(uint8_t id, bool is_ai) noexcept
+bool RustCompanyPrepare(uint8_t id, bool is_ai) noexcept
 {
 	Company *c = Company::Get(id);
 	c->avail_railtypes = GetCompanyRailTypes(c->index);
@@ -1694,12 +1744,18 @@ void RustCompanySetup(uint8_t id, bool is_ai) noexcept
 			c->face = std::move(*cmf);
 		}
 	}
-	if (randomise_face) RandomiseCompanyManagerFace(c->face, _random);
+	return randomise_face;
+}
+void RustCompanyDefaults(uint8_t id) noexcept
+{
+	Company *c = Company::Get(id);
 
 	SetDefaultCompanySettings(c->index);
 	ClearEnginesHiddenFlagOfCompany(c->index);
 
-	GeneratePresidentName(c);
+}
+void RustCompanyStartupWindows() noexcept
+{
 
 	SetWindowDirty(WC_GRAPH_LEGEND, 0);
 	InvalidateWindowData(WC_CLIENT_LIST, 0);

@@ -928,7 +928,7 @@ unsafe fn update_profits(w: &GroupServices) {
         }
     }
 }
-unsafe fn company_liveries(w: &GroupServices, company: u8) {
+pub(crate) unsafe fn company_liveries(w: &GroupServices, company: u8) {
     let mut from = 0;
     loop {
         let id = unsafe { (w.next_group)(from) };

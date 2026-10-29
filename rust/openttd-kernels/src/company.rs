@@ -262,6 +262,7 @@ pub struct FinanceServices {
 /// Lifecycle, economy and ownership-transfer services; see `company_ffi.h`.
 #[repr(C)]
 pub struct Services {
+    pub identity: &'static crate::company_identity::Services,
     pub finance: &'static FinanceServices,
     pub shared: &'static crate::services::Services,
     pub company_next: extern "C" fn(u32) -> CompanyRef,
@@ -272,7 +273,6 @@ pub struct Services {
     pub network_server: extern "C" fn() -> bool,
     pub company_vehicle_counts: extern "C" fn(u8) -> VehicleCounts,
     pub vehicle_limits: extern "C" fn() -> VehicleCounts,
-    pub company_admin_update: extern "C" fn(u8),
     pub company_in_trouble: extern "C" fn(u8),
     pub post_company_delete: extern "C" fn(u8),
     pub hq_location: extern "C" fn(u8) -> u32,
@@ -292,7 +292,6 @@ pub struct Services {
     pub set_cargo_payment: extern "C" fn(u32, i64),
     pub price_windows_dirty: extern "C" fn(),
     pub industry_daily_changes: extern "C" fn(bool),
-    pub generate_company_name: extern "C" fn(u8),
     pub ask_merger: extern "C" fn(u8, u8, i64),
     pub is_interactive_company: extern "C" fn(u8) -> bool,
     pub show_buy_company: extern "C" fn(u8),
@@ -301,10 +300,10 @@ pub struct Services {
     pub finances_dirty: extern "C" fn(u8),
     pub show_company_finances: extern "C" fn(u8),
     pub new_year_sound: extern "C" fn(bool),
-    pub generate_company_colour: extern "C" fn() -> u8,
     pub allocate_company: extern "C" fn(u8, bool) -> CompanyRef,
-    pub set_company_colour: extern "C" fn(u8, u8),
-    pub setup_new_company: extern "C" fn(u8, bool),
+    pub prepare_new_company: extern "C" fn(u8, bool) -> bool,
+    pub company_defaults: extern "C" fn(u8),
+    pub startup_windows: extern "C" fn(),
     pub new_company_events: extern "C" fn(u8),
     pub company_league_dirty: extern "C" fn(),
     pub company_ctrl_windows: extern "C" fn(),
@@ -699,7 +698,7 @@ fn bankruptcy(s: &Services, m: &Month, p: *mut Finances, id: u8) {
         write_field!(p, bankruptcy, 0);
         write_field!(p, asked, 0);
         if previous != 0 {
-            (s.company_admin_update)(id);
+            (s.identity.admin_update)(crate::company_type::CompanyID(id));
         }
         return;
     }
@@ -727,7 +726,7 @@ fn bankruptcy(s: &Services, m: &Month, p: *mut Finances, id: u8) {
     }
     // Original subtraction promotes uint8_t to int before ceil division.
     if (i32::from(month) + 2) / 3 != (i32::from(month) - 1 + 2) / 3 {
-        (s.company_admin_update)(id);
+        (s.identity.admin_update)(crate::company_type::CompanyID(id));
     }
 }
 fn maintenance(s: &Services, p: *mut Finances, id: u8) {
@@ -969,20 +968,30 @@ fn startup(s: &Services, f: &mut Startup) -> bool {
     if !(s.can_allocate_company)() {
         return false;
     }
-    let colour = (s.generate_company_colour)();
+    let colour = crate::company_identity::generate_colour(s.identity);
     if f.requested != INVALID_OWNER && !(s.finance.company_finances)(f.requested).is_null() {
         return false;
     }
     let c = (s.allocate_company)(f.requested, f.is_ai);
     f.company = c.id;
     let id = c.id as u8;
-    (s.set_company_colour)(id, colour);
+    let company = (s.identity.company)(crate::company_type::CompanyID(id));
+    crate::company_identity::set_startup_colour(s.identity, company, colour);
     let loan = (((INITIAL_LOAN as u64).wrapping_mul(read_field!(e(), prices)) >> 16) / 10_000
         * 10_000) as i64;
     let loan = loan.min(read_field!(e(), max_loan));
     write_field!(c.finances, loan, loan);
     write_field!(c.finances, money, loan);
-    (s.setup_new_company)(id, f.is_ai);
+    if (s.prepare_new_company)(id, f.is_ai) {
+        crate::company_manager_face::random(
+            s.identity.faces,
+            (s.identity.face)(company),
+            s.identity.randomizer,
+        );
+    }
+    (s.company_defaults)(id);
+    crate::company_identity::generate_president(s.identity, company);
+    (s.startup_windows)();
     if f.is_ai && (!(s.finance.networking)() || (s.network_server)()) {
         f.stage = 1;
         return true;
@@ -1308,7 +1317,10 @@ fn tick(s: &Services, t: &mut Tick) -> bool {
         let id = unsafe { TICK } as u8;
         if !t.finances.is_null() {
             if t.named {
-                (s.generate_company_name)(id);
+                crate::company_identity::generate_name(
+                    s.identity,
+                    (s.identity.company)(crate::company_type::CompanyID(id)),
+                );
             }
             if read_field!(t.finances, asked) != 0 {
                 offer(s, t.finances, id);
@@ -1924,6 +1936,7 @@ crate::abi::layouts! {
         money_animation,
     };
     "OpenTTDCompanyServices" ["company_economy"] => Services {
+        identity,
         finance,
         shared,
         company_next,
@@ -1934,7 +1947,6 @@ crate::abi::layouts! {
         network_server,
         company_vehicle_counts,
         vehicle_limits,
-        company_admin_update,
         company_in_trouble,
         post_company_delete,
         hq_location,
@@ -1954,7 +1966,6 @@ crate::abi::layouts! {
         set_cargo_payment,
         price_windows_dirty,
         industry_daily_changes,
-        generate_company_name,
         ask_merger,
         is_interactive_company,
         show_buy_company,
@@ -1963,10 +1974,10 @@ crate::abi::layouts! {
         finances_dirty,
         show_company_finances,
         new_year_sound,
-        generate_company_colour,
         allocate_company,
-        set_company_colour,
-        setup_new_company,
+        prepare_new_company,
+        company_defaults,
+        startup_windows,
         new_company_events,
         company_league_dirty,
         company_ctrl_windows,

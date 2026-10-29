@@ -7,3 +7,6 @@ pub const COLOUR_GREEN: u8 = 6;
 
 /// End of the native Colours enumeration, also the random-colour setting.
 pub(crate) const COLOUR_END: u8 = 16;
+
+/// Native invalid colour sentinel.
+pub const INVALID_COLOUR: u8 = 255;

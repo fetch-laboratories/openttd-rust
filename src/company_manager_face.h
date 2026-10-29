@@ -17,6 +17,9 @@
 #include "gfx_type.h"
 
 #include "table/strings.h"
+#ifdef WITH_RUST
+#include "rust/company_face_ffi.h"
+#endif
 
 enum class FaceVarType : uint8_t {
 	Sprite,
@@ -139,6 +142,9 @@ FaceVars GetCompanyManagerFaceVars(uint style_index);
  */
 inline uint64_t GetActiveFaceVars(const CompanyManagerFace &cmf, FaceVars vars)
 {
+#ifdef WITH_RUST
+	return openttd_rust_face_active(&GetRustFaceServices(), cmf.bits, {vars.data(), vars.size()});
+#else
 	uint64_t active_vars = (1ULL << std::size(vars)) - 1ULL;
 
 	for (const auto &info : vars) {
@@ -148,6 +154,7 @@ inline uint64_t GetActiveFaceVars(const CompanyManagerFace &cmf, FaceVars vars)
 	}
 
 	return active_vars;
+#endif /* WITH_RUST */
 }
 
 /**
@@ -157,9 +164,13 @@ inline uint64_t GetActiveFaceVars(const CompanyManagerFace &cmf, FaceVars vars)
  */
 inline void ScaleAllCompanyManagerFaceBits(CompanyManagerFace &cmf, FaceVars vars)
 {
+#ifdef WITH_RUST
+	openttd_rust_face_scale(&GetRustFaceServices(), &cmf, {vars.data(), vars.size()});
+#else
 	for (auto var : SetBitIterator(GetActiveFaceVars(cmf, vars))) {
 		vars[var].ChangeBits(cmf, 0);
 	}
+#endif /* WITH_RUST */
 }
 
 /**
@@ -170,8 +181,12 @@ inline void ScaleAllCompanyManagerFaceBits(CompanyManagerFace &cmf, FaceVars var
  */
 inline void RandomiseCompanyManagerFaceBits(CompanyManagerFace &cmf, FaceVars vars, Randomizer &randomizer)
 {
+#ifdef WITH_RUST
+	openttd_rust_face_random_bits(&GetRustFaceServices(), &cmf, {vars.data(), vars.size()}, &randomizer);
+#else
 	cmf.bits = randomizer.Next();
 	ScaleAllCompanyManagerFaceBits(cmf, vars);
+#endif /* WITH_RUST */
 }
 
 void SetCompanyManagerFaceStyle(CompanyManagerFace &cmf, uint style);

@@ -72,3 +72,10 @@ impl EngineID {
     /// Native invalid sentinel.
     pub const INVALID: Self = Self(u16::MAX);
 }
+
+/// EngineMiscFlag::RailIsMU.
+pub const RAIL_IS_MU: u8 = 1 << 2;
+/// EngineMiscFlag::RoadIsTram.
+pub const ROAD_IS_TRAM: u8 = 1;
+/// AIR_FAST.
+pub const AIR_FAST: u8 = 2;

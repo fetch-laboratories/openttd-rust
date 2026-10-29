@@ -4759,7 +4759,7 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.veh_exit_dir = TrainVehExitDir,
 		.viewport = TrainViewport,
 		.visit_type = TrainVisitType,
-		.wagon_override = TrainWagonOverride,
+		.wagon_override = TrainVehicleRead<uint64_t, RustVehicleUsesWagonOverride>,
 		.wagon_speed_limits = RustSettingRead<uint64_t, RustWagonSpeedLimits, OpenTTDTrainHandle>,
 		.wait_oneway = TrainWaitOneway,
 		.wait_pbs = TrainWaitPbs,

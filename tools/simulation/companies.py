@@ -114,6 +114,8 @@ def scenarios(soak):
             ("competitors", 120),
             ("competitor-timer", 3 * SNAPSHOT_TICKS if soak else 120),
             ("competitor-reload", 120),
+            ("identity", 120),
+            ("identity-reload", 120),
         )
     ]
 
@@ -229,7 +231,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     if operation == "recover":
         finances[1]["money"] = 500_000
     if operation in ("finance", "reuse", "reload") or operation.startswith(
-        "competitor"
+        ("competitor", "identity")
     ):
         finances[1].update(money=500_000, months_of_bankruptcy=0, bankrupt_asked=0)
     if operation == "tie":
@@ -345,6 +347,53 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
 
         active_monitors(prepared, cargoes=(63,), amount=17)
     result["company_input"] = record
+    if operation.startswith("identity"):
+        from . import fleet
+        from .console_adapter import prepared_console
+        from .core import capture_pair, compare_saves
+
+        executables = prepared_console(
+            "fleet", fleet.adapter, binaries, builds, folder, env
+        )
+        scenario = dict(
+            scenario,
+            save=str(prepared),
+            console=["start_ai MigrationCompanies"] * 12
+            + ["fleet_scenario company-identity", "unpause"],
+            executables=executables,
+        )
+        if operation == "identity-reload":
+            runs = capture_pair(scenario, executables, builds, folder, timeout, env)
+            saves = {}
+            for role, run in runs.items():
+                check(scenario, run, "capture", role, result)
+                if run["exit"] or not run["snapshots"]:
+                    raise RuntimeError("company identity capture failed")
+                saves[role] = run["snapshots"][-1]
+            differences = compare_saves(
+                saves["reference"],
+                saves["candidate"],
+                scenario["name"],
+                20,
+                result["stats"],
+            )
+            traces = [
+                [
+                    line
+                    for line in runs[role]["log"]
+                    if line.startswith("COMPANY-IDENTITY ")
+                ]
+                for role in ("reference", "candidate")
+            ]
+            if differences or traces[0] != traces[1]:
+                result["differences"].extend(differences)
+                raise RuntimeError("company identity capture differs")
+            scenario = dict(
+                scenario,
+                role_inputs={role: {"save": str(save)} for role, save in saves.items()},
+                console=["fleet_scenario company-inspect", "unpause"],
+            )
+        return scenario
     return dict(scenario, save=str(prepared))
 
 
@@ -410,6 +459,30 @@ def check(scenario, run, mode, role, result):
     operation = scenario["companies"]
     source, final = Path(scenario["save"]), run["snapshots"][-1]
     before, after = rows(source, "PLYR"), rows(final, "PLYR")
+    if operation.startswith("identity"):
+        log = run["log"]
+        if len(after) != 15 or len({c["colour"] for c in after.values()}) != 15:
+            raise RuntimeError(
+                "company identity did not exhaust the reachable colour pool"
+            )
+        if sum(c["is_ai"] for c in after.values()) != 14:
+            raise RuntimeError("company identity did not create fourteen AI companies")
+        if "fleet_scenario company-identity" in scenario["console"]:
+            if "COMPANY-IDENTITY complete true" not in log:
+                raise RuntimeError("company identity commands did not complete")
+        if not any(line.startswith("COMPANY-IDENTITY rng ") for line in log):
+            raise RuntimeError("company identity lacks both RNG streams")
+        if (
+            after[1]["name_1"] == after[2]["name_1"]
+            and after[1]["name_2"] == after[2]["name_2"]
+        ):
+            raise RuntimeError("company generated-name collision was not resolved")
+        result[f"{mode}_{role}_identity"] = {
+            "companies": len(after),
+            "ai_companies": sum(c["is_ai"] for c in after.values()),
+            "trace": [line for line in log if line.startswith("COMPANY-IDENTITY ")],
+        }
+        return
     if operation.startswith("competitor"):
         result[f"{mode}_{role}_competitors"] = check_competitors(
             scenario, run, source, final

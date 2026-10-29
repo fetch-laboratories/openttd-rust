@@ -1266,9 +1266,12 @@ static void VisualTrainProbe()
 /** Running road vehicle 12 of padhattan-ridge-2000 heads to a service depot; the witness runs on 2001-01-01. */
 static VehicleID _drain_vehicle = VehicleID::Invalid();
 static UnitID _drain_unit = 0;
+#include "company-identity-console.inc"
 static bool FleetScenario(std::span<std::string_view> args)
 {
 	if (args.size() != 2) return false;
+	if (args[1] == "company-identity") { CompanyIdentityProbe(); return true; }
+	if (args[1] == "company-inspect") { CompanyIdentityInspect(); return true; }
 	if (args[1] == "effect-emission") { VisualEffectProbe(); return true; }
 	if (args[1] == "effect-emission-train") { VisualTrainProbe(); return true; }
 	Backup<CompanyID> company(_current_company);

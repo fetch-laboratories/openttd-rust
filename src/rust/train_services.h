@@ -541,11 +541,6 @@ static uint64_t TrainVisitType(OpenTTDTrainHandle, uint16_t a) noexcept
 {
 	return Station::Get(StationID(a))->had_vehicle_of_type;
 }
-static uint64_t TrainWagonOverride(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	return UsesWagonOverride(v);
-}
 
 static uint64_t TrainWaitOneway(OpenTTDTrainHandle) noexcept
 {

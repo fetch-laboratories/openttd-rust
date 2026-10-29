@@ -8,6 +8,9 @@
 /** @file vehicle.cpp Base implementations of all vehicles. */
 
 #include "stdafx.h"
+#ifdef WITH_RUST
+#include "rust/company_identity_ffi.h"
+#endif
 #include "error.h"
 #include "roadveh.h"
 #include "ship.h"
@@ -2203,6 +2206,9 @@ bool CanBuildVehicleInfrastructure(VehicleType type, uint8_t subtype)
  */
 LiveryScheme GetEngineLiveryScheme(EngineID engine_type, EngineID parent_engine_type, const Vehicle *v)
 {
+#ifdef WITH_RUST
+	return openttd_rust_engine_livery_scheme(&GetRustCompanyIdentityServices(), engine_type.base(), parent_engine_type.base(), RustVehicle(const_cast<Vehicle *>(v)));
+#else
 	CargoType cargo_type = v == nullptr ? INVALID_CARGO : v->cargo_type;
 	const Engine *e = Engine::Get(engine_type);
 	switch (e->type) {
@@ -2284,6 +2290,7 @@ LiveryScheme GetEngineLiveryScheme(EngineID engine_type, EngineID parent_engine_
 				default: NOT_REACHED();
 			}
 	}
+#endif /* WITH_RUST */
 }
 
 /**

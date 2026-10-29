@@ -9,6 +9,7 @@
 #define RUST_COMPANY_FFI_H
 #include "service_defaults.hpp"
 struct OpenTTDSubsidyServices;
+struct OpenTTDCompanyIdentityServices;
 #include <cstddef>
 #include <cstdint>
 #include "services_ffi.h"
@@ -88,6 +89,7 @@ struct OpenTTDCompanyFinanceServices {
  */
 struct OpenTTDObjectServices;
 struct OpenTTDCompanyServices {
+	const OpenTTDCompanyIdentityServices *identity;
 	const OpenTTDCompanyFinanceServices *finance;
 	const OpenTTDSharedServices *shared;
 	OpenTTDCompanyRef (OPENTTD_RUST_CALL *company_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(company_next);
@@ -98,7 +100,6 @@ struct OpenTTDCompanyServices {
 	bool (OPENTTD_RUST_CALL *network_server)() noexcept OPENTTD_SERVICE_DEFAULT(network_server);
 	OpenTTDCompanyVehicleCounts (OPENTTD_RUST_CALL *company_vehicle_counts)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_vehicle_counts);
 	OpenTTDCompanyVehicleCounts (OPENTTD_RUST_CALL *vehicle_limits)() noexcept OPENTTD_SERVICE_DEFAULT(vehicle_limits);
-	void (OPENTTD_RUST_CALL *company_admin_update)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_admin_update);
 	void (OPENTTD_RUST_CALL *company_in_trouble)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_in_trouble);
 	void (OPENTTD_RUST_CALL *post_company_delete)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(post_company_delete);
 	uint32_t (OPENTTD_RUST_CALL *hq_location)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(hq_location);
@@ -118,7 +119,6 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_RUST_CALL *set_cargo_payment)(uint32_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_cargo_payment);
 	void (OPENTTD_RUST_CALL *price_windows_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(price_windows_dirty);
 	void (OPENTTD_RUST_CALL *industry_daily_changes)(bool) noexcept OPENTTD_SERVICE_DEFAULT(industry_daily_changes);
-	void (OPENTTD_RUST_CALL *generate_company_name)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(generate_company_name);
 	void (OPENTTD_RUST_CALL *ask_merger)(uint8_t, uint8_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(ask_merger);
 	bool (OPENTTD_RUST_CALL *is_interactive_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(is_interactive_company);
 	void (OPENTTD_RUST_CALL *show_buy_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(show_buy_company);
@@ -127,10 +127,10 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_RUST_CALL *finances_dirty)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(finances_dirty);
 	void (OPENTTD_RUST_CALL *show_company_finances)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(show_company_finances);
 	void (OPENTTD_RUST_CALL *new_year_sound)(bool) noexcept OPENTTD_SERVICE_DEFAULT(new_year_sound);
-	uint8_t (OPENTTD_RUST_CALL *generate_company_colour)() noexcept OPENTTD_SERVICE_DEFAULT(generate_company_colour);
 	OpenTTDCompanyRef (OPENTTD_RUST_CALL *allocate_company)(uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(allocate_company);
-	void (OPENTTD_RUST_CALL *set_company_colour)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_company_colour);
-	void (OPENTTD_RUST_CALL *setup_new_company)(uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(setup_new_company);
+	bool (*prepare_new_company)(uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(prepare_new_company);
+	void (*company_defaults)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_defaults);
+	void (*startup_windows)() noexcept OPENTTD_SERVICE_DEFAULT(startup_windows);
 	void (OPENTTD_RUST_CALL *new_company_events)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(new_company_events);
 	void (OPENTTD_RUST_CALL *company_league_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(company_league_dirty);
 	void (OPENTTD_RUST_CALL *company_ctrl_windows)() noexcept OPENTTD_SERVICE_DEFAULT(company_ctrl_windows);
