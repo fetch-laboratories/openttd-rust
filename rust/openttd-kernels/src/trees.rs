@@ -1380,6 +1380,7 @@ mod tests {
             make_shore,
             make_snow,
             water_services,
+            movement_services,
             tile_type: water_type,
             tree_ground: water,
             play_sound: sound,
@@ -1471,6 +1472,13 @@ mod tests {
             water
         }; }
         WATER.with(std::ptr::from_ref)
+    }
+    // Water entries resolve the map view through the movement registry; this one
+    // has no descriptor, so every map field is read through `tile_type`.
+    extern "C" fn movement_services() -> *const crate::movement::MovementServices {
+        thread_local! { static MOVEMENT: crate::movement::MovementServices =
+        crate::train_reservation::tests::movement_table(); }
+        MOVEMENT.with(std::ptr::from_ref)
     }
     extern "C" fn sound(_: u32, id: u16) {
         log(Event::Sound(id));

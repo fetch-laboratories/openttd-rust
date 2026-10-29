@@ -82,6 +82,11 @@ static void Trees()
 		.news = TreeUnused<void, OpenTTDVehicle *, uint32_t>,
 	};
 	shared.water_services = []() noexcept { return &water; };
+	/* Water entries resolve the map view through this registry; without a descriptor
+	 * every map field is read through tile_type. */
+	static const OpenTTDMovementServices movement{};
+	shared.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
+	shared.map_log_x = []() noexcept { return 6U; };
 	shared.map_max_x = []() noexcept { return 63U; };
 	shared.map_max_y = []() noexcept { return 63U; };
 	shared.tile_type = [](uint32_t tile) noexcept { return static_cast<uint8_t>(tile == 1 || tile == 2 ? 4 : 5); };

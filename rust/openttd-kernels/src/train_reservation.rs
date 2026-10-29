@@ -1315,7 +1315,7 @@ crate::abi::layouts! {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::pbs::PbsServices;
     use crate::services::RailMapServices;
@@ -1463,7 +1463,8 @@ mod tests {
             false
         }
     }
-    fn movement_table() -> crate::movement::MovementServices {
+    /// Movement table whose every service is unused and which has no map descriptor.
+    pub(crate) fn movement_table() -> crate::movement::MovementServices {
         crate::movement::MovementServices {
             tile_types: unused(),
             shared: unused(),
