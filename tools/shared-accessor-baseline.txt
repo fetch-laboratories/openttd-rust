@@ -1,5 +1,4 @@
 src/economy.cpp | []() noexcept -> bool | 05d6eb800dc27d98 | 1
-src/economy.cpp | [](OpenTTDStation *station, OpenTTDVehicle *vehicle) noexcept -> uint32_t | 9863489038d87581 | 1
 src/economy.cpp | [](OpenTTDStation *station, uint8_t cargo) noexcept -> uint32_t | f29886bee36a938f | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> OpenTTDNativeCargoPayment * | 6c04ed067ab54477 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> bool | c1ccb7a99eba675e | 1
@@ -101,7 +100,6 @@ src/rust/train_services.h | TrainAccModel(OpenTTDTrainHandle) noexcept | cba5e3d
 src/rust/train_services.h | TrainLostWarn(OpenTTDTrainHandle) noexcept | a7daee26a20b15e2 | 1
 src/rust/train_services.h | TrainMapSize(OpenTTDTrainHandle) noexcept | b49ebe1aff917479 | 1
 src/rust/train_services.h | TrainMaxDepotPenalty(OpenTTDTrainHandle) noexcept | b7492fcfee760201 | 1
-src/rust/train_services.h | TrainPlatformLength(OpenTTDTrainHandle, uint16_t a, uint32_t b) noexcept | 458d1f670121d8ef | 1
 src/rust/train_services.h | TrainReverseAtSignals(OpenTTDTrainHandle) noexcept | 562ee8ededd55021 | 1
 src/rust/train_services.h | TrainSharedMap(OpenTTDTrainHandle, uint32_t tile) noexcept | d2c72c5ff1b66cb5 | 1
 src/rust/train_services.h | TrainVisitType(OpenTTDTrainHandle, uint16_t a) noexcept | 01608408cc222048 | 1

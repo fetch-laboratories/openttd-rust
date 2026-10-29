@@ -26,3 +26,6 @@ pub const RAILTYPE_LABEL_ELECTRIC: u32 = u32::from_be_bytes(*b"ELRL");
 pub const RAILTYPE_LABEL_MONO: u32 = u32::from_be_bytes(*b"MONO");
 /// `RAILTYPE_LABEL_MAGLEV`.
 pub const RAILTYPE_LABEL_MAGLEV: u32 = u32::from_be_bytes(*b"MGLV");
+
+/// `INVALID_RAILTYPES`, the original all-types sentinel for follower initialization.
+pub const INVALID_RAILTYPES: u64 = u64::MAX;

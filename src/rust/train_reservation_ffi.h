@@ -141,7 +141,6 @@ struct OpenTTDTrainReservationLeaves {
 	void (*write_last)(void *, OpenTTDTrainHandle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_last);
 	void (*write_suppress)(void *, OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_suppress);
 
-	uint8_t (*follow)(OpenTTDTrainHandle, uint64_t, OpenTTDTrainReservationFollow *) noexcept OPENTTD_SERVICE_DEFAULT(follow);
 	OpenTTDTrainReservationSearch (*pathfind)(OpenTTDTrainHandle, uint32_t, uint8_t, uint8_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(pathfind);
 	uint8_t (*safe_track)(OpenTTDTrainHandle, uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(safe_track);
 	uint8_t (*process_orders)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(process_orders);

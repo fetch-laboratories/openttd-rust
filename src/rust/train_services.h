@@ -362,15 +362,6 @@ static uint64_t TrainPbsSignalType(OpenTTDTrainHandle) noexcept
 {
 	return SIGTYPE_PBS;
 }
-static uint64_t TrainPlatformAhead(OpenTTDTrainHandle id, uint16_t a, uint32_t b) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	return Station::Get(StationID(a))->GetPlatformLength(TileIndex(b), DirToDiagDir(RustVehicleDirection(v)));
-}
-static uint64_t TrainPlatformLength(OpenTTDTrainHandle, uint16_t a, uint32_t b) noexcept
-{
-	return Station::Get(StationID(a))->GetPlatformLength(TileIndex(b));
-}
 static uint64_t TrainPowWagPower(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);

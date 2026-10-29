@@ -8,6 +8,7 @@ add_test_files(
     cargo_payment.cpp
     cargo_payment_stubs.hpp
     fleet.cpp
+    follower_probe.hpp
     newgrf_loading.cpp
     engine.cpp
     effectvehicle.cpp
