@@ -452,9 +452,9 @@ pub(crate) fn speed_limit(s: &Services, mode: u8, v: Option<VehicleRef>, tile: u
     let m = crate::movement::table(s);
     let mut speed = i32::MAX;
     if mode != WATER && w.kind(tile) == crate::tile_type::MP_TUNNELBRIDGE && w.bridge(tile) {
-        speed = i32::from((m.bridge_type_speed)(
+        speed = i32::from((m.bridge_type_speed)(u32::from(
             (World::byte(w.types.m6(tile)) >> 2) & 15,
-        ));
+        )));
         if mode == ROAD {
             speed *= 2;
         }

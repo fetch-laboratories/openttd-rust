@@ -237,7 +237,7 @@ pub struct MovementServices {
     pub vehicle: *const crate::vehicle::VehicleServices,
     pub road_compatible: extern "C" fn(VehicleRef) -> u64,
     pub road_type_speed: extern "C" fn(crate::services::RoadType) -> u16,
-    pub bridge_type_speed: extern "C" fn(u8) -> u16,
+    pub bridge_type_speed: extern "C" fn(std::ffi::c_uint) -> u16,
     pub other_bridge_end: extern "C" fn(u32) -> u32,
     pub order_speed: extern "C" fn(VehicleRef) -> u16,
     pub road_kind: extern "C" fn(VehicleRef) -> crate::services::RoadTramType,
