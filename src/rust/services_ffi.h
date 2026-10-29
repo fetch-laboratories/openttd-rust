@@ -57,7 +57,6 @@ enum Foundation : uint8_t;
 enum Slope : uint8_t;
 enum DiagDirection : uint8_t;
 struct OpenTTDCalendarYMD { int32_t year; uint8_t month, day; };
-struct OpenTTDPixelLocation { uint32_t tile; uint8_t kind; };
 struct OpenTTDFoundationSlope { int32_t z; Slope slope; };
 struct OpenTTDTownHandle; // Opaque native Town shell; never dereferenced in Rust.
 struct OpenTTDTownState;

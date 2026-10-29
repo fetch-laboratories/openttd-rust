@@ -20,6 +20,7 @@ pub(crate) fn map_read_probe(
 ) -> bool {
     // SAFETY: The native probe supplies the same no-reset interval as its entry.
     let observations = MapObservations {
+        dimensions: shared.map(),
         types: unsafe { crate::map_func::TileTypeAccess::raw(allocation, shared.tile_type) },
     };
     let s = table(shared);
@@ -45,10 +46,10 @@ pub(crate) fn map_read_probe(
         } else if observations.types.assertions() == station.is_some() {
             return false;
         }
-        if kind == MP_ROAD && (s.normal_road)(tile) {
-            let tail = context.normal_road_status_tail(tile);
-            let expected = (s.normal_road_status_tail)(tile);
-            if tail.disallowed != expected.disallowed || tail.road_works != expected.road_works {
+        if kind == MP_ROAD && (shared.is_normal_road)(tile) {
+            if context.disallowed_road_directions(tile) != (shared.disallowed_road_directions)(tile)
+                || context.has_road_works(tile) != (shared.has_road_works)(tile)
+            {
                 return false;
             }
             for kind in [crate::road_type::RTT_ROAD, crate::road_type::RTT_TRAM] {

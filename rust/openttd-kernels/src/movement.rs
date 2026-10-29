@@ -5,8 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Tile movement policy. Map and pools stay native; only copied scalars cross, including
-//! around `NewGRF` foundation callbacks.
+//! Tile movement policy. Map fields are loaded in place through the canonical
+//! descriptor; pool fields remain typed services. No map reference spans a callback.
 #![allow(
     unsafe_code,
     missing_docs,
@@ -95,6 +95,7 @@ impl<'a> CachedTable<'a> {
                 }
                 // SAFETY: The audited constructor bounds metadata to this entry.
                 Some(MapObservations {
+                    dimensions: self.shared.map(),
                     types: unsafe {
                         crate::map_func::TileTypeAccess::raw(allocation, self.shared.tile_type)
                     },
@@ -126,6 +127,7 @@ impl<'a> CachedTable<'a> {
 }
 
 struct MapObservations {
+    dimensions: crate::map_func::Map,
     types: crate::map_func::TileTypeAccess,
 }
 /// Keeps only allocation metadata; each original observation loads fresh scalars.
@@ -158,15 +160,65 @@ impl<const AUDITED: bool> Context<'_, AUDITED> {
             .unwrap_or_else(|| (self.shared().normal_road_bits)(tile, u8::from(kind.0)))
     }
     #[inline]
-    fn normal_road_status_tail(&self, tile: u32) -> NormalRoadStatusTail {
+    fn disallowed_road_directions(&self, tile: u32) -> u8 {
         self.map()
-            .and_then(|m| {
-                Some(NormalRoadStatusTail {
-                    disallowed: crate::road_map::get_disallowed_road_directions(&m.types, tile)?,
-                    road_works: crate::road_map::has_road_works(&m.types, tile)?,
-                })
-            })
-            .unwrap_or_else(|| (self.s.normal_road_status_tail)(tile))
+            .and_then(|m| crate::road_map::get_disallowed_road_directions(&m.types, tile))
+            .unwrap_or_else(|| (self.shared().disallowed_road_directions)(tile))
+    }
+    #[inline]
+    fn has_road_works(&self, tile: u32) -> bool {
+        self.map()
+            .and_then(|m| crate::road_map::has_road_works(&m.types, tile))
+            .unwrap_or_else(|| (self.shared().has_road_works)(tile))
+    }
+    #[inline]
+    fn road_tile_kind(&self, tile: u32) -> crate::services::RoadTileKind {
+        self.map()
+            .and_then(|m| crate::road_map::get_road_tile_type(&m.types, tile))
+            .unwrap_or_else(|| (self.shared().road_tile_kind)(tile))
+    }
+    #[inline]
+    fn normal_road(&self, tile: u32) -> bool {
+        self.tile_type(tile) == MP_ROAD && self.road_tile_kind(tile).0 == ROAD_TILE_NORMAL
+    }
+    fn map_value<T>(&self, value: Option<T>) -> T {
+        if value.is_none() {
+            (self.native_assert)(false);
+        }
+        value.expect("native map precondition")
+    }
+    fn pixel_slope(&self, tile: u32, outside: Option<(u32, u32)>) -> FoundationSlope {
+        let types = &self.map().expect("entry map descriptor").types;
+        let map = self.map().expect("entry map descriptor");
+        let width = map.dimensions.size_x();
+        let height = types.count() >> map.dimensions.log_x;
+        let (slope, z) = self.map_value(if let Some((x, y)) = outside {
+            crate::tile_map::get_tile_pixel_slope_outside_map(
+                types,
+                x.cast_signed(),
+                y.cast_signed(),
+                width,
+                height,
+            )
+        } else {
+            crate::tile_map::get_tile_pixel_slope(types, tile, width, height)
+        });
+        FoundationSlope {
+            z,
+            slope: Slope(slope),
+        }
+    }
+    fn max_pixel_z(&self, tile: u32) -> i32 {
+        self.map_value(crate::tile_map::get_tile_max_pixel_z(
+            &self.map().expect("entry map descriptor").types,
+            tile,
+            self.map()
+                .expect("entry map descriptor")
+                .dimensions
+                .size_x(),
+            self.map().expect("entry map descriptor").types.count()
+                >> self.map().expect("entry map descriptor").dimensions.log_x,
+        ))
     }
     #[inline]
     fn has_tile_road_type(&self, tile: u32, kind: crate::services::RoadTramType) -> bool {
@@ -180,11 +232,6 @@ impl<const AUDITED: bool> Context<'_, AUDITED> {
 #[path = "native_test_support/movement.rs"]
 pub(crate) mod native_test_support;
 
-#[repr(C)]
-pub struct NormalRoadStatusTail {
-    pub disallowed: u8,
-    pub road_works: bool,
-}
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct CallbackFoundation {
@@ -247,10 +294,7 @@ pub struct MovementServices {
     pub train_engine_class: extern "C" fn(crate::vehicle::VehicleRef) -> u8,
     pub depot_invalidate: extern "C" fn(crate::vehicle::VehicleRef),
     pub native_assert: extern "C" fn(bool),
-    pub normal_road_status_tail: extern "C" fn(u32) -> NormalRoadStatusTail,
-    pub pixel_location: extern "C" fn(i32, i32) -> crate::services::PixelLocation,
     pub plain_rail: extern "C" fn(u32) -> bool,
-    pub normal_road: extern "C" fn(u32) -> bool,
     pub is_tunnel: extern "C" fn(u32) -> bool,
     pub rail_station: extern "C" fn(u32) -> bool,
     pub road_crossing: extern "C" fn(u32) -> bool,
@@ -264,9 +308,6 @@ pub struct MovementServices {
     pub water_type: extern "C" fn(u32) -> crate::water_cmd::WaterTileType,
     pub lock_direction: extern "C" fn(u32) -> crate::services::DiagDirection,
     pub ship_depot_axis: extern "C" fn(u32) -> crate::services::Axis,
-    pub pixel_slope: extern "C" fn(u32) -> FoundationSlope,
-    pub outside_pixel_slope: extern "C" fn(u32, u32) -> FoundationSlope,
-    pub max_pixel_z: extern "C" fn(u32) -> i32,
     pub owned_land: extern "C" fn(u32) -> bool,
     pub object_foundation: extern "C" fn(u32) -> ObjectFoundation,
     pub house_foundation: extern "C" fn(u32) -> CallbackFoundation,
@@ -310,7 +351,7 @@ impl<const AUDITED: bool> Context<'_, AUDITED> {
                 }
             }
             MP_ROAD => {
-                if (self.normal_road)(tile) {
+                if self.normal_road(tile) {
                     road_foundation(slope, (self.road().all_bits)(tile).0, |ok| {
                         (self.native_assert)(ok);
                     })
@@ -369,13 +410,18 @@ impl<const AUDITED: bool> Context<'_, AUDITED> {
     }
     #[inline]
     pub(crate) fn pixel_z_at(&self, x: i32, y: i32, ground: bool) -> i32 {
-        let p = (self.pixel_location)(x, y);
+        let tile = self
+            .map()
+            .expect("entry map descriptor")
+            .dimensions
+            .tile_virt_xy(x.cast_unsigned(), y.cast_unsigned());
+        let kind = self.tile_type(tile);
         // One named body for constant Rust callers and the dynamic native entry.
-        // Resolve the native location before selecting the ground specialization.
+        // Observe the live tile type before selecting the ground specialization.
         if ground {
-            self.pixel_z::<true>(p.tile, x as u32, y as u32, p.kind)
+            self.pixel_z::<true>(tile, x as u32, y as u32, kind)
         } else {
-            self.pixel_z::<false>(p.tile, x as u32, y as u32, p.kind)
+            self.pixel_z::<false>(tile, x as u32, y as u32, kind)
         }
     }
     #[inline]
@@ -383,15 +429,15 @@ impl<const AUDITED: bool> Context<'_, AUDITED> {
         w::hit(w::MOVE_PIXEL_Z);
         if matches!(kind, MP_HOUSE | MP_INDUSTRY | MP_STATION)
             || (kind == MP_RAILWAY && !(self.plain_rail)(tile))
-            || (kind == MP_ROAD && !(self.normal_road)(tile))
+            || (kind == MP_ROAD && !self.normal_road(tile))
             || (kind == MP_OBJECT && !(self.owned_land)(tile))
         {
-            return (self.max_pixel_z)(tile);
+            return self.max_pixel_z(tile);
         }
         let mut p = if kind == MP_VOID {
-            (self.outside_pixel_slope)(x >> 4, y >> 4)
+            self.pixel_slope(tile, Some((x >> 4, y >> 4)))
         } else {
-            (self.pixel_slope)(tile)
+            self.pixel_slope(tile, None)
         };
         if matches!(kind, MP_RAILWAY | MP_ROAD) {
             if p.slope.0 == SLOPE_FLAT {
@@ -445,28 +491,39 @@ impl<const AUDITED: bool> Context<'_, AUDITED> {
 }
 impl MovementServices {
     #[inline]
-    fn context(&self) -> Context<'_, false> {
-        Context {
+    fn with_context<R>(&self, f: impl FnOnce(Context<'_, true>) -> R) -> R {
+        let observations = self.tile_types.and_then(|acquire| {
+            let allocation = acquire();
+            (allocation.count != 0).then(|| MapObservations {
+                dimensions: self.shared().map(),
+                // SAFETY: The globally proved interval excludes reset/load/yield during
+                // game-loop/command entries. Standalone terrain calls end before return.
+                types: unsafe {
+                    crate::map_func::TileTypeAccess::raw(allocation, self.shared().tile_type)
+                },
+            })
+        });
+        f(Context {
             s: self,
-            observations: None,
-        }
+            observations: observations.as_ref(),
+        })
     }
     #[inline]
     pub(crate) fn pixel_z_at(&self, x: i32, y: i32, ground: bool) -> i32 {
-        self.context().pixel_z_at(x, y, ground)
+        self.with_context(|c| c.pixel_z_at(x, y, ground))
     }
     #[inline]
     fn pixel_z<const GROUND: bool>(&self, tile: u32, x: u32, y: u32, kind: u8) -> i32 {
-        self.context().pixel_z::<GROUND>(tile, x, y, kind)
+        self.with_context(|c| c.pixel_z::<GROUND>(tile, x, y, kind))
     }
     #[inline]
     fn foundation(&self, tile: u32, slope: u8) -> u8 {
-        self.context().foundation(tile, slope)
+        self.with_context(|c| c.foundation(tile, slope))
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn track_status(&self, tile: u32, mode: u8, sub: u32, side: u8) -> u32 {
-        self.context().track_status(tile, mode, sub, side)
+        self.with_context(|c| c.track_status(tile, mode, sub, side))
     }
 }
 
@@ -785,7 +842,7 @@ impl<const AUDITED: bool> Context<'_, AUDITED> {
                         if !self.has_tile_road_type(tile, crate::services::RoadTramType(tram)) {
                             return 0;
                         }
-                        match (self.shared().road_tile_kind)(tile).0 {
+                        match self.road_tile_kind(tile).0 {
                             ROAD_TILE_NORMAL => {
                                 let road = self
                                     .normal_road_bits(tile, crate::services::RoadTramType(tram))
@@ -799,10 +856,12 @@ impl<const AUDITED: bool> Context<'_, AUDITED> {
                                     return 0;
                                 }
                                 let (disallowed, road_works) = if tram {
-                                    (0, (self.shared().has_road_works)(tile))
+                                    (0, self.has_road_works(tile))
                                 } else {
-                                    let tail = self.normal_road_status_tail(tile);
-                                    (tail.disallowed, tail.road_works)
+                                    (
+                                        self.disallowed_road_directions(tile),
+                                        self.has_road_works(tile),
+                                    )
                                 };
                                 let multiplier = [0x101, 0x100, 1, 0][usize::from(disallowed)];
                                 const ROAD_TRACKS: [u8; 16] = [
@@ -942,7 +1001,11 @@ impl<const AUDITED: bool> Context<'_, AUDITED> {
                 if mode != TRANSPORT_WATER {
                     return 0;
                 }
-                bits = match (self.water_type)(tile).0 {
+                bits = match self
+                    .map()
+                    .and_then(|m| crate::water_map::get_water_tile_type(&m.types, tile))
+                    .unwrap_or_else(|| (self.water_type)(tile).0)
+                {
                     0 => {
                         if (self.tile_flat)(tile) {
                             TRACK_BIT_ALL
@@ -1627,10 +1690,6 @@ crate::abi::layouts! {
         kind,
         callback,
     };
-    "OpenTTDNormalRoadStatusTail" ["landscape"] => NormalRoadStatusTail {
-        disallowed,
-        road_works,
-    };
     "OpenTTDMovementServices" ["landscape"] => MovementServices {
         tile_types,
         shared,
@@ -1652,10 +1711,7 @@ crate::abi::layouts! {
         train_engine_class,
         depot_invalidate,
         native_assert,
-        normal_road_status_tail,
-        pixel_location,
         plain_rail,
-        normal_road,
         is_tunnel,
         rail_station,
         road_crossing,
@@ -1669,9 +1725,6 @@ crate::abi::layouts! {
         water_type,
         lock_direction,
         ship_depot_axis,
-        pixel_slope,
-        outside_pixel_slope,
-        max_pixel_z,
         owned_land,
         object_foundation,
         house_foundation,

@@ -117,6 +117,7 @@ struct OpenTTDAircraftFloodPose { uint32_t tile; int32_t z; uint8_t subtype; };
 struct OpenTTDGroundFloodPose { int32_t z; OpenTTDVehicle *first; };
 struct OpenTTDCompanyServices;
 struct OpenTTDWaterGroundServices {
+	OpenTTDTileTypeAllocation (*tile_types)() noexcept = nullptr;
 	const OpenTTDRailServices *rail;
 	const OpenTTDClearServices *clear;
 	const OpenTTDVehicleServices *vehicles;

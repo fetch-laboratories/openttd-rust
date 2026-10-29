@@ -196,6 +196,18 @@ Threaded and arbitrary NewGRF corpus limits are open in #156.
 Each converted entry keeps its semantic scenarios; default native checks cover
 mutation and reallocation. The view is map access only, not a storage transfer.
 
+#565's first maintenance batch extends the descriptor to standalone movement
+track-status and pixel-Z calls (including outside-map terrain), and water-ground
+restoration, flooding, tile-loop and neighbour entries. Cached road-controller
+entries keep their existing descriptor reuse. Pixel location, pixel slope,
+maximum pixel height and normal-road status-tail callbacks are removed; the
+header-named terrain helpers load canonical corner heights at each observation.
+The native assertion service retains failed-precondition behavior. Water/road
+helpers keep existing canonical assertion fallbacks and callbacks required by
+other production consumers. Map allocation and native inline accessors remain
+native. Train, ship, aircraft, YAPF and water-region leaves beyond these shared
+movement calls remain for later #565 batches; #560 owns the complete follower.
+
 ## Transferring shared storage
 Storage ports are selected work (user direction, 2026-10-28): the rewrite moves
 every pool and finally the map arrays into Rust, so their object classes and

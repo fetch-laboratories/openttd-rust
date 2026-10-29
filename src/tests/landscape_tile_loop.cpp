@@ -18,6 +18,8 @@
 #include "../rust/generation_sea_set.hpp"
 #include "abi_layout.hpp"
 #include "../tile_map.h"
+#include "../slope_func.h"
+#include "../landscape.h"
 #include "../road_type.h"
 #include "../station_type.h"
 #include "../rust/landscape_loop_ffi.h"
@@ -83,6 +85,41 @@ TEST_CASE("Rust movement map context rereads native mutations within an entry")
 					}
 				}
 			}
+		}
+	}
+	Map::Allocate(64, 64);
+}
+
+TEST_CASE("Rust production pixel entries observe live native corners and reallocation")
+{
+	const Slope slopes[]{SLOPE_FLAT, SLOPE_W, SLOPE_S, SLOPE_SW, SLOPE_E, SLOPE_EW, SLOPE_SE, SLOPE_WSE, SLOPE_N, SLOPE_NW, SLOPE_NS, SLOPE_ENW, SLOPE_NE, SLOPE_SEN, SLOPE_NWS, SLOPE_STEEP_W, SLOPE_STEEP_S, SLOPE_STEEP_E, SLOPE_STEEP_N};
+	for (uint width : {64U, 128U}) {
+		Map::Allocate(width, 64);
+		for (TileIndex t : {TileXY(1, 1), TileXY(Map::MaxX(), Map::MaxY())}) {
+			const uint x = TileX(t), y = TileY(t);
+			const uint east = std::min(x + 1, Map::MaxX()), south = std::min(y + 1, Map::MaxY());
+			for (Slope slope : slopes) {
+				SetTileHeight(t, 3 + GetSlopeZInCorner(slope, CORNER_N));
+				SetTileHeight(TileXY(east, y), 3 + GetSlopeZInCorner(slope, CORNER_W));
+				SetTileHeight(TileXY(x, south), 3 + GetSlopeZInCorner(slope, CORNER_E));
+				SetTileHeight(TileXY(east, south), 3 + GetSlopeZInCorner(slope, CORNER_S));
+				for (TileType kind : {MP_CLEAR, MP_TREES, MP_STATION, MP_VOID}) {
+					Tile{t}.type() = kind << 4;
+					auto [native_slope, z] = GetTilePixelSlope(t);
+					for (int frac : {0, 8, 15}) {
+						const int px = x * TILE_SIZE + frac, py = y * TILE_SIZE + frac;
+						const int expected = kind == MP_STATION ? GetTileMaxPixelZ(t) : z + GetPartialPixelZ(frac, frac, native_slope);
+						CHECK(openttd_rust_movement_pixel_z(&GetRustMovementServices(), px, py, false) == expected);
+					}
+				}
+			}
+			Tile{t}.type() = MP_CLEAR << 4;
+			SetTileHeight(t, 9);
+			SetTileHeight(TileXY(east, y), 9);
+			SetTileHeight(TileXY(x, south), 9);
+			SetTileHeight(TileXY(east, south), 9);
+			auto [slope, z] = GetTilePixelSlope(t);
+			CHECK(openttd_rust_movement_pixel_z(&GetRustMovementServices(), x * TILE_SIZE, y * TILE_SIZE, false) == z + GetPartialPixelZ(0, 0, slope));
 		}
 	}
 	Map::Allocate(64, 64);

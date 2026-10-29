@@ -92,3 +92,78 @@ pub(crate) fn tile_hash(x: u32, y: u32) -> u32 {
 pub(crate) fn tile_hash_2bit(x: u32, y: u32) -> u32 {
     tile_hash(x, y) & 3
 }
+
+/// `GetTilePixelSlope`, preserving unsigned `TILE_HEIGHT` multiplication.
+#[inline]
+pub(crate) fn get_tile_pixel_slope(
+    map: &TileTypeAccess,
+    tile: u32,
+    x: u32,
+    y: u32,
+) -> Option<(u8, i32)> {
+    let (slope, height_z) = get_tile_slope_z(map, tile, x, y)?;
+    Some((
+        slope,
+        height_z
+            .cast_unsigned()
+            .wrapping_mul(crate::tile_type::TILE_HEIGHT)
+            .cast_signed(),
+    ))
+}
+/// `GetTileMaxZ`.
+#[inline]
+pub(crate) fn get_tile_max_z(map: &TileTypeAccess, tile: u32, x: u32, y: u32) -> Option<i32> {
+    let [north, west, east, south] = corners(map, tile, x, y)?;
+    Some(north.max(west).max(east.max(south)))
+}
+/// `GetTileMaxPixelZ`.
+#[inline]
+pub(crate) fn get_tile_max_pixel_z(map: &TileTypeAccess, tile: u32, x: u32, y: u32) -> Option<i32> {
+    Some(
+        get_tile_max_z(map, tile, x, y)?
+            .cast_unsigned()
+            .wrapping_mul(crate::tile_type::TILE_HEIGHT)
+            .cast_signed(),
+    )
+}
+/// `TileHeightOutsideMap`, including signed clamping after the caller's conversion.
+#[inline]
+pub(crate) fn tile_height_outside_map(
+    tiles: &TileTypeAccess,
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+) -> Option<i32> {
+    let map = crate::map_func::Map::from_log_x(width.trailing_zeros());
+    tile_height(
+        tiles,
+        map.tile_xy(
+            x.clamp(0, map.max_x().cast_signed()).cast_unsigned(),
+            y.clamp(0, crate::map_func::Map::max_y(height).cast_signed())
+                .cast_unsigned(),
+        ),
+    )
+}
+/// `GetTilePixelSlopeOutsideMap`.
+#[inline]
+pub(crate) fn get_tile_pixel_slope_outside_map(
+    map: &TileTypeAccess,
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+) -> Option<(u8, i32)> {
+    let north = tile_height_outside_map(map, x, y, width, height)?;
+    let west = tile_height_outside_map(map, x.wrapping_add(1), y, width, height)?;
+    let east = tile_height_outside_map(map, x, y.wrapping_add(1), width, height)?;
+    let south = tile_height_outside_map(map, x.wrapping_add(1), y.wrapping_add(1), width, height)?;
+    let (slope, height_z) = get_tile_slope_given_height([north, west, east, south]);
+    Some((
+        slope,
+        height_z
+            .cast_unsigned()
+            .wrapping_mul(crate::tile_type::TILE_HEIGHT)
+            .cast_signed(),
+    ))
+}

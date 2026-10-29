@@ -477,7 +477,7 @@ def scheduler_gap():
         import probe
 
         match = re.search(
-            r"^(?:static )?(?:inline )?[\w:<>]+\s+" + name + r"\([^;{}]*\)\s*\{",
+            r"^(?:static )?(?:inline )?[\w:<>, \t*&]+\s+" + name + r"\([^;{}]*\)\s*\{",
             text,
             re.M,
         )
@@ -518,6 +518,11 @@ def scheduler_gap():
     fragments += function(source, "GetPartialPixelZ")
     (out / "movement-foundation-reference.inc").write_text(fragments)
     void = (migration.REFERENCE / "src/void_cmd.cpp").read_text()
+    terrain = (migration.REFERENCE / "src/tile_map.cpp").read_text()
+    (out / "movement-height-reference.inc").write_text(
+        function(terrain, "GetTileSlopeGivenHeight")
+        + function(terrain, "GetTilePixelSlopeOutsideMap")
+    )
     (out / "movement-coordinate-reference.inc").write_text(
         function(void, "GetSlopePixelZ_Void")
         + function(source, "GetSlopePixelZOutsideMap")

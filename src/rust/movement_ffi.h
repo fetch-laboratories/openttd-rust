@@ -27,7 +27,6 @@ struct OpenTTDMovementPose { int32_t z; uint8_t direction; };
 struct OpenTTDMovementDepotPosition { uint32_t tile; int32_t x, y; };
 struct OpenTTDMovementIncline { int32_t z; uint16_t flags; };
 struct OpenTTDMovementFirstSpeed { OpenTTDVehicle *first; uint16_t speed; };
-struct OpenTTDNormalRoadStatusTail { uint8_t disallowed; bool road_works; };
 struct OpenTTDMovementServices {
 	OpenTTDTileTypeAllocation (*tile_types)() noexcept = nullptr;
 	const OpenTTDSharedServices *shared;
@@ -49,10 +48,7 @@ struct OpenTTDMovementServices {
 	uint8_t (*train_engine_class)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(train_engine_class);
 	void (*depot_invalidate)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(depot_invalidate);
 	void (*native_assert)(bool) noexcept OPENTTD_SERVICE_DEFAULT(native_assert);
-	OpenTTDNormalRoadStatusTail (*normal_road_status_tail)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(normal_road_status_tail);
-	OpenTTDPixelLocation (*pixel_location)(int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(pixel_location);
 	bool (*plain_rail)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(plain_rail);
-	bool (*normal_road)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(normal_road);
 	bool (*is_tunnel)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_tunnel);
 	bool (*rail_station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_station);
 	bool (*road_crossing)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_crossing);
@@ -66,9 +62,6 @@ struct OpenTTDMovementServices {
 	WaterTileType (*water_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(water_type);
 	DiagDirection (*lock_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(lock_direction);
 	Axis (*ship_depot_axis)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ship_depot_axis);
-	OpenTTDFoundationSlope (*pixel_slope)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(pixel_slope);
-	OpenTTDFoundationSlope (*outside_pixel_slope)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(outside_pixel_slope);
-	int32_t (*max_pixel_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(max_pixel_z);
 	bool (*owned_land)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(owned_land);
 	OpenTTDMovementObjectFoundation (*object_foundation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(object_foundation);
 	OpenTTDMovementFoundation (*house_foundation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(house_foundation);
