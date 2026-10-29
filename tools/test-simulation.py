@@ -563,13 +563,34 @@ class InstructionSpeedTests(unittest.TestCase):
                 "volatile int n; void StateGameLoop_LinkGraphPauseControl(){for(int i=0;i<10000;i++)n=n+1;}\n"
                 "void StateGameLoop(){StateGameLoop_LinkGraphPauseControl();}\n"
                 "void _GenerateWorld(){for(int i=0;i<20000;i++)n=n+1;}\n"
-                'extern "C" void openttd_rust_session_state_loop(){StateGameLoop();}\n'
-                'extern "C" void rust_generate() asm("_ZN15openttd_kernels8genworld8generate17h0000000000000000E");\n'
-                "void rust_generate(){_GenerateWorld();}\n"
-                "int main(){rust_generate(); openttd_rust_session_state_loop();}"
+                'extern "C" void fixture_state_loop(){StateGameLoop();}\n'
+                'extern "C" void fixture_generate_world(){_GenerateWorld();}\n'
+            )
+            obj = root / "probe.o"
+            subprocess.run(
+                ["g++", "-g", "-O0", "-c", str(source), "-o", str(obj)], check=True
+            )
+            rust = root / "probe.rs"
+            rust.write_text(
+                'unsafe extern "C" {fn fixture_state_loop(); fn fixture_generate_world();}\n'
+                '#[unsafe(no_mangle)] pub extern "C" fn openttd_rust_session_state_loop(){unsafe{fixture_state_loop();}}\n'
+                "pub mod genworld {#[inline(never)] pub fn generate(){unsafe{super::fixture_generate_world();}}}\n"
+                "fn main(){genworld::generate(); openttd_rust_session_state_loop();}\n"
             )
             subprocess.run(
-                ["g++", "-g", "-O0", str(source), "-o", str(binary)], check=True
+                [
+                    "rustc",
+                    "--edition=2024",
+                    "--crate-name=openttd_kernels",
+                    "-g",
+                    "-Copt-level=0",
+                    "-Clink-arg=" + str(obj),
+                    str(rust),
+                    "-o",
+                    str(binary),
+                ],
+                env=migration.environment(),
+                check=True,
             )
             scenario = dict(kind="save", ticks=1, save=str(source))
             env = dict(
@@ -601,13 +622,16 @@ class InstructionSpeedTests(unittest.TestCase):
                 self.assertTrue(args[-1])
                 frozen = binaries["candidate"]
                 context = frozen, builds["candidate"], run, env
-                for kind in ("save", "generate"):
-                    case = dict(scenario, kind=kind)
-                    command, info = ir.prepare(case, [str(frozen)], *context, False)
-                    subprocess.run(command, env=env, check=True)
-                    counts.append(ir.count(run / "callgrind.out"))
-                    (run / "callgrind.out").unlink()
-                    (run / "callgrind.log").unlink()
+                for reference in (True, False):
+                    for kind in ("save", "generate"):
+                        case = dict(scenario, kind=kind)
+                        command, info = ir.prepare(
+                            case, [str(frozen)], *context, reference
+                        )
+                        subprocess.run(command, env=env, check=True)
+                        counts.append(ir.count(run / "callgrind.out"))
+                        (run / "callgrind.out").unlink()
+                        (run / "callgrind.log").unlink()
                 frozen.write_bytes(frozen.read_bytes() + b"changed")
                 with self.assertRaisesRegex(ValueError, "stale instruction build"):
                     ir.prepare(case, [str(frozen)], *context, False)
@@ -626,8 +650,9 @@ class InstructionSpeedTests(unittest.TestCase):
             ):
                 simulate.main()
             # Wildcard nested toggle loses this work.
-            self.assertGreater(counts[0], 50000)
-            self.assertGreater(counts[1], counts[0] * 2)
+            for play, generation in (counts[:2], counts[2:]):
+                self.assertGreater(play, 50000)
+                self.assertGreater(generation, play * 2)
             command, _ = ir.prepare(scenario, [str(binary)], *context, False)
             baseline = ir.identity(scenario, *context, Path(command[0]))
             candidate_identity = ir.identity(
