@@ -158,7 +158,7 @@ pub(crate) fn has_tile_road_type(
 impl crate::map_func::World<'_> {
     /// `GetRoadTileType`.
     pub(crate) fn road_tile_type(&self, t: u32) -> crate::services::RoadTileKind {
-        get_road_tile_type(&self.types, t).unwrap_or_else(|| (self.shared.road_tile_kind)(t))
+        self.asserted(get_road_tile_type(&self.types, t))
     }
     /// `IsNormalRoad`.
     pub(crate) fn is_normal_road(&self, t: u32) -> bool {
@@ -167,22 +167,23 @@ impl crate::map_func::World<'_> {
     /// `IsNormalRoadTile`.
     pub(crate) fn is_normal_road_tile(&self, t: u32) -> bool {
         self.kind(t) == crate::tile_type::MP_ROAD
-            && is_normal_road(&self.types, t)
-                .unwrap_or_else(|| (self.shared.is_normal_road_tile)(t))
+            && self.is_normal_road(t)
     }
     /// `GetDisallowedRoadDirections`.
     pub(crate) fn disallowed_road_directions(&self, t: u32) -> u8 {
-        get_disallowed_road_directions(&self.types, t)
-            .unwrap_or_else(|| (self.shared.disallowed_road_directions)(t))
+        self.asserted(get_disallowed_road_directions(&self.types, t))
     }
     /// `HasRoadWorks`.
     pub(crate) fn has_road_works(&self, t: u32) -> bool {
-        has_road_works(&self.types, t).unwrap_or_else(|| (self.shared.has_road_works)(t))
+        self.asserted(has_road_works(&self.types, t))
     }
     pub(crate) fn road_bits(&self, t: u32, tram: bool) -> u8 {
-        get_road_bits(&self.types, t, crate::services::RoadTramType(tram))
-            .unwrap_or_else(|| (self.shared.normal_road_bits)(t, u8::from(tram)))
-            .0
+        self.asserted(get_road_bits(
+            &self.types,
+            t,
+            crate::services::RoadTramType(tram),
+        ))
+        .0
     }
     pub(crate) fn road_depot(&self, t: u32) -> bool {
         self.kind(t) == crate::tile_type::MP_ROAD

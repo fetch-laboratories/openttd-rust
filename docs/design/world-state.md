@@ -207,9 +207,10 @@ restoration, flooding, tile-loop and neighbour entries, each through
 `map_func::World`. Cached road-controller entries keep one `World` per entry. Pixel location, pixel slope,
 maximum pixel height and normal-road status-tail callbacks are removed; the
 header-named terrain helpers load canonical corner heights at each observation.
-The native assertion service retains failed-precondition behavior. Water/road
-helpers keep existing canonical assertion fallbacks and callbacks required by
-other production consumers. Map allocation and native inline accessors remain
+The native assertion service retains failed-precondition behavior for the
+converted road and pixel helpers, without calling the native accessor. Other
+helpers keep their existing fallbacks until their conversion; callbacks required
+by other production consumers remain. Map allocation and native inline accessors remain
 native. Train, ship, aircraft, YAPF and water-region leaves beyond these shared
 movement calls remain for later #565 batches; #560 owns the complete follower.
 

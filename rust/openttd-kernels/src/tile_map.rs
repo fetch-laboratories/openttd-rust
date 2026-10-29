@@ -185,7 +185,7 @@ impl crate::map_func::World<'_> {
             self.types.count() >> self.dimensions.log_x,
         )
     }
-    fn asserted<T>(&self, value: Option<T>) -> T {
+    pub(crate) fn asserted<T>(&self, value: Option<T>) -> T {
         value.unwrap_or_else(|| {
             self.check(false);
             unreachable!("native map precondition")
