@@ -42,17 +42,17 @@ static_assert(sizeof(CompanyNames) <= sizeof(OpenTTDCompanyNameStorage));
 static_assert(alignof(CompanyNames) <= alignof(OpenTTDCompanyNameStorage));
 static CompanyNames &Names(OpenTTDCompanyNameStorage *p) noexcept { return *std::launder(reinterpret_cast<CompanyNames *>(p)); }
 #include "company_identity_services.h"
-void Identity_admin_update(uint8_t id) noexcept { CompanyAdminUpdate(Company::Get(CompanyID{id})); }
-static void Identity_name_frame_init(OpenTTDCompanyNameStorage *slot) noexcept { new (slot) CompanyNames{}; }
-static void Identity_name_frame_drop(OpenTTDCompanyNameStorage *slot) noexcept { Names(slot).~CompanyNames(); }
-static OpenTTDByteSpan Identity_render(OpenTTDCompanyNameStorage *slot, uint32_t str, uint32_t param) noexcept { auto &s = Names(slot).candidate; s = GetString(str, param); return {reinterpret_cast<const uint8_t *>(s.data()), s.size()}; }
-static OpenTTDByteSpan Identity_render_other(OpenTTDCompanyNameStorage *slot, uint32_t str, uint32_t param) noexcept { auto &s = Names(slot).other; s = GetString(str, param); return {reinterpret_cast<const uint8_t *>(s.data()), s.size()}; }
-static void Identity_company_renamed(Company *c, OpenTTDCompanyNameStorage *slot) noexcept { AI::BroadcastNewEvent(new ScriptEventCompanyRenamed(c->index, Names(slot).candidate)); Game::NewEvent(new ScriptEventCompanyRenamed(c->index, Names(slot).candidate)); }
-static void Identity_president_renamed(Company *c, OpenTTDCompanyNameStorage *slot) noexcept { AI::BroadcastNewEvent(new ScriptEventPresidentRenamed(c->index, Names(slot).candidate)); Game::NewEvent(new ScriptEventPresidentRenamed(c->index, Names(slot).candidate)); }
-static void Identity_launch_news(Company *c, const Town *t) noexcept { auto cni = std::make_unique<CompanyNewsInformation>(STR_NEWS_COMPANY_LAUNCH_TITLE, c); EncodedString headline = GetEncodedString(STR_NEWS_COMPANY_LAUNCH_DESCRIPTION, cni->company_name, t->index); AddNewsItem(std::move(headline), NewsType::CompanyInfo, NewsStyle::Company, {}, c->last_build_coordinate, {}, std::move(cni)); }
-static void Identity_rename_transport(OpenTTDByteSpan text) noexcept { Command<CMD_RENAME_COMPANY>::Do(DoCommandFlag::Execute, std::string(reinterpret_cast<const char *>(text.data), text.size) + " Transport"); }
-static void Identity_president_windows() noexcept { InvalidateWindowClassesData(WC_COMPANY, 1); }
-static void Identity_colour_windows() noexcept { InvalidateWindowData(WC_INCOME_GRAPH, 0); InvalidateWindowData(WC_OPERATING_PROFIT, 0); InvalidateWindowData(WC_DELIVERED_CARGO, 0); InvalidateWindowData(WC_PERFORMANCE_HISTORY, 0); InvalidateWindowData(WC_COMPANY_VALUE, 0); InvalidateWindowData(WC_LINKGRAPH_LEGEND, 0); BuildOwnerLegend(); InvalidateWindowData(WC_SMALLMAP, 0, 1); }
+void OPENTTD_RUST_CALL Identity_admin_update(uint8_t id) noexcept { CompanyAdminUpdate(Company::Get(CompanyID{id})); }
+static void OPENTTD_RUST_CALL Identity_name_frame_init(OpenTTDCompanyNameStorage *slot) noexcept { new (slot) CompanyNames{}; }
+static void OPENTTD_RUST_CALL Identity_name_frame_drop(OpenTTDCompanyNameStorage *slot) noexcept { Names(slot).~CompanyNames(); }
+static OpenTTDByteSpan OPENTTD_RUST_CALL Identity_render(OpenTTDCompanyNameStorage *slot, uint32_t str, uint32_t param) noexcept { auto &s = Names(slot).candidate; s = GetString(str, param); return {reinterpret_cast<const uint8_t *>(s.data()), s.size()}; }
+static OpenTTDByteSpan OPENTTD_RUST_CALL Identity_render_other(OpenTTDCompanyNameStorage *slot, uint32_t str, uint32_t param) noexcept { auto &s = Names(slot).other; s = GetString(str, param); return {reinterpret_cast<const uint8_t *>(s.data()), s.size()}; }
+static void OPENTTD_RUST_CALL Identity_company_renamed(Company *c, OpenTTDCompanyNameStorage *slot) noexcept { AI::BroadcastNewEvent(new ScriptEventCompanyRenamed(c->index, Names(slot).candidate)); Game::NewEvent(new ScriptEventCompanyRenamed(c->index, Names(slot).candidate)); }
+static void OPENTTD_RUST_CALL Identity_president_renamed(Company *c, OpenTTDCompanyNameStorage *slot) noexcept { AI::BroadcastNewEvent(new ScriptEventPresidentRenamed(c->index, Names(slot).candidate)); Game::NewEvent(new ScriptEventPresidentRenamed(c->index, Names(slot).candidate)); }
+static void OPENTTD_RUST_CALL Identity_launch_news(Company *c, const Town *t) noexcept { auto cni = std::make_unique<CompanyNewsInformation>(STR_NEWS_COMPANY_LAUNCH_TITLE, c); EncodedString headline = GetEncodedString(STR_NEWS_COMPANY_LAUNCH_DESCRIPTION, cni->company_name, t->index); AddNewsItem(std::move(headline), NewsType::CompanyInfo, NewsStyle::Company, {}, c->last_build_coordinate, {}, std::move(cni)); }
+static void OPENTTD_RUST_CALL Identity_rename_transport(OpenTTDByteSpan text) noexcept { Command<CMD_RENAME_COMPANY>::Do(DoCommandFlag::Execute, std::string(reinterpret_cast<const char *>(text.data), text.size) + " Transport"); }
+static void OPENTTD_RUST_CALL Identity_president_windows() noexcept { InvalidateWindowClassesData(WC_COMPANY, 1); }
+static void OPENTTD_RUST_CALL Identity_colour_windows() noexcept { InvalidateWindowData(WC_INCOME_GRAPH, 0); InvalidateWindowData(WC_OPERATING_PROFIT, 0); InvalidateWindowData(WC_DELIVERED_CARGO, 0); InvalidateWindowData(WC_PERFORMANCE_HISTORY, 0); InvalidateWindowData(WC_COMPANY_VALUE, 0); InvalidateWindowData(WC_LINKGRAPH_LEGEND, 0); BuildOwnerLegend(); InvalidateWindowData(WC_SMALLMAP, 0, 1); }
 const OpenTTDFaceServices &GetRustFaceServices() noexcept
 {
 	static const OpenTTDFaceServices services{

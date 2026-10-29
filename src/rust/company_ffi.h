@@ -127,9 +127,9 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_RUST_CALL *show_company_finances)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(show_company_finances);
 	void (OPENTTD_RUST_CALL *new_year_sound)(bool) noexcept OPENTTD_SERVICE_DEFAULT(new_year_sound);
 	OpenTTDCompanyRef (OPENTTD_RUST_CALL *allocate_company)(uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(allocate_company);
-	bool (*prepare_new_company)(uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(prepare_new_company);
-	void (*company_defaults)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_defaults);
-	void (*startup_windows)() noexcept OPENTTD_SERVICE_DEFAULT(startup_windows);
+	bool (OPENTTD_RUST_CALL *prepare_new_company)(uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(prepare_new_company);
+	void (OPENTTD_RUST_CALL *company_defaults)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_defaults);
+	void (OPENTTD_RUST_CALL *startup_windows)() noexcept OPENTTD_SERVICE_DEFAULT(startup_windows);
 	void (OPENTTD_RUST_CALL *new_company_events)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(new_company_events);
 	void (OPENTTD_RUST_CALL *company_league_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(company_league_dirty);
 	void (OPENTTD_RUST_CALL *company_ctrl_windows)() noexcept OPENTTD_SERVICE_DEFAULT(company_ctrl_windows);

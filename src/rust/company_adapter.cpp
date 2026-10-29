@@ -75,9 +75,9 @@
 extern void CompanyAdminRemove(CompanyID, CompanyRemoveReason);
 extern const PriceBaseSpec _price_base_specs[];
 extern TimeoutTimer<TimerGameTick> _new_competitor_timeout;
-bool RustCompanyPrepare(uint8_t, bool) noexcept;
-void RustCompanyDefaults(uint8_t) noexcept;
-void RustCompanyStartupWindows() noexcept;
+bool OPENTTD_RUST_CALL RustCompanyPrepare(uint8_t, bool) noexcept;
+void OPENTTD_RUST_CALL RustCompanyDefaults(uint8_t) noexcept;
+void OPENTTD_RUST_CALL RustCompanyStartupWindows() noexcept;
 void RustCompanyNetworkSpectate(uint32_t) noexcept;
 void RustCompanyNetworkNew(uint8_t, uint32_t, bool) noexcept;
 void RustCompanyNetworkOwn(uint8_t, uint32_t) noexcept;

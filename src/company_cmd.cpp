@@ -1728,7 +1728,7 @@ std::optional<CompanyManagerFace> ParseCompanyManagerFaceCode(std::string_view s
 /* Identity and networking services of the Rust company owner; each runs the
  * original statements consecutively, without a decision between them. */
 /** DoStartupNewCompany from the inaugurated years to the legend windows. */
-bool RustCompanyPrepare(uint8_t id, bool is_ai) noexcept
+bool OPENTTD_RUST_CALL RustCompanyPrepare(uint8_t id, bool is_ai) noexcept
 {
 	Company *c = Company::Get(id);
 	c->avail_railtypes = GetCompanyRailTypes(c->index);
@@ -1746,7 +1746,7 @@ bool RustCompanyPrepare(uint8_t id, bool is_ai) noexcept
 	}
 	return randomise_face;
 }
-void RustCompanyDefaults(uint8_t id) noexcept
+void OPENTTD_RUST_CALL RustCompanyDefaults(uint8_t id) noexcept
 {
 	Company *c = Company::Get(id);
 
@@ -1754,7 +1754,7 @@ void RustCompanyDefaults(uint8_t id) noexcept
 	ClearEnginesHiddenFlagOfCompany(c->index);
 
 }
-void RustCompanyStartupWindows() noexcept
+void OPENTTD_RUST_CALL RustCompanyStartupWindows() noexcept
 {
 
 	SetWindowDirty(WC_GRAPH_LEGEND, 0);
