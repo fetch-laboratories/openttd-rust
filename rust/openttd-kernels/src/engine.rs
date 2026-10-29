@@ -532,11 +532,11 @@ pub unsafe extern "C" fn openttd_rust_engine_start_all(s: *const Services) {
         unsafe {
             ((&*s.types).set_company_railtypes)(
                 c.id,
-                crate::rail::openttd_rust_company_rail_types(&*s.shared, &*s.types, c.id, true),
+                crate::rail::openttd_rust_company_rail_types(&*s.types, c.id, true),
             );
             ((&*s.types).set_company_roadtypes)(
                 c.id,
-                crate::road::openttd_rust_company_road_types(&*s.shared, &*s.types, c.id, true),
+                crate::road::openttd_rust_company_road_types(&*s.types, c.id, true),
             );
         }
     }
@@ -575,12 +575,12 @@ unsafe fn enable(s: &Services, e: EngineRef, company: u8) {
         if e.kind == VehicleType::TRAIN {
             ((&*s.types).set_company_railtypes)(
                 company,
-                crate::rail::openttd_rust_company_rail_types(&*s.shared, &*s.types, company, true),
+                crate::rail::openttd_rust_company_rail_types(&*s.types, company, true),
             );
         } else if e.kind == VehicleType::ROAD {
             ((&*s.types).set_company_roadtypes)(
                 company,
-                crate::road::openttd_rust_company_road_types(&*s.shared, &*s.types, company, true),
+                crate::road::openttd_rust_company_road_types(&*s.types, company, true),
             );
         }
     }
@@ -601,12 +601,12 @@ unsafe fn disable(s: &Services, e: EngineRef, company: u8) {
         if e.kind == VehicleType::TRAIN {
             ((&*s.types).set_company_railtypes)(
                 company,
-                crate::rail::openttd_rust_company_rail_types(&*s.shared, &*s.types, company, true),
+                crate::rail::openttd_rust_company_rail_types(&*s.types, company, true),
             );
         } else if e.kind == VehicleType::ROAD {
             ((&*s.types).set_company_roadtypes)(
                 company,
-                crate::road::openttd_rust_company_road_types(&*s.shared, &*s.types, company, true),
+                crate::road::openttd_rust_company_road_types(&*s.types, company, true),
             );
         }
     }
