@@ -48,7 +48,7 @@ static void Station562Names(TileIndex origin, DoCommandFlags exec)
 	MakeIndustry(at(12, 12), ind->index, 0, 0, WaterClass::Invalid); MakeIndustry(at(13, 12), ind->index, 0, 0, WaterClass::Invalid);
 	auto *spec = const_cast<IndustrySpec *>(GetIndustrySpec(0));
 	Backup<StringID> station_name(spec->station_name, STR_UNDEFINED);
-	Backup<IndustryLifeTypes> life(spec->life_type, {IndustryLifeType::Extractive});
+	Backup<IndustryLifeTypes> life(spec->life_type, IndustryLifeTypes{IndustryLifeType::Extractive});
 	build(at(12, 14), "mine", STR_SV_STNAME_MINES);
 	spec->station_name = STR_SV_STNAME_TRANSFER;
 	build(at(15, 14), "industry", STR_SV_STNAME_FALLBACK, 0);
@@ -114,7 +114,7 @@ static void Station562Delete(TileIndex origin, bool reload, bool stage)
 		victim->UpdateVirtCoord(); survivor->UpdateVirtCoord();
 		for (RoadVehicle *v : RoadVehicle::Iterate()) if (v->IsPrimaryVehicle() && v->cargo_type == 0 && !v->IsInDepot()) { vehicle = v; break; }
 		StationNeed(vehicle != nullptr && vehicle->cargo_payment == nullptr && LinkGraph::CanAllocateItem(2) && CargoPacket::CanAllocateItem(2), __LINE__);
-		vehicle->current_order.MakeLoading(false); vehicle->current_order.SetLoadType(OLFB_NO_LOAD); vehicle->current_order.SetUnloadType(OUFB_NO_UNLOAD);
+		vehicle->current_order.MakeLoading(false); vehicle->current_order.SetLoadType(OrderLoadType::NoLoad); vehicle->current_order.SetUnloadType(OrderUnloadType::NoUnload);
 		vehicle->last_station_visited = victim->index; vehicle->last_loading_station = victim->index; victim->loading_vehicles.push_back(vehicle);
 		for (CargoType cargo : {0, 1}) {
 			LinkGraph *graph = new LinkGraph(cargo); victim->goods[cargo].link_graph = graph->index; victim->goods[cargo].node = graph->AddNode(victim);

@@ -1620,6 +1620,63 @@ pub unsafe extern "C" fn openttd_rust_cargo_capacity(
     u8::from(transfer && part_chain != 0 && vehicle(services, new).train != 0)
 }
 
+/// `VehicleCargoList::Reroute`, with already-resolved canonical owners.
+/// # Safety
+/// All pointers are live for this synchronous call, with no outstanding owner borrow.
+pub(crate) unsafe fn reroute_vehicle(
+    list: *mut List,
+    s: &Services,
+    ge: *const crate::station_base::GoodsEntry,
+    avoid: u16,
+    avoid2: u16,
+) {
+    unsafe {
+        openttd_rust_cargo_list_move(
+            list,
+            list,
+            s,
+            5,
+            u32::MAX,
+            avoid,
+            avoid2,
+            std::ptr::null(),
+            0,
+            ge.cast(),
+            0,
+            std::ptr::null_mut(),
+            crate::tile_type::INVALID_TILE,
+        );
+    }
+}
+/// `StationCargoList::Reroute`, with already-resolved canonical owners.
+/// # Safety
+/// Same serialized owner contract as `reroute_vehicle`.
+pub(crate) unsafe fn reroute_station(
+    list: *mut List,
+    s: &Services,
+    ge: *const crate::station_base::GoodsEntry,
+    avoid: u16,
+    avoid2: u16,
+) {
+    unsafe {
+        openttd_rust_cargo_list_move(
+            list,
+            list,
+            s,
+            8,
+            u32::MAX,
+            avoid,
+            avoid2,
+            std::ptr::null(),
+            0,
+            ge.cast(),
+            0,
+            std::ptr::null_mut(),
+            crate::tile_type::INVALID_TILE,
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2293,62 +2350,5 @@ mod tests {
             clean(replacement.list);
             clean(replacement_tail.list);
         }
-    }
-}
-
-/// `VehicleCargoList::Reroute`, with already-resolved canonical owners.
-/// # Safety
-/// All pointers are live for this synchronous call, with no outstanding owner borrow.
-pub(crate) unsafe fn reroute_vehicle(
-    list: *mut List,
-    s: &Services,
-    ge: *const crate::station_base::GoodsEntry,
-    avoid: u16,
-    avoid2: u16,
-) {
-    unsafe {
-        openttd_rust_cargo_list_move(
-            list,
-            list,
-            s,
-            5,
-            u32::MAX,
-            avoid,
-            avoid2,
-            std::ptr::null(),
-            0,
-            ge.cast(),
-            0,
-            std::ptr::null_mut(),
-            crate::tile_type::INVALID_TILE,
-        );
-    }
-}
-/// `StationCargoList::Reroute`, with already-resolved canonical owners.
-/// # Safety
-/// Same serialized owner contract as `reroute_vehicle`.
-pub(crate) unsafe fn reroute_station(
-    list: *mut List,
-    s: &Services,
-    ge: *const crate::station_base::GoodsEntry,
-    avoid: u16,
-    avoid2: u16,
-) {
-    unsafe {
-        openttd_rust_cargo_list_move(
-            list,
-            list,
-            s,
-            8,
-            u32::MAX,
-            avoid,
-            avoid2,
-            std::ptr::null(),
-            0,
-            ge.cast(),
-            0,
-            std::ptr::null_mut(),
-            crate::tile_type::INVALID_TILE,
-        );
     }
 }
