@@ -14,7 +14,6 @@ no production user | openttd_rust_economy_startup
 no production user | openttd_rust_effect_initialize
 no production user | openttd_rust_flat_empty_world
 no production user | openttd_rust_fleet_pending_add
-no production user | openttd_rust_follow_mask
 no production user | openttd_rust_generate_landscape
 no production user | openttd_rust_generic_reset
 no production user | openttd_rust_ground_abi_calls

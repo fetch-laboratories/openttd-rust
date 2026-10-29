@@ -31,12 +31,6 @@ static OpenTTDShipYapfDestination ShipDestination(const void *context) noexcept
 	}
 	return {.tile = v->dest_tile.base(), .station = false};
 }
-static OpenTTDShipFollow ShipFollow(const void *context, uint32_t tile, uint8_t td) noexcept
-{
-	CFollowTrackWater follower{static_cast<const Ship *>(context)};
-	const bool followed = follower.Follow(TileIndex{tile}, static_cast<Trackdir>(td));
-	return {follower.new_tile.base(), follower.tiles_skipped, static_cast<uint16_t>(follower.new_td_bits), static_cast<uint8_t>(followed)};
-}
 static OpenTTDShipTile ShipTile(const void *context, uint32_t tile, uint8_t cost) noexcept
 {
 	const Ship *v = static_cast<const Ship *>(context);
@@ -62,7 +56,6 @@ void ShipWaterVisitDestroy(void *) noexcept;
 
 static const OpenTTDShipYapfLeaves _ship_yapf_leaves{
 	.destination = ShipDestination,
-	.follow = ShipFollow,
 	.tile = ShipTile,
 	.patch = ShipPatch,
 	.visit_new = ShipWaterVisitNew,

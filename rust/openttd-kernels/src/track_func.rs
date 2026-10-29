@@ -180,6 +180,11 @@ pub const fn find_first_trackdir(bits: u16) -> u8 {
     }
 }
 
+/// `TrackdirToTrackdirBits`.
+pub const fn trackdir_to_trackdir_bits(td: u8) -> u16 {
+    1_u16 << td
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

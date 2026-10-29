@@ -9,6 +9,7 @@
 #include "../stdafx.h"
 #include "../3rdparty/catch2/catch.hpp"
 #include "../misc/binaryheap.hpp"
+#include "../pathfinder/pathfinder_type.h"
 #include "../track_func.h"
 #include "../roadveh.h"
 #ifdef WITH_RUST
@@ -19,7 +20,6 @@
 namespace {
 struct HeapNode { int32_t estimate; bool operator<(const HeapNode &other) const { return this->estimate < other.estimate; } };
 OpenTTDRoadYapfTile ProbeTile(const void *, uint32_t, uint8_t, bool) noexcept { OpenTTDRoadYapfTile tile{}; tile.type = 5; tile.station_type = 2; return tile; }
-OpenTTDRoadYapfFollow RoadProbeFollow(const void *, uint32_t, uint8_t) noexcept { return {}; }
 uint16_t fixture_dirs = 1;
 OpenTTDFoundationSlope (*height_query)(uint32_t) noexcept = [](uint32_t) noexcept -> OpenTTDFoundationSlope { return {.z = 0, .slope = SLOPE_FLAT}; };
 const OpenTTDSharedServices *MovementWorld()
@@ -44,15 +44,12 @@ const OpenTTDSharedServices *MovementWorld()
 	movement.pixel_slope = [](uint32_t tile) noexcept { return height_query(tile); };
 	return &world;
 }
-OpenTTDRoadYapfTraversal Traversal(const void *, uint32_t) noexcept { OpenTTDRoadYapfTraversal out{}; out.max_speed = INT32_MAX; return out; }
 uint32_t RoadProbeClosest(const void *, uint16_t, uint8_t) noexcept { return 0; }
 OpenTTDRoadYapfArea Area(const void *, uint16_t) noexcept { return {}; }
 const OpenTTDRoadYapfLeaves probe_leaves{
 	.shared = MovementWorld(),
 	.road_kind = [](const void *) noexcept { return RTT_ROAD; },
 	.tile = ProbeTile,
-	.follow = RoadProbeFollow,
-	.traversal = Traversal,
 	.closest = RoadProbeClosest,
 	.area = Area,
 };
@@ -103,55 +100,69 @@ TEST_CASE("Road YAPF origin masks match shared track constants", "[road][rust]")
 	openttd_rust_road_destroy(state);
 }
 
-/* Loaded settings clamp max_search_nodes to >=500. This deliberately injected
- * scalar follower graph reaches small limits and open-key replacement, using
- * the unchanged generic reference loop rather than a second search algorithm. */
+/* Loaded games clamp max_search_nodes. The generic native search still checks
+ * low limits and open-key replacement, now using the production follower on a
+ * concrete junction grid instead of an injected transition callback. */
 #undef WITH_RUST
 #include "../pathfinder/yapf/yapf_node_road.hpp"
 #define WITH_RUST
 #include "../pathfinder/yapf/yapf_base.hpp"
+#include "../pathfinder/follow_track.hpp"
+#include "follower_fixture.hpp"
+#include "follower_probe.hpp"
 namespace RoadLimit {
-inline uint32_t goal;
-inline std::vector<std::pair<uint32_t, uint8_t>> trace;
+inline uint32_t goal, start = 32 + 32 * 64;
 OpenTTDRoadYapfTile ProbeTile(const void *, uint32_t tile, uint8_t, bool) noexcept
 {
-	OpenTTDRoadYapfTile out{}; out.type = 2; out.depot = tile == goal; return out;
+	OpenTTDRoadYapfTile out{}; out.type = 2; out.depot = tile == goal; out.depot_dir = DIAGDIR_SW; return out;
 }
-OpenTTDRoadYapfFollow Follow(const void *, uint32_t tile, uint8_t td) noexcept
+OpenTTDFollowTrackState Follow(uint32_t tile, uint8_t td)
 {
-	trace.emplace_back(tile, td);
-	return {tile + 1, 0, TRACKDIR_BIT_X_NE | TRACKDIR_BIT_LOWER_E, true};
+	OpenTTDFollowTrackState ft{};
+	const auto &s = FollowerFixture::active->shared;
+	openttd_test_follower_init(&ft, &s, TRANSPORT_ROAD, reinterpret_cast<Vehicle *>(FollowerFixture::active->Vehicle()), 0, 0, true, false, true);
+	if (!openttd_test_follower_follow(&s, &ft, tile, td)) ft.new_td_bits = TRACKDIR_BIT_NONE;
+	return ft;
 }
 struct Follower {};
 class Search;
-struct Types {
-	using Tpf = Search;
-	using TrackFollower = Follower;
-	using NodeList = CRoadNodeList;
-	using VehicleType = RoadVehicle;
-};
+struct Types { using Tpf = Search; using TrackFollower = Follower; using NodeList = CRoadNodeList; using VehicleType = RoadVehicle; };
 class Search : public CYapfBaseT<Types> {
 public:
 	int max_cost;
 	Search(int limit, int max_cost) : max_cost(max_cost) {
 		this->max_search_nodes = limit;
-		Node &node = this->CreateNewNode(); node.Set(nullptr, TileIndex(0), TRACKDIR_X_NE, true);
-		this->AddStartupNode(node);
+		Node &node = this->CreateNewNode(); node.Set(nullptr, TileIndex(start), TRACKDIR_X_NE, true); this->AddStartupNode(node);
 	}
 	bool PfNodeCacheFetch(Node &) { return false; }
 	bool PfDetectDestination(Node &node) { return node.segment_last_tile.base() == goal; }
 	void PfFollowNode(Node &parent) {
-		auto follower = Follow(nullptr, parent.segment_last_tile.base(), parent.segment_last_td);
-		for (Trackdir td : {TRACKDIR_X_NE, TRACKDIR_LOWER_E}) {
-			Node &node = this->CreateNewNode(); node.Set(&parent, TileIndex(follower.tile), td, true);
-			this->AddNewNode(node, Follower{});
+		const auto ft = Follow(parent.segment_last_tile.base(), parent.segment_last_td);
+		for (Trackdir td : SetTrackdirBitIterator(ft.new_td_bits)) {
+			Node &node = this->CreateNewNode(); node.Set(&parent, ft.new_tile, td, true); this->AddNewNode(node, Follower{});
 		}
 	}
 	bool PfCalcCost(Node &node, const Follower *) {
-		node.cost = node.parent->cost + (IsDiagonalTrackdir(node.key.td) ? 100 : 71);
-		if (this->PfDetectDestination(node)) return true;
-		if (this->max_cost > 0 && node.cost > this->max_cost) return false;
-		Follow(nullptr, node.key.tile.base(), node.key.td);
+		int segment_cost = 0;
+		TileIndex tile = node.key.tile;
+		Trackdir td = node.key.td;
+		for (;;) {
+			segment_cost += IsDiagonalTrackdir(td) ? 100 : 71;
+			if (tile.base() == goal) break;
+			if (this->max_cost > 0 && node.parent->cost + segment_cost > this->max_cost) return false;
+			const auto ft = Follow(tile.base(), td);
+			if (ft.new_td_bits == TRACKDIR_BIT_NONE || KillFirstBit(ft.new_td_bits) != TRACKDIR_BIT_NONE) break;
+			const Trackdir next_td = static_cast<Trackdir>(FindFirstBit(ft.new_td_bits));
+			if (ft.new_tile == node.key.tile && next_td == node.key.td) return false;
+			// The flat grid has no slope/speed penalty. The depot approach can
+			// have one continuation, so PfCalcCost walks to its segment exit.
+			segment_cost += ft.tiles_skipped * YAPF_TILE_LENGTH;
+			tile = ft.new_tile;
+			td = next_td;
+		}
+		node.segment_last_tile = tile;
+		node.segment_last_td = td;
+		node.cost = node.parent->cost + segment_cost;
 		return true;
 	}
 	bool PfCalcEstimate(Node &node) { node.estimate = node.cost; return true; }
@@ -161,107 +172,66 @@ public:
 }
 TEST_CASE("Road YAPF low-limit timing and exit-key replacement match reference", "[road][rust]")
 {
-	fixture_dirs = 1;
-	auto leaves = probe_leaves;
-	leaves.tile = RoadLimit::ProbeTile; leaves.follow = RoadLimit::Follow;
-	for (int limit : {0, 1, 2, 7}) {
-		for (uint32_t destination : {2U, 10U}) for (int max_cost : {0, 70, 71, 100}) {
-			RoadLimit::goal = destination; RoadLimit::trace.clear();
-			RoadLimit::Search reference(limit, max_cost);
-			bool found = reference.FindPath(nullptr);
-			auto expected_trace = RoadLimit::trace;
-			auto *best = reference.GetBestNode();
-			OpenTTDRoadYapfInput input{}; input.map_x = input.map_y = 64; input.max_nodes = limit;
-			RoadLimit::trace.clear();
-			auto result = openttd_rust_road_yapf_depot(&input, &leaves, nullptr, max_cost);
-			REQUIRE(result.found == static_cast<uint8_t>(found));
-			REQUIRE(RoadLimit::trace == expected_trace);
-			REQUIRE(result.tile == (best != nullptr ? best->segment_last_tile.base() : UINT32_MAX));
-			REQUIRE(result.cost == (best != nullptr ? best->cost : 0));
-			REQUIRE(result.rounds == reference.num_steps);
-			REQUIRE(result.open == reference.nodes.OpenCount());
-			REQUIRE(result.closed == reference.nodes.ClosedCount());
-			REQUIRE(result.calcs == reference.CostCalcs());
-		}
+	FollowerFixture map;
+	for (uint32_t t = 0; t < map.base.size(); ++t) map.Tile(t, MP_ROAD, 15);
+	auto leaves = probe_leaves; leaves.shared = &map.shared; leaves.tile = RoadLimit::ProbeTile;
+	for (int limit : {0, 1, 2, 7}) for (uint32_t distance : {2U, 10U}) for (int max_cost : {0, 70, 71, 100}) {
+		CAPTURE(limit, distance, max_cost);
+		RoadLimit::goal = RoadLimit::start - distance;
+		map.base[RoadLimit::goal].m5 = 0x82;
+		RoadLimit::Search reference(limit, max_cost);
+		bool found = reference.FindPath(nullptr);
+		auto *best = reference.GetBestNode();
+		OpenTTDRoadYapfInput input{}; input.map_x = input.map_y = 64; input.max_nodes = limit; input.tile = RoadLimit::start;
+		auto result = openttd_rust_road_yapf_depot(&input, &leaves, map.Vehicle(), max_cost);
+		REQUIRE(result.found == static_cast<uint8_t>(found));
+		REQUIRE(result.tile == (best != nullptr ? best->segment_last_tile.base() : UINT32_MAX));
+		REQUIRE(result.cost == (best != nullptr ? best->cost : 0));
+		REQUIRE(result.rounds == reference.num_steps);
+		REQUIRE(result.open == reference.nodes.OpenCount());
+		REQUIRE(result.closed == reference.nodes.ClosedCount());
+		REQUIRE(result.calcs == reference.CostCalcs());
+		map.base[RoadLimit::goal].m5 = 15;
 	}
 }
 
-/* Saves do not record rejected traversal queries or endpoint-cache validity.
- * These callbacks describe a tiny immutable graph; the actual Rust search runs
- * unchanged. D marks destination-only reads, T includes tile cost facts, and
- * V/N identifies the old/next tiles passed to the accepted traversal query. */
+/* Production traversal observes heights and vehicle/type limits only after
+ * transient rejection, destination, junction and cost-limit checks. */
 namespace RoadOrder {
-enum Mode { Rejected, Junction, Loop, Destination, MaxCost, DepotEntry, Accepted, LongSegment, Startup };
-struct Context { Mode mode; std::vector<std::pair<char, uint32_t>> trace; };
-OpenTTDRoadYapfTile Tile(const void *ctx, uint32_t tile, uint8_t, bool cost) noexcept
-{
-	auto &c = *const_cast<Context *>(static_cast<const Context *>(ctx));
-	c.trace.emplace_back(cost ? 'T' : 'D', tile);
-	OpenTTDRoadYapfTile out{}; out.type = 2;
-	out.depot = (tile == 0 && c.mode == Startup) || (tile == 1 && (c.mode == Destination || c.mode == DepotEntry)) || tile == 2;
-	out.depot_dir = DIAGDIR_SW;
-	return out;
+inline uint32_t goal;
+inline std::vector<uint32_t> heights;
+OpenTTDRoadYapfTile Tile(const void *, uint32_t tile, uint8_t, bool) noexcept {
+	OpenTTDRoadYapfTile out{}; out.type = FollowerFixture::active->shared.tile_type(tile); out.depot = tile == goal; out.depot_dir = DIAGDIR_SW; return out;
 }
-OpenTTDRoadYapfFollow Follow(const void *ctx, uint32_t tile, uint8_t) noexcept
-{
-	auto &c = *const_cast<Context *>(static_cast<const Context *>(ctx));
-	c.trace.emplace_back('F', tile);
-	if (tile == 0) return {1, 0, TRACKDIR_BIT_X_NE, true}; // Outer expansion must not request facts.
-	if (c.mode == Rejected || c.mode == DepotEntry) return {};
-	if (c.mode == Loop) return {1, 0, TRACKDIR_BIT_X_NE, true};
-	return {2, c.mode == LongSegment ? 4096 : 2, static_cast<uint16_t>(c.mode == Junction ? TRACKDIR_BIT_X_NE | TRACKDIR_BIT_LOWER_E : TRACKDIR_BIT_X_NE), true};
-}
-Context *height_context;
-OpenTTDFoundationSlope Height(uint32_t tile) noexcept
-{
-	height_context->trace.emplace_back(tile == 1 ? 'V' : 'N', tile);
-	return {.z = tile == 1 ? 0 : 8, .slope = SLOPE_FLAT};
-}
-OpenTTDRoadYapfTraversal Traversal(const void *, uint32_t) noexcept
-{
-	return {.display_speed = 100, .max_speed = 40, .min_speed = 90, .order_speed = 40};
-}
+OpenTTDFoundationSlope Height(uint32_t tile) noexcept { heights.push_back(tile); return {tile == 129 ? 0 : 8, SLOPE_FLAT}; }
 }
 TEST_CASE("Road YAPF observes accepted traversal once after transient exits", "[road][rust]")
 {
-	using namespace RoadOrder;
-	fixture_dirs = 1;
-	auto leaves = probe_leaves;
-	leaves.tile = RoadOrder::Tile; leaves.follow = RoadOrder::Follow; leaves.traversal = RoadOrder::Traversal;
-	for (Mode mode : {Rejected, Junction, Loop, Destination, MaxCost, DepotEntry, Accepted, LongSegment, Startup}) {
+	enum Mode { Rejected, Junction, Destination, MaxCost, Accepted, Startup };
+	for (Mode mode : {Rejected, Junction, Destination, MaxCost, Accepted, Startup}) {
 		CAPTURE(mode);
-		Context context{mode, {}};
-		height_context = &context; height_query = Height;
-		OpenTTDRoadYapfInput input{}; input.map_x = input.map_y = 64; input.slope = 17; input.dest_tile = 10;
-		OpenTTDRoadYapfResult result;
-		if (mode == DepotEntry) {
-			auto *state = openttd_rust_road_new();
-			result = openttd_rust_road_yapf_choose(state, &input, &leaves, &context, 0, DIAGDIR_NE, TRACKDIR_BIT_X_NE, false);
-			openttd_rust_road_destroy(state);
+		FollowerFixture map;
+		/* One-way NE road: a missing next tile cannot be replaced by a reversal. */
+		for (uint32_t t : {130U, 129U, 128U, 127U}) map.Tile(t, MP_ROAD, ROAD_X | 0x20);
+		if (mode == Rejected) map.Tile(128, MP_CLEAR);
+		if (mode == Junction) map.base[128].m5 = 15;
+		RoadOrder::goal = mode == Startup ? 130 : mode == Destination ? 129 : 128;
+		RoadOrder::heights.clear();
+		map.movement.pixel_slope = RoadOrder::Height;
+		map.movement.road_type_speed = [](RoadType) noexcept -> uint16_t { return 40; };
+		auto leaves = probe_leaves; leaves.shared = &map.shared; leaves.tile = RoadOrder::Tile;
+		OpenTTDRoadYapfInput input{}; input.map_x = input.map_y = 64; input.tile = 130; input.slope = 17;
+		auto result = openttd_rust_road_yapf_depot(&input, &leaves, map.Vehicle(), mode == MaxCost ? 99 : 0);
+		if (mode == Accepted) {
+			CHECK((RoadOrder::heights == std::vector<uint32_t>{129, 128}));
+			CHECK(result.found == 1); CHECK(result.cost == 417);
 		} else {
-			result = openttd_rust_road_yapf_depot(&input, &leaves, &context, mode == MaxCost ? 99 : 0);
-		}
-		using Trace = std::vector<std::pair<char, uint32_t>>;
-		if (mode == Accepted || mode == LongSegment) {
-			const Trace expected{{'D', 0}, {'F', 0}, {'T', 1}, {'F', 1}, {'V', 1}, {'N', 2}, {mode == LongSegment ? 'D' : 'T', 2}};
-			REQUIRE(context.trace == expected);
-			REQUIRE(result.found == 1);
-			REQUIRE(result.tile == 2);
-			REQUIRE(result.cost == (mode == Accepted ? 1717 : 615717));
-		} else {
-			REQUIRE(std::none_of(context.trace.begin(), context.trace.end(), [](auto item) { return item.first == 'V' || item.first == 'N'; }));
-			REQUIRE(std::count(context.trace.begin(), context.trace.end(), std::pair{'T', 1U}) == (mode == Startup ? 0 : 1));
-			if (mode == Destination || mode == MaxCost || mode == Startup) {
-				REQUIRE(std::count(context.trace.begin(), context.trace.end(), std::pair{'F', 1U}) == 0);
-			}
-			if (mode == DepotEntry) REQUIRE(std::count(context.trace.begin(), context.trace.end(), std::pair{'F', 1U}) == 1);
-			if (mode == Destination) REQUIRE(result.cost == 100);
-			if (mode == Startup) { REQUIRE(result.found == 1); REQUIRE(result.cost == 0); }
-			if (mode == Loop || mode == MaxCost) REQUIRE(result.found == 0);
+			CHECK(RoadOrder::heights.empty());
+			if (mode == Destination) { CHECK(result.found == 1); CHECK(result.cost == 100); }
+			if (mode == Startup) { CHECK(result.found == 1); CHECK(result.cost == 0); }
+			if (mode == Rejected || mode == MaxCost) CHECK(result.found == 0);
 		}
 	}
-	height_query = [](uint32_t) noexcept -> OpenTTDFoundationSlope { return {.z = 0, .slope = SLOPE_FLAT}; };
-	height_context = nullptr;
 }
 
 #endif

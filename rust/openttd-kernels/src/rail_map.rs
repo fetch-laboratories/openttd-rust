@@ -7,6 +7,7 @@
 
 //! Read helpers of `rail_map.h` for the audited map reader.
 //! `None` routes to the original typed native accessor (including failed assertions).
+use crate::bitmath_func::gb;
 use crate::map_func::TileTypeAccess;
 
 /// `GetRailGroundType` has no tile-type precondition in the original.
@@ -36,3 +37,25 @@ pub const RAIL_GROUND_HALF_TILE_WATER: u8 = 13;
 pub const RAIL_TILE_SIGNALS: u8 = 1;
 /// `RailTileType::Depot`.
 pub const RAIL_TILE_DEPOT: u8 = 3;
+
+#[allow(clippy::cast_possible_truncation)] // GB returns the original field width.
+impl crate::map_func::World<'_> {
+    pub(crate) fn plain_rail(&self, t: u32) -> bool {
+        self.kind(t) == crate::tile_type::MP_RAILWAY
+            && gb(u32::from(Self::byte(self.types.m5(t))), 6, 2) <= u32::from(RAIL_TILE_SIGNALS)
+    }
+    pub(crate) fn rail_depot(&self, t: u32) -> bool {
+        self.kind(t) == crate::tile_type::MP_RAILWAY
+            && gb(u32::from(Self::byte(self.types.m5(t))), 6, 2) == u32::from(RAIL_TILE_DEPOT)
+    }
+    pub(crate) fn rail_type(&self, t: u32) -> u8 {
+        gb(u32::from(Self::word(self.types.m8(t))), 0, 6) as u8
+    }
+    pub(crate) fn tracks(&self, t: u32) -> u8 {
+        self.check(self.plain_rail(t));
+        gb(u32::from(Self::byte(self.types.m5(t))), 0, 6) as u8
+    }
+    pub(crate) fn rail_depot_dir(&self, t: u32) -> u8 {
+        gb(u32::from(Self::byte(self.types.m5(t))), 0, 2) as u8
+    }
+}

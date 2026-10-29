@@ -93,8 +93,6 @@ pub struct Leaves {
     pub shared: *const Services,
     pub road_kind: unsafe extern "C" fn(*const c_void) -> crate::services::RoadTramType,
     pub tile: unsafe extern "C" fn(*const c_void, u32, u8, bool) -> Tile,
-    pub follow: unsafe extern "C" fn(*const c_void, u32, u8) -> Follow,
-    pub traversal: unsafe extern "C" fn(*const c_void, u32) -> Traversal,
     pub closest: unsafe extern "C" fn(*const c_void, u16, u8) -> u32,
     pub area: unsafe extern "C" fn(*const c_void, u16) -> Area,
 }
@@ -262,8 +260,24 @@ impl Search<'_> {
         unsafe { (self.leaves.tile)(self.context, tile, td, cost) }
     }
     fn follow(&self, tile: u32, td: u8) -> Follow {
-        // SAFETY: Existing shared follower, opaque live context, copied output.
-        unsafe { (self.leaves.follow)(self.context, tile, td) }
+        let s = unsafe { &*self.leaves.shared };
+        let v =
+            std::ptr::NonNull::new(self.context.cast_mut().cast()).map(crate::vehicle::VehicleRef);
+        let mut state = crate::follow_track::State::vehicle(
+            s,
+            crate::transport_type::TRANSPORT_ROAD,
+            v,
+            u64::MAX,
+            true,
+            false,
+        );
+        let followed = state.follow(s, tile, td);
+        Follow {
+            tile: state.new_tile.0,
+            skipped: state.tiles_skipped,
+            dirs: state.new_td_bits,
+            followed: u8::from(followed),
+        }
     }
     fn destination(&mut self) {
         if self.input.order_type == OT_GOTO_STATION || self.input.order_type == OT_GOTO_WAYPOINT {
@@ -422,7 +436,25 @@ impl Search<'_> {
             };
             let current_z = center_z(tile);
             let next_z = center_z(f.tile);
-            let facts = unsafe { (self.leaves.traversal)(self.context, tile) };
+            let shared = unsafe { &*self.leaves.shared };
+            let movement = crate::movement::table(shared);
+            let vehicle = crate::vehicle::VehicleRef(
+                std::ptr::NonNull::new(self.context.cast_mut().cast()).unwrap(),
+            );
+            let display_speed = (movement.train().physics.display_max_speed)(vehicle);
+            let order_speed = (movement.order_speed)(vehicle);
+            let max_speed = crate::follow_track::speed_limit(
+                shared,
+                crate::transport_type::TRANSPORT_ROAD,
+                Some(vehicle),
+                tile,
+            );
+            let facts = Traversal {
+                display_speed,
+                order_speed,
+                max_speed,
+                min_speed: 0,
+            };
             if next_z.wrapping_sub(current_z) > 1 {
                 cost = cost.wrapping_add(self.input.slope);
             }
@@ -774,12 +806,6 @@ crate::abi::layouts! {
         waypoint,
         drive_through,
     };
-    "OpenTTDRoadYapfFollow" ["probe"] => Follow {
-        tile,
-        skipped,
-        dirs,
-        followed,
-    };
     "OpenTTDRoadYapfArea" ["probe"] => Area {
         tile,
         width,
@@ -789,18 +815,10 @@ crate::abi::layouts! {
         drive_through,
         next,
     };
-    "OpenTTDRoadYapfTraversal" ["probe"] => Traversal {
-        display_speed,
-        max_speed,
-        min_speed,
-        order_speed,
-    };
     "OpenTTDRoadYapfLeaves" ["probe"] => crate::road_yapf::Leaves {
         shared,
         road_kind,
         tile,
-        follow,
-        traversal,
         closest,
         area,
     };
