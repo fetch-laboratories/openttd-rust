@@ -106,7 +106,7 @@ def origin_head(main: Path, branch: str) -> str:
 
 
 def plan_worktrees(
-    main: Path, entries: list[Worktree], pr_state: PrState
+    main: Path, entries: list[Worktree], pr_state: PrState, references: str = ""
 ) -> list[Item]:
     # A head on the base's first-parent chain is a fresh branch, not merged work.
     first_parent = set(git(main, "rev-list", "--first-parent", BASE).split())
@@ -114,10 +114,11 @@ def plan_worktrees(
     for tree in entries:
         if tree.path.is_relative_to(main / ".local/reference"):
             continue
-        if tree.branch is None:
+        task = ".t3/worktrees/" in tree.path.as_posix()
+        if tree.branch is None and not task:
             items.append(Item(tree.path, False, "detached HEAD", True))
             continue
-        state = pr_state(main, tree.branch)
+        state = pr_state(main, tree.branch) if tree.branch else None
         ancestor = subprocess.run(
             ["git", "-C", str(main), "merge-base", "--is-ancestor", tree.head, BASE]
         )
@@ -130,23 +131,83 @@ def plan_worktrees(
             reason = f"merged into {BASE}"
         elif state == "MERGED":
             reason, branch = "PR merged; local branch has unmerged commits, kept", None
-        elif state == "CLOSED" and origin_head(main, tree.branch) == tree.head:
+        elif (
+            state == "CLOSED"
+            and tree.branch
+            and origin_head(main, tree.branch) == tree.head
+        ):
             reason = "PR closed; origin keeps the branch"
         elif state == "CLOSED":
             reason, branch = "PR closed; origin lacks this head, branch kept", None
         else:
             fresh = tree.head in first_parent
-            reason = "no PR; branch at a base commit" if fresh else "no PR; unmerged"
-            items.append(Item(tree.path, False, reason, True))
-            continue
+            if task and (tree.branch is None or fresh):
+                reason = "finished T3 task; detached or no commits beyond base"
+                # A fresh branch holds no work to delete; a detached head has none.
+            else:
+                reason = (
+                    "no PR; branch at a base commit" if fresh else "no PR; unmerged"
+                )
+                items.append(Item(tree.path, False, reason, True))
+                continue
         if tree.locked or tree.prunable:
             hold = "locked" if tree.locked else "missing; run git worktree prune"
             items.append(Item(tree.path, False, f"{reason}, but {hold}", True))
         elif git(tree.path, "status", "--porcelain").strip():
             items.append(Item(tree.path, False, f"{reason}, but dirty", True))
         else:
-            items.append(Item(tree.path, True, reason, True, branch))
+            refusal = worktree_refusal(main, tree.path, references)
+            items.append(Item(tree.path, not refusal, refusal or reason, True, branch))
     return protect_outputs(items)
+
+
+def worktree_references(main: Path) -> str:
+    """Open issues include PRs; paginate so no retained task is silently omitted."""
+    bodies = subprocess.check_output(
+        [
+            "gh",
+            "api",
+            "--paginate",
+            "repos/{owner}/{repo}/issues?state=open&per_page=100",
+            "--jq",
+            ".[].body",
+        ],
+        cwd=main,
+        text=True,
+    )
+    roadmap = main / "docs/roadmap.md"
+    # Keep all explicit roadmap references, including shortened T3 names. This
+    # conservatively includes the resume checkpoint without depending on its title.
+    return bodies + (roadmap.read_text() if roadmap.exists() else "")
+
+
+def worktree_refusal(main: Path, path: Path, references: str) -> str | None:
+    if path.name in references or str(path) in references:
+        return "referenced by roadmap or open issue/PR"
+    local = main / ".local"
+    deep = max(local.glob("deep/*/report.json"), default=None)
+    evidence = deep.read_text() if deep else ""
+    anchors = main / "tools/simulation/instructions.py"
+    if anchors.exists():
+        evidence += anchors.read_text()
+    if (path / ".local").exists() and (str(path) in evidence or path.name in evidence):
+        return "output named by current deep report or speed anchors"
+    if any((path / ".local").rglob("provenance.json")):
+        return "pinned runtime (provenance.json)"
+    try:
+        for process in PROC_ROOT.iterdir():
+            if not process.name.isdecimal():
+                continue
+            try:
+                cwd = (process / "cwd").resolve(strict=True)
+                if cwd == path.resolve() or cwd.is_relative_to(path.resolve()):
+                    return "live process cwd inside worktree"
+            except OSError as error:
+                if error.errno not in (errno.ENOENT, errno.ESRCH):
+                    return f"cannot inspect process cwd: {error}"
+    except OSError as error:
+        return f"cannot inspect process cwd: {error}"
+    return None
 
 
 @dataclass(frozen=True)
@@ -193,11 +254,22 @@ def open_outputs() -> tuple[list[OutputHandle], str | None]:
     return handles, None
 
 
+def output_info(path: Path) -> os.stat_result:
+    """A dangling runtime link has no target whose open writers need protection."""
+    try:
+        return path.stat()
+    except FileNotFoundError:
+        info = path.lstat()
+        if not stat.S_ISLNK(info.st_mode):
+            raise
+        return info
+
+
 def lease_refusal(paths: list[Path]) -> str | None:
     """Check for writers through the kernel when proc hides a process's descriptors."""
     for path in paths:
         try:
-            if not stat.S_ISREG(path.stat().st_mode):
+            if not stat.S_ISREG(output_info(path).st_mode):
                 continue
             descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
             try:
@@ -230,7 +302,7 @@ def output_refusal(
             paths.extend(path.rglob("*"))
         if any(
             (info.st_dev, info.st_ino) in identities
-            for info in (p.stat() for p in paths)
+            for info in (output_info(p) for p in paths)
         ):
             return "live open output handle"
     except OSError as inspection_error:
@@ -324,9 +396,9 @@ def plan_local(local: Path, now: float) -> list[Item]:
     return protect_outputs(items)
 
 
-def plan(repo: Path, pr_state: PrState, now: float) -> list[Item]:
+def plan(repo: Path, pr_state: PrState, now: float, references: str = "") -> list[Item]:
     main, *linked = list_worktrees(repo)
-    trees = plan_worktrees(main.path, linked, pr_state)
+    trees = plan_worktrees(main.path, linked, pr_state, references)
     return trees + plan_local(main.path / ".local", now)
 
 
@@ -361,19 +433,24 @@ def writable(path: Path) -> None:
         path.chmod(path.stat().st_mode | stat.S_IWUSR)
 
 
-def remove(main: Path, item: Item) -> str | None:
+def remove(main: Path, item: Item, references: str = "") -> str | None:
     """Remove ITEM; return the refusal when git keeps it."""
-    writable(item.path)
+    if item.worktree and (refusal := worktree_refusal(main, item.path, references)):
+        return refusal
     handles, error = open_outputs()
     if refusal := output_refusal(item.path, handles, error):
         return refusal
     if not item.worktree:
+        writable(item.path)
         if item.path.is_dir() and not item.path.is_symlink():
             shutil.rmtree(item.path)
         else:
             item.path.unlink()
         return None
     command = ["git", "-C", str(main), "worktree", "remove", str(item.path)]
+    if git(item.path, "status", "--porcelain").strip():
+        return "worktree became dirty"
+    writable(item.path)
     removed = subprocess.run(command, capture_output=True, text=True)
     if removed.returncode:
         return removed.stderr.strip()
@@ -383,7 +460,11 @@ def remove(main: Path, item: Item) -> str | None:
     return None
 
 
-def main(argv: list[str] | None = None, pr_state: PrState = gh_pr_state) -> int:
+def main(
+    argv: list[str] | None = None,
+    pr_state: PrState = gh_pr_state,
+    references_reader: Callable[[Path], str] = worktree_references,
+) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--apply", action="store_true", help="remove the listed items")
     parser.add_argument(
@@ -392,7 +473,8 @@ def main(argv: list[str] | None = None, pr_state: PrState = gh_pr_state) -> int:
     args = parser.parse_args(argv)
     main_root = list_worktrees(args.repo)[0].path
     git(main_root, "fetch", "--prune", "--quiet", "origin")
-    items = plan(args.repo, pr_state, time.time())
+    references = references_reader(main_root)
+    items = plan(args.repo, pr_state, time.time(), references)
     total = 0
     for item in items:
         bytes_ = size(item.path) if item.remove and item.path.exists() else 0
@@ -401,7 +483,7 @@ def main(argv: list[str] | None = None, pr_state: PrState = gh_pr_state) -> int:
         label = "remove" if item.remove else "keep  "
         print(f"{label} {shown:>7} {item.path} ({item.reason})", flush=True)
         if item.remove and args.apply:
-            refusal = remove(main_root, item)
+            refusal = remove(main_root, item, references)
             if refusal:
                 total -= bytes_
                 print(f"       kept: {refusal}", flush=True)

@@ -58,26 +58,35 @@ class PortMetricsTests(unittest.TestCase):
         deleted = self.commit()
         keys = ("retired", "glue", "glue_removed", "net_glue")
         self.assertEqual(
-            counts(METRICS.metrics(baseline, deleted), *keys), (1, 1, 0, 1)
+            counts(METRICS.metrics(baseline, deleted, all_lines=True), *keys),
+            (1, 1, 0, 1),
         )
         original.write_text("int gui = 1;\n")
         restored = self.commit()
         self.assertEqual(
-            counts(METRICS.metrics(deleted, restored), *keys), (-1, 0, 0, 0)
+            counts(METRICS.metrics(deleted, restored, all_lines=True), *keys),
+            (-1, 0, 0, 0),
         )
         renamed = self.root / "src/renamed_glue.cpp"
         glue.rename(renamed)
         moved = self.commit()
-        result = METRICS.metrics(restored, moved)
+        result = METRICS.metrics(restored, moved, all_lines=True)
         self.assertEqual(counts(result, "glue", "glue_removed"), (0, 0))
         renamed.write_text("#ifndef WITH_RUST\nint glue = 2;\n#endif\n")
         portable = self.commit()
         keys = ("glue", "glue_removed", "net_glue")
-        self.assertEqual(counts(METRICS.metrics(moved, portable), *keys), (2, 1, 1))
-        self.assertEqual(counts(METRICS.metrics(portable, moved), *keys), (1, 2, -1))
+        self.assertEqual(
+            counts(METRICS.metrics(moved, portable, all_lines=True), *keys), (2, 1, 1)
+        )
+        self.assertEqual(
+            counts(METRICS.metrics(portable, moved, all_lines=True), *keys), (1, 2, -1)
+        )
         renamed.unlink()
         removed = self.commit()
-        self.assertEqual(counts(METRICS.metrics(portable, removed), *keys), (0, 2, -2))
+        self.assertEqual(
+            counts(METRICS.metrics(portable, removed, all_lines=True), *keys),
+            (0, 2, -2),
+        )
 
     def test_conversion_counts_original_and_removed_glue(self):
         # A first port wraps two original lines; a second replaces its glue,
@@ -97,16 +106,19 @@ class PortMetricsTests(unittest.TestCase):
         second = self.commit()
         keys = ("retired", "glue", "glue_removed", "net_glue")
         self.assertEqual(
-            counts(METRICS.metrics(METRICS.BASELINE, first), *keys), (3, 5, 0, 5)
+            counts(METRICS.metrics(METRICS.BASELINE, first, all_lines=True), *keys),
+            (3, 5, 0, 5),
         )
-        self.assertEqual(counts(METRICS.metrics(first, second), *keys), (2, 3, 3, 0))
+        self.assertEqual(
+            counts(METRICS.metrics(first, second, all_lines=True), *keys), (2, 3, 3, 0)
+        )
 
         # Ownership metrics equal the whole-fork delta and reverse exactly.
-        before = METRICS.source_metrics(METRICS.BASELINE, first)
-        after = METRICS.source_metrics(METRICS.BASELINE, second)
-        result = METRICS.metrics(first, second)
+        before = METRICS.source_metrics(METRICS.BASELINE, first, all_lines=True)
+        after = METRICS.source_metrics(METRICS.BASELINE, second, all_lines=True)
+        result = METRICS.metrics(first, second, all_lines=True)
         self.assertEqual(result["retired"], after["retired"] - before["retired"])
-        reversed_result = METRICS.metrics(second, first)
+        reversed_result = METRICS.metrics(second, first, all_lines=True)
         self.assertEqual(reversed_result["retired"], -result["retired"])
         self.assertEqual(reversed_result["net_glue"], -result["net_glue"])
 
@@ -119,13 +131,118 @@ class PortMetricsTests(unittest.TestCase):
         self.assertEqual(whole["base"], METRICS.BASELINE)
         self.assertEqual(
             counts(whole, "retired", "simulation_retired", "simulation_total"),
-            (3, 2, 4),
+            (3, 2, 3),
         )
-        self.assertEqual(whole["simulation_percent"], 50)
+        self.assertAlmostEqual(whole["simulation_percent"], 200 / 3)
+        self.assertEqual(whole["all_lines"]["simulation_percent"], 50)
+        self.assertEqual(whole["original_total"], 4)
+        self.assertEqual(whole["whole_fork_percent"], 75)
+
+    def test_code_comments_guards_and_area_totals(self) -> None:
+        self.assertEqual(
+            METRICS.code_lines(
+                "// comment\n\n#if defined(WITH_RUST)\n/* start\n end */ int x; // tail\n"
+                'const char *s = R"(// not comment)";\n#endif\n',
+                "src/test.cpp",
+            ),
+            {5, 6},
+        )
+        self.write(
+            "src/town_cmd.cpp",
+            "#ifdef WITH_RUST\n// glue\nrust_call();\n#else\n" + ORIGINAL + "#endif\n",
+        )
+        (self.root / "rust").mkdir()
+        self.write("rust/lib.rs", "// comment\n\npub fn call() {}\n")
+        (self.root / "tools").mkdir()
+        self.write("tools/check.py", '# comment\n"""docstring"""\nx = 1\n')
+        head = self.commit()
+        result = METRICS.metrics(METRICS.BASELINE, head, whole_fork=True)
+        self.assertEqual(
+            counts(result, "rust", "tooling", "glue", "retired", "net_glue"),
+            (1, 1, 1, 3, 1),
+        )
+        self.assertEqual(result["original_total"], 4)
+        self.assertEqual(result["compiled_cpp"], 2)
+        self.assertEqual(result["compiled_percent"], 50)
+        self.assertEqual(
+            result["totals"],
+            dict(original=4, retired=3, remaining=1, glue=1, compiled=2),
+        )
+        self.assertEqual(sum(row["original"] for row in result["areas"].values()), 4)
+        self.assertEqual(sum(row["compiled"] for row in result["areas"].values()), 2)
+        for path, expected in {
+            "src/command.cpp": "Simulation logic",
+            "src/map.cpp": "Simulation storage",
+            "src/town.h": "Simulation storage",
+            "src/rust/ffi.h": "Boundary layer",
+            "src/newgrf_act0.cpp": "NewGRF",
+            "src/saveload/foo.cpp": "Save/load",
+            "src/script/api/foo.cpp": "Script API",
+            "src/network/foo.cpp": "Network",
+            "src/core/pool_type.hpp": "Support",
+            "src/gfx.cpp": "Graphics and viewport",
+            "src/town_gui.cpp": "GUI",
+            "src/os/unix/unix.cpp": "Platform",
+            "src/table/foo.h": "Data tables",
+            "src/3rdparty/foo.cpp": "Vendored",
+            "src/tests/foo.cpp": "Upstream tests",
+        }.items():
+            self.assertEqual(METRICS.area(path), expected, path)
+
+    def test_whole_fork_total_is_independent_of_branch_delta(self) -> None:
+        self.write(
+            "src/town_cmd.cpp",
+            "#ifdef WITH_RUST\nrust_call();\n#else\n" + ORIGINAL + "#endif\n",
+        )
+        head = self.commit()
+        code = METRICS.metrics(head, head, whole_fork=True)
+        physical = METRICS.metrics(head, head, whole_fork=True, all_lines=True)
+        self.assertEqual(code["retired"], 0)
+        self.assertEqual(physical["retired"], 0)
+        # These totals follow directly from the four-line original fixture:
+        # its three statements retire; its blank line only counts physically.
+        self.assertEqual(code["whole_fork_retired"], 3)
+        self.assertEqual(physical["whole_fork_retired"], 4)
+        output = io.StringIO()
+        with (
+            mock.patch("sys.argv", ["port-metrics.py", "--whole-fork"]),
+            mock.patch.object(METRICS, "metrics", side_effect=[code, physical]),
+            contextlib.redirect_stdout(output),
+        ):
+            METRICS.main()
+        self.assertIn("Code: whole-fork retired 3 / 4 (75.00%)", output.getvalue())
+        self.assertIn("All lines: whole-fork retired 4 / 5 (80.00%)", output.getvalue())
+
+    def test_boundary_counts_private_callbacks_and_exports(self) -> None:
+        (self.root / "rust").mkdir()
+        self.write(
+            "rust/lib.rs",
+            "\n".join(
+                (
+                    "#[unsafe(no_mangle)]",
+                    "#[allow(unsafe_code)]",
+                    'pub(crate) unsafe extern "C" fn openttd_rust_call() {}',
+                    "#[no_mangle]",
+                    'extern "C" fn openttd_rust_old() {}',
+                    "struct Services {",
+                    '    pub call: extern "C" fn(),',
+                    '    private: Option<unsafe extern "C" fn()>,',
+                    "}",
+                    'fn helper(callback: extern "C" fn()) {}',
+                    'const EXAMPLE: &str = r#"#[no_mangle] pub extern "C" fn openttd_rust_fake() {}"#;',
+                )
+            ),
+        )
+        head = self.commit()
+        self.assertEqual(METRICS.boundary(head), {"exports": 2, "callback_slots": 2})
 
     def test_simulation_inventory(self):
         for path in (
             "src/town_cmd.cpp",
+            *(
+                f"src/{name}.cpp"
+                for name in "command cheat goal story league signs misc_cmd vehiclelist elrail autoslope".split()
+            ),
             "src/map_func.h",
             "src/openttd.cpp",
             "src/pathfinder/yapf/yapf.hpp",
