@@ -1,8 +1,8 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 #ifndef SIMULATION_SESSION_FIXTURE_HPP
 #define SIMULATION_SESSION_FIXTURE_HPP
-#include "rust/session_ffi.h"
-#include "rust/fleet_ffi.h"
+#include "../../src/rust/session_ffi.h"
+#include "../../src/rust/fleet_ffi.h"
 /* Narrow owner fixtures enter the production state loop. Unrelated phases use
  * empty typed worlds; each fixture replaces only its observed native services. */
 struct SessionFixture {
