@@ -1770,11 +1770,12 @@ NewGRF programs, legacy and unusual occupied/reservation branches remain #156 ga
 ### Station naming, tile loop and lifecycle (#562)
 
 `station_lifecycle.rs` owns default naming and suffix/industry-name exclusion, station tile
-loops, destructor ordering, road-stop tile-data mutation, facility addition and airport
-maintenance. It shares the station service owner and calls the Rust queue, aircraft, order,
-link-graph, flow, cargo and catchment owners directly. Station map fields use the shared map
-descriptor; industry-map lookups preserve the original helper assertions and pool operations.
-C++ retains pool shells, unmoved record fields, the road-stop tile-data vector, native member
+loops (called directly by the tile scheduler with its map descriptor), destructor ordering,
+facility addition and airport maintenance. It shares the station service owner and calls the
+Rust queue, aircraft, order, link-graph, flow, cargo and catchment owners directly. Station map
+fields use the shared map descriptor; industry-map lookups preserve the original helper
+assertions and pool operations. C++ retains pool shells, unmoved record fields, the road-stop
+tile-data vector with `SetRoadStopTileData` and `RemoveRoadStopTileData`, native member
 destruction, spatial indices, news and windows. Each destructor owner access ends before a
 callback; the native destructor is one Rust call followed by ordinary member destruction.
 `GetPlatformLength` remains with #560. PR #568.
