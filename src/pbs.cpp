@@ -60,7 +60,6 @@ const OpenTTDPbsServices &GetPbsServices() noexcept
 		.blocking = RustOnewaySignalBlocking,
 		.has_pbs = RustHasPbsSignal,
 		.index = RustVehicleIndexOpaque,
-		.follow = RustFollowTrackRail,
 	};
 	return s;
 }

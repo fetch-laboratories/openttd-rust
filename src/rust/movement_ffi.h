@@ -14,6 +14,7 @@
 #include "road_ffi.h"
 #include "ship_control_ffi.h"
 #include "vehicle_ffi.h"
+#include "../bridge_type.h"
 #include "orders_ffi.h"
 struct OpenTTDMovementFoundation { const void *spec; uint16_t kind; bool callback; };
 struct OpenTTDMovementObjectFoundation { bool enabled; bool no_foundation; };
@@ -37,6 +38,11 @@ struct OpenTTDMovementServices {
 	const OpenTTDRailMapServices *rail_map;
 	const OpenTTDTrainServices *train;
 	const OpenTTDVehicleServices *vehicle;
+	uint64_t (*road_compatible)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(road_compatible);
+	uint16_t (*road_type_speed)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_type_speed);
+	uint16_t (*bridge_type_speed)(BridgeType) noexcept OPENTTD_SERVICE_DEFAULT(bridge_type_speed);
+	uint32_t (*other_bridge_end)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(other_bridge_end);
+	uint16_t (*order_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_speed);
 	RoadTramType (*road_kind)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(road_kind);
 	const OpenTTDRoadLeaves *road_vehicle;
 	OpenTTDMovementVehicle (*resolve)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(resolve);

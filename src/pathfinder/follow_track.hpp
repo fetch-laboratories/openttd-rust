@@ -19,6 +19,7 @@
 #include "../depot_map.h"
 #include "pathfinder_func.h"
 
+#ifndef WITH_RUST
 /**
  * Track follower helper template class (can serve pathfinders and vehicle
  *  controllers). See 6 different typedefs below for 3 different transport
@@ -167,7 +168,6 @@ struct CFollowTrackT {
 		return true;
 	}
 
-#ifndef WITH_RUST
 	inline bool MaskReservedTracks()
 	{
 		if (!DoTrackMasking()) return true;
@@ -197,7 +197,6 @@ struct CFollowTrackT {
 		}
 		return true;
 	}
-#endif
 
 protected:
 	/** Follow the exitdir from old_tile and fill new_tile and tiles_skipped */
@@ -482,6 +481,7 @@ public:
 	}
 };
 
+
 typedef CFollowTrackT<TRANSPORT_WATER, Ship,        true > CFollowTrackWater;
 typedef CFollowTrackT<TRANSPORT_ROAD,  RoadVehicle, true > CFollowTrackRoad;
 typedef CFollowTrackT<TRANSPORT_RAIL,  Train,       true > CFollowTrackRail;
@@ -490,5 +490,7 @@ typedef CFollowTrackT<TRANSPORT_RAIL,  Train,       false> CFollowTrackRailNo90;
 
 typedef CFollowTrackT<TRANSPORT_RAIL, Train, true,  true > CFollowTrackFreeRail;
 typedef CFollowTrackT<TRANSPORT_RAIL, Train, false, true > CFollowTrackFreeRailNo90;
+
+#endif /* !WITH_RUST */
 
 #endif /* FOLLOW_TRACK_HPP */

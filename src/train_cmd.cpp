@@ -4697,8 +4697,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.other_end = OpenTTDLegacyMapQuery<uint64_t, RustOtherTunnelBridgeEnd, OpenTTDTrainHandle, uint32_t>,
 		.pay_running = TrainPayRunning,
 		.pbs_signal_type = TrainPbsSignalType,
-		.platform_ahead = TrainPlatformAhead,
-		.platform_length = TrainPlatformLength,
 		.pow_wag_power = TrainPowWagPower,
 		.price = TrainPrice,
 		.railveh_wagon = TrainRailvehWagon,
@@ -4852,7 +4850,6 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 		.write_dest = TrainReservationWriteDest,
 		.write_last = TrainReservationWriteLast,
 		.write_suppress = TrainReservationWriteSuppress,
-		.follow = OpenTTDTrainFollower<RustFollowTrackRail>,
 
 		.pathfind = TrainReservationPathfind,
 		.safe_track = TrainReservationSafeTrack,

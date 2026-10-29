@@ -290,6 +290,8 @@ static_assert(OWNER_TOWN.base() == 0x0F && OWNER_NONE.base() == 0x10 && OWNER_WA
 static_assert(to_underlying(DoCommandFlag::Execute) == 0 && to_underlying(DoCommandFlag::Auto) == 1 && to_underlying(DoCommandFlag::QueryCost) == 2 && to_underlying(DoCommandFlag::NoWater) == 3);
 static_assert(to_underlying(DoCommandFlag::NoTestTownRating) == 4 && to_underlying(DoCommandFlag::Bankrupt) == 5 && to_underlying(DoCommandFlag::NoModifyTownRating) == 9 && to_underlying(DoCommandFlag::ForceClearTile) == 10);
 static_assert(std::is_same_v<DoCommandFlags::BaseType, uint16_t>);
+static_assert(INVALID_RAILTYPES.base() == UINT64_MAX && INVALID_RAILTYPE == 255);
+static_assert(GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET == 4);
 static_assert(NEW_STATION.base() == 0xFFFD && StationID::Invalid().base() == 0xFFFF);
 static_assert(to_underlying(StationType::RailWaypoint) == 7 && to_underlying(StationType::RoadWaypoint) == 8 && to_underlying(StationType::Buoy) == 6);
 static_assert(StationFacilities(StationFacility::Train).base() == 1 && StationFacilities(StationFacility::TruckStop).base() == 2 && StationFacilities(StationFacility::BusStop).base() == 4 && StationFacilities(StationFacility::Dock).base() == 16);

@@ -48,30 +48,6 @@ static OpenTTDRoadYapfTile RoadTile(const void *, uint32_t index, uint8_t td, bo
 	return out;
 }
 
-static OpenTTDRoadYapfFollow RoadFollow(const void *ctx, uint32_t tile, uint8_t td) noexcept
-{
-	CFollowTrackRoad follower(static_cast<const RoadVehicle *>(ctx));
-	OpenTTDRoadYapfFollow out{};
-	out.followed = follower.Follow(TileIndex(tile), static_cast<Trackdir>(td));
-	if (out.followed) {
-		out.tile = follower.new_tile.base();
-		out.skipped = follower.tiles_skipped;
-		out.dirs = follower.new_td_bits;
-	}
-	return out;
-}
-
-/** No Follow here: query the named limits at the original traversal observation. */
-static OpenTTDRoadYapfTraversal RoadTraversal(const void *ctx, uint32_t tile) noexcept
-{
-	const auto *v = static_cast<const RoadVehicle *>(ctx);
-	OpenTTDRoadYapfTraversal out{};
-	out.display_speed = RustVehicleDisplayMaxSpeed(v);
-	out.order_speed = RustVehicleOrderMaxSpeed(v);
-	out.max_speed = CFollowTrackRoad::GetSpeedLimit(TileIndex(tile), v, &out.min_speed);
-	return out;
-}
-
 static uint32_t RoadClosest(const void *ctx, uint16_t station, uint8_t type) noexcept
 {
 	return CalcClosestStationTile(StationID(station), static_cast<const RoadVehicle *>(ctx)->tile, static_cast<StationType>(type)).base();
@@ -96,7 +72,7 @@ static OpenTTDRoadYapfArea RoadArea(const void *ctx, uint16_t station) noexcept
 	return out;
 }
 
-static const OpenTTDRoadYapfLeaves _road_yapf_leaves{.shared = &_rust_shared_services, .road_kind = RustVehicleContextQuery<RoadTramType, RoadVehicle, RustMovementRoadKind>, .tile = RoadTile, .follow = RoadFollow, .traversal = RoadTraversal, .closest = RoadClosest, .area = RoadArea};
+static const OpenTTDRoadYapfLeaves _road_yapf_leaves{.shared = &_rust_shared_services, .road_kind = RustVehicleContextQuery<RoadTramType, RoadVehicle, RustMovementRoadKind>, .tile = RoadTile, .closest = RoadClosest, .area = RoadArea};
 
 static void RoadDebug(const RoadVehicle *v, const OpenTTDRoadYapfResult &result)
 {

@@ -6,7 +6,16 @@ import subprocess
 from pathlib import Path
 
 
-def console_adapter(build, folder, env, source, kind, wraps=(), replace_objects=()):
+def console_adapter(
+    build: Path,
+    folder: Path,
+    env: dict[str, str],
+    source: Path,
+    kind: str,
+    wraps: tuple[str, ...] = (),
+    replace_objects: tuple[str, ...] = (),
+    native_test_support: bool = False,
+) -> Path:
     """Relink a component console adapter with the frozen game's built objects."""
     folder.mkdir(parents=True, exist_ok=True)
     commands = json.loads((build / "compile_commands.json").read_text())
@@ -29,6 +38,17 @@ def console_adapter(build, folder, env, source, kind, wraps=(), replace_objects=
         if not arg.startswith("-Wl,--dependency-file=")
         and not any(arg.endswith(suffix) for suffix in replace_objects)
     ]
+    if native_test_support and target == "openttd-rust":
+        import migration
+
+        archive = migration.rust_archive(build)
+        support = migration.rust_archive(
+            build, target_dir=build / "cargo-native-test-support"
+        )
+        archive_args = [arg for arg in link_args if (build / arg).resolve() == archive]
+        if len(archive_args) != 1:
+            raise RuntimeError("expected one production Rust archive in fixture link")
+        link_args[link_args.index(archive_args[0])] = str(support)
     link_args += [
         str(folder / f"{kind}.o"),
         "-Wl,--wrap=_Z22IConsoleStdLibRegisterv",

@@ -1,10 +1,10 @@
 # OpenTTD-Rust migration
 
-OpenTTD-Rust is an independent experiment in incremental C++ to Rust migration. The original
-game's observable behavior is the specification, including quirks retained for historical
-fidelity. Record possible improvements in fork GitHub issues, deferred until near-full Rust
-reproduction. Game-simulation code takes priority, with Rust owning component state;
-`docs/roadmap.md` sets current work and `AGENTS.md` states the selection rules.
+OpenTTD-Rust is an independent experiment that rewrites OpenTTD in Rust incrementally, until no
+original C++ line remains. The original game's observable behavior is the specification,
+including quirks retained for historical fidelity. Record possible improvements in fork GitHub
+issues, deferred until near-full Rust reproduction. `AGENTS.md` states the goal, the phases and
+the selection rules; `docs/roadmap.md` sets current work.
 
 ## Repository and reference
 
@@ -41,7 +41,7 @@ shared random-number behavior.
   write it in place and keep no mirror; "canonical native" means the authoritative copy remains
   in C++ (for example the map arrays).
 - **Facade**: the C++ function or method that keeps the original signature and forwards to Rust
-  under `WITH_RUST`; the original body stays in the `#else` branch for portable builds.
+  under `WITH_RUST`; until #581's sweep, the original body stays in the `#else` branch.
 - **Leaf**: a typed `noexcept` C++ service that Rust calls for a shared operation (`Random`,
   sound, viewport, or a field of a record whose storage has not moved) and that returns without
   reentering the calling owner. Map fields and moved records are read in place, not through
@@ -66,11 +66,12 @@ The current verification setup targets native Linux and needs a C++20 compiler, 
 Python 3.11 or newer, SDL2 development files, and the normal OpenTTD libraries described in
 `COMPILING.md`. OpenGFX supplies free graphics for regression games; commercial game assets are
 unnecessary. The verification driver requires the pinned Rust toolchain and always configures
-the candidate with `OPTION_RUST=ON`. Ordinary CMake builds default to `OPTION_RUST=OFF`,
-preserving the original portable C++ path. Rust linkage supports native GNU/Linux (64-bit x86 or
+the candidate with `OPTION_RUST=ON`. Ordinary CMake builds still default to `OPTION_RUST=OFF`,
+which compiles the original C++ bodies. Rust linkage supports native GNU/Linux (64-bit x86 or
 ARM) and native macOS arm64. The scoped native Windows MSVC mode is described below. Other
 platforms, cross compilation, and macOS universal/Intel configurations reject an enabled Rust
-option; their portable fallback remains migration work (#3).
+option. #581 builds Rust on every CI configuration, including Emscripten, then removes the
+option and the fallback bodies.
 
 On Ubuntu with administrator access:
 
@@ -441,7 +442,8 @@ CMake verifies the pinned `rustc -vV` host against the actual C++ platform, arch
 resolved SDK and minimum supplied to Rust through `SDKROOT` and `MACOSX_DEPLOYMENT_TARGET` (see
 Rust's [Darwin target
 documentation](https://doc.rust-lang.org/rustc/platform-support/apple-darwin.html)). Intel
-packaging, additional Windows CRT modes and Emscripten host/target builds remain separate tasks.
+packaging and additional Windows CRT modes remain separate tasks; Emscripten host/target builds
+are #581.
 
 Archives live at `<build>/cargo/<validated-target>/release/libopenttd_kernels.a`.
 `tools/migration.py` exposes `rust_configuration(build)` and `rust_archive(build)`; all
@@ -804,7 +806,7 @@ reach are tracked in #156.
 Unless an entry says otherwise, these properties hold for every port:
 
 - With `OPTION_RUST=ON` (`WITH_RUST`) the C++ facade calls Rust; with it off, the original C++
-  bodies compile unchanged. Rust on further platforms is #3.
+  bodies compile unchanged. #581 makes Rust the only build and deletes those bodies.
 - Rust panics and Rust allocation failure abort (`panic = "abort"` in both profiles); the C ABI
   never unwinds, and no C++ exception crosses a Rust frame. Identical resource-exhaustion timing
   is not claimed.
@@ -1656,7 +1658,7 @@ two attempts, random lost paths and cache extraction. Search arenas/maps/heaps r
 process-wide capacity (#306); active searches own storage, with no cached world pointers. Each
 Ship owns one opaque Rust path with copied controller access; modern VEHS stages one byte across
 C++ load errors and commits it on unwind, while the pre-struct-list loader retains its reversed
-path order. C++ keeps ship/world pools, track following, station/dock queries, engine/settings
+path order. C++ keeps ship/world pools, station/dock queries, engine/settings
 observations and canonical map arrays. No ordinary throwing/reentrant world callback occurs in
 this search; save errors remain outside Rust frames. Checks: `python3 tools/migration.py
 simulate water --jobs 2`. Arbitrary maps/NewGRFs and complete legacy saves are not covered. PRs
@@ -1666,8 +1668,8 @@ simulate water --jobs 2`. Arbitrary maps/NewGRFs and complete legacy saves are n
 
 Rust owns all four searches, node/segment arenas, exact-order heap, costs, lookahead, limits and
 reconstruction, six specialization-specific cache banks, rail-change invalidation, reservation
-traversal and ordered signal rollback. C++ retains the train controller, shared track follower,
-PBS and canonical world services. Explicit platform/waypoint station triggers return to C++ with
+traversal and ordered signal rollback. Track following and PBS enter their Rust owners
+directly; C++ retains canonical world services. Explicit platform/waypoint station triggers return to C++ with
 borrows released; waypoint track reservation also retains the original synchronous PBS station
 triggers while search/reservation borrows remain active, before its second trigger. Original
 search bodies remain portable-only; diagnostic dumps use temporary views and the original
@@ -1683,7 +1685,8 @@ Rust owns track/depot searches, exit-direction keys, node arena, lookup maps, ex
 segment traversal/cost, heuristic, limits and intermediate fallback. Reconstruction and
 station-area trimming write the road controller's sole canonical path. Original
 specialization/node types compile only portably. C++ retains map/pools/settings, station/stop
-observations and `CFollowTrackRoad` behind copied scalar `noexcept` leaves. None runs scripts,
+observations behind typed `noexcept` leaves; track following and speed limits enter Rust
+directly. None runs scripts,
 mutates/reenters the search/road owner or throws in ordinary play. Short owner access ends
 before leaves. Neither search draws RNG; wrapping, exit-key replacement, strict ties and
 follow-before-limit timing retain source behavior. Panics/OOM abort. Arena/maps/heap retain
@@ -1695,7 +1698,7 @@ read ordered current/next ground-vehicle center Z, vehicle speed fields and old-
 limits; arithmetic stays Rust and Follow is never repeated. Checks: `python3 tools/migration.py
 simulate roads --jobs 2` and native heap/depot transcripts against unchanged C++. Arbitrary
 maps, NewGRFs, articulated/tram, waypoints, exhaustive stop/loop/segment branches and legacy
-saves remain #156 gaps; shared follower logic remains native. PRs #135, #279 and #289.
+saves remain #156 gaps. PRs #135, #279 and #289.
 
 ### Vehicle visual emission, cache and effect creation (#466)
 
@@ -2072,17 +2075,30 @@ GUI/presentation remain #156 gaps. PR #346.
 ### Complete PBS reservation service (#367)
 
 Rust (`pbs.rs`) owns reservation reads/writes, complete platform scans, traversal, loop
-termination, train selection and waiting policy. `follow_track.rs` owns reserved-track masking
-between native Follow and GetSpeedLimit calls. Native map bits remain canonical. The named
-`CFollowTrackRail::Follow` leaf carries all partial failure observations in a call-local typed
-result; spatial enumeration retains native hash order, while Rust selects the lowest front-train
-ID. Crossing updates and train state/trackdir call their Rust owners directly. Header-matched
+termination, train selection and waiting policy. Track following and reserved-track masking
+enter `follow_track.rs` directly and retain all partial failure observations. Native map bits
+remain canonical. Spatial enumeration retains native hash order, while Rust selects the lowest
+front-train ID. Crossing updates and train state/trackdir call their Rust owners directly. Header-matched
 track/PBS helpers are shared. Station randomisation, animation and redraw retain source order
 and the same native station identity. No world borrow spans a trigger or shared service. Checks:
 the default rail-reservation, reload, controller and signal scenarios, whose adapter compiles
 the pinned algorithm bodies; native runtime export/import carries both once-built PBS adapters
 into CI shards. External NewGRF trigger reentry, custom railtype turn flags, legacy conversion
 and threaded GUI coverage remain #156 gaps. PR #370.
+
+### Track follower and platform length (#560)
+
+`follow_track.rs` owns complete rail, road and water follower state and control flow,
+including admission, reversal, tunnel/bridge/platform skipping, reserved-track masking,
+errors and speed limits. It also owns both station platform-length scans; waypoints retain
+their single-tile result. YAPF, PBS, train reservations and water regions call the Rust owner
+directly. Train stopping and station loading call the same platform scans directly.
+The original C++ follower, platform virtual methods and their typedefs compile only
+portably; no native production follower or platform facade remains. Native evidence uses feature-gated test bridges to the same
+Rust methods. Shared header modules read field-sized scalars through the canonical map
+descriptor under the game-loop/command interval. Native vehicle shells and unmoved record
+fields retain shared typed accessors; no world borrow spans a callback. Arbitrary NewGRF
+combinations, legacy saves and exhaustive map layouts remain #156 limits. PR #569.
 
 ### Tile movement dispatch (#371)
 
