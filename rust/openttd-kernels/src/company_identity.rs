@@ -80,9 +80,7 @@ pub struct Services {
     pub president_windows: extern "C" fn() -> (),
     pub colour_windows: extern "C" fn() -> (),
     pub object_colours: extern "C" fn(*mut OpenTTDCompany) -> (),
-    pub current: extern "C" fn() -> CompanyID,
     pub dirty: extern "C" fn() -> (),
-    pub utf8_length: extern "C" fn(*const u8, usize) -> usize,
     pub reset_colourmap: extern "C" fn() -> (),
     pub engine: extern "C" fn(EngineID) -> *const OpenTTDEngine,
     pub engine_type: extern "C" fn(*const OpenTTDEngine) -> VehicleType,
@@ -266,7 +264,7 @@ pub(crate) fn generate_name(s: &Services, c: *mut OpenTTDCompany) {
         });
         if unique {
             let name = names.render(str, parts);
-            if (s.utf8_length)(name.data, name.size)
+            if (s.shared.utf8_length)(name.data, name.size)
                 < crate::company_type::MAX_LENGTH_COMPANY_NAME_CHARS
             {
                 break;
@@ -290,7 +288,7 @@ pub(crate) fn generate_president(s: &Services, c: *mut OpenTTDCompany) {
         (s.set_president_parts)(c, s.shared.random());
         (s.set_president_id)(c, s.strings.president_generated);
         let name = names.render(s.strings.president, u32::from((s.company_id)(c).0));
-        if (s.utf8_length)(name.data, name.size)
+        if (s.shared.utf8_length)(name.data, name.size)
             >= crate::company_type::MAX_LENGTH_PRESIDENT_NAME_CHARS
         {
             continue;
@@ -375,7 +373,7 @@ pub extern "C" fn openttd_rust_company_manager_face(
         return false;
     }
     if execute {
-        let c = (s.company)((s.current)());
+        let c = (s.company)(CompanyID((s.shared.current_company)()));
         let face = (s.face)(c);
         crate::company_manager_face::style(s.faces, face, style);
         unsafe {
@@ -400,7 +398,7 @@ pub extern "C" fn openttd_rust_company_colour(
     if scheme == LS_DEFAULT && colour == INVALID_COLOUR {
         return false;
     }
-    let id = (s.current)();
+    let id = CompanyID((s.shared.current_company)());
     let c = (s.company)(id);
     if scheme == LS_DEFAULT && primary && !companies(s, |cc| cc == c || (s.colour)(cc) != colour) {
         return false;
@@ -475,7 +473,7 @@ fn rename(s: &Services, text: ByteSpan, execute: bool, president: bool) -> u8 {
         } else {
             crate::company_type::MAX_LENGTH_COMPANY_NAME_CHARS
         };
-        if (s.utf8_length)(text.data, text.size) >= limit {
+        if (s.shared.utf8_length)(text.data, text.size) >= limit {
             return 1;
         }
         if !companies(s, |c| {
@@ -490,7 +488,7 @@ fn rename(s: &Services, text: ByteSpan, execute: bool, president: bool) -> u8 {
         }
     }
     if execute {
-        let id = (s.current)();
+        let id = CompanyID((s.shared.current_company)());
         let c = (s.company)(id);
         if president {
             (s.set_president)(c, text);
@@ -679,5 +677,5 @@ crate::abi::layouts! {
     fn abi_layout;
  "OpenTTDCompanyNameStorage" ["company_economy"] => NameStorage { bytes, };
  "OpenTTDCompanyIdentityStrings" ["company_economy"] => Strings { unnamed, president, company, president_generated, andco, town_begin, town_end, company_begin, };
- "OpenTTDCompanyIdentityServices" ["company_economy"] => Services { shared, randomizer, faces, groups, strings, company, next_company, company_id, name_id, set_name_id, name_parts, set_name_parts, president_id, set_president_id, president_parts, set_president_parts, colour, set_colour, last_build, is_ai, name, set_name, president, set_president, livery, face, name_frame_init, name_frame_drop, render, render_other, company_renamed, president_renamed, launch_news, admin_update, rename_transport, president_windows, colour_windows, object_colours, current, dirty, utf8_length, reset_colourmap, engine, engine_type, engine_cargo, engine_kind, engine_class, engine_misc, aircraft_subtype, vehicle_cargo, vehicle_first, articulated, wagon_override, cargo_freight, cargo_classes, vehicle_id, invalidate_vehicle, vehicle_owner, };
+ "OpenTTDCompanyIdentityServices" ["company_economy"] => Services { shared, randomizer, faces, groups, strings, company, next_company, company_id, name_id, set_name_id, name_parts, set_name_parts, president_id, set_president_id, president_parts, set_president_parts, colour, set_colour, last_build, is_ai, name, set_name, president, set_president, livery, face, name_frame_init, name_frame_drop, render, render_other, company_renamed, president_renamed, launch_news, admin_update, rename_transport, president_windows, colour_windows, object_colours, dirty, reset_colourmap, engine, engine_type, engine_cargo, engine_kind, engine_class, engine_misc, aircraft_subtype, vehicle_cargo, vehicle_first, articulated, wagon_override, cargo_freight, cargo_classes, vehicle_id, invalidate_vehicle, vehicle_owner, };
 }

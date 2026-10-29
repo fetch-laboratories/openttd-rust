@@ -52,9 +52,7 @@ struct OpenTTDCompanyIdentityServices {
 	void (*president_windows)() noexcept OPENTTD_SERVICE_DEFAULT(president_windows);
 	void (*colour_windows)() noexcept OPENTTD_SERVICE_DEFAULT(colour_windows);
 	void (*object_colours)(Company *c) noexcept OPENTTD_SERVICE_DEFAULT(object_colours);
-	uint8_t (*current)() noexcept OPENTTD_SERVICE_DEFAULT(current);
 	void (*dirty)() noexcept OPENTTD_SERVICE_DEFAULT(dirty);
-	size_t (*utf8_length)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(utf8_length);
 	void (*reset_colourmap)() noexcept OPENTTD_SERVICE_DEFAULT(reset_colourmap);
 	const OpenTTDEngine * (*engine)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(engine);
 	VehicleType (*engine_type)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_type);
