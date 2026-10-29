@@ -381,27 +381,34 @@ static constexpr void UpdateLandscapingLimit(uint32_t &limit, uint64_t per_64k_f
 }
 #endif /* !WITH_RUST */
 
-/** Update the landscaping limits per company. */
-void UpdateLandscapingLimits()
-{
 #ifdef WITH_RUST
+OpenTTDCompanyLandscaping RustLandscapingRates() noexcept
+{
 	const auto &cs = _settings_game.construction;
-	const OpenTTDCompanyLandscaping rates{
+	return {
 		.terraform_per_64k = cs.terraform_per_64k_frames, .clear_per_64k = cs.clear_per_64k_frames,
 		.tree_per_64k = cs.tree_per_64k_frames, .object_per_64k = cs.build_object_per_64k_frames,
 		.terraform_burst = cs.terraform_frame_burst, .clear_burst = cs.clear_frame_burst,
 		.tree_burst = cs.tree_frame_burst, .object_burst = cs.build_object_frame_burst,
 	};
-	openttd_rust_company_update_landscaping_limits(&GetRustCompanyServices(), &rates);
-#else
+}
+#endif
+
+/** Update the landscaping limits per company. */
+#ifndef WITH_RUST
+void UpdateLandscapingLimits()
+{
+
+
 	for (Company *c : Company::Iterate()) {
 		UpdateLandscapingLimit(c->Finances().terraform_limit,    _settings_game.construction.terraform_per_64k_frames,    _settings_game.construction.terraform_frame_burst);
 		UpdateLandscapingLimit(c->Finances().clear_limit,        _settings_game.construction.clear_per_64k_frames,        _settings_game.construction.clear_frame_burst);
 		UpdateLandscapingLimit(c->Finances().tree_limit,         _settings_game.construction.tree_per_64k_frames,         _settings_game.construction.tree_frame_burst);
 		UpdateLandscapingLimit(c->Finances().build_object_limit, _settings_game.construction.build_object_per_64k_frames, _settings_game.construction.build_object_frame_burst);
 	}
-#endif /* WITH_RUST */
+
 }
+#endif
 
 /**
  * Set the right DParams for STR_ERROR_OWNED_BY.
@@ -851,12 +858,11 @@ static void HandleBankruptcyTakeover(Company *c)
 }
 #endif /* !WITH_RUST */
 
-/** Called every tick for updating some company info. */
-void OnTick_Companies()
-{
 #ifdef WITH_RUST
+OpenTTDCompanyTick RustCompanyTick() noexcept
+{
 	Company *c = Company::GetIfValid(_cur_company_tick_index);
-	OpenTTDCompanyTick frame{
+	return {
 		.finances = c == nullptr ? nullptr : &c->Finances(), .num_companies = Company::GetNumItems(),
 		.index = 0, .timeout = 0, .interval = _settings_game.difficulty.competitors_interval,
 		.editor = _game_mode == GM_EDITOR, .named = c != nullptr && c->name_1 != 0,
@@ -864,9 +870,14 @@ void OnTick_Companies()
 		.networking = _networking, .max_companies = _settings_client.network.max_companies,
 		.max_competitors = _settings_game.difficulty.max_no_competitors, .num_ais = 0, .stage = 0,
 	};
-	/* Each Post can start an AI synchronously; Rust has returned before it. */
-	while (openttd_rust_company_on_tick(&GetRustCompanyServices(), &frame)) Command<CMD_COMPANY_CTRL>::Post(CCA_NEW_AI, CompanyID::Invalid(), CRR_NONE, INVALID_CLIENT_ID);
-#else
+}
+#endif
+
+/** Called every tick for updating some company info. */
+#ifndef WITH_RUST
+void OnTick_Companies()
+{
+
 	if (_game_mode == GM_EDITOR) return;
 
 	Company *c = Company::GetIfValid(_cur_company_tick_index);
@@ -900,8 +911,9 @@ void OnTick_Companies()
 	}
 
 	_cur_company_tick_index = (_cur_company_tick_index + 1) % MAX_COMPANIES;
-#endif /* WITH_RUST */
+
 }
+#endif
 
 #ifdef WITH_RUST
 OpenTTDCompanyYear RustCompanyClockYear() noexcept

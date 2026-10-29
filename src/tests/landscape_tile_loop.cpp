@@ -14,6 +14,8 @@
 #include "../rust/landscape_command_ffi.h"
 #include "../rust/landscape_generation_ffi.h"
 #include "../rust/world_generation_ffi.h"
+#include "../rust/session_ffi.h"
+#include "../core/backup_type.hpp"
 #include <thread>
 #include "../rust/generation_sea_set.hpp"
 #include "abi_layout.hpp"
@@ -27,6 +29,21 @@
 #include "../safeguards.h"
 
 #ifdef WITH_RUST
+TEST_CASE("Session tile fixtures restore storage mode across nested entries")
+{
+	static bool nested;
+	nested = false;
+	SessionFixture fixture;
+	fixture.tiles.station_loop = [](uint32_t) noexcept {
+		if (nested) return;
+		nested = true;
+		SessionFixture inner;
+		CHECK(inner.Run());
+	};
+	CHECK(fixture.Run());
+	CHECK(nested);
+	CHECK(fixture.Run());
+}
 extern "C" uint8_t openttd_rust_shared_tile_type(OpenTTDTileTypeAllocation, uint8_t (*callback)(uint32_t) noexcept, uint32_t tile);
 extern "C" bool openttd_rust_map_read_probe(OpenTTDTileTypeAllocation, const OpenTTDSharedServices *, const OpenTTDClearServices *, const OpenTTDTreeServices *, uint32_t, void (*)(uint32_t) noexcept);
 TEST_CASE("Rust map fields preserve native helpers, mutation and reset")
@@ -103,6 +120,7 @@ TEST_CASE("Rust shared tile-type allocation and all native byte values")
 	ABI_LAYOUT_CHECK;
 #include "abi-layout-landscape.inc"
 #include "abi-layout-genworld.inc"
+#include "abi-layout-session.inc"
 	Map::Allocate(128, 64);
 	const auto allocation = GetRustTileTypeAllocation();
 	const auto &shared = GetRustSharedServices();
@@ -201,10 +219,10 @@ TEST_CASE("Rust world generation shares native lvalues across serialized threads
 static int world_callback_value;
 TEST_CASE("Rust world generation replaces transient callbacks before invoking them")
 {
+	AutoRestoreBackup<GameMode> mode(_game_mode, GM_EDITOR);
+	AutoRestoreBackup<SwitchMode> switching(_switch_mode, SM_NONE);
 	OpenTTDWorldServices services{
-		.game_mode = []() noexcept { return GM_EDITOR; },
-		.callback = [](OpenTTDWorldFrame *, GWDoneProc *proc) noexcept { proc(); return true; },
-		.abort_mode = [](SwitchMode mode) noexcept { CHECK(mode == SM_EDITOR); },
+		.callback = [](OpenTTDWorldFrame *, GWDoneProc *proc) noexcept { CHECK(_switch_mode == SM_EDITOR); proc(); return true; },
 	};
 	world_callback_value = 0;
 	openttd_rust_world_set_abort_callback([] { world_callback_value = 1; });
@@ -214,5 +232,6 @@ TEST_CASE("Rust world generation replaces transient callbacks before invoking th
 	openttd_rust_world_set_abort_callback(nullptr);
 	CHECK(openttd_rust_world_handle_abort(&services, nullptr));
 	CHECK(world_callback_value == 2);
+	CHECK(_switch_mode == SM_EDITOR);
 }
 #endif

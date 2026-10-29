@@ -58,6 +58,5 @@ extern "C" {
 /* Process-global raw u32; unchanged DATE/legacy descriptors access only at serial
  * save/load/reset boundaries. No C++ or Rust reference survives a scheduler call. */
 uint32_t *openttd_rust_tile_loop_cursor();
-void openttd_rust_run_tile_loop(unsigned int log_x, unsigned int log_y, OpenTTDTreeLoopSettings, const OpenTTDLandscapeLoopServices *);
 }
 #endif /* RUST_LANDSCAPE_LOOP_FFI_H */

@@ -1353,14 +1353,19 @@ static void ProduceIndustryGoods(Industry *i)
 
 #endif
 
+#ifdef WITH_RUST
+OpenTTDIndustryTickRecord RustIndustryTickRecord() noexcept
+{
+	/* Values the original reads inline; none changes during the tick. */
+	return OpenTTDIndustryTickRecord{TimerGameTick::counter, {Map::SizeX(), Map::SizeY(), to_underlying(_settings_game.game_creation.landscape)},
+		ScaleByInverseCargoScale(Ticks::INDUSTRY_PRODUCE_TICKS, false), _settings_client.sound.ambient, _game_mode == GM_EDITOR};
+}
+#endif
+
+#ifndef WITH_RUST
 void OnTick_Industry()
 {
-#ifdef WITH_RUST
-	/* Values the original reads inline; none changes during the tick. */
-	const OpenTTDIndustryTickRecord record{TimerGameTick::counter, {Map::SizeX(), Map::SizeY(), to_underlying(_settings_game.game_creation.landscape)},
-		ScaleByInverseCargoScale(Ticks::INDUSTRY_PRODUCE_TICKS, false), _settings_client.sound.ambient, _game_mode == GM_EDITOR};
-	openttd_rust_industry_tick(RustIndustryBuilderState(), &record, &GetIndustryRustServices());
-#else
+
 	if (_industry_sound_ctr != 0) {
 		_industry_sound_ctr++;
 
@@ -1381,8 +1386,9 @@ void OnTick_Industry()
 			for (auto &a : i->accepted) a.accumulated_waiting += a.waiting;
 		}
 	}
-#endif
+
 }
+#endif
 
 /**
  * Check the conditions of #CHECK_NOTHING (Always succeeds).

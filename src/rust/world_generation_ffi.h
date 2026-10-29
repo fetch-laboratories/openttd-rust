@@ -10,6 +10,9 @@
 #include "disaster_ffi.h"
 #include "clock_ffi.h"
 struct OpenTTDWorldFrame;
+struct OpenTTDWorldSetupFrame;
+struct OpenTTDSessionServices;
+struct OpenTTDSessionFrame;
 struct OpenTTDWorldSettings { uint8_t height_limit, flat_height, heightmap_height, generator; };
 struct OpenTTDWorldLandscape { OpenTTDGenerationFrame *frame; const OpenTTDHeightmapDecoder *decoder; OpenTTDLandscapeGenerationSettings settings; };
 struct OpenTTDWorldTown { OpenTTDTownFoundingFrame *frame; OpenTTDTownNameFrame *names; const OpenTTDRoadCommandContext *road; TownLayout layout; };
@@ -31,16 +34,18 @@ struct OpenTTDWorldServices {
 	uint8_t (*local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
 	void (*set_local_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_local_company);
 	void (*restore_companies)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(restore_companies);
-	bool (*initialize)(OpenTTDWorldFrame *, uint32_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(initialize);
+	bool (*initialize)(OpenTTDWorldSetupFrame *, uint32_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(initialize);
 	void (*prepare_progress)() noexcept OPENTTD_SERVICE_DEFAULT(prepare_progress);
 	OpenTTDWorldSettings (*settings)() noexcept OPENTTD_SERVICE_DEFAULT(settings);
 	void (*height_limit)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(height_limit);
-	GameMode (*game_mode)() noexcept OPENTTD_SERVICE_DEFAULT(game_mode);
+	const OpenTTDSessionServices *session;
+	OpenTTDSessionFrame *(*session_frame)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(session_frame);
+	bool (*session_end)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(session_end);
 	uint32_t (*seed)() noexcept OPENTTD_SERVICE_DEFAULT(seed);
 	void (*set_seed)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_seed);
 	uint32_t (*interactive_random)() noexcept OPENTTD_SERVICE_DEFAULT(interactive_random);
 	void (*random_seed)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(random_seed);
-	bool (*load_sprites)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(load_sprites);
+	bool (*load_sprites)(OpenTTDWorldSetupFrame *) noexcept OPENTTD_SERVICE_DEFAULT(load_sprites);
 	void (*string_widths)() noexcept OPENTTD_SERVICE_DEFAULT(string_widths);
 	void (*reset_windows)() noexcept OPENTTD_SERVICE_DEFAULT(reset_windows);
 	void (*setup_windows)() noexcept OPENTTD_SERVICE_DEFAULT(setup_windows);
@@ -91,23 +96,18 @@ struct OpenTTDWorldServices {
 	bool (*dedicated)() noexcept OPENTTD_SERVICE_DEFAULT(dedicated);
 	bool (*exit_game)() noexcept OPENTTD_SERVICE_DEFAULT(exit_game);
 	void (*set_exit)() noexcept OPENTTD_SERVICE_DEFAULT(set_exit);
-	void (*abort_mode)(SwitchMode) noexcept OPENTTD_SERVICE_DEFAULT(abort_mode);
-	bool (*switch_mode)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(switch_mode);
 	void (*debug_start)() noexcept OPENTTD_SERVICE_DEFAULT(debug_start);
 	void (*debug_done)() noexcept OPENTTD_SERVICE_DEFAULT(debug_done);
 	void (*debug_abort)() noexcept OPENTTD_SERVICE_DEFAULT(debug_abort);
 	void (*debug_map)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_map);
-	bool (*desync)() noexcept OPENTTD_SERVICE_DEFAULT(desync);
+	int32_t (*desync_level)() noexcept OPENTTD_SERVICE_DEFAULT(desync_level);
 	bool (*save)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(save);
 };
 const OpenTTDWorldServices &GetRustWorldServices() noexcept;
 extern "C" {
-void openttd_rust_world_set_callback(GWDoneProc *);
 void openttd_rust_world_set_abort_callback(GWAbortProc *);
 void openttd_rust_world_request_abort();
 bool openttd_rust_world_aborted(const OpenTTDWorldServices *);
 bool openttd_rust_world_handle_abort(const OpenTTDWorldServices *, OpenTTDWorldFrame *);
-bool openttd_rust_world_setup(const OpenTTDWorldServices *, OpenTTDWorldFrame *, GenWorldMode, uint32_t, uint32_t, bool);
-uint8_t openttd_rust_world_generate(const OpenTTDWorldServices *, OpenTTDWorldFrame *);
 }
 #endif /* RUST_WORLD_GENERATION_FFI_H */

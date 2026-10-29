@@ -11,18 +11,24 @@ import tempfile
 import threading
 import unittest
 from collections.abc import Sequence
+from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
 from typing import TypedDict, cast
+from unittest.mock import patch
 
 import deep
 from simulation import speed
+
+import migration
 
 # Stands in for `migration.py simulate --soak`: records its own priority, writes a
 # simulate-style report with one failing scenario and prints the `Report:` line.
 FAKE_SIMULATE = """
 import json, os, subprocess, sys
 out = sys.argv[1]
+with open(os.path.join(os.path.dirname(out), "invocations.jsonl"), "a") as log:
+    print(json.dumps([os.path.basename(out), *sys.argv[2:]]), file=log)
 head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 status = subprocess.check_output(["git", "status", "--short"], text=True).strip()
 ionice = subprocess.run(["ionice", "-p", str(os.getpid())], capture_output=True, text=True)
@@ -57,6 +63,8 @@ class SourcePayload(TypedDict):
 
 
 class ResultPayload(TypedDict):
+    name: str
+    command: list[str]
     scenarios: int
     scenario_seconds: float
     failures: list[deep.Failure]
@@ -68,7 +76,10 @@ class ResultPayload(TypedDict):
 
 class ReportPayload(TypedDict):
     commit: str
+    selected_members: list[str]
+    rotation: bool
     partial: bool
+    complete: bool
     passed: bool
     results: list[ResultPayload]
 
@@ -102,13 +113,55 @@ class DeepTests(unittest.TestCase):
     def command(self, root: Path, jobs: int, selectors: Sequence[str]) -> list[str]:
         return [sys.executable, str(self.fake), str(self.drop), str(jobs), *selectors]
 
-    def run_deep(self, selectors: Sequence[str] = ()) -> tuple[int, str]:
+    def run_deep(
+        self, selectors: Sequence[str] = (), member_names: Sequence[str] = ()
+    ) -> tuple[int, str]:
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             code = deep.run_deep(
-                self.root, self.local, self.common, 3, selectors, self.members
+                self.root,
+                self.local,
+                self.common,
+                3,
+                selectors,
+                self.members,
+                member_names=member_names,
             )
         return code, output.getvalue()
+
+    def fixture_members(self) -> None:
+        def member(name: str) -> deep.Member:
+            drop = self.drop / name
+            drop.mkdir()
+
+            def command(root: Path, jobs: int, selectors: Sequence[str]) -> list[str]:
+                return [
+                    sys.executable,
+                    str(self.fake),
+                    str(drop),
+                    str(jobs),
+                    *selectors,
+                ]
+
+            return deep.Member(name, command)
+
+        self.members = tuple(member(item.name) for item in deep.DEEP_SET)
+
+    def run_cli(self, *arguments: str) -> int:
+        with (
+            patch.object(migration, "ROOT", self.root),
+            patch.object(migration, "LOCAL", self.local),
+            patch.object(migration, "COMMON_LOCAL", self.common),
+            patch.object(
+                deep, "run_deep", partial(deep.run_deep, members=self.members)
+            ),
+            patch.object(sys, "argv", ["migration.py", *arguments]),
+            contextlib.redirect_stdout(io.StringIO()),
+            contextlib.redirect_stderr(io.StringIO()),
+            self.assertRaises(SystemExit) as stopped,
+        ):
+            migration.main()
+        return cast(int, stopped.exception.code)
 
     def only_report(self) -> ReportPayload:
         (path,) = (self.local / "deep").glob("*/report.json")
@@ -176,6 +229,95 @@ class DeepTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertTrue(self.only_report()["passed"])
 
+    def test_default_cli_runs_all_members_and_reports_complete_failure(self) -> None:
+        self.fixture_members()
+        self.assertEqual(self.run_cli("deep", "--jobs", "2"), 1)
+        report = self.only_report()
+        expected = [member.name for member in deep.DEEP_SET]
+        self.assertEqual(report["selected_members"], expected)
+        self.assertEqual([row["name"] for row in report["results"]], expected)
+        self.assertEqual(
+            (
+                report["rotation"],
+                report["partial"],
+                report["complete"],
+                report["passed"],
+            ),
+            (False, False, True, False),
+        )
+
+    def test_cli_selection_deduplicates_orders_and_forwards_cases_to_each(self) -> None:
+        self.fixture_members()
+        self.assertEqual(
+            self.run_cli(
+                "deep",
+                "--member",
+                "simulate-multiplayer",
+                "pass",
+                "--member",
+                "simulate-threaded",
+                "--member",
+                "simulate-threaded",
+                "--jobs",
+                "2",
+            ),
+            0,
+        )
+        expected = ["simulate-threaded", "simulate-multiplayer"]
+        report = self.only_report()
+        self.assertEqual(report["selected_members"], expected)
+        self.assertEqual([row["name"] for row in report["results"]], expected)
+        self.assertEqual(
+            [
+                json.loads(line)
+                for line in (self.drop / "invocations.jsonl").read_text().splitlines()
+            ],
+            [[name, "2", "pass"] for name in expected],
+        )
+        self.assertEqual(
+            (
+                report["rotation"],
+                report["partial"],
+                report["complete"],
+                report["passed"],
+            ),
+            (True, True, False, True),
+        )
+
+    def test_explicit_full_selection_without_cases_is_complete(self) -> None:
+        self.fixture_members()
+        code, _ = self.run_deep(
+            member_names=[member.name for member in reversed(self.members)]
+        )
+        self.assertEqual(code, 1)
+        report = self.only_report()
+        self.assertFalse(report["rotation"])
+        self.assertFalse(report["partial"])
+        self.assertTrue(report["complete"])
+
+    def test_sanitized_only_without_case_selectors_is_still_partial(self) -> None:
+        self.fixture_members()
+        self.assertEqual(self.run_cli("deep", "--member", "simulate-sanitized"), 1)
+        report = self.only_report()
+        self.assertEqual(report["selected_members"], ["simulate-sanitized"])
+        self.assertTrue(report["rotation"])
+        self.assertTrue(report["partial"])
+        self.assertFalse(report["complete"])
+        (result,) = report["results"]
+        self.assertEqual(result["name"], "simulate-sanitized")
+        self.assertTrue((self.drop / "simulate-sanitized/report.json").exists())
+
+    def test_invalid_member_or_other_action_is_rejected_before_execution(self) -> None:
+        self.fixture_members()
+        for arguments in (
+            ("deep", "--member", "simulate-soak", "--member", "unknown"),
+            ("build", "--member", "simulate-soak"),
+        ):
+            with self.subTest(arguments=arguments):
+                self.assertEqual(self.run_cli(*arguments), 2)
+                self.assertFalse((self.local / "deep").exists())
+                self.assertFalse((self.drop / "invocations.jsonl").exists())
+
     def test_original_sanitizer_reports_are_recorded_without_failing(self) -> None:
         code, output = self.run_deep(["sanitized"])
         self.assertEqual(code, 0)
@@ -202,7 +344,9 @@ class DeepTests(unittest.TestCase):
         )
         code, _ = self.run_deep(["pass"])
         self.assertEqual(code, 1)
-        (result,) = self.only_report()["results"]
+        report = self.only_report()
+        self.assertFalse(report["complete"])
+        (result,) = report["results"]
         self.assertIn("before", result["problems"][0])
         self.assertFalse((self.drop / "priority.json").exists())
         with deep.single_run(self.common / deep.LOCK_NAME) as free:

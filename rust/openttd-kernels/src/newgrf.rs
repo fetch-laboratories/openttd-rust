@@ -23,7 +23,6 @@ pub struct Services {
     pub(crate) climate: unsafe extern "C" fn() -> u8,
     disable_elrails: unsafe extern "C" fn() -> bool,
     pub(crate) file_version: unsafe extern "C" fn(*const c_void) -> u8,
-    game_mode: unsafe extern "C" fn() -> u8,
     height_limit: unsafe extern "C" fn() -> u8,
     pub(crate) misc_bits: unsafe extern "C" fn() -> u8,
     newgrf_version: unsafe extern "C" fn() -> u32,
@@ -79,7 +78,7 @@ pub unsafe extern "C" fn openttd_rust_global_variable(
                 costs
             }
             0x11 => 0,
-            0x12 => u32::from((s.game_mode)()),
+            0x12 => u32::from(crate::session::mode().0),
             0x1A => u32::MAX,
             0x1B => 0x3F,
             0x1D => 1,
@@ -116,7 +115,7 @@ pub unsafe extern "C" fn openttd_rust_global_variable(
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDGlobalVariableServices" ["storage"] => Services { climate, disable_elrails, file_version, game_mode, height_limit, misc_bits, newgrf_version, palette, pitch, rail_cost, road_side, shared, width };
+    "OpenTTDGlobalVariableServices" ["storage"] => Services { climate, disable_elrails, file_version, height_limit, misc_bits, newgrf_version, palette, pitch, rail_cost, road_side, shared, width };
 }
 
 // Feature identities from newgrf.h, pinned by native static assertions.

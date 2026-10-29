@@ -271,6 +271,23 @@ mode switching can reenter generation. No owner borrow spans those calls. Schedu
 descriptors live only inside each existing audited loop interval and expire before the
 next progress update. This adds no map-view permission.
 
+## Simulation-session lifecycle (#551)
+
+The canonical game mode, switch request and pause-bit subobjects have one stable
+Rust allocation. Native inline aliases begin their enum/bitset lifetimes once and
+retain those addresses across loading and repeated reset. Rust uses field-sized
+raw accesses, with no owner reference spanning native alias writes, callback
+reentry, progress yields, networking or load/reset. The native exit flag retains
+its atomic storage and synchronization contract.
+
+Session entries compose existing Rust owners directly. Native stack frames retain
+chrono/resource lifetimes and exceptions from scheduled console commands, scripts,
+save/load, generation and network operations that can execute scripts. Rust returns
+before native rethrow and CompanyID backup destruction. Storage mode changes occur
+only where the original calls them: failure before PSM_LEAVE_GAMELOOP leaves its
+partial state, while later script failures occur after that transition. This owner
+adds no map-descriptor permission.
+
 ## First vehicle storage port (#563)
 
 Agent: /root/storage563 | Model: gpt-6-astra | Reasoning effort: high.

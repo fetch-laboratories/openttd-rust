@@ -59,12 +59,11 @@ pub extern "C" fn openttd_rust_economy_set_date(date: i32, fraction: u16, wallcl
     write_economy_year(EconomyYear(ymd.year));
     write_economy_month(ymd.month);
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_economy_elapsed(
+pub(crate) unsafe fn elapsed(
     services: &ClockServices,
     console_exception: *mut ConsoleException,
 ) -> bool {
-    if (services.game_mode)() == crate::openttd::GameMode::MENU {
+    if crate::session::mode() == crate::openttd::GameMode::MENU {
         return false;
     }
     let fraction = economy_fraction().wrapping_add(1);

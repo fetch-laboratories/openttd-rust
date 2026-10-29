@@ -182,7 +182,6 @@ const OpenTTDGlobalVariableServices &GetRustGlobalVariableServices() noexcept
 		.climate = OpenTTDLandscapeValue,
 		.disable_elrails = RustDisableElrails,
 		.file_version = RustGRFFileVersion,
-		.game_mode = RustGameMode,
 		.height_limit = RustMapHeightLimit,
 		.misc_bits = RustGRFMiscBits,
 		.newgrf_version = RustNewGRFVersion,

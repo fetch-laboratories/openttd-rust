@@ -9,6 +9,7 @@
 #include "../3rdparty/catch2/catch.hpp"
 #include "../3rdparty/fmt/format.h"
 #ifdef WITH_RUST
+#include "../../tools/simulation/session-fixture.hpp"
 #include "../rust/clock_ffi.h"
 #include "../company_func.h"
 #include "../company_base.h"
@@ -231,14 +232,14 @@ TEST_CASE("Company economy - competitor posts return to the caller before each P
 	FixtureReset(false, false);
 	const OpenTTDCompanyCompetitors competitors{.num_companies = 0, .interval = 1, .menu = false, .can_start = true, .networking = false, .max_companies = 15, .max_competitors = 1};
 	CHECK(openttd_rust_company_competitor_timeout(&fixture_services, &competitors));
-	OpenTTDCompanyTick tick{.finances = nullptr, .num_companies = 0, .index = 0, .timeout = 0, .interval = 0, .editor = false, .named = false,
-		.competitor_due = true, .networking = false, .max_companies = 15, .max_competitors = 2, .num_ais = 0, .stage = 0};
 	uint32_t cursor = *openttd_rust_company_tick();
-	int posts = 0;
-	while (openttd_rust_company_on_tick(&fixture_services, &tick)) {
-		CHECK(fixture_trace.empty()); // the timer is reset only after the last Post
-		posts++;
-	}
+	static int posts;
+	posts = 0;
+	SessionFixture fixture;
+	fixture.services.company = &fixture_services;
+	fixture.services.company_tick = []() noexcept { return OpenTTDCompanyTick{.finances = nullptr, .num_companies = 0, .index = 0, .timeout = 0, .interval = 0, .editor = false, .named = false, .competitor_due = true, .networking = false, .max_companies = 15, .max_competitors = 2, .num_ais = 0, .stage = 0}; };
+	fixture.services.post_ai = [](OpenTTDSessionFrame *) noexcept { CHECK(fixture_trace.empty()); ++posts; return true; };
+	CHECK(fixture.Run());
 	CHECK(posts == 2);
 	CHECK(fixture_trace == std::vector<std::string>{"timeout 19425"});
 	CHECK(*openttd_rust_company_tick() == (cursor + 1) % MAX_COMPANIES);

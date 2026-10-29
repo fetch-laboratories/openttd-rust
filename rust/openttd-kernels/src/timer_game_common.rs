@@ -417,7 +417,6 @@ pub(crate) unsafe fn dispatch(
 #[repr(C)]
 pub struct ClockServices {
     pub shared: *const crate::services::Services,
-    pub game_mode: extern "C" fn() -> crate::openttd::GameMode,
     pub minutes_per_calendar_year: extern "C" fn() -> u16,
     pub using_wallclock_units: extern "C" fn(bool) -> bool,
     pub vehicle_id: extern "C" fn(*const c_void) -> u32,
@@ -535,5 +534,5 @@ crate::abi::layouts! {
     "OpenTTDEconomyClockPeriod" ["clocks"] => Period { trigger, priority };
     "RustClockCallback" ["clocks"] => Callback { invoke, context };
     "RustClockBinding" ["clocks"] => Binding { callback, fired };
-    "OpenTTDClockServices" ["clocks"] => ClockServices { shared, game_mode, minutes_per_calendar_year, using_wallclock_units, vehicle_id, vehicle_shift_dates, next_graph, graph_owner };
+    "OpenTTDClockServices" ["clocks"] => ClockServices { shared, minutes_per_calendar_year, using_wallclock_units, vehicle_id, vehicle_shift_dates, next_graph, graph_owner };
 }

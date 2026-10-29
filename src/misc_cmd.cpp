@@ -27,6 +27,7 @@
 
 #ifdef WITH_RUST
 #include "rust/company_adapter.h"
+#include "rust/session_ffi.h"
 #endif
 
 #include "safeguards.h"
@@ -182,6 +183,9 @@ static void AskUnsafeUnpauseCallback(Window *, bool confirmed)
  */
 CommandCost CmdPause(DoCommandFlags flags, PauseMode mode, bool pause)
 {
+#ifdef WITH_RUST
+	return openttd_rust_session_pause(&GetRustSessionServices(), mode, pause, flags.Test(DoCommandFlag::Execute)) ? CommandCost() : CMD_ERROR;
+#else
 	switch (mode) {
 		case PauseMode::SaveLoad:
 		case PauseMode::Error:
@@ -226,6 +230,7 @@ CommandCost CmdPause(DoCommandFlags flags, PauseMode mode, bool pause)
 		SetWindowDirty(WC_MAIN_TOOLBAR, 0);
 	}
 	return CommandCost();
+#endif
 }
 
 /**
@@ -272,3 +277,10 @@ CommandCost CmdChangeBankBalance(DoCommandFlags flags, TileIndex tile, Money del
 	return zero_cost;
 #endif /* WITH_RUST */
 }
+
+#ifdef WITH_RUST
+void RustAskUnsafeUnpause() noexcept
+{
+	ShowQuery(GetEncodedString(STR_NEWGRF_UNPAUSE_WARNING_TITLE), GetEncodedString(STR_NEWGRF_UNPAUSE_WARNING), nullptr, AskUnsafeUnpauseCallback);
+}
+#endif

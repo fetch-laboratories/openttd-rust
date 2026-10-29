@@ -1155,12 +1155,7 @@ pub unsafe extern "C" fn openttd_rust_station_stale(
         stale(st, w, l, visits);
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_tick(
-    world: *const World,
-    links: *const Links,
-    visits: *const Visits,
-) {
+pub(crate) unsafe fn tick(world: *const World, links: *const Links, visits: *const Visits) {
     let w = unsafe { &*world };
     let l = unsafe { &*links };
     let visits = unsafe { &*visits };

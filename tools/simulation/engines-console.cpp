@@ -24,6 +24,7 @@
 /* Compile the unchanged native loader here to reach its private chunk reader. */
 #include "saveload/saveload.cpp"
 
+#include "clock-fixture.hpp"
 void CalendarEnginesMonthlyLoop();
 void ClearEnginesHiddenFlagOfCompany(CompanyID);
 [[noreturn]] static void FixtureAbort(int line) { fmt::print(stderr, "ENGINE setup-failure {}\n", line); std::fflush(stderr); std::abort(); }
@@ -122,7 +123,7 @@ static bool EnginesScenario(std::span<std::string_view> args)
 		e->preview_company = CompanyID::Invalid();
 		variant->company_avail = {};
 		TimerGameCalendar::SetDate(TimerGameCalendar::date, 73);
-		TimerManager<TimerGameCalendar>::Elapsed(1);
+		FixtureClockElapsed<TimerGameCalendar>();
 		fmt::print(stderr, "ENGINE offered {} {}\n", e->preview_company == c->index, e->preview_wait == 20);
 		Cost("accept-test", Command<CMD_WANT_ENGINE_PREVIEW>::Do({}, e->index));
 		Cost("accept", Command<CMD_WANT_ENGINE_PREVIEW>::Do(DoCommandFlag::Execute, e->index));

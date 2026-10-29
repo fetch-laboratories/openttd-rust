@@ -5,15 +5,6 @@
 #include "clock_ffi.h"
 #include "../script/script_fatalerror.hpp"
 #include <exception>
-template <auto Elapsed>
-inline bool RustClockElapsed(const OpenTTDClockServices &services, [[maybe_unused]] uint32_t delta)
-{
-	assert(delta == 1);
-	std::exception_ptr scheduled_console_exception;
-	bool progressed = Elapsed(&services, reinterpret_cast<OpenTTDConsoleException *>(&scheduled_console_exception));
-	if (scheduled_console_exception) std::rethrow_exception(scheduled_console_exception);
-	return progressed;
-}
 inline bool RustClockRelayScheduledConsole(void (*run)(), void *exception) noexcept
 {
 	try {
