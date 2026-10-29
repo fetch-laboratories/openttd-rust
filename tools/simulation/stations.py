@@ -977,11 +977,15 @@ static bool StationCommands(std::span<std::string_view> args)
 	const DoCommandFlags test{DoCommandFlag::NoTestTownRating};
 	const DoCommandFlags exec{DoCommandFlag::Execute, DoCommandFlag::NoTestTownRating};
 	if (args[1].starts_with("owner562-")) {
+		/* Interactive RNG is process-time seeded and is not saved. */
+		_interactive_random.SetSeed(0x562);
+		const Randomizer interactive = _interactive_random;
 		bool reload = args[1].ends_with("inspect"), stage = args[1].ends_with("stage");
 		TileIndex origin = reload ? INVALID_TILE : StationPatch();
 		if (args[1].starts_with("owner562-names")) { if (reload) Station562InspectNames(); else Station562Names(origin, exec); }
 		else if (args[1].starts_with("owner562-delete")) Station562Delete(origin, reload, stage);
 		else Station562Waypoints(reload ? INVALID_TILE : origin + TileDiffXY(2, 2), exec, args[1].starts_with("owner562-arctic"), reload);
+		StationNeed(std::ranges::equal(_interactive_random.state, interactive.state), __LINE__);
 		if (!reload && args.size() == 3) StationNeed(SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false) == SL_OK, __LINE__);
 		fmt::print(stderr, "STCMD complete\n"); current.Restore(); return true;
 	}

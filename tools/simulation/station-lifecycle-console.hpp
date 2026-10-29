@@ -62,8 +62,9 @@ static void Station562Names(TileIndex origin, DoCommandFlags exec)
 	for (Station *st : aliases) delete st;
 	station_name.Restore(); life.Restore();
 	StationNeed(Industry::CanAllocateItem(), __LINE__);
-	Industry *rig = new Industry(); rig->location = TileArea(at(24, 24), 1, 1); rig->town = ClosestTownFromTile(at(24, 24), UINT_MAX); rig->type = 5;
-	MakeIndustry(rig->location.tile, rig->index, 0, 0, WaterClass::Sea); BuildOilRig(rig->location.tile);
+	Industry *rig = new Industry(); rig->location = TileArea(at(24, 24), 1, 2); rig->town = ClosestTownFromTile(at(24, 24), UINT_MAX); rig->type = 5;
+	MakeIndustry(rig->location.tile, rig->index, GFX_OILRIG_1, 0, WaterClass::Sea);
+	MakeIndustry(at(24, 25), rig->index, GFX_OILRIG_1, 0, WaterClass::Sea); BuildOilRig(rig->location.tile);
 	StationNeed(rig->neutral_station != nullptr && rig->neutral_station->string_id == STR_SV_STNAME_OILFIELD && rig->neutral_station->indtype == IT_INVALID, __LINE__); rig->neutral_station->name = "Owner562 oilrig";
 	fmt::print(stderr, "STCMD owner562-name oilrig {} {} {}\n", rig->neutral_station->index.base(), rig->neutral_station->string_id, rig->neutral_station->indtype);
 	/* Exhaust every default suffix using real station records, including forest aliasing. */
