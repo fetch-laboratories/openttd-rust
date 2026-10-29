@@ -19,6 +19,7 @@
 #include "abi_layout.hpp"
 #include "../tile_map.h"
 #include "../road_type.h"
+#include "../station_type.h"
 #include "../rust/landscape_loop_ffi.h"
 #include "landscape_protocol.hpp"
 #include "ground_protocol.hpp"
@@ -35,7 +36,7 @@ TEST_CASE("Rust map fields preserve native helpers, mutation and reset")
 		const auto allocation = GetRustTileTypeAllocation();
 		CHECK(allocation.extended != nullptr);
 		for (const TileIndex tile : {TileXY(1, 1), TileIndex{Map::Size() - 1}}) {
-			for (const TileType kind : {MP_CLEAR, MP_RAILWAY, MP_ROAD, MP_TREES, MP_WATER, MP_VOID}) {
+			for (const TileType kind : {MP_CLEAR, MP_RAILWAY, MP_ROAD, MP_TREES, MP_STATION, MP_WATER, MP_VOID, MP_TUNNELBRIDGE}) {
 				for (uint value = 0; value < 256; value++) {
 					Tile t{tile};
 					t.type() = (kind << 4) | (value & 3);
@@ -61,21 +62,25 @@ TEST_CASE("Rust movement map context rereads native mutations within an entry")
 			auto allocation = GetRustTileTypeAllocation();
 			allocation.assertions = assertions;
 			for (const TileIndex tile : {TileXY(1, 1), TileIndex{Map::Size() - 1}}) {
-				for (const bool change_type : {false, true}) {
-					Tile t{tile};
-					t.type() = MP_ROAD << 4;
-					t.m3() = 3; t.m4() = INVALID_ROADTYPE; t.m5() = 3;
-					t.m6() = 0; t.m8() = INVALID_ROADTYPE << 6;
-					const auto mutate_fields = [](uint32_t index) noexcept {
-						Tile t{TileIndex{index}};
-						t.m3() = 12; t.m4() = 0; t.m5() = 0x3C;
-						t.m6() = 6 << 3; t.m8() = 0;
-					};
-					const auto mutate_type = [](uint32_t index) noexcept {
-						Tile t{TileIndex{index}};
-						t.type() = MP_CLEAR << 4;
-					};
-					CHECK(openttd_rust_map_read_probe(allocation, &GetRustSharedServices(), &GetRustClearServices(), &GetRustTreeServices(), tile.base(), change_type ? +mutate_type : +mutate_fields));
+				for (const TileType kind : {MP_ROAD, MP_STATION, MP_TUNNELBRIDGE}) {
+					for (const bool change_type : {false, true}) {
+						Tile t{tile};
+						t.type() = kind << 4;
+						t.m3() = 3; t.m4() = INVALID_ROADTYPE;
+						t.m5() = kind == MP_TUNNELBRIDGE ? TRANSPORT_ROAD << 2 : 3;
+						t.m6() = kind == MP_STATION ? static_cast<uint8_t>(StationType::Truck) << 3 : 0;
+						t.m8() = INVALID_ROADTYPE << 6;
+						const auto mutate_fields = [](uint32_t index) noexcept {
+							Tile t{TileIndex{index}};
+							t.m3() = 12; t.m4() = 0; t.m5() = 0x3C;
+							t.m6() = 6 << 3; t.m8() = 0;
+						};
+						const auto mutate_type = [](uint32_t index) noexcept {
+							Tile t{TileIndex{index}};
+							t.type() = MP_CLEAR << 4;
+						};
+						CHECK(openttd_rust_map_read_probe(allocation, &GetRustSharedServices(), &GetRustClearServices(), &GetRustTreeServices(), tile.base(), change_type ? +mutate_type : +mutate_fields));
+					}
 				}
 			}
 		}
