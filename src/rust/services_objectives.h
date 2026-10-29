@@ -3,8 +3,7 @@
 #ifndef RUST_OBJECTIVES_SERVICES_H
 #define RUST_OBJECTIVES_SERVICES_H
 #include "objectives_ffi.h"
-#include "company_services.h"
-#include "environment_services.h"
+#include "company_adapter.h"
 #include "../goal_base.h"
 #include "../story_base.h"
 #include "../league_base.h"
@@ -24,14 +23,12 @@ inline uint32_t * RustObjectives_goal_dst(Goal * p) noexcept { return reinterpre
 inline EncodedString * RustObjectives_goal_text(Goal * p) noexcept { return reinterpret_cast<EncodedString *>(&p->text); }
 inline EncodedString * RustObjectives_goal_progress(Goal * p) noexcept { return reinterpret_cast<EncodedString *>(&p->progress); }
 inline bool * RustObjectives_goal_completed(Goal * p) noexcept { return reinterpret_cast<bool *>(&p->completed); }
-inline void RustObjectives_goal_destroy(Goal * p) noexcept { delete p; }
 inline uint32_t RustObjectives_goal_count() noexcept { return Goal::GetNumItems(); }
 inline bool RustObjectives_goal_can_allocate() noexcept { return Goal::CanAllocateItem(); }
 inline StoryPage * RustObjectives_page(uint32_t id) noexcept { return StoryPage::GetIfValid(id); }
 inline uint8_t * RustObjectives_page_company(StoryPage * p) noexcept { return reinterpret_cast<uint8_t *>(&p->company); }
 inline EncodedString * RustObjectives_page_title(StoryPage * p) noexcept { return reinterpret_cast<EncodedString *>(&p->title); }
 inline int32_t * RustObjectives_page_date(StoryPage * p) noexcept { return reinterpret_cast<int32_t *>(&p->date); }
-inline void RustObjectives_page_destroy(StoryPage * p) noexcept { delete p; }
 inline uint32_t RustObjectives_page_count() noexcept { return StoryPage::GetNumItems(); }
 inline bool RustObjectives_page_can_allocate() noexcept { return StoryPage::CanAllocateItem(); }
 inline StoryPageElement * RustObjectives_element(uint16_t id) noexcept { return StoryPageElement::GetIfValid(StoryPageElementID(id)); }
@@ -81,6 +78,7 @@ inline const OpenTTDObjectivesServices &GetRustObjectivesServices() noexcept
 {
 	static const OpenTTDObjectivesServices services{
 		.shared = &GetRustSharedServices(),
+		.company = &GetRustCompanyServices(),
 		.map_allocation = GetRustTileTypeAllocation,
 		.goal = RustObjectives_goal,
 		.goal_company = RustObjectives_goal_company,
@@ -89,14 +87,12 @@ inline const OpenTTDObjectivesServices &GetRustObjectivesServices() noexcept
 		.goal_text = RustObjectives_goal_text,
 		.goal_progress = RustObjectives_goal_progress,
 		.goal_completed = RustObjectives_goal_completed,
-		.goal_destroy = RustObjectives_goal_destroy,
 		.goal_count = RustObjectives_goal_count,
 		.goal_can_allocate = RustObjectives_goal_can_allocate,
 		.page = RustObjectives_page,
 		.page_company = RustObjectives_page_company,
 		.page_title = RustObjectives_page_title,
 		.page_date = RustObjectives_page_date,
-		.page_destroy = RustObjectives_page_destroy,
 		.page_count = RustObjectives_page_count,
 		.page_can_allocate = RustObjectives_page_can_allocate,
 		.element = RustObjectives_element,
@@ -126,12 +122,8 @@ inline const OpenTTDObjectivesServices &GetRustObjectivesServices() noexcept
 		.table_can_allocate = RustObjectives_table_can_allocate,
 		.table_allocate = RustObjectives_table_allocate,
 		.entry_allocate = RustObjectives_entry_allocate,
-		.local_company = RustLocalCompanyID,
-		.networking = RustNetworking,
-		.network_server = RustNetworkServer,
 		.own_client = RustObjectives_own_client,
 		.client_valid = RustObjectives_client_valid,
-		.company_pool_valid = OpenTTDCompanyIsValid,
 		.industry_valid = RustObjectives_industry_valid,
 		.town_valid = RustObjectives_town_valid,
 		.vehicle_valid = RustObjectives_vehicle_valid,

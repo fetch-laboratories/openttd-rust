@@ -33,26 +33,25 @@ pub struct EncodedString {
 #[repr(C)]
 pub struct Services {
     pub shared: *const crate::services::Services,
+    pub company: *const crate::company::Services,
     pub map_allocation: extern "C" fn() -> crate::map_func::TileTypeAllocation,
     pub goal: extern "C" fn(GoalID) -> *mut Goal,
-    pub goal_company: unsafe extern "C" fn(*mut Goal) -> *mut u8,
+    pub goal_company: unsafe extern "C" fn(*mut Goal) -> *mut CompanyID,
     pub goal_type: unsafe extern "C" fn(*mut Goal) -> *mut u8,
     pub goal_dst: unsafe extern "C" fn(*mut Goal) -> *mut u32,
     pub goal_text: unsafe extern "C" fn(*mut Goal) -> *mut EncodedString,
     pub goal_progress: unsafe extern "C" fn(*mut Goal) -> *mut EncodedString,
     pub goal_completed: unsafe extern "C" fn(*mut Goal) -> *mut bool,
-    pub goal_destroy: unsafe extern "C" fn(*mut Goal),
     pub goal_count: extern "C" fn() -> u32,
     pub goal_can_allocate: extern "C" fn() -> bool,
     pub page: extern "C" fn(u32) -> *mut StoryPage,
-    pub page_company: unsafe extern "C" fn(*mut StoryPage) -> *mut u8,
+    pub page_company: unsafe extern "C" fn(*mut StoryPage) -> *mut CompanyID,
     pub page_title: unsafe extern "C" fn(*mut StoryPage) -> *mut EncodedString,
     pub page_date: unsafe extern "C" fn(*mut StoryPage) -> *mut i32,
-    pub page_destroy: unsafe extern "C" fn(*mut StoryPage),
     pub page_count: extern "C" fn() -> u32,
     pub page_can_allocate: extern "C" fn() -> bool,
     pub element: extern "C" fn(StoryPageElementID) -> *mut StoryPageElement,
-    pub element_page: unsafe extern "C" fn(*mut StoryPageElement) -> *mut u16,
+    pub element_page: unsafe extern "C" fn(*mut StoryPageElement) -> *mut StoryPageID,
     pub element_type: unsafe extern "C" fn(*mut StoryPageElement) -> *mut u8,
     pub element_text: unsafe extern "C" fn(*mut StoryPageElement) -> *mut EncodedString,
     pub element_referenced_id: unsafe extern "C" fn(*mut StoryPageElement) -> *mut u32,
@@ -60,8 +59,8 @@ pub struct Services {
     pub element_count: extern "C" fn() -> u32,
     pub element_can_allocate: extern "C" fn() -> bool,
     pub entry: extern "C" fn(LeagueTableElementID) -> *mut LeagueTableElement,
-    pub entry_company: unsafe extern "C" fn(*mut LeagueTableElement) -> *mut u8,
-    pub entry_table: unsafe extern "C" fn(*mut LeagueTableElement) -> *mut u8,
+    pub entry_company: unsafe extern "C" fn(*mut LeagueTableElement) -> *mut CompanyID,
+    pub entry_table: unsafe extern "C" fn(*mut LeagueTableElement) -> *mut LeagueTableID,
     pub entry_rating: unsafe extern "C" fn(*mut LeagueTableElement) -> *mut i64,
     pub entry_text: unsafe extern "C" fn(*mut LeagueTableElement) -> *mut EncodedString,
     pub entry_score: unsafe extern "C" fn(*mut LeagueTableElement) -> *mut EncodedString,
@@ -69,33 +68,30 @@ pub struct Services {
     pub entry_link_target: unsafe extern "C" fn(*mut LeagueTableElement) -> *mut u32,
     pub entry_destroy: unsafe extern "C" fn(*mut LeagueTableElement),
     pub entry_can_allocate: extern "C" fn() -> bool,
-    pub goal_allocate: unsafe extern "C" fn(u8, u32, u8, *const EncodedString) -> u16,
-    pub page_allocate: unsafe extern "C" fn(u32, i32, u8, *const EncodedString) -> u16,
-    pub element_allocate: extern "C" fn(u32, u8, u16) -> u16,
+    pub goal_allocate: unsafe extern "C" fn(u8, u32, CompanyID, *const EncodedString) -> GoalID,
+    pub page_allocate:
+        unsafe extern "C" fn(u32, i32, CompanyID, *const EncodedString) -> StoryPageID,
+    pub element_allocate: extern "C" fn(u32, u8, StoryPageID) -> StoryPageElementID,
     pub element_next: extern "C" fn(u32) -> *mut StoryPageElement,
-    pub element_id: unsafe extern "C" fn(*mut StoryPageElement) -> u16,
+    pub element_id: unsafe extern "C" fn(*mut StoryPageElement) -> StoryPageElementID,
     pub page_cleaning: extern "C" fn() -> bool,
     pub table_can_allocate: extern "C" fn() -> bool,
     pub table_allocate: unsafe extern "C" fn(
         *const EncodedString,
         *const EncodedString,
         *const EncodedString,
-    ) -> u8,
+    ) -> LeagueTableID,
     pub entry_allocate: unsafe extern "C" fn(
-        u8,
+        LeagueTableID,
         i64,
-        u8,
+        CompanyID,
         *const EncodedString,
         *const EncodedString,
         u8,
         u32,
-    ) -> u16,
-    pub local_company: extern "C" fn() -> u8,
-    pub networking: extern "C" fn() -> bool,
-    pub network_server: extern "C" fn() -> bool,
+    ) -> LeagueTableElementID,
     pub own_client: extern "C" fn() -> u32,
     pub client_valid: extern "C" fn(u32) -> bool,
-    pub company_pool_valid: extern "C" fn(u32) -> bool,
     pub industry_valid: extern "C" fn(u32) -> bool,
     pub town_valid: extern "C" fn(u32) -> bool,
     pub vehicle_valid: extern "C" fn(u32) -> bool,
@@ -105,22 +101,25 @@ pub struct Services {
     pub window_classes: extern "C" fn(u16, i32),
     pub window_close: extern "C" fn(u16, u32),
     pub question_show: unsafe extern "C" fn(u16, u8, u32, *const EncodedString),
-    pub story_show: extern "C" fn(u8, u16),
-    pub question_event: extern "C" fn(u16, u8, u32),
-    pub push_event: extern "C" fn(u8, u16, u16),
-    pub tile_event: extern "C" fn(u8, u16, u16, u32),
-    pub vehicle_event: extern "C" fn(u8, u16, u16, u32),
+    pub story_show: extern "C" fn(CompanyID, StoryPageID),
+    pub question_event: extern "C" fn(u16, CompanyID, u32),
+    pub push_event: extern "C" fn(CompanyID, StoryPageID, StoryPageElementID),
+    pub tile_event: extern "C" fn(CompanyID, StoryPageID, StoryPageElementID, u32),
+    pub vehicle_event: extern "C" fn(CompanyID, StoryPageID, StoryPageElementID, u32),
 }
 impl Services {
     fn shared(&self) -> &crate::services::Services {
         unsafe { &*self.shared }
+    }
+    fn company(&self) -> &crate::company::Services {
+        unsafe { &*self.company }
     }
 }
 
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStoryState" ["probe"] => StoryState { page_next_sort, element_next_sort };
-    "OpenTTDObjectivesServices" ["probe"] => Services { shared, map_allocation, goal, goal_company, goal_type, goal_dst, goal_text, goal_progress, goal_completed, goal_destroy, goal_count, goal_can_allocate, page, page_company, page_title, page_date, page_destroy, page_count, page_can_allocate, element, element_page, element_type, element_text, element_referenced_id, element_destroy, element_count, element_can_allocate, entry, entry_company, entry_table, entry_rating, entry_text, entry_score, entry_link_type, entry_link_target, entry_destroy, entry_can_allocate, goal_allocate, page_allocate, element_allocate, element_next, element_id, page_cleaning, table_can_allocate, table_allocate, entry_allocate, local_company, networking, network_server, own_client, client_valid, company_pool_valid, industry_valid, town_valid, vehicle_valid, text_empty, text_assign, window_data, window_classes, window_close, question_show, story_show, question_event, push_event, tile_event, vehicle_event };
+    "OpenTTDObjectivesServices" ["probe"] => Services { shared, company, map_allocation, goal, goal_company, goal_type, goal_dst, goal_text, goal_progress, goal_completed, goal_count, goal_can_allocate, page, page_company, page_title, page_date, page_count, page_can_allocate, element, element_page, element_type, element_text, element_referenced_id, element_destroy, element_count, element_can_allocate, entry, entry_company, entry_table, entry_rating, entry_text, entry_score, entry_link_type, entry_link_target, entry_destroy, entry_can_allocate, goal_allocate, page_allocate, element_allocate, element_next, element_id, page_cleaning, table_can_allocate, table_allocate, entry_allocate, own_client, client_valid, industry_valid, town_valid, vehicle_valid, text_empty, text_assign, window_data, window_classes, window_close, question_show, story_show, question_event, push_event, tile_event, vehicle_event };
 }
 
 // Native loader aliases and Rust control share one process-wide allocation. Accesses
@@ -182,7 +181,8 @@ pub unsafe extern "C" fn openttd_rust_valid_goal_destination(
         GT_TILE => s.tile_valid(dest),
         GT_INDUSTRY => (s.industry_valid)(dest),
         GT_TOWN => (s.town_valid)(dest),
-        GT_COMPANY => (s.company_pool_valid)(dest),
+        // Company::IsValidID takes the full u32; IDs above u8 lie past the company pool.
+        GT_COMPANY => u8::try_from(dest).is_ok_and(|id| s.company_valid(CompanyID(id))),
         GT_STORY_PAGE => {
             let page = (s.page)(dest);
             if page.is_null() {
@@ -190,9 +190,9 @@ pub unsafe extern "C" fn openttd_rust_valid_goal_destination(
             }
             let owner = unsafe { *(s.page_company)(page) };
             if company == CompanyID::INVALID {
-                owner == CompanyID::INVALID.0
+                owner == CompanyID::INVALID
             } else {
-                owner == CompanyID::INVALID.0 || owner == company.0
+                owner == CompanyID::INVALID || owner == company
             }
         }
         _ => false,
@@ -219,13 +219,13 @@ pub unsafe extern "C" fn openttd_rust_create_goal(
             return false;
         }
         if execute(flags) {
-            let id = (s.goal_allocate)(kind, dest, company.0, text);
-            let goal = (s.goal)(GoalID(id));
-            s.goal_dirty(CompanyID(*(s.goal_company)(goal)));
+            let id = (s.goal_allocate)(kind, dest, company, text);
+            let goal = (s.goal)(id);
+            s.goal_dirty(*(s.goal_company)(goal));
             if (s.goal_count)() == 1 {
                 s.toolbar_dirty();
             }
-            result.write(GoalID(id));
+            result.write(id);
         }
         true
     }
@@ -241,8 +241,8 @@ pub unsafe extern "C" fn openttd_rust_remove_goal(s: &Services, flags: u16, id: 
             return false;
         }
         if execute(flags) {
-            let company = CompanyID(*(s.goal_company)(goal));
-            (s.goal_destroy)(goal);
+            let company = *(s.goal_company)(goal);
+            (s.company().delete_goal)(u32::from(id.0));
             s.goal_dirty(company);
             if (s.goal_count)() == 0 {
                 s.toolbar_dirty();
@@ -267,7 +267,7 @@ pub unsafe extern "C" fn openttd_rust_set_goal_destination(
         if goal.is_null() {
             return false;
         }
-        if !openttd_rust_valid_goal_destination(s, CompanyID(*(s.goal_company)(goal)), kind, dest) {
+        if !openttd_rust_valid_goal_destination(s, *(s.goal_company)(goal), kind, dest) {
             return false;
         }
         if execute(flags) {
@@ -294,7 +294,7 @@ pub unsafe extern "C" fn openttd_rust_set_goal_text(
         }
         if execute(flags) {
             (s.text_assign)((s.goal_text)(goal), text);
-            s.goal_dirty(CompanyID(*(s.goal_company)(goal)));
+            s.goal_dirty(*(s.goal_company)(goal));
         }
         true
     }
@@ -316,7 +316,7 @@ pub unsafe extern "C" fn openttd_rust_set_goal_progress(
         }
         if execute(flags) {
             (s.text_assign)((s.goal_progress)(goal), text);
-            s.goal_dirty(CompanyID(*(s.goal_company)(goal)));
+            s.goal_dirty(*(s.goal_company)(goal));
         }
         true
     }
@@ -338,7 +338,7 @@ pub unsafe extern "C" fn openttd_rust_set_goal_completed(
         }
         if execute(flags) {
             (s.goal_completed)(goal).write(completed);
-            s.goal_dirty(CompanyID(*(s.goal_company)(goal)));
+            s.goal_dirty(*(s.goal_company)(goal));
         }
         true
     }
@@ -360,7 +360,7 @@ pub unsafe extern "C" fn openttd_rust_goal_question(
         return false;
     }
     if is_client {
-        if !execute(flags) && (s.network_server)() && !(s.client_valid)(target) {
+        if !execute(flags) && (s.company().network_server)() && !(s.client_valid)(target) {
             return false;
         }
     } else if company != CompanyID::INVALID && !s.company_valid(company) {
@@ -376,10 +376,11 @@ pub unsafe extern "C" fn openttd_rust_goal_question(
                 return true;
             }
         } else {
-            if company == CompanyID::INVALID && !s.company_valid(CompanyID((s.local_company)())) {
+            let local = CompanyID((s.company().local_company)());
+            if company == CompanyID::INVALID && !s.company_valid(local) {
                 return true;
             }
-            if company != CompanyID::INVALID && company.0 != (s.local_company)() {
+            if company != CompanyID::INVALID && company != local {
                 return true;
             }
         }
@@ -405,16 +406,18 @@ pub extern "C" fn openttd_rust_goal_question_answer(
         }
         return true;
     }
-    if (s.networking)() && (s.local_company)() == (s.shared().current_company)() {
+    if (s.company().finance.networking)()
+        && (s.company().local_company)() == (s.shared().current_company)()
+    {
         if execute(flags) {
             (s.window_close)(WC_GOAL_QUESTION, u32::from(id));
         }
-        if !(s.network_server)() {
+        if !(s.company().network_server)() {
             return true;
         }
     }
     if execute(flags) {
-        (s.question_event)(id, (s.shared().current_company)(), 1 << button);
+        (s.question_event)(id, CompanyID((s.shared().current_company)()), 1 << button);
     }
     true
 }
@@ -436,8 +439,8 @@ unsafe fn verify_element(
                 if goal.is_null() {
                     return false;
                 }
-                !(*(s.page_company)((s.page)(u32::from(page.0))) == CompanyID::INVALID.0
-                    && *(s.goal_company)(goal) != CompanyID::INVALID.0)
+                !(*(s.page_company)((s.page)(u32::from(page.0))) == CompanyID::INVALID
+                    && *(s.goal_company)(goal) != CompanyID::INVALID)
             }
             SPET_BUTTON_PUSH => button.validate_colour() && button.validate_flags(),
             SPET_BUTTON_TILE => {
@@ -499,7 +502,7 @@ pub unsafe extern "C" fn openttd_rust_create_story_page(
             let id = (s.page_allocate)(
                 *page_sort(),
                 crate::timer_game_common::calendar_date().0,
-                company.0,
+                company,
                 text,
             );
             (s.window_classes)(WC_STORY_BOOK, -1);
@@ -508,7 +511,7 @@ pub unsafe extern "C" fn openttd_rust_create_story_page(
             }
             let next = page_sort();
             next.write((*next).wrapping_add(1));
-            result.write(StoryPageID(id));
+            result.write(id);
         }
         true
     }
@@ -520,7 +523,7 @@ unsafe fn each_element(s: &Services, mut visit: impl FnMut(*mut StoryPageElement
         if element.is_null() {
             break;
         }
-        from = u32::from(unsafe { (s.element_id)(element) }) + 1;
+        from = u32::from(unsafe { (s.element_id)(element) }.0) + 1;
         visit(element);
     }
 }
@@ -542,7 +545,7 @@ pub unsafe extern "C" fn openttd_rust_create_story_page_element(
         }
         let mut count = 0_u16;
         each_element(s, |element| {
-            if *(s.element_page)(element) == page.0 {
+            if *(s.element_page)(element) == page {
                 count = count.wrapping_add(1);
             }
         });
@@ -557,18 +560,12 @@ pub unsafe extern "C" fn openttd_rust_create_story_page_element(
             if (s.element_count)() == 0 {
                 element_sort().write(0);
             }
-            let id = (s.element_allocate)(*element_sort(), kind, page.0);
-            update_element(
-                s,
-                (s.element)(StoryPageElementID(id)),
-                tile,
-                reference,
-                text,
-            );
+            let id = (s.element_allocate)(*element_sort(), kind, page);
+            update_element(s, (s.element)(id), tile, reference, text);
             (s.window_classes)(WC_STORY_BOOK, i32::from(page.0));
             let next = element_sort();
             next.write((*next).wrapping_add(1));
-            result.write(StoryPageElementID(id));
+            result.write(id);
         }
         true
     }
@@ -590,14 +587,14 @@ pub unsafe extern "C" fn openttd_rust_update_story_page_element(
         if element.is_null() {
             return false;
         }
-        let page = StoryPageID(*(s.element_page)(element));
+        let page = *(s.element_page)(element);
         let kind = *(s.element_type)(element);
         if !verify_element(s, page, kind, tile, reference, text) {
             return false;
         }
         if execute(flags) {
             update_element(s, element, tile, reference, text);
-            (s.window_classes)(WC_STORY_BOOK, i32::from(*(s.element_page)(element)));
+            (s.window_classes)(WC_STORY_BOOK, i32::from((*(s.element_page)(element)).0));
         }
         true
     }
@@ -661,12 +658,12 @@ pub unsafe extern "C" fn openttd_rust_show_story_page(
             return false;
         }
         if execute(flags) {
-            let company = CompanyID(*(s.page_company)(page));
-            if (company != CompanyID::INVALID && company.0 == (s.local_company)())
-                || (company == CompanyID::INVALID
-                    && s.company_valid(CompanyID((s.local_company)())))
+            let company = *(s.page_company)(page);
+            let local = CompanyID((s.company().local_company)());
+            if (company != CompanyID::INVALID && company == local)
+                || (company == CompanyID::INVALID && s.company_valid(local))
             {
-                (s.story_show)((s.local_company)(), id.0);
+                (s.story_show)(local, id);
             }
         }
         true
@@ -675,7 +672,7 @@ pub unsafe extern "C" fn openttd_rust_show_story_page(
 unsafe fn delete_elements(s: &Services, page: StoryPageID) {
     unsafe {
         each_element(s, |element| {
-            if *(s.element_page)(element) == page.0 {
+            if *(s.element_page)(element) == page {
                 (s.element_destroy)(element);
             }
         });
@@ -705,7 +702,7 @@ pub unsafe extern "C" fn openttd_rust_remove_story_page(
         }
         if execute(flags) {
             delete_elements(s, id);
-            (s.page_destroy)(page);
+            (s.company().delete_story_page)(u32::from(id.0));
             (s.window_classes)(WC_STORY_BOOK, -1);
             if (s.page_count)() == 0 {
                 s.toolbar_dirty();
@@ -731,7 +728,7 @@ pub unsafe extern "C" fn openttd_rust_remove_story_page_element(
         if execute(flags) {
             let page = *(s.element_page)(element);
             (s.element_destroy)(element);
-            (s.window_classes)(WC_STORY_BOOK, i32::from(page));
+            (s.window_classes)(WC_STORY_BOOK, i32::from(page.0));
         }
         true
     }
@@ -750,14 +747,15 @@ pub unsafe extern "C" fn openttd_rust_story_page_button(
             return false;
         }
         let page = *(s.element_page)(element);
-        let company = *(s.page_company)((s.page)(u32::from(page)));
-        if company != CompanyID::INVALID.0 && company != (s.shared().current_company)() {
+        let company = *(s.page_company)((s.page)(u32::from(page.0)));
+        let current = CompanyID((s.shared().current_company)());
+        if company != CompanyID::INVALID && company != current {
             return false;
         }
         match *(s.element_type)(element) {
             SPET_BUTTON_PUSH => {
                 if execute(flags) {
-                    (s.push_event)((s.shared().current_company)(), page, id.0);
+                    (s.push_event)(current, page, id);
                 }
             }
             SPET_BUTTON_TILE => {
@@ -765,7 +763,7 @@ pub unsafe extern "C" fn openttd_rust_story_page_button(
                     return false;
                 }
                 if execute(flags) {
-                    (s.tile_event)((s.shared().current_company)(), page, id.0, tile);
+                    (s.tile_event)(current, page, id, tile);
                 }
             }
             SPET_BUTTON_VEHICLE => {
@@ -773,7 +771,7 @@ pub unsafe extern "C" fn openttd_rust_story_page_button(
                     return false;
                 }
                 if execute(flags) {
-                    (s.vehicle_event)((s.shared().current_company)(), page, id.0, reference.0);
+                    (s.vehicle_event)(current, page, id, reference.0);
                 }
             }
             _ => return false,
@@ -788,7 +786,7 @@ pub extern "C" fn openttd_rust_valid_link(s: &Services, kind: u8, target: u32) -
         LT_TILE => s.tile_valid(target),
         LT_INDUSTRY => (s.industry_valid)(target),
         LT_TOWN => (s.town_valid)(target),
-        LT_COMPANY => (s.company_pool_valid)(target),
+        LT_COMPANY => u8::try_from(target).is_ok_and(|id| s.company_valid(CompanyID(id))),
         LT_STORY_PAGE => !(s.page)(target).is_null(),
         _ => false,
     }
@@ -808,7 +806,7 @@ pub unsafe extern "C" fn openttd_rust_create_league_table(
             return false;
         }
         if execute(flags) {
-            result.write(LeagueTableID((s.table_allocate)(title, header, footer)));
+            result.write((s.table_allocate)(title, header, footer));
         }
         true
     }
@@ -836,9 +834,9 @@ pub unsafe extern "C" fn openttd_rust_create_league_table_element(
             return false;
         }
         if execute(flags) {
-            result.write(LeagueTableElementID((s.entry_allocate)(
-                table.0, rating, company.0, text, score, kind, target,
-            )));
+            result.write((s.entry_allocate)(
+                table, rating, company, text, score, kind, target,
+            ));
             (s.window_data)(WC_COMPANY_LEAGUE, u32::from(table.0), 0);
         }
         true
@@ -868,11 +866,11 @@ pub unsafe extern "C" fn openttd_rust_update_league_table_element_data(
             return false;
         }
         if execute(flags) {
-            (s.entry_company)(entry).write(company.0);
+            (s.entry_company)(entry).write(company);
             (s.text_assign)((s.entry_text)(entry), text);
             (s.entry_link_type)(entry).write(kind);
             (s.entry_link_target)(entry).write(target);
-            (s.window_data)(WC_COMPANY_LEAGUE, u32::from(*(s.entry_table)(entry)), 0);
+            (s.window_data)(WC_COMPANY_LEAGUE, u32::from((*(s.entry_table)(entry)).0), 0);
         }
         true
     }
@@ -896,7 +894,7 @@ pub unsafe extern "C" fn openttd_rust_update_league_table_element_score(
         if execute(flags) {
             (s.entry_rating)(entry).write(rating);
             (s.text_assign)((s.entry_score)(entry), score);
-            (s.window_data)(WC_COMPANY_LEAGUE, u32::from(*(s.entry_table)(entry)), 0);
+            (s.window_data)(WC_COMPANY_LEAGUE, u32::from((*(s.entry_table)(entry)).0), 0);
         }
         true
     }
@@ -918,7 +916,7 @@ pub unsafe extern "C" fn openttd_rust_remove_league_table_element(
         if execute(flags) {
             let table = *(s.entry_table)(entry);
             (s.entry_destroy)(entry);
-            (s.window_data)(WC_COMPANY_LEAGUE, u32::from(table), 0);
+            (s.window_data)(WC_COMPANY_LEAGUE, u32::from(table.0), 0);
         }
         true
     }

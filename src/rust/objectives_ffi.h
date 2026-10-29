@@ -5,11 +5,13 @@
 #include "service_defaults.hpp"
 #include "services_ffi.h"
 struct Goal; struct StoryPage; struct StoryPageElement; struct LeagueTableElement; class EncodedString;
+struct OpenTTDCompanyServices;
 /** Records and strings stay in native pools. Pointers address their live fields;
  * no pointer or borrow survives destruction, pool cleanup or a reentrant callback.
  * Commands hold the game-state mutex. Events enqueue without entering the VM. */
 struct OpenTTDObjectivesServices {
 	const OpenTTDSharedServices *shared;
+	const OpenTTDCompanyServices *company;
 	OpenTTDTileTypeAllocation (*map_allocation)() noexcept OPENTTD_SERVICE_DEFAULT(map_allocation);
 	Goal * (*goal)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(goal);
 	uint8_t * (*goal_company)(Goal *) noexcept OPENTTD_SERVICE_DEFAULT(goal_company);
@@ -18,14 +20,12 @@ struct OpenTTDObjectivesServices {
 	EncodedString * (*goal_text)(Goal *) noexcept OPENTTD_SERVICE_DEFAULT(goal_text);
 	EncodedString * (*goal_progress)(Goal *) noexcept OPENTTD_SERVICE_DEFAULT(goal_progress);
 	bool * (*goal_completed)(Goal *) noexcept OPENTTD_SERVICE_DEFAULT(goal_completed);
-	void (*goal_destroy)(Goal *) noexcept OPENTTD_SERVICE_DEFAULT(goal_destroy);
 	uint32_t (*goal_count)() noexcept OPENTTD_SERVICE_DEFAULT(goal_count);
 	bool (*goal_can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(goal_can_allocate);
 	StoryPage * (*page)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(page);
 	uint8_t * (*page_company)(StoryPage *) noexcept OPENTTD_SERVICE_DEFAULT(page_company);
 	EncodedString * (*page_title)(StoryPage *) noexcept OPENTTD_SERVICE_DEFAULT(page_title);
 	int32_t * (*page_date)(StoryPage *) noexcept OPENTTD_SERVICE_DEFAULT(page_date);
-	void (*page_destroy)(StoryPage *) noexcept OPENTTD_SERVICE_DEFAULT(page_destroy);
 	uint32_t (*page_count)() noexcept OPENTTD_SERVICE_DEFAULT(page_count);
 	bool (*page_can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(page_can_allocate);
 	StoryPageElement * (*element)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(element);
@@ -55,12 +55,8 @@ struct OpenTTDObjectivesServices {
 	bool (*table_can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(table_can_allocate);
 	uint8_t (*table_allocate)(const EncodedString *, const EncodedString *, const EncodedString *) noexcept OPENTTD_SERVICE_DEFAULT(table_allocate);
 	uint16_t (*entry_allocate)(uint8_t, int64_t, uint8_t, const EncodedString *, const EncodedString *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(entry_allocate);
-	uint8_t (*local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
-	bool (*networking)() noexcept OPENTTD_SERVICE_DEFAULT(networking);
-	bool (*network_server)() noexcept OPENTTD_SERVICE_DEFAULT(network_server);
 	uint32_t (*own_client)() noexcept OPENTTD_SERVICE_DEFAULT(own_client);
 	bool (*client_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(client_valid);
-	bool (*company_pool_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(company_pool_valid);
 	bool (*industry_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_valid);
 	bool (*town_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_valid);
 	bool (*vehicle_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_valid);
