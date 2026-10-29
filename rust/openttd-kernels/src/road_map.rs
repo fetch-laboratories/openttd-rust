@@ -146,3 +146,39 @@ pub(crate) fn has_tile_road_type(
 ) -> Option<bool> {
     Some(get_road_type(m, s, tile, kind)?.0 != crate::road_type::INVALID_ROADTYPE)
 }
+
+impl crate::map_func::World<'_> {
+    pub(crate) fn normal_road(&self, t: u32) -> bool {
+        self.kind(t) == crate::tile_type::MP_ROAD
+            && self.byte(self.types.m5(t)) >> 6 == ROAD_TILE_NORMAL
+    }
+    pub(crate) fn road_bits(&self, t: u32, tram: bool) -> u8 {
+        self.check(self.normal_road(t));
+        self.byte(if tram {
+            self.types.m3(t)
+        } else {
+            self.types.m5(t)
+        }) & 15
+    }
+    pub(crate) fn road_depot(&self, t: u32) -> bool {
+        self.kind(t) == crate::tile_type::MP_ROAD
+            && self.byte(self.types.m5(t)) >> 6 == ROAD_TILE_DEPOT
+    }
+    pub(crate) fn road_depot_dir(&self, t: u32) -> u8 {
+        self.check(self.road_depot(t));
+        self.byte(self.types.m5(t)) & 3
+    }
+    pub(crate) fn road_type(&self, t: u32, tram: bool) -> u8 {
+        self.check(matches!(
+            self.kind(t),
+            crate::tile_type::MP_ROAD
+                | crate::tile_type::MP_STATION
+                | crate::tile_type::MP_TUNNELBRIDGE
+        ));
+        if tram {
+            ((self.word(self.types.m8(t)) >> 6) & 63) as u8
+        } else {
+            self.byte(self.types.m4(t)) & 63
+        }
+    }
+}

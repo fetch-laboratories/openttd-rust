@@ -1459,3 +1459,9 @@ mod newgrf_act3;
 pub use industry_type::Industry as NativeIndustry;
 /// Native vehicle pool identity with its full base-type domain.
 pub use vehicle_type::VehicleID;
+
+mod tunnelbridge_map;
+
+mod tunnel_map;
+
+mod depot_map;

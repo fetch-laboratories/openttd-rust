@@ -203,3 +203,8 @@ mod tests {
         assert_eq!(failures.get(), 5);
     }
 }
+
+/// `TrackdirToTrackdirBits`.
+pub const fn trackdir_to_trackdir_bits(td: u8) -> u16 {
+    1_u16 << td
+}

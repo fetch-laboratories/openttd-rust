@@ -83,3 +83,48 @@ pub(crate) fn is_hangar(tile: u32, s: &crate::newgrf_airport::Services) -> bool 
 pub(crate) fn is_hangar_tile(tile: u32, s: &crate::newgrf_airport::Services) -> bool {
     (s.shared().tile_type)(tile) == MP_STATION && is_hangar(tile, s)
 }
+
+impl crate::map_func::World<'_> {
+    pub(crate) fn station_kind(&self, t: u32) -> u8 {
+        self.check(self.kind(t) == MP_STATION);
+        (self.byte(self.types.m6(t)) >> 3) & 15
+    }
+    pub(crate) fn rail_station(&self, t: u32) -> bool {
+        self.kind(t) == MP_STATION && self.station_kind(t) == crate::station_type::STATION_RAIL
+    }
+    pub(crate) fn has_station_rail(&self, t: u32) -> bool {
+        self.kind(t) == MP_STATION
+            && matches!(
+                self.station_kind(t),
+                crate::station_type::STATION_RAIL | RAIL_WAYPOINT
+            )
+    }
+    pub(crate) fn station_road_stop(&self, t: u32) -> bool {
+        self.kind(t) == MP_STATION && matches!(self.station_kind(t), STATION_TRUCK | STATION_BUS)
+    }
+    pub(crate) fn bay_stop(&self, t: u32) -> bool {
+        self.station_road_stop(t) && self.byte(self.types.m5(t)) < 4
+    }
+    pub(crate) fn bay_dir(&self, t: u32) -> u8 {
+        self.check(self.bay_stop(t));
+        self.byte(self.types.m5(t))
+    }
+    pub(crate) fn station_axis(&self, t: u32) -> u8 {
+        self.check(self.has_station_rail(t));
+        self.byte(self.types.m5(t)) & 1
+    }
+    pub(crate) fn station_reserved(&self, t: u32) -> bool {
+        self.check(self.has_station_rail(t));
+        self.byte(self.types.m6(t)) & 4 != 0
+    }
+    pub(crate) fn compatible_station(&self, t: u32, start: u32) -> bool {
+        self.check(self.rail_station(start));
+        self.rail_station(t)
+            && self.byte(self.types.m3(t)) & 1 == 0
+            && (crate::pbs::Pbs::acquire(self.shared).0.compatible)(self.rail_type(t))
+                & (1_u64 << self.rail_type(start))
+                != 0
+            && self.station_axis(t) == self.station_axis(start)
+            && self.word(self.types.m2(t)) == self.word(self.types.m2(start))
+    }
+}

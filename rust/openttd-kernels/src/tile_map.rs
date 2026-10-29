@@ -92,3 +92,14 @@ pub(crate) fn tile_hash(x: u32, y: u32) -> u32 {
 pub(crate) fn tile_hash_2bit(x: u32, y: u32) -> u32 {
     tile_hash(x, y) & 3
 }
+
+impl crate::map_func::World<'_> {
+    pub(crate) fn owner(&self, t: u32) -> u8 {
+        self.check(t < self.types.count() && self.kind(t) != crate::tile_type::MP_VOID);
+        self.check(
+            self.kind(t) != crate::tile_type::MP_HOUSE
+                && self.kind(t) != crate::tile_type::MP_INDUSTRY,
+        );
+        self.byte(self.types.m1(t)) & 0x1f
+    }
+}

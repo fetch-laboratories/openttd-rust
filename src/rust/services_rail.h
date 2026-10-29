@@ -54,6 +54,7 @@ inline void RustRailSetSignalGreen(uint32_t tile, uint8_t td, uint8_t green) noe
 inline Axis RustRailStationAxis(uint32_t tile) noexcept { return GetRailStationAxis(TileIndex(tile)); }
 inline Axis RustCrossingRoadAxis(uint32_t tile) noexcept { return GetCrossingRoadAxis(TileIndex(tile)); }
 inline TransportType RustTunnelBridgeTransport(uint32_t tile) noexcept { return GetTunnelBridgeTransportType(TileIndex(tile)); }
+inline uint32_t RustOtherBridgeEnd(uint32_t tile) noexcept { return GetOtherBridgeEnd(TileIndex{tile}).base(); }
 inline uint32_t RustOtherTunnelBridgeEnd(uint32_t tile) noexcept { return GetOtherTunnelBridgeEnd(TileIndex(tile)).base(); }
 
 /* Rail command, depot and crossing leaves (rail_cmd.rs). */
@@ -99,23 +100,6 @@ inline Track RustRailStationTrack(uint32_t tile) noexcept { return GetRailStatio
 inline bool RustWormholeReserved(uint32_t tile) noexcept { return HasTunnelBridgeReservation(TileIndex(tile)); }
 inline void RustSetTunnelBridgeReservation(uint32_t tile, bool reserved) noexcept { SetTunnelBridgeReservation(TileIndex{tile}, reserved); }
 inline void RustSetTileOwner(uint32_t tile, uint8_t owner) noexcept { SetTileOwner(TileIndex(tile), Owner(owner)); }
-
-/* The named follower is reconstructed without allocation. Carry every mutated
- * output across calls, including partial failure observations. The follower retains no output
- * pointer and exposes no native map or pool layout. */
-inline bool RustFollowTrackRail(OpenTTDTrainHandle v, uint8_t owner, uint64_t types, OpenTTDTrainReservationFollow *out) noexcept
-{
-	CFollowTrackRail ft = v.shell != nullptr ? CFollowTrackRail(static_cast<const Train *>(v.shell), RailTypes{types}) : CFollowTrackRail(Owner{owner}, RailTypes{types});
-	ft.new_tile = TileIndex{out->new_tile}; ft.new_td_bits = static_cast<TrackdirBits>(out->dirs);
-	ft.exitdir = static_cast<DiagDirection>(out->exitdir); ft.is_tunnel = out->tunnel;
-	ft.is_bridge = out->bridge; ft.is_station = out->station; ft.tiles_skipped = out->skipped;
-	bool followed = ft.Follow(TileIndex{out->old_tile}, static_cast<Trackdir>(out->old_td));
-	*out = {ft.old_tile.base(), ft.new_tile.base(), ft.tiles_skipped, ft.new_td_bits, ft.old_td, ft.exitdir,
-		static_cast<uint8_t>(ft.is_tunnel), static_cast<uint8_t>(ft.is_bridge), static_cast<uint8_t>(ft.is_station), ft.err};
-	return followed;
-}
-
-template <auto Follow> inline uint8_t OpenTTDTrainFollower(OpenTTDTrainHandle v, uint64_t types, OpenTTDTrainReservationFollow *out) noexcept { return Follow(v, 0, types, out); }
 
 /* Shared signature adapters preserve existing legacy callback ABIs. Query is
  * compile-time and inline: each entry makes the same native query. */

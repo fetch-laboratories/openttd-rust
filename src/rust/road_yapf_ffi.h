@@ -28,8 +28,6 @@ struct OpenTTDRoadYapfLeaves {
 	const OpenTTDSharedServices *shared; ///< Shared world and movement owner.
 	RoadTramType (OPENTTD_RUST_CALL *road_kind)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(road_kind);
 	OpenTTDRoadYapfTile (OPENTTD_RUST_CALL *tile)(const void *, uint32_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(tile);
-	OpenTTDRoadYapfFollow (OPENTTD_RUST_CALL *follow)(const void *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(follow);
-	OpenTTDRoadYapfTraversal (OPENTTD_RUST_CALL *traversal)(const void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(traversal);
 	uint32_t (OPENTTD_RUST_CALL *closest)(const void *, uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(closest);
 	OpenTTDRoadYapfArea (OPENTTD_RUST_CALL *area)(const void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(area);
 };

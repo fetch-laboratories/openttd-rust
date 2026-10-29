@@ -280,6 +280,11 @@ void Station::MarkTilesDirty(bool cargo_change) const
 	}
 }
 
+#ifdef WITH_RUST
+#include "rust/follow_track_ffi.h"
+uint Station::GetPlatformLength(TileIndex tile) const { return openttd_rust_platform_length(&GetRustSharedServices(), this->index.base(), tile.base(), 0, false); }
+uint Station::GetPlatformLength(TileIndex tile, DiagDirection dir) const { return openttd_rust_platform_length(&GetRustSharedServices(), this->index.base(), tile.base(), dir, true); }
+#else
 /* virtual */ uint Station::GetPlatformLength(TileIndex tile) const
 {
 	assert(this->TileBelongsToRailStation(tile));
@@ -316,6 +321,8 @@ void Station::MarkTilesDirty(bool cargo_change) const
 
 	return length;
 }
+
+#endif
 
 #ifdef WITH_RUST
 uint Station::GetCatchmentRadius() const

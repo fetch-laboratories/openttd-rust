@@ -75,7 +75,6 @@ pub struct Destination {
 #[derive(Clone, Copy)]
 pub struct Leaves {
     pub destination: unsafe extern "C" fn(*const c_void) -> Destination,
-    pub follow: unsafe extern "C" fn(*const c_void, u32, u8) -> Follow,
     pub tile: unsafe extern "C" fn(*const c_void, u32, u8) -> Tile,
     pub patch: unsafe extern "C" fn(u32) -> Patch,
     pub visit_new: unsafe extern "C" fn(Patch) -> *mut c_void,
@@ -450,7 +449,13 @@ fn low_search(
             return Some((search, index, input.dest_tile));
         }
         stats[1] += 1;
-        let f = unsafe { (leaves.follow)(context, parent.tile, parent.td) };
+        let (ft, ok) = crate::follow_track::water(services, parent.tile, parent.td);
+        let f = Follow {
+            tile: ft.new_tile,
+            skipped: ft.tiles_skipped,
+            dirs: ft.new_td_bits,
+            followed: u8::from(ok),
+        };
         if f.followed != 0
             && (!restricted || path.iter().any(|p| (p.x, p.y) == region(input, f.tile)))
         {
@@ -546,16 +551,22 @@ fn random_dir(services: &Services, mut dirs: u16) -> u8 {
 fn random_path(
     cache: &mut Path,
     input: &Input,
-    leaves: &Leaves,
+    _leaves: &Leaves,
     services: &Services,
-    context: *const c_void,
+    _context: *const c_void,
     length: i32,
     stats: &mut [u32; 13],
 ) -> u8 {
     let mut tile = input.tile;
     let mut td = input.trackdir;
     for _ in 0..length {
-        let f = unsafe { (leaves.follow)(context, tile, td) };
+        let (ft, ok) = crate::follow_track::water(services, tile, td);
+        let f = Follow {
+            tile: ft.new_tile,
+            skipped: ft.tiles_skipped,
+            dirs: ft.new_td_bits,
+            followed: u8::from(ok),
+        };
         tile = f.tile;
         if f.followed == 0 {
             break;
@@ -946,7 +957,6 @@ crate::abi::layouts! {
     };
     "OpenTTDShipYapfLeaves" ["probe"] => Leaves {
         destination,
-        follow,
         tile,
         patch,
         visit_new,

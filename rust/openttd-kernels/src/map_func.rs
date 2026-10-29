@@ -291,3 +291,39 @@ impl TileTypeAccess {
     map_fields! { base: BaseTileLayout => kind: u8, height: u8, m1: u8, m2: u16, m3: u8, m4: u8, m5: u8 }
     map_fields! { extended: ExtendedTileLayout => m6: u8, m8: u16 }
 }
+
+/// Entry-local canonical map descriptor. Reads remain field-sized and end before calls.
+pub(crate) struct World<'a> {
+    pub types: TileTypeAccess,
+    pub shared: &'a crate::services::Services,
+    pub dimensions: Map,
+}
+impl<'a> World<'a> {
+    pub(crate) fn new(shared: &'a crate::services::Services) -> Self {
+        let movement = crate::movement::table(shared);
+        // SAFETY: Game-loop and command entries exclude map reset/load/mutex yield.
+        let types = unsafe {
+            TileTypeAccess::raw(
+                (movement.tile_types.expect("native map descriptor"))(),
+                shared.tile_type,
+            )
+        };
+        Self {
+            types,
+            shared,
+            dimensions: shared.map(),
+        }
+    }
+    pub(crate) fn check(&self, condition: bool) {
+        crate::movement::native_assert(self.shared, condition);
+    }
+    pub(crate) fn kind(&self, t: u32) -> u8 {
+        self.types.read(t)
+    }
+    pub(crate) fn byte(&self, value: Option<u8>) -> u8 {
+        value.expect("live map scalar")
+    }
+    pub(crate) fn word(&self, value: Option<u16>) -> u16 {
+        value.expect("live map scalar")
+    }
+}

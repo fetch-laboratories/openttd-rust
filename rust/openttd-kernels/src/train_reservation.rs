@@ -216,7 +216,6 @@ pub struct Leaves {
     pub write_last: extern "C" fn(*mut std::ffi::c_void, Handle, u16),
     pub write_suppress: extern "C" fn(*mut std::ffi::c_void, Handle, u8),
 
-    pub follow: extern "C" fn(Handle, u64, *mut Follow) -> u8,
     pub pathfind: extern "C" fn(Handle, u32, u8, u8, u8, u8) -> Search,
     pub safe_track: extern "C" fn(Handle, u32, u8, u8) -> u8,
     pub process_orders: extern "C" fn(Handle) -> u8,
@@ -374,9 +373,7 @@ impl Game<'_> {
     }
 
     fn follow(&self, id: Handle, types: u64, ft: &mut Follow, tile: u32, td: u8) -> bool {
-        ft.old_tile = tile;
-        ft.old_td = td;
-        (self.leaves.follow)(id, types, ft) != 0
+        crate::follow_track::rail(unsafe { &*self.leaves.shared }, id, 0, types, ft, tile, td)
     }
     fn origin(&self, id: Handle, other: bool) -> Pbs {
         self.pbs().follow_train(id, other, Handle::NONE)
@@ -1306,7 +1303,6 @@ crate::abi::layouts! {
         write_dest,
         write_last,
         write_suppress,
-        follow,
         pathfind,
         safe_track,
         process_orders,
@@ -1706,7 +1702,6 @@ mod tests {
             green: one_track,
             set_signal: signal,
             mark_tile: mark,
-            follow,
             ..leaves()
         }
     }

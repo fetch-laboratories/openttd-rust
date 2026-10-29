@@ -56,10 +56,7 @@ struct OpenTTDRailStep {
 struct OpenTTDRailLeaves {
 	OpenTTDRailTrain (*train)(void *) noexcept OPENTTD_SERVICE_DEFAULT(train);
 	OpenTTDRailTile (*tile)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile);
-	OpenTTDRailFollow (*follow)(void *, uint32_t, uint8_t, uint64_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(follow);
-	OpenTTDRailSpeed (*speed)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(speed);
 	uint8_t (*compatible_station)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(compatible_station);
-	uint32_t (*platform_length)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(platform_length);
 	uint32_t (*closest_station)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(closest_station);
 	void (*output)(void *, uint8_t, const OpenTTDRailStep *) noexcept OPENTTD_SERVICE_DEFAULT(output);
 	void (*debug)(void *, uint8_t, const uint32_t *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug);

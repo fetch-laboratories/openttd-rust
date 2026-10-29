@@ -168,10 +168,7 @@ pub struct Step {
 pub struct Leaves {
     pub train: unsafe extern "C" fn(*mut c_void) -> Train,
     pub tile: unsafe extern "C" fn(u32, u8) -> Tile,
-    pub follow: unsafe extern "C" fn(*mut c_void, u32, u8, u64, u8) -> FollowStep,
-    pub speed: unsafe extern "C" fn(u32) -> Speed,
     pub compatible_station: unsafe extern "C" fn(u32, u32) -> u8,
-    pub platform_length: unsafe extern "C" fn(u32, u8) -> u32,
     pub closest_station: unsafe extern "C" fn(*mut c_void, u8) -> u32,
     pub output: unsafe extern "C" fn(*mut c_void, u8, *const Step),
     pub debug: unsafe extern "C" fn(*mut c_void, u8, *const u32, u32),
@@ -513,29 +510,40 @@ impl Search {
         )
     }
     fn follow(&self, tile: u32, td: u8, no90: u8, compatible: u64, mask: bool) -> Follow {
-        let mut step =
-            unsafe { (self.leaves.follow)(self.input.context, tile, td, compatible, no90) };
-        if step.followed != 0 && mask {
-            let mut ft = crate::train_reservation::Follow {
-                old_tile: tile,
-                old_td: td,
-                new_tile: step.tile,
-                skipped: step.skipped,
-                dirs: step.dirs,
-                exitdir: step.exitdir,
-                station: step.station,
-                error: step.error,
-                ..Default::default()
-            };
-            step.followed = u8::from(crate::follow_track::mask_reserved_tracks(
-                self.pbs(),
-                &mut ft,
-            ));
-            step.dirs = ft.dirs;
-            step.error = ft.error;
+        let shared = unsafe { &*self.input.shared };
+        let v = std::ptr::NonNull::new(self.input.vehicle.cast_mut().cast())
+            .map(crate::vehicle::VehicleRef);
+        let mut state = crate::follow_track::State::vehicle(
+            shared,
+            crate::transport_type::TRANSPORT_RAIL,
+            v,
+            compatible,
+            no90 == 0,
+            mask,
+        );
+        let mut followed = state.follow(shared, tile, td);
+        let mut out = state.output();
+        if followed && mask {
+            followed = crate::follow_track::mask_reserved_tracks(self.pbs(), &mut out);
         }
-        // Native GetSpeedLimit remains after masking, even if either step failed.
-        let speed = unsafe { (self.leaves.speed)(tile) };
+        let step = FollowStep {
+            tile: out.new_tile,
+            skipped: out.skipped,
+            dirs: out.dirs,
+            followed: u8::from(followed),
+            error: out.error,
+            station: out.station,
+            exitdir: out.exitdir,
+        };
+        let speed = Speed {
+            min_speed: 0,
+            max_speed: crate::follow_track::speed_limit(
+                shared,
+                crate::transport_type::TRANSPORT_RAIL,
+                v,
+                tile,
+            ),
+        };
         Follow {
             step,
             min_speed: speed.min_speed,
@@ -554,7 +562,11 @@ impl Search {
         pbs.free(pbs.handle(self.input.vehicle), tile, td, forbid != 0)
     }
     fn platform_length(&self, tile: u32, dir: u8) -> u32 {
-        unsafe { (self.leaves.platform_length)(tile, dir) }
+        crate::follow_track::platform_length(
+            &crate::map_func::World::new(unsafe { &*self.input.shared }),
+            tile,
+            dir,
+        )
     }
     fn set_destination(&mut self) {
         if self.input.kind == 3 {
@@ -1795,10 +1807,7 @@ crate::abi::layouts! {
     "OpenTTDRailLeaves" ["probe"] => Leaves {
         train,
         tile,
-        follow,
-        speed,
         compatible_station,
-        platform_length,
         closest_station,
         output,
         debug,
@@ -1840,7 +1849,6 @@ crate::abi::layouts! {
         rear_virtual_tile,
         dest_tile,
         length,
-        speed,
         order_destination,
         td,
         rear_td,

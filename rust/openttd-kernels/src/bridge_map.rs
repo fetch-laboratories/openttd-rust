@@ -35,3 +35,10 @@ pub unsafe extern "C" fn openttd_rust_bridge_height(s: *const Services, tile: u3
     // SAFETY: canonical native table; no world borrow is formed.
     get_bridge_height(tile, unsafe { &*s })
 }
+
+impl crate::map_func::World<'_> {
+    pub(crate) fn bridge(&self, t: u32) -> bool {
+        self.check(self.kind(t) == crate::tile_type::MP_TUNNELBRIDGE);
+        self.byte(self.types.m5(t)) & 128 != 0
+    }
+}
