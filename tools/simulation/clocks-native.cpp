@@ -27,7 +27,6 @@ const OpenTTDClockServices &GetRustClockServices() noexcept
 {
 	static const OpenTTDClockServices services{
 		.shared = &shared,
-		.game_mode = []() noexcept { return _game_mode; },
 		.minutes_per_calendar_year = []() noexcept { return _settings_game.economy.minutes_per_calendar_year; },
 		.using_wallclock_units = [](bool newgame) noexcept { return (newgame ? _settings_newgame : _settings_game).economy.timekeeping_units == TKU_WALLCLOCK; },
 		.next_graph = [](uint32_t *) noexcept -> LinkGraph * { return nullptr; },
@@ -46,6 +45,9 @@ struct LinkGraph {
 #endif
 #include "clock-bodies.inc"
 
+
+
+#include "clock-fixture.hpp"
 static void Check(const char *name, bool valid)
 {
 	std::printf("CLOCK %s %s\n", name, valid ? "true" : "false");
@@ -58,7 +60,7 @@ static void CalendarEnd(int year = 1999)
 static void CalendarDay()
 {
 	TimerGameCalendar::date_fract = 73;
-	TimerManager<TimerGameCalendar>::Elapsed(1);
+	FixtureClockElapsed<TimerGameCalendar>();
 }
 static int effects;
 static void ScheduledFailure() { effects = effects * 10 + 2; throw Script_FatalError("clock probe"); }
@@ -79,7 +81,7 @@ static void Subscriptions()
 		ordered[1]->SetInterval({C::YEAR, C::NONE});
 		added.emplace(C::TPeriod{C::DAY, C::NONE}, [&](auto) { calls.push_back(8); });
 	});
-	CalendarEnd(); TimerManager<C>::Elapsed(1);
+	CalendarEnd(); FixtureClockElapsed<C>();
 	Check("snapshot-live-order", calls == std::vector<int>{9, 0, 2, 1, 2});
 	TimerManager<C>::RegisterTimer(*added);
 	CalendarDay();
@@ -92,11 +94,11 @@ static void Timeouts()
 	int count = 0;
 	TimeoutTimer<C> timer({C::DAY, C::NONE}, [&] { count++; self->Reset(); }, true);
 	self = &timer;
-	CalendarEnd(); TimerManager<C>::Elapsed(1); CalendarDay();
+	CalendarEnd(); FixtureClockElapsed<C>(); CalendarDay();
 	Check("timeout-post-reset", count == 1 && timer.HasFired());
-	timer.Reset({C::MONTH, C::NONE}); CalendarEnd(); TimerManager<C>::Elapsed(1);
+	timer.Reset({C::MONTH, C::NONE}); CalendarEnd(); FixtureClockElapsed<C>();
 	Check("timeout-period-reset", count == 2 && timer.HasFired());
-	timer.Reset(); timer.Abort(); CalendarEnd(); TimerManager<C>::Elapsed(1);
+	timer.Reset(); timer.Abort(); CalendarEnd(); FixtureClockElapsed<C>();
 	Check("timeout-abort", count == 2 && timer.HasFired());
 }
 static void LiveEconomy()
@@ -110,7 +112,7 @@ static void LiveEconomy()
 	int year = 2000;
 	while ((E::ConvertYMDToDate(E::Year{year}, 2, 1).base() % 7) == 3) year++;
 	E::SetDate(E::ConvertYMDToDate(E::Year{year}, 2, 1) - 1, 73);
-	TimerManager<E>::Elapsed(1);
+	FixtureClockElapsed<E>();
 	Check("live-week-quarter", week == 1 && quarter == 1 && E::days_since_last_month == 0);
 }
 static void ThreadsAndAliases()
@@ -125,9 +127,9 @@ static void ThreadsAndAliases()
 		CalendarEnd();
 		Check("thread-aliases", year == &C::year && date == &C::date && C::sub_date_fract == 19);
 	}); first.join();
-	TimerManager<C>::Elapsed(1);
+	FixtureClockElapsed<C>();
 	Check("thread-registration", count == 1 && C::year == 2000);
-	std::thread second([] { TimerManager<C>::Elapsed(1); }); second.join();
+	std::thread second([] { FixtureClockElapsed<C>(); }); second.join();
 	Check("thread-clock", C::date_fract == 1);
 	TimerGameEconomy::days_since_last_month = 123;
 	TimerGameEconomy::SetDate(TimerGameEconomy::Date{3}, 71);
@@ -151,10 +153,10 @@ static void Exceptions()
 	IntervalTimer<C> after({C::YEAR, C::NONE}, [](auto) { effects = effects * 10 + 3; });
 	CalendarEnd(CalendarTime::MAX_YEAR.base()); effects = 0;
 	bool caught = false;
-	try { TimerManager<C>::Elapsed(1); } catch (const Script_FatalError &) { caught = true; }
+	try { FixtureClockElapsed<C>(); } catch (const Script_FatalError &) { caught = true; }
 	Check("console-partial-exception", caught && effects == 12 && C::year == CalendarTime::MAX_YEAR + 1 && C::date_fract == 0);
 	throwing.SetInterval({C::WEEK, C::NONE});
-	CalendarEnd(); TimerManager<C>::Elapsed(1);
+	CalendarEnd(); FixtureClockElapsed<C>();
 	Check("exception-snapshot-cleanup", C::year == 2000 && effects == 1213);
 }
 int main(int argc, char **)

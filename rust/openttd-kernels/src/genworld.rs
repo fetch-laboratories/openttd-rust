@@ -212,7 +212,7 @@ pub struct WorldServices {
     pub debug_done: extern "C" fn(),
     pub debug_abort: extern "C" fn(),
     pub debug_map: extern "C" fn(u32),
-    pub desync: extern "C" fn() -> bool,
+    pub desync_level: extern "C" fn() -> i32,
     pub save: extern "C" fn(*mut Frame) -> bool,
 }
 
@@ -512,7 +512,7 @@ impl World<'_> {
         let call = unsafe { &*(s.loop_begin)(self.frame) };
         let shared = unsafe { &*(*s.landscape).shared };
         unsafe {
-            crate::tile_loop::openttd_rust_run_tile_loop(
+            crate::tile_loop::run(
                 (shared.map_log_x)(),
                 ((shared.map_max_y)() + 1).ilog2(),
                 call.settings,
@@ -637,7 +637,7 @@ impl World<'_> {
             (s.debug_done)();
         }
         (s.debug_map)((s.seed)());
-        if (s.desync)() {
+        if (s.desync_level)() > 0 {
             native((s.save)(self.frame))?;
         }
         Ok(())
@@ -647,8 +647,7 @@ impl World<'_> {
 /// The native Backup<CompanyID> and exception/resource frames live through the
 /// synchronous call. Named throwing services catch inside those frames; Rust
 /// panics abort. No native container or owner borrow spans reentry or yielding.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_world_generate(s: &WorldServices, frame: *mut Frame) -> u8 {
+fn run(s: &WorldServices, frame: *mut Frame) -> u8 {
     let world = World { s, frame };
     match world.generate() {
         Ok(()) => 0,
@@ -762,7 +761,19 @@ crate::abi::layouts! {
         debug_done,
         debug_abort,
         debug_map,
-        desync,
+        desync_level,
         save,
     };
+}
+
+// This is the candidate profiling entry replacing the original _GenerateWorld.
+#[inline(never)]
+pub(crate) fn generate(
+    session: &crate::session::Services,
+    parent: *mut crate::session::Frame,
+) -> bool {
+    let mut storage = std::mem::MaybeUninit::<crate::session::FrameStorage>::uninit();
+    let frame = (session.world_frame_begin)(storage.as_mut_ptr());
+    let result = run(unsafe { &*(session.world)() }, frame);
+    (session.world_frame_end)(parent, frame, result)
 }

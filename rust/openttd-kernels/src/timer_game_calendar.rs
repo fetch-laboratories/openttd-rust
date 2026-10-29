@@ -30,7 +30,7 @@ pub unsafe extern "C" fn openttd_rust_calendar_elapsed(
     services: &ClockServices,
     console_exception: *mut ConsoleException,
 ) -> bool {
-    if (services.game_mode)() == crate::openttd::GameMode::MENU {
+    if crate::session::mode() == crate::openttd::GameMode::MENU {
         return false;
     }
     let minutes = u32::from((services.minutes_per_calendar_year)());

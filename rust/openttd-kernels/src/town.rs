@@ -2115,8 +2115,7 @@ impl Engine<'_> {
         self.set_counter((counter.min(2 * ticks - (rate - counter) % ticks)) as u16);
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_tick_all(
+pub(crate) unsafe fn tick_all(
     leaves: *const Leaves,
     services: *const Services,
     road: *const crate::road_cmd::CommandContext,

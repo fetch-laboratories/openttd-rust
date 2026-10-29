@@ -10,7 +10,6 @@ struct OpenTTDGlobalVariableServices {
 	uint8_t (*climate)() noexcept OPENTTD_SERVICE_DEFAULT(climate);
 	bool (*disable_elrails)() noexcept OPENTTD_SERVICE_DEFAULT(disable_elrails);
 	uint8_t (*file_version)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(file_version);
-	GameMode (*game_mode)() noexcept OPENTTD_SERVICE_DEFAULT(game_mode);
 	uint8_t (*height_limit)() noexcept OPENTTD_SERVICE_DEFAULT(height_limit);
 	uint8_t (*misc_bits)() noexcept OPENTTD_SERVICE_DEFAULT(misc_bits);
 	uint32_t (*newgrf_version)() noexcept OPENTTD_SERVICE_DEFAULT(newgrf_version);

@@ -189,7 +189,7 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.debug_done = []() noexcept { Debug(net, 3, "Map generated, starting game"); },
 		.debug_abort = []() noexcept { Debug(net, 0, "Generating map failed; closing server"); },
 		.debug_map = RustDebugNewMap,
-		.desync = []() noexcept { return _debug_desync_level > 0; },
+		.desync_level = RustDesyncLevel,
 		.save = [](OpenTTDWorldFrame *f) noexcept { return WorldException(f, RustSaveDesyncGame); },
 	};
 	return services;
@@ -197,22 +197,19 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 
 bool CheckAbi_genworld() { return AbiServicesComplete(GetRustWorldServices()); }
 
-/* Callgrind selects this native frame, including its actual GenerateWorld call. */
-#ifdef _MSC_VER
-__declspec(noinline)
-#else
-__attribute__((noinline))
-#endif
-static void _GenerateWorld()
+static_assert(sizeof(OpenTTDWorldFrame) <= sizeof(OpenTTDSessionFrameStorage));
+static_assert(alignof(OpenTTDWorldFrame) <= alignof(OpenTTDSessionFrameStorage));
+OpenTTDWorldFrame *RustWorldFrameBegin(OpenTTDSessionFrameStorage *storage) noexcept
 {
-	OpenTTDWorldFrame frame;
-	frame.company.emplace(_current_company, OWNER_NONE);
-	uint8_t result = openttd_rust_world_generate(&GetRustWorldServices(), &frame);
-	if (result == 2) std::rethrow_exception(frame.cancellation);
+	auto *frame = new (storage) OpenTTDWorldFrame;
+	frame->company.emplace(_current_company, OWNER_NONE);
+	return frame;
 }
-bool RustRunWorldGeneration(OpenTTDSessionFrame *frame) noexcept
+bool RustWorldFrameEnd(OpenTTDSessionFrame *parent, OpenTTDWorldFrame *frame, uint8_t result) noexcept
 {
-	return SessionException(frame, [] { _GenerateWorld(); });
+	if (result == 2) parent->exception = frame->cancellation;
+	std::destroy_at(frame);
+	return result != 2;
 }
 void GenerateWorld(GenWorldMode mode, uint size_x, uint size_y, bool reset_settings, GWDoneProc *const *callback)
 {

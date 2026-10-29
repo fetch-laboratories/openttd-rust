@@ -64,7 +64,7 @@ pub unsafe extern "C" fn openttd_rust_economy_elapsed(
     services: &ClockServices,
     console_exception: *mut ConsoleException,
 ) -> bool {
-    if (services.game_mode)() == crate::openttd::GameMode::MENU {
+    if crate::session::mode() == crate::openttd::GameMode::MENU {
         return false;
     }
     let fraction = economy_fraction().wrapping_add(1);

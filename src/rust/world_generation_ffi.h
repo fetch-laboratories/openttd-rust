@@ -100,7 +100,7 @@ struct OpenTTDWorldServices {
 	void (*debug_done)() noexcept OPENTTD_SERVICE_DEFAULT(debug_done);
 	void (*debug_abort)() noexcept OPENTTD_SERVICE_DEFAULT(debug_abort);
 	void (*debug_map)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_map);
-	bool (*desync)() noexcept OPENTTD_SERVICE_DEFAULT(desync);
+	int32_t (*desync_level)() noexcept OPENTTD_SERVICE_DEFAULT(desync_level);
 	bool (*save)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(save);
 };
 const OpenTTDWorldServices &GetRustWorldServices() noexcept;
@@ -110,6 +110,5 @@ void openttd_rust_world_request_abort();
 bool openttd_rust_world_aborted(const OpenTTDWorldServices *);
 bool openttd_rust_world_handle_abort(const OpenTTDWorldServices *, OpenTTDWorldFrame *);
 bool openttd_rust_world_setup(const OpenTTDWorldServices *, OpenTTDWorldSetupFrame *, GenWorldMode, uint32_t, uint32_t, bool);
-uint8_t openttd_rust_world_generate(const OpenTTDWorldServices *, OpenTTDWorldFrame *);
 }
 #endif /* RUST_WORLD_GENERATION_FFI_H */

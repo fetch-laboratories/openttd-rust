@@ -7,6 +7,7 @@
 #include "vehicle_func.h"
 #include "tunnelbridge_cmd.h"
 #ifdef WITH_RUST
+#include "session-fixture.hpp"
 #include "rust/landscape_generation_frame.hpp"
 #endif
 static void GenericRunTileLoop()
@@ -14,7 +15,11 @@ static void GenericRunTileLoop()
 #ifdef WITH_RUST
 	RustGenerationLoop loop;
 	assert(*openttd_rust_tile_loop_cursor() != 0);
-	openttd_rust_run_tile_loop(Map::LogX(), Map::LogY(), loop.view.settings, loop.view.services);
+	SessionFixture fixture;
+	fixture.shared.map_log_x = OpenTTDMapLogX;
+	fixture.services.map_log_y = OpenTTDMapLogY;
+	fixture.loop = loop.view;
+	if (!fixture.Run(_game_mode)) std::abort();
 #else
 	RunTileLoop();
 #endif

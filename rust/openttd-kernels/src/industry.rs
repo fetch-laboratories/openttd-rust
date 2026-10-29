@@ -661,8 +661,7 @@ fn produce(e: Entry, t: &TickRecord, s: &Services, builder: *mut Builder) {
 /// Live builder, tick record and synchronous services; C++ supplies serial world
 /// access and terminating noexcept environmental failures. No borrowed owner
 /// reference survives a service, including recursive production on construction.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_tick(
+pub(crate) unsafe fn tick(
     builder: *mut Builder,
     record: *const TickRecord,
     services: *const Services,

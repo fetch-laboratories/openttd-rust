@@ -1,3 +1,6 @@
+#ifdef WITH_RUST
+#include "session-fixture.hpp"
+#endif
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /* Native loaders remain compiled unchanged so fixtures exercise their real publication phases. */
 #include "newgrf.cpp"
@@ -195,7 +198,7 @@ static void CargoRatingFixture()
 		observer.SetRegister(0x102, -1);
 		Randomizer before = _random;
 #ifdef WITH_RUST
-		openttd_rust_station_tick(&GetRustStationServices(), &GetRustStationLinks(), &GetRustVehicleVisits());
+		FixtureStationTick(GetRustStationServices(), GetRustStationLinks(), GetRustVehicleVisits());
 #else
 		OnTick_Station();
 #endif

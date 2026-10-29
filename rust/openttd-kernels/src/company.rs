@@ -1494,8 +1494,7 @@ pub unsafe extern "C" fn openttd_rust_company_subtract_fraction(
     subtract_fraction(f, p, id, cost, usize::from(expense));
 }
 /// `UpdateLandscapingLimits`.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_company_update_landscaping_limits(s: &Services, r: &Landscaping) {
+pub(crate) fn update_landscaping_limits(s: &Services, r: &Landscaping) {
     let next = |value: u32, per: u32, burst: u16| -> u32 {
         (u64::from(value) + u64::from(per)).min(u64::from(burst) << 16) as u32
     };
@@ -1680,8 +1679,7 @@ pub extern "C" fn openttd_rust_company_competitor_timeout(s: &Services, r: &Comp
 /// `OnTick_Companies`; `true` asks the caller to Post `CCA_NEW_AI` and call again.
 /// # Safety
 /// `t.finances` is null or the live owner of company `TICK`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_company_on_tick(s: &Services, t: &mut Tick) -> bool {
+pub(crate) unsafe fn on_tick(s: &Services, t: &mut Tick) -> bool {
     tick(s, t)
 }
 /// Yearly company statistics timer body.

@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file session_services.inc Native leaves for Rust session orchestration. */
 #include "service_table_check.hpp"
+#include "command_services.h"
 #include "services_station.h"
 #include "services_industry.h"
 #include "town_services.h"
@@ -88,7 +89,7 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 		.settings_elrail = [](bool value) noexcept { SettingsDisableElrail(value); },
 		.company_settings = []() noexcept { Company::Get(CompanyID::Begin())->settings = _settings_client.company; },
 		.company_colour = [](bool primary, Colours colour) noexcept { Command<CMD_SET_COMPANY_COLOUR>::Post(LS_DEFAULT, primary, colour); },
-		.post_pause = [](PauseMode mode, bool pause) noexcept { Command<CMD_PAUSE>::Post(mode, pause); },
+		.post_pause = RustPostPause,
 		.reset_ai_config = [](uint8_t c) noexcept { _settings_game.script_config.ai[CompanyID(c)].reset(); },
 		.reset_game_config = []() noexcept { _settings_game.script_config.game.reset(); },
 		.publish_settings = []() noexcept { _settings_game = _settings_newgame; },
@@ -111,12 +112,14 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 		.startup_company = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { DoStartupNewCompany(false); }); },
 		.network_loop = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { NetworkGameLoop(); }); },
 		.network_reconnect = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { NetworkClientConnectGame(_settings_client.network.last_joined, COMPANY_SPECTATOR); }); },
-		.state_loop = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { StateGameLoop(); }); },
+		.state_frame_begin = [](OpenTTDSessionFrameStorage *storage) noexcept { return new (storage) OpenTTDSessionFrame; },
+		.state_frame_end = [](OpenTTDSessionFrame *parent, OpenTTDSessionFrame *f) noexcept { parent->exception = f->exception; std::destroy_at(f); return !parent->exception; },
 		.real_time = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { RustSessionRealtime(); }); },
 		.scan = [](OpenTTDSessionFrame *f, NewGRFScanCallback *callback) noexcept { return SessionException(f, [=] { ScanNewGRFFiles(callback); }); },
 		.world_setup_begin = [](OpenTTDSessionFrame *f) noexcept { return &f->setup.emplace(); },
 		.world_setup_end = [](OpenTTDSessionFrame *f) noexcept { f->exception = f->setup->cancellation; f->setup.reset(); return !f->exception; },
-		.world_run = RustRunWorldGeneration,
+		.world_frame_begin = RustWorldFrameBegin,
+		.world_frame_end = RustWorldFrameEnd,
 		.heightmap_screenshot = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { MakeHeightmapScreenshot(_file_to_saveload.name); }); },
 		.desync_save = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, RustSaveDesyncGame); },
 		.load = [](OpenTTDSessionFrame *f, OpenTTDSessionLoad *load) noexcept { SaveOrLoadResult result = SL_ERROR; SessionException(f, [&] { result = load == nullptr ? SaveOrLoad(_file_to_saveload.name, _file_to_saveload.file_op, _file_to_saveload.ftype.detailed, NO_DIRECTORY) : load->filter == nullptr ? SaveOrLoad(load->filename, load->operation, load->type, load->subdir) : LoadWithFilter(std::move(load->filter)); }); return result; },
@@ -138,7 +141,8 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 #endif
 		},
 		.assert_local_company = []() noexcept { assert(RustIsLocalCompany()); },
-		.desync_level = []() noexcept { return _debug_desync_level; },
+		.desync_level = RustDesyncLevel,
+		.map_log_y = OpenTTDMapLogY,
 		.tick_timer = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { TimerManager<TimerGameTick>::Elapsed(1); }); },
 		.tile_loop_begin = [](OpenTTDSessionFrame *f) noexcept -> const OpenTTDGenerationLoop * { assert(*openttd_rust_tile_loop_cursor() != 0); return &f->loop.emplace().view; },
 		.tile_loop_end = [](OpenTTDSessionFrame *f) noexcept { f->loop.reset(); },

@@ -20,6 +20,7 @@
 #include "abi_layout.hpp"
 #include "../rust/fleet_ffi.h"
 #ifdef WITH_RUST
+#include "../../tools/simulation/session-fixture.hpp"
 #include "../rust/company_adapter.h"
 #include "../rust/session_ffi.h"
 #endif
@@ -100,9 +101,10 @@ TEST_CASE("Base vehicle scheduler - production deletion, reuse and reallocation 
 			_lifetime_mutate = mutate;
 			if (production) {
 #ifdef WITH_RUST
-				CommandCost replacement, refit, temporary;
-				const auto tables = RustVehicleSchedulerTables(reinterpret_cast<OpenTTDCommandCost *>(&refit), reinterpret_cast<OpenTTDCommandCost *>(&temporary));
-				openttd_rust_vehicle_ticks(&tables, _game_mode == GM_NORMAL, TimerGameEconomy::date_fract, &replacement);
+				SessionFixture fixture;
+				CommandCost refit, temporary;
+				fixture.tables = RustVehicleSchedulerTables(reinterpret_cast<OpenTTDCommandCost *>(&refit), reinterpret_cast<OpenTTDCommandCost *>(&temporary));
+				CHECK(fixture.Run());
 #else
 				CallVehicleTicks();
 #endif
@@ -359,7 +361,9 @@ TEST_CASE("Base vehicle scheduler - Tick growth, timing return and fresh type")
 	tables.pending = &pending;
 	tables.transaction = &transaction;
 	tables.group = &group;
-	openttd_rust_vehicle_ticks(&tables, false, 0, nullptr);
+	SessionFixture fixture;
+	fixture.tables = tables;
+	CHECK(fixture.Run());
 	CHECK(_scheduler_tick_scope_ended);
 	CHECK(_scheduler_pool_reads == 2);
 	CHECK(_scheduler_post_visits == 1); // Deleted higher shell must never be dereferenced.

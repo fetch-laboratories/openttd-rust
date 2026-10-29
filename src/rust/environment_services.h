@@ -9,6 +9,7 @@
 #ifndef RUST_ENVIRONMENT_SERVICES_H
 #define RUST_ENVIRONMENT_SERVICES_H
 #include "../genworld.h"
+#include "../debug.h"
 #include "../network/network.h"
 #include "../town.h"
 #include <utility>
@@ -18,6 +19,7 @@
 #include "../settings_type.h"
 #include "../landscape.h"
 
+inline int32_t RustDesyncLevel() noexcept { return _debug_desync_level; }
 inline bool RustNetworking() noexcept { return _networking; }
 inline bool RustNetworkServer() noexcept { return _network_server; }
 inline bool RustNetworkDedicated() noexcept { return _network_dedicated; }
@@ -28,7 +30,6 @@ inline bool RustHasModalProgress() noexcept { return HasModalProgress(); }
 inline uint32_t OpenTTDMapLogY() noexcept { return Map::LogY(); }
 inline uint32_t OpenTTDMapLogX() noexcept { return Map::LogX(); }
 inline bool OpenTTDFreeformEdges() noexcept { return _settings_game.construction.freeform_edges; }
-inline GameMode RustGameMode() noexcept { return _game_mode; }
 inline bool OpenTTDEditor() noexcept { return _game_mode == GM_EDITOR; }
 inline bool OpenTTDGeneratingWorld() noexcept { return _generating_world; }
 inline LandscapeType OpenTTDLandscape() noexcept { return _settings_game.game_creation.landscape; }

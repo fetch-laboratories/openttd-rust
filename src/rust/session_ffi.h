@@ -12,6 +12,8 @@
 struct NewGRFScanCallback;
 struct OpenTTDSessionFrame;
 struct OpenTTDSessionLoad;
+/* Native objects are placement-constructed here; Rust never interprets the bytes. */
+struct alignas(16) OpenTTDSessionFrameStorage { std::byte storage[4096]; };
 struct OpenTTDSessionDimensions { uint32_t x, y; };
 struct OpenTTDSessionSecondaryColour { Colours colour; bool used; };
 /* Serialized entries; native resource/exception frames live on their callers' stacks.
@@ -105,12 +107,14 @@ struct OpenTTDSessionServices {
 	bool (*startup_company)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(startup_company);
 	bool (*network_loop)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(network_loop);
 	bool (*network_reconnect)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(network_reconnect);
-	bool (*state_loop)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(state_loop);
+	OpenTTDSessionFrame *(*state_frame_begin)(OpenTTDSessionFrameStorage *) noexcept OPENTTD_SERVICE_DEFAULT(state_frame_begin);
+	bool (*state_frame_end)(OpenTTDSessionFrame *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(state_frame_end);
 	bool (*real_time)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(real_time);
 	bool (*scan)(OpenTTDSessionFrame *, NewGRFScanCallback *) noexcept OPENTTD_SERVICE_DEFAULT(scan);
 	OpenTTDWorldSetupFrame *(*world_setup_begin)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(world_setup_begin);
 	bool (*world_setup_end)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(world_setup_end);
-	bool (*world_run)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(world_run);
+	OpenTTDWorldFrame *(*world_frame_begin)(OpenTTDSessionFrameStorage *) noexcept OPENTTD_SERVICE_DEFAULT(world_frame_begin);
+	bool (*world_frame_end)(OpenTTDSessionFrame *, OpenTTDWorldFrame *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(world_frame_end);
 	bool (*heightmap_screenshot)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(heightmap_screenshot);
 	bool (*desync_save)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(desync_save);
 	SaveOrLoadResult (*load)(OpenTTDSessionFrame *, OpenTTDSessionLoad *) noexcept OPENTTD_SERVICE_DEFAULT(load);
@@ -127,6 +131,7 @@ struct OpenTTDSessionServices {
 	bool (*scripts_enabled)() noexcept OPENTTD_SERVICE_DEFAULT(scripts_enabled);
 	void (*assert_local_company)() noexcept OPENTTD_SERVICE_DEFAULT(assert_local_company);
 	int32_t (*desync_level)() noexcept OPENTTD_SERVICE_DEFAULT(desync_level);
+	uint32_t (*map_log_y)() noexcept OPENTTD_SERVICE_DEFAULT(map_log_y);
 	bool (*tick_timer)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(tick_timer);
 	const OpenTTDGenerationLoop * (*tile_loop_begin)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(tile_loop_begin);
 	void (*tile_loop_end)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(tile_loop_end);
@@ -156,7 +161,8 @@ struct OpenTTDSessionServices {
 const OpenTTDSessionServices &GetRustSessionServices() noexcept;
 void RustAskUnsafeUnpause() noexcept;
 void RustSaveDesyncGame();
-bool RustRunWorldGeneration(OpenTTDSessionFrame *) noexcept;
+OpenTTDWorldFrame *RustWorldFrameBegin(OpenTTDSessionFrameStorage *) noexcept;
+bool RustWorldFrameEnd(OpenTTDSessionFrame *, OpenTTDWorldFrame *, uint8_t) noexcept;
 OpenTTDTreeTickSettings RustTreeTickSettings() noexcept;
 OpenTTDIndustryTickRecord RustIndustryTickRecord() noexcept;
 OpenTTDVehicleSchedulerTables RustVehicleSchedulerTables(OpenTTDCommandCost *refit = nullptr, OpenTTDCommandCost *temporary = nullptr) noexcept;

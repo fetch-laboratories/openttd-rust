@@ -563,7 +563,10 @@ class InstructionSpeedTests(unittest.TestCase):
                 "volatile int n; void StateGameLoop_LinkGraphPauseControl(){for(int i=0;i<10000;i++)n=n+1;}\n"
                 "void StateGameLoop(){StateGameLoop_LinkGraphPauseControl();}\n"
                 "void _GenerateWorld(){for(int i=0;i<20000;i++)n=n+1;}\n"
-                "int main(){_GenerateWorld(); StateGameLoop();}"
+                "extern \"C\" void openttd_rust_session_state_loop(){StateGameLoop();}\n"
+                "extern \"C\" void rust_generate() asm(\"_ZN15openttd_kernels8genworld8generate17h0000000000000000E\");\n"
+                "void rust_generate(){_GenerateWorld();}\n"
+                "int main(){rust_generate(); openttd_rust_session_state_loop();}"
             )
             subprocess.run(
                 ["g++", "-g", "-O0", str(source), "-o", str(binary)], check=True
@@ -627,6 +630,12 @@ class InstructionSpeedTests(unittest.TestCase):
             self.assertGreater(counts[1], counts[0] * 2)
             command, _ = ir.prepare(scenario, [str(binary)], *context, False)
             baseline = ir.identity(scenario, *context, Path(command[0]))
+            candidate_identity = ir.identity(
+                scenario, *context, Path(command[0]), reference=False
+            )
+            self.assertEqual(baseline["compatible"], candidate_identity["compatible"])
+            self.assertNotEqual(ir.flags(scenario), ir.flags(scenario, reference=False))
+            self.assertEqual(candidate_identity["entries"], ir.flags(scenario, reference=False))
             (root / ".cargo").mkdir()
             for field, value in (("ticks", 2), ("console", ["unpause"])):
                 changed = ir.identity(

@@ -30,6 +30,8 @@ struct OpenTTDSessionFrame {
 	std::optional<PerformanceMeasurer> schedule;
 	void Rethrow() const { if (this->exception) std::rethrow_exception(this->exception); }
 };
+static_assert(sizeof(OpenTTDSessionFrame) <= sizeof(OpenTTDSessionFrameStorage));
+static_assert(alignof(OpenTTDSessionFrame) <= alignof(OpenTTDSessionFrameStorage));
 struct OpenTTDSessionLoad {
 	const std::string &filename;
 	SaveLoadOperation operation;

@@ -19,7 +19,6 @@ using OpenTTDClockPeriod = TimerGameCalendar::TPeriod;
 using OpenTTDEconomyClockPeriod = TimerGameEconomy::TPeriod;
 struct OpenTTDClockServices {
 	const OpenTTDSharedServices *shared;
-	GameMode (*game_mode)() noexcept OPENTTD_SERVICE_DEFAULT(game_mode);
 	uint16_t (*minutes_per_calendar_year)() noexcept OPENTTD_SERVICE_DEFAULT(minutes_per_calendar_year);
 	bool (*using_wallclock_units)(bool) noexcept OPENTTD_SERVICE_DEFAULT(using_wallclock_units);
 	uint32_t (*vehicle_id)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_id);

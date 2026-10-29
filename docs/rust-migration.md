@@ -2383,8 +2383,9 @@ coverage limits. PR #539.
 done/abort callbacks, abort request and the canonical generating bool. It owns setup,
 complete generation orchestration, rough/rocky terrain, warm-up, completion and cleanup.
 Landscape, towns, industries, objects, trees, economy, engines, disasters, storage and
-tile scheduling enter their existing Rust owners directly. The native `_GenerateWorld()`
-frame and its actual `GenerateWorld` call preserve the Callgrind entry.
+tile scheduling enter their existing Rust owners directly. The session owner calls
+generation directly in Rust; instruction profiling selects its Rust entry and the
+original reference body.
 
 Native map/pool allocation, presentation, resource scratch, the CompanyID backup and
 actual callbacks remain. Progress/abortion, script startup/execution, completion callbacks,
@@ -2409,6 +2410,8 @@ Native allocation/decoding, script VMs, networking algorithms, presentation leav
 chrono samples and resource/profiling objects remain in C++. Named stack exception
 frames preserve CompanyID restoration while retaining the original persistent-storage
 partial effects. Calendar non-advancement and a recorded scheduled-console exception
-have distinct outcomes. The native StateGameLoop and _GenerateWorld profiling entries
-remain. External GUI/network scheduling, historical saves and arbitrary script-error
+have distinct outcomes. Instruction profiling selects Rust state-loop and generation
+entries for the candidate and original C++ bodies for the reference. Native resource
+objects use call-local opaque stack capacity with compile-time size/alignment checks.
+External GUI/network scheduling, historical saves and arbitrary script-error
 combinations remain #156 limits. PR #554.

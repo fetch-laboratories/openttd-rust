@@ -10,6 +10,10 @@ import tempfile
 from pathlib import Path
 
 ENTRIES = ("StateGameLoop()", "_GenerateWorld()")
+CANDIDATE_ENTRIES = (
+    "openttd_rust_session_state_loop",
+    "openttd_kernels::genworld::generate",
+)
 
 # Quiet speed pass at 755609b8ea (#275): ratio is the median of
 # four three-pair medians; Ir and compatible identity come from profiles of the
@@ -104,8 +108,9 @@ def record_build(build, source, role, env):
     )
 
 
-def flags(scenario):
-    entries = ENTRIES if scenario["kind"] == "generate" else ENTRIES[:1]
+def flags(scenario, reference=True):
+    entries = ENTRIES if reference else CANDIDATE_ENTRIES
+    entries = entries if scenario["kind"] == "generate" else entries[:1]
     return [
         "--command-line-only=yes",
         "--tool=callgrind",
@@ -136,7 +141,7 @@ def digest(value):
     return hashlib.sha256(value).hexdigest()
 
 
-def identity(scenario, binary, build, folder, env, valgrind):
+def identity(scenario, binary, build, folder, env, valgrind, reference=True):
     """Compatibility excludes candidate code; full measurement identity retains it."""
     from .core import RUNTIME_DIRECTORIES
 
@@ -178,9 +183,15 @@ def identity(scenario, binary, build, folder, env, valgrind):
         [digest(p.read_bytes()) for group in tools for p in group],
     )
     policy = "64x64/serial/witness-off/v1"
+    # Entry names differ because Rust owns the candidate bodies. Normalize that
+    # spelling in compatibility identity so existing quiet-pass anchors and the
+    # unchanged reference cache remain valid; full candidate identity records it.
     settings = settings, platform.machine(), tool, flags(scenario), policy
     compatible = digest([resolved, inputs, settings])
-    return {"compatible": compatible, "executable": executable}
+    result = {"compatible": compatible, "executable": executable}
+    if not reference:
+        result["entries"] = flags(scenario, reference=False)
+    return result
 
 
 def prepare(scenario, command, binary, build, folder, env, reference):
@@ -202,7 +213,7 @@ def prepare(scenario, command, binary, build, folder, env, reference):
             )
         )
     env.pop("OPENTTD_WITNESS", None)
-    measurement = identity(scenario, binary, build, folder, env, valgrind)
+    measurement = identity(scenario, binary, build, folder, env, valgrind, reference)
     key = digest(measurement)
     cache = migration.COMMON_LOCAL / "instruction-cache" / f"{key}.json"
     cached = json.loads(cache.read_text()) if reference and cache.exists() else None
@@ -213,7 +224,7 @@ def prepare(scenario, command, binary, build, folder, env, reference):
             f"--callgrind-out-file={folder / 'callgrind.out'}",
             f"--log-file={folder / 'callgrind.log'}",
         ]
-        command = [str(valgrind), *flags(scenario), *outputs, *command]
+        command = [str(valgrind), *flags(scenario, reference), *outputs, *command]
     return command, dict(identity=measurement, cached=cached, cache=cache)
 
 

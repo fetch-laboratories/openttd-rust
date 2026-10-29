@@ -15,6 +15,11 @@ use crate::raw_field::{read_field, write_field};
 pub struct Frame {
     _opaque: [u8; 0],
 }
+/// Uninterpreted native stack capacity, checked for size/alignment by C++.
+#[repr(C, align(16))]
+pub struct FrameStorage {
+    pub storage: [std::mem::MaybeUninit<u8>; 4096],
+}
 #[repr(C)]
 pub struct Load {
     _opaque: [u8; 0],
@@ -126,12 +131,14 @@ pub struct Services {
     pub startup_company: extern "C" fn(*mut Frame) -> bool,
     pub network_loop: extern "C" fn(*mut Frame) -> bool,
     pub network_reconnect: extern "C" fn(*mut Frame) -> bool,
-    pub state_loop: extern "C" fn(*mut Frame) -> bool,
+    pub state_frame_begin: extern "C" fn(*mut FrameStorage) -> *mut Frame,
+    pub state_frame_end: extern "C" fn(*mut Frame, *mut Frame) -> bool,
     pub real_time: extern "C" fn(*mut Frame) -> bool,
     pub scan: extern "C" fn(*mut Frame, *mut ScanCallback) -> bool,
     pub world_setup_begin: extern "C" fn(*mut Frame) -> *mut crate::genworld::SetupFrame,
     pub world_setup_end: extern "C" fn(*mut Frame) -> bool,
-    pub world_run: extern "C" fn(*mut Frame) -> bool,
+    pub world_frame_begin: extern "C" fn(*mut FrameStorage) -> *mut crate::genworld::Frame,
+    pub world_frame_end: extern "C" fn(*mut Frame, *mut crate::genworld::Frame, u8) -> bool,
     pub heightmap_screenshot: extern "C" fn(*mut Frame) -> bool,
     pub desync_save: extern "C" fn(*mut Frame) -> bool,
     pub load: extern "C" fn(*mut Frame, *mut Load) -> LoadResult,
@@ -149,6 +156,7 @@ pub struct Services {
     pub scripts_enabled: extern "C" fn() -> bool,
     pub assert_local_company: extern "C" fn(),
     pub desync_level: extern "C" fn() -> i32,
+    pub map_log_y: extern "C" fn() -> u32,
     pub tick_timer: extern "C" fn(*mut Frame) -> bool,
     pub tile_loop_begin: extern "C" fn(*mut Frame) -> *const crate::landscape_generation::Loop,
     pub tile_loop_end: extern "C" fn(*mut Frame),
@@ -206,10 +214,10 @@ pub(crate) fn pending() -> SwitchMode {
 pub(crate) fn set_pending(mode: SwitchMode) {
     write_field!(STATE.get(), switch_mode, mode);
 }
-fn pause() -> u8 {
+pub(crate) fn pause() -> u8 {
     read_field!(STATE.get(), pause)
 }
-fn set_pause(value: u8) {
+pub(crate) fn set_pause(value: u8) {
     write_field!(STATE.get(), pause, value);
 }
 
@@ -291,7 +299,7 @@ impl Session<'_> {
         };
         complete((s.world_setup_end)(self.frame))?;
         if ready {
-            complete((s.world_run)(self.frame))?;
+            complete(crate::genworld::generate(s, self.frame))?;
         }
         Ok(())
     }
@@ -584,7 +592,7 @@ impl Session<'_> {
         }
     }
     fn landscaping(&self) {
-        crate::company::openttd_rust_company_update_landscaping_limits(
+        crate::company::update_landscaping_limits(
             unsafe { &*self.s.company },
             &(self.s.landscaping)(),
         );
@@ -605,9 +613,9 @@ impl Session<'_> {
         let call = unsafe { &*(s.tile_loop_begin)(self.frame) };
         let shared = unsafe { &*s.shared };
         unsafe {
-            crate::tile_loop::openttd_rust_run_tile_loop(
+            crate::tile_loop::run(
                 (shared.map_log_x)(),
-                ((shared.map_max_y)() + 1).ilog2(),
+                (s.map_log_y)(),
                 call.settings,
                 call.services,
             );
@@ -619,13 +627,13 @@ impl Session<'_> {
         let tables = (s.vehicle_tables)(self.frame, !calendar);
         unsafe {
             if calendar {
-                crate::vehicle::scheduler::openttd_rust_vehicle_calendar_day(
+                crate::vehicle::scheduler::calendar_day(
                     &raw const tables,
                     mode() == GameMode::NORMAL,
                     usize::from(crate::timer_game_common::calendar_fraction()),
                 );
             } else {
-                crate::vehicle::scheduler::openttd_rust_vehicle_ticks(
+                crate::vehicle::scheduler::ticks(
                     &raw const tables,
                     mode() == GameMode::NORMAL,
                     usize::from(crate::timer_game_common::economy_fraction()),
@@ -642,25 +650,21 @@ impl Session<'_> {
         (s.landscape_begin)(self.frame);
         let road = (s.road_begin)(self.frame);
         unsafe {
-            crate::town::openttd_rust_town_tick_all(s.town, s.shared, road);
+            crate::town::tick_all(s.town, s.shared, road);
         }
         (s.road_end)(self.frame);
         unsafe {
-            crate::trees::openttd_rust_trees_tick((s.tree_tick)(), s.trees, s.shared);
-            crate::station_service::openttd_rust_station_tick(s.station, s.links, s.visits);
+            crate::trees::tick((s.tree_tick)(), s.trees, s.shared);
+            crate::station_service::tick(s.station, s.links, s.visits);
             let world = &*(s.world)();
-            crate::industry::openttd_rust_industry_tick(
-                (s.industry_builder)(),
-                &(s.industry_tick)(),
-                world.industry,
-            );
+            crate::industry::tick((s.industry_builder)(), &(s.industry_tick)(), world.industry);
         }
         (s.landscape_end)(self.frame);
         let mut company = (s.company_tick)();
-        while unsafe { crate::company::openttd_rust_company_on_tick(&*s.company, &mut company) } {
+        while unsafe { crate::company::on_tick(&*s.company, &mut company) } {
             complete((s.post_ai)(self.frame))?;
         }
-        crate::linkgraph_schedule::openttd_rust_schedule_tick(
+        crate::linkgraph_schedule::tick(
             unsafe { &*s.schedule },
             (s.schedule_time)(),
             (s.networking)() && !(s.network_server)(),
@@ -673,7 +677,7 @@ impl Session<'_> {
         let s = self.s;
         if !(s.networking)() || (s.network_server)() {
             unsafe {
-                crate::linkgraph_schedule::openttd_rust_schedule_pause(
+                crate::linkgraph_schedule::pause(
                     &*s.schedule,
                     (s.schedule_time)(),
                     pause() & PauseMode::LINK_GRAPH.bit() != 0,
@@ -712,7 +716,7 @@ impl Session<'_> {
             (s.company_begin)(self.frame);
             self.storage(crate::newgrf_storage::PSM_ENTER_GAMELOOP);
             (s.landscape_begin)(self.frame);
-            crate::animated_tile::openttd_rust_animation_run();
+            crate::animated_tile::run();
             (s.landscape_end)(self.frame);
             let exception = (s.console_exception)(self.frame);
             let advanced = unsafe {
@@ -785,7 +789,7 @@ impl Session<'_> {
             if (s.reconnect_due)() {
                 complete((s.network_reconnect)(self.frame))?;
             }
-            complete((s.state_loop)(self.frame))?;
+            complete(unsafe { openttd_rust_session_state_loop(s, self.frame) })?;
         }
         if pause() == 0 && (s.full_animation)() {
             (s.palette)();
@@ -833,8 +837,12 @@ pub unsafe extern "C" fn openttd_rust_session_switch(
 /// # Safety
 /// Native Backup<CompanyID> restores on frame destruction if a phase fails.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_session_state_loop(s: &Services, frame: *mut Frame) -> bool {
-    (Session { s, frame }).state_loop().is_ok()
+#[inline(never)]
+pub unsafe extern "C" fn openttd_rust_session_state_loop(s: &Services, parent: *mut Frame) -> bool {
+    let mut storage = std::mem::MaybeUninit::<FrameStorage>::uninit();
+    let frame = (s.state_frame_begin)(storage.as_mut_ptr());
+    let result = (Session { s, frame }).state_loop().is_ok();
+    (s.state_frame_end)(parent, frame) && result
 }
 /// # Safety
 /// Native frame is live through loading, network and callback reentry.
@@ -854,6 +862,7 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDSessionDimensions" ["session"] => Dimensions { x, y, };
     "OpenTTDSessionSecondaryColour" ["session"] => SecondaryColour { colour, used, };
+    "OpenTTDSessionFrameStorage" ["session"] => FrameStorage { storage, };
     "OpenTTDSessionState" ["session"] => State { mode, switch_mode, pause, };
     "OpenTTDSessionServices" ["session"] => Services{
         clock,
@@ -944,12 +953,14 @@ crate::abi::layouts! {
         startup_company,
         network_loop,
         network_reconnect,
-        state_loop,
+        state_frame_begin,
+        state_frame_end,
         real_time,
         scan,
         world_setup_begin,
         world_setup_end,
-        world_run,
+        world_frame_begin,
+        world_frame_end,
         heightmap_screenshot,
         desync_save,
         load,
@@ -966,6 +977,7 @@ crate::abi::layouts! {
         scripts_enabled,
         assert_local_company,
         desync_level,
+        map_log_y,
         tick_timer,
         tile_loop_begin,
         tile_loop_end,

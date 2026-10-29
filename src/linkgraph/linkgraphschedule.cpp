@@ -22,6 +22,7 @@
 #include "../misc_cmd.h"
 #ifdef WITH_RUST
 #include "../rust/linkgraph_schedule_ffi.h"
+#include "../rust/command_services.h"
 #include "../rust/services_ffi.h"
 #include "../rust/services_linkgraph.h"
 #endif
@@ -58,8 +59,7 @@ constinit const OpenTTDScheduleServices LinkGraphSchedule::services = {
 		return nullptr;
 	},
 	.shift_job = +[](LinkGraphJob *j, int32_t interval) noexcept { j->ShiftJoinDate(ScheduleDate(interval)); },
-	.post_pause = +[](bool pause) noexcept { Command<CMD_PAUSE>::Post(PauseMode::LinkGraph, pause); },
-	.set_pause = +[]() noexcept { _pause_mode.Set(PauseMode::LinkGraph); },
+	.post_pause = RustPostPause,
 	.begin_measurement = +[](void *storage, bool client) noexcept {
 		if (client) static_cast<std::optional<PerformanceMeasurer> *>(storage)->emplace(PFE_GL_LINKGRAPH);
 		else PerformanceMeasurer::SetInactive(PFE_GL_LINKGRAPH);
