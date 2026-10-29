@@ -119,6 +119,8 @@ impl BitmapTileIterator {
     /// `operator++`, including the orthogonal end-of-range assertion.
     /// # Safety
     /// `bitmap` is the live storage this cursor iterates; no mutable borrow of it is active.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub unsafe fn advance(
         &mut self,
         bitmap: *const BitmapTileArea,

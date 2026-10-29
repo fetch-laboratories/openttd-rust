@@ -8,11 +8,15 @@ disable-model-invocation: true
 
 The user runs root for long autonomous sessions, usually `gpt-6.1-sol` xhigh in
 Codex (Astra before 2026-10-08) and sometimes Claude Opus in Claude Code, and
-runs this review between them in either host. Your
-job is to check that root is still on the path to a game whose simulation runs in Rust, find what it
-cannot see in its own work, and correct the *system*: rules, roadmap order,
-issues and PR comments. Root's team does the implementation. You edit docs,
-issues and PR comments, and you leave code changes to root's PR process.
+runs this review between them in either host. Your job is to hold root to the
+course the system sets, find what it cannot see in its own work, and correct
+the *system*: rules, roadmap order, issues and PR comments. Root's team does
+the implementation. You edit docs, issues and PR comments, and you leave code
+changes to root's PR process.
+
+Navigate (`docs/skills/navigate`) sets that course: it judges the system
+against the project's destination and owns AGENTS.md's goal statement and the
+roadmap's "Phases" section. Steer works within both as navigate left them.
 
 Root carries out the latest steering section's actions within minutes and
 literally, and it parks work rather than question a gate. The rules you write
@@ -65,7 +69,7 @@ Run these together:
 - CI on `rust-migration` (`gh run list --branch rust-migration`). Note PR checks and
   how many runs were cancelled.
 - Open PRs and issues, and the latest review reports on the integrated and pending PRs.
-- `python3 tools/port-metrics.py`, plus the PR-reported metrics and speed ratios.
+- `python3 tools/port-metrics.py --whole-fork`, plus the PR-reported metrics and speed ratios.
   Before quoting a progress figure, confirm it counts original C++ retired,
   not glue removed.
 - `git worktree list` and disk use.
@@ -99,6 +103,9 @@ Watch for the patterns root has repeated before:
   hand-made worktrees for implementation agents, blocked `sleep`, polling
   loops, `timeout N bash -c 'sleep'`, or hand-written environment prefixes.
   Each repeat means a spawn, brief or tool is missing a permanent fix.
+- **Running dry**: each planning round finds smaller items in the same area,
+  or retirement per period falls, while the rest of the goal has no queued
+  work. The finding is the area, not its next item.
 - **Passed over**: an issue with no place in the roadmap, a component excluded
   without an issue, or an exclusion with no condition that brings it back,
   copied forward review after review. Finished work left open counts too.
@@ -203,9 +210,9 @@ When a correction reverses a direction the user gave root, the steering section
 says so in one line: what it reverses, and why.
 
 Commit `AGENTS.md`, the roadmap and any restart-prompt edit (step 5) as one
-docs-only commit pushed straight to `rust-migration`, with a title like
-`Doc: Steer migration toward <corrections> [skip ci]`. Earlier steering commits
-landed the same way. Confirm `origin/rust-migration` has it.
+docs-only commit on `rust-migration`, with a title like
+`Doc: Steer migration toward <corrections> [skip ci]`. The user reviews it from
+your report; push it once it is settled (AGENTS.md, "Standards and commands").
 
 ## 5. Check /start-development
 
@@ -223,8 +230,8 @@ Tell the user, briefly:
 
 - the verdict on root's track;
 - what the audits found, with numbers;
-- what you changed, with issue and commit links, and any user direction it
-  reverses;
+- what you changed, with issue links and the commit hash, and any user
+  direction it reverses;
 - anything only the user can supply, such as a new play save or a policy decision.
 
 If the focus asked you to restart root, launch it once `origin/rust-migration`

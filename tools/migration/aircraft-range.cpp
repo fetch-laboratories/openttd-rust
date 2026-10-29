@@ -85,7 +85,6 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	range_orders->services.vehicle = [](void *v) noexcept { if (v != fixture) std::abort(); return range_orders->vehicle.get(); };
 	range_orders->services.consist = [](void *) noexcept { return &range_orders->consist; };
 	vehicle.orders = []() noexcept -> const OpenTTDOrdersLeaves * { return &range_orders->services; };
-	vehicle.loading = [](OpenTTDVehicle *, bool, const OpenTTDVehicleVisits *) noexcept {};
 	vehicle.visits = []() noexcept -> const OpenTTDVehicleVisits * { return nullptr; };
 	vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept { fixture->messages[0]++; };
 	leaves.destination_too_far = [](OpenTTDAircraftVehicle) noexcept { fixture->messages[1]++; fixture->messages[2]++; };

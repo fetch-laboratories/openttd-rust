@@ -192,7 +192,6 @@ struct OpenTTDVehicleServices {
 	OpenTTDVehicleTickStatus (OPENTTD_RUST_CALL *tick_status)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(tick_status);
 	OpenTTDVehicleDayCost (OPENTTD_RUST_CALL *day_cost)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(day_cost);
 	void (OPENTTD_RUST_CALL *make_dummy)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(make_dummy);
-	void (*loading)(OpenTTDVehicle *, bool, const OpenTTDVehicleVisits *) noexcept OPENTTD_SERVICE_DEFAULT(loading);
 	void (OPENTTD_RUST_CALL *check_orders_only)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(check_orders_only);
 	void (OPENTTD_RUST_CALL *write_coordinates)(OpenTTDVehicle *, int32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_coordinates);
 	OpenTTDVehicleAltitudeInputs (OPENTTD_RUST_CALL *altitude_inputs)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(altitude_inputs);
