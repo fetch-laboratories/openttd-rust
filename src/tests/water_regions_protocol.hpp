@@ -18,7 +18,13 @@
 namespace WaterProbe {
 inline std::array<bool, 32 * 32> water;
 inline uint32_t tracks_calls, follow_calls;
-inline uint8_t WaterType(uint32_t tile) noexcept { ++tracks_calls; return water[tile] ? 6 : 0; }
+inline uint8_t WaterType(uint32_t tile) noexcept
+{
+	++tracks_calls;
+	/* The real follower also queries the tile just beyond this fixture's map. */
+	if (tile >= water.size()) return MP_VOID;
+	return water[tile] ? MP_WATER : MP_CLEAR;
+}
 inline uint32_t OPENTTD_RUST_CALL Aqueduct(uint32_t) noexcept { return UINT32_MAX; }
 inline void OPENTTD_RUST_CALL WaterProbeDebug(uint8_t, int32_t, int32_t) noexcept {}
 
