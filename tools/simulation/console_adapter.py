@@ -45,7 +45,10 @@ def console_adapter(
         support = migration.rust_archive(
             build, target_dir=build / "cargo-native-test-support"
         )
-        link_args = [str(support) if arg == str(archive) else arg for arg in link_args]
+        archive_args = [arg for arg in link_args if (build / arg).resolve() == archive]
+        if len(archive_args) != 1:
+            raise RuntimeError("expected one production Rust archive in fixture link")
+        link_args[link_args.index(archive_args[0])] = str(support)
     link_args += [
         str(folder / f"{kind}.o"),
         "-Wl,--wrap=_Z22IConsoleStdLibRegisterv",
