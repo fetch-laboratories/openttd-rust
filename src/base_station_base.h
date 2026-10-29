@@ -206,6 +206,7 @@ struct BaseStation : StationPool::PoolItem<&_station_pool> {
 		return 0;
 	}
 
+#ifndef WITH_RUST
 private:
 	bool SetRoadStopTileData(TileIndex tile, uint8_t data, bool animation);
 
@@ -213,6 +214,9 @@ public:
 	inline void SetRoadStopRandomBits(TileIndex tile, uint8_t random_bits) { this->SetRoadStopTileData(tile, random_bits, false); }
 	inline bool SetRoadStopAnimationFrame(TileIndex tile, uint8_t frame) { return this->SetRoadStopTileData(tile, frame, true); }
 	void RemoveRoadStopTileData(TileIndex tile);
+#else
+public:
+#endif
 
 	static void PostDestructor(size_t index);
 

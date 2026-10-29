@@ -353,7 +353,11 @@ static void AnimationBindingsProbe()
 	Backup<std::vector<SpecMapping<RoadStopSpec>>> road_specs(rs->roadstop_speclist);
 	Backup<std::vector<RoadStopTileData>> road_data(rs->custom_roadstop_tile_data);
 	const auto road_index = GetCustomRoadStopSpecIndex(tiles[4]); rs->roadstop_speclist.resize(2); rs->roadstop_speclist[1].spec = &road; SetCustomRoadStopSpecIndex(tiles[4], 1);
-	AnimationBindingProbe("roadstop", tiles[4], &road, RoadStopCallbackMask::AnimationSpeed, RoadStopCallbackMask::AnimationNextFrame, AnimateRoadStopTile, [rs, t = tiles[4]](int value) { if (value >= 0) rs->SetRoadStopAnimationFrame(t, value); return rs->GetRoadStopAnimationFrame(t); }, [&road](bool bits) { road.flags.Set(RoadStopSpecFlag::Cb141RandomBits, bits); });
+	AnimationBindingProbe("roadstop", tiles[4], &road, RoadStopCallbackMask::AnimationSpeed, RoadStopCallbackMask::AnimationNextFrame, AnimateRoadStopTile, [rs, t = tiles[4]](int value) { if (value >= 0) {
+			auto it = std::ranges::find(rs->custom_roadstop_tile_data, t, &RoadStopTileData::tile);
+			if (it == rs->custom_roadstop_tile_data.end()) rs->custom_roadstop_tile_data.push_back({t, 0, static_cast<uint8_t>(value)});
+			else it->animation_frame = value;
+		} return rs->GetRoadStopAnimationFrame(t); }, [&road](bool bits) { road.flags.Set(RoadStopSpecFlag::Cb141RandomBits, bits); });
 	const auto zero_queue = AnimationQueue(); const auto zero_state = GetAnimatedTileState(tiles[4]);
 	rs->custom_roadstop_tile_data.clear();
 	fmt::print(stderr, "OBJECT animation-road-zero {}", rs->GetRoadStopAnimationFrame(tiles[4]));

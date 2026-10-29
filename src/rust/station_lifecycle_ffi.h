@@ -72,8 +72,6 @@ const OpenTTDStationLifecycleServices &GetRustStationLifecycleServices() noexcep
 inline const OpenTTDStationLifecycleServices *RustStationLifecycleServices() noexcept { return &GetRustStationLifecycleServices(); }
 extern "C" {
 void openttd_rust_station_destruct(const OpenTTDStationLifecycleServices *, BaseStation *);
-bool openttd_rust_station_stop_data(const OpenTTDStationLifecycleServices *, BaseStation *, uint32_t, uint8_t, bool);
-void openttd_rust_station_remove_stop_data(const OpenTTDStationLifecycleServices *, BaseStation *, uint32_t);
 void openttd_rust_station_tile_loop(const OpenTTDStationLifecycleServices *, uint32_t, OpenTTDGroundCall *);
 int64_t openttd_rust_station_airport_maintenance(const OpenTTDStationLifecycleServices *, uint8_t);
 }

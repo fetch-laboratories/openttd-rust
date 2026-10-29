@@ -1,6 +1,9 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file station-lifecycle-console.hpp Station naming, waypoint ground and destruction fixtures. */
 #include "tree_map.h"
+#ifdef WITH_RUST
+#include "rust/ground_services.h"
+#endif
 #include "linkgraph/linkgraphschedule.h"
 
 static void Station562Rng(const char *phase)
@@ -61,7 +64,7 @@ static void Station562Names(TileIndex origin, DoCommandFlags exec)
 	StationNeed(Industry::CanAllocateItem(), __LINE__);
 	Industry *rig = new Industry(); rig->location = TileArea(at(24, 24), 1, 1); rig->town = ClosestTownFromTile(at(24, 24), UINT_MAX); rig->type = 5;
 	MakeIndustry(rig->location.tile, rig->index, 0, 0, WaterClass::Sea); BuildOilRig(rig->location.tile);
-	StationNeed(rig->neutral_station != nullptr, __LINE__); rig->neutral_station->name = "Owner562 oilrig";
+	StationNeed(rig->neutral_station != nullptr && rig->neutral_station->string_id == STR_SV_STNAME_OILFIELD && rig->neutral_station->indtype == IT_INVALID, __LINE__); rig->neutral_station->name = "Owner562 oilrig";
 	fmt::print(stderr, "STCMD owner562-name oilrig {} {} {}\n", rig->neutral_station->index.base(), rig->neutral_station->string_id, rig->neutral_station->indtype);
 	/* Exhaust every default suffix using real station records, including forest aliasing. */
 	for (Town *town : Town::Iterate()) for (StringID name = STR_SV_STNAME; name < STR_SV_STNAME_FALLBACK; ++name) {
@@ -88,11 +91,16 @@ static void Station562Waypoints(TileIndex tile, DoCommandFlags exec, bool arctic
 	const Town *town = ClosestTownFromTile(tile, UINT_MAX);
 	Backup<std::array<uint32_t, NUM_HOUSE_ZONES>> radii(const_cast<Town *>(town)->cache.squared_town_zone_radius);
 	const_cast<Town *>(town)->cache.squared_town_zone_radius.fill(0);
-	for (int phase = 0; phase < 4; ++phase) {
+	for (int phase = 0; phase < 6; ++phase) {
 		if (phase == 2) { _settings_game.game_creation.snow_line_height = 2; SetTropicZone(tile, TROPICZONE_NORMAL); }
-		_tile_type_station_procs.tile_loop_proc(tile);
+		if (phase == 4) const_cast<Town *>(town)->cache.squared_town_zone_radius.fill(UINT32_MAX);
+#ifdef WITH_RUST
+		OpenTTDGroundCall call; openttd_rust_station_tile_loop(&GetRustStationLifecycleServices(), tile.base(), &call);
+#else
+		TileLoop_Station(tile);
+#endif
 		StationNeed(IsRoadWaypointOnSnowOrDesert(tile) == (!arctic || phase < 2), __LINE__);
-		StationNeed(GetRoadWaypointRoadside(tile) == (phase == 0 ? Roadside::Barren : Roadside::Grass), __LINE__);
+		StationNeed(GetRoadWaypointRoadside(tile) == (phase == 0 || phase == 4 ? Roadside::Barren : phase == 5 ? Roadside::Paved : Roadside::Grass), __LINE__);
 		fmt::print(stderr, "STCMD owner562-ground {} {} {} {}\n", arctic, phase, IsRoadWaypointOnSnowOrDesert(tile), to_underlying(GetRoadWaypointRoadside(tile)));
 	}
 	radii.Restore(); Station562Rng("ground");
@@ -103,6 +111,7 @@ static void Station562Delete(TileIndex origin, bool reload, bool stage)
 	RoadVehicle *vehicle = nullptr;
 	if (!reload) {
 		victim = Station562New(origin, "Owner562 victim"); survivor = Station562New(origin + TileDiffXY(4, 0), "Owner562 survivor");
+		victim->UpdateVirtCoord(); survivor->UpdateVirtCoord();
 		for (RoadVehicle *v : RoadVehicle::Iterate()) if (v->IsPrimaryVehicle() && v->cargo_type == 0 && !v->IsInDepot()) { vehicle = v; break; }
 		StationNeed(vehicle != nullptr && vehicle->cargo_payment == nullptr && LinkGraph::CanAllocateItem(2) && CargoPacket::CanAllocateItem(2), __LINE__);
 		vehicle->current_order.MakeLoading(false); vehicle->current_order.SetLoadType(OLFB_NO_LOAD); vehicle->current_order.SetUnloadType(OUFB_NO_UNLOAD);

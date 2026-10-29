@@ -584,7 +584,9 @@ static void RoadResolverRandom(BaseStation *st, TileIndex tile, bool waypoint)
 		lower->triggers = mask & 1 ? 1 << to_underlying(trigger) : 0; upper->triggers = mask & 2 ? 1 << to_underlying(trigger) : 0;
 		publication->default_result.group = mask == 1 ? lower : upper;
 		spec->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT_NA, publication);
-		st->waiting_random_triggers = {}; st->random_bits = 0xA55A; st->SetRoadStopRandomBits(tile, 0x69);
+		st->waiting_random_triggers = {}; st->random_bits = 0xA55A;
+		StationNeed(std::ranges::any_of(st->custom_roadstop_tile_data, [tile](const auto &data) { return data.tile == tile; }), __LINE__);
+		for (auto &data : st->custom_roadstop_tile_data) if (data.tile == tile) data.random_bits = 0x69;
 		RoadStopUpdateCachedTriggers(st);
 		RoadStopResolverObject object(spec, st, tile, INVALID_ROADTYPE, GetStationType(tile), GetStationGfx(tile), CBID_RANDOM_TRIGGER); object.SetWaitingRandomTriggers(StationRandomTriggers(1 << to_underlying(trigger))); object.ResolveRerandomisation();
 		uint32_t expected_mask = (mask & 1 ? 8 : 0) | (mask & 2 ? 1 << 18 : 0);

@@ -103,7 +103,6 @@
 #include "rust/vehicle_visits_ffi.h"
 #include "rust/services_linkgraph.h"
 #include "rust/station_lifecycle_ffi.h"
-#include "rust/ground_services.h"
 #endif
 
 #ifdef WITH_RUST
@@ -4166,13 +4165,7 @@ static TrackStatus GetTileTrackStatus_Station(TileIndex tile, TransportType mode
 #endif
 
 
-#ifdef WITH_RUST
-static void TileLoop_Station(uint32_t tile) noexcept
-{
-	OpenTTDGroundCall call;
-	openttd_rust_station_tile_loop(&GetRustStationLifecycleServices(), tile, &call);
-}
-#else
+#ifndef WITH_RUST
 static void TileLoop_Station(TileIndex tile)
 {
 	auto *st = BaseStation::GetByTile(tile);
@@ -5961,7 +5954,11 @@ extern const TileTypeProcs _tile_type_station_procs = {
 #ifndef WITH_RUST
 	AnimateTile_Station,        // animate_tile_proc
 #endif
+#ifdef WITH_RUST
+	nullptr, // Rust tile scheduler calls the station owner directly.
+#else
 	TileLoop_Station,           // tile_loop_proc
+#endif
 #ifdef WITH_RUST
 	nullptr,                 // Rust ownership dispatcher calls the owner directly.
 #else

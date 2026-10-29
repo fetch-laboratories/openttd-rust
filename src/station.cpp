@@ -193,11 +193,9 @@ void BaseStation::PostDestructor(size_t)
 	InvalidateWindowData(WC_SELECT_STATION, 0, 0);
 }
 
+#ifndef WITH_RUST
 bool BaseStation::SetRoadStopTileData(TileIndex tile, uint8_t data, bool animation)
 {
-#ifdef WITH_RUST
-	return openttd_rust_station_stop_data(&GetRustStationLifecycleServices(), this, tile.base(), data, animation);
-#else
 	for (RoadStopTileData &tile_data : this->custom_roadstop_tile_data) {
 		if (tile_data.tile == tile) {
 			uint8_t &v = animation ? tile_data.animation_frame : tile_data.random_bits;
@@ -212,14 +210,10 @@ bool BaseStation::SetRoadStopTileData(TileIndex tile, uint8_t data, bool animati
 	tile_data.random_bits = animation ? 0 : data;
 	this->custom_roadstop_tile_data.push_back(tile_data);
 	return data != 0;
-#endif
 }
 
 void BaseStation::RemoveRoadStopTileData(TileIndex tile)
 {
-#ifdef WITH_RUST
-	openttd_rust_station_remove_stop_data(&GetRustStationLifecycleServices(), this, tile.base());
-#else
 	for (RoadStopTileData &tile_data : this->custom_roadstop_tile_data) {
 		if (tile_data.tile == tile) {
 			tile_data = this->custom_roadstop_tile_data.back();
@@ -227,8 +221,8 @@ void BaseStation::RemoveRoadStopTileData(TileIndex tile)
 			return;
 		}
 	}
-#endif
 }
+#endif
 
 /**
  * Get the primary road stop (the first road stop) that the given vehicle can load/unload.

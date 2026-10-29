@@ -378,25 +378,6 @@ pub(crate) fn remove_stop_data(st: *mut BaseStation, tile: u32, s: &Services) {
         }
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_stop_data(
-    s: &Services,
-    st: *mut BaseStation,
-    tile: u32,
-    data: u8,
-    animation: bool,
-) -> bool {
-    set_stop_data(st, tile, data, animation, s)
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_remove_stop_data(
-    s: &Services,
-    st: *mut BaseStation,
-    tile: u32,
-) {
-    remove_stop_data(st, tile, s);
-}
-
 /// `TileLoop_Station`. The map descriptor remains valid through the original tile
 /// callbacks under the game-loop interval in world-state.md.
 pub(crate) unsafe fn tile_loop(tile: u32, call: *mut crate::ground::Call, s: &Services) {
