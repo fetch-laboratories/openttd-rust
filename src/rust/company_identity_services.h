@@ -33,7 +33,6 @@ void Identity_admin_update(uint8_t id) noexcept;
 inline void Identity_reset_colourmap() noexcept { ResetVehicleColourMap(); }
 inline void Identity_object_colours(Company *c) noexcept { UpdateObjectColours(c); }
 inline bool Identity_cargo_freight(uint8_t cargo) noexcept { return RustCargoSpec(cargo)->is_freight; }
-inline bool Identity_cargo_passengers(uint8_t cargo) noexcept { return IsCargoInClass(cargo, CargoClass::Passengers); }
 inline uint8_t Face_offset(const FaceVar *v) noexcept { return v->offset; }
 inline uint8_t Face_length(const FaceVar *v) noexcept { return v->length; }
 inline uint8_t Face_valid_values(const FaceVar *v) noexcept { return v->valid_values; }
