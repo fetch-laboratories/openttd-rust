@@ -15,10 +15,12 @@ import argparse
 import json
 import re
 import subprocess
+from collections.abc import Iterator, Sequence
 from functools import lru_cache
 from pathlib import Path
+from typing import NotRequired, TypedDict
 
-from code_lines import code_lines, without_comments
+from code_lines import RUST_EXPORT, code_lines, without_comments
 
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = json.loads((ROOT / "migration/baseline.json").read_text())["commit"]
@@ -42,15 +44,55 @@ POSITIVE = re.compile(r"^\s*(?:defined\s*\(?\s*WITH_RUST\s*\)?|WITH_RUST)\s*$")
 NEGATIVE = re.compile(r"^\s*!\s*defined\s*\(?\s*WITH_RUST\s*\)?\s*$")
 
 
-def git(*args):
+class AreaMetrics(TypedDict):
+    original: int
+    retired: int
+    glue: int
+    remaining: NotRequired[int]
+    compiled: NotRequired[int]
+
+
+class BoundaryMetrics(TypedDict):
+    exports: int
+    callback_slots: int
+
+
+class Metrics(TypedDict, total=False):
+    rust: int
+    tooling: int
+    glue: int
+    retired: int
+    simulation: int
+    net_glue: int
+    glue_removed: int
+    original_total: int
+    whole_fork_retired: int
+    whole_fork_percent: float
+    simulation_retired: int
+    simulation_total: int
+    simulation_percent: float
+    compiled_cpp: int
+    compiled_percent: float
+    areas: dict[str, AreaMetrics]
+    totals: AreaMetrics
+    boundary: BoundaryMetrics
+    all_lines: "Metrics"
+
+
+Hunk = tuple[int, int, int, int]
+Guard = tuple[str | None, bool]
+
+
+def git(*args: str) -> str:
     return subprocess.check_output(
         ["git", *args], cwd=ROOT, text=True, errors="replace"
     )
 
 
-def classify(text):
+def classify(text: str) -> list[str]:
     """Tag every line 'cpp' (only without WITH_RUST), 'rust' or 'common'."""
-    stack, tags = [], []
+    stack: list[Guard] = []
+    tags: list[str] = []
     # Split only on "\n", as git numbers lines, so tags line up with diff hunks.
     lines = text.split("\n")
     if lines[-1] == "":
@@ -76,7 +118,7 @@ def classify(text):
                 frame = "cpp"
             else:
                 frame = None
-            stack.append([frame, False])
+            stack.append((frame, False))
             tags.append("rust" if frame else state(stack[:-1]))
             continue
         if kind in ("elif", "else") and stack:
@@ -84,7 +126,7 @@ def classify(text):
             tags.append("rust" if frame else state(stack[:-1]))
             if frame and not switched:
                 # Every later branch of a WITH_RUST conditional is the other side.
-                stack[-1] = ["cpp" if frame == "rust" else "rust", True]
+                stack[-1] = ("cpp" if frame == "rust" else "rust", True)
             continue
         if kind == "endif" and stack:
             frame, _ = stack.pop()
@@ -94,7 +136,7 @@ def classify(text):
     return tags
 
 
-def state(stack):
+def state(stack: list[Guard]) -> str:
     frames = [frame for frame, _ in stack]
     if "cpp" in frames:
         return "cpp"
@@ -102,7 +144,7 @@ def state(stack):
 
 
 @lru_cache(maxsize=512)
-def show(rev, path):
+def show(rev: str, path: str) -> str:
     result = subprocess.run(
         ["git", "show", f"{rev}:{path}"],
         cwd=ROOT,
@@ -113,26 +155,29 @@ def show(rev, path):
     return result.stdout if result.returncode == 0 else ""
 
 
-def hunks(base, head, old, new):
+def hunks(base: str, head: str, old: str, new: str) -> Iterator[Hunk]:
     """Yield (old start, old count, new start, new count) of a zero-context diff."""
     for line in git(
         "diff", "-U0", "-M", base, head, "--", *dict.fromkeys((old, new))
     ).splitlines():
         hunk = re.match(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@", line)
         if hunk:
-            yield tuple(
+            a, b, c, d = (
                 int(value) if value is not None else 1 for value in hunk.groups()
             )
+            yield a, b, c, d
 
 
-def added_lines(changes):
+def added_lines(changes: Sequence[Hunk]) -> list[int]:
     """Return 1-based new-side line numbers added by the hunks."""
     return [n for _, _, start, count in changes for n in range(start, start + count)]
 
 
-def surviving(changes, length):
+def surviving(changes: Sequence[Hunk], length: int) -> dict[int, int]:
     """Map each unchanged old-side line number to its new-side line number."""
-    removed, shift, mapping = set(), [], {}
+    removed: set[int] = set()
+    shift: list[tuple[int, int]] = []
+    mapping: dict[int, int] = {}
     for old_start, old_count, _new_start, new_count in changes:
         removed.update(range(old_start, old_start + old_count))
         shift.append(
@@ -147,7 +192,7 @@ def surviving(changes, length):
     return mapping
 
 
-def changes(base, head):
+def changes(base: str, head: str) -> Iterator[tuple[str, str, str]]:
     """Yield (status, old path, new path) with renames paired, NUL-safe."""
     fields = git("diff", "--name-status", "-z", "-M", base, head).split("\0")
     i = 0
@@ -161,7 +206,7 @@ def changes(base, head):
             i += 2
 
 
-def simulation_source(path):
+def simulation_source(path: str) -> bool:
     """The single source inventory for the whole-fork simulation denominator."""
     name = Path(path).stem
     return "gui" not in name.split("_") and (
@@ -205,7 +250,7 @@ AREAS = (
 )
 
 
-def area(path):
+def area(path: str) -> str:
     """Disjoint source inventory; directory-specific areas precede owner families."""
     name = Path(path).stem
     for prefix, label in (
@@ -219,11 +264,19 @@ def area(path):
     ):
         if path.startswith(prefix):
             return label
-    if "gui" in name.split("_"):
+    if (
+        "gui" in name.split("_")
+        or path.startswith("src/widgets/")
+        or name.startswith(("widget", "window", "querystring"))
+    ):
         return "GUI"
     if path.startswith(
         tuple("src/" + p + "/" for p in ("os", "video", "music", "sound", "driver"))
     ):
+        return "Platform"
+    if path.startswith(("src/ai/", "src/game/")):
+        return "Script API"
+    if name in {"driver", "crashlog"}:
         return "Platform"
     if simulation_source(path):
         return (
@@ -234,40 +287,62 @@ def area(path):
     if name.startswith("newgrf"):
         return "NewGRF"
     if name.startswith(
-        ("gfx", "viewport", "sprite", "palette", "blitter", "zoom")
+        (
+            "gfx",
+            "viewport",
+            "sprite",
+            "palette",
+            "blitter",
+            "zoom",
+            "fontcache",
+            "screenshot",
+        )
     ) or path.startswith(("src/blitter/", "src/fontcache/")):
         return "Graphics and viewport"
     return "Support"
 
 
-def boundary(head):
+def boundary(head: str) -> BoundaryMetrics:
     exports = slots = 0
     for path in git("ls-tree", "-r", "--name-only", head, "rust/").splitlines():
         if not path.endswith(".rs"):
             continue
-        text = without_comments(show(head, path), path)
-        exports += len(
-            re.findall(
-                r"#\[(?:unsafe\()?no_mangle\)?\]\s*pub\s+(?:unsafe\s+)?extern \"C\" fn openttd_rust_\w+",
-                text,
+        text = without_comments(show(head, path), path, strings=True)
+        exports += len(RUST_EXPORT.findall(text))
+        # Function-pointer fields in boundary records, including private fields,
+        # nested services and Option callbacks; function parameters don't count.
+        for body in re.findall(r"\bstruct\s+\w+\s*\{([^{}]*)\}", text, re.S):
+            slots += len(
+                re.findall(
+                    r"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?\w+\s*:\s*"
+                    r'(?:Option\s*<\s*)?(?:unsafe\s+)?extern\s+"C"\s+fn\s*\(',
+                    body,
+                )
             )
-        )
-        # All function-pointer fields in repr(C) boundary records, including nested
-        # service tables and Option callbacks; local function variables do not count.
-        slots += len(
-            re.findall(
-                r"pub\s+\w+\s*:\s*(?:Option\s*<\s*)?(?:unsafe\s+)?extern \"C\" fn\s*\(",
-                text,
-            )
-        )
     return dict(exports=exports, callback_slots=slots)
 
 
-def source_metrics(base, head="HEAD", glue_lines=None, all_lines=False, areas=None):
+def source_metrics(
+    base: str,
+    head: str = "HEAD",
+    glue_lines: dict[str, set[int]] | None = None,
+    all_lines: bool = False,
+    areas: dict[str, AreaMetrics] | None = None,
+) -> Metrics:
     """Raw diff counts; optionally collect compiled added-line identities."""
-    result = {"rust": 0, "tooling": 0, "glue": 0, "retired": 0, "simulation": 0}
+    result: Metrics = {
+        "rust": 0,
+        "tooling": 0,
+        "glue": 0,
+        "retired": 0,
+        "simulation": 0,
+    }
     sources = (".cpp", ".h", ".hpp", ".c", ".cc", ".mm")
     for status, old, new in changes(base, head):
+        if not new.startswith(("rust/", "tools/")) and not (
+            (old.startswith("src/") or new.startswith("src/")) and new.endswith(sources)
+        ):
+            continue
         before, after = (
             ("" if status == "A" else show(base, old)),
             ("" if status == "D" else show(head, new)),
@@ -321,11 +396,19 @@ def source_metrics(base, head="HEAD", glue_lines=None, all_lines=False, areas=No
     return result
 
 
-def metrics(base, head="HEAD", whole_fork=False, all_lines=False):
+def metrics(
+    base: str,
+    head: str = "HEAD",
+    whole_fork: bool = False,
+    all_lines: bool = False,
+) -> Metrics:
     result = source_metrics(base, head, all_lines=all_lines)
-    before_glue, after_glue = {}, {}
+    before_glue: dict[str, set[int]] = {}
+    after_glue: dict[str, set[int]] = {}
     before = source_metrics(BASELINE, base, before_glue, all_lines=all_lines)
-    areas = {name: dict(original=0, retired=0, glue=0) for name in AREAS}
+    areas: dict[str, AreaMetrics] = {
+        name: dict(original=0, retired=0, glue=0) for name in AREAS
+    }
     after = source_metrics(BASELINE, head, after_glue, all_lines=all_lines, areas=areas)
     result["retired"] = after["retired"] - before["retired"]
     result["net_glue"] = after["glue"] - before["glue"]
@@ -365,6 +448,7 @@ def metrics(base, head="HEAD", whole_fork=False, all_lines=False):
         compiled = sum(row["compiled"] for row in areas.values())
         result.update(
             original_total=total,
+            whole_fork_retired=after["retired"],
             whole_fork_percent=100 * after["retired"] / total if total else 0,
             simulation_retired=after["simulation"],
             simulation_total=simulation_total,
@@ -374,12 +458,19 @@ def metrics(base, head="HEAD", whole_fork=False, all_lines=False):
             compiled_cpp=compiled,
             compiled_percent=100 * compiled / total if total else 0,
             areas=areas,
+            totals=dict(
+                original=total,
+                retired=after["retired"],
+                remaining=total - after["retired"],
+                glue=after["glue"],
+                compiled=compiled,
+            ),
             boundary=boundary(head),
         )
     return result
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument(
         "--target",
@@ -402,9 +493,8 @@ def main():
     if args.json:
         print(json.dumps(dict(result, base=base)))
     else:
-        print("Code lines (Pygments 2.19.2):")
         print(
-            f"Rust added: {result['rust']} | tooling added: {result['tooling']} | "
+            f"Code lines (Pygments 2.19.2): Rust added: {result['rust']} | tooling added: {result['tooling']} | "
             f"C++ glue added: {result['glue']} | original C++ retired: {result['retired']} | "
             f"fork glue removed: {result['glue_removed']} | net glue: {result['net_glue']}"
         )
@@ -426,13 +516,13 @@ def main():
         if args.whole_fork:
             for label, data in (("Code", result), ("All lines", legacy)):
                 print(
-                    f"{label}: whole-fork retired {data['retired']} / {data['original_total']} ({data['whole_fork_percent']:.2f}%); "
+                    f"{label}: whole-fork retired {data['whole_fork_retired']} / {data['original_total']} ({data['whole_fork_percent']:.2f}%); "
                     f"simulation retired {data['simulation_retired']} / {data['simulation_total']} ({data['simulation_percent']:.2f}%)"
                 )
             print(
                 "Area | original | retired | remaining | glue | compiled C++ (code lines)"
             )
-            for name, row in result["areas"].items():
+            for name, row in (*result["areas"].items(), ("TOTAL", result["totals"])):
                 print(
                     name
                     + " | "

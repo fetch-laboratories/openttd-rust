@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import TypedDict
 
 ENTRIES = ("StateGameLoop()", "_GenerateWorld()")
 
@@ -43,22 +44,40 @@ SPEED_ANCHORS = {
 SPEED_BUDGETS = {name: sum(ratios) / len(ratios) for name, ratios, _, _ in SPEED_PASS}
 
 
-def speed_budget(name, ratio, integrated=None, anchor_ratio=None):
+class SpeedBudget(TypedDict):
+    record: float
+    quiet_pass_mean: float
+    previous_record: float
+    change_percent: float
+    ceiling: float
+    band: float
+    within_ceiling: bool
+    near_ceiling: bool
+
+
+def speed_budget(
+    name: str,
+    ratio: float | None,
+    integrated: float | None = None,
+    anchor_ratio: float | None = None,
+) -> SpeedBudget | None:
     """Report the speed record and ceiling without making timings a CI failure."""
     mean = SPEED_BUDGETS.get(name, anchor_ratio)
     if mean is None or ratio is None:
         return None
-    anchor = anchor_ratio or SPEED_ANCHORS.get(name, {}).get("anchor", {}).get(
-        "ratio", mean
+    record = mean if anchor_ratio is None else mean * (ratio / anchor_ratio)
+    previous = (
+        mean
+        if integrated is None or anchor_ratio is None
+        else mean * (integrated / anchor_ratio)
     )
-    record = mean * (ratio / anchor)
-    previous = mean if integrated is None else mean * (integrated / anchor)
     ceiling = 1.6 if name.startswith("play-") else 1.3
     return {
         "record": record,
         "quiet_pass_mean": mean,
         "previous_record": previous,
-        "change_percent": (record / previous - 1) * 100,
+        "change_percent": (ratio / (mean if integrated is None else integrated) - 1)
+        * 100,
         "ceiling": ceiling,
         "band": 0.95 * ceiling,
         "within_ceiling": record <= ceiling,

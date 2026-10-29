@@ -27,7 +27,10 @@ def export(name: str) -> str:
 class OrphanTests(unittest.TestCase):
     def test_declarations_are_not_users_and_bindings_are(self) -> None:
         files = {
-            "rust/lib.rs": export("call") + export("table") + export("orphan"),
+            "rust/lib.rs": export("call")
+            + export("table")
+            + export("orphan")
+            + 'const EXAMPLE: &str = r#"#[no_mangle] pub extern "C" fn openttd_rust_fake() {}"#;',
             "src/rust/ffi.h": 'extern "C" void openttd_rust_call();\n'
             "const Thing *openttd_rust_table(\n int, void (*callback)());\n"
             "void openttd_rust_orphan();\n",
@@ -50,6 +53,23 @@ class OrphanTests(unittest.TestCase):
                 "no declaration | openttd_rust_missing",
             },
         )
+
+    def test_visibility_and_intervening_attributes(self) -> None:
+        for visibility in ("", "pub ", "pub(crate) "):
+            for attribute in ("", "#[allow(unsafe_code)]\n"):
+                source = (
+                    "#[unsafe(no_mangle)]\n"
+                    + attribute
+                    + visibility
+                    + 'unsafe extern "C" fn openttd_rust_test() {}'
+                )
+                self.assertEqual(
+                    ORPHANS.violations({"rust/lib.rs": source}),
+                    {
+                        "no declaration | openttd_rust_test",
+                        "no production user | openttd_rust_test",
+                    },
+                )
 
     def test_cli_ratchet_and_stale_entries(self) -> None:
         with (

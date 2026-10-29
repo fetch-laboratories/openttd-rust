@@ -411,19 +411,32 @@ class SimulationSpeedTests(unittest.TestCase):
             with self.subTest(name=name), patch.dict(SPEED_BUDGETS, {name: 1.25}):
                 report = speed_budget(name, 1.4375)
                 self.assertEqual(report["quiet_pass_mean"], 1.25)
-                self.assertEqual(report["record"], 1.4375)
+                self.assertEqual(report["record"], 1.25)
                 self.assertAlmostEqual(report["change_percent"], 15.0)
                 self.assertEqual(report["ceiling"], ceiling)
-                self.assertTrue(speed_budget(name, ceiling)["within_ceiling"])
-                self.assertFalse(
-                    speed_budget(name, nextafter(ceiling, inf))["within_ceiling"]
+                self.assertTrue(
+                    speed_budget(name, ceiling, anchor_ratio=1.25)["within_ceiling"]
                 )
-                self.assertTrue(speed_budget(name, 0.95 * ceiling)["near_ceiling"])
                 self.assertFalse(
-                    speed_budget(name, nextafter(0.95 * ceiling, 0))["near_ceiling"]
+                    speed_budget(name, nextafter(ceiling, inf), anchor_ratio=1.25)[
+                        "within_ceiling"
+                    ]
+                )
+                self.assertTrue(
+                    speed_budget(name, 0.95 * ceiling, anchor_ratio=1.25)[
+                        "near_ceiling"
+                    ]
+                )
+                self.assertFalse(
+                    speed_budget(name, nextafter(0.95 * ceiling, 0), anchor_ratio=1.25)[
+                        "near_ceiling"
+                    ]
                 )
                 self.assertLess(speed_budget(name, 0.9)["change_percent"], 0)
                 self.assertIsNone(speed_budget(name, None))
+                self.assertTrue(
+                    speed_budget(name, 2.0)["within_ceiling"]
+                )  # A single wall ratio cannot breach the record.
         self.assertIsNone(speed_budget("unrecorded", 1.0))
 
     def test_three_pass_record_drives_decisions(self):
@@ -993,7 +1006,17 @@ class SpeedPassTests(unittest.TestCase):
 
             for group, ratios in enumerate(groups):
                 write(group, ratios)
-            with contextlib.redirect_stdout(io.StringIO()) as printed:
+            with (
+                contextlib.redirect_stdout(io.StringIO()) as printed,
+                patch.object(
+                    ir,
+                    "SPEED_PASS",
+                    (
+                        ("play-a", (0.8, 0.9, 1.0), 1, "old"),
+                        ("generate-b", (0.1, 0.2, 0.3), 1, "old"),
+                    ),
+                ),
+            ):
                 speed.summarize(out, manifest, names, len(groups))
             rows = json.loads((out / "anchors.json").read_text())["rows"]
             self.assertEqual(
@@ -1003,7 +1026,13 @@ class SpeedPassTests(unittest.TestCase):
                     ["generate-b", 1.625, 11, "generate-b-id"],
                 ],
             )
-            self.assertIn('    ("play-a", 2.5, 10, "play-a-id"),', printed.getvalue())
+            self.assertIn(
+                '    ("play-a", (0.9, 1.0, 2.5), 10, "play-a-id"),', printed.getvalue()
+            )
+            self.assertIn(
+                '    ("generate-b", (0.2, 0.3, 1.625), 11, "generate-b-id"),',
+                printed.getvalue(),
+            )
             for incomplete in (3, len(groups)):
                 with self.subTest(groups=incomplete), self.assertRaises(SystemExit):
                     write(3, groups[3], passed=incomplete == 3)

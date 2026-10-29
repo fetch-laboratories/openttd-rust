@@ -6,14 +6,11 @@ import re
 import subprocess
 from pathlib import Path
 
-from code_lines import without_comments
+from code_lines import RUST_EXPORT, without_comments
 
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = "tools/orphan-export-baseline.txt"
 NAME = r"openttd_rust_\w+"
-EXPORT = re.compile(
-    rf"#\[(?:unsafe\()?no_mangle\)?\]\s*pub\s+(?:unsafe\s+)?extern\s+\"C\"\s+fn\s+({NAME})\s*\("
-)
 DECLARATION = re.compile(
     rf'(?m)^[ \t]*(?:extern\s+"C"\s+)?(?!return\b|else\b)'
     rf"[\w:<>]+[\w:<> \t*&]*[\s*&]({NAME})\s*\([^;{{}}]*\)\s*(?:noexcept\s*)?;"
@@ -24,7 +21,9 @@ def violations(files: dict[str, str]) -> set[str]:
     exports, declarations, references = set(), set(), set()
     for path, text in files.items():
         if path.startswith("rust/") and path.endswith(".rs"):
-            exports.update(EXPORT.findall(without_comments(text, path)))
+            exports.update(
+                RUST_EXPORT.findall(without_comments(text, path, strings=True))
+            )
         elif path.startswith("src/") and not path.startswith("src/tests/"):
             source = without_comments(text, path, strings=True)
             # extern "C" was masked with other strings; it isn't needed to find

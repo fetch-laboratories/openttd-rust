@@ -2,6 +2,7 @@ no declaration | openttd_rust_animate_tile
 no declaration | openttd_rust_generating_world
 no declaration | openttd_rust_ground_destroy
 no declaration | openttd_rust_ground_new
+no declaration | openttd_rust_map_read_probe
 no declaration | openttd_rust_may_animate
 no declaration | openttd_rust_shared_tile_type
 no declaration | openttd_rust_tgp_estimate
@@ -33,6 +34,7 @@ no production user | openttd_rust_industry_shape_check
 no production user | openttd_rust_industry_tile_animate
 no production user | openttd_rust_linkgraph_run
 no production user | openttd_rust_list_token
+no production user | openttd_rust_map_read_probe
 no production user | openttd_rust_object_generate
 no production user | openttd_rust_object_restore_first
 no production user | openttd_rust_object_tunnel_hide

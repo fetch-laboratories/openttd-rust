@@ -1,10 +1,12 @@
 """Pinned standard lexers for code-line metrics and boundary token scans."""
 
+import importlib
 import os
+import re
 import sys
 
 try:
-    import pygments
+    pygments = importlib.import_module("pygments")
 
     if pygments.__version__ != "2.19.2":
         raise ImportError("wrong Pygments version")
@@ -24,20 +26,30 @@ except ImportError:
         ],
     )
 
-from pygments import lex
-from pygments.lexers import CppLexer, PythonLexer, RustLexer
-from pygments.token import Comment, String
+# The pinned dependency may live only in the uv environment after re-exec.
+lex = pygments.lex
+lexers = importlib.import_module("pygments.lexers")
+Comment = importlib.import_module("pygments.token").Comment
+String = importlib.import_module("pygments.token").String
+
+RUST_EXPORT = re.compile(
+    r"#\[(?:unsafe\()?no_mangle\)?\]\s*(?:#\[[^\n]*\]\s*)*"
+    r'(?:pub(?:\([^)]*\))?\s+)?(?:unsafe\s+)?extern\s+"C"\s+fn\s+'
+    r"(openttd_rust_\w+)\s*\("
+)
 
 
-def tokens(text: str, path: str) -> list[tuple]:
+def tokens(text: str, path: str) -> list[tuple[object, str]]:
     lexer = (
-        RustLexer
+        lexers.RustLexer
         if path.endswith(".rs")
-        else PythonLexer
+        else lexers.PythonLexer
         if path.endswith(".py")
-        else CppLexer
+        else lexers.CppLexer
     )
-    return list(lex(text, lexer(ensurenl=False, stripnl=False)))
+    instance = lexer(ensurenl=False, stripnl=False)
+    instance.add_filter("tokenmerge")
+    return list(lex(text, instance))
 
 
 def code_lines(text: str, path: str) -> set[int]:
@@ -53,11 +65,13 @@ def code_lines(text: str, path: str) -> set[int]:
 
 def without_comments(text: str, path: str, strings: bool = False) -> str:
     """Mask lexical comments (and optionally strings), retaining positions."""
-    import re
-
     return "".join(
         re.sub(r"[^\n]", " ", value)
-        if kind in Comment and kind not in Comment.Preproc or strings and kind in String
+        if kind in Comment
+        and kind not in Comment.Preproc
+        or strings
+        and kind in String
+        and value != '"C"'
         else value
         for kind, value in tokens(text, path)
     )
