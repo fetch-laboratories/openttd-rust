@@ -325,12 +325,10 @@ pub(crate) fn reset_livery(s: &Services, c: *mut OpenTTDCompany) {
         from = id + 1;
         let g = unsafe { (s.groups.group)(id as u16) }.cast::<crate::fleet::GroupFields>();
         if read_field!(g, owner) == owner {
-            unsafe {
-                let l = std::ptr::addr_of_mut!((*g).livery);
-                write_field!(l, in_use, 0);
-                write_field!(l, colour1, (s.colour)(c));
-                write_field!(l, colour2, (s.colour)(c));
-            }
+            let l = unsafe { std::ptr::addr_of_mut!((*g).livery) };
+            write_field!(l, in_use, 0);
+            write_field!(l, colour1, (s.colour)(c));
+            write_field!(l, colour2, (s.colour)(c));
         }
     }
 }
