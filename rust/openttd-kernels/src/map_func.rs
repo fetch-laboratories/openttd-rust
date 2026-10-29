@@ -245,20 +245,6 @@ impl TileTypeAccess {
         }
     }
 
-    /// Reader for entries without an audited allocation: every read uses the
-    /// original noexcept accessor.
-    pub(crate) fn callback(callback: extern "C" fn(u32) -> u8) -> Self {
-        Self {
-            allocation: TileTypeAllocation {
-                base: std::ptr::null(),
-                extended: std::ptr::null(),
-                count: 0,
-                assertions: false,
-            },
-            callback,
-        }
-    }
-
     /// Read the original high nibble at this observation point. Checked failures
     /// go through the native accessor; asserts-off reads add no range rejection.
     #[inline]
