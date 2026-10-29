@@ -183,3 +183,21 @@ pub unsafe extern "C" fn openttd_test_follower_speed(
         tile,
     )
 }
+
+/// # Safety
+/// The station and tile satisfy the original overload's preconditions in the serialized world.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_platform_length(
+    s: *const Services,
+    station: *mut crate::station_type::BaseStation,
+    tile: u32,
+    dir: u8,
+    directional: bool,
+) -> u32 {
+    let world = crate::map_func::World::new(unsafe { &*s });
+    if directional {
+        crate::follow_track::platform_length_station(&world, tile, dir)
+    } else {
+        crate::follow_track::platform_length_full(&world, station, tile)
+    }
+}

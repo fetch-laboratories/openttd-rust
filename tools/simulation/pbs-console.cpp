@@ -224,7 +224,14 @@ static bool FollowerProbe([[maybe_unused]] std::span<std::string_view> args)
 	PbsRequire(station != nullptr);
 	rail(); for (uint i = 0; i < 3; ++i) MakeRailStation(tile - i, Owner(0), station->index, AXIS_X, 0, RAILTYPE_RAIL);
 	FollowerCase("platform_skip", ft, old, TRACKDIR_X_NE, true, 0);
-	fmt::print(stderr, "FOLLOWER platform_lengths {} {}\n", station->GetPlatformLength(tile - 1), station->GetPlatformLength(tile - 1, DIAGDIR_NE));
+#ifdef WITH_RUST
+	const uint full_length = openttd_test_platform_length(&GetRustSharedServices(), station, (tile - 1).base(), 0, false);
+	const uint remaining_length = openttd_test_platform_length(&GetRustSharedServices(), station, (tile - 1).base(), DIAGDIR_NE, true);
+#else
+	const uint full_length = station->GetPlatformLength(tile - 1);
+	const uint remaining_length = station->GetPlatformLength(tile - 1, DIAGDIR_NE);
+#endif
+	fmt::print(stderr, "FOLLOWER platform_lengths {} {}\n", full_length, remaining_length);
 	SetRailStationReservation(tile - 1, true);
 	FollowerCase("platform_reserved", free, old, TRACKDIR_X_NE, false, 5, true);
 	RoadVehicle *v = nullptr; for (RoadVehicle *r : RoadVehicle::Iterate()) { v = r; break; }

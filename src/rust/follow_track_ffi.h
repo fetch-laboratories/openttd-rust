@@ -1,5 +1,5 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-/** @file follow_track_ffi.h Platform length entry and layout-checked follower evidence record. */
+/** @file follow_track_ffi.h Layout-checked follower evidence record. */
 #ifndef OPENTTD_RUST_FOLLOW_TRACK_FFI_H
 #define OPENTTD_RUST_FOLLOW_TRACK_FFI_H
 #include "services_ffi.h"
@@ -23,6 +23,5 @@ struct OpenTTDFollowTrackState {
 	uint8_t err, mode;
 	bool allow90, masking;
 };
-uint32_t openttd_rust_platform_length(const OpenTTDSharedServices *, uint16_t, uint32_t, uint8_t, bool);
 }
 #endif

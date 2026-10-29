@@ -511,21 +511,17 @@ pub(crate) fn mask_reserved_tracks(pbs: Pbs<'_>, ft: &mut Follow) -> bool {
     true
 }
 
-/// # Safety
-/// Station tile, services and direction satisfy the original method's preconditions.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_platform_length(
-    s: *const Services,
-    station: u16,
+/// `Station::GetPlatformLength(tile)` on the resolved native station identity.
+pub(crate) fn platform_length_full(
+    w: &World<'_>,
+    station: *mut crate::station_type::BaseStation,
     tile: u32,
-    dir: u8,
-    directional: bool,
 ) -> u32 {
-    let w = World::new(unsafe { &*s });
-    if directional {
-        return platform_length_station(&w, tile, dir);
+    if w.types.assertions() {
+        // SAFETY: The immutable table and resolved station outlive this scan.
+        let stations = unsafe { &*(w.shared.station_catchment)() };
+        w.check(w.rail_station(tile) && w.station_index(tile) == (stations.id)(station));
     }
-    w.check(w.rail_station(tile) && w.station_index(tile).0 == station);
     let delta = w.dimensions.offs_by_axis(w.station_axis(tile));
     let mut t = tile;
     let mut len: u32 = 0;

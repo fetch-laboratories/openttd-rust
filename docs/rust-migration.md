@@ -2090,8 +2090,9 @@ and threaded GUI coverage remain #156 gaps. PR #370.
 including admission, reversal, tunnel/bridge/platform skipping, reserved-track masking,
 errors and speed limits. It also owns both station platform-length scans; waypoints retain
 their single-tile result. YAPF, PBS, train reservations and water regions call the Rust owner
-directly. The original C++ follower and its typedefs compile only portably; no native
-production follower facade remains. Native evidence uses feature-gated test bridges to the same
+directly. Train stopping and station loading call the same platform scans directly.
+The original C++ follower, platform virtual methods and their typedefs compile only
+portably; no native production follower or platform facade remains. Native evidence uses feature-gated test bridges to the same
 Rust methods. Shared header modules read field-sized scalars through the canonical map
 descriptor under the game-loop/command interval. Native vehicle shells and unmoved record
 fields retain shared typed accessors; no world borrow spans a callback. Arbitrary NewGRF

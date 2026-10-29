@@ -1708,9 +1708,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		GoodsEntry &ge = static_cast<Station *>(station)->goods[cargo];
 		return ge.HasData() && ge.GetData().cargo.HasCargoFor(*static_cast<std::vector<StationID> *>(next_stations));
 	},
-	.platform_length = [](OpenTTDStation *station, OpenTTDVehicle *vehicle) noexcept -> uint32_t {
-		return static_cast<Station *>(station)->GetPlatformLength(VehicleOf(vehicle)->tile);
-	},
 	.vehicle_tile = GetRustVehicleServices().tile,
 	.station_cargo_total = [](OpenTTDStation *station, uint8_t cargo) noexcept -> uint32_t {
 		return static_cast<Station *>(station)->goods[cargo].GetData().cargo.TotalCount();

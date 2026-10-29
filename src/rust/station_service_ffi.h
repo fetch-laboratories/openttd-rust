@@ -240,7 +240,6 @@ struct OpenTTDStationLoading {
 	void (*deliver_to_transfer)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(deliver_to_transfer);
 	void (*deliver_to_keep)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(deliver_to_keep);
 	bool (*has_cargo_for)(OpenTTDStation *, uint8_t, void *) noexcept OPENTTD_SERVICE_DEFAULT(has_cargo_for);
-	uint32_t (*platform_length)(OpenTTDStation *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(platform_length);
 	uint32_t (*vehicle_tile)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_tile);
 	uint32_t (*station_cargo_total)(OpenTTDStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_cargo_total);
 	OpenTTDNativeCargoPayment * (*get_payment)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(get_payment);

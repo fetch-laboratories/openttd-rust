@@ -543,8 +543,6 @@ pub struct Leaves {
     pub other_end: extern "C" fn(Handle, u32) -> u64,
     pub pay_running: extern "C" fn(Handle, i64),
     pub pbs_signal_type: extern "C" fn(Handle) -> u64,
-    pub platform_ahead: extern "C" fn(Handle, u16, u32) -> u64,
-    pub platform_length: extern "C" fn(Handle, u16, u32) -> u64,
     pub pow_wag_power: extern "C" fn(Handle) -> u64,
     pub price: extern "C" fn(Handle, u32) -> u64,
     pub railveh_wagon: extern "C" fn(Handle) -> u64,
@@ -948,8 +946,17 @@ impl Game<'_> {
         max_speed as u16
     }
     fn stop_location(&self, id: Handle, station: u16, tile: u32) -> (i32, i32, i32) {
-        let ahead = ((self.leaves.platform_ahead)(id, station, tile) as i32).wrapping_mul(16);
-        let length = ((self.leaves.platform_length)(id, station, tile) as i32).wrapping_mul(16);
+        let world = crate::map_func::World::new(self.services);
+        // SAFETY: The process-lifetime tables resolve the original Station::Get once.
+        let stations = unsafe { &*(*((self.services.station_catchment)())).station };
+        let st = (stations.station)(station);
+        let dir = crate::direction_func::dir_to_diag_dir((self.leaves.read_direction)(id), |ok| {
+            world.check(ok);
+        });
+        let ahead = (crate::follow_track::platform_length_station(&world, tile, dir) as i32)
+            .wrapping_mul(16);
+        let length = (crate::follow_track::platform_length_full(&world, st.base, tile) as i32)
+            .wrapping_mul(16);
         let v = (self.leaves.read_stop_location)(id);
         let mut loc = 1;
         if i32::from(v.total_length) >= length {
@@ -3340,8 +3347,6 @@ crate::abi::layouts! {
         other_end,
         pay_running,
         pbs_signal_type,
-        platform_ahead,
-        platform_length,
         pow_wag_power,
         price,
         railveh_wagon,

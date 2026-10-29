@@ -9,6 +9,7 @@ void openttd_test_follower_init(OpenTTDFollowTrackState *, const OpenTTDSharedSe
 bool openttd_test_follower_follow(const OpenTTDSharedServices *, OpenTTDFollowTrackState *, uint32_t, uint8_t);
 bool openttd_test_follower_mask(const OpenTTDSharedServices *, OpenTTDFollowTrackState *);
 int32_t openttd_test_follower_speed(const OpenTTDSharedServices *, uint8_t, Vehicle *, uint32_t);
+uint32_t openttd_test_platform_length(const OpenTTDSharedServices *, BaseStation *, uint32_t, uint8_t, bool);
 }
 /** Evidence adapter calling the unchanged Rust follower implementation. */
 template <TransportType Ttr_type_, typename VehicleType, bool T90deg_turns_allowed_ = true, bool Tmask_reserved_tracks = false>
