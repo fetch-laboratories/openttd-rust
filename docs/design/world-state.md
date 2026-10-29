@@ -164,8 +164,11 @@ clear, water and tree tile loops, including shore-water reentry, and road
 track-status reads (#523); #565 extends it to every Rust simulation entry.
 Storage, allocation, setters, save adapters and worker ordering stay in C++.
 
-Acquire at an entry under the game-state mutex. Use field-sized raw loads, no
-Rust references/slices, and reload after mutations at the original observation
+Rust reaches the view under the game-state mutex by a load from the canonical
+C++ map statics (base and extended pointers, count, `log_x`, size and the
+native assertion policy), never by a C++ call per entry, and `map_func::World`
+is its one type; an entry needs no fetch slot of its own. Use field-sized raw
+loads, no Rust references/slices, and reload after mutations at the original observation
 points. The interval is proved once for the game loop and command execution
 (below), not per entry; descriptor metadata ends before any callback that can
 load, reset or replace the map or yield, such as generation progress. Same-thread
@@ -173,9 +176,11 @@ reentry keeps the descriptor only within that interval.
 
 Define each source helper once in its header-named Rust module. Generated named
 ABI probes pin both layouts; preserve native helper assertions under the native
-assertion policy captured once per entry. Assertion-disabled builds gain no new
-panics or rejected inputs. Delete displaced reads and orphan bindings; remaining
-unaudited callers share the canonical native fallback.
+assertion policy. Assertion-disabled builds gain no new panics or rejected
+inputs. A helper whose precondition fails calls the native assertion, as the
+original accessor does (`map_value` in movement.rs), never the C++ accessor, so
+a conversion deletes the service it replaces with its orphan bindings. Callers
+not yet converted keep their typed service until a port touches them.
 
 Every entry relies on this interval. `Map::Allocate` runs only from game reset
 (`InitializeGame`), the MAPS and legacy loaders and tests, and the mutex yield
