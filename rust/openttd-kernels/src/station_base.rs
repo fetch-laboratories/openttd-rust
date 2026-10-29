@@ -3,7 +3,6 @@
 #![allow(unsafe_code)]
 
 /// `INITIAL_STATION_RATING`.
-
 pub const INITIAL_STATION_RATING: u8 = 175;
 
 /// `GoodsEntry::State` positions from the native header.

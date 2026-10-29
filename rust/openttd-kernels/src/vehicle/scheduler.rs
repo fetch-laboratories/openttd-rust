@@ -727,7 +727,7 @@ mod tests {
         0
     }
     extern "C" fn origin(_: *mut c_void, _: u16, _: u32, _: u8) {}
-    extern "C" fn flow_owner(_: *const c_void, _: u16) -> *mut crate::cargo_flow::Flow {
+    extern "C" fn flow_map(_: *const c_void) -> *mut crate::cargo_flow::FlowMap {
         null_mut()
     }
     extern "C" fn random_draw() -> u32 {
@@ -746,7 +746,7 @@ mod tests {
         flow,
         pay,
         origin,
-        flow_owner,
+        flow_map,
         random_draw,
         packet_next,
     };

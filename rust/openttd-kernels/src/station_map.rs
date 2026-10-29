@@ -125,5 +125,5 @@ pub(crate) fn set_road_waypoint_roadside(
     value: crate::services::Roadside,
 ) -> Option<()> {
     require_road_waypoint(m, tile)?;
-    m.set_m3(tile, (m.m3(tile)? & !12) | ((value.0 & 3) << 2))
+    m.set_m3(tile, (m.m3(tile)? & !0b1100) | ((value.0 & 3) << 2))
 }

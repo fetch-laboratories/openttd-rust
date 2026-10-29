@@ -845,8 +845,6 @@ const OpenTTDStationLifecycleServices &GetRustStationLifecycleServices() noexcep
 	static const OpenTTDStationLifecycleServices services{
 		.shared = &GetRustSharedServices(),
 		.catchment = &GetRustStationCatchmentServices(),
-		.commands = []() noexcept { return &GetRustStationCommandServices(); },
-		.aircraft = []() noexcept { return &GetRustAircraftLeaves(); },
 		.storage = CargoStorageServices,
 		.allocation = GetRustTileTypeAllocation,
 		.check = RustAssertCondition,
@@ -891,7 +889,6 @@ const OpenTTDStationLifecycleServices &GetRustStationLifecycleServices() noexcep
 		.invalidate_list = RustStationListInvalidation,
 		.invalidate_lists = RustStationListClassesInvalidate,
 		.close_view = [](uint16_t id) noexcept { CloseWindowById(WC_STATION_VIEW, StationID{id}); },
-		.orders = []() noexcept { return &GetRustOrdersLeaves(); },
 		.delete_news = [](uint16_t id) noexcept { DeleteStationNews(StationID{id}); },
 		.remove_index = [](uint16_t id) noexcept { _station_kdtree.Remove(StationID{id}); },
 		.sign_valid = RustStationSignValid,

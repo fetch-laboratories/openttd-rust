@@ -9,7 +9,11 @@ use crate::map_func::TileTypeAccess;
 use crate::road_map::{ROADSIDE_BARREN, ROADSIDE_GRASS, ROADSIDE_PAVED};
 use crate::services::{Map, Services as Shared};
 use crate::station::BaseStation;
-use crate::station_type::*;
+use crate::station_type::{
+    AAT_TILE_LOOP, BUOY, FACILITY_AIRPORT, INVALID_STATION, RAIL_WAYPOINT, ROAD_WAYPOINT,
+    SAT_TILE_LOOP, STATION_AIRPORT, STATION_BUS, STATION_DOCK, STATION_OILRIG, STATION_RAIL,
+    STATION_TRUCK, StationID,
+};
 use crate::tile_type::TileIndex;
 use crate::tile_type::{INVALID_TILE, MP_INDUSTRY, MP_STATION, MP_TREES, MP_WATER};
 use crate::vehicle::VehicleRef;
@@ -53,8 +57,6 @@ pub struct Names {
 pub struct Services {
     pub shared: &'static Shared,
     pub catchment: &'static crate::station::CatchmentServices,
-    pub commands: extern "C" fn() -> *const crate::station_cmd::CommandServicesTable,
-    pub aircraft: extern "C" fn() -> *const crate::aircraft::Leaves,
     pub storage: extern "C" fn() -> *const crate::cargo_storage::Services,
     pub allocation: extern "C" fn() -> crate::map_func::TileTypeAllocation,
     pub check: extern "C" fn(bool),
@@ -89,7 +91,6 @@ pub struct Services {
     pub invalidate_list: extern "C" fn(*mut BaseStation, i32),
     pub invalidate_lists: extern "C" fn(),
     pub close_view: extern "C" fn(StationID),
-    pub orders: extern "C" fn() -> &'static crate::orders::Leaves,
     pub delete_news: extern "C" fn(StationID),
     pub remove_index: extern "C" fn(StationID),
     pub sign_valid: extern "C" fn(*mut BaseStation) -> bool,
@@ -106,7 +107,7 @@ pub(crate) fn services(shared: &Shared) -> &Services {
 }
 impl Services {
     fn commands(&self) -> &crate::station_cmd::CommandServicesTable {
-        unsafe { &*(self.commands)() }
+        unsafe { &*(self.shared.station_commands)() }
     }
     fn map_access(&self) -> TileTypeAccess {
         unsafe { TileTypeAccess::raw((self.allocation)(), self.shared.tile_type) }
@@ -250,10 +251,10 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
         5 => Some(n.heliport),
         _ => None,
     };
-    if let Some(name) = special {
-        if info.available(name, s) {
-            return name;
-        }
+    if let Some(name) = special
+        && info.available(name, s)
+    {
+        return name;
     }
     if info.available(n.mines, s)
         && count_around(tile, map, size_y, freeform, |t| mine(t, &m, s)) >= 2
@@ -544,7 +545,7 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
     }
     let id = (s.catchment.id)(st);
     unsafe {
-        crate::aircraft::invalidate_target((s.aircraft)(), id.0);
+        crate::aircraft::invalidate_target(c.aircraft, id.0);
     }
     let graphs = w.graphs;
     for cargo in 0..NUM_CARGO {
@@ -615,7 +616,7 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
             crate::order_type::OT_GOTO_STATION,
             id.0,
             0,
-            (s.orders)(),
+            &*(vehicles.orders)(),
         );
     }
     (s.delete_news)(id);
@@ -671,5 +672,5 @@ pub(crate) fn airport_maintenance(s: &Services, owner: u8) -> i64 {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStationNames" ["probe"] => Names { base, central, airport, oilfield, docks, heliport, mines, lakeside, woods, forest, valley, heights, north, south, east, west, transfer, halt, exchange, annexe, sidings, branch, upper, lower, fallback, undefined, null };
-    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, commands, aircraft, storage, allocation, check, climate, names, town, industry_type, set_industry_type, spec, spec_name, spec_enabled, spec_life, set_random_bits, freeform, cargo_classes, forest, stop_data, stop_count, stop_tile, stop_random, stop_frame, stop_set_random, stop_set_frame, stop_append, stop_swap_pop, by_tile, as_station, cleaning_pool, cargo, flows, delete_airport_storage, invalidate_list, invalidate_lists, close_view, orders, delete_news, remove_index, sign_valid, remove_sign, next_vehicle, vehicle_id, last_loading, airport_maintenance, maintenance_price };
+    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, storage, allocation, check, climate, names, town, industry_type, set_industry_type, spec, spec_name, spec_enabled, spec_life, set_random_bits, freeform, cargo_classes, forest, stop_data, stop_count, stop_tile, stop_random, stop_frame, stop_set_random, stop_set_frame, stop_append, stop_swap_pop, by_tile, as_station, cleaning_pool, cargo, flows, delete_airport_storage, invalidate_list, invalidate_lists, close_view, delete_news, remove_index, sign_valid, remove_sign, next_vehicle, vehicle_id, last_loading, airport_maintenance, maintenance_price };
 }
