@@ -44,7 +44,11 @@ struct FaceVar {
 	 */
 	inline uint GetBits(const CompanyManagerFace &cmf) const
 	{
+#ifdef WITH_RUST
+		return openttd_rust_face_get_bits(&GetRustFaceServices(), this, &cmf);
+#else
 		return GB(cmf.bits, this->offset, this->length);
+#endif /* WITH_RUST */
 	}
 
 	/**
@@ -54,7 +58,11 @@ struct FaceVar {
 	 */
 	inline void SetBits(CompanyManagerFace &cmf, uint val) const
 	{
+#ifdef WITH_RUST
+		openttd_rust_face_set_bits(&GetRustFaceServices(), this, &cmf, val);
+#else
 		SB(cmf.bits, this->offset, this->length, val);
+#endif /* WITH_RUST */
 	}
 
 	/**
@@ -65,6 +73,9 @@ struct FaceVar {
 	 */
 	inline void ChangeBits(CompanyManagerFace &cmf, int8_t amount) const
 	{
+#ifdef WITH_RUST
+		openttd_rust_face_change_bits(&GetRustFaceServices(), this, &cmf, amount);
+#else
 		int8_t val = this->GetBits(cmf) + amount; // the new value for the cmfv
 
 		/* scales the new value to the correct scope */
@@ -74,6 +85,7 @@ struct FaceVar {
 		val %= this->valid_values;
 
 		this->SetBits(cmf, val); // save the new value
+#endif /* WITH_RUST */
 	}
 
 	/**
@@ -81,6 +93,7 @@ struct FaceVar {
 	 * @param cmf The face to check.
 	 * @return true if and only if the bits are valid
 	 */
+#ifndef WITH_RUST
 	inline bool IsValid(const CompanyManagerFace &cmf) const
 	{
 		return GB(cmf.bits, this->offset, this->length) < this->valid_values;
@@ -97,6 +110,7 @@ struct FaceVar {
 		assert(val < (1U << this->length));
 		return (val * this->valid_values) >> this->length;
 	}
+#endif /* WITH_RUST */
 
 	/**
 	 * Gets the sprite to draw.

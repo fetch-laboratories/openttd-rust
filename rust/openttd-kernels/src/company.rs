@@ -266,7 +266,6 @@ pub struct Services {
     pub finance: &'static FinanceServices,
     pub shared: &'static crate::services::Services,
     pub company_next: extern "C" fn(u32) -> CompanyRef,
-    pub company_is_ai: extern "C" fn(u8) -> bool,
     pub company_count: extern "C" fn() -> usize,
     pub can_allocate_company: extern "C" fn() -> bool,
     pub local_company: extern "C" fn() -> u8,
@@ -683,7 +682,7 @@ fn takeover_limit(s: &Services, big: u8, small: u8) -> bool {
 fn count_ais(s: &Services) -> u8 {
     let mut n = 0_u8;
     companies(s, |_, id| {
-        if (s.company_is_ai)(id) {
+        if (s.identity.is_ai)((s.identity.company)(crate::company_type::CompanyID(id))) {
             n = n.wrapping_add(1);
         }
     });
@@ -1266,7 +1265,8 @@ fn control(s: &Services, ownership: &crate::tile_owner::Context, c: &mut Control
                 }
                 (s.company_bankrupt_news)(target);
                 transfer(s, ownership, target, INVALID_OWNER);
-                if (s.company_is_ai)(target) {
+                if (s.identity.is_ai)((s.identity.company)(crate::company_type::CompanyID(target)))
+                {
                     (s.stop_ai)(target);
                 }
                 (s.delete_company)(target);
@@ -1381,7 +1381,7 @@ fn buy(
     if !hostile && !asked {
         return error();
     }
-    if hostile && !(s.company_is_ai)(id) {
+    if hostile && !(s.identity.is_ai)((s.identity.company)(crate::company_type::CompanyID(id))) {
         return error();
     }
     let networking = (s.finance.networking)();
@@ -1405,7 +1405,7 @@ fn buy(
     if execute {
         (s.merger_news)(id, hostile);
         transfer(s, ownership, id, current);
-        if (s.company_is_ai)(id) {
+        if (s.identity.is_ai)((s.identity.company)(crate::company_type::CompanyID(id))) {
             (s.stop_ai)(id);
         }
         (s.acquisition_windows)(id);
@@ -1940,7 +1940,6 @@ crate::abi::layouts! {
         finance,
         shared,
         company_next,
-        company_is_ai,
         company_count,
         can_allocate_company,
         local_company,

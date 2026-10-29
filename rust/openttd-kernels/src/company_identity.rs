@@ -10,17 +10,20 @@
 )]
 use crate::company_type::{CompanyID, OpenTTDCompany};
 use crate::engine_type::{EngineID, OpenTTDEngine};
-use crate::livery::*;
+use crate::livery::{
+    LS_BUS, LS_DEFAULT, LS_DIESEL, LS_DMU, LS_ELECTRIC, LS_EMU, LS_END, LS_FREIGHT_SHIP,
+    LS_FREIGHT_TRAM, LS_FREIGHT_WAGON, LS_HELICOPTER, LS_LARGE_PLANE, LS_MAGLEV, LS_MONORAIL,
+    LS_PASSENGER_SHIP, LS_PASSENGER_TRAM, LS_PASSENGER_WAGON_DIESEL, LS_PASSENGER_WAGON_ELECTRIC,
+    LS_PASSENGER_WAGON_MAGLEV, LS_PASSENGER_WAGON_MONORAIL, LS_PASSENGER_WAGON_STEAM,
+    LS_SMALL_PLANE, LS_STEAM, LS_TRUCK, Livery,
+};
 use crate::raw_field::{read_field, write_field};
 use crate::services::{ByteSpan, Services as Shared};
 use crate::vehicle::RailVehicleTypes;
 use crate::vehicle_type::OpenTTDVehicle;
 use std::mem::MaybeUninit;
 type Town = crate::town_type::TownHandle;
-#[repr(C)]
-pub struct Face {
-    _private: [u8; 0],
-}
+use crate::company_manager_face::Face;
 #[repr(C, align(16))]
 pub struct NameStorage {
     bytes: [MaybeUninit<u8>; 128],
@@ -152,7 +155,8 @@ fn companies(s: &Services, mut f: impl FnMut(*mut OpenTTDCompany) -> bool) -> bo
         }
     }
 }
-static mut COLOURS: [u8; 15] = [0; 15];
+static mut COLOURS: [u8; crate::company_type::MAX_COMPANIES as usize] =
+    [0; crate::company_type::MAX_COMPANIES as usize];
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_company_colours() -> *mut u8 {
     std::ptr::addr_of_mut!(COLOURS).cast()
@@ -166,32 +170,40 @@ fn cache_colour(id: CompanyID, colour: u8) {
 }
 /// Original 100 draws precede weighting and pool-order colour elimination.
 pub(crate) fn generate_colour(s: &Services) -> u8 {
-    const WEIGHTS: [u8; 16] = [2, 2, 3, 2, 3, 2, 3, 2, 3, 2, 2, 2, 3, 1, 1, 1];
-    const SIMILAR: [[u8; 2]; 16] = [
-        [8, 5],
-        [6, 7],
-        [255, 255],
-        [12, 255],
-        [255, 255],
-        [0, 8],
-        [1, 7],
-        [1, 6],
-        [0, 5],
-        [13, 12],
-        [11, 255],
-        [10, 255],
-        [3, 9],
-        [9, 255],
-        [15, 255],
-        [14, 255],
+    use crate::gfx_type::{
+        COLOUR_BLUE, COLOUR_BROWN, COLOUR_CREAM, COLOUR_DARK_BLUE, COLOUR_DARK_GREEN, COLOUR_END,
+        COLOUR_GREEN, COLOUR_GREY, COLOUR_LIGHT_BLUE, COLOUR_MAUVE, COLOUR_ORANGE,
+        COLOUR_PALE_GREEN, COLOUR_PURPLE, COLOUR_WHITE, COLOUR_YELLOW, INVALID_COLOUR,
+    };
+    const WEIGHTS: [u8; COLOUR_END as usize] = [2, 2, 3, 2, 3, 2, 3, 2, 3, 2, 2, 2, 3, 1, 1, 1];
+    const SIMILAR: [[u8; 2]; COLOUR_END as usize] = [
+        [COLOUR_BLUE, COLOUR_LIGHT_BLUE],
+        [COLOUR_GREEN, COLOUR_DARK_GREEN],
+        [INVALID_COLOUR, INVALID_COLOUR],
+        [COLOUR_ORANGE, INVALID_COLOUR],
+        [INVALID_COLOUR, INVALID_COLOUR],
+        [COLOUR_DARK_BLUE, COLOUR_BLUE],
+        [COLOUR_PALE_GREEN, COLOUR_DARK_GREEN],
+        [COLOUR_PALE_GREEN, COLOUR_GREEN],
+        [COLOUR_DARK_BLUE, COLOUR_LIGHT_BLUE],
+        [COLOUR_BROWN, COLOUR_ORANGE],
+        [COLOUR_PURPLE, INVALID_COLOUR],
+        [COLOUR_MAUVE, INVALID_COLOUR],
+        [COLOUR_YELLOW, COLOUR_CREAM],
+        [COLOUR_CREAM, INVALID_COLOUR],
+        [COLOUR_WHITE, INVALID_COLOUR],
+        [COLOUR_GREY, INVALID_COLOUR],
     ];
-    let mut colours = std::array::from_fn::<_, 16, _>(|i| i as u8);
+    let mut colours = std::array::from_fn::<_, { COLOUR_END as usize }, _>(|i| i as u8);
     for _ in 0..100 {
         let r = s.shared.random();
-        colours.swap((r & 15) as usize, ((r >> 4) & 15) as usize);
+        colours.swap(
+            crate::bitmath_func::gb(r, 0, 4) as usize,
+            crate::bitmath_func::gb(r, 4, 4) as usize,
+        );
     }
-    for _ in 0..16 {
-        for j in 1..16 {
+    for _ in 0..COLOUR_END {
+        for j in 1..usize::from(COLOUR_END) {
             if WEIGHTS[usize::from(colours[j - 1])] < WEIGHTS[usize::from(colours[j])] {
                 colours.swap(j - 1, j);
             }
@@ -200,13 +212,13 @@ pub(crate) fn generate_colour(s: &Services) -> u8 {
     companies(s, |c| {
         let colour = (s.colour)(c);
         if let Some(i) = colours.iter().position(|&x| x == colour) {
-            colours[i] = 255;
+            colours[i] = INVALID_COLOUR;
         }
         for similar in SIMILAR[usize::from(colour)] {
-            if similar == 255 {
+            if similar == INVALID_COLOUR {
                 break;
             }
-            for i in 1..16 {
+            for i in 1..usize::from(COLOUR_END) {
                 if colours[i - 1] == similar {
                     colours.swap(i - 1, i);
                 }
@@ -216,7 +228,7 @@ pub(crate) fn generate_colour(s: &Services) -> u8 {
     });
     colours
         .into_iter()
-        .find(|&x| x != 255)
+        .find(|&x| x != INVALID_COLOUR)
         .expect("NOT_REACHED")
 }
 pub(crate) fn generate_name(s: &Services, c: *mut OpenTTDCompany) {
@@ -399,10 +411,10 @@ pub extern "C" fn openttd_rust_company_colour(
             write_field!(
                 l,
                 in_use,
-                if colour != INVALID_COLOUR {
-                    flags | flag
-                } else {
+                if colour == INVALID_COLOUR {
                     flags & !flag
+                } else {
+                    flags | flag
                 }
             );
         }
@@ -521,7 +533,10 @@ pub(crate) fn engine_livery(
     v: *mut OpenTTDVehicle,
 ) -> u8 {
     use crate::cargo_type::{INVALID_CARGO, is_valid_cargo_type};
-    use crate::engine_type::*;
+    use crate::engine_type::{
+        AIR_CTOL, AIR_FAST, AIR_HELI, EC_DIESEL, EC_ELECTRIC, EC_MAGLEV, EC_MONORAIL, EC_STEAM,
+        RAIL_IS_MU, ROAD_IS_TRAM,
+    };
     use crate::vehicle::RailVehicleTypes;
     let mut cargo = if v.is_null() {
         INVALID_CARGO
@@ -658,7 +673,7 @@ pub extern "C" fn openttd_rust_engine_livery_scheme(
 }
 
 crate::abi::layouts! {
- fn abi_layout;
+    fn abi_layout;
  "OpenTTDCompanyNameStorage" ["company_economy"] => NameStorage { bytes, };
  "OpenTTDCompanyIdentityStrings" ["company_economy"] => Strings { unnamed, president, company, president_generated, andco, town_begin, town_end, company_begin, };
  "OpenTTDCompanyIdentityServices" ["company_economy"] => Services { shared, randomizer, faces, groups, strings, company, next_company, company_id, name_id, set_name_id, name_parts, set_name_parts, president_id, set_president_id, president_parts, set_president_parts, colour, set_colour, last_build, is_ai, name, set_name, president, set_president, livery, face, name_frame_init, name_frame_drop, render, render_other, company_renamed, president_renamed, launch_news, admin_update, rename_transport, president_windows, colour_windows, object_colours, current, dirty, utf8_length, reset_colourmap, engine, engine_type, engine_cargo, engine_kind, engine_class, engine_misc, aircraft_subtype, vehicle_cargo, vehicle_first, articulated, wagon_override, cargo_freight, cargo_passengers, goods, vehicle_id, invalidate_vehicle, vehicle_owner, };

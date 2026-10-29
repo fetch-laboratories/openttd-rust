@@ -7,7 +7,11 @@
     clippy::cast_sign_loss,
     clippy::cast_possible_wrap
 )]
-use crate::company_identity::Face;
+/// Opaque native company-manager face; its string stays native.
+#[repr(C)]
+pub struct Face {
+    _private: [u8; 0],
+}
 use crate::town::names::Randomizer;
 #[repr(C)]
 pub struct FaceVar {
@@ -24,20 +28,15 @@ pub struct FaceVars {
     pub size: usize,
 }
 #[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Variable {
-    pub offset: u8,
-    pub length: u8,
-    pub valid: u8,
-    pub toggle: bool,
-    pub off: u64,
-    pub on: u64,
-}
-#[repr(C)]
 pub struct Services {
+    pub offset: extern "C" fn(*const FaceVar) -> u8,
+    pub length: extern "C" fn(*const FaceVar) -> u8,
+    pub valid_values: extern "C" fn(*const FaceVar) -> u8,
+    pub toggle: extern "C" fn(*const FaceVar) -> bool,
+    pub off: extern "C" fn(*const FaceVar) -> u64,
+    pub on: extern "C" fn(*const FaceVar) -> u64,
     pub count: extern "C" fn() -> u32,
     pub vars: extern "C" fn(u32) -> FaceVars,
-    pub variable: extern "C" fn(*const FaceVar) -> Variable,
     pub at: extern "C" fn(*const FaceVar, usize) -> *const FaceVar,
     pub spec: extern "C" fn(u32) -> *const FaceSpec,
     pub set_style: extern "C" fn(*mut Face, u32) -> (),
@@ -46,22 +45,41 @@ pub struct Services {
     pub bits: extern "C" fn(*mut Face) -> *mut u32,
     pub random: extern "C" fn(*mut Randomizer) -> u32,
 }
-fn get(bits: u32, v: Variable) -> u32 {
-    (bits >> v.offset) & ((1u32 << v.length) - 1)
+/// `FaceVar::GetBits`, using the canonical `GB` callee.
+fn get_bits(s: &Services, var: *const FaceVar, bits: u32) -> u32 {
+    crate::bitmath_func::gb(bits, (s.offset)(var), (s.length)(var))
 }
-fn set(bits: &mut u32, v: Variable, value: u32) {
-    let mask = ((1u32 << v.length) - 1) << v.offset;
-    *bits = (*bits & !mask) | (value << v.offset);
+/// `FaceVar::SetBits`, using the canonical `SB` callee.
+fn set_bits(s: &Services, var: *const FaceVar, bits: &mut u32, value: u32) {
+    crate::bitmath_func::sb(bits, (s.offset)(var), (s.length)(var), value);
+}
+/// `FaceVar::ChangeBits`; the native temporary narrows to `int8_t` before wrapping.
+fn change_bits(s: &Services, var: *const FaceVar, face: *mut Face, amount: i8) {
+    let p = (s.bits)(face);
+    let mut value = (get_bits(s, var, unsafe { p.read() }) as i8).wrapping_add(amount);
+    while value < 0 {
+        value = (i32::from(value) + i32::from((s.valid_values)(var))) as i8;
+    }
+    value = (i32::from(value) % i32::from((s.valid_values)(var))) as i8;
+    let mut bits = unsafe { p.read() };
+    set_bits(s, var, &mut bits, value as u32);
+    unsafe {
+        p.write(bits);
+    }
+}
+/// `FaceVar::IsValid`.
+fn is_valid(s: &Services, var: *const FaceVar, bits: u32) -> bool {
+    get_bits(s, var, bits) < u32::from((s.valid_values)(var))
 }
 pub(crate) fn active(s: &Services, bits: u32, vars: FaceVars) -> u64 {
     let mut mask = (1u64 << vars.size) - 1;
     for i in 0..vars.size {
-        let v = (s.variable)((s.at)(vars.data, i));
-        if v.toggle {
-            mask &= !if bits & (1 << v.offset) != 0 {
-                v.on
+        let v = (s.at)(vars.data, i);
+        if (s.toggle)(v) {
+            mask &= !if crate::bitmath_func::has_bit(bits, (s.offset)(v)) {
+                (s.on)(v)
             } else {
-                v.off
+                (s.off)(v)
             };
         }
     }
@@ -75,8 +93,8 @@ pub(crate) fn valid(s: &Services, style: u32, bits: u32) -> bool {
     let mask = active(s, bits, vars);
     for i in 0..vars.size {
         if mask & (1 << i) != 0 {
-            let v = (s.variable)((s.at)(vars.data, i));
-            if get(bits, v) >= u32::from(v.valid) {
+            let v = (s.at)(vars.data, i);
+            if !is_valid(s, v, bits) {
                 return false;
             }
         }
@@ -84,22 +102,12 @@ pub(crate) fn valid(s: &Services, style: u32, bits: u32) -> bool {
     true
 }
 pub(crate) fn scale(s: &Services, face: *mut Face, vars: FaceVars) {
-    let p = (s.bits)(face);
-    let mut bits = unsafe { p.read() };
+    let bits = unsafe { (s.bits)(face).read() };
     let mask = active(s, bits, vars);
     for i in 0..vars.size {
         if mask & (1 << i) != 0 {
-            let v = (s.variable)((s.at)(vars.data, i));
-            let mut value = get(bits, v) as i8;
-            while value < 0 {
-                value = (i32::from(value) + i32::from(v.valid)) as i8;
-            }
-            value = (i32::from(value) % i32::from(v.valid)) as i8;
-            set(&mut bits, v, value as u32);
+            change_bits(s, (s.at)(vars.data, i), face, 0);
         }
-    }
-    unsafe {
-        p.write(bits);
     }
 }
 pub(crate) fn style(s: &Services, face: *mut Face, value: u32) {
@@ -119,6 +127,37 @@ pub(crate) fn random(s: &Services, face: *mut Face, r: *mut Randomizer) {
     let value = crate::random_func::scale_to_limit((s.random)(r), count);
     style(s, face, value);
     random_bits(s, face, (s.vars)((s.style)(face)), r);
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_face_get_bits(
+    s: &Services,
+    var: *const FaceVar,
+    face: *mut Face,
+) -> u32 {
+    get_bits(s, var, unsafe { (s.bits)(face).read() })
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_face_set_bits(
+    s: &Services,
+    var: *const FaceVar,
+    face: *mut Face,
+    value: u32,
+) {
+    let p = (s.bits)(face);
+    let mut bits = unsafe { p.read() };
+    set_bits(s, var, &mut bits, value);
+    unsafe {
+        p.write(bits);
+    }
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_face_change_bits(
+    s: &Services,
+    var: *const FaceVar,
+    face: *mut Face,
+    amount: i8,
+) {
+    change_bits(s, var, face, amount);
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_face_active(s: &Services, bits: u32, vars: FaceVars) -> u64 {
@@ -151,16 +190,15 @@ pub extern "C" fn openttd_rust_face_mask(s: &Services, bits: u32, vars: FaceVars
     let mask = active(s, bits, vars);
     for i in 0..vars.size {
         if mask & (1 << i) != 0 {
-            let v = (s.variable)((s.at)(vars.data, i));
-            set(&mut result, v, get(bits, v));
+            let v = (s.at)(vars.data, i);
+            set_bits(s, v, &mut result, get_bits(s, v, bits));
         }
     }
     result
 }
 
 crate::abi::layouts! {
- fn abi_layout;
+    fn abi_layout;
  "OpenTTDFaceVars" ["company_economy"] => FaceVars { data, size, };
- "OpenTTDFaceVariable" ["company_economy"] => Variable { offset, length, valid, toggle, off, on, };
- "OpenTTDFaceServices" ["company_economy"] => Services { count, vars, variable, at, spec, set_style, set_label, style, bits, random, };
+ "OpenTTDFaceServices" ["company_economy"] => Services { offset, length, valid_values, toggle, off, on, count, vars, at, spec, set_style, set_label, style, bits, random, };
 }

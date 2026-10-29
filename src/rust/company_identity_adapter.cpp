@@ -7,6 +7,7 @@
 #include "../company_base.h"
 #include "../company_func.h"
 #include "../company_cmd.h"
+#include "../company_manager_face.h"
 #include "../command_func.h"
 #include "../engine_base.h"
 #include "../group.h"
@@ -46,9 +47,10 @@ static void Identity_colour_windows() noexcept { InvalidateWindowData(WC_INCOME_
 const OpenTTDFaceServices &GetRustFaceServices() noexcept
 {
 	static const OpenTTDFaceServices services{
+	.offset = Face_offset, .length = Face_length, .valid_values = Face_valid_values,
+	.toggle = Face_toggle, .off = Face_off, .on = Face_on,
 	.count = Face_count,
 	.vars = Face_vars,
-	.variable = Face_variable,
 	.at = Face_at,
 	.spec = Face_spec,
 	.set_style = Face_set_style,
@@ -66,7 +68,7 @@ const OpenTTDCompanyIdentityServices &GetRustCompanyIdentityServices() noexcept
 	.shared = &GetRustSharedServices(), .randomizer = &_random, .faces = &GetRustFaceServices(), .groups = &FleetGroupServices(),
 	.strings = {STR_SV_UNNAMED, STR_PRESIDENT_NAME, STR_COMPANY_NAME, SPECSTR_PRESIDENT_NAME, SPECSTR_ANDCO_NAME, SPECSTR_TOWNNAME_START, SPECSTR_TOWNNAME_END, SPECSTR_COMPANY_NAME_START},
 	.company = Identity_company,
-	.next_company = Identity_next_company,
+	.next_company = RustCompanyNext,
 	.company_id = Identity_company_id,
 	.name_id = Identity_name_id,
 	.set_name_id = Identity_set_name_id,

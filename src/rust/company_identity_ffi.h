@@ -6,7 +6,7 @@
 #include "company_face_ffi.h"
 #include "fleet_ffi.h"
 #include "engine_ffi.h"
-#include "../company_manager_face.h"
+#include "../livery.h"
 struct Company;
 struct Town;
 struct alignas(16) OpenTTDCompanyNameStorage { std::byte bytes[128]; };

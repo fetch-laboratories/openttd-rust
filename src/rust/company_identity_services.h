@@ -3,8 +3,11 @@
 #ifndef RUST_COMPANY_IDENTITY_SERVICES_H
 #define RUST_COMPANY_IDENTITY_SERVICES_H
 #include "company_identity_ffi.h"
+#include "../company_base.h"
+#include "../company_manager_face.h"
+#include "../object.h"
+#include "services_cargo.h"
 inline Company * Identity_company(uint8_t id) noexcept { return Company::Get(CompanyID{id}); }
-inline Company * Identity_next_company(uint32_t from) noexcept { return RustCompanyNext(from); }
 inline uint8_t Identity_company_id(const Company *c) noexcept { return c->index.base(); }
 inline uint32_t Identity_name_id(const Company *c) noexcept { return c->name_1; }
 inline void Identity_set_name_id(Company *c, uint32_t value) noexcept { c->name_1 = value; }
@@ -29,9 +32,14 @@ inline void Identity_object_colours(Company *c) noexcept { UpdateObjectColours(c
 inline bool Identity_cargo_freight(uint8_t cargo) noexcept { return RustCargoSpec(cargo)->is_freight; }
 inline bool Identity_cargo_passengers(uint8_t cargo) noexcept { return IsCargoInClass(cargo, CargoClass::Passengers); }
 inline uint8_t Identity_goods() noexcept { return GetCargoTypeByLabel(CT_GOODS); }
+inline uint8_t Face_offset(const FaceVar *v) noexcept { return v->offset; }
+inline uint8_t Face_length(const FaceVar *v) noexcept { return v->length; }
+inline uint8_t Face_valid_values(const FaceVar *v) noexcept { return v->valid_values; }
+inline bool Face_toggle(const FaceVar *v) noexcept { return v->type == FaceVarType::Toggle; }
+inline uint64_t Face_off(const FaceVar *v) noexcept { return std::get<std::pair<uint64_t, uint64_t>>(v->data).first; }
+inline uint64_t Face_on(const FaceVar *v) noexcept { return std::get<std::pair<uint64_t, uint64_t>>(v->data).second; }
 inline uint32_t Face_count() noexcept { return GetNumCompanyManagerFaceStyles(); }
 inline OpenTTDFaceVars Face_vars(uint32_t style) noexcept { auto vars = GetCompanyManagerFaceVars(style); return {vars.data(), vars.size()}; }
-inline OpenTTDFaceVariable Face_variable(const FaceVar *v) noexcept { OpenTTDFaceVariable result{v->offset, v->length, v->valid_values, v->type == FaceVarType::Toggle, 0, 0}; if (result.toggle) { const auto &[off, on] = std::get<std::pair<uint64_t, uint64_t>>(v->data); result.off = off; result.on = on; } return result; }
 inline const FaceVar * Face_at(const FaceVar *vars, size_t i) noexcept { return &vars[i]; }
 inline const FaceSpec * Face_spec(uint32_t style) noexcept { return GetCompanyManagerFaceSpec(style); }
 inline void Face_set_style(CompanyManagerFace *face, uint32_t style) noexcept { face->style = style; }

@@ -32,4 +32,11 @@ pub struct Livery {
     pub colour2: u8,
 }
 
-crate::abi::layouts! {fn abi_layout; "Livery" ["company_economy"] => Livery {in_use, colour1, colour2,};}
+crate::abi::layouts! {
+    fn abi_layout;
+    "Livery" ["company_economy"] => Livery {
+        in_use,
+        colour1,
+        colour2,
+    };
+}

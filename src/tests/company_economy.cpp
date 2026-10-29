@@ -17,6 +17,11 @@
 #include "abi_layout.hpp"
 #include "../rust/company_adapter.h"
 #include "../rust/company_identity_ffi.h"
+#include "../rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDCompanyIdentityServices.hpp"
+#include "abi-visit-OpenTTDFaceServices.hpp"
+#include "../company_manager_face.h"
+#include <thread>
 #include "../rust/tile_owner_services.h"
 #include "../rust/command_services.h"
 #include "../core/backup_type.hpp"
@@ -30,6 +35,8 @@ TEST_CASE("Company economy - canonical owner layouts and property copy lifetime"
 {
 	ABI_LAYOUT_CHECK;
 #include "abi-layout-company_economy.inc"
+	CHECK(AbiServicesComplete(GetRustCompanyIdentityServices()));
+	CHECK(AbiServicesComplete(GetRustFaceServices()));
 
 	CompanyProperties original;
 	original.Finances().money = INT64_MIN;
@@ -45,6 +52,26 @@ TEST_CASE("Company economy - canonical owner layouts and property copy lifetime"
 	CHECK(address == &original.Finances().old_economy[23].delivered_cargo[63]);
 	copy.Finances().money = 19;
 	CHECK(original.Finances().money == Money(17));
+}
+
+TEST_CASE("Company identity - process-wide colour alias and face bit truncation")
+{
+	AutoRestoreBackup<Colours> colour(_company_colours[CompanyID(0)]);
+	CHECK(reinterpret_cast<uint8_t *>(&_company_colours[CompanyID(0)]) == openttd_rust_company_colours());
+	std::thread worker([] { _company_colours[CompanyID(0)] = COLOUR_RED; });
+	worker.join();
+	CHECK(openttd_rust_company_colours()[0] == COLOUR_RED);
+
+	FaceVar var{.type = FaceVarType::Sprite, .position = 0, .offset = 3, .length = 5, .valid_values = 6, .data = SpriteID(0)};
+	CompanyManagerFace face{0, UINT32_MAX, {}};
+	CHECK(var.GetBits(face) == 31);
+	var.ChangeBits(face, 0);
+	CHECK(var.GetBits(face) == 1);
+	face.bits = UINT32_MAX;
+	var.ChangeBits(face, 127);
+	CHECK(var.GetBits(face) == 4);
+	var.SetBits(face, 2);
+	CHECK(var.GetBits(face) == 2);
 }
 
 /* Semantic saves cannot witness a client waiting for a server-posted deletion or
@@ -65,7 +92,6 @@ static uint8_t FixtureCurrent() noexcept { return fixture_current; }
 static void FixtureSetCurrent(uint8_t id) noexcept { fixture_current = id; }
 static bool FixtureNetworking() noexcept { return fixture_networking; }
 static bool FixtureServer() noexcept { return fixture_server; }
-static bool FixtureIsAI(uint8_t) noexcept { return fixture_is_ai; }
 static uint8_t FixtureLocal() noexcept { return 0; }
 static CompanyFinances *FixtureFinances(uint8_t id) noexcept { return id < fixture_companies.size() && fixture_companies[id] != nullptr ? &fixture_companies[id]->Finances() : nullptr; }
 static OpenTTDCompanyRef FixtureNext(uint32_t from) noexcept
@@ -102,7 +128,7 @@ static void FixtureReset(bool networking, bool server)
 	fixture_finance.invalidate_company_windows = FixtureNoop;
 	fixture_services = GetRustCompanyServices();
 	fixture_services.finance = &fixture_finance;
-	fixture_services.company_next = FixtureNext; fixture_services.company_is_ai = FixtureIsAI;
+	fixture_services.company_next = FixtureNext;
 	fixture_services.local_company = FixtureLocal; fixture_services.network_server = FixtureServer;
 	fixture_services.post_company_delete = FixturePostDelete;
 	fixture_services.script_random_next = FixtureRandomNext; fixture_services.reset_competitor_timeout = FixtureTimeout;
@@ -126,6 +152,7 @@ static void FixtureReset(bool networking, bool server)
 	fixture_identity.set_president_parts = [](Company *c, uint32_t value) noexcept { FixtureProperties(c)->president_name_2 = value; };
 	fixture_identity.render = [](OpenTTDCompanyNameStorage *, uint32_t, uint32_t) noexcept { return OpenTTDByteSpan{reinterpret_cast<const uint8_t *>("President"), 9}; };
 	fixture_identity.admin_update = FixtureAdminUpdate;
+	fixture_identity.is_ai = [](const Company *) noexcept { return fixture_is_ai; };
 	fixture_faces = GetRustFaceServices();
 	fixture_faces.count = []() noexcept -> uint32_t { return 1; };
 	fixture_faces.vars = [](uint32_t) noexcept { return OpenTTDFaceVars{nullptr, 0}; };

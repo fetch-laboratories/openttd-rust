@@ -118,7 +118,6 @@ static void Fin_money_animation(uint32_t t, int64_t amount) noexcept
 }
 
 /* Company identity and lifecycle services. */
-static bool Co_company_is_ai(uint8_t id) noexcept { return Company::Get(id)->is_ai; }
 static size_t Co_company_count() noexcept { return Company::GetNumItems(); }
 static bool Co_can_allocate_company() noexcept { return Company::CanAllocateItem(); }
 static OpenTTDCompanyVehicleCounts Co_company_vehicle_counts(uint8_t id) noexcept
@@ -408,7 +407,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 	(void)GetRustEconomy(); (void)GetRustPrices(); (void)GetRustCompanyScores();
 	static const OpenTTDCompanyServices services{
 		.identity = &GetRustCompanyIdentityServices(), .finance = &GetRustCompanyFinanceServices(), .shared = &GetRustSharedServices(),
-		.company_next = RustCompanyRefNext, .company_is_ai = Co_company_is_ai,
+		.company_next = RustCompanyRefNext,
 		.company_count = Co_company_count, .can_allocate_company = Co_can_allocate_company,
 		.local_company = RustLocalCompanyID, .network_server = RustNetworkServer,
 		.company_vehicle_counts = Co_company_vehicle_counts, .vehicle_limits = Co_vehicle_limits,

@@ -93,7 +93,6 @@ struct OpenTTDCompanyServices {
 	const OpenTTDCompanyFinanceServices *finance;
 	const OpenTTDSharedServices *shared;
 	OpenTTDCompanyRef (OPENTTD_RUST_CALL *company_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(company_next);
-	bool (OPENTTD_RUST_CALL *company_is_ai)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_is_ai);
 	size_t (OPENTTD_RUST_CALL *company_count)() noexcept OPENTTD_SERVICE_DEFAULT(company_count);
 	bool (OPENTTD_RUST_CALL *can_allocate_company)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate_company);
 	uint8_t (OPENTTD_RUST_CALL *local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
