@@ -942,6 +942,7 @@ pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
 }
 
 /// `Vehicle::HandleLoading`.
+#[inline(never)]
 pub(crate) fn handle_loading(v: VehicleRef, mode: bool, s: &Services) {
     let o = s.orders();
     let order = o.current(v);
@@ -1171,7 +1172,6 @@ macro_rules! visit_entry {
     };
 }
 visit_entry!(openttd_rust_visit_leave_station() => leave_station);
-visit_entry!(openttd_rust_visit_handle_loading(mode: bool) => handle_loading);
 visit_entry!(openttd_rust_visit_enter_depot() => enter_depot);
 visit_entry!(openttd_rust_visit_cancel_reservation(next: u16, st: *mut Station) => cancel_reservation);
 

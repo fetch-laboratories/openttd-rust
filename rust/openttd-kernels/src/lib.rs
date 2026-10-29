@@ -142,6 +142,7 @@ mod tree_cmd;
 mod trees;
 mod tunnelbridge;
 mod tunnelbridge_cmd;
+mod tunnelbridge_map;
 mod vehicle;
 mod vehicle_base;
 mod vehicle_transactions;

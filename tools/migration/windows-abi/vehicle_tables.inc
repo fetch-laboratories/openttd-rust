@@ -63,7 +63,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(vehicle, tick_status);
 		VEHICLE_UNUSED(vehicle, day_cost);
 		VEHICLE_UNUSED(vehicle, make_dummy);
-		VEHICLE_UNUSED(vehicle, loading);
 		VEHICLE_UNUSED(vehicle, write_tick);
 		VEHICLE_UNUSED(vehicle, direction);
 		VEHICLE_UNUSED(vehicle, status);
@@ -75,7 +74,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(vehicle, order_nonstop);
 		VEHICLE_UNUSED(ground, has_articulated);
 		VEHICLE_UNUSED(leaves, max_depot_penalty);
-		VEHICLE_UNUSED(vehicle, loading);
 		VEHICLE_UNUSED(vehicle, visits);
 		VEHICLE_UNUSED(vehicle, waiting_for_unbunching);
 		VEHICLE_UNUSED(vehicle, leave_unbunching_depot);

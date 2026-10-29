@@ -658,6 +658,47 @@ uint32_t GetIndustryProbabilityCallback(IndustryType type, IndustryAvailabilityC
 #endif
 }
 
+#ifdef WITH_RUST
+static void RustIndustryResolveProduction(void *context, uint32_t random, uint32_t parameter, OpenTTDIndustryProductionResult *out) noexcept
+{
+	auto &object = *static_cast<IndustriesResolverObject *>(context);
+	object.callback_param1 = random;
+	object.callback_param2 = parameter;
+	const auto *group = object.Resolve<IndustryProductionSpriteGroup>();
+	out->present = group != nullptr;
+	if (group == nullptr) return;
+	out->version = group->version;
+	if (group->version == 0xFF) return;
+	out->num_input = group->num_input;
+	out->num_output = group->num_output;
+	auto deref = [&](int field) { return group->version >= 1 ? object.GetRegister(field) : field; };
+	for (size_t n = 0; n < group->num_input; n++) {
+		out->subtract[n] = deref(group->subtract_input[n]);
+		if (group->version >= 2) out->cargo_input[n] = group->cargo_input[n];
+	}
+	for (size_t n = 0; n < group->num_output; n++) {
+		out->add[n] = deref(group->add_output[n]);
+		if (group->version >= 2) out->cargo_output[n] = group->cargo_output[n];
+	}
+	out->again = deref(group->again);
+}
+const OpenTTDIndustryDeliveryServices &GetIndustryDeliveryServices() noexcept
+{
+	static_assert(sizeof(IndustriesResolverObject) <= sizeof(OpenTTDIndustryProductionStorage));
+	static_assert(alignof(IndustriesResolverObject) <= alignof(OpenTTDIndustryProductionStorage));
+	static const OpenTTDIndustryDeliveryServices services = {
+		.construct = [](OpenTTDIndustryProductionStorage *storage, Industry *ind) noexcept {
+			auto *object = std::construct_at(reinterpret_cast<IndustriesResolverObject *>(storage), ind->location.tile, ind, ind->type);
+			return reinterpret_cast<OpenTTDIndustryProductionContext *>(object);
+		},
+		.destroy = [](OpenTTDIndustryProductionContext *context) noexcept { reinterpret_cast<IndustriesResolverObject *>(context)->~IndustriesResolverObject(); },
+		.resolve = [](OpenTTDIndustryProductionContext *context, uint32_t random, uint32_t parameter, OpenTTDIndustryProductionResult *out) noexcept { RustIndustryResolveProduction(context, random, parameter, out); },
+		.input_multiplier = [](const OpenTTDIndustrySpecHandle *spec, size_t input, size_t output) noexcept { return reinterpret_cast<const IndustrySpec *>(spec)->input_cargo_multiplier[input][output]; },
+	};
+	return services;
+}
+#endif
+
 /**
  * Get the industry production callback and apply it to the industry.
  * @param ind    the industry this callback has to be called for
@@ -672,28 +713,7 @@ void IndustryProductionCallback(Industry *ind, int reason)
 	 * repeat limit, version policy and all slot mutations; this leaf only resolves
 	 * and copies register values while the native resolver context is live. */
 	openttd_rust_industry_production_callback(ind, ind->production_owner.get(), &object, spec->behaviour.base(), reason,
-		[](void *context, uint32_t random, uint32_t parameter, OpenTTDIndustryProductionResult *out) noexcept {
-			auto &object = *static_cast<IndustriesResolverObject *>(context);
-			object.callback_param1 = random;
-			object.callback_param2 = parameter;
-			const auto *group = object.Resolve<IndustryProductionSpriteGroup>();
-			out->present = group != nullptr;
-			if (group == nullptr) return;
-			out->version = group->version;
-			if (group->version == 0xFF) return;
-			out->num_input = group->num_input;
-			out->num_output = group->num_output;
-			auto deref = [&](int field) { return group->version >= 1 ? object.GetRegister(field) : field; };
-			for (size_t n = 0; n < group->num_input; n++) {
-				out->subtract[n] = deref(group->subtract_input[n]);
-				if (group->version >= 2) out->cargo_input[n] = group->cargo_input[n];
-			}
-			for (size_t n = 0; n < group->num_output; n++) {
-				out->add[n] = deref(group->add_output[n]);
-				if (group->version >= 2) out->cargo_output[n] = group->cargo_output[n];
-			}
-			out->again = deref(group->again);
-		}, &GetIndustryRustServices());
+		RustIndustryResolveProduction, &GetIndustryRustServices());
 #else
 	const IndustrySpec *spec = GetIndustrySpec(ind->type);
 	IndustriesResolverObject object(ind->location.tile, ind, ind->type);

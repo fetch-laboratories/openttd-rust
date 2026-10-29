@@ -152,6 +152,13 @@ pub struct State {
     growth: GrowthFields,
     stations_near: crate::station::StationList,
 }
+/// SAFETY: Live serialized town owner and original cargo acceptance effect.
+pub(crate) unsafe fn record_delivery(owner: *mut State, effect: u8, amount: u32) {
+    unsafe {
+        let count = &mut (*owner).simulation.received[usize::from(effect)].new_act;
+        *count = count.wrapping_add(amount as u16);
+    }
+}
 /// The town's nearby station set, for immediate borrows only.
 pub(crate) fn stations_near(state: *mut State) -> *mut crate::station::StationList {
     // SAFETY: Live owner supplied by the caller's resolved town.

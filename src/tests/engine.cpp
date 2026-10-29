@@ -162,4 +162,52 @@ TEST_CASE("Engine type label services expose live canonical scalars", "[rust][en
 	CheckLiveTypeLabels(_railtypes, RAILTYPE_END, GetRustRailRegistryServices().labels);
 	CheckLiveTypeLabels(_roadtypes, ROADTYPE_END, GetRustRoadRegistryServices().labels);
 }
+
+TEST_CASE("Engine type availability returns canonical booleans for sparse masks", "[rust][engine][abi]")
+{
+	static uint64_t available;
+	OpenTTDSharedServices shared{};
+	shared.company_valid = [](uint8_t) noexcept { return true; };
+	shared.clear_square_services.generating_world = []() noexcept { return false; };
+	static OpenTTDTypeAvailabilityServices types{};
+	shared.current_company = []() noexcept -> uint8_t { return 0; };
+	shared.type_availability = []() noexcept -> const OpenTTDTypeAvailabilityServices * { return &types; };
+	types.editor = []() noexcept { return false; };
+	types.company_roadtypes = [](uint8_t) noexcept { return available; };
+	types.company_railtypes = [](uint8_t) noexcept { return available; };
+	Backup<uint64_t> road_hidden(*openttd_rust_road_hidden_mask(), 0);
+	Backup<uint64_t> rail_hidden(*openttd_rust_rail_hidden_mask(), 0);
+	for (uint64_t hidden : {UINT64_C(0), UINT64_C(1) << 61}) {
+		road_hidden.Change(hidden);
+		rail_hidden.Change(hidden);
+		for (uint64_t mask : {UINT64_C(0), UINT64_C(1), (UINT64_C(1) << 60) | (UINT64_C(1) << 61), UINT64_MAX}) {
+			available = mask;
+			for (RoadType rt = ROADTYPE_BEGIN; rt != ROADTYPE_END; rt++) {
+				RoadTypes native{mask};
+				native.Reset(RoadTypes{hidden});
+				CAPTURE(mask, hidden, rt);
+				CHECK(static_cast<unsigned>(openttd_rust_has_road_type(&shared, &types, 0, rt)) == static_cast<unsigned>(native.Test(rt)));
+				CHECK(static_cast<unsigned>(openttd_rust_val_road_type(&shared, rt)) == static_cast<unsigned>(native.Test(rt)));
+			}
+			for (RailType rt = RAILTYPE_BEGIN; rt != RAILTYPE_END; rt++) {
+				CAPTURE(mask, hidden, rt);
+				const bool expected = !RailTypes{hidden}.Test(rt) && RailTypes{mask}.Test(rt);
+				CHECK(static_cast<unsigned>(openttd_rust_has_rail_type(&types, 0, rt)) == static_cast<unsigned>(expected));
+				CHECK(static_cast<unsigned>(openttd_rust_val_rail_type(&shared, rt)) == static_cast<unsigned>(expected));
+			}
+		}
+	}
+	OpenTTDSharedServices guarded{};
+	for (uint8_t rt : {uint8_t{ROADTYPE_END}, uint8_t{ROADTYPE_END + 1}, uint8_t{UINT8_MAX}}) {
+		CAPTURE(rt);
+		CHECK(openttd_rust_val_road_type(&guarded, static_cast<RoadType>(rt)) == 0);
+	}
+	for (uint8_t rt : {uint8_t{RAILTYPE_END}, uint8_t{RAILTYPE_END + 1}, uint8_t{UINT8_MAX}}) {
+		CAPTURE(rt);
+		CHECK(openttd_rust_val_rail_type(&guarded, static_cast<RailType>(rt)) == 0);
+	}
+	rail_hidden.Restore();
+	road_hidden.Restore();
+}
+
 #endif

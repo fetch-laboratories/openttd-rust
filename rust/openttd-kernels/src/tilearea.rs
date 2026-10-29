@@ -116,6 +116,8 @@ impl OrthogonalTileIterator {
         }
     }
     /// `operator++`, asserting that the end has not been reached.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub fn advance(&mut self, map: Map, check: impl FnOnce(bool)) {
         check(self.tile != crate::tile_type::INVALID_TILE);
         self.x -= 1;

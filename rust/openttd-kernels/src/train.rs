@@ -2391,10 +2391,9 @@ impl Game<'_> {
             return true;
         }
         let valid_order = v.order != OT_NOTHING && v.order != OT_CONDITIONAL;
+        let orders = self.vs().orders();
         // SAFETY: The original live train shell survives orders; no owner borrow spans reentry.
-        if unsafe {
-            crate::orders::openttd_rust_process_orders(id.shell.cast(), self.vs().orders())
-        } != 0
+        if unsafe { crate::orders::openttd_rust_process_orders(id.shell.cast(), orders) } != 0
             && (self.leaves.check_reverse)(id) != 0
         {
             id.set_wait_counter(0);
@@ -2418,7 +2417,7 @@ impl Game<'_> {
             }
             id.set_flag(9, false);
         }
-        self.vs().handle_loading(id.vehicle(), mode);
+        self.vs().handle_loading(id.vehicle(), mode, orders);
         if (self.leaves.read_order)(id) == OT_LOADING || self.stay_depot(id) {
             return true;
         }

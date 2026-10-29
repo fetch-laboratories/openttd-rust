@@ -242,7 +242,6 @@ static void RoadBoundary()
 		openttd_rust_road_set_dest(u, p.state, destination, p.dest, p.leaves);
 	};
 	t.vehicle.order_type = [](OpenTTDVehicle *) noexcept { return road_orders->vehicle->current.type; };
-	t.vehicle.loading = [](OpenTTDVehicle *, bool, const OpenTTDVehicleVisits *) noexcept {};
 	t.vehicle.visits = []() noexcept -> const OpenTTDVehicleVisits * { return nullptr; };
 	OpenTTDEffectLeaves emission_leaves = EffectTestLeaves();
 	auto *emission_owner = openttd_rust_effect_new();

@@ -42,8 +42,10 @@ shared random-number behavior.
   in C++ (for example the map arrays).
 - **Facade**: the C++ function or method that keeps the original signature and forwards to Rust
   under `WITH_RUST`; the original body stays in the `#else` branch for portable builds.
-- **Leaf**: a typed `noexcept` C++ service that Rust calls for a shared operation (map access,
-  `Random`, sound, viewport) and that returns without reentering the calling owner.
+- **Leaf**: a typed `noexcept` C++ service that Rust calls for a shared operation (`Random`,
+  sound, viewport, or a field of a record whose storage has not moved) and that returns without
+  reentering the calling owner. Map fields and moved records are read in place, not through
+  leaves.
 - **Service table**: a designated-initializer C++ struct of typed leaf function pointers (for
   example `OpenTTDTreeServices`) that Rust borrows for a call; each field is one named service,
   never an opcode.
@@ -310,6 +312,12 @@ tools/simulate.py speed collect DIR`. Collection stops other builds, links, prof
 only while its 144 interleaved timed games run, records load and process observations without a
 CPU threshold, and prints the `SPEED_PASS` rows after release.
 
+`SPEED_PASS` retains the last three quiet-pass ratios per scenario, oldest first; the
+collector prints the shifted three-pass history with each new pass. Ceiling and band decisions
+use their mean multiplied by the current projection's instruction-growth term, while
+`projected_ratio` still reports the latest anchor's projection. Play saves have a 1.6x ceiling
+and 1.52x band; generation keeps 1.3x and 1.235x.
+
 `SPEED_ANCHORS` in `tools/simulation/instructions.py` holds each measured anchor `{head, ratio, Ir,
 identity}` and a separate `integrated` record with its head and Ir. Empty anchors mean
 collection only, never a passing speed guard. Each speed pass fills them from its same-head
@@ -374,6 +382,25 @@ C++ TSan cannot see uninstrumented Rust accesses, so a
 reference-only finding can reflect an access moved to Rust. These two fixed inputs
 do not establish arbitrary SDL determinism, interactive RNG equality or Rust race
 freedom. The deep set runs both ordinary threaded and TSan comparisons.
+
+`python3 tools/migration.py simulate --multiplayer` (#510) runs only in the host's
+deep tier. An unchanged dedicated original and an SDL offscreen fork client run
+the Opus play save, then swap roles. The candidate fixture relinks only the
+generated revision object, replacing the revision text, tagged flag and NewGRF
+version with the reference constants; native game objects and executables are
+identified and left unchanged. Unmodified builds reject the join with wrong
+revision. This establishes neither release-version nor arbitrary NewGRF
+interoperability. The original revision source and executable remain unchanged.
+
+The paused server waits for the initial sync ACK/ACTIVE before unpausing. Both
+processes save at the next calendar-month callback; the client sends normal QUIT
+before server shutdown. The member requires matching sync records, real threads,
+stop saves, changed RNG and progress, successful exits and no unexpected network
+errors. Equivalent-role saves across swapped sessions compare through the existing
+decoder, including AIPL; a network client intentionally omits the server's AI
+configuration. Network-frame origins remain independent. Full logs, commands,
+identity records and failures are retained. This exercises spectator networking
+and server unpause, leaving client construction commands outside its evidence.
 
 `python3 tools/migration.py build|simulate --sanitize` (#505) builds both games with
 `-fsanitize=address,undefined` in `build-reference-sanitized` (shared, beside the reference
@@ -632,16 +659,34 @@ Original header helpers and constants live once in crate modules named after the
 import them instead of keeping copies, and `src/rust/services.cpp` asserts every value. The
 checker cannot see Rust copies.
 
-`python3 tools/port-metrics.py` reports the change in retired pinned-original C++ lines
-separately from fork glue added/removed and signed net glue. Original retirement can be negative
-when original lines are restored; removing fork glue does not retire original C++. Ownership
-ports retire more original C++ than net glue plus tooling added, or explain why; conversions
-report their net glue. `--whole-fork` prints totals against the pinned original and the retired
-share of simulation source lines. Its one inventory covers world-state owners, commands,
-accessors, link graph and pathfinding, excluding GUI, platform, vendored code and generic
-support. Mixed owner files, blank lines, comments and data tables count. The diff/guard
-classification measures source lines, not C++ preprocessing or behavioral completion. Historical
-roadmap rows keep their labelled legacy counts.
+`python3 tools/port-metrics.py` reports code lines using pinned Pygments 2.19.2
+lexers, excluding comments (including preprocessor directives), blanks and Python docstrings.
+If the installed version differs, the command uses `uv run --with pygments==2.19.2`;
+install `uv` as in setup. Every metric uses code lines; the second line retains physical-line
+counts for historical comparisons. Original retirement can be negative on restoration;
+removing fork glue does not retire original C++. Ownership ports retire more original C++
+than net glue plus tooling added, or explain why; conversions report their net glue.
+
+`--whole-fork` prints whole-fork and simulation retirement shares, then a disjoint per-area
+inventory of original, retired, remaining, glue and compiled C++ code lines. Directory-specific
+areas take precedence, followed by GUI, platform, simulation owners, NewGRF, graphics and
+support. Simulation storage comprises the simulation headers, `map.cpp` and `*_map.cpp`;
+logic includes the command, cheat, goal, story, league, signs, misc_cmd, vehiclelist, elrail and
+autoslope families. Boundary headers/implementations have their own glue row. Compiled C++ is
+remaining original plus compiled fork glue; the report also counts Rust `openttd_rust_*`
+exports and function-pointer fields in boundary records. Other build defines and file selection
+are not evaluated: this is a source/`WITH_RUST` guard inventory, not a preprocessed build or a
+claim of behavioral completion. Historical roadmap rows retain their labelled legacy counts.
+
+`python3 tools/orphan-exports.py --base-ref origin/rust-migration` checks quick CI's
+production-use rule independently of the shared-accessor heuristic. Rust exports require a
+production C++ declaration, and exports/`src/rust/` declarations require a production C++ reference under
+`src/`. A service-table binding counts; comments, strings, declarations, `src/tests/`, tooling
+and Windows ABI fixtures do not. Existing violations are named in
+`tools/orphan-export-baseline.txt`, which must shrink when fixed and cannot grow against the
+base revision. `tools/test-orphan-exports.py` exercises the scan and ratchet with fixture trees.
+The check is syntactic: it does not resolve macros or arbitrary conditional compilation.
+Reviewers retain responsibility for orphan `WITH_RUST` bodies.
 
 ## Team process and integration
 
@@ -690,7 +735,11 @@ after integrations, reading the dry run before `--apply`. It removes a linked wo
 the main checkout or `.local/reference`) whose branch merged into `origin/rust-migration` or
 whose PR merged or closed, through `git worktree remove` without `--force`, so a dirty or locked
 one stays. It then deletes the local branch when that branch merged or origin holds the same
-head. A branch at a base commit with no PR is a task not yet committed and stays. In the main
+head. Clean detached or no-commit T3 task worktrees may also go when no process has its cwd
+inside, the roadmap and open issue/PR bodies do not name the path (including shortened T3
+names), and current deep reports, speed anchors and pinned runtimes do not retain their output.
+Failure to inspect cwd keeps the worktree. The main checkout, reference, dirty and locked trees
+stay protected. Other no-PR branches remain. Live cwd and output checks run again at deletion. In the main
 checkout's `.local` it removes finished runs under `simulation`, `verification`, `coverage` and
 `deep` whose report's `candidate_commit` (or a deep report's `commit`) is an ancestor of
 `origin/rust-migration`, keeping other finished runs as possible open-PR evidence and reports
@@ -1723,7 +1772,9 @@ maintenance, catchment radius/rectangle, delivery-list maintenance, nearby-list 
 `CatchmentCoversTown`, `RecomputeCatchment(ForAll)`, `ForAllStationsAroundTiles`, the lazy
 `StationFinder` and the around-tile production/acceptance scans; `bitmap_type.rs` owns bitmap
 storage, geometry and the live cursor, and `tile_cmd.rs` the accepted/produced cargo dispatch to
-the Rust house, industry and HQ owners. Rust consumers (station acceptance and watched cargo,
+the Rust house, industry and HQ owners. Acceptance inlines the shared bitmap/orthogonal advance
+helpers; native assertion services resolve only for false conditions (PR #555).
+Rust consumers (station acceptance and watched cargo,
 `MoveGoodsToStation`, delivery, subsidy and cargo-monitor scans, industry construction,
 destruction and production, house loop/removal/placement, the house resolver, the HQ loop and
 station commands) use this state directly. C++ keeps pool shells, map storage, specs and
@@ -1764,8 +1815,11 @@ reference aliases. Cargo/refusal/production/randomisation/animation and vehicle-
 uses the NewGRF evaluator, without script VM entry or payment/destination reentry; wrappers are
 noexcept. Payment settlement borrows typed canonical vehicle/finance services and transfer/final
 payment read feeder shares directly from the Rust cargo-storage owner. Payment fronts and station
-IDs use shared boundary types; delivery/industry selectors and packed source remain under #168,
-#199 and #500. Money saturates arithmetic but retains native shifts; callback unsigned products,
+IDs, delivery sources and destination industry handles use shared boundary types. Delivery
+updates the canonical station, industry, company and town Rust owners directly. Production
+resolution keeps one native resolver in caller-owned stack storage across the Rust repeat loop;
+randomisation and animation call their Rust owners directly. Remaining boundary conversions stay
+under #168, #199 and #500. Money saturates arithmetic but retains native shifts; callback unsigned products,
 BigMulS narrowing, stockpile limits and ordered randomisation/animation are explicit. Checks:
 the default `economy` simulation. NewGRF resolver execution, legacy CAPY files and every
 industry layout are not exhausted. Production cargo callback fixtures accompany #467; the narrow
@@ -2056,7 +2110,9 @@ bridge-speed branches remain #156 gaps. PR #374.
 `rust/openttd-kernels/src/vehicle/visits.rs` owns `BeginLoading`, `HandleLoading`,
 `LeaveStation`, `CancelReservation`, `ResetRefitCaps`, `CalcPercentVehicleFilled`,
 `VehicleEnterDepot` with depot-entry recording, all of `LinkRefresher` and both `IncreaseStats`
-overloads. It calls the Rust orders, station loading (`prepare_unload`), cargo storage, refit
+overloads. Controllers retain an immutable orders table across `ProcessOrders`, then read the
+current order kind before resolving the guarded visits table for the out-of-line loading/dummy
+body (PR #555). It calls the Rust orders, station loading (`prepare_unload`), cargo storage, refit
 command, train/ship state, maintenance and pending-autoreplace owners directly, including
 aircraft hangar entry. Train, ship, aircraft, road, orders, station-command and loading callers
 reach it through `VehicleServices::visits`; the C++ member functions are thin facades for the

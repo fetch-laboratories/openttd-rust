@@ -67,6 +67,13 @@ pub struct Economy {
     pub old_loan: i64,
     pub old_fraction: u16,
 }
+/// SAFETY: Live serialized company finance owner and valid cargo slot.
+pub(crate) unsafe fn record_delivery(owner: *mut Finances, cargo: u8, amount: u32) {
+    unsafe {
+        let count = &mut (*owner).current.cargo[usize::from(cargo)];
+        *count = count.wrapping_add(amount);
+    }
+}
 /// Opaque native `Company`. Pool services lend its address while the shell is
 /// live; Rust never dereferences it or retains an owner borrow across callbacks.
 pub use crate::company_type::OpenTTDCompany;

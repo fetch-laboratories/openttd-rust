@@ -171,7 +171,7 @@ impl<const AUDITED: bool> Context<'_, AUDITED> {
     #[inline]
     fn has_tile_road_type(&self, tile: u32, kind: crate::services::RoadTramType) -> bool {
         self.map()
-            .and_then(|m| crate::road_map::has_tile_road_type(&m.types, self.shared(), tile, kind))
+            .and_then(|m| crate::road_map::has_tile_road_type(&m.types, tile, kind))
             .unwrap_or_else(|| (self.s.has_tile_road_type)(tile, kind))
     }
 }
@@ -1570,8 +1570,27 @@ pub(crate) fn should_stop(shared: &Services, v: VehicleRef, station: u16) -> boo
 
 /// Lazy handler for header preconditions. Valid inline helpers never resolve the
 /// native registry; failed assertions follow the native build's assertion policy.
+#[inline]
 pub(crate) fn native_assert(shared: &Services, condition: bool) {
-    (table(shared).native_assert)(condition);
+    if !condition {
+        (table(shared).native_assert)(condition);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn successful_header_preconditions_need_no_native_registry() {
+        extern "C" fn random(_: *mut std::ffi::c_void) -> u32 {
+            0
+        }
+        extern "C" fn industry(_: i32, _: i32, _: *mut u32) -> u32 {
+            0
+        }
+        // The fixture has no movement registry, as before native first use.
+        let shared = crate::services::fixture(std::ptr::null_mut(), random, industry);
+        super::native_assert(&shared, true);
+    }
 }
 
 crate::abi::layouts! {

@@ -13,23 +13,58 @@ fork; the remaining upstream documentation explains behavior and architecture.
 
 ## Migration method
 
-- The goal is a game whose simulation runs in Rust. Prioritize game code: map
-  generation, landscape and tile loops, towns, industries, vehicles, cargo,
-  economy, link graph, pathfinding, and the commands that change them. Port
-  support code only when a selected game component needs it; a port that keeps
-  the data in C++ behind one setter per field is support code. Vendored
-  libraries (`src/3rdparty`), GUI rendering and platform code come last.
-  Upstream unit-test coverage alone is not a reason to select a component.
-  This orders what to port, not ports against other work: the roadmap keeps
-  one work order for ports, maintenance, testing and housekeeping, ranked by
-  what each item retires, protects or saves.
+- The goal is a complete Rust rewrite of OpenTTD: every original C++ line
+  retires (user direction, 2026-10-28). The fork's own C++ glue retires with
+  it, so the distance to the goal is the C++ the Rust build still compiles,
+  original plus glue. The work runs in overlapping phases, sized with exit
+  criteria in the roadmap's "Phases":
+  1. simulation logic: map generation, landscape and tile loops, towns,
+     industries, vehicles, cargo, economy, link graph, pathfinding and the
+     commands that change them;
+  2. simulation storage: every pool, then the map;
+  3. the code that reads simulation data: save/load, the script API, network
+     and NewGRF;
+  4. support code: core, strings, settings, viewport and graphics;
+  5. GUI, simulation drawing and platform backends;
+  6. vendored libraries (`src/3rdparty`).
+
+  No phase is planned beyond the next one, and no decision about a later phase
+  is made unless it affects the current or next phase (user direction,
+  2026-10-28). A free slot takes the highest-ranked ready item of the earliest
+  phase with ready work. Later phases fill the slots that earlier phases leave free (user
+  decision, 2026-10-28). Within phases 1 and 2, port support code only when a
+  selected game component needs it; a port that keeps the data in C++ behind
+  one setter per field is support code. A vendored library is replaced by a
+  maintained Rust crate where one reproduces the behavior the game observes,
+  and ported otherwise (user decision, 2026-10-28). Squirrel is decided when
+  phase 6 reaches it; deviating from the original may be acceptable by then, so
+  no work plans a Squirrel port (user decision, 2026-10-28). Upstream unit-test coverage alone is not a reason to select a
+  component. This orders what to port, not ports against other work: the
+  roadmap keeps one work order for ports, maintenance, testing and
+  housekeeping, ranked by what each item retires, protects or saves.
 - Prefer ownership ports: Rust owns the component's state and control flow, and
-  C++ keeps only a thin facade plus callbacks for shared services (`Random`,
-  pools, map access, progress). With `WITH_RUST` defined the original C++ body
+  C++ keeps only a thin facade plus calls for shared operations (`Random`,
+  allocation, progress, sound) and for the fields of records whose storage has
+  not moved yet. With `WITH_RUST` defined the original C++ body
   is not compiled; it remains in the `#else` of `#ifdef WITH_RUST` (or under
   `#ifndef WITH_RUST`) for portable builds. Do not extract an algorithmic
   fragment while C++ keeps the surrounding state and loop, unless the roadmap
   names it as a stepping stone.
+- The data moves too: the rewrite retires every C++ line, including the
+  object classes and map accessors in the headers (user direction,
+  2026-10-28). Once a component's control flow runs in Rust, a storage port
+  moves its records into Rust: pool objects (vehicles first, #563; then
+  stations, orders, towns, industries, companies and the rest), then the map
+  arrays. A moved record is defined once, in Rust, with a C-compatible layout;
+  its C++ declaration is generated and its layout checked at build, so both
+  languages read and write its fields in place. C++ code not yet ported
+  (drawing, GUI, save/load, scripts, network) keeps inline accessors over that
+  shared layout until it is ported in turn, never a call per field; only
+  operations (allocation, deletion, iteration with hooks, virtual behavior)
+  cross as calls. A storage port deletes the per-field services and reader
+  carriers it replaces. Storage ports are phase 2 ownership ports: the work
+  order ranks them beside leftover game logic by the code they retire, the
+  crossings they remove and the glue they delete, with no separate gate.
 - Keep the full game running throughout migration. Preserve networking, saves,
   mods, interface, and shared random-number behavior, including the exact
   sequence of random draws.
@@ -44,9 +79,10 @@ fork; the remaining upstream documentation explains behavior and architecture.
   single-player commands on the main thread and the game loop on `ottd:game`,
   serialized by the game-state mutex. The `-vnull` harness runs one thread and
   cannot see the difference.
-- Call shared services directly. Rust calls `Random`, map and pool accessors and
-  other shared services through `noexcept` C++ wrappers and keeps the original's
-  control flow, so a port reads like the C++ body it replaces. Environmental
+- Call shared services directly. Rust calls `Random`, pool operations and
+  other shared services, and the field accessors of records whose storage has
+  not moved, through `noexcept` C++ wrappers and keeps the original's control
+  flow, so a port reads like the C++ body it replaces. Environmental
   failures are not simulation behavior: allocation failure, I/O errors in debug
   or log output, and paths that need developer-only defines such as
   `RANDOM_DEBUG`. An exception escaping a wrapper terminates. Return control to
@@ -67,9 +103,14 @@ fork; the remaining upstream documentation explains behavior and architecture.
   no async, future, task or mailbox machinery, and crossing the boundary
   allocates nothing per call. Where the original builds a local container, the
   port uses a local `Vec`, not process-wide unsafe scratch. Each service is its
-  own typed `noexcept` function, not an opcode switch or positional array. Each
-  entry resolves its owner once and reads, once, only the fields it uses:
-  neither a whole-record view nor a call per field. Services return their real
+  own typed `noexcept` function, not an opcode switch or positional array. Data
+  crosses in place, not by call: a field of the map or of a record whose layout
+  is shared is a field-sized raw load or store at the original's observation
+  point. Until a record's storage port, an entry resolves its owner once and
+  reads its fields through that record's shared typed accessors. A reader
+  function or carrier struct written for one call site is a design fault: the
+  boundary then grows with call sites instead of data types, and the storage
+  port must delete it again. Services return their real
   types on both sides and tables use designated initializers. A C++ class type
   (`PoolID`, `StrongType`) crosses as its base type, because MSVC returns class
   types through a hidden pointer (#355). Existing ports convert under #168 and
@@ -94,13 +135,17 @@ fork; the remaining upstream documentation explains behavior and architecture.
   onto the Rust entry and the body goes. Before requesting Full, a PR that
   removes a name greps `tools/simulation/` and `src/tests/` for it: fixtures of
   scenarios not run locally compile only in Full.
-- The selected #274 shared map descriptor is limited to audited scheduler clear,
-  water and tree loops and the audited road track-status reads retained by #523
-  (`docs/design/world-state.md`). Pixel heights/slopes and other vehicle paths
-  keep typed services. C++ retains canonical arrays and writes. Shared header
-  helpers preserve native assertions; raw field loads end before callbacks and
-  descriptor lifetime requires a proved no-reset/no-yield interval. Other
-  entries keep typed services until audited.
+- Simulation code in Rust reads and writes the map arrays in place through the
+  shared map descriptor (`docs/design/world-state.md`), not through a service
+  per field or predicate. Its interval is proved once, not per entry:
+  `Map::Allocate` (new game and the loaders) and the game-state mutex yield
+  (generation progress, GRF scanning) run outside the game loop and command
+  execution, and a change that adds a reset or yield site there re-proves it.
+  Raw field loads use no Rust references and end before a callback that can
+  load, reset or yield; shared header helpers preserve native assertions. C++
+  keeps canonical map storage and its accessors until the map storage port.
+  Existing typed map services retire hottest first (#565) and otherwise when a
+  port touches them.
 - Deferral names an owned issue whose result can lift it; a re-selection
   condition that waits on another deferred or unscheduled item is circular. A
   core loop (tile loop, vehicle tick) that misses the retirement ratio gets a
@@ -119,7 +164,11 @@ fork; the remaining upstream documentation explains behavior and architecture.
   tools/migration.py simulate`, #72) plus the existing tests; a new game-logic
   port integrates only after its harness scenarios exercise the component.
   Fidelity fixes to existing ports (such as #75) are not new ports and do not
-  wait for it.
+  wait for it. Phases 3 to 6 reuse the harness where it observes their output
+  (saves, script commands, multiplayer sessions). Each phase's first issue
+  names the evidence for what the harness cannot see, such as network packets
+  or script API results. Screenshots and screen recordings attached to a PR
+  can be used as evidence for graphical work (user decision, 2026-10-28).
   Extend the harness's scenarios rather than writing a per-component comparison
   tool. Add a narrow comparison against unchanged reference bodies only for a
   concrete gap the harness cannot reach, and name that gap in the PR. Any check
@@ -139,8 +188,12 @@ fork; the remaining upstream documentation explains behavior and architecture.
 ## Speed
 
 - Speed is checked on the merged branch; PRs run no speed check of their own
-  (user decision, 2026-10-22). The ceilings are 1.5x the original for play saves
-  and 1.3x for generation (#282).
+  (user decision, 2026-10-22). The ceilings are 1.6x the original for play saves
+  (user decision, 2026-10-28) and 1.3x for generation (#282). Ceiling and band
+  decisions use a scenario's record: the mean of its last three quiet-pass
+  ratios, carried forward by the projection's growth term below, never one pass
+  alone (provisional: P2016's five passes spread 1.453x to 1.523x, mean
+  1.486x, while its loop count moved about 1.3%).
 - A projection is the anchor's measured ratio times (1 + 2 x the growth of the
   game loop's callgrind instruction count over the anchor), from
   `SPEED_ANCHORS`; counts do not depend on host load. After every second
@@ -166,8 +219,8 @@ fork; the remaining upstream documentation explains behavior and architecture.
   profile, root attributes the rise per function to the PRs since and fixes it
   forward; that fix is the next maintenance PR to integrate. A ready ownership
   PR proceeds meanwhile; it does not wait for a future maintenance base.
-- A speed pass runs when a tip projection first comes within 5% of its ceiling
-  (1.425x play, 1.235x generation). While a scenario stays in band, a further
+- A speed pass runs when a tip's record first comes within 5% of its ceiling
+  (1.52x play, 1.235x generation). While a scenario stays in band, a further
   pass runs only after its projection has risen at least 3% over its anchor or
   a repair batch crediting at least 1.5% of its loop count has integrated;
   otherwise the instruction projection is the record (provisional: the three
@@ -181,12 +234,18 @@ fork; the remaining upstream documentation explains behavior and architecture.
   those net costs (never gross callback counts), turns the two or three largest
   into maintenance PRs, then re-measures. A candidate crediting under 0.5% of
   the scenario's loop count stays a note on #275, and candidates batch until
-  they credit 1% together (provisional). Each profile keeps its candidate
+  they credit 1% together (provisional). Where the net cost is glue spread
+  over many functions rather than a few (P2016, 2026-10-28: glue was 99% of
+  its gap and the top ten glue functions held 25% of it), the ownership or
+  storage port that removes the hot crossings ranks above another repair
+  batch, and attribution stops at the candidates those thresholds select.
+  Each profile keeps its candidate
   `callgrind.out` under `.local/simulation/` until the next profile replaces
   it. Attribution compares inclusive costs under `StateGameLoop()` (or
-  `_GenerateWorld()`) with a retained reference profile of the same scenario in
+  `_GenerateWorld()`), or under the Rust entry that replaces it in the
+  candidate, with a retained reference profile of the same scenario in
   `.local/speed-reference-profiles/`, because the reference Ir cache keeps no
-  per-function data.
+  per-function data. No C++ frame is kept only for attribution.
 - A pass runs alongside other work: only its timed collection pauses builds,
   links, profiles and other games. Prepare runtimes before the hold and release
   it when the last timed game exits; parsing, attribution and reports run after
@@ -250,7 +309,9 @@ checks that run; do not restate them in paragraphs.
   body, any new callback that duplicates a shared accessor, and any WITH_RUST
   body, export or declaration the PR leaves without a production caller (each
   one is a finding; the line names every `WITH_RUST` body and `openttd_rust_*`
-  export the PR touches and the production caller found for it). Do not narrate further when there are no findings.
+  export the PR touches and the production caller found for it; once #564's
+  quick-CI orphan-export check integrates, the line cites it for exports and
+  names `WITH_RUST` bodies only). Do not narrate further when there are no findings.
   Branches the harness does not reach go in the coverage tracker (#156), not
   only in the disposition.
 - One PR per ownership port, targeting `rust-migration` directly. Small
@@ -504,9 +565,15 @@ libraries and profiles referenced by current speed anchors or active evidence
 until their replacements are recorded; rebuildable does not mean superseded.
 
 Docs-only changes (only `docs/` or `*.md` files, such as roadmap updates and
-skill edits under `docs/skills/`) are committed directly to `rust-migration` as
-a single commit, without a PR. Any agent, including a user-directed Claude Code
-session, pushes its docs-only change as soon as it is done, without asking the
-user first. Everything else (code, tools, workflows, saves) goes through a PR
+skill edits under `docs/skills/`) are committed directly to `rust-migration`
+without a PR, one commit per change, and pushed without asking the user. An
+agent working on its own pushes its change as soon as it is done. In a session
+where the user reviews the edits, a change is done once it is settled: commit
+it locally right away, fold each correction the user makes into that unpushed
+commit (`git commit --amend`, retitled to describe the final text), and push
+when the user approves it or moves to another subject, or before root or a
+delegate needs it on origin. Corrections to a change already pushed collect in
+one new commit the same way. A session that starts with docs-only commits
+ahead of `origin/rust-migration` pushes them first. Everything else (code, tools, workflows, saves) goes through a PR
 that passes CI before it merges; never merge past CI with `--admin`. Preserve
 upstream copyright notices, credits and GPLv2.

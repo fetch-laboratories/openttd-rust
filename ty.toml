@@ -5,7 +5,12 @@ extra-paths = ["tools", "tools/simulation"]
 [src]
 # Add new modules and each #501 conversion here; this list only grows.
 include = [
+    "tools/code_lines.py",
+    "tools/orphan-exports.py",
+    "tools/port-metrics.py",
+    "tools/test-orphan-exports.py",
     "tools/ci.py",
+    "tools/validation_execution.py",
     "tools/simulation/clocks.py",
     "tools/simulation/session.py",
     "tools/simulation/generated.py",
@@ -14,6 +19,7 @@ include = [
     "tools/preflight.py",
     "tools/simulation/commands.py",
     "tools/simulation/community_ai.py",
+    "tools/simulation/multiplayer.py",
     "tools/simulation/platform_subset.py",
     "tools/simulation/sanitizers.py",
     "tools/simulation/threaded.py",
@@ -23,5 +29,6 @@ include = [
     "tools/test-deep.py",
     "tools/test-housekeeping.py",
     "tools/test-migration-env.py",
+    "tools/test-multiplayer.py",
     "tools/test-sanitizers.py",
 ]

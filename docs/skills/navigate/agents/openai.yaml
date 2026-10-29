@@ -1,0 +1,6 @@
+interface:
+  display_name: "Navigate"
+  short_description: "Judge the migration's course against its destination"
+  default_prompt: "Use $navigate to check the migration's course against its destination."
+policy:
+  allow_implicit_invocation: false

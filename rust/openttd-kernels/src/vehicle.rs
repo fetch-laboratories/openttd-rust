@@ -280,8 +280,6 @@ pub struct VehicleServices {
     pub tick_status: extern "C" fn(VehicleRef) -> TickStatus,
     pub day_cost: extern "C" fn(VehicleRef) -> DayCost,
     pub make_dummy: extern "C" fn(VehicleRef),
-    /// `Vehicle::HandleLoading`, owned by `visits` (`openttd_rust_visit_handle_loading`).
-    pub loading: unsafe extern "C" fn(VehicleRef, bool, *const visits::Services),
     pub check_orders_only: extern "C" fn(VehicleRef),
     pub write_coordinates: extern "C" fn(VehicleRef, i32, i32, i32),
     pub altitude_inputs: extern "C" fn(VehicleRef) -> AltitudeInputs,
@@ -315,9 +313,21 @@ impl VehicleServices {
         unsafe { (self.enter_depot)(v, (self.visits)()) }
     }
     /// `v->HandleLoading(mode)`.
-    pub(crate) fn handle_loading(&self, v: VehicleRef, mode: bool) {
-        // SAFETY: a live front vehicle and the static visit table.
-        unsafe { (self.loading)(v, mode, (self.visits)()) }
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn handle_loading(
+        &self,
+        v: VehicleRef,
+        mode: bool,
+        orders: &'static crate::orders::Leaves,
+    ) {
+        let kind = crate::orders::VisitOrders::new(orders).current(v).kind();
+        if matches!(
+            kind,
+            crate::order_type::OT_LOADING | crate::order_type::OT_DUMMY
+        ) {
+            visits::handle_loading(v, mode, self.visits());
+        }
     }
 }
 
@@ -463,7 +473,6 @@ crate::abi::layouts! {
         tick_status,
         day_cost,
         make_dummy,
-        loading,
         check_orders_only,
         write_coordinates,
         altitude_inputs,

@@ -672,17 +672,15 @@ impl Game<'_> {
         // Reacquire with the source strict Ship::Get at the original orders call.
         // No owner borrow spans the lookup or order mutation/reentry.
         let orders_vehicle = (self.vs().ship_get)(id);
+        let orders = self.vs().orders();
         let reverse = unsafe {
-            crate::orders::openttd_rust_process_orders(
-                orders_vehicle.0.as_ptr().cast(),
-                self.vs().orders(),
-            )
+            crate::orders::openttd_rust_process_orders(orders_vehicle.0.as_ptr().cast(), orders)
         } != 0;
         if reverse && (self.leaves.yapf_reverse)(id, false).reverse {
             self.reverse(id, v, INVALID);
             return;
         }
-        self.vs().handle_loading(v, false);
+        self.vs().handle_loading(v, false, orders);
         if (self.leaves.order_type)(id) == u32::from(OT_LOADING) {
             return;
         }
