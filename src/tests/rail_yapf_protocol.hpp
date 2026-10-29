@@ -24,6 +24,7 @@ inline bool hill = false, rollback = false;
 inline bool follow_fail = false;
 inline std::vector<uint32_t> follows, writes;
 inline std::vector<char> follow_reads;
+inline size_t search_read_count;
 inline std::array<uint32_t, 8> stats;
 inline uint32_t flushes, limits, red, restored;
 inline OpenTTDRailTrain Train(void *) noexcept
@@ -60,7 +61,10 @@ inline uint8_t Write(uint32_t tile, uint8_t td, uint8_t op) noexcept
 inline void Output(void *, uint8_t, const OpenTTDRailStep *) noexcept {}
 inline void Debug(void *, uint8_t kind, const uint32_t *data, uint32_t count) noexcept
 {
-	if (kind == 0) std::copy_n(data, count, stats.begin());
+	if (kind == 0) {
+		std::copy_n(data, count, stats.begin());
+		search_read_count = follow_reads.size();
+	}
 	if (kind == 2) ++flushes;
 	if (kind == 5 && data[0] == 0) ++limits;
 	if (kind == 5 && data[0] == 1) ++red;
@@ -70,13 +74,14 @@ inline OpenTTDRailStep Run(uint32_t limit, uint32_t curve = 29, bool cache = fal
 {
 	follows.clear(); writes.clear(); stats = {}; flushes = limits = red = restored = 0;
 	follow_reads.clear();
+	search_read_count = 0;
 	static FollowerFixture map{128, 128};
 	FollowerFixture::active = &map;
 	auto &shared = map.shared;
 	for (uint32_t y = 1; y < 127; ++y) for (uint32_t x = 1; x < 127; ++x) map.Tile(x + y * 128, MP_RAILWAY, TRACK_BIT_ALL);
 	if (follow_fail) map.base[start - 1].m5 = 0;
-	// The production follower resolves its vehicle owner at construction. PBS
-	// reads outside that interval must not be mistaken for optional masking.
+	// Owner lookup marks construction; reservation and speed reads use their
+	// shared services, including origin and reservation-target probes.
 	map.vehicle.owner = [](OpenTTDVehicle *) noexcept -> uint8_t { follow_reads.push_back('f'); return 0; };
 	map.rail.rail_reservation = [](uint32_t) noexcept { follow_reads.push_back('r'); return TRACK_BIT_NONE; };
 	map.physics.rail_speed = [](RailType) noexcept -> uint16_t { follow_reads.push_back('s'); return 0; };

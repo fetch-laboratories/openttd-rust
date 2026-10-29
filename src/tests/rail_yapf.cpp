@@ -144,7 +144,8 @@ TEST_CASE("Rail YAPF observes Follow then optional masking then speed limits")
 		RailYapfProbe::follow_fail = fail;
 		openttd_rust_rail_invalidate();
 		const auto result = RailYapfProbe::Run(1, 29, false, false, kind);
-		const auto &reads = RailYapfProbe::follow_reads;
+		// FindPath's statistics precede SetReservationTarget's PBS probes.
+		const std::string reads(RailYapfProbe::follow_reads.begin(), RailYapfProbe::follow_reads.begin() + RailYapfProbe::search_read_count);
 		CAPTURE(kind, fail, reads);
 		if (kind == 3 && fail) {
 			// With the concrete missing track, the original safe-tile search
@@ -153,17 +154,18 @@ TEST_CASE("Rail YAPF observes Follow then optional masking then speed limits")
 			CHECK(std::count(reads.begin(), reads.end(), 's') == 0);
 			continue;
 		}
-		std::string expected;
+		// ChooseRailTrack obtains its origin through FollowTrainReservation.
+		std::string expected = kind == 0 ? "rf" : "";
 		if (fail) {
-			expected = "fs"; // One failed search-node follow; no child segments.
+			expected += "fs"; // One failed search-node follow; no child segments.
 		} else {
-			// max_nodes=1 expands two search nodes, each with four reachable
+			// max_nodes=1 expands two search nodes, each with three reachable
 			// child trackdirs. PfFollowNode masks only the search-node follow;
 			// PfCalcCost follows each child segment without reservation masking.
 			for (unsigned round = 0; round < 2; ++round) {
 				if (kind == 3) expected += 'f'; // IsSafeWaitingPosition probe.
 				expected += kind == 3 ? "frs" : "fs";
-				for (unsigned child = 0; child < 4; ++child) expected += "fs";
+				for (unsigned child = 0; child < 3; ++child) expected += "fs";
 			}
 		}
 		CHECK(std::string(reads.begin(), reads.end()) == expected);
