@@ -155,8 +155,7 @@ pub extern "C" fn openttd_rust_animation_delete(tile: u32, immediate: bool) {
         (a.set_state)(tile, AnimatedTileState::DELETED);
     }
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_animation_run() {
+pub(crate) fn run() {
     let a = services();
     let mut i = 0;
     while i < openttd_rust_animation_count() {

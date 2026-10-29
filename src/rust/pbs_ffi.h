@@ -44,11 +44,9 @@ struct OpenTTDPbsServices {
 	bool (*blocking)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(blocking);
 	bool (*has_pbs)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(has_pbs);
 	uint32_t (*index)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(index);
-	bool (*follow)(OpenTTDTrainHandle, uint8_t, uint64_t, OpenTTDTrainReservationFollow *) noexcept OPENTTD_SERVICE_DEFAULT(follow);
 };
 const OpenTTDPbsServices &GetPbsServices() noexcept;
 extern "C" {
-bool openttd_rust_follow_mask(const OpenTTDPbsServices *, OpenTTDTrainReservationFollow *);
 uint8_t openttd_rust_pbs_reserved(const OpenTTDPbsServices *, uint32_t);
 void openttd_rust_pbs_platform(const OpenTTDPbsServices *, uint32_t, uint8_t, bool);
 bool openttd_rust_pbs_try_reserve(const OpenTTDPbsServices *, uint32_t, uint8_t, bool);

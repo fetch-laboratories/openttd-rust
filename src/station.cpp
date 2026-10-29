@@ -289,6 +289,7 @@ void Station::MarkTilesDirty(bool cargo_change) const
 	}
 }
 
+#ifndef WITH_RUST
 /* virtual */ uint Station::GetPlatformLength(TileIndex tile) const
 {
 	assert(this->TileBelongsToRailStation(tile));
@@ -325,6 +326,8 @@ void Station::MarkTilesDirty(bool cargo_change) const
 
 	return length;
 }
+
+#endif
 
 #ifdef WITH_RUST
 uint Station::GetCatchmentRadius() const

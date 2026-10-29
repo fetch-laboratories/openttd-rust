@@ -14,6 +14,9 @@ use crate::station_type::{
 };
 use crate::tile_type::{MP_STATION, TileIndex};
 
+/// `GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET`.
+pub const GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET: u8 = 4;
+
 /// `GetStationType`, including its native tile-type assertion policy.
 #[inline]
 #[allow(clippy::cast_possible_truncation)] // GB returns the original four-bit value.
@@ -169,4 +172,74 @@ pub(crate) fn set_road_waypoint_roadside(
     let mut bits = u32::from(m.m3(tile)?);
     sb(&mut bits, 2, 2, u32::from(value.0));
     m.set_m3(tile, bits as u8)
+}
+
+impl crate::map_func::World<'_> {
+    pub(crate) fn rail_station(&self, t: u32) -> bool {
+        self.kind(t) == MP_STATION
+            && get_station_type(&self.types, TileIndex(t))
+                .expect("station tile")
+                .0
+                == crate::station_type::STATION_RAIL
+    }
+    pub(crate) fn has_station_rail(&self, t: u32) -> bool {
+        self.kind(t) == MP_STATION
+            && matches!(
+                get_station_type(&self.types, TileIndex(t))
+                    .expect("station tile")
+                    .0,
+                crate::station_type::STATION_RAIL | RAIL_WAYPOINT
+            )
+    }
+    pub(crate) fn station_road_stop(&self, t: u32) -> bool {
+        self.kind(t) == MP_STATION
+            && matches!(
+                get_station_type(&self.types, TileIndex(t))
+                    .expect("station tile")
+                    .0,
+                STATION_TRUCK | STATION_BUS
+            )
+    }
+    pub(crate) fn bay_stop(&self, t: u32) -> bool {
+        self.station_road_stop(t) && self.station_gfx(t) < GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET
+    }
+    pub(crate) fn bay_dir(&self, t: u32) -> u8 {
+        self.check(self.bay_stop(t));
+        self.station_gfx(t)
+    }
+    /// `GetStationGfx`.
+    pub(crate) fn station_gfx(&self, t: u32) -> u8 {
+        self.check(self.kind(t) == MP_STATION);
+        Self::byte(self.types.m5(t))
+    }
+    /// `GetStationIndex`.
+    pub(crate) fn station_index(&self, t: u32) -> crate::station_type::StationID {
+        self.check(self.kind(t) == MP_STATION);
+        crate::station_type::StationID(Self::word(self.types.m2(t)))
+    }
+    /// `IsStationTileBlocked`.
+    pub(crate) fn station_blocked(&self, t: u32) -> bool {
+        self.check(self.has_station_rail(t));
+        has_bit(Self::byte(self.types.m3(t)), 0)
+    }
+    pub(crate) fn station_axis(&self, t: u32) -> u8 {
+        self.check(self.has_station_rail(t));
+        u8::from(has_bit(self.station_gfx(t), 0))
+    }
+    pub(crate) fn station_reserved(&self, t: u32) -> bool {
+        self.check(self.has_station_rail(t));
+        has_bit(Self::byte(self.types.m6(t)), 2)
+    }
+    pub(crate) fn compatible_station(&self, t: u32, start: u32) -> bool {
+        self.check(self.rail_station(start));
+        self.rail_station(t)
+            && !self.station_blocked(t)
+            && crate::rail::is_compatible_rail(
+                self.shared,
+                self.rail_type(t),
+                self.rail_type(start),
+            )
+            && self.station_axis(t) == self.station_axis(start)
+            && self.station_index(t) == self.station_index(start)
+    }
 }

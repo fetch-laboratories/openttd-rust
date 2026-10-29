@@ -8,6 +8,7 @@
 /** @file landscape_protocol.hpp Actual scalar native-to-Rust-to-native ABI calls. */
 #ifndef TESTS_LANDSCAPE_PROTOCOL_HPP
 #define TESTS_LANDSCAPE_PROTOCOL_HPP
+#include "../../tools/simulation/session-fixture.hpp"
 #include "../tile_cmd.h"
 #include "../rust/landscape_loop_ffi.h"
 #include "../rust/station_lifecycle_ffi.h"
@@ -18,7 +19,6 @@
 
 namespace LandscapeProbe {
 static_assert(std::is_same_v<TileLoopProc, void(uint32_t) noexcept>);
-static_assert(std::is_same_v<decltype(&openttd_rust_run_tile_loop), void (*)(unsigned int, unsigned int, OpenTTDTreeLoopSettings, const OpenTTDLandscapeLoopServices *)>);
 static_assert(std::is_same_v<decltype(OpenTTDLandscapeLoopServices::station_loop), decltype(&openttd_rust_station_tile_loop)>);
 static inline uint32_t calls, reads, seen, expected_tile;
 static inline bool passed;
@@ -66,7 +66,9 @@ template<typename Check> void Run(Check check)
 	const OpenTTDTreeLoopSettings settings{.tick_counter = 1, .size_x = 64, .climate = 0, .extra = 0, .ambient = false, .ambient_callback = false};
 	const auto saved_cursor = *openttd_rust_tile_loop_cursor();
 	*openttd_rust_tile_loop_cursor() = 1;
-	openttd_rust_run_tile_loop(6, 6, settings, &services);
+	SessionFixture fixture;
+	fixture.loop = {settings, &services};
+	check(fixture.Run());
 	check(passed && calls == 16 && reads == calls && seen == 0x420 && *openttd_rust_tile_loop_cursor() == expected_tile);
 	*openttd_rust_tile_loop_cursor() = saved_cursor;
 }

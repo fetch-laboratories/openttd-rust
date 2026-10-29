@@ -123,7 +123,6 @@ static void Fin_money_animation(uint32_t t, int64_t amount) noexcept
 static bool Co_company_is_ai(uint8_t id) noexcept { return Company::Get(id)->is_ai; }
 static size_t Co_company_count() noexcept { return Company::GetNumItems(); }
 static bool Co_can_allocate_company() noexcept { return Company::CanAllocateItem(); }
-static bool Co_network_server() noexcept { return _network_server; }
 static OpenTTDCompanyVehicleCounts Co_company_vehicle_counts(uint8_t id) noexcept
 {
 	/* Special owners are not companies; the original takeover limit is not reached for them. */
@@ -413,7 +412,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.finance = &GetRustCompanyFinanceServices(), .shared = &GetRustSharedServices(),
 		.company_next = RustCompanyRefNext, .company_is_ai = Co_company_is_ai,
 		.company_count = Co_company_count, .can_allocate_company = Co_can_allocate_company,
-		.local_company = RustLocalCompanyID, .network_server = Co_network_server,
+		.local_company = RustLocalCompanyID, .network_server = RustNetworkServer,
 		.company_vehicle_counts = Co_company_vehicle_counts, .vehicle_limits = Co_vehicle_limits,
 		.company_admin_update = Co_company_admin_update, .company_in_trouble = Co_company_in_trouble,
 		.post_company_delete = Co_post_company_delete, .hq_location = RustCompanyHQ,

@@ -51,6 +51,7 @@ static_assert(!OPENTTD_SERVICE_RETURN_TYPE<GRFStringID>);
 	X(network_crypto) \
 	X(landscape) \
 	X(genworld) \
+	X(session) \
 	X(object_cmd) \
 	X(water_cmd) \
 	X(tunnelbridge_cmd) \

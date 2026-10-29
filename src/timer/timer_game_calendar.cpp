@@ -58,11 +58,6 @@ void TimeoutTimer<TimerGameCalendar>::Elapsed([[maybe_unused]] TimerGameCalendar
 {
 	this->callback();
 }
-template <>
-bool TimerManager<TimerGameCalendar>::Elapsed([[maybe_unused]] TimerGameCalendar::TElapsed delta)
-{
-	return RustClockElapsed<openttd_rust_calendar_elapsed>(GetRustClockServices(), delta);
-}
 #else
 TimerGameCalendar::Year TimerGameCalendar::year = {};
 TimerGameCalendar::Month TimerGameCalendar::month = {};

@@ -1175,12 +1175,7 @@ pub unsafe extern "C" fn openttd_rust_station_stale(
         stale(st, w, l, visits);
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_tick(
-    world: *const World,
-    links: *const Links,
-    visits: *const Visits,
-) {
+pub(crate) unsafe fn tick(world: *const World, links: *const Links, visits: *const Visits) {
     let w = unsafe { &*world };
     let l = unsafe { &*links };
     let visits = unsafe { &*visits };
@@ -1320,7 +1315,6 @@ pub struct Loading {
     pub(crate) deliver_to_transfer: extern "C" fn(VehicleRef, u32),
     pub(crate) deliver_to_keep: extern "C" fn(VehicleRef, u32),
     pub(crate) has_cargo_for: extern "C" fn(*mut Station, u8, *mut c_void) -> bool,
-    pub(crate) platform_length: extern "C" fn(*mut Station, VehicleRef) -> u32,
     pub(crate) vehicle_tile: extern "C" fn(VehicleRef) -> u32,
     pub(crate) station_cargo_total: extern "C" fn(*mut Station, u8) -> u32,
     pub(crate) get_payment: extern "C" fn(VehicleRef) -> *mut NativePayment,
@@ -1609,12 +1603,21 @@ pub(crate) fn prepare_unload(front: VehicleRef, w: &World, l: &Loading) {
     let (context, callback) = scope_context(&mut body);
     (l.with_next_stations)(front, context, callback);
 }
-fn update_ticks(front: VehicleRef, st: LoadingStation, kind: u8, mut ticks: i32, l: &Loading) {
+fn update_ticks(
+    front: VehicleRef,
+    st: LoadingStation,
+    kind: u8,
+    mut ticks: i32,
+    w: &World,
+    l: &Loading,
+) {
     if kind == 0 && (l.station_length_penalty)() {
-        // Platform length is a world-geometry query on the native station shell.
-        let overhang = u32::from((l.cached_total_length)(front))
-            .wrapping_sub((l.platform_length)(st.native, front).wrapping_mul(16))
-            as i32;
+        let cached_length = u32::from((l.cached_total_length)(front));
+        let tile = (l.vehicle_tile)(front);
+        // SAFETY: The loading entry keeps the immutable shared services live.
+        let world = crate::map_func::World::new(unsafe { &*w.shared });
+        let length = crate::follow_track::platform_length_full(&world, st.base, tile);
+        let overhang = cached_length.wrapping_sub(length.wrapping_mul(16)) as i32;
         if overhang > 0 {
             ticks = ticks.wrapping_shl(1);
             ticks = ticks.wrapping_add(overhang.wrapping_mul(ticks) / 8);
@@ -1876,9 +1879,9 @@ unsafe fn load_vehicle(
             } {
                 (l.set_stop)(front, true);
             }
-            update_ticks(front, st, control.vehicle_type, ticks, l);
+            update_ticks(front, st, control.vehicle_type, ticks, w, l);
         } else {
-            update_ticks(front, st, control.vehicle_type, 20, l);
+            update_ticks(front, st, control.vehicle_type, 20, w, l);
             let mut finished = true;
             if control.full_load {
                 if control.load_type == 3 {
@@ -2244,7 +2247,6 @@ crate::abi::layouts! {
         deliver_to_transfer,
         deliver_to_keep,
         has_cargo_for,
-        platform_length,
         vehicle_tile,
         station_cargo_total,
         get_payment,

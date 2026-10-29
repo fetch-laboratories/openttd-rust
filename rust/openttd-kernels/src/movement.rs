@@ -235,6 +235,11 @@ pub struct MovementServices {
     pub rail_map: *const crate::services::RailMapServices,
     pub train: *const crate::train::Leaves,
     pub vehicle: *const crate::vehicle::VehicleServices,
+    pub road_compatible: extern "C" fn(VehicleRef) -> u64,
+    pub road_type_speed: extern "C" fn(crate::services::RoadType) -> u16,
+    pub bridge_type_speed: extern "C" fn(std::ffi::c_uint) -> u16,
+    pub other_bridge_end: extern "C" fn(u32) -> u32,
+    pub order_speed: extern "C" fn(VehicleRef) -> u16,
     pub road_kind: extern "C" fn(VehicleRef) -> crate::services::RoadTramType,
     pub road_vehicle: *const crate::road::Leaves,
     pub resolve: extern "C" fn(crate::vehicle::VehicleRef) -> MovementVehicle,
@@ -285,13 +290,19 @@ macro_rules! nested_tables {
     )*};
 }
 impl MovementServices {
+    pub(crate) fn native_assert_call(&self, ok: bool) {
+        if !ok {
+            (self.native_assert)(ok);
+        }
+    }
+
     nested_tables! {
         pub(crate) fn shared -> Services;
         fn rail -> RailServices;
         fn road -> RoadServices;
         fn rail_map -> crate::services::RailMapServices;
-        fn train -> crate::train::Leaves;
-        fn vehicle -> crate::vehicle::VehicleServices;
+        pub(crate) fn train -> crate::train::Leaves;
+        pub(crate) fn vehicle -> crate::vehicle::VehicleServices;
         fn road_vehicle -> crate::road::Leaves;
     }
 }
@@ -1640,6 +1651,11 @@ crate::abi::layouts! {
         rail_map,
         train,
         vehicle,
+        road_compatible,
+        road_type_speed,
+        bridge_type_speed,
+        other_bridge_end,
+        order_speed,
         road_kind,
         road_vehicle,
         resolve,

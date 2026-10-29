@@ -334,10 +334,7 @@ extern "C" void *openttd_orders_create_backup(void *ctx, uint32_t user) noexcept
 
 
 
-extern "C" uint64_t openttd_orders_network_server() noexcept
-{
-	return _network_server;
-}
+
 
 extern "C" uint64_t openttd_orders_network_client() noexcept
 {
@@ -623,7 +620,7 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.backup_capacity = openttd_orders_backup_capacity,
 	.create_backup = openttd_orders_create_backup,
 	.networking = RustSettingRead<uint64_t, RustNetworking>,
-	.network_server = openttd_orders_network_server,
+	.network_server = RustNetworkServer,
 	.network_client = openttd_orders_network_client,
 	.server_client = openttd_orders_server_client,
 	.default_group = openttd_orders_default_group,

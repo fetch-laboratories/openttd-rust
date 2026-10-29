@@ -14,7 +14,8 @@ struct Job {
     _opaque: [u8; 0],
 }
 #[repr(C)]
-struct Time {
+#[derive(Clone, Copy)]
+pub(crate) struct Time {
     date: i32,
     fract: u16,
     interval: u16,
@@ -44,13 +45,12 @@ pub(crate) struct Services {
     next_graph: extern "C" fn(*mut u32) -> *mut Graph,
     next_job: extern "C" fn(*mut u32) -> *mut Job,
     shift_job: extern "C" fn(*mut Job, i32),
-    post_pause: extern "C" fn(bool),
-    set_pause: extern "C" fn(),
+    post_pause: extern "C" fn(crate::openttd::PauseMode, bool),
     begin_measurement: extern "C" fn(*mut c_void, bool),
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDScheduleServices" ["linkgraph_schedule"] => Services { graph_owner, assert_graph, can_allocate, allocation_failure, new_job, spawn, due, completed, graph_index, destroy_job, graph_valid, graph_get, abort_job, next_graph, next_job, shift_job, post_pause, set_pause, begin_measurement };
+    "OpenTTDScheduleServices" ["linkgraph_schedule"] => Services { graph_owner, assert_graph, can_allocate, allocation_failure, new_job, spawn, due, completed, graph_index, destroy_job, graph_valid, graph_get, abort_job, next_graph, next_job, shift_job, post_pause, begin_measurement };
     "OpenTTDScheduleTime" ["linkgraph_schedule"] => Time { date, fract, interval };
     "OpenTTDScheduleQueues" ["linkgraph_schedule"] => Queues { schedule, schedule_len, running, running_len };
 
@@ -169,13 +169,7 @@ extern "C" fn openttd_rust_schedule_shift(s: &Services, interval: i32) {
         (s.shift_job)(job, interval);
     }
 }
-#[unsafe(no_mangle)]
-extern "C" fn openttd_rust_schedule_tick(
-    s: &Services,
-    time: Time,
-    client: bool,
-    measurement: *mut c_void,
-) {
+pub(crate) fn tick(s: &Services, time: Time, client: bool, measurement: *mut c_void) {
     if time.fract != SPAWN_JOIN_TICK {
         return;
     }
@@ -188,11 +182,10 @@ extern "C" fn openttd_rust_schedule_tick(
         join_next(s);
     }
 }
-#[unsafe(no_mangle)]
-extern "C" fn openttd_rust_schedule_pause(s: &Services, time: Time, paused: bool, unpaused: bool) {
+pub(crate) fn pause(s: &Services, time: Time, paused: bool, unpaused: bool) {
     if paused {
         if !unfinished(s) {
-            (s.post_pause)(false);
+            (s.post_pause)(crate::openttd::PauseMode::LINK_GRAPH, false);
         }
     } else if unpaused {
         if time.fract != SPAWN_JOIN_TICK - 2 {
@@ -200,7 +193,7 @@ extern "C" fn openttd_rust_schedule_pause(s: &Services, time: Time, paused: bool
         }
         let interval = i32::from(time.interval) / SECONDS_PER_DAY;
         if time.date % interval == interval / 2 && unfinished(s) {
-            (s.post_pause)(true);
+            (s.post_pause)(crate::openttd::PauseMode::LINK_GRAPH, true);
             witness::hit(witness::SCHEDULE_PAUSE);
         }
     }
@@ -208,7 +201,9 @@ extern "C" fn openttd_rust_schedule_pause(s: &Services, time: Time, paused: bool
 #[unsafe(no_mangle)]
 extern "C" fn openttd_rust_schedule_after_load(s: &Services) {
     if unfinished(s) {
-        (s.set_pause)();
+        crate::session::set_pause(
+            crate::session::pause() | crate::openttd::PauseMode::LINK_GRAPH.bit(),
+        );
     }
 }
 #[unsafe(no_mangle)]

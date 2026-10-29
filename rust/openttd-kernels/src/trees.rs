@@ -1040,8 +1040,7 @@ pub(crate) unsafe fn tile_loop(
 /// `OnTick_Trees`.
 /// # Safety
 /// Tables are live and immutable; game thread only. Services are `noexcept`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_trees_tick(
+pub(crate) unsafe fn tick(
     settings: TickSettings,
     services: *const TreeServices,
     shared: *const Services,

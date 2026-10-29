@@ -80,7 +80,6 @@ uint16_t openttd_rust_roadstop_animation_callback(uint16_t, uint32_t, uint32_t, 
 const OpenTTDAnimationServices *openttd_rust_animation_exchange(const OpenTTDAnimationServices *);
 void openttd_rust_animation_add(uint32_t, bool);
 void openttd_rust_animation_delete(uint32_t, bool);
-void openttd_rust_animation_run();
 void openttd_rust_animation_initialize();
 size_t openttd_rust_animation_count();
 uint32_t openttd_rust_animation_at(size_t);

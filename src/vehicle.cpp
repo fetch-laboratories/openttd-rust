@@ -1101,21 +1101,12 @@ static void VehicleEnteredDepotThisTick(Vehicle *v)
 #include "rust/vehicle_ffi.h"
 #include "rust/station_service_ffi.h"
 #include "rust/vehicle_refit_ffi.h"
-static OpenTTDVehicleSchedulerTables VehicleSchedulerTables(OpenTTDCommandCost *refit_cost = nullptr, OpenTTDCommandCost *temporary = nullptr) noexcept
+OpenTTDVehicleSchedulerTables RustVehicleSchedulerTables(OpenTTDCommandCost *refit_cost, OpenTTDCommandCost *temporary) noexcept
 {
 	return {.scheduler = &GetRustVehicleSchedulerServices(), .cargo = CargoStorageServices(), .station = &GetRustStationServices(), .loading = &GetRustStationLoading(), .pending = &_fleet_pending_services, .transaction = &FleetTransactionServices(), .group = &FleetGroupServices(), .visits = &GetRustVehicleVisits(), .refit_cost = refit_cost, .refit_temporary = temporary};
 }
-void RunVehicleCalendarDayProc()
-{
-	const auto tables = VehicleSchedulerTables();
-	openttd_rust_vehicle_calendar_day(&tables, _game_mode == GM_NORMAL, TimerGameCalendar::date_fract);
-}
-void CallVehicleTicks()
-{
-	CommandCost replacement_cost, refit_cost, temporary;
-	const auto tables = VehicleSchedulerTables(reinterpret_cast<OpenTTDCommandCost *>(&refit_cost), reinterpret_cast<OpenTTDCommandCost *>(&temporary));
-	openttd_rust_vehicle_ticks(&tables, _game_mode == GM_NORMAL, TimerGameEconomy::date_fract, &replacement_cost);
-}
+
+
 #else
 /**
  * Age all vehicles, spreading out the action using the current TimerGameCalendar::date_fract.

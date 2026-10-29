@@ -58,8 +58,6 @@ struct GameSessionStats {
 	std::optional<size_t> savegame_size; ///< Size of the last saved savegame in bytes, or std::nullopt if not saved yet.
 };
 
-extern GameMode _game_mode;
-extern SwitchMode _switch_mode;
 extern GameSessionStats _game_session_stats;
 extern std::atomic<bool> _exit_game;
 extern bool _save_config;
@@ -78,7 +76,22 @@ enum class PauseMode : uint8_t {
 using PauseModes = EnumBitSet<PauseMode, uint8_t>;
 
 /** The current pause mode */
+#ifdef WITH_RUST
+struct OpenTTDSessionState { GameMode mode; SwitchMode switch_mode; PauseModes pause; };
+extern "C" OpenTTDSessionState *openttd_rust_session_storage();
+inline OpenTTDSessionState &GetRustSessionState() noexcept
+{
+	static auto *state = new (openttd_rust_session_storage()) OpenTTDSessionState{};
+	return *state;
+}
+inline GameMode &_game_mode = GetRustSessionState().mode;
+inline SwitchMode &_switch_mode = GetRustSessionState().switch_mode;
+inline PauseModes &_pause_mode = GetRustSessionState().pause;
+#else
+extern GameMode _game_mode;
+extern SwitchMode _switch_mode;
 extern PauseModes _pause_mode;
+#endif
 
 void AskExitGame();
 void AskExitToGameMenu();

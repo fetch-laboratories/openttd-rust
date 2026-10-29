@@ -6,6 +6,8 @@
  */
 
 /** @file landscape-loop-reference.cpp Unchanged scheduler versus Rust for unreachable map phases. */
+#define WITH_RUST
+#include "stdafx.h"
 #include <cstdint>
 #include <algorithm>
 #include <bit>
@@ -23,6 +25,15 @@
 #include <memory>
 #include "rust/landscape_loop_ffi.h"
 
+#include "session-fixture.hpp"
+
+[[noreturn]] void NOT_REACHED(const std::source_location) { std::abort(); }
+
+namespace LandscapeReference {
+// Avoid ADL into the candidate header helpers while calling pinned originals.
+#define CornerToTrackBits ReferenceCornerToTrackBits
+#define TracksOverlap ReferenceTracksOverlap
+#undef lengthof
 static unsigned int log_x, log_y;
 using uint = unsigned int;
 static constexpr uint TILE_SIZE = 16, TILE_HEIGHT = 8;
@@ -117,7 +128,11 @@ static void RustRun()
 	/* Each nested entry has its own immutable table, like the native facade. */
 	auto batch_services = services;
 	batch_services.tile_types = raw_backend ? OpenTTDTileTypeAllocation{.base = tiles.get(), .extended = extended.get(), .count = 1U << (log_x + log_y), .assertions = true} : OpenTTDTileTypeAllocation{};
-	openttd_rust_run_tile_loop(log_x, log_y, settings, &batch_services);
+	SessionFixture fixture;
+	fixture.shared.map_log_x = []() noexcept { return log_x; };
+	fixture.services.map_log_y = []() noexcept { return log_y; };
+	fixture.loop = {settings, &batch_services};
+	if (!fixture.Run()) std::abort();
 }
 static void NativeVisit(uint32_t tile, uint8_t kind) noexcept
 {
@@ -169,7 +184,7 @@ static void MovementGap()
 	}
 	std::printf("movement foundation/extreme-coordinate gap: %u unchanged-body cases passed\n", cases);
 }
-int main()
+void Main()
 {
 	MovementGap();
 	shared.tile_type = Type;
@@ -241,3 +256,6 @@ int main()
 	}
 	std::printf("landscape scheduler: %u unchanged-body map/phase/cursor/reentry cases plus ordered mutation/reset passed\n", cases);
 }
+
+} // namespace LandscapeReference
+int main() { LandscapeReference::Main(); }

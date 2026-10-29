@@ -45,9 +45,11 @@ bool _right_button_clicked; ///< Is right mouse button clicked?
 DrawPixelInfo _screen;
 bool _screen_disable_anim = false;   ///< Disable palette animation (important for 32bpp-anim blitter during giant screenshot)
 std::atomic<bool> _exit_game;
+#ifndef WITH_RUST
 GameMode _game_mode;
 SwitchMode _switch_mode;  ///< The next mainloop command.
 PauseModes _pause_mode;
+#endif
 GameSessionStats _game_session_stats; ///< Statistics about the current session.
 
 static uint8_t _stringwidth_table[FS_END][224]; ///< Cache containing width of often used characters. @see GetCharacterWidth()
