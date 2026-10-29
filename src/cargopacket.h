@@ -37,7 +37,7 @@ extern SaveLoadTable GetCargoPacketDesc();
 
 #ifdef WITH_RUST
 #include "rust/cargo_storage_ffi.h"
-const OpenTTDCargoStorageServices *CargoStorageServices();
+const OpenTTDCargoStorageServices *CargoStorageServices() noexcept;
 
 /** Pool shell: all packet fields have one canonical Rust owner. */
 struct CargoPacket : CargoPacketPool::PoolItem<&_cargopacket_pool> {

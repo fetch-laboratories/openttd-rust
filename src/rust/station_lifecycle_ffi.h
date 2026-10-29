@@ -26,7 +26,7 @@ struct OpenTTDStationLifecycleServices {
 	const OpenTTDStationCatchmentServices *catchment;
 	const OpenTTDStationCommandServices *(*commands)() noexcept OPENTTD_SERVICE_DEFAULT(commands);
 	const OpenTTDAircraftLeaves *(*aircraft)() noexcept OPENTTD_SERVICE_DEFAULT(aircraft);
-	const OpenTTDCargoStorageServices *(*storage)() OPENTTD_SERVICE_DEFAULT(storage);
+	const OpenTTDCargoStorageServices *(*storage)() noexcept OPENTTD_SERVICE_DEFAULT(storage);
 	OpenTTDTileTypeAllocation (*allocation)() noexcept OPENTTD_SERVICE_DEFAULT(allocation);
 	void (*check)(bool) noexcept OPENTTD_SERVICE_DEFAULT(check);
 	uint8_t (*climate)() noexcept OPENTTD_SERVICE_DEFAULT(climate);
@@ -60,7 +60,7 @@ struct OpenTTDStationLifecycleServices {
 	void (*invalidate_list)(BaseStation *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_list);
 	void (*invalidate_lists)() noexcept OPENTTD_SERVICE_DEFAULT(invalidate_lists);
 	void (*close_view)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(close_view);
-	const OpenTTDOrdersLeaves *(*orders)() OPENTTD_SERVICE_DEFAULT(orders);
+	const OpenTTDOrdersLeaves *(*orders)() noexcept OPENTTD_SERVICE_DEFAULT(orders);
 	void (*delete_news)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_news);
 	void (*remove_index)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(remove_index);
 	bool (*sign_valid)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(sign_valid);

@@ -403,11 +403,6 @@ extern "C" void openttd_orders_append_station(void *ctx, uint16_t station) noexc
 	static_cast<std::vector<StationID> *>(ctx)->push_back(StationID(station));
 }
 
-extern "C" void openttd_orders_invalidate_station_list() noexcept
-{
-	RustStationListClassesInvalidate();
-}
-
 extern "C" void openttd_orders_command_error(void *ctx, uint32_t error, uint32_t detail) noexcept
 {
 	{
@@ -640,7 +635,7 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.fast_aircraft = openttd_orders_fast_aircraft,
 	.no_jet_crash = openttd_orders_no_jet_crash,
 	.append_station = openttd_orders_append_station,
-	.invalidate_station_list = openttd_orders_invalidate_station_list,
+	.invalidate_station_list = RustStationListClassesInvalidate,
 	.command_error = openttd_orders_command_error,
 	.timetable_dirty = openttd_orders_timetable_dirty,
 	.invalidate_order = openttd_orders_invalidate_order,

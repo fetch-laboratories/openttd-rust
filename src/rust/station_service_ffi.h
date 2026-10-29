@@ -173,7 +173,7 @@ struct OpenTTDStationLinks {
 	bool (*stopped_in_depot)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(stopped_in_depot);
 	int32_t (*last_service)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(last_service);
 	uint8_t (*cargo_type)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_type);
-	const OpenTTDCargoStorageServices *(*storage)() OPENTTD_SERVICE_DEFAULT(storage);
+	const OpenTTDCargoStorageServices *(*storage)() noexcept OPENTTD_SERVICE_DEFAULT(storage);
 	const GoodsEntry *(*goods_entry)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(goods_entry);
 	const OpenTTDCargoList *(*station_cargo)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_cargo);
 	OpenTTDCargoList *(*vehicle_cargo)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_cargo);

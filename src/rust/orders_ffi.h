@@ -292,7 +292,6 @@ uint64_t openttd_orders_local_owner(void *ctx) noexcept;
 uint64_t openttd_orders_fast_aircraft(void *ctx) noexcept;
 uint64_t openttd_orders_no_jet_crash() noexcept;
 void openttd_orders_append_station(void *ctx, uint16_t station) noexcept;
-void openttd_orders_invalidate_station_list() noexcept;
 void openttd_orders_command_error(void *ctx, uint32_t error, uint32_t detail) noexcept;
 void openttd_orders_timetable_dirty(void *ctx) noexcept;
 void openttd_orders_invalidate_order(void *ctx, int32_t data) noexcept;

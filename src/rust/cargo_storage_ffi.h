@@ -13,6 +13,7 @@
 #include <cstddef>
 struct OpenTTDCargoList;
 struct OpenTTDCargoFlow;
+struct OpenTTDCargoFlowMap;
 enum class SourceType : uint8_t;
 /* Typed, call-local cargo Source value; the ID and source kind are never packed. */
 struct OpenTTDCargoSource {
