@@ -27,6 +27,10 @@
 
 #include "session-fixture.hpp"
 namespace LandscapeReference {
+// Avoid ADL into the candidate header helpers while calling pinned originals.
+#define CornerToTrackBits ReferenceCornerToTrackBits
+#define TracksOverlap ReferenceTracksOverlap
+#undef lengthof
 static unsigned int log_x, log_y;
 using uint = unsigned int;
 static constexpr uint TILE_SIZE = 16, TILE_HEIGHT = 8;
