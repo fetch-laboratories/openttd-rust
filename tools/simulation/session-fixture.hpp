@@ -35,9 +35,9 @@ struct SessionFixture {
 	bool animate = false;
 	bool in_loop = false;
 	bool skip_animation = false;
-	OpenTTDSharedServices animation_shared{};
 	OpenTTDAnimationServices animation{};
 	std::optional<RustAnimationScope> animation_scope;
+	std::optional<RustAnimationSave> animation_queue;
 	static inline size_t empty_extent = 0;
 	static void Nothing() noexcept {}
 	static void FrameNothing(OpenTTDSessionFrame *) noexcept {}
@@ -46,9 +46,6 @@ struct SessionFixture {
 		active = this;
 		shared.map_log_x = []() noexcept -> uint32_t { return 6; };
 		shared.tile_type = [](uint32_t) noexcept -> uint8_t { return 5; };
-		animation_shared.tile_type = [](uint32_t) noexcept -> uint8_t { return MP_VOID; };
-		animation.shared = &animation_shared;
-		animation.state = [](uint32_t) noexcept { return AnimatedTileState::Animated; };
 		tiles.shared = &shared;
 		tiles.station_loop = [](uint32_t) noexcept {};
 		group.current_company = []() noexcept -> uint8_t { return 0; };
@@ -94,10 +91,15 @@ struct SessionFixture {
 		services.vehicle_end = FrameNothing;
 		services.landscape_begin = [](OpenTTDSessionFrame *) noexcept {
 			active->in_loop = true;
-			if (active->skip_animation) active->animation_scope.emplace(active->animation);
+			if (active->skip_animation) {
+				active->animation_queue.emplace(true);
+				openttd_rust_animation_initialize();
+				active->animation_scope.emplace(active->animation);
+			}
 		};
 		services.landscape_end = [](OpenTTDSessionFrame *) noexcept {
 			active->animation_scope.reset();
+			active->animation_queue.reset();
 			active->skip_animation = false;
 		};
 		services.road_begin = [](OpenTTDSessionFrame *) noexcept -> const OpenTTDRoadCommandContext * { return nullptr; };
