@@ -26,7 +26,7 @@ AI_FOLDER = "rail-scenario-ai"
 
 # Exact unchanged pinned bodies: transient PBSTileInfo/train_on_res and trigger order
 # are not serialized. Both adapter roles compile the same source without editing it.
-def pbs_reference(folder):
+def pbs_reference(folder: Path) -> None:
     baseline = json.loads((ROOT / "migration/baseline.json").read_text())["commit"]
     original = subprocess.check_output(
         ["git", "show", f"{baseline}:src/pbs.cpp"], cwd=ROOT, text=True
@@ -46,33 +46,59 @@ def pbs_reference(folder):
     body = "".join(f"#define {name} PbsOriginal{name}\n" for name in names)
     body += "TrackBits PbsOriginalGetReservedTrackbits(TileIndex);\nbool PbsOriginalIsSafeWaitingPosition(const Train *, TileIndex, Trackdir, bool, bool);\n"
     body += "inline bool PbsOriginalHasReservedTracks(TileIndex t, TrackBits b) { return (PbsOriginalGetReservedTrackbits(t) & b) != TRACK_BIT_NONE; }\n"
-    body += (
-        original[original.index("TrackBits GetReservedTrackbits") :]
-        .replace("t->track", "PbsTrainTrack(t)")
-        .replace("v->railtypes", "PbsTrainRailTypes(v)")
-    )
     header = subprocess.check_output(
         ["git", "show", f"{baseline}:src/pathfinder/follow_track.hpp"],
         cwd=ROOT,
         text=True,
     )
-    mask = header[header.index("\tinline bool MaskReservedTracks()") :]
-    body += (
-        "struct PbsOriginalMask : CFollowTrackRail { using CFollowTrackRail::CFollowTrackRail; "
-        "static bool DoTrackMasking() { return true; }\n"
-        + mask[: mask.index("\nprotected:")]
-        + "};\n"
+    station = subprocess.check_output(
+        ["git", "show", f"{baseline}:src/station.cpp"], cwd=ROOT, text=True
     )
+    signature = (
+        "uint Station::GetPlatformLength(TileIndex tile, DiagDirection dir) const"
+    )
+    platform = station[station.index(signature) + len(signature) :]
+    platform = platform[: platform.index("\n}") + 2]
+    body += (
+        "inline uint PbsOriginalPlatformLength(const BaseStation *station, TileIndex tile, DiagDirection dir) {\n"
+        "if (!Station::IsExpected(station)) return 1;\n"
+        + platform[platform.index("{") + 1 :]
+        + "\n"
+    )
+    follower = header[header.index("template <TransportType") : header.rfind("#endif")]
+    follower = follower.replace(
+        "BaseStation::GetByTile(this->new_tile)->GetPlatformLength(this->new_tile, TrackdirToExitdir(this->old_td))",
+        "PbsOriginalPlatformLength(BaseStation::GetByTile(this->new_tile), this->new_tile, TrackdirToExitdir(this->old_td))",
+    )
+    body += follower.replace("CFollowTrack", "PbsOriginalFollowTrack").replace(
+        "Train::From(v)->compatible_railtypes",
+        "PbsTrainCompatibleRailTypes(Train::From(v))",
+    )
+    body += (
+        original[original.index("TrackBits GetReservedTrackbits") :]
+        .replace("t->track", "PbsTrainTrack(t)")
+        .replace("v->railtypes", "PbsTrainRailTypes(v)")
+        .replace("CFollowTrack", "PbsOriginalFollowTrack")
+    )
+    body += "using PbsOriginalMask = PbsOriginalFollowTrackFreeRail;\n"
     body += "".join(f"#undef {name}\n" for name in names)
     (folder / "pbs-original.hpp").write_text(body)
 
 
-def adapter(build, folder, env):
+def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
     folder.mkdir(parents=True, exist_ok=True)
     pbs_reference(folder)
     source = folder / "pbs-source.cpp"
     source.write_text((ROOT / "tools/simulation/pbs-console.cpp").read_text())
-    return console_adapter(build, folder, env, source, "rails", wraps=pbs_wraps(build))
+    return console_adapter(
+        build,
+        folder,
+        env,
+        source,
+        "rails",
+        wraps=pbs_wraps(build),
+        native_test_support=True,
+    )
 
 
 PBS_WRAPS = (
@@ -261,6 +287,17 @@ def scenarios(soak):
                 "ticks": (6 if soak else 2) * 365 * TICKS_PER_DAY + SNAPSHOT_TICKS,
             }
         )
+    cases.append(
+        dict(
+            name="track-follower",
+            kind="save",
+            follower_probe=True,
+            save=str(ROOT / "migration/saves/padhattan-ridge-1996.sav"),
+            ticks=1,
+            short_checkpoint=True,
+            console=["follower_probe", "unpause"],
+        )
+    )
     for case in cases:
         if case["name"].startswith(("rail-reservation-", "rail-controller-")):
             case["pbs_probe"] = True
@@ -321,6 +358,14 @@ def train_required(scenario):
 
 
 def prepare(scenario, binaries, builds, out, timeout, env, result):
+    if scenario.get("follower_probe"):
+        directory = out / scenario["name"] / "prepare"
+        normalized, record = normalize(Path(scenario["save"]), directory)
+        result["follower_input"] = record
+        executables = prepared_console(
+            "rails", adapter, binaries, builds, directory / "follower", env
+        )
+        return dict(scenario, save=str(normalized), executables=executables)
     if scenario.get("movement_structure"):
         from . import signals
 
@@ -818,6 +863,25 @@ def controller_witnesses(scenario, run, mode):
 
 
 def check(scenario, run, mode, role, result):
+    if scenario.get("follower_probe"):
+        rows = [line for line in run["log"] if line.startswith("FOLLOWER ")]
+        required = set(
+            "rail owner rail_type no_way ninety ninety_allowed reserved depot_reverse tunnel_wrong_side bridge_wrong_side tunnel_skip bridge_skip platform_skip platform_lengths platform_reserved road road_end_reverse road_owner_reverse road_type_reverse stop_wrong_side stop_reverse tram_reverse tram_wrong_side tram_type tram_bad_exit water".split()
+        )
+        if {row.split()[1] for row in rows} != required or len(rows) != len(required):
+            raise RuntimeError(
+                "missing default follower branch/path/reservation/RNG outputs"
+            )
+        result[f"{mode}_{role}_follower"] = rows
+        other = "candidate" if role == "reference" else "reference"
+        if (
+            expected := result.get(f"{mode}_{other}_follower")
+        ) is not None and rows != expected:
+            raise RuntimeError(
+                "follower paths, errors, reservations or RNG streams differ"
+            )
+        return
+
     if route := scenario.get("movement_structure"):
         markers = [
             line.split() for line in run["log"] if line.startswith("MOVEMENT route ")

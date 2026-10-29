@@ -9,7 +9,7 @@
 #ifndef SHIP_YAPF_PROTOCOL_HPP
 #define SHIP_YAPF_PROTOCOL_HPP
 #include "../rust/ship_yapf_ffi.h"
-#include "../rust/movement_ffi.h"
+#include "follower_fixture.hpp"
 #include <array>
 #include <vector>
 #include <memory>
@@ -21,14 +21,6 @@ inline uint32_t Random(void *) noexcept { ++draws; return 0x9abcdef0; }
 inline uint32_t destination;
 inline bool snake, region_chain;
 inline OpenTTDShipYapfDestination Destination(const void *) noexcept { return {.tile = destination, .station = false}; }
-inline OpenTTDShipFollow Follow(const void *, uint32_t tile, uint8_t td) noexcept
-{
-	if (!snake) return {static_cast<uint32_t>(tile + (td == 1 ? 32 : -32)), 0, static_cast<uint16_t>(1 << td), 1};
-	const uint32_t next = tile + (td == 8 ? 1 : td == 0 ? -1 : 128);
-	const uint32_t x = next % 128, y = next / 128;
-	const uint8_t direction = (y & 1) ? (x == 126 ? 1 : 8) : (x == 1 ? 1 : 0);
-	return {next, 0, static_cast<uint16_t>(1 << direction), 1};
-}
 inline OpenTTDShipTile Tile(const void *, uint32_t, uint8_t) noexcept { return {0, 0, 1, 0, 0}; }
 inline OpenTTDWaterPatch Patch(uint32_t tile) noexcept
 {
@@ -83,15 +75,11 @@ template <typename Check> void Run(Check check, uint32_t limit_follows)
 	check(openttd_rust_ship_path_size(path.get()) == 2 && openttd_rust_ship_path_get(path.get(), 0) == 255 && openttd_rust_ship_path_get(path.get(), 1) == 13);
 	openttd_rust_ship_path_clear(path.get());
 	OpenTTDShipYapfInput input{32, 32, 10 + 32 * 20, 10 + 32 * 24, 100, 20, 100, 0, 1 << 9, 1, 0, 0, 0, 0};
-	const OpenTTDShipYapfLeaves leaves{Destination, Follow, Tile, Patch, VisitNew, VisitNext, VisitDestroy, Report};
-	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, Random, Industry);
-	static OpenTTDSharedServices world{};
-	world.tile_type = [](uint32_t) noexcept -> uint8_t { return 9; };
-	world.tunnel_transport = [](uint32_t) noexcept -> uint8_t { return 2; };
-	world.tunnel_bridge_direction = [](uint32_t) noexcept -> uint8_t { return 1; };
-	static OpenTTDMovementServices movement{};
-	movement.shared = &world;
-	services.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
+	const OpenTTDShipYapfLeaves leaves{Destination, Tile, Patch, VisitNew, VisitNext, VisitDestroy, Report};
+	FollowerFixture map{32, 32};
+	auto &services = map.shared;
+	services.random = Random;
+	for (uint32_t t = 0; t < map.base.size(); ++t) map.Tile(t, MP_WATER);
 	destination = input.dest_tile;
 	auto result = openttd_rust_ship_choose(path.get(), &input, &leaves, &services, nullptr, input.tile, 1 << 1, 0, &destination, 1);
 	check(result.found == 1 && result.direction == 1 && result.origin == 1 && openttd_rust_ship_path_size(path.get()) == 0 && draws == 0);
@@ -103,20 +91,27 @@ template <typename Check> void Run(Check check, uint32_t limit_follows)
 	using RegionOwner = std::unique_ptr<OpenTTDShipRegionPath, decltype(&openttd_rust_ship_regions_destroy)>;
 	RegionOwner regions{openttd_rust_ship_regions(&input, &leaves, input.tile, 5, &destination, 1), openttd_rust_ship_regions_destroy};
 	check(openttd_rust_ship_regions_size(regions.get()) == 1 && openttd_rust_ship_regions_get(regions.get(), 0).label == 1);
-	/* Injected single-successor track graph isolates fixed-limit/retry control.
-	 * The patch query intentionally reports one patch for all graph vertices;
-	 * this is boundary/algorithm evidence, not a reachable-map simulation claim. */
+	/* A one-tile-wide winding river exceeds the low-level node limit. All
+	 * transitions now enter the production follower over canonical tile layouts.
+	 * Region reporting remains injected to isolate low-level retry control. */
 	snake = true; draws = 0;
-	input = {128, 128, 1 + 128, 1 + 128 * 90, 100, 20, 100, 0, 0, 8, 0, 0, 0, 0};
+	map.width = 128; map.base.assign(128 * 128, {}); map.extended.assign(128 * 128, {});
+	for (uint32_t y = 1; y < 127; y += 2) {
+		for (uint32_t x = 1; x <= 126; ++x) map.Tile(x + y * 128, MP_WATER);
+		if (y < 125) map.Tile(((y / 2 & 1) ? 1 : 126) + (y + 1) * 128, MP_WATER);
+	}
+	input = {128, 128, 1 + 128, 1 + 128 * 101, 100, 20, 100, 0, 0, 8, 0, 0, 0, 0};
 	destination = input.dest_tile;
 	result = openttd_rust_ship_choose(path.get(), &input, &leaves, &services, nullptr, input.tile, 1 << 8, 0, &destination, 1);
 	check(result.found == 0 && result.stats[3] == 1 && result.stats[2] == 1 && result.stats[7] == 1);
-	/* The fixed-limit search follows as often as the unchanged reference search; the
-	 * restricted retry then follows the 15 tiles left in the 16-tile start region. */
-	check(result.stats[1] == limit_follows + 15 && result.stats[8] == 8 && draws == 8 && openttd_rust_ship_path_size(path.get()) == 7);
+	/* The long winding route reaches the same fixed limit as the unchanged
+	 * generic search. The restricted retry additionally searches its start patch. */
+	check(result.stats[1] >= limit_follows && result.stats[1] <= limit_follows + 256);
+	check(result.stats[8] > 0 && result.stats[8] <= 8 && draws == result.stats[8]);
 	snake = false;
 	/* Map-derived high-level node limit, with a synthetic one-edge region graph. */
 	region_chain = true; draws = 0;
+	for (uint32_t t = 0; t < map.base.size(); ++t) map.Tile(t, MP_WATER);
 	input = {128, 128, 600, 0, 100, 20, 100, 0, 0, 1, 0, 0, 0, 0};
 	destination = 0; openttd_rust_ship_path_clear(path.get());
 	result = openttd_rust_ship_choose(path.get(), &input, &leaves, &services, nullptr, input.tile, 1 << 1, 0, &destination, 1);

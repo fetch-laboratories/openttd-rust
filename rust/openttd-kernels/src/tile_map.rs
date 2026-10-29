@@ -167,3 +167,15 @@ pub(crate) fn get_tile_pixel_slope_outside_map(
             .cast_signed(),
     ))
 }
+
+#[allow(clippy::cast_possible_truncation)] // GB returns the original field width.
+impl crate::map_func::World<'_> {
+    pub(crate) fn owner(&self, t: u32) -> u8 {
+        self.check(t < self.types.count() && self.kind(t) != crate::tile_type::MP_VOID);
+        self.check(
+            self.kind(t) != crate::tile_type::MP_HOUSE
+                && self.kind(t) != crate::tile_type::MP_INDUSTRY,
+        );
+        crate::bitmath_func::gb(u32::from(Self::byte(self.types.m1(t))), 0, 5) as u8
+    }
+}

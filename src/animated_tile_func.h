@@ -14,7 +14,9 @@
 
 void AddAnimatedTile(TileIndex tile, bool mark_dirty = true);
 void DeleteAnimatedTile(TileIndex tile, bool immediate = false);
+#ifndef WITH_RUST
 void AnimateAnimatedTiles();
+#endif
 void InitializeAnimatedTiles();
 
 #endif /* ANIMATED_TILE_FUNC_H */

@@ -33,7 +33,6 @@ const OpenTTDClockServices &GetRustClockServices() noexcept
 {
 	static const OpenTTDClockServices services{
 		.shared = &GetRustSharedServices(),
-		.game_mode = RustGameMode,
 		.minutes_per_calendar_year = RustMinutesPerCalendarYear,
 		.using_wallclock_units = RustUsingWallclockUnits,
 		.vehicle_id = RustVehicleIndexOpaque,

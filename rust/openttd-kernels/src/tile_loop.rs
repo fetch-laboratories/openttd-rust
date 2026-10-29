@@ -184,8 +184,7 @@ unsafe fn dispatch(
 /// reached pointers/tables are immutable and live; each native entry owns its lazy
 /// result context independently. Calls are serialized with reset and
 /// save/load. Callbacks are noexcept; reentry sees the cursor before this batch.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_run_tile_loop(
+pub(crate) unsafe fn run(
     log_x: c_uint,
     log_y: c_uint,
     settings: trees::LoopSettings,

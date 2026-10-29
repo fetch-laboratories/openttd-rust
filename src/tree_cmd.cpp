@@ -248,16 +248,19 @@ OpenTTDTreeLoopSettings GetRustTreeLoopSettings() noexcept
 	};
 }
 
-void OnTick_Trees()
+#ifdef WITH_RUST
+OpenTTDTreeTickSettings RustTreeTickSettings() noexcept
 {
-	const OpenTTDTreeTickSettings settings{
+	return {
 		.tick_counter = TimerGameTick::counter,
 		.size = Map::Size(),
 		.climate = to_underlying(_settings_game.game_creation.landscape),
 		.extra = _settings_game.construction.extra_tree_placement,
 	};
-	openttd_rust_trees_tick(settings, &_tree_services, &GetRustSharedServices());
 }
+#endif
+
+
 
 void InitializeTrees() { openttd_rust_trees_initialize(); }
 #endif /* WITH_RUST */

@@ -33,7 +33,6 @@ pub struct Snapshot {
 #[repr(C)]
 pub struct Leaves {
     pub shared: *const crate::services::Services,
-    pub follow: unsafe extern "C" fn(u32, u8, *mut u8) -> u32,
     pub aqueduct: unsafe extern "C" fn(u32) -> u32,
     pub debug: unsafe extern "C" fn(u8, i32, i32),
 }
@@ -148,10 +147,17 @@ impl Regions {
                 while dirs != 0 {
                     let dir = dirs.trailing_zeros() as u8;
                     dirs &= dirs - 1;
-                    let mut bridge = 0;
+
                     // SAFETY: Initialized output is call-local; follower neither borrows nor mutates cache.
                     crate::witness::hit(crate::witness::WATER_FOLLOWS);
-                    let next = unsafe { (leaves.follow)(tile, dir, &raw mut bridge) };
+                    let (ft, followed) =
+                        crate::follow_track::water(unsafe { &*leaves.shared }, tile, dir);
+                    let next = if followed {
+                        ft.new_tile.0
+                    } else {
+                        INVALID_TILE
+                    };
+                    let bridge = u8::from(ft.is_bridge);
                     if next == INVALID_TILE {
                         continue;
                     }
@@ -491,7 +497,6 @@ crate::abi::layouts! {
     };
     "OpenTTDWaterLeaves" ["probe"] => Leaves {
         shared,
-        follow,
         aqueduct,
         debug,
     };

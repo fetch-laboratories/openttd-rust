@@ -348,12 +348,7 @@ unsafe fn post_tick<const COUNTED: bool>(
 /// # Safety
 /// Immutable native tables and serialized pools remain valid until return.
 /// No selected callback resets pools, loads a game or yields the game-state mutex.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_calendar_day(
-    tables: *const Tables,
-    normal: bool,
-    date_fract: usize,
-) {
+pub(crate) unsafe fn calendar_day(tables: *const Tables, normal: bool, date_fract: usize) {
     if !normal {
         return;
     }
@@ -366,13 +361,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_calendar_day(
 }
 /// # Safety
 /// As calendar entry; cost is native stack storage valid through fleet drain.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_ticks(
-    tables: *const Tables,
-    normal: bool,
-    date_fract: usize,
-    cost: *mut (),
-) {
+pub(crate) unsafe fn ticks(tables: *const Tables, normal: bool, date_fract: usize, cost: *mut ()) {
     if crate::witness::enabled() {
         unsafe { run_ticks::<true>(&*tables, normal, date_fract, cost) };
     } else {

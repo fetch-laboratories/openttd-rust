@@ -216,7 +216,6 @@ pub struct Leaves {
     pub write_last: extern "C" fn(*mut std::ffi::c_void, Handle, u16),
     pub write_suppress: extern "C" fn(*mut std::ffi::c_void, Handle, u8),
 
-    pub follow: extern "C" fn(Handle, u64, *mut Follow) -> u8,
     pub pathfind: extern "C" fn(Handle, u32, u8, u8, u8, u8) -> Search,
     pub safe_track: extern "C" fn(Handle, u32, u8, u8) -> u8,
     pub process_orders: extern "C" fn(Handle) -> u8,
@@ -374,9 +373,7 @@ impl Game<'_> {
     }
 
     fn follow(&self, id: Handle, types: u64, ft: &mut Follow, tile: u32, td: u8) -> bool {
-        ft.old_tile = tile;
-        ft.old_td = td;
-        (self.leaves.follow)(id, types, ft) != 0
+        crate::follow_track::rail(unsafe { &*self.leaves.shared }, id, 0, types, ft, tile, td)
     }
     fn origin(&self, id: Handle, other: bool) -> Pbs {
         self.pbs().follow_train(id, other, Handle::NONE)
@@ -1306,7 +1303,6 @@ crate::abi::layouts! {
         write_dest,
         write_last,
         write_suppress,
-        follow,
         pathfind,
         safe_track,
         process_orders,
@@ -1440,11 +1436,180 @@ mod tests {
             write_dest: unused(),
             write_last: unused(),
             write_suppress: unused(),
-            follow: unused(),
             pathfind: unused(),
             safe_track: unused(),
             process_orders: unused(),
             update_order_dest: unused(),
+        }
+    }
+
+    impl<T> Unused for *const T {
+        fn unused() -> Self {
+            std::ptr::null()
+        }
+    }
+    impl<T> Unused for *mut T {
+        fn unused() -> Self {
+            std::ptr::null_mut()
+        }
+    }
+    impl<T> Unused for Option<T> {
+        fn unused() -> Self {
+            None
+        }
+    }
+    impl Unused for bool {
+        fn unused() -> Self {
+            false
+        }
+    }
+    fn movement_table() -> crate::movement::MovementServices {
+        crate::movement::MovementServices {
+            tile_types: unused(),
+            shared: unused(),
+            orders: unused(),
+            rail: unused(),
+            road: unused(),
+            rail_map: unused(),
+            train: unused(),
+            vehicle: unused(),
+            road_compatible: unused(),
+            road_type_speed: unused(),
+            bridge_type_speed: unused(),
+            other_bridge_end: unused(),
+            order_speed: unused(),
+            road_kind: unused(),
+            road_vehicle: unused(),
+            resolve: unused(),
+            pose: unused(),
+            depot_position: unused(),
+            incline: unused(),
+            first: unused(),
+            first_speed: unused(),
+            write_ground_flags: unused(),
+            train_engine_class: unused(),
+            depot_invalidate: unused(),
+            native_assert: unused(),
+            plain_rail: unused(),
+            is_tunnel: unused(),
+            rail_station: unused(),
+            road_crossing: unused(),
+            tile_flat: unused(),
+            add_by_diag_dir: unused(),
+            rail_depot_tile: unused(),
+            has_tile_road_type: unused(),
+            oneway_signal: unused(),
+            crossing_barred: unused(),
+            buoy: unused(),
+            water_type: unused(),
+            lock_direction: unused(),
+            ship_depot_axis: unused(),
+            owned_land: unused(),
+            object_foundation: unused(),
+            house_foundation: unused(),
+            house_boolean: unused(),
+            industry_foundation: unused(),
+            industry_callback: unused(),
+            industry_boolean: unused(),
+        }
+    }
+    fn vehicle_table() -> crate::vehicle::VehicleServices {
+        crate::vehicle::VehicleServices {
+            tile_links: unused(),
+            occupancy_update: unused(),
+            occupancy_near: unused(),
+            map_log_x: unused(),
+            assertions: unused(),
+            train_handle: unused(),
+            write_counters: unused(),
+            waiting_for_unbunching: unused(),
+            leave_unbunching_depot: unused(),
+            reset_depot_unbunching: unused(),
+            enter_depot: unused(),
+            pathfinding_result: unused(),
+            new_position: unused(),
+            write_xy: unused(),
+            base_viewport: unused(),
+            newgrf: unused(),
+            property: unused(),
+            callback: unused(),
+            unknown_callback_result: unused(),
+            length_changed: unused(),
+            play_vehicle_sound: unused(),
+            play_sound: unused(),
+            order_free: unused(),
+            order_dummy: unused(),
+            start_stop_dirty: unused(),
+            destroy: unused(),
+            check_orders: unused(),
+            day: unused(),
+            write_day: unused(),
+            write_direction: unused(),
+            write_speed: unused(),
+            last_station: unused(),
+            write_last_station: unused(),
+            set_dest_tile: unused(),
+            write_dest: unused(),
+            write_progress: unused(),
+            write_max_speed: unused(),
+            previous_tile: unused(),
+            detach_last: unused(),
+            next: unused(),
+            engine_id: unused(),
+            engine: unused(),
+            engine_for_length: unused(),
+            write_tick: unused(),
+            direction: unused(),
+            status: unused(),
+            tile: unused(),
+            progress: unused(),
+            dest_tile: unused(),
+            order_type: unused(),
+            order_destination: unused(),
+            order_nonstop: unused(),
+            subtype: unused(),
+            x: unused(),
+            y: unused(),
+            z: unused(),
+            tick: unused(),
+            owner: unused(),
+            speed: unused(),
+            subspeed: unused(),
+            running: unused(),
+            order_time: unused(),
+            vehicle_type: unused(),
+            write_x: unused(),
+            write_y: unused(),
+            write_z: unused(),
+            write_tile: unused(),
+            write_status: unused(),
+            write_subspeed: unused(),
+            write_breakdown_counter: unused(),
+            write_running: unused(),
+            write_order_time: unused(),
+            write_profit: unused(),
+            write_economy_service: unused(),
+            write_calendar_service: unused(),
+            write_breakdowns: unused(),
+            write_reliability: unused(),
+            write_cargo_age: unused(),
+            coordinates: unused(),
+            xy: unused(),
+            speed_inputs: unused(),
+            direction_progress: unused(),
+            tick_status: unused(),
+            day_cost: unused(),
+            make_dummy: unused(),
+            check_orders_only: unused(),
+            write_coordinates: unused(),
+            altitude_inputs: unused(),
+            position_observations: unused(),
+            movement_observations: unused(),
+            max_speed: unused(),
+            maintenance: unused(),
+            visits: unused(),
+            orders: unused(),
+            ship_get: unused(),
         }
     }
     struct Mock {
@@ -1486,6 +1651,7 @@ mod tests {
     thread_local! {
         static TRAIN: Cell<Handle> = const { Cell::new(Handle::NONE) };
         static PBS: Cell<*const PbsServices> = const { Cell::new(std::ptr::null()) };
+        static WORLD: Cell<*const World> = const { Cell::new(std::ptr::null()) };
     }
     fn current<'a>() -> &'a mut Mock {
         // SAFETY: The installing test keeps this mock live; callbacks end each access.
@@ -1496,6 +1662,10 @@ mod tests {
         shared: crate::services::Services,
         rail: RailMapServices,
         pbs: PbsServices,
+        movement: crate::movement::MovementServices,
+        vehicle: crate::vehicle::VehicleServices,
+        base: Vec<crate::map_func::BaseTileLayout>,
+        extended: Vec<crate::map_func::ExtendedTileLayout>,
     }
     extern "C" fn pbs_services(_: *const crate::services::Services) -> *const PbsServices {
         PBS.get()
@@ -1519,7 +1689,7 @@ mod tests {
         false
     }
     extern "C" fn every_type(_: u64) -> u64 {
-        u64::MAX
+        1
     }
     extern "C" fn rail_type(_: u32) -> crate::services::RailType {
         crate::services::RailType(0)
@@ -1529,24 +1699,11 @@ mod tests {
     }
     extern "C" fn try_track(tile: u32, track: u8) -> bool {
         let m = current();
-        m.log.push(("try", tile, track));
-        tile != 3 || m.stop == 1
+        m.log.push(("try", ordinal(tile), track));
+        ordinal(tile) != 3 || m.stop == 1
     }
     extern "C" fn unreserve_track(tile: u32, track: u8) {
-        current().log.push(("unreserve", tile, track));
-    }
-    /// `IsSafeWaitingPosition` follows with the train's types and `IsWaitingPositionFree`
-    /// with none: the line ends at tile 2 for a stop-2 train, and every position is free.
-    unsafe extern "C" fn pbs_follow(_: Handle, _: u8, types: u64, out: *mut Follow) -> bool {
-        // SAFETY: Pbs passes its live stack follower for this call only.
-        let ft = unsafe { &mut *out };
-        if types == 0 || (current().stop == 2 && ft.old_tile == 2) {
-            return false;
-        }
-        ft.new_tile = ft.old_tile + 1;
-        ft.exitdir = 0;
-        ft.dirs = crate::track_func::diagdir_reaches_trackdirs(0);
-        true
+        current().log.push(("unreserve", ordinal(tile), track));
     }
     extern "C" fn no_random(_: *mut c_void) -> u32 {
         std::process::abort()
@@ -1565,13 +1722,47 @@ mod tests {
                 },
                 rail: rail_map(),
                 pbs: pbs_table(),
+                movement: movement_table(),
+                vehicle: vehicle_table(),
+                base: (0..4096)
+                    .map(|_| crate::map_func::BaseTileLayout {
+                        kind: 0,
+                        height: 0,
+                        m2: 0,
+                        m1: 0,
+                        m3: 0,
+                        m4: 0,
+                        m5: 0,
+                    })
+                    .collect(),
+                extended: (0..4096)
+                    .map(|_| crate::map_func::ExtendedTileLayout {
+                        m6: 0,
+                        m7: 0,
+                        m8: 0,
+                    })
+                    .collect(),
             });
+            for ordinal in 0..=4 {
+                world.base[index(ordinal) as usize].kind = crate::tile_type::MP_RAILWAY << 4;
+                world.base[index(ordinal) as usize].m5 = crate::track_type::TRACK_BIT_X;
+            }
+            world.vehicle.owner = owner;
+            world.vehicle.vehicle_type = vehicle_kind;
+            world.movement.vehicle = &raw const world.vehicle;
+            world.movement.shared = &raw const world.shared;
+            world.movement.tile_types = Some(allocation);
+            world.shared.movement_services = movement_services;
+            world.shared.map_log_x = map_log_x;
             world.pbs.shared = &raw const world.shared;
             world.pbs.rail = &raw const world.rail;
             world
         }
         /// Route this thread's PBS queries to the world and to `train`'s mock.
-        fn install(&self, train: Handle) {
+        fn install(&mut self, train: Handle) {
+            let stop = unsafe { mock(train) }.stop;
+            self.base[index(if stop == 2 { 3 } else { 4 }) as usize].m5 = 0;
+            WORLD.set(std::ptr::from_ref(self));
             TRAIN.set(train);
             PBS.set(&raw const self.pbs);
         }
@@ -1622,6 +1813,34 @@ mod tests {
             wormhole_reserved: unused(),
         }
     }
+
+    const fn index(ordinal: u32) -> u32 {
+        72 - ordinal
+    }
+    const fn ordinal(tile: u32) -> u32 {
+        72 - tile
+    }
+    extern "C" fn map_log_x() -> u32 {
+        6
+    }
+    extern "C" fn owner(_: crate::vehicle::VehicleRef) -> u8 {
+        0
+    }
+    extern "C" fn vehicle_kind(_: crate::vehicle::VehicleRef) -> u8 {
+        crate::vehicle_type::VEH_TRAIN
+    }
+    extern "C" fn movement_services() -> *const crate::movement::MovementServices {
+        unsafe { &raw const (*WORLD.get()).movement }
+    }
+    extern "C" fn allocation() -> crate::map_func::TileTypeAllocation {
+        let w = unsafe { &*WORLD.get() };
+        crate::map_func::TileTypeAllocation {
+            base: w.base.as_ptr(),
+            extended: w.extended.as_ptr(),
+            count: w.base.len() as u32,
+            assertions: false,
+        }
+    }
     fn pbs_table() -> PbsServices {
         PbsServices {
             shared: std::ptr::null(),
@@ -1650,10 +1869,9 @@ mod tests {
             compatible: unused(),
             tile_rail_type: rail_type,
             rail90: same_types,
-            blocking: unused(),
-            has_pbs: unused(),
+            blocking: no_signal,
+            has_pbs: no_signal,
             index: unused(),
-            follow: pbs_follow,
         }
     }
 
@@ -1669,31 +1887,16 @@ mod tests {
     extern "C" fn one_track(_: *mut c_void, _: Handle, _: u32, _: u8) -> u64 {
         1
     }
-    extern "C" fn follow(h: Handle, _: u64, out: *mut Follow) -> u8 {
-        // SAFETY: The mock and output live throughout this synchronous callback; no recursive callback here.
-        unsafe {
-            let m = mock(h);
-            let ft = &mut *out;
-            if ft.old_tile == 3 && m.stop == 1 {
-                ft.error = 4;
-                return 0;
-            }
-            ft.new_tile = ft.old_tile + 1;
-            ft.dirs = 1;
-            ft.error = 0;
-            1
-        }
-    }
     extern "C" fn signal(_: *mut c_void, h: Handle, tile: u32, _: u8, green: u8) {
         // SAFETY: Live exclusive test mock.
         unsafe {
-            mock(h).log.push(("signal", tile, green));
+            mock(h).log.push(("signal", ordinal(tile), green));
         }
     }
     extern "C" fn mark(_: *mut c_void, h: Handle, tile: u32) {
         // SAFETY: Live exclusive test mock.
         unsafe {
-            mock(h).log.push(("mark", tile, 0));
+            mock(h).log.push(("mark", ordinal(tile), 0));
         }
     }
     fn extension_leaves(shared: &crate::services::Services) -> Leaves {
@@ -1706,12 +1909,11 @@ mod tests {
             green: one_track,
             set_signal: signal,
             mark_tile: mark,
-            follow,
             ..leaves()
         }
     }
     const ORIGIN: Pbs = Pbs {
-        tile: 0,
+        tile: index(0),
         other: Handle::NONE,
         td: 0,
         okay: 0,
@@ -1720,7 +1922,7 @@ mod tests {
     fn controller_extension_rolls_back_only_new_tracks_and_restores_signal_order() {
         let mut m = Mock::new(0);
         let h = m.handle();
-        let world = World::new();
+        let mut world = World::new();
         world.install(h);
         let ls = extension_leaves(&world.shared);
         let g = Game {
@@ -1754,7 +1956,7 @@ mod tests {
         for stop in [1, 2] {
             let mut m = Mock::new(stop);
             let h = m.handle();
-            let world = World::new();
+            let mut world = World::new();
             world.install(h);
             let ls = extension_leaves(&world.shared);
             let g = Game {
@@ -1767,7 +1969,7 @@ mod tests {
             let result = extend_from(&g, h, ORIGIN, &mut available, &mut dir);
             assert_eq!(
                 (result.tile, result.td, result.okay),
-                (if stop == 1 { 3 } else { 2 }, 0, 1)
+                (index(if stop == 1 { 3 } else { 2 }), 0, 1)
             );
             assert!(
                 !m.log

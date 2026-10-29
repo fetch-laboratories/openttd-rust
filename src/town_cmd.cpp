@@ -1273,9 +1273,7 @@ static void TownTickHandler(Town *t)
 #endif
 
 /** Iterate through all towns and call their tick handler. */
-#ifdef WITH_RUST
-void OnTick_Town() { RustRoadCommandContext road; openttd_rust_town_tick_all(&GetRustTownServices(), &GetRustSharedServices(), &road.view); }
-#else
+#ifndef WITH_RUST
 void OnTick_Town()
 {
 	if (_game_mode == GM_EDITOR) return;

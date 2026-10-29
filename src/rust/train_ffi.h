@@ -342,8 +342,6 @@ struct OpenTTDTrainServices {
 	uint64_t (*other_end)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(other_end);
 	void (*pay_running)(OpenTTDTrainHandle, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(pay_running);
 	uint64_t (*pbs_signal_type)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(pbs_signal_type);
-	uint64_t (*platform_ahead)(OpenTTDTrainHandle, uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(platform_ahead);
-	uint64_t (*platform_length)(OpenTTDTrainHandle, uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(platform_length);
 	uint64_t (*pow_wag_power)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(pow_wag_power);
 	uint64_t (*price)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(price);
 	uint64_t (*railveh_wagon)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(railveh_wagon);

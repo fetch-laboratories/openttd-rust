@@ -1,6 +1,7 @@
 #pragma once
 #include "rust/trees_ffi.h"
 #include "rust/landscape_loop_ffi.h"
+#include "../../simulation/session-fixture.hpp"
 
 // ABI/reentry probe, not simulation evidence. The full game harness compares map/DATE.
 struct TreeProbe {
@@ -101,9 +102,20 @@ static void Trees()
 	openttd_rust_trees_initialize();
 	CHECK(*counter == 0);
 	*counter = 37; // Same boundary write made by DATE/TTD descriptors.
-	openttd_rust_trees_tick({.tick_counter = 0, .size = 4096, .climate = 0, .extra = 2}, &tree_probe_services, &shared);
+	static uint32_t tick_size;
+	const auto Tick = [&](uint32_t size) {
+		tick_size = size;
+		SessionFixture fixture;
+		auto tick_shared = shared;
+		tick_shared.map_log_x = fixture.shared.map_log_x;
+		fixture.services.shared = &tick_shared;
+		fixture.services.trees = &tree_probe_services;
+		fixture.services.tree_tick = []() noexcept { return OpenTTDTreeTickSettings{.tick_counter = 0, .size = tick_size, .climate = 0, .extra = 2}; };
+		CHECK(fixture.Run());
+	};
+	Tick(4096);
 	CHECK(*counter == 36 && counter == openttd_rust_tree_counter());
-	openttd_rust_trees_tick({.tick_counter = 0, .size = 4096 * 4096, .climate = 0, .extra = 2}, &tree_probe_services, &shared);
+	Tick(4096 * 4096);
 	CHECK(*counter == 36 && tree_probe.writes == 0);
 	tree_probe.plant = {.tile_type = 0, .bridge = false, .ground = 0, .density = 2, .snow = false, .coast = false, .zone = 0};
 	openttd_rust_trees_plant(1, 12, 2, 6, &tree_probe_services, &shared);
@@ -126,7 +138,11 @@ static void Trees()
 	};
 	const uint32_t cursor = *openttd_rust_tile_loop_cursor();
 	*openttd_rust_tile_loop_cursor() = 1;
-	openttd_rust_run_tile_loop(6, 6, {.tick_counter = 1, .size_x = 64, .climate = 0, .extra = 2, .ambient = false, .ambient_callback = false}, &loop);
+	{
+		SessionFixture fixture;
+		fixture.loop = {{.tick_counter = 1, .size_x = 64, .climate = 0, .extra = 2, .ambient = false, .ambient_callback = false}, &loop};
+		CHECK(fixture.Run());
+	}
 	*openttd_rust_tile_loop_cursor() = cursor;
 	CHECK(tree_probe.waters == 1 && tree_probe.clears == 1 && tree_probe.nested_cost == 40 && tree_probe.writes == 1);
 	openttd_rust_trees_initialize();
