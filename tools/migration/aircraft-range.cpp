@@ -1,13 +1,16 @@
 /* OpenTTD-Rust migration evidence, licensed under GPLv2. */
 /** @file aircraft-range.cpp Finite NewGRF range gap against unchanged event bodies. */
+#include <algorithm>
+#include <array>
+#include <bit>
+#include <cstdio>
+#include <cstdlib>
+#include <iterator>
+#include <limits>
+#include <memory>
 #include "rust/aircraft_ffi.h"
 #include "rust/movement_ffi.h"
 #include "rust/vehicle_maintenance_ffi.h"
-#include <algorithm>
-#include <array>
-#include <cstdio>
-#include <cstdlib>
-#include <memory>
 
 static constexpr uint32_t INVALID_TILE = UINT32_MAX;
 static constexpr uint8_t ENDTAKEOFF = 12, HELIENDLANDING = 18;
