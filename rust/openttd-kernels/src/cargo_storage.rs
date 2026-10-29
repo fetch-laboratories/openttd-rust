@@ -1694,8 +1694,19 @@ mod tests {
         7
     }
     extern "C" fn origin(_: *mut c_void, _: u16, _: u32, _: u8) {}
-    extern "C" fn flow_map(_: *const c_void) -> *mut crate::cargo_flow::FlowMap {
-        std::ptr::null_mut()
+    extern "C" fn flow_map(context: *const c_void) -> *mut crate::cargo_flow::FlowMap {
+        context.cast_mut().cast()
+    }
+    fn flow_fixture(via: u16) -> *mut crate::cargo_flow::FlowMap {
+        let map = crate::cargo_flow::openttd_rust_flow_map_new();
+        let flow = crate::cargo_flow::openttd_rust_flow_new(via, 1, 0);
+        unsafe {
+            for origin in [10, 11] {
+                crate::cargo_flow::openttd_rust_flow_map_insert(map, origin, flow);
+            }
+            crate::cargo_flow::openttd_rust_flow_destroy(flow);
+        }
+        map
     }
     extern "C" fn draw() -> u32 {
         0
@@ -1892,6 +1903,7 @@ mod tests {
         let service = services();
         unsafe {
             for via in [10_u16, 90] {
+                let flows = flow_fixture(via);
                 let station = list(false);
                 append(station, service, cargo(8, 10, 0), 70);
                 append(station, service, cargo(8, 11, 0), 70);
@@ -1906,7 +1918,7 @@ mod tests {
                         INVALID,
                         std::ptr::null(),
                         0,
-                        (&raw const via).cast(),
+                        flows.cast(),
                         0,
                         std::ptr::null_mut(),
                         5
@@ -1921,6 +1933,7 @@ mod tests {
                 assert_eq!(selected, 10);
                 assert_eq!(fields(station).count, 16);
                 clean(station);
+                crate::cargo_flow::openttd_rust_flow_map_destroy(flows);
             }
             let vehicle = list(true);
             let original = cargo(8, 10, 0);
@@ -1928,6 +1941,7 @@ mod tests {
             append(vehicle, service, original, KEEP as u16);
             (*vehicle).fields.action_counts = [8, 0, 0, 0];
             let via = 90_u16;
+            let flows = flow_fixture(via);
             assert_eq!(
                 openttd_rust_cargo_list_move(
                     vehicle,
@@ -1939,7 +1953,7 @@ mod tests {
                     INVALID,
                     std::ptr::null(),
                     0,
-                    (&raw const via).cast(),
+                    flows.cast(),
                     0,
                     std::ptr::null_mut(),
                     5
@@ -1950,6 +1964,7 @@ mod tests {
             assert_eq!(packet(service, nodes(vehicle)[0].shell).next_hop, 70);
             assert_eq!(fields(vehicle).action_counts, [8, 0, 0, 0]);
             clean(vehicle);
+            crate::cargo_flow::openttd_rust_flow_map_destroy(flows);
         }
     }
     #[test]
