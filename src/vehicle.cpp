@@ -8,9 +8,6 @@
 /** @file vehicle.cpp Base implementations of all vehicles. */
 
 #include "stdafx.h"
-#ifdef WITH_RUST
-#include "rust/company_identity_ffi.h"
-#endif
 #include "error.h"
 #include "roadveh.h"
 #include "ship.h"
@@ -70,6 +67,7 @@
 #include "rust/vehicle_maintenance_ffi.h"
 #include "rust/presentation_services.h"
 #include "rust/vehicle_services.h"
+#include "rust/company_identity_ffi.h"
 #include "rust/command_cost_services.h"
 #include "rust/vehicle_visits_ffi.h"
 #include "rust/services_station.h"
