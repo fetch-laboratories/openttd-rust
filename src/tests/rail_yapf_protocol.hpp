@@ -75,6 +75,9 @@ inline OpenTTDRailStep Run(uint32_t limit, uint32_t curve = 29, bool cache = fal
 	auto &shared = map.shared;
 	for (uint32_t y = 1; y < 127; ++y) for (uint32_t x = 1; x < 127; ++x) map.Tile(x + y * 128, MP_RAILWAY, TRACK_BIT_ALL);
 	if (follow_fail) map.base[start - 1].m5 = 0;
+	// The production follower resolves its vehicle owner at construction. PBS
+	// reads outside that interval must not be mistaken for optional masking.
+	map.vehicle.owner = [](OpenTTDVehicle *) noexcept -> uint8_t { follow_reads.push_back('f'); return 0; };
 	map.rail.rail_reservation = [](uint32_t) noexcept { follow_reads.push_back('r'); return TRACK_BIT_NONE; };
 	map.physics.rail_speed = [](RailType) noexcept -> uint16_t { follow_reads.push_back('s'); return 0; };
 	map.train.read_tile = [](OpenTTDTrainHandle) noexcept -> uint32_t { return start; };

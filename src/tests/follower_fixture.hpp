@@ -65,6 +65,7 @@ struct FollowerFixture {
 			return {t, active->shared.tile_type(t)};
 		};
 		movement.pixel_slope = [](uint32_t) noexcept -> OpenTTDFoundationSlope { return {0, SLOPE_FLAT}; };
+		movement.max_pixel_z = [](uint32_t) noexcept -> int32_t { return 0; };
 		ground.tracks = [](uint32_t t) noexcept { return static_cast<TrackBits>(active->base[t].m5 & 63); };
 		rail.rail_tile_type = [](uint32_t t) noexcept { return static_cast<RailTileType>(active->base[t].m5 >> 6); };
 		rail.is_rail_depot = [](uint32_t t) noexcept { return active->base[t].m5 >> 6 == 3; };

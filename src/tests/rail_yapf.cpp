@@ -143,14 +143,26 @@ TEST_CASE("Rail YAPF observes Follow then optional masking then speed limits")
 	for (bool fail : {false, true}) for (uint8_t kind : {0, 3}) {
 		RailYapfProbe::follow_fail = fail;
 		openttd_rust_rail_invalidate();
-		RailYapfProbe::Run(1, 29, false, false, kind);
+		const auto result = RailYapfProbe::Run(1, 29, false, false, kind);
 		const auto &reads = RailYapfProbe::follow_reads;
-		REQUIRE(std::count(reads.begin(), reads.end(), 's') > 0);
-		size_t masked = 0;
-		for (size_t i = 0; i < reads.size(); ++i) if (reads[i] == 'r') {
-			++masked; REQUIRE(i + 1 < reads.size()); CHECK(reads[i + 1] == 's');
+		CAPTURE(kind, fail, reads);
+		if (kind == 3 && fail) {
+			// With the concrete missing track, the original safe-tile search
+			// accepts its free line-end origin before calling PfFollowNode.
+			CHECK(result.found == 1);
+			CHECK(std::count(reads.begin(), reads.end(), 's') == 0);
+			continue;
 		}
-		CHECK((masked != 0) == (kind == 3 && !fail));
+		REQUIRE(std::count(reads.begin(), reads.end(), 's') > 0);
+		size_t begin = 0;
+		for (size_t i = 0; i < reads.size(); ++i) {
+			if (reads[i] == 'f') begin = i;
+			if (reads[i] != 's') continue;
+			REQUIRE(reads[begin] == 'f');
+			const auto masked = std::count(reads.begin() + begin + 1, reads.begin() + i, 'r');
+			CHECK((masked != 0) == (kind == 3 && !fail));
+			if (masked != 0) CHECK(reads[i - 1] == 'r');
+		}
 	}
 	RailYapfProbe::follow_fail = false;
 	openttd_rust_rail_invalidate();

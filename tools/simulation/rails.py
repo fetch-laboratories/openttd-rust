@@ -261,9 +261,17 @@ def scenarios(soak):
                 "ticks": (6 if soak else 2) * 365 * TICKS_PER_DAY + SNAPSHOT_TICKS,
             }
         )
-    cases.append(dict(name="track-follower", kind="save", follower_probe=True,
-                      save=str(ROOT / "migration/saves/padhattan-ridge-1996.sav"),
-                      ticks=1, short_checkpoint=True, console=["follower_probe", "unpause"]))
+    cases.append(
+        dict(
+            name="track-follower",
+            kind="save",
+            follower_probe=True,
+            save=str(ROOT / "migration/saves/padhattan-ridge-1996.sav"),
+            ticks=1,
+            short_checkpoint=True,
+            console=["follower_probe", "unpause"],
+        )
+    )
     for case in cases:
         if case["name"].startswith(("rail-reservation-", "rail-controller-")):
             case["pbs_probe"] = True
@@ -328,7 +336,9 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         directory = out / scenario["name"] / "prepare"
         normalized, record = normalize(Path(scenario["save"]), directory)
         result["follower_input"] = record
-        executables = prepared_console("rails", adapter, binaries, builds, directory / "follower", env)
+        executables = prepared_console(
+            "rails", adapter, binaries, builds, directory / "follower", env
+        )
         return dict(scenario, save=str(normalized), executables=executables)
     if scenario.get("movement_structure"):
         from . import signals
@@ -829,13 +839,21 @@ def controller_witnesses(scenario, run, mode):
 def check(scenario, run, mode, role, result):
     if scenario.get("follower_probe"):
         rows = [line for line in run["log"] if line.startswith("FOLLOWER ")]
-        required = set("rail owner rail_type no_way ninety ninety_allowed reserved depot_reverse tunnel_wrong_side bridge_wrong_side tunnel_skip bridge_skip platform_skip platform_lengths platform_reserved road road_end_reverse road_owner_reverse road_type_reverse stop_wrong_side stop_reverse tram_reverse tram_wrong_side tram_type tram_bad_exit water".split())
+        required = set(
+            "rail owner rail_type no_way ninety ninety_allowed reserved depot_reverse tunnel_wrong_side bridge_wrong_side tunnel_skip bridge_skip platform_skip platform_lengths platform_reserved road road_end_reverse road_owner_reverse road_type_reverse stop_wrong_side stop_reverse tram_reverse tram_wrong_side tram_type tram_bad_exit water".split()
+        )
         if {row.split()[1] for row in rows} != required or len(rows) != len(required):
-            raise RuntimeError("missing default follower branch/path/reservation/RNG outputs")
+            raise RuntimeError(
+                "missing default follower branch/path/reservation/RNG outputs"
+            )
         result[f"{mode}_{role}_follower"] = rows
         other = "candidate" if role == "reference" else "reference"
-        if (expected := result.get(f"{mode}_{other}_follower")) is not None and rows != expected:
-            raise RuntimeError("follower paths, errors, reservations or RNG streams differ")
+        if (
+            expected := result.get(f"{mode}_{other}_follower")
+        ) is not None and rows != expected:
+            raise RuntimeError(
+                "follower paths, errors, reservations or RNG streams differ"
+            )
         return
 
     if route := scenario.get("movement_structure"):
