@@ -18,6 +18,7 @@
     clippy::many_single_char_names,
     clippy::struct_field_names
 )]
+use crate::livery::{Livery, PRIMARY, SECONDARY};
 use crate::raw_field::{read_field, write_field};
 use crate::vehicle::OpenTTDVehicle;
 use std::collections::{BTreeMap, BTreeSet};
@@ -30,7 +31,7 @@ pub struct GroupFields {
     pub owner: u8,
     pub vehicle_type: u8,
     pub flags: u8,
-    pub livery: [u8; 3],
+    pub livery: Livery,
     pub parent: u16,
     pub number: u16,
 }
@@ -72,7 +73,7 @@ pub extern "C" fn openttd_rust_fleet_group_create() -> *mut () {
             owner: 255,
             vehicle_type: 255,
             flags: 0,
-            livery: [0; 3],
+            livery: Livery::default(),
             parent: 65535,
             number: 0,
         },
@@ -289,7 +290,7 @@ pub struct GroupServices {
     pub(crate) allocate: unsafe extern "C" fn(u8, u8) -> u16,
     pub(crate) use_number: unsafe extern "C" fn(u8) -> u16,
     pub(crate) release_number: unsafe extern "C" fn(u8, u16),
-    pub(crate) company_livery: unsafe extern "C" fn(u8) -> *const u8,
+    pub(crate) company_livery: unsafe extern "C" fn(u8) -> *const Livery,
     pub(crate) keep_length: unsafe extern "C" fn(u8) -> bool,
     pub(crate) delete_group: unsafe extern "C" fn(u16),
     pub(crate) invalid_parent: unsafe extern "C" fn(u16, u16),
@@ -575,15 +576,14 @@ unsafe fn add_vehicle(w: &GroupServices, v: *mut (), new: u16) {
         count_vehicle(w, v, 1);
     }
 }
-unsafe fn parent_livery(w: &GroupServices, g: *mut GroupFields) -> [u8; 3] {
+unsafe fn parent_livery(w: &GroupServices, g: *mut GroupFields) -> *const Livery {
     let parent = read_field!(g, parent);
     if parent == INVALID_GROUP {
         let owner = read_field!(g, owner);
-        let p = unsafe { (w.company_livery)(owner) };
-        unsafe { p.cast::<[u8; 3]>().read() }
+        unsafe { (w.company_livery)(owner) }
     } else {
         let p = unsafe { group(w, parent) };
-        read_field!(p, livery)
+        unsafe { std::ptr::addr_of!((*p).livery) }
     }
 }
 unsafe fn propagate_livery(w: &GroupServices, id: u16, reset: bool) {
@@ -610,15 +610,12 @@ unsafe fn propagate_livery(w: &GroupServices, id: u16, reset: bool) {
     let mut from = 0;
     while let Some(child) = unsafe { child_after(g, from) } {
         let cg = unsafe { group(w, child) };
-        let mut livery = read_field!(cg, livery);
-        let parent = read_field!(g, livery);
-        if livery[0] & 1 == 0 {
-            livery[1] = parent[1];
+        if read_field!(cg, livery.in_use) & PRIMARY == 0 {
+            write_field!(cg, livery.colour1, read_field!(g, livery.colour1));
         }
-        if livery[0] & 2 == 0 {
-            livery[2] = parent[2];
+        if read_field!(cg, livery.in_use) & SECONDARY == 0 {
+            write_field!(cg, livery.colour2, read_field!(g, livery.colour2));
         }
-        write_field!(cg, livery, livery);
         unsafe { propagate_livery(w, child, reset) };
         from = u32::from(child) + 1;
     }
@@ -638,23 +635,20 @@ unsafe fn create_group(w: &GroupServices, flags: u32, kind: u8, parent: u16, out
         let g = unsafe { group(w, id) };
         let number = unsafe { (w.use_number)(owner) };
         write_field!(g, number, number);
-        let mut livery = read_field!(g, livery);
         if pg.is_null() {
-            let parent = unsafe { (w.company_livery)(owner).cast::<[u8; 3]>().read() };
-            livery[1] = parent[1];
-            livery[2] = parent[2];
+            let parent = unsafe { (w.company_livery)(owner) };
+            write_field!(g, livery.colour1, read_field!(parent, colour1));
+            write_field!(g, livery.colour2, read_field!(parent, colour2));
             if unsafe { (w.keep_length)(owner) } {
                 write_field!(g, flags, read_field!(g, flags) | 2);
             }
         } else {
             write_field!(g, parent, parent);
-            let parent = read_field!(pg, livery);
-            livery[1] = parent[1];
-            livery[2] = parent[2];
+            write_field!(g, livery.colour1, read_field!(pg, livery.colour1));
+            write_field!(g, livery.colour2, read_field!(pg, livery.colour2));
             write_field!(g, flags, read_field!(pg, flags));
             unsafe { openttd_rust_fleet_child_change(pg.cast(), u32::from(id), true) };
         }
-        write_field!(g, livery, livery);
         unsafe {
             (w.list_dirty)(owner, kind);
             (w.colour_dirty)(owner, kind);
@@ -756,16 +750,14 @@ unsafe fn alter_group(
                 unsafe { openttd_rust_fleet_child_change(pg.cast(), u32::from(id), true) };
             }
             unsafe { update_autoreplace(w, owner) };
-            let mut livery = read_field!(g, livery);
-            if livery[0] & 3 != 3 {
+            if read_field!(g, livery.in_use) & (PRIMARY | SECONDARY) != (PRIMARY | SECONDARY) {
                 let inherited = unsafe { parent_livery(w, g) };
-                if livery[0] & 1 == 0 {
-                    livery[1] = inherited[1];
+                if read_field!(g, livery.in_use) & PRIMARY == 0 {
+                    write_field!(g, livery.colour1, read_field!(inherited, colour1));
                 }
-                if livery[0] & 2 == 0 {
-                    livery[2] = inherited[2];
+                if read_field!(g, livery.in_use) & SECONDARY == 0 {
+                    write_field!(g, livery.colour2, read_field!(inherited, colour2));
                 }
-                write_field!(g, livery, livery);
                 unsafe {
                     propagate_livery(w, id, true);
                     (w.screen_dirty)();
@@ -928,7 +920,7 @@ unsafe fn update_profits(w: &GroupServices) {
         }
     }
 }
-unsafe fn company_liveries(w: &GroupServices, company: u8) {
+pub(crate) unsafe fn company_liveries(w: &GroupServices, company: u8) {
     let mut from = 0;
     loop {
         let id = unsafe { (w.next_group)(from) };
@@ -938,15 +930,13 @@ unsafe fn company_liveries(w: &GroupServices, company: u8) {
         from = id + 1;
         let g = unsafe { group(w, id as u16) };
         if read_field!(g, owner) == company && read_field!(g, parent) == INVALID_GROUP {
-            let inherited = unsafe { (w.company_livery)(company).cast::<[u8; 3]>().read() };
-            let mut livery = read_field!(g, livery);
-            if livery[0] & 1 == 0 {
-                livery[1] = inherited[1];
+            let inherited = unsafe { (w.company_livery)(company) };
+            if read_field!(g, livery.in_use) & PRIMARY == 0 {
+                write_field!(g, livery.colour1, read_field!(inherited, colour1));
             }
-            if livery[0] & 2 == 0 {
-                livery[2] = inherited[2];
+            if read_field!(g, livery.in_use) & SECONDARY == 0 {
+                write_field!(g, livery.colour2, read_field!(inherited, colour2));
             }
-            write_field!(g, livery, livery);
             unsafe { propagate_livery(w, id as u16, false) };
         }
     }
@@ -1109,17 +1099,23 @@ unsafe fn set_livery(w: &GroupServices, flags: u32, id: u16, primary: bool, mut 
         return ERROR;
     }
     if flags & 1 != 0 {
-        let mut livery = read_field!(g, livery);
-        let mask = if primary { 1 } else { 2 };
-        let index = if primary { 1 } else { 2 };
+        let mask = if primary { PRIMARY } else { SECONDARY };
         if colour == 255 {
-            livery[0] &= !mask;
-            colour = unsafe { parent_livery(w, g) }[index];
+            write_field!(g, livery.in_use, read_field!(g, livery.in_use) & !mask);
+            let inherited = unsafe { parent_livery(w, g) };
+            colour = if primary {
+                read_field!(inherited, colour1)
+            } else {
+                read_field!(inherited, colour2)
+            };
         } else {
-            livery[0] |= mask;
+            write_field!(g, livery.in_use, read_field!(g, livery.in_use) | mask);
         }
-        livery[index] = colour;
-        write_field!(g, livery, livery);
+        if primary {
+            write_field!(g, livery.colour1, colour);
+        } else {
+            write_field!(g, livery.colour2, colour);
+        }
         unsafe {
             propagate_livery(w, id, true);
             (w.screen_dirty)();
@@ -1352,18 +1348,6 @@ pub unsafe extern "C" fn openttd_rust_fleet_update_autoreplace(
 ) {
     let w = unsafe { &*services };
     unsafe { update_autoreplace(w, company) }
-}
-/// Synchronous original fleet `company_liveries` control.
-/// # Safety
-/// Static typed noexcept services; live native arguments and game-thread owners.
-/// Field accesses end before callbacks. Panics or escaping exceptions abort.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_fleet_company_liveries(
-    services: *const GroupServices,
-    company: u8,
-) {
-    let w = unsafe { &*services };
-    unsafe { company_liveries(w, company) }
 }
 /// Synchronous original fleet `create_group` control.
 /// # Safety

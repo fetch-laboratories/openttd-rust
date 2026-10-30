@@ -11,6 +11,7 @@
 #include "../rust/town_ffi.h"
 #include "../rust/type_registry_ffi.h"
 #include "../core/backup_type.hpp"
+#include "../rust/clock_state.h"
 #include "../rust/road_command_ffi.h"
 #include "../rust/house_ffi.h"
 #include "../rust/house_resolver_ffi.h"
@@ -64,7 +65,6 @@ static inline bool TownProtocol_generating_world() noexcept { return false; }
 static inline bool TownProtocol_allow_crossings() noexcept { return false; }
 static inline uint8_t TownProtocol_climate() noexcept { return 0; }
 static inline uint8_t TownProtocol_highest_snow_line() noexcept { return 0; }
-static inline int32_t TownProtocol_calendar_year() noexcept { return 1950; }
 static inline bool TownProtocol_allow_roads() noexcept { return false; }
 static inline uint8_t TownProtocol_road_flags(uint8_t) noexcept { return 0; }
 static inline OpenTTDTownHouseAvailability TownProtocol_house_availability(uint16_t) noexcept { return {.zones = 0xFFFF, .override_id = UINT16_MAX, .class_id = town_protocol_world->house_class, .probability = 1, .enabled = true}; }
@@ -171,7 +171,6 @@ static inline OpenTTDTownLeaves TownProtocolServices()
 		.allow_crossings = TownProtocol_allow_crossings,
 		.climate = TownProtocol_climate,
 		.highest_snow_line = TownProtocol_highest_snow_line,
-		.calendar_year = TownProtocol_calendar_year,
 		.allow_roads = TownProtocol_allow_roads,
 		.road_flags = TownProtocol_road_flags,
 		.house_availability = TownProtocol_house_availability,
@@ -207,6 +206,7 @@ static inline OpenTTDTownLeaves TownProtocolServices()
 }
 template <typename Check> void CheckTownProtocol(Check check)
 {
+	AutoRestoreBackup<decltype(GetRustClockState().calendar_year)> calendar_year_scope(GetRustClockState().calendar_year, decltype(GetRustClockState().calendar_year){1950});
 	AutoRestoreBackup<uint64_t> road_mask(*openttd_rust_road_mask(), 0);
 	/* Source quirks: first-road execute failure still returns success; a failed
 	 * expansion tries 25 times; reentry mutates the canonical owner's flags. */
@@ -257,7 +257,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	services.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
 	services.tile_max_z = [](uint32_t) noexcept -> int32_t { return 0; };
 	services.tile_z = [](uint32_t) noexcept -> int32_t { return 0; };
-	services.calendar_date = []() noexcept { return 0; };
+	AutoRestoreBackup<decltype(GetRustClockState().calendar_date)> calendar_date_scope(GetRustClockState().calendar_date, decltype(GetRustClockState().calendar_date){0});
 	services.bridge_above = [](uint32_t) noexcept { return false; };
 	services.has_water_ground = [](uint32_t) noexcept { return false; };
 	services.mark_dirty = [](uint32_t) noexcept {};

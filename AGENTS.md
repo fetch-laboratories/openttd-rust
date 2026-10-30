@@ -129,11 +129,14 @@ fork; the remaining upstream documentation explains behavior and architecture.
   the timing, and root grants no exceptions.
 - A shared accessor (vehicle field, map predicate, setting, constant) has one
   typed definition used by every port. `tools/shared-accessors.py` rejects new
-  copies in quick CI (#249). It cannot see Rust service-table fields (#582
-  adds rebound table callees), macros or compound callbacks, so a reviewer
-  greps the callee of every new table-bound wrapper (such as `CheckOwnership`
-  or `GetRoadOwner`) across `src/` and reports
-  each existing wrapper of it as a finding. Command ports share one set of
+  copies in quick CI (#249), and `tools/rebound-callees.py` rejects a callee
+  bound directly into a second service table or a field forwarded from
+  another table within its documented syntactic scope. Neither sees macros or
+  compound callbacks (a lambda or wrapper whose body calls the callee), so a
+  reviewer greps the callee of every new binding outside the rebound check's
+  scope, macro or compound callback (such as one calling `CheckOwnership`
+  or `GetRoadOwner`) across `src/` and reports each existing wrapper or
+  binding of it as a finding. Command ports share one set of
   command-check services. A PR that adds a shared accessor deletes the
   integrated copies, and a PR that removes a caller deletes the export,
   declaration or callback field it orphans. A test or harness caller does not
@@ -361,7 +364,9 @@ review on `gpt-6.1-sol` (high) through T3 `delegate_task`, so a reviewer's model
 family differs from the implementer's.
 Under a Claude Code root, implementation, fixes and code-touching follow-ups
 run on Opus. Sonnet handles only non-code work such as runs, measurements and
-tracker edits (user decision, 2026-10-27).
+tracker edits (user decision, 2026-10-27). Opus writes code at medium effort;
+high is for tasks that need more judgment, such as planning, speed attribution
+and hard fidelity analysis (user decision, 2026-10-30).
 A Claude Code root spawns each code-touching agent through T3 `delegate_task`
 with `isolation: "worktree"`. T3 creates the worktree from root's commit, binds
 the agent's shell to it so no command needs a `cd` prefix, and removes it when

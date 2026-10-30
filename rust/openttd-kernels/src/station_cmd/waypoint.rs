@@ -408,7 +408,7 @@ impl Ctx<'_> {
         crate::station_association::assign(self.s.rail_association, spec, wp, specindex.value);
         self.reset_delete_counter(wp);
         (self.s.set_facility_bits)(wp, FACILITY_TRAIN);
-        (self.s.set_build_date)(wp, (self.shared.calendar_date)());
+        (self.s.set_build_date)(wp, crate::timer_game_common::calendar_date().0);
         (self.s.set_string_id)(wp, self.s.strings.waypoint_name);
         (self.s.set_train_area)(wp, area);
         if (self.s.station_town)(wp).is_null() {
@@ -615,7 +615,7 @@ impl Ctx<'_> {
         }
         self.reset_delete_counter(wp);
         (self.s.set_facility_bits)(wp, FACILITY_BUS | FACILITY_TRUCK);
-        (self.s.set_build_date)(wp, (self.shared.calendar_date)());
+        (self.s.set_build_date)(wp, crate::timer_game_common::calendar_date().0);
         (self.s.set_string_id)(wp, self.s.strings.waypoint_name);
         if (self.s.station_town)(wp).is_null() {
             (self.s.waypoint_default_name)(wp);
@@ -732,7 +732,7 @@ impl Ctx<'_> {
         (self.s.set_string_id)(wp, self.s.strings.buoy_name);
         (self.s.set_facility_bits)(wp, FACILITY_DOCK);
         (self.s.set_station_owner)(wp, OWNER_NONE);
-        (self.s.set_build_date)(wp, (self.shared.calendar_date)());
+        (self.s.set_build_date)(wp, crate::timer_game_common::calendar_date().0);
         if (self.s.station_town)(wp).is_null() {
             (self.s.waypoint_default_name)(wp);
         }

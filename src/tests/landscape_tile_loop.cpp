@@ -27,6 +27,7 @@
 #include "../rust/landscape_loop_ffi.h"
 #include "landscape_protocol.hpp"
 #include "ground_protocol.hpp"
+#include "world_generation_probe.hpp"
 #endif
 #include "../safeguards.h"
 
@@ -262,11 +263,11 @@ TEST_CASE("Rust world generation replaces transient callbacks before invoking th
 		.callback = [](OpenTTDWorldFrame *, GWDoneProc *proc) noexcept { CHECK(_switch_mode == SM_EDITOR); proc(); return true; },
 	};
 	world_callback_value = 0;
-	openttd_rust_world_set_abort_callback([] { world_callback_value = 1; });
-	openttd_rust_world_set_abort_callback([] { world_callback_value = 2; });
+	openttd_test_world_set_abort_callback([] { world_callback_value = 1; });
+	openttd_test_world_set_abort_callback([] { world_callback_value = 2; });
 	CHECK(openttd_rust_world_handle_abort(&services, nullptr));
 	CHECK(world_callback_value == 2);
-	openttd_rust_world_set_abort_callback(nullptr);
+	openttd_test_world_set_abort_callback(nullptr);
 	CHECK(openttd_rust_world_handle_abort(&services, nullptr));
 	CHECK(world_callback_value == 2);
 	CHECK(_switch_mode == SM_EDITOR);

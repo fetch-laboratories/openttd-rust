@@ -468,7 +468,6 @@ pub struct Services {
     pub landscape: unsafe extern "C" fn() -> u8,
     pub economy_type: unsafe extern "C" fn() -> u8,
     pub fund_only: unsafe extern "C" fn() -> bool,
-    pub calendar_year: unsafe extern "C" fn() -> i32,
     pub deity: unsafe extern "C" fn() -> bool,
 }
 impl Services {
@@ -1080,7 +1079,7 @@ fn game_probability(kind: u8, s: &Services) -> u64 {
     }
     let info = unsafe { (s.type_info)(kind) };
     let behavior = info.behaviour;
-    let year = unsafe { (s.calendar_year)() };
+    let year = crate::timer_game_common::calendar_year().0;
     if !info.enabled
         || !info.layouts
         || (behavior & (1 << 8) != 0 && year > 1950)
@@ -2073,7 +2072,6 @@ crate::abi::layouts! {
         cargo_lists,
         callback_mask,
         set_town,
-        calendar_date,
         generating,
         callback,
         callback_error,
@@ -2268,7 +2266,6 @@ crate::abi::layouts! {
         landscape,
         economy_type,
         fund_only,
-        calendar_year,
         deity,
     };
     "OpenTTDIndustryProductionStorage" ["industry"] => ProductionStorage { storage, };

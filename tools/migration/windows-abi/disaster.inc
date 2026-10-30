@@ -1,6 +1,7 @@
 #pragma once
 #include "rust/disaster_ffi.h"
 #include "rust/clock_ffi.h"
+#include "core/backup_type.hpp"
 
 struct DisasterProbe {
 	uint32_t draws = 0, random = 0, viewports = 0, deletes = 0, clears = 0, signals = 0, news = 0, tile_types = 0;
@@ -99,7 +100,7 @@ static void Disasters()
 		openttd_rust_disaster_release_industry(p->services, 7);
 	};
 	shared.map_log_x = []() noexcept { return 6U; };
-	shared.calendar_year = []() noexcept { return 1955; };
+	AutoRestoreBackup<decltype(GetRustClockState().calendar_year)> calendar_year_scope(GetRustClockState().calendar_year, decltype(GetRustClockState().calendar_year){1955});
 	shared.tile_valid = [](uint32_t tile) noexcept { return tile == 0; };
 	shared.tile_type = [](uint32_t tile) noexcept { CHECK(tile == 0); _disaster_probe->tile_types++; return _disaster_probe->tile_type; };
 	shared.tile_owner = [](uint32_t tile) noexcept { CHECK(tile == 0); return uint8_t{1}; };
@@ -136,7 +137,7 @@ static void Disasters()
 		{[]() noexcept { return 2000; }, 65535},
 	};
 	for (const auto &test : cases) {
-		shared.calendar_year = test.year;
+		GetRustClockState().calendar_year = decltype(GetRustClockState().calendar_year){test.year()};
 		probe.random = test.random; probe.draws = 0; *delay = 1;
 		openttd_rust_clock_disaster_daily(&services, nullptr);
 		CHECK(probe.draws == 2 && probe.deletes == 1 && probe.viewports == 1);

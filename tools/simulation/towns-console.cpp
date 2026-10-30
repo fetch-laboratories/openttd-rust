@@ -682,6 +682,9 @@ static bool RoadTypeGrowthScenario()
 #endif
 	_roadtypes_road.Set(alternate);
 	Backup<CompanyID> owner(_current_company, OWNER_DEITY);
+	/* Interactive randomness starts from process-specific state, not the map seed. */
+	Backup<Randomizer> interactive_seed(_interactive_random);
+	_interactive_random.SetSeed(12345);
 	HouseDefinitionNeed(Town::GetNumItems() > 0, "road-growth-town");
 	HouseDefinitionNeed(GetTownRoadType() == ROADTYPE_ROAD, "road-growth-selected");
 	HouseDefinitionNeed(Command<CMD_CONVERT_ROAD>::Do(DoCommandFlag::Execute, TileXY(Map::SizeX() - 2, Map::SizeY() - 2), TileXY(1, 1), alternate, false).Succeeded(), "road-growth-conversion");
@@ -704,7 +707,7 @@ static bool RoadTypeGrowthScenario()
 	}
 	HouseDefinitionNeed(added + changed > 0, "road-growth-physical-change");
 	fmt::print(stderr, "TOWN road-growth output {} {} {} {} {} {}\n", added, changed, _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]);
-	owner.Restore();
+	owner.Restore(); interactive_seed.Restore();
 	return true;
 }
 static bool HouseDefinitionsScenario(std::span<std::string_view> args)

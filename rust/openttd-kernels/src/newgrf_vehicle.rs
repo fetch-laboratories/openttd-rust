@@ -1544,12 +1544,12 @@ pub unsafe extern "C" fn openttd_rust_vehicle_scope_variable(
                 }
             }
             0x48 => u32::from((s.engine_flags)((s.engine_by_id)((*scope).self_type))),
-            0x49 => (s.shared.calendar_year)() as u32,
-            0x4b => (s.shared.calendar_date)() as u32,
+            0x49 => crate::timer_game_common::calendar_year().0 as u32,
+            0x4b => crate::timer_game_common::calendar_date().0 as u32,
             0x7a => (s.engine_badge)(ro, (s.engine_by_id)((*scope).self_type), parameter),
-            0x92 => service_date((s.shared.calendar_date)()),
-            0x93 => service_date((s.shared.calendar_date)()) >> 8,
-            0xc4 => old_year((s.shared.calendar_year)()),
+            0x92 => service_date(crate::timer_game_common::calendar_date().0),
+            0x93 => service_date(crate::timer_game_common::calendar_date().0) >> 8,
+            0xc4 => old_year(crate::timer_game_common::calendar_year().0),
             0xc6 => u32::from((s.local_id)((s.engine_by_id)((*scope).self_type))),
             0xc7 => u32::from((s.local_id)((s.engine_by_id)((*scope).self_type))) >> 8,
             0xda => crate::fleet::INVALID_VEHICLE,

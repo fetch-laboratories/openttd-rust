@@ -22,6 +22,8 @@ const OpenTTDEngineCapabilitiesServices &GetRustEngineCapabilitiesServices() noe
 		.ship_capacity = RustEngineShipCapacity,
 		.passenger_capacity = RustEnginePassengerCapacity,
 		.mail_capacity = RustEngineMailCapacity,
+		.train_class = RustEngineTrainClass,
+		.aircraft_subtype = RustEngineAircraftSubtype,
 		.rail_kind = Engine_rail_kind,
 		.grf = RustEngineGRF,
 		.version = RustGRFFileVersion,

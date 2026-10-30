@@ -2,6 +2,7 @@
 """Exercise housekeeping on a fixture clone: the dry run lists exactly what --apply removes."""
 
 import contextlib
+import errno
 import io
 import json
 import os
@@ -179,9 +180,13 @@ class HousekeepingTests(unittest.TestCase):
                 "anchor",
                 "pinned",
                 "open",
+                "unmerged",
             )
         ]
-        dirty, locked, issue, checkpoint, deep, anchor, pinned, open_tree = protected
+        dirty, locked, issue, checkpoint, deep, anchor, pinned, open_tree, unmerged = (
+            protected
+        )
+        git(unmerged, "commit", "--quiet", "--allow-empty", "-m", "Add: unfinished")
         write(dirty / "untracked")
         git(self.main, "worktree", "lock", str(locked))
         write(deep / ".local/output")
@@ -239,20 +244,93 @@ class HousekeepingTests(unittest.TestCase):
         )
         self.assertIsNone(housekeeping.remove(self.main, item))
 
-    def test_uninspectable_cwd_keeps_worktree(self) -> None:
-        tree = self.t3_tree("t3-hidden-cwd")
+    def hidden_process_plan(self, name: str, offset: float, missing: str = "") -> bool:
+        """Plan with a same-user process whose cwd is unreadable, started OFFSET
+        seconds after the worktree was created; return whether it is removable."""
+        tree = self.t3_tree(name)
+        creation = housekeeping.created(tree)
+        assert creation is not None
+        self.assertGreater(creation, 0)
+        boot, ticks = int(creation) - 3600, os.sysconf("SC_CLK_TCK")
+        write(self.proc / "stat", f"cpu  1 2 3\nbtime {boot}\n")
+        start = round((creation + offset - boot) * ticks)
+        fields = " ".join(["0"] * 18)
+        write(self.proc / "88/stat", f"88 (a (job)) S {fields} {start} 0 0\n")
+        if missing:
+            target = (
+                self.proc / "88/stat"
+                if missing == "start"
+                else self.proc / "stat"
+                if missing == "boot"
+                else tree / ".git"
+            )
+            target.unlink()
         original = Path.resolve
 
         def resolve(path: Path, strict: bool = False) -> Path:
-            if path.name == "cwd":
-                raise PermissionError("hidden cwd")
+            if path.parent.name == "88" and path.name == "cwd":
+                raise PermissionError(errno.EACCES, "Permission denied")
             return original(path, strict=strict)
 
         with patch.object(Path, "resolve", resolve):
-            items = housekeeping.plan_worktrees(
-                self.main, housekeeping.list_worktrees(self.main)[1:], pr_state
+            return housekeeping.worktree_refusal(self.main, tree, "") is None
+
+    def test_uninspectable_cwd_keeps_worktree(self) -> None:
+        # A job started inside the live worktree, then made non-dumpable.
+        self.assertFalse(self.hidden_process_plan("t3-hidden-cwd", 60))
+
+    def test_uninspectable_cwd_older_than_worktree_is_ignored(self) -> None:
+        # `(sd-pam)` and other session processes predate every task worktree.
+        self.assertTrue(self.hidden_process_plan("t3-old-hidden-cwd", -60))
+
+    def test_uninspectable_cwd_with_unknown_time_keeps_worktree(self) -> None:
+        for missing in ("start", "boot", "creation"):
+            with (
+                self.subTest(missing=missing),
+                patch.object(housekeeping.time, "time", return_value=0),
+            ):
+                self.assertFalse(
+                    self.hidden_process_plan(f"t3-unknown-{missing}", -60, missing)
+                )
+
+    def test_process_start_rounding_keeps_worktree(self) -> None:
+        for ticks, creation in ((10000, 1100.5), (10000, 1100.005)):
+            with self.subTest(creation=creation):
+                write(self.proc / "stat", "cpu 1 2 3\nbtime 1000\n")
+                write(
+                    self.proc / "88/stat",
+                    f"88 (a (job)) S {'0 ' * 18}{ticks} 0 0\n",
+                )
+                with patch.object(housekeeping.os, "sysconf", return_value=100):
+                    latest = housekeeping.started(self.proc / "88")
+                assert latest is not None
+                self.assertGreater(latest, creation)
+                self.assertAlmostEqual(latest, 1101.01)
+
+    def test_foreign_process_is_skipped_and_same_user_cwd_kept(self) -> None:
+        init = Path("/proc/1")
+        try:
+            (init / "cwd").resolve(strict=True)
+            self.skipTest("init's cwd is readable here")
+        except PermissionError:
+            pass
+        self.assertNotEqual(init.stat().st_uid, os.geteuid())
+        (self.proc / "1").symlink_to(init)
+        tree = self.t3_tree("t3-foreign-cwd")
+
+        def planned() -> housekeeping.Item:
+            return next(
+                i
+                for i in housekeeping.plan_worktrees(
+                    self.main, housekeeping.list_worktrees(self.main)[1:], pr_state
+                )
+                if i.path == tree
             )
-        self.assertFalse(next(item.remove for item in items if item.path == tree))
+
+        self.assertTrue(planned().remove, planned().reason)
+        (self.proc / "123").mkdir()
+        (self.proc / "123/cwd").symlink_to(tree)
+        self.assertEqual(planned().reason, "live process cwd inside worktree")
 
     def test_dangling_runtime_link_keeps_live_target_protection(self) -> None:
         tree = self.t3_tree("t3-runtime-links")

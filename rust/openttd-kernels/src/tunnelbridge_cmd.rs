@@ -280,7 +280,7 @@ impl<'a> World<'a> {
             return Self::error(out);
         }
         let b = (self.a.availability)(bridge_type);
-        if b.year > (self.s.calendar_year)() {
+        if b.year > crate::timer_game_common::calendar_year().0 {
             return Self::error(out);
         }
         let maximum = b.max.min((self.a.max_bridge_length)());
@@ -733,7 +733,9 @@ impl<'a> World<'a> {
         let companies = unsafe { &*self.a.company };
         if flags & DoCommandFlag::QUERY_COST == 0
             || (valid_company
-                && (companies.company_is_ai)(company)
+                && (companies.identity.is_ai)((companies.identity.company)(
+                    crate::company_type::CompanyID(company),
+                ))
                 && company != (companies.local_company)())
         {
             if flags & DoCommandFlag::QUERY_COST != 0 {
