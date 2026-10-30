@@ -127,18 +127,6 @@ clock_field!(
 clock_field!(calendar_month, write_calendar_month, calendar_month, u8);
 clock_field!(economy_month, write_economy_month, economy_month, u8);
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_clock_calendar_date() -> i32 {
-    calendar_date().0
-}
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_clock_calendar_year() -> i32 {
-    calendar_year().0
-}
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_clock_economy_date() -> i32 {
-    economy_date().0
-}
 const ACCUM_DAYS: [i32; 12] = [0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335];
 const MONTH_DATE: [u16; 366] = {
     let mut table = [0; 366];

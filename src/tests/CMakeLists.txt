@@ -54,6 +54,7 @@ add_test_files(
     ship_yapf_protocol.hpp
     water_regions.cpp
     water_regions_protocol.hpp
+    world_generation_probe.hpp
     tilearea.cpp
     utf8.cpp
 )

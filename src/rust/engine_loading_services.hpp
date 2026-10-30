@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file engine_loading_services.hpp Engine specifications, pool and loading diagnostics. */
 #include "engine_loading_ffi.h"
+#include "company_identity_ffi.h"
 #include "engine_services.h"
 #include "settings_services.h"
 #include "services_newgrf.h"
@@ -10,6 +11,7 @@
 const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 {
 	static const OpenTTDEngineLoadingServices services{
+		.identity = &GetRustCompanyIdentityServices(),
 		.shared = &GetRustSharedServices(),
 		.resolver = &GetRustVehicleResolverServices(),
 		.next = Engine_next,
@@ -56,7 +58,6 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 		.rail_badges = [](const OpenTTDEngine *shell, RailType rt) noexcept { AppendCopyableBadgeList(const_cast<Engine *>(EngineOf(shell))->badges, GetRailTypeInfo(rt)->badges, GSF_TRAINS); },
 		.road_badges = [](const OpenTTDEngine *shell) noexcept { auto *e = const_cast<Engine *>(EngineOf(shell)); AppendCopyableBadgeList(e->badges, GetRoadTypeInfo(RustEngineRoadType(e))->badges, GSF_ROADVEHICLES); },
 		.rail_kind = Engine_rail_kind,
-		.livery = [](uint16_t id) noexcept { return GetEngineLiveryScheme(EngineID{id}, EngineID::Invalid(), nullptr); },
 		.use_livery = [](LiveryScheme scheme) noexcept { SetBit(_loaded_newgrf_features.used_liveries, scheme); },
 		.variant_flags = [](const OpenTTDEngine *shell) noexcept { const_cast<Engine *>(EngineOf(shell))->display_flags.Set({EngineDisplayFlag::HasVariants, EngineDisplayFlag::IsFolded}); },
 		.variant_cycle_log = [](const OpenTTDEngine *shell) noexcept { const Engine *e = EngineOf(shell); GrfMsg(1, "FinaliseEngineArray: Variant of engine {:x} in '{}' loops back on itself", e->grf_prop.local_id, RustEngineGRF(shell)->filename); },

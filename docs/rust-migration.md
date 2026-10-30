@@ -1829,6 +1829,17 @@ the default `economy` simulation. NewGRF resolver execution, legacy CAPY files a
 industry layout are not exhausted. Production cargo callback fixtures accompany #467; the narrow
 arithmetic fixture also supplies callback results. PR #123.
 
+### Company identity, faces and liveries
+
+Rust owns company colour/name/president generation, manager-face validation and bit helpers,
+company livery propagation, identity commands and engine livery-scheme selection. Startup and
+engine loading call these owners directly, and group inheritance uses the existing Rust fleet
+owner. The company-colour cache is process-wide Rust storage with a stable native array alias.
+Company and vehicle shells and unmoved fields remain native behind typed per-record accessors;
+face style/variable tables and string rendering remain native. Name rendering uses call-local
+placement strings, with no span surviving its next mutation. Console face-code parsing, local
+company selection and network allow lists remain with their existing owners. PR #579.
+
 ### Company finances and economy lifecycle
 
 Rust owns cash/fraction accounting, loans, histories, rating/value, construction budgets,
@@ -2488,3 +2499,15 @@ entries for the candidate and original C++ bodies for the reference. Native reso
 objects use call-local opaque stack capacity with compile-time size/alignment checks.
 External GUI/network scheduling, historical saves and arbitrary script-error
 combinations remain #156 limits. PR #554.
+
+### Goals, story pages and league commands (#572)
+
+Rust owns destination/content validation, command test/execute policy, page and
+element ordering and deletion, goal mutations, league ratings/links and GS event
+eligibility. Rust owns both process-wide next-sort counters; stable native aliases
+preserve the loader's assignments. Native pools retain records and strings through canonical typed
+record accessors and allocation/deletion operations. The page destructor calls
+the same Rust lifecycle policy; pool cleanup keeps its original early exit.
+Native button packing/getters, windows, rendering, save/load and script VM
+execution remain in C++. No record storage or presentation pixel equivalence is
+claimed; window presentation remains a #156 limit. [PR #578](https://github.com/fetch-laboratories/openttd-rust/pull/578).

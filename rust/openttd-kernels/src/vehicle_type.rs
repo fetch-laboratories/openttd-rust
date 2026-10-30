@@ -18,6 +18,8 @@ pub const GROUND_ACCELERATION: u32 = 9800;
 
 /// End of vehicle types buildable by companies.
 pub const VEH_COMPANY_END: u8 = VehicleType::COMPANY_END.0;
+/// Native `VEH_INVALID`.
+pub const VEH_INVALID: u8 = u8::MAX;
 
 /// Opaque native `Vehicle`; valid only while its native pool shell lives.
 #[repr(C)]

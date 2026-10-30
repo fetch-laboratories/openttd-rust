@@ -38,7 +38,11 @@ CommandCost CheckTileOwnership(TileIndex tile);
 extern CompanyID _local_company;
 extern CompanyID _current_company;
 
+#ifdef WITH_RUST
+extern TypedIndexContainer<std::array<Colours, MAX_COMPANIES>, CompanyID> &_company_colours;
+#else
 extern TypedIndexContainer<std::array<Colours, MAX_COMPANIES>, CompanyID> _company_colours;
+#endif
 extern std::string _company_manager_face;
 PaletteID GetCompanyPalette(CompanyID company);
 

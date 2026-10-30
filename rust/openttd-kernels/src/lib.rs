@@ -32,6 +32,8 @@ mod cargopacket;
 mod command;
 mod command_type;
 mod company;
+mod company_identity;
+mod company_manager_face;
 mod company_type;
 mod consumer;
 mod direction_func;
@@ -1468,3 +1470,10 @@ mod session;
 
 mod fileio_type;
 mod saveload;
+
+mod goal_type;
+mod league_type;
+mod objectives;
+mod story_base;
+mod story_type;
+mod window_type;
