@@ -432,7 +432,6 @@ pub struct Leaves {
     pub any_road_bits: extern "C" fn(VehicleRef, u32, bool) -> u8,
     pub is_road_depot_tile: extern "C" fn(u32) -> bool,
     pub depot_direction: extern "C" fn(u32) -> u8,
-    pub is_normal_road_tile: extern "C" fn(u32) -> bool,
     pub disallowed_directions: extern "C" fn(u32) -> u8,
     pub is_bay_stop: extern "C" fn(u32) -> bool,
     pub bay_direction: extern "C" fn(u32) -> u8,
@@ -1432,7 +1431,7 @@ impl Game<'_> {
                         let previous = service!(self.vs.previous_tile)(v.v);
                         let big = (previous.exists && previous.tile == tile)
                             || (s.front
-                                && service!(self.l.is_normal_road_tile)(tile)
+                                && service!(self.ss.is_normal_road_tile)(tile)
                                 && !service!(self.ss.has_road_works)(tile)
                                 && service!(self.l.has_road)(v.v, tile)
                                 && needed & service!(self.ss.normal_road_bits)(tile, 1).0 != 0);
@@ -1449,7 +1448,7 @@ impl Game<'_> {
                                 return false;
                             }
                         }
-                    } else if service!(self.l.is_normal_road_tile)(s.tile)
+                    } else if service!(self.ss.is_normal_road_tile)(s.tile)
                         && service!(self.l.disallowed_directions)(s.tile) != 0
                     {
                         self.set_speed(v, s, 0);
@@ -1977,7 +1976,7 @@ impl Game<'_> {
         {
             return false;
         }
-        if service!(self.l.is_normal_road_tile)(r.tile)
+        if service!(self.ss.is_normal_road_tile)(r.tile)
             && service!(self.l.disallowed_directions)(r.tile) != 0
         {
             return false;
@@ -2432,7 +2431,6 @@ crate::abi::layouts! {
         any_road_bits,
         is_road_depot_tile,
         depot_direction,
-        is_normal_road_tile,
         disallowed_directions,
         is_bay_stop,
         bay_direction,

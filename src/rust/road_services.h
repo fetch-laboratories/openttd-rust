@@ -267,7 +267,6 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.any_road_bits = RoadSvcAnyRoadBits,
 	.is_road_depot_tile = Shared_is_road_depot,
 	.depot_direction = Shared_road_depot_direction,
-	.is_normal_road_tile = Shared_is_normal_road_tile,
 	.disallowed_directions = Shared_disallowed_road_directions,
 	.is_bay_stop = Shared_is_bay_stop,
 	.bay_direction = Shared_bay_stop_direction,

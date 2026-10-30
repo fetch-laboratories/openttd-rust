@@ -128,7 +128,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(leaves, any_road_bits);
 		VEHICLE_UNUSED(leaves, is_road_depot_tile);
 		VEHICLE_UNUSED(leaves, depot_direction);
-		VEHICLE_UNUSED(leaves, is_normal_road_tile);
 		VEHICLE_UNUSED(leaves, disallowed_directions);
 		VEHICLE_UNUSED(leaves, is_bay_stop);
 		VEHICLE_UNUSED(leaves, bay_direction);
