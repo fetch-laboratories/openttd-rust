@@ -265,6 +265,17 @@ impl TileTypeAccess {
     pub(crate) fn count(&self) -> u32 {
         self.allocation.count
     }
+    /// Run `read` over this allocation under the assertion-disabled policy: the
+    /// reads an original accessor performs once its assertion returns.
+    pub(crate) fn with_unasserted<T>(&self, read: impl FnOnce(&Self) -> T) -> T {
+        read(&Self {
+            allocation: TileTypeAllocation {
+                assertions: false,
+                ..self.allocation
+            },
+            callback: self.callback,
+        })
+    }
     #[inline]
     pub(crate) fn require_type(&self, tile: u32, kind: u8) -> Option<()> {
         self.available(tile)?;

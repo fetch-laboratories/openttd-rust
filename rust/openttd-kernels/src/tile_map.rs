@@ -185,31 +185,190 @@ impl crate::map_func::World<'_> {
             self.types.count() >> self.dimensions.log_x,
         )
     }
-    pub(crate) fn asserted<T>(&self, value: Option<T>) -> T {
-        value.unwrap_or_else(|| {
+    /// Run a header helper whose `None` is a failed precondition. The failure
+    /// calls the native assertion, as the original accessor does, and then
+    /// returns the helper's raw-bit result as the original does once it returns.
+    pub(crate) fn asserted<T>(&self, read: impl Fn(&TileTypeAccess) -> Option<T>) -> T {
+        read(&self.types).unwrap_or_else(|| {
             self.check(false);
-            unreachable!("native map precondition")
+            self.types.with_unasserted(read).expect("live map scalar")
         })
     }
     /// `GetTilePixelSlope`.
     pub(crate) fn tile_pixel_slope(&self, t: u32) -> (u8, i32) {
         let (x, y) = self.size();
-        self.asserted(get_tile_pixel_slope(&self.types, t, x, y))
+        self.asserted(|m| get_tile_pixel_slope(m, t, x, y))
     }
     /// `GetTilePixelSlopeOutsideMap`.
     pub(crate) fn tile_pixel_slope_outside_map(&self, x: i32, y: i32) -> (u8, i32) {
         let (width, height) = self.size();
-        self.asserted(get_tile_pixel_slope_outside_map(
-            &self.types,
-            x,
-            y,
-            width,
-            height,
-        ))
+        self.asserted(|m| get_tile_pixel_slope_outside_map(m, x, y, width, height))
     }
     /// `GetTileMaxPixelZ`.
     pub(crate) fn tile_max_pixel_z(&self, t: u32) -> i32 {
         let (x, y) = self.size();
-        self.asserted(get_tile_max_pixel_z(&self.types, t, x, y))
+        self.asserted(|m| get_tile_max_pixel_z(m, t, x, y))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation, World};
+    use std::cell::Cell;
+
+    thread_local! {
+        static ASSERTS: Cell<u32> = const { Cell::new(0) };
+        static MOVEMENT: crate::movement::MovementServices = {
+            let mut movement = crate::train_reservation::tests::movement_table();
+            movement.native_assert = native_assert;
+            movement
+        };
+    }
+    /// A native assertion that returns, counting each failed condition.
+    extern "C" fn native_assert(ok: bool) {
+        if !ok {
+            ASSERTS.set(ASSERTS.get() + 1);
+        }
+    }
+    extern "C" fn movement_services() -> *const crate::movement::MovementServices {
+        MOVEMENT.with(std::ptr::from_ref)
+    }
+    extern "C" fn no_random(_: *mut std::ffi::c_void) -> u32 {
+        std::process::abort()
+    }
+    extern "C" fn no_industry(_: i32, _: i32, _: *mut u32) -> u32 {
+        std::process::abort()
+    }
+    extern "C" fn no_callback(_: u32) -> u8 {
+        std::process::abort()
+    }
+
+    /// A failed helper precondition calls the native assertion under the
+    /// assertion policy only, and both policies return the original's raw bits.
+    #[test]
+    #[allow(unsafe_code)] // The raw reader over this test's arrays only.
+    fn failed_world_preconditions_assert_then_read_raw_bits() {
+        use crate::slope_func::{SLOPE_E, SLOPE_S, SLOPE_STEEP, SLOPE_W};
+        type Read = for<'a> fn(&World<'a>) -> [i32; 2];
+        // Map::Size() is 4096 of 64 by 64; tile 4096 lies past it but inside
+        // this backing array, where the assertion-disabled original reads it.
+        let mut base: Vec<BaseTileLayout> = (0..8192)
+            .map(|_| BaseTileLayout {
+                kind: crate::tile_type::MP_CLEAR << 4,
+                height: 0,
+                m2: 0,
+                m1: 0,
+                m3: 0,
+                m4: 0,
+                m5: 0,
+            })
+            .collect();
+        let mut extended: Vec<ExtendedTileLayout> = (0..8192)
+            .map(|_| ExtendedTileLayout {
+                m6: 0,
+                m7: 0,
+                m8: 0,
+            })
+            .collect();
+        // A clear tile whose road fields hold normal road, one-way bits 2, road
+        // bits 11, tram bits 14, road type 45, tram type 37 and roadworks.
+        base[5].m5 = 0b0010_1011;
+        base[5].m3 = 0x0e;
+        base[5].m4 = 0b1010_1101;
+        extended[5].m8 = (37 << 6) | 5;
+        extended[5].m6 = 6 << 3;
+        for (tile, height) in [(4096, 3), (4097, 4), (4032, 4), (4033, 5)] {
+            base[tile].height = height;
+        }
+        // Each case lists the native assertions the original makes when its
+        // `assert` returns: IsTileType or MayHaveRoad, or TileHeight's range.
+        let cases: [(&str, Read, [i32; 2], u32); 9] = [
+            (
+                "GetRoadTileType",
+                |w| [w.road_tile_type(5).0.into(), 0],
+                [0, 0],
+                1,
+            ),
+            (
+                "GetDisallowedRoadDirections",
+                |w| [w.disallowed_road_directions(5).into(), 0],
+                [2, 0],
+                1,
+            ),
+            (
+                "GetRoadBits road",
+                |w| [w.road_bits(5, false).into(), 0],
+                [11, 0],
+                1,
+            ),
+            (
+                "GetRoadBits tram",
+                |w| [w.road_bits(5, true).into(), 0],
+                [14, 0],
+                1,
+            ),
+            (
+                "GetRoadTypeRoad",
+                |w| [w.road_type(5, false).into(), 0],
+                [45, 0],
+                1,
+            ),
+            (
+                "GetRoadTypeTram",
+                |w| [w.road_type(5, true).into(), 0],
+                [37, 0],
+                1,
+            ),
+            (
+                "HasRoadWorks",
+                |w| [w.has_road_works(5).into(), 0],
+                [1, 0],
+                0,
+            ),
+            (
+                "GetTilePixelSlope",
+                |w| {
+                    let (slope, z) = w.tile_pixel_slope(4096);
+                    [slope.into(), z]
+                },
+                [(SLOPE_W | SLOPE_S | SLOPE_E | SLOPE_STEEP).into(), 24],
+                1,
+            ),
+            (
+                "GetTileMaxPixelZ",
+                |w| [w.tile_max_pixel_z(4096), 0],
+                [40, 0],
+                1,
+            ),
+        ];
+        let shared = crate::services::Services {
+            movement_services,
+            ..crate::services::fixture(std::ptr::null_mut(), no_random, no_industry)
+        };
+        for assertions in [true, false] {
+            for (name, read, expected, asserts) in cases {
+                // SAFETY: Both arrays hold 8192 initialized tiles that outlive the reader.
+                let types = unsafe {
+                    crate::map_func::TileTypeAccess::raw(
+                        TileTypeAllocation {
+                            base: base.as_ptr(),
+                            extended: extended.as_ptr(),
+                            count: 4096,
+                            assertions,
+                        },
+                        no_callback,
+                    )
+                };
+                let world = World {
+                    types,
+                    shared: &shared,
+                    dimensions: crate::map_func::Map::from_log_x(6),
+                };
+                ASSERTS.set(0);
+                assert_eq!(read(&world), expected, "{name}, assertions {assertions}");
+                let asserts = if assertions { asserts } else { 0 };
+                assert_eq!(ASSERTS.get(), asserts, "{name}, assertions {assertions}");
+            }
+        }
     }
 }

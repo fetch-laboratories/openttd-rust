@@ -158,7 +158,7 @@ pub(crate) fn has_tile_road_type(
 impl crate::map_func::World<'_> {
     /// `GetRoadTileType`.
     pub(crate) fn road_tile_type(&self, t: u32) -> crate::services::RoadTileKind {
-        self.asserted(get_road_tile_type(&self.types, t))
+        self.asserted(|m| get_road_tile_type(m, t))
     }
     /// `IsNormalRoad`.
     pub(crate) fn is_normal_road(&self, t: u32) -> bool {
@@ -170,19 +170,15 @@ impl crate::map_func::World<'_> {
     }
     /// `GetDisallowedRoadDirections`.
     pub(crate) fn disallowed_road_directions(&self, t: u32) -> u8 {
-        self.asserted(get_disallowed_road_directions(&self.types, t))
+        self.asserted(|m| get_disallowed_road_directions(m, t))
     }
     /// `HasRoadWorks`.
     pub(crate) fn has_road_works(&self, t: u32) -> bool {
-        self.asserted(has_road_works(&self.types, t))
+        self.asserted(|m| has_road_works(m, t))
     }
     pub(crate) fn road_bits(&self, t: u32, tram: bool) -> u8 {
-        self.asserted(get_road_bits(
-            &self.types,
-            t,
-            crate::services::RoadTramType(tram),
-        ))
-        .0
+        self.asserted(|m| get_road_bits(m, t, crate::services::RoadTramType(tram)))
+            .0
     }
     pub(crate) fn road_depot(&self, t: u32) -> bool {
         self.kind(t) == crate::tile_type::MP_ROAD
@@ -193,11 +189,7 @@ impl crate::map_func::World<'_> {
         crate::bitmath_func::gb(u32::from(Self::byte(self.types.m5(t))), 0, 2) as u8
     }
     pub(crate) fn road_type(&self, t: u32, tram: bool) -> u8 {
-        get_road_type(&self.types, t, crate::services::RoadTramType(tram))
-            .unwrap_or_else(|| {
-                self.check(false);
-                unreachable!("native road-type precondition")
-            })
+        self.asserted(|m| get_road_type(m, t, crate::services::RoadTramType(tram)))
             .0
     }
 }
