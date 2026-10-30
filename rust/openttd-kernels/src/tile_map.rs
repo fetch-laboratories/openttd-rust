@@ -243,15 +243,9 @@ mod tests {
         std::process::abort()
     }
 
-    /// A failed helper precondition calls the native assertion under the
-    /// assertion policy only, and both policies return the original's raw bits.
-    #[test]
-    #[allow(unsafe_code)] // The raw reader over this test's arrays only.
-    fn failed_world_preconditions_assert_then_read_raw_bits() {
-        use crate::slope_func::{SLOPE_E, SLOPE_S, SLOPE_STEEP, SLOPE_W};
-        type Read = for<'a> fn(&World<'a>) -> [i32; 2];
-        // Map::Size() is 4096 of 64 by 64; tile 4096 lies past it but inside
-        // this backing array, where the assertion-disabled original reads it.
+    /// `Map::Size()` is 4096 of 64 by 64; tile 4096 lies past it but inside
+    /// these backing arrays, where the assertion-disabled original reads it.
+    fn tiles() -> (Vec<BaseTileLayout>, Vec<ExtendedTileLayout>) {
         let mut base: Vec<BaseTileLayout> = (0..8192)
             .map(|_| BaseTileLayout {
                 kind: crate::tile_type::MP_CLEAR << 4,
@@ -280,6 +274,17 @@ mod tests {
         for (tile, height) in [(4096, 3), (4097, 4), (4032, 4), (4033, 5)] {
             base[tile].height = height;
         }
+        (base, extended)
+    }
+
+    /// A failed helper precondition calls the native assertion under the
+    /// assertion policy only, and both policies return the original's raw bits.
+    #[test]
+    #[allow(unsafe_code)] // The raw reader over this test's arrays only.
+    fn failed_world_preconditions_assert_then_read_raw_bits() {
+        use crate::slope_func::{SLOPE_E, SLOPE_S, SLOPE_STEEP, SLOPE_W};
+        type Read = for<'a> fn(&World<'a>) -> [i32; 2];
+        let (base, extended) = tiles();
         // Each case lists the native assertions the original makes when its
         // `assert` returns: IsTileType or MayHaveRoad, or TileHeight's range.
         let cases: [(&str, Read, [i32; 2], u32); 9] = [
