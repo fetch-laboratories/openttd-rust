@@ -32,6 +32,8 @@ mod cargopacket;
 mod command;
 mod command_type;
 mod company;
+mod company_identity;
+mod company_manager_face;
 mod company_type;
 mod consumer;
 mod direction_func;

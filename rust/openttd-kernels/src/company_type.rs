@@ -54,3 +54,7 @@ impl CompanyID {
     /// Native `COMPANY_SPECTATOR`.
     pub const SPECTATOR: Self = Self(0xFF);
 }
+
+/// Native name limits, including the terminating character.
+pub const MAX_LENGTH_COMPANY_NAME_CHARS: usize = 32;
+pub const MAX_LENGTH_PRESIDENT_NAME_CHARS: usize = 32;

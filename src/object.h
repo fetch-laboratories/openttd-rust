@@ -15,6 +15,7 @@
 #include "object_type.h"
 
 void UpdateCompanyHQ(TileIndex tile, uint score);
+void UpdateObjectColours(const Company *c);
 
 void BuildObject(ObjectType type, TileIndex tile, CompanyID owner = OWNER_NONE, struct Town *town = nullptr, uint8_t view = 0);
 

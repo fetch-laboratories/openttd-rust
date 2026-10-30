@@ -186,6 +186,8 @@ void SetTrainGroupID(Train *v, GroupID grp);
 void UpdateTrainGroupID(Train *v);
 void RemoveAllGroupsForCompany(const CompanyID company);
 bool GroupIsInGroup(GroupID search, GroupID group);
+#ifndef WITH_RUST
 void UpdateCompanyGroupLiveries(const Company *c);
+#endif
 
 #endif /* GROUP_H */
