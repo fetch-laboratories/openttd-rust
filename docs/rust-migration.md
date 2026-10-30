@@ -66,8 +66,9 @@ The current verification setup targets native Linux and needs a C++20 compiler, 
 Python 3.11 or newer, SDL2 development files, and the normal OpenTTD libraries described in
 `COMPILING.md`. OpenGFX supplies free graphics for regression games; commercial game assets are
 unnecessary. The verification driver requires the pinned Rust toolchain and always configures
-the candidate with `OPTION_RUST=ON`. Ordinary CMake builds still default to `OPTION_RUST=OFF`,
-which compiles the original C++ bodies. Rust linkage supports native GNU/Linux (64-bit x86 or
+the candidate with `OPTION_RUST=ON`, which is also the CMake default. Only the Emscripten CI
+build still sets `OPTION_RUST=OFF`, which compiles the original C++ bodies, until #581's
+Emscripten step. Rust linkage supports native GNU/Linux (64-bit x86 or
 ARM) and native macOS arm64. The scoped native Windows MSVC mode is described below. Other
 platforms, cross compilation, and macOS universal/Intel configurations reject an enabled Rust
 option. #581 builds Rust on every CI configuration, including Emscripten, then removes the
@@ -1841,6 +1842,17 @@ BigMulS narrowing, stockpile limits and ordered randomisation/animation are expl
 the default `economy` simulation. NewGRF resolver execution, legacy CAPY files and every
 industry layout are not exhausted. Production cargo callback fixtures accompany #467; the narrow
 arithmetic fixture also supplies callback results. PR #123.
+
+### Company identity, faces and liveries
+
+Rust owns company colour/name/president generation, manager-face validation and bit helpers,
+company livery propagation, identity commands and engine livery-scheme selection. Startup and
+engine loading call these owners directly, and group inheritance uses the existing Rust fleet
+owner. The company-colour cache is process-wide Rust storage with a stable native array alias.
+Company and vehicle shells and unmoved fields remain native behind typed per-record accessors;
+face style/variable tables and string rendering remain native. Name rendering uses call-local
+placement strings, with no span surviving its next mutation. Console face-code parsing, local
+company selection and network allow lists remain with their existing owners. PR #579.
 
 ### Company finances and economy lifecycle
 

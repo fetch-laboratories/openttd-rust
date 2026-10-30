@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BASELINE = "tools/shared-accessor-baseline.txt"
 SHARED = re.compile(
     r"^src/rust/(?:services[^/]*|vehicle_services[^/]*|"
-    r"(?:environment|settings|company|engine|presentation)_services\.h)$"
+    r"(?:environment|settings|company|company_identity|engine|presentation)_services\.h)$"
 )
 HEADER = re.compile(
     r"(?P<header>\b\w+(?:::\w+)*\s*\([^{};]*\)\s*(?:const\s*)?(?:noexcept\s*)?"
