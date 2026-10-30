@@ -61,7 +61,7 @@ static OpenTTDRoadEntry GetRoadEntry(const RoadVehicle *v) noexcept
 /** The front gate never observes movement settings or front-only fields for parts. */
 OpenTTDRoadTickRead RustRoadTickRead(const RoadVehicle *v) noexcept
 {
-	OpenTTDRoadTickRead read{.tick = RustVehicleTick(v), .front = RustVehicleFront(v)};
+	OpenTTDRoadTickRead read{.tick = RustVehicleTick(v), .front = RustVehicleFront(v), .movement = {}, .order_time = nullptr, .running = nullptr, .status = nullptr};
 	if (read.front) {
 		read.movement = GetRoadEntry(v);
 		read.order_time = RustVehicleOrderTimeAddress(v);

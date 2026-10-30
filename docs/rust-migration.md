@@ -66,13 +66,11 @@ The current verification setup targets native Linux and needs a C++20 compiler, 
 Python 3.11 or newer, SDL2 development files, and the normal OpenTTD libraries described in
 `COMPILING.md`. OpenGFX supplies free graphics for regression games; commercial game assets are
 unnecessary. The verification driver requires the pinned Rust toolchain and always configures
-the candidate with `OPTION_RUST=ON`, which is also the CMake default. Only the Emscripten CI
-build still sets `OPTION_RUST=OFF`, which compiles the original C++ bodies, until #581's
-Emscripten step. Rust linkage supports native GNU/Linux (64-bit x86 or
-ARM) and native macOS arm64. The scoped native Windows MSVC mode is described below. Other
-platforms, cross compilation, and macOS universal/Intel configurations reject an enabled Rust
-option. #581 builds Rust on every CI configuration, including Emscripten, then removes the
-option and the fallback bodies.
+the candidate with `OPTION_RUST=ON`, which is also the CMake default, and every CI
+configuration builds Rust. Rust linkage supports native GNU/Linux (64-bit x86 or ARM), native
+macOS arm64 and Emscripten. The scoped native Windows MSVC mode is described below. Other
+platforms, other cross compilation, and macOS universal/Intel configurations reject an enabled
+Rust option. #581 then removes the option and the fallback bodies.
 
 On Ubuntu with administrator access:
 
@@ -443,8 +441,14 @@ CMake verifies the pinned `rustc -vV` host against the actual C++ platform, arch
 resolved SDK and minimum supplied to Rust through `SDKROOT` and `MACOSX_DEPLOYMENT_TARGET` (see
 Rust's [Darwin target
 documentation](https://doc.rust-lang.org/rustc/platform-support/apple-darwin.html)). Intel
-packaging and additional Windows CRT modes remain separate tasks; Emscripten host/target builds
-are #581.
+packaging and additional Windows CRT modes remain separate tasks.
+
+Emscripten builds the archive for `wasm32-unknown-emscripten` with 4-byte pointers, so its
+toolchain needs that standard library besides the host one its native `HOST_BINARY_DIR` tools
+link. rustc reports no native libraries for this target. Its prebuilt standard library carries
+WebAssembly exception instructions, so the build uses emsdk 4.0.23 and compiles and links all C++
+with `-fwasm-exceptions`, one exception model for both languages. The Emscripten CI job runs
+`openttd_rust_abi` under emsdk's node (22.16.0), which runs WebAssembly exceptions without flags.
 
 Archives live at `<build>/cargo/<validated-target>/release/libopenttd_kernels.a`.
 `tools/migration.py` exposes `rust_configuration(build)` and `rust_archive(build)`; all
