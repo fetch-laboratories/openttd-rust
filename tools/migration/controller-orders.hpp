@@ -22,11 +22,11 @@ struct ControllerOrders {
 
 	explicit ControllerOrders(const OpenTTDVehicleServices *base)
 	{
-		vehicle->current = {.type = 0, .flags = 0, .destination = 0, .refit_cargo = 254, .max_speed = UINT16_MAX};
+		vehicle->current = {.type = 0, .flags = 0, .destination = 0, .refit_cargo = 254, .wait_time = 0, .travel_time = 0, .max_speed = UINT16_MAX};
 		vehicle->orders = this;
 		list->manual = 1;
 		list->vehicles = 1;
-		OpenTTDOrderFields order{.type = 1, .flags = 0, .destination = 1, .refit_cargo = 254, .max_speed = UINT16_MAX};
+		OpenTTDOrderFields order{.type = 1, .flags = 0, .destination = 1, .refit_cargo = 254, .wait_time = 0, .travel_time = 0, .max_speed = UINT16_MAX};
 		openttd_rust_order_vector_insert(vector.get(), 0, &order);
 		services.base = base;
 		services.list = [](void *shell) noexcept { return static_cast<ControllerOrders *>(shell)->list.get(); };
