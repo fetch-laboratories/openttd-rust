@@ -131,9 +131,10 @@ fork; the remaining upstream documentation explains behavior and architecture.
   typed definition used by every port. `tools/shared-accessors.py` rejects new
   copies in quick CI (#249), and `tools/rebound-callees.py` rejects a callee
   bound directly into a second service table or a field forwarded from
-  another table. Neither sees macros or compound callbacks (a lambda or
-  wrapper whose body calls the callee), so a reviewer greps the callee of
-  every new macro or compound callback (such as one calling `CheckOwnership`
+  another table within its documented syntactic scope. Neither sees macros or
+  compound callbacks (a lambda or wrapper whose body calls the callee), so a
+  reviewer greps the callee of every new binding outside the rebound check's
+  scope, macro or compound callback (such as one calling `CheckOwnership`
   or `GetRoadOwner`) across `src/` and reports each existing wrapper or
   binding of it as a finding. Command ports share one set of
   command-check services. A PR that adds a shared accessor deletes the

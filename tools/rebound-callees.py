@@ -12,7 +12,8 @@ from code_lines import without_comments
 
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = "tools/rebound-callee-baseline.txt"
-FIELD = re.compile(r"\s*\.(\w+)\s*=\s*(.*?)\s*", re.S)
+DESIGNATOR = re.compile(r"[{,](?>\s+|/\*.*?\*/|//[^\n]*|#[^\n]*)*\.", re.S)
+FIELD = re.compile(r"\s*\.\s*(\w+)\s*=\s*(.*?)\s*", re.S)
 # `Callee`, `&Callee`, `ns::Callee` or `Callee<T>`; fork callees are CamelCase or openttd_*.
 CALLEE = re.compile(r"&?\s*(?:::)?((?:\w+::)*(?:[A-Z]|openttd_)\w*)(?:\s*<[^<>]*>)?")
 # A field read from another table, such as `GetRustSharedServices().snow_line`.
@@ -49,7 +50,7 @@ def violations(files: dict[str, str]) -> set[str]:
     masked = {
         path: re.sub(r"(?m)^[ \t]*#.*$", "", without_comments(text, path, True))
         for path, text in production.items()
-        if re.search(r"[{,]\s*\.\w+\s*=", text)
+        if DESIGNATOR.search(text)
     }
     sites: defaultdict[str, list[tuple[str, int, str]]] = defaultdict(list)
     hits: set[str] = set()

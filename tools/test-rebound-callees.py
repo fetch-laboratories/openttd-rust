@@ -27,6 +27,20 @@ SERVICES = (
 
 
 class ReboundTests(unittest.TestCase):
+    def test_comments_and_directives_before_a_single_field(self) -> None:
+        files = {"src/services.h": SERVICES}
+        for name, initializer in {
+            "a": "{/* note */ .owner = RustTileOwner}",
+            "b": "{\n#ifdef WITH_RUST\n.owner = RustTileOwner\n#endif\n}",
+            "c": "{. /* note */ owner /* note */ = RustTileOwner}",
+            "d": "{// note\n.owner = RustTileOwner}",
+        }.items():
+            files[f"src/{name}.cpp"] = f"const S {name}{initializer};\n"
+        self.assertEqual(
+            REBOUND.violations(files),
+            {f"rebound | RustTileOwner | src/{name}.cpp | owner" for name in "abcd"},
+        )
+
     def test_rebound_and_forwarded_fields(self) -> None:
         files = {
             "src/rust/services.h": SERVICES,

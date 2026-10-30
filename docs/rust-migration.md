@@ -700,6 +700,9 @@ one line per site, are in `tools/rebound-callee-baseline.txt`, which shrinks as 
 them and cannot grow against the base revision. `tools/test-rebound-callees.py` exercises the
 scan and ratchet with fixture trees. Preprocessor lines are dropped, so both branches of a
 conditional count; lambdas, macros and wrappers that call the callee remain review work.
+The scan matches qualified names by spelling without namespace resolution. Template
+arguments containing commas or nested templates, and names outside the callee rule above,
+also remain review work; forwarded fields require a `*Services()` getter.
 
 ## Team process and integration
 
