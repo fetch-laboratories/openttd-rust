@@ -268,3 +268,16 @@ pub unsafe extern "C" fn openttd_test_flat_empty_world(
 ) {
     unsafe { crate::landscape_generation::flat_empty_world(a, height, freeform, max_height) }
 }
+
+/// `LoadTownData` coordinate policy, compared with the original native expression.
+/// # Safety
+/// Live shared services and map for the synchronous call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_town_data_target(
+    services: *const crate::town::import::ImportServices,
+    rotation: u8,
+    x: f32,
+    y: f32,
+) -> u32 {
+    unsafe { &*services }.target(rotation, x, y).0
+}

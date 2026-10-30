@@ -69,17 +69,26 @@ impl ImportServices {
         clippy::cast_sign_loss,
         clippy::cast_precision_loss
     )]
-    fn target(&self, rotation: u8, x: f32, y: f32) -> Tile {
+    pub(crate) fn target(&self, rotation: u8, x: f32, y: f32) -> Tile {
         let s = unsafe { &*self.shared };
         let map = s.map();
         let max_x = map.max_x() as f32;
         let max_y = (s.map_max_y)() as f32;
         match rotation {
             HM_CLOCKWISE => Tile(map.tile_xy((x * max_x) as u32, (y * max_y) as u32)),
-            // The original converts the negative float to uint; x86-64 compilers
-            // truncate through a 64-bit integer, so it wraps modulo 2^32.
             HM_COUNTER_CLOCKWISE => {
-                Tile(map.tile_xy(((1.0 - y * max_x) as i64) as u32, (x * max_y) as u32))
+                // Apple Clang contracts the original subtraction and multiplication on AArch64.
+                #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+                let rotated_x = (-y).mul_add(max_x, 1.0);
+                #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
+                let rotated_x = 1.0 - y * max_x;
+                // Emscripten and AArch64 clamp the original negative float-to-uint conversion to zero.
+                #[cfg(any(target_os = "emscripten", target_arch = "aarch64"))]
+                let tile_x = rotated_x as u32;
+                // x86 compilers truncate through a signed integer, retaining the low 32 bits.
+                #[cfg(not(any(target_os = "emscripten", target_arch = "aarch64")))]
+                let tile_x = (rotated_x as i64) as u32;
+                Tile(map.tile_xy(tile_x, (x * max_y) as u32))
             }
             _ => {
                 (s.not_reached)();
