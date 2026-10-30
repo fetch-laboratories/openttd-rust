@@ -10,6 +10,8 @@ include = [
     "tools/orphan-exports.py",
     "tools/port-metrics.py",
     "tools/test-orphan-exports.py",
+    "tools/rebound-callees.py",
+    "tools/test-rebound-callees.py",
     "tools/ci.py",
     "tools/validation_execution.py",
     "tools/simulation/clocks.py",

@@ -690,6 +690,16 @@ base revision. `tools/test-orphan-exports.py` exercises the scan and ratchet wit
 The check is syntactic: it does not resolve macros or arbitrary conditional compilation.
 Reviewers retain responsibility for orphan `WITH_RUST` bodies.
 
+`python3 tools/rebound-callees.py --base-ref origin/rust-migration` rejects, in quick CI, a
+callee bound by designated initializer (`.field = Callee`, `&Callee`, `ns::Callee` or
+`Callee<T>`) into more than one braced initializer under `src/` outside `src/tests/`, and a
+field forwarded from another table (`.field = GetRustXServices().other`). A callee is a
+CamelCase or `openttd_*` name with a `noexcept` declaration under `src/`. Existing bindings,
+one line per site, are in `tools/rebound-callee-baseline.txt`, which shrinks as #199 removes
+them and cannot grow against the base revision. `tools/test-rebound-callees.py` exercises the
+scan and ratchet with fixture trees. Preprocessor lines are dropped, so both branches of a
+conditional count; lambdas, macros and wrappers that call the callee remain review work.
+
 ## Team process and integration
 
 `AGENTS.md` is authoritative for agent roles, models and reasoning effort, attribution, the

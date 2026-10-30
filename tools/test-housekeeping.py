@@ -254,6 +254,31 @@ class HousekeepingTests(unittest.TestCase):
             )
         self.assertFalse(next(item.remove for item in items if item.path == tree))
 
+    def test_foreign_process_is_skipped_and_same_user_cwd_kept(self) -> None:
+        init = Path("/proc/1")
+        try:
+            (init / "cwd").resolve(strict=True)
+            self.skipTest("init's cwd is readable here")
+        except PermissionError:
+            pass
+        self.assertNotEqual(init.stat().st_uid, os.geteuid())
+        (self.proc / "1").symlink_to(init)
+        tree = self.t3_tree("t3-foreign-cwd")
+
+        def planned() -> housekeeping.Item:
+            return next(
+                i
+                for i in housekeeping.plan_worktrees(
+                    self.main, housekeeping.list_worktrees(self.main)[1:], pr_state
+                )
+                if i.path == tree
+            )
+
+        self.assertTrue(planned().remove, planned().reason)
+        (self.proc / "123").mkdir()
+        (self.proc / "123/cwd").symlink_to(tree)
+        self.assertEqual(planned().reason, "live process cwd inside worktree")
+
     def test_dangling_runtime_link_keeps_live_target_protection(self) -> None:
         tree = self.t3_tree("t3-runtime-links")
         runtime = tree / ".local/runtime"

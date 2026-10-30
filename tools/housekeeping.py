@@ -199,6 +199,9 @@ def worktree_refusal(main: Path, path: Path, references: str) -> str | None:
             if not process.name.isdecimal():
                 continue
             try:
+                # Another user's process (init, system daemons) hides its cwd.
+                if process.stat().st_uid != os.geteuid():
+                    continue
                 cwd = (process / "cwd").resolve(strict=True)
                 if cwd == path.resolve() or cwd.is_relative_to(path.resolve()):
                     return "live process cwd inside worktree"

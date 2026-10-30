@@ -56,6 +56,10 @@ jobs:
       env:
         BASE_REF: ${{ inputs.base-ref || github.event.pull_request.base.sha || github.event.before }}
       run: python3 tools/orphan-exports.py --base-ref "$BASE_REF"
+    - name: Reject rebound service-table callees
+      env:
+        BASE_REF: ${{ inputs.base-ref || github.event.pull_request.base.sha || github.event.before }}
+      run: python3 tools/rebound-callees.py --base-ref "$BASE_REF"
     - name: Check strings and script mode enforcement
       run: |
         python3 .github/unused-strings.py
