@@ -66,8 +66,9 @@ The current verification setup targets native Linux and needs a C++20 compiler, 
 Python 3.11 or newer, SDL2 development files, and the normal OpenTTD libraries described in
 `COMPILING.md`. OpenGFX supplies free graphics for regression games; commercial game assets are
 unnecessary. The verification driver requires the pinned Rust toolchain and always configures
-the candidate with `OPTION_RUST=ON`. Ordinary CMake builds still default to `OPTION_RUST=OFF`,
-which compiles the original C++ bodies. Rust linkage supports native GNU/Linux (64-bit x86 or
+the candidate with `OPTION_RUST=ON`, which is also the CMake default. Only the Emscripten CI
+build still sets `OPTION_RUST=OFF`, which compiles the original C++ bodies, until #581's
+Emscripten step. Rust linkage supports native GNU/Linux (64-bit x86 or
 ARM) and native macOS arm64. The scoped native Windows MSVC mode is described below. Other
 platforms, cross compilation, and macOS universal/Intel configurations reject an enabled Rust
 option. #581 builds Rust on every CI configuration, including Emscripten, then removes the
@@ -638,8 +639,9 @@ blacksmith-6vcpu-macos-26`, reruns, and runs `gh variable delete CI_MACOS_HEAVY`
 finishes; setting the variable needs no Blacksmith credentials.
 
 `python3 tools/preflight.py --base origin/rust-migration` runs the pinned inherited commit
-checker. Its first run downloads the pinned hooks into ignored shared storage; `--hooks PATH`
-uses an existing clean pinned checkout offline.
+checker, then the rebound-callee gate on the working tree against that base. Its first run
+downloads the pinned hooks into ignored shared storage; `--hooks PATH` uses an existing clean
+pinned checkout offline.
 
 ## Shared-code checks and port metrics
 
@@ -689,6 +691,19 @@ and Windows ABI fixtures do not. Existing violations are named in
 base revision. `tools/test-orphan-exports.py` exercises the scan and ratchet with fixture trees.
 The check is syntactic: it does not resolve macros or arbitrary conditional compilation.
 Reviewers retain responsibility for orphan `WITH_RUST` bodies.
+
+`python3 tools/rebound-callees.py --base-ref origin/rust-migration` rejects, in quick CI, a
+callee bound by designated initializer (`.field = Callee`, `&Callee`, `ns::Callee` or
+`Callee<T>`) into more than one braced initializer under `src/` outside `src/tests/`, and a
+field forwarded from another table (`.field = GetRustXServices().other`). A callee is a
+CamelCase or `openttd_*` name with a `noexcept` declaration under `src/`. Existing bindings,
+one line per site, are in `tools/rebound-callee-baseline.txt`, which shrinks as #199 removes
+them and cannot grow against the base revision. `tools/test-rebound-callees.py` exercises the
+scan and ratchet with fixture trees. Preprocessor lines are dropped, so both branches of a
+conditional count; lambdas, macros and wrappers that call the callee remain review work.
+The scan matches qualified names by spelling without namespace resolution. Template
+arguments containing commas or nested templates, and names outside the callee rule above,
+also remain review work; forwarded fields require a `*Services()` getter.
 
 ## Team process and integration
 

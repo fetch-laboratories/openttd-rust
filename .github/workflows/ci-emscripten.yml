@@ -57,7 +57,8 @@ jobs:
         cd build-host
 
         echo "::group::CMake"
-        cmake .. -DOPTION_TOOLS_ONLY=ON
+        # cmake/Rust.cmake accepts native targets only; #581's PR-E links Rust here.
+        cmake .. -DOPTION_TOOLS_ONLY=ON -DOPTION_RUST=OFF
         echo "::endgroup::"
 
         echo "::group::Build"
@@ -74,7 +75,7 @@ jobs:
         cd build
 
         echo "::group::CMake"
-        emcmake cmake .. -DHOST_BINARY_DIR=../build-host
+        emcmake cmake .. -DHOST_BINARY_DIR=../build-host -DOPTION_RUST=OFF
         echo "::endgroup::"
 
         echo "::group::Build"
