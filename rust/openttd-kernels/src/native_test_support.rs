@@ -203,3 +203,47 @@ pub unsafe extern "C" fn openttd_test_platform_length(
         crate::follow_track::platform_length_full(&world, station, tile)
     }
 }
+
+use crate::genworld::Callback;
+use crate::landscape_generation::{
+    Decoder, Frame as GenerationFrame, GenerationServices, Settings,
+};
+
+/// `GenerateWorldSetAbortCallback`, for fixtures that replace the registered cleanup.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_test_world_set_abort_callback(callback: Callback) {
+    crate::genworld::set_abort_callback(callback);
+}
+
+/// The registered `GenWorldInfo::abortp`, which Rust TGP sets without a native call.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_test_world_abort_callback() -> Callback {
+    crate::genworld::abort_callback()
+}
+
+/// `GenerateLandscape`.
+/// # Safety
+/// Same contract as the production generation entry.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_generate_landscape(
+    a: *const GenerationServices,
+    frame: *mut GenerationFrame,
+    decoder: *const Decoder,
+    g: Settings,
+    mode: u8,
+) -> bool {
+    unsafe { crate::landscape_generation::generate_landscape(a, frame, decoder, g, mode) }
+}
+
+/// `FlatEmptyWorld`.
+/// # Safety
+/// Same native map/service contract as the production generation entry.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_flat_empty_world(
+    a: *const GenerationServices,
+    height: u8,
+    freeform: bool,
+    max_height: u8,
+) {
+    unsafe { crate::landscape_generation::flat_empty_world(a, height, freeform, max_height) }
+}

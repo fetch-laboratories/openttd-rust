@@ -43,20 +43,28 @@ pub unsafe extern "C" fn openttd_rust_global_variable(
     unsafe {
         let shared = &*s.shared;
         let result = match variable {
-            0x00 => (shared.calendar_date)()
+            0x00 => crate::timer_game_common::calendar_date()
+                .0
                 .wrapping_sub(DAYS_TILL_ORIGINAL_BASE_YEAR)
                 .max(0) as u32,
             0x01 => {
-                ((shared.calendar_year)().clamp(ORIGINAL_BASE_YEAR, ORIGINAL_MAX_YEAR)
+                (crate::timer_game_common::calendar_year()
+                    .0
+                    .clamp(ORIGINAL_BASE_YEAR, ORIGINAL_MAX_YEAR)
                     - ORIGINAL_BASE_YEAR) as u32
             }
             0x02 => {
-                let ymd = crate::timer_game_common::calendar_date_to_ymd((shared.calendar_date)());
+                let ymd = crate::timer_game_common::calendar_date_to_ymd(
+                    crate::timer_game_common::calendar_date().0,
+                );
                 let first = crate::timer_game_common::calendar_ymd_to_date(ymd.year, 0, 1);
                 u32::from(ymd.month)
                     | (u32::from(ymd.day) - 1) << 8
                     | u32::from(is_leap_year(ymd.year)) << 15
-                    | ((shared.calendar_date)().wrapping_sub(first) as u32) << 16
+                    | (crate::timer_game_common::calendar_date()
+                        .0
+                        .wrapping_sub(first) as u32)
+                        << 16
             }
             0x03 => u32::from((s.climate)()),
             0x06 => u32::from((s.road_side)()) << 4,
@@ -105,8 +113,8 @@ pub unsafe extern "C" fn openttd_rust_global_variable(
             }
             0x21 => (s.newgrf_version)(),
             0x22 => crate::settings_type::SP_CUSTOM,
-            0x23 => (shared.calendar_date)() as u32,
-            0x24 => (shared.calendar_year)() as u32,
+            0x23 => crate::timer_game_common::calendar_date().0 as u32,
+            0x24 => crate::timer_game_common::calendar_year().0 as u32,
             _ => return false,
         };
         value.write(result);

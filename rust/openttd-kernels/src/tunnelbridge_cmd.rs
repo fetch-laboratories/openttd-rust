@@ -280,7 +280,7 @@ impl<'a> World<'a> {
             return Self::error(out);
         }
         let b = (self.a.availability)(bridge_type);
-        if b.year > (self.s.calendar_year)() {
+        if b.year > crate::timer_game_common::calendar_year().0 {
             return Self::error(out);
         }
         let maximum = b.max.min((self.a.max_bridge_length)());

@@ -642,7 +642,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
                 land_info(native, file, nearby, axis)
             }
             0x7a => (native.badges)(resolver, spec, parameter),
-            0xfa => build_date((native.shared().calendar_date)()),
+            0xfa => build_date(crate::timer_game_common::calendar_date().0),
             _ => {
                 unsafe {
                     available.write(false);

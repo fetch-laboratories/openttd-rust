@@ -59,10 +59,8 @@ struct OpenTTDLandscapeGenerationServices {
 };
 const OpenTTDLandscapeGenerationServices &GetRustLandscapeGenerationServices() noexcept;
 extern "C" {
-bool openttd_rust_generate_landscape(const OpenTTDLandscapeGenerationServices *, OpenTTDGenerationFrame *, const OpenTTDHeightmapDecoder *, OpenTTDLandscapeGenerationSettings, uint8_t);
 void openttd_rust_initialize_landscape(const OpenTTDLandscapeGenerationServices *, bool);
 void openttd_rust_convert_ground_water(const OpenTTDLandscapeGenerationServices *);
-void openttd_rust_flat_empty_world(const OpenTTDLandscapeGenerationServices *, uint8_t, bool, uint8_t);
 bool openttd_rust_load_heightmap(const OpenTTDLandscapeGenerationServices *, const OpenTTDHeightmapDecoder *, uint8_t, bool, uint8_t, uint8_t);
 void openttd_rust_fix_slopes(const OpenTTDLandscapeGenerationServices *, uint8_t);
 }

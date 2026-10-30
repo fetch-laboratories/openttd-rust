@@ -3712,7 +3712,7 @@ impl Ctx<'_> {
         (self.s.airport_add)(st, tile);
         (self.s.ship_area_add)(st, tile);
         (self.s.set_facilities)(st, 24);
-        (self.s.set_build_date)(st, (self.shared.calendar_date)());
+        (self.s.set_build_date)(st, crate::timer_game_common::calendar_date().0);
         self.update_docking(st);
         self.before_add_tile(ret, st, tile, 2);
         (self.s.virtual_coord)(st);

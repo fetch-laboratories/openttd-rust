@@ -51,7 +51,6 @@ pub struct ConstructionServices {
     pub cargo_lists: unsafe extern "C" fn(*const SpecHandle) -> CargoLists,
     pub callback_mask: unsafe extern "C" fn(*const SpecHandle) -> u16,
     pub set_town: unsafe extern "C" fn(*mut c_void, *const TownHandle),
-    pub calendar_date: unsafe extern "C" fn() -> i32,
     pub generating: unsafe extern "C" fn() -> bool,
     pub callback: unsafe extern "C" fn(*mut c_void, u16, u32, u32) -> u16,
     pub callback_error: unsafe extern "C" fn(*const SpecHandle, u16, u16),
@@ -323,7 +322,7 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
         (*owner).metadata.founder = r.founder;
         (*f).ctlflags = 0;
     }
-    let date = unsafe { (c.calendar_date)() };
+    let date = crate::timer_game_common::calendar_date().0;
     unsafe {
         (*owner).metadata.construction_date = date;
     }

@@ -374,8 +374,7 @@ pub unsafe extern "C" fn openttd_rust_convert_ground_water(a: *const GenerationS
 }
 /// # Safety
 /// Same native map/service contract as initialize.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_flat_empty_world(
+pub(crate) unsafe fn flat_empty_world(
     a: *const GenerationServices,
     height: u8,
     freeform: bool,
@@ -1051,8 +1050,7 @@ impl World<'_> {
 /// All native metadata/decoder/frame storage lives through the synchronous call.
 /// Map operations are serialized; progress catches native abortion and returns
 /// false. No native exception or Rust panic may unwind across this boundary.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_generate_landscape(
+pub(crate) unsafe fn generate_landscape(
     a: *const GenerationServices,
     frame: *mut Frame,
     decoder: *const Decoder,

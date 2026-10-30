@@ -223,10 +223,13 @@ pub extern "C" fn openttd_rust_generating_world() -> *mut bool {
 pub(crate) fn set_native_callback(callback: Callback) {
     write_field!(INFO.get(), done, Completion::Native(callback));
 }
-#[unsafe(no_mangle)]
-#[inline(never)]
-pub extern "C" fn openttd_rust_world_set_abort_callback(callback: Callback) {
+/// `GenerateWorldSetAbortCallback`.
+pub(crate) fn set_abort_callback(callback: Callback) {
     write_field!(INFO.get(), abort_callback, callback);
+}
+#[cfg(feature = "native-test-support")]
+pub(crate) fn abort_callback() -> Callback {
+    read_field!(INFO.get(), abort_callback)
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_world_request_abort() {
@@ -445,7 +448,7 @@ impl World<'_> {
         let call = (s.landscape_begin)(self.frame);
         let mode = read_field!(INFO.get(), mode).0;
         let generated = unsafe {
-            landscape_generation::openttd_rust_generate_landscape(
+            landscape_generation::generate_landscape(
                 s.landscape,
                 call.frame,
                 call.decoder,
@@ -558,7 +561,7 @@ impl World<'_> {
             if crate::session::mode() != GameMode::MENU {
                 let g = (s.settings)();
                 unsafe {
-                    landscape_generation::openttd_rust_flat_empty_world(
+                    landscape_generation::flat_empty_world(
                         s.landscape,
                         g.flat_height,
                         (s.freeform)(),

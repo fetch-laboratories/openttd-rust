@@ -494,8 +494,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         plane_crashes(self; ) => (self.ss.plane_crashes)();
         service_at_helipad(self; ) => (self.ss.service_at_helipad)();
         disaster_sound(self; ) => (self.ss.disaster_sound)();
-        economy_date(self; ) => (self.ss.economy_date)();
-        calendar_date(self; ) => (self.ss.calendar_date)();
+        economy_date(self; ) => crate::timer_game_common::economy_date().0;
+        calendar_date(self; ) => crate::timer_game_common::calendar_date().0;
         airport_tile(self; s: *const Station) => unsafe { (self.leaves.airport_tile)(s) };
         station_tile(self; s: *const Station) => unsafe { (self.leaves.station_tile)(s) };
         rotation(self; s: *const Station) => unsafe { (self.leaves.rotation)(s) };

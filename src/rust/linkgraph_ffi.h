@@ -64,7 +64,7 @@ uint8_t *openttd_rust_live_graph_cargo(OpenTTDLiveGraph *);
 int32_t *openttd_rust_live_graph_date(OpenTTDLiveGraph *);
 void openttd_rust_live_graph_init(OpenTTDLiveGraph *, uint32_t);
 void openttd_rust_live_graph_shift(OpenTTDLiveGraph *, int32_t);
-void openttd_rust_live_graph_compress(OpenTTDLiveGraph *, int32_t);
+void openttd_rust_live_graph_compress(OpenTTDLiveGraph *);
 uint32_t openttd_rust_live_graph_scale(uint32_t, int32_t, int32_t);
 uint32_t openttd_rust_live_graph_monthly(const OpenTTDLiveGraph *, uint32_t, int32_t);
 OpenTTDLiveNodeFields openttd_rust_live_node_fields(OpenTTDLiveGraph *, uint16_t);
@@ -104,7 +104,7 @@ struct OpenTTDLiveGraphServices {
 	void (*allocation_failure)() noexcept;
 };
 OpenTTDLinkGraphResult *openttd_rust_live_graph_run(const OpenTTDLiveGraph *, const OpenTTDLinkGraphSettings *, const void *, uint8_t (*)(const void *));
-void openttd_rust_live_graph_merge(OpenTTDLinkGraph *, OpenTTDLinkGraph *, int32_t, const OpenTTDLiveGraphServices *);
+void openttd_rust_live_graph_merge(OpenTTDLinkGraph *, OpenTTDLinkGraph *, const OpenTTDLiveGraphServices *);
 void openttd_rust_live_graph_remove(OpenTTDLinkGraph *, uint16_t, const OpenTTDLiveGraphServices *);
 uint16_t openttd_rust_live_graph_add_station(OpenTTDLinkGraph *, uint16_t, const OpenTTDLiveGraphServices *);
 #ifdef __cplusplus

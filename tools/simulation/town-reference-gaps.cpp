@@ -175,6 +175,7 @@ static bool BuildRoad(uint32_t town, uint32_t tile, uint32_t bits, uint32_t type
 static bool BuildTunnel(uint32_t tile, uint32_t type, uint32_t execute) noexcept { return TunnelCommand(tile, type, execute != 0).Succeeded(); }
 static bool Candidate()
 {
+	AutoRestoreBackup<decltype(GetRustClockState().calendar_year)> calendar_year_scope(GetRustClockState().calendar_year, decltype(GetRustClockState().calendar_year){1950});
 	AutoRestoreBackup<uint64_t> road_mask(*openttd_rust_road_mask(), 1);
 	openttd_rust_town_simulation(world->owner)->population = world->town.cache.population;
 	auto leaves = TownProtocolServices();
@@ -185,7 +186,7 @@ static bool Candidate()
 	leaves.houses = &house_services;
 	leaves.stations = Stations; leaves.build_tunnel = BuildTunnel;
 	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, Random, Industry);
-	services.calendar_date = []() noexcept { return 0; }; // The controlled road type is available from date zero.
+	AutoRestoreBackup<decltype(GetRustClockState().calendar_date)> calendar_date_scope(GetRustClockState().calendar_date, decltype(GetRustClockState().calendar_date){0});
 	services.tile_type = Read_tile_type; services.tile_valid = Read_tile_valid;
 	services.tile_slope = Read_tile_slope; services.tile_z = Read_tile_z; services.road_bits = Read_road_bits;
 	services.tunnel_transport = [](uint32_t id) noexcept { return uint8_t(GetTunnelBridgeTransportType(id)); };

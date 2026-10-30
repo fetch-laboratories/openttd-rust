@@ -826,14 +826,7 @@ unsafe fn admit(
     }
     (w.append_packet)(st, cargo, amount, source);
     unsafe {
-        live::station_supply(
-            st,
-            cargo,
-            amount,
-            (*w.shared).economy_date,
-            w.graphs,
-            visits.schedule,
-        );
+        live::station_supply(st, cargo, amount, w.graphs, visits.schedule);
     }
     if unsafe { (*ge).status } & 2 == 0 {
         (w.station_list_invalidation)(st, 0);
@@ -968,7 +961,6 @@ pub struct Edge {
 pub struct Links {
     pub(crate) graphs: &'static live::Services,
     pub(crate) automatic_distribution: extern "C" fn(u8) -> bool,
-    pub(crate) date: extern "C" fn() -> i32,
     pub(crate) edge: extern "C" fn(*mut BaseStation, u16) -> Edge,
     pub(crate) delete_flows: extern "C" fn(*mut BaseStation, u8, u16),
     pub(crate) restrict_flows: extern "C" fn(*mut BaseStation, u8, u16),
@@ -1055,7 +1047,7 @@ unsafe fn stale(from: *mut BaseStation, w: &World, l: &Links, visits: &Visits) {
                 (g.nodes[usize::from(e.dest_node)].station, e.last_update())
             };
             let edge = (l.edge)(from, destination);
-            let date = (l.date)();
+            let date = crate::timer_game_common::economy_date().0;
             let timeout = live::MIN_TIMEOUT_DISTANCE.wrapping_add(edge.distance >> 3) as i32;
             if date.wrapping_sub(last_update) > timeout {
                 let mut updated = false;
@@ -1155,7 +1147,7 @@ unsafe fn stale(from: *mut BaseStation, w: &World, l: &Links, visits: &Visits) {
         for dest in remove {
             unsafe { &mut *owner }.nodes[usize::from(node)].remove_edge(dest);
         }
-        let date = (l.date)();
+        let date = crate::timer_game_common::economy_date().0;
         if date.wrapping_sub(unsafe { &*owner }.last_compression) > live::COMPRESSION_INTERVAL {
             unsafe { &mut *owner }.compress(date);
         }
@@ -2164,7 +2156,6 @@ crate::abi::layouts! {
     "OpenTTDStationLinks" ["probe"] => Links {
         graphs,
         automatic_distribution,
-        date,
         edge,
         delete_flows,
         restrict_flows,

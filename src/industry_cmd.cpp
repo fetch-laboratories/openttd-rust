@@ -3764,7 +3764,6 @@ static const OpenTTDIndustryServices _industry_services = {
 	.economy_type = []() noexcept -> uint8_t { return _settings_game.economy.type; },
 
 	.fund_only = []() noexcept -> bool { return _settings_game.difficulty.industry_density == ID_FUND_ONLY; },
-	.calendar_year = GetRustSharedServices().calendar_year,
 	.deity = IndustryCommandDeity,
 };
 const OpenTTDIndustryServices &GetIndustryRustServices() { return _industry_services; }
@@ -3857,7 +3856,6 @@ const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices()
 		},
 		.callback_mask = RustIndustrySpecCallbackMask<OpenTTDIndustrySpecHandle>,
 		.set_town = [](void *shell, const OpenTTDTownHandle *town) noexcept { RustIndustry(shell)->town = const_cast<Town *>(reinterpret_cast<const Town *>(town)); },
-		.calendar_date = GetRustSharedServices().calendar_date,
 		.generating = GetRustSharedServices().clear_square_services.generating_world,
 		.callback = [](void *shell, uint16_t callback, uint32_t parameter, uint32_t random) noexcept -> uint16_t {
 			Industry *i = RustIndustry(shell);

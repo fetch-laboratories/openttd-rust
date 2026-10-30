@@ -61,7 +61,6 @@ struct OpenTTDTownLeaves {
 	bool (*allow_crossings)() noexcept OPENTTD_SERVICE_DEFAULT(allow_crossings);
 	uint8_t (*climate)() noexcept OPENTTD_SERVICE_DEFAULT(climate);
 	uint8_t (*highest_snow_line)() noexcept OPENTTD_SERVICE_DEFAULT(highest_snow_line);
-	int32_t (*calendar_year)() noexcept OPENTTD_SERVICE_DEFAULT(calendar_year);
 	bool (*allow_roads)() noexcept OPENTTD_SERVICE_DEFAULT(allow_roads);
 	uint8_t (*road_flags)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_flags);
 	OpenTTDTownHouseAvailability (*house_availability)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(house_availability);

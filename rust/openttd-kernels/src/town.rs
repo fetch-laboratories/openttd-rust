@@ -694,7 +694,6 @@ pub struct Leaves {
     pub allow_crossings: extern "C" fn() -> bool,
     pub climate: extern "C" fn() -> u8,
     pub highest_snow_line: extern "C" fn() -> u8,
-    pub calendar_year: extern "C" fn() -> i32,
     pub allow_roads: extern "C" fn() -> bool,
     pub road_flags: extern "C" fn(u8) -> u8,
     pub house_availability: extern "C" fn(u16) -> HouseAvailability,
@@ -1086,7 +1085,9 @@ impl Engine<'_> {
                 continue;
             }
             let date = rti.introduction_date;
-            if (0..1_826_212_865).contains(&date) && date > (self.services.calendar_date)() {
+            if (0..1_826_212_865).contains(&date)
+                && date > crate::timer_game_common::calendar_date().0
+            {
                 continue;
             }
             let speed = if rti.max_speed == 0 {
@@ -1993,7 +1994,7 @@ impl Engine<'_> {
             {
                 continue;
             }
-            let year = (self.leaves.calendar_year)();
+            let year = crate::timer_game_common::calendar_year().0;
             if year < h.min_year || year > h.max_year {
                 continue;
             }
@@ -2555,7 +2556,6 @@ crate::abi::layouts! {
         allow_crossings,
         climate,
         highest_snow_line,
-        calendar_year,
         allow_roads,
         road_flags,
         house_availability,
