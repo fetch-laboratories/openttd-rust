@@ -64,6 +64,9 @@
 #include "rust/newgrf_storage_ffi.h"
 #include "rust/services_map.h"
 #include "rust/service_table_check.hpp"
+#include "rust/town_data_ffi.h"
+#include "rust/services_assert.h"
+#include "abi-visit-OpenTTDTownDataServices.hpp"
 #include "abi-visit-OpenTTDWorldServices.hpp"
 
 static_assert(GWM_EMPTY == 1 && GWP_MAP_INIT == 0 && GWP_ROUGH_ROCKY == 3 && GWP_OBJECT == 7 && GWP_GAME_INIT == 9 && GWP_RUNTILELOOP == 10 && GWP_RUNSCRIPT == 11 && GWP_GAME_START == 12);
@@ -154,7 +157,7 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.town_roads = []() noexcept { return CheckTownRoadTypes(); },
 		.freeform = OpenTTDFreeformEdges,
 		.count_land = RustCountLandTiles,
-		.landscape_begin = [](OpenTTDWorldFrame *f) noexcept { auto &c = f->landscape.emplace(); return OpenTTDWorldLandscape{&c.frame, &c.heightmap, c.settings}; },
+		.landscape_begin = [](OpenTTDWorldFrame *f) noexcept { auto &c = f->landscape.emplace(); return OpenTTDWorldLandscape{&c.frame, &c.heightmap.view, c.settings}; },
 		.landscape_end = [](OpenTTDWorldFrame *f) noexcept { f->cancellation = f->landscape->frame.cancellation; f->landscape.reset(); return !f->cancellation; },
 		.town_begin = [](OpenTTDWorldFrame *f) noexcept { auto &t = f->town.emplace(); return OpenTTDWorldTown{&t.frame, &t.frame.names, &t.road.view, _settings_game.economy.town_layout}; },
 		.town_end = [](OpenTTDWorldFrame *f) noexcept { f->cancellation = f->town->frame.cancellation; f->town.reset(); return !f->cancellation; },
@@ -195,7 +198,8 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 	return services;
 }
 
-bool CheckAbi_genworld() { return AbiServicesComplete(GetRustWorldServices()); }
+static const OpenTTDTownDataServices &GetRustTownDataServices() noexcept;
+bool CheckAbi_genworld() { return AbiServicesComplete(GetRustWorldServices()) && AbiServicesComplete(GetRustTownDataServices()); }
 
 static_assert(sizeof(OpenTTDWorldFrame) <= sizeof(OpenTTDSessionFrameStorage));
 static_assert(alignof(OpenTTDWorldFrame) <= alignof(OpenTTDSessionFrameStorage));
@@ -532,11 +536,86 @@ void GenerateWorld(GenWorldMode mode, uint size_x, uint size_y, bool reset_setti
 
 #endif /* WITH_RUST */
 
+#ifdef WITH_RUST
+/** The parsed document and the current feature's name, which Rust borrows until the next feature. */
+struct OpenTTDTownDataFrame {
+	nlohmann::json town_data;
+	std::string name;
+};
+static_assert(TSZ_SMALL == 0 && to_underlying(TownExpandMode::Buildings) == 0 && to_underlying(TownExpandMode::Roads) == 1);
+static bool TownDataLoad(OpenTTDTownDataFrame *frame) noexcept
+{
+	size_t filesize;
+	auto f = FioFOpenFile(_file_to_saveload.name, "rb", HEIGHTMAP_DIR, &filesize);
+	if (!f.has_value()) return false;
+	std::string text(filesize, '\0');
+	size_t len = fread(text.data(), filesize, 1, *f);
+	f.reset();
+	if (len != 1) return false;
+	try {
+		frame->town_data = nlohmann::json::parse(text);
+	} catch (nlohmann::json::exception &) {
+		return false;
+	}
+	return frame->town_data.is_array();
+}
+/* The original's type checks, in order, then its get_to conversions. */
+static uint8_t TownDataFeature(OpenTTDTownDataFrame *frame, size_t index, OpenTTDTownDataFeature *out) noexcept
+{
+	if (index >= frame->town_data.size()) return OPENTTD_TOWN_DATA_END;
+	auto &feature = frame->town_data[index];
+	if (!feature.is_object()) return OPENTTD_TOWN_DATA_MALFORMED;
+	if (!feature.contains("name") || !feature.at("name").is_string()) return OPENTTD_TOWN_DATA_MALFORMED;
+	feature.at("name").get_to(frame->name);
+	out->name = {reinterpret_cast<const uint8_t *>(frame->name.data()), frame->name.size()};
+	if (!feature.contains("population") || !feature.at("population").is_number() ||
+			!feature.contains("city") || !feature.at("city").is_boolean() ||
+			!feature.contains("x") || !feature.at("x").is_number() ||
+			!feature.contains("y") || !feature.at("y").is_number()) {
+		return OPENTTD_TOWN_DATA_NAMED_MALFORMED;
+	}
+	feature.at("population").get_to(out->population);
+	feature.at("city").get_to(out->city);
+	feature.at("x").get_to(out->x);
+	feature.at("y").get_to(out->y);
+	return OPENTTD_TOWN_DATA_OK;
+}
+static std::string TownDataName(OpenTTDByteSpan name) { return std::string(reinterpret_cast<const char *>(name.data), name.size); }
+static const OpenTTDTownDataServices &GetRustTownDataServices() noexcept
+{
+	static const OpenTTDTownDataServices services{
+		.shared = &GetRustSharedServices(),
+		.founding = &GetRustTownFoundingServices(),
+		.strings = {
+			.load_failed = STR_TOWN_DATA_ERROR_LOAD_FAILED, .json_format = STR_TOWN_DATA_ERROR_JSON_FORMATTED_INCORRECTLY,
+			.town_format = STR_TOWN_DATA_ERROR_TOWN_FORMATTED_INCORRECTLY, .bad_coordinate = STR_TOWN_DATA_ERROR_BAD_COORDINATE,
+			.failed_towns = STR_TOWN_DATA_ERROR_FAILED_TO_FOUND_TOWN,
+		},
+		.load = TownDataLoad,
+		.feature = TownDataFeature,
+		.error = RustShowErrorMessage,
+		.named_error = [](uint32_t summary, uint32_t detail, OpenTTDByteSpan name) noexcept { ShowErrorMessage(GetEncodedString(summary), GetEncodedString(detail, TownDataName(name)), WL_ERROR); },
+		.failed_warning = [](uint32_t detail, uint32_t count) noexcept { ShowErrorMessage(GetEncodedString(detail, count), {}, WL_WARNING); },
+		.found = [](uint32_t tile, TownSize size, bool city, TownLayout layout, bool random, uint32_t parts, OpenTTDByteSpan name) noexcept {
+			return std::get<TownID>(Command<CMD_FOUND_TOWN>::Do(DoCommandFlag::Execute, TileIndex(tile), size, city, layout, random, parts, TownDataName(name))).base();
+		},
+		.place_sign = [](uint32_t tile, OpenTTDByteSpan name) noexcept { Command<CMD_PLACE_SIGN>::Post(TileIndex(tile), TownDataName(name)); },
+		.expand = [](uint16_t town, uint32_t amount, uint8_t modes) noexcept { Command<CMD_EXPAND_TOWN>::Post(TownID(town), amount, TownExpandModes(modes)); },
+		.not_reached = RustNotReached,
+	};
+	return services;
+}
+#endif
+
 /**
  * Load town data from _file_to_saveload, place towns at the appropriate locations, and expand them to their target populations.
  */
 void LoadTownData()
 {
+#ifdef WITH_RUST
+	OpenTTDTownDataFrame frame;
+	openttd_rust_load_town_data(&GetRustTownDataServices(), &frame, _settings_game.game_creation.heightmap_rotation);
+#else
 	/* Load the JSON file as a string initially. We'll parse it soon. */
 	size_t filesize;
 	auto f = FioFOpenFile(_file_to_saveload.name, "rb", HEIGHTMAP_DIR, &filesize);
@@ -686,4 +765,5 @@ void LoadTownData()
 			if (t->cache.num_houses <= before) fail_limit--;
 		} while (fail_limit > 0 && try_limit-- > 0 && t->cache.population < population);
 	}
+#endif
 }

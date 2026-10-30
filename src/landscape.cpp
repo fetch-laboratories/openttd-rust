@@ -1084,11 +1084,7 @@ void InitializeLandscape()
 }
 
 #ifdef WITH_RUST
-OpenTTDLandscapeGenerationCall::OpenTTDLandscapeGenerationCall() : heightmap{
-	.context = &this->decoder,
-	.read = [](void *ctx, OpenTTDHeightmapImage *out) noexcept { return static_cast<RustHeightmapDecoder *>(ctx)->Read(_file_to_saveload.ftype.detailed, _file_to_saveload.name, out); },
-	.finish = this->decoder.view.finish,
-}
+OpenTTDLandscapeGenerationCall::OpenTTDLandscapeGenerationCall()
 {
 	static_assert(GWP_LANDSCAPE == 1 && GWP_RIVER == 2 && GWM_HEIGHTMAP == 3 && LG_ORIGINAL == 0 && LG_TERRAGENESIS == 1 && MAX_TILE_HEIGHT == 255);
 	static_assert(SPR_MAPGEN_BEGIN == 4845 && TILE_UPDATE_FREQUENCY == 256);
@@ -1991,7 +1987,7 @@ void CallLandscapeTick()
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDLandscapeGenerationServices.hpp"
-#include "abi-visit-OpenTTDHeightmapDecoder.hpp"
+#include "abi-visit-OpenTTDHeightmapInput.hpp"
 #include "abi-visit-OpenTTDLandscapeLoopServices.hpp"
 #include "abi-visit-OpenTTDMovementServices.hpp"
 #include "abi-visit-OpenTTDTileOwnerServices.hpp"
@@ -2005,8 +2001,8 @@ bool CheckAbi_landscape()
 {
 	OpenTTDGroundCall call;
 	RustRoadCommandContext road;
-	RustHeightmapDecoder decoder(DFT_HEIGHTMAP_BMP, "");
-	return AbiServicesComplete(GetRustLandscapeGenerationServices()) && AbiServicesComplete(decoder.view) &&
+	RustHeightmapInput heightmap;
+	return AbiServicesComplete(GetRustLandscapeGenerationServices()) && AbiServicesComplete(heightmap.view) &&
 		AbiServicesComplete(GetRustTileOwnerServices()) && AbiServicesComplete(RustLandscapeLoopServices(&call, &road.view)) &&
 		AbiServicesComplete(GetRustClearServices()) && AbiServicesComplete(GetRustRailGroundServices()) &&
 		AbiServicesComplete(GetRustRoadGroundServices()) && AbiServicesComplete(GetRustTunnelGroundServices()) &&

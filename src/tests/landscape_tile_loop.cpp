@@ -14,6 +14,7 @@
 #include "../rust/landscape_command_ffi.h"
 #include "../rust/landscape_generation_ffi.h"
 #include "../rust/world_generation_ffi.h"
+#include "../rust/town_data_ffi.h"
 #include "../rust/session_ffi.h"
 #include "../core/backup_type.hpp"
 #include <thread>

@@ -5,6 +5,9 @@
 #include "openttd.h"
 #include "fios.h"
 #include "core/random_func.hpp"
+#include "error.h"
+#include "strings_func.h"
+#include <fstream>
 extern "C" void __real__Z26SetGeneratingWorldProgress16GenWorldProgressj(GenWorldProgress, uint);
 extern "C" void __real__Z31IncreaseGeneratingWorldProgress16GenWorldProgress(GenWorldProgress);
 #ifdef WITH_RUST
@@ -19,11 +22,20 @@ static bool GenerationLandscape(uint8_t mode)
 {
 #ifdef WITH_RUST
 	OpenTTDLandscapeGenerationCall call;
-	bool generated = openttd_test_generate_landscape(&GetRustLandscapeGenerationServices(), &call.frame, &call.heightmap, call.settings, mode);
+	bool generated = openttd_test_generate_landscape(&GetRustLandscapeGenerationServices(), &call.frame, &call.heightmap.view, call.settings, mode);
 	if (call.frame.cancellation) std::rethrow_exception(call.frame.cancellation);
 	return generated;
 #else
 	return GenerateLandscape(mode);
+#endif
+}
+static bool GenerationLoadHeightmap(DetailedFileType type, std::string_view filename)
+{
+#ifdef WITH_RUST
+	RustHeightmapInput input(type, filename);
+	return openttd_test_load_heightmap(&GetRustLandscapeGenerationServices(), &input.view, _settings_game.game_creation.heightmap_rotation, _settings_game.construction.freeform_edges, _settings_game.game_creation.heightmap_height, _settings_game.construction.map_height_limit);
+#else
+	return LoadHeightmap(type, filename);
 #endif
 }
 static int generation_cancel = -1, generation_events = 0, generation_cleanup = 0;
@@ -238,6 +250,34 @@ static void GenerationSnapshot(std::string_view name)
 	for (TileIndex tile : Map::Iterate()) for (uint32_t value : GenerationTile(Tile{tile})) map = (map ^ value) * 1099511628211ULL;
 	fmt::print(stderr, "GENERATION map {} {} {} {} {} {}\n", name, map, _random.state[0], _random.state[1], _settings_game.construction.freeform_edges, _settings_game.game_creation.snow_line_height);
 }
+/* Observe each heightmap error; -vnull shows no window. */
+static int generation_errors = 0;
+extern "C" void __real__Z16ShowErrorMessageO13EncodedStringS0_12WarningLeveliiS0_6PoolIDIh12CompanyIDTagLh15ELh255EE(EncodedString &&, EncodedString &&, WarningLevel, int, int, EncodedString &&, CompanyID);
+extern "C" void __wrap__Z16ShowErrorMessageO13EncodedStringS0_12WarningLeveliiS0_6PoolIDIh12CompanyIDTagLh15ELh255EE(EncodedString &&summary, EncodedString &&detail, WarningLevel level, int x, int y, EncodedString &&extra, CompanyID company)
+{
+	++generation_errors;
+	fmt::print(stderr, "GENERATION error {} {} / {}\n", level, summary.GetDecodedString(), detail.empty() ? std::string{} : detail.GetDecodedString());
+	__real__Z16ShowErrorMessageO13EncodedStringS0_12WarningLeveliiS0_6PoolIDIh12CompanyIDTagLh15ELh255EE(std::move(summary), std::move(detail), level, x, y, std::move(extra), company);
+}
+/* Real PNG and BMP inputs listed by landscape.py: dimensions, then a full load, alternating rotation. */
+static void GenerationInputs()
+{
+	std::string home = std::getenv("HOME");
+	std::ifstream list(home + "/heightmap-inputs.txt");
+	uint8_t rotate = HM_COUNTER_CLOCKWISE;
+	for (std::string name; std::getline(list, name); rotate ^= 1) {
+		DetailedFileType type = name.ends_with(".png") ? DFT_HEIGHTMAP_PNG : DFT_HEIGHTMAP_BMP;
+		std::string path = home + "/heightmap-inputs/" + name;
+		_settings_game.game_creation.heightmap_rotation = rotate;
+		uint x = UINT_MAX, y = UINT_MAX;
+		generation_errors = 0;
+		bool dimensions = GetHeightmapDimensions(type, path, &x, &y);
+		int dimension_errors = std::exchange(generation_errors, 0);
+		bool loaded = GenerationLoadHeightmap(type, path);
+		fmt::print(stderr, "GENERATION input {} {} {} {} {} {} {}\n", name, dimensions, x, y, dimension_errors, loaded, generation_errors);
+		GenerationSnapshot("input");
+	}
+}
 static bool GenerationScenario(std::span<std::string_view> args)
 {
 	if (args.size() != 2) return false;
@@ -254,11 +294,12 @@ static bool GenerationScenario(std::span<std::string_view> args)
 	for (const char *aspect : {"wide", "tall"}) for (uint8_t rotate : {HM_COUNTER_CLOCKWISE, HM_CLOCKWISE}) for (bool edges : {false, true}) {
 		_settings_game.game_creation.heightmap_rotation = rotate; _settings_game.construction.freeform_edges = edges;
 		std::string filename = std::string(std::getenv("HOME")) + "/" + aspect + ".bmp";
-		bool loaded = LoadHeightmap(DFT_HEIGHTMAP_BMP, filename);
+		bool loaded = GenerationLoadHeightmap(DFT_HEIGHTMAP_BMP, filename);
 		fmt::print(stderr, "GENERATION heightmap {} {} {} {}\n", aspect, rotate, edges, loaded);
 		GenerationSnapshot("heightmap");
 	}
-	bool loaded = LoadHeightmap(DFT_HEIGHTMAP_BMP, "generation-missing.bmp");
+	bool loaded = GenerationLoadHeightmap(DFT_HEIGHTMAP_BMP, "generation-missing.bmp");
+	GenerationInputs();
 	{
 		/* Successful LoadHeightmap alone misses GenerateLandscape's continuation:
 			* slope repair, watering, climate policy and the complete river pass. */

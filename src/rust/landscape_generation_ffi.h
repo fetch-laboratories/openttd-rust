@@ -6,6 +6,7 @@
 #include "landscape_loop_ffi.h"
 #include "landscape_command_ffi.h"
 #include "tgp_ffi.h"
+#include "heightmap_ffi.h"
 #include "../genworld.h"
 struct OpenTTDGenerationFrame;
 struct OpenTTDGenerationLoop { OpenTTDTreeLoopSettings settings; const OpenTTDLandscapeLoopServices *services; };
@@ -14,12 +15,6 @@ struct OpenTTDLandscapeGenerationSettings {
 	int32_t max_search_nodes;
 	uint8_t climate, generator, rivers, min_river_length, route_random, terrain, sea, snow_coverage, desert_coverage, tree_placer, height_limit, rotation, heightmap_height;
 	bool freeform;
-};
-struct OpenTTDHeightmapImage { uint32_t width, height; const uint8_t *data; };
-struct OpenTTDHeightmapDecoder {
-	void *context;
-	bool (*read)(void *, OpenTTDHeightmapImage *) noexcept OPENTTD_SERVICE_DEFAULT(read);
-	void (*finish)(void *) noexcept OPENTTD_SERVICE_DEFAULT(finish);
 };
 /* Native map storage remains canonical. The immutable tables outlive each call;
  * leaves do not yield or retain pointers. No raw-map descriptor is authorized. */
@@ -61,7 +56,6 @@ const OpenTTDLandscapeGenerationServices &GetRustLandscapeGenerationServices() n
 extern "C" {
 void openttd_rust_initialize_landscape(const OpenTTDLandscapeGenerationServices *, bool);
 void openttd_rust_convert_ground_water(const OpenTTDLandscapeGenerationServices *);
-bool openttd_rust_load_heightmap(const OpenTTDLandscapeGenerationServices *, const OpenTTDHeightmapDecoder *, uint8_t, bool, uint8_t, uint8_t);
 void openttd_rust_fix_slopes(const OpenTTDLandscapeGenerationServices *, uint8_t);
 }
 #endif /* RUST_LANDSCAPE_GENERATION_FFI_H */

@@ -1,18 +1,40 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-/** @file heightmap_services.hpp Native decoding scratch; no terrain policy. */
+/** @file heightmap_services.hpp Native codec resources for one Rust heightmap read; no input policy. */
 #ifndef RUST_HEIGHTMAP_SERVICES_HPP
 #define RUST_HEIGHTMAP_SERVICES_HPP
-#include "landscape_generation_ffi.h"
+#include "heightmap_ffi.h"
 #include "../fios.h"
-/* The decoded byte buffer belongs only to the native decoder. Rust borrows it
- * synchronously after read, until finish frees it at LoadHeightmap return.
- * Map services cannot resize it; no filename view crosses generation progress. */
-struct RustHeightmapDecoder {
+#include "../fileio_func.h"
+#include "../bmp.h"
+#include "../random_access_file_type.h"
+#ifdef WITH_PNG
+#include <png.h>
+#endif
+/* Codec state for one decode, allocated by png or bmp_header and released by
+ * finish, so generation frames hold only the input. Rust borrows decoded rows,
+ * palettes and bitmaps synchronously until finish. */
+struct RustHeightmapCodec {
+	std::optional<FileHandle> file;
+#ifdef WITH_PNG
+	png_structp png = nullptr;
+	png_infop info = nullptr;
+#endif
+	std::optional<RandomAccessFile> bmp_file;
+	BmpInfo bmp_info{};
+	BmpData bmp_data{};
+	~RustHeightmapCodec();
+};
+/* Without a fixed file, source reads _file_to_saveload, so no filename view
+ * crosses generation progress. */
+struct RustHeightmapInput {
+	bool saveload;
 	DetailedFileType type;
 	std::string_view filename;
-	std::vector<uint8_t> image;
-	OpenTTDHeightmapDecoder view;
-	RustHeightmapDecoder(DetailedFileType type, std::string_view filename);
-	bool Read(DetailedFileType type, std::string_view filename, OpenTTDHeightmapImage *out) noexcept;
+	std::unique_ptr<RustHeightmapCodec> codec;
+	OpenTTDHeightmapInput view;
+	RustHeightmapInput();
+	RustHeightmapInput(DetailedFileType type, std::string_view filename);
+	RustHeightmapInput(const RustHeightmapInput &) = delete;
+	RustHeightmapInput &operator=(const RustHeightmapInput &) = delete;
 };
 #endif /* RUST_HEIGHTMAP_SERVICES_HPP */

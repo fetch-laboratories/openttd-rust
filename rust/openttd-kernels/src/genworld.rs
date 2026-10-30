@@ -113,7 +113,7 @@ pub struct Settings {
 #[repr(C)]
 pub struct LandscapeCall {
     pub frame: *mut landscape_generation::Frame,
-    pub decoder: *const landscape_generation::Decoder,
+    pub decoder: *const crate::heightmap::Input,
     pub settings: landscape_generation::Settings,
 }
 #[repr(C)]

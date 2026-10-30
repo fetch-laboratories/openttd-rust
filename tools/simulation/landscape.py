@@ -2,6 +2,7 @@
 
 import struct
 import subprocess
+import zlib
 from pathlib import Path
 
 from . import core, objects
@@ -367,7 +368,10 @@ def check(scenario, run, mode, role, result):
             raise RuntimeError(
                 "missing successful heightmap landscape/climate/river progress"
             )
-        if sum(line.startswith("GENERATION map ") for line in lines) != 42:
+        check_heightmap_inputs(lines)
+        if sum(line.startswith("GENERATION map ") for line in lines) != 42 + len(
+            heightmap_inputs()
+        ):
             raise RuntimeError("missing early/heightmap/flat map and RNG snapshots")
         counts = branch_witnesses(
             scenario,
@@ -545,6 +549,157 @@ def scheduler_gap():
     subprocess.run([str(binary)], cwd=root, check=True)
 
 
+def png_chunk(kind: bytes, data: bytes) -> bytes:
+    body = kind + data
+    return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body))
+
+
+def png_file(
+    width: int,
+    height: int,
+    depth: int,
+    colour: int,
+    samples: list[list[int]],
+    palette: list[tuple[int, int, int]] | None = None,
+) -> bytes:
+    """A filter-0 PNG; each row lists its samples, packed to `depth` bits."""
+    rows = b""
+    for row in samples:
+        if depth == 16:
+            packed = b"".join(struct.pack(">H", v) for v in row)
+        elif depth == 8:
+            packed = bytes(row)
+        else:
+            bits = "".join(format(v, f"0{depth}b") for v in row)
+            bits += "0" * (-len(bits) % 8)
+            packed = int(bits, 2).to_bytes(len(bits) // 8, "big")
+        rows += b"\0" + packed
+    header = struct.pack(">IIBBBBB", width, height, depth, colour, 0, 0, 0)
+    chunks = png_chunk(b"IHDR", header)
+    if palette is not None:
+        chunks += png_chunk(b"PLTE", b"".join(bytes(c) for c in palette))
+    chunks += png_chunk(b"IDAT", zlib.compress(rows)) + png_chunk(b"IEND", b"")
+    return b"\x89PNG\r\n\x1a\n" + chunks
+
+
+def bmp_file(
+    width: int,
+    height: int,
+    bpp: int,
+    indices: list[list[int]],
+    palette: list[tuple[int, int, int]],
+    truncate: int = 0,
+) -> bytes:
+    """A bottom-up uncompressed BMP with a BGRA palette."""
+    pixels = b""
+    for row in reversed(indices):
+        if bpp == 24:
+            line = b"".join(bytes((v, (v * 3) % 256, (v * 7) % 256)) for v in row)
+        else:
+            bits = "".join(format(v, f"0{bpp}b") for v in row)
+            bits += "0" * (-len(bits) % 8)
+            line = int(bits, 2).to_bytes(len(bits) // 8, "big")
+        pixels += line + bytes(-len(line) % 4)
+    table = b"".join(bytes((b, g, r, 0)) for r, g, b in palette)
+    offset = 54 + len(table)
+    header = struct.pack("<2sIHHI", b"BM", offset + len(pixels), 0, 0, offset)
+    header += struct.pack(
+        "<IiiHHIIiiII", 40, width, height, 1, bpp, 0, len(pixels), 0, 0, len(palette), 0
+    )
+    data = header + table + pixels
+    return data[: len(data) - truncate] if truncate else data
+
+
+def heightmap_inputs() -> dict[str, tuple[bytes | None, tuple[int, int] | None]]:
+    """Name, file contents (None: missing) and expected dimensions (None: error)."""
+    w, h = 9, 5
+
+    def grid(limit: int) -> list[list[int]]:
+        return [[(x * 7 + y * 13) % limit for x in range(w)] for y in range(h)]
+
+    grey16 = [(17 * i, 17 * i, 17 * i) for i in range(16)]
+    mono = [(0, 0, 0), (255, 255, 255)]
+    colour16 = [(255 - 16 * i, 40 + 8 * i, (90 * i) % 256) for i in range(16)]
+    colour256 = [(i, (i * 5) % 256, (255 - i)) for i in range(256)]
+    return {
+        "grey8.png": (png_file(w, h, 8, 0, grid(256)), (w, h)),
+        "grey16.png": (
+            png_file(w, h, 16, 0, [[v * 257 for v in r] for r in grid(256)]),
+            (w, h),
+        ),
+        "grey1.png": (png_file(w, h, 1, 0, grid(2)), (w, h)),
+        "grey-alpha.png": (
+            png_file(
+                w, h, 8, 4, [sum(([v, 255 - v] for v in r), []) for r in grid(256)]
+            ),
+            (w, h),
+        ),
+        "rgb.png": (
+            png_file(
+                w,
+                h,
+                8,
+                2,
+                [sum(([v, 255 - v, v // 2] for v in r), []) for r in grid(256)],
+            ),
+            (w, h),
+        ),
+        "rgba16.png": (
+            png_file(
+                w,
+                h,
+                16,
+                6,
+                [
+                    sum(([v * 257, 0, 65535 - v * 257, 4096] for v in r), [])
+                    for r in grid(256)
+                ],
+            ),
+            (w, h),
+        ),
+        "palette-grey16.png": (png_file(w, h, 4, 3, grid(16), grey16), (w, h)),
+        "palette-colour16.png": (png_file(w, h, 4, 3, grid(16), colour16), (w, h)),
+        "palette256.png": (png_file(w, h, 8, 3, grid(256), colour256), (w, h)),
+        "palette2.png": (
+            png_file(w, h, 1, 3, grid(2), [(10, 20, 30), (200, 210, 220)]),
+            (w, h),
+        ),
+        "corrupt.png": (b"\x89PNG\r\n\x1a\n" + b"\0" * 24, None),
+        "wide.png": (png_file(8193, 1, 1, 0, [[x % 2 for x in range(8193)]]), None),
+        "missing.png": (None, None),
+        "mono.bmp": (bmp_file(8, h, 1, [r[:8] for r in grid(2)], mono), (8, h)),
+        # BmpRead1 pads 1-bit lines by 4 - width / 8, so this reads past the end.
+        "mono-odd.bmp": (bmp_file(w, h, 1, grid(2), mono), (w, h)),
+        "colour16.bmp": (bmp_file(w, h, 4, grid(16), colour16), (w, h)),
+        "grey16.bmp": (bmp_file(w, h, 4, grid(16), grey16), (w, h)),
+        "colour256.bmp": (bmp_file(w, h, 8, grid(256), colour256), (w, h)),
+        "rgb.bmp": (bmp_file(w, h, 24, grid(256), []), (w, h)),
+        "header.bmp": (b"BM" + b"\0" * 20, None),
+        "wide.bmp": (bmp_file(8193, 1, 1, [[0] * 8193], [(0, 0, 0), (9, 9, 9)]), None),
+        # The header is valid, so only the load (not the dimensions) fails.
+        "truncated.bmp": (bmp_file(w, h, 8, grid(256), colour256, truncate=20), (w, h)),
+        "missing.bmp": (None, None),
+    }
+
+
+def check_heightmap_inputs(lines: list[str]) -> None:
+    """Every input reports dimensions, load result and one error per failed read."""
+    rows = {
+        parts[2]: parts[3:]
+        for line in lines
+        if line.startswith("GENERATION input ") and len(parts := line.split()) == 9
+    }
+    for name, (_, size) in heightmap_inputs().items():
+        loads = size is not None and name not in ("truncated.bmp", "mono-odd.bmp")
+        width, height = size if size else (4294967295, 4294967295)
+        expected = [str(size is not None).lower(), str(width), str(height)]
+        expected += [str(int(size is None)), str(loads).lower(), str(int(not loads))]
+        if rows.get(name) != expected:
+            raise RuntimeError(
+                f"heightmap input {name}: {rows.get(name)} != {expected}"
+            )
+
+
 def install(scenario, run_dir):
     if not scenario.get("generation_probe"):
         return
@@ -561,3 +716,10 @@ def install(scenario, run_dir):
             "<IiiHHIIiiII", 40, width, height, 1, 24, 0, len(pixels), 0, 0, 0, 0
         )
         (run_dir / f"{name}.bmp").write_bytes(header + pixels)
+    names = []
+    for name, (data, _) in heightmap_inputs().items():
+        names.append(name)
+        if data is not None:
+            (run_dir / "heightmap-inputs").mkdir(exist_ok=True)
+            (run_dir / "heightmap-inputs" / name).write_bytes(data)
+    (run_dir / "heightmap-inputs.txt").write_text("\n".join(names) + "\n")
