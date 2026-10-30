@@ -59,7 +59,7 @@ function(set_options)
     option(OPTION_USE_ASSERTS "Use assertions; leave enabled for nightlies, betas, and RCs" OFF)
     option(OPTION_USE_NSIS "Use NSIS to create windows installer; enable only for stable releases" OFF)
     option(OPTION_TOOLS_ONLY "Build only tools target" OFF)
-    option(OPTION_RUST "Use migrated Rust game/tool algorithms (validated native platforms)" OFF)
+    option(OPTION_RUST "Use migrated Rust game/tool algorithms (validated native platforms)" ON)
     option(OPTION_DOCS_ONLY "Build only docs target" OFF)
     option(OPTION_ALLOW_INVALID_SIGNATURE "Allow loading of content with invalid signatures" OFF)
 

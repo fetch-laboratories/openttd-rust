@@ -143,6 +143,13 @@ jobs:
     - name: Install OpenGFX
       uses: ./.github/actions/install-opengfx
 
+    # cmake/Rust.cmake requires the rust-toolchain.toml channel.
+    - name: Install Rust
+      run: |
+        channel=$(python3 -c 'import tomllib; print(tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
+        rustup toolchain install "$channel" --profile minimal --component rustfmt,clippy
+        rustc -vV
+
     - name: Install GCC problem matcher
       uses: ammaraskar/gcc-problem-matcher@master
 

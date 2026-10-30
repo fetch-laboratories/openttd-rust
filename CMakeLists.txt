@@ -24,14 +24,6 @@ if (EMSCRIPTEN)
 endif()
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
-if(APPLE AND OPTION_RUST)
-    if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
-        set(CMAKE_OSX_DEPLOYMENT_TARGET 11.0 CACHE STRING "macOS deployment minimum" FORCE)
-    endif()
-else()
-    set(CMAKE_OSX_DEPLOYMENT_TARGET 10.15)
-endif()
-
 # Use GNUInstallDirs to allow customisation
 # but set our own default data and bin dir
 if(NOT CMAKE_INSTALL_DATADIR)
@@ -45,6 +37,14 @@ include(GNUInstallDirs)
 include(Options)
 set_options()
 set_directory_options()
+
+if(APPLE AND OPTION_RUST)
+    if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+        set(CMAKE_OSX_DEPLOYMENT_TARGET 11.0 CACHE STRING "macOS deployment minimum" FORCE)
+    endif()
+else()
+    set(CMAKE_OSX_DEPLOYMENT_TARGET 10.15)
+endif()
 
 include(Static)
 set_static_if_needed()
@@ -463,6 +463,12 @@ if(OPTION_RUST AND BUILD_TESTING)
     add_executable(openttd_rust_abi tools/migration/windows-abi.cpp src/3rdparty/monocypher/monocypher.cpp)
     target_include_directories(openttd_rust_abi PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/tools/migration")
     target_link_libraries(openttd_rust_abi PRIVATE openttd_rust)
+    if(NOT MSVC AND NOT APPLE)
+        # GCC emits the original headers' unused non-inline static helpers at -O0, such as
+        # ScaleByInverseCargoScale reading _settings_game, which this probe does not link.
+        target_compile_options(openttd_rust_abi PRIVATE -ffunction-sections)
+        target_link_options(openttd_rust_abi PRIVATE -Wl,--gc-sections)
+    endif()
     add_test(NAME rust-abi-layout-and-calls COMMAND openttd_rust_abi)
 endif()
 
