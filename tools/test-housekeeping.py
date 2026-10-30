@@ -180,9 +180,13 @@ class HousekeepingTests(unittest.TestCase):
                 "anchor",
                 "pinned",
                 "open",
+                "unmerged",
             )
         ]
-        dirty, locked, issue, checkpoint, deep, anchor, pinned, open_tree = protected
+        dirty, locked, issue, checkpoint, deep, anchor, pinned, open_tree, unmerged = (
+            protected
+        )
+        git(unmerged, "commit", "--quiet", "--allow-empty", "-m", "Add: unfinished")
         write(dirty / "untracked")
         git(self.main, "worktree", "lock", str(locked))
         write(deep / ".local/output")
@@ -240,17 +244,27 @@ class HousekeepingTests(unittest.TestCase):
         )
         self.assertIsNone(housekeeping.remove(self.main, item))
 
-    def hidden_process_plan(self, name: str, offset: float) -> bool:
+    def hidden_process_plan(self, name: str, offset: float, missing: str = "") -> bool:
         """Plan with a same-user process whose cwd is unreadable, started OFFSET
         seconds after the worktree was created; return whether it is removable."""
         tree = self.t3_tree(name)
         creation = housekeeping.created(tree)
+        assert creation is not None
         self.assertGreater(creation, 0)
         boot, ticks = int(creation) - 3600, os.sysconf("SC_CLK_TCK")
         write(self.proc / "stat", f"cpu  1 2 3\nbtime {boot}\n")
         start = round((creation + offset - boot) * ticks)
         fields = " ".join(["0"] * 18)
         write(self.proc / "88/stat", f"88 (a (job)) S {fields} {start} 0 0\n")
+        if missing:
+            target = (
+                self.proc / "88/stat"
+                if missing == "start"
+                else self.proc / "stat"
+                if missing == "boot"
+                else tree / ".git"
+            )
+            target.unlink()
         original = Path.resolve
 
         def resolve(path: Path, strict: bool = False) -> Path:
@@ -259,10 +273,7 @@ class HousekeepingTests(unittest.TestCase):
             return original(path, strict=strict)
 
         with patch.object(Path, "resolve", resolve):
-            items = housekeeping.plan_worktrees(
-                self.main, housekeeping.list_worktrees(self.main)[1:], pr_state
-            )
-        return next(item.remove for item in items if item.path == tree)
+            return housekeeping.worktree_refusal(self.main, tree, "") is None
 
     def test_uninspectable_cwd_keeps_worktree(self) -> None:
         # A job started inside the live worktree, then made non-dumpable.
@@ -271,6 +282,30 @@ class HousekeepingTests(unittest.TestCase):
     def test_uninspectable_cwd_older_than_worktree_is_ignored(self) -> None:
         # `(sd-pam)` and other session processes predate every task worktree.
         self.assertTrue(self.hidden_process_plan("t3-old-hidden-cwd", -60))
+
+    def test_uninspectable_cwd_with_unknown_time_keeps_worktree(self) -> None:
+        for missing in ("start", "boot", "creation"):
+            with (
+                self.subTest(missing=missing),
+                patch.object(housekeeping.time, "time", return_value=0),
+            ):
+                self.assertFalse(
+                    self.hidden_process_plan(f"t3-unknown-{missing}", -60, missing)
+                )
+
+    def test_process_start_rounding_keeps_worktree(self) -> None:
+        for ticks, creation in ((10000, 1100.5), (10000, 1100.005)):
+            with self.subTest(creation=creation):
+                write(self.proc / "stat", "cpu 1 2 3\nbtime 1000\n")
+                write(
+                    self.proc / "88/stat",
+                    f"88 (a (job)) S {'0 ' * 18}{ticks} 0 0\n",
+                )
+                with patch.object(housekeeping.os, "sysconf", return_value=100):
+                    latest = housekeeping.started(self.proc / "88")
+                assert latest is not None
+                self.assertGreater(latest, creation)
+                self.assertAlmostEqual(latest, 1101.01)
 
     def test_foreign_process_is_skipped_and_same_user_cwd_kept(self) -> None:
         init = Path("/proc/1")

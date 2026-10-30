@@ -210,7 +210,12 @@ def worktree_refusal(main: Path, path: Path, references: str) -> str | None:
                     continue
                 # A non-dumpable process (`(sd-pam)`) hides its cwd from its own user.
                 start, creation = started(process), created(path)
-                if isinstance(error, PermissionError) and start < creation:
+                if (
+                    isinstance(error, PermissionError)
+                    and start is not None
+                    and creation is not None
+                    and start < creation
+                ):
                     continue
                 return f"cannot inspect process cwd: {error}"
     except OSError as error:
@@ -218,24 +223,28 @@ def worktree_refusal(main: Path, path: Path, references: str) -> str | None:
     return None
 
 
-def started(process: Path) -> float:
-    """Start time in seconds since the epoch; unknown counts as now."""
+def started(process: Path) -> float | None:
+    """Upper bound on start time in epoch seconds; unknown prevents removal."""
     try:
         boot = re.search(r"^btime (\d+)$", (PROC_ROOT / "stat").read_text(), re.M)
         # Field 22 of /proc/PID/stat; the command name may contain spaces and parentheses.
         ticks = int((process / "stat").read_text().rsplit(")", 1)[1].split()[19])
+        frequency = os.sysconf("SC_CLK_TCK")
+        if boot is None or ticks < 0 or frequency <= 0:
+            return None
+        # btime truncates seconds and starttime truncates clock ticks.
+        return int(boot[1]) + 1 + (ticks + 1) / frequency
     except (OSError, IndexError, ValueError):
-        return time.time()
-    return int(boot[1]) + ticks / os.sysconf("SC_CLK_TCK") if boot else time.time()
+        return None
 
 
-def created(tree: Path) -> float:
-    """`git worktree add` writes the admin directory's commondir once; unknown is 0."""
+def created(tree: Path) -> float | None:
+    """`git worktree add` writes the admin directory's commondir once."""
     try:
         admin = (tree / ".git").read_text().removeprefix("gitdir:").strip()
         return (tree / admin / "commondir").stat().st_mtime
     except OSError:
-        return 0.0
+        return None
 
 
 @dataclass(frozen=True)
