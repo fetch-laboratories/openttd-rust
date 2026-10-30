@@ -1,5 +1,5 @@
 # If you change this version, change the numbers in .github/workflows/ci-emscripten.yml (2x) too.
-FROM emscripten/emsdk:3.1.57
+FROM emscripten/emsdk:4.0.23
 
 RUN apt-get update \
     && apt-get install -y curl gcc-12 g++-12 \

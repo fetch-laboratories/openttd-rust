@@ -445,9 +445,10 @@ packaging and additional Windows CRT modes remain separate tasks.
 
 Emscripten builds the archive for `wasm32-unknown-emscripten` with 4-byte pointers, so its
 toolchain needs that standard library besides the host one its native `HOST_BINARY_DIR` tools
-link. rustc reports no native libraries for this target, and emcc links C++ JavaScript
-exceptions (`-s DISABLE_EXCEPTION_CATCHING=0`) beside the `panic=abort` archive. The Emscripten
-CI job runs `openttd_rust_abi` under emsdk's node.
+link. rustc reports no native libraries for this target. Its prebuilt standard library carries
+WebAssembly exception instructions, so the build uses emsdk 4.0.23 and compiles and links all C++
+with `-fwasm-exceptions`, one exception model for both languages. The Emscripten CI job runs
+`openttd_rust_abi` under emsdk's node (22.16.0), which runs WebAssembly exceptions without flags.
 
 Archives live at `<build>/cargo/<validated-target>/release/libopenttd_kernels.a`.
 `tools/migration.py` exposes `rust_configuration(build)` and `rust_archive(build)`; all
