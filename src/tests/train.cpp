@@ -27,6 +27,7 @@ TEST_CASE("PBS depot early return does not read or write train_on_res")
 	CHECK(result.tile == 23); CHECK(result.td == 0); CHECK(result.okay == 0); CHECK(other == nullptr);
 }
 
+extern "C" void openttd_test_train_state_set_cached_max_curve_speed(OpenTTDTrainState *, uint16_t);
 namespace {
 uint8_t _train_speed_status;
 uint64_t _train_speed_model;
@@ -37,7 +38,7 @@ TEST_CASE("Train speed - depot break and wormhole limits")
 	/* Abort defaults stand for every service the original loop must not reach. */
 	std::unique_ptr<OpenTTDTrainState, decltype(&openttd_rust_train_state_destroy)> owner(openttd_rust_train_state_new(), openttd_rust_train_state_destroy);
 	const OpenTTDTrainHandle handle{owner.get(), owner.get()};
-	openttd_rust_train_state_set_cached_max_curve_speed(owner.get(), 180);
+	openttd_test_train_state_set_cached_max_curve_speed(owner.get(), 180);
 	OpenTTDTrainServices table{};
 	table.read_current_max_speed = [](OpenTTDTrainHandle) noexcept -> OpenTTDTrainCurrentMaxSpeedRead { return {17, 200, 100}; };
 	table.acc_model = [](OpenTTDTrainHandle) noexcept { return _train_speed_model; };

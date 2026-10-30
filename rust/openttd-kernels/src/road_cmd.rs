@@ -2299,3 +2299,9 @@ crate::abi::layouts! {
         authority,
     };
 }
+
+/// `RoadVehiclesAreBuilt`: whether `RoadVehicle::Iterate()` is nonempty, given the vehicle
+/// pool's types in pool order.
+pub(crate) fn road_vehicles_are_built(mut kinds: impl Iterator<Item = u8>) -> bool {
+    kinds.any(|kind| kind == crate::vehicle_type::VEH_ROAD)
+}

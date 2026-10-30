@@ -5,7 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Read helpers of `tile_map.h` for the audited map reader.
+//! Helpers of `tile_map.h` for the audited map view.
 //! `None` routes to the original typed native accessor (including failed assertions).
 use crate::map_func::TileTypeAccess;
 
@@ -103,4 +103,46 @@ impl crate::map_func::World<'_> {
         );
         crate::bitmath_func::gb(u32::from(Self::byte(self.types.m1(t))), 0, 5) as u8
     }
+}
+
+/// `TileHeight`; a failed `tile < Map::Size()` calls the native assertion.
+pub(crate) fn tile_height_in(w: &crate::map_func::World<'_>, t: u32) -> u32 {
+    w.types.height(t).map_or_else(
+        || {
+            w.check(false);
+            0
+        },
+        u32::from,
+    )
+}
+/// `IsInnerTile`; `freeform_edges` is `construction.freeform_edges` at the call.
+pub(crate) fn is_inner_tile(w: &crate::map_func::World<'_>, t: u32, freeform_edges: bool) -> bool {
+    w.check(w.types.available(t).is_some());
+    let map = w.dimensions;
+    let x = map.tile_x(t);
+    let y = map.tile_y(t);
+    x < map.max_x()
+        && y < crate::map_func::Map::max_y(w.size_y())
+        && ((x > 0 && y > 0) || !freeform_edges)
+}
+/// `SetTileHeight`.
+#[allow(clippy::cast_possible_truncation)] // `tile.height() = height` stores the low byte.
+pub(crate) fn set_tile_height(w: &crate::map_func::World<'_>, t: u32, height: u32) {
+    w.check(w.types.available(t).is_some());
+    w.check(height <= crate::tile_type::MAX_TILE_HEIGHT);
+    let _ = w.types.set_height(t, height as u8);
+}
+/// `SetTileType`; the inner-tile assertion reads `freeform_edges` only in assertion builds.
+pub(crate) fn set_tile_type(
+    w: &crate::map_func::World<'_>,
+    t: u32,
+    kind: u8,
+    freeform_edges: impl FnOnce() -> bool,
+) {
+    w.check(w.types.available(t).is_some());
+    if w.types.assertions() {
+        w.check(is_inner_tile(w, t, freeform_edges()) == (kind != crate::tile_type::MP_VOID));
+    }
+    let old = crate::map_func::World::byte(w.types.kind(t));
+    let _ = w.types.set_kind(t, (old & 0x0F) | (kind << 4));
 }

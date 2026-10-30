@@ -228,6 +228,18 @@ macro_rules! map_fields {
         }
     )*};
 }
+// Stores write one scalar of the canonical allocation, whose native owner is mutable.
+macro_rules! map_stores {
+    ($array:ident: $layout:ty => $($setter:ident . $field:ident: $scalar:ty),*) => {$ (
+        #[inline]
+        pub(crate) fn $setter(&self, tile: u32, value: $scalar) -> Option<()> {
+            self.available(tile)?;
+            // SAFETY: Live allocation under the entry contract, one scalar only.
+            unsafe { std::ptr::addr_of_mut!((*self.allocation.$array.cast_mut().add(tile as usize)).$field).write(value) };
+            Some(())
+        }
+    )*};
+}
 impl TileTypeAccess {
     /// Resolve the audited allocation once, retaining only descriptor metadata.
     /// # Safety
@@ -290,9 +302,11 @@ impl TileTypeAccess {
     // Named, field-sized loads. No Rust reference or record value is formed.
     map_fields! { base: BaseTileLayout => kind: u8, height: u8, m1: u8, m2: u16, m3: u8, m4: u8, m5: u8 }
     map_fields! { extended: ExtendedTileLayout => m6: u8, m8: u16 }
+    map_stores! { base: BaseTileLayout => set_kind.kind: u8, set_height.height: u8, set_m1.m1: u8, set_m2.m2: u16, set_m3.m3: u8, set_m4.m4: u8, set_m5.m5: u8 }
+    map_stores! { extended: ExtendedTileLayout => set_m6.m6: u8, set_m7.m7: u8, set_m8.m8: u16 }
 }
 
-/// Entry-local canonical map descriptor. Reads remain field-sized and end before calls.
+/// Entry-local canonical map descriptor. Reads and writes remain field-sized and end before calls.
 pub(crate) struct World<'a> {
     pub types: TileTypeAccess,
     pub shared: &'a crate::services::Services,
@@ -319,6 +333,10 @@ impl<'a> World<'a> {
     }
     pub(crate) fn kind(&self, t: u32) -> u8 {
         self.types.read(t)
+    }
+    /// `Map::SizeY()`, derived from the descriptor's tile count.
+    pub(crate) fn size_y(&self) -> u32 {
+        self.types.count() / self.dimensions.size_x()
     }
     pub(crate) fn byte(value: Option<u8>) -> u8 {
         value.expect("live map scalar")

@@ -55,6 +55,26 @@
 
 #include "table/strings.h"
 
+#ifdef WITH_RUST
+#include "linkgraph/linkgraphschedule.h"
+#include "vehicle_base.h"
+#include "rust/settings_table_ffi.h"
+#include "order_func.h"
+#include "train.h"
+#include "timer/timer_game_calendar.h"
+#include "rust/clock_ffi.h"
+#include "rust/company_adapter.h"
+#include "rust/vehicle_transaction_ffi.h"
+#include "rust/engine_loading_ffi.h"
+#include "rust/command_cost_services.h"
+#include "rust/presentation_services.h"
+#include "rust/settings_services.h"
+#include "rust/vehicle_services.h"
+#include "rust/company_services.h"
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDSettingServices.hpp"
+#endif
+
 #include "safeguards.h"
 
 ClientSettings _settings_client;
@@ -1758,6 +1778,72 @@ std::vector<const SettingDesc *> GetFilteredSettingCollection(std::function<bool
 	return collection;
 }
 
+#ifdef WITH_RUST
+static OpenTTDByteSpan SettingName(std::string_view name)
+{
+	return {reinterpret_cast<const uint8_t *>(name.data()), name.size()};
+}
+static std::string_view SettingName(OpenTTDByteSpan name)
+{
+	return {reinterpret_cast<const char *>(name.data), name.size};
+}
+const OpenTTDSettingServices &GetRustSettingServices() noexcept
+{
+	static const OpenTTDSettingServices services{
+		.shared = &GetRustSharedServices(),
+		.clock = &GetRustClockServices(),
+		.company = &GetRustCompanyServices(),
+		.transactions = &GetRustVehicleTransactionServices(),
+		.schedule = &LinkGraphSchedule::services,
+		.engines = &GetRustEngineLoadingServices(),
+		.environment = GetRustEnvironmentServices(),
+		.client_vehicle_defaults = RustClientVehicleDefaults,
+		.company_vehicle_defaults = RustCompanyVehicleDefaults,
+		.set_service_interval = RustIndexedVehicleWrite<uint16_t, RustVehicleSetServiceInterval>,
+		.set_service_interval_percent = RustIndexedVehicleWrite<bool, RustVehicleSetServiceIntervalIsPercent>,
+		.road_acceleration_model = RustRoadAccelerationModel,
+		.newgame_minutes_per_year = RustNewgameMinutesPerCalendarYear,
+		.set_minutes_per_year = RustSetMinutesPerCalendarYear,
+		.set_newgame_wallclock = RustSetNewgameWallclockUnits,
+		.setting = [](OpenTTDByteSpan name) noexcept { return GetSettingFromName(SettingName(name)); },
+		.company_setting = [](OpenTTDByteSpan name) noexcept { return GetCompanySettingFromName(SettingName(name)); },
+		.setting_current = [](const SettingDesc *sd) noexcept { return SlIsObjectCurrentlyValid(sd->save.version_from, sd->save.version_to); },
+		.setting_int = [](const SettingDesc *sd) noexcept { return sd->IsIntSetting(); },
+		.setting_editable = [](const SettingDesc *sd) noexcept { return sd->IsEditable(true); },
+		.change_game_setting = [](const SettingDesc *sd, int32_t value) noexcept { sd->AsIntSetting()->ChangeValue(&GetGameSettings(), value); },
+		.change_company_setting = [](const SettingDesc *sd, uint8_t company, int32_t value) noexcept { sd->AsIntSetting()->ChangeValue(RustCompanySettings(company), value); },
+		.window_classes_dirty = RustSetWindowClassesDirty,
+		.window_classes_data = RustInvalidateWindowClassesData,
+		.screen_dirty = RustScreenDirty,
+		.error_message = [](uint32_t message) noexcept { ShowErrorMessage(GetEncodedString(message), {}, WL_ERROR); },
+		.edges_not_empty = STR_CONFIG_SETTING_EDGES_NOT_EMPTY,
+		.edges_not_water = STR_CONFIG_SETTING_EDGES_NOT_WATER,
+		.dynamic_engines_existing_vehicles = STR_CONFIG_SETTING_DYNAMIC_ENGINES_EXISTING_VEHICLES,
+		.too_high_mountain = STR_CONFIG_SETTING_TOO_HIGH_MOUNTAIN,
+	};
+	return services;
+}
+bool CheckAbi_settings() { return AbiServicesComplete(GetRustSettingServices()); }
+static_assert(WC_TOWN_VIEW == 45 && WC_VEHICLE_DETAILS == 23 && WC_BUILD_VEHICLE == 54 && WC_ENGINE_PREVIEW == 88 && WC_GAME_OPTIONS == 91);
+static_assert(DEF_SERVINT_DAYS_TRAINS == 150 && DEF_SERVINT_DAYS_ROADVEH == 150 && DEF_SERVINT_DAYS_AIRCRAFT == 100 && DEF_SERVINT_DAYS_SHIPS == 360 && MIN_SERVINT_DAYS == 30 && MAX_SERVINT_DAYS == 800);
+static_assert(DEF_SERVINT_MINUTES_TRAINS == 5 && DEF_SERVINT_MINUTES_ROADVEH == 5 && DEF_SERVINT_MINUTES_AIRCRAFT == 3 && DEF_SERVINT_MINUTES_SHIPS == 12 && MIN_SERVINT_MINUTES == 1 && MAX_SERVINT_MINUTES == 30);
+static_assert(DEF_SERVINT_PERCENT == 50 && MIN_SERVINT_PERCENT == 5 && MAX_SERVINT_PERCENT == 90 && AM_ORIGINAL == 0 && CCF_TRACK.base() == 0);
+static_assert(CalendarTime::DEF_MINUTES_PER_YEAR == 12 && CalendarTime::FROZEN_MINUTES_PER_YEAR == 0 && CalendarTime::MAX_MINUTES_PER_YEAR == 10080);
+
+CommandCost CmdChangeSetting(DoCommandFlags flags, const std::string &name, int32_t value)
+{
+	CommandCost cost;
+	openttd_rust_cmd_change_setting(&GetRustSettingServices(), RustCommandCost(&cost), flags.base(), SettingName(name), value);
+	return cost;
+}
+
+CommandCost CmdChangeCompanySetting(DoCommandFlags flags, const std::string &name, int32_t value)
+{
+	CommandCost cost;
+	openttd_rust_cmd_change_company_setting(&GetRustSettingServices(), RustCommandCost(&cost), flags.base(), SettingName(name), value);
+	return cost;
+}
+#else
 /**
  * Network-safe changing of settings (server-only).
  * @param flags operation to perform
@@ -1807,6 +1893,7 @@ CommandCost CmdChangeCompanySetting(DoCommandFlags flags, const std::string &nam
 
 	return CommandCost();
 }
+#endif /* WITH_RUST */
 
 /**
  * Top function to save the new value of an element of the Settings struct

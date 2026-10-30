@@ -16,6 +16,8 @@
 #include "../window_func.h"
 inline void OpenTTDInvalidateTownView(uint16_t town) noexcept { InvalidateWindowData(WC_TOWN_VIEW, TownID(town)); }
 inline void RustScreenDirty() noexcept { MarkWholeScreenDirty(); }
+inline void RustSetWindowClassesDirty(uint16_t cls) noexcept { SetWindowClassesDirty(WindowClass(cls)); }
+inline void RustInvalidateWindowClassesData(uint16_t cls, int32_t data) noexcept { InvalidateWindowClassesData(WindowClass(cls), data); }
 inline void RustResetWindowSystem() noexcept { ResetWindowSystem(); }
 inline void RustSetupColoursAndInitialWindow() noexcept { SetupColoursAndInitialWindow(); }
 inline size_t RustUtf8Length(const uint8_t *text, size_t length) noexcept { return Utf8StringLength(std::string_view(reinterpret_cast<const char *>(text), length)); }

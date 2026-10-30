@@ -10,10 +10,12 @@ STATES = (
     "normal",
     "paused",
     "frozen-calendar",
+    "settings-live",
     "newgame",
     "restart",
     "reload-random",
     "editor",
+    "settings-editor",
     "editor-heightmap",
     "reload-heightmap",
     "new-heightmap",
@@ -30,6 +32,59 @@ STATES = (
 )
 
 
+# Setting transitions in live, editor and menu modes (#587).
+SETTING_CHECKS = (
+    "settings-road-side-refused",
+    "settings-dynamic-refused",
+    "settings-height-live-refused",
+    "settings-edges-live",
+    "settings-percent",
+    "settings-days",
+    "settings-unknown",
+    "settings-test-only",
+    "settings-company-command",
+    "settings-height-refused",
+    "settings-height-editor",
+    "settings-edges-editor",
+    "settings-wallclock-editor",
+    "settings-frozen",
+    "settings-thawed",
+    "settings-calendar-editor",
+    "settings-menu-minutes",
+    "settings-menu-client",
+    "settings-menu-calendar",
+)
+
+# settings.* branches the candidate's captured session must reach.
+SETTING_WITNESSES = (
+    "consists",
+    "service_defaults",
+    "service_vehicle",
+    "service_type",
+    "train_acceleration",
+    "road_acceleration",
+    "slope",
+    "noise",
+    "road_side_refused",
+    "dynamic_refused",
+    "height_refused",
+    "catchment",
+    "edges_void",
+    "edges_water",
+    "timekeeping_editor",
+    "minutes_clamped",
+    "command_refused",
+    "command",
+    "company_command",
+)
+
+
+def witness_environment(scenario: "Scenario", role: str) -> dict[str, str]:
+    if scenario.get("witnesses") and role == "candidate":
+        return core.WITNESS_ENVIRONMENT
+    return {}
+
+
 class Scenario(TypedDict):
     name: str
     kind: str
@@ -37,6 +92,7 @@ class Scenario(TypedDict):
     session: bool
     ticks: int
     short_checkpoint: bool
+    witnesses: NotRequired[bool]
     console: NotRequired[list[str]]
     partial: NotRequired[str]
     executables: NotRequired[dict[str, Path]]
@@ -140,7 +196,7 @@ def prepare(
                 builds[role],
                 folder / role / mode,
                 timeout,
-                env,
+                {**env, **witness_environment(scenario, role)},
                 snapshots,
             )
             lines = [line for line in capture["log"] if line.startswith("SESSION ")]
@@ -158,6 +214,7 @@ def prepare(
                 "current-settings",
                 "editor-owner",
                 "heightmap-new-settings",
+                *SETTING_CHECKS,
             }
             observed = {
                 line.split()[2]
@@ -169,6 +226,10 @@ def prepare(
                     f"{mode}: {role} incomplete session evidence: exit {capture['exit']}, missing {required - observed}"
                 )
             entry_observations(lines)
+            if witness_environment(scenario, role):
+                core.branch_witnesses(
+                    scenario, capture, role, "settings", SETTING_WITNESSES
+                )
             if mode == "plain":
                 saves[role] = states / "final.sav"
         if captures[f"{mode}-reference"] != captures[f"{mode}-candidate"]:

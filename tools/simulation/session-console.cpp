@@ -20,6 +20,11 @@
 #include "network/network.h"
 #include "genworld.h"
 #include "script/script_fatalerror.hpp"
+#include "command_func.h"
+#include "settings_cmd.h"
+#include "settings_type.h"
+#include "order_func.h"
+#include "vehicle_type.h"
 #ifdef WITH_RUST
 #include "rust/clock_native.hpp"
 #endif
@@ -97,6 +102,89 @@ static void SessionExceptions()
 	}
 	session_storage = nullptr;
 }
+static void SessionSetting(std::string_view name, int32_t value)
+{
+	IConsoleCmdExec(fmt::format("setting {} {}", name, value));
+}
+/** Setting transitions in a loaded game with trains, road vehicles, ships, stations and link graphs. */
+static void SessionLiveSettings()
+{
+	auto &vehicle = _settings_game.vehicle;
+	SessionSetting("vehicle.train_acceleration_model", 1 - vehicle.train_acceleration_model);
+	SessionSetting("vehicle.train_slope_steepness", vehicle.train_slope_steepness == 3 ? 7 : 3);
+	SessionSetting("vehicle.roadveh_acceleration_model", 1 - vehicle.roadveh_acceleration_model);
+	if (vehicle.roadveh_acceleration_model == AM_ORIGINAL) SessionSetting("vehicle.roadveh_acceleration_model", 1);
+	SessionSetting("vehicle.roadveh_slope_steepness", vehicle.roadveh_slope_steepness == 3 ? 7 : 3);
+	SessionSetting("vehicle.wagon_speed_limits", !vehicle.wagon_speed_limits);
+	SessionSetting("vehicle.freight_trains", vehicle.freight_trains == 1 ? 3 : 1);
+	SessionSetting("difficulty.town_council_tolerance", _settings_game.difficulty.town_council_tolerance == 0 ? 2 : 0);
+	SessionSetting("station.modified_catchment", !_settings_game.station.modified_catchment);
+	const uint8_t road_side = vehicle.road_side;
+	SessionSetting("vehicle.road_side", 1 - road_side);
+	SessionCheck("settings-road-side-refused", vehicle.road_side == road_side);
+	const bool dynamic = vehicle.dynamic_engines;
+	SessionSetting("vehicle.dynamic_engines", !dynamic);
+	SessionCheck("settings-dynamic-refused", vehicle.dynamic_engines == dynamic);
+	const uint8_t height = _settings_game.construction.map_height_limit;
+	SessionSetting("construction.map_height_limit", height == 30 ? 40 : 30);
+	SessionCheck("settings-height-live-refused", _settings_game.construction.map_height_limit == height);
+	const bool edges = _settings_game.construction.freeform_edges;
+	SessionSetting("construction.freeform_edges", !edges);
+	SessionCheck("settings-edges-live", _settings_game.construction.freeform_edges == edges);
+	const Company *c = Company::Get(_local_company);
+	SessionSetting("company.servint_ispercent", 1);
+	SessionCheck("settings-percent", c->settings.vehicle.servint_ispercent && c->settings.vehicle.servint_trains == 50);
+	SessionSetting("company.servint_trains", 40);
+	SessionSetting("company.servint_roadveh", 30);
+	SessionSetting("company.servint_ispercent", 0);
+	SessionCheck("settings-days", !c->settings.vehicle.servint_ispercent && c->settings.vehicle.servint_ships == 360);
+	SessionSetting("company.servint_ships", 200);
+	SessionCheck("settings-unknown", Command<CMD_CHANGE_SETTING>::Do(DoCommandFlag::Execute, "settings.unknown", 1).Failed()
+		&& Command<CMD_CHANGE_SETTING>::Do(DoCommandFlag::Execute, "", 1).Failed()
+		&& Command<CMD_CHANGE_SETTING>::Do(DoCommandFlag::Execute, "network.server_name", 1).Failed()
+		&& Command<CMD_CHANGE_SETTING>::Do(DoCommandFlag::Execute, "game_creation.landscape", 1).Failed()
+		&& Command<CMD_CHANGE_COMPANY_SETTING>::Do(DoCommandFlag::Execute, "company.unknown", 1).Failed()
+		&& Command<CMD_CHANGE_COMPANY_SETTING>::Do(DoCommandFlag::Execute, "", 1).Failed());
+	SessionCheck("settings-test-only", Command<CMD_CHANGE_SETTING>::Do({}, "vehicle.plane_speed", 2).Succeeded() && Command<CMD_CHANGE_COMPANY_SETTING>::Do({}, "company.servint_aircraft", 150).Succeeded() && c->settings.vehicle.servint_aircraft == 100);
+	SessionCheck("settings-company-command", Command<CMD_CHANGE_COMPANY_SETTING>::Do(DoCommandFlag::Execute, "company.servint_aircraft", 150).Succeeded() && c->settings.vehicle.servint_aircraft == 150);
+}
+/** Editor-only transitions on the fresh scenario editor map. */
+static void SessionEditorSettings()
+{
+	auto &construction = _settings_game.construction;
+	SessionSetting("construction.map_height_limit", 60);
+	SetTileHeight(TileXY(4, 4), 50);
+	SessionSetting("construction.map_height_limit", 40);
+	SessionCheck("settings-height-refused", construction.map_height_limit == 60);
+	SetTileHeight(TileXY(4, 4), 0);
+	SessionSetting("construction.map_height_limit", 40);
+	SessionCheck("settings-height-editor", construction.map_height_limit == 40);
+	const bool edges = construction.freeform_edges;
+	SessionSetting("construction.freeform_edges", !edges);
+	SessionSetting("construction.freeform_edges", edges);
+	SessionCheck("settings-edges-editor", construction.freeform_edges == edges && IsTileType(TileXY(0, 5), edges ? MP_VOID : MP_WATER));
+	SessionSetting("economy.timekeeping_units", TKU_WALLCLOCK);
+	SessionCheck("settings-wallclock-editor", TimerGameEconomy::UsingWallclockUnits() && TimerGameEconomy::year == 1);
+	SessionSetting("economy.minutes_per_calendar_year", 0);
+	SessionCheck("settings-frozen", _settings_game.economy.minutes_per_calendar_year == CalendarTime::FROZEN_MINUTES_PER_YEAR);
+	SessionSetting("economy.minutes_per_calendar_year", 1);
+	SessionCheck("settings-thawed", _settings_game.economy.minutes_per_calendar_year == CalendarTime::DEF_MINUTES_PER_YEAR);
+	SessionSetting("economy.timekeeping_units", TKU_CALENDAR);
+	SessionCheck("settings-calendar-editor", !TimerGameEconomy::UsingWallclockUnits() && TimerGameEconomy::date.base() == TimerGameCalendar::date.base());
+}
+/** Menu transitions write the new-game and client defaults. */
+static void SessionMenuSettings()
+{
+	SessionSetting("economy.timekeeping_units", TKU_WALLCLOCK);
+	SessionSetting("economy.minutes_per_calendar_year", 30);
+	SessionCheck("settings-menu-minutes", _settings_newgame.economy.minutes_per_calendar_year == 30 && TimerGameEconomy::UsingWallclockUnits(true));
+	SessionSetting("company.servint_ispercent", 1);
+	SessionSetting("company.servint_ispercent", 0);
+	SessionCheck("settings-menu-client", _settings_client.company.vehicle.servint_trains == 5);
+	SessionSetting("economy.timekeeping_units", TKU_CALENDAR);
+	SessionCheck("settings-menu-calendar", _settings_newgame.economy.minutes_per_calendar_year == CalendarTime::DEF_MINUTES_PER_YEAR && _settings_client.company.vehicle.servint_trains == 150);
+	SessionSetting("vehicle.road_side", 1 - _settings_newgame.vehicle.road_side);
+}
 struct SessionScan final : NewGRFScanCallback {
 	void OnNewGRFsScanned() override {
 		++session_scans;
@@ -129,6 +217,7 @@ static bool SessionScenario(std::span<std::string_view> args)
 	_settings_game.economy.minutes_per_calendar_year = 0;
 	StateGameLoop(); SessionSave(folder, "frozen-calendar");
 	_settings_game.economy.minutes_per_calendar_year = CalendarTime::DEF_MINUTES_PER_YEAR;
+	SessionLiveSettings(); StateGameLoop(); SessionSave(folder, "settings-live");
 	SessionExceptions();
 	_pause_mode = PauseMode::Normal;
 	for (int scan = 0; scan < 2; scan++) {
@@ -151,6 +240,7 @@ static bool SessionScenario(std::span<std::string_view> args)
 	SwitchToMode(SM_RESTARTGAME); SessionCheck("current-settings", TimerGameCalendar::year == 1960 && _settings_game.game_creation.generation_seed == 777); SessionSave(folder, "restart");
 	SwitchToMode(SM_RELOADGAME); SessionSave(folder, "reload-random");
 	SwitchToMode(SM_EDITOR); SessionCheck("editor-owner", _local_company == OWNER_NONE); _pause_mode = {}; SessionObserve("before-editor"); StateGameLoop(); SessionSave(folder, "editor");
+	SessionEditorSettings(); SessionSave(folder, "settings-editor");
 	_file_to_saveload.SetMode(FIOS_TYPE_BMP, SLO_LOAD); _file_to_saveload.name = std::string(std::getenv("HOME")) + "/wide.bmp";
 	SwitchToMode(SM_LOAD_HEIGHTMAP); SessionSave(folder, "editor-heightmap");
 	SwitchToMode(SM_RELOADGAME); SessionSave(folder, "reload-heightmap");
@@ -168,6 +258,7 @@ static bool SessionScenario(std::span<std::string_view> args)
 	_file_to_saveload.SetMode(FIOS_TYPE_FILE, SLO_LOAD);
 	SwitchToMode(SM_RELOADGAME); SessionSave(folder, "reload-save");
 	SwitchToMode(SM_MENU); SessionSave(folder, "intro");
+	SessionMenuSettings();
 	_switch_mode = SM_EDITOR; GameLoop(); SessionSave(folder, "outer-editor");
 	_switch_mode = SM_NEWGAME; GameLoop(); _pause_mode = {}; SessionSave(folder, "final");
 	session_active = false;

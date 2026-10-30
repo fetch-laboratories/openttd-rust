@@ -167,6 +167,8 @@ impl Handle {
 pub(crate) const FLIPPED: u8 = 4;
 /// `CCF_ARRANGE`: `ConsistChangeFlag::Length` and `ConsistChangeFlag::Capacity`.
 pub(crate) const CCF_ARRANGE: u8 = 3;
+/// `CCF_TRACK`: no length or capacity changes.
+pub(crate) const CCF_TRACK: u8 = 0;
 use crate::tile_type::INVALID_TILE;
 use crate::track_type::{TRACK_BIT_DEPOT as DEPOT, TRACK_BIT_WORMHOLE as WORMHOLE};
 #[repr(C)]
