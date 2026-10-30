@@ -49,8 +49,8 @@ pub(crate) fn is_normal_road(m: &crate::map_func::TileTypeAccess, tile: u32) -> 
 #[inline]
 fn require_normal_road(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<()> {
     m.available(tile)?;
-    if m.assertions() && !is_normal_road(m, tile)? {
-        return None;
+    if m.assertions() {
+        m.check(is_normal_road(m, tile)?)?;
     }
     Some(())
 }
@@ -106,8 +106,8 @@ pub(crate) fn may_have_road(m: &crate::map_func::TileTypeAccess, tile: TileIndex
 #[inline]
 fn require_may_have_road(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<()> {
     m.available(tile)?;
-    if m.assertions() && !may_have_road(m, TileIndex(tile))? {
-        return None;
+    if m.assertions() {
+        m.check(may_have_road(m, TileIndex(tile))?)?;
     }
     Some(())
 }
@@ -166,7 +166,8 @@ impl crate::map_func::World<'_> {
     }
     /// `IsNormalRoadTile`.
     pub(crate) fn is_normal_road_tile(&self, t: u32) -> bool {
-        self.kind(t) == crate::tile_type::MP_ROAD && self.is_normal_road(t)
+        self.asserted(|m| crate::tile_map::get_tile_type(m, t)) == crate::tile_type::MP_ROAD
+            && self.is_normal_road(t)
     }
     /// `GetDisallowedRoadDirections`.
     pub(crate) fn disallowed_road_directions(&self, t: u32) -> u8 {

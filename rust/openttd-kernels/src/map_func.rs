@@ -215,6 +215,7 @@ pub struct ExtendedTileLayout {
 pub(crate) struct TileTypeAccess {
     allocation: TileTypeAllocation,
     callback: extern "C" fn(u32) -> u8,
+    native_assert: Option<extern "C" fn(bool)>,
 }
 // The constructor's provenance/serialization contract covers each initialized
 // scalar; every load ends before any callback and native aliases remain legal.
@@ -242,6 +243,7 @@ impl TileTypeAccess {
         Self {
             allocation,
             callback,
+            native_assert: None,
         }
     }
 
@@ -255,7 +257,8 @@ impl TileTypeAccess {
     /// Raw backend availability; assertion-disabled builds add no range rejection.
     #[inline]
     pub(crate) fn available(&self, tile: u32) -> Option<()> {
-        (self.allocation.count != 0 && (!self.assertions() || tile < self.allocation.count))
+        (self.allocation.count != 0
+            && (!self.assertions() || self.native_assert.is_some() || tile < self.allocation.count))
             .then_some(())
     }
     #[inline]
@@ -265,22 +268,36 @@ impl TileTypeAccess {
     pub(crate) fn count(&self) -> u32 {
         self.allocation.count
     }
-    /// Run `read` over this allocation under the assertion-disabled policy: the
-    /// reads an original accessor performs once its assertion returns.
-    pub(crate) fn with_unasserted<T>(&self, read: impl FnOnce(&Self) -> T) -> T {
+    /// Retry a header helper with native assertions at each source assertion site.
+    /// Raw Tile field accessors themselves have no range assertions.
+    pub(crate) fn with_native_assert<T>(
+        &self,
+        native_assert: extern "C" fn(bool),
+        read: impl FnOnce(&Self) -> T,
+    ) -> T {
         read(&Self {
-            allocation: TileTypeAllocation {
-                assertions: false,
-                ..self.allocation
-            },
+            allocation: self.allocation,
             callback: self.callback,
+            native_assert: Some(native_assert),
         })
+    }
+    #[inline]
+    pub(crate) fn check(&self, condition: bool) -> Option<()> {
+        if self.assertions() && !condition {
+            (self.native_assert?)(false);
+        }
+        Some(())
+    }
+    /// The explicit bounds assertion in `GetTileType` and `TileHeight`.
+    #[inline]
+    pub(crate) fn require_range(&self, tile: u32) -> Option<()> {
+        self.check(tile < self.count())
     }
     #[inline]
     pub(crate) fn require_type(&self, tile: u32, kind: u8) -> Option<()> {
         self.available(tile)?;
-        if self.assertions() && crate::tile_map::get_tile_type(self, tile)? != kind {
-            return None;
+        if self.assertions() {
+            self.check(crate::tile_map::get_tile_type(self, tile)? == kind)?;
         }
         Some(())
     }

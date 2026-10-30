@@ -6,7 +6,7 @@
  */
 
 //! Read helpers of `tile_map.h` for the audited map reader.
-//! `None` routes to the original typed native accessor (including failed assertions).
+//! `None` denotes an unavailable raw backend or a failed native precondition.
 use crate::map_func::TileTypeAccess;
 
 #[inline]
@@ -16,6 +16,7 @@ pub(crate) fn is_tile_type(s: &crate::services::Services, tile: u32, kind: u8) -
 
 #[inline]
 pub(crate) fn get_tile_type(m: &TileTypeAccess, t: u32) -> Option<u8> {
+    m.require_range(t)?;
     Some(m.kind(t)? >> 4)
 }
 #[inline]
@@ -29,6 +30,7 @@ pub(crate) fn is_valid_tile(m: &TileTypeAccess, t: u32, count: u32) -> Option<bo
 }
 #[inline]
 fn tile_height(m: &TileTypeAccess, t: u32) -> Option<i32> {
+    m.require_range(t)?;
     Some(i32::from(m.height(t)?))
 }
 #[inline]
@@ -186,12 +188,12 @@ impl crate::map_func::World<'_> {
         )
     }
     /// Run a header helper whose `None` is a failed precondition. The failure
-    /// calls the native assertion, as the original accessor does, and then
-    /// returns the helper's raw-bit result as the original does once it returns.
+    /// retries with each source assertion dispatched to the native handler.
     pub(crate) fn asserted<T>(&self, read: impl Fn(&TileTypeAccess) -> Option<T>) -> T {
         read(&self.types).unwrap_or_else(|| {
-            self.check(false);
-            self.types.with_unasserted(read).expect("live map scalar")
+            self.types
+                .with_native_assert(crate::movement::table(self.shared).native_assert, read)
+                .expect("live map scalar")
         })
     }
     /// `GetTilePixelSlope`.
@@ -271,79 +273,111 @@ mod tests {
         base[5].m4 = 0b1010_1101;
         extended[5].m8 = (37 << 6) | 5;
         extended[5].m6 = 6 << 3;
+        for tile in [6, 4096] {
+            base[tile].m5 = 0b0110_1011;
+            base[tile].m3 = 0x0e;
+            base[tile].m4 = 0b1010_1101;
+            extended[tile].m8 = (37 << 6) | 5;
+            extended[tile].m6 = 6 << 3;
+        }
         for (tile, height) in [(4096, 3), (4097, 4), (4032, 4), (4033, 5)] {
             base[tile].height = height;
         }
         (base, extended)
     }
 
-    /// A failed helper precondition calls the native assertion under the
-    /// assertion policy only, and both policies return the original's raw bits.
+    type Read = for<'a> fn(&World<'a>, u32) -> [i32; 2];
+    type Case = (&'static str, Read, [[i32; 2]; 2], [u32; 3]);
+
+    // Clear tiles 5, 6 and 4096 carry normal/crossing/crossing road bits.
+    // Tile 4096 also fails GetTileType's range assertion, where it is called.
+    const ROAD_CASES: &[Case] = &[
+        (
+            "GetRoadTileType",
+            |w, t| [w.road_tile_type(t).0.into(), 0],
+            [[0, 0], [1, 0]],
+            [1, 1, 2],
+        ),
+        (
+            "IsNormalRoad",
+            |w, t| [w.is_normal_road(t).into(), 0],
+            [[1, 0], [0, 0]],
+            [1, 1, 2],
+        ),
+        (
+            "IsNormalRoadTile",
+            |w, t| [w.is_normal_road_tile(t).into(), 0],
+            [[0, 0]; 2],
+            [0, 0, 1],
+        ),
+        (
+            "GetDisallowedRoadDirections",
+            |w, t| [w.disallowed_road_directions(t).into(), 0],
+            [[2, 0]; 2],
+            [1, 2, 3],
+        ),
+        (
+            "GetRoadBits road",
+            |w, t| [w.road_bits(t, false).into(), 0],
+            [[11, 0]; 2],
+            [1, 2, 3],
+        ),
+        (
+            "GetRoadBits tram",
+            |w, t| [w.road_bits(t, true).into(), 0],
+            [[14, 0]; 2],
+            [1, 2, 3],
+        ),
+        (
+            "GetRoadTypeRoad",
+            |w, t| [w.road_type(t, false).into(), 0],
+            [[45, 0]; 2],
+            [1, 1, 2],
+        ),
+        (
+            "GetRoadTypeTram",
+            |w, t| [w.road_type(t, true).into(), 0],
+            [[37, 0]; 2],
+            [1, 1, 2],
+        ),
+        (
+            "HasRoadWorks",
+            |w, t| [w.has_road_works(t).into(), 0],
+            [[1, 0]; 2],
+            [0; 3],
+        ),
+    ];
+
+    /// Returning native assertions preserve nested assertion sites and raw results.
     #[test]
     #[allow(unsafe_code)] // The raw reader over this test's arrays only.
     fn failed_world_preconditions_assert_then_read_raw_bits() {
         use crate::slope_func::{SLOPE_E, SLOPE_S, SLOPE_STEEP, SLOPE_W};
-        type Read = for<'a> fn(&World<'a>) -> [i32; 2];
         let (base, extended) = tiles();
-        // Each case lists the native assertions the original makes when its
-        // `assert` returns: IsTileType or MayHaveRoad, or TileHeight's range.
-        let cases: [(&str, Read, [i32; 2], u32); 9] = [
-            (
-                "GetRoadTileType",
-                |w| [w.road_tile_type(5).0.into(), 0],
-                [0, 0],
-                1,
-            ),
-            (
-                "GetDisallowedRoadDirections",
-                |w| [w.disallowed_road_directions(5).into(), 0],
-                [2, 0],
-                1,
-            ),
-            (
-                "GetRoadBits road",
-                |w| [w.road_bits(5, false).into(), 0],
-                [11, 0],
-                1,
-            ),
-            (
-                "GetRoadBits tram",
-                |w| [w.road_bits(5, true).into(), 0],
-                [14, 0],
-                1,
-            ),
-            (
-                "GetRoadTypeRoad",
-                |w| [w.road_type(5, false).into(), 0],
-                [45, 0],
-                1,
-            ),
-            (
-                "GetRoadTypeTram",
-                |w| [w.road_type(5, true).into(), 0],
-                [37, 0],
-                1,
-            ),
-            (
-                "HasRoadWorks",
-                |w| [w.has_road_works(5).into(), 0],
-                [1, 0],
-                0,
-            ),
+        let height_cases: [(&str, Read, [i32; 2], u32); 3] = [
             (
                 "GetTilePixelSlope",
-                |w| {
-                    let (slope, z) = w.tile_pixel_slope(4096);
+                |w, t| {
+                    let (slope, z) = w.tile_pixel_slope(t);
                     [slope.into(), z]
                 },
                 [(SLOPE_W | SLOPE_S | SLOPE_E | SLOPE_STEEP).into(), 24],
-                1,
+                2,
             ),
             (
                 "GetTileMaxPixelZ",
-                |w| [w.tile_max_pixel_z(4096), 0],
+                |w, t| [w.tile_max_pixel_z(t), 0],
                 [40, 0],
-                1,
+                2,
+            ),
+            (
+                "GetTilePixelSlopeOutsideMap",
+                |w, _| {
+                    let (slope, z) = w.tile_pixel_slope_outside_map(0, 64);
+                    [slope.into(), z]
+                },
+                [(SLOPE_W | SLOPE_S).into(), 32],
+                0,
             ),
         ];
         let shared = crate::services::Services {
@@ -351,7 +385,17 @@ mod tests {
             ..crate::services::fixture(std::ptr::null_mut(), no_random, no_industry)
         };
         for assertions in [true, false] {
-            for (name, read, expected, asserts) in cases {
+            let road_cases = ROAD_CASES
+                .iter()
+                .flat_map(|&(name, read, expected, asserts)| {
+                    [5, 6, 4096].into_iter().enumerate().map(move |(i, tile)| {
+                        (name, read, tile, expected[usize::from(i != 0)], asserts[i])
+                    })
+                });
+            let height_cases = height_cases
+                .iter()
+                .map(|&(name, read, expected, asserts)| (name, read, 4096, expected, asserts));
+            for (name, read, tile, expected, asserts) in road_cases.chain(height_cases) {
                 // SAFETY: Both arrays hold 8192 initialized tiles that outlive the reader.
                 let types = unsafe {
                     crate::map_func::TileTypeAccess::raw(
@@ -370,9 +414,17 @@ mod tests {
                     dimensions: crate::map_func::Map::from_log_x(6),
                 };
                 ASSERTS.set(0);
-                assert_eq!(read(&world), expected, "{name}, assertions {assertions}");
+                assert_eq!(
+                    read(&world, tile),
+                    expected,
+                    "{name}, tile {tile}, assertions {assertions}"
+                );
                 let asserts = if assertions { asserts } else { 0 };
-                assert_eq!(ASSERTS.get(), asserts, "{name}, assertions {assertions}");
+                assert_eq!(
+                    ASSERTS.get(),
+                    asserts,
+                    "{name}, tile {tile}, assertions {assertions}"
+                );
             }
         }
     }
