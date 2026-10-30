@@ -1181,6 +1181,14 @@ TOWN_DATA_INPUTS: tuple[tuple[str, str | None, int, int, int], ...] = (
     ("not-object.json", "[5]", 0, 0, 1),
     ("bad-name.json", json.dumps([town(5, 1, False, 0.5, 0.5)]), 0, 0, 1),
     ("missing.json", None, 0, 0, 1),
+    (
+        # The wrapped counter-clockwise coordinate leaves the spiral entirely outside the map.
+        "empty-spiral.json",
+        json.dumps([town("Import Empty", 10, False, 0.001, 0.5)]),
+        0,
+        0,
+        1,
+    ),
 )
 
 
