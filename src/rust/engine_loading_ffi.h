@@ -16,7 +16,9 @@ struct OpenTTDEngineCargoClass { uint16_t classes; CargoType cargo; };
 struct OpenTTDEngineMappingView { const EngineIDMapping *data; size_t size; };
 /** Native leaves do not throw. Load/reset excludes resolution; native error frames
  * retain ByteReader and EIDS unwinding. All IDs returned across the ABI are scalars. */
+struct OpenTTDCompanyIdentityServices;
 struct OpenTTDEngineLoadingServices {
+	const OpenTTDCompanyIdentityServices *identity;
 	const OpenTTDSharedServices *shared;
 	const OpenTTDVehicleResolverServices *resolver;
 	OpenTTDEngineRef (*next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next);
@@ -59,7 +61,6 @@ struct OpenTTDEngineLoadingServices {
 	void (*rail_badges)(const OpenTTDEngine *, RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_badges);
 	void (*road_badges)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(road_badges);
 	RailVehicleTypes (*rail_kind)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(rail_kind);
-	LiveryScheme (*livery)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(livery);
 	void (*use_livery)(LiveryScheme) noexcept OPENTTD_SERVICE_DEFAULT(use_livery);
 	void (*variant_flags)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(variant_flags);
 	void (*variant_cycle_log)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(variant_cycle_log);

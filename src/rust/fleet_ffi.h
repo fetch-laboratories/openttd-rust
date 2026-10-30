@@ -10,6 +10,7 @@ struct OpenTTDEngineCapabilitiesServices;
 #ifndef RUST_FLEET_FFI_H
 #define RUST_FLEET_FFI_H
 #include "service_defaults.hpp"
+#include "../livery.h"
 #include <cstdint>
 #include <cstddef>
 #include "command_services_ffi.h"
@@ -54,7 +55,7 @@ struct OpenTTDFleetGroupServices {
 	uint16_t (*allocate)(uint8_t owner, uint8_t type) noexcept OPENTTD_SERVICE_DEFAULT(allocate);
 	uint16_t (*use_number)(uint8_t owner) noexcept OPENTTD_SERVICE_DEFAULT(use_number);
 	void (*release_number)(uint8_t owner, uint16_t number) noexcept OPENTTD_SERVICE_DEFAULT(release_number);
-	const uint8_t * (*company_livery)(uint8_t owner) noexcept OPENTTD_SERVICE_DEFAULT(company_livery);
+	const Livery * (*company_livery)(uint8_t owner) noexcept OPENTTD_SERVICE_DEFAULT(company_livery);
 	bool (*keep_length)(uint8_t owner) noexcept OPENTTD_SERVICE_DEFAULT(keep_length);
 	void (*delete_group)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(delete_group);
 	void (*invalid_parent)(uint16_t id, uint16_t parent) noexcept OPENTTD_SERVICE_DEFAULT(invalid_parent);
@@ -195,7 +196,6 @@ void openttd_rust_fleet_min_age(const OpenTTDFleetGroupServices *, void *);
 void openttd_rust_fleet_update_afterload(const OpenTTDFleetGroupServices *);
 void openttd_rust_fleet_update_profits(const OpenTTDFleetGroupServices *);
 void openttd_rust_fleet_update_autoreplace(const OpenTTDFleetGroupServices *, uint8_t);
-void openttd_rust_fleet_company_liveries(const OpenTTDFleetGroupServices *, uint8_t);
 uint32_t openttd_rust_fleet_create_group(const OpenTTDFleetGroupServices *, uint32_t, uint8_t, uint16_t, uint16_t *);
 uint32_t openttd_rust_fleet_delete_group(const OpenTTDFleetGroupServices *, uint32_t, uint16_t);
 uint32_t openttd_rust_fleet_alter_group(const OpenTTDFleetGroupServices *, uint32_t, uint8_t, uint16_t, uint16_t, const uint8_t *, size_t);
