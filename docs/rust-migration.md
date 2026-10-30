@@ -638,8 +638,9 @@ blacksmith-6vcpu-macos-26`, reruns, and runs `gh variable delete CI_MACOS_HEAVY`
 finishes; setting the variable needs no Blacksmith credentials.
 
 `python3 tools/preflight.py --base origin/rust-migration` runs the pinned inherited commit
-checker. Its first run downloads the pinned hooks into ignored shared storage; `--hooks PATH`
-uses an existing clean pinned checkout offline.
+checker, then the rebound-callee gate on the working tree against that base. Its first run
+downloads the pinned hooks into ignored shared storage; `--hooks PATH` uses an existing clean
+pinned checkout offline.
 
 ## Shared-code checks and port metrics
 
