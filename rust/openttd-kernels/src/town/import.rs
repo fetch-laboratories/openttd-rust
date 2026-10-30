@@ -77,10 +77,10 @@ impl ImportServices {
         match rotation {
             HM_CLOCKWISE => Tile(map.tile_xy((x * max_x) as u32, (y * max_y) as u32)),
             HM_COUNTER_CLOCKWISE => {
-                // Apple Clang contracts the original subtraction and multiplication on AArch64.
-                #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+                // AArch64 compilers contract the original subtraction and multiplication.
+                #[cfg(target_arch = "aarch64")]
                 let rotated_x = (-y).mul_add(max_x, 1.0);
-                #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
+                #[cfg(not(target_arch = "aarch64"))]
                 let rotated_x = 1.0 - y * max_x;
                 // Emscripten and AArch64 clamp the original negative float-to-uint conversion to zero.
                 #[cfg(any(target_os = "emscripten", target_arch = "aarch64"))]
