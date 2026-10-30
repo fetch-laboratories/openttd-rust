@@ -2,6 +2,7 @@
 """Exercise housekeeping on a fixture clone: the dry run lists exactly what --apply removes."""
 
 import contextlib
+import errno
 import io
 import json
 import os
@@ -239,20 +240,37 @@ class HousekeepingTests(unittest.TestCase):
         )
         self.assertIsNone(housekeeping.remove(self.main, item))
 
-    def test_uninspectable_cwd_keeps_worktree(self) -> None:
-        tree = self.t3_tree("t3-hidden-cwd")
+    def hidden_process_plan(self, name: str, offset: float) -> bool:
+        """Plan with a same-user process whose cwd is unreadable, started OFFSET
+        seconds after the worktree was created; return whether it is removable."""
+        tree = self.t3_tree(name)
+        creation = housekeeping.created(tree)
+        self.assertGreater(creation, 0)
+        boot, ticks = int(creation) - 3600, os.sysconf("SC_CLK_TCK")
+        write(self.proc / "stat", f"cpu  1 2 3\nbtime {boot}\n")
+        start = round((creation + offset - boot) * ticks)
+        fields = " ".join(["0"] * 18)
+        write(self.proc / "88/stat", f"88 (a (job)) S {fields} {start} 0 0\n")
         original = Path.resolve
 
         def resolve(path: Path, strict: bool = False) -> Path:
-            if path.name == "cwd":
-                raise PermissionError("hidden cwd")
+            if path.parent.name == "88" and path.name == "cwd":
+                raise PermissionError(errno.EACCES, "Permission denied")
             return original(path, strict=strict)
 
         with patch.object(Path, "resolve", resolve):
             items = housekeeping.plan_worktrees(
                 self.main, housekeeping.list_worktrees(self.main)[1:], pr_state
             )
-        self.assertFalse(next(item.remove for item in items if item.path == tree))
+        return next(item.remove for item in items if item.path == tree)
+
+    def test_uninspectable_cwd_keeps_worktree(self) -> None:
+        # A job started inside the live worktree, then made non-dumpable.
+        self.assertFalse(self.hidden_process_plan("t3-hidden-cwd", 60))
+
+    def test_uninspectable_cwd_older_than_worktree_is_ignored(self) -> None:
+        # `(sd-pam)` and other session processes predate every task worktree.
+        self.assertTrue(self.hidden_process_plan("t3-old-hidden-cwd", -60))
 
     def test_foreign_process_is_skipped_and_same_user_cwd_kept(self) -> None:
         init = Path("/proc/1")
