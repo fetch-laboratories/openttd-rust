@@ -227,10 +227,6 @@ pub struct Services {
     pub bridge_speed: extern "C" fn(u32) -> u16,
     /// `construction.build_on_slopes`.
     pub build_on_slopes: extern "C" fn() -> bool,
-    /// Shared live calendar date observation.
-    pub calendar_date: extern "C" fn() -> i32,
-    /// Current calendar year used by town and industry.
-    pub calendar_year: extern "C" fn() -> i32,
     /// Native leaves for direct shared Rust clear-square control.
     pub clear_square_services: ClearSquareServices,
     /// Original native uncached nearest-town spatial lookup.
@@ -255,8 +251,6 @@ pub struct Services {
     pub distance_from_edge: extern "C" fn(u32) -> u32,
     /// Original native `drive_through_axis` map observation.
     pub drive_through_axis: extern "C" fn(u32) -> u8,
-    /// Shared live economy date observation.
-    pub economy_date: extern "C" fn() -> i32,
     /// Original pathfinding setting, observed at the calling branch.
     pub forbid_90_deg: extern "C" fn() -> bool,
     /// `FreeTrainTrackReservation(v)`.
@@ -683,8 +677,6 @@ crate::abi::layouts! {
         bridge_axis,
         bridge_speed,
         build_on_slopes,
-        calendar_date,
-        calendar_year,
         clear_square_services,
         calc_closest_town,
         closest_town,
@@ -697,7 +689,6 @@ crate::abi::layouts! {
         disaster_sound,
         distance_from_edge,
         drive_through_axis,
-        economy_date,
         forbid_90_deg,
         free_train_reservation,
         has_road_type,
@@ -822,9 +813,6 @@ pub fn fixture(
     extern "C" fn zero_byte() -> u8 {
         0
     }
-    extern "C" fn zero_year() -> i32 {
-        0
-    }
     extern "C" fn byte(_: u32) -> u8 {
         0
     }
@@ -903,8 +891,6 @@ pub fn fixture(
         bridge_axis: byte,
         bridge_speed: short,
         build_on_slopes: flag0,
-        calendar_date: zero_year,
-        calendar_year: zero_year,
         clear_square_services: ClearSquareServices {
             docking: flag,
             generating_world: flag0,
@@ -920,7 +906,6 @@ pub fn fixture(
         disaster_sound: flag0,
         distance_from_edge: word,
         drive_through_axis: byte,
-        economy_date: zero_year,
         forbid_90_deg: flag0,
         free_train_reservation: train,
         has_road_type: flag,

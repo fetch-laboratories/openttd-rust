@@ -38,7 +38,9 @@ struct Goal : GoalPool::PoolItem<&_goal_pool> {
 	 */
 	~Goal() { }
 
+#ifndef WITH_RUST
 	static bool IsValidGoalDestination(CompanyID company, GoalType type, GoalTypeID dest);
+#endif
 };
 
 #endif /* GOAL_BASE_H */

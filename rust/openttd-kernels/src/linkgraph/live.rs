@@ -332,7 +332,8 @@ pub unsafe extern "C" fn openttd_rust_live_graph_shift(graph: *mut Graph, interv
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_graph_compress(graph: *mut Graph, date: i32) {
+pub unsafe extern "C" fn openttd_rust_live_graph_compress(graph: *mut Graph) {
+    let date = crate::timer_game_common::economy_date().0;
     unsafe { &mut *graph }.compress(date);
 }
 #[unsafe(no_mangle)]
@@ -544,9 +545,9 @@ pub unsafe extern "C" fn openttd_rust_live_graph_remove(
 pub unsafe extern "C" fn openttd_rust_live_graph_merge(
     graph: *mut super::NativeGraph,
     other: *mut super::NativeGraph,
-    date: i32,
     services: *const Services,
 ) {
+    let date = crate::timer_game_common::economy_date().0;
     let services = unsafe { &*services };
     witness::hit(witness::LINKGRAPH_MERGE);
     let native = (services.access)(graph);
@@ -671,7 +672,6 @@ pub(crate) unsafe fn station_supply(
     station: *mut crate::station::BaseStation,
     cargo: u8,
     supply: u32,
-    date: extern "C" fn() -> i32,
     services: &Services,
     schedule: &crate::linkgraph_schedule::Services,
 ) {
@@ -693,7 +693,7 @@ pub(crate) unsafe fn station_supply(
     };
     if !graph.is_null() {
         let owner = unsafe { resolve(graph, services) };
-        let date = date();
+        let date = crate::timer_game_common::economy_date().0;
         let node = (services.node)(station, cargo);
         let n = &mut unsafe { &mut *owner }.nodes[usize::from(node)];
         n.update_supply(supply, date);

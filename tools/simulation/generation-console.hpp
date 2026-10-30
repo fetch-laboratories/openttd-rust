@@ -10,20 +10,16 @@ extern "C" void __real__Z31IncreaseGeneratingWorldProgress16GenWorldProgress(Gen
 #ifdef WITH_RUST
 #include "rust/world_generation_ffi.h"
 #include "rust/landscape_generation_frame.hpp"
-#define GENERATION_REAL_ABORT __real_openttd_rust_world_set_abort_callback
-#define GENERATION_WRAP_ABORT __wrap_openttd_rust_world_set_abort_callback
-static void GenerationSetAbort(GWAbortProc *proc) { openttd_rust_world_set_abort_callback(proc); }
+#include "tests/world_generation_probe.hpp"
+static void GenerationSetAbort(GWAbortProc *proc) { openttd_test_world_set_abort_callback(proc); }
 #else
-#define GENERATION_REAL_ABORT __real__Z29GenerateWorldSetAbortCallbackPFvvE
-#define GENERATION_WRAP_ABORT __wrap__Z29GenerateWorldSetAbortCallbackPFvvE
 static void GenerationSetAbort(GWAbortProc *proc) { GenerateWorldSetAbortCallback(proc); }
 #endif
-extern "C" void GENERATION_REAL_ABORT(GWAbortProc *);
 static bool GenerationLandscape(uint8_t mode)
 {
 #ifdef WITH_RUST
 	OpenTTDLandscapeGenerationCall call;
-	bool generated = openttd_rust_generate_landscape(&GetRustLandscapeGenerationServices(), &call.frame, &call.heightmap, call.settings, mode);
+	bool generated = openttd_test_generate_landscape(&GetRustLandscapeGenerationServices(), &call.frame, &call.heightmap, call.settings, mode);
 	if (call.frame.cancellation) std::rethrow_exception(call.frame.cancellation);
 	return generated;
 #else
@@ -36,11 +32,24 @@ static bool generation_heightmap = false;
 static uint generation_landscape_steps = 0, generation_river_steps = 0;
 static void GenerationSnapshot(std::string_view name);
 static void GenerationCleanup() { generation_cleanup++; generation_abort(); }
-extern "C" void GENERATION_WRAP_ABORT(GWAbortProc *callback)
+#ifdef WITH_RUST
+/* Rust TGP registers its cleanup without a native call, so the counter replaces it at the injected abort. */
+static void GenerationCountCleanup()
+{
+	GWAbortProc *callback = openttd_test_world_abort_callback();
+	if (callback == nullptr) return;
+	generation_abort = callback;
+	openttd_test_world_set_abort_callback(GenerationCleanup);
+}
+#else
+static void GenerationCountCleanup() {}
+extern "C" void __real__Z29GenerateWorldSetAbortCallbackPFvvE(GWAbortProc *);
+extern "C" void __wrap__Z29GenerateWorldSetAbortCallbackPFvvE(GWAbortProc *callback)
 {
 	generation_abort = callback;
-	GENERATION_REAL_ABORT(generation_cancel >= 0 && callback != nullptr ? GenerationCleanup : callback);
+	__real__Z29GenerateWorldSetAbortCallbackPFvvE(generation_cancel >= 0 && callback != nullptr ? GenerationCleanup : callback);
 }
+#endif
 #include "progress.h"
 #include "network/network.h"
 #include "newgrf_storage.h"
@@ -181,7 +190,10 @@ static void GenerationLifecycle()
 
 static void GenerationProgress(GenWorldProgress stage)
 {
-	if (generation_cancel >= 0 && stage == GWP_LANDSCAPE && generation_events++ == generation_cancel) HandleGeneratingWorldAbortion();
+	if (generation_cancel >= 0 && stage == GWP_LANDSCAPE && generation_events++ == generation_cancel) {
+		GenerationCountCleanup();
+		HandleGeneratingWorldAbortion();
+	}
 }
 extern "C" void __wrap__Z26SetGeneratingWorldProgress16GenWorldProgressj(GenWorldProgress stage, uint total)
 {
@@ -272,7 +284,7 @@ static bool GenerationScenario(std::span<std::string_view> args)
 		fmt::print(stderr, "GENERATION missing {} {}\n", loaded, GenerationLandscape(GWM_HEIGHTMAP));
 	}
 #ifdef WITH_RUST
-	openttd_rust_flat_empty_world(&GetRustLandscapeGenerationServices(), 7, _settings_game.construction.freeform_edges, _settings_game.construction.map_height_limit);
+	openttd_test_flat_empty_world(&GetRustLandscapeGenerationServices(), 7, _settings_game.construction.freeform_edges, _settings_game.construction.map_height_limit);
 #else
 	FlatEmptyWorld(7);
 #endif

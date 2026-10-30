@@ -220,24 +220,14 @@ pub(crate) fn increase_stats(
                 witness::hit(witness::VISITS_GRAPH_MERGE_SECOND);
                 unsafe {
                     linkgraph_schedule::openttd_rust_schedule_dequeue(graph);
-                    live::openttd_rust_live_graph_merge(
-                        second,
-                        graph,
-                        (s.shared.economy_date)(),
-                        l.graphs,
-                    );
+                    live::openttd_rust_live_graph_merge(second, graph, l.graphs);
                 }
                 graph = second;
             } else {
                 witness::hit(witness::VISITS_GRAPH_MERGE_FIRST);
                 unsafe {
                     linkgraph_schedule::openttd_rust_schedule_dequeue(second);
-                    live::openttd_rust_live_graph_merge(
-                        graph,
-                        second,
-                        (s.shared.economy_date)(),
-                        l.graphs,
-                    );
+                    live::openttd_rust_live_graph_merge(graph, second, l.graphs);
                 }
             }
         }
@@ -253,7 +243,7 @@ pub(crate) fn increase_stats(
                 usage,
                 time,
                 modes,
-                (s.shared.economy_date)(),
+                crate::timer_game_common::economy_date().0,
                 l.graphs.assertions,
             );
         }

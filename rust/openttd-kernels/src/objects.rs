@@ -521,7 +521,7 @@ impl<'a> World<'a> {
                     0x45 | 0x46 if (self.shared.tile_valid)(tile) => {
                         town = (self.shared.closest_town)(tile, u32::MAX);
                     }
-                    0x42 => return (self.shared.calendar_date)() as u32,
+                    0x42 => return crate::timer_game_common::calendar_date().0 as u32,
                     0x44 => return u32::from((self.shared.current_company)()),
                     0x48 => return u32::from(view),
                     0x7a => return (q.badges)(ro, spec, parameter),
@@ -2032,7 +2032,7 @@ fn ever_available(s: &ObjectServices, spec: *const Spec) -> bool {
 }
 fn was_available(s: &ObjectServices, spec: *const Spec) -> bool {
     ever_available(s, spec)
-        && (unsafe { &*s.shared }.calendar_date)()
+        && crate::timer_game_common::calendar_date().0
             > unsafe { (resolver_services(s).introduction)(spec) }
 }
 fn available(s: &ObjectServices, spec: *const Spec) -> bool {
@@ -2040,7 +2040,7 @@ fn available(s: &ObjectServices, spec: *const Spec) -> bool {
         return false;
     }
     let dates = unsafe { (resolver_services(s).lifetime)(spec) };
-    (unsafe { &*s.shared }.calendar_date)() < dates.end
+    crate::timer_game_common::calendar_date().0 < dates.end
         || dates.end < dates.introduction.wrapping_add(365)
 }
 #[unsafe(no_mangle)]

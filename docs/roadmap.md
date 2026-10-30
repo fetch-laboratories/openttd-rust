@@ -4,55 +4,43 @@ Root selects here; `AGENTS.md` and `docs/rust-migration.md` define process. Foll
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-10-29, code at `06a644505a`)
+## Where the fork stands (2026-10-29, code at `44cb5f49f5`)
 
-Agent: /root (Claude Code steering review) | Model: claude-opus-5-5 | Reasoning effort: xhigh.
+Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh.
 
-- Since the twenty-third steering review, root integrated five PRs in about six
-  hours: #558, #567 (#564), #571, #577 (#554 with #557) and #569 (#560). The
-  table under "Recent completed work" lists them. Retirement was 791 original code lines, net glue +289 and
-  tooling +2,237, of which 1,013 was #564's requested metrics and cleanup batch.
-  Eight Fulls ran: five passed, three failures were repaired, and none was a
-  regression.
-- Whole fork at `06a644505a` (`python3 tools/port-metrics.py --whole-fork`,
-  code lines, Pygments 2.19.2):
-  - 50,902 of 284,355 original lines retired (17.90%), and 38,387 of 61,148
-    in the simulation inventory (62.78%).
-  - Glue 32,588 and compiled C++ 266,041 (93.56%).
-  - The boundary has 1,297 Rust exports and 4,074 callback slots. The +117 slots
-    since `7105e24d49` are all from #577: of its 131 new slots, 76 are shared
-    accessors or operations, 10 are single-use carriers (on #199) and 45 are
-    frames and scopes. The slot count also counts every rebinding of a shared
-    callee (#582).
-  - Rust totals 117,779 code lines and tooling 47,674.
+- The resumed root session integrated #588 as integration 31 (`44cb5f49f5`):
+  #578 (#572 goals, story pages and league tables), #580 (#168 clock and world
+  boundary batch) and #589 (the `town-growth-differing-road-type` interactive
+  seed fix). `python3 tools/port-metrics.py` at `ee3a0481d8`, before a 3-line
+  MSVC width fix and #589's 4 tooling lines joined: Rust 1,133, tooling 376,
+  original C++ retired 388, glue added 315, glue removed 51, net glue +264. No
+  rollback ran.
+- Whole fork: not re-measured this session. The Phases chart below holds the
+  inventory at `06a644505a`; add integration 31's figures above.
+- Four component branches are open: #568, #576, #579 and #583. The checkpoint
+  gives heads and next actions.
+- Speed: the profile after integration 30 (`06a644505a`) completed. Grok and
+  Opus rose 13.7% and 12.0% over their anchors and moved into the play band;
+  P2016's record is at the band edge. Attribution and fix-forward and a speed
+  pass are due (AGENTS.md "Speed"); #569's follower crossings (about 2 to about
+  15 per follow) are the first suspect, and #565 item 1 the first candidate fix.
 
-  The "Phases" chart below holds the per-area inventory.
-- Five component branches are open: #568, #576, #578, #579 and #580. The
-  steering audits added before-integration fixes to #568, #576 and #579 (PR
-  comments of 2026-10-29). Their lines retired per net glue line are #568 440/173, #579
-  373/315 and #578 384/296. The checkpoint below gives heads and next actions.
-- Speed: the latest completed profile is profile28 on `7105e24d49`. All six
-  comparisons matched and counts were below the anchors, so the projection
-  floor applied. Each three-pass record is below its band (1.52x play, 1.235x
-  generation):
-
-| Scenario | Latest quiet anchor | Profile28 projection | Three-pass record |
+| Scenario | Latest quiet anchor | Profile-30 projection | Record with growth |
 | --- | ---: | ---: | ---: |
 | TGP | 1.1117x | 1.1117x | 1.1541x |
-| Grok | 1.3871x | 1.3871x | 1.3857x |
-| Opus | 1.3939x | 1.3939x | 1.3946x |
-| P1996 | 1.3366x | 1.3366x | 1.3378x |
-| P2000 | 1.4006x | 1.4006x | 1.4014x |
-| P2016 | 1.5229x | 1.5229x | 1.4819x |
+| Grok | 1.3871x | 1.5777x | 1.5760x |
+| Opus | 1.3939x | 1.5618x | 1.5625x |
+| P1996 | 1.3366x | 1.3816x | 1.3828x |
+| P2000 | 1.4006x | 1.4288x | 1.4297x |
+| P2016 | 1.5229x | 1.5644x | 1.5223x |
 
-- The profile after integration 30 is due. #569 raised crossings per rail
-  pathfinder follow from about 2 to about 15, so look for that in it.
-- The `simulate-sanitized` deep member on `7473e63624` has been running at idle
-  priority in `.local/worktrees/deep-after29-577` since 04:50 UTC. No report yet.
-- Original coverage: 330 of 449 traces are complete. Source and evidence gaps
-  are on #156, with this review's additions from #569, #568 and #579.
-- Housekeeping has kept every finished T3 worktree: 47 worktrees, 82 GB, not
-  yet removed (#582).
+- Deep checks: the sanitized rotation after integration 29 was interrupted at a
+  session end after 406 cases. Its one failure was the scenario's
+  `_interactive_random` timing, which #589 fixed. The restart on `06a644505a`
+  stopped during its candidate configure without a report.
+- Original coverage: 330 of 449 traces are complete; gaps are on #156.
+- Housekeeping still keeps every T3 worktree on this host (#582); root removed
+  merged worktrees by hand.
 
 ## Phases
 
@@ -341,15 +329,18 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
 5. **#199 integrated-fault batch**, after #582: #569's service copies, duplicate
    fields and orphan declaration, #577's single-use carriers, and the
    `CargoFlow` bounce once #568 integrates.
-6. **Queued phase-1 owners under #3.** Root issues each before implementation:
-   - world-input generation (heightmap input and town-data import);
-   - complete NewGRF town-name storage and generation plus ActionF;
-   - clear-ground clearing;
-   - editor tree-group mutation;
-   - sign and depot naming;
-   - simulation-setting transitions.
+6. **Queued phase-1 owners under #3**, sized by issues-phase1 (remaining code
+   lines, estimated net glue):
+   1. #587 simulation-setting transitions (317, +90 to +170);
+   2. #584 world-input generation, heightmap input and town-data import (276,
+      +90 to +160);
+   3. #585 NewGRF town-name storage and generation plus ActionF (168, +40 to
+      +85);
+   4. #586 sign and depot naming (90 selected, +35 to +70);
+   5. clear-ground clearing (22) and editor tree-group mutation (36): one small
+      PR beside the ground and tree owners; root issues it when a slot takes it.
 
-   Measure the real remaining bodies; do not fall back to utility helpers. Port
+   Do not fall back to utility helpers. Port
    support code only where the component needs it, and keep an operation on
    data that stays in C++ as one call, not a service per field. Vehicle base
    lifecycle runs after #570, on its movement and consist record contract
@@ -412,26 +403,27 @@ Excluded, with return conditions checked by this review:
   near-full reproduction under #513's original-default setting policy. #513
   needs implementation when the first such improvement is accepted.
 
-## Resume checkpoint (2026-10-29, root session after integration 30)
+## Resume checkpoint (2026-10-29, paused after integration 31)
 
-Root resumed at 14:30 UTC on `70193e535e` and applied the twenty-fourth steering
-review. Six component branches are open, at the limit. Each draft's agent keeps
-its status comment on its PR.
+Paused at the user's request after integration 31 (`44cb5f49f5`); no rollback
+ran. The user's wind-down scope ended with #588, so the remaining drafts wait
+for resume with every worktree and branch preserved.
 
-| Draft | Owner task | Next action on resume |
+| Draft | Pushed head | Next action on resume |
 | --- | --- | --- |
-| #562 / #568 | fix568 (Opus) | Steering fixes 1-5 and base update, then a fresh scoped review and Full. |
-| #565 / #576 | update576 (Opus) | Base update and `map_func::World` adoption, then a fresh conflict review and Full. Root's #565 item-1 PR follows its integration. |
-| #572 / #578 | finish578 (Opus) | Objectives comparison, boundary fixes and base update, then a fresh review and Full. |
-| #561 / #579 | review579 (gpt-6.1-sol) | Base update and independent review with fixes, then Full. |
-| #168 / #580 | finish580 (Opus) | Relinking-helper adoption and fixture migration, then a fresh review and Full. |
-| #581 PR-A / #583 | root | Platform-profile CI, then an independent review and Full. PR-E takes the next free branch. |
+| #561 / #579 | `fec98f7e42` | Reviewed by review579; fix579win's Windows static-initialization repair (`FleetGroupServices()` built on first use) is a platform repair needing no new review, and diagnostic platform run 40900481042 passed Windows x64 build and tests. 1. Update from base: it overlaps #588 in `lib.rs`, `tunnelbridge_cmd.rs` and `docs/rust-migration.md`; keeping both sides needs no new review. 2. Exact-head Full. 3. Merge. |
+| #562 / #568 | `a5d99f00cb` | Steering fixes made; review568-r2 fixed its findings and all 21 scenarios passed; root spot-checked; F3 is on #199. 1. Update from base: it overlaps #588 in 23 files, so a resolution beyond keeping both sides gets a fresh conflict review. 2. Full. 3. Merge. |
+| #565 / #576 | `6cb71c295e` | review576-r3 fixed its findings. Root's spot-check found that `World::asserted` aborts after a disabled native assertion where the original accessor returns the raw bits (PR comment). 1. Fix it (fix576-assert was cancelled before any edit). 2. Fresh scoped review. 3. Base update and Full. Root's #565 item-1 PR follows its integration. |
+| #581 PR-A / #583 | `379b993d00` | Reviewed by review583 and spot-checked; Linux Clang and Dedicated built Rust and passed in platform run 40895107702. 1. Update from base. 2. Bootstrap Full: unset `CI_ON_DEMAND`, request `--profile full --bootstrap`, restore the variable after merge. 3. Merge. |
 
 | Running or due work | Saved state / next action |
 | --- | --- |
-| Deep rotation (sanitized, threaded, TSan, multiplayer) | Running detached on `06a644505a` in `.local/worktrees/deep-after30-569` (locked); exit status lands in `deep-after30-569.done`. The interrupted after-29 run's one failure is ASan `_interactive_random` nondeterminism (#156), not a regression. |
-| Instruction profile after integration 30 | Running detached in `.local/worktrees/profile-after30-569`; exit status in `profile-after30-569.done`. Keep profile28 and the compatible anchors. |
-| Fifth-integration platform cadence | Run 40893525725 on `70193e535e`. A red result is fixed before more integrations. |
+| Speed attribution and fix-forward, speed pass | Due: Grok and Opus rose more than 3% and are in the play band (table above). Profile-30 output is in `.local/worktrees/profile-after30-569`; keep it and profile28 until replaced. |
+| Instruction profile | Next due after integration 32. |
+| Deep rotation | Due at session start on the current tip: sanitized, threaded, TSan and multiplayer (the soak member ran last at `0b4646f1e7`). `.local/worktrees/deep-after30-569` is locked and holds no report. |
+| Fifth-integration platform cadence | Run 40893525725 on `70193e535e`: Linux Clang, Dedicated, Windows x64 and x86 and macOS Release passed; macOS Debug was not acquired by a hosted runner, so the annotation checks failed. Not a code regression; a rerun is due. |
+| CI | No request pending. Diagnostic platform run 40900481042 on #579 may still be finishing. |
+| Work order after the drafts | Items 2 to 6: #581 PR-E, #582, #565 item 1, #199, then #587, #584, #585, #586. |
 
 Keep the pinned reference unchanged. Preserve unfinished checkouts and existing
 profile and deep evidence.

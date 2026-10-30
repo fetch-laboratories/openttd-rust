@@ -1068,7 +1068,7 @@ impl<'a> World<'a> {
         if !(self.s.disasters_enabled)() {
             return;
         }
-        let year = (self.shared.calendar_year)();
+        let year = crate::timer_game_common::calendar_year().0;
         let years = [
             (1930, 1955),
             (1940, 1970),

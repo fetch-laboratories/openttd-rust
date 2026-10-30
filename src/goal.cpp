@@ -25,12 +25,17 @@
 #include "network/network_func.h"
 #include "goal_cmd.h"
 
+#ifdef WITH_RUST
+#include "rust/services_objectives.h"
+#endif
+
 #include "safeguards.h"
 
 
 GoalPool _goal_pool("Goal");
 INSTANTIATE_POOL_METHODS(Goal)
 
+#ifndef WITH_RUST
 /* static */ bool Goal::IsValidGoalDestination(CompanyID company, GoalType type, GoalTypeID dest)
 {
 	switch (type) {
@@ -65,6 +70,7 @@ INSTANTIATE_POOL_METHODS(Goal)
 	}
 	return true;
 }
+#endif
 
 /**
  * Create a new goal.
@@ -77,6 +83,11 @@ INSTANTIATE_POOL_METHODS(Goal)
  */
 std::tuple<CommandCost, GoalID> CmdCreateGoal(DoCommandFlags flags, CompanyID company, GoalType type, GoalTypeID dest, const EncodedString &text)
 {
+#ifdef WITH_RUST
+	uint16_t result;
+	bool success = openttd_rust_create_goal(&GetRustObjectivesServices(), flags.base(), company.base(), type, dest, &text, &result);
+	return { success ? CommandCost() : CMD_ERROR, GoalID(result) };
+#else
 	if (!Goal::CanAllocateItem()) return { CMD_ERROR, GoalID::Invalid() };
 
 	if (_current_company != OWNER_DEITY) return { CMD_ERROR, GoalID::Invalid() };
@@ -98,6 +109,7 @@ std::tuple<CommandCost, GoalID> CmdCreateGoal(DoCommandFlags flags, CompanyID co
 	}
 
 	return { CommandCost(), GoalID::Invalid() };
+#endif
 }
 
 /**
@@ -108,6 +120,9 @@ std::tuple<CommandCost, GoalID> CmdCreateGoal(DoCommandFlags flags, CompanyID co
  */
 CommandCost CmdRemoveGoal(DoCommandFlags flags, GoalID goal)
 {
+#ifdef WITH_RUST
+	return openttd_rust_remove_goal(&GetRustObjectivesServices(), flags.base(), goal.base()) ? CommandCost() : CMD_ERROR;
+#else
 	if (_current_company != OWNER_DEITY) return CMD_ERROR;
 	if (!Goal::IsValidID(goal)) return CMD_ERROR;
 
@@ -125,6 +140,7 @@ CommandCost CmdRemoveGoal(DoCommandFlags flags, GoalID goal)
 	}
 
 	return CommandCost();
+#endif
 }
 
 /**
@@ -137,6 +153,9 @@ CommandCost CmdRemoveGoal(DoCommandFlags flags, GoalID goal)
  */
 CommandCost CmdSetGoalDestination(DoCommandFlags flags, GoalID goal, GoalType type, GoalTypeID dest)
 {
+#ifdef WITH_RUST
+	return openttd_rust_set_goal_destination(&GetRustObjectivesServices(), flags.base(), goal.base(), type, dest) ? CommandCost() : CMD_ERROR;
+#else
 	if (_current_company != OWNER_DEITY) return CMD_ERROR;
 	if (!Goal::IsValidID(goal)) return CMD_ERROR;
 	Goal *g = Goal::Get(goal);
@@ -148,6 +167,7 @@ CommandCost CmdSetGoalDestination(DoCommandFlags flags, GoalID goal, GoalType ty
 	}
 
 	return CommandCost();
+#endif
 }
 
 /**
@@ -159,6 +179,9 @@ CommandCost CmdSetGoalDestination(DoCommandFlags flags, GoalID goal, GoalType ty
  */
 CommandCost CmdSetGoalText(DoCommandFlags flags, GoalID goal, const EncodedString &text)
 {
+#ifdef WITH_RUST
+	return openttd_rust_set_goal_text(&GetRustObjectivesServices(), flags.base(), goal.base(), &text) ? CommandCost() : CMD_ERROR;
+#else
 	if (_current_company != OWNER_DEITY) return CMD_ERROR;
 	if (!Goal::IsValidID(goal)) return CMD_ERROR;
 	if (text.empty()) return CMD_ERROR;
@@ -175,6 +198,7 @@ CommandCost CmdSetGoalText(DoCommandFlags flags, GoalID goal, const EncodedStrin
 	}
 
 	return CommandCost();
+#endif
 }
 
 /**
@@ -186,6 +210,9 @@ CommandCost CmdSetGoalText(DoCommandFlags flags, GoalID goal, const EncodedStrin
  */
 CommandCost CmdSetGoalProgress(DoCommandFlags flags, GoalID goal, const EncodedString &text)
 {
+#ifdef WITH_RUST
+	return openttd_rust_set_goal_progress(&GetRustObjectivesServices(), flags.base(), goal.base(), &text) ? CommandCost() : CMD_ERROR;
+#else
 	if (_current_company != OWNER_DEITY) return CMD_ERROR;
 	if (!Goal::IsValidID(goal)) return CMD_ERROR;
 
@@ -201,6 +228,7 @@ CommandCost CmdSetGoalProgress(DoCommandFlags flags, GoalID goal, const EncodedS
 	}
 
 	return CommandCost();
+#endif
 }
 
 /**
@@ -212,6 +240,9 @@ CommandCost CmdSetGoalProgress(DoCommandFlags flags, GoalID goal, const EncodedS
  */
 CommandCost CmdSetGoalCompleted(DoCommandFlags flags, GoalID goal, bool completed)
 {
+#ifdef WITH_RUST
+	return openttd_rust_set_goal_completed(&GetRustObjectivesServices(), flags.base(), goal.base(), completed) ? CommandCost() : CMD_ERROR;
+#else
 	if (_current_company != OWNER_DEITY) return CMD_ERROR;
 	if (!Goal::IsValidID(goal)) return CMD_ERROR;
 
@@ -227,6 +258,7 @@ CommandCost CmdSetGoalCompleted(DoCommandFlags flags, GoalID goal, bool complete
 	}
 
 	return CommandCost();
+#endif
 }
 
 /**
@@ -242,6 +274,9 @@ CommandCost CmdSetGoalCompleted(DoCommandFlags flags, GoalID goal, bool complete
  */
 CommandCost CmdGoalQuestion(DoCommandFlags flags, uint16_t uniqueid, uint32_t target, bool is_client, uint32_t button_mask, GoalQuestionType type, const EncodedString &text)
 {
+#ifdef WITH_RUST
+	return openttd_rust_goal_question(&GetRustObjectivesServices(), flags.base(), uniqueid, target, is_client, button_mask, type, &text) ? CommandCost() : CMD_ERROR;
+#else
 	static_assert(sizeof(uint32_t) >= sizeof(CompanyID));
 	CompanyID company = (CompanyID)target;
 	static_assert(sizeof(uint32_t) >= sizeof(ClientID));
@@ -275,6 +310,7 @@ CommandCost CmdGoalQuestion(DoCommandFlags flags, uint16_t uniqueid, uint32_t ta
 	}
 
 	return CommandCost();
+#endif
 }
 
 /**
@@ -286,6 +322,9 @@ CommandCost CmdGoalQuestion(DoCommandFlags flags, uint16_t uniqueid, uint32_t ta
  */
 CommandCost CmdGoalQuestionAnswer(DoCommandFlags flags, uint16_t uniqueid, uint8_t button)
 {
+#ifdef WITH_RUST
+	return openttd_rust_goal_question_answer(&GetRustObjectivesServices(), flags.base(), uniqueid, button) ? CommandCost() : CMD_ERROR;
+#else
 	if (button >= GOAL_QUESTION_BUTTON_COUNT) return CMD_ERROR;
 
 	if (_current_company == OWNER_DEITY) {
@@ -305,4 +344,5 @@ CommandCost CmdGoalQuestionAnswer(DoCommandFlags flags, uint16_t uniqueid, uint8
 	}
 
 	return CommandCost();
+#endif
 }

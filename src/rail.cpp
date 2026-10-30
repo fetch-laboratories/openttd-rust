@@ -159,7 +159,7 @@ RailTypes AddDateIntroducedRailTypes(RailTypes current, TimerGameCalendar::Date 
 RailTypes GetCompanyRailTypes(CompanyID company, bool introduces)
 {
 #ifdef WITH_RUST
-	return RailTypes{openttd_rust_company_rail_types(&GetRustSharedServices(), &GetRustTypeAvailabilityServices(), company.base(), introduces)};
+	return RailTypes{openttd_rust_company_rail_types( &GetRustTypeAvailabilityServices(), company.base(), introduces)};
 #else
 	RailTypes rts{};
 
@@ -194,7 +194,7 @@ RailTypes GetCompanyRailTypes(CompanyID company, bool introduces)
 RailTypes GetRailTypes(bool introduces)
 {
 #ifdef WITH_RUST
-	return RailTypes{openttd_rust_rail_types(&GetRustSharedServices(), &GetRustTypeAvailabilityServices(), introduces)};
+	return RailTypes{openttd_rust_rail_types( &GetRustTypeAvailabilityServices(), introduces)};
 #else
 	RailTypes rts{};
 

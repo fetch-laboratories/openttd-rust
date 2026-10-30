@@ -31,7 +31,8 @@ def game_environment(scenario):
     return WITNESS_ENVIRONMENT if selected and scenario.get("witnesses") else {}
 
 
-def adapter(build, folder, env):
+def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
+    rust = (build / "openttd-rust").exists()
     return console_adapter(
         build,
         folder,
@@ -42,15 +43,14 @@ def adapter(build, folder, env):
             "_Z16SetModalProgressb",
             "_Z26SetGeneratingWorldProgress16GenWorldProgressj",
             "_Z31IncreaseGeneratingWorldProgress16GenWorldProgress",
-            "openttd_rust_world_set_abort_callback"
-            if (build / "openttd-rust").exists()
-            else "_Z29GenerateWorldSetAbortCallbackPFvvE",
+            *(() if rust else ("_Z29GenerateWorldSetAbortCallbackPFvvE",)),
             "_Z13PlayTileSoundPK7GRFFiletN10StrongType7TypedefIj12TileIndexTagJNS2_7CompareENS2_7IntegerENS2_10CompatibleIiEENS7_IlEEEEE",
             "_ZN11BaseStation19SetRoadStopTileDataEN10StrongType7TypedefIj12TileIndexTagJNS0_7CompareENS0_7IntegerENS0_10CompatibleIiEENS5_IlEEEEEhb",
             "_Z19MarkTileDirtyByTileN10StrongType7TypedefIj12TileIndexTagJNS_7CompareENS_7IntegerENS_10CompatibleIiEENS4_IlEEEEEii",
             "_Z26ErrorUnknownCallbackResultjtt",
         ),
         replace_objects=("/src/object_cmd.cpp.o", "/src/saveload/saveload.cpp.o"),
+        native_test_support=True,
     )
 
 

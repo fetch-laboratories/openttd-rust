@@ -645,7 +645,7 @@ pub(crate) fn run(world: &World<'_>, frame: *mut Frame, input: Input) -> bool {
     unsafe {
         OWNER = owner;
     }
-    crate::genworld::openttd_rust_world_set_abort_callback(Some(abort));
+    crate::genworld::set_abort_callback(Some(abort));
     unsafe {
         (*owner).generate();
     }
@@ -675,7 +675,7 @@ pub(crate) fn run(world: &World<'_>, frame: *mut Frame, input: Input) -> bool {
         }
     }
     abort();
-    crate::genworld::openttd_rust_world_set_abort_callback(None);
+    crate::genworld::set_abort_callback(None);
     true
 }
 
