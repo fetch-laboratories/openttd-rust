@@ -129,11 +129,14 @@ fork; the remaining upstream documentation explains behavior and architecture.
   the timing, and root grants no exceptions.
 - A shared accessor (vehicle field, map predicate, setting, constant) has one
   typed definition used by every port. `tools/shared-accessors.py` rejects new
-  copies in quick CI (#249). It cannot see Rust service-table fields (#582
-  adds rebound table callees), macros or compound callbacks, so a reviewer
-  greps the callee of every new table-bound wrapper (such as `CheckOwnership`
-  or `GetRoadOwner`) across `src/` and reports
-  each existing wrapper of it as a finding. Command ports share one set of
+  copies in quick CI (#249), and `tools/rebound-callees.py` rejects a callee
+  bound directly into a second service table or a field forwarded from
+  another table within its documented syntactic scope. Neither sees macros or
+  compound callbacks (a lambda or wrapper whose body calls the callee), so a
+  reviewer greps the callee of every new binding outside the rebound check's
+  scope, macro or compound callback (such as one calling `CheckOwnership`
+  or `GetRoadOwner`) across `src/` and reports each existing wrapper or
+  binding of it as a finding. Command ports share one set of
   command-check services. A PR that adds a shared accessor deletes the
   integrated copies, and a PR that removes a caller deletes the export,
   declaration or callback field it orphans. A test or harness caller does not

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the pinned inherited commit checker."""
+"""Run the pinned inherited commit checker and the rebound-callee gate."""
 
 import argparse
 import os
@@ -80,6 +80,17 @@ def main() -> int:
             env=env,
             check=False,
         ).returncode
+        if code == 0:
+            code = subprocess.run(
+                [
+                    sys.executable,
+                    str(migration.ROOT / "tools/rebound-callees.py"),
+                    "--base-ref",
+                    base,
+                ],
+                cwd=migration.ROOT,
+                check=False,
+            ).returncode
     except (
         OSError,
         ValueError,
