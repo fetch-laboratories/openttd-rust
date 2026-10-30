@@ -230,6 +230,7 @@ type E = *const OpenTTDEngine;
 type File = *const c_void;
 #[repr(C)]
 pub struct Services {
+    identity: &'static crate::company_identity::Services,
     shared: *const Shared,
     resolver: *const crate::newgrf_vehicle::Services,
     next: extern "C" fn(u32) -> EngineRef,
@@ -272,7 +273,6 @@ pub struct Services {
     rail_badges: extern "C" fn(E, u8),
     road_badges: extern "C" fn(E),
     rail_kind: extern "C" fn(E) -> RailVehicleTypes,
-    livery: extern "C" fn(u16) -> u8,
     use_livery: extern "C" fn(u8),
     variant_flags: extern "C" fn(E),
     variant_cycle_log: extern "C" fn(E),
@@ -428,6 +428,7 @@ crate::abi::layouts! {
     "OpenTTDEngineOrderSource" ["engine_loading"] => OrderSource { local, kind => type, grfid };
     "OpenTTDEngineLoadingVehicle" ["engine_loading"] => LoadingVehicle { id, kind => type };
     "OpenTTDEngineLoadingServices" ["engine_loading"] => Services {
+        identity,
         shared,
         resolver,
         next,
@@ -470,7 +471,6 @@ crate::abi::layouts! {
         rail_badges,
         road_badges,
         rail_kind,
-        livery,
         use_livery,
         variant_flags,
         variant_cycle_log,
@@ -863,7 +863,12 @@ pub(crate) unsafe fn openttd_rust_engine_finalise(s: &Services) {
             _ => (),
         }
         if e.kind.0 != VEH_TRAIN || (s.rail_kind)(e.shell) != RailVehicleTypes::WAGON {
-            let ls = (s.livery)(e.id);
+            let ls = crate::company_identity::engine_livery(
+                s.identity,
+                crate::engine_type::EngineID(e.id),
+                crate::engine_type::EngineID::INVALID,
+                std::ptr::null_mut(),
+            );
             (s.use_livery)(ls);
             if e.kind.0 == VEH_TRAIN {
                 (s.use_livery)(LS_FREIGHT_WAGON);

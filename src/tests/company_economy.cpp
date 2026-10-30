@@ -16,6 +16,12 @@
 #include "../economy_type.h"
 #include "abi_layout.hpp"
 #include "../rust/company_adapter.h"
+#include "../rust/company_identity_ffi.h"
+#include "../rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDCompanyIdentityServices.hpp"
+#include "abi-visit-OpenTTDFaceServices.hpp"
+#include "../company_manager_face.h"
+#include <thread>
 #include "../rust/tile_owner_services.h"
 #include "../rust/command_services.h"
 #include "../core/backup_type.hpp"
@@ -29,6 +35,8 @@ TEST_CASE("Company economy - canonical owner layouts and property copy lifetime"
 {
 	ABI_LAYOUT_CHECK;
 #include "abi-layout-company_economy.inc"
+	CHECK(AbiServicesComplete(GetRustCompanyIdentityServices()));
+	CHECK(AbiServicesComplete(GetRustFaceServices()));
 
 	CompanyProperties original;
 	original.Finances().money = INT64_MIN;
@@ -46,6 +54,27 @@ TEST_CASE("Company economy - canonical owner layouts and property copy lifetime"
 	CHECK(original.Finances().money == Money(17));
 }
 
+TEST_CASE("Company identity - process-wide colour alias and face bit truncation")
+{
+	AutoRestoreBackup<Colours> colour(_company_colours[CompanyID(0)], _company_colours[CompanyID(0)]);
+	CHECK(reinterpret_cast<uint8_t *>(&_company_colours[CompanyID(0)]) == openttd_rust_company_colours());
+	std::thread worker([] { _company_colours[CompanyID(0)] = COLOUR_RED; });
+	worker.join();
+	CHECK(openttd_rust_company_colours()[0] == COLOUR_RED);
+
+	FaceVar var{.type = FaceVarType::Sprite, .position = 0, .offset = 3, .length = 5, .valid_values = 6, .data = SpriteID(0)};
+	CompanyManagerFace face{0, UINT32_MAX, {}};
+	CHECK(var.GetBits(face) == 31);
+	CHECK(var.ScaleBits(31) == 5);
+	var.ChangeBits(face, 0);
+	CHECK(var.GetBits(face) == 1);
+	face.bits = UINT32_MAX;
+	var.ChangeBits(face, 127);
+	CHECK(var.GetBits(face) == 4);
+	var.SetBits(face, 2);
+	CHECK(var.GetBits(face) == 2);
+}
+
 /* Semantic saves cannot witness a client waiting for a server-posted deletion or
  * a script memory-policy exception during AI startup. These fixtures copy the
  * game's service table and replace only the world services the checked paths
@@ -56,11 +85,14 @@ static uint8_t fixture_current;
 static std::vector<std::string> fixture_trace;
 static OpenTTDCompanyFinanceServices fixture_finance;
 static OpenTTDCompanyServices fixture_services;
+static OpenTTDCompanyIdentityServices fixture_identity;
+static OpenTTDSharedServices fixture_identity_shared;
+static OpenTTDFaceServices fixture_faces;
+static CompanyProperties *FixtureProperties(const Company *c) noexcept { return reinterpret_cast<CompanyProperties *>(const_cast<Company *>(c)); }
 static uint8_t FixtureCurrent() noexcept { return fixture_current; }
 static void FixtureSetCurrent(uint8_t id) noexcept { fixture_current = id; }
 static bool FixtureNetworking() noexcept { return fixture_networking; }
 static bool FixtureServer() noexcept { return fixture_server; }
-static bool FixtureIsAI(uint8_t) noexcept { return fixture_is_ai; }
 static uint8_t FixtureLocal() noexcept { return 0; }
 static CompanyFinances *FixtureFinances(uint8_t id) noexcept { return id < fixture_companies.size() && fixture_companies[id] != nullptr ? &fixture_companies[id]->Finances() : nullptr; }
 static OpenTTDCompanyRef FixtureNext(uint32_t from) noexcept
@@ -78,15 +110,13 @@ static void FixturePostDelete(uint8_t id) noexcept
 static uint32_t FixtureRandomNext(uint32_t) noexcept { return 0; }
 static void FixtureTimeout(uint32_t ticks) noexcept { fixture_trace.push_back(fmt::format("timeout {}", ticks)); }
 static bool FixtureCanAllocate() noexcept { return true; }
-static uint8_t FixtureColour() noexcept { return 3; }
 static OpenTTDCompanyRef FixtureAllocate(uint8_t, bool) noexcept
 {
 	fixture_companies[2] = std::make_unique<CompanyProperties>();
 	fixture_trace.push_back("allocate 2");
 	return {&fixture_companies[2]->Finances(), 2};
 }
-static void FixtureColourSet(uint8_t, uint8_t) noexcept {}
-static void FixtureSetup(uint8_t id, bool) noexcept { fixture_trace.push_back(fmt::format("setup {}", id)); }
+static bool FixturePrepare(uint8_t id, bool) noexcept { fixture_trace.push_back(fmt::format("setup {}", id)); return true; }
 static void FixtureEvents(uint8_t id) noexcept { fixture_trace.push_back(fmt::format("events {}", id)); }
 static void FixtureVoid() noexcept {}
 static void FixtureNetworkNew(uint8_t id, uint32_t, bool) noexcept { fixture_trace.push_back(fmt::format("network {}", id)); }
@@ -99,13 +129,38 @@ static void FixtureReset(bool networking, bool server)
 	fixture_finance.invalidate_company_windows = FixtureNoop;
 	fixture_services = GetRustCompanyServices();
 	fixture_services.finance = &fixture_finance;
-	fixture_services.company_next = FixtureNext; fixture_services.company_is_ai = FixtureIsAI;
+	fixture_services.company_next = FixtureNext;
 	fixture_services.local_company = FixtureLocal; fixture_services.network_server = FixtureServer;
-	fixture_services.company_admin_update = FixtureAdminUpdate; fixture_services.post_company_delete = FixturePostDelete;
+	fixture_services.post_company_delete = FixturePostDelete;
 	fixture_services.script_random_next = FixtureRandomNext; fixture_services.reset_competitor_timeout = FixtureTimeout;
-	fixture_services.can_allocate_company = FixtureCanAllocate; fixture_services.generate_company_colour = FixtureColour;
-	fixture_services.allocate_company = FixtureAllocate; fixture_services.set_company_colour = FixtureColourSet;
-	fixture_services.setup_new_company = FixtureSetup; fixture_services.new_company_events = FixtureEvents;
+	fixture_services.can_allocate_company = FixtureCanAllocate;
+	fixture_services.allocate_company = FixtureAllocate;
+	fixture_services.prepare_new_company = FixturePrepare;
+	fixture_services.company_defaults = FixtureNoop; fixture_services.startup_windows = FixtureVoid;
+	fixture_services.new_company_events = FixtureEvents;
+	fixture_identity = GetRustCompanyIdentityServices();
+	fixture_identity_shared = GetRustSharedServices();
+	fixture_identity_shared.random = [](void *) noexcept -> uint32_t { return 0; };
+	fixture_identity.shared = &fixture_identity_shared;
+	fixture_identity.company = [](uint8_t id) noexcept { return reinterpret_cast<Company *>(fixture_companies[id].get()); };
+	fixture_identity.next_company = [](uint32_t) noexcept -> Company * { return nullptr; };
+	fixture_identity.company_id = [](const Company *) noexcept -> uint8_t { return 2; };
+	fixture_identity.set_colour = [](Company *c, uint8_t value) noexcept { FixtureProperties(c)->colour = static_cast<Colours>(value); };
+	fixture_identity.colour = [](const Company *c) noexcept -> uint8_t { return FixtureProperties(c)->colour; };
+	fixture_identity.livery = [](Company *c, LiveryScheme scheme) noexcept { return &FixtureProperties(c)->livery[scheme]; };
+	fixture_identity.face = [](Company *c) noexcept { return &FixtureProperties(c)->face; };
+	fixture_identity.set_president_id = [](Company *c, uint32_t value) noexcept { FixtureProperties(c)->president_name_1 = value; };
+	fixture_identity.set_president_parts = [](Company *c, uint32_t value) noexcept { FixtureProperties(c)->president_name_2 = value; };
+	fixture_identity.render = [](OpenTTDCompanyNameStorage *, uint32_t, uint32_t) noexcept { return OpenTTDByteSpan{reinterpret_cast<const uint8_t *>("President"), 9}; };
+	fixture_identity.admin_update = FixtureAdminUpdate;
+	fixture_identity.is_ai = [](const Company *) noexcept { return fixture_is_ai; };
+	fixture_faces = GetRustFaceServices();
+	fixture_faces.count = []() noexcept -> uint32_t { return 1; };
+	fixture_faces.vars = [](uint32_t) noexcept { return OpenTTDFaceVars{nullptr, 0}; };
+	fixture_faces.spec = [](uint32_t) noexcept { static const FaceSpec spec{"fixture", FaceVars{}}; return &spec; };
+	fixture_faces.random = [](Randomizer *) noexcept -> uint32_t { return 0; };
+	fixture_identity.faces = &fixture_faces;
+	fixture_services.identity = &fixture_identity;
 	fixture_services.company_league_dirty = FixtureVoid; fixture_services.company_ctrl_windows = FixtureVoid;
 	fixture_services.assert_new_ai_slot = FixtureNoop; fixture_services.network_company_new = FixtureNetworkNew;
 }
@@ -250,6 +305,7 @@ TEST_CASE("Company economy - competitor posts return to the caller before each P
  * effects (allocated company, no new-company events, no network announcement). */
 TEST_CASE("Company economy - AI startup continuation and abandoned frames")
 {
+	AutoRestoreBackup<Colours> colour(_company_colours[CompanyID(2)], _company_colours[CompanyID(2)]);
 	RustTileOwnerContext ownership;
 	FixtureReset(false, false);
 	OpenTTDCompanyControl abandoned{.result = {}, .startup = {}, .client = 0, .action = static_cast<uint8_t>(CCA_NEW_AI), .target = 255, .reason = 0, .execute = true, .stage = 0};

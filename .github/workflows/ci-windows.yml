@@ -144,7 +144,7 @@ jobs:
         CCACHE_MAXSIZE: 1G
       run: |
         export PATH="$(dirname "$(command -v cl.exe)"):$PATH"
-        rust_parameters=()
+        rust_parameters=(-DOPTION_RUST=OFF)
         if [ "${{ inputs.rust }}" = true ]; then
           rust_parameters=(-DOPTION_RUST=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOPTION_USE_ASSERTS=ON -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
             -DCMAKE_C_COMPILER_LAUNCHER="$CCACHE_EXE" -DCMAKE_CXX_COMPILER_LAUNCHER="$CCACHE_EXE"

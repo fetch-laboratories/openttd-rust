@@ -50,6 +50,8 @@ pub struct Services {
     ship_capacity: extern "C" fn(E) -> u16,
     passenger_capacity: extern "C" fn(E) -> u16,
     mail_capacity: extern "C" fn(E) -> u8,
+    train_class: extern "C" fn(E) -> u8,
+    aircraft_subtype: extern "C" fn(E) -> u8,
     rail_kind: extern "C" fn(E) -> RailVehicleTypes,
     grf: extern "C" fn(E) -> *const c_void,
     version: extern "C" fn(*const c_void) -> u8,
@@ -554,7 +556,7 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDEngineCapabilitiesServices" ["probe"] => Services {
         resolver, engine, engine_if_valid, kind, ground, id, default_cargo, callbacks, carrying, capacity_config, refit_mask,
-        ship_capacity, passenger_capacity, mail_capacity, rail_kind,
+        ship_capacity, passenger_capacity, mail_capacity, train_class, aircraft_subtype, rail_kind,
         grf, version, loading, cargo_classes, multiplier, pool_available,
         new_temporary, destroy_temporary, set_engine, set_owner, current_company, vehicle_engine,
         vehicle_engine_object, vehicle_cargo, vehicle_subtype, has_articulated, next_articulated, check, assertions,

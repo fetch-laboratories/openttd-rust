@@ -57,6 +57,7 @@
 #include "../window_func.h"
 #include "company_adapter.h"
 #include "company_services.h"
+#include "company_identity_ffi.h"
 #include "object_ffi.h"
 #include "presentation_services.h"
 #include "services_rail.h"
@@ -74,11 +75,9 @@
 extern void CompanyAdminRemove(CompanyID, CompanyRemoveReason);
 extern const PriceBaseSpec _price_base_specs[];
 extern TimeoutTimer<TimerGameTick> _new_competitor_timeout;
-/* Identity services keep company_cmd.cpp's file-local helpers there. */
-void RustCompanyGenerateName(uint8_t) noexcept;
-uint8_t RustCompanyGenerateColour() noexcept;
-void RustCompanySetColour(uint8_t, uint8_t) noexcept;
-void RustCompanySetup(uint8_t, bool) noexcept;
+bool OPENTTD_RUST_CALL RustCompanyPrepare(uint8_t, bool) noexcept;
+void OPENTTD_RUST_CALL RustCompanyDefaults(uint8_t) noexcept;
+void OPENTTD_RUST_CALL RustCompanyStartupWindows() noexcept;
 void RustCompanyNetworkSpectate(uint32_t) noexcept;
 void RustCompanyNetworkNew(uint8_t, uint32_t, bool) noexcept;
 void RustCompanyNetworkOwn(uint8_t, uint32_t) noexcept;
@@ -119,7 +118,6 @@ static void Fin_money_animation(uint32_t t, int64_t amount) noexcept
 }
 
 /* Company identity and lifecycle services. */
-static bool Co_company_is_ai(uint8_t id) noexcept { return Company::Get(id)->is_ai; }
 static size_t Co_company_count() noexcept { return Company::GetNumItems(); }
 static bool Co_can_allocate_company() noexcept { return Company::CanAllocateItem(); }
 static OpenTTDCompanyVehicleCounts Co_company_vehicle_counts(uint8_t id) noexcept
@@ -133,7 +131,6 @@ static OpenTTDCompanyVehicleCounts Co_vehicle_limits() noexcept
 {
 	return {RustTrainLimit(), RustRoadVehicleLimit(), RustShipLimit(), RustAircraftLimit()};
 }
-static void Co_company_admin_update(uint8_t id) noexcept { CompanyAdminUpdate(Company::Get(id)); }
 static void Co_company_in_trouble(uint8_t id) noexcept
 {
 	CompanyID cid(id);
@@ -409,12 +406,12 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 	/* Construct process-lifetime C++ views before Rust accesses their storage. */
 	(void)GetRustEconomy(); (void)GetRustPrices(); (void)GetRustCompanyScores();
 	static const OpenTTDCompanyServices services{
-		.finance = &GetRustCompanyFinanceServices(), .shared = &GetRustSharedServices(),
-		.company_next = RustCompanyRefNext, .company_is_ai = Co_company_is_ai,
+		.identity = &GetRustCompanyIdentityServices(), .finance = &GetRustCompanyFinanceServices(), .shared = &GetRustSharedServices(),
+		.company_next = RustCompanyRefNext,
 		.company_count = Co_company_count, .can_allocate_company = Co_can_allocate_company,
 		.local_company = RustLocalCompanyID, .network_server = RustNetworkServer,
 		.company_vehicle_counts = Co_company_vehicle_counts, .vehicle_limits = Co_vehicle_limits,
-		.company_admin_update = Co_company_admin_update, .company_in_trouble = Co_company_in_trouble,
+		.company_in_trouble = Co_company_in_trouble,
 		.post_company_delete = Co_post_company_delete, .hq_location = RustCompanyHQ,
 		.object_services = []() noexcept { return &GetRustObjectServices(); },
 		.performance_detail_dirty = Co_performance_detail_dirty, .company_graphs_dirty = Co_company_graphs_dirty,
@@ -425,13 +422,13 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.recession_news = Co_recession_news, .price_base = Co_price_base,
 		.cargo_next = Co_cargo_next, .set_cargo_payment = RustCargoSetCurrentPayment,
 		.price_windows_dirty = Co_price_windows_dirty, .industry_daily_changes = Co_industry_daily_changes,
-		.generate_company_name = RustCompanyGenerateName, .ask_merger = Co_ask_merger,
+		.ask_merger = Co_ask_merger,
 		.is_interactive_company = RustIsInteractiveCompany, .show_buy_company = Co_show_buy_company,
 		.script_random_next = Co_script_random_next, .reset_competitor_timeout = Co_reset_competitor_timeout,
 		.finances_dirty = Co_finances_dirty, .show_company_finances = Co_show_company_finances,
-		.new_year_sound = Co_new_year_sound, .generate_company_colour = RustCompanyGenerateColour,
-		.allocate_company = Co_allocate_company, .set_company_colour = RustCompanySetColour,
-		.setup_new_company = RustCompanySetup, .new_company_events = Co_new_company_events,
+		.new_year_sound = Co_new_year_sound,
+		.allocate_company = Co_allocate_company,
+		.prepare_new_company = RustCompanyPrepare, .company_defaults = RustCompanyDefaults, .startup_windows = RustCompanyStartupWindows, .new_company_events = Co_new_company_events,
 		.company_league_dirty = Co_company_league_dirty, .company_ctrl_windows = Co_company_ctrl_windows,
 		.close_network_status = Co_close_network_status, .network_spectate = RustCompanyNetworkSpectate,
 		.network_company_new = RustCompanyNetworkNew, .network_own_company = RustCompanyNetworkOwn,

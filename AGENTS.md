@@ -361,7 +361,9 @@ review on `gpt-6.1-sol` (high) through T3 `delegate_task`, so a reviewer's model
 family differs from the implementer's.
 Under a Claude Code root, implementation, fixes and code-touching follow-ups
 run on Opus. Sonnet handles only non-code work such as runs, measurements and
-tracker edits (user decision, 2026-10-27).
+tracker edits (user decision, 2026-10-27). Opus writes code at medium effort;
+high is for tasks that need more judgment, such as planning, speed attribution
+and hard fidelity analysis (user decision, 2026-10-30).
 A Claude Code root spawns each code-touching agent through T3 `delegate_task`
 with `isolation: "worktree"`. T3 creates the worktree from root's commit, binds
 the agent's shell to it so no command needs a `cd` prefix, and removes it when

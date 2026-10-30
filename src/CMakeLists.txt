@@ -249,6 +249,7 @@ add_files(
     ini_type.h
     intro_gui.cpp
     landscape.cpp
+    rust/company_identity_adapter.cpp
     rust/company_adapter.cpp
     rust/services.cpp
     rust/airport_definitions.cpp

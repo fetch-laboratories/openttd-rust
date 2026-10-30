@@ -17,6 +17,9 @@
 #include "gfx_type.h"
 
 #include "table/strings.h"
+#ifdef WITH_RUST
+#include "rust/company_face_ffi.h"
+#endif
 
 enum class FaceVarType : uint8_t {
 	Sprite,
@@ -41,7 +44,11 @@ struct FaceVar {
 	 */
 	inline uint GetBits(const CompanyManagerFace &cmf) const
 	{
+#ifdef WITH_RUST
+		return openttd_rust_face_get_bits(&GetRustFaceServices(), this, &cmf);
+#else
 		return GB(cmf.bits, this->offset, this->length);
+#endif /* WITH_RUST */
 	}
 
 	/**
@@ -51,7 +58,11 @@ struct FaceVar {
 	 */
 	inline void SetBits(CompanyManagerFace &cmf, uint val) const
 	{
+#ifdef WITH_RUST
+		openttd_rust_face_set_bits(&GetRustFaceServices(), this, &cmf, val);
+#else
 		SB(cmf.bits, this->offset, this->length, val);
+#endif /* WITH_RUST */
 	}
 
 	/**
@@ -62,6 +73,9 @@ struct FaceVar {
 	 */
 	inline void ChangeBits(CompanyManagerFace &cmf, int8_t amount) const
 	{
+#ifdef WITH_RUST
+		openttd_rust_face_change_bits(&GetRustFaceServices(), this, &cmf, amount);
+#else
 		int8_t val = this->GetBits(cmf) + amount; // the new value for the cmfv
 
 		/* scales the new value to the correct scope */
@@ -71,6 +85,7 @@ struct FaceVar {
 		val %= this->valid_values;
 
 		this->SetBits(cmf, val); // save the new value
+#endif /* WITH_RUST */
 	}
 
 	/**
@@ -78,10 +93,12 @@ struct FaceVar {
 	 * @param cmf The face to check.
 	 * @return true if and only if the bits are valid
 	 */
+#ifndef WITH_RUST
 	inline bool IsValid(const CompanyManagerFace &cmf) const
 	{
 		return GB(cmf.bits, this->offset, this->length) < this->valid_values;
 	}
+#endif /* WITH_RUST */
 
 	/**
 	 * Scales a company manager's face bits variable to the correct scope
@@ -91,8 +108,12 @@ struct FaceVar {
 	 */
 	inline uint ScaleBits(uint val) const
 	{
+#ifdef WITH_RUST
+		return openttd_rust_face_scale_bits(&GetRustFaceServices(), this, val);
+#else
 		assert(val < (1U << this->length));
 		return (val * this->valid_values) >> this->length;
+#endif /* WITH_RUST */
 	}
 
 	/**
@@ -139,6 +160,9 @@ FaceVars GetCompanyManagerFaceVars(uint style_index);
  */
 inline uint64_t GetActiveFaceVars(const CompanyManagerFace &cmf, FaceVars vars)
 {
+#ifdef WITH_RUST
+	return openttd_rust_face_active(&GetRustFaceServices(), cmf.bits, {vars.data(), vars.size()});
+#else
 	uint64_t active_vars = (1ULL << std::size(vars)) - 1ULL;
 
 	for (const auto &info : vars) {
@@ -148,6 +172,7 @@ inline uint64_t GetActiveFaceVars(const CompanyManagerFace &cmf, FaceVars vars)
 	}
 
 	return active_vars;
+#endif /* WITH_RUST */
 }
 
 /**
@@ -157,9 +182,13 @@ inline uint64_t GetActiveFaceVars(const CompanyManagerFace &cmf, FaceVars vars)
  */
 inline void ScaleAllCompanyManagerFaceBits(CompanyManagerFace &cmf, FaceVars vars)
 {
+#ifdef WITH_RUST
+	openttd_rust_face_scale(&GetRustFaceServices(), &cmf, {vars.data(), vars.size()});
+#else
 	for (auto var : SetBitIterator(GetActiveFaceVars(cmf, vars))) {
 		vars[var].ChangeBits(cmf, 0);
 	}
+#endif /* WITH_RUST */
 }
 
 /**
@@ -170,8 +199,12 @@ inline void ScaleAllCompanyManagerFaceBits(CompanyManagerFace &cmf, FaceVars var
  */
 inline void RandomiseCompanyManagerFaceBits(CompanyManagerFace &cmf, FaceVars vars, Randomizer &randomizer)
 {
+#ifdef WITH_RUST
+	openttd_rust_face_random_bits(&GetRustFaceServices(), &cmf, {vars.data(), vars.size()}, &randomizer);
+#else
 	cmf.bits = randomizer.Next();
 	ScaleAllCompanyManagerFaceBits(cmf, vars);
+#endif /* WITH_RUST */
 }
 
 void SetCompanyManagerFaceStyle(CompanyManagerFace &cmf, uint style);
