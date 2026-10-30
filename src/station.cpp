@@ -38,6 +38,7 @@
 #include "rust/services_cargo.h"
 #include "rust/orders_ffi.h"
 #include "rust/services_industry.h"
+#include "rust/industry_ffi.h"
 #include "rust/industry_shell_services.h"
 #include "rust/settings_services.h"
 #include "rust/airport_resolver_ffi.h"
@@ -841,7 +842,6 @@ const OpenTTDStationLifecycleServices &GetRustStationLifecycleServices() noexcep
 	static const OpenTTDStationLifecycleServices services{
 		.shared = &GetRustSharedServices(),
 		.catchment = &GetRustStationCatchmentServices(),
-		.allocation = GetRustTileTypeAllocation,
 		.names = {
 			.base = STR_SV_STNAME, .central = STR_SV_STNAME_CENTRAL, .airport = STR_SV_STNAME_AIRPORT,
 			.oilfield = STR_SV_STNAME_OILFIELD, .docks = STR_SV_STNAME_DOCKS, .heliport = STR_SV_STNAME_HELIPORT,
@@ -855,9 +855,8 @@ const OpenTTDStationLifecycleServices &GetRustStationLifecycleServices() noexcep
 		},
 		.industry_type = RustStationIndustryType,
 		.set_industry_type = RustStationSetIndustryType,
-		.spec = RustIndustryTypeSpec<IndustrySpec>,
+		.industry_generation = &GetIndustryGenerationServices(),
 		.spec_name = RustIndustrySpecStationName,
-		.spec_enabled = RustSpecEnabled<IndustrySpec>,
 		.spec_life = RustIndustrySpecLife,
 		.forest = [](uint32_t tile) noexcept { return IsTileForestIndustry(TileIndex{tile}); },
 		.roadstop = &GetRoadStopResolverServices(),

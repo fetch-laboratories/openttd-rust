@@ -56,13 +56,11 @@ pub struct Names {
 pub struct Services {
     pub shared: &'static Shared,
     pub catchment: &'static crate::station::CatchmentServices,
-    pub allocation: extern "C" fn() -> crate::map_func::TileTypeAllocation,
     names: Names,
     pub industry_type: extern "C" fn(*mut BaseStation) -> u8,
     pub set_industry_type: extern "C" fn(*mut BaseStation, u8),
-    pub spec: extern "C" fn(u8) -> *const IndustrySpec,
+    pub industry_generation: *const crate::industry::GenerationServices,
     pub spec_name: extern "C" fn(*const IndustrySpec) -> u32,
-    pub spec_enabled: extern "C" fn(*const IndustrySpec) -> bool,
     pub spec_life: extern "C" fn(*const IndustrySpec) -> u8,
     pub forest: extern "C" fn(u32) -> bool,
     pub roadstop: *const crate::newgrf_roadstop::Services,
@@ -90,7 +88,14 @@ impl Services {
         unsafe { ((*crate::animated_tile::services().industries).landscape)() }
     }
     fn map_access(&self) -> TileTypeAccess {
-        unsafe { TileTypeAccess::raw((self.allocation)(), self.shared.tile_type) }
+        crate::map_func::World::new(self.shared).types
+    }
+    fn spec(&self, kind: u8) -> *const IndustrySpec {
+        unsafe { ((*self.industry_generation).spec)(kind) }
+    }
+    /// `IndustrySpec::enabled`, read through the generation table's spec summary.
+    fn spec_enabled(&self, spec: *const IndustrySpec) -> bool {
+        unsafe { ((*self.industry_generation).info)(spec) }.enabled
     }
 }
 
@@ -135,7 +140,7 @@ fn mine(tile: u32, m: &TileTypeAccess, s: &Services) -> bool {
         crate::industry_map::get_industry_by_tile(m, tile, s.catchment.industry_by_id, s.check());
     let owner = (s.catchment.industry_owner)(shell);
     let kind = unsafe { (*crate::industry::openttd_rust_industry_metadata(owner)).kind };
-    if (s.spec_life)((s.spec)(kind)) & crate::industry_type::LIFE_EXTRACTIVE == 0 {
+    if (s.spec_life)(s.spec(kind)) & crate::industry_type::LIFE_EXTRACTIVE == 0 {
         return false;
     }
     let mut result = false;
@@ -178,11 +183,11 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
         let kind = (s.industry_type)(other);
         if kind != IT_INVALID {
             info.industries[usize::from(kind)] = true;
-            let name = (s.spec_name)((s.spec)(kind));
+            let name = (s.spec_name)(s.spec(kind));
             if name != n.undefined {
                 for it in 0..NUM_INDUSTRYTYPES {
-                    let spec = (s.spec)(it);
-                    if (s.spec_enabled)(spec) && (s.spec_name)(spec) == name {
+                    let spec = s.spec(it);
+                    if s.spec_enabled(spec) && (s.spec_name)(spec) == name {
                         info.industries[usize::from(it)] = true;
                     }
                 }
@@ -209,7 +214,7 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
             s.catchment.industry_owner,
             s.check(),
         );
-        let spec = (s.spec)(kind);
+        let spec = s.spec(kind);
         if (s.spec_name)(spec) == n.undefined {
             continue;
         }
@@ -435,7 +440,7 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
     let state = (w.owner)(st);
     if (s.cleaning_pool)() {
         for cargo in 0..NUM_CARGO {
-            let list = (links.station_cargo)(st, cargo);
+            let list = links.station_cargo(st, cargo);
             if !list.is_null() {
                 unsafe {
                     crate::cargo_storage::openttd_rust_cargo_list_clear(list.cast_mut());
@@ -463,7 +468,7 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
         crate::aircraft::invalidate_target(c.aircraft, id.0);
     }
     let graphs = w.graphs;
-    let storage = unsafe { &*(links.storage)() };
+    let storage = links.storage();
     for cargo in 0..NUM_CARGO {
         let graph = (graphs.get_if_valid)((graphs.graph_id)(st, cargo));
         if graph.is_null() {
@@ -539,7 +544,7 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
     }
     (s.delete_news)(id);
     for cargo in 0..NUM_CARGO {
-        let list = (links.station_cargo)(st, cargo);
+        let list = links.station_cargo(st, cargo);
         if !list.is_null() {
             unsafe {
                 crate::cargo_storage::truncate_station(
@@ -589,5 +594,5 @@ pub(crate) fn airport_maintenance(s: &Services, owner: u8) -> i64 {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStationNames" ["probe"] => Names { base, central, airport, oilfield, docks, heliport, mines, lakeside, woods, forest, valley, heights, north, south, east, west, transfer, halt, exchange, annexe, sidings, branch, upper, lower, fallback, undefined, null };
-    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, allocation, names, industry_type, set_industry_type, spec, spec_name, spec_enabled, spec_life, forest, roadstop, cleaning_pool, close_view, delete_news, remove_index, sign_valid, remove_sign, last_loading, airport_maintenance, maintenance_price };
+    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, names, industry_type, set_industry_type, industry_generation, spec_name, spec_life, forest, roadstop, cleaning_pool, close_view, delete_news, remove_index, sign_valid, remove_sign, last_loading, airport_maintenance, maintenance_price };
 }

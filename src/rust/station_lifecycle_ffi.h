@@ -10,6 +10,7 @@
 #include "aircraft_ffi.h"
 struct OpenTTDStationCommandServices;
 struct IndustrySpec;
+struct OpenTTDIndustryGenerationServices;
 struct AirportSpec;
 struct OpenTTDOrdersLeaves;
 struct OpenTTDRoadStopResolverServices;
@@ -21,13 +22,11 @@ struct OpenTTDStationNames {
 struct OpenTTDStationLifecycleServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDStationCatchmentServices *catchment;
-	OpenTTDTileTypeAllocation (*allocation)() noexcept OPENTTD_SERVICE_DEFAULT(allocation);
 	OpenTTDStationNames names;
 	uint8_t (*industry_type)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(industry_type);
 	void (*set_industry_type)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_industry_type);
-	const IndustrySpec *(*spec)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(spec);
+	const OpenTTDIndustryGenerationServices *industry_generation;
 	uint32_t (*spec_name)(const IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_name);
-	bool (*spec_enabled)(const IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_enabled);
 	uint8_t (*spec_life)(const IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_life);
 	bool (*forest)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(forest);
 	const OpenTTDRoadStopResolverServices *roadstop;

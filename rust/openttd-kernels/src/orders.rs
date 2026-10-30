@@ -568,7 +568,7 @@ pub struct Leaves {
     pub fast_aircraft: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub no_jet_crash: extern "C" fn() -> u64,
     pub append_station: unsafe extern "C" fn(ctx: *mut c_void, station: u16),
-    pub invalidate_station_list: extern "C" fn(),
+    pub station_commands: *const crate::station_cmd::CommandServicesTable,
     pub command_error: unsafe extern "C" fn(ctx: *mut c_void, error: u32, detail: u32),
     pub timetable_dirty: unsafe extern "C" fn(ctx: *mut c_void),
     pub invalidate_order: unsafe extern "C" fn(ctx: *mut c_void, data: i32),
@@ -702,6 +702,10 @@ impl Game {
     fn maintenance(self) -> &'static maintenance::Services {
         // SAFETY: The immutable base table supplies its process-wide maintenance table.
         unsafe { &*self.0.base.maintenance }
+    }
+    fn invalidate_station_list(self) {
+        // SAFETY: The immutable leaves table supplies the process-wide station command table.
+        (unsafe { &*self.0.station_commands }.station_list_classes_invalidate)();
     }
     fn vehicle(self, v: *mut c_void) -> *mut VehicleOrders {
         // SAFETY: The entry supplies a live Vehicle shell whose orders owner remains allocated.
@@ -1052,7 +1056,7 @@ pub unsafe extern "C" fn openttd_rust_list_free(
             if matches!(order.kind(), OT_GOTO_STATION | OT_GOTO_WAYPOINT)
                 && g.ownerless_station(order.destination, 1) != 0
             {
-                (g.0.invalidate_station_list)();
+                g.invalidate_station_list();
                 break;
             }
         }
@@ -1125,7 +1129,7 @@ pub unsafe extern "C" fn openttd_rust_list_insert(
         if matches!(order.kind(), OT_GOTO_STATION | OT_GOTO_WAYPOINT)
             && g.ownerless_station(order.destination, 0) != 0
         {
-            (g.0.invalidate_station_list)();
+            g.invalidate_station_list();
         }
     };
     0
@@ -4031,7 +4035,7 @@ impl Control {
             }
             self.initialize_list(list, v);
             write_field!(g.vehicle(v), orders, list);
-            (g.0.invalidate_station_list)();
+            g.invalidate_station_list();
         }
         if g.unique_backup_name(backup) == 0 {
             g.clear_backup_name(backup);
@@ -4707,7 +4711,7 @@ crate::abi::layouts! {
         fast_aircraft,
         no_jet_crash,
         append_station,
-        invalidate_station_list,
+        station_commands,
         command_error,
         timetable_dirty,
         invalidate_order,

@@ -328,8 +328,6 @@ rebound | RustRoadStopAnimationFrame | src/animated_tile.cpp | road_frame
 rebound | RustRoadStopAnimationFrame | src/newgrf_roadstop.cpp | frame
 rebound | RustRoadStopDataTile | src/animated_tile.cpp | road_tile
 rebound | RustRoadStopDataTile | src/newgrf_roadstop.cpp | tile
-rebound | RustRoadStopSetRandomBits | src/newgrf_roadstop.cpp | set_tile_random
-rebound | RustRoadStopSetRandomBits | src/rust/station_command_services.hpp | stop_random_bits
 rebound | RustRoadStopTileDataCount | src/animated_tile.cpp | road_count
 rebound | RustRoadStopTileDataCount | src/newgrf_roadstop.cpp | tile_count
 rebound | RustScreenDirty | src/genworld.cpp | dirty
@@ -575,8 +573,6 @@ rebound | RustWaterClass | src/clear_cmd.cpp | water_class
 rebound | RustWaterClass | src/newgrf_generic.cpp | water_class
 rebound | SharedIsDepotTile | src/rust/vehicle_effect_services.hpp | depot
 rebound | SharedIsDepotTile | src/vehicle_cmd.cpp | is_depot
-rebound | SharedTileAddWrap | src/industry_cmd.cpp | tile_add_wrap
-rebound | SharedTileAddWrap | src/rust/services.cpp | tile_add_wrap
 rebound | Shared_bay_stop_direction | src/rust/road_services.h | bay_direction
 rebound | Shared_bay_stop_direction | src/rust/services.cpp | bay_stop_direction
 rebound | Shared_disallowed_road_directions | src/rust/road_services.h | disallowed_directions

@@ -128,7 +128,7 @@ pub struct Services {
     resolve_callback: unsafe extern "C" fn(*mut State, u16, u16, u32, u32, *mut i32, usize) -> u16,
     resolve_random: unsafe extern "C" fn(*mut State, u16, u8) -> RandomResult,
     order: unsafe extern "C" fn(V) -> OrderState,
-    cargo_owner: unsafe extern "C" fn(V) -> *const crate::cargo_storage::List,
+    pub(crate) cargo_owner: unsafe extern "C" fn(V) -> *const crate::cargo_storage::List,
     cargo_capacity: unsafe extern "C" fn(V) -> u16,
     real_count: unsafe extern "C" fn(Group, bool) -> u32,
     real_at: unsafe extern "C" fn(Group, bool, u32) -> Group,

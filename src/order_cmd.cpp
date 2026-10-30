@@ -632,7 +632,7 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.fast_aircraft = openttd_orders_fast_aircraft,
 	.no_jet_crash = openttd_orders_no_jet_crash,
 	.append_station = openttd_orders_append_station,
-	.invalidate_station_list = GetRustStationCommandServices().station_list_classes_invalidate,
+	.station_commands = &GetRustStationCommandServices(),
 	.command_error = openttd_orders_command_error,
 	.timetable_dirty = openttd_orders_timetable_dirty,
 	.invalidate_order = openttd_orders_invalidate_order,

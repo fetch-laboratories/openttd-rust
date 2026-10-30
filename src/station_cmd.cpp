@@ -799,10 +799,9 @@ static const OpenTTDStationLinks _rust_station_links = {
 	},
 	.last_service = RustVehicleLastServiceOf,
 	.cargo_type = RustVehicleCargoType,
-	.storage = []() noexcept { return GetStationResolverServices().cargo; },
 	.goods_entry = RustStationGoodsEntry,
-	.station_cargo = GetStationResolverServices().cargo_owner,
-	.vehicle_cargo = GetRustVehicleResolverServices().cargo_owner,
+	.station_resolver = &GetStationResolverServices(),
+	.vehicle_resolver = &GetRustVehicleResolverServices(),
 };
 const OpenTTDStationServices &GetRustStationServices() noexcept { return _rust_station_services; }
 const OpenTTDStationLinks &GetRustStationLinks() noexcept { return _rust_station_links; }
