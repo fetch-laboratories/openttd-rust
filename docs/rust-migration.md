@@ -68,10 +68,10 @@ Python 3.11 or newer, SDL2 development files, and the normal OpenTTD libraries d
 unnecessary. The verification driver requires the pinned Rust toolchain and always configures
 the candidate with `OPTION_RUST=ON`. Ordinary CMake builds still default to `OPTION_RUST=OFF`,
 which compiles the original C++ bodies. Rust linkage supports native GNU/Linux (64-bit x86 or
-ARM) and native macOS arm64. The scoped native Windows MSVC mode is described below. Other
-platforms, cross compilation, and macOS universal/Intel configurations reject an enabled Rust
-option. #581 builds Rust on every CI configuration, including Emscripten, then removes the
-option and the fallback bodies.
+ARM), native macOS arm64 and Emscripten. The scoped native Windows MSVC mode is described below.
+Other platforms, other cross compilation, and macOS universal/Intel configurations reject an
+enabled Rust option. #581 builds Rust on every CI configuration, then removes the option and the
+fallback bodies.
 
 On Ubuntu with administrator access:
 
@@ -442,8 +442,13 @@ CMake verifies the pinned `rustc -vV` host against the actual C++ platform, arch
 resolved SDK and minimum supplied to Rust through `SDKROOT` and `MACOSX_DEPLOYMENT_TARGET` (see
 Rust's [Darwin target
 documentation](https://doc.rust-lang.org/rustc/platform-support/apple-darwin.html)). Intel
-packaging and additional Windows CRT modes remain separate tasks; Emscripten host/target builds
-are #581.
+packaging and additional Windows CRT modes remain separate tasks.
+
+Emscripten builds the archive for `wasm32-unknown-emscripten` with 4-byte pointers, so its
+toolchain needs that standard library besides the host one its native `HOST_BINARY_DIR` tools
+link. rustc reports no native libraries for this target, and emcc links C++ JavaScript
+exceptions (`-s DISABLE_EXCEPTION_CATCHING=0`) beside the `panic=abort` archive. The Emscripten
+CI job runs `openttd_rust_abi` under emsdk's node.
 
 Archives live at `<build>/cargo/<validated-target>/release/libopenttd_kernels.a`.
 `tools/migration.py` exposes `rust_configuration(build)` and `rust_archive(build)`; all
