@@ -2,7 +2,7 @@
 /** @file heightmap_ffi.h One heightmap read: native codecs, Rust input policy. */
 #ifndef RUST_HEIGHTMAP_FFI_H
 #define RUST_HEIGHTMAP_FFI_H
-#include "service_defaults.hpp"
+#include "services_ffi.h"
 #include <cstddef>
 #include <cstdint>
 #include "../gfx_type.h"
@@ -29,6 +29,7 @@ struct OpenTTDHeightmapBmp {
  * source fixes the file kind and name for the read; finish releases every codec
  * resource and may run when none was acquired. */
 struct OpenTTDHeightmapInput {
+	const OpenTTDSharedServices *shared;
 	void *context;
 	OpenTTDHeightmapStrings strings;
 	uint8_t (*source)(void *) noexcept OPENTTD_SERVICE_DEFAULT(source);
@@ -36,8 +37,6 @@ struct OpenTTDHeightmapInput {
 	uint8_t (*bmp_header)(void *, OpenTTDHeightmapBmp *) noexcept OPENTTD_SERVICE_DEFAULT(bmp_header);
 	bool (*bmp_bitmap)(void *, OpenTTDHeightmapBmp *) noexcept OPENTTD_SERVICE_DEFAULT(bmp_bitmap);
 	void (*finish)(void *) noexcept OPENTTD_SERVICE_DEFAULT(finish);
-	void (*error)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(error);
-	void (*not_reached)() noexcept OPENTTD_SERVICE_DEFAULT(not_reached);
 };
 extern "C" bool openttd_rust_heightmap_dimensions(const OpenTTDHeightmapInput *, uint32_t *, uint32_t *);
 #endif /* RUST_HEIGHTMAP_FFI_H */

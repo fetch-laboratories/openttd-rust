@@ -34,7 +34,6 @@ struct OpenTTDLandscapeGenerationServices {
 	OpenTTDFlatTileHeight (*flat_height)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(flat_height);
 	bool (*river)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(river);
 	void (*set_snow_line)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_snow_line);
-	void (*not_reached)() noexcept OPENTTD_SERVICE_DEFAULT(not_reached);
 	void (*river_debug)(bool, uint32_t, uint32_t, uint32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(river_debug);
 	void (*assert_condition)(bool) noexcept OPENTTD_SERVICE_DEFAULT(assert_condition);
 	void (*sea_construct)(OpenTTDGenerationFrame *) noexcept OPENTTD_SERVICE_DEFAULT(sea_construct);

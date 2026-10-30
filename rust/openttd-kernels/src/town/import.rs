@@ -48,7 +48,6 @@ pub struct ImportServices {
     /// Read and parse `_file_to_saveload`; false for any file, parse or non-array failure.
     pub load: extern "C" fn(*mut Frame) -> bool,
     pub feature: extern "C" fn(*mut Frame, usize, *mut Feature) -> u8,
-    pub error: extern "C" fn(u32, u32),
     pub named_error: extern "C" fn(u32, u32, ByteSpan),
     pub failed_warning: extern "C" fn(u32, u32),
     /// `Command<CMD_FOUND_TOWN>::Do(DoCommandFlag::Execute, ...)`, returning the town ID.
@@ -57,12 +56,11 @@ pub struct ImportServices {
     pub place_sign: extern "C" fn(Tile, ByteSpan),
     /// `Command<CMD_EXPAND_TOWN>::Post`.
     pub expand: extern "C" fn(TownId, u32, u8),
-    pub not_reached: extern "C" fn(),
 }
 
 impl ImportServices {
     fn format_error(&self) {
-        (self.error)(self.strings.load_failed, self.strings.json_format);
+        (unsafe { &*self.shared }.show_error)(self.strings.load_failed, self.strings.json_format);
     }
 
     /// The target tile, with the original float products and unsigned conversions.
@@ -84,7 +82,7 @@ impl ImportServices {
                 Tile(map.tile_xy(((1.0 - y * max_x) as i64) as u32, (x * max_y) as u32))
             }
             _ => {
-                (self.not_reached)();
+                (s.not_reached)();
                 Tile(0)
             }
         }
@@ -233,5 +231,5 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDTownDataFeature" ["genworld"] => Feature { name, population, x, y, city, };
     "OpenTTDTownDataStrings" ["genworld"] => Strings { load_failed, json_format, town_format, bad_coordinate, failed_towns, };
-    "OpenTTDTownDataServices" ["genworld"] => ImportServices { shared, founding, strings, load, feature, error, named_error, failed_warning, found, place_sign, expand, not_reached, };
+    "OpenTTDTownDataServices" ["genworld"] => ImportServices { shared, founding, strings, load, feature, named_error, failed_warning, found, place_sign, expand, };
 }

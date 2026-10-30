@@ -63,6 +63,7 @@ pub struct Bmp {
 /// One synchronous read's native decoder. `source` fixes the file for the read.
 #[repr(C)]
 pub struct Input {
+    pub shared: *const crate::services::Services,
     pub context: *mut c_void,
     pub strings: Strings,
     pub source: extern "C" fn(*mut c_void) -> u8,
@@ -70,8 +71,6 @@ pub struct Input {
     pub bmp_header: extern "C" fn(*mut c_void, *mut Bmp) -> u8,
     pub bmp_bitmap: extern "C" fn(*mut c_void, *mut Bmp) -> bool,
     pub finish: extern "C" fn(*mut c_void),
-    pub error: extern "C" fn(u32, u32),
-    pub not_reached: extern "C" fn(),
 }
 
 /// A decoded image: dimensions and, when requested, one greyscale byte per pixel.
@@ -106,7 +105,7 @@ fn ordered_palette(gray: &mut [u8; 256], size: usize) {
 
 impl Input {
     fn fail(&self, summary: u32, detail: u32) -> Option<Image> {
-        (self.error)(summary, detail);
+        (unsafe { &*self.shared }.show_error)(summary, detail);
         (self.finish)(self.context);
         None
     }
@@ -165,7 +164,7 @@ impl Input {
         match (self.bmp_header)(self.context, &raw mut bmp) {
             DECODE_OK => {}
             DECODE_NOT_FOUND => {
-                (self.error)(s.bmp, s.not_found);
+                (unsafe { &*self.shared }.show_error)(s.bmp, s.not_found);
                 return None;
             }
             _ => return self.fail(s.bmp, s.bmp_image_type),
@@ -196,7 +195,7 @@ impl Input {
             DFT_HEIGHTMAP_PNG => self.read_png(want_map),
             DFT_HEIGHTMAP_BMP => self.read_bmp(want_map),
             _ => {
-                (self.not_reached)();
+                (unsafe { &*self.shared }.not_reached)();
                 None
             }
         }
@@ -308,7 +307,7 @@ crate::abi::layouts! {
     "OpenTTDHeightmapStrings" ["landscape"] => Strings { png, bmp, not_found, png_misc, png_image_type, bmp_image_type, too_large, };
     "OpenTTDHeightmapPng" ["landscape"] => Png { width, height, rows, palette, palette_size, channels, bit_depth, has_palette, };
     "OpenTTDHeightmapBmp" ["landscape"] => Bmp { width, height, palette_size, palette, palette_len, bitmap, bpp, };
-    "OpenTTDHeightmapInput" ["landscape"] => Input { context, strings, source, png, bmp_header, bmp_bitmap, finish, error, not_reached, };
+    "OpenTTDHeightmapInput" ["landscape"] => Input { shared, context, strings, source, png, bmp_header, bmp_bitmap, finish, };
 }
 
 #[cfg(test)]

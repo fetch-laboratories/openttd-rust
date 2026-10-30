@@ -593,7 +593,6 @@ static const OpenTTDTownDataServices &GetRustTownDataServices() noexcept
 		},
 		.load = TownDataLoad,
 		.feature = TownDataFeature,
-		.error = RustShowErrorMessage,
 		.named_error = [](uint32_t summary, uint32_t detail, OpenTTDByteSpan name) noexcept { ShowErrorMessage(GetEncodedString(summary), GetEncodedString(detail, TownDataName(name)), WL_ERROR); },
 		.failed_warning = [](uint32_t detail, uint32_t count) noexcept { ShowErrorMessage(GetEncodedString(detail, count), {}, WL_WARNING); },
 		.found = [](uint32_t tile, TownSize size, bool city, TownLayout layout, bool random, uint32_t parts, OpenTTDByteSpan name) noexcept {
@@ -601,7 +600,6 @@ static const OpenTTDTownDataServices &GetRustTownDataServices() noexcept
 		},
 		.place_sign = [](uint32_t tile, OpenTTDByteSpan name) noexcept { Command<CMD_PLACE_SIGN>::Post(TileIndex(tile), TownDataName(name)); },
 		.expand = [](uint16_t town, uint32_t amount, uint8_t modes) noexcept { Command<CMD_EXPAND_TOWN>::Post(TownID(town), amount, TownExpandModes(modes)); },
-		.not_reached = RustNotReached,
 	};
 	return services;
 }

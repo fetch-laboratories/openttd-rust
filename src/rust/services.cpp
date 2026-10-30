@@ -21,6 +21,7 @@
 #include "road_command_ffi.h"
 #include "road_stop_ffi.h"
 #include "presentation_services.h"
+#include "services_assert.h"
 #include "tile_animation_services.h"
 #include "vehicle_services.h"
 #include "services_water.h"
@@ -481,6 +482,8 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.for_each_station = SharedForEachStation,
 	.road_stop_type = SharedRoadStopType,
 	.road_stops = []() noexcept { return &GetRustRoadStopServices(); },
+	.show_error = RustShowErrorMessage,
+	.not_reached = RustNotReached,
 };
 
 const OpenTTDSharedServices &GetRustSharedServices() noexcept

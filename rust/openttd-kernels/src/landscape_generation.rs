@@ -102,7 +102,6 @@ pub struct GenerationServices {
     pub flat_height: extern "C" fn(u32) -> FlatHeight,
     pub river: extern "C" fn(u32) -> bool,
     pub set_snow_line: extern "C" fn(u8),
-    pub not_reached: extern "C" fn(),
     pub river_debug: extern "C" fn(bool, u32, u32, u32, i32, i32),
     pub assert_condition: extern "C" fn(bool),
     pub sea_construct: extern "C" fn(*mut Frame),
@@ -258,7 +257,7 @@ impl World<'_> {
         const DIV: u32 = 16384;
         const _: () = assert!(DIV <= u32::MAX / MAX_HEIGHTMAP_SIDE_LENGTH_IN_PIXELS);
         if rotation != HM_COUNTER_CLOCKWISE && rotation != HM_CLOCKWISE {
-            (self.a.not_reached)();
+            (self.s.not_reached)();
         }
         let (width, height) = if rotation == HM_COUNTER_CLOCKWISE {
             (self.map.size_x(), self.size_y)
@@ -1273,7 +1272,7 @@ impl<'a, 'w> RiverBuilder<'a, 'w> {
         }
         if let Some(&old) = self.closed.get(&node.get_tile()) {
             if node.estimate < self.nodes[old].estimate {
-                (self.world.a.not_reached)();
+                (self.world.s.not_reached)();
             }
             return;
         }
@@ -1342,6 +1341,6 @@ crate::abi::layouts! {
     "OpenTTDGenerationLoop" ["landscape"] => crate::landscape_generation::Loop {settings,services,};
     "OpenTTDLandscapeGenerationSettings" ["landscape"] => crate::landscape_generation::Settings {max_search_nodes,climate,generator,rivers,min_river_length,route_random,terrain,sea,snow_coverage,desert_coverage,tree_placer,height_limit,rotation,heightmap_height,freeform,};
     "OpenTTDLandscapeGenerationServices" ["landscape"] => crate::landscape_generation::GenerationServices {
-        shared, clear, water, trees, landscape_commands, water_commands, set_progress, increase_progress, begin_loop, end_loop, tgp_settings, terrain_template, flat_height, river, set_snow_line, not_reached, river_debug, assert_condition, sea_construct, sea_destroy, sea_insert, sea_contains, sea_size, sea_first, sea_next, set_height, inner_tile, make_void, screen_dirty, surrounded_by_water, set_freeform, clear_bridge_middle,
+        shared, clear, water, trees, landscape_commands, water_commands, set_progress, increase_progress, begin_loop, end_loop, tgp_settings, terrain_template, flat_height, river, set_snow_line, river_debug, assert_condition, sea_construct, sea_destroy, sea_insert, sea_contains, sea_size, sea_first, sea_next, set_height, inner_tile, make_void, screen_dirty, surrounded_by_water, set_freeform, clear_bridge_middle,
     };
 }

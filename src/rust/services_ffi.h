@@ -200,6 +200,8 @@ struct OpenTTDSharedServices {
 	void (*for_each_station)(void *, void (*)(void *, const OpenTTDStation *, OpenTTDStationService *, uint16_t)) noexcept OPENTTD_SERVICE_DEFAULT(for_each_station); ///< Live Station::Iterate(); resolves the next slot after each visit, including reentry.
 	RoadStopType (*road_stop_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_stop_type);
 	const OpenTTDRoadStopServices *(*road_stops)() noexcept OPENTTD_SERVICE_DEFAULT(road_stops);
+	void (*show_error)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(show_error);
+	void (*not_reached)() noexcept OPENTTD_SERVICE_DEFAULT(not_reached);
 };
 extern const OpenTTDSharedServices _rust_shared_services;
 struct OpenTTDSubsidyServices;

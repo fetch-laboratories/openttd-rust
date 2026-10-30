@@ -569,7 +569,7 @@ impl Session<'_> {
                 self.sized_world(crate::genworld::GWM_RANDOM, true)?;
                 (s.dirty)();
             }
-            _ => (unsafe { &*(*((s.world)())).landscape }.not_reached)(),
+            _ => (unsafe { &*s.shared }.not_reached)(),
         }
         Ok(())
     }
