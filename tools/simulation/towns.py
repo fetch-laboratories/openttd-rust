@@ -1189,7 +1189,7 @@ def check_town_data(run: dict[str, Any]) -> None:
     rows = {
         p[2]: p[3:6]
         for line in run["log"]
-        if line.startswith("TOWN data ") and len(p := line.split()) == 8
+        if line.startswith("TOWN data ") and len(p := line.split()) == 10
     }
     for name, _, towns, signs, errors in TOWN_DATA_INPUTS:
         if rows.get(name) != [str(towns), str(signs), str(errors)]:

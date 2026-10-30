@@ -248,7 +248,7 @@ static void GenerationSnapshot(std::string_view name)
 {
 	uint64_t map = 14695981039346656037ULL;
 	for (TileIndex tile : Map::Iterate()) for (uint32_t value : GenerationTile(Tile{tile})) map = (map ^ value) * 1099511628211ULL;
-	fmt::print(stderr, "GENERATION map {} {} {} {} {} {}\n", name, map, _random.state[0], _random.state[1], _settings_game.construction.freeform_edges, _settings_game.game_creation.snow_line_height);
+	fmt::print(stderr, "GENERATION map {} {} {} {} {} {} {} {}\n", name, map, _random.state[0], _random.state[1], _settings_game.construction.freeform_edges, _settings_game.game_creation.snow_line_height, _interactive_random.state[0], _interactive_random.state[1]);
 }
 /* Observe each heightmap error; -vnull shows no window. */
 static int generation_errors = 0;

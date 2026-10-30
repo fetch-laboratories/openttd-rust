@@ -369,6 +369,12 @@ def check(scenario, run, mode, role, result):
                 "missing successful heightmap landscape/climate/river progress"
             )
         check_heightmap_inputs(lines)
+        if any(
+            len(line.split()) != 10
+            for line in lines
+            if line.startswith("GENERATION map ")
+        ):
+            raise RuntimeError("missing map or simulation/interactive RNG observations")
         if sum(line.startswith("GENERATION map ") for line in lines) != 42 + len(
             heightmap_inputs()
         ):

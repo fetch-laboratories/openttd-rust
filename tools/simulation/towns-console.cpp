@@ -800,7 +800,7 @@ static bool TownDataScenario(std::span<std::string_view> args)
 		std::vector<TownID> before; for (const Town *t : Town::Iterate()) before.push_back(t->index);
 		town_data_errors = 0;
 		LoadTownData();
-		fmt::print(stderr, "TOWN data {} {} {} {} {} {}\n", name, Town::GetNumItems() - towns, Sign::GetNumItems() - signs, town_data_errors, _random.state[0], _random.state[1]);
+		fmt::print(stderr, "TOWN data {} {} {} {} {} {} {} {}\n", name, Town::GetNumItems() - towns, Sign::GetNumItems() - signs, town_data_errors, _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]);
 		for (const Town *t : Town::Iterate()) {
 			if (std::ranges::find(before, t->index) != before.end()) continue;
 			fmt::print(stderr, "TOWN data-town {} {} {} {} {} {}\n", name, t->GetCachedName(), t->xy.base(), t->larger_town, t->cache.num_houses, t->cache.population);
