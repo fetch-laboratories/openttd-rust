@@ -285,8 +285,8 @@ pub struct Services {
     pub is_drive_through_stop: extern "C" fn(u32) -> bool,
     /// `IsLevelCrossingTile`.
     pub is_level_crossing: extern "C" fn(u32) -> bool,
-    /// Original native `is_normal_road` map observation.
-    pub is_normal_road: extern "C" fn(u32) -> bool,
+    /// Original native `IsNormalRoadTile` map observation.
+    pub is_normal_road_tile: extern "C" fn(u32) -> bool,
     /// Original native `is_plain_rail` map observation.
     pub is_plain_rail: extern "C" fn(u32) -> bool,
     /// Original native `is_road_depot` map observation.
@@ -475,14 +475,6 @@ pub type StationVisitor = unsafe extern "C" fn(
     *mut crate::station_service::Service,
     u16,
 );
-/// Canonical `TileVirtXY` and tile type observation, in native call order.
-#[repr(C)]
-pub struct PixelLocation {
-    /// Tile index from unsigned pixel coordinates.
-    pub tile: u32,
-    /// Native tile type.
-    pub kind: u8,
-}
 /// `GetFoundationSlope` result: height and slope after the tile's foundation.
 #[repr(C)]
 pub struct FoundationSlope {
@@ -542,10 +534,6 @@ crate::abi::layouts! {
     "OpenTTDEnvironmentServices" ["common"] => EnvironmentServices {
         editor,
         freeform_edges,
-    };
-    "OpenTTDPixelLocation" ["landscape"] => PixelLocation {
-        tile,
-        kind,
     };
     "OpenTTDFoundationSlope" ["landscape"] => FoundationSlope {
         z,
@@ -716,7 +704,7 @@ crate::abi::layouts! {
         is_bridge,
         is_drive_through_stop,
         is_level_crossing,
-        is_normal_road,
+        is_normal_road_tile,
         is_plain_rail,
         is_road_depot,
         is_sea,
@@ -943,7 +931,7 @@ pub fn fixture(
         is_bridge: flag,
         is_drive_through_stop: flag,
         is_level_crossing: flag,
-        is_normal_road: flag,
+        is_normal_road_tile: flag,
         is_plain_rail: flag,
         is_road_depot: flag,
         is_sea: flag,

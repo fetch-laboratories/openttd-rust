@@ -4,32 +4,33 @@ Root selects here; `AGENTS.md` and the docs in its routing table define process.
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-10-31, code at `063e7b28f1`)
+## Where the fork stands (2026-10-31, code at `e48846d8fd`)
 
 Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh.
 
-- This session integrated five PRs; no rollback ran. Metrics are
+- This session has integrated two PRs so far, with no rollback. Metrics are
   `tools/port-metrics.py` code lines (Rust / tooling / original retired / net
   glue):
-  - 32, #579 company identity (`0de459cbe1`): 995 / 205 / 373 / +315;
-  - 33, #583 Rust by default and on Linux CI, #581 PR-A (`d531622d32`):
-    0 / 0 / 0 / 0;
-  - 34, #590 rebound-callee gate and housekeeping fix, #582 (`29b65dd186`):
-    0 / 964 / 0 / 0;
-  - 35, #591 Emscripten links Rust on emsdk 4.0.23 with WebAssembly
-    exceptions, #581 PR-E (`69f02851be`): 0 / 21 / 0 / 0;
-  - 36, #595 Clang missing-initializer fixes in `src/tests`
-    (`063e7b28f1`): 0 / 0 / 0 / +18.
+  - 37, #593 heightmap input and town-data import (`b74888c4bc`):
+    554 / 389 / 278 / +193;
+  - 38, #576 movement terrain and water entries in place (`e48846d8fd`):
+    546 / 61 / 0 / +15.
+- Whole fork at `e48846d8fd`: retired 51,941 of 284,355 (18.27%, +278 since
+  `29b65dd186`); glue 33,391 (+224); compiled C++ 265,805 (93.48%, -54);
+  simulation logic left 10,674 (-276), storage 11,048 (-2); 1,337 exports
+  and 4,190 callback slots (+5). Tooling totals 49,603 lines.
+- Unintegrated branches: six (#568, #594, #596, #603, #586 and the #565
+  item 1 PR).
 - Every CI configuration now builds Rust. #581 PR-B, the sweep, remains.
-- Whole fork at `29b65dd186` (not re-measured after it): retired 51,663 of
-  284,355 (18.17%); glue 33,167; compiled C++ 265,859 (93.50%); simulation
-  logic left 10,950, storage 11,050; 1,337 exports and 4,185 callback slots.
-- Speed: profile 36 (`11c285f939`, code as `063e7b28f1`) moved every
-  instruction count by under 0.05% from profile 32; the table below shows its
-  projections. The integration-30 rise is attributed to #569's road follower
-  crossings (#275). Its fix-forward batch (#565 item 1 plus #275's two items)
-  waits for #576. Grok and Opus stay in the play band, so the quiet pass is
-  due; it needs an idle host.
+- Speed: profile 38 (`e48846d8fd`) rose sharply against profile 36
+  (`11c285f939`): candidate Ir +46% TGP, +29% Grok, +27% Opus, +13% to +15%
+  on the Padhattan saves. Every projection is over its ceiling (table below).
+  The cause is #576's in-place map helpers, which cost more per read than the
+  C++ services they replaced (attribution on #275, 2026-10-31). Under the
+  speed policy the fix goes forward in the next maintenance PR, mapload565
+  (#565 item 1, #275's two fix-forward items and #592), whose target is
+  profile 36's Ir or lower on every scenario. Ready ownership PRs proceed
+  meanwhile. The quiet pass waits for that fix.
 - Platform cadence: run 41174701345 on `rust-migration` after #595 passed
   every platform, confirming its Clang `-Wmissing-field-initializers` fix.
 - Deep checks: the sanitized, threaded, TSan and multiplayer rotation started
@@ -39,18 +40,17 @@ Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh.
   missing" for the sanitized build's native-test-support archive (#503), not
   fidelity differences. Deep checks now run only on the user's request
   ([deep-check policy](deep-checks.md#policy), user decision 2026-10-31), so it does not restart by itself.
-- Housekeeping removed 49 finished T3 worktrees (71.8 GB). #592 now also
-  covers the shared-accessor check misreading `OpenTTDXServices name{};`.
+- Housekeeping this session removed 14 finished T3 worktrees (38.3 GB).
 - Original coverage: 330 of 449 traces are complete; gaps are on #156.
 
-| Scenario | Latest quiet anchor | Profile-36 projection | Record with growth |
-| --- | ---: | ---: | ---: |
-| TGP | 1.1117x | 1.1117x | 1.1541x |
-| Grok | 1.3871x | 1.5766x | 1.5749x |
-| Opus | 1.3939x | 1.5612x | 1.5618x |
-| P1996 | 1.3366x | 1.3817x | 1.3829x |
-| P2000 | 1.4006x | 1.4284x | 1.4293x |
-| P2016 | 1.5229x | 1.5653x | 1.5231x |
+| Scenario | Latest quiet anchor | Profile-36 projection | Profile-38 projection | Record with growth |
+| --- | ---: | ---: | ---: | ---: |
+| TGP | 1.1117x | 1.1117x | 2.1219x | 2.2028x |
+| Grok | 1.3871x | 1.5766x | 2.4471x | 2.4445x |
+| Opus | 1.3939x | 1.5612x | 2.3647x | 2.3657x |
+| P1996 | 1.3366x | 1.3817x | 1.7827x | 1.7843x |
+| P2000 | 1.4006x | 1.4284x | 1.7968x | 1.7979x |
+| P2016 | 1.5229x | 1.5653x | 1.9922x | 1.9386x |
 
 ## Phases
 
@@ -313,6 +313,7 @@ Rust / tooling / original C++ retired / net glue.
 | 35 | #581 PR-E, Emscripten links Rust on emsdk 4.0.23 / #591 | `69f02851be` | 0 / 21 / 0 / 0 |
 | 36 | Clang missing-initializer fixes in `src/tests` / #595 | `063e7b28f1` | 0 / 0 / 0 / +18 |
 | 37 | #584 heightmap input and town-data import / #593 | `b74888c4bc` | 554 / 389 / 278 / +193 |
+| 38 | #565 movement terrain and water entries in place / #576 | `e48846d8fd` | 546 / 61 / 0 / +15 |
 
 ## Work order
 
@@ -421,7 +422,7 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
 
 Recurring:
 - Profile the merged tip after every second integration; the next is due
-  after integration 38. Launch it with the pinned `LD_LIBRARY_PATH` that
+  after integration 40. Launch it with the pinned `LD_LIBRARY_PATH` that
   docs/rust-migration.md names.
 - Deep checks run only on the user's request (user decision, 2026-10-31).
 - The fifth-integration platform cadence is due after integration 40.
@@ -447,28 +448,30 @@ Excluded, with return conditions checked by this review:
   near-full reproduction under #513's original-default setting policy. #513
   needs implementation when the first such improvement is accepted.
 
-## Resume checkpoint (2026-10-31, integration 37)
+## Resume checkpoint (2026-10-31, integration 38)
 
-Claude Code root (claude-opus-5-5, xhigh) resumed at `11c285f939`; #593
-integrated as integration 37 (`b74888c4bc`). Drafts integrate one at a time
-because every pair shares service files; each merge needs the next draft
-updated from base. Order: #576, #596, #568, #594.
+Claude Code root (claude-opus-5-5, xhigh) resumed at `11c285f939`. #593
+integrated as integration 37 (`b74888c4bc`) and #576 as integration 38
+(`e48846d8fd`). Drafts integrate one at a time because every pair shares
+service files; each merge needs the next draft updated from base. Order: #568,
+#603, #594, #596 once fixed, then #586 and the #565 PR.
 
 | Draft | Pushed head | State and next action | Worktree |
 | --- | --- | --- | --- |
-| #565 / #576 | `f5ea17e1dd` | Updated (update576, condition (a)); root's warning-only fix. 1. Update from base after #593. 2. Full. 3. Merge. Then #565 item 1 with #275's fix-forward and #592. | `t3-f870f713` |
-| #585 / #596 | `eeab615a38` | Spot-checked by root; updated (update596, condition (a)); 52 of 52 scenarios equal. Update from base after #576, then Full. | `t3-489ff2ae` (implementation) |
-| #562 / #568 | `6ab951af32` | Updated (update568, condition (a)); root's warning-only fix. Update from base after #596, then Full. | `t3-070c9aac` (implementation) |
-| #587 / #594 | `adcea34bb3` | Updated (update594). Its `src/tests/train.cpp` resolution meets neither condition and needs a fresh conflict reviewer; one review covers it with its final base update. | `t3-9836ee35` |
-| #199 batch | none yet | faults199 running: #199's four ready integrated-fault items; `CargoFlow` waits for #568. Independent review, then Full. | T3 worktree |
+| #585 / #596 | `cc56eeb7a1` | Full 41178590847 failed: the engine-types fixture wraps `InitGRFTownGeneratorNames`, which the Rust build no longer defines. fix596-engines is moving the hook. Then a fresh scoped review, a base update and Full. | `t3-d920cf58` |
+| #562 / #568 | `6ab951af32` | Updated (update568, condition (a)); root's warning-only fix. Base update, then Full (next to integrate). | `t3-070c9aac` (implementation) |
+| #587 / #594 | `b655b40c0a` | conflict594 reviewed the `train.cpp` resolution and fixed two docs omissions. Base update, then Full. | `t3-9836ee35` |
+| #199 / #603 | `70215c21cb` | review603 fixed four missing native assertions; root spot-checked. Item 4 waits for #604. Base update, then Full. | T3 worktree |
+| #565 / #275 / #592 | none yet | mapload565 running: #565 item 1, #275's two fix-forward items, #592 and the profile-38 regression fix (target: profile 36's Ir). Independent review, then Full. | T3 worktree |
+| #586 | none yet | signs586 running. Cost decision at its first checkpoint, then review. | T3 worktree |
 
 | Running or due work | State / next action |
 | --- | --- |
-| Branch limit | Five unintegrated branches plus #586 once started; #565 item 1 starts after #576 integrates. |
+| Branch limit | Six unintegrated branches (#568, #594, #596, #603, #586 and the #565 PR). The next branch starts after an integration. |
 | Deep checks | On the user's request only (user decision, 2026-10-31). If one is requested, use `.local/worktrees/deep-after30-569` (locked). Move it with `git checkout --detach origin/rust-migration` and relock it. Then run `python3 tools/migration.py build --jobs 2`, then `cmake --build build-rust-sanitized --target openttd_rust_native_test_support_build` until #503's fix lands, then `python3 tools/migration.py deep` with the requested `--member` options. Launch outside the session's process group, for example as a `systemd-run --user` unit. |
-| Instruction profile | Profile 36 is retained in `.local/worktrees/profile-after36-595` (locked). The next is due after integration 38. |
-| Quiet speed pass | Due (Grok and Opus in the play band); needs an idle host. |
-| Maintenance | #565 item 1 with #275's fix-forward and #592, after #576 integrates; #581 PR-B after #568 and #576 integrate. |
+| Instruction profile | Profiles 36 and 38 are retained in `.local/worktrees/profile-after36-595` and `profile-after38-576` (locked) for the regression comparison. The next is due after integration 40, or when the fix-forward PR integrates. |
+| Quiet speed pass | Waits for the profile-38 regression fix; needs an idle host. |
+| Maintenance | #581 PR-B after #568 integrates; #604 at the next planning round. |
 | Housekeeping | Lock a running Codex agent's worktree before `--apply` until #592 integrates. |
 
 Keep the pinned reference unchanged. Preserve unfinished checkouts and existing
