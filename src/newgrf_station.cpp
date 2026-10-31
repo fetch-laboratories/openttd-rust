@@ -190,11 +190,7 @@ uint8_t GoodsEntry::ConvertState() const
 #endif
 }
 
-enum TriggerArea : uint8_t {
-	TA_TILE,
-	TA_PLATFORM,
-	TA_WHOLE,
-};
+
 
 /**
  * Evaluate a tile's position within a station, and return the result in a bit-stuffed format.
