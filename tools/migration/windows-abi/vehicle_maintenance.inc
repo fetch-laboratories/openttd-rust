@@ -2,6 +2,9 @@
 
 #include "trees.inc"
 #include "vehicle_tables.inc"
+#include "rust/company_ffi.h"
+#include "rust/engine_capabilities_ffi.h"
+#include "rust/fleet_ffi.h"
 
 /* Explicit trivial Date and actual VehicleType carriers and aggregate return/write call ABI. Opaque
  * shells are never dereferenced; the game target checks real member stores. */
@@ -39,6 +42,48 @@ static void VehicleMaintenanceBoundary()
 	CHECK(openttd_rust_vehicle_needs_renew(shell, &base, nullptr, false));
 	CHECK(!openttd_rust_vehicle_needs_renew(shell, &base, nullptr, true));
 	CHECK(dirty == 2 && resets == 1 && values == 1);
+	/* Replacement budgets use the Rust engine price before observing available money. */
+	static OpenTTDEngineCapabilitiesServices capabilities{};
+	static OpenTTDVehicleResolverServices resolver{};
+	static uint32_t stage;
+	static uint16_t factor;
+	static int64_t available;
+	static int engine_shell;
+	resolver.spritegroup = [](uint16_t, uint8_t) noexcept -> const SpriteGroup * { return nullptr; };
+	resolver.resolve_callback = [](OpenTTDVehicleResolverState *, uint16_t id, uint16_t callback, uint32_t property, uint32_t, int32_t *, size_t) noexcept -> uint16_t {
+		CHECK(stage++ == 0 && id == 123 && callback == CBID_VEHICLE_MODIFY_PROPERTY && property == 0x11);
+		return factor;
+	};
+	capabilities.resolver = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
+	capabilities.engine = [](uint16_t) noexcept { return reinterpret_cast<const OpenTTDEngine *>(&engine_shell); };
+	capabilities.kind = [](const OpenTTDEngine *) noexcept { return VEH_ROAD; };
+	capabilities.id = [](const OpenTTDEngine *) noexcept -> uint16_t { return 123; };
+	capabilities.ground = [](const OpenTTDEngine *) noexcept { return false; };
+	capabilities.carrying = [](const OpenTTDEngine *) noexcept -> OpenTTDEngineCarrying { return {.kind = VEH_ROAD, .ground_capacity = 0, .default_cargo = INVALID_CARGO}; };
+	capabilities.road_cost = [](const OpenTTDEngine *) noexcept -> uint8_t { return 53; };
+	capabilities.price_shift = [](const OpenTTDEngine *, uint32_t index) noexcept -> int32_t { CHECK(stage++ == 1 && index == PR_BUILD_VEHICLE_ROAD); return 0; };
+	OpenTTDFleetTransactionServices transactions{}; transactions.capabilities = &capabilities;
+	maintenance.transaction = &transactions;
+	base.status = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
+	base.vehicle_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return VEH_ROAD; };
+	maintenance.interval = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicleMaintenanceInterval { return {.company = nullptr, .last_service = {0}, .now = {100}, .interval = 1, .no_service = true}; };
+	maintenance.budget = [](const Company *) noexcept -> OpenTTDVehicleMaintenanceBudget { return {.needed = 100, .available = 1000000}; };
+	maintenance.replacement = [](OpenTTDVehicle *, const Company *) noexcept -> OpenTTDVehicleMaintenanceReplacement { return {.engine = 1, .when_old = false}; };
+	maintenance.replacement_available = [](OpenTTDVehicle *, uint16_t) noexcept { return true; };
+	maintenance.available_money = [](const Company *) noexcept -> int64_t { CHECK(stage++ == 2); return available; };
+	const int64_t original_price = openttd_rust_economy_prices()[PR_BUILD_VEHICLE_ROAD];
+	openttd_rust_economy_prices()[PR_BUILD_VEHICLE_ROAD] = 25600;
+	for (uint16_t value : {CALLBACK_FAILED, uint16_t{17}}) {
+		factor = value;
+		const int64_t needed = value == CALLBACK_FAILED ? 10700 : 3500;
+		for (bool funded : {false, true}) {
+			available = needed - !funded; stage = 0;
+			CHECK(openttd_rust_vehicle_needs_service(shell, &base) == funded);
+			CHECK(stage == 3);
+		}
+	}
+	openttd_rust_economy_prices()[PR_BUILD_VEHICLE_ROAD] = original_price;
+	maintenance.transaction = nullptr;
 }
 
 /* Actual native storage type is checked by the game-side shell probe; this
