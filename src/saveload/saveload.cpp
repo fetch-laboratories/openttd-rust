@@ -122,7 +122,8 @@ static SaveLoadParams _sl; ///< Parameters used for/at saveload.
 
 /** Codec action, length, array, block and header state and buffer cursors, owned by Rust. */
 static OpenTTDRustSaveLoadCodec &_codec = [] () -> OpenTTDRustSaveLoadCodec & {
-	static_assert(sizeof(SaveLoadVersion) == sizeof(uint16_t) && SLV_SAVELOAD_LIST_LENGTH == 293);
+	static_assert(sizeof(SaveLoadVersion) == sizeof(uint16_t) && SLV_4 == 4 && SLV_69 == 69 && SLV_SAVELOAD_LIST_LENGTH == 293);
+	static_assert(REF_VEHICLE == 1 && REF_LINK_GRAPH_JOB == 11 && sizeof(size_t) == sizeof(void *));
 	OpenTTDRustSaveLoadCodec &codec = *openttd_rust_saveload_codec();
 	codec.version = reinterpret_cast<const uint16_t *>(&_sl_version);
 	codec.minor_version = &_sl_minor_version;
@@ -140,6 +141,20 @@ static bool SlNativeFrame(F &&operation) noexcept
 	return true;
 }
 
+/** Index of a pool item, for ReferenceToInt. */
+template <typename T>
+static uint32_t SlPoolIndex(const void *obj) noexcept
+{
+	return static_cast<const T *>(obj)->index.base();
+}
+
+/** Pool item at an index, or nullptr when the index is invalid, for IntToReference. */
+template <typename T>
+static void *SlPoolGet(size_t index) noexcept
+{
+	return T::IsValidID(index) ? T::Get(index) : nullptr;
+}
+
 static const OpenTTDSaveLoadServices _sl_services = {
 	.native_assert = []([[maybe_unused]] bool ok) noexcept { assert(ok); },
 	.debug_iterate_error = []() noexcept { Debug(sl, 0, "SlIterateArray error"); },
@@ -148,6 +163,26 @@ static const OpenTTDSaveLoadServices _sl_services = {
 	.finish = [](void *filter) noexcept { return SlNativeFrame([&] { static_cast<SaveFilter *>(filter)->Finish(); }); },
 	.remap_old_string = [](uint32_t id) noexcept -> uint32_t { return RemapOldStringID(static_cast<uint16_t>(id)); },
 	.copy_from_old_name = [](void *ptr, uint32_t id) noexcept { *reinterpret_cast<std::string *>(ptr) = CopyFromOldName(id); },
+	.cargo_packet_get = &SlPoolGet<CargoPacket>,
+	.cargo_packet_index = &SlPoolIndex<CargoPacket>,
+	.engine_renew_get = &SlPoolGet<EngineRenew>,
+	.engine_renew_index = &SlPoolIndex<EngineRenew>,
+	.link_graph_get = &SlPoolGet<LinkGraph>,
+	.link_graph_index = &SlPoolIndex<LinkGraph>,
+	.link_graph_job_get = &SlPoolGet<LinkGraphJob>,
+	.link_graph_job_index = &SlPoolIndex<LinkGraphJob>,
+	.order_list_get = &SlPoolGet<OrderList>,
+	.order_list_index = &SlPoolIndex<OrderList>,
+	.persistent_storage_get = &SlPoolGet<PersistentStorage>,
+	.persistent_storage_index = &SlPoolIndex<PersistentStorage>,
+	.road_stop_get = &SlPoolGet<RoadStop>,
+	.road_stop_index = &SlPoolIndex<RoadStop>,
+	.station_get = &SlPoolGet<Station>,
+	.station_index = &SlPoolIndex<Station>,
+	.town_get = &SlPoolGet<Town>,
+	.town_index = &SlPoolIndex<Town>,
+	.vehicle_get = &SlPoolGet<Vehicle>,
+	.vehicle_index = &SlPoolIndex<Vehicle>,
 };
 
 static const std::vector<ChunkHandlerRef> &ChunkHandlers()
@@ -486,7 +521,7 @@ static inline uint8_t SlCalcConvFileLen(VarType conv)
 /** Return the size in bytes of a reference (pointer) */
 static inline size_t SlCalcRefLen()
 {
-	return IsSavegameVersionBefore(SLV_69) ? 2 : 4;
+	return openttd_rust_saveload_ref_len();
 }
 
 void SlSetArrayIndex(uint index)
@@ -724,135 +759,13 @@ static void SlArray(void *array, size_t length, VarType conv)
 }
 
 /**
- * Pointers cannot be saved to a savegame, so this functions gets
- * the index of the item, and if not available, it hussles with
- * pointers (looks really bad :()
- * Remember that a nullptr item has value 0, and all
- * indices have +1, so vehicle 0 is saved as index 1.
- * @param obj The object that we want to get the index of
- * @param rt SLRefType type of the object the index is being sought of
- * @return Return the pointer converted to an index of the type pointed to
- */
-static size_t ReferenceToInt(const void *obj, SLRefType rt)
-{
-	assert(_codec.action == SLA_SAVE);
-
-	if (obj == nullptr) return 0;
-
-	switch (rt) {
-		case REF_VEHICLE_OLD: // Old vehicles we save as new ones
-		case REF_VEHICLE:   return ((const  Vehicle*)obj)->index + 1;
-		case REF_STATION:   return ((const  Station*)obj)->index + 1;
-		case REF_TOWN:      return ((const     Town*)obj)->index + 1;
-		case REF_ROADSTOPS: return ((const RoadStop*)obj)->index + 1;
-		case REF_ENGINE_RENEWS:  return ((const       EngineRenew*)obj)->index + 1;
-		case REF_CARGO_PACKET:   return ((const       CargoPacket*)obj)->index + 1;
-		case REF_ORDERLIST:      return ((const         OrderList*)obj)->index + 1;
-		case REF_STORAGE:        return ((const PersistentStorage*)obj)->index + 1;
-		case REF_LINK_GRAPH:     return ((const         LinkGraph*)obj)->index + 1;
-		case REF_LINK_GRAPH_JOB: return ((const      LinkGraphJob*)obj)->index + 1;
-		default: NOT_REACHED();
-	}
-}
-
-/**
- * Pointers cannot be loaded from a savegame, so this function
- * gets the index from the savegame and returns the appropriate
- * pointer from the already loaded base.
- * Remember that an index of 0 is a nullptr pointer so all indices
- * are +1 so vehicle 0 is saved as 1.
- * @param index The index that is being converted to a pointer
- * @param rt SLRefType type of the object the pointer is sought of
- * @return Return the index converted to a pointer of any type
- */
-static void *IntToReference(size_t index, SLRefType rt)
-{
-	static_assert(sizeof(size_t) <= sizeof(void *));
-
-	assert(_codec.action == SLA_PTRS);
-
-	/* After version 4.3 REF_VEHICLE_OLD is saved as REF_VEHICLE,
-	 * and should be loaded like that */
-	if (rt == REF_VEHICLE_OLD && !IsSavegameVersionBefore(SLV_4, 4)) {
-		rt = REF_VEHICLE;
-	}
-
-	/* No need to look up nullptr pointers, just return immediately */
-	if (index == (rt == REF_VEHICLE_OLD ? 0xFFFF : 0)) return nullptr;
-
-	/* Correct index. Old vehicles were saved differently:
-	 * invalid vehicle was 0xFFFF, now we use 0x0000 for everything invalid. */
-	if (rt != REF_VEHICLE_OLD) index--;
-
-	switch (rt) {
-		case REF_ORDERLIST:
-			if (OrderList::IsValidID(index)) return OrderList::Get(index);
-			SlErrorCorrupt("Referencing invalid OrderList");
-
-		case REF_VEHICLE_OLD:
-		case REF_VEHICLE:
-			if (Vehicle::IsValidID(index)) return Vehicle::Get(index);
-			SlErrorCorrupt("Referencing invalid Vehicle");
-
-		case REF_STATION:
-			if (Station::IsValidID(index)) return Station::Get(index);
-			SlErrorCorrupt("Referencing invalid Station");
-
-		case REF_TOWN:
-			if (Town::IsValidID(index)) return Town::Get(index);
-			SlErrorCorrupt("Referencing invalid Town");
-
-		case REF_ROADSTOPS:
-			if (RoadStop::IsValidID(index)) return RoadStop::Get(index);
-			SlErrorCorrupt("Referencing invalid RoadStop");
-
-		case REF_ENGINE_RENEWS:
-			if (EngineRenew::IsValidID(index)) return EngineRenew::Get(index);
-			SlErrorCorrupt("Referencing invalid EngineRenew");
-
-		case REF_CARGO_PACKET:
-			if (CargoPacket::IsValidID(index)) return CargoPacket::Get(index);
-			SlErrorCorrupt("Referencing invalid CargoPacket");
-
-		case REF_STORAGE:
-			if (PersistentStorage::IsValidID(index)) return PersistentStorage::Get(index);
-			SlErrorCorrupt("Referencing invalid PersistentStorage");
-
-		case REF_LINK_GRAPH:
-			if (LinkGraph::IsValidID(index)) return LinkGraph::Get(index);
-			SlErrorCorrupt("Referencing invalid LinkGraph");
-
-		case REF_LINK_GRAPH_JOB:
-			if (LinkGraphJob::IsValidID(index)) return LinkGraphJob::Get(index);
-			SlErrorCorrupt("Referencing invalid LinkGraphJob");
-
-		default: NOT_REACHED();
-	}
-}
-
-/**
  * Handle conversion for references.
  * @param ptr The object being filled/read.
  * @param conv VarType type of the current element of the struct.
  */
 void SlSaveLoadRef(void *ptr, VarType conv)
 {
-	switch (_codec.action) {
-		case SLA_SAVE:
-			SlWriteUint32((uint32_t)ReferenceToInt(*(void **)ptr, (SLRefType)conv));
-			break;
-		case SLA_LOAD_CHECK:
-		case SLA_LOAD:
-			*(size_t *)ptr = IsSavegameVersionBefore(SLV_69) ? SlReadUint16() : SlReadUint32();
-			break;
-		case SLA_PTRS:
-			*(void **)ptr = IntToReference(*(size_t *)ptr, (SLRefType)conv);
-			break;
-		case SLA_NULL:
-			*(void **)ptr = nullptr;
-			break;
-		default: NOT_REACHED();
-	}
+	SlRaise(openttd_rust_saveload_ref(&_sl_services, ptr, conv));
 }
 
 /**

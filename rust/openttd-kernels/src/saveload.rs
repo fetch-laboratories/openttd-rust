@@ -54,7 +54,22 @@ pub(crate) const CH_TABLE: u8 = 3;
 pub(crate) const CH_SPARSE_TABLE: u8 = 4;
 
 /// `SaveLoadVersion` values in `saveload.h` that the codec tests.
+pub(crate) const SLV_4: u16 = 4;
+pub(crate) const SLV_69: u16 = 69;
 pub(crate) const SLV_SAVELOAD_LIST_LENGTH: u16 = 293;
+
+/// `SLRefType` in `saveload.h`.
+pub(crate) const REF_VEHICLE: u32 = 1;
+pub(crate) const REF_STATION: u32 = 2;
+pub(crate) const REF_TOWN: u32 = 3;
+pub(crate) const REF_VEHICLE_OLD: u32 = 4;
+pub(crate) const REF_ROADSTOPS: u32 = 5;
+pub(crate) const REF_ENGINE_RENEWS: u32 = 6;
+pub(crate) const REF_CARGO_PACKET: u32 = 7;
+pub(crate) const REF_ORDERLIST: u32 = 8;
+pub(crate) const REF_STORAGE: u32 = 9;
+pub(crate) const REF_LINK_GRAPH: u32 = 10;
+pub(crate) const REF_LINK_GRAPH_JOB: u32 = 11;
 
 /// `VarTypes` in `saveload.h`.
 pub(crate) const SLE_FILE_END: u32 = 0;
@@ -153,6 +168,28 @@ pub struct OpenTTDSaveLoadServices {
     pub remap_old_string: extern "C" fn(id: u32) -> u32,
     /// `*reinterpret_cast<std::string *>(ptr) = CopyFromOldName(id)`.
     pub copy_from_old_name: extern "C" fn(ptr: *mut c_void, id: u32),
+    /// Pool references: `index` returns `obj->index`; `get` returns `T::Get(index)` when
+    /// `T::IsValidID(index)`, otherwise null.
+    pub cargo_packet_get: extern "C" fn(index: usize) -> *mut c_void,
+    pub cargo_packet_index: extern "C" fn(obj: *const c_void) -> u32,
+    pub engine_renew_get: extern "C" fn(index: usize) -> *mut c_void,
+    pub engine_renew_index: extern "C" fn(obj: *const c_void) -> u32,
+    pub link_graph_get: extern "C" fn(index: usize) -> *mut c_void,
+    pub link_graph_index: extern "C" fn(obj: *const c_void) -> u32,
+    pub link_graph_job_get: extern "C" fn(index: usize) -> *mut c_void,
+    pub link_graph_job_index: extern "C" fn(obj: *const c_void) -> u32,
+    pub order_list_get: extern "C" fn(index: usize) -> *mut c_void,
+    pub order_list_index: extern "C" fn(obj: *const c_void) -> u32,
+    pub persistent_storage_get: extern "C" fn(index: usize) -> *mut c_void,
+    pub persistent_storage_index: extern "C" fn(obj: *const c_void) -> u32,
+    pub road_stop_get: extern "C" fn(index: usize) -> *mut c_void,
+    pub road_stop_index: extern "C" fn(obj: *const c_void) -> u32,
+    pub station_get: extern "C" fn(index: usize) -> *mut c_void,
+    pub station_index: extern "C" fn(obj: *const c_void) -> u32,
+    pub town_get: extern "C" fn(index: usize) -> *mut c_void,
+    pub town_index: extern "C" fn(obj: *const c_void) -> u32,
+    pub vehicle_get: extern "C" fn(index: usize) -> *mut c_void,
+    pub vehicle_index: extern "C" fn(obj: *const c_void) -> u32,
 }
 
 struct Codec {
@@ -323,6 +360,13 @@ fn write_uint64(x: u64) {
 fn version_before(major: u16) -> bool {
     // SAFETY: Native code points the codec at `_sl_version` before any save or load.
     unsafe { *shared(|s| s.version) < major }
+}
+
+/// `IsSavegameVersionBefore(major, minor)`.
+fn version_before_minor(major: u16, minor: u8) -> bool {
+    let (version, minor_version) = shared(|s| (s.version, s.minor_version));
+    // SAFETY: As in `version_before`, for both version globals.
+    unsafe { *version < major || (minor > 0 && *version == major && *minor_version < minor) }
 }
 
 /// `_sl_version`.
@@ -842,6 +886,110 @@ unsafe fn array(
     }
 }
 
+/// `ReferenceToInt`: index + 1, or 0 for null.
+fn reference_to_int(services: &OpenTTDSaveLoadServices, obj: *const c_void, rt: u32) -> usize {
+    (services.native_assert)(shared(|s| s.action) == SLA_SAVE);
+
+    if obj.is_null() {
+        return 0;
+    }
+
+    // Old vehicles are saved as new ones.
+    let index = match rt {
+        REF_VEHICLE_OLD | REF_VEHICLE => services.vehicle_index,
+        REF_STATION => services.station_index,
+        REF_TOWN => services.town_index,
+        REF_ROADSTOPS => services.road_stop_index,
+        REF_ENGINE_RENEWS => services.engine_renew_index,
+        REF_CARGO_PACKET => services.cargo_packet_index,
+        REF_ORDERLIST => services.order_list_index,
+        REF_STORAGE => services.persistent_storage_index,
+        REF_LINK_GRAPH => services.link_graph_index,
+        REF_LINK_GRAPH_JOB => services.link_graph_job_index,
+        _ => unreachable!("NOT_REACHED in ReferenceToInt"),
+    };
+    index(obj) as usize + 1
+}
+
+/// `IntToReference`: index 0 is null, other indices are one more than the pool index.
+fn int_to_reference(
+    services: &OpenTTDSaveLoadServices,
+    mut index: usize,
+    mut rt: u32,
+) -> Result<*mut c_void, OpenTTDRustSaveLoadStatus> {
+    (services.native_assert)(shared(|s| s.action) == SLA_PTRS);
+
+    // From 4.4, REF_VEHICLE_OLD is saved as REF_VEHICLE.
+    if rt == REF_VEHICLE_OLD && !version_before_minor(SLV_4, 4) {
+        rt = REF_VEHICLE;
+    }
+
+    if index == if rt == REF_VEHICLE_OLD { 0xFFFF } else { 0 } {
+        return Ok(std::ptr::null_mut());
+    }
+
+    // Old vehicles were saved differently: invalid was 0xFFFF.
+    if rt != REF_VEHICLE_OLD {
+        index = index.wrapping_sub(1);
+    }
+
+    let (get, kind) = match rt {
+        REF_ORDERLIST => (services.order_list_get, "OrderList"),
+        REF_VEHICLE_OLD | REF_VEHICLE => (services.vehicle_get, "Vehicle"),
+        REF_STATION => (services.station_get, "Station"),
+        REF_TOWN => (services.town_get, "Town"),
+        REF_ROADSTOPS => (services.road_stop_get, "RoadStop"),
+        REF_ENGINE_RENEWS => (services.engine_renew_get, "EngineRenew"),
+        REF_CARGO_PACKET => (services.cargo_packet_get, "CargoPacket"),
+        REF_STORAGE => (services.persistent_storage_get, "PersistentStorage"),
+        REF_LINK_GRAPH => (services.link_graph_get, "LinkGraph"),
+        REF_LINK_GRAPH_JOB => (services.link_graph_job_get, "LinkGraphJob"),
+        _ => unreachable!("NOT_REACHED in IntToReference"),
+    };
+    let obj = get(index);
+    if obj.is_null() {
+        return Err(corrupt(format!("Referencing invalid {kind}")));
+    }
+    Ok(obj)
+}
+
+/// `SlSaveLoadRef`.
+///
+/// # Safety
+/// `ptr` points to a pointer field that holds an index between load and pointer fixing.
+unsafe fn save_load_ref(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv: u32) -> Status {
+    let ptr = ptr.cast::<*mut c_void>();
+    // `(SLRefType)conv` narrows to the enum's byte.
+    let rt = conv & 0xFF;
+    match shared(|s| s.action) {
+        SLA_SAVE => {
+            // SAFETY: The caller's contract.
+            let obj = unsafe { ptr.read_unaligned() };
+            write_uint32(reference_to_int(services, obj, rt) as u32);
+        }
+        SLA_LOAD_CHECK | SLA_LOAD => {
+            let index = if version_before(SLV_69) {
+                usize::from(read_uint16(services)?)
+            } else {
+                read_uint32(services)? as usize
+            };
+            // SAFETY: The caller's contract; size_t and pointers have the same size.
+            unsafe { ptr.cast::<usize>().write_unaligned(index) };
+        }
+        SLA_PTRS => {
+            // SAFETY: The caller's contract.
+            let index = unsafe { ptr.cast::<usize>().read_unaligned() };
+            let obj = int_to_reference(services, index, rt)?;
+            // SAFETY: The caller's contract.
+            unsafe { ptr.write_unaligned(obj) };
+        }
+        // SAFETY: The caller's contract.
+        SLA_NULL => unsafe { ptr.write_unaligned(std::ptr::null_mut()) },
+        _ => unreachable!("NOT_REACHED in SlSaveLoadRef"),
+    }
+    Ok(())
+}
+
 fn status(result: Status) -> OpenTTDRustSaveLoadStatus {
     result.err().unwrap_or(SL_STATUS_OK)
 }
@@ -1161,6 +1309,26 @@ pub unsafe extern "C" fn openttd_rust_saveload_array_len(
     }))
 }
 
+/// `SlSaveLoadRef`.
+///
+/// # Safety
+/// `ptr` points to a reference field.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_saveload_ref(
+    services: &OpenTTDSaveLoadServices,
+    ptr: *mut c_void,
+    conv: u32,
+) -> OpenTTDRustSaveLoadStatus {
+    // SAFETY: The caller's contract.
+    status(unsafe { save_load_ref(services, ptr, conv) })
+}
+
+/// `SlCalcRefLen`.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_saveload_ref_len() -> usize {
+    if version_before(SLV_69) { 2 } else { 4 }
+}
+
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDRustSaveLoadCodec" ["probe"] => OpenTTDRustSaveLoadCodec {
@@ -1187,5 +1355,25 @@ crate::abi::layouts! {
         finish,
         remap_old_string,
         copy_from_old_name,
+        cargo_packet_get,
+        cargo_packet_index,
+        engine_renew_get,
+        engine_renew_index,
+        link_graph_get,
+        link_graph_index,
+        link_graph_job_get,
+        link_graph_job_index,
+        order_list_get,
+        order_list_index,
+        persistent_storage_get,
+        persistent_storage_index,
+        road_stop_get,
+        road_stop_index,
+        station_get,
+        station_index,
+        town_get,
+        town_index,
+        vehicle_get,
+        vehicle_index,
     };
 }

@@ -47,6 +47,27 @@ typedef struct OpenTTDSaveLoadServices {
 	bool (*finish)(void *filter);
 	uint32_t (*remap_old_string)(uint32_t id);
 	void (*copy_from_old_name)(void *ptr, uint32_t id);
+	/* Pool references: index returns obj->index; get returns T::Get(index) if T::IsValidID(index), else null. */
+	void *(*cargo_packet_get)(size_t index);
+	uint32_t (*cargo_packet_index)(const void *obj);
+	void *(*engine_renew_get)(size_t index);
+	uint32_t (*engine_renew_index)(const void *obj);
+	void *(*link_graph_get)(size_t index);
+	uint32_t (*link_graph_index)(const void *obj);
+	void *(*link_graph_job_get)(size_t index);
+	uint32_t (*link_graph_job_index)(const void *obj);
+	void *(*order_list_get)(size_t index);
+	uint32_t (*order_list_index)(const void *obj);
+	void *(*persistent_storage_get)(size_t index);
+	uint32_t (*persistent_storage_index)(const void *obj);
+	void *(*road_stop_get)(size_t index);
+	uint32_t (*road_stop_index)(const void *obj);
+	void *(*station_get)(size_t index);
+	uint32_t (*station_index)(const void *obj);
+	void *(*town_get)(size_t index);
+	uint32_t (*town_index)(const void *obj);
+	void *(*vehicle_get)(size_t index);
+	uint32_t (*vehicle_index)(const void *obj);
 } OpenTTDSaveLoadServices;
 
 OpenTTDRustSaveLoadCodec *openttd_rust_saveload_codec(void);
@@ -81,6 +102,8 @@ OpenTTDRustSaveLoadStatus openttd_rust_saveload_conv(const OpenTTDSaveLoadServic
 OpenTTDRustSaveLoadStatus openttd_rust_saveload_conv_file_len(const OpenTTDSaveLoadServices *services, uint32_t conv, uint8_t *length);
 OpenTTDRustSaveLoadStatus openttd_rust_saveload_copy(const OpenTTDSaveLoadServices *services, void *object, size_t length, uint32_t conv);
 OpenTTDRustSaveLoadStatus openttd_rust_saveload_array(const OpenTTDSaveLoadServices *services, void *object, size_t length, uint32_t conv);
+OpenTTDRustSaveLoadStatus openttd_rust_saveload_ref(const OpenTTDSaveLoadServices *services, void *ptr, uint32_t conv);
+size_t openttd_rust_saveload_ref_len(void);
 OpenTTDRustSaveLoadStatus openttd_rust_saveload_array_len(const OpenTTDSaveLoadServices *services, size_t elements, uint32_t conv, size_t *length);
 
 #ifdef __cplusplus
