@@ -41,8 +41,9 @@ Agent: /root | Model: gpt-6.1-sol | Reasoning effort: xhigh.
 | Boundary layer | 0 | 0 | 0 | 18,120 | 18,120 |
 | **Whole fork** | **284,355** | **52,558** | **231,797** | **33,628** | **265,425** |
 
-- Six unintegrated branches: #596, #603, #605, #606, #607 and #608.
-  #608 takes the slot freed by #594. #601 is the next unstarted phase-1 owner.
+- Six selected component slots: drafts #603, #605, #606, #607 and #608,
+  plus #601 in the slot freed by integrated #596. #608 took #594's slot.
+  The company-control remainder is next unstarted, with an issue before selection.
 - Every CI configuration builds Rust. #581 PR-B is draft #607; its mechanical
   fallback sweep and reference-oracle changes are under validation. #570
   starts after it integrates.
@@ -338,6 +339,7 @@ Rust / tooling / original C++ retired / net glue.
 | 38 | #565 movement terrain and water entries in place / #576 | `e48846d8fd` | 546 / 61 / 0 / +15 |
 | 39 | #562 station naming, tile loop and lifecycle / #568 | `4733594d75` | 983 / 248 / 295 / +70 |
 | 40 | #587 simulation-setting transitions and commands / #594 | `b01e7fd5c8` | 726 / 180 / 322 / +167 |
+| 41 | #585 NewGRF town-name state, generation and ActionF / #596 | `a2429cda1f` | 393 / 209 / 190 / +37 |
 
 ## Work order
 
@@ -346,8 +348,8 @@ six-branch limit and disjoint-service rule; completing review/integration takes
 priority. A lower rank can run while a higher one waits. Scopes live in issues.
 
 1. **Finish the remaining drafts in readiness order, with the steering fixes.**
-   #568 and #594 integrated as integrations 39 and 40. #596 and #605 follow
-   in ownership readiness order; #608 is implementing the next selected owner.
+   #568, #594 and #596 integrated as integrations 39 to 41. #605 is the
+   next reviewed ownership integration; #608 and #601 implement selected owners.
    #606 must be the next maintenance integration before #603. Each next action
    is in the checkpoint. No reviewed owner gains other scope; a fix the audit
    found is not new scope.
@@ -388,8 +390,8 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
    1. #587 simulation-setting transitions: integrated as #594 (integration 40);
    2. #584 world-input generation, heightmap input and town-data import:
       integrated as #593 (integration 37);
-   3. #585 NewGRF town-name storage and generation plus ActionF (168, +40 to
-      +85), in review (#596);
+   3. #585 NewGRF town-name storage, generation and ActionF: integrated as
+      #596 (integration 41), with 190 retired and +37 net glue;
    4. #586 sign and depot naming, implemented in #605 (75 retired, first
       checkpoint +131 net glue and 260 tooling; root accepted the necessary
       native-operation and evidence cost);
@@ -401,7 +403,8 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
       lines to reproduce 284 native template lines, which remain for GUI
       indexes and receive no retirement credit here. The concrete checkpoint
       supersedes the old -10 to +50 glue estimate;
-   6. #601 industry remainder (142, -10 to +40), after #568;
+   6. #601 industry remainder (142, -10 to +40), selected in the slot freed
+      by #596. Keep its industry services separate from #600's town index;
    7. company-control remainder (about 121, +30 to +70), then engine runtime
       (about 100, +40 to +80); root issues each when a slot takes it. Keep
       presentation and pool-coupled constructors out of these owners;
@@ -501,15 +504,16 @@ Excluded, with return conditions checked by this review:
   near-full reproduction under #513's original-default setting policy. #513
   needs implementation when the first such improvement is accepted.
 
-## Resume checkpoint (2026-10-31, integration 40)
+## Resume checkpoint (2026-10-31, integration 41)
 
 Codex root has taken over from Claude Code root at `9cf6b7898e`.
 Agent: /root | Model: gpt-6.1-sol | Reasoning effort: xhigh.
-#568 integrated as integration 39 (`4733594d75`) and #594 as integration 40
-(`b01e7fd5c8`), each after current-base exact-head Full. #562 and #587 are
-closed. Drafts integrate one at a time because every pair shares service
-files; each merge needs the next draft updated from base. Ownership readiness
-order is #596, then #605. #608 implements the newly selected #600 owner.
+#568 integrated as integration 39 (`4733594d75`), #594 as integration 40
+(`b01e7fd5c8`), and #596 as integration 41 (`a2429cda1f`), each after
+current-base exact-head Full. #562, #587 and #585 are closed. Drafts
+integrate one at a time because every pair shares service files; each merge
+needs the next draft updated from base. #605 is the next reviewed ownership
+integration. #608 implements #600; #601 takes the slot freed by #596.
 #606 remains the next maintenance integration before #603 and #607. The
 integration-40 stocktake, instruction profile and platform cadence are
 complete. The next ordinary stocktake and profile are due after
@@ -517,16 +521,16 @@ integration 42, or profile sooner when #606 integrates.
 
 | Draft | Pushed head | State and next action | Worktree |
 | --- | --- | --- | --- |
-| #585 / #596 | `8b4cb010f8` | Scoped engine-types hook review passed with no findings; build and three scenarios passed. Next: current-base update, classify conflicts, then root's Full. Next ownership integration. | `t3-489ff2ae` (implementation); new update worktree |
 | #581 / #607 | `9277315a39` | Draft mechanical sweep and pinned fallback-reading oracles. Guard tests, Ruff, ty and preflight passed; native/Cargo, affected comparisons, metrics, source replay and preprocessing evidence pending. Root accepted the bounded first-checkpoint tooling cost. Fresh fixing review, then bootstrap Full after #606. | `t3-4076556a` |
 | #199 / #603 | `70215c21cb` | Reviewed four native-assertion fixes; root spot-checked. Current-base update and Full after #606, without expanding the accepted scope. Item 4 is #604. | `t3-120ef117` |
 | #565 / #275 / #592 / #606 | `2df021c421` | Road-search caching and fixture-header separation pushed. Builds and inventories passed; native tests and six repair measurements remain pending. Target: profile 36's Ir or lower per scenario. Fresh fixing review, then current-base Full; next maintenance integration. | `t3-d6cdd816` (active); `t3-431c84b4` (locked source) |
-| #586 / #605 | `b7a469889a` | Fixing review removed the extra sign-name copy and reused canonical presentation bindings. Root spot-checked; affected build, ABI and signs checks passed. Current-base update and Full when ready to integrate. | `t3-08065140`; `t3-a695ea95` (locked source) |
-| #600 / #608 | `c367d5182c` | First concrete boundary cost accepted. Cargo check and preflight passed; verification and metrics running. Complete bounded scenario evidence and traversal-order verification, then fresh fixing review. | `t3-a9d3a3a4` |
+| #586 / #605 | `b7a469889a` | Fixing review and root spot-check complete; affected build, ABI and signs checks passed. Next: current-base update from integration 41, classify conflicts, then root's exact-head Full. | `t3-08065140`; `t3-a695ea95` (locked source); new update worktree |
+| #600 / #608 | `74b6e5f3eb` | Cost accepted at first checkpoint. Bounded town/subsidy observations, native fixture adaptation, callback removal and mutation wrapping fix pushed. Preflight passed; verification and affected scenarios remain pending. Coverage limits are on #156. Fresh fixing review after implementation evidence. | `t3-a9d3a3a4` |
+| #601 | none yet | Selected industry servicing, production news and random selection owner. Preserve the separate #600 town-index scope. Root decides cost at its first concrete boundary/evidence checkpoint. | New Codex T3 worktree |
 
 | Running or due work | State / next action |
 | --- | --- |
-| Branch limit | Six selected component branches (#596, #603, #605, #606, #607 and #608). Start no seventh; #601 is next unstarted phase-1 owner. |
+| Branch limit | Six selected slots (#603, #605, #606, #607, #608 and #601). Start no seventh. Company control is next unstarted; issue it before selection. |
 | Platform cadence | Integration 40 passed every required configuration and the bounded platform semantic subset. Next cadence after integration 45. |
 | Deep checks | On the user's request only (user decision, 2026-10-31). If one is requested, use `.local/worktrees/deep-after30-569` (locked). Move it with `git checkout --detach origin/rust-migration` and relock it. Then run `python3 tools/migration.py build --jobs 2`, then `cmake --build build-rust-sanitized --target openttd_rust_native_test_support_build` until #503's fix lands, then `python3 tools/migration.py deep` with the requested `--member` options. Launch outside the session's process group, for example as a `systemd-run --user` unit. |
 | Instruction profile | Profile 40 passed all six semantic comparisons; projections are above ceilings but did not rise from profile 38. Profiles 36, 38 and 40 are retained in `.local/worktrees/profile-after36-595`, `profile-after38-576` and `profile-after40-594` (locked). Next profile after integration 42, or when #606 integrates. |
