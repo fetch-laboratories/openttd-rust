@@ -121,7 +121,13 @@ struct SaveLoadParams {
 static SaveLoadParams _sl; ///< Parameters used for/at saveload.
 
 /** Codec action, length, array, block and header state and buffer cursors, owned by Rust. */
-static OpenTTDRustSaveLoadCodec &_codec = *openttd_rust_saveload_codec();
+static OpenTTDRustSaveLoadCodec &_codec = [] () -> OpenTTDRustSaveLoadCodec & {
+	static_assert(sizeof(SaveLoadVersion) == sizeof(uint16_t) && SLV_SAVELOAD_LIST_LENGTH == 293);
+	OpenTTDRustSaveLoadCodec &codec = *openttd_rust_saveload_codec();
+	codec.version = reinterpret_cast<const uint16_t *>(&_sl_version);
+	codec.minor_version = &_sl_minor_version;
+	return codec;
+}();
 /** Exception caught by a native filter frame under a Rust codec entry, until rethrown. */
 static std::exception_ptr _sl_native_exception;
 
@@ -140,6 +146,8 @@ static const OpenTTDSaveLoadServices _sl_services = {
 	.read = [](void *filter, uint8_t *buf, size_t len, size_t *read) noexcept { return SlNativeFrame([&] { *read = static_cast<LoadFilter *>(filter)->Read(buf, len); }); },
 	.write = [](void *filter, const uint8_t *buf, size_t len) noexcept { return SlNativeFrame([&] { static_cast<SaveFilter *>(filter)->Write(const_cast<uint8_t *>(buf), len); }); },
 	.finish = [](void *filter) noexcept { return SlNativeFrame([&] { static_cast<SaveFilter *>(filter)->Finish(); }); },
+	.remap_old_string = [](uint32_t id) noexcept -> uint32_t { return RemapOldStringID(static_cast<uint16_t>(id)); },
+	.copy_from_old_name = [](void *ptr, uint32_t id) noexcept { *reinterpret_cast<std::string *>(ptr) = CopyFromOldName(id); },
 };
 
 static const std::vector<ChunkHandlerRef> &ChunkHandlers()
@@ -367,39 +375,21 @@ void SlWriteByte(uint8_t b)
 
 static inline int SlReadUint16()
 {
-	int x = SlReadByte() << 8;
-	return x | SlReadByte();
+	uint16_t x;
+	SlRaise(openttd_rust_saveload_read_uint16(&_sl_services, &x));
+	return x;
 }
 
 static inline uint32_t SlReadUint32()
 {
-	uint32_t x = SlReadUint16() << 16;
-	return x | SlReadUint16();
-}
-
-static inline uint64_t SlReadUint64()
-{
-	uint32_t x = SlReadUint32();
-	uint32_t y = SlReadUint32();
-	return (uint64_t)x << 32 | y;
-}
-
-static inline void SlWriteUint16(uint16_t v)
-{
-	SlWriteByte(GB(v, 8, 8));
-	SlWriteByte(GB(v, 0, 8));
+	uint32_t x;
+	SlRaise(openttd_rust_saveload_read_uint32(&_sl_services, &x));
+	return x;
 }
 
 static inline void SlWriteUint32(uint32_t v)
 {
-	SlWriteUint16(GB(v, 16, 16));
-	SlWriteUint16(GB(v,  0, 16));
-}
-
-static inline void SlWriteUint64(uint64_t x)
-{
-	SlWriteUint32((uint32_t)(x >> 32));
-	SlWriteUint32((uint32_t)x);
+	openttd_rust_saveload_write_uint32(v);
 }
 
 /** Read a gamma-encoded index or length. */
@@ -482,61 +472,15 @@ static uint8_t GetSavegameFileType(const SaveLoad &sld)
 
 /**
  * Return the size in bytes of a certain type of normal/atomic variable
- * as it appears in memory. See VarTypes
- * @param conv VarType type of variable that is used for calculating the size
- * @return Return the size of this type in bytes
- */
-static inline uint SlCalcConvMemLen(VarType conv)
-{
-	switch (GetVarMemType(conv)) {
-		case SLE_VAR_BL: return sizeof(bool);
-		case SLE_VAR_I8: return sizeof(int8_t);
-		case SLE_VAR_U8: return sizeof(uint8_t);
-		case SLE_VAR_I16: return sizeof(int16_t);
-		case SLE_VAR_U16: return sizeof(uint16_t);
-		case SLE_VAR_I32: return sizeof(int32_t);
-		case SLE_VAR_U32: return sizeof(uint32_t);
-		case SLE_VAR_I64: return sizeof(int64_t);
-		case SLE_VAR_U64: return sizeof(uint64_t);
-		case SLE_VAR_NULL: return 0;
-
-		case SLE_VAR_STR:
-		case SLE_VAR_STRQ:
-			return SlReadArrayLength();
-
-		case SLE_VAR_NAME:
-		default:
-			NOT_REACHED();
-	}
-}
-
-/**
- * Return the size in bytes of a certain type of normal/atomic variable
  * as it appears in a saved game. See VarTypes
  * @param conv VarType type of variable that is used for calculating the size
  * @return Return the size of this type in bytes
  */
 static inline uint8_t SlCalcConvFileLen(VarType conv)
 {
-	switch (GetVarFileType(conv)) {
-		case SLE_FILE_END: return 0;
-		case SLE_FILE_I8: return sizeof(int8_t);
-		case SLE_FILE_U8: return sizeof(uint8_t);
-		case SLE_FILE_I16: return sizeof(int16_t);
-		case SLE_FILE_U16: return sizeof(uint16_t);
-		case SLE_FILE_I32: return sizeof(int32_t);
-		case SLE_FILE_U32: return sizeof(uint32_t);
-		case SLE_FILE_I64: return sizeof(int64_t);
-		case SLE_FILE_U64: return sizeof(uint64_t);
-		case SLE_FILE_STRINGID: return sizeof(uint16_t);
-
-		case SLE_FILE_STRING:
-			return SlReadArrayLength();
-
-		case SLE_FILE_STRUCT:
-		default:
-			NOT_REACHED();
-	}
+	uint8_t length;
+	SlRaise(openttd_rust_saveload_conv_file_len(&_sl_services, conv, &length));
+	return length;
 }
 
 /** Return the size in bytes of a reference (pointer) */
@@ -617,19 +561,7 @@ size_t SlGetFieldLength()
  */
 int64_t ReadValue(const void *ptr, VarType conv)
 {
-	switch (GetVarMemType(conv)) {
-		case SLE_VAR_BL:  return (*(const bool *)ptr != 0);
-		case SLE_VAR_I8:  return *(const int8_t  *)ptr;
-		case SLE_VAR_U8:  return *(const uint8_t  *)ptr;
-		case SLE_VAR_I16: return *(const int16_t *)ptr;
-		case SLE_VAR_U16: return *(const uint16_t*)ptr;
-		case SLE_VAR_I32: return *(const int32_t *)ptr;
-		case SLE_VAR_U32: return *(const uint32_t*)ptr;
-		case SLE_VAR_I64: return *(const int64_t *)ptr;
-		case SLE_VAR_U64: return *(const uint64_t*)ptr;
-		case SLE_VAR_NULL:return 0;
-		default: NOT_REACHED();
-	}
+	return openttd_rust_saveload_read_value(ptr, conv);
 }
 
 /**
@@ -641,76 +573,17 @@ int64_t ReadValue(const void *ptr, VarType conv)
  */
 void WriteValue(void *ptr, VarType conv, int64_t val)
 {
-	switch (GetVarMemType(conv)) {
-		case SLE_VAR_BL:  *(bool  *)ptr = (val != 0);  break;
-		case SLE_VAR_I8:  *(int8_t  *)ptr = val; break;
-		case SLE_VAR_U8:  *(uint8_t  *)ptr = val; break;
-		case SLE_VAR_I16: *(int16_t *)ptr = val; break;
-		case SLE_VAR_U16: *(uint16_t*)ptr = val; break;
-		case SLE_VAR_I32: *(int32_t *)ptr = val; break;
-		case SLE_VAR_U32: *(uint32_t*)ptr = val; break;
-		case SLE_VAR_I64: *(int64_t *)ptr = val; break;
-		case SLE_VAR_U64: *(uint64_t*)ptr = val; break;
-		case SLE_VAR_NAME: *reinterpret_cast<std::string *>(ptr) = CopyFromOldName(val); break;
-		case SLE_VAR_NULL: break;
-		default: NOT_REACHED();
-	}
+	openttd_rust_saveload_write_value(&_sl_services, ptr, conv, val);
 }
 
 /**
  * Handle all conversion and typechecking of variables here.
- * In the case of saving, read in the actual value from the struct
- * and then write them to file, endian safely. Loading a value
- * goes exactly the opposite way
  * @param ptr The object being filled/read
  * @param conv VarType type of the current element of the struct
  */
 static void SlSaveLoadConv(void *ptr, VarType conv)
 {
-	switch (_codec.action) {
-		case SLA_SAVE: {
-			int64_t x = ReadValue(ptr, conv);
-
-			/* Write the value to the file and check if its value is in the desired range */
-			switch (GetVarFileType(conv)) {
-				case SLE_FILE_I8: assert(x >= -128 && x <= 127);     SlWriteByte(x);break;
-				case SLE_FILE_U8: assert(x >= 0 && x <= 255);        SlWriteByte(x);break;
-				case SLE_FILE_I16:assert(x >= -32768 && x <= 32767); SlWriteUint16(x);break;
-				case SLE_FILE_STRINGID:
-				case SLE_FILE_U16:assert(x >= 0 && x <= 65535);      SlWriteUint16(x);break;
-				case SLE_FILE_I32:
-				case SLE_FILE_U32:                                   SlWriteUint32((uint32_t)x);break;
-				case SLE_FILE_I64:
-				case SLE_FILE_U64:                                   SlWriteUint64(x);break;
-				default: NOT_REACHED();
-			}
-			break;
-		}
-		case SLA_LOAD_CHECK:
-		case SLA_LOAD: {
-			int64_t x;
-			/* Read a value from the file */
-			switch (GetVarFileType(conv)) {
-				case SLE_FILE_I8:  x = (int8_t  )SlReadByte();   break;
-				case SLE_FILE_U8:  x = (uint8_t  )SlReadByte();   break;
-				case SLE_FILE_I16: x = (int16_t )SlReadUint16(); break;
-				case SLE_FILE_U16: x = (uint16_t)SlReadUint16(); break;
-				case SLE_FILE_I32: x = (int32_t )SlReadUint32(); break;
-				case SLE_FILE_U32: x = (uint32_t)SlReadUint32(); break;
-				case SLE_FILE_I64: x = (int64_t )SlReadUint64(); break;
-				case SLE_FILE_U64: x = (uint64_t)SlReadUint64(); break;
-				case SLE_FILE_STRINGID: x = RemapOldStringID((uint16_t)SlReadUint16()); break;
-				default: NOT_REACHED();
-			}
-
-			/* Write The value to the struct. These ARE endian safe. */
-			WriteValue(ptr, conv, x);
-			break;
-		}
-		case SLA_PTRS: break;
-		case SLA_NULL: break;
-		default: NOT_REACHED();
-	}
+	SlRaise(openttd_rust_saveload_conv(&_sl_services, ptr, conv));
 }
 
 /**
@@ -815,55 +688,6 @@ static void SlStdString(void *ptr, VarType conv)
 }
 
 /**
- * Internal function to save/Load a list of SL_VARs.
- * SlCopy() and SlArray() are very similar, with the exception of the header.
- * This function represents the common part.
- * @param object The object being manipulated.
- * @param length The length of the object in elements
- * @param conv VarType type of the items.
- */
-static void SlCopyInternal(void *object, size_t length, VarType conv)
-{
-	if (GetVarMemType(conv) == SLE_VAR_NULL) {
-		assert(_codec.action != SLA_SAVE); // Use SL_NULL if you want to write null-bytes
-		SlSkipBytes(length * SlCalcConvFileLen(conv));
-		return;
-	}
-
-	/* NOTICE - handle some buggy stuff, in really old versions everything was saved
-	 * as a byte-type. So detect this, and adjust object size accordingly */
-	if (_codec.action != SLA_SAVE && _sl_version == 0) {
-		/* all objects except difficulty settings */
-		if (conv == SLE_INT16 || conv == SLE_UINT16 || conv == SLE_STRINGID ||
-				conv == SLE_INT32 || conv == SLE_UINT32) {
-			SlCopyBytes(object, length * SlCalcConvFileLen(conv));
-			return;
-		}
-		/* used for conversion of Money 32bit->64bit */
-		if (conv == (SLE_FILE_I32 | SLE_VAR_I64)) {
-			for (uint i = 0; i < length; i++) {
-				((int64_t*)object)[i] = (int32_t)std::byteswap(SlReadUint32());
-			}
-			return;
-		}
-	}
-
-	/* If the size of elements is 1 byte both in file and memory, no special
-	 * conversion is needed, use specialized copy-copy function to speed up things */
-	if (conv == SLE_INT8 || conv == SLE_UINT8) {
-		SlCopyBytes(object, length);
-	} else {
-		uint8_t *a = (uint8_t*)object;
-		uint8_t mem_size = SlCalcConvMemLen(conv);
-
-		for (; length != 0; length --) {
-			SlSaveLoadConv(a, conv);
-			a += mem_size; // get size
-		}
-	}
-}
-
-/**
  * Copy a list of SL_VARs to/from a savegame.
  * These entries are copied as-is, and you as caller have to make sure things
  * like length-fields are calculated correctly.
@@ -873,16 +697,7 @@ static void SlCopyInternal(void *object, size_t length, VarType conv)
  */
 void SlCopy(void *object, size_t length, VarType conv)
 {
-	if (_codec.action == SLA_PTRS || _codec.action == SLA_NULL) return;
-
-	/* Automatically calculate the length? */
-	if (_codec.need_length != NL_NONE) {
-		SlSetLength(length * SlCalcConvFileLen(conv));
-		/* Determine length only? */
-		if (_codec.need_length == NL_CALCLENGTH) return;
-	}
-
-	SlCopyInternal(object, length, conv);
+	SlRaise(openttd_rust_saveload_copy(&_sl_services, object, length, conv));
 }
 
 /**
@@ -892,7 +707,9 @@ void SlCopy(void *object, size_t length, VarType conv)
  */
 static inline size_t SlCalcArrayLen(size_t length, VarType conv)
 {
-	return SlCalcConvFileLen(conv) * length + SlGetArrayLength(length);
+	size_t result;
+	SlRaise(openttd_rust_saveload_array_len(&_sl_services, length, conv, &result));
+	return result;
 }
 
 /**
@@ -903,38 +720,7 @@ static inline size_t SlCalcArrayLen(size_t length, VarType conv)
  */
 static void SlArray(void *array, size_t length, VarType conv)
 {
-	switch (_codec.action) {
-		case SLA_SAVE:
-			SlWriteArrayLength(length);
-			SlCopyInternal(array, length, conv);
-			return;
-
-		case SLA_LOAD_CHECK:
-		case SLA_LOAD: {
-			if (!IsSavegameVersionBefore(SLV_SAVELOAD_LIST_LENGTH)) {
-				size_t sv_length = SlReadArrayLength();
-				if (GetVarMemType(conv) == SLE_VAR_NULL) {
-					/* We don't know this field, so we assume the length in the savegame is correct. */
-					length = sv_length;
-				} else if (sv_length != length) {
-					/* If the SLE_ARR changes size, a savegame bump is required
-					 * and the developer should have written conversion lines.
-					 * Error out to make this more visible. */
-					SlErrorCorrupt("Fixed-length array is of wrong length");
-				}
-			}
-
-			SlCopyInternal(array, length, conv);
-			return;
-		}
-
-		case SLA_PTRS:
-		case SLA_NULL:
-			return;
-
-		default:
-			NOT_REACHED();
-	}
+	SlRaise(openttd_rust_saveload_array(&_sl_services, array, length, conv));
 }
 
 /**
