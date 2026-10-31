@@ -35,7 +35,7 @@ static std::string_view RustText(OpenTTDByteSpan text) noexcept { return {reinte
 
 static uint16_t RustSignPlace(uint8_t owner, int32_t x, int32_t y, int32_t z, OpenTTDByteSpan text) noexcept
 {
-	Sign *si = new Sign(CompanyID(owner), x, y, z, std::string{RustText(text)});
+	Sign *si = new Sign(CompanyID(owner), x, y, z, RustText(text));
 
 	si->UpdateVirtCoord();
 	InvalidateWindowData(WC_SIGN_LIST, 0, 0);
