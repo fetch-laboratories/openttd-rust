@@ -25,6 +25,8 @@
 #include "../tile_map.h"
 #include "../slope_func.h"
 #include "../landscape.h"
+#include "../timer/timer_game_calendar.h"
+#include "../rust/snow_line_ffi.h"
 #include "../heightmap.h"
 #include "../road_type.h"
 #include "../station_type.h"
@@ -36,6 +38,87 @@
 #include "../safeguards.h"
 
 #ifdef WITH_RUST
+static uint snow_line_deleted;
+TEST_CASE("Rust snow-line owner preserves native allocation, dates and serialized threads")
+{
+	ABI_LAYOUT_CHECK;
+#include "abi-layout-landscape.inc"
+	AutoRestoreBackup height(_settings_game.game_creation.snow_line_height, uint8_t{7});
+	AutoRestoreBackup date(TimerGameCalendar::date, TimerGameCalendar::date);
+	ClearSnowLine();
+	TimerGameCalendar::date = TimerGameCalendar::Date{-1};
+	for (uint8_t value : {0, 255, 19}) {
+		_settings_game.game_creation.snow_line_height = value;
+		CHECK_FALSE(IsSnowLineSet());
+		CHECK(GetSnowLine() == value); CHECK(openttd_test_snow_line_highest(&GetRustSharedServices()) == value); CHECK(LowestSnowLine() == value);
+	}
+	auto table = std::make_unique<SnowLine>();
+	for (uint month = 0; month < 12; month++) for (uint day = 0; day < 32; day++) table->table[month][day] = static_cast<uint8_t>(month * 37 + day * 11);
+	table->highest_value = 3; table->lowest_value = 249;
+	std::thread install([&] { SetSnowLine(std::move(table)); }); install.join();
+	CHECK(table == nullptr); CHECK(IsSnowLineSet());
+	_settings_game.game_creation.snow_line_height = 255;
+	std::thread read([&] {
+		CHECK(openttd_test_snow_line_highest(&GetRustSharedServices()) == 3); CHECK(LowestSnowLine() == 249);
+		for (int year : {1999, 2000, 2001, 2100}) {
+			auto first = TimerGameCalendar::ConvertYMDToDate(TimerGameCalendar::Year{year}, 0, 1);
+			auto end = TimerGameCalendar::ConvertYMDToDate(TimerGameCalendar::Year{year + 1}, 0, 1);
+			for (auto day = first; day < end; ++day) {
+				TimerGameCalendar::date = day;
+				auto ymd = TimerGameCalendar::ConvertDateToYMD(day);
+				CHECK(GetSnowLine() == static_cast<uint8_t>(ymd.month * 37 + ymd.day * 11));
+			}
+		}
+	}); read.join();
+	_settings_game.game_creation.snow_line_height = 19;
+	snow_line_deleted = 0;
+	auto support = GetRustSharedServices().snow_line_support;
+	support.destroy = [](SnowLine *old) noexcept {
+		snow_line_deleted++;
+		CHECK(IsSnowLineSet() == (snow_line_deleted == 1));
+		delete old;
+	};
+	auto replacement = std::make_unique<SnowLine>();
+	replacement->table[0][1] = 255; replacement->highest_value = 0; replacement->lowest_value = 255;
+	TimerGameCalendar::date = TimerGameCalendar::ConvertYMDToDate(TimerGameCalendar::Year{2000}, 0, 1);
+	openttd_rust_snow_line_set(&support, replacement.release());
+	CHECK(snow_line_deleted == 1); CHECK(GetSnowLine() == 255); CHECK(openttd_test_snow_line_highest(&GetRustSharedServices()) == 0); CHECK(LowestSnowLine() == 255);
+	openttd_rust_snow_line_set(&support, nullptr);
+	CHECK(snow_line_deleted == 2); CHECK(GetSnowLine() == 19);
+	SetSnowLine(std::make_unique<SnowLine>());
+	std::thread clear([] { ClearSnowLine(); }); clear.join();
+	CHECK_FALSE(IsSnowLineSet());
+	SetSnowLine(nullptr); ClearSnowLine(); ClearSnowLine();
+	CHECK(GetSnowLine() == 19);
+}
+TEST_CASE("Rust water border scan uses allocated rectangular native map and header slopes")
+{
+	AutoRestoreBackup freeform(_settings_game.construction.freeform_edges, false);
+	for (uint width : {64U, 128U}) for (uint height : {64U, 128U}) {
+		Map::Allocate(width, height);
+		for (bool edges : {false, true}) {
+			_settings_game.construction.freeform_edges = edges;
+			for (TileIndex t : Map::Iterate()) { Tile{t}.type() = MP_CLEAR << 4; SetTileHeight(t, 0); }
+			auto expected = [] {
+				auto check = [](uint x, uint y) { auto [slope, h] = GetTilePixelSlopeOutsideMap(x, y); return slope == SLOPE_FLAT && h == 0; };
+				if (!check(0, 0) || !check(0, Map::SizeY()) || !check(Map::SizeX(), 0) || !check(Map::SizeX(), Map::SizeY())) return false;
+				for (uint x = 0; x <= Map::SizeX(); x++) if (!check(x, 0) || !check(x, Map::SizeY())) return false;
+				for (uint y = 1; y < Map::SizeY(); y++) if (!check(0, y) || !check(Map::SizeX(), y)) return false;
+				return true;
+			};
+			CHECK(openttd_test_map_surrounded_by_water(&GetRustSharedServices()));
+			for (TileIndex t : {TileXY(0, 0), TileXY(0, Map::MaxY()), TileXY(Map::MaxX(), 0), TileXY(Map::MaxX(), Map::MaxY()), TileXY(width / 2, 0), TileXY(width / 2, Map::MaxY()), TileXY(0, height / 2), TileXY(Map::MaxX(), height / 2)}) {
+				SetTileHeight(t, 1);
+				CHECK_FALSE(expected());
+				CHECK(openttd_test_map_surrounded_by_water(&GetRustSharedServices()) == expected());
+				SetTileHeight(t, 0);
+			}
+			for (TileIndex t : Map::Iterate()) SetTileHeight(t, 1);
+			CHECK_FALSE(openttd_test_map_surrounded_by_water(&GetRustSharedServices()));
+		}
+	}
+	Map::Allocate(64, 64);
+}
 TEST_CASE("Town import coordinates preserve native float conversions")
 {
 	const OpenTTDTownDataServices services{.shared = &GetRustSharedServices(), .founding = nullptr, .strings = {}};

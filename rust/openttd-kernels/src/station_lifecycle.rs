@@ -386,7 +386,7 @@ pub(crate) unsafe fn tile_loop(
                 crate::landscape_type::ARCTIC => {
                     snow()
                         != (crate::tile_map::get_tile_z(m, tile, size_x, size_y).unwrap()
-                            > i32::from((s.shared.snow_line)()))
+                            > i32::from(crate::snow_line::get(s.shared)))
                 }
                 crate::landscape_type::TROPIC => {
                     crate::tile_map::get_tropic_zone(m, tile).unwrap()

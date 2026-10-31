@@ -103,3 +103,11 @@
 - Checks: Default `generated.py`/`landscape.py` cases and native sea-order unit test.
 - Limits: These remain #156 gaps: external heightmap formats, maximum dimensions, alternate graphics and late/GUI aborts.
 - PRs: #364.
+
+## Snow-line ownership and map water borders (#617)
+
+- Rust owns: the process-wide snow-line pointer, install/replacement/null/clear, static and seasonal reads, supplied extrema, and the ordered water-border scan through canonical map/header helpers. Rust consumers call these owners directly.
+- C++ keeps: the native SnowLine record, unchanged Action0 loader construction/scaling/duplicate rejection, typed whole-record deletion, the live configured-height byte, loader/GUI facades and static-shutdown cleanup. Existing generated ABI checks pin the native record view; no record or setting copy is introduced.
+- Checks: native landscape fixtures, generation borders and file-loaded NewGRF seasonal/reset/reload scenarios.
+- Limits: External seasonal mods, historical save reconstruction and live GUI/network scheduling remain outside the bounded evidence (#156).
+- PRs: [#618](https://github.com/fetch-laboratories/openttd-rust/pull/618).

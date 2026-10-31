@@ -38,6 +38,30 @@ static bool GenerationLoadHeightmap(DetailedFileType type, std::string_view file
 	return LoadHeightmap(type, filename);
 #endif
 }
+static void GenerationWaterBorders()
+{
+	auto surrounded = [] {
+#ifdef WITH_RUST
+		return openttd_test_map_surrounded_by_water(&GetRustSharedServices());
+#else
+		return IsMapSurroundedByWater();
+#endif
+	};
+	for (bool edges : {false, true}) {
+		_settings_game.construction.freeform_edges = edges;
+		for (TileIndex t : Map::Iterate()) SetTileHeight(t, 0);
+		auto snapshot = [&](uint case_id) {
+			fmt::print(stderr, "GENERATION border {} {} {} {} {} {} {} {} {}\n", edges, case_id, Map::SizeX(), Map::SizeY(), surrounded(), _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]);
+		};
+		snapshot(0);
+		uint case_id = 1;
+		for (TileIndex t : {TileXY(0, 0), TileXY(0, Map::MaxY()), TileXY(Map::MaxX(), 0), TileXY(Map::MaxX(), Map::MaxY()), TileXY(Map::SizeX() / 2, 0), TileXY(Map::SizeX() / 2, Map::MaxY()), TileXY(0, Map::SizeY() / 2), TileXY(Map::MaxX(), Map::SizeY() / 2)}) {
+			SetTileHeight(t, 1); snapshot(case_id++); SetTileHeight(t, 0);
+		}
+		for (TileIndex t : Map::Iterate()) SetTileHeight(t, 1);
+		snapshot(9);
+	}
+}
 static int generation_cancel = -1, generation_events = 0, generation_cleanup = 0;
 static GWAbortProc *generation_abort = nullptr;
 static bool generation_heightmap = false;
@@ -293,6 +317,7 @@ static bool GenerationScenario(std::span<std::string_view> args)
 	AutoRestoreBackup<bool> freeform(_settings_game.construction.freeform_edges, _settings_game.construction.freeform_edges);
 	AutoRestoreBackup<uint8_t> limit(_settings_game.construction.map_height_limit, 32);
 	std::vector<std::array<uint32_t, 10>> map; for (TileIndex tile : Map::Iterate()) map.push_back(GenerationTile(Tile{tile}));
+	GenerationWaterBorders();
 	for (const char *aspect : {"wide", "tall"}) for (uint8_t rotate : {HM_COUNTER_CLOCKWISE, HM_CLOCKWISE}) for (bool edges : {false, true}) {
 		_settings_game.game_creation.heightmap_rotation = rotate; _settings_game.construction.freeform_edges = edges;
 		std::string filename = std::string(std::getenv("HOME")) + "/" + aspect + ".bmp";

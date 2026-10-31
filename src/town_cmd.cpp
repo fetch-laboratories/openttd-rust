@@ -1139,12 +1139,10 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 	static const OpenTTDTownLeaves services{
 		.map_log_x = OpenTTDMapLogX,
 		.growth_rate = RustTown_growth_rate,
-		.snow_line = GetRustSharedServices().snow_line,
 		.environment = GetRustEnvironmentServices(),
 		.generating_world = GetRustSharedServices().clear_square_services.generating_world,
 		.allow_crossings = RustTown_allow_crossings,
 		.climate = OpenTTDLandscapeValue,
-		.highest_snow_line = OpenTTDHighestSnowLine,
 		.allow_roads = RustAllowTownRoads,
 		.road_flags = RustTownRoadFlags,
 		.house_availability = RustTownHouseAvailability,
