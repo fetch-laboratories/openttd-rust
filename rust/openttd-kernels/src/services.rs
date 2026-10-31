@@ -168,6 +168,18 @@ pub struct ByteSpan {
     /// Full byte count; embedded NULs do not terminate the span.
     pub size: usize,
 }
+impl ByteSpan {
+    /// Byte equality of two live spans, as `std::string` or `std::string_view` `==`.
+    pub(crate) fn same_bytes(self, other: Self) -> bool {
+        self.size == other.size
+            && (self.size == 0
+                // SAFETY: Both spans denote live readable bytes for the producing entry.
+                || unsafe {
+                    std::slice::from_raw_parts(self.data, self.size)
+                        == std::slice::from_raw_parts(other.data, other.size)
+                })
+    }
+}
 
 pub use crate::map_func::TileTypeAllocation;
 pub(crate) use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAccess};
