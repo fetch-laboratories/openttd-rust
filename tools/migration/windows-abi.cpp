@@ -129,7 +129,8 @@ static void Calls()
 		founding.found_setting = []() noexcept { return TF_CUSTOM_LAYOUT; };
 		founding.can_allocate = []() noexcept { return true; };
 		/* TileXY(32, 32) on a 64x64 map is 32 tiles from every edge. */
-		shared.map_log_x = []() noexcept -> uint32_t { return 6; };
+		const OpenTTDFixtureMap map{6};
+		shared.map = &map.statics;
 		shared.map_max_y = []() noexcept -> uint32_t { return 63; };
 		founding.close_to_town = [](uint32_t tile, uint distance) noexcept { CHECK(tile == 2080 && distance == 20); return true; };
 		founding.resolve = [](uint16_t id) noexcept -> OpenTTDTownRef { CHECK(id == UINT16_MAX); return {nullptr, nullptr, id}; };
