@@ -15,7 +15,6 @@ struct OpenTTDCargoPacket;
 struct OpenTTDCompanyFinanceServices;
 struct OpenTTDVehicleServices;
 enum ExpensesType : uint8_t;
-enum TownAcceptanceEffect : uint8_t;
 struct OpenTTDCargoRegistryServices;
 struct OpenTTDSubsidyServices;
 struct OpenTTDIndustryResolverServices;

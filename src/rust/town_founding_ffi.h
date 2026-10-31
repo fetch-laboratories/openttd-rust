@@ -53,7 +53,6 @@ struct OpenTTDTownFoundingServices {
 	uint8_t (*larger_towns)() noexcept OPENTTD_SERVICE_DEFAULT(larger_towns);
 	const TownNameParams *(*parameters)(OpenTTDTownFoundingFrame *) noexcept OPENTTD_SERVICE_DEFAULT(parameters);
 	OpenTTDTownNameMetadata (*metadata)(const TownNameParams *) noexcept OPENTTD_SERVICE_DEFAULT(metadata);
-	void (*prepare_town)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(prepare_town);
 	void (*prepare_rename)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(prepare_rename);
 	void (*name_changed)(Town *, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(name_changed);
 	void (*update_virt)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(update_virt);

@@ -68,7 +68,6 @@ pub struct FoundingServices {
     pub larger_towns: extern "C" fn() -> u8,
     pub parameters: extern "C" fn(*mut Frame) -> *const names::NameParams,
     pub metadata: extern "C" fn(*const names::NameParams) -> Metadata,
-    pub prepare_town: extern "C" fn(*mut TownHandle),
     pub prepare_rename: extern "C" fn(*mut TownHandle),
     pub name_changed: extern "C" fn(*mut TownHandle, ByteSpan),
     pub update_virt: extern "C" fn(*mut TownHandle),
@@ -300,7 +299,7 @@ impl<'a> Founding<'a> {
             (*town.state).growth.counter = town.id.0 % 70;
             (*town.state).growth.rate = town_ticks_to_game_ticks(250);
         }
-        observed!((self.s.prepare_town)(town.shell));
+        // Town's native default initializes show_zone=false before this creation entry.
         super::spatial::insert(self.shared, town.id);
         match observed!((self.leaves.climate)()) {
             1 => {
@@ -771,7 +770,6 @@ crate::abi::layouts! {
         larger_towns,
         parameters,
         metadata,
-        prepare_town,
         prepare_rename,
         name_changed,
         update_virt,

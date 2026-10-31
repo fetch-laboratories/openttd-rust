@@ -99,9 +99,6 @@
 TownPool _town_pool("Town");
 INSTANTIATE_POOL_METHODS(Town)
 
-
-
-
 void RebuildTownKdtree()
 {
 	openttd_rust_town_rebuild_index(&GetRustSharedServices());
@@ -197,7 +194,6 @@ Town::~Town()
 	CargoPacket::InvalidateAllFrom(src);
 	MarkWholeScreenDirty();
 }
-
 
 /**
  * Invalidating of the "nearest town cache" has to be done
@@ -393,14 +389,6 @@ static void AnimateTile_Town(TileIndex tile)
 	MarkTileDirtyByTile(tile);
 }
 #endif
-
-/**
- * Determines if a town is close to a tile.
- * @param tile TileIndex of the tile to query.
- * @param dist The maximum distance to be accepted.
- * @returns true if the tile is within the specified distance.
- */
-
 
 /** Resize the sign (label) of the town after it changes population. */
 void Town::UpdateVirtCoord()
@@ -1137,7 +1125,6 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 		.convert_boolean = RustHouseConvertBoolean,
 		.convert_8bit = RustHouseConvert8bitBoolean,
 
-
 		.scale_cargo = OpenTTDScaleTownCargo,
 		.cargogen_mode = OpenTTDTownCargoGenMode,
 		.place_houses = OpenTTDPlaceHouses,
@@ -1285,12 +1272,6 @@ RoadType GetTownRoadType()
 	return best_rt;
 }
 #endif
-
-/**
- * Get the calendar date of the earliest town-buildable road type.
- * @return introduction date of earliest road type, or INT32_MAX if none available.
- */
-
 
 /**
  * Check if towns are able to build road.
@@ -2222,7 +2203,6 @@ static bool GrowTown(Town *t, TownExpandModes modes)
 }
 #endif
 
-
 /**
  * Update the cached town zone radii of a town, based on the number of houses.
  * @param t The town to update.
@@ -2325,7 +2305,6 @@ const OpenTTDTownFoundingServices &GetRustTownFoundingServices() noexcept
 		.larger_towns = OpenTTDLargerTowns,
 		.parameters = [](OpenTTDTownFoundingFrame *frame) noexcept -> const TownNameParams * { return &frame->parameters.emplace(OpenTTDTownNameStyle()); },
 		.metadata = [](const TownNameParams *params) noexcept -> OpenTTDTownNameMetadata { return {.grfid = params->grfid, .type = params->type}; },
-		.prepare_town = [](Town *town) noexcept { town->show_zone = false; },
 		.prepare_rename = [](Town *town) noexcept { town->cached_name.clear(); },
 		.name_changed = [](Town *town, OpenTTDByteSpan name) noexcept { town->custom_name_cache.assign(reinterpret_cast<const char *>(name.data), name.size); },
 		.update_virt = [](Town *town) noexcept { town->UpdateVirtCoord(); },
@@ -2865,7 +2844,6 @@ bool GenerateTowns(TownLayout layout, std::optional<uint> number)
 
 #endif /* !WITH_RUST */
 
-
 /**
  * Returns the bit corresponding to the town zone of the specified tile.
  * @param t Town on which town zone is to be found.
@@ -2901,7 +2879,6 @@ static inline void ClearMakeHouseTile(TileIndex tile, Town *t, uint8_t counter, 
 	MarkTileDirtyByTile(tile);
 }
 
-
 /**
  * Write house information into the map. For multi-tile houses, all tiles are marked.
  * @param town The town related to this house
@@ -2928,7 +2905,6 @@ static void MakeTownHouse(TileIndex tile, Town *t, uint8_t counter, uint8_t stag
 	});
 }
 
-
 /**
  * Check if a house can be built here, based on slope, whether there's a bridge above, and if we can clear the land.
  * @param tile The tile to check.
@@ -2951,7 +2927,6 @@ static inline bool CanBuildHouseHere(TileIndex tile, bool noslope)
 	return Command<CMD_LANDSCAPE_CLEAR>::Do({DoCommandFlag::Auto, DoCommandFlag::NoWater}, tile).Succeeded();
 }
 
-
 /**
  * Check if a tile where we want to build a multi-tile house has an appropriate max Z.
  * @param tile The tile to check.
@@ -2969,7 +2944,6 @@ static inline bool CheckBuildHouseSameZ(TileIndex tile, int z, bool noslope)
 
 	return true;
 }
-
 
 /**
  * Checks if a house of size 2x2 can be built at this tile.
@@ -2991,7 +2965,6 @@ static bool CheckFree2x2Area(TileIndex tile, int z, bool noslope)
 
 	return true;
 }
-
 
 /**
  * Checks if the current town layout allows building here.
@@ -3024,7 +2997,6 @@ static inline bool TownLayoutAllowsHouseHere(Town *t, TileIndex tile, TownExpand
 
 	return true;
 }
-
 
 /**
  * Checks if the current town layout allows a 2x2 building here.
@@ -3062,7 +3034,6 @@ static inline bool TownLayoutAllows2x2HouseHere(Town *t, TileIndex tile, TownExp
 	return true;
 }
 
-
 /**
  * Checks if a 1x2 or 2x1 building is allowed here, accounting for road layout and tile heights.
  * Also, tests both building positions that occupy this tile.
@@ -3087,7 +3058,6 @@ static bool CheckTownBuild2House(TileIndex *tile, Town *t, int maxz, bool noslop
 
 	return false;
 }
-
 
 /**
  * Checks if a 1x2 or 2x1 building is allowed here, accounting for road layout and tile heights.
@@ -3286,7 +3256,6 @@ static bool TryBuildTownHouse(Town *t, TileIndex tile, TownExpandModes modes)
 	return false;
 }
 #endif
-
 
 /**
  * Determines if a given HouseID is part of a multitile house.
@@ -4304,7 +4273,6 @@ static void UpdateTownRating(Town *t)
 
 #endif
 
-
 /**
  * Updates town grow counter after growth rate change.
  * Preserves relative house builting progress whenever it can.
@@ -4422,7 +4390,6 @@ static void UpdateTownGrowth(Town *t)
 	SetWindowDirty(WC_TOWN_VIEW, t->index);
 }
 #endif
-
 
 /**
  * Checks whether the local authority allows construction of a new station (rail, road, airport, dock) on the given tile
@@ -4675,7 +4642,6 @@ static const IntervalTimer<TimerGameEconomy> _economy_towns_monthly({TimerGameEc
 });
 #endif
 
-
 #ifdef WITH_RUST
 static const IntervalTimer<TimerGameEconomy> _economy_towns_yearly({TimerGameEconomy::YEAR, TimerGameEconomy::Priority::TOWN}, RustClockCallback{openttd_rust_clock_town_yearly, &clock_town});
 #else
@@ -4689,7 +4655,6 @@ static const IntervalTimer<TimerGameEconomy> _economy_towns_yearly({TimerGameEco
 
 });
 #endif
-
 
 #ifndef WITH_RUST
 static CommandCost TerraformTile_Town(TileIndex tile, DoCommandFlags flags, int z_new, Slope tileh_new)
