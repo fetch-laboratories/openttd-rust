@@ -266,7 +266,7 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
         "static void UpdateIndustryStatistics(Industry *i)",
         "static bool CheckIndustryCloseDownProtection(IndustryType type)",
         "static void CanCargoServiceIndustry(",
-        "int WhoCanServiceIndustry(Industry *ind)",
+        "int WhoCanServiceIndustry(Industry *ind)\n{",
         "static void ReportNewsProductionChangeIndustry(",
         "static void ChangeIndustryProduction(Industry *i, bool monthly)",
     )
