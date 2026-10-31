@@ -7,7 +7,7 @@
 
 //! Read helpers of `water_map.h` for the audited map reader.
 //! `None` routes to the original typed native accessor (including failed assertions).
-use crate::map_func::TileTypeAccess;
+use crate::map_func::{TileFields, TileTypeAccess};
 
 use crate::tile_type::{MP_INDUSTRY, MP_OBJECT, MP_STATION, MP_TREES, MP_WATER};
 /// `WaterTileType::Coast`.
@@ -21,19 +21,29 @@ pub(crate) fn get_water_tile_type(m: &TileTypeAccess, t: u32) -> Option<u8> {
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn has_tile_water_class(m: &TileTypeAccess, t: u32) -> Option<bool> {
-    Some(matches!(
-        crate::tile_map::get_tile_type(m, t)?,
+    Some(has_tile_water_class_from_fields(&m.require_range(t)?))
+}
+#[allow(clippy::inline_always)]
+#[inline(always)]
+fn has_tile_water_class_from_fields(fields: &TileFields<'_>) -> bool {
+    matches!(
+        crate::tile_map::get_tile_type_from_fields(fields),
         MP_WATER | MP_STATION | MP_INDUSTRY | MP_OBJECT | MP_TREES
-    ))
+    )
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn get_water_class(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    m.available(t)?;
-    if m.assertions() && !has_tile_water_class(m, t)? {
-        return None;
-    }
-    Some((m.m1(t)? >> 5) & 3)
+    let fields = if m.assertions() {
+        let fields = m.require_range(t)?;
+        if !has_tile_water_class_from_fields(&fields) {
+            return None;
+        }
+        fields
+    } else {
+        m.fields(t)?
+    };
+    Some((fields.m1() >> 5) & 3)
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
