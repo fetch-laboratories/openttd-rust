@@ -313,6 +313,7 @@ def adapter(build, folder, env):
         ADAPTER,
         "newgrf_loading",
         replace_objects=("/newgrf/newgrf_act2.cpp.o",),
+        native_test_support=True,
     )
 
 
