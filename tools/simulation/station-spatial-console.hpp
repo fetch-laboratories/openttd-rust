@@ -63,6 +63,7 @@ static void Station602Stops(TileIndex tile, DoCommandFlags exec)
 	Station *st = Station::GetByTile(tile);
 	StationNeed(Command<CMD_BUILD_ROAD_STOP>::Do(exec, tile + TileDiffXY(3, 0), 1, 1, RoadStopType::Bus, true, DIAGDIR_NE, ROADTYPE_ROAD, ROADSTOP_CLASS_DFLT, 0, st->index, true).Succeeded(), __LINE__);
 	StationNeed(Command<CMD_BUILD_ROAD_STOP>::Do(exec, tile + TileDiffXY(6, 0), 1, 1, RoadStopType::Truck, false, DIAGDIR_NE, ROADTYPE_ROAD, ROADSTOP_CLASS_DFLT, 0, st->index, true).Succeeded(), __LINE__);
+	StationNeed(RoadVehicle::CanAllocateItem(), __LINE__);
 	auto *v = new RoadVehicle(); v->SetFrontEngine(); v->owner = _current_company; v->compatible_roadtypes = RoadTypes{ROADTYPE_ROAD};
 	for (CargoType cargo : {CargoType{0}, CargoType{1}}) {
 		v->cargo_type = cargo;
@@ -76,6 +77,7 @@ static void Station602Stops(TileIndex tile, DoCommandFlags exec)
 	v->cargo_type = 0; v->compatible_roadtypes = RoadTypes{ROADTYPE_ROAD};
 	RoadStop *bay = st->bus_stops; auto status = bay->status; bay->status.Reset(RoadStop::RoadStopStatusFlag::Bay0Free); bay->status.Reset(RoadStop::RoadStopStatusFlag::Bay1Free); bay->status.Set(RoadStop::RoadStopStatusFlag::EntryBusy);
 	StationNeed(Station602Primary(st, v) == bay, __LINE__);
+	StationNeed(RoadVehicle::CanAllocateItem(), __LINE__);
 	auto *part = new RoadVehicle(); part->SetArticulatedPart(); v->SetNext(part);
 	RoadStop *drive = Station602Primary(st, v);
 	StationNeed(drive != nullptr && IsDriveThroughStopTile(drive->xy) && Station602Next(drive, v) == nullptr, __LINE__);
@@ -288,6 +290,7 @@ static void Station602Fixture(TileIndex origin, DoCommandFlags exec, bool reload
 		Station *moving = seeds[1]; TileIndex old = moving->xy;
 		moving->rect.left = TileX(origin); moving->rect.top = TileY(origin); moving->rect.right = TileX(origin) + 4; moving->rect.bottom = TileY(origin) + 4;
 		auto collision = std::get<0>(CmdMoveStationName({}, moving->index, seeds[0]->xy));
+		StationNeed(Waypoint::CanAllocateItem(), __LINE__);
 		Waypoint *wp = new Waypoint(old); wp->owner = _current_company; wp->town = moving->town;
 		wp->rect.left = moving->rect.left; wp->rect.top = moving->rect.top; wp->rect.right = moving->rect.right; wp->rect.bottom = moving->rect.bottom;
 		auto waypoint_collision = std::get<0>(CmdMoveWaypointName({}, wp->index, seeds[0]->xy));
