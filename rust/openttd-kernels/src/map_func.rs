@@ -460,32 +460,37 @@ impl TileTypeAccess {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn require_range(&self, tile: u32) -> Option<TileFields<'_>> {
-        if self.native_assert.is_none() {
-            return self.fields(tile);
-        }
         if self.allocation.count == 0 {
             return None;
         }
-        self.check(tile < self.count())?;
+        if self.assertions() {
+            self.check_range(tile)?;
+        }
         Some(self.field_addresses(tile))
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn require_type(&self, tile: u32, kind: u8) -> Option<TileFields<'_>> {
-        if self.native_assert.is_none() {
-            let fields = self.fields(tile)?;
-            if self.assertions() && crate::tile_map::get_tile_type_from_fields(&fields) != kind {
-                return None;
-            }
-            return Some(fields);
+        if self.allocation.count == 0 {
+            return None;
         }
+        let fields = self.field_addresses(tile);
         if self.assertions() {
-            let fields = self.require_range(tile)?;
-            self.check(crate::tile_map::get_tile_type_from_fields(&fields) == kind)?;
-            Some(fields)
-        } else {
-            self.fields(tile)
+            self.check_range(tile)?;
+            if crate::tile_map::get_tile_type_from_fields(&fields) != kind {
+                self.failed_check()?;
+            }
         }
+        Some(fields)
+    }
+    // Source range assertion after the getter has selected the native policy.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn check_range(&self, tile: u32) -> Option<()> {
+        if tile >= self.count() {
+            self.failed_check()?;
+        }
+        Some(())
     }
     /// Field-sized stores under the same serialized allocation contract as reads.
     pub(crate) fn set_m3(&self, tile: u32, value: u8) -> Option<()> {
