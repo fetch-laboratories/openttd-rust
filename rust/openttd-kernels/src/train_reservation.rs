@@ -415,6 +415,11 @@ fn clear(g: &Game, id: Handle, tile: u32, td: u8) {
 #[allow(clippy::nonminimal_bool)] // `FreeTrainTrackReservation`'s condition as written.
 fn free(g: &Game, id: Handle) {
     crate::witness::hit(crate::witness::TRAIN_FREE_PATH);
+    if g.pbs().0.assertions {
+        // SAFETY: The canonical train services remain live for this entry.
+        let train = unsafe { &*g.pbs().0.train };
+        crate::movement::native_assert(g.shared(), (train.read_front)(id) != 0);
+    }
     let v = g.read_free(id);
     let mut tile = v.tile;
     let mut td = g.td(id);
@@ -450,6 +455,7 @@ fn free(g: &Game, id: Handle) {
         tile = ft.new_tile.0;
         let bits = ft.new_td_bits & dirs(g.reserved(tile));
         td = first(bits);
+        crate::movement::native_assert(g.shared(), single(bits));
         if td == 0xff {
             break;
         }
@@ -589,7 +595,9 @@ fn extend_from(g: &Game, id: Handle, origin: Pbs, new_tracks: &mut u8, enterdir:
         }
         if (g.leaves.rail90)(g.context, id, ft.old_tile.0, ft.new_tile.0) != 0 {
             ft.new_td_bits &= !((g.leaves.cross_dirs)(g.context, id, ft.old_td) as u16);
+            crate::movement::native_assert(g.shared(), ft.new_td_bits != 0);
         }
+        crate::movement::native_assert(g.shared(), single(ft.new_td_bits));
         tile = ft.new_tile.0;
         td = first(ft.new_td_bits);
         crate::witness::hit(crate::witness::TRAIN_EXTENSION_ROLLBACK);
