@@ -206,7 +206,9 @@ pub(crate) unsafe fn run(
     let s = &snapshot;
     // The batch loads the descriptor once. Its serialized no-reset/no-yield call
     // graph keeps it live; only descriptor metadata, never a map access, spans dispatch.
-    let types = crate::map_func::World::new(unsafe { &*s.shared }).types;
+    let types = crate::map_func::World::new(unsafe { &*s.shared })
+        .types
+        .without_native_assert();
     let mut tile = unsafe { CURSOR };
     let log_sum = log_x + log_y;
     let feedback = FEEDBACKS[(log_sum - 12) as usize];

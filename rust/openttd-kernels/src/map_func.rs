@@ -374,6 +374,18 @@ impl TileTypeAccess {
     pub(crate) fn count(&self) -> u32 {
         self.allocation.count
     }
+    /// Probe source preconditions without callbacks; the caller handles a failed
+    /// predicate through native assertions or an existing typed fallback.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn without_native_assert(&self) -> Self {
+        Self {
+            allocation: self.allocation,
+            callback: self.callback,
+            native_assert: None,
+        }
+    }
+
     /// Retry a header helper with native assertions at each source assertion site.
     /// Raw Tile field accessors themselves have no range assertions.
     #[allow(clippy::inline_always)]
@@ -393,6 +405,7 @@ impl TileTypeAccess {
     #[inline(always)]
     pub(crate) fn check(&self, condition: bool) -> Option<()> {
         if self.assertions() && !condition {
+            self.native_assert?;
             return self.failed_check();
         }
         Some(())

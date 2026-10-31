@@ -223,7 +223,7 @@ impl crate::map_func::World<'_> {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn asserted<T>(&self, read: impl Fn(&TileTypeAccess) -> Option<T>) -> T {
-        read(&self.types).unwrap_or_else(|| {
+        read(&self.types.without_native_assert()).unwrap_or_else(|| {
             self.types
                 .with_native_assert(crate::movement::table(self.shared).native_assert, read)
                 .expect("live map scalar")
