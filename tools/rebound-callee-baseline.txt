@@ -139,10 +139,8 @@ rebound | RustAssertCondition | src/cargomonitor.cpp | check
 rebound | RustAssertCondition | src/landscape.cpp | assert_condition
 rebound | RustAssertCondition | src/landscape.cpp | native_assert
 rebound | RustAssertCondition | src/newgrf_airport.cpp | check
-rebound | RustAssertCondition | src/rust/engine_capabilities_services.hpp | check
 rebound | RustAssertCondition | src/rust/fleet_transaction_services.hpp | check
 rebound | RustAssertCondition | src/rust/newgrf_storage_services.cpp | check
-rebound | RustAssertCondition | src/rust/vehicle_services_newgrf.h | check
 rebound | RustAssertCondition | src/signal.cpp | assert_condition
 rebound | RustBaseStationByTile | src/newgrf_roadstop.cpp | by_tile
 rebound | RustBaseStationByTile | src/pbs.cpp | station
@@ -168,11 +166,8 @@ rebound | RustCompanyRoadTypes | src/rust/engine_adapter.hpp | company_roadtypes
 rebound | RustCostOrIncomeAnimation | src/economy.cpp | cost_animation
 rebound | RustCostOrIncomeAnimation | src/rust/fleet_pending_services.hpp | animation
 rebound | RustCurrentCompanyID | src/rust/company_adapter.cpp | current_company
-rebound | RustCurrentCompanyID | src/rust/engine_adapter.hpp | current_company
-rebound | RustCurrentCompanyID | src/rust/engine_capabilities_services.hpp | current_company
 rebound | RustCurrentCompanyID | src/rust/fleet_group_services.hpp | current_company
 rebound | RustCurrentCompanyID | src/rust/services.cpp | current_company
-rebound | RustCurrentCompanyID | src/rust/vehicle_services_newgrf.h | current_company
 rebound | RustCustomRoadStopIndex | src/newgrf_roadstop.cpp | index
 rebound | RustCustomRoadStopIndex | src/rust/station_command_services.hpp | custom_road_index
 rebound | RustDisableElrails | src/rail_cmd.cpp | disable_elrails

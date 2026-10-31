@@ -3,7 +3,6 @@
 #include "engine_services.h"
 #include "engine_loading_ffi.h"
 #include "services_cargo.h"
-#include "services_assert.h"
 #include "settings_services.h"
 static OpenTTDVehicle *EngineTemporaryNew() noexcept { return RustVehicle(new Vehicle()); }
 const OpenTTDEngineCapabilitiesServices &GetRustEngineCapabilitiesServices() noexcept
@@ -36,14 +35,13 @@ const OpenTTDEngineCapabilitiesServices &GetRustEngineCapabilitiesServices() noe
 		.destroy_temporary = GetRustVehicleServices().destroy,
 		.set_engine = RustVehicleSetEngine,
 		.set_owner = RustVehicleSetOwner,
-		.current_company = RustCurrentCompanyID,
 		.vehicle_engine = RustVehicleRead<uint16_t, RustVehicleEngineID>,
 		.vehicle_engine_object = RustVehicleGetEngine,
 		.vehicle_cargo = RustVehicleCargoType,
 		.vehicle_subtype = RustVehicleRead<uint8_t, RustVehicleCargoSubtype>,
 		.has_articulated = RustVehicleHasArticulated,
 		.next_articulated = RustVehicleNextArticulated,
-		.check = RustAssertCondition,
+		.shared = &GetRustSharedServices(),
 #if !defined(NDEBUG) || defined(WITH_ASSERT)
 		.assertions = true,
 #else

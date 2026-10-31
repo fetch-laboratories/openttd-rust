@@ -83,7 +83,6 @@ struct OpenTTDEngineServices {
 	uint64_t (*company_roadtypes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_roadtypes);
 	uint (*company_engine_count)(uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(company_engine_count);
 	void (*block_preview)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(block_preview);
-	uint8_t (*current_company)() noexcept OPENTTD_SERVICE_DEFAULT(current_company);
 	uint8_t (*local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
 	void (*toolbar_enable)(VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(toolbar_enable);
 	void (*toolbar_release)(VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(toolbar_release);

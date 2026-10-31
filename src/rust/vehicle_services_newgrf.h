@@ -3,7 +3,6 @@
 #ifndef RUST_VEHICLE_SERVICES_NEWGRF_H
 #define RUST_VEHICLE_SERVICES_NEWGRF_H
 #include "vehicle_services.h"
-#include "services_assert.h"
 #include "engine_services.h"
 #include "services_ffi.h"
 #include "services_cargo.h"
@@ -55,7 +54,6 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.cargo_bitnum = RustCargoBitnum,
 		.cargo_translation = RustGRFCargoMap,
 		.grf_version = RustGRFFileVersion,
-		.current_company = RustCurrentCompanyID,
 		.valid_company = OpenTTDCompanyIsValid,
 		.livery = [](uint16_t engine, uint8_t owner, uint16_t first, OpenTTDVehicle *v) noexcept { return GetEngineLivery(EngineID(engine), CompanyID(owner), EngineID(first), VehicleOf(v), LIT_ALL); },
 		.company_info = RustCompanyInfo,
@@ -136,7 +134,6 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.aircraft_leaves = []() noexcept { return &GetRustAircraftLeaves(); },
 		.ground = []() noexcept { return &GetRustGroundPhysicsServices(); },
 		.cargo_services = []() noexcept { return GetRustCargoCapacityServices().cargo; },
-		.check = RustAssertCondition,
 	};
 	return services;
 }

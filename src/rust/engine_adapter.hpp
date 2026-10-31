@@ -184,7 +184,6 @@ const OpenTTDEngineServices &EngineServices() noexcept
 		.company_roadtypes = RustCompanyRoadTypes,
 		.company_engine_count = Engine_company_engine_count,
 		.block_preview = Engine_block_preview,
-		.current_company = RustCurrentCompanyID,
 		.local_company = RustLocalCompanyID,
 		.toolbar_enable = Engine_toolbar_enable,
 		.toolbar_release = Engine_toolbar_release,

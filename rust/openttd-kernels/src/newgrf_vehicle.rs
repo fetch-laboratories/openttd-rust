@@ -108,7 +108,6 @@ pub struct Services {
     cargo_bitnum: unsafe extern "C" fn(u8) -> u8,
     cargo_translation: unsafe extern "C" fn(*const c_void, u8) -> u8,
     grf_version: unsafe extern "C" fn(*const c_void) -> u8,
-    current_company: unsafe extern "C" fn() -> u8,
     valid_company: unsafe extern "C" fn(u8) -> bool,
     livery: unsafe extern "C" fn(u16, u8, u16, V) -> *const c_void,
     company_info: unsafe extern "C" fn(u8, *const c_void) -> u32,
@@ -195,7 +194,6 @@ pub struct Services {
     aircraft_leaves: unsafe extern "C" fn() -> *const crate::aircraft::Leaves,
     ground: unsafe extern "C" fn() -> *const crate::ground_vehicle::Services,
     cargo_services: unsafe extern "C" fn() -> *const crate::cargo_storage::Services,
-    check: unsafe extern "C" fn(bool),
 }
 fn handle(v: V) -> VehicleRef {
     VehicleRef(std::ptr::NonNull::new(v).unwrap())
@@ -215,7 +213,7 @@ fn ground(s: &Services, v: V) -> bool {
 unsafe fn livery(s: &Services, id: u16, v: V) -> *const c_void {
     unsafe {
         if v.is_null() {
-            let company = (s.current_company)();
+            let company = (s.shared.current_company)();
             if !(s.valid_company)(company) {
                 return null();
             }
@@ -407,7 +405,10 @@ pub unsafe extern "C" fn openttd_rust_vehicle_grf_fill(s: &Services, v: V) {
                 cached_variable(s, v, variable, null());
             }
         }
-        (s.check)((*(s.cache)(v)).cache_valid == (1 << NCVV_END) - 1);
+        crate::movement::native_assert(
+            s.shared,
+            (*(s.cache)(v)).cache_valid == (1 << NCVV_END) - 1,
+        );
     }
 }
 unsafe fn wagon_override(s: &Services, id: u16, cargo: u8, overriding: u16) -> Group {
@@ -457,7 +458,7 @@ unsafe fn init(s: &Services, id: u16, v: V, wagon: u8, rotor: bool) -> State {
             state.root = wagon_override(s, id, crate::newgrf_commons::SG_DEFAULT, id);
         } else {
             if wagon != 0 && !v.is_null() && ground(s, v) {
-                (s.check)(engine(s, v) == id);
+                crate::movement::native_assert(s.shared, engine(s, v) == id);
                 state.root = if wagon == 2 && (s.vehicle.vehicle_type)(handle(v)) == 0 {
                     (s.cached_override)(v)
                 } else {
@@ -674,7 +675,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_build_probability(
 }
 unsafe fn randomise(s: &Services, v: V, trigger: u8, base: u16, first: bool) {
     unsafe {
-        (s.check)(!v.is_null());
+        crate::movement::native_assert(s.shared, !v.is_null());
         let mut state = init(s, engine(s, v), v, 2, false);
         let waiting = (s.waiting)(v) | (1 << trigger);
         (s.write_waiting)(v, waiting);
@@ -689,7 +690,7 @@ unsafe fn randomise(s: &Services, v: V, trigger: u8, base: u16, first: bool) {
         );
         match trigger {
             0 => {
-                (s.check)(first);
+                crate::movement::native_assert(s.shared, first);
                 randomise(s, (s.first)(v), Trigger::AnyNewCargo as u8, random, false);
             }
             1 => {
@@ -705,7 +706,7 @@ unsafe fn randomise(s: &Services, v: V, trigger: u8, base: u16, first: bool) {
                 }
             }
             3 => {
-                (s.check)(!first);
+                crate::movement::native_assert(s.shared, !first);
                 let u = next(s, v);
                 if !u.is_null() {
                     randomise(s, u, trigger, base, false);
@@ -802,7 +803,7 @@ unsafe fn old_subtype(s: &Services, v: V, kind: u8) -> u32 {
         3 | 5 => u32::from((s.vehicle.subtype)(handle(v))),
         4 => u32::from((s.vehicle.subtype)(handle(v))) << 1,
         _ => {
-            unsafe { (s.check)(false) };
+            crate::movement::native_assert(s.shared, false);
             unreachable!()
         }
     }
@@ -1030,7 +1031,7 @@ unsafe fn variable(
     unsafe {
         let h = handle(v);
         let kind = || (s.vehicle.vehicle_type)(h);
-        let check = |ok| (s.check)(ok);
+        let check = |ok| crate::movement::native_assert(s.shared, ok);
         match variable {
             0x25 => {
                 return crate::engine_capabilities::openttd_rust_engine_grfid(
@@ -1044,7 +1045,7 @@ unsafe fn variable(
                     return u32::MAX;
                 }
                 let w = next(s, v);
-                (s.check)(!w.is_null());
+                crate::movement::native_assert(s.shared, !w.is_null());
                 let altitude = (s.vehicle.z)(h)
                     .wrapping_sub((s.vehicle.z)(handle(w)))
                     .clamp(0, i32::from(u16::MAX));
@@ -1535,7 +1536,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_scope_variable(
         }
         match variable {
             0x43 => (s.company_info)(
-                (s.current_company)(),
+                (s.shared.current_company)(),
                 livery(s, (*scope).self_type, null_mut()),
             ),
             0x46 | 0xf2 => 0,
@@ -1657,12 +1658,12 @@ crate::abi::layouts! {
     "OpenTTDVehicleOverrides" ["vehicle_resolver"] => Overrides { engine, count };
     "OpenTTDVehicleResolverServices" ["vehicle_resolver"] => Services {
         vehicle, shared, cache, first, move_vehicle => move, previous, capabilities,
-        cargo_classes, cargo_bitnum, cargo_translation, grf_version, current_company,
+        cargo_classes, cargo_bitnum, cargo_translation, grf_version,
         valid_company, livery, company_info, first_engine, articulated, has_articulated,
         overrides, override_at, override_engine, cached_override, write_override, spritegroup, random_bits, waiting,
         write_random, write_waiting, resolve_callback, resolve_random, order, cargo_owner,
         cargo_capacity, real_count, real_at,
-        engine_by_id, default_cargo, engine_flags, local_id, cargo_info, motion, build_year, last_service, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, load_ticks, service_interval, acceleration, cargo_type, cargo_subtype, age, max_age, unit, sprite, breakdowns, breakdown_counter, breakdown_delay, breakdown_chance, reliability, reliability_decay, value, profit_this, profit_last, vehicle_flags, aircraft, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, engine_has_badge, engine_badge, rail_badge, road_badge, ship_owner, unhandled, aircraft_leaves, ground, cargo_services, check
+        engine_by_id, default_cargo, engine_flags, local_id, cargo_info, motion, build_year, last_service, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, load_ticks, service_interval, acceleration, cargo_type, cargo_subtype, age, max_age, unit, sprite, breakdowns, breakdown_counter, breakdown_delay, breakdown_chance, reliability, reliability_decay, value, profit_this, profit_last, vehicle_flags, aircraft, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, engine_has_badge, engine_badge, rail_badge, road_badge, ship_owner, unhandled, aircraft_leaves, ground, cargo_services
     };
     "NewGRFCache" ["vehicle_resolver"] => Cache { position_consist_length, position_same_id_length, consist_cargo_information, company_information, position_in_vehicle, cache_valid };
     "OpenTTDVehicleScopeState" ["vehicle_resolver"] => Scope { v, self_type, rotor_in_gui };
