@@ -14,12 +14,17 @@
 #include "../rust/landscape_command_ffi.h"
 #include "../rust/landscape_generation_ffi.h"
 #include "../rust/world_generation_ffi.h"
+#include "../rust/town_data_ffi.h"
 #include "../rust/session_ffi.h"
 #include "../core/backup_type.hpp"
 #include <thread>
+#include <cmath>
 #include "../rust/generation_sea_set.hpp"
 #include "abi_layout.hpp"
 #include "../tile_map.h"
+#include "../slope_func.h"
+#include "../landscape.h"
+#include "../heightmap.h"
 #include "../road_type.h"
 #include "../station_type.h"
 #include "../rust/landscape_loop_ffi.h"
@@ -30,16 +35,33 @@
 #include "../safeguards.h"
 
 #ifdef WITH_RUST
+TEST_CASE("Town import coordinates preserve native float conversions")
+{
+	const OpenTTDTownDataServices services{.shared = &GetRustSharedServices(), .founding = nullptr, .strings = {}};
+	for (const uint size : {64U, 128U, 4096U}) {
+		Map::Allocate(size, 64);
+		const float boundary = 0x1p-25f / static_cast<float>(Map::MaxX());
+		for (const float input : {std::nextafter(boundary, 0.0f), boundary, std::nextafter(boundary, 1.0f), 0.0001f, 0.01f, 0.3f, 0.5f, 0.99f}) {
+			/* Volatile keeps the original's runtime float-to-uint conversion. */
+			volatile float stored = input;
+			float x = stored, y = stored;
+			CHECK(openttd_test_town_data_target(&services, HM_CLOCKWISE, x, y) == TileXY(x * Map::MaxX(), y * Map::MaxY()).base());
+			CHECK(openttd_test_town_data_target(&services, HM_COUNTER_CLOCKWISE, x, y) == TileXY((1 - y * Map::MaxX()), x * Map::MaxY()).base());
+		}
+	}
+	Map::Allocate(64, 64);
+}
 TEST_CASE("Session tile fixtures restore storage mode across nested entries")
 {
 	static bool nested;
 	nested = false;
 	SessionFixture fixture;
-	fixture.tiles.station_loop = [](uint32_t) noexcept {
-		if (nested) return;
+	fixture.roadstops.by_tile = [](uint32_t) noexcept -> BaseStation * {
+		if (nested) return nullptr;
 		nested = true;
 		SessionFixture inner;
 		CHECK(inner.Run());
+		return nullptr;
 	};
 	CHECK(fixture.Run());
 	CHECK(nested);
@@ -101,6 +123,41 @@ TEST_CASE("Rust movement map context rereads native mutations within an entry")
 					}
 				}
 			}
+		}
+	}
+	Map::Allocate(64, 64);
+}
+
+TEST_CASE("Rust production pixel entries observe live native corners and reallocation")
+{
+	const Slope slopes[]{SLOPE_FLAT, SLOPE_W, SLOPE_S, SLOPE_SW, SLOPE_E, SLOPE_EW, SLOPE_SE, SLOPE_WSE, SLOPE_N, SLOPE_NW, SLOPE_NS, SLOPE_ENW, SLOPE_NE, SLOPE_SEN, SLOPE_NWS, SLOPE_STEEP_W, SLOPE_STEEP_S, SLOPE_STEEP_E, SLOPE_STEEP_N};
+	for (uint width : {64U, 128U}) {
+		Map::Allocate(width, 64);
+		for (TileIndex t : {TileXY(1, 1), TileXY(Map::MaxX(), Map::MaxY())}) {
+			const uint x = TileX(t), y = TileY(t);
+			const uint east = std::min(x + 1, Map::MaxX()), south = std::min(y + 1, Map::MaxY());
+			for (Slope slope : slopes) {
+				SetTileHeight(t, 3 + GetSlopeZInCorner(slope, CORNER_N));
+				SetTileHeight(TileXY(east, y), 3 + GetSlopeZInCorner(slope, CORNER_W));
+				SetTileHeight(TileXY(x, south), 3 + GetSlopeZInCorner(slope, CORNER_E));
+				SetTileHeight(TileXY(east, south), 3 + GetSlopeZInCorner(slope, CORNER_S));
+				for (TileType kind : {MP_CLEAR, MP_TREES, MP_STATION, MP_VOID}) {
+					Tile{t}.type() = kind << 4;
+					auto [native_slope, z] = GetTilePixelSlope(t);
+					for (int frac : {0, 8, 15}) {
+						const int px = x * TILE_SIZE + frac, py = y * TILE_SIZE + frac;
+						const int expected = kind == MP_STATION ? GetTileMaxPixelZ(t) : z + GetPartialPixelZ(frac, frac, native_slope);
+						CHECK(openttd_rust_movement_pixel_z(&GetRustMovementServices(), px, py, false) == expected);
+					}
+				}
+			}
+			Tile{t}.type() = MP_CLEAR << 4;
+			SetTileHeight(t, 9);
+			SetTileHeight(TileXY(east, y), 9);
+			SetTileHeight(TileXY(x, south), 9);
+			SetTileHeight(TileXY(east, south), 9);
+			auto [slope, z] = GetTilePixelSlope(t);
+			CHECK(openttd_rust_movement_pixel_z(&GetRustMovementServices(), x * TILE_SIZE, y * TILE_SIZE, false) == z + static_cast<int>(GetPartialPixelZ(0, 0, slope)));
 		}
 	}
 	Map::Allocate(64, 64);

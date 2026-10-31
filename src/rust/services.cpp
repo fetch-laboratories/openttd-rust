@@ -21,6 +21,7 @@
 #include "road_command_ffi.h"
 #include "road_stop_ffi.h"
 #include "presentation_services.h"
+#include "services_assert.h"
 #include "tile_animation_services.h"
 #include "vehicle_services.h"
 #include "services_water.h"
@@ -276,7 +277,6 @@ OpenTTDTownRef OpenTTDTownResolveByID(uint32_t id) noexcept
 }
 
 static bool Shared_tile_valid(uint32_t tile) noexcept { return IsValidTile(TileIndex{tile}); }
-static uint32_t Shared_distance_from_edge(uint32_t tile) noexcept { return DistanceFromEdge(TileIndex{tile}); }
 static int32_t Shared_tile_max_z(uint32_t tile) noexcept { return OpenTTDTileMaxZ(TileIndex{tile}); }
 static_assert(TILE_HEIGHT == 8 && TILE_SIZE == 16);
 /* Values of the shared Rust header modules (tile_type.rs, slope_func.rs and the like). */
@@ -379,7 +379,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.depot_index = MapSvcDepotIndex,
 	.disallowed_road_directions = Shared_disallowed_road_directions,
 	.disaster_sound = SharedDisasterSound,
-	.distance_from_edge = Shared_distance_from_edge,
 	.drive_through_axis = Shared_drive_through_axis,
 	.forbid_90_deg = RustForbid90Deg,
 	.free_train_reservation = SharedFreeTrainReservation,
@@ -392,7 +391,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.is_bridge = Shared_is_bridge,
 	.is_drive_through_stop = Shared_is_drive_through_stop,
 	.is_level_crossing = MapSvcIsLevelCrossing,
-	.is_normal_road = Shared_is_normal_road,
+	.is_normal_road_tile = Shared_is_normal_road_tile,
 	.is_plain_rail = RustPlainRailTile,
 	.is_road_depot = Shared_is_road_depot,
 	.is_sea = Shared_is_sea,
@@ -449,7 +448,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.tile_owner = RustTileOwnerValue,
 	.tile_slope = SharedTileSlope,
 	.tile_type = SharedTileType,
-	.tile_add_wrap = SharedTileAddWrap,
 	.tile_valid = Shared_tile_valid,
 	.tile_slope_z = RustTileSlopeZ,
 	.tile_z = SharedTileZ,
@@ -481,6 +479,8 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.for_each_station = SharedForEachStation,
 	.road_stop_type = SharedRoadStopType,
 	.road_stops = []() noexcept { return &GetRustRoadStopServices(); },
+	.show_error = RustShowErrorMessage,
+	.not_reached = RustNotReached,
 };
 
 const OpenTTDSharedServices &GetRustSharedServices() noexcept

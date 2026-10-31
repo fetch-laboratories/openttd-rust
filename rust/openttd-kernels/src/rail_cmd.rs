@@ -591,7 +591,7 @@ impl<'a> Ctx<'a> {
                     return cost.take(ret);
                 }
                 let mut built = false;
-                if (self.shared.is_normal_road)(tile) {
+                if (self.shared.is_normal_road_tile)(tile) {
                     if (self.shared.has_road_works)(tile) {
                         return cost.error(strings.road_works);
                     }

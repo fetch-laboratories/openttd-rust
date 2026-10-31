@@ -18,6 +18,7 @@
 #include "../rust/command_services_ffi.h"
 #include "../rust/ground_ffi.h"
 #include "../rust/movement_ffi.h"
+#include "../tile_storage_type.h"
 #include "../rust/landscape_command_ffi.h"
 #include "../rust/station_catchment_ffi.h"
 #include <algorithm>
@@ -246,10 +247,14 @@ template <typename Check> void CheckTownProtocol(Check check)
 	services.tile_slope = [](uint32_t) noexcept -> uint8_t { return 0; };
 	static OpenTTDSharedServices movement_world{};
 	movement_world.tile_type = [](uint32_t) noexcept -> uint8_t { return 0; };
-	movement_world.tile_slope_z = [](uint32_t tile) noexcept -> OpenTTDFoundationSlope { return {.z = 0, .slope = static_cast<Slope>(TownProtocolLeaf(4, tile, 0, 0, 0))}; };
+	movement_world.map_log_x = []() noexcept -> uint32_t { return 6; };
 	static OpenTTDMovementServices movement{};
 	movement.shared = &movement_world;
-	movement_world.apply_foundation = [](Foundation, Slope slope) noexcept -> OpenTTDFoundationSlope { return {.z = 0, .slope = slope}; };
+	movement.tile_types = []() noexcept -> OpenTTDTileTypeAllocation {
+		static const std::array<TileBaseStorage, 4096> tiles{};
+		static const std::array<TileExtendedStorage, 4096> extended{};
+		return {tiles.data(), extended.data(), 4096, true};
+	};
 	services.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
 	services.tile_max_z = [](uint32_t) noexcept -> int32_t { return 0; };
 	services.tile_z = [](uint32_t) noexcept -> int32_t { return 0; };
@@ -270,7 +275,6 @@ template <typename Check> void CheckTownProtocol(Check check)
 	services.map_max_y = []() noexcept -> uint32_t { return 63; };
 	services.closest_town = [](uint32_t, uint32_t) noexcept -> const OpenTTDTownHandle * { return nullptr; };
 	services.tile_valid = [](uint32_t) noexcept { return true; };
-	services.distance_from_edge = [](uint32_t) noexcept { return uint32_t(1); };
 	services.road_type = [](uint32_t) noexcept { return uint8_t(63); };
 	static const OpenTTDTileOwnerServices owners{};
 	static const OpenTTDLandscapeTileServices tiles = [] {

@@ -77,7 +77,7 @@ pub struct Services {
     pub industry: IndustryServices,
     pub ground: GroundServices,
     pub town: *const town::Leaves,
-    pub station_loop: extern "C" fn(u32),
+    pub station: *const crate::station_lifecycle::Services,
     pub objects: *const crate::objects::ObjectServices,
 }
 
@@ -141,7 +141,16 @@ unsafe fn dispatch(
         4 => unsafe {
             trees::tile_loop(tile, settings, g.call, s.trees, s.shared, types);
         },
-        5 => (s.station_loop)(tile),
+        5 => unsafe {
+            crate::station_lifecycle::tile_loop(
+                tile,
+                g.call,
+                &*s.station,
+                types,
+                settings.size_x,
+                size_y,
+            );
+        },
         // `TileLoop_Void` is exactly `TileLoop_Water(tile)`.
         6 | 7 => unsafe {
             water::water_tile_loop(
@@ -246,7 +255,7 @@ crate::abi::layouts! {
         industry,
         ground,
         town,
-        station_loop,
+        station,
         objects,
     };
 }

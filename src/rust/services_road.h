@@ -29,6 +29,5 @@ inline bool RustCrossingReserved(uint32_t tile) noexcept { return HasCrossingRes
 inline void RustSetCrossingReserved(uint32_t tile, bool reserved) noexcept { SetCrossingReservation(TileIndex{tile}, reserved); }
 inline void RustSetTownIndex(uint32_t tile, uint16_t town) noexcept { SetTownIndex(TileIndex{tile}, TownID(town)); }
 inline bool OpenTTDHasTownOwnedRoad(uint32_t tile) noexcept { return HasTownOwnedRoad(TileIndex(tile)); }
-inline bool RustMovementNormalRoad(uint32_t tile) noexcept { return IsNormalRoad(TileIndex{tile}); }
 inline bool RustHasTileRoadType(uint32_t tile, RoadTramType kind) noexcept { return HasTileRoadType(TileIndex{tile}, kind); }
 #endif /* RUST_SERVICES_ROAD_H */

@@ -974,10 +974,35 @@ pub struct Links {
     pub(crate) stopped_in_depot: extern "C" fn(VehicleRef) -> bool,
     pub(crate) last_service: extern "C" fn(VehicleRef) -> i32,
     pub(crate) cargo_type: extern "C" fn(VehicleRef) -> u8,
-    pub(crate) reroute: extern "C" fn(*mut BaseStation, Option<VehicleRef>, u8, u16, u16),
+    pub(crate) goods_entry:
+        extern "C" fn(*mut BaseStation, u8) -> *const crate::station_base::GoodsEntry,
+    pub(crate) station_resolver: *const crate::newgrf_station::Services,
+    pub(crate) vehicle_resolver: *const crate::newgrf_vehicle::Services,
+}
+impl Links {
+    pub(crate) fn storage(&self) -> &crate::cargo_storage::Services {
+        unsafe { &*(*self.station_resolver).cargo }
+    }
+    pub(crate) fn station_cargo(
+        &self,
+        st: *mut BaseStation,
+        cargo: u8,
+    ) -> *const crate::cargo_storage::List {
+        unsafe { ((*self.station_resolver).cargo_owner)(st, cargo) }
+    }
+    pub(crate) fn vehicle_cargo(&self, v: VehicleRef) -> *mut crate::cargo_storage::List {
+        unsafe { ((*self.vehicle_resolver).cargo_owner)(v.0.as_ptr().cast()) }.cast_mut()
+    }
 }
 unsafe fn reroute(st: *mut BaseStation, cargo: u8, avoid: u16, avoid2: u16, w: &World, l: &Links) {
-    (l.reroute)(st, None, cargo, avoid, avoid2);
+    let storage = l.storage();
+    let goods = (l.goods_entry)(st, cargo);
+    let list = l.station_cargo(st, cargo);
+    if !list.is_null() {
+        unsafe {
+            crate::cargo_storage::reroute_station(list.cast_mut(), storage, goods, avoid, avoid2);
+        }
+    }
     let state = (w.owner)(st);
     let mut node = unsafe { openttd_rust_station_queue_first(state) };
     while !node.is_null() {
@@ -985,7 +1010,15 @@ unsafe fn reroute(st: *mut BaseStation, cargo: u8, avoid: u16, avoid2: u16, w: &
             NonNull::new(unsafe { openttd_rust_station_queue_value(node) }.cast()).map(VehicleRef);
         while let Some(vehicle) = current {
             if u32::from((l.cargo_type)(vehicle)) == u32::from(cargo) {
-                (l.reroute)(st, Some(vehicle), cargo, avoid, avoid2);
+                unsafe {
+                    crate::cargo_storage::reroute_vehicle(
+                        l.vehicle_cargo(vehicle),
+                        storage,
+                        goods,
+                        avoid,
+                        avoid2,
+                    );
+                }
             }
             current = (l.next_vehicle)(vehicle);
         }
@@ -2149,7 +2182,7 @@ crate::abi::layouts! {
         stopped_in_depot,
         last_service,
         cargo_type,
-        reroute,
+        goods_entry, station_resolver, vehicle_resolver,
     };
     "OpenTTDStationLoading" ["probe"] => Loading {
         control,

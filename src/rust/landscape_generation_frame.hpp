@@ -26,8 +26,7 @@ struct OpenTTDGenerationFrame {
 
 struct OpenTTDLandscapeGenerationCall {
 	OpenTTDGenerationFrame frame;
-	RustHeightmapDecoder decoder{DFT_HEIGHTMAP_BMP, ""};
-	OpenTTDHeightmapDecoder heightmap;
+	RustHeightmapInput heightmap;
 	OpenTTDLandscapeGenerationSettings settings;
 	OpenTTDLandscapeGenerationCall();
 };

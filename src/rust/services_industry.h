@@ -30,4 +30,8 @@ inline uint32_t RustIndustryTile(void *industry) noexcept { return static_cast<I
 inline uint16_t RustIndustryTileIndex(uint32_t tile) noexcept { return GetIndustryIndex(TileIndex{tile}).base(); }
 inline bool RustIndustryTileBelongs(void *industry, uint32_t tile) noexcept { return static_cast<Industry *>(industry)->TileBelongsToIndustry(TileIndex{tile}); }
 inline void RustResetIndustryConstruction(uint32_t tile) noexcept { ResetIndustryConstructionStage(TileIndex{tile}); }
+template <typename Handle = IndustrySpec>
+inline const Handle *RustIndustryTypeSpec(uint8_t type) noexcept { return reinterpret_cast<const Handle *>(GetIndustrySpec(type)); }
+inline uint32_t RustIndustrySpecStationName(const IndustrySpec *spec) noexcept { return spec->station_name; }
+inline uint8_t RustIndustrySpecLife(const IndustrySpec *spec) noexcept { return spec->life_type.base(); }
 #endif /* RUST_SERVICES_INDUSTRY_H */

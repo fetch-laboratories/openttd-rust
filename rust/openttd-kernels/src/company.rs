@@ -284,7 +284,7 @@ pub struct Services {
     pub road_maintenance_cost: extern "C" fn(u8, u32, u32) -> i64,
     pub canal_maintenance_cost: extern "C" fn(u32) -> i64,
     pub station_maintenance_cost: extern "C" fn(u32) -> i64,
-    pub airport_maintenance_cost: extern "C" fn(u8) -> i64,
+    pub station_lifecycle: extern "C" fn() -> *const crate::station_lifecycle::Services,
     pub recession_news: extern "C" fn(bool),
     pub price_base: extern "C" fn(u32) -> PriceBase,
     pub cargo_next: extern "C" fn(u32, *mut i64) -> u32,
@@ -754,7 +754,10 @@ fn maintenance(s: &Services, p: *mut Finances, id: u8) {
     }
     cost = cost.saturating_add((s.canal_maintenance_cost)(infra.water));
     cost = cost.saturating_add((s.station_maintenance_cost)(infra.station));
-    cost = cost.saturating_add((s.airport_maintenance_cost)(id));
+    cost = cost.saturating_add(crate::station_lifecycle::airport_maintenance(
+        unsafe { &*(s.station_lifecycle)() },
+        id,
+    ));
     subtract(s.finance, p, id, cost, EXPENSES_PROPERTY);
 }
 fn statistics(s: &Services, m: &Month) {
@@ -1958,7 +1961,7 @@ crate::abi::layouts! {
         road_maintenance_cost,
         canal_maintenance_cost,
         station_maintenance_cost,
-        airport_maintenance_cost,
+        station_lifecycle,
         recession_news,
         price_base,
         cargo_next,

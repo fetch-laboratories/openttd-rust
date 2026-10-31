@@ -53,7 +53,7 @@ impl Ctx<'_> {
         if crate::station_map::is_road_waypoint_tile(tile, self.shared) {
             return (self.shared.drive_through_axis)(tile);
         }
-        if !(self.shared.is_normal_road)(tile) {
+        if !(self.shared.is_normal_road_tile)(tile) {
             return INVALID_AXIS;
         }
         let ground = unsafe { &*self.s.road_ground };
@@ -656,7 +656,7 @@ impl Ctx<'_> {
                     count,
                 );
             };
-            if (self.shared.is_normal_road)(tile) {
+            if (self.shared.is_normal_road_tile)(tile) {
                 update(
                     road,
                     road_owner,
@@ -683,7 +683,9 @@ impl Ctx<'_> {
             );
             (self.s.set_custom_road_index)(tile, specindex.value);
             if !spec.is_null() {
-                (self.s.stop_random_bits)(wp, tile, 0);
+                unsafe {
+                    ((*self.s.roadstop_resolver).set_tile_random)(wp, tile, 0);
+                }
             }
             (self.s.station_infrastructure)(owner, 1);
             (self.shared.mark_dirty)(tile);

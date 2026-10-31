@@ -69,6 +69,28 @@ impl Map {
     pub fn random_tile_seed(self, size_y: u32, random: u32) -> u32 {
         self.wrap_to_map(random, size_y)
     }
+    /// `TileAddWrap`, including freeform-edge exclusion.
+    #[must_use]
+    pub fn tile_add_wrap(self, tile: u32, dx: i32, dy: i32, size_y: u32, freeform: bool) -> u32 {
+        let x = self.tile_x(tile).wrapping_add_signed(dx);
+        let y = self.tile_y(tile).wrapping_add_signed(dy);
+        if ((x == 0 || y == 0) && freeform) || x >= self.max_x() || y >= Self::max_y(size_y) {
+            crate::tile_type::INVALID_TILE
+        } else {
+            self.tile_xy(x, y)
+        }
+    }
+    /// `DistanceFromEdge`.
+    #[must_use]
+    pub fn distance_from_edge(self, tile: u32, size_y: u32) -> u32 {
+        let x = self.tile_x(tile);
+        let y = self.tile_y(tile);
+        x.min(y).min(
+            self.max_x()
+                .wrapping_sub(x)
+                .min(Self::max_y(size_y).wrapping_sub(y)),
+        )
+    }
     /// `Map::MaxX`.
     #[must_use]
     pub fn max_x(self) -> u32 {
@@ -215,6 +237,7 @@ pub struct ExtendedTileLayout {
 pub(crate) struct TileTypeAccess {
     allocation: TileTypeAllocation,
     callback: extern "C" fn(u32) -> u8,
+    native_assert: Option<extern "C" fn(bool)>,
 }
 // The constructor's provenance/serialization contract covers each initialized
 // scalar; every load ends before any callback and native aliases remain legal.
@@ -254,20 +277,7 @@ impl TileTypeAccess {
         Self {
             allocation,
             callback,
-        }
-    }
-
-    /// Reader for entries without an audited allocation: every read uses the
-    /// original noexcept accessor.
-    pub(crate) fn callback(callback: extern "C" fn(u32) -> u8) -> Self {
-        Self {
-            allocation: TileTypeAllocation {
-                base: std::ptr::null(),
-                extended: std::ptr::null(),
-                count: 0,
-                assertions: false,
-            },
-            callback,
+            native_assert: None,
         }
     }
 
@@ -281,7 +291,8 @@ impl TileTypeAccess {
     /// Raw backend availability; assertion-disabled builds add no range rejection.
     #[inline]
     pub(crate) fn available(&self, tile: u32) -> Option<()> {
-        (self.allocation.count != 0 && (!self.assertions() || tile < self.allocation.count))
+        (self.allocation.count != 0
+            && (!self.assertions() || self.native_assert.is_some() || tile < self.allocation.count))
             .then_some(())
     }
     #[inline]
@@ -291,11 +302,55 @@ impl TileTypeAccess {
     pub(crate) fn count(&self) -> u32 {
         self.allocation.count
     }
+    /// Retry a header helper with native assertions at each source assertion site.
+    /// Raw Tile field accessors themselves have no range assertions.
+    pub(crate) fn with_native_assert<T>(
+        &self,
+        native_assert: extern "C" fn(bool),
+        read: impl FnOnce(&Self) -> T,
+    ) -> T {
+        read(&Self {
+            allocation: self.allocation,
+            callback: self.callback,
+            native_assert: Some(native_assert),
+        })
+    }
+    #[inline]
+    pub(crate) fn check(&self, condition: bool) -> Option<()> {
+        if self.assertions() && !condition {
+            (self.native_assert?)(false);
+        }
+        Some(())
+    }
+    /// The explicit bounds assertion in `GetTileType` and `TileHeight`.
+    #[inline]
+    pub(crate) fn require_range(&self, tile: u32) -> Option<()> {
+        self.check(tile < self.count())
+    }
     #[inline]
     pub(crate) fn require_type(&self, tile: u32, kind: u8) -> Option<()> {
         self.available(tile)?;
-        if self.assertions() && crate::tile_map::get_tile_type(self, tile)? != kind {
-            return None;
+        if self.assertions() {
+            self.check(crate::tile_map::get_tile_type(self, tile)? == kind)?;
+        }
+        Some(())
+    }
+    /// Field-sized stores under the same serialized allocation contract as reads.
+    pub(crate) fn set_m3(&self, tile: u32, value: u8) -> Option<()> {
+        self.available(tile)?;
+        unsafe {
+            std::ptr::addr_of!((*self.allocation.base.add(tile as usize)).m3)
+                .cast_mut()
+                .write(value);
+        }
+        Some(())
+    }
+    pub(crate) fn set_m8(&self, tile: u32, value: u16) -> Option<()> {
+        self.available(tile)?;
+        unsafe {
+            std::ptr::addr_of!((*self.allocation.extended.add(tile as usize)).m8)
+                .cast_mut()
+                .write(value);
         }
         Some(())
     }
@@ -314,7 +369,21 @@ pub(crate) struct World<'a> {
 }
 impl<'a> World<'a> {
     pub(crate) fn new(shared: &'a crate::services::Services) -> Self {
-        let movement = crate::movement::table(shared);
+        Self::with_table(shared, crate::movement::table(shared))
+    }
+    /// `new` for an entry that already resolved its movement table.
+    pub(crate) fn with_table(
+        shared: &'a crate::services::Services,
+        movement: &crate::movement::MovementServices,
+    ) -> Self {
+        Self::with_dimensions(shared, movement, shared.map())
+    }
+    /// Use dimensions already acquired by the entry instead of calling `Map::LogX` again.
+    pub(crate) fn with_dimensions(
+        shared: &'a crate::services::Services,
+        movement: &crate::movement::MovementServices,
+        dimensions: Map,
+    ) -> Self {
         // SAFETY: Game-loop and command entries exclude map reset/load/mutex yield.
         let types = unsafe {
             TileTypeAccess::raw(
@@ -325,7 +394,7 @@ impl<'a> World<'a> {
         Self {
             types,
             shared,
-            dimensions: shared.map(),
+            dimensions,
         }
     }
     pub(crate) fn check(&self, condition: bool) {

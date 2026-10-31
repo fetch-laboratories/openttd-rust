@@ -1315,7 +1315,7 @@ crate::abi::layouts! {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::pbs::PbsServices;
     use crate::services::RailMapServices;
@@ -1463,7 +1463,8 @@ mod tests {
             false
         }
     }
-    fn movement_table() -> crate::movement::MovementServices {
+    /// Movement table whose every service is unused and which has no map descriptor.
+    pub(crate) fn movement_table() -> crate::movement::MovementServices {
         crate::movement::MovementServices {
             tile_types: unused(),
             shared: unused(),
@@ -1490,10 +1491,7 @@ mod tests {
             train_engine_class: unused(),
             depot_invalidate: unused(),
             native_assert: unused(),
-            normal_road_status_tail: unused(),
-            pixel_location: unused(),
             plain_rail: unused(),
-            normal_road: unused(),
             is_tunnel: unused(),
             rail_station: unused(),
             road_crossing: unused(),
@@ -1507,9 +1505,6 @@ mod tests {
             water_type: unused(),
             lock_direction: unused(),
             ship_depot_axis: unused(),
-            pixel_slope: unused(),
-            outside_pixel_slope: unused(),
-            max_pixel_z: unused(),
             owned_land: unused(),
             object_foundation: unused(),
             house_foundation: unused(),

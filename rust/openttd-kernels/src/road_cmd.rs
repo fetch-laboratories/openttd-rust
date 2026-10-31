@@ -1045,7 +1045,7 @@ impl<'a> Ctx<'a> {
         if !clear {
             if self.tile_type(tile) == MP_ROAD {
                 pieces &= existing ^ 15;
-                if (self.shared.is_normal_road)(tile) {
+                if (self.shared.is_normal_road_tile)(tile) {
                     let slope = (self.shared.tile_slope)(tile);
                     let new = crate::movement::road_foundation(slope, pieces | existing, |ok| {
                         crate::movement::native_assert(self.shared, ok);
@@ -1066,7 +1066,7 @@ impl<'a> Ctx<'a> {
                 cost.take(ret);
                 return;
             }
-            if self.tile_type(tile) == MP_ROAD && (self.shared.is_normal_road)(tile) {
+            if self.tile_type(tile) == MP_ROAD && (self.shared.is_normal_road_tile)(tile) {
                 let old = self.rt(tile, rtt);
                 if old != INVALID && old != rt {
                     if (self.shared.road_powered)(rt, old) {
@@ -1146,7 +1146,10 @@ impl<'a> Ctx<'a> {
                 num = num.wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR);
             }
             self.infrastructure(rt, self.owner(tile, rtt), num as i32);
-            if rtt == 0 && self.tile_type(tile) == MP_ROAD && (self.shared.is_normal_road)(tile) {
+            if rtt == 0
+                && self.tile_type(tile) == MP_ROAD
+                && (self.shared.is_normal_road_tile)(tile)
+            {
                 existing |= pieces;
                 (self.shared.set_road_directions)(
                     tile,

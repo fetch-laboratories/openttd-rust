@@ -49,6 +49,7 @@
 #ifdef WITH_RUST
 #include "rust/ffi.h"
 #include "rust/landscape_loop_ffi.h"
+#include "rust/station_lifecycle_ffi.h"
 #include "rust/services_object.h"
 #include "rust/tile_owner_services.h"
 #include "rust/road_command_services.h"
@@ -954,7 +955,7 @@ OpenTTDLandscapeLoopServices RustLandscapeLoopServices(OpenTTDGroundCall *call, 
 		.industry = GetRustIndustryLoopServices(),
 		.ground = {.clear = &GetRustClearServices(), .rail = &GetRustRailGroundServices(), .road = &GetRustRoadGroundServices(), .road_command = road, .tunnel = &GetRustTunnelGroundServices(), .water = &GetRustWaterGroundServices(), .costs = &GetRustGroundCostServices(), .call = call, .climate = OpenTTDLandscape(), .editor = OpenTTDEditor(), .rebuild = _settings_game.economy.mod_road_rebuild},
 		.town = &GetRustTownServices(),
-		.station_loop = _tile_type_station_procs.tile_loop_proc,
+		.station = &GetRustStationLifecycleServices(),
 		.objects = &GetRustObjectServices(),
 	};
 }
@@ -1042,7 +1043,6 @@ const OpenTTDLandscapeGenerationServices &GetRustLandscapeGenerationServices() n
 		.flat_height = RustFlatTileHeight,
 		.river = RustIsRiver,
 		.set_snow_line = RustSetSnowLineHeight,
-		.not_reached = RustNotReached,
 		.river_debug = RustRiverYapfDebug,
 		.assert_condition = RustAssertCondition,
 		.sea_construct = [](OpenTTDGenerationFrame *f) noexcept { f->sea.Construct(); },
@@ -1084,11 +1084,7 @@ void InitializeLandscape()
 }
 
 #ifdef WITH_RUST
-OpenTTDLandscapeGenerationCall::OpenTTDLandscapeGenerationCall() : heightmap{
-	.context = &this->decoder,
-	.read = [](void *ctx, OpenTTDHeightmapImage *out) noexcept { return static_cast<RustHeightmapDecoder *>(ctx)->Read(_file_to_saveload.ftype.detailed, _file_to_saveload.name, out); },
-	.finish = this->decoder.view.finish,
-}
+OpenTTDLandscapeGenerationCall::OpenTTDLandscapeGenerationCall()
 {
 	static_assert(GWP_LANDSCAPE == 1 && GWP_RIVER == 2 && GWM_HEIGHTMAP == 3 && LG_ORIGINAL == 0 && LG_TERRAGENESIS == 1 && MAX_TILE_HEIGHT == 255);
 	static_assert(SPR_MAPGEN_BEGIN == 4845 && TILE_UPDATE_FREQUENCY == 256);
@@ -1991,8 +1987,7 @@ void CallLandscapeTick()
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDLandscapeGenerationServices.hpp"
-#include "abi-visit-OpenTTDHeightmapDecoder.hpp"
-#include "abi-visit-OpenTTDLandscapeLoopServices.hpp"
+#include "abi-visit-OpenTTDHeightmapInput.hpp"
 #include "abi-visit-OpenTTDMovementServices.hpp"
 #include "abi-visit-OpenTTDTileOwnerServices.hpp"
 #include "abi-visit-OpenTTDClearServices.hpp"
@@ -2003,11 +1998,9 @@ void CallLandscapeTick()
 #include "abi-visit-OpenTTDGroundCostServices.hpp"
 bool CheckAbi_landscape()
 {
-	OpenTTDGroundCall call;
-	RustRoadCommandContext road;
-	RustHeightmapDecoder decoder(DFT_HEIGHTMAP_BMP, "");
-	return AbiServicesComplete(GetRustLandscapeGenerationServices()) && AbiServicesComplete(decoder.view) &&
-		AbiServicesComplete(GetRustTileOwnerServices()) && AbiServicesComplete(RustLandscapeLoopServices(&call, &road.view)) &&
+	RustHeightmapInput heightmap;
+	return AbiServicesComplete(GetRustLandscapeGenerationServices()) && AbiServicesComplete(heightmap.view) &&
+		AbiServicesComplete(GetRustTileOwnerServices()) &&
 		AbiServicesComplete(GetRustClearServices()) && AbiServicesComplete(GetRustRailGroundServices()) &&
 		AbiServicesComplete(GetRustRoadGroundServices()) && AbiServicesComplete(GetRustTunnelGroundServices()) &&
 		AbiServicesComplete(GetRustWaterGroundServices()) && AbiServicesComplete(GetRustGroundCostServices()) &&
@@ -2045,10 +2038,7 @@ const OpenTTDMovementServices &GetRustMovementServices() noexcept
 		.train_engine_class = RustMovementTrainEngineClass,
 		.depot_invalidate = RustMovementDepotInvalidate,
 		.native_assert = RustAssertCondition,
-		.normal_road_status_tail = RustNormalRoadStatusTail,
-		.pixel_location = RustPixelLocation,
 		.plain_rail = RustMovementPlainRail,
-		.normal_road = RustMovementNormalRoad,
 		.is_tunnel = RustIsTunnel,
 		.rail_station = RustMovementRailStation,
 		.road_crossing = MapSvcRoadIsLevelCrossing,
@@ -2062,9 +2052,6 @@ const OpenTTDMovementServices &GetRustMovementServices() noexcept
 		.water_type = GetRustWaterCommandServices().water_type,
 		.lock_direction = GetRustWaterCommandServices().lock_direction,
 		.ship_depot_axis = RustShipDepotAxis,
-		.pixel_slope = RustTilePixelSlope,
-		.outside_pixel_slope = RustOutsidePixelSlope,
-		.max_pixel_z = GetIndustryTileServices().pixel_max_z,
 		.owned_land = GetRustRailGroundServices().owned_land,
 		.object_foundation = RustObjectFoundation,
 		.house_foundation = RustHouseFoundation,

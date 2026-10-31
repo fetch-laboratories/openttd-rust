@@ -13,7 +13,6 @@ forwarded | src/industry_cmd.cpp | set_frame = GetRustSharedServices().tile_anim
 forwarded | src/industry_cmd.cpp | snow_line = GetRustSharedServices().snow_line
 forwarded | src/landscape.cpp | exchange_generating = GetRustTownFoundingServices().exchange_generating
 forwarded | src/landscape.cpp | lock_direction = GetRustWaterCommandServices().lock_direction
-forwarded | src/landscape.cpp | max_pixel_z = GetIndustryTileServices().pixel_max_z
 forwarded | src/landscape.cpp | owned_land = GetRustRailGroundServices().owned_land
 forwarded | src/landscape.cpp | tile_flat = GetRustTownFoundingServices().flat
 forwarded | src/landscape.cpp | water_type = GetRustWaterCommandServices().water_type
@@ -328,8 +327,6 @@ rebound | RustRoadStopAnimationFrame | src/animated_tile.cpp | road_frame
 rebound | RustRoadStopAnimationFrame | src/newgrf_roadstop.cpp | frame
 rebound | RustRoadStopDataTile | src/animated_tile.cpp | road_tile
 rebound | RustRoadStopDataTile | src/newgrf_roadstop.cpp | tile
-rebound | RustRoadStopSetRandomBits | src/newgrf_roadstop.cpp | set_tile_random
-rebound | RustRoadStopSetRandomBits | src/rust/station_command_services.hpp | stop_random_bits
 rebound | RustRoadStopTileDataCount | src/animated_tile.cpp | road_count
 rebound | RustRoadStopTileDataCount | src/newgrf_roadstop.cpp | tile_count
 rebound | RustScreenDirty | src/genworld.cpp | dirty
@@ -575,8 +572,6 @@ rebound | RustWaterClass | src/clear_cmd.cpp | water_class
 rebound | RustWaterClass | src/newgrf_generic.cpp | water_class
 rebound | SharedIsDepotTile | src/rust/vehicle_effect_services.hpp | depot
 rebound | SharedIsDepotTile | src/vehicle_cmd.cpp | is_depot
-rebound | SharedTileAddWrap | src/industry_cmd.cpp | tile_add_wrap
-rebound | SharedTileAddWrap | src/rust/services.cpp | tile_add_wrap
 rebound | Shared_bay_stop_direction | src/rust/road_services.h | bay_direction
 rebound | Shared_bay_stop_direction | src/rust/services.cpp | bay_stop_direction
 rebound | Shared_disallowed_road_directions | src/rust/road_services.h | disallowed_directions
@@ -585,8 +580,6 @@ rebound | Shared_is_bay_stop | src/rust/road_services.h | is_bay_stop
 rebound | Shared_is_bay_stop | src/rust/services.cpp | is_bay_stop
 rebound | Shared_is_drive_through_stop | src/rust/road_services.h | is_drive_through
 rebound | Shared_is_drive_through_stop | src/rust/services.cpp | is_drive_through_stop
-rebound | Shared_is_normal_road | src/rust/road_services.h | is_normal_road
-rebound | Shared_is_normal_road | src/rust/services.cpp | is_normal_road
 rebound | Shared_is_road_depot | src/rust/road_services.h | is_road_depot_tile
 rebound | Shared_is_road_depot | src/rust/services.cpp | is_road_depot
 rebound | Shared_road_depot_direction | src/rust/road_services.h | depot_direction

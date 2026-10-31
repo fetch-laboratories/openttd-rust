@@ -257,15 +257,13 @@ fn scale_by_size(size: u32, n: u32) -> u32 {
 
 /// `TileAddWrap` for the generation map geometry.
 fn tile_add_wrap(g: &GenerateSettings, tile: u32, x: i32, y: i32) -> u32 {
-    let nx = (tile % g.size_x).wrapping_add(x as u32);
-    let ny = (tile / g.size_x).wrapping_add(y as u32);
-    if (nx == 0 || ny == 0) && g.freeform_edges {
-        return INVALID_TILE;
-    }
-    if nx >= g.size_x.wrapping_sub(1) || ny >= g.size_y.wrapping_sub(1) {
-        return INVALID_TILE;
-    }
-    ny.wrapping_mul(g.size_x).wrapping_add(nx)
+    crate::map_func::Map::from_log_x(g.size_x.trailing_zeros()).tile_add_wrap(
+        tile,
+        x,
+        y,
+        g.size_y,
+        g.freeform_edges,
+    )
 }
 
 /// `GetRandomTreeType`; the zone is used only in the tropic climate.
@@ -1380,8 +1378,11 @@ mod tests {
             make_shore,
             make_snow,
             water_services,
+            movement_services,
+            map_log_x: water_map_log_x,
+            map_max_x: water_map_max,
+            map_max_y: water_map_max,
             tile_type: water_type,
-            tree_ground: water,
             play_sound: sound,
             clear_square_services: crate::services::ClearSquareServices {
                 docking: clear_flag,
@@ -1457,10 +1458,6 @@ mod tests {
     extern "C" fn make_snow(_: u32, _: u32) {
         log(Event::Write("snow"));
     }
-    extern "C" fn water(_: u32) -> crate::services::TreeGround {
-        log(Event::Water);
-        crate::services::TreeGround(0)
-    }
     extern "C" fn water_type(_: u32) -> u8 {
         MP_TREES
     }
@@ -1471,6 +1468,51 @@ mod tests {
             water
         }; }
         WATER.with(std::ptr::from_ref)
+    }
+    // Resolving the view observes water entry; its ground stays dry, as in the fixture.
+    extern "C" fn movement_services() -> *const crate::movement::MovementServices {
+        thread_local! { static MOVEMENT: crate::movement::MovementServices = {
+            let mut movement = crate::train_reservation::tests::movement_table();
+            movement.tile_types = Some(water_map);
+            movement
+        }; }
+        MOVEMENT.with(std::ptr::from_ref)
+    }
+    extern "C" fn water_map_log_x() -> u32 {
+        6
+    }
+    extern "C" fn water_map_max() -> u32 {
+        63
+    }
+    extern "C" fn water_map() -> crate::map_func::TileTypeAllocation {
+        use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation};
+        static BASE: [BaseTileLayout; 4096] = [const {
+            BaseTileLayout {
+                kind: MP_TREES << 4,
+                height: 0,
+                m2: 0,
+                m1: 0,
+                m3: 0,
+                m4: 0,
+                m5: 0,
+            }
+        }; 4096];
+        static EXTENDED: [ExtendedTileLayout; 4096] = [const {
+            ExtendedTileLayout {
+                m6: 0,
+                m7: 0,
+                m8: 0,
+            }
+        }; 4096];
+        if WORLD.with_borrow(|w| w.tree.ground == GROUND_SHORE) {
+            log(Event::Water);
+        }
+        TileTypeAllocation {
+            base: BASE.as_ptr(),
+            extended: EXTENDED.as_ptr(),
+            count: 4096,
+            assertions: true,
+        }
     }
     extern "C" fn sound(_: u32, id: u16) {
         log(Event::Sound(id));

@@ -3649,7 +3649,7 @@ static void RustIndustryNews(Industry *i, StringID str, bool close) noexcept
 }
 
 static Industry *RustIndustry(void *handle) noexcept { return static_cast<Industry *>(handle); }
-static const IndustrySpec *RustIndustrySpec(void *handle) noexcept { return GetIndustrySpec(RustIndustry(handle)->type); }
+static const IndustrySpec *RustIndustrySpec(void *handle) noexcept { return RustIndustryTypeSpec(RustIndustry(handle)->type); }
 
 /** One typed noexcept slot per original operation, in industry_ffi.h order. */
 static const OpenTTDIndustryServices _industry_services = {
@@ -3682,7 +3682,7 @@ static const OpenTTDIndustryServices _industry_services = {
 	},
 	.production_callback = [](void *i, uint8_t reason) noexcept { IndustryProductionCallback(RustIndustry(i), reason); },
 	.scale_cargo = OpenTTDScaleIndustryCargo,
-	.tile_add_wrap = SharedTileAddWrap,
+	.environment = &GetRustEnvironmentServices(),
 	.farm_tile = [](uint32_t index) noexcept -> OpenTTDIndustryFarmTile {
 		TileIndex tile(index);
 		const auto type = SharedTileType(index);
@@ -3716,7 +3716,7 @@ static const OpenTTDIndustryServices _industry_services = {
 	.observe = [](void *handle, OpenTTDIndustryObservation *out) noexcept {
 		Industry *i = RustIndustry(handle);
 		const IndustrySpec *spec = GetIndustrySpec(i->type);
-		*out = {RustIndustryCanonicalOwner(i), RustIndustrySpecBehaviour(spec), RustIndustrySpecCallbackMask(spec), spec->life_type.base(), uint8_t(spec->UsesOriginalEconomy()), i->type,
+		*out = {RustIndustryCanonicalOwner(i), RustIndustrySpecBehaviour(spec), RustIndustrySpecCallbackMask(spec), RustIndustrySpecLife(spec), uint8_t(spec->UsesOriginalEconomy()), i->type,
 			spec->production_up_text, spec->production_down_text, spec->closure_text};
 	},
 	.production_rate = [](void *i, uint32_t slot) noexcept -> uint8_t { return RustIndustrySpec(i)->production_rate[slot]; },
@@ -3810,7 +3810,7 @@ const OpenTTDIndustryLifecycleServices &GetIndustryLifecycleRustServices() { ret
 const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices()
 {
 	static const OpenTTDIndustryGenerationServices services = {
-		.spec = [](uint8_t type) noexcept -> const OpenTTDIndustrySpecHandle * { return reinterpret_cast<const OpenTTDIndustrySpecHandle *>(GetIndustrySpec(type)); },
+		.spec = RustIndustryTypeSpec<OpenTTDIndustrySpecHandle>,
 		.spec_behaviour = RustIndustrySpecHandleBehaviour,
 		.info = [](const OpenTTDIndustrySpecHandle *handle) noexcept -> OpenTTDIndustryGenerationInfo {
 			const auto *spec = reinterpret_cast<const IndustrySpec *>(handle);
