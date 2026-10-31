@@ -15,6 +15,11 @@ Agent: /root | Model: gpt-6.1-sol | Reasoning effort: xhigh.
   - 46, #606 map/movement loads and regression repair (`a60ef2e616`):
     524 / 158 / 0 / +12 (-4 production, +16 fixture).
   Both passed fixing review, root spot-checks and current-base exact-head Full.
+  After this integration-46 stocktake, engine runtime #614 integrated as 47
+  (`2a89fb023f`): 316 Rust / 352 tooling / 63 retired / +76 net glue
+  (-19 production, +95 fixture), after full review and exact-head Full.
+  The inventory and speed tables below retain their integration-46 pin;
+  the next ordinary stocktake/profile is after 48.
   #610 and #592 are closed; #565 item 1 is complete, with remaining conversions
   and native fallback deletion open.
 - Whole fork: retired 53,119 of 284,355 (18.68%, +70 since integration 44);
@@ -49,42 +54,46 @@ Agent: /root | Model: gpt-6.1-sol | Reasoning effort: xhigh.
 | Boundary layer | 0 | 0 | 0 | 18,174 | 18,174 |
 | **Whole fork** | **284,355** | **53,119** | **231,236** | **33,997** | **265,233** |
 
-- Six component slots are selected: #603, #607, #612, #614, #616 and new
-  snow-line/map-edge owner #617. Its seven native functions contain 46 code
-  lines before facade/storage retention. First concrete boundary/evidence cost
-  precedes long checks. Three ready unstarted owners remain: road-bit cleanup,
-  link-graph lifecycle/flow publication and elrail/service clamp. No planning
-  trigger is met. #616's full and zero-area scoped reviews, root spot-checks, affected
-  runtime and final recount are complete at `587e916eca`: 52 retired,
-  -1 production/+18 fixture glue, 192 tooling and 131 Rust. Its conflict-free
-  base update `46f946cfa1` is in targeted combination checks/recount before Full.
-- #614's full fixing review, root spot-check and affected runtime validation
-  pass at `64683b8314`. Complete price/input/RNG/lifetime observations reject
-  missing or malformed evidence. Final metrics: 63 retired, 316 Rust,
-  352 tooling, -19 production/+95 fixture glue. Earlier Rust/native/other-case
-  checks retain their real pins; all 22 affected cases/69 snapshots pass across
-  those runs. Current-base adoption and exact-head Full are next in the queue.
-- #612's full review/root spot-checks and affected Cargo/build/14-native/five-
-  case validation pass at `eee04f139c`. Final cost there: 88 retired, 597 Rust,
-  587 tooling, -78 production/+29 fixture glue. The base update is now
-  `a5bd61f93d`: two real RoadYAPF/fixture conflicts plus a separate retired-World
-  API adaptation. Neither review exception applies. Root obtains a fresh scoped
-  resolution/follow-up review while running its pinned combination checks and
-  recount; unchanged full-review scope remains valid. The configured-STL
-  primitive stays 10 native lines, with one Rust tree and original order/RNG.
-  Native GUI k-d code and retained GetTileArea selectors receive no new credit.
+- Six component slots are selected: #603, #607, #612, #616, #618 and new
+  road-bit owner #619, in the slot freed by #614. #618 has its accepted first
+  concrete cost: 34 retired, +10 production/+78 fixture glue, 200 tooling and
+  159 Rust; first native/scenario/standard-metric validation is running.
+  #619 owns cleanup and crossing-connectivity decisions with direct town and
+  road-loop consumers; its 45-line inventory is not promised retirement.
+  Two ready unstarted phase-1 owners remain, so a fresh planning round is due.
+- #616's full and zero-area scoped reviews, root spot-checks and affected
+  implementation/combination validation are complete at `5063e1d71f`.
+  Combined 46f builds, seven native/ABI tests, probes and two tree cases pass.
+  A control-log mismatch was independently traced to unsaved wall-time RNG
+  startup input. The common fixture now seeds that input and requires both
+  streams unchanged by clearing, with no production/expectation/mask change.
+  The corrected landscape pair passes. Final cost: 52 retired, 131 Rust,
+  196 tooling, -1 production/+18 fixture glue. Actual-base adoption and
+  exact-head Full follow integration 47.
+- #612's full and fresh scoped resolution reviews, root spot-checks and A5
+  combination validation pass at `a5bd61f93d`: both builds, nine selected
+  native/ABI tests and five cases/eight snapshots. Current cost: 88 retired,
+  599 Rust, 587 tooling, -78 production/+29 fixture glue. Earlier unchanged
+  orders/Rust evidence retains its actual pin. Adopt the actual base when
+  preparing Full; preserve one Rust tree, the ten-line configured-STL support
+  and all native GetTileArea/GUI/lifecycle exclusions.
+- #603's current-base update `f2731de370` preserves the prior full review and
+  all four native assertion repairs. Fresh scoped review of six conflicts and
+  the separate fixture adaptation has no findings; root spot-check is done.
+  Its pinned metric/Cargo/build/16-native/17-case run is active. #603 remains
+  the next maintenance integration; no session/CargoFlow scope was added.
 - Every CI configuration builds Rust. #581 PR-B is draft #607. Its full
   fixing review and root workflow/README spot-check are preserved. Current
   integration-46 merge `e090ccf1fd` resolves the map-static conflict by keeping
   integrated source, then reruns the recorded unifdef sweep. Root verified
   all 1,810 base/swept/candidate source identities and exactly the same eight
   explicit migration patch bodies. Condition (c) applies subject to CI.
-  Fast gates pass; metric and minimal Rust archive/map/road object compilation
-  are running. Prior 224 native tests, Cargo/generators/comparisons and four
-  preprocessing proofs retain their actual pins. Prior bb10 cost remains
-  12 Rust, 142 tooling, -814 retirement/-815 glue (signed reclassification).
-  Current-base bootstrap Full remains queued; CI_ON_DEMAND is unchanged.
-  #570 follows PR-B, with #566 drawing evidence required before integration.
+  Minimal archive/map/road compilation and recount pass: 12 Rust, 142 tooling,
+  -815 retirement/-816 net glue, preserving signed reclassification. Prior
+  224 native tests, Cargo/generators/comparisons and four preprocessing proofs
+  retain their actual pins. Actual-base adoption/sweep and bootstrap Full
+  follow #603; CI_ON_DEMAND is unchanged. #570 follows PR-B, with #566 drawing
+  evidence required before integration.
 - Merged profile 46 at `a60ef2e616` passes all six semantic exit/log comparisons,
   with identical reference identities/counts and compatible candidates versus
   profile 44 and the accepted repair. Every unchanged profile-36 repair target
@@ -398,6 +407,8 @@ Rust / tooling / original C++ retired / net glue.
 | 43 | #600 town spatial index and policy / #608 | `5345e29939` | 699 / 112 / 120 / -16 |
 | 44 | #601 industry servicing and policy / #609 | `16e0235d0d` | 309 / 158 / 105 / +37 |
 | 45 | #610 company control and ownership checks / #611 | `1dd6d32544` | 393 / 181 / 70 / +171 |
+| 46 | #565 canonical map/movement loads and speed repair / #606 | `a60ef2e616` | 524 / 158 / 0 / +12 |
+| 47 | #613 remaining engine runtime decisions / #614 | `2a89fb023f` | 316 / 352 / 63 / +76 |
 
 ## Work order
 
@@ -406,7 +417,7 @@ six-branch limit and disjoint-service rule; completing review/integration takes
 priority. A lower rank can run while a higher one waits. Scopes live in issues.
 
 1. **Finish the remaining drafts in readiness order, with the steering fixes.**
-   #568, #594, #596, #605, #608, #609, #611 and #606 integrated as 39 to 46.
+   #568, #594, #596, #605, #608, #609, #611, #606 and #614 integrated as 39 to 47.
    #612 and #614 follow completed implementation/runtime evidence and review.
    The integration-45 platform cadence passed; next due at 50.
    #603 is the next maintenance integration. Each next action
@@ -482,12 +493,11 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
       tree state/build orchestration/mutations/traversal. Count its retained
       native support and final glue explicitly. Keep the two native
       `GetTileArea` selectors as whole operations with zero retirement credit;
-   9. #613 engine runtime is selected in #614. Six methods have 78 original
-      inventory lines; the concrete owner retires 63. Root accepted the necessary
-      evidence cost and required a bounded maintenance funds repair, now pushed
-      at `ad4ffdb005`: -19 production glue, +95 fixture glue, 268 tooling,
-      318 Rust. Full fixing review is complete; affected checks and final
-      recount precede current-base Full;
+   9. #613 engine runtime integrated as #614 (integration 47, `2a89fb023f`).
+      Six methods had 78 original inventory lines; 63 retired. Final cost is
+      316 Rust, 352 tooling, -19 production/+95 fixture glue. The supplied-company
+      funding repair, full fixing review, root spot-check and current-base
+      exact-head Full are complete. Native engine shells/storage remain;
    10. #615 clear-ground clearing (22) and editor tree-group mutation (36) is
       selected in the slot freed by #611. Port the two decisions and direct
       landscape dispatch, reusing canonical cost/map/tree/geometry/RNG owners.
@@ -495,8 +505,9 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
       concrete split cost and necessary evidence are accepted; reviews are
       complete. #617 now selects the next snow-line/map-edge owner (46 original
       function lines, including signatures/braces), with process-wide state and
-      exact date/edge semantics. Next unstarted: road-bit cleanup (45,
-      including `IsPossibleCrossing`), link-graph job lifecycle (37 original
+      exact date/edge semantics. Its implementation is #618, in first validation.
+      Road-bit cleanup (45, including `IsPossibleCrossing`) is now #619.
+      Next unstarted: link-graph job lifecycle (37 original
       lines in the six principal spans, including 12 pool-coupled constructor
       and destructor lines; size retained operations and executable headers
       with flow-publication cleanup), and the elrail setting change plus
@@ -591,49 +602,48 @@ Excluded, with return conditions checked by this review:
   near-full reproduction under #513's original-default setting policy. #513
   needs implementation when the first such improvement is accepted.
 
-## Resume checkpoint (2026-10-31, integration 46)
+## Resume checkpoint (2026-10-31, integration 47)
 
 Codex root has taken over from Claude Code root at `9cf6b7898e`.
 Agent: /root | Model: gpt-6.1-sol | Reasoning effort: xhigh.
-#568, #594, #596, #605, #608, #609 and #611 integrated as 39 to 45.
-Map/movement repair #606 integrated as 46 at `a60ef2e616` after full fixing
-review, root spot-checks and current-base Full. #592 is closed; #565 item 1 is
-complete. Stocktake/profile 46 are complete above. All six repair targets and
-semantic comparisons pass on the merged tip with compatible identities; all
-carried records are below bands, so no quiet pass is currently triggered.
-Cadence 45 passed; next due at 50. Next ordinary stocktake/profile is after 48.
+#568, #594, #596, #605, #608, #609, #611, #606 and #614 integrated as 39 to 47.
+Current code is `2a89fb023f`: engine runtime #614 passed full fixing review,
+root spot-checks and exact-head Full on its conflict-free current-base merge.
+#613 is closed. Stocktake/profile 46 remain above, with all carried speed
+records below bands and no quiet-pass trigger. The next ordinary stocktake
+and profile are after 48; platform cadence is next at 50.
 
-Six components are selected. #616's clean current-base combination is in its
-pinned metric/build/native/probe/four-case run. #603 is next maintenance.
-#607's integration-46 sweep/replay is verified across 1,810 paths and eight
-unchanged deviations; condition (c) applies subject to CI, with minimal
-compilation/recount running. #614 is reviewed/validated/recounted and ready
-for base adoption/Full. #612's reviewed checks pass; its real integration-46
-resolutions need fresh scoped review plus pinned combination validation.
-New #617 fills the freed slot with snow-line decisions and map-edge water;
-implementation starts from this integrated base, with first concrete cost
-checkpoint before long checks. Three ready unstarted phase-1 owners remain.
+Six components are selected. #616 and #612 have completed their implementation,
+full/scoped reviews, root spot-checks and affected combination checks; prepare
+actual-base Full in readiness order. #603's fresh scoped review has no findings
+and its f273-pinned combination checks are active; it is next maintenance.
+#607's minimal compilation/recount and 1,810-path/eight-deviation replay pass;
+bootstrap Full remains after #603 and actual-base sweep. #618's accepted
+snow-line/edge implementation is in first native/scenario validation. #619 takes
+#614's freed slot for road-bit cleanup. Two ready unstarted phase-1 owners
+remain, so a fresh high-effort planner is due without a preferred candidate.
+Do not start a seventh component. Keep running source pins stable.
 
 | Draft | Pushed head | State and next action | Worktree |
 | --- | --- | --- | --- |
-| #581 / #607 | `e090ccf1fd` | Full review preserved. Integration-46 conflict keeps canonical map-static load then full unifdef sweep. Root verified all 1,810 base/sweep/candidate identities and unchanged eight explicit patch bodies; condition (c), subject to CI. Metric/minimal Rust archive/map/road object checks running. Earlier runtime/preprocessing evidence retains pins. Bootstrap Full remains queued; CI_ON_DEMAND unchanged. | `t3-4076556a` |
-| #199 / #603 | `70215c21cb` | Reviewed four native-assertion fixes; root spot-checked. Current-base update and Full after #606, without expanding the accepted scope. Item 4 is #604. | `t3-120ef117` |
-| #602 / #612 | `a5bd61f93d` | Full review and eee Cargo/build/14-native/five-case checks passed. eee recount: 88 retired, 597 Rust, 587 tooling, -78 production/+29 fixture. Two base conflicts and separate World API adaptation meet neither exception; fresh scoped review plus pinned combination validation/recount next. Source held. | `t3-56a3afc8` |
-| #613 / #614 | `64683b8314` | Full review/root spot-check/affected properties cases and final recount complete. All 22 selected cases/69 snapshots and native/Rust checks retain recorded pins. Final cost: 63 retired, 316 Rust, 352 tooling, -19 production/+95 fixture. Ready for current-base adoption and exact-head Full. | `t3-8ff8d8ea` |
-| #615 / #616 clear/tree | `46f946cfa1` | Conflict-free base update preserves reviews/root fixes; condition (a), subject to CI. Combination metric/build/seven native-ABI/probe/four-case run active. Old final cost: 52 retired, 131 Rust, 192 tooling, -1 production/+18 fixture. Final docs adoption and exact-head Full follow success. | `t3-68700e40` |
-| #617 snow-line/map-edge | Issue only | Selected next phase-1 owner, 46 original function lines before native facade/storage retention. Preserve one process-wide state, native table/date/reset contracts and exact map-edge order. First actual split metrics before long validation; full review and current-base Full required. | Prepared T3 worktree at spawn |
+| #581 / #607 | `e090ccf1fd` | Full review preserved. Integration-46 sweep/replay and minimal archive/map/road compilation pass. Cost: 12 Rust, 142 tooling, -815 retirement/-816 net glue. Condition (c), subject to CI. Actual-base sweep/bootstrap Full follows #603; CI_ON_DEMAND unchanged. | `t3-4076556a` |
+| #199 / #603 | `f2731de370` | Full review and four assertion repairs preserved; fresh scoped review of six conflicts/follow-up has no findings, root spot-check complete. Standard metric/Cargo/build/16-native/17-case run active at base 3aa. Actual-base update and Full afterward; no new session/CargoFlow scope. | `t3-d31fc312` (old `t3-120ef117` preserved) |
+| #602 / #612 | `a5bd61f93d` | Full/scoped reviews, root spot-checks and combination builds/nine-native/five-case/eight-snapshot checks pass. Cost: 88 retired, 599 Rust, 587 tooling, -78 production/+29 fixture. Source held; actual-base adoption and Full next. | `t3-56a3afc8` |
+| #615 / #616 clear/tree | `5063e1d71f` | Full/scoped reviews and root checks pass. Common fixture seed correction is independently original-derived; both landscape cases pass without production/expectation changes. Final cost: 52 retired, 131 Rust, 196 tooling, -1 production/+18 fixture. Actual-base adoption and exact-head Full next. | `t3-68700e40` |
+| #617 / #618 snow-line/map-edge | `45e1350c79` | First concrete cost accepted: 34 retired, 159 Rust, 200 tooling, +10 production/+78 fixture. Source held for first Cargo/native/ABI/ten-case validation and standard recount. Fresh full fixing review and actual-base Full follow implementation evidence. | `t3-0d996c45` |
+| #619 road-bit cleanup | Issue only | Selected in #614's freed slot. Own cleanup and crossing-connectivity, direct town/road-loop consumers, canonical map/header/foundation helpers and complete ordering/RNG evidence. 45 original inventory lines; first actual split before long checks. | Prepared T3 worktree at spawn |
 
 | Running or due work | State / next action |
 | --- | --- |
-| Branch limit | Six selected components: #603, #607, #612, #614, #616 and new owner #617. Start no seventh. |
-| Planning | #617 snow-line/map-edge selected from the existing order. Three ready unstarted phase-1 owners remain; next-phase #570 is queued after PR-B. No fresh planning trigger. |
+| Branch limit | Six selected components: #603, #607, #612, #616, #618 and new owner #619. Start no seventh. |
+| Planning | #619 selected from the existing order. Two ready unstarted phase-1 owners remain; next-phase #570 is queued after PR-B. Fresh high-effort planning round is due without a preferred candidate. |
 | Platform cadence | Integration-45 run `41204109835` passed at `1dd6d32544`; both semantic artifacts pass five cases/126 snapshots with matching exits and moments. Next due at integration 50; integration 40 passed. |
 | Deep checks | On the user's request only (user decision, 2026-10-31). If one is requested, use `.local/worktrees/deep-after30-569` (locked). Move it with `git checkout --detach origin/rust-migration` and relock it. Then run `python3 tools/migration.py build --jobs 2`, then `cmake --build build-rust-sanitized --target openttd_rust_native_test_support_build` until #503's fix lands, then `python3 tools/migration.py deep` with the requested `--member` options. Launch outside the session's process group, for example as a `systemd-run --user` unit. |
 | Instruction profile | Profile 46 at a60ef2e616 is complete: six equal comparisons, compatible identities, all unchanged repair targets met. Projections and carried records are above; all records below bands. Retain locked profile-after46-606 and prior anchors. Next ordinary profile after 48. |
 | Quiet speed pass | No current trigger: all carried three-pass records are below bands. No wall anchor/median changed. |
-| Maintenance | #606 integrated. #603 is next maintenance with current-base update/Full; #607 needs map adoption, touched-src sweep and bootstrap Full. Ready #616 proceeds through current-base combination and Full. #604 remains after map/CargoFlow repairs, PR-B and #570 generator, ahead of typing/coverage. |
-| Issues | #592 closed; #565 item 1 done with remaining leaves open. #617 selected and placed. Recheck placement after this checkpoint. |
-| Housekeeping | Merged #606 review and implementation checkouts removed after profile 46 replaced current candidate evidence. Cancelled dirty source, native fixture evidence and retained anchor/profile trees remain protected. Active source trees remain locked. |
+| Maintenance | #606 and #614 integrated. #603 is next maintenance after its active combination checks, with actual-base Full. #607 follows with actual-base touched-src sweep and bootstrap Full. Ready #616/#612 proceed through actual-base Full. #604 remains after map/CargoFlow repairs, PR-B and #570 generator, ahead of typing/coverage. |
+| Issues | #613 and #592 closed; #565 item 1 done with remaining leaves open. #617/#618 active; #619 selected and placed. Recheck placement after this checkpoint. |
+| Housekeeping | After 47, dry run/apply removed 0 B. Completed review/merged #614 checkouts stay protected where live-process inspection is incomplete; do not force removal. Cancelled dirty source, native fixture evidence, retained anchors/profiles and active source pins remain protected. |
 
 Keep the pinned reference unchanged. Preserve unfinished checkouts and existing
 profile and deep evidence.
