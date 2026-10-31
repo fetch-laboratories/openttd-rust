@@ -179,13 +179,7 @@ unsafe fn day<const COUNTED: bool>(
                     }
                     if callback & !3 != 0 {
                         let engine = svc!(COUNTED, vs.engine, vehicle);
-                        svc!(
-                            COUNTED,
-                            vs.unknown_callback_result,
-                            engine,
-                            CBID_VEHICLE_32DAY_CALLBACK,
-                            callback
-                        );
+                        vs.unknown_callback_result(engine, CBID_VEHICLE_32DAY_CALLBACK, callback);
                     }
                 }
             }

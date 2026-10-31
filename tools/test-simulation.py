@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from simulation import community_ai, newgrf_loading, platform_subset, runtime
+from simulation import community_ai, engines, newgrf_loading, platform_subset, runtime
 from simulation import core as simulate
 from simulation import instructions as ir
 from simulation.instructions import SPEED_BUDGETS, speed_budget
@@ -25,6 +25,60 @@ simulate.scenario_modules()
 
 
 class SimulationDeterminismTests(unittest.TestCase):
+    def test_engine_runtime_requires_complete_price_matrix_and_rng(self) -> None:
+        records = [
+            f"ENGINE properties-runtime {kind} {price} {dynamic} {base} 0 -1"
+            for kind, price in ((0, 15), (0, 16), (1, 18), (2, 19), (3, 17))
+            for dynamic in ("false", "true")
+            for base in (2560, (1 << 63) - 1, -(1 << 63))
+        ] + ["ENGINE properties-runtime-rng 0 1 2147483648 4294967295"]
+        markers = [
+            f"ENGINE loading-case {label} true"
+            for label, count in (
+                ("runtime-null-grf", 4),
+                ("runtime-action3-grf", 4),
+                ("runtime-climate", 4),
+                ("runtime-invalid-engine", 4),
+                ("runtime-enabled", 4),
+                ("runtime-build", 30),
+                ("runtime-running", 30),
+                ("runtime-invalid-price", 3),
+                ("runtime-range-default", 1),
+                ("runtime-range-dynamic", 1),
+                ("runtime-life", 8),
+                ("runtime-rng", 1),
+                ("runtime-built-life", 4),
+            )
+            for _ in range(count)
+        ]
+        lines = records + markers
+        self.assertEqual(engines.runtime_markers(lines), records)
+        for index in range(len(lines)):
+            with self.subTest(missing=index), self.assertRaises(RuntimeError):
+                engines.runtime_markers(lines[:index] + lines[index + 1 :])
+        for index, line in enumerate(records):
+            for end in range(2, len(line.split())):
+                with (
+                    self.subTest(truncated=index, end=end),
+                    self.assertRaises(RuntimeError),
+                ):
+                    engines.runtime_markers(
+                        lines[:index]
+                        + [" ".join(line.split()[:end])]
+                        + lines[index + 1 :]
+                    )
+        for old, new in (
+            ("0 16 false", "0 15 false"),
+            ("0 15 true", "0 15 false"),
+            ("9223372036854775807", "2560"),
+            (" 0 -1", " 9223372036854775808 -1"),
+            (" 0 -1", " 0 broken"),
+            ("4294967295", "4294967296"),
+            ("4294967295", "-1"),
+        ):
+            with self.subTest(replaced=old, new=new), self.assertRaises(RuntimeError):
+                engines.runtime_markers([line.replace(old, new) for line in lines])
+
     def test_townname_observations_require_every_style_and_seed(self) -> None:
         lines = ["LOADING townname first styles 0", "LOADING townname first style 0 0"]
         for k in range(40):

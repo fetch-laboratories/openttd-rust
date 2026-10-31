@@ -213,10 +213,7 @@ static void OPENTTD_RUST_CALL Aircraft_service_order(OpenTTDAircraftVehicle vehi
 	Aircraft::From(VehicleOf(vehicle.handle))->current_order.MakeGoToDepot(StationID{static_cast<uint16_t>(station)}, OrderDepotTypeFlag::Service);
 }
 
-static int64_t OPENTTD_RUST_CALL Aircraft_running_cost(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	return Aircraft::From(VehicleOf(vehicle.handle))->GetRunningCost();
-}
+
 
 static void OPENTTD_RUST_CALL Aircraft_subtract_cost(OpenTTDAircraftVehicle vehicle, int64_t cost) noexcept
 {
@@ -374,7 +371,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.destination_too_far = Aircraft_destination_too_far,
 	.delete_range_news = Aircraft_delete_range_news,
 	.service_order = Aircraft_service_order,
-	.running_cost = Aircraft_running_cost,
 	.subtract_cost = Aircraft_subtract_cost,
 	.dirty_lists = Aircraft_dirty_lists,
 	.next_stopping_station = Aircraft_next_stopping_station,
@@ -385,7 +381,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.invalid_scheme = Aircraft_invalid_scheme,
 	.unreachable = RustNotReachedWithUnusedOwner<OpenTTDAircraftVehicle>,
 	.cargo_age_default = RustVehicleEngineObservation<uint16_t, OpenTTDAircraftVehicle, RustEngineCargoAge>,
-	.range_default = RustVehicleEngineObservation<uint16_t, OpenTTDAircraftVehicle, RustEngineAircraftRange>,
 	.rotor_image_if_changed = Aircraft_rotor_image_if_changed,
 	.update_rotor_image = Aircraft_update_rotor_image,
 	.vehicle_crash = RustVehicleBaseCrashHandle<OpenTTDAircraftVehicle>,

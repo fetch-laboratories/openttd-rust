@@ -134,7 +134,6 @@ static void Ship_ships_dirty() noexcept { SetWindowClassesDirty(WC_SHIPS_LIST); 
 
 static void Ship_check_orders(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); CheckOrders(v); }
 
-static int64_t Ship_running_cost(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return static_cast<int64_t>(v->GetRunningCost()); }
 
 static uint32_t Ship_cost_divisor() noexcept { return CalendarTime::DAYS_IN_YEAR * Ticks::DAY_TICKS; }
 
@@ -242,7 +241,6 @@ static void Ship_build_properties(uint32_t id, uint32_t engine) noexcept
 	RustVehicleSetEngine(RustVehicle(v), e->index.base());
 	v->reliability = RustEngineReliability(e);
 	v->reliability_spd_dec = e->reliability_spd_dec;
-	v->max_age = RustEngineLifeLength(e);
 }
 
 static void Ship_build_dates(uint32_t id) noexcept
@@ -377,7 +375,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.start_dirty = Ship_start_dirty, .depot_dirty = Ship_depot_dirty,
 		.depot_invalidate = Ship_depot_invalidate, .ships_dirty = Ship_ships_dirty,
 		.check_orders = Ship_check_orders,
-		.running_cost = Ship_running_cost, .cost_divisor = Ship_cost_divisor,
+		.cost_divisor = Ship_cost_divisor,
 		.pay_running = Ship_pay_running, .speed_default = Ship_speed_default,
 		.age_default = Ship_age_default, .speed_frac = Ship_speed_frac,
 		.cache_invalidate = Ship_cache_invalidate,

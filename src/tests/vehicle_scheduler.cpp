@@ -21,6 +21,7 @@
 #include "../rust/fleet_ffi.h"
 #include "../../tools/simulation/session-fixture.hpp"
 #include "../rust/company_adapter.h"
+#include "../rust/company_identity_ffi.h"
 #include "../rust/session_ffi.h"
 #include "../safeguards.h"
 
@@ -337,7 +338,7 @@ TEST_CASE("Base vehicle scheduler - Tick growth, timing return and fresh type")
 		.x = unused_position,
 		.y = unused_position,
 		.z = unused_position,
-		.reserve = [](uint8_t) noexcept -> uint32_t { FAIL_CHECK("Unexpected pending fleet reserve"); return 0; },
+		.company = &GetRustCompanyIdentityServices(),
 		.subtract = unused,
 		.command = unused,
 		.animation = unused,

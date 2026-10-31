@@ -144,7 +144,7 @@ pub extern "C" fn openttd_rust_visual_update(v: VehicleRef, allow_power_change: 
             (s.vehicle.callback)((s.vehicle.newgrf)(), v, CBID_VEHICLE_VISUAL_EFFECT);
         if callback != CALLBACK_FAILED {
             if callback >= 0x100 && (s.grf_version)(e.engine) >= 8 {
-                (s.vehicle.unknown_callback_result)(
+                s.vehicle.unknown_callback_result(
                     crate::vehicle::EngineRef(unsafe {
                         std::ptr::NonNull::new_unchecked(e.engine.cast_mut())
                     }),

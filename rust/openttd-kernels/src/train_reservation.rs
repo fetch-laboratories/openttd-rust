@@ -1533,7 +1533,7 @@ pub(crate) mod tests {
             newgrf: unused(),
             property: unused(),
             callback: unused(),
-            unknown_callback_result: unused(),
+            set_max_age: unused(),
             length_changed: unused(),
             play_vehicle_sound: unused(),
             play_sound: unused(),

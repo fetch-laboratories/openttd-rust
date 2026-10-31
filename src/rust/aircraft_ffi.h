@@ -91,7 +91,6 @@ struct OpenTTDAircraftLeaves {
 	void (OPENTTD_RUST_CALL *destination_too_far)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(destination_too_far);
 	void (OPENTTD_RUST_CALL *delete_range_news)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(delete_range_news);
 	void (OPENTTD_RUST_CALL *service_order)(OpenTTDAircraftVehicle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(service_order);
-	int64_t (OPENTTD_RUST_CALL *running_cost)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(running_cost);
 	void (OPENTTD_RUST_CALL *subtract_cost)(OpenTTDAircraftVehicle, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(subtract_cost);
 	void (OPENTTD_RUST_CALL *dirty_lists)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(dirty_lists);
 	uint16_t (OPENTTD_RUST_CALL *next_stopping_station)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(next_stopping_station);
@@ -102,7 +101,6 @@ struct OpenTTDAircraftLeaves {
 	void (OPENTTD_RUST_CALL *invalid_scheme)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(invalid_scheme);
 	void (OPENTTD_RUST_CALL *unreachable)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(unreachable);
 	uint16_t (OPENTTD_RUST_CALL *cargo_age_default)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(cargo_age_default);
-	uint16_t (OPENTTD_RUST_CALL *range_default)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(range_default);
 	bool (OPENTTD_RUST_CALL *rotor_image_if_changed)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(rotor_image_if_changed);
 	void (OPENTTD_RUST_CALL *update_rotor_image)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(update_rotor_image);
 	uint32_t (OPENTTD_RUST_CALL *vehicle_crash)(OpenTTDAircraftVehicle, bool) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_crash);

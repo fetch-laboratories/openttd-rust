@@ -45,6 +45,7 @@
 #include "aircraft_ffi.h"
 #include "fleet_ffi.h"
 #include "services_ffi.h"
+#include "company_identity_ffi.h"
 #include "company_services.h"
 #include "environment_services.h"
 #include "../company_base.h"
@@ -93,7 +94,7 @@ OpenTTDTrainHandle RustVehicleTrain(OpenTTDVehicle *v) noexcept { return TrainHa
 bool RustTrainIsEngine(const Vehicle *v) noexcept { return Train::From(v)->IsEngine(); }
 uint32_t RustTrainCachedPower(const Vehicle *v) noexcept { return Train::From(v)->gcache.cached_power; }
 uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept { return RustEngineGRFVersion(EngineOf(RustVehicleGetEngine(RustVehicle(v)))); }
-uint32_t RustVehicleGRFString(Vehicle *v, uint32_t string) noexcept { return GetGRFStringID(RustVehicleGRFID(v), GRFStringID(string)); }
+uint32_t RustGRFString(uint32_t grfid, uint32_t string) noexcept { return GetGRFStringID(grfid, GRFStringID(string)); }
 void RustVehicleFlipStopped(Vehicle *v) noexcept { v->vehstatus.Flip(VehState::Stopped); }
 
 uint16_t RustVehicleRefitCap(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->refit_cap; }
@@ -156,10 +157,7 @@ Train *RustTrainGetIfValid(uint32_t id) noexcept { return Train::GetIfValid(Vehi
 OpenTTDVehicle *RustShipGet(uint32_t id) noexcept { return RustVehicle(Ship::Get(VehicleID(id))); }
 static const OpenTTDOrdersLeaves *VehicleOrders() noexcept { return &GetRustOrdersLeaves(); }
 
-static void OPENTTD_RUST_CALL VehicleSvcUnknownCallbackResult(const OpenTTDEngine *e, CallbackID callback, uint16_t result) noexcept
-{
-	RustUnknownCallbackResult(EngineOf(e)->GetGRFID(), callback, result);
-}
+
 static void OPENTTD_RUST_CALL VehicleSvcLengthChanged(OpenTTDVehicle *v) noexcept { VehicleLengthChanged(VehicleOf(v)); }
 static bool OPENTTD_RUST_CALL VehicleSvcPlayVehicleSound(OpenTTDVehicle *v, VehicleSoundEvent event) noexcept { return PlayVehicleSound(VehicleOf(v), event); }
 static void OPENTTD_RUST_CALL VehicleSvcPlaySound(OpenTTDVehicle *v, uint16_t sound) noexcept { SndPlayVehicleFx(static_cast<SoundID>(sound), VehicleOf(v)); }
@@ -345,7 +343,7 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.newgrf = []() noexcept { return &GetRustVehicleResolverServices(); },
 	.property = openttd_rust_vehicle_shell_property,
 	.callback = openttd_rust_vehicle_shell_callback,
-	.unknown_callback_result = VehicleSvcUnknownCallbackResult,
+	.set_max_age = RustVehicleSetMaxAge,
 	.length_changed = VehicleSvcLengthChanged,
 	.play_vehicle_sound = VehicleSvcPlayVehicleSound,
 	.play_sound = VehicleSvcPlaySound,
@@ -523,7 +521,6 @@ static OpenTTDVehicleMaintenanceInterval OPENTTD_RUST_CALL MaintenanceInterval(O
 	return {.company = company, .last_service = MaintenanceDate(RustVehicleLastService(v)), .now = MaintenanceDate(TimerGameEconomy::date), .interval = RustVehicleServiceInterval(v), .reliability = RustVehicleReliability(v), .percent = v->ServiceIntervalIsPercent(), .wallclock = TimerGameEconomy::UsingWallclockUnits(), .no_service = _settings_game.order.no_servicing_if_no_breakdowns, .breakdowns = _settings_game.difficulty.vehicle_breakdowns};
 }
 static uint16_t OPENTTD_RUST_CALL MaintenanceEngineReliability(OpenTTDVehicle *handle) noexcept { return RustEngineReliability(VehicleOf(handle)->GetEngine()); }
-static OpenTTDVehicleMaintenanceBudget OPENTTD_RUST_CALL MaintenanceBudget(const Company *company) noexcept { return {.needed = RustCompanyRenewReserve(company), .available = GetAvailableMoney(company->index).base()}; }
 static OpenTTDVehicleMaintenanceReplacement OPENTTD_RUST_CALL MaintenanceReplacement(OpenTTDVehicle *handle, const Company *company) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
@@ -532,7 +529,6 @@ static OpenTTDVehicleMaintenanceReplacement OPENTTD_RUST_CALL MaintenanceReplace
 	return {.engine = engine.base(), .when_old = when_old};
 }
 static bool OPENTTD_RUST_CALL MaintenanceReplacementAvailable(OpenTTDVehicle *handle, uint16_t engine) noexcept { return Engine::Get(EngineID(engine))->company_avail.Test(VehicleOf(handle)->owner); }
-static OpenTTDVehicleMaintenanceReplacementCost OPENTTD_RUST_CALL MaintenanceReplacementCost(const Company *company, uint16_t engine) noexcept { return {.cost = RustEngineCost(RustEngineByID(engine)), .available = GetAvailableMoney(company->index).base()}; }
 static OpenTTDVehicleMaintenanceAutomatic OPENTTD_RUST_CALL MaintenanceAutomatic(OpenTTDVehicle *handle) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
@@ -636,15 +632,14 @@ const OpenTTDVehicleMaintenanceServices _rust_vehicle_maintenance_services{
 	.shared = &GetRustSharedServices(),
 	.transaction = &FleetTransactionServices(),
 	.group = &FleetGroupServices(),
+	.company = &GetRustCompanyIdentityServices(),
 	.renewal = MaintenanceRenewal,
 	.reset = MaintenanceReset,
 	.has_engine = MaintenanceHasEngine,
 	.interval = MaintenanceInterval,
 	.engine_reliability = MaintenanceEngineReliability,
-	.budget = MaintenanceBudget,
 	.replacement = MaintenanceReplacement,
 	.replacement_available = MaintenanceReplacementAvailable,
-	.replacement_cost = MaintenanceReplacementCost,
 	.automatic = MaintenanceAutomatic,
 	.depot_service = MaintenanceDepotService,
 	.check_breakdown = MaintenanceCheckBreakdown,

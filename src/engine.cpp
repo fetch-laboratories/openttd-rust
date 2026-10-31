@@ -152,7 +152,7 @@ Engine::Engine(VehicleType type, uint16_t local_id)
  */
 bool Engine::IsEnabled() const
 {
-	return this->info.string_id != STR_NEWGRF_INVALID_ENGINE && this->info.climates.Test(_settings_game.game_creation.landscape);
+	return openttd_rust_engine_enabled(&EngineServices(), RustEngine(this));
 }
 
 /**
@@ -162,8 +162,7 @@ bool Engine::IsEnabled() const
  */
 uint32_t Engine::GetGRFID() const
 {
-	const GRFFile *file = this->GetGRF();
-	return file == nullptr ? 0 : file->grfid;
+	return openttd_rust_engine_grfid(&GetRustEngineCapabilitiesServices(), RustEngine(this));
 }
 
 /**
@@ -195,35 +194,7 @@ uint Engine::DetermineCapacity(const Vehicle *v, uint16_t *mail_capacity) const
  */
 Money Engine::GetRunningCost() const
 {
-	Price base_price;
-	uint cost_factor;
-	switch (this->type) {
-		case VEH_ROAD:
-			base_price = this->VehInfo<RoadVehicleInfo>().running_cost_class;
-			if (base_price == INVALID_PRICE) return 0;
-			cost_factor = GetEngineProperty(this->index, PROP_ROADVEH_RUNNING_COST_FACTOR, this->VehInfo<RoadVehicleInfo>().running_cost);
-			break;
-
-		case VEH_TRAIN:
-			base_price = this->VehInfo<RailVehicleInfo>().running_cost_class;
-			if (base_price == INVALID_PRICE) return 0;
-			cost_factor = GetEngineProperty(this->index, PROP_TRAIN_RUNNING_COST_FACTOR, this->VehInfo<RailVehicleInfo>().running_cost);
-			break;
-
-		case VEH_SHIP:
-			base_price = PR_RUNNING_SHIP;
-			cost_factor = GetEngineProperty(this->index, PROP_SHIP_RUNNING_COST_FACTOR, this->VehInfo<ShipVehicleInfo>().running_cost);
-			break;
-
-		case VEH_AIRCRAFT:
-			base_price = PR_RUNNING_AIRCRAFT;
-			cost_factor = GetEngineProperty(this->index, PROP_AIRCRAFT_RUNNING_COST_FACTOR, this->VehInfo<AircraftVehicleInfo>().running_cost);
-			break;
-
-		default: NOT_REACHED();
-	}
-
-	return GetPrice(base_price, cost_factor, this->GetGRF(), -8);
+	return openttd_rust_engine_running_cost(&GetRustEngineCapabilitiesServices(), RustEngine(this));
 }
 
 /**
@@ -232,38 +203,7 @@ Money Engine::GetRunningCost() const
  */
 Money Engine::GetCost() const
 {
-	Price base_price;
-	uint cost_factor;
-	switch (this->type) {
-		case VEH_ROAD:
-			base_price = PR_BUILD_VEHICLE_ROAD;
-			cost_factor = GetEngineProperty(this->index, PROP_ROADVEH_COST_FACTOR, this->VehInfo<RoadVehicleInfo>().cost_factor);
-			break;
-
-		case VEH_TRAIN:
-			if (this->VehInfo<RailVehicleInfo>().railveh_type == RAILVEH_WAGON) {
-				base_price = PR_BUILD_VEHICLE_WAGON;
-				cost_factor = GetEngineProperty(this->index, PROP_TRAIN_COST_FACTOR, this->VehInfo<RailVehicleInfo>().cost_factor);
-			} else {
-				base_price = PR_BUILD_VEHICLE_TRAIN;
-				cost_factor = GetEngineProperty(this->index, PROP_TRAIN_COST_FACTOR, this->VehInfo<RailVehicleInfo>().cost_factor);
-			}
-			break;
-
-		case VEH_SHIP:
-			base_price = PR_BUILD_VEHICLE_SHIP;
-			cost_factor = GetEngineProperty(this->index, PROP_SHIP_COST_FACTOR, this->VehInfo<ShipVehicleInfo>().cost_factor);
-			break;
-
-		case VEH_AIRCRAFT:
-			base_price = PR_BUILD_VEHICLE_AIRCRAFT;
-			cost_factor = GetEngineProperty(this->index, PROP_AIRCRAFT_COST_FACTOR, this->VehInfo<AircraftVehicleInfo>().cost_factor);
-			break;
-
-		default: NOT_REACHED();
-	}
-
-	return GetPrice(base_price, cost_factor, this->GetGRF(), -8);
+	return openttd_rust_engine_cost(&GetRustEngineCapabilitiesServices(), RustEngine(this));
 }
 
 /**
@@ -357,8 +297,7 @@ uint Engine::GetDisplayMaxTractiveEffort() const
  */
 TimerGameCalendar::Date Engine::GetLifeLengthInDays() const
 {
-	/* Assume leap years; this gives the player a bit more than the given amount of years, but never less. */
-	return TimerGameCalendar::Date{(this->info.lifelength + _settings_game.vehicle.extend_vehicle_life).base() * CalendarTime::DAYS_IN_LEAP_YEAR};
+	return TimerGameCalendar::Date{openttd_rust_engine_life_days(&GetRustEngineCapabilitiesServices(), RustEngine(this))};
 }
 
 /**
@@ -367,12 +306,7 @@ TimerGameCalendar::Date Engine::GetLifeLengthInDays() const
  */
 uint16_t Engine::GetRange() const
 {
-	switch (this->type) {
-		case VEH_AIRCRAFT:
-			return GetEngineProperty(this->index, PROP_AIRCRAFT_RANGE, this->VehInfo<AircraftVehicleInfo>().max_range);
-
-		default: NOT_REACHED();
-	}
+	return openttd_rust_engine_range(&GetRustEngineCapabilitiesServices(), RustEngine(this));
 }
 
 /**

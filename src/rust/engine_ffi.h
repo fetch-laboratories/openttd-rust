@@ -22,7 +22,7 @@ struct OpenTTDEngineSyncVariant { uint16_t parent; bool sync; };
 struct OpenTTDEngineDisplayVariant { uint16_t parent, display; };
 struct OpenTTDEnginePreviewVariant { uint16_t parent; bool join; };
 struct OpenTTDEngineReliability { int32_t base_life; int8_t retire_early; };
-struct OpenTTDEngineStartup { int32_t base_intro; uint32_t grfid; int32_t base_life; uint8_t decay_speed; bool climate; };
+struct OpenTTDEngineStartup { int32_t base_intro; int32_t base_life; uint8_t decay_speed; bool climate; };
 struct OpenTTDEngineSeed { int32_t base_intro, lifelength; uint8_t decay_speed; int8_t retire_early; };
 struct OpenTTDEngineYear { int32_t base_intro, lifelength; };
 using OpenTTDEngineYMD = OpenTTDCalendarYMD;
@@ -66,7 +66,6 @@ struct OpenTTDEngineServices {
 	bool (*ai_road_disabled)() noexcept OPENTTD_SERVICE_DEFAULT(ai_road_disabled);
 	bool (*ai_ship_disabled)() noexcept OPENTTD_SERVICE_DEFAULT(ai_ship_disabled);
 	bool (*ai_aircraft_disabled)() noexcept OPENTTD_SERVICE_DEFAULT(ai_aircraft_disabled);
-	bool (*enabled)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(enabled);
 	bool (*climate)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(climate);
 	RailVehicleTypes (*rail_kind)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(rail_kind);
 	void (*clear_last_variant)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(clear_last_variant);
@@ -99,6 +98,7 @@ struct OpenTTDEngineServices {
 };
 const OpenTTDEngineServices &EngineServices() noexcept;
 extern "C" {
+bool openttd_rust_engine_enabled(const OpenTTDEngineServices *, const OpenTTDEngine *);
 void openttd_rust_engine_reliability(const OpenTTDEngineServices *, OpenTTDEngineRef, bool);
 void openttd_rust_engine_start_one(const OpenTTDEngineServices *, OpenTTDEngineRef, OpenTTDEngineYMD, uint32_t);
 void openttd_rust_engine_aging_stops(const OpenTTDEngineServices *);

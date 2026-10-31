@@ -43,6 +43,8 @@
 
 #include "table/strings.h"
 
+#include "rust/engine_capabilities_ffi.h"
+#include "rust/vehicle_services.h"
 #include "safeguards.h"
 
 void Aircraft::UpdateDeltaXY()
@@ -205,9 +207,7 @@ void GetAircraftSpriteSize(EngineID engine, uint &width, uint &height, int &xoff
 
 Money Aircraft::GetRunningCost() const
 {
-	const Engine *e = this->GetEngine();
-	uint cost_factor = GetVehicleProperty(this, PROP_AIRCRAFT_RUNNING_COST_FACTOR, e->VehInfo<AircraftVehicleInfo>().running_cost);
-	return GetPrice(PR_RUNNING_AIRCRAFT, cost_factor, e->GetGRF());
+	return openttd_rust_engine_vehicle_running_cost(&GetRustEngineCapabilitiesServices(), RustEngine(this->GetEngine()), RustVehicle(this));
 }
 
 
