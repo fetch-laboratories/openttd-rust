@@ -46,13 +46,15 @@ Agent: /root | Model: gpt-6.1-sol | Reasoning effort: xhigh.
   The figures in the inventory above remain at integration 42 until the next
   ordinary stocktake after integration 44.
 - Five unintegrated PRs occupy component slots: #603, #606, #607, #609 and
-  #611. A fresh planner validates the next ready owner now that #600's shared
-  index is integrated, before root fills the sixth slot.
-- #609's native/runtime evidence and clean combination Cargo/static checks
-  passed. Combine integrated #608 before its first fresh full fixing review.
-  #610 is now draft #611: root accepted 70 retired, +33 production glue and
-  317 Rust at the first checkpoint; compilation repairs and planned native/
-  reload evidence continue.
+  #611; selected #602 takes the sixth. Fresh planning puts the now-ready
+  station index ahead of engine runtime because it transfers live state and
+  protects traversal-sensitive station/town observations.
+- #609 has combined #608; affected checks and its first full fixing review
+  are running. Review found an order-count narrowing defect for loaded lists
+  beyond 255; the reviewer is fixing it with full-width canonical storage.
+  #611's source and fixtures are pushed on current base; root is launching
+  pinned validation. Its final authored cost is 70 retired, +37 production
+  glue, +73 fixture glue, 181 tooling and 364 Rust.
 - Every CI configuration builds Rust. #581 PR-B is draft #607. Its regression
   dependencies are restored; all 224 CTests, Cargo, generators and affected
   comparisons pass. Exact sweep replay matches all 1,809 paths except the
@@ -365,8 +367,8 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
 
 1. **Finish the remaining drafts in readiness order, with the steering fixes.**
    #568, #594, #596, #605 and #608 integrated as integrations 39 to 43. #609
-   is the next ownership candidate after its base combination and first full
-   review; #611 follows completed implementation and review.
+   is the next ownership candidate after its first fixing review and affected
+   checks; #611 follows completed validation and review.
    #606 must be the next maintenance integration before #603. Each next action
    is in the checkpoint. No reviewed owner gains other scope; a fix the audit
    found is not new scope.
@@ -425,16 +427,24 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
       ranges are 55-75 retired, +30 to +80 production glue, +50 to +100 fixture
       glue, 60-120 tooling and 250-450 Rust. Reuse #594's in-place vehicle
       defaults; neither #600 nor #604 is a prerequisite. Root accepted the
-      first checkpoint: 70 retired, +33 production glue, zero fixture glue so
-      far, one tooling line and 317 Rust; evidence additions remain pending.
-      Engine runtime follows: six identified methods total 78 original code
-      lines, with the old +40 to +80 glue range still provisional. Presentation and
-      pool-coupled constructors receive no simulation-retirement credit;
-   8. #602 station spatial index and road-stop selection (about 80, old -10 to
-      +30 estimate), now ready after integrated #568 and #600. Adapt remaining
-      native radius consumers and `Station::MoveSign` index mutations; the
-      body count is not its full implementation footprint;
-   9. clear-ground clearing (22) and editor tree-group mutation (36), one
+      first checkpoint: 70 retired and +33 production glue. Completed source/
+      fixture authoring reports 70 retired, +37 production glue, +73 fixture
+      glue, 181 tooling and 364 Rust; runtime validation is pending;
+   8. #602 station spatial queries, road-stop selection and rail trigger areas
+      takes the sixth slot, ahead of engine runtime after fresh planning.
+      Both prerequisites are integrated. Its 80-line inventory supports an
+      estimated 55-75 retirement, +10 to +70 production glue, +80 to +140
+      fixture glue, 100-180 tooling and 350-650 Rust. Transfer all radius
+      consumers and `Station::MoveSign` mutations. Shared index median
+      selection may change unsorted visitation; repair necessary support and
+      compare consumer observations, not sorted membership. Keep the two
+      native `GetTileArea` record selectors as whole operations with zero
+      retirement credit. Root decides actual cost at the first checkpoint;
+   9. engine runtime follows: six identified methods total 78 original code
+      lines, about 60 retireable with native facades. The +40 to +80 glue
+      range remains provisional. Presentation and pool-coupled constructors
+      receive no simulation-retirement credit;
+   10. clear-ground clearing (22) and editor tree-group mutation (36), one
       issued owner; then snow line and map-edge water (46 executable original
       lines, about 51 including state/definitions), road-bit cleanup (45,
       including `IsPossibleCrossing`), link-graph job lifecycle (37 original
@@ -539,26 +549,28 @@ Agent: /root | Model: gpt-6.1-sol | Reasoning effort: xhigh.
 #568, #594, #596, #605 and #608 integrated as integrations 39 to 43, each
 after current-base exact-head Full. Latest code is `5345e29939`; #562, #587,
 #585, #586 and #600 are closed. Drafts integrate one at a time because their
-service files overlap. #609 combines integrated #608 before its first fresh
-full review. #611's implementation/evidence continues after its accepted cost
-checkpoint. #606 remains the next maintenance integration before #603 and
-#607. Five PRs occupy slots; a fresh planner prepares the next source-sized
-issue with #602's index prerequisite now satisfied. Integration-42 metrics
+service files overlap. #609's first full fixing review and affected checks
+are running at its integrated-town combination; an order-count defect is under
+repair. #611's source/fixtures are pushed and pinned validation is next. #606
+remains the next maintenance integration before #603 and #607. Five PRs occupy
+slots; #602 is selected for the sixth ahead of engine runtime after fresh
+planning and a bounded issue update. Integration-42 metrics
 and profile 42 are recorded above. Next ordinary stocktake and profile after
 integration 44, or profile sooner when #606 integrates.
 
 | Draft | Pushed head | State and next action | Worktree |
 | --- | --- | --- | --- |
-| #581 / #607 | `60e8f4340a` | Regression dependencies restored; 224 CTests, Cargo, generators and affected comparisons pass. Exact replay matches 1,809 paths except five explicit migrations; preprocessing sample reports 4 of 4 equal. Consume the finished proof and publish final disposition, then fresh fixing review. Root inspects final workflow/CMake changes before bootstrap Full after #606. | `t3-4076556a` |
+| #581 / #607 | `9f2986d588` | Required current-base conflict resolution, CI-consumer fixes and orphan cleanups pushed. Prior runtime/replay/proof evidence retained; affected final checks and metrics running. First fresh fixing review follows final disposition; root inspects final workflow/CMake changes before bootstrap Full after #606. | `t3-4076556a` |
 | #199 / #603 | `70215c21cb` | Reviewed four native-assertion fixes; root spot-checked. Current-base update and Full after #606, without expanding the accepted scope. Item 4 is #604. | `t3-120ef117` |
-| #565 / #275 / #592 / #606 | `6155a7ee11` | All six measurements at `76fe06ba5a` compare equal but exceed profile-36 targets. Targeted clear-loop/assertion repair pushed; pinned validation and remeasurement running. Fresh fixing review and current-base Full follow performance acceptance; next maintenance integration. | `t3-d6cdd816` (implementation); `t3-431c84b4` (locked source) |
-| #601 / #609 | `a0bbf2ffb6` | Native verification, history, affected scenarios and clean-base Cargo/static checks passed. Consume results and combine integrated #608, then first fresh full review covers the complete owner and any resolutions. Root's Full follows. Accepted: 101 retired, +22 production glue, +17 fixture glue, 142 tooling. | `t3-2040ed1e` |
-| #610 / #611 | `9bf1809e70` | Root accepted 70 retired, +33 production glue and 317 Rust at the first checkpoint. Four old callback-field call sites and the Quick shared-accessor initializer diagnostic are under repair; planned native/reload evidence remains. Fresh review and Full follow completed implementation. | `t3-4b253100` |
+| #565 / #275 / #592 / #606 | `0fbaf18f4c` | Checks pass but all six counts still miss profile-36 targets at `6155a7ee11`. Next targeted repair pushed; pinned validation and remeasurement running. Fresh fixing review and current-base Full follow performance acceptance; next maintenance integration. | `t3-d6cdd816` (implementation); `t3-431c84b4` (locked source) |
+| #601 / #609 | `29be807aed` | Combined integrated #608; current static gates pass. Root's affected checks and first fresh full fixing review are running. Reviewer is fixing narrowed order counts for loaded lists beyond 255 and adding a real-shell regression case. Spot-check fixes and affected validation, then root's Full. Accepted: 101 retired, +22 production glue, +17 fixture glue, 142 tooling. | `t3-2040ed1e` |
+| #610 / #611 | `c602313bb6` | Callback repairs, canonical getter bindings and native/reload observations authored. Clean base merge and static checks pass. Root launches the handed-off pinned validation, then resumes implementation to record/fix results before first full review. Cost: 70 retired, +37 production glue, +73 fixture glue, 181 tooling, 364 Rust. | `t3-4b253100` |
+| #602 station index | Not yet pushed | Selected for the sixth slot. Issue defines shared-index traversal fidelity, all mutation/query consumers, road-stop selection and rail trigger areas; native record-area operations remain. Root decides cost at the first checkpoint. | T3 implementation checkout on start |
 
 | Running or due work | State / next action |
 | --- | --- |
-| Branch limit | Five component PRs (#603, #606, #607, #609 and #611). The sixth slot awaits a concrete issue after fresh planning; start no seventh. |
-| Planning | Company control is selected as #610/#611. Fresh Astra checks the next ready owner and prepares its issue brief now that #602's shared-index prerequisite is integrated. |
+| Branch limit | Five component PRs (#603, #606, #607, #609 and #611) plus selected #602 reserve all six slots; start no seventh. |
+| Planning | Fresh Astra ranked now-ready #602 ahead of engine runtime for canonical live-state ownership and traversal-sensitive consumers. Root updated and selected #602; engine runtime follows it, then clear/tree and the existing remainder. |
 | Platform cadence | Integration 40 passed every required configuration and the bounded platform semantic subset. Next cadence after integration 45. |
 | Deep checks | On the user's request only (user decision, 2026-10-31). If one is requested, use `.local/worktrees/deep-after30-569` (locked). Move it with `git checkout --detach origin/rust-migration` and relock it. Then run `python3 tools/migration.py build --jobs 2`, then `cmake --build build-rust-sanitized --target openttd_rust_native_test_support_build` until #503's fix lands, then `python3 tools/migration.py deep` with the requested `--member` options. Launch outside the session's process group, for example as a `systemd-run --user` unit. |
 | Instruction profile | Profile 42 passed all six comparisons; no 3% rise from 40, and all records remain above ceilings. Profiles 36, 38, 40 and 42 remain in their locked worktrees. Next profile after integration 44 or when #606 integrates. |
