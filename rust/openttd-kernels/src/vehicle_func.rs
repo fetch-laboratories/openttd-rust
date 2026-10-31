@@ -50,7 +50,8 @@ pub(crate) unsafe fn can_vehicle_use_station(
         crate::vehicle::VehicleRef(unsafe { std::ptr::NonNull::new_unchecked(v.cast_mut()) });
     let vs = unsafe { &*s.vehicles };
     if (vs.vehicle_type)(vehicle) == 1 {
-        return !(s.primary_road_stop)(v, st).is_null();
+        return !crate::road_stop::primary_for_vehicle(s.shared(), st.cast_mut(), vehicle)
+            .is_null();
     }
     can_engine_use_station((vs.engine_id)(vehicle), st, s)
 }

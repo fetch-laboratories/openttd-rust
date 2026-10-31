@@ -27,6 +27,42 @@ use crate::{
 use std::{ffi::c_void, ptr};
 const TA_PLATFORM: u8 = 1;
 pub(crate) const TA_WHOLE: u8 = 2;
+/// `GetRailTileArea`: forward scan precedes backward scan, and both compare
+/// each neighbour to the original trigger tile.
+pub(crate) fn rail_tile_area(
+    shared: &Shared,
+    st: *const BaseStation,
+    tile: u32,
+    area: u8,
+) -> crate::tilearea::TileArea {
+    use crate::tilearea::TileArea;
+    match area {
+        0 => TileArea { tile, w: 1, h: 1 },
+        TA_PLATFORM => {
+            let world = crate::map_func::World::new(shared);
+            let delta = world.dimensions.offs_by_axis(world.station_axis(tile));
+            let (mut start, mut end) = (tile, tile);
+            while world.rail_station(end.wrapping_add(delta))
+                && world.compatible_station(end.wrapping_add(delta), tile)
+            {
+                end = end.wrapping_add(delta);
+            }
+            while world.rail_station(start.wrapping_sub(delta))
+                && world.compatible_station(start.wrapping_sub(delta), tile)
+            {
+                start = start.wrapping_sub(delta);
+            }
+            TileArea {
+                tile: start,
+                w: (world.dimensions.tile_x(end) - world.dimensions.tile_x(start) + 1) as u16,
+                h: (world.dimensions.tile_y(end) - world.dimensions.tile_y(start) + 1) as u16,
+            }
+        }
+        TA_WHOLE => unsafe { &*(shared.station_commands)() }.rail_area(st),
+        _ => unreachable!(),
+    }
+}
+
 #[repr(C)]
 pub struct State {
     station: *mut BaseStation,
@@ -774,7 +810,7 @@ pub unsafe extern "C" fn openttd_rust_station_resolve_real(
     };
     let spec = (native.spec)(unsafe { (*state).spec });
     if spec.divide {
-        let a = unsafe { (native.commands().train_area)(st) };
+        let a = native.commands().rail_area(st);
         cargo /= u32::from(a.w) + u32::from(a.h);
     }
     cargo = cargo.min(0xfff);
@@ -858,7 +894,8 @@ pub extern "C" fn openttd_rust_station_randomisation(
         (native.waiting)(st) | (1_u8.wrapping_shl(u32::from(trigger))),
     );
     let a = crate::animated_tile::services();
-    let area = (a.rail_area)(
+    let area = rail_tile_area(
+        unsafe { &*a.shared },
         st,
         tile,
         if trigger <= SRT_CARGO_TAKEN {

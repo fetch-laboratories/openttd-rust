@@ -41,6 +41,7 @@ const OpenTTDSharedServices *MovementWorld()
 	world.disallowed_road_directions = [](uint32_t) noexcept -> uint8_t { return fixture_dirs > 255 ? 1 : 2; };
 	world.has_road_works = [](uint32_t) noexcept { return false; };
 	movement.shared = &world;
+	movement.road_kind = [](OpenTTDVehicle *) noexcept { return RTT_ROAD; };
 	movement.has_tile_road_type = [](uint32_t, RoadTramType) noexcept { return true; };
 	movement.tile_types = []() noexcept -> OpenTTDTileTypeAllocation {
 		constexpr uint8_t bits[]{10, 5, 9, 6, 3, 12};
@@ -53,13 +54,10 @@ const OpenTTDSharedServices *MovementWorld()
 	return &world;
 }
 uint32_t RoadProbeClosest(const void *, uint16_t, uint8_t) noexcept { return 0; }
-OpenTTDRoadYapfArea Area(const void *, uint16_t) noexcept { return {}; }
 const OpenTTDRoadYapfLeaves probe_leaves{
 	.shared = MovementWorld(),
-	.road_kind = [](const void *) noexcept { return RTT_ROAD; },
 	.tile = ProbeTile,
 	.closest = RoadProbeClosest,
-	.area = Area,
 };
 }
 

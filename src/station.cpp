@@ -225,28 +225,6 @@ void BaseStation::RemoveRoadStopTileData(TileIndex tile)
 }
 
 /**
- * Get the primary road stop (the first road stop) that the given vehicle can load/unload.
- * @param v the vehicle to get the first road stop for
- * @return the first roadstop that this vehicle can load at
- */
-RoadStop *Station::GetPrimaryRoadStop(const RoadVehicle *v) const
-{
-	RoadStop *rs = this->GetPrimaryRoadStop(v->IsBus() ? RoadStopType::Bus : RoadStopType::Truck);
-
-	for (; rs != nullptr; rs = rs->next) {
-		/* The vehicle cannot go to this roadstop (different roadtype) */
-		if (!HasTileAnyRoadType(rs->xy, v->compatible_roadtypes)) continue;
-		/* The vehicle is articulated and can therefore not go to a standard road stop. */
-		if (IsBayRoadStopTile(rs->xy) && v->HasArticulatedPart()) continue;
-
-		/* The vehicle can actually go to this road stop. So, return it! */
-		break;
-	}
-
-	return rs;
-}
-
-/**
  * Called when new facility is built on the station. If it is the first facility
  * it initializes also 'xy' and 'random_bits' members
  */

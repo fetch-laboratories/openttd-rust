@@ -58,7 +58,6 @@ struct RoadStop : RoadStopPool::PoolItem<&_roadstop_pool> {
 		return dir >= DIAGDIR_SW ? this->rust_state->entries->west : this->rust_state->entries->east;
 	}
 
-	RoadStop *GetNextRoadStop(const struct RoadVehicle *v) const;
 #else
 	/** Container for each entry point of a drive through road stop */
 	struct Entry {
@@ -175,7 +174,6 @@ struct RoadStop : RoadStopPool::PoolItem<&_roadstop_pool> {
 	void Leave(RoadVehicle *rv);
 	bool Enter(RoadVehicle *rv);
 
-	RoadStop *GetNextRoadStop(const struct RoadVehicle *v) const;
 
 	static RoadStop *GetByTile(TileIndex tile, RoadStopType type);
 

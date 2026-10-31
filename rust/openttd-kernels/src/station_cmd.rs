@@ -30,6 +30,18 @@ use crate::station_service::World;
 use crate::town::AuthorityServices;
 use waypoint::WaypointLayout;
 
+impl CommandServicesTable {
+    pub(crate) fn rail_area(&self, st: *const BaseStation) -> TileArea {
+        let station = unsafe { &*self.station };
+        let kind = if (station.is_station)(st.cast_mut()) {
+            crate::station_type::STATION_RAIL
+        } else {
+            crate::station_type::RAIL_WAYPOINT
+        };
+        (self.tile_area)(st, kind)
+    }
+}
+
 #[repr(C)]
 pub struct Industry {
     _private: [u8; 0],
@@ -169,7 +181,7 @@ pub struct CommandServicesTable {
     pub rail_bridge_info: unsafe extern "C" fn(*const RailSpec) -> BridgeSpan,
     pub road_bridge_info: unsafe extern "C" fn(*const RoadSpec) -> BridgeSpan,
     pub southern_bridge_end: extern "C" fn(u32) -> u32,
-    pub train_area: unsafe extern "C" fn(*const BaseStation) -> TileArea,
+    pub tile_area: extern "C" fn(*const BaseStation, u8) -> TileArea,
     pub rail_spec: extern "C" fn(u32) -> *const RailSpec,
     pub links: *const crate::station_service::Links,
     pub location: extern "C" fn(*const BaseStation) -> u32,
@@ -1462,7 +1474,7 @@ impl Ctx<'_> {
         if !ret.ok() {
             return cost.take(ret);
         }
-        if !st.is_null() && unsafe { (self.s.train_area)(st) }.tile != u32::MAX {
+        if !st.is_null() && self.s.rail_area(st).tile != u32::MAX {
             area = self.expand_rail(ret, st, area);
             if !ret.ok() {
                 return cost.take(ret);
@@ -1856,7 +1868,7 @@ impl Ctx<'_> {
             crate::witness::hit(crate::witness::STATION_CMD_PARTIAL_RAIL);
         }
         for &st in &affected {
-            let area = self.shrink(st, unsafe { (self.s.train_area)(st) }, 0);
+            let area = self.shrink(st, self.s.rail_area(st), 0);
             (self.s.set_train_area)(st, area);
             self.sign_coord(st);
             if area.tile == u32::MAX {
@@ -1903,7 +1915,7 @@ impl Ctx<'_> {
             return;
         }
         for st in affected {
-            if unsafe { (self.s.train_area)(st) }.tile == u32::MAX {
+            if self.s.rail_area(st).tile == u32::MAX {
                 (self.s.facility_widget)(st, 0);
             }
             (self.s.mark_tiles)(st, false);
@@ -1928,7 +1940,7 @@ impl Ctx<'_> {
                 return;
             }
         }
-        let area = unsafe { (self.s.train_area)(st) };
+        let area = self.s.rail_area(st);
         cost.set(0);
         let id = (self.links().graphs.station_id)(st);
         let kind = if waypoint { 7 } else { 0 };
@@ -4168,7 +4180,7 @@ pub(crate) unsafe fn openttd_rust_station_change_owner(
 
 impl Ctx<'_> {
     fn expand_rail(&self, out: Cost<'_>, st: *const BaseStation, new_area: TileArea) -> TileArea {
-        let old = unsafe { (self.s.train_area)(st) };
+        let old = self.s.rail_area(st);
         let x = self
             .map()
             .tile_x(old.tile)
@@ -4225,7 +4237,7 @@ crate::abi::layouts! {
         rail_bridge_info,
         road_bridge_info,
         southern_bridge_end,
-        train_area,
+        tile_area,
         rail_spec,
         links,
         location,

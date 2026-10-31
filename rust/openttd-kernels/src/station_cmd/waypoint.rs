@@ -359,7 +359,7 @@ impl Ctx<'_> {
             if (self.world().station_owner)(wp) != (self.shared.current_company)() {
                 return cost.error(self.s.strings.waypoint_close);
             }
-            if unsafe { (self.s.train_area)(wp) }.tile != INVALID_TILE {
+            if self.s.rail_area(wp).tile != INVALID_TILE {
                 area = self.expand_rail(ret, wp, area);
                 if !ret.ok() {
                     return cost.take(ret);

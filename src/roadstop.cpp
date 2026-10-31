@@ -39,26 +39,6 @@ RoadStop::~RoadStop()
 }
 #endif /* WITH_RUST */
 
-/**
- * Get the next road stop accessible by this vehicle.
- * @param v the vehicle to get the next road stop for.
- * @return the next road stop accessible.
- */
-RoadStop *RoadStop::GetNextRoadStop(const RoadVehicle *v) const
-{
-	for (RoadStop *rs = this->next; rs != nullptr; rs = rs->next) {
-		/* The vehicle cannot go to this roadstop (different roadtype) */
-		if (!HasTileAnyRoadType(rs->xy, v->compatible_roadtypes)) continue;
-		/* The vehicle is articulated and can therefore not go to a standard road stop. */
-		if (IsBayRoadStopTile(rs->xy) && v->HasArticulatedPart()) continue;
-
-		/* The vehicle can actually go to this road stop. So, return it! */
-		return rs;
-	}
-
-	return nullptr;
-}
-
 #ifdef WITH_RUST
 static OpenTTDRoadStopDriveRead OPENTTD_RUST_CALL RoadStopDriveRead(OpenTTDVehicle *handle) noexcept
 {
@@ -82,6 +62,7 @@ static constinit const OpenTTDRoadStopServices _rust_road_stop_services{
 	.ground = &_rust_ground_services<RoadVehicle>,
 	.primary = [](uint32_t tile, RoadStopType type) noexcept { return RustStationByTile(tile)->GetPrimaryRoadStop(type); },
 	.head = [](BaseStation *st, bool truck) noexcept { return truck ? Station::From(st)->truck_stops : Station::From(st)->bus_stops; },
+	.is_bus = RustVehicleRead<bool, RustRoadIsBus>,
 	.next = [](const RoadStop *stop) noexcept { return stop->next; },
 	.tile = [](const RoadStop *stop) noexcept { return stop->xy.base(); },
 	.state = [](const RoadStop *stop) noexcept { return stop->GetRustState(); },

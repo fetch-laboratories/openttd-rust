@@ -205,3 +205,18 @@ pub(crate) fn has_town_owned_road(world: &crate::map_func::World<'_>, tile: u32)
     world.road_type(tile, false) != crate::road_type::INVALID_ROADTYPE
         && (world.shared.road_owner)(tile) == crate::company_type::OWNER_TOWN
 }
+
+/// `HasTileAnyRoadType`, including the `MayHaveRoad` short circuit.
+pub(crate) fn has_tile_any_road_type(
+    world: &crate::map_func::World<'_>,
+    tile: u32,
+    types: u64,
+) -> bool {
+    if !may_have_road(&world.types, crate::tile_type::TileIndex(tile)).expect("map tile") {
+        return false;
+    }
+    [world.road_type(tile, false), world.road_type(tile, true)]
+        .into_iter()
+        .filter(|kind| *kind != crate::road_type::INVALID_ROADTYPE)
+        .any(|kind| types & (1_u64 << kind) != 0)
+}

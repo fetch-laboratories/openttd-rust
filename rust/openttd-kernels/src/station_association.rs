@@ -129,7 +129,8 @@ pub(crate) fn deallocate(native: *const Services, st: *mut BaseStation, index: u
     }
     let s = unsafe { &*native };
     let animation = crate::animated_tile::services();
-    let area = (animation.rail_area)(
+    let area = crate::newgrf_station::rail_tile_area(
+        unsafe { &*s.shared },
         st,
         crate::tile_type::INVALID_TILE,
         crate::newgrf_station::TA_WHOLE,
