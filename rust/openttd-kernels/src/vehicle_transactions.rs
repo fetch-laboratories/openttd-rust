@@ -477,7 +477,7 @@ pub(crate) unsafe fn sell(
     let front = unsafe { (s.transactions.first)(v) };
     unsafe {
         b.commands
-            .ownership(cost, (b.groups.vehicle_owner)(front), 0)
+            .ownership(cost, (b.groups.vehicle_owner)(front), 0);
     };
     if !(b.cost.success)(cost) {
         return;
