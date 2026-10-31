@@ -20,7 +20,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 PROC_ROOT = Path("/proc")
@@ -53,6 +53,14 @@ class Item:
     reason: str
     worktree: bool = False
     branch: str | None = None  # local branch deleted after its worktree
+    identity: tuple[int, int] | None = field(init=False, default=None)
+
+    def __post_init__(self) -> None:
+        try:
+            info = self.path.lstat()
+            object.__setattr__(self, "identity", (info.st_dev, info.st_ino))
+        except OSError:
+            pass
 
 
 @dataclass(frozen=True)
@@ -497,6 +505,12 @@ def writable(path: Path) -> None:
 
 def remove(main: Path, item: Item, references: str = "") -> str | None:
     """Remove ITEM; return the refusal when git keeps it."""
+    try:
+        info = item.path.lstat()
+        if item.identity is None or item.identity != (info.st_dev, info.st_ino):
+            return "output candidate identity changed since planning"
+    except OSError as error:
+        return f"cannot inspect output candidate: {error}"
     if item.worktree and (refusal := worktree_refusal(main, item.path, references)):
         return refusal
     handles, error = open_outputs()

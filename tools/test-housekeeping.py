@@ -561,6 +561,25 @@ class HousekeepingTests(unittest.TestCase):
         self.assertIsNone(housekeeping.remove(self.main, item))
         self.assertFalse(path.exists())
 
+    def test_replaced_output_candidates_are_kept(self) -> None:
+        for directory in (False, True):
+            with self.subTest(directory=directory):
+                path = (
+                    self.main / ".local" / ("replaced" if directory else "replaced.log")
+                )
+                write(path / "output.log" if directory else path)
+                item = housekeeping.Item(path, True, "idle output")
+                retained = path.with_name(path.name + ".retained")
+                path.rename(retained)
+                write(path / "new.log" if directory else path, "new output")
+                self.assertIn(
+                    "identity changed", housekeeping.remove(self.main, item) or ""
+                )
+                self.assertEqual(
+                    (path / "new.log" if directory else path).read_text(), "new output"
+                )
+                self.assertTrue(retained.exists())
+
     def run_main(self, *arguments: str) -> list[Path]:
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
