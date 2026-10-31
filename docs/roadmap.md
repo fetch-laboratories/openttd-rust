@@ -52,30 +52,36 @@ Agent: /root | Model: gpt-6.1-sol | Reasoning effort: xhigh.
 - Six component slots remain occupied: #603, #606, #607, #612, #614 for
   engine runtime #613, and newly selected #615 clear-ground/editor tree groups.
   #615 uses the slot freed by #611 and is now draft #616. No new planning
-  trigger is met. Root accepts its concrete first checkpoint: 52 retired,
-  -1 production/+18 fixture glue, 148 tooling and 131 Rust; the required native
-  result/RNG/reload evidence fits the selected owner. First runtime validation
-  and independent fixing review remain pending.
+  trigger is met. #616's first full fixing review and the fresh zero-area scoped
+  review are complete, with root spot-checks. Required omission-proof checking,
+  zero-extent constructor semantics and affected runtime pass at `587e916eca`.
+  Earlier eight-case/45-snapshot, native and comparison evidence retains its
+  actual pins. Latest standard cost at `38053b5487`: 52 retired, -1 production/
+  +18 fixture glue, 192 tooling and 131 Rust; final-pin recount is due. Keep this
+  ready ownership PR behind #606's frozen repair combination, then adopt the
+  current base and obtain exact-head Full; no Full is requested yet.
 - #614's first checkpoint cost is accepted, including required runtime/fatal,
   ABI and funding evidence. Root required removal of a maintenance funds
   bounce through the already-ported company facade. Repair `ad4ffdb005`
   now calls the canonical Rust operation for the supplied company and removes
   the compound budget carrier. Updated metrics are 63 retired, 318 Rust,
   268 tooling, -19 production glue and +95 fixture glue. First pinned
-  Cargo/native/affected scenario validation is running at this held pin;
-  independent review follows. Its real integration-45 conflict is held until
-  that job finishes.
+  validation stopped at default Clippy after passing formatting/Cargo check;
+  no unit/native/scenario check ran. The implementer is fixing the concrete
+  lint failures and authorized real integration-45 conflict, then hands root a
+  new clean pinned validation script. No first full review yet.
 - #612's nearest test failure was a test partition helper defect; its original
   points/grid/lowest-ID expectations are unchanged and the focused kernel now
   passes. Base integration 44 and required crash/both-axis trigger observations
-  are authored at `864f0fbc1b`. Both builds, ten selected native tests and five
-  scenario prefixes (eight snapshots) pass. The spatial fixture aborts in both
-  builds on an uncredited Waypoint allocation before its move marker; later
-  crash/trigger/reload evidence remains unfinished. Fixture allocation checks
-  and the integration-45 merge are pushed at `35b8fd5744`; static checks pass.
-  Root next runs only the spatial/reload cases and affected combination checks.
-  Accepted cost: 88 retired,
-  578 Rust, 402 tooling, -65 production
+  are authored. Both builds, ten selected native tests and five scenario prefixes
+  (eight snapshots) pass at `864f0fbc1b`; integration45 build/two ABI checks pass
+  at `35b8fd5744`. Subsequent common-fixture fixes establish pool allocation and
+  complete vehicle build/sell lifecycle contracts. Both games then reached the
+  animation fixture and exposed its use of var18 (trigger) instead of var10
+  (random callback parameter). Source-derived program/root/mask correction
+  `f18f164974` preserves the frame/RNG oracle; root runs only spatial/reload
+  cases now. Complete trigger/crash/final-RNG/reload evidence is still pending.
+  Accepted cost: 88 retired, 578 Rust, 427 tooling, -65 production
   glue and +29 fixture glue, with the stateless native STL primitive still 10
   production-glue lines. The first fresh full fixing review remains pending.
   Native GUI k-d tree and retained GetTileArea selectors get no new credit.
@@ -98,12 +104,15 @@ Agent: /root | Model: gpt-6.1-sol | Reasoning effort: xhigh.
   The largest projection rise is 0.6905%, below the 3% attribution trigger.
   All records still exceed their ceilings; no new attribution is selected. #606 remains the next maintenance integration before #603
   and #607, targeting profile 36's Ir or lower on every scenario. At
-  `635c3c56dd`, all six targets and semantic comparisons now pass on the
-  recorded integration-42 base, alongside Cargo4, 224 native tests, comparison
-  probes and 72 semantic cases/217 snapshots. TGP has only 0.0987% headroom.
-  Root next updates to the integration base and remeasures all six before the
-  fresh full fixing review and exact-head Full. This is branch repair evidence;
-  the merged speed regression is still present. Ready ownership proceeds meanwhile.
+  `ff1a79d19a`, all six targets and semantic comparisons pass on integration45,
+  with compatible identities and unchanged original counts. Combination build,
+  sixteen native tests, 1,508 town reference cases, movement/scheduler probes
+  and the repaired town-command scenario pass. Old `635c3c56dd` retains Cargo4,
+  all 224 native tests and 72 semantic cases/217 snapshots. Both #592 negative
+  proofs remain valid for unchanged tooling blobs. Current cost: 415 Rust,
+  87 tooling, -4 production/+16 fixture glue, zero original retirement. Root
+  next obtains the first fresh full fixing review and exact-head Full. This is
+  branch repair evidence; the merged speed regression is still present.
   The quiet pass waits for the repair and an idle host. No wall anchors changed.
 - Integration-45 platform cadence `41204109835` passed on code `1dd6d32544`:
   Windows x86/x64, Linux Clang/Dedicated, macOS arm64 Release/Debug and
@@ -600,16 +609,17 @@ Agent: /root | Model: gpt-6.1-sol | Reasoning effort: xhigh.
 after current-base exact-head Full. Latest code is `1dd6d32544`; #610 is now
 closed. Required platform cadence `41204109835` passed, including both bounded
 semantic artifacts; next due at integration 50. Drafts integrate one at a time
-because service files overlap. #612's checkpoint3 passed ten native tests and
-five prefixes; its spatial fixture aborts in both builds before move evidence.
-Allocation credit and the integration-45 merge are repaired at `35b8fd5744`;
-targeted spatial/reload validation is next. First full review follows completed
-evidence. #614's bounded maintenance
-repair is in root-pinned validation with source held. #615 clear-ground/editor
-tree groups takes #611's slot as draft #616; six components remain selected.
-#606 now meets all six Ir targets on its old base and needs the current-base
-combination and all-six measurement before fresh fixing review/Full. It remains
-next maintenance before #603/#607.
+because service files overlap. #612's existing builds/ABI/native/five-case
+evidence stays pinned; callback-program repair `f18f164974` is in the two-case
+spatial/reload run, with complete trigger/crash/reload evidence and first full
+review pending. #614's old run failed default Clippy before native checks;
+its implementer is repairing that and the real integration45 conflict.
+#615 clear-ground/editor tree groups is reviewed draft #616 at `587e916eca`,
+with corrected affected checks passing and final metric recount due. Keep it
+ready behind #606's frozen repair combination. Six components remain selected.
+#606 at `ff1a79d19a` now meets all six Ir targets on integration45 with required
+combination checks and compatible identities. First fresh full fixing review
+and exact-head Full are next; it remains next maintenance before #603/#607.
 Integration-44 source metrics and completed profile 44 are recorded above;
 next ordinary stocktake is after 46, or profile sooner when #606 integrates.
 
@@ -617,10 +627,10 @@ next ordinary stocktake is after 46, or profile sooner when #606 integrates.
 | --- | --- | --- | --- |
 | #581 / #607 | `bb10d32674` | First fixing review/root spot-checks complete. Integration-45 base merge qualifies for condition (c): all 1,809 actual source hashes replay with eight unchanged reviewed deviations. Quick and targeted Rust archive/company/order object compilation pass; earlier history/runtime/preprocessing checks retain their pins. Current-base metrics: 12 Rust, 142 tooling, -814 retired/-815 net glue (reclassification). Final-base bootstrap Full after #606; CI_ON_DEMAND unchanged. Clean, locked, no job remains. | `t3-4076556a` |
 | #199 / #603 | `70215c21cb` | Reviewed four native-assertion fixes; root spot-checked. Current-base update and Full after #606, without expanding the accepted scope. Item 4 is #604. | `t3-120ef117` |
-| #565 / #275 / #592 / #606 | `635c3c56dd` | All six profile-36 Ir targets and semantic comparisons pass on recorded base636c698a89 (code42); TGP headroom 0.0987%. Cargo4, 224 native tests, probes, 72 scenarios/217 snapshots and exact-head Quick pass; both #592 negative regressions fail without fixes. Production glue -4, fixture +18, Rust412/tooling84. Next: current-base merge, affected combination checks and all-six measurement, then fresh full fixing review/exact-head Full; next maintenance integration. | `t3-d6cdd816` (implementation); `t3-431c84b4` (locked source) |
-| #602 / #612 | `35b8fd5744` | Fixture Waypoint/temporary-road-vehicle allocation checks repaired; integration45 merged with only a docs conflict retaining both entries. Static checks pass. Root next runs exact spatial602 and spatial602-reload, two affected completeness/ABI CTests and incremental combination builds, retaining checkpoint3's ten tests/five prefixes at864. Crash/trigger/reload observations remain unfinished until that run passes; first full fixing review remains. Prior cost accepted: 88 retired, -65 production/+29 fixture glue, 402 tooling, 578 Rust; new pinned recount pending. Clean, locked, source HOLD. | `t3-56a3afc8` |
-| #613 / #614 | `ad4ffdb005` | Six engine runtime decisions/direct callers implemented. Root accepted cost and spot-checked the canonical supplied-company funds repair/budget carrier deletion. First pinned verify/affected scenario validation runs; source HOLD. Real integration-45 conflict waits for completion. No runtime pass or first review yet. Cost: 63 retired, -19 production/+95 fixture glue, 268 tooling, 318 Rust. | `t3-8ff8d8ea` |
-| #615 / #616 clear/tree | `1a5a456b51` | Root accepts first checkpoint: 52 retired, -1 production/+18 fixture glue, 148 tooling/131 Rust. Both decisions/direct landscape dispatch and default observations authored; static checks pass. First exact-head Cargo/native/affected runtime validation is next, with source held. First full fixing review pending. | `t3-68700e40` |
+| #565 / #275 / #592 / #606 | `ff1a79d19a` | Integration45/base7ad combination passes build,16 named native tests,1,508 town cases, movement/scheduler probes,town-command and ALL SIX semantic/identity/profile36 Ir targets. Old635 retains Cargo4/224 native/72 scenarios217snapshots and unchanged #592 mutation proofs. Cost:0 retired,415 Rust,87 tooling,-4 production/+16 fixture glue. First fresh full fixing review of entire recovered batch/all resolutions, then exact-head Full; next maintenance integration. | `t3-d6cdd816` (implementation); `t3-431c84b4` (locked source) |
+| #602 / #612 | `f18f164974` | Pool/lifecycle fixture repairs and integration45 combination preserved. Corrected var10 callback program/root/mask setup after both-side frame-assert failure; frame/RNG oracle unchanged. Root two-case spatial/reload run is held in validate-checkpoint6.log. Full trigger/crash/final-RNG/reload evidence and first full review remain. Retain35 builds/2ABI and864 ten tests/five cases8snapshots. Cost:88 retired,578 Rust,427 tooling,-65 production/+29 fixture glue. | `t3-56a3afc8` |
+| #613 / #614 | `ad4ffdb005` | Formatting/Cargo check pass; first default-Clippy run failed before unit/native/scenarios. Existing implementer resumed for concrete lint failures and authorized real integration45 conflict; preserve supplied-company funds repair/all commits. Next stable-pin script runs the unexecuted scoped verification, then first full review. Prior cost:63 retired,318 Rust,268 tooling,-19 production/+95 fixture glue. | `t3-8ff8d8ea` |
+| #615 / #616 clear/tree | `587e916eca` | First full fixing review +fresh zero-area scoped review/root spot-checks complete. Clippy,66 Rust tests and corrected landscape control/reload2snapshots pass at587. Earlier native/probe/six-case evidence stays atc464. Checker-completeness and separate original zero-extent constructor corrections verified;24 real-log omission probes reject. Latest standard380 cost:52 retired,131 Rust,192 tooling,-1 production/+18 fixture; final-pin recount due. Ready current-base combination/Full after #606 to preserve measured base. | `t3-68700e40` |
 
 | Running or due work | State / next action |
 | --- | --- |
@@ -630,7 +640,7 @@ next ordinary stocktake is after 46, or profile sooner when #606 integrates.
 | Deep checks | On the user's request only (user decision, 2026-10-31). If one is requested, use `.local/worktrees/deep-after30-569` (locked). Move it with `git checkout --detach origin/rust-migration` and relock it. Then run `python3 tools/migration.py build --jobs 2`, then `cmake --build build-rust-sanitized --target openttd_rust_native_test_support_build` until #503's fix lands, then `python3 tools/migration.py deep` with the requested `--member` options. Launch outside the session's process group, for example as a `systemd-run --user` unit. |
 | Instruction profile | Profile 44 at `16e0235d0d` passed all six comparisons with compatible identities; largest projection rise 0.6905% versus 42, no new attribution trigger, all records above ceilings. Report `.local/worktrees/profile-after44-609/.local/simulation/20261031T123243Z-2921578/report.json`; log `/tmp/openttd-profile-after44.log`. Profiles 36/38/40/42/44 stay locked. Profile again when #606 integrates. |
 | Quiet speed pass | Waits for the profile-38 regression repair and an idle host. |
-| Maintenance | #606 meets all six Ir targets on its recorded old base; current-base combination and measurement precede first full fixing review/Full. #607's full source/evidence review and root workflow spot-check are complete; bootstrap Full waits for #606. #606 remains the next maintenance integration. #604 remains under #199 after map/CargoFlow repairs, PR-B and #570's generator, before typing/coverage. |
+| Maintenance | #606 meets all six Ir targets on integration45 with combination checks; first full fixing review/Full next. #616 is ready behind that frozen repair combination. #603 needs current-base update/Full after #606. #607's review/root workflow spot-check are complete; bootstrap Full waits for #606 and its final all-src sweep. #604 stays under #199 after map/CargoFlow repairs, PR-B and #570's generator, before typing/coverage. |
 | Issues | #610 closed and #615 issued/selected: 37 open, zero unplaced, three excluded with recorded return conditions. |
 | Housekeeping | Automated takeover cleanup removed 53.1 GB. Merged #596/#605/#608/#609/#611 worktrees and local branches, and the completed #607 review checkout, are removed. Active Codex component worktrees are locked until #592 integrates. |
 
