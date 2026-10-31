@@ -407,13 +407,10 @@ static void GreyscaleToMapHeights(uint img_width, uint img_height, std::span<con
  */
 #ifdef WITH_RUST
 #include "rust/heightmap_services.hpp"
-#include "rust/landscape_generation_ffi.h"
 #endif
+#ifndef WITH_RUST
 void FixSlopes()
 {
-#ifdef WITH_RUST
-	openttd_rust_fix_slopes(&GetRustLandscapeGenerationServices(), _settings_game.construction.map_height_limit);
-#else
 	uint width, height;
 	int row, col;
 	uint8_t current_height;
@@ -479,8 +476,8 @@ void FixSlopes()
 			}
 		}
 	}
-#endif
 }
+#endif /* WITH_RUST */
 
 /**
  * Reads the heightmap with the correct file reader.

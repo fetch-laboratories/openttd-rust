@@ -55,6 +55,5 @@ const OpenTTDLandscapeGenerationServices &GetRustLandscapeGenerationServices() n
 extern "C" {
 void openttd_rust_initialize_landscape(const OpenTTDLandscapeGenerationServices *, bool);
 void openttd_rust_convert_ground_water(const OpenTTDLandscapeGenerationServices *);
-void openttd_rust_fix_slopes(const OpenTTDLandscapeGenerationServices *, uint8_t);
 }
 #endif /* RUST_LANDSCAPE_GENERATION_FFI_H */

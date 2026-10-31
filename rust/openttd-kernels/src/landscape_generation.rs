@@ -202,13 +202,6 @@ pub unsafe extern "C" fn openttd_rust_initialize_landscape(
 ) {
     unsafe { World::new(&*a) }.initialize(freeform);
 }
-/// # Safety
-/// Same table contract as initialize; callbacks never unwind across Rust.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_fix_slopes(a: *const GenerationServices, max_height: u8) {
-    unsafe { World::new(&*a) }.fix_slopes(max_height);
-}
-
 impl World<'_> {
     fn convert_ground_water(&self) {
         w::hit(w::GENERATION_WATERING);
