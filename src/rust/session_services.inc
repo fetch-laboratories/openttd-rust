@@ -73,8 +73,6 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 		.check_caches = []() noexcept { CheckCaches(); },
 		.reset_engine_overrides = []() noexcept { EngineOverrideManager::ResetToCurrentNewGRFConfig(); },
 		.dirty = RustScreenDirty,
-		.set_local_company = RustSetLocalCompany,
-		.first_playable_company = []() noexcept { return GetFirstPlayableCompanyID().base(); },
 		.reload_config = []() noexcept { return _settings_client.network.reload_cfg; },
 		.reset_grf = [](bool value) noexcept { ResetGRFConfig(value); },
 		.autosave_frequency = [](bool reset) noexcept { ChangeAutosaveFrequency(reset); },

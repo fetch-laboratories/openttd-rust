@@ -162,8 +162,6 @@ pub struct RoadCommandServices {
     pub next_effect: extern "C" fn(u32) -> WorksEffect,
     /// Delete the source-valid effect shell and its owner.
     pub delete_effect: extern "C" fn(u32),
-    /// Native encoded owned-by-town result.
-    pub owned_by_town: unsafe extern "C" fn(*mut CommandCost, u32),
     /// One extra native result for nested build or low-money remove test.
     pub scratch_cost: unsafe extern "C" fn(*mut CommandScratch) -> *mut CommandCost,
     /// Lazily construct the nested conversion stack objects, resetting prior use.
@@ -255,6 +253,19 @@ impl<'a> Ctx<'a> {
     }
     fn command(&self, cost: Cost<'_>, flags: u16, tile: u32, body: impl FnMut(u16) -> i64) -> i64 {
         crate::command::nested(self.commands, self.shared, cost, tile, flags, body)
+    }
+
+    fn owned_by_town(&self, error: Cost<'_>, tile: u32) {
+        // SAFETY: The context's canonical command table owns the company service.
+        let company = unsafe { &*(self.commands.company)() };
+        error.make_error(company.owned_by);
+        if (company.local_company)() == (company.finance.current_company)() {
+            (error.1.encode_owned_by)(
+                error.0,
+                crate::company_type::Owner::TOWN,
+                crate::tile_type::TileIndex(tile),
+            );
+        }
     }
 
     fn do_build(
@@ -1847,9 +1858,7 @@ impl<'a> Ctx<'a> {
                     return;
                 }
                 if rtt == 0 && owner == OWNER_TOWN {
-                    unsafe {
-                        (self.s.owned_by_town)(error.0, tile);
-                    }
+                    self.owned_by_town(error, tile);
                     return;
                 }
             }
@@ -1890,9 +1899,7 @@ impl<'a> Ctx<'a> {
                     return;
                 }
                 if rtt == 0 && owner == OWNER_TOWN {
-                    unsafe {
-                        (self.s.owned_by_town)(error.0, tile);
-                    }
+                    self.owned_by_town(error, tile);
                     return;
                 }
             }
@@ -2273,7 +2280,6 @@ crate::abi::layouts! {
         depot_exit,
         next_effect,
         delete_effect,
-        owned_by_town,
         scratch_cost,
         conversion_scratch,
         include_vehicle,

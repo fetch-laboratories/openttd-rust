@@ -694,7 +694,7 @@ pub(crate) unsafe fn move_vehicle(
     if src.is_null() {
         return (cost.error)(out, ERROR);
     }
-    unsafe { (x.t.commands.ownership)(out, (x.g.vehicle_owner)(src), 0) };
+    unsafe { x.t.commands.ownership(out, (x.g.vehicle_owner)(src), 0) };
     if !(cost.success)(out) {
         return;
     }
@@ -713,7 +713,7 @@ pub(crate) unsafe fn move_vehicle(
         if dst.is_null() {
             return (cost.error)(out, ERROR);
         }
-        unsafe { (x.t.commands.ownership)(out, (x.g.vehicle_owner)(dst), 0) };
+        unsafe { x.t.commands.ownership(out, (x.g.vehicle_owner)(dst), 0) };
         if !(cost.success)(out) {
             return;
         }

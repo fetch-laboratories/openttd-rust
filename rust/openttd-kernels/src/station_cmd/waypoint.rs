@@ -74,7 +74,7 @@ impl Ctx<'_> {
         }
         let owner = (self.world().station_owner)(st);
         if owner != OWNER_NONE {
-            unsafe { (self.command.ownership)(out.0, owner, 0) };
+            unsafe { self.command.ownership(out.0, owner, 0) };
             if !out.ok() {
                 return;
             }
@@ -109,7 +109,7 @@ impl Ctx<'_> {
         }
         let owner = (self.world().station_owner)(st);
         if owner != OWNER_NONE {
-            unsafe { (self.command.ownership)(out.0, owner, 0) };
+            unsafe { self.command.ownership(out.0, owner, 0) };
             if !out.ok() {
                 return INVALID_STATION;
             }
@@ -236,7 +236,7 @@ impl Ctx<'_> {
             return out.error(self.rail().strings.no_suitable_track);
         }
         let owner = (self.shared.tile_owner)(tile);
-        unsafe { (self.command.ownership)(out.0, owner, 0) };
+        unsafe { self.command.ownership(out.0, owner, 0) };
         if out.ok() {
             unsafe { self.command.no_vehicle(out.0, tile) };
         }

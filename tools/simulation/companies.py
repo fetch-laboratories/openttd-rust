@@ -7,6 +7,7 @@ import shutil
 import struct
 import subprocess
 from pathlib import Path
+from typing import TypedDict
 
 from .core import (
     EMPTY_AI,
@@ -381,7 +382,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 [
                     line
                     for line in runs[role]["log"]
-                    if line.startswith("COMPANY-IDENTITY ")
+                    if line.startswith(("COMPANY-IDENTITY ", "COMPANY-CONTROL "))
                 ]
                 for role in ("reference", "candidate")
             ]
@@ -403,6 +404,17 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 console=[f"fleet_scenario company-resume {first} {second}", "unpause"],
             )
         return scenario
+    if operation == "acquire":
+        from . import fleet
+        from .console_adapter import prepared_console
+
+        scenario = dict(
+            scenario,
+            executables=prepared_console(
+                "fleet", fleet.adapter, binaries, builds, folder, env
+            ),
+            console=["fleet_scenario company-control-observe"] + scenario["console"],
+        )
     return dict(scenario, save=str(prepared))
 
 
@@ -460,6 +472,45 @@ def check_competitors(scenario, run, source, final):
     }
 
 
+class ControlInput(TypedDict):
+    console: list[str]
+
+
+class ControlObservation(TypedDict):
+    log: list[str]
+
+
+def check_control(
+    scenario: ControlInput, run: ControlObservation, final: Path
+) -> list[str]:
+    """Require native notifications and exact allow-list bytes before and after loading."""
+    trace = [line for line in run["log"] if line.startswith("COMPANY-CONTROL ")]
+    keys = [
+        value
+        for field, value in rows(final, "PLYR")[0].items()
+        if field.startswith("allow_list[")
+    ]
+    expected = ["A" * 64, "z" * 64]
+    if keys != expected:
+        raise RuntimeError(f"company allow-list contents differ: {keys!r}")
+    if [
+        line.split()[-1] for line in trace if line.startswith("COMPANY-CONTROL key 0 ")
+    ] != expected:
+        raise RuntimeError("company allow-list native reload observation is absent")
+    if "fleet_scenario company-identity" in scenario["console"]:
+        if "COMPANY-CONTROL complete rng-unchanged true" not in trace:
+            raise RuntimeError("company control did not preserve both RNG streams")
+        if sum(line.startswith("COMPANY-CONTROL local ") for line in trace) != 6:
+            raise RuntimeError("company control local context transitions are absent")
+        if sum(line.startswith("COMPANY-CONTROL ownership ") for line in trace) != 8:
+            raise RuntimeError(
+                "company control encoded ownership observations are absent"
+            )
+        if sum(line.startswith("COMPANY-CONTROL allow ") for line in trace) != 17:
+            raise RuntimeError("company control allow-list cases are absent")
+    return trace
+
+
 def check(scenario, run, mode, role, result):
     if not uses_ai(scenario):
         return
@@ -469,6 +520,7 @@ def check(scenario, run, mode, role, result):
     source, final = Path(scenario["save"]), run["snapshots"][-1]
     before, after = rows(source, "PLYR"), rows(final, "PLYR")
     if operation.startswith("identity"):
+        control_trace = check_control(scenario, run, final)
         log = run["log"]
         if len(after) != 15 or len({c["colour"] for c in after.values()}) != 15:
             raise RuntimeError(
@@ -497,7 +549,12 @@ def check(scenario, run, mode, role, result):
         result[f"{mode}_{role}_identity"] = {
             "companies": len(after),
             "ai_companies": sum(c["is_ai"] for c in after.values()),
-            "trace": [line for line in log if line.startswith("COMPANY-IDENTITY ")],
+            "control_trace": control_trace,
+            "trace": [
+                line
+                for line in log
+                if line.startswith(("COMPANY-IDENTITY ", "COMPANY-CONTROL "))
+            ],
         }
         return
     if operation.startswith("competitor"):
@@ -646,6 +703,14 @@ def check(scenario, run, mode, role, result):
             after[0]["money_fraction"] != before[0]["money_fraction"],
             "fractional running costs absent",
         )
+    if operation == "acquire":
+        nested = [
+            line for line in run["log"] if line.startswith("COMPANY-CONTROL nested ")
+        ]
+        require(
+            bool(nested), "company acquisition nested service-interval arguments absent"
+        )
+        result[f"{mode}_{role}_service_commands"] = nested
     if operation == "reload":
         require(
             set(after) == {0, 1, 2}
