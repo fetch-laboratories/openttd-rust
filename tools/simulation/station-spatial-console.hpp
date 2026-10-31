@@ -110,7 +110,8 @@ static void Station602Triggers(Station *st, Axis axis)
 	auto *result = new CallbackResultSpriteGroup(0);
 	auto *animation = new DeterministicSpriteGroup(); animation->var_scope = VSG_SCOPE_SELF; animation->size = DSG_SIZE_DWORD;
 	animation->default_result = {true, nullptr};
-	animation->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x18, .and_mask = 0x7F}};
+	/* TriggerStationAnimation passes random bits in var10; var18 is the trigger. */
+	animation->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x10, .and_mask = 0x7F}};
 	auto *random = new RandomizedSpriteGroup(); random->var_scope = VSG_SCOPE_SELF; random->lowest_randbit = 16; random->groups = {result, result};
 	st->speclist.resize(2); st->speclist[1] = {&spec, file.grfid, 0};
 	TileIndex start = st->train_station.tile, middle = start + TileOffsByAxis(axis), end = start + 2 * TileOffsByAxis(axis);
@@ -125,12 +126,16 @@ static void Station602Triggers(Station *st, Axis axis)
 		auto trigger = mode == 0 ? StationAnimationTrigger::Built : mode == 1 ? StationAnimationTrigger::VehicleArrives : StationAnimationTrigger::NewCargo;
 		spec.animation.triggers = {trigger}; st->cached_anim_triggers = {trigger};
 		spec.grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, animation);
+		StationNeed(GetStationSpec(middle) == &spec, __LINE__);
+		StationResolverObject program(&spec, st, middle, CBID_STATION_ANIMATION_TRIGGER, 0x12345678, 7);
+		StationNeed(program.root_spritegroup == animation && program.station_scope.cargo_type == CargoGRFFileProps::SG_DEFAULT && program.ResolveCallback({}) == 0x78, __LINE__);
 		for (TileIndex t : st->train_station) SetAnimationFrame(t, 0x80);
 		auto expected = _random; expected.Next();
 		TriggerStationAnimation(st, middle, trigger);
 		fmt::print(stderr, "STCMD spatial602-animation {} {} {}", axis, blocked, mode);
 		for (TileIndex t : st->train_station) {
 			uint8_t frame = covered(t) ? expected.Next() & 0x7F : 0x80;
+			if (GetAnimationFrame(t) != frame) fmt::print(stderr, " STCMD spatial602-frame-mismatch {} {} {} {} {} {}\n", axis, blocked, mode, t.base(), GetAnimationFrame(t), frame);
 			StationNeed(GetAnimationFrame(t) == frame, __LINE__);
 			fmt::print(stderr, " {}:{}", t.base(), GetAnimationFrame(t)); DeleteAnimatedTile(t);
 		}
@@ -141,6 +146,10 @@ static void Station602Triggers(Station *st, Axis axis)
 		auto rt = mode == 1 ? StationRandomTrigger::VehicleArrives : StationRandomTrigger::NewCargo;
 		random->triggers = 1U << to_underlying(rt); st->cached_cargo_triggers = 1;
 		spec.grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, random);
+		StationResolverObject reseed(&spec, st, middle, CBID_RANDOM_TRIGGER);
+		StationNeed(reseed.root_spritegroup == random && reseed.station_scope.cargo_type == CargoGRFFileProps::SG_DEFAULT, __LINE__);
+		reseed.SetWaitingRandomTriggers(StationRandomTriggers{rt}); reseed.ResolveRerandomisation();
+		StationNeed(reseed.GetReseedSum() == (1U << 16) && reseed.GetUsedRandomTriggers().base() == random->triggers, __LINE__);
 		for (TileIndex t : st->train_station) SetStationTileRandomBits(t, 0);
 		expected = _random; TriggerStationRandomisation(st, middle, rt);
 		fmt::print(stderr, "STCMD spatial602-random {} {} {}", axis, blocked, mode);
