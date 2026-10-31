@@ -79,7 +79,12 @@ static void *RailNewEngine(uint32_t tile_index, const OpenTTDEngine *engine) noe
 
 	v->reliability = e->reliability;
 	v->reliability_spd_dec = e->reliability_spd_dec;
-	v->max_age = RustEngineLifeLength(e);
+	return v;
+}
+static void RailEngineDates(void *shell, const OpenTTDEngine *engine) noexcept
+{
+	Train *v = static_cast<Train *>(shell);
+	const Engine *e = EngineOf(engine);
 
 	v->SetRailTypes(RailTypes{RustEngineRailTypes(e)});
 
@@ -88,7 +93,6 @@ static void *RailNewEngine(uint32_t tile_index, const OpenTTDEngine *engine) noe
 	v->date_of_last_service_newgrf = TimerGameCalendar::date;
 	v->build_year = TimerGameCalendar::year;
 	RustWriteVehicleSpriteSequence(v, SPR_IMG_QUERY);
-	return v;
 }
 /* Original `AddRearEngineToMultiheadedTrain` statements through the sprite cache,
  * including the front's `Money` value halving. */
@@ -160,6 +164,7 @@ const OpenTTDRailConstructionServices &GetRustRailConstructionServices() noexcep
 		.powered = RustEngineHasPowerOnRail,
 		.new_wagon = RailNewWagon,
 		.new_engine = RailNewEngine,
+		.engine_dates = RailEngineDates,
 		.new_rear = RailNewRear,
 		.link_multihead = RailLinkMultihead,
 		.subtype = RustOpaqueVehicleRead<uint8_t, RustVehicleSubtype>,
@@ -172,7 +177,6 @@ const OpenTTDRailConstructionServices &GetRustRailConstructionServices() noexcep
 		.ground = &GetRustGroundServices<Train>(),
 		.first_engine = RustOpaqueVehicleRead<uint16_t, RustGroundFirstEngine>,
 		.invalidate_grf = RustOpaqueVehicleInvoke<RustVehicleInvalidateNewGRFCache>,
-		.unknown_attach = RustVehicleCallbackError<CBID_TRAIN_ALLOW_WAGON_ATTACH>,
 		.train_limit = RustTrainLimit,
 		.unit = RustOpaqueVehicleRead<uint16_t, RustVehicleUnitNumber>,
 		.use_unit = RustOpaqueVehicleInvoke<RustVehicleUseUnitNumber, uint16_t>,

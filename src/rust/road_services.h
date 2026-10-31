@@ -196,17 +196,8 @@ static uint16_t OPENTTD_RUST_CALL RoadSvcDefaultMaxSpeed(OpenTTDVehicle *v) noex
 	return RoadVehInfo(EngineID(RustVehicleEngineID(VehicleOf(v))))->max_speed;
 }
 
-static OpenTTDRoadCostRead OPENTTD_RUST_CALL RoadSvcCostRead(OpenTTDVehicle *v) noexcept
-{
-	const Engine *e = RoadOf(v)->GetEngine();
-	const RoadVehicleInfo &info = e->VehInfo<RoadVehicleInfo>();
-	return {.engine = RustEngine(e), .cost_class = info.running_cost_class, .cost_factor = info.running_cost};
-}
-static int64_t OPENTTD_RUST_CALL RoadSvcPrice(const OpenTTDEngine *engine, uint32_t cost_factor) noexcept
-{
-	const Engine *e = EngineOf(engine);
-	return static_cast<int64_t>(GetPrice(e->VehInfo<RoadVehicleInfo>().running_cost_class, cost_factor, RustEngineGRF(e)));
-}
+
+
 /** The running cost tail of `RoadVehicle::OnNewEconomyDay`. */
 static void OPENTTD_RUST_CALL RoadSvcPayRunning(OpenTTDVehicle *v, int64_t amount) noexcept
 {
@@ -279,8 +270,6 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.shorten_factor = RoadSvcShortenFactor,
 	.default_max_speed = RoadSvcDefaultMaxSpeed,
 	.cargo_age_default = RustVehicleEngineRead<uint16_t, RustEngineCargoAge>,
-	.cost_read = RoadSvcCostRead,
-	.price = RoadSvcPrice,
 	.pay_running = RoadSvcPayRunning,
 	.service_read = RoadSvcServiceRead,
 	.turn_read = RoadSvcTurnRead,

@@ -369,14 +369,6 @@ pub struct SoundRead {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct CostRead {
-    pub engine: crate::vehicle::EngineRef,
-    pub cost_class: u8,
-    pub cost_factor: u8,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
 pub struct ServiceRead {
     pub tile: u32,
     pub servint: u16,
@@ -445,8 +437,6 @@ pub struct Leaves {
     pub shorten_factor: extern "C" fn(crate::vehicle::EngineRef) -> u8,
     pub default_max_speed: extern "C" fn(VehicleRef) -> u16,
     pub cargo_age_default: extern "C" fn(VehicleRef) -> u16,
-    pub cost_read: extern "C" fn(VehicleRef) -> CostRead,
-    pub price: extern "C" fn(crate::vehicle::EngineRef, u32) -> i64,
     pub pay_running: extern "C" fn(VehicleRef, i64),
     pub service_read: extern "C" fn(VehicleRef) -> ServiceRead,
     pub turn_read: extern "C" fn(VehicleRef) -> TurnRead,
@@ -1071,11 +1061,8 @@ impl Game<'_> {
                     i32::from(CALLBACK_FAILED),
                 ) as u16;
                 if value != CALLBACK_FAILED && value >= u16::from(VEHICLE_LENGTH) {
-                    service!(self.vs.unknown_callback_result)(
-                        engine.engine,
-                        CBID_VEHICLE_LENGTH,
-                        value,
-                    );
+                    self.vs
+                        .unknown_callback_result(engine.engine, CBID_VEHICLE_LENGTH, value);
                 }
                 value
             } else {
@@ -1877,16 +1864,21 @@ impl Game<'_> {
     }
     /// `RoadVehicle::GetRunningCost`.
     fn running_cost(&self, v: Part) -> i64 {
-        let r = service!(self.l.cost_read)(v.v);
-        if r.cost_class == INVALID_PRICE {
+        let cap = unsafe { (&*(self.vs.newgrf)()).capabilities };
+        let e = (self.vs.engine)(v.v).0.as_ptr();
+        if (cap.road_price)(e) == INVALID_PRICE {
             return 0;
         }
-        let factor =
-            service!(self.vs.property)((self.vs.newgrf)(), v.v, 9, i32::from(r.cost_factor)) as u32;
+        let factor = service!(self.vs.property)(
+            (self.vs.newgrf)(),
+            v.v,
+            crate::newgrf_properties::PROP_ROADVEH_RUNNING_COST_FACTOR,
+            i32::from((cap.road_running)(e)),
+        ) as u32;
         if factor == 0 {
             return 0;
         }
-        service!(self.l.price)(r.engine, factor)
+        crate::engine_capabilities::price(cap, e, u32::from((cap.road_price)(e)), factor, 0)
     }
     /// `CheckIfRoadVehNeedsService`; `IsChainInDepot` and `FindClosestRoadDepot` inline.
     fn service(&self, v: Part) {
@@ -2387,11 +2379,6 @@ crate::abi::layouts! {
         link,
         tile,
     };
-    "OpenTTDRoadCostRead" ["probe"] => CostRead {
-        engine,
-        cost_class,
-        cost_factor,
-    };
     "OpenTTDRoadServiceRead" ["probe"] => ServiceRead {
         tile,
         servint,
@@ -2449,8 +2436,6 @@ crate::abi::layouts! {
         shorten_factor,
         default_max_speed,
         cargo_age_default,
-        cost_read,
-        price,
         pay_running,
         service_read,
         turn_read,

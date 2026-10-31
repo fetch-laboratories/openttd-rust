@@ -66,6 +66,14 @@ static Engine *UnusedEngine(EngineID except = EngineID::Invalid())
 static bool EnginesScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
+	if (args[1].starts_with("runtime-invalid-")) {
+		Engine *e = *Engine::Iterate().begin(); e->type = VEH_INVALID;
+		fmt::print(stderr, "ENGINE runtime-fatal {}\n", args[1]); std::fflush(stderr);
+		if (args[1] == "runtime-invalid-cost") (void)e->GetCost();
+		else if (args[1] == "runtime-invalid-running") (void)e->GetRunningCost();
+		else (void)e->GetRange();
+		FixtureAbort(__LINE__);
+	}
 	if ((args[1].starts_with("loading") || args[1].starts_with("properties"))) return LoadingScenario(args);
 	if (args[1] == "cargo-registry") return CargoRegistryScenario(args);
 	if (args[1] == "cargo-profit" || args[1] == "cargo-rating") {

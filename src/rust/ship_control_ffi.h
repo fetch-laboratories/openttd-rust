@@ -67,7 +67,6 @@ struct OpenTTDShipLeaves {
 	void (*depot_invalidate)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_invalidate);
 	void (*ships_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(ships_dirty);
 	void (*check_orders)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(check_orders);
-	int64_t (*running_cost)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(running_cost);
 	uint32_t (*cost_divisor)() noexcept OPENTTD_SERVICE_DEFAULT(cost_divisor);
 	void (*pay_running)(uint32_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(pay_running);
 	uint32_t (*speed_default)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(speed_default);

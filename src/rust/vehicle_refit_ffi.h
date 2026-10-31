@@ -43,7 +43,6 @@ struct OpenTTDVehicleRefitServices {
 	OpenTTDRefitCargo (*refit_cargo)(const OpenTTDEngine *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(refit_cargo);
 	VehicleType (*engine_kind)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_kind);
 	RailVehicleTypes (*rail_kind)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(rail_kind);
-	int32_t (*price_shift)(const OpenTTDEngine *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(price_shift);
 	const OpenTTDEngineCapabilitiesServices *capabilities;
 	OpenTTDRefitEngine (*refit_engine)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(refit_engine);
 	OpenTTDRefitCargoKind (*cargo_kind)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_kind);
@@ -119,6 +118,7 @@ struct OpenTTDRailConstructionServices {
 	bool (*powered)(const OpenTTDEngine *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(powered);
 	void *(*new_wagon)(uint32_t, const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(new_wagon);
 	void *(*new_engine)(uint32_t, const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(new_engine);
+	void (*engine_dates)(void *, const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_dates);
 	void *(*new_rear)(void *) noexcept OPENTTD_SERVICE_DEFAULT(new_rear);
 	void (*link_multihead)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(link_multihead);
 	uint8_t (*subtype)(void *) noexcept OPENTTD_SERVICE_DEFAULT(subtype);
@@ -131,7 +131,6 @@ struct OpenTTDRailConstructionServices {
 	const OpenTTDGroundServices *ground;
 	uint16_t (*first_engine)(void *) noexcept OPENTTD_SERVICE_DEFAULT(first_engine);
 	void (*invalidate_grf)(void *) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_grf);
-	void (*unknown_attach)(void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(unknown_attach);
 	uint16_t (*train_limit)() noexcept OPENTTD_SERVICE_DEFAULT(train_limit);
 	uint16_t (*unit)(void *) noexcept OPENTTD_SERVICE_DEFAULT(unit);
 	void (*use_unit)(void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(use_unit);
@@ -147,7 +146,6 @@ struct OpenTTDVehicleBuildServices {
 	const OpenTTDVehicleMassServices *mass;
 	const OpenTTDRandomServices *random;
 	VehicleType (*depot_kind)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_kind);
-	int64_t (*engine_cost)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_cost);
 	uint8_t (*default_cargo)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(default_cargo);
 	bool (*pool_available)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(pool_available);
 	uint16_t (*free_unit)(VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(free_unit);

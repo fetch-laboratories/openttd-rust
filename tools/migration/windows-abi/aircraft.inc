@@ -1,5 +1,6 @@
 #pragma once
 #include "rust/aircraft_ffi.h"
+#include "rust/engine_capabilities_ffi.h"
 #include "rust/vehicle_visits_ffi.h"
 #include "aircraft-boundary.hpp"
 
@@ -61,10 +62,14 @@ static void AircraftDirectBoundary()
 		v.state->pos = 19;
 		aircraft_probe.order_owner->vehicle->current.type = 3;
 	};
-	vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return nullptr; };
+	static OpenTTDEngineCapabilitiesServices capabilities{};
+	static OpenTTDVehicleResolverServices resolver{};
+	resolver.capabilities = &capabilities;
+	vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
+	vehicle.engine = [](OpenTTDVehicle *) noexcept { return reinterpret_cast<const OpenTTDEngine *>(&aircraft_probe); };
 	vehicle.property = [](const OpenTTDVehicleResolverServices *, OpenTTDVehicle *, uint8_t property, int32_t fallback) noexcept { if (property == 0x0C) { CHECK(fallback == 0); return int32_t{200}; } CHECK((property == 0x1C && fallback == 71) || (property == 0x1F && fallback == 41)); return fallback; };
 	leaves.cargo_age_default = [](OpenTTDAircraftVehicle) noexcept { return uint16_t{71}; };
-	leaves.range_default = [](OpenTTDAircraftVehicle) noexcept { return uint16_t{41}; };
+	capabilities.aircraft_range = [](const OpenTTDEngine *) noexcept { return uint16_t{41}; };
 	vehicle.write_max_speed = [](OpenTTDVehicle *, uint16_t speed) noexcept { aircraft_probe.maximum_speed = speed; };
 	vehicle.write_cargo_age = [](OpenTTDVehicle *, uint16_t age) noexcept { aircraft_probe.cargo_age = age; };
 	leaves.next = [](OpenTTDAircraftVehicle v) noexcept { return v; };

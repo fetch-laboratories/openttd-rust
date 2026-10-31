@@ -35,11 +35,7 @@ uint32_t RustTrainCachedPower(const Vehicle *v) noexcept;
 uint32_t RustTrainCachedWeight(const Vehicle *v) noexcept;
 uint64_t RustTrainRailTypes(const Vehicle *v) noexcept;
 uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept;
-inline uint32_t RustVehicleGRFID(const Vehicle *v) noexcept { return v->GetGRFID(); }
-/** Fixed callback-error adapter for a live native vehicle shell. */
-template <CallbackID Callback>
-inline void RustVehicleCallbackError(void *shell, uint16_t result) noexcept { RustUnknownCallbackResult(RustVehicleGRFID(static_cast<const Vehicle *>(shell)), Callback, result); }
-uint32_t RustVehicleGRFString(Vehicle *v, uint32_t string) noexcept;
+uint32_t RustGRFString(uint32_t grfid, uint32_t string) noexcept;
 void RustVehicleFlipStopped(Vehicle *v) noexcept;
 
 
@@ -175,6 +171,7 @@ inline void RustWriteVehicleAge(Vehicle *v, int32_t age) noexcept { v->age = Tim
 inline void RustVehicleWriteBreakdown(Vehicle *v, uint8_t counter, uint8_t delay) noexcept { v->breakdown_ctr = counter; v->breakdown_delay = delay; }
 inline bool RustVehicleIsGround(const Vehicle *v) noexcept { return v->IsGroundVehicle(); }
 inline TimerGameCalendar::Date RustVehicleMaxAge(const Vehicle *v) noexcept { return v->max_age; }
+inline void RustVehicleSetMaxAge(OpenTTDVehicle *v, int32_t days) noexcept { VehicleOf(v)->max_age = TimerGameCalendar::Date{days}; }
 inline TimerGameEconomy::Date RustVehicleEconomyAge(const Vehicle *v) noexcept { return v->economy_age; }
 inline TimerGameEconomy::Date RustVehicleLastService(const Vehicle *v) noexcept { return v->date_of_last_service; }
 inline int32_t RustVehicleLastServiceOf(OpenTTDVehicle *v) noexcept { return RustVehicleLastService(VehicleOf(v)).base(); }

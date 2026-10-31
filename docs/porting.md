@@ -24,7 +24,7 @@ For agents writing or reviewing port code, tests and Python tools.
 
 - The rewrite retires object classes and map accessors in headers (user, 2026-10-28). Once control flow is in Rust, move records to Rust: pool objects (vehicles first, #563; then stations, orders, towns, industries, companies and the rest), then map arrays.
 - Define each moved record once in Rust with a C-compatible layout. Generate its C++ declaration and check the layout at build. `tools/port-metrics.py` counts the declaration as compiled C++ glue. Both languages access fields in place.
-- Unported C++ drawing, GUI, save/load, scripts and network use inline accessors over the shared layout, never a call per field. Only operations such as allocation, deletion, iteration with hooks and virtual behavior cross as calls. Delete replaced per-field services and reader carriers.
+- Unported C++ drawing, GUI, save/load, scripts and network use inline accessors over the shared layout, never a call per field. Only operations such as allocation, deletion, iteration with hooks and virtual behavior cross as calls. Delete replaced per-field services and reader carriers, together with their rows in the rebound-callee and shared-accessor baselines, and report the rows removed in the PR.
 
 ## Fidelity
 
@@ -66,6 +66,7 @@ For agents writing or reviewing port code, tests and Python tools.
 ## Evidence
 
 - Game-logic ports require the semantic simulation harness (`python3 tools/migration.py simulate`, #72) and existing tests. Integrate a new port only after harness scenarios exercise its component. Fidelity fixes to existing ports, such as #75, do not wait for that. Phases 3 to 6 reuse the harness where it observes output, such as saves, script commands and multiplayer sessions.
+- A native C++ fixture is compiled C++ that must retire later. Add one only for boundary behavior that harness scenarios and Rust tests cannot observe, and name that behavior in the PR.
 - Extend harness scenarios instead of writing a comparison tool for each component. Put harness tooling for a port in its component's scenario module. Tooling is code to maintain: keep it proportionate to the C++ the port retires. Compare against unchanged reference bodies only for a concrete gap the harness cannot reach, named in the PR.
 - Any check cited by a doc or PR, such as a branch witness or reference probe, runs in default CI and fails when missing; an opt-in profile or `__main__`-only probe is not evidence.
 - Compare semantic state: screenshots alone and compressed-save byte equality cannot establish equivalent simulation. Screenshots and screen recordings attached to a PR can evidence graphical work (user, 2026-10-28). Retain small failures and explain discrepancies before accepting changes. Test success establishes covered behavior, not complete game equivalence.

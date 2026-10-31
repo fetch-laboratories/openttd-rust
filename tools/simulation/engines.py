@@ -2,6 +2,7 @@
 
 import struct
 from pathlib import Path
+from typing import Any, TypedDict, cast
 
 from . import core, economy
 from .console_adapter import console_adapter, prepared_console
@@ -12,6 +13,106 @@ from .core import (
     compare_saves,
     witness_counts,
 )
+
+
+class RuntimeRun(TypedDict):
+    exit: int | str
+    log: list[str]
+    stdout: bytes
+
+
+def runtime_fatal_probes(
+    scenario: dict[str, Any],
+    executables: dict[str, Path],
+    builds: dict[str, Path],
+    folder: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: dict[str, Any],
+) -> None:
+    exits: dict[str, dict[str, int]] = {}
+    for operation in ("cost", "running", "range"):
+        command = "runtime-invalid-" + operation
+        runs = cast(
+            dict[str, RuntimeRun],
+            core.capture_pair(
+                dict(scenario, console=["engines_scenario " + command], ticks=1),
+                executables,
+                builds,
+                folder,
+                timeout,
+                env,
+                name="runtime-fatal-" + operation,
+            ),
+        )
+        for run in runs.values():
+            if (
+                not isinstance(run["exit"], int)
+                or not run["exit"]
+                or "ENGINE runtime-fatal " + command not in run["log"]
+                or b"NOT_REACHED triggered" not in run["stdout"]
+            ):
+                raise RuntimeError(
+                    "engine invalid-kind fatal path missing: " + operation
+                )
+        exits[operation] = {role: cast(int, run["exit"]) for role, run in runs.items()}
+    result["engine_runtime_fatal"] = exits
+
+
+def runtime_markers(lines: list[str]) -> list[str]:
+    from collections import Counter
+
+    records = [line for line in lines if line.startswith("ENGINE properties-runtime ")]
+    observed = []
+    for line in records:
+        fields = line.split()
+        if len(fields) != 8 or fields[4] not in ("false", "true"):
+            raise RuntimeError("engine runtime price record malformed")
+        try:
+            kind, price = int(fields[2]), int(fields[3])
+            base, cost, running = map(int, fields[5:])
+        except ValueError as error:
+            raise RuntimeError("engine runtime price record malformed") from error
+        if any(not -(1 << 63) <= value < 1 << 63 for value in (base, cost, running)):
+            raise RuntimeError("engine runtime price outside Money range")
+        observed.append((kind, price, fields[4], base))
+    expected = Counter(
+        (kind, price, dynamic, base)
+        for kind, price in ((0, 15), (0, 16), (1, 18), (2, 19), (3, 17))
+        for dynamic in ("false", "true")
+        for base in (2560, (1 << 63) - 1, -(1 << 63))
+    )
+    if Counter(observed) != expected:
+        raise RuntimeError("engine runtime kinds, wagon, factors or saturation missing")
+    required = {
+        "runtime-null-grf": 4,
+        "runtime-action3-grf": 4,
+        "runtime-climate": 4,
+        "runtime-invalid-engine": 4,
+        "runtime-enabled": 4,
+        "runtime-build": 30,
+        "runtime-running": 30,
+        "runtime-invalid-price": 3,
+        "runtime-range-default": 1,
+        "runtime-range-dynamic": 1,
+        "runtime-life": 8,
+        "runtime-rng": 1,
+        "runtime-built-life": 4,
+    }
+    for label, count in required.items():
+        if lines.count("ENGINE loading-case " + label + " true") != count:
+            raise RuntimeError("engine runtime observation missing: " + label)
+    rng = [line for line in lines if line.startswith("ENGINE properties-runtime-rng ")]
+    if len(rng) != 1:
+        raise RuntimeError("engine runtime random streams missing")
+    try:
+        words = [int(word) for word in rng[0].split()[2:]]
+    except ValueError as error:
+        raise RuntimeError("engine runtime random streams malformed") from error
+    if len(words) != 4 or any(not 0 <= word < 1 << 32 for word in words):
+        raise RuntimeError("engine runtime random streams malformed")
+    return records + rng
+
 
 ADAPTER = ROOT / "tools/simulation/engines-console.cpp"
 REQUIRED = {
@@ -323,6 +424,8 @@ def check(scenario, run, mode, role, result):
             setup=not variant.endswith("-reload"),
             properties=variant.startswith("properties"),
         )
+        if variant.startswith("properties"):
+            runtime_markers(run["log"])
         trace = [line for line in run["log"] if line.startswith("ENGINE properties-")]
         result.setdefault(mode + "_properties_trace", {})[role] = trace
         pair = result[mode + "_properties_trace"]
@@ -709,6 +812,10 @@ def prepare_loading(scenario, executables, builds, folder, timeout, env, result)
     variant = scenario["engines"]
     property_mode = variant.startswith("properties")
     command = "properties" if property_mode else "loading"
+    if variant == "properties":
+        runtime_fatal_probes(
+            scenario, executables, builds, folder, timeout, env, result
+        )
     if not variant.endswith("-reload"):
         return dict(
             scenario,
@@ -737,6 +844,8 @@ def prepare_loading(scenario, executables, builds, folder, timeout, env, result)
         ):
             raise RuntimeError("file-loaded engine capture failed")
         loading_markers(run["log"], setup=True, saving=True, properties=property_mode)
+        if property_mode:
+            runtime_markers(run["log"])
         captures[role] = [
             line
             for line in run["log"]
