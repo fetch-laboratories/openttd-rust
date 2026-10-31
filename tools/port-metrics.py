@@ -556,32 +556,26 @@ def function_rows(
         text = show(BASELINE, path)
         code = code_lines(text, path)
         left = code - retired.get(path, set())
+        found: list[tuple[str, int, set[int], bool]] = []
         for name, first, opened, last in spans(text, path):
             body = set(range(first, last + 1))
-            if body & left:
-                rows.append(
-                    dict(
-                        area=area(path),
-                        path=path,
-                        function=name,
-                        line=first,
-                        remaining=len(body & left),
-                        facade=bool(body & code - left)
-                        and body & left <= {*range(first, opened + 1), last},
-                    )
-                )
+            signature = {*range(first, opened + 1), last}
+            facade = bool(body & code - left) and body & left <= signature
+            found.append((name, first, body & left, facade))
             left -= body
-        if left:
-            rows.append(
-                dict(
-                    area=area(path),
-                    path=path,
-                    function="(file scope)",
-                    line=min(left),
-                    remaining=len(left),
-                    facade=False,
-                )
+        found.append(("(file scope)", min(left, default=0), left, False))
+        rows += [
+            FunctionRow(
+                area=area(path),
+                path=path,
+                function=name,
+                line=line,
+                remaining=len(lines),
+                facade=facade,
             )
+            for name, line, lines, facade in found
+            if lines
+        ]
     return rows
 
 
