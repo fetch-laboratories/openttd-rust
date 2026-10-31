@@ -91,7 +91,7 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.train_services = []() noexcept { return &GetTrainServices(); },
 		.road_acceleration = RustRoadAccelerationModel,
 		.order_max_speed = RustVehicleRead<uint16_t, RustVehicleOrderMaxSpeed>,
-		.id = [](OpenTTDVehicle * v) noexcept -> uint32_t { return RustVehicleIndexOpaque(VehicleOf(v)); },
+		.id = RustVehicleIndex<OpenTTDVehicle *>,
 		.old_order = [](OpenTTDVehicle * v) noexcept -> uint16_t { return VehicleOf(v)->current_order.MapOldOrder(); },
 		.num_orders = RustVehicleRead<uint8_t, RustVehicleNumOrders>,
 		.real_order = RustVehicleRead<uint8_t, RustVehicleRealOrderIndex>,

@@ -69,6 +69,28 @@ impl Map {
     pub fn random_tile_seed(self, size_y: u32, random: u32) -> u32 {
         self.wrap_to_map(random, size_y)
     }
+    /// `TileAddWrap`, including freeform-edge exclusion.
+    #[must_use]
+    pub fn tile_add_wrap(self, tile: u32, dx: i32, dy: i32, size_y: u32, freeform: bool) -> u32 {
+        let x = self.tile_x(tile).wrapping_add_signed(dx);
+        let y = self.tile_y(tile).wrapping_add_signed(dy);
+        if ((x == 0 || y == 0) && freeform) || x >= self.max_x() || y >= Self::max_y(size_y) {
+            crate::tile_type::INVALID_TILE
+        } else {
+            self.tile_xy(x, y)
+        }
+    }
+    /// `DistanceFromEdge`.
+    #[must_use]
+    pub fn distance_from_edge(self, tile: u32, size_y: u32) -> u32 {
+        let x = self.tile_x(tile);
+        let y = self.tile_y(tile);
+        x.min(y).min(
+            self.max_x()
+                .wrapping_sub(x)
+                .min(Self::max_y(size_y).wrapping_sub(y)),
+        )
+    }
     /// `Map::MaxX`.
     #[must_use]
     pub fn max_x(self) -> u32 {
@@ -298,6 +320,25 @@ impl TileTypeAccess {
         self.available(tile)?;
         if self.assertions() {
             self.check(crate::tile_map::get_tile_type(self, tile)? == kind)?;
+        }
+        Some(())
+    }
+    /// Field-sized stores under the same serialized allocation contract as reads.
+    pub(crate) fn set_m3(&self, tile: u32, value: u8) -> Option<()> {
+        self.available(tile)?;
+        unsafe {
+            std::ptr::addr_of!((*self.allocation.base.add(tile as usize)).m3)
+                .cast_mut()
+                .write(value);
+        }
+        Some(())
+    }
+    pub(crate) fn set_m8(&self, tile: u32, value: u16) -> Option<()> {
+        self.available(tile)?;
+        unsafe {
+            std::ptr::addr_of!((*self.allocation.extended.add(tile as usize)).m8)
+                .cast_mut()
+                .write(value);
         }
         Some(())
     }

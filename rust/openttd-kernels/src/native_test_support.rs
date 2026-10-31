@@ -42,6 +42,8 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
     let x = (s.map_max_x)() + 1;
     let y = (s.map_max_y)() + 1;
     if get_tile_slope(&map, tile, x, y) != Some((s.tile_slope)(tile))
+        || crate::tile_map::is_tile_flat(&map, tile, x, y)
+            != Some((unsafe { &*(s.station_commands)() }.tile_flat)(tile))
         || get_tile_z(&map, tile, x, y) != Some((s.tile_z)(tile))
         || get_tropic_zone(&map, tile) != Some((s.tropic_zone)(tile))
     {

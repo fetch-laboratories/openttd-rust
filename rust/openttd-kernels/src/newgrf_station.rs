@@ -61,8 +61,9 @@ pub struct SlopeResult {
 #[repr(C)]
 pub struct Services {
     shared: *const Shared,
-    cargo: *const crate::cargo_storage::Services,
-    cargo_owner: extern "C" fn(*mut BaseStation, u8) -> *const crate::cargo_storage::List,
+    pub(crate) cargo: *const crate::cargo_storage::Services,
+    pub(crate) cargo_owner:
+        extern "C" fn(*mut BaseStation, u8) -> *const crate::cargo_storage::List,
     group_count: extern "C" fn(*const RailSpec) -> usize,
     group_cargo: extern "C" fn(*const RailSpec, usize) -> u8,
     group: extern "C" fn(*const RailSpec, u8) -> *const c_void,

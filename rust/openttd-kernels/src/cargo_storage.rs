@@ -65,7 +65,7 @@ pub struct Services {
         extern "C" fn(*const c_void, u8, u16, u16, u16, *const u16, usize, *mut u8) -> u16,
     pub(crate) pay: extern "C" fn(*mut c_void, u8, u8, *const c_void, u32, u32) -> i64,
     pub(crate) origin: extern "C" fn(*mut c_void, u16, u32, u8),
-    pub(crate) flow_owner: extern "C" fn(*const c_void, u16) -> *mut crate::cargo_flow::Flow,
+    pub(crate) flow_map: extern "C" fn(*const c_void) -> *mut crate::cargo_flow::FlowMap,
     pub(crate) random_draw: extern "C" fn() -> u32,
     pub(crate) packet_next: extern "C" fn(*mut c_void) -> *mut c_void,
 }
@@ -206,7 +206,7 @@ crate::abi::layouts! {
         flow,
         pay,
         origin,
-        flow_owner,
+        flow_map,
         random_draw,
         packet_next,
     };
@@ -452,7 +452,12 @@ unsafe fn forced_flow(
         openttd_rust_flow_change, openttd_rust_flow_clone, openttd_rust_flow_destroy,
         openttd_rust_flow_read, openttd_rust_flow_via,
     };
-    let original = (s.flow_owner)(ge, origin);
+    let map = (s.flow_map)(ge);
+    let original = if map.is_null() {
+        std::ptr::null_mut()
+    } else {
+        unsafe { crate::cargo_flow::openttd_rust_flow_map_at(map, u32::from(origin), 1).flow }
+    };
     if original.is_null() {
         return INVALID;
     }
@@ -1079,17 +1084,15 @@ unsafe fn action(
         },
         5 => {
             if p.next_hop == avoid || p.next_hop == avoid2 {
-                let mut restricted = 0;
-                let via = (s.flow)(
-                    ge,
-                    2,
-                    p.first_station,
-                    avoid,
-                    avoid2,
-                    std::ptr::null(),
-                    0,
-                    &raw mut restricted,
-                );
+                let via = unsafe {
+                    crate::station_base::goods_get_via(
+                        (s.flow_map)(ge),
+                        p.first_station,
+                        avoid,
+                        avoid2,
+                        s.random_draw,
+                    )
+                };
                 // Original mutates cp, even when cp_new is a partial split.
                 unsafe {
                     (*(s.packet)(n.shell)).next_hop = via;
@@ -1125,17 +1128,15 @@ unsafe fn action(
             }
         }
         8 => {
-            let mut restricted = 0;
-            let via = (s.flow)(
-                ge,
-                2,
-                p.first_station,
-                avoid,
-                avoid2,
-                std::ptr::null(),
-                0,
-                &raw mut restricted,
-            );
+            let via = unsafe {
+                crate::station_base::goods_get_via(
+                    (s.flow_map)(ge),
+                    p.first_station,
+                    avoid,
+                    avoid2,
+                    s.random_draw,
+                )
+            };
             if src != dst {
                 unsafe {
                     remove_cache(src, p, count, None);
@@ -1199,7 +1200,12 @@ unsafe fn walk(
         n = next;
     }
 }
-unsafe fn truncate_station(l: *mut List, s: Services, max_move: u32, origins: *mut c_void) -> u32 {
+pub(crate) unsafe fn truncate_station(
+    l: *mut List,
+    s: Services,
+    max_move: u32,
+    origins: *mut c_void,
+) -> u32 {
     let max_move = max_move.min(unsafe { fields(l) }.count);
     let previous = unsafe { fields(l) }.count;
     let mut moved = 0_u32;
@@ -1614,6 +1620,63 @@ pub unsafe extern "C" fn openttd_rust_cargo_capacity(
     u8::from(transfer && part_chain != 0 && vehicle(services, new).train != 0)
 }
 
+/// `VehicleCargoList::Reroute`, with already-resolved canonical owners.
+/// # Safety
+/// All pointers are live for this synchronous call, with no outstanding owner borrow.
+pub(crate) unsafe fn reroute_vehicle(
+    list: *mut List,
+    s: &Services,
+    ge: *const crate::station_base::GoodsEntry,
+    avoid: u16,
+    avoid2: u16,
+) {
+    unsafe {
+        openttd_rust_cargo_list_move(
+            list,
+            list,
+            s,
+            5,
+            u32::MAX,
+            avoid,
+            avoid2,
+            std::ptr::null(),
+            0,
+            ge.cast(),
+            0,
+            std::ptr::null_mut(),
+            crate::tile_type::INVALID_TILE,
+        );
+    }
+}
+/// `StationCargoList::Reroute`, with already-resolved canonical owners.
+/// # Safety
+/// Same serialized owner contract as `reroute_vehicle`.
+pub(crate) unsafe fn reroute_station(
+    list: *mut List,
+    s: &Services,
+    ge: *const crate::station_base::GoodsEntry,
+    avoid: u16,
+    avoid2: u16,
+) {
+    unsafe {
+        openttd_rust_cargo_list_move(
+            list,
+            list,
+            s,
+            8,
+            u32::MAX,
+            avoid,
+            avoid2,
+            std::ptr::null(),
+            0,
+            ge.cast(),
+            0,
+            std::ptr::null_mut(),
+            crate::tile_type::INVALID_TILE,
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1688,8 +1751,19 @@ mod tests {
         7
     }
     extern "C" fn origin(_: *mut c_void, _: u16, _: u32, _: u8) {}
-    extern "C" fn flow_owner(_: *const c_void, _: u16) -> *mut crate::cargo_flow::Flow {
-        std::ptr::null_mut()
+    extern "C" fn flow_map(context: *const c_void) -> *mut crate::cargo_flow::FlowMap {
+        context.cast_mut().cast()
+    }
+    fn flow_fixture(via: u16) -> *mut crate::cargo_flow::FlowMap {
+        let map = crate::cargo_flow::openttd_rust_flow_map_new();
+        let flow = crate::cargo_flow::openttd_rust_flow_new(via, 1, 0);
+        unsafe {
+            for origin in [10, 11] {
+                crate::cargo_flow::openttd_rust_flow_map_insert(map, origin, flow);
+            }
+            crate::cargo_flow::openttd_rust_flow_destroy(flow);
+        }
+        map
     }
     extern "C" fn draw() -> u32 {
         0
@@ -1716,7 +1790,7 @@ mod tests {
             flow,
             pay,
             origin,
-            flow_owner,
+            flow_map,
             random_draw: draw,
             packet_next: next_packet,
         }
@@ -1886,6 +1960,7 @@ mod tests {
         let service = services();
         unsafe {
             for via in [10_u16, 90] {
+                let flows = flow_fixture(via);
                 let station = list(false);
                 append(station, service, cargo(8, 10, 0), 70);
                 append(station, service, cargo(8, 11, 0), 70);
@@ -1900,7 +1975,7 @@ mod tests {
                         INVALID,
                         std::ptr::null(),
                         0,
-                        (&raw const via).cast(),
+                        flows.cast(),
                         0,
                         std::ptr::null_mut(),
                         5
@@ -1915,6 +1990,7 @@ mod tests {
                 assert_eq!(selected, 10);
                 assert_eq!(fields(station).count, 16);
                 clean(station);
+                crate::cargo_flow::openttd_rust_flow_map_destroy(flows);
             }
             let vehicle = list(true);
             let original = cargo(8, 10, 0);
@@ -1922,6 +1998,7 @@ mod tests {
             append(vehicle, service, original, KEEP as u16);
             (*vehicle).fields.action_counts = [8, 0, 0, 0];
             let via = 90_u16;
+            let flows = flow_fixture(via);
             assert_eq!(
                 openttd_rust_cargo_list_move(
                     vehicle,
@@ -1933,7 +2010,7 @@ mod tests {
                     INVALID,
                     std::ptr::null(),
                     0,
-                    (&raw const via).cast(),
+                    flows.cast(),
                     0,
                     std::ptr::null_mut(),
                     5
@@ -1944,6 +2021,7 @@ mod tests {
             assert_eq!(packet(service, nodes(vehicle)[0].shell).next_hop, 70);
             assert_eq!(fields(vehicle).action_counts, [8, 0, 0, 0]);
             clean(vehicle);
+            crate::cargo_flow::openttd_rust_flow_map_destroy(flows);
         }
     }
     #[test]

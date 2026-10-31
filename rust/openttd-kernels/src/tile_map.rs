@@ -74,6 +74,12 @@ pub(crate) fn get_tile_slope_z(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Op
 pub(crate) fn get_tile_slope(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<u8> {
     Some(get_tile_slope_z(m, t, x, y)?.0)
 }
+/// `IsTileFlat` without the height output.
+#[inline]
+pub(crate) fn is_tile_flat(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<bool> {
+    let [height, x2_y1, x1_y2, x2_y2] = corners(m, t, x, y)?;
+    Some(x2_y1 == height && x1_y2 == height && x2_y2 == height)
+}
 #[inline]
 pub(crate) fn get_tile_z(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<i32> {
     let [north, west, east, south] = corners(m, t, x, y)?;

@@ -13,6 +13,7 @@
 #include <cstddef>
 struct OpenTTDCargoList;
 struct OpenTTDCargoFlow;
+struct OpenTTDCargoFlowMap;
 enum class SourceType : uint8_t;
 /* Typed, call-local cargo Source value; the ID and source kind are never packed. */
 struct OpenTTDCargoSource {
@@ -53,7 +54,7 @@ struct OpenTTDCargoStorageServices {
 	uint16_t (*flow)(const void *, uint8_t, uint16_t, uint16_t, uint16_t, const uint16_t *, size_t, uint8_t *) noexcept OPENTTD_SERVICE_DEFAULT(flow);
 	int64_t (*pay)(void *, uint8_t, uint8_t, const void *, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(pay);
 	void (*origin)(void *, uint16_t, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(origin);
-	OpenTTDCargoFlow *(*flow_owner)(const void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(flow_owner);
+	OpenTTDCargoFlowMap *(*flow_map)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(flow_map);
 	uint32_t (*random_draw)() noexcept OPENTTD_SERVICE_DEFAULT(random_draw);
 	void *(*packet_next)(void *) noexcept OPENTTD_SERVICE_DEFAULT(packet_next);
 };

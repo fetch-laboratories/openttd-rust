@@ -247,8 +247,6 @@ pub struct Services {
     pub disallowed_road_directions: extern "C" fn(u32) -> u8,
     /// Shared live disaster sound observation.
     pub disaster_sound: extern "C" fn() -> bool,
-    /// Original native `distance_from_edge` map observation.
-    pub distance_from_edge: extern "C" fn(u32) -> u32,
     /// Original native `drive_through_axis` map observation.
     pub drive_through_axis: extern "C" fn(u32) -> u8,
     /// Original pathfinding setting, observed at the calling branch.
@@ -388,8 +386,6 @@ pub struct Services {
     pub tile_slope: extern "C" fn(u32) -> u8,
     /// `GetTileType`.
     pub tile_type: extern "C" fn(u32) -> u8,
-    /// Original `TileAddWrap`, including map and freeform-edge checks.
-    pub tile_add_wrap: extern "C" fn(u32, i32, i32) -> u32,
     /// Original native `tile_valid` map observation.
     pub tile_valid: extern "C" fn(u32) -> bool,
     /// Original `GetTileSlopeZ`, observed together at the source call.
@@ -679,7 +675,6 @@ crate::abi::layouts! {
         depot_index,
         disallowed_road_directions,
         disaster_sound,
-        distance_from_edge,
         drive_through_axis,
         forbid_90_deg,
         free_train_reservation,
@@ -748,7 +743,6 @@ crate::abi::layouts! {
         tile_owner,
         tile_slope,
         tile_type,
-        tile_add_wrap,
         tile_valid,
         tile_slope_z,
         tile_z,
@@ -906,7 +900,6 @@ pub fn fixture(
         depot_index: short,
         disallowed_road_directions: byte,
         disaster_sound: flag0,
-        distance_from_edge: word,
         drive_through_axis: byte,
         forbid_90_deg: flag0,
         free_train_reservation: train,
@@ -975,7 +968,6 @@ pub fn fixture(
         tile_owner: byte,
         tile_slope: byte,
         tile_type: byte,
-        tile_add_wrap: unused_tile_add_wrap,
         tile_valid: flag,
         tile_slope_z: foundation,
         tile_z: height,
@@ -1433,11 +1425,6 @@ pub struct RoadTileKind(pub u8);
 #[cfg(test)]
 extern "C" fn fixture_road_commands() -> *const crate::road_cmd::RoadCommandServices {
     panic!("unused road commands")
-}
-
-#[cfg(test)]
-extern "C" fn unused_tile_add_wrap(_: u32, _: i32, _: i32) -> u32 {
-    panic!("unused tile addition")
 }
 
 #[cfg(test)]

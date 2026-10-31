@@ -169,7 +169,6 @@ Station *GetTargetAirportIfValid(const Aircraft *v);
 void HandleMissingAircraftOrders(Aircraft *v);
 #ifdef WITH_RUST
 void ReleaseAircraftAirportBlocks(const Aircraft *v);
-void InvalidateAircraftTargetStation(StationID station);
 #endif
 
 #endif /* AIRCRAFT_H */
