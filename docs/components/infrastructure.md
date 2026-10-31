@@ -13,7 +13,6 @@
 
 - Rust owns: Rail/road/tram reservation, property interpretation, allocation/reset/publication, lookup, translation, saved-label conversion, sorted lists and masks; cargo/rail/road/tram translation-table loading.
 - C++ keeps: TypeInfo/default tables, strings, badges, sorting, GUI sprite resolution, per-file GRF labels/maps and RAIL/ROTT serialization; conversion reads typed map accessors.
-- C++ keeps: TypeInfo/default tables, strings, badges, sorting, GUI sprite resolution, per-file labels and maps, and save/load frames.
 - Limits: Rendering/resolver ownership, historical save variants and GUI scheduling remain outside this component.
 - PRs: #481.
 
@@ -37,7 +36,6 @@
 
 - Rust owns: Road removal permissions and slopes, single/long build/removal, depots, clear/owner/nearest-town updates, terraform, conversion, build-above, prices and tile clearing.
 - C++ keeps: Road-type allocation, drawing, track-status/vehicle-enter, tile loops and map services.
-- C++ keeps: Road-type allocation, drawing, track status, vehicle entry and tile loops.
 - Checks: Default `roads-commands` and `roads-commands-reload` scenarios.
 - Limits: The fixture declares builtin-like road-type inputs; external NewGRF programs and legacy save variants remain #156 gaps.
 - PRs: #290.
