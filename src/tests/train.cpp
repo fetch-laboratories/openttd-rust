@@ -20,7 +20,10 @@ TEST_CASE("PBS depot early return does not read or write train_on_res")
 	train.read_trackdir = [](OpenTTDTrainHandle) noexcept -> OpenTTDTrainTrackdirRead { return {23, 1, 0}; };
 	train.first_track = [](OpenTTDTrainHandle, uint8_t) noexcept -> uint64_t { return 0; };
 	train.track_direction = [](OpenTTDTrainHandle, uint8_t, uint8_t) noexcept -> uint64_t { return 0; };
-	OpenTTDPbsServices pbs{.shared = &shared, .rail = &rail, .train = &train};
+	OpenTTDPbsServices pbs{};
+	pbs.shared = &shared;
+	pbs.rail = &rail;
+	pbs.train = &train;
 	pbs.depot_bits = [](uint32_t) noexcept { return TRACK_BIT_NONE; };
 	void *other = nullptr;
 	const auto result = openttd_rust_pbs_follow_train(&pbs, {state.get(), state.get()}, reinterpret_cast<OpenTTDPbsTrainOutput *>(&other));
