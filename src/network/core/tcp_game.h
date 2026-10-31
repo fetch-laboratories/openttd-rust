@@ -15,6 +15,9 @@
 #include "os_abstraction.h"
 #include "tcp.h"
 #include "../network_type.h"
+#include "../../command_type.h"
+#include "../../company_type.h"
+#include "../../rust/network_command_ffi.h"
 #include <chrono>
 
 /**
@@ -126,15 +129,63 @@ enum PacketGameType : uint8_t {
 	PACKET_END,                          ///< Must ALWAYS be on the end of this list!! (period)
 };
 
-/** Packet that wraps a command */
-struct CommandPacket;
+/** Command parameters in Rust storage; a back-insertion container for EndianBufferWriter. */
+class CommandData : public OpenTTDCommandData {
+public:
+	using value_type = uint8_t;
+
+	CommandData() : OpenTTDCommandData{} {}
+	CommandData(const CommandData &) = delete;
+	CommandData(CommandData &&other) noexcept : OpenTTDCommandData{other} { static_cast<OpenTTDCommandData &>(other) = {}; }
+	CommandData &operator=(const CommandData &) = delete;
+	CommandData &operator=(CommandData &&) = delete;
+	~CommandData() { openttd_rust_command_data_free(this); }
+
+	void push_back(uint8_t byte)
+	{
+		if (this->size == this->capacity) openttd_rust_command_data_grow(this);
+		this->data[this->size++] = byte;
+	}
+};
+
+/** Command parameters of a queued packet. */
+inline std::span<const uint8_t> CommandPacketData(const OpenTTDCommandPacket &cp) { return {cp.data.data, cp.data.size}; }
+
+/** Everything we need to know about a command to be able to execute it; owned until pushed to a queue. */
+struct CommandPacket : OpenTTDCommandPacket {
+	CommandPacket() : OpenTTDCommandPacket{{}, nullptr, 0, 0, CompanyID::Invalid().base(), 0, false} {}
+	CommandPacket(const CommandPacket &) = delete;
+	CommandPacket &operator=(const CommandPacket &) = delete;
+	~CommandPacket() { openttd_rust_command_data_free(&this->data); }
+
+	Commands Cmd() const { return static_cast<Commands>(this->cmd); }
+	CompanyID Company() const { return static_cast<CompanyID>(this->company); }
+	std::span<const uint8_t> Data() const { return CommandPacketData(*this); }
+
+	/** Replace the parameters with \a replacement, which is left empty. */
+	void SetData(CommandData &&replacement)
+	{
+		openttd_rust_command_data_free(&this->data);
+		this->data = replacement;
+		static_cast<OpenTTDCommandData &>(replacement) = {};
+	}
+};
 
 /**
- * A "queue" of CommandPackets.
+ * A "queue" of CommandPackets, owned and ordered by Rust.
  * Not a std::queue because, when paused, some commands remain on the queue.
  * In other words, you do not always pop the first element from this queue.
  */
-using CommandQueue = std::vector<CommandPacket>;
+class CommandQueue : public OpenTTDCommandQueue {
+public:
+	CommandQueue() : OpenTTDCommandQueue{} {}
+	CommandQueue(const CommandQueue &) = delete;
+	CommandQueue &operator=(const CommandQueue &) = delete;
+	~CommandQueue() { openttd_rust_command_queue_free(this); }
+
+	size_t Count() const { return this->size; }
+	void Push(CommandPacket &&cp) { openttd_rust_command_queue_push(this, &cp); }
+};
 
 /** Base socket handler for all TCP sockets */
 class NetworkGameSocketHandler : public NetworkTCPSocketHandler {
@@ -519,7 +570,7 @@ public:
 	NetworkRecvStatus ReceivePackets();
 
 	std::optional<std::string_view> ReceiveCommand(Packet &p, CommandPacket &cp);
-	void SendCommand(Packet &p, const CommandPacket &cp);
+	void SendCommand(Packet &p, const OpenTTDCommandPacket &cp);
 
 	bool IsPendingDeletion() const { return this->is_pending_deletion; }
 

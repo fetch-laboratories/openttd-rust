@@ -73,7 +73,7 @@ public:
 	NetworkRecvStatus SendConsole(std::string_view origin, std::string_view command);
 	NetworkRecvStatus SendGameScript(std::string_view json);
 	NetworkRecvStatus SendCmdNames();
-	NetworkRecvStatus SendCmdLogging(ClientID client_id, const CommandPacket &cp);
+	NetworkRecvStatus SendCmdLogging(ClientID client_id, const OpenTTDCommandPacket &cp);
 	NetworkRecvStatus SendRconEnd(std::string_view command);
 
 	static void Send();
@@ -118,6 +118,6 @@ void NetworkAdminUpdate(AdminUpdateFrequency freq);
 void NetworkServerSendAdminRcon(AdminID admin_index, TextColour colour_code, std::string_view string);
 void NetworkAdminConsole(std::string_view origin, std::string_view string);
 void NetworkAdminGameScript(std::string_view json);
-void NetworkAdminCmdLogging(const NetworkClientSocket *owner, const CommandPacket &cp);
+void NetworkAdminCmdLogging(const NetworkClientSocket *owner, const OpenTTDCommandPacket &cp);
 
 #endif /* NETWORK_ADMIN_H */

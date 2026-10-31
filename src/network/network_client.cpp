@@ -379,7 +379,7 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::SendAck()
  * Send a command to the server.
  * @param cp The command to send.
  */
-NetworkRecvStatus ClientNetworkGameSocketHandler::SendCommand(const CommandPacket &cp)
+NetworkRecvStatus ClientNetworkGameSocketHandler::SendCommand(const OpenTTDCommandPacket &cp)
 {
 	Debug(net, 9, "Client::SendCommand(): cmd={}", cp.cmd);
 
@@ -926,7 +926,7 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_COMMAND(Packet 
 		return NETWORK_RECV_STATUS_MALFORMED_PACKET;
 	}
 
-	this->incoming_queue.push_back(std::move(cp));
+	this->incoming_queue.Push(std::move(cp));
 
 	return NETWORK_RECV_STATUS_OKAY;
 }

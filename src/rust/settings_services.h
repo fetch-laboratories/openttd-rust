@@ -24,6 +24,8 @@ inline uint8_t RustPlaneCrashes() noexcept { return _settings_game.vehicle.plane
 inline bool RustServiceAtHelipad() noexcept { return _settings_game.order.serviceathelipad; }
 inline bool RustDisastersEnabled() noexcept { return _settings_game.difficulty.disasters; }
 inline bool RustDisasterSound() noexcept { return _settings_client.sound.disaster; }
+inline uint16_t RustCommandsPerFrame() noexcept { return _settings_client.network.commands_per_frame; }
+inline uint16_t RustCommandsPerFrameServer() noexcept { return _settings_client.network.commands_per_frame_server; }
 inline bool RustNeverExpireAirports() noexcept { return _settings_game.station.never_expire_airports; }
 inline bool RustNeverExpireVehicles() noexcept { return _settings_game.vehicle.never_expire_vehicles; }
 inline uint16_t RustTrainLimit() noexcept { return _settings_game.vehicle.max_trains; }

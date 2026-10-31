@@ -37,7 +37,7 @@ private:
 	ServerStatus status = STATUS_INACTIVE; ///< Status of the connection with the server.
 
 protected:
-	friend void NetworkExecuteLocalCommandQueue();
+	friend const OpenTTDNetworkCommandServices &GetRustNetworkCommandServices() noexcept;
 	friend void NetworkClose(bool close_admins);
 	static ClientNetworkGameSocketHandler *my_client; ///< This is us!
 
@@ -81,7 +81,7 @@ public:
 	void ClientError(NetworkRecvStatus res);
 
 	static NetworkRecvStatus SendJoin();
-	static NetworkRecvStatus SendCommand(const CommandPacket &cp);
+	static NetworkRecvStatus SendCommand(const OpenTTDCommandPacket &cp);
 	static NetworkRecvStatus SendError(NetworkErrorCode errorno);
 	static NetworkRecvStatus SendQuit();
 	static NetworkRecvStatus SendAck();

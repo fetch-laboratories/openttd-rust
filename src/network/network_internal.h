@@ -89,24 +89,11 @@ void NetworkRebuildHostList();
 void UpdateNetworkGameWindow();
 
 /* From network_command.cpp */
-/**
- * Everything we need to know about a command to be able to execute it.
- */
-struct CommandPacket {
-	CompanyID company = CompanyID::Invalid(); ///< company that is executing the command
-	uint32_t frame = 0; ///< the frame in which this packet is executed
-	bool my_cmd = false; ///< did the command originate from "me"
-
-	Commands cmd{}; ///< command being executed.
-	StringID err_msg{}; ///< string ID of error message to use.
-	CommandCallback *callback = nullptr; ///< any callback function executed upon successful completion of the command.
-	CommandDataBuffer data{}; ///< command parameters.
-};
-
 void NetworkDistributeCommands();
 void NetworkExecuteLocalCommandQueue();
 void NetworkFreeLocalCommandQueue();
 void NetworkSyncCommandQueue(NetworkClientSocket *cs);
+void NetworkHandleCommandQueue(NetworkClientSocket *cs);
 void NetworkReplaceCommandClientId(CommandPacket &cp, ClientID client_id);
 
 void ShowNetworkError(StringID error_string);

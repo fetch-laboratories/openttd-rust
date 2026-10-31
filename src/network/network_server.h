@@ -99,7 +99,7 @@ public:
 	NetworkRecvStatus SendJoin(ClientID client_id);
 	NetworkRecvStatus SendFrame();
 	NetworkRecvStatus SendSync();
-	NetworkRecvStatus SendCommand(const CommandPacket &cp);
+	NetworkRecvStatus SendCommand(const OpenTTDCommandPacket &cp);
 	NetworkRecvStatus SendConfigUpdate();
 
 	static void Send();

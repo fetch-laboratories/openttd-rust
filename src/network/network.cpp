@@ -1114,7 +1114,14 @@ void NetworkGameLoop()
 		static auto f = FioFOpenFile("commands.log", "rb", SAVE_DIR);
 		static TimerGameEconomy::Date next_date(0);
 		static uint32_t next_date_fract;
-		static CommandPacket *cp = nullptr;
+		/** A replayed command, injected through NetworkSendCommand. */
+		struct DumpedCommand {
+			CompanyID company = CompanyID::Invalid();
+			Commands cmd{};
+			StringID err_msg{};
+			CommandDataBuffer data{};
+		};
+		static DumpedCommand *cp = nullptr;
 		static bool check_sync_state = false;
 		static uint32_t sync_state[2];
 		if (!f.has_value() && next_date == 0) {
@@ -1169,7 +1176,7 @@ void NetworkGameLoop()
 				|| consumer.ReadIf("cmdf: ")
 #endif
 				) {
-				cp = new CommandPacket();
+				cp = new DumpedCommand();
 				next_date = TimerGameEconomy::Date(consumer.ReadIntegerBase<uint32_t>(16));
 				bool valid = consumer.ReadIf("; ");
 				next_date_fract = consumer.ReadIntegerBase<uint32_t>(16);
@@ -1197,7 +1204,7 @@ void NetworkGameLoop()
 				next_date_fract = consumer.ReadIntegerBase<uint32_t>(16);
 				assert(valid);
 				Debug(desync, 0, "Injecting pause for join at {:08x}:{:02x}; please join when paused", next_date, next_date_fract);
-				cp = new CommandPacket();
+				cp = new DumpedCommand();
 				cp->company = COMPANY_SPECTATOR;
 				cp->cmd = CMD_PAUSE;
 				cp->data = EndianBufferWriter<>::FromValue(CommandTraits<CMD_PAUSE>::Args{ PauseMode::Normal, true });

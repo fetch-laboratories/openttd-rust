@@ -312,7 +312,6 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::CloseConnection(NetworkRecvSta
 	}
 }
 
-static void NetworkHandleCommandQueue(NetworkClientSocket *cs);
 
 /***********
  * Sending functions
@@ -655,7 +654,7 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::SendSync()
  * Send a command to the client to execute.
  * @param cp The command to send.
  */
-NetworkRecvStatus ServerNetworkGameSocketHandler::SendCommand(const CommandPacket &cp)
+NetworkRecvStatus ServerNetworkGameSocketHandler::SendCommand(const OpenTTDCommandPacket &cp)
 {
 	Debug(net, 9, "client[{}] SendCommand(): cmd={}", this->client_id, cp.cmd);
 
@@ -1059,7 +1058,7 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::Receive_CLIENT_COMMAND(Packet 
 		return this->SendError(NETWORK_ERROR_NOT_EXPECTED);
 	}
 
-	if (this->incoming_queue.size() >= _settings_client.network.max_commands_in_queue) {
+	if (this->incoming_queue.Count() >= _settings_client.network.max_commands_in_queue) {
 		return this->SendError(NETWORK_ERROR_TOO_MANY_COMMANDS);
 	}
 
@@ -1077,13 +1076,13 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::Receive_CLIENT_COMMAND(Packet 
 		return this->SendError(NETWORK_ERROR_NOT_EXPECTED);
 	}
 
-	if (GetCommandFlags(cp.cmd).Test(CommandFlag::Server) && ci->client_id != CLIENT_ID_SERVER) {
-		IConsolePrint(CC_WARNING, "Kicking client #{} (IP: {}) due to calling a server only command {}.", ci->client_id, this->GetClientIP(), cp.cmd);
+	if (GetCommandFlags(cp.Cmd()).Test(CommandFlag::Server) && ci->client_id != CLIENT_ID_SERVER) {
+		IConsolePrint(CC_WARNING, "Kicking client #{} (IP: {}) due to calling a server only command {}.", ci->client_id, this->GetClientIP(), cp.Cmd());
 		return this->SendError(NETWORK_ERROR_KICKED);
 	}
 
-	if (!GetCommandFlags(cp.cmd).Test(CommandFlag::Spectator) && !Company::IsValidID(cp.company) && ci->client_id != CLIENT_ID_SERVER) {
-		IConsolePrint(CC_WARNING, "Kicking client #{} (IP: {}) due to calling a non-spectator command {}.", ci->client_id, this->GetClientIP(), cp.cmd);
+	if (!GetCommandFlags(cp.Cmd()).Test(CommandFlag::Spectator) && !Company::IsValidID(cp.Company()) && ci->client_id != CLIENT_ID_SERVER) {
+		IConsolePrint(CC_WARNING, "Kicking client #{} (IP: {}) due to calling a non-spectator command {}.", ci->client_id, this->GetClientIP(), cp.Cmd());
 		return this->SendError(NETWORK_ERROR_KICKED);
 	}
 
@@ -1092,15 +1091,15 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::Receive_CLIENT_COMMAND(Packet 
 	 * to match the company in the packet. If it doesn't, the client has done
 	 * something pretty naughty (or a bug), and will be kicked
 	 */
-	CompanyCtrlAction cca = cp.cmd == CMD_COMPANY_CTRL ? std::get<0>(EndianBufferReader::ToValue<CommandTraits<CMD_COMPANY_CTRL>::Args>(cp.data)) : CCA_NEW;
-	if (!(cp.cmd == CMD_COMPANY_CTRL && cca == CCA_NEW && ci->client_playas == COMPANY_NEW_COMPANY) && ci->client_playas != cp.company) {
+	CompanyCtrlAction cca = cp.Cmd() == CMD_COMPANY_CTRL ? std::get<0>(EndianBufferReader::ToValue<CommandTraits<CMD_COMPANY_CTRL>::Args>(cp.Data())) : CCA_NEW;
+	if (!(cp.Cmd() == CMD_COMPANY_CTRL && cca == CCA_NEW && ci->client_playas == COMPANY_NEW_COMPANY) && ci->client_playas != cp.Company()) {
 		IConsolePrint(CC_WARNING, "Kicking client #{} (IP: {}) due to calling a command as another company {}.",
-		               ci->client_playas + 1, this->GetClientIP(), cp.company + 1);
+		               ci->client_playas + 1, this->GetClientIP(), cp.Company() + 1);
 		return this->SendError(NETWORK_ERROR_COMPANY_MISMATCH);
 	}
 
-	if (cp.cmd == CMD_COMPANY_CTRL) {
-		if (cca != CCA_NEW || cp.company != COMPANY_SPECTATOR) {
+	if (cp.Cmd() == CMD_COMPANY_CTRL) {
+		if (cca != CCA_NEW || cp.Company() != COMPANY_SPECTATOR) {
 			return this->SendError(NETWORK_ERROR_CHEATER);
 		}
 
@@ -1111,12 +1110,12 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::Receive_CLIENT_COMMAND(Packet 
 		}
 	}
 
-	if (cp.cmd == CMD_COMPANY_ALLOW_LIST_CTRL) {
+	if (cp.Cmd() == CMD_COMPANY_ALLOW_LIST_CTRL) {
 		/* Maybe the client just got moved before allowing? */
-		if (ci->client_id != CLIENT_ID_SERVER && ci->client_playas != cp.company) return NETWORK_RECV_STATUS_OKAY;
+		if (ci->client_id != CLIENT_ID_SERVER && ci->client_playas != cp.Company()) return NETWORK_RECV_STATUS_OKAY;
 
 		/* Only allow clients to add/remove currently joined clients. The server owner does not go via this method, so is allowed to do more. */
-		std::string public_key = std::get<1>(EndianBufferReader::ToValue<CommandTraits<CMD_COMPANY_ALLOW_LIST_CTRL>::Args>(cp.data));
+		std::string public_key = std::get<1>(EndianBufferReader::ToValue<CommandTraits<CMD_COMPANY_ALLOW_LIST_CTRL>::Args>(cp.Data()));
 		bool found = false;
 		for (const NetworkClientInfo *info : NetworkClientInfo::Iterate()) {
 			if (info->public_key == public_key) {
@@ -1129,9 +1128,9 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::Receive_CLIENT_COMMAND(Packet 
 		if (!found) return NETWORK_RECV_STATUS_OKAY;
 	}
 
-	if (GetCommandFlags(cp.cmd).Test(CommandFlag::ClientID)) NetworkReplaceCommandClientId(cp, this->client_id);
+	if (GetCommandFlags(cp.Cmd()).Test(CommandFlag::ClientID)) NetworkReplaceCommandClientId(cp, this->client_id);
 
-	this->incoming_queue.push_back(std::move(cp));
+	this->incoming_queue.Push(std::move(cp));
 	return NETWORK_RECV_STATUS_OKAY;
 }
 
@@ -1666,11 +1665,6 @@ bool NetworkServerChangeClientName(ClientID client_id, const std::string &new_na
  * Handle the command-queue of a socket.
  * @param cs The socket to handle the queue for.
  */
-static void NetworkHandleCommandQueue(NetworkClientSocket *cs)
-{
-	for (auto &cp : cs->outgoing_queue) cs->SendCommand(cp);
-	cs->outgoing_queue.clear();
-}
 
 /**
  * This is called every tick if this is a _network_server

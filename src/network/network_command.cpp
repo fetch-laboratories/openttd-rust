@@ -51,6 +51,8 @@
 #include "../water_cmd.h"
 #include "../waypoint_cmd.h"
 #include "../script/script_cmd.h"
+#include "../rust/company_adapter.h"
+#include "../rust/settings_services.h"
 
 #include "../safeguards.h"
 
@@ -132,13 +134,13 @@ struct CallbackArgsHelper<void(*const)(Commands, const CommandCost &, Targs...)>
 
 /* Helpers to generate the command dispatch table from the command traits. */
 
-template <Commands Tcmd> static CommandDataBuffer SanitizeCmdStrings(const CommandDataBuffer &data);
-template <Commands Tcmd, size_t cb> static void UnpackNetworkCommand(const CommandPacket &cp);
+template <Commands Tcmd> static CommandData SanitizeCmdStrings(std::span<const uint8_t> data);
+template <Commands Tcmd, size_t cb> static void UnpackNetworkCommand(const OpenTTDCommandPacket &cp);
 template <Commands Tcmd> static void NetworkReplaceCommandClientId(CommandPacket &cp, ClientID client_id);
-using UnpackNetworkCommandProc = void (*)(const CommandPacket &);
+using UnpackNetworkCommandProc = void (*)(const OpenTTDCommandPacket &);
 using UnpackDispatchT = std::array<UnpackNetworkCommandProc, _callback_tuple_size>;
 struct CommandDispatch {
-	CommandDataBuffer(*Sanitize)(const CommandDataBuffer &);
+	CommandData(*Sanitize)(std::span<const uint8_t>);
 	void (*ReplaceClientId)(CommandPacket &, ClientID);
 	UnpackDispatchT Unpack;
 };
@@ -176,12 +178,6 @@ static constexpr auto _cmd_dispatch = MakeDispatchTable(std::make_integer_sequen
 #	pragma GCC diagnostic pop
 #endif
 
-/** Local queue of packets waiting for handling. */
-static CommandQueue _local_wait_queue;
-/** Local queue of packets waiting for execution. */
-static CommandQueue _local_execution_queue;
-
-
 /**
  * Find the callback index of a callback pointer.
  * @param callback Address of callback to search for.
@@ -196,6 +192,43 @@ static size_t FindCallbackIndex(CommandCallback *callback)
 	return std::numeric_limits<size_t>::max();
 }
 
+static_assert(NetworkClientSocket::STATUS_MAP == 6); // network_command.rs STATUS_MAP
+
+const OpenTTDNetworkCommandServices &GetRustNetworkCommandServices() noexcept
+{
+	static const OpenTTDNetworkCommandServices services{
+		.company = &GetRustCompanyServices(),
+		.admin_log = [](const void *owner, const OpenTTDCommandPacket *cp) noexcept { NetworkAdminCmdLogging(static_cast<const NetworkClientSocket *>(owner), *cp); },
+		.allowed_while_paused = [](uint8_t cmd) noexcept { return IsCommandAllowedWhilePaused(static_cast<Commands>(cmd)); },
+		.client_queue = []() noexcept -> OpenTTDCommandQueue * { return &ClientNetworkGameSocketHandler::my_client->incoming_queue; },
+		.client_send = [](const OpenTTDCommandPacket *cp) noexcept { MyClient::SendCommand(*cp); },
+		.commands_per_frame = RustCommandsPerFrame,
+		.commands_per_frame_server = RustCommandsPerFrameServer,
+		.execute = [](const OpenTTDCommandPacket *cp) noexcept {
+			size_t cb_index = FindCallbackIndex(reinterpret_cast<CommandCallback *>(const_cast<void *>(cp->callback)));
+			assert(cb_index < _callback_tuple_size);
+			assert(_cmd_dispatch[cp->cmd].Unpack[cb_index] != nullptr);
+			_cmd_dispatch[cp->cmd].Unpack[cb_index](*cp);
+		},
+		.execute_past = []() noexcept {
+			/* If we reach here, it means for whatever reason, we've already executed
+			 * past the command we need to execute. */
+			FatalError("[net] Trying to execute a packet in the past!");
+		},
+		.frame_counter = []() noexcept { return _frame_counter; },
+		.frame_counter_max = []() noexcept { return _frame_counter_max; },
+		.next_client = [](size_t from, OpenTTDNetworkCommandClient *client) noexcept {
+			for (NetworkClientSocket *cs : NetworkClientSocket::Iterate(from)) {
+				*client = {cs, cs->index.base(), &cs->incoming_queue, &cs->outgoing_queue, static_cast<uint8_t>(cs->status)};
+				return true;
+			}
+			return false;
+		},
+		.server_send = [](void *cs, const OpenTTDCommandPacket *cp) noexcept { static_cast<NetworkClientSocket *>(cs)->SendCommand(*cp); },
+	};
+	return services;
+}
+
 /**
  * Prepare a DoCommand to be send over the network
  * @param cmd The command to execute (a CMD_* value)
@@ -206,48 +239,16 @@ static size_t FindCallbackIndex(CommandCallback *callback)
  */
 void NetworkSendCommand(Commands cmd, StringID err_message, CommandCallback *callback, CompanyID company, const CommandDataBuffer &cmd_data)
 {
-	CommandPacket c;
-	c.company  = company;
-	c.cmd      = cmd;
-	c.err_msg  = err_message;
-	c.callback = callback;
-	c.data     = cmd_data;
-
-	if (_network_server) {
-		/* If we are the server, we queue the command in our 'special' queue.
-		 *   In theory, we could execute the command right away, but then the
-		 *   client on the server can do everything 1 tick faster than others.
-		 *   So to keep the game fair, we delay the command with 1 tick
-		 *   which gives about the same speed as most clients.
-		 */
-		c.frame = _frame_counter_max + 1;
-		c.my_cmd = true;
-
-		_local_wait_queue.push_back(std::move(c));
-		return;
-	}
-
-	c.frame = 0; // The client can't tell which frame, so just make it 0
-
-	/* Clients send their command to the server and forget all about the packet */
-	MyClient::SendCommand(c);
+	openttd_rust_network_send_command(&GetRustNetworkCommandServices(), cmd, err_message, reinterpret_cast<const void *>(callback), company.base(), {cmd_data.data(), cmd_data.size()});
 }
 
 /**
- * Sync our local command queue to the command queue of the given
- * socket. This is needed for the case where we receive a command
- * before saving the game for a joining client, but without the
- * execution of those commands. Not syncing those commands means
- * that the client will never get them and as such will be in a
- * desynced state from the time it started with joining.
+ * Sync our local command queue to the command queue of the given socket.
  * @param cs The client to sync the queue to.
  */
 void NetworkSyncCommandQueue(NetworkClientSocket *cs)
 {
-	for (auto &p : _local_execution_queue) {
-		CommandPacket &c = cs->outgoing_queue.emplace_back(p);
-		c.callback = nullptr;
-	}
+	openttd_rust_network_sync_command_queue(&cs->outgoing_queue);
 }
 
 /**
@@ -256,32 +257,7 @@ void NetworkSyncCommandQueue(NetworkClientSocket *cs)
 void NetworkExecuteLocalCommandQueue()
 {
 	assert(IsLocalCompany());
-
-	CommandQueue &queue = (_network_server ? _local_execution_queue : ClientNetworkGameSocketHandler::my_client->incoming_queue);
-
-	auto cp = queue.begin();
-	for (; cp != queue.end(); cp++) {
-		/* The queue is always in order, which means
-		 * that the first element will be executed first. */
-		if (_frame_counter < cp->frame) break;
-
-		if (_frame_counter > cp->frame) {
-			/* If we reach here, it means for whatever reason, we've already executed
-			 * past the command we need to execute. */
-			FatalError("[net] Trying to execute a packet in the past!");
-		}
-
-		/* We can execute this command */
-		_current_company = cp->company;
-		size_t cb_index = FindCallbackIndex(cp->callback);
-		assert(cb_index < _callback_tuple_size);
-		assert(_cmd_dispatch[cp->cmd].Unpack[cb_index] != nullptr);
-		_cmd_dispatch[cp->cmd].Unpack[cb_index](*cp);
-	}
-	queue.erase(queue.begin(), cp);
-
-	/* Local company may have changed, so we should not restore the old value */
-	_current_company = _local_company;
+	openttd_rust_network_execute_local_command_queue(&GetRustNetworkCommandServices());
 }
 
 /**
@@ -289,80 +265,22 @@ void NetworkExecuteLocalCommandQueue()
  */
 void NetworkFreeLocalCommandQueue()
 {
-	_local_wait_queue.clear();
-	_local_execution_queue.clear();
-}
-
-/**
- * "Send" a particular CommandPacket to all clients.
- * @param cp    The command that has to be distributed.
- * @param owner The client that owns the command,
- */
-static void DistributeCommandPacket(CommandPacket &cp, const NetworkClientSocket *owner)
-{
-	CommandCallback *callback = cp.callback;
-	cp.frame = _frame_counter_max + 1;
-
-	for (NetworkClientSocket *cs : NetworkClientSocket::Iterate()) {
-		if (cs->status >= NetworkClientSocket::STATUS_MAP) {
-			/* Callbacks are only send back to the client who sent them in the
-			 *  first place. This filters that out. */
-			cp.callback = (cs != owner) ? nullptr : callback;
-			cp.my_cmd = (cs == owner);
-			cs->outgoing_queue.push_back(cp);
-		}
-	}
-
-	cp.callback = (nullptr != owner) ? nullptr : callback;
-	cp.my_cmd = (nullptr == owner);
-	_local_execution_queue.push_back(cp);
-}
-
-/**
- * "Send" a particular CommandQueue to all clients.
- * @param queue The queue of commands that has to be distributed.
- * @param owner The client that owns the commands,
- */
-static void DistributeQueue(CommandQueue &queue, const NetworkClientSocket *owner)
-{
-#ifdef DEBUG_DUMP_COMMANDS
-	/* When replaying we do not want this limitation. */
-	int to_go = UINT16_MAX;
-#else
-	int to_go = _settings_client.network.commands_per_frame;
-	if (owner == nullptr) {
-		/* This is the server, use the commands_per_frame_server setting if higher */
-		to_go = std::max<int>(to_go, _settings_client.network.commands_per_frame_server);
-	}
-#endif
-
-	/* Not technically the most performant way, but consider clients rarely click more than once per tick. */
-	for (auto cp = queue.begin(); cp != queue.end(); /* removing some items */) {
-		/* Do not distribute commands when paused and the command is not allowed while paused. */
-		if (_pause_mode.Any() && !IsCommandAllowedWhilePaused(cp->cmd)) {
-			++cp;
-			continue;
-		}
-
-		/* Limit the number of commands per client per tick. */
-		if (--to_go < 0) break;
-
-		DistributeCommandPacket(*cp, owner);
-		NetworkAdminCmdLogging(owner, *cp);
-		cp = queue.erase(cp);
-	}
+	openttd_rust_network_free_local_command_queue();
 }
 
 /** Distribute the commands of ourself and the clients. */
 void NetworkDistributeCommands()
 {
-	/* First send the server's commands. */
-	DistributeQueue(_local_wait_queue, nullptr);
+	openttd_rust_network_distribute_commands(&GetRustNetworkCommandServices());
+}
 
-	/* Then send the queues of the others. */
-	for (NetworkClientSocket *cs : NetworkClientSocket::Iterate()) {
-		DistributeQueue(cs->incoming_queue, cs);
-	}
+/**
+ * Send the outgoing command queue of a client.
+ * @param cs The client to send the commands to.
+ */
+void NetworkHandleCommandQueue(NetworkClientSocket *cs)
+{
+	openttd_rust_network_handle_command_queue(&GetRustNetworkCommandServices(), cs, &cs->outgoing_queue);
 }
 
 /**
@@ -373,17 +291,18 @@ void NetworkDistributeCommands()
  */
 std::optional<std::string_view> NetworkGameSocketHandler::ReceiveCommand(Packet &p, CommandPacket &cp)
 {
-	cp.company = (CompanyID)p.Recv_uint8();
-	cp.cmd     = static_cast<Commands>(p.Recv_uint16());
-	if (!IsValidCommand(cp.cmd)) return "invalid command";
-	if (GetCommandFlags(cp.cmd).Test(CommandFlag::Offline)) return "single-player only command";
+	cp.company = p.Recv_uint8();
+	/* Commands has an 8-bit underlying type; the received value narrows before validation. */
+	cp.cmd     = static_cast<uint8_t>(p.Recv_uint16());
+	if (!IsValidCommand(cp.Cmd())) return "invalid command";
+	if (GetCommandFlags(cp.Cmd()).Test(CommandFlag::Offline)) return "single-player only command";
 	cp.err_msg = p.Recv_uint16();
-	cp.data    = _cmd_dispatch[cp.cmd].Sanitize(p.Recv_buffer());
+	cp.SetData(_cmd_dispatch[cp.cmd].Sanitize(p.Recv_buffer()));
 
 	uint8_t callback = p.Recv_uint8();
 	if (callback >= _callback_table.size() || _cmd_dispatch[cp.cmd].Unpack[callback] == nullptr) return "invalid callback";
 
-	cp.callback = _callback_table[callback];
+	cp.callback = reinterpret_cast<const void *>(_callback_table[callback]);
 	return std::nullopt;
 }
 
@@ -392,14 +311,14 @@ std::optional<std::string_view> NetworkGameSocketHandler::ReceiveCommand(Packet 
  * @param p the packet to send it in.
  * @param cp the packet to actually send.
  */
-void NetworkGameSocketHandler::SendCommand(Packet &p, const CommandPacket &cp)
+void NetworkGameSocketHandler::SendCommand(Packet &p, const OpenTTDCommandPacket &cp)
 {
 	p.Send_uint8(cp.company);
 	p.Send_uint16(cp.cmd);
 	p.Send_uint16(cp.err_msg);
-	p.Send_buffer(cp.data);
+	p.Send_buffer(CommandPacketData(cp));
 
-	size_t callback = FindCallbackIndex(cp.callback);
+	size_t callback = FindCallbackIndex(reinterpret_cast<CommandCallback *>(const_cast<void *>(cp.callback)));
 	if (callback > UINT8_MAX || _cmd_dispatch[cp.cmd].Unpack[callback] == nullptr) {
 		Debug(net, 0, "Unknown callback for command; no callback sent (command: {})", cp.cmd);
 		callback = 0; // _callback_table[0] == nullptr
@@ -427,13 +346,13 @@ template <Commands Tcmd>
 static void NetworkReplaceCommandClientId(CommandPacket &cp, ClientID client_id)
 {
 	/* Unpack command parameters. */
-	auto params = EndianBufferReader::ToValue<typename CommandTraits<Tcmd>::Args>(cp.data);
+	auto params = EndianBufferReader::ToValue<typename CommandTraits<Tcmd>::Args>(cp.Data());
 
 	/* Insert client id. */
 	SetClientIds(params, client_id, std::make_index_sequence<std::tuple_size_v<decltype(params)>>{});
 
 	/* Repack command parameters. */
-	cp.data = EndianBufferWriter<CommandDataBuffer>::FromValue(params);
+	cp.SetData(EndianBufferWriter<CommandData>::FromValue<decltype(params), CommandData>(params));
 }
 
 /**
@@ -474,11 +393,11 @@ static inline void SanitizeStringsHelper(CommandFlags cmd_flags, Ttuple &values,
  * @return Sanitized command data.
  */
 template <Commands Tcmd>
-CommandDataBuffer SanitizeCmdStrings(const CommandDataBuffer &data)
+CommandData SanitizeCmdStrings(std::span<const uint8_t> data)
 {
 	auto args = EndianBufferReader::ToValue<typename CommandTraits<Tcmd>::Args>(data);
 	SanitizeStringsHelper(CommandTraits<Tcmd>::flags, args, std::make_index_sequence<std::tuple_size_v<typename CommandTraits<Tcmd>::Args>>{});
-	return EndianBufferWriter<CommandDataBuffer>::FromValue(args);
+	return EndianBufferWriter<CommandData>::FromValue<decltype(args), CommandData>(args);
 }
 
 /**
@@ -488,8 +407,15 @@ CommandDataBuffer SanitizeCmdStrings(const CommandDataBuffer &data)
  * @param cp Command packet to unpack.
  */
 template <Commands Tcmd, size_t Tcb>
-void UnpackNetworkCommand(const CommandPacket &cp)
+void UnpackNetworkCommand(const OpenTTDCommandPacket &cp)
 {
-	auto args = EndianBufferReader::ToValue<typename CommandTraits<Tcmd>::Args>(cp.data);
+	auto args = EndianBufferReader::ToValue<typename CommandTraits<Tcmd>::Args>(CommandPacketData(cp));
 	Command<Tcmd>::PostFromNet(cp.err_msg, std::get<Tcb>(_callback_tuple), cp.my_cmd, args);
+}
+
+#include "../rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDNetworkCommandServices.hpp"
+bool CheckAbi_network_command()
+{
+	return AbiServicesComplete(GetRustNetworkCommandServices());
 }
