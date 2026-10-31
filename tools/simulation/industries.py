@@ -478,7 +478,9 @@ def check(scenario, run, mode, role, result):
             markers += [
                 f"INDUSTRY-POLICY servicing {outcome} true" for outcome in range(3)
             ]
-        if run["exit"] or any(marker not in run["log"] for marker in markers):
+        if run["exit"] or any(
+            not any(marker in line for line in run["log"]) for marker in markers
+        ):
             raise RuntimeError("industry policy observations missing: " + role)
         return
     if kind == "resolver":
