@@ -5,6 +5,7 @@ Reports code lines (Pygments 2.19.2, excluding comments, blank and preprocessor
 lines), then physical-line totals for comparison with historical metrics.
 --whole-fork adds original/retired/remaining/glue by area, compiled C++ distance,
 whole-fork and simulation shares, and Rust exports/service callback slots.
+--functions [AREA ...] adds the remaining lines per file and top-level function.
 This is a source/guard inventory, not full preprocessing or behavioral coverage.
 
 Both guard forms are understood: `#ifdef WITH_RUST ... #else <original>
@@ -20,7 +21,14 @@ from functools import lru_cache
 from pathlib import Path
 from typing import NotRequired, TypedDict
 
-from code_lines import RUST_EXPORT, code_lines, without_comments
+from code_lines import (
+    RUST_EXPORT,
+    Comment,
+    String,
+    code_lines,
+    tokens,
+    without_comments,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = json.loads((ROOT / "migration/baseline.json").read_text())["commit"]
@@ -57,6 +65,15 @@ class BoundaryMetrics(TypedDict):
     callback_slots: int
 
 
+class FunctionRow(TypedDict):
+    area: str
+    path: str
+    function: str
+    line: int
+    remaining: int
+    facade: bool
+
+
 class Metrics(TypedDict, total=False):
     rust: int
     tooling: int
@@ -77,6 +94,7 @@ class Metrics(TypedDict, total=False):
     totals: AreaMetrics
     boundary: BoundaryMetrics
     all_lines: "Metrics"
+    functions: list[FunctionRow]
 
 
 Hunk = tuple[int, int, int, int]
@@ -328,8 +346,9 @@ def source_metrics(
     glue_lines: dict[str, set[int]] | None = None,
     all_lines: bool = False,
     areas: dict[str, AreaMetrics] | None = None,
+    retired_lines: dict[str, set[int]] | None = None,
 ) -> Metrics:
-    """Raw diff counts; optionally collect compiled added-line identities."""
+    """Raw diff counts; optionally collect compiled added and retired lines."""
     result: Metrics = {
         "rust": 0,
         "tooling": 0,
@@ -371,13 +390,16 @@ def source_metrics(
         head_tags, base_tags = classify(after), classify(before)
         kept = {} if status == "D" else surviving(diff, len(base_tags))
         # Original lines compiled with WITH_RUST that are now removed or C++-only.
-        retired = sum(
-            1
+        gone = {
+            n
             for n, tag in enumerate(base_tags, 1)
             if n in before_code
             and tag == "common"
             and (n not in kept or head_tags[kept[n] - 1] == "cpp")
-        )
+        }
+        retired = len(gone)
+        if retired_lines is not None:
+            retired_lines.setdefault(old, set()).update(gone)
         result["retired"] += retired
         if simulation_source(old):
             result["simulation"] += retired
@@ -401,6 +423,7 @@ def metrics(
     head: str = "HEAD",
     whole_fork: bool = False,
     all_lines: bool = False,
+    retired_lines: dict[str, set[int]] | None = None,
 ) -> Metrics:
     result = source_metrics(base, head, all_lines=all_lines)
     before_glue: dict[str, set[int]] = {}
@@ -409,7 +432,7 @@ def metrics(
     areas: dict[str, AreaMetrics] = {
         name: dict(original=0, retired=0, glue=0) for name in AREAS
     }
-    after = source_metrics(BASELINE, head, after_glue, all_lines=all_lines, areas=areas)
+    after = source_metrics(BASELINE, head, after_glue, all_lines, areas, retired_lines)
     result["retired"] = after["retired"] - before["retired"]
     result["net_glue"] = after["glue"] - before["glue"]
     result["glue"], result["glue_removed"] = 0, 0
@@ -470,6 +493,98 @@ def metrics(
     return result
 
 
+def spans(text: str, path: str) -> list[tuple[str, int, int, int]]:
+    """Heuristic top-level functions: (name, first, opening brace, last line)."""
+    masked = "".join(
+        re.sub(r"[^\n]", " ", value) if kind in Comment or kind in String else value
+        for kind, value in tokens(text, path)
+    )
+    found: list[tuple[str, int, int, int]] = []
+    header, start, opened, inner, init, kind = "", 0, 0, 0, 0, ""
+    for n, line in enumerate(masked.split("\n"), 1):
+        if not inner and not init and not line.strip():
+            header = ""  # Blank, comment or directive lines end a header.
+        for ch in line:
+            if inner:
+                inner += {"{": 1, "}": -1}.get(ch, 0)
+                if not inner and kind:
+                    found.append((kind, start, opened, n))
+                continue
+            # Brace initialisers in a constructor's member initialiser list.
+            if init or (
+                ch == "{"
+                and re.search(r"\)\s*:(?!:)", header)
+                and re.search(r"[\w>]\s*$", header)
+            ):
+                init += {"{": 1, "}": -1}.get(ch, 0)
+                header += ch
+                continue
+            if ch == "{":
+                pre = header.split("(")[0]
+                if "(" not in header and not re.search(r"\benum\b|=", header):
+                    pass  # Namespaces, classes and linkage blocks are transparent.
+                elif "(" not in header or re.search(
+                    r"=|\b(?:class|struct|union|enum)\b",
+                    re.sub(r"\boperator\b.*", "", pre, flags=re.S),
+                ):
+                    inner, kind = 1, ""
+                else:
+                    name = re.search(
+                        r"((?:[\w~]+\s*::\s*)*(?:operator\b.*|~?\w+))\s*$", pre, re.S
+                    )
+                    kind = re.sub(r"\s+", "", name.group(1)) if name else "?"
+                    inner, opened = 1, n
+                header = ""
+            elif ch in ";}":
+                header = ""
+            else:
+                if not header.strip() and not ch.isspace():
+                    start = n
+                header += ch
+        header += "\n"
+    return found
+
+
+def function_rows(
+    names: Sequence[str], retired: dict[str, set[int]]
+) -> list[FunctionRow]:
+    """Attribute each area's remaining original code lines to top-level functions."""
+    rows: list[FunctionRow] = []
+    for path in git("ls-tree", "-r", "--name-only", BASELINE, "src/").splitlines():
+        if not path.endswith(SOURCES) or area(path) not in names:
+            continue
+        text = show(BASELINE, path)
+        code = code_lines(text, path)
+        left = code - retired.get(path, set())
+        for name, first, opened, last in spans(text, path):
+            body = set(range(first, last + 1))
+            if body & left:
+                rows.append(
+                    dict(
+                        area=area(path),
+                        path=path,
+                        function=name,
+                        line=first,
+                        remaining=len(body & left),
+                        facade=bool(body & code - left)
+                        and body & left <= {*range(first, opened + 1), last},
+                    )
+                )
+            left -= body
+        if left:
+            rows.append(
+                dict(
+                    area=area(path),
+                    path=path,
+                    function="(file scope)",
+                    line=min(left),
+                    remaining=len(left),
+                    facade=False,
+                )
+            )
+    return rows
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument(
@@ -482,13 +597,25 @@ def main() -> None:
     )
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--whole-fork", action="store_true")
+    parser.add_argument(
+        "--functions",
+        nargs="*",
+        choices=AREAS,
+        metavar="AREA",
+        help="list remaining lines per function for these areas (default: all); "
+        "implies --whole-fork",
+    )
     args = parser.parse_args()
+    args.whole_fork |= args.functions is not None
     base = (
         BASELINE
         if args.whole_fork
         else git("merge-base", args.target, args.head).strip()
     )
-    result = metrics(base, args.head, args.whole_fork)
+    retired: dict[str, set[int]] = {}
+    result = metrics(base, args.head, args.whole_fork, retired_lines=retired)
+    if args.functions is not None:
+        result["functions"] = function_rows(args.functions or AREAS, retired)
     result["all_lines"] = metrics(base, args.head, args.whole_fork, all_lines=True)
     if args.json:
         print(json.dumps(dict(result, base=base)))
@@ -543,6 +670,22 @@ def main() -> None:
             print(
                 f"Boundary: {result['boundary']['exports']} exports | {result['boundary']['callback_slots']} callback slots"
             )
+        if args.functions is not None:
+            rows = result["functions"]
+            print("Area | file:line | function | remaining | facade (code lines)")
+            for row in sorted(rows, key=lambda row: -row["remaining"]):
+                print(
+                    f"{row['area']} | {row['path']}:{row['line']} | {row['function']} | "
+                    f"{row['remaining']} | {'facade' if row['facade'] else ''}"
+                )
+            for name in args.functions or AREAS:
+                mine = [row for row in rows if row["area"] == name]
+                facades = [row["remaining"] for row in mine if row["facade"]]
+                print(
+                    f"{name}: {len(mine)} rows sum {sum(row['remaining'] for row in mine)}"
+                    f" (remaining {result['areas'][name]['remaining']}); "
+                    f"{len(facades)} facades, {sum(facades)} lines"
+                )
 
 
 if __name__ == "__main__":

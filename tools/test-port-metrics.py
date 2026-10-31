@@ -213,6 +213,47 @@ class PortMetricsTests(unittest.TestCase):
         self.assertIn("Code: whole-fork retired 3 / 4 (75.00%)", output.getvalue())
         self.assertIn("All lines: whole-fork retired 4 / 5 (80.00%)", output.getvalue())
 
+    def test_functions_attribute_remaining_lines(self) -> None:
+        body = (
+            "Foo::Foo() : a{1} {}\n"
+            "/** Ported. */\nint Ported(int x)\n{\n\tint y = x;\n\treturn y;\n}\n\n"
+            "int Facade(int x)\n{\n\treturn x * 2;\n}\n\n"
+            "namespace {\nint Untouched()\n{\n\treturn '}';\n}\n}\n"
+            "static const int _table[] = { 1, 2 };\n"
+        )
+        self.write("src/town_cmd.cpp", body)
+        METRICS.BASELINE = self.commit()
+        self.write(
+            "src/town_cmd.cpp",
+            body.replace("\tint y = x;\n", "").replace("x * 2", "RustFacade(x)"),
+        )
+        head = self.commit()
+        output = io.StringIO()
+        argv = ["port-metrics.py", "--functions", "Simulation logic", "--json"]
+        with (
+            mock.patch("sys.argv", [*argv, "--head", head]),
+            contextlib.redirect_stdout(output),
+        ):
+            METRICS.main()
+        result = json.loads(output.getvalue())
+        self.assertEqual(
+            [
+                (r["function"], r["line"], r["remaining"], r["facade"])
+                for r in result["functions"]
+            ],
+            [
+                ("Foo::Foo", 1, 1, False),
+                ("Ported", 3, 4, False),
+                ("Facade", 9, 3, True),
+                ("Untouched", 15, 4, False),
+                ("(file scope)", 14, 3, False),
+            ],
+        )
+        self.assertEqual(
+            sum(row["remaining"] for row in result["functions"]),
+            result["areas"]["Simulation logic"]["remaining"],
+        )
+
     def test_boundary_counts_private_callbacks_and_exports(self) -> None:
         (self.root / "rust").mkdir()
         self.write(
