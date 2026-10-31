@@ -58,7 +58,7 @@ def main() -> int:
         str(p.relative_to(ROOT)): p.read_text()
         for folder in ("src", "rust")
         for p in (ROOT / folder).rglob("*")
-        if p.is_file() and p.suffix in {".cpp", ".h", ".hpp", ".rs"}
+        if p.is_file() and p.suffix in {".cpp", ".h", ".hpp", ".inc", ".rs"}
     }
     hits = violations(files)
     baseline = set((ROOT / BASELINE).read_text().splitlines())

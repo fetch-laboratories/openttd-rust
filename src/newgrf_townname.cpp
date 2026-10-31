@@ -21,103 +21,18 @@
 
 #include "safeguards.h"
 
-static std::vector<GRFTownName> _grf_townnames;
-static std::vector<StringID> _grf_townname_names;
+#include "rust/byte_span_ffi.h"
+#include "rust/services_ffi.h"
 
-GRFTownName *GetGRFTownName(uint32_t grfid)
-{
-	auto found = std::ranges::find(_grf_townnames, grfid, &GRFTownName::grfid);
-	if (found != std::end(_grf_townnames)) return &*found;
-	return nullptr;
-}
-
-GRFTownName *AddGRFTownName(uint32_t grfid)
-{
-	GRFTownName *t = GetGRFTownName(grfid);
-	if (t == nullptr) {
-		t = &_grf_townnames.emplace_back();
-		t->grfid = grfid;
-	}
-	return t;
-}
-
-void DelGRFTownName(uint32_t grfid)
-{
-	_grf_townnames.erase(std::ranges::find(_grf_townnames, grfid, &GRFTownName::grfid));
-}
-
-static void RandomPart(StringBuilder &builder, const GRFTownName *t, uint32_t seed, uint8_t id)
-{
-	assert(t != nullptr);
-	for (const auto &partlist : t->partlists[id]) {
-		uint8_t count = partlist.bitcount;
-		uint16_t maxprob = partlist.maxprob;
-		uint32_t r = (GB(seed, partlist.bitstart, count) * maxprob) >> count;
-		for (const auto &part : partlist.parts) {
-			maxprob -= GB(part.prob, 0, 7);
-			if (maxprob > r) continue;
-			if (HasBit(part.prob, 7)) {
-				RandomPart(builder, t, seed, part.id);
-			} else {
-				builder += part.text;
-			}
-			break;
-		}
-	}
-}
+extern "C" void openttd_rust_grf_townname_generate(const OpenTTDSharedServices *, StringBuilder *builder, void (*append)(StringBuilder *, OpenTTDByteSpan) noexcept, uint32_t grfid, uint16_t gen, uint32_t seed);
 
 void GRFTownNameGenerate(StringBuilder &builder, uint32_t grfid, uint16_t gen, uint32_t seed)
 {
-	const GRFTownName *t = GetGRFTownName(grfid);
-	if (t != nullptr) {
-		assert(gen < t->styles.size());
-		RandomPart(builder, t, seed, t->styles[gen].id);
-	}
-}
-
-
-/** Allocate memory for the NewGRF town names. */
-void InitGRFTownGeneratorNames()
-{
-	_grf_townname_names.clear();
-	for (const auto &t : _grf_townnames) {
-		for (const auto &style : t.styles) {
-			_grf_townname_names.push_back(style.name);
-		}
-	}
-}
-
-const std::vector<StringID> &GetGRFTownNameList()
-{
-	return _grf_townname_names;
+	openttd_rust_grf_townname_generate(&GetRustSharedServices(), &builder, [](StringBuilder *builder, OpenTTDByteSpan text) noexcept { *builder += std::string_view{reinterpret_cast<const char *>(text.data), text.size}; }, grfid, gen, seed);
 }
 
 StringID GetGRFTownNameName(uint16_t gen)
 {
-	return gen < _grf_townname_names.size() ? _grf_townname_names[gen] : STR_UNDEFINED;
-}
-
-void CleanUpGRFTownNames()
-{
-	_grf_townnames.clear();
-}
-
-uint32_t GetGRFTownNameId(uint16_t gen)
-{
-	for (const auto &t : _grf_townnames) {
-		if (gen < t.styles.size()) return t.grfid;
-		gen -= static_cast<uint16_t>(t.styles.size());
-	}
-	/* Fallback to no NewGRF */
-	return 0;
-}
-
-uint16_t GetGRFTownNameType(uint16_t gen)
-{
-	for (const auto &t : _grf_townnames) {
-		if (gen < t.styles.size()) return gen;
-		gen -= static_cast<uint16_t>(t.styles.size());
-	}
-	/* Fallback to the first built in town name (English). */
-	return SPECSTR_TOWNNAME_START;
+	auto names = GetGRFTownNameList();
+	return gen < names.size() ? names[gen] : STR_UNDEFINED;
 }

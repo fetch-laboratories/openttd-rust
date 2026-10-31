@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from simulation import community_ai, platform_subset, runtime
+from simulation import community_ai, newgrf_loading, platform_subset, runtime
 from simulation import core as simulate
 from simulation import instructions as ir
 from simulation.instructions import SPEED_BUDGETS, speed_budget
@@ -25,6 +25,22 @@ simulate.scenario_modules()
 
 
 class SimulationDeterminismTests(unittest.TestCase):
+    def test_townname_observations_require_every_style_and_seed(self) -> None:
+        lines = ["LOADING townname first styles 0", "LOADING townname first style 0 0"]
+        for k in range(40):
+            seed = (
+                (0, 1, 0x80000000, 0xFFFFFFFF)[k]
+                if k < 4
+                else (k * 0x9E3779B9) & 0xFFFFFFFF
+            )
+            lines.append(f"LOADING townname first name 0 {seed:08X} text")
+        self.assertEqual(newgrf_loading.townname_observations(lines, ("first",)), lines)
+        for index in range(len(lines)):
+            with self.subTest(missing=index), self.assertRaises(RuntimeError):
+                newgrf_loading.townname_observations(
+                    lines[:index] + lines[index + 1 :], ("first",)
+                )
+
     def test_unnamed_fixture_runs_and_named_river_diagnostics(self):
         # Disaster and aircraft preparation call run_game directly with unnamed
         # generation/setup and save/stepping dictionaries. All hooks run there.

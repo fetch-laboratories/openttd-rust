@@ -150,7 +150,7 @@ extern "C" fn openttd_rust_schedule_clear(s: &Services) {
     });
 }
 #[unsafe(no_mangle)]
-extern "C" fn openttd_rust_schedule_shift(s: &Services, interval: i32) {
+pub(crate) extern "C" fn openttd_rust_schedule_shift(s: &Services, interval: i32) {
     let mut from = 0;
     loop {
         let graph = (s.next_graph)(&raw mut from);

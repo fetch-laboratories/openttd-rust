@@ -28,16 +28,9 @@
  * Initializes this struct from town data
  * @param t town for which we will be printing name later
  */
-TownNameParams::TownNameParams(const Town *t) :
-		grfid(t->townnamegrfid), // by default, use supplied data
-		type(t->townnametype)
+TownNameParams::TownNameParams(const Town *t)
 {
-	if (t->townnamegrfid != 0 && GetGRFTownName(t->townnamegrfid) == nullptr) {
-		/* Fallback to the first built in town name (English). */
-		this->grfid = 0;
-		this->type = SPECSTR_TOWNNAME_START;
-		return;
-	}
+	openttd_rust_town_name_params_for_town(this, t->growth_owner.get());
 }
 
 
@@ -106,14 +99,12 @@ const OpenTTDTownNameServices &GetRustTownNameServices() noexcept
 			for (Town *town : Town::Iterate(from)) return {.shell = town, .state = town->growth_owner.get(), .id = town->index.base()};
 			return {.shell = nullptr, .state = nullptr, .id = TownID::Invalid().base()};
 		},
-		.render = [](OpenTTDTownNameFrame *frame, const TownNameParams *params, uint32_t seed) noexcept -> OpenTTDByteSpan {
-			frame->candidate = GetTownName(params, seed);
-			return {reinterpret_cast<const uint8_t *>(frame->candidate.data()), frame->candidate.size()};
+		.render = [](OpenTTDTownNameFrame *frame, const TownNameParams *params, uint32_t seed, bool other) noexcept -> OpenTTDByteSpan {
+			auto &text = other ? frame->other : frame->candidate;
+			text = GetTownName(params, seed);
+			return {reinterpret_cast<const uint8_t *>(text.data()), text.size()};
 		},
-		.render_other = [](OpenTTDTownNameFrame *frame, const Town *town) noexcept -> OpenTTDByteSpan {
-			frame->other = GetTownName(town);
-			return {reinterpret_cast<const uint8_t *>(frame->other.data()), frame->other.size()};
-		},
+		.shared = &GetRustSharedServices(),
 		.utf8_length = GetRustSharedServices().utf8_length,
 		.random_next = [](Randomizer *randomizer) noexcept -> uint32_t { return randomizer->Next(); },
 	};

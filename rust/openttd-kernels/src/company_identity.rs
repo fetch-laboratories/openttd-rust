@@ -129,17 +129,6 @@ impl Drop for Names<'_> {
         (self.s.name_frame_drop)(self.slot);
     }
 }
-fn equal(a: ByteSpan, b: ByteSpan) -> bool {
-    if a.size != b.size {
-        return false;
-    }
-    if a.size == 0 {
-        return true;
-    }
-    unsafe {
-        std::slice::from_raw_parts(a.data, a.size) == std::slice::from_raw_parts(b.data, b.size)
-    }
-}
 fn companies(s: &Services, mut f: impl FnMut(*mut OpenTTDCompany) -> bool) -> bool {
     let mut from = 0;
     loop {
@@ -295,14 +284,11 @@ pub(crate) fn generate_president(s: &Services, c: *mut OpenTTDCompany) {
         }
         if companies(s, |cc| {
             cc == c
-                || !equal(
-                    name,
-                    (s.render_other)(
-                        names.slot,
-                        s.strings.president,
-                        u32::from((s.company_id)(cc).0),
-                    ),
-                )
+                || !name.same_bytes((s.render_other)(
+                    names.slot,
+                    s.strings.president,
+                    u32::from((s.company_id)(cc).0),
+                ))
         }) {
             return;
         }
@@ -484,7 +470,7 @@ fn rename(s: &Services, text: ByteSpan, execute: bool, president: bool) -> u8 {
             } else {
                 (s.name)(c)
             };
-            n.size == 0 || !equal(n, text)
+            n.size == 0 || !n.same_bytes(text)
         }) {
             return 2;
         }

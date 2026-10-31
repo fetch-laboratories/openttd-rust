@@ -78,3 +78,10 @@
 - C++ keeps: Map storage, vehicle shells and unmoved record fields; follower reads use the shared map descriptor.
 - Limits: These remain #156 gaps: arbitrary NewGRF combinations, legacy saves and exhaustive map layouts.
 - PRs: #569.
+
+## Sign lifecycle and depot renaming (#586)
+
+- Rust owns: Sign allocation eligibility, place/rename/move/delete command policy, edit permissions, UTF-8 limits and depot name uniqueness/reset policy. Sign heights call the movement owner directly.
+- C++ keeps: Sign/depot records, pool and string storage, whole allocation/assignment/positioning/deletion and viewport operations, default depot naming and window refresh.
+- Limits: GUI pixels, threaded GUI scheduling, arbitrary mod layouts and historical save variants remain outside the targeted scenario evidence. Interactive RNG is unsaved; command evidence observes it after deterministic seeding.
+- PRs: #605.

@@ -82,7 +82,7 @@ static void VehicleTransactionSetInterval(void *shell, uint16_t interval, bool c
 	Vehicle *v = static_cast<Vehicle *>(shell);
 	v->SetServiceInterval(interval);
 	v->SetServiceIntervalIsCustom(custom);
-	v->SetServiceIntervalIsPercent(percent);
+	RustVehicleSetServiceIntervalIsPercent(v, percent);
 	GetRustVehicleServices().maintenance->details_dirty(RustVehicle(v));
 }
 const OpenTTDVehicleTransactionServices &GetRustVehicleTransactionServices() noexcept

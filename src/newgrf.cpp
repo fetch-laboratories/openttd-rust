@@ -420,6 +420,8 @@ static void FinaliseObjectsArray()
 void LoadNewGRFFile(GRFConfig &config, GrfLoadingStage stage, Subdirectory subdir, bool temporary)
 {
 	std::optional<SpriteFile> temporary_file;
+	std::string translated_text;
+	AutoRestoreBackup text_frame(_cur_gps.translated_text, &translated_text);
 	openttd_rust_grf_load_file(&GetRustGrfLoadingServices(), &config, stage, subdir, temporary ? &temporary_file : nullptr);
 }
 
@@ -631,9 +633,6 @@ static void FinaliseBadges()
 	AddBadgeClassesToConfiguration();
 }
 
-extern void InitGRFTownGeneratorNames();
-
-/** Finish loading NewGRFs and execute needed post-processing */
 
 /**
  * Load all the NewGRFs.
@@ -642,6 +641,8 @@ extern void InitGRFTownGeneratorNames();
  */
 void LoadNewGRF(SpriteID load_index, uint num_baseset)
 {
+	std::string translated_text;
+	AutoRestoreBackup text_frame(_cur_gps.translated_text, &translated_text);
 	openttd_rust_grf_load(&GetRustGrfLoadingServices(), load_index, num_baseset);
 }
 

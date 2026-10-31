@@ -59,15 +59,29 @@ static void InstallTypeInputs()
 	_roadtypes[59].flags.Set(RoadTypeFlag::Hidden); _roadtypes[59].flags.Set(RoadTypeFlag::TownBuild);
 	TypesInstalled = true;
 }
-extern "C" void __real__Z25InitGRFTownGeneratorNamesv();
-extern "C" void __wrap__Z25InitGRFTownGeneratorNamesv()
+/* The production loader initializes types after town-name finalization, before the vehicle-list order commit.
+ * Rust owns both steps, so the candidate hooks the commit's first native call, its pre-sort. */
+static void TypeLoadPhase()
 {
-	__real__Z25InitGRFTownGeneratorNamesv();
 	if (std::getenv("OPENTTD_ENGINE_TYPES") == nullptr || RestoreTypeInputs) return;
-	/* The production loader initializes types after town-name finalization. */
 	InstallTypeInputs();
 	fmt::print(stderr, "ENGINE types-loadphase true\n");
 }
+#ifdef WITH_RUST
+extern "C" void __real__Z20RustVehicleOrderSortPtm(uint16_t *data, size_t size) noexcept;
+extern "C" void __wrap__Z20RustVehicleOrderSortPtm(uint16_t *data, size_t size) noexcept
+{
+	TypeLoadPhase();
+	__real__Z20RustVehicleOrderSortPtm(data, size);
+}
+#else
+extern "C" void __real__Z29CommitVehicleListOrderChangesv();
+extern "C" void __wrap__Z29CommitVehicleListOrderChangesv()
+{
+	TypeLoadPhase();
+	__real__Z29CommitVehicleListOrderChangesv();
+}
+#endif
 static auto TypeTileState(Tile t)
 {
 	return std::tuple{t.type(), t.height(), t.m1(), t.m2(), t.m3(), t.m4(), t.m5(), t.m6(), t.m7(), t.m8()};

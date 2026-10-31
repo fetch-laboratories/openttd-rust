@@ -7,6 +7,9 @@
 #include "../company_type.h"
 #include "../newgrf_text_type.h"
 #include "abi-visit-OpenTTDRandomServices.hpp"
+#include "../settings_type.h"
+#include "../rust/settings_table_ffi.h"
+#include "abi_layout.hpp"
 static_assert(!OPENTTD_SERVICE_RETURN_TYPE<CompanyID>);
 static_assert(!OPENTTD_SERVICE_RETURN_TYPE<GRFStringID>);
 /* Every production unit that defines CheckAbi_<unit>() for its callback tables. */
@@ -60,7 +63,8 @@ static_assert(!OPENTTD_SERVICE_RETURN_TYPE<GRFStringID>);
 	X(storage) \
 	X(cargo_registry) \
 	X(generic) \
-	X(grf_loading)
+	X(grf_loading) \
+	X(settings)
 #define OPENTTD_DECLARE_ABI_CHECK(unit) extern bool CheckAbi_##unit();
 OPENTTD_ABI_CHECKED_UNITS(OPENTTD_DECLARE_ABI_CHECK)
 
@@ -80,4 +84,9 @@ TEST_CASE("Rust ABI - omitted and explicit null callbacks fail completeness")
 	CHECK(AbiServicesComplete(table));
 	table.restore = nullptr;
 	CHECK_FALSE(AbiServicesComplete(table));
+}
+TEST_CASE("Rust ABI - setting callback records")
+{
+	ABI_LAYOUT_CHECK;
+#include "abi-layout-settings.inc"
 }

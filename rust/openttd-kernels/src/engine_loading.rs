@@ -262,7 +262,7 @@ pub struct Services {
     set_old_refittable: extern "C" fn(E, bool),
     cargo_next: extern "C" fn(u32) -> CargoClass,
     cargo_map: extern "C" fn(File, u8) -> u8,
-    file_version: extern "C" fn(File) -> u8,
+    pub(crate) file_version: extern "C" fn(File) -> u8,
     cargo_list_size: extern "C" fn(File) -> usize,
     unknown_refit: extern "C" fn(u32, u16, u16),
     climate: extern "C" fn() -> u8,

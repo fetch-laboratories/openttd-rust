@@ -190,10 +190,6 @@ struct Train final : public GroundVehicle<Train, VEH_TRAIN> {
 	{
 		return static_cast<uint16_t>(openttd_rust_train_state_get_cached_max_curve_speed(this->rust_state.get()));
 	}
-	void SetCachedMaxCurveSpeed(uint16_t value)
-	{
-		openttd_rust_train_state_set_cached_max_curve_speed(this->rust_state.get(), value);
-	}
 
 	void SetTrainFlag(VehicleRailFlag flag, bool value = true) { this->SetTrainFlags(this->GetTrainFlags().Set(flag, value)); }
 	void ResetTrainFlag(VehicleRailFlag flag) { this->SetTrainFlags(this->GetTrainFlags().Reset(flag)); }

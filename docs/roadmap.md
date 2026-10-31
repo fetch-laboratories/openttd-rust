@@ -4,53 +4,82 @@ Root selects here; `AGENTS.md` and the docs in its routing table define process.
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-10-31, code at `e48846d8fd`)
+## Where the fork stands (2026-10-31, code at `73c5a4797c`)
 
-Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh.
+Agent: /root | Model: gpt-6.1-sol | Reasoning effort: xhigh.
 
-- This session has integrated two PRs so far, with no rollback. Metrics are
-  `tools/port-metrics.py` code lines (Rust / tooling / original retired / net
-  glue):
-  - 37, #593 heightmap input and town-data import (`b74888c4bc`):
-    554 / 389 / 278 / +193;
-  - 38, #576 movement terrain and water entries in place (`e48846d8fd`):
-    546 / 61 / 0 / +15.
-- Whole fork at `e48846d8fd`: retired 51,941 of 284,355 (18.27%, +278 since
-  `29b65dd186`); glue 33,391 (+224); compiled C++ 265,805 (93.48%, -54);
-  simulation logic left 10,674 (-276), storage 11,048 (-2); 1,337 exports
-  and 4,190 callback slots (+5). Tooling totals 49,603 lines.
-- Unintegrated branches: six (#568, #594, #596, #603, #586 and the #565
-  item 1 PR).
-- Every CI configuration now builds Rust. #581 PR-B, the sweep, remains.
-- Speed: profile 38 (`e48846d8fd`) rose sharply against profile 36
-  (`11c285f939`): candidate Ir +46% TGP, +29% Grok, +27% Opus, +13% to +15%
-  on the Padhattan saves. Every projection is over its ceiling (table below).
-  The cause is #576's in-place map helpers, which cost more per read than the
-  C++ services they replaced (attribution on #275, 2026-10-31). Under the
-  speed policy the fix goes forward in the next maintenance PR, mapload565
-  (#565 item 1, #275's two fix-forward items and #592), whose target is
-  profile 36's Ir or lower on every scenario. Ready ownership PRs proceed
-  meanwhile. The quiet pass waits for that fix.
-- Platform cadence: run 41174701345 on `rust-migration` after #595 passed
-  every platform, confirming its Clang `-Wmissing-field-initializers` fix.
-- Deep checks: the sanitized, threaded, TSan and multiplayer rotation started
-  at `2f3d78e774` was killed at 2026-10-31 01:35Z when the session restarted,
-  three hours into its sanitized member, without a report. It had passed 352
-  sanitized scenarios and failed 43, all with the harness error "Rust archive
-  missing" for the sanitized build's native-test-support archive (#503), not
-  fidelity differences. Deep checks now run only on the user's request
-  ([deep-check policy](deep-checks.md#policy), user decision 2026-10-31), so it does not restart by itself.
-- Housekeeping this session removed 14 finished T3 worktrees (38.3 GB).
-- Original coverage: 330 of 449 traces are complete; gaps are on #156.
+- Since the integration-40 stocktake, two ownership PRs integrated without
+  rollback. Metrics are `tools/port-metrics.py` code lines
+  (Rust / tooling / original retired / net glue):
+  - 41, #596 NewGRF town-name state, generation and ActionF (`a2429cda1f`):
+    393 / 209 / 190 / +37;
+  - 42, #605 sign commands and depot naming (`73c5a4797c`):
+    230 / 260 / 76 / +128.
+- Whole fork: retired 52,824 of 284,355 (18.58%, +266 since integration 40);
+  glue 33,793 (+165); compiled C++ 265,324 (93.31%, -101). Rust totals
+  122,648 code lines (+533) and tooling 50,461 (+459). The boundary has
+  1,349 exports (+9) and 4,229 callback slots (+18).
+- The source-area inventory below retains executable headers and drawing in
+  their source classification; these totals do not establish phase completion.
 
-| Scenario | Latest quiet anchor | Profile-36 projection | Profile-38 projection | Record with growth |
+| Area | Original | Retired | Left | Glue | Compiled C++ |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Simulation logic | 47,424 | 37,218 | 10,206 | 6,978 | 17,184 |
+| Simulation storage | 13,724 | 2,712 | 11,012 | 1,334 | 12,346 |
+| NewGRF | 10,785 | 5,280 | 5,505 | 428 | 5,933 |
+| Save/load | 13,388 | 536 | 12,852 | 585 | 13,437 |
+| Script API | 14,908 | 878 | 14,030 | 453 | 14,483 |
+| Network | 12,713 | 211 | 12,502 | 182 | 12,684 |
+| Support | 21,617 | 982 | 20,635 | 513 | 21,148 |
+| Graphics and viewport | 10,985 | 4 | 10,981 | 1 | 10,982 |
+| GUI | 52,179 | 117 | 52,062 | 165 | 52,227 |
+| Platform | 11,941 | 0 | 11,941 | 2 | 11,943 |
+| Data tables | 17,295 | 4,364 | 12,931 | 0 | 12,931 |
+| Vendored | 55,148 | 522 | 54,626 | 163 | 54,789 |
+| Upstream tests | 2,248 | 0 | 2,248 | 4,822 | 7,070 |
+| Boundary layer | 0 | 0 | 0 | 18,167 | 18,167 |
+| **Whole fork** | **284,355** | **52,824** | **231,531** | **33,793** | **265,324** |
+
+- Five unintegrated PRs occupy component slots: #603, #606, #607, #608 and
+  #609. A read-only planning agent is sizing the highest-ranked ready
+  unstarted owner and preparing an issue brief for the sixth slot.
+- #608's 22 affected cases and native verification passed. Its current-base
+  conflicts must be resolved before fresh full review. #609's native and
+  targeted runtime checks passed; its final static rerun is finishing. Root
+  accepted both owners' first concrete cost checkpoints.
+- Every CI configuration builds Rust. #581 PR-B is draft #607. Its saved
+  validation stopped on two missing regression-test paths; repair those
+  paths, then finish the source replay and preprocessing proof. #570 starts
+  after PR-B integrates.
+- Profile 42 is running with the pinned runtime. The table below is the last
+  completed profile, 40; replace its projections when 42 finishes and apply
+  the greater-than-3% attribution rule if needed. Every profile-40 record was
+  over its ceiling. #606 remains the next maintenance integration, targeting
+  profile 36's Ir or lower on every scenario. Its saved validation had
+  stopped on the native water-region test, before any repair counts ran;
+  root is resuming that implementation. Ready ownership proceeds meanwhile.
+  The quiet pass waits for the repair and an idle host; no wall anchors changed.
+- The integration-40 platform cadence passed Windows x86/x64, Linux
+  Clang/Dedicated, macOS arm64 Release/Debug, annotation gates and the bounded
+  platform semantic subset. The next cadence is due after integration 45.
+- Deep checks run only on the user's request. The interrupted rotation's
+  missing sanitized native-test-support archives remain on #503; it does not
+  restart by itself.
+- Automated takeover housekeeping removed 53.1 GB. The merged #596 and #605
+  implementation/update/review worktrees were also removed after their clean
+  pushed commits were verified in base. Active checkouts, the reference and
+  retained profile evidence stay protected.
+- Original coverage remains 330 of 449 completed traces. #156 records the
+  remaining observable-domain gaps; no new recollection was selected.
+
+| Scenario | Latest quiet anchor | Profile-36 projection | Profile-40 projection | Record with growth |
 | --- | ---: | ---: | ---: | ---: |
-| TGP | 1.1117x | 1.1117x | 2.1219x | 2.2028x |
-| Grok | 1.3871x | 1.5766x | 2.4471x | 2.4445x |
-| Opus | 1.3939x | 1.5612x | 2.3647x | 2.3657x |
-| P1996 | 1.3366x | 1.3817x | 1.7827x | 1.7843x |
-| P2000 | 1.4006x | 1.4284x | 1.7968x | 1.7979x |
-| P2016 | 1.5229x | 1.5653x | 1.9922x | 1.9386x |
+| TGP | 1.1117x | 1.1117x | 2.0714x | 2.1503x |
+| Grok | 1.3871x | 1.5766x | 2.4383x | 2.4357x |
+| Opus | 1.3939x | 1.5612x | 2.3552x | 2.3562x |
+| P1996 | 1.3366x | 1.3817x | 1.7670x | 1.7686x |
+| P2000 | 1.4006x | 1.4284x | 1.7835x | 1.7846x |
+| P2016 | 1.5229x | 1.5653x | 1.9835x | 1.9301x |
 
 ## Phases
 
@@ -315,6 +344,9 @@ Rust / tooling / original C++ retired / net glue.
 | 37 | #584 heightmap input and town-data import / #593 | `b74888c4bc` | 554 / 389 / 278 / +193 |
 | 38 | #565 movement terrain and water entries in place / #576 | `e48846d8fd` | 546 / 61 / 0 / +15 |
 | 39 | #562 station naming, tile loop and lifecycle / #568 | `4733594d75` | 983 / 248 / 295 / +70 |
+| 40 | #587 simulation-setting transitions and commands / #594 | `b01e7fd5c8` | 726 / 180 / 322 / +167 |
+| 41 | #585 NewGRF town-name state, generation and ActionF / #596 | `a2429cda1f` | 393 / 209 / 190 / +37 |
+| 42 | #586 sign commands and depot naming / #605 | `73c5a4797c` | 230 / 260 / 76 / +128 |
 
 ## Work order
 
@@ -323,7 +355,8 @@ six-branch limit and disjoint-service rule; completing review/integration takes
 priority. A lower rank can run while a higher one waits. Scopes live in issues.
 
 1. **Finish the remaining drafts in readiness order, with the steering fixes.**
-   #568 integrated as integration 39; #594, #596 and #605 follow in ownership readiness order.
+   #568, #594, #596 and #605 integrated as integrations 39 to 42. #608 and
+   #609 are the next ownership candidates in readiness order after review.
    #606 must be the next maintenance integration before #603. Each next action
    is in the checkpoint. No reviewed owner gains other scope; a fix the audit
    found is not new scope.
@@ -361,20 +394,26 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
    #606 without expanding it; take remaining repairs in the next bounded batch.
 6. **Queued phase-1 owners under #3**, ranked by plan-phase1-rest on
    2026-10-31 at `11c285f939` (remaining code lines, estimated net glue):
-   1. #587 simulation-setting transitions (317, +90 to +170), in review (#594);
+   1. #587 simulation-setting transitions: integrated as #594 (integration 40);
    2. #584 world-input generation, heightmap input and town-data import:
       integrated as #593 (integration 37);
-   3. #585 NewGRF town-name storage and generation plus ActionF (168, +40 to
-      +85), in review (#596);
-   4. #586 sign and depot naming, implemented in #605 (75 retired, first
-      checkpoint +131 net glue and 260 tooling; root accepted the necessary
-      native-operation and evidence cost);
-   5. #600 town spatial index and town policy (151 selected), after #568. It
-      owns the one required shared Rust k-d tree: about 300-450 extra Rust
+   3. #585 NewGRF town-name storage, generation and ActionF: integrated as
+      #596 (integration 41), with 190 retired and +37 net glue;
+   4. #586 sign and depot naming: integrated as #605 (integration 42), with
+      76 retired, +128 net glue and 260 tooling; root accepted the necessary
+      native-operation and evidence cost;
+   5. #600 town spatial index and town policy, selected in #608 after #568.
+      Its first checkpoint retires 112 original lines with -11 production
+      glue, -2 fixture glue and 13 tooling lines; root accepted the necessary
+      shared-index cost. Native validation and new evidence remain unfinished.
+      It owns the one required shared Rust k-d tree: about 300-450 extra Rust
       lines to reproduce 284 native template lines, which remain for GUI
-      indexes and receive no retirement credit here. Reassess the old -10 to
-      +50 glue estimate at the first checkpoint;
-   6. #601 industry remainder (142, -10 to +40), after #568;
+      indexes and receive no retirement credit here. The concrete checkpoint
+      supersedes the old -10 to +50 glue estimate;
+   6. #601 industry remainder in #609. Root accepted the concrete checkpoint:
+      101 retired, +22 production glue, +17 fixture glue and bounded tooling
+      for servicing/news, builder selection, reload and price-width evidence.
+      Keep its industry services separate from #600's town index;
    7. company-control remainder (about 121, +30 to +70), then engine runtime
       (about 100, +40 to +80); root issues each when a slot takes it. Keep
       presentation and pool-coupled constructors out of these owners;
@@ -446,11 +485,12 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
     traces with provenance checks. No recollection just to fill a slot.
 
 Recurring:
-- Profile the merged tip after every second integration; the next is due
-  after integration 40. Launch it with the pinned `LD_LIBRARY_PATH` that
-  docs/rust-migration.md names.
+- The integration-42 profile is running. Thereafter profile after integration
+  44, or when #606 integrates, using the pinned `LD_LIBRARY_PATH` from
+  docs/rust-migration.md.
 - Deep checks run only on the user's request (user decision, 2026-10-31).
-- The fifth-integration platform cadence is due after integration 40.
+- The integration-40 platform cadence passed; the next is due after
+  integration 45. Fix a red cadence before further integrations.
 - Preserve anchors, raw traces, frozen runtimes and failed outputs.
 - Root checks actual issue placement and exclusion conditions at stocktake.
 
@@ -473,35 +513,39 @@ Excluded, with return conditions checked by this review:
   near-full reproduction under #513's original-default setting policy. #513
   needs implementation when the first such improvement is accepted.
 
-## Resume checkpoint (2026-10-31, integration 39)
+## Resume checkpoint (2026-10-31, integration 42)
 
 Codex root has taken over from Claude Code root at `9cf6b7898e`.
 Agent: /root | Model: gpt-6.1-sol | Reasoning effort: xhigh.
-#593 integrated as integration 37 (`b74888c4bc`), #576 as integration 38
-(`e48846d8fd`), and #568 as integration 39 (`4733594d75`) after exact-head
-Full passed at `a4812c3060`. #562 is closed. Drafts integrate one at a time because every pair shares
-service files; each merge needs the next draft updated from base. Ownership
-readiness order is #594, #596 and #605. #606 is the next maintenance
-integration before #603. #581 PR-B takes the freed slot. The next stocktake,
-instruction profile and platform cadence are due after integration 40.
+#568, #594, #596 and #605 integrated as integrations 39 to 42, each after
+current-base exact-head Full. Latest code is `73c5a4797c`; #562, #587, #585
+and #586 are closed. Drafts integrate one at a time because their service
+files overlap. #608 and #609 supply the next ready ownership work, after
+base updates and fresh independent review. #606 remains the next maintenance
+integration before #603 and #607. Five PRs occupy slots; Astra is preparing
+the concrete next issue brief before root fills the sixth. The integration-42
+metrics are recorded above; profile 42 is running. Next ordinary stocktake and
+profile after integration 44, or profile sooner when #606 integrates.
 
 | Draft | Pushed head | State and next action | Worktree |
 | --- | --- | --- | --- |
-| #585 / #596 | `8b4cb010f8` | Scoped engine-types hook review passed with no findings; build and three scenarios passed. Current-base update when preparing final Full. | `t3-489ff2ae` (implementation) |
-| #581 PR-B | none yet | Selected now that #568 integrated. Mechanical `src/` sweep, pinned fallback-reading oracles, Rust-only build configuration and quick-CI guard. Independent review, then Full. | New Codex T3 worktree |
-| #587 / #594 | `b655b40c0a` | conflict594 reviewed the earlier `train.cpp` resolution. Codex updates from integration 39; classify any new conflicts, then current-base Full. Next ownership integration. | New Codex update worktree |
-| #199 / #603 | `70215c21cb` | Reviewed four native-assertion fixes; root spot-checked. Current-base update and Full after #606, the next maintenance integration. Item 4 is #604. | T3 worktree |
-| #565 / #275 / #592 / #606 | `2df021c421` | Road-search caching and fixture-header separation pushed. Builds and inventories passed; native tests and six profiles are pending. Target: profile 36's Ir or lower per scenario. Fresh fixing review, then Full; next maintenance integration. | `t3-d6cdd816` (active); `t3-431c84b4` (locked source) |
-| #586 / #605 | `b7a469889a` | Fixing review removed the extra sign-name copy and reused canonical presentation bindings. Root spot-checked; affected build, ABI and signs checks passed. Current-base update and Full when ready to integrate. | Codex implementation worktree; `t3-a695ea95` (locked source) |
+| #581 / #607 | `9277315a39` | Saved validation stopped on missing regression test paths. Resume implementation, restore those checks without reducing coverage, finish comparisons, exact sweep replay and preprocessing proof. Root inspected the workflow/CMake diff; fresh fixing review and bootstrap Full follow completed evidence, after #606. | `t3-4076556a` |
+| #199 / #603 | `70215c21cb` | Reviewed four native-assertion fixes; root spot-checked. Current-base update and Full after #606, without expanding the accepted scope. Item 4 is #604. | `t3-120ef117` |
+| #565 / #275 / #592 / #606 | `2df021c421` | Saved native job ended: reference tests passed, candidate water-region test aborted, so profiles never ran. Resume implementation and fix the failure, then measure all six targets at profile 36's Ir or lower. Fresh fixing review and current-base Full remain; next maintenance integration. | `t3-d6cdd816` (implementation); `t3-431c84b4` (locked source) |
+| #600 / #608 | `bcab7e6946` | Implementation evidence complete: 22 affected cases/68 snapshots, Cargo and native verification passed. Final accounting: 120 retired, -26 production glue, +10 fixture glue, 112 tooling. Resolve current-base conflicts before fresh full review, then root's Full. | `t3-a9d3a3a4` |
+| #601 / #609 | `fd878e1d48` | Native verification, history comparison and affected scenarios passed; final static rerun finishing. Cost accepted: 101 retired, +22 production glue, +17 fixture glue; final tooling 142. Prepare current-base combination, then fresh full review and root's Full. | `t3-2040ed1e` |
 
 | Running or due work | State / next action |
 | --- | --- |
-| Branch limit | Six selected component branches (#581 PR-B, #594, #596, #603, #605 and #606); the sweep replaces merged #568. |
+| Branch limit | Five component PRs (#603, #606, #607, #608 and #609). The sixth slot awaits the source-sized issue brief from plan-next-owner. Start no seventh. |
+| Planning | Fresh Astra validates the leading ready current/next-phase owners against integrated code and supplies a concrete issue body. Root selects and publishes it. Existing work remains authorized meanwhile. |
+| Platform cadence | Integration 40 passed every required configuration and the bounded platform semantic subset. Next cadence after integration 45. |
 | Deep checks | On the user's request only (user decision, 2026-10-31). If one is requested, use `.local/worktrees/deep-after30-569` (locked). Move it with `git checkout --detach origin/rust-migration` and relock it. Then run `python3 tools/migration.py build --jobs 2`, then `cmake --build build-rust-sanitized --target openttd_rust_native_test_support_build` until #503's fix lands, then `python3 tools/migration.py deep` with the requested `--member` options. Launch outside the session's process group, for example as a `systemd-run --user` unit. |
-| Instruction profile | Profiles 36 and 38 are retained in `.local/worktrees/profile-after36-595` and `profile-after38-576` (locked) for the regression comparison. The next is due after integration 40, or when the fix-forward PR integrates. |
-| Quiet speed pass | Waits for the profile-38 regression fix; needs an idle host. |
-| Maintenance | Astra planning is complete. #581 PR-B is selected; #606 is the next maintenance integration. #604 is explicitly placed under #199 after #594, PR-B and #570, before typing/coverage. |
-| Housekeeping | Lock a running Codex agent's worktree before `--apply` until #592 integrates. |
+| Instruction profile | Profile 42 is running in `.local/worktrees/profile-after42-605` (locked). Retain profiles 36, 38 and 40 in their existing locked worktrees for the regression comparison. Replace the six projections above when 42 finishes and check the rise trigger. |
+| Quiet speed pass | Waits for the profile-38 regression repair and an idle host. |
+| Maintenance | Resume #606 and #607 from the actual saved failures. #606 remains the next maintenance integration. #604 remains under #199 after map/CargoFlow repairs, PR-B and #570's generator, before typing/coverage. |
+| Issues | Latest run: 37 open, zero unplaced; exclusions retain their return conditions. |
+| Housekeeping | Automated takeover cleanup removed 53.1 GB. Merged #596/#605 worktrees and local branches are removed. Active Codex component worktrees are locked until #592 integrates. |
 
 Keep the pinned reference unchanged. Preserve unfinished checkouts and existing
 profile and deep evidence.

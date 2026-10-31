@@ -16,10 +16,7 @@ use std::collections::BTreeSet;
 pub struct NameFrame {
     _private: [u8; 0],
 }
-#[repr(C)]
-pub struct NameParams {
-    _private: [u8; 0],
-}
+pub use crate::townname_type::NameParams;
 #[repr(C)]
 pub struct Randomizer {
     _private: [u8; 0],
@@ -28,8 +25,8 @@ pub type Names = BTreeSet<Vec<u8>>;
 #[repr(C)]
 pub struct NameServices {
     pub next: extern "C" fn(u32) -> TownRef,
-    pub render: extern "C" fn(*mut NameFrame, *const NameParams, u32) -> ByteSpan,
-    pub render_other: extern "C" fn(*mut NameFrame, *const crate::services::TownHandle) -> ByteSpan,
+    pub render: extern "C" fn(*mut NameFrame, *const NameParams, u32, bool) -> ByteSpan,
+    pub shared: *const crate::services::Services,
     pub utf8_length: extern "C" fn(*const u8, usize) -> usize,
     pub random_next: extern "C" fn(*mut Randomizer) -> u32,
 }
@@ -108,6 +105,33 @@ pub(super) unsafe fn unique_custom(s: &NameServices, name: ByteSpan) -> bool {
     }
     true
 }
+unsafe fn render(
+    s: &NameServices,
+    frame: *mut NameFrame,
+    params: &NameParams,
+    seed: u32,
+    other: bool,
+    text: &mut Vec<u8>,
+) -> ByteSpan {
+    if params.grfid == 0 {
+        return observed!((s.render)(frame, params, seed, other));
+    }
+    text.clear();
+    unsafe {
+        crate::newgrf_townname::generate(
+            &*s.shared,
+            &mut |part| text.extend_from_slice(part),
+            params.grfid,
+            params.kind,
+            seed,
+        );
+    }
+    ByteSpan {
+        data: text.as_ptr(),
+        size: text.len(),
+    }
+}
+
 pub(super) unsafe fn verify(
     s: &NameServices,
     frame: *mut NameFrame,
@@ -115,7 +139,9 @@ pub(super) unsafe fn verify(
     params: *const NameParams,
     names: *mut Names,
 ) -> bool {
-    let candidate = observed!((s.render)(frame, params, seed));
+    let mut candidate_text = Vec::new();
+    let mut other_text = Vec::new();
+    let candidate = unsafe { render(s, frame, &*params, seed, false, &mut candidate_text) };
     if observed!((s.utf8_length)(candidate.data, candidate.size)) >= 32 {
         return false;
     }
@@ -135,7 +161,9 @@ pub(super) unsafe fn verify(
         // SAFETY: Short canonical name observation before resolver reentry.
         let custom = unsafe { openttd_rust_town_name(town.state) };
         let other = if custom.size == 0 {
-            observed!((s.render_other)(frame, town.shell))
+            let params = unsafe { crate::townname_type::from_town(&*town.state) };
+            let seed = unsafe { (*town.state).simulation.townnameparts };
+            unsafe { render(s, frame, &params, seed, true, &mut other_text) }
         } else {
             custom
         };
@@ -201,10 +229,11 @@ crate::abi::layouts! {
     "OpenTTDTownNameServices" ["probe"] => NameServices {
         next,
         render,
-        render_other,
+        shared,
         utf8_length,
         random_next,
     };
+    "TownNameParams" ["probe"] => NameParams { grfid, kind => type };
 }
 
 #[cfg(test)]
