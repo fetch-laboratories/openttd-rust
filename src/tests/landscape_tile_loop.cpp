@@ -14,12 +14,15 @@
 #include "../rust/landscape_command_ffi.h"
 #include "../rust/landscape_generation_ffi.h"
 #include "../rust/world_generation_ffi.h"
+#include "../rust/town_data_ffi.h"
 #include "../rust/session_ffi.h"
 #include "../core/backup_type.hpp"
 #include <thread>
+#include <cmath>
 #include "../rust/generation_sea_set.hpp"
 #include "abi_layout.hpp"
 #include "../tile_map.h"
+#include "../heightmap.h"
 #include "../road_type.h"
 #include "../station_type.h"
 #include "../rust/landscape_loop_ffi.h"
@@ -30,6 +33,22 @@
 #include "../safeguards.h"
 
 #ifdef WITH_RUST
+TEST_CASE("Town import coordinates preserve native float conversions")
+{
+	const OpenTTDTownDataServices services{.shared = &GetRustSharedServices(), .founding = nullptr, .strings = {}};
+	for (const uint size : {64U, 128U, 4096U}) {
+		Map::Allocate(size, 64);
+		const float boundary = 0x1p-25f / static_cast<float>(Map::MaxX());
+		for (const float input : {std::nextafter(boundary, 0.0f), boundary, std::nextafter(boundary, 1.0f), 0.0001f, 0.01f, 0.3f, 0.5f, 0.99f}) {
+			/* Volatile keeps the original's runtime float-to-uint conversion. */
+			volatile float stored = input;
+			float x = stored, y = stored;
+			CHECK(openttd_test_town_data_target(&services, HM_CLOCKWISE, x, y) == TileXY(x * Map::MaxX(), y * Map::MaxY()).base());
+			CHECK(openttd_test_town_data_target(&services, HM_COUNTER_CLOCKWISE, x, y) == TileXY((1 - y * Map::MaxX()), x * Map::MaxY()).base());
+		}
+	}
+	Map::Allocate(64, 64);
+}
 TEST_CASE("Session tile fixtures restore storage mode across nested entries")
 {
 	static bool nested;

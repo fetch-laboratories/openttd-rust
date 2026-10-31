@@ -827,6 +827,32 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
     scenario = dict(scenario, executables=executables)
     if scenario["town_founding"] == "road-types":
         return dict(scenario, console=["towns_scenario road-types", "unpause"])
+    if scenario["town_founding"] == "data" and not scenario["town_data_reload"]:
+        return dict(scenario, console=["towns_scenario data", "unpause"])
+    if scenario["town_founding"] == "data":
+        from .core import normalize
+
+        save = folder / "reference" / "town-data.sav"
+        setup = dict(scenario, console=[f'towns_scenario data "{save}"'])
+        run = run_game(
+            setup,
+            executables["reference"],
+            builds["reference"],
+            folder / "capture",
+            timeout,
+            env,
+            False,
+        )
+        if run["exit"] or not save.is_file():
+            raise RuntimeError("town data reload capture failed")
+        check_town_data(run)
+        save, result["town_data_reload_input"] = normalize(save, folder / "normalized")
+        return dict(
+            scenario,
+            kind="save",
+            save=str(save),
+            console=["towns_scenario data-inspect", "unpause"],
+        )
     if scenario["town_founding"] == "storage":
         from .core import normalize
 
@@ -1080,6 +1106,131 @@ def house_scenarios(soak):
     return cases
 
 
+def town(name: str, population: object, city: object, x: object, y: object) -> dict:
+    return {"name": name, "population": population, "city": city, "x": x, "y": y}
+
+
+# File name, contents (None: missing) and expected towns, signs and error lines.
+TOWN_DATA_INPUTS: tuple[tuple[str, str | None, int, int, int], ...] = (
+    (
+        "valid-ccw.json",
+        json.dumps(
+            [
+                town("Import Alpha", 0, False, 0.25, 0.3),
+                town("Import Beta", 400, True, 0.6, 0.55),
+                town("Import Gamma", 250.7, False, 0.8, 0.2),
+            ]
+        ),
+        3,
+        0,
+        0,
+    ),
+    (
+        "valid-cw.json",
+        json.dumps(
+            [
+                # A negative population narrows to a huge unsigned target.
+                town("Import Delta", -5, True, 0.5, 0.5),
+                # The spiral reaches a void edge tile, where Command::Do returns a
+                # default TownID (0): the import expands town 0 instead.
+                town("Import Epsilon", 100, False, 0.01, 0.99),
+            ]
+        ),
+        1,
+        0,
+        0,
+    ),
+    (
+        "duplicate-cw.json",
+        json.dumps(
+            [
+                town("Import Alpha", 10, False, 0.3, 0.3),
+                town("Import Beta", 10, False, 0.7, 0.4),
+            ]
+        ),
+        0,
+        2,
+        1,
+    ),
+    (
+        "malformed-later.json",
+        json.dumps(
+            [
+                town("Import Zeta", 5000, False, 0.4, 0.7),
+                town("Import Eta", "many", False, 0.5, 0.5),
+            ]
+        ),
+        1,
+        0,
+        1,
+    ),
+    (
+        "bad-coordinate-cw.json",
+        json.dumps(
+            [
+                town("Import Theta", 10, False, 0.3, 0.6),
+                town("Import Iota", 10, False, 1.0, 0.5),
+            ]
+        ),
+        1,
+        0,
+        1,
+    ),
+    ("not-array.json", json.dumps({"name": "Import"}), 0, 0, 1),
+    ("syntax.json", "[{", 0, 0, 1),
+    ("not-object.json", "[5]", 0, 0, 1),
+    ("bad-name.json", json.dumps([town(5, 1, False, 0.5, 0.5)]), 0, 0, 1),
+    ("missing.json", None, 0, 0, 1),
+    (
+        # The wrapped counter-clockwise coordinate leaves the spiral entirely outside the map.
+        "empty-spiral.json",
+        json.dumps([town("Import Empty", 10, False, 0.001, 0.5)]),
+        0,
+        0,
+        1,
+    ),
+)
+
+
+def check_town_data(run: dict[str, Any]) -> None:
+    """Each input reports its founded towns, failure signs and error lines."""
+    rows = {
+        p[2]: p[3:6]
+        for line in run["log"]
+        if line.startswith("TOWN data ") and len(p := line.split()) == 10
+    }
+    for name, _, towns, signs, errors in TOWN_DATA_INPUTS:
+        if rows.get(name) != [str(towns), str(signs), str(errors)]:
+            raise RuntimeError(f"town data {name}: {rows.get(name)}")
+    if sum(line.startswith("TOWN data-error ") for line in run["log"]) != sum(
+        errors for _, _, _, _, errors in TOWN_DATA_INPUTS
+    ):
+        raise RuntimeError("import error messages missing")
+    if sum(line.startswith("TOWN data-town ") for line in run["log"]) != 6:
+        raise RuntimeError("imported town records missing")
+
+
+def town_data_scenarios(soak: bool) -> list[dict[str, Any]]:
+    return [
+        {
+            "name": "town-data-import" + ("-reload" if reload else ""),
+            "kind": "generate",
+            "seed": 1,
+            "map_log2": 7,
+            "land_generator": 1,
+            "town_founding": "data",
+            "town_data_reload": reload,
+            "short_checkpoint": True,
+            "ticks": 1,
+            "settings": {
+                "difficulty": {"number_towns": 4},
+                "game_creation": {"custom_town_number": 4},
+            },
+        }
+        for reload in (False, True)
+    ]
+
+
 def command_scenarios(soak):
     cases = []
     for reload in (False, True):
@@ -1166,6 +1317,7 @@ def scenarios(soak):
         + founding_scenarios(soak)
         + house_scenarios(soak)
         + command_scenarios(soak)
+        + town_data_scenarios(soak)
         + [
             {
                 "name": "town-growth-differing-road-type",
@@ -1531,7 +1683,13 @@ def check_bribes(scenario, run, mode, role, result):
 
 
 def check(scenario, run, mode, role, result):
-    if scenario.get("town_founding") == "road-types" and not run["exit"]:
+    if scenario.get("town_founding") == "data":
+        if scenario["town_data_reload"]:
+            if "TOWN data-reloaded 6 2" not in run["log"]:
+                raise RuntimeError("reloaded imported towns or signs missing")
+        else:
+            check_town_data(run)
+    elif scenario.get("town_founding") == "road-types" and not run["exit"]:
         result[f"{mode}_{role}_road_type_growth"] = check_road_type_growth(run)
     elif scenario.get("town_founding") == "definitions" and not run["exit"]:
         if "TOWN definition-reloaded true" not in run["log"]:
@@ -1638,6 +1796,13 @@ def check(scenario, run, mode, role, result):
 
 
 def install(scenario, run_dir):
+    if scenario.get("town_founding") == "data":
+        (run_dir / "town-data").mkdir(exist_ok=True)
+        for name, text, *_ in TOWN_DATA_INPUTS:
+            if text is not None:
+                (run_dir / "town-data" / name).write_text(text)
+        names = "\n".join(name for name, *_ in TOWN_DATA_INPUTS)
+        (run_dir / "town-data-inputs.txt").write_text(names + "\n")
     if "house_definition_dir" in scenario:
         for personal in (
             ".openttd",

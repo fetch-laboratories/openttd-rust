@@ -203,9 +203,8 @@ pub unsafe extern "C" fn openttd_test_platform_length(
 }
 
 use crate::genworld::Callback;
-use crate::landscape_generation::{
-    Decoder, Frame as GenerationFrame, GenerationServices, Settings,
-};
+use crate::heightmap::Input as HeightmapInput;
+use crate::landscape_generation::{Frame as GenerationFrame, GenerationServices, Settings};
 
 /// `GenerateWorldSetAbortCallback`, for fixtures that replace the registered cleanup.
 #[unsafe(no_mangle)]
@@ -226,11 +225,35 @@ pub extern "C" fn openttd_test_world_abort_callback() -> Callback {
 pub unsafe extern "C" fn openttd_test_generate_landscape(
     a: *const GenerationServices,
     frame: *mut GenerationFrame,
-    decoder: *const Decoder,
+    input: *const HeightmapInput,
     g: Settings,
     mode: u8,
 ) -> bool {
-    unsafe { crate::landscape_generation::generate_landscape(a, frame, decoder, g, mode) }
+    unsafe { crate::landscape_generation::generate_landscape(a, frame, input, g, mode) }
+}
+
+/// `LoadHeightmap`, which has no production caller beside `GenerateLandscape`.
+/// # Safety
+/// Same contract as the production generation entry.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_load_heightmap(
+    a: *const GenerationServices,
+    input: *const HeightmapInput,
+    rotation: u8,
+    freeform: bool,
+    heightmap_height: u8,
+    max_height: u8,
+) -> bool {
+    unsafe {
+        crate::landscape_generation::load_heightmap(
+            a,
+            input,
+            rotation,
+            freeform,
+            heightmap_height,
+            max_height,
+        )
+    }
 }
 
 /// `FlatEmptyWorld`.
@@ -244,4 +267,17 @@ pub unsafe extern "C" fn openttd_test_flat_empty_world(
     max_height: u8,
 ) {
     unsafe { crate::landscape_generation::flat_empty_world(a, height, freeform, max_height) }
+}
+
+/// `LoadTownData` coordinate policy, compared with the original native expression.
+/// # Safety
+/// Live shared services and map for the synchronous call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_town_data_target(
+    services: *const crate::town::import::ImportServices,
+    rotation: u8,
+    x: f32,
+    y: f32,
+) -> u32 {
+    unsafe { &*services }.target(rotation, x, y).0
 }

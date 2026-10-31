@@ -4,10 +4,13 @@
 #define WORLD_GENERATION_PROBE_HPP
 #include "../genworld.h"
 #include "../rust/landscape_generation_ffi.h"
+struct OpenTTDTownDataServices;
 extern "C" {
 void openttd_test_world_set_abort_callback(GWAbortProc *);
+uint32_t openttd_test_town_data_target(const OpenTTDTownDataServices *, uint8_t, float, float);
 GWAbortProc *openttd_test_world_abort_callback();
-bool openttd_test_generate_landscape(const OpenTTDLandscapeGenerationServices *, OpenTTDGenerationFrame *, const OpenTTDHeightmapDecoder *, OpenTTDLandscapeGenerationSettings, uint8_t);
+bool openttd_test_generate_landscape(const OpenTTDLandscapeGenerationServices *, OpenTTDGenerationFrame *, const OpenTTDHeightmapInput *, OpenTTDLandscapeGenerationSettings, uint8_t);
+bool openttd_test_load_heightmap(const OpenTTDLandscapeGenerationServices *, const OpenTTDHeightmapInput *, uint8_t, bool, uint8_t, uint8_t);
 void openttd_test_flat_empty_world(const OpenTTDLandscapeGenerationServices *, uint8_t, bool, uint8_t);
 }
 #endif /* WORLD_GENERATION_PROBE_HPP */
