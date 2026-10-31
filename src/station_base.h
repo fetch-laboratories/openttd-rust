@@ -398,7 +398,6 @@ public:
 		return type == RoadStopType::Bus ? bus_stops : truck_stops;
 	}
 
-	RoadStop *GetPrimaryRoadStop(const struct RoadVehicle *v) const;
 
 	RoadStop *bus_stops = nullptr; ///< All the road stops
 	TileArea bus_station{}; ///< Tile area the bus 'station' part covers
@@ -437,7 +436,6 @@ public:
 
 	void UpdateVirtCoord() override;
 
-	void MoveSign(TileIndex new_xy) override;
 
 	void AfterStationTileSetChange(bool adding, StationType type);
 
@@ -501,7 +499,6 @@ public:
 	}
 };
 
-void RebuildStationKdtree();
 
 
 #endif /* STATION_BASE_H */

@@ -1,7 +1,9 @@
 """Station service evidence from the existing road/CAPY reference preparation."""
 
 import hashlib
+import re
 import struct
+import subprocess
 from pathlib import Path
 
 from . import core, economy
@@ -121,6 +123,8 @@ def scenarios(soak):
                 "airport-reload",
                 "catchment",
                 "catchment-reload",
+                "spatial602",
+                "spatial602-reload",
                 "owner562-names",
                 "owner562-names-reload",
                 "owner562-arctic",
@@ -976,6 +980,12 @@ static bool StationCommands(std::span<std::string_view> args)
 	_settings_game.construction.road_stop_on_competitor_road = true;
 	const DoCommandFlags test{DoCommandFlag::NoTestTownRating};
 	const DoCommandFlags exec{DoCommandFlag::Execute, DoCommandFlag::NoTestTownRating};
+	if (args[1].starts_with("spatial602")) {
+		bool reload = args[1].ends_with("inspect");
+		Station602Fixture(reload ? INVALID_TILE : StationPatch(), exec, reload);
+		if (!reload && args.size() == 3) StationNeed(SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false) == SL_OK, __LINE__);
+		fmt::print(stderr, "STCMD complete\n"); current.Restore(); return true;
+	}
 	if (args[1].starts_with("owner562-")) {
 		/* Interactive RNG is process-time seeded and is not saved. */
 		_interactive_random.SetSeed(0x562);
@@ -1292,6 +1302,7 @@ extern "C" void __wrap__Z22IConsoleStdLibRegisterv() { __real__Z22IConsoleStdLib
 
 
 RELOADS = {
+    "spatial602-reload": ("spatial602", "spatial602-inspect"),
     "owner562-names-reload": ("owner562-names", "owner562-names-inspect"),
     "owner562-arctic-reload": ("owner562-arctic", "owner562-arctic-inspect"),
     "owner562-tropic-reload": ("owner562-tropic", "owner562-tropic-inspect"),
@@ -1318,10 +1329,38 @@ ROAD_STOPS = (
 ).split()
 
 
-def adapter(build, folder, env):
+def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
+    import probe
+
+    import migration
+
     from .console_adapter import console_adapter
 
     folder.mkdir(parents=True, exist_ok=True)
+    migration.ensure_reference()
+    original = (migration.REFERENCE / "src/town_cmd.cpp").read_text()
+    (folder / "station602-town-original.hpp").write_text(
+        "\n".join(
+            probe.body(original, signature)
+            for signature in (
+                "template <typename Func>\nstatic void ForAllStationsNearTown(",
+                "static void UpdateTownRating(",
+                "static int CountActiveStations(",
+            )
+        )
+    )
+    target = "openttd-rust" if (build / "openttd-rust").exists() else "openttd"
+    news = [
+        line.split()[-1]
+        for line in subprocess.check_output(
+            ["nm", str(build / target)], text=True
+        ).splitlines()
+        if " T _Z11AddNewsItem" in line
+    ]
+    if len(news) != 1:
+        raise RuntimeError(
+            "station crash observation needs the canonical AddNewsItem symbol"
+        )
     source = folder / "station-commands.cpp"
     source.write_text(
         COMMAND_SOURCE.replace(
@@ -1331,7 +1370,10 @@ def adapter(build, folder, env):
             "// OWNER399",
             (ROOT / "tools/simulation/station-resolver-console.hpp").read_text()
             + (ROOT / "tools/simulation/airport-resolver-console.hpp").read_text()
-            + (ROOT / "tools/simulation/station-lifecycle-console.hpp").read_text(),
+            + (ROOT / "tools/simulation/station-lifecycle-console.hpp").read_text()
+            + (ROOT / "tools/simulation/station-spatial-console.hpp")
+            .read_text()
+            .replace("STATION602_NEWS_SYMBOL", news[0]),
         )
     )
     return console_adapter(
@@ -1340,7 +1382,14 @@ def adapter(build, folder, env):
         env,
         source,
         "stations",
+        wraps=(
+            "_ZN2AI8NewEventE6PoolIDIh12CompanyIDTagLh15ELh255EEP11ScriptEvent",
+            "_ZN4Game8NewEventEP11ScriptEvent",
+            "_Z16SndPlayVehicleFxtPK7Vehicle",
+            news[0],
+        ),
         replace_objects=("/src/station_cmd.cpp.o",),
+        native_test_support=True,
     )
 
 
@@ -1625,6 +1674,8 @@ def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
                 or "STCMD complete" not in run["log"]
             ):
                 raise RuntimeError("station reload capture failed")
+            if capture == "spatial602":
+                check_spatial602(run["log"], False)
             logs[role] = [line for line in run["log"] if line.startswith("STCMD ")]
         differences = core.compare_saves(
             saves["reference"],
@@ -1671,7 +1722,102 @@ def check_airport_definition_state(snapshots: list[Path], log: list[str]) -> Non
         raise RuntimeError("file-loaded airport aircraft did not move")
 
 
+def check_spatial602(log: list[str], reload: bool) -> None:
+    phases = (
+        ["reload"]
+        if reload
+        else ["build", "move-unchanged", "move-away", "move-back", "remove", "reuse"]
+    )
+    markers = [f"STCMD spatial602-visit {phase} " for phase in phases]
+    markers += [
+        "STCMD spatial602-visit zero ",
+        "STCMD spatial602-visit edge ",
+        "STCMD owner562-rng spatial602-before ",
+        "STCMD owner562-rng spatial602 ",
+        "STCMD complete",
+    ]
+    markers += [
+        f"STCMD spatial602-town {value} " for value in (-32768, -1000, 999, 32767)
+    ]
+    markers += [
+        f"STCMD spatial602-rating {radius} {amount} "
+        for radius in (0, 1, 2, 8)
+        for amount in (-160, -1, 0, 1, 255)
+    ]
+    markers += [
+        f"STCMD spatial602-animation {axis} {blocked} {area} "
+        for axis in (0, 1)
+        for blocked in ("false", "true")
+        for area in (0, 1, 2)
+    ]
+    markers += [
+        f"STCMD spatial602-random {axis} {blocked} {area} "
+        for axis in (0, 1)
+        for blocked in ("false", "true")
+        for area in (1, 2)
+    ]
+    if reload:
+        markers += ["STCMD spatial602-crash-reload 40"]
+    else:
+        markers += [
+            "STCMD spatial602-crash-input 20 ",
+            "STCMD spatial602-crash-event ai-event ",
+            "STCMD spatial602-crash-event game-event ",
+            "STCMD spatial602-crash 0 ai-event 200",
+            "STCMD spatial602-crash 1 game-event 200",
+            "STCMD spatial602-crash 2 news 200",
+            "STCMD spatial602-crash 3 sound 40",
+            "STCMD owner562-rng spatial602-crash ",
+            "STCMD spatial602-stop occupied-articulated ",
+            "STCMD spatial602-collisions true true",
+            "STCMD spatial602-deleted-tie ",
+            "STCMD spatial602-waypoint ",
+        ]
+        markers += [
+            f"STCMD spatial602-stop {bus} {incompatible} "
+            for bus in ("true", "false")
+            for incompatible in ("false", "true")
+        ]
+        markers += [
+            f"STCMD spatial602-rail {axis} {blocked} {area} "
+            for axis in (0, 1)
+            for blocked in ("false", "true")
+            for area in (0, 1, 2)
+        ]
+    for marker in markers:
+        rows = [line for line in log if line.startswith(marker)]
+        if len(rows) != 1:
+            raise RuntimeError(
+                "missing or duplicate station spatial observation: " + marker
+            )
+        payload = rows[0][len(marker) :]
+        if "-visit " in marker:
+            members = "*" if any(p in marker for p in ("zero ", "edge ")) else "+"
+            pattern = rf"\d+ \d+(?: \d+:(?:true|false):-?\d+){members}"
+        elif "-rating " in marker:
+            pattern = rf"\d+:\d+(?: \d+:\d+){{{18 if reload else 19}}}"
+        elif any(p in marker for p in ("-animation ", "-random ")):
+            pattern = r"(?:\d+:\d+ ){6}rng \d+ \d+ \d+ \d+"
+        elif "-crash-event " in marker:
+            pattern = r"type \d+ id 21 site 10005 reason 1 victims \d+ expected \d+ rng \d+ \d+"
+        elif "-crash-input " in marker:
+            pattern = r"\d+ \d+ \d+ \d+ \d+"
+        elif "-rng " in marker:
+            pattern = r"\d+ \d+ \d+ \d+"
+        elif any(p in marker for p in ("-rail ", "-waypoint ")):
+            pattern = r"\d+ \d+ \d+"
+        elif any(p in marker for p in ("-town ", "-stop ", "-deleted-tie ")):
+            pattern = r"\d+ -?\d+"
+        else:
+            pattern = ""
+        if re.fullmatch(pattern, payload) is None:
+            raise RuntimeError("incomplete station spatial observation: " + rows[0])
+
+
 def check_commands(scenario, run, mode, role, result):
+    if scenario["station_commands"].startswith("spatial602"):
+        check_spatial602(run["log"], scenario["station_commands"].endswith("reload"))
+        return
     if scenario["station_commands"].startswith("owner562-"):
         kind = scenario["station_commands"].split("-")[1]
         required = {

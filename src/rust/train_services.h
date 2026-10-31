@@ -183,11 +183,6 @@ static void TrainCrashNews(OpenTTDTrainHandle id, uint32_t a) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	AddTileNewsItem(GetEncodedString(STR_NEWS_TRAIN_CRASH, static_cast<uint>(a)), NewsType::Accident, v->tile);
 }
-static void TrainCrashRating(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	OpenTTDModifyStationRatingAround(v->tile.base(), v->owner.base(), -160, 30);
-}
 static void TrainCrashSound(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);

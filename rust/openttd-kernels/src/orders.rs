@@ -550,7 +550,6 @@ pub struct Leaves {
     pub next_vehicle: extern "C" fn(first: u32) -> *mut c_void,
     pub aircraft_range: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub aircraft_range_square: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub bus: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub backup_capacity: extern "C" fn() -> u64,
     pub create_backup: unsafe extern "C" fn(ctx: *mut c_void, user: u32) -> *mut c_void,
     pub networking: extern "C" fn() -> u64,
@@ -661,7 +660,6 @@ leaves! {
     fn waypoint_facilities(destination: u16) -> u64;
     fn waypoint_owner(destination: u16) -> u64;
     fn aircraft_range_square(ctx: *mut c_void) -> u64;
-    fn bus(ctx: *mut c_void) -> u64;
     fn create_backup(ctx: *mut c_void, user: u32) -> *mut c_void;
     fn vehicle_tile(ctx: *mut c_void) -> u64;
     fn vehicle_group(ctx: *mut c_void) -> u64;
@@ -696,6 +694,11 @@ leaves! {
 }
 
 impl Game {
+    fn bus(self, vehicle: *mut c_void) -> bool {
+        // SAFETY: The immutable maintenance table supplies the shared world services.
+        let shared = unsafe { &*self.maintenance().shared };
+        crate::road_stop::is_bus(shared, native_vehicle(vehicle))
+    }
     fn maintenance(self) -> &'static maintenance::Services {
         // SAFETY: The immutable base table supplies its process-wide maintenance table.
         unsafe { &*self.0.base.maintenance }
@@ -4704,7 +4707,6 @@ crate::abi::layouts! {
         next_vehicle,
         aircraft_range,
         aircraft_range_square,
-        bus,
         backup_capacity,
         create_backup,
         networking,

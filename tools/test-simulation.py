@@ -14,7 +14,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from simulation import community_ai, engines, newgrf_loading, platform_subset, runtime
+from simulation import (
+    community_ai,
+    engines,
+    newgrf_loading,
+    platform_subset,
+    runtime,
+    stations,
+)
 from simulation import core as simulate
 from simulation import instructions as ir
 from simulation.instructions import SPEED_BUDGETS, speed_budget
@@ -25,6 +32,110 @@ simulate.scenario_modules()
 
 
 class SimulationDeterminismTests(unittest.TestCase):
+    def test_station_spatial_requires_complete_unique_rows(self) -> None:
+        for reload in (False, True):
+            phases = (
+                ("reload",)
+                if reload
+                else (
+                    "build",
+                    "move-unchanged",
+                    "move-away",
+                    "move-back",
+                    "remove",
+                    "reuse",
+                )
+            )
+            lines = [
+                f"STCMD spatial602-visit {phase} 1000 8 1:true:32767"
+                for phase in phases
+            ]
+            lines += [
+                "STCMD spatial602-visit zero 1000 0",
+                "STCMD spatial602-visit edge 0 1",
+            ]
+            lines += [
+                f"STCMD owner562-rng {phase} 1 2 3 4"
+                for phase in ("spatial602-before", "spatial602")
+            ]
+            lines += [
+                f"STCMD spatial602-town {initial} 10 1000"
+                for initial in (-32768, -1000, 999, 32767)
+            ]
+            ratings = " ".join(f"{i}:0" for i in range(19 if reload else 20))
+            lines += [
+                f"STCMD spatial602-rating {radius} {amount} {ratings}"
+                for radius in (0, 1, 2, 8)
+                for amount in (-160, -1, 0, 1, 255)
+            ]
+            tiles = " ".join(f"{i}:0" for i in range(6))
+            for axis in (0, 1):
+                for blocked in ("false", "true"):
+                    for mode in (0, 1, 2):
+                        lines.append(
+                            f"STCMD spatial602-animation {axis} {blocked} {mode} {tiles} rng 1 2 3 4"
+                        )
+                        if mode != 0:
+                            lines.append(
+                                f"STCMD spatial602-random {axis} {blocked} {mode} {tiles} rng 1 2 3 4"
+                            )
+                        if not reload:
+                            lines.append(
+                                f"STCMD spatial602-rail {axis} {blocked} {mode} 1000 3 2"
+                            )
+            if reload:
+                lines.append("STCMD spatial602-crash-reload 40")
+            else:
+                lines += ["STCMD spatial602-crash-input 20 3 1 2 3 4"]
+                lines += [
+                    f"STCMD spatial602-crash-event {event} type 0 id 21 site 10005 reason 1 victims 3 expected 3 rng 1 2"
+                    for event in ("ai-event", "game-event")
+                ]
+                lines += [
+                    f"STCMD spatial602-crash {i} {operation} {40 if i == 3 else 200}"
+                    for i, operation in enumerate(
+                        ("ai-event", "game-event", "news", "sound")
+                    )
+                ]
+                lines += [
+                    "STCMD owner562-rng spatial602-crash 1 2 3 4",
+                    "STCMD spatial602-stop occupied-articulated 0 1",
+                    "STCMD spatial602-collisions true true",
+                    "STCMD spatial602-deleted-tie 0 0",
+                    "STCMD spatial602-waypoint 1000 1 1",
+                ]
+                lines += [
+                    f"STCMD spatial602-stop {bus} {incompatible} 0 1"
+                    for bus in ("true", "false")
+                    for incompatible in ("false", "true")
+                ]
+            lines.append("STCMD complete")
+            stations.check_spatial602(lines, reload)
+            for index, line in enumerate(lines):
+                with (
+                    self.subTest(reload=reload, missing=line),
+                    self.assertRaises(RuntimeError),
+                ):
+                    stations.check_spatial602(
+                        lines[:index] + lines[index + 1 :], reload
+                    )
+                with (
+                    self.subTest(reload=reload, duplicate=line),
+                    self.assertRaises(RuntimeError),
+                ):
+                    stations.check_spatial602(lines + [line], reload)
+                if line.endswith(" rng 1 2 3 4"):
+                    with (
+                        self.subTest(reload=reload, incomplete=line),
+                        self.assertRaises(RuntimeError),
+                    ):
+                        stations.check_spatial602(
+                            lines[:index]
+                            + [line.split(" rng ")[0]]
+                            + lines[index + 1 :],
+                            reload,
+                        )
+
     def test_engine_runtime_requires_complete_price_matrix_and_rng(self) -> None:
         records = [
             f"ENGINE properties-runtime {kind} {price} {dynamic} {base} 0 -1"
