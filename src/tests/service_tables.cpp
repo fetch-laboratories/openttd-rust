@@ -2,7 +2,6 @@
 /** @file service_tables.cpp Production table completeness and typed default contracts. */
 #include "../stdafx.h"
 #include "../3rdparty/catch2/catch.hpp"
-#ifdef WITH_RUST
 #include "../rust/services_ffi.h"
 #include "../rust/service_table_check.hpp"
 #include "../company_type.h"
@@ -91,4 +90,3 @@ TEST_CASE("Rust ABI - setting callback records")
 	ABI_LAYOUT_CHECK;
 #include "abi-layout-settings.inc"
 }
-#endif

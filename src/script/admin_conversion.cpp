@@ -9,7 +9,6 @@
 #include "../stdafx.h"
 #include "admin_conversion.hpp"
 
-#ifdef WITH_RUST
 #include "../rust/admin_conversion_ffi.h"
 #include "api/script_log.hpp"
 #include "script_instance.hpp"
@@ -191,4 +190,3 @@ void ScriptAdminConvertFromJSON(nlohmann::json &json, HSQUIRRELVM vm)
 {
 	Convert(json, vm, 1, 0, 0);
 }
-#endif /* WITH_RUST */

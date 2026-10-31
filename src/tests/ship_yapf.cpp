@@ -8,7 +8,6 @@
 /** @file ship_yapf.cpp Heap comparison and ship ownership ABI check. */
 #include "../stdafx.h"
 #include "../3rdparty/catch2/catch.hpp"
-#ifdef WITH_RUST
 #include "ship_yapf_protocol.hpp"
 #include "../ship.h"
 #include "../pathfinder/yapf/yapf_base.hpp"
@@ -87,4 +86,3 @@ TEST_CASE("Ship YAPF fixed limit timing against unchanged reference search")
 	CHECK(boundary.FindPath(nullptr));
 	CHECK(boundary.follows == 5120);
 }
-#endif

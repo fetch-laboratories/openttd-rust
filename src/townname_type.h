@@ -17,7 +17,6 @@
 #include "town_type.h"
 #include "string_type.h"
 
-#ifdef WITH_RUST
 struct TownNameParams;
 struct OpenTTDTownState;
 extern "C" void openttd_rust_town_name_params(TownNameParams *, uint8_t);
@@ -32,9 +31,6 @@ struct TownNames {
 	TownNames(const TownNames &) = delete;
 	TownNames &operator=(const TownNames &) = delete;
 };
-#else
-typedef std::set<std::string> TownNames;
-#endif
 
 /**
  * Struct holding parameters used to generate town name.
@@ -50,13 +46,7 @@ struct TownNameParams {
 	 */
 	TownNameParams(uint8_t town_name)
 	{
-#ifdef WITH_RUST
 		openttd_rust_town_name_params(this, town_name);
-#else
-		bool grf = town_name >= BUILTIN_TOWNNAME_GENERATOR_COUNT;
-		this->grfid = grf ? GetGRFTownNameId(town_name - BUILTIN_TOWNNAME_GENERATOR_COUNT) : 0;
-		this->type = grf ? GetGRFTownNameType(town_name - BUILTIN_TOWNNAME_GENERATOR_COUNT) : SPECSTR_TOWNNAME_START + town_name;
-#endif
 	}
 
 	TownNameParams(const Town *t);

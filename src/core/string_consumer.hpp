@@ -13,12 +13,10 @@
 #define STRING_CONSUMER_HPP
 
 #include <charconv>
-#ifdef WITH_RUST
 #include <bit>
 #include "../rust/ffi.h"
 #include "../rust/consumer_ffi.h"
 #include "utf8.hpp"
-#endif
 #include "format.hpp"
 
 /**
@@ -56,7 +54,6 @@ private:
 
 	static void LogError(std::string &&msg);
 
-#ifdef WITH_RUST
 	static_assert(npos == SIZE_MAX);
 	std::string_view PeekClamped(size_type len) const;
 	std::string_view ReadClamped(size_type len);
@@ -91,7 +88,6 @@ private:
 		auto input = this->GetLeftData();
 		return openttd_rust_consumer_separator(reinterpret_cast<const uint8_t *>(input.data()), input.size(), reinterpret_cast<const uint8_t *>(pattern.data()), pattern.size(), policy);
 	}
-#endif
 
 public:
 	/**
@@ -448,14 +444,10 @@ public:
 	 * Peek UTF-8 character.
 	 * @return Length and read char, {0, 0} if no valid data.
 	 */
-#ifdef WITH_RUST
 	[[nodiscard]] std::pair<size_type, char32_t> PeekUtf8() const
 	{
 		return DecodeUtf8(this->src.substr(this->position));
 	}
-#else
-	[[nodiscard]] std::pair<size_type, char32_t> PeekUtf8() const;
-#endif
 	/**
 	 * Try to read a UTF-8 character, and then advance reader.
 	 */
@@ -496,37 +488,23 @@ public:
 	 */
 	[[nodiscard]] bool PeekIf(std::string_view str) const
 	{
-#ifdef WITH_RUST
 		return this->MatchPrefix(str).matched != 0;
-#else
-		return this->src.compare(this->position, str.size(), str) == 0;
-#endif
 	}
 	/**
 	 * Check whether the next data matches 'str', and skip it.
 	 */
 	[[nodiscard]] bool ReadIf(std::string_view str)
 	{
-#ifdef WITH_RUST
 		auto result = this->MatchPrefix(str);
 		this->position += result.length;
 		return result.matched != 0;
-#else
-		bool result = this->PeekIf(str);
-		if (result) this->Skip(str.size());
-		return result;
-#endif
 	}
 	/**
 	 * If the next data matches 'str', then skip it.
 	 */
 	void SkipIf(std::string_view str)
 	{
-#ifdef WITH_RUST
 		this->position += this->MatchPrefix(str).length;
-#else
-		if (this->PeekIf(str)) this->Skip(str.size());
-#endif
 	}
 
 	/**
@@ -585,15 +563,11 @@ public:
 	 * @param len Bytes to read, 'npos' to read all.
 	 * @return Up to 'len' bytes.
 	 */
-#ifdef WITH_RUST
 	[[nodiscard]] std::string_view Peek(size_type len) const
 	{
 		if (len <= this->GetBytesLeft()) return this->src.substr(this->position, len);
 		return this->PeekClamped(len);
 	}
-#else
-	[[nodiscard]] std::string_view Peek(size_type len) const;
-#endif
 	/**
 	 * Read the next 'len' bytes, and advance reader.
 	 * @param len Bytes to read, 'npos' to read all.
@@ -601,27 +575,17 @@ public:
 	 */
 	[[nodiscard]] std::string_view Read(size_type len)
 	{
-#ifdef WITH_RUST
 		if (len <= this->GetBytesLeft()) {
 			auto result = this->src.substr(this->position, len);
 			this->position += len;
 			return result;
 		}
 		return this->ReadClamped(len);
-#else
-		auto result = this->Peek(len);
-		if (len != npos && len != result.size()) {
-			LogError(fmt::format("Source buffer too short: {} > {}", len, result.size()));
-		}
-		this->Skip(result.size());
-		return result;
-#endif
 	}
 	/**
 	 * Discard some bytes.
 	 * @param len Number of bytes to skip, 'npos' to skip all.
 	 */
-#ifdef WITH_RUST
 	void Skip(size_type len)
 	{
 		if (len <= this->GetBytesLeft()) {
@@ -630,9 +594,6 @@ public:
 			this->SkipClamped(len);
 		}
 	}
-#else
-	void Skip(size_type len);
-#endif
 
 	/**
 	 * Find first occurrence of 'str'.
@@ -670,17 +631,10 @@ public:
 	 */
 	[[nodiscard]] std::optional<char> PeekCharIfIn(std::string_view chars) const
 	{
-#ifdef WITH_RUST
 		assert(!chars.empty());
 		auto result = this->MatchCharacter(chars, true);
 		if (result.length == 0) return std::nullopt;
 		return static_cast<char>(result.value_bits);
-#else
-		assert(!chars.empty());
-		std::optional<char> c = this->PeekChar();
-		if (c.has_value() && chars.find(*c) != std::string_view::npos) return c;
-		return std::nullopt;
-#endif
 	}
 	/**
 	 * Read next 8-bit char, check whether it is in 'chars', and advance reader.
@@ -707,17 +661,10 @@ public:
 	 */
 	[[nodiscard]] std::optional<char> PeekCharIfNotIn(std::string_view chars) const
 	{
-#ifdef WITH_RUST
 		assert(!chars.empty());
 		auto result = this->MatchCharacter(chars, false);
 		if (result.length == 0) return std::nullopt;
 		return static_cast<char>(result.value_bits);
-#else
-		assert(!chars.empty());
-		std::optional<char> c = this->PeekChar();
-		if (c.has_value() && chars.find(*c) == std::string_view::npos) return c;
-		return std::nullopt;
-#endif
 	}
 	/**
 	 * Read next 8-bit char, check whether it is not in 'chars', and advance reader.
@@ -802,9 +749,7 @@ public:
 		SKIP_ONE_SEPARATOR,  ///< Read and discard one separator, do not include it in the result.
 		SKIP_ALL_SEPARATORS, ///< Read and discard all consecutive separators, do not include any in the result.
 	};
-#ifdef WITH_RUST
 	static_assert(READ_ALL_SEPARATORS == 0 && READ_ONE_SEPARATOR == 1 && KEEP_SEPARATOR == 2 && SKIP_ONE_SEPARATOR == 3 && SKIP_ALL_SEPARATORS == 4);
-#endif
 
 	/**
 	 * Peek data until the first occurrence of 'str'.
@@ -819,28 +764,11 @@ public:
 	 */
 	[[nodiscard]] std::string_view ReadUntil(std::string_view str, SeparatorUsage sep)
 	{
-#ifdef WITH_RUST
 		assert(!str.empty());
 		auto lengths = this->SeparatorResult(str, sep);
 		auto result = this->src.substr(this->position, lengths.result_length);
 		this->position += lengths.consumed_length;
 		return result;
-#else
-		assert(!str.empty());
-		auto result = this->PeekUntil(str, sep);
-		this->Skip(result.size());
-		switch (sep) {
-			default:
-				break;
-			case SKIP_ONE_SEPARATOR:
-				this->SkipIf(str);
-				break;
-			case SKIP_ALL_SEPARATORS:
-				while (this->ReadIf(str)) {}
-				break;
-		}
-		return result;
-#endif
 	}
 	/**
 	 * Skip data until the first occurrence of 'str'.
@@ -849,25 +777,8 @@ public:
 	 */
 	void SkipUntil(std::string_view str, SeparatorUsage sep)
 	{
-#ifdef WITH_RUST
 		assert(!str.empty());
 		this->position += this->SeparatorResult(str, sep).consumed_length;
-#else
-		assert(!str.empty());
-		this->Skip(this->Find(str));
-		switch (sep) {
-			default:
-				break;
-			case READ_ONE_SEPARATOR:
-			case SKIP_ONE_SEPARATOR:
-				this->SkipIf(str);
-				break;
-			case READ_ALL_SEPARATORS:
-			case SKIP_ALL_SEPARATORS:
-				while (this->ReadIf(str)) {}
-				break;
-		}
-#endif
 	}
 
 	/**
@@ -921,7 +832,6 @@ private:
 	template <class T>
 	[[nodiscard]] static std::pair<size_type, T> ParseIntegerBase(std::string_view src, int base, bool clamp, bool log_errors)
 	{
-#ifdef WITH_RUST
 		assert(base == 0 || base == 8 || base == 10 || base == 16);
 		using Unsigned = std::make_unsigned_t<T>;
 		auto result = openttd_rust_parse_integer(reinterpret_cast<const uint8_t *>(src.data()), src.size(), base,
@@ -937,55 +847,6 @@ private:
 		}
 		if (result.length == 0) return {};
 		return {result.length, std::bit_cast<T>(static_cast<Unsigned>(result.value_bits))};
-#else
-		if (base == 0) {
-			/* Try positive hex */
-			if (src.starts_with("0x") || src.starts_with("0X")) {
-				auto [len, value] = ParseIntegerBase<T>(src.substr(2), 16, clamp, log_errors);
-				if (len == 0) return {};
-				return {len + 2, value};
-			}
-
-			/* Try negative hex */
-			if (std::is_signed_v<T> && (src.starts_with("-0x") || src.starts_with("-0X"))) {
-				using Unsigned = std::make_unsigned_t<T>;
-				auto [len, uvalue] = ParseIntegerBase<Unsigned>(src.substr(3), 16, clamp, log_errors);
-				if (len == 0) return {};
-				T value = static_cast<T>(0 - uvalue);
-				if (value > 0) {
-					if (!clamp) {
-						if (log_errors) LogError(fmt::format("Integer out of range: '{}'", src.substr(0, len + 3)));
-						return {};
-					}
-					value = std::numeric_limits<T>::lowest();
-				}
-				return {len + 3, value};
-			}
-
-			/* Try decimal */
-			return ParseIntegerBase<T>(src, 10, clamp, log_errors);
-		}
-
-		T value{};
-		assert(base == 8 || base == 10 || base == 16); // we only support these bases when skipping
-		auto result = std::from_chars(src.data(), src.data() + src.size(), value, base);
-		auto len = result.ptr - src.data();
-		if (result.ec == std::errc::result_out_of_range) {
-			if (!clamp) {
-				if (log_errors) LogError(fmt::format("Integer out of range: '{}'+'{}'", src.substr(0, len), src.substr(len, 4)));
-				return {};
-			}
-			if (src.starts_with("-")) {
-				value = std::numeric_limits<T>::lowest();
-			} else {
-				value = std::numeric_limits<T>::max();
-			}
-		} else if (result.ec != std::errc{}) {
-			if (log_errors) LogError(fmt::format("Cannot parse integer: '{}'+'{}'", src.substr(0, len), src.substr(len, 4)));
-			return {};
-		}
-		return {len, value};
-#endif
 	}
 
 public:

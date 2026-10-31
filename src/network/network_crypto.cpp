@@ -28,7 +28,6 @@ static void crypto_wipe(std::span<uint8_t> span)
 	crypto_wipe(span.data(), span.size());
 }
 
-#ifdef WITH_RUST
 /* These callbacks are primitive-only and cannot throw. They start the actual
  * trivial vendor object lifetime in Rust-allocated, correctly aligned storage.
  * The table keeps vendor symbols out of the Rust archive's other consumers. */
@@ -55,14 +54,10 @@ static const OpenTTDAuthPrimitives &GetAuthPrimitives()
 }
 
 X25519DerivedKeys::X25519DerivedKeys() : keys(openttd_rust_auth_keys_new(&GetAuthPrimitives())) {}
-#endif
 
 /** Ensure the derived keys do not get leaked when we're done with it. */
 X25519DerivedKeys::~X25519DerivedKeys()
 {
-#ifndef WITH_RUST
-	crypto_wipe(keys);
-#endif
 }
 
 /**
@@ -71,11 +66,7 @@ X25519DerivedKeys::~X25519DerivedKeys()
  */
 std::span<const uint8_t> X25519DerivedKeys::ClientToServer() const
 {
-#ifdef WITH_RUST
 	return std::span(openttd_rust_auth_keys_data(this->keys.get(), 0), X25519_KEY_SIZE);
-#else
-	return std::span(this->keys.data(), X25519_KEY_SIZE);
-#endif
 }
 
 /**
@@ -84,11 +75,7 @@ std::span<const uint8_t> X25519DerivedKeys::ClientToServer() const
  */
 std::span<const uint8_t> X25519DerivedKeys::ServerToClient() const
 {
-#ifdef WITH_RUST
 	return std::span(openttd_rust_auth_keys_data(this->keys.get(), 1), X25519_KEY_SIZE);
-#else
-	return std::span(this->keys.data() + X25519_KEY_SIZE, X25519_KEY_SIZE);
-#endif
 }
 
 /**
@@ -103,42 +90,13 @@ std::span<const uint8_t> X25519DerivedKeys::ServerToClient() const
 bool X25519DerivedKeys::Exchange(const X25519PublicKey &peer_public_key, X25519KeyExchangeSide side,
 		const X25519SecretKey &our_secret_key, const X25519PublicKey &our_public_key, std::string_view extra_payload)
 {
-#ifdef WITH_RUST
 	return openttd_rust_auth_keys_exchange(this->keys.get(), peer_public_key.data(), static_cast<uint8_t>(side),
 			our_secret_key.data(), our_public_key.data(), reinterpret_cast<const uint8_t *>(extra_payload.data()), extra_payload.size()) != 0;
-#else
-	X25519Key shared_secret;
-	crypto_x25519(shared_secret.data(), our_secret_key.data(), peer_public_key.data());
-	if (std::all_of(shared_secret.begin(), shared_secret.end(), [](auto v) { return v == 0; })) {
-		/* A shared secret of all zeros means that the peer tried to force the shared secret to a known constant. */
-		return false;
-	}
-
-	crypto_blake2b_ctx ctx;
-	crypto_blake2b_init(&ctx, this->keys.size());
-	crypto_blake2b_update(&ctx, shared_secret.data(), shared_secret.size());
-	switch (side) {
-		case X25519KeyExchangeSide::SERVER:
-			crypto_blake2b_update(&ctx, our_public_key.data(), our_public_key.size());
-			crypto_blake2b_update(&ctx, peer_public_key.data(), peer_public_key.size());
-			break;
-		case X25519KeyExchangeSide::CLIENT:
-			crypto_blake2b_update(&ctx, peer_public_key.data(), peer_public_key.size());
-			crypto_blake2b_update(&ctx, our_public_key.data(), our_public_key.size());
-			break;
-		default:
-			NOT_REACHED();
-	}
-	crypto_blake2b_update(&ctx, reinterpret_cast<const uint8_t *>(extra_payload.data()), extra_payload.size());
-	crypto_blake2b_final(&ctx, this->keys.data());
-	return true;
-#endif
 }
 
 /**
  * Encryption handler implementation for monocypher encryption after a X25519 key exchange.
  */
-#ifdef WITH_RUST
 class X25519EncryptionHandler : public NetworkEncryptionHandler {
 private:
 	RustAuthStream context; ///< Independently owned opaque vendor context in Rust.
@@ -156,45 +114,6 @@ public:
 		openttd_rust_auth_stream_encrypt(this->context.get(), mac.data(), message.data(), message.size());
 	}
 };
-#else
-class X25519EncryptionHandler : public NetworkEncryptionHandler {
-private:
-	crypto_aead_ctx context; ///< The actual encryption context.
-
-public:
-	/**
-	 * Create the encryption handler.
-	 * @param key The key used for the encryption.
-	 * @param nonce The nonce used for the encryption.
-	 */
-	X25519EncryptionHandler(const std::span<const uint8_t> key, const X25519Nonce &nonce)
-	{
-		assert(key.size() == X25519_KEY_SIZE);
-		crypto_aead_init_x(&this->context, key.data(), nonce.data());
-	}
-
-	/** Ensure the encryption context is wiped! */
-	~X25519EncryptionHandler()
-	{
-		crypto_wipe(&this->context, sizeof(this->context));
-	}
-
-	size_t MACSize() const override
-	{
-		return X25519_MAC_SIZE;
-	}
-
-	bool Decrypt(std::span<std::uint8_t> mac, std::span<std::uint8_t> message) override
-	{
-		return crypto_aead_read(&this->context, message.data(), mac.data(), nullptr, 0, message.data(), message.size()) == 0;
-	}
-
-	void Encrypt(std::span<std::uint8_t> mac, std::span<std::uint8_t> message) override
-	{
-		crypto_aead_write(&this->context, message.data(), mac.data(), nullptr, 0, message.data(), message.size());
-	}
-};
-#endif
 
 /** Ensure the key does not get leaked when we're done with it. */
 X25519Key::~X25519Key()
@@ -245,30 +164,17 @@ X25519Nonce::~X25519Nonce()
  * Create the handler, and generate the public keys accordingly.
  * @param secret_key The secret key to use for this handler. Defaults to secure random data.
  */
-#ifdef WITH_RUST
 X25519AuthenticationHandler::X25519AuthenticationHandler(const X25519SecretKey &secret_key) :
 	session(openttd_rust_auth_session_new(&GetAuthPrimitives(), secret_key.data()))
 {
 	RandomBytesWithFallback(std::span(openttd_rust_auth_session_mut_view(this->session.get(), 2), X25519_NONCE_SIZE));
 	RandomBytesWithFallback(std::span(openttd_rust_auth_session_mut_view(this->session.get(), 3), X25519_NONCE_SIZE));
 }
-#else
-X25519AuthenticationHandler::X25519AuthenticationHandler(const X25519SecretKey &secret_key) :
-	our_secret_key(secret_key), our_public_key(secret_key.CreatePublicKey()),
-	key_exchange_nonce(X25519Nonce::CreateRandom()), encryption_nonce(X25519Nonce::CreateRandom())
-{
-}
-#endif
 
 /* virtual */ void X25519AuthenticationHandler::SendRequest(Packet &p)
 {
-#ifdef WITH_RUST
 	p.Send_bytes(std::span(openttd_rust_auth_session_view(this->session.get(), 0), X25519_KEY_SIZE));
 	p.Send_bytes(std::span(openttd_rust_auth_session_view(this->session.get(), 2), X25519_NONCE_SIZE));
-#else
-	p.Send_bytes(this->our_public_key);
-	p.Send_bytes(this->key_exchange_nonce);
-#endif
 }
 
 /**
@@ -283,13 +189,8 @@ bool X25519AuthenticationHandler::ReceiveRequest(Packet &p)
 		return false;
 	}
 
-#ifdef WITH_RUST
 	p.Recv_bytes(std::span(openttd_rust_auth_session_mut_view(this->session.get(), 1), X25519_KEY_SIZE));
 	p.Recv_bytes(std::span(openttd_rust_auth_session_mut_view(this->session.get(), 2), X25519_NONCE_SIZE));
-#else
-	p.Recv_bytes(this->peer_public_key);
-	p.Recv_bytes(this->key_exchange_nonce);
-#endif
 	return true;
 }
 
@@ -301,13 +202,8 @@ bool X25519AuthenticationHandler::ReceiveRequest(Packet &p)
  */
 bool X25519AuthenticationHandler::SendResponse(Packet &p, std::string_view derived_key_extra_payload)
 {
-#ifdef WITH_RUST
 	if (openttd_rust_auth_session_exchange(this->session.get(), static_cast<uint8_t>(X25519KeyExchangeSide::CLIENT),
 			reinterpret_cast<const uint8_t *>(derived_key_extra_payload.data()), derived_key_extra_payload.size()) == 0) {
-#else
-	if (!this->derived_keys.Exchange(this->peer_public_key, X25519KeyExchangeSide::CLIENT,
-			this->our_secret_key, this->our_public_key, derived_key_extra_payload)) {
-#endif
 		Debug(net, 0, "[crypto] Peer sent an illegal public key; authentication aborted.");
 		return false;
 	}
@@ -316,15 +212,8 @@ bool X25519AuthenticationHandler::SendResponse(Packet &p, std::string_view deriv
 	RandomBytesWithFallback(message);
 	X25519Mac mac;
 
-#ifdef WITH_RUST
 	openttd_rust_auth_session_encrypt_response(this->session.get(), message.data(), mac.data());
 	p.Send_bytes(std::span(openttd_rust_auth_session_view(this->session.get(), 0), X25519_KEY_SIZE));
-#else
-	crypto_aead_lock(message.data(), mac.data(), this->derived_keys.ClientToServer().data(), this->key_exchange_nonce.data(),
-			this->our_public_key.data(), this->our_public_key.size(), message.data(), message.size());
-
-	p.Send_bytes(this->our_public_key);
-#endif
 	p.Send_bytes(mac);
 	p.Send_bytes(message);
 	return true;
@@ -336,11 +225,7 @@ bool X25519AuthenticationHandler::SendResponse(Packet &p, std::string_view deriv
  */
 std::string X25519AuthenticationHandler::GetPeerPublicKey() const
 {
-#ifdef WITH_RUST
 	return FormatArrayAsHex(std::span(openttd_rust_auth_session_view(this->session.get(), 1), X25519_KEY_SIZE));
-#else
-	return FormatArrayAsHex(this->peer_public_key);
-#endif
 }
 
 /**
@@ -349,11 +234,7 @@ std::string X25519AuthenticationHandler::GetPeerPublicKey() const
  */
 void X25519AuthenticationHandler::SendEnableEncryption(struct Packet &p) const
 {
-#ifdef WITH_RUST
 	p.Send_bytes(std::span(openttd_rust_auth_session_view(this->session.get(), 3), X25519_NONCE_SIZE));
-#else
-	p.Send_bytes(this->encryption_nonce);
-#endif
 }
 
 /**
@@ -363,29 +244,17 @@ void X25519AuthenticationHandler::SendEnableEncryption(struct Packet &p) const
  */
 bool X25519AuthenticationHandler::ReceiveEnableEncryption(struct Packet &p)
 {
-#ifdef WITH_RUST
 	return p.Recv_bytes(std::span(openttd_rust_auth_session_mut_view(this->session.get(), 3), X25519_NONCE_SIZE)) == X25519_NONCE_SIZE;
-#else
-	return p.Recv_bytes(this->encryption_nonce) == this->encryption_nonce.size();
-#endif
 }
 
 std::unique_ptr<NetworkEncryptionHandler> X25519AuthenticationHandler::CreateClientToServerEncryptionHandler() const
 {
-#ifdef WITH_RUST
 	return std::make_unique<X25519EncryptionHandler>(this->session.get(), 0);
-#else
-	return std::make_unique<X25519EncryptionHandler>(this->derived_keys.ClientToServer(), this->encryption_nonce);
-#endif
 }
 
 std::unique_ptr<NetworkEncryptionHandler> X25519AuthenticationHandler::CreateServerToClientEncryptionHandler() const
 {
-#ifdef WITH_RUST
 	return std::make_unique<X25519EncryptionHandler>(this->session.get(), 1);
-#else
-	return std::make_unique<X25519EncryptionHandler>(this->derived_keys.ServerToClient(), this->encryption_nonce);
-#endif
 }
 
 /**
@@ -405,31 +274,17 @@ NetworkAuthenticationServerHandler::ResponseResult X25519AuthenticationHandler::
 	X25519KeyExchangeMessage message{};
 	X25519Mac mac;
 
-#ifdef WITH_RUST
 	p.Recv_bytes(std::span(openttd_rust_auth_session_mut_view(this->session.get(), 1), X25519_KEY_SIZE));
-#else
-	p.Recv_bytes(this->peer_public_key);
-#endif
 	p.Recv_bytes(mac);
 	p.Recv_bytes(message);
 
-#ifdef WITH_RUST
 	if (openttd_rust_auth_session_exchange(this->session.get(), static_cast<uint8_t>(X25519KeyExchangeSide::SERVER),
 			reinterpret_cast<const uint8_t *>(derived_key_extra_payload.data()), derived_key_extra_payload.size()) == 0) {
-#else
-	if (!this->derived_keys.Exchange(this->peer_public_key, X25519KeyExchangeSide::SERVER,
-			this->our_secret_key, this->our_public_key, derived_key_extra_payload)) {
-#endif
 		Debug(net, 0, "[crypto] Peer sent an illegal public key; authentication aborted.");
 		return NetworkAuthenticationServerHandler::ResponseResult::NotAuthenticated;
 	}
 
-#ifdef WITH_RUST
 	if (openttd_rust_auth_session_decrypt_response(this->session.get(), message.data(), mac.data()) == 0) {
-#else
-	if (crypto_aead_unlock(message.data(), mac.data(), this->derived_keys.ClientToServer().data(), this->key_exchange_nonce.data(),
-			this->peer_public_key.data(), this->peer_public_key.size(), message.data(), message.size()) != 0) {
-#endif
 		/*
 		 * The ciphertext and the message authentication code do not match with the encryption key.
 		 * This is most likely an invalid password, or possibly a bug in the client.
@@ -620,7 +475,7 @@ std::unique_ptr<NetworkAuthenticationServerHandler> NetworkAuthenticationServerH
 	return handler;
 }
 
-#if defined(WITH_RUST) && defined(WITH_RUST_ABI_CHECKS)
+#if defined(WITH_RUST_ABI_CHECKS)
 #include "../rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDAuthPrimitives.hpp"
 bool CheckAbi_network_crypto() { return AbiServicesComplete(GetAuthPrimitives()); }

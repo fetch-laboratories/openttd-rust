@@ -48,6 +48,8 @@ jobs:
             print(f'Running {test}', flush=True)
             subprocess.run(['python3', str(test)], check=True)
         PY
+    - name: Reject source build fallbacks
+      run: python3 tools/rust-only.py
     - name: Reject new shared accessor copies
       env:
         BASE_REF: ${{ inputs.base-ref || github.event.pull_request.base.sha || github.event.before }}

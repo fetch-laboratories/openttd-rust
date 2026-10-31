@@ -15,9 +15,7 @@
 #include "tile_type.h"
 #include "vehicle_type.h"
 #include "base_consist.h"
-#ifdef WITH_RUST
 #include "order_base.h"
-#endif
 #include "saveload/saveload.h"
 
 /** Unique identifier for an order backup. */
@@ -40,21 +38,12 @@ private:
 	template <typename T>
 	friend class SlOrders;
 
-#ifdef WITH_RUST
 	std::unique_ptr<OpenTTDOrderBackupState, decltype(&openttd_rust_orderbackup_delete)> rust_state{openttd_rust_orderbackup_new(), openttd_rust_orderbackup_delete};
 	uint32_t &user = this->rust_state->user;
 	TileIndex &tile = *new (std::addressof(this->rust_state->tile)) TileIndex{INVALID_TILE};
 	GroupID &group = *new (std::addressof(this->rust_state->group)) GroupID{GroupID::Invalid()};
 	const Vehicle *&clone = *new (std::addressof(this->rust_state->clone)) const Vehicle *{nullptr};
 	RustOrderVector orders;
-#else
-	uint32_t user = 0; ///< The user that requested the backup.
-	TileIndex tile = INVALID_TILE; ///< Tile of the depot where the order was changed.
-	GroupID group = GroupID::Invalid(); ///< The group the vehicle was part of.
-
-	const Vehicle *clone = nullptr; ///< Vehicle this vehicle was a clone of.
-	std::vector<Order> orders; ///< The actual orders if the vehicle was not a clone.
-#endif
 	uint32_t old_order_index = 0;
 
 	/** Creation for savegame restoration. */
@@ -64,11 +53,9 @@ private:
 	void DoRestore(Vehicle *v);
 
 public:
-#ifdef WITH_RUST
 	OpenTTDOrderBackupState *GetRustState() const { return this->rust_state.get(); }
 	OpenTTDOrderVector *GetRustOrders() const { return this->orders.GetRustOwner(); }
 	static OrderBackup *CreateForRust(const Vehicle *v, uint32_t user) { return new OrderBackup(v, user); }
-#endif
 	~OrderBackup();
 
 	static void Backup(const Vehicle *v, uint32_t user);

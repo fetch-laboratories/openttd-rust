@@ -152,7 +152,7 @@ def scan_source_files(path, strings_found):
             scan_source_files(new_path, strings_found)
             continue
 
-        if not new_path.endswith((".c", ".h", ".cpp", ".hpp", ".ini")):
+        if not new_path.endswith((".c", ".h", ".cpp", ".hpp", ".inc", ".ini")):
             continue
 
         # Most files we can just open, but some use magic, that requires the

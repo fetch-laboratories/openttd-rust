@@ -14,7 +14,6 @@
 #include "vehiclelist_func.h"
 #include "group.h"
 
-#ifdef WITH_RUST
 #include "rust/vehicle_transaction_ffi.h"
 #include "rust/vehicle_services.h"
 static void SelectionWithOrders(void *ctx, bool (*vehicle)(void *, const Vehicle *), bool (*order)(void *, const Order *), void (*visit)(void *, const Vehicle *)) noexcept
@@ -40,7 +39,6 @@ const OpenTTDVehicleSelectionServices &GetRustVehicleSelectionServices() noexcep
 	};
 	return services;
 }
-#endif
 
 #include "safeguards.h"
 
@@ -70,27 +68,7 @@ WindowNumber VehicleListIdentifier::ToWindowNumber() const
  */
 void BuildDepotVehicleList(VehicleType type, TileIndex tile, VehicleList *engines, VehicleList *wagons, bool individual_wagons)
 {
-#ifdef WITH_RUST
 	openttd_rust_vehicle_depot_list(&GetRustVehicleSelectionServices(), type, tile.base(), engines, wagons, individual_wagons);
-#else
-	engines->clear();
-	if (wagons != nullptr && wagons != engines) wagons->clear();
-
-	for (Vehicle *v : VehiclesOnTile(tile)) {
-		if (v->type != type || !v->IsInDepot()) continue;
-
-		if (type == VEH_TRAIN) {
-			const Train *t = Train::From(v);
-			if (t->IsArticulatedPart() || t->IsRearDualheaded()) continue;
-			if (wagons != nullptr && t->First()->IsFreeWagon()) {
-				if (individual_wagons || t->IsFreeWagon()) wagons->push_back(t);
-				continue;
-			}
-		}
-
-		if (v->IsPrimaryVehicle()) engines->push_back(v);
-	}
-#endif
 }
 
 /**
@@ -101,68 +79,9 @@ void BuildDepotVehicleList(VehicleType type, TileIndex tile, VehicleList *engine
  */
 bool GenerateVehicleSortList(VehicleList *list, const VehicleListIdentifier &vli)
 {
-#ifdef WITH_RUST
 	return openttd_rust_vehicle_generate_list(&GetRustVehicleSelectionServices(), list, vli.type, vli.vtype, vli.company.base(), vli.index);
-#else
-	list->clear();
-
-	switch (vli.type) {
-		case VL_STATION_LIST:
-			FindVehiclesWithOrder(
-				[&vli](const Vehicle *v) { return v->type == vli.vtype; },
-				[&vli](const Order *order) { return (order->IsType(OT_GOTO_STATION) || order->IsType(OT_GOTO_WAYPOINT) || order->IsType(OT_IMPLICIT)) && order->GetDestination() == vli.ToStationID(); },
-				[&list](const Vehicle *v) { list->push_back(v); }
-			);
-			break;
-
-		case VL_SHARED_ORDERS: {
-			/* Add all vehicles from this vehicle's shared order list */
-			const Vehicle *v = Vehicle::GetIfValid(vli.ToVehicleID());
-			if (v == nullptr || v->type != vli.vtype || !v->IsPrimaryVehicle()) return false;
-
-			for (; v != nullptr; v = v->NextShared()) {
-				list->push_back(v);
-			}
-			break;
-		}
-
-		case VL_GROUP_LIST:
-			if (vli.ToGroupID() != ALL_GROUP) {
-				for (const Vehicle *v : Vehicle::Iterate()) {
-					if (v->type == vli.vtype && v->IsPrimaryVehicle() &&
-							v->owner == vli.company && GroupIsInGroup(v->group_id, vli.ToGroupID())) {
-						list->push_back(v);
-					}
-				}
-				break;
-			}
-			[[fallthrough]];
-
-		case VL_STANDARD:
-			for (const Vehicle *v : Vehicle::Iterate()) {
-				if (v->type == vli.vtype && v->owner == vli.company && v->IsPrimaryVehicle()) {
-					list->push_back(v);
-				}
-			}
-			break;
-
-		case VL_DEPOT_LIST:
-			FindVehiclesWithOrder(
-				[&vli](const Vehicle *v) { return v->type == vli.vtype; },
-				[&vli](const Order *order) { return order->IsType(OT_GOTO_DEPOT) && !order->GetDepotActionType().Test(OrderDepotActionFlag::NearestDepot) && order->GetDestination() == vli.ToDestinationID(); },
-				[&list](const Vehicle *v) { list->push_back(v); }
-			);
-			break;
-
-		default: return false;
-	}
-
-	return true;
-#endif
 }
 
-#ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDVehicleSelectionServices.hpp"
 bool CheckAbi_vehiclelist() { return AbiServicesComplete(GetRustVehicleSelectionServices()); }
-#endif

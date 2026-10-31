@@ -112,12 +112,8 @@ typedef TrackStatus GetTileTrackStatusProc(TileIndex tile, TransportType mode, u
 typedef void AddProducedCargoProc(TileIndex tile, CargoArray &produced);
 typedef bool ClickTileProc(TileIndex tile);
 typedef void AnimateTileProc(TileIndex tile);
-#ifdef WITH_RUST
 /** Scalar native ABI also called directly by the Rust scheduler. */
 using TileLoopProc = void(uint32_t tile) noexcept;
-#else
-typedef void TileLoopProc(TileIndex tile);
-#endif
 typedef void ChangeTileOwnerProc(TileIndex tile, Owner old_owner, Owner new_owner);
 
 typedef VehicleEnterTileStates VehicleEnterTileProc(Vehicle *v, TileIndex tile, int x, int y);
@@ -162,9 +158,6 @@ struct TileTypeProcs {
 	GetTileDescProc *get_tile_desc_proc;           ///< Get a description of a tile (for the 'land area information' tool)
 	GetTileTrackStatusProc *get_tile_track_status_proc; ///< Get available tracks and status of a tile
 	ClickTileProc *click_tile_proc;                ///< Called when tile is clicked
-#ifndef WITH_RUST
-	AnimateTileProc *animate_tile_proc;
-#endif
 	TileLoopProc *tile_loop_proc;
 	ChangeTileOwnerProc *change_tile_owner_proc;
 	AddProducedCargoProc *add_produced_cargo_proc; ///< Adds produced cargo of the tile to cargo array supplied as parameter
@@ -201,25 +194,10 @@ inline void AddProducedCargo(TileIndex tile, CargoArray &produced)
  * @param tile Tile to test.
  * @returns True iff the type of the tile has a handler for tile animation.
  */
-#ifdef WITH_RUST
 extern "C" bool openttd_rust_may_animate(uint32_t);
 extern "C" void openttd_rust_animate_tile(uint32_t);
 inline bool MayAnimateTile(TileIndex tile) { return openttd_rust_may_animate(tile.base()); }
 inline void AnimateTile(TileIndex tile) { openttd_rust_animate_tile(tile.base()); }
-#else
-inline bool MayAnimateTile(TileIndex tile)
-{
-	return _tile_type_procs[GetTileType(tile)]->animate_tile_proc != nullptr;
-}
-
-inline void AnimateTile(TileIndex tile)
-{
-	AnimateTileProc *proc = _tile_type_procs[GetTileType(tile)]->animate_tile_proc;
-	assert(proc != nullptr);
-	proc(tile);
-}
-
-#endif
 
 inline bool ClickTile(TileIndex tile)
 {

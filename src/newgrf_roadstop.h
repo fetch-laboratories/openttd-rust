@@ -22,9 +22,7 @@
 #include "newgrf_town.h"
 #include "road.h"
 
-#ifdef WITH_RUST
 #include "rust/roadstop_resolver_ffi.h"
-#endif
 
 struct TileInfo;
 
@@ -87,26 +85,10 @@ enum RoadStopView : uint8_t {
 
 /** Scope resolver for road stops. */
 struct RoadStopScopeResolver : public ScopeResolver {
-#ifdef WITH_RUST
 	mutable OpenTTDRoadStopResolverState state;
 	RoadStopScopeResolver(ResolverObject &ro, BaseStation *st, const RoadStopSpec *spec, TileIndex tile, RoadType roadtype, StationType type, uint8_t view = 0)
 		: ScopeResolver(ro), state{st, spec, nullptr, nullptr, tile.base(), roadtype, to_underlying(type), view, 0} {}
 	RoadStopScopeResolver(ResolverObject &ro, const OpenTTDRoadStopResolverState &state) : ScopeResolver(ro), state(state) {}
-#else
-	TileIndex tile{}; ///< %Tile of the station.
-	struct BaseStation *st = nullptr; ///< Instance of the station.
-	const struct RoadStopSpec *roadstopspec = nullptr; ///< Station (type) specification.
-	CargoType cargo_type{}; ///< Type of cargo of the station.
-	StationType type{}; ///< Station type.
-	uint8_t view = 0; ///< Station axis.
-	RoadType roadtype{}; ///< Road type (used when no tile)
-
-	RoadStopScopeResolver(ResolverObject &ro, BaseStation *st, const RoadStopSpec *roadstopspec, TileIndex tile, RoadType roadtype, StationType type, uint8_t view = 0)
-		: ScopeResolver(ro), tile(tile), st(st), roadstopspec(roadstopspec), type(type), view(view), roadtype(roadtype)
-	{
-	}
-
-#endif
 
 	uint32_t GetRandomBits() const override;
 	uint32_t GetRandomTriggers() const override;
@@ -121,24 +103,8 @@ struct RoadStopResolverObject : public SpecializedResolverObject<StationRandomTr
 
 	RoadStopResolverObject(const RoadStopSpec *roadstopspec, BaseStation *st, TileIndex tile, RoadType roadtype, StationType type, uint8_t view, CallbackID callback = CBID_NO_CALLBACK, uint32_t param1 = 0, uint32_t param2 = 0);
 
-#ifdef WITH_RUST
 	RoadStopResolverObject(const OpenTTDRoadStopResolverState &state, CallbackID callback = CBID_NO_CALLBACK, uint32_t param1 = 0, uint32_t param2 = 0);
 	ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, uint8_t relative = 0) override;
-#else
-	ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, uint8_t relative = 0) override
-	{
-		switch (scope) {
-			case VSG_SCOPE_SELF: return &this->roadstop_scope;
-			case VSG_SCOPE_PARENT: {
-				TownScopeResolver *tsr = this->GetTown();
-				if (tsr != nullptr) return tsr;
-				[[fallthrough]];
-			}
-			default: return ResolverObject::GetScope(scope, relative);
-		}
-	}
-
-#endif
 
 	TownScopeResolver *GetTown();
 };
@@ -207,11 +173,7 @@ void RoadStopUpdateCachedTriggers(BaseStation *st);
  */
 inline bool IsWaypointClass(const RoadStopClass &cls)
 {
-#ifdef WITH_RUST
 	return openttd_rust_is_waypoint_class(cls.global_id);
-#else
-	return cls.global_id == ROADSTOP_CLASS_LABEL_WAYPOINT || GB(cls.global_id, 24, 8) == UINT8_MAX;
-#endif
 }
 
 #endif /* NEWGRF_ROADSTATION_H */

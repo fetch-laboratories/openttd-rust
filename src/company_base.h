@@ -89,7 +89,6 @@ struct CompanyFinances {
 	uint8_t num_valid_stat_ent = 0; ///< Number of valid statistical entries in #old_economy.
 };
 
-#ifdef WITH_RUST
 #include "rust/company_ffi.h"
 struct CompanyFinanceOwner {
 	CompanyFinances *state;
@@ -98,19 +97,12 @@ struct CompanyFinanceOwner {
 	CompanyFinanceOwner &operator=(const CompanyFinanceOwner &other) { *state = *other.state; return *this; }
 	~CompanyFinanceOwner() { state->~CompanyFinances(); openttd_rust_company_state_destroy(state); }
 };
-#endif
 
 /** Statically loadable part of Company pool item */
 struct CompanyProperties {
-#ifdef WITH_RUST
 	CompanyFinanceOwner finances{};
 	CompanyFinances &Finances() { return *this->finances.state; }
 	const CompanyFinances &Finances() const { return *this->finances.state; }
-#else
-	CompanyFinances finances{};
-	CompanyFinances &Finances() { return this->finances; }
-	const CompanyFinances &Finances() const { return this->finances; }
-#endif
 	uint32_t name_2 = 0; ///< Parameter of #name_1.
 	StringID name_1 = INVALID_STRING_ID; ///< Name of the company if the user did not change it.
 	std::string name{}; ///< Name of the company if the user changed it.
@@ -144,15 +136,9 @@ struct CompanyProperties {
 
 	std::array<Livery, LS_END> livery{};
 
-#ifdef WITH_RUST
 	FleetOwner<EngineRenewList, openttd_rust_fleet_head_create, openttd_rust_fleet_head_destroy, openttd_rust_fleet_head_copy> renewal_head{};
 	EngineRenewList &RenewalList() { return *renewal_head.state; }
 	const EngineRenewList &RenewalList() const { return *renewal_head.state; }
-#else
-	EngineRenewList engine_renew_list = nullptr;
-	EngineRenewList &RenewalList() { return engine_renew_list; }
-	const EngineRenewList &RenewalList() const { return engine_renew_list; }
-#endif
 	CompanySettings settings{}; ///< settings specific for each company
 };
 
@@ -230,10 +216,6 @@ struct Company : CompanyProperties, CompanyPool::PoolItem<&_company_pool> {
 Money CalculateCompanyValue(const Company *c, bool including_loan = true);
 Money CalculateHostileTakeoverValue(const Company *c);
 
-#ifdef WITH_RUST
 #define _cur_company_tick_index (*openttd_rust_company_tick())
-#else
-extern uint _cur_company_tick_index;
-#endif
 
 #endif /* COMPANY_BASE_H */

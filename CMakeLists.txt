@@ -43,7 +43,7 @@ include(Options)
 set_options()
 set_directory_options()
 
-if(APPLE AND OPTION_RUST)
+if(APPLE)
     if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
         set(CMAKE_OSX_DEPLOYMENT_TARGET 11.0 CACHE STRING "macOS deployment minimum" FORCE)
     endif()
@@ -60,7 +60,7 @@ set(CMAKE_CXX_EXTENSIONS NO)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS YES)
 
-if(OPTION_RUST AND CMAKE_SYSTEM_NAME STREQUAL "Windows")
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     include(WindowsRust)
 endif()
 
@@ -115,9 +115,7 @@ endif()
 
 include(AddCustomXXXTimestamp)
 
-if(OPTION_RUST)
-    include(Rust)
-endif()
+include(Rust)
 
 if(OPTION_TOOLS_ONLY)
     if(HOST_BINARY_DIR)
@@ -257,9 +255,7 @@ include_directories(${CMAKE_SOURCE_DIR}/src/3rdparty/squirrel/include)
 include(MSVCFilters)
 
 add_library(openttd_lib OBJECT ${GENERATED_SOURCE_FILES})
-if(OPTION_RUST)
-    target_compile_definitions(openttd_lib PUBLIC WITH_RUST)
-endif()
+target_compile_definitions(openttd_lib PUBLIC WITH_RUST)
 add_executable(openttd WIN32)
 add_executable(openttd_test)
 set_target_properties(openttd PROPERTIES OUTPUT_NAME "${BINARY_NAME}")
@@ -268,14 +264,6 @@ set_target_properties(openttd PROPERTIES OUTPUT_NAME "${BINARY_NAME}")
 if(MSVC)
     # Add DPI manifest to project; other WIN32 targets get this via ottdres.rc
     target_sources(openttd PRIVATE "${CMAKE_SOURCE_DIR}/os/windows/openttd.manifest")
-
-    # If target -static is used, switch our project to static (/MT) too.
-    # If the target ends on -static-md, it will remain dynamic (/MD).
-    if(NOT OPTION_RUST AND VCPKG_TARGET_TRIPLET MATCHES "-static" AND NOT VCPKG_TARGET_TRIPLET MATCHES "-md")
-        set_property(TARGET openttd_lib PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-        set_property(TARGET openttd PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-        set_property(TARGET openttd_test PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-     endif()
 endif()
 
 target_precompile_headers(openttd_lib
@@ -306,10 +294,8 @@ target_link_libraries(openttd
 )
 
 target_link_libraries(openttd_test PRIVATE openttd_lib)
-if(OPTION_RUST)
-    target_link_libraries(openttd openttd_rust)
-    target_link_libraries(openttd_test PRIVATE openttd_rust_native_test_support)
-endif()
+target_link_libraries(openttd openttd_rust)
+target_link_libraries(openttd_test PRIVATE openttd_rust_native_test_support)
 if(ANDROID)
     target_link_libraries(openttd_test PRIVATE log)
 endif()
@@ -458,11 +444,9 @@ link_package(SSE)
 
 add_definitions_based_on_options()
 
-if(OPTION_RUST)
-    set_property(SOURCE src/3rdparty/monocypher/monocypher.cpp src/network/network_crypto.cpp APPEND PROPERTY COMPILE_DEFINITIONS WITH_RUST_ABI_CHECKS)
-endif()
+set_property(SOURCE src/3rdparty/monocypher/monocypher.cpp src/network/network_crypto.cpp APPEND PROPERTY COMPILE_DEFINITIONS WITH_RUST_ABI_CHECKS)
 
-if(OPTION_RUST AND BUILD_TESTING)
+if(BUILD_TESTING)
     add_executable(openttd_rust_abi tools/migration/windows-abi.cpp src/3rdparty/monocypher/monocypher.cpp)
     target_include_directories(openttd_rust_abi PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/tools/migration")
     target_link_libraries(openttd_rust_abi PRIVATE openttd_rust)

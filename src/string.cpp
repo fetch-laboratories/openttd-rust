@@ -15,10 +15,8 @@
 #include "core/utf8.hpp"
 #include "core/string_inplace.hpp"
 
-#ifdef WITH_RUST
 #	include "rust/byte_strings_ffi.h"
 #	include "rust/string_validation_ffi.h"
-#endif
 
 #include "table/control_codes.h"
 
@@ -47,7 +45,6 @@
 #include "safeguards.h"
 
 
-#ifdef WITH_RUST
 static_assert(CHAR_BIT == 8 && sizeof(int) == sizeof(int32_t));
 
 /** C++ retains its native string_view length policy; Rust scans and maps bytes. */
@@ -64,7 +61,6 @@ static int RustByteCase(std::string_view left, std::string_view right, uint8_t m
 	return openttd_rust_bytes_case(reinterpret_cast<const uint8_t *>(left.data()), left.size(),
 		reinterpret_cast<const uint8_t *>(right.data()), right.size(), mode, CHAR_MIN < 0, length_order);
 }
-#endif
 
 /**
  * Copies characters from one buffer to another.
@@ -100,22 +96,11 @@ void strecpy(std::span<char> dst, std::string_view src)
  */
 std::string FormatArrayAsHex(std::span<const uint8_t> data)
 {
-#ifdef WITH_RUST
 	std::string str;
 	str.reserve(data.size() * 2 + 1);
 	str.resize(data.size() * 2);
 	openttd_rust_bytes_hex_encode(data.data(), data.size(), reinterpret_cast<uint8_t *>(str.data()));
 	return str;
-#else
-	std::string str;
-	str.reserve(data.size() * 2 + 1);
-
-	for (auto b : data) {
-		format_append(str, "{:02X}", b);
-	}
-
-	return str;
-#endif
 }
 
 /**
@@ -123,23 +108,6 @@ std::string FormatArrayAsHex(std::span<const uint8_t> data)
  * @param c Character to test.
  * @returns True iff the character is an encoded string control code.
  */
-#ifndef WITH_RUST
-static bool IsSccEncodedCode(char32_t c)
-{
-	switch (c) {
-		case SCC_RECORD_SEPARATOR:
-		case SCC_ENCODED:
-		case SCC_ENCODED_INTERNAL:
-		case SCC_ENCODED_NUMERIC:
-		case SCC_ENCODED_STRING:
-			return true;
-
-		default:
-			return false;
-	}
-}
-
-#endif
 
 /**
  * Copies the valid (UTF-8) characters from \c consumer to the \c builder.
@@ -153,7 +121,6 @@ static bool IsSccEncodedCode(char32_t c)
 template <class Builder>
 static void StrMakeValid(Builder &builder, StringConsumer &consumer, StringValidationSettings settings)
 {
-#ifdef WITH_RUST
 	static_assert(sizeof(char32_t) == sizeof(uint32_t));
 	static_assert(StringValidationSettings(StringValidationSetting::ReplaceWithQuestionMark).base() == 1);
 	static_assert(StringValidationSettings(StringValidationSetting::AllowNewline).base() == 2);
@@ -169,35 +136,6 @@ static void StrMakeValid(Builder &builder, StringConsumer &consumer, StringValid
 		if (step.stopped) break;
 		if (step.output.length != 0) builder.PutBuffer({reinterpret_cast<const char *>(step.output.bytes), step.output.length});
 	}
-#else
-	/* Assume the ABSOLUTE WORST to be in str as it comes from the outside. */
-	while (consumer.AnyBytesLeft()) {
-		auto c = consumer.TryReadUtf8();
-		if (!c.has_value()) {
-			/* Maybe the next byte is still a valid character? */
-			consumer.Skip(1);
-			continue;
-		}
-		if (*c == 0) break;
-
-		if ((IsPrintable(*c) && (*c < SCC_SPRITE_START || *c > SCC_SPRITE_END)) ||
-				(settings.Test(StringValidationSetting::AllowControlCode) && IsSccEncodedCode(*c)) ||
-				(settings.Test(StringValidationSetting::AllowNewline) && *c == '\n')) {
-			builder.PutUtf8(*c);
-		} else if (settings.Test(StringValidationSetting::AllowNewline) && *c == '\r' && consumer.PeekCharIf('\n')) {
-			/* Skip \r, if followed by \n */
-			/* continue */
-		} else if (settings.Test(StringValidationSetting::ReplaceTabCrNlWithSpace) && (*c == '\r' || *c == '\n' || *c == '\t')) {
-			/* Replace the tab, carriage return or newline with a space. */
-			builder.PutChar(' ');
-		} else if (settings.Test(StringValidationSetting::ReplaceWithQuestionMark)) {
-			/* Replace the undesirable character with a question mark */
-			builder.PutChar('?');
-		}
-	}
-
-	/* String termination, if needed, is left to the caller of this function. */
-#endif
 }
 
 /**
@@ -257,22 +195,7 @@ std::string StrMakeValid(std::string_view str, StringValidationSettings settings
  */
 bool StrValid(std::span<const char> str)
 {
-#ifdef WITH_RUST
 	return openttd_rust_validation_valid(reinterpret_cast<const uint8_t *>(str.data()), str.size()) != 0;
-#else
-	/* Assume the ABSOLUTE WORST to be in str as it comes from the outside. */
-	StringConsumer consumer(str);
-	while (consumer.AnyBytesLeft()) {
-		auto c = consumer.TryReadUtf8();
-		if (!c.has_value()) return false; // invalid codepoint
-		if (*c == 0) return true; // NUL termination
-		if (!IsPrintable(*c) || (*c >= SCC_SPRITE_START && *c <= SCC_SPRITE_END)) {
-			return false;
-		}
-	}
-
-	return false; // missing NUL termination
-#endif
 }
 
 /**
@@ -284,7 +207,6 @@ bool StrValid(std::span<const char> str)
  */
 void StrTrimInPlace(std::string &str)
 {
-#ifdef WITH_RUST
 	auto set = StringConsumer::WHITESPACE_NO_NEWLINE;
 	auto result = openttd_rust_bytes_trim(reinterpret_cast<const uint8_t *>(str.data()), str.size(),
 		reinterpret_cast<const uint8_t *>(set.data()), set.size());
@@ -294,33 +216,13 @@ void StrTrimInPlace(std::string &str)
 	}
 	str.erase(0, result.offset);
 	str.erase(result.length);
-#else
-	size_t first_pos = str.find_first_not_of(StringConsumer::WHITESPACE_NO_NEWLINE);
-	if (first_pos == std::string::npos) {
-		str.clear();
-		return;
-	}
-	str.erase(0, first_pos);
-
-	size_t last_pos = str.find_last_not_of(StringConsumer::WHITESPACE_NO_NEWLINE);
-	str.erase(last_pos + 1);
-#endif
 }
 
 std::string_view StrTrimView(std::string_view str, std::string_view characters_to_trim)
 {
-#ifdef WITH_RUST
 	auto result = openttd_rust_bytes_trim(reinterpret_cast<const uint8_t *>(str.data()), str.size(),
 		reinterpret_cast<const uint8_t *>(characters_to_trim.data()), characters_to_trim.size());
 	return result.length == 0 ? std::string_view{} : str.substr(result.offset, result.length);
-#else
-	size_t first_pos = str.find_first_not_of(characters_to_trim);
-	if (first_pos == std::string::npos) {
-		return std::string_view{};
-	}
-	size_t last_pos = str.find_last_not_of(characters_to_trim);
-	return str.substr(first_pos, last_pos - first_pos + 1);
-#endif
 }
 
 /**
@@ -331,12 +233,7 @@ std::string_view StrTrimView(std::string_view str, std::string_view characters_t
  */
 bool StrStartsWithIgnoreCase(std::string_view str, std::string_view prefix)
 {
-#ifdef WITH_RUST
 	return RustByteCase(str, prefix, 2) != 0;
-#else
-	if (str.size() < prefix.size()) return false;
-	return StrEqualsIgnoreCase(str.substr(0, prefix.size()), prefix);
-#endif
 }
 
 /** Case insensitive implementation of the standard character type traits. */
@@ -375,12 +272,7 @@ typedef std::basic_string_view<char, CaseInsensitiveCharTraits> CaseInsensitiveS
  */
 bool StrEndsWithIgnoreCase(std::string_view str, std::string_view suffix)
 {
-#ifdef WITH_RUST
 	return RustByteCase(str, suffix, 3) != 0;
-#else
-	if (str.size() < suffix.size()) return false;
-	return StrEqualsIgnoreCase(str.substr(str.size() - suffix.size()), suffix);
-#endif
 }
 
 /**
@@ -392,13 +284,7 @@ bool StrEndsWithIgnoreCase(std::string_view str, std::string_view suffix)
  */
 int StrCompareIgnoreCase(std::string_view str1, std::string_view str2)
 {
-#ifdef WITH_RUST
 	return RustByteCase(str1, str2, 0);
-#else
-	CaseInsensitiveStringView ci_str1{ str1.data(), str1.size() };
-	CaseInsensitiveStringView ci_str2{ str2.data(), str2.size() };
-	return ci_str1.compare(ci_str2);
-#endif
 }
 
 /**
@@ -409,12 +295,7 @@ int StrCompareIgnoreCase(std::string_view str1, std::string_view str2)
  */
 bool StrEqualsIgnoreCase(std::string_view str1, std::string_view str2)
 {
-#ifdef WITH_RUST
 	return RustByteCase(str1, str2, 1) != 0;
-#else
-	if (str1.size() != str2.size()) return false;
-	return StrCompareIgnoreCase(str1, str2) == 0;
-#endif
 }
 
 /**
@@ -426,13 +307,7 @@ bool StrEqualsIgnoreCase(std::string_view str1, std::string_view str2)
  */
 bool StrContainsIgnoreCase(std::string_view str, std::string_view value)
 {
-#ifdef WITH_RUST
 	return RustByteCase(str, value, 4) != 0;
-#else
-	CaseInsensitiveStringView ci_str{ str.data(), str.size() };
-	CaseInsensitiveStringView ci_value{ value.data(), value.size() };
-	return ci_str.find(ci_value) != ci_str.npos;
-#endif
 }
 
 /**
@@ -449,17 +324,7 @@ size_t Utf8StringLength(std::string_view str)
 
 bool strtolower(std::string &str, std::string::size_type offs)
 {
-#ifdef WITH_RUST
 	return openttd_rust_bytes_lower(reinterpret_cast<uint8_t *>(str.data()), str.size(), offs) != 0;
-#else
-	bool changed = false;
-	for (auto ch = str.begin() + offs; ch != str.end(); ++ch) {
-		auto new_ch = static_cast<char>(tolower(static_cast<unsigned char>(*ch)));
-		changed |= new_ch != *ch;
-		*ch = new_ch;
-	}
-	return changed;
-#endif
 }
 
 /**
@@ -636,31 +501,9 @@ static int ICUStringContains(std::string_view str, std::string_view value, bool 
 	if (res >= 0) return res > 0;
 #endif
 
-#ifdef WITH_RUST
 	return StrContainsIgnoreCase(str, value);
-#else
-	CaseInsensitiveStringView ci_str{ str.data(), str.size() };
-	CaseInsensitiveStringView ci_value{ value.data(), value.size() };
-	return ci_str.find(ci_value) != CaseInsensitiveStringView::npos;
-#endif
 }
 
-#ifndef WITH_RUST
-/**
- * Convert a single hex-nibble to a byte.
- *
- * @param c The hex-nibble to convert.
- * @return The byte the hex-nibble represents, or -1 if it is not a valid hex-nibble.
- */
-static int ConvertHexNibbleToByte(char c)
-{
-	if (c >= '0' && c <= '9') return c - '0';
-	if (c >= 'A' && c <= 'F') return c + 10 - 'A';
-	if (c >= 'a' && c <= 'f') return c + 10 - 'a';
-	return -1;
-}
-
-#endif
 
 /**
  * Convert a hex-string to a byte-array, while validating it was actually hex.
@@ -675,31 +518,7 @@ static int ConvertHexNibbleToByte(char c)
  */
 bool ConvertHexToBytes(std::string_view hex, std::span<uint8_t> bytes)
 {
-#ifdef WITH_RUST
 	return openttd_rust_bytes_hex_decode(reinterpret_cast<const uint8_t *>(hex.data()), hex.size(), bytes.data(), bytes.size()) != 0;
-#else
-	if (bytes.size() != hex.size() / 2) {
-		return false;
-	}
-
-	/* Hex-string lengths are always divisible by 2. */
-	if (hex.size() % 2 != 0) {
-		return false;
-	}
-
-	for (size_t i = 0; i < hex.size() / 2; i++) {
-		auto hi = ConvertHexNibbleToByte(hex[i * 2]);
-		auto lo = ConvertHexNibbleToByte(hex[i * 2 + 1]);
-
-		if (hi < 0 || lo < 0) {
-			return false;
-		}
-
-		bytes[i] = (hi << 4) | lo;
-	}
-
-	return true;
-#endif
 }
 
 #ifdef WITH_UNISCRIBE

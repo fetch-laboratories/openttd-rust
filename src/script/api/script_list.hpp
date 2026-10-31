@@ -12,9 +12,7 @@
 #define SCRIPT_LIST_HPP
 
 #include "script_object.hpp"
-#ifdef WITH_RUST
 #include "../../rust/script_list_ffi.h"
-#endif
 
 /** Maximum number of operations allowed for valuating a list. */
 static const int MAX_VALUATE_OPS = 1000000;
@@ -39,22 +37,11 @@ public:
 	static const bool SORT_DESCENDING = false;
 
 private:
-#ifdef WITH_RUST
 	std::unique_ptr<OpenTTDScriptList, decltype(&openttd_rust_list_destroy)> owner; ///< Rust storage/order/live cursor.
-#else
-	std::unique_ptr<ScriptListSorter> sorter; ///< Sorting algorithm
-	SorterType sorter_type;       ///< Sorting type
-	bool sort_ascending;          ///< Whether to sort ascending or descending
-	bool initialized;             ///< Whether an iteration has been started
-	int modifications;            ///< Number of modification that has been done. To prevent changing data while valuating.
-#endif
 
 protected:
-#ifdef WITH_RUST
 	/** Borrow storage for a synchronous derived-class reducer; never retain in Rust. */
 	OpenTTDScriptList *GetRustListOwner() const { return this->owner.get(); }
-#endif
-#ifdef WITH_RUST
 	/** Own actual host scopes; Rust supplies every VM/control decision. */
 	class VMControl {
 		HSQUIRRELVM vm;
@@ -75,7 +62,6 @@ protected:
 	/* Restore outer visibility for the upstream binding generator, which tracks
 	 * public markers without recognizing an un-inherited nested helper class. */
 protected:
-#endif
 	/* Temporary helper functions to get the raw index from either strongly and non-strongly typed pool items. */
 	template <typename T>
 	static auto GetRawIndex(const T &index) { return index; }
@@ -107,7 +93,6 @@ protected:
 	template <typename T, class ItemValid>
 	static void FillList(HSQUIRRELVM vm, ScriptList *list, ItemValid item_valid)
 	{
-#ifdef WITH_RUST
 		VMControl control(vm, list, 1);
 		control.Drive();
 		/* Live typed iteration and validation remain host operations. No snapshot
@@ -118,69 +103,6 @@ protected:
 			while (control.NeedsIndex()) control.Index(static_cast<SQInteger>(GetRawIndex(item->index)));
 		}
 		control.Finish();
-#else
-		int nparam = sq_gettop(vm) - 1;
-		if (nparam >= 1) {
-			/* Make sure the filter function is really a function, and not any
-			 * other type. It's parameter 2 for us, but for the user it's the
-			 * first parameter they give. */
-			SQObjectType valuator_type = sq_gettype(vm, 2);
-			if (valuator_type != OT_CLOSURE && valuator_type != OT_NATIVECLOSURE) {
-				throw sq_throwerror(vm, "parameter 1 has an invalid type (expected function)");
-			}
-
-			/* Push the function to call */
-			sq_push(vm, 2);
-		}
-
-		/* Don't allow docommand from a filter, as we can't resume in
-		 * mid C++-code. */
-		ScriptObject::DisableDoCommandScope disabler{};
-
-		if (nparam < 1) {
-			ScriptList::FillList<T>(list, item_valid);
-		} else {
-			/* Limit the total number of ops that can be consumed by a filter operation, if a filter function is present */
-			SQOpsLimiter limiter(vm, MAX_VALUATE_OPS, "list filter function");
-
-			ScriptList::FillList<T>(list, item_valid,
-				[vm, nparam](const T *item) {
-					/* Push the root table as instance object, this is what squirrel does for meta-functions. */
-					sq_pushroottable(vm);
-					/* Push all arguments for the valuator function. */
-					sq_pushinteger(vm, GetRawIndex(item->index));
-					for (int i = 0; i < nparam - 1; i++) {
-						sq_push(vm, i + 3);
-					}
-
-					/* Call the function. Squirrel pops all parameters and pushes the return value. */
-					if (SQ_FAILED(sq_call(vm, nparam + 1, SQTrue, SQFalse))) {
-						throw static_cast<SQInteger>(SQ_ERROR);
-					}
-
-					SQBool add = SQFalse;
-
-					/* Retrieve the return value */
-					switch (sq_gettype(vm, -1)) {
-						case OT_BOOL:
-							sq_getbool(vm, -1, &add);
-							break;
-
-						default:
-							throw sq_throwerror(vm, "return value of filter is not valid (not bool)");
-					}
-
-					/* Pop the return value. */
-					sq_poptop(vm);
-
-					return add;
-				}
-			);
-
-			/* Pop the filter function */
-			sq_poptop(vm);
-		}
-#endif
 	}
 
 	template <typename T>
@@ -200,13 +122,6 @@ protected:
 	void CopyList(const ScriptList *list);
 
 public:
-#ifndef WITH_RUST
-	using ScriptListSet = std::set<std::pair<SQInteger, SQInteger>>; ///< List per value
-	using ScriptListMap = std::map<SQInteger, SQInteger>; ///< List per item
-
-	ScriptListMap items;           ///< The items in the list
-	ScriptListSet values; ///< The items in the list, sorted by value
-#endif
 
 	ScriptList();
 	~ScriptList();
