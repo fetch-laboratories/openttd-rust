@@ -460,6 +460,9 @@ impl TileTypeAccess {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn require_range(&self, tile: u32) -> Option<TileFields<'_>> {
+        if self.native_assert.is_none() {
+            return self.fields(tile);
+        }
         if self.allocation.count == 0 {
             return None;
         }
@@ -469,6 +472,13 @@ impl TileTypeAccess {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn require_type(&self, tile: u32, kind: u8) -> Option<TileFields<'_>> {
+        if self.native_assert.is_none() {
+            let fields = self.fields(tile)?;
+            if self.assertions() && crate::tile_map::get_tile_type_from_fields(&fields) != kind {
+                return None;
+            }
+            return Some(fields);
+        }
         if self.assertions() {
             let fields = self.require_range(tile)?;
             self.check(crate::tile_map::get_tile_type_from_fields(&fields) == kind)?;
