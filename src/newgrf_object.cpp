@@ -725,7 +725,6 @@ const OpenTTDObjectQueryServices &GetRustObjectQueryServices() noexcept
 		.nearby = RustSignedNearbyTile,
 		.nearby_info = RustNearbyTileInformation,
 		.terrain = RustTerrainType,
-		.town_zone = RustTownRadiusGroup,
 		.badges = RustSpecBadges<ObjectSpec>,
 		.grfid = RustResolverGRFFileID,
 		.version8 = RustResolverGRFVersion8,

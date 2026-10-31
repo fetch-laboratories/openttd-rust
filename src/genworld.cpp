@@ -154,7 +154,6 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.dirty = RustScreenDirty,
 		.set_progress = [](OpenTTDWorldFrame *f, GenWorldProgress p, uint32_t total) noexcept { return RunGenerationProgress(f, [=] { RustSetGeneratingWorldProgress(p, total); }); },
 		.increase_progress = [](OpenTTDWorldFrame *f, GenWorldProgress p) noexcept { return RunGenerationProgress(f, [=] { RustIncreaseGeneratingWorldProgress(p); }); },
-		.town_roads = []() noexcept { return CheckTownRoadTypes(); },
 		.freeform = OpenTTDFreeformEdges,
 		.count_land = RustCountLandTiles,
 		.landscape_begin = [](OpenTTDWorldFrame *f) noexcept { auto &c = f->landscape.emplace(); return OpenTTDWorldLandscape{&c.frame, &c.heightmap.view, c.settings}; },

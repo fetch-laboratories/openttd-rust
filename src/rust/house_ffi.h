@@ -30,7 +30,7 @@ struct OpenTTDHouseLoopSpec { uint16_t callbacks; uint8_t flags, population, mai
 struct OpenTTDHouseAnimationSpec { uint16_t callbacks; uint8_t extra_flags; };
 struct OpenTTDHouseNewSpec { uint16_t callbacks; uint8_t flags, processing_time; };
 struct OpenTTDHouseProduction { uint16_t callbacks; uint8_t population, mail; };
-struct OpenTTDHouseRemoval { int64_t cost; uint16_t rating; };
+struct OpenTTDHouseRemoval { uint8_t factor; uint16_t rating; };
 struct OpenTTDHouseAcceptance { uint8_t accepts[16], amounts[16]; };
 struct OpenTTDHouseReseed { uint32_t reseed; uint8_t used; };
 struct OpenTTDHouseErrors { uint32_t demolish, is_protected, refuses, sloped, bridge, flat, no_town; };
@@ -53,7 +53,6 @@ struct OpenTTDHouseServices {
 	uint8_t (*processing)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(processing);
 	uint16_t (*clean_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(clean_type);
 	OpenTTDTownRef (*town)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town);
-	Town *(*town_shell)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_shell);
 	OpenTTDHouseLoopSpec (*loop_spec)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(loop_spec);
 	OpenTTDHouseAnimationSpec (*animation_spec)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(animation_spec);
 	OpenTTDHouseNewSpec (*new_spec)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(new_spec);
@@ -88,6 +87,8 @@ struct OpenTTDHouseServices {
 /* Resolver and AnimationBase services live beside their native templates. */
 
 extern "C" {
+void openttd_rust_house_accepted_tile(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t, uint32_t *, uint64_t *);
+void openttd_rust_house_accepted_prototype(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint16_t, uint32_t *);
 void openttd_rust_house_tile_loop(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile);
 void openttd_rust_house_animate(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile);
 void openttd_rust_house_place(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, OpenTTDCommandCost *, uint16_t flags, uint32_t tile, uint16_t house, bool is_protected, bool replace);

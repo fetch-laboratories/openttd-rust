@@ -363,6 +363,7 @@ const OpenTTDCargoRegistryServices &GetRustCargoRegistryServices() noexcept
 		.clear_specs = [](uint8_t first) noexcept { std::fill(RustCargoSpec(first), RustCargoSpec(0) + CargoSpec::GetArraySize(), CargoSpec{}); },
 		.label_spec = [](const CargoSpec *cs) noexcept -> OpenTTDCargoLabelSpec { return {RustCargoSpecLabel(cs), RustCargoSpecBitnum(cs)}; },
 		.bitnum = RustCargoSpecBitnum,
+		.town_acceptance_effect = RustCargoTownAcceptanceEffect,
 		.finalise_spec = [](const CargoSpec *cs) noexcept -> OpenTTDCargoFinaliseSpec { return {RustCargoSpecLabel(cs), RustCargoSpecBitnum(cs), cs->town_production_effect}; },
 		.order_spec = [](const CargoSpec *cs) noexcept -> OpenTTDCargoOrderSpec { return {RustCargoSpecIndex(cs), cs->town_production_effect, cs->classes.Test(CargoClass::Special)}; },
 		.index = RustCargoSpecIndex,

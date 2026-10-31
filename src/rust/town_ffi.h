@@ -85,7 +85,7 @@ struct OpenTTDTownLeaves {
 
 	void (*population_changed)(uint32_t town) noexcept OPENTTD_SERVICE_DEFAULT(population_changed);
 	uint32_t (*house_count)() noexcept OPENTTD_SERVICE_DEFAULT(house_count);
-	void (*update_max_pass)(uint32_t town) noexcept OPENTTD_SERVICE_DEFAULT(update_max_pass);
+	void (*road_type_error)(int32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_type_error);
 	uint32_t (*next_town)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_town);
 	bool (*build_bridge)(uint32_t tile, uint32_t end, uint32_t bridge, uint32_t road_type, uint32_t execute) noexcept OPENTTD_SERVICE_DEFAULT(build_bridge);
 	bool (*build_tunnel)(uint32_t tile, uint32_t road_type, uint32_t execute) noexcept OPENTTD_SERVICE_DEFAULT(build_tunnel);
@@ -99,6 +99,16 @@ uint32_t OpenTTDNextTownID(uint32_t from) noexcept;
 const OpenTTDTownAuthorityServices &GetRustTownAuthorityServices() noexcept;
 
 extern "C" {
+void openttd_rust_town_rebuild_index(const OpenTTDSharedServices *);
+const OpenTTDTownHandle *openttd_rust_town_calc_closest(const OpenTTDSharedServices *, uint32_t, uint32_t);
+const OpenTTDTownHandle *openttd_rust_town_closest(const OpenTTDSharedServices *, uint32_t, uint32_t);
+OpenTTDTownHandle *openttd_rust_town_random(const OpenTTDSharedServices *);
+void openttd_rust_town_update_max_pass(const OpenTTDTownLeaves *, OpenTTDTownState *);
+bool openttd_rust_town_check_road_types(const OpenTTDTownLeaves *);
+int64_t openttd_rust_house_removal_cost(uint8_t);
+uint8_t openttd_rust_town_radius_group(const OpenTTDTownState *, const OpenTTDSharedServices *, uint32_t);
+uint8_t openttd_rust_town_first_cargo(uint8_t);
+uint16_t openttd_rust_town_climate_mask(uint8_t);
 OpenTTDByteSpan openttd_rust_town_text(const OpenTTDTownState *);
 void openttd_rust_town_set_text(OpenTTDTownState *, OpenTTDByteSpan);
 OpenTTDByteSpan openttd_rust_town_name(const OpenTTDTownState *);

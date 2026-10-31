@@ -8,6 +8,7 @@
 #define RUST_CARGO_REGISTRY_FFI_H
 #include "services_ffi.h"
 #include "cargo_registry_lookup.h"
+enum TownAcceptanceEffect : uint8_t;
 struct CargoSpec;
 struct GRFFile;
 struct SpriteGroup;
@@ -36,6 +37,7 @@ struct OpenTTDCargoRegistryServices {
 	void (*clear_specs)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_specs);
 	OpenTTDCargoLabelSpec (*label_spec)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(label_spec);
 	uint8_t (*bitnum)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(bitnum);
+	TownAcceptanceEffect (*town_acceptance_effect)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(town_acceptance_effect);
 	OpenTTDCargoFinaliseSpec (*finalise_spec)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(finalise_spec);
 	OpenTTDCargoOrderSpec (*order_spec)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(order_spec);
 	uint8_t (*index)(const CargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(index);

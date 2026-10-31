@@ -46,7 +46,6 @@ struct OpenTTDHouseDefinitionServices {
 	void (*resize_specs)(size_t count) noexcept OPENTTD_SERVICE_DEFAULT(resize_specs);
 	void (*move_spec)(const HouseSpec *spec, uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(move_spec);
 	void (*set_override)(const HouseSpec *spec, uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(set_override);
-	uint16_t (*climate_mask)() noexcept OPENTTD_SERVICE_DEFAULT(climate_mask);
 	LandscapeType (*landscape)() noexcept OPENTTD_SERVICE_DEFAULT(landscape);
 	void (*too_many)(uint32_t last) noexcept OPENTTD_SERVICE_DEFAULT(too_many);
 	void (*invalid_substitute)(uint8_t substitute, uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(invalid_substitute);

@@ -53,7 +53,6 @@ pub struct Services {
     pub shared: *const crate::services::Services,
     pub town: *const crate::town::Leaves,
     pub industry: *const crate::industry::Services,
-    pub random_town: extern "C" fn() -> crate::town::TownRef,
     pub industry_owner: extern "C" fn(*mut c_void) -> *mut crate::industry::Industry,
     pub industry_id: extern "C" fn(*mut c_void) -> u16,
     pub next_industry: extern "C" fn(u32) -> u32,
@@ -219,14 +218,14 @@ impl Services {
                 crate::cargo_registry::town_count(crate::cargotype::TPE_PASSENGERS) as u32,
             );
         let cargo = crate::cargo_registry::town_cargo(crate::cargotype::TPE_PASSENGERS, n as usize);
-        let src = (self.random_town)();
+        let src = town::spatial::random(unsafe { &*self.shared });
         if unsafe {
             town::population(src.state) < SUBSIDY_PAX_MIN_POPULATION
                 || town::subsidy_percent_transported(src.state, cargo) > SUBSIDY_MAX_PCT_TRANSPORTED
         } {
             return false;
         }
-        let dst = (self.random_town)();
+        let dst = town::spatial::random(unsafe { &*self.shared });
         if unsafe { town::population(dst.state) < SUBSIDY_PAX_MIN_POPULATION }
             || src.shell == dst.shell
         {
@@ -293,7 +292,7 @@ impl Services {
         if !(self.can_allocate)() {
             return false;
         }
-        let src = (self.random_town)();
+        let src = town::spatial::random(unsafe { &*self.shared });
         if unsafe { town::population(src.state) < SUBSIDY_CARGO_MIN_POPULATION } {
             return false;
         }
@@ -356,7 +355,7 @@ impl Services {
     }
     fn destination(&self, scratch: Cargo, cargo: u8, src: Source) -> bool {
         let dst = if crate::random_func::chance16_i(1, 2, self.shared().random()) {
-            let town = (self.random_town)();
+            let town = town::spatial::random(unsafe { &*self.shared });
             self.scan(scratch, town.state, true);
             if unsafe { scratch.data.add(usize::from(cargo)).read() < 8 } {
                 return false;
@@ -591,7 +590,6 @@ crate::abi::layouts! {
         shared,
         town,
         industry,
-        random_town,
         industry_owner,
         industry_id,
         next_industry,

@@ -66,7 +66,7 @@ pub struct CommandServices {
     pub set_object_town: extern "C" fn(*mut Object, *mut TownHandle),
     pub industry_town_by_tile: extern "C" fn(u32) -> *mut TownHandle,
     pub town_owned_road: extern "C" fn(u32) -> bool,
-    pub remove_town_indices: extern "C" fn(*mut TownHandle),
+    pub remove_town_sign: extern "C" fn(*mut TownHandle),
     pub delete_town: extern "C" fn(*mut TownHandle),
     pub cleaning_pool: extern "C" fn() -> bool,
     pub close_view: extern "C" fn(u16),
@@ -469,7 +469,8 @@ impl<'a> Commands<'a> {
             }
         }
         if flags & DoCommandFlag::EXECUTE != 0 {
-            (self.s.remove_town_indices)(t.shell);
+            super::spatial::remove(self.shared, t.id);
+            (self.s.remove_town_sign)(t.shell);
             (self.s.delete_town)(t.shell);
             w::hit(w::TOWN_COMMAND_DELETE);
         }
@@ -507,7 +508,7 @@ pub unsafe extern "C" fn openttd_rust_town_cargo_goal(
         return;
     }
     let t = c.resolve(id);
-    if t.shell.is_null() || !(c.f.cargo_effect_exists)(effect) {
+    if t.shell.is_null() || crate::cargo_registry::first_town_acceptance(effect.0).is_none() {
         c.error(out);
         return;
     }
@@ -824,7 +825,8 @@ pub unsafe extern "C" fn openttd_rust_town_post_destruct(s: &CommandServices) {
         }
         from = o.id.wrapping_add(1);
         if unsafe { (c.object_query().town)(o.object) }.is_null() {
-            let town = (c.shared.calc_closest_town)(
+            let town = crate::town::spatial::calc_closest(
+                c.shared,
                 unsafe { (c.object_query().north)(o.object) },
                 u32::MAX,
             );
@@ -877,7 +879,7 @@ crate::abi::layouts! {
         set_object_town,
         industry_town_by_tile,
         town_owned_road,
-        remove_town_indices,
+        remove_town_sign,
         delete_town,
         cleaning_pool,
         close_view,

@@ -27,7 +27,9 @@ pub mod founding;
 pub mod house;
 pub mod import;
 pub mod names;
+pub(crate) mod policy;
 pub mod resolver;
+pub(crate) mod spatial;
 
 use crate::history_type::LAST_MONTH;
 use crate::random_func::chance16_i;
@@ -229,6 +231,14 @@ pub(crate) unsafe fn get_radius_group(
         &state.simulation.radius,
         map.distance_square(tile, state.simulation.xy),
     )
+}
+/// `GetTownRadiusGroup` for a live native shell, resolving its canonical owner once.
+pub(crate) unsafe fn radius_from_shell(
+    s: &Services,
+    town: *const crate::services::TownHandle,
+    tile: u32,
+) -> u8 {
+    unsafe { get_radius_group((s.town_owner)(town), tile, s.map()) }
 }
 /// Copied canonical road-work policy inputs; no owner reference spans a service.
 /// SAFETY: Caller supplies a live, serialized owner.
@@ -641,7 +651,7 @@ pub unsafe extern "C" fn openttd_rust_town_authority_station(
         (c.zero)(result);
         return;
     }
-    let town = (s.closest_town)(tile, u32::from((a.authority_distance)()));
+    let town = crate::town::spatial::closest(s, tile, u32::from((a.authority_distance)()));
     if town.is_null() {
         (c.zero)(result);
         return;
@@ -731,7 +741,7 @@ pub struct Leaves {
 
     pub population_changed: extern "C" fn(u32),
     pub house_count: extern "C" fn() -> u32,
-    pub update_max_pass: extern "C" fn(u32),
+    pub road_type_error: extern "C" fn(i32),
     pub next_town: extern "C" fn(u32) -> u32,
     pub build_bridge: extern "C" fn(u32, u32, u32, u32, u32) -> bool,
     pub build_tunnel: extern "C" fn(u32, u32, u32) -> bool,
@@ -1915,7 +1925,7 @@ impl Engine<'_> {
         // their shell. No owner reference spans any construction callback.
         let shell = *self.house_shell.get_or_init(|| {
             // SAFETY: Static house table referenced by the town leaves.
-            (unsafe { &*self.leaves.houses }.town_shell)(town)
+            (self.services.town_by_id)(town)
         });
         let town_ref = TownRef {
             shell,
@@ -2094,7 +2104,7 @@ impl Engine<'_> {
         unsafe {
             update_radius(self.owner);
         }
-        (self.leaves.update_max_pass)(town);
+        policy::update_max_pass(self.leaves, self.owner);
     }
     fn tick_all(mut self) {
         if !(self.leaves.environment.editor)() {
@@ -2588,7 +2598,7 @@ crate::abi::layouts! {
 
         population_changed,
         house_count,
-        update_max_pass,
+        road_type_error,
         next_town,
         build_bridge,
         build_tunnel,

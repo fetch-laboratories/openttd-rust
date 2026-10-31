@@ -16,7 +16,6 @@ inline OpenTTDCargoServices CargoTestServices()
 		.spec = [](uint8_t, OpenTTDCargoSpec *) noexcept { std::abort(); },
 		.registry = nullptr,
 		.station_company = [](const Station *) noexcept -> uint8_t { std::abort(); },
-		.town_acceptance_effect = [](uint8_t) noexcept -> TownAcceptanceEffect { std::abort(); },
 		.station_town = [](const Station *) noexcept -> const OpenTTDTownHandle * { std::abort(); },
 		.resolver = nullptr,
 		.subsidies = []() noexcept -> const OpenTTDSubsidyServices * { std::abort(); },

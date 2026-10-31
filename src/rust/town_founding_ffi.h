@@ -41,7 +41,6 @@ struct OpenTTDTownFoundingServices {
 	OpenTTDTownRef (*allocate)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(allocate);
 	OpenTTDTownRef (*resolve)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve);
 	bool (*can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
-	bool (*close_to_town)(uint32_t, uint) noexcept OPENTTD_SERVICE_DEFAULT(close_to_town);
 	bool (*flat)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(flat);
 	uint (*water_distance)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(water_distance);
 	uint (*scale_size)(uint) noexcept OPENTTD_SERVICE_DEFAULT(scale_size);
@@ -54,8 +53,7 @@ struct OpenTTDTownFoundingServices {
 	uint8_t (*larger_towns)() noexcept OPENTTD_SERVICE_DEFAULT(larger_towns);
 	const TownNameParams *(*parameters)(OpenTTDTownFoundingFrame *) noexcept OPENTTD_SERVICE_DEFAULT(parameters);
 	OpenTTDTownNameMetadata (*metadata)(const TownNameParams *) noexcept OPENTTD_SERVICE_DEFAULT(metadata);
-	void (*insert_town)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(insert_town);
-	bool (*cargo_effect_exists)(TownAcceptanceEffect) noexcept OPENTTD_SERVICE_DEFAULT(cargo_effect_exists);
+	void (*prepare_town)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(prepare_town);
 	void (*prepare_rename)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(prepare_rename);
 	void (*name_changed)(Town *, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(name_changed);
 	void (*update_virt)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(update_virt);

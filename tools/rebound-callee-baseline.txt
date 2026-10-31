@@ -124,8 +124,6 @@ rebound | OpenTTDTileMaxPixelZ | src/industry_cmd.cpp | pixel_max_z
 rebound | OpenTTDTileMaxPixelZ | src/rust/vehicle_services.cpp | max_pixel_z
 rebound | OpenTTDTownOwnerByID | src/rust/services.cpp | town_owner_by_id
 rebound | OpenTTDTownOwnerByID | src/town_cmd.cpp | resolve_owner
-rebound | OpenTTDTownShellByID | src/newgrf_house.cpp | town_by_id
-rebound | OpenTTDTownShellByID | src/town_cmd.cpp | town_shell
 rebound | OpenTTDTownTile | src/industry_cmd.cpp | town_position
 rebound | OpenTTDTownTile | src/newgrf_industries.cpp | town_tile
 rebound | OpenTTDTownTile | src/newgrf_object.cpp | town_tile
@@ -511,9 +509,6 @@ rebound | RustTileRailType | src/rust/vehicle_services_newgrf.h | tile_railtype
 rebound | RustTownAuthorityIndex | src/newgrf_industries.cpp | town_id
 rebound | RustTownAuthorityIndex | src/rust/disaster_adapter.hpp | town_index
 rebound | RustTownAuthorityIndex | src/town_cmd.cpp | town_index
-rebound | RustTownRadiusGroup | src/newgrf_industries.cpp | town_zone
-rebound | RustTownRadiusGroup | src/newgrf_object.cpp | town_zone
-rebound | RustTownRadiusGroup | src/newgrf_roadstop.cpp | town_zone
 rebound | RustTownStorageCount | src/rust/newgrf_storage_services.cpp | town_count
 rebound | RustTownStorageCount | src/town_cmd.cpp | storage_count
 rebound | RustTrainLimit | src/rust/engine_adapter.hpp | train_limit

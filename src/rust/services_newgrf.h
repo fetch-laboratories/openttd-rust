@@ -125,7 +125,6 @@ inline uint32_t RustSignedNearbyTile(uint8_t parameter, uint32_t tile) noexcept 
 inline uint32_t RustNearbyStationTile(uint8_t parameter, uint32_t tile, Axis axis) noexcept { return RustNearbyTileWithAxis(parameter, tile, true, axis); }
 inline uint32_t RustNearbyTileInformation(uint32_t tile, bool version8) noexcept { return GetNearbyTileInformation(TileIndex(tile), version8); }
 inline uint32_t RustTerrainType(uint32_t tile) noexcept { return GetTerrainType(TileIndex(tile)); }
-inline HouseZone RustTownRadiusGroup(const Town *town, uint32_t tile) noexcept { return GetTownRadiusGroup(town, TileIndex(tile)); }
 template <typename Spec>
 inline uint32_t RustSpecBadges(const ResolverObject *resolver, const Spec *spec, uint32_t parameter) noexcept { return GetBadgeVariableResult(*RustResolverGRFFile(resolver), spec->badges, parameter); }
 inline uint32_t RustHouseBadges(const ResolverObject *resolver, uint16_t house, uint32_t parameter) noexcept { return RustSpecBadges(resolver, RustHouseSpec(house), parameter); }

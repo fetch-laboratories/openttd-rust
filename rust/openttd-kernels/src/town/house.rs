@@ -154,7 +154,7 @@ pub struct HouseProduction {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct HouseRemoval {
-    pub cost: i64,
+    pub factor: u8,
     pub rating: u16,
 }
 #[repr(C)]
@@ -199,7 +199,6 @@ pub struct HouseServices {
     pub processing: extern "C" fn(u32) -> u8,
     pub clean_type: extern "C" fn(u32) -> u16,
     pub town: extern "C" fn(u32) -> TownRef,
-    pub town_shell: extern "C" fn(u32) -> *mut TownHandle,
     pub loop_spec: extern "C" fn(u16) -> HouseLoopSpec,
     pub animation_spec: extern "C" fn(u16) -> HouseAnimationSpec,
     pub new_spec: extern "C" fn(u16) -> HouseNewSpec,
@@ -869,7 +868,7 @@ impl<'a> House<'a> {
             return;
         }
         let removal = (self.h.removal)(house);
-        (c.expense_money)(result, 0, removal.cost);
+        (c.expense_money)(result, 0, super::policy::removal_cost(removal.factor));
         let rating = i32::from(removal.rating);
         let company = (self.s.current_company)();
         let authority = self.authority();
@@ -1045,7 +1044,7 @@ impl<'a> House<'a> {
                     }
                 }
             }
-            let town = (self.s.closest_town)(tile, u32::MAX);
+            let town = crate::town::spatial::closest(self.s, tile, u32::MAX);
             let id = u32::from((self.authority().town_index)(town));
             let completed = (self.h.place_houses)() == 2;
             let random = self.s.random() & 0xFF;
@@ -1245,7 +1244,7 @@ impl<'a> House<'a> {
                 (self.l.house_count)() as usize,
             );
         };
-        (self.s.rebuild_town_tree)();
+        crate::town::spatial::rebuild(self.s);
         // SAFETY: Immediate owner writes; no service runs while accessed.
         self.towns(|state| unsafe {
             (*state).simulation.population = 0;
@@ -1417,7 +1416,8 @@ pub unsafe extern "C" fn openttd_rust_house_accepted(
 /// `AddAcceptedCargo_Town`, for the shared tile dispatch.
 /// # Safety
 /// Live tables; `acceptance` names 64 values and `always` is writable.
-pub(crate) unsafe fn accepted_tile(
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_house_accepted_tile(
     leaves: *const Leaves,
     services: *const Services,
     tile: u32,
@@ -1520,7 +1520,7 @@ crate::abi::layouts! {
         house,
     };
     "OpenTTDHouseRemoval" ["probe"] => HouseRemoval {
-        cost,
+        factor,
         rating,
     };
     "OpenTTDHouseAcceptance" ["probe"] => HouseAcceptance {
@@ -1557,7 +1557,6 @@ crate::abi::layouts! {
         processing,
         clean_type,
         town,
-        town_shell,
         loop_spec,
         animation_spec,
         new_spec,
@@ -1589,4 +1588,24 @@ crate::abi::layouts! {
         company_human,
         errors,
     };
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_house_accepted_prototype(
+    leaves: *const Leaves,
+    services: *const Services,
+    id: u16,
+    acceptance: *mut u32,
+) {
+    unsafe {
+        std::ptr::write_bytes(acceptance, 0, usize::from(crate::cargo_type::NUM_CARGO));
+    }
+    let mut always = 0;
+    house(leaves, services).accepted(
+        INVALID_TILE,
+        id,
+        std::ptr::null_mut(),
+        acceptance,
+        &raw mut always,
+    );
 }

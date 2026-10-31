@@ -199,3 +199,9 @@ impl crate::map_func::World<'_> {
             .0
     }
 }
+
+/// `HasTownOwnedRoad`, preserving the short circuit before `GetRoadOwner`.
+pub(crate) fn has_town_owned_road(world: &crate::map_func::World<'_>, tile: u32) -> bool {
+    world.road_type(tile, false) != crate::road_type::INVALID_ROADTYPE
+        && (world.shared.road_owner)(tile) == crate::company_type::OWNER_TOWN
+}
