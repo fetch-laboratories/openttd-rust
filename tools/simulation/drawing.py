@@ -9,7 +9,7 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
-from .core import ROOT
+from .core import ROOT, normalize
 
 Scenario = dict[str, Any]
 
@@ -62,11 +62,14 @@ def prepare(
     env: dict[str, str],
     result: dict[str, Any],
 ) -> Scenario:
-    """Both roles must draw with identical base graphics."""
+    """Load a save without GLOG history, which would make only the candidate append
+    a load-revision event; both roles must draw with identical base graphics."""
     if scenario.get("draw"):
         sets = [tree_digest(builds[role] / "baseset") for role in builds]
         if not sets[0] or sets[0] != sets[-1]:
             raise RuntimeError("reference and candidate base graphics differ")
+        save, _ = normalize(Path(scenario["save"]), out / scenario["name"] / "source")
+        scenario = dict(scenario, save=str(save))
     return scenario
 
 

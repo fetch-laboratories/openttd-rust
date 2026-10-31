@@ -1248,9 +1248,11 @@ class DrawingWorkloadTests(unittest.TestCase):
                 (root / role / "baseset/opengfx.grf").write_bytes(b"gfx")
                 (root / role / "screenshot").mkdir()
             builds = {role: root / role for role in ("reference", "candidate")}
-            self.assertIs(
-                drawing.prepare(scenario, {}, builds, root, 1, {}, {}), scenario
+            save = simulate.ROOT / "migration/saves/padhattan-ridge-1996.sav"
+            prepared = drawing.prepare(
+                dict(scenario, name="draw", save=str(save)), {}, builds, root, 1, {}, {}
             )
+            self.assertNotIn("GLOG", simulate.read_save(Path(prepared["save"])))
             (root / "candidate/baseset/opengfx.grf").write_bytes(b"other")
             with self.assertRaisesRegex(RuntimeError, "base graphics differ"):
                 drawing.prepare(scenario, {}, builds, root, 1, {}, {})
