@@ -271,6 +271,17 @@ pub unsafe extern "C" fn openttd_test_flat_empty_world(
     unsafe { crate::landscape_generation::flat_empty_world(a, height, freeform, max_height) }
 }
 
+/// Seed a fixture train's `cached_max_curve_speed`; production writes stay in Rust owners.
+/// # Safety
+/// `state` is a live, exclusively accessed train state.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_train_state_set_cached_max_curve_speed(
+    state: *mut crate::train_state::State,
+    value: u16,
+) {
+    crate::raw_field::write_field!(state, cached_max_curve_speed, value);
+}
+
 /// `LoadTownData` coordinate policy, compared with the original native expression.
 /// # Safety
 /// Live shared services and map for the synchronous call.

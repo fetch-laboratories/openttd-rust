@@ -92,4 +92,8 @@ inline uint8_t RustTrainPathBackoffInterval() noexcept { return _settings_game.p
 inline bool RustTrainReservePaths() noexcept { return _settings_game.pf.reserve_paths; }
 inline uint16_t RustMinutesPerCalendarYear() noexcept { return _settings_game.economy.minutes_per_calendar_year; }
 inline bool RustUsingWallclockUnits(bool newgame) noexcept { return (newgame ? _settings_newgame : _settings_game).economy.timekeeping_units == TKU_WALLCLOCK; }
+inline VehicleDefaultSettings *RustClientVehicleDefaults() noexcept { return &_settings_client.company.vehicle; }
+inline uint16_t RustNewgameMinutesPerCalendarYear() noexcept { return _settings_newgame.economy.minutes_per_calendar_year; }
+inline void RustSetMinutesPerCalendarYear(bool newgame, uint16_t minutes) noexcept { (newgame ? _settings_newgame : _settings_game).economy.minutes_per_calendar_year = minutes; }
+inline void RustSetNewgameWallclockUnits() noexcept { _settings_newgame.economy.timekeeping_units = TKU_WALLCLOCK; }
 #endif /* RUST_SETTINGS_SERVICES_H */

@@ -232,6 +232,7 @@ const OpenTTDRoadRegistryServices &GetRustRoadRegistryServices() noexcept
 #endif
 
 
+#ifndef WITH_RUST
 /**
  * Verify whether a road vehicle is available.
  * @return \c true if at least one road vehicle is available, \c false if not
@@ -240,6 +241,7 @@ bool RoadVehiclesAreBuilt()
 {
 	return !RoadVehicle::Iterate().empty();
 }
+#endif /* WITH_RUST */
 
 
 /**

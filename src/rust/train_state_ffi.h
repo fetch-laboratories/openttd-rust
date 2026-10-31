@@ -38,7 +38,6 @@ uint8_t OPENTTD_RUST_CALL openttd_rust_train_state_get_user_def_data(const OpenT
 int16_t OPENTTD_RUST_CALL openttd_rust_train_state_get_cached_curve_speed_mod(const OpenTTDTrainState *);
 void OPENTTD_RUST_CALL openttd_rust_train_state_set_cached_curve_speed_mod(OpenTTDTrainState *, int16_t);
 uint16_t OPENTTD_RUST_CALL openttd_rust_train_state_get_cached_max_curve_speed(const OpenTTDTrainState *);
-void OPENTTD_RUST_CALL openttd_rust_train_state_set_cached_max_curve_speed(OpenTTDTrainState *, uint16_t);
 
 }
 #endif /* RUST_TRAIN_STATE_FFI_H */

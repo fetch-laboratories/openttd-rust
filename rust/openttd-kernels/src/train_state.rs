@@ -206,13 +206,3 @@ pub unsafe extern "C" fn openttd_rust_train_state_get_cached_max_curve_speed(
 ) -> u16 {
     read_field!(state, cached_max_curve_speed)
 }
-/// Write the shell's canonical `cached_max_curve_speed` scalar.
-/// # Safety
-/// The serialized shell owns this exclusively accessible live state.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_train_state_set_cached_max_curve_speed(
-    state: *mut State,
-    value: u16,
-) {
-    write_field!(state, cached_max_curve_speed, value);
-}
