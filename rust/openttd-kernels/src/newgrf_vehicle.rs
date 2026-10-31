@@ -1033,12 +1033,10 @@ unsafe fn variable(
         let check = |ok| (s.check)(ok);
         match variable {
             0x25 => {
-                return unsafe {
-                    crate::engine_capabilities::openttd_rust_engine_grfid(
-                        s.capabilities,
-                        (s.vehicle.engine)(handle(v)).0.as_ptr(),
-                    )
-                };
+                return crate::engine_capabilities::openttd_rust_engine_grfid(
+                    s.capabilities,
+                    (s.vehicle.engine)(handle(v)).0.as_ptr(),
+                );
             }
             0x40 | 0x41 | 0x42 | 0x43 | 0x4d => return cached_variable(s, v, variable, grf),
             0x44 => {

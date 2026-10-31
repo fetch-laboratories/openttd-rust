@@ -606,7 +606,7 @@ unsafe fn invalid_kind(s: &Services) -> ! {
     unsafe { ((*((s.resolver)())).shared.not_reached)() };
     std::process::abort()
 }
-/// `Engine::GetRange` narrows the live property result to uint16_t.
+/// `Engine::GetRange` narrows the live property result to `uint16_t`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_range(s: &Services, e: E) -> u16 {
     if (s.kind)(e) != VehicleType::AIRCRAFT {
@@ -649,7 +649,7 @@ pub(crate) fn price(s: &Services, e: E, index: u32, factor: u32, shift: i32) -> 
     }
     crate::economy_func::get_price(index, factor, (s.price_shift)(e, index), shift)
 }
-/// `Engine::GetRunningCost` preserves INVALID_PRICE before any property callback.
+/// `Engine::GetRunningCost` preserves `INVALID_PRICE` before any property callback.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_running_cost(s: &Services, e: E) -> i64 {
     let base = unsafe { running_price(s, e) };

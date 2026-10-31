@@ -205,7 +205,7 @@ pub struct VehicleServices {
     /// `GetVehicleCallback(callback, 0, 0, v->engine_type, v)`.
     pub callback:
         extern "C" fn(*const crate::newgrf_vehicle::Services, VehicleRef, CallbackID) -> u16,
-    /// Native max_age store after the Rust engine lifetime decision.
+    /// Native `max_age` store after the Rust engine lifetime decision.
     pub set_max_age: extern "C" fn(VehicleRef, i32),
     pub length_changed: extern "C" fn(VehicleRef),
     /// `PlayVehicleSound(v, event)`.
@@ -601,23 +601,6 @@ impl VehicleServices {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::services::Map;
-    #[test]
-    fn map_offsets_follow_the_original_tables() {
-        let map = Map { log_x: 8 };
-        assert_eq!(map.add_diag(0x1010, 0), 0x100f);
-        assert_eq!(map.add_diag(0x1010, 1), 0x1110);
-        assert_eq!(map.add_dir(0x1010, 0), 0x0f0f);
-        assert_eq!(map.add_dir(0x1010, 5), 0x1011);
-        assert_eq!(map.add_dir(0, 0), 0_u32.wrapping_sub(257));
-        assert_eq!((map.tile_x(0x1234), map.tile_y(0x1234)), (0x34, 0x12));
-        assert_eq!(advance_distance(3), 192);
-    }
-}
-
 #[allow(unsafe_code)]
 impl VehicleServices {
     pub(crate) fn unknown_callback_result(
@@ -646,5 +629,22 @@ impl VehicleServices {
                 v.0.as_ptr(),
             )
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::services::Map;
+    #[test]
+    fn map_offsets_follow_the_original_tables() {
+        let map = Map { log_x: 8 };
+        assert_eq!(map.add_diag(0x1010, 0), 0x100f);
+        assert_eq!(map.add_diag(0x1010, 1), 0x1110);
+        assert_eq!(map.add_dir(0x1010, 0), 0x0f0f);
+        assert_eq!(map.add_dir(0x1010, 5), 0x1011);
+        assert_eq!(map.add_dir(0, 0), 0_u32.wrapping_sub(257));
+        assert_eq!((map.tile_x(0x1234), map.tile_y(0x1234)), (0x34, 0x12));
+        assert_eq!(advance_distance(3), 192);
     }
 }

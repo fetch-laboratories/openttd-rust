@@ -219,8 +219,6 @@ pub(crate) unsafe fn aircraft(
     unsafe { crate::aircraft::openttd_rust_aircraft_cache(r.aircraft, hv, true) };
     unsafe {
         a.position(v);
-    }
-    unsafe {
         a.position(u);
     }
     if subtype == AIR_HELICOPTER {

@@ -1074,6 +1074,7 @@ impl Game<'_> {
     }
     fn running_cost(&self, id: Handle) -> i64 {
         let vs = self.vs();
+        // SAFETY: The shared NewGRF services live for the simulation runtime.
         let cap = unsafe { (&*(vs.newgrf)()).capabilities };
         let mut cost = 0_i64;
         let mut u = id;

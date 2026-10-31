@@ -367,7 +367,7 @@ unsafe fn start_one(s: &Services, e: EngineRef, aging: Ymd, seed: u32) {
                 ^ seed
                 ^ cfg.base_intro as u32
                 ^ u32::from(e.kind.0)
-                ^ crate::engine_capabilities::openttd_rust_engine_grfid(&*s.capabilities, e.shell),
+                ^ crate::engine_capabilities::openttd_rust_engine_grfid(s.capabilities, e.shell),
         );
     }
     let r = call!(shared, random, shared.context);
@@ -411,7 +411,7 @@ unsafe fn start_one(s: &Services, e: EngineRef, aging: Ymd, seed: u32) {
                 ^ (re_cfg.lifelength as u32).wrapping_shl(4)
                 ^ (i32::from(re_cfg.retire_early) as u32)
                 ^ u32::from(e.kind.0)
-                ^ crate::engine_capabilities::openttd_rust_engine_grfid(&*s.capabilities, e.shell),
+                ^ crate::engine_capabilities::openttd_rust_engine_grfid(s.capabilities, e.shell),
         );
     }
     let r = call!(shared, random, shared.context);
@@ -1342,5 +1342,5 @@ pub unsafe extern "C" fn openttd_rust_engine_enabled(
     s: &Services,
     e: *const OpenTTDEngine,
 ) -> bool {
-    unsafe { ((*s.capabilities).valid_string)(e) && (s.climate)(e) }
+    unsafe { (s.capabilities.valid_string)(e) && (s.climate)(e) }
 }
