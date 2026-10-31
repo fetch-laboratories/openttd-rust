@@ -73,13 +73,14 @@ Agent: /root | Model: gpt-6.1-sol | Reasoning effort: xhigh.
   sweep/proof. These are prior-head results until that continuation finishes.
   Current-base bootstrap Full follows #606; CI_ON_DEMAND remains unchanged.
   #570 starts after PR-B integrates, with #566's drawing workload alongside.
-- Instruction profile 44 is running at `16e0235d0d`; its results are pending.
-  Profile 42 remains the last completed six-scenario comparison and projection
-  record below. Its identities matched profile 40 with no 3% rise; all records
-  exceed ceilings. #606 remains the next maintenance integration before #603
+- Instruction profile 44 at `16e0235d0d` matched the original in all six
+  scenarios. Root verified clean source, final exit comparisons/logs, compatible
+  measurement identities and identical reference counts versus profile 42.
+  The largest projection rise is 0.6905%, below the 3% attribution trigger.
+  All records still exceed their ceilings; no new attribution is selected. #606 remains the next maintenance integration before #603
   and #607, targeting profile 36's Ir or lower on every scenario. Its latest
   measured head still misses TGP and all three Padhattan targets; six new
-  counts are pending at `1ed7c0045b`. Ready ownership proceeds meanwhile.
+  counts are pending at `7d74e6898c`. Ready ownership proceeds meanwhile.
   The quiet pass waits for the repair and an idle host. No wall anchors changed.
 - The integration-40 platform cadence passed Windows x86/x64, Linux
   Clang/Dedicated, macOS arm64 Release/Debug, annotation gates and the bounded
@@ -94,14 +95,14 @@ Agent: /root | Model: gpt-6.1-sol | Reasoning effort: xhigh.
 - Original coverage remains 330 of 449 completed traces. #156 records concrete
   remaining observable-domain gaps; no new coverage recollection was selected.
 
-| Scenario | Latest quiet anchor | Profile-36 projection | Profile-42 projection | Record with growth |
+| Scenario | Latest quiet anchor | Profile-36 projection | Profile-44 projection | Record with growth |
 | --- | ---: | ---: | ---: | ---: |
-| TGP | 1.1117x | 1.1117x | 2.0715x | 2.1505x |
-| Grok | 1.3871x | 1.5766x | 2.4384x | 2.4358x |
-| Opus | 1.3939x | 1.5612x | 2.3552x | 2.3563x |
-| P1996 | 1.3366x | 1.3817x | 1.7674x | 1.7690x |
-| P2000 | 1.4006x | 1.4284x | 1.7823x | 1.7834x |
-| P2016 | 1.5229x | 1.5653x | 1.9813x | 1.9279x |
+| TGP | 1.1117x | 1.1117x | 2.0793x | 2.1586x |
+| Grok | 1.3871x | 1.5766x | 2.4475x | 2.4448x |
+| Opus | 1.3939x | 1.5612x | 2.3649x | 2.3660x |
+| P1996 | 1.3366x | 1.3817x | 1.7767x | 1.7783x |
+| P2000 | 1.4006x | 1.4284x | 1.7946x | 1.7957x |
+| P2016 | 1.5229x | 1.5653x | 1.9903x | 1.9367x |
 
 ## Phases
 
@@ -579,13 +580,14 @@ at the fixed pin. Its real base conflict and unfinished crash/trigger evidence
 are next before first review. #606 remains the next maintenance integration before #603 and #607.
 #613 engine runtime takes the slot freed by #609; six component slots remain
 occupied. Integration-44 whole-fork metrics are recorded above. Instruction
-profile 44 is running; profile 42 remains the last completed speed record.
+profile 44 passed all six comparisons and is recorded above; no 3% rise was
+triggered. Existing quiet anchors and repair targets remain unchanged.
 
 | Draft | Pushed head | State and next action | Worktree |
 | --- | --- | --- | --- |
-| #581 / #607 | `6600d951ab` | First fixing review and root final workflow/README spot-checks complete; no remaining findings. Source/evidence pin remains `9f2986d588`. Real base-conflict update and full-source sweep/proof running after #609. Bootstrap Full remains after #606; CI_ON_DEMAND unchanged. Retain -825 retirement/-826 net-glue reclassification, 136 tooling. Completed review checkout removed. | `t3-4076556a` |
+| #581 / #607 | `143e57fd1f` | First fixing review/root spot-checks complete. Base merge `63d0978073` qualifies for condition (c): all 1,809 source paths replay with eight reviewed deviations. Affected archive/industry/history checks pass. Root fixed the Quick fixture-address flake; seven threaded tests/lint/preflight pass, fresh Quick pending. Final-base bootstrap Full after #606; CI_ON_DEMAND unchanged. New-base reclassification -815 retired/-816 net glue; final tooling recount includes the small fixture fix. | `t3-4076556a` |
 | #199 / #603 | `70215c21cb` | Reviewed four native-assertion fixes; root spot-checked. Current-base update and Full after #606, without expanding the accepted scope. Item 4 is #604. | `t3-120ef117` |
-| #565 / #275 / #592 / #606 | `1ed7c0045b` | Latest measured six scenarios are semantically equal, but TGP and all three Padhattan targets miss. Shared clear-map preconditions and fixture caller repairs are pushed; Cargo4 passed, native validation/six counts pending. Fresh fixing review and current-base Full follow all-six acceptance; next maintenance integration. | `t3-d6cdd816` (implementation); `t3-431c84b4` (locked source) |
+| #565 / #275 / #592 / #606 | `7d74e6898c` | Latest measured six scenarios are semantically equal, but TGP and all three Padhattan targets miss. Range-check repair follows successful native/semantic validation at `1ed7c0045b`; new pinned validation/six counts pending. Fresh fixing review and current-base Full follow all-six acceptance; next maintenance integration. | `t3-d6cdd816` (implementation); `t3-431c84b4` (locked source) |
 | #610 / #611 | `c047d643cc` | First fixing review complete; two canonical-binding repairs, root spot-checked. Affected validation runs in `.local/review611-affected-c047d643cc.log`; earlier `aa0bbf7777` implementation evidence passed. Metrics: 70 retired, +12 production/+159 fixture glue, 181 tooling, 393 Rust. Current-base update/Full after the fix results. | `t3-4b253100` (implementation); `t3-f50302f3` (root fix validation) |
 | #602 / #612 | `2d2f8b01da` | Index and all selected direct production consumers implemented; YAPF dependency fix preserves cases/expectations. Static gates pass; pinned affected validation running in `.local/station602/validate-checkpoint2.log`. Keep pin fixed, then resolve real base conflict and finish crash/trigger-order evidence before first review. Cost accepted: 88 retired, -52 production/+29 fixture glue, 241 tooling, 548 Rust. | `t3-56a3afc8` |
 | #613 engine runtime | Implementation active | Started from integrated `16e0235d0d` and docs `499724da46`, with no unpublished service dependency. Six runtime decisions and compound callers; first concrete cost checkpoint before long checks. | T3 prepared checkout; first checkpoint pending |
@@ -596,7 +598,7 @@ profile 44 is running; profile 42 remains the last completed speed record.
 | Planning | Fresh Astra ranked now-ready #602 ahead of engine runtime; both are now selected. Clear/tree follows, then the existing remainder. No new planning trigger. |
 | Platform cadence | Integration 40 passed every required configuration and the bounded platform semantic subset. Next cadence after integration 45. |
 | Deep checks | On the user's request only (user decision, 2026-10-31). If one is requested, use `.local/worktrees/deep-after30-569` (locked). Move it with `git checkout --detach origin/rust-migration` and relock it. Then run `python3 tools/migration.py build --jobs 2`, then `cmake --build build-rust-sanitized --target openttd_rust_native_test_support_build` until #503's fix lands, then `python3 tools/migration.py deep` with the requested `--member` options. Launch outside the session's process group, for example as a `systemd-run --user` unit. |
-| Instruction profile | Profile 42 passed all six comparisons; no 3% rise from 40, and all records remain above ceilings. Profiles 36, 38, 40 and 42 remain in their locked worktrees. Profile 44 is running in `.local/worktrees/profile-after44-609`, pinned to `16e0235d0d`; log `/tmp/openttd-profile-after44.log`. Profile again when #606 integrates. |
+| Instruction profile | Profile 44 at `16e0235d0d` passed all six comparisons with compatible identities; largest projection rise 0.6905% versus 42, no new attribution trigger, all records above ceilings. Report `.local/worktrees/profile-after44-609/.local/simulation/20261031T123243Z-2921578/report.json`; log `/tmp/openttd-profile-after44.log`. Profiles 36/38/40/42/44 stay locked. Profile again when #606 integrates. |
 | Quiet speed pass | Waits for the profile-38 regression repair and an idle host. |
 | Maintenance | #606 is revalidating with four Ir targets still unmet. #607's full source/evidence review and root workflow spot-check are complete; bootstrap Full waits for #606. #606 remains the next maintenance integration. #604 remains under #199 after map/CargoFlow repairs, PR-B and #570's generator, before typing/coverage. |
 | Issues | #601 closed and #613 issued/selected: 37 open, zero unplaced, three excluded with recorded return conditions. |
