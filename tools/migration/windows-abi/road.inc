@@ -77,7 +77,7 @@ static void RoadBoundary()
 		if (p.reset_status) p.status = 0;
 	};
 	t.vehicle.write_tick = [](OpenTTDVehicle *u, uint8_t tick) noexcept { CHECK(u == RoadAbiHandle()); road_abi_probe->tick = tick; };
-	const OpenTTDRoadTickRead part{.tick = 255, .front = false};
+	const OpenTTDRoadTickRead part{.tick = 255, .front = false, .movement = {}, .order_time = nullptr, .running = nullptr, .status = nullptr};
 	CHECK(openttd_rust_road_tick(v, probe.state, &part, &t.leaves, nullptr));
 	CHECK(probe.tick == 0 && probe.running == 0 && probe.order_time == 0 && world.draws == 0);
 
@@ -199,7 +199,7 @@ static void RoadBoundary()
 		CHECK((rd & 0xC0) == 0 && (rd & 15) < 15);
 		return {.tile = 100, .x = (rd & 15) + 1, .y = (rd >> 8) & 15, .z = 0, .cur_speed = 0, .direction = 1, .length = 8, .front = true, .tram = false};
 	};
-	t.leaves.link = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadLink { return {.next = nullptr, .next_state = nullptr}; };
+	t.leaves.link = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadLink { return {.next = nullptr, .next_state = nullptr, .next_ground = nullptr}; };
 	t.shared.station_index = [](uint32_t tile) noexcept -> uint16_t { CHECK(tile == 100); return 55; };
 	t.leaves.is_drive_through = [](uint32_t tile) noexcept { CHECK(tile == 100); return false; };
 	probe.stop->status = 0xFF; // Entering the bay frees its entrance.
@@ -407,7 +407,7 @@ static void RoadBoundary()
 	/* The final-part deletion returns its copied alive result only. */
 	openttd_rust_road_set(probe.state, 0, 0);
 	openttd_rust_road_set(probe.state, 5, 2219);
-	t.leaves.link = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadLink { return {.next = nullptr, .next_state = nullptr}; };
+	t.leaves.link = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadLink { return {.next = nullptr, .next_state = nullptr, .next_ground = nullptr}; };
 	t.vehicle.detach_last = [](OpenTTDVehicle *previous, OpenTTDVehicle *last, OpenTTDVehicle *first) noexcept {
 		CHECK(previous == RoadAbiHandle() && last == previous && first == previous);
 	};
@@ -487,11 +487,11 @@ static void RoadServiceBoundary()
 	t.leaves.link_tile = [](OpenTTDVehicle *u) noexcept -> OpenTTDRoadLinkTile {
 		auto &p = *road_service_probe;
 		bool head = u == RoadServiceHandle(0);
-		return {.link = {.next = head ? RoadServiceHandle(1) : nullptr, .next_state = head ? p.tail : nullptr}, .tile = p.tile};
+		return {.link = {.next = head ? RoadServiceHandle(1) : nullptr, .next_state = head ? p.tail : nullptr, .next_ground = nullptr}, .tile = p.tile};
 	};
 	t.leaves.link = [](OpenTTDVehicle *u) noexcept -> OpenTTDRoadLink {
 		bool head = u == RoadServiceHandle(0);
-		return {.next = head ? RoadServiceHandle(1) : nullptr, .next_state = head ? road_service_probe->tail : nullptr};
+		return {.next = head ? RoadServiceHandle(1) : nullptr, .next_state = head ? road_service_probe->tail : nullptr, .next_ground = nullptr};
 	};
 	t.leaves.find_depot = [](OpenTTDVehicle *, int32_t penalty) noexcept -> OpenTTDRoadDepotResult {
 		CHECK(penalty == 300);

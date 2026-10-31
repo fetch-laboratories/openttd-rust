@@ -15,12 +15,15 @@ TEST_CASE("PBS depot early return does not read or write train_on_res")
 	openttd_rust_train_state_set_track(state.get(), TRACK_BIT_X);
 	OpenTTDSharedServices shared{}; shared.tile_type = [](uint32_t) noexcept -> uint8_t { return MP_RAILWAY; };
 	OpenTTDRailMapServices rail{}; rail.is_rail_depot = [](uint32_t) noexcept { return true; };
-	OpenTTDTrainServices train{};
+	auto train = OpenTTDTrainServices{};
 	train.read_tile = [](OpenTTDTrainHandle) noexcept -> uint32_t { return 23; };
 	train.read_trackdir = [](OpenTTDTrainHandle) noexcept -> OpenTTDTrainTrackdirRead { return {23, 1, 0}; };
 	train.first_track = [](OpenTTDTrainHandle, uint8_t) noexcept -> uint64_t { return 0; };
 	train.track_direction = [](OpenTTDTrainHandle, uint8_t, uint8_t) noexcept -> uint64_t { return 0; };
-	OpenTTDPbsServices pbs{.shared = &shared, .rail = &rail, .train = &train};
+	auto pbs = OpenTTDPbsServices{};
+	pbs.shared = &shared;
+	pbs.rail = &rail;
+	pbs.train = &train;
 	pbs.depot_bits = [](uint32_t) noexcept { return TRACK_BIT_NONE; };
 	void *other = nullptr;
 	const auto result = openttd_rust_pbs_follow_train(&pbs, {state.get(), state.get()}, reinterpret_cast<OpenTTDPbsTrainOutput *>(&other));
@@ -39,7 +42,7 @@ TEST_CASE("Train speed - depot break and wormhole limits")
 	std::unique_ptr<OpenTTDTrainState, decltype(&openttd_rust_train_state_destroy)> owner(openttd_rust_train_state_new(), openttd_rust_train_state_destroy);
 	const OpenTTDTrainHandle handle{owner.get(), owner.get()};
 	openttd_test_train_state_set_cached_max_curve_speed(owner.get(), 180);
-	OpenTTDTrainServices table{};
+	auto table = OpenTTDTrainServices{};
 	table.read_current_max_speed = [](OpenTTDTrainHandle) noexcept -> OpenTTDTrainCurrentMaxSpeedRead { return {17, 200, 100}; };
 	table.acc_model = [](OpenTTDTrainHandle) noexcept { return _train_speed_model; };
 	table.is_station = [](OpenTTDTrainHandle, uint32_t) noexcept -> uint64_t { return 0; };
@@ -72,7 +75,7 @@ TEST_CASE("Train speed - depot break and wormhole limits")
 TEST_CASE("Train reservation - backoff 255 skips lookahead before owner reads")
 {
 	std::unique_ptr<OpenTTDTrainState, decltype(&openttd_rust_train_state_destroy)> owner(openttd_rust_train_state_new(), openttd_rust_train_state_destroy);
-	OpenTTDTrainReservationLeaves leaves{};
+	auto leaves = OpenTTDTrainReservationLeaves{};
 	leaves.backoff = []() noexcept -> uint8_t { return 255; };
 	openttd_rust_train_reservation_check_next({owner.get(), owner.get()}, reinterpret_cast<OpenTTDVehicle *>(owner.get()), &leaves, nullptr);
 	CHECK(openttd_rust_train_state_get_track(owner.get()) == 0);

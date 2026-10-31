@@ -4,6 +4,7 @@ Please use docker with the supplied `Dockerfile` to build for emscripten.
 It takes care of a few things:
 - Use a version of emscripten we know works.
 - Add LibLZMA library under contrib ports.
+- Install the Rust toolchain pinned in `rust-toolchain.toml`, with the `wasm32-unknown-emscripten` standard library.
 
 First, build the docker image by navigating in the folder this `README.md` is in, and executing:
 ```
