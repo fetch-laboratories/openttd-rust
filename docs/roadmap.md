@@ -313,6 +313,7 @@ First, **integrate the reviewed tooling PR and get back under six branches.**
    - #622 is in #624. The operation families measure 281 rebound entries over 92 callees, not 332. Estimated net glue -200 to -500.
    - #565 item 2: delete the map fallbacks and convert the remaining rail, crossing, depot, stop, water and tunnel leaves, `tile_slope_z`, and world generation's per-tile services (issue body). Production net glue -300 to -600.
    - #199's open items: the `CargoFlow` bounce, #578's story-page bounce, #580's date parameters and the sweep's stale comments.
+   - #629: isolate the multiplayer comparison from other loopback connections on port 41051. It fails on base too, and #628 needs it as its per-slice check.
    - Later: #604 shared settings access, after #607 and #570's generator; then #168/#199/#500 completed-job publication and #501 probe typing.
 4. **The next phase-2 pool after #570 integrates**, in the order of "Phases": stations and road stops (1,604 storage lines, about 600 callback slots); towns and industries (1,295, about 344); companies, groups, engines, link graph and the smaller pools (952, about 286); orders and order lists (390, about 111); then the map (3,988) with the rail, road, water, tunnel, landscape and tile bodies. Each pool gets an issue and a design section when selected. It moves its coupled save adapters with each record, generates native declarations, verifies the layout, and deletes the displaced readers, services and their baseline rows.
 5. **Phase 3 fills every other free slot:**
@@ -344,7 +345,7 @@ Code is `b34535f99c`. `CI_ON_DEMAND` is `true`; it was unset only for #607's boo
 | #566 / #623 | Review623 fixing the drawing speed budget | Publish the review, Full, merge before #570 | `t3-8aec009e` |
 | #622 / #624 | Handed off at `55c7afe82e`: five families, all local checks pass | Shared typed `RustSpec*` table next (root's answers on the PR) | `t3-b2cef9d7` |
 | #573 / #627 | Slice 1 (codec state, buffers, gamma) pushed | Continue slices (status comment) | `t3-fdca1ad8` |
-| #574 / #628 | Boundary plan posted; slice 1 in validation | Continue from the status comment and root's scope answers on the PR | `t3-1e4ffc20` |
+| #574 / #628 | Slice 1 (command queues) pushed at `77c0b8295e`; all checks pass except the multiplayer comparison, which fails the same way on base (#629) | Continue from the status comment and root's scope answers on the PR | `t3-1e4ffc20` |
 | #615 / #616 | Untouched this session at `b4021e34a1` | Repair `town_growth.cpp:20` with a scoped review; base update with sweep, Full | `t3-68700e40` |
 | #617 / #618 | Untouched at `45e1350c79` | Fresh full fixing review; base update with sweep, Full | `t3-0d996c45` |
 | #619 / #620 | Untouched at `1afd6fe028` | Continue the implementation | `t3-90e92030` |
