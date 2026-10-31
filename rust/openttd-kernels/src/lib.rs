@@ -1469,7 +1469,9 @@ pub use vehicle_type::VehicleID;
 
 mod tunnel_map;
 
+mod depot_cmd;
 mod depot_map;
+mod depot_type;
 mod session;
 
 mod fileio_type;
@@ -1479,6 +1481,8 @@ mod goal_type;
 mod league_type;
 mod objectives;
 mod settings_table;
+mod signs_cmd;
+mod signs_type;
 mod story_base;
 mod story_type;
 mod void_map;
