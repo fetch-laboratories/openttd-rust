@@ -184,7 +184,7 @@ class ThreadedTests(unittest.TestCase):
                     thread_sanitizer.findings(run, (), ())
 
     def test_conflict_stacks_and_global_identity(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(prefix="tsan-0x123-") as directory:
             root = Path(directory)
             roles = {}
             for role in ("reference", "candidate"):
@@ -194,7 +194,11 @@ class ThreadedTests(unittest.TestCase):
                 text = report(source)
                 if role == "candidate":
                     text = (
-                        re.sub(r"0x[0-9a-f]+", "0xabc", text)
+                        re.sub(
+                            r"(?<= at )0x[0-9a-f]+|(?<=\(openttd\+)0x[0-9a-f]+",
+                            "0xabc",
+                            text,
+                        )
                         .replace("T2", "T9")
                         .replace("pid=42", "pid=99")
                         .replace(":12", ":90")
