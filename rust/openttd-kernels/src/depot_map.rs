@@ -1,4 +1,5 @@
 impl crate::map_func::World<'_> {
+    #[inline]
     pub(crate) fn depot(&self, t: u32, mode: u8) -> bool {
         match mode {
             crate::transport_type::TRANSPORT_RAIL => self.rail_depot(t),

@@ -7,7 +7,7 @@
 
 //! Native evidence bridges; linked by `openttd_test` and fixture-only game adapters.
 #![allow(unsafe_code, clippy::too_many_lines)]
-use crate::map_func::{TileTypeAccess, TileTypeAllocation};
+use crate::map_func::{MapStatics, TileTypeAccess};
 use crate::tile_map::{get_tile_slope, get_tile_z, get_tropic_zone};
 
 /// # Safety
@@ -16,11 +16,11 @@ use crate::tile_map::{get_tile_slope, get_tile_z, get_tropic_zone};
 /// equivalent live fixture; it keeps the native out-of-range assertion policy.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_shared_tile_type(
-    allocation: TileTypeAllocation,
+    statics: *const MapStatics,
     callback: extern "C" fn(u32) -> u8,
     tile: u32,
 ) -> u8 {
-    unsafe { TileTypeAccess::raw(allocation, callback) }.read(tile)
+    unsafe { TileTypeAccess::raw((*statics).load().0, callback) }.read(tile)
 }
 
 /// Native default probe: compare audited reads with the unchanged typed services.
@@ -30,7 +30,7 @@ pub unsafe extern "C" fn openttd_rust_shared_tile_type(
 #[unsafe(no_mangle)]
 #[allow(unsafe_code)]
 pub unsafe extern "C" fn openttd_rust_map_read_probe(
-    allocation: crate::services::TileTypeAllocation,
+    statics: *const MapStatics,
     shared: *const crate::services::Services,
     clear: *const crate::ground::ClearServices,
     trees: *const crate::trees::TreeServices,
@@ -38,6 +38,7 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
     mutate: extern "C" fn(u32),
 ) -> bool {
     let (s, c, trees) = unsafe { (&*shared, &*clear, &*trees) };
+    let allocation = unsafe { (*statics).load().0 };
     let map = unsafe { TileTypeAccess::raw(allocation, s.tile_type) };
     let x = (s.map_max_x)() + 1;
     let y = (s.map_max_y)() + 1;

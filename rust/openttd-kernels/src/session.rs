@@ -617,7 +617,7 @@ impl Session<'_> {
         let shared = unsafe { &*s.shared };
         unsafe {
             crate::tile_loop::run(
-                (shared.map_log_x)(),
+                u32::from(shared.map().log_x),
                 (s.map_log_y)(),
                 call.settings,
                 call.services,

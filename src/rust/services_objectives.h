@@ -79,7 +79,6 @@ inline const OpenTTDObjectivesServices &GetRustObjectivesServices() noexcept
 	static const OpenTTDObjectivesServices services{
 		.shared = &GetRustSharedServices(),
 		.company = &GetRustCompanyServices(),
-		.map_allocation = GetRustTileTypeAllocation,
 		.goal = RustObjectives_goal,
 		.goal_company = RustObjectives_goal_company,
 		.goal_type = RustObjectives_goal_type,

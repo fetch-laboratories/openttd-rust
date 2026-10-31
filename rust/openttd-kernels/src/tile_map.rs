@@ -81,16 +81,19 @@ pub(crate) fn get_tile_z(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<i
 }
 
 /// `IsTileOwner`.
+#[inline]
 pub fn is_tile_owner(s: &crate::services::Services, tile: u32, owner: u8) -> bool {
     (s.tile_owner)(tile) == owner
 }
 
 /// `TileHash`, preserving the source unsigned subtraction.
+#[inline]
 pub(crate) fn tile_hash(x: u32, y: u32) -> u32 {
     ((x >> 4) ^ (x >> 6) ^ (y >> 4)).wrapping_sub(y >> 6)
 }
 
 /// `TileHash2Bit` calls the canonical hash before extracting its low bits.
+#[inline]
 pub(crate) fn tile_hash_2bit(x: u32, y: u32) -> u32 {
     tile_hash(x, y) & 3
 }
@@ -172,6 +175,7 @@ pub(crate) fn get_tile_pixel_slope_outside_map(
 
 #[allow(clippy::cast_possible_truncation)] // GB returns the original field width.
 impl crate::map_func::World<'_> {
+    #[inline]
     pub(crate) fn owner(&self, t: u32) -> u8 {
         self.check(t < self.types.count() && self.kind(t) != crate::tile_type::MP_VOID);
         self.check(
@@ -181,6 +185,7 @@ impl crate::map_func::World<'_> {
         crate::bitmath_func::gb(u32::from(Self::byte(self.types.m1(t))), 0, 5) as u8
     }
     /// `Map::SizeX` and `Map::SizeY` of the acquired allocation.
+    #[inline]
     pub(crate) fn size(&self) -> (u32, u32) {
         (
             self.dimensions.size_x(),
@@ -189,6 +194,7 @@ impl crate::map_func::World<'_> {
     }
     /// Run a header helper whose `None` is a failed precondition. The failure
     /// retries with each source assertion dispatched to the native handler.
+    #[inline]
     pub(crate) fn asserted<T>(&self, read: impl Fn(&TileTypeAccess) -> Option<T>) -> T {
         read(&self.types).unwrap_or_else(|| {
             self.types
@@ -197,16 +203,19 @@ impl crate::map_func::World<'_> {
         })
     }
     /// `GetTilePixelSlope`.
+    #[inline]
     pub(crate) fn tile_pixel_slope(&self, t: u32) -> (u8, i32) {
         let (x, y) = self.size();
         self.asserted(|m| get_tile_pixel_slope(m, t, x, y))
     }
     /// `GetTilePixelSlopeOutsideMap`.
+    #[inline]
     pub(crate) fn tile_pixel_slope_outside_map(&self, x: i32, y: i32) -> (u8, i32) {
         let (width, height) = self.size();
         self.asserted(|m| get_tile_pixel_slope_outside_map(m, x, y, width, height))
     }
     /// `GetTileMaxPixelZ`.
+    #[inline]
     pub(crate) fn tile_max_pixel_z(&self, t: u32) -> i32 {
         let (x, y) = self.size();
         self.asserted(|m| get_tile_max_pixel_z(m, t, x, y))
@@ -231,9 +240,6 @@ mod tests {
         if !ok {
             ASSERTS.set(ASSERTS.get() + 1);
         }
-    }
-    extern "C" fn movement_services() -> *const crate::movement::MovementServices {
-        MOVEMENT.with(std::ptr::from_ref)
     }
     extern "C" fn no_random(_: *mut std::ffi::c_void) -> u32 {
         std::process::abort()
@@ -381,7 +387,7 @@ mod tests {
             ),
         ];
         let shared = crate::services::Services {
-            movement_services,
+            movement: MOVEMENT.with(std::ptr::from_ref),
             ..crate::services::fixture(std::ptr::null_mut(), no_random, no_industry)
         };
         for assertions in [true, false] {

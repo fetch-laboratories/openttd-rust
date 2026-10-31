@@ -675,11 +675,7 @@ pub unsafe extern "C" fn openttd_rust_water_tile_loop(
     // the descriptor ends before this synchronous native entry returns.
     unsafe {
         let shared = &*s;
-        let map = crate::map_func::World::with_dimensions(
-            shared,
-            crate::movement::table(shared),
-            crate::map_func::Map::from_log_x(size_x.trailing_zeros()),
-        );
+        let map = crate::map_func::World::new(shared);
         let types = &map.types;
         let tile_type = types.read(tile);
         let ambient = tile_type == 6 && crate::newgrf_generic::ambient_enabled();
@@ -754,11 +750,7 @@ pub(crate) unsafe fn dirty_water_neighbours(
     s: &Services,
 ) {
     // SAFETY: Serialized native entry; no map references are formed.
-    let map = crate::map_func::World::with_dimensions(
-        s,
-        crate::movement::table(s),
-        crate::map_func::Map::from_log_x(size_x.trailing_zeros()),
-    );
+    let map = crate::map_func::World::new(s);
     unsafe { World::new(w, s, &map.types, size_x, size_y) }.dirty_neighbours(tile);
 }
 /// # Safety
@@ -773,11 +765,7 @@ pub unsafe extern "C" fn openttd_rust_clear_neighbour_flooding(
 ) {
     // SAFETY: Serialized native entry; no map references are formed.
     let shared = unsafe { &*s };
-    let map = crate::map_func::World::with_dimensions(
-        shared,
-        crate::movement::table(shared),
-        crate::map_func::Map::from_log_x(size_x.trailing_zeros()),
-    );
+    let map = crate::map_func::World::new(shared);
     let world = unsafe { World::new(w, s, &map.types, size_x, size_y) };
     for direction in 0..8 {
         let target = offset(tile, direction, size_x);

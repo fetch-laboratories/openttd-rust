@@ -56,24 +56,29 @@ pub(crate) fn is_any_road_stop(m: &TileTypeAccess, tile: TileIndex) -> Option<bo
 }
 
 /// `IsAirport`; the station type leaf keeps its native assertion.
+#[inline]
 pub(crate) fn is_airport(tile: u32, s: &Services) -> bool {
     (s.station_type)(tile).0 == STATION_AIRPORT
 }
 
 /// `IsRailWaypoint`; the station type leaf keeps its native assertion.
+#[inline]
 pub(crate) fn is_rail_waypoint(tile: u32, s: &Services) -> bool {
     (s.station_type)(tile).0 == RAIL_WAYPOINT
 }
 /// `IsRailWaypointTile`.
+#[inline]
 pub(crate) fn is_rail_waypoint_tile(tile: u32, s: &Services) -> bool {
     (s.tile_type)(tile) == MP_STATION && is_rail_waypoint(tile, s)
 }
 /// `IsRoadWaypointTile`.
+#[inline]
 pub(crate) fn is_road_waypoint_tile(tile: u32, s: &Services) -> bool {
     (s.tile_type)(tile) == MP_STATION && (s.station_type)(tile).0 == ROAD_WAYPOINT
 }
 
 /// `HasStationTileRail`, retaining its guard before `HasStationRail`'s assertions.
+#[inline]
 pub(crate) fn has_station_tile_rail(
     tile: u32,
     s: &Services,
@@ -83,6 +88,7 @@ pub(crate) fn has_station_tile_rail(
 }
 
 /// `IsStationRoadStopTile`: a bus or truck stop, not a road waypoint.
+#[inline]
 pub(crate) fn is_station_road_stop_tile(s: &Services, tile: u32) -> bool {
     (s.tile_type)(tile) == MP_STATION
         && matches!((s.station_type)(tile).0, STATION_TRUCK | STATION_BUS)
@@ -91,6 +97,7 @@ pub(crate) fn is_station_road_stop_tile(s: &Services, tile: u32) -> bool {
 /// `GetAirportGfx`: airport membership is established by each caller before
 /// this read, proving its native `IsAirport` assertion. `GetStationGfx` retains its
 /// native station assertion; translation calls the Rust owner directly.
+#[inline]
 pub(crate) fn get_airport_gfx(
     tile: u32,
     s: &Services,
@@ -100,6 +107,7 @@ pub(crate) fn get_airport_gfx(
 }
 
 /// `Station::GetByTile`, retaining its valid-station-or-null lookup.
+#[inline]
 pub(crate) fn station_by_tile(
     tile: u32,
     s: &crate::newgrf_airport::Services,
@@ -107,6 +115,7 @@ pub(crate) fn station_by_tile(
     (s.by_tile)(tile).cast()
 }
 /// Original `IsHangar`, retaining its assertion and airport gate before lookup.
+#[inline]
 pub(crate) fn is_hangar(tile: u32, s: &crate::newgrf_airport::Services) -> bool {
     (s.check)((s.shared().tile_type)(tile) == MP_STATION);
     if !is_airport(tile, s.shared()) {
@@ -123,11 +132,13 @@ pub(crate) fn is_hangar(tile: u32, s: &crate::newgrf_airport::Services) -> bool 
     false
 }
 /// Original `IsHangarTile`, including its non-station early return.
+#[inline]
 pub(crate) fn is_hangar_tile(tile: u32, s: &crate::newgrf_airport::Services) -> bool {
     (s.shared().tile_type)(tile) == MP_STATION && is_hangar(tile, s)
 }
 
 impl crate::map_func::World<'_> {
+    #[inline]
     pub(crate) fn rail_station(&self, t: u32) -> bool {
         self.kind(t) == MP_STATION
             && get_station_type(&self.types, TileIndex(t))
@@ -135,6 +146,7 @@ impl crate::map_func::World<'_> {
                 .0
                 == crate::station_type::STATION_RAIL
     }
+    #[inline]
     pub(crate) fn has_station_rail(&self, t: u32) -> bool {
         self.kind(t) == MP_STATION
             && matches!(
@@ -144,6 +156,7 @@ impl crate::map_func::World<'_> {
                 crate::station_type::STATION_RAIL | RAIL_WAYPOINT
             )
     }
+    #[inline]
     pub(crate) fn station_road_stop(&self, t: u32) -> bool {
         self.kind(t) == MP_STATION
             && matches!(
@@ -153,36 +166,44 @@ impl crate::map_func::World<'_> {
                 STATION_TRUCK | STATION_BUS
             )
     }
+    #[inline]
     pub(crate) fn bay_stop(&self, t: u32) -> bool {
         self.station_road_stop(t) && self.station_gfx(t) < GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET
     }
+    #[inline]
     pub(crate) fn bay_dir(&self, t: u32) -> u8 {
         self.check(self.bay_stop(t));
         self.station_gfx(t)
     }
     /// `GetStationGfx`.
+    #[inline]
     pub(crate) fn station_gfx(&self, t: u32) -> u8 {
         self.check(self.kind(t) == MP_STATION);
         Self::byte(self.types.m5(t))
     }
     /// `GetStationIndex`.
+    #[inline]
     pub(crate) fn station_index(&self, t: u32) -> crate::station_type::StationID {
         self.check(self.kind(t) == MP_STATION);
         crate::station_type::StationID(Self::word(self.types.m2(t)))
     }
     /// `IsStationTileBlocked`.
+    #[inline]
     pub(crate) fn station_blocked(&self, t: u32) -> bool {
         self.check(self.has_station_rail(t));
         has_bit(Self::byte(self.types.m3(t)), 0)
     }
+    #[inline]
     pub(crate) fn station_axis(&self, t: u32) -> u8 {
         self.check(self.has_station_rail(t));
         u8::from(has_bit(self.station_gfx(t), 0))
     }
+    #[inline]
     pub(crate) fn station_reserved(&self, t: u32) -> bool {
         self.check(self.has_station_rail(t));
         has_bit(Self::byte(self.types.m6(t)), 2)
     }
+    #[inline]
     pub(crate) fn compatible_station(&self, t: u32, start: u32) -> bool {
         self.check(self.rail_station(start));
         self.rail_station(t)

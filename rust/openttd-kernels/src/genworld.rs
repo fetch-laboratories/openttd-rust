@@ -515,7 +515,7 @@ impl World<'_> {
         let shared = unsafe { &*(*s.landscape).shared };
         unsafe {
             crate::tile_loop::run(
-                (shared.map_log_x)(),
+                u32::from(shared.map().log_x),
                 ((shared.map_max_y)() + 1).ilog2(),
                 call.settings,
                 call.services,

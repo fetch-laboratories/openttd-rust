@@ -47,7 +47,10 @@ template<typename Check> void Run(Check check)
 	calls = reads = seen = 0;
 	expected_tile = 1;
 	passed = true;
+	/* A zero-size map selects the callback backend for every tile read. */
+	const OpenTTDFixtureMap callbacks{0};
 	auto shared = OpenTTDSharedServices{};
+	shared.map = &callbacks.statics;
 	shared.tile_type = Type;
 	const OpenTTDIndustryTileServices object_tiles{.on_water = ProbeObjectOnWater};
 	auto objects = OpenTTDObjectServices{};
@@ -56,7 +59,6 @@ template<typename Check> void Run(Check check)
 	objects.loop_policy = ProbeObjectPolicy;
 	const OpenTTDLandscapeLoopServices services{
 		.shared = &shared,
-		.tile_types = {},
 		.trees = nullptr,
 		.industry = {},
 		.ground = {},

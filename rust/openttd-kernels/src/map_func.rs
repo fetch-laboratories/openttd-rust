@@ -17,6 +17,7 @@ pub struct Map {
 impl Map {
     /// `Map::Iterate`, over `Map::Size()` captured for a no-reset entry.
     #[must_use]
+    #[inline]
     pub fn iterate(count: u32) -> std::ops::Range<u32> {
         0..count
     }
@@ -24,32 +25,38 @@ impl Map {
     /// Capture a `Map::LogX()` service result; the original dimension is a `uint8`.
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]
+    #[inline]
     pub fn from_log_x(log_x: u32) -> Self {
         Self { log_x: log_x as u8 }
     }
     /// `Map::SizeX()`, from the dimension captured at entry.
     #[must_use]
+    #[inline]
     pub fn size_x(self) -> u32 {
         1_u32 << self.log_x
     }
     /// `TileXY`, over the captured map width.
     #[must_use]
+    #[inline]
     pub fn tile_xy(self, x: u32, y: u32) -> u32 {
         y.wrapping_shl(u32::from(self.log_x)).wrapping_add(x)
     }
     /// `TileVirtXY`, including the unsigned coordinate shifts and addition.
     #[must_use]
+    #[inline]
     pub fn tile_virt_xy(self, x: u32, y: u32) -> u32 {
         self.tile_xy(x >> 4, y >> 4)
     }
     /// `Map::ScaleBySize`, preserving its pre-division unsigned shift.
     #[must_use]
+    #[inline]
     pub fn scale_by_size(self, size_y: u32, n: u32) -> u32 {
         let scaled = n.wrapping_shl(u32::from(self.log_x) + size_y.ilog2() - 12);
         scaled.wrapping_add(15) / 16
     }
     /// `AddTileIndexDiffCWrap` for an arbitrary original coordinate offset.
     #[must_use]
+    #[inline]
     pub fn add_offset_c_wrap(self, tile: u32, dx: i32, dy: i32, size_y: u32) -> u32 {
         let x = self.tile_x(tile).wrapping_add_signed(dx);
         let y = self.tile_y(tile).wrapping_add_signed(dy);
@@ -61,41 +68,49 @@ impl Map {
     }
     /// `Map::WrapToMap`, preserving the canonical power-of-two tile mask.
     #[must_use]
+    #[inline]
     pub fn wrap_to_map(self, tile: u32, size_y: u32) -> u32 {
         tile & (self.size_x() * size_y - 1)
     }
     /// `RandomTileSeed`, using the original `Map::WrapToMap` helper.
     #[must_use]
+    #[inline]
     pub fn random_tile_seed(self, size_y: u32, random: u32) -> u32 {
         self.wrap_to_map(random, size_y)
     }
     /// `Map::MaxX`.
     #[must_use]
+    #[inline]
     pub fn max_x(self) -> u32 {
         self.size_x() - 1
     }
     /// `Map::MaxY`, over the height captured at entry.
     #[must_use]
+    #[inline]
     pub fn max_y(size_y: u32) -> u32 {
         size_y - 1
     }
     /// `TileX`.
     #[must_use]
+    #[inline]
     pub fn tile_x(self, tile: u32) -> u32 {
         tile & (self.size_x() - 1)
     }
     /// `TileY`.
     #[must_use]
+    #[inline]
     pub fn tile_y(self, tile: u32) -> u32 {
         tile >> self.log_x
     }
     /// Original `DistanceManhattan`.
     #[must_use]
+    #[inline]
     pub fn distance_manhattan(self, a: u32, b: u32) -> u32 {
         self.tile_x(a).abs_diff(self.tile_x(b)) + self.tile_y(a).abs_diff(self.tile_y(b))
     }
     /// Original `DistanceMax`, the L-infinity norm.
     #[must_use]
+    #[inline]
     pub fn distance_max(self, a: u32, b: u32) -> u32 {
         self.tile_x(a)
             .abs_diff(self.tile_x(b))
@@ -103,11 +118,13 @@ impl Map {
     }
     /// `TileAddXY`: `tile + TileDiffXY(x, y)` in unsigned arithmetic.
     #[must_use]
+    #[inline]
     pub fn tile_add_xy(self, tile: u32, x: i32, y: i32) -> u32 {
         tile.wrapping_add(self.diff(x, y))
     }
     /// Original `DistanceSquare` over captured map dimensions.
     #[must_use]
+    #[inline]
     pub fn distance_square(self, a: u32, b: u32) -> u32 {
         let x = self.tile_x(a).cast_signed() - self.tile_x(b).cast_signed();
         let y = self.tile_y(a).cast_signed() - self.tile_y(b).cast_signed();
@@ -115,6 +132,7 @@ impl Map {
     }
     /// `TileDiffXY`: `y * Map::SizeX() + x` in unsigned arithmetic.
     #[must_use]
+    #[inline]
     pub fn diff(self, x: i32, y: i32) -> u32 {
         y.cast_unsigned()
             .wrapping_mul(self.size_x())
@@ -122,6 +140,7 @@ impl Map {
     }
     /// `TileOffsByAxis`, as the unsigned pattern of its `TileIndexDiff`.
     #[must_use]
+    #[inline]
     pub fn offs_by_axis(self, axis: u8) -> u32 {
         const OFFSETS: [(i32, i32); 2] = [(1, 0), (0, 1)];
         let (x, y) = OFFSETS[usize::from(axis)];
@@ -129,17 +148,20 @@ impl Map {
     }
     /// `TileOffsByDiagDir`, as the unsigned pattern of its `TileIndexDiff`.
     #[must_use]
+    #[inline]
     pub fn offs_by_diag_dir(self, dir: u8) -> u32 {
         let (x, y) = tile_index_diff_c_by_diag_dir(dir);
         self.diff(x, y)
     }
     /// `tile + TileOffsByDiagDir(dir)`.
     #[must_use]
+    #[inline]
     pub fn add_diag(self, tile: u32, dir: u8) -> u32 {
         tile.wrapping_add(self.offs_by_diag_dir(dir))
     }
     /// `TileAddByDir(tile, dir)`.
     #[must_use]
+    #[inline]
     pub fn add_dir(self, tile: u32, dir: u8) -> u32 {
         const OFFSETS: [(i32, i32); 8] = [
             (-1, -1),
@@ -157,6 +179,7 @@ impl Map {
     /// `AddTileIndexDiffCWrap(tile, TileIndexDiffCByDiagDir(dir))`.
     /// Unlike `TileAddWrap`, this includes `MP_VOID` edge tiles.
     #[must_use]
+    #[inline]
     pub fn add_diff_c_wrap(self, tile: u32, dir: u8, size_y: u32) -> u32 {
         let (dx, dy) = tile_index_diff_c_by_diag_dir(dir);
         self.add_offset_c_wrap(tile, dx, dy, size_y)
@@ -165,14 +188,50 @@ impl Map {
 
 /// `TileIndexDiffCByDiagDir`, in the original NE/SE/SW/NW order.
 #[must_use]
+#[inline]
 pub fn tile_index_diff_c_by_diag_dir(dir: u8) -> (i32, i32) {
     const OFFSETS: [(i32, i32); 4] = [(-1, 0), (0, 1), (1, 0), (0, -1)];
     OFFSETS[usize::from(dir)]
 }
 
-/// Allocation descriptor acquired once by an audited native entry. The base
-/// pointer comes from `Tile::base_tiles.get()`, with the full allocation's provenance.
+/// Addresses of the canonical `Tile` and `Map` statics; entries load them instead
+/// of calling. Each array static is a `std::unique_ptr` whose representation is
+/// its array pointer (asserted by `OpenTTDNativeTileTypeAccess`).
 #[repr(C)]
+pub struct MapStatics {
+    /// `Tile::base_tiles`.
+    pub base: *const *const BaseTileLayout,
+    /// `Tile::extended_tiles`.
+    pub extended: *const *const ExtendedTileLayout,
+    /// `Map::size`.
+    pub size: *const u32,
+    /// `Map::log_x`.
+    pub log_x: *const u32,
+    /// Native assert policy of the C++ build.
+    pub assertions: bool,
+}
+impl MapStatics {
+    /// Load the allocation and dimensions current at this observation point.
+    /// # Safety
+    /// Every address is live; the loads are serialized with `Map::Allocate`.
+    #[inline]
+    pub(crate) unsafe fn load(&self) -> (TileTypeAllocation, Map) {
+        unsafe {
+            (
+                TileTypeAllocation {
+                    base: self.base.read(),
+                    extended: self.extended.read(),
+                    count: self.size.read(),
+                    assertions: self.assertions,
+                },
+                Map::from_log_x(self.log_x.read()),
+            )
+        }
+    }
+}
+
+/// Allocation descriptor loaded once by an audited native entry, with the
+/// provenance of the full canonical allocation.
 #[derive(Clone, Copy)]
 pub struct TileTypeAllocation {
     /// Canonical base array; null only together with a zero count.
@@ -182,7 +241,7 @@ pub struct TileTypeAllocation {
     /// Actual native `Map::Size()` at acquisition, not a copied tile snapshot;
     /// zero selects the original callback backend for every read.
     pub count: u32,
-    /// Native assert policy captured once at the audited entry.
+    /// Native assert policy of the C++ build.
     pub assertions: bool,
 }
 
@@ -236,6 +295,7 @@ impl TileTypeAccess {
     /// initialized base/extended tiles, within `isize::MAX`, until this reader is dropped. Map
     /// reset and game-state-mutex yield are excluded throughout the entry. Each
     /// read must be serialized with native writes; native aliases are permitted.
+    #[inline]
     pub(crate) unsafe fn raw(
         allocation: TileTypeAllocation,
         callback: extern "C" fn(u32) -> u8,
@@ -265,11 +325,13 @@ impl TileTypeAccess {
     pub(crate) fn assertions(&self) -> bool {
         self.allocation.assertions
     }
+    #[inline]
     pub(crate) fn count(&self) -> u32 {
         self.allocation.count
     }
     /// Retry a header helper with native assertions at each source assertion site.
     /// Raw Tile field accessors themselves have no range assertions.
+    #[inline]
     pub(crate) fn with_native_assert<T>(
         &self,
         native_assert: extern "C" fn(bool),
@@ -313,45 +375,73 @@ pub(crate) struct World<'a> {
     pub dimensions: Map,
 }
 impl<'a> World<'a> {
+    /// Load the canonical descriptor and `Map::LogX()` at entry, without a call.
+    #[inline]
     pub(crate) fn new(shared: &'a crate::services::Services) -> Self {
-        Self::with_table(shared, crate::movement::table(shared))
-    }
-    /// `new` for an entry that already resolved its movement table.
-    pub(crate) fn with_table(
-        shared: &'a crate::services::Services,
-        movement: &crate::movement::MovementServices,
-    ) -> Self {
-        Self::with_dimensions(shared, movement, shared.map())
-    }
-    /// Use dimensions already acquired by the entry instead of calling `Map::LogX` again.
-    pub(crate) fn with_dimensions(
-        shared: &'a crate::services::Services,
-        movement: &crate::movement::MovementServices,
-        dimensions: Map,
-    ) -> Self {
-        // SAFETY: Game-loop and command entries exclude map reset/load/mutex yield.
-        let types = unsafe {
-            TileTypeAccess::raw(
-                (movement.tile_types.expect("native map descriptor"))(),
-                shared.tile_type,
-            )
-        };
+        // SAFETY: Game-loop and command entries exclude map reset/load/mutex yield;
+        // the shared table's statics address the canonical native map.
+        let (allocation, dimensions) = unsafe { (*shared.map).load() };
+        // SAFETY: Same entry contract; the allocation was loaded at this entry.
+        let mut types = unsafe { TileTypeAccess::raw(allocation, shared.tile_type) };
+        // Each failed precondition calls the native assertion once, as the inline
+        // accessor does, so helpers check a tile once rather than retry through it.
+        // SAFETY: A non-null movement table is the immutable process-lifetime table.
+        types.native_assert = unsafe { shared.movement.as_ref() }.map(|m| m.native_assert);
         Self {
             types,
             shared,
             dimensions,
         }
     }
+    #[inline]
     pub(crate) fn check(&self, condition: bool) {
         crate::movement::native_assert(self.shared, condition);
     }
+    #[inline]
     pub(crate) fn kind(&self, t: u32) -> u8 {
         self.types.read(t)
     }
+    #[inline]
     pub(crate) fn byte(value: Option<u8>) -> u8 {
         value.expect("live map scalar")
     }
+    #[inline]
     pub(crate) fn word(value: Option<u16>) -> u16 {
         value.expect("live map scalar")
+    }
+}
+
+/// Thread-local stand-ins for the canonical statics; a test sets them before an entry.
+#[cfg(test)]
+pub(crate) mod fixture {
+    use super::{BaseTileLayout, ExtendedTileLayout, MapStatics, TileTypeAllocation};
+    use std::cell::Cell;
+    thread_local! {
+        static BASE: Cell<*const BaseTileLayout> = const { Cell::new(std::ptr::null()) };
+        static EXTENDED: Cell<*const ExtendedTileLayout> = const { Cell::new(std::ptr::null()) };
+        static SIZE: Cell<u32> = const { Cell::new(0) };
+        static LOG_X: Cell<u32> = const { Cell::new(0) };
+        static STATICS: Cell<MapStatics> = Cell::new(MapStatics {
+            base: BASE.with(Cell::as_ptr),
+            extended: EXTENDED.with(Cell::as_ptr),
+            size: SIZE.with(Cell::as_ptr),
+            log_x: LOG_X.with(Cell::as_ptr),
+            assertions: true,
+        });
+    }
+    /// This thread's statics, valid for the thread's lifetime.
+    pub(crate) fn statics() -> *const MapStatics {
+        STATICS.with(Cell::as_ptr)
+    }
+    /// Install an allocation and `Map::LogX()` for the next entries on this thread.
+    pub(crate) fn set(allocation: TileTypeAllocation, log_x: u32) {
+        BASE.set(allocation.base);
+        EXTENDED.set(allocation.extended);
+        SIZE.set(allocation.count);
+        LOG_X.set(log_x);
+        STATICS.with(|s| {
+            // SAFETY: Thread-local cell; no reference to it is live.
+            unsafe { (*s.as_ptr()).assertions = allocation.assertions };
+        });
     }
 }

@@ -12,6 +12,7 @@
 #include "service_defaults.hpp"
 #include <cstdint>
 #include <cstddef>
+#include <memory>
 #include <type_traits>
 #include "station_ffi.h"
 
@@ -32,17 +33,17 @@ struct OpenTTDEconomyDate { int32_t value; };
 static_assert(std::is_trivially_copyable_v<OpenTTDCalendarDate> && std::is_standard_layout_v<OpenTTDCalendarDate>);
 static_assert(std::is_trivially_copyable_v<OpenTTDEconomyDate> && std::is_standard_layout_v<OpenTTDEconomyDate>);
 
-/* Canonical typed allocation addresses, never references to tile zero's fields.
- * Only an audited serialized entry may retain it. It expires before map reset or
- * mutex yield. Only field-sized raw reads in audited scheduler entries are allowed;
- * C++ owns allocation/construction/reset/destruction and every write. */
-struct OpenTTDTileTypeAllocation {
-	const TileBaseStorage *base;
-	const TileExtendedStorage *extended;
-	uint32_t count;
+/* Addresses of the canonical Tile and Map statics. Rust loads them at entry
+ * instead of calling; only field-sized raw reads follow, ending before a map
+ * reset or mutex yield. C++ owns allocation, construction, reset and every write. */
+struct OpenTTDMapStatics {
+	const std::unique_ptr<TileBaseStorage[]> *base;
+	const std::unique_ptr<TileExtendedStorage[]> *extended;
+	const uint32_t *size;
+	const uint32_t *log_x;
 	bool assertions;
 };
-OpenTTDTileTypeAllocation GetRustTileTypeAllocation() noexcept;
+extern const OpenTTDMapStatics _rust_map_statics;
 
 /* Immutable table of world services; context may be null in the game, while test fixtures supply
  * their own world. Map predicates take a TileIndex value and return the original accessor's
@@ -81,7 +82,7 @@ struct OpenTTDTypeAvailabilityServices;
 struct OpenTTDPbsServices;
 struct OpenTTDMovementServices;
 struct OpenTTDSharedServices {
-	const OpenTTDMovementServices *(*movement_services)() noexcept OPENTTD_SERVICE_DEFAULT(movement_services);
+	const OpenTTDMovementServices *movement = nullptr;
 	void (*set_tile_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_owner);
 	bool (*autoslope)() noexcept OPENTTD_SERVICE_DEFAULT(autoslope);
 	uint8_t (*bay_stop_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bay_stop_direction);
@@ -117,7 +118,7 @@ struct OpenTTDSharedServices {
 	bool (*is_road_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_road_depot);
 	bool (*is_sea)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_sea);
 	bool (*is_water_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_water_tile);
-	uint32_t (*map_log_x)() noexcept OPENTTD_SERVICE_DEFAULT(map_log_x);
+	const OpenTTDMapStatics *map = nullptr;
 	uint32_t (*map_max_x)() noexcept OPENTTD_SERVICE_DEFAULT(map_max_x);
 	uint32_t (*map_max_y)() noexcept OPENTTD_SERVICE_DEFAULT(map_max_y);
 	void (*mark_bridge_dirty)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(mark_bridge_dirty);
@@ -287,6 +288,26 @@ struct OpenTTDRailMapServices {
 	bool (*wormhole_reserved)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(wormhole_reserved);
 };
 const OpenTTDRailMapServices &GetRustRailMapServices() noexcept;
+
+/* Fixture stand-in for the canonical map statics; a zero size selects the
+ * callback backend. Shared tables hold its address, so it neither moves nor copies. */
+struct OpenTTDFixtureMap {
+	std::unique_ptr<TileBaseStorage[]> base;
+	std::unique_ptr<TileExtendedStorage[]> extended;
+	uint32_t size = 0;
+	uint32_t log_x = 0;
+	OpenTTDMapStatics statics{&this->base, &this->extended, &this->size, &this->log_x, true};
+	explicit OpenTTDFixtureMap(uint32_t log_x, uint32_t size = 0) : base(std::make_unique<TileBaseStorage[]>(size)), extended(std::make_unique<TileExtendedStorage[]>(size)), size(size), log_x(log_x) {}
+	void Resize(uint32_t log_x, uint32_t size)
+	{
+		this->base = std::make_unique<TileBaseStorage[]>(size);
+		this->extended = std::make_unique<TileExtendedStorage[]>(size);
+		this->size = size;
+		this->log_x = log_x;
+	}
+	OpenTTDFixtureMap(const OpenTTDFixtureMap &) = delete;
+	OpenTTDFixtureMap &operator=(const OpenTTDFixtureMap &) = delete;
+};
 
 /* Standalone fixtures without a game map: map predicates return zero and writes do nothing. */
 template <typename Result, typename... Args>

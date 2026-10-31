@@ -181,6 +181,18 @@ def worktree_references(main: Path) -> str:
     return bodies + (roadmap.read_text() if roadmap.exists() else "")
 
 
+def recently_active(tree: Path) -> bool:
+    """Codex delegates hold no cwd between commands; git and file writes show activity."""
+    try:
+        admin = tree / (tree / ".git").read_text().removeprefix("gitdir:").strip()
+        marks = [admin / "HEAD", admin / "index", admin / "logs/HEAD"]
+        marks += [child for child in tree.iterdir() if child.is_file()]
+        now = time.time()
+        return any(now - m.stat().st_mtime < RUNNING_SECONDS for m in marks if m.exists())
+    except OSError:
+        return False
+
+
 def worktree_refusal(main: Path, path: Path, references: str) -> str | None:
     if path.name in references or str(path) in references:
         return "referenced by roadmap or open issue/PR"
@@ -220,6 +232,8 @@ def worktree_refusal(main: Path, path: Path, references: str) -> str | None:
                 return f"cannot inspect process cwd: {error}"
     except OSError as error:
         return f"cannot inspect process cwd: {error}"
+    if ".t3/worktrees/" in path.as_posix() and recently_active(path):
+        return f"T3 task active within {RUNNING_SECONDS // 3600} hours"
     return None
 
 

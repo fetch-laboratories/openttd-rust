@@ -25,7 +25,8 @@ OWNER = r"(?:Vehicle|BaseStation|Station|Company)"
 WORLD = re.compile(
     r"\b(?:_settings_game|_settings_client|_game_mode|_current_company)\b|\bTimerGame\w*::\w+|\bMap::\w+"
 )
-TABLE = r"OpenTTD\w*(?:Services|Leaves)\s+\w+\s*(?:=\s*)?\{(.*?)\n\s*};"
+# A value-initialized `OpenTTDXServices name{};` opens no initializer list.
+TABLE = r"OpenTTD\w*(?:Services|Leaves)\s+\w+\s*(?:=\s*)?\{(?!\s*\})(.*?)\n\s*};"
 
 
 def git(*args):

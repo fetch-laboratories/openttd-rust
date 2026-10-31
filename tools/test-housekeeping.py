@@ -164,7 +164,32 @@ class HousekeepingTests(unittest.TestCase):
             *(["--detach"] if detached else ["-b", name]),
             str(tree),
         )
+        self.age(tree, 2 * housekeeping.RUNNING_SECONDS)
         return tree
+
+    def age(self, tree: Path, seconds: float) -> None:
+        """Date the admin HEAD, index, reflog and top-level files SECONDS ago."""
+        admin = Path(git(tree, "rev-parse", "--absolute-git-dir").strip())
+        marks = [admin / "HEAD", admin / "index", admin / "logs/HEAD"]
+        marks += [child for child in tree.iterdir() if child.is_file()]
+        when = time.time() - seconds
+        for mark in marks:
+            if mark.exists():
+                os.utime(mark, (when, when))
+
+    def test_recently_active_t3_task_is_kept(self) -> None:
+        """A detached, clean task without a live cwd is kept while its admin HEAD is recent."""
+        tree = self.t3_tree("t3-active", detached=True)
+        admin = Path(git(tree, "rev-parse", "--absolute-git-dir").strip())
+        os.utime(admin / "HEAD")
+        entries = housekeeping.list_worktrees(self.main)[1:]
+        items = housekeeping.plan_worktrees(self.main, entries, pr_state)
+        item = next(i for i in items if i.path == tree)
+        self.assertFalse(item.remove, item.reason)
+        self.assertIn("active", item.reason)
+        self.age(tree, housekeeping.RUNNING_SECONDS + 60)
+        items = housekeeping.plan_worktrees(self.main, entries, pr_state)
+        self.assertTrue(next(i for i in items if i.path == tree).remove)
 
     def test_finished_t3_and_protected_tasks(self) -> None:
         finished = self.t3_tree("t3-finished")

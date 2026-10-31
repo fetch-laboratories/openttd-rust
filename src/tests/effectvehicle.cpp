@@ -34,7 +34,8 @@ TEST_CASE("Animated tiles - ordered queue and partial native load publication")
 	static std::array<AnimatedTileState, 4> states{}; states.fill(AnimatedTileState::None);
 	auto shared = OpenTTDSharedServices{};
 	shared.tile_type = [](uint32_t t) noexcept -> uint8_t { return t == 2 ? 0 : 3; };
-	shared.map_log_x = []() noexcept -> uint32_t { return 0; };
+	const OpenTTDFixtureMap map{0};
+	shared.map = &map.statics;
 	shared.map_max_y = []() noexcept -> uint32_t { return 3; };
 	auto services = OpenTTDAnimationServices{};
 	services.shared = &shared;

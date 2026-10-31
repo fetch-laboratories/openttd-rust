@@ -245,17 +245,13 @@ template <typename Check> void CheckTownProtocol(Check check)
 	services.road_bits = [](uint32_t, uint8_t, bool) noexcept -> uint8_t { return 0; };
 	services.tile_type = [](uint32_t) noexcept -> uint8_t { return 0; };
 	services.tile_slope = [](uint32_t) noexcept -> uint8_t { return 0; };
+	static OpenTTDFixtureMap map{6, 4096};
 	static OpenTTDSharedServices movement_world{};
 	movement_world.tile_type = [](uint32_t) noexcept -> uint8_t { return 0; };
-	movement_world.map_log_x = []() noexcept -> uint32_t { return 6; };
+	movement_world.map = &map.statics;
 	static OpenTTDMovementServices movement{};
 	movement.shared = &movement_world;
-	movement.tile_types = []() noexcept -> OpenTTDTileTypeAllocation {
-		static const std::array<TileBaseStorage, 4096> tiles{};
-		static const std::array<TileExtendedStorage, 4096> extended{};
-		return {tiles.data(), extended.data(), 4096, true};
-	};
-	services.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
+	services.movement = &movement;
 	services.tile_max_z = [](uint32_t) noexcept -> int32_t { return 0; };
 	services.tile_z = [](uint32_t) noexcept -> int32_t { return 0; };
 	AutoRestoreBackup<decltype(GetRustClockState().calendar_date)> calendar_date_scope(GetRustClockState().calendar_date, decltype(GetRustClockState().calendar_date){0});
@@ -270,7 +266,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	catchment.shared = &services;
 	catchment.station_count = []() noexcept -> size_t { return 0; };
 	services.station_catchment = []() noexcept -> const OpenTTDStationCatchmentServices * { return &catchment; };
-	services.map_log_x = []() noexcept -> uint32_t { return 6; };
+	services.map = &map.statics;
 	services.map_max_x = []() noexcept -> uint32_t { return 63; };
 	services.map_max_y = []() noexcept -> uint32_t { return 63; };
 	services.closest_town = [](uint32_t, uint32_t) noexcept -> const OpenTTDTownHandle * { return nullptr; };

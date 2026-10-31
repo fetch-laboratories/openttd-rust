@@ -191,10 +191,7 @@ const OpenTTDWaterRestorationServices &GetRustWaterRestorationServices() noexcep
 
 static uint8_t SharedSnowLine() noexcept { return GetSnowLine(); }
 
-OpenTTDTileTypeAllocation GetRustTileTypeAllocation() noexcept
-{
-	return OpenTTDNativeTileTypeAccess::Acquire();
-}
+constinit const OpenTTDMapStatics _rust_map_statics = OpenTTDNativeTileTypeAccess::Statics();
 
 extern "C" uint64_t openttd_orders_ship_station_tile(uint16_t destination) noexcept
 {
@@ -358,7 +355,7 @@ static void SharedForEachStation(void *context, void (*visit)(void *, const Open
 }
 
 constinit const OpenTTDSharedServices _rust_shared_services{
-	.movement_services = []() noexcept { return &GetRustMovementServices(); },
+	.movement = &_rust_movement_services,
 	.set_tile_owner = RustSetTileOwner,
 	.autoslope = RustAutoslopeEnabled,
 	.bay_stop_direction = Shared_bay_stop_direction,
@@ -398,7 +395,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.is_road_depot = Shared_is_road_depot,
 	.is_sea = Shared_is_sea,
 	.is_water_tile = MapSvcIsWaterTile,
-	.map_log_x = OpenTTDMapLogX,
+	.map = &_rust_map_statics,
 	.map_max_x = SharedMapMaxX,
 	.map_max_y = SharedMapMaxY,
 	.mark_bridge_dirty = SharedMarkBridgeDirty,

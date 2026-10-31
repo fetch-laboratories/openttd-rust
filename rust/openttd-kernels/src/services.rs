@@ -212,7 +212,7 @@ pub struct ClearSquareServices {
 #[derive(Clone, Copy)]
 pub struct Services {
     /// Complete synchronous movement owner; immutable process-lifetime table.
-    pub movement_services: extern "C" fn() -> *const crate::movement::MovementServices,
+    pub movement: *const crate::movement::MovementServices,
     /// Canonical native tile owner write.
     pub set_tile_owner: extern "C" fn(u32, u8),
     /// `AutoslopeEnabled()`.
@@ -283,8 +283,8 @@ pub struct Services {
     pub is_sea: extern "C" fn(u32) -> bool,
     /// `IsWaterTile`: water category and clear subtype (sea, canal or river).
     pub is_water_tile: extern "C" fn(u32) -> bool,
-    /// Shared live map log x observation.
-    pub map_log_x: extern "C" fn() -> u32,
+    /// Canonical `Tile` and `Map` statics, loaded at each observation.
+    pub map: *const crate::map_func::MapStatics,
     /// Shared live map max x observation.
     pub map_max_x: extern "C" fn() -> u32,
     /// Shared live map max y observation.
@@ -475,7 +475,8 @@ impl Services {
     /// Capture `Map::LogX()` once for a synchronous entry.
     #[must_use]
     pub fn map(&self) -> Map {
-        Map::from_log_x((self.map_log_x)())
+        // SAFETY: The table's statics address the live canonical `Map::log_x`.
+        Map::from_log_x(unsafe { (*self.map).log_x.read() })
     }
     /// Draw one shared random word.
     #[must_use]
@@ -527,10 +528,11 @@ crate::abi::layouts! {
         z,
         slope,
     };
-    "OpenTTDTileTypeAllocation" ["landscape"] => crate::services::TileTypeAllocation {
+    "OpenTTDMapStatics" ["landscape"] => crate::map_func::MapStatics {
         base,
         extended,
-        count,
+        size,
+        log_x,
         assertions,
     };
     "OpenTTDNativeTileTypeAccess::BaseTile" ["landscape"] => BaseTileLayout {
@@ -661,7 +663,7 @@ crate::abi::layouts! {
         generating_world,
     };
     "OpenTTDSharedServices" ["probe"] => crate::services::Services {
-        movement_services,
+        movement,
         set_tile_owner,
         autoslope,
         bay_stop_direction,
@@ -697,7 +699,7 @@ crate::abi::layouts! {
         is_road_depot,
         is_sea,
         is_water_tile,
-        map_log_x,
+        map,
         map_max_x,
         map_max_y,
         mark_bridge_dirty,
@@ -885,7 +887,7 @@ pub fn fixture(
     Services {
         show_error: unexpected_error,
         not_reached: unexpected_path,
-        movement_services: fixture_movement,
+        movement: std::ptr::null(),
         set_tile_owner: zone,
         autoslope: flag0,
         bay_stop_direction: byte,
@@ -924,7 +926,7 @@ pub fn fixture(
         is_road_depot: flag,
         is_sea: flag,
         is_water_tile: flag,
-        map_log_x: word0,
+        map: crate::map_func::fixture::statics(),
         map_max_x: word0,
         map_max_y: word0,
         mark_bridge_dirty: tile,
@@ -1438,12 +1440,6 @@ extern "C" fn fixture_road_commands() -> *const crate::road_cmd::RoadCommandServ
 #[cfg(test)]
 extern "C" fn unused_tile_add_wrap(_: u32, _: i32, _: i32) -> u32 {
     panic!("unused tile addition")
-}
-
-#[cfg(test)]
-#[cfg(test)]
-extern "C" fn fixture_movement() -> *const crate::movement::MovementServices {
-    std::ptr::null()
 }
 
 #[cfg(test)]

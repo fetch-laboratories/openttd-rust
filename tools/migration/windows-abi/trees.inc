@@ -84,16 +84,11 @@ static void Trees()
 		.news = TreeUnused<void, OpenTTDVehicle *, uint32_t>,
 	};
 	shared.water_services = []() noexcept { return &water; };
-	static std::array<TileBaseStorage, 4096> map_tiles{};
-	static const std::array<TileExtendedStorage, 4096> map_extended{};
-	for (uint32_t tile = 0; tile < map_tiles.size(); ++tile) map_tiles[tile].type = (tile == 1 || tile == 2 ? MP_TREES : MP_STATION) << 4;
-	static const OpenTTDMovementServices movement = [] {
-		OpenTTDMovementServices m{};
-		m.tile_types = []() noexcept -> OpenTTDTileTypeAllocation { return {map_tiles.data(), map_extended.data(), 4096, true}; };
-		return m;
-	}();
-	shared.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
-	shared.map_log_x = []() noexcept { return 6U; };
+	static OpenTTDFixtureMap map{6, 4096};
+	for (uint32_t tile = 0; tile < map.size; ++tile) map.base[tile].type = (tile == 1 || tile == 2 ? MP_TREES : MP_STATION) << 4;
+	static const OpenTTDMovementServices movement{};
+	shared.movement = &movement;
+	shared.map = &map.statics;
 	shared.map_max_x = []() noexcept { return 63U; };
 	shared.map_max_y = []() noexcept { return 63U; };
 	shared.tile_type = [](uint32_t tile) noexcept { return static_cast<uint8_t>(tile == 1 || tile == 2 ? 4 : 5); };
@@ -113,7 +108,7 @@ static void Trees()
 		tick_size = size;
 		SessionFixture fixture;
 		auto tick_shared = shared;
-		tick_shared.map_log_x = fixture.shared.map_log_x;
+		tick_shared.map = fixture.shared.map;
 		fixture.services.shared = &tick_shared;
 		fixture.services.trees = &tree_probe_services;
 		fixture.services.tree_tick = []() noexcept { return OpenTTDTreeTickSettings{.tick_counter = 0, .size = tick_size, .climate = 0, .extra = 2}; };
@@ -134,7 +129,6 @@ static void Trees()
 	tree_probe.plant.tile_type = 0;
 	const OpenTTDLandscapeLoopServices loop{
 		.shared = &shared,
-		.tile_types = movement.tile_types(),
 		.trees = &tree_probe_services,
 		.industry = {},
 		.ground = {},

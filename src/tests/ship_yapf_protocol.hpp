@@ -79,7 +79,7 @@ template <typename Check> void Run(Check check, uint32_t limit_follows)
 	FollowerFixture map{32, 32};
 	auto &services = map.shared;
 	services.random = Random;
-	for (uint32_t t = 0; t < map.base.size(); ++t) map.Tile(t, MP_WATER);
+	for (uint32_t t = 0; t < map.tiles.size; ++t) map.Tile(t, MP_WATER);
 	destination = input.dest_tile;
 	auto result = openttd_rust_ship_choose(path.get(), &input, &leaves, &services, nullptr, input.tile, 1 << 1, 0, &destination, 1);
 	check(result.found == 1 && result.direction == 1 && result.origin == 1 && openttd_rust_ship_path_size(path.get()) == 0 && draws == 0);
@@ -95,7 +95,7 @@ template <typename Check> void Run(Check check, uint32_t limit_follows)
 	 * transitions now enter the production follower over canonical tile layouts.
 	 * Region reporting remains injected to isolate low-level retry control. */
 	snake = true; draws = 0;
-	map.width = 128; map.base.assign(128 * 128, {}); map.extended.assign(128 * 128, {});
+	map.tiles.Resize(7, 128 * 128);
 	for (uint32_t y = 1; y < 127; y += 2) {
 		for (uint32_t x = 1; x <= 126; ++x) map.Tile(x + y * 128, MP_WATER);
 		if (y < 125) map.Tile(((y / 2 & 1) ? 1 : 126) + (y + 1) * 128, MP_WATER);
@@ -111,7 +111,7 @@ template <typename Check> void Run(Check check, uint32_t limit_follows)
 	snake = false;
 	/* Map-derived high-level node limit, with a synthetic one-edge region graph. */
 	region_chain = true; draws = 0;
-	for (uint32_t t = 0; t < map.base.size(); ++t) map.Tile(t, MP_WATER);
+	for (uint32_t t = 0; t < map.tiles.size; ++t) map.Tile(t, MP_WATER);
 	input = {128, 128, 600, 0, 100, 20, 100, 0, 0, 1, 0, 0, 0, 0};
 	destination = 0; openttd_rust_ship_path_clear(path.get());
 	result = openttd_rust_ship_choose(path.get(), &input, &leaves, &services, nullptr, input.tile, 1 << 1, 0, &destination, 1);
