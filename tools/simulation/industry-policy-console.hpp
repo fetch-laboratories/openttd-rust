@@ -65,6 +65,7 @@ static bool IndustryPolicy(std::span<std::string_view> args)
 			/* Orders() retains entries beyond the uint8 GetNumOrders() count in loaded lists. */
 			std::vector<Order> entries(257);
 			entries.back().MakeGoToStation((*ind->stations_near.begin())->index);
+			IndustryPolicyRequire(OrderList::CanAllocateItem());
 			wide = new OrderList(std::move(entries), vehicle);
 			for (Vehicle *v : Vehicle::Iterate()) {
 				original_orders.emplace_back(v, v->orders);
