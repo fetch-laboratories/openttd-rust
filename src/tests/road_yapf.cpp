@@ -116,13 +116,9 @@ OpenTTDRoadYapfTile ProbeTile(const void *, uint32_t tile, uint8_t, bool) noexce
 {
 	OpenTTDRoadYapfTile out{}; out.type = 2; out.depot = tile == goal; out.depot_dir = DIAGDIR_SW; return out;
 }
-OpenTTDFollowTrackState Follow(uint32_t tile, uint8_t td)
+OpenTTDTestFollow Follow(uint32_t tile, uint8_t td)
 {
-	OpenTTDFollowTrackState ft{};
-	const auto &s = FollowerFixture::active->shared;
-	openttd_test_follower_init(&ft, &s, TRANSPORT_ROAD, reinterpret_cast<Vehicle *>(FollowerFixture::active->Vehicle()), 0, 0, true, false, true);
-	if (!openttd_test_follower_follow(&s, &ft, tile, td)) ft.new_td_bits = TRACKDIR_BIT_NONE;
-	return ft;
+	return OpenTTDTestFollowOnce(FollowerFixture::active->shared, TRANSPORT_ROAD, reinterpret_cast<Vehicle *>(FollowerFixture::active->Vehicle()), 0, 0, true, tile, td);
 }
 struct Follower {};
 class Search;

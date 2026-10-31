@@ -665,7 +665,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
         }
         0x43 => (native.company)((native.world().station_owner)(st), ptr::null()),
         0x44 => {
-            if (crate::pbs::Pbs::acquire(native.shared()).0.station_reserved)(tile) {
+            if crate::map_func::World::new(native.shared()).station_reserved(tile) {
                 7
             } else {
                 4
@@ -699,7 +699,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
         }
         0x68 | 0x6a | 0x6b => {
             let nearby = (native.nearby)(parameter as u8, tile);
-            if !crate::station_map::has_station_tile_rail(nearby, native.shared(), native.rail()) {
+            if !crate::map_func::World::new(native.shared()).has_station_rail(nearby) {
                 return u32::MAX;
             }
             let index = (native.commands().custom_rail_index)(nearby);

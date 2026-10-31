@@ -20,6 +20,7 @@ struct OpenTTDMovementFoundation { const void *spec; uint16_t kind; bool callbac
 struct OpenTTDMovementObjectFoundation { bool enabled; bool no_foundation; };
 enum class WaterTileType : uint8_t;
 struct OpenTTDTrainServices;
+struct OpenTTDTunnelBridgeServices;
 /* Only consumed entry-local owner identities/scalars; never a Vehicle/map view.
  * Shells survive the selected depot/admission/sound/viewport calls. No pointer
  * is retained after this synchronous entry and no Rust borrow crosses a call. */
@@ -38,11 +39,9 @@ struct OpenTTDMovementServices {
 	const OpenTTDRailMapServices *rail_map;
 	const OpenTTDTrainServices *train;
 	const OpenTTDVehicleServices *vehicle;
+	const OpenTTDTunnelBridgeServices *tunnel_bridge;
 	uint64_t (*road_compatible)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(road_compatible);
 	uint16_t (*road_type_speed)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_type_speed);
-	uint16_t (*bridge_type_speed)(BridgeType) noexcept OPENTTD_SERVICE_DEFAULT(bridge_type_speed);
-	uint32_t (*other_bridge_end)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(other_bridge_end);
-	uint16_t (*order_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_speed);
 	RoadTramType (*road_kind)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(road_kind);
 	const OpenTTDRoadLeaves *road_vehicle;
 	OpenTTDMovementVehicle (*resolve)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(resolve);

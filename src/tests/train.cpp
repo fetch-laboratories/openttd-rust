@@ -8,25 +8,20 @@
 #include "../rust/train_reservation_ffi.h"
 #include "../tile_type.h"
 #include "../track_type.h"
+#include "follower_fixture.hpp"
 
 TEST_CASE("PBS depot early return does not read or write train_on_res")
 {
-	std::unique_ptr<OpenTTDTrainState, decltype(&openttd_rust_train_state_destroy)> state(openttd_rust_train_state_new(), openttd_rust_train_state_destroy);
-	openttd_rust_train_state_set_track(state.get(), TRACK_BIT_X);
-	OpenTTDSharedServices shared{}; shared.tile_type = [](uint32_t) noexcept -> uint8_t { return MP_RAILWAY; };
-	OpenTTDRailMapServices rail{}; rail.is_rail_depot = [](uint32_t) noexcept { return true; };
-	auto train = OpenTTDTrainServices{};
-	train.read_tile = [](OpenTTDTrainHandle) noexcept -> uint32_t { return 23; };
-	train.read_trackdir = [](OpenTTDTrainHandle) noexcept -> OpenTTDTrainTrackdirRead { return {23, 1, 0}; };
-	train.first_track = [](OpenTTDTrainHandle, uint8_t) noexcept -> uint64_t { return 0; };
-	train.track_direction = [](OpenTTDTrainHandle, uint8_t, uint8_t) noexcept -> uint64_t { return 0; };
-	auto pbs = OpenTTDPbsServices{};
-	pbs.shared = &shared;
-	pbs.rail = &rail;
-	pbs.train = &train;
-	pbs.depot_bits = [](uint32_t) noexcept { return TRACK_BIT_NONE; };
+	FollowerFixture map;
+	map.Tile(23, MP_RAILWAY, 3 << 6);
+	map.train.read_tile = [](OpenTTDTrainHandle) noexcept -> uint32_t { return 23; };
+	map.train.read_trackdir = [](OpenTTDTrainHandle) noexcept -> OpenTTDTrainTrackdirRead { return {23, 1, 0}; };
+	map.train.first_track = [](OpenTTDTrainHandle, uint8_t) noexcept -> uint64_t { return 0; };
+	map.train.track_direction = [](OpenTTDTrainHandle, uint8_t, uint8_t) noexcept -> uint64_t { return 0; };
+	map.pbs.depot_bits = [](uint32_t) noexcept { return TRACK_BIT_NONE; };
+	openttd_rust_train_state_set_track(map.state.get(), TRACK_BIT_X);
 	void *other = nullptr;
-	const auto result = openttd_rust_pbs_follow_train(&pbs, {state.get(), state.get()}, reinterpret_cast<OpenTTDPbsTrainOutput *>(&other));
+	const auto result = openttd_rust_pbs_follow_train(&map.pbs, {map.state.get(), map.state.get()}, reinterpret_cast<OpenTTDPbsTrainOutput *>(&other));
 	CHECK(result.tile == 23); CHECK(result.td == 0); CHECK(result.okay == 0); CHECK(other == nullptr);
 }
 

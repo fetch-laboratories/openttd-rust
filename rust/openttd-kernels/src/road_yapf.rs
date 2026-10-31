@@ -269,7 +269,6 @@ impl Search<'_> {
             v,
             u64::MAX,
             true,
-            false,
         );
         let followed = state.follow(s, tile, td);
         Follow {
@@ -442,7 +441,11 @@ impl Search<'_> {
                 std::ptr::NonNull::new(self.context.cast_mut().cast()).unwrap(),
             );
             let display_speed = (movement.train().physics.display_max_speed)(vehicle);
-            let order_speed = (movement.order_speed)(vehicle);
+            // SAFETY: the movement table's orders leaves have process lifetime.
+            let orders = unsafe { &*movement.orders };
+            let order_speed = crate::orders::VisitOrders::new(orders)
+                .current(vehicle)
+                .speed;
             let max_speed = crate::follow_track::speed_limit(
                 shared,
                 crate::transport_type::TRANSPORT_ROAD,

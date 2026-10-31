@@ -235,11 +235,9 @@ pub struct MovementServices {
     pub rail_map: *const crate::services::RailMapServices,
     pub train: *const crate::train::Leaves,
     pub vehicle: *const crate::vehicle::VehicleServices,
+    pub tunnel_bridge: *const crate::tunnelbridge_cmd::TunnelBridgeServices,
     pub road_compatible: extern "C" fn(VehicleRef) -> u64,
     pub road_type_speed: extern "C" fn(crate::services::RoadType) -> u16,
-    pub bridge_type_speed: extern "C" fn(std::ffi::c_uint) -> u16,
-    pub other_bridge_end: extern "C" fn(u32) -> u32,
-    pub order_speed: extern "C" fn(VehicleRef) -> u16,
     pub road_kind: extern "C" fn(VehicleRef) -> crate::services::RoadTramType,
     pub road_vehicle: *const crate::road::Leaves,
     pub resolve: extern "C" fn(crate::vehicle::VehicleRef) -> MovementVehicle,
@@ -303,6 +301,7 @@ impl MovementServices {
         fn rail_map -> crate::services::RailMapServices;
         pub(crate) fn train -> crate::train::Leaves;
         pub(crate) fn vehicle -> crate::vehicle::VehicleServices;
+        pub(crate) fn tunnel_bridge -> crate::tunnelbridge_cmd::TunnelBridgeServices;
         fn road_vehicle -> crate::road::Leaves;
     }
 }
@@ -1651,11 +1650,9 @@ crate::abi::layouts! {
         rail_map,
         train,
         vehicle,
+        tunnel_bridge,
         road_compatible,
         road_type_speed,
-        bridge_type_speed,
-        other_bridge_end,
-        order_speed,
         road_kind,
         road_vehicle,
         resolve,
