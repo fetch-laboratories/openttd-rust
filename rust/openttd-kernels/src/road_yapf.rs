@@ -598,7 +598,6 @@ impl Search<'_> {
         }
         if let Some(station) = self.dest_station {
             let shared = unsafe { &*self.leaves.shared };
-            let commands = unsafe { &*(shared.station_commands)() };
             let catchment = unsafe { &*(shared.station_catchment)() };
             let st = (catchment.station_if_valid)(crate::station_type::StationID(station));
             if st.is_null() {
@@ -622,6 +621,7 @@ impl Search<'_> {
                 } else {
                     crate::station_type::STATION_TRUCK
                 };
+                let commands = unsafe { &*(shared.station_commands)() };
                 let a = (commands.tile_area)(st, kind);
                 let x = (a.tile % self.input.map_x) as i32;
                 let y = (a.tile / self.input.map_x) as i32;

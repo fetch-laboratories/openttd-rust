@@ -231,7 +231,6 @@ pub struct Leaves {
     pub copy_sprite: unsafe extern "C" fn(VehicleRef, VehicleRef),
     pub truncate_cargo: unsafe extern "C" fn(Vehicle),
     pub crash_news: unsafe extern "C" fn(Vehicle, u16, u32),
-    pub station_rating: unsafe extern "C" fn(u32, u8, i32, u32),
     pub landing_rating: unsafe extern "C" fn(u16, u8),
     pub dirty_depot: unsafe extern "C" fn(Vehicle),
     pub first_arrival: unsafe extern "C" fn(Vehicle, u16),
@@ -665,14 +664,6 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             result
         }
     }
-    fn station_rating(&self, tile: i64, owner: i64, amount: i64, radius: i64) {
-        Self::service_witness("station_rating", 0);
-        // SAFETY: Synchronous noexcept service; no owner borrow spans this call.
-        unsafe {
-            (self.leaves.station_rating)(tile as u32, owner as u8, amount as i32, radius as u32);
-        }
-    }
-
     fn status(&self, id: Vehicle, mask: i64, on: bool) {
         let old = self.vehicle_status(id);
         self.set_vehicle_status(id, if on { old | mask } else { old & !mask });
@@ -1491,7 +1482,13 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             self.x(id).clamp(0, self.map_max_x() * 16),
             self.y(id).clamp(0, self.map_max_y() * 16),
         );
-        self.station_rating(i64::from(tile), self.owner(id), -160, 30);
+        crate::station::spatial::modify_rating_around(
+            unsafe { &*self.leaves.shared },
+            tile,
+            self.owner(id) as u8,
+            -160,
+            30,
+        );
         if self.disaster_sound() != 0 {
             self.play_sound(id, EXPLOSION_SOUND);
         }
@@ -2629,7 +2626,6 @@ crate::abi::layouts! {
         copy_sprite,
         truncate_cargo,
         crash_news,
-        station_rating,
         landing_rating,
         dirty_depot,
         first_arrival,

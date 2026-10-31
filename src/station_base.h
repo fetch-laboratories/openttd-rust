@@ -665,7 +665,6 @@ public:
 
 	void UpdateVirtCoord() override;
 
-	void MoveSign(TileIndex new_xy) override;
 
 	void AfterStationTileSetChange(bool adding, StationType type);
 
@@ -740,7 +739,6 @@ public:
 	}
 };
 
-void RebuildStationKdtree();
 
 #ifndef WITH_RUST
 /**

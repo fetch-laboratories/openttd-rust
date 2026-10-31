@@ -82,7 +82,8 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.rail_spec = RustAnimationRailSpec,
 		.links = &_rust_station_links,
 		.location = RustStationLocation,
-		.move_sign = [](BaseStation *st, uint32_t tile) noexcept { st->MoveSign(TileIndex{tile}); },
+		.base_move_sign = [](BaseStation *st, uint32_t tile) noexcept { st->BaseStation::MoveSign(TileIndex{tile}); },
+		.waypoint_move_sign = [](BaseStation *st, uint32_t tile) noexcept { Waypoint::From(st)->MoveSign(TileIndex{tile}); },
 		.virtual_coord = [](BaseStation *st) noexcept { st->UpdateVirtCoord(); },
 		.catchment_dirty = []() noexcept { MarkCatchmentTilesDirty(); },
 		.facility_widget = [](BaseStation *st, uint8_t type) noexcept {
@@ -95,10 +96,8 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 			}
 		},
 		.select_invalidate = []() noexcept { InvalidateWindowData(WC_SELECT_STATION, 0, 0); },
-		.radius = RustStationRadius,
 		.station_available = RustStationStationAvailable,
 		.new_station = [](uint32_t tile) noexcept -> BaseStation * { return new Station(TileIndex{tile}); },
-		.index_insert = RustStationIndexInsert,
 		.set_town = RustStationSetTown,
 		.lifecycle = &GetRustStationLifecycleServices(),
 		.have_rating = RustStationHaveRating,

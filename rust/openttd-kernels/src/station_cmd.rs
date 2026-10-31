@@ -185,20 +185,14 @@ pub struct CommandServicesTable {
     pub rail_spec: extern "C" fn(u32) -> *const RailSpec,
     pub links: *const crate::station_service::Links,
     pub location: extern "C" fn(*const BaseStation) -> u32,
-    pub move_sign: extern "C" fn(*mut BaseStation, u32),
+    pub base_move_sign: extern "C" fn(*mut BaseStation, u32),
+    pub waypoint_move_sign: extern "C" fn(*mut BaseStation, u32),
     pub virtual_coord: extern "C" fn(*mut BaseStation),
     pub catchment_dirty: extern "C" fn(),
     pub facility_widget: extern "C" fn(*mut BaseStation, u8),
     pub select_invalidate: extern "C" fn(),
-    pub radius: unsafe extern "C" fn(
-        u32,
-        u32,
-        *mut std::ffi::c_void,
-        unsafe extern "C" fn(*mut std::ffi::c_void, *mut BaseStation),
-    ),
     pub station_available: extern "C" fn() -> bool,
     pub new_station: extern "C" fn(u32) -> *mut BaseStation,
-    pub index_insert: extern "C" fn(*mut BaseStation),
     pub set_town: extern "C" fn(*mut BaseStation, *const crate::services::TownHandle),
     pub lifecycle: *const crate::station_lifecycle::Services,
     pub have_rating: extern "C" fn(*mut BaseStation, u8),
@@ -699,7 +693,7 @@ impl Ctx<'_> {
         let xy = (self.s.location)(st);
         let x = (self.map().tile_x(xy) as i32).clamp(b.left, b.right) as u32;
         let y = (self.map().tile_y(xy) as i32).clamp(b.top, b.bottom) as u32;
-        (self.s.move_sign)(st, (y << self.map().log_x) + x);
+        crate::station::spatial::move_sign(self.shared, st, (y << self.map().log_x) + x);
         if !(self.world().is_station)(st) {
             return;
         }
@@ -866,7 +860,9 @@ impl Ctx<'_> {
                 threshold: 8,
                 best: std::ptr::null_mut(),
             };
-            unsafe { (self.s.radius)(area.tile, 8, (&raw mut search).cast(), deleted_visit) };
+            crate::station::spatial::radius(self.shared, area.tile, 8, |st| unsafe {
+                deleted_visit((&raw mut search).cast(), st);
+            });
             st = search.best;
             if !st.is_null() {
                 crate::witness::hit(crate::witness::STATION_CMD_REUSE);
@@ -888,7 +884,7 @@ impl Ctx<'_> {
             }
             if flags & 1 != 0 {
                 st = (self.s.new_station)(area.tile);
-                (self.s.index_insert)(st);
+                crate::station::spatial::insert(self.shared, st);
                 let town = crate::town::spatial::closest(self.shared, area.tile, u32::MAX);
                 (self.s.set_town)(st, town);
                 (self.s.set_string_id)(
@@ -984,15 +980,15 @@ impl Ctx<'_> {
             tile,
             other: false,
         };
-        unsafe {
-            (self.s.radius)(tile, 0, (&raw mut search).cast(), sign_visit);
-        }
+        crate::station::spatial::radius(self.shared, tile, 0, |st| unsafe {
+            sign_visit((&raw mut search).cast(), st);
+        });
         if search.other {
             out.error(self.s.strings.unsuitable);
             return 0xffff;
         }
         if flags & 1 != 0 {
-            (self.s.move_sign)(st, tile);
+            crate::station::spatial::move_sign(self.shared, st, tile);
             (self.s.virtual_coord)(st);
         }
         out.zero();
@@ -3707,7 +3703,7 @@ impl Ctx<'_> {
             return;
         }
         let st = (self.s.new_station)(tile);
-        (self.s.index_insert)(st);
+        crate::station::spatial::insert(self.shared, st);
         (self.s.set_town)(
             st,
             crate::town::spatial::closest(self.shared, tile, u32::MAX),
@@ -4241,15 +4237,14 @@ crate::abi::layouts! {
         rail_spec,
         links,
         location,
-        move_sign,
+        base_move_sign,
+        waypoint_move_sign,
         virtual_coord,
         catchment_dirty,
         facility_widget,
         select_invalidate,
-        radius,
         station_available,
         new_station,
-        index_insert,
         set_town,
         lifecycle,
         have_rating,

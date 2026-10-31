@@ -121,6 +121,8 @@ def scenarios(soak):
                 "airport-reload",
                 "catchment",
                 "catchment-reload",
+                "spatial602",
+                "spatial602-reload",
                 "owner562-names",
                 "owner562-names-reload",
                 "owner562-arctic",
@@ -976,6 +978,12 @@ static bool StationCommands(std::span<std::string_view> args)
 	_settings_game.construction.road_stop_on_competitor_road = true;
 	const DoCommandFlags test{DoCommandFlag::NoTestTownRating};
 	const DoCommandFlags exec{DoCommandFlag::Execute, DoCommandFlag::NoTestTownRating};
+	if (args[1].starts_with("spatial602")) {
+		bool reload = args[1].ends_with("inspect");
+		Station602Fixture(reload ? INVALID_TILE : StationPatch(), exec, reload);
+		if (!reload && args.size() == 3) StationNeed(SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false) == SL_OK, __LINE__);
+		fmt::print(stderr, "STCMD complete\n"); current.Restore(); return true;
+	}
 	if (args[1].starts_with("owner562-")) {
 		/* Interactive RNG is process-time seeded and is not saved. */
 		_interactive_random.SetSeed(0x562);
@@ -1292,6 +1300,7 @@ extern "C" void __wrap__Z22IConsoleStdLibRegisterv() { __real__Z22IConsoleStdLib
 
 
 RELOADS = {
+    "spatial602-reload": ("spatial602", "spatial602-inspect"),
     "owner562-names-reload": ("owner562-names", "owner562-names-inspect"),
     "owner562-arctic-reload": ("owner562-arctic", "owner562-arctic-inspect"),
     "owner562-tropic-reload": ("owner562-tropic", "owner562-tropic-inspect"),
@@ -1318,10 +1327,26 @@ ROAD_STOPS = (
 ).split()
 
 
-def adapter(build, folder, env):
+def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
+    import probe
+
+    import migration
+
     from .console_adapter import console_adapter
 
     folder.mkdir(parents=True, exist_ok=True)
+    migration.ensure_reference()
+    original = (migration.REFERENCE / "src/town_cmd.cpp").read_text()
+    (folder / "station602-town-original.hpp").write_text(
+        "\n".join(
+            probe.body(original, signature)
+            for signature in (
+                "template <typename Func>\nstatic void ForAllStationsNearTown(",
+                "static void UpdateTownRating(",
+                "static int CountActiveStations(",
+            )
+        )
+    )
     source = folder / "station-commands.cpp"
     source.write_text(
         COMMAND_SOURCE.replace(
@@ -1331,7 +1356,8 @@ def adapter(build, folder, env):
             "// OWNER399",
             (ROOT / "tools/simulation/station-resolver-console.hpp").read_text()
             + (ROOT / "tools/simulation/airport-resolver-console.hpp").read_text()
-            + (ROOT / "tools/simulation/station-lifecycle-console.hpp").read_text(),
+            + (ROOT / "tools/simulation/station-lifecycle-console.hpp").read_text()
+            + (ROOT / "tools/simulation/station-spatial-console.hpp").read_text(),
         )
     )
     return console_adapter(
@@ -1341,6 +1367,7 @@ def adapter(build, folder, env):
         source,
         "stations",
         replace_objects=("/src/station_cmd.cpp.o",),
+        native_test_support=True,
     )
 
 
@@ -1671,7 +1698,51 @@ def check_airport_definition_state(snapshots: list[Path], log: list[str]) -> Non
         raise RuntimeError("file-loaded airport aircraft did not move")
 
 
+def check_spatial602(log: list[str], reload: bool) -> None:
+    phases = ["reload"] if reload else ["build", "move", "remove", "reuse"]
+    markers = [f"STCMD spatial602-visit {phase} " for phase in phases]
+    markers += [
+        "STCMD spatial602-visit zero ",
+        "STCMD spatial602-visit edge ",
+        "STCMD owner562-rng spatial602-before ",
+        "STCMD owner562-rng spatial602 ",
+        "STCMD complete",
+    ]
+    markers += [
+        f"STCMD spatial602-town {value} " for value in (-32768, -1000, 999, 32767)
+    ]
+    markers += [
+        f"STCMD spatial602-rating {radius} {amount} "
+        for radius in (0, 1, 2, 8)
+        for amount in (-160, -1, 0, 1, 255)
+    ]
+    if not reload:
+        markers += [
+            "STCMD spatial602-stop occupied-articulated ",
+            "STCMD spatial602-collisions true true",
+            "STCMD spatial602-deleted-tie ",
+            "STCMD spatial602-waypoint ",
+        ]
+        markers += [
+            f"STCMD spatial602-stop {bus} {incompatible} "
+            for bus in ("true", "false")
+            for incompatible in ("false", "true")
+        ]
+        markers += [
+            f"STCMD spatial602-rail {axis} {blocked} {area} "
+            for axis in (0, 1)
+            for blocked in ("false", "true")
+            for area in (0, 1, 2)
+        ]
+    for marker in markers:
+        if not any(line.startswith(marker) for line in log):
+            raise RuntimeError("missing station spatial observation: " + marker)
+
+
 def check_commands(scenario, run, mode, role, result):
+    if scenario["station_commands"].startswith("spatial602"):
+        check_spatial602(run["log"], scenario["station_commands"].endswith("reload"))
+        return
     if scenario["station_commands"].startswith("owner562-"):
         kind = scenario["station_commands"].split("-")[1]
         required = {

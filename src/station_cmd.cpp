@@ -492,21 +492,6 @@ void Station::UpdateVirtCoord()
 	SetWindowDirty(WC_STATION_VIEW, this->index);
 }
 
-/**
- * Move the station main coordinate somewhere else.
- * @param new_xy new tile location of the sign
- */
-void Station::MoveSign(TileIndex new_xy)
-{
-	if (this->xy == new_xy) return;
-
-	_station_kdtree.Remove(this->index);
-
-	this->BaseStation::MoveSign(new_xy);
-
-	_station_kdtree.Insert(this->index);
-}
-
 /** Update the virtual coords needed to draw the station sign for all stations. */
 void UpdateAllStationVirtCoords()
 {
@@ -4853,31 +4838,6 @@ static const IntervalTimer<TimerGameEconomy> _economy_stations_monthly({TimerGam
 });
 #endif
 
-
-/**
- * Forcibly modify station ratings near a given tile.
- * Used when a crash hurts a company's station ratings nearby, or when local authority actions affect nearby ratings.
- * @param tile The center of the ratings change area.
- * @param owner The station owner whose stations are affected.
- * @param amount The amount to change the rating.
- * @param radius The radius to search for stations, from the origin tile.
- */
-void ModifyStationRatingAround(TileIndex tile, Owner owner, int amount, uint radius)
-{
-	ForAllStationsRadius(tile, radius, [&](Station *st) {
-		if (st->owner == owner && DistanceManhattan(tile, st->xy) <= radius) {
-#ifdef WITH_RUST
-			openttd_rust_station_modify_rating(st->rust_service.get(), amount);
-#else
-			for (GoodsEntry &ge : st->goods) {
-				if (ge.status.Any()) {
-					ge.rating = ClampTo<uint8_t>(ge.rating + amount);
-				}
-			}
-#endif
-		}
-	});
-}
 
 #ifndef WITH_RUST
 static uint UpdateStationWaiting(Station *st, CargoType cargo, uint amount, Source source)

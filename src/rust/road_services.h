@@ -193,8 +193,6 @@ static void OPENTTD_RUST_CALL RoadSvcCrashNews(OpenTTDVehicle *v, uint32_t victi
 
 	AddTileNewsItem(std::move(headline), newstype, u->tile);
 
-	OpenTTDModifyStationRatingAround(u->tile.base(), u->owner.base(), -160, 22);
-	if (_settings_client.sound.disaster) SndPlayVehicleFx(SND_12_EXPLOSION, u);
 }
 static uint8_t OPENTTD_RUST_CALL RoadSvcShortenFactor(const OpenTTDEngine *e) noexcept
 {

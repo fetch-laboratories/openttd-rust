@@ -36,21 +36,46 @@
 #include "abi_layout.hpp"
 #include "../rust/station_queue_save.hpp"
 #include "../rust/services_ffi.h"
+#include "station_spatial_fixture.hpp"
+#include "../core/kdtree.hpp"
 
 
+
+TEST_CASE("Station tree - unsorted native STL traversal, strict splits and mutation timing")
+{
+	struct XY { uint16_t operator()(StationID id, int dim) const { return dim == 0 ? id.base() % 3 : id.base() % 5; } };
+	Kdtree<StationID, XY, uint16_t, int> tree;
+	std::vector<std::pair<uint32_t, uint16_t>> expected, actual;
+	auto observe = [&](uint32_t phase) {
+		tree.FindContained(0, 0, 10, 10, [&](StationID id) { expected.emplace_back(phase, id.base()); });
+		tree.FindContained(1, 1, 2, 4, [&](StationID id) { expected.emplace_back(phase + 100, id.base()); });
+		if (tree.Count() != 0) expected.emplace_back(phase + 200, tree.FindNearest(1, 2).base());
+	};
+	std::vector<StationID> ids; for (uint16_t i = 0; i < 20; ++i) ids.emplace_back(i);
+	tree.Build(ids.begin(), ids.end()); observe(0);
+	auto root = expected[0].second, interior = expected[1].second;
+	tree.Remove(StationID{root}); observe(1); tree.Remove(StationID{interior}); observe(2);
+	for (uint16_t i = 20; i < 40; ++i) { tree.Insert(StationID{i}); observe(i); }
+	tree.Remove(StationID{20}); observe(40); tree.Remove(StationID{30}); observe(41); tree.Remove(StationID{39}); observe(42);
+	ids.clear(); tree.Build(ids.begin(), ids.end()); observe(43); tree.Insert(StationID{12}); observe(44);
+	openttd_test_station_tree_sequence(&GetRustSharedServices(), &actual, [](void *context, uint32_t phase, uint16_t id) {
+		static_cast<decltype(actual) *>(context)->emplace_back(phase, id);
+	});
+	REQUIRE(actual == expected);
+}
 
 TEST_CASE("Shared station traversal - live filtered pool mutation and reentry")
 {
 	MockEnvironment::Instance();
-	struct Restore { ~Restore() { _station_pool.CleanPool(); RebuildStationKdtree(); } } restore;
+	struct Restore { ~Restore() { _station_pool.CleanPool(); openttd_rust_station_rebuild_index(&GetRustSharedServices()); } } restore;
 	const auto Trace = [](bool shared) {
 		_station_pool.CleanPool();
-		RebuildStationKdtree();
+		openttd_rust_station_rebuild_index(&GetRustSharedServices());
 		const auto Create = [](uint32_t id) {
 			REQUIRE(BaseStation::CanAllocateItem());
 			auto *st = new (StationID(id)) Station(TileIndex(1));
 			st->owner = OWNER_NONE;
-			_station_kdtree.Insert(st->index);
+			openttd_test_station_insert(&GetRustSharedServices(), st);
 		};
 		for (uint32_t id : {0, 2, 4, 5}) Create(id);
 		new (StationID(1)) Waypoint(TileIndex(2)); // Shares the pool, excluded by Iterate.
@@ -232,7 +257,7 @@ TEST_CASE("Station service - direct prepare preserves native frames and same-own
 		CHECK(*static_cast<int *>(next) == 42);
 		CHECK(static_cast<void *>(payment) == &_station_loading_probe->payment);
 		CHECK(openttd_rust_station_queue_size(_station_loading_probe->owner) == 1);
-		openttd_rust_station_modify_rating(_station_loading_probe->owner, 5);
+		openttd_test_station_modify_rating(_station_loading_probe->owner, 5);
 		CHECK(openttd_rust_station_service_cargo(_station_loading_probe->owner, 0)->rating == 6);
 		_station_loading_probe->staged = true;
 	};
@@ -367,7 +392,7 @@ TEST_CASE("Station service - indexed shells, retirement and pool reuse")
 	REQUIRE(BaseStation::CanAllocateItem());
 	auto *st = new Station(TileIndex(1));
 	st->owner = OWNER_NONE;
-	_station_kdtree.Insert(st->index);
+	openttd_test_station_insert(&GetRustSharedServices(), st);
 	StationID id = st->index;
 	st->goods[63].rating = 1;
 	st->goods[63].amount_fract = 255;
@@ -394,7 +419,7 @@ TEST_CASE("Station service - indexed shells, retirement and pool reuse")
 	CHECK(waypoint->delete_ctr == 0);
 	indexed->goods[0].last_speed = 255;
 	_station_pool.CleanPool(); // Derived cleanup early returns still drop owners.
-	RebuildStationKdtree();
+	openttd_rust_station_rebuild_index(&GetRustSharedServices());
 	TimerGameTick::counter = old_counter;
 	_game_mode = old_mode;
 }

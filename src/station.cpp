@@ -54,18 +54,6 @@ StationPool _station_pool("Station");
 INSTANTIATE_POOL_METHODS(Station)
 
 
-StationKdtree _station_kdtree{};
-
-void RebuildStationKdtree()
-{
-	std::vector<StationID> stids;
-	for (const Station *st : Station::Iterate()) {
-		stids.push_back(st->index);
-	}
-	_station_kdtree.Build(stids.begin(), stids.end());
-}
-
-
 BaseStation::~BaseStation()
 {
 	if (CleaningPool()) return;
@@ -841,7 +829,6 @@ const OpenTTDStationLifecycleServices &GetRustStationLifecycleServices() noexcep
 		.cleaning_pool = []() noexcept { return Station::CleaningPool(); },
 		.close_view = [](uint16_t id) noexcept { CloseWindowById(WC_STATION_VIEW, StationID{id}); },
 		.delete_news = [](uint16_t id) noexcept { DeleteStationNews(StationID{id}); },
-		.remove_index = [](uint16_t id) noexcept { _station_kdtree.Remove(StationID{id}); },
 		.sign_valid = RustStationSignValid,
 		.remove_sign = [](uint16_t id) noexcept { _viewport_sign_kdtree.Remove(ViewportSignKdtreeItem::MakeStation(StationID{id})); },
 		.last_loading = RustVehicleLastLoadingStation,

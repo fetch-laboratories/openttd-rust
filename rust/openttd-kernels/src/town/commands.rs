@@ -44,7 +44,6 @@ pub struct CommandServices {
     pub bribe: extern "C" fn() -> bool,
     pub invalidate_view: extern "C" fn(u16),
     pub invalidate_authority: extern "C" fn(u16),
-    pub modify_station_rating: extern "C" fn(u32, u8, i32, u32),
     pub road_news: extern "C" fn(u16),
     pub road_events: extern "C" fn(u16),
     pub rights_news: extern "C" fn(u16),
@@ -688,7 +687,8 @@ pub unsafe extern "C" fn openttd_rust_town_action(
     match action {
         0..=2 => {
             if execute {
-                (s.modify_station_rating)(
+                crate::station::spatial::modify_rating_around(
+                    c.shared,
                     unsafe { super::position(t.state) },
                     (c.shared.current_company)(),
                     [0x40, 0x70, 0xA0][usize::from(action)],
@@ -736,7 +736,8 @@ pub unsafe extern "C" fn openttd_rust_town_action(
                     (*t.state).simulation.exclusive_counter = 12;
                     (*t.state).simulation.exclusivity = (c.shared.current_company)();
                 }
-                (s.modify_station_rating)(
+                crate::station::spatial::modify_rating_around(
+                    c.shared,
                     unsafe { super::position(t.state) },
                     (c.shared.current_company)(),
                     130,
@@ -867,7 +868,6 @@ crate::abi::layouts! {
         bribe,
         invalidate_view,
         invalidate_authority,
-        modify_station_rating,
         road_news,
         road_events,
         rights_news,

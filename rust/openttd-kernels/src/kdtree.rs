@@ -8,7 +8,7 @@
 //! `core/kdtree.hpp`: two-dimensional uint16 coordinates and signed int distances.
 //! Coordinates resolve canonical records; queries allocate nothing. Coordinate readers
 //! must not mutate the tree or its records. Rectangle visitors follow node/left/right order.
-#![allow(dead_code)] // Rectangle consumers move with the station index (#602).
+#![allow(unsafe_code)]
 
 const NONE: usize = usize::MAX;
 const MIN_REBALANCE: usize = 8;
@@ -57,7 +57,7 @@ impl<T: Copy + Ord> Kdtree<T> {
         &mut self,
         elements: &mut [T],
         level: usize,
-        xy: &impl Fn(T, usize) -> u16,
+        split: &impl Fn(&mut [T], usize) -> usize,
     ) -> usize {
         if elements.is_empty() {
             return NONE;
@@ -66,34 +66,10 @@ impl<T: Copy + Ord> Kdtree<T> {
             return self.add(elements[0]);
         }
         let dim = level % 2;
-        let mid = elements.len() / 2;
-        elements.select_nth_unstable_by_key(mid, |e| xy(*e, dim));
-        let coordinate = xy(elements[mid], dim);
-        // std::partition on the random-access vector: exchange the first rejected
-        // element with the last accepted element, retaining the strict split.
-        let (mut first, mut last) = (0, elements.len());
-        loop {
-            while first < last && xy(elements[first], dim) < coordinate {
-                first += 1;
-            }
-            if first == last {
-                break;
-            }
-            loop {
-                last -= 1;
-                if first == last || xy(elements[last], dim) < coordinate {
-                    break;
-                }
-            }
-            if first == last {
-                break;
-            }
-            elements.swap(first, last);
-            first += 1;
-        }
+        let first = split(elements, dim);
         let index = self.add(elements[first]);
-        self.nodes[index].children[0] = self.subtree(&mut elements[..first], level + 1, xy);
-        self.nodes[index].children[1] = self.subtree(&mut elements[first + 1..], level + 1, xy);
+        self.nodes[index].children[0] = self.subtree(&mut elements[..first], level + 1, split);
+        self.nodes[index].children[1] = self.subtree(&mut elements[first + 1..], level + 1, split);
         index
     }
     pub(crate) fn clear(&mut self) {
@@ -101,13 +77,13 @@ impl<T: Copy + Ord> Kdtree<T> {
         self.free.clear();
         self.unbalanced = 0;
     }
-    pub(crate) fn build(&mut self, elements: &mut [T], xy: &impl Fn(T, usize) -> u16) {
+    pub(crate) fn build(&mut self, elements: &mut [T], split: &impl Fn(&mut [T], usize) -> usize) {
         self.clear();
         if elements.is_empty() {
             return;
         }
         self.nodes.reserve(elements.len());
-        self.root = self.subtree(elements, 0, xy);
+        self.root = self.subtree(elements, 0, split);
     }
     fn free_subtree(&mut self, node: usize) -> Vec<T> {
         let mut elements = Vec::new();
@@ -139,7 +115,7 @@ impl<T: Copy + Ord> Kdtree<T> {
         &mut self,
         include: Option<T>,
         exclude: Option<T>,
-        xy: &impl Fn(T, usize) -> u16,
+        split: &impl Fn(&mut [T], usize) -> usize,
     ) -> bool {
         if self.count() < MIN_REBALANCE {
             return false;
@@ -153,7 +129,7 @@ impl<T: Copy + Ord> Kdtree<T> {
         if let Some(element) = exclude {
             elements.retain(|e| *e != element);
         }
-        self.build(&mut elements, xy);
+        self.build(&mut elements, split);
         true
     }
     fn insert_recursive(
@@ -173,10 +149,15 @@ impl<T: Copy + Ord> Kdtree<T> {
             self.insert_recursive(element, next, level + 1, xy);
         }
     }
-    pub(crate) fn insert(&mut self, element: T, xy: &impl Fn(T, usize) -> u16) {
+    pub(crate) fn insert(
+        &mut self,
+        element: T,
+        xy: &impl Fn(T, usize) -> u16,
+        split: &impl Fn(&mut [T], usize) -> usize,
+    ) {
         if self.count() == 0 {
             self.root = self.add(element);
-        } else if !self.is_unbalanced() || !self.rebuild(Some(element), None, xy) {
+        } else if !self.is_unbalanced() || !self.rebuild(Some(element), None, split) {
             self.insert_recursive(element, self.root, 0, xy);
             self.unbalanced = self.unbalanced.wrapping_add(1);
         }
@@ -187,6 +168,7 @@ impl<T: Copy + Ord> Kdtree<T> {
         node: usize,
         level: usize,
         xy: &impl Fn(T, usize) -> u16,
+        split: &impl Fn(&mut [T], usize) -> usize,
     ) -> usize {
         if self.nodes[node].element == element {
             self.free.push(node);
@@ -194,24 +176,29 @@ impl<T: Copy + Ord> Kdtree<T> {
                 return NONE;
             }
             let mut elements = self.free_subtree(node);
-            self.subtree(&mut elements, level, xy)
+            self.subtree(&mut elements, level, split)
         } else {
             let dim = level % 2;
             let side = usize::from(xy(element, dim) >= xy(self.nodes[node].element, dim));
             let next = self.nodes[node].children[side];
-            let branch = self.remove_recursive(element, next, level + 1, xy);
+            let branch = self.remove_recursive(element, next, level + 1, xy, split);
             if branch != next {
                 self.nodes[node].children[side] = branch;
             }
             node
         }
     }
-    pub(crate) fn remove(&mut self, element: T, xy: &impl Fn(T, usize) -> u16) {
+    pub(crate) fn remove(
+        &mut self,
+        element: T,
+        xy: &impl Fn(T, usize) -> u16,
+        split: &impl Fn(&mut [T], usize) -> usize,
+    ) {
         if self.count() == 0 {
             return;
         }
-        if !self.is_unbalanced() || !self.rebuild(None, Some(element), xy) {
-            self.root = self.remove_recursive(element, self.root, 0, xy);
+        if !self.is_unbalanced() || !self.rebuild(None, Some(element), split) {
+            self.root = self.remove_recursive(element, self.root, 0, xy, split);
             self.unbalanced = self.unbalanced.wrapping_add(1);
         }
     }
@@ -282,6 +269,29 @@ impl<T: Copy + Ord> Kdtree<T> {
     }
 }
 
+/// Partition live pool IDs using the configured native STL. Every subtree with
+/// at least two elements makes one call; the callback reads coordinates only.
+/// SAFETY: `T` is u16 or a transparent u16 pool ID, including every bit pattern.
+pub(crate) unsafe fn native_split<T: Copy>(
+    services: &crate::services::Services,
+    elements: &mut [T],
+    coordinate: impl Fn(T) -> u16,
+) -> usize {
+    extern "C" fn read<F: Fn(u16) -> u16>(context: *mut std::ffi::c_void, id: u16) -> u16 {
+        unsafe { (&*context.cast::<F>())(id) }
+    }
+    fn callback<F: Fn(u16) -> u16>(_: &F) -> extern "C" fn(*mut std::ffi::c_void, u16) -> u16 {
+        read::<F>
+    }
+    let coordinate = |id: u16| coordinate(unsafe { std::ptr::from_ref(&id).cast::<T>().read() });
+    (services.kdtree_partition)(
+        elements.as_mut_ptr().cast(),
+        elements.len(),
+        std::ptr::from_ref(&coordinate).cast_mut().cast(),
+        callback(&coordinate),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::Kdtree;
@@ -305,6 +315,21 @@ mod tests {
             let p = points[usize::from(id)];
             if dim == 0 { p.0 } else { p.1 }
         };
+        let split = |elements: &mut [u16], dim| {
+            let mid = elements.len() / 2;
+            elements.select_nth_unstable_by_key(mid, |id| xy(*id, dim));
+            let coordinate = xy(elements[mid], dim);
+            let (mut first, mut last) = (0, elements.len());
+            while first < last {
+                if xy(elements[first], dim) < coordinate {
+                    first += 1;
+                } else {
+                    last -= 1;
+                    elements.swap(first, last);
+                }
+            }
+            first
+        };
         let mut tree = Kdtree::new();
         let mut active = Vec::new();
         let verify = |tree: &Kdtree<u16>, active: &[u16]| {
@@ -322,25 +347,25 @@ mod tests {
             }
         };
         for id in 0..12 {
-            tree.insert(id, &xy);
+            tree.insert(id, &xy, &split);
             active.push(id);
             verify(&tree, &active);
         }
         for id in [4, 0, 10, 8, 3, 6, 9, 1, 11, 2, 7, 5] {
-            tree.remove(id, &xy);
+            tree.remove(id, &xy, &split);
             active.retain(|v| *v != id);
             verify(&tree, &active);
         }
         active = (0..12).collect();
-        tree.build(&mut active, &xy);
+        tree.build(&mut active, &split);
         verify(&tree, &active);
         let mut contained = Vec::new();
         tree.contained([0, 0], [10, 10], &xy, |id| contained.push(id));
         contained.sort_unstable();
         assert_eq!(contained, [0, 4, 5, 7, 9]);
-        tree.build(&mut [], &xy);
+        tree.build(&mut [], &split);
         assert_eq!(tree.count(), 0);
-        tree.insert(9, &xy);
+        tree.insert(9, &xy, &split);
         assert_eq!(tree.nearest([0, 0], &xy), 9);
     }
 }

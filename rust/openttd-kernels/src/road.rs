@@ -989,6 +989,16 @@ impl Game<'_> {
                 if hit {
                     let victims = self.crash(v, false);
                     service!(self.l.crash_news)(v.v, victims);
+                    crate::station::spatial::modify_rating_around(
+                        self.ss,
+                        (self.vs.tile)(v.v),
+                        (self.vs.owner)(v.v),
+                        -160,
+                        22,
+                    );
+                    if (self.ss.disaster_sound)() {
+                        (self.vs.play_sound)(v.v, crate::sound_type::SND_12_EXPLOSION);
+                    }
                     return true;
                 }
             }

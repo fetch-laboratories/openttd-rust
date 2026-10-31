@@ -348,6 +348,16 @@ static void SharedForEachStation(void *context, void (*visit)(void *, const Open
 	}
 }
 
+/** Stateless STL permutation primitive; storage and tree control flow belong to Rust. */
+static size_t RustKdtreePartition(uint16_t *ids, size_t count, void *context, uint16_t (*coordinate)(void *, uint16_t)) noexcept
+{
+	auto *end = ids + count;
+	auto *mid = ids + count / 2;
+	std::nth_element(ids, mid, end, [=](uint16_t a, uint16_t b) { return coordinate(context, a) < coordinate(context, b); });
+	auto split = coordinate(context, *mid);
+	return std::partition(ids, end, [=](uint16_t id) { return coordinate(context, id) < split; }) - ids;
+}
+
 constinit const OpenTTDSharedServices _rust_shared_services{
 	.movement_services = []() noexcept { return &GetRustMovementServices(); },
 	.set_tile_owner = RustSetTileOwner,
@@ -420,6 +430,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.snow_line = SharedSnowLine,
 	.station_index = MapSvcStationIndex,
 	.road_commands = []() noexcept { return &GetRustRoadCommandServices(); },
+	.kdtree_partition = RustKdtreePartition,
 	.station_commands = []() noexcept { return &GetRustStationCommandServices(); },
 	.station_catchment = []() noexcept { return &GetRustStationCatchmentServices(); },
 	.docking_tile = OpenTTDIsDockingTile,

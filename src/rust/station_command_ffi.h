@@ -81,15 +81,14 @@ struct OpenTTDStationCommandServices {
 	const StationSpec *(*rail_spec)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_spec);
 	const OpenTTDStationLinks *links;
 	uint32_t (*location)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(location);
-	void (*move_sign)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(move_sign);
+	void (*base_move_sign)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(base_move_sign);
+	void (*waypoint_move_sign)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(waypoint_move_sign);
 	void (*virtual_coord)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(virtual_coord);
 	void (*catchment_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(catchment_dirty);
 	void (*facility_widget)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(facility_widget);
 	void (*select_invalidate)() noexcept OPENTTD_SERVICE_DEFAULT(select_invalidate);
-	void (*radius)(uint32_t, uint32_t, void *, void (*)(void *, BaseStation *)) noexcept OPENTTD_SERVICE_DEFAULT(radius);
 	bool (*station_available)() noexcept OPENTTD_SERVICE_DEFAULT(station_available);
 	BaseStation *(*new_station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_station);
-	void (*index_insert)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(index_insert);
 	void (*set_town)(BaseStation *, const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(set_town);
 	const OpenTTDStationLifecycleServices *lifecycle;
 	void (*have_rating)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(have_rating);

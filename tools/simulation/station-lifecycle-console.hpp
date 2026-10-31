@@ -1,5 +1,8 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file station-lifecycle-console.hpp Station naming, waypoint ground and destruction fixtures. */
+#ifdef WITH_RUST
+#include "tests/station_spatial_fixture.hpp"
+#endif
 #include "tree_map.h"
 #ifdef WITH_RUST
 #include "rust/ground_services.h"
@@ -17,7 +20,13 @@ static void Station562Rng(const char *phase)
 static Station *Station562New(TileIndex tile, const std::string &label)
 {
 	StationNeed(Station::CanAllocateItem(), __LINE__);
-	Station *st = new Station(tile); _station_kdtree.Insert(st->index);
+	Station *st = new Station(tile);
+#ifdef WITH_RUST
+	openttd_test_station_insert(&GetRustSharedServices(), st);
+#else
+	_station_kdtree.Insert(st->index);
+#endif
+
 	st->town = ClosestTownFromTile(tile, UINT_MAX); st->owner = _current_company; st->name = label;
 	return st;
 }

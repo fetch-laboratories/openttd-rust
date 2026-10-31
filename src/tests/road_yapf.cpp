@@ -15,6 +15,7 @@
 #ifdef WITH_RUST
 #include "../rust/road_yapf_ffi.h"
 #include "../rust/movement_ffi.h"
+#include "../rust/station_catchment_ffi.h"
 #include "../tile_type.h"
 #include "../landscape.h"
 #include "../safeguards.h"
@@ -29,6 +30,9 @@ const OpenTTDSharedServices *MovementWorld()
 {
 	static OpenTTDSharedServices world{};
 	static OpenTTDMovementServices movement{};
+	static OpenTTDStationCatchmentServices stations{};
+	world.station_catchment = []() noexcept -> const OpenTTDStationCatchmentServices * { return &stations; };
+	stations.station_if_valid = [](uint16_t) noexcept -> BaseStation * { return nullptr; };
 	world.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
 	world.tile_type = [](uint32_t) noexcept -> uint8_t { return 2; };
 	world.map_max_y = []() noexcept -> uint32_t { return 63; };
