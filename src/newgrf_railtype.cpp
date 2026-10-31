@@ -17,9 +17,7 @@
 #include "town.h"
 #include "tunnelbridge_map.h"
 
-#ifdef WITH_RUST
 #include "rust/type_registry_ffi.h"
-#endif
 
 #include "safeguards.h"
 
@@ -154,22 +152,7 @@ SpriteID GetCustomSignalSprite(const RailTypeInfo *rti, TileIndex tile, SignalTy
  */
 RailType GetRailTypeTranslation(uint8_t railtype, const GRFFile *grffile)
 {
-#ifdef WITH_RUST
 	return openttd_rust_rail_translate(railtype, grffile);
-#else
-	if (grffile == nullptr || grffile->railtype_list.empty()) {
-		/* No railtype table present. Return railtype as-is (if valid), so it works for original railtypes. */
-		if (railtype >= RAILTYPE_END || GetRailTypeInfo(static_cast<RailType>(railtype))->label == 0) return INVALID_RAILTYPE;
-
-		return static_cast<RailType>(railtype);
-	} else {
-		/* Railtype table present, but invalid index, return invalid type. */
-		if (railtype >= grffile->railtype_list.size()) return INVALID_RAILTYPE;
-
-		/* Look up railtype including alternate labels. */
-		return GetRailTypeByLabel(grffile->railtype_list[railtype]);
-	}
-#endif
 }
 
 /**
@@ -180,26 +163,9 @@ RailType GetRailTypeTranslation(uint8_t railtype, const GRFFile *grffile)
  */
 uint8_t GetReverseRailTypeTranslation(RailType railtype, const GRFFile *grffile)
 {
-#ifdef WITH_RUST
 	return openttd_rust_rail_reverse(railtype, grffile);
-#else
-	/* No rail type table present, return rail type as-is */
-	if (grffile == nullptr || grffile->railtype_list.empty()) return railtype;
-
-	/* Look for a matching rail type label in the table */
-	RailTypeLabel label = GetRailTypeInfo(railtype)->label;
-
-	int idx = find_index(grffile->railtype_list, label);
-	if (idx >= 0) return idx;
-
-	/* If not found, return as invalid */
-	return 0xFF;
-#endif
 }
 
-#ifndef WITH_RUST
-std::vector<LabelObject<RailTypeLabel>> _railtype_list;
-#endif
 
 /**
  * Test if any saved rail type labels are different to the currently loaded
@@ -207,76 +173,16 @@ std::vector<LabelObject<RailTypeLabel>> _railtype_list;
  */
 void ConvertRailTypes()
 {
-#ifdef WITH_RUST
 	openttd_rust_rail_saved_convert(&GetRustSharedServices(), &GetRustRailMapServices(), Map::Size());
-#else
-	std::vector<RailType> railtype_conversion_map;
-	bool needs_conversion = false;
-
-	for (auto it = std::begin(_railtype_list); it != std::end(_railtype_list); ++it) {
-		RailType rt = GetRailTypeByLabel(it->label);
-		if (rt == INVALID_RAILTYPE) {
-			rt = RAILTYPE_RAIL;
-		}
-
-		railtype_conversion_map.push_back(rt);
-
-		/* Conversion is needed if the rail type is in a different position than the list. */
-		if (it->label != 0 && rt != std::distance(std::begin(_railtype_list), it)) needs_conversion = true;
-	}
-
-	if (!needs_conversion) return;
-
-	for (const auto t : Map::Iterate()) {
-		switch (GetTileType(t)) {
-			case MP_RAILWAY:
-				SetRailType(t, railtype_conversion_map[GetRailType(t)]);
-				break;
-
-			case MP_ROAD:
-				if (IsLevelCrossing(t)) {
-					SetRailType(t, railtype_conversion_map[GetRailType(t)]);
-				}
-				break;
-
-			case MP_STATION:
-				if (HasStationRail(t)) {
-					SetRailType(t, railtype_conversion_map[GetRailType(t)]);
-				}
-				break;
-
-			case MP_TUNNELBRIDGE:
-				if (GetTunnelBridgeTransportType(t) == TRANSPORT_RAIL) {
-					SetRailType(t, railtype_conversion_map[GetRailType(t)]);
-				}
-				break;
-
-			default:
-				break;
-		}
-	}
-#endif
 }
 
 /** Populate railtype label list with current values. */
 void SetCurrentRailTypeLabelList()
 {
-#ifdef WITH_RUST
 	openttd_rust_rail_saved_current();
-#else
-	_railtype_list.clear();
-
-	for (RailType rt = RAILTYPE_BEGIN; rt != RAILTYPE_END; rt++) {
-		_railtype_list.emplace_back(GetRailTypeInfo(rt)->label, 0);
-	}
-#endif
 }
 
 void ClearRailTypeLabelList()
 {
-#ifdef WITH_RUST
 	openttd_rust_rail_saved_clear();
-#else
-	_railtype_list.clear();
-#endif
 }

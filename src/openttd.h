@@ -76,7 +76,6 @@ enum class PauseMode : uint8_t {
 using PauseModes = EnumBitSet<PauseMode, uint8_t>;
 
 /** The current pause mode */
-#ifdef WITH_RUST
 struct OpenTTDSessionState { GameMode mode; SwitchMode switch_mode; PauseModes pause; };
 extern "C" OpenTTDSessionState *openttd_rust_session_storage();
 inline OpenTTDSessionState &GetRustSessionState() noexcept
@@ -87,11 +86,6 @@ inline OpenTTDSessionState &GetRustSessionState() noexcept
 inline GameMode &_game_mode = GetRustSessionState().mode;
 inline SwitchMode &_switch_mode = GetRustSessionState().switch_mode;
 inline PauseModes &_pause_mode = GetRustSessionState().pause;
-#else
-extern GameMode _game_mode;
-extern SwitchMode _switch_mode;
-extern PauseModes _pause_mode;
-#endif
 
 void AskExitGame();
 void AskExitToGameMenu();

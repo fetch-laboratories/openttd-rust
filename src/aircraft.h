@@ -12,9 +12,7 @@
 
 #include "station_map.h"
 #include "vehicle_base.h"
-#ifdef WITH_RUST
 #include "rust/aircraft_ffi.h"
-#endif
 
 /**
  * Base values for flight levels above ground level for 'normal' flight and holding patterns.
@@ -50,9 +48,6 @@ enum AirVehicleFlags : uint8_t {
 
 static const int ROTOR_Z_OFFSET         = 5;    ///< Z Offset between helicopter- and rotorsprite.
 
-#ifndef WITH_RUST
-void HandleAircraftEnterHangar(Aircraft *v);
-#endif
 void GetAircraftSpriteSize(EngineID engine, uint &width, uint &height, int &xoffs, int &yoffs, EngineImageType image_type);
 void UpdateAirplanesOnNewStation(const Station *st);
 void UpdateAircraftCache(Aircraft *v, bool update_range = false);
@@ -79,7 +74,6 @@ static_assert(std::is_trivially_destructible_v<StationID> && std::is_trivially_d
  * Aircraft, helicopters, rotors and their shadows belong to this class.
  */
 struct Aircraft final : public SpecializedVehicle<Aircraft, VEH_AIRCRAFT> {
-#ifdef WITH_RUST
 	std::unique_ptr<OpenTTDAircraftState, decltype(&openttd_rust_aircraft_state_destroy)> rust_state{openttd_rust_aircraft_state_new(), openttd_rust_aircraft_state_destroy};
 	uint16_t &crashed_counter = this->rust_state->crashed_counter;
 	uint8_t &pos = this->rust_state->pos;
@@ -94,20 +88,6 @@ struct Aircraft final : public SpecializedVehicle<Aircraft, VEH_AIRCRAFT> {
 	uint8_t &turn_counter = this->rust_state->turn_counter;
 	uint8_t &flags = this->rust_state->flags;
 	AircraftCache &acache = *new (std::addressof(this->rust_state->cached_max_range_sqr)) AircraftCache{};
-#else
-	uint16_t crashed_counter = 0; ///< Timer for handling crash animations.
-	uint8_t pos = 0; ///< Next desired position of the aircraft.
-	uint8_t previous_pos = 0; ///< Previous desired position of the aircraft.
-	StationID targetairport = StationID::Invalid(); ///< Airport to go to next.
-	uint8_t state = 0; ///< State of the airport. @see AirportMovementStates
-	Direction last_direction = INVALID_DIR;
-	uint8_t number_consecutive_turns = 0; ///< Protection to prevent the aircraft of making a lot of turns in order to reach a specific point.
-	uint8_t turn_counter = 0; ///< Ticks between each turn to prevent > 45 degree turns.
-	uint8_t flags = 0; ///< Aircraft flags. @see AirVehicleFlags
-
-	AircraftCache acache{};
-
-#endif
 
 	/** We don't want GCC to zero our struct! It already is zeroed and has an index! */
 	Aircraft() : SpecializedVehicleBase() {}
@@ -167,8 +147,6 @@ void GetRotorImage(const Aircraft *v, EngineImageType image_type, VehicleSpriteS
 
 Station *GetTargetAirportIfValid(const Aircraft *v);
 void HandleMissingAircraftOrders(Aircraft *v);
-#ifdef WITH_RUST
 void ReleaseAircraftAirportBlocks(const Aircraft *v);
-#endif
 
 #endif /* AIRCRAFT_H */

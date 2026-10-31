@@ -8,10 +8,8 @@
 /** @file water_regions.cpp Native ownership/reentrant visitor ABI check. */
 #include "../stdafx.h"
 #include "../3rdparty/catch2/catch.hpp"
-#ifdef WITH_RUST
 #include "water_regions_protocol.hpp"
 TEST_CASE("Water-region Rust owner and reentrant visitor")
 {
 	WaterProbe::Run([](bool value) { CHECK(value); });
 }
-#endif

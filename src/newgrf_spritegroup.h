@@ -20,9 +20,7 @@
 #include "newgrf_generic.h"
 #include "newgrf_storage.h"
 #include "newgrf_commons.h"
-#ifdef WITH_RUST
 #include "rust/newgrf_spritegroup_ffi.h"
-#endif
 
 struct SpriteGroup;
 struct ResultSpriteGroup;
@@ -49,21 +47,12 @@ extern SpriteGroupPool _spritegroup_pool;
 /* Common wrapper for all the different sprite group types */
 struct SpriteGroup : SpriteGroupPool::PoolItem<&_spritegroup_pool> {
 public:
-#ifdef WITH_RUST
 	enum class Kind : uint8_t { Real, Deterministic, Randomized, Callback, Result, Layout, Production, Native };
 	const Kind kind;
 protected:
 	explicit SpriteGroup(Kind kind = Kind::Native) : kind(kind) {}
-#else
-protected:
-	SpriteGroup() {} // Not `= default` as that resets PoolItem->index.
-	/** Base sprite group resolver */
-	virtual ResolverResult Resolve(ResolverObject &object) const = 0;
-#endif
-#ifdef WITH_RUST
 	virtual ResolverResult Resolve(ResolverObject &object) const = 0;
 	friend OpenTTDResolverResult RustNativeSpriteGroup(const SpriteGroup *, ResolverObject *) noexcept;
-#endif
 
 public:
 	virtual ~SpriteGroup() = default;
@@ -74,11 +63,7 @@ public:
 };
 
 
-#ifdef WITH_RUST
 #define SPRITEGROUP_KIND(kind) Kind::kind
-#else
-#define SPRITEGROUP_KIND(kind)
-#endif
 
 /* 'Real' sprite groups contain a list of other result or callback sprite
  * groups. */
@@ -96,11 +81,7 @@ struct RealSpriteGroup : SpriteGroup {
 	std::vector<const SpriteGroup *> loading{}; ///< List of loading groups (can be SpriteIDs or Callback results)
 
 protected:
-#ifdef WITH_RUST
 	ResolverResult Resolve(ResolverObject &object) const override { return SpriteGroup::Resolve(this, object, false); }
-#else
-	ResolverResult Resolve(ResolverObject &object) const override;
-#endif
 };
 
 /* Shared by deterministic and random groups. */
@@ -195,11 +176,7 @@ struct DeterministicSpriteGroup : SpriteGroup {
 	const SpriteGroup *error_group = nullptr; // was first range, before sorting ranges
 
 protected:
-#ifdef WITH_RUST
 	ResolverResult Resolve(ResolverObject &object) const override { return SpriteGroup::Resolve(this, object, false); }
-#else
-	ResolverResult Resolve(ResolverObject &object) const override;
-#endif
 };
 
 enum RandomizedSpriteGroupCompareMode : uint8_t {
@@ -221,11 +198,7 @@ struct RandomizedSpriteGroup : SpriteGroup {
 	std::vector<const SpriteGroup *> groups{}; ///< Take the group with appropriate index:
 
 protected:
-#ifdef WITH_RUST
 	ResolverResult Resolve(ResolverObject &object) const override { return SpriteGroup::Resolve(this, object, false); }
-#else
-	ResolverResult Resolve(ResolverObject &object) const override;
-#endif
 };
 
 
@@ -241,11 +214,7 @@ struct CallbackResultSpriteGroup : SpriteGroup {
 	CallbackResult result = 0;
 
 protected:
-#ifdef WITH_RUST
 	ResolverResult Resolve(ResolverObject &object) const override { return SpriteGroup::Resolve(this, object, false); }
-#else
-	ResolverResult Resolve(ResolverObject &object) const override;
-#endif
 };
 
 
@@ -324,11 +293,7 @@ struct ScopeResolver {
  */
 struct ResolverObject {
 private:
-#ifndef WITH_RUST
-	static TemporaryStorageArray<int32_t, 0x110> temp_store;
-#else
 	OpenTTDResolverState common_state;
-#endif
 
 public:
 	/**
@@ -339,33 +304,16 @@ public:
 	 * @param callback_param2 Second parameter (var 18) of the callback (only used when \a callback is also set).
 	 */
 	ResolverObject(const GRFFile *grffile, CallbackID callback = CBID_NO_CALLBACK, uint32_t callback_param1 = 0, uint32_t callback_param2 = 0)
-#ifdef WITH_RUST
 		: default_scope(*this), callback(common_state.callback), callback_param1(common_state.callback_param1), callback_param2(common_state.callback_param2), last_value(common_state.last_value), waiting_random_triggers(common_state.waiting_random_triggers), used_random_triggers(common_state.used_random_triggers), reseed(common_state.reseed), grffile(grffile), root_spritegroup(nullptr)
-#else
-		: default_scope(*this), callback(callback), callback_param1(callback_param1), callback_param2(callback_param2), grffile(grffile), root_spritegroup(nullptr)
-#endif
 	{
-#ifdef WITH_RUST
 		openttd_rust_resolver_init(&this->common_state, callback, callback_param1, callback_param2);
-#endif
 	}
 
 	virtual ~ResolverObject() = default;
 
 	ResolverResult DoResolve()
-#ifdef WITH_RUST
 	;
 	OpenTTDResolverState *CommonState() { return &this->common_state; }
-#else
-	{
-		temp_store.ClearChanges();
-		this->last_value = 0;
-		this->used_random_triggers = 0;
-		this->reseed.fill(0);
-		return SpriteGroup::Resolve(this->root_spritegroup, *this);
-	}
-
-#endif
 
 	ScopeResolver default_scope; ///< Default implementation of the grf scope.
 
@@ -377,11 +325,7 @@ public:
 	 */
 	inline int32_t GetRegister(uint i) const
 	{
-#ifdef WITH_RUST
 		return openttd_rust_storage_temp_get(i);
-#else
-		return temp_store.GetValue(i);
-#endif
 	}
 
 	/**
@@ -392,34 +336,15 @@ public:
 	 */
 	inline void SetRegister(uint i, int32_t value)
 	{
-#ifdef WITH_RUST
 		openttd_rust_storage_temp_store(i, value);
-#else
-		temp_store.StoreValue(i, value);
-#endif
 	}
 
-#ifdef WITH_RUST
 	CallbackID &callback;
 	uint32_t &callback_param1, &callback_param2, &last_value;
 protected:
 	uint32_t &waiting_random_triggers, &used_random_triggers;
 public:
 	std::array<uint32_t, VSG_END> &reseed;
-#else
-	CallbackID callback{}; ///< Callback being resolved.
-	uint32_t callback_param1 = 0; ///< First parameter (var 10) of the callback.
-	uint32_t callback_param2 = 0; ///< Second parameter (var 18) of the callback.
-
-	uint32_t last_value = 0; ///< Result of most recent DeterministicSpriteGroup (including procedure calls)
-
-protected:
-	uint32_t waiting_random_triggers = 0; ///< Waiting triggers to be used by any rerandomisation. (scope independent)
-	uint32_t used_random_triggers = 0; ///< Subset of cur_triggers, which actually triggered some rerandomisation. (scope independent)
-public:
-	std::array<uint32_t, VSG_END> reseed; ///< Collects bits to rerandomise while triggering triggers.
-
-#endif
 
 	const GRFFile *grffile = nullptr; ///< GRFFile the resolved SpriteGroup belongs to
 	const SpriteGroup *root_spritegroup = nullptr; ///< Root SpriteGroup to use for resolving
@@ -459,41 +384,13 @@ public:
 	 */
 	inline CallbackResult ResolveCallback(std::span<int32_t> regs100)
 	{
-#ifdef WITH_RUST
 		return openttd_rust_resolver_callback(&GetRustSpriteGroupServices(), this->root_spritegroup, this, &this->common_state, this->grffile, regs100.data(), regs100.size());
-#else
-		auto result = this->DoResolve();
-		const auto *value = std::get_if<CallbackResult>(&result);
-		if (value == nullptr) return CALLBACK_FAILED;
-		for (uint i = 0; i < regs100.size(); ++i) {
-			regs100[i] = this->GetRegister(0x100 + i);
-		}
-		return *value;
-#endif
 	}
 
 	virtual const SpriteGroup *ResolveReal(const RealSpriteGroup &group) const;
 
 	virtual ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, uint8_t relative = 0);
 
-#ifndef WITH_RUST
-	/**
-	 * Used by RandomizedSpriteGroup: Triggers for rerandomisation
-	 */
-	uint32_t GetWaitingRandomTriggers() const
-	{
-		return this->waiting_random_triggers;
-	}
-
-	/**
-	 * Used by RandomizedSpriteGroup: Consume triggers.
-	 */
-	void AddUsedRandomTriggers(uint32_t triggers)
-	{
-		this->used_random_triggers |= triggers;
-	}
-
-#endif
 
 	/**
 	 * Returns the OR-sum of all bits that need reseeding
@@ -502,15 +399,7 @@ public:
 	 */
 	uint32_t GetReseedSum() const
 	{
-#ifdef WITH_RUST
 		return openttd_rust_resolver_reseed_sum(&this->common_state);
-#else
-		uint32_t sum = 0;
-		for (VarSpriteGroupScope vsg = VSG_BEGIN; vsg < VSG_END; vsg++) {
-			sum |= this->reseed[vsg];
-		}
-		return sum;
-#endif
 	}
 
 	/**

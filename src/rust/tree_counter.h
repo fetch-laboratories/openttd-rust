@@ -8,10 +8,6 @@
 /** @file tree_counter.h Serialization address of the Rust-owned tree tick counter. */
 #ifndef TREE_COUNTER_H
 #define TREE_COUNTER_H
-#ifdef WITH_RUST
 #include "trees_ffi.h"
 #define _trees_tick_ctr (*openttd_rust_tree_counter())
-#else
-extern uint8_t _trees_tick_ctr;
-#endif
 #endif /* TREE_COUNTER_H */

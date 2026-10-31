@@ -10,7 +10,6 @@
 #include "../3rdparty/catch2/catch.hpp"
 #include "../order_base.h"
 #include "../base_consist.h"
-#ifdef WITH_RUST
 #include "../timer/timer_game_economy.h"
 #include "../rust/services_ffi.h"
 #include "../rust/command_services.h"
@@ -136,7 +135,6 @@ TEST_CASE("Orders ownership - early validation and complete native error storage
 	}
 }
 
-#endif
 TEST_CASE("Base consist copies preserve values with independent aliases")
 {
 	BaseConsist original;

@@ -24,7 +24,6 @@ pub struct Services {
     pub mass: &'static mass::Services,
     pub random: &'static RandomServices,
     pub depot_kind: extern "C" fn(u32) -> VehicleType,
-    pub engine_cost: extern "C" fn(*const OpenTTDEngine) -> i64,
     pub default_cargo: extern "C" fn(*const OpenTTDEngine) -> u8,
     pub pool_available: extern "C" fn(usize) -> bool,
     pub free_unit: extern "C" fn(VehicleType) -> u16,
@@ -76,7 +75,9 @@ pub(crate) unsafe fn build(
         return Result::default();
     }
     let e = (r.engine)(engine);
-    (b.cost.expense_money)(out, c.strings.new_vehicle_expense, (s.engine_cost)(e));
+    (b.cost.expense_money)(out, c.strings.new_vehicle_expense, unsafe {
+        crate::engine_capabilities::openttd_rust_engine_cost(r.capabilities, e)
+    });
     let default_cargo = (s.default_cargo)(e);
     if !(c.valid_cargo)(default_cargo) {
         value.error(ERROR);
@@ -304,7 +305,7 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDVehicleBuildResult" ["probe"] => Result { id, capacity, };
     "OpenTTDVehicleBuildServices" ["probe"] => Services {
-        refit, mass, random, depot_kind, engine_cost, default_cargo, pool_available,
+        refit, mass, random, depot_kind, default_cargo, pool_available,
         free_unit, construct, rail, ship_tile, new_ship, set_purchase,
         is_engine, presentation, use_unit, too_many, unavailable,
     };

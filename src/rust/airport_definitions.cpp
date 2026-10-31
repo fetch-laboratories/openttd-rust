@@ -1,7 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file airport_definitions.cpp Native storage leaves for airport loading. */
 #include "../stdafx.h"
-#ifdef WITH_RUST
 #include "airport_definitions_ffi.h"
 #include "../newgrf_airport.h"
 #include "../newgrf_airporttiles.h"
@@ -80,4 +79,3 @@ const OpenTTDAirportDefinitionServices &GetAirportDefinitionServices() noexcept
 	};
 	return services;
 }
-#endif

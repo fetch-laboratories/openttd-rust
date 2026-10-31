@@ -16,7 +16,6 @@
 
 #include "../safeguards.h"
 
-#ifdef WITH_RUST
 static std::string *_fleet_group_name = nullptr;
 /** Save/load string storage exists only for the synchronous SlObject call. */
 struct FleetGroupNameScope {
@@ -28,11 +27,6 @@ struct FleetGroupNameScope {
 #define FLEET_GROUP_NAME_DESC \
 	SLEG_CONDVAR("name", *_fleet_group_name, SLE_NAME, SL_MIN_VERSION, SLV_84), \
 	SLEG_CONDSSTR("name", *_fleet_group_name, SLE_STR | SLF_ALLOW_CONTROL, SLV_84, SL_MAX_VERSION)
-#else
-#define FLEET_GROUP_NAME_DESC \
-	SLE_CONDVAR(Group, name, SLE_NAME, SL_MIN_VERSION, SLV_84), \
-	SLE_CONDSSTR(Group, name, SLE_STR | SLF_ALLOW_CONTROL, SLV_84, SL_MAX_VERSION)
-#endif
 static const SaveLoad _group_desc[] = {
 	FLEET_GROUP_NAME_DESC,
 	     SLE_VAR(Group, owner,              SLE_UINT8),
@@ -54,9 +48,7 @@ struct GRPSChunkHandler : ChunkHandler {
 
 		for (Group *g : Group::Iterate()) {
 			SlSetArrayIndex(g->index);
-#ifdef WITH_RUST
 			FleetGroupNameScope name(g->GetName());
-#endif
 			SlObject(g, _group_desc);
 		}
 	}
@@ -70,13 +62,9 @@ struct GRPSChunkHandler : ChunkHandler {
 
 		while ((index = SlIterateArray()) != -1) {
 			Group *g = new (GroupID(index)) Group();
-#ifdef WITH_RUST
 			FleetGroupNameScope name;
-#endif
 			SlObject(g, slt);
-#ifdef WITH_RUST
 			g->SetName(name.value);
-#endif
 
 			if (IsSavegameVersionBefore(SLV_189)) g->parent = GroupID::Invalid();
 		}

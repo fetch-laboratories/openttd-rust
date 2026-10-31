@@ -10,30 +10,5 @@
 #ifndef YAPF_NODE_ROAD_HPP
 #define YAPF_NODE_ROAD_HPP
 
-#ifndef WITH_RUST
-
-#include "../../tile_type.h"
-#include "../../track_type.h"
-#include "nodelist.hpp"
-#include "yapf_node.hpp"
-
-/** Yapf Node for road YAPF */
-struct CYapfRoadNode : CYapfNodeT<CYapfNodeKeyExitDir, CYapfRoadNode> {
-	typedef CYapfNodeT<CYapfNodeKeyExitDir, CYapfRoadNode> base;
-
-	TileIndex segment_last_tile;
-	Trackdir segment_last_td;
-
-	void Set(CYapfRoadNode *parent, TileIndex tile, Trackdir td, bool is_choice)
-	{
-		this->base::Set(parent, tile, td, is_choice);
-		this->segment_last_tile = tile;
-		this->segment_last_td = td;
-	}
-};
-
-typedef NodeList<CYapfRoadNode, 8, 10> CRoadNodeList;
-
-#endif /* !WITH_RUST */
 
 #endif /* YAPF_NODE_ROAD_HPP */

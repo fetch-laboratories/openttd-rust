@@ -154,11 +154,6 @@ struct OpenTTDRoadSoundRead {
 	uint16_t sound;
 	uint8_t tick;
 };
-struct OpenTTDRoadCostRead {
-	const OpenTTDEngine *engine;
-	uint8_t cost_class;
-	uint8_t cost_factor;
-};
 struct OpenTTDRoadServiceRead {
 	uint32_t tile;
 	uint16_t servint;
@@ -219,8 +214,6 @@ struct OpenTTDRoadLeaves {
 	uint8_t (OPENTTD_RUST_CALL *shorten_factor)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(shorten_factor);
 	uint16_t (OPENTTD_RUST_CALL *default_max_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(default_max_speed);
 	uint16_t (OPENTTD_RUST_CALL *cargo_age_default)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_age_default);
-	OpenTTDRoadCostRead (OPENTTD_RUST_CALL *cost_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cost_read);
-	int64_t (OPENTTD_RUST_CALL *price)(const OpenTTDEngine *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(price);
 	void (OPENTTD_RUST_CALL *pay_running)(OpenTTDVehicle *, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(pay_running);
 	OpenTTDRoadServiceRead (OPENTTD_RUST_CALL *service_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(service_read);
 	OpenTTDRoadTurnRead (OPENTTD_RUST_CALL *turn_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(turn_read);

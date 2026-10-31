@@ -35,11 +35,7 @@ uint32_t RustTrainCachedPower(const Vehicle *v) noexcept;
 uint32_t RustTrainCachedWeight(const Vehicle *v) noexcept;
 uint64_t RustTrainRailTypes(const Vehicle *v) noexcept;
 uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept;
-inline uint32_t RustVehicleGRFID(const Vehicle *v) noexcept { return v->GetGRFID(); }
-/** Fixed callback-error adapter for a live native vehicle shell. */
-template <CallbackID Callback>
-inline void RustVehicleCallbackError(void *shell, uint16_t result) noexcept { RustUnknownCallbackResult(RustVehicleGRFID(static_cast<const Vehicle *>(shell)), Callback, result); }
-uint32_t RustVehicleGRFString(Vehicle *v, uint32_t string) noexcept;
+uint32_t RustGRFString(uint32_t grfid, uint32_t string) noexcept;
 void RustVehicleFlipStopped(Vehicle *v) noexcept;
 
 
@@ -116,10 +112,8 @@ inline void RustVehicleInvalidateNewGRFCache(Vehicle *v) noexcept { v->Invalidat
 inline uint16_t RustVehicleUnitNumber(const Vehicle *v) noexcept { return v->unitnumber; }
 inline void RustVehicleReleaseUnitNumber(Vehicle *v) noexcept { v->ReleaseUnitNumber(); }
 inline uint16_t RustGroundFirstEngine(const Vehicle *v) noexcept { return v->GetGroundVehicleCache()->first_engine.base(); }
-#ifdef WITH_RUST
 inline OpenTTDCargoList *RustVehicleCargoOwner(Vehicle *v) noexcept { return v->cargo.RustOwner(); }
 inline OpenTTDVehicleTileLinks *RustVehicleTileLinks(Vehicle *v) noexcept { return &v->tile_links; }
-#endif
 inline bool RustVehicleHasEngine(const Vehicle *v) noexcept { return v->HasEngineType(); }
 inline uint8_t RustVehicleDay(const Vehicle *v) noexcept { return v->day_counter; }
 inline uint32_t RustVehicleTile(const Vehicle *v) noexcept { return v->tile.base(); }
@@ -175,6 +169,7 @@ inline void RustWriteVehicleAge(Vehicle *v, int32_t age) noexcept { v->age = Tim
 inline void RustVehicleWriteBreakdown(Vehicle *v, uint8_t counter, uint8_t delay) noexcept { v->breakdown_ctr = counter; v->breakdown_delay = delay; }
 inline bool RustVehicleIsGround(const Vehicle *v) noexcept { return v->IsGroundVehicle(); }
 inline TimerGameCalendar::Date RustVehicleMaxAge(const Vehicle *v) noexcept { return v->max_age; }
+inline void RustVehicleSetMaxAge(OpenTTDVehicle *v, int32_t days) noexcept { VehicleOf(v)->max_age = TimerGameCalendar::Date{days}; }
 inline TimerGameEconomy::Date RustVehicleEconomyAge(const Vehicle *v) noexcept { return v->economy_age; }
 inline TimerGameEconomy::Date RustVehicleLastService(const Vehicle *v) noexcept { return v->date_of_last_service; }
 inline int32_t RustVehicleLastServiceOf(OpenTTDVehicle *v) noexcept { return RustVehicleLastService(VehicleOf(v)).base(); }
@@ -357,7 +352,6 @@ inline bool OPENTTD_RUST_CALL GroundSvcHasArticulated(OpenTTDVehicle *v) noexcep
 	return RustGroundHasArticulated(T::From(VehicleOf(v)));
 }
 
-#ifdef WITH_RUST
 /** One immutable process-wide GroundVehicle table per vehicle type. */
 template <class T>
 inline const OpenTTDGroundServices _rust_ground_services{
@@ -377,7 +371,6 @@ const OpenTTDGroundServices &GetRustGroundServices() noexcept
 {
 	return _rust_ground_services<T>;
 }
-#endif /* WITH_RUST */
 
 inline OpenTTDVehicle *RustGroundFirst(OpenTTDVehicle *v) noexcept { return RustVehicle(RustVehicleFirst(VehicleOf(v))); }
 

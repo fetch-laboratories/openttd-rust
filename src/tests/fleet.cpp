@@ -8,7 +8,6 @@
 /** @file fleet.cpp Fleet owner layouts, CommandCost stack lifetime and reentry checks. */
 #include "../stdafx.h"
 #include "../3rdparty/catch2/catch.hpp"
-#ifdef WITH_RUST
 #include "../group.h"
 #include "../autoreplace_base.h"
 #include "../company_base.h"
@@ -17,11 +16,12 @@
 #include "../core/backup_type.hpp"
 #include "abi_layout.hpp"
 #include "../rust/command_services.h"
+#include "../rust/company_identity_ffi.h"
 #include "../table/strings.h"
 #include <map>
-#endif
 #include "../safeguards.h"
-#ifdef WITH_RUST
+
+extern "C" void openttd_test_fleet_pending_drain(const OpenTTDFleetPendingServices *, const OpenTTDFleetTransactionServices *, const OpenTTDFleetGroupServices *, void *);
 TEST_CASE("Fleet - canonical state layouts and independent lifetimes")
 {
 	ABI_LAYOUT_CHECK;
@@ -116,7 +116,10 @@ TEST_CASE("Fleet - pending drain matches ordered map iteration under reentry")
 	pending.x = [](void *) noexcept -> int32_t { return 0; };
 	pending.y = [](void *) noexcept -> int32_t { return 0; };
 	pending.z = [](void *) noexcept -> int32_t { return 0; };
-	pending.reserve = [](uint8_t) noexcept -> uint32_t { return 0; };
+	OpenTTDCompanyIdentityServices company{};
+	company.company = [](uint8_t id) noexcept { return reinterpret_cast<Company *>(static_cast<uintptr_t>(id) + 1); };
+	company.renew_reserve = [](const Company *c) noexcept -> uint32_t { CHECK(static_cast<uint8_t>(reinterpret_cast<uintptr_t>(c) - 1) == _fleet_drain_company); return 0; };
+	pending.company = &company;
 	pending.subtract = [](int64_t) noexcept {};
 	pending.command = [](void *, uint32_t id) noexcept {
 		_fleet_drain_trace.emplace_back(id, _fleet_drain_company);
@@ -139,9 +142,8 @@ TEST_CASE("Fleet - pending drain matches ordered map iteration under reentry")
 	_fleet_drain_company = 11;
 	_fleet_drain_trace.clear();
 	CommandCost cost;
-	openttd_rust_fleet_pending_drain(&pending, &transaction, &group, &cost);
+	openttd_test_fleet_pending_drain(&pending, &transaction, &group, &cost);
 	CHECK(_fleet_drain_trace == expected);
 	CHECK(_fleet_drain_company == 11);
 	openttd_rust_fleet_pending_clear();
 }
-#endif

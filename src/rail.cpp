@@ -17,13 +17,9 @@
 
 #include "table/track_data.h"
 
-#ifdef WITH_RUST
 #include "rust/type_availability_ffi.h"
-#endif
 
-#ifdef WITH_RUST
 #include "rust/type_registry_ffi.h"
-#endif
 
 #include "safeguards.h"
 
@@ -75,11 +71,7 @@ RailType GetTileRailType(Tile tile)
  */
 bool HasRailTypeAvail(const CompanyID company, const RailType railtype)
 {
-#ifdef WITH_RUST
 	return openttd_rust_has_rail_type(&GetRustTypeAvailabilityServices(), company.base(), railtype) != 0;
-#else
-	return !_railtypes_hidden_mask.Test(railtype) && Company::Get(company)->avail_railtypes.Test(railtype);
-#endif
 }
 
 /**
@@ -89,13 +81,7 @@ bool HasRailTypeAvail(const CompanyID company, const RailType railtype)
  */
 bool HasAnyRailTypesAvail(const CompanyID company)
 {
-#ifdef WITH_RUST
 	return openttd_rust_has_any_rail_types(&GetRustTypeAvailabilityServices(), company.base());
-#else
-	RailTypes avail = Company::Get(company)->avail_railtypes;
-	avail.Reset(_railtypes_hidden_mask);
-	return avail.Any();
-#endif
 }
 
 /**
@@ -105,11 +91,7 @@ bool HasAnyRailTypesAvail(const CompanyID company)
  */
 bool ValParamRailType(const RailType rail)
 {
-#ifdef WITH_RUST
 	return openttd_rust_val_rail_type(&GetRustSharedServices(), rail) != 0;
-#else
-	return rail < RAILTYPE_END && HasRailTypeAvail(_current_company, rail);
-#endif
 }
 
 /**
@@ -121,33 +103,7 @@ bool ValParamRailType(const RailType rail)
  */
 RailTypes AddDateIntroducedRailTypes(RailTypes current, TimerGameCalendar::Date date)
 {
-#ifdef WITH_RUST
 	return RailTypes{openttd_rust_add_date_rail_types(&GetRustTypeAvailabilityServices(), current.base(), date.base())};
-#else
-	RailTypes rts = current;
-
-	for (RailType rt = RAILTYPE_BEGIN; rt != RAILTYPE_END; rt++) {
-		const RailTypeInfo *rti = GetRailTypeInfo(rt);
-		/* Unused rail type. */
-		if (rti->label == 0) continue;
-
-		/* Not date introduced. */
-		if (!IsInsideMM(rti->introduction_date, 0, CalendarTime::MAX_DATE.base())) continue;
-
-		/* Not yet introduced at this date. */
-		if (rti->introduction_date > date) continue;
-
-		/* Have we introduced all required railtypes? */
-		RailTypes required = rti->introduction_required_railtypes;
-		if (!rts.All(required)) continue;
-
-		rts.Set(rti->introduces_railtypes);
-	}
-
-	/* When we added railtypes we need to run this method again; the added
-	 * railtypes might enable more rail types to become introduced. */
-	return rts == current ? rts : AddDateIntroducedRailTypes(rts, date);
-#endif
 }
 
 /**
@@ -158,32 +114,7 @@ RailTypes AddDateIntroducedRailTypes(RailTypes current, TimerGameCalendar::Date 
  */
 RailTypes GetCompanyRailTypes(CompanyID company, bool introduces)
 {
-#ifdef WITH_RUST
 	return RailTypes{openttd_rust_company_rail_types( &GetRustTypeAvailabilityServices(), company.base(), introduces)};
-#else
-	RailTypes rts{};
-
-	for (const Engine *e : Engine::IterateType(VEH_TRAIN)) {
-		const EngineInfo *ei = &e->info;
-
-		if (ei->climates.Test(_settings_game.game_creation.landscape) &&
-				(e->company_avail.Test(company) || TimerGameCalendar::date >= e->intro_date + CalendarTime::DAYS_IN_YEAR)) {
-			const RailVehicleInfo *rvi = &e->VehInfo<RailVehicleInfo>();
-
-			if (rvi->railveh_type != RAILVEH_WAGON) {
-				assert(rvi->railtypes.Any());
-				if (introduces) {
-					rts.Set(GetAllIntroducesRailTypes(rvi->railtypes));
-				} else {
-					rts.Set(rvi->railtypes);
-				}
-			}
-		}
-	}
-
-	if (introduces) return AddDateIntroducedRailTypes(rts, TimerGameCalendar::date);
-	return rts;
-#endif
 }
 
 /**
@@ -193,29 +124,7 @@ RailTypes GetCompanyRailTypes(CompanyID company, bool introduces)
  */
 RailTypes GetRailTypes(bool introduces)
 {
-#ifdef WITH_RUST
 	return RailTypes{openttd_rust_rail_types( &GetRustTypeAvailabilityServices(), introduces)};
-#else
-	RailTypes rts{};
-
-	for (const Engine *e : Engine::IterateType(VEH_TRAIN)) {
-		const EngineInfo *ei = &e->info;
-		if (!ei->climates.Test(_settings_game.game_creation.landscape)) continue;
-
-		const RailVehicleInfo *rvi = &e->VehInfo<RailVehicleInfo>();
-		if (rvi->railveh_type != RAILVEH_WAGON) {
-			assert(rvi->railtypes.Any());
-			if (introduces) {
-				rts.Set(GetAllIntroducesRailTypes(rvi->railtypes));
-			} else {
-				rts.Set(rvi->railtypes);
-			}
-		}
-	}
-
-	if (introduces) return AddDateIntroducedRailTypes(rts, CalendarTime::MAX_DATE);
-	return rts;
-#endif
 }
 
 /**
@@ -226,21 +135,5 @@ RailTypes GetRailTypes(bool introduces)
  */
 RailType GetRailTypeByLabel(RailTypeLabel label, bool allow_alternate_labels)
 {
-#ifdef WITH_RUST
 	return openttd_rust_rail_by_label(label, allow_alternate_labels);
-#else
-	extern RailTypeInfo _railtypes[RAILTYPE_END];
-	if (label == 0) return INVALID_RAILTYPE;
-
-	auto it = std::ranges::find(_railtypes, label, &RailTypeInfo::label);
-	if (it == std::end(_railtypes) && allow_alternate_labels) {
-		/* Test if any rail type defines the label as an alternate. */
-		it = std::ranges::find_if(_railtypes, [label](const RailTypeInfo &rti) { return rti.alternate_labels.contains(label); });
-	}
-
-	if (it != std::end(_railtypes)) return it->Index();
-
-	/* No matching label was found, so it is invalid */
-	return INVALID_RAILTYPE;
-#endif
 }

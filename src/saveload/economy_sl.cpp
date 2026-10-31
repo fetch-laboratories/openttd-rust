@@ -14,9 +14,7 @@
 
 #include "../economy_func.h"
 #include "../economy_base.h"
-#ifdef WITH_RUST
 #	include "../industry.h"
-#endif
 
 #include "../safeguards.h"
 
@@ -56,11 +54,7 @@ static const SaveLoad _economy_desc[] = {
 	    SLE_VAR(Economy, interest_rate,                 SLE_UINT8),
 	    SLE_VAR(Economy, infl_amount,                   SLE_UINT8),
 	    SLE_VAR(Economy, infl_amount_pr,                SLE_UINT8),
-#ifdef WITH_RUST
 	SLEG_CONDVAR("industry_daily_change_counter", _industry_builder.daily_counter, SLE_UINT32, SLV_102, SL_MAX_VERSION),
-#else
-	SLE_CONDVAR(Economy, industry_daily_change_counter, SLE_UINT32,                SLV_102, SL_MAX_VERSION),
-#endif
 };
 
 /** Economy variables */

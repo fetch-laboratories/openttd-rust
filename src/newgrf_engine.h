@@ -17,13 +17,10 @@
 #include "engine_type.h"
 #include "gfx_type.h"
 #include "newgrf_spritegroup.h"
-#ifdef WITH_RUST
 #include "rust/newgrf_vehicle_ffi.h"
-#endif
 
 /** Resolver for a vehicle scope. */
 struct VehicleScopeResolver : public ScopeResolver {
-#ifdef WITH_RUST
 	OpenTTDVehicleScopeState &state;
 	const Vehicle *&v;
 	uint16_t &self_type;
@@ -31,25 +28,6 @@ struct VehicleScopeResolver : public ScopeResolver {
 	VehicleScopeResolver(ResolverObject &ro, OpenTTDVehicleScopeState &state)
 		: ScopeResolver(ro), state(state), v(state.v), self_type(state.self_type), rotor_in_gui(state.rotor_in_gui) {}
 	void SetVehicle(const Vehicle *v) { openttd_rust_vehicle_scope_set(&this->state, v); }
-#else
-	const struct Vehicle *v; ///< The vehicle being resolved.
-	EngineID self_type;      ///< Type of the vehicle.
-	bool rotor_in_gui;       ///< Helicopter rotor is drawn in GUI.
-
-	/**
-	 * Scope resolver of a single vehicle.
-	 * @param ro Surrounding resolver.
-	 * @param engine_type Engine type
-	 * @param v %Vehicle being resolved.
-	 * @param rotor_in_gui Helicopter rotor is drawn in GUI.
-	 */
-	VehicleScopeResolver(ResolverObject &ro, EngineID engine_type, const Vehicle *v, bool rotor_in_gui)
-		: ScopeResolver(ro), v(v), self_type(engine_type), rotor_in_gui(rotor_in_gui)
-	{
-	}
-
-	void SetVehicle(const Vehicle *v) { this->v = v; }
-#endif
 
 	uint32_t GetRandomBits() const override;
 	uint32_t GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const override;
@@ -66,19 +44,14 @@ struct VehicleResolverObject : public SpecializedResolverObject<VehicleRandomTri
 		WO_SELF,     //!< Resolve self-override (helicopter rotors and such).
 	};
 
-#ifdef WITH_RUST
 	OpenTTDVehicleResolverState owned_state{};
 	OpenTTDVehicleResolverState &state;
 	/** Borrow a Rust stack invocation; no allocation or retained pointer. */
 	VehicleResolverObject(OpenTTDVehicleResolverState &state, EngineID engine, CallbackID callback, uint32_t p1, uint32_t p2);
-#endif
 	VehicleScopeResolver self_scope;     ///< Scope resolver for the indicated vehicle.
 	VehicleScopeResolver parent_scope;   ///< Scope resolver for its parent vehicle.
 
 	VehicleScopeResolver relative_scope; ///< Scope resolver for an other vehicle in the chain.
-#ifndef WITH_RUST
-	uint8_t cached_relative_count;          ///< Relative position of the other vehicle.
-#endif
 
 	VehicleResolverObject(EngineID engine_type, const Vehicle *v, WagonOverride wagon_override, bool rotor_in_gui = false,
 			CallbackID callback = CBID_NO_CALLBACK, uint32_t callback_param1 = 0, uint32_t callback_param2 = 0);
@@ -130,10 +103,6 @@ std::optional<bool> TestVehicleBuildProbability(Vehicle *v, EngineID engine, Bui
 
 void TriggerVehicleRandomisation(Vehicle *veh, VehicleRandomTrigger trigger);
 
-#ifndef WITH_RUST
-void AlterVehicleListOrder(EngineID engine, uint16_t target);
-void CommitVehicleListOrderChanges();
-#endif
 
 EngineID GetNewEngineID(const GRFFile *file, VehicleType type, uint16_t internal_id);
 

@@ -11,9 +11,7 @@
 #define VEHICLE_FUNC_H
 
 #include "gfx_type.h"
-#ifdef WITH_RUST
 #include "rust/vehicle_ffi.h"
-#endif
 #include "direction_type.h"
 #include "timer/timer_game_economy.h"
 #include "command_type.h"
@@ -87,19 +85,10 @@ public:
 			return result;
 		}
 	private:
-#ifdef WITH_RUST
 		OpenTTDVehicleOnTile cursor;
 		Vehicle *Current() const { return reinterpret_cast<Vehicle *>(this->cursor.current); }
 		void Increment();
 		void SkipFalseMatches() {}
-#else
-		TileIndex tile;
-		Vehicle *current;
-
-		void Increment();
-		void SkipFalseMatches();
-		Vehicle *Current() const { return this->current; }
-#endif
 	};
 
 	explicit VehiclesOnTile(TileIndex tile) : start(tile) {}
@@ -161,22 +150,10 @@ public:
 			return result;
 		}
 	private:
-#ifdef WITH_RUST
 		OpenTTDVehicleNear cursor;
 		Vehicle *Current() const { return reinterpret_cast<Vehicle *>(this->cursor.current); }
 		void Increment();
 		void SkipFalseMatches() {}
-#else
-		Rect pos_rect;
-		uint hxmin, hxmax, hymin, hymax;
-		uint hx, hy;
-		Vehicle *current_veh;
-
-		void Increment();
-		void SkipEmptyBuckets();
-		void SkipFalseMatches();
-		Vehicle *Current() const { return this->current_veh; }
-#endif
 	};
 
 	explicit VehiclesNearTileXY(int32_t x, int32_t y, uint max_dist) : start(x, y, max_dist) {}
@@ -202,9 +179,6 @@ bool HasVehicleNearTileXY(int32_t x, int32_t y, uint max_dist, UnaryPred &&predi
 
 void VehicleServiceInDepot(Vehicle *v);
 uint CountVehiclesInChain(const Vehicle *v);
-#ifndef WITH_RUST
-void CallVehicleTicks();
-#endif
 uint8_t CalcPercentVehicleFilled(const Vehicle *v, StringID *colour);
 
 void VehicleLengthChanged(const Vehicle *u);
@@ -223,9 +197,6 @@ void DecreaseVehicleValue(Vehicle *v);
 void CheckVehicleBreakdown(Vehicle *v);
 void EconomyAgeVehicle(Vehicle *v);
 void AgeVehicle(Vehicle *v);
-#ifndef WITH_RUST
-void RunVehicleCalendarDayProc();
-#endif
 
 UnitID GetFreeUnitNumber(VehicleType type);
 
@@ -339,9 +310,6 @@ void ReleaseDisasterVehicle(VehicleID vehicle);
 typedef std::vector<VehicleID> VehicleSet;
 void GetVehicleSet(VehicleSet &set, Vehicle *v, uint8_t num_vehicles);
 
-#ifndef WITH_RUST
-void CheckCargoCapacity(Vehicle *v);
-#endif
 
 bool VehiclesHaveSameEngineList(const Vehicle *v1, const Vehicle *v2);
 bool VehiclesHaveSameOrderList(const Vehicle *v1, const Vehicle *v2);

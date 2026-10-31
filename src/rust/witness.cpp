@@ -7,7 +7,6 @@
 
 /** @file witness.cpp The one branch-witness switch and writer; counters live in Rust. */
 #include "../stdafx.h"
-#ifdef WITH_RUST
 #include <cstdio>
 #include <cstdlib>
 #include "../3rdparty/fmt/format.h"
@@ -38,4 +37,3 @@ static struct WitnessWriter {
 		std::fclose(file);
 	}
 } _witness_writer;
-#endif /* WITH_RUST */

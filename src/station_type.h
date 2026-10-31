@@ -123,28 +123,5 @@ static constexpr uint MAX_CATCHMENT = 10; ///< Maximum catchment for airports wi
 
 static const uint MAX_LENGTH_STATION_NAME_CHARS = 32; ///< The maximum length of a station name in characters including '\0'
 
-#ifndef WITH_RUST
-struct StationCompare {
-	bool operator() (const Station *lhs, const Station *rhs) const;
-};
-
-/** List of stations */
-typedef std::set<Station *, StationCompare> StationList;
-
-/**
- * Structure contains cached list of stations nearby. The list
- * is created upon first call to GetStations()
- */
-class StationFinder : TileArea {
-	StationList stations; ///< List of stations nearby
-public:
-	/**
-	 * Constructs StationFinder
-	 * @param area the area to search from
-	 */
-	StationFinder(const TileArea &area) : TileArea(area) {}
-	const StationList &GetStations();
-};
-#endif
 
 #endif /* STATION_TYPE_H */

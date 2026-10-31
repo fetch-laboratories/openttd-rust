@@ -3652,11 +3652,7 @@ void MarkCatchmentTilesDirty()
 	}
 
 	if (_viewport_highlight_station != nullptr) {
-#ifdef WITH_RUST
 		if (static_cast<const TileArea &>(_viewport_highlight_station->catchment_tiles).tile == INVALID_TILE) {
-#else
-		if (_viewport_highlight_station->catchment_tiles.tile == INVALID_TILE) {
-#endif
 			MarkWholeScreenDirty();
 			_viewport_highlight_station = nullptr;
 		} else {

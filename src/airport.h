@@ -199,9 +199,7 @@ public:
 
 
 const AirportFTAClass *GetAirport(const uint8_t airport_type);
-#ifdef WITH_RUST
 const AirportFTAClass *RustDummyAirportFTA() noexcept;
-#endif
 uint8_t GetVehiclePosOnBuild(TileIndex hangar_tile);
 
 #endif /* AIRPORT_H */

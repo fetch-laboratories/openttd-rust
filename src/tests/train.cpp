@@ -2,7 +2,6 @@
 /** @file train.cpp Train PBS depot and speed limit branches not observable in semantic saves. */
 #include "../stdafx.h"
 #include "../3rdparty/catch2/catch.hpp"
-#ifdef WITH_RUST
 #include "../rust/train_ffi.h"
 #include "../rust/pbs_ffi.h"
 #include "../rust/train_reservation_ffi.h"
@@ -107,4 +106,3 @@ TEST_CASE("Train reservation - backoff 255 skips lookahead before owner reads")
 	openttd_rust_train_reservation_check_next({owner.get(), owner.get()}, reinterpret_cast<OpenTTDVehicle *>(owner.get()), &leaves, nullptr);
 	CHECK(openttd_rust_train_state_get_track(owner.get()) == 0);
 }
-#endif

@@ -30,43 +30,6 @@
  * @param buf The property value.
  * @return ChangeInfoResult.
  */
-#ifndef WITH_RUST
-ChangeInfoResult CommonVehicleChangeInfo(EngineInfo *ei, int prop, ByteReader &buf)
-{
-	switch (prop) {
-		case 0x00: // Introduction date
-			ei->base_intro = CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR + buf.ReadWord();
-			break;
-
-		case 0x02: // Decay speed
-			ei->decay_speed = buf.ReadByte();
-			break;
-
-		case 0x03: // Vehicle life
-			ei->lifelength = TimerGameCalendar::Year{buf.ReadByte()};
-			break;
-
-		case 0x04: // Model life
-			ei->base_life = TimerGameCalendar::Year{buf.ReadByte()};
-			break;
-
-		case 0x06: // Climates available
-			ei->climates = LandscapeTypes{buf.ReadByte()};
-			break;
-
-		case PROP_VEHICLE_LOAD_AMOUNT: // 0x07 Loading speed
-			/* Amount of cargo loaded during a vehicle's "loading tick" */
-			ei->load_amount = buf.ReadByte();
-			break;
-
-		default:
-			return CIR_UNKNOWN;
-	}
-
-	return CIR_SUCCESS;
-}
-
-#endif
 
 /**
  * Skip a list of badges.

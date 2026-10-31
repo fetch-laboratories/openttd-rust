@@ -90,8 +90,11 @@ Done when the prompt has been checked and any needed edit is included.
 Report the review and restart root only if the focus requested it.
 
 1. Briefly report root's track, audit findings with numbers, changes with issue links and commit hash, reversed user direction, and anything only the user can supply.
-2. If asked to restart, wait until `origin/rust-migration` has the commit. Use `t3_thread_list`, `t3_thread_configuration`, `t3_thread_launch` and `t3_thread_read` (load with ToolSearch in Claude Code). Find the newest top-level thread whose first message invokes start-development by reading it with `t3_thread_read`.
-3. Read its `modelSelection`, `runtimeMode` and `interactionMode` with `t3_thread_configuration`. Launch with those values or the focus's model, its title, `workspaceStrategy: {type: "root"}`, and `$start-development` in Codex or `/start-development` in Claude Code. The launch has no retry key: after an error check `t3_thread_list` before retrying. Confirm with `t3_thread_read` that it is running and link `[title](t3-thread://v1/<threadId>)`.
+2. If asked to restart, wait until `origin/rust-migration` has the commit. Launch one thread with `t3_thread_launch` (load it with ToolSearch in Claude Code). Only the model, effort and workspace vary; omit every other setting to inherit this thread's.
+   - `modelSelection`: the focus's model and effort, else root's default, `{instanceId: "codex", model: "gpt-6.1-sol", options: [{id: "effort", value: "xhigh"}]}`. Claude Code uses `instanceId: "claudeAgent"`.
+   - `workspaceStrategy: {type: "root"}`, a title, and a stable `clientRequestId`, so a retry after an error cannot launch twice.
+   - The prompt `$start-development` in Codex or `/start-development` in Claude Code, followed by any scope from the focus.
+3. Confirm with `t3_thread_read` that it is running, and link it with the `link` the launch returns.
 4. Otherwise tell the user to start root with start-development. Either way, say whether the review changed the prompt; the prompt lives in the skill, not the reply.
 
 Done when the report and requested handoff are complete.

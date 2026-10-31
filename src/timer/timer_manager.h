@@ -13,9 +13,7 @@
 
 template <typename TTimerType>
 class BaseTimer;
-#ifdef WITH_RUST
 #include "../rust/clock_timer.h"
-#endif
 
 /**
  * The TimerManager manages a single Timer-type.
@@ -41,11 +39,9 @@ public:
 	 */
 	static void RegisterTimer(BaseTimer<TTimerType> &timer)
 	{
-#ifdef WITH_RUST
 		if constexpr (IsRustGameClock<TTimerType>) {
 			RustClockRegister(timer);
 		} else
-#endif
 		{
 #ifdef WITH_ASSERT
 			Validate(timer.period);
@@ -61,11 +57,9 @@ public:
 	 */
 	static void UnregisterTimer(BaseTimer<TTimerType> &timer)
 	{
-#ifdef WITH_RUST
 		if constexpr (IsRustGameClock<TTimerType>) {
 			RustClockUnregister(timer);
 		} else
-#endif
 		{
 			GetTimers().erase(&timer);
 		}
@@ -79,11 +73,9 @@ public:
 	 */
 	static void ChangeRegisteredTimerPeriod(BaseTimer<TTimerType> &timer, TPeriod new_period)
 	{
-#ifdef WITH_RUST
 		if constexpr (IsRustGameClock<TTimerType>) {
 			RustClockChangePeriod(timer, new_period.trigger, new_period.priority);
 		} else
-#endif
 		{
 			/* Unregistration and re-registration is necessary because the period is used as the sort key in base_timer_sorter */
 			UnregisterTimer(timer);

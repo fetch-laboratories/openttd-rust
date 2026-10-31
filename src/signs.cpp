@@ -15,9 +15,7 @@
 #include "strings_func.h"
 #include "core/pool_func.hpp"
 #include "viewport_kdtree.h"
-#ifdef WITH_RUST
 #include "rust/signs_ffi.h"
-#endif
 
 #include "table/strings.h"
 
@@ -64,10 +62,5 @@ void UpdateAllSignVirtCoords()
  */
 bool CompanyCanEditSign(const Sign *si)
 {
-#ifdef WITH_RUST
 	return openttd_rust_company_can_edit_sign(&GetRustSignServices(), si);
-#else
-	if (si->owner == OWNER_DEITY && _current_company != OWNER_DEITY && _game_mode != GM_EDITOR) return false;
-	return true;
-#endif
 }

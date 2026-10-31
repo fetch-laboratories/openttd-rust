@@ -61,9 +61,7 @@
 
 #include "table/strings.h"
 
-#ifdef WITH_RUST
 #include "rust/command_services_ffi.h"
-#endif
 
 #include "safeguards.h"
 
@@ -172,12 +170,7 @@ bool IsCommandAllowedWhilePaused(Commands cmd)
  */
 void CommandHelperBase::InternalDoBefore(bool top_level, bool test)
 {
-#ifdef WITH_RUST
 	openttd_rust_command_before(&GetRustCommandServices(), top_level, test);
-#else
-	if (top_level) _cleared_object_areas.clear();
-	if (test) SetTownRatingTestMode(true);
-#endif
 }
 
 /**
@@ -189,22 +182,7 @@ void CommandHelperBase::InternalDoBefore(bool top_level, bool test)
  */
 void CommandHelperBase::InternalDoAfter(CommandCost &res, DoCommandFlags flags, bool top_level, bool test)
 {
-#ifdef WITH_RUST
 	openttd_rust_command_after(&GetRustCommandServices(), &GetRustCommandCostServices(), reinterpret_cast<OpenTTDCommandCost *>(&res), flags.base(), top_level, test);
-#else
-	if (test) {
-		SetTownRatingTestMode(false);
-
-		if (res.Succeeded() && top_level && !flags.Test(DoCommandFlag::QueryCost) && !flags.Test(DoCommandFlag::Bankrupt)) {
-			CheckCompanyHasMoney(res); // CheckCompanyHasMoney() modifies 'res' to an error if it fails.
-		}
-	} else {
-		/* If top-level, subtract the money. */
-		if (res.Succeeded() && top_level && !flags.Test(DoCommandFlag::Bankrupt)) {
-			SubtractMoneyFromCompany(res);
-		}
-	}
-#endif
 }
 
 /**
@@ -296,12 +274,7 @@ bool CommandHelperBase::InternalExecutePrepTest(CommandFlags cmd_flags, TileInde
 	if (exec_as_spectator) cur_company.Change(COMPANY_SPECTATOR);
 
 	/* Enter test mode. */
-#ifdef WITH_RUST
 	InternalDoBefore(true, true);
-#else
-	_cleared_object_areas.clear();
-	SetTownRatingTestMode(true);
-#endif
 	BasePersistentStorageArray::SwitchMode(PSM_ENTER_TESTMODE);
 	return true;
 }
@@ -337,11 +310,7 @@ std::tuple<bool, bool, bool> CommandHelperBase::InternalExecuteValidateTestAndPr
 
 	if (!send_net) {
 		/* Prepare for command execution. */
-#ifdef WITH_RUST
 		InternalDoBefore(true, false);
-#else
-		_cleared_object_areas.clear();
-#endif
 		BasePersistentStorageArray::SwitchMode(PSM_ENTER_COMMAND);
 	}
 

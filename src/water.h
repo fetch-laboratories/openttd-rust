@@ -26,17 +26,10 @@ enum FloodingBehaviour : uint8_t {
 FloodingBehaviour GetFloodingBehaviour(TileIndex tile);
 void ClearNeighbourNonFloodingStates(TileIndex tile);
 
-#ifdef WITH_RUST
 void TileLoop_Water(uint32_t tile) noexcept;
 inline void TileLoop_Water(TileIndex tile) noexcept { TileLoop_Water(tile.base()); }
-#else
-void TileLoop_Water(TileIndex tile);
-#endif
 bool FloodHalftile(TileIndex t);
 
-#ifndef WITH_RUST
-void ConvertGroundTilesIntoWaterTiles();
-#endif
 
 void DrawShipDepotSprite(int x, int y, Axis axis, DepotPart part);
 void DrawWaterClassGround(const struct TileInfo *ti);
@@ -46,10 +39,6 @@ void MakeWaterKeepingClass(TileIndex tile, Owner o);
 void CheckForDockingTile(TileIndex t);
 
 void MakeRiverAndModifyDesertZoneAround(TileIndex tile);
-#ifndef WITH_RUST
-void RiverMakeWider(TileIndex tile, TileIndex origin_tile);
-bool RiverFlowsDown(TileIndex begin, TileIndex end);
-#endif
 static const uint RIVER_OFFSET_DESERT_DISTANCE = 5; ///< Circular tile search diameter to create non-desert around a river tile.
 
 bool IsWateredTile(TileIndex tile, Direction from);

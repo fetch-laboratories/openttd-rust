@@ -2,7 +2,6 @@
 /** @file linkgraph_schedule.cpp Native LGRS partial-state and recursive cleanup lifetime. */
 #include "../stdafx.h"
 #include "../3rdparty/catch2/catch.hpp"
-#ifdef WITH_RUST
 #include "../rust/linkgraph_schedule_staging.hpp"
 #include "../saveload/saveload.h"
 #include "../saveload/saveload_filter.h"
@@ -43,4 +42,3 @@ TEST_CASE("Link graph schedule - ABI and staging unwind")
 	}
 	OpenTTDScheduleQueues empty{}; openttd_rust_schedule_import(&empty);
 }
-#endif

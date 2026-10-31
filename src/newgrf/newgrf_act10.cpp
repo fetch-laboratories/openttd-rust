@@ -13,29 +13,3 @@
 #include "newgrf_internal.h"
 
 #include "../safeguards.h"
-
-#ifndef WITH_RUST
-
-/** Action 0x10 - Define goto label */
-static void DefineGotoLabel(ByteReader &buf)
-{
-	/* <10> <label> [<comment>]
-	 *
-	 * B label      The label to define
-	 * V comment    Optional comment - ignored */
-
-	uint8_t nfo_label = buf.ReadByte();
-
-	_cur_gps.grffile->labels.emplace_back(nfo_label, _cur_gps.nfo_line, _cur_gps.file->GetPos());
-
-	GrfMsg(2, "DefineGotoLabel: GOTO target with label 0x{:02X}", nfo_label);
-}
-
-template <> void GrfActionHandler<0x10>::FileScan(ByteReader &) { }
-template <> void GrfActionHandler<0x10>::SafetyScan(ByteReader &) { }
-template <> void GrfActionHandler<0x10>::LabelScan(ByteReader &buf) { DefineGotoLabel(buf); }
-template <> void GrfActionHandler<0x10>::Init(ByteReader &) { }
-template <> void GrfActionHandler<0x10>::Reserve(ByteReader &) { }
-template <> void GrfActionHandler<0x10>::Activation(ByteReader &) { }
-
-#endif

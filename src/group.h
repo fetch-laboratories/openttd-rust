@@ -29,13 +29,10 @@ struct FleetStatisticsFields {
 	bool autoreplace_defined = false;
 	bool autoreplace_finished = false;
 };
-#ifdef WITH_RUST
 #include "rust/fleet_owner.hpp"
-#endif
 
 /** Statistics and caches on the vehicles in a group. */
 struct GroupStatistics {
-#ifdef WITH_RUST
 	FleetOwner<FleetStatisticsFields, openttd_rust_fleet_stats_create, openttd_rust_fleet_stats_destroy, openttd_rust_fleet_stats_copy> state{};
 	Money &profit_last_year = state.state->profit_last_year;
 	Money &profit_last_year_min_age = state.state->profit_last_year_min_age;
@@ -47,39 +44,17 @@ struct GroupStatistics {
 	GroupStatistics() = default;
 	GroupStatistics(const GroupStatistics &other) : state(other.state) {}
 	GroupStatistics &operator=(const GroupStatistics &other) { state = other.state; return *this; }
-#else
-	Money profit_last_year = 0; ///< Sum of profits for all vehicles.
-	Money profit_last_year_min_age = 0; ///< Sum of profits for vehicles considered for profit statistics.
-	std::map<EngineID, uint16_t> num_engines{}; ///< Caches the number of engines of each type the company owns.
-	uint16_t num_vehicle = 0; ///< Number of vehicles.
-	uint16_t num_vehicle_min_age = 0; ///< Number of vehicles considered for profit statistics;
-	bool autoreplace_defined = false; ///< Are any autoreplace rules set?
-	bool autoreplace_finished = false; ///< Have all autoreplacement finished?
-
-#endif
 
 	void Clear();
 
 	void ClearProfits()
 	{
-#ifdef WITH_RUST
 		openttd_rust_fleet_stats_clear_profits(this->state.state);
-#else
-		this->profit_last_year = 0;
-
-		this->num_vehicle_min_age = 0;
-		this->profit_last_year_min_age = 0;
-#endif
 	}
 
 	void ClearAutoreplace()
 	{
-#ifdef WITH_RUST
 		openttd_rust_fleet_stats_clear_autoreplace(this->state.state);
-#else
-		this->autoreplace_defined = false;
-		this->autoreplace_finished = false;
-#endif
 	}
 
 	uint16_t GetNumEngines(EngineID engine) const;
@@ -105,7 +80,6 @@ enum class GroupFlag : uint8_t {
 using GroupFlags = EnumBitSet<GroupFlag, uint8_t>;
 
 /** Group data. */
-#ifdef WITH_RUST
 struct FleetGroupFields {
 	Owner owner = INVALID_OWNER;
 	VehicleType vehicle_type = VEH_INVALID;
@@ -135,29 +109,6 @@ struct Group : GroupPool::PoolItem<&_group_pool> {
 	}
 	void SetName(const std::string &name) { openttd_rust_fleet_set_name(state.state, reinterpret_cast<const uint8_t *>(name.data()), name.size()); }
 };
-#else
-struct Group : GroupPool::PoolItem<&_group_pool> {
-	std::string name{}; ///< Group Name
-	Owner owner = INVALID_OWNER; ///< Group Owner
-	VehicleType vehicle_type = VEH_INVALID; ///< Vehicle type of the group
-
-	GroupFlags flags{}; ///< Group flags
-	Livery livery{}; ///< Custom colour scheme for vehicles in this group
-	GroupStatistics statistics{}; ///< NOSAVE: Statistics and caches on the vehicles in the group.
-
-	FlatSet<GroupID> children; ///< NOSAVE: child groups belonging to this group.
-	bool folded = false; ///< NOSAVE: Is this group folded in the group view?
-
-	GroupID parent = GroupID::Invalid(); ///< Parent group
-	uint16_t number = 0; ///< Per-company group number.
-
-	std::string GetName() const { return name; }
-	void SetName(const std::string &value) { name = value; }
-	const FlatSet<GroupID> &ChildGroups() const { return children; }
-	Group() {}
-	Group(CompanyID owner, VehicleType vehicle_type) : owner(owner), vehicle_type(vehicle_type) {}
-};
-#endif
 
 
 inline bool IsDefaultGroupID(GroupID index)
@@ -186,8 +137,5 @@ void SetTrainGroupID(Train *v, GroupID grp);
 void UpdateTrainGroupID(Train *v);
 void RemoveAllGroupsForCompany(const CompanyID company);
 bool GroupIsInGroup(GroupID search, GroupID group);
-#ifndef WITH_RUST
-void UpdateCompanyGroupLiveries(const Company *c);
-#endif
 
 #endif /* GROUP_H */
