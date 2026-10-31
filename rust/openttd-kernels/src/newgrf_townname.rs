@@ -98,17 +98,17 @@ fn random_part(builder: &mut dyn FnMut(&[u8]), t: &GrfTownName, seed: u32, id: u
 /// `GRFTownNameGenerate`: appends each selected part to the native builder through `append`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_grf_townname_generate(
+    shared: &crate::services::Services,
     builder: *mut c_void,
     append: unsafe extern "C" fn(*mut c_void, ByteSpan),
     grfid: u32,
     gen_: u16,
     seed: u32,
 ) {
-    if let Some(t) = unsafe { get(grfid) } {
-        // Indexing is the original's `assert(gen < t->styles.size())`.
-        let id = t.styles[usize::from(gen_)].id;
-        random_part(
-            &mut |text| unsafe {
+    unsafe {
+        generate(
+            shared,
+            &mut |text| {
                 append(
                     builder,
                     ByteSpan {
@@ -117,15 +117,34 @@ pub unsafe extern "C" fn openttd_rust_grf_townname_generate(
                     },
                 );
             },
-            t,
+            grfid,
+            gen_,
             seed,
-            id,
         );
+    }
+}
+
+/// Append selected parts without crossing the native facade.
+pub(crate) unsafe fn generate(
+    shared: &crate::services::Services,
+    builder: &mut dyn FnMut(&[u8]),
+    grfid: u32,
+    gen_: u16,
+    seed: u32,
+) {
+    if let Some(t) = unsafe { get(grfid) } {
+        crate::movement::native_assert(shared, usize::from(gen_) < t.styles.len());
+        // C++ operator[] is unchecked when its native assertion is disabled.
+        let id = unsafe { (*t.styles.as_ptr().add(usize::from(gen_))).id };
+        random_part(builder, t, seed, id);
     }
 }
 /// `GetGRFTownName(grfid) != nullptr`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_grf_townname_exists(grfid: u32) -> bool {
+    unsafe { exists(grfid) }
+}
+pub(crate) unsafe fn exists(grfid: u32) -> bool {
     unsafe { get(grfid).is_some() }
 }
 /// `InitGRFTownGeneratorNames`.
@@ -173,20 +192,14 @@ pub unsafe extern "C" fn openttd_rust_grf_townname_type(mut gen_: u16) -> u16 {
     // Fallback to the first built in town name (English).
     SPECSTR_TOWNNAME_START as u16
 }
-/// Destination of the native `TranslateTTDPatchCodes` result.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_grf_text_assign(out: *mut Vec<u8>, text: ByteSpan) {
-    unsafe {
-        let out = &mut *out;
-        out.clear();
-        out.extend_from_slice(std::slice::from_raw_parts(text.data, text.size));
-    }
-}
-
 unsafe fn translate(s: &Services, grfid: u32, lang: u8, text: (*const u8, usize)) -> Vec<u8> {
-    let mut out = Vec::new();
-    unsafe { (s.translate_text)(grfid, lang, false, text.0, text.1, &raw mut out) };
-    out
+    // The native loader frame keeps this view alive until the next translation.
+    let translated = unsafe { (s.translate_text)(grfid, lang, false, text.0, text.1) };
+    if translated.size == 0 {
+        Vec::new()
+    } else {
+        unsafe { std::slice::from_raw_parts(translated.data, translated.size) }.to_vec()
+    }
 }
 
 /// Action 0x0F - Define Town names (`FeatureTownName`).
@@ -205,7 +218,8 @@ pub(crate) unsafe fn feature_town_name(
         let grfid = (s.file_id)(file);
 
         // Only `DelGRFTownName` changes the list before this entry returns.
-        let townname: *mut GrfTownName = &raw mut townnames()[add(grfid)];
+        let index = add(grfid);
+        let townname: *mut GrfTownName = &raw mut townnames()[index];
 
         let mut id = buf.byte()?;
         (s.town_definition)(id & 0x7F);

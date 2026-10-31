@@ -75,7 +75,7 @@ static void GrfTownNames(const char *phase, bool loaded)
 	Require(GetTownName(&par, 0) == "Q" && GetTownName(&par, 0xFFFF) == "Y Hill", "townname-recursive-final");
 	par.grfid = ID("TNB5");
 	par.type = 0;
-	Require(GetTownName(&par, 0) == "Gam", "townname-second-grf");
+	Require(GetTownName(&par, 0) == "Gam\u20ac", "townname-second-grf");
 	par.grfid = ID("TNX5");
 	Require(GetTownName(&par, 0).empty(), "townname-invalid-reference-deleted");
 	GRFConfig *bad = GetGRFConfig(ID("TNX5"));

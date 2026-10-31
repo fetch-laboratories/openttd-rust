@@ -23,12 +23,13 @@
 
 #ifdef WITH_RUST
 #include "rust/byte_span_ffi.h"
+#include "rust/presentation_services.h"
 
-extern "C" void openttd_rust_grf_townname_generate(StringBuilder *builder, void (*append)(StringBuilder *, OpenTTDByteSpan) noexcept, uint32_t grfid, uint16_t gen, uint32_t seed);
+extern "C" void openttd_rust_grf_townname_generate(const OpenTTDSharedServices *, StringBuilder *builder, void (*append)(StringBuilder *, OpenTTDByteSpan) noexcept, uint32_t grfid, uint16_t gen, uint32_t seed);
 
 void GRFTownNameGenerate(StringBuilder &builder, uint32_t grfid, uint16_t gen, uint32_t seed)
 {
-	openttd_rust_grf_townname_generate(&builder, [](StringBuilder *builder, OpenTTDByteSpan text) noexcept { *builder += std::string_view{reinterpret_cast<const char *>(text.data), text.size}; }, grfid, gen, seed);
+	openttd_rust_grf_townname_generate(&GetRustSharedServices(), &builder, [](StringBuilder *builder, OpenTTDByteSpan text) noexcept { *builder += std::string_view{reinterpret_cast<const char *>(text.data), text.size}; }, grfid, gen, seed);
 }
 
 StringID GetGRFTownNameName(uint16_t gen)

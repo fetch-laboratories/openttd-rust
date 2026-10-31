@@ -235,7 +235,7 @@ def fixtures(folder, version):
             bytes((0x85, 0x7F))
             + b"Gamma\x00\x00"
             + bytes((1, 1, 0, 1))
-            + text(1, b"Gam")
+            + text(1, b"Gam\x9e")
         ],
     )
     # The reference byte of the last part is missing.

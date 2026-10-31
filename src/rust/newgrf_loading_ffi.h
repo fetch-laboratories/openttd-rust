@@ -13,8 +13,6 @@ struct GRFConfig;
 class SpriteFile;
 enum GrfLoadingStage : uint8_t;
 enum GrfSpecFeature : uint8_t;
-/** Opaque Rust-owned byte vector receiving a translated GRF text. */
-struct OpenTTDGrfText;
 struct OpenTTDGrfExecution {
 	GrfLoadingStage stage;
 	uint32_t spriteid;
@@ -24,6 +22,7 @@ struct OpenTTDGrfExecution {
 	uint32_t nfo_line;
 	int32_t skip_sprites;
 	std::array<const SpriteGroup *, 256> spritegroups;
+	std::string *translated_text; ///< Borrowed from the native loader stack frame.
 };
 extern "C" {
 OpenTTDGrfExecution *openttd_rust_grf_execution();
@@ -225,8 +224,8 @@ struct OpenTTDGrfLoadingServices {
 	void (*grm_feature)(GrfSpecFeature feature) noexcept OPENTTD_SERVICE_DEFAULT(grm_feature);
 	void (*unimplemented_target)(uint8_t target) noexcept OPENTTD_SERVICE_DEFAULT(unimplemented_target);
 	void (*unknown_target)(uint8_t target) noexcept OPENTTD_SERVICE_DEFAULT(unknown_target);
-	/* TranslateTTDPatchCodes; the result is stored into out through openttd_rust_grf_text_assign. */
-	void (*translate_text)(uint32_t grfid, uint8_t lang, bool allow_newlines, const uint8_t *text, size_t len, OpenTTDGrfText *out) noexcept OPENTTD_SERVICE_DEFAULT(translate_text);
+	/* TranslateTTDPatchCodes; view valid until the next translation in this loader frame. */
+	OpenTTDByteSpan (*translate_text)(uint32_t grfid, uint8_t lang, bool allow_newlines, const uint8_t *text, size_t len) noexcept OPENTTD_SERVICE_DEFAULT(translate_text);
 	StringID (*add_string)(uint32_t grfid, uint32_t stringid, uint8_t lang, bool new_scheme, bool allow_newlines, const uint8_t *text, size_t len, StringID def_string) noexcept OPENTTD_SERVICE_DEFAULT(add_string);
 	StringID undefined;
 	void (*town_definition)(uint8_t id) noexcept OPENTTD_SERVICE_DEFAULT(town_definition);
@@ -245,7 +244,6 @@ void openttd_rust_grf_load(const OpenTTDGrfLoadingServices *, SpriteID, uint32_t
 void openttd_rust_grf_reset(const OpenTTDGrfLoadingServices *);
 bool openttd_rust_grf_reserved_sprite(uint32_t, SpriteID, uint16_t);
 void openttd_rust_grf_load_file(const OpenTTDGrfLoadingServices *, GRFConfig *, GrfLoadingStage, Subdirectory, void *);
-void openttd_rust_grf_text_assign(OpenTTDGrfText *, OpenTTDByteSpan);
 }
 const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept;
 #endif

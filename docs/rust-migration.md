@@ -1946,8 +1946,9 @@ lists, the generator-name list, recursive seeded generation, style/GRF lookups a
 `GRFTownNameGenerate` passes its `StringBuilder` with an append callback that receives each
 selected part's bytes. `TranslateTTDPatchCodes` and `AddGRFString` remain native string-registry
 operations behind one loading service each; the translated bytes are copied into the Rust part
-through `openttd_rust_grf_text_assign`. Debug messages keep one loading service each. Rust indexing
-replaces the original `gen < styles.size()` assertion, and self-referencing definitions recurse
+from a view backed by the native loader stack frame. Debug messages keep one loading service
+each. Generation preserves the native `gen < styles.size()` assertion, and name verification
+calls the Rust generator directly. Self-referencing definitions recurse
 without a guard as in the original. PR pending.
 
 ### Town growth and lifecycle state

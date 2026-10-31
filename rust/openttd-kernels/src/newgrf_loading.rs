@@ -31,6 +31,7 @@ pub struct Execution {
     pub(crate) nfo_line: u32,
     pub(crate) skip_sprites: i32,
     pub(crate) spritegroups: [*const c_void; 256],
+    translated_text: *mut c_void,
 }
 static EXECUTION: GameState<Execution> = GameState::new(Execution {
     stage: 0,
@@ -41,6 +42,7 @@ static EXECUTION: GameState<Execution> = GameState::new(Execution {
     nfo_line: 0,
     skip_sprites: 0,
     spritegroups: [ptr::null(); 256],
+    translated_text: ptr::null_mut(),
 });
 #[derive(Clone, Copy)]
 struct SpriteSet {
@@ -108,7 +110,7 @@ crate::abi::layouts! {
     "OpenTTDGrfEngineRange" ["grf_loading"] => EngineRange { offset, count };
     "OpenTTDGrfClock" ["grf_loading"] => Clock { ticks, display };
     "OpenTTDGrfExecution" ["grf_loading"] => Execution {
-        stage, spriteid, file, grffile, grfconfig, nfo_line, skip_sprites, spritegroups
+        stage, spriteid, file, grffile, grfconfig, nfo_line, skip_sprites, spritegroups, translated_text
     };
 }
 
@@ -295,7 +297,8 @@ pub struct Services {
     grm_feature: unsafe extern "C" fn(u8),
     unimplemented_target: unsafe extern "C" fn(u8),
     unknown_target: unsafe extern "C" fn(u8),
-    pub(crate) translate_text: unsafe extern "C" fn(u32, u8, bool, *const u8, usize, *mut Vec<u8>),
+    pub(crate) translate_text:
+        unsafe extern "C" fn(u32, u8, bool, *const u8, usize) -> crate::services::ByteSpan,
     pub(crate) add_string:
         unsafe extern "C" fn(u32, u32, u8, bool, bool, *const u8, usize, u32) -> u32,
     pub(crate) undefined: u32,
