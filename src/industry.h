@@ -269,7 +269,6 @@ struct Industry : IndustryPool::PoolItem<&_industry_pool> {
 		return Industry::Get(GetIndustryIndex(tile));
 	}
 
-	static Industry *GetRandom();
 	static void PostDestructor(size_t index);
 
 	/**

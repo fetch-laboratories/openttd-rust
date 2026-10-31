@@ -28,6 +28,8 @@ pub struct GenerationInfo {
 pub struct GenerationServices {
     pub spec: unsafe extern "C" fn(u8) -> *const SpecHandle,
     pub spec_behaviour: unsafe extern "C" fn(*const SpecHandle) -> u32,
+    pub spec_life: unsafe extern "C" fn(*const SpecHandle) -> u8,
+    pub cost_multiplier: unsafe extern "C" fn(*const SpecHandle) -> u8,
     pub info: unsafe extern "C" fn(*const SpecHandle) -> GenerationInfo,
     pub coastal: unsafe extern "C" fn(*const SpecHandle) -> bool,
     pub environment: crate::services::EnvironmentServices,

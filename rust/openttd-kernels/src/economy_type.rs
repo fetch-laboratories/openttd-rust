@@ -67,5 +67,11 @@ pub const PR_END: u8 = 71;
 /// `INVALID_PRICE`.
 pub const INVALID_PRICE: u8 = 255;
 
+/// `PR_BUILD_INDUSTRY`.
+pub const PR_BUILD_INDUSTRY: usize = 48;
+/// `PR_CLEAR_INDUSTRY`.
+pub const PR_CLEAR_INDUSTRY: usize = 49;
+/// `PR_BUILD_INDUSTRY_RAW`.
+pub const PR_BUILD_INDUSTRY_RAW: usize = 58;
 /// `PR_CLEAR_HOUSE`.
 pub const PR_CLEAR_HOUSE: usize = 40;

@@ -141,7 +141,6 @@ struct IndustrySpec {
 	bool IsRawIndustry() const;
 	bool IsProcessingIndustry() const;
 	Money GetConstructionCost() const;
-	Money GetRemovalCost() const;
 	bool UsesOriginalEconomy() const;
 };
 

@@ -700,3 +700,5 @@ static_assert(RAILTYPE_END == 64 && ROADTYPE_END == 63);
 static_assert(NUM_AIRPORTS_PER_GRF == 128 && NUM_AIRPORTTILES_PER_GRF == 255);
 static_assert(GSF_AIRPORTS == 0x0D && GSF_TRAMTYPES == 0x13);
 static_assert(MAX_CATCHMENT == 10 && CalendarTime::MAX_YEAR.base() == 5000000);
+
+static_assert(PR_BUILD_INDUSTRY == 48 && PR_CLEAR_INDUSTRY == 49 && PR_BUILD_INDUSTRY_RAW == 58);

@@ -8,6 +8,7 @@
 #include "town.h"
 #include "core/backup_type.hpp"
 #include "core/random_func.hpp"
+#include "industry-policy-console.hpp"
 #include "safeguards.h"
 
 static DeterministicSpriteGroupAdjust Read(uint8_t variable, uint8_t parameter = 0, uint32_t mask = UINT32_MAX, DeterministicSpriteGroupAdjustOperation operation = DSGA_OP_RST)
@@ -303,6 +304,7 @@ extern "C" void __real__Z22IConsoleStdLibRegisterv();
 extern "C" void __wrap__Z22IConsoleStdLibRegisterv()
 {
 	__real__Z22IConsoleStdLibRegisterv();
+	IConsole::CmdRegister("industry_policy", IndustryPolicy);
 	IConsole::CmdRegister("industries_scenario", IndustriesScenario);
 	IConsole::CmdRegister("industry_definitions", IndustryDefinitionsScenario);
 }

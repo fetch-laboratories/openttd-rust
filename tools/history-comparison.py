@@ -6,6 +6,8 @@ allocator leaks, not Rust memory accesses. NOT_REACHED/AssertFailedError stubs
 check dispatch and C++ unwinding, not game fatal text or source locations.
 """
 
+from pathlib import Path
+
 import probe
 
 REDUCERS = {
@@ -19,7 +21,7 @@ REDUCERS = {
 }
 
 
-def reducers(out):
+def reducers(out: Path) -> dict[str, Path]:
     """Extract independent pinned reducers and the production candidate facades."""
     pieces = {"reference": [], "candidate": []}
     for filename, signatures in REDUCERS.items():
@@ -60,7 +62,7 @@ def main():
                 "-I",
                 source / "src",
                 fixture,
-                production["reference" if label == "reference" else "candidate"],
+                production["candidate" if label == "candidate" else "reference"],
                 source / "src/misc/history.cpp",
                 "-Wl,--gc-sections",
             ]

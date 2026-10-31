@@ -152,7 +152,7 @@ pub struct Services {
     load_ticks: unsafe extern "C" fn(V) -> u16,
     service_interval: unsafe extern "C" fn(V) -> u16,
     acceleration: unsafe extern "C" fn(V) -> u8,
-    cargo_type: unsafe extern "C" fn(V) -> u8,
+    pub(crate) cargo_type: unsafe extern "C" fn(V) -> u8,
     cargo_subtype: unsafe extern "C" fn(V) -> u8,
     age: unsafe extern "C" fn(V) -> i32,
     max_age: unsafe extern "C" fn(V) -> i32,
