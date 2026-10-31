@@ -214,7 +214,8 @@ impl MapStatics {
     /// Load the allocation and dimensions current at this observation point.
     /// # Safety
     /// Every address is live; the loads are serialized with `Map::Allocate`.
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) unsafe fn load(&self) -> (TileTypeAllocation, Map) {
         unsafe {
             (
@@ -280,7 +281,8 @@ pub(crate) struct TileTypeAccess {
 // scalar; every load ends before any callback and native aliases remain legal.
 macro_rules! map_fields {
     ($array:ident: $layout:ty => $($field:ident: $scalar:ty),*) => {$ (
-        #[inline]
+        #[allow(clippy::inline_always)]
+    #[inline(always)]
         pub(crate) fn $field(&self, tile: u32) -> Option<$scalar> {
             self.available(tile)?;
             // SAFETY: Live allocation under the entry contract, one scalar only.
@@ -295,7 +297,8 @@ impl TileTypeAccess {
     /// initialized base/extended tiles, within `isize::MAX`, until this reader is dropped. Map
     /// reset and game-state-mutex yield are excluded throughout the entry. Each
     /// read must be serialized with native writes; native aliases are permitted.
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) unsafe fn raw(
         allocation: TileTypeAllocation,
         callback: extern "C" fn(u32) -> u8,
@@ -309,29 +312,34 @@ impl TileTypeAccess {
 
     /// Read the original high nibble at this observation point. Checked failures
     /// go through the native accessor; asserts-off reads add no range rejection.
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     #[allow(clippy::cast_possible_truncation)]
     pub(crate) fn read(&self, tile: u32) -> u8 {
         crate::tile_map::get_tile_type(self, tile).unwrap_or_else(|| (self.callback)(tile))
     }
     /// Raw backend availability; assertion-disabled builds add no range rejection.
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn available(&self, tile: u32) -> Option<()> {
         (self.allocation.count != 0
             && (!self.assertions() || self.native_assert.is_some() || tile < self.allocation.count))
             .then_some(())
     }
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn assertions(&self) -> bool {
         self.allocation.assertions
     }
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn count(&self) -> u32 {
         self.allocation.count
     }
     /// Retry a header helper with native assertions at each source assertion site.
     /// Raw Tile field accessors themselves have no range assertions.
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn with_native_assert<T>(
         &self,
         native_assert: extern "C" fn(bool),
@@ -343,7 +351,8 @@ impl TileTypeAccess {
             native_assert: Some(native_assert),
         })
     }
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn check(&self, condition: bool) -> Option<()> {
         if self.assertions() && !condition {
             (self.native_assert?)(false);
@@ -351,11 +360,14 @@ impl TileTypeAccess {
         Some(())
     }
     /// The explicit bounds assertion in `GetTileType` and `TileHeight`.
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn require_range(&self, tile: u32) -> Option<()> {
+        self.available(tile)?;
         self.check(tile < self.count())
     }
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn require_type(&self, tile: u32, kind: u8) -> Option<()> {
         self.available(tile)?;
         if self.assertions() {
@@ -376,7 +388,8 @@ pub(crate) struct World<'a> {
 }
 impl<'a> World<'a> {
     /// Load the canonical descriptor and `Map::LogX()` at entry, without a call.
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn new(shared: &'a crate::services::Services) -> Self {
         // SAFETY: Game-loop and command entries exclude map reset/load/mutex yield;
         // the shared table's statics address the canonical native map.
@@ -393,19 +406,23 @@ impl<'a> World<'a> {
             dimensions,
         }
     }
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn check(&self, condition: bool) {
         crate::movement::native_assert(self.shared, condition);
     }
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn kind(&self, t: u32) -> u8 {
         self.types.read(t)
     }
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn byte(value: Option<u8>) -> u8 {
         value.expect("live map scalar")
     }
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn word(value: Option<u16>) -> u16 {
         value.expect("live map scalar")
     }

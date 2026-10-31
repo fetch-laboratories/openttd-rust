@@ -9,31 +9,37 @@
 //! `None` denotes an unavailable raw backend or a failed native precondition.
 use crate::map_func::TileTypeAccess;
 
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn is_tile_type(s: &crate::services::Services, tile: u32, kind: u8) -> bool {
     (s.tile_type)(tile) == kind
 }
 
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn get_tile_type(m: &TileTypeAccess, t: u32) -> Option<u8> {
     m.require_range(t)?;
     Some(m.kind(t)? >> 4)
 }
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn get_tropic_zone(m: &TileTypeAccess, t: u32) -> Option<u8> {
     Some(m.kind(t)? & 3)
 }
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn is_valid_tile(m: &TileTypeAccess, t: u32, count: u32) -> Option<bool> {
     m.available(0)?;
     Some(t < count && get_tile_type(m, t)? != crate::tile_type::MP_VOID)
 }
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 fn tile_height(m: &TileTypeAccess, t: u32) -> Option<i32> {
     m.require_range(t)?;
     Some(i32::from(m.height(t)?))
 }
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 #[allow(clippy::cast_possible_truncation)] // trailing_zeros is in 0..=32.
 fn corners(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<[i32; 4]> {
     m.available(t)?;
@@ -50,7 +56,8 @@ fn corners(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<[i32; 4]> {
     ])
 }
 /// `GetTileSlopeGivenHeight`, also called by `GetTileSlopeZ` in the original.
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 fn get_tile_slope_given_height([n, w, e, s]: [i32; 4]) -> (u8, i32) {
     use crate::slope_func::{SLOPE_E, SLOPE_FLAT, SLOPE_N, SLOPE_S, SLOPE_STEEP, SLOPE_W};
     let low = n.min(w).min(e.min(s));
@@ -66,40 +73,47 @@ fn get_tile_slope_given_height([n, w, e, s]: [i32; 4]) -> (u8, i32) {
     }
     (slope, low)
 }
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn get_tile_slope_z(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<(u8, i32)> {
     Some(get_tile_slope_given_height(corners(m, t, x, y)?))
 }
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn get_tile_slope(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<u8> {
     Some(get_tile_slope_z(m, t, x, y)?.0)
 }
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn get_tile_z(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<i32> {
     let [north, west, east, south] = corners(m, t, x, y)?;
     Some(north.min(west).min(east.min(south)))
 }
 
 /// `IsTileOwner`.
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub fn is_tile_owner(s: &crate::services::Services, tile: u32, owner: u8) -> bool {
     (s.tile_owner)(tile) == owner
 }
 
 /// `TileHash`, preserving the source unsigned subtraction.
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn tile_hash(x: u32, y: u32) -> u32 {
     ((x >> 4) ^ (x >> 6) ^ (y >> 4)).wrapping_sub(y >> 6)
 }
 
 /// `TileHash2Bit` calls the canonical hash before extracting its low bits.
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn tile_hash_2bit(x: u32, y: u32) -> u32 {
     tile_hash(x, y) & 3
 }
 
 /// `GetTilePixelSlope`, preserving unsigned `TILE_HEIGHT` multiplication.
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn get_tile_pixel_slope(
     map: &TileTypeAccess,
     tile: u32,
@@ -116,13 +130,15 @@ pub(crate) fn get_tile_pixel_slope(
     ))
 }
 /// `GetTileMaxZ`.
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn get_tile_max_z(map: &TileTypeAccess, tile: u32, x: u32, y: u32) -> Option<i32> {
     let [north, west, east, south] = corners(map, tile, x, y)?;
     Some(north.max(west).max(east.max(south)))
 }
 /// `GetTileMaxPixelZ`.
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn get_tile_max_pixel_z(map: &TileTypeAccess, tile: u32, x: u32, y: u32) -> Option<i32> {
     Some(
         get_tile_max_z(map, tile, x, y)?
@@ -132,7 +148,8 @@ pub(crate) fn get_tile_max_pixel_z(map: &TileTypeAccess, tile: u32, x: u32, y: u
     )
 }
 /// `TileHeightOutsideMap`, including signed clamping after the caller's conversion.
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn tile_height_outside_map(
     tiles: &TileTypeAccess,
     x: i32,
@@ -151,7 +168,8 @@ pub(crate) fn tile_height_outside_map(
     )
 }
 /// `GetTilePixelSlopeOutsideMap`.
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn get_tile_pixel_slope_outside_map(
     map: &TileTypeAccess,
     x: i32,
@@ -175,7 +193,8 @@ pub(crate) fn get_tile_pixel_slope_outside_map(
 
 #[allow(clippy::cast_possible_truncation)] // GB returns the original field width.
 impl crate::map_func::World<'_> {
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn owner(&self, t: u32) -> u8 {
         self.check(t < self.types.count() && self.kind(t) != crate::tile_type::MP_VOID);
         self.check(
@@ -185,7 +204,8 @@ impl crate::map_func::World<'_> {
         crate::bitmath_func::gb(u32::from(Self::byte(self.types.m1(t))), 0, 5) as u8
     }
     /// `Map::SizeX` and `Map::SizeY` of the acquired allocation.
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn size(&self) -> (u32, u32) {
         (
             self.dimensions.size_x(),
@@ -194,7 +214,8 @@ impl crate::map_func::World<'_> {
     }
     /// Run a header helper whose `None` is a failed precondition. The failure
     /// retries with each source assertion dispatched to the native handler.
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn asserted<T>(&self, read: impl Fn(&TileTypeAccess) -> Option<T>) -> T {
         read(&self.types).unwrap_or_else(|| {
             self.types
@@ -203,19 +224,22 @@ impl crate::map_func::World<'_> {
         })
     }
     /// `GetTilePixelSlope`.
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn tile_pixel_slope(&self, t: u32) -> (u8, i32) {
         let (x, y) = self.size();
         self.asserted(|m| get_tile_pixel_slope(m, t, x, y))
     }
     /// `GetTilePixelSlopeOutsideMap`.
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn tile_pixel_slope_outside_map(&self, x: i32, y: i32) -> (u8, i32) {
         let (width, height) = self.size();
         self.asserted(|m| get_tile_pixel_slope_outside_map(m, x, y, width, height))
     }
     /// `GetTileMaxPixelZ`.
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn tile_max_pixel_z(&self, t: u32) -> i32 {
         let (x, y) = self.size();
         self.asserted(|m| get_tile_max_pixel_z(m, t, x, y))

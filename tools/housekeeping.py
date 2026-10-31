@@ -186,9 +186,15 @@ def recently_active(tree: Path) -> bool:
     try:
         admin = tree / (tree / ".git").read_text().removeprefix("gitdir:").strip()
         marks = [admin / "HEAD", admin / "index", admin / "logs/HEAD"]
-        marks += [child for child in tree.iterdir() if child.is_file()]
+        marks += [
+            tree / name
+            for name in git(tree, "ls-files", "-z").split("\0")
+            if name and "/" not in name
+        ]
         now = time.time()
-        return any(now - m.stat().st_mtime < RUNNING_SECONDS for m in marks if m.exists())
+        return any(
+            now - m.stat().st_mtime < RUNNING_SECONDS for m in marks if m.exists()
+        )
     except OSError:
         return False
 

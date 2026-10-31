@@ -12,19 +12,22 @@ use crate::map_func::TileTypeAccess;
 use crate::tile_type::{MP_INDUSTRY, MP_OBJECT, MP_STATION, MP_TREES, MP_WATER};
 /// `WaterTileType::Coast`.
 const COAST: u8 = 1;
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn get_water_tile_type(m: &TileTypeAccess, t: u32) -> Option<u8> {
     m.require_type(t, MP_WATER)?;
     Some(m.m5(t)? >> 4)
 }
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn has_tile_water_class(m: &TileTypeAccess, t: u32) -> Option<bool> {
     Some(matches!(
         crate::tile_map::get_tile_type(m, t)?,
         MP_WATER | MP_STATION | MP_INDUSTRY | MP_OBJECT | MP_TREES
     ))
 }
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn get_water_class(m: &TileTypeAccess, t: u32) -> Option<u8> {
     m.available(t)?;
     if m.assertions() && !has_tile_water_class(m, t)? {
@@ -32,11 +35,13 @@ pub(crate) fn get_water_class(m: &TileTypeAccess, t: u32) -> Option<u8> {
     }
     Some((m.m1(t)? >> 5) & 3)
 }
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn is_coast(m: &TileTypeAccess, t: u32) -> Option<bool> {
     Some(get_water_tile_type(m, t)? == COAST)
 }
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn is_non_flooding_water_tile(m: &TileTypeAccess, t: u32) -> Option<bool> {
     m.require_type(t, MP_WATER)?;
     Some(m.m3(t)? & 1 != 0)

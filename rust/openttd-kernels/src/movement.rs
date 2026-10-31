@@ -1475,6 +1475,7 @@ pub unsafe extern "C" fn openttd_rust_movement_depot_ticks(
 
 /// Resolve the native immutable movement registry. Production callers hold the
 /// game-state mutex; no map or owner borrow is formed by resolving this table.
+#[inline]
 pub(crate) fn table(shared: &Services) -> &MovementServices {
     // SAFETY: The shared table holds the immutable process-lifetime movement table.
     unsafe { &*shared.movement }

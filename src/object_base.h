@@ -114,7 +114,7 @@ ClearedObjectArea *FindClearedObject(TileIndex tile);
 extern std::vector<ClearedObjectArea> _cleared_object_areas;
 #else
 /** Native scratch clients query the first intersecting area. */
-inline bool IsObjectIndirectlyCleared(TileIndex tile) { return openttd_rust_object_indirectly_cleared(tile.base(), Map::LogX()); }
+inline bool IsObjectIndirectlyCleared(TileIndex tile) { return openttd_rust_object_indirectly_cleared(tile.base(), *GetRustSharedServices().map->log_x); }
 #endif
 
 #endif /* OBJECT_BASE_H */

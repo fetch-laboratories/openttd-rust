@@ -19,27 +19,32 @@ pub(crate) const CLEAR_ROCKS: u8 = 2;
 pub(crate) const CLEAR_DESERT: u8 = 5;
 /// `ClearGround::CLEAR_FIELDS`.
 pub(crate) const CLEAR_FIELDS: u8 = 3;
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn is_snow_tile(m: &TileTypeAccess, t: u32) -> Option<bool> {
     m.require_type(t, MP_CLEAR)?;
     Some(m.m3(t)? & 16 != 0)
 }
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn get_clear_ground(m: &TileTypeAccess, t: u32) -> Option<u8> {
     m.require_type(t, MP_CLEAR)?;
     Some((m.m5(t)? >> 2) & 7)
 }
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn get_clear_density(m: &TileTypeAccess, t: u32) -> Option<u8> {
     m.require_type(t, MP_CLEAR)?;
     Some(m.m5(t)? & 3)
 }
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn get_clear_counter(m: &TileTypeAccess, t: u32) -> Option<u8> {
     m.require_type(t, MP_CLEAR)?;
     Some(m.m5(t)? >> 5)
 }
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 fn require_field(m: &TileTypeAccess, t: u32) -> Option<()> {
     m.available(t)?;
     if m.assertions() && get_clear_ground(m, t)? != CLEAR_FIELDS {
@@ -47,17 +52,20 @@ fn require_field(m: &TileTypeAccess, t: u32) -> Option<()> {
     }
     Some(())
 }
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn get_field_type(m: &TileTypeAccess, t: u32) -> Option<u32> {
     require_field(m, t)?;
     Some(u32::from(m.m3(t)? & 15))
 }
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn get_industry_index_of_field(m: &TileTypeAccess, t: u32) -> Option<u16> {
     require_field(m, t)?;
     m.m2(t)
 }
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn get_fence(m: &TileTypeAccess, t: u32, side: u8) -> Option<u32> {
     require_field(m, t)?;
     Some(u32::from(match side {
@@ -68,7 +76,8 @@ pub(crate) fn get_fence(m: &TileTypeAccess, t: u32, side: u8) -> Option<u32> {
         _ => unreachable!("DiagDirection"),
     }))
 }
-#[inline]
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn is_field_tile(m: &TileTypeAccess, t: u32) -> Option<bool> {
     Some(
         crate::tile_map::get_tile_type(m, t)? == MP_CLEAR
