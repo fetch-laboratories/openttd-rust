@@ -417,7 +417,7 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
             }
             let bridge = if (s.shared.is_bridge)(p.tile) {
                 let pos = (s.bridge_position)(v);
-                let map = crate::map_func::Map::from_log_x((s.shared.map_log_x)());
+                let map = s.shared.map();
                 map.tile_virt_xy(pos.x as u32, pos.y as u32) == p.tile
                     && (s.shared.bridge_above)(p.tile)
             } else {

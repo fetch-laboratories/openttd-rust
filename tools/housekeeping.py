@@ -20,7 +20,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 PROC_ROOT = Path("/proc")
@@ -53,6 +53,14 @@ class Item:
     reason: str
     worktree: bool = False
     branch: str | None = None  # local branch deleted after its worktree
+    identity: tuple[int, int] | None = field(init=False, default=None)
+
+    def __post_init__(self) -> None:
+        try:
+            info = self.path.lstat()
+            object.__setattr__(self, "identity", (info.st_dev, info.st_ino))
+        except OSError:
+            pass
 
 
 @dataclass(frozen=True)
@@ -181,6 +189,24 @@ def worktree_references(main: Path) -> str:
     return bodies + (roadmap.read_text() if roadmap.exists() else "")
 
 
+def recently_active(tree: Path) -> bool:
+    """Codex delegates hold no cwd between commands; git and file writes show activity."""
+    try:
+        admin = tree / (tree / ".git").read_text().removeprefix("gitdir:").strip()
+        marks = [admin / "HEAD", admin / "index", admin / "logs/HEAD"]
+        marks += [
+            tree / name
+            for name in git(tree, "ls-files", "-z").split("\0")
+            if name and "/" not in name
+        ]
+        now = time.time()
+        return any(
+            now - m.stat().st_mtime < RUNNING_SECONDS for m in marks if m.exists()
+        )
+    except OSError:
+        return False
+
+
 def worktree_refusal(main: Path, path: Path, references: str) -> str | None:
     if path.name in references or str(path) in references:
         return "referenced by roadmap or open issue/PR"
@@ -220,6 +246,8 @@ def worktree_refusal(main: Path, path: Path, references: str) -> str | None:
                 return f"cannot inspect process cwd: {error}"
     except OSError as error:
         return f"cannot inspect process cwd: {error}"
+    if ".t3/worktrees/" in path.as_posix() and recently_active(path):
+        return f"T3 task active within {RUNNING_SECONDS // 3600} hours"
     return None
 
 
@@ -336,7 +364,12 @@ def output_refusal(
     try:
         paths = [path]
         if path.is_dir() and not path.is_symlink():
-            paths.extend(path.rglob("*"))
+
+            def unreadable(inspection_error: OSError) -> None:
+                raise inspection_error
+
+            for folder, directories, files in os.walk(path, onerror=unreadable):
+                paths.extend(Path(folder) / name for name in directories + files)
         if any(
             (info.st_dev, info.st_ino) in identities
             for info in (output_info(p) for p in paths)
@@ -477,6 +510,12 @@ def remove(main: Path, item: Item, references: str = "") -> str | None:
     handles, error = open_outputs()
     if refusal := output_refusal(item.path, handles, error):
         return refusal
+    try:
+        info = item.path.lstat()
+        if item.identity is None or item.identity != (info.st_dev, info.st_ino):
+            return "output candidate identity changed since planning"
+    except OSError as error:
+        return f"cannot inspect output candidate: {error}"
     if not item.worktree:
         writable(item.path)
         if item.path.is_dir() and not item.path.is_symlink():

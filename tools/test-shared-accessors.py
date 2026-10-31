@@ -117,6 +117,14 @@ with tempfile.TemporaryDirectory() as directory:
     before = port.read_text()
     port.write_text(before + "\nstatic void SharedCallback() noexcept {}\n")
     assert "binding | SharedCallback | 2" in check().stdout
+    # A value-initialized table opens no list: the call argument and the real
+    # table after it are not one table body, so Single is bound once.
+    value_initialized = (
+        "\nvoid Single() noexcept {}\nvoid Use() { OpenTTDFixtureServices empty{};\n"
+        "Run({.a = Single,});\n}\nOpenTTDFixtureServices real{.a = Single,\n};\n"
+    )
+    port.write_text(before + value_initialized)
+    assert "binding | Single" not in check().stdout, check().stdout
     port.write_text(before)
     duplicate = "\nvoid Callback() noexcept {}\nOpenTTDFixtureServices one{.a = Callback,\n};\nOpenTTDFixtureServices two{.b = Callback,\n};\n"
     write = "\nvoid Write(uint8_t value) { _current_company = value; }\n"

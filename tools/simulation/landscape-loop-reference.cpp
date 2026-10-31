@@ -50,6 +50,9 @@ static_assert(sizeof(BaseTile) == 8 && alignof(BaseTile) == 2 && offsetof(BaseTi
 static std::unique_ptr<BaseTile[]> tiles;
 static std::unique_ptr<TileExtendedStorage[]> extended;
 static bool raw_backend, mutate;
+/* Map::size stand-in; zero selects the callback backend. */
+static uint32_t map_size;
+static const OpenTTDMapStatics map_statics{.base = &tiles, .extended = &extended, .size = &map_size, .log_x = &log_x, .assertions = true};
 /* Raw station tiles store StationType::End in m6 bits 3..6, as GetStationType reads them. */
 static constexpr uint8_t STATION_END_M6 = static_cast<uint8_t>(StationType::End) << 3;
 static uint32_t feedback;
@@ -119,7 +122,6 @@ static const OpenTTDRoadStopResolverServices roadstops{.by_tile = [](uint32_t ti
 static const OpenTTDStationLifecycleServices station{.shared = &shared, .roadstop = &roadstops};
 static OpenTTDLandscapeLoopServices services{
 	.shared = &shared,
-	.tile_types = {},
 	.trees = nullptr,
 	.industry = {},
 	.ground = {},
@@ -139,9 +141,10 @@ static void RustRun()
 	};
 	/* Each nested entry has its own immutable table, like the native facade. */
 	auto batch_services = services;
-	batch_services.tile_types = raw_backend ? OpenTTDTileTypeAllocation{.base = tiles.get(), .extended = extended.get(), .count = 1U << (log_x + log_y), .assertions = true} : OpenTTDTileTypeAllocation{};
+	map_size = raw_backend ? 1U << (log_x + log_y) : 0;
+	shared.map = &map_statics;
 	SessionFixture fixture;
-	fixture.shared.map_log_x = []() noexcept { return log_x; };
+	fixture.shared.map = &map_statics;
 	fixture.services.map_log_y = []() noexcept { return log_y; };
 	fixture.loop = {settings, &batch_services};
 	if (!fixture.Run()) std::abort();
@@ -173,19 +176,17 @@ static void MovementGap()
 		cases += 2;
 	}
 	OpenTTDSharedServices world{};
-	world.map_log_x = []() noexcept -> uint32_t { return log_x; };
+	world.map = &map_statics;
 	world.map_max_x = []() noexcept { return Map::SizeX() - 1; };
 	world.map_max_y = []() noexcept { return Map::SizeY() - 1; };
 	world.tile_type = [](uint32_t) noexcept -> uint8_t { return 0; };
 	OpenTTDMovementServices movement{};
 	movement.shared = &world;
-	movement.tile_types = []() noexcept -> OpenTTDTileTypeAllocation {
-		return {.base = tiles.get(), .extended = extended.get(), .count = 1U << (log_x + log_y), .assertions = true};
-	};
 	for (uint x_bits : {6U, 12U}) for (uint y_bits : {6U, 12U}) {
 		log_x = x_bits; log_y = y_bits;
 		tiles = std::make_unique<BaseTile[]>(1U << (log_x + log_y));
 		extended = std::make_unique<TileExtendedStorage[]>(1U << (log_x + log_y));
+		map_size = 1U << (log_x + log_y);
 		for (uint i = 0; i < (1U << (log_x + log_y)); ++i) tiles[i].height = 3;
 		for (Slope slope : slopes) {
 		tiles[0].height = 3 + ((slope & SLOPE_N) != 0);
