@@ -35,7 +35,7 @@
 #ifdef WITH_RUST
 TEST_CASE("Town import coordinates preserve native float conversions")
 {
-	const OpenTTDTownDataServices services{.shared = &GetRustSharedServices()};
+	const OpenTTDTownDataServices services{.shared = &GetRustSharedServices(), .founding = nullptr, .strings = {}};
 	for (const uint size : {64U, 128U, 4096U}) {
 		Map::Allocate(size, 64);
 		const float boundary = 0x1p-25f / static_cast<float>(Map::MaxX());
