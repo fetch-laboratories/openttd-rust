@@ -82,7 +82,7 @@ typedef struct OpenTTDIndustryObservation {
 	OpenTTDIndustry *owner;
 	uint32_t behaviour;
 	uint16_t callbacks;
-	uint8_t life, original, type;
+	uint8_t life, type;
 	uint32_t up_text, down_text, closure_text;
 } OpenTTDIndustryObservation;
 /** Map facts constant for one entry; landscape is the original enum value. */
@@ -125,6 +125,7 @@ typedef struct OpenTTDIndustryTypeInfo {
 #else
 #	define OPENTTD_INDUSTRY_NOEXCEPT
 #endif
+enum class OpenTTDIndustryServicing : uint8_t { Nobody, Other, Company };
 /** Direct typed services, one per original operation. No Rust borrow survives
  * any call; construction, clearing, distribution and destruction may reenter. */
 typedef struct OpenTTDIndustryServices {
@@ -153,17 +154,17 @@ typedef struct OpenTTDIndustryServices {
 	uint8_t (*production_rate)(void *industry, uint32_t slot) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(production_rate);
 	OpenTTDIndustryChange (*change_callback)(void *industry, bool monthly, uint32_t random) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(change_callback);
 	uint32_t (*custom_text)(void *industry, uint16_t text) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(custom_text);
-	void (*news)(void *industry, uint32_t text, bool close) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(news);
-	void (*rate_news)(void *industry, uint8_t cargo, int32_t percent) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(rate_news);
+	void (*news)(void *industry, uint32_t text, bool close, OpenTTDIndustryServicing servicing) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(news);
+	void (*production_news)(void *industry, uint8_t cargo, int32_t percent, OpenTTDIndustryServicing servicing) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(production_news);
 	void (*callback_error)(void *industry, bool invalid_cargo) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(callback_error);
 	void (*set_dirty)(void *industry) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(set_dirty);
 	void (*destroy)(void *industry) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(destroy);
-	void (*advertise)(void *industry) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(advertise);
+	void (*opening_news)(void *industry) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(opening_news);
+	void (*opening_events)(void *industry) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(opening_events);
 	void *(*create)(uint8_t type, uint8_t creation) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(create);
-	void *(*random_industry)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(random_industry);
+	uint32_t (*num_items)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(num_items);
 	void *(*get)(uint16_t id) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(get);
 	uint16_t (*type_count)(uint8_t type) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(type_count);
-	uint32_t (*total)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(total);
 	OpenTTDIndustryTypeInfo (*type_info)(uint8_t type) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(type_info);
 	const struct OpenTTDIndustryResolverServices *resolver;
 	uint32_t (*scale_by_map_size)(uint32_t n) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(scale_by_map_size);
@@ -178,6 +179,14 @@ typedef struct OpenTTDIndustryServices {
 	bool (*fund_only)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(fund_only);
 	bool (*deity)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(deity);
 } OpenTTDIndustryServices;
+bool openttd_rust_industry_forest(uint32_t, const OpenTTDIndustryServices *);
+bool openttd_rust_industry_spec_raw(uint8_t life);
+bool openttd_rust_industry_spec_processing(uint8_t life, uint32_t behaviour);
+bool openttd_rust_industry_original_economy(uint16_t callbacks, uint8_t economy);
+int64_t openttd_rust_industry_construction_cost(uint8_t multiplier, uint8_t life, uint8_t raw_setting);
+struct OpenTTDIndustryPair { uint16_t first, second; };
+OpenTTDIndustryPair openttd_rust_industry_sum_history(const OpenTTDIndustryPair *, size_t);
+
 
 /** Minimal destruction map facts, queried at the original observation point. */
 typedef struct OpenTTDIndustryCleanupTile { uint16_t industry; uint8_t type; bool oilrig; } OpenTTDIndustryCleanupTile;
@@ -227,6 +236,8 @@ typedef struct OpenTTDIndustryGenerationInfo {
 typedef struct OpenTTDIndustryGenerationServices {
 	const OpenTTDIndustrySpecHandle *(*spec)(uint8_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(spec);
 	uint32_t (*spec_behaviour)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(spec_behaviour);
+	uint8_t (*spec_life)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(spec_life);
+	uint8_t (*cost_multiplier)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(cost_multiplier);
 	OpenTTDIndustryGenerationInfo (*info)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(info);
 	bool (*coastal)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(coastal);
 	OpenTTDEnvironmentServices environment;
@@ -299,7 +310,7 @@ typedef struct OpenTTDIndustryTilePolicyServices {
 	void (*close_ai)(OpenTTDIndustryShell *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(close_ai);
 	void (*close_game)(OpenTTDIndustryShell *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(close_game);
 	void (*destroy)(OpenTTDIndustryShell *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(destroy);
-	int64_t (*removal_cost)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(removal_cost);
+	uint32_t (*removal_multiplier)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(removal_multiplier);
 	int32_t (*tile_max_z)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(tile_max_z);
 	bool (*autoslope_callback)(const OpenTTDIndustryTileSpec *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(autoslope_callback);
 	bool (*callback_boolean)(const OpenTTDIndustryTileSpec *, uint16_t, uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(callback_boolean);
@@ -396,12 +407,10 @@ typedef struct OpenTTDIndustryTransactionServices {
 	bool (*enabled)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(enabled);
 	size_t (*layout_count)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(layout_count);
 	const OpenTTDIndustryLayoutHandle * (*layout)(const OpenTTDIndustrySpecHandle *, size_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(layout);
-	bool (*raw)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(raw);
 	uint8_t (*raw_setting)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(raw_setting);
 	uint8_t (*check_proc)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(check_proc);
 	OpenTTDIndustryConflictKinds (*conflicting)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(conflicting);
 	bool (*multiple_per_town)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(multiple_per_town);
-	const OpenTTDTownHandle * (*closest_town)(uint32_t, uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(closest_town);
 	const OpenTTDTownHandle * (*town)(OpenTTDIndustryShell *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(town);
 	uint32_t (*population)(const OpenTTDTownHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(population);
 	uint32_t (*town_position)(const OpenTTDTownHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(town_position);
@@ -428,7 +437,6 @@ typedef struct OpenTTDIndustryTransactionServices {
 	bool (*local_company)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(local_company);
 	void (*prospect_no_place)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(prospect_no_place);
 	void (*prospect_unlucky)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(prospect_unlucky);
-	int64_t (*construction_cost)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(construction_cost);
 } OpenTTDIndustryTransactionServices;
 /** Stack-only immutable service context; no live owner observation. */
 typedef struct OpenTTDIndustryTransactionContext {

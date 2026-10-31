@@ -825,7 +825,6 @@ const OpenTTDRoadStopResolverServices &GetRoadStopResolverServices() noexcept
 		.tile_random = RustRoadStopRandomBits,
 		.town = OpenTTDBaseStationTown,
 		.town_tile = OpenTTDTownTile,
-		.town_zone = RustTownRadiusGroup,
 		.version = RustResolverGRFVersion,
 		.waiting = RustStationWaitingTriggers<const BaseStation>,
 	};

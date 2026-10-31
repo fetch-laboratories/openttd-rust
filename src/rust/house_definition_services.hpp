@@ -48,7 +48,6 @@ inline const OpenTTDHouseDefinitionServices &GetHouseDefinitionServices() noexce
 		.resize_specs = [](size_t count) noexcept { HouseSpec::Specs().resize(count); },
 		.move_spec = [](const HouseSpec *spec, uint16_t id) noexcept { HouseSpec::Specs()[id] = std::move(*MutableHouse(spec)); },
 		.set_override = [](const HouseSpec *spec, uint16_t id) noexcept { RustSpecSetOverride(MutableHouse(spec), id); },
-		.climate_mask = []() noexcept { return GetClimateMaskForLandscape().base(); },
 		.landscape = OpenTTDLandscape,
 		.too_many = [](uint32_t last) noexcept { GrfMsg(1, "TownHouseChangeInfo: Too many houses loaded ({}), max ({}). Ignoring.", last, NUM_HOUSES_PER_GRF); },
 		.invalid_substitute = [](uint8_t substitute, uint32_t id) noexcept { GrfMsg(2, "TownHouseChangeInfo: Attempt to use new house {} as substitute house for {}. Ignoring.", substitute, id); },

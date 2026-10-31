@@ -28,6 +28,13 @@
 #include "../strings_func.h"
 #include "../table/strings.h"
 #include "../road.h"
+#include "../settings_type.h"
+#include "../tile_map.h"
+#include "../openttd.h"
+#include "../rust/movement_ffi.h"
+#include "../rust/objectives_ffi.h"
+#include "../window_func.h"
+#include "../network/network_type.h"
 #endif
 #include "../safeguards.h"
 #ifdef WITH_RUST
@@ -52,6 +59,84 @@ TEST_CASE("Company economy - canonical owner layouts and property copy lifetime"
 	CHECK(address == &original.Finances().old_economy[23].delivered_cargo[63]);
 	copy.Finances().money = 19;
 	CHECK(original.Finances().money == Money(17));
+}
+
+/* These entries read real pool/settings storage and preserve native error objects. */
+TEST_CASE("Company control - human preference, allocation credit, defaults and encoded owners")
+{
+	REQUIRE(Company::GetNumItems() == 0);
+	AutoRestoreBackup<CompanyID> current(_current_company, CompanyID(0));
+	AutoRestoreBackup<CompanyID> local(_local_company, CompanyID(0));
+	AutoRestoreBackup<VehicleDefaultSettings> client(_settings_client.company.vehicle, {});
+	AutoRestoreBackup<GameMode> mode(_game_mode, GM_MENU);
+	std::array<std::unique_ptr<Company>, MAX_COMPANIES> companies;
+	REQUIRE(Company::CanAllocateItem());
+	companies[3].reset(new (CompanyID(3)) Company(STR_SV_UNNAMED, false));
+	CHECK(GetFirstPlayableCompanyID() == CompanyID(3)); // human wins before hole zero
+	companies[3]->is_ai = true;
+	auto vacant = GetFirstPlayableCompanyID();
+	CHECK(vacant == CompanyID(0));
+	companies[0].reset(new (vacant) Company(STR_SV_UNNAMED, true)); // consumes the selector's allocation credit
+	for (uint8_t i = 1; i < MAX_COMPANIES; ++i) if (i != 3) {
+		REQUIRE(Company::CanAllocateItem());
+		companies[i].reset(new (CompanyID(i)) Company(STR_SV_UNNAMED, true));
+	}
+	CHECK(GetFirstPlayableCompanyID() == CompanyID::Begin()); // full AI pool
+	companies[9]->is_ai = false; companies[12]->is_ai = false;
+	CHECK(GetFirstPlayableCompanyID() == CompanyID(9));
+	companies[1].reset();
+	CHECK(GetFirstPlayableCompanyID() == CompanyID(9));
+	companies[9]->is_ai = true; companies[12]->is_ai = true;
+	CHECK(GetFirstPlayableCompanyID() == CompanyID(1));
+
+	auto &supplied = companies[3]->settings.vehicle;
+	for (bool percent : {false, true}) {
+		supplied = {.servint_ispercent = percent, .servint_trains = 0, .servint_roadveh = 121, .servint_aircraft = 65535, .servint_ships = 423};
+		_settings_client.company.vehicle = {.servint_ispercent = !percent, .servint_trains = 224, .servint_roadveh = 0, .servint_aircraft = 426, .servint_ships = 65535};
+		for (auto [type, company_interval, client_interval] : {std::tuple{VEH_TRAIN, 0, 224}, {VEH_ROAD, 121, 0}, {VEH_AIRCRAFT, 65535, 426}, {VEH_SHIP, 423, 65535}}) {
+			CHECK(CompanyServiceInterval(companies[3].get(), type) == company_interval);
+			CHECK(CompanyServiceInterval(nullptr, type) == client_interval);
+		}
+	}
+	for (CompanyID observer : {CompanyID(0), COMPANY_SPECTATOR}) {
+		_local_company = observer;
+		CHECK(CheckOwnership(CompanyID(0)).Succeeded());
+		for (Owner owner : {CompanyID(3), OWNER_NONE}) {
+			auto error = CheckOwnership(owner);
+			CHECK(error.GetErrorMessage() == STR_ERROR_OWNED_BY);
+			CHECK(error.GetErrorOwner() == (observer == 0 ? owner : INVALID_OWNER));
+			EncodedString expected;
+			if (observer == 0) expected = owner == 3 ? GetEncodedString(STR_ERROR_OWNED_BY, STR_COMPANY_NAME, CompanyID(3)) : GetEncodedString(STR_ERROR_OWNED_BY, STR_COMPANY_SOMEONE, std::monostate{});
+			CHECK(error.GetEncodedMessage() == expected);
+		}
+	}
+	Map::Allocate(64, 64);
+	TileIndex tile = TileXY(20, 20);
+	SetTileType(tile, MP_CLEAR); SetTileOwner(tile, CompanyID(3));
+	_local_company = CompanyID(0);
+	auto tile_error = CheckTileOwnership(tile), owner_error = CheckOwnership(CompanyID(3), tile);
+	CHECK(tile_error.GetEncodedMessage() == owner_error.GetEncodedMessage());
+	CHECK(tile_error.GetErrorOwner() == CompanyID(3));
+}
+
+/* The native fatal operation is replaced only to observe both failed preconditions. */
+TEST_CASE("Company ownership - both original assertions precede error selection")
+{
+	static std::vector<bool> failed;
+	static OpenTTDMovementServices movement;
+	movement = GetRustMovementServices();
+	movement.native_assert = [](bool condition) noexcept { failed.push_back(condition); };
+	auto shared = GetRustSharedServices();
+	shared.movement = &movement;
+	auto services = GetRustCompanyServices(); services.shared = &shared;
+	AutoRestoreBackup<CompanyID> current(_current_company, CompanyID(0)), local(_local_company, COMPANY_SPECTATOR);
+	for (auto [owner, tile] : {std::pair{OWNER_END, TileIndex(1)}, {OWNER_TOWN, TileIndex(0)}}) {
+		failed.clear(); CommandCost cost;
+		openttd_rust_company_check_ownership(&services, RustCommandCost(&cost), owner.base(), tile.base());
+		CHECK(failed == std::vector<bool>{false});
+		CHECK(cost.GetErrorMessage() == STR_ERROR_OWNED_BY);
+		CHECK(cost.GetEncodedMessage().empty());
+	}
 }
 
 TEST_CASE("Company identity - process-wide colour alias and face bit truncation")
@@ -331,6 +416,40 @@ TEST_CASE("Company economy - AI startup continuation and abandoned frames")
 /* AI command APIs cannot select deity/non-company owners. The original wider
  * CompanyMask test is defined through bit 63; compare those special owners and
  * also check the inactive/new/spectator sentinels without an oversized shift. */
+TEST_CASE("Company control - network local switch precedes native settings continuation")
+{
+	static uint8_t local;
+	static bool own;
+	static OpenTTDObjectivesServices windows;
+	AutoRestoreBackup<Colours> colour(_company_colours[CompanyID(2)], _company_colours[CompanyID(2)]);
+	RustTileOwnerContext ownership;
+	for (bool matching_client : {false, true}) {
+		FixtureReset(true, false); local = COMPANY_SPECTATOR.base(); fixture_current = local; own = matching_client;
+		fixture_identity_shared.company_valid = [](uint8_t id) noexcept { return FixtureFinances(id) != nullptr; };
+		fixture_services.shared = &fixture_identity_shared;
+		fixture_services.local_company = []() noexcept { return local; };
+		fixture_services.close_network_status = FixtureVoid;
+		fixture_services.network_own_company = [](uint8_t id, uint32_t) noexcept -> Company * { fixture_trace.push_back("request"); return own ? fixture_identity.company(id) : nullptr; };
+		fixture_services.network_own_company_settings = [](Company *) noexcept { CHECK(local == 2); CHECK(fixture_current == 2); fixture_trace.push_back("settings"); };
+		windows = GetRustObjectivesServices();
+		windows.window_data = [](uint16_t cls, uint32_t number, int32_t data) noexcept { CHECK(cls == WC_SEND_NETWORK_MSG); CHECK(number == DESTTYPE_TEAM); CHECK(data == COMPANY_SPECTATOR.base()); CHECK(local == COMPANY_SPECTATOR.base()); CHECK(fixture_current == COMPANY_SPECTATOR.base()); fixture_trace.push_back("chat"); };
+		windows.window_classes = [](uint16_t, int32_t) noexcept { fixture_trace.push_back("classes"); };
+		fixture_services.objectives = []() noexcept -> const OpenTTDObjectivesServices & { return windows; };
+		fixture_services.assign_company_context = [](uint8_t company) noexcept { local = company; fixture_current = company; fixture_trace.push_back("assign"); };
+		fixture_services.close_construction_windows = []() noexcept { fixture_trace.push_back("construction"); };
+		fixture_identity.dirty = []() noexcept { fixture_trace.push_back("screen"); };
+		fixture_identity.reset_colourmap = []() noexcept { fixture_trace.push_back("colourmap"); };
+		OpenTTDCompanyControl call{.result = {}, .startup = {}, .client = 7, .action = static_cast<uint8_t>(CCA_NEW), .target = 255, .reason = 0, .execute = true, .stage = 0};
+		CHECK_FALSE(openttd_rust_company_control(&fixture_services, &ownership.view, &call));
+		std::vector<std::string> expected{"allocate 2", "setup 2", "events 2", "network 2", "request"};
+		if (matching_client) expected.insert(expected.end(), {"chat", "assign", "classes", "construction", "screen", "classes", "classes", "classes", "colourmap", "settings"});
+		CHECK(fixture_trace == expected);
+		CHECK(call.result.error == 0);
+		CHECK(local == (matching_client ? 2 : COMPANY_SPECTATOR.base()));
+		fixture_companies[2].reset();
+	}
+}
+
 TEST_CASE("Company economy - special owners have no bankruptcy takeover offer")
 {
 	RustTileOwnerContext ownership;

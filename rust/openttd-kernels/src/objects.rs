@@ -354,9 +354,6 @@ const SCALE_WATER: u16 = 1 << 13;
 pub struct Resolver {
     _private: [u8; 0],
 }
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct HouseZone(u8);
 #[repr(C)]
 pub struct Definition {
     pub grfid: u32,
@@ -381,7 +378,6 @@ pub struct QueryServices {
     pub nearby: unsafe extern "C" fn(u8, u32) -> u32,
     pub nearby_info: unsafe extern "C" fn(u32, bool) -> u32,
     pub terrain: unsafe extern "C" fn(u32) -> u32,
-    pub town_zone: unsafe extern "C" fn(*const TownHandle, u32) -> HouseZone,
     pub badges: unsafe extern "C" fn(*const Resolver, *const Spec, u32) -> u32,
     pub grfid: unsafe extern "C" fn(*const Resolver) -> u32,
     pub version8: unsafe extern "C" fn(*const Resolver) -> bool,
@@ -519,7 +515,7 @@ impl<'a> World<'a> {
                 match variable {
                     0x41 | 0x60 | 0x61 | 0x62 | 0x64 => {}
                     0x45 | 0x46 if (self.shared.tile_valid)(tile) => {
-                        town = (self.shared.closest_town)(tile, u32::MAX);
+                        town = crate::town::spatial::closest(self.shared, tile, u32::MAX);
                     }
                     0x42 => return crate::timer_game_common::calendar_date().0 as u32,
                     0x44 => return u32::from((self.shared.current_company)()),
@@ -545,7 +541,7 @@ impl<'a> World<'a> {
                 0x43 => u32::from(((*self.s.industry_tiles).frame)(tile)),
                 0x44 => u32::from((self.shared.tile_owner)(tile)),
                 0x45 => {
-                    u32::from((q.town_zone)(town, tile).0) << 16
+                    u32::from(crate::town::radius_from_shell(self.shared, town, tile)) << 16
                         | (q.manhattan)(tile, (q.town_tile)(town)).min(u32::from(u16::MAX))
                 }
                 0x46 => (q.square)(tile, (q.town_tile)(town)),
@@ -705,7 +701,7 @@ impl<'a> World<'a> {
             let shape = (self.s.footprint)(spec);
             let area = Self::footprint(tile, shape, view);
             let town = if town.is_null() {
-                (self.shared.calc_closest_town)(tile, u32::MAX)
+                crate::town::spatial::calc_closest(self.shared, tile, u32::MAX)
             } else {
                 town
             };
@@ -869,7 +865,7 @@ impl<'a> World<'a> {
                         return;
                     }
                 } else {
-                    (self.commands().tile_ownership)(tmp.0, tile);
+                    self.commands().tile_ownership(tmp.0, tile);
                     if !tmp.ok() {
                         out.take(tmp);
                         return;
@@ -1014,7 +1010,7 @@ impl<'a> World<'a> {
                         } else {
                             let owner = self.owner(t);
                             if owner != OWNER_NONE && owner != OWNER_WATER {
-                                (self.commands().ownership)(tmp.0, owner, t);
+                                self.commands().ownership(tmp.0, owner, t);
                                 out.add(tmp);
                             }
                             if !((*self.s.town).environment.freeform_edges)()
@@ -1315,7 +1311,7 @@ impl World<'_> {
         unsafe {
             let kind = (self.s.object_type)(tile);
             if kind == OWNED {
-                (self.commands().tile_ownership)(out.0, tile);
+                self.commands().tile_ownership(out.0, tile);
                 if out.ok() {
                     out.zero();
                     return;
@@ -1921,7 +1917,7 @@ unsafe fn object_town(context: *mut ObjectScope, ro: *mut Resolver) -> *mut std:
     let town = if parent.is_null() {
         if object.is_null() {
             // ClosestTownFromTile has no invalid-tile guard in this source body.
-            (unsafe { &*s.shared }.closest_town)(tile, u32::MAX)
+            crate::town::spatial::closest(unsafe { &*s.shared }, tile, u32::MAX)
         } else {
             unsafe { ((*s.query).town)(object) }
         }
@@ -2460,7 +2456,6 @@ crate::abi::layouts! {
         nearby,
         nearby_info,
         terrain,
-        town_zone,
         badges,
         grfid,
         version8,

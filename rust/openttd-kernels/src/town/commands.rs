@@ -65,8 +65,7 @@ pub struct CommandServices {
     pub next_industry: extern "C" fn(u32) -> Relation,
     pub set_object_town: extern "C" fn(*mut Object, *mut TownHandle),
     pub industry_town_by_tile: extern "C" fn(u32) -> *mut TownHandle,
-    pub town_owned_road: extern "C" fn(u32) -> bool,
-    pub remove_town_indices: extern "C" fn(*mut TownHandle),
+    pub remove_town_sign: extern "C" fn(*mut TownHandle),
     pub delete_town: extern "C" fn(*mut TownHandle),
     pub cleaning_pool: extern "C" fn() -> bool,
     pub close_view: extern "C" fn(u16),
@@ -86,6 +85,7 @@ struct Commands<'a> {
     shared: &'a Services,
     cost: &'a CommandCostServices,
     map: OnceCell<Map>,
+    world: OnceCell<crate::map_func::World<'a>>,
     size_y: OnceCell<u32>,
 }
 impl<'a> Commands<'a> {
@@ -98,6 +98,7 @@ impl<'a> Commands<'a> {
             shared: unsafe { &*f.shared },
             cost: unsafe { &*f.cost },
             map: OnceCell::new(),
+            world: OnceCell::new(),
             size_y: OnceCell::new(),
         }
     }
@@ -114,6 +115,16 @@ impl<'a> Commands<'a> {
     }
     fn map(&self) -> Map {
         *self.map.get_or_init(|| self.shared.map())
+    }
+    fn town_owned_road(&self, tile: u32) -> bool {
+        let world = self.world.get_or_init(|| {
+            crate::map_func::World::with_dimensions(
+                self.shared,
+                crate::movement::table(self.shared),
+                self.map(),
+            )
+        });
+        crate::road_map::has_town_owned_road(world, tile)
     }
     fn size_y(&self) -> u32 {
         *self
@@ -435,9 +446,7 @@ impl<'a> Commands<'a> {
         }
         for tile in 0..self.map_size() {
             let clear = match (self.shared.tile_type)(tile) {
-                MP_ROAD => {
-                    (self.s.town_owned_road)(tile) && (self.shared.town_index)(tile) == t.id.0
-                }
+                MP_ROAD => self.town_owned_road(tile) && (self.shared.town_index)(tile) == t.id.0,
                 MP_HOUSE => (self.shared.town_index)(tile) == t.id.0,
                 MP_INDUSTRY => (self.s.industry_town_by_tile)(tile) == t.shell,
                 MP_OBJECT => {
@@ -469,7 +478,8 @@ impl<'a> Commands<'a> {
             }
         }
         if flags & DoCommandFlag::EXECUTE != 0 {
-            (self.s.remove_town_indices)(t.shell);
+            super::spatial::remove(self.shared, t.id);
+            (self.s.remove_town_sign)(t.shell);
             (self.s.delete_town)(t.shell);
             w::hit(w::TOWN_COMMAND_DELETE);
         }
@@ -507,7 +517,7 @@ pub unsafe extern "C" fn openttd_rust_town_cargo_goal(
         return;
     }
     let t = c.resolve(id);
-    if t.shell.is_null() || !(c.f.cargo_effect_exists)(effect) {
+    if t.shell.is_null() || crate::cargo_registry::first_town_acceptance(effect.0).is_none() {
         c.error(out);
         return;
     }
@@ -782,7 +792,7 @@ pub unsafe extern "C" fn openttd_rust_town_destruct(s: &CommandServices, t: Town
             match (c.shared.tile_type)(tile) {
                 MP_HOUSE => assert_ne!((c.shared.town_index)(tile), t.id.0),
                 MP_ROAD => {
-                    assert!(!(s.town_owned_road)(tile) || (c.shared.town_index)(tile) != t.id.0);
+                    assert!(!c.town_owned_road(tile) || (c.shared.town_index)(tile) != t.id.0);
                 }
                 MP_TUNNELBRIDGE => assert!(!c.bridge_owned(tile, t)),
                 _ => {}
@@ -824,7 +834,8 @@ pub unsafe extern "C" fn openttd_rust_town_post_destruct(s: &CommandServices) {
         }
         from = o.id.wrapping_add(1);
         if unsafe { (c.object_query().town)(o.object) }.is_null() {
-            let town = (c.shared.calc_closest_town)(
+            let town = crate::town::spatial::calc_closest(
+                c.shared,
                 unsafe { (c.object_query().north)(o.object) },
                 u32::MAX,
             );
@@ -876,8 +887,7 @@ crate::abi::layouts! {
         next_industry,
         set_object_town,
         industry_town_by_tile,
-        town_owned_road,
-        remove_town_indices,
+        remove_town_sign,
         delete_town,
         cleaning_pool,
         close_view,

@@ -877,7 +877,7 @@ impl Ctx<'_> {
             if flags & 1 != 0 {
                 st = (self.s.new_station)(area.tile);
                 (self.s.index_insert)(st);
-                let town = (self.shared.closest_town)(area.tile, u32::MAX);
+                let town = crate::town::spatial::closest(self.shared, area.tile, u32::MAX);
                 (self.s.set_town)(st, town);
                 (self.s.set_string_id)(
                     st,
@@ -916,7 +916,8 @@ impl Ctx<'_> {
             return out.error(0xffff);
         }
         unsafe {
-            (self.command.ownership)(out.0, (self.world().station_owner)(st), 0);
+            self.command
+                .ownership(out.0, (self.world().station_owner)(st), 0);
         }
         if !out.ok() {
             return;
@@ -956,7 +957,7 @@ impl Ctx<'_> {
         let owner = (self.world().station_owner)(st);
         if owner != 0x10 {
             unsafe {
-                (self.command.ownership)(out.0, owner, 0);
+                self.command.ownership(out.0, owner, 0);
             }
             if !out.ok() {
                 return 0xffff;
@@ -1103,7 +1104,7 @@ pub unsafe extern "C" fn openttd_rust_station_open_close_airport(
         return out.error(0xffff);
     }
     unsafe {
-        (c.command.ownership)(out.0, owner, 0);
+        c.command.ownership(out.0, owner, 0);
     }
     if !out.ok() {
         return;
@@ -1794,7 +1795,8 @@ impl Ctx<'_> {
             }
             if (self.shared.current_company)() != 0x11 {
                 unsafe {
-                    (self.command.ownership)(ret.0, (self.world().station_owner)(st), 0);
+                    self.command
+                        .ownership(ret.0, (self.world().station_owner)(st), 0);
                 }
                 error.add(ret);
                 if !error.ok() {
@@ -1922,7 +1924,8 @@ impl Ctx<'_> {
     ) {
         if (self.shared.current_company)() != 0x11 {
             unsafe {
-                (self.command.ownership)(cost.0, (self.world().station_owner)(st), 0);
+                self.command
+                    .ownership(cost.0, (self.world().station_owner)(st), 0);
             }
             if !cost.ok() {
                 return;
@@ -2149,7 +2152,7 @@ impl Ctx<'_> {
                         }
                     } else if !(self.s.stop_on_competitor_road)() && owner != 0x10 {
                         unsafe {
-                            (self.command.ownership)(ret.0, owner, 0);
+                            self.command.ownership(ret.0, owner, 0);
                         }
                         if !ret.ok() {
                             return cost.take(ret);
@@ -2167,7 +2170,7 @@ impl Ctx<'_> {
                         && owner != 0x10
                     {
                         unsafe {
-                            (self.command.ownership)(ret.0, owner, 0);
+                            self.command.ownership(ret.0, owner, 0);
                         }
                         if !ret.ok() {
                             return cost.take(ret);
@@ -2188,7 +2191,7 @@ impl Ctx<'_> {
                         && (!(self.s.stop_on_competitor_road)() || bits.is_power_of_two())
                     {
                         unsafe {
-                            (self.command.ownership)(ret.0, owner, 0);
+                            self.command.ownership(ret.0, owner, 0);
                         }
                         if !ret.ok() {
                             return cost.take(ret);
@@ -2587,7 +2590,8 @@ impl Ctx<'_> {
         };
         if (self.shared.current_company)() != 0x11 {
             unsafe {
-                (self.command.ownership)(cost.0, (self.world().station_owner)(st), 0);
+                self.command
+                    .ownership(cost.0, (self.world().station_owner)(st), 0);
             }
             if !cost.ok() {
                 return;
@@ -2773,7 +2777,7 @@ impl Ctx<'_> {
             cost.add_money(ret.money());
             success = true;
             if flags & 1 != 0 && (types[0] != 63 || types[1] != 63) {
-                let town = (self.shared.closest_town)(tile, u32::MAX);
+                let town = crate::town::spatial::closest(self.shared, tile, u32::MAX);
                 let authority = unsafe { &*self.s.authority };
                 let town = (authority.town_index)(town);
                 (self.rail().make_road)(
@@ -2946,7 +2950,8 @@ impl Ctx<'_> {
             if x != min_x && x != max_x && y != min_y && y != max_y {
                 continue;
             }
-            let town = (self.shared.calc_closest_town)(tile, distance.wrapping_add(1));
+            let town =
+                crate::town::spatial::calc_closest(self.shared, tile, distance.wrapping_add(1));
             if town.is_null() {
                 continue;
             }
@@ -3074,7 +3079,7 @@ impl Ctx<'_> {
                 refused = nearest;
             }
         } else if (authority.council_tolerance)() != 3 {
-            let town = (self.shared.closest_town)(tile, u32::MAX);
+            let town = crate::town::spatial::closest(self.shared, tile, u32::MAX);
             let mut count = 0_u32;
             for id in 0..(self.world().pool_size)() {
                 let st = self.full_station(id as u16);
@@ -3172,7 +3177,8 @@ impl Ctx<'_> {
         let st = self.full_station((self.shared.station_index)(tile));
         if (self.shared.current_company)() != 0x11 {
             unsafe {
-                (self.command.ownership)(cost.0, (self.world().station_owner)(st), 0);
+                self.command
+                    .ownership(cost.0, (self.world().station_owner)(st), 0);
             }
             if !cost.ok() {
                 return;
@@ -3580,7 +3586,7 @@ impl Ctx<'_> {
         let st = self.full_station((self.shared.station_index)(tile));
         let owner = (self.world().station_owner)(st);
         unsafe {
-            (self.command.ownership)(cost.0, owner, 0);
+            self.command.ownership(cost.0, owner, 0);
         }
         if !cost.ok() {
             return;
@@ -3695,7 +3701,10 @@ impl Ctx<'_> {
         }
         let st = (self.s.new_station)(tile);
         (self.s.index_insert)(st);
-        (self.s.set_town)(st, (self.shared.closest_town)(tile, u32::MAX));
+        (self.s.set_town)(
+            st,
+            crate::town::spatial::closest(self.shared, tile, u32::MAX),
+        );
         (self.s.set_string_id)(
             st,
             crate::station_lifecycle::generate_name(st, tile, 3, unsafe { &*self.s.lifecycle }),
@@ -3928,7 +3937,7 @@ impl Ctx<'_> {
             let owner = self.road_owner(tile, true);
             if owner != 0x10 {
                 unsafe {
-                    (self.command.ownership)(cost.0, owner, 0);
+                    self.command.ownership(cost.0, owner, 0);
                 }
                 if !cost.ok() {
                     return;
@@ -3956,7 +3965,7 @@ impl Ctx<'_> {
                 }
             } else if owner != 0x10 {
                 unsafe {
-                    (self.command.ownership)(cost.0, owner, 0);
+                    self.command.ownership(cost.0, owner, 0);
                 }
                 if !cost.ok() {
                     return;

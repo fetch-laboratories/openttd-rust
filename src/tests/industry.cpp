@@ -11,6 +11,7 @@
 #ifdef WITH_RUST
 #include "../industry.h"
 #include "abi_layout.hpp"
+#include "fixture_map.hpp"
 #include "../rust/industry_generation_adapter.hpp"
 #include "../rust/industry_shell_services.h"
 #include "../rust/industry_resolver_ffi.h"
@@ -19,13 +20,17 @@
 #include "../rust/industry_property_ffi.h"
 #include "../rust/newgrf_bytereader_services.h"
 #include "../rust/newgrf_loading_ffi.h"
+#include "../rust/movement_ffi.h"
 #include "../newgrf.h"
 #include "../newgrf_spritegroup.h"
 #include "../rust/newgrf_global_ffi.h"
 #include "../object_base.h"
 #include "../industrytype.h"
 #include "../water_map.h"
+#include "../core/backup_type.hpp"
+#include "../economy_func.h"
 #include <thread>
+extern "C" int64_t openttd_test_industry_removal_cost(uint32_t);
 static_assert(sizeof(CargoArray::value_type) == sizeof(uint32_t) && sizeof(CargoTypes) == sizeof(uint64_t));
 static_assert(std::is_trivially_destructible_v<TileArea>);
 static_assert(sizeof(TileArea) == sizeof(OpenTTDIndustryLocation));
@@ -265,7 +270,6 @@ struct IndustryGenerationFixture {
 		auto world = GetIndustryRustServices();
 		world.create = [](uint8_t, uint8_t creation) noexcept -> void * { CHECK(creation == 0); ++created; return &shell; };
 		world.type_count = [](uint8_t) noexcept -> uint16_t { return 0; };
-		world.total = []() noexcept -> uint32_t { return 0; };
 		static auto resolver = GetIndustryResolverServices();
 		static auto construction = GetIndustryConstructionServices();
 		construction.callback_mask = [](const OpenTTDIndustrySpecHandle *) noexcept -> uint16_t { return 0; };
@@ -400,7 +404,12 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 	generation.spec = [](uint8_t kind) noexcept -> const OpenTTDIndustrySpecHandle * { CHECK(kind == 7); trace.push_back(0); return reinterpret_cast<const OpenTTDIndustrySpecHandle *>(&industry_spec); };
 	commands.owner = RustIndustryCanonicalOwner<Industry *>;
 	construction.set_town = [](void *shell, const OpenTTDTownHandle *town) noexcept { CHECK(town == nullptr); static_cast<Industry *>(shell)->town = nullptr; };
-	transaction.closest_town = [](uint32_t tile, uint32_t threshold) noexcept -> const OpenTTDTownHandle * { CHECK(tile == 123); CHECK(threshold == UINT32_MAX); CHECK(openttd_rust_industry_metadata(active_owner)->random == 0); trace.push_back(2); return nullptr; };
+	const OpenTTDFixtureMap map{Map::LogX()};
+	shared.map = &map.statics;
+	static const OpenTTDMovementServices movement{};
+	shared.movement = &movement;
+	shared.tile_type = [](uint32_t tile) noexcept -> uint8_t { CHECK(tile == 123); CHECK(openttd_rust_industry_metadata(active_owner)->random == 0); trace.push_back(2); return MP_CLEAR; };
+	shared.town_count = []() noexcept -> size_t { return 0; };
 	transaction.temporary_shell = [](OpenTTDIndustry *owner, void *context, OpenTTDIndustryTemporaryVisit visit) noexcept {
 		active_owner = owner;
 		trace.push_back(1);
@@ -499,4 +508,21 @@ TEST_CASE("NewGRF storage canonical aliases and complete transaction lifetime", 
 	CHECK(temporary.GetValue(0x10F) == 456);
 	temporary.ClearChanges();
 	CHECK(temporary.GetValue(0x110) == 0);
+}
+
+TEST_CASE("Industry - specification price widths and saturation")
+{
+	IndustrySpec spec{};
+	spec.life_type = {IndustryLifeType::Organic};
+	Backup<uint8_t> setting(_settings_game.construction.raw_industry_construction, 1);
+	for (Money price : {Money(INT64_MIN), Money(-12345), Money(0), Money(12345), Money(INT64_MAX)}) {
+		Backup<Money> raw(_price[PR_BUILD_INDUSTRY_RAW], price), clear(_price[PR_CLEAR_INDUSTRY], price);
+		for (uint8_t multiplier : {uint8_t(0), uint8_t(1), uint8_t(255)}) {
+			spec.cost_multiplier = multiplier;
+			CHECK(spec.GetConstructionCost() == ((price * multiplier) >> 8));
+		}
+		for (uint32_t multiplier : {0U, 1U, 0x7FFFFFFFU, 0x80000000U, UINT32_MAX}) {
+			CHECK(openttd_test_industry_removal_cost(multiplier) == ((price * multiplier) >> 8).base());
+		}
+	}
 }

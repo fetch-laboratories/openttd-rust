@@ -118,7 +118,10 @@ unsafe fn clone(
         return invalid;
     }
     let original = v;
-    unsafe { (b.commands.ownership)(temporary, (b.groups.vehicle_owner)(v), 0) };
+    unsafe {
+        b.commands
+            .ownership(temporary, (b.groups.vehicle_owner)(v), 0);
+    };
     if !(b.cost.success)(temporary) {
         total.take(Cost(temporary, b.cost));
         return invalid;

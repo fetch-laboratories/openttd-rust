@@ -33,5 +33,7 @@ inline void RustResetIndustryConstruction(uint32_t tile) noexcept { ResetIndustr
 template <typename Handle = IndustrySpec>
 inline const Handle *RustIndustryTypeSpec(uint8_t type) noexcept { return reinterpret_cast<const Handle *>(GetIndustrySpec(type)); }
 inline uint32_t RustIndustrySpecStationName(const IndustrySpec *spec) noexcept { return spec->station_name; }
-inline uint8_t RustIndustrySpecLife(const IndustrySpec *spec) noexcept { return spec->life_type.base(); }
+template <class Handle> inline uint8_t RustIndustrySpecLife(const Handle *spec) noexcept { return reinterpret_cast<const IndustrySpec *>(spec)->life_type.base(); }
+template <class Handle> inline uint8_t RustIndustrySpecCostMultiplier(const Handle *spec) noexcept { return reinterpret_cast<const IndustrySpec *>(spec)->cost_multiplier; }
+template <class Handle> inline uint32_t RustIndustrySpecRemovalMultiplier(const Handle *spec) noexcept { return reinterpret_cast<const IndustrySpec *>(spec)->removal_cost_multiplier; }
 #endif /* RUST_SERVICES_INDUSTRY_H */

@@ -407,7 +407,7 @@ unsafe fn resolver_town(state: *mut State) -> *const crate::services::TownHandle
     let town = if !st.is_null() {
         (native.commands().station_town)(st)
     } else if tile != crate::tile_type::INVALID_TILE {
-        (native.shared().closest_town)(tile, u32::MAX)
+        crate::town::spatial::closest(native.shared(), tile, u32::MAX)
     } else {
         ptr::null()
     };

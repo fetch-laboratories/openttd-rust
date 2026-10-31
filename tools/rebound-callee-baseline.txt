@@ -121,8 +121,6 @@ rebound | OpenTTDTileMaxPixelZ | src/industry_cmd.cpp | pixel_max_z
 rebound | OpenTTDTileMaxPixelZ | src/rust/vehicle_services.cpp | max_pixel_z
 rebound | OpenTTDTownOwnerByID | src/rust/services.cpp | town_owner_by_id
 rebound | OpenTTDTownOwnerByID | src/town_cmd.cpp | resolve_owner
-rebound | OpenTTDTownShellByID | src/newgrf_house.cpp | town_by_id
-rebound | OpenTTDTownShellByID | src/town_cmd.cpp | town_shell
 rebound | OpenTTDTownTile | src/industry_cmd.cpp | town_position
 rebound | OpenTTDTownTile | src/newgrf_industries.cpp | town_tile
 rebound | OpenTTDTownTile | src/newgrf_object.cpp | town_tile
@@ -257,7 +255,6 @@ rebound | RustLinkGraphGet | src/linkgraph/linkgraphschedule.cpp | graph_get
 rebound | RustLinkGraphGet | src/rust/services.cpp | get
 rebound | RustLinkGraphNext | src/linkgraph/linkgraphschedule.cpp | next_graph
 rebound | RustLinkGraphNext | src/timer/timer_game_common.cpp | next_graph
-rebound | RustLocalCompanyID | src/genworld.cpp | local_company
 rebound | RustLocalCompanyID | src/rust/company_adapter.cpp | local_company
 rebound | RustLocalCompanyID | src/rust/engine_adapter.hpp | local_company
 rebound | RustLocalCompanyID | src/subsidy.cpp | local_company
@@ -336,8 +333,6 @@ rebound | RustSelectedHangarTile | src/newgrf_airport.cpp | hangar_tile
 rebound | RustSelectedHangarTile | src/rust/station_command_services.hpp | hangar_tile
 rebound | RustSetCurrentCompanyID | src/rust/company_adapter.cpp | set_current_company
 rebound | RustSetCurrentCompanyID | src/rust/fleet_pending_services.hpp | set_current
-rebound | RustSetLocalCompany | src/genworld.cpp | set_local_company
-rebound | RustSetLocalCompany | src/rust/company_adapter.cpp | set_local_company
 rebound | RustSetRailStationReservation | src/pbs.cpp | set_station
 rebound | RustSetRailStationReservation | src/rust/station_command_services.hpp | set_rail_station_reservation
 rebound | RustSetTileHeight | src/landscape.cpp | set_height
@@ -508,9 +503,6 @@ rebound | RustTileRailType | src/rust/vehicle_services_newgrf.h | tile_railtype
 rebound | RustTownAuthorityIndex | src/newgrf_industries.cpp | town_id
 rebound | RustTownAuthorityIndex | src/rust/disaster_adapter.hpp | town_index
 rebound | RustTownAuthorityIndex | src/town_cmd.cpp | town_index
-rebound | RustTownRadiusGroup | src/newgrf_industries.cpp | town_zone
-rebound | RustTownRadiusGroup | src/newgrf_object.cpp | town_zone
-rebound | RustTownRadiusGroup | src/newgrf_roadstop.cpp | town_zone
 rebound | RustTownStorageCount | src/rust/newgrf_storage_services.cpp | town_count
 rebound | RustTownStorageCount | src/town_cmd.cpp | storage_count
 rebound | RustTrainLimit | src/rust/engine_adapter.hpp | train_limit

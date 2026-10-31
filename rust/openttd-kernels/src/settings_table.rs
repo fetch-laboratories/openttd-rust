@@ -194,7 +194,7 @@ fn update_all_service_interval(s: &Services, new_value: i32) {
                 hit(witness::SETTINGS_SERVICE_VEHICLE);
                 // `SetServiceInterval` takes the `int` of `CompanyServiceInterval` as uint16_t.
                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                let interval = (s.transactions.interval_default)(company.0, kind) as u16;
+                let interval = s.transactions.interval_default(company.0, kind) as u16;
                 (s.set_service_interval)(id, interval);
                 (s.set_service_interval_percent)(id, new_value != 0);
             }

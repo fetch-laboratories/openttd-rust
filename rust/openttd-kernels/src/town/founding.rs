@@ -51,7 +51,6 @@ pub struct FoundingServices {
     pub allocate: extern "C" fn(Tile) -> TownRef,
     pub resolve: extern "C" fn(TownId) -> TownRef,
     pub can_allocate: extern "C" fn() -> bool,
-    pub close_to_town: extern "C" fn(Tile, u32) -> bool,
     pub flat: extern "C" fn(Tile) -> bool,
     pub water_distance: extern "C" fn(Tile, bool) -> u32,
     pub scale_size: extern "C" fn(u32) -> u32,
@@ -63,8 +62,6 @@ pub struct FoundingServices {
     pub custom_number: extern "C" fn() -> u16,
     pub larger_towns: extern "C" fn() -> u8,
     pub name_style: extern "C" fn() -> u8,
-    pub insert_town: extern "C" fn(*mut TownHandle),
-    pub cargo_effect_exists: extern "C" fn(AcceptanceEffect) -> bool,
     pub prepare_rename: extern "C" fn(*mut TownHandle),
     pub name_changed: extern "C" fn(*mut TownHandle, ByteSpan),
     pub update_virt: extern "C" fn(*mut TownHandle),
@@ -177,7 +174,7 @@ impl<'a> Founding<'a> {
         if self.map().distance_from_edge(tile.0, self.size_y()) < 12 {
             return Some(self.s.edge_error);
         }
-        if observed!((self.s.close_to_town)(tile, 20)) {
+        if observed!(super::spatial::close(self.shared, tile.0, 20)) {
             return Some(self.s.close_error);
         }
         let tile_type = observed!((self.shared.tile_type)(tile.0));
@@ -293,22 +290,23 @@ impl<'a> Founding<'a> {
             (*town.state).growth.counter = town.id.0 % 70;
             (*town.state).growth.rate = town_ticks_to_game_ticks(250);
         }
-        observed!((self.s.insert_town)(town.shell));
+        // Town's native default initializes show_zone=false before this creation entry.
+        super::spatial::insert(self.shared, town.id);
         match observed!((self.leaves.climate)()) {
             1 => {
-                if observed!((self.s.cargo_effect_exists)(AcceptanceEffect(5))) {
+                if crate::cargo_registry::first_town_acceptance(5).is_some() {
                     unsafe {
                         (*town.state).simulation.goal[5] = 0xffff_fffe;
                     }
                 }
             }
             2 => {
-                if observed!((self.s.cargo_effect_exists)(AcceptanceEffect(5))) {
+                if crate::cargo_registry::first_town_acceptance(5).is_some() {
                     unsafe {
                         (*town.state).simulation.goal[5] = u32::MAX;
                     }
                 }
-                if observed!((self.s.cargo_effect_exists)(AcceptanceEffect(4))) {
+                if crate::cargo_registry::first_town_acceptance(4).is_some() {
                     unsafe {
                         (*town.state).simulation.goal[4] = u32::MAX;
                     }
@@ -361,7 +359,7 @@ impl<'a> Founding<'a> {
             update_radius(town.state);
         }
         engine.update_rate(u32::from(town.id.0));
-        observed!((self.leaves.update_max_pass)(u32::from(town.id.0)));
+        super::policy::update_max_pass(self.leaves, town.state);
         observed!((self.s.update_noise)());
         super::openttd_rust_town_generating_exchange(previous);
     }
@@ -667,7 +665,7 @@ pub unsafe extern "C" fn openttd_rust_town_generate(
         }
     }
     scratch.clear();
-    observed!((f.shared.rebuild_town_tree)());
+    observed!(crate::town::spatial::rebuild(f.shared));
     if current != 0 {
         unsafe {
             result.write(true);
@@ -752,7 +750,6 @@ crate::abi::layouts! {
         allocate,
         resolve,
         can_allocate,
-        close_to_town,
         flat,
         water_distance,
         scale_size,
@@ -764,8 +761,6 @@ crate::abi::layouts! {
         custom_number,
         larger_towns,
         name_style,
-        insert_town,
-        cargo_effect_exists,
         prepare_rename,
         name_changed,
         update_virt,

@@ -28,3 +28,14 @@ pub const BUILDING_SIZE_2X2: u8 = 1 << 4;
 pub const BUILDING_IS_ANIMATED: u8 = 1 << 5;
 pub const BUILDING_2_TILES_X: u8 = BUILDING_SIZE_2X1 | BUILDING_SIZE_2X2;
 pub const BUILDING_2_TILES_Y: u8 = BUILDING_SIZE_1X2 | BUILDING_SIZE_2X2;
+
+/// `GetClimateMaskForLandscape`, with the native unreachable landscape domain.
+pub(crate) fn climate_mask(landscape: u8) -> u16 {
+    match landscape {
+        0 => 1 << 12,
+        1 => (1 << 11) | (1 << 13),
+        2 => 1 << 14,
+        3 => 1 << 15,
+        _ => unreachable!("landscape"),
+    }
+}

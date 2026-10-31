@@ -10,6 +10,12 @@
 use crate::map_func::{MapStatics, TileTypeAccess};
 use crate::tile_map::{get_tile_slope, get_tile_z, get_tropic_zone};
 
+/// Compare production industry removal arithmetic with native `Money` operators.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_test_industry_removal_cost(multiplier: u32) -> i64 {
+    crate::industry::removal_cost(multiplier)
+}
+
 /// # Safety
 /// For nonzero counts, uphold `TileTypeAccess::raw`'s validity/serialization
 /// contract for this call. The callback is the original noexcept accessor or an

@@ -21,7 +21,6 @@ struct Kdtree_TownXYFunc {
 };
 
 using TownKdtree = Kdtree<TownID, Kdtree_TownXYFunc, uint16_t, int>;
-extern TownKdtree _town_kdtree;
 extern TownKdtree _town_local_authority_kdtree;
 
 #endif

@@ -83,7 +83,6 @@ static inline uint16_t TownProtocol_house_class(uint16_t id) noexcept { return i
 static inline void TownProtocol_make_house(uint32_t tile, uint32_t town, uint32_t house, uint32_t construction) noexcept { TownProtocolLeaf(10, tile, town, house, construction); }
 static inline void TownProtocol_population_changed(uint32_t) noexcept { town_protocol_world->population = openttd_rust_town_simulation(town_protocol_world->owner)->population; }
 static inline uint32_t TownProtocol_house_count() noexcept { return static_cast<uint32_t>(TownProtocolLeaf(17, 0, 0, 0, 0)); }
-static inline void TownProtocol_update_max_pass(uint32_t town) noexcept { TownProtocolLeaf(19, town, 0, 0, 0); }
 static inline uint32_t TownProtocol_next_town(uint32_t from) noexcept { return static_cast<uint32_t>(TownProtocolLeaf(20, 0, from, 0, 0)); }
 static inline bool TownProtocol_build_road(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t mode) noexcept
 {
@@ -136,7 +135,6 @@ static inline OpenTTDHouseServices TownProtocolHouses()
 	houses.loop_tile = TownProtocol_house_tile;
 	houses.house_type = [](uint32_t) noexcept -> uint16_t { return 2; };
 	houses.completed = [](uint32_t) noexcept { return true; };
-	houses.town_shell = [](uint32_t) noexcept -> Town * { return nullptr; };
 	houses.town = [](uint32_t) noexcept -> OpenTTDTownRef { town_protocol_world->owner_reads++; return {nullptr, town_protocol_world->owner, 0}; };
 	houses.loop_spec = [](uint16_t id) noexcept -> OpenTTDHouseLoopSpec { return {.callbacks = TownProtocol_house_callbacks(id), .flags = TownProtocol_house_flags(id), .population = TownProtocol_house_population(id), .mail = 0, .minimum_life = 0}; };
 	houses.delete_inspect = [](uint32_t) noexcept {};
@@ -199,7 +197,6 @@ static inline OpenTTDTownLeaves TownProtocolServices()
 
 		.population_changed = TownProtocol_population_changed,
 		.house_count = TownProtocol_house_count,
-		.update_max_pass = TownProtocol_update_max_pass,
 		.next_town = TownProtocol_next_town,
 		.build_bridge = TownProtocol_build_bridge,
 		.build_tunnel = TownProtocol_build_tunnel,
@@ -232,7 +229,8 @@ template <typename Check> void CheckTownProtocol(Check check)
 	/* The callback reenters the town owner through the direct resolver entry;
 	 * preserve the original fixture's mutation and success. */
 	auto resolver = OpenTTDHouseResolverServices{};
-	resolver.town_by_id = [](uint32_t) noexcept -> Town * { return nullptr; };
+	resolver.shared = &services;
+	services.town_by_id = [](uint32_t) noexcept -> OpenTTDTownHandle * { return nullptr; };
 	resolver.evaluate = [](const OpenTTDHouseCallbackArgs *, int32_t *, size_t) noexcept -> uint16_t {
 		openttd_rust_town_growth(town_protocol_world->owner)->flags = 0x88;
 		return UINT16_MAX;
@@ -270,7 +268,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	services.map = &map.statics;
 	services.map_max_x = []() noexcept -> uint32_t { return 63; };
 	services.map_max_y = []() noexcept -> uint32_t { return 63; };
-	services.closest_town = [](uint32_t, uint32_t) noexcept -> const OpenTTDTownHandle * { return nullptr; };
+	services.town_count = []() noexcept -> size_t { return 0; };
 	services.tile_valid = [](uint32_t) noexcept { return true; };
 	services.road_type = [](uint32_t) noexcept { return uint8_t(63); };
 	static const OpenTTDTileOwnerServices owners{};
@@ -335,6 +333,9 @@ template <typename Check> void CheckTownProtocol(Check check)
 	w.placing = true; w.writes.clear(); w.house_callback = false; w.clears = 0; w.animations = 0; w.house_count = 5;
 	TownProtocolCost cost{};
 	services.town_count = []() noexcept -> size_t { return 1; };
+	services.town_next_id = [](uint32_t from) noexcept -> uint32_t { return from == 0 ? 0 : UINT32_MAX; };
+	services.town_owner_by_id = [](uint32_t) noexcept { return town_protocol_world->owner; };
+	openttd_rust_town_rebuild_index(&services);
 	services.town_owner = [](const OpenTTDTownHandle *) noexcept { town_protocol_world->owner_reads++; return town_protocol_world->owner; };
 	w.owner_reads = 0; w.map_reads = 0;
 	openttd_rust_house_place(&leaves, &services, reinterpret_cast<OpenTTDCommandCost *>(&cost), 1, 2080, 1, true, false);
@@ -365,6 +366,9 @@ template <typename Check> void CheckTownProtocol(Check check)
 	openttd_rust_town_global_class_counts_resize(saved_classes.size());
 	std::copy(saved_ids.begin(), saved_ids.end(), static_cast<uint32_t *>(openttd_rust_town_global_id_counts().data));
 	std::copy(saved_classes.begin(), saved_classes.end(), static_cast<uint32_t *>(openttd_rust_town_global_class_counts().data));
+	services.town_count = []() noexcept -> size_t { return 0; };
+	services.town_next_id = [](uint32_t) noexcept -> uint32_t { return UINT32_MAX; };
+	openttd_rust_town_rebuild_index(&services);
 	openttd_rust_house_resolver_exchange(previous_resolver);
 	town_protocol_world = nullptr;
 }
