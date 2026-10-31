@@ -20,7 +20,7 @@ Read the course and resume the work order.
 2. Apply the roadmap's "Phases" and latest steering review actions first.
 3. Run `python3 docs/skills/steer/issues.py`. Place every unplaced issue, including the user's.
 4. Run `python3 tools/housekeeping.py`, read its dry run, then use `--apply` for eligible stale worktrees and output.
-5. Resume from the roadmap's checkpoint and work order.
+5. Resume from the roadmap's checkpoint and work order, then from each open PR's status comment.
 
 Done when the current course is applied and work can resume.
 
@@ -41,7 +41,7 @@ Done when finished work is handled and free slots have ready work.
 Follow the [change workflow](../../workflow.md) from issue through cleanup.
 
 - Run `python3 tools/housekeeping.py`, read its dry run, then use `--apply`.
-- Commit roadmap updates at stocktakes or work-order changes, not every integration.
+- Commit roadmap updates at stocktakes, course changes and wind-down. Record a selection or integration on its issue or PR; alone it is not a work-order change. Each roadmap push moves base under PRs in final validation.
 - Apply the [automatic rollback rule](../../workflow.md#automatic-rollback-and-wind-down) before further integrations after a regression.
 
 Done when each finished change is integrated and cleaned up, or has its next action recorded.

@@ -41,6 +41,7 @@ For substantive changes create a fork issue with a clear owner, then use an isol
 - Keep the [reference worktree unchanged](../AGENTS.md#every-agent).
 - For infrastructure work (CI, caches, evidence plumbing), fix only defects that can change a game comparison or a speed decision on this host or in CI; list hypothetical ones in the PR's limits ([cost decisions](planning.md#cost-decisions)).
 - A separate reviewer examines the final commit and evidence. The reviewer checks fidelity first. Compare each replaced original body callee by callee before checking boundary rules. For a port retiring more than about 1,000 original lines, assign one reviewer per function group in parallel.
+- For each new scenario, fixture or checker, the reviewer names the behavior it distinguishes that existing checks cannot ([cost decisions](planning.md#cost-decisions)). One that names none, or compares an operation with itself, is a finding; the fix deletes it. Scenarios that exercise the component stay ([evidence](porting.md#evidence)).
 - The reviewer commits each fix to the PR branch. Rerun only checks affected by those fixes; a review without fixes reruns nothing. List each finding, its fixing commit and the check that found it. Root spot-checks the fix commits before integration. Send findings that need a scope or policy decision to root unfixed.
 - For every new binding outside the rebound check's scope, the reviewer greps its callee across `src/`. This includes macros and compound callbacks, such as calls to `CheckOwnership` or `GetRoadOwner`. Report each existing wrapper or binding as a finding. See [shared accessors](porting.md#callees-and-shared-accessors).
 - Use the review report skeleton in the [PR template](../.github/PULL_REQUEST_TEMPLATE.md). Start with `Reviewed commit: <sha>`. Name the functions or files compared with original bodies, duplicate callbacks, and orphaned `WITH_RUST` bodies, exports or declarations. Each orphan is a finding. Name every `WITH_RUST` body and `openttd_rust_*` export touched and its production caller. Once #564's quick-CI orphan-export check integrates, cite it for exports and name only `WITH_RUST` bodies. Add no narration when there are no findings. Put branches the harness does not reach in #156, not only in the disposition.
@@ -49,7 +50,7 @@ For substantive changes create a fork issue with a clear owner, then use an isol
   - The update has no conflicts in `src/`, `rust/`, `tools/` or `.github/`.
   - It resolves every conflict by keeping both sides' lines unchanged. `git show --remerge-diff` removes only conflict markers.
   - It reruns #581's recorded `unifdef` command over every touched `src/` file.
-- Root records the applicable condition on the PR. Otherwise a fresh reviewer checks and fixes only the conflict resolution.
+- Root records the applicable condition on the PR. Such an update needs only CI: no recount, local build, proof or new evidence. Record metrics once, at the head that integrates. Otherwise a fresh reviewer checks and fixes only the conflict resolution.
 
 ## Integration
 
