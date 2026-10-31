@@ -139,8 +139,8 @@ Root's first actions from this chart:
    `tools/port-metrics.py` count the C++ declarations it generates.
 3. Phase 2 takes every slot that ready phase 1 work leaves free, ranked by code
    retired, crossings removed and glue deleted.
-4. Before each stocktake and planning round, reread AGENTS.md, `docs/planning.md`, this chart and
-   the latest steering section if they changed (`/start-development`, step 4).
+4. Before each stocktake and planning round, refresh changed guidance and apply
+   its actions (`/start-development`, step 4).
 
 ## Twenty-fourth steering review (2026-10-29: per-entry map tolls, rebound callees and #581's hidden consumers)
 

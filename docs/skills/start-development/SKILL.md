@@ -61,7 +61,7 @@ Done when the planner has ranked the work and placed or reconsidered issues.
 
 Apply new direction before stocktakes and planning.
 
-- Before each, `git fetch`. If AGENTS.md, `docs/planning.md`, the roadmap's "Phases" or latest steering section changed on `origin/rust-migration`, update your checkout, reread them and apply their actions first.
+- Before each, `git fetch`. If AGENTS.md, guidance reached through its routing table, the roadmap's "Phases" or latest steering section changed on `origin/rust-migration`, update your checkout, reread the changed guidance and apply its actions first.
 - After every second integration, update "Where the fork stands": retired code lines per phase, compiled original and glue C++, exports and callback slots, tooling cost, play-save speed ratio, coverage gaps and unintegrated branch count.
 - Rerun `issues.py`. Place new issues and close those whose remaining scope is done.
 - Profile the merged branch in the background. Run a speed pass under [speed policy](../../speed.md#policy).
