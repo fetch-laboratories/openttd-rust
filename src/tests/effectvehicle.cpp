@@ -36,11 +36,10 @@ TEST_CASE("Animated tiles - ordered queue and partial native load publication")
 	shared.tile_type = [](uint32_t t) noexcept -> uint8_t { return t == 2 ? 0 : 3; };
 	shared.map_log_x = []() noexcept -> uint32_t { return 0; };
 	shared.map_max_y = []() noexcept -> uint32_t { return 3; };
-	const OpenTTDAnimationServices services{
-		.shared = &shared,
-		.state = [](uint32_t t) noexcept { return states[t]; },
-		.set_state = [](uint32_t t, AnimatedTileState s) noexcept { states[t] = s; },
-	};
+	auto services = OpenTTDAnimationServices{};
+	services.shared = &shared;
+	services.state = [](uint32_t t) noexcept { return states[t]; };
+	services.set_state = [](uint32_t t, AnimatedTileState s) noexcept { states[t] = s; };
 	RustAnimationScope scope(services);
 	openttd_rust_animation_initialize();
 	for (uint32_t t : {1, 2, 3}) openttd_rust_animation_add(t, false);
