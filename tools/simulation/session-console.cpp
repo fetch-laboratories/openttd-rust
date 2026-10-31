@@ -189,12 +189,19 @@ static void SessionEditorSettings()
 	SessionCheck("settings-edges-void", construction.freeform_edges && IsTileType(TileXY(0, 5), MP_VOID) && IsTileType(TileXY(5, 0), MP_VOID));
 	SessionSetting("economy.timekeeping_units", TKU_WALLCLOCK);
 	SessionCheck("settings-wallclock-editor", TimerGameEconomy::UsingWallclockUnits() && TimerGameEconomy::year == 1);
+	const auto timetable_mode = _settings_client.gui.timetable_mode;
+	const int32_t next_timetable_mode = (static_cast<int32_t>(timetable_mode) + 1) % 3;
+	const auto *timetable_setting = GetSettingFromName("gui.timetable_mode")->AsIntSetting();
+	SetSettingValue(timetable_setting, next_timetable_mode);
+	SessionCheck("settings-timetable-refused", _settings_client.gui.timetable_mode == timetable_mode);
 	SessionSetting("economy.minutes_per_calendar_year", 0);
 	SessionCheck("settings-frozen", _settings_game.economy.minutes_per_calendar_year == CalendarTime::FROZEN_MINUTES_PER_YEAR);
 	SessionSetting("economy.minutes_per_calendar_year", 1);
 	SessionCheck("settings-thawed", _settings_game.economy.minutes_per_calendar_year == CalendarTime::DEF_MINUTES_PER_YEAR);
 	SessionSetting("economy.timekeeping_units", TKU_CALENDAR);
 	SessionCheck("settings-calendar-editor", !TimerGameEconomy::UsingWallclockUnits() && TimerGameEconomy::date.base() == TimerGameCalendar::date.base());
+	SetSettingValue(timetable_setting, next_timetable_mode);
+	SessionCheck("settings-timetable-calendar", static_cast<int32_t>(_settings_client.gui.timetable_mode) == next_timetable_mode);
 }
 /** Menu transitions write the new-game and client defaults. */
 static void SessionMenuSettings()
