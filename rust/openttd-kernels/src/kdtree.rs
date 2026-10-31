@@ -178,7 +178,7 @@ impl<T: Copy + Ord> Kdtree<T> {
             self.root = self.add(element);
         } else if !self.is_unbalanced() || !self.rebuild(Some(element), None, xy) {
             self.insert_recursive(element, self.root, 0, xy);
-            self.unbalanced += 1;
+            self.unbalanced = self.unbalanced.wrapping_add(1);
         }
     }
     fn remove_recursive(
@@ -212,7 +212,7 @@ impl<T: Copy + Ord> Kdtree<T> {
         }
         if !self.is_unbalanced() || !self.rebuild(None, Some(element), xy) {
             self.root = self.remove_recursive(element, self.root, 0, xy);
-            self.unbalanced += 1;
+            self.unbalanced = self.unbalanced.wrapping_add(1);
         }
     }
     fn nearest_recursive(
