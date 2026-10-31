@@ -77,12 +77,8 @@ public:
 	 * Annotation for a link graph node.
 	 */
 	struct NodeAnnotation {
-#ifdef WITH_RUST
 		const uint16_t *station; ///< Immutable snapshot scalar.
 		StationID Station() const { return StationID(*this->station); }
-#else
-		const LinkGraph::BaseNode &base;
-#endif
 
 
 		uint undelivered_supply = 0; ///< Amount of supply that hasn't been distributed yet.
@@ -93,21 +89,13 @@ public:
 		std::vector<DemandAnnotation> demands{}; ///< Annotations for the demand to all other nodes.
 
 		NodeAnnotation(const LinkGraph::BaseNode &node, size_t size) :
-#ifdef WITH_RUST
 			station(node.StationAddress()),
-#else
-			base(node),
-#endif
 			undelivered_supply(node.Supply())
 		{
 			const auto edges = node.Edges();
 			this->edges.reserve(edges.size());
 			for (auto &e : edges) this->edges.emplace_back(e);
-#ifndef WITH_RUST
-			this->demands.resize(size);
-#else
 			(void)size;
-#endif
 		}
 
 		/**
@@ -199,9 +187,7 @@ public:
 	~LinkGraphJob();
 
 	void Init();
-#ifdef WITH_RUST
 	void RunRust();
-#endif
 
 	/**
 	 * Check if job has actually finished.
@@ -290,98 +276,5 @@ public:
 /**
  * A leg of a path in the link graph. Paths can form trees by being "forked".
  */
-#ifndef WITH_RUST
-class Path {
-public:
-	static Path *invalid_path;
-
-	Path(NodeID n, bool source = false);
-	virtual ~Path() = default;
-
-	/** Get the node this leg passes. */
-	inline NodeID GetNode() const { return this->node; }
-
-	/** Get the overall origin of the path. */
-	inline NodeID GetOrigin() const { return this->origin; }
-
-	/** Get the parent leg of this one. */
-	inline Path *GetParent() { return this->parent; }
-
-	/** Get the overall capacity of the path. */
-	inline uint GetCapacity() const { return this->capacity; }
-
-	/** Get the free capacity of the path. */
-	inline int GetFreeCapacity() const { return this->free_capacity; }
-
-	/**
-	 * Get ratio of free * 16 (so that we get fewer 0) /
-	 * max(total capacity, 1) (so that we don't divide by 0).
-	 * @param free Free capacity.
-	 * @param total Total capacity.
-	 * @return free * 16 / max(total, 1).
-	 */
-	static inline int GetCapacityRatio(int free, uint total)
-	{
-		return Clamp(free, PATH_CAP_MIN_FREE, PATH_CAP_MAX_FREE) * PATH_CAP_MULTIPLIER / std::max(total, 1U);
-	}
-
-	/**
-	 * Get capacity ratio of this path.
-	 * @return free capacity * 16 / (total capacity + 1).
-	 */
-	inline int GetCapacityRatio() const
-	{
-		return Path::GetCapacityRatio(this->free_capacity, this->capacity);
-	}
-
-	/** Get the overall distance of the path. */
-	inline uint GetDistance() const { return this->distance; }
-
-	/** Reduce the flow on this leg only by the specified amount. */
-	inline void ReduceFlow(uint f) { this->flow -= f; }
-
-	/** Increase the flow on this leg only by the specified amount. */
-	inline void AddFlow(uint f) { this->flow += f; }
-
-	/** Get the flow on this leg. */
-	inline uint GetFlow() const { return this->flow; }
-
-	/** Get the number of "forked off" child legs of this one. */
-	inline uint GetNumChildren() const { return this->num_children; }
-
-	/**
-	 * Detach this path from its parent.
-	 */
-	inline void Detach()
-	{
-		if (this->parent != nullptr) {
-			this->parent->num_children--;
-			this->parent = nullptr;
-		}
-	}
-
-	uint AddFlow(uint f, LinkGraphJob &job, uint max_saturation);
-	void Fork(Path *base, uint cap, int free_cap, uint dist);
-
-protected:
-
-	/*
-	 * Some boundaries to clamp against in order to avoid integer overflows.
-	 */
-	static constexpr int PATH_CAP_MULTIPLIER = 16;
-	static constexpr int PATH_CAP_MIN_FREE = (INT_MIN + 1) / PATH_CAP_MULTIPLIER;
-	static constexpr int PATH_CAP_MAX_FREE = (INT_MAX - 1) / PATH_CAP_MULTIPLIER;
-
-	uint distance = 0; ///< Sum(distance of all legs up to this one).
-	uint capacity = 0; ///< This capacity is min(capacity) fom all edges.
-	int free_capacity = 0; ///< This capacity is min(edge.capacity - edge.flow) for the current run of Dijkstra.
-	uint flow = 0; ///< Flow the current run of the mcf solver assigns.
-	NodeID node = INVALID_NODE; ///< Link graph node this leg passes.
-	NodeID origin = INVALID_NODE; ///< Link graph node this path originates from.
-	uint num_children = 0; ///< Number of child legs that have been forked from this path.
-	Path *parent = nullptr; ///< Parent leg of this one.
-};
-
-#endif /* !WITH_RUST */
 
 #endif /* LINKGRAPHJOB_H */

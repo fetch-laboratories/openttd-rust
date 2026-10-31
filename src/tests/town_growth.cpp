@@ -9,12 +9,9 @@
 #include "../stdafx.h"
 #include "../3rdparty/catch2/catch.hpp"
 #include "../town.h"
-#ifdef WITH_RUST
 #include "town_protocol.hpp"
-#endif
 #include "../safeguards.h"
 
-#ifdef WITH_RUST
 TEST_CASE("Town growth - command boundaries and callback reentry")
 {
 	CheckTownProtocol([](bool result) { CHECK(result); });
@@ -95,4 +92,3 @@ TEST_CASE("Town growth - indexed construction, descriptor aliases and pool reuse
 	CHECK(a->flags.base() == 0);
 	_town_pool.CleanPool();
 }
-#endif

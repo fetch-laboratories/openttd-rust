@@ -11,9 +11,7 @@
 #define NETWORK_CRYPTO_INTERNAL_H
 
 #include "network_crypto.h"
-#ifdef WITH_RUST
 #include "../rust/auth_owner.hpp"
-#endif
 
 /** The number of bytes the public and secret keys are in X25519. */
 constexpr size_t X25519_KEY_SIZE = 32;
@@ -64,15 +62,9 @@ enum class X25519KeyExchangeSide : uint8_t {
 class X25519DerivedKeys {
 private:
 	/** Single contiguous buffer to store the derived keys in, as they are generated as a single hash. */
-#ifdef WITH_RUST
 	RustAuthKeys keys; ///< Rust owns stable storage and wiping.
-#else
-	std::array<uint8_t, X25519_KEY_SIZE + X25519_KEY_SIZE> keys;
-#endif
 public:
-#ifdef WITH_RUST
 	X25519DerivedKeys();
-#endif
 	~X25519DerivedKeys();
 	std::span<const uint8_t> ClientToServer() const;
 	std::span<const uint8_t> ServerToClient() const;
@@ -113,17 +105,7 @@ public:
  */
 class X25519AuthenticationHandler {
 private:
-#ifdef WITH_RUST
 	RustAuthSession session; ///< Rust owns the complete protocol session.
-#else
-	X25519SecretKey our_secret_key; ///< The secret key used by us.
-	X25519PublicKey our_public_key; ///< The public key used by us.
-	X25519Nonce key_exchange_nonce; ///< The nonce to prevent replay attacks of the key exchange.
-	X25519DerivedKeys derived_keys; ///< Keys derived from the authentication process.
-	X25519PublicKey peer_public_key; ///< The public key used by our peer.
-
-	X25519Nonce encryption_nonce; ///< The nonce to prevent replay attacks the encrypted connection.
-#endif
 
 protected:
 	X25519AuthenticationHandler(const X25519SecretKey &secret_key);

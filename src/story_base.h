@@ -22,14 +22,9 @@ using StoryPageElementPool = Pool<StoryPageElement, StoryPageElementID, 64>;
 using StoryPagePool = Pool<StoryPage, StoryPageID, 64>;
 extern StoryPageElementPool _story_page_element_pool;
 extern StoryPagePool _story_page_pool;
-#ifdef WITH_RUST
 #include "rust/story_state.h"
 inline uint32_t &_story_page_element_next_sort_value = GetRustStoryState().element_next_sort;
 inline uint32_t &_story_page_next_sort_value = GetRustStoryState().page_next_sort;
-#else
-extern uint32_t _story_page_element_next_sort_value;
-extern uint32_t _story_page_next_sort_value;
-#endif
 
 /*
  * Each story page element is one of these types.
@@ -188,4 +183,3 @@ struct StoryPage : StoryPagePool::PoolItem<&_story_page_pool> {
 };
 
 #endif /* STORY_BASE_H */
-

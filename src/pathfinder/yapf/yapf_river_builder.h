@@ -12,8 +12,5 @@
 
 #include "../../tile_type.h"
 
-#ifndef WITH_RUST
-void YapfBuildRiver(TileIndex start_tile, TileIndex end_tile, TileIndex spring_tile, bool main_river);
-#endif
 
 #endif /* YAPF_RIVER_BUILDER_H */

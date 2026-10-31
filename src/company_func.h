@@ -22,9 +22,6 @@ void SetLocalCompany(CompanyID new_company);
 void ShowBuyCompanyDialog(CompanyID company, bool hostile_takeover);
 void CompanyAdminUpdate(const Company *company);
 void CompanyAdminBankrupt(CompanyID company_id);
-#ifndef WITH_RUST
-void UpdateLandscapingLimits();
-#endif
 void UpdateCompanyLiveries(Company *c);
 
 Money GetAvailableMoney(CompanyID company);
@@ -38,11 +35,7 @@ CommandCost CheckTileOwnership(TileIndex tile);
 extern CompanyID _local_company;
 extern CompanyID _current_company;
 
-#ifdef WITH_RUST
 extern TypedIndexContainer<std::array<Colours, MAX_COMPANIES>, CompanyID> &_company_colours;
-#else
-extern TypedIndexContainer<std::array<Colours, MAX_COMPANIES>, CompanyID> _company_colours;
-#endif
 extern std::string _company_manager_face;
 PaletteID GetCompanyPalette(CompanyID company);
 

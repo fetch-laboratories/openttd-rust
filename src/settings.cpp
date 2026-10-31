@@ -55,7 +55,6 @@
 
 #include "table/strings.h"
 
-#ifdef WITH_RUST
 #include "linkgraph/linkgraphschedule.h"
 #include "vehicle_base.h"
 #include "rust/settings_table_ffi.h"
@@ -75,7 +74,6 @@
 #include "rust/company_services.h"
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDSettingServices.hpp"
-#endif
 
 #include "safeguards.h"
 
@@ -1780,7 +1778,6 @@ std::vector<const SettingDesc *> GetFilteredSettingCollection(std::function<bool
 	return collection;
 }
 
-#ifdef WITH_RUST
 static OpenTTDByteSpan SettingName(std::string_view name)
 {
 	return {reinterpret_cast<const uint8_t *>(name.data()), name.size()};
@@ -1844,57 +1841,6 @@ CommandCost CmdChangeCompanySetting(DoCommandFlags flags, const std::string &nam
 	openttd_rust_cmd_change_company_setting(&GetRustSettingServices(), RustCommandCost(&cost), flags.base(), SettingName(name), value);
 	return cost;
 }
-#else
-/**
- * Network-safe changing of settings (server-only).
- * @param flags operation to perform
- * @param name the name of the setting to change
- * @param value the new value for the setting
- * The new value is properly clamped to its minimum/maximum when setting
- * @return the cost of this operation or an error
- * @see _settings
- */
-CommandCost CmdChangeSetting(DoCommandFlags flags, const std::string &name, int32_t value)
-{
-	if (name.empty()) return CMD_ERROR;
-	const SettingDesc *sd = GetSettingFromName(name);
-
-	if (sd == nullptr) return CMD_ERROR;
-	if (!SlIsObjectCurrentlyValid(sd->save.version_from, sd->save.version_to)) return CMD_ERROR;
-	if (!sd->IsIntSetting()) return CMD_ERROR;
-
-	if (!sd->IsEditable(true)) return CMD_ERROR;
-
-	if (flags.Test(DoCommandFlag::Execute)) {
-		sd->AsIntSetting()->ChangeValue(&GetGameSettings(), value);
-	}
-
-	return CommandCost();
-}
-
-/**
- * Change one of the per-company settings.
- * @param flags operation to perform
- * @param name the name of the company setting to change
- * @param value the new value for the setting
- * The new value is properly clamped to its minimum/maximum when setting
- * @return the cost of this operation or an error
- */
-CommandCost CmdChangeCompanySetting(DoCommandFlags flags, const std::string &name, int32_t value)
-{
-	if (name.empty()) return CMD_ERROR;
-	const SettingDesc *sd = GetCompanySettingFromName(name);
-
-	if (sd == nullptr) return CMD_ERROR;
-	if (!sd->IsIntSetting()) return CMD_ERROR;
-
-	if (flags.Test(DoCommandFlag::Execute)) {
-		sd->AsIntSetting()->ChangeValue(&Company::Get(_current_company)->settings, value);
-	}
-
-	return CommandCost();
-}
-#endif /* WITH_RUST */
 
 /**
  * Top function to save the new value of an element of the Settings struct

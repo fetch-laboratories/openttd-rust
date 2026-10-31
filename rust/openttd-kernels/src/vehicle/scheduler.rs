@@ -449,12 +449,7 @@ unsafe fn run_ticks<const COUNTED: bool>(
         }
     } // Every pool/scalar descriptor is discarded before commands in fleet drain.
     unsafe {
-        fleet::pending::openttd_rust_fleet_pending_drain(
-            tables.pending,
-            tables.transaction,
-            tables.group,
-            cost,
-        );
+        fleet::pending::drain(tables.pending, tables.transaction, tables.group, cost);
     };
 }
 

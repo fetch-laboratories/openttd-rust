@@ -11,10 +11,8 @@
 #include "landscape.h"
 #include "tunnelbridge_map.h"
 
-#ifdef WITH_RUST
 #include "rust/tunnelbridge_command_ffi.h"
 #include "rust/services_ffi.h"
-#endif
 
 #include "safeguards.h"
 
@@ -74,13 +72,5 @@ TileIndex GetOtherBridgeEnd(TileIndex tile)
  */
 int GetBridgeHeight(TileIndex t)
 {
-#ifdef WITH_RUST
 	return openttd_rust_bridge_height(&GetRustSharedServices(), t.base());
-#else
-	auto [tileh, h] = GetTileSlopeZ(t);
-	Foundation f = GetBridgeFoundation(tileh, DiagDirToAxis(GetTunnelBridgeDirection(t)));
-
-	/* one height level extra for the ramp */
-	return h + 1 + ApplyFoundationToSlope(f, tileh);
-#endif
 }

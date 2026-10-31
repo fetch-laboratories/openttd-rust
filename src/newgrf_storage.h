@@ -13,10 +13,8 @@
 #include "core/pool_type.hpp"
 #include "newgrf.h"
 #include "tile_type.h"
-#ifdef WITH_RUST
 #include "rust/newgrf_storage_ffi.h"
 #include "rust/services_assert.h"
-#endif
 
 /**
  * Mode switches to the behaviour of persistent storage array.
@@ -43,24 +41,6 @@ struct BasePersistentStorageArray {
 
 	static void SwitchMode(PersistentStorageMode mode, bool ignore_prev_mode = false);
 
-#ifndef WITH_RUST
-protected:
-	/**
-	 * Discard temporary changes.
-	 */
-	virtual void ClearChanges() = 0;
-
-	/**
-	 * Check whether currently changes to the storage shall be persistent or
-	 * temporary till the next call to ClearChanges().
-	 */
-	static bool AreChangesPersistent() { return (gameloop || command) && !testmode; }
-
-private:
-	static bool gameloop;
-	static bool command;
-	static bool testmode;
-#endif
 };
 
 /**
@@ -73,7 +53,6 @@ template <typename TYPE, uint SIZE>
 struct PersistentStorageArray : BasePersistentStorageArray {
 	using StorageType = std::array<TYPE, SIZE>;
 
-#ifdef WITH_RUST
 	static_assert(std::is_same_v<TYPE, int32_t> && (SIZE == 16 || SIZE == 256));
 	using RustStorage = std::conditional_t<SIZE == 16, OpenTTDStorage16, OpenTTDStorage256>;
 	RustStorage *rust_storage = RustStorageNew(std::integral_constant<uint, SIZE>{}, this);
@@ -86,61 +65,6 @@ struct PersistentStorageArray : BasePersistentStorageArray {
 	void StoreValue(uint pos, int32_t value) { RustStorageStore(this->rust_storage, pos, value, RustAssertCondition); }
 	TYPE GetValue(uint pos) const { return RustStorageGet(this->rust_storage, pos); }
 	void ClearChanges() { RustStorageClear(this->rust_storage); }
-#else
-	StorageType storage{}; ///< Memory for the storage array
-	std::unique_ptr<StorageType> prev_storage{}; ///< Temporary memory to store previous state so it can be reverted, e.g. for command tests.
-
-	/**
-	 * Stores some value at a given position.
-	 * If there is no backup of the data that backup is made and then
-	 * we write the data.
-	 * @param pos   the position to write at
-	 * @param value the value to write
-	 */
-	void StoreValue(uint pos, int32_t value)
-	{
-		/* Out of the scope of the array */
-		if (pos >= SIZE) return;
-
-		/* The value hasn't changed, so we pretend nothing happened.
-		 * Saves a few cycles and such and it's pretty easy to check. */
-		if (this->storage[pos] == value) return;
-
-		/* We do not have made a backup; lets do so */
-		if (AreChangesPersistent()) {
-			assert(!this->prev_storage);
-		} else if (!this->prev_storage) {
-			this->prev_storage = std::make_unique<StorageType>(this->storage);
-
-			/* We only need to register ourselves when we made the backup
-			 * as that is the only time something will have changed */
-			AddChangedPersistentStorage(this);
-		}
-
-		this->storage[pos] = value;
-	}
-
-	/**
-	 * Gets the value from a given position.
-	 * @param pos the position to get the data from
-	 * @return the data from that position
-	 */
-	TYPE GetValue(uint pos) const
-	{
-		/* Out of the scope of the array */
-		if (pos >= SIZE) return 0;
-
-		return this->storage[pos];
-	}
-
-	void ClearChanges() override
-	{
-		if (this->prev_storage) {
-			this->storage = *this->prev_storage;
-			this->prev_storage.reset();
-		}
-	}
-#endif
 };
 
 
@@ -155,64 +79,12 @@ struct TemporaryStorageArray {
 	using StorageType = std::array<TYPE, SIZE>;
 	using StorageInitType = std::array<uint16_t, SIZE>;
 
-#ifdef WITH_RUST
 	static_assert(std::is_same_v<TYPE, int32_t> && SIZE == 0x110);
 	void StoreValue(uint pos, int32_t value) { openttd_rust_storage_temp_store(pos, value); }
 	TYPE GetValue(uint pos) const { return openttd_rust_storage_temp_get(pos); }
 	void ClearChanges() { openttd_rust_storage_temp_clear(); }
-#else
-	StorageType storage{}; ///< Memory for the storage array
-	StorageInitType init{}; ///< Storage has been assigned, if this equals 'init_key'.
-	uint16_t init_key = 1; ///< Magic key to 'init'.
-
-	/**
-	 * Stores some value at a given position.
-	 * @param pos   the position to write at
-	 * @param value the value to write
-	 */
-	void StoreValue(uint pos, int32_t value)
-	{
-		/* Out of the scope of the array */
-		if (pos >= SIZE) return;
-
-		this->storage[pos] = value;
-		this->init[pos] = this->init_key;
-	}
-
-	/**
-	 * Gets the value from a given position.
-	 * @param pos the position to get the data from
-	 * @return the data from that position
-	 */
-	TYPE GetValue(uint pos) const
-	{
-		/* Out of the scope of the array */
-		if (pos >= SIZE) return 0;
-
-		if (this->init[pos] != this->init_key) {
-			/* Unassigned since last call to ClearChanges */
-			return 0;
-		}
-
-		return this->storage[pos];
-	}
-
-	void ClearChanges()
-	{
-		/* Increment init_key to invalidate all storage */
-		this->init_key++;
-		if (this->init_key == 0) {
-			/* When init_key wraps around, we need to reset everything */
-			this->init = {};
-			this->init_key = 1;
-		}
-	}
-#endif
 };
 
-#ifndef WITH_RUST
-void AddChangedPersistentStorage(BasePersistentStorageArray *storage);
-#endif
 
 typedef PersistentStorageArray<int32_t, 16> OldPersistentStorage;
 

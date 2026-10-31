@@ -7,10 +7,6 @@
 /** @file disaster_counter.h Stable Rust-owned DATE/legacy serialization address. */
 #ifndef OPENTTD_RUST_DISASTER_COUNTER_H
 #define OPENTTD_RUST_DISASTER_COUNTER_H
-#ifdef WITH_RUST
 #include "disaster_ffi.h"
 #define _disaster_delay (*openttd_rust_disaster_delay())
-#else
-extern uint16_t _disaster_delay;
-#endif
 #endif /* OPENTTD_RUST_DISASTER_COUNTER_H */

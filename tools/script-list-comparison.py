@@ -65,7 +65,7 @@ def main():
     validation_body = validation[
         validation.index("{") + 1 : validation.rfind("}")
     ].strip()
-    active_station = candidate_station.split("#else\n\nclass CargoCollector", 1)[0]
+    active_station = candidate_station
     if validation_body.replace("\n\t", "\n\t\t") not in active_station:
         raise RuntimeError("Station-before-cargo validation body/order changed")
     guards = "if (collector.GE() == nullptr) return;\n\tif (!collector.GE()->HasData()) return;"
@@ -81,8 +81,6 @@ def main():
         signature: probe.body(station_source, signature)
         for signature in cargo_signatures
     }
-    if any(body not in candidate_station for body in cargo_bodies.values()):
-        raise RuntimeError("Portable cargo reducer changed")
     initializer = station_source[
         station_source.index("CargoCollector::CargoCollector(") :
     ]

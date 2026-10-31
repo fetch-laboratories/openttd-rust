@@ -22,13 +22,10 @@
 #include "rail_type.h"
 #include "newgrf_spritegroup.h"
 #include "newgrf_town.h"
-#ifdef WITH_RUST
 #include "rust/station_resolver_ffi.h"
-#endif
 
 /** Scope resolver for stations. */
 struct StationScopeResolver : public ScopeResolver {
-#ifdef WITH_RUST
 	mutable OpenTTDStationResolverState state{};
 	/* Compatibility aliases refer to the one canonical Rust stack state. */
 	uint32_t &tile;
@@ -41,41 +38,6 @@ struct StationScopeResolver : public ScopeResolver {
 	{
 		ro.root_spritegroup = openttd_rust_station_resolver_init(&state, spec, station, tile.base());
 	}
-#else
-	TileIndex tile;                     ///< %Tile of the station.
-	struct BaseStation *st;             ///< Instance of the station.
-	const struct StationSpec *statspec; ///< Station (type) specification.
-	CargoType cargo_type;                 ///< Type of cargo of the station.
-	Axis axis;                          ///< Station axis, used only for the slope check callback.
-
-	/**
-	 * Station variable cache
-	 * This caches 'expensive' station variable lookups which iterate over
-	 * several tiles that may be called multiple times per Resolve().
-	 */
-	struct Cache {
-		std::optional<uint32_t> v40;
-		std::optional<uint32_t> v41;
-		std::optional<uint32_t> v45;
-		std::optional<uint32_t> v46;
-		std::optional<uint32_t> v47;
-		std::optional<uint32_t> v49;
-	};
-	mutable Cache cache;
-
-	/**
-	 * Constructor for station scopes.
-	 * @param ro Surrounding resolver.
-	 * @param statspec Station (type) specification.
-	 * @param st Instance of the station.
-	 * @param tile %Tile of the station.
-	 */
-	StationScopeResolver(ResolverObject &ro, const StationSpec *statspec, BaseStation *st, TileIndex tile)
-		: ScopeResolver(ro), tile(tile), st(st), statspec(statspec), cargo_type(INVALID_CARGO), axis(INVALID_AXIS)
-	{
-	}
-
-#endif
 
 	uint32_t GetRandomBits() const override;
 	uint32_t GetRandomTriggers() const override;
@@ -95,23 +57,7 @@ struct StationResolverObject : public SpecializedResolverObject<StationRandomTri
 
 	ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, uint8_t relative = 0) override
 	{
-#ifdef WITH_RUST
 		return openttd_rust_station_scope(&this->station_scope.state, this, &this->station_scope, scope, relative);
-#else
-		switch (scope) {
-			case VSG_SCOPE_SELF:
-				return &this->station_scope;
-
-			case VSG_SCOPE_PARENT: {
-				TownScopeResolver *tsr = this->GetTown();
-				if (tsr != nullptr) return tsr;
-				[[fallthrough]];
-			}
-
-			default:
-				return ResolverObject::GetScope(scope, relative);
-		}
-#endif
 	}
 
 	const SpriteGroup *ResolveReal(const RealSpriteGroup &group) const override;
@@ -216,11 +162,7 @@ const StationSpec *GetStationSpec(TileIndex t);
  */
 inline uint16_t GetStationLayoutKey(uint8_t platforms, uint8_t length)
 {
-#ifdef WITH_RUST
 	return openttd_rust_station_layout_key(platforms, length);
-#else
-	return (length << 8U) | platforms;
-#endif
 }
 
 /**
@@ -230,11 +172,7 @@ inline uint16_t GetStationLayoutKey(uint8_t platforms, uint8_t length)
  */
 inline bool IsWaypointClass(const StationClass &cls)
 {
-#ifdef WITH_RUST
 	return openttd_rust_is_waypoint_class(cls.global_id);
-#else
-	return cls.global_id == STATION_CLASS_LABEL_WAYPOINT || GB(cls.global_id, 24, 8) == UINT8_MAX;
-#endif
 }
 
 /* Evaluate a tile's position within a station, and return the result a bitstuffed format. */
@@ -248,9 +186,6 @@ CommandCost PerformStationTileSlopeCheck(TileIndex north_tile, TileIndex cur_til
 
 std::optional<uint8_t> AllocateSpecToStation(const StationSpec *spec, BaseStation *st);
 void AssignSpecToStation(const StationSpec *spec, BaseStation *st, uint8_t specindex);
-#ifndef WITH_RUST
-void DeallocateSpecFromStation(BaseStation *st, uint8_t specindex);
-#endif
 bool DrawStationTile(int x, int y, RailType railtype, Axis axis, StationClassID sclass, uint station);
 
 void AnimateStationTile(TileIndex tile);

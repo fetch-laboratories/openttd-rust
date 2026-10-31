@@ -2,7 +2,6 @@
 /** @file session.cpp Canonical native aliases and pause command reentry. */
 #include "../stdafx.h"
 #include "../3rdparty/catch2/catch.hpp"
-#ifdef WITH_RUST
 #include "../rust/session_ffi.h"
 #include "../core/backup_type.hpp"
 #include "../rust/session_native.hpp"
@@ -96,4 +95,3 @@ TEST_CASE("Session load - original restoration and callback partial effects")
 	CHECK_FALSE(openttd_rust_session_safe_load(&services, &frame, nullptr, GM_EDITOR));
 	CHECK(_game_mode == GM_BOOTSTRAP); CHECK(_exit_game.load());
 }
-#endif

@@ -12,9 +12,7 @@
 
 #include <ranges>
 
-#ifdef WITH_RUST
 #include "../rust/alternating_ffi.h"
-#endif
 
 /**
  * Iterator that alternately takes from the "middle" of a range.
@@ -43,18 +41,10 @@ public:
 		/* Starting from the end is not supported, unless the range is empty. */
 		assert(first == last || middle != last);
 
-#ifdef WITH_RUST
 		const size_t initial_position = begin ? 0 : std::distance(this->first, this->last);
 		this->before = middle;
 		this->after = middle;
 		this->traversal = openttd_rust_alternating_initialize(initial_position, this->before == this->first);
-#else
-		this->position = begin ? 0 : std::distance(this->first, this->last);
-		this->before = middle;
-		this->after = middle;
-		this->next_state = this->before == this->first;
-		this->state = this->next_state;
-#endif
 	}
 
 	bool operator==(const AlternatingIterator &rhs) const
@@ -62,11 +52,7 @@ public:
 		assert(this->first == rhs.first);
 		assert(this->last == rhs.last);
 		assert(this->middle == rhs.middle);
-#ifdef WITH_RUST
 		return openttd_rust_alternating_compare(this->traversal, rhs.traversal) == 0;
-#else
-		return this->position == rhs.position;
-#endif
 	}
 
 	std::strong_ordering operator<=>(const AlternatingIterator &rhs) const
@@ -74,11 +60,7 @@ public:
 		assert(this->first == rhs.first);
 		assert(this->last == rhs.last);
 		assert(this->middle == rhs.middle);
-#ifdef WITH_RUST
 		return openttd_rust_alternating_compare(this->traversal, rhs.traversal) <=> 0;
-#else
-		return this->position <=> rhs.position;
-#endif
 	}
 
 	inline reference operator*() const
@@ -89,7 +71,6 @@ public:
 	AlternatingIterator &operator++()
 	{
 		size_t size = static_cast<size_t>(std::distance(this->first, this->last));
-#ifdef WITH_RUST
 		assert(this->traversal.position < size);
 		/* Rust selects movement; query only its requested live boundary after moving. */
 		auto step = openttd_rust_alternating_advance(this->traversal, size);
@@ -108,12 +89,6 @@ public:
 				break;
 			default: NOT_REACHED();
 		}
-#else
-		assert(this->position < size);
-
-		++this->position;
-		if (this->position < size) this->Next();
-#endif
 
 		return *this;
 	}
@@ -127,11 +102,7 @@ public:
 
 	inline Titer Base() const
 	{
-#ifdef WITH_RUST
 		return this->traversal.current_after ? this->after : this->before;
-#else
-		return this->state ? this->after : this->before;
-#endif
 	}
 
 private:
@@ -142,28 +113,7 @@ private:
 	Titer after; ///< Current iterator after the middle.
 	Titer before; ///< Current iterator before the middle.
 
-#ifdef WITH_RUST
 	OpenTTDRustAlternatingState traversal; ///< Rust owns position and traversal decisions.
-#else
-	size_t position; ///< Position within the entire range.
-
-	bool next_state; ///< Next state for advancing iterator. If true take from after middle, otherwise take from before middle.
-	bool state; ///< Current state for reading iterator. If true take from after middle, otherwise take from before middle.
-
-	void Next()
-	{
-		this->state = this->next_state;
-		if (this->next_state) {
-			assert(this->after != this->last);
-			++this->after;
-			this->next_state = this->before == this->first;
-		} else {
-			assert(this->before != this->first);
-			--this->before;
-			this->next_state = std::next(this->after) != this->last;
-		}
-	}
-#endif
 };
 
 template <typename Titer>

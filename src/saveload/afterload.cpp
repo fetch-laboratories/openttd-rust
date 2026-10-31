@@ -9,9 +9,7 @@
 
 #include "../stdafx.h"
 #include "../station_kdtree.h"
-#ifdef WITH_RUST
 #include "../rust/movement_ffi.h"
-#endif
 #include "../void_map.h"
 #include "../signs_base.h"
 #include "../depot_base.h"
@@ -79,9 +77,7 @@
 
 #include "../rust/tile_loop_cursor.h"
 
-#ifdef WITH_RUST
 #include "../rust/animation_ffi.h"
-#endif
 #include "../safeguards.h"
 
 extern Company *DoStartupNewCompany(bool is_ai, CompanyID company = CompanyID::Invalid());
@@ -2264,30 +2260,7 @@ bool AfterLoadGame()
 	}
 
 	if (IsSavegameVersionBefore(SLV_122)) {
-#ifdef WITH_RUST
 		openttd_rust_animation_afterload(true, false);
-#else
-		/* Animated tiles would sometimes not be actually animated or
-		 * in case of old savegames duplicate. */
-
-		extern std::vector<TileIndex> _animated_tiles;
-
-		for (auto tile = _animated_tiles.begin(); tile < _animated_tiles.end(); /* Nothing */) {
-			/* Remove if tile is not animated */
-			bool remove = !MayAnimateTile(*tile);
-
-			/* and remove if duplicate */
-			for (auto j = _animated_tiles.begin(); !remove && j < tile; j++) {
-				remove = *tile == *j;
-			}
-
-			if (remove) {
-				tile = _animated_tiles.erase(tile);
-			} else {
-				tile++;
-			}
-		}
-#endif
 	}
 
 	if (IsSavegameVersionBefore(SLV_NONFLOODING_WATER_TILES)) {
@@ -2298,24 +2271,7 @@ bool AfterLoadGame()
 	}
 
 	if (IsSavegameVersionBefore(SLV_ANIMATED_TILE_STATE_IN_MAP)) {
-#ifdef WITH_RUST
 		openttd_rust_animation_afterload(false, true);
-#else
-		/* Animated tile state is stored in the map array, allowing
-		 * quicker addition and deletion of animated tiles. */
-
-		extern std::vector<TileIndex> _animated_tiles;
-
-		for (auto t : Map::Iterate()) {
-			/* Ensure there is no spurious animated tile state. */
-			if (MayAnimateTile(t)) SetAnimatedTileState(t, AnimatedTileState::None);
-		}
-
-		/* Set animated flag for all valid animated tiles. */
-		for (const TileIndex &tile : _animated_tiles) {
-			if (tile != INVALID_TILE) SetAnimatedTileState(tile, AnimatedTileState::Animated);
-		}
-#endif
 	}
 
 	if (IsSavegameVersionBefore(SLV_124) && !IsSavegameVersionBefore(SLV_1)) {
@@ -2657,12 +2613,7 @@ bool AfterLoadGame()
 			/* Have we passed the visibility "switch" state already? */
 			uint8_t pos = (DiagDirToAxis(vdir) == AXIS_X ? v->x_pos : v->y_pos) & TILE_UNIT_MASK;
 			uint8_t frame = (vdir == DIAGDIR_NE || vdir == DIAGDIR_NW) ? TILE_SIZE - 1 - pos : pos;
-#ifdef WITH_RUST
 			const uint8_t visibility_frame = openttd_rust_movement_tunnel_visibility(dir);
-#else
-			extern const uint8_t _tunnel_visibility_frame[DIAGDIR_END];
-			const uint8_t visibility_frame = _tunnel_visibility_frame[dir];
-#endif
 
 			/* Should the vehicle be hidden or not? */
 			bool hidden;
@@ -2709,12 +2660,7 @@ bool AfterLoadGame()
 			bool loading = rv->current_order.IsType(OT_LOADING) || rv->current_order.IsType(OT_LEAVESTATION);
 			if (HasBit(rv->GetState(), RVS_IN_ROAD_STOP)) {
 				uint8_t state = rv->GetState();
-#ifdef WITH_RUST
 				SB(state, RVS_ENTERED_STOP, 1, loading || rv->GetFrame() > openttd_rust_road_stop_frame(rv->GetState() - RVSB_IN_ROAD_STOP + (_settings_game.vehicle.road_side << RVS_DRIVE_SIDE)));
-#else
-				extern const uint8_t _road_stop_stop_frame[];
-				SB(state, RVS_ENTERED_STOP, 1, loading || rv->GetFrame() > _road_stop_stop_frame[rv->GetState() - RVSB_IN_ROAD_STOP + (_settings_game.vehicle.road_side << RVS_DRIVE_SIDE)]);
-#endif
 				rv->SetState(state);
 			} else if (HasBit(rv->GetState(), RVS_IN_DT_ROAD_STOP)) {
 				uint8_t state = rv->GetState();

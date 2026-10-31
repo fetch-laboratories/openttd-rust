@@ -8,7 +8,6 @@
 /** @file rail_yapf.cpp Finite-limit and heap ordering against unchanged YAPF. */
 #include "../stdafx.h"
 #include "../3rdparty/catch2/catch.hpp"
-#ifdef WITH_RUST
 #include "rail_yapf_protocol.hpp"
 #include "../train.h"
 #include "../pathfinder/yapf/yapf_base.hpp"
@@ -173,4 +172,3 @@ TEST_CASE("Rail YAPF observes Follow then optional masking then speed limits")
 	RailYapfProbe::follow_fail = false;
 	openttd_rust_rail_invalidate();
 }
-#endif

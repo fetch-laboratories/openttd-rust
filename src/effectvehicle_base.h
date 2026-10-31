@@ -12,9 +12,7 @@
 
 #include "vehicle_base.h"
 #include "transparency.h"
-#ifdef WITH_RUST
 #include "rust/effect_ffi.h"
-#endif
 
 /**
  * A special vehicle is one of the following:
@@ -25,13 +23,7 @@
  *  - bubbles (industry)
  */
 struct EffectVehicle final : public SpecializedVehicle<EffectVehicle, VEH_EFFECT> {
-#ifdef WITH_RUST
 	std::unique_ptr<OpenTTDEffectState, decltype(&openttd_rust_effect_destroy)> rust_state{openttd_rust_effect_new(), openttd_rust_effect_destroy};
-#else
-	uint16_t animation_state = 0; ///< State primarily used to change the graphics/behaviour.
-	uint8_t animation_substate = 0; ///< Sub state to time the change of the graphics/behaviour.
-
-#endif
 
 	/** We don't want GCC to zero our struct! It already is zeroed and has an index! */
 	EffectVehicle() : SpecializedVehicleBase() {}
@@ -40,35 +32,19 @@ struct EffectVehicle final : public SpecializedVehicle<EffectVehicle, VEH_EFFECT
 
 	uint16_t GetAnimationState() const
 	{
-#ifdef WITH_RUST
 		return openttd_rust_effect_get_animation(this->rust_state.get());
-#else
-		return this->animation_state;
-#endif
 	}
 	uint8_t GetAnimationSubstate() const
 	{
-#ifdef WITH_RUST
 		return openttd_rust_effect_get_substate(this->rust_state.get());
-#else
-		return this->animation_substate;
-#endif
 	}
 	void SetAnimationState(uint16_t state)
 	{
-#ifdef WITH_RUST
 		openttd_rust_effect_set_animation(this->rust_state.get(), state);
-#else
-		this->animation_state = state;
-#endif
 	}
 	void SetAnimationSubstate(uint8_t state)
 	{
-#ifdef WITH_RUST
 		openttd_rust_effect_set_substate(this->rust_state.get(), state);
-#else
-		this->animation_substate = state;
-#endif
 	}
 
 	void UpdateDeltaXY() override;
@@ -76,7 +52,6 @@ struct EffectVehicle final : public SpecializedVehicle<EffectVehicle, VEH_EFFECT
 	TransparencyOption GetTransparencyOption() const;
 };
 
-#ifdef WITH_RUST
 /** Stack-only serialization staging; nested boundaries restore their predecessor.
  * Private bytes remain owned by Rust. Partial loads are committed on unwind too. */
 class EffectVehicleAnimationScope {
@@ -99,5 +74,4 @@ public:
 	static uint16_t &State() { return active->animation_state; }
 	static uint8_t &Substate() { return active->animation_substate; }
 };
-#endif
 #endif /* EFFECTVEHICLE_BASE_H */

@@ -9,7 +9,7 @@ For agents writing or reviewing port code, tests and Python tools.
 | Owner | Rust state that holds a component's data and runs its control flow. It may be one allocation per vehicle or a process-wide static. |
 | Shell | A C++ object that holds a Rust owner and keeps its pool identity, fields not yet moved to Rust and save aliases. It is usually a pool item such as `Vehicle`, `Station` or `Town`. |
 | Canonical state | The single authoritative copy of a datum, in Rust or C++. Canonical native state stays in C++, as with the map arrays. Read and write it in place without a mirror. |
-| Facade | A C++ function or method that keeps the original signature and forwards to Rust under `WITH_RUST`. |
+| Facade | A C++ function or method that keeps the original signature and forwards to Rust. |
 | Leaf | A typed `noexcept` C++ service that Rust calls for a shared operation or a field of a record still stored in C++. Shared operations include `Random`, sound and viewport. A leaf returns without reentering its calling owner. |
 | Service table | A C++ struct of typed leaf function pointers, such as `OpenTTDTreeServices`. C++ uses designated initializers; Rust borrows the table for a call. Each field names one service, never an opcode. |
 | Witness | A named branch counter in `witness.rs`. A scenario that sets `witnesses` requires each listed counter to be nonzero. |
@@ -17,7 +17,7 @@ For agents writing or reviewing port code, tests and Python tools.
 ## Ownership ports
 
 - Prefer ports where Rust owns state and control flow. C++ keeps a thin facade and calls for shared operations (`Random`, allocation, progress, sound) and fields of records still stored in C++.
-- The Rust build does not compile the original body. Until #581, keep it in the `#else` of `#ifdef WITH_RUST` or under `#ifndef WITH_RUST`. The #581 sweep deletes these bodies. Later ports delete the bodies they replace. The pinned reference remains for review.
+- Delete replaced C++ bodies; every fork build requires Rust. Keep no `WITH_RUST` conditionals in `src/`; quick CI rejects them. The pinned reference remains for review. Drafts adopting #581 rerun the [recorded sweep](rust-migration.md#rust-only-source-sweep) over every touched `src/` file, including cleanly merged files.
 - Do not extract an algorithmic fragment while C++ keeps its state and loop unless the roadmap names it as a stepping stone.
 
 ## Storage ports
