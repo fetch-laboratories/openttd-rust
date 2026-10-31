@@ -14,7 +14,7 @@ struct OpenTTDWorldSetupFrame;
 struct OpenTTDSessionServices;
 struct OpenTTDSessionFrame;
 struct OpenTTDWorldSettings { uint8_t height_limit, flat_height, heightmap_height, generator; };
-struct OpenTTDWorldLandscape { OpenTTDGenerationFrame *frame; const OpenTTDHeightmapDecoder *decoder; OpenTTDLandscapeGenerationSettings settings; };
+struct OpenTTDWorldLandscape { OpenTTDGenerationFrame *frame; const OpenTTDHeightmapInput *decoder; OpenTTDLandscapeGenerationSettings settings; };
 struct OpenTTDWorldTown { OpenTTDTownFoundingFrame *frame; OpenTTDTownNameFrame *names; const OpenTTDRoadCommandContext *road; TownLayout layout; };
 struct OpenTTDWorldObject { OpenTTDObjectGenerationFrame *frame; OpenTTDCommandCost *out, *tmp, *aux; };
 /* All calls are serialized by the game-state mutex. Progress may yield; no map

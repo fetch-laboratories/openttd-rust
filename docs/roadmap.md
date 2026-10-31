@@ -24,16 +24,14 @@ Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh.
 - Whole fork at `29b65dd186` (not re-measured after it): retired 51,663 of
   284,355 (18.17%); glue 33,167; compiled C++ 265,859 (93.50%); simulation
   logic left 10,950, storage 11,050; 1,337 exports and 4,185 callback slots.
-- Speed: the profile after integration 32 (table below) moved every
-  projection by under 0.1% from profile 30. The integration-30 rise is
-  attributed to #569's road follower crossings (#275). Its fix-forward batch
-  (#565 item 1 plus #275's two items) and the quiet pass (Grok and Opus in the
-  play band) are due and not started.
-- Platform cadence: run 41146771150 on `69f02851be` failed every annotation
-  check on Linux Clang `-Wmissing-field-initializers` in `src/tests` (Clang
-  now builds Rust and the fork's tests). #595 fixes them; a `ci-build.yml`
-  dispatch on its branch (run 41150431792) passed every platform. A cadence
-  dispatch on `rust-migration` after #595 confirms it and is due.
+- Speed: profile 36 (`11c285f939`, code as `063e7b28f1`) moved every
+  instruction count by under 0.05% from profile 32; the table below shows its
+  projections. The integration-30 rise is attributed to #569's road follower
+  crossings (#275). Its fix-forward batch (#565 item 1 plus #275's two items)
+  waits for #576. Grok and Opus stay in the play band, so the quiet pass is
+  due; it needs an idle host.
+- Platform cadence: run 41174701345 on `rust-migration` after #595 passed
+  every platform, confirming its Clang `-Wmissing-field-initializers` fix.
 - Deep checks: the sanitized, threaded, TSan and multiplayer rotation started
   at `2f3d78e774` was killed at 2026-10-31 01:35Z when the session restarted,
   three hours into its sanitized member, without a report. It had passed 352
@@ -45,14 +43,14 @@ Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh.
   covers the shared-accessor check misreading `OpenTTDXServices name{};`.
 - Original coverage: 330 of 449 traces are complete; gaps are on #156.
 
-| Scenario | Latest quiet anchor | Profile-32 projection | Record with growth |
+| Scenario | Latest quiet anchor | Profile-36 projection | Record with growth |
 | --- | ---: | ---: | ---: |
 | TGP | 1.1117x | 1.1117x | 1.1541x |
-| Grok | 1.3871x | 1.5767x | 1.5750x |
+| Grok | 1.3871x | 1.5766x | 1.5749x |
 | Opus | 1.3939x | 1.5612x | 1.5618x |
-| P1996 | 1.3366x | 1.3803x | 1.3816x |
-| P2000 | 1.4006x | 1.4298x | 1.4307x |
-| P2016 | 1.5229x | 1.5644x | 1.5223x |
+| P1996 | 1.3366x | 1.3817x | 1.3829x |
+| P2000 | 1.4006x | 1.4284x | 1.4293x |
+| P2016 | 1.5229x | 1.5653x | 1.5231x |
 
 ## Phases
 
@@ -312,6 +310,9 @@ Rust / tooling / original C++ retired / net glue.
 | 32 | #561 company identity, faces, colours and liveries / #579 | `0de459cbe1` | 995 / 205 / 373 / +315 |
 | 33 | #581 PR-A, Rust by default and on Linux CI / #583 | `d531622d32` | 0 / 0 / 0 / 0 (CI and CMake) |
 | 34 | #582 rebound-callee gate and housekeeping cwd fix / #590 | `29b65dd186` | 0 / 964 / 0 / 0 |
+| 35 | #581 PR-E, Emscripten links Rust on emsdk 4.0.23 / #591 | `69f02851be` | 0 / 21 / 0 / 0 |
+| 36 | Clang missing-initializer fixes in `src/tests` / #595 | `063e7b28f1` | 0 / 0 / 0 / +18 |
+| 37 | #584 heightmap input and town-data import / #593 | `b74888c4bc` | 554 / 389 / 278 / +193 |
 
 ## Work order
 
@@ -320,8 +321,9 @@ six-branch limit and disjoint-service rule; completing review/integration takes
 priority. A lower rank can run while a higher one waits. Scopes live in issues.
 
 1. **Finish the remaining drafts in readiness order, with the steering fixes.**
-   #568 and #576 remain; each next action is in the checkpoint. No reviewed
-   owner gains other scope; a fix the audit found is not new scope.
+   #576, #596, #568 and #594 remain; each next action is in the
+   checkpoint. No reviewed owner gains other scope; a fix the audit found is
+   not new scope.
 2. **#581 Rust on every CI configuration and retirement of the portable
    fallback.**
    - PR-A integrated as #583 (integration 33).
@@ -349,24 +351,40 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
 5. **#199 integrated-fault batch**, now that #582's gate is integrated: #569's service copies, duplicate
    fields and orphan declaration, #577's single-use carriers, and the
    `CargoFlow` bounce once #568 integrates.
-6. **Queued phase-1 owners under #3**, sized by issues-phase1 (remaining code
-   lines, estimated net glue):
-   1. #587 simulation-setting transitions (317, +90 to +170), in progress
-      (settings587);
-   2. #584 world-input generation, heightmap input and town-data import (276,
-      +90 to +160), in progress (worldinput584);
+6. **Queued phase-1 owners under #3**, ranked by plan-phase1-rest on
+   2026-10-31 at `11c285f939` (remaining code lines, estimated net glue):
+   1. #587 simulation-setting transitions (317, +90 to +170), in review (#594);
+   2. #584 world-input generation, heightmap input and town-data import:
+      integrated as #593 (integration 37);
    3. #585 NewGRF town-name storage and generation plus ActionF (168, +40 to
-      +85);
-   4. #586 sign and depot naming (90 selected, +35 to +70);
-   5. clear-ground clearing (22) and editor tree-group mutation (36): one small
-      PR beside the ground and tree owners; root issues it when a slot takes it.
+      +85), in review (#596);
+   4. #600 town spatial index and town policy (151, -10 to +50), after #568;
+   5. #601 industry remainder (142, -10 to +40), after #568;
+   6. #602 station spatial index and road-stop selection (about 80, -10 to
+      +30), after #568;
+   7. #586 sign and depot naming (90 selected, +35 to +70);
+   8. clear-ground clearing (22) and editor tree-group mutation (36): one small
+      PR beside the ground and tree owners; root issues it when a slot takes it;
+   9. not yet issued; root issues each when a slot takes it: company control
+      remainder (121, +30 to +70), engine runtime (100, +40 to +80), snow line
+      and map-edge water (51), road-bit cleanup (45), link-graph job lifecycle
+      (42), and the elrail setting change and service clamp (35, after #594).
 
-   Do not fall back to utility helpers. Port
-   support code only where the component needs it, and keep an operation on
-   data that stays in C++ as one call, not a service per field. Vehicle base
-   lifecycle runs after #570, on its movement and consist record contract
-   (estimate 190-240 retired, 70-160 net glue), never concurrently in the
-   shared vehicle files.
+   After #570, one at a time in the shared vehicle files: #598 vehicle routing
+   decisions (263, -20 to +60), then #599 vehicle base lifecycle (245, +60 to
+   +140). The airport automata (83, negative net glue) follow #570's
+   declaration generator. Pool-coupled bodies, such as the engine constructor
+   and the station destructors, move with their pool in item 8.
+
+   Do not fall back to utility helpers. Port support code only where the
+   component needs it, and keep an operation on data that stays in C++ as one
+   call, not a service per field.
+
+   The planner found two inventory items outside phase 1: process startup in
+   `openttd.cpp` (468 lines, phase 4) and drawing support (about 515 lines:
+   the rail, road and canal NewGRF resolvers, `UpdateDeltaXY`, elrail wire
+   geometry, `IsWateredTile` and the bridge pillar helpers, phase 5). The next
+   navigation reclassifies them in the Phases table.
 7. **#566 drawing workload and #570 first shared vehicle records**, after
    #581's PR-B.
    - #570 follows the accepted world-state design. It deletes the replaced
@@ -376,13 +394,15 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
      model.
    - Start #566 beside it and obtain its reference and candidate pixels and
      drawing Ir before storage integrates (150-250 tooling lines).
+   - #570 unblocks #598, #599 and the airport automata.
 8. **Queued later phase-2 pools.** The order is:
    1. the remaining vehicle pool;
-   2. stations and road stops;
-   3. orders and order lists;
-   4. towns and industries;
-   5. companies, groups, engines and the smaller pools;
-   6. map allocation and definitions.
+   2. stations and road stops (1,604 storage lines, about 600 callback slots);
+   3. towns and industries (1,295, about 344);
+   4. companies, groups, engines and the smaller pools (952, about 286);
+   5. orders and order lists (390, about 111), earlier if the vehicle pool
+      design needs order lists first;
+   6. map allocation and definitions (3,988).
 
    Move the coupled save adapters with each record owner, generate native
    declarations, verify the layout, and delete the displaced readers and
@@ -401,10 +421,10 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
 
 Recurring:
 - Profile the merged tip after every second integration; the next is due
-  after integration 36. Launch it with the pinned `LD_LIBRARY_PATH` that
+  after integration 38. Launch it with the pinned `LD_LIBRARY_PATH` that
   docs/rust-migration.md names.
 - Deep checks run only on the user's request (user decision, 2026-10-31).
-- The fifth-integration platform cadence is due after integration 35.
+- The fifth-integration platform cadence is due after integration 40.
 - Preserve anchors, raw traces, frozen runtimes and failed outputs.
 - Root checks actual issue placement and exclusion conditions at stocktake.
 
@@ -412,11 +432,14 @@ Excluded, with return conditions checked by this review:
 - #559 command invocation lifecycle returns when one of these happens:
   - a selected game owner needs Rust-owned top-level `Do`/`Post` admission;
   - a #275 profile ranks top-level dispatch among the largest net costs;
-  - the queued ownership candidates run out.
+  - the queued ownership candidates run out, or the item-6 ready queue
+    empties. `command.cpp` (141 lines) is in phase 1's exit inventory, so #559
+    returns before phase 1 exits.
 - #507's NewGRF corpus (#525, #526) stays parked by the user (2026-10-28)
   until the user reselects it. #525's branch stays on origin.
 - #69's remaining tile-list/support work returns when a selected simulation
-  component needs it.
+  component needs it or the item-6 ready queue empties. `tilearea.cpp` (172
+  lines) is in phase 1's exit inventory, so it returns before phase 1 exits.
 - #64 and #68 become maintained Rust crates that reproduce the game's
   observable cryptography. They return when phase 3's network ports reach
   authentication, or with phase 6, whichever comes first.
@@ -424,28 +447,29 @@ Excluded, with return conditions checked by this review:
   near-full reproduction under #513's original-default setting policy. #513
   needs implementation when the first such improvement is accepted.
 
-## Resume checkpoint (2026-10-31, paused after integration 36)
+## Resume checkpoint (2026-10-31, integration 37)
 
-Paused at the user's request after integration 36 (`063e7b28f1`); no rollback
-ran. Every worktree and branch below is preserved.
+Claude Code root (claude-opus-5-5, xhigh) resumed at `11c285f939`; #593
+integrated as integration 37 (`b74888c4bc`). Drafts integrate one at a time
+because every pair shares service files; each merge needs the next draft
+updated from base. Order: #576, #596, #568, #594.
 
-| Draft | Pushed head | State and next action on resume | Worktree |
+| Draft | Pushed head | State and next action | Worktree |
 | --- | --- | --- | --- |
-| #565 / #576 | `98de8a1a23` | Reviewed (review576-r4, -r5) and spot-checked. Full 41148035929 at `d899ead4b6` failed only on an Emscripten missing-initializer annotation in its trees ABI fixture, which root's warning-only commit `98de8a1a23` fixes. 1. Update from base (#595 also edits `src/tests`; build before pushing). 2. Exact-head Full. 3. Merge. Then #565 item 1 with #275's fix-forward and #592. | `t3-9b7a8224` |
-| #562 / #568 | `ae124c2b6e` | review568-r3 found nothing in fix568-rebound's commits. Quick passed; no native result at this head. 1. Update from base and rerun the rebound gate. 2. Full. 3. Merge. | `t3-070c9aac` |
-| #584 / #593 | `3eb4c2815c` | Reviewed by review593 and spot-checked; cost accepted. Quick is red. 1. Read the Quick failure. 2. Update from base and reconcile it. 3. Full. | `t3-183f9668` |
-| #587 / #594 | `0ea4a457af` | Reviewed by review594 and spot-checked; cost accepted; it adopts #565 item 1 at its base update. Quick is red and the PR conflicts with base. 1. Update from base; a fresh conflict review if the resolution changes lines. 2. Rebound gate. 3. Full. | `t3-fbbd1132` |
-| #585 / #596 | `84b323f599` | review596 fixed its findings, including the translated-text bounce (report of 2026-10-31). Its final `simulate newgrf-loading- town-names- town-founding- town-commands` was still running at wind-down (PID 1694439), and `tools/test-simulation.py`, `tools/test-orphan-exports.py`, Ruff and ty were not rerun after `84b323f599`. 1. Read or rerun that validation. 2. Root's spot-check of review596's fixes. 3. Base update and Full. | `t3-489ff2ae` (implementation), `t3-1bac609b` (review) |
+| #565 / #576 | `f5ea17e1dd` | Updated (update576, condition (a)); root's warning-only fix. 1. Update from base after #593. 2. Full. 3. Merge. Then #565 item 1 with #275's fix-forward and #592. | `t3-f870f713` |
+| #585 / #596 | `eeab615a38` | Spot-checked by root; updated (update596, condition (a)); 52 of 52 scenarios equal. Update from base after #576, then Full. | `t3-489ff2ae` (implementation) |
+| #562 / #568 | `6ab951af32` | Updated (update568, condition (a)); root's warning-only fix. Update from base after #596, then Full. | `t3-070c9aac` (implementation) |
+| #587 / #594 | `adcea34bb3` | Updated (update594). Its `src/tests/train.cpp` resolution meets neither condition and needs a fresh conflict reviewer; one review covers it with its final base update. | `t3-9836ee35` |
+| #199 batch | none yet | faults199 running: #199's four ready integrated-fault items; `CargoFlow` waits for #568. Independent review, then Full. | T3 worktree |
 
 | Running or due work | State / next action |
 | --- | --- |
-| Deep checks | On the user's request only (user decision, 2026-10-31); do not restart the killed rotation unprompted. It died at 2026-10-31 01:35Z with the session restart, three hours into its sanitized member at `2f3d78e774`, with no report (352 passed; 43 failed only on the missing native-test-support archive, #503). If a run is requested, in `.local/worktrees/deep-after30-569` (locked; move it with `git checkout --detach origin/rust-migration` and relock): 1. `python3 tools/migration.py build --jobs 2`. 2. `cmake --build build-rust-sanitized --target openttd_rust_native_test_support_build` until #503's fix lands. 3. `python3 tools/migration.py deep` with the requested `--member` options. Launch it outside the session's process group (for example a `systemd-run --user` unit), since a `setsid` child of the session died with it. |
-| Platform cadence | Due on `rust-migration` at `063e7b28f1`: `gh workflow run ci-build.yml --ref rust-migration`. |
-| Instruction profile | Due after integration 36; launch with the pinned `LD_LIBRARY_PATH` from docs/rust-migration.md. Profile 32 is retained in `.local/worktrees/profile-after32-579` (locked). |
-| Quiet speed pass | Due (Grok and Opus in the play band). |
-| Maintenance | #565 item 1 with #275's fix-forward and #592, after #576 integrates; #199's batch; #581 PR-B after #568 and #576 integrate. |
+| Branch limit | Five unintegrated branches plus #586 once started; #565 item 1 starts after #576 integrates. |
+| Deep checks | On the user's request only (user decision, 2026-10-31). If one is requested, use `.local/worktrees/deep-after30-569` (locked). Move it with `git checkout --detach origin/rust-migration` and relock it. Then run `python3 tools/migration.py build --jobs 2`, then `cmake --build build-rust-sanitized --target openttd_rust_native_test_support_build` until #503's fix lands, then `python3 tools/migration.py deep` with the requested `--member` options. Launch outside the session's process group, for example as a `systemd-run --user` unit. |
+| Instruction profile | Profile 36 is retained in `.local/worktrees/profile-after36-595` (locked). The next is due after integration 38. |
+| Quiet speed pass | Due (Grok and Opus in the play band); needs an idle host. |
+| Maintenance | #565 item 1 with #275's fix-forward and #592, after #576 integrates; #581 PR-B after #568 and #576 integrate. |
 | Housekeeping | Lock a running Codex agent's worktree before `--apply` until #592 integrates. |
-| CI | No request pending. |
 
 Keep the pinned reference unchanged. Preserve unfinished checkouts and existing
 profile and deep evidence.
