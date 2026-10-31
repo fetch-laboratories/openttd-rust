@@ -1674,6 +1674,8 @@ def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
                 or "STCMD complete" not in run["log"]
             ):
                 raise RuntimeError("station reload capture failed")
+            if capture == "spatial602":
+                check_spatial602(run["log"], False)
             logs[role] = [line for line in run["log"] if line.startswith("STCMD ")]
         differences = core.compare_saves(
             saves["reference"],
