@@ -34,7 +34,7 @@ static Randomizer SubsidyChance(uint target) { for (uint seed = 1;; ++seed) { _r
 static bool SubsidyScenario(std::span<std::string_view> args)
 {
 	if (args[1] == "subsidies-inspect") { bool loaded = false; for (Subsidy *s : Subsidy::Iterate()) loaded |= s->remaining == 54321 && s->IsAwarded(); fmt::print(stderr, "SUBSIDY loaded {}\n", loaded); return true; }
-	Backup<Randomizer> interactive_seed(_interactive_random);
+	AutoRestoreBackup<Randomizer> interactive_seed(_interactive_random, _interactive_random);
 	_interactive_random.SetSeed(12345);
 	SubsidyClean();
 	Vehicle *front = nullptr; for (Vehicle *v : Vehicle::Iterate()) if (v->type == VEH_TRAIN && v->IsPrimaryVehicle() && v->cargo_payment == nullptr) { front = v; break; }

@@ -372,7 +372,7 @@ static void TownSpatialQueries(const char *phase, TileIndex tile)
 }
 static void TownSpatial(const char *phase, bool ties)
 {
-	Backup<Randomizer> interactive_seed(_interactive_random);
+	AutoRestoreBackup<Randomizer> interactive_seed(_interactive_random, _interactive_random);
 	_interactive_random.SetSeed(12345);
 	for (const Town *town : Town::Iterate()) TownSpatialQueries(phase, town->xy);
 	if (!ties) return;
