@@ -148,7 +148,6 @@ public:
 	}
 };
 
-#ifdef WITH_RUST
 /** Only the opaque Rust text needs native string staging. Scalar descriptors
  * address canonical aliases directly, including partial writes on load failure. */
 static EncodedString _industry_text;
@@ -157,7 +156,6 @@ struct IndustryTextScope {
 	IndustryTextScope(Industry *i) : industry(i) { _industry_text = i->GetText(); }
 	~IndustryTextScope() { this->industry->SetText(_industry_text); }
 };
-#endif
 
 static const SaveLoad _industry_desc[] = {
 	SLE_CONDVAR(Industry, location.tile,              SLE_FILE_U16 | SLE_VAR_U32,  SL_MIN_VERSION, SLV_6),
@@ -209,11 +207,7 @@ static const SaveLoad _industry_desc[] = {
 	SLE_CONDREF(Industry, psa,                        REF_STORAGE,              SLV_161, SL_MAX_VERSION),
 
 	SLE_CONDVAR(Industry, random,                     SLE_UINT16,                SLV_82, SL_MAX_VERSION),
-#ifdef WITH_RUST
 	SLEG_CONDSSTR("text", _industry_text,     SLE_STR | SLF_ALLOW_CONTROL,     SLV_INDUSTRY_TEXT, SL_MAX_VERSION),
-#else
-	SLE_CONDSSTR(Industry, text,     SLE_STR | SLF_ALLOW_CONTROL,     SLV_INDUSTRY_TEXT, SL_MAX_VERSION),
-#endif
 
 	SLE_CONDVAR(Industry, valid_history, SLE_UINT64, SLV_INDUSTRY_NUM_VALID_HISTORY, SL_MAX_VERSION),
 
@@ -231,9 +225,7 @@ struct INDYChunkHandler : ChunkHandler {
 		/* Write the industries */
 		for (Industry *ind : Industry::Iterate()) {
 			SlSetArrayIndex(ind->index);
-#ifdef WITH_RUST
 			_industry_text = ind->GetText();
-#endif
 			SlObject(ind, _industry_desc);
 		}
 	}
@@ -272,14 +264,10 @@ struct INDYChunkHandler : ChunkHandler {
 
 		while ((index = SlIterateArray()) != -1) {
 			Industry *i = new (IndustryID(index)) Industry();
-#ifdef WITH_RUST
 			{
 				IndustryTextScope text(i);
 				SlObject(i, slt);
 			}
-#else
-			SlObject(i, slt);
-#endif
 
 			/* Before savegame version 161, persistent storages were not stored in a pool. */
 			if (IsSavegameVersionBefore(SLV_161) && !IsSavegameVersionBefore(SLV_76)) {

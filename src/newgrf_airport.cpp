@@ -20,18 +20,15 @@
 
 #include "newgrf_class_func.h"
 
-#ifdef WITH_RUST
 #include "rust/services_station.h"
 #include "rust/tile_animation_services.h"
 #include "rust/settings_services.h"
 #include "rust/engine_services.h"
 #include "rust/services_assert.h"
 #include "rust/airport_resolver_ffi.h"
-#endif
 
 #include "safeguards.h"
 
-#ifdef WITH_RUST
 static uint16_t RustEvaluateAirportTile(uint16_t callback, uint32_t p1, uint32_t p2, const AirportTileSpec *spec, Station *station, uint32_t tile, int32_t *registers, size_t count) noexcept
 {
 	/* Native shells and optional scopes live for this synchronous invocation.
@@ -101,14 +98,12 @@ const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept
 	};
 	return services;
 }
-#endif
 
 /**
  * Reset airport classes to their default state.
  * This includes initialising the defaults classes with an empty
  * entry, for standard airports.
  */
-#ifdef WITH_RUST
 template <>
 std::span<const OpenTTDGRFClassDefault> AirportClass::Defaults()
 {
@@ -120,24 +115,7 @@ std::span<const OpenTTDGRFClassDefault> AirportClass::Defaults()
 	};
 	return defaults;
 }
-#else
-template <>
-/* static */ void AirportClass::InsertDefaults()
-{
-	AirportClass::Get(AirportClass::Allocate('SMAL'))->name = STR_AIRPORT_CLASS_SMALL;
-	AirportClass::Get(AirportClass::Allocate('LARG'))->name = STR_AIRPORT_CLASS_LARGE;
-	AirportClass::Get(AirportClass::Allocate('HUB_'))->name = STR_AIRPORT_CLASS_HUB;
-	AirportClass::Get(AirportClass::Allocate('HELI'))->name = STR_AIRPORT_CLASS_HELIPORTS;
-}
-#endif
 
-#ifndef WITH_RUST
-template <>
-bool AirportClass::IsUIAvailable(uint) const
-{
-	return true;
-}
-#endif
 
 /* Instantiate AirportClass. */
 template class NewGRFClass<AirportSpec, AirportClassID, APC_MAX>;
@@ -146,10 +124,8 @@ template class NewGRFClass<AirportSpec, AirportClassID, APC_MAX>;
 AirportOverrideManager _airport_mngr(NEW_AIRPORT_OFFSET, NUM_AIRPORTS, AT_INVALID);
 
 AirportSpec AirportSpec::specs[NUM_AIRPORTS]; ///< Airport specifications.
-#ifdef WITH_RUST
 AirportSpec *AirportSpec::RustRawSpec(uint16_t type) noexcept { return &AirportSpec::specs[type]; }
 static_assert(NUM_AIRPORTS == 128 && NEW_AIRPORT_OFFSET == 10 && AT_INVALID == 254 && INVALID_AIRPORTTILE == 256 && NEW_AIRPORTTILE_OFFSET == 74);
-#endif
 
 /**
  * Retrieve airport spec for the given airport. If an override is available
@@ -159,20 +135,7 @@ static_assert(NUM_AIRPORTS == 128 && NEW_AIRPORT_OFFSET == 10 && AT_INVALID == 2
  */
 /* static */ const AirportSpec *AirportSpec::Get(uint8_t type)
 {
-#ifdef WITH_RUST
 	return openttd_rust_airport_spec(type, &GetAirportResolverServices());
-#else
-	assert(type < lengthof(AirportSpec::specs));
-	const AirportSpec *as = &AirportSpec::specs[type];
-	if (type >= NEW_AIRPORT_OFFSET && !as->enabled) {
-		if (_airport_mngr.GetGRFID(type) == 0) return as;
-		uint8_t subst_id = _airport_mngr.GetSubstituteID(type);
-		if (subst_id == AT_INVALID) return as;
-		as = &AirportSpec::specs[subst_id];
-	}
-	if (as->grf_prop.override_id != AT_INVALID) return &AirportSpec::specs[as->grf_prop.override_id];
-	return as;
-#endif
 }
 
 /**
@@ -181,25 +144,11 @@ static_assert(NUM_AIRPORTS == 128 && NEW_AIRPORT_OFFSET == 10 && AT_INVALID == 2
  * @param type index of airport
  * @return A pointer to the corresponding AirportSpec
  */
-#ifndef WITH_RUST
-/* static */ AirportSpec *AirportSpec::GetWithoutOverride(uint8_t type)
-{
-	assert(type < lengthof(AirportSpec::specs));
-	return &AirportSpec::specs[type];
-}
-#endif
 
 /** Check whether this airport is available to build. */
 bool AirportSpec::IsAvailable() const
 {
-#ifdef WITH_RUST
 	return openttd_rust_airport_available(this, &GetAirportResolverServices());
-#else
-	if (!this->enabled) return false;
-	if (TimerGameCalendar::year < this->min_year) return false;
-	if (_settings_game.station.never_expire_airports) return true;
-	return TimerGameCalendar::year <= this->max_year;
-#endif
 }
 
 /**
@@ -210,101 +159,22 @@ bool AirportSpec::IsAvailable() const
  */
 bool AirportSpec::IsWithinMapBounds(uint8_t table, TileIndex tile) const
 {
-#ifdef WITH_RUST
 	return openttd_rust_airport_in_bounds(this, table, tile.base(), &GetAirportResolverServices());
-#else
-	if (table >= this->layouts.size()) return false;
-
-	uint8_t w = this->size_x;
-	uint8_t h = this->size_y;
-	if (this->layouts[table].rotation == DIR_E || this->layouts[table].rotation == DIR_W) std::swap(w, h);
-
-	return TileX(tile) + w < Map::SizeX() &&
-		TileY(tile) + h < Map::SizeY();
-#endif
 }
 
 /**
  * This function initializes the airportspec array.
  */
-#ifndef WITH_RUST
-void AirportSpec::ResetAirports()
-{
-	extern const AirportSpec _origin_airport_specs[NEW_AIRPORT_OFFSET];
-
-	auto insert = std::copy(std::begin(_origin_airport_specs), std::end(_origin_airport_specs), std::begin(AirportSpec::specs));
-	std::fill(insert, std::end(AirportSpec::specs), AirportSpec{});
-
-	_airport_mngr.ResetOverride();
-}
-#endif
 
 /**
  * Tie all airportspecs to their class.
  */
-#ifndef WITH_RUST
-void BindAirportSpecs()
-{
-	for (int i = 0; i < NUM_AIRPORTS; i++) {
-		AirportSpec *as = AirportSpec::GetWithoutOverride(i);
-		if (as->enabled) AirportClass::Assign(as);
-	}
-}
-#endif
 
 
-#ifndef WITH_RUST
-void AirportOverrideManager::SetEntitySpec(AirportSpec &&as)
-{
-	uint8_t airport_id = this->AddEntityID(as.grf_prop.local_id, as.grf_prop.grfid, as.grf_prop.subst_id);
-
-	if (airport_id == this->invalid_id) {
-		GrfMsg(1, "Airport.SetEntitySpec: Too many airports allocated. Ignoring.");
-		return;
-	}
-
-	AirportSpec::specs[airport_id] = std::move(as);
-
-	/* Now add the overrides. */
-	for (int i = 0; i < this->max_offset; i++) {
-		AirportSpec *overridden_as = AirportSpec::GetWithoutOverride(i);
-
-		if (this->entity_overrides[i] != AirportSpec::specs[airport_id].grf_prop.local_id || this->grfid_overrides[i] != AirportSpec::specs[airport_id].grf_prop.grfid) continue;
-
-		overridden_as->grf_prop.override_id = airport_id;
-		overridden_as->enabled = false;
-		this->entity_overrides[i] = this->invalid_id;
-		this->grfid_overrides[i] = 0;
-	}
-}
-#endif
 
 /* virtual */ uint32_t AirportScopeResolver::GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const
 {
-#ifdef WITH_RUST
 	return openttd_rust_airport_variable(&this->context, &this->ro, this->ro.grffile, variable, parameter, &available, &GetAirportResolverServices());
-#else
-	switch (variable) {
-		case 0x40: return this->layout;
-
-		case 0x7A: return GetBadgeVariableResult(*this->ro.grffile, this->spec->badges, parameter);
-	}
-
-	if (this->st == nullptr) {
-		available = false;
-		return UINT_MAX;
-	}
-
-	switch (variable) {
-		/* Get a variable from the persistent storage */
-		case 0x7C: return (this->st->airport.psa != nullptr) ? this->st->airport.psa->GetValue(parameter) : 0;
-
-		case 0xF0: return this->st->facilities.base();
-		case 0xFA: return ClampTo<uint16_t>(this->st->build_date - CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR);
-	}
-
-	return this->st->GetNewGRFVariable(this->ro, variable, parameter, available);
-#endif
 }
 
 GrfSpecFeature AirportResolverObject::GetFeature() const
@@ -314,20 +184,12 @@ GrfSpecFeature AirportResolverObject::GetFeature() const
 
 uint32_t AirportResolverObject::GetDebugID() const
 {
-#ifdef WITH_RUST
 	return RustSpecLocalID(this->airport_scope.context.spec);
-#else
-	return this->airport_scope.spec->grf_prop.local_id;
-#endif
 }
 
 /* virtual */ uint32_t AirportScopeResolver::GetRandomBits() const
 {
-#ifdef WITH_RUST
 	return openttd_rust_airport_random(&this->context, false, &GetAirportResolverServices());
-#else
-	return this->st == nullptr ? 0 : this->st->random_bits;
-#endif
 }
 
 /**
@@ -337,22 +199,7 @@ uint32_t AirportResolverObject::GetDebugID() const
  */
 /* virtual */ void AirportScopeResolver::StorePSA(uint pos, int32_t value)
 {
-#ifdef WITH_RUST
 	openttd_rust_storage_airport(&GetRustStorageServices(), this->context.station, this->ro.grffile, pos, value);
-#else
-	if (this->st == nullptr) return;
-
-	if (this->st->airport.psa == nullptr) {
-		/* There is no need to create a storage if the value is zero. */
-		if (value == 0) return;
-
-		/* Create storage on first modification. */
-		uint32_t grfid = (this->ro.grffile != nullptr) ? this->ro.grffile->grfid : 0;
-		assert(PersistentStorage::CanAllocateItem());
-		this->st->airport.psa = new PersistentStorage(grfid, GSF_AIRPORTS, this->st->airport.tile);
-	}
-	this->st->airport.psa->StoreValue(pos, value);
-#endif
 }
 
 /**
@@ -362,21 +209,7 @@ uint32_t AirportResolverObject::GetDebugID() const
  */
 TownScopeResolver *AirportResolverObject::GetTown()
 {
-#ifdef WITH_RUST
 	return openttd_rust_airport_town(&this->airport_scope.context, this, &GetAirportResolverServices());
-#else
-	if (!this->town_scope.has_value()) {
-		Town *t = nullptr;
-		if (this->airport_scope.st != nullptr) {
-			t = this->airport_scope.st->town;
-		} else if (this->airport_scope.tile != INVALID_TILE) {
-			t = ClosestTownFromTile(this->airport_scope.tile, UINT_MAX);
-		}
-		if (t == nullptr) return nullptr;
-		this->town_scope.emplace(*this, t, this->airport_scope.st == nullptr);
-	}
-	return &*this->town_scope;
-#endif
 }
 
 /**
@@ -392,18 +225,10 @@ TownScopeResolver *AirportResolverObject::GetTown()
 AirportResolverObject::AirportResolverObject(TileIndex tile, Station *st, const AirportSpec *spec, uint8_t layout,
 		CallbackID callback, uint32_t param1, uint32_t param2)
 	: ResolverObject(
-#ifdef WITH_RUST
 		RustSpecGRFFile(spec),
-#else
-		spec->grf_prop.grffile,
-#endif
 		callback, param1, param2), airport_scope(*this, tile, st, spec, layout)
 {
-#ifdef WITH_RUST
 	this->root_spritegroup = openttd_rust_airport_root(&this->airport_scope.context, &GetAirportResolverServices());
-#else
-	this->root_spritegroup = spec->grf_prop.GetSpriteGroup(st != nullptr);
-#endif
 }
 
 SpriteID GetCustomAirportSprite(const AirportSpec *as, uint8_t layout)
@@ -415,14 +240,6 @@ SpriteID GetCustomAirportSprite(const AirportSpec *as, uint8_t layout)
 	return group->sprite;
 }
 
-#ifndef WITH_RUST
-uint16_t GetAirportCallback(CallbackID callback, uint32_t param1, uint32_t param2, Station *st, TileIndex tile, std::span<int32_t> regs100)
-{
-	AirportResolverObject object(tile, st, AirportSpec::Get(st->airport.type), st->airport.layout, callback, param1, param2);
-	return object.ResolveCallback(regs100);
-}
-
-#endif
 
 /**
  * Get a custom text for the airport.

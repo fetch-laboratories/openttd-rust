@@ -22,9 +22,7 @@
 
 #include "table/strings.h"
 
-#ifdef WITH_RUST
 #include "../admin_conversion.hpp"
-#endif
 
 #include "../../safeguards.h"
 
@@ -126,94 +124,11 @@ ScriptEventAdminPort::ScriptEventAdminPort(const std::string &json) :
 {
 }
 
-#ifndef WITH_RUST
-/**
- * Convert a JSON part for Squirrel.
- * @param vm The VM used.
- * @param json The JSON part to convert to Squirrel.
- */
-static bool ScriptEventAdminPortReadValue(HSQUIRRELVM vm, nlohmann::json &json)
-{
-	switch (json.type()) {
-		case nlohmann::json::value_t::null:
-			sq_pushnull(vm);
-			break;
-
-		case nlohmann::json::value_t::boolean:
-			sq_pushbool(vm, json.get<bool>() ? 1 : 0);
-			break;
-
-		case nlohmann::json::value_t::string: {
-			auto value = json.get<std::string>();
-			sq_pushstring(vm, value);
-			break;
-		}
-
-		case nlohmann::json::value_t::number_integer:
-		case nlohmann::json::value_t::number_unsigned:
-			sq_pushinteger(vm, json.get<int64_t>());
-			break;
-
-		case nlohmann::json::value_t::object:
-			sq_newtable(vm);
-
-			for (auto &[key, value] : json.items()) {
-				sq_pushstring(vm, key);
-
-				if (!ScriptEventAdminPortReadValue(vm, value)) {
-					return false;
-				}
-
-				sq_rawset(vm, -3);
-			}
-			break;
-
-		case nlohmann::json::value_t::array:
-			sq_newarray(vm, 0);
-
-			for (auto &value : json) {
-				if (!ScriptEventAdminPortReadValue(vm, value)) {
-					return false;
-				}
-
-				sq_arrayappend(vm, -2);
-			}
-			break;
-
-		/* These types are not supported by Squirrel. */
-		case nlohmann::json::value_t::number_float:
-		default:
-			return false;
-	}
-
-	return true;
-}
-#endif /* !WITH_RUST */
 
 SQInteger ScriptEventAdminPort::GetObject(HSQUIRRELVM vm)
 {
 	auto json = nlohmann::json::parse(this->json, nullptr, false);
 
-#ifdef WITH_RUST
 	ScriptAdminConvertFromJSON(json, vm);
-#else
-	if (!json.is_object()) {
-		ScriptLog::Error("The root element in the JSON data from AdminPort has to be an object.");
-
-		sq_pushnull(vm);
-		return 1;
-	}
-
-	auto top = sq_gettop(vm);
-	if (!ScriptEventAdminPortReadValue(vm, json)) {
-		/* Rewind the stack, removing anything that might be left on top. */
-		sq_settop(vm, top);
-
-		ScriptLog::Error("Received invalid JSON data from AdminPort.");
-
-		sq_pushnull(vm);
-		return 1;
-	}
-#endif /* WITH_RUST */
 	return 1;
 }

@@ -21,13 +21,9 @@
 #include "road_func.h"
 #include "roadveh.h"
 
-#ifdef WITH_RUST
 #include "rust/type_availability_ffi.h"
-#endif
 
-#ifdef WITH_RUST
 #include "rust/type_registry_ffi.h"
-#endif
 
 #include "safeguards.h"
 
@@ -130,30 +126,7 @@ RoadBits CleanUpRoadBits(const TileIndex tile, RoadBits org_rb)
  */
 bool HasRoadTypeAvail(const CompanyID company, RoadType roadtype)
 {
-#ifdef WITH_RUST
 	return openttd_rust_has_road_type(&GetRustSharedServices(), &GetRustTypeAvailabilityServices(), company.base(), roadtype) != 0;
-#else
-	if (company == OWNER_DEITY || company == OWNER_TOWN || _game_mode == GM_EDITOR || _generating_world) {
-		const RoadTypeInfo *rti = GetRoadTypeInfo(roadtype);
-		if (rti->label == 0) return false;
-
-		/* Not yet introduced at this date. */
-		if (IsInsideMM(rti->introduction_date, 0, CalendarTime::MAX_DATE.base()) && rti->introduction_date > TimerGameCalendar::date) return false;
-
-		/*
-		 * Do not allow building hidden road types, except when a town may build it.
-		 * The GS under deity mode, as well as anybody in the editor builds roads that are
-		 * owned by towns. So if a town may build it, it should be buildable by them too.
-		 */
-		return !rti->flags.Test( RoadTypeFlag::Hidden) || rti->flags.Test( RoadTypeFlag::TownBuild);
-	} else {
-		const Company *c = Company::GetIfValid(company);
-		if (c == nullptr) return false;
-		RoadTypes avail = c->avail_roadtypes;
-		avail.Reset(_roadtypes_hidden_mask);
-		return avail.Test(roadtype);
-	}
-#endif
 }
 
 /**
@@ -163,13 +136,7 @@ bool HasRoadTypeAvail(const CompanyID company, RoadType roadtype)
  */
 bool HasAnyRoadTypesAvail(CompanyID company, RoadTramType rtt)
 {
-#ifdef WITH_RUST
 	return openttd_rust_has_any_road_types(&GetRustTypeAvailabilityServices(), company.base(), rtt);
-#else
-	RoadTypes avail = Company::Get(company)->avail_roadtypes;
-	avail.Reset(_roadtypes_hidden_mask);
-	return avail.Any(GetMaskForRoadTramType(rtt));
-#endif
 }
 
 /**
@@ -179,11 +146,7 @@ bool HasAnyRoadTypesAvail(CompanyID company, RoadTramType rtt)
  */
 bool ValParamRoadType(RoadType roadtype)
 {
-#ifdef WITH_RUST
 	return openttd_rust_val_road_type(&GetRustSharedServices(), roadtype) != 0;
-#else
-	return roadtype < ROADTYPE_END && HasRoadTypeAvail(_current_company, roadtype);
-#endif
 }
 
 /**
@@ -196,33 +159,7 @@ bool ValParamRoadType(RoadType roadtype)
  */
 RoadTypes AddDateIntroducedRoadTypes(RoadTypes current, TimerGameCalendar::Date date)
 {
-#ifdef WITH_RUST
 	return RoadTypes{openttd_rust_add_date_road_types(&GetRustTypeAvailabilityServices(), current.base(), date.base())};
-#else
-	RoadTypes rts = current;
-
-	for (RoadType rt = ROADTYPE_BEGIN; rt != ROADTYPE_END; rt++) {
-		const RoadTypeInfo *rti = GetRoadTypeInfo(rt);
-		/* Unused road type. */
-		if (rti->label == 0) continue;
-
-		/* Not date introduced. */
-		if (!IsInsideMM(rti->introduction_date, 0, CalendarTime::MAX_DATE.base())) continue;
-
-		/* Not yet introduced at this date. */
-		if (rti->introduction_date > date) continue;
-
-		/* Have we introduced all required roadtypes? */
-		RoadTypes required = rti->introduction_required_roadtypes;
-		if (!rts.All(required)) continue;
-
-		rts.Set(rti->introduces_roadtypes);
-	}
-
-	/* When we added roadtypes we need to run this method again; the added
-	 * roadtypes might enable more rail types to become introduced. */
-	return rts == current ? rts : AddDateIntroducedRoadTypes(rts, date);
-#endif
 }
 
 /**
@@ -233,29 +170,7 @@ RoadTypes AddDateIntroducedRoadTypes(RoadTypes current, TimerGameCalendar::Date 
  */
 RoadTypes GetCompanyRoadTypes(CompanyID company, bool introduces)
 {
-#ifdef WITH_RUST
 	return RoadTypes{openttd_rust_company_road_types( &GetRustTypeAvailabilityServices(), company.base(), introduces)};
-#else
-	RoadTypes rts{};
-
-	for (const Engine *e : Engine::IterateType(VEH_ROAD)) {
-		const EngineInfo *ei = &e->info;
-
-		if (ei->climates.Test(_settings_game.game_creation.landscape) &&
-				(e->company_avail.Test(company) || TimerGameCalendar::date >= e->intro_date + CalendarTime::DAYS_IN_YEAR)) {
-			const RoadVehicleInfo *rvi = &e->VehInfo<RoadVehicleInfo>();
-			assert(rvi->roadtype < ROADTYPE_END);
-			if (introduces) {
-				rts.Set(GetRoadTypeInfo(rvi->roadtype)->introduces_roadtypes);
-			} else {
-				rts.Set(rvi->roadtype);
-			}
-		}
-	}
-
-	if (introduces) return AddDateIntroducedRoadTypes(rts, TimerGameCalendar::date);
-	return rts;
-#endif
 }
 
 /**
@@ -265,27 +180,7 @@ RoadTypes GetCompanyRoadTypes(CompanyID company, bool introduces)
  */
 RoadTypes GetRoadTypes(bool introduces)
 {
-#ifdef WITH_RUST
 	return RoadTypes{openttd_rust_road_types( &GetRustTypeAvailabilityServices(), introduces)};
-#else
-	RoadTypes rts{};
-
-	for (const Engine *e : Engine::IterateType(VEH_ROAD)) {
-		const EngineInfo *ei = &e->info;
-		if (!ei->climates.Test(_settings_game.game_creation.landscape)) continue;
-
-		const RoadVehicleInfo *rvi = &e->VehInfo<RoadVehicleInfo>();
-		assert(rvi->roadtype < ROADTYPE_END);
-		if (introduces) {
-			rts.Set(GetRoadTypeInfo(rvi->roadtype)->introduces_roadtypes);
-		} else {
-			rts.Set(rvi->roadtype);
-		}
-	}
-
-	if (introduces) return AddDateIntroducedRoadTypes(rts, CalendarTime::MAX_DATE);
-	return rts;
-#endif
 }
 
 /**
@@ -296,21 +191,5 @@ RoadTypes GetRoadTypes(bool introduces)
  */
 RoadType GetRoadTypeByLabel(RoadTypeLabel label, bool allow_alternate_labels)
 {
-#ifdef WITH_RUST
 	return openttd_rust_road_by_label(label, allow_alternate_labels);
-#else
-	extern RoadTypeInfo _roadtypes[ROADTYPE_END];
-	if (label == 0) return INVALID_ROADTYPE;
-
-	auto it = std::ranges::find(_roadtypes, label, &RoadTypeInfo::label);
-	if (it == std::end(_roadtypes) && allow_alternate_labels) {
-		/* Test if any road type defines the label as an alternate. */
-		it = std::ranges::find_if(_roadtypes, [label](const RoadTypeInfo &rti) { return rti.alternate_labels.contains(label); });
-	}
-
-	if (it != std::end(_roadtypes)) return it->Index();
-
-	/* No matching label was found, so it is invalid */
-	return INVALID_ROADTYPE;
-#endif
 }

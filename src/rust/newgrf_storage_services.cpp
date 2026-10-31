@@ -1,7 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file newgrf_storage_services.cpp Native pool identity and feature associations. */
 #include "../stdafx.h"
-#ifdef WITH_RUST
 #include "../newgrf_storage.h"
 #include "../industry.h"
 #include "../newgrf_industries.h"
@@ -64,4 +63,3 @@ const OpenTTDStorageServices &GetRustStorageServices() noexcept
 #include "service_table_check.hpp"
 #include "abi-visit-OpenTTDStorageServices.hpp"
 bool CheckAbi_storage() { return AbiServicesComplete(GetRustStorageServices()); }
-#endif /* WITH_RUST */

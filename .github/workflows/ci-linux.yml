@@ -153,6 +153,12 @@ jobs:
     - name: Install GCC problem matcher
       uses: ammaraskar/gcc-problem-matcher@master
 
+    - name: Fetch pinned native-test oracle headers
+      shell: bash
+      run: |
+        baseline=$(sed -n 's/  "commit": "\(.*\)"/\1/p' migration/baseline.json)
+        git fetch --no-tags --depth=1 origin "$baseline"
+
     - name: Build
       env:
         CCACHE_CONFIGPATH: ${{ github.workspace }}/migration/ccache.conf

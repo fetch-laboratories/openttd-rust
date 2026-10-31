@@ -74,13 +74,8 @@ void CheckCaches()
 	for (const RoadStop *rs : RoadStop::Iterate()) {
 		if (IsBayRoadStopTile(rs->xy)) continue;
 
-#ifdef WITH_RUST
 		openttd_rust_road_stop_check_integrity(&GetRustSharedServices(), rs->xy.base(), rs->GetRustState(), DIAGDIR_NE);
 		openttd_rust_road_stop_check_integrity(&GetRustSharedServices(), rs->xy.base(), rs->GetRustState(), DIAGDIR_NW);
-#else
-		rs->GetEntry(DIAGDIR_NE).CheckIntegrity(rs);
-		rs->GetEntry(DIAGDIR_NW).CheckIntegrity(rs);
-#endif
 	}
 
 	std::vector<NewGRFCache> grf_cache;
@@ -162,7 +157,6 @@ void CheckCaches()
 		assert(c == v->cargo.GetFeederShare());
 	}
 
-#ifdef WITH_RUST
 	/* Backup stations_near: independent copies of the Rust-owned sets. */
 	using StationsNear = std::vector<const Station *>;
 	using IndustriesNear = std::vector<std::pair<uint32_t, const Industry *>>;
@@ -180,17 +174,6 @@ void CheckCaches()
 
 	std::vector<IndustriesNear> old_station_industries_near;
 	for (Station *st : Station::Iterate()) old_station_industries_near.push_back(copy_industries(st->industries_near));
-#else
-	/* Backup stations_near */
-	std::vector<StationList> old_town_stations_near;
-	for (Town *t : Town::Iterate()) old_town_stations_near.push_back(t->stations_near);
-
-	std::vector<StationList> old_industry_stations_near;
-	for (Industry *ind : Industry::Iterate()) old_industry_stations_near.push_back(ind->stations_near);
-
-	std::vector<IndustryList> old_station_industries_near;
-	for (Station *st : Station::Iterate()) old_station_industries_near.push_back(st->industries_near);
-#endif
 
 	for (Station *st : Station::Iterate()) {
 		for (GoodsEntry &ge : st->goods) {
@@ -224,7 +207,6 @@ void CheckCaches()
 
 	Station::RecomputeCatchmentForAll();
 
-#ifdef WITH_RUST
 	/* Check industries_near */
 	i = 0;
 	for (Station *st : Station::Iterate()) {
@@ -249,30 +231,4 @@ void CheckCaches()
 		}
 		i++;
 	}
-#else
-	/* Check industries_near */
-	i = 0;
-	for (Station *st : Station::Iterate()) {
-		if (st->industries_near != old_station_industries_near[i]) {
-			Debug(desync, 2, "warning: station industries near mismatch: station {}", st->index);
-		}
-		i++;
-	}
-
-	/* Check stations_near */
-	i = 0;
-	for (Town *t : Town::Iterate()) {
-		if (t->stations_near != old_town_stations_near[i]) {
-			Debug(desync, 2, "warning: town stations near mismatch: town {}", t->index);
-		}
-		i++;
-	}
-	i = 0;
-	for (Industry *ind : Industry::Iterate()) {
-		if (ind->stations_near != old_industry_stations_near[i]) {
-			Debug(desync, 2, "warning: industry stations near mismatch: industry {}", ind->index);
-		}
-		i++;
-	}
-#endif
 }

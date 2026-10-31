@@ -95,9 +95,6 @@
 
 #include "safeguards.h"
 
-#ifndef WITH_RUST
-void CallLandscapeTick();
-#endif
 void DoPaletteAnimations();
 void MusicLoop();
 void CallWindowGameTickEvent();
@@ -110,13 +107,7 @@ extern void ShowOSErrorBox(std::string_view buf, bool system);
 extern std::string _config_file;
 
 bool _save_config = false;
-#ifndef WITH_RUST
-bool _request_newgrf_scan = false;
-NewGRFScanCallback *_request_newgrf_scan_callback = nullptr;
-#endif
-#ifdef WITH_RUST
 #include "rust/session_native.hpp"
-#endif
 
 /**
  * Error handling for fatal user errors.
@@ -331,52 +322,14 @@ static void ShutdownGame()
  */
 static void LoadIntroGame(bool load_newgrfs = true)
 {
-#ifdef WITH_RUST
 	OpenTTDSessionFrame frame;
 	openttd_rust_session_intro(&GetRustSessionServices(), &frame, load_newgrfs);
 	frame.Rethrow();
-#else
-	_game_mode = GM_MENU;
-
-	if (load_newgrfs) ResetGRFConfig(false);
-
-	/* Setup main window */
-	ResetWindowSystem();
-	SetupColoursAndInitialWindow();
-
-	/* Load the default opening screen savegame */
-	if (SaveOrLoad("opntitle.dat", SLO_LOAD, DFT_GAME_FILE, BASESET_DIR) != SL_OK) {
-		GenerateWorld(GWM_EMPTY, 64, 64); // if failed loading, make empty world.
-		SetLocalCompany(COMPANY_SPECTATOR);
-	} else {
-		SetLocalCompany(CompanyID::Begin());
-	}
-
-	FixTitleGameZoom();
-	_pause_mode = {};
-	_cursor.fix_at = false;
-
-	CheckForMissingGlyphs();
-
-	MusicLoop(); // ensure music is correct
-#endif
 }
 
 void MakeNewgameSettingsLive()
 {
-#ifdef WITH_RUST
 	openttd_rust_session_settings(&GetRustSessionServices());
-#else
-	for (CompanyID c = CompanyID::Begin(); c < MAX_COMPANIES; ++c) {
-		_settings_game.script_config.ai[c].reset();
-	}
-	_settings_game.script_config.game.reset();
-
-	/* Copy newgame settings to active settings.
-	 * Also initialise old settings needed for savegame conversion. */
-	_settings_game = _settings_newgame;
-	_old_vds = _settings_client.company.vehicle;
-#endif
 }
 
 void OpenBrowser(const std::string &url)
@@ -844,109 +797,6 @@ void HandleExitGameRequest()
 	}
 }
 
-#ifndef WITH_RUST
-/**
- * Triggers everything required to set up a saved scenario for a new game.
- */
-static void OnStartScenario()
-{
-	/* Reset engine pool to simplify changing engine NewGRFs in scenario editor. */
-	EngineOverrideManager::ResetToCurrentNewGRFConfig();
-
-	/* Make sure all industries were built "this year", to avoid too early closures. (#9918) */
-	for (Industry *i : Industry::Iterate()) {
-		i->last_prod_year = TimerGameEconomy::year;
-	}
-}
-
-/**
- * Triggers everything that should be triggered when starting a game.
- * @param dedicated_server Whether this is a dedicated server or not.
- */
-static void OnStartGame(bool dedicated_server)
-{
-	/* Update the local company for a loaded game. It is either the first available company
-	 * or in the case of a dedicated server, a spectator */
-	SetLocalCompany(dedicated_server ? COMPANY_SPECTATOR : GetFirstPlayableCompanyID());
-
-	NetworkOnGameStart();
-
-	/* Execute the game-start script */
-	IConsoleCmdExec("exec scripts/game_start.scr 0");
-}
-
-static void MakeNewGameDone()
-{
-	SettingsDisableElrail(_settings_game.vehicle.disable_elrails);
-
-	/* In a dedicated server, the server does not play */
-	if (!VideoDriver::GetInstance()->HasGUI()) {
-		OnStartGame(true);
-		if (_settings_client.gui.pause_on_newgame) Command<CMD_PAUSE>::Post(PauseMode::Normal, true);
-		return;
-	}
-
-	/* Create a single company */
-	DoStartupNewCompany(false);
-
-	Company *c = Company::Get(CompanyID::Begin());
-	c->settings = _settings_client.company;
-
-	/* Overwrite colour from settings if needed
-	 * COLOUR_END corresponds to Random colour */
-
-	if (_settings_client.gui.starting_colour != COLOUR_END) {
-		Command<CMD_SET_COMPANY_COLOUR>::Post(LS_DEFAULT, true, _settings_client.gui.starting_colour);
-	}
-
-	if (_settings_client.gui.starting_colour_secondary != COLOUR_END && HasBit(_loaded_newgrf_features.used_liveries, LS_DEFAULT)) {
-		Command<CMD_SET_COMPANY_COLOUR>::Post(LS_DEFAULT, false, _settings_client.gui.starting_colour_secondary);
-	}
-
-	OnStartGame(false);
-
-	InitializeRailGUI();
-	InitializeRoadGUI();
-
-	if (_settings_client.gui.pause_on_newgame) Command<CMD_PAUSE>::Post(PauseMode::Normal, true);
-
-	CheckEngines();
-	CheckIndustries();
-	MarkWholeScreenDirty();
-}
-
-static void MakeNewGame(bool from_heightmap, bool reset_settings)
-{
-	_game_mode = GM_NORMAL;
-	if (!from_heightmap) {
-		/* "reload" command needs to know what mode we were in. */
-		_file_to_saveload.SetMode(FIOS_TYPE_INVALID, SLO_INVALID);
-	}
-
-	ResetGRFConfig(true);
-
-	GenerateWorldSetCallback(&MakeNewGameDone);
-	GenerateWorld(from_heightmap ? GWM_HEIGHTMAP : GWM_NEWGAME, 1 << _settings_game.game_creation.map_x, 1 << _settings_game.game_creation.map_y, reset_settings);
-}
-
-static void MakeNewEditorWorldDone()
-{
-	SetLocalCompany(OWNER_NONE);
-}
-
-static void MakeNewEditorWorld()
-{
-	_game_mode = GM_EDITOR;
-	/* "reload" command needs to know what mode we were in. */
-	_file_to_saveload.SetMode(FIOS_TYPE_INVALID, SLO_INVALID);
-
-	ResetGRFConfig(true);
-
-	GenerateWorldSetCallback(&MakeNewEditorWorldDone);
-	GenerateWorld(GWM_EMPTY, 1 << _settings_game.game_creation.map_x, 1 << _settings_game.game_creation.map_y);
-}
-
-#endif
 
 /**
  * Load the specified savegame but on error do different things.
@@ -960,7 +810,6 @@ static void MakeNewEditorWorld()
  */
 bool SafeLoad(const std::string &filename, SaveLoadOperation fop, DetailedFileType dft, GameMode newgm, Subdirectory subdir, std::shared_ptr<LoadFilter> lf = nullptr)
 {
-#ifdef WITH_RUST
 	assert(fop == SLO_LOAD);
 	assert(dft == DFT_GAME_FILE || (lf == nullptr && dft == DFT_OLD_GAME_FILE));
 	OpenTTDSessionLoad input{filename, fop, dft, subdir, std::move(lf)};
@@ -968,59 +817,6 @@ bool SafeLoad(const std::string &filename, SaveLoadOperation fop, DetailedFileTy
 	bool result = openttd_rust_session_safe_load(&GetRustSessionServices(), &frame, &input, newgm);
 	frame.Rethrow();
 	return result;
-#else
-	assert(fop == SLO_LOAD);
-	assert(dft == DFT_GAME_FILE || (lf == nullptr && dft == DFT_OLD_GAME_FILE));
-	GameMode ogm = _game_mode;
-
-	_game_mode = newgm;
-
-	SaveOrLoadResult result = (lf == nullptr) ? SaveOrLoad(filename, fop, dft, subdir) : LoadWithFilter(std::move(lf));
-	if (result == SL_OK) return true;
-
-	if (_network_dedicated && ogm == GM_MENU) {
-		/*
-		 * If we are a dedicated server *and* we just were in the menu, then we
-		 * are loading the first savegame. If that fails, not starting the
-		 * server is a better reaction than starting the server with a newly
-		 * generated map as it is quite likely to be started from a script.
-		 */
-		Debug(net, 0, "Loading requested map failed; closing server.");
-		_exit_game = true;
-		return false;
-	}
-
-	if (result != SL_REINIT) {
-		_game_mode = ogm;
-		return false;
-	}
-
-	if (_network_dedicated) {
-		/*
-		 * If we are a dedicated server, have already loaded/started a game,
-		 * and then loading the savegame fails in a manner that we need to
-		 * reinitialize everything. We must not fall back into the menu mode
-		 * with the intro game, as that is unjoinable by clients. So there is
-		 * nothing else to do than start a new game, as it might have failed
-		 * trying to reload the originally loaded savegame/scenario.
-		 */
-		Debug(net, 0, "Loading game failed, so a new (random) game will be started");
-		MakeNewGame(false, true);
-		return false;
-	}
-
-	if (_network_server) {
-		/* We can't load the intro game as server, so disconnect first. */
-		NetworkDisconnect();
-	}
-
-	switch (ogm) {
-		default:
-		case GM_MENU:   LoadIntroGame();      break;
-		case GM_EDITOR: MakeNewEditorWorld(); break;
-	}
-	return false;
-#endif
 }
 
 static void UpdateSocialIntegration(GameMode game_mode)
@@ -1047,193 +843,9 @@ static void UpdateSocialIntegration(GameMode game_mode)
 
 void SwitchToMode(SwitchMode new_mode)
 {
-#ifdef WITH_RUST
 	OpenTTDSessionFrame frame;
 	openttd_rust_session_switch(&GetRustSessionServices(), &frame, new_mode);
 	frame.Rethrow();
-#else
-	/* If we are saving something, the network stays in its current state */
-	if (new_mode != SM_SAVE_GAME) {
-		/* If the network is active, make it not-active */
-		if (_networking) {
-			if (_network_server && (new_mode == SM_LOAD_GAME || new_mode == SM_NEWGAME || new_mode == SM_RESTARTGAME)) {
-				NetworkReboot();
-			} else {
-				NetworkDisconnect();
-			}
-		}
-
-		/* If we are a server, we restart the server */
-		if (_is_network_server) {
-			/* But not if we are going to the menu */
-			if (new_mode != SM_MENU) {
-				/* check if we should reload the config */
-				if (_settings_client.network.reload_cfg) {
-					LoadFromConfig();
-					MakeNewgameSettingsLive();
-					ResetGRFConfig(false);
-				}
-				NetworkServerStart();
-			} else {
-				/* This client no longer wants to be a network-server */
-				_is_network_server = false;
-			}
-		}
-	}
-
-	/* Make sure all AI controllers are gone at quitting game */
-	if (new_mode != SM_SAVE_GAME) AI::KillAll();
-
-	/* When we change mode, reset the autosave. */
-	if (new_mode != SM_SAVE_GAME) ChangeAutosaveFrequency(true);
-
-	/* Transmit the survey if we were in normal-mode and not saving. It always means we leaving the current game. */
-	if (_game_mode == GM_NORMAL && new_mode != SM_SAVE_GAME) _survey.Transmit(NetworkSurveyHandler::Reason::LEAVE);
-
-	/* Keep track when we last switch mode. Used for survey, to know how long someone was in a game. */
-	if (new_mode != SM_SAVE_GAME) {
-		_game_session_stats.start_time = std::chrono::steady_clock::now();
-		_game_session_stats.savegame_size = std::nullopt;
-	}
-
-	switch (new_mode) {
-		case SM_EDITOR: // Switch to scenario editor
-			MakeNewEditorWorld();
-			GenerateSavegameId();
-
-			UpdateSocialIntegration(GM_EDITOR);
-			break;
-
-		case SM_RELOADGAME: // Reload with what-ever started the game
-			if (_file_to_saveload.ftype.abstract == FT_SAVEGAME || _file_to_saveload.ftype.abstract == FT_SCENARIO) {
-				/* Reload current savegame/scenario */
-				_switch_mode = _game_mode == GM_EDITOR ? SM_LOAD_SCENARIO : SM_LOAD_GAME;
-				SwitchToMode(_switch_mode);
-				break;
-			} else if (_file_to_saveload.ftype.abstract == FT_HEIGHTMAP) {
-				/* Restart current heightmap */
-				_switch_mode = _game_mode == GM_EDITOR ? SM_LOAD_HEIGHTMAP : SM_RESTART_HEIGHTMAP;
-				SwitchToMode(_switch_mode);
-				break;
-			}
-
-			MakeNewGame(false, new_mode == SM_NEWGAME);
-			GenerateSavegameId();
-
-			UpdateSocialIntegration(GM_NORMAL);
-			break;
-
-		case SM_RESTARTGAME: // Restart --> 'Random game' with current settings
-		case SM_NEWGAME: // New Game --> 'Random game'
-			MakeNewGame(false, new_mode == SM_NEWGAME);
-			GenerateSavegameId();
-
-			UpdateSocialIntegration(GM_NORMAL);
-			break;
-
-		case SM_LOAD_GAME: { // Load game, Play Scenario
-			ResetGRFConfig(true);
-			ResetWindowSystem();
-
-			if (!SafeLoad(_file_to_saveload.name, _file_to_saveload.file_op, _file_to_saveload.ftype.detailed, GM_NORMAL, NO_DIRECTORY)) {
-				ShowErrorMessage(GetSaveLoadErrorType(), GetSaveLoadErrorMessage(), WL_CRITICAL);
-			} else {
-				if (_file_to_saveload.ftype.abstract == FT_SCENARIO) {
-					OnStartScenario();
-				}
-				OnStartGame(_network_dedicated);
-				/* Decrease pause counter (was increased from opening load dialog) */
-				Command<CMD_PAUSE>::Post(PauseMode::SaveLoad, false);
-			}
-
-			UpdateSocialIntegration(GM_NORMAL);
-			break;
-		}
-
-		case SM_RESTART_HEIGHTMAP: // Load a heightmap and start a new game from it with current settings
-		case SM_START_HEIGHTMAP: // Load a heightmap and start a new game from it
-			MakeNewGame(true, new_mode == SM_START_HEIGHTMAP);
-			GenerateSavegameId();
-
-			UpdateSocialIntegration(GM_NORMAL);
-			break;
-
-		case SM_LOAD_HEIGHTMAP: // Load heightmap from scenario editor
-			SetLocalCompany(OWNER_NONE);
-
-			_game_mode = GM_EDITOR;
-
-			GenerateWorld(GWM_HEIGHTMAP, 1 << _settings_game.game_creation.map_x, 1 << _settings_game.game_creation.map_y);
-			GenerateSavegameId();
-			MarkWholeScreenDirty();
-
-			UpdateSocialIntegration(GM_EDITOR);
-			break;
-
-		case SM_LOAD_SCENARIO: { // Load scenario from scenario editor
-			if (SafeLoad(_file_to_saveload.name, _file_to_saveload.file_op, _file_to_saveload.ftype.detailed, GM_EDITOR, NO_DIRECTORY)) {
-				SetLocalCompany(OWNER_NONE);
-				GenerateSavegameId();
-				_settings_newgame.game_creation.starting_year = TimerGameCalendar::year;
-				/* Cancel the saveload pausing */
-				Command<CMD_PAUSE>::Post(PauseMode::SaveLoad, false);
-			} else {
-				ShowErrorMessage(GetSaveLoadErrorType(), GetSaveLoadErrorMessage(), WL_CRITICAL);
-			}
-
-			UpdateSocialIntegration(GM_EDITOR);
-			break;
-		}
-
-		case SM_JOIN_GAME: // Join a multiplayer game
-			LoadIntroGame();
-			NetworkClientJoinGame();
-
-			SocialIntegration::EventJoiningMultiplayer();
-			break;
-
-		case SM_MENU: // Switch to game intro menu
-			LoadIntroGame();
-			if (BaseSounds::ini_set.empty() && BaseSounds::GetUsedSet()->fallback && SoundDriver::GetInstance()->HasOutput()) {
-				ShowErrorMessage(GetEncodedString(STR_WARNING_FALLBACK_SOUNDSET), {}, WL_CRITICAL);
-				BaseSounds::ini_set = BaseSounds::GetUsedSet()->name;
-			}
-			if (_settings_client.network.participate_survey == PS_ASK) {
-				/* No matter how often you go back to the main menu, only ask the first time. */
-				static bool asked_once = false;
-				if (!asked_once) {
-					asked_once = true;
-					ShowNetworkAskSurvey();
-				}
-			}
-
-			UpdateSocialIntegration(GM_MENU);
-			break;
-
-		case SM_SAVE_GAME: // Save game.
-			/* Make network saved games on pause compatible to singleplayer mode */
-			if (SaveOrLoad(_file_to_saveload.name, SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY) != SL_OK) {
-				ShowErrorMessage(GetSaveLoadErrorType(), GetSaveLoadErrorMessage(), WL_ERROR);
-			} else {
-				CloseWindowById(WC_SAVELOAD, 0);
-			}
-			break;
-
-		case SM_SAVE_HEIGHTMAP: // Save heightmap.
-			MakeHeightmapScreenshot(_file_to_saveload.name);
-			CloseWindowById(WC_SAVELOAD, 0);
-			break;
-
-		case SM_GENRANDLAND: // Generate random land within scenario editor
-			SetLocalCompany(OWNER_NONE);
-			GenerateWorld(GWM_RANDOM, 1 << _settings_game.game_creation.map_x, 1 << _settings_game.game_creation.map_y);
-			/* XXX: set date */
-			MarkWholeScreenDirty();
-			break;
-
-		default: NOT_REACHED();
-	}
-#endif
 }
 
 
@@ -1245,86 +857,9 @@ void SwitchToMode(SwitchMode new_mode)
  */
 void StateGameLoop()
 {
-#ifdef WITH_RUST
 	OpenTTDSessionFrame frame;
 	openttd_rust_session_state_loop(&GetRustSessionServices(), &frame);
 	frame.Rethrow();
-#else
-	if (!_networking || _network_server) {
-		StateGameLoop_LinkGraphPauseControl();
-	}
-
-	/* Don't execute the state loop during pause or when modal windows are open. */
-	if (_pause_mode.Any() || HasModalProgress()) {
-		PerformanceMeasurer::Paused(PFE_GAMELOOP);
-		PerformanceMeasurer::Paused(PFE_GL_ECONOMY);
-		PerformanceMeasurer::Paused(PFE_GL_TRAINS);
-		PerformanceMeasurer::Paused(PFE_GL_ROADVEHS);
-		PerformanceMeasurer::Paused(PFE_GL_SHIPS);
-		PerformanceMeasurer::Paused(PFE_GL_AIRCRAFT);
-		PerformanceMeasurer::Paused(PFE_GL_LANDSCAPE);
-
-		if (!HasModalProgress()) UpdateLandscapingLimits();
-#ifndef DEBUG_DUMP_COMMANDS
-		if (_game_mode == GM_NORMAL) Game::GameLoop();
-#endif
-		return;
-	}
-
-	PerformanceMeasurer framerate(PFE_GAMELOOP);
-	PerformanceAccumulator::Reset(PFE_GL_LANDSCAPE);
-
-	if (_game_mode == GM_EDITOR) {
-		BasePersistentStorageArray::SwitchMode(PSM_ENTER_GAMELOOP);
-		RunTileLoop();
-		CallVehicleTicks();
-		CallLandscapeTick();
-		BasePersistentStorageArray::SwitchMode(PSM_LEAVE_GAMELOOP);
-		UpdateLandscapingLimits();
-
-		CallWindowGameTickEvent();
-		NewsLoop();
-	} else {
-		if (_debug_desync_level > 2 && TimerGameEconomy::date_fract == 0 && (TimerGameEconomy::date.base() & 0x1F) == 0) {
-			/* Save the desync savegame if needed. */
-			std::string name = fmt::format("dmp_cmds_{:08x}_{:08x}.sav", _settings_game.game_creation.generation_seed, TimerGameEconomy::date);
-			SaveOrLoad(name, SLO_SAVE, DFT_GAME_FILE, AUTOSAVE_DIR, false);
-		}
-
-		CheckCaches();
-
-		/* All these actions has to be done from OWNER_NONE
-		 *  for multiplayer compatibility */
-		Backup<CompanyID> cur_company(_current_company, OWNER_NONE);
-
-		BasePersistentStorageArray::SwitchMode(PSM_ENTER_GAMELOOP);
-		AnimateAnimatedTiles();
-		if (TimerManager<TimerGameCalendar>::Elapsed(1)) {
-			RunVehicleCalendarDayProc();
-		}
-		TimerManager<TimerGameEconomy>::Elapsed(1);
-		TimerManager<TimerGameTick>::Elapsed(1);
-		RunTileLoop();
-		CallVehicleTicks();
-		CallLandscapeTick();
-		BasePersistentStorageArray::SwitchMode(PSM_LEAVE_GAMELOOP);
-
-#ifndef DEBUG_DUMP_COMMANDS
-		{
-			PerformanceMeasurer script_framerate(PFE_ALLSCRIPTS);
-			AI::GameLoop();
-			Game::GameLoop();
-		}
-#endif
-		UpdateLandscapingLimits();
-
-		CallWindowGameTickEvent();
-		NewsLoop();
-		cur_company.Restore();
-	}
-
-	assert(IsLocalCompany());
-#endif
 }
 
 /** Interval for regular autosaves. Initialized at zero to disable till settings are loaded. */
@@ -1368,85 +903,14 @@ void ChangeAutosaveFrequency(bool reset)
  */
 bool RequestNewGRFScan(NewGRFScanCallback *callback)
 {
-#ifdef WITH_RUST
 	return openttd_rust_session_scan(callback);
-#else
-	if (_request_newgrf_scan) return false;
-
-	_request_newgrf_scan = true;
-	_request_newgrf_scan_callback = callback;
-	return true;
-#endif
 }
 
 void GameLoop()
 {
-#ifdef WITH_RUST
 	OpenTTDSessionFrame frame;
 	openttd_rust_session_game_loop(&GetRustSessionServices(), &frame);
 	frame.Rethrow();
-#else
-	if (_game_mode == GM_BOOTSTRAP) {
-		/* Check for UDP stuff */
-		if (_network_available) NetworkBackgroundLoop();
-		return;
-	}
-
-	if (_request_newgrf_scan) {
-		ScanNewGRFFiles(_request_newgrf_scan_callback);
-		_request_newgrf_scan = false;
-		_request_newgrf_scan_callback = nullptr;
-		/* In case someone closed the game during our scan, don't do anything else. */
-		if (_exit_game) return;
-	}
-
-	ProcessAsyncSaveFinish();
-
-	if (_game_mode == GM_NORMAL) {
-		static auto last_time = std::chrono::steady_clock::now();
-		auto now = std::chrono::steady_clock::now();
-		auto delta_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_time);
-		if (delta_ms.count() != 0) {
-			TimerManager<TimerGameRealtime>::Elapsed(delta_ms);
-			last_time = now;
-		}
-	}
-
-	/* switch game mode? */
-	if (_switch_mode != SM_NONE && !HasModalProgress()) {
-		SwitchToMode(_switch_mode);
-		_switch_mode = SM_NONE;
-		if (_exit_game) return;
-	}
-
-	IncreaseSpriteLRU();
-
-	/* Check for UDP stuff */
-	if (_network_available) NetworkBackgroundLoop();
-
-	DebugSendRemoteMessages();
-
-	if (_networking && !HasModalProgress()) {
-		/* Multiplayer */
-		NetworkGameLoop();
-	} else {
-		if (_network_reconnect > 0 && --_network_reconnect == 0) {
-			/* This means that we want to reconnect to the last host
-			 * We do this here, because it means that the network is really closed */
-			NetworkClientConnectGame(_settings_client.network.last_joined, COMPANY_SPECTATOR);
-		}
-		/* Singleplayer */
-		StateGameLoop();
-	}
-
-	if (_pause_mode.None() && HasBit(_display_opt, DO_FULL_ANIMATION)) DoPaletteAnimations();
-
-	SoundDriver::GetInstance()->MainLoop();
-	MusicLoop();
-	SocialIntegration::RunCallbacks();
-#endif
 }
 
-#ifdef WITH_RUST
 #include "rust/session_services.inc"
-#endif

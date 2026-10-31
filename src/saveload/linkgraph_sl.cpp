@@ -18,13 +18,10 @@
 #include "../network/network.h"
 #include "../settings_internal.h"
 #include "../settings_table.h"
-#ifdef WITH_RUST
 #include "../rust/linkgraph_schedule_ffi.h"
-#endif
 
 #include "../safeguards.h"
 
-#ifdef WITH_RUST
 /** Save-only stack carrier of canonical scalar addresses. No load transaction:
  * scalar writes and appended edges survive partially decoded objects as before. */
 struct Node : LinkGraph::BaseNode {
@@ -37,9 +34,6 @@ struct Node : LinkGraph::BaseNode {
 
 	Node(LinkGraph *graph, NodeID id) : LinkGraph::BaseNode{graph->RustState(), id}, fields(openttd_rust_live_node_fields(graph->RustState(), id)) {}
 };
-#else
-typedef LinkGraph::BaseNode Node;
-#endif
 typedef LinkGraph::BaseEdge Edge;
 
 static uint16_t _num_nodes;
@@ -116,19 +110,11 @@ public:
 class SlLinkgraphNode : public DefaultSaveLoadHandler<SlLinkgraphNode, LinkGraph> {
 public:
 	static inline const SaveLoad description[] = {
-#ifdef WITH_RUST
 		SLE_CONDVARNAME(Node, Field_xy(), "xy", SLE_UINT32, SLV_191, SL_MAX_VERSION),
 		SLE_VARNAME(Node, Field_supply(), "supply", SLE_UINT32),
 		SLE_VARNAME(Node, Field_demand(), "demand", SLE_UINT32),
 		SLE_VARNAME(Node, Field_station(), "station", SLE_UINT16),
 		SLE_VARNAME(Node, Field_last_update(), "last_update", SLE_INT32),
-#else
-		SLE_CONDVAR(Node, xy,          SLE_UINT32, SLV_191, SL_MAX_VERSION),
-		    SLE_VAR(Node, supply,      SLE_UINT32),
-		    SLE_VAR(Node, demand,      SLE_UINT32),
-		    SLE_VAR(Node, station,     SLE_UINT16),
-		    SLE_VAR(Node, last_update, SLE_INT32),
-#endif
 		SLEG_STRUCTLIST("edges", SlLinkgraphEdge),
 	};
 	static inline const SaveLoadCompatTable compat_description = _linkgraph_node_sl_compat;
@@ -140,12 +126,8 @@ public:
 		SlSetStructListLength(lg->Size());
 		for (NodeID from = 0; from < lg->Size(); ++from) {
 			_linkgraph_from = from;
-#ifdef WITH_RUST
 			Node node(lg, from);
 			SlObject(&node, this->GetDescription());
-#else
-			SlObject(&lg->nodes[from], this->GetDescription());
-#endif
 		}
 	}
 
@@ -157,12 +139,8 @@ public:
 		lg->Init(length);
 		for (NodeID from = 0; from < length; ++from) {
 			_linkgraph_from = from;
-#ifdef WITH_RUST
 			Node node(lg, from);
 			SlObject(&node, this->GetLoadDescription());
-#else
-			SlObject(&lg->nodes[from], this->GetLoadDescription());
-#endif
 		}
 	}
 };
@@ -174,17 +152,9 @@ public:
 SaveLoadTable GetLinkGraphDesc()
 {
 	static const SaveLoad link_graph_desc[] = {
-#ifdef WITH_RUST
 		SLE_VARNAME(LinkGraph, SaveCompression(), "last_compression", SLE_INT32),
-#else
-		 SLE_VAR(LinkGraph, last_compression, SLE_INT32),
-#endif
 		SLEG_CONDVAR("num_nodes", _num_nodes, SLE_UINT16, SL_MIN_VERSION, SLV_SAVELOAD_LIST_LENGTH),
-#ifdef WITH_RUST
 		SLE_VARNAME(LinkGraph, SaveCargo(), "cargo", SLE_UINT8),
-#else
-		 SLE_VAR(LinkGraph, cargo,            SLE_UINT8),
-#endif
 		SLEG_STRUCTLIST("nodes", SlLinkgraphNode),
 	};
 	return link_graph_desc;
@@ -262,7 +232,6 @@ SaveLoadTable GetLinkGraphJobDesc()
  * Get a SaveLoad array for the link graph schedule.
  * @return SaveLoad array for the link graph schedule.
  */
-#ifdef WITH_RUST
 #include "../rust/linkgraph_schedule_staging.hpp"
 SaveLoadTable GetLinkGraphScheduleDesc()
 {
@@ -282,20 +251,6 @@ static void ScheduleObject(SaveLoadTable desc, bool import)
 		SlObject(&staging, desc);
 	}
 }
-#else
-SaveLoadTable GetLinkGraphScheduleDesc()
-{
-	static const SaveLoad schedule_desc[] = {
-		SLE_REFLIST(LinkGraphSchedule, schedule, REF_LINK_GRAPH),
-		SLE_REFLIST(LinkGraphSchedule, running,  REF_LINK_GRAPH_JOB),
-	};
-	return schedule_desc;
-}
-static void ScheduleObject(SaveLoadTable desc, bool)
-{
-	SlObject(&LinkGraphSchedule::instance, desc);
-}
-#endif
 
 /**
  * Spawn the threads for running link graph calculations.

@@ -15,10 +15,8 @@
 #include "viewport_type.h"
 #include "station_map.h"
 #include "timer/timer_game_calendar.h"
-#ifdef WITH_RUST
 #include "rust/station_service_ffi.h"
 #include "rust/station_catchment_ffi.h"
-#endif
 
 typedef Pool<BaseStation, StationID, 32> StationPool;
 extern StationPool _station_pool;
@@ -44,34 +42,18 @@ struct StationRect : public Rect {
 		ADD_FORCE
 	};
 
-#ifndef WITH_RUST
-	StationRect();
-	void MakeEmpty();
-#endif
 	bool PtInExtendedRect(int x, int y, int distance = 0) const;
 	bool IsEmpty() const;
 	CommandCost BeforeAddTile(TileIndex tile, StationRectMode mode);
 	CommandCost BeforeAddRect(TileIndex tile, int w, int h, StationRectMode mode);
-#ifndef WITH_RUST
-	bool AfterRemoveTile(BaseStation *st, TileIndex tile);
-	bool AfterRemoveRect(BaseStation *st, TileArea ta);
-
-	static bool ScanForStationTiles(StationID st_id, int left_a, int top_a, int right_a, int bottom_a);
-
-	StationRect& operator = (const Rect &src);
-#endif
 };
 
 /** Base class for all station-ish types */
 struct BaseStation : StationPool::PoolItem<&_station_pool> {
 	TileIndex xy = INVALID_TILE; ///< Base tile of the station
 	TrackedViewportSign sign{}; ///< NOSAVE: Dimensions of sign
-#ifdef WITH_RUST
 	std::unique_ptr<OpenTTDStationService, decltype(&openttd_rust_station_service_destroy)> rust_service{openttd_rust_station_service_new(), openttd_rust_station_service_destroy};
 	uint8_t &delete_ctr = openttd_rust_station_service_fields(this->rust_service.get())->delete_ctr;
-#else
-	uint8_t delete_ctr = 0; ///< Delete counter. If greater than 0 then it is decremented until it reaches 0; the waypoint is then is deleted.
-#endif
 
 	std::string name{}; ///< Custom name
 	StringID string_id = INVALID_STRING_ID; ///< Default name (town area) of station
@@ -94,11 +76,7 @@ struct BaseStation : StationPool::PoolItem<&_station_pool> {
 	CargoTypes cached_roadstop_cargo_triggers{}; ///< NOSAVE: Combined cargo trigger bitmask for road stops
 
 	TileArea train_station{INVALID_TILE, 0, 0}; ///< Tile area the train 'station' part covers
-#ifdef WITH_RUST
 	StationRect &rect = *reinterpret_cast<StationRect *>(openttd_rust_station_rect(this->rust_service.get()));
-#else
-	StationRect rect{}; ///< NOSAVE: Station spread out rectangle maintained by StationRect::xxx() functions
-#endif
 
 	std::vector<RoadStopTileData> custom_roadstop_tile_data{}; ///< List of custom road stop tile data
 
@@ -152,24 +130,6 @@ struct BaseStation : StationPool::PoolItem<&_station_pool> {
 	 */
 	virtual TileArea GetTileArea(StationType type) const = 0;
 
-#ifndef WITH_RUST
-	/**
-	 * Obtain the length of a platform
-	 * @pre tile must be a rail station tile
-	 * @param tile A tile that contains the platform in question
-	 * @return The length of the platform
-	 */
-	virtual uint GetPlatformLength(TileIndex tile) const = 0;
-
-	/**
-	 * Determines the REMAINING length of a platform, starting at (and including)
-	 * the given tile.
-	 * @param tile the tile from which to start searching. Must be a rail station tile
-	 * @param dir The direction in which to search.
-	 * @return The platform length
-	 */
-	virtual uint GetPlatformLength(TileIndex tile, DiagDirection dir) const = 0;
-#endif
 
 	/**
 	 * Get the base station belonging to a specific tile.

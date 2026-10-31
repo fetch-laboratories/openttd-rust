@@ -13,9 +13,7 @@
 #include "linkgraph.h"
 
 class LinkGraphJob;
-#ifdef WITH_RUST
 struct OpenTTDScheduleServices;
-#endif
 
 /**
  * A handler doing "something" on a link graph component. It must not keep any
@@ -41,20 +39,8 @@ private:
 	LinkGraphSchedule();
 	~LinkGraphSchedule();
 
-#ifndef WITH_RUST
-	typedef std::list<LinkGraph *> GraphList;
-	typedef std::list<LinkGraphJob *> JobList;
-	friend SaveLoadTable GetLinkGraphScheduleDesc();
-#endif
 
 protected:
-#ifndef WITH_RUST
-	std::array<std::unique_ptr<ComponentHandler>, 6> handlers{}; ///< Handlers to be run for each job.
-#endif
-#ifndef WITH_RUST
-	GraphList schedule;            ///< Queue for new jobs.
-	JobList running;               ///< Currently running jobs.
-#endif
 
 public:
 	/* This is a tick where not much else is happening, so a small lag might go unnoticed. */
@@ -65,13 +51,7 @@ public:
 	static void Clear();
 
 
-#ifdef WITH_RUST
 	static const OpenTTDScheduleServices services;
-#else
-	void SpawnNext();
-	bool IsJoinWithUnfinishedJobDue() const;
-	void JoinNext();
-#endif
 	void SpawnAll();
 	void ShiftDates(TimerGameEconomy::Date interval);
 
@@ -79,30 +59,15 @@ public:
 	 * Queue a link graph for execution.
 	 * @param lg Link graph to be queued.
 	 */
-#ifdef WITH_RUST
 	void Queue(LinkGraph *lg);
-#else
-	void Queue(LinkGraph *lg)
-	{
-		assert(LinkGraph::Get(lg->index) == lg);
-		this->schedule.push_back(lg);
-	}
-#endif
 
 	/**
 	 * Remove a link graph from the execution queue.
 	 * @param lg Link graph to be removed.
 	 */
-#ifdef WITH_RUST
 	void Dequeue(LinkGraph *lg);
-#else
-	void Dequeue(LinkGraph *lg) { this->schedule.remove(lg); }
-#endif
 };
 
-#ifndef WITH_RUST
-void StateGameLoop_LinkGraphPauseControl();
-#endif
 void AfterLoad_LinkGraphPauseControl();
 
 #endif /* LINKGRAPHSCHEDULE_H */

@@ -238,7 +238,6 @@ def main():
             ("reference", "candidate"),
             ("candidate", "reference"),
             ("candidate", "candidate"),
-            ("candidate-cpp", "candidate-cpp"),
         ):
             name = f"scenario-{index}-{server_label}-{client_label}"
             actual = scenario(

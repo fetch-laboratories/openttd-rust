@@ -97,11 +97,7 @@ def native_probes(folder: Path, env: dict[str, str]) -> None:
                         if clock == "common"
                         else f"TimerGame{clock.title()}::Year TimerGame"
                     )
-                    bodies.append(
-                        text[text.index(start) :].removesuffix(
-                            "\n#endif /* WITH_RUST */\n"
-                        )
-                    )
+                    bodies.append(text[text.index(start) :])
             (target / "clock-bodies.inc").write_text("\n".join(bodies))
             command = [
                 probe.compiler(),

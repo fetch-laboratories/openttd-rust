@@ -17,9 +17,7 @@
 #include "road.h"
 #include "road_map.h"
 #include "newgrf_engine.h"
-#ifdef WITH_RUST
 #include "rust/road_ffi.h"
-#endif
 
 struct RoadVehicle;
 
@@ -99,21 +97,9 @@ using RoadVehPathCache = std::vector<RoadVehPathElement>;
  * Buses, trucks and trams belong to this class.
  */
 struct RoadVehicle final : public GroundVehicle<RoadVehicle, VEH_ROAD> {
-#ifdef WITH_RUST
 	/* The shell owns one canonical allocation; members destruct after PreDestructor,
 	 * including its early return during pool cleanup and indexed-load destruction. */
 	std::unique_ptr<OpenTTDRoadState, decltype(&openttd_rust_road_destroy)> rust_state{openttd_rust_road_new(), openttd_rust_road_destroy};
-#else
-	RoadVehPathCache path{};  ///< Cached path.
-	uint8_t state = 0; ///< @see RoadVehicleStates
-	uint8_t frame = 0;
-	uint16_t blocked_ctr = 0;
-	uint8_t overtaking = 0; ///< Set to #RVSB_DRIVE_SIDE when overtaking, otherwise 0.
-	uint8_t overtaking_ctr = 0; ///< The length of the current overtake attempt.
-	uint16_t crashed_ctr = 0; ///< Animation counter when the vehicle has crashed. @see RoadVehIsCrashed
-	uint8_t reverse_ctr = 0;
-
-#endif
 
 	RoadType roadtype = INVALID_ROADTYPE; ///< NOSAVE: Roadtype of this vehicle.
 	VehicleID disaster_vehicle = VehicleID::Invalid(); ///< NOSAVE: Disaster vehicle targetting this vehicle.
@@ -124,132 +110,73 @@ struct RoadVehicle final : public GroundVehicle<RoadVehicle, VEH_ROAD> {
 	/** We want to 'destruct' the right class. */
 	virtual ~RoadVehicle() { this->PreDestructor(); }
 
-#ifdef WITH_RUST
 	OpenTTDRoadState *GetRustState() const { return this->rust_state.get(); }
-#endif
 
 	uint8_t GetState() const
 	{
-#ifdef WITH_RUST
 		return static_cast<uint8_t>(openttd_rust_road_get(this->rust_state.get(), 0));
-#else
-		return this->state;
-#endif
 	}
 	void SetState(uint8_t value)
 	{
-#ifdef WITH_RUST
 		openttd_rust_road_set(this->rust_state.get(), 0, value);
-#else
-		this->state = value;
-#endif
 	}
 
 	uint8_t GetFrame() const
 	{
-#ifdef WITH_RUST
 		return static_cast<uint8_t>(openttd_rust_road_get(this->rust_state.get(), 1));
-#else
-		return this->frame;
-#endif
 	}
 	void SetFrame(uint8_t value)
 	{
-#ifdef WITH_RUST
 		openttd_rust_road_set(this->rust_state.get(), 1, value);
-#else
-		this->frame = value;
-#endif
 	}
 
 	uint16_t GetBlockedCounter() const
 	{
-#ifdef WITH_RUST
 		return static_cast<uint16_t>(openttd_rust_road_get(this->rust_state.get(), 2));
-#else
-		return this->blocked_ctr;
-#endif
 	}
 	void SetBlockedCounter(uint16_t value)
 	{
-#ifdef WITH_RUST
 		openttd_rust_road_set(this->rust_state.get(), 2, value);
-#else
-		this->blocked_ctr = value;
-#endif
 	}
 
 	uint8_t GetOvertaking() const
 	{
-#ifdef WITH_RUST
 		return static_cast<uint8_t>(openttd_rust_road_get(this->rust_state.get(), 3));
-#else
-		return this->overtaking;
-#endif
 	}
 	void SetOvertaking(uint8_t value)
 	{
-#ifdef WITH_RUST
 		openttd_rust_road_set(this->rust_state.get(), 3, value);
-#else
-		this->overtaking = value;
-#endif
 	}
 
 	uint8_t GetOvertakingCounter() const
 	{
-#ifdef WITH_RUST
 		return static_cast<uint8_t>(openttd_rust_road_get(this->rust_state.get(), 4));
-#else
-		return this->overtaking_ctr;
-#endif
 	}
 	void SetOvertakingCounter(uint8_t value)
 	{
-#ifdef WITH_RUST
 		openttd_rust_road_set(this->rust_state.get(), 4, value);
-#else
-		this->overtaking_ctr = value;
-#endif
 	}
 
 	uint16_t GetCrashedCounter() const
 	{
-#ifdef WITH_RUST
 		return static_cast<uint16_t>(openttd_rust_road_get(this->rust_state.get(), 5));
-#else
-		return this->crashed_ctr;
-#endif
 	}
 	void SetCrashedCounter(uint16_t value)
 	{
-#ifdef WITH_RUST
 		openttd_rust_road_set(this->rust_state.get(), 5, value);
-#else
-		this->crashed_ctr = value;
-#endif
 	}
 
 	uint8_t GetReverseCounter() const
 	{
-#ifdef WITH_RUST
 		return static_cast<uint8_t>(openttd_rust_road_get(this->rust_state.get(), 6));
-#else
-		return this->reverse_ctr;
-#endif
 	}
 	void SetReverseCounter(uint8_t value)
 	{
-#ifdef WITH_RUST
 		openttd_rust_road_set(this->rust_state.get(), 6, value);
-#else
-		this->reverse_ctr = value;
-#endif
 	}
 
 	RoadVehPathCache CopyPath() const
 	{
-#ifdef WITH_RUST
 		RoadVehPathCache path;
 		const size_t size = this->PathSize();
 		path.reserve(size);
@@ -258,61 +185,34 @@ struct RoadVehicle final : public GroundVehicle<RoadVehicle, VEH_ROAD> {
 			path.emplace_back(static_cast<Trackdir>(element.trackdir), TileIndex(element.tile));
 		}
 		return path;
-#else
-		return this->path;
-#endif
 	}
 	void ReplacePath(const RoadVehPathCache &path)
 	{
-#ifdef WITH_RUST
 		std::vector<OpenTTDRoadPathElement> elements;
 		elements.reserve(path.size());
 		for (const auto &element : path) elements.push_back({static_cast<uint8_t>(element.trackdir), element.tile.base()});
 		openttd_rust_road_path_replace(this->rust_state.get(), elements.data(), elements.size());
-#else
-		this->path = path;
-#endif
 	}
 	void ClearPath()
 	{
-#ifdef WITH_RUST
 		openttd_rust_road_path_clear(this->rust_state.get());
-#else
-		this->path.clear();
-#endif
 	}
 	size_t PathSize() const
 	{
-#ifdef WITH_RUST
 		return openttd_rust_road_path_size(this->rust_state.get());
-#else
-		return this->path.size();
-#endif
 	}
 	RoadVehPathElement PathBack() const
 	{
-#ifdef WITH_RUST
 		const auto element = openttd_rust_road_path_get(this->rust_state.get(), this->PathSize() - 1);
 		return {static_cast<Trackdir>(element.trackdir), TileIndex(element.tile)};
-#else
-		return this->path.back();
-#endif
 	}
 	void PathPush(Trackdir trackdir, TileIndex tile)
 	{
-#ifdef WITH_RUST
 		openttd_rust_road_path_push(this->rust_state.get(), {static_cast<uint8_t>(trackdir), tile.base()});
-#else
-		this->path.emplace_back(trackdir, tile);
-#endif
 	}
 	void PathPop()
 	{
-#ifdef WITH_RUST
 		openttd_rust_road_path_pop(this->rust_state.get());
-#else
-		this->path.pop_back();
-#endif
 	}
 
 	friend struct GroundVehicle<RoadVehicle, VEH_ROAD>; // GroundVehicle needs to use the acceleration functions defined at RoadVehicle.
@@ -347,47 +247,16 @@ protected: // These functions should not be called outside acceleration code.
 	 * Allows to know the power value that this vehicle will use.
 	 * @return Power value from the engine in HP, or zero if the vehicle is not powered.
 	 */
-#ifndef WITH_RUST
-	inline uint16_t GetPower() const
-	{
-		/* Power is not added for articulated parts */
-		if (!this->IsArticulatedPart()) {
-			/* Road vehicle power is in units of 10 HP. */
-			return 10 * GetVehicleProperty(this, PROP_ROADVEH_POWER, RoadVehInfo(this->engine_type)->power);
-		}
-		return 0;
-	}
-#endif
 
 	/**
 	 * Returns a value if this articulated part is powered.
 	 * @return Zero, because road vehicles don't have powered parts.
 	 */
-#ifndef WITH_RUST
-	inline uint16_t GetPoweredPartPower(const RoadVehicle *) const
-	{
-		return 0;
-	}
-#endif
 
 	/**
 	 * Allows to know the weight value that this vehicle will use.
 	 * @return Weight value from the engine in tonnes.
 	 */
-#ifndef WITH_RUST
-	inline uint16_t GetWeight() const
-	{
-		uint16_t weight = CargoSpec::Get(this->cargo_type)->WeightOfNUnits(this->cargo.StoredCount());
-
-		/* Vehicle weight is not added for articulated parts. */
-		if (!this->IsArticulatedPart()) {
-			/* Road vehicle weight is in units of 1/4 t. */
-			weight += GetVehicleProperty(this, PROP_ROADVEH_WEIGHT, RoadVehInfo(this->engine_type)->weight) / 4;
-		}
-
-		return weight;
-	}
-#endif
 
 	/**
 	 * Calculates the weight value that this vehicle will have when fully loaded with its current cargo.
@@ -399,120 +268,51 @@ protected: // These functions should not be called outside acceleration code.
 	 * Allows to know the tractive effort value that this vehicle will use.
 	 * @return Tractive effort value from the engine.
 	 */
-#ifndef WITH_RUST
-	inline uint8_t GetTractiveEffort() const
-	{
-		/* The tractive effort coefficient is in units of 1/256.  */
-		return GetVehicleProperty(this, PROP_ROADVEH_TRACTIVE_EFFORT, RoadVehInfo(this->engine_type)->tractive_effort);
-	}
-#endif
 
 	/**
 	 * Gets the area used for calculating air drag.
 	 * @return Area of the engine in m^2.
 	 */
-#ifndef WITH_RUST
-	inline uint8_t GetAirDragArea() const
-	{
-		return 6;
-	}
-#endif
 
 	/**
 	 * Gets the air drag coefficient of this vehicle.
 	 * @return Air drag value from the engine.
 	 */
-#ifndef WITH_RUST
-	inline uint8_t GetAirDrag() const
-	{
-		return RoadVehInfo(this->engine_type)->air_drag;
-	}
-#endif
 
 	/**
 	 * Checks the current acceleration status of this vehicle.
 	 * @return Acceleration status.
 	 */
-#ifndef WITH_RUST
-	inline AccelStatus GetAccelerationStatus() const
-	{
-		return this->vehstatus.Test(VehState::Stopped) ? AS_BRAKE : AS_ACCEL;
-	}
-#endif
 
 	/**
 	 * Calculates the current speed of this vehicle.
 	 * @return Current speed in km/h-ish.
 	 */
-#ifndef WITH_RUST
-	inline uint16_t GetCurrentSpeed() const
-	{
-		return this->cur_speed / 2;
-	}
-#endif
 
 	/**
 	 * Returns the rolling friction coefficient of this vehicle.
 	 * @return Rolling friction coefficient in [1e-4].
 	 */
-#ifndef WITH_RUST
-	inline uint32_t GetRollingFriction() const
-	{
-		/* Trams have a slightly greater friction coefficient than trains.
-		 * The rest of road vehicles have bigger values. */
-		uint32_t coeff = RoadTypeIsTram(this->roadtype) ? 40 : 75;
-		/* The friction coefficient increases with speed in a way that
-		 * it doubles at 128 km/h, triples at 256 km/h and so on. */
-		return coeff * (128 + this->GetCurrentSpeed()) / 128;
-	}
-#endif
 
 	/**
 	 * Allows to know the acceleration type of a vehicle.
 	 * @return \c VehicleAccelerationModel::Normal, road vehicles always use a normal acceleration method.
 	 */
-#ifndef WITH_RUST
-	inline VehicleAccelerationModel GetAccelerationType() const
-	{
-		return VehicleAccelerationModel::Normal;
-	}
-#endif
 
 	/**
 	 * Returns the slope steepness used by this vehicle.
 	 * @return Slope steepness used by the vehicle.
 	 */
-#ifndef WITH_RUST
-	inline uint32_t GetSlopeSteepness() const
-	{
-		return _settings_game.vehicle.roadveh_slope_steepness;
-	}
-#endif
 
 	/**
 	 * Gets the maximum speed allowed by the track for this vehicle.
 	 * @return Since roads don't limit road vehicle speed, it returns always zero.
 	 */
-#ifndef WITH_RUST
-	inline uint16_t GetMaxTrackSpeed() const
-	{
-		return GetRoadTypeInfo(GetRoadType(this->tile, GetRoadTramType(this->roadtype)))->max_speed;
-	}
-#endif
 
 	/**
 	 * Checks if the vehicle is at a tile that can be sloped.
 	 * @return True if the tile can be sloped.
 	 */
-#ifndef WITH_RUST
-	inline bool TileMayHaveSlopedTrack() const
-	{
-		TrackStatus ts = GetTileTrackStatus(this->tile, TRANSPORT_ROAD, GetRoadTramType(this->roadtype));
-		TrackBits trackbits = TrackStatusToTrackBits(ts);
-
-		return trackbits == TRACK_BIT_X || trackbits == TRACK_BIT_Y;
-	}
-#endif
 
 	/**
 	 * Road vehicles have to use GetSlopePixelZ() to compute their height
@@ -521,33 +321,8 @@ protected: // These functions should not be called outside acceleration code.
 	 * even if it is not reversing.
 	 * @return are we (possibly) reversing?
 	 */
-#ifndef WITH_RUST
-	inline bool HasToUseGetSlopePixelZ()
-	{
-		const RoadVehicle *rv = this->First();
-
-		/* Check if this vehicle is in the same direction as the road under.
-		 * We already know it has either GVF_GOINGUP_BIT or GVF_GOINGDOWN_BIT set. */
-
-		if (rv->GetState() <= RVSB_TRACKDIR_MASK && IsReversingRoadTrackdir((Trackdir)rv->GetState())) {
-			/* If the first vehicle is reversing, this vehicle may be reversing too
-			 * (especially if this is the first, and maybe the only, vehicle).*/
-			return true;
-		}
-
-		while (rv != this) {
-			/* If any previous vehicle has different direction,
-			 * we may be in the middle of reversing. */
-			if (this->direction != rv->direction) return true;
-			rv = rv->Next();
-		}
-
-		return false;
-	}
-#endif
 };
 
-#ifdef WITH_RUST
 /** Call-scoped serialization staging. No Rust frame spans save/load, callbacks or
  * reference fixups. Nested handlers restore the previous scope; partial loads
  * commit on unwind, matching direct field/vector mutation in the portable build. */
@@ -601,6 +376,5 @@ public:
 	static std::vector<Trackdir> &PathTrackdirs() { return active->path_td; }
 	static std::vector<TileIndex> &PathTiles() { return active->path_tile; }
 };
-#endif
 
 #endif /* ROADVEH_H */
