@@ -5,7 +5,6 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-#include "presentation_services.h"
 #include "vehicle_effect_ffi.h"
 #include "effect_ffi.h"
 #include "services_ffi.h"
@@ -126,7 +125,7 @@ static void Ship_depot_dirty(uint32_t id) noexcept { Ship *v = Ship::Get(Vehicle
 
 static void Ship_depot_invalidate(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleInvalidateDepot(v); }
 
-static void Ship_ships_dirty() noexcept { RustSetWindowClassesDirty(WC_SHIPS_LIST); }
+static void Ship_ships_dirty() noexcept { SetWindowClassesDirty(WC_SHIPS_LIST); }
 
 
 

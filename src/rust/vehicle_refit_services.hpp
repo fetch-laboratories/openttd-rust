@@ -6,7 +6,6 @@
  */
 
 /** @file vehicle_refit_services.hpp Native refit observations, scalar stores and UI leaves. */
-#include "presentation_services.h"
 #include "services_road.h"
 #include "services_cargo.h"
 
@@ -26,7 +25,7 @@ static void VehicleRefitWrite(OpenTTDVehicle *handle, uint8_t cargo, uint16_t ca
 }
 static OpenTTDRoadState *VehicleRefitRoadState(OpenTTDVehicle *v) noexcept { return RoadStateOf(RoadVehicle::From(VehicleOf(v))); }
 static void VehicleRefitDetailsUI(OpenTTDVehicle *v) noexcept { InvalidateWindowData(WC_VEHICLE_DETAILS, VehicleOf(v)->index); }
-static void VehicleRefitListsUI(uint8_t type) noexcept { RustInvalidateWindowClassesData(GetWindowClassForVehicleType(static_cast<VehicleType>(type)), 0); }
+static void VehicleRefitListsUI(uint8_t type) noexcept { InvalidateWindowClassesData(GetWindowClassForVehicleType(static_cast<VehicleType>(type)), 0); }
 const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept
 {
 	static const OpenTTDVehicleRefitServices services{

@@ -402,7 +402,7 @@ extern "C" void openttd_orders_append_station(void *ctx, uint16_t station) noexc
 
 extern "C" void openttd_orders_invalidate_station_list() noexcept
 {
-	RustInvalidateWindowClassesData(WC_STATION_LIST, 0);
+	InvalidateWindowClassesData(WC_STATION_LIST, 0);
 }
 
 extern "C" void openttd_orders_command_error(void *ctx, uint32_t error, uint32_t detail) noexcept
@@ -441,7 +441,7 @@ extern "C" void openttd_orders_suppress_implicit_write(void *ctx, uint8_t suppre
 
 extern "C" void openttd_orders_invalidate_vehicle_list(void *ctx) noexcept
 {
-	RustInvalidateWindowClassesData(GetWindowClassForVehicleType(static_cast<Vehicle *>(ctx)->type), 0);
+	InvalidateWindowClassesData(GetWindowClassForVehicleType(static_cast<Vehicle *>(ctx)->type), 0);
 }
 
 extern "C" void openttd_orders_close_shared_window(void *ctx, uint32_t window) noexcept
@@ -461,7 +461,7 @@ extern "C" void openttd_orders_last_station_write(void *ctx, uint16_t station) n
 
 extern "C" void openttd_orders_dirty_vehicle_windows(void *ctx) noexcept
 {
-	RustSetWindowClassesDirty(GetWindowClassForVehicleType(static_cast<Vehicle *>(ctx)->type));
+	SetWindowClassesDirty(GetWindowClassForVehicleType(static_cast<Vehicle *>(ctx)->type));
 }
 
 extern "C" void openttd_orders_capture_backup_metadata(void *ctx, void *source_context) noexcept

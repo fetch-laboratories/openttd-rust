@@ -52,7 +52,7 @@ static void OPENTTD_RUST_CALL Identity_company_renamed(Company *c, OpenTTDCompan
 static void OPENTTD_RUST_CALL Identity_president_renamed(Company *c, OpenTTDCompanyNameStorage *slot) noexcept { AI::BroadcastNewEvent(new ScriptEventPresidentRenamed(c->index, Names(slot).candidate)); Game::NewEvent(new ScriptEventPresidentRenamed(c->index, Names(slot).candidate)); }
 static void OPENTTD_RUST_CALL Identity_launch_news(Company *c, const Town *t) noexcept { auto cni = std::make_unique<CompanyNewsInformation>(STR_NEWS_COMPANY_LAUNCH_TITLE, c); EncodedString headline = GetEncodedString(STR_NEWS_COMPANY_LAUNCH_DESCRIPTION, cni->company_name, t->index); AddNewsItem(std::move(headline), NewsType::CompanyInfo, NewsStyle::Company, {}, c->last_build_coordinate, {}, std::move(cni)); }
 static void OPENTTD_RUST_CALL Identity_rename_transport(OpenTTDByteSpan text) noexcept { Command<CMD_RENAME_COMPANY>::Do(DoCommandFlag::Execute, std::string(reinterpret_cast<const char *>(text.data), text.size) + " Transport"); }
-static void OPENTTD_RUST_CALL Identity_president_windows() noexcept { RustInvalidateWindowClassesData(WC_COMPANY, 1); }
+static void OPENTTD_RUST_CALL Identity_president_windows() noexcept { InvalidateWindowClassesData(WC_COMPANY, 1); }
 static void OPENTTD_RUST_CALL Identity_colour_windows() noexcept { InvalidateWindowData(WC_INCOME_GRAPH, 0); InvalidateWindowData(WC_OPERATING_PROFIT, 0); InvalidateWindowData(WC_DELIVERED_CARGO, 0); InvalidateWindowData(WC_PERFORMANCE_HISTORY, 0); InvalidateWindowData(WC_COMPANY_VALUE, 0); InvalidateWindowData(WC_LINKGRAPH_LEGEND, 0); BuildOwnerLegend(); InvalidateWindowData(WC_SMALLMAP, 0, 1); }
 const OpenTTDFaceServices &GetRustFaceServices() noexcept
 {

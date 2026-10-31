@@ -73,7 +73,7 @@ static OpenTTDVehicleTransactionTarget VehicleTransactionTarget(void *shell) noe
 }
 static void VehicleTransactionNameDirty(void *shell) noexcept
 {
-	RustInvalidateWindowClassesData(GetWindowClassForVehicleType(RustVehicleVehicleType(static_cast<Vehicle *>(shell))), 1);
+	InvalidateWindowClassesData(GetWindowClassForVehicleType(RustVehicleVehicleType(static_cast<Vehicle *>(shell))), 1);
 	RustScreenDirty();
 }
 static int32_t VehicleTransactionDefaultInterval(uint8_t owner, uint8_t type) noexcept { return CompanyServiceInterval(Company::Get(CompanyID(owner)), static_cast<VehicleType>(type)); }

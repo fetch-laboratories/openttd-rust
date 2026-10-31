@@ -1,6 +1,5 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file rail_construction_services.hpp Native rail shell allocation, field stores and presentation leaves. */
-#include "presentation_services.h"
 
 /* Original `CmdBuildRailWagon` statements from the allocation through the sprite
  * cache, in source order; Rust draws the random bits that follow. */
@@ -149,7 +148,7 @@ static void RailCompanyDirty() noexcept { SetWindowDirty(WC_COMPANY, OpenTTDCurr
 static void RailDepotChanged(uint32_t tile) noexcept
 {
 	RustVehicleInvalidateDepotTile(TileIndex(tile));
-	RustInvalidateWindowClassesData(WC_TRAINS_LIST, 0);
+	InvalidateWindowClassesData(WC_TRAINS_LIST, 0);
 }
 const OpenTTDRailConstructionServices &GetRustRailConstructionServices() noexcept
 {

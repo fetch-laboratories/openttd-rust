@@ -1,6 +1,5 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file vehicle_build_services.hpp Native pools, specification helpers and presentation leaves. */
-#include "presentation_services.h"
 static VehicleType VehicleBuildDepotKind(uint32_t tile) noexcept { return GetDepotVehicleType(TileIndex(tile)); }
 static uint16_t VehicleBuildFreeUnit(VehicleType type) noexcept { return GetFreeUnitNumber(type); }
 /* Road vehicle and aircraft construction leaves: shell allocation and field stores. */
@@ -148,7 +147,7 @@ static void VehicleBuildPresentation(void *shell, VehicleType type) noexcept
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);
 	RustVehicleInvalidateDepot(v);
-	RustInvalidateWindowClassesData(GetWindowClassForVehicleType(type), 0);
+	InvalidateWindowClassesData(GetWindowClassForVehicleType(type), 0);
 	SetWindowDirty(WC_COMPANY, OpenTTDCurrentCompany());
 	if (RustIsLocalCompany()) InvalidateAutoreplaceWindow(v->engine_type, v->group_id);
 }

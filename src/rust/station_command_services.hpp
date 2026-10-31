@@ -8,7 +8,6 @@
 /** @file station_command_services.hpp Native leaves for station construction. */
 #ifndef RUST_STATION_COMMAND_SERVICES_HPP
 #define RUST_STATION_COMMAND_SERVICES_HPP
-#include "presentation_services.h"
 #include "services_map.h"
 #include "services_industry.h"
 #include "services_rail.h"
@@ -135,7 +134,7 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.station_infrastructure = RustStationStationInfrastructure,
 		.mark_tiles = RustStationMarkTilesDirty,
 		.reset_facilities = RustStationResetFacilities,
-		.orders_dirty = []() noexcept { RustSetWindowClassesDirty(WC_VEHICLE_ORDERS); },
+		.orders_dirty = []() noexcept { SetWindowClassesDirty(WC_VEHICLE_ORDERS); },
 		.vehicle = &GetRustVehicleServices(),
 				.stop_on_town_road = RustStationStopOnTownRoad,
 		.stop_on_competitor_road = RustStationStopOnCompetitorRoad,
@@ -219,7 +218,7 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.clear_industry_neutral = [](Industry *industry) noexcept { industry->neutral_station = nullptr; },
 		.industry_area = [](Industry *industry) noexcept -> OpenTTDStationArea { const auto &a = industry->location; return {a.tile.base(), a.w, a.h}; },
 		.autoslope_axis = [](uint32_t tile, int32_t z, uint8_t slope, uint8_t axis) noexcept { return AutoslopeCheckForAxis(TileIndex{tile}, z, static_cast<Slope>(slope), static_cast<Axis>(axis)); },
-			.station_list_classes_invalidate = []() noexcept { RustInvalidateWindowClassesData(WC_STATION_LIST, 0); },
+			.station_list_classes_invalidate = []() noexcept { InvalidateWindowClassesData(WC_STATION_LIST, 0); },
 		.clear_cached_name = RustStationClearCachedName,
 		.clear_name = RustStationClearName,
 		.make_buoy = RustMakeBuoy,

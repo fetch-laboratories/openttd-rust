@@ -97,8 +97,8 @@ static void Engine_clear_last_variant(const OpenTTDEngine *shell) noexcept
 static void Engine_refresh_type(VehicleType type) noexcept { AddRemoveEngineFromAutoreplaceAndBuildWindows(type); }
 static void Engine_refresh_lists(bool dirty) noexcept
 {
-	RustInvalidateWindowClassesData(WC_BUILD_VEHICLE);
-	if (dirty) { RustSetWindowClassesDirty(WC_BUILD_VEHICLE); RustSetWindowClassesDirty(WC_REPLACE_VEHICLE); }
+	InvalidateWindowClassesData(WC_BUILD_VEHICLE);
+	if (dirty) { SetWindowClassesDirty(WC_BUILD_VEHICLE); SetWindowClassesDirty(WC_REPLACE_VEHICLE); }
 }
 static OpenTTDEngineCompanyPreview Engine_company_preview(const Company *c) noexcept
 {

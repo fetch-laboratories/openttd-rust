@@ -5,7 +5,6 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-#include "presentation_services.h"
 #include "services_road.h"
 #include "services_ffi.h"
 #include "services_rail.h"
@@ -412,12 +411,12 @@ static uint64_t TrainReverseSingleBlocked(OpenTTDTrainHandle id) noexcept
 static void TrainReverseWindows(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	RustVehicleDirtyDepot(v); RustVehicleDetailsDirty(RustVehicle(v)); SetWindowDirty(WC_VEHICLE_VIEW, v->index); RustSetWindowClassesDirty(WC_TRAINS_LIST);
+	RustVehicleDirtyDepot(v); RustVehicleDetailsDirty(RustVehicle(v)); SetWindowDirty(WC_VEHICLE_VIEW, v->index); SetWindowClassesDirty(WC_TRAINS_LIST);
 }
 static void TrainRunningWindows(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	RustVehicleDetailsDirty(RustVehicle(v)); RustSetWindowClassesDirty(WC_TRAINS_LIST);
+	RustVehicleDetailsDirty(RustVehicle(v)); SetWindowClassesDirty(WC_TRAINS_LIST);
 }
 static uint64_t TrainServint(OpenTTDTrainHandle id) noexcept
 {
@@ -502,7 +501,7 @@ static uint64_t TrainTrackDirection(OpenTTDTrainHandle, uint8_t a, uint8_t b) no
 }
 static void TrainTrainList(OpenTTDTrainHandle) noexcept
 {
-	RustSetWindowClassesDirty(WC_TRAINS_LIST);
+	SetWindowClassesDirty(WC_TRAINS_LIST);
 }
 static uint64_t TrainTrainVisit(OpenTTDTrainHandle) noexcept
 {
