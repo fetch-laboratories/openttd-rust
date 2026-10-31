@@ -35,7 +35,11 @@ Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh.
   dispatch on its branch (run 41150431792) passed every platform. A cadence
   dispatch on `rust-migration` after #595 confirms it and is due.
 - Deep checks: the sanitized, threaded, TSan and multiplayer rotation started
-  at `2f3d78e774` and is still in its sanitized member.
+  at `2f3d78e774` was killed at 2026-10-31 01:35Z when the session restarted,
+  three hours into its sanitized member, without a report. It had passed 352
+  sanitized scenarios and failed 43, all with the harness error "Rust archive
+  missing" for the sanitized build's native-test-support archive (#503), not
+  fidelity differences. It must restart at the next session start.
 - Housekeeping removed 49 finished T3 worktrees (71.8 GB). #592 now also
   covers the shared-accessor check misreading `OpenTTDXServices name{};`.
 - Original coverage: 330 of 449 traces are complete; gaps are on #156.
@@ -435,7 +439,7 @@ ran. Every worktree and branch below is preserved.
 
 | Running or due work | State / next action |
 | --- | --- |
-| Deep rotation | Running detached since 2026-10-30 22:37Z at `2f3d78e774` (PID 1041392) in `.local/worktrees/deep-after30-569` (locked), log `.local/deep-launches/after31.log`, still in its sanitized member. Read its report on resume. |
+| Deep rotation | Not running: killed at 2026-10-31 01:35Z by the session restart, three hours into its sanitized member at `2f3d78e774`, with no report (352 passed; 43 failed only on the missing native-test-support archive, #503). Restart it at session start on the current tip, in `.local/worktrees/deep-after30-569` (locked; move it with `git checkout --detach origin/rust-migration` and relock): 1. `python3 tools/migration.py build --jobs 2`. 2. `cmake --build build-rust-sanitized --target openttd_rust_native_test_support_build` (until #503's fix lands; if the sanitized build directory does not exist yet, run this after the member configures it, or the 43 scenarios fail again). 3. `python3 tools/migration.py deep --member simulate-sanitized --member simulate-threaded --member simulate-tsan --member simulate-multiplayer`. Launch it from a shell outside the session's process group (a `systemd-run --user` unit), since a `setsid` child of the session was killed with it. |
 | Platform cadence | Due on `rust-migration` at `063e7b28f1`: `gh workflow run ci-build.yml --ref rust-migration`. |
 | Instruction profile | Due after integration 36; launch with the pinned `LD_LIBRARY_PATH` from docs/rust-migration.md. Profile 32 is retained in `.local/worktrees/profile-after32-579` (locked). |
 | Quiet speed pass | Due (Grok and Opus in the play band); its collection waits for the deep run's lock. |
