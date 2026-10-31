@@ -54,8 +54,6 @@ pub struct Services {
     pub(crate) engine_kind:
         extern "C" fn(*const crate::vehicle::OpenTTDEngine) -> crate::vehicle::VehicleType,
     pub(crate) engine_subtype: extern "C" fn(*const crate::vehicle::OpenTTDEngine) -> u8,
-    pub(crate) primary_road_stop:
-        extern "C" fn(*const crate::vehicle::OpenTTDVehicle, *const BaseStation) -> *mut c_void,
     pub(crate) fta_flags: extern "C" fn(*const c_void) -> u8,
     pub(crate) has_hangar: extern "C" fn(*const BaseStation, *const AirportSpec) -> bool,
     pub(crate) hangar_tile: extern "C" fn(*const BaseStation, u32, *const AirportSpec) -> u32,
@@ -555,7 +553,7 @@ pub(crate) fn tile_callback(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAirportResolverState" ["probe"] => State { station, spec, tile_spec, tile, layout, town, };
-    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, by_tile, station_id, facilities, get_station, check, engine_if_valid, engine_id, engine_kind, engine_subtype, primary_road_stop, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, catchment, base_spec, enabled, min_year, max_year, override_id, never_expire, station_layout, random, build_date, root, tile_root, badges, tile_badges, tile_spec, tile_override, tile_local, tile_grfid, tile_has_groups, tile_substitute, belongs, tile_random, nearby, nearby_info, terrain, frame, version, grfid, base_scope, town_scope, evaluate_tile, unhandled, };
+    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, by_tile, station_id, facilities, get_station, check, engine_if_valid, engine_id, engine_kind, engine_subtype, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, catchment, base_spec, enabled, min_year, max_year, override_id, never_expire, station_layout, random, build_date, root, tile_root, badges, tile_badges, tile_spec, tile_override, tile_local, tile_grfid, tile_has_groups, tile_substitute, belongs, tile_random, nearby, nearby_info, terrain, frame, version, grfid, base_scope, town_scope, evaluate_tile, unhandled, };
 }
 
 #[unsafe(no_mangle)]

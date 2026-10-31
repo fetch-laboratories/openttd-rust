@@ -3,7 +3,6 @@
 static VehicleType VehicleBuildDepotKind(uint32_t tile) noexcept { return GetDepotVehicleType(TileIndex(tile)); }
 static uint16_t VehicleBuildFreeUnit(VehicleType type) noexcept { return GetFreeUnitNumber(type); }
 /* Road vehicle and aircraft construction leaves: shell allocation and field stores. */
-static bool VehicleConstructRoadTile(uint32_t tile, uint64_t powered) noexcept { return HasTileAnyRoadType(TileIndex(tile), RoadTypes(powered)); }
 static void *VehicleConstructNewRoad(uint32_t tile) noexcept
 {
 	RoadVehicle *v = new RoadVehicle();
@@ -126,7 +125,7 @@ static const OpenTTDVehicleConstructServices &GetVehicleConstructServices() noex
 {
 	static const OpenTTDVehicleConstructServices services{
 		.articulated = &GetRustVehicleArticulatedServices(),
-		.powered_roadtypes = Engine_powered_roadtypes, .any_roadtype = VehicleConstructRoadTile,
+		.powered_roadtypes = Engine_powered_roadtypes,
 		.new_road = VehicleConstructNewRoad, .road_front = VehicleConstructRoadFront,
 		.station = OpenTTDStationByTile, .hangar_tile = VehicleConstructHangar,
 		.new_aircraft = VehicleConstructNewAircraft,

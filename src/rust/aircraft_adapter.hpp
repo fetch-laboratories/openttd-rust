@@ -366,7 +366,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.copy_sprite = Aircraft_copy_sprite,
 	.truncate_cargo = Aircraft_truncate_cargo,
 	.crash_news = Aircraft_crash_news,
-	.station_rating = OpenTTDModifyStationRatingAround,
 	.landing_rating = Aircraft_landing_rating,
 	.dirty_depot = Aircraft_dirty_depot,
 	.first_arrival = Aircraft_first_arrival,

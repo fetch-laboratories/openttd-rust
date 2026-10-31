@@ -20,6 +20,8 @@
 //! may reenter and mutate other owners; cursors re-read live storage at each step.
 #![allow(unsafe_code)]
 
+pub(crate) mod spatial;
+
 use crate::base_station_base::{ADD_FORCE, ADD_TEST, ADD_TRY};
 use crate::bitmap_type::{BitmapTileArea, BitmapTileIterator};
 use crate::geometry_type::{rect_height, rect_width};

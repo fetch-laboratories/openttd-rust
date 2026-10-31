@@ -2019,8 +2019,7 @@ pub unsafe extern "C" fn openttd_rust_station_load(
     unsafe { load_station(state, world, loading, visits, out, temporary) };
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_modify_rating(state: *mut Service, amount: i32) {
+pub(crate) unsafe fn modify_rating(state: *mut Service, amount: i32) {
     for cargo in 0..64 {
         let ge = unsafe { cp(state, cargo) };
         if unsafe { (*ge).status } != 0 {

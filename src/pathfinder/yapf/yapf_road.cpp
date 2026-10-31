@@ -50,29 +50,10 @@ static OpenTTDRoadYapfTile RoadTile(const void *, uint32_t index, uint8_t td, bo
 
 static uint32_t RoadClosest(const void *ctx, uint16_t station, uint8_t type) noexcept
 {
-	return CalcClosestStationTile(StationID(station), static_cast<const RoadVehicle *>(ctx)->tile, static_cast<StationType>(type)).base();
+	return CalcClosestStationTile(StationID(station), VehicleOf(static_cast<const OpenTTDVehicle *>(ctx))->tile, static_cast<StationType>(type)).base();
 }
 
-static OpenTTDRoadYapfArea RoadArea(const void *ctx, uint16_t station) noexcept
-{
-	OpenTTDRoadYapfArea out{};
-	const Station *st = Station::GetIfValid(StationID(station));
-	if (st == nullptr) return out;
-	out.valid = true;
-	const auto *v = static_cast<const RoadVehicle *>(ctx);
-	const RoadStop *stop = st->GetPrimaryRoadStop(v);
-	if (stop == nullptr) return out;
-	out.stop = true;
-	out.drive_through = Shared_is_drive_through_stop(stop->xy.base());
-	out.next = stop->GetNextRoadStop(v) != nullptr;
-	const TileArea &area = v->IsBus() ? st->bus_station : st->truck_station;
-	out.tile = area.tile.base();
-	out.width = area.w;
-	out.height = area.h;
-	return out;
-}
-
-static const OpenTTDRoadYapfLeaves _road_yapf_leaves{.shared = &_rust_shared_services, .road_kind = RustVehicleContextQuery<RoadTramType, RoadVehicle, RustMovementRoadKind>, .tile = RoadTile, .closest = RoadClosest, .area = RoadArea};
+static const OpenTTDRoadYapfLeaves _road_yapf_leaves{.shared = &_rust_shared_services, .tile = RoadTile, .closest = RoadClosest};
 
 static void RoadDebug(const RoadVehicle *v, const OpenTTDRoadYapfResult &result)
 {
@@ -84,7 +65,7 @@ static void RoadDebug(const RoadVehicle *v, const OpenTTDRoadYapfResult &result)
 Trackdir YapfRoadVehicleChooseTrack(const RoadVehicle *v, TileIndex tile, DiagDirection enterdir, TrackdirBits trackdirs, bool &path_found)
 {
 	const auto input = RoadInput(v);
-	const auto result = openttd_rust_road_yapf_choose(v->GetRustState(), &input, &_road_yapf_leaves, v, tile.base(), enterdir, trackdirs, path_found);
+	const auto result = openttd_rust_road_yapf_choose(v->GetRustState(), &input, &_road_yapf_leaves, RustVehicle(v), tile.base(), enterdir, trackdirs, path_found);
 	RoadDebug(v, result);
 	path_found = result.found;
 	return static_cast<Trackdir>(result.direction);
@@ -93,7 +74,7 @@ Trackdir YapfRoadVehicleChooseTrack(const RoadVehicle *v, TileIndex tile, DiagDi
 FindDepotData YapfRoadVehicleFindNearestDepot(const RoadVehicle *v, int max_distance)
 {
 	const auto input = RoadInput(v);
-	const auto result = openttd_rust_road_yapf_depot(&input, &_road_yapf_leaves, v, max_distance);
+	const auto result = openttd_rust_road_yapf_depot(&input, &_road_yapf_leaves, RustVehicle(v), max_distance);
 	RoadDebug(v, result);
 	return result.found ? FindDepotData(TileIndex(result.tile), result.cost) : FindDepotData();
 }

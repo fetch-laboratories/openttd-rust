@@ -305,12 +305,6 @@ extern "C" uint64_t openttd_orders_aircraft_range_square(void *ctx) noexcept
 	return Aircraft::From(v)->acache.cached_max_range_sqr;
 }
 
-extern "C" uint64_t openttd_orders_bus(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return RoadVehicle::From(v)->IsBus();
-}
-
 extern "C" uint64_t openttd_orders_backup_capacity() noexcept
 {
 	return OrderBackup::CanAllocateItem();
@@ -603,7 +597,6 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.next_vehicle = openttd_orders_next_vehicle,
 	.aircraft_range = openttd_orders_aircraft_range,
 	.aircraft_range_square = openttd_orders_aircraft_range_square,
-	.bus = openttd_orders_bus,
 	.backup_capacity = openttd_orders_backup_capacity,
 	.create_backup = openttd_orders_create_backup,
 	.networking = RustSettingRead<uint64_t, RustNetworking>,

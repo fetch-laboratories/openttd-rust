@@ -489,7 +489,6 @@ pub struct Leaves {
     pub count_chain: extern "C" fn(Handle) -> u64,
     pub crash_event: extern "C" fn(Handle, u32),
     pub crash_news: extern "C" fn(Handle, u32),
-    pub crash_rating: extern "C" fn(Handle),
     pub crash_sound: extern "C" fn(Handle),
     pub crossing_barred: extern "C" fn(Handle, u32) -> u64,
     pub crossing_rail_axis: extern "C" fn(Handle, u32) -> u64,
@@ -2131,7 +2130,13 @@ impl Game<'_> {
         }
         crate::witness::hit(crate::witness::TRAIN_COLLISION);
         (self.leaves.crash_news)(id, victims);
-        (self.leaves.crash_rating)(id);
+        crate::station::spatial::modify_rating_around(
+            self.services,
+            (self.vs().tile)(id.vehicle()),
+            (self.vs().owner)(id.vehicle()),
+            -160,
+            30,
+        );
         if (self.services.disaster_sound)() {
             (self.leaves.crash_sound)(id);
         }
@@ -3293,7 +3298,6 @@ crate::abi::layouts! {
         count_chain,
         crash_event,
         crash_news,
-        crash_rating,
         crash_sound,
         crossing_barred,
         crossing_rail_axis,

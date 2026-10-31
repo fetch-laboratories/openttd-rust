@@ -148,6 +148,7 @@ struct OpenTTDSharedServices {
 	uint8_t (*snow_line)() noexcept OPENTTD_SERVICE_DEFAULT(snow_line);
 	uint16_t (*station_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_index);
 	const OpenTTDRoadCommandServices *(*road_commands)() noexcept OPENTTD_SERVICE_DEFAULT(road_commands);
+	size_t (*kdtree_partition)(uint16_t *, size_t, void *, uint16_t (*)(void *, uint16_t)) noexcept OPENTTD_SERVICE_DEFAULT(kdtree_partition);
 	const OpenTTDStationCommandServices *(*station_commands)() noexcept OPENTTD_SERVICE_DEFAULT(station_commands);
 	const OpenTTDStationCatchmentServices *(*station_catchment)() noexcept OPENTTD_SERVICE_DEFAULT(station_catchment);
 	bool (*docking_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(docking_tile);

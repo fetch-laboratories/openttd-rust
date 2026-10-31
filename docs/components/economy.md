@@ -102,6 +102,13 @@
 - Limits: `GetPlatformLength` remains with #560.
 - PRs: #568.
 
+## Station spatial queries and road-stop selection (#602)
+
+- Rust owns: the process-wide station simulation index, rebuild/mutation/radius traversal, station sign index orchestration, nearby rating filters, accessible road-stop head/next selection and rail trigger-area decisions. Town, command, vehicle, crash, YAPF and NewGRF consumers call these owners directly.
+- C++ keeps: native pools and records, canonical whole station/waypoint tile areas, qualified base sign movement and waypoint presentation, viewport indices, script/news/sound operations, and one stateless STL median-selection/strict-partition primitive. Each subtree with at least two IDs calls the primitive once; tree state and traversal remain Rust-owned.
+- Limits: External NewGRF programs, historical station saves and GUI/game-thread presentation are outside the bounded default fixtures (#156). Native STL permutation and consumer observations are fixture-only support; configured-platform results remain validation work until their checks run.
+- PRs: #612 (draft).
+
 ## Company control, ownership checks and defaults (#610)
 
 - Rust owns: local-company transitions, ownership assertions/errors, allow-list validation and notification eligibility, first-playable selection and service-interval dispatch. Company, session, generation, command and vehicle consumers enter the existing owners directly.

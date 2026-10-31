@@ -111,12 +111,8 @@ rebound | OpenTTDMapScaleLandProportion | src/industry_cmd.cpp | scale_by_land_p
 rebound | OpenTTDMapScaleLandProportion | src/town_cmd.cpp | scale_land
 rebound | OpenTTDMapScaleSize | src/industry_cmd.cpp | scale_by_map_size
 rebound | OpenTTDMapScaleSize | src/town_cmd.cpp | scale_size
-rebound | OpenTTDModifyStationRatingAround | src/rust/aircraft_adapter.hpp | station_rating
-rebound | OpenTTDModifyStationRatingAround | src/town_cmd.cpp | modify_station_rating
 rebound | OpenTTDScaleTownCargo | src/object_cmd.cpp | scale_cargo
 rebound | OpenTTDScaleTownCargo | src/town_cmd.cpp | scale_cargo
-rebound | OpenTTDStationActivityOwner | src/town_cmd.cpp | station_activity_owner
-rebound | OpenTTDStationActivityOwner | src/town_cmd.cpp | station_activity_owner | 2
 rebound | OpenTTDTileMaxPixelZ | src/industry_cmd.cpp | pixel_max_z
 rebound | OpenTTDTileMaxPixelZ | src/rust/vehicle_services.cpp | max_pixel_z
 rebound | OpenTTDTownOwnerByID | src/rust/services.cpp | town_owner_by_id
@@ -464,7 +460,6 @@ rebound | RustStationOwnerByte | src/economy.cpp | station_company
 rebound | RustStationOwnerByte | src/newgrf_roadstop.cpp | owner
 rebound | RustStationOwnerByte | src/station_cmd.cpp | station_owner
 rebound | RustStationOwnerByte | src/town_cmd.cpp | station_owner
-rebound | RustStationOwnerByte | src/town_cmd.cpp | station_owner | 2
 rebound | RustStationRandomBits | src/newgrf_airport.cpp | random
 rebound | RustStationRandomBits | src/newgrf_roadstop.cpp | random_bits
 rebound | RustStationRandomBits | src/newgrf_station.cpp | station_random

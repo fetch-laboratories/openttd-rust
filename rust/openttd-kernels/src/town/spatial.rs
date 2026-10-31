@@ -24,19 +24,25 @@ pub(crate) fn rebuild(s: &Services) {
         id = (s.town_next_id)(id + 1);
     }
     unsafe {
-        (*TREE.get()).build(&mut ids, &|id, dim| coordinate(s, map, id, dim));
+        (*TREE.get()).build(&mut ids, &|ids, dim| {
+            crate::kdtree::native_split(s, ids, |id| coordinate(s, map, id, dim))
+        });
     }
 }
 pub(crate) fn insert(s: &Services, id: TownId) {
     let map = s.map();
     unsafe {
-        (*TREE.get()).insert(id, &|id, dim| coordinate(s, map, id, dim));
+        (*TREE.get()).insert(id, &|id, dim| coordinate(s, map, id, dim), &|ids, dim| {
+            crate::kdtree::native_split(s, ids, |id| coordinate(s, map, id, dim))
+        });
     }
 }
 pub(crate) fn remove(s: &Services, id: TownId) {
     let map = s.map();
     unsafe {
-        (*TREE.get()).remove(id, &|id, dim| coordinate(s, map, id, dim));
+        (*TREE.get()).remove(id, &|id, dim| coordinate(s, map, id, dim), &|ids, dim| {
+            crate::kdtree::native_split(s, ids, |id| coordinate(s, map, id, dim))
+        });
     }
 }
 fn nearest(s: &Services, tile: u32) -> TownId {

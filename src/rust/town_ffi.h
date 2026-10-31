@@ -71,9 +71,6 @@ struct OpenTTDTownLeaves {
 	uint16_t (*house_callbacks)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(house_callbacks);
 	OpenTTDTownRoadChoice (*road_info)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_info);
 	OpenTTDTownState *(*resolve_owner)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve_owner);
-	void (*stations)(uint32_t, uint32_t, void *, void (*)(void *, const OpenTTDStation *, uint32_t)) noexcept OPENTTD_SERVICE_DEFAULT(stations);
-	const OpenTTDStationService *(*station_activity_owner)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_activity_owner);
-	uint8_t (*station_owner)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_owner);
 	void (*dirty_authority)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(dirty_authority);
 	void (*dirty_town)(uint32_t town) noexcept OPENTTD_SERVICE_DEFAULT(dirty_town);
 	int64_t (*terraform_price)() noexcept OPENTTD_SERVICE_DEFAULT(terraform_price);

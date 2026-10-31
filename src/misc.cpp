@@ -125,7 +125,7 @@ void InitializeGame(uint size_x, uint size_y, bool reset_date, bool reset_settin
 	LinkGraphSchedule::Clear();
 	PoolBase::Clean(PoolType::Normal);
 
-	RebuildStationKdtree();
+	openttd_rust_station_rebuild_index(&GetRustSharedServices());
 	RebuildTownKdtree();
 	RebuildViewportKdtree();
 
