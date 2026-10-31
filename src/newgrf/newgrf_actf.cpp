@@ -17,6 +17,8 @@
 
 #include "../safeguards.h"
 
+#ifndef WITH_RUST
+
 /** Action 0x0F - Define Town names */
 static void FeatureTownName(ByteReader &buf)
 {
@@ -101,3 +103,4 @@ template <> void GrfActionHandler<0x0F>::LabelScan(ByteReader &) { }
 template <> void GrfActionHandler<0x0F>::Init(ByteReader &buf) { FeatureTownName(buf); }
 template <> void GrfActionHandler<0x0F>::Reserve(ByteReader &) { }
 template <> void GrfActionHandler<0x0F>::Activation(ByteReader &) { }
+#endif /* WITH_RUST */

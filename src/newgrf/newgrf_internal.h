@@ -57,6 +57,7 @@ struct GrfProcessingState {
 	uint32_t &nfo_line = openttd_rust_grf_execution()->nfo_line;
 	int &skip_sprites = openttd_rust_grf_execution()->skip_sprites;
 	std::array<const SpriteGroup *, MAX_SPRITEGROUP + 1> &spritegroups = openttd_rust_grf_execution()->spritegroups;
+	std::string *&translated_text = openttd_rust_grf_execution()->translated_text;
 	void AddSpriteSets(GrfSpecFeature feature, SpriteID first_sprite, uint first_set, uint numsets, uint numents)
 	{
 		assert(feature < GSF_END);
