@@ -30,30 +30,12 @@
 
 #include "safeguards.h"
 
+static_assert(PR_CLEAR_GRASS == 22 && PR_CLEAR_ROUGH == 23 && PR_CLEAR_ROCKS == 24 && PR_CLEAR_FIELDS == 25);
+
 static CommandCost ClearTile_Clear(TileIndex tile, DoCommandFlags flags)
 {
-	static constexpr Price clear_price_table[] = {
-		PR_CLEAR_GRASS,
-		PR_CLEAR_ROUGH,
-		PR_CLEAR_ROCKS,
-		PR_CLEAR_FIELDS,
-		PR_CLEAR_ROUGH,
-		PR_CLEAR_ROUGH,
-	};
-	CommandCost price(EXPENSES_CONSTRUCTION);
-
-	ClearGround ground = GetClearGround(tile);
-	uint8_t density = GetClearDensity(tile);
-	if (IsSnowTile(tile)) {
-		price.AddCost(_price[clear_price_table[ground]]);
-		/* Add a little more for removing snow. */
-		price.AddCost(std::abs(_price[PR_CLEAR_ROUGH] - _price[PR_CLEAR_GRASS]));
-	} else if (ground != CLEAR_GRASS || density != 0) {
-		price.AddCost(_price[clear_price_table[ground]]);
-	}
-
-	if (flags.Test(DoCommandFlag::Execute)) DoClearSquare(tile);
-
+	CommandCost price;
+	openttd_rust_clear_tile(RustCommandCost(&price), tile.base(), flags.base(), &GetRustCommandCostServices(), &GetRustSharedServices());
 	return price;
 }
 
