@@ -34,6 +34,8 @@ static Randomizer SubsidyChance(uint target) { for (uint seed = 1;; ++seed) { _r
 static bool SubsidyScenario(std::span<std::string_view> args)
 {
 	if (args[1] == "subsidies-inspect") { bool loaded = false; for (Subsidy *s : Subsidy::Iterate()) loaded |= s->remaining == 54321 && s->IsAwarded(); fmt::print(stderr, "SUBSIDY loaded {}\n", loaded); return true; }
+	Backup<Randomizer> interactive_seed(_interactive_random);
+	_interactive_random.SetSeed(12345);
 	SubsidyClean();
 	Vehicle *front = nullptr; for (Vehicle *v : Vehicle::Iterate()) if (v->type == VEH_TRAIN && v->IsPrimaryVehicle() && v->cargo_payment == nullptr) { front = v; break; }
 	if (front == nullptr || Town::GetNumItems() < 2 || Industry::GetNumItems() < 2) FixtureAbort(__LINE__);
@@ -102,7 +104,13 @@ static bool SubsidyScenario(std::span<std::string_view> args)
 	for (Town *t : Town::Iterate()) { populations.emplace_back(t, t->cache.population); t->cache.population = 0; for (auto &entry : t->supplied) { auto &count = entry.history[LAST_MONTH].transported; histories.emplace_back(&count, count); count = 0; } }
 	SubsidyChance(0); SubsidyMonthlyLoop(); fmt::print(stderr, "SUBSIDY retry-rng {} {}\n", _random.state[0], _random.state[1]);
 	for (auto [t, value] : populations) { t->cache.population = 2000; }
-	bool found[3]{}; uint index = 0; for (uint chance : {0U, 2U, 3U}) { SubsidyChance(chance); auto before = Subsidy::GetNumItems(); SubsidyMonthlyLoop(); found[index++] = Subsidy::GetNumItems() > before; }
+	bool found[3]{}; uint index = 0;
+	for (uint chance : {0U, 2U, 3U}) {
+		SubsidyChance(chance); auto before = Subsidy::GetNumItems();
+		SubsidyMonthlyLoop(); found[index++] = Subsidy::GetNumItems() > before;
+		fmt::print(stderr, "SUBSIDY random-route {} {} {} {} {}\n", chance, _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]);
+		for (const Subsidy *offer : Subsidy::Iterate()) fmt::print(stderr, "SUBSIDY random-offer {} {} {} {} {} {} {}\n", chance, offer->index.base(), offer->cargo_type, to_underlying(offer->src.type), offer->src.id, to_underlying(offer->dst.type), offer->dst.id);
+	}
 	for (auto [field, value] : histories) { *field = value; } for (auto [t, value] : populations) { t->cache.population = value; }
 	fmt::print(stderr, "SUBSIDY routes {} {} {}\n", found[0], found[1], found[2]); SubsidyClean();
 	if (!Company::CanAllocateItem()) { FixtureAbort(__LINE__); } Company *empty = new Company(); s = FixtureSubsidy(cargo, industry, other, 12); s->awarded = empty->index; RebuildSubsidisedSourceAndDestinationCache(); ChangeOwnershipOfCompanyItems(empty->index, front->owner); bool transfer = s->awarded == front->owner;

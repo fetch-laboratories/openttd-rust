@@ -233,7 +233,7 @@ pub(crate) fn generate_name(s: &Services, c: *mut OpenTTDCompany) {
     if (s.name_id)(c) != s.strings.unnamed || (s.last_build)(c).0 == 0 {
         return;
     }
-    let t = crate::town::spatial::closest(&*s.shared, (s.last_build)(c).0, u32::MAX);
+    let t = crate::town::spatial::closest(s.shared, (s.last_build)(c).0, u32::MAX);
     let town = (s.shared.town_owner)(t);
     let simulation = unsafe { crate::town::openttd_rust_town_simulation(town) };
     let mut slot = NameStorage::new();

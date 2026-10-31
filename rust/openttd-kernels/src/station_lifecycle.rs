@@ -396,7 +396,7 @@ pub(crate) unsafe fn tile_loop(
                 crate::station_map::toggle_road_waypoint_snow(m, tile).unwrap();
                 (s.shared.mark_dirty)(tile);
             }
-            let town = crate::town::spatial::closest(&*s.shared, tile, u32::MAX);
+            let town = crate::town::spatial::closest(s.shared, tile, u32::MAX);
             let zone = if town.is_null() {
                 0
             } else {

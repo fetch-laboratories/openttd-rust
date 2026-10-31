@@ -267,7 +267,7 @@ impl Services {
                     let house = &*(*self.town).houses;
                     let entry = (house.entry)(tile);
                     let mut always = 0;
-                    town::house::openttd_rust_house_accepted(
+                    town::house::accepted(
                         self.town,
                         self.shared,
                         tile,

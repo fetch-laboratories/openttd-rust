@@ -148,9 +148,3 @@ pub unsafe extern "C" fn openttd_rust_town_closest(
 ) -> *const crate::services::TownHandle {
     closest(unsafe { &*s }, tile, threshold)
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_random(
-    s: *const Services,
-) -> *mut crate::services::TownHandle {
-    random(unsafe { &*s }).shell
-}

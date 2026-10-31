@@ -92,7 +92,6 @@ void openttd_rust_house_accepted_prototype(const OpenTTDTownLeaves *, const Open
 void openttd_rust_house_tile_loop(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile);
 void openttd_rust_house_animate(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile);
 void openttd_rust_house_place(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, OpenTTDCommandCost *, uint16_t flags, uint32_t tile, uint16_t house, bool is_protected, bool replace);
-void openttd_rust_house_accepted(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile, uint16_t house, Town *town, uint32_t *acceptance, uint64_t *always);
 void openttd_rust_house_produced(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile, uint32_t *produced);
 void openttd_rust_house_rebuild_caches(const OpenTTDTownLeaves *, const OpenTTDSharedServices *);
 void openttd_rust_house_update_all(const OpenTTDTownLeaves *, const OpenTTDSharedServices *);

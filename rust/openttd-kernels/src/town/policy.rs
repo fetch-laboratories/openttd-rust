@@ -58,10 +58,6 @@ pub unsafe extern "C" fn openttd_rust_town_check_road_types(leaves: *const Leave
     road_types(unsafe { &*leaves })
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_house_removal_cost(factor: u8) -> i64 {
-    removal_cost(factor)
-}
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_radius_group(
     owner: *const State,
     s: *const Services,

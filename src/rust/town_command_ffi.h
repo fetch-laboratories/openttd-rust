@@ -48,7 +48,6 @@ struct OpenTTDTownCommandServices {
 	OpenTTDTownPoolRelation (*next_industry)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_industry);
 	void (*set_object_town)(Object *, Town *) noexcept OPENTTD_SERVICE_DEFAULT(set_object_town);
 	Town *(*industry_town_by_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_town_by_tile);
-	bool (*town_owned_road)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_owned_road);
 	void (*remove_town_sign)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(remove_town_sign);
 	void (*delete_town)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(delete_town);
 	bool (*cleaning_pool)() noexcept OPENTTD_SERVICE_DEFAULT(cleaning_pool);

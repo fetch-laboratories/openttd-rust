@@ -232,27 +232,9 @@ void Town::InitializeLayout(TownLayout layout)
 }
 #endif
 
-/**
- * Return a random valid town.
- * @return A random town, or nullptr if there are no towns.
- */
-/* static */ Town *Town::GetRandom()
-{
-	return reinterpret_cast<Town *>(openttd_rust_town_random(&GetRustSharedServices()));
-}
-
 void Town::FillCachedName() const
 {
 	this->cached_name = GetTownName(this);
-}
-
-/**
- * Get the cost for removing this house.
- * @return The cost adjusted for inflation, etc.
- */
-Money HouseSpec::GetRemovalCost() const
-{
-	return openttd_rust_house_removal_cost(this->removal_cost);
 }
 
 #ifndef WITH_RUST
@@ -498,10 +480,7 @@ static void AddProducedCargo_Town(TileIndex tile, CargoArray &produced)
 {
 	openttd_rust_house_produced(&GetRustTownServices(), &GetRustSharedServices(), tile.base(), produced.data());
 }
-void AddAcceptedCargoOfHouse(TileIndex tile, HouseID house, const HouseSpec *, Town *t, CargoArray &acceptance, CargoTypes &always_accepted)
-{
-	openttd_rust_house_accepted(&GetRustTownServices(), &GetRustSharedServices(), tile.base(), house, t, acceptance.data(), &always_accepted);
-}
+
 #else
 /**
  * Remove stations from nearby station list if a town is no longer in the catchment area of each.
@@ -3573,7 +3552,6 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 		.next_industry = [](uint32_t from) noexcept -> OpenTTDTownPoolRelation { if (const Industry *i = OpenTTDNextIndustry(from)) return {.next = i->index.base() + 1U, .town = OpenTTDIndustryTown(i)}; return {.next = UINT32_MAX, .town = nullptr}; },
 		.set_object_town = OpenTTDSetObjectTown,
 		.industry_town_by_tile = OpenTTDIndustryTownByTile,
-		.town_owned_road = OpenTTDHasTownOwnedRoad,
 		.remove_town_sign = [](Town *t) noexcept { if (t->cache.sign.kdtree_valid) _viewport_sign_kdtree.Remove(ViewportSignKdtreeItem::MakeTown(t->index)); },
 		.delete_town = [](Town *town) noexcept { delete town; },
 		.cleaning_pool = []() noexcept { return Town::CleaningPool(); },

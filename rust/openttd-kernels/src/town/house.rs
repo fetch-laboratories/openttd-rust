@@ -1401,8 +1401,7 @@ pub unsafe extern "C" fn openttd_rust_house_place(
 ) {
     house(leaves, services).place(result, flags, tile, id, protected, replace);
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_house_accepted(
+pub(crate) unsafe fn accepted(
     leaves: *const Leaves,
     services: *const Services,
     tile: u32,
