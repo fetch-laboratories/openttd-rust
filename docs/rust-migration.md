@@ -2511,3 +2511,25 @@ the same Rust lifecycle policy; pool cleanup keeps its original early exit.
 Native button packing/getters, windows, rendering, save/load and script VM
 execution remain in C++. No record storage or presentation pixel equivalence is
 claimed; window presentation remains a #156 limit. [PR #578](https://github.com/fetch-laboratories/openttd-rust/pull/578).
+
+### Simulation-setting transitions and setting commands (#587)
+
+`settings_table.rs` owns the simulation callbacks of `settings_table.cpp`:
+- consists;
+- company and client service-interval defaults, ranges and vehicle updates;
+- train and road acceleration and slope caches;
+- airport noise and catchment;
+- road-side, dynamic-engine, height-limit and freeform-edge checks;
+- freeform-edge map writes;
+- timekeeping units and minutes per year, including the editor's link-graph, vehicle and economy-date shift.
+
+It also owns the decisions of `CmdChangeSetting` and `CmdChangeCompanySetting`. Existing owners are direct Rust callees: train, ground vehicle, station, station command, engine loading, link-graph schedule, clocks and session. Map reads and writes use `map_func::World`, which gains field-sized stores, and the `tile_map`/`void_map` helpers.
+
+Native setting descriptors stay opaque: lookup, validation and `IntSettingDesc::ChangeValue` are whole native operations, which reenter these callbacks. `VehicleDefaultSettings` is read and written in place under a pinned layout. Ini-named facades keep the original bodies under `WITH_RUST` until #581. Presentation stays native.
+
+Open limits (#156):
+- a ship or buoy on the northern border during a freeform-edge change is not reached;
+- the service-interval refusal is unreachable through `ChangeValue`;
+- the new-game forced-wallclock branch needs a configuration the range callback prevents.
+
+[PR #594](https://github.com/fetch-laboratories/openttd-rust/pull/594).
