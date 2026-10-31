@@ -49,7 +49,7 @@ static const OpenTTDTreeServices tree_probe_services{
 static void Trees()
 {
 	/* Standalone ABI host has no GRF loader: install its disabled feature gate. */
-	static const OpenTTDGenericServices generic{.shared = nullptr, .enabled = []() noexcept { return false; }};
+	static const OpenTTDGenericServices generic{.shared = nullptr, .common = nullptr, .enabled = []() noexcept { return false; }};
 	openttd_rust_generic_reset(&generic);
 	OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(nullptr, TreeRandom, EffectTestIndustry);
 	shared.make_shore = TreeUnused<void, uint32_t>;
