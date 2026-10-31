@@ -523,7 +523,7 @@ TEST_CASE("Industry - specification price widths and saturation")
 			CHECK(spec.GetConstructionCost() == ((price * multiplier) >> 8));
 		}
 		for (uint32_t multiplier : {0U, 1U, 0x7FFFFFFFU, 0x80000000U, UINT32_MAX}) {
-			CHECK(openttd_test_industry_removal_cost(multiplier) == ((price * multiplier) >> 8));
+			CHECK(openttd_test_industry_removal_cost(multiplier) == ((price * multiplier) >> 8).base());
 		}
 	}
 }
