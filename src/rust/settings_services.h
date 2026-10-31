@@ -96,4 +96,5 @@ inline VehicleDefaultSettings *RustClientVehicleDefaults() noexcept { return &_s
 inline uint16_t RustNewgameMinutesPerCalendarYear() noexcept { return _settings_newgame.economy.minutes_per_calendar_year; }
 inline void RustSetMinutesPerCalendarYear(bool newgame, uint16_t minutes) noexcept { (newgame ? _settings_newgame : _settings_game).economy.minutes_per_calendar_year = minutes; }
 inline void RustSetNewgameWallclockUnits() noexcept { _settings_newgame.economy.timekeeping_units = TKU_WALLCLOCK; }
+inline int32_t RustVehicleLifeExtension() noexcept { return _settings_game.vehicle.extend_vehicle_life; }
 #endif /* RUST_SETTINGS_SERVICES_H */

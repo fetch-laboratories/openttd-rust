@@ -61,11 +61,7 @@ pub struct Budget {
     pub needed: i64,
     pub available: i64,
 }
-#[repr(C)]
-pub struct ReplacementCost {
-    pub cost: i64,
-    pub available: i64,
-}
+
 #[repr(C)]
 pub struct Automatic {
     pub has_depot_order: bool,
@@ -154,7 +150,7 @@ pub struct Services {
     pub budget: unsafe extern "C" fn(*const OpenTTDCompany) -> Budget,
     pub replacement: unsafe extern "C" fn(VehicleRef, *const OpenTTDCompany) -> Replacement,
     pub replacement_available: extern "C" fn(VehicleRef, u16) -> bool,
-    pub replacement_cost: unsafe extern "C" fn(*const OpenTTDCompany, u16) -> ReplacementCost,
+    pub available_money: unsafe extern "C" fn(*const OpenTTDCompany) -> i64,
     pub automatic: extern "C" fn(VehicleRef) -> Automatic,
     pub depot_service: extern "C" fn(VehicleRef) -> bool,
     pub check_breakdown: extern "C" fn(VehicleRef) -> CheckBreakdown,
@@ -377,10 +373,14 @@ unsafe fn replacement_needed<const C: bool>(
     }
     *pending = true;
     // SAFETY: the same live owner remains valid after the bounded refit queries.
-    let money = unsafe { svc!(C, s.replacement_cost, company, replacement.engine) };
-    *needed = needed.saturating_add(money.cost.saturating_mul(2));
+    let cap = t.capabilities;
+    let cost = unsafe {
+        crate::engine_capabilities::openttd_rust_engine_cost(cap, (cap.engine)(replacement.engine))
+    };
+    let available = unsafe { svc!(C, s.available_money, company) };
+    *needed = needed.saturating_add(cost.saturating_mul(2));
     branch!(C, VEHICLE_MAINT_REPLACE);
-    *needed > money.available
+    *needed > available
 }
 unsafe fn automatic<const C: bool>(v: VehicleRef, base: &VehicleServices) -> bool {
     let s = unsafe { &*base.maintenance };
@@ -820,10 +820,7 @@ crate::abi::layouts! {
         needed,
         available,
     };
-    "OpenTTDVehicleMaintenanceReplacementCost" ["maintenance"] => ReplacementCost {
-        cost,
-        available,
-    };
+
     "OpenTTDVehicleMaintenanceAutomatic" ["maintenance"] => Automatic {
         has_depot_order,
         order_type,
@@ -895,7 +892,7 @@ crate::abi::layouts! {
         budget,
         replacement,
         replacement_available,
-        replacement_cost,
+        available_money,
         automatic,
         depot_service,
         check_breakdown,

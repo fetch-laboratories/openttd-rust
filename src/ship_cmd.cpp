@@ -41,6 +41,7 @@
 #include <unordered_set>
 
 #ifdef WITH_RUST
+#include "rust/engine_capabilities_ffi.h"
 #include "rust/services_ffi.h"
 #include "rust/industry_shell_services.h"
 #include "rust/vehicle_services.h"
@@ -259,9 +260,13 @@ void Ship::UpdateCache()
 
 Money Ship::GetRunningCost() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_engine_vehicle_running_cost(&GetRustEngineCapabilitiesServices(), RustEngine(this->GetEngine()), RustVehicle(this));
+#else
 	const Engine *e = this->GetEngine();
 	uint cost_factor = GetVehicleProperty(this, PROP_SHIP_RUNNING_COST_FACTOR, e->VehInfo<ShipVehicleInfo>().running_cost);
 	return GetPrice(PR_RUNNING_SHIP, cost_factor, e->GetGRF());
+#endif
 }
 
 /** Calendar day handler. */

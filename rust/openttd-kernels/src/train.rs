@@ -483,8 +483,6 @@ pub struct Leaves {
     pub choose_track: extern "C" fn(Handle, u32, u8, u8) -> u64,
     pub clear_reservation: extern "C" fn(Handle, u32, u8),
     pub consist_windows: extern "C" fn(Handle),
-    pub cost_class: extern "C" fn(Handle) -> u64,
-    pub cost_default: extern "C" fn(Handle) -> u64,
     pub cost_divisor: extern "C" fn(Handle) -> u64,
     pub count_chain: extern "C" fn(Handle) -> u64,
     pub crash_event: extern "C" fn(Handle, u32),
@@ -521,7 +519,6 @@ pub struct Leaves {
     pub has_signal_td: extern "C" fn(Handle, u32, u8) -> u64,
     pub hide_fill: extern "C" fn(Handle),
     pub invalidate_grf: extern "C" fn(Handle),
-    pub invalid_price: extern "C" fn(Handle) -> u64,
     pub is_bridge: extern "C" fn(Handle, u32) -> u64,
     pub is_crossing: extern "C" fn(Handle, u32) -> u64,
     pub is_depot: extern "C" fn(Handle, u32) -> u64,
@@ -546,7 +543,6 @@ pub struct Leaves {
     pub pay_running: extern "C" fn(Handle, i64),
     pub pbs_signal_type: extern "C" fn(Handle) -> u64,
     pub pow_wag_power: extern "C" fn(Handle) -> u64,
-    pub price: extern "C" fn(Handle, u32) -> u64,
     pub railveh_wagon: extern "C" fn(Handle) -> u64,
     pub rail_tilt: extern "C" fn(Handle) -> u64,
     pub rail_type: extern "C" fn(Handle, u32) -> u64,
@@ -840,7 +836,7 @@ impl Game<'_> {
                 ) as u16;
                 if length != u16::MAX && length >= 8 {
                     let vs = self.vs();
-                    (vs.unknown_callback_result)(
+                    vs.unknown_callback_result(
                         (vs.engine)(u.vehicle()),
                         crate::newgrf_callbacks::CBID_VEHICLE_LENGTH,
                         length,
@@ -1077,20 +1073,29 @@ impl Game<'_> {
             as u8
     }
     fn running_cost(&self, id: Handle) -> i64 {
+        let vs = self.vs();
+        let cap = unsafe { (&*(vs.newgrf)()).capabilities };
         let mut cost = 0_i64;
         let mut u = id;
         loop {
-            if (self.leaves.cost_class)(u) != (self.leaves.invalid_price)(u) {
+            let e = (vs.engine)(u.vehicle()).0.as_ptr();
+            if (cap.train_price)(e) != crate::economy_type::INVALID_PRICE {
                 let mut factor = self.property(
                     u,
                     u32::from(crate::newgrf_properties::PROP_TRAIN_RUNNING_COST_FACTOR),
-                    (self.leaves.cost_default)(u),
+                    u64::from((cap.train_running)(e)),
                 ) as u32;
                 if factor != 0 {
                     if (self.leaves.read_multiheaded)(u) != 0 {
                         factor /= 2;
                     }
-                    cost = cost.saturating_add((self.leaves.price)(u, factor) as i64);
+                    cost = cost.saturating_add(crate::engine_capabilities::price(
+                        cap,
+                        e,
+                        u32::from((cap.train_price)(e)),
+                        factor,
+                        0,
+                    ));
                 }
             }
             u = (self.leaves.read_next_unit)(u);
@@ -3287,8 +3292,6 @@ crate::abi::layouts! {
         choose_track,
         clear_reservation,
         consist_windows,
-        cost_class,
-        cost_default,
         cost_divisor,
         count_chain,
         crash_event,
@@ -3325,7 +3328,6 @@ crate::abi::layouts! {
         has_signal_td,
         hide_fill,
         invalidate_grf,
-        invalid_price,
         is_bridge,
         is_crossing,
         is_depot,
@@ -3350,7 +3352,6 @@ crate::abi::layouts! {
         pay_running,
         pbs_signal_type,
         pow_wag_power,
-        price,
         railveh_wagon,
         rail_tilt,
         rail_type,

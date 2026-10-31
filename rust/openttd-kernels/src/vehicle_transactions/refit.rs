@@ -79,7 +79,6 @@ pub struct Services {
     pub refit_cargo: extern "C" fn(*const OpenTTDEngine, u8) -> Cargo,
     pub engine_kind: extern "C" fn(*const OpenTTDEngine) -> VehicleType,
     pub rail_kind: extern "C" fn(*const OpenTTDEngine) -> RailVehicleTypes,
-    pub price_shift: extern "C" fn(*const OpenTTDEngine, u32) -> i32,
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub refit_engine: extern "C" fn(*const OpenTTDEngine) -> Engine,
     pub cargo_kind: extern "C" fn(*mut OpenTTDVehicle) -> CargoKind,
@@ -192,7 +191,12 @@ pub(super) unsafe fn get_cost(
         _ => unreachable!("original NOT_REACHED vehicle type"),
     };
     let negative = factor < 0;
-    let amount = get_price(price, factor.unsigned_abs(), (s.price_shift)(e, price), -10);
+    let amount = get_price(
+        price,
+        factor.unsigned_abs(),
+        (s.capabilities.price_shift)(e, price),
+        -10,
+    );
     (s.common.base.cost.expense_money)(
         out,
         expense,
@@ -575,6 +579,6 @@ crate::abi::layouts! {
         train, wagon, road, ship, aircraft, train_run, road_run, ship_run, aircraft_run, auto_refit, refit,
     };
     "OpenTTDVehicleRefitServices" ["probe"] => Services {
-        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, vehicle_engine, has_grf, refit_cost, refit_cargo, engine_kind, rail_kind, price_shift, capabilities, refit_engine, cargo_kind, set_cargo_kind, expense, invalidate_chain, commit, set_refit_cap, refit_cap, cargo_cap, set_capacity, write_refit, train_handle, road_state, aircraft_handle, road_acceleration, details_ui, lists_ui,
+        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, vehicle_engine, has_grf, refit_cost, refit_cargo, engine_kind, rail_kind, capabilities, refit_engine, cargo_kind, set_cargo_kind, expense, invalidate_chain, commit, set_refit_cap, refit_cap, cargo_cap, set_capacity, write_refit, train_handle, road_state, aircraft_handle, road_acceleration, details_ui, lists_ui,
     };
 }

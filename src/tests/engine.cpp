@@ -10,6 +10,9 @@
 #include "../engine_base.h"
 #include "../engine_func.h"
 #include "../newgrf.h"
+#include "../economy_func.h"
+#include "../newgrf_engine.h"
+#include "../table/strings.h"
 #include <thread>
 #ifdef WITH_RUST
 #include "../rust/engine_ffi.h"
@@ -210,4 +213,100 @@ TEST_CASE("Engine type availability returns canonical booleans for sparse masks"
 	road_hidden.Restore();
 }
 
+#endif
+
+#ifdef WITH_RUST
+TEST_CASE("Engine runtime observes live specs and original property and price kinds", "[rust][engine]")
+{
+	static OpenTTDVehicleResolverServices resolver;
+	static uint16_t result, observed_engine;
+	static uint32_t observed_property, calls;
+	resolver.spritegroup = [](uint16_t, uint8_t) noexcept -> const SpriteGroup * { return nullptr; };
+	resolver.resolve_callback = [](OpenTTDVehicleResolverState *, uint16_t engine, uint16_t cb, uint32_t property, uint32_t p2, int32_t *, size_t count) noexcept -> uint16_t {
+		CHECK(cb == CBID_VEHICLE_MODIFY_PROPERTY);
+		CHECK(p2 == 0);
+		CHECK(count == 0);
+		observed_engine = engine;
+		observed_property = property;
+		++calls;
+		return result;
+	};
+	auto services = GetRustEngineCapabilitiesServices();
+	services.resolver = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
+	struct Case { VehicleType type; Price build, running; uint8_t build_prop, run_prop; };
+	for (const Case c : {
+		Case{VEH_TRAIN, PR_BUILD_VEHICLE_TRAIN, PR_RUNNING_TRAIN_DIESEL, PROP_TRAIN_COST_FACTOR, PROP_TRAIN_RUNNING_COST_FACTOR},
+		Case{VEH_ROAD, PR_BUILD_VEHICLE_ROAD, PR_RUNNING_ROADVEH, PROP_ROADVEH_COST_FACTOR, PROP_ROADVEH_RUNNING_COST_FACTOR},
+		Case{VEH_SHIP, PR_BUILD_VEHICLE_SHIP, PR_RUNNING_SHIP, PROP_SHIP_COST_FACTOR, PROP_SHIP_RUNNING_COST_FACTOR},
+		Case{VEH_AIRCRAFT, PR_BUILD_VEHICLE_AIRCRAFT, PR_RUNNING_AIRCRAFT, PROP_AIRCRAFT_COST_FACTOR, PROP_AIRCRAFT_RUNNING_COST_FACTOR},
+	}) {
+		Engine e(c.type, 0); e.index = EngineID{123};
+		GRFFile file; file.grfid = 0x613A0003;
+		e.grf_prop.grfid = 0xBAD;
+		e.grf_prop.grffile = &file;
+		CHECK(e.GetGRFID() == file.grfid);
+		e.grf_prop.grffile = nullptr;
+		CHECK(e.GetGRFID() == 0);
+		e.grf_prop.grffile = &file;
+		if (c.type == VEH_TRAIN) { auto &i = e.VehInfo<RailVehicleInfo>(); i.railveh_type = RAILVEH_SINGLEHEAD; i.running_cost_class = c.running; i.cost_factor = 53; i.running_cost = 29; }
+		if (c.type == VEH_ROAD) { auto &i = e.VehInfo<RoadVehicleInfo>(); i.running_cost_class = c.running; i.cost_factor = 53; i.running_cost = 29; }
+		if (c.type == VEH_SHIP) { auto &i = e.VehInfo<ShipVehicleInfo>(); i.cost_factor = 53; i.running_cost = 29; }
+		if (c.type == VEH_AIRCRAFT) { auto &i = e.VehInfo<AircraftVehicleInfo>(); i.cost_factor = 53; i.running_cost = 29; i.max_range = 65535; }
+		for (int64_t base : {INT64_C(2560), INT64_MAX, INT64_MIN}) {
+			Backup<Money> build_price(_price[c.build], Money{base});
+			Backup<Money> run_price(_price[c.running], Money{base});
+			for (int8_t shift : {-2, 0, 2}) {
+				file.price_base_multipliers[c.build] = shift;
+				file.price_base_multipliers[c.running] = shift;
+				for (uint16_t value : {CALLBACK_FAILED, uint16_t{0}, uint16_t{32767}, uint16_t{65534}}) {
+					result = value; calls = 0;
+					CHECK(openttd_rust_engine_cost(&services, RustEngine(&e)) == GetPrice(c.build, value == CALLBACK_FAILED ? 53 : value, &file, -8).base());
+					CHECK(calls == 1); CHECK(observed_engine == 123); CHECK(observed_property == c.build_prop);
+					CHECK(openttd_rust_engine_running_cost(&services, RustEngine(&e)) == GetPrice(c.running, value == CALLBACK_FAILED ? 29 : value, &file, -8).base());
+					CHECK(calls == 2); CHECK(observed_property == c.run_prop);
+				}
+			}
+			build_price.Restore(); run_price.Restore();
+		}
+		if (c.type == VEH_TRAIN || c.type == VEH_ROAD) {
+			if (c.type == VEH_TRAIN) e.VehInfo<RailVehicleInfo>().running_cost_class = INVALID_PRICE;
+			else e.VehInfo<RoadVehicleInfo>().running_cost_class = INVALID_PRICE;
+			calls = 0;
+			CHECK(openttd_rust_engine_running_cost(&services, RustEngine(&e)) == 0);
+			CHECK(calls == 0);
+		}
+		if (c.type == VEH_TRAIN) {
+			e.VehInfo<RailVehicleInfo>().railveh_type = RAILVEH_WAGON; result = CALLBACK_FAILED;
+			CHECK(openttd_rust_engine_cost(&services, RustEngine(&e)) == GetPrice(PR_BUILD_VEHICLE_WAGON, 53, &file, -8).base());
+		}
+		if (c.type == VEH_AIRCRAFT) {
+			result = CALLBACK_FAILED; CHECK(openttd_rust_engine_range(&services, RustEngine(&e)) == 65535);
+			result = 32767; CHECK(openttd_rust_engine_range(&services, RustEngine(&e)) == 32767);
+			CHECK(observed_property == PROP_AIRCRAFT_RANGE);
+		}
+	}
+}
+
+TEST_CASE("Engine runtime enablement short circuits and lifetime retains widths", "[rust][engine]")
+{
+	Engine e(VEH_ROAD, 0);
+	auto engine = EngineServices();
+	engine.climate = [](const OpenTTDEngine *) noexcept -> bool { FAIL("Invalid strings must short circuit climate"); return false; };
+	e.info.string_id = STR_NEWGRF_INVALID_ENGINE;
+	CHECK_FALSE(openttd_rust_engine_enabled(&engine, RustEngine(&e)));
+	e.info.string_id = STR_EMPTY;
+	for (bool climate : {false, true}) {
+		e.info.climates = climate ? LandscapeTypes{_settings_game.game_creation.landscape} : LandscapeTypes{};
+		CHECK(e.IsEnabled() == climate);
+	}
+	for (uint8_t extension : {0, 1, 255}) {
+		Backup<uint8_t> setting(_settings_game.vehicle.extend_vehicle_life, extension);
+		for (int32_t years : {0, 255, 65536, INT32_MAX, INT32_MIN}) {
+			e.info.lifelength = TimerGameCalendar::Year{years};
+			const uint32_t bits = (static_cast<uint32_t>(years) + extension) * CalendarTime::DAYS_IN_LEAP_YEAR;
+			CHECK(e.GetLifeLengthInDays().base() == static_cast<int32_t>(bits));
+		}
+		setting.Restore();
+	}
+}
 #endif

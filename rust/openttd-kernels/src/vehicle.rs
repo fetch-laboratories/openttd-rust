@@ -205,8 +205,8 @@ pub struct VehicleServices {
     /// `GetVehicleCallback(callback, 0, 0, v->engine_type, v)`.
     pub callback:
         extern "C" fn(*const crate::newgrf_vehicle::Services, VehicleRef, CallbackID) -> u16,
-    /// `ErrorUnknownCallbackResult(e->GetGRFID(), callback, result)`.
-    pub unknown_callback_result: extern "C" fn(EngineRef, CallbackID, u16),
+    /// Native max_age store after the Rust engine lifetime decision.
+    pub set_max_age: extern "C" fn(VehicleRef, i32),
     pub length_changed: extern "C" fn(VehicleRef),
     /// `PlayVehicleSound(v, event)`.
     pub play_vehicle_sound: extern "C" fn(VehicleRef, VehicleSoundEvent) -> bool,
@@ -406,7 +406,7 @@ crate::abi::layouts! {
         newgrf,
         property,
         callback,
-        unknown_callback_result,
+        set_max_age,
         length_changed,
         play_vehicle_sound,
         play_sound,
@@ -615,5 +615,36 @@ mod tests {
         assert_eq!(map.add_dir(0, 0), 0_u32.wrapping_sub(257));
         assert_eq!((map.tile_x(0x1234), map.tile_y(0x1234)), (0x34, 0x12));
         assert_eq!(advance_distance(3), 192);
+    }
+}
+
+#[allow(unsafe_code)]
+impl VehicleServices {
+    pub(crate) fn unknown_callback_result(
+        &self,
+        engine: EngineRef,
+        callback: CallbackID,
+        result: u16,
+    ) {
+        unsafe {
+            crate::engine_capabilities::unknown_callback(
+                (&*(self.newgrf)()).capabilities,
+                engine.0.as_ptr(),
+                callback,
+                result,
+            );
+        }
+    }
+
+    /// Ship/aircraft running cost; the caller retains its live vehicle shell.
+    pub(crate) unsafe fn running_cost(&self, v: VehicleRef) -> i64 {
+        let cap = unsafe { (&*(self.newgrf)()).capabilities };
+        unsafe {
+            crate::engine_capabilities::openttd_rust_engine_vehicle_running_cost(
+                cap,
+                (self.engine)(v).0.as_ptr(),
+                v.0.as_ptr(),
+            )
+        }
     }
 }

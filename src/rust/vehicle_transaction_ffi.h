@@ -66,7 +66,7 @@ struct OpenTTDVehicleCommonServices {
 	uint32_t (*train_power)(void *) noexcept OPENTTD_SERVICE_DEFAULT(train_power);
 	OpenTTDAircraftStartState (*aircraft_start)(void *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_start);
 	uint8_t (*grf_version)(void *) noexcept OPENTTD_SERVICE_DEFAULT(grf_version);
-	uint32_t (*grf_string)(void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_string);
+	uint32_t (*grf_string)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_string);
 	void (*waiting_news)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(waiting_news);
 	void (*flip_stopped)(void *) noexcept OPENTTD_SERVICE_DEFAULT(flip_stopped);
 	void (*startstop_ui)(void *) noexcept OPENTTD_SERVICE_DEFAULT(startstop_ui);

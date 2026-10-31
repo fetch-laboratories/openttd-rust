@@ -78,7 +78,6 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.cargo_capacity = RustVehicleCargoCap,
 		.real_count = [](const RealSpriteGroup *group, bool motion) noexcept { return static_cast<uint32_t>(motion ? RustRealLoadedCount(group) : RustRealLoadingCount(group)); },
 		.real_at = [](const RealSpriteGroup *group, bool motion, uint32_t index) noexcept { return motion ? RustRealLoaded(group, index) : RustRealLoading(group, index); },
-		.vehicle_grfid = RustVehicleRead<uint32_t, RustVehicleGRFID>,
 		.engine_by_id = RustEngineByID,
 		.default_cargo = RustEngineDefaultCargo,
 		.engine_flags = [](const OpenTTDEngine * e) noexcept -> uint8_t { return EngineOf(e)->flags.base(); },

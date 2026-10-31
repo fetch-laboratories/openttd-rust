@@ -3,6 +3,9 @@
 #include "ground_vehicle.hpp"
 #include "rust/road_stop_ffi.h"
 #include "rust/road_ffi.h"
+#include "rust/engine_capabilities_ffi.h"
+#include "rust/engine_loading_ffi.h"
+#include "rust/company_ffi.h"
 #include "rust/road_yapf_ffi.h"
 #include "tests/effect_protocol.hpp"
 #include "rust/vehicle_effect_ffi.h"
@@ -129,15 +132,19 @@ static void RoadBoundary()
 		return 8;
 	};
 	t.vehicle.length_changed = [](OpenTTDVehicle *) noexcept { ++road_abi_probe->length_changes; };
-	t.vehicle.unknown_callback_result = [](const OpenTTDEngine *e, CallbackID callback, uint16_t result) noexcept {
-		CHECK(e == reinterpret_cast<const OpenTTDEngine *>(&road_abi_new_engine) && callback == 0x11 && result == 9);
-	};
+	static OpenTTDEngineCapabilitiesServices capabilities{};
+	static OpenTTDVehicleResolverServices resolver{};
+	static OpenTTDEngineLoadingServices loading{};
+	resolver.capabilities = &capabilities;
+	capabilities.grf = [](const OpenTTDEngine *e) noexcept -> const GRFFile * { CHECK(e == reinterpret_cast<const OpenTTDEngine *>(&road_abi_new_engine)); return nullptr; };
+	capabilities.loading = []() noexcept -> const OpenTTDEngineLoadingServices * { return &loading; };
+	loading.unknown_refit = [](uint32_t grfid, uint16_t callback, uint16_t result) noexcept { CHECK(grfid == 0 && callback == 0x11 && result == 9); };
 	t.leaves.default_max_speed = [](OpenTTDVehicle *) noexcept -> uint16_t {
 		CHECK(road_abi_probe->fallback_cache && road_abi_probe->cache_properties == 3);
 		return 99;
 	};
 	t.ground.write_first_engine = [](OpenTTDVehicle *, uint16_t engine) noexcept { CHECK(engine == 0xFFFF || (road_abi_probe->fallback_cache && engine == 9)); };
-	t.vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return nullptr; };
+	t.vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
 	t.vehicle.property = [](const OpenTTDVehicleResolverServices *, OpenTTDVehicle *u, uint8_t property, int32_t fallback) noexcept -> int32_t {
 		auto &p = *road_abi_probe;
 		if (property == 0x22) return fallback;
@@ -174,21 +181,26 @@ static void RoadBoundary()
 
 	/* Running-cost property callbacks can replace the vehicle's engine. Price retains the original engine. */
 	probe.engine_replaced = false;
-	t.leaves.cost_read = [](OpenTTDVehicle *u) noexcept -> OpenTTDRoadCostRead {
+	t.vehicle.engine = [](OpenTTDVehicle *u) noexcept -> const OpenTTDEngine * {
 		CHECK(u == RoadAbiHandle() && !road_abi_probe->engine_replaced);
-		return {.engine = reinterpret_cast<const OpenTTDEngine *>(&road_abi_engine), .cost_class = 1, .cost_factor = 3};
+		return reinterpret_cast<const OpenTTDEngine *>(&road_abi_engine);
 	};
-	t.vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return nullptr; };
+	capabilities.road_price = [](const OpenTTDEngine *) noexcept -> Price { return static_cast<Price>(1); };
+	capabilities.road_running = [](const OpenTTDEngine *) noexcept -> uint8_t { return 3; };
+	t.vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
 	t.vehicle.property = [](const OpenTTDVehicleResolverServices *, OpenTTDVehicle *u, uint8_t property, int32_t value) noexcept -> int32_t {
 		CHECK(u == RoadAbiHandle() && property == 9 && value == 3);
 		road_abi_probe->engine_replaced = true;
 		return 4;
 	};
-	t.leaves.price = [](const OpenTTDEngine *e, uint32_t factor) noexcept -> int64_t {
-		CHECK(road_abi_probe->engine_replaced && e == reinterpret_cast<const OpenTTDEngine *>(&road_abi_engine) && factor == 4);
-		return 123;
+	capabilities.price_shift = [](const OpenTTDEngine *e, uint32_t price) noexcept -> int32_t {
+		CHECK(road_abi_probe->engine_replaced && e == reinterpret_cast<const OpenTTDEngine *>(&road_abi_engine) && price == 1);
+		return -2;
 	};
+	const int64_t old_price = openttd_rust_economy_prices()[1];
+	openttd_rust_economy_prices()[1] = 123;
 	CHECK(openttd_rust_road_running_cost(v, probe.state, &t.leaves) == 123);
+	openttd_rust_economy_prices()[1] = old_price;
 
 	/* A non-station order must not read its destination at the bay stopping frame. */
 	openttd_rust_road_set(probe.state, 0, 32);

@@ -31,6 +31,7 @@ pub struct Services {
     pub powered: extern "C" fn(*const OpenTTDEngine, u32) -> bool,
     pub new_wagon: extern "C" fn(u32, *const OpenTTDEngine) -> *mut (),
     pub new_engine: extern "C" fn(u32, *const OpenTTDEngine) -> *mut (),
+    pub engine_dates: extern "C" fn(*mut (), *const OpenTTDEngine),
     pub new_rear: extern "C" fn(*mut ()) -> *mut (),
     pub link_multihead: extern "C" fn(*mut (), *mut ()),
     pub subtype: extern "C" fn(*mut ()) -> u8,
@@ -43,7 +44,6 @@ pub struct Services {
     pub ground: &'static crate::vehicle::GroundServices,
     pub first_engine: extern "C" fn(*mut ()) -> u16,
     pub invalidate_grf: extern "C" fn(*mut ()),
-    pub unknown_attach: extern "C" fn(*mut (), u16),
     pub train_limit: extern "C" fn() -> u16,
     pub unit: extern "C" fn(*mut ()) -> u16,
     pub use_unit: extern "C" fn(*mut (), u16),
@@ -331,6 +331,10 @@ pub(crate) unsafe fn build(
         let a = k.articulated;
         let company = (x.t.shared.current_company)();
         v = (s.new_engine)(tile, e);
+        (x.c.vehicles.set_max_age)(unsafe { super::vehicle_ref(v) }, unsafe {
+            crate::engine_capabilities::openttd_rust_engine_life_days(x.r.capabilities, e)
+        });
+        (s.engine_dates)(v, e);
         (a.random_bits)(v, x.t.shared.random() as u16);
         (k.service_flags)(v, (k.exclusive_preview)(e), (x.t.interval_percent)(company));
         unsafe { (x.g.set_membership)(v, DEFAULT_GROUP) };
@@ -539,7 +543,7 @@ fn check_train_attachment(x: Ctx, mut t: *mut ()) -> Option<u32> {
             (x.s.invalidate_grf)(head);
             if callback != CALLBACK_FAILED {
                 let mut error = strings.null_string;
-                let grf_text = |n: u32| (x.c.grf_string)(head, strings.grf_text.0.wrapping_add(n));
+                let grf_text = |n: u32| x.c.grf_text(head, strings.grf_text.0.wrapping_add(n));
                 if (x.c.grf_version)(head) < 8 {
                     if callback == 0xFD {
                         error = strings.incompatible_rail;
@@ -548,7 +552,11 @@ fn check_train_attachment(x: Ctx, mut t: *mut ()) -> Option<u32> {
                         error = grf_text(u32::from(callback));
                     }
                     if callback >= 0x100 {
-                        (x.s.unknown_attach)(head, callback);
+                        x.c.vehicles.unknown_callback_result(
+                            (x.c.vehicles.engine)(unsafe { super::vehicle_ref(head) }),
+                            crate::newgrf_callbacks::CBID_TRAIN_ALLOW_WAGON_ATTACH,
+                            callback,
+                        );
                     }
                 } else if callback < 0x400 {
                     error = grf_text(u32::from(callback));
@@ -557,7 +565,7 @@ fn check_train_attachment(x: Ctx, mut t: *mut ()) -> Option<u32> {
                         0x400 | 0x401 => (),
                         0x40F => {
                             // The original reads register 100 only for this result.
-                            error = (x.c.grf_string)(head, unsafe { regs100.assume_init() } as u32);
+                            error = x.c.grf_text(head, unsafe { regs100.assume_init() } as u32);
                         }
                         _ => error = strings.incompatible_rail,
                     }
@@ -944,9 +952,9 @@ pub unsafe extern "C" fn openttd_rust_train_move(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDRailConstructionServices" ["probe"] => Services {
-        cargo_capacity, strings, train_if_valid, compatible, powered, new_wagon, new_engine, new_rear, link_multihead, subtype,
+        cargo_capacity, strings, train_if_valid, compatible, powered, new_wagon, new_engine, engine_dates, new_rear, link_multihead, subtype,
         set_subtype, previous, last, set_next, next_vehicle, last_engine_part, ground, first_engine,
-        invalidate_grf, unknown_attach, train_limit, unit,
+        invalidate_grf, train_limit, unit,
         use_unit, release_unit, head_windows, front_windows, company_dirty, depot_changed,
     };
     "OpenTTDRailConstructionStrings" ["probe"] => Strings { rear_follow, depot_only, no_orders, };

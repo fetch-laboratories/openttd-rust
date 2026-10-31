@@ -98,7 +98,7 @@ pub struct Overrides {
 #[repr(C)]
 pub struct Services {
     vehicle: &'static VehicleServices,
-    shared: &'static crate::services::Services,
+    pub(crate) shared: &'static crate::services::Services,
     cache: unsafe extern "C" fn(V) -> *mut Cache,
     first: unsafe extern "C" fn(V) -> V,
     move_vehicle: unsafe extern "C" fn(V, i32) -> V,
@@ -132,7 +132,6 @@ pub struct Services {
     cargo_capacity: unsafe extern "C" fn(V) -> u16,
     real_count: unsafe extern "C" fn(Group, bool) -> u32,
     real_at: unsafe extern "C" fn(Group, bool, u32) -> Group,
-    vehicle_grfid: unsafe extern "C" fn(V) -> u32,
     engine_by_id: unsafe extern "C" fn(u16) -> *const OpenTTDEngine,
     default_cargo: unsafe extern "C" fn(*const OpenTTDEngine) -> u8,
     engine_flags: unsafe extern "C" fn(*const OpenTTDEngine) -> u8,
@@ -1033,7 +1032,14 @@ unsafe fn variable(
         let kind = || (s.vehicle.vehicle_type)(h);
         let check = |ok| (s.check)(ok);
         match variable {
-            0x25 => return (s.vehicle_grfid)(v),
+            0x25 => {
+                return unsafe {
+                    crate::engine_capabilities::openttd_rust_engine_grfid(
+                        s.capabilities,
+                        (s.vehicle.engine)(handle(v)).0.as_ptr(),
+                    )
+                };
+            }
             0x40 | 0x41 | 0x42 | 0x43 | 0x4d => return cached_variable(s, v, variable, grf),
             0x44 => {
                 if kind() != 3 || !crate::aircraft::is_normal_aircraft((s.vehicle.subtype)(h)) {
@@ -1658,7 +1664,7 @@ crate::abi::layouts! {
         overrides, override_at, override_engine, cached_override, write_override, spritegroup, random_bits, waiting,
         write_random, write_waiting, resolve_callback, resolve_random, order, cargo_owner,
         cargo_capacity, real_count, real_at,
-        vehicle_grfid, engine_by_id, default_cargo, engine_flags, local_id, cargo_info, motion, build_year, last_service, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, load_ticks, service_interval, acceleration, cargo_type, cargo_subtype, age, max_age, unit, sprite, breakdowns, breakdown_counter, breakdown_delay, breakdown_chance, reliability, reliability_decay, value, profit_this, profit_last, vehicle_flags, aircraft, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, engine_has_badge, engine_badge, rail_badge, road_badge, ship_owner, unhandled, aircraft_leaves, ground, cargo_services, check
+        engine_by_id, default_cargo, engine_flags, local_id, cargo_info, motion, build_year, last_service, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, load_ticks, service_interval, acceleration, cargo_type, cargo_subtype, age, max_age, unit, sprite, breakdowns, breakdown_counter, breakdown_delay, breakdown_chance, reliability, reliability_decay, value, profit_this, profit_last, vehicle_flags, aircraft, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, engine_has_badge, engine_badge, rail_badge, road_badge, ship_owner, unhandled, aircraft_leaves, ground, cargo_services, check
     };
     "NewGRFCache" ["vehicle_resolver"] => Cache { position_consist_length, position_same_id_length, consist_cargo_information, company_information, position_in_vehicle, cache_valid };
     "OpenTTDVehicleScopeState" ["vehicle_resolver"] => Scope { v, self_type, rotor_in_gui };

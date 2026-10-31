@@ -50,10 +50,7 @@ struct OpenTTDVehicleMaintenanceBudget {
 	int64_t needed;
 	int64_t available;
 };
-struct OpenTTDVehicleMaintenanceReplacementCost {
-	int64_t cost;
-	int64_t available;
-};
+
 struct OpenTTDVehicleMaintenanceAutomatic {
 	bool has_depot_order;
 	OrderType order_type;
@@ -125,7 +122,7 @@ struct OpenTTDVehicleMaintenanceServices {
 	OpenTTDVehicleMaintenanceBudget (OPENTTD_RUST_CALL *budget)(const Company *) noexcept OPENTTD_SERVICE_DEFAULT(budget);
 	OpenTTDVehicleMaintenanceReplacement (OPENTTD_RUST_CALL *replacement)(OpenTTDVehicle *, const Company *) noexcept OPENTTD_SERVICE_DEFAULT(replacement);
 	bool (OPENTTD_RUST_CALL *replacement_available)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(replacement_available);
-	OpenTTDVehicleMaintenanceReplacementCost (OPENTTD_RUST_CALL *replacement_cost)(const Company *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(replacement_cost);
+	int64_t (*available_money)(const Company *) noexcept OPENTTD_SERVICE_DEFAULT(available_money);
 	OpenTTDVehicleMaintenanceAutomatic (OPENTTD_RUST_CALL *automatic)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(automatic);
 	bool (OPENTTD_RUST_CALL *depot_service)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(depot_service);
 	OpenTTDVehicleMaintenanceCheckBreakdown (OPENTTD_RUST_CALL *check_breakdown)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(check_breakdown);

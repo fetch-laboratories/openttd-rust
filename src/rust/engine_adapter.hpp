@@ -70,7 +70,7 @@ static OpenTTDEngineReliability Engine_reliability(const OpenTTDEngine *shell) n
 static OpenTTDEngineStartup Engine_startup(const OpenTTDEngine *shell) noexcept
 {
 	const Engine *e = EngineOf(shell); const auto &info = e->info;
-	return {.base_intro = RustEngineBaseIntro(shell), .grfid = e->GetGRFID(), .base_life = info.base_life.base(), .decay_speed = info.decay_speed, .climate = RustEngineClimate(shell)};
+	return {.base_intro = RustEngineBaseIntro(shell), .base_life = info.base_life.base(), .decay_speed = info.decay_speed, .climate = RustEngineClimate(shell)};
 }
 static OpenTTDEngineSeed Engine_seed_config(const OpenTTDEngine *e) noexcept
 {
@@ -85,7 +85,6 @@ static OpenTTDEngineYear Engine_aging_year(const OpenTTDEngine *shell) noexcept
 
 static OpenTTDEngineStartSettings Engine_start_settings() noexcept { return {.generation_seed = RustGenerationSeed(), .starting_year = RustStartingYear(), .date = TimerGameCalendar::date.base()}; }
 
-static bool Engine_enabled(const OpenTTDEngine *e) noexcept { return EngineOf(e)->IsEnabled(); }
 
 static void Engine_clear_last_variant(const OpenTTDEngine *shell) noexcept
 {
@@ -168,7 +167,6 @@ const OpenTTDEngineServices &EngineServices() noexcept
 		.ai_road_disabled = RustAIRoadDisabled,
 		.ai_ship_disabled = RustAIShipDisabled,
 		.ai_aircraft_disabled = RustAIAircraftDisabled,
-		.enabled = Engine_enabled,
 		.climate = RustEngineClimate,
 		.rail_kind = Engine_rail_kind,
 		.clear_last_variant = Engine_clear_last_variant,
