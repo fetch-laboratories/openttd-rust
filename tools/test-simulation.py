@@ -973,6 +973,43 @@ class InstructionSpeedTests(unittest.TestCase):
             settings = json.loads(recorded[0])["settings"]
             self.assertIn(f"{shared}/deps/lib;<source>/src;<build>/x;", settings)
 
+    def test_rust_only_cache_keeps_anchored_compatible_spelling(self):
+        anchored = (
+            "GITCOMMAND:FILEPATH=/usr/bin/git\n\n//Global directory\n"
+            "OPTION_PACKAGE_DEPENDENCIES:BOOL=OFF\n\n" + ir.RUST_OPTION + "//Survey\n"
+            "//Details about finding Freetype\nFIND_PACKAGE_MESSAGE_DETAILS_Freetype:INTERNAL=[f]\n"
+            "//Details about finding ICU\nGITCOMMAND-ADVANCED:INTERNAL=1\n"
+            "//Test HAVE\n"
+        )
+        rust_only = (
+            "GITCOMMAND:FILEPATH=/usr/bin/git\n\n"
+            "//Git command line client\nGIT_EXECUTABLE:FILEPATH=/usr/bin/git\n\n"
+            "//Global directory\nOPTION_PACKAGE_DEPENDENCIES:BOOL=OFF\n\n//Survey\n"
+            "//Details about finding Freetype\nFIND_PACKAGE_MESSAGE_DETAILS_Freetype:INTERNAL=[f]\n"
+            "//Details about finding Git\nFIND_PACKAGE_MESSAGE_DETAILS_Git:INTERNAL=[/usr/bin/git][v2()]\n"
+            "//Details about finding ICU\nGITCOMMAND-ADVANCED:INTERNAL=1\n"
+            "//ADVANCED property for variable: GIT_EXECUTABLE\nGIT_EXECUTABLE-ADVANCED:INTERNAL=1\n"
+            "//Test HAVE\n"
+        )
+        self.assertEqual(ir.anchored_cache(anchored), anchored)
+        self.assertEqual(ir.anchored_cache(rust_only), anchored)
+        with tempfile.TemporaryDirectory() as directory:
+            build = Path(directory)
+            for name, text in (
+                ("CMakeCache.txt", rust_only),
+                ("rust-build-configuration.txt", "c"),
+                ("rust-toolchain.txt", "t"),
+                ("openttd-rust", "game"),
+            ):
+                (build / name).write_text(text)
+            with (
+                patch.object(ir, "verify_debug"),
+                patch.object(migration, "rust_archive"),
+            ):
+                ir.record_build(build, build, "candidate", {"CARGO_HOME": "-"})
+                settings = json.loads((build / "instruction-build.json").read_text())
+            self.assertTrue(settings["settings"].startswith(anchored + "ct"))
+
     def test_effective_compiled_debug_rejects_overrides_and_stripping(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
