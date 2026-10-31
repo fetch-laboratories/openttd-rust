@@ -955,10 +955,7 @@ static int64_t RustTown_terraform_price() noexcept
 {
 	return _price[PR_TERRAFORM];
 }
-static uint32_t RustTown_clean_road_bits(uint32_t tile, uint32_t bits) noexcept
-{
-	return RustCleanRoadBits(TileIndex{tile}, static_cast<RoadBits>(bits));
-}
+
 static void RustTown_set_road_town(uint32_t tile, uint32_t town) noexcept
 {
 	RustSetRoadOwner(tile, RTT_ROAD, OWNER_TOWN.base()); RustSetTownIndex(tile, static_cast<uint16_t>(town));
@@ -1162,7 +1159,6 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.dirty_town = RustTown_dirty_town,
 
 		.terraform_price = RustTown_terraform_price,
-		.clean_road_bits = RustTown_clean_road_bits,
 		.set_road_town = RustTown_set_road_town,
 		.exchange_company = RustTown_exchange_company,
 		.house_class = RustTownHouseClass,

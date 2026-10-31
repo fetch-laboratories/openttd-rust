@@ -14,6 +14,13 @@
 #include "pathfinder/pathfinder_func.h"
 #include "road.h"
 #include "newgrf_roadstop.h"
+#include "tree_map.h"
+#include "tunnel_map.h"
+#ifdef WITH_RUST
+#include "rust/movement_ffi.h"
+#include "rust/services_ffi.h"
+extern "C" uint32_t openttd_test_clean_up_road_bits(const OpenTTDSharedServices *, uint32_t, uint32_t);
+#endif
 extern RoadTypeInfo _roadtypes[ROADTYPE_END];
 #ifdef WITH_RUST
 extern RoadTypes &_roadtypes_road;
@@ -32,6 +39,144 @@ extern RoadTypes _roadtypes_road;
 #include "vehicle_cmd.h"
 #include "water_cmd.h"
 extern const TileTypeProcs _tile_type_road_procs;
+/* Native map helpers remain the oracle, including their assertion policy. */
+namespace RoadCleanupProbe {
+static std::vector<std::pair<uint32_t, uint32_t>> trace;
+static TileIndex mutate = INVALID_TILE;
+static void Observe(uint32_t event, TileIndex tile)
+{
+	trace.emplace_back(event, tile.base());
+	if (event == 4 && mutate != INVALID_TILE) MakeClear(mutate, CLEAR_GRASS, 3);
+}
+static TileIndex Add(TileIndex tile, DiagDirection dir) { Observe(dir, tile); return ::TileAddByDiagDir(tile, dir); }
+static RoadBits Bits(Tile tile, RoadTramType type)
+{
+	Observe(4 + static_cast<uint>(type), static_cast<TileIndex>(tile));
+	return ::GetAnyRoadBits(tile, type);
+}
+static auto Foundation(TileIndex tile) { Observe(6, tile); return ::GetFoundationSlope(tile); }
+#define TileAddByDiagDir Add
+#define GetAnyRoadBits Bits
+#define GetFoundationSlope Foundation
+#include "road-cleanup-original.hpp"
+#undef GetFoundationSlope
+#undef GetAnyRoadBits
+#undef TileAddByDiagDir
+static uint32_t Candidate(TileIndex tile, uint32_t bits)
+{
+#ifdef WITH_RUST
+	auto shared = GetRustSharedServices();
+	auto movement = GetRustMovementServices();
+	movement.shared = &shared;
+	shared.movement = &movement;
+	movement.add_by_diag_dir = [](uint32_t t, uint8_t dir) noexcept { return Add(TileIndex{t}, static_cast<DiagDirection>(dir)).base(); };
+	shared.road_bits = [](uint32_t t, uint8_t kind, bool straight) noexcept -> uint8_t { if (straight) SignalFixtureAbort(__LINE__); return Bits(TileIndex{t}, static_cast<RoadTramType>(kind)); };
+	shared.tile_slope_z = [](uint32_t t) noexcept { Observe(6, TileIndex{t}); return GetRustSharedServices().tile_slope_z(t); };
+	return openttd_test_clean_up_road_bits(&shared, tile.base(), bits);
+#else
+	return CleanUpRoadBits(tile, static_cast<RoadBits>(bits));
+#endif
+}
+static void Run(TileIndex center)
+{
+	AutoRestoreBackup<Randomizer> interactive(_interactive_random, _interactive_random);
+	_interactive_random.SetSeed(619);
+	SavedRandomSeeds before, after;
+	SaveRandomSeeds(&before);
+	/* Restore all fixture fields before returning to simulation; no pool entry is
+	 * allocated or dereferenced by the tile-only connectivity helpers. */
+	auto capture = [](Tile t) { return std::array<uint16_t, 10>{t.type(), t.height(), t.m1(), t.m2(), t.m3(), t.m4(), t.m5(), t.m6(), t.m7(), t.m8()}; };
+	auto restore = [](Tile t, const std::array<uint16_t, 10> &v) { t.type() = v[0]; t.height() = v[1]; t.m1() = v[2]; t.m2() = v[3]; t.m3() = v[4]; t.m4() = v[5]; t.m5() = v[6]; t.m6() = v[7]; t.m7() = v[8]; t.m8() = v[9]; };
+	std::vector<std::tuple<TileIndex, std::array<uint16_t, 10>>> saved;
+	for (int y = -2; y <= 3; ++y) for (int x = -2; x <= 3; ++x) {
+		TileIndex tile = center + TileDiffXY(x, y);
+		saved.emplace_back(tile, capture(tile));
+	}
+	uint count = 0;
+	auto compare = [&](TileIndex tile, uint32_t plan) {
+		TileIndex changed = mutate == INVALID_TILE ? center : mutate;
+		auto original = capture(changed);
+		trace.clear();
+		const uint32_t expected = CleanUpRoadBits(tile, static_cast<RoadBits>(plan));
+		const auto calls = trace;
+		auto final = capture(changed);
+		restore(changed, original);
+		trace.clear();
+		const uint32_t actual = Candidate(tile, plan);
+		if (actual != expected || calls != trace || final != capture(changed)) {
+			fmt::print(stderr, "ROADCMD cleanup-failure {} {} {} {} {} {}\n", tile.base(), plan, expected, actual, calls.size(), trace.size());
+			SignalFixtureAbort(__LINE__);
+		}
+		++count;
+	};
+	for (DiagDirection dir = DIAGDIR_BEGIN; dir < DIAGDIR_END; ++dir) {
+		TileIndex at = ::TileAddByDiagDir(center, dir);
+		for (uint kind = 0; kind < 34; ++kind) for (uint orientation = 0; orientation < 4; ++orientation) {
+			for (int y = -1; y <= 2; ++y) for (int x = -1; x <= 2; ++x) { TileIndex t = center + TileDiffXY(x, y); MakeClear(t, CLEAR_GRASS, 3); SetTileHeight(t, 2); }
+			auto d = static_cast<DiagDirection>(orientation);
+			auto axis = DiagDirToAxis(d);
+			switch (kind) {
+				case 0: break;
+				case 1: MakeTree(at, TREE_TEMPERATE, 0, TreeGrowthStage::Grown, TREE_GROUND_GRASS, 3); break;
+				case 2: MakeVoid(at); break;
+				case 3: MakeSea(at); break;
+				case 4: MakeShore(at); break;
+				case 5: MakeRiver(at, 0); break;
+				case 6: MakeCanal(at, OWNER_NONE, 0); break;
+				case 7: MakeLockTile(at, OWNER_NONE, LockPart::Middle, d, WaterClass::Canal); break;
+				case 8: MakeRoadNormal(at, DiagDirToRoadBits(d), ROADTYPE_ROAD, INVALID_ROADTYPE, TownID::Invalid(), OWNER_NONE, OWNER_NONE); break;
+				case 9: MakeRoadNormal(at, ROAD_NONE, INVALID_ROADTYPE, ROADTYPE_TRAM, TownID::Invalid(), OWNER_NONE, OWNER_NONE); break;
+				case 10: MakeRoadDepot(at, OWNER_NONE, DepotID(0), d, ROADTYPE_ROAD); break;
+				case 11: MakeRoadDepot(at, OWNER_NONE, DepotID(0), d, ROADTYPE_TRAM); break;
+				case 12: MakeRoadCrossing(at, OWNER_NONE, OWNER_NONE, OWNER_NONE, axis, RAILTYPE_RAIL, ROADTYPE_ROAD, ROADTYPE_TRAM, TownID::Invalid()); break;
+				case 13: MakeRoadStop(at, OWNER_NONE, StationID(0), RoadStopType::Bus, ROADTYPE_ROAD, INVALID_ROADTYPE, d); break;
+				case 14: MakeRoadStop(at, OWNER_NONE, StationID(0), RoadStopType::Truck, INVALID_ROADTYPE, ROADTYPE_TRAM, d); break;
+				case 15: MakeDriveThroughRoadStop(at, OWNER_NONE, OWNER_NONE, OWNER_NONE, StationID(0), StationType::Bus, ROADTYPE_ROAD, ROADTYPE_TRAM, axis); break;
+				case 16: MakeRailStation(at, OWNER_NONE, StationID(0), axis, 0, RAILTYPE_RAIL); break;
+				case 17: MakeRoadTunnel(at, OWNER_NONE, d, ROADTYPE_ROAD, ROADTYPE_TRAM); break;
+				case 18: MakeRoadBridgeRamp(at, OWNER_NONE, OWNER_NONE, OWNER_NONE, 0, d, INVALID_ROADTYPE, ROADTYPE_TRAM); break;
+				case 19: MakeRailTunnel(at, OWNER_NONE, d, RAILTYPE_RAIL); break;
+				case 20: MakeRailNormal(at, OWNER_NONE, AxisToTrackBits(axis), RAILTYPE_RAIL); break;
+				case 21: MakeRailNormal(at, OWNER_NONE, TRACK_BIT_X | TRACK_BIT_Y, RAILTYPE_RAIL); break;
+				case 22: MakeRailNormal(at, OWNER_NONE, AxisToTrackBits(axis), RAILTYPE_RAIL); SetHasSignals(at, true); break;
+				case 23: MakeRailDepot(at, OWNER_NONE, DepotID(0), d, RAILTYPE_RAIL); break;
+				case 28: SetTileType(at, MP_HOUSE); break;
+				case 29: SetTileType(at, MP_INDUSTRY); break;
+				case 30: SetTileType(at, MP_OBJECT); break;
+				case 31: MakeRoadDepot(at, OWNER_NONE, DepotID(0), d, ROADTYPE_ROAD); SetRoadType(at, RTT_ROAD, INVALID_ROADTYPE); break;
+				case 32: MakeRoadStop(at, OWNER_NONE, StationID(0), RoadStopType::Bus, INVALID_ROADTYPE, INVALID_ROADTYPE, d); break;
+				case 33: MakeRoadTunnel(at, OWNER_NONE, d, INVALID_ROADTYPE, INVALID_ROADTYPE); break;
+				default: MakeRailNormal(at, OWNER_NONE, AxisToTrackBits(axis), RAILTYPE_RAIL); break;
+			}
+			if (kind >= 24 && kind < 28) {
+				Slope slope = static_cast<Slope>(std::array<uint, 4>{SLOPE_N, SLOPE_NE, SLOPE_NWS, SLOPE_STEEP_N}[kind - 24]);
+				SetTileHeight(at, 2 + ((slope & SLOPE_N) != 0) + (slope == SLOPE_STEEP_N));
+				SetTileHeight(at + TileDiffXY(1, 0), 2 + ((slope & SLOPE_W) != 0));
+				SetTileHeight(at + TileDiffXY(0, 1), 2 + ((slope & SLOPE_E) != 0));
+				SetTileHeight(at + TileDiffXY(1, 1), 2 + ((slope & SLOPE_S) != 0));
+			}
+			for (uint plan = 0; plan <= UINT8_MAX; ++plan) compare(center, plan);
+			for (uint32_t plan : {256U, 0x8000000FU, UINT32_MAX}) compare(center, plan);
+		}
+		fmt::print(stderr, "ROADCMD cleanup-matrix {} {}\n", static_cast<uint>(dir), count);
+	}
+	for (TileIndex tile : {INVALID_TILE, TileIndex{Map::Size()}, TileXY(Map::MaxX(), 2), TileXY(2, Map::MaxY()), TileXY(1, 1), TileXY(Map::MaxX() - 1, Map::MaxY() - 1)}) for (uint plan = 0; plan <= UINT8_MAX; ++plan) compare(tile, plan);
+	for (auto [tile, state] : saved) restore(tile, state);
+	/* A road read mutates a later neighbour; the following tram read and later
+	 * direction must see live fields. The mutation is part of each comparison. */
+	for (DiagDirection dir = DIAGDIR_BEGIN; dir < DIAGDIR_END; ++dir) MakeRoadDepot(::TileAddByDiagDir(center, dir), OWNER_NONE, DepotID(0), DIAGDIR_NE, ROADTYPE_ROAD);
+	mutate = ::TileAddByDiagDir(center, DIAGDIR_SE);
+	MakeSea(mutate);
+	compare(center, UINT32_MAX);
+	mutate = INVALID_TILE;
+	for (auto [tile, state] : saved) restore(tile, state);
+	SaveRandomSeeds(&after);
+	const bool same = before.random.state[0] == after.random.state[0] && before.random.state[1] == after.random.state[1] && before.interactive_random.state[0] == after.interactive_random.state[0] && before.interactive_random.state[1] == after.interactive_random.state[1];
+	fmt::print(stderr, "ROADCMD cleanup-done {} {} {} {} {} {}\n", count, same, after.random.state[0], after.random.state[1], after.interactive_random.state[0], after.interactive_random.state[1]);
+	if (!same) SignalFixtureAbort(__LINE__);
+}
+} // namespace RoadCleanupProbe
+
 static void RoadPrint(std::string_view name, const CommandCost &cost, Money extra = 0)
 {
 	fmt::print(stderr, "ROADCMD {} {} {} {} {} {}\n", name, cost.Succeeded(), cost.GetCost(), cost.GetErrorMessage(), static_cast<int>(cost.GetExpensesType()), extra);
@@ -195,12 +340,69 @@ static void TunnelBridgeCommands(CompanyID owner, CompanyID other, RoadVehicle *
 	dynamite.Restore(); slopes.Restore();
 }
 
+static TileIndex cleanup_dirty_tile = INVALID_TILE;
+static std::vector<uint8_t> cleanup_dirty_types;
+extern "C" void __real__Z19MarkTileDirtyByTileN10StrongType7TypedefIj12TileIndexTagJNS_7CompareENS_7IntegerENS_10CompatibleIiEENS4_IlEEEEEii(TileIndex, int, int);
+extern "C" void __wrap__Z19MarkTileDirtyByTileN10StrongType7TypedefIj12TileIndexTagJNS_7CompareENS_7IntegerENS_10CompatibleIiEENS4_IlEEEEEii(TileIndex tile, int offset, int height)
+{
+	if (tile == cleanup_dirty_tile) cleanup_dirty_types.push_back(GetTileType(tile));
+	__real__Z19MarkTileDirtyByTileN10StrongType7TypedefIj12TileIndexTagJNS_7CompareENS_7IntegerENS_10CompatibleIiEENS4_IlEEEEEii(tile, offset, height);
+}
+/* Complete roadworks through the actual tile-loop entry, then reload its save. */
+static void RoadCleanupWorks(TileIndex origin, CompanyID owner)
+{
+	Backup<bool> rebuild(_settings_game.economy.mod_road_rebuild, true);
+	AutoRestoreBackup<Randomizer> interactive(_interactive_random, _interactive_random);
+	_interactive_random.SetSeed(619);
+	SavedRandomSeeds before, after;
+	SaveRandomSeeds(&before);
+	for (uint mode = 0; mode < 4; ++mode) {
+		TileIndex tile = origin + TileDiffXY(4 + mode * 5, 19);
+		RoadRun<CMD_BUILD_ROAD>("cleanup-works-build", tile, ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid());
+		if (mode == 3) {
+			Town *town = ClosestTownFromTile(tile, UINT_MAX);
+			if (town == nullptr) SignalFixtureAbort(__LINE__);
+			ChangeTileOwner(tile, owner, OWNER_TOWN);
+			SetTownIndex(tile, town->index);
+			SetRoadType(tile, RTT_ROAD, static_cast<RoadType>(2));
+		}
+		for (DiagDirection d : {DIAGDIR_NE, DIAGDIR_SW}) {
+			TileIndex neighbour = TileAddByDiagDir(tile, d);
+			if (mode == 2 || (mode == 1 && d == DIAGDIR_NE)) MakeSea(neighbour);
+		}
+		cleanup_dirty_tile = tile; cleanup_dirty_types.clear();
+		StartRoadWorks(tile);
+		for (uint step = 0; step < 15; ++step) _tile_type_road_procs.tile_loop_proc(tile);
+		const RoadBits bits = GetAnyRoadBits(tile, RTT_ROAD);
+		fmt::print(stderr, "ROADCMD cleanup-works {} {} {} {} {}\n", mode, tile.base(), static_cast<uint>(GetTileType(tile)), static_cast<uint>(bits), IsNormalRoadTile(tile) ? static_cast<uint>(GetRoadside(tile)) : 0);
+		fmt::print(stderr, "ROADCMD cleanup-dirty {}", mode);
+		for (uint8_t kind : cleanup_dirty_types) fmt::print(stderr, " {}", kind);
+		fmt::print(stderr, "\n");
+		if (cleanup_dirty_types.empty() || cleanup_dirty_types.back() != (mode == 2 ? MP_CLEAR : MP_ROAD)) SignalFixtureAbort(__LINE__);
+		cleanup_dirty_tile = INVALID_TILE;
+		if (bits != (mode == 1 ? ROAD_SW : mode == 2 ? ROAD_NONE : ROAD_X) || (mode == 2 && !IsTileType(tile, MP_CLEAR))) SignalFixtureAbort(__LINE__);
+		if (mode == 3) {
+			fmt::print(stderr, "ROADCMD cleanup-town-type {} {}\n", GetRoadTypeRoad(tile), GetTownRoadType());
+			if (GetRoadTypeRoad(tile) != GetTownRoadType()) SignalFixtureAbort(__LINE__);
+		}
+	}
+	SaveRandomSeeds(&after);
+	const bool same = before.random.state[0] == after.random.state[0] && before.random.state[1] == after.random.state[1] && before.interactive_random.state[0] == after.interactive_random.state[0] && before.interactive_random.state[1] == after.interactive_random.state[1];
+	fmt::print(stderr, "ROADCMD cleanup-works-rng {} {} {} {} {} {}\n", same, owner.base(), after.random.state[0], after.random.state[1], after.interactive_random.state[0], after.interactive_random.state[1]);
+	if (!same) SignalFixtureAbort(__LINE__);
+	rebuild.Restore();
+}
+
 static bool RoadCommandsScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
 	CompanyID owner = (*Company::Iterate().begin())->index;
 	Backup<CompanyID> company(_current_company, owner);
 	if (args[1] == "inspect") {
+		for (size_t n = 2; n < args.size(); ++n) {
+			TileIndex tile{static_cast<uint32_t>(std::stoul(std::string(args[n])))};
+			fmt::print(stderr, "ROADCMD cleanup-reload {} {} {}\n", n - 2, tile.base(), static_cast<uint>(GetAnyRoadBits(tile, RTT_ROAD)));
+		}
 		uint roads = 0, depots = 0;
 		for (TileIndex tile : Map::Iterate()) if (IsTileType(tile, MP_ROAD)) { ++roads; depots += IsRoadDepot(tile); }
 		fmt::print(stderr, "ROADCMD reload {} {}\n", roads, depots);
@@ -258,6 +460,8 @@ static bool RoadCommandsScenario(std::span<std::string_view> args)
 	CompanyID other = RailCompany();
 	SavedRandomSeeds before, after;
 	SaveRandomSeeds(&before);
+	RoadCleanupProbe::Run(t(18, 15));
+	RoadCleanupWorks(origin, owner);
 	RoadRun<CMD_BUILD_ROAD>("zero", t(2, 2), ROAD_NONE, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid());
 	RoadPrint("protocol-outside", RoadBuild({}, TileIndex{Map::Size()}, ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid()));
 	RoadPrint("protocol-void", RoadBuild({}, TileXY(Map::MaxX(), 2), ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid()));

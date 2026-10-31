@@ -43,6 +43,7 @@ RoadType RoadTypeInfo::Index() const
 	return static_cast<RoadType>(index);
 }
 
+#ifndef WITH_RUST
 /**
  * Return if the tile is a valid tile for a crossing.
  *
@@ -121,6 +122,8 @@ RoadBits CleanUpRoadBits(const TileIndex tile, RoadBits org_rb)
 
 	return org_rb;
 }
+
+#endif
 
 /**
  * Finds out, whether given company has a given RoadType available for construction.
