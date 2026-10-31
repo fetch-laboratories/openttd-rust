@@ -16,6 +16,7 @@ struct OpenTTDCompanyIdentityServices;
 #include "services_ffi.h"
 #include "call_ffi.h"
 struct CompanyFinances;
+struct OpenTTDCommandCost;
 struct OpenTTDCommandCostServices;
 struct OpenTTDObjectivesServices;
 struct OpenTTDSettingServices;
