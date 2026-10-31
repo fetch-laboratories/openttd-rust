@@ -460,37 +460,34 @@ impl TileTypeAccess {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn require_range(&self, tile: u32) -> Option<TileFields<'_>> {
-        if self.allocation.count == 0 {
-            return None;
+        // A successful source bounds check also proves a nonempty backend.
+        if tile < self.count() {
+            return Some(self.field_addresses(tile));
         }
-        if self.assertions() {
-            self.check_range(tile)?;
-        }
-        Some(self.field_addresses(tile))
+        self.outside_range(tile)
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn require_type(&self, tile: u32, kind: u8) -> Option<TileFields<'_>> {
-        if self.allocation.count == 0 {
-            return None;
-        }
-        let fields = self.field_addresses(tile);
-        if self.assertions() {
-            self.check_range(tile)?;
-            if crate::tile_map::get_tile_type_from_fields(&fields) != kind {
-                self.failed_check()?;
-            }
+        let fields = self.require_range(tile)?;
+        if self.assertions() && crate::tile_map::get_tile_type_from_fields(&fields) != kind {
+            self.failed_check()?;
         }
         Some(fields)
     }
-    // Source range assertion after the getter has selected the native policy.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
-    fn check_range(&self, tile: u32) -> Option<()> {
-        if tile >= self.count() {
+    // An empty backend retains fixture fallback. A real out-of-range tile keeps
+    // the original assertion policy, including continued reads when assertions
+    // are disabled or the native handler returns.
+    #[cold]
+    #[inline(never)]
+    fn outside_range(&self, tile: u32) -> Option<TileFields<'_>> {
+        if self.count() == 0 {
+            return None;
+        }
+        if self.assertions() {
             self.failed_check()?;
         }
-        Some(())
+        Some(self.field_addresses(tile))
     }
     /// Field-sized stores under the same serialized allocation contract as reads.
     pub(crate) fn set_m3(&self, tile: u32, value: u8) -> Option<()> {
