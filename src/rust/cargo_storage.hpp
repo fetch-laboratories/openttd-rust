@@ -178,4 +178,4 @@ template uint VehicleCargoList::Reassign<VehicleCargoList::MTA_DELIVER, VehicleC
 template uint VehicleCargoList::Reassign<VehicleCargoList::MTA_DELIVER, VehicleCargoList::MTA_TRANSFER>(uint);
 template uint VehicleCargoList::Reassign<VehicleCargoList::MTA_LOAD, VehicleCargoList::MTA_KEEP>(uint);
 
-const OpenTTDCargoStorageServices *CargoStorageServices() noexcept { return &_cargo_storage_services; }
+const OpenTTDCargoStorageServices *CargoStorageServices() { return &_cargo_storage_services; }
