@@ -43,8 +43,8 @@ pub(crate) fn get_road_tile_type(
     m: &crate::map_func::TileTypeAccess,
     tile: u32,
 ) -> Option<crate::services::RoadTileKind> {
-    m.require_type(tile, crate::tile_type::MP_ROAD)?;
-    Some(crate::services::RoadTileKind(m.m5(tile)? >> 6))
+    let fields = m.require_type(tile, crate::tile_type::MP_ROAD)?;
+    Some(crate::services::RoadTileKind(fields.m5() >> 6))
 }
 /// `IsNormalRoad`.
 #[allow(clippy::inline_always)]

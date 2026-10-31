@@ -25,9 +25,9 @@ pub(crate) fn get_station_type(
     m: &TileTypeAccess,
     tile: TileIndex,
 ) -> Option<crate::services::StationType> {
-    m.require_type(tile.0, MP_STATION)?;
+    let fields = m.require_type(tile.0, MP_STATION)?;
     Some(crate::services::StationType(
-        gb(u32::from(m.m6(tile.0)?), 3, 4) as u8,
+        gb(u32::from(fields.m6()), 3, 4) as u8,
     ))
 }
 

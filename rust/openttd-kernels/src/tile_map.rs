@@ -18,8 +18,14 @@ pub(crate) fn is_tile_type(s: &crate::services::Services, tile: u32, kind: u8) -
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn get_tile_type(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    m.require_range(t)?;
-    Some(m.kind(t)? >> 4)
+    let fields = m.require_range(t)?;
+    Some(get_tile_type_from_fields(&fields))
+}
+/// `GetTileType`'s bit extraction after the caller's original range assertion.
+#[allow(clippy::inline_always)]
+#[inline(always)]
+pub(crate) fn get_tile_type_from_fields(fields: &crate::map_func::TileFields<'_>) -> u8 {
+    fields.kind() >> 4
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
@@ -35,8 +41,8 @@ pub(crate) fn is_valid_tile(m: &TileTypeAccess, t: u32, count: u32) -> Option<bo
 #[allow(clippy::inline_always)]
 #[inline(always)]
 fn tile_height(m: &TileTypeAccess, t: u32) -> Option<i32> {
-    m.require_range(t)?;
-    Some(i32::from(m.height(t)?))
+    let fields = m.require_range(t)?;
+    Some(i32::from(fields.height()))
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]

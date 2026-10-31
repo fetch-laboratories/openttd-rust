@@ -22,26 +22,26 @@ pub(crate) const CLEAR_FIELDS: u8 = 3;
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn is_snow_tile(m: &TileTypeAccess, t: u32) -> Option<bool> {
-    m.require_type(t, MP_CLEAR)?;
-    Some(m.m3(t)? & 16 != 0)
+    let fields = m.require_type(t, MP_CLEAR)?;
+    Some(fields.m3() & 16 != 0)
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn get_clear_ground(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    m.require_type(t, MP_CLEAR)?;
-    Some((m.m5(t)? >> 2) & 7)
+    let fields = m.require_type(t, MP_CLEAR)?;
+    Some((fields.m5() >> 2) & 7)
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn get_clear_density(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    m.require_type(t, MP_CLEAR)?;
-    Some(m.m5(t)? & 3)
+    let fields = m.require_type(t, MP_CLEAR)?;
+    Some(fields.m5() & 3)
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn get_clear_counter(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    m.require_type(t, MP_CLEAR)?;
-    Some(m.m5(t)? >> 5)
+    let fields = m.require_type(t, MP_CLEAR)?;
+    Some(fields.m5() >> 5)
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]

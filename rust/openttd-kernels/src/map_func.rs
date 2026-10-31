@@ -306,12 +306,34 @@ macro_rules! map_fields {
         #[allow(clippy::inline_always)]
     #[inline(always)]
         pub(crate) fn $field(&self, tile: u32) -> Option<$scalar> {
-            self.available(tile)?;
-            // SAFETY: Live allocation under the entry contract, one scalar only.
-            unsafe { Some(std::ptr::addr_of!((*self.allocation.$array.add(tile as usize)).$field).read()) }
+            Some(self.fields(tile)?.$field())
         }
     )*};
 }
+/// Field addresses for one tile after its header getter checks the backend and
+/// source preconditions. The borrow keeps allocation metadata live; scalars are
+/// loaded afresh, never copied or referenced as a tile record.
+pub(crate) struct TileFields<'a> {
+    base: *const BaseTileLayout,
+    extended: *const ExtendedTileLayout,
+    _metadata: std::marker::PhantomData<&'a TileTypeAccess>,
+}
+macro_rules! tile_fields {
+    ($array:ident => $($field:ident: $scalar:ty),*) => {$ (
+        #[allow(clippy::inline_always)]
+        #[inline(always)]
+        pub(crate) fn $field(&self) -> $scalar {
+            // SAFETY: The getter's boundary proves the field's readable storage;
+            // native aliases may mutate it between these field-sized loads.
+            unsafe { std::ptr::addr_of!((*self.$array).$field).read() }
+        }
+    )*};
+}
+impl TileFields<'_> {
+    tile_fields! { base => kind: u8, height: u8, m1: u8, m2: u16, m3: u8, m4: u8, m5: u8 }
+    tile_fields! { extended => m6: u8, m8: u16 }
+}
+
 // Stores write one scalar of the canonical allocation, whose native owner is mutable.
 macro_rules! map_stores {
     ($array:ident: $layout:ty => $($setter:ident . $field:ident: $scalar:ty),*) => {$ (
@@ -352,6 +374,23 @@ impl TileTypeAccess {
     pub(crate) fn read(&self, tile: u32) -> u8 {
         crate::tile_map::get_tile_type(self, tile).unwrap_or_else(|| (self.callback)(tile))
     }
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn field_addresses(&self, tile: u32) -> TileFields<'_> {
+        TileFields {
+            base: self.allocation.base.wrapping_add(tile as usize),
+            extended: self.allocation.extended.wrapping_add(tile as usize),
+            _metadata: std::marker::PhantomData,
+        }
+    }
+    /// Raw Tile fields have no source assertions; callback-only readers use None.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn fields(&self, tile: u32) -> Option<TileFields<'_>> {
+        self.available(tile)?;
+        Some(self.field_addresses(tile))
+    }
+
     /// Raw backend availability; assertion-disabled builds add no range rejection.
     #[allow(clippy::inline_always)]
     #[inline(always)]
@@ -420,19 +459,22 @@ impl TileTypeAccess {
     /// The explicit bounds assertion in `GetTileType` and `TileHeight`.
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn require_range(&self, tile: u32) -> Option<()> {
+    pub(crate) fn require_range(&self, tile: u32) -> Option<TileFields<'_>> {
         if self.allocation.count == 0 {
             return None;
         }
-        self.check(tile < self.count())
+        self.check(tile < self.count())?;
+        Some(self.field_addresses(tile))
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub(crate) fn require_type(&self, tile: u32, kind: u8) -> Option<()> {
+    pub(crate) fn require_type(&self, tile: u32, kind: u8) -> Option<TileFields<'_>> {
         if self.assertions() {
-            self.check(crate::tile_map::get_tile_type(self, tile)? == kind)
+            let fields = self.require_range(tile)?;
+            self.check(crate::tile_map::get_tile_type_from_fields(&fields) == kind)?;
+            Some(fields)
         } else {
-            self.available(tile)
+            self.fields(tile)
         }
     }
     /// Field-sized stores under the same serialized allocation contract as reads.

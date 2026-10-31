@@ -15,8 +15,8 @@ const COAST: u8 = 1;
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn get_water_tile_type(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    m.require_type(t, MP_WATER)?;
-    Some(m.m5(t)? >> 4)
+    let fields = m.require_type(t, MP_WATER)?;
+    Some(fields.m5() >> 4)
 }
 #[allow(clippy::inline_always)]
 #[inline(always)]
@@ -43,8 +43,8 @@ pub(crate) fn is_coast(m: &TileTypeAccess, t: u32) -> Option<bool> {
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn is_non_flooding_water_tile(m: &TileTypeAccess, t: u32) -> Option<bool> {
-    m.require_type(t, MP_WATER)?;
-    Some(m.m3(t)? & 1 != 0)
+    let fields = m.require_type(t, MP_WATER)?;
+    Some(fields.m3() & 1 != 0)
 }
 
 /// `IsWater`.
