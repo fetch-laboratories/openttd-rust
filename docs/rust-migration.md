@@ -15,6 +15,10 @@ This is the migration tool reference. See [AGENTS.md](../AGENTS.md) for rules an
 | Candidate build | `build-rust` in each worktree |
 | Rust crate | `rust/openttd-kernels`, linked into the game, tests and native generators |
 
+Direct CMake builds need the pinned commit object for native-test oracle headers:
+`git fetch --no-tags --depth=1 origin 14ec60f248547d4d062a1160f0fc26d742319888`.
+CI fetches that commit before configuring.
+
 The driver creates the detached reference worktree and rejects a dirty source or wrong revision. Keep that worktree unchanged; updating the baseline is a separate task. See [workflow](workflow.md#branches-and-worktrees) for branches and PRs. A port does not by itself complete its subsystem.
 
 ## Build and verification
@@ -35,8 +39,8 @@ On this Ubuntu 26.04 x86-64 host without administrator access, `python3 tools/bo
 | --- | --- |
 | `python3 tools/migration.py rust-checks` | Runs the four Cargo checks without building the reference. |
 | `python3 tools/migration.py build` | Builds both games without tests. |
-| `python3 tools/migration.py verify` | Runs Cargo checks, builds both graphical executables and runs both CTest suites. It fails for empty test inventories, missing candidate test names or disabled `OPTION_RUST`. |
-| `python3 tools/migration.py tools` | Builds native Rust generators in `.local/build-tools-rust` with `OPTION_TOOLS_ONLY=ON` and `OPTION_RUST=ON`. |
+| `python3 tools/migration.py verify` | Runs Cargo checks, builds both graphical executables and runs both CTest suites. It fails for empty test inventories, missing candidate test names or invalid Rust target metadata. |
+| `python3 tools/migration.py tools` | Builds native Rust generators in `.local/build-tools-rust` with `OPTION_TOOLS_ONLY=ON`. |
 | `python3 tools/run-comparisons.py` | Runs every `tools/*-comparison.py` in parallel and prints case inventories. |
 | `eval "$(python3 tools/migration.py env)"` | Sets the driver environment for Cargo and binaries run outside the driver. |
 
@@ -53,7 +57,7 @@ cargo test --workspace --locked
 - Logs, test reports and source revision go to `.local/verification/<timestamp>/`. A pass establishes covered behavior, not whole-game equivalence.
 - The candidate is `build-rust/openttd-rust`; Cargo artifacts are in `build-rust/cargo`. The reference is `.local/build-reference/openttd` in the main checkout.
 - Bootstrapped dependencies give candidate binaries an RPATH, so `./build-rust/openttd-rust -X`, `./build-rust/openttd_test` and `ctest` in `build-rust` run from a plain shell. `-X` avoids global game folders; use separate development configuration and saves.
-- The driver and CI build with `OPTION_RUST=ON`, also the CMake default. Native GNU/Linux x86-64 and ARM, macOS arm64, Emscripten and the scoped Windows MSVC mode below are supported. Other platforms, cross compilation and macOS universal or Intel reject Rust. #581 removes the option and fallback bodies.
+- Every fork build requires Rust. Native GNU/Linux x86-64 and ARM, macOS arm64, Emscripten and the scoped Windows MSVC mode below are supported. Other platforms, cross compilation and macOS universal or Intel are unsupported.
 
 ### Generated ABI probes and fixture defaults (#284)
 
@@ -144,3 +148,34 @@ Full validation requires native comparisons and simulation, Windows x64, Linux G
 The `tools/test-shared-accessors.py`, `tools/test-rebound-callees.py` and `tools/test-orphan-exports.py` tests exercise their checks. Original header helpers and constants live in shared Rust header modules (#261); the checker cannot detect Rust copies. See [porting](porting.md#callees-and-shared-accessors) for the rule.
 
 Metrics count code lines, excluding comments, directives, blank lines and Python docstrings; a second line retains historical physical counts. The whole-fork report inventories source and `WITH_RUST` guards rather than preprocessing all build defines. Compiled C++ means remaining original plus compiled fork glue; it is not a claim of behavioral completion. Ownership ports retire more original C++ than net glue and tooling added, or explain why; conversions report net glue.
+
+## Rust-only source sweep
+
+`tools/rust-only.py` rejects `WITH_RUST` conditionals in `src/` in quick CI.
+`WITH_RUST` stays defined by CMake for dual-build harnesses under `tools/`.
+The pinned original remains the oracle; do not sweep its worktree or `tools/`.
+
+Install unifdef 2.12 (Ubuntu/Debian: `sudo apt-get install unifdef`). On the
+Ubuntu 26.04 host without administrator access, obtain package 2.12-1:
+
+```sh
+mkdir -p .local/unifdef
+(cd .local/unifdef && apt-get download unifdef=2.12-1 && \
+  dpkg-deb -x unifdef_2.12-1_amd64.deb extracted)
+.local/unifdef/extracted/usr/bin/unifdef -V
+python3 tools/rust-only.py --sweep --unifdef .local/unifdef/extracted/usr/bin/unifdef
+```
+
+The sweep invokes `unifdef -DWITH_RUST -m` on tracked files under `src/`
+containing `WITH_RUST`. Exit status 1 means changed, not failure. Version 2.12
+misparses C++ digit separators in `strings.cpp` and `station_cmd.cpp`; those two
+files use the additional `-t` flag, preserving their bytes outside directives.
+The two mixed `WITH_RUST && WITH_RUST_ABI_CHECKS` directives retain only the
+ABI-check term; unifdef 2.12 leaves these unknown expressions unchanged.
+A developer with unifdef on PATH can omit `--unifdef`.
+
+Surviving drafts merge PR-B's first parent, then PR-B. Rerun the sweep on **all**
+`src/` files the draft touches, including cleanly merged files. Pass the explicit
+file paths after `--sweep`, or rerun across all tracked `src/` files as above.
+The command refuses paths outside `src/`. Keep the reference unchanged and move
+any fallback-reading fixture to the pinned baseline before sweeping it.

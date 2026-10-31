@@ -52,12 +52,10 @@
 // <https://creativecommons.org/publicdomain/zero/1.0/>
 
 #include "monocypher.h"
-#ifdef WITH_RUST
 #include "../../rust/crypto_primitives_ffi.h"
 #include "../../rust/blake2b_ffi.h"
 #include "../../rust/x25519_ffi.h"
 #include <type_traits>
-#endif
 
 #ifdef MONOCYPHER_CPP_NAMESPACE
 namespace MONOCYPHER_CPP_NAMESPACE {
@@ -85,17 +83,6 @@ typedef uint64_t u64;
 
 static const u8 zero[128] = {0};
 
-#ifndef WITH_RUST
-// returns the smallest positive integer y such that
-// (x + y) % pow_2  == 0
-// Basically, y is the "gap" missing to align x.
-// Only works when pow_2 is a power of 2.
-// Note: we use ~x+1 instead of -x to avoid compiler warnings
-static size_t gap(size_t x, size_t pow_2)
-{
-	return (~x + 1) & (pow_2 - 1);
-}
-#endif
 
 static u32 load24_le(const u8 s[3])
 {
@@ -147,9 +134,6 @@ static void store64_le_buf(u8 *dst, const u64 *src, size_t size) {
 }
 
 static u64 rotr64(u64 x, u64 n) { return (x >> n) ^ (x << (64 - n)); }
-#ifndef WITH_RUST
-static u32 rotl32(u32 x, u32 n) { return (x << n) ^ (x >> (32 - n)); }
-#endif
 
 static int neq0(u64 diff)
 {
@@ -176,7 +160,6 @@ void crypto_wipe(void *secret, size_t size)
 	ZERO(v_secret, size);
 }
 
-#ifdef WITH_RUST
 // Only original leaf primitives cross back to C++; never application callbacks.
 static void OPENTTD_RUST_CALL RustCryptoWipe(void *p, size_t size) noexcept { crypto_wipe(p, size); }
 static int32_t OPENTTD_RUST_CALL RustCryptoVerify16(const uint8_t *a, const uint8_t *b) noexcept { return crypto_verify16(a, b); }
@@ -250,295 +233,10 @@ void crypto_poly1305(u8     mac[16],  const u8 *message,
 	openttd_rust_poly(&rust_crypto_leaves, &rust_poly_layout, &ctx, mac, message, message_size, key);
 }
 
-#else
-/////////////////
-/// Chacha 20 ///
-/////////////////
-#define QUARTERROUND(a, b, c, d)	\
-	a += b;  d = rotl32(d ^ a, 16); \
-	c += d;  b = rotl32(b ^ c, 12); \
-	a += b;  d = rotl32(d ^ a,  8); \
-	c += d;  b = rotl32(b ^ c,  7)
-
-static void chacha20_rounds(u32 out[16], const u32 in[16])
-{
-	// The temporary variables make Chacha20 10% faster.
-	u32 t0  = in[ 0];  u32 t1  = in[ 1];  u32 t2  = in[ 2];  u32 t3  = in[ 3];
-	u32 t4  = in[ 4];  u32 t5  = in[ 5];  u32 t6  = in[ 6];  u32 t7  = in[ 7];
-	u32 t8  = in[ 8];  u32 t9  = in[ 9];  u32 t10 = in[10];  u32 t11 = in[11];
-	u32 t12 = in[12];  u32 t13 = in[13];  u32 t14 = in[14];  u32 t15 = in[15];
-
-	FOR (i, 0, 10) { // 20 rounds, 2 rounds per loop.
-		QUARTERROUND(t0, t4, t8 , t12); // column 0
-		QUARTERROUND(t1, t5, t9 , t13); // column 1
-		QUARTERROUND(t2, t6, t10, t14); // column 2
-		QUARTERROUND(t3, t7, t11, t15); // column 3
-		QUARTERROUND(t0, t5, t10, t15); // diagonal 0
-		QUARTERROUND(t1, t6, t11, t12); // diagonal 1
-		QUARTERROUND(t2, t7, t8 , t13); // diagonal 2
-		QUARTERROUND(t3, t4, t9 , t14); // diagonal 3
-	}
-	out[ 0] = t0;   out[ 1] = t1;   out[ 2] = t2;   out[ 3] = t3;
-	out[ 4] = t4;   out[ 5] = t5;   out[ 6] = t6;   out[ 7] = t7;
-	out[ 8] = t8;   out[ 9] = t9;   out[10] = t10;  out[11] = t11;
-	out[12] = t12;  out[13] = t13;  out[14] = t14;  out[15] = t15;
-}
-
-static const u8 *chacha20_constant = (const u8*)"expand 32-byte k"; // 16 bytes
-
-void crypto_chacha20_h(u8 out[32], const u8 key[32], const u8 in [16])
-{
-	u32 block[16];
-	load32_le_buf(block     , chacha20_constant, 4);
-	load32_le_buf(block +  4, key              , 8);
-	load32_le_buf(block + 12, in               , 4);
-
-	chacha20_rounds(block, block);
-
-	// prevent reversal of the rounds by revealing only half of the buffer.
-	store32_le_buf(out   , block   , 4); // constant
-	store32_le_buf(out+16, block+12, 4); // counter and nonce
-	WIPE_BUFFER(block);
-}
-
-u64 crypto_chacha20_djb(u8 *cipher_text, const u8 *plain_text,
-                        size_t text_size, const u8 key[32], const u8 nonce[8],
-                        u64 ctr)
-{
-	u32 input[16];
-	load32_le_buf(input     , chacha20_constant, 4);
-	load32_le_buf(input +  4, key              , 8);
-	load32_le_buf(input + 14, nonce            , 2);
-	input[12] = (u32) ctr;
-	input[13] = (u32)(ctr >> 32);
-
-	// Whole blocks
-	u32    pool[16];
-	size_t nb_blocks = text_size >> 6;
-	FOR (i, 0, nb_blocks) {
-		chacha20_rounds(pool, input);
-		if (plain_text != 0) {
-			FOR (j, 0, 16) {
-				u32 p = pool[j] + input[j];
-				store32_le(cipher_text, p ^ load32_le(plain_text));
-				cipher_text += 4;
-				plain_text  += 4;
-			}
-		} else {
-			FOR (j, 0, 16) {
-				u32 p = pool[j] + input[j];
-				store32_le(cipher_text, p);
-				cipher_text += 4;
-			}
-		}
-		input[12]++;
-		if (input[12] == 0) {
-			input[13]++;
-		}
-	}
-	text_size &= 63;
-
-	// Last (incomplete) block
-	if (text_size > 0) {
-		if (plain_text == 0) {
-			plain_text = zero;
-		}
-		chacha20_rounds(pool, input);
-		u8 tmp[64];
-		FOR (i, 0, 16) {
-			store32_le(tmp + i*4, pool[i] + input[i]);
-		}
-		FOR (i, 0, text_size) {
-			cipher_text[i] = tmp[i] ^ plain_text[i];
-		}
-		WIPE_BUFFER(tmp);
-	}
-	ctr = input[12] + ((u64)input[13] << 32) + (text_size > 0);
-
-	WIPE_BUFFER(pool);
-	WIPE_BUFFER(input);
-	return ctr;
-}
-
-u32 crypto_chacha20_ietf(u8 *cipher_text, const u8 *plain_text,
-                         size_t text_size,
-                         const u8 key[32], const u8 nonce[12], u32 ctr)
-{
-	u64 big_ctr = ctr + ((u64)load32_le(nonce) << 32);
-	return (u32)crypto_chacha20_djb(cipher_text, plain_text, text_size,
-	                                key, nonce + 4, big_ctr);
-}
-
-u64 crypto_chacha20_x(u8 *cipher_text, const u8 *plain_text,
-                      size_t text_size,
-                      const u8 key[32], const u8 nonce[24], u64 ctr)
-{
-	u8 sub_key[32];
-	crypto_chacha20_h(sub_key, key, nonce);
-	ctr = crypto_chacha20_djb(cipher_text, plain_text, text_size,
-	                          sub_key, nonce + 16, ctr);
-	WIPE_BUFFER(sub_key);
-	return ctr;
-}
-
-/////////////////
-/// Poly 1305 ///
-/////////////////
-
-// h = (h + c) * r
-// preconditions:
-//   ctx->h <= 4_ffffffff_ffffffff_ffffffff_ffffffff
-//   ctx->r <=   0ffffffc_0ffffffc_0ffffffc_0fffffff
-//   end    <= 1
-// Postcondition:
-//   ctx->h <= 4_ffffffff_ffffffff_ffffffff_ffffffff
-static void poly_blocks(crypto_poly1305_ctx *ctx, const u8 *in,
-                        size_t nb_blocks, unsigned end)
-{
-	// Local all the things!
-	const u32 r0 = ctx->r[0];
-	const u32 r1 = ctx->r[1];
-	const u32 r2 = ctx->r[2];
-	const u32 r3 = ctx->r[3];
-	const u32 rr0 = (r0 >> 2) * 5;  // lose 2 bits...
-	const u32 rr1 = (r1 >> 2) + r1; // rr1 == (r1 >> 2) * 5
-	const u32 rr2 = (r2 >> 2) + r2; // rr1 == (r2 >> 2) * 5
-	const u32 rr3 = (r3 >> 2) + r3; // rr1 == (r3 >> 2) * 5
-	const u32 rr4 = r0 & 3;         // ...recover 2 bits
-	u32 h0 = ctx->h[0];
-	u32 h1 = ctx->h[1];
-	u32 h2 = ctx->h[2];
-	u32 h3 = ctx->h[3];
-	u32 h4 = ctx->h[4];
-
-	FOR (i, 0, nb_blocks) {
-		// h + c, without carry propagation
-		const u64 s0 = (u64)h0 + load32_le(in);  in += 4;
-		const u64 s1 = (u64)h1 + load32_le(in);  in += 4;
-		const u64 s2 = (u64)h2 + load32_le(in);  in += 4;
-		const u64 s3 = (u64)h3 + load32_le(in);  in += 4;
-		const u32 s4 =      h4 + end;
-
-		// (h + c) * r, without carry propagation
-		const u64 x0 = s0*r0+ s1*rr3+ s2*rr2+ s3*rr1+ s4*rr0;
-		const u64 x1 = s0*r1+ s1*r0 + s2*rr3+ s3*rr2+ s4*rr1;
-		const u64 x2 = s0*r2+ s1*r1 + s2*r0 + s3*rr3+ s4*rr2;
-		const u64 x3 = s0*r3+ s1*r2 + s2*r1 + s3*r0 + s4*rr3;
-		const u32 x4 =                                s4*rr4;
-
-		// partial reduction modulo 2^130 - 5
-		const u32 u5 = x4 + (x3 >> 32); // u5 <= 7ffffff5
-		const u64 u0 = (u5 >>  2) * 5 + (x0 & 0xffffffff);
-		const u64 u1 = (u0 >> 32)     + (x1 & 0xffffffff) + (x0 >> 32);
-		const u64 u2 = (u1 >> 32)     + (x2 & 0xffffffff) + (x1 >> 32);
-		const u64 u3 = (u2 >> 32)     + (x3 & 0xffffffff) + (x2 >> 32);
-		const u32 u4 = (u3 >> 32)     + (u5 & 3); // u4 <= 4
-
-		// Update the hash
-		h0 = u0 & 0xffffffff;
-		h1 = u1 & 0xffffffff;
-		h2 = u2 & 0xffffffff;
-		h3 = u3 & 0xffffffff;
-		h4 = u4;
-	}
-	ctx->h[0] = h0;
-	ctx->h[1] = h1;
-	ctx->h[2] = h2;
-	ctx->h[3] = h3;
-	ctx->h[4] = h4;
-}
-
-void crypto_poly1305_init(crypto_poly1305_ctx *ctx, const u8 key[32])
-{
-	ZERO(ctx->h, 5); // Initial hash is zero
-	ctx->c_idx = 0;
-	// load r and pad (r has some of its bits cleared)
-	load32_le_buf(ctx->r  , key   , 4);
-	load32_le_buf(ctx->pad, key+16, 4);
-	FOR (i, 0, 1) { ctx->r[i] &= 0x0fffffff; }
-	FOR (i, 1, 4) { ctx->r[i] &= 0x0ffffffc; }
-}
-
-void crypto_poly1305_update(crypto_poly1305_ctx *ctx,
-                            const u8 *message, size_t message_size)
-{
-	// Avoid undefined NULL pointer increments with empty messages
-	if (message_size == 0) {
-		return;
-	}
-
-	// Align ourselves with block boundaries
-	size_t aligned = MC_MIN(gap(ctx->c_idx, 16), message_size);
-	FOR (i, 0, aligned) {
-		ctx->c[ctx->c_idx] = *message;
-		ctx->c_idx++;
-		message++;
-		message_size--;
-	}
-
-	// If block is complete, process it
-	if (ctx->c_idx == 16) {
-		poly_blocks(ctx, ctx->c, 1, 1);
-		ctx->c_idx = 0;
-	}
-
-	// Process the message block by block
-	size_t nb_blocks = message_size >> 4;
-	poly_blocks(ctx, message, nb_blocks, 1);
-	message      += nb_blocks << 4;
-	message_size &= 15;
-
-	// remaining bytes (we never complete a block here)
-	FOR (i, 0, message_size) {
-		ctx->c[ctx->c_idx] = message[i];
-		ctx->c_idx++;
-	}
-}
-
-void crypto_poly1305_final(crypto_poly1305_ctx *ctx, u8 mac[16])
-{
-	// Process the last block (if any)
-	// We move the final 1 according to remaining input length
-	// (this will add less than 2^130 to the last input block)
-	if (ctx->c_idx != 0) {
-		ZERO(ctx->c + ctx->c_idx, 16 - ctx->c_idx);
-		ctx->c[ctx->c_idx] = 1;
-		poly_blocks(ctx, ctx->c, 1, 0);
-	}
-
-	// check if we should subtract 2^130-5 by performing the
-	// corresponding carry propagation.
-	u64 c = 5;
-	FOR (i, 0, 4) {
-		c  += ctx->h[i];
-		c >>= 32;
-	}
-	c += ctx->h[4];
-	c  = (c >> 2) * 5; // shift the carry back to the beginning
-	// c now indicates how many times we should subtract 2^130-5 (0 or 1)
-	FOR (i, 0, 4) {
-		c += (u64)ctx->h[i] + ctx->pad[i];
-		store32_le(mac + i*4, (u32)c);
-		c = c >> 32;
-	}
-	WIPE_CTX(ctx);
-}
-
-void crypto_poly1305(u8     mac[16],  const u8 *message,
-                     size_t message_size, const u8  key[32])
-{
-	crypto_poly1305_ctx ctx;
-	crypto_poly1305_init  (&ctx, key);
-	crypto_poly1305_update(&ctx, message, message_size);
-	crypto_poly1305_final (&ctx, mac);
-}
-
-#endif // WITH_RUST
 
 ////////////////
 /// BLAKE2 b ///
 ////////////////
-#ifdef WITH_RUST
 static_assert(std::is_standard_layout_v<crypto_blake2b_ctx> && std::is_trivially_copyable_v<crypto_blake2b_ctx>);
 static_assert(sizeof(OpenTTDBlake2bLayout) == 7 * sizeof(size_t));
 static const OpenTTDBlake2bLayout rust_blake2b_layout = {
@@ -576,207 +274,6 @@ void crypto_blake2b(u8 *hash, size_t hash_size, const u8 *msg, size_t msg_size)
 	crypto_blake2b_ctx ctx;
 	openttd_rust_blake2b(&rust_crypto_leaves, &rust_blake2b_layout, &ctx, hash, hash_size, msg, msg_size);
 }
-#else
-static const u64 iv[8] = {
-	0x6a09e667f3bcc908, 0xbb67ae8584caa73b,
-	0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1,
-	0x510e527fade682d1, 0x9b05688c2b3e6c1f,
-	0x1f83d9abfb41bd6b, 0x5be0cd19137e2179,
-};
-
-static void blake2b_compress(crypto_blake2b_ctx *ctx, int is_last_block)
-{
-	static const u8 sigma[12][16] = {
-		{  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15 },
-		{ 14, 10,  4,  8,  9, 15, 13,  6,  1, 12,  0,  2, 11,  7,  5,  3 },
-		{ 11,  8, 12,  0,  5,  2, 15, 13, 10, 14,  3,  6,  7,  1,  9,  4 },
-		{  7,  9,  3,  1, 13, 12, 11, 14,  2,  6,  5, 10,  4,  0, 15,  8 },
-		{  9,  0,  5,  7,  2,  4, 10, 15, 14,  1, 11, 12,  6,  8,  3, 13 },
-		{  2, 12,  6, 10,  0, 11,  8,  3,  4, 13,  7,  5, 15, 14,  1,  9 },
-		{ 12,  5,  1, 15, 14, 13,  4, 10,  0,  7,  6,  3,  9,  2,  8, 11 },
-		{ 13, 11,  7, 14, 12,  1,  3,  9,  5,  0, 15,  4,  8,  6,  2, 10 },
-		{  6, 15, 14,  9, 11,  3,  0,  8, 12,  2, 13,  7,  1,  4, 10,  5 },
-		{ 10,  2,  8,  4,  7,  6,  1,  5, 15, 11,  9, 14,  3, 12, 13,  0 },
-		{  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15 },
-		{ 14, 10,  4,  8,  9, 15, 13,  6,  1, 12,  0,  2, 11,  7,  5,  3 },
-	};
-
-	// increment input offset
-	u64   *x = ctx->input_offset;
-	size_t y = ctx->input_idx;
-	x[0] += y;
-	if (x[0] < y) {
-		x[1]++;
-	}
-
-	// init work vector
-	u64 v0 = ctx->hash[0];  u64 v8  = iv[0];
-	u64 v1 = ctx->hash[1];  u64 v9  = iv[1];
-	u64 v2 = ctx->hash[2];  u64 v10 = iv[2];
-	u64 v3 = ctx->hash[3];  u64 v11 = iv[3];
-	u64 v4 = ctx->hash[4];  u64 v12 = iv[4] ^ ctx->input_offset[0];
-	u64 v5 = ctx->hash[5];  u64 v13 = iv[5] ^ ctx->input_offset[1];
-	u64 v6 = ctx->hash[6];  u64 v14 = iv[6] ^ (u64)~(is_last_block - 1);
-	u64 v7 = ctx->hash[7];  u64 v15 = iv[7];
-
-	// mangle work vector
-	u64 *input = ctx->input;
-#define BLAKE2_G(a, b, c, d, x, y)	\
-	a += b + x;  d = rotr64(d ^ a, 32); \
-	c += d;      b = rotr64(b ^ c, 24); \
-	a += b + y;  d = rotr64(d ^ a, 16); \
-	c += d;      b = rotr64(b ^ c, 63)
-#define BLAKE2_ROUND(i)	\
-	BLAKE2_G(v0, v4, v8 , v12, input[sigma[i][ 0]], input[sigma[i][ 1]]); \
-	BLAKE2_G(v1, v5, v9 , v13, input[sigma[i][ 2]], input[sigma[i][ 3]]); \
-	BLAKE2_G(v2, v6, v10, v14, input[sigma[i][ 4]], input[sigma[i][ 5]]); \
-	BLAKE2_G(v3, v7, v11, v15, input[sigma[i][ 6]], input[sigma[i][ 7]]); \
-	BLAKE2_G(v0, v5, v10, v15, input[sigma[i][ 8]], input[sigma[i][ 9]]); \
-	BLAKE2_G(v1, v6, v11, v12, input[sigma[i][10]], input[sigma[i][11]]); \
-	BLAKE2_G(v2, v7, v8 , v13, input[sigma[i][12]], input[sigma[i][13]]); \
-	BLAKE2_G(v3, v4, v9 , v14, input[sigma[i][14]], input[sigma[i][15]])
-
-#ifdef BLAKE2_NO_UNROLLING
-	FOR (i, 0, 12) {
-		BLAKE2_ROUND(i);
-	}
-#else
-	BLAKE2_ROUND(0);  BLAKE2_ROUND(1);  BLAKE2_ROUND(2);  BLAKE2_ROUND(3);
-	BLAKE2_ROUND(4);  BLAKE2_ROUND(5);  BLAKE2_ROUND(6);  BLAKE2_ROUND(7);
-	BLAKE2_ROUND(8);  BLAKE2_ROUND(9);  BLAKE2_ROUND(10); BLAKE2_ROUND(11);
-#endif
-
-	// update hash
-	ctx->hash[0] ^= v0 ^ v8;   ctx->hash[1] ^= v1 ^ v9;
-	ctx->hash[2] ^= v2 ^ v10;  ctx->hash[3] ^= v3 ^ v11;
-	ctx->hash[4] ^= v4 ^ v12;  ctx->hash[5] ^= v5 ^ v13;
-	ctx->hash[6] ^= v6 ^ v14;  ctx->hash[7] ^= v7 ^ v15;
-}
-
-void crypto_blake2b_keyed_init(crypto_blake2b_ctx *ctx, size_t hash_size,
-                               const u8 *key, size_t key_size)
-{
-	// initial hash
-	COPY(ctx->hash, iv, 8);
-	ctx->hash[0] ^= 0x01010000 ^ (key_size << 8) ^ hash_size;
-
-	ctx->input_offset[0] = 0;  // beginning of the input, no offset
-	ctx->input_offset[1] = 0;  // beginning of the input, no offset
-	ctx->hash_size       = hash_size;
-	ctx->input_idx       = 0;
-	ZERO(ctx->input, 16);
-
-	// if there is a key, the first block is that key (padded with zeroes)
-	if (key_size > 0) {
-		u8 key_block[128] = {0};
-		COPY(key_block, key, key_size);
-		// same as calling crypto_blake2b_update(ctx, key_block , 128)
-		load64_le_buf(ctx->input, key_block, 16);
-		ctx->input_idx = 128;
-	}
-}
-
-void crypto_blake2b_init(crypto_blake2b_ctx *ctx, size_t hash_size)
-{
-	crypto_blake2b_keyed_init(ctx, hash_size, 0, 0);
-}
-
-void crypto_blake2b_update(crypto_blake2b_ctx *ctx,
-                           const u8 *message, size_t message_size)
-{
-	// Avoid undefined NULL pointer increments with empty messages
-	if (message_size == 0) {
-		return;
-	}
-
-	// Align with word boundaries
-	if ((ctx->input_idx & 7) != 0) {
-		size_t nb_bytes = MC_MIN(gap(ctx->input_idx, 8), message_size);
-		size_t word     = ctx->input_idx >> 3;
-		size_t byte     = ctx->input_idx & 7;
-		FOR (i, 0, nb_bytes) {
-			ctx->input[word] |= (u64)message[i] << ((byte + i) << 3);
-		}
-		ctx->input_idx += nb_bytes;
-		message        += nb_bytes;
-		message_size   -= nb_bytes;
-	}
-
-	// Align with block boundaries (faster than byte by byte)
-	if ((ctx->input_idx & 127) != 0) {
-		size_t nb_words = MC_MIN(gap(ctx->input_idx, 128), message_size) >> 3;
-		load64_le_buf(ctx->input + (ctx->input_idx >> 3), message, nb_words);
-		ctx->input_idx += nb_words << 3;
-		message        += nb_words << 3;
-		message_size   -= nb_words << 3;
-	}
-
-	// Process block by block
-	size_t nb_blocks = message_size >> 7;
-	FOR (i, 0, nb_blocks) {
-		if (ctx->input_idx == 128) {
-			blake2b_compress(ctx, 0);
-		}
-		load64_le_buf(ctx->input, message, 16);
-		message += 128;
-		ctx->input_idx = 128;
-	}
-	message_size &= 127;
-
-	if (message_size != 0) {
-		// Compress block & flush input buffer as needed
-		if (ctx->input_idx == 128) {
-			blake2b_compress(ctx, 0);
-			ctx->input_idx = 0;
-		}
-		if (ctx->input_idx == 0) {
-			ZERO(ctx->input, 16);
-		}
-		// Fill remaining words (faster than byte by byte)
-		size_t nb_words = message_size >> 3;
-		load64_le_buf(ctx->input, message, nb_words);
-		ctx->input_idx += nb_words << 3;
-		message        += nb_words << 3;
-		message_size   -= nb_words << 3;
-
-		// Fill remaining bytes
-		FOR (i, 0, message_size) {
-			size_t word = ctx->input_idx >> 3;
-			size_t byte = ctx->input_idx & 7;
-			ctx->input[word] |= (u64)message[i] << (byte << 3);
-			ctx->input_idx++;
-		}
-	}
-}
-
-void crypto_blake2b_final(crypto_blake2b_ctx *ctx, u8 *hash)
-{
-	blake2b_compress(ctx, 1); // compress the last block
-	size_t hash_size = MC_MIN(ctx->hash_size, 64);
-	size_t nb_words  = hash_size >> 3;
-	store64_le_buf(hash, ctx->hash, nb_words);
-	FOR (i, nb_words << 3, hash_size) {
-		hash[i] = (ctx->hash[i >> 3] >> (8 * (i & 7))) & 0xff;
-	}
-	WIPE_CTX(ctx);
-}
-
-void crypto_blake2b_keyed(u8 *hash,          size_t hash_size,
-                          const u8 *key,     size_t key_size,
-                          const u8 *message, size_t message_size)
-{
-	crypto_blake2b_ctx ctx;
-	crypto_blake2b_keyed_init(&ctx, hash_size, key, key_size);
-	crypto_blake2b_update    (&ctx, message, message_size);
-	crypto_blake2b_final     (&ctx, hash);
-}
-
-void crypto_blake2b(u8 *hash, size_t hash_size, const u8 *msg, size_t msg_size)
-{
-	crypto_blake2b_keyed(hash, hash_size, 0, 0, msg, msg_size);
-}
-
-#endif // WITH_RUST
 
 //////////////
 /// Argon2 ///
@@ -1594,21 +1091,10 @@ static void fe_invert(fe out, const fe x)
 }
 
 // trim a scalar for scalar multiplication
-#ifdef WITH_RUST
 void crypto_eddsa_trim_scalar(u8 out[32], const u8 in[32])
 {
 	openttd_rust_x25519_trim(out, in);
 }
-#else
-void crypto_eddsa_trim_scalar(u8 out[32], const u8 in[32])
-{
-	COPY(out, in, 32);
-	out[ 0] &= 248;
-	out[31] &= 127;
-	out[31] |= 64;
-}
-
-#endif // WITH_RUST
 
 // get bit from scalar at position i
 static int scalar_bit(const u8 s[32], int i)
@@ -1620,7 +1106,6 @@ static int scalar_bit(const u8 s[32], int i)
 ///////////////
 /// X-25519 /// Taken from SUPERCOP's ref10 implementation.
 ///////////////
-#ifdef WITH_RUST
 // Coarse adapter only. Rust owns the complete ladder and required field math;
 // the retained C++ field helpers above still serve Edwards/Elligator families.
 static void scalarmult(u8 q[32], const u8 scalar[32], const u8 p[32], int nb_bits)
@@ -1635,85 +1120,6 @@ void crypto_x25519_public_key(u8 public_key[32], const u8 secret_key[32])
 {
 	openttd_rust_x25519_public_key(&rust_x25519_leaves, public_key, secret_key);
 }
-#else
-static void scalarmult(u8 q[32], const u8 scalar[32], const u8 p[32],
-                       int nb_bits)
-{
-	// computes the scalar product
-	fe x1;
-	fe_frombytes(x1, p);
-
-	// computes the actual scalar product (the result is in x2 and z2)
-	fe x2, z2, x3, z3, t0, t1;
-	// Montgomery ladder
-	// In projective coordinates, to avoid divisions: x = X / Z
-	// We don't care about the y coordinate, it's only 1 bit of information
-	fe_1(x2);        fe_0(z2); // "zero" point
-	fe_copy(x3, x1); fe_1(z3); // "one"  point
-	int swap = 0;
-	for (int pos = nb_bits-1; pos >= 0; --pos) {
-		// constant time conditional swap before ladder step
-		int b = scalar_bit(scalar, pos);
-		swap ^= b; // xor trick avoids swapping at the end of the loop
-		fe_cswap(x2, x3, swap);
-		fe_cswap(z2, z3, swap);
-		swap = b;  // anticipates one last swap after the loop
-
-		// Montgomery ladder step: replaces (P2, P3) by (P2*2, P2+P3)
-		// with differential addition
-		fe_sub(t0, x3, z3);
-		fe_sub(t1, x2, z2);
-		fe_add(x2, x2, z2);
-		fe_add(z2, x3, z3);
-		fe_mul(z3, t0, x2);
-		fe_mul(z2, z2, t1);
-		fe_sq (t0, t1    );
-		fe_sq (t1, x2    );
-		fe_add(x3, z3, z2);
-		fe_sub(z2, z3, z2);
-		fe_mul(x2, t1, t0);
-		fe_sub(t1, t1, t0);
-		fe_sq (z2, z2    );
-		fe_mul_small(z3, t1, 121666);
-		fe_sq (x3, x3    );
-		fe_add(t0, t0, z3);
-		fe_mul(z3, x1, z2);
-		fe_mul(z2, t1, t0);
-	}
-	// last swap is necessary to compensate for the xor trick
-	// Note: after this swap, P3 == P2 + P1.
-	fe_cswap(x2, x3, swap);
-	fe_cswap(z2, z3, swap);
-
-	// normalises the coordinates: x == X / Z
-	fe_invert(z2, z2);
-	fe_mul(x2, x2, z2);
-	fe_tobytes(q, x2);
-
-	WIPE_BUFFER(x1);
-	WIPE_BUFFER(x2);  WIPE_BUFFER(z2);  WIPE_BUFFER(t0);
-	WIPE_BUFFER(x3);  WIPE_BUFFER(z3);  WIPE_BUFFER(t1);
-}
-
-void crypto_x25519(u8       raw_shared_secret[32],
-                   const u8 your_secret_key  [32],
-                   const u8 their_public_key [32])
-{
-	// restrict the possible scalar values
-	u8 e[32];
-	crypto_eddsa_trim_scalar(e, your_secret_key);
-	scalarmult(raw_shared_secret, e, their_public_key, 255);
-	WIPE_BUFFER(e);
-}
-
-void crypto_x25519_public_key(u8       public_key[32],
-                              const u8 secret_key[32])
-{
-	static const u8 base_point[32] = {9};
-	crypto_x25519(public_key, secret_key, base_point);
-}
-
-#endif // WITH_RUST
 
 ///////////////////////////
 /// Arithmetic modulo L ///
@@ -3006,7 +2412,6 @@ void crypto_x25519_inverse(u8 blind_salt [32], const u8 private_key[32],
 	WIPE_BUFFER(product);  WIPE_BUFFER(m_inv);
 }
 
-#ifdef WITH_RUST
 void crypto_aead_init_x(crypto_aead_ctx *ctx,
                         u8 const key[32], const u8 nonce[24])
 {
@@ -3055,113 +2460,12 @@ int crypto_aead_unlock(u8 *plain_text, const u8  mac[16], const u8 key[32],
 	return openttd_rust_aead_unlock(&rust_crypto_leaves, &rust_aead_layout, &ctx, plain_text, mac, key, nonce, ad, ad_size, cipher_text, text_size);
 }
 
-#else
-////////////////////////////////
-/// Authenticated encryption ///
-////////////////////////////////
-static void lock_auth(u8 mac[16], const u8  auth_key[32],
-                      const u8 *ad         , size_t ad_size,
-                      const u8 *cipher_text, size_t text_size)
-{
-	u8 sizes[16]; // Not secret, not wiped
-	store64_le(sizes + 0, ad_size);
-	store64_le(sizes + 8, text_size);
-	crypto_poly1305_ctx poly_ctx;           // auto wiped...
-	crypto_poly1305_init  (&poly_ctx, auth_key);
-	crypto_poly1305_update(&poly_ctx, ad         , ad_size);
-	crypto_poly1305_update(&poly_ctx, zero       , gap(ad_size, 16));
-	crypto_poly1305_update(&poly_ctx, cipher_text, text_size);
-	crypto_poly1305_update(&poly_ctx, zero       , gap(text_size, 16));
-	crypto_poly1305_update(&poly_ctx, sizes      , 16);
-	crypto_poly1305_final (&poly_ctx, mac); // ...here
-}
-
-void crypto_aead_init_x(crypto_aead_ctx *ctx,
-                        u8 const key[32], const u8 nonce[24])
-{
-	crypto_chacha20_h(ctx->key, key, nonce);
-	COPY(ctx->nonce, nonce + 16, 8);
-	ctx->counter = 0;
-}
-
-void crypto_aead_init_djb(crypto_aead_ctx *ctx,
-                          const u8 key[32], const u8 nonce[8])
-{
-	COPY(ctx->key  , key  , 32);
-	COPY(ctx->nonce, nonce,  8);
-	ctx->counter = 0;
-}
-
-void crypto_aead_init_ietf(crypto_aead_ctx *ctx,
-                           const u8 key[32], const u8 nonce[12])
-{
-	COPY(ctx->key  , key      , 32);
-	COPY(ctx->nonce, nonce + 4,  8);
-	ctx->counter = (u64)load32_le(nonce) << 32;
-}
-
-void crypto_aead_write(crypto_aead_ctx *ctx, u8 *cipher_text, u8 mac[16],
-                       const u8 *ad,         size_t ad_size,
-                       const u8 *plain_text, size_t text_size)
-{
-	u8 auth_key[64]; // the last 32 bytes are used for rekeying.
-	crypto_chacha20_djb(auth_key, 0, 64, ctx->key, ctx->nonce, ctx->counter);
-	crypto_chacha20_djb(cipher_text, plain_text, text_size,
-	                    ctx->key, ctx->nonce, ctx->counter + 1);
-	lock_auth(mac, auth_key, ad, ad_size, cipher_text, text_size);
-	COPY(ctx->key, auth_key + 32, 32);
-	WIPE_BUFFER(auth_key);
-}
-
-int crypto_aead_read(crypto_aead_ctx *ctx, u8 *plain_text, const u8 mac[16],
-                     const u8 *ad,          size_t ad_size,
-                     const u8 *cipher_text, size_t text_size)
-{
-	u8 auth_key[64]; // the last 32 bytes are used for rekeying.
-	u8 real_mac[16];
-	crypto_chacha20_djb(auth_key, 0, 64, ctx->key, ctx->nonce, ctx->counter);
-	lock_auth(real_mac, auth_key, ad, ad_size, cipher_text, text_size);
-	int mismatch = crypto_verify16(mac, real_mac);
-	if (!mismatch) {
-		crypto_chacha20_djb(plain_text, cipher_text, text_size,
-		                    ctx->key, ctx->nonce, ctx->counter + 1);
-		COPY(ctx->key, auth_key + 32, 32);
-	}
-	WIPE_BUFFER(auth_key);
-	WIPE_BUFFER(real_mac);
-	return mismatch;
-}
-
-void crypto_aead_lock(u8 *cipher_text, u8 mac[16], const u8 key[32],
-                      const u8  nonce[24], const u8 *ad, size_t ad_size,
-                      const u8 *plain_text, size_t text_size)
-{
-	crypto_aead_ctx ctx;
-	crypto_aead_init_x(&ctx, key, nonce);
-	crypto_aead_write(&ctx, cipher_text, mac, ad, ad_size,
-	                  plain_text, text_size);
-	crypto_wipe(&ctx, sizeof(ctx));
-}
-
-int crypto_aead_unlock(u8 *plain_text, const u8  mac[16], const u8 key[32],
-                       const u8 nonce[24], const u8 *ad, size_t ad_size,
-                       const u8 *cipher_text, size_t text_size)
-{
-	crypto_aead_ctx ctx;
-	crypto_aead_init_x(&ctx, key, nonce);
-	int mismatch = crypto_aead_read(&ctx, plain_text, mac, ad, ad_size,
-	                                cipher_text, text_size);
-	crypto_wipe(&ctx, sizeof(ctx));
-	return mismatch;
-}
-
-#endif // WITH_RUST
 
 #ifdef MONOCYPHER_CPP_NAMESPACE
 }
 #endif
 
-#if defined(WITH_RUST) && defined(WITH_RUST_ABI_CHECKS)
+#if defined(WITH_RUST_ABI_CHECKS)
 #include "../../rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDCryptoLeaves.hpp"
 #include "abi-visit-OpenTTDX25519Leaves.hpp"

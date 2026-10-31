@@ -16,12 +16,8 @@
 
 #include "../safeguards.h"
 
-#ifdef WITH_RUST
 #include "../rust/animation_save.hpp"
 #define _animated_tiles RustAnimationSave::Tiles()
-#else
-extern std::vector<TileIndex> _animated_tiles;
-#endif
 
 static const SaveLoad _animated_tile_desc[] = {
 	 SLEG_VECTOR("tiles", _animated_tiles, SLE_UINT32),
@@ -32,9 +28,7 @@ struct ANITChunkHandler : ChunkHandler {
 
 	void Save() const override
 	{
-#ifdef WITH_RUST
 		RustAnimationSave staging(false);
-#endif
 
 		SlTableHeader(_animated_tile_desc);
 
@@ -44,9 +38,7 @@ struct ANITChunkHandler : ChunkHandler {
 
 	void Load() const override
 	{
-#ifdef WITH_RUST
 		RustAnimationSave staging(true);
-#endif
 
 		/* Before version 80 we did NOT have a variable length animated tile table */
 		if (IsSavegameVersionBefore(SLV_80)) {

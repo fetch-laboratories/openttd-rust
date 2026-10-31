@@ -17,7 +17,6 @@
 #include "../string_func.h"
 
 #include "../safeguards.h"
-#ifdef WITH_RUST
 /** Only the opaque Rust name needs native string decoding. Scalar descriptors
  * address canonical aliases directly, including partial writes on load failure. */
 static std::string _engine_name;
@@ -26,7 +25,6 @@ struct EngineNameScope {
 	EngineNameScope(Engine *e) : engine(e) { _engine_name = e->name.View(); }
 	~EngineNameScope() { this->engine->name = _engine_name; }
 };
-#endif
 
 static const SaveLoad _engine_desc[] = {
 	 SLE_CONDVAR(Engine, intro_date,          SLE_FILE_U16 | SLE_VAR_I32,  SL_MIN_VERSION,  SLV_31),
@@ -48,11 +46,7 @@ static const SaveLoad _engine_desc[] = {
 	 SLE_CONDVAR(Engine, company_avail,       SLE_FILE_U8  | SLE_VAR_U16,  SL_MIN_VERSION, SLV_104),
 	 SLE_CONDVAR(Engine, company_avail,       SLE_UINT16,                SLV_104, SL_MAX_VERSION),
 	 SLE_CONDVAR(Engine, company_hidden,      SLE_UINT16,                SLV_193, SL_MAX_VERSION),
-#ifdef WITH_RUST
 	SLEG_CONDSSTR("name", _engine_name, SLE_STR, SLV_84, SL_MAX_VERSION),
-#else
-	SLE_CONDSSTR(Engine, name, SLE_STR, SLV_84, SL_MAX_VERSION),
-#endif
 };
 
 static TypedIndexContainer<std::vector<Engine>, EngineID> _temp_engine;
@@ -77,12 +71,8 @@ struct ENGNChunkHandler : ChunkHandler {
 
 		for (Engine *e : Engine::Iterate()) {
 			SlSetArrayIndex(e->index);
-#ifdef WITH_RUST
 			_engine_name = e->name.View();
 			SlObject(e, _engine_desc);
-#else
-			SlObject(e, _engine_desc);
-#endif
 		}
 	}
 
@@ -96,14 +86,10 @@ struct ENGNChunkHandler : ChunkHandler {
 		int index;
 		while ((index = SlIterateArray()) != -1) {
 			Engine *e = GetTempDataEngine(static_cast<EngineID>(index));
-#ifdef WITH_RUST
 			{
 				EngineNameScope name(e);
 				SlObject(e, slt);
 			}
-#else
-			SlObject(e, slt);
-#endif
 
 			if (IsSavegameVersionBefore(SLV_179)) {
 				/* preview_company_rank was replaced with preview_company and preview_asked.

@@ -35,7 +35,6 @@
 #include "../object_base.h"
 #include "../strings_func.h"
 #include "../table/strings.h"
-#ifdef WITH_RUST
 #include "newgrf_bytereader_services.h"
 #include "../aircraft.h"
 #include "../airport.h"
@@ -617,9 +616,7 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 	};
 	return services;
 }
-#endif /* WITH_RUST */
 
-#ifdef WITH_RUST
 #include "service_table_check.hpp"
 #include "abi-visit-OpenTTDRandomServices.hpp"
 #include "abi-visit-OpenTTDRailMapServices.hpp"
@@ -688,7 +685,6 @@ const OpenTTDLiveGraphServices &GetRustLiveGraphServices() noexcept
 	};
 	return services;
 }
-#endif /* WITH_RUST */
 
 static_assert(EV_CHIMNEY_SMOKE == 0);
 static_assert(EV_STEAM_SMOKE == 1);

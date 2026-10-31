@@ -839,7 +839,7 @@ class InstructionSpeedTests(unittest.TestCase):
             build = Path(directory)
             (build / "build.ninja").touch()
             (build / "CMakeCache.txt").write_text(
-                f"CMAKE_HOME_DIRECTORY:PATH={build}\nOPTION_RUST:BOOL=ON\n"
+                f"CMAKE_HOME_DIRECTORY:PATH={build}\nRUST_TARGET:STRING=x86_64-unknown-linux-gnu\n"
             )
             configuration = build / "rust-build-configuration.txt"
             profile_env = {"CARGO_PROFILE_RELEASE_DEBUG": "line-tables-only"}

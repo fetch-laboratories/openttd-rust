@@ -15,9 +15,7 @@
 #include "tilearea_type.h"
 #include "town_type.h"
 #include "timer/timer_game_calendar.h"
-#ifdef WITH_RUST
 #include "rust/object_ffi.h"
-#endif
 
 using ObjectPool = Pool<Object, ObjectID, 64>;
 extern ObjectPool _object_pool;
@@ -48,11 +46,7 @@ struct Object : ObjectPool::PoolItem<&_object_pool> {
 	static inline void IncTypeCount(ObjectType type)
 	{
 		assert(type < NUM_OBJECTS);
-#ifdef WITH_RUST
 		openttd_rust_object_count_increment(type);
-#else
-		Object::counts[type]++;
-#endif
 	}
 
 	/**
@@ -63,11 +57,7 @@ struct Object : ObjectPool::PoolItem<&_object_pool> {
 	static inline void DecTypeCount(ObjectType type)
 	{
 		assert(type < NUM_OBJECTS);
-#ifdef WITH_RUST
 		openttd_rust_object_count_decrement(type);
-#else
-		Object::counts[type]--;
-#endif
 	}
 
 	/**
@@ -78,43 +68,19 @@ struct Object : ObjectPool::PoolItem<&_object_pool> {
 	static inline uint16_t GetTypeCount(ObjectType type)
 	{
 		assert(type < NUM_OBJECTS);
-#ifdef WITH_RUST
 		return openttd_rust_object_count(type);
-#else
-		return Object::counts[type];
-#endif
 	}
 
 	/** Resets object counts. */
 	static inline void ResetTypeCounts()
 	{
-#ifdef WITH_RUST
 		openttd_rust_object_counts_reset();
-#else
-		Object::counts.fill(0);
-#endif
 	}
 
 protected:
-#ifndef WITH_RUST
-	static std::array<uint16_t, NUM_OBJECTS> counts; ///< Number of objects per type ingame
-#endif
 };
 
-#ifndef WITH_RUST
-/**
- * Keeps track of removed objects during execution/testruns of commands.
- */
-struct ClearedObjectArea {
-	TileIndex first_tile;  ///< The first tile being cleared, which then causes the whole object to be cleared.
-	TileArea area;         ///< The area of the object.
-};
-
-ClearedObjectArea *FindClearedObject(TileIndex tile);
-extern std::vector<ClearedObjectArea> _cleared_object_areas;
-#else
 /** Native scratch clients query the first intersecting area. */
 inline bool IsObjectIndirectlyCleared(TileIndex tile) { return openttd_rust_object_indirectly_cleared(tile.base(), GetRustSharedServices().map_log_x()); }
-#endif
 
 #endif /* OBJECT_BASE_H */

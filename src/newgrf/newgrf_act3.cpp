@@ -30,14 +30,11 @@
 #include "newgrf_internal_vehicle.h"
 #include "newgrf_internal.h"
 
-#ifdef WITH_RUST
 #include "../rust/newgrf_act3_ffi.h"
 #include "../rust/station_definitions_ffi.h"
-#endif
 #include "../safeguards.h"
 
 
-#ifdef WITH_RUST
 const OpenTTDAct3CargoServices &GetAct3CargoServices() noexcept
 {
 	static const OpenTTDAct3CargoServices services{
@@ -48,41 +45,10 @@ const OpenTTDAct3CargoServices &GetAct3CargoServices() noexcept
 	};
 	return services;
 }
-#endif
 
 static CargoType TranslateCargo(GrfSpecFeature feature, uint8_t ctype)
 {
-#ifdef WITH_RUST
 	return openttd_rust_act3_translate_cargo(&GetAct3CargoServices(), feature, ctype, _cur_gps.grffile);
-#else
-	/* Special cargo types for purchase list and stations */
-	if ((feature == GSF_STATIONS || feature == GSF_ROADSTOPS) && ctype == 0xFE) return CargoGRFFileProps::SG_DEFAULT_NA;
-	if (ctype == 0xFF) return CargoGRFFileProps::SG_PURCHASE;
-
-	auto cargo_list = GetCargoTranslationTable(*_cur_gps.grffile);
-
-	/* Check if the cargo type is out of bounds of the cargo translation table */
-	if (ctype >= cargo_list.size()) {
-		GrfMsg(1, "TranslateCargo: Cargo type {} out of range (max {}), skipping.", ctype, (unsigned int)_cur_gps.grffile->cargo_list.size() - 1);
-		return INVALID_CARGO;
-	}
-
-	/* Look up the cargo label from the translation table */
-	CargoLabel cl = cargo_list[ctype];
-	if (cl == CT_INVALID) {
-		GrfMsg(5, "TranslateCargo: Cargo type {} not available in this climate, skipping.", ctype);
-		return INVALID_CARGO;
-	}
-
-	CargoType cargo_type = GetCargoTypeByLabel(cl);
-	if (!IsValidCargoType(cargo_type)) {
-		GrfMsg(5, "TranslateCargo: Cargo '{:c}{:c}{:c}{:c}' unsupported, skipping.", GB(cl.base(), 24, 8), GB(cl.base(), 16, 8), GB(cl.base(), 8, 8), GB(cl.base(), 0, 8));
-		return INVALID_CARGO;
-	}
-
-	GrfMsg(6, "TranslateCargo: Cargo '{:c}{:c}{:c}{:c}' mapped to cargo type {}.", GB(cl.base(), 24, 8), GB(cl.base(), 16, 8), GB(cl.base(), 8, 8), GB(cl.base(), 0, 8), cargo_type);
-	return cargo_type;
-#endif
 }
 
 
@@ -213,7 +179,6 @@ struct PurchaseDefaultMapSpriteGroupHandler : MapSpriteGroupHandler {
 /** Common handler for mapping sprite groups for features which support cargo-type specific sprites. */
 template <typename T, typename Tclass>
 struct CargoTypeMapSpriteGroupHandler : MapSpriteGroupHandler {
-#ifdef WITH_RUST
 	void MapSpecific(uint16_t local_id, uint8_t cid, const SpriteGroup *group) override
 	{
 		if constexpr (std::is_same_v<T, StationSpec>) {
@@ -230,33 +195,6 @@ struct CargoTypeMapSpriteGroupHandler : MapSpriteGroupHandler {
 			openttd_rust_roadstop_map_default(&GetStationDefinitionServices(), _cur_gps.grffile, local_id, group);
 		}
 	}
-#else
-	void MapSpecific(uint16_t local_id, uint8_t cid, const SpriteGroup *group) override
-	{
-		CargoType cargo_type = TranslateCargo(GSF_STATIONS, cid);
-		if (!IsValidCargoType(cargo_type)) return;
-
-		if (T *spec = GetSpec<T>(_cur_gps.grffile, local_id); spec == nullptr) {
-			GrfMsg(1, "MapSpriteGroup: {} undefined, skipping", local_id);
-		} else {
-			spec->grf_prop.SetSpriteGroup(cargo_type, group);
-		}
-	}
-
-	void MapDefault(uint16_t local_id, const SpriteGroup *group) override
-	{
-		if (T *spec = GetSpec<T>(_cur_gps.grffile, local_id); spec == nullptr) {
-			GrfMsg(1, "MapSpriteGroup: {} undefined, skipping", local_id);
-		} else if (spec->grf_prop.HasGrfFile()) {
-			GrfMsg(1, "MapSpriteGroup: {} mapped multiple times, skipping", local_id);
-		} else {
-			spec->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, group);
-			spec->grf_prop.SetGRFFile(_cur_gps.grffile);
-			spec->grf_prop.local_id = local_id;
-			Tclass::Assign(spec);
-		}
-	}
-#endif
 };
 
 struct CanalMapSpriteGroupHandler : MapSpriteGroupHandler {
@@ -273,9 +211,6 @@ struct CanalMapSpriteGroupHandler : MapSpriteGroupHandler {
 	}
 };
 
-#ifndef WITH_RUST
-template <> auto *GetSpec<StationSpec>(GRFFile *grffile, uint16_t local_id) { return local_id < grffile->stations.size() ? grffile->stations[local_id].get() : nullptr; }
-#endif
 struct StationMapSpriteGroupHandler : CargoTypeMapSpriteGroupHandler<StationSpec, StationClass> {};
 
 template <> auto *GetSpec<HouseSpec>(GRFFile *grffile, uint16_t local_id) { return local_id < grffile->housespec.size() ? grffile->housespec[local_id].get() : nullptr; }
@@ -348,9 +283,6 @@ struct AirportMapSpriteGroupHandler : PurchaseDefaultMapSpriteGroupHandler<Airpo
 template <> auto *GetSpec<AirportTileSpec>(GRFFile *grffile, uint16_t local_id) { return local_id < grffile->airtspec.size() ? grffile->airtspec[local_id].get() : nullptr; }
 struct AirportTileMapSpriteGroupHandler : PurchaseDefaultMapSpriteGroupHandler<AirportTileSpec> {};
 
-#ifndef WITH_RUST
-template <> auto *GetSpec<RoadStopSpec>(GRFFile *grffile, uint16_t local_id) { return local_id < grffile->roadstops.size() ? grffile->roadstops[local_id].get() : nullptr; }
-#endif
 struct RoadStopMapSpriteGroupHandler : CargoTypeMapSpriteGroupHandler<RoadStopSpec, RoadStopClass> {};
 
 struct BadgeMapSpriteGroupHandler : MapSpriteGroupHandler {

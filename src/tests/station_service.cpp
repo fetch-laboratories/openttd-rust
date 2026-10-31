@@ -9,7 +9,6 @@
 #include "../stdafx.h"
 #include "../3rdparty/catch2/catch.hpp"
 #include "mock_environment.h"
-#ifdef WITH_RUST
 #include "../../tools/simulation/session-fixture.hpp"
 #include "../rust/station_service_ffi.h"
 #include "../engine_type.h"
@@ -398,9 +397,7 @@ TEST_CASE("Station service - indexed shells, retirement and pool reuse")
 	TimerGameTick::counter = old_counter;
 	_game_mode = old_mode;
 }
-#endif
 
-#ifdef WITH_RUST
 #include "../linkgraph/linkgraphjob.h"
 TEST_CASE("Link graph - canonical scalars and independent job snapshot lifetime")
 {
@@ -425,4 +422,3 @@ TEST_CASE("Link graph - canonical scalars and independent job snapshot lifetime"
 	CHECK(graph[0].Station() == StationID(42));
 	CHECK(GetRustLiveGraphServices().access(&graph).owner == graph.RustState());
 }
-#endif

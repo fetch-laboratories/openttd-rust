@@ -385,27 +385,19 @@ static bool FixTTOEngines()
 	{
 		EngineID j = EngineID::Begin();
 		for (uint16_t i = 0; i < lengthof(_orig_rail_vehicle_info); ++i, ++j) {
-#ifdef WITH_RUST
 			GetTempDataEngine(j)->~Engine();
-#endif
 			new (GetTempDataEngine(j)) Engine(VEH_TRAIN, i);
 		}
 		for (uint16_t i = 0; i < lengthof(_orig_road_vehicle_info); ++i, ++j) {
-#ifdef WITH_RUST
 			GetTempDataEngine(j)->~Engine();
-#endif
 			new (GetTempDataEngine(j)) Engine(VEH_ROAD, i);
 		}
 		for (uint16_t i = 0; i < lengthof(_orig_ship_vehicle_info); ++i, ++j) {
-#ifdef WITH_RUST
 			GetTempDataEngine(j)->~Engine();
-#endif
 			new (GetTempDataEngine(j)) Engine(VEH_SHIP, i);
 		}
 		for (uint16_t i = 0; i < lengthof(_orig_aircraft_vehicle_info); ++i, ++j) {
-#ifdef WITH_RUST
 			GetTempDataEngine(j)->~Engine();
-#endif
 			new (GetTempDataEngine(j)) Engine(VEH_AIRCRAFT, i);
 		}
 	}
@@ -503,11 +495,7 @@ static inline uint RemapOrderIndex(uint x)
 	return _savegame_type == SGT_TTO ? (x - 0x1AC4) / 2 : (x - 0x1C18) / 2;
 }
 
-#ifdef WITH_RUST
 #include "../rust/animation_ffi.h"
-#else
-extern std::vector<TileIndex> _animated_tiles;
-#endif
 extern TimeoutTimer<TimerGameTick> _new_competitor_timeout;
 extern std::unique_ptr<std::string[]> _old_name_array;
 
@@ -709,11 +697,7 @@ static bool LoadOldAnimTileList(LoadgameState &ls, int)
 	/* The first zero in the loaded array indicates the end of the list. */
 	for (int i = 0; i < 256; i++) {
 		if (anim_list[i] == 0) break;
-#ifdef WITH_RUST
 		openttd_rust_animation_append(anim_list[i].base());
-#else
-		_animated_tiles.push_back(anim_list[i]);
-#endif
 	}
 
 	return true;
@@ -1096,15 +1080,9 @@ static uint16_t _old_next_ptr;
 static typename VehicleID::BaseType _current_vehicle_id;
 
 static const OldChunks vehicle_train_chunk[] = {
-#ifdef WITH_RUST
 	{ OC_UINT8, 1, nullptr, [] (void *) -> void * { return &TrainStateScope::Track(); }, nullptr },
 	{ OC_UINT8, 1, nullptr, [] (void *) -> void * { return &TrainStateScope::ForceProceed(); }, nullptr },
 	{ OC_UINT16, 1, nullptr, [] (void *) -> void * { return &TrainStateScope::CrashAnimPos(); }, nullptr },
-#else
-	OCL_SVAR(  OC_UINT8, Train, track ),
-	OCL_SVAR(  OC_UINT8, Train, force_proceed ),
-	OCL_SVAR( OC_UINT16, Train, crash_anim_pos ),
-#endif
 	OCL_NULL( 1 ), // railtype
 
 	OCL_NULL( 5 ), ///< Junk
@@ -1113,7 +1091,6 @@ static const OldChunks vehicle_train_chunk[] = {
 };
 
 static const OldChunks vehicle_road_chunk[] = {
-#ifdef WITH_RUST
 	{ OC_UINT8, 1, nullptr, [] (void *) -> void * { return &RoadVehicleStateScope::State(); }, nullptr },
 	{ OC_UINT8, 1, nullptr, [] (void *) -> void * { return &RoadVehicleStateScope::Frame(); }, nullptr },
 	{ OC_UINT16, 1, nullptr, [] (void *) -> void * { return &RoadVehicleStateScope::BlockedCounter(); }, nullptr },
@@ -1121,15 +1098,6 @@ static const OldChunks vehicle_road_chunk[] = {
 	{ OC_UINT8, 1, nullptr, [] (void *) -> void * { return &RoadVehicleStateScope::OvertakingCounter(); }, nullptr },
 	{ OC_UINT16, 1, nullptr, [] (void *) -> void * { return &RoadVehicleStateScope::CrashedCounter(); }, nullptr },
 	{ OC_UINT8, 1, nullptr, [] (void *) -> void * { return &RoadVehicleStateScope::ReverseCounter(); }, nullptr },
-#else
-	OCL_SVAR(  OC_UINT8, RoadVehicle, state ),
-	OCL_SVAR(  OC_UINT8, RoadVehicle, frame ),
-	OCL_SVAR( OC_UINT16, RoadVehicle, blocked_ctr ),
-	OCL_SVAR(  OC_UINT8, RoadVehicle, overtaking ),
-	OCL_SVAR(  OC_UINT8, RoadVehicle, overtaking_ctr ),
-	OCL_SVAR( OC_UINT16, RoadVehicle, crashed_ctr ),
-	OCL_SVAR(  OC_UINT8, RoadVehicle, reverse_ctr ),
-#endif
 
 	OCL_NULL( 1 ), ///< Junk
 
@@ -1137,11 +1105,7 @@ static const OldChunks vehicle_road_chunk[] = {
 };
 
 static const OldChunks vehicle_ship_chunk[] = {
-#ifdef WITH_RUST
 	{ OC_UINT8, 1, nullptr, [] (void *) -> void * { return &ShipStateScope::State(); }, nullptr },
-#else
-	OCL_SVAR(  OC_UINT8, Ship, state ),
-#endif
 
 	OCL_NULL( 9 ), ///< Junk
 
@@ -1160,13 +1124,8 @@ static const OldChunks vehicle_air_chunk[] = {
 };
 
 static const OldChunks vehicle_effect_chunk[] = {
-#ifdef WITH_RUST
 	{ OC_UINT16, 1, nullptr, [] (void *) -> void * { return &EffectVehicleAnimationScope::State(); }, nullptr },
 	{ OC_UINT8, 1, nullptr, [] (void *) -> void * { return &EffectVehicleAnimationScope::Substate(); }, nullptr },
-#else
-	OCL_SVAR( OC_UINT16, EffectVehicle, animation_state ),
-	OCL_SVAR(  OC_UINT8, EffectVehicle, animation_substate ),
-#endif
 
 	OCL_NULL( 7 ), // Junk
 
@@ -1200,31 +1159,23 @@ static bool LoadOldVehicleUnion(LoadgameState &ls, int)
 		switch (v->type) {
 			default: SlErrorCorrupt("Invalid vehicle type");
 			case VEH_TRAIN: {
-#ifdef WITH_RUST
 				TrainStateScope scope(Train::From(v), true);
-#endif
 				res = LoadChunk(ls, v, vehicle_train_chunk);
 				break;
 			}
 			case VEH_ROAD: {
-#ifdef WITH_RUST
 				RoadVehicleStateScope scope(RoadVehicle::From(v), true);
-#endif
 				res = LoadChunk(ls, v, vehicle_road_chunk);
 				break;
 			}
 			case VEH_SHIP: {
-#ifdef WITH_RUST
 				ShipStateScope scope(Ship::From(v), true);
-#endif
 				res = LoadChunk(ls, v, vehicle_ship_chunk);
 				break;
 			}
 			case VEH_AIRCRAFT: res = LoadChunk(ls, v, vehicle_air_chunk);      break;
 			case VEH_EFFECT: {
-#ifdef WITH_RUST
 				EffectVehicleAnimationScope scope(EffectVehicle::From(v), true);
-#endif
 				res = LoadChunk(ls, v, vehicle_effect_chunk);
 				break;
 			}
@@ -1521,11 +1472,7 @@ static bool LoadOldSign(LoadgameState &ls, int num)
 
 	return true;
 }
-#ifdef WITH_RUST
 using OldEngineObject = OpenTTDEngineLifecycle;
-#else
-using OldEngineObject = Engine;
-#endif
 
 static const OldChunks engine_chunk[] = {
 	OCL_SVAR( OC_UINT16, OldEngineObject, company_avail ),
@@ -1553,11 +1500,7 @@ static const OldChunks engine_chunk[] = {
 static bool LoadOldEngine(LoadgameState &ls, int num)
 {
 	Engine *e = _savegame_type == SGT_TTO ? &_old_engines[num] : GetTempDataEngine(static_cast<EngineID>(num));
-#ifdef WITH_RUST
 	return LoadChunk(ls, e->rust_lifecycle.state, engine_chunk);
-#else
-	return LoadChunk(ls, e, engine_chunk);
-#endif
 }
 
 static bool LoadOldEngineName(LoadgameState &ls, int num)
@@ -1921,15 +1864,10 @@ bool LoadTTOMain(LoadgameState &ls)
 	Debug(oldloader, 3, "Reading main chunk...");
 
 	_read_ttdpatch_flags = false;
-#ifdef WITH_RUST
 	/* The original raw prototypes have no native resources. Rust owners require
 	 * construction and one destruction path on success and every failed load. */
 	std::array<Engine, 103> engines;
 	_old_engines = engines.data();
-#else
-	std::array<uint8_t, 103 * sizeof(Engine)> engines; // we don't want to call Engine constructor here
-	_old_engines = (Engine *)engines.data();
-#endif
 
 	/* Load the biggest chunk */
 	if (!LoadChunk(ls, nullptr, main_chunk)) {

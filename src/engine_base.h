@@ -16,9 +16,7 @@
 #include "core/pool_type.hpp"
 #include "newgrf_commons.h"
 #include "timer/timer_game_calendar.h"
-#ifdef WITH_RUST
 #include "rust/engine_lifecycle.hpp"
-#endif
 
 struct WagonOverride {
 	std::vector<EngineID> engines;
@@ -40,7 +38,6 @@ extern EnginePool _engine_pool;
 
 class Engine : public EnginePool::PoolItem<&_engine_pool> {
 public:
-#ifdef WITH_RUST
 	EngineLifecycleOwner rust_lifecycle;
 	CompanyMask &company_avail = this->rust_lifecycle.state->company_avail;
 	CompanyMask &company_hidden = this->rust_lifecycle.state->company_hidden;
@@ -59,29 +56,6 @@ public:
 	CompanyID &preview_company = this->rust_lifecycle.state->preview_company;
 	uint8_t &preview_wait = this->rust_lifecycle.state->preview_wait;
 	EngineName name{this->rust_lifecycle.state};
-#else
-	CompanyMask company_avail{}; ///< Bit for each company whether the engine is available for that company.
-	CompanyMask company_hidden{}; ///< Bit for each company whether the engine is normally hidden in the build gui for that company.
-	CompanyMask preview_asked{}; ///< Bit for each company which has already been offered a preview.
-
-	std::string name{}; ///< Custom name of engine.
-
-	TimerGameCalendar::Date intro_date{}; ///< Date of introduction of the engine.
-	int32_t age = 0; ///< Age of the engine in months.
-
-	uint16_t reliability = 0; ///< Current reliability of the engine.
-	uint16_t reliability_spd_dec = 0; ///< Speed of reliability decay between services (per day).
-	uint16_t reliability_start = 0; ///< Initial reliability of the engine.
-	uint16_t reliability_max = 0; ///< Maximal reliability of the engine.
-	uint16_t reliability_final = 0; ///< Final reliability of the engine.
-	uint16_t duration_phase_1 = 0; ///< First reliability phase in months, increasing reliability from #reliability_start to #reliability_max.
-	uint16_t duration_phase_2 = 0; ///< Second reliability phase in months, keeping #reliability_max.
-	uint16_t duration_phase_3 = 0; ///< Third reliability phase in months, decaying to #reliability_final.
-	EngineFlags flags{}; ///< Flags of the engine. @see EngineFlags
-
-	CompanyID preview_company = CompanyID::Invalid();  ///< Company which is currently being offered a preview \c CompanyID::Invalid() means no company.
-	uint8_t preview_wait = 0; ///< Daily countdown timer for timeout of offering the engine to the #preview_company company.
-#endif
 	uint8_t original_image_index = 0; ///< Original vehicle image index, thus the image index of the overridden vehicle
 	VehicleType type = VEH_INVALID; ///< %Vehicle type, ie #VEH_ROAD, #VEH_TRAIN, etc.
 
@@ -102,11 +76,9 @@ private:
 
 public:
 	Engine() {}
-#ifdef WITH_RUST
 	Engine(Engine &&) noexcept = default;
 	Engine(const Engine &) = delete;
 	Engine &operator=(const Engine &) = delete;
-#endif
 	Engine(VehicleType type, uint16_t local_id);
 	bool IsEnabled() const;
 
@@ -255,14 +227,8 @@ struct EngineIDMappingKeyProjection {
  * Note: This is not part of Engine, as the data in the EngineOverrideManager and the engine pool get reset in different cases.
  */
 struct EngineOverrideManager {
-#ifdef WITH_RUST
 	std::span<const EngineIDMapping> Mappings(VehicleType type) const;
 	void ClearMapping();
-#else
-	std::array<std::vector<EngineIDMapping>, VEH_COMPANY_END> mappings;
-	std::span<const EngineIDMapping> Mappings(VehicleType type) const { return this->mappings[type]; }
-	void ClearMapping() { this->mappings = {}; }
-#endif
 
 	void ResetToDefaultMapping();
 	EngineID GetID(VehicleType type, uint16_t grf_local_id, uint32_t grfid);

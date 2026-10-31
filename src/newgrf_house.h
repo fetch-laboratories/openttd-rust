@@ -18,17 +18,7 @@
 
 /** Scope resolver for houses. */
 struct HouseScopeResolver : public ScopeResolver {
-#ifdef WITH_RUST
 	OpenTTDHouseScope context;
-#else
-	HouseID house_id;              ///< Type of house being queried.
-	TileIndex tile;                ///< Tile of this house.
-	Town *town;                    ///< Town of this house.
-	bool not_yet_constructed;      ///< True for construction check.
-	uint16_t initial_random_bits;    ///< Random bits during construction checks.
-	CargoTypes watched_cargo_triggers; ///< Cargo types that triggered the watched cargo callback.
-	int view; ///< View when house does yet exist.
-#endif
 
 	/**
 	 * Constructor of a house scope resolver.
@@ -59,15 +49,7 @@ struct HouseResolverObject : public SpecializedResolverObject<HouseRandomTrigger
 
 	ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, uint8_t relative = 0) override
 	{
-#ifdef WITH_RUST
 		return openttd_rust_house_scope(this, &this->house_scope, &this->town_scope, scope, relative);
-#else
-		switch (scope) {
-			case VSG_SCOPE_SELF:   return &this->house_scope;
-			case VSG_SCOPE_PARENT: return &this->town_scope;
-			default: return ResolverObject::GetScope(scope, relative);
-		}
-#endif
 	}
 
 	GrfSpecFeature GetFeature() const override;
@@ -87,42 +69,15 @@ struct HouseResolverObject : public SpecializedResolverObject<HouseRandomTrigger
  * purpose. Since the class ID is not saved anywhere, this mapping does not
  * need to be persistent; it just needs to keep class ids unique.
  */
-#ifndef WITH_RUST
-struct HouseClassMapping {
-	uint32_t grfid;     ///< The GRF ID of the file this class belongs to
-	uint8_t  class_id;  ///< The class id within the grf file
-};
-
-void ResetHouseClassIDs();
-HouseClassID AllocateHouseClassID(uint8_t grf_class_id, uint32_t grfid);
-
-void InitializeBuildingCounts();
-void InitializeBuildingCounts(Town *t);
-void IncreaseBuildingCount(Town *t, HouseID house_id);
-void DecreaseBuildingCount(Town *t, HouseID house_id);
-#endif
 std::span<const uint> GetBuildingHouseIDCounts();
 
 void DrawNewHouseTile(TileInfo *ti, HouseID house_id);
 void DrawNewHouseTileInGUI(int x, int y, const HouseSpec *spec, HouseID house_id, int view);
 void AnimateNewHouseTile(TileIndex tile);
 /* see also: void TriggerHouseAnimation_TileLoop(TileIndex tile, uint16_t random_bits) */
-#ifndef WITH_RUST
-void TriggerHouseAnimation_ConstructionStageChanged(TileIndex tile, bool first_call);
-#endif
-#ifndef WITH_RUST
-void TriggerHouseAnimation_WatchedCargoAccepted(TileIndex tile, CargoTypes trigger_cargoes);
-#endif
 
 uint16_t GetHouseCallback(CallbackID callback, uint32_t param1, uint32_t param2, HouseID house_id, Town *town, TileIndex tile, std::span<int32_t> regs100 = {},
 		bool not_yet_constructed = false, uint8_t initial_random_bits = 0, CargoTypes watched_cargo_triggers = 0, int view = 0);
 
-#ifndef WITH_RUST
-bool CanDeleteHouse(TileIndex tile);
-
-bool NewHouseTileLoop(TileIndex tile);
-
-void TriggerHouseRandomisation(TileIndex t, HouseRandomTrigger trigger);
-#endif
 
 #endif /* NEWGRF_HOUSE_H */

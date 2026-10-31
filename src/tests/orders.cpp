@@ -10,7 +10,6 @@
 #include "../3rdparty/catch2/catch.hpp"
 #include "../order_base.h"
 #include "../base_consist.h"
-#ifdef WITH_RUST
 #include "../timer/timer_game_economy.h"
 #include "../rust/services_ffi.h"
 TEST_CASE("Order vector preserves values and allocation invalidation")
@@ -75,7 +74,6 @@ TEST_CASE("Orders timetable - signed native economy dates cross into Rust")
 	}
 	TimerGameEconomy::date = saved_date;
 }
-#endif
 TEST_CASE("Base consist copies preserve values with independent aliases")
 {
 	BaseConsist original;

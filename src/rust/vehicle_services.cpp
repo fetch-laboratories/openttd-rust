@@ -8,7 +8,6 @@
 /** @file vehicle_services.cpp Shared typed vehicle and map services for Rust ports. */
 #include "../stdafx.h"
 #include "vehicle_ffi.h"
-#ifdef WITH_RUST
 #include "vehicle_services.h"
 #include "orders_ffi.h"
 #include "station_service_ffi.h"
@@ -702,9 +701,7 @@ extern "C" uint64_t openttd_orders_remaining_years(void *ctx) noexcept
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
 	return std::max(TimerGameCalendar::DateToYear(RustVehicleMaxAge(v) - RustVehicleAge(v) + CalendarTime::DAYS_IN_LEAP_YEAR - 1), TimerGameCalendar::Year(0)).base();
 }
-#endif /* WITH_RUST */
 
-#ifdef WITH_RUST
 #include "service_table_check.hpp"
 #include "abi-visit-OpenTTDVehicleServices.hpp"
 #include "abi-visit-OpenTTDVehicleSchedulerServices.hpp"
@@ -715,4 +712,3 @@ bool CheckAbi_vehicle_services()
 		AbiServicesComplete(GetRustVehicleSchedulerServices()) &&
 		AbiServicesComplete(_rust_vehicle_maintenance_services);
 }
-#endif

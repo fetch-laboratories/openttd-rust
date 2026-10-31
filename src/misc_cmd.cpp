@@ -25,10 +25,8 @@
 
 #include "table/strings.h"
 
-#ifdef WITH_RUST
 #include "rust/company_adapter.h"
 #include "rust/session_ffi.h"
-#endif
 
 #include "safeguards.h"
 
@@ -43,43 +41,7 @@
  */
 CommandCost CmdIncreaseLoan(DoCommandFlags flags, LoanCommand cmd, Money amount)
 {
-#ifdef WITH_RUST
 	return RustCompanyCost(openttd_rust_company_increase_loan(&GetRustCompanyFinanceServices(), static_cast<uint8_t>(cmd), amount.base(), _settings_game.difficulty.infinite_money, flags.Test(DoCommandFlag::Execute)));
-#else
-	Company *c = Company::Get(_current_company);
-	Money max_loan = c->GetMaxLoan();
-	if (c->Finances().current_loan >= max_loan) {
-		return CommandCostWithParam(STR_ERROR_MAXIMUM_PERMITTED_LOAN, max_loan);
-	}
-
-	Money loan;
-	switch (cmd) {
-		default: return CMD_ERROR; // Invalid method
-		case LoanCommand::Interval: // Take some extra loan
-			loan = LOAN_INTERVAL;
-			break;
-		case LoanCommand::Max: // Take a loan as big as possible
-			loan = max_loan - c->Finances().current_loan;
-			break;
-		case LoanCommand::Amount: // Take the given amount of loan
-			loan = amount;
-			if (loan < LOAN_INTERVAL || c->Finances().current_loan + loan > max_loan || loan % LOAN_INTERVAL != 0) return CMD_ERROR;
-			break;
-	}
-
-	/* In case adding the loan triggers the overflow protection of Money,
-	 * we would essentially be losing money as taking and repaying the loan
-	 * immediately would not get us back to the same bank balance anymore. */
-	if (c->Finances().money > Money::max() - loan) return CMD_ERROR;
-
-	if (flags.Test(DoCommandFlag::Execute)) {
-		c->Finances().money        += loan;
-		c->Finances().current_loan += loan;
-		InvalidateCompanyWindows(c);
-	}
-
-	return CommandCost(EXPENSES_OTHER);
-#endif /* WITH_RUST */
 }
 
 /**
@@ -93,40 +55,7 @@ CommandCost CmdIncreaseLoan(DoCommandFlags flags, LoanCommand cmd, Money amount)
  */
 CommandCost CmdDecreaseLoan(DoCommandFlags flags, LoanCommand cmd, Money amount)
 {
-#ifdef WITH_RUST
 	return RustCompanyCost(openttd_rust_company_decrease_loan(&GetRustCompanyFinanceServices(), static_cast<uint8_t>(cmd), amount.base(), _settings_game.difficulty.infinite_money, flags.Test(DoCommandFlag::Execute)));
-#else
-	Company *c = Company::Get(_current_company);
-
-	if (c->Finances().current_loan == 0) return CommandCost(STR_ERROR_LOAN_ALREADY_REPAID);
-
-	Money loan;
-	switch (cmd) {
-		default: return CMD_ERROR; // Invalid method
-		case LoanCommand::Interval: // Pay back one step
-			loan = std::min(c->Finances().current_loan, (Money)LOAN_INTERVAL);
-			break;
-		case LoanCommand::Max: // Pay back as much as possible
-			loan = std::max(std::min(c->Finances().current_loan, GetAvailableMoneyForCommand()), (Money)LOAN_INTERVAL);
-			loan -= loan % LOAN_INTERVAL;
-			break;
-		case LoanCommand::Amount: // Repay the given amount of loan
-			loan = amount;
-			if (loan % LOAN_INTERVAL != 0 || loan < LOAN_INTERVAL || loan > c->Finances().current_loan) return CMD_ERROR; // Invalid amount to loan
-			break;
-	}
-
-	if (GetAvailableMoneyForCommand() < loan) {
-		return CommandCostWithParam(STR_ERROR_CURRENCY_REQUIRED, loan);
-	}
-
-	if (flags.Test(DoCommandFlag::Execute)) {
-		c->Finances().money        -= loan;
-		c->Finances().current_loan -= loan;
-		InvalidateCompanyWindows(c);
-	}
-	return CommandCost();
-#endif /* WITH_RUST */
 }
 
 /**
@@ -137,26 +66,7 @@ CommandCost CmdDecreaseLoan(DoCommandFlags flags, LoanCommand cmd, Money amount)
  */
 CommandCost CmdSetCompanyMaxLoan(DoCommandFlags flags, CompanyID company, Money amount)
 {
-#ifdef WITH_RUST
 	return RustCompanyCost(openttd_rust_company_set_max_loan(&GetRustCompanyFinanceServices(), company.base(), amount.base(), flags.Test(DoCommandFlag::Execute)));
-#else
-	if (_current_company != OWNER_DEITY) return CMD_ERROR;
-	if (amount != COMPANY_MAX_LOAN_DEFAULT) {
-		if (amount < 0 || amount > (Money)MAX_LOAN_LIMIT) return CMD_ERROR;
-	}
-
-	Company *c = Company::GetIfValid(company);
-	if (c == nullptr) return CMD_ERROR;
-
-	if (flags.Test(DoCommandFlag::Execute)) {
-		/* Round the amount down to a multiple of LOAN_INTERVAL. */
-		if (amount != COMPANY_MAX_LOAN_DEFAULT) amount -= (int64_t)amount % LOAN_INTERVAL;
-
-		c->Finances().max_loan = amount;
-		InvalidateCompanyWindows(c);
-	}
-	return CommandCost();
-#endif /* WITH_RUST */
 }
 
 /**
@@ -183,54 +93,7 @@ static void AskUnsafeUnpauseCallback(Window *, bool confirmed)
  */
 CommandCost CmdPause(DoCommandFlags flags, PauseMode mode, bool pause)
 {
-#ifdef WITH_RUST
 	return openttd_rust_session_pause(&GetRustSessionServices(), mode, pause, flags.Test(DoCommandFlag::Execute)) ? CommandCost() : CMD_ERROR;
-#else
-	switch (mode) {
-		case PauseMode::SaveLoad:
-		case PauseMode::Error:
-		case PauseMode::Normal:
-		case PauseMode::GameScript:
-		case PauseMode::LinkGraph:
-			break;
-
-		case PauseMode::Join:
-		case PauseMode::ActiveClients:
-			if (!_networking) return CMD_ERROR;
-			break;
-
-		default: return CMD_ERROR;
-	}
-	if (flags.Test(DoCommandFlag::Execute)) {
-		if (mode == PauseMode::Normal && _pause_mode.Test(PauseMode::Error)) {
-			ShowQuery(
-				GetEncodedString(STR_NEWGRF_UNPAUSE_WARNING_TITLE),
-				GetEncodedString(STR_NEWGRF_UNPAUSE_WARNING),
-				nullptr,
-				AskUnsafeUnpauseCallback
-			);
-		} else {
-			PauseModes prev_mode = _pause_mode;
-
-			if (pause) {
-				_pause_mode.Set(mode);
-			} else {
-				_pause_mode.Reset(mode);
-
-				/* If the only remaining reason to be paused is that we saw a command during pause, unpause. */
-				if (_pause_mode == PauseMode::CommandDuringPause) {
-					_pause_mode = {};
-				}
-			}
-
-			NetworkHandlePauseChange(prev_mode, mode);
-		}
-
-		SetWindowDirty(WC_STATUS_BAR, 0);
-		SetWindowDirty(WC_MAIN_TOOLBAR, 0);
-	}
-	return CommandCost();
-#endif
 }
 
 /**
@@ -254,33 +117,10 @@ CommandCost CmdMoneyCheat(DoCommandFlags, Money amount)
  */
 CommandCost CmdChangeBankBalance(DoCommandFlags flags, TileIndex tile, Money delta, CompanyID company, ExpensesType expenses_type)
 {
-#ifdef WITH_RUST
 	return RustCompanyCost(openttd_rust_company_change_bank_balance(&GetRustCompanyFinanceServices(), tile.base(), delta.base(), company.base(), expenses_type, flags.Test(DoCommandFlag::Execute)));
-#else
-	if (!Company::IsValidID(company)) return CMD_ERROR;
-	if (expenses_type >= EXPENSES_END) return CMD_ERROR;
-	if (_current_company != OWNER_DEITY) return CMD_ERROR;
-
-	if (flags.Test(DoCommandFlag::Execute)) {
-		/* Change company bank balance of company. */
-		Backup<CompanyID> cur_company(_current_company, company);
-		SubtractMoneyFromCompany(CommandCost(expenses_type, -delta));
-		cur_company.Restore();
-
-		if (tile != 0) {
-			ShowCostOrIncomeAnimation(TileX(tile) * TILE_SIZE, TileY(tile) * TILE_SIZE, GetTilePixelZ(tile), -delta);
-		}
-	}
-
-	/* This command doesn't cost anything for deity. */
-	CommandCost zero_cost(expenses_type, (Money)0);
-	return zero_cost;
-#endif /* WITH_RUST */
 }
 
-#ifdef WITH_RUST
 void RustAskUnsafeUnpause() noexcept
 {
 	ShowQuery(GetEncodedString(STR_NEWGRF_UNPAUSE_WARNING_TITLE), GetEncodedString(STR_NEWGRF_UNPAUSE_WARNING), nullptr, AskUnsafeUnpauseCallback);
 }
-#endif

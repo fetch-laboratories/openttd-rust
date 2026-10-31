@@ -12,9 +12,7 @@
 
 #include "convertible_through_base.hpp"
 
-#ifdef WITH_RUST
 #include "../rust/math_ffi.h"
-#endif
 
 /**
  * Returns the absolute value of (scalar) variable.
@@ -105,7 +103,6 @@ constexpr T Clamp(const T a, const T min, const T max)
 template <typename T>
 constexpr T SoftClamp(const T a, const T min, const T max)
 {
-#ifdef WITH_RUST
 	static_assert(sizeof(int) == 4 && std::numeric_limits<unsigned char>::digits == 8);
 	if constexpr (std::is_integral_v<T> && !std::is_same_v<T, bool> && sizeof(T) <= sizeof(uint64_t)) {
 		if (!std::is_constant_evaluated()) {
@@ -114,7 +111,6 @@ constexpr T SoftClamp(const T a, const T min, const T max)
 		}
 	}
 	/* Preserve accepted compiler extension types in the original body below. */
-#endif
 	if (min > max) {
 		using U = std::make_unsigned_t<T>;
 		return min - (U(min) - max) / 2;

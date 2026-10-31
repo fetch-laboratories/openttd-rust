@@ -12,7 +12,6 @@
 #include "../pathfinder/pathfinder_type.h"
 #include "../track_func.h"
 #include "../roadveh.h"
-#ifdef WITH_RUST
 #include "../rust/road_yapf_ffi.h"
 #include "../rust/movement_ffi.h"
 #include "../tile_type.h"
@@ -111,9 +110,7 @@ TEST_CASE("Road YAPF origin masks match shared track constants", "[road][rust]")
 /* Loaded games clamp max_search_nodes. The generic native search still checks
  * low limits and open-key replacement, now using the production follower on a
  * concrete junction grid instead of an injected transition callback. */
-#undef WITH_RUST
-#include "../pathfinder/yapf/yapf_node_road.hpp"
-#define WITH_RUST
+#include "reference-yapf_node_road.hpp"
 #include "../pathfinder/yapf/yapf_base.hpp"
 #include "../pathfinder/follow_track.hpp"
 #include "follower_fixture.hpp"
@@ -248,5 +245,3 @@ TEST_CASE("Road YAPF observes accepted traversal once after transient exits", "[
 		}
 	}
 }
-
-#endif

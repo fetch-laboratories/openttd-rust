@@ -1,7 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file company_identity_adapter.cpp Borrowed native fields and presentation operations. */
 #include "../stdafx.h"
-#ifdef WITH_RUST
 #include "../ai/ai.hpp"
 #include "../game/game.hpp"
 #include "../company_base.h"
@@ -130,4 +129,3 @@ const OpenTTDCompanyIdentityServices &GetRustCompanyIdentityServices() noexcept
 	};
 	return services;
 }
-#endif

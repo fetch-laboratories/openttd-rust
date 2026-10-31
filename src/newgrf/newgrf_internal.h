@@ -45,7 +45,6 @@ struct GrfActionHandler {
 
 static constexpr uint MAX_SPRITEGROUP = UINT8_MAX; ///< Maximum GRF-local ID for a spritegroup.
 
-#ifdef WITH_RUST
 #include "../rust/newgrf_loading_ffi.h"
 /** Nonowning references into the process-wide Rust execution carrier. */
 struct GrfProcessingState {
@@ -83,144 +82,9 @@ struct GrfProcessingState {
 		return openttd_rust_grf_set_size(feature, set);
 	}
 };
-#else
-/** Temporary data during loading of GRFs */
-struct GrfProcessingState {
-private:
-	/** Definition of a single Action1 spriteset */
-	struct SpriteSet {
-		SpriteID sprite;  ///< SpriteID of the first sprite of the set.
-		uint num_sprites; ///< Number of sprites in the set.
-	};
-
-	/** Currently referenceable spritesets */
-	std::map<uint, SpriteSet> spritesets[GSF_END];
-
-public:
-	/* Global state */
-	GrfLoadingStage stage;    ///< Current loading stage
-	SpriteID spriteid;        ///< First available SpriteID for loading realsprites.
-
-	/* Local state in the file */
-	SpriteFile *file;         ///< File of currently processed GRF file.
-	GRFFile *grffile;         ///< Currently processed GRF file.
-	GRFConfig *grfconfig;     ///< Config of the currently processed GRF file.
-	uint32_t nfo_line;          ///< Currently processed pseudo sprite number in the GRF.
-
-	/* Kind of return values when processing certain actions */
-	int skip_sprites;         ///< Number of pseudo sprites to skip before processing the next one. (-1 to skip to end of file)
-
-	/* Currently referenceable spritegroups */
-	std::array<const SpriteGroup *, MAX_SPRITEGROUP + 1> spritegroups{};
-
-	/** Clear temporary data before processing the next file in the current loading stage */
-	void ClearDataForNextFile()
-	{
-		this->nfo_line = 0;
-		this->skip_sprites = 0;
-
-		for (uint i = 0; i < GSF_END; i++) {
-			this->spritesets[i].clear();
-		}
-
-		this->spritegroups = {};
-	}
-
-	/**
-	 * Records new spritesets.
-	 * @param feature GrfSpecFeature the set is defined for.
-	 * @param first_sprite SpriteID of the first sprite in the set.
-	 * @param first_set First spriteset to define.
-	 * @param numsets Number of sets to define.
-	 * @param numents Number of sprites per set to define.
-	 */
-	void AddSpriteSets(GrfSpecFeature feature, SpriteID first_sprite, uint first_set, uint numsets, uint numents)
-	{
-		assert(feature < GSF_END);
-		for (uint i = 0; i < numsets; i++) {
-			SpriteSet &set = this->spritesets[feature][first_set + i];
-			set.sprite = first_sprite + i * numents;
-			set.num_sprites = numents;
-		}
-	}
-
-	/**
-	 * Check whether there are any valid spritesets for a feature.
-	 * @param feature GrfSpecFeature to check.
-	 * @return true if there are any valid sets.
-	 * @note Spritesets with zero sprites are valid to allow callback-failures.
-	 */
-	bool HasValidSpriteSets(GrfSpecFeature feature) const
-	{
-		assert(feature < GSF_END);
-		return !this->spritesets[feature].empty();
-	}
-
-	/**
-	 * Check whether a specific set is defined.
-	 * @param feature GrfSpecFeature to check.
-	 * @param set Set to check.
-	 * @return true if the set is valid.
-	 * @note Spritesets with zero sprites are valid to allow callback-failures.
-	 */
-	bool IsValidSpriteSet(GrfSpecFeature feature, uint set) const
-	{
-		assert(feature < GSF_END);
-		return this->spritesets[feature].find(set) != this->spritesets[feature].end();
-	}
-
-	/**
-	 * Returns the first sprite of a spriteset.
-	 * @param feature GrfSpecFeature to query.
-	 * @param set Set to query.
-	 * @return First sprite of the set.
-	 */
-	SpriteID GetSprite(GrfSpecFeature feature, uint set) const
-	{
-		assert(IsValidSpriteSet(feature, set));
-		return this->spritesets[feature].find(set)->second.sprite;
-	}
-
-	/**
-	 * Returns the number of sprites in a spriteset
-	 * @param feature GrfSpecFeature to query.
-	 * @param set Set to query.
-	 * @return Number of sprites in the set.
-	 */
-	uint GetNumEnts(GrfSpecFeature feature, uint set) const
-	{
-		assert(IsValidSpriteSet(feature, set));
-		return this->spritesets[feature].find(set)->second.num_sprites;
-	}
-};
-
-#endif
 
 extern GrfProcessingState _cur_gps;
 
-#ifndef WITH_RUST
-struct GRFLocation {
-	uint32_t grfid;
-	uint32_t nfoline;
-
-	GRFLocation(uint32_t grfid, uint32_t nfoline) : grfid(grfid), nfoline(nfoline) { }
-
-	bool operator <(const GRFLocation &other) const
-	{
-		return this->grfid < other.grfid || (this->grfid == other.grfid && this->nfoline < other.nfoline);
-	}
-
-	bool operator ==(const GRFLocation &other) const
-	{
-		return this->grfid == other.grfid && this->nfoline == other.nfoline;
-	}
-};
-
-using GRFLineToSpriteOverride = std::map<GRFLocation, std::vector<uint8_t>>;
-
-extern std::map<GRFLocation, std::pair<SpriteID, uint16_t>> _grm_sprites;
-extern GRFLineToSpriteOverride _grf_line_to_action6_sprite_override;
-#endif
 
 extern GrfMiscBits _misc_grf_features;
 
@@ -235,24 +99,11 @@ void SkipBadgeList(ByteReader &buf);
 std::vector<BadgeID> ReadBadgeList(ByteReader &buf, GrfSpecFeature feature);
 
 void MapSpriteMappingRecolour(PalSpriteID *grf_sprite);
-#ifndef WITH_RUST
-TileLayoutFlags ReadSpriteLayoutSprite(ByteReader &buf, bool read_flags, bool invert_action1_flag, bool use_cur_spritesets, GrfSpecFeature feature, PalSpriteID *grf_sprite, uint16_t *max_sprite_offset = nullptr, uint16_t *max_palette_offset = nullptr);
-bool ReadSpriteLayout(ByteReader &buf, uint num_building_sprites, bool use_cur_spritesets, GrfSpecFeature feature, bool allow_var10, bool no_z_position, NewGRFSpriteLayout *dts);
-#endif
 
 GRFFile *GetFileByGRFID(uint32_t grfid);
 GRFError *DisableGrf(StringID message = {}, GRFConfig *config = nullptr);
-#ifndef WITH_RUST
-void DisableStaticNewGRFInfluencingNonStaticNewGRFs(GRFConfig &c);
-#endif
 bool HandleChangeInfoResult(std::string_view caller, ChangeInfoResult cir, GrfSpecFeature feature, uint8_t property);
-#ifndef WITH_RUST
-uint32_t GetParamVal(uint8_t param, uint32_t *cond_val);
-#endif
 void GRFUnsafe(ByteReader &);
 
-#ifndef WITH_RUST
-void InitializePatchFlags();
-#endif
 
 #endif /* NEWGRF_INTERNAL_H */

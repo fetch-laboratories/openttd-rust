@@ -7,7 +7,6 @@
 /** @file company_adapter.cpp Typed noexcept shared-world services for the Rust company owner. */
 #include "../stdafx.h"
 #include "presentation_services.h"
-#ifdef WITH_RUST
 #include "../ai/ai.hpp"
 #include "../aircraft.h"
 #include "../autoreplace_func.h"
@@ -477,9 +476,7 @@ CommandCost RustCompanyCost(const OpenTTDCompanyCost &x)
 		default: NOT_REACHED();
 	}
 }
-#endif /* WITH_RUST */
 
-#ifdef WITH_RUST
 #include "service_table_check.hpp"
 #include "abi-visit-OpenTTDCompanyServices.hpp"
 #include "abi-visit-OpenTTDCompanyFinanceServices.hpp"
@@ -488,4 +485,3 @@ bool CheckAbi_company_adapter()
 	return AbiServicesComplete(GetRustCompanyServices()) &&
 		AbiServicesComplete(GetRustCompanyFinanceServices());
 }
-#endif

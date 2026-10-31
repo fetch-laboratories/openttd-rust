@@ -17,7 +17,6 @@
 #include "town_type.h"
 #include "string_type.h"
 
-#ifdef WITH_RUST
 struct OpenTTDTownNames;
 struct TownNames {
 	OpenTTDTownNames *owner;
@@ -28,9 +27,6 @@ struct TownNames {
 	TownNames(const TownNames &) = delete;
 	TownNames &operator=(const TownNames &) = delete;
 };
-#else
-typedef std::set<std::string> TownNames;
-#endif
 
 /**
  * Struct holding parameters used to generate town name.

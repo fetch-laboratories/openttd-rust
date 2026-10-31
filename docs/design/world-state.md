@@ -13,7 +13,7 @@ Design: [#90](https://github.com/fetch-laboratories/openttd-rust/issues/90). Imp
 
 Move component owners while retaining one shared-world store behind narrow operations until a selected storage port transfers it. A tick-by-tick mirror introduces two authorities and delayed mutations; transferring map and pools together requires changing references, polymorphic objects, save adapters and many callers.
 
-Rust owns component-private state and control flow; C++ initially owns map arrays, live pools and shared services. Original bodies remain compiled only without `WITH_RUST`. #73 owns the temporary height map; #74 owns its computation snapshot, with scheduling, save/load and join in C++. Neither moves the global map or station pool. See [storage ports](../porting.md#storage-ports), [boundary](../porting.md#boundary) and [map access](../porting.md#map-access).
+Rust owns component-private state and control flow; C++ initially owns map arrays, live pools and shared services. Replaced original bodies live only in the pinned reference. #73 owns the temporary height map; #74 owns its computation snapshot, with scheduling, save/load and join in C++. Neither moves the global map or station pool. See [storage ports](../porting.md#storage-ports), [boundary](../porting.md#boundary) and [map access](../porting.md#map-access).
 
 ## Boundary safety and cost
 
@@ -85,7 +85,7 @@ Agent: /root/storage563 | Model: gpt-6-astra | Reasoning effort: high.
 
 This is the selected phase 2 design; its first implementation issue is [#570](https://github.com/fetch-laboratories/openttd-rust/issues/570).
 
-- Start implementation after #581 retires the build without Rust. Each moved record then has one definition and no C++ fallback copy.
+- The Rust-only build established by #581 is required. Each moved record then has one definition and no C++ fallback copy.
 - Use #564's metric for the next ranking round, not to rerank this selected design.
 - Complete all three checkpoints: shared records and native adaptation, retirement of the data boundary, and direct Tick dispatch. A record-only scaffold is incomplete.
 

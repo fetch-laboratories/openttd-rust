@@ -192,34 +192,19 @@ struct CargoSpec {
 	static IterateWrapper Iterate(size_t from = 0) { return IterateWrapper(from); }
 
 	/** List of cargo specs for each Town Product Effect. */
-#ifdef WITH_RUST
 	static std::array<std::span<const CargoSpec *>, NUM_TPE> town_production_cargoes;
-#else
-	static std::array<std::vector<const CargoSpec *>, NUM_TPE> town_production_cargoes;
-#endif
 
 private:
 	static CargoSpec array[NUM_CARGO]; ///< Array holding all CargoSpecs
-#ifndef WITH_RUST
-	static inline std::map<CargoLabel, CargoType> label_map{}; ///< Translation map from CargoLabel to Cargo type.
-#endif
 
 	friend void SetupCargoForClimate(LandscapeType l);
 	friend void BuildCargoLabelMap();
 	friend inline CargoType GetCargoTypeByLabel(CargoLabel ct);
 
-#ifndef WITH_RUST
-	friend void FinaliseCargoArray();
-#endif
 };
 
-#ifdef WITH_RUST
 extern CargoTypes &_cargo_mask;
 extern CargoTypes &_standard_cargo_mask;
-#else
-extern CargoTypes _cargo_mask;
-extern CargoTypes _standard_cargo_mask;
-#endif
 
 void SetupCargoForClimate(LandscapeType l);
 bool IsDefaultCargo(CargoType cargo_type);
@@ -227,29 +212,14 @@ void BuildCargoLabelMap();
 
 std::optional<std::string> BuildCargoAcceptanceString(const CargoArray &acceptance, StringID label);
 
-#ifdef WITH_RUST
 #include "rust/cargo_registry_lookup.h"
 inline CargoType GetCargoTypeByLabel(CargoLabel label) { return openttd_rust_cargo_by_label(label.base()); }
-#else
-inline CargoType GetCargoTypeByLabel(CargoLabel label)
-{
-	auto found = CargoSpec::label_map.find(label);
-	if (found != std::end(CargoSpec::label_map)) return found->second;
-	return INVALID_CARGO;
-}
-
-#endif
 
 Dimension GetLargestCargoIconSize();
 
 void InitializeSortedCargoSpecs();
-#ifdef WITH_RUST
 extern std::span<uint8_t, NUM_CARGO> _sorted_cargo_types;
 extern std::span<const CargoSpec *> _sorted_cargo_specs;
-#else
-extern std::array<uint8_t, NUM_CARGO> _sorted_cargo_types;
-extern std::vector<const CargoSpec *> _sorted_cargo_specs;
-#endif
 extern std::span<const CargoSpec *> _sorted_standard_cargo_specs;
 
 /**

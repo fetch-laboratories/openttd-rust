@@ -23,7 +23,6 @@ void ResetPriceBaseMultipliers();
 void SetPriceBaseMultiplier(Price price, int factor);
 
 extern const ScoreInfo _score_info[];
-#ifdef WITH_RUST
 #include "rust/company_ffi.h"
 using CompanyScoreParts = TypedIndexContainer<std::array<std::array<int64_t, SCORE_END>, MAX_COMPANIES>, CompanyID>;
 Economy &GetRustEconomy();
@@ -32,24 +31,12 @@ CompanyScoreParts &GetRustCompanyScores();
 #define _economy (GetRustEconomy())
 #define _price (GetRustPrices())
 #define _score_part (GetRustCompanyScores())
-#else
-extern TypedIndexContainer<std::array<std::array<int64_t, SCORE_END>, MAX_COMPANIES>, CompanyID> _score_part;
-extern Economy _economy;
-/* Prices and also the fractional part. */
-extern Prices _price;
-#endif
 
 int UpdateCompanyRatingAndValue(Company *c, bool update);
 void StartupIndustryDailyChanges(bool init_counter);
 
 Money GetTransportedGoodsIncome(uint num_pieces, uint dist, uint16_t transit_periods, CargoType cargo_type);
-#ifndef WITH_RUST
-uint MoveGoodsToStation(CargoType cargo, uint amount, Source source, const StationList &all_stations, Owner exclusivity = INVALID_OWNER);
-#endif
 
-#ifndef WITH_RUST
-void PrepareUnload(Vehicle *front_v);
-#endif
 void LoadUnloadStation(Station *st);
 
 Money GetPrice(Price index, uint cost_factor, const struct GRFFile *grf_file, int shift = 0);

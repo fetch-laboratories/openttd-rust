@@ -14,9 +14,7 @@
 #include "newgrf_internal.h"
 #include "newgrf_stringmapping.h"
 
-#ifdef WITH_RUST
 #include "../rust/cargo_registry_ffi.h"
-#endif
 
 #include "../safeguards.h"
 
@@ -29,22 +27,7 @@
  */
 static void MaybeInstallFallbackCargoLabel(uint id, uint last, CargoLabel label)
 {
-#ifdef WITH_RUST
 	openttd_rust_cargo_fallback(_cur_gps.grffile, id, last, label.base());
-#else
-	if (_cur_gps.grffile->cargo_list.empty()) {
-		/* Cargo translation table isn't configured yet, assume it won't be and configure the cargo list as a fallback list. */
-		auto default_cargo_list = GetCargoTranslationTable(*_cur_gps.grffile);
-		_cur_gps.grffile->cargo_list.assign(default_cargo_list.begin(), default_cargo_list.end());
-		_cur_gps.grffile->cargo_list_is_fallback = true;
-	}
-
-	if (_cur_gps.grffile->cargo_list_is_fallback) {
-		/* Automatically fill fallback cargo list with the defined label, resizing as needed. */
-		if (_cur_gps.grffile->cargo_list.size() < last) _cur_gps.grffile->cargo_list.resize(last, CT_INVALID);
-		_cur_gps.grffile->cargo_list[id] = label;
-	}
-#endif
 }
 
 /**
@@ -70,17 +53,7 @@ static ChangeInfoResult CargoReserveInfo(uint first, uint last, int prop, ByteRe
 		switch (prop) {
 			case 0x08: // Bit number of cargo
 				cs->bitnum = buf.ReadByte();
-#ifdef WITH_RUST
 				openttd_rust_cargo_bitnum_changed(cs, id, _cur_gps.grffile);
-#else
-				if (cs->IsValid()) {
-					cs->grffile = _cur_gps.grffile;
-					SetBit(_cargo_mask, id);
-				} else {
-					ClrBit(_cargo_mask, id);
-				}
-				BuildCargoLabelMap();
-#endif
 				break;
 
 			case 0x09: // String ID for cargo type name

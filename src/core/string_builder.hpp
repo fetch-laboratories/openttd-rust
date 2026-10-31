@@ -13,11 +13,8 @@
 #define STRING_BUILDER_HPP
 
 #include <charconv>
-#ifdef WITH_RUST
 #include "../rust/builder_ffi.h"
-#endif
 
-#ifdef WITH_RUST
 /** Match std::to_chars integer overload resolution, including implicit conversions. */
 class StringBuilderIntegerAdapter {
 	template <class T>
@@ -44,7 +41,6 @@ public:
 	static OpenTTDRustFormattedInteger Format(unsigned long long value, int base) { return FormatValue(value, base); }
 	static OpenTTDRustFormattedInteger Format(bool, int) = delete;
 };
-#endif
 
 /**
  * Compose data into a string / buffer.
@@ -83,17 +79,9 @@ public:
 	template <class T>
 	void PutIntegerBase(T value, int base)
 	{
-#ifdef WITH_RUST
 		auto result = StringBuilderIntegerAdapter::Format(value, base);
 		if (result.length == 0) return;
 		this->PutBuffer({reinterpret_cast<const char *>(result.bytes), result.length});
-#else
-		std::array<char, 32> buf;
-		auto result = std::to_chars(buf.data(), buf.data() + buf.size(), value, base);
-		if (result.ec != std::errc{}) return;
-		size_type len = result.ptr - buf.data();
-		this->PutBuffer({buf.data(), len});
-#endif
 	}
 };
 

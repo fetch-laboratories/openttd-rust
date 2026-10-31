@@ -22,22 +22,18 @@
 #include "town.h"
 #include "water.h"
 #include "newgrf_animation_base.h"
-#ifdef WITH_RUST
 #include "rust/animation_binding.hpp"
 #include "rust/services_object.h"
-#endif
 
 #include "table/strings.h"
 
 #include "newgrf_class_func.h"
 
-#ifdef WITH_RUST
 #include "rust/object_ffi.h"
 #include "rust/services_newgrf.h"
 #include "rust/tile_animation_services.h"
 #include "rust/services_map.h"
 #include "rust/environment_services.h"
-#endif
 
 #include "safeguards.h"
 
@@ -89,12 +85,7 @@ size_t ObjectSpec::Count()
  */
 bool ObjectSpec::IsEverAvailable() const
 {
-#ifdef WITH_RUST
 	return openttd_rust_object_ever_available(&GetRustObjectServices(), this);
-#else
-	return this->IsEnabled() && this->climate.Test(_settings_game.game_creation.landscape) &&
-			!this->flags.Test((_game_mode != GM_EDITOR && !_generating_world) ? ObjectFlag::OnlyInScenedit : ObjectFlag::OnlyInGame);
-#endif
 }
 
 /**
@@ -103,11 +94,7 @@ bool ObjectSpec::IsEverAvailable() const
  */
 bool ObjectSpec::WasEverAvailable() const
 {
-#ifdef WITH_RUST
 	return openttd_rust_object_was_available(&GetRustObjectServices(), this);
-#else
-	return this->IsEverAvailable() && TimerGameCalendar::date > this->introduction_date;
-#endif
 }
 
 /**
@@ -116,12 +103,7 @@ bool ObjectSpec::WasEverAvailable() const
  */
 bool ObjectSpec::IsAvailable() const
 {
-#ifdef WITH_RUST
 	return openttd_rust_object_available(&GetRustObjectServices(), this);
-#else
-	return this->WasEverAvailable() &&
-			(TimerGameCalendar::date < this->end_of_life_date || this->end_of_life_date < this->introduction_date + 365);
-#endif
 }
 
 /**
@@ -148,9 +130,7 @@ uint ObjectSpec::Index() const
 /** This function initialize the spec arrays of objects. */
 void ResetObjects()
 {
-#ifdef WITH_RUST
 	openttd_rust_object_services_exchange(&GetRustObjectServices());
-#endif
 	/* Clean the pool. */
 	_object_specs.clear();
 
@@ -167,7 +147,6 @@ void ResetObjects()
 	_object_specs[OBJECT_TRANSMITTER].class_index = ObjectClass::Allocate('TRNS');
 }
 
-#ifdef WITH_RUST
 template <>
 std::span<const OpenTTDGRFClassDefault> ObjectClass::Defaults()
 {
@@ -177,253 +156,21 @@ std::span<const OpenTTDGRFClassDefault> ObjectClass::Defaults()
 	};
 	return defaults;
 }
-#else
-template <>
-/* static */ void ObjectClass::InsertDefaults()
-{
-	ObjectClass::Get(ObjectClass::Allocate('LTHS'))->name = STR_OBJECT_CLASS_LTHS;
-	ObjectClass::Get(ObjectClass::Allocate('TRNS'))->name = STR_OBJECT_CLASS_TRNS;
-}
-#endif
 
-#ifndef WITH_RUST
-template <>
-bool ObjectClass::IsUIAvailable(uint index) const
-{
-	return this->GetSpec(index)->IsEverAvailable();
-}
-#endif
 
 /* Instantiate ObjectClass. */
 template class NewGRFClass<ObjectSpec, ObjectClassID, OBJECT_CLASS_MAX>;
 
 /* virtual */ uint32_t ObjectScopeResolver::GetRandomBits() const
 {
-#ifdef WITH_RUST
 	return openttd_rust_object_random_bits(&GetRustObjectServices(), this->context.tile);
-#else
-	return IsValidTile(this->tile) && IsTileType(this->tile, MP_OBJECT) ? GetObjectRandomBits(this->tile) : 0;
-#endif
 }
 
-#ifndef WITH_RUST
-/**
- * Make an analysis of a tile and get the object type.
- * @param tile TileIndex of the tile to query
- * @param cur_grfid GRFID of the current callback chain
- * @return value encoded as per NFO specs
- */
-static uint32_t GetObjectIDAtOffset(TileIndex tile, uint32_t cur_grfid)
-{
-	if (!IsTileType(tile, MP_OBJECT)) {
-		return 0xFFFF;
-	}
-
-	const Object *o = Object::GetByTile(tile);
-	const ObjectSpec *spec = ObjectSpec::Get(o->type);
-
-	/* Default objects have no associated NewGRF file */
-	if (!spec->grf_prop.HasGrfFile()) {
-		return 0xFFFE; // Defined in another grf file
-	}
-
-	if (spec->grf_prop.grfid == cur_grfid) { // same object, same grf ?
-		return spec->grf_prop.local_id | o->view << 16;
-	}
-
-	return 0xFFFE; // Defined in another grf file
-}
-
-/**
- * Based on newhouses equivalent, but adapted for newobjects
- * @param parameter from callback.  It's in fact a pair of coordinates
- * @param tile TileIndex from which the callback was initiated
- * @param index of the object been queried for
- * @param grf_version8 True, if we are dealing with a new NewGRF which uses GRF version >= 8.
- * @return a construction of bits obeying the newgrf format
- */
-static uint32_t GetNearbyObjectTileInformation(uint8_t parameter, TileIndex tile, ObjectID index, bool grf_version8)
-{
-	if (parameter != 0) tile = GetNearbyTile(parameter, tile); // only perform if it is required
-	bool is_same_object = (IsTileType(tile, MP_OBJECT) && GetObjectIndex(tile) == index);
-
-	return GetNearbyTileInformation(tile, grf_version8) | (is_same_object ? 1 : 0) << 8;
-}
-
-/**
- * Get the closest object of a given type.
- * @param tile    The tile to start searching from.
- * @param type    The type of the object to search for.
- * @param current The current object (to ignore).
- * @return The distance to the closest object.
- */
-static uint32_t GetClosestObject(TileIndex tile, ObjectType type, const Object *current)
-{
-	uint32_t best_dist = UINT32_MAX;
-	for (const Object *o : Object::Iterate()) {
-		if (o->type != type || o == current) continue;
-
-		best_dist = std::min(best_dist, DistanceManhattan(tile, o->location.tile));
-	}
-
-	return best_dist;
-}
-
-/**
- * Implementation of var 65
- * @param object ResolverObject owning the temporary storage.
- * @param local_id Parameter given to the callback, which is the set id, or the local id, in our terminology.
- * @param grfid    The object's GRFID.
- * @param tile     The tile to look from.
- * @param current  Object for which the inquiry is made
- * @return The formatted answer to the callback : rr(reserved) cc(count) dddd(manhattan distance of closest sister)
- */
-static uint32_t GetCountAndDistanceOfClosestInstance(const ResolverObject &object, uint8_t local_id, uint32_t grfid, TileIndex tile, const Object *current)
-{
-	uint32_t grf_id = static_cast<uint32_t>(object.GetRegister(0x100)); // Get the GRFID of the definition to look for in register 100h
-	uint32_t idx;
-
-	/* Determine what will be the object type to look for */
-	switch (grf_id) {
-		case 0:  // this is a default object type
-			idx = local_id;
-			break;
-
-		case 0xFFFFFFFF: // current grf
-			grf_id = grfid;
-			[[fallthrough]];
-
-		default: // use the grfid specified in register 100h
-			idx = _object_mngr.GetID(local_id, grf_id);
-			break;
-	}
-
-	/* If the object type is invalid, there is none and the closest is far away. */
-	if (idx >= NUM_OBJECTS) return 0 | 0xFFFF;
-
-	return Object::GetTypeCount(idx) << 16 | ClampTo<uint16_t>(GetClosestObject(tile, idx, current));
-}
-
-#endif
 
 /** Used by the resolver to get values for feature 0F deterministic spritegroups. */
 /* virtual */ uint32_t ObjectScopeResolver::GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const
 {
-#ifdef WITH_RUST
 	return openttd_rust_object_variable(&GetRustObjectServices(), &this->ro, this->context.object, this->context.spec, this->context.tile, this->context.view, variable, parameter, &available);
-#else
-	/* We get the town from the object, or we calculate the closest
-	 * town if we need to when there's no object. */
-	const Town *t = nullptr;
-
-	if (this->obj == nullptr) {
-		switch (variable) {
-			/* Allow these when there's no object. */
-			case 0x41:
-			case 0x60:
-			case 0x61:
-			case 0x62:
-			case 0x64:
-				break;
-
-			/* Allow these, but find the closest town. */
-			case 0x45:
-			case 0x46:
-				if (!IsValidTile(this->tile)) goto unhandled;
-				t = ClosestTownFromTile(this->tile, UINT_MAX);
-				break;
-
-			/* Construction date */
-			case 0x42: return TimerGameCalendar::date.base();
-
-			/* Object founder information */
-			case 0x44: return _current_company.base();
-
-			/* Object view */
-			case 0x48: return this->view;
-
-			case 0x7A: return GetBadgeVariableResult(*this->ro.grffile, this->spec->badges, parameter);
-
-			/*
-			 * Disallow the rest:
-			 * 0x40: Relative position is passed as parameter during construction.
-			 * 0x43: Animation counter is only for actual tiles.
-			 * 0x47: Object colour is only valid when its built.
-			 * 0x63: Animation counter of nearby tile, see above.
-			 */
-			default:
-				goto unhandled;
-		}
-
-		/* If there's an invalid tile, then we don't have enough information at all. */
-		if (!IsValidTile(this->tile)) goto unhandled;
-	} else {
-		t = this->obj->town;
-	}
-
-	switch (variable) {
-		/* Relative position. */
-		case 0x40: {
-			TileIndex offset = this->tile - this->obj->location.tile;
-			uint offset_x = TileX(offset);
-			uint offset_y = TileY(offset);
-			return offset_y << 20 | offset_x << 16 | offset_y << 8 | offset_x;
-		}
-
-		/* Tile information. */
-		case 0x41: return GetTileSlope(this->tile) << 8 | GetTerrainType(this->tile);
-
-		/* Construction date */
-		case 0x42: return this->obj->build_date.base();
-
-		/* Animation counter */
-		case 0x43: return GetAnimationFrame(this->tile);
-
-		/* Object founder information */
-		case 0x44: return GetTileOwner(this->tile).base();
-
-		/* Get town zone and Manhattan distance of closest town */
-		case 0x45: return to_underlying(GetTownRadiusGroup(t, this->tile)) << 16 | ClampTo<uint16_t>(DistanceManhattan(this->tile, t->xy));
-
-		/* Get square of Euclidean distance of closest town */
-		case 0x46: return DistanceSquare(this->tile, t->xy);
-
-		/* Object colour */
-		case 0x47: return this->obj->colour;
-
-		/* Object view */
-		case 0x48: return this->obj->view;
-
-		/* Get object ID at offset param */
-		case 0x60: return GetObjectIDAtOffset(GetNearbyTile(parameter, this->tile), this->ro.grffile->grfid);
-
-		/* Get random tile bits at offset param */
-		case 0x61: {
-			TileIndex tile = GetNearbyTile(parameter, this->tile);
-			return (IsTileType(tile, MP_OBJECT) && Object::GetByTile(tile) == this->obj) ? GetObjectRandomBits(tile) : 0;
-		}
-
-		/* Land info of nearby tiles */
-		case 0x62: return GetNearbyObjectTileInformation(parameter, this->tile, this->obj == nullptr ? ObjectID::Invalid() : this->obj->index, this->ro.grffile->grf_version >= 8);
-
-		/* Animation counter of nearby tile */
-		case 0x63: {
-			TileIndex tile = GetNearbyTile(parameter, this->tile);
-			return (IsTileType(tile, MP_OBJECT) && Object::GetByTile(tile) == this->obj) ? GetAnimationFrame(tile) : 0;
-		}
-
-		/* Count of object, distance of closest instance */
-		case 0x64: return GetCountAndDistanceOfClosestInstance(this->ro, parameter, this->ro.grffile->grfid, this->tile, this->obj);
-
-		case 0x7A: return GetBadgeVariableResult(*this->ro.grffile, this->spec->badges, parameter);
-	}
-
-unhandled:
-	Debug(grf, 1, "Unhandled object variable 0x{:X}", variable);
-
-	available = false;
-	return UINT_MAX;
-#endif
 }
 
 /**
@@ -438,18 +185,10 @@ unhandled:
 ObjectResolverObject::ObjectResolverObject(const ObjectSpec *spec, Object *obj, TileIndex tile, uint8_t view,
 		CallbackID callback, uint32_t param1, uint32_t param2)
 	: ResolverObject(
-#ifdef WITH_RUST
 		openttd_rust_object_file(spec),
-#else
-		spec->grf_prop.grffile,
-#endif
 		callback, param1, param2), object_scope(*this, obj, spec, tile, view)
 {
-#ifdef WITH_RUST
 	this->root_spritegroup = openttd_rust_object_root(&this->object_scope.context);
-#else
-	this->root_spritegroup = spec->grf_prop.GetSpriteGroup(obj != nullptr);
-#endif
 }
 
 /**
@@ -457,39 +196,15 @@ ObjectResolverObject::ObjectResolverObject(const ObjectSpec *spec, Object *obj, 
  * On the first call, the town scope is created (if possible).
  * @return Town scope, if available.
  */
-#ifndef WITH_RUST
-TownScopeResolver *ObjectResolverObject::GetTown()
-{
-	if (!this->town_scope.has_value()) {
-		Town *t;
-		if (this->object_scope.obj != nullptr) {
-			t = this->object_scope.obj->town;
-		} else {
-			t = ClosestTownFromTile(this->object_scope.tile, UINT_MAX);
-		}
-		if (t == nullptr) return nullptr;
-		this->town_scope.emplace(*this, t, this->object_scope.obj == nullptr);
-	}
-	return &*this->town_scope;
-}
-#endif
 
 GrfSpecFeature ObjectResolverObject::GetFeature() const
 {
-#ifdef WITH_RUST
 	return static_cast<GrfSpecFeature>(openttd_rust_object_feature());
-#else
-	return GSF_OBJECTS;
-#endif
 }
 
 uint32_t ObjectResolverObject::GetDebugID() const
 {
-#ifdef WITH_RUST
 	return openttd_rust_object_debug_id(&this->object_scope.context);
-#else
-	return this->object_scope.spec->grf_prop.local_id;
-#endif
 }
 
 /**
@@ -506,12 +221,7 @@ uint32_t ObjectResolverObject::GetDebugID() const
  */
 uint16_t GetObjectCallback(CallbackID callback, uint32_t param1, uint32_t param2, const ObjectSpec *spec, Object *o, TileIndex tile, std::span<int32_t> regs100, uint8_t view)
 {
-#ifdef WITH_RUST
 	return openttd_rust_object_callback(&GetRustObjectServices(), callback, param1, param2, spec, o, tile.base(), regs100.data(), regs100.size(), view);
-#else
-	ObjectResolverObject object(spec, o, tile, view, callback, param1, param2);
-	return object.ResolveCallback(regs100);
-#endif
 }
 
 /**
@@ -608,16 +318,8 @@ void DrawNewObjectTileInGUI(int x, int y, const ObjectSpec *spec, uint8_t view)
  * @param tile     The tile the callback is called for.
  * @return The result of the callback.
  */
-#ifndef WITH_RUST
-uint16_t StubGetObjectCallback(CallbackID callback, uint32_t param1, uint32_t param2, const ObjectSpec *spec, Object *o, TileIndex tile, int)
-{
-	return GetObjectCallback(callback, param1, param2, spec, o, tile);
-}
-
-#endif
 
 /** Helper class for animation control. */
-#ifdef WITH_RUST
 const OpenTTDObjectAnimation &GetObjectAnimationBinding() noexcept
 {
 	static const auto binding = MakeRustAnimationBindingDirect<ObjectSpec, Object, int>(
@@ -626,15 +328,6 @@ const OpenTTDObjectAnimation &GetObjectAnimationBinding() noexcept
 		openttd_rust_object_animation_callback);
 	return binding;
 }
-#else
-struct ObjectAnimationBase : public AnimationBase<ObjectAnimationBase, ObjectSpec, Object, int, StubGetObjectCallback, TileAnimationFrameAnimationHelper<Object> > {
-	static const CallbackID cb_animation_speed      = CBID_OBJECT_ANIMATION_SPEED;
-	static const CallbackID cb_animation_next_frame = CBID_OBJECT_ANIMATION_NEXT_FRAME;
-
-	static const ObjectCallbackMask cbm_animation_speed      = ObjectCallbackMask::AnimationSpeed;
-	static const ObjectCallbackMask cbm_animation_next_frame = ObjectCallbackMask::AnimationNextFrame;
-};
-#endif
 
 /**
  * Handle the animation of the object tile.
@@ -642,26 +335,9 @@ struct ObjectAnimationBase : public AnimationBase<ObjectAnimationBase, ObjectSpe
  */
 void AnimateNewObjectTile(TileIndex tile)
 {
-#ifdef WITH_RUST
 	openttd_rust_animate_object(tile.base());
-#else
-	const ObjectSpec *spec = ObjectSpec::GetByTile(tile);
-	if (spec == nullptr || !spec->flags.Test(ObjectFlag::Animation)) return;
-
-	ObjectAnimationBase::AnimateTile(spec, Object::GetByTile(tile), tile, spec->flags.Test(ObjectFlag::AnimRandomBits));
-#endif
 }
 
-#ifndef WITH_RUST
-static bool DoTriggerObjectTileAnimation(Object *o, TileIndex tile, ObjectAnimationTrigger trigger, const ObjectSpec *spec, uint32_t random, uint32_t var18_extra = 0)
-{
-	if (!spec->animation.triggers.Test(trigger)) return false;
-
-	ObjectAnimationBase::ChangeAnimationFrame(CBID_OBJECT_ANIMATION_TRIGGER, spec, o, tile, random, to_underlying(trigger) | var18_extra);
-	return true;
-}
-
-#endif
 
 /**
  * Trigger the update of animation on a single tile.
@@ -672,11 +348,7 @@ static bool DoTriggerObjectTileAnimation(Object *o, TileIndex tile, ObjectAnimat
  */
 bool TriggerObjectTileAnimation(Object *o, TileIndex tile, ObjectAnimationTrigger trigger, const ObjectSpec *spec)
 {
-#ifdef WITH_RUST
 	return openttd_rust_object_trigger_tile(&GetRustObjectServices(), o, tile.base(), trigger, spec);
-#else
-	return DoTriggerObjectTileAnimation(o, tile, trigger, spec, Random());
-#endif
 }
 
 /**
@@ -687,26 +359,9 @@ bool TriggerObjectTileAnimation(Object *o, TileIndex tile, ObjectAnimationTrigge
  */
 bool TriggerObjectAnimation(Object *o, ObjectAnimationTrigger trigger, const ObjectSpec *spec)
 {
-#ifdef WITH_RUST
 	return openttd_rust_object_trigger(&GetRustObjectServices(), o, trigger, spec);
-#else
-	if (!spec->animation.triggers.Test(trigger)) return false;
-
-	bool ret = true;
-	uint32_t random = Random();
-	for (TileIndex tile : o->location) {
-		if (DoTriggerObjectTileAnimation(o, tile, trigger, spec, random)) {
-			SB(random, 0, 16, Random());
-		} else {
-			ret = false;
-		}
-	}
-
-	return ret;
-#endif
 }
 
-#ifdef WITH_RUST
 const OpenTTDObjectQueryServices &GetRustObjectQueryServices() noexcept
 {
 	static const OpenTTDObjectQueryServices services{
@@ -738,9 +393,7 @@ const OpenTTDObjectQueryServices &GetRustObjectQueryServices() noexcept
 	};
 	return services;
 }
-#endif
 
-#ifdef WITH_RUST
 const OpenTTDObjectResolverServices &GetObjectResolverServices() noexcept
 {
 	static_assert(GSF_OBJECTS == 0x0F && VSG_SCOPE_SELF == 0 && VSG_SCOPE_PARENT == 1 && CBID_OBJECT_LAND_SLOPE_CHECK == 0x157 && CBID_OBJECT_COLOUR == 0x15B);
@@ -762,4 +415,3 @@ const OpenTTDObjectResolverServices &GetObjectResolverServices() noexcept
 	};
 	return services;
 }
-#endif

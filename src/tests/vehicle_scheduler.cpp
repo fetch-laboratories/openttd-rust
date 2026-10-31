@@ -19,11 +19,9 @@
 #include "../newgrf_sound.h"
 #include "abi_layout.hpp"
 #include "../rust/fleet_ffi.h"
-#ifdef WITH_RUST
 #include "../../tools/simulation/session-fixture.hpp"
 #include "../rust/company_adapter.h"
 #include "../rust/session_ffi.h"
-#endif
 #include "../safeguards.h"
 
 /* Exercise CallVehicleTicks itself, with the original PoolIterator as oracle.
@@ -65,7 +63,6 @@ struct SchedulerLifetimeVehicle final : Vehicle {
 		return true;
 	}
 };
-#ifdef WITH_RUST
 TEST_CASE("Vehicle maintenance previous ID preserves the company sentinel")
 {
 	struct Restore { ~Restore() { _vehicle_pool.CleanPool(); } } restore;
@@ -78,7 +75,6 @@ TEST_CASE("Vehicle maintenance previous ID preserves the company sentinel")
 	CHECK(services.vehicle_previous(head->index.base()) == UINT32_MAX);
 	CHECK(services.vehicle_previous(part->index.base()) == head->index.base());
 }
-#endif
 
 TEST_CASE("Base vehicle scheduler - production deletion, reuse and reallocation order")
 {
@@ -100,14 +96,10 @@ TEST_CASE("Base vehicle scheduler - production deletion, reuse and reallocation 
 		for (bool mutate : {true, false}) {
 			_lifetime_mutate = mutate;
 			if (production) {
-#ifdef WITH_RUST
 				SessionFixture fixture;
 				CommandCost refit, temporary;
 				fixture.tables = RustVehicleSchedulerTables(reinterpret_cast<OpenTTDCommandCost *>(&refit), reinterpret_cast<OpenTTDCommandCost *>(&temporary));
 				CHECK(fixture.Run());
-#else
-				CallVehicleTicks();
-#endif
 			} else {
 				for (Vehicle *v : Vehicle::Iterate()) v->Tick();
 			}
@@ -120,7 +112,6 @@ TEST_CASE("Base vehicle scheduler - production deletion, reuse and reallocation 
 	const auto source = Trace(false);
 	CHECK(Trace(true) == source);
 }
-#ifdef WITH_RUST
 TEST_CASE("Base vehicle scheduler - consumed boundary layouts")
 {
 	ABI_LAYOUT_CHECK;
@@ -370,18 +361,14 @@ TEST_CASE("Base vehicle scheduler - Tick growth, timing return and fresh type")
 	CHECK(_vehicle_pool.items == 1);
 	_vehicle_pool.CleanPool();
 }
-#endif /* WITH_RUST */
 
-#ifdef WITH_RUST
 TEST_CASE("Vehicle maintenance consumed native ABI")
 {
 	ABI_LAYOUT_CHECK;
 #include "abi-layout-maintenance.inc"
 }
 
-#endif
 
-#ifdef WITH_RUST
 TEST_CASE("Vehicle maintenance native scalar stores and cadence")
 {
 	auto &pool = _vehicle_pool;
@@ -513,4 +500,3 @@ TEST_CASE("Vehicle occupancy - canonical links, stale removal and copied cursors
 	CHECK(*VehiclesOnTile(a->tile).begin() == b);
 	delete b; delete a;
 }
-#endif

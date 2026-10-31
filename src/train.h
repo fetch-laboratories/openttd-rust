@@ -18,9 +18,7 @@
 #include "engine_base.h"
 #include "rail_map.h"
 #include "ground_vehicle.hpp"
-#ifdef WITH_RUST
 #include "rust/train_state_ffi.h"
-#endif
 
 struct Train;
 
@@ -66,16 +64,10 @@ void CheckTrainsLengths();
 void FreeTrainTrackReservation(const Train *v);
 bool TryPathReserve(Train *v, bool mark_as_stuck = false, bool first_tile_okay = false);
 
-#ifndef WITH_RUST
-int GetTrainStopLocation(StationID station_id, TileIndex tile, const Train *v, int *station_ahead, int *station_length);
-#endif
 
 void GetTrainSpriteSize(EngineID engine, uint &width, uint &height, int &xoffs, int &yoffs, EngineImageType image_type);
 
 bool TrainOnCrossing(TileIndex tile);
-#ifndef WITH_RUST
-void NormalizeTrainVehInDepot(const Train *u);
-#endif
 
 /** Variables that are cached to improve performance and such */
 struct TrainCache {
@@ -92,32 +84,19 @@ struct TrainCache {
 	auto operator<=>(const TrainCache &) const = default;
 };
 
-#ifdef WITH_RUST
 /** The only C++ train-private cache is its shared NewGRF sprite pointer. */
 struct TrainSpriteCache {
 	const struct SpriteGroup *cached_override = nullptr;
 };
-#endif
 
 /**
  * 'Train' is either a loco or a wagon.
  */
 struct Train final : public GroundVehicle<Train, VEH_TRAIN> {
-#ifdef WITH_RUST
 	/* Canonical allocation destructs after PreDestructor, also on pool cleanup
 	 * and indexed-load destruction. C++ retains only the sprite pointer cache. */
 	std::unique_ptr<OpenTTDTrainState, decltype(&openttd_rust_train_state_destroy)> rust_state{openttd_rust_train_state_new(), openttd_rust_train_state_destroy};
 	TrainSpriteCache tcache{};
-#else
-	VehicleRailFlags flags{};
-	uint16_t crash_anim_pos = 0; ///< Crash animation counter.
-	uint16_t wait_counter = 0; ///< Signal/stuck/forced-proceeding wait ticks.
-	TrainCache tcache{};
-	RailTypes compatible_railtypes{};
-	RailTypes railtypes{};
-	TrackBits track{};
-	TrainForceProceeding force_proceed{};
-#endif
 
 	/* Link between the two ends of a multiheaded engine */
 	Train *other_multiheaded_part = nullptr;
@@ -127,171 +106,93 @@ struct Train final : public GroundVehicle<Train, VEH_TRAIN> {
 	/** We want to 'destruct' the right class. */
 	virtual ~Train() { this->PreDestructor(); }
 
-#ifdef WITH_RUST
 	OpenTTDTrainState *GetRustState() const { return this->rust_state.get(); }
-#endif
 
 	VehicleRailFlags GetTrainFlags() const
 	{
-#ifdef WITH_RUST
 		return VehicleRailFlags(static_cast<uint16_t>(openttd_rust_train_state_get_flags(this->rust_state.get())));
-#else
-		return this->flags;
-#endif
 	}
 	void SetTrainFlags(VehicleRailFlags value)
 	{
-#ifdef WITH_RUST
 		openttd_rust_train_state_set_flags(this->rust_state.get(), value.base());
-#else
-		this->flags = value;
-#endif
 	}
 
 	uint16_t GetCrashAnimPos() const
 	{
-#ifdef WITH_RUST
 		return static_cast<uint16_t>(openttd_rust_train_state_get_crash_anim_pos(this->rust_state.get()));
-#else
-		return this->crash_anim_pos;
-#endif
 	}
 	void SetCrashAnimPos(uint16_t value)
 	{
-#ifdef WITH_RUST
 		openttd_rust_train_state_set_crash_anim_pos(this->rust_state.get(), value);
-#else
-		this->crash_anim_pos = value;
-#endif
 	}
 
 	uint16_t GetWaitCounter() const
 	{
-#ifdef WITH_RUST
 		return static_cast<uint16_t>(openttd_rust_train_state_get_wait_counter(this->rust_state.get()));
-#else
-		return this->wait_counter;
-#endif
 	}
 	void SetWaitCounter(uint16_t value)
 	{
-#ifdef WITH_RUST
 		openttd_rust_train_state_set_wait_counter(this->rust_state.get(), value);
-#else
-		this->wait_counter = value;
-#endif
 	}
 
 	RailTypes GetCompatibleRailTypes() const
 	{
-#ifdef WITH_RUST
 		return RailTypes(static_cast<uint64_t>(openttd_rust_train_state_get_compatible_railtypes(this->rust_state.get())));
-#else
-		return this->compatible_railtypes;
-#endif
 	}
 	void SetCompatibleRailTypes(RailTypes value)
 	{
-#ifdef WITH_RUST
 		openttd_rust_train_state_set_compatible_railtypes(this->rust_state.get(), value.base());
-#else
-		this->compatible_railtypes = value;
-#endif
 	}
 
 	RailTypes GetRailTypes() const
 	{
-#ifdef WITH_RUST
 		return RailTypes(static_cast<uint64_t>(openttd_rust_train_state_get_railtypes(this->rust_state.get())));
-#else
-		return this->railtypes;
-#endif
 	}
 	void SetRailTypes(RailTypes value)
 	{
-#ifdef WITH_RUST
 		openttd_rust_train_state_set_railtypes(this->rust_state.get(), value.base());
-#else
-		this->railtypes = value;
-#endif
 	}
 
 	TrackBits GetTrack() const
 	{
-#ifdef WITH_RUST
 		return static_cast<TrackBits>(openttd_rust_train_state_get_track(this->rust_state.get()));
-#else
-		return this->track;
-#endif
 	}
 	void SetTrack(TrackBits value)
 	{
-#ifdef WITH_RUST
 		openttd_rust_train_state_set_track(this->rust_state.get(), value);
-#else
-		this->track = value;
-#endif
 	}
 
 	TrainForceProceeding GetForceProceed() const
 	{
-#ifdef WITH_RUST
 		return static_cast<TrainForceProceeding>(openttd_rust_train_state_get_force_proceed(this->rust_state.get()));
-#else
-		return this->force_proceed;
-#endif
 	}
 	void SetForceProceed(TrainForceProceeding value)
 	{
-#ifdef WITH_RUST
 		openttd_rust_train_state_set_force_proceed(this->rust_state.get(), value);
-#else
-		this->force_proceed = value;
-#endif
 	}
 
 	bool GetCachedTilt() const
 	{
-#ifdef WITH_RUST
 		return static_cast<bool>(openttd_rust_train_state_get_cached_tilt(this->rust_state.get()));
-#else
-		return this->tcache.cached_tilt;
-#endif
 	}
 
 	uint8_t GetUserDefData() const
 	{
-#ifdef WITH_RUST
 		return static_cast<uint8_t>(openttd_rust_train_state_get_user_def_data(this->rust_state.get()));
-#else
-		return this->tcache.user_def_data;
-#endif
 	}
 
 	int16_t GetCachedCurveSpeedMod() const
 	{
-#ifdef WITH_RUST
 		return static_cast<int16_t>(static_cast<uint16_t>(openttd_rust_train_state_get_cached_curve_speed_mod(this->rust_state.get())));
-#else
-		return this->tcache.cached_curve_speed_mod;
-#endif
 	}
 
 	uint16_t GetCachedMaxCurveSpeed() const
 	{
-#ifdef WITH_RUST
 		return static_cast<uint16_t>(openttd_rust_train_state_get_cached_max_curve_speed(this->rust_state.get()));
-#else
-		return this->tcache.cached_max_curve_speed;
-#endif
 	}
 	void SetCachedMaxCurveSpeed(uint16_t value)
 	{
-#ifdef WITH_RUST
 		openttd_rust_train_state_set_cached_max_curve_speed(this->rust_state.get(), value);
-#else
-		this->tcache.cached_max_curve_speed = value;
-#endif
 	}
 
 	void SetTrainFlag(VehicleRailFlag flag, bool value = true) { this->SetTrainFlags(this->GetTrainFlags().Set(flag, value)); }
@@ -382,11 +283,7 @@ struct Train final : public GroundVehicle<Train, VEH_TRAIN> {
 	 */
 	inline VehicleAccelerationModel GetAccelerationType() const
 	{
-#ifdef WITH_RUST
 		return openttd_rust_ground_acceleration_type(&GetRustGroundPhysicsServices(), this);
-#else
-		return GetRailTypeInfo(GetRailType(this->tile))->acceleration_type;
-#endif
 	}
 
 protected: // These functions should not be called outside acceleration code.
@@ -395,59 +292,16 @@ protected: // These functions should not be called outside acceleration code.
 	 * Allows to know the power value that this vehicle will use.
 	 * @return Power value from the engine in HP, or zero if the vehicle is not powered.
 	 */
-#ifndef WITH_RUST
-	inline uint16_t GetPower() const
-	{
-		/* Power is not added for articulated parts */
-		if (!this->IsArticulatedPart() && HasPowerOnRail(this->GetRailTypes(), GetRailType(this->tile))) {
-			uint16_t power = GetVehicleProperty(this, PROP_TRAIN_POWER, RailVehInfo(this->engine_type)->power);
-			/* Halve power for multiheaded parts */
-			if (this->IsMultiheaded()) power /= 2;
-			return power;
-		}
-
-		return 0;
-	}
-#endif
 
 	/**
 	 * Returns a value if this articulated part is powered.
 	 * @return Power value from the articulated part in HP, or zero if it is not powered.
 	 */
-#ifndef WITH_RUST
-	inline uint16_t GetPoweredPartPower(const Train *head) const
-	{
-		/* For powered wagons the engine defines the type of engine (i.e. railtype) */
-		if (this->GetTrainFlags().Test(VehicleRailFlag::PoweredWagon) && HasPowerOnRail(head->GetRailTypes(), GetRailType(this->tile))) {
-			return RailVehInfo(this->gcache.first_engine)->pow_wag_power;
-		}
-
-		return 0;
-	}
-#endif
 
 	/**
 	 * Allows to know the weight value that this vehicle will use.
 	 * @return Weight value from the engine in tonnes.
 	 */
-#ifndef WITH_RUST
-	inline uint16_t GetWeight() const
-	{
-		uint16_t weight = CargoSpec::Get(this->cargo_type)->WeightOfNUnitsInTrain(this->cargo.StoredCount());
-
-		/* Vehicle weight is not added for articulated parts. */
-		if (!this->IsArticulatedPart()) {
-			weight += GetVehicleProperty(this, PROP_TRAIN_WEIGHT, RailVehInfo(this->engine_type)->weight);
-		}
-
-		/* Powered wagons have extra weight added. */
-		if (this->GetTrainFlags().Test(VehicleRailFlag::PoweredWagon)) {
-			weight += RailVehInfo(this->gcache.first_engine)->pow_wag_weight;
-		}
-
-		return weight;
-	}
-#endif
 
 	/**
 	 * Calculates the weight value that this vehicle will have when fully loaded with its current cargo.
@@ -459,93 +313,41 @@ protected: // These functions should not be called outside acceleration code.
 	 * Allows to know the tractive effort value that this vehicle will use.
 	 * @return Tractive effort value from the engine.
 	 */
-#ifndef WITH_RUST
-	inline uint8_t GetTractiveEffort() const
-	{
-		return GetVehicleProperty(this, PROP_TRAIN_TRACTIVE_EFFORT, RailVehInfo(this->engine_type)->tractive_effort);
-	}
-#endif
 
 	/**
 	 * Gets the area used for calculating air drag.
 	 * @return Area of the engine in m^2.
 	 */
-#ifndef WITH_RUST
-	inline uint8_t GetAirDragArea() const
-	{
-		/* Air drag is higher in tunnels due to the limited cross-section. */
-		return (this->GetTrack() == TRACK_BIT_WORMHOLE && this->vehstatus.Test(VehState::Hidden)) ? 28 : 14;
-	}
-#endif
 
 	/**
 	 * Gets the air drag coefficient of this vehicle.
 	 * @return Air drag value from the engine.
 	 */
-#ifndef WITH_RUST
-	inline uint8_t GetAirDrag() const
-	{
-		return RailVehInfo(this->engine_type)->air_drag;
-	}
-#endif
 
 	/**
 	 * Checks the current acceleration status of this vehicle.
 	 * @return Acceleration status.
 	 */
-#ifndef WITH_RUST
-	inline AccelStatus GetAccelerationStatus() const
-	{
-		return this->vehstatus.Test(VehState::Stopped) || this->GetTrainFlags().Any({VehicleRailFlag::Reversing, VehicleRailFlag::Stuck}) ? AS_BRAKE : AS_ACCEL;
-	}
-#endif
 
 	/**
 	 * Calculates the current speed of this vehicle.
 	 * @return Current speed in km/h-ish.
 	 */
-#ifndef WITH_RUST
-	inline uint16_t GetCurrentSpeed() const
-	{
-		return this->cur_speed;
-	}
-#endif
 
 	/**
 	 * Returns the rolling friction coefficient of this vehicle.
 	 * @return Rolling friction coefficient in [1e-4].
 	 */
-#ifndef WITH_RUST
-	inline uint32_t GetRollingFriction() const
-	{
-		/* Rolling friction for steel on steel is between 0.1% and 0.2%.
-		 * The friction coefficient increases with speed in a way that
-		 * it doubles at 512 km/h, triples at 1024 km/h and so on. */
-		return 15 * (512 + this->GetCurrentSpeed()) / 512;
-	}
-#endif
 
 	/**
 	 * Returns the slope steepness used by this vehicle.
 	 * @return Slope steepness used by the vehicle.
 	 */
-#ifndef WITH_RUST
-	inline uint32_t GetSlopeSteepness() const
-	{
-		return _settings_game.vehicle.train_slope_steepness;
-	}
-#endif
 
 	/**
 	 * Gets the maximum speed allowed by the track for this vehicle.
 	 * @return Maximum speed allowed.
 	 */
-#ifndef WITH_RUST
-	inline uint16_t GetMaxTrackSpeed() const
-	{
-		return GetRailTypeInfo(GetRailType(this->tile))->max_speed;
-	}
-#endif
 
 	/**
 	 * Returns the curve speed modifier of this vehicle.
@@ -560,28 +362,14 @@ protected: // These functions should not be called outside acceleration code.
 	 * Checks if the vehicle is at a tile that can be sloped.
 	 * @return True if the tile can be sloped.
 	 */
-#ifndef WITH_RUST
-	inline bool TileMayHaveSlopedTrack() const
-	{
-		/* Any track that isn't TRACK_BIT_X or TRACK_BIT_Y cannot be sloped. */
-		return this->GetTrack() == TRACK_BIT_X || this->GetTrack() == TRACK_BIT_Y;
-	}
-#endif
 
 	/**
 	 * Trains can always use the faster algorithm because they
 	 * have always the same direction as the track under them.
 	 * @return false
 	 */
-#ifndef WITH_RUST
-	inline bool HasToUseGetSlopePixelZ()
-	{
-		return false;
-	}
-#endif
 };
 
-#ifdef WITH_RUST
 /** Call-scoped scalar serialization staging. No Rust frame spans save/load or
  * reference fixups. Nested handlers restore the prior scope; partial loads
  * commit on unwind, matching direct mutation in the original field descriptors. */
@@ -617,6 +405,5 @@ public:
 	static TrackBits &Track() { return active->track; }
 	static TrainForceProceeding &ForceProceed() { return active->force_proceed; }
 };
-#endif
 
 #endif /* TRAIN_H */

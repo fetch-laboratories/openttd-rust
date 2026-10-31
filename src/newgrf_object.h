@@ -20,9 +20,7 @@
 #include "newgrf_badge_type.h"
 #include "newgrf_class.h"
 #include "newgrf_commons.h"
-#ifdef WITH_RUST
 #include "rust/object_resolver_ffi.h"
-#endif
 
 /** Various object behaviours. */
 enum class ObjectFlag : uint8_t {
@@ -85,11 +83,7 @@ struct ObjectSpec : NewGRFSpecBase<ObjectClassID> {
 	 */
 	bool IsEnabled() const
 	{
-#ifdef WITH_RUST
 		return openttd_rust_object_enabled(&GetRustObjectServices(), this);
-#else
-		return this->views > 0;
-#endif
 	}
 
 	/**
@@ -119,14 +113,7 @@ struct ObjectSpec : NewGRFSpecBase<ObjectClassID> {
 
 /** Object scope resolver. */
 struct ObjectScopeResolver : public ScopeResolver {
-#ifdef WITH_RUST
 	OpenTTDObjectScope context;
-#else
-	struct Object *obj;     ///< The object the callback is ran for.
-	const ObjectSpec *spec; ///< Specification of the object type.
-	TileIndex tile;         ///< The tile related to the object.
-	uint8_t view;             ///< The view of the object.
-#endif
 
 	/**
 	 * Constructor of an object scope resolver.
@@ -137,11 +124,7 @@ struct ObjectScopeResolver : public ScopeResolver {
 	 */
 	ObjectScopeResolver(ResolverObject &ro, Object *obj, const ObjectSpec *spec, TileIndex tile, uint8_t view = 0)
 		: ScopeResolver(ro)
-#ifdef WITH_RUST
 		, context(openttd_rust_object_scope_init(obj, spec, tile.base(), view))
-#else
-		, obj(obj), spec(spec), tile(tile), view(view)
-#endif
 	{
 	}
 
@@ -159,32 +142,12 @@ struct ObjectResolverObject : public ResolverObject {
 
 	ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, uint8_t relative = 0) override
 	{
-#ifdef WITH_RUST
 		return openttd_rust_object_scope(&this->object_scope.context, this, &this->object_scope, scope, relative);
-#else
-		switch (scope) {
-			case VSG_SCOPE_SELF:
-				return &this->object_scope;
-
-			case VSG_SCOPE_PARENT: {
-				TownScopeResolver *tsr = this->GetTown();
-				if (tsr != nullptr) return tsr;
-				[[fallthrough]];
-			}
-
-			default:
-				return ResolverObject::GetScope(scope, relative);
-		}
-#endif
 	}
 
 	GrfSpecFeature GetFeature() const override;
 	uint32_t GetDebugID() const override;
 
-#ifndef WITH_RUST
-private:
-	TownScopeResolver *GetTown();
-#endif
 };
 
 /** Class containing information relating to object classes. */

@@ -11,7 +11,6 @@
 #define BITMAP_TYPE_HPP
 
 
-#ifdef WITH_RUST
 #include "rust/bitmap_ffi.h"
 /**
  * Facade over a Rust-owned bitmap, either allocated for this object or
@@ -35,99 +34,6 @@ public:
 	bool HasTile(TileIndex tile) const { return openttd_rust_bitmap_has(this->bitmap, tile.base(), &GetRustSharedServices()); }
 };
 
-#else
-/** Represents a tile area containing containing individually set tiles.
- * Each tile must be contained within the preallocated area.
- * A std::vector<bool> is used to mark which tiles are contained.
- */
-class BitmapTileArea : public TileArea {
-protected:
-	std::vector<bool> data;
-
-	inline uint Index(uint x, uint y) const { return y * this->w + x; }
-
-	inline uint Index(TileIndex tile) const { return Index(TileX(tile) - TileX(this->tile), TileY(tile) - TileY(this->tile)); }
-
-public:
-	BitmapTileArea()
-	{
-		this->tile = INVALID_TILE;
-		this->w = 0;
-		this->h = 0;
-	}
-
-	BitmapTileArea(const TileArea &ta)
-	{
-		this->tile = ta.tile;
-		this->w = ta.w;
-		this->h = ta.h;
-		this->data.resize(Index(this->w, this->h));
-	}
-
-	/**
-	 * Reset and clear the BitmapTileArea.
-	 */
-	void Reset()
-	{
-		this->tile = INVALID_TILE;
-		this->w = 0;
-		this->h = 0;
-		this->data.clear();
-	}
-
-	/**
-	 * Initialize the BitmapTileArea with the specified Rect.
-	 * @param rect Rect to use.
-	 */
-	void Initialize(const Rect &r)
-	{
-		this->tile = TileXY(r.left, r.top);
-		this->w = r.Width();
-		this->h = r.Height();
-		this->data.clear();
-		this->data.resize(Index(w, h));
-	}
-
-	void Initialize(const TileArea &ta)
-	{
-		this->tile = ta.tile;
-		this->w = ta.w;
-		this->h = ta.h;
-		this->data.clear();
-		this->data.resize(Index(w, h));
-	}
-
-	/**
-	 * Add a tile as part of the tile area.
-	 * @param tile Tile to add.
-	 */
-	inline void SetTile(TileIndex tile)
-	{
-		assert(this->Contains(tile));
-		this->data[Index(tile)] = true;
-	}
-
-	/**
-	 * Clear a tile from the tile area.
-	 * @param tile Tile to clear
-	 */
-	inline void ClrTile(TileIndex tile)
-	{
-		assert(this->Contains(tile));
-		this->data[Index(tile)] = false;
-	}
-
-	/**
-	 * Test if a tile is part of the tile area.
-	 * @param tile Tile to check
-	 */
-	inline bool HasTile(TileIndex tile) const
-	{
-		return this->Contains(tile) && this->data[Index(tile)];
-	}
-};
-
-#endif
 
 /** Iterator to iterate over all tiles belonging to a bitmaptilearea. */
 class BitmapTileIterator : public OrthogonalTileIterator {

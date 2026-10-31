@@ -8,7 +8,6 @@
 /** @file fleet.cpp Fleet owner layouts, CommandCost stack lifetime and reentry checks. */
 #include "../stdafx.h"
 #include "../3rdparty/catch2/catch.hpp"
-#ifdef WITH_RUST
 #include "../group.h"
 #include "../autoreplace_base.h"
 #include "../company_base.h"
@@ -19,9 +18,7 @@
 #include "../rust/command_services.h"
 #include "../table/strings.h"
 #include <map>
-#endif
 #include "../safeguards.h"
-#ifdef WITH_RUST
 TEST_CASE("Fleet - canonical state layouts and independent lifetimes")
 {
 	ABI_LAYOUT_CHECK;
@@ -144,4 +141,3 @@ TEST_CASE("Fleet - pending drain matches ordered map iteration under reentry")
 	CHECK(_fleet_drain_company == 11);
 	openttd_rust_fleet_pending_clear();
 }
-#endif
