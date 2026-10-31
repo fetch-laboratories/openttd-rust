@@ -43,6 +43,18 @@ class SeasonalSnow(unittest.TestCase):
                 with self.subTest(version=version), self.assertRaises(RuntimeError):
                     seasonal_observations(broken, ("first",), version)
 
+    def test_reset_uses_live_static_height_without_a_loaded_file(self) -> None:
+        valid = observations(8)
+        reset = []
+        for line in valid:
+            fields = line.split()
+            fields[2] = "reset"
+            fields[6:11] = ["false", "19", "19", "19", "0"]
+            reset.append(" ".join(fields))
+        self.assertEqual(seasonal_observations(reset, ("reset",), 8), reset)
+        with self.assertRaises(RuntimeError):
+            seasonal_observations(valid, ("reset",), 8)
+
 
 if __name__ == "__main__":
     unittest.main()

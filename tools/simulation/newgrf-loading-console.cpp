@@ -325,8 +325,8 @@ static bool LoadingScenario(std::span<std::string_view> args)
 	_settings_game.vehicle.dynamic_engines = false;
 	ReloadNewGRFData();
 	SeasonalSnow("first", true);
-	ClearSnowLine();
-	SeasonalSnow("clear", false);
+	ResetNewGRFData();
+	SeasonalSnow("reset", false);
 	ReloadNewGRFData();
 	SeasonalSnow("reconstructed", true);
 	Inspect(false);

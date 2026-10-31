@@ -352,7 +352,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     )
     for role, run in captures.items():
         seasonal_observations(
-            run["log"], ("first", "clear", "reconstructed", "reload"), 8
+            run["log"], ("first", "reset", "reconstructed", "reload"), 8
         )
         if (
             run["exit"]
@@ -404,10 +404,10 @@ def seasonal_observations(
         fields = line.split()
         if len(fields) != 17 or fields[2:6] != [phase, str(year), str(month), str(day)]:
             raise RuntimeError("seasonal snow observation key or payload malformed")
-        if fields[6] != str(phase != "clear").lower():
+        if fields[6] != str(phase != "reset").lower():
             raise RuntimeError("seasonal snow install/reset state differs")
         value, highest, lowest, grf_version, limit, static, *rng = map(int, fields[7:])
-        if grf_version != version:
+        if grf_version != (0 if phase == "reset" else version):
             raise RuntimeError("seasonal snow fixture version missing")
 
         table = [
@@ -417,7 +417,7 @@ def seasonal_observations(
         ]
         expected = (
             (static, static, static)
-            if phase == "clear"
+            if phase == "reset"
             else (
                 seasonal_scaled((month * 37 + day * 11) % 256, version, limit),
                 max(table),
@@ -521,7 +521,7 @@ def check(scenario, run, mode, role, result):
     snow_phases = (
         ("inspect",)
         if scenario["newgrf_loading"] == "reload"
-        else ("first", "clear", "reconstructed", "reload")
+        else ("first", "reset", "reconstructed", "reload")
     )
     snow = seasonal_observations(
         run["log"], snow_phases, 7 if scenario["newgrf_loading"] == "v1" else 8
@@ -532,7 +532,7 @@ def check(scenario, run, mode, role, result):
     if role == "reference":
         TOWN_NAMES[key] = names
     elif TOWN_NAMES.pop(key, None) != names:
-        raise RuntimeError("file-loaded GRF town names differ")
+        raise RuntimeError("file-loaded GRF town names or seasonal snow differ")
 
 
 def install(scenario, run_dir):

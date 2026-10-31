@@ -4,6 +4,8 @@
 #define RUST_SNOW_LINE_FFI_H
 #include "../landscape.h"
 #include "service_defaults.hpp"
+#include <type_traits>
+static_assert(std::is_standard_layout_v<SnowLine> && std::is_trivially_copyable_v<SnowLine>);
 struct OpenTTDSnowLineSupport {
 	const uint8_t *height;
 	void (*destroy)(SnowLine *) noexcept OPENTTD_SERVICE_DEFAULT(destroy);

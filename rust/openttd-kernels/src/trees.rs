@@ -1792,7 +1792,7 @@ mod tests {
     }
 
     #[test]
-    fn arctic_loop_reads_height_and_snow_line_once() {
+    fn arctic_loop_uses_configured_snow_line() {
         reset(World {
             tree: TreeObservation {
                 ground: GROUND_SNOW_DESERT,

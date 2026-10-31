@@ -46,16 +46,18 @@ TEST_CASE("Rust snow-line owner preserves native allocation, dates and serialize
 	AutoRestoreBackup height(_settings_game.game_creation.snow_line_height, uint8_t{7});
 	AutoRestoreBackup date(TimerGameCalendar::date, TimerGameCalendar::date);
 	ClearSnowLine();
+	TimerGameCalendar::date = TimerGameCalendar::Date{-1};
 	for (uint8_t value : {0, 255, 19}) {
 		_settings_game.game_creation.snow_line_height = value;
 		CHECK_FALSE(IsSnowLineSet());
 		CHECK(GetSnowLine() == value); CHECK(openttd_test_snow_line_highest(&GetRustSharedServices()) == value); CHECK(LowestSnowLine() == value);
 	}
 	auto table = std::make_unique<SnowLine>();
-	for (uint month = 0; month < 12; month++) for (uint day = 0; day < 32; day++) table->table[month][day] = month * 37 + day * 11;
+	for (uint month = 0; month < 12; month++) for (uint day = 0; day < 32; day++) table->table[month][day] = static_cast<uint8_t>(month * 37 + day * 11);
 	table->highest_value = 3; table->lowest_value = 249;
 	std::thread install([&] { SetSnowLine(std::move(table)); }); install.join();
 	CHECK(table == nullptr); CHECK(IsSnowLineSet());
+	_settings_game.game_creation.snow_line_height = 255;
 	std::thread read([&] {
 		CHECK(openttd_test_snow_line_highest(&GetRustSharedServices()) == 3); CHECK(LowestSnowLine() == 249);
 		for (int year : {1999, 2000, 2001, 2100}) {
@@ -68,6 +70,7 @@ TEST_CASE("Rust snow-line owner preserves native allocation, dates and serialize
 			}
 		}
 	}); read.join();
+	_settings_game.game_creation.snow_line_height = 19;
 	snow_line_deleted = 0;
 	auto support = GetRustSharedServices().snow_line_support;
 	support.destroy = [](SnowLine *old) noexcept {
