@@ -356,9 +356,13 @@ impl TileTypeAccess {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn available(&self, tile: u32) -> Option<()> {
-        (self.allocation.count != 0
-            && (!self.assertions() || self.native_assert.is_some() || tile < self.allocation.count))
-            .then_some(())
+        if self.allocation.count == 0 {
+            return None;
+        }
+        if tile < self.allocation.count {
+            return Some(());
+        }
+        (!self.assertions() || self.native_assert.is_some()).then_some(())
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]
@@ -389,25 +393,34 @@ impl TileTypeAccess {
     #[inline(always)]
     pub(crate) fn check(&self, condition: bool) -> Option<()> {
         if self.assertions() && !condition {
-            (self.native_assert?)(false);
+            return self.failed_check();
         }
+        Some(())
+    }
+    // Returning fixture handlers resume after the exact failed source assertion.
+    #[cold]
+    #[inline(never)]
+    fn failed_check(&self) -> Option<()> {
+        (self.native_assert?)(false);
         Some(())
     }
     /// The explicit bounds assertion in `GetTileType` and `TileHeight`.
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn require_range(&self, tile: u32) -> Option<()> {
-        self.available(tile)?;
+        if self.allocation.count == 0 {
+            return None;
+        }
         self.check(tile < self.count())
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn require_type(&self, tile: u32, kind: u8) -> Option<()> {
-        self.available(tile)?;
         if self.assertions() {
-            self.check(crate::tile_map::get_tile_type(self, tile)? == kind)?;
+            self.check(crate::tile_map::get_tile_type(self, tile)? == kind)
+        } else {
+            self.available(tile)
         }
-        Some(())
     }
     /// Field-sized stores under the same serialized allocation contract as reads.
     pub(crate) fn set_m3(&self, tile: u32, value: u8) -> Option<()> {
