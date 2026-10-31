@@ -25,7 +25,6 @@ use crate::track_func::{
     trackdir_bits_to_track_bits, trackdir_crosses_trackdirs, trackdir_to_exitdir,
     trackdir_to_trackdir_bits, tracks_overlap,
 };
-use crate::train_reservation::Follow;
 use crate::transport_type::{
     TRANSPORT_RAIL as RAIL, TRANSPORT_ROAD as ROAD, TRANSPORT_WATER as WATER,
 };
@@ -44,9 +43,9 @@ pub(crate) struct RoadContext {
     pub compatible: u64,
 }
 
-/// The complete follower state; C++ facades alias this stack record in place.
-#[repr(C)]
+/// The complete `CFollowTrackT` follower, held on its caller's stack across follows.
 #[derive(Clone, Copy)]
+#[allow(clippy::struct_excessive_bools)] // `CFollowTrackT`'s flags and template parameter.
 pub struct State {
     pub veh: *mut OpenTTDVehicle,
     pub railtypes: u64,
@@ -63,7 +62,6 @@ pub struct State {
     pub err: u8,
     pub mode: u8,
     pub allow90: bool,
-    pub masking: bool,
 }
 impl State {
     pub(crate) fn new(
@@ -73,7 +71,6 @@ impl State {
         owner: u8,
         railtypes: u64,
         allow90: bool,
-        masking: bool,
     ) -> Self {
         let m = crate::movement::table(s);
         m.native_assert_call(mode != ROAD || v.is_some());
@@ -94,7 +91,6 @@ impl State {
             err: EC_NONE,
             mode,
             allow90,
-            masking,
         }
     }
     pub(crate) fn vehicle(
@@ -103,7 +99,6 @@ impl State {
         v: Option<VehicleRef>,
         types: u64,
         allow90: bool,
-        masking: bool,
     ) -> Self {
         let m = crate::movement::table(s);
         m.native_assert_call(
@@ -120,7 +115,16 @@ impl State {
         } else {
             types
         };
-        Self::new(s, mode, v, owner, types, allow90, masking)
+        Self::new(s, mode, v, owner, types, allow90)
+    }
+    /// `CFollowTrackRail(v, types)` for a train, else `CFollowTrackRail(owner, types)`.
+    pub(crate) fn rail(s: &Services, v: crate::train::Handle, owner: u8, types: u64) -> Self {
+        let vehicle = std::ptr::NonNull::new(v.shell.cast()).map(VehicleRef);
+        if vehicle.is_some() {
+            Self::vehicle(s, RAIL, vehicle, types, true)
+        } else {
+            Self::new(s, RAIL, None, owner, types, true)
+        }
     }
     fn vehicle_ref(&self) -> VehicleRef {
         VehicleRef(std::ptr::NonNull::new(self.veh).expect("live vehicle"))
@@ -250,8 +254,9 @@ impl State {
                     self.new_tile.0 = (w.shared.other_tunnel_end)(self.old_tile.0);
                 } else {
                     self.is_bridge = true;
-                    self.new_tile.0 =
-                        (crate::movement::table(w.shared).other_bridge_end)(self.old_tile.0);
+                    self.new_tile.0 = (crate::movement::table(w.shared)
+                        .tunnel_bridge()
+                        .other_bridge_end)(self.old_tile.0);
                 }
                 self.tiles_skipped = crate::tunnelbridge::get_tunnel_bridge_length(
                     w.dimensions,
@@ -417,32 +422,6 @@ impl State {
         }
         true
     }
-    pub(crate) fn output(&self) -> Follow {
-        Follow {
-            old_tile: self.old_tile.0,
-            new_tile: self.new_tile.0,
-            skipped: self.tiles_skipped,
-            dirs: self.new_td_bits,
-            old_td: self.old_td,
-            exitdir: self.exitdir,
-            tunnel: u8::from(self.is_tunnel),
-            bridge: u8::from(self.is_bridge),
-            station: u8::from(self.is_station),
-            error: self.err,
-        }
-    }
-    pub(crate) fn restore(&mut self, f: Follow) {
-        self.old_tile.0 = f.old_tile;
-        self.new_tile.0 = f.new_tile;
-        self.tiles_skipped = f.skipped;
-        self.new_td_bits = f.dirs;
-        self.old_td = f.old_td;
-        self.exitdir = f.exitdir;
-        self.is_tunnel = f.tunnel != 0;
-        self.is_bridge = f.bridge != 0;
-        self.is_station = f.station != 0;
-        self.err = f.error;
-    }
 }
 /// Virtual `BaseStation::GetPlatformLength(tile, dir)`: waypoints return one.
 pub(crate) fn platform_length(w: &World<'_>, tile: u32, dir: u8) -> u32 {
@@ -484,7 +463,7 @@ pub(crate) fn speed_limit_with_road(
     let m = crate::movement::table(s);
     let mut speed = i32::MAX;
     if mode != WATER && w.kind(tile) == crate::tile_type::MP_TUNNELBRIDGE && w.bridge(tile) {
-        speed = i32::from((m.bridge_type_speed)(w.bridge_type(tile)));
+        speed = i32::from((m.tunnel_bridge().speed)(w.bridge_type(tile)));
         if mode == ROAD {
             speed *= 2;
         }
@@ -508,24 +487,25 @@ pub(crate) fn speed_limit_with_road(
 /// The caller invokes it only after native Follow succeeds. All accesses are
 /// call-local scalars and typed services; no world borrow spans a service.
 #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-pub(crate) fn mask_reserved_tracks(pbs: Pbs<'_>, ft: &mut Follow) -> bool {
-    if ft.station != 0 {
+pub(crate) fn mask_reserved_tracks(pbs: Pbs<'_>, ft: &mut State) -> bool {
+    if ft.is_station {
         let diff = pbs.map().offs_by_diag_dir(ft.exitdir);
         let mut tile = ft
             .new_tile
-            .wrapping_sub(diff.wrapping_mul(ft.skipped as u32));
-        while tile != ft.new_tile {
+            .0
+            .wrapping_sub(diff.wrapping_mul(ft.tiles_skipped as u32));
+        while tile != ft.new_tile.0 {
             if World::new(pbs.shared()).station_reserved(tile) {
-                ft.dirs = 0;
-                ft.error = EC_RESERVED;
+                ft.new_td_bits = 0;
+                ft.err = EC_RESERVED;
                 return false;
             }
             tile = tile.wrapping_add(diff);
         }
     }
-    let reserved = pbs.reserved(ft.new_tile);
-    ft.dirs &= !track_bits_to_trackdir_bits(reserved);
-    let mut tracks = trackdir_bits_to_track_bits(ft.dirs);
+    let reserved = pbs.reserved(ft.new_tile.0);
+    ft.new_td_bits &= !track_bits_to_trackdir_bits(reserved);
+    let mut tracks = trackdir_bits_to_track_bits(ft.new_td_bits);
     while tracks != 0 {
         let track = tracks.trailing_zeros() as u8;
         tracks &= tracks.wrapping_sub(1);
@@ -533,11 +513,11 @@ pub(crate) fn mask_reserved_tracks(pbs: Pbs<'_>, ft: &mut Follow) -> bool {
             reserved
                 | track_to_track_bits(track, |ok| crate::movement::native_assert(pbs.shared(), ok)),
         ) {
-            ft.dirs &= !track_to_trackdir_bits(track);
+            ft.new_td_bits &= !track_to_trackdir_bits(track);
         }
     }
-    if ft.dirs == 0 {
-        ft.error = EC_RESERVED;
+    if ft.new_td_bits == 0 {
+        ft.err = EC_RESERVED;
         return false;
     }
     true
@@ -574,40 +554,8 @@ pub(crate) fn platform_length_full(
     }
     len.wrapping_sub(1)
 }
-crate::abi::layouts! {
-    fn abi_layout;
-    "OpenTTDFollowTrackState" ["probe"] => crate::follow_track::State { veh, railtypes, old_tile, new_tile, tiles_skipped, new_td_bits, veh_owner, old_td, exitdir, is_tunnel, is_bridge, is_station, err, mode, allow90, masking, };
-}
-
-pub(crate) fn rail(
-    s: &Services,
-    v: crate::train::Handle,
-    owner: u8,
-    types: u64,
-    out: &mut Follow,
-    tile: u32,
-    td: u8,
-) -> bool {
-    let vehicle = std::ptr::NonNull::new(v.shell.cast()).map(VehicleRef);
-    let mut state = if vehicle.is_some() {
-        State::vehicle(s, RAIL, vehicle, types, true, false)
-    } else {
-        State::new(s, RAIL, None, owner, types, true, false)
-    };
-    state.restore(*out);
-    let result = state.follow(s, tile, td);
-    *out = state.output();
-    result
-}
 pub(crate) fn water(s: &Services, tile: u32, td: u8) -> (State, bool) {
-    let mut state = State::vehicle(
-        s,
-        WATER,
-        None,
-        crate::rail_type::INVALID_RAILTYPES,
-        true,
-        false,
-    );
+    let mut state = State::vehicle(s, WATER, None, crate::rail_type::INVALID_RAILTYPES, true);
     let ok = state.follow(s, tile, td);
     (state, ok)
 }

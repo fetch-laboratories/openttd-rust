@@ -149,7 +149,6 @@ static void RailDebug(void *context, uint8_t kind, const uint32_t *stats, uint32
 }
 static const OpenTTDRailLeaves _rail_leaves{
 	.train = RailTrain, .tile = RailTile,
-	.compatible_station = OpenTTDMapQuery<uint8_t, RustCompatibleStationTiles, uint32_t, uint32_t>,
 	.closest_station = RailClosestStation,
 	.output = RailOutput, .debug = RailDebug,
 };

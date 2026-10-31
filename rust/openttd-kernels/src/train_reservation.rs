@@ -30,6 +30,7 @@ use crate::track_func::{
 };
 use crate::track_type::{TRACK_BIT_DEPOT as DEPOT, TRACK_BIT_WORMHOLE as WORMHOLE};
 
+use crate::follow_track::State as Follower;
 use crate::train::Handle;
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -72,36 +73,6 @@ pub struct TrainReservationCheckNextRead {
     pub destination: u16,
     pub order: u8,
     pub num_orders: u8,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Follow {
-    pub old_tile: u32,
-    pub new_tile: u32,
-    pub skipped: i32,
-    pub dirs: u16,
-    pub old_td: u8,
-    pub exitdir: u8,
-    pub tunnel: u8,
-    pub bridge: u8,
-    pub station: u8,
-    pub error: u8,
-}
-impl Default for Follow {
-    fn default() -> Self {
-        Self {
-            old_tile: INVALID_TILE,
-            new_tile: INVALID_TILE,
-            skipped: 0,
-            dirs: 0,
-            old_td: 0xff,
-            exitdir: 0xff,
-            tunnel: 0,
-            bridge: 0,
-            station: 0,
-            error: 0,
-        }
-    }
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -372,8 +343,8 @@ impl Game<'_> {
         (self.leaves.safe_track)(id, tile, td, u8::from(override_types)) != 0
     }
 
-    fn follow(&self, id: Handle, types: u64, ft: &mut Follow, tile: u32, td: u8) -> bool {
-        crate::follow_track::rail(unsafe { &*self.leaves.shared }, id, 0, types, ft, tile, td)
+    fn follower(&self, id: Handle, types: u64) -> Follower {
+        Follower::rail(self.shared(), id, 0, types)
     }
     fn origin(&self, id: Handle, other: bool) -> Pbs {
         self.pbs().follow_train(id, other, Handle::NONE)
@@ -441,8 +412,14 @@ fn clear(g: &Game, id: Handle, tile: u32, td: u8) {
         g.unreserve(tile, td);
     }
 }
+#[allow(clippy::nonminimal_bool)] // `FreeTrainTrackReservation`'s condition as written.
 fn free(g: &Game, id: Handle) {
     crate::witness::hit(crate::witness::TRAIN_FREE_PATH);
+    if g.pbs().0.assertions {
+        // SAFETY: The canonical train services remain live for this entry.
+        let train = unsafe { &*g.pbs().0.train };
+        crate::movement::native_assert(g.shared(), (train.read_front)(id) != 0);
+    }
     let v = g.read_free(id);
     let mut tile = v.tile;
     let mut td = g.td(id);
@@ -473,11 +450,12 @@ fn free(g: &Game, id: Handle) {
         return;
     }
     let types = (g.leaves.all_compat)(g.context, id);
-    let mut ft = Follow::default();
-    while g.follow(id, types, &mut ft, tile, td) {
-        tile = ft.new_tile;
-        let bits = ft.dirs & dirs(g.reserved(tile));
+    let mut ft = g.follower(id, types);
+    while ft.follow(g.shared(), tile, td) {
+        tile = ft.new_tile.0;
+        let bits = ft.new_td_bits & dirs(g.reserved(tile));
         td = first(bits);
+        crate::movement::native_assert(g.shared(), single(bits));
         if td == 0xff {
             break;
         }
@@ -503,10 +481,10 @@ fn free(g: &Game, id: Handle) {
             }
         }
         if free_tile
-            || (!(ft.station != 0
-                && (g.leaves.station)(g.context, id, ft.new_tile) as u16 == station)
-                && ft.tunnel == 0
-                && ft.bridge == 0)
+            || (!(ft.is_station
+                && (g.leaves.station)(g.context, id, ft.new_tile.0) as u16 == station)
+                && !ft.is_tunnel
+                && !ft.is_bridge)
         {
             clear(g, id, tile, td);
         }
@@ -521,48 +499,50 @@ fn extend(g: &Game, id: Handle, new_tracks: &mut u8, enterdir: &mut u8) -> Pbs {
 /// `ExtendTrainReservation` after its `FollowTrainReservation`.
 fn extend_from(g: &Game, id: Handle, origin: Pbs, new_tracks: &mut u8, enterdir: &mut u8) -> Pbs {
     let types = id.get_compatible_railtypes();
-    let mut ft = Follow::default();
+    let mut ft = g.follower(id, types);
     let mut red = Vec::new();
     let mut tile = origin.tile;
     let mut td = origin.td;
-    while g.follow(id, types, &mut ft, tile, td) {
-        if single(ft.dirs) && ((g.leaves.blocking)(g.context, id, ft.new_tile, first(ft.dirs)) != 0)
+    while ft.follow(g.shared(), tile, td) {
+        if single(ft.new_td_bits)
+            && ((g.leaves.blocking)(g.context, id, ft.new_tile.0, first(ft.new_td_bits)) != 0)
         {
             break;
         }
-        if (g.leaves.rail90)(g.context, id, ft.old_tile, ft.new_tile) != 0 {
-            ft.dirs &= !((g.leaves.cross_dirs)(g.context, id, ft.old_td) as u16);
-            if ft.dirs == 0 {
+        if (g.leaves.rail90)(g.context, id, ft.old_tile.0, ft.new_tile.0) != 0 {
+            ft.new_td_bits &= !((g.leaves.cross_dirs)(g.context, id, ft.old_td) as u16);
+            if ft.new_td_bits == 0 {
                 break;
             }
         }
-        let target = ft.station != 0
-            || ((is_tile_type(g.shared(), ft.new_tile, MP_RAILWAY))
-                && ((g.leaves.is_plain)(g.context, id, ft.new_tile) == 0));
-        if target || !single(ft.dirs) {
+        let target = ft.is_station
+            || ((is_tile_type(g.shared(), ft.new_tile.0, MP_RAILWAY))
+                && ((g.leaves.is_plain)(g.context, id, ft.new_tile.0) == 0));
+        if target || !single(ft.new_td_bits) {
             if g.has_reserved(
-                ft.new_tile,
+                ft.new_tile.0,
                 tracks((g.leaves.reach_dirs)(g.context, id, ft.old_td) as u16),
             ) {
                 break;
             }
-            if ft.skipped != 0 {
+            if ft.tiles_skipped != 0 {
                 let off = (g.leaves.tile_offset)(g.context, id, ft.exitdir) as i32;
-                ft.new_tile = ft
+                ft.new_tile.0 = ft
                     .new_tile
-                    .wrapping_sub(off.wrapping_mul(ft.skipped) as u32);
+                    .0
+                    .wrapping_sub(off.wrapping_mul(ft.tiles_skipped) as u32);
             }
-            *new_tracks = tracks(ft.dirs);
+            *new_tracks = tracks(ft.new_td_bits);
             *enterdir = ft.exitdir;
             return Pbs {
-                tile: ft.new_tile,
+                tile: ft.new_tile.0,
                 td: ft.old_td,
                 okay: 0,
                 other: Handle::NONE,
             };
         }
-        tile = ft.new_tile;
-        td = first(ft.dirs);
+        tile = ft.new_tile.0;
+        td = first(ft.new_td_bits);
         let rev = td ^ 8;
         // SAFETY: The entry keeps the native train live; no owner borrow spans the callback.
         if g.safe(id, tile, td) {
@@ -596,9 +576,9 @@ fn extend_from(g: &Game, id: Handle, origin: Pbs, new_tracks: &mut u8, enterdir:
             (g.leaves.mark_tile)(g.context, id, tile);
         }
     }
-    if ft.error == 1 || ft.error == 4 {
+    if ft.err == 1 || ft.err == 4 {
         return Pbs {
-            tile: ft.old_tile,
+            tile: ft.old_tile.0,
             td: ft.old_td,
             okay: 1,
             other: Handle::NONE,
@@ -607,17 +587,19 @@ fn extend_from(g: &Game, id: Handle, origin: Pbs, new_tracks: &mut u8, enterdir:
     crate::witness::hit(crate::witness::TRAIN_EXTENSION_FAIL);
     tile = origin.tile;
     td = origin.td;
-    let stopped = ft.old_tile;
+    let stopped = ft.old_tile.0;
     let stopped_td = ft.old_td;
     while tile != stopped || td != stopped_td {
-        if !g.follow(id, types, &mut ft, tile, td) {
+        if !ft.follow(g.shared(), tile, td) {
             break;
         }
-        if (g.leaves.rail90)(g.context, id, ft.old_tile, ft.new_tile) != 0 {
-            ft.dirs &= !((g.leaves.cross_dirs)(g.context, id, ft.old_td) as u16);
+        if (g.leaves.rail90)(g.context, id, ft.old_tile.0, ft.new_tile.0) != 0 {
+            ft.new_td_bits &= !((g.leaves.cross_dirs)(g.context, id, ft.old_td) as u16);
+            crate::movement::native_assert(g.shared(), ft.new_td_bits != 0);
         }
-        tile = ft.new_tile;
-        td = first(ft.dirs);
+        crate::movement::native_assert(g.shared(), single(ft.new_td_bits));
+        tile = ft.new_tile.0;
+        td = first(ft.new_td_bits);
         crate::witness::hit(crate::witness::TRAIN_EXTENSION_ROLLBACK);
         g.unreserve(tile, td);
     }
@@ -991,19 +973,19 @@ fn check_next(g: &Game, id: Handle) {
     {
         return;
     }
-    let mut ft = Follow::default();
-    if !g.follow(id, id.get_compatible_railtypes(), &mut ft, tile, td) {
+    let mut ft = g.follower(id, id.get_compatible_railtypes());
+    if !ft.follow(g.shared(), tile, td) {
         return;
     }
-    if !g.has_reserved(ft.new_tile, tracks(ft.dirs))
-        && single(ft.dirs)
-        && ((g.leaves.has_pbs)(g.context, id, ft.new_tile, first(ft.dirs)) != 0)
+    if !g.has_reserved(ft.new_tile.0, tracks(ft.new_td_bits))
+        && single(ft.new_td_bits)
+        && ((g.leaves.has_pbs)(g.context, id, ft.new_tile.0, first(ft.new_td_bits)) != 0)
     {
-        let mut available = tracks(ft.dirs);
-        if (g.leaves.rail90)(g.context, id, ft.old_tile, ft.new_tile) != 0 {
+        let mut available = tracks(ft.new_td_bits);
+        if (g.leaves.rail90)(g.context, id, ft.old_tile.0, ft.new_tile.0) != 0 {
             available &= !((g.leaves.cross_tracks)(g.context, id, ft.old_td & 7) as u8);
         }
-        choose(g, id, ft.new_tile, ft.exitdir, available, false, false);
+        choose(g, id, ft.new_tile.0, ft.exitdir, available, false, false);
     }
 }
 
@@ -1201,18 +1183,6 @@ crate::abi::layouts! {
         destination,
         order,
         num_orders,
-    };
-    "OpenTTDTrainReservationFollow" ["probe"] => Follow {
-        old_tile,
-        new_tile,
-        skipped,
-        dirs,
-        old_td,
-        exitdir,
-        tunnel,
-        bridge,
-        station,
-        error,
     };
     "OpenTTDTrainReservationPbs" ["probe"] => Pbs {
         tile,
@@ -1473,11 +1443,9 @@ pub(crate) mod tests {
             rail_map: unused(),
             train: unused(),
             vehicle: unused(),
+            tunnel_bridge: unused(),
             road_compatible: unused(),
             road_type_speed: unused(),
-            bridge_type_speed: unused(),
-            other_bridge_end: unused(),
-            order_speed: unused(),
             road_kind: unused(),
             road_vehicle: unused(),
             resolve: unused(),
@@ -1691,9 +1659,6 @@ pub(crate) mod tests {
     extern "C" fn every_type(_: u64) -> u64 {
         1
     }
-    extern "C" fn rail_type(_: u32) -> crate::services::RailType {
-        crate::services::RailType(0)
-    }
     extern "C" fn same_types(_: u8, _: u8, _: bool) -> bool {
         false
     }
@@ -1847,8 +1812,6 @@ pub(crate) mod tests {
             set_wormhole: unused(),
             try_track,
             unreserve_track,
-            station_reserved: unused(),
-            compatible_station: unused(),
             show_reservation: no_show,
             assert_platform: unused(),
             station: unused(),
@@ -1859,7 +1822,6 @@ pub(crate) mod tests {
             handle: unused(),
             all_compatible: every_type,
             compatible: unused(),
-            tile_rail_type: rail_type,
             rail90: same_types,
             blocking: no_signal,
             has_pbs: no_signal,

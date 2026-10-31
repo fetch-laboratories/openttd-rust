@@ -41,15 +41,10 @@ inline OpenTTDRailTile Tile(uint32_t tile, uint8_t td) noexcept
 	info.signal_type = 4; info.signal_green = 1;
 	return info;
 }
-inline OpenTTDFollowTrackState Follow(uint32_t tile, uint8_t td)
+inline OpenTTDTestFollow Follow(uint32_t tile, uint8_t td)
 {
-	OpenTTDFollowTrackState ft{};
-	const auto &world = FollowerFixture::active->shared;
-	openttd_test_follower_init(&ft, &world, TRANSPORT_RAIL, nullptr, 0, 1, true, false, false);
-	if (!openttd_test_follower_follow(&world, &ft, tile, td)) ft.new_td_bits = TRACKDIR_BIT_NONE;
-	return ft;
+	return OpenTTDTestFollowOnce(FollowerFixture::active->shared, TRANSPORT_RAIL, nullptr, 0, 1, false, tile, td);
 }
-inline uint8_t Station(uint32_t, uint32_t) noexcept { return 0; }
 inline uint32_t Platform(uint32_t, uint8_t) noexcept { return 0; }
 inline uint32_t Closest(void *, uint8_t) noexcept { return start - goal; }
 inline uint8_t Write(uint32_t tile, uint8_t td, uint8_t op) noexcept
@@ -100,7 +95,7 @@ inline OpenTTDRailStep Run(uint32_t limit, uint32_t curve = 29, bool cache = fal
 	input.settings.slope = 50; input.settings.lookahead = !cache;
 	input.map_x = 128; input.reserve = reserve;
 	input.kind = kind;
-	const OpenTTDRailLeaves leaves{.train = Train, .tile = Tile, .compatible_station = Station, .closest_station = Closest, .output = Output, .debug = Debug};
+	const OpenTTDRailLeaves leaves{.train = Train, .tile = Tile, .closest_station = Closest, .output = Output, .debug = Debug};
 	std::unique_ptr<OpenTTDRailYapf, decltype(&openttd_rust_rail_destroy)> owner{openttd_rust_rail_new(&input, &leaves), openttd_rust_rail_destroy};
 	return openttd_rust_rail_step(owner.get());
 }
