@@ -39,22 +39,26 @@ static bool IndustryPolicy(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
 	if (args[1] == "inspect") { _interactive_random.SetSeed(0x60100002); IndustryPolicyObserve(); fmt::print(stderr, "INDUSTRY-POLICY complete true\n"); return true; }
-	Industry *ind = nullptr;
-	for (Industry *candidate : Industry::Iterate()) if (!candidate->produced.empty() && IsValidCargoType(candidate->produced[0].cargo) && GetIndustrySpec(candidate->type)->life_type.Test(IndustryLifeType::Organic)) { ind = candidate; break; }
 	Vehicle *vehicle = nullptr;
 	for (Vehicle *v : Vehicle::Iterate()) if (v->type == VEH_ROAD && v->GetNumOrders() != 0) { vehicle = v; break; }
-	IndustryPolicyRequire(ind != nullptr && vehicle != nullptr);
-	Station *station = *Station::Iterate().begin();
+	IndustryPolicyRequire(vehicle != nullptr);
 	Backup<CompanyID> local(_local_company);
-	Backup<CargoType> cargo(vehicle->cargo_type, ind->produced[0].cargo);
+	Backup<CargoType> cargo(vehicle->cargo_type);
 	Backup<Order> order(*vehicle->GetOrder(0));
-	vehicle->GetOrder(0)->MakeGoToStation(station->index);
 	_settings_game.economy.type = ET_SMOOTH;
-	ind->ctlflags.Set(IndustryControlFlag::NoClosure);
 	_random.SetSeed(0x601); _interactive_random.SetSeed(0x60100001);
 	for (uint outcome = 0; outcome < 3; ++outcome) {
 		local.Change(outcome == 2 ? vehicle->owner : CompanyID{OWNER_NONE});
-		ind->stations_near.clear(); if (outcome != 0) ind->stations_near.insert(station);
+		Industry *ind = nullptr;
+		for (Industry *candidate : Industry::Iterate()) {
+			const auto *spec = GetIndustrySpec(candidate->type);
+			if (candidate->produced.empty() || !IsValidCargoType(candidate->produced[0].cargo) || candidate->produced[0].cargo == GetCargoTypeByLabel(CT_PASSENGERS) || !spec->IsRawIndustry() || spec->UsesOriginalEconomy()) continue;
+			if (candidate->stations_near.empty() == (outcome == 0)) { ind = candidate; break; }
+		}
+		IndustryPolicyRequire(ind != nullptr);
+		ind->ctlflags.Set(IndustryControlFlag::NoClosure);
+		vehicle->cargo_type = ind->produced[0].cargo;
+		if (outcome != 0) vehicle->GetOrder(0)->MakeGoToStation((*ind->stations_near.begin())->index);
 		DeleteIndustryNews(ind->index);
 		bool found = false;
 		for (uint attempt = 0; attempt < 512 && !found; ++attempt) {
@@ -74,11 +78,12 @@ static bool IndustryPolicy(std::span<std::string_view> args)
 		fmt::print(stderr, "INDUSTRY-POLICY servicing {} true\n", outcome);
 	}
 	for (uint n = 0; n < 16; ++n) {
-		_economy.industry_daily_change_counter = 2 << 16;
 #ifdef WITH_RUST
+		_industry_builder.daily_counter = 2 << 16;
 		const OpenTTDClockIndustry clock{_industry_builder.owner.get(), &GetIndustryRustServices()};
 		openttd_rust_clock_industry_daily(&clock, nullptr);
 #else
+		_economy.industry_daily_change_counter = 2 << 16;
 		IndustryPolicyDaily();
 #endif
 	}
