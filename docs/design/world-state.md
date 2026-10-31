@@ -44,6 +44,19 @@ The tile-type allocation/access descriptor has canonical base/extended pointers 
 
 In `tile_loop.rs`, handlers may mutate tiles and pools, run landscape, road and crash commands and queue script events (`InsertEvent`), but cannot reset, load, report progress or run a script VM. They do not change map dimensions, climate, tree placement, tick counter, editor mode, road-rebuild or ambient settings; `_misc_grf_features` changes only on reset and GRF `ActionD` loading. A batch may read these settings, including the ambient feature gate, once and retain descriptor metadata across dispatch. Ambient callbacks retain their RNG position; the tree loop reads fields after them at source observation points. Threaded and arbitrary NewGRF corpus limits remain open in #156.
 
+#565's first maintenance batch extends the descriptor to standalone movement
+track-status and pixel-Z calls (including outside-map terrain), and water-ground
+restoration, flooding, tile-loop and neighbour entries, each through
+`map_func::World`. Cached road-controller entries keep one `World` per entry. Pixel location, pixel slope,
+maximum pixel height and normal-road status-tail callbacks are removed; the
+header-named terrain helpers load canonical corner heights at each observation.
+The native assertion service retains failed-precondition behavior for the
+converted road and pixel helpers, without calling the native accessor. Other
+helpers keep their existing fallbacks until their conversion; callbacks required
+by other production consumers remain. Map allocation and native inline accessors remain
+native. Train, ship, aircraft, YAPF and water-region leaves beyond these shared
+movement calls remain for later #565 batches; #560 owns the complete follower.
+
 ## Transferring shared storage
 
 Storage ports move every pool, then map arrays (user, 2026-10-28); vehicles are first (#563). Move each canonical owner, accessors, allocation/reset and destruction together. See [storage ports](../porting.md#storage-ports). A polymorphic C++ shell stays opaque to Rust and holds fields not yet migrated; each design places its shared record in or beside it. The map storage port moves the allocation without replacing C++ tile references. Pools retain ID, first-free, iteration and hook behavior; a compacting arena or generational IDs would change it. #566 measures drawing, which reads records every frame.

@@ -15,19 +15,23 @@
 #ifdef WITH_RUST
 #include "../rust/road_yapf_ffi.h"
 #include "../rust/movement_ffi.h"
+#include "../tile_type.h"
+#include "../landscape.h"
 #include "../safeguards.h"
 
 namespace {
 struct HeapNode { int32_t estimate; bool operator<(const HeapNode &other) const { return this->estimate < other.estimate; } };
 OpenTTDRoadYapfTile ProbeTile(const void *, uint32_t, uint8_t, bool) noexcept { OpenTTDRoadYapfTile tile{}; tile.type = 5; tile.station_type = 2; return tile; }
 uint16_t fixture_dirs = 1;
-OpenTTDFoundationSlope (*height_query)(uint32_t) noexcept = [](uint32_t) noexcept -> OpenTTDFoundationSlope { return {.z = 0, .slope = SLOPE_FLAT}; };
+std::array<TileBaseStorage, 4096> movement_tiles{};
+std::array<TileExtendedStorage, 4096> movement_extended{};
 const OpenTTDSharedServices *MovementWorld()
 {
 	static OpenTTDSharedServices world{};
 	static OpenTTDMovementServices movement{};
 	world.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
 	world.tile_type = [](uint32_t) noexcept -> uint8_t { return 2; };
+	world.map_max_y = []() noexcept -> uint32_t { return 63; };
 	world.map_log_x = []() noexcept -> uint32_t { return 6; };
 	world.road_tile_kind = [](uint32_t) noexcept { return static_cast<RoadTileType>(0); };
 	world.normal_road_bits = [](uint32_t, uint8_t) noexcept -> RoadBits {
@@ -38,10 +42,14 @@ const OpenTTDSharedServices *MovementWorld()
 	world.has_road_works = [](uint32_t) noexcept { return false; };
 	movement.shared = &world;
 	movement.has_tile_road_type = [](uint32_t, RoadTramType) noexcept { return true; };
-	movement.normal_road = [](uint32_t) noexcept { return true; };
-	movement.pixel_location = [](int32_t x, int32_t y) noexcept -> OpenTTDPixelLocation { return {.tile = ((uint32_t(y) >> 4) << 6) + (uint32_t(x) >> 4), .kind = 2}; };
-	movement.normal_road_status_tail = [](uint32_t) noexcept -> OpenTTDNormalRoadStatusTail { return {.disallowed = uint8_t(fixture_dirs > 255 ? 1 : 2), .road_works = false}; };
-	movement.pixel_slope = [](uint32_t tile) noexcept { return height_query(tile); };
+	movement.tile_types = []() noexcept -> OpenTTDTileTypeAllocation {
+		constexpr uint8_t bits[]{10, 5, 9, 6, 3, 12};
+		for (auto &tile : movement_tiles) {
+			tile.type = MP_ROAD << 4;
+			tile.m5 = bits[std::countr_zero(static_cast<unsigned>(fixture_dirs)) & 7] | ((fixture_dirs > 255 ? 1 : 2) << 4);
+		}
+		return {.base = movement_tiles.data(), .extended = movement_extended.data(), .count = 4096, .assertions = true};
+	};
 	return &world;
 }
 uint32_t RoadProbeClosest(const void *, uint16_t, uint8_t) noexcept { return 0; }
@@ -195,15 +203,14 @@ TEST_CASE("Road YAPF low-limit timing and exit-key replacement match reference",
 	}
 }
 
-/* Production traversal observes heights and vehicle/type limits only after
+/* Vehicle/type limits are observed once per accepted continuation, after
  * transient rejection, destination, junction and cost-limit checks. */
 namespace RoadOrder {
 inline uint32_t goal;
-inline std::vector<uint32_t> heights;
+inline std::vector<char> limits;
 OpenTTDRoadYapfTile Tile(const void *, uint32_t tile, uint8_t, bool) noexcept {
 	OpenTTDRoadYapfTile out{}; out.type = FollowerFixture::active->shared.tile_type(tile); out.depot = tile == goal; out.depot_dir = DIAGDIR_SW; return out;
 }
-OpenTTDFoundationSlope Height(uint32_t tile) noexcept { heights.push_back(tile); return {tile == 129 ? 0 : 8, SLOPE_FLAT}; }
 }
 TEST_CASE("Road YAPF observes accepted traversal once after transient exits", "[road][rust]")
 {
@@ -216,17 +223,25 @@ TEST_CASE("Road YAPF observes accepted traversal once after transient exits", "[
 		if (mode == Rejected) map.Tile(128, MP_CLEAR);
 		if (mode == Junction) map.base[128].m5 = 15;
 		RoadOrder::goal = mode == Startup ? 130 : mode == Destination ? 129 : 128;
-		RoadOrder::heights.clear();
-		map.movement.pixel_slope = RoadOrder::Height;
-		map.movement.road_type_speed = [](RoadType) noexcept -> uint16_t { return 40; };
+		/* Raising tile 128's north corner gives it SLOPE_N under ROAD_X, so its
+		 * centre is above flat tile 129 and the accepted step pays the uphill penalty. */
+		map.base[128].height = 1;
+		map.shared.apply_foundation = GetRustSharedServices().apply_foundation;
+		OpenTTDRoadGroundServices road{};
+		road.all_bits = [](uint32_t t) noexcept { return static_cast<RoadBits>(FollowerFixture::active->base[t].m5 & 15); };
+		map.movement.road = &road;
+		RoadOrder::limits.clear();
+		map.physics.display_max_speed = [](OpenTTDVehicle *) noexcept -> int32_t { RoadOrder::limits.push_back('D'); return 100; };
+		map.movement.order_speed = [](OpenTTDVehicle *) noexcept -> uint16_t { RoadOrder::limits.push_back('O'); return 40; };
+		map.movement.road_type_speed = [](RoadType) noexcept -> uint16_t { RoadOrder::limits.push_back('R'); return 40; };
 		auto leaves = probe_leaves; leaves.shared = &map.shared; leaves.tile = RoadOrder::Tile;
 		OpenTTDRoadYapfInput input{}; input.map_x = input.map_y = 64; input.tile = 130; input.slope = 17;
 		auto result = openttd_rust_road_yapf_depot(&input, &leaves, map.Vehicle(), mode == MaxCost ? 99 : 0);
 		if (mode == Accepted) {
-			CHECK((RoadOrder::heights == std::vector<uint32_t>{129, 128}));
+			CHECK((RoadOrder::limits == std::vector<char>{'D', 'O', 'R'}));
 			CHECK(result.found == 1); CHECK(result.cost == 417);
 		} else {
-			CHECK(RoadOrder::heights.empty());
+			CHECK(RoadOrder::limits.empty());
 			if (mode == Destination) { CHECK(result.found == 1); CHECK(result.cost == 100); }
 			if (mode == Startup) { CHECK(result.found == 1); CHECK(result.cost == 0); }
 			if (mode == Rejected || mode == MaxCost) CHECK(result.found == 0);

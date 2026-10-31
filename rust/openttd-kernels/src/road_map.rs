@@ -49,8 +49,8 @@ pub(crate) fn is_normal_road(m: &crate::map_func::TileTypeAccess, tile: u32) -> 
 #[inline]
 fn require_normal_road(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<()> {
     m.available(tile)?;
-    if m.assertions() && !is_normal_road(m, tile)? {
-        return None;
+    if m.assertions() {
+        m.check(is_normal_road(m, tile)?)?;
     }
     Some(())
 }
@@ -106,8 +106,8 @@ pub(crate) fn may_have_road(m: &crate::map_func::TileTypeAccess, tile: TileIndex
 #[inline]
 fn require_may_have_road(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<()> {
     m.available(tile)?;
-    if m.assertions() && !may_have_road(m, TileIndex(tile))? {
-        return None;
+    if m.assertions() {
+        m.check(may_have_road(m, TileIndex(tile))?)?;
     }
     Some(())
 }
@@ -161,13 +161,29 @@ pub const ROADSIDE_GRASS: Roadside = Roadside(1);
 
 #[allow(clippy::cast_possible_truncation)] // GB returns the original field width.
 impl crate::map_func::World<'_> {
-    pub(crate) fn normal_road(&self, t: u32) -> bool {
-        self.kind(t) == crate::tile_type::MP_ROAD
-            && is_normal_road(&self.types, t).unwrap_or_else(|| (self.shared.is_normal_road)(t))
+    /// `GetRoadTileType`.
+    pub(crate) fn road_tile_type(&self, t: u32) -> crate::services::RoadTileKind {
+        self.asserted(|m| get_road_tile_type(m, t))
+    }
+    /// `IsNormalRoad`.
+    pub(crate) fn is_normal_road(&self, t: u32) -> bool {
+        self.road_tile_type(t).0 == ROAD_TILE_NORMAL
+    }
+    /// `IsNormalRoadTile`.
+    pub(crate) fn is_normal_road_tile(&self, t: u32) -> bool {
+        self.asserted(|m| crate::tile_map::get_tile_type(m, t)) == crate::tile_type::MP_ROAD
+            && self.is_normal_road(t)
+    }
+    /// `GetDisallowedRoadDirections`.
+    pub(crate) fn disallowed_road_directions(&self, t: u32) -> u8 {
+        self.asserted(|m| get_disallowed_road_directions(m, t))
+    }
+    /// `HasRoadWorks`.
+    pub(crate) fn has_road_works(&self, t: u32) -> bool {
+        self.asserted(|m| has_road_works(m, t))
     }
     pub(crate) fn road_bits(&self, t: u32, tram: bool) -> u8 {
-        get_road_bits(&self.types, t, crate::services::RoadTramType(tram))
-            .unwrap_or_else(|| (self.shared.normal_road_bits)(t, u8::from(tram)))
+        self.asserted(|m| get_road_bits(m, t, crate::services::RoadTramType(tram)))
             .0
     }
     pub(crate) fn road_depot(&self, t: u32) -> bool {
@@ -179,11 +195,7 @@ impl crate::map_func::World<'_> {
         crate::bitmath_func::gb(u32::from(Self::byte(self.types.m5(t))), 0, 2) as u8
     }
     pub(crate) fn road_type(&self, t: u32, tram: bool) -> u8 {
-        get_road_type(&self.types, t, crate::services::RoadTramType(tram))
-            .unwrap_or_else(|| {
-                self.check(false);
-                unreachable!("native road-type precondition")
-            })
+        self.asserted(|m| get_road_type(m, t, crate::services::RoadTramType(tram)))
             .0
     }
 }

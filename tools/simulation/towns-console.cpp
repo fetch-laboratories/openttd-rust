@@ -13,6 +13,10 @@
 #include "core/backup_type.hpp"
 #include "core/random_func.hpp"
 #include "town.h"
+#include "signs_base.h"
+#include "fios.h"
+#include "heightmap.h"
+#include <fstream>
 #include "town_cmd.h"
 #include "townname_func.h"
 #include "house.h"
@@ -93,10 +97,15 @@ static void LevelCorners(uint x0, uint x1, uint y0, uint y1, uint height, const 
 /* Observe the real presentation request, then forward it unchanged. The null
  * driver cannot establish rendered errors or authority-window refreshes. */
 static uint bribe_errors;
+static int town_data_errors = -1;
 extern "C" void __real__Z16ShowErrorMessageO13EncodedStringS0_12WarningLeveliiS0_6PoolIDIh12CompanyIDTagLh15ELh255EE(EncodedString &&, EncodedString &&, WarningLevel, int, int, EncodedString &&, CompanyID);
 extern "C" void __wrap__Z16ShowErrorMessageO13EncodedStringS0_12WarningLeveliiS0_6PoolIDIh12CompanyIDTagLh15ELh255EE(EncodedString &&summary, EncodedString &&detail, WarningLevel level, int x, int y, EncodedString &&extra, CompanyID company)
 {
 	if (summary == GetEncodedString(STR_ERROR_BRIBE_FAILED) && detail.empty() && level == WL_INFO) ++bribe_errors;
+	if (town_data_errors >= 0) {
+		++town_data_errors;
+		fmt::print(stderr, "TOWN data-error {} {} / {}\n", level, summary.GetDecodedString(), detail.empty() ? std::string{} : detail.GetDecodedString());
+	}
 	__real__Z16ShowErrorMessageO13EncodedStringS0_12WarningLeveliiS0_6PoolIDIh12CompanyIDTagLh15ELh255EE(std::move(summary), std::move(detail), level, x, y, std::move(extra), company);
 }
 static TileIndex Site()
@@ -776,8 +785,41 @@ static bool HouseDefinitionsScenario(std::span<std::string_view> args)
 	fmt::print(stderr, "TOWN definition-complete true\n");
 	return true;
 }
+/* Real JSON inputs listed by towns.py, imported in editor mode with alternating rotation. */
+static bool TownDataScenario(std::span<std::string_view> args)
+{
+	AutoRestoreBackup<Randomizer> interactive_seed(_interactive_random, _interactive_random);
+	_interactive_random.SetSeed(12345);
+	Backup<GameMode> mode(_game_mode, GM_EDITOR);
+	Backup<CompanyID> owner(_current_company, OWNER_NONE);
+	Backup<uint8_t> rotation(_settings_game.game_creation.heightmap_rotation, HM_COUNTER_CLOCKWISE);
+	std::string home = std::getenv("HOME");
+	std::ifstream list(home + "/town-data-inputs.txt");
+	for (std::string name; std::getline(list, name); ) {
+		_settings_game.game_creation.heightmap_rotation = name.ends_with("-cw.json") ? HM_CLOCKWISE : HM_COUNTER_CLOCKWISE;
+		_file_to_saveload.name = home + "/town-data/" + name;
+		uint towns = Town::GetNumItems(), signs = Sign::GetNumItems();
+		std::vector<TownID> before; for (const Town *t : Town::Iterate()) before.push_back(t->index);
+		town_data_errors = 0;
+		LoadTownData();
+		fmt::print(stderr, "TOWN data {} {} {} {} {} {} {} {}\n", name, Town::GetNumItems() - towns, Sign::GetNumItems() - signs, town_data_errors, _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]);
+		for (const Town *t : Town::Iterate()) {
+			if (std::ranges::find(before, t->index) != before.end()) continue;
+			fmt::print(stderr, "TOWN data-town {} {} {} {} {} {}\n", name, t->GetCachedName(), t->xy.base(), t->larger_town, t->cache.num_houses, t->cache.population);
+		}
+		town_data_errors = -1;
+	}
+	mode.Restore(); owner.Restore(); rotation.Restore();
+	if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
+	return true;
+}
 static bool TownsScenario(std::span<std::string_view> args)
 {
+	if (args.size() >= 2 && args[1] == "data") return TownDataScenario(args);
+	if (args.size() >= 2 && args[1] == "data-inspect") {
+		uint imported = 0; for (const Town *t : Town::Iterate()) imported += t->GetCachedName().starts_with("Import ");
+		fmt::print(stderr, "TOWN data-reloaded {} {}\n", imported, Sign::GetNumItems()); return true;
+	}
 	if (args.size() < 2) return false;
 	if (args[1] == "road-types") return RoadTypeGrowthScenario();
 	if (args[1].starts_with("definitions")) return HouseDefinitionsScenario(args);

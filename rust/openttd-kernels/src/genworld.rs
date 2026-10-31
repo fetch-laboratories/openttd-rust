@@ -113,7 +113,7 @@ pub struct Settings {
 #[repr(C)]
 pub struct LandscapeCall {
     pub frame: *mut landscape_generation::Frame,
-    pub decoder: *const landscape_generation::Decoder,
+    pub decoder: *const crate::heightmap::Input,
     pub settings: landscape_generation::Settings,
 }
 #[repr(C)]
@@ -774,7 +774,7 @@ pub(crate) fn generate(
     session: &crate::session::Services,
     parent: *mut crate::session::Frame,
 ) -> bool {
-    let mut storage = std::mem::MaybeUninit::<crate::session::FrameStorage>::uninit();
+    let mut storage = std::mem::MaybeUninit::<crate::session::WorldFrameStorage>::uninit();
     let frame = (session.world_frame_begin)(storage.as_mut_ptr());
     let result = run(unsafe { &*(session.world)() }, frame);
     (session.world_frame_end)(parent, frame, result)

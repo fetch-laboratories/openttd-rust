@@ -2123,7 +2123,7 @@ impl Ctx<'_> {
                 cost.error(self.s.strings.adjoins_multiple);
             }
         } else {
-            let normal = (self.shared.is_normal_road)(tile);
+            let normal = (self.shared.is_normal_road_tile)(tile);
             let build_over = drive && normal;
             let rb = if normal {
                 (self.shared.normal_road_bits)(tile, 0).0
@@ -2479,7 +2479,7 @@ impl Ctx<'_> {
             let owner = (self.world().station_owner)(st);
             let id = (self.links().graphs.station_id)(st);
             if drive {
-                if (self.shared.is_normal_road)(tile) {
+                if (self.shared.is_normal_road_tile)(tile) {
                     self.road_infrastructure(
                         road,
                         road_owner,

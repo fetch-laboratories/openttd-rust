@@ -25,11 +25,6 @@ inline bool RustIsTunnelTile(uint32_t tile) noexcept { return IsTunnelTile(TileI
 inline bool SharedIsDepotTile(uint32_t tile) noexcept { return IsDepotTile(TileIndex(tile)); }
 inline uint8_t SharedTileType(uint32_t tile) noexcept { return GetTileType(TileIndex{tile}); }
 inline uint32_t RustTileVirtXY(int32_t x, int32_t y) noexcept { return TileVirtXY(static_cast<uint>(x), static_cast<uint>(y)).base(); }
-inline OpenTTDPixelLocation RustPixelLocation(int32_t x, int32_t y) noexcept
-{
-	const uint32_t tile = RustTileVirtXY(x, y);
-	return {.tile = tile, .kind = SharedTileType(tile)};
-}
 inline bool SharedHasRoadWorks(uint32_t tile) noexcept { return HasRoadWorks(TileIndex{tile}); }
 inline uint16_t MapSvcStationIndex(uint32_t tile) noexcept { return GetStationIndex(TileIndex(tile)).base(); }
 inline bool MapSvcRoadIsLevelCrossing(uint32_t tile) noexcept { return IsLevelCrossing(TileIndex(tile)); }
@@ -37,7 +32,7 @@ inline bool MapSvcIsLevelCrossing(uint32_t tile) noexcept { return SharedTileTyp
 inline bool Shared_is_road_depot(uint32_t tile) noexcept { return IsRoadDepotTile(TileIndex{tile}); }
 inline uint8_t Shared_road_depot_direction(uint32_t tile) noexcept { return GetRoadDepotDirection(TileIndex{tile}); }
 inline bool Shared_is_drive_through_stop(uint32_t tile) noexcept { return IsDriveThroughStopTile(TileIndex{tile}); }
-inline bool Shared_is_normal_road(uint32_t tile) noexcept { return IsNormalRoadTile(TileIndex{tile}); }
+inline bool Shared_is_normal_road_tile(uint32_t tile) noexcept { return IsNormalRoadTile(TileIndex{tile}); }
 inline uint8_t Shared_disallowed_road_directions(uint32_t tile) noexcept { return GetDisallowedRoadDirections(TileIndex{tile}); }
 inline bool Shared_is_bay_stop(uint32_t tile) noexcept { return IsBayRoadStopTile(TileIndex{tile}); }
 inline uint8_t Shared_bay_stop_direction(uint32_t tile) noexcept { return GetBayRoadStopDir(TileIndex{tile}); }

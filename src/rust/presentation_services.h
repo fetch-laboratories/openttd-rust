@@ -14,7 +14,10 @@
 #include "../gfx_func.h"
 #include "../town_type.h"
 #include "../window_func.h"
+#include "../strings_func.h"
+#include "../error.h"
 inline void OpenTTDInvalidateTownView(uint16_t town) noexcept { InvalidateWindowData(WC_TOWN_VIEW, TownID(town)); }
+inline void RustShowErrorMessage(uint32_t summary, uint32_t detail) noexcept { ShowErrorMessage(GetEncodedString(summary), GetEncodedString(detail), WL_ERROR); }
 inline void RustScreenDirty() noexcept { MarkWholeScreenDirty(); }
 inline void RustResetWindowSystem() noexcept { ResetWindowSystem(); }
 inline void RustSetupColoursAndInitialWindow() noexcept { SetupColoursAndInitialWindow(); }

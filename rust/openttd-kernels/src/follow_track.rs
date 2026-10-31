@@ -123,7 +123,7 @@ impl State {
     }
     fn single_tram(&self, w: &World<'_>, tile: u32) -> u8 {
         w.check(self.tram(w));
-        if w.normal_road(tile) {
+        if w.is_normal_road_tile(tile) {
             use crate::road_type::{ROAD_NE, ROAD_NW, ROAD_SE, ROAD_SW};
             return match w.road_bits(tile, true) {
                 ROAD_NW => crate::direction_type::DIAGDIR_NW,
