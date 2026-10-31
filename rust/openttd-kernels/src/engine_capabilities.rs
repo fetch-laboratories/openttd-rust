@@ -1,5 +1,5 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Engine cargo capabilities and complete articulated query traversal.
+//! Engine runtime decisions, cargo capabilities and articulated query traversal.
 //! Native specs, cargo definitions and pooled shells remain shared. No borrow
 //! into an owner survives a callback, TEMP allocation/destruction or cache work.
 //! Entries are synchronous, allocate only the original pooled TEMP shell, and abort
@@ -18,14 +18,21 @@ use crate::bitmath_func::{gb, has_bit, set_bit64};
 use crate::cargo_type::{
     ALL_CARGOTYPES, CT_MAIL, CT_PASSENGERS, INVALID_CARGO, NUM_CARGO, is_valid_cargo_type,
 };
+use crate::economy_type::{
+    PR_BUILD_VEHICLE_AIRCRAFT, PR_BUILD_VEHICLE_ROAD, PR_BUILD_VEHICLE_SHIP,
+    PR_BUILD_VEHICLE_TRAIN, PR_BUILD_VEHICLE_WAGON,
+};
 use crate::engine_type::{INVALID_ENGINE, NO_DEFAULT_CARGO_MULTIPLIER};
 use crate::newgrf_callbacks::{
     CALLBACK_FAILED, CBID_VEHICLE_ARTIC_ENGINE, CBID_VEHICLE_REFIT_CAPACITY, VEHICLE_ARTIC_ENGINE,
     VEHICLE_CARGO_SUFFIX, VEHICLE_REFIT_CAPACITY,
 };
 use crate::newgrf_properties::{
-    PROP_AIRCRAFT_MAIL_CAPACITY, PROP_AIRCRAFT_PASSENGER_CAPACITY, PROP_ROADVEH_CARGO_CAPACITY,
-    PROP_SHIP_CARGO_CAPACITY, PROP_TRAIN_CARGO_CAPACITY,
+    PROP_AIRCRAFT_COST_FACTOR, PROP_AIRCRAFT_MAIL_CAPACITY, PROP_AIRCRAFT_PASSENGER_CAPACITY,
+    PROP_AIRCRAFT_RUNNING_COST_FACTOR, PROP_ROADVEH_CARGO_CAPACITY, PROP_ROADVEH_COST_FACTOR,
+    PROP_ROADVEH_RUNNING_COST_FACTOR, PROP_SHIP_CARGO_CAPACITY, PROP_SHIP_COST_FACTOR,
+    PROP_SHIP_RUNNING_COST_FACTOR, PROP_TRAIN_CARGO_CAPACITY, PROP_TRAIN_COST_FACTOR,
+    PROP_TRAIN_RUNNING_COST_FACTOR,
 };
 use crate::vehicle::{OpenTTDEngine, OpenTTDVehicle, RailVehicleTypes, VehicleType};
 use std::ffi::c_void;
@@ -649,7 +656,6 @@ pub unsafe extern "C" fn openttd_rust_engine_running_cost(s: &Services, e: E) ->
     if base == u32::from(crate::economy_type::INVALID_PRICE) {
         return 0;
     }
-    use crate::newgrf_properties::*;
     let prop = match (s.kind)(e) {
         VehicleType::TRAIN => PROP_TRAIN_RUNNING_COST_FACTOR,
         VehicleType::ROAD => PROP_ROADVEH_RUNNING_COST_FACTOR,
@@ -663,8 +669,6 @@ pub unsafe extern "C" fn openttd_rust_engine_running_cost(s: &Services, e: E) ->
 /// `Engine::GetCost`, including the wagon price kind and dynamic factors.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_cost(s: &Services, e: E) -> i64 {
-    use crate::economy_type::*;
-    use crate::newgrf_properties::*;
     let (base, prop, fallback) = match (s.kind)(e) {
         VehicleType::TRAIN => (
             if (s.rail_kind)(e) == RailVehicleTypes::WAGON {
