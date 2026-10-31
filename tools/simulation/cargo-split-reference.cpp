@@ -22,10 +22,23 @@ static uint32_t UnusedCoordinate(uint32_t, uint8_t) noexcept { std::abort(); }
 static uint16_t UnusedFlow(const void *, uint8_t, uint16_t, uint16_t, uint16_t, const uint16_t *, size_t, uint8_t *) noexcept { std::abort(); }
 static int64_t UnusedPay(void *, uint8_t, uint8_t, const void *, uint32_t, uint32_t) noexcept { std::abort(); }
 static void UnusedOrigin(void *, uint16_t, uint32_t, uint8_t) noexcept { std::abort(); }
-static OpenTTDCargoFlow *UnusedOwner(const void *, uint16_t) noexcept { std::abort(); }
+static OpenTTDCargoFlowMap *UnusedFlowMap(const void *) noexcept { std::abort(); }
 static uint32_t UnusedDraw() noexcept { std::abort(); }
 static void *UnusedNext(void *) noexcept { std::abort(); }
-static const OpenTTDCargoStorageServices services{CannotAllocate, UnusedCreate, UnusedPacket, UnusedDestroy, UnusedRandom, UnusedCoordinate, UnusedFlow, UnusedPay, UnusedOrigin, UnusedOwner, UnusedDraw, UnusedNext};
+static const OpenTTDCargoStorageServices services{
+	.can_allocate = CannotAllocate,
+	.create = UnusedCreate,
+	.packet = UnusedPacket,
+	.destroy = UnusedDestroy,
+	.random = UnusedRandom,
+	.coordinate = UnusedCoordinate,
+	.flow = UnusedFlow,
+	.pay = UnusedPay,
+	.origin = UnusedOrigin,
+	.flow_map = UnusedFlowMap,
+	.random_draw = UnusedDraw,
+	.packet_next = UnusedNext,
+};
 
 #ifndef WITH_RUST
 struct CargoPacket {
