@@ -404,7 +404,7 @@ pub(crate) fn set_local_company(s: &Services, company: crate::company_type::Comp
         (windows.window_classes)(WC_COMPANY, 0);
         (s.close_construction_windows)();
     }
-    (s.identity.dirty)();
+    (s.identity.shared.screen_dirty)();
     (windows.window_classes)(WC_SIGN_LIST, -1);
     (windows.window_classes)(WC_GOALS_LIST, 0);
     (windows.window_classes)(WC_COMPANY_COLOUR, -1);

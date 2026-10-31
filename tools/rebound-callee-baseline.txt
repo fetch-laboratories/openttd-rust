@@ -25,7 +25,6 @@ forwarded | src/object_cmd.cpp | water_class = GetRustClearServices().water_clas
 forwarded | src/rust/company_identity_adapter.cpp | aircraft_subtype = GetRustEngineCapabilitiesServices().aircraft_subtype
 forwarded | src/rust/company_identity_adapter.cpp | articulated = GetRustVehicleResolverServices().articulated
 forwarded | src/rust/company_identity_adapter.cpp | cargo_classes = GetRustEngineCapabilitiesServices().cargo_classes
-forwarded | src/rust/company_identity_adapter.cpp | dirty = FleetGroupServices().screen_dirty
 forwarded | src/rust/company_identity_adapter.cpp | engine = GetRustEngineCapabilitiesServices().engine
 forwarded | src/rust/company_identity_adapter.cpp | engine_cargo = GetRustEngineCapabilitiesServices().default_cargo
 forwarded | src/rust/company_identity_adapter.cpp | engine_class = GetRustEngineCapabilitiesServices().train_class
@@ -136,6 +135,7 @@ rebound | RustAirportTileSpec | src/rust/airport_definitions.cpp | tile_base
 rebound | RustAnimationRailSpec | src/animated_tile.cpp | rail_spec
 rebound | RustAnimationRailSpec | src/rust/station_command_services.hpp | rail_spec
 rebound | RustAssertCondition | src/cargomonitor.cpp | check
+rebound | RustAssertCondition | src/landscape.cpp | assert_condition
 rebound | RustAssertCondition | src/landscape.cpp | native_assert
 rebound | RustAssertCondition | src/newgrf_airport.cpp | check
 rebound | RustAssertCondition | src/rust/fleet_transaction_services.hpp | check

@@ -383,7 +383,7 @@ impl World<'_> {
             crate::newgrf_storage::openttd_rust_storage_switch_mode(
                 mode,
                 ignore,
-                crate::movement::table(&*landscape.shared).native_assert,
+                landscape.assert_condition,
                 self.s.storage_discard,
             );
         }
