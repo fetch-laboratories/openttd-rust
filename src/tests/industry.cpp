@@ -265,7 +265,6 @@ struct IndustryGenerationFixture {
 		auto world = GetIndustryRustServices();
 		world.create = [](uint8_t, uint8_t creation) noexcept -> void * { CHECK(creation == 0); ++created; return &shell; };
 		world.type_count = [](uint8_t) noexcept -> uint16_t { return 0; };
-		world.total = []() noexcept -> uint32_t { return 0; };
 		static auto resolver = GetIndustryResolverServices();
 		static auto construction = GetIndustryConstructionServices();
 		construction.callback_mask = [](const OpenTTDIndustrySpecHandle *) noexcept -> uint16_t { return 0; };

@@ -218,6 +218,11 @@ pub extern "C" fn openttd_rust_cargo_by_label(label: u32) -> u8 {
             .unwrap_or(INVALID_CARGO)
     }
 }
+/// Canonical `CargoSpec::label`, including duplicate labels in distinct slots.
+pub(crate) fn cargo_label(cargo: u8) -> u32 {
+    let s = services();
+    (s.label_spec)((s.spec)(cargo)).label
+}
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_is_default(cargo: u8) -> bool {
     let s = services();

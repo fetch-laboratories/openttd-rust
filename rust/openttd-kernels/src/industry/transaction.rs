@@ -49,7 +49,6 @@ pub struct TransactionServices {
     pub enabled: unsafe extern "C" fn(*const SpecHandle) -> bool,
     pub layout_count: unsafe extern "C" fn(*const SpecHandle) -> usize,
     pub layout: unsafe extern "C" fn(*const SpecHandle, usize) -> *const LayoutHandle,
-    pub raw: unsafe extern "C" fn(*const SpecHandle) -> bool,
     pub raw_setting: unsafe extern "C" fn() -> u8,
     pub check_proc: unsafe extern "C" fn(*const SpecHandle) -> u8,
     pub conflicting: unsafe extern "C" fn(*const SpecHandle) -> ConflictKinds,
@@ -87,7 +86,6 @@ pub struct TransactionServices {
     pub local_company: unsafe extern "C" fn() -> bool,
     pub prospect_no_place: unsafe extern "C" fn(),
     pub prospect_unlucky: unsafe extern "C" fn(),
-    pub construction_cost: unsafe extern "C" fn(*const SpecHandle) -> i64,
 }
 #[repr(C)]
 pub struct TransactionContext {
@@ -828,7 +826,7 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
     if !(e.g.environment.editor)()
         && e.company() != 18
         && unsafe { (e.x.raw_setting)() } == 0
-        && unsafe { (e.x.raw)(spec) }
+        && unsafe { super::spec_raw((e.g.spec_life)(spec)) }
     {
         e.fail(0xffff);
         return;
@@ -858,7 +856,7 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
         || (!(e.g.environment.editor)()
             && e.company() != 18
             && unsafe { (e.x.raw_setting)() } == 2
-            && unsafe { (e.x.raw)(spec) })
+            && unsafe { super::spec_raw((e.g.spec_life)(spec)) })
     {
         if flags & 1 != 0 {
             let succeeded = deity_prospect
@@ -930,9 +928,15 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
         }
     }
     if flags & 1 != 0 && !industry.is_null() && !(e.g.environment.editor)() {
-        unsafe { (e.s.advertise)(industry.cast()) };
+        unsafe { super::advertise(industry.cast(), e.s) };
     }
-    let construction = unsafe { (e.x.construction_cost)(spec) };
+    let construction = unsafe {
+        super::construction_cost(
+            (e.g.cost_multiplier)(spec),
+            (e.g.spec_life)(spec),
+            (e.x.raw_setting)(),
+        )
+    };
     unsafe { (e.cost.expense_money)(out, 12, construction) };
 }
 /// # Safety

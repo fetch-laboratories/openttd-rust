@@ -334,7 +334,7 @@ impl Services {
         if !(self.can_allocate)() {
             return false;
         }
-        let shell = unsafe { (self.industry().random_industry)() };
+        let shell = unsafe { industry::random_industry(self.industry()) };
         if shell.is_null() {
             return false;
         }
@@ -363,7 +363,7 @@ impl Services {
             }
             Source::town(town.id.0)
         } else {
-            let shell = unsafe { (self.industry().random_industry)() };
+            let shell = unsafe { industry::random_industry(self.industry()) };
             if shell.is_null() {
                 return false;
             }
