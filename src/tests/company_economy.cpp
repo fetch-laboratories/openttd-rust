@@ -127,7 +127,7 @@ TEST_CASE("Company ownership - both original assertions precede error selection"
 	movement = GetRustMovementServices();
 	movement.native_assert = [](bool condition) noexcept { failed.push_back(condition); };
 	auto shared = GetRustSharedServices();
-	shared.movement_services = []() noexcept { return &movement; };
+	shared.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
 	auto services = GetRustCompanyServices(); services.shared = &shared;
 	AutoRestoreBackup<CompanyID> current(_current_company, CompanyID(0)), local(_local_company, COMPANY_SPECTATOR);
 	for (auto [owner, tile] : {std::pair{OWNER_END, TileIndex(1)}, {OWNER_TOWN, TileIndex(0)}}) {
