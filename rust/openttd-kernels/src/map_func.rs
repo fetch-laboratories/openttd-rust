@@ -357,8 +357,8 @@ impl TileTypeAccess {
     // Named, field-sized loads. No Rust reference or record value is formed.
     map_fields! { base: BaseTileLayout => kind: u8, height: u8, m1: u8, m2: u16, m3: u8, m4: u8, m5: u8 }
     map_fields! { extended: ExtendedTileLayout => m6: u8, m8: u16 }
-    map_stores! { base: BaseTileLayout => set_kind.kind: u8, set_height.height: u8, set_m1.m1: u8, set_m2.m2: u16, set_m3.m3: u8, set_m4.m4: u8, set_m5.m5: u8 }
-    map_stores! { extended: ExtendedTileLayout => set_m6.m6: u8, set_m7.m7: u8, set_m8.m8: u16 }
+    map_stores! { base: BaseTileLayout => set_kind.kind: u8, set_height.height: u8, set_m1.m1: u8, set_m2.m2: u16, set_m4.m4: u8, set_m5.m5: u8 }
+    map_stores! { extended: ExtendedTileLayout => set_m6.m6: u8, set_m7.m7: u8 }
 }
 
 /// Entry-local canonical map descriptor. Reads and writes remain field-sized and end before calls.
