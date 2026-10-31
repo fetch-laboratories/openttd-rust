@@ -562,19 +562,34 @@ class HousekeepingTests(unittest.TestCase):
         self.assertFalse(path.exists())
 
     def test_replaced_output_candidates_are_kept(self) -> None:
-        for directory in (False, True):
-            with self.subTest(directory=directory):
-                path = (
-                    self.main / ".local" / ("replaced" if directory else "replaced.log")
-                )
+        for directory, during in (
+            (False, False),
+            (False, True),
+            (True, False),
+            (True, True),
+        ):
+            with self.subTest(directory=directory, during_inspection=during):
+                path = self.main / ".local" / f"replaced-{int(directory)}-{int(during)}"
                 write(path / "output.log" if directory else path)
                 item = housekeeping.Item(path, True, "idle output")
                 retained = path.with_name(path.name + ".retained")
-                path.rename(retained)
-                write(path / "new.log" if directory else path, "new output")
-                self.assertIn(
-                    "identity changed", housekeeping.remove(self.main, item) or ""
-                )
+
+                def replace_output(
+                    path: Path = path,
+                    retained: Path = retained,
+                    directory: bool = directory,
+                ) -> tuple[list[housekeeping.OutputHandle], None]:
+                    path.rename(retained)
+                    write(path / "new.log" if directory else path, "new output")
+                    return [], None
+
+                if during:
+                    with patch.object(housekeeping, "open_outputs", replace_output):
+                        refusal = housekeeping.remove(self.main, item)
+                else:
+                    replace_output()
+                    refusal = housekeeping.remove(self.main, item)
+                self.assertIn("identity changed", refusal or "")
                 self.assertEqual(
                     (path / "new.log" if directory else path).read_text(), "new output"
                 )

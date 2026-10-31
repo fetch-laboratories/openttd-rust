@@ -505,17 +505,17 @@ def writable(path: Path) -> None:
 
 def remove(main: Path, item: Item, references: str = "") -> str | None:
     """Remove ITEM; return the refusal when git keeps it."""
+    if item.worktree and (refusal := worktree_refusal(main, item.path, references)):
+        return refusal
+    handles, error = open_outputs()
+    if refusal := output_refusal(item.path, handles, error):
+        return refusal
     try:
         info = item.path.lstat()
         if item.identity is None or item.identity != (info.st_dev, info.st_ino):
             return "output candidate identity changed since planning"
     except OSError as error:
         return f"cannot inspect output candidate: {error}"
-    if item.worktree and (refusal := worktree_refusal(main, item.path, references)):
-        return refusal
-    handles, error = open_outputs()
-    if refusal := output_refusal(item.path, handles, error):
-        return refusal
     if not item.worktree:
         writable(item.path)
         if item.path.is_dir() and not item.path.is_symlink():
