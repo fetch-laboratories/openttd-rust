@@ -77,6 +77,7 @@ static bool IndustryPolicy(std::span<std::string_view> args)
 		IndustryPolicyRequire(found);
 		fmt::print(stderr, "INDUSTRY-POLICY servicing {} true\n", outcome);
 	}
+	_settings_game.economy.type = ET_ORIGINAL;
 	for (uint n = 0; n < 16; ++n) {
 #ifdef WITH_RUST
 		_industry_builder.daily_counter = 2 << 16;
