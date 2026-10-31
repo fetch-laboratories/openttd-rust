@@ -161,7 +161,11 @@ Engine::Engine(VehicleType type, uint16_t local_id)
  */
 bool Engine::IsEnabled() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_engine_enabled(&EngineServices(), RustEngine(this));
+#else
 	return this->info.string_id != STR_NEWGRF_INVALID_ENGINE && this->info.climates.Test(_settings_game.game_creation.landscape);
+#endif
 }
 
 /**
@@ -171,8 +175,12 @@ bool Engine::IsEnabled() const
  */
 uint32_t Engine::GetGRFID() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_engine_grfid(&GetRustEngineCapabilitiesServices(), RustEngine(this));
+#else
 	const GRFFile *file = this->GetGRF();
 	return file == nullptr ? 0 : file->grfid;
+#endif
 }
 
 /**
@@ -303,6 +311,9 @@ uint Engine::DetermineCapacity(const Vehicle *v, uint16_t *mail_capacity) const
  */
 Money Engine::GetRunningCost() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_engine_running_cost(&GetRustEngineCapabilitiesServices(), RustEngine(this));
+#else
 	Price base_price;
 	uint cost_factor;
 	switch (this->type) {
@@ -332,6 +343,7 @@ Money Engine::GetRunningCost() const
 	}
 
 	return GetPrice(base_price, cost_factor, this->GetGRF(), -8);
+#endif
 }
 
 /**
@@ -340,6 +352,9 @@ Money Engine::GetRunningCost() const
  */
 Money Engine::GetCost() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_engine_cost(&GetRustEngineCapabilitiesServices(), RustEngine(this));
+#else
 	Price base_price;
 	uint cost_factor;
 	switch (this->type) {
@@ -372,6 +387,7 @@ Money Engine::GetCost() const
 	}
 
 	return GetPrice(base_price, cost_factor, this->GetGRF(), -8);
+#endif
 }
 
 /**
@@ -465,8 +481,12 @@ uint Engine::GetDisplayMaxTractiveEffort() const
  */
 TimerGameCalendar::Date Engine::GetLifeLengthInDays() const
 {
+#ifdef WITH_RUST
+	return TimerGameCalendar::Date{openttd_rust_engine_life_days(&GetRustEngineCapabilitiesServices(), RustEngine(this))};
+#else
 	/* Assume leap years; this gives the player a bit more than the given amount of years, but never less. */
 	return TimerGameCalendar::Date{(this->info.lifelength + _settings_game.vehicle.extend_vehicle_life).base() * CalendarTime::DAYS_IN_LEAP_YEAR};
+#endif
 }
 
 /**
@@ -475,12 +495,16 @@ TimerGameCalendar::Date Engine::GetLifeLengthInDays() const
  */
 uint16_t Engine::GetRange() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_engine_range(&GetRustEngineCapabilitiesServices(), RustEngine(this));
+#else
 	switch (this->type) {
 		case VEH_AIRCRAFT:
 			return GetEngineProperty(this->index, PROP_AIRCRAFT_RANGE, this->VehInfo<AircraftVehicleInfo>().max_range);
 
 		default: NOT_REACHED();
 	}
+#endif
 }
 
 /**

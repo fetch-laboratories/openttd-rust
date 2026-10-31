@@ -13,6 +13,8 @@
 #include "water_map.h"
 #include "road_map.h"
 #include "core/random_func.hpp"
+#include "economy_func.h"
+#include "newgrf_spritegroup.h"
 static void LoadingRequire(bool value, const char *name)
 {
 	fmt::print(stderr, "ENGINE loading-case {} {}\n", name, value);
@@ -92,8 +94,97 @@ static void LoadingInspect()
 	LoadingRequire(GetNewEngineID(names, VEH_TRAIN, 1) == (dynamic ? EngineID::Invalid() : EngineID{1}), "static-lookup");
 	fmt::print(stderr, "ENGINE loading-liveries {}\n", _loaded_newgrf_features.used_liveries);
 }
+struct RuntimeObserver : SpriteGroup {
+	RuntimeObserver() : SpriteGroup() {}
+	mutable uint32_t calls = 0, property = 0;
+	const SpriteGroup *result = nullptr;
+	ResolverResult Resolve(ResolverObject &object) const override
+	{
+		if (object.callback != CBID_VEHICLE_MODIFY_PROPERTY) return {};
+		++calls; property = object.callback_param1;
+		return SpriteGroup::Resolve(result, object, false);
+	}
+};
+static void RuntimeInspect()
+{
+	SavedRandomSeeds before, after; SaveRandomSeeds(&before);
+	for (VehicleType type = VEH_BEGIN; type != VEH_COMPANY_END; type++) {
+		Engine *e = LoadingEngine(1, type, 500);
+		Backup<EngineInfo> info(e->info);
+		Backup<CargoGRFFileProps> props(e->grf_prop);
+		GRFFile file; file.grfid = 0x613A0003; file.grf_version = 8;
+		e->grf_prop.grffile = nullptr;
+		LoadingRequire(e->GetGRFID() == 0, "runtime-null-grf");
+		e->grf_prop.grffile = &file; e->grf_prop.grfid = 0xBAD;
+		LoadingRequire(e->GetGRFID() == file.grfid, "runtime-action3-grf");
+		e->info.climates = {}; LoadingRequire(!e->IsEnabled(), "runtime-climate");
+		e->info.climates.Set(); e->info.string_id = STR_NEWGRF_INVALID_ENGINE;
+		LoadingRequire(!e->IsEnabled(), "runtime-invalid-engine");
+		e->info.string_id = STR_EMPTY; LoadingRequire(e->IsEnabled(), "runtime-enabled");
+		if (!SpriteGroup::CanAllocateItem(2)) FixtureAbort(__LINE__);
+		auto value = std::make_unique<CallbackResultSpriteGroup>(32767);
+		auto observer = std::make_unique<RuntimeObserver>(); observer->result = value.get();
+		e->grf_prop.spritegroups.clear(); e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, observer.get());
+		auto inspect = [&](auto &spec, Price build, Price running, PropertyID cost_prop, PropertyID run_prop) {
+			Backup<std::remove_reference_t<decltype(spec)>> saved(spec);
+			spec.cost_factor = 53; spec.running_cost = 29;
+			if constexpr (requires { spec.running_cost_class; }) spec.running_cost_class = running;
+			for (bool dynamic : {false, true}) {
+				value->result = dynamic ? 32767 : CALLBACK_FAILED;
+				for (int64_t base : {INT64_C(2560), INT64_MAX, INT64_MIN}) {
+					Backup<Money> purchase(_price[build], Money{base}), upkeep(_price[running], Money{base});
+					file.price_base_multipliers[build] = 2; file.price_base_multipliers[running] = -2;
+					observer->calls = 0;
+					Money cost = e->GetCost();
+					LoadingRequire(cost == GetPrice(build, dynamic ? 32767 : 53, &file, -8) && observer->calls == 1 && observer->property == cost_prop, "runtime-build");
+					Money run = e->GetRunningCost();
+					LoadingRequire(run == GetPrice(running, dynamic ? 32767 : 29, &file, -8) && observer->calls == 2 && observer->property == run_prop, "runtime-running");
+					fmt::print(stderr, "ENGINE properties-runtime {} {} {} {} {} {}\n", type, build, dynamic, base, cost, run);
+					purchase.Restore(); upkeep.Restore();
+				}
+			}
+			if constexpr (requires { spec.running_cost_class; }) {
+				spec.running_cost_class = INVALID_PRICE; observer->calls = 0;
+				LoadingRequire(e->GetRunningCost() == 0 && observer->calls == 0, "runtime-invalid-price");
+			}
+			saved.Restore();
+		};
+		switch (type) {
+			case VEH_TRAIN: {
+				auto &spec = e->VehInfo<RailVehicleInfo>(); Backup<RailVehicleTypes> kind(spec.railveh_type, RAILVEH_SINGLEHEAD);
+				inspect(spec, PR_BUILD_VEHICLE_TRAIN, PR_RUNNING_TRAIN_DIESEL, PROP_TRAIN_COST_FACTOR, PROP_TRAIN_RUNNING_COST_FACTOR);
+				spec.railveh_type = RAILVEH_WAGON;
+				inspect(spec, PR_BUILD_VEHICLE_WAGON, PR_RUNNING_TRAIN_ELECTRIC, PROP_TRAIN_COST_FACTOR, PROP_TRAIN_RUNNING_COST_FACTOR);
+				kind.Restore();
+				break;
+			}
+			case VEH_ROAD: inspect(e->VehInfo<RoadVehicleInfo>(), PR_BUILD_VEHICLE_ROAD, PR_RUNNING_ROADVEH, PROP_ROADVEH_COST_FACTOR, PROP_ROADVEH_RUNNING_COST_FACTOR); break;
+			case VEH_SHIP: inspect(e->VehInfo<ShipVehicleInfo>(), PR_BUILD_VEHICLE_SHIP, PR_RUNNING_SHIP, PROP_SHIP_COST_FACTOR, PROP_SHIP_RUNNING_COST_FACTOR); break;
+			case VEH_AIRCRAFT: {
+				inspect(e->VehInfo<AircraftVehicleInfo>(), PR_BUILD_VEHICLE_AIRCRAFT, PR_RUNNING_AIRCRAFT, PROP_AIRCRAFT_COST_FACTOR, PROP_AIRCRAFT_RUNNING_COST_FACTOR);
+				Backup<uint16_t> range(e->VehInfo<AircraftVehicleInfo>().max_range, 65535);
+				value->result = CALLBACK_FAILED; LoadingRequire(e->GetRange() == 65535, "runtime-range-default");
+				value->result = 32767; LoadingRequire(e->GetRange() == 32767 && observer->property == PROP_AIRCRAFT_RANGE, "runtime-range-dynamic");
+				range.Restore();
+				break;
+			}
+			default: FixtureAbort(__LINE__);
+		}
+		for (uint8_t extension : {0, 255}) {
+			Backup<uint8_t> setting(_settings_game.vehicle.extend_vehicle_life, extension);
+			e->info.lifelength = TimerGameCalendar::Year{65536};
+			LoadingRequire(e->GetLifeLengthInDays().base() == (65536 + extension) * CalendarTime::DAYS_IN_LEAP_YEAR, "runtime-life");
+			setting.Restore();
+		}
+		props.Restore(); info.Restore();
+	}
+	SaveRandomSeeds(&after);
+	LoadingRequire(TypeSameRng(before, after), "runtime-rng");
+	fmt::print(stderr, "ENGINE properties-runtime-rng {} {} {} {}\n", after.random.state[0], after.random.state[1], after.interactive_random.state[0], after.interactive_random.state[1]);
+}
 static void PropertiesInspect()
 {
+	RuntimeInspect();
 	LoadingRequire(_loaded_newgrf_features.has_2CC, "properties-2cc");
 	for (VehicleType type = VEH_BEGIN; type != VEH_COMPANY_END; type++) {
 		Engine *e = LoadingEngine(1, type, 500), *b = LoadingEngine(1, type, 501), *c = LoadingEngine(1, type, 502);
@@ -187,6 +278,7 @@ static void LoadingBuild(uint16_t local = 300)
 		LoadingRequire(std::get<0>(tested).Succeeded() && TypeSameRng(before, after), "build-test");
 		auto [cost, id, capacity, mail_capacity, cargoes] = Command<CMD_BUILD_VEHICLE>::Do(DoCommandFlag::Execute, tile, engine->index, false, INVALID_CARGO, INVALID_CLIENT_ID);
 		LoadingRequire(cost.Succeeded() && cost.GetCost() == std::get<0>(tested).GetCost() && capacity == std::get<2>(tested) && mail_capacity == std::get<3>(tested) && Vehicle::Get(id)->engine_type == engine->index, "build-execute");
+		LoadingRequire(type == VEH_TRAIN && engine->VehInfo<RailVehicleInfo>().railveh_type == RAILVEH_WAGON ? true : Vehicle::Get(id)->max_age == engine->GetLifeLengthInDays(), "runtime-built-life");
 		fmt::print(stderr, "ENGINE loading-build {} {} {} {} {} {}\n", type, id, engine->index, cost.GetCost(), capacity, mail_capacity);
 		const CargoType mail = GetCargoTypeByLabel(CT_MAIL), passengers = GetCargoTypeByLabel(CT_PASSENGERS);
 		SaveRandomSeeds(&before);

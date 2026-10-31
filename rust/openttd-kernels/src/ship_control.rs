@@ -200,7 +200,6 @@ pub struct Leaves {
     pub depot_invalidate: extern "C" fn(u32),
     pub ships_dirty: extern "C" fn(),
     pub check_orders: extern "C" fn(u32),
-    pub running_cost: extern "C" fn(u32) -> i64,
     pub cost_divisor: extern "C" fn() -> u32,
     pub pay_running: extern "C" fn(u32, i64),
     pub speed_default: extern "C" fn(u32) -> u32,
@@ -971,7 +970,7 @@ pub unsafe extern "C" fn openttd_rust_ship_economy_day(
     (game.leaves.check_orders)(id);
     let ticks = (game.leaves.running)(id);
     if ticks != 0 {
-        let cost = (game.leaves.running_cost)(id);
+        let cost = unsafe { game.vs().running_cost(vehicle) };
         let cost = cost.saturating_mul(i64::from(ticks)) / i64::from((game.leaves.cost_divisor)());
         (game.leaves.pay_running)(id, cost);
         // SAFETY: The base table names its immutable maintenance table.
@@ -1097,6 +1096,10 @@ pub(crate) unsafe fn ship_build(
     game.set_rotation(direction as u16);
     (game.leaves.update_delta)(id);
     (game.leaves.build_properties)(id, engine);
+    let cap = unsafe { (&*(game.vs().newgrf)()).capabilities };
+    (game.vs().set_max_age)(v, unsafe {
+        crate::engine_capabilities::openttd_rust_engine_life_days(cap, (cap.engine)(engine as u16))
+    });
     game.set_state(DEPOT);
     (game.leaves.build_dates)(id);
     (game.leaves.build_random)(id, game.services.random() as u16);
@@ -1177,7 +1180,6 @@ crate::abi::layouts! {
         depot_invalidate,
         ships_dirty,
         check_orders,
-        running_cost,
         cost_divisor,
         pay_running,
         speed_default,

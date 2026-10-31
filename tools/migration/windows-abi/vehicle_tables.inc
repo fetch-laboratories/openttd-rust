@@ -85,7 +85,7 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(vehicle, base_viewport);
 		VEHICLE_UNUSED(vehicle, property);
 		VEHICLE_UNUSED(vehicle, callback);
-		VEHICLE_UNUSED(vehicle, unknown_callback_result);
+		VEHICLE_UNUSED(vehicle, set_max_age);
 		VEHICLE_UNUSED(vehicle, length_changed);
 		VEHICLE_UNUSED(vehicle, play_vehicle_sound);
 		VEHICLE_UNUSED(vehicle, play_sound);
@@ -159,8 +159,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(leaves, default_max_speed);
 		VEHICLE_UNUSED(leaves, cargo_age_default);
 		VEHICLE_UNUSED(vehicle, write_max_speed);
-		VEHICLE_UNUSED(leaves, cost_read);
-		VEHICLE_UNUSED(leaves, price);
 		VEHICLE_UNUSED(leaves, pay_running);
 		VEHICLE_UNUSED(leaves, service_read);
 		VEHICLE_UNUSED(leaves, turn_read);

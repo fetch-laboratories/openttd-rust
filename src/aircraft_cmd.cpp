@@ -43,6 +43,10 @@
 
 #include "table/strings.h"
 
+#ifdef WITH_RUST
+#include "rust/engine_capabilities_ffi.h"
+#include "rust/vehicle_services.h"
+#endif
 #include "safeguards.h"
 
 void Aircraft::UpdateDeltaXY()
@@ -404,9 +408,13 @@ CommandCost CmdBuildAircraft(DoCommandFlags flags, TileIndex tile, const Engine 
 
 Money Aircraft::GetRunningCost() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_engine_vehicle_running_cost(&GetRustEngineCapabilitiesServices(), RustEngine(this->GetEngine()), RustVehicle(this));
+#else
 	const Engine *e = this->GetEngine();
 	uint cost_factor = GetVehicleProperty(this, PROP_AIRCRAFT_RUNNING_COST_FACTOR, e->VehInfo<AircraftVehicleInfo>().running_cost);
 	return GetPrice(PR_RUNNING_AIRCRAFT, cost_factor, e->GetGRF());
+#endif
 }
 
 #ifndef WITH_RUST
