@@ -1753,6 +1753,9 @@ def check_spatial602(log: list[str], reload: bool) -> None:
         markers += ["STCMD spatial602-crash-reload 40"]
     else:
         markers += [
+            "STCMD spatial602-crash-input 20 ",
+            "STCMD spatial602-crash-event ai-event ",
+            "STCMD spatial602-crash-event game-event ",
             "STCMD spatial602-crash 0 ai-event 200",
             "STCMD spatial602-crash 1 game-event 200",
             "STCMD spatial602-crash 2 news 200",

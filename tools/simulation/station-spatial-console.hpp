@@ -207,16 +207,26 @@ static void Station602Rail(TileIndex tile, DoCommandFlags exec)
 #include "sound_func.h"
 #include "train.h"
 static Station *_station602_crash = nullptr;
-static uint _station602_crash_step = 0;
+static uint _station602_crash_step = 0, _station602_crash_victims = 0, _station602_other_events = 0;
+static Randomizer _station602_crash_rng;
 static void Station602CrashStep(uint step, const char *operation)
 {
+	if (_station602_crash_step != step || _station602_crash->goods[0].rating != (step == 3 ? 40 : 200)) fmt::print(stderr, "STCMD spatial602-crash-step-mismatch {} {} {}\n", step, _station602_crash_step, _station602_crash->goods[0].rating);
 	StationNeed(_station602_crash_step++ == step && _station602_crash->goods[0].rating == (step == 3 ? 40 : 200), __LINE__);
 	fmt::print(stderr, "STCMD spatial602-crash {} {} {}\n", step, operation, _station602_crash->goods[0].rating);
 }
 static void Station602CrashEvent(uint step, const char *operation, ScriptEvent *event)
 {
 	auto *crash = ScriptEventVehicleCrashed::Convert(event);
-	StationNeed(crash != nullptr && crash->GetVehicleID() == VehicleID(21) && crash->GetCrashSite() == TileIndex(10005) && crash->GetCrashReason() == ScriptEventVehicleCrashed::CRASH_RV_LEVEL_CROSSING && crash->GetVictims() == 3, __LINE__);
+	int type = event == nullptr ? -1 : static_cast<int>(event->GetEventType());
+	if (crash != nullptr) fmt::print(stderr, "STCMD spatial602-crash-event {} type {} id {} site {} reason {} victims {} expected {} rng {} {}\n", operation, type, crash->GetVehicleID().base(), crash->GetCrashSite().base(), static_cast<int>(crash->GetCrashReason()), crash->GetVictims(), _station602_crash_victims, _random.state[0], _random.state[1]);
+	if (type != ScriptEvent::ET_VEHICLE_CRASHED) {
+		if (_station602_other_events++ < 8) fmt::print(stderr, "STCMD spatial602-crash-other-event {} {} {}\n", operation, type, crash != nullptr);
+		StationNeed(event != nullptr && crash == nullptr, __LINE__); return;
+	}
+	if (crash == nullptr) fmt::print(stderr, "STCMD spatial602-crash-event {} type {} null-cast\n", operation, type);
+	StationNeed(crash != nullptr && crash->GetVehicleID() == VehicleID(21) && crash->GetCrashSite() == TileIndex(10005) && crash->GetCrashReason() == ScriptEventVehicleCrashed::CRASH_RV_LEVEL_CROSSING && crash->GetVictims() == _station602_crash_victims, __LINE__);
+	StationNeed(std::ranges::equal(_random.state, _station602_crash_rng.state), __LINE__);
 	Station602CrashStep(step, operation);
 }
 extern "C" void __real__ZN2AI8NewEventE6PoolIDIh12CompanyIDTagLh15ELh255EEP11ScriptEvent(CompanyID, ScriptEvent *);
@@ -241,13 +251,19 @@ extern "C" void Station602WrapNews(EncodedString &&headline, NewsType type, News
 extern "C" void __real__Z16SndPlayVehicleFxtPK7Vehicle(SoundID, const Vehicle *);
 extern "C" void __wrap__Z16SndPlayVehicleFxtPK7Vehicle(SoundID sound, const Vehicle *vehicle)
 {
-	if (_station602_crash != nullptr) { StationNeed(sound == SND_12_EXPLOSION, __LINE__); Station602CrashStep(3, "sound"); }
+	if (_station602_crash != nullptr) {
+		if (sound == SND_12_EXPLOSION) {
+			if (vehicle->index != VehicleID(21)) fmt::print(stderr, "STCMD spatial602-crash-sound-mismatch {} {}\n", sound, vehicle->index.base());
+			StationNeed(vehicle->index == VehicleID(21), __LINE__); Station602CrashStep(3, "sound");
+		} else if (_station602_other_events++ < 8) fmt::print(stderr, "STCMD spatial602-crash-other-sound {} {}\n", sound, vehicle->index.base());
+	}
 	__real__Z16SndPlayVehicleFxtPK7Vehicle(sound, vehicle);
 }
 static void Station602Crash(bool reload)
 {
 	if (reload) {
 		Station *st = nullptr; for (Station *s : Station::Iterate()) if (s->name == "Spatial602 crash") st = s;
+		fmt::print(stderr, "STCMD spatial602-crash-reload-state {} {} {}\n", st != nullptr, st == nullptr ? -1 : st->goods[0].rating, RoadVehicle::Get(VehicleID(21))->vehstatus.Test(VehState::Crashed));
 		StationNeed(st != nullptr && st->goods[0].rating == 40 && RoadVehicle::Get(VehicleID(21))->vehstatus.Test(VehState::Crashed), __LINE__);
 		fmt::print(stderr, "STCMD spatial602-crash-reload {}\n", st->goods[0].rating); return;
 	}
@@ -266,7 +282,13 @@ static void Station602Crash(bool reload)
 	Station *st = Station562New(bus->tile, "Spatial602 crash"); st->owner = bus->owner;
 	st->goods[0].status.Set(GoodsEntry::State::Acceptance); st->goods[0].rating = 200;
 	Backup<bool> sound(_settings_client.sound.disaster, true);
-	_station602_crash_step = 0; _station602_crash = st; StationNeed(bus->Tick(), __LINE__); _station602_crash = nullptr;
+	uint passengers = 0;
+	for (RoadVehicle *part = bus; part != nullptr; part = part->Next()) if (IsCargoInClass(part->cargo_type, CargoClass::Passengers)) passengers += part->cargo.TotalCount();
+	StationNeed(bus->IsFrontEngine() && bus->Next() == nullptr && passengers == 20, __LINE__);
+	/* Original Vehicle::Crash samples all passengers once; RoadVehicle adds its driver. */
+	_station602_crash_rng = _random; _station602_crash_victims = _station602_crash_rng.Next(passengers + 1) + 1;
+	fmt::print(stderr, "STCMD spatial602-crash-input {} {} {} {} {} {}\n", passengers, _station602_crash_victims, _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]);
+	_station602_crash_step = 0; _station602_other_events = 0; _station602_crash = st; StationNeed(bus->Tick(), __LINE__); _station602_crash = nullptr;
 	StationNeed(_station602_crash_step == 4 && st->goods[0].rating == 40 && bus->vehstatus.Test(VehState::Crashed), __LINE__);
 	sound.Restore(); Station562Rng("spatial602-crash");
 }
