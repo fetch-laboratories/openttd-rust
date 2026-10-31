@@ -1176,7 +1176,8 @@ pub unsafe extern "C" fn openttd_rust_trees_place_group(
         }
     }
     if set_zone && is_rainforest_tree(tree) {
-        let mut area = crate::tilearea::TileArea::between(map, tile, tile);
+        // The native TileArea(tile) constructor starts with zero extents.
+        let mut area = crate::tilearea::TileArea { tile, w: 0, h: 0 };
         area.expand(radius.cast_signed(), map, size_y);
         for target in area.tiles(map) {
             if world.kind(target) != crate::tile_type::MP_VOID
