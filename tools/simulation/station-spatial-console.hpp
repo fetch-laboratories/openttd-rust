@@ -63,8 +63,21 @@ static void Station602Stops(TileIndex tile, DoCommandFlags exec)
 	Station *st = Station::GetByTile(tile);
 	StationNeed(Command<CMD_BUILD_ROAD_STOP>::Do(exec, tile + TileDiffXY(3, 0), 1, 1, RoadStopType::Bus, true, DIAGDIR_NE, ROADTYPE_ROAD, ROADSTOP_CLASS_DFLT, 0, st->index, true).Succeeded(), __LINE__);
 	StationNeed(Command<CMD_BUILD_ROAD_STOP>::Do(exec, tile + TileDiffXY(6, 0), 1, 1, RoadStopType::Truck, false, DIAGDIR_NE, ROADTYPE_ROAD, ROADSTOP_CLASS_DFLT, 0, st->index, true).Succeeded(), __LINE__);
-	StationNeed(RoadVehicle::CanAllocateItem(), __LINE__);
-	auto *v = new RoadVehicle(); v->SetFrontEngine(); v->owner = _current_company; v->compatible_roadtypes = RoadTypes{ROADTYPE_ROAD};
+	/* Build/sell establishes and balances owner, group counts and unit IDs. */
+	TileIndex depot = tile + TileDiffXY(0, 3);
+	StationNeed(Command<CMD_BUILD_ROAD_DEPOT>::Do(exec, depot, ROADTYPE_ROAD, DIAGDIR_NE).Succeeded(), __LINE__);
+	EngineID engine = EngineID::Invalid();
+	for (const Engine *e : Engine::IterateType(VEH_ROAD)) {
+		if (engine == EngineID::Invalid() && IsEngineBuildable(e->index, VEH_ROAD, _current_company) && e->VehInfo<RoadVehicleInfo>().roadtype == ROADTYPE_ROAD && !e->info.callback_mask.Test(VehicleCallbackMask::ArticEngine)) engine = e->index;
+	}
+	StationNeed(engine != EngineID::Invalid(), __LINE__);
+	auto build = [&] {
+		auto [cost, id, refit, capacity, cargo] = Command<CMD_BUILD_VEHICLE>::Do(exec, depot, engine, false, INVALID_CARGO, INVALID_CLIENT_ID);
+		StationNeed(cost.Succeeded() && RoadVehicle::Get(id)->Next() == nullptr, __LINE__); return RoadVehicle::Get(id);
+	};
+	RoadVehicle *v = build(), *part = build();
+	auto cargo_before = v->cargo_type; auto compatible_before = v->compatible_roadtypes;
+	auto part_subtype = part->subtype;
 	for (CargoType cargo : {CargoType{0}, CargoType{1}}) {
 		v->cargo_type = cargo;
 		for (bool incompatible : {false, true}) {
@@ -77,12 +90,14 @@ static void Station602Stops(TileIndex tile, DoCommandFlags exec)
 	v->cargo_type = 0; v->compatible_roadtypes = RoadTypes{ROADTYPE_ROAD};
 	RoadStop *bay = st->bus_stops; auto status = bay->status; bay->status.Reset(RoadStop::RoadStopStatusFlag::Bay0Free); bay->status.Reset(RoadStop::RoadStopStatusFlag::Bay1Free); bay->status.Set(RoadStop::RoadStopStatusFlag::EntryBusy);
 	StationNeed(Station602Primary(st, v) == bay, __LINE__);
-	StationNeed(RoadVehicle::CanAllocateItem(), __LINE__);
-	auto *part = new RoadVehicle(); part->SetArticulatedPart(); v->SetNext(part);
+	part->subtype = 0; part->SetArticulatedPart(); v->SetNext(part);
 	RoadStop *drive = Station602Primary(st, v);
 	StationNeed(drive != nullptr && IsDriveThroughStopTile(drive->xy) && Station602Next(drive, v) == nullptr, __LINE__);
 	fmt::print(stderr, "STCMD spatial602-stop occupied-articulated {} {}\n", bay->index.base(), drive->index.base());
-	v->SetNext(nullptr); delete part; delete v; bay->status = status;
+	v->SetNext(nullptr); part->subtype = part_subtype; bay->status = status;
+	v->cargo_type = cargo_before; v->compatible_roadtypes = compatible_before;
+	for (RoadVehicle *vehicle : {part, v}) StationNeed(Command<CMD_SELL_VEHICLE>::Do(exec, vehicle->index, false, false, INVALID_CLIENT_ID).Succeeded(), __LINE__);
+	StationNeed(Command<CMD_LANDSCAPE_CLEAR>::Do(exec, depot).Succeeded(), __LINE__);
 }
 /* Real Action2 callbacks publish each draw into its receiving tile. Expected
  * tile/platform/whole coverage is enumerated independently from GetRailTileArea. */
