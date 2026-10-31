@@ -1,6 +1,6 @@
 # OpenTTD-Rust near-term roadmap
 
-Root selects here; `AGENTS.md` and `docs/rust-migration.md` define process. Follow
+Root selects here; `AGENTS.md` and the docs in its routing table define process. Follow
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
@@ -40,7 +40,7 @@ Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh.
   sanitized scenarios and failed 43, all with the harness error "Rust archive
   missing" for the sanitized build's native-test-support archive (#503), not
   fidelity differences. Deep checks now run only on the user's request
-  (AGENTS.md, user decision 2026-10-31), so it does not restart by itself.
+  ([deep-check policy](deep-checks.md#policy), user decision 2026-10-31), so it does not restart by itself.
 - Housekeeping removed 49 finished T3 worktrees (71.8 GB). #592 now also
   covers the shared-accessor check misreading `OpenTTDXServices name{};`.
 - Original coverage: 330 of 449 traces are complete; gaps are on #156.
@@ -58,7 +58,7 @@ Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh.
 
 Agent: /root (Claude Code navigation) | Model: claude-opus-5-5 | Reasoning effort: not reported to the agent by host.
 
-The goal is a complete Rust rewrite (AGENTS.md "Migration method"). Each free
+The goal is a complete Rust rewrite ([goal and phases](planning.md#goal-and-phases)). Each free
 slot takes ready work from the earliest phase, and later phases fill the rest
 (user decision, 2026-10-28). Position at code `06a644505a` in code lines from
 `python3 tools/port-metrics.py --whole-fork`, with the change since the
@@ -134,12 +134,12 @@ Root's first actions from this chart:
    24th steering review rescoped it): Linux builds Rust, Emscripten links Rust,
    then the sweep, which also moves every oracle that reads a fallback body onto
    the pinned reference. Drafts adopt the sweep by rerunning its recorded
-   command over every `src/` file they touch (AGENTS.md, step 3).
+   command over every `src/` file they touch ([review](workflow.md#review)).
 2. #570 starts after the sweep integrates. #570 also makes
    `tools/port-metrics.py` count the C++ declarations it generates.
 3. Phase 2 takes every slot that ready phase 1 work leaves free, ranked by code
    retired, crossings removed and glue deleted.
-4. Before each stocktake and planning round, reread AGENTS.md, this chart and
+4. Before each stocktake and planning round, reread AGENTS.md, `docs/planning.md`, this chart and
    the latest steering section if they changed (`/start-development`, step 4).
 
 ## Twenty-fourth steering review (2026-10-29: per-entry map tolls, rebound callees and #581's hidden consumers)
@@ -219,7 +219,7 @@ Apply these corrections through the work order below:
      reference, sweeps `src/` only, and adds a quick-CI check against
      `WITH_RUST` in `src/`.
    - #570 still starts after PR-B.
-3. **The map view costs a load, not a call** (AGENTS.md map bullet,
+3. **The map view costs a load, not a call** ([map access](porting.md#map-access),
    world-state.md "Shared map view", #565 body).
    - After #576 integrates, root's own small PR makes `map_func::World` the one
      descriptor, reached by a load from the canonical C++ statics. A failed
@@ -238,7 +238,7 @@ Apply these corrections through the work order below:
    - #577's single-use carriers;
    - the `CargoFlow` bounce.
 6. **Speed.** Run the due profile after integration 30 first. If a projection
-   rose more than 3%, attribution follows AGENTS.md, and correction 3 is the
+   rose more than 3%, attribution follows [speed policy](speed.md#policy), and correction 3 is the
    first candidate.
 
 AGENTS.md changes:
@@ -292,7 +292,7 @@ fixing reviews, strict exact-combination Full, bounded rollback and
 action-based wind-down remain. A historical mention is not placement; CI-found
 behavior fixes get a scoped review; deep checks run only on the user's request;
 active speed dependencies are preserved. #559 and the parked NewGRF corpus stay
-excluded with the return conditions in the work order. AGENTS.md carries the
+excluded with the return conditions in the work order. AGENTS.md and its routing table carry the
 rules; issue and PR bodies carry current actions and evidence.
 
 ## Recent completed work
