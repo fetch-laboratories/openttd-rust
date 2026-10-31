@@ -434,7 +434,7 @@ pub struct Services {
     pub tick_trigger: unsafe extern "C" fn(*mut c_void),
     pub production_callback: unsafe extern "C" fn(*mut c_void, u8),
     pub scale_cargo: unsafe extern "C" fn(u32) -> u32,
-    pub tile_add_wrap: unsafe extern "C" fn(u32, i32, i32) -> u32,
+    pub environment: *const crate::services::EnvironmentServices,
     pub farm_tile: unsafe extern "C" fn(u32) -> FarmTile,
     pub snow_line: unsafe extern "C" fn() -> u8,
     pub make_field: unsafe extern "C" fn(u32, u8, u8, u16),
@@ -1483,7 +1483,13 @@ fn farm_with_landscape(
     let y = (u32::from(l.h) / 2)
         .wrapping_add(rand(s) % 31)
         .wrapping_sub(16) as i32;
-    let tile = unsafe { (s.tile_add_wrap)(l.tile, x, y) };
+    let tile = map.coordinates().tile_add_wrap(
+        l.tile,
+        x,
+        y,
+        map.size_y,
+        (unsafe { &*s.environment }.freeform_edges)(),
+    );
     if tile != INVALID_TILE {
         plant(tile, id, map, s, landscape);
     }
@@ -2232,7 +2238,7 @@ crate::abi::layouts! {
         tick_trigger,
         production_callback,
         scale_cargo,
-        tile_add_wrap,
+        environment,
         farm_tile,
         snow_line,
         make_field,

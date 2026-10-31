@@ -12,6 +12,8 @@
 #include "fixture_map.hpp"
 #include "../tile_cmd.h"
 #include "../rust/landscape_loop_ffi.h"
+#include "../rust/station_lifecycle_ffi.h"
+#include "../rust/roadstop_resolver_ffi.h"
 #include "../rust/tile_owner_ffi.h"
 #include "../rust/abi_ffi.h"
 #include <array>
@@ -19,7 +21,6 @@
 
 namespace LandscapeProbe {
 static_assert(std::is_same_v<TileLoopProc, void(uint32_t) noexcept>);
-static_assert(std::is_same_v<decltype(OpenTTDLandscapeLoopServices::station_loop), TileLoopProc *>);
 static inline uint32_t calls, reads, seen, expected_tile;
 static inline bool passed;
 static constexpr std::array<uint8_t, 4> NATIVE_TYPES{5, 10, 10, 5}; // Other kinds dispatch to Rust owners.
@@ -53,6 +54,13 @@ template<typename Check> void Run(Check check)
 	auto shared = OpenTTDSharedServices{};
 	shared.map = &callbacks.statics;
 	shared.tile_type = Type;
+	shared.station_type = [](uint32_t) noexcept { return StationType::End; };
+	/* The Rust station loop's first native call is GetByTile. */
+	OpenTTDRoadStopResolverServices roadstops{};
+	roadstops.by_tile = [](uint32_t tile) noexcept -> BaseStation * { Visit<5>(tile); return nullptr; };
+	auto station = OpenTTDStationLifecycleServices{};
+	station.shared = &shared;
+	station.roadstop = &roadstops;
 	const OpenTTDIndustryTileServices object_tiles{.on_water = ProbeObjectOnWater};
 	auto objects = OpenTTDObjectServices{};
 	objects.shared = &shared;
@@ -64,7 +72,7 @@ template<typename Check> void Run(Check check)
 		.industry = {},
 		.ground = {},
 		.town = nullptr,
-		.station_loop = Visit<5>,
+		.station = &station,
 		.objects = &objects,
 	};
 	const OpenTTDTreeLoopSettings settings{.tick_counter = 1, .size_x = 64, .climate = 0, .extra = 0, .ambient = false, .ambient_callback = false};

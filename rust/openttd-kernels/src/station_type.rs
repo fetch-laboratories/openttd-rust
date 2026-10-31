@@ -100,3 +100,8 @@ pub const STATION_RAIL: u8 = 0;
 pub const STATION_OILRIG: u8 = 4;
 /// `StationType::Dock`.
 pub const STATION_DOCK: u8 = 5;
+
+/// `StationAnimationTrigger::TileLoop`.
+pub const SAT_TILE_LOOP: u8 = 7;
+/// `AirportAnimationTrigger::TileLoop`.
+pub const AAT_TILE_LOOP: u8 = 1;

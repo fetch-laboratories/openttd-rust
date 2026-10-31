@@ -49,16 +49,6 @@ pub struct TransactionServices {
     pub max_name: usize,
 }
 
-/// # Safety
-/// The spans denote live readable bytes; no name mutation occurs during comparison.
-unsafe fn equal(a: ByteSpan, b: ByteSpan) -> bool {
-    a.size == b.size
-        && (a.size == 0
-            || unsafe {
-                std::slice::from_raw_parts(a.data, a.size)
-                    == std::slice::from_raw_parts(b.data, b.size)
-            })
-}
 unsafe fn unique_name(s: &TransactionServices, name: ByteSpan) -> bool {
     let mut from = 0;
     loop {
@@ -67,7 +57,7 @@ unsafe fn unique_name(s: &TransactionServices, name: ByteSpan) -> bool {
             return true;
         }
         let current = (s.name)(v.cast());
-        if current.size != 0 && unsafe { equal(current, name) } {
+        if current.size != 0 && current.same_bytes(name) {
             return false;
         }
         from = unsafe { (s.groups.vehicle_id)(v.cast()) }.wrapping_add(1);

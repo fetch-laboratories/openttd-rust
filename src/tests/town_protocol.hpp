@@ -272,7 +272,6 @@ template <typename Check> void CheckTownProtocol(Check check)
 	services.map_max_y = []() noexcept -> uint32_t { return 63; };
 	services.closest_town = [](uint32_t, uint32_t) noexcept -> const OpenTTDTownHandle * { return nullptr; };
 	services.tile_valid = [](uint32_t) noexcept { return true; };
-	services.distance_from_edge = [](uint32_t) noexcept { return uint32_t(1); };
 	services.road_type = [](uint32_t) noexcept { return uint8_t(63); };
 	static const OpenTTDTileOwnerServices owners{};
 	static const OpenTTDLandscapeTileServices tiles = [] {

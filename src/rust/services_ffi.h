@@ -100,7 +100,6 @@ struct OpenTTDSharedServices {
 	uint16_t (*depot_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_index);
 	uint8_t (*disallowed_road_directions)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(disallowed_road_directions);
 	bool (*disaster_sound)() noexcept OPENTTD_SERVICE_DEFAULT(disaster_sound);
-	uint32_t (*distance_from_edge)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(distance_from_edge);
 	uint8_t (*drive_through_axis)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(drive_through_axis);
 	bool (*forbid_90_deg)() noexcept OPENTTD_SERVICE_DEFAULT(forbid_90_deg);
 	void (*free_train_reservation)(const Train *) noexcept OPENTTD_SERVICE_DEFAULT(free_train_reservation);
@@ -169,7 +168,6 @@ struct OpenTTDSharedServices {
 	uint8_t (*tile_owner)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_owner);
 	uint8_t (*tile_slope)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_slope);
 	uint8_t (*tile_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_type);
-	uint32_t (*tile_add_wrap)(uint32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_add_wrap);
 	bool (*tile_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_valid);
 	OpenTTDFoundationSlope (*tile_slope_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_slope_z);
 	int32_t (*tile_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_z);

@@ -171,6 +171,11 @@ pub(crate) fn has_tile_road_type(
     Some(get_road_type(m, tile, kind)?.0 != crate::road_type::INVALID_ROADTYPE)
 }
 
+/// `Roadside::Barren`.
+pub const ROADSIDE_BARREN: Roadside = Roadside(0);
+/// `Roadside::Grass`.
+pub const ROADSIDE_GRASS: Roadside = Roadside(1);
+
 #[allow(clippy::cast_possible_truncation)] // GB returns the original field width.
 impl crate::map_func::World<'_> {
     /// `GetRoadTileType`.

@@ -14,6 +14,7 @@ use crate::timer_game_tick::DAY_TICKS;
 pub struct CalendarYear(pub i32);
 pub const DEF_MINUTES_PER_YEAR: u32 = 12;
 pub const FROZEN_MINUTES_PER_YEAR: u32 = 0;
+pub const MAX_MINUTES_PER_YEAR: u32 = 10080;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_calendar_set_date(date: i32, fraction: u16) {

@@ -267,7 +267,7 @@ static void Ship_build_prototype(uint32_t id) noexcept { Ship *v = Ship::Get(Veh
 static void Ship_build_interval_percent(uint32_t id) noexcept
 {
 	Ship *v = Ship::Get(VehicleID(id));
-	v->SetServiceIntervalIsPercent(RustCompanyServiceIntervalPercent(RustCurrentCompanyID()));
+	RustVehicleSetServiceIntervalIsPercent(v, RustCompanyServiceIntervalPercent(RustCurrentCompanyID()));
 }
 
 static void Ship_build_capacity(uint32_t id, uint32_t capacity) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleSetCargoCap(RustVehicle(v), static_cast<uint16_t>(capacity)); }

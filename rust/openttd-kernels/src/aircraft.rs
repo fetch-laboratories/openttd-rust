@@ -2532,11 +2532,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_release_blocks(leaves: *const Lea
 /// # Safety
 /// Handles/state and immutable services satisfy the source lifetime preconditions.
 /// Raw scalar accesses end before noexcept callbacks; no borrow survives reentry.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_aircraft_invalidate_target(
-    leaves: *const Leaves,
-    station: u16,
-) {
+pub(crate) unsafe fn invalidate_target(leaves: *const Leaves, station: u16) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
     with_world!(leaves, |w| {
         {

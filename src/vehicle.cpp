@@ -99,7 +99,7 @@ static OpenTTDVisitCapacity VehicleVisitCapacity(OpenTTDVehicle *handle) noexcep
 static OpenTTDVisitPrediction VehicleVisitPrediction(OpenTTDVehicle *handle) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
-	return {.loading_tick = v->last_loading_tick, .last_loading = v->last_loading_station.base(), .last_station = RustVehicleLastStationVisited(handle), .ticks = RustVehicleLoadUnloadTicks(handle)};
+	return {.loading_tick = v->last_loading_tick, .last_loading = RustVehicleLastLoadingStation(handle), .last_station = RustVehicleLastStationVisited(handle), .ticks = RustVehicleLoadUnloadTicks(handle)};
 }
 static void VehicleVisitArrivalDirty(OpenTTDVehicle *handle) noexcept
 {

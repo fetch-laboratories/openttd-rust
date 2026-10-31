@@ -12,10 +12,9 @@ static OpenTTDCargoPacket *CargoOwner(void *shell) noexcept { return static_cast
 static void CargoDestroy(void *shell) noexcept { delete static_cast<CargoPacket *>(shell); }
 static uint32_t CargoRandom(uint32_t limit) noexcept { return RandomRange(limit); }
 static uint32_t CargoCoordinate(uint32_t tile, uint8_t axis) noexcept { return axis == 0 ? TileX(TileIndex(tile)) : TileY(TileIndex(tile)); }
-static uint16_t CargoFlow(const void *context, uint8_t mode, uint16_t origin, uint16_t avoid, uint16_t avoid2, const uint16_t *, size_t, uint8_t *restricted) noexcept
+static uint16_t CargoFlow(const void *context, uint8_t mode, uint16_t origin, [[maybe_unused]] uint16_t avoid, [[maybe_unused]] uint16_t avoid2, const uint16_t *, size_t, uint8_t *restricted) noexcept
 {
 	const GoodsEntry *ge = static_cast<const GoodsEntry *>(context);
-	if (mode == 2) return ge->GetVia(StationID(origin), StationID(avoid), StationID(avoid2)).base();
 	if (mode == 4) return ge->HasData() && !ge->GetData().flows.empty();
 	if (!ge->HasData()) return StationID::Invalid().base();
 	const auto &flows = ge->GetData().flows;
@@ -47,13 +46,10 @@ static void CargoOrigin(void *context, uint16_t origin, uint32_t amount, uint8_t
 	if (remove != 0) map[StationID(origin)] -= amount;
 	else map[StationID(origin)] += amount;
 }
-static OpenTTDCargoFlow *CargoFlowOwner(const void *context, uint16_t origin) noexcept
+static OpenTTDCargoFlowMap *CargoFlowMap(const void *context) noexcept
 {
 	const GoodsEntry *ge = static_cast<const GoodsEntry *>(context);
-	if (!ge->HasData()) return nullptr;
-	const auto &flows = ge->GetData().flows;
-	auto it = flows.find(StationID(origin));
-	return it == flows.end() ? nullptr : it->second.RustState();
+	return ge->HasData() ? ge->GetData().flows.RustState() : nullptr;
 }
 static uint32_t CargoRandomDraw() noexcept { return Random(); }
 static void *CargoNextPacket(void *shell) noexcept
@@ -63,7 +59,7 @@ static void *CargoNextPacket(void *shell) noexcept
 	return it == range.end() ? nullptr : *it;
 }
 static const OpenTTDCargoStorageServices _cargo_storage_services = {
-	CargoCanAllocate, CargoCreate, CargoOwner, CargoDestroy, CargoRandom, CargoCoordinate, CargoFlow, CargoPay, CargoOrigin, CargoFlowOwner, CargoRandomDraw, CargoNextPacket,
+	CargoCanAllocate, CargoCreate, CargoOwner, CargoDestroy, CargoRandom, CargoCoordinate, CargoFlow, CargoPay, CargoOrigin, CargoFlowMap, CargoRandomDraw, CargoNextPacket,
 };
 
 CargoPacket::CargoPacket() : CargoPacket(OpenTTDCargoPacketFields{}) {}

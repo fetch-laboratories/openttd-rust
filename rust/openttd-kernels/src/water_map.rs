@@ -46,3 +46,8 @@ pub(crate) fn is_non_flooding_water_tile(m: &TileTypeAccess, t: u32) -> Option<b
     m.require_type(t, MP_WATER)?;
     Some(m.m3(t)? & 1 != 0)
 }
+
+/// `IsWater`.
+pub(crate) fn is_water(m: &TileTypeAccess, tile: u32) -> Option<bool> {
+    Some(get_water_tile_type(m, tile)? == 0)
+}

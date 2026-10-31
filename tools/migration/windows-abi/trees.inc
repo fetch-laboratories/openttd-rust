@@ -86,6 +86,8 @@ static void Trees()
 	shared.water_services = []() noexcept { return &water; };
 	static OpenTTDFixtureMap map{6, 4096};
 	for (uint32_t tile = 0; tile < map.size; ++tile) map.base[tile].type = (tile == 1 || tile == 2 ? MP_TREES : MP_STATION) << 4;
+	/* Station tiles reach no station arm. */
+	for (uint32_t tile = 0; tile < map.size; ++tile) map.extended[tile].m6 = static_cast<uint8_t>(static_cast<uint8_t>(StationType::End) << 3);
 	static const OpenTTDMovementServices movement{};
 	shared.movement = &movement;
 	shared.map = &map.statics;
@@ -127,13 +129,18 @@ static void Trees()
 		{.build_price = 15, .size = 4096, .climate = 0, .editor = false, .execute = false, .company_valid = false}, &tree_probe_services, &shared, nullptr, &commands, 0);
 	CHECK(command.cost == 30 && command.status == 0);
 	tree_probe.plant.tile_type = 0;
+	OpenTTDRoadStopResolverServices roadstops{};
+	roadstops.by_tile = [](uint32_t) noexcept -> BaseStation * { return nullptr; };
+	auto station = OpenTTDStationLifecycleServices{};
+	station.shared = &shared;
+	station.roadstop = &roadstops;
 	const OpenTTDLandscapeLoopServices loop{
 		.shared = &shared,
 		.trees = &tree_probe_services,
 		.industry = {},
 		.ground = {},
 		.town = nullptr,
-		.station_loop = TreeUnused<void, uint32_t>,
+		.station = &station,
 		.objects = nullptr,
 	};
 	const uint32_t cursor = *openttd_rust_tile_loop_cursor();

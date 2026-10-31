@@ -15,6 +15,8 @@ pub const VEH_SHIP: u8 = VehicleType::SHIP.0;
 /// `VEH_AIRCRAFT`.
 pub const VEH_AIRCRAFT: u8 = VehicleType::AIRCRAFT.0;
 pub const GROUND_ACCELERATION: u32 = 9800;
+/// `AccelerationModel::AM_ORIGINAL`.
+pub const AM_ORIGINAL: u8 = 0;
 
 /// End of vehicle types buildable by companies.
 pub const VEH_COMPANY_END: u8 = VehicleType::COMPANY_END.0;

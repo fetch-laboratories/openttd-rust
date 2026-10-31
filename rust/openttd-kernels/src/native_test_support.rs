@@ -43,6 +43,8 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
     let x = (s.map_max_x)() + 1;
     let y = (s.map_max_y)() + 1;
     if get_tile_slope(&map, tile, x, y) != Some((s.tile_slope)(tile))
+        || crate::tile_map::is_tile_flat(&map, tile, x, y)
+            != Some((unsafe { &*(s.station_commands)() }.tile_flat)(tile))
         || get_tile_z(&map, tile, x, y) != Some((s.tile_z)(tile))
         || get_tropic_zone(&map, tile) != Some((s.tropic_zone)(tile))
     {
@@ -268,6 +270,17 @@ pub unsafe extern "C" fn openttd_test_flat_empty_world(
     max_height: u8,
 ) {
     unsafe { crate::landscape_generation::flat_empty_world(a, height, freeform, max_height) }
+}
+
+/// Seed a fixture train's `cached_max_curve_speed`; production writes stay in Rust owners.
+/// # Safety
+/// `state` is a live, exclusively accessed train state.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_train_state_set_cached_max_curve_speed(
+    state: *mut crate::train_state::State,
+    value: u16,
+) {
+    crate::raw_field::write_field!(state, cached_max_curve_speed, value);
 }
 
 /// `LoadTownData` coordinate policy, compared with the original native expression.
