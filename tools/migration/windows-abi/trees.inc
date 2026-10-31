@@ -7,7 +7,7 @@
 struct TreeProbe {
 	OpenTTDTreePlantObservation plant{.tile_type = 7, .bridge = false, .ground = 0, .density = 0, .snow = false, .coast = false, .zone = 0};
 	OpenTTDTreeObservation tree{.ground = 3, .density = 3, .species = 20, .count = 2, .growth = 3, .zone = 0};
-	uint32_t writes = 0, waters = 0, clears = 0;
+	uint32_t writes = 0, reentries = 0, clears = 0;
 	int64_t nested_cost = 0;
 	bool abort = false;
 	const OpenTTDSharedServices *shared = nullptr;
@@ -27,9 +27,11 @@ static const OpenTTDTreeServices tree_probe_services{
 	.snow_line = TreeUnused<uint8_t>,
 	.sin = [](float value) noexcept { return value; },
 	.cos = [](float value) noexcept { return value; },
-	.make_tree = [](uint32_t, uint8_t type, uint32_t count, uint8_t growth, uint8_t ground, uint32_t density) noexcept {
+	.make_tree = [](uint32_t tile, uint8_t type, uint32_t count, uint8_t growth, uint8_t ground, uint32_t density) noexcept {
 		++tree_probe.writes;
 		CHECK(type == 12 && count == 2 && growth == 6 && ground == 0 && density == 2);
+		++tree_probe.reentries;
+		tree_probe.nested_cost = openttd_rust_trees_clear_tile(tile + 1, 1, 5, false, &tree_probe_services, tree_probe.shared);
 	},
 	.set_ground_density = TreeUnused<void, uint32_t, uint8_t, uint32_t>,
 	.add_count = TreeUnused<void, uint32_t, int32_t>,
@@ -82,15 +84,19 @@ static void Trees()
 		.news = TreeUnused<void, OpenTTDVehicle *, uint32_t>,
 	};
 	shared.water_services = []() noexcept { return &water; };
+	static std::array<TileBaseStorage, 4096> map_tiles{};
+	static const std::array<TileExtendedStorage, 4096> map_extended{};
+	for (uint32_t tile = 0; tile < map_tiles.size(); ++tile) map_tiles[tile].type = (tile == 1 || tile == 2 ? MP_TREES : MP_STATION) << 4;
+	static const OpenTTDMovementServices movement = [] {
+		OpenTTDMovementServices m{};
+		m.tile_types = []() noexcept -> OpenTTDTileTypeAllocation { return {map_tiles.data(), map_extended.data(), 4096, true}; };
+		return m;
+	}();
+	shared.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
+	shared.map_log_x = []() noexcept { return 6U; };
 	shared.map_max_x = []() noexcept { return 63U; };
 	shared.map_max_y = []() noexcept { return 63U; };
 	shared.tile_type = [](uint32_t tile) noexcept { return static_cast<uint8_t>(tile == 1 || tile == 2 ? 4 : 5); };
-	shared.tree_ground = [](uint32_t tile) noexcept {
-		/* A water observation reenters trees; no owner borrow spans the call. */
-		++tree_probe.waters;
-		tree_probe.nested_cost = openttd_rust_trees_clear_tile(tile + 1, 1, 5, false, &tree_probe_services, tree_probe.shared);
-		return static_cast<TreeGround>(0);
-	};
 	shared.clear_square_services = {
 		.docking = [](uint32_t) noexcept { return false; },
 		.generating_world = []() noexcept { return false; },
@@ -128,7 +134,7 @@ static void Trees()
 	tree_probe.plant.tile_type = 0;
 	const OpenTTDLandscapeLoopServices loop{
 		.shared = &shared,
-		.tile_types = {},
+		.tile_types = movement.tile_types(),
 		.trees = &tree_probe_services,
 		.industry = {},
 		.ground = {},
@@ -144,7 +150,7 @@ static void Trees()
 		CHECK(fixture.Run());
 	}
 	*openttd_rust_tile_loop_cursor() = cursor;
-	CHECK(tree_probe.waters == 1 && tree_probe.clears == 1 && tree_probe.nested_cost == 40 && tree_probe.writes == 1);
+	CHECK(tree_probe.reentries == 1 && tree_probe.clears == 1 && tree_probe.nested_cost == 40 && tree_probe.writes == 1);
 	openttd_rust_trees_initialize();
 	CHECK(*counter == 0 && counter == openttd_rust_tree_counter());
 	tree_probe.abort = true;

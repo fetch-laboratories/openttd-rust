@@ -25,7 +25,9 @@ use crate::genworld::{
     LG_TERRAGENESIS, Progress,
 };
 use crate::ground::ClearServices;
-use crate::heightmap::{HM_CLOCKWISE, HM_COUNTER_CLOCKWISE};
+use crate::heightmap::{
+    HM_CLOCKWISE, HM_COUNTER_CLOCKWISE, Image, Input, MAX_HEIGHTMAP_SIDE_LENGTH_IN_PIXELS,
+};
 use crate::landscape_type::{ARCTIC, TROPIC};
 use crate::node_hash::{NodeMap, NodeSet};
 use crate::random_func::chance16_i;
@@ -44,7 +46,6 @@ use crate::tree_cmd::TP_NONE;
 use crate::water::WaterServices;
 use crate::water_type::WATER_CLASS_SEA;
 use crate::witness as w;
-use std::ffi::c_void;
 #[repr(C)]
 pub struct Frame {
     _private: [u8; 0],
@@ -85,19 +86,6 @@ pub struct Settings {
     pub freeform: bool,
 }
 #[repr(C)]
-pub struct Image {
-    pub width: u32,
-    pub height: u32,
-    pub data: *const u8,
-}
-#[repr(C)]
-pub struct Decoder {
-    pub context: *mut c_void,
-    pub read: extern "C" fn(*mut c_void, *mut Image) -> bool,
-    pub finish: extern "C" fn(*mut c_void),
-}
-
-#[repr(C)]
 pub struct GenerationServices {
     pub shared: *const Services,
     pub clear: *const ClearServices,
@@ -114,7 +102,6 @@ pub struct GenerationServices {
     pub flat_height: extern "C" fn(u32) -> FlatHeight,
     pub river: extern "C" fn(u32) -> bool,
     pub set_snow_line: extern "C" fn(u8),
-    pub not_reached: extern "C" fn(),
     pub river_debug: extern "C" fn(bool, u32, u32, u32, i32, i32),
     pub assert_condition: extern "C" fn(bool),
     pub sea_construct: extern "C" fn(*mut Frame),
@@ -215,13 +202,6 @@ pub unsafe extern "C" fn openttd_rust_initialize_landscape(
 ) {
     unsafe { World::new(&*a) }.initialize(freeform);
 }
-/// # Safety
-/// Same table contract as initialize; callbacks never unwind across Rust.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_fix_slopes(a: *const GenerationServices, max_height: u8) {
-    unsafe { World::new(&*a) }.fix_slopes(max_height);
-}
-
 impl World<'_> {
     fn convert_ground_water(&self) {
         w::hit(w::GENERATION_WATERING);
@@ -268,8 +248,9 @@ impl World<'_> {
     }
     fn greyscale(&self, image: &Image, rotation: u8, freeform: bool, heightmap_height: u8) {
         const DIV: u32 = 16384;
+        const _: () = assert!(DIV <= u32::MAX / MAX_HEIGHTMAP_SIDE_LENGTH_IN_PIXELS);
         if rotation != HM_COUNTER_CLOCKWISE && rotation != HM_CLOCKWISE {
-            (self.a.not_reached)();
+            (self.s.not_reached)();
         }
         let (width, height) = if rotation == HM_COUNTER_CLOCKWISE {
             (self.map.size_x(), self.size_y)
@@ -309,10 +290,8 @@ impl World<'_> {
                     };
                     (self.a.assert_condition)(img_row < image.height);
                     (self.a.assert_condition)(img_col < image.width);
-                    // Native decoder's dimensions and this source resizing establish bounds.
-                    let mut level = u32::from(unsafe {
-                        *image.data.add((img_row * image.width + img_col) as usize)
-                    });
+                    let mut level =
+                        u32::from(image.map[(img_row * image.width + img_col) as usize]);
                     if level > 0 {
                         level = 1 + (level - 1) * u32::from(heightmap_height) / 255;
                     }
@@ -334,22 +313,16 @@ impl World<'_> {
     }
     fn load_heightmap(
         &self,
-        decoder: &Decoder,
+        input: &Input,
         rotation: u8,
         freeform: bool,
         heightmap_height: u8,
         max_height: u8,
     ) -> bool {
-        let mut image = Image {
-            width: 0,
-            height: 0,
-            data: std::ptr::null(),
-        };
-        if !(decoder.read)(decoder.context, &raw mut image) {
-            (decoder.finish)(decoder.context);
+        let Some(image) = input.read(true) else {
             w::hit(w::GENERATION_LOAD_FAILURE);
             return false;
-        }
+        };
         w::hit(w::GENERATION_HEIGHTMAP);
         w::hit(if rotation == HM_COUNTER_CLOCKWISE {
             w::GENERATION_HEIGHTMAP_CCW
@@ -360,9 +333,6 @@ impl World<'_> {
         self.fix_slopes(max_height);
         (self.a.set_freeform)(!(self.a.surrounded_by_water)());
         (self.a.screen_dirty)();
-        // End the source's local decoded buffer before returning to progress.
-        // Every read through image.data ended in greyscale above.
-        (decoder.finish)(decoder.context);
         true
     }
 }
@@ -382,20 +352,20 @@ pub(crate) unsafe fn flat_empty_world(
 ) {
     unsafe { World::new(&*a) }.flat_empty_world(height, freeform, max_height);
 }
+/// `LoadHeightmap`, for fixtures; generation reaches it through `generate_landscape`.
 /// # Safety
-/// Decoder output is live and initialized until finish, and cannot
-/// alias map storage. Decode failures retain the source's early false return.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_load_heightmap(
+/// Same native map/service contract as initialize, with a live native input.
+#[cfg(feature = "native-test-support")]
+pub(crate) unsafe fn load_heightmap(
     a: *const GenerationServices,
-    decoder: *const Decoder,
+    input: *const Input,
     rotation: u8,
     freeform: bool,
     heightmap_height: u8,
     max_height: u8,
 ) -> bool {
     unsafe { World::new(&*a) }.load_heightmap(
-        unsafe { &*decoder },
+        unsafe { &*input },
         rotation,
         freeform,
         heightmap_height,
@@ -939,7 +909,7 @@ impl World<'_> {
         }
         true
     }
-    fn generate(&self, frame: *mut Frame, decoder: &Decoder, mode: u8, g: &Settings) -> bool {
+    fn generate(&self, frame: *mut Frame, input: &Input, mode: u8, g: &Settings) -> bool {
         const GLS_HEIGHTMAP: u32 = 3;
         const GLS_TERRAGENESIS: u32 = 4;
         const GLS_ORIGINAL: u32 = 2;
@@ -955,7 +925,7 @@ impl World<'_> {
                 return false;
             }
             if !self.load_heightmap(
-                decoder,
+                input,
                 g.rotation,
                 g.freeform,
                 g.heightmap_height,
@@ -1050,11 +1020,11 @@ impl World<'_> {
 pub(crate) unsafe fn generate_landscape(
     a: *const GenerationServices,
     frame: *mut Frame,
-    decoder: *const Decoder,
+    input: *const Input,
     g: Settings,
     mode: u8,
 ) -> bool {
-    unsafe { World::new(&*a) }.generate(frame, unsafe { &*decoder }, mode, &g)
+    unsafe { World::new(&*a) }.generate(frame, unsafe { &*input }, mode, &g)
 }
 
 impl World<'_> {
@@ -1295,7 +1265,7 @@ impl<'a, 'w> RiverBuilder<'a, 'w> {
         }
         if let Some(&old) = self.closed.get(&node.get_tile()) {
             if node.estimate < self.nodes[old].estimate {
-                (self.world.a.not_reached)();
+                (self.world.s.not_reached)();
             }
             return;
         }
@@ -1363,9 +1333,7 @@ crate::abi::layouts! {
     "OpenTTDFlatTileHeight" ["landscape"] => crate::landscape_generation::FlatHeight {height,flat,};
     "OpenTTDGenerationLoop" ["landscape"] => crate::landscape_generation::Loop {settings,services,};
     "OpenTTDLandscapeGenerationSettings" ["landscape"] => crate::landscape_generation::Settings {max_search_nodes,climate,generator,rivers,min_river_length,route_random,terrain,sea,snow_coverage,desert_coverage,tree_placer,height_limit,rotation,heightmap_height,freeform,};
-    "OpenTTDHeightmapImage" ["landscape"] => crate::landscape_generation::Image { width, height, data, };
-    "OpenTTDHeightmapDecoder" ["landscape"] => crate::landscape_generation::Decoder { context, read, finish, };
     "OpenTTDLandscapeGenerationServices" ["landscape"] => crate::landscape_generation::GenerationServices {
-        shared, clear, water, trees, landscape_commands, water_commands, set_progress, increase_progress, begin_loop, end_loop, tgp_settings, terrain_template, flat_height, river, set_snow_line, not_reached, river_debug, assert_condition, sea_construct, sea_destroy, sea_insert, sea_contains, sea_size, sea_first, sea_next, set_height, inner_tile, make_void, screen_dirty, surrounded_by_water, set_freeform, clear_bridge_middle,
+        shared, clear, water, trees, landscape_commands, water_commands, set_progress, increase_progress, begin_loop, end_loop, tgp_settings, terrain_template, flat_height, river, set_snow_line, river_debug, assert_condition, sea_construct, sea_destroy, sea_insert, sea_contains, sea_size, sea_first, sea_next, set_height, inner_tile, make_void, screen_dirty, surrounded_by_water, set_freeform, clear_bridge_middle,
     };
 }

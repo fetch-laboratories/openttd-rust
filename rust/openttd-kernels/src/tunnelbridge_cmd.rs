@@ -1216,7 +1216,7 @@ impl<'a> World<'a> {
             // SAFETY: immutable table; only original scalar observations cross.
             let road_ground = unsafe { &*self.a.road_ground };
             while middle != end {
-                if (self.s.is_normal_road)(middle)
+                if (self.s.is_normal_road_tile)(middle)
                     && (road_ground.roadside)(middle).0 == ROADSIDE_TREES.0
                 {
                     let min_z = (self.s.tile_max_z)(middle).wrapping_add(3);

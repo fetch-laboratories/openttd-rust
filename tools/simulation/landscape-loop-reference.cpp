@@ -79,10 +79,17 @@ static void ReferenceStation(TileIndex tile) { LandscapeStationLoop(tile.base())
 static void ReferenceObject(TileIndex tile) { Object(tile.base()); }
 static uint8_t GetTileType(uint32_t tile) { return Type(tile); }
 static uint8_t GetTileType(TileIndex tile) { return Type(tile.base()); }
-static Slope movement_slope;
-static uint32_t outside_x, outside_y;
-static std::tuple<Slope, int> GetTilePixelSlopeOutsideMap(int x, int y) { outside_x = x; outside_y = y; return {movement_slope, 24}; }
-static int GetSlopePixelZ(int x, int y, bool ground) { assert(!ground); return 24 + GetPartialPixelZ(x & 15, y & 15, movement_slope); }
+static uint TileHeightOutsideMap(int x, int y) {
+	const uint tx = std::clamp(x, 0, int(Map::SizeX() - 1));
+	const uint ty = std::clamp(y, 0, int(Map::SizeY() - 1));
+	return tiles[(ty << log_x) + tx].height;
+}
+#include "movement-height-reference.inc"
+static int GetSlopePixelZ(int x, int y, bool ground) {
+	assert(!ground);
+	auto [slope, z] = GetTilePixelSlopeOutsideMap(uint32_t(x) >> 4, uint32_t(y) >> 4);
+	return z + GetPartialPixelZ(x & 15, y & 15, slope);
+}
 struct TileTypeProcs { void (*tile_loop_proc)(TileIndex); int (*get_slope_z_proc)(TileIndex, uint, uint, bool) = nullptr; };
 static int GetSlopePixelZ_Void(TileIndex, uint, uint, bool);
 static const TileIndex INVALID_TILE{UINT32_MAX};
@@ -167,20 +174,25 @@ static void MovementGap()
 	world.tile_type = [](uint32_t) noexcept -> uint8_t { return 0; };
 	OpenTTDMovementServices movement{};
 	movement.shared = &world;
-	movement.pixel_location = [](int32_t x, int32_t y) noexcept -> OpenTTDPixelLocation { return {.tile = ((uint32_t(y) >> 4) << log_x) + (uint32_t(x) >> 4), .kind = 0}; };
-	movement.pixel_slope = [](uint32_t) noexcept -> OpenTTDFoundationSlope { return {.z = 24, .slope = movement_slope}; };
-	movement.outside_pixel_slope = [](uint32_t x, uint32_t y) noexcept -> OpenTTDFoundationSlope { outside_x = x; outside_y = y; return {.z = 24, .slope = movement_slope}; };
-	for (uint x_bits : {6U, 12U}) for (uint y_bits : {6U, 12U}) for (Slope slope : slopes) {
+	movement.tile_types = []() noexcept -> OpenTTDTileTypeAllocation {
+		return {.base = tiles.get(), .extended = extended.get(), .count = 1U << (log_x + log_y), .assertions = true};
+	};
+	for (uint x_bits : {6U, 12U}) for (uint y_bits : {6U, 12U}) {
 		log_x = x_bits; log_y = y_bits;
-		movement_slope = slope;
+		tiles = std::make_unique<BaseTile[]>(1U << (log_x + log_y));
+		extended = std::make_unique<TileExtendedStorage[]>(1U << (log_x + log_y));
+		for (uint i = 0; i < (1U << (log_x + log_y)); ++i) tiles[i].height = 3;
+		for (Slope slope : slopes) {
+		tiles[0].height = 3 + ((slope & SLOPE_N) != 0);
+		tiles[1].height = 3 + ((slope & SLOPE_W) != 0);
+		tiles[1U << log_x].height = 3 + ((slope & SLOPE_E) != 0);
+		tiles[(1U << log_x) + 1].height = 3 + ((slope & SLOPE_S) != 0);
 		for (int x : {INT32_MIN, -65537, -16, -1, 0, 1, 15, 16, 1023, 1024, 65535, 65536, INT32_MAX}) for (int y : {INT32_MIN, -16, -1, 0, 15, 1023, 1024, 65535, 65536, INT32_MAX}) {
-			outside_x = outside_y = UINT32_MAX;
 			int expected = GetSlopePixelZOutsideMap(x, y);
-			const uint32_t expected_x = outside_x, expected_y = outside_y;
-			outside_x = outside_y = UINT32_MAX;
-			if (openttd_rust_movement_outside_z(&movement, x, y) != expected || outside_x != expected_x || outside_y != expected_y) std::abort();
+			if (openttd_rust_movement_outside_z(&movement, x, y) != expected) std::abort();
 			cases++;
 		}
+	}
 	}
 	std::printf("movement foundation/extreme-coordinate gap: %u unchanged-body cases passed\n", cases);
 }

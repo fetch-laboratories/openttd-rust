@@ -21,6 +21,7 @@
 #include "road_command_ffi.h"
 #include "road_stop_ffi.h"
 #include "presentation_services.h"
+#include "services_assert.h"
 #include "tile_animation_services.h"
 #include "vehicle_services.h"
 #include "services_water.h"
@@ -392,7 +393,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.is_bridge = Shared_is_bridge,
 	.is_drive_through_stop = Shared_is_drive_through_stop,
 	.is_level_crossing = MapSvcIsLevelCrossing,
-	.is_normal_road = Shared_is_normal_road,
+	.is_normal_road_tile = Shared_is_normal_road_tile,
 	.is_plain_rail = RustPlainRailTile,
 	.is_road_depot = Shared_is_road_depot,
 	.is_sea = Shared_is_sea,
@@ -481,6 +482,8 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.for_each_station = SharedForEachStation,
 	.road_stop_type = SharedRoadStopType,
 	.road_stops = []() noexcept { return &GetRustRoadStopServices(); },
+	.show_error = RustShowErrorMessage,
+	.not_reached = RustNotReached,
 };
 
 const OpenTTDSharedServices &GetRustSharedServices() noexcept

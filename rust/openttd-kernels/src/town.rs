@@ -25,6 +25,7 @@
 pub mod commands;
 pub mod founding;
 pub mod house;
+pub mod import;
 pub mod names;
 pub mod resolver;
 
@@ -196,6 +197,12 @@ pub(crate) unsafe fn position(state: *const State) -> u32 {
 pub(crate) unsafe fn population(state: *const State) -> u32 {
     // SAFETY: Caller establishes owner lifetime and serialized access.
     unsafe { (*state).simulation.population }
+}
+/// Read only the canonical house count at the original observation point.
+/// SAFETY: The caller supplies a live owner; this immediate copied read retains no borrow.
+pub(crate) unsafe fn num_houses(state: *const State) -> u32 {
+    // SAFETY: Caller establishes owner lifetime and serialized access.
+    unsafe { (*state).simulation.num_houses }
 }
 fn radius_group(funded: bool, radii: &[u32; 5], distance: u32) -> u8 {
     if funded && distance <= 25 {
@@ -761,7 +768,8 @@ impl Engine<'_> {
         unsafe { position(self.owner) }
     }
     fn num_houses(&self) -> u32 {
-        read_field!(self.owner, simulation.num_houses)
+        // SAFETY: Stable live owner; each immediate field read ends before services.
+        unsafe { num_houses(self.owner) }
     }
     fn change_house_count(&self, amount: u32) {
         write_field!(
@@ -1286,7 +1294,7 @@ impl Engine<'_> {
                 || !(((self.services.is_water_tile)(end)
                     && (slope != 0 || !(self.services.is_sea)(end)))
                     || (self.services.is_plain_rail)(end)
-                    || ((self.services.is_normal_road)(end)
+                    || ((self.services.is_normal_road_tile)(end)
                         && (self.services.disallowed_road_directions)(end) != 0))
             {
                 break;

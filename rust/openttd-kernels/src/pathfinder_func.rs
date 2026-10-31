@@ -34,7 +34,7 @@ pub(crate) fn road_trackdirs(movement: &MovementServices, tile: u32, tram: bool)
                 Some(false)
             }
         });
-        if normal.unwrap_or_else(|| (movement.shared().is_normal_road)(tile)) {
+        if normal.unwrap_or_else(|| (movement.shared().is_normal_road_tile)(tile)) {
             let road = map
                 .as_ref()
                 .and_then(|m| crate::road_map::get_road_bits(m, tile, crate::road_type::RTT_TRAM))

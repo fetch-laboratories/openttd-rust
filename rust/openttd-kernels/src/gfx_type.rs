@@ -43,3 +43,37 @@ pub const COLOUR_GREY: u8 = 14;
 
 /// `COLOUR_WHITE`.
 pub const COLOUR_WHITE: u8 = 15;
+
+/// `Colour` channels: `ColourRGBA` under Emscripten, otherwise `ColourBGRA` on
+/// little-endian and `ColourARGB` on big-endian hosts.
+#[cfg(target_os = "emscripten")]
+#[repr(C, align(4))]
+#[derive(Clone, Copy)]
+pub(crate) struct Colour {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: u8,
+}
+/// `Colour` channels: `ColourRGBA` under Emscripten, otherwise `ColourBGRA` on
+/// little-endian and `ColourARGB` on big-endian hosts.
+#[cfg(all(not(target_os = "emscripten"), target_endian = "little"))]
+#[repr(C, align(4))]
+#[derive(Clone, Copy)]
+pub(crate) struct Colour {
+    pub b: u8,
+    pub g: u8,
+    pub r: u8,
+    pub a: u8,
+}
+/// `Colour` channels: `ColourRGBA` under Emscripten, otherwise `ColourBGRA` on
+/// little-endian and `ColourARGB` on big-endian hosts.
+#[cfg(all(not(target_os = "emscripten"), target_endian = "big"))]
+#[repr(C, align(4))]
+#[derive(Clone, Copy)]
+pub(crate) struct Colour {
+    pub a: u8,
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+}

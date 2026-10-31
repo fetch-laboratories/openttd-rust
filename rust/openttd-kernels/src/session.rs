@@ -20,6 +20,11 @@ pub struct Frame {
 pub struct FrameStorage {
     pub storage: [std::mem::MaybeUninit<u8>; 4096],
 }
+/// Native world-generation frame capacity, including inline heightmap codec scratch.
+#[repr(C, align(16))]
+pub struct WorldFrameStorage {
+    pub storage: [std::mem::MaybeUninit<u8>; 8192],
+}
 #[repr(C)]
 pub struct Load {
     _opaque: [u8; 0],
@@ -137,7 +142,7 @@ pub struct Services {
     pub scan: extern "C" fn(*mut Frame, *mut ScanCallback) -> bool,
     pub world_setup_begin: extern "C" fn(*mut Frame) -> *mut crate::genworld::SetupFrame,
     pub world_setup_end: extern "C" fn(*mut Frame) -> bool,
-    pub world_frame_begin: extern "C" fn(*mut FrameStorage) -> *mut crate::genworld::Frame,
+    pub world_frame_begin: extern "C" fn(*mut WorldFrameStorage) -> *mut crate::genworld::Frame,
     pub world_frame_end: extern "C" fn(*mut Frame, *mut crate::genworld::Frame, u8) -> bool,
     pub heightmap_screenshot: extern "C" fn(*mut Frame) -> bool,
     pub desync_save: extern "C" fn(*mut Frame) -> bool,
@@ -569,7 +574,7 @@ impl Session<'_> {
                 self.sized_world(crate::genworld::GWM_RANDOM, true)?;
                 (s.dirty)();
             }
-            _ => (unsafe { &*(*((s.world)())).landscape }.not_reached)(),
+            _ => (unsafe { &*s.shared }.not_reached)(),
         }
         Ok(())
     }
@@ -859,6 +864,7 @@ crate::abi::layouts! {
     "OpenTTDSessionDimensions" ["session"] => Dimensions { x, y, };
     "OpenTTDSessionSecondaryColour" ["session"] => SecondaryColour { colour, used, };
     "OpenTTDSessionFrameStorage" ["session"] => FrameStorage { storage, };
+    "OpenTTDWorldFrameStorage" ["session"] => WorldFrameStorage { storage, };
     "OpenTTDSessionState" ["session"] => State { mode, switch_mode, pause, };
     "OpenTTDSessionServices" ["session"] => Services{
         clock,

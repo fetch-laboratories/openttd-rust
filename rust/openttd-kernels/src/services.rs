@@ -273,8 +273,8 @@ pub struct Services {
     pub is_drive_through_stop: extern "C" fn(u32) -> bool,
     /// `IsLevelCrossingTile`.
     pub is_level_crossing: extern "C" fn(u32) -> bool,
-    /// Original native `is_normal_road` map observation.
-    pub is_normal_road: extern "C" fn(u32) -> bool,
+    /// Original native `IsNormalRoadTile` map observation.
+    pub is_normal_road_tile: extern "C" fn(u32) -> bool,
     /// Original native `is_plain_rail` map observation.
     pub is_plain_rail: extern "C" fn(u32) -> bool,
     /// Original native `is_road_depot` map observation.
@@ -451,6 +451,10 @@ pub struct Services {
     pub road_stop_type: extern "C" fn(u32) -> RoadStopType,
     /// Native road stop shells and their vehicle reads.
     pub road_stops: extern "C" fn() -> *const crate::road_stop::RoadStopServices,
+    /// `ShowErrorMessage` with two string IDs at `WL_ERROR`.
+    pub show_error: extern "C" fn(u32, u32),
+    /// Native `NOT_REACHED`.
+    pub not_reached: extern "C" fn(),
 }
 /// Station visitor: context, station, its service owner and its index.
 pub type StationVisitor = unsafe extern "C" fn(
@@ -459,14 +463,6 @@ pub type StationVisitor = unsafe extern "C" fn(
     *mut crate::station_service::Service,
     u16,
 );
-/// Canonical `TileVirtXY` and tile type observation, in native call order.
-#[repr(C)]
-pub struct PixelLocation {
-    /// Tile index from unsigned pixel coordinates.
-    pub tile: u32,
-    /// Native tile type.
-    pub kind: u8,
-}
 /// `GetFoundationSlope` result: height and slope after the tile's foundation.
 #[repr(C)]
 pub struct FoundationSlope {
@@ -526,10 +522,6 @@ crate::abi::layouts! {
     "OpenTTDEnvironmentServices" ["common"] => EnvironmentServices {
         editor,
         freeform_edges,
-    };
-    "OpenTTDPixelLocation" ["landscape"] => PixelLocation {
-        tile,
-        kind,
     };
     "OpenTTDFoundationSlope" ["landscape"] => FoundationSlope {
         z,
@@ -700,7 +692,7 @@ crate::abi::layouts! {
         is_bridge,
         is_drive_through_stop,
         is_level_crossing,
-        is_normal_road,
+        is_normal_road_tile,
         is_plain_rail,
         is_road_depot,
         is_sea,
@@ -786,6 +778,8 @@ crate::abi::layouts! {
         for_each_station,
         road_stop_type,
         road_stops,
+        show_error,
+        not_reached,
     };
     "OpenTTDByteSpan" ["industry"] => ByteSpan {
         data,
@@ -882,7 +876,15 @@ pub fn fixture(
     extern "C" fn two_types(_: u8, _: u8) -> bool {
         false
     }
+    extern "C" fn unexpected_error(_: u32, _: u32) {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_path() {
+        std::process::abort()
+    }
     Services {
+        show_error: unexpected_error,
+        not_reached: unexpected_path,
         movement_services: fixture_movement,
         set_tile_owner: zone,
         autoslope: flag0,
@@ -917,7 +919,7 @@ pub fn fixture(
         is_bridge: flag,
         is_drive_through_stop: flag,
         is_level_crossing: flag,
-        is_normal_road: flag,
+        is_normal_road_tile: flag,
         is_plain_rail: flag,
         is_road_depot: flag,
         is_sea: flag,

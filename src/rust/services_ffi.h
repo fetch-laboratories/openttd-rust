@@ -57,7 +57,6 @@ enum Foundation : uint8_t;
 enum Slope : uint8_t;
 enum DiagDirection : uint8_t;
 struct OpenTTDCalendarYMD { int32_t year; uint8_t month, day; };
-struct OpenTTDPixelLocation { uint32_t tile; uint8_t kind; };
 struct OpenTTDFoundationSlope { int32_t z; Slope slope; };
 struct OpenTTDTownHandle; // Opaque native Town shell; never dereferenced in Rust.
 struct OpenTTDTownState;
@@ -113,7 +112,7 @@ struct OpenTTDSharedServices {
 	bool (*is_bridge)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_bridge);
 	bool (*is_drive_through_stop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_drive_through_stop);
 	bool (*is_level_crossing)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_level_crossing);
-	bool (*is_normal_road)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_normal_road);
+	bool (*is_normal_road_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_normal_road_tile);
 	bool (*is_plain_rail)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_plain_rail);
 	bool (*is_road_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_road_depot);
 	bool (*is_sea)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_sea);
@@ -200,6 +199,8 @@ struct OpenTTDSharedServices {
 	void (*for_each_station)(void *, void (*)(void *, const OpenTTDStation *, OpenTTDStationService *, uint16_t)) noexcept OPENTTD_SERVICE_DEFAULT(for_each_station); ///< Live Station::Iterate(); resolves the next slot after each visit, including reentry.
 	RoadStopType (*road_stop_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_stop_type);
 	const OpenTTDRoadStopServices *(*road_stops)() noexcept OPENTTD_SERVICE_DEFAULT(road_stops);
+	void (*show_error)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(show_error);
+	void (*not_reached)() noexcept OPENTTD_SERVICE_DEFAULT(not_reached);
 };
 extern const OpenTTDSharedServices _rust_shared_services;
 struct OpenTTDSubsidyServices;
