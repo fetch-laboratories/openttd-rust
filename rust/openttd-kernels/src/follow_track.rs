@@ -37,6 +37,13 @@ const EC_90DEG: u8 = 3;
 const EC_NO_WAY: u8 = 4;
 const EC_RESERVED: u8 = 5;
 
+/// Vehicle facts invariant during a synchronous road search. No search callback
+/// changes road kind or compatible types, owner, display speed or order speed.
+pub(crate) struct RoadContext {
+    pub tram: bool,
+    pub compatible: u64,
+}
+
 /// The complete follower state; C++ facades alias this stack record in place.
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -118,11 +125,15 @@ impl State {
     fn vehicle_ref(&self) -> VehicleRef {
         VehicleRef(std::ptr::NonNull::new(self.veh).expect("live vehicle"))
     }
-    fn tram(&self, w: &World<'_>) -> bool {
-        self.mode == ROAD && (crate::movement::table(w.shared).road_kind)(self.vehicle_ref()).0
+    fn tram(&self, w: &World<'_>, road: Option<&RoadContext>) -> bool {
+        self.mode == ROAD
+            && road.map_or_else(
+                || (crate::movement::table(w.shared).road_kind)(self.vehicle_ref()).0,
+                |r| r.tram,
+            )
     }
-    fn single_tram(&self, w: &World<'_>, tile: u32) -> u8 {
-        w.check(self.tram(w));
+    fn single_tram(&self, w: &World<'_>, tile: u32, road: Option<&RoadContext>) -> u8 {
+        w.check(self.tram(w, road));
         if w.is_normal_road_tile(tile) {
             use crate::road_type::{ROAD_NE, ROAD_NW, ROAD_SE, ROAD_SW};
             return match w.road_bits(tile, true) {
@@ -135,14 +146,14 @@ impl State {
         }
         crate::direction_type::INVALID_DIAGDIR
     }
-    fn query(&mut self, w: &World<'_>) -> bool {
+    fn query(&mut self, w: &World<'_>, road: Option<&RoadContext>) -> bool {
         self.new_td_bits = if self.mode == RAIL && w.plain_rail(self.new_tile.0) {
             u16::from(w.tracks(self.new_tile.0)) * 0x101
         } else if self.mode == ROAD {
             crate::pathfinder_func::road_trackdirs(
                 crate::movement::table(w.shared),
                 self.new_tile.0,
-                self.tram(w),
+                self.tram(w, road),
             )
         } else {
             track_status_to_trackdir_bits(crate::movement::track_status(
@@ -164,7 +175,7 @@ impl State {
         self.is_bridge = false;
         self.is_station = false;
     }
-    fn forced_reverse(&mut self, w: &World<'_>) -> bool {
+    fn forced_reverse(&mut self, w: &World<'_>, road: Option<&RoadContext>) -> bool {
         if self.mode != WATER && w.depot(self.old_tile.0, self.mode) {
             let dir = if self.mode == RAIL {
                 w.rail_depot_dir(self.old_tile.0)
@@ -177,8 +188,8 @@ impl State {
             }
         }
         if self.mode == ROAD
-            && ((self.tram(w)
-                && self.single_tram(w, self.old_tile.0)
+            && ((self.tram(w, road)
+                && self.single_tram(w, self.old_tile.0, road)
                     == reverse_diag_dir(self.exitdir, |ok| w.check(ok)))
                 || (w.bay_stop(self.old_tile.0)
                     && w.bay_dir(self.old_tile.0)
@@ -189,11 +200,11 @@ impl State {
         }
         false
     }
-    fn try_reverse(&mut self, w: &World<'_>) -> bool {
-        if self.mode == ROAD && !self.tram(w) {
+    fn try_reverse(&mut self, w: &World<'_>, road: Option<&RoadContext>) -> bool {
+        if self.mode == ROAD && !self.tram(w, road) {
             self.exitdir = reverse_diag_dir(self.exitdir, |ok| w.check(ok));
             self.new_tile.0 = self.old_tile.0;
-            self.query(w);
+            self.query(w, road);
             self.new_td_bits &= diagdir_reaches_trackdirs(self.exitdir);
             if self.new_td_bits != 0 {
                 return true;
@@ -202,7 +213,7 @@ impl State {
         self.err = EC_NO_WAY;
         false
     }
-    fn can_exit(&mut self, w: &World<'_>) -> bool {
+    fn can_exit(&mut self, w: &World<'_>, road: Option<&RoadContext>) -> bool {
         if self.mode == ROAD
             && w.bay_stop(self.old_tile.0)
             && w.bay_dir(self.old_tile.0) != self.exitdir
@@ -210,8 +221,8 @@ impl State {
             self.err = EC_NO_WAY;
             return false;
         }
-        if self.tram(w) {
-            let dir = self.single_tram(w, self.old_tile.0);
+        if self.tram(w, road) {
+            let dir = self.single_tram(w, self.old_tile.0, road);
             if dir != crate::direction_type::INVALID_DIAGDIR && dir != self.exitdir {
                 self.err = EC_NO_WAY;
                 return false;
@@ -255,7 +266,7 @@ impl State {
         self.is_station = (self.mode == RAIL && w.has_station_rail(self.new_tile.0))
             || (self.mode == ROAD && w.station_road_stop(self.new_tile.0));
     }
-    fn can_enter(&mut self, w: &World<'_>) -> bool {
+    fn can_enter(&mut self, w: &World<'_>, road: Option<&RoadContext>) -> bool {
         if self.mode == ROAD
             && w.bay_stop(self.new_tile.0)
             && reverse_diag_dir(w.bay_dir(self.new_tile.0), |ok| w.check(ok)) != self.exitdir
@@ -263,8 +274,8 @@ impl State {
             self.err = EC_NO_WAY;
             return false;
         }
-        if self.tram(w) {
-            let dir = self.single_tram(w, self.new_tile.0);
+        if self.tram(w, road) {
+            let dir = self.single_tram(w, self.new_tile.0, road);
             if dir != crate::direction_type::INVALID_DIAGDIR
                 && dir != reverse_diag_dir(self.exitdir, |ok| w.check(ok))
             {
@@ -302,9 +313,11 @@ impl State {
             return false;
         }
         if self.mode == ROAD {
-            let rt = w.road_type(self.new_tile.0, self.tram(w));
-            if (crate::movement::table(w.shared).road_compatible)(self.vehicle_ref())
-                & (1_u64 << rt)
+            let rt = w.road_type(self.new_tile.0, self.tram(w, road));
+            if road.map_or_else(
+                || (crate::movement::table(w.shared).road_compatible)(self.vehicle_ref()),
+                |r| r.compatible,
+            ) & (1_u64 << rt)
                 == 0
             {
                 self.err = EC_RAIL_ROAD_TYPE;
@@ -334,18 +347,28 @@ impl State {
         true
     }
     pub(crate) fn follow(&mut self, s: &Services, tile: u32, td: u8) -> bool {
+        self.follow_with_road(s, tile, td, None)
+    }
+    pub(crate) fn follow_with_road(
+        &mut self,
+        s: &Services,
+        tile: u32,
+        td: u8,
+        road: Option<&RoadContext>,
+    ) -> bool {
         let w = World::new(s);
         self.old_tile.0 = tile;
         self.old_td = td;
         self.err = EC_NONE;
         if w.types.assertions() {
             w.check(
-                (self.tram(&w)
-                    && self.single_tram(&w, self.old_tile.0)
+                (self.tram(&w, road)
+                    && self.single_tram(&w, self.old_tile.0, road)
                         != crate::direction_type::INVALID_DIAGDIR)
                     || {
-                        let sub =
-                            u32::from(self.mode == ROAD && !self.veh.is_null() && self.tram(&w));
+                        let sub = u32::from(
+                            self.mode == ROAD && !self.veh.is_null() && self.tram(&w, road),
+                        );
                         track_status_to_trackdir_bits(crate::movement::track_status(
                             s,
                             self.old_tile.0,
@@ -358,19 +381,19 @@ impl State {
             );
         }
         self.exitdir = trackdir_to_exitdir(self.old_td);
-        if self.forced_reverse(&w) {
+        if self.forced_reverse(&w, road) {
             return true;
         }
-        if !self.can_exit(&w) {
+        if !self.can_exit(&w, road) {
             return false;
         }
         self.tile_exit(&w);
-        if !self.query(&w) {
-            return self.try_reverse(&w);
+        if !self.query(&w, road) {
+            return self.try_reverse(&w, road);
         }
         self.new_td_bits &= diagdir_reaches_trackdirs(self.exitdir);
-        if self.new_td_bits == 0 || !self.can_enter(&w) {
-            if self.mode == ROAD && !self.tram(&w) && self.try_reverse(&w) {
+        if self.new_td_bits == 0 || !self.can_enter(&w, road) {
+            if self.mode == ROAD && !self.tram(&w, road) && self.try_reverse(&w, road) {
                 return true;
             }
             if self.new_td_bits == 0 {
@@ -448,6 +471,15 @@ pub(crate) fn platform_length_station(w: &World<'_>, mut tile: u32, dir: u8) -> 
     }
 }
 pub(crate) fn speed_limit(s: &Services, mode: u8, v: Option<VehicleRef>, tile: u32) -> i32 {
+    speed_limit_with_road(s, mode, v, tile, None)
+}
+pub(crate) fn speed_limit_with_road(
+    s: &Services,
+    mode: u8,
+    v: Option<VehicleRef>,
+    tile: u32,
+    tram: Option<bool>,
+) -> i32 {
     let w = World::new(s);
     let m = crate::movement::table(s);
     let mut speed = i32::MAX;
@@ -461,7 +493,7 @@ pub(crate) fn speed_limit(s: &Services, mode: u8, v: Option<VehicleRef>, tile: u
         (m.train().physics.rail_speed)(crate::services::RailType(w.rail_type(tile)))
     } else if mode == ROAD {
         (m.road_type_speed)(crate::services::RoadType(
-            w.road_type(tile, (m.road_kind)(v.unwrap()).0),
+            w.road_type(tile, tram.unwrap_or_else(|| (m.road_kind)(v.unwrap()).0)),
         ))
     } else {
         0

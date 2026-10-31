@@ -354,13 +354,13 @@ static void CompareAuthority()
 	shared.company_valid = +[](uint8_t id) noexcept { return Company::IsValidID(id); };
 	static const OpenTTDMovementServices movement = [] {
 		auto m = OpenTTDMovementServices{};
-		m.tile_types = []() noexcept -> OpenTTDTileTypeAllocation { return {}; };
 		m.native_assert = [](bool ok) noexcept { assert(ok); };
 		return m;
 	}();
-	shared.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
+	shared.movement = &movement;
 	shared.tile_type = +[](uint32_t tile) noexcept -> uint8_t { assert(tile == 129); authority_closest_calls++; return authority_town == nullptr ? 0 : MP_HOUSE; };
-	shared.map_log_x = +[]() noexcept -> uint32_t { return 6; };
+	const OpenTTDFixtureMap map{6};
+	shared.map = &map.statics;
 	shared.town_count = +[]() noexcept -> size_t { return 0; };
 	shared.town_index = +[](uint32_t) noexcept -> uint16_t { return 17; };
 	shared.town_by_id = +[](uint32_t) noexcept { return reinterpret_cast<OpenTTDTownHandle *>(authority_town); };

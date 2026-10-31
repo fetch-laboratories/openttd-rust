@@ -12,12 +12,13 @@ pub(crate) fn get_tunnel_bridge_transport_type(
     m: &TileTypeAccess,
     tile: TileIndex,
 ) -> Option<TransportType> {
-    m.require_type(tile.0, MP_TUNNELBRIDGE)?;
-    Some(TransportType(gb(u32::from(m.m5(tile.0)?), 2, 2) as u8))
+    let fields = m.require_type(tile.0, MP_TUNNELBRIDGE)?;
+    Some(TransportType(gb(u32::from(fields.m5()), 2, 2) as u8))
 }
 
 #[allow(clippy::cast_possible_truncation)] // GB returns the original field width.
 impl crate::map_func::World<'_> {
+    #[inline]
     pub(crate) fn tunnel_bridge_dir(&self, t: u32) -> u8 {
         self.check(self.kind(t) == crate::tile_type::MP_TUNNELBRIDGE);
         gb(u32::from(Self::byte(self.types.m5(t))), 0, 2) as u8

@@ -110,7 +110,8 @@ static void AircraftDirectBoundary()
 	CHECK(!openttd_rust_aircraft_event(&leaves, p.vehicle, false));
 	CHECK(!p.live && p.deleted == 1);
 	/* A disaster has its own flags and no Aircraft state, even with subtype zero. */
-	shared.map_log_x = []() noexcept { return uint32_t{6}; };
+	static OpenTTDFixtureMap disaster_map{6};
+	shared.map = &disaster_map.statics;
 	shared.map_max_x = shared.map_max_y = []() noexcept { return uint32_t{63}; };
 	vehicle.x = vehicle.y = vehicle.z = [](OpenTTDVehicle *) noexcept { CHECK(aircraft_probe.live == false); return int32_t{0}; };
 	shared.tile_height = [](uint32_t) noexcept { return uint32_t{0}; };
@@ -184,7 +185,8 @@ static void AircraftPhaseBoundary()
 	AircraftTestAirportServices().fta = [](const AirportSpec *) noexcept -> const AirportFTAClass * { return reinterpret_cast<const AirportFTAClass *>(&aircraft_probe); };
 	leaves.moving = [](const void *, uint8_t) noexcept { return OpenTTDAircraftMoving{16, 0, 16, 0}; };
 	v.xy = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleXY{aircraft_probe.x, aircraft_probe.y}; };
-	s.map_log_x = []() noexcept { return uint32_t{6}; };
+	static OpenTTDFixtureMap map{6, 4096};
+	s.map = &map.statics;
 	s.map_max_x = s.map_max_y = []() noexcept { return uint32_t{63}; };
 	s.plane_speed = []() noexcept { return uint8_t{1}; };
 	v.speed_inputs = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleSpeedInputs{0, 100, 8, 0, 0}; };
@@ -209,16 +211,11 @@ static void AircraftPhaseBoundary()
 	v.y = [](OpenTTDVehicle *) noexcept { return int32_t{-3}; };
 	v.write_z = [](OpenTTDVehicle *, int32_t z) noexcept { CHECK(z == 0); };
 	static OpenTTDSharedServices movement_world{};
-	movement_world.map_log_x = []() noexcept -> uint32_t { return 6; };
+	movement_world.map = &map.statics;
 	movement_world.tile_type = [](uint32_t) noexcept -> uint8_t { return 0; };
 	static OpenTTDMovementServices movement{};
 	movement.shared = &movement_world;
-	movement.tile_types = []() noexcept -> OpenTTDTileTypeAllocation {
-		static std::array<TileBaseStorage, 4096> tiles{};
-		static std::array<TileExtendedStorage, 4096> extended{};
-		return {.base = tiles.data(), .extended = extended.data(), .count = 4096, .assertions = true};
-	};
-	s.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
+	s.movement = &movement;
 	leaves.copy_sprite = [](OpenTTDVehicle *, OpenTTDVehicle *) noexcept {};
 	v.base_viewport = [](OpenTTDVehicle *) noexcept {};
 	v.tile_links = [](OpenTTDVehicle *shell) noexcept { return &aircraft_probe.links[shell == aircraft_probe.vehicle.handle ? 0 : 1]; };
