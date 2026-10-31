@@ -85,7 +85,7 @@ static void VehicleMaintenanceBoundary()
 	base.status = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 	base.vehicle_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return VEH_ROAD; };
 	maintenance.interval = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicleMaintenanceInterval {
-		return {.company = reinterpret_cast<const Company *>(&company_shell), .last_service = {0}, .now = {100}, .reliability = 0, .interval = 1, .percent = false, .wallclock = false, .breakdowns = false, .no_service = true};
+		return {.company = reinterpret_cast<const Company *>(&company_shell), .last_service = {0}, .now = {100}, .interval = 1, .reliability = 0, .percent = false, .wallclock = false, .no_service = true, .breakdowns = 0};
 	};
 	maintenance.replacement = [](OpenTTDVehicle *, const Company *) noexcept -> OpenTTDVehicleMaintenanceReplacement { return {.engine = 1, .when_old = false}; };
 	maintenance.replacement_available = [](OpenTTDVehicle *, uint16_t) noexcept { return true; };
