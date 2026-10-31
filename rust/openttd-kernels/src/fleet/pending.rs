@@ -19,7 +19,7 @@ pub struct Services {
     pub(crate) x: unsafe extern "C" fn(*mut ()) -> i32,
     pub(crate) y: unsafe extern "C" fn(*mut ()) -> i32,
     pub(crate) z: unsafe extern "C" fn(*mut ()) -> i32,
-    pub(crate) reserve: unsafe extern "C" fn(u8) -> u32,
+    pub(crate) company: *const crate::company_identity::Services,
     pub(crate) subtract: unsafe extern "C" fn(i64),
     pub(crate) command: unsafe extern "C" fn(*mut (), u32),
     pub(crate) animation: unsafe extern "C" fn(i32, i32, i32, i64),
@@ -82,7 +82,10 @@ pub unsafe extern "C" fn openttd_rust_fleet_pending_drain(
         let x = unsafe { (w.x)(v) };
         let y = unsafe { (w.y)(v) };
         let z = unsafe { (w.z)(v) };
-        let reserve = i64::from(unsafe { (w.reserve)(owner) });
+        let company = unsafe { &*w.company };
+        let reserve = i64::from((company.renew_reserve)((company.company)(
+            crate::company_type::CompanyID(owner),
+        )));
         unsafe {
             (w.subtract)(reserve);
             (w.command)(cost, id);
@@ -120,7 +123,7 @@ crate::abi::layouts! {
         x,
         y,
         z,
-        reserve,
+        company,
         subtract,
         command,
         animation,

@@ -16,6 +16,7 @@ struct Company;
 struct OpenTTDSharedServices;
 struct OpenTTDFleetTransactionServices;
 struct OpenTTDFleetGroupServices;
+struct OpenTTDCompanyIdentityServices;
 struct OpenTTDVehicleMaintenanceRenewal {
 	OpenTTDCalendarDate age;
 	OpenTTDCalendarDate max_age;
@@ -45,10 +46,6 @@ struct OpenTTDVehicleMaintenanceInterval {
 struct OpenTTDVehicleMaintenanceReplacement {
 	uint16_t engine;
 	bool when_old;
-};
-struct OpenTTDVehicleMaintenanceBudget {
-	int64_t needed;
-	int64_t available;
 };
 
 struct OpenTTDVehicleMaintenanceAutomatic {
@@ -114,15 +111,14 @@ struct OpenTTDVehicleMaintenanceServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDFleetTransactionServices *transaction;
 	const OpenTTDFleetGroupServices *group;
+	const OpenTTDCompanyIdentityServices *company;
 	OpenTTDVehicleMaintenanceRenewal (OPENTTD_RUST_CALL *renewal)(OpenTTDVehicle *, const Company *) noexcept OPENTTD_SERVICE_DEFAULT(renewal);
 	OpenTTDVehicleMaintenanceReset (OPENTTD_RUST_CALL *reset)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(reset);
 	bool (OPENTTD_RUST_CALL *has_engine)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(has_engine);
 	OpenTTDVehicleMaintenanceInterval (OPENTTD_RUST_CALL *interval)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(interval);
 	uint16_t (OPENTTD_RUST_CALL *engine_reliability)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine_reliability);
-	OpenTTDVehicleMaintenanceBudget (OPENTTD_RUST_CALL *budget)(const Company *) noexcept OPENTTD_SERVICE_DEFAULT(budget);
 	OpenTTDVehicleMaintenanceReplacement (OPENTTD_RUST_CALL *replacement)(OpenTTDVehicle *, const Company *) noexcept OPENTTD_SERVICE_DEFAULT(replacement);
 	bool (OPENTTD_RUST_CALL *replacement_available)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(replacement_available);
-	int64_t (*available_money)(const Company *) noexcept OPENTTD_SERVICE_DEFAULT(available_money);
 	OpenTTDVehicleMaintenanceAutomatic (OPENTTD_RUST_CALL *automatic)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(automatic);
 	bool (OPENTTD_RUST_CALL *depot_service)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(depot_service);
 	OpenTTDVehicleMaintenanceCheckBreakdown (OPENTTD_RUST_CALL *check_breakdown)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(check_breakdown);

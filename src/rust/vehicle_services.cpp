@@ -46,6 +46,7 @@
 #include "aircraft_ffi.h"
 #include "fleet_ffi.h"
 #include "services_ffi.h"
+#include "company_identity_ffi.h"
 #include "company_services.h"
 #include "environment_services.h"
 #include "../company_base.h"
@@ -521,8 +522,6 @@ static OpenTTDVehicleMaintenanceInterval OPENTTD_RUST_CALL MaintenanceInterval(O
 	return {.company = company, .last_service = MaintenanceDate(RustVehicleLastService(v)), .now = MaintenanceDate(TimerGameEconomy::date), .interval = RustVehicleServiceInterval(v), .reliability = RustVehicleReliability(v), .percent = v->ServiceIntervalIsPercent(), .wallclock = TimerGameEconomy::UsingWallclockUnits(), .no_service = _settings_game.order.no_servicing_if_no_breakdowns, .breakdowns = _settings_game.difficulty.vehicle_breakdowns};
 }
 static uint16_t OPENTTD_RUST_CALL MaintenanceEngineReliability(OpenTTDVehicle *handle) noexcept { return RustEngineReliability(VehicleOf(handle)->GetEngine()); }
-static int64_t MaintenanceAvailableMoney(const Company *company) noexcept { return GetAvailableMoney(company->index).base(); }
-static OpenTTDVehicleMaintenanceBudget OPENTTD_RUST_CALL MaintenanceBudget(const Company *company) noexcept { return {.needed = RustCompanyRenewReserve(company), .available = MaintenanceAvailableMoney(company)}; }
 static OpenTTDVehicleMaintenanceReplacement OPENTTD_RUST_CALL MaintenanceReplacement(OpenTTDVehicle *handle, const Company *company) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
@@ -634,15 +633,14 @@ const OpenTTDVehicleMaintenanceServices _rust_vehicle_maintenance_services{
 	.shared = &GetRustSharedServices(),
 	.transaction = &FleetTransactionServices(),
 	.group = &FleetGroupServices(),
+	.company = &GetRustCompanyIdentityServices(),
 	.renewal = MaintenanceRenewal,
 	.reset = MaintenanceReset,
 	.has_engine = MaintenanceHasEngine,
 	.interval = MaintenanceInterval,
 	.engine_reliability = MaintenanceEngineReliability,
-	.budget = MaintenanceBudget,
 	.replacement = MaintenanceReplacement,
 	.replacement_available = MaintenanceReplacementAvailable,
-	.available_money = MaintenanceAvailableMoney,
 	.automatic = MaintenanceAutomatic,
 	.depot_service = MaintenanceDepotService,
 	.check_breakdown = MaintenanceCheckBreakdown,

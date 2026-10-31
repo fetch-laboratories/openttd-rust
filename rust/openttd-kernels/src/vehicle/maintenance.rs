@@ -56,11 +56,6 @@ pub struct Replacement {
     pub engine: u16,
     pub when_old: bool,
 }
-#[repr(C)]
-pub struct Budget {
-    pub needed: i64,
-    pub available: i64,
-}
 
 #[repr(C)]
 pub struct Automatic {
@@ -141,16 +136,15 @@ pub struct Services {
     pub shared: *const services::Services,
     pub transaction: *const fleet::transactions::Services,
     pub group: *const fleet::GroupServices,
+    pub company: *const crate::company_identity::Services,
     /// Company pointers must name the live owner for the synchronous call.
     pub renewal: unsafe extern "C" fn(VehicleRef, *const OpenTTDCompany) -> Renewal,
     pub reset: extern "C" fn(VehicleRef) -> Reset,
     pub has_engine: extern "C" fn(VehicleRef) -> bool,
     pub interval: extern "C" fn(VehicleRef) -> Interval,
     pub engine_reliability: extern "C" fn(VehicleRef) -> u16,
-    pub budget: unsafe extern "C" fn(*const OpenTTDCompany) -> Budget,
     pub replacement: unsafe extern "C" fn(VehicleRef, *const OpenTTDCompany) -> Replacement,
     pub replacement_available: extern "C" fn(VehicleRef, u16) -> bool,
-    pub available_money: unsafe extern "C" fn(*const OpenTTDCompany) -> i64,
     pub automatic: extern "C" fn(VehicleRef) -> Automatic,
     pub depot_service: extern "C" fn(VehicleRef) -> bool,
     pub check_breakdown: extern "C" fn(VehicleRef) -> CheckBreakdown,
@@ -254,6 +248,15 @@ unsafe fn reset<const C: bool>(mut v: VehicleRef, base: &VehicleServices) {
         v = next;
     }
 }
+// The supplied shell stays live; resolve its canonical finance owner afresh after callbacks.
+unsafe fn available_money(s: &Services, company: *const OpenTTDCompany) -> i64 {
+    let commands = unsafe { &*(*s.transaction).commands };
+    let companies = unsafe { &*s.company };
+    let id = (companies.company_id)(company.cast_mut());
+    let owner = (commands.finance.company_finances)(id.0);
+    let infinite = (commands.infinite_money)();
+    unsafe { crate::company::openttd_rust_company_available_money(owner, infinite) }
+}
 unsafe fn needs_service<const C: bool>(v: VehicleRef, base: &VehicleServices) -> bool {
     let s = unsafe { &*base.maintenance };
     if svc!(C, base.status, v) & (VS_STOPPED | VS_CRASHED) != 0 {
@@ -286,11 +289,11 @@ unsafe fn needs_service<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
         return true;
     }
     // SAFETY: interval resolved the live owner; no callback can destroy it here.
-    let budget = unsafe { svc!(C, s.budget, r.company) };
-    if budget.needed > budget.available {
+    let companies = unsafe { &*s.company };
+    let mut needed = i64::from((companies.renew_reserve)(r.company));
+    if needed > unsafe { available_money(s, r.company) } {
         return false;
     }
-    let mut needed = budget.needed;
     let mut pending = false;
     let mut current = Some(v);
     while let Some(unit) = current {
@@ -377,8 +380,8 @@ unsafe fn replacement_needed<const C: bool>(
     let cost = unsafe {
         crate::engine_capabilities::openttd_rust_engine_cost(cap, (cap.engine)(replacement.engine))
     };
-    let available = unsafe { svc!(C, s.available_money, company) };
     *needed = needed.saturating_add(cost.saturating_mul(2));
+    let available = unsafe { available_money(s, company) };
     branch!(C, VEHICLE_MAINT_REPLACE);
     *needed > available
 }
@@ -816,10 +819,6 @@ crate::abi::layouts! {
         engine,
         when_old,
     };
-    "OpenTTDVehicleMaintenanceBudget" ["maintenance"] => Budget {
-        needed,
-        available,
-    };
 
     "OpenTTDVehicleMaintenanceAutomatic" ["maintenance"] => Automatic {
         has_depot_order,
@@ -884,15 +883,14 @@ crate::abi::layouts! {
         shared,
         transaction,
         group,
+        company,
         renewal,
         reset,
         has_engine,
         interval,
         engine_reliability,
-        budget,
         replacement,
         replacement_available,
-        available_money,
         automatic,
         depot_service,
         check_breakdown,

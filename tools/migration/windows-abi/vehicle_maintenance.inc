@@ -2,7 +2,9 @@
 
 #include "trees.inc"
 #include "vehicle_tables.inc"
+#include "company_base.h"
 #include "rust/company_ffi.h"
+#include "rust/company_identity_ffi.h"
 #include "rust/engine_capabilities_ffi.h"
 #include "rust/fleet_ffi.h"
 
@@ -48,10 +50,26 @@ static void VehicleMaintenanceBoundary()
 	static uint32_t stage;
 	static uint16_t factor;
 	static int64_t available;
-	static int engine_shell;
+	static int engine_shell, company_shell;
+	static CompanyFinances *active_finances, *after_finances;
+	static bool infinite, after_infinite;
+	static uint8_t supplied_id;
+	CompanyFinanceOwner initial, changed;
+	after_finances = changed.state;
+	OpenTTDCompanyIdentityServices company{};
+	company.renew_reserve = [](const Company *c) noexcept -> uint32_t { CHECK(c == reinterpret_cast<const Company *>(&company_shell) && stage++ == 0); return 100; };
+	company.company_id = [](const Company *c) noexcept -> uint8_t { CHECK(c == reinterpret_cast<const Company *>(&company_shell) && (stage == 1 || stage == 6)); ++stage; return supplied_id; };
+	OpenTTDCompanyFinanceServices finance{};
+	finance.company_finances = [](uint8_t id) noexcept -> CompanyFinances * { CHECK(id == supplied_id && (stage == 2 || stage == 7)); ++stage; return id == COMPANY_SPECTATOR.base() ? nullptr : active_finances; };
+	OpenTTDCommandServices commands{}; commands.finance = &finance;
+	commands.infinite_money = []() noexcept { CHECK(stage == 3 || stage == 8); ++stage; return infinite; };
+	maintenance.company = &company;
 	resolver.spritegroup = [](uint16_t, uint8_t) noexcept -> const SpriteGroup * { return nullptr; };
 	resolver.resolve_callback = [](OpenTTDVehicleResolverState *, uint16_t id, uint16_t callback, uint32_t property, uint32_t, int32_t *, size_t) noexcept -> uint16_t {
-		CHECK(stage++ == 0 && id == 123 && callback == CBID_VEHICLE_MODIFY_PROPERTY && property == 0x11);
+		CHECK(stage++ == 4 && id == 123 && callback == CBID_VEHICLE_MODIFY_PROPERTY && property == 0x11);
+		active_finances = after_finances;
+		active_finances->money = Money{available};
+		infinite = after_infinite;
 		return factor;
 	};
 	capabilities.resolver = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
@@ -61,16 +79,14 @@ static void VehicleMaintenanceBoundary()
 	capabilities.ground = [](const OpenTTDEngine *) noexcept { return false; };
 	capabilities.carrying = [](const OpenTTDEngine *) noexcept -> OpenTTDEngineCarrying { return {.kind = VEH_ROAD, .ground_capacity = 0, .default_cargo = INVALID_CARGO}; };
 	capabilities.road_cost = [](const OpenTTDEngine *) noexcept -> uint8_t { return 53; };
-	capabilities.price_shift = [](const OpenTTDEngine *, uint32_t index) noexcept -> int32_t { CHECK(stage++ == 1 && index == PR_BUILD_VEHICLE_ROAD); return 0; };
-	OpenTTDFleetTransactionServices transactions{}; transactions.capabilities = &capabilities;
+	capabilities.price_shift = [](const OpenTTDEngine *, uint32_t index) noexcept -> int32_t { CHECK(stage++ == 5 && index == PR_BUILD_VEHICLE_ROAD); return 0; };
+	OpenTTDFleetTransactionServices transactions{}; transactions.capabilities = &capabilities; transactions.commands = &commands;
 	maintenance.transaction = &transactions;
 	base.status = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 	base.vehicle_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return VEH_ROAD; };
-	maintenance.interval = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicleMaintenanceInterval { return {.company = nullptr, .last_service = {0}, .now = {100}, .interval = 1, .no_service = true}; };
-	maintenance.budget = [](const Company *) noexcept -> OpenTTDVehicleMaintenanceBudget { return {.needed = 100, .available = 1000000}; };
+	maintenance.interval = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicleMaintenanceInterval { return {.company = reinterpret_cast<const Company *>(&company_shell), .last_service = {0}, .now = {100}, .interval = 1, .no_service = true}; };
 	maintenance.replacement = [](OpenTTDVehicle *, const Company *) noexcept -> OpenTTDVehicleMaintenanceReplacement { return {.engine = 1, .when_old = false}; };
 	maintenance.replacement_available = [](OpenTTDVehicle *, uint16_t) noexcept { return true; };
-	maintenance.available_money = [](const Company *) noexcept -> int64_t { CHECK(stage++ == 2); return available; };
 	const int64_t original_price = openttd_rust_economy_prices()[PR_BUILD_VEHICLE_ROAD];
 	openttd_rust_economy_prices()[PR_BUILD_VEHICLE_ROAD] = 25600;
 	for (uint16_t value : {CALLBACK_FAILED, uint16_t{17}}) {
@@ -78,12 +94,28 @@ static void VehicleMaintenanceBoundary()
 		const int64_t needed = value == CALLBACK_FAILED ? 10700 : 3500;
 		for (bool funded : {false, true}) {
 			available = needed - !funded; stage = 0;
+			active_finances = initial.state; initial.state->money = Money{1000000};
+			supplied_id = 7; infinite = after_infinite = false;
 			CHECK(openttd_rust_vehicle_needs_service(shell, &base) == funded);
-			CHECK(stage == 3);
+			CHECK(stage == 9);
 		}
 	}
+	/* The initial reserve check precedes property evaluation at the same boundary. */
+	for (int64_t money : {INT64_C(99), INT64_C(100)}) {
+		active_finances = initial.state; initial.state->money = Money{money};
+		supplied_id = 7; infinite = after_infinite = false; available = 3500; factor = 17; stage = 0;
+		CHECK(openttd_rust_vehicle_needs_service(shell, &base) == (money == 100));
+		CHECK(stage == (money == 100 ? 9 : 4));
+	}
+	for (bool invalid : {false, true}) {
+		active_finances = initial.state; initial.state->money = Money{1000000};
+		supplied_id = invalid ? COMPANY_SPECTATOR.base() : 7; infinite = false; after_infinite = !invalid;
+		available = -1; stage = 0;
+		CHECK(openttd_rust_vehicle_needs_service(shell, &base));
+		CHECK(stage == 9);
+	}
 	openttd_rust_economy_prices()[PR_BUILD_VEHICLE_ROAD] = original_price;
-	maintenance.transaction = nullptr;
+	maintenance.company = nullptr; maintenance.transaction = nullptr;
 }
 
 /* Actual native storage type is checked by the game-side shell probe; this
