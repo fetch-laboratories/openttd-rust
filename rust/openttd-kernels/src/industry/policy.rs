@@ -210,15 +210,11 @@ pub extern "C" fn openttd_rust_industry_construction_cost(
 ) -> i64 {
     construction_cost(multiplier, life, raw_setting)
 }
-pub(super) fn removal_cost(multiplier: u32) -> i64 {
+pub(crate) fn removal_cost(multiplier: u32) -> i64 {
     // OverflowSafeInt::operator*= takes int, including the unsigned multiplier conversion.
     crate::company::price(crate::economy_type::PR_CLEAR_INDUSTRY)
         .saturating_mul(i64::from(multiplier as i32))
         >> 8
-}
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_industry_removal_cost(multiplier: u32) -> i64 {
-    removal_cost(multiplier)
 }
 /// # Safety
 /// Nonempty readable native span of layout-checked industry history pairs.

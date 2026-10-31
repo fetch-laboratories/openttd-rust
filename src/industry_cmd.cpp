@@ -3364,17 +3364,6 @@ Money IndustrySpec::GetConstructionCost() const
 }
 
 /**
- * Get the cost for removing this industry
- * Take note that the cost will always be zero for non-grf industries.
- * Only if the grf author did specified a cost will it be applicable.
- * @return the cost (inflation corrected etc)
- */
-Money IndustrySpec::GetRemovalCost() const
-{
-	return openttd_rust_industry_removal_cost(RustIndustrySpecRemovalMultiplier(this));
-}
-
-/**
  * Determines whether this industrytype uses standard/newgrf production changes.
  * @return true if original economy is used.
  */

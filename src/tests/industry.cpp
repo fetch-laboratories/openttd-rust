@@ -29,6 +29,7 @@
 #include "../core/backup_type.hpp"
 #include "../economy_func.h"
 #include <thread>
+extern "C" int64_t openttd_test_industry_removal_cost(uint32_t);
 static_assert(sizeof(CargoArray::value_type) == sizeof(uint32_t) && sizeof(CargoTypes) == sizeof(uint64_t));
 static_assert(std::is_trivially_destructible_v<TileArea>);
 static_assert(sizeof(TileArea) == sizeof(OpenTTDIndustryLocation));
@@ -522,8 +523,7 @@ TEST_CASE("Industry - specification price widths and saturation")
 			CHECK(spec.GetConstructionCost() == ((price * multiplier) >> 8));
 		}
 		for (uint32_t multiplier : {0U, 1U, 0x7FFFFFFFU, 0x80000000U, UINT32_MAX}) {
-			spec.removal_cost_multiplier = multiplier;
-			CHECK(spec.GetRemovalCost() == ((price * multiplier) >> 8));
+			CHECK(openttd_test_industry_removal_cost(multiplier) == ((price * multiplier) >> 8));
 		}
 	}
 }

@@ -184,7 +184,6 @@ bool openttd_rust_industry_spec_raw(uint8_t life);
 bool openttd_rust_industry_spec_processing(uint8_t life, uint32_t behaviour);
 bool openttd_rust_industry_original_economy(uint16_t callbacks, uint8_t economy);
 int64_t openttd_rust_industry_construction_cost(uint8_t multiplier, uint8_t life, uint8_t raw_setting);
-int64_t openttd_rust_industry_removal_cost(uint32_t multiplier);
 struct OpenTTDIndustryPair { uint16_t first, second; };
 OpenTTDIndustryPair openttd_rust_industry_sum_history(const OpenTTDIndustryPair *, size_t);
 
