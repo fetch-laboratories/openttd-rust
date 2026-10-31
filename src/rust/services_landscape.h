@@ -92,8 +92,6 @@ inline void RustUpdateSignals() noexcept { UpdateSignalsInBuffer(); }
 template <typename Context>
 inline void RustCrossingSound(Context, uint32_t tile) noexcept { RustPlayTileSound(tile, SND_0E_LEVEL_CROSSING); }
 
-inline OpenTTDFoundationSlope RustTilePixelSlope(uint32_t tile) noexcept { auto [slope, z] = GetTilePixelSlope(TileIndex{tile}); return {.z = z, .slope = slope}; }
-inline OpenTTDFoundationSlope RustOutsidePixelSlope(uint32_t x, uint32_t y) noexcept { auto [slope, z] = GetTilePixelSlopeOutsideMap(x, y); return {.z = z, .slope = slope}; }
 inline OpenTTDMovementObjectFoundation RustObjectFoundation(uint32_t tile) noexcept
 {
 	const auto *spec = ObjectSpec::Get(GetObjectType(TileIndex{tile}));

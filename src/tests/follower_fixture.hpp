@@ -55,17 +55,9 @@ struct FollowerFixture {
 		movement.road_compatible = [](OpenTTDVehicle *) noexcept -> uint64_t { return 1; };
 		movement.road_type_speed = [](RoadType) noexcept -> uint16_t { return 0; };
 		movement.order_speed = [](OpenTTDVehicle *) noexcept -> uint16_t { return 40; };
-		movement.normal_road = [](uint32_t t) noexcept { return active->base[t].m5 >> 6 == 0; };
 		movement.has_tile_road_type = [](uint32_t, RoadTramType) noexcept { return true; };
-		movement.normal_road_status_tail = [](uint32_t t) noexcept -> OpenTTDNormalRoadStatusTail { return {static_cast<uint8_t>((active->base[t].m5 >> 4) & 3), false}; };
 		movement.water_type = [](uint32_t t) noexcept { return static_cast<WaterTileType>(active->base[t].m5 >> 4); };
 		movement.tile_flat = [](uint32_t) noexcept { return true; };
-		movement.pixel_location = [](int32_t x, int32_t y) noexcept -> OpenTTDPixelLocation {
-			const uint32_t t = (uint32_t(y) >> 4) * active->width + (uint32_t(x) >> 4);
-			return {t, active->shared.tile_type(t)};
-		};
-		movement.pixel_slope = [](uint32_t) noexcept -> OpenTTDFoundationSlope { return {0, SLOPE_FLAT}; };
-		movement.max_pixel_z = [](uint32_t) noexcept -> int32_t { return 0; };
 		ground.tracks = [](uint32_t t) noexcept { return static_cast<TrackBits>(active->base[t].m5 & 63); };
 		rail.rail_tile_type = [](uint32_t t) noexcept { return static_cast<RailTileType>(active->base[t].m5 >> 6); };
 		rail.is_rail_depot = [](uint32_t t) noexcept { return active->base[t].m5 >> 6 == 3; };

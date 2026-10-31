@@ -129,8 +129,11 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	movement.shared = &shared;
 	shared.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
 	shared.tile_type = [](uint32_t) noexcept { return uint8_t{0}; }; // Flat clear ground.
-	movement.pixel_location = [](int32_t x, int32_t y) noexcept -> OpenTTDPixelLocation { return {.tile = ((uint32_t(y) >> 4) << 6) + (uint32_t(x) >> 4), .kind = 0}; };
-	movement.pixel_slope = [](uint32_t) noexcept { return OpenTTDFoundationSlope{0, Slope{0}}; };
+	movement.tile_types = []() noexcept -> OpenTTDTileTypeAllocation {
+		static std::array<TileBaseStorage, 4096> tiles{};
+		static std::array<TileExtendedStorage, 4096> extended{};
+		return {.base = tiles.data(), .extended = extended.data(), .count = 4096, .assertions = true};
+	};
 	shared.tile_height = [](uint32_t) noexcept { return uint32_t{0}; };
 	leaves.airport_entry = [](const void *, uint8_t) noexcept { return uint8_t{0}; };
 	vehicle.write_x = vehicle.write_y = vehicle.write_z = [](OpenTTDVehicle *, int32_t) noexcept {};
