@@ -392,8 +392,7 @@ pub unsafe extern "C" fn openttd_test_station_tree_sequence(
 ) {
     let s = unsafe { &*s };
     let xy = |id: u16, dim: usize| if dim == 0 { id % 3 } else { id % 5 };
-    let split =
-        |ids: &mut [u16], dim| unsafe { crate::kdtree::native_split(s, ids, |id| xy(id, dim)) };
+    let split = |keys: &mut [crate::kdtree::SplitKey<u16>]| crate::kdtree::native_split(s, keys);
     let mut tree = crate::kdtree::Kdtree::new();
     let observe = |tree: &crate::kdtree::Kdtree<u16>, phase| {
         tree.contained([0, 0], [10, 10], &xy, |id| visit(context, phase, id));
@@ -402,7 +401,7 @@ pub unsafe extern "C" fn openttd_test_station_tree_sequence(
             visit(context, phase + 200, tree.nearest([1, 2], &xy));
         }
     };
-    tree.build(&mut (0..20).collect::<Vec<_>>(), &split);
+    tree.build(0..20, &xy, &split);
     observe(&tree, 0);
     let mut first = Vec::new();
     tree.contained([0, 0], [10, 10], &xy, |id| first.push(id));
@@ -418,7 +417,7 @@ pub unsafe extern "C" fn openttd_test_station_tree_sequence(
         tree.remove(id, &xy, &split);
         observe(&tree, phase);
     }
-    tree.build(&mut [], &split);
+    tree.build([], &xy, &split);
     observe(&tree, 43);
     tree.insert(12, &xy, &split);
     observe(&tree, 44);

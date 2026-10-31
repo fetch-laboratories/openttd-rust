@@ -8,7 +8,6 @@
 //! `core/kdtree.hpp`: two-dimensional uint16 coordinates and signed int distances.
 //! Coordinates resolve canonical records; queries allocate nothing. Coordinate readers
 //! must not mutate the tree or its records. Rectangle visitors follow node/left/right order.
-#![allow(unsafe_code)]
 
 const NONE: usize = usize::MAX;
 const MIN_REBALANCE: usize = 8;
@@ -25,17 +24,33 @@ impl<T> Node<T> {
         }
     }
 }
+/// One element and its coordinate on the dimension being split.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SplitKey<T> {
+    pub coordinate: u16,
+    pub element: T,
+}
 pub(crate) struct Kdtree<T> {
     nodes: Vec<Node<T>>,
     free: Vec<usize>,
+    /// Split buffer, reused by every build so rebuilds allocate nothing once grown.
+    keys: Vec<SplitKey<T>>,
     root: usize,
     unbalanced: usize,
+}
+fn key<T>(element: T) -> SplitKey<T> {
+    SplitKey {
+        coordinate: 0,
+        element,
+    }
 }
 impl<T: Copy + Ord> Kdtree<T> {
     pub(crate) const fn new() -> Self {
         Self {
             nodes: Vec::new(),
             free: Vec::new(),
+            keys: Vec::new(),
             root: NONE,
             unbalanced: 0,
         }
@@ -55,21 +70,25 @@ impl<T: Copy + Ord> Kdtree<T> {
     }
     fn subtree(
         &mut self,
-        elements: &mut [T],
+        keys: &mut [SplitKey<T>],
         level: usize,
-        split: &impl Fn(&mut [T], usize) -> usize,
+        xy: &impl Fn(T, usize) -> u16,
+        split: &impl Fn(&mut [SplitKey<T>]) -> usize,
     ) -> usize {
-        if elements.is_empty() {
+        if keys.is_empty() {
             return NONE;
         }
-        if elements.len() == 1 {
-            return self.add(elements[0]);
+        if keys.len() == 1 {
+            return self.add(keys[0].element);
         }
         let dim = level % 2;
-        let first = split(elements, dim);
-        let index = self.add(elements[first]);
-        self.nodes[index].children[0] = self.subtree(&mut elements[..first], level + 1, split);
-        self.nodes[index].children[1] = self.subtree(&mut elements[first + 1..], level + 1, split);
+        for key in keys.iter_mut() {
+            key.coordinate = xy(key.element, dim);
+        }
+        let first = split(keys);
+        let index = self.add(keys[first].element);
+        self.nodes[index].children[0] = self.subtree(&mut keys[..first], level + 1, xy, split);
+        self.nodes[index].children[1] = self.subtree(&mut keys[first + 1..], level + 1, xy, split);
         index
     }
     pub(crate) fn clear(&mut self) {
@@ -77,16 +96,32 @@ impl<T: Copy + Ord> Kdtree<T> {
         self.free.clear();
         self.unbalanced = 0;
     }
-    pub(crate) fn build(&mut self, elements: &mut [T], split: &impl Fn(&mut [T], usize) -> usize) {
+    pub(crate) fn build(
+        &mut self,
+        elements: impl IntoIterator<Item = T>,
+        xy: &impl Fn(T, usize) -> u16,
+        split: &impl Fn(&mut [SplitKey<T>]) -> usize,
+    ) {
+        let mut keys = std::mem::take(&mut self.keys);
+        keys.clear();
+        keys.extend(elements.into_iter().map(key));
+        self.build_keys(&mut keys, xy, split);
+        self.keys = keys;
+    }
+    fn build_keys(
+        &mut self,
+        keys: &mut [SplitKey<T>],
+        xy: &impl Fn(T, usize) -> u16,
+        split: &impl Fn(&mut [SplitKey<T>]) -> usize,
+    ) {
         self.clear();
-        if elements.is_empty() {
+        if keys.is_empty() {
             return;
         }
-        self.nodes.reserve(elements.len());
-        self.root = self.subtree(elements, 0, split);
+        self.nodes.reserve(keys.len());
+        self.root = self.subtree(keys, 0, xy, split);
     }
-    fn free_subtree(&mut self, node: usize) -> Vec<T> {
-        let mut elements = Vec::new();
+    fn free_subtree(&mut self, node: usize, keys: &mut Vec<SplitKey<T>>) {
         let mut cursor = self.free.len();
         for child in self.nodes[node].children {
             if child != NONE {
@@ -97,7 +132,7 @@ impl<T: Copy + Ord> Kdtree<T> {
         while cursor < self.free.len() {
             let index = self.free[cursor];
             let node = self.nodes[index];
-            elements.push(node.element);
+            keys.push(key(node.element));
             for child in node.children {
                 if child != NONE {
                     self.free.push(child);
@@ -106,7 +141,6 @@ impl<T: Copy + Ord> Kdtree<T> {
             self.nodes[index].children = [NONE; 2];
             cursor += 1;
         }
-        elements
     }
     fn is_unbalanced(&self) -> bool {
         self.count() >= MIN_REBALANCE && self.unbalanced > self.count() / 4
@@ -115,21 +149,25 @@ impl<T: Copy + Ord> Kdtree<T> {
         &mut self,
         include: Option<T>,
         exclude: Option<T>,
-        split: &impl Fn(&mut [T], usize) -> usize,
+        xy: &impl Fn(T, usize) -> u16,
+        split: &impl Fn(&mut [SplitKey<T>]) -> usize,
     ) -> bool {
         if self.count() < MIN_REBALANCE {
             return false;
         }
         let root = self.nodes[self.root].element;
-        let mut elements = self.free_subtree(self.root);
-        elements.push(root);
+        let mut keys = std::mem::take(&mut self.keys);
+        keys.clear();
+        self.free_subtree(self.root, &mut keys);
+        keys.push(key(root));
         if let Some(element) = include {
-            elements.push(element);
+            keys.push(key(element));
         }
         if let Some(element) = exclude {
-            elements.retain(|e| *e != element);
+            keys.retain(|k| k.element != element);
         }
-        self.build(&mut elements, split);
+        self.build_keys(&mut keys, xy, split);
+        self.keys = keys;
         true
     }
     fn insert_recursive(
@@ -153,11 +191,11 @@ impl<T: Copy + Ord> Kdtree<T> {
         &mut self,
         element: T,
         xy: &impl Fn(T, usize) -> u16,
-        split: &impl Fn(&mut [T], usize) -> usize,
+        split: &impl Fn(&mut [SplitKey<T>]) -> usize,
     ) {
         if self.count() == 0 {
             self.root = self.add(element);
-        } else if !self.is_unbalanced() || !self.rebuild(Some(element), None, split) {
+        } else if !self.is_unbalanced() || !self.rebuild(Some(element), None, xy, split) {
             self.insert_recursive(element, self.root, 0, xy);
             self.unbalanced = self.unbalanced.wrapping_add(1);
         }
@@ -168,15 +206,19 @@ impl<T: Copy + Ord> Kdtree<T> {
         node: usize,
         level: usize,
         xy: &impl Fn(T, usize) -> u16,
-        split: &impl Fn(&mut [T], usize) -> usize,
+        split: &impl Fn(&mut [SplitKey<T>]) -> usize,
     ) -> usize {
         if self.nodes[node].element == element {
             self.free.push(node);
             if self.nodes[node].children == [NONE; 2] {
                 return NONE;
             }
-            let mut elements = self.free_subtree(node);
-            self.subtree(&mut elements, level, split)
+            let mut keys = std::mem::take(&mut self.keys);
+            keys.clear();
+            self.free_subtree(node, &mut keys);
+            let branch = self.subtree(&mut keys, level, xy, split);
+            self.keys = keys;
+            branch
         } else {
             let dim = level % 2;
             let side = usize::from(xy(element, dim) >= xy(self.nodes[node].element, dim));
@@ -192,12 +234,12 @@ impl<T: Copy + Ord> Kdtree<T> {
         &mut self,
         element: T,
         xy: &impl Fn(T, usize) -> u16,
-        split: &impl Fn(&mut [T], usize) -> usize,
+        split: &impl Fn(&mut [SplitKey<T>]) -> usize,
     ) {
         if self.count() == 0 {
             return;
         }
-        if !self.is_unbalanced() || !self.rebuild(None, Some(element), split) {
+        if !self.is_unbalanced() || !self.rebuild(None, Some(element), xy, split) {
             self.root = self.remove_recursive(element, self.root, 0, xy, split);
             self.unbalanced = self.unbalanced.wrapping_add(1);
         }
@@ -269,32 +311,20 @@ impl<T: Copy + Ord> Kdtree<T> {
     }
 }
 
-/// Partition live pool IDs using the configured native STL. Every subtree with
-/// at least two elements makes one call; the callback reads coordinates only.
-/// SAFETY: `T` is u16 or a transparent u16 pool ID, including every bit pattern.
-pub(crate) unsafe fn native_split<T: Copy>(
+/// Partition split keys by coordinate using the configured native STL. Every
+/// subtree with at least two elements makes one call, which moves whole keys.
+pub(crate) fn native_split<T: Copy>(
     services: &crate::services::Services,
-    elements: &mut [T],
-    coordinate: impl Fn(T) -> u16,
+    keys: &mut [SplitKey<T>],
 ) -> usize {
-    extern "C" fn read<F: Fn(u16) -> u16>(context: *mut std::ffi::c_void, id: u16) -> u16 {
-        unsafe { (&*context.cast::<F>())(id) }
-    }
-    fn callback<F: Fn(u16) -> u16>(_: &F) -> extern "C" fn(*mut std::ffi::c_void, u16) -> u16 {
-        read::<F>
-    }
-    let coordinate = |id: u16| coordinate(unsafe { std::ptr::from_ref(&id).cast::<T>().read() });
-    (services.kdtree_partition)(
-        elements.as_mut_ptr().cast(),
-        elements.len(),
-        std::ptr::from_ref(&coordinate).cast_mut().cast(),
-        callback(&coordinate),
-    )
+    // The native key is two u16 fields; pool IDs are transparent u16.
+    const { assert!(size_of::<T>() == 2 && size_of::<SplitKey<T>>() == 4) };
+    (services.kdtree_partition)(keys.as_mut_ptr().cast(), keys.len())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Kdtree;
+    use super::{Kdtree, SplitKey};
     #[test]
     fn nearest_after_mutations_and_rebuild() {
         let points: [(u16, u16); 12] = [
@@ -315,13 +345,13 @@ mod tests {
             let p = points[usize::from(id)];
             if dim == 0 { p.0 } else { p.1 }
         };
-        let split = |elements: &mut [u16], dim| {
+        let split = |elements: &mut [SplitKey<u16>]| {
             let mid = elements.len() / 2;
-            elements.select_nth_unstable_by_key(mid, |id| xy(*id, dim));
-            let coordinate = xy(elements[mid], dim);
+            elements.select_nth_unstable_by_key(mid, |k| k.coordinate);
+            let coordinate = elements[mid].coordinate;
             let (mut first, mut last) = (0, elements.len());
             loop {
-                while first < last && xy(elements[first], dim) < coordinate {
+                while first < last && elements[first].coordinate < coordinate {
                     first += 1;
                 }
                 if first == last {
@@ -329,7 +359,7 @@ mod tests {
                 }
                 loop {
                     last -= 1;
-                    if first == last || xy(elements[last], dim) < coordinate {
+                    if first == last || elements[last].coordinate < coordinate {
                         break;
                     }
                 }
@@ -340,7 +370,7 @@ mod tests {
                 first += 1;
             }
             // The boundary element supplies the node's split coordinate.
-            assert_eq!(xy(elements[first], dim), coordinate);
+            assert_eq!(elements[first].coordinate, coordinate);
             first
         };
         let mut tree = Kdtree::new();
@@ -370,13 +400,13 @@ mod tests {
             verify(&tree, &active);
         }
         active = (0..12).collect();
-        tree.build(&mut active, &split);
+        tree.build(active.iter().copied(), &xy, &split);
         verify(&tree, &active);
         let mut contained = Vec::new();
         tree.contained([0, 0], [10, 10], &xy, |id| contained.push(id));
         contained.sort_unstable();
         assert_eq!(contained, [0, 4, 5, 7, 9]);
-        tree.build(&mut [], &split);
+        tree.build([], &xy, &split);
         assert_eq!(tree.count(), 0);
         tree.insert(9, &xy, &split);
         assert_eq!(tree.nearest([0, 0], &xy), 9);

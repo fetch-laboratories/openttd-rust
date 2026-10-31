@@ -381,13 +381,8 @@ pub struct Services {
     pub station_index: extern "C" fn(u32) -> u16,
     /// Canonical shared `docking_tile` service.
     pub road_commands: extern "C" fn() -> *const crate::road_cmd::RoadCommandServices,
-    /// Stateless native STL median selection and strict partition over u16 pool IDs.
-    pub kdtree_partition: extern "C" fn(
-        *mut u16,
-        usize,
-        *mut c_void,
-        extern "C" fn(*mut c_void, u16) -> u16,
-    ) -> usize,
+    /// Stateless native STL median selection and strict partition over split keys.
+    pub kdtree_partition: extern "C" fn(*mut crate::kdtree::SplitKey<u16>, usize) -> usize,
     /// Canonical native station command table.
     pub station_commands: extern "C" fn() -> *const crate::station_cmd::CommandServicesTable,
     /// Canonical native station catchment table.
@@ -1483,11 +1478,6 @@ extern "C" fn fixture_town_by_id(_: u32) -> *mut TownHandle {
 }
 
 #[cfg(test)]
-extern "C" fn fixture_kdtree_partition(
-    _: *mut u16,
-    _: usize,
-    _: *mut c_void,
-    _: extern "C" fn(*mut c_void, u16) -> u16,
-) -> usize {
+extern "C" fn fixture_kdtree_partition(_: *mut crate::kdtree::SplitKey<u16>, _: usize) -> usize {
     unreachable!()
 }

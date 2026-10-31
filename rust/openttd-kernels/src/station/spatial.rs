@@ -20,16 +20,18 @@ fn coordinate(c: &CatchmentServices, map: crate::map_func::Map, id: StationID, d
 pub(crate) fn rebuild(s: &Services) {
     let c = table(s);
     let map = s.map();
-    let mut ids = Vec::with_capacity((c.station_count)());
     let mut st = (c.next_station)(0);
-    while !st.is_null() {
+    let ids = std::iter::from_fn(|| {
+        if st.is_null() {
+            return None;
+        }
         let id = (c.id)(st);
-        ids.push(id);
         st = (c.next_station)(u32::from(id.0) + 1);
-    }
+        Some(id)
+    });
     unsafe {
-        (*TREE.get()).build(&mut ids, &|ids, dim| {
-            crate::kdtree::native_split(s, ids, |id| coordinate(c, map, id, dim))
+        (*TREE.get()).build(ids, &|id, dim| coordinate(c, map, id, dim), &|keys| {
+            crate::kdtree::native_split(s, keys)
         });
     }
 }
@@ -40,7 +42,7 @@ pub(crate) fn insert(s: &Services, st: *mut BaseStation) {
         (*TREE.get()).insert(
             (c.id)(st),
             &|id, dim| coordinate(c, map, id, dim),
-            &|ids, dim| crate::kdtree::native_split(s, ids, |id| coordinate(c, map, id, dim)),
+            &|keys| crate::kdtree::native_split(s, keys),
         );
     }
 }
@@ -48,8 +50,8 @@ pub(crate) fn remove(s: &Services, id: StationID) {
     let c = table(s);
     let map = s.map();
     unsafe {
-        (*TREE.get()).remove(id, &|id, dim| coordinate(c, map, id, dim), &|ids, dim| {
-            crate::kdtree::native_split(s, ids, |id| coordinate(c, map, id, dim))
+        (*TREE.get()).remove(id, &|id, dim| coordinate(c, map, id, dim), &|keys| {
+            crate::kdtree::native_split(s, keys)
         });
     }
 }
