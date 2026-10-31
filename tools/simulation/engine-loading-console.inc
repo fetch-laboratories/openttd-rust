@@ -95,6 +95,7 @@ static void LoadingInspect()
 	fmt::print(stderr, "ENGINE loading-liveries {}\n", _loaded_newgrf_features.used_liveries);
 }
 struct RuntimeObserver : SpriteGroup {
+	RuntimeObserver() : SpriteGroup() {}
 	mutable uint32_t calls = 0, property = 0;
 	const SpriteGroup *result = nullptr;
 	ResolverResult Resolve(ResolverObject &object) const override
