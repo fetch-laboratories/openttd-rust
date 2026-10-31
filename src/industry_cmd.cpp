@@ -3603,7 +3603,7 @@ static const OpenTTDIndustryServices _industry_services = {
 	.opening_news = [](void *i) noexcept { RustIndustryOpeningNews(RustIndustry(i)); },
 	.opening_events = [](void *i) noexcept { Industry *ind = RustIndustry(i); AI::BroadcastNewEvent(new ScriptEventIndustryOpen(ind->index)); Game::NewEvent(new ScriptEventIndustryOpen(ind->index)); },
 	.create = [](uint8_t type, uint8_t creation) noexcept -> void * { return CreateNewIndustry(RandomTile(), type, static_cast<IndustryAvailabilityCallType>(creation)); },
-	.num_items = []() noexcept -> uint32_t { return Industry::GetNumItems(); },
+	.num_items = []() noexcept -> uint32_t { return static_cast<uint32_t>(Industry::GetNumItems()); },
 	.get = [](uint16_t id) noexcept -> void * { return IndustryIfValid(id); },
 	.type_count = [](uint8_t type) noexcept -> uint16_t { return Industry::GetIndustryTypeCount(type); },
 	.type_info = [](uint8_t type) noexcept -> OpenTTDIndustryTypeInfo {
