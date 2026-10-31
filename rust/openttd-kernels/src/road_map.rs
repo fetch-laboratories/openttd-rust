@@ -206,17 +206,24 @@ pub(crate) fn has_town_owned_road(world: &crate::map_func::World<'_>, tile: u32)
         && (world.shared.road_owner)(tile) == crate::company_type::OWNER_TOWN
 }
 
+/// `GetPresentRoadTypes` over the canonical map fields.
+pub(crate) fn get_present_road_types(world: &crate::map_func::World<'_>, tile: u32) -> u64 {
+    let mut types = 0;
+    if may_have_road(&world.types, crate::tile_type::TileIndex(tile)).expect("map tile") {
+        for kind in [world.road_type(tile, false), world.road_type(tile, true)] {
+            if kind != crate::road_type::INVALID_ROADTYPE {
+                types |= 1_u64 << kind;
+            }
+        }
+    }
+    types
+}
 /// `HasTileAnyRoadType`, including the `MayHaveRoad` short circuit.
 pub(crate) fn has_tile_any_road_type(
     world: &crate::map_func::World<'_>,
     tile: u32,
     types: u64,
 ) -> bool {
-    if !may_have_road(&world.types, crate::tile_type::TileIndex(tile)).expect("map tile") {
-        return false;
-    }
-    [world.road_type(tile, false), world.road_type(tile, true)]
-        .into_iter()
-        .filter(|kind| *kind != crate::road_type::INVALID_ROADTYPE)
-        .any(|kind| types & (1_u64 << kind) != 0)
+    may_have_road(&world.types, crate::tile_type::TileIndex(tile)).expect("map tile")
+        && get_present_road_types(world, tile) & types != 0
 }

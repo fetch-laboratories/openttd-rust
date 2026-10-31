@@ -74,13 +74,13 @@ static void Station602Stops(TileIndex tile, DoCommandFlags exec)
 		}
 	}
 	v->cargo_type = 0; v->compatible_roadtypes = RoadTypes{ROADTYPE_ROAD};
-	RoadStop *bay = st->bus_stops; bay->status.Reset(RoadStop::RoadStopStatusFlag::Bay0Free); bay->status.Reset(RoadStop::RoadStopStatusFlag::Bay1Free); bay->status.Set(RoadStop::RoadStopStatusFlag::EntryBusy);
+	RoadStop *bay = st->bus_stops; auto status = bay->status; bay->status.Reset(RoadStop::RoadStopStatusFlag::Bay0Free); bay->status.Reset(RoadStop::RoadStopStatusFlag::Bay1Free); bay->status.Set(RoadStop::RoadStopStatusFlag::EntryBusy);
 	StationNeed(Station602Primary(st, v) == bay, __LINE__);
 	auto *part = new RoadVehicle(); part->SetArticulatedPart(); v->SetNext(part);
 	RoadStop *drive = Station602Primary(st, v);
 	StationNeed(drive != nullptr && IsDriveThroughStopTile(drive->xy) && Station602Next(drive, v) == nullptr, __LINE__);
 	fmt::print(stderr, "STCMD spatial602-stop occupied-articulated {} {}\n", bay->index.base(), drive->index.base());
-	v->SetNext(nullptr); delete part; delete v;
+	v->SetNext(nullptr); delete part; delete v; bay->status = status;
 }
 static void Station602Rail(TileIndex tile, DoCommandFlags exec)
 {
