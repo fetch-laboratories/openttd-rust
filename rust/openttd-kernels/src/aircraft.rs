@@ -405,9 +405,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     // reset; nested entries obtain their own dimensions. No world state is cached.
     fn map(&self) -> Map {
         self.map.get().unwrap_or_else(|| {
-            let log_x = (self.ss.map_log_x)();
-            Self::service_witness("map_log_x", std::mem::size_of_val(&log_x));
-            let map = Map::from_log_x(log_x);
+            let map = self.ss.map();
             self.map.set(Some(map));
             map
         })

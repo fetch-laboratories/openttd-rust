@@ -99,7 +99,8 @@ static void Disasters()
 		CHECK(tile == 0); p->clears++; p->clear_owner = company;
 		openttd_rust_disaster_release_industry(p->services, 7);
 	};
-	shared.map_log_x = []() noexcept { return 6U; };
+	static OpenTTDFixtureMap map{6};
+	shared.map = &map.statics;
 	AutoRestoreBackup<decltype(GetRustClockState().calendar_year)> calendar_year_scope(GetRustClockState().calendar_year, decltype(GetRustClockState().calendar_year){1955});
 	shared.tile_valid = [](uint32_t tile) noexcept { return tile == 0; };
 	shared.tile_type = [](uint32_t tile) noexcept { CHECK(tile == 0); _disaster_probe->tile_types++; return _disaster_probe->tile_type; };

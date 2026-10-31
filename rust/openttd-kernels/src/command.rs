@@ -157,7 +157,7 @@ pub(crate) fn nested<T: Default>(
             (self.0.leave)();
         }
     }
-    let size = ((shared.map_max_y)() + 1) << (shared.map_log_x)();
+    let size = ((shared.map_max_y)() + 1) << shared.map().log_x;
     if tile != 0 && (tile >= size || (!(shared.tile_valid)(tile) && flags & 256 == 0)) {
         out.error(0xffff);
         return T::default();

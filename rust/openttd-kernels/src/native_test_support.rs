@@ -7,7 +7,7 @@
 
 //! Native evidence bridges; linked by `openttd_test` and fixture-only game adapters.
 #![allow(unsafe_code, clippy::too_many_lines)]
-use crate::map_func::{TileTypeAccess, TileTypeAllocation};
+use crate::map_func::{MapStatics, TileTypeAccess};
 use crate::tile_map::{get_tile_slope, get_tile_z, get_tropic_zone};
 
 /// Compare production industry removal arithmetic with native `Money` operators.
@@ -22,11 +22,11 @@ pub extern "C" fn openttd_test_industry_removal_cost(multiplier: u32) -> i64 {
 /// equivalent live fixture; it keeps the native out-of-range assertion policy.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_shared_tile_type(
-    allocation: TileTypeAllocation,
+    statics: *const MapStatics,
     callback: extern "C" fn(u32) -> u8,
     tile: u32,
 ) -> u8 {
-    unsafe { TileTypeAccess::raw(allocation, callback) }.read(tile)
+    unsafe { TileTypeAccess::raw((*statics).load().0, callback) }.read(tile)
 }
 
 /// Native default probe: compare audited reads with the unchanged typed services.
@@ -36,7 +36,7 @@ pub unsafe extern "C" fn openttd_rust_shared_tile_type(
 #[unsafe(no_mangle)]
 #[allow(unsafe_code)]
 pub unsafe extern "C" fn openttd_rust_map_read_probe(
-    allocation: crate::services::TileTypeAllocation,
+    statics: *const MapStatics,
     shared: *const crate::services::Services,
     clear: *const crate::ground::ClearServices,
     trees: *const crate::trees::TreeServices,
@@ -44,6 +44,7 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
     mutate: extern "C" fn(u32),
 ) -> bool {
     let (s, c, trees) = unsafe { (&*shared, &*clear, &*trees) };
+    let allocation = unsafe { (*statics).load().0 };
     let map = unsafe { TileTypeAccess::raw(allocation, s.tile_type) };
     let x = (s.map_max_x)() + 1;
     let y = (s.map_max_y)() + 1;
@@ -59,7 +60,7 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
         0 => {
             use crate::clear_map::{
                 get_clear_counter, get_clear_density, get_clear_ground, get_fence, get_field_type,
-                get_industry_index_of_field, is_snow_tile,
+                get_industry_index_of_field, is_snow_tile, require_field,
             };
             if is_snow_tile(&map, tile) != Some((c.snow)(tile))
                 || get_clear_ground(&map, tile) != Some((s.clear_ground)(tile).0)
@@ -74,13 +75,22 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
                 if [fences.ne, fences.se, fences.sw, fences.nw]
                     .into_iter()
                     .zip(0_u8..)
-                    .any(|(expected, dir)| get_fence(&map, tile, dir) != Some(expected))
-                    || get_field_type(&map, tile) != Some(field.field_type)
-                    || get_industry_index_of_field(&map, tile) != Some(field.industry)
+                    .any(|(expected, dir)| {
+                        require_field(&map, tile).map(|fields| get_fence(&fields, dir))
+                            != Some(expected)
+                    })
+                    || require_field(&map, tile).map(|fields| get_field_type(&fields))
+                        != Some(field.field_type)
+                    || require_field(&map, tile).map(|fields| get_industry_index_of_field(&fields))
+                        != Some(field.industry)
                 {
                     return false;
                 }
-            } else if allocation.assertions && get_field_type(&map, tile).is_some() {
+            } else if allocation.assertions
+                && require_field(&map, tile)
+                    .map(|fields| get_field_type(&fields))
+                    .is_some()
+            {
                 return false;
             }
         }

@@ -88,7 +88,7 @@ impl<'a> CachedTable<'a> {
     fn observed(&self) -> Context<'_> {
         let s = self.get();
         // The audited constructor bounds the descriptor to this entry.
-        let world = self.world.get_or_init(|| World::with_table(s.shared(), s));
+        let world = self.world.get_or_init(|| World::new(s.shared()));
         Context { s, world }
     }
     pub(crate) fn road_tracks(&self, v: VehicleRef, tile: u32) -> u32 {
@@ -179,7 +179,6 @@ pub struct FirstSpeed {
 }
 #[repr(C)]
 pub struct MovementServices {
-    pub tile_types: Option<extern "C" fn() -> crate::map_func::TileTypeAllocation>,
     pub shared: *const Services,
     pub orders: *const crate::orders::Leaves,
     pub rail: *const RailServices,
@@ -413,7 +412,7 @@ impl MovementServices {
     #[inline]
     fn with_context<R>(&self, f: impl FnOnce(Context<'_>) -> R) -> R {
         // Standalone terrain and track-status calls end the descriptor before return.
-        let world = World::with_table(self.shared(), self);
+        let world = World::new(self.shared());
         f(Context {
             s: self,
             world: &world,
@@ -1476,9 +1475,10 @@ pub unsafe extern "C" fn openttd_rust_movement_depot_ticks(
 
 /// Resolve the native immutable movement registry. Production callers hold the
 /// game-state mutex; no map or owner borrow is formed by resolving this table.
+#[inline]
 pub(crate) fn table(shared: &Services) -> &MovementServices {
-    // SAFETY: Native registry returns its immutable process-lifetime table.
-    unsafe { &*(shared.movement_services)() }
+    // SAFETY: The shared table holds the immutable process-lifetime movement table.
+    unsafe { &*shared.movement }
 }
 // Forward literal transport/side arguments through this registry facade too.
 #[allow(clippy::inline_always)]
@@ -1598,7 +1598,6 @@ crate::abi::layouts! {
         callback,
     };
     "OpenTTDMovementServices" ["landscape"] => MovementServices {
-        tile_types,
         shared,
         orders,
         rail,

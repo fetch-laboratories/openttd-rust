@@ -199,7 +199,7 @@ pub extern "C" fn openttd_rust_animate_tile(tile: u32) {
         },
         MP_OBJECT => openttd_rust_animate_object(tile),
         MP_STATION => {
-            if (unsafe { &*(*((s.movement_services)())).rail_map }.has_station_rail)(tile) {
+            if (unsafe { &*crate::movement::table(s).rail_map }.has_station_rail)(tile) {
                 openttd_rust_animate_station(tile);
             } else if crate::station_map::is_airport(tile, s) {
                 openttd_rust_animate_airport(tile);
@@ -228,7 +228,7 @@ pub extern "C" fn openttd_rust_animation_afterload(clean: bool, flags: bool) {
         }
     }
     if flags {
-        for t in 0..(1_u32 << (a.shared().map_log_x)()) * ((a.shared().map_max_y)() + 1) {
+        for t in 0..(1_u32 << a.shared().map().log_x) * ((a.shared().map_max_y)() + 1) {
             if openttd_rust_may_animate(t) {
                 (a.set_state)(t, AnimatedTileState::NONE);
             }

@@ -113,7 +113,7 @@ static void RustReverse(int left, int right)
 	const auto leaves = Leaves();
 	OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(nullptr, UnexpectedRandom, UnexpectedIndustry);
 	movement.shared = &shared;
-	shared.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
+	shared.movement = &movement;
 	// The copied world has no depot/tunnel tiles. Observe the real owner's
 	// admission call through typed map/vehicle services, retaining event order.
 	shared.tile_type = [](uint32_t tile) noexcept { entered_tile = tile; return uint8_t{1}; };

@@ -186,6 +186,9 @@ public:
  */
 struct Map {
 private:
+#ifdef WITH_RUST
+	friend struct OpenTTDNativeTileTypeAccess;
+#endif
 	/**
 	 * Iterator to iterate all Tiles
 	 */

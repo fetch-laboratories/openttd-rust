@@ -72,7 +72,6 @@ pub struct GroundServices {
 #[derive(Clone, Copy)]
 pub struct Services {
     pub shared: *const services::Services,
-    pub tile_types: services::TileTypeAllocation,
     pub trees: *const trees::TreeServices,
     pub industry: IndustryServices,
     pub ground: GroundServices,
@@ -205,10 +204,11 @@ pub(crate) unsafe fn run(
     // entry-local value; unused/null child tables are never dereferenced.
     let snapshot = unsafe { *services };
     let s = &snapshot;
-    // SAFETY: The native scheduler facade acquires the actual allocation once.
-    // Its serialized no-reset/no-yield call graph keeps it live for this batch;
-    // only descriptor metadata, never an actual map access, spans dispatch.
-    let types = unsafe { services::TileTypeAccess::raw(s.tile_types, (*s.shared).tile_type) };
+    // The batch loads the descriptor once. Its serialized no-reset/no-yield call
+    // graph keeps it live; only descriptor metadata, never a map access, spans dispatch.
+    let types = crate::map_func::World::new(unsafe { &*s.shared })
+        .types
+        .without_native_assert();
     let mut tile = unsafe { CURSOR };
     let log_sum = log_x + log_y;
     let feedback = FEEDBACKS[(log_sum - 12) as usize];
@@ -250,7 +250,6 @@ crate::abi::layouts! {
     };
     "OpenTTDLandscapeLoopServices" ["landscape"] => Services {
         shared,
-        tile_types,
         trees,
         industry,
         ground,
