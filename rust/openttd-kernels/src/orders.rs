@@ -4511,6 +4511,14 @@ impl VisitOrders {
     pub(crate) fn order(self, list: *mut c_void, index: u8) -> Order {
         self.0.stored_order(list, usize::from(index))
     }
+    /// Full `OrderList::GetOrders()` span length, without `VehicleOrderID` narrowing.
+    pub(crate) fn stored_count(self, list: *mut c_void) -> usize {
+        self.0.stored_count(list)
+    }
+    /// Full stored-span entry, with `index` below `stored_count`.
+    pub(crate) fn stored_order(self, list: *mut c_void, index: usize) -> Order {
+        self.0.stored_order(list, index)
+    }
     /// `OrderList::GetNext`.
     pub(crate) fn next(self, list: *mut c_void, index: u8) -> u8 {
         self.0.next_index(list, index)

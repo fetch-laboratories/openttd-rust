@@ -568,7 +568,7 @@ pub struct TilePolicyServices {
     pub close_ai: unsafe extern "C" fn(*mut ShellHandle),
     pub close_game: unsafe extern "C" fn(*mut ShellHandle),
     pub destroy: unsafe extern "C" fn(*mut ShellHandle),
-    pub removal_cost: unsafe extern "C" fn(*const SpecHandle) -> i64,
+    pub removal_multiplier: unsafe extern "C" fn(*const SpecHandle) -> u32,
     pub tile_max_z: unsafe extern "C" fn(u32) -> i32,
     pub autoslope_callback: unsafe extern "C" fn(*const TileSpec) -> bool,
     pub callback_boolean: unsafe extern "C" fn(*const TileSpec, u16, u16) -> bool,
@@ -612,7 +612,7 @@ pub(crate) unsafe fn openttd_rust_industry_tile_clear(
             (p.destroy)(industry.shell);
         }
     }
-    let removal = unsafe { (p.removal_cost)(spec) };
+    let removal = unsafe { super::removal_cost((p.removal_multiplier)(spec)) };
     unsafe { (c.expense_money)(out, 0, removal) };
 }
 /// # Safety
