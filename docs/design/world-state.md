@@ -70,7 +70,7 @@ Game mode, switch request and pause-bit subobjects share one stable Rust allocat
 
 Agent: /root/storage563 | Model: gpt-6-astra | Reasoning effort: high.
 
-The selected phase 2 design is [#570](https://github.com/fetch-laboratories/openttd-rust/issues/570).
+This is the selected phase 2 design; its first implementation issue is [#570](https://github.com/fetch-laboratories/openttd-rust/issues/570).
 
 - Start implementation after #581 retires the build without Rust. Each moved record then has one definition and no C++ fallback copy.
 - Use #564's metric for the next ranking round, not to rerank this selected design.
