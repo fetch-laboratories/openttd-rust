@@ -1,6 +1,7 @@
 """Station service evidence from the existing road/CAPY reference preparation."""
 
 import hashlib
+import re
 import struct
 import subprocess
 from pathlib import Path
@@ -1720,7 +1721,11 @@ def check_airport_definition_state(snapshots: list[Path], log: list[str]) -> Non
 
 
 def check_spatial602(log: list[str], reload: bool) -> None:
-    phases = ["reload"] if reload else ["build", "move", "remove", "reuse"]
+    phases = (
+        ["reload"]
+        if reload
+        else ["build", "move-unchanged", "move-away", "move-back", "remove", "reuse"]
+    )
     markers = [f"STCMD spatial602-visit {phase} " for phase in phases]
     markers += [
         "STCMD spatial602-visit zero ",
@@ -1778,8 +1783,33 @@ def check_spatial602(log: list[str], reload: bool) -> None:
             for area in (0, 1, 2)
         ]
     for marker in markers:
-        if not any(line.startswith(marker) for line in log):
-            raise RuntimeError("missing station spatial observation: " + marker)
+        rows = [line for line in log if line.startswith(marker)]
+        if len(rows) != 1:
+            raise RuntimeError(
+                "missing or duplicate station spatial observation: " + marker
+            )
+        payload = rows[0][len(marker) :]
+        if "-visit " in marker:
+            members = "*" if any(p in marker for p in ("zero ", "edge ")) else "+"
+            pattern = rf"\d+ \d+(?: \d+:(?:true|false):-?\d+){members}"
+        elif "-rating " in marker:
+            pattern = rf"\d+:\d+(?: \d+:\d+){{{18 if reload else 19}}}"
+        elif any(p in marker for p in ("-animation ", "-random ")):
+            pattern = r"(?:\d+:\d+ ){6}rng \d+ \d+ \d+ \d+"
+        elif "-crash-event " in marker:
+            pattern = r"type \d+ id 21 site 10005 reason 1 victims \d+ expected \d+ rng \d+ \d+"
+        elif "-crash-input " in marker:
+            pattern = r"\d+ \d+ \d+ \d+ \d+"
+        elif "-rng " in marker:
+            pattern = r"\d+ \d+ \d+ \d+"
+        elif any(p in marker for p in ("-rail ", "-waypoint ")):
+            pattern = r"\d+ \d+ \d+"
+        elif any(p in marker for p in ("-town ", "-stop ", "-deleted-tie ")):
+            pattern = r"\d+ -?\d+"
+        else:
+            pattern = ""
+        if re.fullmatch(pattern, payload) is None:
+            raise RuntimeError("incomplete station spatial observation: " + rows[0])
 
 
 def check_commands(scenario, run, mode, role, result):

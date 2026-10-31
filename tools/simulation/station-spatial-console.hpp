@@ -342,13 +342,13 @@ static void Station602Fixture(TileIndex origin, DoCommandFlags exec, bool reload
 		auto waypoint_collision = std::get<0>(CmdMoveWaypointName({}, wp->index, seeds[0]->xy));
 		StationNeed(collision.Failed() && waypoint_collision.Failed(), __LINE__);
 		fmt::print(stderr, "STCMD spatial602-collisions {} {}\n", collision.Failed(), waypoint_collision.Failed()); delete wp;
-		for (TileIndex to : {old, old + TileDiffXY(2, 0), old}) {
+		for (auto [phase, to] : {std::pair{"move-unchanged", old}, std::pair{"move-away", old + TileDiffXY(2, 0)}, std::pair{"move-back", old}}) {
 #ifdef WITH_RUST
 			openttd_test_station_move_sign(&GetRustSharedServices(), moving, to.base());
 #else
 			moving->MoveSign(to);
 #endif
-			Station602Visit("move", origin, 8);
+			Station602Visit(phase, origin, 8);
 		}
 		delete seeds[3]; delete seeds[0]; Station602Visit("remove", origin, 8);
 		Station562New(origin, "Spatial602 seed"); Station602Visit("reuse", origin, 8);
