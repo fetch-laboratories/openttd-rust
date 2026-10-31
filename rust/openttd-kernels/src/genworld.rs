@@ -774,7 +774,7 @@ pub(crate) fn generate(
     session: &crate::session::Services,
     parent: *mut crate::session::Frame,
 ) -> bool {
-    let mut storage = std::mem::MaybeUninit::<crate::session::FrameStorage>::uninit();
+    let mut storage = std::mem::MaybeUninit::<crate::session::WorldFrameStorage>::uninit();
     let frame = (session.world_frame_begin)(storage.as_mut_ptr());
     let result = run(unsafe { &*(session.world)() }, frame);
     (session.world_frame_end)(parent, frame, result)

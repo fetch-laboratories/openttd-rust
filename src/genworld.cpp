@@ -201,9 +201,9 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 static const OpenTTDTownDataServices &GetRustTownDataServices() noexcept;
 bool CheckAbi_genworld() { return AbiServicesComplete(GetRustWorldServices()) && AbiServicesComplete(GetRustTownDataServices()); }
 
-static_assert(sizeof(OpenTTDWorldFrame) <= sizeof(OpenTTDSessionFrameStorage));
-static_assert(alignof(OpenTTDWorldFrame) <= alignof(OpenTTDSessionFrameStorage));
-OpenTTDWorldFrame *RustWorldFrameBegin(OpenTTDSessionFrameStorage *storage) noexcept
+static_assert(sizeof(OpenTTDWorldFrame) <= sizeof(OpenTTDWorldFrameStorage));
+static_assert(alignof(OpenTTDWorldFrame) <= alignof(OpenTTDWorldFrameStorage));
+OpenTTDWorldFrame *RustWorldFrameBegin(OpenTTDWorldFrameStorage *storage) noexcept
 {
 	auto *frame = new (storage) OpenTTDWorldFrame;
 	frame->company.emplace(_current_company, OWNER_NONE);
