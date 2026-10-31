@@ -78,11 +78,10 @@ template <typename Check> void CheckEffectProtocol(Check check)
 	const OpenTTDSharedServices services = OpenTTDFixtureSharedServices(&w, EffectTestRandom, EffectTestIndustry);
 	auto animation_shared = services;
 	animation_shared.mark_dirty = [](uint32_t) noexcept {};
-	const OpenTTDAnimationServices animation{
-		.shared = &animation_shared,
-		.state = [](uint32_t) noexcept -> AnimatedTileState { return AnimatedTileState::Deleted; },
-		.set_state = [](uint32_t tile, AnimatedTileState) noexcept { effect_test_world->animated = tile; },
-	};
+	OpenTTDAnimationServices animation{};
+	animation.shared = &animation_shared;
+	animation.state = [](uint32_t) noexcept -> AnimatedTileState { return AnimatedTileState::Deleted; };
+	animation.set_state = [](uint32_t tile, AnimatedTileState) noexcept { effect_test_world->animated = tile; };
 	RustAnimationScope animation_scope(animation);
 
 	auto owner = std::unique_ptr<OpenTTDEffectState, decltype(&openttd_rust_effect_destroy)>(openttd_rust_effect_new(), openttd_rust_effect_destroy);

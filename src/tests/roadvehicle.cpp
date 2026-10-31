@@ -202,13 +202,24 @@ TEST_CASE("Road max speed - front reversal, later curve assignment and hidden br
 {
 	auto *front = openttd_rust_road_new(), *tail = openttd_rust_road_new();
 	auto *v = reinterpret_cast<OpenTTDVehicle *>(1);
-	const OpenTTDSharedServices shared{.bridge_speed = BridgeSpeed};
-	const OpenTTDRoadLeaves leaves{.shared = &shared, .speed_part = SpeedPart};
+	OpenTTDSharedServices shared{};
+	shared.bridge_speed = BridgeSpeed;
+	OpenTTDRoadLeaves leaves{};
+	leaves.shared = &shared;
+	leaves.speed_part = SpeedPart;
 	for (uint16_t model = 0; model < 2; ++model) for (uint16_t state = 0; state < 256; ++state) for (uint16_t tail_state = 0; tail_state < 256; ++tail_state) {
 		for (uint8_t hidden : {0, 1, 2, 3}) for (uint8_t direction : {0, 1}) {
 			openttd_rust_road_set(front, 0, state); openttd_rust_road_set(tail, 0, tail_state);
-			OpenTTDRoadMaxSpeedRead r{.next = v, .next_state = tail, .max_track_speed = static_cast<uint16_t>(tail_state * 257), .order_max_speed = static_cast<uint16_t>(state * 257), .direction = 1, .status = static_cast<uint8_t>((hidden & 1) | 128)};
-			speed_parts[0] = {.direction = direction, .status = static_cast<uint8_t>((hidden >> 1) | 64)};
+			OpenTTDRoadMaxSpeedRead r{};
+			r.next = v;
+			r.next_state = tail;
+			r.max_track_speed = static_cast<uint16_t>(tail_state * 257);
+			r.order_max_speed = static_cast<uint16_t>(state * 257);
+			r.direction = 1;
+			r.status = static_cast<uint8_t>((hidden & 1) | 128);
+			speed_parts[0] = {};
+			speed_parts[0].direction = direction;
+			speed_parts[0].status = static_cast<uint8_t>((hidden >> 1) | 64);
 			/* Pinned GetCurrentMaxSpeed loop: this->state, assignment (not min), then bridge. */
 			int expected = r.max_track_speed, reads = 0;
 			auto part_hidden = hidden & 1;
