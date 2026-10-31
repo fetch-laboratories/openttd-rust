@@ -4,8 +4,8 @@
 
 ## Authentication and streaming owners
 
-- Rust owns: X25519 sessions, encryption contexts and their key/session storage.
-- C++ keeps: Bundled Monocypher algorithms and vendor-context lifetime.
+- Rust owns: X25519 sessions, encryption contexts, and stable key/session and vendor-context storage.
+- C++ keeps: Bundled Monocypher algorithms; C++ supplies each vendor context's size/alignment and starts its trivial lifetime.
 - Checks: `python3 tools/auth-comparison.py`.
 - PRs: #43.
 

@@ -60,7 +60,7 @@
 ## Airport and airport-tile NewGRF runtime (#418)
 
 - Rust owns: Airport and airport-tile resolver contexts, roots/scopes/town, variables, random packing, tile callbacks and airport selection/availability/bounds.
-- C++ keeps: Parsing, spec/layout/override storage, rendering, preview drawing, text, hangar and rotation algorithms.
+- C++ keeps: Parsing, spec/layout/override storage, rendering, preview drawing, text, hangar and rotation algorithms; `GetAirportCallback` has no Rust export.
 - Checks: Default airport/reload fixtures.
 - Limits: These remain #156 gaps: external loading, historical saves, GUI scheduling and native removal setup. Temporary admission builds carry no storage-writing group because native removal leaves a deleted PSA pointer; retained airport PSA is saved and reloaded.
 - PRs: #428, integrated in #444.

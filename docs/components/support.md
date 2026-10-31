@@ -19,7 +19,7 @@
 ## StringConsumer byte algorithms
 
 - Rust owns: Little-endian reads, bounded read/skip decisions, prefix matching, searches and separator decisions.
-- C++ keeps: Conversions, views, cursor and diagnostics, owning containers, allocators, escape parsing and encoded-string transformation.
+- C++ keeps: Conversions, views, cursor and diagnostics, the in-place pair, owning containers, allocators, escape parsing and encoded-string transformation.
 - Checks: `python3 tools/run-comparisons.py`.
 - Limits: Nonempty search/set/separator assertions are preconditions; release behavior outside them, including empty-separator loops, is not claimed.
 - PRs: #18.
@@ -44,7 +44,7 @@
 - Rust owns: Case-insensitive comparison and search, lowercase conversion, hexadecimal encoding/decoding and trim scanning.
 - C++ keeps: String owners, views, erases, equal-prefix length policy, ICU and platform collation, validation, in-place replacement and `StringIterator` backends.
 - Checks: `python3 tools/byte-strings-comparison.py`.
-- Limits: Negative-char uppercase inputs other than EOF are outside portable C's domain; only observed native behavior is matched (#26).
+- Limits: Only the portable natural-contains fallback calls these helpers. Negative-char uppercase inputs other than EOF are outside portable C's domain; only observed native behavior is matched (#26).
 - PRs: #27.
 
 ## UTF-8 codec and byte positions

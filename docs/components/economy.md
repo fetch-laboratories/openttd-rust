@@ -44,7 +44,7 @@
 ## Cargo payment and delivery
 
 - Rust owns: `CargoPayment` state/lifetime, final/transfer payment, settlement, industry acceptance, statistics/payment ordering, destination deduplication and production flush.
-- C++ keeps: pool shells, world/packet storage, loading/reservation, subsidy checks, UI and NewGRF evaluator.
+- C++ keeps: pool shells, world/packet storage, loading/reservation, subsidy checks and UI. Production resolution keeps one native resolver in caller-owned stack storage across the Rust repeat loop.
 - Checks: default `economy` simulation; production cargo callback fixtures with #467 and narrow arithmetic fixture.
 - Limits: The checks do not exhaust NewGRF resolver execution, legacy CAPY files or industry layouts. Boundary conversions remain in #168, #199 and #500.
 - PRs: #123.

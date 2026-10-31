@@ -70,7 +70,7 @@
 - Rust owns: `vehicle_cmd.cpp` build, sell, refit, clone, start/stop, mass start/stop, depot sell/replace, send-to-depot, naming and service interval commands; vehicle selection and depot/sort lists; road/aircraft construction, shadow/rotor and articulated assembly/check. Speculative refits restore both RNG streams; failed clones sell partial consists.
 - C++ keeps: pools, shells, field stores, specs/NewGRF callbacks, unit allocation, command costs and UI; rail transactions belong to #315.
 - Checks: default `fleet-` scenarios, including `transaction-build-road`, `transaction-build-aircraft` and `transaction-clone`.
-- Limits: Gaps remain in articulated road vehicles, wrong-depot road types, airport engine refusal, and clone build failure after front part (#156).
+- Limits: Gaps remain in articulated road vehicles (NewGRF only), wrong-depot road types, airport engine refusal, and clone build failure after front part (#156).
 - PRs: #329.
 
 ## Rail construction and depot consist transactions (#315)

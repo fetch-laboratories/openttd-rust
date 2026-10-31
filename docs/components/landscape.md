@@ -14,7 +14,7 @@
 
 - Rust owns: `RunTileLoop` (LFSR walk and saved cursor), seven Rust tile owners; clear, rail, road and tunnel ground evolution; flooding, half-tile rail removal, dry-up, neighbour wakeups and flood-victim traversal.
 - C++ keeps: Map arrays, allocation and writes; house, station and object tile handlers. Scheduler clear/water/tree reads use the shared map descriptor (#274); standalone water/tree, generation, planting, command and other owner reads use typed callbacks.
-- Checks: `python3 tools/migration.py simulate landscape roads-flooding`.
+- Checks: `python3 tools/landscape-comparison.py` and `python3 tools/migration.py simulate landscape roads-flooding`.
 - Limits: These remain #156 gaps: matrix, editor, NewGRF, threaded.
 - PRs: #255; descriptor #351.
 
