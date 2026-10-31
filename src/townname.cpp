@@ -36,7 +36,11 @@ TownNameParams::TownNameParams(const Town *t) :
 		grfid(t->townnamegrfid), // by default, use supplied data
 		type(t->townnametype)
 {
+#ifdef WITH_RUST
+	if (t->townnamegrfid != 0 && !openttd_rust_grf_townname_exists(t->townnamegrfid)) {
+#else
 	if (t->townnamegrfid != 0 && GetGRFTownName(t->townnamegrfid) == nullptr) {
+#endif
 		/* Fallback to the first built in town name (English). */
 		this->grfid = 0;
 		this->type = SPECSTR_TOWNNAME_START;

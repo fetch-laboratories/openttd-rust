@@ -9,3 +9,5 @@
 
 /// `INVALID_STRING_ID`; `CMD_ERROR` is `CommandCost(INVALID_STRING_ID)`.
 pub const INVALID_STRING_ID: u32 = 0xFFFF;
+/// `SPECSTR_TOWNNAME_START`, the first built-in town-name generator string.
+pub const SPECSTR_TOWNNAME_START: u32 = 0x20C0;

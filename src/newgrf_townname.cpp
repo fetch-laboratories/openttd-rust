@@ -21,6 +21,22 @@
 
 #include "safeguards.h"
 
+#ifdef WITH_RUST
+#include "rust/byte_span_ffi.h"
+
+extern "C" void openttd_rust_grf_townname_generate(StringBuilder *builder, void (*append)(StringBuilder *, OpenTTDByteSpan) noexcept, uint32_t grfid, uint16_t gen, uint32_t seed);
+
+void GRFTownNameGenerate(StringBuilder &builder, uint32_t grfid, uint16_t gen, uint32_t seed)
+{
+	openttd_rust_grf_townname_generate(&builder, [](StringBuilder *builder, OpenTTDByteSpan text) noexcept { *builder += std::string_view{reinterpret_cast<const char *>(text.data), text.size}; }, grfid, gen, seed);
+}
+
+StringID GetGRFTownNameName(uint16_t gen)
+{
+	auto names = GetGRFTownNameList();
+	return gen < names.size() ? names[gen] : STR_UNDEFINED;
+}
+#else
 static std::vector<GRFTownName> _grf_townnames;
 static std::vector<StringID> _grf_townname_names;
 
@@ -121,3 +137,4 @@ uint16_t GetGRFTownNameType(uint16_t gen)
 	/* Fallback to the first built in town name (English). */
 	return SPECSTR_TOWNNAME_START;
 }
+#endif /* WITH_RUST */

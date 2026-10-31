@@ -1937,6 +1937,19 @@ including on append exceptions; no builder/world pointer, callback or shared RNG
 The harness samples seeds through read-only AI logs; it does not cover all 21 * 2^32
 combinations, every allocator failure or NewGRF town-name behavior. PR #98.
 
+### NewGRF town names and Action 0F
+
+Rust owns Action 0F parsing (`FeatureTownName`) in the INIT stage, the per-GRF style and part
+lists, the generator-name list, recursive seeded generation, style/GRF lookups and cleanup
+(#585). The loader calls the parser, cleanup and list rebuild directly. C++ keeps a facade:
+`TownNameParams`, the genworld drop-down and `GetGRFTownNameName` read the Rust lists, and
+`GRFTownNameGenerate` passes its `StringBuilder` with an append callback that receives each
+selected part's bytes. `TranslateTTDPatchCodes` and `AddGRFString` remain native string-registry
+operations behind one loading service each; the translated bytes are copied into the Rust part
+through `openttd_rust_grf_text_assign`. Debug messages keep one loading service each. Rust indexing
+replaces the original `gen < styles.size()` assertion, and self-referencing definitions recurse
+without a guard as in the original. PR pending.
+
 ### Town growth and lifecycle state
 
 Rust owns town tick traversal, road/build choices, terrain retries, house selection/placement

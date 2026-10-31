@@ -1732,10 +1732,10 @@ static void FinaliseBadges()
 	AddBadgeClassesToConfiguration();
 }
 
+#ifndef WITH_RUST
 extern void InitGRFTownGeneratorNames();
 
 /** Finish loading NewGRFs and execute needed post-processing */
-#ifndef WITH_RUST
 static void AfterLoadGRFs()
 {
 	/* Cached callback groups are no longer needed. */

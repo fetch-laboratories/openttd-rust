@@ -86,6 +86,7 @@ mod settings_type;
 
 mod newgrf_station;
 mod newgrf_storage;
+mod newgrf_townname;
 mod node_hash;
 mod object_type;
 mod objects;

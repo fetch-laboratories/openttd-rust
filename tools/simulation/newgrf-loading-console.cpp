@@ -28,6 +28,11 @@
 #include "settings_type.h"
 #include "saveload/saveload.h"
 #include "vehicle_cmd.h"
+#include "newgrf_townname.h"
+#include "strings_func.h"
+#include "town.h"
+#include "town_cmd.h"
+#include "townname_func.h"
 #include "table/strings.h"
 
 static uint32_t ID(const char *text)
@@ -38,6 +43,66 @@ static void Require(bool value, const char *name)
 {
 	fmt::print(stderr, "LOADING case {} {}\n", name, value);
 	if (!value) std::abort();
+}
+static std::string Hex(std::string_view text)
+{
+	std::string result;
+	for (char c : text) result += fmt::format("{:02X}", uint8_t(c));
+	return result;
+}
+/** Generator lists, style lookups and generated name bytes of the ActionF fixtures. */
+static void GrfTownNames(const char *phase, bool loaded)
+{
+	auto names = GetGRFTownNameList();
+	fmt::print(stderr, "LOADING townname {} styles {}\n", phase, names.size());
+	for (uint gen = 0; gen <= names.size(); gen++) {
+		TownNameParams par(static_cast<uint8_t>(BUILTIN_TOWNNAME_GENERATOR_COUNT + gen));
+		StringID name = GetGRFTownNameName(gen);
+		fmt::print(stderr, "LOADING townname {} style {} {:08X} {} {} {}\n", phase, gen, GetGRFTownNameId(gen), GetGRFTownNameType(gen), gen < names.size() && name == names[gen], Hex(GetString(name)));
+		for (uint32_t k = 0; k < 40; k++) {
+			uint32_t seed = k < 4 ? std::array<uint32_t, 4>{0, 1, 0x80000000, UINT32_MAX}[k] : k * 0x9E3779B9;
+			fmt::print(stderr, "LOADING townname {} name {} {:08X} {}\n", phase, gen, seed, Hex(GetTownName(&par, seed)));
+		}
+	}
+	if (!loaded) return;
+	Require(names.size() == 4 && GetGRFTownNameId(0) == ID("TNA5") && GetGRFTownNameId(2) == ID("TNB5") && GetGRFTownNameId(3) == ID("TNS5") && GetGRFTownNameType(3) == 0, "townname-style-order");
+	Require(GetGRFTownNameId(4) == 0 && GetGRFTownNameType(4) == SPECSTR_TOWNNAME_START && GetGRFTownNameName(4) == STR_UNDEFINED, "townname-fallback");
+	TownNameParams par(static_cast<uint8_t>(0));
+	par.grfid = ID("TNA5");
+	par.type = 0;
+	Require(GetTownName(&par, 0) == "Y Hill" && GetTownName(&par, 0xFFFFFFFF) == "Alton Hill" && GetTownName(&par, 0x00030000) == "Beton Hill", "townname-repeated-definition");
+	par.type = 1;
+	Require(GetTownName(&par, 0) == "Q" && GetTownName(&par, 0xFFFF) == "Y Hill", "townname-recursive-final");
+	par.grfid = ID("TNB5");
+	par.type = 0;
+	Require(GetTownName(&par, 0) == "Gam", "townname-second-grf");
+	par.grfid = ID("TNX5");
+	Require(GetTownName(&par, 0).empty(), "townname-invalid-reference-deleted");
+	GRFConfig *bad = GetGRFConfig(ID("TNX5"));
+	Require(bad->status == GCS_DISABLED && bad->errors.size() == 1 && bad->errors.front().message == STR_NEWGRF_ERROR_INVALID_ID, "townname-invalid-reference");
+	GRFConfig *truncated = GetGRFConfig(ID("TNS5"));
+	par.grfid = ID("TNS5");
+	Require(truncated->status == GCS_DISABLED && truncated->errors.size() == 1 && truncated->errors.front().message == STR_NEWGRF_ERROR_READ_BOUNDS && GetTownName(&par, 0) == "Shortort", "townname-partial-read");
+}
+/** Found one town per NewGRF style through the production name generator. */
+static void GrfTownNameTowns()
+{
+	AutoRestoreBackup company(_current_company, OWNER_DEITY);
+	auto names = GetGRFTownNameList();
+	for (uint gen = 0; gen < names.size(); gen++) {
+		AutoRestoreBackup style(_settings_game.game_creation.town_name, static_cast<uint8_t>(BUILTIN_TOWNNAME_GENERATOR_COUNT + gen));
+		uint32_t parts = 0;
+		bool generated = GenerateTownName(_random, &parts);
+		TownID id = TownID::Invalid();
+		for (uint32_t n = 1 + 997 * gen; n < Map::Size() && id == TownID::Invalid(); n += 31) {
+			TileIndex tile(n);
+			if (!IsTileType(tile, MP_CLEAR) || GetTileSlope(tile) != SLOPE_FLAT) continue;
+			id = std::get<TownID>(Command<CMD_FOUND_TOWN>::Do(DoCommandFlag::Execute, tile, TSZ_SMALL, false, TL_ORIGINAL, false, parts, {}));
+		}
+		Require(generated && id != TownID::Invalid(), "townname-found");
+		const Town *t = Town::Get(id);
+		fmt::print(stderr, "LOADING townname town {} {} {:08X} {} {:08X} {}\n", gen, id.base(), t->townnamegrfid, t->townnametype, t->townnameparts, Hex(GetTownName(t)));
+	}
 }
 static void ResetAction2Callbacks(bool final)
 {
@@ -215,11 +280,11 @@ static void Action2Consumers()
 static bool LoadingScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
-	if (args[1] == "inspect") { Inspect(true); return true; }
+	if (args[1] == "inspect") { Inspect(true); GrfTownNames("inspect", false); return true; }
 	if (args.size() < 3) return false;
 	SetRandomSeed(0x47100001);
 	_grfconfig.clear();
-	for (const char *name : {"main", "graph-broken", "broken", "victim", "fatal", "before", "after"}) {
+	for (const char *name : {"main", "graph-broken", "broken", "victim", "fatal", "before", "after", "names-a", "names-bad", "names-b", "names-short"}) {
 		auto c = std::make_unique<GRFConfig>(std::string(args[2]) + "/" + name + ".grf");
 		Require(FillGRFDetails(*c, false, NO_DIRECTORY), "file-scan");
 		c->flags.Reset(GRFConfigFlag::InitOnly);
@@ -231,8 +296,11 @@ static bool LoadingScenario(std::span<std::string_view> args)
 	_settings_game.vehicle.dynamic_engines = false;
 	ReloadNewGRFData();
 	Inspect(false);
+	GrfTownNames("first", true);
 	ReloadNewGRFData();
 	Inspect(false);
+	GrfTownNames("reload", true);
+	GrfTownNameTowns();
 	EngineID id = GetNewEngineID(GetFileByGRFID(ID("R471")), VEH_ROAD, 0);
 	bool built = false;
 	for (const Depot *depot : Depot::Iterate()) {

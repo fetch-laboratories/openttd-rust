@@ -15,6 +15,24 @@
 
 #include "strings_type.h"
 
+#ifdef WITH_RUST
+extern "C" {
+bool openttd_rust_grf_townname_exists(uint32_t grfid);
+uint32_t openttd_rust_grf_townname_id(uint16_t gen);
+uint16_t openttd_rust_grf_townname_type(uint16_t gen);
+const StringID *openttd_rust_grf_townname_list(size_t *size);
+}
+inline uint32_t GetGRFTownNameId(uint16_t gen) { return openttd_rust_grf_townname_id(gen); }
+inline uint16_t GetGRFTownNameType(uint16_t gen) { return openttd_rust_grf_townname_type(gen); }
+/** Generator names in style order, valid until the next NewGRF load. */
+inline std::span<const StringID> GetGRFTownNameList()
+{
+	size_t size;
+	const StringID *names = openttd_rust_grf_townname_list(&size);
+	return {names, size};
+}
+StringID GetGRFTownNameName(uint16_t gen);
+#else
 struct NamePart {
 	std::string text; ///< If probability bit 7 is clear
 	uint8_t id;          ///< If probability bit 7 is set
@@ -52,5 +70,6 @@ uint16_t GetGRFTownNameType(uint16_t gen);
 StringID GetGRFTownNameName(uint16_t gen);
 
 const std::vector<StringID> &GetGRFTownNameList();
+#endif /* WITH_RUST */
 
 #endif /* NEWGRF_TOWNNAME_H */
