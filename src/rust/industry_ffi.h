@@ -180,7 +180,6 @@ typedef struct OpenTTDIndustryServices {
 	bool (*deity)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(deity);
 } OpenTTDIndustryServices;
 bool openttd_rust_industry_forest(uint32_t, const OpenTTDIndustryServices *);
-void openttd_rust_industry_advertise(void *, const OpenTTDIndustryServices *);
 bool openttd_rust_industry_spec_raw(uint8_t life);
 bool openttd_rust_industry_spec_processing(uint8_t life, uint32_t behaviour);
 bool openttd_rust_industry_original_economy(uint16_t callbacks, uint8_t economy);

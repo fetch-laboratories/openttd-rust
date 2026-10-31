@@ -173,12 +173,6 @@ pub(super) fn advertise(shell: *mut c_void, s: &Services) {
         (s.opening_events)(shell);
     }
 }
-/// # Safety
-/// Live industry shell; news and events do not destroy it or yield the mutex.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_advertise(shell: *mut c_void, s: *const Services) {
-    advertise(shell, unsafe { &*s });
-}
 pub(super) const fn spec_raw(life: u8) -> bool {
     life & (LIFE_EXTRACTIVE | LIFE_ORGANIC) != 0
 }

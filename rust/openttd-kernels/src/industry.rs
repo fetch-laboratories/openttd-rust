@@ -991,7 +991,9 @@ fn change(i: *mut c_void, s: &Services, monthly: bool) {
                     close = false;
                 }
                 if percent.abs() >= 10 {
-                    unsafe { (s.production_news)(i, (*p).cargo, percent, servicing(i, owner, s)) };
+                    unsafe {
+                        (s.production_news)(i, (*p).cargo, percent, servicing(i, o.owner, s))
+                    };
                 }
             }
         }
@@ -1068,7 +1070,7 @@ fn change(i: *mut c_void, s: &Services, monthly: bool) {
                 if close {
                     Servicing::Nobody
                 } else {
-                    servicing(i, owner, s)
+                    servicing(i, o.owner, s)
                 },
             )
         };
@@ -1147,7 +1149,7 @@ fn build_monthly(builder: *mut Builder, s: &Services) {
     }
     let b = build_fields(builder);
     let max = 1 + unsafe { (s.scale_by_map_size)(3) }.min(99);
-    if unsafe { total(builder) }.wrapping_add(max) >= unsafe { (*b).wanted_inds >> 16 } {
+    if total(builder).wrapping_add(max) >= unsafe { (*b).wanted_inds >> 16 } {
         let increment = unsafe { (s.scale_by_map_size)(0x38000 / (10 * 12)) };
         unsafe {
             (*b).wanted_inds = (*b).wanted_inds.wrapping_add(increment);
@@ -1282,7 +1284,7 @@ fn build_try(builder: *mut Builder, s: &Services) {
                 (*f).max_wait = (u32::from((*f).max_wait) + 2).min(1000) as u16;
             }
         } else {
-            unsafe { advertise(i, s) };
+            advertise(i, s);
             unsafe {
                 (*f).max_wait = ((*f).max_wait / 2).max(1);
             }
@@ -1323,14 +1325,14 @@ pub(crate) unsafe fn openttd_rust_industry_daily(builder: *mut Builder, services
     let company = unsafe { (s.company_none)() };
     let mut percentage = 3;
     let wanted = unsafe { (*b).wanted_inds >> 16 };
-    if wanted > unsafe { total(builder) } {
-        percentage = (percentage + wanted - unsafe { total(builder) }).min(9);
+    if wanted > total(builder) {
+        percentage = (percentage + wanted - total(builder)).min(9);
     }
     for _ in 0..loops {
         if chance(s, percentage, 100) {
             build_try(builder, s);
         } else {
-            let i = unsafe { random_industry(s) };
+            let i = random_industry(s);
             if !i.is_null() {
                 change(i, s, false);
                 unsafe { (s.set_dirty)(i) };

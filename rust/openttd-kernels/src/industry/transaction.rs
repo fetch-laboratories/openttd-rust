@@ -928,7 +928,7 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
         }
     }
     if flags & 1 != 0 && !industry.is_null() && !(e.g.environment.editor)() {
-        unsafe { super::advertise(industry.cast(), e.s) };
+        super::advertise(industry.cast(), e.s);
     }
     let construction = unsafe {
         super::construction_cost(

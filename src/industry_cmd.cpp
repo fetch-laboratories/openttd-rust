@@ -2269,7 +2269,7 @@ CommandCost CmdBuildIndustry(DoCommandFlags flags, TileIndex tile, IndustryType 
 	}
 
 	if (flags.Test(DoCommandFlag::Execute) && ind != nullptr && _game_mode != GM_EDITOR) {
-		openttd_rust_industry_advertise(const_cast<Industry *>(ind), &GetIndustryRustServices());
+		AdvertiseIndustryOpening(ind);
 	}
 
 	return CommandCost(EXPENSES_OTHER, indspec->GetConstructionCost());
@@ -2926,7 +2926,7 @@ void IndustryBuildData::TryBuildNewIndustry()
 			this->builddata[it].wait_count = this->builddata[it].max_wait + 1; // Compensate for decrementing below.
 			this->builddata[it].max_wait = std::min(1000, this->builddata[it].max_wait + 2);
 		} else {
-			openttd_rust_industry_advertise(const_cast<Industry *>(ind), &GetIndustryRustServices());
+			AdvertiseIndustryOpening(ind);
 			this->builddata[it].max_wait = std::max(this->builddata[it].max_wait / 2, 1); // Reduce waiting time of the industry type.
 		}
 	}

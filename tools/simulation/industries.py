@@ -239,7 +239,7 @@ def scenarios(soak):
                 "economy": {"multiple_industry_per_town": True},
             },
         )
-        for mode in ("definitions", "definitions-reload")
+        for mode in ("definitions", "definitions-reload", "policy", "policy-reload")
     )
 
     return result
@@ -254,6 +254,36 @@ def game_environment(scenario):
 
 
 def adapter(build, folder, env):
+    import probe
+
+    import migration
+
+    source = migration.git(
+        "show", migration.BASELINE["commit"] + ":src/industry_cmd.cpp"
+    )
+    signatures = (
+        "static uint GetCurrentTotalNumberOfIndustries()",
+        "static void UpdateIndustryStatistics(Industry *i)",
+        "static bool CheckIndustryCloseDownProtection(IndustryType type)",
+        "static void CanCargoServiceIndustry(",
+        "int WhoCanServiceIndustry(Industry *ind)",
+        "static void ReportNewsProductionChangeIndustry(",
+        "static void ChangeIndustryProduction(Industry *i, bool monthly)",
+    )
+    text = "static const uint PERCENT_TRANSPORTED_60 = 153, PERCENT_TRANSPORTED_80 = 204;\n"
+    text += "\n".join(probe.body(source, signature) for signature in signatures)
+    for period in ("daily", "monthly"):
+        start = source.index("\n{", source.index("_economy_industries_" + period)) + 1
+        end = source.index("\n});", start)
+        text += (
+            "\nstatic void IndustryPolicy"
+            + period.title()
+            + "()\n"
+            + source[start:end]
+            + "\n}\n"
+        )
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "industry-policy-reference.inc").write_text(text)
     return console_adapter(
         build,
         folder,
@@ -268,6 +298,54 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     if mode in ("definitions", "definitions-reload"):
         return prepare_definitions(
             scenario, binaries, builds, out, timeout, env, result
+        )
+    if mode in ("policy", "policy-reload"):
+        folder = out / scenario["name"] / "input"
+        source, _ = core.normalize(Path(scenario["save"]), folder / "normalized")
+        executables = prepared_console(
+            "industries", adapter, binaries, builds, folder, env
+        )
+        prepared = dict(
+            scenario,
+            save=str(source),
+            executables=executables,
+            short_checkpoint=True,
+            ticks=1,
+        )
+        if mode == "policy":
+            return dict(prepared, console=["industry_policy run", "unpause"])
+        saves = {role: folder / role / "policy.sav" for role in executables}
+        captures = core.capture_pair(
+            lambda role: dict(
+                prepared, console=[f'industry_policy run "{saves[role]}"', "unpause"]
+            ),
+            executables,
+            builds,
+            folder,
+            timeout,
+            env,
+        )
+        for role, run in captures.items():
+            if (
+                run["exit"]
+                or not saves[role].is_file()
+                or "INDUSTRY-POLICY complete true" not in run["log"]
+            ):
+                raise RuntimeError("industry policy capture failed: " + role)
+        differences = core.compare_saves(
+            saves["reference"],
+            saves["candidate"],
+            scenario["name"],
+            10,
+            {"chunks": 0, "elements": 0, "masked": {}},
+        )
+        if differences or captures["reference"]["log"] != captures["candidate"]["log"]:
+            result["differences"].extend(differences)
+            raise RuntimeError("industry policy captures differ")
+        return dict(
+            prepared,
+            role_inputs={role: {"save": str(save)} for role, save in saves.items()},
+            console=["industry_policy inspect", "unpause"],
         )
     if mode == "resolver":
         folder = out / scenario["name"] / "input"
@@ -437,6 +515,19 @@ def check(scenario, run, mode, role, result):
     kind = scenario.get("industry")
     if kind in ("definitions", "definitions-reload"):
         check_definitions(scenario, run, mode, role, result)
+        return
+    if kind in ("policy", "policy-reload"):
+        markers = [
+            "INDUSTRY-POLICY complete true",
+            "INDUSTRY-POLICY forests",
+            "INDUSTRY-POLICY rng",
+        ]
+        if kind == "policy":
+            markers += [
+                f"INDUSTRY-POLICY servicing {outcome} true" for outcome in range(3)
+            ]
+        if run["exit"] or any(marker not in run["log"] for marker in markers):
+            raise RuntimeError("industry policy observations missing: " + role)
         return
     if kind == "resolver":
         branch_witnesses(
