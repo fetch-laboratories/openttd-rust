@@ -101,7 +101,6 @@ static void VehicleConstructEngineCommon(void *shell, const OpenTTDEngine *engin
 	RustVehicleSetEngine(RustVehicle(v), e->index.base());
 	v->reliability = RustEngineReliability(e);
 	v->reliability_spd_dec = e->reliability_spd_dec;
-	v->max_age = RustEngineLifeLength(e);
 }
 static void VehicleConstructServiceDates(void *shell, uint16_t interval) noexcept
 {
@@ -155,7 +154,7 @@ const OpenTTDVehicleBuildServices &GetRustVehicleBuildServices() noexcept
 {
 	static const OpenTTDVehicleBuildServices services{
 		.refit = &GetRustVehicleRefitServices(), .mass = &GetVehicleMassServices(), .random = &GetRustRandomServices(),
-		.depot_kind = VehicleBuildDepotKind, .engine_cost = RustEngineCost, .default_cargo = RustEngineDefaultCargo,
+		.depot_kind = VehicleBuildDepotKind, .default_cargo = RustEngineDefaultCargo,
 		.pool_available = RustVehicleCanAllocate, .free_unit = VehicleBuildFreeUnit,
 		.construct = &GetVehicleConstructServices(), .rail = &GetRustRailConstructionServices(),
 		.ship_tile = VehicleBuildShipTile, .new_ship = VehicleBuildNewShip, .set_purchase = VehicleBuildSetPurchase,

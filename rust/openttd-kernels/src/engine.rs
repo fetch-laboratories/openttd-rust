@@ -124,7 +124,6 @@ pub struct Reliability {
 #[repr(C)]
 pub struct Startup {
     pub base_intro: i32,
-    pub grfid: u32,
     pub base_life: i32,
     pub decay_speed: u8,
     pub climate: bool,
@@ -208,7 +207,6 @@ pub struct Services {
     pub ai_road_disabled: unsafe extern "C" fn() -> bool,
     pub ai_ship_disabled: unsafe extern "C" fn() -> bool,
     pub ai_aircraft_disabled: unsafe extern "C" fn() -> bool,
-    pub enabled: unsafe extern "C" fn(*const OpenTTDEngine) -> bool,
     pub climate: unsafe extern "C" fn(*const OpenTTDEngine) -> bool,
     pub rail_kind: unsafe extern "C" fn(*const OpenTTDEngine) -> RailVehicleTypes,
     pub clear_last_variant: unsafe extern "C" fn(*const OpenTTDEngine),
@@ -369,7 +367,7 @@ unsafe fn start_one(s: &Services, e: EngineRef, aging: Ymd, seed: u32) {
                 ^ seed
                 ^ cfg.base_intro as u32
                 ^ u32::from(e.kind.0)
-                ^ cfg.grfid,
+                ^ crate::engine_capabilities::openttd_rust_engine_grfid(s.capabilities, e.shell),
         );
     }
     let r = call!(shared, random, shared.context);
@@ -413,7 +411,7 @@ unsafe fn start_one(s: &Services, e: EngineRef, aging: Ymd, seed: u32) {
                 ^ (re_cfg.lifelength as u32).wrapping_shl(4)
                 ^ (i32::from(re_cfg.retire_early) as u32)
                 ^ u32::from(e.kind.0)
-                ^ cfg.grfid,
+                ^ crate::engine_capabilities::openttd_rust_engine_grfid(s.capabilities, e.shell),
         );
     }
     let r = call!(shared, random, shared.context);
@@ -897,7 +895,7 @@ pub unsafe extern "C" fn openttd_rust_engine_monthly(s: *const Services) {
             }
             refresh = true;
         }
-        if !unsafe { call!(s, enabled, e.shell) } {
+        if !unsafe { openttd_rust_engine_enabled(s, e.shell) } {
             continue;
         }
         if read_field!(e.state, flags) & AVAILABLE == 0
@@ -957,7 +955,7 @@ unsafe fn buildable(s: &Services, e: EngineRef, kind: VehicleType, company: u8) 
     } else if read_field!(e.state, company_avail) & company_mask(company) == 0 {
         return false;
     }
-    if !unsafe { call!(s, enabled, e.shell) } {
+    if !unsafe { openttd_rust_engine_enabled(s, e.shell) } {
         return false;
     }
     if company != OWNER_DEITY {
@@ -1151,7 +1149,7 @@ pub unsafe extern "C" fn openttd_rust_engine_check(s: *const Services) {
             break;
         }
         from = u32::from(e.id) + 1;
-        if !unsafe { call!(s, enabled, e.shell) } || unsafe { wagon(s, e) } {
+        if !unsafe { openttd_rust_engine_enabled(s, e.shell) } || unsafe { wagon(s, e) } {
             continue;
         }
         if read_field!(e.state, flags) & AVAILABLE != 0 && read_field!(e.state, company_avail) != 0
@@ -1209,7 +1207,6 @@ crate::abi::layouts! {
     };
     "OpenTTDEngineStartup" ["engine"] => Startup {
         base_intro,
-        grfid,
         decay_speed,
         base_life,
         climate,
@@ -1289,7 +1286,6 @@ crate::abi::layouts! {
         ai_road_disabled,
         ai_ship_disabled,
         ai_aircraft_disabled,
-        enabled,
         climate,
         rail_kind,
         clear_last_variant,
@@ -1338,4 +1334,13 @@ pub(crate) struct CapacityConfig {
     pub id: u16,
     pub callbacks: u16,
     pub misc: u8,
+}
+
+/// Original invalid-string short circuit precedes the climate observation.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_engine_enabled(
+    s: &Services,
+    e: *const OpenTTDEngine,
+) -> bool {
+    unsafe { (s.capabilities.valid_string)(e) && (s.climate)(e) }
 }

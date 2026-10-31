@@ -4,6 +4,7 @@
 #include "engine_loading_ffi.h"
 #include "services_cargo.h"
 #include "services_assert.h"
+#include "settings_services.h"
 static OpenTTDVehicle *EngineTemporaryNew() noexcept { return RustVehicle(new Vehicle()); }
 const OpenTTDEngineCapabilitiesServices &GetRustEngineCapabilitiesServices() noexcept
 {
@@ -48,6 +49,21 @@ const OpenTTDEngineCapabilitiesServices &GetRustEngineCapabilitiesServices() noe
 #else
 		.assertions = false,
 #endif
+		.aircraft_cost = RustEngineAircraftCost,
+		.aircraft_range = RustEngineAircraftRange,
+		.aircraft_running = RustEngineAircraftRunning,
+		.life_extension = RustVehicleLifeExtension,
+		.life_years = RustEngineLifeYears,
+		.price_shift = RustEnginePriceShift,
+		.road_cost = RustEngineRoadCost,
+		.road_price = RustEngineRoadPrice,
+		.road_running = RustEngineRoadRunning,
+		.ship_cost = RustEngineShipCost,
+		.ship_running = RustEngineShipRunning,
+		.train_cost = RustEngineTrainCost,
+		.train_price = RustEngineTrainPrice,
+		.train_running = RustEngineTrainRunning,
+		.valid_string = RustEngineValidString,
 	};
 	return services;
 }
@@ -60,3 +76,11 @@ static_assert(to_underlying(VehicleCallbackMask::RefitCapacity) == 3 && to_under
 static_assert(to_underlying(EngineMiscFlag::NoDefaultCargoMultiplier) == 5 && to_underlying(CargoClass::Passengers) == 0);
 static_assert(PROP_TRAIN_CARGO_CAPACITY == 0x14 && PROP_ROADVEH_CARGO_CAPACITY == 0x0f && PROP_SHIP_CARGO_CAPACITY == 0x0d);
 static_assert(PROP_AIRCRAFT_PASSENGER_CAPACITY == 0x0f && PROP_AIRCRAFT_MAIL_CAPACITY == 0x11 && ALL_CARGOTYPES == UINT64_MAX);
+
+static_assert(PR_BUILD_VEHICLE_TRAIN == 15);
+static_assert(PR_BUILD_VEHICLE_WAGON == 16);
+static_assert(PR_BUILD_VEHICLE_AIRCRAFT == 17);
+static_assert(PR_BUILD_VEHICLE_ROAD == 18);
+static_assert(PR_BUILD_VEHICLE_SHIP == 19);
+static_assert(PR_RUNNING_AIRCRAFT == 45);
+static_assert(PR_RUNNING_SHIP == 47);

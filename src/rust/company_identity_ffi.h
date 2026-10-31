@@ -22,6 +22,7 @@ struct OpenTTDCompanyIdentityServices {
 	Company * (OPENTTD_RUST_CALL *company)(uint8_t id) noexcept OPENTTD_SERVICE_DEFAULT(company);
 	Company * (OPENTTD_RUST_CALL *next_company)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_company);
 	uint8_t (OPENTTD_RUST_CALL *company_id)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(company_id);
+	uint32_t (*renew_reserve)(const Company *) noexcept OPENTTD_SERVICE_DEFAULT(renew_reserve);
 	uint32_t (OPENTTD_RUST_CALL *name_id)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(name_id);
 	void (OPENTTD_RUST_CALL *set_name_id)(Company *c, uint32_t value) noexcept OPENTTD_SERVICE_DEFAULT(set_name_id);
 	uint32_t (OPENTTD_RUST_CALL *name_parts)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(name_parts);

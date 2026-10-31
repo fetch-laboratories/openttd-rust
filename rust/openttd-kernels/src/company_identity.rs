@@ -50,6 +50,7 @@ pub struct Services {
     pub company: extern "C" fn(CompanyID) -> *mut OpenTTDCompany,
     pub next_company: extern "C" fn(u32) -> *mut OpenTTDCompany,
     pub company_id: extern "C" fn(*mut OpenTTDCompany) -> CompanyID,
+    pub renew_reserve: extern "C" fn(*const OpenTTDCompany) -> u32,
     pub name_id: extern "C" fn(*mut OpenTTDCompany) -> u32,
     pub set_name_id: extern "C" fn(*mut OpenTTDCompany, u32) -> (),
     pub name_parts: extern "C" fn(*mut OpenTTDCompany) -> u32,
@@ -677,5 +678,5 @@ crate::abi::layouts! {
     fn abi_layout;
  "OpenTTDCompanyNameStorage" ["company_economy"] => NameStorage { bytes, };
  "OpenTTDCompanyIdentityStrings" ["company_economy"] => Strings { unnamed, president, company, president_generated, andco, town_begin, town_end, company_begin, };
- "OpenTTDCompanyIdentityServices" ["company_economy"] => Services { shared, randomizer, faces, groups, strings, company, next_company, company_id, name_id, set_name_id, name_parts, set_name_parts, president_id, set_president_id, president_parts, set_president_parts, colour, set_colour, last_build, is_ai, name, set_name, president, set_president, livery, face, name_frame_init, name_frame_drop, render, render_other, company_renamed, president_renamed, launch_news, admin_update, rename_transport, president_windows, colour_windows, object_colours, dirty, reset_colourmap, engine, engine_type, engine_cargo, engine_kind, engine_class, engine_misc, aircraft_subtype, vehicle_cargo, vehicle_first, articulated, wagon_override, cargo_freight, cargo_classes, vehicle_id, invalidate_vehicle, vehicle_owner, };
+ "OpenTTDCompanyIdentityServices" ["company_economy"] => Services { shared, randomizer, faces, groups, strings, company, next_company, company_id, renew_reserve, name_id, set_name_id, name_parts, set_name_parts, president_id, set_president_id, president_parts, set_president_parts, colour, set_colour, last_build, is_ai, name, set_name, president, set_president, livery, face, name_frame_init, name_frame_drop, render, render_other, company_renamed, president_renamed, launch_news, admin_update, rename_transport, president_windows, colour_windows, object_colours, dirty, reset_colourmap, engine, engine_type, engine_cargo, engine_kind, engine_class, engine_misc, aircraft_subtype, vehicle_cargo, vehicle_first, articulated, wagon_override, cargo_freight, cargo_classes, vehicle_id, invalidate_vehicle, vehicle_owner, };
 }

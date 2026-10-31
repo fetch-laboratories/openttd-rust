@@ -72,7 +72,6 @@ struct OpenTTDVehicleResolverServices {
 	uint16_t (*cargo_capacity)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_capacity);
 	uint32_t (*real_count)(const RealSpriteGroup *, bool) noexcept OPENTTD_SERVICE_DEFAULT(real_count);
 	const SpriteGroup *(*real_at)(const RealSpriteGroup *, bool, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(real_at);
-	uint32_t (*vehicle_grfid)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_grfid);
 	const OpenTTDEngine * (*engine_by_id)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(engine_by_id);
 	uint8_t (*default_cargo)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(default_cargo);
 	uint8_t (*engine_flags)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_flags);
