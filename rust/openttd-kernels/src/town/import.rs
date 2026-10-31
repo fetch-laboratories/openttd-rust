@@ -6,7 +6,7 @@
 use super::founding::{FoundingServices, Tile, TownLayout, TownSize};
 use super::{State, TownId};
 use crate::heightmap::{HM_CLOCKWISE, HM_COUNTER_CLOCKWISE};
-use crate::services::{ByteSpan, Services};
+use crate::services::Services;
 use crate::town_type::{TOWN_EXPAND_BUILDINGS, TOWN_EXPAND_ROADS, TSZ_SMALL};
 
 #[repr(C)]
@@ -14,10 +14,9 @@ pub struct Frame {
     _private: [u8; 0],
 }
 
-/// One validated feature; `name` lives until the next `feature` call.
+/// One validated feature; the native frame keeps its name until the next `feature` call.
 #[repr(C)]
 pub struct Feature {
-    pub name: ByteSpan,
     pub population: u32,
     pub x: f32,
     pub y: f32,
@@ -28,7 +27,7 @@ pub struct Feature {
 pub const FEATURE_OK: u8 = 0;
 /// Past the last array element; status 2 is a non-object or a missing or non-string name.
 pub const FEATURE_END: u8 = 1;
-/// Another field is missing or mistyped; `name` identifies the town.
+/// Another field is missing or mistyped; the native frame retains the town name.
 pub const FEATURE_NAMED_MALFORMED: u8 = 3;
 
 #[repr(C)]
@@ -48,12 +47,12 @@ pub struct ImportServices {
     /// Read and parse `_file_to_saveload`; false for any file, parse or non-array failure.
     pub load: extern "C" fn(*mut Frame) -> bool,
     pub feature: extern "C" fn(*mut Frame, usize, *mut Feature) -> u8,
-    pub named_error: extern "C" fn(u32, u32, ByteSpan),
+    pub named_error: extern "C" fn(u32, u32, *const Frame),
     pub failed_warning: extern "C" fn(u32, u32),
     /// `Command<CMD_FOUND_TOWN>::Do(DoCommandFlag::Execute, ...)`, returning the town ID.
-    pub found: extern "C" fn(Tile, TownSize, bool, TownLayout, bool, u32, ByteSpan) -> TownId,
+    pub found: extern "C" fn(*const Frame, Tile, TownSize, bool, TownLayout, bool, u32) -> TownId,
     /// `Command<CMD_PLACE_SIGN>::Post`.
-    pub place_sign: extern "C" fn(Tile, ByteSpan),
+    pub place_sign: extern "C" fn(Tile, *const Frame),
     /// `Command<CMD_EXPAND_TOWN>::Post`.
     pub expand: extern "C" fn(TownId, u32, u8),
 }
@@ -98,7 +97,7 @@ impl ImportServices {
     }
 
     /// Spiral founding attempts around the target, excluding the target itself.
-    fn found(&self, target: Tile, feature: &Feature) -> TownId {
+    fn found(&self, frame: *mut Frame, target: Tile, feature: &Feature) -> TownId {
         let s = unsafe { &*self.shared };
         let layout = (unsafe { &*self.founding }.layout_setting)();
         let map = s.map();
@@ -116,13 +115,13 @@ impl ImportServices {
         while !spiral.is_end() {
             let tile = Tile(map.tile_xy(spiral.x, spiral.y));
             town = (self.found)(
+                frame,
                 tile,
                 TownSize(TSZ_SMALL),
                 feature.city,
                 layout,
                 false,
                 0,
-                feature.name,
             );
             if town != TownId::INVALID {
                 break;
@@ -146,10 +145,6 @@ impl ImportServices {
         let mut index = 0;
         loop {
             let mut feature = Feature {
-                name: ByteSpan {
-                    data: std::ptr::null(),
-                    size: 0,
-                },
                 population: 0,
                 x: 0.0,
                 y: 0.0,
@@ -159,11 +154,7 @@ impl ImportServices {
                 FEATURE_OK => {}
                 FEATURE_END => break,
                 FEATURE_NAMED_MALFORMED => {
-                    (self.named_error)(
-                        self.strings.load_failed,
-                        self.strings.town_format,
-                        feature.name,
-                    );
+                    (self.named_error)(self.strings.load_failed, self.strings.town_format, frame);
                     return;
                 }
                 _ => {
@@ -173,17 +164,13 @@ impl ImportServices {
             }
             index += 1;
             if feature.x <= 0.0 || feature.y <= 0.0 || feature.x >= 1.0 || feature.y >= 1.0 {
-                (self.named_error)(
-                    self.strings.load_failed,
-                    self.strings.bad_coordinate,
-                    feature.name,
-                );
+                (self.named_error)(self.strings.load_failed, self.strings.bad_coordinate, frame);
                 return;
             }
             let target = self.target(rotation, feature.x, feature.y);
-            let town = self.found(target, &feature);
+            let town = self.found(frame, target, &feature);
             if town == TownId::INVALID {
-                (self.place_sign)(target, feature.name);
+                (self.place_sign)(target, frame);
                 failed_towns = failed_towns.wrapping_add(1);
                 continue;
             }
@@ -238,7 +225,7 @@ pub unsafe extern "C" fn openttd_rust_load_town_data(
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDTownDataFeature" ["genworld"] => Feature { name, population, x, y, city, };
+    "OpenTTDTownDataFeature" ["genworld"] => Feature { population, x, y, city, };
     "OpenTTDTownDataStrings" ["genworld"] => Strings { load_failed, json_format, town_format, bad_coordinate, failed_towns, };
     "OpenTTDTownDataServices" ["genworld"] => ImportServices { shared, founding, strings, load, feature, named_error, failed_warning, found, place_sign, expand, };
 }

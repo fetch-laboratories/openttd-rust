@@ -551,7 +551,7 @@ static uint8_t HeightmapSource(void *ctx) noexcept
 static uint8_t HeightmapPng(void *ctx, OpenTTDHeightmapPng *out) noexcept
 {
 	auto &input = *static_cast<RustHeightmapInput *>(ctx);
-	auto &codec = *(input.codec = std::make_unique<RustHeightmapCodec>());
+	auto &codec = input.codec.emplace();
 	codec.file = FioFOpenFile(input.filename, "rb", HEIGHTMAP_DIR);
 	if (!codec.file.has_value()) return OPENTTD_HEIGHTMAP_NOT_FOUND;
 	codec.png = png_create_read_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
@@ -591,7 +591,7 @@ static void HeightmapBmpResult(const RustHeightmapCodec &codec, OpenTTDHeightmap
 static uint8_t HeightmapBmpHeader(void *ctx, OpenTTDHeightmapBmp *out) noexcept
 {
 	auto &input = *static_cast<RustHeightmapInput *>(ctx);
-	auto &codec = *(input.codec = std::make_unique<RustHeightmapCodec>());
+	auto &codec = input.codec.emplace();
 	codec.file = FioFOpenFile(input.filename, "rb", HEIGHTMAP_DIR);
 	if (!codec.file.has_value()) return OPENTTD_HEIGHTMAP_NOT_FOUND;
 	codec.bmp_file.emplace(input.filename, HEIGHTMAP_DIR);

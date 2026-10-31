@@ -537,7 +537,7 @@ void GenerateWorld(GenWorldMode mode, uint size_x, uint size_y, bool reset_setti
 #endif /* WITH_RUST */
 
 #ifdef WITH_RUST
-/** The parsed document and the current feature's name, which Rust borrows until the next feature. */
+/** Parsed document and current feature name for native command and presentation calls. */
 struct OpenTTDTownDataFrame {
 	nlohmann::json town_data;
 	std::string name;
@@ -567,7 +567,6 @@ static uint8_t TownDataFeature(OpenTTDTownDataFrame *frame, size_t index, OpenTT
 	if (!feature.is_object()) return OPENTTD_TOWN_DATA_MALFORMED;
 	if (!feature.contains("name") || !feature.at("name").is_string()) return OPENTTD_TOWN_DATA_MALFORMED;
 	feature.at("name").get_to(frame->name);
-	out->name = {reinterpret_cast<const uint8_t *>(frame->name.data()), frame->name.size()};
 	if (!feature.contains("population") || !feature.at("population").is_number() ||
 			!feature.contains("city") || !feature.at("city").is_boolean() ||
 			!feature.contains("x") || !feature.at("x").is_number() ||
@@ -580,7 +579,6 @@ static uint8_t TownDataFeature(OpenTTDTownDataFrame *frame, size_t index, OpenTT
 	feature.at("y").get_to(out->y);
 	return OPENTTD_TOWN_DATA_OK;
 }
-static std::string TownDataName(OpenTTDByteSpan name) { return std::string(reinterpret_cast<const char *>(name.data), name.size); }
 static const OpenTTDTownDataServices &GetRustTownDataServices() noexcept
 {
 	static const OpenTTDTownDataServices services{
@@ -593,12 +591,12 @@ static const OpenTTDTownDataServices &GetRustTownDataServices() noexcept
 		},
 		.load = TownDataLoad,
 		.feature = TownDataFeature,
-		.named_error = [](uint32_t summary, uint32_t detail, OpenTTDByteSpan name) noexcept { ShowErrorMessage(GetEncodedString(summary), GetEncodedString(detail, TownDataName(name)), WL_ERROR); },
+		.named_error = [](uint32_t summary, uint32_t detail, const OpenTTDTownDataFrame *frame) noexcept { ShowErrorMessage(GetEncodedString(summary), GetEncodedString(detail, frame->name), WL_ERROR); },
 		.failed_warning = [](uint32_t detail, uint32_t count) noexcept { ShowErrorMessage(GetEncodedString(detail, count), {}, WL_WARNING); },
-		.found = [](uint32_t tile, TownSize size, bool city, TownLayout layout, bool random, uint32_t parts, OpenTTDByteSpan name) noexcept {
-			return std::get<TownID>(Command<CMD_FOUND_TOWN>::Do(DoCommandFlag::Execute, TileIndex(tile), size, city, layout, random, parts, TownDataName(name))).base();
+		.found = [](const OpenTTDTownDataFrame *frame, uint32_t tile, TownSize size, bool city, TownLayout layout, bool random, uint32_t parts) noexcept {
+			return std::get<TownID>(Command<CMD_FOUND_TOWN>::Do(DoCommandFlag::Execute, TileIndex(tile), size, city, layout, random, parts, frame->name)).base();
 		},
-		.place_sign = [](uint32_t tile, OpenTTDByteSpan name) noexcept { Command<CMD_PLACE_SIGN>::Post(TileIndex(tile), TownDataName(name)); },
+		.place_sign = [](uint32_t tile, const OpenTTDTownDataFrame *frame) noexcept { Command<CMD_PLACE_SIGN>::Post(TileIndex(tile), frame->name); },
 		.expand = [](uint16_t town, uint32_t amount, uint8_t modes) noexcept { Command<CMD_EXPAND_TOWN>::Post(TownID(town), amount, TownExpandModes(modes)); },
 	};
 	return services;

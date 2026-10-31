@@ -10,7 +10,7 @@
 #ifdef WITH_PNG
 #include <png.h>
 #endif
-/* Codec state for one decode, allocated by png or bmp_header and released by
+/* Codec state for one decode, initialized by png or bmp_header and released by
  * finish, so generation frames hold only the input. Rust borrows decoded rows,
  * palettes and bitmaps synchronously until finish. */
 struct RustHeightmapCodec {
@@ -30,7 +30,7 @@ struct RustHeightmapInput {
 	bool saveload;
 	DetailedFileType type;
 	std::string_view filename;
-	std::unique_ptr<RustHeightmapCodec> codec;
+	std::optional<RustHeightmapCodec> codec;
 	OpenTTDHeightmapInput view;
 	RustHeightmapInput();
 	RustHeightmapInput(DetailedFileType type, std::string_view filename);
