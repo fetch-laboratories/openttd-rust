@@ -1465,7 +1465,9 @@ pub use vehicle_type::VehicleID;
 
 mod tunnel_map;
 
+mod depot_cmd;
 mod depot_map;
+mod depot_type;
 mod session;
 
 mod fileio_type;
