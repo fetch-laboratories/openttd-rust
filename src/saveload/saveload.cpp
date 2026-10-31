@@ -206,6 +206,7 @@ static const OpenTTDSaveLoadServices _sl_services = {
 		if (tabcrlf) settings.Set(StringValidationSetting::ReplaceTabCrNlWithSpace);
 		StrMakeValidInPlace(*static_cast<std::string *>(ptr), settings);
 	},
+	.autolength = [](const void *proc, int32_t arg) noexcept { return SlNativeFrame([&] { reinterpret_cast<AutolengthProc *>(const_cast<void *>(proc))(arg); }); },
 };
 
 static const std::vector<ChunkHandlerRef> &ChunkHandlers()
@@ -549,8 +550,7 @@ static inline size_t SlCalcRefLen()
 
 void SlSetArrayIndex(uint index)
 {
-	_codec.need_length = NL_WANTLENGTH;
-	_codec.array_index = index;
+	openttd_rust_saveload_set_array_index(index);
 }
 
 /**
@@ -1197,13 +1197,7 @@ static bool SlObjectMember(void *object, const SaveLoad &sld)
  */
 void SlSetStructListLength(size_t length)
 {
-	/* Automatically calculate the length? */
-	if (_codec.need_length != NL_NONE) {
-		SlSetLength(SlGetArrayLength(length));
-		if (_codec.need_length == NL_CALCLENGTH) return;
-	}
-
-	SlWriteArrayLength(length);
+	openttd_rust_saveload_set_struct_list_length(&_sl_services, length);
 }
 
 /**
@@ -1213,9 +1207,8 @@ void SlSetStructListLength(size_t length)
  */
 size_t SlGetStructListLength(size_t limit)
 {
-	size_t length = SlReadArrayLength();
-	if (length > limit) SlErrorCorrupt("List exceeds storage size");
-
+	size_t length;
+	SlRaise(openttd_rust_saveload_get_struct_list_length(&_sl_services, limit, &length));
 	return length;
 }
 
@@ -1481,26 +1474,7 @@ void SlGlobList(const SaveLoadTable &slt)
  */
 void SlAutolength(AutolengthProc *proc, int arg)
 {
-	assert(_codec.action == SLA_SAVE);
-
-	/* Tell it to calculate the length */
-	_codec.need_length = NL_CALCLENGTH;
-	_codec.obj_len = 0;
-	proc(arg);
-
-	/* Setup length */
-	_codec.need_length = NL_WANTLENGTH;
-	SlSetLength(_codec.obj_len);
-
-	size_t start_pos = openttd_rust_saveload_dumper_size();
-	size_t expected_offs = start_pos + _codec.obj_len;
-
-	/* And write the stuff */
-	proc(arg);
-
-	if (expected_offs != openttd_rust_saveload_dumper_size()) {
-		SlErrorCorruptFmt("Invalid chunk size when writing autolength block, expected {}, got {}", _codec.obj_len, openttd_rust_saveload_dumper_size() - start_pos);
-	}
+	SlRaise(openttd_rust_saveload_autolength(&_sl_services, reinterpret_cast<const void *>(proc), arg));
 }
 
 void ChunkHandler::LoadCheck(size_t len) const

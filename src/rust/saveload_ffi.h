@@ -73,6 +73,7 @@ typedef struct OpenTTDSaveLoadServices {
 	void (*fix_scc_encoded)(void *ptr, bool fix_code);
 	void (*fix_scc_encoded_negative)(void *ptr);
 	void (*make_valid)(void *ptr, bool control, bool newline, bool tabcrlf);
+	bool (*autolength)(const void *proc, int32_t arg);
 } OpenTTDSaveLoadServices;
 
 OpenTTDRustSaveLoadCodec *openttd_rust_saveload_codec(void);
@@ -108,6 +109,10 @@ OpenTTDRustSaveLoadStatus openttd_rust_saveload_array(const OpenTTDSaveLoadServi
 OpenTTDRustSaveLoadStatus openttd_rust_saveload_std_string(const OpenTTDSaveLoadServices *services, void *ptr, uint32_t conv);
 size_t openttd_rust_saveload_std_string_len(const OpenTTDSaveLoadServices *services, const void *ptr);
 OpenTTDRustSaveLoadStatus openttd_rust_saveload_read_string(const OpenTTDSaveLoadServices *services, void *ptr, size_t length);
+void openttd_rust_saveload_set_struct_list_length(const OpenTTDSaveLoadServices *services, size_t length);
+OpenTTDRustSaveLoadStatus openttd_rust_saveload_get_struct_list_length(const OpenTTDSaveLoadServices *services, size_t limit, size_t *length);
+void openttd_rust_saveload_set_array_index(uint32_t index);
+OpenTTDRustSaveLoadStatus openttd_rust_saveload_autolength(const OpenTTDSaveLoadServices *services, const void *proc, int32_t arg);
 OpenTTDRustSaveLoadStatus openttd_rust_saveload_ref(const OpenTTDSaveLoadServices *services, void *ptr, uint32_t conv);
 size_t openttd_rust_saveload_ref_len(void);
 OpenTTDRustSaveLoadStatus openttd_rust_saveload_array_len(const OpenTTDSaveLoadServices *services, size_t elements, uint32_t conv, size_t *length);

@@ -206,6 +206,8 @@ pub struct OpenTTDSaveLoadServices {
     pub fix_scc_encoded_negative: extern "C" fn(ptr: *mut c_void),
     /// `StrMakeValidInPlace(*str, settings)` with `ReplaceWithQuestionMark` and the given flags.
     pub make_valid: extern "C" fn(ptr: *mut c_void, control: bool, newline: bool, tabcrlf: bool),
+    /// `proc(arg)` for `SlAutolength`, where `proc` is an `AutolengthProc *`; false when it threw.
+    pub autolength: extern "C" fn(proc_: *const c_void, arg: i32) -> bool,
 }
 
 struct Codec {
@@ -1058,6 +1060,66 @@ fn std_string(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv: u32) -
     Ok(())
 }
 
+/// `SlSetStructListLength`.
+fn set_struct_list_length(services: &OpenTTDSaveLoadServices, length: usize) {
+    if shared(|s| s.need_length) != NL_NONE {
+        set_length(services, gamma_length(length) as usize);
+        if shared(|s| s.need_length) == NL_CALCLENGTH {
+            return;
+        }
+    }
+    write_simple_gamma(services, length);
+}
+
+/// `SlGetStructListLength`.
+fn get_struct_list_length(
+    services: &OpenTTDSaveLoadServices,
+    limit: usize,
+) -> Result<usize, OpenTTDRustSaveLoadStatus> {
+    let length = read_simple_gamma(services)? as usize;
+    if length > limit {
+        return Err(corrupt("List exceeds storage size".to_owned()));
+    }
+    Ok(length)
+}
+
+/// `SlAutolength`.
+fn autolength(services: &OpenTTDSaveLoadServices, proc_: *const c_void, arg: i32) -> Status {
+    (services.native_assert)(shared(|s| s.action) == SLA_SAVE);
+
+    // Calculate the length.
+    shared(|s| {
+        s.need_length = NL_CALCLENGTH;
+        s.obj_len = 0;
+    });
+    if !(services.autolength)(proc_, arg) {
+        return Err(SL_STATUS_NATIVE);
+    }
+
+    // Write the length, then the data.
+    let obj_len = shared(|s| {
+        s.need_length = NL_WANTLENGTH;
+        s.obj_len
+    });
+    set_length(services, obj_len);
+
+    let start_pos = dumper_size();
+    let expected_offs = start_pos.wrapping_add(shared(|s| s.obj_len));
+
+    if !(services.autolength)(proc_, arg) {
+        return Err(SL_STATUS_NATIVE);
+    }
+
+    if expected_offs != dumper_size() {
+        return Err(corrupt(format!(
+            "Invalid chunk size when writing autolength block, expected {}, got {}",
+            shared(|s| s.obj_len),
+            dumper_size().wrapping_sub(start_pos)
+        )));
+    }
+    Ok(())
+}
+
 fn status(result: Status) -> OpenTTDRustSaveLoadStatus {
     result.err().unwrap_or(SL_STATUS_OK)
 }
@@ -1413,6 +1475,50 @@ pub unsafe extern "C" fn openttd_rust_saveload_read_string(
     status(read_string(services, ptr, length))
 }
 
+/// `SlSetStructListLength`.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_saveload_set_struct_list_length(
+    services: &OpenTTDSaveLoadServices,
+    length: usize,
+) {
+    set_struct_list_length(services, length);
+}
+
+/// `SlGetStructListLength`.
+///
+/// # Safety
+/// `length` is writable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_saveload_get_struct_list_length(
+    services: &OpenTTDSaveLoadServices,
+    limit: usize,
+    length: *mut usize,
+) -> OpenTTDRustSaveLoadStatus {
+    status(get_struct_list_length(services, limit).map(|v| {
+        // SAFETY: The caller's contract.
+        unsafe { *length = v }
+    }))
+}
+
+/// `SlSetArrayIndex`.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_saveload_set_array_index(index: u32) {
+    shared(|s| {
+        s.need_length = NL_WANTLENGTH;
+        s.array_index = index as i32;
+    });
+}
+
+/// `SlAutolength`; `proc_` is an `AutolengthProc *` that `services.autolength` calls.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_saveload_autolength(
+    services: &OpenTTDSaveLoadServices,
+    proc_: *const c_void,
+    arg: i32,
+) -> OpenTTDRustSaveLoadStatus {
+    status(autolength(services, proc_, arg))
+}
+
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDRustSaveLoadCodec" ["probe"] => OpenTTDRustSaveLoadCodec {
@@ -1464,5 +1570,6 @@ crate::abi::layouts! {
         fix_scc_encoded,
         fix_scc_encoded_negative,
         make_valid,
+        autolength,
     };
 }
