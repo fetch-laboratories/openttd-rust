@@ -3642,7 +3642,7 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 			AddNewsItem(std::move(message), NewsType::General, NewsStyle::Company, {}, TownID(id), {}, std::move(cni));
 		},
 		.rights_events = [](uint16_t id) noexcept { AI::BroadcastNewEvent(new ScriptEventExclusiveTransportRights(_current_company, TownID(id))); Game::NewEvent(new ScriptEventExclusiveTransportRights(_current_company, TownID(id))); },
-		.station_views_dirty = []() noexcept { SetWindowClassesDirty(WC_STATION_VIEW); },
+		.station_views_dirty = []() noexcept { RustSetWindowClassesDirty(WC_STATION_VIEW); },
 		.next_station = [](uint32_t from) noexcept -> OpenTTDTownStationCursor { if (Station *st = OpenTTDNextStation(from)) return {.shell = st, .next = RustBaseStationID(st) + 1U}; return {.shell = nullptr, .next = UINT32_MAX}; },
 		.station_town = RustStationStationTown,
 		.station_owner = RustStationOwnerByte<const BaseStation>,

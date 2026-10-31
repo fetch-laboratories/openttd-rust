@@ -188,10 +188,10 @@ static uint32_t Co_cargo_next(uint32_t from, int64_t *initial_payment) noexcept
 }
 static void Co_price_windows_dirty() noexcept
 {
-	SetWindowClassesDirty(WC_BUILD_VEHICLE);
-	SetWindowClassesDirty(WC_REPLACE_VEHICLE);
-	SetWindowClassesDirty(WC_VEHICLE_DETAILS);
-	SetWindowClassesDirty(WC_COMPANY_INFRASTRUCTURE);
+	RustSetWindowClassesDirty(WC_BUILD_VEHICLE);
+	RustSetWindowClassesDirty(WC_REPLACE_VEHICLE);
+	RustSetWindowClassesDirty(WC_VEHICLE_DETAILS);
+	RustSetWindowClassesDirty(WC_COMPANY_INFRASTRUCTURE);
 	InvalidateWindowData(WC_PAYMENT_RATES, 0);
 }
 static void Co_industry_daily_changes(bool init_counter) noexcept { StartupIndustryDailyChanges(init_counter); }
@@ -215,9 +215,9 @@ static void Co_new_company_events(uint8_t id) noexcept
 static void Co_company_league_dirty() noexcept { InvalidateWindowData(WC_COMPANY_LEAGUE, 0, 0); }
 static void Co_company_ctrl_windows() noexcept
 {
-	InvalidateWindowClassesData(WC_GAME_OPTIONS);
-	InvalidateWindowClassesData(WC_SCRIPT_SETTINGS);
-	InvalidateWindowClassesData(WC_SCRIPT_LIST);
+	RustInvalidateWindowClassesData(WC_GAME_OPTIONS);
+	RustInvalidateWindowClassesData(WC_SCRIPT_SETTINGS);
+	RustInvalidateWindowClassesData(WC_SCRIPT_LIST);
 }
 static void Co_close_network_status() noexcept { CloseWindowById(WC_NETWORK_STATUS_WINDOW, WN_NETWORK_STATUS_WINDOW_JOIN); }
 static void Co_assert_new_ai_slot([[maybe_unused]] uint8_t id) noexcept { assert(CompanyID(id) == CompanyID::Invalid() || !Company::IsValidID(id)); }
@@ -255,10 +255,10 @@ static void Co_merger_news(uint8_t id, bool hostile) noexcept
 static void Co_acquisition_windows(uint8_t id) noexcept
 {
 	CloseCompanyWindows(CompanyID(id));
-	InvalidateWindowClassesData(WC_TRAINS_LIST, 0);
-	InvalidateWindowClassesData(WC_SHIPS_LIST, 0);
-	InvalidateWindowClassesData(WC_ROADVEH_LIST, 0);
-	InvalidateWindowClassesData(WC_AIRCRAFT_LIST, 0);
+	RustInvalidateWindowClassesData(WC_TRAINS_LIST, 0);
+	RustInvalidateWindowClassesData(WC_SHIPS_LIST, 0);
+	RustInvalidateWindowClassesData(WC_ROADVEH_LIST, 0);
+	RustInvalidateWindowClassesData(WC_AIRCRAFT_LIST, 0);
 	InvalidateWindowData(WC_CLIENT_LIST, 0);
 }
 

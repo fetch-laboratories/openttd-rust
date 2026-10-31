@@ -5,6 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
+#include "presentation_services.h"
 #include "road_command_services.h"
 #include "services_road.h"
 
@@ -228,7 +229,7 @@ static void OPENTTD_RUST_CALL RoadSvcPayRunning(OpenTTDVehicle *v, int64_t amoun
 	SubtractMoneyFromCompanyFract(u->owner, cost);
 
 	RustVehicleDetailsDirty(RustVehicle(u));
-	SetWindowClassesDirty(WC_ROADVEH_LIST);
+	RustSetWindowClassesDirty(WC_ROADVEH_LIST);
 }
 static OpenTTDRoadServiceRead OPENTTD_RUST_CALL RoadSvcServiceRead(OpenTTDVehicle *v) noexcept
 {

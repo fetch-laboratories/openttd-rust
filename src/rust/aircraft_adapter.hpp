@@ -5,6 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 /** @file aircraft_adapter.hpp Canonical pool observations and direct shared leaves. */
+#include "presentation_services.h"
 #include "aircraft_ffi.h"
 #include "services_assert.h"
 #include "vehicle_services.h"
@@ -185,7 +186,7 @@ static void OPENTTD_RUST_CALL Aircraft_landing_rating(uint16_t station_id, uint8
 
 static void OPENTTD_RUST_CALL Aircraft_dirty_depot(OpenTTDAircraftVehicle vehicle) noexcept
 {
-	RustVehicleInvalidateDepot(VehicleOf(vehicle.handle)); SetWindowClassesDirty(WC_AIRCRAFT_LIST);
+	RustVehicleInvalidateDepot(VehicleOf(vehicle.handle)); RustSetWindowClassesDirty(WC_AIRCRAFT_LIST);
 }
 
 static void OPENTTD_RUST_CALL Aircraft_first_arrival(OpenTTDAircraftVehicle vehicle, uint16_t station) noexcept
@@ -225,7 +226,7 @@ static void OPENTTD_RUST_CALL Aircraft_subtract_cost(OpenTTDAircraftVehicle vehi
 
 static void OPENTTD_RUST_CALL Aircraft_dirty_lists(OpenTTDAircraftVehicle vehicle) noexcept
 {
-	RustVehicleDetailsDirty(vehicle.handle); SetWindowClassesDirty(WC_AIRCRAFT_LIST);
+	RustVehicleDetailsDirty(vehicle.handle); RustSetWindowClassesDirty(WC_AIRCRAFT_LIST);
 }
 
 static uint16_t OPENTTD_RUST_CALL Aircraft_next_stopping_station(OpenTTDAircraftVehicle vehicle) noexcept
