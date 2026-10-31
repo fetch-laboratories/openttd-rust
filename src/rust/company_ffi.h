@@ -159,7 +159,8 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_RUST_CALL *close_network_status)() noexcept OPENTTD_SERVICE_DEFAULT(close_network_status);
 	void (OPENTTD_RUST_CALL *network_spectate)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(network_spectate);
 	void (OPENTTD_RUST_CALL *network_company_new)(uint8_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(network_company_new);
-	void (OPENTTD_RUST_CALL *network_own_company)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(network_own_company);
+	Company *(OPENTTD_RUST_CALL *network_own_company)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(network_own_company);
+	void (OPENTTD_RUST_CALL *network_own_company_settings)(Company *) noexcept OPENTTD_SERVICE_DEFAULT(network_own_company_settings);
 	void (OPENTTD_RUST_CALL *assert_new_ai_slot)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assert_new_ai_slot);
 	void (OPENTTD_RUST_CALL *company_bankrupt_news)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_bankrupt_news);
 	void (OPENTTD_RUST_CALL *stop_ai)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(stop_ai);

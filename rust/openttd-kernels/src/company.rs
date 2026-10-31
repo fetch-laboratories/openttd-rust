@@ -320,7 +320,8 @@ pub struct Services {
     pub close_network_status: extern "C" fn(),
     pub network_spectate: extern "C" fn(u32),
     pub network_company_new: extern "C" fn(u8, u32, bool),
-    pub network_own_company: extern "C" fn(u8, u32),
+    pub network_own_company: extern "C" fn(u8, u32) -> *mut crate::company_type::OpenTTDCompany,
+    pub network_own_company_settings: extern "C" fn(*mut crate::company_type::OpenTTDCompany),
     pub assert_new_ai_slot: extern "C" fn(u8),
     pub company_bankrupt_news: extern "C" fn(u8),
     pub stop_ai: extern "C" fn(u8),
@@ -1461,7 +1462,11 @@ fn control(s: &Services, ownership: &crate::tile_owner::Context, c: &mut Control
                 } else {
                     let id = startup_frame.company as u8;
                     (s.network_company_new)(id, c.client, true);
-                    (s.network_own_company)(id, c.client);
+                    let company = (s.network_own_company)(id, c.client);
+                    if !company.is_null() {
+                        set_local_company(s, (s.identity.company_id)(company));
+                        (s.network_own_company_settings)(company);
+                    }
                 }
             }
             1 => {
@@ -2238,6 +2243,7 @@ crate::abi::layouts! {
         network_spectate,
         network_company_new,
         network_own_company,
+        network_own_company_settings,
         assert_new_ai_slot,
         company_bankrupt_news,
         stop_ai,

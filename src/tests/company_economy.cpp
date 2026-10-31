@@ -32,6 +32,9 @@
 #include "../tile_map.h"
 #include "../openttd.h"
 #include "../rust/movement_ffi.h"
+#include "../rust/objectives_ffi.h"
+#include "../window_func.h"
+#include "../network/network_type.h"
 #endif
 #include "../safeguards.h"
 #ifdef WITH_RUST
@@ -413,6 +416,40 @@ TEST_CASE("Company economy - AI startup continuation and abandoned frames")
 /* AI command APIs cannot select deity/non-company owners. The original wider
  * CompanyMask test is defined through bit 63; compare those special owners and
  * also check the inactive/new/spectator sentinels without an oversized shift. */
+TEST_CASE("Company control - network local switch precedes native settings continuation")
+{
+	static uint8_t local;
+	static bool own;
+	static OpenTTDObjectivesServices windows;
+	AutoRestoreBackup<Colours> colour(_company_colours[CompanyID(2)], _company_colours[CompanyID(2)]);
+	RustTileOwnerContext ownership;
+	for (bool matching_client : {false, true}) {
+		FixtureReset(true, false); local = COMPANY_SPECTATOR.base(); fixture_current = local; own = matching_client;
+		fixture_identity_shared.company_valid = [](uint8_t id) noexcept { return FixtureFinances(id) != nullptr; };
+		fixture_services.shared = &fixture_identity_shared;
+		fixture_services.local_company = []() noexcept { return local; };
+		fixture_services.close_network_status = FixtureVoid;
+		fixture_services.network_own_company = [](uint8_t id, uint32_t) noexcept -> Company * { fixture_trace.push_back("request"); return own ? fixture_identity.company(id) : nullptr; };
+		fixture_services.network_own_company_settings = [](Company *) noexcept { CHECK(local == 2); CHECK(fixture_current == 2); fixture_trace.push_back("settings"); };
+		windows = GetRustObjectivesServices();
+		windows.window_data = [](uint16_t cls, uint32_t number, int32_t data) noexcept { CHECK(cls == WC_SEND_NETWORK_MSG); CHECK(number == DESTTYPE_TEAM); CHECK(data == COMPANY_SPECTATOR.base()); CHECK(local == COMPANY_SPECTATOR.base()); CHECK(fixture_current == COMPANY_SPECTATOR.base()); fixture_trace.push_back("chat"); };
+		windows.window_classes = [](uint16_t, int32_t) noexcept { fixture_trace.push_back("classes"); };
+		fixture_services.objectives = []() noexcept -> const OpenTTDObjectivesServices & { return windows; };
+		fixture_services.assign_company_context = [](uint8_t company) noexcept { local = company; fixture_current = company; fixture_trace.push_back("assign"); };
+		fixture_services.close_construction_windows = []() noexcept { fixture_trace.push_back("construction"); };
+		fixture_identity.dirty = []() noexcept { fixture_trace.push_back("screen"); };
+		fixture_identity.reset_colourmap = []() noexcept { fixture_trace.push_back("colourmap"); };
+		OpenTTDCompanyControl call{.result = {}, .startup = {}, .client = 7, .action = static_cast<uint8_t>(CCA_NEW), .target = 255, .reason = 0, .execute = true, .stage = 0};
+		CHECK_FALSE(openttd_rust_company_control(&fixture_services, &ownership.view, &call));
+		std::vector<std::string> expected{"allocate 2", "setup 2", "events 2", "network 2", "request"};
+		if (matching_client) expected.insert(expected.end(), {"chat", "assign", "classes", "construction", "screen", "classes", "classes", "classes", "colourmap", "settings"});
+		CHECK(fixture_trace == expected);
+		CHECK(call.result.error == 0);
+		CHECK(local == (matching_client ? 2 : COMPANY_SPECTATOR.base()));
+		fixture_companies[2].reset();
+	}
+}
+
 TEST_CASE("Company economy - special owners have no bankruptcy takeover offer")
 {
 	RustTileOwnerContext ownership;

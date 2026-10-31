@@ -84,7 +84,8 @@ void OPENTTD_RUST_CALL RustCompanyDefaults(uint8_t) noexcept;
 void OPENTTD_RUST_CALL RustCompanyStartupWindows() noexcept;
 void RustCompanyNetworkSpectate(uint32_t) noexcept;
 void RustCompanyNetworkNew(uint8_t, uint32_t, bool) noexcept;
-void RustCompanyNetworkOwn(uint8_t, uint32_t) noexcept;
+Company *RustCompanyNetworkOwn(uint8_t, uint32_t) noexcept;
+void RustCompanyNetworkOwnSettings(Company *) noexcept;
 
 /* Constants Rust uses as literals. */
 static_assert(Ticks::DAY_TICKS == 74 && Ticks::TICKS_PER_SECOND == 37);
@@ -453,6 +454,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.company_league_dirty = Co_company_league_dirty, .company_ctrl_windows = Co_company_ctrl_windows,
 		.close_network_status = Co_close_network_status, .network_spectate = RustCompanyNetworkSpectate,
 		.network_company_new = RustCompanyNetworkNew, .network_own_company = RustCompanyNetworkOwn,
+		.network_own_company_settings = RustCompanyNetworkOwnSettings,
 		.assert_new_ai_slot = Co_assert_new_ai_slot, .company_bankrupt_news = Co_company_bankrupt_news,
 		.stop_ai = Co_stop_ai, .delete_company = Co_delete_company, .company_removed = Co_company_removed,
 		.merger_news = Co_merger_news, .acquisition_windows = Co_acquisition_windows,

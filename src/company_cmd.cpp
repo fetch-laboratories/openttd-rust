@@ -1683,12 +1683,15 @@ void RustCompanyNetworkNew(uint8_t id, uint32_t client, bool with_client) noexce
 	NetworkServerNewCompany(c, with_client ? NetworkClientInfo::GetByClientID(ClientID(client)) : nullptr);
 }
 /** CCA_NEW: the requesting client takes control of its new company. */
-void RustCompanyNetworkOwn(uint8_t id, uint32_t client) noexcept
+Company *RustCompanyNetworkOwn(uint8_t id, uint32_t client) noexcept
 {
-	if (ClientID(client) != _network_own_client_id) return;
+	if (ClientID(client) != _network_own_client_id) return nullptr;
 	Company *c = Company::Get(id);
 	assert(_local_company == COMPANY_SPECTATOR);
-	SetLocalCompany(c->index);
+	return c;
+}
+void RustCompanyNetworkOwnSettings(Company *c) noexcept
+{
 	if (!_company_manager_face.empty()) {
 		auto cmf = ParseCompanyManagerFaceCode(_company_manager_face);
 		if (cmf.has_value()) Command<CMD_SET_COMPANY_MANAGER_FACE>::SendNet(STR_NULL, c->index, cmf->style, cmf->bits);
