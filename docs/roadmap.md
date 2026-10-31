@@ -30,7 +30,7 @@ Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh
 | P2000 | 7,386,811,216 | 1.400577x | 1.401446x |
 | P2016 | 13,373,195,254 | 1.522911x | 1.481910x |
 
-- The integration-50 platform cadence (run 41242566571) was running at this commit. Read its result before the next integration; a red result blocks integrations.
+- The integration-50 platform cadence (run 41242566571) passed on every platform. The next is due after 55.
 - Coverage is unchanged: #156 holds the gaps, and #503 comes last.
 - Unintegrated branches: #616, #618, #620, #623, #624, #625, #627 and #628. That is above the six-branch limit, by the user's direction for this session (2026-10-31: use the remaining window). The next session integrates or parks branches before starting any.
 
@@ -340,7 +340,6 @@ Code is `b34535f99c`. `CI_ON_DEMAND` is `true`; it was unset only for #607's boo
 
 | Issue / PR | State at this commit | Next action | Checkout |
 | --- | --- | --- | --- |
-| Integration-50 cadence | Run 41242566571 running | Read the result; fix a red cadence before integrating | none |
 | #621 / #625 | Review625 found false facade marks and is fixing them | Publish the review, base update, Full, merge | `t3-a5baa928` |
 | #566 / #623 | Review623 fixing the drawing speed budget | Publish the review, Full, merge before #570 | `t3-8aec009e` |
 | #622 / #624 | Handed off at `55c7afe82e`: five families, all local checks pass | Shared typed `RustSpec*` table next (root's answers on the PR) | `t3-b2cef9d7` |
