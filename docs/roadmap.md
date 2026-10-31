@@ -322,7 +322,7 @@ six-branch limit and disjoint-service rule; completing review/integration takes
 priority. A lower rank can run while a higher one waits. Scopes live in issues.
 
 1. **Finish the remaining drafts in readiness order, with the steering fixes.**
-   #568 remains next; #594, #596 and #605 follow in ownership readiness order.
+   #568 integrated as integration 39; #594, #596 and #605 follow in ownership readiness order.
    #606 must be the next maintenance integration before #603. Each next action
    is in the checkpoint. No reviewed owner gains other scope; a fix the audit
    found is not new scope.
@@ -333,7 +333,7 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
      `-fwasm-exceptions`.
    - PR-B, the sweep plus moving the fallback-body oracles onto the pinned
      reference, follows PR-A, PR-E, #568, #576 and #580.
-   - PR-B takes the slot #568 frees, without waiting for every other draft.
+   - PR-B now takes the slot freed by #568, whose integration completes its prerequisites.
      Keep dual-build harness guards and move fallback-reading oracles to the
      pinned reference. Surviving drafts rerun the recorded sweep over every
      touched `src/` file when updating from base. Expected size and evidence
@@ -472,32 +472,34 @@ Excluded, with return conditions checked by this review:
   near-full reproduction under #513's original-default setting policy. #513
   needs implementation when the first such improvement is accepted.
 
-## Resume checkpoint (2026-10-31, integration 38)
+## Resume checkpoint (2026-10-31, integration 39)
 
 Codex root has taken over from Claude Code root at `9cf6b7898e`.
 Agent: /root | Model: gpt-6.1-sol | Reasoning effort: xhigh.
-#593 integrated as integration 37 (`b74888c4bc`) and #576 as integration 38
-(`e48846d8fd`). Drafts integrate one at a time because every pair shares
+#593 integrated as integration 37 (`b74888c4bc`), #576 as integration 38
+(`e48846d8fd`), and #568 as integration 39 (`4733594d75`) after exact-head
+Full passed at `a4812c3060`. #562 is closed. Drafts integrate one at a time because every pair shares
 service files; each merge needs the next draft updated from base. Ownership
-readiness order is #568, #594, #596 and #605. #606 is the next maintenance
-integration before #603. #581 PR-B takes the slot freed by #568.
+readiness order is #594, #596 and #605. #606 is the next maintenance
+integration before #603. #581 PR-B takes the freed slot. The next stocktake,
+instruction profile and platform cadence are due after integration 40.
 
 | Draft | Pushed head | State and next action | Worktree |
 | --- | --- | --- | --- |
 | #585 / #596 | `8b4cb010f8` | Scoped engine-types hook review passed with no findings; build and three scenarios passed. Current-base update when preparing final Full. | `t3-489ff2ae` (implementation) |
-| #562 / #568 | `9e1884c26e` | Fresh conflict review passed. Full passed every simulation shard and platform build but failed the cargo pool-limit comparison: an unused fixture callback still has the old `flow_owner` type. Root is updating it to `flow_map`, then reruns that comparison and current-base Full. | `t3-05b5586e` (locked root repair) |
-| #587 / #594 | `b655b40c0a` | conflict594 reviewed the `train.cpp` resolution and fixed two docs omissions. Base update, then Full. | `t3-9836ee35` |
+| #581 PR-B | none yet | Selected now that #568 integrated. Mechanical `src/` sweep, pinned fallback-reading oracles, Rust-only build configuration and quick-CI guard. Independent review, then Full. | New Codex T3 worktree |
+| #587 / #594 | `b655b40c0a` | conflict594 reviewed the earlier `train.cpp` resolution. Codex updates from integration 39; classify any new conflicts, then current-base Full. Next ownership integration. | New Codex update worktree |
 | #199 / #603 | `70215c21cb` | Reviewed four native-assertion fixes; root spot-checked. Current-base update and Full after #606, the next maintenance integration. Item 4 is #604. | T3 worktree |
-| #565 / #275 / #592 / #606 | `0cc77436aa` | Codex recovery and road-search caching pushed; initial Quick formatting failure fixed. Build and six instruction measurements pending; target is profile 36's Ir or lower per scenario. Fresh fixing review, then Full; next maintenance integration. | `t3-d6cdd816` (active); `t3-431c84b4` (locked source) |
-| #586 / #605 | `ddbbfe6830` | Native/Cargo/ABI, static checks and seven scenarios passed. Final metrics: 230 Rust, 260 tooling, 75 retired, +127 net glue. Fresh independent fixing review605-signs is running. Root accepted the scoped cost. | Codex T3 worktree; `t3-a695ea95` (locked source) |
+| #565 / #275 / #592 / #606 | `2df021c421` | Road-search caching and fixture-header separation pushed. Builds and inventories passed; native tests and six profiles are pending. Target: profile 36's Ir or lower per scenario. Fresh fixing review, then Full; next maintenance integration. | `t3-d6cdd816` (active); `t3-431c84b4` (locked source) |
+| #586 / #605 | `b7a469889a` | Fixing review removed the extra sign-name copy and reused canonical presentation bindings. Root spot-checked; affected build, ABI and signs checks passed. Current-base update and Full when ready to integrate. | Codex implementation worktree; `t3-a695ea95` (locked source) |
 
 | Running or due work | State / next action |
 | --- | --- |
-| Branch limit | Six unintegrated component branches (#568, #594, #596, #603, #605 and #606). #581 PR-B starts after #568 integrates. |
+| Branch limit | Six selected component branches (#581 PR-B, #594, #596, #603, #605 and #606); the sweep replaces merged #568. |
 | Deep checks | On the user's request only (user decision, 2026-10-31). If one is requested, use `.local/worktrees/deep-after30-569` (locked). Move it with `git checkout --detach origin/rust-migration` and relock it. Then run `python3 tools/migration.py build --jobs 2`, then `cmake --build build-rust-sanitized --target openttd_rust_native_test_support_build` until #503's fix lands, then `python3 tools/migration.py deep` with the requested `--member` options. Launch outside the session's process group, for example as a `systemd-run --user` unit. |
 | Instruction profile | Profiles 36 and 38 are retained in `.local/worktrees/profile-after36-595` and `profile-after38-576` (locked) for the regression comparison. The next is due after integration 40, or when the fix-forward PR integrates. |
 | Quiet speed pass | Waits for the profile-38 regression fix; needs an idle host. |
-| Maintenance | Astra planning is complete. #581 PR-B takes the next freed slot; #606 is the next maintenance integration. #604 is explicitly placed under #199 after #594, PR-B and #570, before typing/coverage. |
+| Maintenance | Astra planning is complete. #581 PR-B is selected; #606 is the next maintenance integration. #604 is explicitly placed under #199 after #594, PR-B and #570, before typing/coverage. |
 | Housekeeping | Lock a running Codex agent's worktree before `--apply` until #592 integrates. |
 
 Keep the pinned reference unchanged. Preserve unfinished checkouts and existing
