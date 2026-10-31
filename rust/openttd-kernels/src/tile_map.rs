@@ -219,6 +219,51 @@ impl crate::map_func::World<'_> {
     }
 }
 
+/// `TileHeight`; a failed `tile < Map::Size()` calls the native assertion.
+#[allow(clippy::cast_sign_loss)] // `tile_height` reads a byte, so its i32 is nonnegative.
+pub(crate) fn tile_height_in(w: &crate::map_func::World<'_>, t: u32) -> u32 {
+    tile_height(&w.types, t).map_or_else(
+        || {
+            w.check(false);
+            0
+        },
+        |height| height as u32,
+    )
+}
+/// `IsInnerTile`; `freeform_edges` is `construction.freeform_edges` at the call.
+pub(crate) fn is_inner_tile(w: &crate::map_func::World<'_>, t: u32, freeform_edges: bool) -> bool {
+    w.check(w.types.available(t).is_some());
+    let map = w.dimensions;
+    let x = map.tile_x(t);
+    let y = map.tile_y(t);
+    x < map.max_x()
+        && y < crate::map_func::Map::max_y(w.size_y())
+        && ((x > 0 && y > 0) || !freeform_edges)
+}
+/// `SetTileHeight`.
+#[allow(clippy::cast_possible_truncation)] // `tile.height() = height` stores the low byte.
+pub(crate) fn set_tile_height(w: &crate::map_func::World<'_>, t: u32, height: u32) {
+    w.check(w.types.available(t).is_some());
+    w.check(height <= crate::tile_type::MAX_TILE_HEIGHT);
+    let _ = w.types.set_height(t, height as u8);
+}
+/// `SetTileType`; the inner-tile assertion reads `freeform_edges` only in assertion builds.
+#[allow(clippy::cast_possible_truncation)] // `SB` assigns the promoted result to a byte.
+pub(crate) fn set_tile_type(
+    w: &crate::map_func::World<'_>,
+    t: u32,
+    kind: u8,
+    freeform_edges: impl FnOnce() -> bool,
+) {
+    w.check(w.types.available(t).is_some());
+    if w.types.assertions() {
+        w.check(is_inner_tile(w, t, freeform_edges()) == (kind != crate::tile_type::MP_VOID));
+    }
+    let mut value = u32::from(crate::map_func::World::byte(w.types.kind(t)));
+    crate::bitmath_func::sb(&mut value, 4, 4, u32::from(kind));
+    let _ = w.types.set_kind(t, value as u8);
+}
+
 #[cfg(test)]
 mod tests {
     use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation, World};
@@ -434,49 +479,4 @@ mod tests {
             }
         }
     }
-}
-
-/// `TileHeight`; a failed `tile < Map::Size()` calls the native assertion.
-#[allow(clippy::cast_sign_loss)] // `tile_height` reads a byte, so its i32 is nonnegative.
-pub(crate) fn tile_height_in(w: &crate::map_func::World<'_>, t: u32) -> u32 {
-    tile_height(&w.types, t).map_or_else(
-        || {
-            w.check(false);
-            0
-        },
-        |height| height as u32,
-    )
-}
-/// `IsInnerTile`; `freeform_edges` is `construction.freeform_edges` at the call.
-pub(crate) fn is_inner_tile(w: &crate::map_func::World<'_>, t: u32, freeform_edges: bool) -> bool {
-    w.check(w.types.available(t).is_some());
-    let map = w.dimensions;
-    let x = map.tile_x(t);
-    let y = map.tile_y(t);
-    x < map.max_x()
-        && y < crate::map_func::Map::max_y(w.size_y())
-        && ((x > 0 && y > 0) || !freeform_edges)
-}
-/// `SetTileHeight`.
-#[allow(clippy::cast_possible_truncation)] // `tile.height() = height` stores the low byte.
-pub(crate) fn set_tile_height(w: &crate::map_func::World<'_>, t: u32, height: u32) {
-    w.check(w.types.available(t).is_some());
-    w.check(height <= crate::tile_type::MAX_TILE_HEIGHT);
-    let _ = w.types.set_height(t, height as u8);
-}
-/// `SetTileType`; the inner-tile assertion reads `freeform_edges` only in assertion builds.
-#[allow(clippy::cast_possible_truncation)] // `SB` assigns the promoted result to a byte.
-pub(crate) fn set_tile_type(
-    w: &crate::map_func::World<'_>,
-    t: u32,
-    kind: u8,
-    freeform_edges: impl FnOnce() -> bool,
-) {
-    w.check(w.types.available(t).is_some());
-    if w.types.assertions() {
-        w.check(is_inner_tile(w, t, freeform_edges()) == (kind != crate::tile_type::MP_VOID));
-    }
-    let mut value = u32::from(crate::map_func::World::byte(w.types.kind(t)));
-    crate::bitmath_func::sb(&mut value, 4, 4, u32::from(kind));
-    let _ = w.types.set_kind(t, value as u8);
 }
