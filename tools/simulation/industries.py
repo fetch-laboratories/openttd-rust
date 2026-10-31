@@ -475,6 +475,7 @@ def check(scenario, run, mode, role, result):
             "INDUSTRY-POLICY rng",
         ]
         if kind == "policy":
+            markers.append("INDUSTRY-POLICY wide-orders true")
             markers += [
                 f"INDUSTRY-POLICY servicing {outcome} true" for outcome in range(3)
             ]

@@ -86,8 +86,12 @@ pub(super) fn servicing(shell: *mut c_void, owner: *mut Industry, s: &Services) 
         if !accepts && !produces {
             continue;
         }
-        let mut index = 0;
-        while let Some(order) = orders.get(v, index) {
+        let list = orders.list(v);
+        if list.is_null() {
+            continue;
+        }
+        for index in 0..orders.stored_count(list) {
+            let order = orders.stored_order(list, index);
             if order.kind() == OT_GOTO_STATION && order.unload() != OUFB_TRANSFER {
                 let station = (subsidies.station)(order.destination)
                     .cast_mut()
@@ -108,7 +112,6 @@ pub(super) fn servicing(shell: *mut c_void, owner: *mut Industry, s: &Services) 
                     result = Servicing::Other;
                 }
             }
-            index = index.wrapping_add(1);
         }
     }
     result

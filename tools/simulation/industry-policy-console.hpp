@@ -59,6 +59,18 @@ static bool IndustryPolicy(std::span<std::string_view> args)
 		ind->ctlflags.Set(IndustryControlFlag::NoClosure);
 		vehicle->cargo_type = ind->produced[0].cargo;
 		if (outcome != 0) vehicle->GetOrder(0)->MakeGoToStation((*ind->stations_near.begin())->index);
+		std::vector<std::pair<Vehicle *, OrderList *>> original_orders;
+		OrderList *wide = nullptr;
+		if (outcome == 2) {
+			/* Orders() retains entries beyond the uint8 GetNumOrders() count in loaded lists. */
+			std::vector<Order> entries(257);
+			entries.back().MakeGoToStation((*ind->stations_near.begin())->index);
+			wide = new OrderList(std::move(entries), vehicle);
+			for (Vehicle *v : Vehicle::Iterate()) {
+				original_orders.emplace_back(v, v->orders);
+				v->orders = v == vehicle ? wide : nullptr;
+			}
+		}
 		DeleteIndustryNews(ind->index);
 		bool found = false;
 		for (uint attempt = 0; attempt < 512 && !found; ++attempt) {
@@ -75,6 +87,9 @@ static bool IndustryPolicy(std::span<std::string_view> args)
 			}
 		}
 		IndustryPolicyRequire(found);
+		for (const auto &[v, orders] : original_orders) v->orders = orders;
+		delete wide;
+		if (outcome == 2) fmt::print(stderr, "INDUSTRY-POLICY wide-orders true\n");
 		fmt::print(stderr, "INDUSTRY-POLICY servicing {} true\n", outcome);
 	}
 	_settings_game.economy.type = ET_ORIGINAL;
