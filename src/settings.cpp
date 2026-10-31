@@ -66,7 +66,7 @@
 #include "rust/company_adapter.h"
 #include "rust/vehicle_transaction_ffi.h"
 #include "rust/vehicle_refit_ffi.h"
-#include "rust/objectives_ffi.h"
+#include "rust/services_objectives.h"
 #include "rust/engine_loading_ffi.h"
 #include "rust/command_cost_services.h"
 #include "rust/presentation_services.h"
