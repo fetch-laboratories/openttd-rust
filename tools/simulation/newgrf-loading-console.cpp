@@ -309,7 +309,11 @@ static void SeasonalSnow(const char *phase, bool loaded)
 static bool LoadingScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
-	if (args[1] == "inspect") { Inspect(true); GrfTownNames("inspect", false); SeasonalSnow("inspect", true); return true; }
+	if (args[1] == "inspect") {
+		/* Interactive RNG is unsaved; observe it from a deterministic reload command seed. */
+		_interactive_random.SetSeed(0x61700001);
+		Inspect(true); GrfTownNames("inspect", false); SeasonalSnow("inspect", true); return true;
+	}
 	if (args.size() < 3) return false;
 	SetRandomSeed(0x47100001);
 	_grfconfig.clear();
