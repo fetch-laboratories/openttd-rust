@@ -15,3 +15,4 @@ pub const WC_COMPANY: u16 = 51;
 pub const WC_SIGN_LIST: u16 = 36;
 pub const WC_COMPANY_COLOUR: u16 = 28;
 pub const WC_SEND_NETWORK_MSG: u16 = 72;
+pub const WC_CLIENT_LIST: u16 = 68;

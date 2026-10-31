@@ -267,7 +267,6 @@ pub struct Services {
     pub shared: &'static crate::services::Services,
     pub allow_list_add:
         extern "C" fn(crate::company_type::CompanyID, crate::services::ByteSpan) -> bool,
-    pub allow_list_changed: extern "C" fn(),
     pub allow_list_remove:
         extern "C" fn(crate::company_type::CompanyID, crate::services::ByteSpan) -> bool,
     pub assign_company_context: extern "C" fn(crate::company_type::CompanyID),
@@ -480,7 +479,9 @@ fn allow_list(
     if flags & crate::command_type::DoCommandFlag::EXECUTE != 0
         && execute_allow_list_action(s, action, company, key)
     {
-        (s.allow_list_changed)();
+        ((s.objectives)().window_data)(crate::window_type::WC_CLIENT_LIST, 0, 0);
+        let transactions = (s.settings)().refit.common.transactions;
+        ((transactions.build_services)().rail.company_dirty)();
     }
     out.zero();
 }
@@ -2190,7 +2191,6 @@ crate::abi::layouts! {
         finance,
         shared,
         allow_list_add,
-        allow_list_changed,
         allow_list_remove,
         assign_company_context,
         close_construction_windows,

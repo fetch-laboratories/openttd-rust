@@ -94,7 +94,7 @@ static_assert(RAILTYPE_END == 64 && ROADTYPE_END == 63 && MAX_HISTORY_QUARTERS =
 static_assert(CompanyID::Invalid().base() == 255 && OWNER_NONE.base() == 16 && OWNER_DEITY.base() == 18 && CRR_END == 3);
 static_assert(CalendarTime::ORIGINAL_BASE_YEAR.base() == 1920 && CalendarTime::ORIGINAL_MAX_YEAR.base() == 2090);
 static_assert(DESTTYPE_TEAM == 1 && OWNER_END.base() == 19 && NETWORK_PUBLIC_KEY_LENGTH == 65 && CALCA_ADD == 0 && CALCA_REMOVE == 1);
-static_assert(WC_COMPANY == 51 && WC_SIGN_LIST == 36 && WC_COMPANY_COLOUR == 28 && WC_SEND_NETWORK_MSG == 72);
+static_assert(WC_COMPANY == 51 && WC_SIGN_LIST == 36 && WC_COMPANY_COLOUR == 28 && WC_SEND_NETWORK_MSG == 72 && WC_CLIENT_LIST == 68);
 static_assert(RATING_INITIAL == 500 && VEH_TRAIN == 0 && VEH_ROAD == 1 && VEH_SHIP == 2 && VEH_AIRCRAFT == 3);
 
 /** Next pool item at or after @p from whose owner field is @p owner. */
@@ -407,11 +407,6 @@ const OpenTTDClockCompany &GetRustClockCompanyServices() noexcept
 static void Co_close_construction_windows() noexcept { CloseConstructionWindows(); }
 static bool Co_allow_list_add(uint8_t id, OpenTTDByteSpan key) noexcept { return Company::Get(id)->allow_list.Add({reinterpret_cast<const char *>(key.data), key.size}); }
 static bool Co_allow_list_remove(uint8_t id, OpenTTDByteSpan key) noexcept { return Company::Get(id)->allow_list.Remove({reinterpret_cast<const char *>(key.data), key.size}); }
-static void Co_allow_list_changed() noexcept
-{
-	InvalidateWindowData(WC_CLIENT_LIST, 0);
-	SetWindowDirty(WC_COMPANY, _current_company);
-}
 const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 {
 	/* Construct process-lifetime C++ views before Rust accesses their storage. */
@@ -421,7 +416,6 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.finance = &GetRustCompanyFinanceServices(),
 		.shared = &GetRustSharedServices(),
 		.allow_list_add = Co_allow_list_add,
-		.allow_list_changed = Co_allow_list_changed,
 		.allow_list_remove = Co_allow_list_remove,
 		.assign_company_context = RustRestoreGenerationCompanies,
 		.close_construction_windows = Co_close_construction_windows,

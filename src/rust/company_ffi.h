@@ -107,7 +107,6 @@ struct OpenTTDCompanyServices {
 	const OpenTTDCompanyFinanceServices *finance;
 	const OpenTTDSharedServices *shared;
 	bool (*allow_list_add)(uint8_t, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(allow_list_add);
-	void (*allow_list_changed)() noexcept OPENTTD_SERVICE_DEFAULT(allow_list_changed);
 	bool (*allow_list_remove)(uint8_t, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(allow_list_remove);
 	void (*assign_company_context)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assign_company_context);
 	void (*close_construction_windows)() noexcept OPENTTD_SERVICE_DEFAULT(close_construction_windows);
