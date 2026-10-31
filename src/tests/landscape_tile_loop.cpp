@@ -7,6 +7,7 @@
 
 /** @file landscape_tile_loop.cpp Actual native allocation/layout and live shared reads. */
 #include "../stdafx.h"
+#include "fixture_map.hpp"
 #include "../3rdparty/catch2/catch.hpp"
 #ifdef WITH_RUST
 #include "../rust/tile_type_access.hpp"

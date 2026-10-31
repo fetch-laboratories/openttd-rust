@@ -1,6 +1,7 @@
 /* OpenTTD-Rust migration evidence, licensed under GPLv2. */
 /** @file aircraft-range.cpp Finite NewGRF range gap against unchanged event bodies. */
 #include <algorithm>
+#include "tests/fixture_map.hpp"
 #include <array>
 #include <bit>
 #include <cstdio>

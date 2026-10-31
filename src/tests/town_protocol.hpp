@@ -9,6 +9,7 @@
 #ifndef TOWN_PROTOCOL_HPP
 #define TOWN_PROTOCOL_HPP
 #include "../rust/town_ffi.h"
+#include "fixture_map.hpp"
 #include "../rust/type_registry_ffi.h"
 #include "../core/backup_type.hpp"
 #include "../rust/clock_state.h"

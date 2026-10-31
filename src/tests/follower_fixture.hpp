@@ -3,6 +3,7 @@
 #ifndef FOLLOWER_FIXTURE_HPP
 #define FOLLOWER_FIXTURE_HPP
 #include "../rust/movement_ffi.h"
+#include "fixture_map.hpp"
 #include "../rust/ground_vehicle_ffi.h"
 #include "../rust/train_ffi.h"
 #include "../rust/pbs_ffi.h"

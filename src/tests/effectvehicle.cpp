@@ -7,6 +7,7 @@
 
 /** @file effectvehicle.cpp Effect owner lifetime and serialization-boundary evidence. */
 #include "../stdafx.h"
+#include "fixture_map.hpp"
 #include "../3rdparty/catch2/catch.hpp"
 #include "../effectvehicle_base.h"
 #include "../effectvehicle_func.h"

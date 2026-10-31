@@ -289,26 +289,6 @@ struct OpenTTDRailMapServices {
 };
 const OpenTTDRailMapServices &GetRustRailMapServices() noexcept;
 
-/* Fixture stand-in for the canonical map statics; a zero size selects the
- * callback backend. Shared tables hold its address, so it neither moves nor copies. */
-struct OpenTTDFixtureMap {
-	std::unique_ptr<TileBaseStorage[]> base;
-	std::unique_ptr<TileExtendedStorage[]> extended;
-	uint32_t size = 0;
-	uint32_t log_x = 0;
-	OpenTTDMapStatics statics{&this->base, &this->extended, &this->size, &this->log_x, true};
-	explicit OpenTTDFixtureMap(uint32_t log_x, uint32_t size = 0) : base(std::make_unique<TileBaseStorage[]>(size)), extended(std::make_unique<TileExtendedStorage[]>(size)), size(size), log_x(log_x) {}
-	void Resize(uint32_t log_x, uint32_t size)
-	{
-		this->base = std::make_unique<TileBaseStorage[]>(size);
-		this->extended = std::make_unique<TileExtendedStorage[]>(size);
-		this->size = size;
-		this->log_x = log_x;
-	}
-	OpenTTDFixtureMap(const OpenTTDFixtureMap &) = delete;
-	OpenTTDFixtureMap &operator=(const OpenTTDFixtureMap &) = delete;
-};
-
 /* Standalone fixtures without a game map: map predicates return zero and writes do nothing. */
 template <typename Result, typename... Args>
 Result OpenTTDFixtureMapService(Args...) noexcept

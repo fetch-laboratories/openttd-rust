@@ -9,6 +9,7 @@
 #ifndef TESTS_LANDSCAPE_PROTOCOL_HPP
 #define TESTS_LANDSCAPE_PROTOCOL_HPP
 #include "../../tools/simulation/session-fixture.hpp"
+#include "fixture_map.hpp"
 #include "../tile_cmd.h"
 #include "../rust/landscape_loop_ffi.h"
 #include "../rust/tile_owner_ffi.h"

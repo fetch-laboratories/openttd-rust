@@ -2,6 +2,7 @@
 #ifndef SIMULATION_SESSION_FIXTURE_HPP
 #define SIMULATION_SESSION_FIXTURE_HPP
 #include "../../src/rust/session_ffi.h"
+#include "../../src/tests/fixture_map.hpp"
 #include "../../src/rust/fleet_ffi.h"
 #include "../../src/rust/animation_save.hpp"
 #include "../../src/rust/newgrf_storage_ffi.h"

@@ -7,6 +7,7 @@
 
 /** @file road_yapf.cpp Native road heap ordering and ABI evidence. */
 #include "../stdafx.h"
+#include "fixture_map.hpp"
 #include "../3rdparty/catch2/catch.hpp"
 #include "../misc/binaryheap.hpp"
 #include "../pathfinder/pathfinder_type.h"
@@ -230,7 +231,7 @@ TEST_CASE("Road YAPF observes accepted traversal once after transient exits", "[
 		map.tiles.base[128].height = 1;
 		map.shared.apply_foundation = GetRustSharedServices().apply_foundation;
 		OpenTTDRoadGroundServices road{};
-		road.all_bits = [](uint32_t t) noexcept { return static_cast<RoadBits>(FollowerFixture::active->base[t].m5 & 15); };
+		road.all_bits = [](uint32_t t) noexcept { return static_cast<RoadBits>(FollowerFixture::active->tiles.base[t].m5 & 15); };
 		map.movement.road = &road;
 		RoadOrder::limits.clear();
 		map.physics.display_max_speed = [](OpenTTDVehicle *) noexcept -> int32_t { RoadOrder::limits.push_back('D'); return 100; };
