@@ -66,6 +66,7 @@ For agents writing or reviewing port code, tests and Python tools.
 ## Evidence
 
 - Game-logic ports require the semantic simulation harness (`python3 tools/migration.py simulate`, #72) and existing tests. Integrate a new port only after harness scenarios exercise its component. Fidelity fixes to existing ports, such as #75, do not wait for that. Phases 3 to 6 reuse the harness where it observes output, such as saves, script commands and multiplayer sessions.
+- A native C++ fixture is compiled C++ that must retire later. Add one only for boundary behavior that harness scenarios and Rust tests cannot observe, and name that behavior in the PR.
 - Extend harness scenarios instead of writing a comparison tool for each component. Put harness tooling for a port in its component's scenario module. Tooling is code to maintain: keep it proportionate to the C++ the port retires. Compare against unchanged reference bodies only for a concrete gap the harness cannot reach, named in the PR.
 - Any check cited by a doc or PR, such as a branch witness or reference probe, runs in default CI and fails when missing; an opt-in profile or `__main__`-only probe is not evidence.
 - Compare semantic state: screenshots alone and compressed-save byte equality cannot establish equivalent simulation. Screenshots and screen recordings attached to a PR can evidence graphical work (user, 2026-10-28). Retain small failures and explain discrepancies before accepting changes. Test success establishes covered behavior, not complete game equivalence.

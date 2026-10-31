@@ -50,7 +50,7 @@ Done when each finished change is integrated and cleaned up, or has its next act
 
 Plan when the queue or issue placement needs attention.
 
-- Trigger planning when the earliest unfinished phase has fewer than three unstarted ownership items, the next phase has none queued, fewer than two unstarted items remain overall, or `issues.py` shows unplaced issues.
+- Trigger planning when the current and next phases together hold fewer than three unstarted ownership items, the next phase has none queued, or `issues.py` shows unplaced issues. A phase at its exit gets no new owners ([goal and phases](../../planning.md#goal-and-phases)).
 - Spawn a fresh high-effort planning agent (Astra in Codex). Name no preferred candidate.
 - Have it size remaining code and rank owners of the current and next phase and open maintenance, testing and housekeeping issues under [selection](../../planning.md#selection). Point it at the roadmap's "Phases" and, for storage owners, the [world-state design](../../design/world-state.md).
 - Never fall back to `deferred-improvement` issues. Have it reread `issues.py` and apply [issue placement and deferral](../../planning.md#issue-placement-and-deferral).
@@ -62,10 +62,10 @@ Done when the planner has ranked the work and placed or reconsidered issues.
 Apply new direction before stocktakes and planning.
 
 - Before each, `git fetch`. If AGENTS.md, guidance reached through its routing table, the roadmap's "Phases" or latest steering section changed on `origin/rust-migration`, update your checkout, reread the changed guidance and apply its actions first.
-- After every second integration, update "Where the fork stands": retired code lines per phase, compiled original and glue C++, exports and callback slots, tooling cost, play-save speed ratio, coverage gaps and unintegrated branch count.
+- After every second integration, update "Where the fork stands": retired code lines per phase, compiled original and glue C++ with its change per day since the previous stocktake, exports and callback slots, tooling cost, play-save speed ratio, coverage gaps and unintegrated branch count.
 - Rerun `issues.py`. Place new issues and close those whose remaining scope is done.
 - Profile the merged branch in the background. Run a speed pass under [speed policy](../../speed.md#policy).
-- If retirement stalls, a scenario nears its speed ceiling, or an item stalls across review rounds, change course.
+- If compiled C++ stops falling, a scenario nears its speed ceiling, or an item stalls across review rounds, change course.
 
 Done when the current direction and stocktake are reflected in the work order.
 

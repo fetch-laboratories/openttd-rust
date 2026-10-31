@@ -104,87 +104,104 @@ Agent: /root (Claude Code navigation) | Model: claude-opus-5-5 | Reasoning effor
 
 The goal is a complete Rust rewrite ([goal and phases](planning.md#goal-and-phases)). Each free
 slot takes ready work from the earliest phase, and later phases fill the rest
-(user decision, 2026-10-28). Position at code `06a644505a` in code lines from
-`python3 tools/port-metrics.py --whole-fork`, with the change since the
-previous navigation's inventory at `7105e24d49` in parentheses. Source areas
-are an accounting classification: they do not move drawing or executable
-header logic into a different phase.
+(user decision, 2026-10-28). Position at code `2a89fb023f` (integration 47) in
+code lines from `python3 tools/port-metrics.py --whole-fork`, with the change
+since the previous navigation's inventory at `06a644505a` in parentheses.
+Source areas are an accounting classification: they do not move drawing or
+executable header logic into a different phase.
 
 | Area | Original | Retired | Left | Glue added | Compiled C++ |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Simulation logic | 47,424 | 35,744 (+444) | 11,680 | 6,698 (-69) | 18,378 (-513) |
-| Simulation storage | 13,724 | 2,643 (+344) | 11,081 | 1,312 (+2) | 12,393 (-342) |
-| NewGRF | 10,785 | 5,218 | 5,567 | 423 | 5,990 |
+| Simulation logic | 47,424 | 37,571 (+1,827) | 9,853 | 6,974 (+276) | 16,827 (-1,551) |
+| Simulation storage | 13,724 | 2,717 (+74) | 11,007 | 1,335 (+23) | 12,342 (-51) |
+| NewGRF | 10,785 | 5,280 (+62) | 5,505 | 428 (+5) | 5,933 (-57) |
 | Save/load | 13,388 | 536 | 12,852 | 585 | 13,437 |
 | Script API | 14,908 | 878 | 14,030 | 453 | 14,483 |
 | Network | 12,713 | 211 | 12,502 | 182 | 12,684 |
-| Support | 21,617 | 665 | 20,952 | 424 | 21,376 |
-| Graphics and viewport | 10,985 | 4 (+3) | 10,981 | 1 | 10,982 (-3) |
+| Support | 21,617 | 982 (+317) | 20,635 | 513 (+89) | 21,148 (-228) |
+| Graphics and viewport | 10,985 | 4 | 10,981 | 1 | 10,982 |
 | GUI | 52,179 | 117 | 52,062 | 165 | 52,227 |
 | Platform | 11,941 | 0 | 11,941 | 2 | 11,943 |
 | Data tables | 17,295 | 4,364 | 12,931 | 0 | 12,931 |
 | Vendored | 55,148 | 522 | 54,626 | 163 | 54,789 |
-| Upstream tests | 2,248 | 0 | 2,248 | 4,683 (+192) | 6,931 (+192) |
-| Boundary layer | 0 | 0 | 0 | 17,497 (+164) | 17,497 (+164) |
-| **Whole fork** | **284,355** | **50,902 (17.90%, +791)** | **233,453** | **32,588 (+289)** | **266,041 (93.56%, -502)** |
+| Upstream tests | 2,248 | 0 | 2,248 | 5,118 (+435) | 7,366 (+435) |
+| Boundary layer | 0 | 0 | 0 | 18,154 (+657) | 18,154 (+657) |
+| **Whole fork** | **284,355** | **53,182 (18.70%, +2,280)** | **231,173** | **34,073 (+1,485)** | **265,246 (93.28%, -795)** |
 
-The boundary has 1,297 Rust exports (-8) and 4,074 callback slots (+117).
-Rust totals 117,779 code lines (+2,109) and tooling 47,674 (+1,024).
-"Compiled C++" counts the Rust build. The Linux and Emscripten CI builds have
-no Rust and still compile all 284,355 original lines; #581 ends that.
+The boundary has 1,377 Rust exports (+80) and 4,206 callback slots (+132).
+Rust totals 124,225 code lines (+6,446) and tooling 51,310 (+3,636).
+Simulation-source retirement is 40,288 of 61,148 (65.89%).
 
-| Period (steering commits) | Days | Retired | Per day | Compiled C++ change |
-| --- | ---: | ---: | ---: | ---: |
-| Fork start to 10-09 | 7.0 | 24,228 | 3,470 | -7,428 |
-| 10-09 to 10-21 | 11.3 | 7,987 | 705 | -1,485 |
-| 10-21 to 10-27 | 6.4 | 17,321 | 2,720 | -8,995 |
-| 10-27 to 10-28 (22nd to 23rd steering) | 1.0 | 575 | 550 | +92 |
-| Previous navigation to now | 0.4 | 791 | 1,830 | -498 |
-| **Whole history** | **26.3** | **50,902** | **1,930** | **-18,314** |
+| Period (steering and navigation commits) | Days | Retired | Per day | Compiled C++ change | Per day |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Fork start to 10-09 | 7.0 | 23,244 | 3,330 | -10,321 | -1,480 |
+| 10-09 to 10-21 | 12.1 | 8,971 | 740 | +1,408 | +120 |
+| 10-21 to 10-27 | 6.4 | 17,321 | 2,720 | -8,995 | -1,410 |
+| 10-27 to the first navigation (10-28) | 1.2 | 575 | 470 | +92 | +80 |
+| First to second navigation | 0.45 | 791 | 1,760 | -498 | -1,110 |
+| Second navigation to now | 2.4 | 2,280 | 950 | -795 | -330 |
+| **Whole history** | **29.6** | **53,182** | **1,800** | **-19,109** | **-650** |
 
-Days are calendar days, including pauses; root ran about half of the last two.
-Glue took 64% of all retirement: compiled C++ fell 695 lines per day while
-original C++ retired at 1,930. The 22nd steering's testing round explains the
-10-28 dip: 5,459 tooling lines against 575 retired. Phase 2 storage ports
-(#565, #570) remain the course's fix for the glue.
+Days are calendar days, including pauses; root ran for about one day of the
+last 2.4. Three things set the last period's rate:
+- Retirement per integration fell from about 390 lines (integrations 29 to 32)
+  to about 140 (39 to 47), and the four drafts now open hold 34 to 88 each.
+- Glue rose 65% as fast as retirement: the boundary layer grew 657 lines and
+  native test fixtures 435. So compiled C++ fell 795 lines while 2,280 original
+  lines retired. Phase 2's storage ports remain the fix, and none has started.
+- Tooling grew 1.6 lines per retired line.
 
-Why the course changed. Every port kept the original body under `#else` for
-builds without Rust, and four CI configurations are such builds: Linux GCC
-SDL2 and Emscripten in every required Full, and Linux Clang and Dedicated at
-cadence. So no rule ever deleted an original line, the required Full spent two
-builds on code the Rust game does not run, and phase 2 would have needed a
-second, C++-owned definition of each record it moves, which #570's design
-lacks. #581 now builds Rust on every configuration and deletes the fallback in
-one mechanical sweep, before #570 starts. AGENTS.md also told the work order to
-rank storage "beside leftover game logic", against the user's earliest-phase
-rule; root followed the user's rule, and the text now says so. Generated C++
-declarations count as compiled C++. Root read the course only at restart, so
-each steering and navigation stopped it; it now rereads changed course
-documents at each stocktake and planning round.
+Why the course changed:
+1. Phase 1's exit criterion and the planning trigger in `/start-development`
+   (fewer than three unstarted owners in the earliest unfinished phase) kept
+   every slot on phase 1 after its large owners ran out. Of the 9,853 lines left
+   in its bucket, about 4,700 are drawing and description (phase 5) and 510 are
+   startup (phase 4). About 1,700 are three- and four-line facade shells
+   (signature and braces) that retire with their C++ callers. About 2,250 are
+   other non-drawing bodies in about 200 functions across 51 files; the rest
+   are file-scope declarations (about 350), `command.cpp` (151, #559) and
+   `tilearea.cpp` (172, #69). #621 makes this inventory a tool. Planning cut
+   owners of 11 to 88 lines from that tail. Meanwhile phase-3 owners sized at
+   1,000 to 2,900 retired lines each (#573, #574, #575) have been queued since
+   10-29. Every owner pays
+   the same issue, review and exact-head Full cost. Phase 1 now closes with its
+   open drafts and the two excluded items whose return condition is its exit.
+   Its remaining bodies move with the phase-2 owner of their files.
+2. #581 PR-B (#607) was the previous navigation's first action and is phase 2's
+   only prerequisite, yet it is still a draft. Integration in readiness order
+   let eight integrations pass it on 10-31. Each moved base and forced a new
+   sweep and deviation proof, and the checkpoint then queued it behind #603 as
+   well. A sweep across `src/` now integrates before other `src/` changes
+   ([integration](workflow.md#integration)).
+3. #566's drawing evidence gates #570's integration, but the work order started
+   it only after PR-B, which it does not need. It starts now.
 
 | Phase | Left | Exit criterion | Status |
 | --- | --- | --- | --- |
-| 1. Simulation logic | 11,680 in the logic bucket, of which about 4,100 are drawing, description and viewport bodies (phase 5) | No non-drawing function body of the inventory or the command families compiles in the Rust build | Nearly done: #562, #561 and #572 in draft (#568, #579, #578), the queued owners in work order item 7; #559 excluded with its return condition |
-| 2. Simulation storage | 11,081 in the storage bucket; credit only moved records and operations, and deleted glue | Every pool record and the map arrays are defined once in Rust and read in place by both languages. C++ calls Rust only for operations, and no per-field service or per-call-site reader remains for moved data | #565 in draft (#576). #581 lands before #570; #566 runs beside #570 |
-| 3. Simulation data readers | 41,158 after excluding script and network GUI: save/load 12,852, script 13,099, network 9,640, NewGRF 5,567 | These run in Rust; the Squirrel VM may stay C++ until phase 6 | #573 to #575, #497 and #498 queued |
-| 4. Support | 31,933 support and graphics lines; data tables (12,931) retire with their consumers | Not planned yet | Not planned until it is the next phase (user direction, 2026-10-28) |
-| 5. Interface | 67,796 GUI and platform lines including script and network GUI, plus drawing in other buckets | Not planned yet | As above |
+| 1. Simulation logic | About 2,250 lines of non-drawing bodies in the logic bucket, plus #559's command invocation (`command.cpp`, 151) and #69's tile areas (`tilearea.cpp`, 172) | Its open drafts, #559 and #69 integrate. Every other remaining non-drawing body belongs to the phase-2 owner of its file | Closing. #612, #616, #618 and #619 are in draft. #559 and #69 return now: their recorded condition is phase 1's exit. No further phase-1 owner is planned |
+| 2. Simulation storage | 11,007 in the storage bucket, plus the phase-1 bodies left in each pool's files | Every pool record and the map arrays are defined once in Rust and read in place by both languages. C++ calls Rust only for operations, and no per-field service or per-call-site reader remains for moved data. Each pool owner also ports the remaining non-drawing bodies in its files | PR-B (#607) first, then #570 with #566. Pools in order: vehicles (#570, then #598 and #599); stations and road stops; towns and industries; companies, groups, engines, link graph and the smaller pools; orders; then the map with the rail, road, water, tunnel, landscape and tile bodies |
+| 3. Simulation data readers | 41,096: save/load 12,852, script 13,099, network 9,640, NewGRF 5,505 | These run in Rust; the Squirrel VM may stay C++ until phase 6 | #573, #574, #575, #497 and #498 are queued and ready. They take every slot phases 1 and 2 leave free |
+| 4. Support | 31,616 support and graphics lines, plus startup in `openttd.cpp` (510); data tables (12,931) retire with their consumers | Not planned yet | Not planned until it is the next phase (user direction, 2026-10-28) |
+| 5. Interface | 67,796 GUI and platform lines including script and network GUI, plus about 4,700 drawing and description lines in the logic bucket | Not planned yet | As above |
 | 6. Vendored | 54,626 | Not planned yet | As above |
 
-Upstream unit tests (2,248) retire with the code they test.
+Upstream unit tests (2,248) and fixture glue retire with the code they test.
+Boundary-layer glue retires as its C++ callers do.
 
-Root's first actions from this chart:
-1. #581 at the top of the work order, in the three PRs its body lists (the
-   24th steering review rescoped it): Linux builds Rust, Emscripten links Rust,
-   then the sweep, which also moves every oracle that reads a fallback body onto
-   the pinned reference. Drafts adopt the sweep by rerunning its recorded
-   command over every `src/` file they touch ([review](workflow.md#review)).
-2. #570 starts after the sweep integrates. #570 also makes
-   `tools/port-metrics.py` count the C++ declarations it generates.
-3. Phase 2 takes every slot that ready phase 1 work leaves free, ranked by code
-   retired, crossings removed and glue deleted.
-4. Before each stocktake and planning round, refresh changed guidance and apply
-   its actions (`/start-development`, step 4).
+Root's first actions from this chart. They override the plan-after47 input's
+#603-before-#607 order and its phase-1 rankings:
+1. #581 PR-B (#607) integrates before any other `src/` change, #603 included:
+   finish its current-base sweep, replay and deviation proof, then bootstrap
+   Full. Other drafts keep implementing and reviewing, then adopt it at their
+   base update. #621 changes only `tools/` and may integrate meanwhile.
+2. Start #566 in the next free slot. Start #570 when PR-B integrates.
+3. Finish #612, #616, #618 and #619, and select #559 and #69 as phase 1's last
+   owners. The plan-after47 phase-1 candidates (link-graph job lifecycle, elrail
+   transition, land count) join the phase-2 owners of their files.
+4. Fill every other free slot with phase 3 (#573, #574, #575, #497, #498),
+   ranked under [selection](planning.md#selection).
+5. Size new owners to repay their review and Full ([selection](planning.md#selection)),
+   and record the compiled-C++ rate at each stocktake (`/start-development`, step 4).
 
 ## Twenty-fourth steering review (2026-10-29: per-entry map tolls, rebound callees and #581's hidden consumers)
 
@@ -376,11 +393,17 @@ One ranked list. Each free slot takes the highest unblocked item that fits the
 six-branch limit and disjoint-service rule; completing review/integration takes
 priority. A lower rank can run while a higher one waits. Scopes live in issues.
 
+First: **#621 per-function remaining-code inventory in `tools/port-metrics.py`**
+(navigation, 80-150 tooling lines). It changes only `tools/`, so it may
+integrate while #581 PR-B holds `src/` integrations. Planners use it for owner
+and phase sizes.
+
 1. **Finish the remaining drafts in readiness order, with the steering fixes.**
    #568, #594, #596, #605, #608, #609, #611, #606 and #614 integrated as 39 to 47.
    #612 and #614 follow completed implementation/runtime evidence and review.
    The integration-45 platform cadence passed; next due at 50.
-   #603 is the next maintenance integration. Each next action
+   #603 is the next maintenance integration after #581 PR-B, which integrates
+   before any other `src/` change (Phases, action 1). Each next action
    is in the checkpoint. No reviewed owner gains other scope; a fix the audit
    found is not new scope.
 2. **#581 Rust on every CI configuration and retirement of the portable
@@ -391,6 +414,8 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
    - PR-B, the sweep plus moving the fallback-body oracles onto the pinned
      reference, follows PR-A, PR-E, #568, #576 and #580.
    - PR-B now takes the slot freed by #568, whose integration completes its prerequisites.
+     It integrates before any other `src/` change, #603 included; other drafts
+     hold integration until it lands ([integration](workflow.md#integration)).
      Keep dual-build harness guards and move fallback-reading oracles to the
      pinned reference. Surviving drafts rerun the recorded sweep over every
      touched `src/` file when updating from base. Expected size and evidence
@@ -467,12 +492,9 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
       function lines, including signatures/braces), with process-wide state and
       exact date/edge semantics. Its implementation is #618, in first validation.
       Road-bit cleanup (45, including `IsPossibleCrossing`) is now #619.
-      Next unstarted: link-graph job lifecycle (37 original
-      lines in the six principal spans, including 12 pool-coupled constructor
-      and destructor lines; size retained operations and executable headers
-      with flow-publication cleanup), and the elrail setting change plus
-      service clamp (29 + 6, #594 prerequisite satisfied). Root issues each
-      when selected and coordinates shared map helpers with #606.
+      Phase 1 plans no further owners (Phases): #559 and #69 are its last,
+      and the link-graph job lifecycle and elrail transition candidates join
+      the phase-2 owners of their files.
 
    After #570 these outrank smaller remaining owners, one at a time in the
    shared vehicle files: #598 vehicle routing
@@ -488,20 +510,19 @@ priority. A lower rank can run while a higher one waits. Scopes live in issues.
    component needs it, and keep an operation on data that stays in C++ as one
    call, not a service per field.
 
-   The planner found two inventory items outside phase 1: process startup in
-   `openttd.cpp` (468 lines, phase 4) and drawing support (about 515 lines:
-   the rail, road and canal NewGRF resolvers, `UpdateDeltaXY`, elrail wire
-   geometry, `IsWateredTile` and the bridge pillar helpers, phase 5). The next
-   navigation reclassifies them in the Phases table.
-7. **#566 drawing workload and #570 first shared vehicle records**, after
-   #581's PR-B.
+   Process startup in `openttd.cpp` is phase 4, and drawing support (the rail,
+   road and canal NewGRF resolvers, `UpdateDeltaXY`, elrail wire geometry,
+   `IsWateredTile` and the bridge pillar helpers) is phase 5 (Phases).
+7. **#566 drawing workload now, and #570 first shared vehicle records after
+   #581's PR-B.**
    - #570 follows the accepted world-state design. It deletes the replaced
      readers and the direct Tick bounces, and makes `tools/port-metrics.py`
      count the C++ declarations it generates.
    - Estimated net glue -500 to -1,100. Its 0.86% instruction credit is a
      model.
-   - Start #566 beside it and obtain its reference and candidate pixels and
-     drawing Ir before storage integrates (150-250 tooling lines).
+   - Start #566 in the next free slot; it does not need PR-B. Obtain its
+     reference and candidate pixels and drawing Ir before storage integrates
+     (150-250 tooling lines).
    - #570 unblocks #598, #599 and the airport automata.
 8. **Queued later phase-2 pools.** The order is:
    1. the remaining vehicle pool;
@@ -543,18 +564,13 @@ Recurring:
 - Preserve anchors, raw traces, frozen runtimes and failed outputs.
 - Root checks actual issue placement and exclusion conditions at stocktake.
 
+Returned by the navigation of 2026-10-31: #559's command invocation lifecycle
+and #69's remaining tile-list and support work. Their recorded condition was
+phase 1's exit, which now arrives; they are phase 1's last owners (Phases).
+
 Excluded, with return conditions checked by this review:
-- #559 command invocation lifecycle returns when one of these happens:
-  - a selected game owner needs Rust-owned top-level `Do`/`Post` admission;
-  - a #275 profile ranks top-level dispatch among the largest net costs;
-  - the queued ownership candidates run out, or the item-6 ready queue
-    empties. `command.cpp` (141 lines) is in phase 1's exit inventory, so #559
-    returns before phase 1 exits.
 - #507's NewGRF corpus (#525, #526) stays parked by the user (2026-10-28)
   until the user reselects it. #525's branch stays on origin.
-- #69's remaining tile-list/support work returns when a selected simulation
-  component needs it or the item-6 ready queue empties. `tilearea.cpp` (172
-  lines) is in phase 1's exit inventory, so it returns before phase 1 exits.
 - #64 and #68 become maintained Rust crates that reproduce the game's
   observable cryptography. They return when phase 3's network ports reach
   authentication, or with phase 6, whichever comes first.
@@ -582,7 +598,7 @@ saved only #607/#619's edits underway and completed the read-only plan report.
 | Issue / draft | Saved head | Known evidence and next action | Retained checkout |
 | --- | --- | --- | --- |
 | #199 / #603 | `f2731de370a3025d2345a1836945632c0bf1db99` | Full/scoped reviews and combination validation complete: four Cargo gates, 16 native tests, 17 cases/153 snapshots. Cost: 0 retired, 202 Rust, 3 tooling, -32 production/+63 fixture glue, total +31. Behind base; **actual-base adoption, then exact-head Full**. Do not expand into session/CargoFlow work. | `t3-d31fc312`; old `t3-120ef117` left alone |
-| #581 / #607 | `8bb6678cea6c62469ceec6195f8624fd9f5885d2` | Already-underway engine-base resolution saved/pushed; local/remote heads match, clean/locked, no merge/job. A pre-stop sweep is not new-base proof: source replay and explicit-deviation identity are incomplete, with no current-head compilation/metric/runtime result. **Finish actual-base update with touched-source sweep/replay and deviation proof; bootstrap Full after #603**. CI_ON_DEMAND unchanged. Earlier e090 proof/metrics remain historical. | `t3-4076556a` |
+| #581 / #607 | `8bb6678cea6c62469ceec6195f8624fd9f5885d2` | Already-underway engine-base resolution saved/pushed; local/remote heads match, clean/locked, no merge/job. A pre-stop sweep is not new-base proof: source replay and explicit-deviation identity are incomplete, with no current-head compilation/metric/runtime result. **Finish actual-base update with touched-source sweep/replay and deviation proof; bootstrap Full before any other `src/` integration, #603 included (navigation)**. CI_ON_DEMAND unchanged. Earlier e090 proof/metrics remain historical. | `t3-4076556a` |
 | #602 / #612 | `a5bd61f93dfaac6fe93540a1405d6ae84df80b20` | Full/scoped reviews and A5 builds/nine-native/five-case/eight-snapshot checks complete. Cost: 88 retired, 599 Rust, 587 tooling, -78 production/+29 fixture. Conflicts with base; **actual-base update, then Full**. Preserve approved STL support, one Rust tree and native area/GUI/lifecycle exclusions. | `t3-56a3afc8` |
 | #615 / #616 | `b4021e34a128fdcb2a368fb92429601055dc8987` | Full `41221404067` **FAILED**: native/build and Linux GCC SDL2 fail `town_growth.cpp:20` (`CHECK(result)` false); Windows x64 also fails. Earlier local/review passes and marker-only price-constant resolution do not authorize merge. Existing recount: 52 retired, 131 Rust, 196 tooling, -1 production/+18 fixture. **Repair this combination failure, then actual-current-base exact-head Full**. No fix/retry was started. | `t3-68700e40` |
 | #617 / #618 | `45e1350c79ca577d96c0fb05b3ff4c7edfa2d8bc` | Existing verification `20261031T162734.730348Z`, simulation driver `20261031T163657.570360Z` and simulation `20261031T163658Z-3509040` pass: 97 reference/231 candidate tests and ten cases/14 snapshots. Previously started standard recount completed: 34 retired, 159 Rust, 200 tooling, +10 production/+78 fixture (109 added/21 removed). **Fresh full fixing review, then actual-base Full**; recount again only if source changes require it. | `t3-0d996c45` |
