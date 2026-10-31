@@ -395,11 +395,11 @@ impl TileTypeAccess {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn available(&self, tile: u32) -> Option<()> {
-        if self.allocation.count == 0 {
-            return None;
-        }
         if tile < self.allocation.count {
             return Some(());
+        }
+        if self.allocation.count == 0 {
+            return None;
         }
         (!self.assertions() || self.native_assert.is_some()).then_some(())
     }
