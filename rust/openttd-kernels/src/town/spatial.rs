@@ -17,26 +17,35 @@ fn coordinate(s: &Services, map: crate::map_func::Map, id: TownId, dim: usize) -
 }
 pub(crate) fn rebuild(s: &Services) {
     let map = s.map();
-    let mut ids = Vec::with_capacity((s.town_count)());
     let mut id = (s.town_next_id)(0);
-    while id != u32::MAX {
-        ids.push(TownId(id as u16));
+    let ids = std::iter::from_fn(|| {
+        if id == u32::MAX {
+            return None;
+        }
+        let town = TownId(id as u16);
         id = (s.town_next_id)(id + 1);
-    }
+        Some(town)
+    });
     unsafe {
-        (*TREE.get()).build(&mut ids, &|id, dim| coordinate(s, map, id, dim));
+        (*TREE.get()).build(ids, &|id, dim| coordinate(s, map, id, dim), &|keys| {
+            crate::kdtree::native_split(s, keys)
+        });
     }
 }
 pub(crate) fn insert(s: &Services, id: TownId) {
     let map = s.map();
     unsafe {
-        (*TREE.get()).insert(id, &|id, dim| coordinate(s, map, id, dim));
+        (*TREE.get()).insert(id, &|id, dim| coordinate(s, map, id, dim), &|keys| {
+            crate::kdtree::native_split(s, keys)
+        });
     }
 }
 pub(crate) fn remove(s: &Services, id: TownId) {
     let map = s.map();
     unsafe {
-        (*TREE.get()).remove(id, &|id, dim| coordinate(s, map, id, dim));
+        (*TREE.get()).remove(id, &|id, dim| coordinate(s, map, id, dim), &|keys| {
+            crate::kdtree::native_split(s, keys)
+        });
     }
 }
 fn nearest(s: &Services, tile: u32) -> TownId {

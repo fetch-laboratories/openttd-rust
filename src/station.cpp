@@ -52,18 +52,6 @@ StationPool _station_pool("Station");
 INSTANTIATE_POOL_METHODS(Station)
 
 
-StationKdtree _station_kdtree{};
-
-void RebuildStationKdtree()
-{
-	std::vector<StationID> stids;
-	for (const Station *st : Station::Iterate()) {
-		stids.push_back(st->index);
-	}
-	_station_kdtree.Build(stids.begin(), stids.end());
-}
-
-
 BaseStation::~BaseStation()
 {
 	if (CleaningPool()) return;
@@ -135,28 +123,6 @@ void BaseStation::RemoveRoadStopTileData(TileIndex tile)
 			return;
 		}
 	}
-}
-
-/**
- * Get the primary road stop (the first road stop) that the given vehicle can load/unload.
- * @param v the vehicle to get the first road stop for
- * @return the first roadstop that this vehicle can load at
- */
-RoadStop *Station::GetPrimaryRoadStop(const RoadVehicle *v) const
-{
-	RoadStop *rs = this->GetPrimaryRoadStop(v->IsBus() ? RoadStopType::Bus : RoadStopType::Truck);
-
-	for (; rs != nullptr; rs = rs->next) {
-		/* The vehicle cannot go to this roadstop (different roadtype) */
-		if (!HasTileAnyRoadType(rs->xy, v->compatible_roadtypes)) continue;
-		/* The vehicle is articulated and can therefore not go to a standard road stop. */
-		if (IsBayRoadStopTile(rs->xy) && v->HasArticulatedPart()) continue;
-
-		/* The vehicle can actually go to this road stop. So, return it! */
-		break;
-	}
-
-	return rs;
 }
 
 /**
@@ -296,7 +262,6 @@ const OpenTTDStationLifecycleServices &GetRustStationLifecycleServices() noexcep
 		.cleaning_pool = []() noexcept { return Station::CleaningPool(); },
 		.close_view = [](uint16_t id) noexcept { CloseWindowById(WC_STATION_VIEW, StationID{id}); },
 		.delete_news = [](uint16_t id) noexcept { DeleteStationNews(StationID{id}); },
-		.remove_index = [](uint16_t id) noexcept { _station_kdtree.Remove(StationID{id}); },
 		.sign_valid = RustStationSignValid,
 		.remove_sign = [](uint16_t id) noexcept { _viewport_sign_kdtree.Remove(ViewportSignKdtreeItem::MakeStation(StationID{id})); },
 		.last_loading = RustVehicleLastLoadingStation,

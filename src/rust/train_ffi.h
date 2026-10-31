@@ -284,7 +284,6 @@ struct OpenTTDTrainServices {
 	uint64_t (*count_chain)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(count_chain);
 	void (*crash_event)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crash_event);
 	void (*crash_news)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crash_news);
-	void (*crash_rating)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(crash_rating);
 	void (*crash_sound)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(crash_sound);
 	uint64_t (*crossing_barred)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_barred);
 	uint64_t (*crossing_rail_axis)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_rail_axis);

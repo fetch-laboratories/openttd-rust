@@ -90,7 +90,6 @@ struct OpenTTDAircraftInfo { uint8_t image; uint16_t passengers, mail; uint8_t s
 struct OpenTTDVehicleConstructServices {
 	const OpenTTDVehicleArticulatedServices *articulated;
 	uint64_t (*powered_roadtypes)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(powered_roadtypes);
-	bool (*any_roadtype)(uint32_t, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(any_roadtype);
 	void *(*new_road)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_road);
 	void (*road_front)(void *, const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(road_front);
 	const OpenTTDStation *(*station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station);

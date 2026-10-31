@@ -150,42 +150,6 @@ uint8_t GoodsEntry::ConvertState() const
 	return openttd_rust_goods_convert_state(this->status.base());
 }
 
-enum TriggerArea : uint8_t {
-	TA_TILE,
-	TA_PLATFORM,
-	TA_WHOLE,
-};
-
-/**
- * Get the tile area of a rail station with trigger area type.
- * @param st The rail station or rail waypoint.
- * @param tile Origin tile.
- * @param ta Trigger area type.
- * @return The tile area.
- */
-TileArea GetRailTileArea(const BaseStation *st, TileIndex tile, TriggerArea ta)
-{
-	switch (ta) {
-		default: NOT_REACHED();
-
-		case TA_TILE:
-			return {tile, 1, 1};
-
-		case TA_PLATFORM: {
-			TileIndex start, end;
-			Axis axis = GetRailStationAxis(tile);
-			TileIndexDiff delta = TileOffsByAxis(axis);
-
-			for (end = tile; IsRailStationTile(end + delta) && IsCompatibleTrainStationTile(end + delta, tile); end += delta) { /* Nothing */ }
-			for (start = tile; IsRailStationTile(start - delta) && IsCompatibleTrainStationTile(start - delta, tile); start -= delta) { /* Nothing */ }
-
-			return TileArea(start, TileX(end) - TileX(start) + 1, TileY(end) - TileY(start) + 1);
-		}
-
-		case TA_WHOLE:
-			return st->GetTileArea(Station::IsExpected(st) ? StationType::Rail : StationType::RailWaypoint);
-	}
-}
 
 
 /**
@@ -487,7 +451,6 @@ uint16_t GetAnimStationCallback(CallbackID callback, uint32_t param1, uint32_t p
 }
 
 /** Helper class for animation control. */
-OpenTTDAnimationArea OpenTTDAnimationRailArea(BaseStation *s, uint32_t t, uint8_t area) noexcept { auto a = GetRailTileArea(s, TileIndex{t}, static_cast<TriggerArea>(area)); return {a.tile.base(), a.w, a.h}; }
 const OpenTTDStationAnimation &GetStationAnimationBinding() noexcept
 {
 	static const auto binding = MakeRustAnimationBinding<StationSpec, BaseStation, int, GetAnimStationCallback>(

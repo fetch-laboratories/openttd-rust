@@ -814,6 +814,7 @@ def adapter(build, folder, env):
             "_Z16ShowErrorMessageO13EncodedStringS0_12WarningLeveliiS0_6PoolIDIh12CompanyIDTagLh15ELh255EE",
         ),
         replace_objects=("saveload.cpp.o",),
+        native_test_support=True,
     )
 
 

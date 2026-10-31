@@ -55,7 +55,6 @@ struct RoadStop : RoadStopPool::PoolItem<&_roadstop_pool> {
 		return dir >= DIAGDIR_SW ? this->rust_state->entries->west : this->rust_state->entries->east;
 	}
 
-	RoadStop *GetNextRoadStop(const struct RoadVehicle *v) const;
 };
 
 static_assert(sizeof(RoadStop::RoadStopStatusFlags) == sizeof(uint8_t));

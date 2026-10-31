@@ -396,14 +396,6 @@ static bool RustTown_build_tunnel(uint32_t tile, uint32_t road_type, uint32_t ex
 	return Command<CMD_BUILD_TUNNEL>::Do(flags, TileIndex{tile}, TRANSPORT_ROAD, static_cast<RoadType>(road_type)).Succeeded();
 }
 static void RustTown_assert_clear_house([[maybe_unused]] bool success) noexcept { assert(success); }
-static void RustTownStations(uint32_t tile, uint32_t radius, void *context, void (*visit)(void *, const OpenTTDStation *, uint32_t)) noexcept
-{
-	struct Context { void *context; void (*visit)(void *, const OpenTTDStation *, uint32_t); } state{context, visit};
-	RustStationRadius(tile, radius, &state, [](void *opaque, BaseStation *base) {
-		const auto &state = *static_cast<Context *>(opaque);
-		state.visit(state.context, RustStation(Station::From(base)), RustStationLocation(base));
-	});
-}
 /* Thin FFI conversion facades over the shared station observations. */
 static void RustTownDirtyAuthority(uint32_t town) noexcept { SetWindowDirty(WC_TOWN_AUTHORITY, TownID(town)); }
 
@@ -553,9 +545,6 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.house_callbacks = [](uint16_t house) noexcept -> uint16_t { return RustTownHouseCallbacks(HouseSpec::Get(house)); },
 		.road_info = RustTownRoadInfo,
 		.resolve_owner = OpenTTDTownOwnerByID,
-		.stations = RustTownStations,
-		.station_activity_owner = OpenTTDStationActivityOwner,
-		.station_owner = RustStationOwnerByte<const Station>,
 		.dirty_authority = RustTownDirtyAuthority,
 		.dirty_town = RustTown_dirty_town,
 
@@ -843,7 +832,6 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 		.bribe = OpenTTDBribe,
 		.invalidate_view = OpenTTDInvalidateTownView,
 		.invalidate_authority = [](uint16_t town) noexcept { InvalidateWindowData(WC_TOWN_AUTHORITY, TownID(town)); },
-		.modify_station_rating = OpenTTDModifyStationRatingAround,
 		.road_news = [](uint16_t id) noexcept {
 			std::string company_name = GetString(STR_COMPANY_NAME, _current_company);
 			AddNewsItem(GetEncodedString(TimerGameEconomy::UsingWallclockUnits() ? STR_NEWS_ROAD_REBUILDING_MINUTES : STR_NEWS_ROAD_REBUILDING_MONTHS, TownID(id), company_name), NewsType::General, NewsStyle::Normal, {}, TownID(id));

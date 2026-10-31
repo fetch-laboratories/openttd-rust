@@ -64,7 +64,6 @@ pub struct Services {
     pub house_spec: extern "C" fn(u16) -> *const HouseSpec,
     pub road_frame: extern "C" fn(*mut BaseStation, u32) -> u8,
     pub set_road_frame: extern "C" fn(*mut BaseStation, u32, u8) -> bool,
-    pub rail_area: extern "C" fn(*mut BaseStation, u32, u8) -> TileArea,
     pub rail_belongs: extern "C" fn(*mut BaseStation, u32) -> bool,
     pub station_triggers: extern "C" fn(*mut BaseStation, u8) -> bool,
     pub road_triggers: extern "C" fn(*mut BaseStation, u8) -> bool,
@@ -366,7 +365,12 @@ pub extern "C" fn openttd_rust_trigger_station(
     }
     let random = a.shared().random() as u16;
     let areas = [0, 2, 2, 1, 1, 1, 2, 0, 1];
-    let area = (a.rail_area)(st, tile, areas[usize::from(trigger)]);
+    let area = crate::newgrf_station::rail_tile_area(
+        unsafe { &*a.shared },
+        st,
+        tile,
+        areas[usize::from(trigger)],
+    );
     let b = unsafe { &*a.station };
     area.tiles(a.shared().map()).for_each(|t| {
         if !(a.rail_belongs)(st, t) {
@@ -523,7 +527,6 @@ crate::abi::layouts! {
         house_spec,
         road_frame,
         set_road_frame,
-        rail_area,
         rail_belongs,
         station_triggers,
         road_triggers,

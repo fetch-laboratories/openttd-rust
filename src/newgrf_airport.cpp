@@ -51,7 +51,6 @@ const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept
 		.engine_id = RustEngineID,
 		.engine_kind = RustEngineType,
 		.engine_subtype = GetRustEngineCapabilitiesServices().aircraft_subtype,
-		.primary_road_stop = RustStationPrimaryRoadStop,
 		.fta_flags = RustAirportFlags,
 		.has_hangar = RustSelectedAirportHasHangar,
 		.hangar_tile = RustSelectedHangarTile,

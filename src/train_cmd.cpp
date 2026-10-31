@@ -1062,7 +1062,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.count_chain = TrainCountChain,
 		.crash_event = TrainCrashEvent,
 		.crash_news = TrainCrashNews,
-		.crash_rating = TrainCrashRating,
 		.crash_sound = TrainCrashSound,
 		.crossing_barred = OpenTTDLegacyMapQuery<uint64_t, RustCrossingBarred, OpenTTDTrainHandle, uint32_t>,
 		.crossing_rail_axis = TrainCrossingRailAxis,

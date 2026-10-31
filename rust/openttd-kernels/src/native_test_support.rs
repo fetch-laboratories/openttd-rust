@@ -343,6 +343,118 @@ pub unsafe extern "C" fn openttd_test_town_data_target(
     unsafe { &*services }.target(rotation, x, y).0
 }
 
+/// # Safety
+/// Every station, road vehicle and service table is live and serialized throughout these probes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_station_insert(
+    s: *const Services,
+    st: *mut crate::station::BaseStation,
+) {
+    crate::station::spatial::insert(unsafe { &*s }, st);
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_station_move_sign(
+    s: *const Services,
+    st: *mut crate::station::BaseStation,
+    tile: u32,
+) {
+    crate::station::spatial::move_sign(unsafe { &*s }, st, tile);
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_station_radius(
+    s: *const Services,
+    center: u32,
+    distance: u32,
+    context: *mut std::ffi::c_void,
+    visit: extern "C" fn(*mut std::ffi::c_void, *mut crate::station::BaseStation),
+) {
+    crate::station::spatial::radius(unsafe { &*s }, center, distance, |st| visit(context, st));
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_station_rating_around(
+    s: *const Services,
+    tile: u32,
+    owner: u8,
+    amount: i32,
+    radius: u32,
+) {
+    crate::station::spatial::modify_rating_around(unsafe { &*s }, tile, owner, amount, radius);
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_station_modify_rating(
+    st: *mut crate::station_service::Service,
+    amount: i32,
+) {
+    unsafe {
+        crate::station_service::modify_rating(st, amount);
+    }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_station_primary_stop(
+    s: *const Services,
+    st: *mut crate::station::BaseStation,
+    vehicle: VehicleRef,
+) -> *mut crate::road_stop::Stop {
+    crate::road_stop::primary_for_vehicle(unsafe { &*s }, st, vehicle)
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_station_next_stop(
+    s: *const Services,
+    stop: *const crate::road_stop::Stop,
+    vehicle: VehicleRef,
+) -> *mut crate::road_stop::Stop {
+    crate::road_stop::next_for_vehicle(unsafe { &*s }, stop, vehicle)
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_station_rail_area(
+    s: *const Services,
+    st: *mut crate::station::BaseStation,
+    tile: u32,
+    area: u8,
+) -> crate::tilearea::TileArea {
+    crate::newgrf_station::rail_tile_area(unsafe { &*s }, st, tile, area)
+}
+
+/// Fixed build/mutation observations against the original native template.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_station_tree_sequence(
+    s: *const Services,
+    context: *mut std::ffi::c_void,
+    visit: extern "C" fn(*mut std::ffi::c_void, u32, u16),
+) {
+    let s = unsafe { &*s };
+    let xy = |id: u16, dim: usize| if dim == 0 { id % 3 } else { id % 5 };
+    let split = |keys: &mut [crate::kdtree::SplitKey<u16>]| crate::kdtree::native_split(s, keys);
+    let mut tree = crate::kdtree::Kdtree::new();
+    let observe = |tree: &crate::kdtree::Kdtree<u16>, phase| {
+        tree.contained([0, 0], [10, 10], &xy, |id| visit(context, phase, id));
+        tree.contained([1, 1], [2, 4], &xy, |id| visit(context, phase + 100, id));
+        if tree.count() != 0 {
+            visit(context, phase + 200, tree.nearest([1, 2], &xy));
+        }
+    };
+    tree.build(0..20, &xy, &split);
+    observe(&tree, 0);
+    let mut first = Vec::new();
+    tree.contained([0, 0], [10, 10], &xy, |id| first.push(id));
+    for (phase, id) in [(1, first[0]), (2, first[1])] {
+        tree.remove(id, &xy, &split);
+        observe(&tree, phase);
+    }
+    for id in 20..40 {
+        tree.insert(id, &xy, &split);
+        observe(&tree, u32::from(id));
+    }
+    for (phase, id) in [(40, 20), (41, 30), (42, 39)] {
+        tree.remove(id, &xy, &split);
+        observe(&tree, phase);
+    }
+    tree.build([], &xy, &split);
+    observe(&tree, 43);
+    tree.insert(12, &xy, &split);
+    observe(&tree, 44);
+}
+
 /// Exercise the production pending-replacement drain with native fixture tables.
 /// # Safety
 /// Live serialized service tables and caller-owned cost, as in the scheduler.
