@@ -51,6 +51,10 @@ static void GroundTreeRandom(const char *kind, TileIndex tile)
 static void GroundTreeProbe(TileIndex tile)
 {
 	AutoRestoreBackup<GameMode> editor(_game_mode, GM_EDITOR);
+	/* The interactive RNG starts from wall time and is not restored by loading a save. */
+	_interactive_random.SetSeed(615);
+	SavedRandomSeeds clear_before;
+	SaveRandomSeeds(&clear_before);
 	const std::array<Price, 4> prices{PR_CLEAR_GRASS, PR_CLEAR_ROUGH, PR_CLEAR_ROCKS, PR_CLEAR_FIELDS};
 	std::array<Money, 4> saved_prices; for (uint i = 0; i < 4; ++i) saved_prices[i] = _price[prices[i]];
 	const std::array<std::array<int64_t, 4>, 5> amounts{{{0, 0, 0, 0}, {5, 2, 11, 17}, {INT64_MAX, INT64_MAX, INT64_MAX, INT64_MAX}, {INT64_MIN, INT64_MIN + 1, INT64_MAX, -7}, {1, INT64_MAX, INT64_MIN, INT64_MIN + 1}}};
@@ -72,6 +76,7 @@ static void GroundTreeProbe(TileIndex tile)
 	}
 	std::tie(original_water.type(), original_water.m1(), original_water.m2(), original_water.m3(), original_water.m4(), original_water.m5(), original_water.m6(), original_water.m7(), original_water.m8()) = water_fields;
 	for (uint i = 0; i < 4; ++i) _price[prices[i]] = saved_prices[i];
+	if (!std::ranges::equal(clear_before.random.state, _random.state) || !std::ranges::equal(clear_before.interactive_random.state, _interactive_random.state)) std::abort();
 	GroundTreeRandom("clear-rng", tile);
 	uint groups = 0;
 	for (bool edge : {false, true}) for (bool freeform : {false, true}) for (uint mode = 0; mode < 14; ++mode) {
