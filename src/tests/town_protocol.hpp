@@ -150,9 +150,11 @@ static inline const OpenTTDClearServices town_protocol_clear = [] {
 	clear.make_clear = [](uint32_t, ClearGround, uint32_t) noexcept { town_protocol_world->square_clears++; };
 	return clear;
 }();
-static inline const OpenTTDWaterLeaves town_protocol_water_leaves{
-	.debug = [](uint8_t, int32_t, int32_t) noexcept {},
-};
+static inline const OpenTTDWaterLeaves town_protocol_water_leaves = [] {
+	auto leaves = OpenTTDWaterLeaves{};
+	leaves.debug = [](uint8_t, int32_t, int32_t) noexcept {};
+	return leaves;
+}();
 static inline const OpenTTDWaterGroundServices town_protocol_water = [] {
 	auto water = OpenTTDWaterGroundServices{};
 	water.clear = &town_protocol_clear;
@@ -227,12 +229,11 @@ template <typename Check> void CheckTownProtocol(Check check)
 	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, TownProtocolRandom, TownProtocolIndustry);
 	/* The callback reenters the town owner through the direct resolver entry;
 	 * preserve the original fixture's mutation and success. */
-	const OpenTTDHouseResolverServices resolver{
-		.town_by_id = [](uint32_t) noexcept -> Town * { return nullptr; },
-		.evaluate = [](const OpenTTDHouseCallbackArgs *, int32_t *, size_t) noexcept -> uint16_t {
-			openttd_rust_town_growth(town_protocol_world->owner)->flags = 0x88;
-			return UINT16_MAX;
-		},
+	auto resolver = OpenTTDHouseResolverServices{};
+	resolver.town_by_id = [](uint32_t) noexcept -> Town * { return nullptr; };
+	resolver.evaluate = [](const OpenTTDHouseCallbackArgs *, int32_t *, size_t) noexcept -> uint16_t {
+		openttd_rust_town_growth(town_protocol_world->owner)->flags = 0x88;
+		return UINT16_MAX;
 	};
 	const auto *previous_resolver = openttd_rust_house_resolver_exchange(&resolver);
 
@@ -271,25 +272,27 @@ template <typename Check> void CheckTownProtocol(Check check)
 	services.tile_valid = [](uint32_t) noexcept { return true; };
 	services.road_type = [](uint32_t) noexcept { return uint8_t(63); };
 	static const OpenTTDTileOwnerServices owners{};
-	static const OpenTTDLandscapeTileServices tiles{
-		.clear = [](OpenTTDCommandCost *p, uint32_t, uint16_t flags) noexcept { auto &w = *town_protocol_world; if (w.placing && !(flags & 1)) w.landscape_clears++; else w.clears++; TownProtocolCostOf(p)->ok = w.clear_ok; },
-		.owners = &owners,
-	};
+	static const OpenTTDLandscapeTileServices tiles = [] {
+		auto t = OpenTTDLandscapeTileServices{};
+		t.clear = [](OpenTTDCommandCost *p, uint32_t, uint16_t flags) noexcept { auto &w = *town_protocol_world; if (w.placing && !(flags & 1)) w.landscape_clears++; else w.clears++; TownProtocolCostOf(p)->ok = w.clear_ok; };
+		t.owners = &owners;
+		return t;
+	}();
 	town_protocol_landscape.shared = &services; town_protocol_landscape.costs = &town_protocol_costs;
 	town_protocol_landscape.commands = &town_protocol_commands; town_protocol_landscape.tile_procs = &tiles;
 	const OpenTTDHouseAnimation animation_house{
 		.callback = [](uint16_t, uint32_t, uint32_t, const HouseSpec *, Town *, uint32_t, uint64_t) noexcept -> uint16_t { town_protocol_world->animations++; return UINT16_MAX; },
 	};
-	const OpenTTDAnimationServices animation{
-		.shared = &services, .house = &animation_house,
-		.state = [](uint32_t) noexcept -> AnimatedTileState { return AnimatedTileState::Deleted; },
-		.set_state = [](uint32_t tile, AnimatedTileState) noexcept { TownProtocolLeaf(11, tile, 0, 0, 0); },
-		.house_spec = [](uint16_t) noexcept -> const HouseSpec * { return nullptr; },
-	};
+	auto animation = OpenTTDAnimationServices{};
+	animation.shared = &services;
+	animation.house = &animation_house;
+	animation.state = [](uint32_t) noexcept -> AnimatedTileState { return AnimatedTileState::Deleted; };
+	animation.set_state = [](uint32_t tile, AnimatedTileState) noexcept { TownProtocolLeaf(11, tile, 0, 0, 0); };
+	animation.house_spec = [](uint16_t) noexcept -> const HouseSpec * { return nullptr; };
 	RustAnimationScope animation_scope(animation);
 
 	bool road_ok = false;
-	OpenTTDCommandCostServices costs{};
+	auto costs = OpenTTDCommandCostServices{};
 	costs.success = [](const OpenTTDCommandCost *out) noexcept { return *reinterpret_cast<const bool *>(out); };
 	OpenTTDRailCommandServices rail{}; rail.cost = &costs;
 	OpenTTDRoadCommandServices roads{}; roads.do_build = [](const OpenTTDRoadCommandServices *, OpenTTDRoadCommandScratch *, OpenTTDCommandCost *out, OpenTTDCommandCost *, uint16_t flags, uint32_t tile, uint8_t bits, uint8_t rt, uint8_t, uint16_t town) noexcept {

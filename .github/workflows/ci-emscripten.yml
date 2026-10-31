@@ -19,7 +19,7 @@ jobs:
     container:
       # If you change this version, change the numbers in the cache step
       # and os/emscripten/Dockerfile too.
-      image: emscripten/emsdk:3.1.57
+      image: emscripten/emsdk:4.0.23
 
     steps:
     - name: Checkout
@@ -45,7 +45,18 @@ jobs:
         # If you change this version, change the numbers in the image configuration step
         # and os/emscripten/Dockerfile too.
         path: /emsdk/upstream/emscripten/cache
-        key: 3.1.57-${{ runner.os }}
+        key: 4.0.23-${{ runner.os }}
+
+    # cmake/Rust.cmake requires the rust-toolchain.toml channel. The host tools link the host
+    # standard library and the game links the wasm32-unknown-emscripten one.
+    - name: Install Rust
+      run: |
+        channel=$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)
+        apt-get install -y curl
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path \
+          --profile minimal --default-toolchain "$channel" --component rustfmt,clippy --target wasm32-unknown-emscripten
+        echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+        "$HOME/.cargo/bin/rustc" -vV
 
     - name: Add liblzma support
       run: |
@@ -57,8 +68,7 @@ jobs:
         cd build-host
 
         echo "::group::CMake"
-        # cmake/Rust.cmake accepts native targets only; #581's PR-E links Rust here.
-        cmake .. -DOPTION_TOOLS_ONLY=ON -DOPTION_RUST=OFF
+        cmake .. -DOPTION_TOOLS_ONLY=ON -DOPTION_RUST=ON
         echo "::endgroup::"
 
         echo "::group::Build"
@@ -75,10 +85,16 @@ jobs:
         cd build
 
         echo "::group::CMake"
-        emcmake cmake .. -DHOST_BINARY_DIR=../build-host -DOPTION_RUST=OFF
+        emcmake cmake .. -DHOST_BINARY_DIR=../build-host -DOPTION_RUST=ON
         echo "::endgroup::"
 
         echo "::group::Build"
         echo "Running on $(nproc) cores"
-        cmake --build . -j $(nproc) --target openttd
+        cmake --build . -j $(nproc) --target openttd openttd_rust_abi
         echo "::endgroup::"
+
+    # emcmake sets emsdk's node as the CTest emulator.
+    - name: Test Rust ABI
+      run: |
+        cd build
+        ctest -R rust-abi-layout-and-calls --no-tests=error --output-on-failure

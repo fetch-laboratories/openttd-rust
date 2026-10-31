@@ -7,8 +7,8 @@
 
 //! Tile scheduler (`RunTileLoop`): the LFSR walk, tile-zero handling and dispatch to the tile
 //! loop owners. Map arrays stay in C++. Batch settings are read once per entry and only the map
-//! descriptor's allocation metadata spans dispatch; `docs/design/world-state.md` ("Selected
-//! shared map view") gives the interval that permits both.
+//! descriptor's allocation metadata spans dispatch; `docs/design/world-state.md` ("Shared
+//! map view") gives the interval that permits both.
 #![allow(unsafe_code)]
 
 use crate::{ground, industry, services, town, trees, water};

@@ -56,7 +56,10 @@ template<typename Check> void Run(Check check)
 	roadstops.by_tile = [](uint32_t tile) noexcept -> BaseStation * { Visit<5>(tile); return nullptr; };
 	const OpenTTDStationLifecycleServices station{.shared = &shared, .roadstop = &roadstops};
 	const OpenTTDIndustryTileServices object_tiles{.on_water = ProbeObjectOnWater};
-	const OpenTTDObjectServices objects{.shared = &shared, .industry_tiles = &object_tiles, .loop_policy = ProbeObjectPolicy};
+	auto objects = OpenTTDObjectServices{};
+	objects.shared = &shared;
+	objects.industry_tiles = &object_tiles;
+	objects.loop_policy = ProbeObjectPolicy;
 	const OpenTTDLandscapeLoopServices services{
 		.shared = &shared,
 		.tile_types = {},

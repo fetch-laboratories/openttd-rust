@@ -59,13 +59,17 @@ struct SessionFixture {
 		tiles.station = &station_tiles;
 		group.current_company = []() noexcept -> uint8_t { return 0; };
 		pending.set_current = [](uint8_t) noexcept {};
-		loop = {{.tick_counter = 1, .size_x = 64}, &tiles};
+		loop = {{.tick_counter = 1, .size_x = 64, .climate = 0, .extra = 0, .ambient = false, .ambient_callback = false}, &tiles};
 		scheduler.pool = []() noexcept { return OpenTTDVehiclePoolCursor{nullptr, 0, &empty_extent}; };
 		scheduler.vehicle = &vehicles;
 		scheduler.shared = &shared;
 		scheduler.with_loading_timer = [](const OpenTTDVehicleSchedulerTables *, void (*)(const OpenTTDVehicleSchedulerTables *)) noexcept {};
 		scheduler.reset_accumulators = Nothing;
-		tables = {.scheduler = &scheduler, .pending = &pending, .transaction = &transaction, .group = &group};
+		tables = {};
+		tables.scheduler = &scheduler;
+		tables.pending = &pending;
+		tables.transaction = &transaction;
+		tables.group = &group;
 		towns.environment.editor = []() noexcept { return true; };
 		stations.environment.editor = []() noexcept { return true; };
 		companies.company_next = [](uint32_t) noexcept { return OpenTTDCompanyRef{nullptr, UINT32_MAX}; };
@@ -118,10 +122,14 @@ struct SessionFixture {
 		services.station = &stations;
 		services.links = &links;
 		services.visits = &visits;
-		services.tree_tick = []() noexcept { return OpenTTDTreeTickSettings{.extra = 0}; };
+		services.tree_tick = []() noexcept { return OpenTTDTreeTickSettings{.tick_counter = 0, .size = 0, .climate = 0, .extra = 0}; };
 		services.industry_builder = []() noexcept { return active->builder; };
-		services.industry_tick = []() noexcept { return OpenTTDIndustryTickRecord{.editor = 1}; };
-		services.company_tick = []() noexcept { return OpenTTDCompanyTick{.editor = true}; };
+		services.industry_tick = []() noexcept { return OpenTTDIndustryTickRecord{.counter = 0, .map = {}, .interval = 0, .ambient = 0, .editor = 1}; };
+		services.company_tick = []() noexcept {
+			OpenTTDCompanyTick tick{};
+			tick.editor = true;
+			return tick;
+		};
 		services.schedule_time = []() noexcept { return OpenTTDScheduleTime{0, 0, 4}; };
 		services.schedule_measurement = [](OpenTTDSessionFrame *) noexcept -> void * { return nullptr; };
 		services.schedule_end = FrameNothing;

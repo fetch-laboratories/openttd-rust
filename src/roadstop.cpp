@@ -71,7 +71,7 @@ static OpenTTDRoadStopRebuildRead OPENTTD_RUST_CALL RoadStopRebuildRead(OpenTTDV
 {
 	const Vehicle *v = VehicleOf(handle);
 	VehicleType type = RustVehicleVehicleType(v);
-	if (type != VEH_ROAD) return {.vehicle_type = type};
+	if (type != VEH_ROAD) return {.road = nullptr, .total_length = 0, .vehicle_type = type, .direction = 0, .status = 0, .primary = false};
 	const RoadVehicle *rv = RoadVehicle::From(v);
 	return {.road = RoadStateOf(rv), .total_length = RustGroundCachedTotalLength(&rv->gcache), .vehicle_type = type,
 		.direction = RustVehicleDirection(v), .status = RustVehicleStatus(v), .primary = RustVehiclePrimary(v)};
