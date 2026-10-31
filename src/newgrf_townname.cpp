@@ -23,7 +23,7 @@
 
 #ifdef WITH_RUST
 #include "rust/byte_span_ffi.h"
-#include "rust/presentation_services.h"
+#include "rust/services_ffi.h"
 
 extern "C" void openttd_rust_grf_townname_generate(const OpenTTDSharedServices *, StringBuilder *builder, void (*append)(StringBuilder *, OpenTTDByteSpan) noexcept, uint32_t grfid, uint16_t gen, uint32_t seed);
 
