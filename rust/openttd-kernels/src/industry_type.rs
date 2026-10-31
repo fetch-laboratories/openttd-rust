@@ -48,3 +48,10 @@ pub const ANIMATION_TRIGGER_CARGO_RECEIVED: u8 = 3;
 
 /// `IndustryLifeType::Extractive` mask.
 pub const LIFE_EXTRACTIVE: u8 = 1;
+
+/// `IndustryLifeType::Organic` mask.
+pub const LIFE_ORGANIC: u8 = 2;
+/// `IndustryLifeType::Processing` mask.
+pub const LIFE_PROCESSING: u8 = 4;
+/// `IndustryBehaviour::CutTrees` mask.
+pub const CUT_TREES: u32 = 1 << 1;
