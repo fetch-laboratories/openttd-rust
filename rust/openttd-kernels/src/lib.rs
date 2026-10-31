@@ -1474,6 +1474,8 @@ mod saveload;
 mod goal_type;
 mod league_type;
 mod objectives;
+mod signs_cmd;
+mod signs_type;
 mod story_base;
 mod story_type;
 mod window_type;
