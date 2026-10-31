@@ -190,7 +190,7 @@ const OpenTTDWaterRestorationServices &GetRustWaterRestorationServices() noexcep
 }
 
 
-static uint8_t SharedSnowLine() noexcept { return GetSnowLine(); }
+static void DestroySnowLine(SnowLine *record) noexcept { delete record; }
 
 constinit const OpenTTDMapStatics _rust_map_statics = OpenTTDNativeTileTypeAccess::Statics();
 
@@ -415,7 +415,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.service_at_helipad = SharedServiceAtHelipad,
 	.set_tropic_zone = SharedSetTropicZone,
 
-	.snow_line = SharedSnowLine,
+	.snow_line_support = { .height = &_settings_game.game_creation.snow_line_height, .destroy = DestroySnowLine },
 	.station_index = MapSvcStationIndex,
 	.road_commands = []() noexcept { return &GetRustRoadCommandServices(); },
 	.station_commands = []() noexcept { return &GetRustStationCommandServices(); },

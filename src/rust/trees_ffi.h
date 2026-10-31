@@ -78,7 +78,6 @@ struct OpenTTDTreeServices {
 	OpenTTDTreeObservation (*tree_observation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tree_observation);
 	uint32_t (*tree_count)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tree_count);
 	OpenTTDTreeClearObservation (*clear_observation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_observation);
-	uint8_t (*snow_line)() noexcept OPENTTD_SERVICE_DEFAULT(snow_line);
 	float (*sin)(float) noexcept OPENTTD_SERVICE_DEFAULT(sin);
 	float (*cos)(float) noexcept OPENTTD_SERVICE_DEFAULT(cos);
 	void (*make_tree)(uint32_t tile, uint8_t type, uint32_t count, uint8_t growth, uint8_t ground, uint32_t density) noexcept OPENTTD_SERVICE_DEFAULT(make_tree);

@@ -3554,7 +3554,6 @@ static const OpenTTDIndustryServices _industry_services = {
 			default: return {type, 0, 0, 0};
 		}
 	},
-	.snow_line = GetRustSharedServices().snow_line,
 	.make_field = [](uint32_t index, uint8_t field_type, uint8_t counter, uint16_t industry) noexcept {
 		TileIndex tile(index);
 		MakeField(tile, field_type, IndustryID(industry));
@@ -3849,7 +3848,6 @@ static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices(
 		.population = [](const OpenTTDTownHandle *town) noexcept -> uint32_t { return reinterpret_cast<const Town *>(town)->cache.population; },
 		.town_position = OpenTTDTownTile,
 		.industry = RustIndustryByID<uint16_t>,
-		.highest_snow_line = OpenTTDHighestSnowLine,
 		.edge_distance = [](uint32_t tile, uint8_t direction) noexcept -> uint32_t { return DistanceFromEdgeDir(TileIndex(tile), static_cast<DiagDirection>(direction)); },
 		.refinery_limit = []() noexcept -> uint8_t { return _settings_game.game_creation.oil_refinery_limit; },
 		.tile_height = [](uint32_t tile) noexcept -> uint32_t { return TileHeight(TileIndex(tile)); },

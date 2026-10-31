@@ -57,7 +57,6 @@ pub struct TransactionServices {
     pub population: unsafe extern "C" fn(*const TownHandle) -> u32,
     pub town_position: unsafe extern "C" fn(*const TownHandle) -> u32,
     pub industry: unsafe extern "C" fn(u16) -> *mut ShellHandle,
-    pub highest_snow_line: unsafe extern "C" fn() -> u8,
     pub edge_distance: unsafe extern "C" fn(u32, u8) -> u32,
     pub refinery_limit: unsafe extern "C" fn() -> u8,
     pub tile_height: unsafe extern "C" fn(u32) -> u32,
@@ -183,7 +182,7 @@ impl Engine<'_> {
             1 => {
                 if self.map().landscape == 1
                     && (self.s.shared().tile_z)(tile)
-                        < i32::from(unsafe { (self.x.highest_snow_line)() }) + 2
+                        < i32::from(crate::snow_line::highest(self.s.shared())) + 2
                 {
                     return self.fail(self.e.forest);
                 }
@@ -201,7 +200,7 @@ impl Engine<'_> {
             3 => {
                 if self.map().landscape == 1
                     && (self.s.shared().tile_z)(tile).wrapping_add(2)
-                        >= i32::from(unsafe { (self.x.highest_snow_line)() })
+                        >= i32::from(crate::snow_line::highest(self.s.shared()))
                 {
                     return self.fail(self.e.site);
                 }

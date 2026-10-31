@@ -15,6 +15,7 @@
 #include <memory>
 #include <type_traits>
 #include "station_ffi.h"
+#include "snow_line_ffi.h"
 
 enum class LandscapeType : uint8_t;
 enum class StationType : uint8_t;
@@ -145,7 +146,7 @@ struct OpenTTDSharedServices {
 	const OpenTTDPbsServices *(*pbs_services)(const OpenTTDSharedServices *) noexcept OPENTTD_SERVICE_DEFAULT(pbs_services);
 	bool (*service_at_helipad)() noexcept OPENTTD_SERVICE_DEFAULT(service_at_helipad);
 	void (*set_tropic_zone)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tropic_zone);
-	uint8_t (*snow_line)() noexcept OPENTTD_SERVICE_DEFAULT(snow_line);
+	OpenTTDSnowLineSupport snow_line_support;
 	uint16_t (*station_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_index);
 	const OpenTTDRoadCommandServices *(*road_commands)() noexcept OPENTTD_SERVICE_DEFAULT(road_commands);
 	const OpenTTDStationCommandServices *(*station_commands)() noexcept OPENTTD_SERVICE_DEFAULT(station_commands);
@@ -293,6 +294,7 @@ Result OpenTTDFixtureMapService(Args...) noexcept
 }
 inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_t (*random)(void *) noexcept, uint32_t (*industry)(int32_t, int32_t, uint32_t *) noexcept = OpenTTDAbortService<uint32_t (*)(int32_t, int32_t, uint32_t *) noexcept>::Call) noexcept
 {
+	static const uint8_t snow_line_height = 0;
 	return {
 		.clear_square_services = {},
 		.context = context,
@@ -300,6 +302,7 @@ inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_
 		.industry = industry,
 		.next_company = [](uint8_t) noexcept -> uint8_t { return UINT8_MAX; },
 		.random = random,
+		.snow_line_support = { .height = &snow_line_height },
 		.recession = OpenTTDFixtureMapService<bool>,
 		.tick_counter = OpenTTDFixtureMapService<uint64_t>,
 		.town_count = OpenTTDFixtureMapService<size_t>,

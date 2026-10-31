@@ -30,7 +30,7 @@ pub struct Services {
     pitch: unsafe extern "C" fn(*const c_void) -> i32,
     rail_cost: unsafe extern "C" fn(u8) -> u16,
     road_side: unsafe extern "C" fn() -> u8,
-    shared: *const Shared,
+    pub(crate) shared: *const Shared,
     width: unsafe extern "C" fn(*const c_void) -> u32,
 }
 #[unsafe(no_mangle)]
@@ -98,7 +98,7 @@ pub unsafe extern "C" fn openttd_rust_global_variable(
                 u32::from(bits)
             }
             0x20 => {
-                let snow = (shared.snow_line)();
+                let snow = crate::snow_line::get(shared);
                 if (s.climate)() == crate::landscape_type::ARCTIC && snow <= (s.height_limit)() {
                     (u32::from(snow)
                         * if (s.file_version)(file) >= 8 {

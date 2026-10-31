@@ -152,7 +152,6 @@ static const OpenTTDTreeServices _tree_services{
 		TileIndex tile{index};
 		return OpenTTDTreeClearObservation{.count = GetTreeCount(tile), .species = GetTreeType(tile)};
 	},
-	.snow_line = GetRustSharedServices().snow_line,
 	.sin = [](float v) noexcept { return sinf(v); },
 	.cos = [](float v) noexcept { return cosf(v); },
 	.make_tree = [](uint32_t tile, uint8_t type, uint32_t count, uint8_t growth, uint8_t ground, uint32_t density) noexcept {

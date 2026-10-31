@@ -146,7 +146,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.roadstop_classes = &RoadStopClass::GetServices(),
 		.reset_water_features = []() noexcept { _water_feature.fill({}); },
 		.reset_faces = []() noexcept { ResetFaces(); },
-		.clear_snowline = []() noexcept { ClearSnowLine(); },
 		.reset_files = []() noexcept { _grf_files.clear(); _grf_files.reserve(_grfconfig.size()); },
 		.reset_loaded_features = []() noexcept { _loaded_newgrf_features.has_2CC = false; _loaded_newgrf_features.used_liveries = 1 << LS_DEFAULT; _loaded_newgrf_features.shore = SHORE_REPLACE_NONE; _loaded_newgrf_features.tram = TRAMWAY_REPLACE_DEPOT_NONE; },
 		.initialize_sounds = []() noexcept { InitializeSoundPool(); },

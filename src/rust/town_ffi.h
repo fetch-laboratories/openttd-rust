@@ -55,12 +55,10 @@ struct OpenTTDTownAuthorityServices {
 struct OpenTTDTownLeaves {
 	uint32_t (*map_log_x)() noexcept OPENTTD_SERVICE_DEFAULT(map_log_x);
 	uint8_t (*growth_rate)() noexcept OPENTTD_SERVICE_DEFAULT(growth_rate);
-	uint8_t (*snow_line)() noexcept OPENTTD_SERVICE_DEFAULT(snow_line);
 	OpenTTDEnvironmentServices environment;
 	bool (*generating_world)() noexcept OPENTTD_SERVICE_DEFAULT(generating_world);
 	bool (*allow_crossings)() noexcept OPENTTD_SERVICE_DEFAULT(allow_crossings);
 	uint8_t (*climate)() noexcept OPENTTD_SERVICE_DEFAULT(climate);
-	uint8_t (*highest_snow_line)() noexcept OPENTTD_SERVICE_DEFAULT(highest_snow_line);
 	bool (*allow_roads)() noexcept OPENTTD_SERVICE_DEFAULT(allow_roads);
 	uint8_t (*road_flags)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_flags);
 	OpenTTDTownHouseAvailability (*house_availability)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(house_availability);
