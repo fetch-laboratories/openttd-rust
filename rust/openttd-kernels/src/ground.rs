@@ -367,23 +367,31 @@ pub(crate) unsafe fn clear_tile_loop(
             hit(Witness::Desert);
         }
     }
-    let surface = (|| -> Option<ClearSurface> {
-        let snow = crate::clear_map::is_snow_tile(map, tile)?;
+    let surface = 'surface: {
+        // No callback or write separates these source reads. Share the successful
+        // precondition; a failed probe leaves the original assertion sequence to
+        // the native group, including handlers that return.
+        let probe = map.without_native_assert();
+        let Some(fields) = probe.require_type(tile, crate::tile_type::MP_CLEAR) else {
+            break 'surface None;
+        };
+        let snow = crate::clear_map::is_snow_tile_from_fields(&fields);
         let ground = if snow {
             0
         } else {
-            crate::clear_map::get_clear_ground(map, tile)?
+            crate::clear_map::get_clear_ground_from_fields(&fields)
+        };
+        let density = if !snow && ground == 0 {
+            crate::clear_map::get_clear_density_from_fields(&fields)
+        } else {
+            0
         };
         Some(ClearSurface {
             snow,
             ground: ClearGroundType(ground),
-            density: if !snow && ground == 0 {
-                crate::clear_map::get_clear_density(map, tile)?
-            } else {
-                0
-            },
+            density,
         })
-    })()
+    }
     .unwrap_or_else(|| (c.surface)(tile));
     if surface.snow {
         return;
@@ -414,14 +422,17 @@ pub(crate) unsafe fn clear_tile_loop(
         3 => {
             // Four ordered steps keep each guarded live neighbour read and write.
             // SetFence's fields are disjoint; dirtying remains after all four.
-            let fences = (|| -> Option<FieldFences> {
-                Some(FieldFences {
-                    ne: crate::clear_map::get_fence(map, tile, 0)?,
-                    se: crate::clear_map::get_fence(map, tile, 1)?,
-                    sw: crate::clear_map::get_fence(map, tile, 2)?,
-                    nw: crate::clear_map::get_fence(map, tile, 3)?,
-                })
-            })()
+            let fences = 'fences: {
+                let probe = map.without_native_assert();
+                let Some(fields) = crate::clear_map::require_field(&probe, tile) else {
+                    break 'fences None;
+                };
+                let ne = crate::clear_map::get_fence(&fields, 0);
+                let se = crate::clear_map::get_fence(&fields, 1);
+                let sw = crate::clear_map::get_fence(&fields, 2);
+                let nw = crate::clear_map::get_fence(&fields, 3);
+                Some(FieldFences { ne, se, sw, nw })
+            }
             .unwrap_or_else(|| (c.fences)(tile));
             let mut dirty = field_fence(tile, size_x, 0, fences.ne, c, s, map);
             dirty |= field_fence(tile, size_x, 1, fences.se, c, s, map);
@@ -441,12 +452,18 @@ pub(crate) unsafe fn clear_tile_loop(
                 return;
             }
             (c.set_counter)(tile, 0);
-            let field = (|| -> Option<FieldGround> {
+            let field = 'field: {
+                let probe = map.without_native_assert();
+                let Some(fields) = crate::clear_map::require_field(&probe, tile) else {
+                    break 'field None;
+                };
+                let industry = crate::clear_map::get_industry_index_of_field(&fields);
+                let field_type = crate::clear_map::get_field_type(&fields);
                 Some(FieldGround {
-                    industry: crate::clear_map::get_industry_index_of_field(map, tile)?,
-                    field_type: crate::clear_map::get_field_type(map, tile)?,
+                    industry,
+                    field_type,
                 })
-            })()
+            }
             .unwrap_or_else(|| (c.field)(tile));
             if field.industry == u16::MAX && field.field_type >= 7 {
                 (c.make_clear)(tile, ClearGroundType(0), 2);

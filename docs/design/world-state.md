@@ -40,7 +40,7 @@ C++ retains canonical allocation, setters and field-wise save adapters until the
 
 ### Shared map view (#274, extended by #565)
 
-The tile-type allocation/access descriptor has canonical base/extended pointers and count. Rust loads the C++ map statics under the game-state mutex, including `log_x`, size and native assertion policy; `map_func::World` is its sole type. Generated named ABI probes pin both layouts. See [map access](../porting.md#map-access) for field access, helper assertions and the game-loop interval proof. The view does not transfer storage.
+The tile-type allocation/access descriptor has canonical base/extended pointers and count. The shared table holds the addresses of the canonical C++ map statics; entries load their current pointers, `log_x` and size without calling C++, retaining the native assertion policy. `map_func::World` is the one entry descriptor. Generated named ABI probes pin both layouts. See [map access](../porting.md#map-access) for field access, helper assertions and the game-loop interval proof. The view does not transfer storage.
 
 In `tile_loop.rs`, handlers may mutate tiles and pools, run landscape, road and crash commands and queue script events (`InsertEvent`), but cannot reset, load, report progress or run a script VM. They do not change map dimensions, climate, tree placement, tick counter, editor mode, road-rebuild or ambient settings; `_misc_grf_features` changes only on reset and GRF `ActionD` loading. A batch may read these settings, including the ambient feature gate, once and retain descriptor metadata across dispatch. Ambient callbacks retain their RNG position; the tree loop reads fields after them at source observation points. Threaded and arbitrary NewGRF corpus limits remain open in #156.
 
@@ -53,7 +53,10 @@ header-named terrain helpers load canonical corner heights at each observation.
 The native assertion service retains failed-precondition behavior for the
 converted road and pixel helpers, without calling the native accessor. Other
 helpers keep their existing fallbacks until their conversion; callbacks required
-by other production consumers remain. Map allocation and native inline accessors remain
+by other production consumers remain. Road YAPF searches resolve road/tram kind,
+owner, compatible road types, display speed and order speed once per search.
+Their synchronous query callbacks cannot mutate these vehicle facts; tile fields
+and tile speed limits are still observed at each source point. Map allocation and native inline accessors remain
 native. Train, ship, aircraft, YAPF and water-region leaves beyond these shared
 movement calls remain for later #565 batches; #560 owns the complete follower.
 

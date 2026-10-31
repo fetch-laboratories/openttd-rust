@@ -120,9 +120,7 @@ impl<'a> Founding<'a> {
         }
     }
     fn map(&self) -> crate::services::Map {
-        *self
-            .map
-            .get_or_init(|| crate::services::Map::from_log_x(observed!((self.shared.map_log_x)())))
+        *self.map.get_or_init(|| self.shared.map())
     }
     fn size_y(&self) -> u32 {
         *self

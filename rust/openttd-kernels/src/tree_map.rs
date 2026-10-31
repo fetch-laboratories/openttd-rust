@@ -13,13 +13,13 @@ use crate::tile_type::MP_TREES;
 pub(crate) const TREE_COUNT_TOYLAND: u8 = 9;
 #[inline]
 pub(crate) fn get_tree_ground(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    m.require_type(t, MP_TREES)?;
-    Some(((m.m2(t)? >> 6) & 7) as u8)
+    let fields = m.require_type(t, MP_TREES)?;
+    Some(((fields.m2() >> 6) & 7) as u8)
 }
 #[inline]
 pub(crate) fn get_tree_density(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    m.require_type(t, MP_TREES)?;
-    Some(((m.m2(t)? >> 4) & 3) as u8)
+    let fields = m.require_type(t, MP_TREES)?;
+    Some(((fields.m2() >> 4) & 3) as u8)
 }
 #[inline]
 pub(crate) fn get_tree_type(m: &TileTypeAccess, t: u32) -> Option<u8> {
@@ -28,11 +28,11 @@ pub(crate) fn get_tree_type(m: &TileTypeAccess, t: u32) -> Option<u8> {
 }
 #[inline]
 pub(crate) fn get_tree_count(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    m.require_type(t, MP_TREES)?;
-    Some((m.m5(t)? >> 6) + 1)
+    let fields = m.require_type(t, MP_TREES)?;
+    Some((fields.m5() >> 6) + 1)
 }
 #[inline]
 pub(crate) fn get_tree_growth(m: &TileTypeAccess, t: u32) -> Option<u8> {
-    m.require_type(t, MP_TREES)?;
-    Some(m.m5(t)? & 7)
+    let fields = m.require_type(t, MP_TREES)?;
+    Some(fields.m5() & 7)
 }

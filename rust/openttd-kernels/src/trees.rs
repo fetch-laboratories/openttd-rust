@@ -1383,7 +1383,6 @@ mod tests {
         Write(&'static str),
         Dirty,
         Zone(u8),
-        Water,
         Sound(u16),
         Rating(bool),
         Begin(u32, u32, bool),
@@ -1437,6 +1436,7 @@ mod tests {
         WORLD.with_borrow_mut(|w| w.plant.zone = zone);
     }
     fn shared() -> Services {
+        crate::map_func::fixture::set(water_map(), 6);
         Services {
             tile_z,
             mark_dirty: dirty,
@@ -1444,8 +1444,7 @@ mod tests {
             make_shore,
             make_snow,
             water_services,
-            movement_services,
-            map_log_x: water_map_log_x,
+            movement: movement(),
             map_max_x: water_map_max,
             map_max_y: water_map_max,
             tile_type: water_type,
@@ -1535,22 +1534,17 @@ mod tests {
         }; }
         WATER.with(std::ptr::from_ref)
     }
-    // Resolving the view observes water entry; its ground stays dry, as in the fixture.
-    extern "C" fn movement_services() -> *const crate::movement::MovementServices {
-        thread_local! { static MOVEMENT: crate::movement::MovementServices = {
-            let mut movement = crate::train_reservation::tests::movement_table();
-            movement.tile_types = Some(water_map);
-            movement
-        }; }
+    fn movement() -> *const crate::movement::MovementServices {
+        thread_local! { static MOVEMENT: crate::movement::MovementServices =
+            crate::train_reservation::tests::movement_table();
+        }
         MOVEMENT.with(std::ptr::from_ref)
-    }
-    extern "C" fn water_map_log_x() -> u32 {
-        6
     }
     extern "C" fn water_map_max() -> u32 {
         63
     }
-    extern "C" fn water_map() -> crate::map_func::TileTypeAllocation {
+    /// Every tile is a tree tile; the water entry's ground stays dry, as in the fixture.
+    fn water_map() -> crate::map_func::TileTypeAllocation {
         use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAllocation};
         static BASE: [BaseTileLayout; 4096] = [const {
             BaseTileLayout {
@@ -1570,9 +1564,6 @@ mod tests {
                 m8: 0,
             }
         }; 4096];
-        if WORLD.with_borrow(|w| w.tree.ground == GROUND_SHORE) {
-            log(Event::Water);
-        }
         TileTypeAllocation {
             base: BASE.as_ptr(),
             extended: EXTENDED.as_ptr(),
@@ -1860,7 +1851,6 @@ mod tests {
             events(),
             [
                 Event::Tree,
-                Event::Water,
                 Event::Tree,
                 Event::Tree,
                 Event::Write("add_growth"),

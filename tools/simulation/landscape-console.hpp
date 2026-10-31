@@ -16,7 +16,7 @@ static void GenericRunTileLoop()
 	RustGenerationLoop loop;
 	assert(*openttd_rust_tile_loop_cursor() != 0);
 	SessionFixture fixture;
-	fixture.shared.map_log_x = OpenTTDMapLogX;
+	fixture.shared.map = &_rust_map_statics;
 	fixture.services.map_log_y = OpenTTDMapLogY;
 	fixture.loop = loop.view;
 	if (!fixture.Run(_game_mode)) std::abort();

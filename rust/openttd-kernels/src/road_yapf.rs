@@ -24,6 +24,7 @@ use crate::order_type::{OT_GOTO_STATION, OT_GOTO_WAYPOINT};
 use crate::road::{PathElement, State};
 use crate::services::Services;
 use crate::track_type::INVALID_TRACKDIR;
+use std::cell::OnceCell;
 use std::ffi::c_void;
 
 #[repr(C)]
@@ -153,6 +154,10 @@ static SCRATCH: GameState<Option<Scratch>> = GameState::new(None);
 
 struct Search<'a> {
     movement: crate::movement::CachedTable<'a>,
+    tram: OnceCell<bool>,
+    follower: OnceCell<crate::follow_track::State>,
+    road: OnceCell<crate::follow_track::RoadContext>,
+    speeds: OnceCell<(i32, u16)>,
     input: Input,
     leaves: Leaves,
     context: *const c_void,
@@ -220,6 +225,10 @@ impl Search<'_> {
         Self {
             // SAFETY: The shared registry outlives this synchronous search.
             movement: crate::movement::CachedTable::new(unsafe { &*leaves.shared }),
+            tram: OnceCell::new(),
+            follower: OnceCell::new(),
+            road: OnceCell::new(),
+            speeds: OnceCell::new(),
             input,
             leaves,
             context,
@@ -240,10 +249,16 @@ impl Search<'_> {
             reuse_scratch,
         }
     }
+    fn tram(&self) -> bool {
+        // SAFETY: The context's road kind is invariant throughout this search.
+        *self
+            .tram
+            .get_or_init(|| unsafe { (self.leaves.road_kind)(self.context) }.0)
+    }
     fn tracks(&self, tile: u32, status: u8) -> u16 {
         // SAFETY: The native search keeps the same live road vehicle context.
         let movement = self.movement.get();
-        let tram = unsafe { (self.leaves.road_kind)(self.context) }.0;
+        let tram = self.tram();
         if status != 0 {
             crate::track_func::track_status_to_trackdir_bits(movement.track_status(
                 tile,
@@ -263,15 +278,21 @@ impl Search<'_> {
         let s = unsafe { &*self.leaves.shared };
         let v =
             std::ptr::NonNull::new(self.context.cast_mut().cast()).map(crate::vehicle::VehicleRef);
-        let mut state = crate::follow_track::State::vehicle(
-            s,
-            crate::transport_type::TRANSPORT_ROAD,
-            v,
-            u64::MAX,
-            true,
-            false,
-        );
-        let followed = state.follow(s, tile, td);
+        let mut state = *self.follower.get_or_init(|| {
+            crate::follow_track::State::vehicle(
+                s,
+                crate::transport_type::TRANSPORT_ROAD,
+                v,
+                u64::MAX,
+                true,
+                false,
+            )
+        });
+        let road = self.road.get_or_init(|| crate::follow_track::RoadContext {
+            tram: self.tram(),
+            compatible: (self.movement.get().road_compatible)(v.expect("road vehicle")),
+        });
+        let followed = state.follow_with_road(s, tile, td, Some(road));
         Follow {
             tile: state.new_tile.0,
             skipped: state.tiles_skipped,
@@ -441,13 +462,18 @@ impl Search<'_> {
             let vehicle = crate::vehicle::VehicleRef(
                 std::ptr::NonNull::new(self.context.cast_mut().cast()).unwrap(),
             );
-            let display_speed = (movement.train().physics.display_max_speed)(vehicle);
-            let order_speed = (movement.order_speed)(vehicle);
-            let max_speed = crate::follow_track::speed_limit(
+            let (display_speed, order_speed) = *self.speeds.get_or_init(|| {
+                (
+                    (movement.train().physics.display_max_speed)(vehicle),
+                    (movement.order_speed)(vehicle),
+                )
+            });
+            let max_speed = crate::follow_track::speed_limit_with_road(
                 shared,
                 crate::transport_type::TRANSPORT_ROAD,
                 Some(vehicle),
                 tile,
+                Some(self.tram()),
             );
             let facts = Traversal {
                 display_speed,
