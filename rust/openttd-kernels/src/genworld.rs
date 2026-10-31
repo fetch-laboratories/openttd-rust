@@ -175,7 +175,6 @@ pub struct WorldServices {
     pub dirty: extern "C" fn(),
     pub set_progress: extern "C" fn(*mut Frame, Progress, u32) -> bool,
     pub increase_progress: extern "C" fn(*mut Frame, Progress) -> bool,
-    pub town_roads: extern "C" fn() -> bool,
     pub freeform: extern "C" fn() -> bool,
     pub count_land: extern "C" fn(),
     pub landscape_begin: extern "C" fn(*mut Frame) -> LandscapeCall,
@@ -542,7 +541,7 @@ impl World<'_> {
             unsafe { &*company.services },
             &(company.settings)(),
         );
-        if !(s.town_roads)() {
+        if !crate::town::policy::road_types(unsafe { &*(*s.town).growth }) {
             return self.abort();
         }
         let generated = read_field!(INFO.get(), mode) != GWM_EMPTY && self.landscape()?;
@@ -733,7 +732,6 @@ crate::abi::layouts! {
         dirty,
         set_progress,
         increase_progress,
-        town_roads,
         freeform,
         count_land,
         landscape_begin,

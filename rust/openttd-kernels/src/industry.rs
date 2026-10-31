@@ -1944,7 +1944,6 @@ crate::abi::layouts! {
         check_proc,
         conflicting,
         multiple_per_town,
-        closest_town,
         town,
         population,
         town_position,

@@ -51,7 +51,6 @@ pub struct Services {
     pub(crate) spec: extern "C" fn(u8, *mut Spec),
     pub(crate) registry: *const crate::cargo_registry::Services,
     pub(crate) station_company: extern "C" fn(*const Station) -> CompanyID,
-    pub(crate) town_acceptance_effect: extern "C" fn(u8) -> u8,
     pub(crate) station_town: extern "C" fn(*const Station) -> *const crate::town_type::TownHandle,
     pub(crate) resolver: *const crate::industry::resolver::ResolverServices,
     pub(crate) subsidies: extern "C" fn() -> *const crate::subsidy::Services,
@@ -214,7 +213,7 @@ fn deliver(
     let finance = unsafe { &*s.finance };
     let finances = (finance.company_finances)(company.0);
     unsafe { crate::company::record_delivery(finances, cargo, accepted) };
-    let effect = (s.town_acceptance_effect)(cargo);
+    let effect = crate::cargo_registry::town_acceptance(cargo);
     let town = (s.station_town)(native);
     let town = (subsidies.shared().town_owner)(town);
     unsafe { crate::town::record_delivery(town, effect, accepted) };
@@ -463,7 +462,6 @@ crate::abi::layouts! {
         spec,
         registry,
         station_company,
-        town_acceptance_effect,
         station_town,
         resolver,
         subsidies,

@@ -253,14 +253,6 @@ static uint8_t SharedNextCompany(uint8_t from) noexcept
 	return static_cast<uint8_t>(RustNextCompanyID(from));
 }
 
-static const OpenTTDTownHandle *SharedCalcClosestTown(uint32_t tile, uint32_t threshold) noexcept
-{
-	return reinterpret_cast<const OpenTTDTownHandle *>(RustCalcClosestTown(TileIndex{tile}, threshold));
-}
-static const OpenTTDTownHandle *SharedClosestTown(uint32_t tile, uint32_t threshold) noexcept
-{
-	return reinterpret_cast<const OpenTTDTownHandle *>(ClosestTownFromTile(TileIndex{tile}, threshold));
-}
 static OpenTTDTownState *SharedTownOwner(const OpenTTDTownHandle *town) noexcept
 {
 	return reinterpret_cast<const Town *>(town)->growth_owner.get();
@@ -281,6 +273,7 @@ static bool Shared_tile_valid(uint32_t tile) noexcept { return IsValidTile(TileI
 static int32_t Shared_tile_max_z(uint32_t tile) noexcept { return OpenTTDTileMaxZ(TileIndex{tile}); }
 static_assert(TILE_HEIGHT == 8 && TILE_SIZE == 16);
 /* Values of the shared Rust header modules (tile_type.rs, slope_func.rs and the like). */
+static_assert(PR_CLEAR_HOUSE == 40);
 static_assert(MP_CLEAR == 0 && MP_RAILWAY == 1 && MP_ROAD == 2 && MP_HOUSE == 3 && MP_TREES == 4 && MP_STATION == 5 && MP_WATER == 6 && MP_VOID == 7 && MP_INDUSTRY == 8 && MP_TUNNELBRIDGE == 9 && MP_OBJECT == 10);
 static_assert(INVALID_TILE.base() == UINT32_MAX && TILE_HEIGHT_STEP == 50 && CALLBACK_FAILED == 0xFFFF && INVALID_STRING_ID == 0xFFFF && SPECSTR_TOWNNAME_START == 0x20C0 && BUILTIN_TOWNNAME_GENERATOR_COUNT == 21);
 static_assert(SLOPE_FLAT == 0 && SLOPE_W == 1 && SLOPE_S == 2 && SLOPE_E == 4 && SLOPE_N == 8 && SLOPE_STEEP == 0x10 && SLOPE_HALFTILE == 0x20 && SLOPE_HALFTILE_MASK == 0xE0);
@@ -349,7 +342,6 @@ static bool SharedDisasterSound() noexcept { return RustDisasterSound(); }
 
 static size_t SharedTownCount() noexcept { return Town::GetNumItems(); }
 static bool SharedRecession() noexcept { return EconomyIsInRecession(); }
-static void SharedRebuildTownTree() noexcept { RebuildTownKdtree(); }
 static void SharedForEachStation(void *context, void (*visit)(void *, const OpenTTDStation *, OpenTTDStationService *, uint16_t)) noexcept
 {
 	for (Station *st : Station::Iterate()) {
@@ -371,8 +363,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 		.docking = OpenTTDIsDockingTile,
 		.generating_world = OpenTTDGeneratingWorld,
 	},
-	.calc_closest_town = SharedCalcClosestTown,
-	.closest_town = SharedClosestTown,
 	.company_valid = OpenTTDCompanyIsValid,
 	.context = nullptr,
 	.crossing_road_bits = SharedCrossingRoadBits,
@@ -440,6 +430,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 
 	.tile_animation_set_frame = OpenTTDSetAnimationFrame,
 	.town_next_id = OpenTTDNextTownID,
+	.town_by_id = [](uint32_t id) noexcept { return reinterpret_cast<OpenTTDTownHandle *>(OpenTTDTownShellByID(id)); },
 	.town_owner_by_id = OpenTTDTownOwnerByID,
 	.utf8_length = RustUtf8Length,
 	.vehicle_next = RustNextVehicle,
@@ -462,7 +453,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.tunnel_bridge_direction = MapSvcTunnelBridgeDirection,
 	.tunnel_transport = OpenTTDMapQuery<uint8_t, RustTunnelBridgeTransport, uint32_t>,
 	.update_level_crossing = SharedUpdateLevelCrossing,
-	.rebuild_town_tree = SharedRebuildTownTree,
 	.recession = SharedRecession,
 	.tick_counter = openttd_orders_tick_counter,
 	.town_count = SharedTownCount,

@@ -63,7 +63,6 @@ pub struct ResolverServices {
     pub nearby: unsafe extern "C" fn(u8, u32, bool) -> u32,
     pub nearby_info: unsafe extern "C" fn(u32, bool) -> u32,
     pub terrain: unsafe extern "C" fn(u32) -> u32,
-    pub town_zone: unsafe extern "C" fn(*const TownHandle, u32) -> u8,
     pub water_distance: unsafe extern "C" fn(u32, bool) -> u32,
     pub town_tile: unsafe extern "C" fn(*const crate::services::TownHandle) -> u32,
     pub town_id: unsafe extern "C" fn(*const crate::services::TownHandle) -> u16,
@@ -293,7 +292,11 @@ fn variable(
             },
             0x86 => return u32::from(unsafe { (*i).metadata.selected_layout }),
             0x87 => return unsafe { (s.terrain)(c.tile) },
-            0x88 => return u32::from(unsafe { (s.town_zone)(c.town, c.tile) }),
+            0x88 => {
+                return u32::from(unsafe {
+                    crate::town::radius_from_shell(s.shared(), c.town, c.tile)
+                });
+            }
             0x89 => {
                 return s
                     .map()
@@ -405,7 +408,7 @@ fn variable(
         }
         0x65 if c.tile != INVALID_TILE => {
             let tile = unsafe { (s.nearby)(parameter as u8, c.tile, true) };
-            (u32::from(unsafe { (s.town_zone)(c.town, tile) }) << 16)
+            (u32::from(unsafe { crate::town::radius_from_shell(s.shared(), c.town, tile) }) << 16)
                 | s.map()
                     .distance_manhattan(tile, town_tile(c.town, s))
                     .min(65535)
@@ -572,8 +575,8 @@ fn tile_variable(
         }
         0x41 => unsafe { (s.terrain)(c.tile) },
         0x42 => {
-            let town = (s.shared().closest_town)(c.tile, u32::MAX);
-            u32::from(unsafe { (s.town_zone)(town.cast(), c.tile) })
+            let town = crate::town::spatial::closest(s.shared(), c.tile, u32::MAX);
+            u32::from(unsafe { crate::town::radius_from_shell(s.shared(), town.cast(), c.tile) })
         }
         0x43 => relative_position(c.tile, unsafe { (*c.owner).metadata.tile }, s.map()),
         0x44 => {
@@ -723,7 +726,7 @@ fn town(c: &ResolverContext, ro: *mut c_void, s: &ResolverServices) -> *mut c_vo
         (c.town, c.id == INVALID_INDUSTRY)
     } else if c.tile != INVALID_TILE {
         (
-            (s.shared().closest_town)(c.tile, u32::MAX)
+            crate::town::spatial::closest(s.shared(), c.tile, u32::MAX)
                 .cast_mut()
                 .cast(),
             true,
@@ -897,7 +900,6 @@ crate::abi::layouts! {
         nearby,
         nearby_info,
         terrain,
-        town_zone,
         water_distance,
         town_tile,
         town_id,

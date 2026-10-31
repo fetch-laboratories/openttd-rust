@@ -372,7 +372,7 @@ impl<'a> Ctx<'a> {
     }
 
     fn update_town(&self, tile: u32) {
-        let town = (self.shared.calc_closest_town)(tile, u32::MAX);
+        let town = crate::town::spatial::calc_closest(self.shared, tile, u32::MAX);
         let id = if town.is_null() {
             INVALID_TOWN
         } else {
@@ -421,7 +421,7 @@ impl<'a> Ctx<'a> {
         if !town_check || (self.authority.bulldozer)() {
             return;
         }
-        let town = (self.shared.closest_town)(tile, u32::MAX);
+        let town = crate::town::spatial::closest(self.shared, tile, u32::MAX);
         if town.is_null() {
             return;
         }
@@ -790,7 +790,7 @@ impl<'a> Ctx<'a> {
             return;
         }
         if company != OWNER_TOWN {
-            let town = (self.shared.calc_closest_town)(tile, u32::MAX);
+            let town = crate::town::spatial::calc_closest(self.shared, tile, u32::MAX);
             town_id = if town.is_null() {
                 INVALID_TOWN
             } else {
@@ -1828,8 +1828,11 @@ impl<'a> Ctx<'a> {
             }
         }
         if owner == OWNER_TOWN {
-            let town =
-                (self.shared.closest_town)(tile, u32::from((self.authority.authority_distance)()));
+            let town = crate::town::spatial::closest(
+                self.shared,
+                tile,
+                u32::from((self.authority.authority_distance)()),
+            );
             self.rating(ret, town, 0, u8::from(tt == MP_TUNNELBRIDGE));
             if !ret.ok() {
                 error.take(ret);

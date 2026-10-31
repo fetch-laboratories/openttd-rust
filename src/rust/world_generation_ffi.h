@@ -63,7 +63,6 @@ struct OpenTTDWorldServices {
 	void (*dirty)() noexcept OPENTTD_SERVICE_DEFAULT(dirty);
 	bool (*set_progress)(OpenTTDWorldFrame *, GenWorldProgress, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_progress);
 	bool (*increase_progress)(OpenTTDWorldFrame *, GenWorldProgress) noexcept OPENTTD_SERVICE_DEFAULT(increase_progress);
-	bool (*town_roads)() noexcept OPENTTD_SERVICE_DEFAULT(town_roads);
 	bool (*freeform)() noexcept OPENTTD_SERVICE_DEFAULT(freeform);
 	void (*count_land)() noexcept OPENTTD_SERVICE_DEFAULT(count_land);
 	OpenTTDWorldLandscape (*landscape_begin)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(landscape_begin);

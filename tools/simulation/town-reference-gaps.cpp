@@ -182,11 +182,11 @@ static bool Candidate()
 	leaves.map_log_x = Read_map_log_x; leaves.road_info = Read_road_info;
 	leaves.resolve_owner = ResolveOwner;
 	auto house_services = *leaves.houses;
-	house_services.town_shell = ResolveShell;
 	leaves.houses = &house_services;
 	leaves.stations = Stations; leaves.build_tunnel = BuildTunnel;
 	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, Random, Industry);
 	AutoRestoreBackup<decltype(GetRustClockState().calendar_date)> calendar_date_scope(GetRustClockState().calendar_date, decltype(GetRustClockState().calendar_date){0});
+	services.town_by_id = [](uint32_t id) noexcept { return reinterpret_cast<OpenTTDTownHandle *>(ResolveShell(id)); };
 	services.tile_type = Read_tile_type; services.tile_valid = Read_tile_valid;
 	services.tile_slope = Read_tile_slope; services.tile_z = Read_tile_z; services.road_bits = Read_road_bits;
 	services.tunnel_transport = [](uint32_t id) noexcept { return uint8_t(GetTunnelBridgeTransportType(id)); };
@@ -352,7 +352,18 @@ static void CompareAuthority()
 	OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(nullptr, Random, Industry);
 	shared.current_company = +[]() noexcept { return _current_company; };
 	shared.company_valid = +[](uint8_t id) noexcept { return Company::IsValidID(id); };
-	shared.closest_town = +[](uint32_t tile, uint32_t threshold) noexcept { return reinterpret_cast<const OpenTTDTownHandle *>(ClosestTownFromTile(tile, threshold)); };
+	static const OpenTTDMovementServices movement = [] {
+		auto m = OpenTTDMovementServices{};
+		m.tile_types = []() noexcept -> OpenTTDTileTypeAllocation { return {}; };
+		m.native_assert = [](bool ok) noexcept { assert(ok); };
+		return m;
+	}();
+	shared.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
+	shared.tile_type = +[](uint32_t tile) noexcept -> uint8_t { assert(tile == 129); authority_closest_calls++; return authority_town == nullptr ? 0 : MP_HOUSE; };
+	shared.map_log_x = +[]() noexcept -> uint32_t { return 6; };
+	shared.town_count = +[]() noexcept -> size_t { return 0; };
+	shared.town_index = +[](uint32_t) noexcept -> uint16_t { return 17; };
+	shared.town_by_id = +[](uint32_t) noexcept { return reinterpret_cast<OpenTTDTownHandle *>(authority_town); };
 	shared.town_owner = +[](const OpenTTDTownHandle *) noexcept { return authority_owner; };
 	const OpenTTDTownAuthorityServices a{
 		.council_tolerance = +[]() noexcept { return _settings_game.difficulty.town_council_tolerance; },
