@@ -14,6 +14,7 @@
 #include "../cargomonitor.h"
 #include "../command_func.h"
 #include "../company_base.h"
+#include "station_lifecycle_ffi.h"
 #include "../company_cmd.h"
 #include "../company_func.h"
 #include "../company_gui.h"
@@ -172,7 +173,6 @@ static int64_t Co_signal_maintenance_cost(uint32_t num) noexcept { return Signal
 static int64_t Co_road_maintenance_cost(uint8_t rt, uint32_t num, uint32_t total) noexcept { return RoadMaintenanceCost(static_cast<RoadType>(rt), num, total).base(); }
 static int64_t Co_canal_maintenance_cost(uint32_t num) noexcept { return CanalMaintenanceCost(num).base(); }
 static int64_t Co_station_maintenance_cost(uint32_t num) noexcept { return StationMaintenanceCost(num).base(); }
-static int64_t Co_airport_maintenance_cost(uint8_t id) noexcept { return AirportMaintenanceCost(CompanyID(id)).base(); }
 static void Co_recession_news(bool begin) noexcept
 {
 	AddNewsItem(GetEncodedString(begin ? STR_NEWS_BEGIN_OF_RECESSION : STR_NEWS_END_OF_RECESSION), NewsType::Economy, NewsStyle::Normal, {});
@@ -418,7 +418,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.company_infrastructure = Co_company_infrastructure,
 		.rail_maintenance_cost = Co_rail_maintenance_cost, .signal_maintenance_cost = Co_signal_maintenance_cost,
 		.road_maintenance_cost = Co_road_maintenance_cost, .canal_maintenance_cost = Co_canal_maintenance_cost,
-		.station_maintenance_cost = Co_station_maintenance_cost, .airport_maintenance_cost = Co_airport_maintenance_cost,
+		.station_maintenance_cost = Co_station_maintenance_cost, .station_lifecycle = RustStationLifecycleServices,
 		.recession_news = Co_recession_news, .price_base = Co_price_base,
 		.cargo_next = Co_cargo_next, .set_cargo_payment = RustCargoSetCurrentPayment,
 		.price_windows_dirty = Co_price_windows_dirty, .industry_daily_changes = Co_industry_daily_changes,

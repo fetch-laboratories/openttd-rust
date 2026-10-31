@@ -824,7 +824,13 @@ impl<'a> World<'a> {
             }
             for dy in -3..3 {
                 for dx in -3..3 {
-                    let tile = (self.shared.tile_add_wrap)(self.tile(v), dx, dy);
+                    let tile = self.map().tile_add_wrap(
+                        self.tile(v),
+                        dx,
+                        dy,
+                        self.size_y(),
+                        (unsafe { &*self.s.environment }.freeform_edges)(),
+                    );
                     if tile != INVALID_TILE {
                         self.clear(tile);
                     }

@@ -49,6 +49,7 @@
 #ifdef WITH_RUST
 #include "rust/ffi.h"
 #include "rust/landscape_loop_ffi.h"
+#include "rust/station_lifecycle_ffi.h"
 #include "rust/services_object.h"
 #include "rust/tile_owner_services.h"
 #include "rust/road_command_services.h"
@@ -954,7 +955,7 @@ OpenTTDLandscapeLoopServices RustLandscapeLoopServices(OpenTTDGroundCall *call, 
 		.industry = GetRustIndustryLoopServices(),
 		.ground = {.clear = &GetRustClearServices(), .rail = &GetRustRailGroundServices(), .road = &GetRustRoadGroundServices(), .road_command = road, .tunnel = &GetRustTunnelGroundServices(), .water = &GetRustWaterGroundServices(), .costs = &GetRustGroundCostServices(), .call = call, .climate = OpenTTDLandscape(), .editor = OpenTTDEditor(), .rebuild = _settings_game.economy.mod_road_rebuild},
 		.town = &GetRustTownServices(),
-		.station_loop = _tile_type_station_procs.tile_loop_proc,
+		.station = &GetRustStationLifecycleServices(),
 		.objects = &GetRustObjectServices(),
 	};
 }
@@ -1987,7 +1988,6 @@ void CallLandscapeTick()
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDLandscapeGenerationServices.hpp"
 #include "abi-visit-OpenTTDHeightmapInput.hpp"
-#include "abi-visit-OpenTTDLandscapeLoopServices.hpp"
 #include "abi-visit-OpenTTDMovementServices.hpp"
 #include "abi-visit-OpenTTDTileOwnerServices.hpp"
 #include "abi-visit-OpenTTDClearServices.hpp"
@@ -1998,11 +1998,9 @@ void CallLandscapeTick()
 #include "abi-visit-OpenTTDGroundCostServices.hpp"
 bool CheckAbi_landscape()
 {
-	OpenTTDGroundCall call;
-	RustRoadCommandContext road;
 	RustHeightmapInput heightmap;
 	return AbiServicesComplete(GetRustLandscapeGenerationServices()) && AbiServicesComplete(heightmap.view) &&
-		AbiServicesComplete(GetRustTileOwnerServices()) && AbiServicesComplete(RustLandscapeLoopServices(&call, &road.view)) &&
+		AbiServicesComplete(GetRustTileOwnerServices()) &&
 		AbiServicesComplete(GetRustClearServices()) && AbiServicesComplete(GetRustRailGroundServices()) &&
 		AbiServicesComplete(GetRustRoadGroundServices()) && AbiServicesComplete(GetRustTunnelGroundServices()) &&
 		AbiServicesComplete(GetRustWaterGroundServices()) && AbiServicesComplete(GetRustGroundCostServices()) &&

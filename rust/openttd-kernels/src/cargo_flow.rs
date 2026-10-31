@@ -313,7 +313,7 @@ impl FlowMap {
             }
         }
     }
-    fn deleted(&mut self, via: u16) -> Vec<u16> {
+    pub(crate) fn deleted(&mut self, via: u16) -> Vec<u16> {
         let mut ret = Vec::new();
         for (&origin, &ptr) in &self.entries {
             let flow = unsafe { &mut *ptr };

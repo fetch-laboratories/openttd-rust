@@ -237,4 +237,10 @@ inline uint8_t RustStationWaitingTriggers(TStation *st) noexcept { return st->wa
 inline void RustStationSetWaitingTriggers(BaseStation *station, uint8_t triggers) noexcept { station->waiting_random_triggers = StationRandomTriggers(triggers); }
 inline void RustStationSetRandomBits(BaseStation *station, uint16_t bits) noexcept { station->random_bits = bits; }
 inline uint64_t RustStationCachedCargoTriggers(BaseStation *station) noexcept { return station->cached_cargo_triggers; }
+inline bool RustStationSignValid(BaseStation *st) noexcept { return st->sign.kdtree_valid; }
+inline void RustStationListClassesInvalidate() noexcept { InvalidateWindowClassesData(WC_STATION_LIST, 0); }
+inline uint8_t RustStationIndustryType(BaseStation *st) noexcept { return Station::From(st)->indtype; }
+inline void RustStationSetIndustryType(BaseStation *st, uint8_t type) noexcept { Station::From(st)->indtype = type; }
+inline uint16_t RustAirportSpecMaintenance(const AirportSpec *spec) noexcept { return spec->maintenance_cost; }
+inline const GoodsEntry *RustStationGoodsEntry(BaseStation *st, uint8_t cargo) noexcept { return &Station::From(st)->goods[cargo]; }
 #endif /* RUST_SERVICES_STATION_H */

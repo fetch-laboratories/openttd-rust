@@ -31,7 +31,14 @@
 #include "table/strings.h"
 #ifdef WITH_RUST
 #include "rust/services_station.h"
+#include "rust/station_lifecycle_ffi.h"
+#include "rust/roadstop_resolver_ffi.h"
+#include "rust/station_command_ffi.h"
+#include "rust/services_assert.h"
+#include "rust/services_cargo.h"
+#include "rust/orders_ffi.h"
 #include "rust/services_industry.h"
+#include "rust/industry_ffi.h"
 #include "rust/industry_shell_services.h"
 #include "rust/settings_services.h"
 #include "rust/airport_resolver_ffi.h"
@@ -95,6 +102,9 @@ Station::Station(TileIndex tile) :
  */
 Station::~Station()
 {
+#ifdef WITH_RUST
+	openttd_rust_station_destruct(&GetRustStationLifecycleServices(), this);
+#else
 	if (CleaningPool()) {
 		for (GoodsEntry &ge : this->goods) {
 			if (!ge.HasData()) continue;
@@ -107,14 +117,10 @@ Station::~Station()
 		this->loading_vehicles.front()->LeaveStation();
 	}
 
-#ifdef WITH_RUST
-	InvalidateAircraftTargetStation(this->index);
-#else
 	for (Aircraft *a : Aircraft::Iterate()) {
 		if (!a->IsNormalAircraft()) continue;
 		if (a->targetairport == this->index) a->targetairport = StationID::Invalid();
 	}
-#endif
 
 	for (CargoType cargo = 0; cargo < NUM_CARGO; ++cargo) {
 		LinkGraph *lg = LinkGraph::GetIfValid(this->goods[cargo].link_graph);
@@ -176,6 +182,7 @@ Station::~Station()
 
 	_station_kdtree.Remove(this->index);
 	if (this->sign.kdtree_valid) _viewport_sign_kdtree.Remove(ViewportSignKdtreeItem::MakeStation(this->index));
+#endif
 }
 
 
@@ -243,6 +250,7 @@ RoadStop *Station::GetPrimaryRoadStop(const RoadVehicle *v) const
  * Called when new facility is built on the station. If it is the first facility
  * it initializes also 'xy' and 'random_bits' members
  */
+#ifndef WITH_RUST
 void Station::AddFacility(StationFacility new_facility_bit, TileIndex facil_xy)
 {
 	if (this->facilities.None()) {
@@ -254,6 +262,7 @@ void Station::AddFacility(StationFacility new_facility_bit, TileIndex facil_xy)
 	this->build_date = TimerGameCalendar::date;
 	SetWindowClassesDirty(WC_VEHICLE_ORDERS);
 }
+#endif
 
 /**
  * Marks the tiles of the station as dirty.
@@ -804,6 +813,9 @@ StationRect& StationRect::operator = (const Rect &src)
  */
 Money AirportMaintenanceCost(Owner owner)
 {
+#ifdef WITH_RUST
+	return Money(openttd_rust_station_airport_maintenance(&GetRustStationLifecycleServices(), owner.base()));
+#else
 	Money total_cost = 0;
 
 	for (const Station *st : Station::Iterate()) {
@@ -813,11 +825,51 @@ Money AirportMaintenanceCost(Owner owner)
 	}
 	/* 3 bits fraction for the maintenance cost factor. */
 	return total_cost >> 3;
+#endif
 }
 
 #ifndef WITH_RUST
 bool StationCompare::operator() (const Station *lhs, const Station *rhs) const
 {
 	return lhs->index < rhs->index;
+}
+#endif
+
+#ifdef WITH_RUST
+const OpenTTDStationLifecycleServices &GetRustStationLifecycleServices() noexcept
+{
+	static_assert(STR_SV_STNAME_FALLBACK - STR_SV_STNAME <= 256);
+	static const OpenTTDStationLifecycleServices services{
+		.shared = &GetRustSharedServices(),
+		.catchment = &GetRustStationCatchmentServices(),
+		.names = {
+			.base = STR_SV_STNAME, .central = STR_SV_STNAME_CENTRAL, .airport = STR_SV_STNAME_AIRPORT,
+			.oilfield = STR_SV_STNAME_OILFIELD, .docks = STR_SV_STNAME_DOCKS, .heliport = STR_SV_STNAME_HELIPORT,
+			.mines = STR_SV_STNAME_MINES, .lakeside = STR_SV_STNAME_LAKESIDE, .woods = STR_SV_STNAME_WOODS,
+			.forest = STR_SV_STNAME_FOREST, .valley = STR_SV_STNAME_VALLEY, .heights = STR_SV_STNAME_HEIGHTS,
+			.north = STR_SV_STNAME_NORTH, .south = STR_SV_STNAME_SOUTH, .east = STR_SV_STNAME_EAST, .west = STR_SV_STNAME_WEST,
+			.transfer = STR_SV_STNAME_TRANSFER, .halt = STR_SV_STNAME_HALT, .exchange = STR_SV_STNAME_EXCHANGE,
+			.annexe = STR_SV_STNAME_ANNEXE, .sidings = STR_SV_STNAME_SIDINGS, .branch = STR_SV_STNAME_BRANCH,
+			.upper = STR_SV_STNAME_UPPER, .lower = STR_SV_STNAME_LOWER, .fallback = STR_SV_STNAME_FALLBACK,
+			.undefined = STR_UNDEFINED, .null = STR_NULL,
+		},
+		.industry_type = RustStationIndustryType,
+		.set_industry_type = RustStationSetIndustryType,
+		.industry_generation = &GetIndustryGenerationServices(),
+		.spec_name = RustIndustrySpecStationName,
+		.spec_life = RustIndustrySpecLife,
+		.forest = [](uint32_t tile) noexcept { return IsTileForestIndustry(TileIndex{tile}); },
+		.roadstop = &GetRoadStopResolverServices(),
+		.cleaning_pool = []() noexcept { return Station::CleaningPool(); },
+		.close_view = [](uint16_t id) noexcept { CloseWindowById(WC_STATION_VIEW, StationID{id}); },
+		.delete_news = [](uint16_t id) noexcept { DeleteStationNews(StationID{id}); },
+		.remove_index = [](uint16_t id) noexcept { _station_kdtree.Remove(StationID{id}); },
+		.sign_valid = RustStationSignValid,
+		.remove_sign = [](uint16_t id) noexcept { _viewport_sign_kdtree.Remove(ViewportSignKdtreeItem::MakeStation(StationID{id})); },
+		.last_loading = RustVehicleLastLoadingStation,
+		.airport_maintenance = RustAirportSpecMaintenance,
+		.maintenance_price = PR_INFRASTRUCTURE_AIRPORT,
+	};
+	return services;
 }
 #endif

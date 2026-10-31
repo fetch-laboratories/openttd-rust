@@ -274,7 +274,7 @@ impl World<'_> {
                 } else {
                     self.map.tile_xy(row, col)
                 };
-                if (!freeform && (self.s.distance_from_edge)(tile) <= 1)
+                if (!freeform && self.map.distance_from_edge(tile, self.size_y) <= 1)
                     || row < row_pad
                     || row >= height - row_pad - u32::from(!freeform)
                     || col < col_pad
@@ -603,10 +603,13 @@ impl World<'_> {
         if g.climate == TROPIC && (self.s.tropic_zone)(tile) != TROPICZONE_RAINFOREST {
             return false;
         }
+        let freeform = (unsafe { &*self.a.water_commands }
+            .environment
+            .freeform_edges)();
         let mut count = 0;
         for dx in -1..=1 {
             for dy in -1..=1 {
-                let other = (self.s.tile_add_wrap)(tile, dx, dy);
+                let other = self.map.tile_add_wrap(tile, dx, dy, self.size_y, freeform);
                 if other != INVALID_TILE && (self.s.tile_max_z)(other) > flat.height {
                     count += 1;
                 }
@@ -617,7 +620,7 @@ impl World<'_> {
         }
         for dx in -16..=16 {
             for dy in -16..=16 {
-                let other = (self.s.tile_add_wrap)(tile, dx, dy);
+                let other = self.map.tile_add_wrap(tile, dx, dy, self.size_y, freeform);
                 if other != INVALID_TILE && (self.s.tile_max_z)(other) > flat.height + 2 {
                     return false;
                 }
@@ -741,7 +744,7 @@ impl World<'_> {
         {
             return false;
         }
-        if (self.s.distance_from_edge)(tile) <= 1 {
+        if self.map.distance_from_edge(tile, self.size_y) <= 1 {
             w::hit(w::GENERATION_SEA_EDGE);
             return true;
         }

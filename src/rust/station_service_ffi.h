@@ -153,6 +153,9 @@ struct OpenTTDStationEdge {
 	OpenTTDBaseStation *destination;
 	uint32_t distance;
 };
+struct GoodsEntry;
+struct OpenTTDStationResolverServices;
+struct OpenTTDVehicleResolverServices;
 struct OpenTTDStationLinks {
 	const OpenTTDLiveGraphServices *graphs;
 	bool (*automatic_distribution)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(automatic_distribution);
@@ -169,7 +172,9 @@ struct OpenTTDStationLinks {
 	bool (*stopped_in_depot)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(stopped_in_depot);
 	int32_t (*last_service)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(last_service);
 	uint8_t (*cargo_type)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_type);
-	void (*reroute)(OpenTTDBaseStation *, OpenTTDVehicle *, uint8_t, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(reroute);
+	const GoodsEntry *(*goods_entry)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(goods_entry);
+	const OpenTTDStationResolverServices *station_resolver;
+	const OpenTTDVehicleResolverServices *vehicle_resolver;
 };
 
 struct OpenTTDStationLoading {
