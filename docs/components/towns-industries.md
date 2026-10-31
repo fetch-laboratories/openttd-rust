@@ -21,7 +21,7 @@
 ## Town founding, generation and names
 
 - Rust owns: custom-name bytes, founding, placement/coastal/grid search, initial growth, generation counts/retries, layout, rename and name uniqueness.
-- C++ keeps: map/pool shells, house specs, rendering/NewGRF resolvers, spatial/noise/news services, save decoding and presentation name cache.
+- C++ keeps: map/pool shells, house specs, rendering/NewGRF resolvers, noise/news services, save decoding and presentation name cache.
 - Checks: `python3 tools/migration.py simulate town-founding- --jobs 2`; module-owned adapters compare cancellation, full-width count clamps/RNG and otherwise unreachable name bytes.
 - Limits: Gaps remain in real NewGRFs, historical saves, GUI threading or the final 10,000-attempt fallback (#156). House lifecycle is #256.
 - PRs: #258.
@@ -87,6 +87,14 @@
 - Checks: default `subsidies-control` and `subsidies-reload`; console adapter compiling unchanged reference monthly lambda.
 - Limits: Gaps remain in external NewGRF programs, legacy conversion fixtures, and threaded GUI/presentation (#156).
 - PRs: #346.
+
+## Town spatial index and remaining policy (#600)
+
+- Rust owns: the simulation town k-d tree and its insertion, deletion, rebuild and nearest lookups; random-town selection; road-type availability; monthly maximum passenger/mail production; climate masks; cargo-effect selection; house removal costs; the radius, acceptance and supplied-history facades.
+- The shared Rust index preserves uint16 coordinates, signed int Manhattan distances, strict splits, the original rebuild threshold and lower-ID nearest ties. Queries allocate nothing. Native and Rust median selection can arrange equal coordinates differently; town nearest results do not depend on that arrangement. Rectangle traversal is node/left/right and remains unused until #602 audits its consumers.
+- C++ keeps: town pool shells and their coupled constructors/destructors, viewport signs and the local-authority presentation index, error formatting, cargo scaling and map/pool access. The shared native k-d template remains compiled for GUI users.
+- Limits: Arbitrary NewGRF road availability/error combinations, historical saves and GUI/game-thread integration remain outside the default corpus (#156).
+- PRs: #608.
 
 ## NewGRF town names and Action 0F (#585)
 

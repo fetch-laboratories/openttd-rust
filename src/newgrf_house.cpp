@@ -80,7 +80,6 @@ const OpenTTDHouseResolverServices &GetHouseResolverServices() noexcept
 		.nearby_spec = HouseNearbySpec,
 		.file_identity = [](uint16_t house) noexcept -> OpenTTDHouseFileIdentity { const auto *spec = RustHouseSpec(house); return {.grfid = RustSpecGRFID(spec), .has_file = RustSpecHasGRFFile(spec)}; },
 		.badges = RustHouseBadges,
-		.town_by_id = OpenTTDTownShellByID,
 		.root = RustHouseSpriteGroup,
 		.spec_house = [](const HouseSpec *spec) noexcept -> uint16_t { return spec - HouseSpec::Get(0); },
 		.local_id = RustHouseLocalID,

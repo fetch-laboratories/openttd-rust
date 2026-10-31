@@ -73,7 +73,6 @@ struct OpenTTDRoadStopResolverServices {
 	uint8_t (*tile_random)(const BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_random);
 	Town * (*town)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(town);
 	uint32_t (*town_tile)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_tile);
-	HouseZone (*town_zone)(const Town *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_zone);
 	uint8_t (*version)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(version);
 	uint8_t (*waiting)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(waiting);
 };

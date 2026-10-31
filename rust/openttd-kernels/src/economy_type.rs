@@ -66,3 +66,6 @@ pub const ROAD_STOP_TRACKBIT_FACTOR: u32 = 2;
 pub const PR_END: u8 = 71;
 /// `INVALID_PRICE`.
 pub const INVALID_PRICE: u8 = 255;
+
+/// `PR_CLEAR_HOUSE`.
+pub const PR_CLEAR_HOUSE: usize = 40;

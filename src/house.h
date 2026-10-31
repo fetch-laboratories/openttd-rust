@@ -126,7 +126,6 @@ struct HouseSpec {
 	CargoLabel accepts_cargo_label[HOUSE_ORIGINAL_NUM_ACCEPTS]; ///< input landscape cargo slots
 
 	HouseID Index() const;
-	Money GetRemovalCost() const;
 
 	static std::vector<HouseSpec> &Specs();
 	static HouseSpec *Get(size_t house_id);
