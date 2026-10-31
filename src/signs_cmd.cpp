@@ -19,9 +19,9 @@
 #include "string_func.h"
 #include "signs_cmd.h"
 #ifdef WITH_RUST
-#include "rust/signs_ffi.h"
 #include "rust/command_cost_services.h"
 #include "rust/services_ffi.h"
+#include "rust/signs_ffi.h"
 #endif
 
 #include "table/strings.h"
@@ -33,12 +33,9 @@ static_assert(MAX_LENGTH_SIGN_NAME_CHARS == 32);
 
 static std::string_view RustText(OpenTTDByteSpan text) noexcept { return {reinterpret_cast<const char *>(text.data), text.size}; }
 
-static uint16_t RustSignPlace(uint8_t owner, uint32_t tile, OpenTTDByteSpan text) noexcept
+static uint16_t RustSignPlace(uint8_t owner, int32_t x, int32_t y, int32_t z, OpenTTDByteSpan text) noexcept
 {
-	int x = TileX(TileIndex{tile}) * TILE_SIZE;
-	int y = TileY(TileIndex{tile}) * TILE_SIZE;
-
-	Sign *si = new Sign(CompanyID(owner), x, y, GetSlopePixelZ(x, y), std::string{RustText(text)});
+	Sign *si = new Sign(CompanyID(owner), x, y, z, std::string{RustText(text)});
 
 	si->UpdateVirtCoord();
 	InvalidateWindowData(WC_SIGN_LIST, 0, 0);
@@ -54,14 +51,11 @@ static void RustSignRename(Sign *si, uint8_t owner, OpenTTDByteSpan text) noexce
 	InvalidateWindowData(WC_SIGN_LIST, 0, 1);
 }
 
-static void RustSignRelocate(Sign *si, uint8_t owner, uint32_t tile) noexcept
+static void RustSignRelocate(Sign *si, uint8_t owner, int32_t x, int32_t y, int32_t z) noexcept
 {
-	int x = TileX(TileIndex{tile}) * TILE_SIZE;
-	int y = TileY(TileIndex{tile}) * TILE_SIZE;
-
 	si->x = x;
 	si->y = y;
-	si->z = GetSlopePixelZ(x, y);
+	si->z = z;
 	si->owner = CompanyID(owner);
 
 	si->UpdateVirtCoord();

@@ -10,6 +10,7 @@ use crate::openttd::GameMode;
 use crate::services::{ByteSpan, CommandCost, CommandCostServices, Cost, Services as Shared};
 use crate::signs_type::{MAX_LENGTH_SIGN_NAME_CHARS, Sign, SignID};
 use crate::strings_type::INVALID_STRING_ID;
+use crate::tile_type::TILE_SIZE;
 
 #[repr(C)]
 pub struct Services {
@@ -20,12 +21,12 @@ pub struct Services {
     pub owner: unsafe extern "C" fn(*const Sign) -> Owner,
     /// `Sign::CanAllocateItem`.
     pub can_allocate: extern "C" fn() -> bool,
-    /// Construct at the tile's pixel position and height, present it and refresh the list.
-    pub place: extern "C" fn(Owner, u32, ByteSpan) -> SignID,
+    /// Construct at the pixel position and height, present it and refresh the list.
+    pub place: extern "C" fn(Owner, i32, i32, i32, ByteSpan) -> SignID,
     /// Assign the name and owner, then present the sign.
     pub rename: unsafe extern "C" fn(*mut Sign, Owner, ByteSpan),
-    /// Assign the tile's pixel position, height and the owner, then present the sign.
-    pub relocate: unsafe extern "C" fn(*mut Sign, Owner, u32),
+    /// Assign the pixel position, height and the owner, then present the sign.
+    pub relocate: unsafe extern "C" fn(*mut Sign, Owner, i32, i32, i32),
     /// Unmark, remove from the viewport index, delete and refresh the list.
     pub remove: unsafe extern "C" fn(*mut Sign),
     pub too_many_signs: u32,
@@ -69,7 +70,11 @@ fn place(s: &Services, out: Cost<'_>, flags: u16, tile: u32, text: ByteSpan) -> 
         } else {
             CompanyID((s.shared.current_company)())
         };
-        return (s.place)(owner, tile, text);
+        let map = s.shared.map();
+        let x = map.tile_x(tile).wrapping_mul(TILE_SIZE).cast_signed();
+        let y = map.tile_y(tile).wrapping_mul(TILE_SIZE).cast_signed();
+        let z = crate::movement::pixel_z(s.shared, x, y, false);
+        return (s.place)(owner, x, y, z, text);
     }
     SignID::INVALID
 }
@@ -100,7 +105,11 @@ fn rename(s: &Services, out: Cost<'_>, flags: u16, id: SignID, text: ByteSpan) {
 fn relocate(s: &Services, out: Cost<'_>, flags: u16, id: SignID, tile: u32) {
     let si = editable(s, out, id);
     if !si.is_null() && flags & DoCommandFlag::EXECUTE != 0 {
-        unsafe { (s.relocate)(si, new_owner(s, si), tile) };
+        let map = s.shared.map();
+        let x = map.tile_x(tile).wrapping_mul(TILE_SIZE).cast_signed();
+        let y = map.tile_y(tile).wrapping_mul(TILE_SIZE).cast_signed();
+        let z = crate::movement::pixel_z(s.shared, x, y, false);
+        unsafe { (s.relocate)(si, new_owner(s, si), x, y, z) };
     }
 }
 

@@ -18,9 +18,9 @@
 #include "window_func.h"
 #include "depot_cmd.h"
 #ifdef WITH_RUST
-#include "rust/depot_ffi.h"
 #include "rust/command_cost_services.h"
 #include "rust/command_services_ffi.h"
+#include "rust/depot_ffi.h"
 #include "rust/rail_command_ffi.h"
 #include "rust/services_ffi.h"
 #endif
@@ -40,7 +40,7 @@ static void RustDepotRenamed(Depot *d) noexcept
 
 	/* Update the depot list */
 	VehicleType vt = GetDepotVehicleType(d->xy);
-	SetWindowDirty(GetWindowClassForVehicleType(vt), VehicleListIdentifier(VL_DEPOT_LIST, vt, GetTileOwner(d->xy), d->index).ToWindowNumber());
+	SetWindowDirty(GetWindowClassForVehicleType(vt), VehicleListIdentifier(VL_DEPOT_LIST, vt, CompanyID(GetRustSharedServices().tile_owner(d->xy.base())), d->index).ToWindowNumber());
 }
 
 static const OpenTTDDepotServices &GetRustDepotServices() noexcept

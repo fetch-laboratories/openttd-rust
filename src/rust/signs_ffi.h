@@ -14,9 +14,9 @@ struct OpenTTDSignServices {
 	Sign *(*sign)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(sign);
 	uint8_t (*owner)(const Sign *) noexcept OPENTTD_SERVICE_DEFAULT(owner);
 	bool (*can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
-	uint16_t (*place)(uint8_t, uint32_t, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(place);
+	uint16_t (*place)(uint8_t, int32_t, int32_t, int32_t, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(place);
 	void (*rename)(Sign *, uint8_t, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(rename);
-	void (*relocate)(Sign *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(relocate);
+	void (*relocate)(Sign *, uint8_t, int32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(relocate);
 	void (*remove)(Sign *) noexcept OPENTTD_SERVICE_DEFAULT(remove);
 	uint32_t too_many_signs;
 };
