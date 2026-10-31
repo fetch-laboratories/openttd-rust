@@ -6,6 +6,7 @@
 //! through an entry-local `World` that ends before any presentation call.
 #![allow(unsafe_code)]
 use crate::command_type::DoCommandFlag;
+use crate::company_type::CompanyID;
 use crate::map_func::{Map, World};
 use crate::openttd::GameMode;
 use crate::order_func::{
@@ -24,7 +25,7 @@ use crate::timer_game_calendar::{
     DEF_MINUTES_PER_YEAR, FROZEN_MINUTES_PER_YEAR, MAX_MINUTES_PER_YEAR,
 };
 use crate::vehicle::VehicleRef;
-use crate::vehicle_type::{AM_ORIGINAL, VEH_AIRCRAFT, VEH_ROAD, VEH_SHIP, VEH_TRAIN};
+use crate::vehicle_type::{AM_ORIGINAL, VEH_AIRCRAFT, VEH_ROAD, VEH_SHIP, VEH_TRAIN, VehicleID};
 use crate::window_type::{
     WC_BUILD_VEHICLE, WC_ENGINE_PREVIEW, WC_GAME_OPTIONS, WC_TOWN_VIEW, WC_VEHICLE_DETAILS,
 };
@@ -69,9 +70,9 @@ pub struct Services {
     /// `&_settings_client.company.vehicle`.
     pub client_vehicle_defaults: extern "C" fn() -> *mut VehicleDefaults,
     /// `&Company::Get(c)->settings.vehicle`.
-    pub company_vehicle_defaults: extern "C" fn(u8) -> *mut VehicleDefaults,
-    pub set_service_interval: extern "C" fn(u32, u16),
-    pub set_service_interval_percent: extern "C" fn(u32, bool),
+    pub company_vehicle_defaults: extern "C" fn(CompanyID) -> *mut VehicleDefaults,
+    pub set_service_interval: extern "C" fn(VehicleID, u16),
+    pub set_service_interval_percent: extern "C" fn(VehicleID, bool),
     /// `_settings_newgame.economy.minutes_per_calendar_year`.
     pub newgame_minutes_per_year: extern "C" fn() -> u16,
     /// Store minutes per year in the new-game (true) or current game settings.
@@ -90,7 +91,7 @@ pub struct Services {
     /// `ChangeValue(&GetGameSettings(), value)`.
     pub change_game_setting: extern "C" fn(*const SettingDesc, i32),
     /// `ChangeValue(&Company::Get(c)->settings, value)`.
-    pub change_company_setting: extern "C" fn(*const SettingDesc, u8, i32),
+    pub change_company_setting: extern "C" fn(*const SettingDesc, CompanyID, i32),
     pub window_classes_dirty: extern "C" fn(u16),
     /// `ShowErrorMessage(GetEncodedString(id), {}, WL_ERROR)`.
     pub error_message: extern "C" fn(u32),
@@ -134,12 +135,12 @@ fn menu() -> bool {
 }
 
 /// The original's `vds` choice: client defaults in the menu or without a valid company.
-fn vehicle_defaults(s: &Services) -> (*mut VehicleDefaults, Option<u8>) {
+fn vehicle_defaults(s: &Services) -> (*mut VehicleDefaults, Option<CompanyID>) {
     if menu() {
         return ((s.client_vehicle_defaults)(), None);
     }
-    let company = (s.shared.current_company)();
-    if (s.shared.company_valid)(company) {
+    let company = CompanyID((s.shared.current_company)());
+    if (s.shared.company_valid)(company.0) {
         ((s.company_vehicle_defaults)(company), Some(company))
     } else {
         ((s.client_vehicle_defaults)(), None)
@@ -147,16 +148,16 @@ fn vehicle_defaults(s: &Services) -> (*mut VehicleDefaults, Option<u8>) {
 }
 
 /// `Vehicle::Iterate()` filtered by `owner == company`, yielding index and type.
-fn owned_vehicles(s: &Services, company: u8, mut each: impl FnMut(u32, u8)) {
+fn owned_vehicles(s: &Services, company: CompanyID, mut each: impl FnMut(VehicleID, u8)) {
     let mut from = 0;
     loop {
         let mut kind = 0;
-        let id = (s.company.vehicle_next_owned)(company, from, &raw mut kind);
+        let id = (s.company.vehicle_next_owned)(company.0, from, &raw mut kind);
         if id == u32::MAX {
             break;
         }
         from = id.wrapping_add(1);
-        each(id, kind);
+        each(VehicleID(id), kind);
     }
 }
 
@@ -187,13 +188,13 @@ fn update_all_service_interval(s: &Services, new_value: i32) {
     if let Some(company) = company {
         hit(witness::SETTINGS_SERVICE_DEFAULTS);
         owned_vehicles(s, company, |id, kind| {
-            if (s.company.vehicle_is_primary)(id)
-                && !(s.company.vehicle_service_interval_is_custom)(id)
+            if (s.company.vehicle_is_primary)(id.0)
+                && !(s.company.vehicle_service_interval_is_custom)(id.0)
             {
                 hit(witness::SETTINGS_SERVICE_VEHICLE);
                 // `SetServiceInterval` takes the `int` of `CompanyServiceInterval` as uint16_t.
                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                let interval = (s.transactions.interval_default)(company, kind) as u16;
+                let interval = (s.transactions.interval_default)(company.0, kind) as u16;
                 (s.set_service_interval)(id, interval);
                 (s.set_service_interval_percent)(id, new_value != 0);
             }
@@ -210,12 +211,12 @@ fn can_update_service_interval(s: &Services, new_value: i32) -> bool {
 
 fn update_service_interval(s: &Services, kind: u8, new_value: i32) {
     if !menu() {
-        let company = (s.shared.current_company)();
-        if (s.shared.company_valid)(company) {
+        let company = CompanyID((s.shared.current_company)());
+        if (s.shared.company_valid)(company.0) {
             owned_vehicles(s, company, |id, vehicle_kind| {
                 if vehicle_kind == kind
-                    && (s.company.vehicle_is_primary)(id)
-                    && !(s.company.vehicle_service_interval_is_custom)(id)
+                    && (s.company.vehicle_is_primary)(id.0)
+                    && !(s.company.vehicle_service_interval_is_custom)(id.0)
                 {
                     hit(witness::SETTINGS_SERVICE_TYPE);
                     // `SetServiceInterval(uint16_t)` truncates the setting value.
@@ -616,7 +617,7 @@ fn change_setting(
     if flags & DoCommandFlag::EXECUTE != 0 {
         if company {
             hit(witness::SETTINGS_COMPANY_COMMAND);
-            (s.change_company_setting)(sd, (s.shared.current_company)(), value);
+            (s.change_company_setting)(sd, CompanyID((s.shared.current_company)()), value);
         } else {
             hit(witness::SETTINGS_COMMAND);
             (s.change_game_setting)(sd, value);
