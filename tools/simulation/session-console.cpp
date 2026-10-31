@@ -17,11 +17,16 @@
 #include "newgrf_config.h"
 #include "misc_cmd.h"
 #include "tile_map.h"
+#include "water_map.h"
+#include "vehicle_base.h"
+#include "linkgraph/linkgraph.h"
 #include "network/network.h"
 #include "genworld.h"
 #include "script/script_fatalerror.hpp"
 #include "command_func.h"
 #include "settings_cmd.h"
+#include "settings_func.h"
+#include "settings_internal.h"
 #include "settings_type.h"
 #include "order_func.h"
 #include "vehicle_type.h"
@@ -102,9 +107,17 @@ static void SessionExceptions()
 	}
 	session_storage = nullptr;
 }
+/** The setting commands, or SetSettingValue's direct client-default write in the menu. */
 static void SessionSetting(std::string_view name, int32_t value)
 {
-	IConsoleCmdExec(fmt::format("setting {} {}", name, value));
+	const std::string setting(name);
+	if (!setting.starts_with("company.")) {
+		Command<CMD_CHANGE_SETTING>::Do(DoCommandFlag::Execute, setting, value);
+	} else if (_game_mode == GM_MENU) {
+		SetSettingValue(GetSettingFromName(setting)->AsIntSetting(), value);
+	} else {
+		Command<CMD_CHANGE_COMPANY_SETTING>::Do(DoCommandFlag::Execute, setting, value);
+	}
 }
 /** Setting transitions in a loaded game with trains, road vehicles, ships, stations and link graphs. */
 static void SessionLiveSettings()
@@ -132,6 +145,7 @@ static void SessionLiveSettings()
 	SessionSetting("construction.freeform_edges", !edges);
 	SessionCheck("settings-edges-live", _settings_game.construction.freeform_edges == edges);
 	const Company *c = Company::Get(_local_company);
+	SessionSetting("company.servint_ispercent", 0);
 	SessionSetting("company.servint_ispercent", 1);
 	SessionCheck("settings-percent", c->settings.vehicle.servint_ispercent && c->settings.vehicle.servint_trains == 50);
 	SessionSetting("company.servint_trains", 40);
@@ -159,10 +173,20 @@ static void SessionEditorSettings()
 	SetTileHeight(TileXY(4, 4), 0);
 	SessionSetting("construction.map_height_limit", 40);
 	SessionCheck("settings-height-editor", construction.map_height_limit == 40);
-	const bool edges = construction.freeform_edges;
-	SessionSetting("construction.freeform_edges", !edges);
-	SessionSetting("construction.freeform_edges", edges);
-	SessionCheck("settings-edges-editor", construction.freeform_edges == edges && IsTileType(TileXY(0, 5), edges ? MP_VOID : MP_WATER));
+	SessionCheck("settings-edges-freeform", construction.freeform_edges);
+	SessionSetting("construction.freeform_edges", 0);
+	SessionCheck("settings-edges-refused", construction.freeform_edges);
+	/* CheckFreeformEdges needs flat inner borders and water along the far edges. */
+	for (uint i = 0; i < Map::MaxX(); i++) SetTileHeight(TileXY(i, 1), 0);
+	for (uint i = 0; i < Map::MaxY(); i++) SetTileHeight(TileXY(1, i), 0);
+	for (uint i = 0; i <= Map::MaxX(); i++) SetTileHeight(TileXY(i, Map::MaxY()), 0);
+	for (uint i = 0; i <= Map::MaxY(); i++) SetTileHeight(TileXY(Map::MaxX(), i), 0);
+	for (uint i = 1; i < Map::MaxX(); i++) { SetTileHeight(TileXY(i, Map::MaxY() - 1), 0); MakeSea(TileXY(i, Map::MaxY() - 1)); }
+	for (uint i = 1; i < Map::MaxY(); i++) { SetTileHeight(TileXY(Map::MaxX() - 1, i), 0); MakeSea(TileXY(Map::MaxX() - 1, i)); }
+	SessionSetting("construction.freeform_edges", 0);
+	SessionCheck("settings-edges-water", !construction.freeform_edges && IsTileType(TileXY(0, 5), MP_WATER) && IsTileType(TileXY(5, 0), MP_WATER));
+	SessionSetting("construction.freeform_edges", 1);
+	SessionCheck("settings-edges-void", construction.freeform_edges && IsTileType(TileXY(0, 5), MP_VOID) && IsTileType(TileXY(5, 0), MP_VOID));
 	SessionSetting("economy.timekeeping_units", TKU_WALLCLOCK);
 	SessionCheck("settings-wallclock-editor", TimerGameEconomy::UsingWallclockUnits() && TimerGameEconomy::year == 1);
 	SessionSetting("economy.minutes_per_calendar_year", 0);
@@ -249,6 +273,10 @@ static bool SessionScenario(std::span<std::string_view> args)
 	_file_to_saveload.SetMode(FIOS_TYPE_SCENARIO, SLO_LOAD); _file_to_saveload.name = folder + "/editor.sav";
 	SwitchToMode(SM_LOAD_SCENARIO); SessionSave(folder, "load-scenario");
 	SwitchToMode(SM_RELOADGAME); SessionSave(folder, "reload-scenario");
+	_file_to_saveload.SetMode(FIOS_TYPE_SCENARIO, SLO_LOAD); _file_to_saveload.name = folder + "/settings-live.sav";
+	SwitchToMode(SM_LOAD_SCENARIO); SessionCheck("settings-editor-records", _game_mode == GM_EDITOR && !Vehicle::Iterate().empty() && !LinkGraph::Iterate().empty());
+	SessionSetting("economy.timekeeping_units", TKU_WALLCLOCK); SessionSave(folder, "settings-editor-wallclock");
+	SessionSetting("economy.timekeeping_units", TKU_CALENDAR); SessionSave(folder, "settings-editor-calendar");
 	SessionCheck("missing-load", !SafeLoad("session-missing.sav", SLO_LOAD, DFT_GAME_FILE, GM_NORMAL, NO_DIRECTORY, nullptr) && _game_mode == GM_EDITOR);
 	SessionSave(folder, "missing-load");
 	SessionCheck("partial-load", !SafeLoad(std::string(std::getenv("HOME")) + "/partial.sav", SLO_LOAD, DFT_GAME_FILE, GM_NORMAL, NO_DIRECTORY, nullptr));

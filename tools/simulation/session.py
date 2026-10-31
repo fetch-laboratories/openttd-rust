@@ -22,6 +22,8 @@ STATES = (
     "restart-heightmap",
     "load-scenario",
     "reload-scenario",
+    "settings-editor-wallclock",
+    "settings-editor-calendar",
     "missing-load",
     "partial-load",
     "play-scenario",
@@ -45,17 +47,22 @@ SETTING_CHECKS = (
     "settings-company-command",
     "settings-height-refused",
     "settings-height-editor",
-    "settings-edges-editor",
+    "settings-edges-freeform",
+    "settings-edges-refused",
+    "settings-edges-water",
+    "settings-edges-void",
     "settings-wallclock-editor",
     "settings-frozen",
     "settings-thawed",
     "settings-calendar-editor",
+    "settings-editor-records",
     "settings-menu-minutes",
     "settings-menu-client",
     "settings-menu-calendar",
 )
 
-# settings.* branches the candidate's captured session must reach.
+# settings.* branches the candidate's captured session must reach. Unreached (#156):
+# edges_occupied (a ship or buoy on the northern border).
 SETTING_WITNESSES = (
     "consists",
     "service_defaults",
@@ -178,7 +185,13 @@ def prepare(
         return scenario
     folder = out / scenario["name"] / "input"
     source, _ = core.normalize(Path(scenario["save"]), folder / "source")
-    scenario = {**scenario, "save": str(source), "partial": str(source)}
+    # Captures run before core sets "witnesses"; a distinct candidate counts branches.
+    scenario = {
+        **scenario,
+        "save": str(source),
+        "partial": str(source),
+        "witnesses": binaries["candidate"] != binaries["reference"],
+    }
     executables = prepared_console("session", adapter, binaries, builds, folder, env)
     captures: dict[str, list[str]] = {}
     saves: dict[str, Path] = {}
