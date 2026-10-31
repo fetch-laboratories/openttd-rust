@@ -117,13 +117,9 @@ impl<'a> Commands<'a> {
         *self.map.get_or_init(|| self.shared.map())
     }
     fn town_owned_road(&self, tile: u32) -> bool {
-        let world = self.world.get_or_init(|| {
-            crate::map_func::World::with_dimensions(
-                self.shared,
-                crate::movement::table(self.shared),
-                self.map(),
-            )
-        });
+        let world = self
+            .world
+            .get_or_init(|| crate::map_func::World::new(self.shared));
         crate::road_map::has_town_owned_road(world, tile)
     }
     fn size_y(&self) -> u32 {
