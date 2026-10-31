@@ -135,55 +135,87 @@ use crate::pbs::Pbs;
 use crate::services::Services;
 use crate::vehicle::{OpenTTDVehicle, VehicleRef};
 
+/// Follower fields the native evidence adapters print and compare after each call.
+#[repr(C)]
+pub struct FollowerOutput {
+    pub followed: bool,
+    pub old_tile: u32,
+    pub new_tile: u32,
+    pub tiles_skipped: i32,
+    pub new_td_bits: u16,
+    pub old_td: u8,
+    pub exitdir: u8,
+    pub is_tunnel: bool,
+    pub is_bridge: bool,
+    pub is_station: bool,
+    pub err: u8,
+}
+fn follower_output(state: &State, followed: bool) -> FollowerOutput {
+    FollowerOutput {
+        followed,
+        old_tile: state.old_tile.0,
+        new_tile: state.new_tile.0,
+        tiles_skipped: state.tiles_skipped,
+        new_td_bits: state.new_td_bits,
+        old_td: state.old_td,
+        exitdir: state.exitdir,
+        is_tunnel: state.is_tunnel,
+        is_bridge: state.is_bridge,
+        is_station: state.is_station,
+        err: state.err,
+    }
+}
+/// A boxed production follower; `openttd_test_follower_delete` frees it.
 /// # Safety
-/// The output is writable; services and optional native vehicle remain live and serialized.
+/// Services and optional native vehicle remain live and serialized.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_test_follower_init(
-    out: *mut State,
+pub unsafe extern "C" fn openttd_test_follower_new(
     s: *const Services,
     mode: u8,
     v: *mut OpenTTDVehicle,
     owner: u8,
     types: u64,
     allow90: bool,
-    masking: bool,
     from_vehicle: bool,
-) {
+) -> *mut State {
     let s = unsafe { &*s };
     let v = std::ptr::NonNull::new(v).map(VehicleRef);
-    let state = if from_vehicle {
-        State::vehicle(s, mode, v, types, allow90, masking)
+    Box::into_raw(Box::new(if from_vehicle {
+        State::vehicle(s, mode, v, types, allow90)
     } else {
-        State::new(s, mode, v, owner, types, allow90, masking)
-    };
-    unsafe {
-        out.write(state);
-    }
+        State::new(s, mode, v, owner, types, allow90)
+    }))
 }
 /// # Safety
-/// The stack follower and shared game world remain live and serialized throughout the call.
+/// `state` came from `openttd_test_follower_new` and is not used afterwards.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_follower_delete(state: *mut State) {
+    drop(unsafe { Box::from_raw(state) });
+}
+/// # Safety
+/// The follower and shared game world remain live and serialized throughout the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_follower_follow(
     s: *const Services,
     state: *mut State,
     tile: u32,
     td: u8,
-) -> bool {
-    unsafe { (&mut *state).follow(&*s, tile, td) }
-}
-/// # Safety
-/// Same stack follower and serialized world contract as Follow.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_test_follower_mask(s: *const Services, state: *mut State) -> bool {
-    let s = unsafe { &*s };
+) -> FollowerOutput {
     let state = unsafe { &mut *state };
-    if !state.masking {
-        return true;
-    }
-    let mut out = state.output();
-    let result = mask_reserved_tracks(Pbs::acquire(s), &mut out);
-    state.restore(out);
-    result
+    let followed = state.follow(unsafe { &*s }, tile, td);
+    follower_output(state, followed)
+}
+/// The production `MaskReservedTracks` step after a successful follow.
+/// # Safety
+/// Same follower and serialized world contract as Follow.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_follower_mask(
+    s: *const Services,
+    state: *mut State,
+) -> FollowerOutput {
+    let state = unsafe { &mut *state };
+    let masked = mask_reserved_tracks(Pbs::acquire(unsafe { &*s }), state);
+    follower_output(state, masked)
 }
 /// # Safety
 /// Shared services and optional vehicle stay live under the game-state mutex.

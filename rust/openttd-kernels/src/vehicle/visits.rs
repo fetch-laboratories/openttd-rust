@@ -31,7 +31,6 @@ use crate::{
     orders::VisitOrders,
     services::{CommandCost, Services as SharedServices},
     station::{BaseStation, Station},
-    station_map::is_station_road_stop_tile,
     station_service::{Links, Loading, Scope, World, has_rating, prepare_unload, scope_context},
     station_type::INVALID_STATION,
     tile_type::MP_STATION,
@@ -918,7 +917,7 @@ pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
     if kind == VehicleType::ROAD && (s.vehicles().status)(v) & VS_CRASHED == 0 {
         // Trigger road stop animation.
         let tile = (s.vehicles().tile)(v);
-        if is_station_road_stop_tile(s.shared, tile) {
+        if crate::map_func::World::new(s.shared).station_road_stop(tile) {
             crate::animated_tile::road_event(
                 st.base,
                 tile,

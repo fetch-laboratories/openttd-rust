@@ -26,8 +26,6 @@ struct OpenTTDPbsServices {
 	void (*set_wormhole)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_wormhole);
 	bool (*try_track)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(try_track);
 	void (*unreserve_track)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unreserve_track);
-	bool (*station_reserved)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_reserved);
-	bool (*compatible_station)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(compatible_station);
 	bool (*show_reservation)() noexcept OPENTTD_SERVICE_DEFAULT(show_reservation);
 	void (*assert_platform)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assert_platform);
 	BaseStation * (*station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
@@ -39,7 +37,6 @@ struct OpenTTDPbsServices {
 	OpenTTDTrainHandle (*handle)(const Train *) noexcept OPENTTD_SERVICE_DEFAULT(handle);
 	uint64_t (*all_compatible)(uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(all_compatible);
 	uint64_t (*compatible)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(compatible);
-	RailType (*tile_rail_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_rail_type);
 	bool (*rail90)(uint8_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(rail90);
 	bool (*blocking)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(blocking);
 	bool (*has_pbs)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(has_pbs);

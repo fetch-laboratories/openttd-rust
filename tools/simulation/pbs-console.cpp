@@ -93,12 +93,10 @@ static bool PbsCheckMask(TileIndex tile, Trackdir td)
 	PbsOriginalMask ft{GetTileOwner(tile), GetRailTypeInfo(GetTileRailType(tile))->compatible_railtypes};
 	if (!ft.Follow(tile, td)) return false;
 #ifdef WITH_RUST
-	OpenTTDFollowTrackState actual{};
-	openttd_test_follower_init(&actual, &GetRustSharedServices(), TRANSPORT_RAIL, nullptr, 0, 0, true, true, false);
-	actual.old_tile = ft.old_tile; actual.old_td = ft.old_td; actual.new_tile = ft.new_tile; actual.new_td_bits = ft.new_td_bits;
-	actual.exitdir = ft.exitdir; actual.is_station = ft.is_station; actual.tiles_skipped = ft.tiles_skipped;
+	FollowerProbeFreeRail actual{GetTileOwner(tile), GetRailTypeInfo(GetTileRailType(tile))->compatible_railtypes};
+	PbsRequire(actual.Follow(tile, td));
 	const bool expected = ft.MaskReservedTracks();
-	PbsRequire(openttd_test_follower_mask(&GetRustSharedServices(), &actual) == expected && actual.new_td_bits == ft.new_td_bits && actual.err == ft.err);
+	PbsRequire(actual.MaskReservedTracks() == expected && actual.new_td_bits == ft.new_td_bits && uint8_t(actual.err) == uint8_t(ft.err));
 #else
 	ft.MaskReservedTracks();
 #endif
