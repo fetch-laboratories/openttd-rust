@@ -50,7 +50,6 @@ struct OpenTTDRoadCommandServices {
 	void (*depot_exit)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_exit);
 	OpenTTDRoadWorksEffect (*next_effect)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_effect);
 	void (*delete_effect)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_effect);
-	void (*owned_by_town)(OpenTTDCommandCost *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(owned_by_town);
 	OpenTTDCommandCost *(*scratch_cost)(OpenTTDRoadCommandScratch *) noexcept OPENTTD_SERVICE_DEFAULT(scratch_cost);
 	OpenTTDRoadConversionScratch (*conversion_scratch)(OpenTTDRoadCommandScratch *) noexcept OPENTTD_SERVICE_DEFAULT(conversion_scratch);
 	void (*include_vehicle)(OpenTTDRoadConvertFrame *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(include_vehicle);

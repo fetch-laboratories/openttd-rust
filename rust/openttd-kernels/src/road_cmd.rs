@@ -162,8 +162,6 @@ pub struct RoadCommandServices {
     pub next_effect: extern "C" fn(u32) -> WorksEffect,
     /// Delete the source-valid effect shell and its owner.
     pub delete_effect: extern "C" fn(u32),
-    /// Native encoded owned-by-town result.
-    pub owned_by_town: unsafe extern "C" fn(*mut CommandCost, u32),
     /// One extra native result for nested build or low-money remove test.
     pub scratch_cost: unsafe extern "C" fn(*mut CommandScratch) -> *mut CommandCost,
     /// Lazily construct the nested conversion stack objects, resetting prior use.
@@ -255,6 +253,19 @@ impl<'a> Ctx<'a> {
     }
     fn command(&self, cost: Cost<'_>, flags: u16, tile: u32, body: impl FnMut(u16) -> i64) -> i64 {
         crate::command::nested(self.commands, self.shared, cost, tile, flags, body)
+    }
+
+    fn owned_by_town(&self, error: Cost<'_>, tile: u32) {
+        // SAFETY: The context's canonical command table owns the company service.
+        let company = unsafe { &*(self.commands.company)() };
+        error.make_error(company.owned_by);
+        if (company.local_company)() == (company.finance.current_company)() {
+            (error.1.encode_owned_by)(
+                error.0,
+                crate::company_type::Owner::TOWN,
+                crate::tile_type::TileIndex(tile),
+            );
+        }
     }
 
     fn do_build(
@@ -372,7 +383,7 @@ impl<'a> Ctx<'a> {
     }
 
     fn update_town(&self, tile: u32) {
-        let town = (self.shared.calc_closest_town)(tile, u32::MAX);
+        let town = crate::town::spatial::calc_closest(self.shared, tile, u32::MAX);
         let id = if town.is_null() {
             INVALID_TOWN
         } else {
@@ -421,7 +432,7 @@ impl<'a> Ctx<'a> {
         if !town_check || (self.authority.bulldozer)() {
             return;
         }
-        let town = (self.shared.closest_town)(tile, u32::MAX);
+        let town = crate::town::spatial::closest(self.shared, tile, u32::MAX);
         if town.is_null() {
             return;
         }
@@ -790,7 +801,7 @@ impl<'a> Ctx<'a> {
             return;
         }
         if company != OWNER_TOWN {
-            let town = (self.shared.calc_closest_town)(tile, u32::MAX);
+            let town = crate::town::spatial::calc_closest(self.shared, tile, u32::MAX);
             town_id = if town.is_null() {
                 INVALID_TOWN
             } else {
@@ -1045,7 +1056,7 @@ impl<'a> Ctx<'a> {
         if !clear {
             if self.tile_type(tile) == MP_ROAD {
                 pieces &= existing ^ 15;
-                if (self.shared.is_normal_road)(tile) {
+                if (self.shared.is_normal_road_tile)(tile) {
                     let slope = (self.shared.tile_slope)(tile);
                     let new = crate::movement::road_foundation(slope, pieces | existing, |ok| {
                         crate::movement::native_assert(self.shared, ok);
@@ -1066,7 +1077,7 @@ impl<'a> Ctx<'a> {
                 cost.take(ret);
                 return;
             }
-            if self.tile_type(tile) == MP_ROAD && (self.shared.is_normal_road)(tile) {
+            if self.tile_type(tile) == MP_ROAD && (self.shared.is_normal_road_tile)(tile) {
                 let old = self.rt(tile, rtt);
                 if old != INVALID && old != rt {
                     if (self.shared.road_powered)(rt, old) {
@@ -1146,7 +1157,10 @@ impl<'a> Ctx<'a> {
                 num = num.wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR);
             }
             self.infrastructure(rt, self.owner(tile, rtt), num as i32);
-            if rtt == 0 && self.tile_type(tile) == MP_ROAD && (self.shared.is_normal_road)(tile) {
+            if rtt == 0
+                && self.tile_type(tile) == MP_ROAD
+                && (self.shared.is_normal_road_tile)(tile)
+            {
                 existing |= pieces;
                 (self.shared.set_road_directions)(
                     tile,
@@ -1825,8 +1839,11 @@ impl<'a> Ctx<'a> {
             }
         }
         if owner == OWNER_TOWN {
-            let town =
-                (self.shared.closest_town)(tile, u32::from((self.authority.authority_distance)()));
+            let town = crate::town::spatial::closest(
+                self.shared,
+                tile,
+                u32::from((self.authority.authority_distance)()),
+            );
             self.rating(ret, town, 0, u8::from(tt == MP_TUNNELBRIDGE));
             if !ret.ok() {
                 error.take(ret);
@@ -1841,9 +1858,7 @@ impl<'a> Ctx<'a> {
                     return;
                 }
                 if rtt == 0 && owner == OWNER_TOWN {
-                    unsafe {
-                        (self.s.owned_by_town)(error.0, tile);
-                    }
+                    self.owned_by_town(error, tile);
                     return;
                 }
             }
@@ -1884,9 +1899,7 @@ impl<'a> Ctx<'a> {
                     return;
                 }
                 if rtt == 0 && owner == OWNER_TOWN {
-                    unsafe {
-                        (self.s.owned_by_town)(error.0, tile);
-                    }
+                    self.owned_by_town(error, tile);
                     return;
                 }
             }
@@ -2267,7 +2280,6 @@ crate::abi::layouts! {
         depot_exit,
         next_effect,
         delete_effect,
-        owned_by_town,
         scratch_cost,
         conversion_scratch,
         include_vehicle,
@@ -2298,4 +2310,10 @@ crate::abi::layouts! {
         no_suitable_tram,
         authority,
     };
+}
+
+/// `RoadVehiclesAreBuilt`: whether `RoadVehicle::Iterate()` is nonempty, given the vehicle
+/// pool's types in pool order.
+pub(crate) fn road_vehicles_are_built(mut kinds: impl Iterator<Item = u8>) -> bool {
+    kinds.any(|kind| kind == crate::vehicle_type::VEH_ROAD)
 }

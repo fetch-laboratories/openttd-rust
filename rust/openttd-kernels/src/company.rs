@@ -265,6 +265,16 @@ pub struct Services {
     pub identity: &'static crate::company_identity::Services,
     pub finance: &'static FinanceServices,
     pub shared: &'static crate::services::Services,
+    pub allow_list_add:
+        extern "C" fn(crate::company_type::CompanyID, crate::services::ByteSpan) -> bool,
+    pub allow_list_remove:
+        extern "C" fn(crate::company_type::CompanyID, crate::services::ByteSpan) -> bool,
+    pub assign_company_context: extern "C" fn(crate::company_type::CompanyID),
+    pub close_construction_windows: extern "C" fn(),
+    pub cost: &'static crate::services::CommandCostServices,
+    pub objectives: extern "C" fn() -> &'static crate::objectives::Services,
+    pub owned_by: u32,
+    pub settings: extern "C" fn() -> &'static crate::settings_table::Services,
     pub company_next: extern "C" fn(u32) -> CompanyRef,
     pub company_count: extern "C" fn() -> usize,
     pub can_allocate_company: extern "C" fn() -> bool,
@@ -284,7 +294,7 @@ pub struct Services {
     pub road_maintenance_cost: extern "C" fn(u8, u32, u32) -> i64,
     pub canal_maintenance_cost: extern "C" fn(u32) -> i64,
     pub station_maintenance_cost: extern "C" fn(u32) -> i64,
-    pub airport_maintenance_cost: extern "C" fn(u8) -> i64,
+    pub station_lifecycle: extern "C" fn() -> *const crate::station_lifecycle::Services,
     pub recession_news: extern "C" fn(bool),
     pub price_base: extern "C" fn(u32) -> PriceBase,
     pub cargo_next: extern "C" fn(u32, *mut i64) -> u32,
@@ -309,7 +319,8 @@ pub struct Services {
     pub close_network_status: extern "C" fn(),
     pub network_spectate: extern "C" fn(u32),
     pub network_company_new: extern "C" fn(u8, u32, bool),
-    pub network_own_company: extern "C" fn(u8, u32),
+    pub network_own_company: extern "C" fn(u8, u32) -> *mut crate::company_type::OpenTTDCompany,
+    pub network_own_company_settings: extern "C" fn(*mut crate::company_type::OpenTTDCompany),
     pub assert_new_ai_slot: extern "C" fn(u8),
     pub company_bankrupt_news: extern "C" fn(u8),
     pub stop_ai: extern "C" fn(u8),
@@ -318,7 +329,6 @@ pub struct Services {
     pub merger_news: extern "C" fn(u8, bool),
     pub acquisition_windows: extern "C" fn(u8),
     pub clients_to_spectators: extern "C" fn(u8),
-    pub set_local_company: extern "C" fn(u8),
     pub subsidies: extern "C" fn() -> *const crate::subsidy::Services,
     pub town_next: extern "C" fn(u32, u8, *mut TownRights) -> u32,
     pub town_rating: extern "C" fn(u32, u8) -> i16,
@@ -335,7 +345,7 @@ pub struct Services {
     pub delete_vehicle: extern "C" fn(u32),
     pub count_group_engine: extern "C" fn(u32, i32),
     pub count_group_vehicle: extern "C" fn(u32, i32),
-    pub reset_service_interval: extern "C" fn(u32, u8),
+    pub reset_service_interval: extern "C" fn(u32, i32, bool),
     pub set_vehicle_owner: extern "C" fn(u32, u8),
     pub assign_unit_number: extern "C" fn(u32, u8),
     pub remove_engine_replacements: extern "C" fn(u8),
@@ -365,6 +375,230 @@ pub struct Services {
     pub change_window_owner: extern "C" fn(u8, u8),
     pub mark_whole_screen_dirty: extern "C" fn(),
 }
+/// `SetLocalCompany`: team chat observes the old context before the assertion and assignment.
+pub(crate) fn set_local_company(s: &Services, company: crate::company_type::CompanyID) {
+    use crate::company_type::CompanyID;
+    use crate::window_type::{
+        WC_COMPANY, WC_COMPANY_COLOUR, WC_GOALS_LIST, WC_SEND_NETWORK_MSG, WC_SIGN_LIST,
+    };
+    crate::movement::native_assert(
+        s.shared,
+        (s.shared.company_valid)(company.0)
+            || company == CompanyID::SPECTATOR
+            || company == CompanyID::NONE,
+    );
+    let switching = (s.local_company)() != company.0;
+    let windows = (s.objectives)();
+    if switching {
+        (windows.window_data)(
+            WC_SEND_NETWORK_MSG,
+            crate::network_type::DESTTYPE_TEAM,
+            i32::from((s.local_company)()),
+        );
+    }
+    crate::movement::native_assert(
+        s.shared,
+        (s.local_company)() == (s.finance.current_company)(),
+    );
+    (s.assign_company_context)(company);
+    if switching {
+        (windows.window_classes)(WC_COMPANY, 0);
+        (s.close_construction_windows)();
+    }
+    (s.identity.dirty)();
+    (windows.window_classes)(WC_SIGN_LIST, -1);
+    (windows.window_classes)(WC_GOALS_LIST, 0);
+    (windows.window_classes)(WC_COMPANY_COLOUR, -1);
+    (s.identity.reset_colourmap)();
+}
+
+pub(crate) fn check_ownership(
+    s: &Services,
+    out: crate::services::Cost<'_>,
+    owner: crate::company_type::Owner,
+    tile: crate::tile_type::TileIndex,
+) {
+    use crate::company_type::{OWNER_END, OWNER_TOWN};
+    crate::movement::native_assert(s.shared, owner.0 < OWNER_END);
+    crate::movement::native_assert(s.shared, owner.0 != OWNER_TOWN || tile.0 != 0);
+    if owner.0 == (s.finance.current_company)() {
+        out.zero();
+        return;
+    }
+    out.error(s.owned_by);
+    if (s.local_company)() == (s.finance.current_company)() {
+        (out.1.encode_owned_by)(out.0, owner, tile);
+        if owner.0 != OWNER_TOWN {
+            (out.1.error_owner)(out.0, owner);
+        }
+    }
+}
+
+pub(crate) fn check_tile_ownership(
+    s: &Services,
+    out: crate::services::Cost<'_>,
+    tile: crate::tile_type::TileIndex,
+) {
+    let owner = crate::company_type::CompanyID(crate::map_func::World::new(s.shared).owner(tile.0));
+    check_ownership(s, out, owner, tile);
+}
+
+fn execute_allow_list_action(
+    s: &Services,
+    action: u8,
+    company: crate::company_type::CompanyID,
+    key: crate::services::ByteSpan,
+) -> bool {
+    use crate::company_type::{CALCA_ADD, CALCA_REMOVE};
+    match action {
+        CALCA_ADD => (s.allow_list_add)(company, key),
+        CALCA_REMOVE => (s.allow_list_remove)(company, key),
+        _ => {
+            (s.shared.not_reached)();
+            unreachable!()
+        }
+    }
+}
+
+fn allow_list(
+    s: &Services,
+    out: crate::services::Cost<'_>,
+    flags: u16,
+    action: u8,
+    key: crate::services::ByteSpan,
+) {
+    use crate::company_type::{CALCA_ADD, CALCA_REMOVE, CompanyID};
+    let company = CompanyID((s.finance.current_company)());
+    if !(s.shared.company_valid)(company.0)
+        || key.size != crate::network_type::NETWORK_PUBLIC_KEY_LENGTH - 1
+        || !matches!(action, CALCA_ADD | CALCA_REMOVE)
+    {
+        out.error(crate::strings_type::INVALID_STRING_ID);
+        return;
+    }
+    if flags & crate::command_type::DoCommandFlag::EXECUTE != 0
+        && execute_allow_list_action(s, action, company, key)
+    {
+        ((s.objectives)().window_data)(crate::window_type::WC_CLIENT_LIST, 0, 0);
+        let transactions = (s.settings)().refit.common.transactions;
+        ((transactions.build_services)().rail.company_dirty)();
+    }
+    out.zero();
+}
+
+/// Read only the selected field of the supplied company's defaults, or the client defaults for null.
+pub(crate) fn service_interval(
+    settings: &crate::settings_table::Services,
+    company: Option<crate::company_type::CompanyID>,
+    kind: crate::vehicle_type::VehicleType,
+) -> i32 {
+    let defaults = match company {
+        None => (settings.client_vehicle_defaults)(),
+        Some(company) => (settings.company_vehicle_defaults)(company),
+    };
+    service_interval_from(settings.shared, defaults, kind)
+}
+
+fn service_interval_from(
+    shared: &crate::services::Services,
+    defaults: *const crate::settings_table::VehicleDefaults,
+    kind: crate::vehicle_type::VehicleType,
+) -> i32 {
+    use crate::vehicle_type::{VEH_AIRCRAFT, VEH_ROAD, VEH_SHIP, VEH_TRAIN};
+    i32::from(match kind.0 {
+        VEH_TRAIN => read_field!(defaults, servint_trains),
+        VEH_ROAD => read_field!(defaults, servint_roadveh),
+        VEH_AIRCRAFT => read_field!(defaults, servint_aircraft),
+        VEH_SHIP => read_field!(defaults, servint_ships),
+        _ => {
+            (shared.not_reached)();
+            unreachable!()
+        }
+    })
+}
+
+pub(crate) fn first_playable(s: &Services) -> crate::company_type::CompanyID {
+    use crate::company_type::CompanyID;
+    let mut from = 0;
+    loop {
+        let c = (s.identity.next_company)(from);
+        if c.is_null() {
+            break;
+        }
+        let id = (s.identity.company_id)(c);
+        // IsHumanID resolves through Company::Get at this point in the original.
+        if !(s.identity.is_ai)((s.identity.company)(id)) {
+            return id;
+        }
+        from = u32::from(id.0) + 1;
+    }
+    if (s.can_allocate_company)() {
+        for id in CompanyID::BEGIN.0..MAX_COMPANIES {
+            if !(s.shared.company_valid)(id) {
+                return CompanyID(id);
+            }
+        }
+    }
+    CompanyID::BEGIN
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_company_set_local(
+    s: &Services,
+    company: crate::company_type::CompanyID,
+) {
+    set_local_company(s, company);
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_company_check_ownership(
+    s: &Services,
+    out: *mut crate::services::CommandCost,
+    owner: crate::company_type::Owner,
+    tile: crate::tile_type::TileIndex,
+) {
+    check_ownership(s, crate::services::Cost(out, s.cost), owner, tile);
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_company_check_tile_ownership(
+    s: &Services,
+    out: *mut crate::services::CommandCost,
+    tile: crate::tile_type::TileIndex,
+) {
+    check_tile_ownership(s, crate::services::Cost(out, s.cost), tile);
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_company_allow_list(
+    s: &Services,
+    out: *mut crate::services::CommandCost,
+    flags: u16,
+    action: u8,
+    key: crate::services::ByteSpan,
+) {
+    allow_list(s, crate::services::Cost(out, s.cost), flags, action, key);
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_company_service_interval(
+    s: &Services,
+    company: *mut crate::company_type::OpenTTDCompany,
+    kind: crate::vehicle_type::VehicleType,
+) -> i32 {
+    service_interval(
+        (s.settings)(),
+        if company.is_null() {
+            None
+        } else {
+            Some((s.identity.company_id)(company))
+        },
+        kind,
+    )
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_company_first_playable(
+    s: &Services,
+) -> crate::company_type::CompanyID {
+    first_playable(s)
+}
+
 static mut ECONOMY: Economy = unsafe { std::mem::zeroed() };
 static mut PRICES: [i64; 71] = [0; 71];
 static mut SCORES: [[i64; 10]; 15] = [[0; 10]; 15];
@@ -754,7 +988,10 @@ fn maintenance(s: &Services, p: *mut Finances, id: u8) {
     }
     cost = cost.saturating_add((s.canal_maintenance_cost)(infra.water));
     cost = cost.saturating_add((s.station_maintenance_cost)(infra.station));
-    cost = cost.saturating_add((s.airport_maintenance_cost)(id));
+    cost = cost.saturating_add(crate::station_lifecycle::airport_maintenance(
+        unsafe { &*(s.station_lifecycle)() },
+        id,
+    ));
     subtract(s.finance, p, id, cost, EXPENSES_PROPERTY);
 }
 fn statistics(s: &Services, m: &Month) {
@@ -1015,7 +1252,7 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
             }
             from = c.id.wrapping_add(1);
             if c.id as u8 != old {
-                (s.set_local_company)(c.id as u8);
+                set_local_company(s, crate::company_type::CompanyID(c.id as u8));
                 break;
             }
         }
@@ -1105,7 +1342,17 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
             continue;
         }
         if !(s.vehicle_service_interval_is_custom)(v) {
-            (s.reset_service_interval)(v, new);
+            let settings = (s.settings)();
+            let vehicle = unsafe { (settings.transactions.groups.vehicle)(v) };
+            let defaults = (settings.company_vehicle_defaults)(crate::company_type::CompanyID(new));
+            let kind = unsafe { (settings.transactions.groups.vehicle_type)(vehicle) };
+            let interval = service_interval_from(
+                settings.shared,
+                defaults,
+                crate::vehicle_type::VehicleType(kind),
+            );
+            let percent = read_field!(defaults, servint_ispercent);
+            (s.reset_service_interval)(v, interval, percent);
         }
         (s.set_vehicle_owner)(v, new);
         let g = (s.vehicle_group_flags)(v);
@@ -1216,7 +1463,11 @@ fn control(s: &Services, ownership: &crate::tile_owner::Context, c: &mut Control
                 } else {
                     let id = startup_frame.company as u8;
                     (s.network_company_new)(id, c.client, true);
-                    (s.network_own_company)(id, c.client);
+                    let company = (s.network_own_company)(id, c.client);
+                    if !company.is_null() {
+                        set_local_company(s, (s.identity.company_id)(company));
+                        (s.network_own_company_settings)(company);
+                    }
                 }
             }
             1 => {
@@ -1939,6 +2190,14 @@ crate::abi::layouts! {
         identity,
         finance,
         shared,
+        allow_list_add,
+        allow_list_remove,
+        assign_company_context,
+        close_construction_windows,
+        cost,
+        objectives,
+        owned_by,
+        settings,
         company_next,
         company_count,
         can_allocate_company,
@@ -1958,7 +2217,7 @@ crate::abi::layouts! {
         road_maintenance_cost,
         canal_maintenance_cost,
         station_maintenance_cost,
-        airport_maintenance_cost,
+        station_lifecycle,
         recession_news,
         price_base,
         cargo_next,
@@ -1984,6 +2243,7 @@ crate::abi::layouts! {
         network_spectate,
         network_company_new,
         network_own_company,
+        network_own_company_settings,
         assert_new_ai_slot,
         company_bankrupt_news,
         stop_ai,
@@ -1992,7 +2252,6 @@ crate::abi::layouts! {
         merger_news,
         acquisition_windows,
         clients_to_spectators,
-        set_local_company,
         subsidies,
         town_next,
         town_rating,

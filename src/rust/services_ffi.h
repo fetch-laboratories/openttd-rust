@@ -12,6 +12,7 @@
 #include "service_defaults.hpp"
 #include <cstdint>
 #include <cstddef>
+#include <memory>
 #include <type_traits>
 #include "station_ffi.h"
 
@@ -32,17 +33,17 @@ struct OpenTTDEconomyDate { int32_t value; };
 static_assert(std::is_trivially_copyable_v<OpenTTDCalendarDate> && std::is_standard_layout_v<OpenTTDCalendarDate>);
 static_assert(std::is_trivially_copyable_v<OpenTTDEconomyDate> && std::is_standard_layout_v<OpenTTDEconomyDate>);
 
-/* Canonical typed allocation addresses, never references to tile zero's fields.
- * Only an audited serialized entry may retain it. It expires before map reset or
- * mutex yield. Only field-sized raw reads in audited scheduler entries are allowed;
- * C++ owns allocation/construction/reset/destruction and every write. */
-struct OpenTTDTileTypeAllocation {
-	const TileBaseStorage *base;
-	const TileExtendedStorage *extended;
-	uint32_t count;
+/* Addresses of the canonical Tile and Map statics. Rust loads them at entry
+ * instead of calling; only field-sized raw reads follow, ending before a map
+ * reset or mutex yield. C++ owns allocation, construction, reset and every write. */
+struct OpenTTDMapStatics {
+	const std::unique_ptr<TileBaseStorage[]> *base;
+	const std::unique_ptr<TileExtendedStorage[]> *extended;
+	const uint32_t *size;
+	const uint32_t *log_x;
 	bool assertions;
 };
-OpenTTDTileTypeAllocation GetRustTileTypeAllocation() noexcept;
+extern const OpenTTDMapStatics _rust_map_statics;
 
 /* Immutable table of world services; context may be null in the game, while test fixtures supply
  * their own world. Map predicates take a TileIndex value and return the original accessor's
@@ -57,7 +58,6 @@ enum Foundation : uint8_t;
 enum Slope : uint8_t;
 enum DiagDirection : uint8_t;
 struct OpenTTDCalendarYMD { int32_t year; uint8_t month, day; };
-struct OpenTTDPixelLocation { uint32_t tile; uint8_t kind; };
 struct OpenTTDFoundationSlope { int32_t z; Slope slope; };
 struct OpenTTDTownHandle; // Opaque native Town shell; never dereferenced in Rust.
 struct OpenTTDTownState;
@@ -82,7 +82,7 @@ struct OpenTTDTypeAvailabilityServices;
 struct OpenTTDPbsServices;
 struct OpenTTDMovementServices;
 struct OpenTTDSharedServices {
-	const OpenTTDMovementServices *(*movement_services)() noexcept OPENTTD_SERVICE_DEFAULT(movement_services);
+	const OpenTTDMovementServices *movement = nullptr;
 	void (*set_tile_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_owner);
 	bool (*autoslope)() noexcept OPENTTD_SERVICE_DEFAULT(autoslope);
 	uint8_t (*bay_stop_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bay_stop_direction);
@@ -91,8 +91,6 @@ struct OpenTTDSharedServices {
 	uint16_t (*bridge_speed)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bridge_speed);
 	bool (*build_on_slopes)() noexcept OPENTTD_SERVICE_DEFAULT(build_on_slopes);
 	OpenTTDClearSquareServices clear_square_services;
-	const OpenTTDTownHandle *(*calc_closest_town)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(calc_closest_town);
-	const OpenTTDTownHandle *(*closest_town)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(closest_town);
 	bool (*company_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_valid);
 	void *context;
 	RoadBits (*crossing_road_bits)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_road_bits);
@@ -100,7 +98,6 @@ struct OpenTTDSharedServices {
 	uint16_t (*depot_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_index);
 	uint8_t (*disallowed_road_directions)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(disallowed_road_directions);
 	bool (*disaster_sound)() noexcept OPENTTD_SERVICE_DEFAULT(disaster_sound);
-	uint32_t (*distance_from_edge)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(distance_from_edge);
 	uint8_t (*drive_through_axis)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(drive_through_axis);
 	bool (*forbid_90_deg)() noexcept OPENTTD_SERVICE_DEFAULT(forbid_90_deg);
 	void (*free_train_reservation)(const Train *) noexcept OPENTTD_SERVICE_DEFAULT(free_train_reservation);
@@ -113,12 +110,12 @@ struct OpenTTDSharedServices {
 	bool (*is_bridge)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_bridge);
 	bool (*is_drive_through_stop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_drive_through_stop);
 	bool (*is_level_crossing)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_level_crossing);
-	bool (*is_normal_road)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_normal_road);
+	bool (*is_normal_road_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_normal_road_tile);
 	bool (*is_plain_rail)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_plain_rail);
 	bool (*is_road_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_road_depot);
 	bool (*is_sea)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_sea);
 	bool (*is_water_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_water_tile);
-	uint32_t (*map_log_x)() noexcept OPENTTD_SERVICE_DEFAULT(map_log_x);
+	const OpenTTDMapStatics *map = nullptr;
 	uint32_t (*map_max_x)() noexcept OPENTTD_SERVICE_DEFAULT(map_max_x);
 	uint32_t (*map_max_y)() noexcept OPENTTD_SERVICE_DEFAULT(map_max_y);
 	void (*mark_bridge_dirty)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(mark_bridge_dirty);
@@ -160,6 +157,7 @@ struct OpenTTDSharedServices {
 
 	void (*tile_animation_set_frame)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_animation_set_frame);
 	uint32_t (*town_next_id)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_next_id);
+	OpenTTDTownHandle *(*town_by_id)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_by_id);
 	OpenTTDTownState *(*town_owner_by_id)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_owner_by_id);
 	size_t (*utf8_length)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(utf8_length);
 	OpenTTDVehicle *(*vehicle_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_next);
@@ -169,7 +167,6 @@ struct OpenTTDSharedServices {
 	uint8_t (*tile_owner)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_owner);
 	uint8_t (*tile_slope)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_slope);
 	uint8_t (*tile_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_type);
-	uint32_t (*tile_add_wrap)(uint32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_add_wrap);
 	bool (*tile_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_valid);
 	OpenTTDFoundationSlope (*tile_slope_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_slope_z);
 	int32_t (*tile_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_z);
@@ -183,7 +180,6 @@ struct OpenTTDSharedServices {
 	uint8_t (*tunnel_bridge_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tunnel_bridge_direction);
 	uint8_t (*tunnel_transport)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tunnel_transport);
 	void (*update_level_crossing)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(update_level_crossing);
-	void (*rebuild_town_tree)() noexcept OPENTTD_SERVICE_DEFAULT(rebuild_town_tree);
 	bool (*recession)() noexcept OPENTTD_SERVICE_DEFAULT(recession);
 	uint64_t (*tick_counter)() noexcept OPENTTD_SERVICE_DEFAULT(tick_counter);
 	size_t (*town_count)() noexcept OPENTTD_SERVICE_DEFAULT(town_count);
@@ -200,6 +196,8 @@ struct OpenTTDSharedServices {
 	void (*for_each_station)(void *, void (*)(void *, const OpenTTDStation *, OpenTTDStationService *, uint16_t)) noexcept OPENTTD_SERVICE_DEFAULT(for_each_station); ///< Live Station::Iterate(); resolves the next slot after each visit, including reentry.
 	RoadStopType (*road_stop_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_stop_type);
 	const OpenTTDRoadStopServices *(*road_stops)() noexcept OPENTTD_SERVICE_DEFAULT(road_stops);
+	void (*show_error)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(show_error);
+	void (*not_reached)() noexcept OPENTTD_SERVICE_DEFAULT(not_reached);
 };
 extern const OpenTTDSharedServices _rust_shared_services;
 struct OpenTTDSubsidyServices;
@@ -302,7 +300,6 @@ inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_
 		.industry = industry,
 		.next_company = [](uint8_t) noexcept -> uint8_t { return UINT8_MAX; },
 		.random = random,
-		.rebuild_town_tree = OpenTTDFixtureMapService<void>,
 		.recession = OpenTTDFixtureMapService<bool>,
 		.tick_counter = OpenTTDFixtureMapService<uint64_t>,
 		.town_count = OpenTTDFixtureMapService<size_t>,

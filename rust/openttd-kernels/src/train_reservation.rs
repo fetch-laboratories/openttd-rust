@@ -1285,7 +1285,7 @@ crate::abi::layouts! {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::pbs::PbsServices;
     use crate::services::RailMapServices;
@@ -1433,9 +1433,9 @@ mod tests {
             false
         }
     }
-    fn movement_table() -> crate::movement::MovementServices {
+    /// Movement table whose every service is unused and which has no map descriptor.
+    pub(crate) fn movement_table() -> crate::movement::MovementServices {
         crate::movement::MovementServices {
-            tile_types: unused(),
             shared: unused(),
             orders: unused(),
             rail: unused(),
@@ -1458,10 +1458,7 @@ mod tests {
             train_engine_class: unused(),
             depot_invalidate: unused(),
             native_assert: unused(),
-            normal_road_status_tail: unused(),
-            pixel_location: unused(),
             plain_rail: unused(),
-            normal_road: unused(),
             is_tunnel: unused(),
             rail_station: unused(),
             road_crossing: unused(),
@@ -1475,9 +1472,6 @@ mod tests {
             water_type: unused(),
             lock_direction: unused(),
             ship_depot_axis: unused(),
-            pixel_slope: unused(),
-            outside_pixel_slope: unused(),
-            max_pixel_z: unused(),
             owned_land: unused(),
             object_foundation: unused(),
             house_foundation: unused(),
@@ -1722,9 +1716,7 @@ mod tests {
             world.vehicle.vehicle_type = vehicle_kind;
             world.movement.vehicle = &raw const world.vehicle;
             world.movement.shared = &raw const world.shared;
-            world.movement.tile_types = Some(allocation);
-            world.shared.movement_services = movement_services;
-            world.shared.map_log_x = map_log_x;
+            world.shared.movement = &raw const world.movement;
             world.pbs.shared = &raw const world.shared;
             world.pbs.rail = &raw const world.rail;
             world
@@ -1734,6 +1726,15 @@ mod tests {
             let stop = unsafe { mock(train) }.stop;
             self.base[index(if stop == 2 { 3 } else { 4 }) as usize].m5 = 0;
             WORLD.set(std::ptr::from_ref(self));
+            crate::map_func::fixture::set(
+                crate::map_func::TileTypeAllocation {
+                    base: self.base.as_ptr(),
+                    extended: self.extended.as_ptr(),
+                    count: self.base.len() as u32,
+                    assertions: false,
+                },
+                6,
+            );
             TRAIN.set(train);
             PBS.set(&raw const self.pbs);
         }
@@ -1791,26 +1792,11 @@ mod tests {
     const fn ordinal(tile: u32) -> u32 {
         72 - tile
     }
-    extern "C" fn map_log_x() -> u32 {
-        6
-    }
     extern "C" fn owner(_: crate::vehicle::VehicleRef) -> u8 {
         0
     }
     extern "C" fn vehicle_kind(_: crate::vehicle::VehicleRef) -> u8 {
         crate::vehicle_type::VEH_TRAIN
-    }
-    extern "C" fn movement_services() -> *const crate::movement::MovementServices {
-        unsafe { &raw const (*WORLD.get()).movement }
-    }
-    extern "C" fn allocation() -> crate::map_func::TileTypeAllocation {
-        let w = unsafe { &*WORLD.get() };
-        crate::map_func::TileTypeAllocation {
-            base: w.base.as_ptr(),
-            extended: w.extended.as_ptr(),
-            count: w.base.len() as u32,
-            assertions: false,
-        }
     }
     fn pbs_table() -> PbsServices {
         PbsServices {

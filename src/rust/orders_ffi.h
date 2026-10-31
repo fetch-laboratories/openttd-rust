@@ -48,6 +48,7 @@ struct OpenTTDOrdersClosest { uint32_t tile; uint16_t destination; uint8_t rever
 /* Immutable typed service table, borrowed synchronously without copying.
  * Services terminate on escaping exceptions; Rust borrows end before callbacks. */
 struct OpenTTDVehicleServices;
+struct OpenTTDStationCommandServices;
 struct OpenTTDOrdersLeaves {
 	OpenTTDVehicleOrderState *(*vehicle)(void *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle);
 	OpenTTDConsistState *(*consist)(void *) noexcept OPENTTD_SERVICE_DEFAULT(consist);
@@ -63,7 +64,6 @@ struct OpenTTDOrdersLeaves {
 	uint64_t (*vehicle_status)(void *ctx) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_status);
 	uint64_t (*tick_counter)() noexcept OPENTTD_SERVICE_DEFAULT(tick_counter);
 	uint64_t (*primary_vehicle)(void *ctx) noexcept OPENTTD_SERVICE_DEFAULT(primary_vehicle);
-	uint64_t (*vehicle_ownership)(void *ctx, void *result) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_ownership);
 	uint64_t (*ticks_per_second)() noexcept OPENTTD_SERVICE_DEFAULT(ticks_per_second);
 	uint64_t (*unit_number)(void *ctx) noexcept OPENTTD_SERVICE_DEFAULT(unit_number);
 	uint64_t (*economy_fraction)() noexcept OPENTTD_SERVICE_DEFAULT(economy_fraction);
@@ -94,7 +94,6 @@ struct OpenTTDOrdersLeaves {
 	uint64_t (*ship_station_tile)(uint16_t destination) noexcept OPENTTD_SERVICE_DEFAULT(ship_station_tile);
 	uint64_t (*valid_station)(uint16_t destination) noexcept OPENTTD_SERVICE_DEFAULT(valid_station);
 	uint64_t (*station_owner)(uint16_t destination) noexcept OPENTTD_SERVICE_DEFAULT(station_owner);
-	uint64_t (*owner_check)(uint8_t owner, void *result) noexcept OPENTTD_SERVICE_DEFAULT(owner_check);
 	uint64_t (*station_error)(void *ctx, uint16_t destination) noexcept OPENTTD_SERVICE_DEFAULT(station_error);
 	uint64_t (*valid_depot)(uint16_t destination) noexcept OPENTTD_SERVICE_DEFAULT(valid_depot);
 	uint64_t (*depot_owner)(uint16_t destination) noexcept OPENTTD_SERVICE_DEFAULT(depot_owner);
@@ -125,7 +124,7 @@ struct OpenTTDOrdersLeaves {
 	uint64_t (*fast_aircraft)(void *ctx) noexcept OPENTTD_SERVICE_DEFAULT(fast_aircraft);
 	uint64_t (*no_jet_crash)() noexcept OPENTTD_SERVICE_DEFAULT(no_jet_crash);
 	void (*append_station)(void *ctx, uint16_t station) noexcept OPENTTD_SERVICE_DEFAULT(append_station);
-	void (*invalidate_station_list)() noexcept OPENTTD_SERVICE_DEFAULT(invalidate_station_list);
+	const OpenTTDStationCommandServices *station_commands;
 	void (*command_error)(void *ctx, uint32_t error, uint32_t detail) noexcept OPENTTD_SERVICE_DEFAULT(command_error);
 	void (*timetable_dirty)(void *ctx) noexcept OPENTTD_SERVICE_DEFAULT(timetable_dirty);
 	void (*invalidate_order)(void *ctx, int32_t data) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_order);
@@ -235,7 +234,6 @@ uint64_t openttd_orders_vehicle_type(void *ctx) noexcept;
 uint64_t openttd_orders_vehicle_status(void *ctx) noexcept;
 uint64_t openttd_orders_tick_counter() noexcept;
 uint64_t openttd_orders_primary_vehicle(void *ctx) noexcept;
-uint64_t openttd_orders_vehicle_ownership(void *ctx, void *result) noexcept;
 uint64_t openttd_orders_ticks_per_second() noexcept;
 uint64_t openttd_orders_economy_fraction() noexcept;
 uint64_t openttd_orders_maximum_date() noexcept;
@@ -261,7 +259,6 @@ uint64_t openttd_orders_at_station(void *ctx) noexcept;
 uint64_t openttd_orders_ship_station_tile(uint16_t destination) noexcept;
 uint64_t openttd_orders_valid_station(uint16_t destination) noexcept;
 uint64_t openttd_orders_station_owner(uint16_t destination) noexcept;
-uint64_t openttd_orders_owner_check(uint8_t owner, void *result) noexcept;
 uint64_t openttd_orders_station_error(void *ctx, uint16_t destination) noexcept;
 uint64_t openttd_orders_valid_depot(uint16_t destination) noexcept;
 uint64_t openttd_orders_depot_owner(uint16_t destination) noexcept;
@@ -290,7 +287,6 @@ uint64_t openttd_orders_local_owner(void *ctx) noexcept;
 uint64_t openttd_orders_fast_aircraft(void *ctx) noexcept;
 uint64_t openttd_orders_no_jet_crash() noexcept;
 void openttd_orders_append_station(void *ctx, uint16_t station) noexcept;
-void openttd_orders_invalidate_station_list() noexcept;
 void openttd_orders_command_error(void *ctx, uint32_t error, uint32_t detail) noexcept;
 void openttd_orders_timetable_dirty(void *ctx) noexcept;
 void openttd_orders_invalidate_order(void *ctx, int32_t data) noexcept;

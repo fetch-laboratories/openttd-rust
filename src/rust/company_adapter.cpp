@@ -14,6 +14,7 @@
 #include "../cargomonitor.h"
 #include "../command_func.h"
 #include "../company_base.h"
+#include "station_lifecycle_ffi.h"
 #include "../company_cmd.h"
 #include "../company_func.h"
 #include "../company_gui.h"
@@ -56,6 +57,9 @@
 #include "../waypoint_base.h"
 #include "../window_func.h"
 #include "company_adapter.h"
+#include "command_services.h"
+#include "settings_table_ffi.h"
+#include "services_objectives.h"
 #include "company_services.h"
 #include "company_identity_ffi.h"
 #include "object_ffi.h"
@@ -80,7 +84,8 @@ void OPENTTD_RUST_CALL RustCompanyDefaults(uint8_t) noexcept;
 void OPENTTD_RUST_CALL RustCompanyStartupWindows() noexcept;
 void RustCompanyNetworkSpectate(uint32_t) noexcept;
 void RustCompanyNetworkNew(uint8_t, uint32_t, bool) noexcept;
-void RustCompanyNetworkOwn(uint8_t, uint32_t) noexcept;
+Company *RustCompanyNetworkOwn(uint8_t, uint32_t) noexcept;
+void RustCompanyNetworkOwnSettings(Company *) noexcept;
 
 /* Constants Rust uses as literals. */
 static_assert(Ticks::DAY_TICKS == 74 && Ticks::TICKS_PER_SECOND == 37);
@@ -88,6 +93,8 @@ static_assert(CalendarTime::DAYS_IN_YEAR * 2 == 730 && PR_END == 71 && MAX_COMPA
 static_assert(RAILTYPE_END == 64 && ROADTYPE_END == 63 && MAX_HISTORY_QUARTERS == 24 && EXPENSES_END == 13);
 static_assert(CompanyID::Invalid().base() == 255 && OWNER_NONE.base() == 16 && OWNER_DEITY.base() == 18 && CRR_END == 3);
 static_assert(CalendarTime::ORIGINAL_BASE_YEAR.base() == 1920 && CalendarTime::ORIGINAL_MAX_YEAR.base() == 2090);
+static_assert(DESTTYPE_TEAM == 1 && OWNER_END.base() == 19 && NETWORK_PUBLIC_KEY_LENGTH == 65 && CALCA_ADD == 0 && CALCA_REMOVE == 1);
+static_assert(WC_COMPANY == 51 && WC_SIGN_LIST == 36 && WC_COMPANY_COLOUR == 28 && WC_SEND_NETWORK_MSG == 72 && WC_CLIENT_LIST == 68);
 static_assert(RATING_INITIAL == 500 && VEH_TRAIN == 0 && VEH_ROAD == 1 && VEH_SHIP == 2 && VEH_AIRCRAFT == 3);
 
 /** Next pool item at or after @p from whose owner field is @p owner. */
@@ -172,7 +179,6 @@ static int64_t Co_signal_maintenance_cost(uint32_t num) noexcept { return Signal
 static int64_t Co_road_maintenance_cost(uint8_t rt, uint32_t num, uint32_t total) noexcept { return RoadMaintenanceCost(static_cast<RoadType>(rt), num, total).base(); }
 static int64_t Co_canal_maintenance_cost(uint32_t num) noexcept { return CanalMaintenanceCost(num).base(); }
 static int64_t Co_station_maintenance_cost(uint32_t num) noexcept { return StationMaintenanceCost(num).base(); }
-static int64_t Co_airport_maintenance_cost(uint8_t id) noexcept { return AirportMaintenanceCost(CompanyID(id)).base(); }
 static void Co_recession_news(bool begin) noexcept
 {
 	AddNewsItem(GetEncodedString(begin ? STR_NEWS_BEGIN_OF_RECESSION : STR_NEWS_END_OF_RECESSION), NewsType::Economy, NewsStyle::Normal, {});
@@ -311,12 +317,9 @@ static void Co_delete_vehicle(uint32_t id) noexcept { delete Vehicle::Get(id); }
 static void Co_count_group_engine(uint32_t id, int32_t delta) noexcept { GroupStatistics::CountEngine(Vehicle::Get(id), delta); }
 static void Co_count_group_vehicle(uint32_t id, int32_t delta) noexcept { GroupStatistics::CountVehicle(Vehicle::Get(id), delta); }
 /** The original's CompanyServiceInterval argument evaluation and nested command. */
-static void Co_reset_service_interval(uint32_t id, uint8_t company) noexcept
+static void Co_reset_service_interval(uint32_t id, int32_t interval, bool percent) noexcept
 {
-	const Vehicle *v = Vehicle::Get(id);
-	const Company *c = Company::Get(company);
-	int interval = CompanyServiceInterval(c, v->type);
-	Command<CMD_CHANGE_SERVICE_INT>::Do({DoCommandFlag::Execute, DoCommandFlag::Bankrupt}, v->index, interval, false, RustCompanyServiceIntervalPercent(c->index.base()));
+	Command<CMD_CHANGE_SERVICE_INT>::Do({DoCommandFlag::Execute, DoCommandFlag::Bankrupt}, VehicleID(id), interval, false, percent);
 }
 /** Owner write and its cache invalidation, consecutive in the original. */
 static void Co_set_vehicle_owner(uint32_t id, uint8_t owner) noexcept
@@ -401,12 +404,25 @@ const OpenTTDClockCompany &GetRustClockCompanyServices() noexcept
 	return services;
 }
 
+static void Co_close_construction_windows() noexcept { CloseConstructionWindows(); }
+static bool Co_allow_list_add(uint8_t id, OpenTTDByteSpan key) noexcept { return Company::Get(id)->allow_list.Add({reinterpret_cast<const char *>(key.data), key.size}); }
+static bool Co_allow_list_remove(uint8_t id, OpenTTDByteSpan key) noexcept { return Company::Get(id)->allow_list.Remove({reinterpret_cast<const char *>(key.data), key.size}); }
 const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 {
 	/* Construct process-lifetime C++ views before Rust accesses their storage. */
 	(void)GetRustEconomy(); (void)GetRustPrices(); (void)GetRustCompanyScores();
 	static const OpenTTDCompanyServices services{
-		.identity = &GetRustCompanyIdentityServices(), .finance = &GetRustCompanyFinanceServices(), .shared = &GetRustSharedServices(),
+		.identity = &GetRustCompanyIdentityServices(),
+		.finance = &GetRustCompanyFinanceServices(),
+		.shared = &GetRustSharedServices(),
+		.allow_list_add = Co_allow_list_add,
+		.allow_list_remove = Co_allow_list_remove,
+		.assign_company_context = RustRestoreGenerationCompanies,
+		.close_construction_windows = Co_close_construction_windows,
+		.cost = &GetRustCommandCostServices(),
+		.objectives = GetRustObjectivesServices,
+		.owned_by = STR_ERROR_OWNED_BY,
+		.settings = GetRustSettingServices,
 		.company_next = RustCompanyRefNext,
 		.company_count = Co_company_count, .can_allocate_company = Co_can_allocate_company,
 		.local_company = RustLocalCompanyID, .network_server = RustNetworkServer,
@@ -418,7 +434,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.company_infrastructure = Co_company_infrastructure,
 		.rail_maintenance_cost = Co_rail_maintenance_cost, .signal_maintenance_cost = Co_signal_maintenance_cost,
 		.road_maintenance_cost = Co_road_maintenance_cost, .canal_maintenance_cost = Co_canal_maintenance_cost,
-		.station_maintenance_cost = Co_station_maintenance_cost, .airport_maintenance_cost = Co_airport_maintenance_cost,
+		.station_maintenance_cost = Co_station_maintenance_cost, .station_lifecycle = RustStationLifecycleServices,
 		.recession_news = Co_recession_news, .price_base = Co_price_base,
 		.cargo_next = Co_cargo_next, .set_cargo_payment = RustCargoSetCurrentPayment,
 		.price_windows_dirty = Co_price_windows_dirty, .industry_daily_changes = Co_industry_daily_changes,
@@ -432,10 +448,11 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.company_league_dirty = Co_company_league_dirty, .company_ctrl_windows = Co_company_ctrl_windows,
 		.close_network_status = Co_close_network_status, .network_spectate = RustCompanyNetworkSpectate,
 		.network_company_new = RustCompanyNetworkNew, .network_own_company = RustCompanyNetworkOwn,
+		.network_own_company_settings = RustCompanyNetworkOwnSettings,
 		.assert_new_ai_slot = Co_assert_new_ai_slot, .company_bankrupt_news = Co_company_bankrupt_news,
 		.stop_ai = Co_stop_ai, .delete_company = Co_delete_company, .company_removed = Co_company_removed,
 		.merger_news = Co_merger_news, .acquisition_windows = Co_acquisition_windows,
-		.clients_to_spectators = Co_clients_to_spectators, .set_local_company = RustSetLocalCompany,
+		.clients_to_spectators = Co_clients_to_spectators,
 		.subsidies = RustSubsidyServices,
 		.town_next = Co_town_next, .town_rating = Co_town_rating,
 		.set_town_rating = Co_set_town_rating, .set_town_exclusivity = Co_set_town_exclusivity,

@@ -42,13 +42,12 @@ static_assert(sizeof(DestinationID) >= sizeof(DepotID));
 static_assert(sizeof(DestinationID) >= sizeof(StationID));
 
 #ifdef WITH_RUST
-#include "rust/command_services_ffi.h"
 #include "rust/environment_services.h"
 #include "rust/settings_services.h"
-#include "rust/command_cost_services.h"
 #include "rust/services_map.h"
 #include "rust/vehicle_services.h"
 #include "rust/services_station.h"
+#include "rust/station_command_ffi.h"
 #include "rust/engine_services.h"
 static_assert(sizeof(Order) == sizeof(OpenTTDOrderFields) && alignof(Order) == alignof(OpenTTDOrderFields));
 static_assert(std::is_trivially_copyable_v<Order> && std::is_trivially_destructible_v<Order>);
@@ -99,12 +98,7 @@ extern "C" uint64_t openttd_orders_vehicle_status(void *ctx) noexcept
 	return v->vehstatus.base();
 }
 
-extern "C" uint64_t openttd_orders_vehicle_ownership(void *ctx, void *result) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	GetRustCommandServices().ownership(RustCommandCost(static_cast<CommandCost *>(result)), v->owner.base(), 0);
-	return static_cast<CommandCost *>(result)->Succeeded();
-}
+
 
 extern "C" uint64_t openttd_orders_ticks_per_second() noexcept
 {
@@ -229,11 +223,7 @@ extern "C" uint64_t openttd_orders_station_owner(uint16_t destination) noexcept
 
 
 
-extern "C" uint64_t openttd_orders_owner_check(uint8_t owner, void *result) noexcept
-{
-	GetRustCommandServices().ownership(RustCommandCost(static_cast<CommandCost *>(result)), owner, 0);
-	return static_cast<CommandCost *>(result)->Succeeded();
-}
+
 
 extern "C" uint64_t openttd_orders_station_error(void *ctx, uint16_t destination) noexcept
 {
@@ -398,11 +388,6 @@ extern "C" uint64_t openttd_orders_no_jet_crash() noexcept
 extern "C" void openttd_orders_append_station(void *ctx, uint16_t station) noexcept
 {
 	static_cast<std::vector<StationID> *>(ctx)->push_back(StationID(station));
-}
-
-extern "C" void openttd_orders_invalidate_station_list() noexcept
-{
-	InvalidateWindowClassesData(WC_STATION_LIST, 0);
 }
 
 extern "C" void openttd_orders_command_error(void *ctx, uint32_t error, uint32_t detail) noexcept
@@ -574,7 +559,6 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.vehicle_status = openttd_orders_vehicle_status,
 	.tick_counter = openttd_orders_tick_counter,
 	.primary_vehicle = openttd_orders_primary_vehicle,
-	.vehicle_ownership = openttd_orders_vehicle_ownership,
 	.ticks_per_second = openttd_orders_ticks_per_second,
 	.unit_number = RustOpaqueVehicleRead<uint64_t, RustVehicleUnitNumber>,
 	.economy_fraction = openttd_orders_economy_fraction,
@@ -605,7 +589,6 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.ship_station_tile = openttd_orders_ship_station_tile,
 	.valid_station = openttd_orders_valid_station,
 	.station_owner = openttd_orders_station_owner,
-	.owner_check = openttd_orders_owner_check,
 	.station_error = openttd_orders_station_error,
 	.valid_depot = openttd_orders_valid_depot,
 	.depot_owner = openttd_orders_depot_owner,
@@ -636,7 +619,7 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.fast_aircraft = openttd_orders_fast_aircraft,
 	.no_jet_crash = openttd_orders_no_jet_crash,
 	.append_station = openttd_orders_append_station,
-	.invalidate_station_list = openttd_orders_invalidate_station_list,
+	.station_commands = &GetRustStationCommandServices(),
 	.command_error = openttd_orders_command_error,
 	.timetable_dirty = openttd_orders_timetable_dirty,
 	.invalidate_order = openttd_orders_invalidate_order,

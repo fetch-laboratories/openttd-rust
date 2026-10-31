@@ -14,7 +14,7 @@ struct OpenTTDWorldSetupFrame;
 struct OpenTTDSessionServices;
 struct OpenTTDSessionFrame;
 struct OpenTTDWorldSettings { uint8_t height_limit, flat_height, heightmap_height, generator; };
-struct OpenTTDWorldLandscape { OpenTTDGenerationFrame *frame; const OpenTTDHeightmapDecoder *decoder; OpenTTDLandscapeGenerationSettings settings; };
+struct OpenTTDWorldLandscape { OpenTTDGenerationFrame *frame; const OpenTTDHeightmapInput *decoder; OpenTTDLandscapeGenerationSettings settings; };
 struct OpenTTDWorldTown { OpenTTDTownFoundingFrame *frame; OpenTTDTownNameFrame *names; const OpenTTDRoadCommandContext *road; TownLayout layout; };
 struct OpenTTDWorldObject { OpenTTDObjectGenerationFrame *frame; OpenTTDCommandCost *out, *tmp, *aux; };
 /* All calls are serialized by the game-state mutex. Progress may yield; no map
@@ -31,9 +31,6 @@ struct OpenTTDWorldServices {
 	const OpenTTDDisasterServices *disasters;
 	bool (*modal)() noexcept OPENTTD_SERVICE_DEFAULT(modal);
 	void (*set_modal)(bool) noexcept OPENTTD_SERVICE_DEFAULT(set_modal);
-	uint8_t (*local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
-	void (*set_local_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_local_company);
-	void (*restore_companies)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(restore_companies);
 	bool (*initialize)(OpenTTDWorldSetupFrame *, uint32_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(initialize);
 	void (*prepare_progress)() noexcept OPENTTD_SERVICE_DEFAULT(prepare_progress);
 	OpenTTDWorldSettings (*settings)() noexcept OPENTTD_SERVICE_DEFAULT(settings);
@@ -66,7 +63,6 @@ struct OpenTTDWorldServices {
 	void (*dirty)() noexcept OPENTTD_SERVICE_DEFAULT(dirty);
 	bool (*set_progress)(OpenTTDWorldFrame *, GenWorldProgress, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_progress);
 	bool (*increase_progress)(OpenTTDWorldFrame *, GenWorldProgress) noexcept OPENTTD_SERVICE_DEFAULT(increase_progress);
-	bool (*town_roads)() noexcept OPENTTD_SERVICE_DEFAULT(town_roads);
 	bool (*freeform)() noexcept OPENTTD_SERVICE_DEFAULT(freeform);
 	void (*count_land)() noexcept OPENTTD_SERVICE_DEFAULT(count_land);
 	OpenTTDWorldLandscape (*landscape_begin)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(landscape_begin);

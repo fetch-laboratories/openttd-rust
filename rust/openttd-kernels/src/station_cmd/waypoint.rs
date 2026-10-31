@@ -53,7 +53,7 @@ impl Ctx<'_> {
         if crate::station_map::is_road_waypoint_tile(tile, self.shared) {
             return (self.shared.drive_through_axis)(tile);
         }
-        if !(self.shared.is_normal_road)(tile) {
+        if !(self.shared.is_normal_road_tile)(tile) {
             return INVALID_AXIS;
         }
         let ground = unsafe { &*self.s.road_ground };
@@ -74,7 +74,7 @@ impl Ctx<'_> {
         }
         let owner = (self.world().station_owner)(st);
         if owner != OWNER_NONE {
-            unsafe { (self.command.ownership)(out.0, owner, 0) };
+            unsafe { self.command.ownership(out.0, owner, 0) };
             if !out.ok() {
                 return;
             }
@@ -109,7 +109,7 @@ impl Ctx<'_> {
         }
         let owner = (self.world().station_owner)(st);
         if owner != OWNER_NONE {
-            unsafe { (self.command.ownership)(out.0, owner, 0) };
+            unsafe { self.command.ownership(out.0, owner, 0) };
             if !out.ok() {
                 return INVALID_STATION;
             }
@@ -236,7 +236,7 @@ impl Ctx<'_> {
             return out.error(self.rail().strings.no_suitable_track);
         }
         let owner = (self.shared.tile_owner)(tile);
-        unsafe { (self.command.ownership)(out.0, owner, 0) };
+        unsafe { self.command.ownership(out.0, owner, 0) };
         if out.ok() {
             unsafe { self.command.no_vehicle(out.0, tile) };
         }
@@ -655,7 +655,7 @@ impl Ctx<'_> {
                     count,
                 );
             };
-            if (self.shared.is_normal_road)(tile) {
+            if (self.shared.is_normal_road_tile)(tile) {
                 update(
                     road,
                     road_owner,
@@ -682,7 +682,9 @@ impl Ctx<'_> {
             );
             (self.s.set_custom_road_index)(tile, specindex.value);
             if !spec.is_null() {
-                (self.s.stop_random_bits)(wp, tile, 0);
+                unsafe {
+                    ((*self.s.roadstop_resolver).set_tile_random)(wp, tile, 0);
+                }
             }
             (self.s.station_infrastructure)(owner, 1);
             (self.shared.mark_dirty)(tile);

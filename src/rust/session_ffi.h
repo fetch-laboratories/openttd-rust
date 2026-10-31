@@ -14,6 +14,7 @@ struct OpenTTDSessionFrame;
 struct OpenTTDSessionLoad;
 /* Native objects are placement-constructed here; Rust never interprets the bytes. */
 struct alignas(16) OpenTTDSessionFrameStorage { std::byte storage[4096]; };
+struct alignas(16) OpenTTDWorldFrameStorage { std::byte storage[8192]; };
 struct OpenTTDSessionDimensions { uint32_t x, y; };
 struct OpenTTDSessionSecondaryColour { Colours colour; bool used; };
 /* Serialized entries; native resource/exception frames live on their callers' stacks.
@@ -68,8 +69,6 @@ struct OpenTTDSessionServices {
 	void (*check_caches)() noexcept OPENTTD_SERVICE_DEFAULT(check_caches);
 	void (*reset_engine_overrides)() noexcept OPENTTD_SERVICE_DEFAULT(reset_engine_overrides);
 	void (*dirty)() noexcept OPENTTD_SERVICE_DEFAULT(dirty);
-	void (*set_local_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_local_company);
-	uint8_t (*first_playable_company)() noexcept OPENTTD_SERVICE_DEFAULT(first_playable_company);
 	bool (*reload_config)() noexcept OPENTTD_SERVICE_DEFAULT(reload_config);
 	void (*reset_grf)(bool) noexcept OPENTTD_SERVICE_DEFAULT(reset_grf);
 	void (*autosave_frequency)(bool) noexcept OPENTTD_SERVICE_DEFAULT(autosave_frequency);
@@ -113,7 +112,7 @@ struct OpenTTDSessionServices {
 	bool (*scan)(OpenTTDSessionFrame *, NewGRFScanCallback *) noexcept OPENTTD_SERVICE_DEFAULT(scan);
 	OpenTTDWorldSetupFrame *(*world_setup_begin)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(world_setup_begin);
 	bool (*world_setup_end)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(world_setup_end);
-	OpenTTDWorldFrame *(*world_frame_begin)(OpenTTDSessionFrameStorage *) noexcept OPENTTD_SERVICE_DEFAULT(world_frame_begin);
+	OpenTTDWorldFrame *(*world_frame_begin)(OpenTTDWorldFrameStorage *) noexcept OPENTTD_SERVICE_DEFAULT(world_frame_begin);
 	bool (*world_frame_end)(OpenTTDSessionFrame *, OpenTTDWorldFrame *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(world_frame_end);
 	bool (*heightmap_screenshot)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(heightmap_screenshot);
 	bool (*desync_save)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(desync_save);
@@ -161,7 +160,7 @@ struct OpenTTDSessionServices {
 const OpenTTDSessionServices &GetRustSessionServices() noexcept;
 void RustAskUnsafeUnpause() noexcept;
 void RustSaveDesyncGame();
-OpenTTDWorldFrame *RustWorldFrameBegin(OpenTTDSessionFrameStorage *) noexcept;
+OpenTTDWorldFrame *RustWorldFrameBegin(OpenTTDWorldFrameStorage *) noexcept;
 bool RustWorldFrameEnd(OpenTTDSessionFrame *, OpenTTDWorldFrame *, uint8_t) noexcept;
 OpenTTDTreeTickSettings RustTreeTickSettings() noexcept;
 OpenTTDIndustryTickRecord RustIndustryTickRecord() noexcept;

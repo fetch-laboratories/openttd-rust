@@ -1,5 +1,8 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! `map_type.h` landscape leveling modes; native compilation asserts the values.
+//! `map_type.h` map limits and landscape leveling modes; native compilation asserts the values.
+
+/// `MAX_MAP_SIZE`.
+pub const MAX_MAP_SIZE: u32 = 1 << 12;
 
 /// `LM_LEVEL`.
 pub const LM_LEVEL: u8 = 0;

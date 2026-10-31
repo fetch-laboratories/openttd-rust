@@ -718,7 +718,7 @@ impl<'a> World<'a> {
                 }
                 from = target.id + 1;
             }
-            let town = (self.shared.closest_town)(self.dest(v), u32::MAX);
+            let town = crate::town::spatial::closest(self.shared, self.dest(v), u32::MAX);
             (self.s.big_ufo_news)(self.tile(v), (self.s.town_index)(town));
             if !(self.s.can_allocate)(2) {
                 return self.delete(v);
@@ -824,7 +824,13 @@ impl<'a> World<'a> {
             }
             for dy in -3..3 {
                 for dx in -3..3 {
-                    let tile = (self.shared.tile_add_wrap)(self.tile(v), dx, dy);
+                    let tile = self.map().tile_add_wrap(
+                        self.tile(v),
+                        dx,
+                        dy,
+                        self.size_y(),
+                        (unsafe { &*self.s.environment }.freeform_edges)(),
+                    );
                     if tile != INVALID_TILE {
                         self.clear(tile);
                     }

@@ -506,7 +506,6 @@ pub struct Leaves {
     pub vehicle_status: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub tick_counter: extern "C" fn() -> u64,
     pub primary_vehicle: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub vehicle_ownership: unsafe extern "C" fn(ctx: *mut c_void, result: *mut c_void) -> u64,
     pub ticks_per_second: extern "C" fn() -> u64,
     pub unit_number: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub economy_fraction: extern "C" fn() -> u64,
@@ -537,7 +536,6 @@ pub struct Leaves {
     pub ship_station_tile: unsafe extern "C" fn(destination: u16) -> u64,
     pub valid_station: extern "C" fn(destination: u16) -> u64,
     pub station_owner: unsafe extern "C" fn(destination: u16) -> u64,
-    pub owner_check: unsafe extern "C" fn(owner: u8, result: *mut c_void) -> u64,
     pub station_error: unsafe extern "C" fn(ctx: *mut c_void, destination: u16) -> u64,
     pub valid_depot: extern "C" fn(destination: u16) -> u64,
     pub depot_owner: unsafe extern "C" fn(destination: u16) -> u64,
@@ -568,7 +566,7 @@ pub struct Leaves {
     pub fast_aircraft: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub no_jet_crash: extern "C" fn() -> u64,
     pub append_station: unsafe extern "C" fn(ctx: *mut c_void, station: u16),
-    pub invalidate_station_list: extern "C" fn(),
+    pub station_commands: *const crate::station_cmd::CommandServicesTable,
     pub command_error: unsafe extern "C" fn(ctx: *mut c_void, error: u32, detail: u32),
     pub timetable_dirty: unsafe extern "C" fn(ctx: *mut c_void),
     pub invalidate_order: unsafe extern "C" fn(ctx: *mut c_void, data: i32),
@@ -632,7 +630,6 @@ leaves! {
     fn vehicle_type(ctx: *mut c_void) -> u64;
     fn vehicle_status(ctx: *mut c_void) -> u64;
     fn primary_vehicle(ctx: *mut c_void) -> u64;
-    fn vehicle_ownership(ctx: *mut c_void, result: *mut c_void) -> u64;
     fn unit_number(ctx: *mut c_void) -> u64;
     fn stopped_or_crashed(ctx: *mut c_void) -> u64;
     fn suppress_implicit(ctx: *mut c_void) -> u64;
@@ -702,6 +699,10 @@ impl Game {
     fn maintenance(self) -> &'static maintenance::Services {
         // SAFETY: The immutable base table supplies its process-wide maintenance table.
         unsafe { &*self.0.base.maintenance }
+    }
+    fn invalidate_station_list(self) {
+        // SAFETY: The immutable leaves table supplies the process-wide station command table.
+        (unsafe { &*self.0.station_commands }.station_list_classes_invalidate)();
     }
     fn vehicle(self, v: *mut c_void) -> *mut VehicleOrders {
         // SAFETY: The entry supplies a live Vehicle shell whose orders owner remains allocated.
@@ -1052,7 +1053,7 @@ pub unsafe extern "C" fn openttd_rust_list_free(
             if matches!(order.kind(), OT_GOTO_STATION | OT_GOTO_WAYPOINT)
                 && g.ownerless_station(order.destination, 1) != 0
             {
-                (g.0.invalidate_station_list)();
+                g.invalidate_station_list();
                 break;
             }
         }
@@ -1125,7 +1126,7 @@ pub unsafe extern "C" fn openttd_rust_list_insert(
         if matches!(order.kind(), OT_GOTO_STATION | OT_GOTO_WAYPOINT)
             && g.ownerless_station(order.destination, 0) != 0
         {
-            (g.0.invalidate_station_list)();
+            g.invalidate_station_list();
         }
     };
     0
@@ -1418,7 +1419,8 @@ impl Game {
         }
     }
     fn owner_check(self, v: *mut c_void, output: *mut c_void) -> bool {
-        self.vehicle_ownership(v, output) != 0
+        let owner = (self.0.base.owner)(native_vehicle(v));
+        self.check_owner(u64::from(owner), output)
     }
     fn command_error(self, output: *mut c_void, error: u32) -> u32 {
         // SAFETY: Output is the entry's live, writable native CommandCost.
@@ -3231,8 +3233,13 @@ impl Game {
         0
     }
     fn check_owner(self, owner: u64, output: *mut c_void) -> bool {
-        // SAFETY: Output is the entry's live, writable native CommandCost.
-        (unsafe { (self.0.owner_check)(owner as u8, output) }) != 0
+        // SAFETY: The entry supplies immutable owning tables and a live native cost slot.
+        let station = unsafe { &*self.0.station_commands };
+        // SAFETY: These canonical command/cost tables outlive the synchronous entry.
+        let (costs, commands) = unsafe { (&*station.cost, &*station.command) };
+        let result = crate::services::Cost(output.cast(), costs);
+        result.ownership(commands, owner as u8, 0);
+        result.ok()
     }
     fn error(self, output: *mut c_void, error: u32) -> u64 {
         u64::from(self.command_error(output, error))
@@ -4031,7 +4038,7 @@ impl Control {
             }
             self.initialize_list(list, v);
             write_field!(g.vehicle(v), orders, list);
-            (g.0.invalidate_station_list)();
+            g.invalidate_station_list();
         }
         if g.unique_backup_name(backup) == 0 {
             g.clear_backup_name(backup);
@@ -4507,6 +4514,14 @@ impl VisitOrders {
     pub(crate) fn order(self, list: *mut c_void, index: u8) -> Order {
         self.0.stored_order(list, usize::from(index))
     }
+    /// Full `OrderList::GetOrders()` span length, without `VehicleOrderID` narrowing.
+    pub(crate) fn stored_count(self, list: *mut c_void) -> usize {
+        self.0.stored_count(list)
+    }
+    /// Full stored-span entry, with `index` below `stored_count`.
+    pub(crate) fn stored_order(self, list: *mut c_void, index: usize) -> Order {
+        self.0.stored_order(list, index)
+    }
     /// `OrderList::GetNext`.
     pub(crate) fn next(self, list: *mut c_void, index: u8) -> u8 {
         self.0.next_index(list, index)
@@ -4645,7 +4660,6 @@ crate::abi::layouts! {
         vehicle_status,
         tick_counter,
         primary_vehicle,
-        vehicle_ownership,
         ticks_per_second,
         unit_number,
         economy_fraction,
@@ -4676,7 +4690,6 @@ crate::abi::layouts! {
         ship_station_tile,
         valid_station,
         station_owner,
-        owner_check,
         station_error,
         valid_depot,
         depot_owner,
@@ -4707,7 +4720,7 @@ crate::abi::layouts! {
         fast_aircraft,
         no_jet_crash,
         append_station,
-        invalidate_station_list,
+        station_commands,
         command_error,
         timetable_dirty,
         invalidate_order,

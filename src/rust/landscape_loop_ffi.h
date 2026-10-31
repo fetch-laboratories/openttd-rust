@@ -13,6 +13,7 @@
 #include "ground_ffi.h"
 #include "object_ffi.h"
 struct OpenTTDTownLeaves;
+struct OpenTTDStationLifecycleServices;
 
 /* Only existing tables consumed by the industry tile loop; borrowed for a batch. */
 struct OpenTTDIndustryLoopServices {
@@ -43,12 +44,11 @@ struct OpenTTDGroundLoopServices {
  * immutable and live for the synchronous invocation. All wrappers are noexcept. */
 struct OpenTTDLandscapeLoopServices {
 	const OpenTTDSharedServices *shared;
-	OpenTTDTileTypeAllocation tile_types;
 	const OpenTTDTreeServices *trees;
 	OpenTTDIndustryLoopServices industry;
 	OpenTTDGroundLoopServices ground;
 	const OpenTTDTownLeaves *town;
-	void (*station_loop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_loop);
+	const OpenTTDStationLifecycleServices *station;
 	const OpenTTDObjectServices *objects;
 };
 const OpenTTDTreeServices &GetRustTreeServices() noexcept;

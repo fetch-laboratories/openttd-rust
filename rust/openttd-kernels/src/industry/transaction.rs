@@ -49,12 +49,10 @@ pub struct TransactionServices {
     pub enabled: unsafe extern "C" fn(*const SpecHandle) -> bool,
     pub layout_count: unsafe extern "C" fn(*const SpecHandle) -> usize,
     pub layout: unsafe extern "C" fn(*const SpecHandle, usize) -> *const LayoutHandle,
-    pub raw: unsafe extern "C" fn(*const SpecHandle) -> bool,
     pub raw_setting: unsafe extern "C" fn() -> u8,
     pub check_proc: unsafe extern "C" fn(*const SpecHandle) -> u8,
     pub conflicting: unsafe extern "C" fn(*const SpecHandle) -> ConflictKinds,
     pub multiple_per_town: unsafe extern "C" fn() -> bool,
-    pub closest_town: unsafe extern "C" fn(u32, u32) -> *const TownHandle,
     pub town: unsafe extern "C" fn(*mut ShellHandle) -> *const TownHandle,
     pub population: unsafe extern "C" fn(*const TownHandle) -> u32,
     pub town_position: unsafe extern "C" fn(*const TownHandle) -> u32,
@@ -87,7 +85,6 @@ pub struct TransactionServices {
     pub local_company: unsafe extern "C" fn() -> bool,
     pub prospect_no_place: unsafe extern "C" fn(),
     pub prospect_unlucky: unsafe extern "C" fn(),
-    pub construction_cost: unsafe extern "C" fn(*const SpecHandle) -> i64,
 }
 #[repr(C)]
 pub struct TransactionContext {
@@ -140,6 +137,16 @@ impl Engine<'_> {
     }
     fn map(&self) -> super::Map {
         self.context.map
+    }
+    fn tile_add_wrap(&self, tile: u32, x: i32, y: i32) -> u32 {
+        let map = self.map();
+        map.coordinates().tile_add_wrap(
+            tile,
+            x,
+            y,
+            map.size_y,
+            (self.g.environment.freeform_edges)(),
+        )
     }
     fn distance(&self, a: u32, b: u32) -> u32 {
         let map = self.map();
@@ -252,7 +259,7 @@ impl Engine<'_> {
         self.success()
     }
     fn find_town(&self, tile: u32, kind: u8) -> Option<*const TownHandle> {
-        let town = unsafe { (self.x.closest_town)(tile, u32::MAX) };
+        let town = crate::town::spatial::closest(unsafe { &*self.s.shared }, tile, u32::MAX);
         if !unsafe { (self.x.multiple_per_town)() } {
             for n in 0..self.registry_count(kind) {
                 let shell = unsafe { (self.x.industry)(self.registry_id(kind, n)) };
@@ -285,8 +292,7 @@ impl Engine<'_> {
         for n in 0..unsafe { (self.c.layout_size)(layout) } {
             let part = unsafe { (self.c.layout_tile)(layout, n) };
             let gfx = unsafe { (self.c.translated_gfx)(part.gfx) };
-            let current =
-                unsafe { (self.s.tile_add_wrap)(tile, i32::from(part.x), i32::from(part.y)) };
+            let current = self.tile_add_wrap(tile, i32::from(part.x), i32::from(part.y));
             if current == u32::MAX {
                 return self.fail(self.e.site);
             }
@@ -365,8 +371,7 @@ impl Engine<'_> {
         for n in 0..unsafe { (self.c.layout_size)(layout) } {
             let part = unsafe { (self.c.layout_tile)(layout, n) };
             let gfx = unsafe { (self.c.translated_gfx)(part.gfx) };
-            let current =
-                unsafe { (self.s.tile_add_wrap)(tile, i32::from(part.x), i32::from(part.y)) };
+            let current = self.tile_add_wrap(tile, i32::from(part.x), i32::from(part.y));
             if gfx != crate::industry_map::GFX_WATERTILE_SPECIALCHECK {
                 let spec = unsafe { (self.t.spec)(gfx) };
                 if unsafe { (self.x.shape_callback)(spec) } {
@@ -693,7 +698,7 @@ unsafe extern "C" fn location_visit(context: *mut c_void, shell: *mut ShellHandl
         (*owner).metadata.kind = call.kind;
         (*owner).metadata.selected_layout = call.layout_index as u8;
     }
-    let town = unsafe { (e.x.closest_town)(call.tile, u32::MAX) };
+    let town = crate::town::spatial::closest(unsafe { &*e.s.shared }, call.tile, u32::MAX);
     unsafe {
         (e.c.set_town)(shell.cast(), town);
         (*owner).metadata.random = call.bits;
@@ -820,7 +825,7 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
     if !(e.g.environment.editor)()
         && e.company() != 18
         && unsafe { (e.x.raw_setting)() } == 0
-        && unsafe { (e.x.raw)(spec) }
+        && unsafe { super::spec_raw((e.g.spec_life)(spec)) }
     {
         e.fail(0xffff);
         return;
@@ -850,7 +855,7 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
         || (!(e.g.environment.editor)()
             && e.company() != 18
             && unsafe { (e.x.raw_setting)() } == 2
-            && unsafe { (e.x.raw)(spec) })
+            && unsafe { super::spec_raw((e.g.spec_life)(spec)) })
     {
         if flags & 1 != 0 {
             let succeeded = deity_prospect
@@ -922,9 +927,15 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
         }
     }
     if flags & 1 != 0 && !industry.is_null() && !(e.g.environment.editor)() {
-        unsafe { (e.s.advertise)(industry.cast()) };
+        super::advertise(industry.cast(), e.s);
     }
-    let construction = unsafe { (e.x.construction_cost)(spec) };
+    let construction = unsafe {
+        super::construction_cost(
+            (e.g.cost_multiplier)(spec),
+            (e.g.spec_life)(spec),
+            (e.x.raw_setting)(),
+        )
+    };
     unsafe { (e.cost.expense_money)(out, 12, construction) };
 }
 /// # Safety

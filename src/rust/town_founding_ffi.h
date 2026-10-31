@@ -16,16 +16,13 @@
 #include "../cargotype.h"
 #include "../command_type.h"
 #include <exception>
-#include <optional>
 struct OpenTTDRoadCommandContext;
 struct OpenTTDTownFoundingFrame {
 	OpenTTDTownNameFrame names;
-	std::optional<TownNameParams> parameters;
 	std::exception_ptr cancellation;
 	Money extra_money = 0;
 	TownID town_id = TownID::Invalid();
 };
-struct OpenTTDTownNameMetadata { uint32_t grfid; uint16_t type; };
 /** Only set_progress/increase_progress can signal ordinary cancellation. Each
  * catches AbortGenerateWorldSignal in the native frame; Rust drops scratch and
  * returns before C++ rethrows. All other services are direct noexcept calls.
@@ -41,7 +38,6 @@ struct OpenTTDTownFoundingServices {
 	OpenTTDTownRef (*allocate)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(allocate);
 	OpenTTDTownRef (*resolve)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve);
 	bool (*can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
-	bool (*close_to_town)(uint32_t, uint) noexcept OPENTTD_SERVICE_DEFAULT(close_to_town);
 	bool (*flat)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(flat);
 	uint (*water_distance)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(water_distance);
 	uint (*scale_size)(uint) noexcept OPENTTD_SERVICE_DEFAULT(scale_size);
@@ -52,10 +48,7 @@ struct OpenTTDTownFoundingServices {
 	uint8_t (*town_density)() noexcept OPENTTD_SERVICE_DEFAULT(town_density);
 	uint16_t (*custom_number)() noexcept OPENTTD_SERVICE_DEFAULT(custom_number);
 	uint8_t (*larger_towns)() noexcept OPENTTD_SERVICE_DEFAULT(larger_towns);
-	const TownNameParams *(*parameters)(OpenTTDTownFoundingFrame *) noexcept OPENTTD_SERVICE_DEFAULT(parameters);
-	OpenTTDTownNameMetadata (*metadata)(const TownNameParams *) noexcept OPENTTD_SERVICE_DEFAULT(metadata);
-	void (*insert_town)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(insert_town);
-	bool (*cargo_effect_exists)(TownAcceptanceEffect) noexcept OPENTTD_SERVICE_DEFAULT(cargo_effect_exists);
+	uint8_t (*name_style)() noexcept OPENTTD_SERVICE_DEFAULT(name_style);
 	void (*prepare_rename)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(prepare_rename);
 	void (*name_changed)(Town *, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(name_changed);
 	void (*update_virt)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(update_virt);

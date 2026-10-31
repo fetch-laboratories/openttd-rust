@@ -7,6 +7,7 @@
 
 /** @file windows-abi.cpp Bounded first-32-bit layout and real C ABI call checks. */
 #include "stdafx.h"
+#include "tests/fixture_map.hpp"
 #include "ground_vehicle.hpp"
 #include "3rdparty/monocypher/monocypher.h"
 #include "misc/history_type.hpp"
@@ -123,17 +124,28 @@ static void Calls()
 		leaves.environment.freeform_edges = []() noexcept { return false; };
 		names.next = [](uint from) noexcept -> OpenTTDTownRef { CHECK(from == 0 || from == UINT16_MAX); return from == 0 ? OpenTTDTownRef{reinterpret_cast<Town *>(uintptr_t{1}), owner, UINT16_MAX - 1} : OpenTTDTownRef{nullptr, nullptr, UINT16_MAX}; };
 		names.utf8_length = [](const uint8_t *data, size_t size) noexcept -> size_t { CHECK(size == 1 && *data == 'x'); return size; };
-		founding.parameters = [](OpenTTDTownFoundingFrame *) noexcept -> const TownNameParams * { return nullptr; };
+		founding.name_style = []() noexcept -> uint8_t { return 0; };
 		shared.current_company = []() noexcept -> uint8_t { return UINT8_MAX; };
 		founding.found_setting = []() noexcept { return TF_CUSTOM_LAYOUT; };
 		founding.can_allocate = []() noexcept { return true; };
-		shared.distance_from_edge = [](uint32_t tile) noexcept -> uint32_t { CHECK(tile == UINT32_MAX); return 13; };
-		founding.close_to_town = [](uint32_t tile, uint distance) noexcept { CHECK(tile == UINT32_MAX && distance == 20); return true; };
+		/* TileXY(32, 32) on a 64x64 map is 32 tiles from every edge. */
+		const OpenTTDFixtureMap map{6};
+		shared.map = &map.statics;
+		shared.map_max_y = []() noexcept -> uint32_t { return 63; };
+		openttd_rust_town_simulation(owner)->xy = 2080;
+		shared.town_count = []() noexcept -> size_t { return 1; };
+		shared.town_next_id = [](uint32_t from) noexcept -> uint32_t { return from == 0 ? UINT16_MAX - 1 : UINT32_MAX; };
+		shared.town_owner_by_id = [](uint32_t id) noexcept { CHECK(id == UINT16_MAX - 1); return owner; };
+		openttd_rust_town_rebuild_index(&shared);
 		founding.resolve = [](uint16_t id) noexcept -> OpenTTDTownRef { CHECK(id == UINT16_MAX); return {nullptr, nullptr, id}; };
 		uint32_t error = 0; auto *cost = reinterpret_cast<OpenTTDCommandCost *>(&error); OpenTTDTownFoundingFrame frame; const uint8_t text = 'x';
-		openttd_rust_town_found(&founding, nullptr, &frame, &frame.names, cost, UINT32_MAX, TSZ_SMALL, false, TL_ORIGINAL, false, 0, {&text, 1}, false);
+		openttd_rust_town_found(&founding, nullptr, &frame, &frame.names, cost, 2080, TSZ_SMALL, false, TL_ORIGINAL, false, 0, {&text, 1}, false);
 		CHECK(error == 0x87654321); openttd_rust_town_rename(&founding, cost, UINT16_MAX, {nullptr, 0}, false);
-		CHECK(error == UINT16_MAX); openttd_rust_town_destroy(owner);
+		CHECK(error == UINT16_MAX);
+		shared.town_count = []() noexcept -> size_t { return 0; };
+		shared.town_next_id = [](uint32_t) noexcept -> uint32_t { return UINT32_MAX; };
+		openttd_rust_town_rebuild_index(&shared);
+		openttd_rust_town_destroy(owner);
 	}
 	std::unique_ptr<OpenTTDRoadState, decltype(&openttd_rust_road_destroy)> road(openttd_rust_road_new(), openttd_rust_road_destroy);
 	for (uint8_t field = 0; field < 7; ++field) {

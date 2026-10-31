@@ -102,6 +102,9 @@
 #include "rust/services_road.h"
 #include "rust/vehicle_visits_ffi.h"
 #include "rust/services_linkgraph.h"
+#include "rust/station_lifecycle_ffi.h"
+#include "rust/station_resolver_ffi.h"
+#include "rust/newgrf_vehicle_ffi.h"
 #endif
 
 #ifdef WITH_RUST
@@ -179,6 +182,7 @@ CommandCost GetStationAround(TileArea ta, StationID closest_station, CompanyID c
 
 #endif
 
+#ifndef WITH_RUST
 /**
  * Function to check whether the given tile matches some criterion.
  * @param tile the tile to check
@@ -422,6 +426,8 @@ static StringID GenerateStationName(Station *st, TileIndex tile, StationNaming n
 	}
 	return STR_SV_STNAME_FALLBACK;
 }
+#endif
+
 
 /**
  * Find the closest deleted station of the current company
@@ -793,15 +799,9 @@ static const OpenTTDStationLinks _rust_station_links = {
 	},
 	.last_service = RustVehicleLastServiceOf,
 	.cargo_type = RustVehicleCargoType,
-	.reroute = [](OpenTTDBaseStation *handle, OpenTTDVehicle *vehicle, uint8_t cargo, uint16_t avoid, uint16_t avoid2) noexcept -> void {
-		GoodsEntry &ge = static_cast<Station *>(handle)->goods[cargo];
-		if (vehicle == nullptr) {
-			if (ge.HasData()) ge.GetData().cargo.Reroute(UINT_MAX, &ge.GetData().cargo, StationID(avoid), StationID(avoid2), &ge);
-		} else {
-			Vehicle *v = VehicleOf(vehicle);
-			v->cargo.Reroute(UINT_MAX, &v->cargo, StationID(avoid), StationID(avoid2), &ge);
-		}
-	},
+	.goods_entry = RustStationGoodsEntry,
+	.station_resolver = &GetStationResolverServices(),
+	.vehicle_resolver = &GetRustVehicleResolverServices(),
 };
 const OpenTTDStationServices &GetRustStationServices() noexcept { return _rust_station_services; }
 const OpenTTDStationLinks &GetRustStationLinks() noexcept { return _rust_station_links; }
@@ -4165,15 +4165,9 @@ static TrackStatus GetTileTrackStatus_Station(TileIndex tile, TransportType mode
 #endif
 
 
-#ifdef WITH_RUST
-static void TileLoop_Station(uint32_t tile_index) noexcept
-#else
+#ifndef WITH_RUST
 static void TileLoop_Station(TileIndex tile)
-#endif
 {
-#ifdef WITH_RUST
-	const TileIndex tile{tile_index};
-#endif
 	auto *st = BaseStation::GetByTile(tile);
 	switch (GetStationType(tile)) {
 		case StationType::Airport:
@@ -4240,6 +4234,8 @@ static void TileLoop_Station(TileIndex tile)
 		default: break;
 	}
 }
+
+#endif
 
 
 #ifndef WITH_RUST
@@ -5958,7 +5954,11 @@ extern const TileTypeProcs _tile_type_station_procs = {
 #ifndef WITH_RUST
 	AnimateTile_Station,        // animate_tile_proc
 #endif
+#ifdef WITH_RUST
+	nullptr, // Rust tile scheduler calls the station owner directly.
+#else
 	TileLoop_Station,           // tile_loop_proc
+#endif
 #ifdef WITH_RUST
 	nullptr,                 // Rust ownership dispatcher calls the owner directly.
 #else
@@ -5991,9 +5991,11 @@ extern const TileTypeProcs _tile_type_station_procs = {
 #include "abi-visit-OpenTTDStationDefinitionServices.hpp"
 #include "abi-visit-OpenTTDAct3CargoServices.hpp"
 #include "abi-visit-OpenTTDStationCatchmentServices.hpp"
+#include "abi-visit-OpenTTDStationLifecycleServices.hpp"
 bool CheckAbi_station_cmd()
 {
-	return AbiServicesComplete(GetRustStationCatchmentServices()) &&
+	return AbiServicesComplete(GetRustStationLifecycleServices()) &&
+		AbiServicesComplete(GetRustStationCatchmentServices()) &&
 		AbiServicesComplete(_rust_station_services.environment) &&
 		AbiServicesComplete(_rust_station_services) &&
 		AbiServicesComplete(_rust_station_links) &&

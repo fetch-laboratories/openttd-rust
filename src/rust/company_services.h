@@ -32,12 +32,13 @@ inline CompanyID OpenTTDCurrentCompany() noexcept { return _current_company; }
 inline void OpenTTDSetCurrentCompany(CompanyID company) noexcept { _current_company = company; }
 inline uint32_t RustCompanyRenewReserve(const Company *company) noexcept { return company->settings.engine_renew_money; }
 inline bool RustCompanyServiceIntervalPercent(uint8_t owner) noexcept { return Company::Get(CompanyID(owner))->settings.vehicle.servint_ispercent; }
+inline CompanySettings *RustCompanySettings(uint8_t owner) noexcept { return &Company::Get(CompanyID(owner))->settings; }
+inline VehicleDefaultSettings *RustCompanyVehicleDefaults(uint8_t owner) noexcept { return &Company::Get(CompanyID(owner))->settings.vehicle; }
 inline uint16_t RustCompanyAircraftServiceInterval(CompanyID owner) noexcept { return Company::Get(owner)->settings.vehicle.servint_aircraft; }
 inline uint8_t RustCurrentCompanyID() noexcept { return OpenTTDCurrentCompany().base(); }
 inline void RustSetCurrentCompanyID(uint8_t company) noexcept { OpenTTDSetCurrentCompany(CompanyID(company)); }
 inline void RustInfrastructureDirty(uint8_t owner) noexcept { DirtyCompanyInfrastructureWindows(CompanyID(owner)); }
 inline bool RustIsLocalCompany() noexcept { return IsLocalCompany(); }
-inline void RustSetLocalCompany(uint8_t company) noexcept { SetLocalCompany(CompanyID(company)); }
 inline void RustRestoreGenerationCompanies(uint8_t company) noexcept { _local_company = CompanyID(company); OpenTTDSetCurrentCompany(CompanyID(company)); }
 inline uint8_t RustLocalCompanyID() noexcept { return _local_company.base(); }
 /** Shared pool traversal preserves the native ascending ID order. */

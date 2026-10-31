@@ -115,7 +115,7 @@ class OrphanTests(unittest.TestCase):
                 )
             self.assertEqual(check(), 1)  # Adding exemptions never fixes it.
             (root / "rust/lib.rs").write_text(export("orphan"))
-            (root / "src/use.cpp").write_text("void Run() { openttd_rust_orphan(); }")
+            (root / "src/use.inc").write_text("void Run() { openttd_rust_orphan(); }")
             self.assertEqual(check(), 1)  # Retired exemptions must disappear.
             (root / ORPHANS.BASELINE).write_text("")
             self.assertEqual(check(), 0)

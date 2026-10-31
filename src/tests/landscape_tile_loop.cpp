@@ -7,6 +7,7 @@
 
 /** @file landscape_tile_loop.cpp Actual native allocation/layout and live shared reads. */
 #include "../stdafx.h"
+#include "fixture_map.hpp"
 #include "../3rdparty/catch2/catch.hpp"
 #ifdef WITH_RUST
 #include "../rust/tile_type_access.hpp"
@@ -14,12 +15,17 @@
 #include "../rust/landscape_command_ffi.h"
 #include "../rust/landscape_generation_ffi.h"
 #include "../rust/world_generation_ffi.h"
+#include "../rust/town_data_ffi.h"
 #include "../rust/session_ffi.h"
 #include "../core/backup_type.hpp"
 #include <thread>
+#include <cmath>
 #include "../rust/generation_sea_set.hpp"
 #include "abi_layout.hpp"
 #include "../tile_map.h"
+#include "../slope_func.h"
+#include "../landscape.h"
+#include "../heightmap.h"
 #include "../road_type.h"
 #include "../station_type.h"
 #include "../rust/landscape_loop_ffi.h"
@@ -30,29 +36,46 @@
 #include "../safeguards.h"
 
 #ifdef WITH_RUST
+TEST_CASE("Town import coordinates preserve native float conversions")
+{
+	const OpenTTDTownDataServices services{.shared = &GetRustSharedServices(), .founding = nullptr, .strings = {}};
+	for (const uint size : {64U, 128U, 4096U}) {
+		Map::Allocate(size, 64);
+		const float boundary = 0x1p-25f / static_cast<float>(Map::MaxX());
+		for (const float input : {std::nextafter(boundary, 0.0f), boundary, std::nextafter(boundary, 1.0f), 0.0001f, 0.01f, 0.3f, 0.5f, 0.99f}) {
+			/* Volatile keeps the original's runtime float-to-uint conversion. */
+			volatile float stored = input;
+			float x = stored, y = stored;
+			CHECK(openttd_test_town_data_target(&services, HM_CLOCKWISE, x, y) == TileXY(x * Map::MaxX(), y * Map::MaxY()).base());
+			CHECK(openttd_test_town_data_target(&services, HM_COUNTER_CLOCKWISE, x, y) == TileXY((1 - y * Map::MaxX()), x * Map::MaxY()).base());
+		}
+	}
+	Map::Allocate(64, 64);
+}
 TEST_CASE("Session tile fixtures restore storage mode across nested entries")
 {
 	static bool nested;
 	nested = false;
 	SessionFixture fixture;
-	fixture.tiles.station_loop = [](uint32_t) noexcept {
-		if (nested) return;
+	fixture.roadstops.by_tile = [](uint32_t) noexcept -> BaseStation * {
+		if (nested) return nullptr;
 		nested = true;
 		SessionFixture inner;
 		CHECK(inner.Run());
+		return nullptr;
 	};
 	CHECK(fixture.Run());
 	CHECK(nested);
 	CHECK(fixture.Run());
 }
-extern "C" uint8_t openttd_rust_shared_tile_type(OpenTTDTileTypeAllocation, uint8_t (*callback)(uint32_t) noexcept, uint32_t tile);
-extern "C" bool openttd_rust_map_read_probe(OpenTTDTileTypeAllocation, const OpenTTDSharedServices *, const OpenTTDClearServices *, const OpenTTDTreeServices *, uint32_t, void (*)(uint32_t) noexcept);
+extern "C" uint8_t openttd_rust_shared_tile_type(const OpenTTDMapStatics *, uint8_t (*callback)(uint32_t) noexcept, uint32_t tile);
+extern "C" bool openttd_rust_map_read_probe(const OpenTTDMapStatics *, const OpenTTDSharedServices *, const OpenTTDClearServices *, const OpenTTDTreeServices *, uint32_t, void (*)(uint32_t) noexcept);
 TEST_CASE("Rust map fields preserve native helpers, mutation and reset")
 {
 	for (const uint size : {64U, 128U}) {
 		Map::Allocate(size, 64);
-		const auto allocation = GetRustTileTypeAllocation();
-		CHECK(allocation.extended != nullptr);
+		const auto statics = _rust_map_statics;
+		CHECK(*statics.extended != nullptr);
 		for (const TileIndex tile : {TileXY(1, 1), TileIndex{Map::Size() - 1}}) {
 			for (const TileType kind : {MP_CLEAR, MP_RAILWAY, MP_ROAD, MP_TREES, MP_STATION, MP_WATER, MP_VOID, MP_TUNNELBRIDGE}) {
 				for (uint value = 0; value < 256; value++) {
@@ -62,10 +85,10 @@ TEST_CASE("Rust map fields preserve native helpers, mutation and reset")
 					t.m4() = value; t.m5() = kind == MP_ROAD ? value & 63 : value; t.m6() = value;
 					t.m8() = value * 257;
 					SetTileHeight(tile, value);
-					CHECK(openttd_rust_map_read_probe(allocation, &GetRustSharedServices(), &GetRustClearServices(), &GetRustTreeServices(), tile.base(), [](uint32_t) noexcept {}));
-					auto unchecked = allocation;
+					CHECK(openttd_rust_map_read_probe(&statics, &GetRustSharedServices(), &GetRustClearServices(), &GetRustTreeServices(), tile.base(), [](uint32_t) noexcept {}));
+					auto unchecked = statics;
 					unchecked.assertions = false;
-					CHECK(openttd_rust_map_read_probe(unchecked, &GetRustSharedServices(), &GetRustClearServices(), &GetRustTreeServices(), tile.base(), [](uint32_t) noexcept {}));
+					CHECK(openttd_rust_map_read_probe(&unchecked, &GetRustSharedServices(), &GetRustClearServices(), &GetRustTreeServices(), tile.base(), [](uint32_t) noexcept {}));
 				}
 			}
 		}
@@ -77,8 +100,8 @@ TEST_CASE("Rust movement map context rereads native mutations within an entry")
 	for (const uint size : {64U, 128U}) {
 		Map::Allocate(size, 64);
 		for (const bool assertions : {false, true}) {
-			auto allocation = GetRustTileTypeAllocation();
-			allocation.assertions = assertions;
+			auto statics = _rust_map_statics;
+			statics.assertions = assertions;
 			for (const TileIndex tile : {TileXY(1, 1), TileIndex{Map::Size() - 1}}) {
 				for (const TileType kind : {MP_ROAD, MP_STATION, MP_TUNNELBRIDGE}) {
 					for (const bool change_type : {false, true}) {
@@ -97,10 +120,45 @@ TEST_CASE("Rust movement map context rereads native mutations within an entry")
 							Tile t{TileIndex{index}};
 							t.type() = MP_CLEAR << 4;
 						};
-						CHECK(openttd_rust_map_read_probe(allocation, &GetRustSharedServices(), &GetRustClearServices(), &GetRustTreeServices(), tile.base(), change_type ? +mutate_type : +mutate_fields));
+						CHECK(openttd_rust_map_read_probe(&statics, &GetRustSharedServices(), &GetRustClearServices(), &GetRustTreeServices(), tile.base(), change_type ? +mutate_type : +mutate_fields));
 					}
 				}
 			}
+		}
+	}
+	Map::Allocate(64, 64);
+}
+
+TEST_CASE("Rust production pixel entries observe live native corners and reallocation")
+{
+	const Slope slopes[]{SLOPE_FLAT, SLOPE_W, SLOPE_S, SLOPE_SW, SLOPE_E, SLOPE_EW, SLOPE_SE, SLOPE_WSE, SLOPE_N, SLOPE_NW, SLOPE_NS, SLOPE_ENW, SLOPE_NE, SLOPE_SEN, SLOPE_NWS, SLOPE_STEEP_W, SLOPE_STEEP_S, SLOPE_STEEP_E, SLOPE_STEEP_N};
+	for (uint width : {64U, 128U}) {
+		Map::Allocate(width, 64);
+		for (TileIndex t : {TileXY(1, 1), TileXY(Map::MaxX(), Map::MaxY())}) {
+			const uint x = TileX(t), y = TileY(t);
+			const uint east = std::min(x + 1, Map::MaxX()), south = std::min(y + 1, Map::MaxY());
+			for (Slope slope : slopes) {
+				SetTileHeight(t, 3 + GetSlopeZInCorner(slope, CORNER_N));
+				SetTileHeight(TileXY(east, y), 3 + GetSlopeZInCorner(slope, CORNER_W));
+				SetTileHeight(TileXY(x, south), 3 + GetSlopeZInCorner(slope, CORNER_E));
+				SetTileHeight(TileXY(east, south), 3 + GetSlopeZInCorner(slope, CORNER_S));
+				for (TileType kind : {MP_CLEAR, MP_TREES, MP_STATION, MP_VOID}) {
+					Tile{t}.type() = kind << 4;
+					auto [native_slope, z] = GetTilePixelSlope(t);
+					for (int frac : {0, 8, 15}) {
+						const int px = x * TILE_SIZE + frac, py = y * TILE_SIZE + frac;
+						const int expected = kind == MP_STATION ? GetTileMaxPixelZ(t) : z + GetPartialPixelZ(frac, frac, native_slope);
+						CHECK(openttd_rust_movement_pixel_z(&GetRustMovementServices(), px, py, false) == expected);
+					}
+				}
+			}
+			Tile{t}.type() = MP_CLEAR << 4;
+			SetTileHeight(t, 9);
+			SetTileHeight(TileXY(east, y), 9);
+			SetTileHeight(TileXY(x, south), 9);
+			SetTileHeight(TileXY(east, south), 9);
+			auto [slope, z] = GetTilePixelSlope(t);
+			CHECK(openttd_rust_movement_pixel_z(&GetRustMovementServices(), x * TILE_SIZE, y * TILE_SIZE, false) == z + static_cast<int>(GetPartialPixelZ(0, 0, slope)));
 		}
 	}
 	Map::Allocate(64, 64);
@@ -123,56 +181,58 @@ TEST_CASE("Rust shared tile-type allocation and all native byte values")
 #include "abi-layout-genworld.inc"
 #include "abi-layout-session.inc"
 	Map::Allocate(128, 64);
-	const auto allocation = GetRustTileTypeAllocation();
+	const auto *statics = &_rust_map_statics;
 	const auto &shared = GetRustSharedServices();
-	CHECK(allocation.count == Map::Size());
-	CHECK(allocation.base != nullptr);
+	const uint32_t count = *statics->size;
+	CHECK(count == Map::Size());
+	CHECK(*statics->base != nullptr);
+	const OpenTTDFixtureMap empty{0};
 	/* Raw storage covers every byte, including values that semantic setters
 	 * cannot assign to these edge tiles. */
 	for (const TileIndex tile : {TileIndex{0}, TileIndex{Map::Size() - 1}}) {
 		for (uint byte = 0; byte < 256; byte++) {
 			Tile(tile).type() = byte;
-			CHECK(openttd_rust_shared_tile_type(allocation, shared.tile_type, tile.base()) == static_cast<uint8_t>(GetTileType(tile)));
-			CHECK(openttd_rust_shared_tile_type({.base = nullptr, .extended = nullptr, .count = 0, .assertions = false}, shared.tile_type, tile.base()) == static_cast<uint8_t>(GetTileType(tile)));
+			CHECK(openttd_rust_shared_tile_type(statics, shared.tile_type, tile.base()) == static_cast<uint8_t>(GetTileType(tile)));
+			CHECK(openttd_rust_shared_tile_type(&empty.statics, shared.tile_type, tile.base()) == static_cast<uint8_t>(GetTileType(tile)));
 		}
 	}
 	/* Real native writes between accesses must be observed without a new snapshot.
 	 * Use an interior tile so these setters are valid with either edge setting. */
 	const TileIndex live_tile = TileXY(1, 1);
 	SetTileType(live_tile, MP_ROAD);
-	CHECK(openttd_rust_shared_tile_type(allocation, shared.tile_type, live_tile.base()) == MP_ROAD);
+	CHECK(openttd_rust_shared_tile_type(statics, shared.tile_type, live_tile.base()) == MP_ROAD);
 	SetTileType(live_tile, MP_CLEAR);
-	CHECK(openttd_rust_shared_tile_type(allocation, shared.tile_type, live_tile.base()) == MP_CLEAR);
-	/* Reset between reader entries; the next entry acquires a live allocation. */
+	CHECK(openttd_rust_shared_tile_type(statics, shared.tile_type, live_tile.base()) == MP_CLEAR);
+	/* Reset between reader entries; the next entry loads the live allocation. */
 	Map::Allocate(64, 64);
-	const auto next = GetRustTileTypeAllocation();
-	CHECK(next.count == Map::Size());
-	CHECK(next.count != allocation.count);
+	CHECK(*statics->size == Map::Size());
+	CHECK(*statics->size != count);
 	const TileIndex next_tile = TileXY(Map::MaxX() - 1, Map::MaxY() - 1);
 	SetTileType(next_tile, MP_INDUSTRY);
-	CHECK(openttd_rust_shared_tile_type(next, shared.tile_type, next_tile.base()) == MP_INDUSTRY);
+	CHECK(openttd_rust_shared_tile_type(statics, shared.tile_type, next_tile.base()) == MP_INDUSTRY);
 	Map::Allocate(64, 64);
 }
 
 TEST_CASE("Rust shared tile-type out-of-range preserves callback policy")
 {
 	Map::Allocate(64, 64);
-	auto allocation = GetRustTileTypeAllocation();
+	auto statics = _rust_map_statics;
 	/* Exercise the checked backend without executing native asserts-off UB. */
-	allocation.assertions = true;
+	statics.assertions = true;
+	const OpenTTDFixtureMap empty{0};
 	/* The original native accessor stays the production oracle. This fixture
 	 * records fallback rather than executing source UB with assertions disabled. */
 	static uint calls;
 	static uint32_t observed;
 	calls = 0;
 	auto callback = [](uint32_t tile) noexcept -> uint8_t { calls++; observed = tile; return 231; };
-	CHECK(openttd_rust_shared_tile_type(allocation, callback, allocation.count) == 231);
+	CHECK(openttd_rust_shared_tile_type(&statics, callback, Map::Size()) == 231);
 	CHECK(calls == 1);
-	CHECK(observed == allocation.count);
-	CHECK(openttd_rust_shared_tile_type(allocation, callback, UINT32_MAX) == 231);
+	CHECK(observed == Map::Size());
+	CHECK(openttd_rust_shared_tile_type(&statics, callback, UINT32_MAX) == 231);
 	CHECK(calls == 2);
 	CHECK(observed == UINT32_MAX);
-	CHECK(openttd_rust_shared_tile_type({.base = nullptr, .extended = nullptr, .count = 0, .assertions = false}, callback, 0) == 231);
+	CHECK(openttd_rust_shared_tile_type(&empty.statics, callback, 0) == 231);
 	CHECK(calls == 3);
 	CHECK(observed == 0);
 }

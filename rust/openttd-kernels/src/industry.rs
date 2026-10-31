@@ -40,6 +40,8 @@ mod construction;
 pub use construction::*;
 mod generation;
 pub use generation::*;
+mod policy;
+pub use policy::*;
 mod lifecycle;
 pub use lifecycle::*;
 const RECORDS: usize = 61;
@@ -365,7 +367,6 @@ pub struct Observation {
     pub behaviour: u32,
     pub callbacks: u16,
     pub life: u8,
-    pub original: u8,
     pub kind: u8,
     pub up_text: u32,
     pub down_text: u32,
@@ -434,7 +435,7 @@ pub struct Services {
     pub tick_trigger: unsafe extern "C" fn(*mut c_void),
     pub production_callback: unsafe extern "C" fn(*mut c_void, u8),
     pub scale_cargo: unsafe extern "C" fn(u32) -> u32,
-    pub tile_add_wrap: unsafe extern "C" fn(u32, i32, i32) -> u32,
+    pub environment: *const crate::services::EnvironmentServices,
     pub farm_tile: unsafe extern "C" fn(u32) -> FarmTile,
     pub snow_line: unsafe extern "C" fn() -> u8,
     pub make_field: unsafe extern "C" fn(u32, u8, u8, u16),
@@ -445,17 +446,17 @@ pub struct Services {
     pub production_rate: unsafe extern "C" fn(*mut c_void, u32) -> u8,
     pub change_callback: unsafe extern "C" fn(*mut c_void, bool, u32) -> Change,
     pub custom_text: unsafe extern "C" fn(*mut c_void, u16) -> u32,
-    pub news: unsafe extern "C" fn(*mut c_void, u32, bool),
-    pub rate_news: unsafe extern "C" fn(*mut c_void, u8, i32),
+    pub news: unsafe extern "C" fn(*mut c_void, u32, bool, Servicing),
+    pub production_news: unsafe extern "C" fn(*mut c_void, u8, i32, Servicing),
     pub callback_error: unsafe extern "C" fn(*mut c_void, bool),
     pub set_dirty: unsafe extern "C" fn(*mut c_void),
     pub destroy: unsafe extern "C" fn(*mut c_void),
-    pub advertise: unsafe extern "C" fn(*mut c_void),
+    pub opening_news: unsafe extern "C" fn(*mut c_void),
+    pub opening_events: unsafe extern "C" fn(*mut c_void),
     pub create: unsafe extern "C" fn(u8, u8) -> *mut c_void,
-    pub random_industry: unsafe extern "C" fn() -> *mut c_void,
+    pub num_items: unsafe extern "C" fn() -> u32,
     pub get: unsafe extern "C" fn(u16) -> *mut c_void,
     pub type_count: unsafe extern "C" fn(u8) -> u16,
-    pub total: unsafe extern "C" fn() -> u32,
     pub type_info: unsafe extern "C" fn(u8) -> TypeInfo,
     pub resolver: *const resolver::ResolverServices,
     pub scale_by_map_size: unsafe extern "C" fn(u32) -> u32,
@@ -827,16 +828,7 @@ fn rotate(history: &mut [Pair; RECORDS], mask: u64, month: u32) {
             history[first] = history[0];
             history[0] = Pair::default();
         } else if mask & (1 << (first - division)) != 0 {
-            let mut a = 0u32;
-            let mut b = 0u32;
-            for pair in &history[first - division..first] {
-                a += u32::from(pair.first);
-                b += u32::from(pair.second);
-            }
-            history[first] = Pair {
-                first: (a / division as u32).min(65535) as u16,
-                second: (b / division as u32).min(65535) as u16,
-            };
+            history[first] = policy::sum_history(&history[first - division..first]);
         }
     }
 }
@@ -886,7 +878,7 @@ fn change(i: *mut c_void, s: &Services, monthly: bool) {
     let mut standard = false;
     let mut suppress = false;
     let mut recalc = false;
-    let original = o.original != 0;
+    let original = original_economy(o.callbacks, unsafe { (s.economy_type)() });
     let mut div = 0u8;
     let mut mul = 0u8;
     let mut increment = 0i8;
@@ -990,7 +982,9 @@ fn change(i: *mut c_void, s: &Services, monthly: bool) {
                     close = false;
                 }
                 if percent.abs() >= 10 {
-                    unsafe { (s.rate_news)(i, (*p).cargo, percent) };
+                    unsafe {
+                        (s.production_news)(i, (*p).cargo, percent, servicing(i, o.owner, s));
+                    };
                 }
             }
         }
@@ -1059,7 +1053,18 @@ fn change(i: *mut c_void, s: &Services, monthly: bool) {
         str = o.closure_text;
     }
     if !suppress && str != 0 {
-        unsafe { (s.news)(i, str, close) };
+        unsafe {
+            (s.news)(
+                i,
+                str,
+                close,
+                if close {
+                    Servicing::Nobody
+                } else {
+                    servicing(i, o.owner, s)
+                },
+            );
+        };
     }
 }
 fn type_data(f: *mut BuildFields, kind: u8, s: &Services) -> bool {
@@ -1111,10 +1116,10 @@ fn build_fields(builder: *mut Builder) -> *mut BuilderFields {
 fn build_type(b: *mut BuilderFields, n: usize) -> *mut BuildFields {
     unsafe { ptr::addr_of_mut!((*b).builddata[n]) }
 }
-fn build_reset(builder: *mut Builder, s: &Services) {
+fn build_reset(builder: *mut Builder, _s: &Services) {
     let b = build_fields(builder);
     unsafe {
-        (*b).wanted_inds = (s.total)().wrapping_shl(16);
+        (*b).wanted_inds = total(builder).wrapping_shl(16);
         for n in 0..TYPES {
             *build_type(b, n) = BuildFields {
                 max_wait: 1,
@@ -1135,7 +1140,7 @@ fn build_monthly(builder: *mut Builder, s: &Services) {
     }
     let b = build_fields(builder);
     let max = 1 + unsafe { (s.scale_by_map_size)(3) }.min(99);
-    if unsafe { (s.total)() }.wrapping_add(max) >= unsafe { (*b).wanted_inds >> 16 } {
+    if total(builder).wrapping_add(max) >= unsafe { (*b).wanted_inds >> 16 } {
         let increment = unsafe { (s.scale_by_map_size)(0x38000 / (10 * 12)) };
         unsafe {
             (*b).wanted_inds = (*b).wanted_inds.wrapping_add(increment);
@@ -1270,7 +1275,7 @@ fn build_try(builder: *mut Builder, s: &Services) {
                 (*f).max_wait = (u32::from((*f).max_wait) + 2).min(1000) as u16;
             }
         } else {
-            unsafe { (s.advertise)(i) };
+            advertise(i, s);
             unsafe {
                 (*f).max_wait = ((*f).max_wait / 2).max(1);
             }
@@ -1311,14 +1316,14 @@ pub(crate) unsafe fn openttd_rust_industry_daily(builder: *mut Builder, services
     let company = unsafe { (s.company_none)() };
     let mut percentage = 3;
     let wanted = unsafe { (*b).wanted_inds >> 16 };
-    if wanted > unsafe { (s.total)() } {
-        percentage = (percentage + wanted - unsafe { (s.total)() }).min(9);
+    if wanted > total(builder) {
+        percentage = (percentage + wanted - total(builder)).min(9);
     }
     for _ in 0..loops {
         if chance(s, percentage, 100) {
             build_try(builder, s);
         } else {
-            let i = unsafe { (s.random_industry)() };
+            let i = random_industry(s);
             if !i.is_null() {
                 change(i, s, false);
                 unsafe { (s.set_dirty)(i) };
@@ -1483,7 +1488,13 @@ fn farm_with_landscape(
     let y = (u32::from(l.h) / 2)
         .wrapping_add(rand(s) % 31)
         .wrapping_sub(16) as i32;
-    let tile = unsafe { (s.tile_add_wrap)(l.tile, x, y) };
+    let tile = map.coordinates().tile_add_wrap(
+        l.tile,
+        x,
+        y,
+        map.size_y,
+        (unsafe { &*s.environment }.freeform_edges)(),
+    );
     if tile != INVALID_TILE {
         plant(tile, id, map, s, landscape);
     }
@@ -1933,12 +1944,10 @@ crate::abi::layouts! {
         enabled,
         layout_count,
         layout,
-        raw,
         raw_setting,
         check_proc,
         conflicting,
         multiple_per_town,
-        closest_town,
         town,
         population,
         town_position,
@@ -1964,7 +1973,6 @@ crate::abi::layouts! {
         local_company,
         prospect_no_place,
         prospect_unlucky,
-        construction_cost,
     };
     "OpenTTDIndustryTransactionContext" ["industry"] => crate::industry::TransactionContext {
         map,
@@ -1989,7 +1997,7 @@ crate::abi::layouts! {
         close_ai,
         close_game,
         destroy,
-        removal_cost,
+        removal_multiplier,
         tile_max_z,
         autoslope_callback,
         callback_boolean,
@@ -2047,6 +2055,9 @@ crate::abi::layouts! {
         callback,
         cargo_file,
     };
+    "OpenTTDIndustryPair" ["industry"] => Pair { first, second, };
+    "Industry::ProducedHistory" ["industry"] => Pair { first => production, second => transported, };
+    "Industry::AcceptedHistory" ["industry"] => Pair { first => accepted, second => waiting, };
     "OpenTTDIndustryCargoLists" ["industry"] => crate::industry::CargoLists {
         produced,
         accepted,
@@ -2098,6 +2109,8 @@ crate::abi::layouts! {
     "OpenTTDIndustryGenerationServices" ["industry"] => crate::industry::GenerationServices {
         spec,
         spec_behaviour,
+        spec_life,
+        cost_multiplier,
         info,
         coastal,
         environment,
@@ -2214,7 +2227,6 @@ crate::abi::layouts! {
         behaviour,
         callbacks,
         life,
-        original,
         kind => type,
         up_text,
         down_text,
@@ -2232,7 +2244,7 @@ crate::abi::layouts! {
         tick_trigger,
         production_callback,
         scale_cargo,
-        tile_add_wrap,
+        environment,
         farm_tile,
         snow_line,
         make_field,
@@ -2244,16 +2256,16 @@ crate::abi::layouts! {
         change_callback,
         custom_text,
         news,
-        rate_news,
+        production_news,
         callback_error,
         set_dirty,
         destroy,
-        advertise,
+        opening_news,
+        opening_events,
         create,
-        random_industry,
+        num_items,
         get,
         type_count,
-        total,
         type_info,
         resolver,
         scale_by_map_size,

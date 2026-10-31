@@ -124,6 +124,11 @@ pub struct CommandCostServices {
     pub expense: extern "C" fn(*const CommandCost) -> ExpenseType,
     /// Native `MakeError`, keeping owner and encoded message.
     pub make_error: unsafe extern "C" fn(*mut CommandCost, u32),
+    /// Native owned-by parameter formatting after the local-company decision.
+    pub encode_owned_by:
+        extern "C" fn(*mut CommandCost, crate::company_type::Owner, crate::tile_type::TileIndex),
+    /// Native error-owner metadata.
+    pub error_owner: extern "C" fn(*mut CommandCost, crate::company_type::Owner),
 }
 
 /// Ordinary direct commands. Native result storage retains complete errors and
@@ -147,12 +152,32 @@ pub struct CommandServices {
     pub infrastructure_dirty: extern "C" fn(u8),
     /// Original `CMD_LANDSCAPE_CLEAR`, with actual `DoCommandFlags` width.
     pub landscape_commands: extern "C" fn() -> *const crate::landscape_cmd::LandscapeServices,
-    /// Original `CheckTileOwnership`, preserving native encoded errors.
-    pub tile_ownership: unsafe extern "C" fn(*mut CommandCost, u32),
-    /// Original `CheckOwnership`.
-    pub ownership: unsafe extern "C" fn(*mut CommandCost, u8, u32),
+    /// Company owner for direct ownership checks.
+    pub company: extern "C" fn() -> *const crate::company::Services,
     /// Direct Rust occupancy owner, shared by every command.
     pub occupancy: extern "C" fn() -> *const crate::vehicle::occupancy::Commands,
+}
+
+impl CommandServices {
+    /// Ownership checks require a live borrowed native command result.
+    pub(crate) unsafe fn ownership(&self, out: *mut CommandCost, owner: u8, tile: u32) {
+        let company = unsafe { &*(self.company)() };
+        crate::company::check_ownership(
+            company,
+            Cost(out, company.cost),
+            crate::company_type::CompanyID(owner),
+            crate::tile_type::TileIndex(tile),
+        );
+    }
+    /// Tile ownership checks also require a live canonical map interval.
+    pub(crate) unsafe fn tile_ownership(&self, out: *mut CommandCost, tile: u32) {
+        let company = unsafe { &*(self.company)() };
+        crate::company::check_tile_ownership(
+            company,
+            Cost(out, company.cost),
+            crate::tile_type::TileIndex(tile),
+        );
+    }
 }
 
 /// Opaque native town shell. Its address identifies the shell, not the Rust owner.
@@ -167,6 +192,18 @@ pub struct ByteSpan {
     pub data: *const u8,
     /// Full byte count; embedded NULs do not terminate the span.
     pub size: usize,
+}
+impl ByteSpan {
+    /// Byte equality of two live spans, as `std::string` or `std::string_view` `==`.
+    pub(crate) fn same_bytes(self, other: Self) -> bool {
+        self.size == other.size
+            && (self.size == 0
+                // SAFETY: Both spans denote live readable bytes for the producing entry.
+                || unsafe {
+                    std::slice::from_raw_parts(self.data, self.size)
+                        == std::slice::from_raw_parts(other.data, other.size)
+                })
+    }
 }
 
 pub use crate::map_func::TileTypeAllocation;
@@ -212,7 +249,7 @@ pub struct ClearSquareServices {
 #[derive(Clone, Copy)]
 pub struct Services {
     /// Complete synchronous movement owner; immutable process-lifetime table.
-    pub movement_services: extern "C" fn() -> *const crate::movement::MovementServices,
+    pub movement: *const crate::movement::MovementServices,
     /// Canonical native tile owner write.
     pub set_tile_owner: extern "C" fn(u32, u8),
     /// `AutoslopeEnabled()`.
@@ -229,10 +266,6 @@ pub struct Services {
     pub build_on_slopes: extern "C" fn() -> bool,
     /// Native leaves for direct shared Rust clear-square control.
     pub clear_square_services: ClearSquareServices,
-    /// Original native uncached nearest-town spatial lookup.
-    pub calc_closest_town: extern "C" fn(u32, u32) -> *const TownHandle,
-    /// Original native nearest-town spatial lookup; the result may be null.
-    pub closest_town: extern "C" fn(u32, u32) -> *const TownHandle,
     /// Whether this company pool ID is live.
     pub company_valid: extern "C" fn(u8) -> bool,
     /// Opaque context for test fixtures; production leaves ignore it.
@@ -247,8 +280,6 @@ pub struct Services {
     pub disallowed_road_directions: extern "C" fn(u32) -> u8,
     /// Shared live disaster sound observation.
     pub disaster_sound: extern "C" fn() -> bool,
-    /// Original native `distance_from_edge` map observation.
-    pub distance_from_edge: extern "C" fn(u32) -> u32,
     /// Original native `drive_through_axis` map observation.
     pub drive_through_axis: extern "C" fn(u32) -> u8,
     /// Original pathfinding setting, observed at the calling branch.
@@ -273,8 +304,8 @@ pub struct Services {
     pub is_drive_through_stop: extern "C" fn(u32) -> bool,
     /// `IsLevelCrossingTile`.
     pub is_level_crossing: extern "C" fn(u32) -> bool,
-    /// Original native `is_normal_road` map observation.
-    pub is_normal_road: extern "C" fn(u32) -> bool,
+    /// Original native `IsNormalRoadTile` map observation.
+    pub is_normal_road_tile: extern "C" fn(u32) -> bool,
     /// Original native `is_plain_rail` map observation.
     pub is_plain_rail: extern "C" fn(u32) -> bool,
     /// Original native `is_road_depot` map observation.
@@ -283,8 +314,8 @@ pub struct Services {
     pub is_sea: extern "C" fn(u32) -> bool,
     /// `IsWaterTile`: water category and clear subtype (sea, canal or river).
     pub is_water_tile: extern "C" fn(u32) -> bool,
-    /// Shared live map log x observation.
-    pub map_log_x: extern "C" fn() -> u32,
+    /// Canonical `Tile` and `Map` statics, loaded at each observation.
+    pub map: *const crate::map_func::MapStatics,
     /// Shared live map max x observation.
     pub map_max_x: extern "C" fn() -> u32,
     /// Shared live map max y observation.
@@ -370,6 +401,8 @@ pub struct Services {
     pub tile_animation_set_frame: extern "C" fn(u32, u8),
     /// Canonical shared `town_next_id` service.
     pub town_next_id: extern "C" fn(u32) -> u32,
+    /// Canonical native town shell resolver.
+    pub town_by_id: extern "C" fn(u32) -> *mut TownHandle,
     /// Canonical shared `town_owner_by_id` service.
     pub town_owner_by_id: extern "C" fn(u32) -> *mut crate::town::State,
     /// Canonical shared `utf8_length` service.
@@ -388,8 +421,6 @@ pub struct Services {
     pub tile_slope: extern "C" fn(u32) -> u8,
     /// `GetTileType`.
     pub tile_type: extern "C" fn(u32) -> u8,
-    /// Original `TileAddWrap`, including map and freeform-edge checks.
-    pub tile_add_wrap: extern "C" fn(u32, i32, i32) -> u32,
     /// Original native `tile_valid` map observation.
     pub tile_valid: extern "C" fn(u32) -> bool,
     /// Original `GetTileSlopeZ`, observed together at the source call.
@@ -416,8 +447,6 @@ pub struct Services {
     pub tunnel_transport: extern "C" fn(u32) -> u8,
     /// Original `UpdateLevelCrossing`; callers retain their original sound argument.
     pub update_level_crossing: extern "C" fn(u32, bool),
-    /// Rebuild the canonical town spatial index.
-    pub rebuild_town_tree: extern "C" fn(),
     /// Whether the economy is in recession.
     pub recession: extern "C" fn() -> bool,
     /// Global game tick counter.
@@ -451,6 +480,10 @@ pub struct Services {
     pub road_stop_type: extern "C" fn(u32) -> RoadStopType,
     /// Native road stop shells and their vehicle reads.
     pub road_stops: extern "C" fn() -> *const crate::road_stop::RoadStopServices,
+    /// `ShowErrorMessage` with two string IDs at `WL_ERROR`.
+    pub show_error: extern "C" fn(u32, u32),
+    /// Native `NOT_REACHED`.
+    pub not_reached: extern "C" fn(),
 }
 /// Station visitor: context, station, its service owner and its index.
 pub type StationVisitor = unsafe extern "C" fn(
@@ -459,14 +492,6 @@ pub type StationVisitor = unsafe extern "C" fn(
     *mut crate::station_service::Service,
     u16,
 );
-/// Canonical `TileVirtXY` and tile type observation, in native call order.
-#[repr(C)]
-pub struct PixelLocation {
-    /// Tile index from unsigned pixel coordinates.
-    pub tile: u32,
-    /// Native tile type.
-    pub kind: u8,
-}
 /// `GetFoundationSlope` result: height and slope after the tile's foundation.
 #[repr(C)]
 pub struct FoundationSlope {
@@ -479,7 +504,8 @@ impl Services {
     /// Capture `Map::LogX()` once for a synchronous entry.
     #[must_use]
     pub fn map(&self) -> Map {
-        Map::from_log_x((self.map_log_x)())
+        // SAFETY: The table's statics address the live canonical `Map::log_x`.
+        Map::from_log_x(unsafe { (*self.map).log_x.read() })
     }
     /// Draw one shared random word.
     #[must_use]
@@ -527,18 +553,15 @@ crate::abi::layouts! {
         editor,
         freeform_edges,
     };
-    "OpenTTDPixelLocation" ["landscape"] => PixelLocation {
-        tile,
-        kind,
-    };
     "OpenTTDFoundationSlope" ["landscape"] => FoundationSlope {
         z,
         slope,
     };
-    "OpenTTDTileTypeAllocation" ["landscape"] => crate::services::TileTypeAllocation {
+    "OpenTTDMapStatics" ["landscape"] => crate::map_func::MapStatics {
         base,
         extended,
-        count,
+        size,
+        log_x,
         assertions,
     };
     "OpenTTDNativeTileTypeAccess::BaseTile" ["landscape"] => BaseTileLayout {
@@ -642,8 +665,7 @@ crate::abi::layouts! {
         money_error,
         infrastructure_dirty,
         landscape_commands,
-        tile_ownership,
-        ownership,
+        company,
         occupancy,
     };
     "OpenTTDCommandCostServices" ["probe"] => crate::services::CommandCostServices {
@@ -661,6 +683,8 @@ crate::abi::layouts! {
         money,
         expense,
         make_error,
+        encode_owned_by,
+        error_owner,
     };
     "OpenTTDClearSquareServices" ["probe"] => ClearSquareServices {
 
@@ -669,7 +693,7 @@ crate::abi::layouts! {
         generating_world,
     };
     "OpenTTDSharedServices" ["probe"] => crate::services::Services {
-        movement_services,
+        movement,
         set_tile_owner,
         autoslope,
         bay_stop_direction,
@@ -678,8 +702,6 @@ crate::abi::layouts! {
         bridge_speed,
         build_on_slopes,
         clear_square_services,
-        calc_closest_town,
-        closest_town,
         company_valid,
         context,
         crossing_road_bits,
@@ -687,7 +709,6 @@ crate::abi::layouts! {
         depot_index,
         disallowed_road_directions,
         disaster_sound,
-        distance_from_edge,
         drive_through_axis,
         forbid_90_deg,
         free_train_reservation,
@@ -700,12 +721,12 @@ crate::abi::layouts! {
         is_bridge,
         is_drive_through_stop,
         is_level_crossing,
-        is_normal_road,
+        is_normal_road_tile,
         is_plain_rail,
         is_road_depot,
         is_sea,
         is_water_tile,
-        map_log_x,
+        map,
         map_max_x,
         map_max_y,
         mark_bridge_dirty,
@@ -747,6 +768,7 @@ crate::abi::layouts! {
 
         tile_animation_set_frame,
         town_next_id,
+        town_by_id,
         town_owner_by_id,
         utf8_length,
         vehicle_next,
@@ -756,7 +778,6 @@ crate::abi::layouts! {
         tile_owner,
         tile_slope,
         tile_type,
-        tile_add_wrap,
         tile_valid,
         tile_slope_z,
         tile_z,
@@ -770,7 +791,6 @@ crate::abi::layouts! {
         tunnel_bridge_direction,
         tunnel_transport,
         update_level_crossing,
-        rebuild_town_tree,
         recession,
         tick_counter,
         town_count,
@@ -786,6 +806,8 @@ crate::abi::layouts! {
         for_each_station,
         road_stop_type,
         road_stops,
+        show_error,
+        not_reached,
     };
     "OpenTTDByteSpan" ["industry"] => ByteSpan {
         data,
@@ -825,7 +847,6 @@ pub fn fixture(
     extern "C" fn height(_: u32) -> i32 {
         0
     }
-    extern "C" fn noop() {}
     extern "C" fn tile(_: u32) {}
     extern "C" fn train(_: *const Train) {}
     extern "C" fn train_path(_: *mut Train, _: bool, _: bool) -> bool {
@@ -882,8 +903,16 @@ pub fn fixture(
     extern "C" fn two_types(_: u8, _: u8) -> bool {
         false
     }
+    extern "C" fn unexpected_error(_: u32, _: u32) {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_path() {
+        std::process::abort()
+    }
     Services {
-        movement_services: fixture_movement,
+        show_error: unexpected_error,
+        not_reached: unexpected_path,
+        movement: std::ptr::null(),
         set_tile_owner: zone,
         autoslope: flag0,
         bay_stop_direction: byte,
@@ -895,8 +924,6 @@ pub fn fixture(
             docking: flag,
             generating_world: flag0,
         },
-        calc_closest_town: unused_closest_town,
-        closest_town: unused_closest_town,
         company_valid: unused_company_valid,
         context,
         crossing_road_bits: fixture_crossing_road_bits,
@@ -904,7 +931,6 @@ pub fn fixture(
         depot_index: short,
         disallowed_road_directions: byte,
         disaster_sound: flag0,
-        distance_from_edge: word,
         drive_through_axis: byte,
         forbid_90_deg: flag0,
         free_train_reservation: train,
@@ -917,12 +943,12 @@ pub fn fixture(
         is_bridge: flag,
         is_drive_through_stop: flag,
         is_level_crossing: flag,
-        is_normal_road: flag,
+        is_normal_road_tile: flag,
         is_plain_rail: flag,
         is_road_depot: flag,
         is_sea: flag,
         is_water_tile: flag,
-        map_log_x: word0,
+        map: crate::map_func::fixture::statics(),
         map_max_x: word0,
         map_max_y: word0,
         mark_bridge_dirty: tile,
@@ -964,6 +990,7 @@ pub fn fixture(
 
         tile_animation_set_frame: zone,
         town_next_id: word,
+        town_by_id: fixture_town_by_id,
         town_owner_by_id: unused_town_owner_by_id,
         utf8_length: unused_utf8_length,
         vehicle_next: unused_vehicle_next,
@@ -973,7 +1000,6 @@ pub fn fixture(
         tile_owner: byte,
         tile_slope: byte,
         tile_type: byte,
-        tile_add_wrap: unused_tile_add_wrap,
         tile_valid: flag,
         tile_slope_z: foundation,
         tile_z: height,
@@ -987,7 +1013,6 @@ pub fn fixture(
         tunnel_bridge_direction: byte,
         tunnel_transport: byte,
         update_level_crossing: fixture_crossing_update,
-        rebuild_town_tree: noop,
         recession: flag0,
         tick_counter: tick0,
         town_count: count0,
@@ -1033,10 +1058,6 @@ pub(crate) extern "C" fn unused_next_company(_: u8) -> u8 {
     u8::MAX
 }
 
-#[cfg(test)]
-pub(crate) extern "C" fn unused_closest_town(_: u32, _: u32) -> *const TownHandle {
-    std::ptr::null()
-}
 #[cfg(test)]
 pub(crate) extern "C" fn unused_town_owner(_: *const TownHandle) -> *mut crate::town::State {
     std::ptr::null_mut()
@@ -1344,12 +1365,21 @@ impl Cost<'_> {
     /// `CheckTileOwnership`.
     pub(crate) fn tile_ownership(self, command: &CommandServices, tile: u32) {
         // SAFETY: The impl contract above.
-        unsafe { (command.tile_ownership)(self.0, tile) };
+        crate::company::check_tile_ownership(
+            unsafe { &*(command.company)() },
+            self,
+            crate::tile_type::TileIndex(tile),
+        );
     }
     /// `CheckOwnership`.
     pub(crate) fn ownership(self, command: &CommandServices, owner: u8, tile: u32) {
         // SAFETY: The impl contract above.
-        unsafe { (command.ownership)(self.0, owner, tile) };
+        crate::company::check_ownership(
+            unsafe { &*(command.company)() },
+            self,
+            crate::company_type::CompanyID(owner),
+            crate::tile_type::TileIndex(tile),
+        );
     }
     /// `EnsureNoVehicleOnGround`.
     pub(crate) fn no_vehicle(self, command: &CommandServices, tile: u32) {
@@ -1434,17 +1464,11 @@ extern "C" fn fixture_road_commands() -> *const crate::road_cmd::RoadCommandServ
 }
 
 #[cfg(test)]
-extern "C" fn unused_tile_add_wrap(_: u32, _: i32, _: i32) -> u32 {
-    panic!("unused tile addition")
-}
-
-#[cfg(test)]
-#[cfg(test)]
-extern "C" fn fixture_movement() -> *const crate::movement::MovementServices {
-    std::ptr::null()
-}
-
-#[cfg(test)]
 extern "C" fn fixture_type_availability() -> *const crate::type_availability::Services {
     std::process::abort()
+}
+
+#[cfg(test)]
+extern "C" fn fixture_town_by_id(_: u32) -> *mut TownHandle {
+    panic!("unused town shell")
 }

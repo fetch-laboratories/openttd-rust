@@ -74,7 +74,7 @@ inline OpenTTDRailStep Run(uint32_t limit, uint32_t curve = 29, bool cache = fal
 	FollowerFixture::active = &map;
 	auto &shared = map.shared;
 	for (uint32_t y = 1; y < 127; ++y) for (uint32_t x = 1; x < 127; ++x) map.Tile(x + y * 128, MP_RAILWAY, TRACK_BIT_ALL);
-	if (follow_fail) map.base[start - 1].m5 = 0;
+	if (follow_fail) map.tiles.base[start - 1].m5 = 0;
 	// Owner lookup marks construction; reservation and speed reads use their
 	// shared services, including origin and reservation-target probes.
 	map.vehicle.owner = [](OpenTTDVehicle *) noexcept -> uint8_t { follow_reads.push_back('f'); return 0; };

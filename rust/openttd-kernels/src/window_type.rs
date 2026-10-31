@@ -1,8 +1,18 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Window classes used by objectives presentation. Native assertions pin their values.
+//! Window classes used by objectives and setting presentation. Native assertions pin their values.
 #![allow(missing_docs)]
 pub const WC_MAIN_TOOLBAR: u16 = 1;
 pub const WC_GOALS_LIST: u16 = 38;
 pub const WC_GOAL_QUESTION: u16 = 13;
 pub const WC_STORY_BOOK: u16 = 39;
 pub const WC_COMPANY_LEAGUE: u16 = 81;
+pub const WC_TOWN_VIEW: u16 = 45;
+pub const WC_VEHICLE_DETAILS: u16 = 23;
+pub const WC_BUILD_VEHICLE: u16 = 54;
+pub const WC_ENGINE_PREVIEW: u16 = 88;
+pub const WC_GAME_OPTIONS: u16 = 91;
+pub const WC_COMPANY: u16 = 51;
+pub const WC_SIGN_LIST: u16 = 36;
+pub const WC_COMPANY_COLOUR: u16 = 28;
+pub const WC_SEND_NETWORK_MSG: u16 = 72;
+pub const WC_CLIENT_LIST: u16 = 68;

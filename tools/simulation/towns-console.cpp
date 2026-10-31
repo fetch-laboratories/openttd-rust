@@ -13,6 +13,10 @@
 #include "core/backup_type.hpp"
 #include "core/random_func.hpp"
 #include "town.h"
+#include "signs_base.h"
+#include "fios.h"
+#include "heightmap.h"
+#include <fstream>
 #include "town_cmd.h"
 #include "townname_func.h"
 #include "house.h"
@@ -93,10 +97,15 @@ static void LevelCorners(uint x0, uint x1, uint y0, uint y1, uint height, const 
 /* Observe the real presentation request, then forward it unchanged. The null
  * driver cannot establish rendered errors or authority-window refreshes. */
 static uint bribe_errors;
+static int town_data_errors = -1;
 extern "C" void __real__Z16ShowErrorMessageO13EncodedStringS0_12WarningLeveliiS0_6PoolIDIh12CompanyIDTagLh15ELh255EE(EncodedString &&, EncodedString &&, WarningLevel, int, int, EncodedString &&, CompanyID);
 extern "C" void __wrap__Z16ShowErrorMessageO13EncodedStringS0_12WarningLeveliiS0_6PoolIDIh12CompanyIDTagLh15ELh255EE(EncodedString &&summary, EncodedString &&detail, WarningLevel level, int x, int y, EncodedString &&extra, CompanyID company)
 {
 	if (summary == GetEncodedString(STR_ERROR_BRIBE_FAILED) && detail.empty() && level == WL_INFO) ++bribe_errors;
+	if (town_data_errors >= 0) {
+		++town_data_errors;
+		fmt::print(stderr, "TOWN data-error {} {} / {}\n", level, summary.GetDecodedString(), detail.empty() ? std::string{} : detail.GetDecodedString());
+	}
 	__real__Z16ShowErrorMessageO13EncodedStringS0_12WarningLeveliiS0_6PoolIDIh12CompanyIDTagLh15ELh255EE(std::move(summary), std::move(detail), level, x, y, std::move(extra), company);
 }
 static TileIndex Site()
@@ -350,11 +359,43 @@ static bool HousesScenario(std::span<std::string_view> args)
 	if (args.size() == 4) SaveOrLoad(std::string(args[3]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
 	return true;
 }
+/* Query the loaded/mutated tree before rebuilding; temporary coordinates then
+ * distinguish equal-distance ties and the strict nearest threshold. */
+static void TownSpatialQueries(const char *phase, TileIndex tile)
+{
+	for (uint threshold : {0U, 1U, 9U, 10U, 11U, UINT_MAX}) {
+		const Town *near = CalcClosestTownFromTile(tile, threshold);
+		const Town *owned = ClosestTownFromTile(tile, threshold);
+		fmt::print(stderr, "TOWN spatial {} {} {} {} {}\n", phase, tile.base(), threshold, near == nullptr ? TownID::Invalid().base() : near->index.base(), owned == nullptr ? TownID::Invalid().base() : owned->index.base());
+	}
+	fmt::print(stderr, "TOWN spatial-rng {} {} {} {} {}\n", phase, _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]);
+}
+static void TownSpatial(const char *phase, bool ties)
+{
+	AutoRestoreBackup<Randomizer> interactive_seed(_interactive_random, _interactive_random);
+	_interactive_random.SetSeed(12345);
+	for (const Town *town : Town::Iterate()) TownSpatialQueries(phase, town->xy);
+	if (!ties) return;
+	std::vector<std::pair<Town *, TileIndex>> positions;
+	for (Town *town : Town::Iterate()) {
+		positions.emplace_back(town, town->xy);
+		town->xy = TileXY(100, 100);
+	}
+	if (positions.size() < 3) std::abort();
+	positions[0].first->xy = TileXY(20, 20);
+	positions[1].first->xy = TileXY(40, 20);
+	positions[2].first->xy = TileXY(30, 30);
+	RebuildTownKdtree();
+	TownSpatialQueries("ties", TileXY(30, 20));
+	for (auto [town, tile] : positions) town->xy = tile;
+	RebuildTownKdtree();
+}
 /* Commands use the unchanged native bodies in the reference. The explicit pool
  * associations below cover editor/lifetime inputs absent from ordinary games. */
 static bool CommandsScenario(std::span<std::string_view> args)
 {
 	if (args[1] == "authority-inspect") {
+		TownSpatial("reload", false);
 		const Town *town = *Town::Iterate().begin();
 #ifdef WITH_RUST
 		bool text = town->HasText();
@@ -542,8 +583,11 @@ static bool CommandsScenario(std::span<std::string_view> args)
 	auto *storage = new PersistentStorage(0x12345678, GSF_FAKE_TOWNS, target->xy); auto storage_id = storage->index; target->psa_list.push_back(storage);
 	auto *packet = new CargoPacket(StationID::Invalid(), 7, {removed, SourceType::Town});
 	auto *subsidy = new Subsidy(CargoType{0}, {removed, SourceType::Town}, {id, SourceType::Town}, 12); auto subsidy_id = subsidy->index;
+	TownSpatial("before-delete", true);
+	const TileIndex deleted_xy = target->xy;
 	Cost("delete-test", CmdDeleteTown({}, removed));
 	CommandCost deleted = CmdDeleteTown(DoCommandFlag::Execute, removed); Cost("delete-exec", deleted);
+	TownSpatialQueries("deleted", deleted_xy);
 	fmt::print(stderr, "TOWN deleted-dependencies {} {} {}\n", !PersistentStorage::IsValidID(storage_id), !Subsidy::IsValidID(subsidy_id), !packet->GetSource().IsValid()); delete packet;
 	fmt::print(stderr, "TOWN deletion {} {} {}\n", deleted.Succeeded(), !Town::IsValidID(removed), detached->town != nullptr && detached->town != target);
 	/* Reuse the released ID through the actual founding command. */
@@ -559,6 +603,7 @@ static bool CommandsScenario(std::span<std::string_view> args)
 			CommandCost cost = CmdDeleteTown(DoCommandFlag::Execute, last); Cost("delete-final", cost); if (cost.Failed()) std::abort();
 		}
 		fmt::print(stderr, "TOWN final-town {} {}\n", Town::GetNumItems(), Object::GetNumItems());
+		TownSpatialQueries("empty", TileXY(30, 20));
 		/* Keep the simulation valid after the final-town input. */
 		auto recovery = CmdFoundTown(DoCommandFlag::Execute, Site(), TSZ_SMALL, false, TL_ORIGINAL, false, 0, "Recovery town");
 		Cost("delete-final-recover", recovery); if (std::get<0>(recovery).Failed()) std::abort();
@@ -776,8 +821,41 @@ static bool HouseDefinitionsScenario(std::span<std::string_view> args)
 	fmt::print(stderr, "TOWN definition-complete true\n");
 	return true;
 }
+/* Real JSON inputs listed by towns.py, imported in editor mode with alternating rotation. */
+static bool TownDataScenario(std::span<std::string_view> args)
+{
+	AutoRestoreBackup<Randomizer> interactive_seed(_interactive_random, _interactive_random);
+	_interactive_random.SetSeed(12345);
+	Backup<GameMode> mode(_game_mode, GM_EDITOR);
+	Backup<CompanyID> owner(_current_company, OWNER_NONE);
+	Backup<uint8_t> rotation(_settings_game.game_creation.heightmap_rotation, HM_COUNTER_CLOCKWISE);
+	std::string home = std::getenv("HOME");
+	std::ifstream list(home + "/town-data-inputs.txt");
+	for (std::string name; std::getline(list, name); ) {
+		_settings_game.game_creation.heightmap_rotation = name.ends_with("-cw.json") ? HM_CLOCKWISE : HM_COUNTER_CLOCKWISE;
+		_file_to_saveload.name = home + "/town-data/" + name;
+		uint towns = Town::GetNumItems(), signs = Sign::GetNumItems();
+		std::vector<TownID> before; for (const Town *t : Town::Iterate()) before.push_back(t->index);
+		town_data_errors = 0;
+		LoadTownData();
+		fmt::print(stderr, "TOWN data {} {} {} {} {} {} {} {}\n", name, Town::GetNumItems() - towns, Sign::GetNumItems() - signs, town_data_errors, _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]);
+		for (const Town *t : Town::Iterate()) {
+			if (std::ranges::find(before, t->index) != before.end()) continue;
+			fmt::print(stderr, "TOWN data-town {} {} {} {} {} {}\n", name, t->GetCachedName(), t->xy.base(), t->larger_town, t->cache.num_houses, t->cache.population);
+		}
+		town_data_errors = -1;
+	}
+	mode.Restore(); owner.Restore(); rotation.Restore();
+	if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
+	return true;
+}
 static bool TownsScenario(std::span<std::string_view> args)
 {
+	if (args.size() >= 2 && args[1] == "data") return TownDataScenario(args);
+	if (args.size() >= 2 && args[1] == "data-inspect") {
+		uint imported = 0; for (const Town *t : Town::Iterate()) imported += t->GetCachedName().starts_with("Import ");
+		fmt::print(stderr, "TOWN data-reloaded {} {}\n", imported, Sign::GetNumItems()); return true;
+	}
 	if (args.size() < 2) return false;
 	if (args[1] == "road-types") return RoadTypeGrowthScenario();
 	if (args[1].starts_with("definitions")) return HouseDefinitionsScenario(args);

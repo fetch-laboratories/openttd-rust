@@ -25,8 +25,11 @@
 pub mod commands;
 pub mod founding;
 pub mod house;
+pub mod import;
 pub mod names;
+pub(crate) mod policy;
 pub mod resolver;
+pub(crate) mod spatial;
 
 use crate::history_type::LAST_MONTH;
 use crate::random_func::chance16_i;
@@ -145,7 +148,7 @@ pub struct GrowthFields {
 pub struct State {
     name: Vec<u8>,
     text: Vec<u8>,
-    simulation: SimulationFields,
+    pub(crate) simulation: SimulationFields,
     supplied: Vec<Supplied>,
     id_counts: Vec<u16>,
     class_counts: Vec<u16>,
@@ -197,6 +200,12 @@ pub(crate) unsafe fn population(state: *const State) -> u32 {
     // SAFETY: Caller establishes owner lifetime and serialized access.
     unsafe { (*state).simulation.population }
 }
+/// Read only the canonical house count at the original observation point.
+/// SAFETY: The caller supplies a live owner; this immediate copied read retains no borrow.
+pub(crate) unsafe fn num_houses(state: *const State) -> u32 {
+    // SAFETY: Caller establishes owner lifetime and serialized access.
+    unsafe { (*state).simulation.num_houses }
+}
 fn radius_group(funded: bool, radii: &[u32; 5], distance: u32) -> u8 {
     if funded && distance <= 25 {
         return 4;
@@ -222,6 +231,14 @@ pub(crate) unsafe fn get_radius_group(
         &state.simulation.radius,
         map.distance_square(tile, state.simulation.xy),
     )
+}
+/// `GetTownRadiusGroup` for a live native shell, resolving its canonical owner once.
+pub(crate) unsafe fn radius_from_shell(
+    s: &Services,
+    town: *const crate::services::TownHandle,
+    tile: u32,
+) -> u8 {
+    unsafe { get_radius_group((s.town_owner)(town), tile, s.map()) }
 }
 /// Copied canonical road-work policy inputs; no owner reference spans a service.
 /// SAFETY: Caller supplies a live, serialized owner.
@@ -634,7 +651,7 @@ pub unsafe extern "C" fn openttd_rust_town_authority_station(
         (c.zero)(result);
         return;
     }
-    let town = (s.closest_town)(tile, u32::from((a.authority_distance)()));
+    let town = crate::town::spatial::closest(s, tile, u32::from((a.authority_distance)()));
     if town.is_null() {
         (c.zero)(result);
         return;
@@ -724,7 +741,7 @@ pub struct Leaves {
 
     pub population_changed: extern "C" fn(u32),
     pub house_count: extern "C" fn() -> u32,
-    pub update_max_pass: extern "C" fn(u32),
+    pub road_type_error: extern "C" fn(i32),
     pub next_town: extern "C" fn(u32) -> u32,
     pub build_bridge: extern "C" fn(u32, u32, u32, u32, u32) -> bool,
     pub build_tunnel: extern "C" fn(u32, u32, u32) -> bool,
@@ -756,12 +773,17 @@ impl Engine<'_> {
     fn size_x(&self) -> u32 {
         self.map().size_x()
     }
+    fn distance_from_edge(&self, tile: u32) -> u32 {
+        self.map()
+            .distance_from_edge(tile, (self.services.map_max_y)() + 1)
+    }
     fn position(&self) -> u32 {
         // SAFETY: Stable live owner; each immediate field read ends before services.
         unsafe { position(self.owner) }
     }
     fn num_houses(&self) -> u32 {
-        read_field!(self.owner, simulation.num_houses)
+        // SAFETY: Stable live owner; each immediate field read ends before services.
+        unsafe { num_houses(self.owner) }
     }
     fn change_house_count(&self, amount: u32) {
         write_field!(
@@ -1121,7 +1143,7 @@ impl Engine<'_> {
         false
     }
     fn road_allowed(&self, town: u32, tile: u32, dir: u32) -> bool {
-        if (self.services.distance_from_edge)(tile) == 0
+        if self.distance_from_edge(tile) == 0
             || ((self.services.bridge_above)(tile)
                 && u32::from((self.services.bridge_axis)(tile)) == (dir & 1))
         {
@@ -1214,7 +1236,7 @@ impl Engine<'_> {
         }
     }
     fn extra_house(&self, town: u32, tile: u32, modes: u32) -> bool {
-        if (self.services.distance_from_edge)(tile) == 0 {
+        if self.distance_from_edge(tile) == 0 {
             return false;
         }
         let mut count = 0;
@@ -1286,7 +1308,7 @@ impl Engine<'_> {
                 || !(((self.services.is_water_tile)(end)
                     && (slope != 0 || !(self.services.is_sea)(end)))
                     || (self.services.is_plain_rail)(end)
-                    || ((self.services.is_normal_road)(end)
+                    || ((self.services.is_normal_road_tile)(end)
                         && (self.services.disallowed_road_directions)(end) != 0))
             {
                 break;
@@ -1903,7 +1925,7 @@ impl Engine<'_> {
         // their shell. No owner reference spans any construction callback.
         let shell = *self.house_shell.get_or_init(|| {
             // SAFETY: Static house table referenced by the town leaves.
-            (unsafe { &*self.leaves.houses }.town_shell)(town)
+            (self.services.town_by_id)(town)
         });
         let town_ref = TownRef {
             shell,
@@ -2082,7 +2104,7 @@ impl Engine<'_> {
         unsafe {
             update_radius(self.owner);
         }
-        (self.leaves.update_max_pass)(town);
+        policy::update_max_pass(self.leaves, self.owner);
     }
     fn tick_all(mut self) {
         if !(self.leaves.environment.editor)() {
@@ -2576,7 +2598,7 @@ crate::abi::layouts! {
 
         population_changed,
         house_count,
-        update_max_pass,
+        road_type_error,
         next_town,
         build_bridge,
         build_tunnel,

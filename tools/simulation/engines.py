@@ -174,6 +174,13 @@ def game_environment(scenario):
     return env
 
 
+def type_load_wraps(build):
+    # Rust owns town-name and vehicle-order finalization; its pre-sort is the first native call.
+    if (build / "openttd-rust").exists():
+        return ("_Z20RustVehicleOrderSortPtm",)
+    return ("_Z29CommitVehicleListOrderChangesv",)
+
+
 def adapter(build, folder, env):
     economy.subsidy_reference(folder)
     return console_adapter(
@@ -182,7 +189,7 @@ def adapter(build, folder, env):
         env,
         ADAPTER,
         "engines",
-        wraps=("_Z25InitGRFTownGeneratorNamesv",),
+        wraps=type_load_wraps(build),
         replace_objects=("saveload.cpp.o", "/newgrf.cpp.o", "/newgrf_act0_cargo.cpp.o"),
     )
 
@@ -345,6 +352,25 @@ def check(scenario, run, mode, role, result):
         line.startswith(prefix + "retry-rng ") for line in run["log"]
     ):
         raise RuntimeError("subsidy retry RNG result missing")
+    if variant == "subsidies":
+        routes = [
+            line.split()
+            for line in run["log"]
+            if line.startswith("SUBSIDY random-route ")
+        ]
+        offers = [
+            line.split()
+            for line in run["log"]
+            if line.startswith("SUBSIDY random-offer ")
+        ]
+        if (
+            len(routes) != 3
+            or {int(row[2]) for row in routes} != {0, 2, 3}
+            or {int(row[2]) for row in offers} != {0, 2, 3}
+        ):
+            raise RuntimeError(
+                "subsidy random-town routes, offers or RNG streams missing"
+            )
     for expected in EXPECTED[variant]:
         if prefix + expected not in run["log"]:
             raise RuntimeError("engine branch result missing: " + expected)

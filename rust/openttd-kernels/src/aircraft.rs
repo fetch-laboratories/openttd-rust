@@ -406,9 +406,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     // reset; nested entries obtain their own dimensions. No world state is cached.
     fn map(&self) -> Map {
         self.map.get().unwrap_or_else(|| {
-            let log_x = (self.ss.map_log_x)();
-            Self::service_witness("map_log_x", std::mem::size_of_val(&log_x));
-            let map = Map::from_log_x(log_x);
+            let map = self.ss.map();
             self.map.set(Some(map));
             map
         })
@@ -2534,11 +2532,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_release_blocks(leaves: *const Lea
 /// # Safety
 /// Handles/state and immutable services satisfy the source lifetime preconditions.
 /// Raw scalar accesses end before noexcept callbacks; no borrow survives reentry.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_aircraft_invalidate_target(
-    leaves: *const Leaves,
-    station: u16,
-) {
+pub(crate) unsafe fn invalidate_target(leaves: *const Leaves, station: u16) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
     with_world!(leaves, |w| {
         {

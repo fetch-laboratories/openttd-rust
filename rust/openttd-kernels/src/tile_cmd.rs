@@ -41,7 +41,9 @@ pub(crate) fn add_accepted_cargo(
     unsafe {
         match kind {
             crate::tile_type::MP_HOUSE => {
-                crate::town::house::accepted_tile(c.c.town, c.s, tile, cargoes, always);
+                crate::town::house::openttd_rust_house_accepted_tile(
+                    c.c.town, c.s, tile, cargoes, always,
+                );
             }
             crate::tile_type::MP_INDUSTRY => {
                 crate::industry::tile::openttd_rust_industry_tile_acceptance(

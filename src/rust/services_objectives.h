@@ -4,6 +4,7 @@
 #define RUST_OBJECTIVES_SERVICES_H
 #include "objectives_ffi.h"
 #include "company_adapter.h"
+#include "presentation_services.h"
 #include "orders_ffi.h"
 #include "road_command_ffi.h"
 #include "../goal_base.h"
@@ -66,7 +67,6 @@ inline bool RustObjectives_vehicle_valid(uint32_t id) noexcept { return Vehicle:
 inline bool RustObjectives_text_empty(const EncodedString * text) noexcept { return text->empty(); }
 inline void RustObjectives_text_assign(EncodedString * to, const EncodedString * text) noexcept { *to = *text; }
 inline void RustObjectives_window_data(uint16_t cls, uint32_t number, int32_t data) noexcept { InvalidateWindowData(WindowClass(cls), number, data); }
-inline void RustObjectives_window_classes(uint16_t cls, int32_t data) noexcept { InvalidateWindowClassesData(WindowClass(cls), data); }
 inline void RustObjectives_window_close(uint16_t cls, uint32_t number) noexcept { CloseWindowById(WindowClass(cls), number); }
 inline void RustObjectives_question_show(uint16_t id, uint8_t type, uint32_t buttons, const EncodedString * text) noexcept { ShowGoalQuestion(id, GoalQuestionType(type), buttons, *text); }
 inline void RustObjectives_story_show(uint8_t company, uint16_t page) noexcept { ShowStoryBook(CompanyID(company), StoryPageID(page), true); }
@@ -79,7 +79,6 @@ inline const OpenTTDObjectivesServices &GetRustObjectivesServices() noexcept
 	static const OpenTTDObjectivesServices services{
 		.shared = &GetRustSharedServices(),
 		.company = &GetRustCompanyServices(),
-		.map_allocation = GetRustTileTypeAllocation,
 		.goal = RustObjectives_goal,
 		.goal_company = RustObjectives_goal_company,
 		.goal_type = RustObjectives_goal_type,
@@ -130,7 +129,7 @@ inline const OpenTTDObjectivesServices &GetRustObjectivesServices() noexcept
 		.text_empty = RustObjectives_text_empty,
 		.text_assign = RustObjectives_text_assign,
 		.window_data = RustObjectives_window_data,
-		.window_classes = RustObjectives_window_classes,
+		.window_classes = RustInvalidateWindowClassesData,
 		.window_close = RustObjectives_window_close,
 		.question_show = RustObjectives_question_show,
 		.story_show = RustObjectives_story_show,

@@ -433,4 +433,3 @@ Station *GetTargetAirportIfValid(const Aircraft *v)
 	return st == nullptr || RustStationAirportTile(st) == INVALID_TILE.base() ? nullptr : st;
 }
 void ReleaseAircraftAirportBlocks(const Aircraft *v) { openttd_rust_aircraft_release_blocks(&_aircraft_leaves, RustAircraftVehicle(const_cast<Aircraft *>(v))); }
-void InvalidateAircraftTargetStation(StationID station) { openttd_rust_aircraft_invalidate_target(&_aircraft_leaves, station.base()); }

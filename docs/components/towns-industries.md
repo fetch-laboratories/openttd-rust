@@ -21,7 +21,7 @@
 ## Town founding, generation and names
 
 - Rust owns: custom-name bytes, founding, placement/coastal/grid search, initial growth, generation counts/retries, layout, rename and name uniqueness.
-- C++ keeps: map/pool shells, house specs, rendering/NewGRF resolvers, spatial/noise/news services, save decoding and presentation name cache.
+- C++ keeps: map/pool shells, house specs, rendering/NewGRF resolvers, noise/news services, save decoding and presentation name cache.
 - Checks: `python3 tools/migration.py simulate town-founding- --jobs 2`; module-owned adapters compare cancellation, full-width count clamps/RNG and otherwise unreachable name bytes.
 - Limits: Gaps remain in real NewGRFs, historical saves, GUI threading or the final 10,000-attempt fallback (#156). House lifecycle is #256.
 - PRs: #258.
@@ -87,3 +87,25 @@
 - Checks: default `subsidies-control` and `subsidies-reload`; console adapter compiling unchanged reference monthly lambda.
 - Limits: Gaps remain in external NewGRF programs, legacy conversion fixtures, and threaded GUI/presentation (#156).
 - PRs: #346.
+
+## Town spatial index and remaining policy (#600)
+
+- Rust owns: the simulation town k-d tree and its insertion, deletion, rebuild and nearest lookups; random-town selection; road-type availability; monthly maximum passenger/mail production; climate masks; cargo-effect selection; house removal costs; the radius, acceptance and supplied-history facades.
+- The shared Rust index preserves uint16 coordinates, signed int Manhattan distances, strict splits, the original rebuild threshold and lower-ID nearest ties. Queries allocate nothing. Native and Rust median selection can arrange equal coordinates differently; town nearest results do not depend on that arrangement. Rectangle traversal is node/left/right and remains unused until #602 audits its consumers.
+- C++ keeps: town pool shells and their coupled constructors/destructors, viewport signs and the local-authority presentation index, error formatting, cargo scaling and map/pool access. The shared native k-d template remains compiled for GUI users.
+- Limits: Arbitrary NewGRF road availability/error combinations, historical saves and GUI/game-thread integration remain outside the default corpus (#156).
+- PRs: #608.
+
+## NewGRF town names and Action 0F (#585)
+
+- Rust owns: Action 0F parsing (`FeatureTownName`) in the INIT stage, per-GRF style and part lists, the generator-name list, recursive seeded generation, style/GRF lookups and cleanup. The loader calls the parser, cleanup and list rebuild directly. Both `TownNameParams` constructors are shared Rust logic; town founding reads its style setting directly and keeps the parameters locally. Name verification calls the Rust generator directly.
+- C++ keeps: a facade. `TownNameParams`, the genworld drop-down and `GetGRFTownNameName` read the Rust lists; `GRFTownNameGenerate` passes its `StringBuilder` with an append callback that receives each selected part's bytes. `TranslateTTDPatchCodes`, `AddGRFString` and debug messages remain native, behind one loading service each; translated bytes are copied into the Rust part from a view backed by the native loader stack frame.
+- Limits: Generation preserves the native `gen < styles.size()` assertion. Self-referencing definitions recurse without a guard, as in the original.
+- PRs: pending.
+
+## Industry servicing, selection and specification policy (#601)
+
+- Rust owns: servicing classification over vehicles, consist cargo and orders; production-news category and opening event order; random pool selection and registry totals; forest-industry checks; industry history reduction; raw/processing and original-economy policy; construction/removal price arithmetic.
+- C++ keeps: pool shells and allocation, specification fields behind canonical accessors, and one native formatting/publication operation per news kind. Station naming and subsidies call the shared Rust owners directly.
+- Limits: Distinct train/order/refusal combinations, pool cardinality extremes, native news presentation and scheduling, arbitrary mods and historical saves remain on #156. News and interactive RNG are not serialized; reload observes the original reset and command-phase interactive RNG reseeding.
+- PRs: #609.

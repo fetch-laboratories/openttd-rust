@@ -18,10 +18,78 @@
 #include "window_func.h"
 #include "string_func.h"
 #include "signs_cmd.h"
+#ifdef WITH_RUST
+#include "rust/command_cost_services.h"
+#include "rust/services_ffi.h"
+#include "rust/services_objectives.h"
+#include "rust/signs_ffi.h"
+#endif
 
 #include "table/strings.h"
 
 #include "safeguards.h"
+
+#ifdef WITH_RUST
+static_assert(MAX_LENGTH_SIGN_NAME_CHARS == 32);
+
+static std::string_view RustText(OpenTTDByteSpan text) noexcept { return {reinterpret_cast<const char *>(text.data), text.size}; }
+
+static uint16_t RustSignPlace(uint8_t owner, int32_t x, int32_t y, int32_t z, OpenTTDByteSpan text) noexcept
+{
+	Sign *si = new Sign(CompanyID(owner), x, y, z, RustText(text));
+
+	si->UpdateVirtCoord();
+	GetRustObjectivesServices().window_data(WC_SIGN_LIST, 0, 0);
+	return si->index.base();
+}
+
+static void RustSignRename(Sign *si, uint8_t owner, OpenTTDByteSpan text) noexcept
+{
+	si->name = RustText(text);
+	si->owner = CompanyID(owner);
+
+	si->UpdateVirtCoord();
+	GetRustObjectivesServices().window_data(WC_SIGN_LIST, 0, 1);
+}
+
+static void RustSignRelocate(Sign *si, uint8_t owner, int32_t x, int32_t y, int32_t z) noexcept
+{
+	si->x = x;
+	si->y = y;
+	si->z = z;
+	si->owner = CompanyID(owner);
+
+	si->UpdateVirtCoord();
+}
+
+static void RustSignRemove(Sign *si) noexcept
+{
+	si->sign.MarkDirty();
+	if (si->sign.kdtree_valid) _viewport_sign_kdtree.Remove(ViewportSignKdtreeItem::MakeSign(si->index));
+	delete si;
+
+	GetRustObjectivesServices().window_data(WC_SIGN_LIST, 0, 0);
+}
+
+const OpenTTDSignServices &GetRustSignServices() noexcept
+{
+	static const OpenTTDSignServices services{
+		.shared = &GetRustSharedServices(),
+		.costs = &GetRustCommandCostServices(),
+		.sign = [](uint16_t id) noexcept { return Sign::GetIfValid(SignID(id)); },
+		.owner = [](const Sign *si) noexcept { return si->owner.base(); },
+		.can_allocate = []() noexcept { return Sign::CanAllocateItem(); },
+		.place = RustSignPlace,
+		.rename = RustSignRename,
+		.relocate = RustSignRelocate,
+		.remove = RustSignRemove,
+		.too_many_signs = STR_ERROR_TOO_MANY_SIGNS,
+	};
+	return services;
+}
+
+static OpenTTDByteSpan RustSpan(const std::string &text) noexcept { return {reinterpret_cast<const uint8_t *>(text.data()), text.size()}; }
+#endif
 
 /**
  * Place a sign at the given coordinates. Ownership of sign has
@@ -34,6 +102,11 @@
  */
 std::tuple<CommandCost, SignID> CmdPlaceSign(DoCommandFlags flags, TileIndex tile, const std::string &text)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	SignID id{openttd_rust_sign_place(&GetRustSignServices(), RustCommandCost(&cost), flags.base(), tile.base(), RustSpan(text))};
+	return { std::move(cost), id };
+#else
 	/* Try to locate a new sign */
 	if (!Sign::CanAllocateItem()) return { CommandCost(STR_ERROR_TOO_MANY_SIGNS), SignID::Invalid() };
 
@@ -53,6 +126,7 @@ std::tuple<CommandCost, SignID> CmdPlaceSign(DoCommandFlags flags, TileIndex til
 	}
 
 	return { CommandCost(), SignID::Invalid() };
+#endif
 }
 
 /**
@@ -66,6 +140,11 @@ std::tuple<CommandCost, SignID> CmdPlaceSign(DoCommandFlags flags, TileIndex til
  */
 CommandCost CmdRenameSign(DoCommandFlags flags, SignID sign_id, const std::string &text)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_sign_rename(&GetRustSignServices(), RustCommandCost(&cost), flags.base(), sign_id.base(), RustSpan(text));
+	return cost;
+#else
 	Sign *si = Sign::GetIfValid(sign_id);
 	if (si == nullptr) return CMD_ERROR;
 	if (!CompanyCanEditSign(si)) return CMD_ERROR;
@@ -93,6 +172,7 @@ CommandCost CmdRenameSign(DoCommandFlags flags, SignID sign_id, const std::strin
 	}
 
 	return CommandCost();
+#endif
 }
 
 /**
@@ -105,6 +185,11 @@ CommandCost CmdRenameSign(DoCommandFlags flags, SignID sign_id, const std::strin
  */
 CommandCost CmdMoveSign(DoCommandFlags flags, SignID sign_id, TileIndex tile)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_sign_move(&GetRustSignServices(), RustCommandCost(&cost), flags.base(), sign_id.base(), tile.base());
+	return cost;
+#else
 	Sign *si = Sign::GetIfValid(sign_id);
 	if (si == nullptr) return CMD_ERROR;
 	if (!CompanyCanEditSign(si)) return CMD_ERROR;
@@ -123,6 +208,7 @@ CommandCost CmdMoveSign(DoCommandFlags flags, SignID sign_id, TileIndex tile)
 	}
 
 	return CommandCost();
+#endif
 }
 
 /**

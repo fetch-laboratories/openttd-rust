@@ -16,7 +16,7 @@
 #include "saveload/saveload.h"
 #ifdef WITH_RUST
 using HiddenObjectArea = OpenTTDObjectHiddenArea;
-static HiddenObjectArea HideObjectForTunnel(TileIndex t) { return openttd_rust_object_tunnel_hide(t.base(), GetRustSharedServices().map_log_x()); }
+static HiddenObjectArea HideObjectForTunnel(TileIndex t) { return openttd_rust_object_tunnel_hide(t.base(), Map::LogX()); }
 static void RestoreObjectFirstTile(HiddenObjectArea h) { openttd_rust_object_restore_first(h); }
 static void ResetScratch() { openttd_rust_command_before(&GetRustCommandServices(), true, false); }
 #else

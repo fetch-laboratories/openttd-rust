@@ -20,7 +20,7 @@
 ## Station construction, joining and removal (#267)
 
 - Rust owns: rail platform/waypoint, road stop, airport, dock and oil-rig commands; sign/name/owner, terrain, clearance, joining, deletion/reuse and docking-neighbour decisions, including `water_cmd.cpp` docking eligibility/registration.
-- C++ keeps: shell/spec/road-stop allocation, NewGRF resolvers, spatial indices, rendering/description and tile-loop/animation/vehicle-entry/track/slope services.
+- C++ keeps: shell/spec/road-stop allocation, NewGRF resolvers, spatial indices, rendering/description and vehicle-entry/track/slope services.
 - Checks: `python3 tools/migration.py simulate stations-commands aircraft-controller-removal water-structures-mutate --jobs 2`; default #320 cases, builtin tram, airport noise and reload cases are required.
 - Limits: Gaps remain in external NewGRF programs, legacy cases and unusual occupied or reservation branches (#156).
 - PRs: #303, #323.
@@ -52,7 +52,7 @@
 ## Company identity, faces and liveries
 
 - Rust owns: company colour/name/president generation, manager-face validation/bit helpers, livery propagation, identity commands, engine livery-scheme selection and company-colour cache.
-- C++ keeps: company/vehicle shells and other fields, face tables and string rendering; console face parsing, local company selection and network allow lists remain with existing owners.
+- C++ keeps: company/vehicle shells and other fields, face tables and string rendering; console face parsing and network key containers remain native.
 - PRs: #579.
 
 ## Company finances and economy lifecycle
@@ -94,3 +94,17 @@
 - Checks: `python3 tools/migration.py simulate economy-manual economy-cargodist economy-stockpile companies-delete companies-acquire engines-monitors`, `python3 tools/cargo-income-comparison.py` and native company/payment/ABI tests.
 - Limits: Gaps remain in historical monitor-key conversion and external GameScript callers (#156).
 - PRs: #388, integrated in #391.
+
+## Station naming, tile loop and lifecycle (#562)
+
+- Rust owns: `station_lifecycle.rs` default naming and suffix/industry-name exclusion, station tile loops (called directly by the tile scheduler with its map descriptor), destructor ordering, facility addition and airport maintenance; it shares the station service owner and calls the Rust queue, aircraft, order, link-graph, flow, cargo and catchment owners directly. Station map fields use the shared map descriptor; industry-map lookups preserve the original helper assertions and pool operations.
+- C++ keeps: pool shells, unmoved record fields, the road-stop tile-data vector with `SetRoadStopTileData` and `RemoveRoadStopTileData`, native member destruction, spatial indices, news and windows. The native destructor is one Rust call followed by ordinary member destruction; each destructor owner access ends before a callback.
+- Limits: `GetPlatformLength` remains with #560.
+- PRs: #568.
+
+## Company control, ownership checks and defaults (#610)
+
+- Rust owns: local-company transitions, ownership assertions/errors, allow-list validation and notification eligibility, first-playable selection and service-interval dispatch. Company, session, generation, command and vehicle consumers enter the existing owners directly.
+- C++ keeps: company shells and pool operations, current/local context and settings storage, key Add/Remove containers, encoded owner formatting, presentation and nested service commands.
+- Limits: Actual network packets, client/admin delivery, GUI rendering and terminating assertion paths remain outside the bounded native/reload evidence (#156). Interactive RNG is carried explicitly across reload because the save omits it.
+- PRs: #611.

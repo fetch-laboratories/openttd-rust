@@ -8,6 +8,7 @@
 #ifndef RUST_COMPANY_FFI_H
 #define RUST_COMPANY_FFI_H
 #include "service_defaults.hpp"
+#include "byte_span_ffi.h"
 struct OpenTTDSubsidyServices;
 struct OpenTTDCompanyIdentityServices;
 #include <cstddef>
@@ -15,8 +16,20 @@ struct OpenTTDCompanyIdentityServices;
 #include "services_ffi.h"
 #include "call_ffi.h"
 struct CompanyFinances;
+struct OpenTTDCommandCost;
+struct OpenTTDCommandCostServices;
+struct OpenTTDObjectivesServices;
+struct OpenTTDSettingServices;
 struct OpenTTDTileOwnerContext;
+struct Company;
+struct OpenTTDCompanyServices;
 extern "C" {
+void openttd_rust_company_set_local(const OpenTTDCompanyServices *, uint8_t);
+void openttd_rust_company_check_ownership(const OpenTTDCompanyServices *, OpenTTDCommandCost *, uint8_t, uint32_t);
+void openttd_rust_company_check_tile_ownership(const OpenTTDCompanyServices *, OpenTTDCommandCost *, uint32_t);
+void openttd_rust_company_allow_list(const OpenTTDCompanyServices *, OpenTTDCommandCost *, uint16_t, uint8_t, OpenTTDByteSpan);
+int32_t openttd_rust_company_service_interval(const OpenTTDCompanyServices *, const Company *, uint8_t);
+uint8_t openttd_rust_company_first_playable(const OpenTTDCompanyServices *);
 /* Company IDs, owners, vehicle types, tracks and expenses cross as uint8_t;
  * pool indices and tiles as uint32_t (UINT32_MAX ends an iteration); Money as
  * int64_t. Layouts are checked by ABI 210-214 and 400-417. */
@@ -88,10 +101,19 @@ struct OpenTTDCompanyFinanceServices {
  * index for the next item of that owner, in pool order.
  */
 struct OpenTTDObjectServices;
+struct OpenTTDStationLifecycleServices;
 struct OpenTTDCompanyServices {
 	const OpenTTDCompanyIdentityServices *identity;
 	const OpenTTDCompanyFinanceServices *finance;
 	const OpenTTDSharedServices *shared;
+	bool (*allow_list_add)(uint8_t, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(allow_list_add);
+	bool (*allow_list_remove)(uint8_t, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(allow_list_remove);
+	void (*assign_company_context)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assign_company_context);
+	void (*close_construction_windows)() noexcept OPENTTD_SERVICE_DEFAULT(close_construction_windows);
+	const OpenTTDCommandCostServices *cost;
+	const OpenTTDObjectivesServices &(*objectives)() noexcept OPENTTD_SERVICE_DEFAULT(objectives);
+	uint32_t owned_by;
+	const OpenTTDSettingServices &(*settings)() noexcept OPENTTD_SERVICE_DEFAULT(settings);
 	OpenTTDCompanyRef (OPENTTD_RUST_CALL *company_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(company_next);
 	size_t (OPENTTD_RUST_CALL *company_count)() noexcept OPENTTD_SERVICE_DEFAULT(company_count);
 	bool (OPENTTD_RUST_CALL *can_allocate_company)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate_company);
@@ -111,7 +133,7 @@ struct OpenTTDCompanyServices {
 	int64_t (OPENTTD_RUST_CALL *road_maintenance_cost)(uint8_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_maintenance_cost);
 	int64_t (OPENTTD_RUST_CALL *canal_maintenance_cost)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(canal_maintenance_cost);
 	int64_t (OPENTTD_RUST_CALL *station_maintenance_cost)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_maintenance_cost);
-	int64_t (OPENTTD_RUST_CALL *airport_maintenance_cost)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_maintenance_cost);
+	const OpenTTDStationLifecycleServices *(OPENTTD_RUST_CALL *station_lifecycle)() noexcept OPENTTD_SERVICE_DEFAULT(station_lifecycle);
 	void (OPENTTD_RUST_CALL *recession_news)(bool) noexcept OPENTTD_SERVICE_DEFAULT(recession_news);
 	OpenTTDCompanyPriceBase (OPENTTD_RUST_CALL *price_base)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(price_base);
 	uint32_t (OPENTTD_RUST_CALL *cargo_next)(uint32_t, int64_t *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_next);
@@ -136,7 +158,8 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_RUST_CALL *close_network_status)() noexcept OPENTTD_SERVICE_DEFAULT(close_network_status);
 	void (OPENTTD_RUST_CALL *network_spectate)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(network_spectate);
 	void (OPENTTD_RUST_CALL *network_company_new)(uint8_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(network_company_new);
-	void (OPENTTD_RUST_CALL *network_own_company)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(network_own_company);
+	Company *(OPENTTD_RUST_CALL *network_own_company)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(network_own_company);
+	void (OPENTTD_RUST_CALL *network_own_company_settings)(Company *) noexcept OPENTTD_SERVICE_DEFAULT(network_own_company_settings);
 	void (OPENTTD_RUST_CALL *assert_new_ai_slot)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assert_new_ai_slot);
 	void (OPENTTD_RUST_CALL *company_bankrupt_news)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_bankrupt_news);
 	void (OPENTTD_RUST_CALL *stop_ai)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(stop_ai);
@@ -145,7 +168,6 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_RUST_CALL *merger_news)(uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(merger_news);
 	void (OPENTTD_RUST_CALL *acquisition_windows)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(acquisition_windows);
 	void (OPENTTD_RUST_CALL *clients_to_spectators)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(clients_to_spectators);
-	void (OPENTTD_RUST_CALL *set_local_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_local_company);
 	const OpenTTDSubsidyServices *(OPENTTD_RUST_CALL *subsidies)() noexcept OPENTTD_SERVICE_DEFAULT(subsidies);
 	uint32_t (OPENTTD_RUST_CALL *town_next)(uint32_t, uint8_t, OpenTTDCompanyTownRights *) noexcept OPENTTD_SERVICE_DEFAULT(town_next);
 	int16_t (OPENTTD_RUST_CALL *town_rating)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(town_rating);
@@ -162,7 +184,7 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_RUST_CALL *delete_vehicle)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_vehicle);
 	void (OPENTTD_RUST_CALL *count_group_engine)(uint32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(count_group_engine);
 	void (OPENTTD_RUST_CALL *count_group_vehicle)(uint32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(count_group_vehicle);
-	void (OPENTTD_RUST_CALL *reset_service_interval)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(reset_service_interval);
+	void (OPENTTD_RUST_CALL *reset_service_interval)(uint32_t, int32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(reset_service_interval);
 	void (OPENTTD_RUST_CALL *set_vehicle_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_vehicle_owner);
 	void (OPENTTD_RUST_CALL *assign_unit_number)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assign_unit_number);
 	void (OPENTTD_RUST_CALL *remove_engine_replacements)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(remove_engine_replacements);

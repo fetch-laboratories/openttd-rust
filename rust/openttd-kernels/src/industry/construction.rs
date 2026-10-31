@@ -73,7 +73,7 @@ const PROD_CHANGE_BUILD: u16 = 0x15f;
 const DECIDE_COLOUR: u16 = 0x14a;
 const INPUT_CARGO_TYPES: u16 = 0x14b;
 const OUTPUT_CARGO_TYPES: u16 = 0x14c;
-const ORIGINAL_CALLBACKS: u16 = (1 << 2) | (1 << 1) | (1 << 5) | (1 << 4) | (1 << 14);
+pub(super) const ORIGINAL_CALLBACKS: u16 = (1 << 2) | (1 << 1) | (1 << 5) | (1 << 4) | (1 << 14);
 
 fn add_location(owner: *mut Industry, tile: u32, size_x: u32) {
     let area = unsafe { super::lifecycle::location(owner) };
@@ -294,7 +294,7 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
         }
     }
     let callbacks = unsafe { (c.callback_mask)(spec) };
-    if unsafe { (s.economy_type)() } != 0 && callbacks & ORIGINAL_CALLBACKS == 0 {
+    if !super::original_economy(callbacks, unsafe { (s.economy_type)() }) {
         for n in 0..produced_count(owner) {
             let random = s.shared().random_range(256);
             let p = produced(owner, n);

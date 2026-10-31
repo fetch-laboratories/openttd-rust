@@ -137,7 +137,6 @@ IndustrySpec _industry_specs[NUM_INDUSTRYTYPES];
 IndustryTileSpec _industry_tile_specs[NUM_INDUSTRYTILES];
 IndustryBuildData _industry_builder; ///< In-game manager of industries.
 
-static int WhoCanServiceIndustry(Industry *ind);
 
 /**
  * This function initialize the spec arrays of both
@@ -295,25 +294,7 @@ void Industry::PostDestructor(size_t)
  * Return a random valid industry.
  * @return random industry, nullptr if there are no industries
  */
-/* static */ Industry *Industry::GetRandom()
-{
-	if (Industry::GetNumItems() == 0) return nullptr;
-	int num = RandomRange((uint16_t)Industry::GetNumItems());
-	size_t index = std::numeric_limits<size_t>::max();
 
-	while (num >= 0) {
-		num--;
-		index++;
-
-		/* Make sure we have a valid industry */
-		while (!Industry::IsValidID(index)) {
-			index++;
-			assert(index < Industry::GetPoolSize());
-		}
-	}
-
-	return Industry::Get(index);
-}
 
 
 static void IndustryDrawSugarMine(const TileInfo *ti)
@@ -1090,16 +1071,7 @@ static void ChangeTileOwner_Industry(TileIndex tile, Owner old_owner, Owner new_
  */
 bool IsTileForestIndustry(TileIndex tile)
 {
-	/* Check for industry tile */
-	if (!IsTileType(tile, MP_INDUSTRY)) return false;
-
-	const Industry *ind = Industry::GetByTile(tile);
-
-	/* Check for organic industry (i.e. not processing or extractive) */
-	if (!GetIndustrySpec(ind->type)->life_type.Test(IndustryLifeType::Organic)) return false;
-
-	/* Check for wood production */
-	return std::any_of(std::begin(ind->produced), std::end(ind->produced), [](const auto &p) { return IsValidCargoType(p.cargo) && CargoSpec::Get(p.cargo)->label == CT_WOOD; });
+	return openttd_rust_industry_forest(tile.base(), &GetIndustryRustServices());
 }
 
 #ifndef WITH_RUST
@@ -1856,7 +1828,7 @@ static CommandCost CheckIfFarEnoughFromConflictingIndustry(TileIndex tile, Indus
  */
 #endif
 
-static void AdvertiseIndustryOpening(const Industry *ind)
+static void RustIndustryOpeningNews(const Industry *ind) noexcept
 {
 	const IndustrySpec *ind_spc = GetIndustrySpec(ind->type);
 	EncodedString headline;
@@ -1866,8 +1838,6 @@ static void AdvertiseIndustryOpening(const Industry *ind)
 		headline = GetEncodedString(ind_spc->new_industry_text, ind_spc->name, ind->town->index);
 	}
 	AddIndustryNewsItem(std::move(headline), NewsType::IndustryOpen, ind->index);
-	AI::BroadcastNewEvent(new ScriptEventIndustryOpen(ind->index));
-	Game::NewEvent(new ScriptEventIndustryOpen(ind->index));
 }
 
 /**
@@ -2612,14 +2582,7 @@ static void PlaceInitialIndustry(IndustryType type, bool water, bool try_hard)
  * Get total number of industries existing in the game.
  * @return Number of industries currently in the game.
  */
-static uint GetCurrentTotalNumberOfIndustries()
-{
-	uint total = 0;
-	for (const auto &industries : Industry::industries) {
-		total += static_cast<uint16_t>(std::size(industries));
-	}
-	return total;
-}
+
 
 
 /** Reset the entry. */
@@ -2764,19 +2727,15 @@ void GenerateIndustries()
 template <>
 Industry::ProducedHistory SumHistory(std::span<const Industry::ProducedHistory> history)
 {
-	uint32_t production = std::accumulate(std::begin(history), std::end(history), 0, [](uint32_t r, const auto &p) { return r + p.production; });
-	uint32_t transported = std::accumulate(std::begin(history), std::end(history), 0, [](uint32_t r, const auto &p) { return r + p.transported; });
-	auto count = std::size(history);
-	return {.production = ClampTo<uint16_t>(production / count), .transported = ClampTo<uint16_t>(transported / count)};
+	const auto sum = openttd_rust_industry_sum_history(reinterpret_cast<const OpenTTDIndustryPair *>(history.data()), history.size());
+	return {.production = sum.first, .transported = sum.second};
 }
 
 template <>
 Industry::AcceptedHistory SumHistory(std::span<const Industry::AcceptedHistory> history)
 {
-	uint32_t accepted = std::accumulate(std::begin(history), std::end(history), 0, [](uint32_t r, const auto &a) { return r + a.accepted; });
-	uint32_t waiting = std::accumulate(std::begin(history), std::end(history), 0, [](uint32_t r, const auto &a) { return r + a.waiting; });;
-	auto count = std::size(history);
-	return {.accepted = ClampTo<uint16_t>(accepted / count), .waiting = ClampTo<uint16_t>(waiting / count)};
+	const auto sum = openttd_rust_industry_sum_history(reinterpret_cast<const OpenTTDIndustryPair *>(history.data()), history.size());
+	return {.accepted = sum.first, .waiting = sum.second};
 }
 
 /**
@@ -3008,74 +2967,14 @@ static bool CheckIndustryCloseDownProtection(IndustryType type)
  */
 #endif
 
-static void CanCargoServiceIndustry(CargoType cargo, Industry *ind, bool *c_accepts, bool *c_produces)
+static NewsType RustIndustryNewsType(OpenTTDIndustryServicing servicing) noexcept
 {
-	if (!IsValidCargoType(cargo)) return;
-
-	/* Check for acceptance of cargo */
-	if (ind->IsCargoAccepted(cargo) && !IndustryTemporarilyRefusesCargo(ind, cargo)) *c_accepts = true;
-
-	/* Check for produced cargo */
-	if (ind->IsCargoProduced(cargo)) *c_produces = true;
-}
-
-/**
- * Compute who can service the industry.
- *
- * Here, 'can service' means that they have trains and stations close enough
- * to the industry with the right cargo type and the right orders (ie has the
- * technical means).
- *
- * @param ind: Industry being investigated.
- *
- * @return: 0 if nobody can service the industry, 2 if the local company can
- * service the industry, and 1 otherwise (only competitors can service the
- * industry)
- */
-int WhoCanServiceIndustry(Industry *ind)
-{
-	if (ind->stations_near.empty()) return 0; // No stations found at all => nobody services
-
-	int result = 0;
-	for (const Vehicle *v : Vehicle::Iterate()) {
-		/* Is it worthwhile to try this vehicle? */
-		if (v->owner != _local_company && result != 0) continue;
-
-		/* Check whether it accepts the right kind of cargo */
-		bool c_accepts = false;
-		bool c_produces = false;
-		if (v->type == VEH_TRAIN && v->IsFrontEngine()) {
-			for (const Vehicle *u = v; u != nullptr; u = u->Next()) {
-				CanCargoServiceIndustry(u->cargo_type, ind, &c_accepts, &c_produces);
-			}
-		} else if (v->type == VEH_ROAD || v->type == VEH_SHIP || v->type == VEH_AIRCRAFT) {
-			CanCargoServiceIndustry(v->cargo_type, ind, &c_accepts, &c_produces);
-		} else {
-			continue;
-		}
-		if (!c_accepts && !c_produces) continue; // Wrong cargo
-
-		/* Check orders of the vehicle.
-		 * We cannot check the first of shared orders only, since the first vehicle in such a chain
-		 * may have a different cargo type.
-		 */
-		for (const Order &o : v->Orders()) {
-			if (o.IsType(OT_GOTO_STATION) && o.GetUnloadType() != OrderUnloadType::Transfer) {
-				/* Vehicle visits a station to load or unload */
-				Station *st = Station::Get(o.GetDestination().ToStationID());
-				assert(st != nullptr);
-
-				/* Same cargo produced by industry is dropped here => not serviced by vehicle v */
-				if (o.GetUnloadType() == OrderUnloadType::Unload && !c_accepts) break;
-
-				if (ind->stations_near.find(st) != ind->stations_near.end()) {
-					if (v->owner == _local_company) return 2; // Company services industry
-					result = 1; // Competitor services industry
-				}
-			}
-		}
+	switch (servicing) {
+		case OpenTTDIndustryServicing::Nobody: return NewsType::IndustryNobody;
+		case OpenTTDIndustryServicing::Other: return NewsType::IndustryOther;
+		case OpenTTDIndustryServicing::Company: return NewsType::IndustryCompany;
+		default: NOT_REACHED();
 	}
-	return result;
 }
 
 /**
@@ -3085,23 +2984,12 @@ int WhoCanServiceIndustry(Industry *ind)
  * @param cargo Cargo type that has changed
  * @param percent Percentage of change (>0 means increase, <0 means decrease)
  */
-static void ReportNewsProductionChangeIndustry(Industry *ind, CargoType cargo, int percent)
+static void RustIndustryProductionNews(Industry *ind, CargoType cargo, int percent, OpenTTDIndustryServicing servicing) noexcept
 {
-	NewsType nt;
-
-	switch (WhoCanServiceIndustry(ind)) {
-		case 0: nt = NewsType::IndustryNobody;  break;
-		case 1: nt = NewsType::IndustryOther;   break;
-		case 2: nt = NewsType::IndustryCompany; break;
-		default: NOT_REACHED();
-	}
 	AddIndustryNewsItem(
 		GetEncodedString(percent >= 0 ? STR_NEWS_INDUSTRY_PRODUCTION_INCREASE_SMOOTH : STR_NEWS_INDUSTRY_PRODUCTION_DECREASE_SMOOTH,
-			CargoSpec::Get(cargo)->name, ind->index, abs(percent)
-		),
-		nt,
-		ind->index
-	);
+			CargoSpec::Get(cargo)->name, ind->index, abs(percent)),
+		RustIndustryNewsType(servicing), ind->index);
 }
 
 #ifndef WITH_RUST
@@ -3454,7 +3342,7 @@ void CheckIndustries()
  */
 bool IndustrySpec::IsRawIndustry() const
 {
-	return this->life_type.Any({IndustryLifeType::Extractive, IndustryLifeType::Organic});
+	return openttd_rust_industry_spec_raw(this->life_type.base());
 }
 
 /**
@@ -3463,9 +3351,7 @@ bool IndustrySpec::IsRawIndustry() const
  */
 bool IndustrySpec::IsProcessingIndustry() const
 {
-	/* Lumber mills are neither raw nor processing */
-	return this->life_type.Test(IndustryLifeType::Processing) &&
-			!this->behaviour.Test(IndustryBehaviour::CutTrees);
+	return openttd_rust_industry_spec_processing(this->life_type.base(), this->behaviour.base());
 }
 
 /**
@@ -3474,20 +3360,7 @@ bool IndustrySpec::IsProcessingIndustry() const
  */
 Money IndustrySpec::GetConstructionCost() const
 {
-	/* Building raw industries like secondary uses different price base */
-	return (_price[(_settings_game.construction.raw_industry_construction == 1 && this->IsRawIndustry()) ?
-			PR_BUILD_INDUSTRY_RAW : PR_BUILD_INDUSTRY] * this->cost_multiplier) >> 8;
-}
-
-/**
- * Get the cost for removing this industry
- * Take note that the cost will always be zero for non-grf industries.
- * Only if the grf author did specified a cost will it be applicable.
- * @return the cost (inflation corrected etc)
- */
-Money IndustrySpec::GetRemovalCost() const
-{
-	return (_price[PR_CLEAR_INDUSTRY] * this->removal_cost_multiplier) >> 8;
+	return openttd_rust_industry_construction_cost(RustIndustrySpecCostMultiplier(this), this->life_type.base(), _settings_game.construction.raw_industry_construction);
 }
 
 /**
@@ -3496,13 +3369,7 @@ Money IndustrySpec::GetRemovalCost() const
  */
 bool IndustrySpec::UsesOriginalEconomy() const
 {
-	return _settings_game.economy.type == ET_ORIGINAL ||
-		this->callback_mask.Any({
-			IndustryCallbackMask::Production256Ticks,
-			IndustryCallbackMask::ProductionCargoArrival, // production callbacks
-			IndustryCallbackMask::MonthlyProdChange,
-			IndustryCallbackMask::ProductionChange,
-			IndustryCallbackMask::ProdChangeBuild}); // production change callbacks
+	return openttd_rust_industry_original_economy(this->callback_mask.base(), _settings_game.economy.type);
 }
 
 #ifndef WITH_RUST
@@ -3615,7 +3482,7 @@ void TrimIndustryAcceptedProduced(Industry *ind)
 /** Industry world services with immediate effects. Script event services only enqueue
 	* events; construction, landscape clearing and industry destruction can reenter Rust.
 	* Their CommandCost failures are handled by the native transactions. */
-static void RustIndustryNews(Industry *i, StringID str, bool close) noexcept
+static void RustIndustryNews(Industry *i, StringID str, bool close, OpenTTDIndustryServicing servicing) noexcept
 {
 	NewsType nt;
 	/* Compute news category */
@@ -3624,12 +3491,7 @@ static void RustIndustryNews(Industry *i, StringID str, bool close) noexcept
 		AI::BroadcastNewEvent(new ScriptEventIndustryClose(i->index));
 		Game::NewEvent(new ScriptEventIndustryClose(i->index));
 	} else {
-		switch (WhoCanServiceIndustry(i)) {
-			case 0: nt = NewsType::IndustryNobody;  break;
-			case 1: nt = NewsType::IndustryOther;   break;
-			case 2: nt = NewsType::IndustryCompany; break;
-			default: NOT_REACHED();
-		}
+		nt = RustIndustryNewsType(servicing);
 	}
 	/* Set parameters of news string */
 	EncodedString headline;
@@ -3649,7 +3511,7 @@ static void RustIndustryNews(Industry *i, StringID str, bool close) noexcept
 }
 
 static Industry *RustIndustry(void *handle) noexcept { return static_cast<Industry *>(handle); }
-static const IndustrySpec *RustIndustrySpec(void *handle) noexcept { return GetIndustrySpec(RustIndustry(handle)->type); }
+static const IndustrySpec *RustIndustrySpec(void *handle) noexcept { return RustIndustryTypeSpec(RustIndustry(handle)->type); }
 
 /** One typed noexcept slot per original operation, in industry_ffi.h order. */
 static const OpenTTDIndustryServices _industry_services = {
@@ -3682,7 +3544,7 @@ static const OpenTTDIndustryServices _industry_services = {
 	},
 	.production_callback = [](void *i, uint8_t reason) noexcept { IndustryProductionCallback(RustIndustry(i), reason); },
 	.scale_cargo = OpenTTDScaleIndustryCargo,
-	.tile_add_wrap = SharedTileAddWrap,
+	.environment = &GetRustEnvironmentServices(),
 	.farm_tile = [](uint32_t index) noexcept -> OpenTTDIndustryFarmTile {
 		TileIndex tile(index);
 		const auto type = SharedTileType(index);
@@ -3716,7 +3578,7 @@ static const OpenTTDIndustryServices _industry_services = {
 	.observe = [](void *handle, OpenTTDIndustryObservation *out) noexcept {
 		Industry *i = RustIndustry(handle);
 		const IndustrySpec *spec = GetIndustrySpec(i->type);
-		*out = {RustIndustryCanonicalOwner(i), RustIndustrySpecBehaviour(spec), RustIndustrySpecCallbackMask(spec), spec->life_type.base(), uint8_t(spec->UsesOriginalEconomy()), i->type,
+		*out = {RustIndustryCanonicalOwner(i), RustIndustrySpecBehaviour(spec), RustIndustrySpecCallbackMask(spec), RustIndustrySpecLife(spec), i->type,
 			spec->production_up_text, spec->production_down_text, spec->closure_text};
 	},
 	.production_rate = [](void *i, uint32_t slot) noexcept -> uint8_t { return RustIndustrySpec(i)->production_rate[slot]; },
@@ -3727,8 +3589,8 @@ static const OpenTTDIndustryServices _industry_services = {
 		return {result, reg[0]};
 	},
 	.custom_text = [](void *i, uint16_t text) noexcept -> uint32_t { return MapGRFStringID(RustIndustrySpec(i)->grf_prop.grfid, GRFStringID(text)); },
-	.news = [](void *i, uint32_t text, bool close) noexcept { RustIndustryNews(RustIndustry(i), text, close); },
-	.rate_news = [](void *i, uint8_t cargo, int32_t percent) noexcept { ReportNewsProductionChangeIndustry(RustIndustry(i), cargo, percent); },
+	.news = [](void *i, uint32_t text, bool close, OpenTTDIndustryServicing servicing) noexcept { RustIndustryNews(RustIndustry(i), text, close, servicing); },
+	.production_news = [](void *i, uint8_t cargo, int32_t percent, OpenTTDIndustryServicing servicing) noexcept { RustIndustryProductionNews(RustIndustry(i), cargo, percent, servicing); },
 	.callback_error = [](void *handle, bool invalid_cargo) noexcept {
 		Industry *i = RustIndustry(handle);
 		const IndustrySpec *spec = GetIndustrySpec(i->type);
@@ -3738,12 +3600,12 @@ static const OpenTTDIndustryServices _industry_services = {
 	},
 	.set_dirty = [](void *i) noexcept { SetWindowDirty(WC_INDUSTRY_VIEW, RustIndustry(i)->index); },
 	.destroy = [](void *i) noexcept { delete RustIndustry(i); },
-	.advertise = [](void *i) noexcept { AdvertiseIndustryOpening(RustIndustry(i)); },
+	.opening_news = [](void *i) noexcept { RustIndustryOpeningNews(RustIndustry(i)); },
+	.opening_events = [](void *i) noexcept { Industry *ind = RustIndustry(i); AI::BroadcastNewEvent(new ScriptEventIndustryOpen(ind->index)); Game::NewEvent(new ScriptEventIndustryOpen(ind->index)); },
 	.create = [](uint8_t type, uint8_t creation) noexcept -> void * { return CreateNewIndustry(RandomTile(), type, static_cast<IndustryAvailabilityCallType>(creation)); },
-	.random_industry = []() noexcept -> void * { return Industry::GetRandom(); },
+	.num_items = []() noexcept -> uint32_t { return static_cast<uint32_t>(Industry::GetNumItems()); },
 	.get = [](uint16_t id) noexcept -> void * { return IndustryIfValid(id); },
 	.type_count = [](uint8_t type) noexcept -> uint16_t { return Industry::GetIndustryTypeCount(type); },
-	.total = []() noexcept -> uint32_t { return GetCurrentTotalNumberOfIndustries(); },
 	.type_info = [](uint8_t type) noexcept -> OpenTTDIndustryTypeInfo {
 		const IndustrySpec *spec = GetIndustrySpec(type);
 		return {RustIndustrySpecBehaviour(spec), spec->enabled, !spec->layouts.empty(), spec->appear_ingame[to_underlying(_settings_game.game_creation.landscape)]};
@@ -3810,8 +3672,10 @@ const OpenTTDIndustryLifecycleServices &GetIndustryLifecycleRustServices() { ret
 const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices()
 {
 	static const OpenTTDIndustryGenerationServices services = {
-		.spec = [](uint8_t type) noexcept -> const OpenTTDIndustrySpecHandle * { return reinterpret_cast<const OpenTTDIndustrySpecHandle *>(GetIndustrySpec(type)); },
+		.spec = RustIndustryTypeSpec<OpenTTDIndustrySpecHandle>,
 		.spec_behaviour = RustIndustrySpecHandleBehaviour,
+		.spec_life = RustIndustrySpecLife<OpenTTDIndustrySpecHandle>,
+		.cost_multiplier = RustIndustrySpecCostMultiplier<OpenTTDIndustrySpecHandle>,
 		.info = [](const OpenTTDIndustrySpecHandle *handle) noexcept -> OpenTTDIndustryGenerationInfo {
 			const auto *spec = reinterpret_cast<const IndustrySpec *>(handle);
 			return {spec->appear_creation[to_underlying(_settings_game.game_creation.landscape)], spec->enabled, !spec->layouts.empty()};
@@ -3960,7 +3824,7 @@ const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices() noexcep
 		.close_ai = [](Industry *industry) noexcept { AI::BroadcastNewEvent(new ScriptEventIndustryClose(industry->index)); },
 		.close_game = [](Industry *industry) noexcept { Game::NewEvent(new ScriptEventIndustryClose(industry->index)); },
 		.destroy = [](Industry *industry) noexcept { delete industry; },
-		.removal_cost = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> int64_t { return reinterpret_cast<const IndustrySpec *>(spec)->GetRemovalCost(); },
+		.removal_multiplier = RustIndustrySpecRemovalMultiplier<OpenTTDIndustrySpecHandle>,
 		.tile_max_z = [](uint32_t tile) noexcept -> int32_t { return OpenTTDTileMaxZ(TileIndex(tile)); },
 		.autoslope_callback = [](const OpenTTDIndustryTileSpec *spec) noexcept -> bool { return spec->callback_mask.Test(IndustryTileCallbackMask::Autoslope); },
 		.callback_boolean = RustSpecBooleanCallback<IndustryTileSpec>,
@@ -3977,12 +3841,10 @@ static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices(
 		.enabled = RustSpecEnabled<IndustrySpec, OpenTTDIndustrySpecHandle>,
 		.layout_count = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> size_t { return reinterpret_cast<const IndustrySpec *>(spec)->layouts.size(); },
 		.layout = [](const OpenTTDIndustrySpecHandle *spec, size_t index) noexcept -> const OpenTTDIndustryLayoutHandle * { return reinterpret_cast<const OpenTTDIndustryLayoutHandle *>(&reinterpret_cast<const IndustrySpec *>(spec)->layouts[index]); },
-		.raw = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> bool { return reinterpret_cast<const IndustrySpec *>(spec)->IsRawIndustry(); },
 		.raw_setting = []() noexcept -> uint8_t { return _settings_game.construction.raw_industry_construction; },
 		.check_proc = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> uint8_t { return reinterpret_cast<const IndustrySpec *>(spec)->check_proc; },
 		.conflicting = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> OpenTTDIndustryConflictKinds { OpenTTDIndustryConflictKinds result; std::ranges::copy(reinterpret_cast<const IndustrySpec *>(spec)->conflicting, result.kinds); return result; },
 		.multiple_per_town = []() noexcept -> bool { return _settings_game.economy.multiple_industry_per_town; },
-		.closest_town = [](uint32_t tile, uint32_t threshold) noexcept -> const OpenTTDTownHandle * { return reinterpret_cast<const OpenTTDTownHandle *>(ClosestTownFromTile(TileIndex(tile), threshold)); },
 		.town = OpenTTDIndustryTownHandle,
 		.population = [](const OpenTTDTownHandle *town) noexcept -> uint32_t { return reinterpret_cast<const Town *>(town)->cache.population; },
 		.town_position = OpenTTDTownTile,
@@ -4008,7 +3870,6 @@ static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices(
 		.local_company = []() noexcept -> bool { return IsLocalCompany(); },
 		.prospect_no_place = []() noexcept { ShowErrorMessage(GetEncodedString(STR_ERROR_CAN_T_PROSPECT_INDUSTRY), GetEncodedString(STR_ERROR_NO_SUITABLE_PLACES_FOR_PROSPECTING), WL_INFO); },
 		.prospect_unlucky = []() noexcept { ShowErrorMessage(GetEncodedString(STR_ERROR_CAN_T_PROSPECT_INDUSTRY), GetEncodedString(STR_ERROR_PROSPECTING_WAS_UNLUCKY), WL_INFO); },
-		.construction_cost = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> int64_t { return reinterpret_cast<const IndustrySpec *>(spec)->GetConstructionCost(); },
 	};
 	return services;
 }

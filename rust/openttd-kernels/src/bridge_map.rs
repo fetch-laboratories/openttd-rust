@@ -10,6 +10,7 @@
 use crate::direction_func::diag_dir_to_axis;
 use crate::services::{Foundation, Services};
 /// `GetBridgeHeight`. Each original operation remains a named shared callee.
+#[inline]
 pub(crate) fn get_bridge_height(tile: u32, s: &Services) -> i32 {
     let slope_z = (s.tile_slope_z)(tile);
     let foundation = crate::bridge::get_bridge_foundation(
@@ -24,6 +25,7 @@ pub(crate) fn get_bridge_height(tile: u32, s: &Services) -> i32 {
         .wrapping_add((s.apply_foundation)(Foundation(foundation), slope_z.slope).z)
 }
 /// `GetBridgePixelHeight`.
+#[inline]
 pub(crate) fn get_bridge_pixel_height(tile: u32, s: &Services) -> i32 {
     get_bridge_height(tile, s).wrapping_mul(crate::tile_type::TILE_HEIGHT.cast_signed())
 }
@@ -37,6 +39,7 @@ pub unsafe extern "C" fn openttd_rust_bridge_height(s: *const Services, tile: u3
 }
 
 impl crate::map_func::World<'_> {
+    #[inline]
     pub(crate) fn bridge(&self, t: u32) -> bool {
         self.check(self.kind(t) == crate::tile_type::MP_TUNNELBRIDGE);
         crate::bitmath_func::has_bit(Self::byte(self.types.m5(t)), 7)
@@ -45,6 +48,7 @@ impl crate::map_func::World<'_> {
 
 impl crate::map_func::World<'_> {
     /// `GetBridgeType`, preserving `IsBridgeTile`'s assertion.
+    #[inline]
     pub(crate) fn bridge_type(&self, t: u32) -> u32 {
         self.check(self.kind(t) == crate::tile_type::MP_TUNNELBRIDGE && self.bridge(t));
         crate::bitmath_func::gb(u32::from(Self::byte(self.types.m6(t))), 2, 4)

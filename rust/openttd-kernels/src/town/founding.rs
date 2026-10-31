@@ -43,11 +43,6 @@ pub struct Frame {
     _private: [u8; 0],
 }
 #[repr(C)]
-pub struct Metadata {
-    pub grfid: u32,
-    pub kind: u16,
-}
-#[repr(C)]
 pub struct FoundingServices {
     pub shared: *const Services,
     pub growth: *const Leaves,
@@ -56,7 +51,6 @@ pub struct FoundingServices {
     pub allocate: extern "C" fn(Tile) -> TownRef,
     pub resolve: extern "C" fn(TownId) -> TownRef,
     pub can_allocate: extern "C" fn() -> bool,
-    pub close_to_town: extern "C" fn(Tile, u32) -> bool,
     pub flat: extern "C" fn(Tile) -> bool,
     pub water_distance: extern "C" fn(Tile, bool) -> u32,
     pub scale_size: extern "C" fn(u32) -> u32,
@@ -67,10 +61,7 @@ pub struct FoundingServices {
     pub town_density: extern "C" fn() -> u8,
     pub custom_number: extern "C" fn() -> u16,
     pub larger_towns: extern "C" fn() -> u8,
-    pub parameters: extern "C" fn(*mut Frame) -> *const names::NameParams,
-    pub metadata: extern "C" fn(*const names::NameParams) -> Metadata,
-    pub insert_town: extern "C" fn(*mut TownHandle),
-    pub cargo_effect_exists: extern "C" fn(AcceptanceEffect) -> bool,
+    pub name_style: extern "C" fn() -> u8,
     pub prepare_rename: extern "C" fn(*mut TownHandle),
     pub name_changed: extern "C" fn(*mut TownHandle, ByteSpan),
     pub update_virt: extern "C" fn(*mut TownHandle),
@@ -129,9 +120,7 @@ impl<'a> Founding<'a> {
         }
     }
     fn map(&self) -> crate::services::Map {
-        *self
-            .map
-            .get_or_init(|| crate::services::Map::from_log_x(observed!((self.shared.map_log_x)())))
+        *self.map.get_or_init(|| self.shared.map())
     }
     fn size_y(&self) -> u32 {
         *self
@@ -182,10 +171,10 @@ impl<'a> Founding<'a> {
     }
     fn placement_error(&self, tile: Tile, surrounding: bool) -> Option<u32> {
         w::hit(w::TOWN_PLACEMENT);
-        if observed!((self.shared.distance_from_edge)(tile.0)) < 12 {
+        if self.map().distance_from_edge(tile.0, self.size_y()) < 12 {
             return Some(self.s.edge_error);
         }
-        if observed!((self.s.close_to_town)(tile, 20)) {
+        if observed!(super::spatial::close(self.shared, tile.0, 20)) {
             return Some(self.s.close_error);
         }
         let tile_type = observed!((self.shared.tile_type)(tile.0));
@@ -263,7 +252,6 @@ impl<'a> Founding<'a> {
     }
     unsafe fn create(
         &self,
-        frame: *mut Frame,
         town: TownRef,
         tile: Tile,
         parts: u32,
@@ -302,22 +290,23 @@ impl<'a> Founding<'a> {
             (*town.state).growth.counter = town.id.0 % 70;
             (*town.state).growth.rate = town_ticks_to_game_ticks(250);
         }
-        observed!((self.s.insert_town)(town.shell));
+        // Town's native default initializes show_zone=false before this creation entry.
+        super::spatial::insert(self.shared, town.id);
         match observed!((self.leaves.climate)()) {
             1 => {
-                if observed!((self.s.cargo_effect_exists)(AcceptanceEffect(5))) {
+                if crate::cargo_registry::first_town_acceptance(5).is_some() {
                     unsafe {
                         (*town.state).simulation.goal[5] = 0xffff_fffe;
                     }
                 }
             }
             2 => {
-                if observed!((self.s.cargo_effect_exists)(AcceptanceEffect(5))) {
+                if crate::cargo_registry::first_town_acceptance(5).is_some() {
                     unsafe {
                         (*town.state).simulation.goal[5] = u32::MAX;
                     }
                 }
-                if observed!((self.s.cargo_effect_exists)(AcceptanceEffect(4))) {
+                if crate::cargo_registry::first_town_acceptance(4).is_some() {
                     unsafe {
                         (*town.state).simulation.goal[4] = u32::MAX;
                     }
@@ -333,11 +322,11 @@ impl<'a> Founding<'a> {
             (*town.state).simulation.exclusive_counter = 0;
             (*town.state).simulation.statues = 0;
         }
-        let parameters = observed!((self.s.parameters)(frame));
-        let metadata = observed!((self.s.metadata)(parameters));
+        let parameters =
+            unsafe { crate::townname_type::from_style(observed!((self.s.name_style)())) };
         unsafe {
-            (*town.state).simulation.townnamegrfid = metadata.grfid;
-            (*town.state).simulation.townnametype = metadata.kind;
+            (*town.state).simulation.townnamegrfid = parameters.grfid;
+            (*town.state).simulation.townnametype = parameters.kind;
             (*town.state).simulation.townnameparts = parts;
             initialize_layout(town.state, layout, self.map().size_x());
             (*town.state).simulation.larger_town = city;
@@ -370,13 +359,12 @@ impl<'a> Founding<'a> {
             update_radius(town.state);
         }
         engine.update_rate(u32::from(town.id.0));
-        observed!((self.leaves.update_max_pass)(u32::from(town.id.0)));
+        super::policy::update_max_pass(self.leaves, town.state);
         observed!((self.s.update_noise)());
         super::openttd_rust_town_generating_exchange(previous);
     }
     unsafe fn random_town(
         &self,
-        frame: *mut Frame,
         mut attempts: u32,
         parts: u32,
         size: TownSize,
@@ -408,7 +396,7 @@ impl<'a> Founding<'a> {
             if valid {
                 let town = observed!((self.s.allocate)(tile));
                 unsafe {
-                    self.create(frame, town, tile, parts, size, city, layout, false);
+                    self.create(town, tile, parts, size, city, layout, false);
                 }
                 if unsafe { super::population(town.state) } > 0 {
                     return Some(town);
@@ -439,19 +427,19 @@ impl<'a> Founding<'a> {
     }
     unsafe fn generate_name(
         &self,
-        frame: *mut Frame,
         name_frame: *mut names::NameFrame,
         scratch: *mut names::Names,
         result: *mut u32,
     ) -> bool {
-        let parameters = observed!((self.s.parameters)(frame));
+        let parameters =
+            unsafe { crate::townname_type::from_style(observed!((self.s.name_style)())) };
         unsafe {
             names::generate(
                 self.names,
                 name_frame,
                 self.s.random,
                 result,
-                parameters,
+                &raw const parameters,
                 scratch,
             )
         }
@@ -499,7 +487,7 @@ pub unsafe extern "C" fn openttd_rust_town_found(
     let mut f = unsafe { Founding::new(&*s) };
     f.road = road;
     w::hit(w::TOWN_ENTRIES);
-    let parameters = observed!((f.s.parameters)(frame));
+    let parameters = unsafe { crate::townname_type::from_style(observed!((f.s.name_style)())) };
     observed!((f.cost.error)(result, 0xffff));
     if size.0 >= 4 || layout.0 >= 5 {
         w::hit(w::TOWN_INVALID);
@@ -525,7 +513,15 @@ pub unsafe extern "C" fn openttd_rust_town_found(
         return;
     }
     if text.size == 0 {
-        if !unsafe { names::verify(f.names, name_frame, parts, parameters, std::ptr::null_mut()) } {
+        if !unsafe {
+            names::verify(
+                f.names,
+                name_frame,
+                parts,
+                &raw const parameters,
+                std::ptr::null_mut(),
+            )
+        } {
             w::hit(w::TOWN_DUPLICATE);
             observed!((f.cost.error)(result, f.s.unique_error));
             return;
@@ -568,11 +564,11 @@ pub unsafe extern "C" fn openttd_rust_town_found(
             crate::road_cmd::openttd_rust_road_nearest_towns((*road).services, true);
         }
         let town = if random {
-            unsafe { f.random_town(frame, 20, parts, size, city, layout) }
+            unsafe { f.random_town(20, parts, size, city, layout) }
         } else {
             let town = observed!((f.s.allocate)(tile));
             unsafe {
-                f.create(frame, town, tile, parts, size, city, layout, true);
+                f.create(town, tile, parts, size, city, layout, true);
             }
             Some(town)
         };
@@ -658,8 +654,8 @@ pub unsafe extern "C" fn openttd_rust_town_generate(
             w::hit(w::TOWN_CANCELLED);
             return false;
         }
-        if unsafe { f.generate_name(frame, name_frame, &raw mut scratch, &raw mut parts) }
-            && unsafe { f.random_town(frame, 20, parts, TownSize(3), city, layout) }.is_some()
+        if unsafe { f.generate_name(name_frame, &raw mut scratch, &raw mut parts) }
+            && unsafe { f.random_town(20, parts, TownSize(3), city, layout) }.is_some()
         {
             current = current.wrapping_add(1);
         }
@@ -669,7 +665,7 @@ pub unsafe extern "C" fn openttd_rust_town_generate(
         }
     }
     scratch.clear();
-    observed!((f.shared.rebuild_town_tree)());
+    observed!(crate::town::spatial::rebuild(f.shared));
     if current != 0 {
         unsafe {
             result.write(true);
@@ -677,19 +673,17 @@ pub unsafe extern "C" fn openttd_rust_town_generate(
         return true;
     }
     w::hit(w::TOWN_FALLBACK);
-    let success =
-        unsafe { f.generate_name(frame, name_frame, std::ptr::null_mut(), &raw mut parts) }
-            && unsafe {
-                f.random_town(
-                    frame,
-                    10000,
-                    parts,
-                    TownSize(3),
-                    observed!((f.s.larger_towns)()) != 0,
-                    layout,
-                )
-            }
-            .is_some();
+    let success = unsafe { f.generate_name(name_frame, std::ptr::null_mut(), &raw mut parts) }
+        && unsafe {
+            f.random_town(
+                10000,
+                parts,
+                TownSize(3),
+                observed!((f.s.larger_towns)()) != 0,
+                layout,
+            )
+        }
+        .is_some();
     if !success
         && observed!((f.shared.town_count)()) == 0
         && !observed!((f.leaves.environment.editor)())
@@ -748,10 +742,6 @@ pub unsafe extern "C" fn openttd_rust_town_rename(
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDTownNameMetadata" ["probe"] => Metadata {
-        grfid,
-        kind => type,
-    };
     "OpenTTDTownFoundingServices" ["probe"] => FoundingServices {
         shared,
         growth,
@@ -760,7 +750,6 @@ crate::abi::layouts! {
         allocate,
         resolve,
         can_allocate,
-        close_to_town,
         flat,
         water_distance,
         scale_size,
@@ -771,10 +760,7 @@ crate::abi::layouts! {
         town_density,
         custom_number,
         larger_towns,
-        parameters,
-        metadata,
-        insert_town,
-        cargo_effect_exists,
+        name_style,
         prepare_rename,
         name_changed,
         update_virt,

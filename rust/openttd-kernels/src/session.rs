@@ -20,6 +20,11 @@ pub struct Frame {
 pub struct FrameStorage {
     pub storage: [std::mem::MaybeUninit<u8>; 4096],
 }
+/// Native world-generation frame capacity, including inline heightmap codec scratch.
+#[repr(C, align(16))]
+pub struct WorldFrameStorage {
+    pub storage: [std::mem::MaybeUninit<u8>; 8192],
+}
 #[repr(C)]
 pub struct Load {
     _opaque: [u8; 0],
@@ -92,8 +97,6 @@ pub struct Services {
     pub check_caches: extern "C" fn(),
     pub reset_engine_overrides: extern "C" fn(),
     pub dirty: extern "C" fn(),
-    pub set_local_company: extern "C" fn(CompanyID),
-    pub first_playable_company: extern "C" fn() -> CompanyID,
     pub reload_config: extern "C" fn() -> bool,
     pub reset_grf: extern "C" fn(bool),
     pub autosave_frequency: extern "C" fn(bool),
@@ -137,7 +140,7 @@ pub struct Services {
     pub scan: extern "C" fn(*mut Frame, *mut ScanCallback) -> bool,
     pub world_setup_begin: extern "C" fn(*mut Frame) -> *mut crate::genworld::SetupFrame,
     pub world_setup_end: extern "C" fn(*mut Frame) -> bool,
-    pub world_frame_begin: extern "C" fn(*mut FrameStorage) -> *mut crate::genworld::Frame,
+    pub world_frame_begin: extern "C" fn(*mut WorldFrameStorage) -> *mut crate::genworld::Frame,
     pub world_frame_end: extern "C" fn(*mut Frame, *mut crate::genworld::Frame, u8) -> bool,
     pub heightmap_screenshot: extern "C" fn(*mut Frame) -> bool,
     pub desync_save: extern "C" fn(*mut Frame) -> bool,
@@ -317,9 +320,9 @@ impl Session<'_> {
         self.checked()?;
         if result != SL_OK {
             self.generate(crate::genworld::GWM_EMPTY, 64, 64, true)?;
-            (s.set_local_company)(CompanyID::SPECTATOR);
+            crate::company::set_local_company(unsafe { &*s.company }, CompanyID::SPECTATOR);
         } else {
-            (s.set_local_company)(CompanyID::BEGIN);
+            crate::company::set_local_company(unsafe { &*s.company }, CompanyID::BEGIN);
         }
         (s.fix_title_zoom)();
         set_pause(0);
@@ -330,11 +333,14 @@ impl Session<'_> {
     }
     fn start_game(&self, dedicated: bool) -> Outcome {
         let s = self.s;
-        (s.set_local_company)(if dedicated {
-            CompanyID::SPECTATOR
-        } else {
-            (s.first_playable_company)()
-        });
+        crate::company::set_local_company(
+            unsafe { &*s.company },
+            if dedicated {
+                CompanyID::SPECTATOR
+            } else {
+                crate::company::first_playable(unsafe { &*s.company })
+            },
+        );
         (s.network_start_game)();
         complete((s.console_script)(self.frame))
     }
@@ -515,7 +521,7 @@ impl Session<'_> {
                 (s.social_mode)(GameMode::NORMAL);
             }
             SwitchMode::LOAD_HEIGHTMAP => {
-                (s.set_local_company)(CompanyID::NONE);
+                crate::company::set_local_company(unsafe { &*s.company }, CompanyID::NONE);
                 set_mode(GameMode::EDITOR);
                 self.sized_world(crate::genworld::Mode(crate::genworld::GWM_HEIGHTMAP), true)?;
                 (s.generate_id)();
@@ -524,7 +530,7 @@ impl Session<'_> {
             }
             SwitchMode::LOAD_SCENARIO => {
                 if self.safe_load(std::ptr::null_mut(), GameMode::EDITOR)? {
-                    (s.set_local_company)(CompanyID::NONE);
+                    crate::company::set_local_company(unsafe { &*s.company }, CompanyID::NONE);
                     (s.generate_id)();
                     (s.newgame_year)(crate::timer_game_common::calendar_year().0);
                     (s.post_pause)(PauseMode::SAVE_LOAD, false);
@@ -565,11 +571,11 @@ impl Session<'_> {
                 (s.close_saveload)();
             }
             SwitchMode::GENRANDLAND => {
-                (s.set_local_company)(CompanyID::NONE);
+                crate::company::set_local_company(unsafe { &*s.company }, CompanyID::NONE);
                 self.sized_world(crate::genworld::GWM_RANDOM, true)?;
                 (s.dirty)();
             }
-            _ => (unsafe { &*(*((s.world)())).landscape }.not_reached)(),
+            _ => (unsafe { &*s.shared }.not_reached)(),
         }
         Ok(())
     }
@@ -612,7 +618,7 @@ impl Session<'_> {
         let shared = unsafe { &*s.shared };
         unsafe {
             crate::tile_loop::run(
-                (shared.map_log_x)(),
+                u32::from(shared.map().log_x),
                 (s.map_log_y)(),
                 call.settings,
                 call.services,
@@ -859,6 +865,7 @@ crate::abi::layouts! {
     "OpenTTDSessionDimensions" ["session"] => Dimensions { x, y, };
     "OpenTTDSessionSecondaryColour" ["session"] => SecondaryColour { colour, used, };
     "OpenTTDSessionFrameStorage" ["session"] => FrameStorage { storage, };
+    "OpenTTDWorldFrameStorage" ["session"] => WorldFrameStorage { storage, };
     "OpenTTDSessionState" ["session"] => State { mode, switch_mode, pause, };
     "OpenTTDSessionServices" ["session"] => Services{
         clock,
@@ -910,8 +917,6 @@ crate::abi::layouts! {
         check_caches,
         reset_engine_overrides,
         dirty,
-        set_local_company,
-        first_playable_company,
         reload_config,
         reset_grf,
         autosave_frequency,

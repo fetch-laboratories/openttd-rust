@@ -49,6 +49,7 @@
 #ifdef WITH_RUST
 #include "rust/ffi.h"
 #include "rust/landscape_loop_ffi.h"
+#include "rust/station_lifecycle_ffi.h"
 #include "rust/services_object.h"
 #include "rust/tile_owner_services.h"
 #include "rust/road_command_services.h"
@@ -949,12 +950,11 @@ OpenTTDLandscapeLoopServices RustLandscapeLoopServices(OpenTTDGroundCall *call, 
 	static_assert(MP_CLEAR == 0 && MP_RAILWAY == 1 && MP_ROAD == 2 && MP_HOUSE == 3 && MP_TREES == 4 && MP_STATION == 5 && MP_WATER == 6 && MP_VOID == 7 && MP_INDUSTRY == 8 && MP_TUNNELBRIDGE == 9 && MP_OBJECT == 10);
 	return {
 		.shared = &GetRustSharedServices(),
-		.tile_types = GetRustTileTypeAllocation(),
 		.trees = &GetRustTreeServices(),
 		.industry = GetRustIndustryLoopServices(),
 		.ground = {.clear = &GetRustClearServices(), .rail = &GetRustRailGroundServices(), .road = &GetRustRoadGroundServices(), .road_command = road, .tunnel = &GetRustTunnelGroundServices(), .water = &GetRustWaterGroundServices(), .costs = &GetRustGroundCostServices(), .call = call, .climate = OpenTTDLandscape(), .editor = OpenTTDEditor(), .rebuild = _settings_game.economy.mod_road_rebuild},
 		.town = &GetRustTownServices(),
-		.station_loop = _tile_type_station_procs.tile_loop_proc,
+		.station = &GetRustStationLifecycleServices(),
 		.objects = &GetRustObjectServices(),
 	};
 }
@@ -1042,7 +1042,6 @@ const OpenTTDLandscapeGenerationServices &GetRustLandscapeGenerationServices() n
 		.flat_height = RustFlatTileHeight,
 		.river = RustIsRiver,
 		.set_snow_line = RustSetSnowLineHeight,
-		.not_reached = RustNotReached,
 		.river_debug = RustRiverYapfDebug,
 		.assert_condition = RustAssertCondition,
 		.sea_construct = [](OpenTTDGenerationFrame *f) noexcept { f->sea.Construct(); },
@@ -1084,11 +1083,7 @@ void InitializeLandscape()
 }
 
 #ifdef WITH_RUST
-OpenTTDLandscapeGenerationCall::OpenTTDLandscapeGenerationCall() : heightmap{
-	.context = &this->decoder,
-	.read = [](void *ctx, OpenTTDHeightmapImage *out) noexcept { return static_cast<RustHeightmapDecoder *>(ctx)->Read(_file_to_saveload.ftype.detailed, _file_to_saveload.name, out); },
-	.finish = this->decoder.view.finish,
-}
+OpenTTDLandscapeGenerationCall::OpenTTDLandscapeGenerationCall()
 {
 	static_assert(GWP_LANDSCAPE == 1 && GWP_RIVER == 2 && GWM_HEIGHTMAP == 3 && LG_ORIGINAL == 0 && LG_TERRAGENESIS == 1 && MAX_TILE_HEIGHT == 255);
 	static_assert(SPR_MAPGEN_BEGIN == 4845 && TILE_UPDATE_FREQUENCY == 256);
@@ -1991,8 +1986,7 @@ void CallLandscapeTick()
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDLandscapeGenerationServices.hpp"
-#include "abi-visit-OpenTTDHeightmapDecoder.hpp"
-#include "abi-visit-OpenTTDLandscapeLoopServices.hpp"
+#include "abi-visit-OpenTTDHeightmapInput.hpp"
 #include "abi-visit-OpenTTDMovementServices.hpp"
 #include "abi-visit-OpenTTDTileOwnerServices.hpp"
 #include "abi-visit-OpenTTDClearServices.hpp"
@@ -2003,11 +1997,9 @@ void CallLandscapeTick()
 #include "abi-visit-OpenTTDGroundCostServices.hpp"
 bool CheckAbi_landscape()
 {
-	OpenTTDGroundCall call;
-	RustRoadCommandContext road;
-	RustHeightmapDecoder decoder(DFT_HEIGHTMAP_BMP, "");
-	return AbiServicesComplete(GetRustLandscapeGenerationServices()) && AbiServicesComplete(decoder.view) &&
-		AbiServicesComplete(GetRustTileOwnerServices()) && AbiServicesComplete(RustLandscapeLoopServices(&call, &road.view)) &&
+	RustHeightmapInput heightmap;
+	return AbiServicesComplete(GetRustLandscapeGenerationServices()) && AbiServicesComplete(heightmap.view) &&
+		AbiServicesComplete(GetRustTileOwnerServices()) &&
 		AbiServicesComplete(GetRustClearServices()) && AbiServicesComplete(GetRustRailGroundServices()) &&
 		AbiServicesComplete(GetRustRoadGroundServices()) && AbiServicesComplete(GetRustTunnelGroundServices()) &&
 		AbiServicesComplete(GetRustWaterGroundServices()) && AbiServicesComplete(GetRustGroundCostServices()) &&
@@ -2017,60 +2009,55 @@ bool CheckAbi_landscape()
 
 #ifdef WITH_RUST
 #include "rust/services_assert.h"
+/* Namespace scope: the constinit shared table holds this address, so Rust loads
+ * it instead of calling. Its nested getters initialize before main. */
+const OpenTTDMovementServices _rust_movement_services{
+	.shared = &GetRustSharedServices(),
+	.orders = &GetRustOrdersLeaves(),
+	.rail = &GetRustRailGroundServices(),
+	.road = &GetRustRoadGroundServices(),
+	.rail_map = &GetRustRailMapServices(),
+	.train = &GetTrainServices(),
+	.vehicle = &GetRustVehicleServices(),
+	.tunnel_bridge = &GetRustTunnelBridgeServices(),
+	.road_compatible = RustVehicleRead<uint64_t, RustRoadCompatibleTypes>,
+	.road_type_speed = RustRoadTypeMaxSpeed,
+	.road_kind = RustMovementRoadKind,
+	.road_vehicle = &GetRustRoadLeaves(),
+	.resolve = RustMovementResolve,
+	.pose = RustMovementPose,
+	.depot_position = RustMovementDepotPosition,
+	.incline = RustMovementIncline,
+	.first = RustMovementFirst,
+	.first_speed = RustMovementFirstSpeed,
+	.write_ground_flags = RustMovementWriteGroundFlags,
+	.train_engine_class = RustMovementTrainEngineClass,
+	.depot_invalidate = RustMovementDepotInvalidate,
+	.native_assert = RustAssertCondition,
+	.plain_rail = RustMovementPlainRail,
+	.is_tunnel = RustIsTunnel,
+	.rail_station = RustMovementRailStation,
+	.road_crossing = MapSvcRoadIsLevelCrossing,
+	.tile_flat = GetRustTownFoundingServices().flat,
+	.add_by_diag_dir = RustTileAddByDiagDir,
+	.rail_depot_tile = RustRailDepotTile,
+	.has_tile_road_type = RustHasTileRoadType,
+	.oneway_signal = RustRailOnewaySignal,
+	.crossing_barred = RustCrossingBarred,
+	.buoy = RustStationBuoy,
+	.water_type = GetRustWaterCommandServices().water_type,
+	.lock_direction = GetRustWaterCommandServices().lock_direction,
+	.ship_depot_axis = RustShipDepotAxis,
+	.owned_land = GetRustRailGroundServices().owned_land,
+	.object_foundation = RustObjectFoundation,
+	.house_foundation = RustHouseFoundation,
+	.house_boolean = RustHouseFoundationBoolean,
+	.industry_foundation = RustIndustryFoundation,
+	.industry_callback = RustIndustryFoundationCallback,
+	.industry_boolean = RustIndustryFoundationBoolean,
+};
 const OpenTTDMovementServices &GetRustMovementServices() noexcept
 {
-	static const OpenTTDMovementServices services{
-		.tile_types = GetRustTileTypeAllocation,
-		.shared = &GetRustSharedServices(),
-		.orders = &GetRustOrdersLeaves(),
-		.rail = &GetRustRailGroundServices(),
-		.road = &GetRustRoadGroundServices(),
-		.rail_map = &GetRustRailMapServices(),
-		.train = &GetTrainServices(),
-		.vehicle = &GetRustVehicleServices(),
-		.tunnel_bridge = &GetRustTunnelBridgeServices(),
-		.road_compatible = RustVehicleRead<uint64_t, RustRoadCompatibleTypes>,
-		.road_type_speed = RustRoadTypeMaxSpeed,
-		.road_kind = RustMovementRoadKind,
-		.road_vehicle = &GetRustRoadLeaves(),
-		.resolve = RustMovementResolve,
-		.pose = RustMovementPose,
-		.depot_position = RustMovementDepotPosition,
-		.incline = RustMovementIncline,
-		.first = RustMovementFirst,
-		.first_speed = RustMovementFirstSpeed,
-		.write_ground_flags = RustMovementWriteGroundFlags,
-		.train_engine_class = RustMovementTrainEngineClass,
-		.depot_invalidate = RustMovementDepotInvalidate,
-		.native_assert = RustAssertCondition,
-		.normal_road_status_tail = RustNormalRoadStatusTail,
-		.pixel_location = RustPixelLocation,
-		.plain_rail = RustMovementPlainRail,
-		.normal_road = RustMovementNormalRoad,
-		.is_tunnel = RustIsTunnel,
-		.rail_station = RustMovementRailStation,
-		.road_crossing = MapSvcRoadIsLevelCrossing,
-		.tile_flat = GetRustTownFoundingServices().flat,
-		.add_by_diag_dir = RustTileAddByDiagDir,
-		.rail_depot_tile = RustRailDepotTile,
-		.has_tile_road_type = RustHasTileRoadType,
-		.oneway_signal = RustRailOnewaySignal,
-		.crossing_barred = RustCrossingBarred,
-		.buoy = RustStationBuoy,
-		.water_type = GetRustWaterCommandServices().water_type,
-		.lock_direction = GetRustWaterCommandServices().lock_direction,
-		.ship_depot_axis = RustShipDepotAxis,
-		.pixel_slope = RustTilePixelSlope,
-		.outside_pixel_slope = RustOutsidePixelSlope,
-		.max_pixel_z = GetIndustryTileServices().pixel_max_z,
-		.owned_land = GetRustRailGroundServices().owned_land,
-		.object_foundation = RustObjectFoundation,
-		.house_foundation = RustHouseFoundation,
-		.house_boolean = RustHouseFoundationBoolean,
-		.industry_foundation = RustIndustryFoundation,
-		.industry_callback = RustIndustryFoundationCallback,
-		.industry_boolean = RustIndustryFoundationBoolean,
-	};
-	return services;
+	return _rust_movement_services;
 }
 #endif

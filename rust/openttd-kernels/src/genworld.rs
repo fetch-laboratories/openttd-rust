@@ -113,7 +113,7 @@ pub struct Settings {
 #[repr(C)]
 pub struct LandscapeCall {
     pub frame: *mut landscape_generation::Frame,
-    pub decoder: *const landscape_generation::Decoder,
+    pub decoder: *const crate::heightmap::Input,
     pub settings: landscape_generation::Settings,
 }
 #[repr(C)]
@@ -143,9 +143,6 @@ pub struct WorldServices {
     pub disasters: *const crate::disaster::Services,
     pub modal: extern "C" fn() -> bool,
     pub set_modal: extern "C" fn(bool),
-    pub local_company: extern "C" fn() -> CompanyID,
-    pub set_local_company: extern "C" fn(CompanyID),
-    pub restore_companies: extern "C" fn(CompanyID),
     pub initialize: extern "C" fn(*mut SetupFrame, u32, u32, bool) -> bool,
     pub prepare_progress: extern "C" fn(),
     pub settings: extern "C" fn() -> Settings,
@@ -178,7 +175,6 @@ pub struct WorldServices {
     pub dirty: extern "C" fn(),
     pub set_progress: extern "C" fn(*mut Frame, Progress, u32) -> bool,
     pub increase_progress: extern "C" fn(*mut Frame, Progress) -> bool,
-    pub town_roads: extern "C" fn() -> bool,
     pub freeform: extern "C" fn() -> bool,
     pub count_land: extern "C" fn(),
     pub landscape_begin: extern "C" fn(*mut Frame) -> LandscapeCall,
@@ -278,8 +274,12 @@ pub(crate) unsafe fn setup(
     (s.set_modal)(true);
     write_field!(INFO.get(), abort, false);
     write_field!(INFO.get(), abort_callback, None);
-    write_field!(INFO.get(), local_company, (s.local_company)());
-    (s.set_local_company)(CompanyID::SPECTATOR);
+    write_field!(
+        INFO.get(),
+        local_company,
+        CompanyID((unsafe { &*(*s.company).services }.local_company)())
+    );
+    crate::company::set_local_company(unsafe { &*(*s.company).services }, CompanyID::SPECTATOR);
     if !(s.initialize)(
         frame,
         read_field!(INFO.get(), size_x),
@@ -515,7 +515,7 @@ impl World<'_> {
         let shared = unsafe { &*(*s.landscape).shared };
         unsafe {
             crate::tile_loop::run(
-                (shared.map_log_x)(),
+                u32::from(shared.map().log_x),
                 ((shared.map_max_y)() + 1).ilog2(),
                 call.settings,
                 call.services,
@@ -541,7 +541,7 @@ impl World<'_> {
             unsafe { &*company.services },
             &(company.settings)(),
         );
-        if !(s.town_roads)() {
+        if !crate::town::policy::road_types(unsafe { &*(*s.town).growth }) {
             return self.abort();
         }
         let generated = read_field!(INFO.get(), mode) != GWM_EMPTY && self.landscape()?;
@@ -617,7 +617,10 @@ impl World<'_> {
         self.storage_mode(crate::newgrf_storage::PSM_LEAVE_GAMELOOP, false);
         (s.reset_object)();
         (s.trash_company)(self.frame);
-        (s.restore_companies)(read_field!(INFO.get(), local_company));
+        (unsafe { &*(*s.company).services }.assign_company_context)(read_field!(
+            INFO.get(),
+            local_company
+        ));
         if crate::session::mode() != GameMode::MENU {
             (s.show_windows)();
         }
@@ -625,7 +628,10 @@ impl World<'_> {
         match read_field!(INFO.get(), done) {
             Completion::Native(Some(callback)) => native((s.callback)(self.frame, Some(callback)))?,
             Completion::Native(None) => {}
-            Completion::Editor => (s.set_local_company)(CompanyID::NONE),
+            Completion::Editor => crate::company::set_local_company(
+                unsafe { &*(*s.company).services },
+                CompanyID::NONE,
+            ),
             Completion::NewGame => {
                 let frame = (s.session_frame)(self.frame);
                 crate::session::new_game_done(unsafe { &*s.session }, frame);
@@ -694,9 +700,6 @@ crate::abi::layouts! {
         disasters,
         modal,
         set_modal,
-        local_company,
-        set_local_company,
-        restore_companies,
         initialize,
         prepare_progress,
         settings,
@@ -729,7 +732,6 @@ crate::abi::layouts! {
         dirty,
         set_progress,
         increase_progress,
-        town_roads,
         freeform,
         count_land,
         landscape_begin,
@@ -774,7 +776,7 @@ pub(crate) fn generate(
     session: &crate::session::Services,
     parent: *mut crate::session::Frame,
 ) -> bool {
-    let mut storage = std::mem::MaybeUninit::<crate::session::FrameStorage>::uninit();
+    let mut storage = std::mem::MaybeUninit::<crate::session::WorldFrameStorage>::uninit();
     let frame = (session.world_frame_begin)(storage.as_mut_ptr());
     let result = run(unsafe { &*(session.world)() }, frame);
     (session.world_frame_end)(parent, frame, result)

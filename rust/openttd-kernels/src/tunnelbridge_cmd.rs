@@ -257,7 +257,7 @@ impl<'a> World<'a> {
     }
     fn deity_owner(&self, tile: u32) -> u8 {
         w::hit(w::TB_DEITY);
-        let town = (self.s.calc_closest_town)(tile, u32::MAX);
+        let town = crate::town::spatial::calc_closest(self.s, tile, u32::MAX);
         if town.is_null() {
             return OWNER_NONE;
         }
@@ -498,7 +498,7 @@ impl<'a> World<'a> {
                     return cost.error(self.a.strings.already_built);
                 }
                 if (self.s.tile_owner)(start) == OWNER_TOWN && !self.editor() {
-                    let town = (self.s.closest_town)(start, u32::MAX);
+                    let town = crate::town::spatial::closest(self.s, start, u32::MAX);
                     if town.is_null() {
                         return Self::error(cost);
                     }
@@ -1053,7 +1053,7 @@ impl<'a> World<'a> {
         END_TILE.store(end, Ordering::Relaxed);
         let mut town = std::ptr::null();
         if (self.s.tile_owner)(tile) == OWNER_TOWN && !self.editor() {
-            town = (self.s.closest_town)(tile, u32::MAX);
+            town = crate::town::spatial::closest(self.s, tile, u32::MAX);
             self.rating_check(ret, town, flags);
             if !ret.ok() {
                 return cost.take(ret);
@@ -1144,7 +1144,7 @@ impl<'a> World<'a> {
         let delta = self.map.offs_by_diag_dir(direction);
         let mut town = std::ptr::null();
         if (self.s.tile_owner)(tile) == OWNER_TOWN && !self.editor() {
-            town = (self.s.closest_town)(tile, u32::MAX);
+            town = crate::town::spatial::closest(self.s, tile, u32::MAX);
             self.rating_check(ret, town, flags);
             if !ret.ok() {
                 return cost.take(ret);
@@ -1216,7 +1216,7 @@ impl<'a> World<'a> {
             // SAFETY: immutable table; only original scalar observations cross.
             let road_ground = unsafe { &*self.a.road_ground };
             while middle != end {
-                if (self.s.is_normal_road)(middle)
+                if (self.s.is_normal_road_tile)(middle)
                     && (road_ground.roadside)(middle).0 == ROADSIDE_TREES.0
                 {
                     let min_z = (self.s.tile_max_z)(middle).wrapping_add(3);

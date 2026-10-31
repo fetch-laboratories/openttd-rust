@@ -120,7 +120,7 @@ static void VehicleConstructServiceFlags(void *shell, bool prototype, bool perce
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);
 	if (prototype) v->vehicle_flags.Set(VehicleFlag::BuiltAsPrototype);
-	v->SetServiceIntervalIsPercent(percent);
+	RustVehicleSetServiceIntervalIsPercent(v, percent);
 }
 static const OpenTTDVehicleConstructServices &GetVehicleConstructServices() noexcept
 {
@@ -172,7 +172,7 @@ static void VehicleCloneCopyService(void *source, void *destination) noexcept
 	Vehicle *w = static_cast<Vehicle *>(destination);
 	w->service_interval = v->service_interval;
 	w->SetServiceIntervalIsCustom(v->ServiceIntervalIsCustom());
-	w->SetServiceIntervalIsPercent(v->ServiceIntervalIsPercent());
+	RustVehicleSetServiceIntervalIsPercent(w, v->ServiceIntervalIsPercent());
 }
 static long VehicleCloneParseSuffix(OpenTTDByteSpan suffix) noexcept
 {

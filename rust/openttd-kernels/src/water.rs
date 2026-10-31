@@ -118,8 +118,18 @@ pub(crate) unsafe fn restore(
     water: &WaterServices,
     r: &RestorationServices,
 ) {
-    let mut class = unsafe { (&*water.clear).water_class }(tile).0;
-    let slope_z = (s.tile_slope_z)(tile);
+    let map = crate::map_func::World::new(s);
+    let mut class = crate::water_map::get_water_class(&map.types, tile)
+        .unwrap_or_else(|| unsafe { (&*water.clear).water_class }(tile).0);
+    let slope_z =
+        crate::tile_map::get_tile_slope_z(&map.types, tile, map.dimensions.size_x(), map.size().1)
+            .map_or_else(
+                || (s.tile_slope_z)(tile),
+                |(slope, z)| crate::services::FoundationSlope {
+                    z,
+                    slope: crate::services::Slope(slope),
+                },
+            );
     if slope_z.slope.0 != 0 {
         if class == 1 {
             if (s.company_valid)(owner) {
@@ -265,6 +275,8 @@ impl<'a> World<'a> {
     fn valid(&self, tile: u32) -> bool {
         tile < self.size_x * self.size_y && self.tile_type(tile) != 7
     }
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     fn behaviour(&self, tile: u32) -> u8 {
         match self.tile_type(tile) {
             6 => {
@@ -662,12 +674,14 @@ pub unsafe extern "C" fn openttd_rust_water_tile_loop(
     s: *const Services,
 ) {
     // SAFETY: Same synchronous table contract as the in-crate scheduler entry;
-    // this native entry keeps the original callback reader.
+    // the descriptor ends before this synchronous native entry returns.
     unsafe {
-        let types = TileTypeAccess::callback((*s).tile_type);
+        let shared = &*s;
+        let map = crate::map_func::World::new(shared);
+        let types = &map.types;
         let tile_type = types.read(tile);
         let ambient = tile_type == 6 && crate::newgrf_generic::ambient_enabled();
-        water_tile_loop(tile, tile_type, ambient, size_x, size_y, call, w, s, &types);
+        water_tile_loop(tile, tile_type, ambient, size_x, size_y, call, w, s, types);
     };
 }
 /// Original `TileLoop_Water` after its caller has read `GetTileType(tile)`; `ambient` is
@@ -708,9 +722,10 @@ pub unsafe extern "C" fn openttd_rust_flood_halftile(
     s: *const Services,
 ) -> bool {
     // SAFETY: Serialized native entry; no borrowed state crosses commands. Half
-    // flooding reads neither map size nor tile type.
-    let types = TileTypeAccess::callback(unsafe { (*s).tile_type });
-    unsafe { World::new(w, s, &types, 0, 0) }.half_flood(tile, call)
+    // flooding uses the canonical descriptor and original map dimensions.
+    let map = crate::map_func::World::new(unsafe { &*s });
+    unsafe { World::new(w, s, &map.types, map.dimensions.size_x(), map.size().1) }
+        .half_flood(tile, call)
 }
 /// # Safety
 /// Live immutable service tables; valid original tile argument.
@@ -720,10 +735,12 @@ pub unsafe extern "C" fn openttd_rust_flooding_behaviour(
     w: *const WaterServices,
     s: *const Services,
 ) -> FloodingBehaviour {
-    // SAFETY: Serialized native entry, observations are copied. Behaviour reads
-    // no map size.
-    let types = TileTypeAccess::callback(unsafe { (*s).tile_type });
-    FloodingBehaviour(unsafe { World::new(w, s, &types, 0, 0) }.behaviour(tile))
+    // SAFETY: Serialized native entry; scalar reads end before callbacks.
+    let map = crate::map_func::World::new(unsafe { &*s });
+    FloodingBehaviour(
+        unsafe { World::new(w, s, &map.types, map.dimensions.size_x(), map.size().1) }
+            .behaviour(tile),
+    )
 }
 /// # Safety
 /// Live immutable service tables for the synchronous no-unwind invocation.
@@ -735,8 +752,8 @@ pub(crate) unsafe fn dirty_water_neighbours(
     s: &Services,
 ) {
     // SAFETY: Serialized native entry; no map references are formed.
-    let types = TileTypeAccess::callback(s.tile_type);
-    unsafe { World::new(w, s, &types, size_x, size_y) }.dirty_neighbours(tile);
+    let map = crate::map_func::World::new(s);
+    unsafe { World::new(w, s, &map.types, size_x, size_y) }.dirty_neighbours(tile);
 }
 /// # Safety
 /// Live immutable service tables for the synchronous no-unwind invocation.
@@ -749,8 +766,9 @@ pub unsafe extern "C" fn openttd_rust_clear_neighbour_flooding(
     s: *const Services,
 ) {
     // SAFETY: Serialized native entry; no map references are formed.
-    let types = TileTypeAccess::callback(unsafe { (*s).tile_type });
-    let world = unsafe { World::new(w, s, &types, size_x, size_y) };
+    let shared = unsafe { &*s };
+    let map = crate::map_func::World::new(shared);
+    let world = unsafe { World::new(w, s, &map.types, size_x, size_y) };
     for direction in 0..8 {
         let target = offset(tile, direction, size_x);
         if world.valid(target) && world.tile_type(target) == 6 {

@@ -14,7 +14,7 @@ use crate::track_type::{
 };
 use crate::transport_type::TRANSPORT_ROAD;
 
-#[allow(unsafe_code)]
+#[inline]
 pub(crate) fn road_trackdirs(movement: &MovementServices, tile: u32, tram: bool) -> u16 {
     let mut bits = track_status_to_trackdir_bits(movement.track_status(
         tile,
@@ -23,21 +23,15 @@ pub(crate) fn road_trackdirs(movement: &MovementServices, tile: u32, tram: bool)
         INVALID_DIAGDIR,
     ));
     if tram && bits == 0 {
-        // SAFETY: Game-loop/command entries exclude map reset/load/mutex yield.
-        let map = movement.tile_types.map(|allocate| unsafe {
-            crate::map_func::TileTypeAccess::raw(allocate(), movement.shared().tile_type)
-        });
-        let normal = map.as_ref().and_then(|m| {
-            if m.read(tile) == crate::tile_type::MP_ROAD {
-                crate::road_map::is_normal_road(m, tile)
-            } else {
-                Some(false)
-            }
-        });
-        if normal.unwrap_or_else(|| (movement.shared().is_normal_road)(tile)) {
-            let road = map
-                .as_ref()
-                .and_then(|m| crate::road_map::get_road_bits(m, tile, crate::road_type::RTT_TRAM))
+        let map = crate::map_func::World::new(movement.shared());
+        let m = &map.types;
+        let normal = if m.read(tile) == crate::tile_type::MP_ROAD {
+            crate::road_map::is_normal_road(m, tile)
+        } else {
+            Some(false)
+        };
+        if normal.unwrap_or_else(|| (movement.shared().is_normal_road_tile)(tile)) {
+            let road = crate::road_map::get_road_bits(m, tile, crate::road_type::RTT_TRAM)
                 .unwrap_or_else(|| (movement.shared().normal_road_bits)(tile, 1));
             bits = match road.0 {
                 crate::road_type::ROAD_NE | crate::road_type::ROAD_SW => {

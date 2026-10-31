@@ -71,7 +71,6 @@ pub struct ResolverServices {
     nearby_spec: extern "C" fn(u16) -> NearbySpec,
     file_identity: extern "C" fn(u16) -> FileIdentity,
     badges: extern "C" fn(*const c_void, u16, u32) -> u32,
-    town_by_id: extern "C" fn(u32) -> *mut TownHandle,
     root: extern "C" fn(u16, bool) -> *const c_void,
     spec_house: extern "C" fn(*const c_void) -> u16,
     local_id: extern "C" fn(u16) -> u16,
@@ -599,7 +598,7 @@ crate::abi::layouts! {
         towns, shared, storage, larger_towns, file, version,
         nearby, nearby_info, terrain, stage, age, random_bits,
         random_triggers, search_spec, nearby_spec, file_identity,
-        badges, town_by_id, root, spec_house, local_id, base_scope, evaluate, reseed, unhandled_house, unhandled_town,
+        badges, root, spec_house, local_id, base_scope, evaluate, reseed, unhandled_house, unhandled_town,
     };
 }
 
@@ -678,7 +677,7 @@ pub(super) unsafe fn allow_construction(
     house: u16,
     initial_random: u8,
 ) -> bool {
-    let town = (services().town_by_id)(u32::from(town));
+    let town = (unsafe { &*services().shared }.town_by_id)(u32::from(town));
     let args = CallbackArgs {
         town,
         watched: 0,
@@ -697,7 +696,8 @@ pub(super) unsafe fn allow_construction(
 }
 pub(crate) unsafe fn foundation(tile: u32, house: u16) -> u16 {
     let s = services();
-    let town = (s.town_by_id)(u32::from((unsafe { &*s.shared }.town_index)(tile)));
+    let town =
+        (unsafe { &*s.shared }.town_by_id)(u32::from((unsafe { &*s.shared }.town_index)(tile)));
     unsafe {
         callback(
             CBID_HOUSE_DRAW_FOUNDATIONS.0,

@@ -15,7 +15,6 @@ struct OpenTTDRoadCommandServices;
 struct OpenTTDObjectivesServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDCompanyServices *company;
-	OpenTTDTileTypeAllocation (*map_allocation)() noexcept OPENTTD_SERVICE_DEFAULT(map_allocation);
 	Goal * (*goal)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(goal);
 	uint8_t * (*goal_company)(Goal *) noexcept OPENTTD_SERVICE_DEFAULT(goal_company);
 	uint8_t * (*goal_type)(Goal *) noexcept OPENTTD_SERVICE_DEFAULT(goal_type);

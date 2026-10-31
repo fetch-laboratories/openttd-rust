@@ -18,6 +18,10 @@
 #include "string_type.h"
 
 #ifdef WITH_RUST
+struct TownNameParams;
+struct OpenTTDTownState;
+extern "C" void openttd_rust_town_name_params(TownNameParams *, uint8_t);
+extern "C" void openttd_rust_town_name_params_for_town(TownNameParams *, const OpenTTDTownState *);
 struct OpenTTDTownNames;
 struct TownNames {
 	OpenTTDTownNames *owner;
@@ -46,9 +50,13 @@ struct TownNameParams {
 	 */
 	TownNameParams(uint8_t town_name)
 	{
+#ifdef WITH_RUST
+		openttd_rust_town_name_params(this, town_name);
+#else
 		bool grf = town_name >= BUILTIN_TOWNNAME_GENERATOR_COUNT;
 		this->grfid = grf ? GetGRFTownNameId(town_name - BUILTIN_TOWNNAME_GENERATOR_COUNT) : 0;
 		this->type = grf ? GetGRFTownNameType(town_name - BUILTIN_TOWNNAME_GENERATOR_COUNT) : SPECSTR_TOWNNAME_START + town_name;
+#endif
 	}
 
 	TownNameParams(const Town *t);
