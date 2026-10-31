@@ -36,6 +36,7 @@ For agents writing or reviewing port code, tests and Python tools.
 ## Boundary
 
 - Call `Random`, pool operations, other shared services and field accessors for records still stored in C++ directly through `noexcept` C++ wrappers. Preserve the original control flow. An escaping exception terminates.
+- Do not batch RNG or defer writes across callbacks. Keep source computation out of callback bodies.
 - Allocation failure, debug or log I/O errors, and paths needing developer-only defines such as `RANDOM_DEBUG` are environmental failures, not simulation behavior.
 - Use an action protocol to return control to C++ only where an exception can unwind through the call in ordinary play (script VMs, save/load errors). Name each such service. Reentry alone is not a reason: end every Rust borrow before a callback that can reenter Rust or mutate its state, then call directly.
 - Use synchronous calls for entries. Do not use async, futures, tasks or mailboxes. Crossings allocate nothing per call. Where the original builds a local container, use a local `Vec`, not process-wide unsafe scratch.
