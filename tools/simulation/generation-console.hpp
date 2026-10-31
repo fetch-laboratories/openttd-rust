@@ -281,6 +281,8 @@ static void GenerationInputs()
 static bool GenerationScenario(std::span<std::string_view> args)
 {
 	if (args.size() != 2) return false;
+	AutoRestoreBackup<Randomizer> interactive_seed(_interactive_random, _interactive_random);
+	_interactive_random.SetSeed(12345);
 	GenerationSnapshot("early");
 	if (args[1] == "snapshot") return true;
 	if (args[1] == "lifecycle") { GenerationLifecycle(); return true; }

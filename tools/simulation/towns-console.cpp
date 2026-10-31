@@ -788,6 +788,8 @@ static bool HouseDefinitionsScenario(std::span<std::string_view> args)
 /* Real JSON inputs listed by towns.py, imported in editor mode with alternating rotation. */
 static bool TownDataScenario(std::span<std::string_view> args)
 {
+	AutoRestoreBackup<Randomizer> interactive_seed(_interactive_random, _interactive_random);
+	_interactive_random.SetSeed(12345);
 	Backup<GameMode> mode(_game_mode, GM_EDITOR);
 	Backup<CompanyID> owner(_current_company, OWNER_NONE);
 	Backup<uint8_t> rotation(_settings_game.game_creation.heightmap_rotation, HM_COUNTER_CLOCKWISE);
