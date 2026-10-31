@@ -32,21 +32,24 @@
  * Initializes this struct from town data
  * @param t town for which we will be printing name later
  */
+#ifdef WITH_RUST
+TownNameParams::TownNameParams(const Town *t)
+{
+	openttd_rust_town_name_params_for_town(this, t->growth_owner.get());
+}
+#else
 TownNameParams::TownNameParams(const Town *t) :
 		grfid(t->townnamegrfid), // by default, use supplied data
 		type(t->townnametype)
 {
-#ifdef WITH_RUST
-	if (t->townnamegrfid != 0 && !openttd_rust_grf_townname_exists(t->townnamegrfid)) {
-#else
 	if (t->townnamegrfid != 0 && GetGRFTownName(t->townnamegrfid) == nullptr) {
-#endif
 		/* Fallback to the first built in town name (English). */
 		this->grfid = 0;
 		this->type = SPECSTR_TOWNNAME_START;
 		return;
 	}
 }
+#endif
 
 
 /**

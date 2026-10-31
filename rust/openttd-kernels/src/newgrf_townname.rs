@@ -140,10 +140,6 @@ pub(crate) unsafe fn generate(
     }
 }
 /// `GetGRFTownName(grfid) != nullptr`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_grf_townname_exists(grfid: u32) -> bool {
-    unsafe { exists(grfid) }
-}
 pub(crate) unsafe fn exists(grfid: u32) -> bool {
     unsafe { get(grfid).is_some() }
 }
@@ -169,8 +165,7 @@ pub(crate) unsafe fn clean_up() {
     unsafe { townnames().clear() };
 }
 /// `GetGRFTownNameId`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_grf_townname_id(mut gen_: u16) -> u32 {
+pub(crate) unsafe fn get_id(mut gen_: u16) -> u32 {
     for t in unsafe { townnames() }.iter() {
         if usize::from(gen_) < t.styles.len() {
             return t.grfid;
@@ -181,8 +176,7 @@ pub unsafe extern "C" fn openttd_rust_grf_townname_id(mut gen_: u16) -> u32 {
     0
 }
 /// `GetGRFTownNameType`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_grf_townname_type(mut gen_: u16) -> u16 {
+pub(crate) unsafe fn get_type(mut gen_: u16) -> u16 {
     for t in unsafe { townnames() }.iter() {
         if usize::from(gen_) < t.styles.len() {
             return gen_;

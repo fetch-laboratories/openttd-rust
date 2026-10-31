@@ -54,19 +54,20 @@ static std::string Hex(std::string_view text)
 static void GrfTownNames(const char *phase, bool loaded)
 {
 	auto names = GetGRFTownNameList();
+	auto params = [](uint16_t gen) { return TownNameParams(static_cast<uint8_t>(BUILTIN_TOWNNAME_GENERATOR_COUNT + gen)); };
 	fmt::print(stderr, "LOADING townname {} styles {}\n", phase, names.size());
 	for (uint gen = 0; gen <= names.size(); gen++) {
-		TownNameParams par(static_cast<uint8_t>(BUILTIN_TOWNNAME_GENERATOR_COUNT + gen));
+		TownNameParams par = params(gen);
 		StringID name = GetGRFTownNameName(gen);
-		fmt::print(stderr, "LOADING townname {} style {} {:08X} {} {} {}\n", phase, gen, GetGRFTownNameId(gen), GetGRFTownNameType(gen), gen < names.size() && name == names[gen], Hex(GetString(name)));
+		fmt::print(stderr, "LOADING townname {} style {} {:08X} {} {} {}\n", phase, gen, par.grfid, par.type, gen < names.size() && name == names[gen], Hex(GetString(name)));
 		for (uint32_t k = 0; k < 40; k++) {
 			uint32_t seed = k < 4 ? std::array<uint32_t, 4>{0, 1, 0x80000000, UINT32_MAX}[k] : k * 0x9E3779B9;
 			fmt::print(stderr, "LOADING townname {} name {} {:08X} {}\n", phase, gen, seed, Hex(GetTownName(&par, seed)));
 		}
 	}
 	if (!loaded) return;
-	Require(names.size() == 4 && GetGRFTownNameId(0) == ID("TNA5") && GetGRFTownNameId(2) == ID("TNB5") && GetGRFTownNameId(3) == ID("TNS5") && GetGRFTownNameType(3) == 0, "townname-style-order");
-	Require(GetGRFTownNameId(4) == 0 && GetGRFTownNameType(4) == SPECSTR_TOWNNAME_START && GetGRFTownNameName(4) == STR_UNDEFINED, "townname-fallback");
+	Require(names.size() == 4 && params(0).grfid == ID("TNA5") && params(2).grfid == ID("TNB5") && params(3).grfid == ID("TNS5") && params(3).type == 0, "townname-style-order");
+	Require(params(4).grfid == 0 && params(4).type == SPECSTR_TOWNNAME_START && GetGRFTownNameName(4) == STR_UNDEFINED, "townname-fallback");
 	TownNameParams par(static_cast<uint8_t>(0));
 	par.grfid = ID("TNA5");
 	par.type = 0;

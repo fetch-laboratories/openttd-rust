@@ -138,6 +138,7 @@ mod town_map;
 mod town_type;
 mod townname;
 mod townname_data;
+mod townname_type;
 mod track_func;
 mod track_type;
 mod transport_type;

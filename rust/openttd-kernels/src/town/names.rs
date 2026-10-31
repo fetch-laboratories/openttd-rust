@@ -16,11 +16,7 @@ use std::collections::BTreeSet;
 pub struct NameFrame {
     _private: [u8; 0],
 }
-#[repr(C)]
-pub struct NameParams {
-    pub grfid: u32,
-    pub kind: u16,
-}
+pub use crate::townname_type::NameParams;
 #[repr(C)]
 pub struct Randomizer {
     _private: [u8; 0],
@@ -165,17 +161,8 @@ pub(super) unsafe fn verify(
         // SAFETY: Short canonical name observation before resolver reentry.
         let custom = unsafe { openttd_rust_town_name(town.state) };
         let other = if custom.size == 0 {
-            // TownNameParams(const Town *) falls back when the GRF is absent.
-            let state = unsafe { &(*town.state).simulation };
-            let mut params = NameParams {
-                grfid: state.townnamegrfid,
-                kind: state.townnametype,
-            };
-            let seed = state.townnameparts;
-            if params.grfid != 0 && !unsafe { crate::newgrf_townname::exists(params.grfid) } {
-                params.grfid = 0;
-                params.kind = crate::strings_type::SPECSTR_TOWNNAME_START as u16;
-            }
+            let params = unsafe { crate::townname_type::from_town(&*town.state) };
+            let seed = unsafe { (*town.state).simulation.townnameparts };
             unsafe { render(s, frame, &params, seed, true, &mut other_text) }
         } else {
             custom

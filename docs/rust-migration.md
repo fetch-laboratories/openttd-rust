@@ -1948,7 +1948,9 @@ selected part's bytes. `TranslateTTDPatchCodes` and `AddGRFString` remain native
 operations behind one loading service each; the translated bytes are copied into the Rust part
 from a view backed by the native loader stack frame. Debug messages keep one loading service
 each. Generation preserves the native `gen < styles.size()` assertion, and name verification
-calls the Rust generator directly. Self-referencing definitions recurse
+calls the Rust generator directly. Both TownNameParams constructors are shared Rust
+logic; town founding reads its style setting directly and keeps the parameters locally.
+Self-referencing definitions recurse
 without a guard as in the original. PR pending.
 
 ### Town growth and lifecycle state
