@@ -9,9 +9,8 @@ not an official OpenTTD release.
 The fork requires Rust and runs an increasing set of components in Rust
 behind their original C++ interfaces. Native Rust linkage currently supports
 Linux, macOS arm64, and the scoped Windows MSVC configurations documented in
-the [migration guide](docs/rust-migration.md). Builds without Rust still compile
-the original C++ until Rust links on every configuration (#581). The
-[roadmap](docs/roadmap.md) lists current priorities.
+the [migration guide](docs/rust-migration.md). The [roadmap](docs/roadmap.md)
+lists current priorities.
 
 See [the migration guide](docs/rust-migration.md) for setup and verification,
 and [AGENTS.md](AGENTS.md) for scope and team process. The original game
