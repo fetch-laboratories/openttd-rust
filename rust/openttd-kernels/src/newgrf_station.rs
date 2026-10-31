@@ -54,8 +54,16 @@ pub(crate) fn rail_tile_area(
             }
             TileArea {
                 tile: start,
-                w: (world.dimensions.tile_x(end) - world.dimensions.tile_x(start) + 1) as u16,
-                h: (world.dimensions.tile_y(end) - world.dimensions.tile_y(start) + 1) as u16,
+                w: world
+                    .dimensions
+                    .tile_x(end)
+                    .wrapping_sub(world.dimensions.tile_x(start))
+                    .wrapping_add(1) as u16,
+                h: world
+                    .dimensions
+                    .tile_y(end)
+                    .wrapping_sub(world.dimensions.tile_y(start))
+                    .wrapping_add(1) as u16,
             }
         }
         TA_WHOLE => unsafe { &*(shared.station_commands)() }.rail_area(st),
