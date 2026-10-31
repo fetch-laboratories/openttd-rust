@@ -275,6 +275,8 @@ impl<'a> World<'a> {
     fn valid(&self, tile: u32) -> bool {
         tile < self.size_x * self.size_y && self.tile_type(tile) != 7
     }
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     fn behaviour(&self, tile: u32) -> u8 {
         match self.tile_type(tile) {
             6 => {
