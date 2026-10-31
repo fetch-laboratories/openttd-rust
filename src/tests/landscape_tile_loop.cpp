@@ -137,7 +137,7 @@ TEST_CASE("Rust production pixel entries observe live native corners and realloc
 			SetTileHeight(TileXY(x, south), 9);
 			SetTileHeight(TileXY(east, south), 9);
 			auto [slope, z] = GetTilePixelSlope(t);
-			CHECK(openttd_rust_movement_pixel_z(&GetRustMovementServices(), x * TILE_SIZE, y * TILE_SIZE, false) == z + GetPartialPixelZ(0, 0, slope));
+			CHECK(openttd_rust_movement_pixel_z(&GetRustMovementServices(), x * TILE_SIZE, y * TILE_SIZE, false) == z + static_cast<int>(GetPartialPixelZ(0, 0, slope)));
 		}
 	}
 	Map::Allocate(64, 64);
