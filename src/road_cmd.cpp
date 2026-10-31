@@ -1068,7 +1068,6 @@ static void GetTileDesc_Road(TileIndex tile, TileDesc &td)
 #include "rust/town_services.h"
 #include "rust/rail_command_services.h"
 #include "rust/command_cost_services.h"
-#include "rust/command_cost_native_services.h"
 #include "rust/company_services.h"
 #include "rust/vehicle_services.h"
 #include "rust/environment_services.h"
@@ -1080,12 +1079,6 @@ static_assert(ROAD_DEPOT_TRACKBIT_FACTOR == 2 && ROAD_STOP_TRACKBIT_FACTOR == 2 
 static_assert(PR_BUILD_DEPOT_ROAD == 6 && PR_CLEAR_DEPOT_ROAD == 31 && PR_BUILD_FOUNDATION == 57);
 static_assert(OWNER_TOWN.base() == 15 && OWNER_NONE.base() == 16 && INVALID_OWNER.base() == 255);
 static_assert(FOUNDATION_NONE == 0 && FOUNDATION_LEVELED == 1 && FOUNDATION_INCLINED_X == 2 && FOUNDATION_INCLINED_Y == 3);
-static CommandCost &RoadCost(OpenTTDCommandCost *cost) noexcept { return *reinterpret_cast<CommandCost *>(cost); }
-static void RoadOwnedByTown(OpenTTDCommandCost *out, uint32_t tile) noexcept
-{
-	RoadCost(out).MakeError(STR_ERROR_OWNED_BY);
-	if (RustIsLocalCompany()) RustEncodeOwnedBy(RoadCost(out), OWNER_TOWN, TileIndex{tile});
-}
 static OpenTTDRoadWorksEffect RoadNextEffect(uint32_t from) noexcept
 {
 	for (const EffectVehicle *v : EffectVehicle::Iterate(from)) return {.id = v->index.base(), .tile = TileVirtXY(v->x_pos, v->y_pos).base()};
@@ -1121,7 +1114,6 @@ const OpenTTDRoadCommandServices &GetRustRoadCommandServices() noexcept
 		.depot_exit = [](uint32_t tile, uint8_t dir) noexcept { SetRoadDepotExitDirection(TileIndex{tile}, static_cast<DiagDirection>(dir)); },
 		.next_effect = RoadNextEffect,
 		.delete_effect = [](uint32_t id) noexcept { delete EffectVehicle::Get(VehicleID(id)); },
-		.owned_by_town = RoadOwnedByTown,
 		.scratch_cost = [](OpenTTDRoadCommandScratch *scratch) noexcept { return RustCommandCost(&scratch->ret.emplace()); },
 		.conversion_scratch = [](OpenTTDRoadCommandScratch *scratch) noexcept -> OpenTTDRoadConversionScratch {
 			auto &s = scratch->conversion.emplace();

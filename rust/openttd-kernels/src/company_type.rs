@@ -15,6 +15,8 @@ pub const OWNER_NONE: u8 = Owner::NONE.0;
 pub const OWNER_WATER: u8 = Owner::WATER.0;
 /// `OWNER_DEITY`.
 pub const OWNER_DEITY: u8 = Owner::DEITY.0;
+/// `OWNER_END`.
+pub const OWNER_END: u8 = 0x13;
 /// `MAX_COMPANIES`.
 pub const MAX_COMPANIES: u8 = 0x0F;
 /// `INVALID_OWNER`.
@@ -58,3 +60,8 @@ impl CompanyID {
 /// Native name limits, including the terminating character.
 pub const MAX_LENGTH_COMPANY_NAME_CHARS: usize = 32;
 pub const MAX_LENGTH_PRESIDENT_NAME_CHARS: usize = 32;
+
+/// Company allow-list addition.
+pub const CALCA_ADD: u8 = 0;
+/// Company allow-list removal.
+pub const CALCA_REMOVE: u8 = 1;

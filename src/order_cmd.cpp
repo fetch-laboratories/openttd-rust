@@ -41,10 +41,8 @@
 static_assert(sizeof(DestinationID) >= sizeof(DepotID));
 static_assert(sizeof(DestinationID) >= sizeof(StationID));
 
-#include "rust/command_services_ffi.h"
 #include "rust/environment_services.h"
 #include "rust/settings_services.h"
-#include "rust/command_cost_services.h"
 #include "rust/services_map.h"
 #include "rust/vehicle_services.h"
 #include "rust/services_station.h"
@@ -97,12 +95,7 @@ extern "C" uint64_t openttd_orders_vehicle_status(void *ctx) noexcept
 	return v->vehstatus.base();
 }
 
-extern "C" uint64_t openttd_orders_vehicle_ownership(void *ctx, void *result) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	GetRustCommandServices().ownership(RustCommandCost(static_cast<CommandCost *>(result)), v->owner.base(), 0);
-	return static_cast<CommandCost *>(result)->Succeeded();
-}
+
 
 extern "C" uint64_t openttd_orders_ticks_per_second() noexcept
 {
@@ -227,11 +220,7 @@ extern "C" uint64_t openttd_orders_station_owner(uint16_t destination) noexcept
 
 
 
-extern "C" uint64_t openttd_orders_owner_check(uint8_t owner, void *result) noexcept
-{
-	GetRustCommandServices().ownership(RustCommandCost(static_cast<CommandCost *>(result)), owner, 0);
-	return static_cast<CommandCost *>(result)->Succeeded();
-}
+
 
 extern "C" uint64_t openttd_orders_station_error(void *ctx, uint16_t destination) noexcept
 {
@@ -567,7 +556,6 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.vehicle_status = openttd_orders_vehicle_status,
 	.tick_counter = openttd_orders_tick_counter,
 	.primary_vehicle = openttd_orders_primary_vehicle,
-	.vehicle_ownership = openttd_orders_vehicle_ownership,
 	.ticks_per_second = openttd_orders_ticks_per_second,
 	.unit_number = RustOpaqueVehicleRead<uint64_t, RustVehicleUnitNumber>,
 	.economy_fraction = openttd_orders_economy_fraction,
@@ -598,7 +586,6 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.ship_station_tile = openttd_orders_ship_station_tile,
 	.valid_station = openttd_orders_valid_station,
 	.station_owner = openttd_orders_station_owner,
-	.owner_check = openttd_orders_owner_check,
 	.station_error = openttd_orders_station_error,
 	.valid_depot = openttd_orders_valid_depot,
 	.depot_owner = openttd_orders_depot_owner,

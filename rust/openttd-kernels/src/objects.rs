@@ -865,7 +865,7 @@ impl<'a> World<'a> {
                         return;
                     }
                 } else {
-                    (self.commands().tile_ownership)(tmp.0, tile);
+                    self.commands().tile_ownership(tmp.0, tile);
                     if !tmp.ok() {
                         out.take(tmp);
                         return;
@@ -1010,7 +1010,7 @@ impl<'a> World<'a> {
                         } else {
                             let owner = self.owner(t);
                             if owner != OWNER_NONE && owner != OWNER_WATER {
-                                (self.commands().ownership)(tmp.0, owner, t);
+                                self.commands().ownership(tmp.0, owner, t);
                                 out.add(tmp);
                             }
                             if !((*self.s.town).environment.freeform_edges)()
@@ -1311,7 +1311,7 @@ impl World<'_> {
         unsafe {
             let kind = (self.s.object_type)(tile);
             if kind == OWNED {
-                (self.commands().tile_ownership)(out.0, tile);
+                self.commands().tile_ownership(out.0, tile);
                 if out.ok() {
                     out.zero();
                     return;

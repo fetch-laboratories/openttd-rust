@@ -49,6 +49,7 @@
 #include "table/company_face.h"
 
 #include "rust/company_adapter.h"
+#include "rust/command_cost_services.h"
 #include "rust/company_identity_ffi.h"
 #include "rust/tile_owner_services.h"
 #include "rust/company_services.h"
@@ -123,31 +124,7 @@ Money Company::GetMaxLoan() const
  */
 void SetLocalCompany(CompanyID new_company)
 {
-	/* company could also be COMPANY_SPECTATOR or OWNER_NONE */
-	assert(Company::IsValidID(new_company) || new_company == COMPANY_SPECTATOR || new_company == OWNER_NONE);
-
-	/* If actually changing to another company, several windows need closing */
-	bool switching_company = _local_company != new_company;
-
-	/* Delete the chat window, if you were team chatting. */
-	if (switching_company) InvalidateWindowData(WC_SEND_NETWORK_MSG, DESTTYPE_TEAM, _local_company);
-
-	assert(IsLocalCompany());
-
-	_current_company = _local_company = new_company;
-
-	if (switching_company) {
-		InvalidateWindowClassesData(WC_COMPANY);
-		/* Delete any construction windows... */
-		CloseConstructionWindows();
-	}
-
-	/* ... and redraw the whole screen. */
-	MarkWholeScreenDirty();
-	InvalidateWindowClassesData(WC_SIGN_LIST, -1);
-	InvalidateWindowClassesData(WC_GOALS_LIST);
-	InvalidateWindowClassesData(WC_COMPANY_COLOUR, -1);
-	ResetVehicleColourMap();
+	openttd_rust_company_set_local(&GetRustCompanyServices(), new_company.base());
 }
 
 /**
@@ -327,17 +304,9 @@ std::array<StringParameter, 2> GetParamsForOwnedBy(Owner owner, TileIndex tile)
  */
 CommandCost CheckOwnership(Owner owner, TileIndex tile)
 {
-	assert(owner < OWNER_END);
-	assert(owner != OWNER_TOWN || tile != 0);
-
-	if (owner == _current_company) return CommandCost();
-
-	CommandCost error{STR_ERROR_OWNED_BY};
-	if (RustIsLocalCompany()) {
-		RustEncodeOwnedBy(error, owner, tile);
-		if (owner != OWNER_TOWN) error.SetErrorOwner(owner);
-	}
-	return error;
+	CommandCost result;
+	openttd_rust_company_check_ownership(&GetRustCompanyServices(), RustCommandCost(&result), owner.base(), tile.base());
+	return result;
 }
 
 /**
@@ -349,7 +318,9 @@ CommandCost CheckOwnership(Owner owner, TileIndex tile)
  */
 CommandCost CheckTileOwnership(TileIndex tile)
 {
-	return CheckOwnership(GetTileOwner(tile), tile);
+	CommandCost result;
+	openttd_rust_company_check_tile_ownership(&GetRustCompanyServices(), RustCommandCost(&result), tile.base());
+	return result;
 }
 
 /**
@@ -528,20 +499,6 @@ CommandCost CmdCompanyCtrl(DoCommandFlags flags, CompanyCtrlAction cca, CompanyI
 	return RustCompanyCost(frame.result);
 }
 
-static bool ExecuteAllowListCtrlAction(CompanyAllowListCtrlAction action, Company *c, const std::string &public_key)
-{
-	switch (action) {
-		case CALCA_ADD:
-			return c->allow_list.Add(public_key);
-
-		case CALCA_REMOVE:
-			return c->allow_list.Remove(public_key);
-
-		default:
-			NOT_REACHED();
-	}
-}
-
 /**
  * Add or remove the given public key to the allow list of this company.
  * @param flags Operation to perform.
@@ -551,29 +508,9 @@ static bool ExecuteAllowListCtrlAction(CompanyAllowListCtrlAction action, Compan
  */
 CommandCost CmdCompanyAllowListCtrl(DoCommandFlags flags, CompanyAllowListCtrlAction action, const std::string &public_key)
 {
-	Company *c = Company::GetIfValid(_current_company);
-	if (c == nullptr) return CMD_ERROR;
-
-	/* The public key length includes the '\0'. */
-	if (public_key.size() != NETWORK_PUBLIC_KEY_LENGTH - 1) return CMD_ERROR;
-
-	switch (action) {
-		case CALCA_ADD:
-		case CALCA_REMOVE:
-			break;
-
-		default:
-			return CMD_ERROR;
-	}
-
-	if (flags.Test(DoCommandFlag::Execute)) {
-		if (ExecuteAllowListCtrlAction(action, c, public_key)) {
-			InvalidateWindowData(WC_CLIENT_LIST, 0);
-			SetWindowDirty(WC_COMPANY, _current_company);
-		}
-	}
-
-	return CommandCost();
+	CommandCost result;
+	openttd_rust_company_allow_list(&GetRustCompanyServices(), RustCommandCost(&result), flags.base(), action, {reinterpret_cast<const uint8_t *>(public_key.data()), public_key.size()});
+	return result;
 }
 
 /**
@@ -655,14 +592,7 @@ CommandCost CmdRenamePresident(DoCommandFlags flags, const std::string &text)
  */
 int CompanyServiceInterval(const Company *c, VehicleType type)
 {
-	const VehicleDefaultSettings *vds = (c == nullptr) ? &_settings_client.company.vehicle : &c->settings.vehicle;
-	switch (type) {
-		default: NOT_REACHED();
-		case VEH_TRAIN:    return vds->servint_trains;
-		case VEH_ROAD:     return vds->servint_roadveh;
-		case VEH_AIRCRAFT: return vds->servint_aircraft;
-		case VEH_SHIP:     return vds->servint_ships;
-	}
+	return openttd_rust_company_service_interval(&GetRustCompanyServices(), c, type);
 }
 
 /**
@@ -705,21 +635,7 @@ CommandCost CmdGiveMoney(DoCommandFlags flags, Money money, CompanyID dest_compa
  */
 CompanyID GetFirstPlayableCompanyID()
 {
-	for (Company *c : Company::Iterate()) {
-		if (Company::IsHumanID(c->index)) {
-			return c->index;
-		}
-	}
-
-	if (Company::CanAllocateItem()) {
-		for (CompanyID c = CompanyID::Begin(); c < MAX_COMPANIES; ++c) {
-			if (!Company::IsValidID(c)) {
-				return c;
-			}
-		}
-	}
-
-	return CompanyID::Begin();
+	return CompanyID(openttd_rust_company_first_playable(&GetRustCompanyServices()));
 }
 
 static std::vector<FaceSpec> _faces; ///< All company manager face styles.
@@ -916,12 +832,15 @@ void RustCompanyNetworkNew(uint8_t id, uint32_t client, bool with_client) noexce
 	NetworkServerNewCompany(c, with_client ? NetworkClientInfo::GetByClientID(ClientID(client)) : nullptr);
 }
 /** CCA_NEW: the requesting client takes control of its new company. */
-void RustCompanyNetworkOwn(uint8_t id, uint32_t client) noexcept
+Company *RustCompanyNetworkOwn(uint8_t id, uint32_t client) noexcept
 {
-	if (ClientID(client) != _network_own_client_id) return;
+	if (ClientID(client) != _network_own_client_id) return nullptr;
 	Company *c = Company::Get(id);
 	assert(_local_company == COMPANY_SPECTATOR);
-	SetLocalCompany(c->index);
+	return c;
+}
+void RustCompanyNetworkOwnSettings(Company *c) noexcept
+{
 	if (!_company_manager_face.empty()) {
 		auto cmf = ParseCompanyManagerFaceCode(_company_manager_face);
 		if (cmf.has_value()) Command<CMD_SET_COMPANY_MANAGER_FACE>::SendNet(STR_NULL, c->index, cmf->style, cmf->bits);
