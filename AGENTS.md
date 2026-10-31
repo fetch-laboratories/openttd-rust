@@ -214,19 +214,19 @@ fork; the remaining upstream documentation explains behavior and architecture.
   six projections in the roadmap's "Where the fork stands". Compare tips under
   the same anchor; after re-anchoring, recompute the previous tip from its
   retained count.
-- Deep checks (#503) run beside that profile: after every second integration
-  root runs `python3 tools/migration.py deep` on the integrated tip in the
-  background at idle CPU and I/O priority, and skips the turn if one is still
-  running. They run only during sessions (a run a session end interrupts
-  restarts at the next session start on the current tip); wind-down rules are
-  unchanged. Root reads a finished report before the next integration. Deep
+- Deep checks (#503) run only when the user requests one (user decision,
+  2026-10-31). Root then runs `python3 tools/migration.py deep` on the
+  integrated tip in the background at idle CPU and I/O priority, with the
+  members the request names (all by default), launched so that a session end
+  does not kill it, and reads its report before the next integration after it
+  finishes. No session restarts an interrupted run unless the user asks. Deep
   runs and speed-pass timed collection never overlap: both take one exclusive
   lock, so a deep run skips while a collection runs and a collection waits for a
   deep run to finish. A failure
   does not block integration by itself: root bisects over the integrations since the last clean
   deep check, and a divergence introduced there is a code regression under the
   rollback rule, while an older one becomes a fidelity item on #156 or a new
-  issue. If the set grows past about 6 hours, members rotate across checks.
+  issue.
 - If a projection rose more than 3% (provisional) since the previous tip
   profile, root attributes the rise per function to the PRs since and fixes it
   forward; that fix is the next maintenance PR to integrate. A ready ownership

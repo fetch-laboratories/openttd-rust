@@ -39,7 +39,8 @@ Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh.
   three hours into its sanitized member, without a report. It had passed 352
   sanitized scenarios and failed 43, all with the harness error "Rust archive
   missing" for the sanitized build's native-test-support archive (#503), not
-  fidelity differences. It must restart at the next session start.
+  fidelity differences. Deep checks now run only on the user's request
+  (AGENTS.md, user decision 2026-10-31), so it does not restart by itself.
 - Housekeeping removed 49 finished T3 worktrees (71.8 GB). #592 now also
   covers the shared-accessor check misreading `OpenTTDXServices name{};`.
 - Original coverage: 330 of 449 traces are complete; gaps are on #156.
@@ -289,7 +290,7 @@ candidates get no attribution research. Testing is maintenance: scenarios
 arrive with the ports that need them. Six branches, batched maintenance,
 fixing reviews, strict exact-combination Full, bounded rollback and
 action-based wind-down remain. A historical mention is not placement; CI-found
-behavior fixes get a scoped review; deep checks run every second integration;
+behavior fixes get a scoped review; deep checks run only on the user's request;
 active speed dependencies are preserved. #559 and the parked NewGRF corpus stay
 excluded with the return conditions in the work order. AGENTS.md carries the
 rules; issue and PR bodies carry current actions and evidence.
@@ -402,8 +403,7 @@ Recurring:
 - Profile the merged tip after every second integration; the next is due
   after integration 36. Launch it with the pinned `LD_LIBRARY_PATH` that
   docs/rust-migration.md names.
-- Read the running deep member's report, then launch the next rotation under
-  the existing lock at idle priority.
+- Deep checks run only on the user's request (user decision, 2026-10-31).
 - The fifth-integration platform cadence is due after integration 35.
 - Preserve anchors, raw traces, frozen runtimes and failed outputs.
 - Root checks actual issue placement and exclusion conditions at stocktake.
@@ -439,10 +439,10 @@ ran. Every worktree and branch below is preserved.
 
 | Running or due work | State / next action |
 | --- | --- |
-| Deep rotation | Not running: killed at 2026-10-31 01:35Z by the session restart, three hours into its sanitized member at `2f3d78e774`, with no report (352 passed; 43 failed only on the missing native-test-support archive, #503). Restart it at session start on the current tip, in `.local/worktrees/deep-after30-569` (locked; move it with `git checkout --detach origin/rust-migration` and relock): 1. `python3 tools/migration.py build --jobs 2`. 2. `cmake --build build-rust-sanitized --target openttd_rust_native_test_support_build` (until #503's fix lands; if the sanitized build directory does not exist yet, run this after the member configures it, or the 43 scenarios fail again). 3. `python3 tools/migration.py deep --member simulate-sanitized --member simulate-threaded --member simulate-tsan --member simulate-multiplayer`. Launch it from a shell outside the session's process group (a `systemd-run --user` unit), since a `setsid` child of the session was killed with it. |
+| Deep checks | On the user's request only (user decision, 2026-10-31); do not restart the killed rotation unprompted. It died at 2026-10-31 01:35Z with the session restart, three hours into its sanitized member at `2f3d78e774`, with no report (352 passed; 43 failed only on the missing native-test-support archive, #503). If a run is requested, in `.local/worktrees/deep-after30-569` (locked; move it with `git checkout --detach origin/rust-migration` and relock): 1. `python3 tools/migration.py build --jobs 2`. 2. `cmake --build build-rust-sanitized --target openttd_rust_native_test_support_build` until #503's fix lands. 3. `python3 tools/migration.py deep` with the requested `--member` options. Launch it outside the session's process group (for example a `systemd-run --user` unit), since a `setsid` child of the session died with it. |
 | Platform cadence | Due on `rust-migration` at `063e7b28f1`: `gh workflow run ci-build.yml --ref rust-migration`. |
 | Instruction profile | Due after integration 36; launch with the pinned `LD_LIBRARY_PATH` from docs/rust-migration.md. Profile 32 is retained in `.local/worktrees/profile-after32-579` (locked). |
-| Quiet speed pass | Due (Grok and Opus in the play band); its collection waits for the deep run's lock. |
+| Quiet speed pass | Due (Grok and Opus in the play band). |
 | Maintenance | #565 item 1 with #275's fix-forward and #592, after #576 integrates; #199's batch; #581 PR-B after #568 and #576 integrate. |
 | Housekeeping | Lock a running Codex agent's worktree before `--apply` until #592 integrates. |
 | CI | No request pending. |
