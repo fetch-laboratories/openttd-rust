@@ -6,178 +6,77 @@ disable-model-invocation: true
 
 # Write a wind-down message for root
 
-Root is developing OpenTTD-Rust in /home/fetch/projects/openttd-rust. Inspect
-the project and root's live session, then write a message tailored to what is
-in flight right now, then send it to root's thread yourself with the T3 Code
-`t3_thread_send` tool (step 5).
+Inspect root's session and the project in /home/fetch/projects/openttd-rust. Send a tailored message to root with `t3_thread_send` in step 5. Stay read-only apart from that send: no commits, pushes, GitHub comments, CI requests, process signals or messages to other agents. Give the user a short note and the message sent.
 
-Stay read-only apart from that one send. Make no commits, pushes, GitHub
-comments, CI requests or process signals, and send no messages to other agents.
-Your output is the message, sent to root, plus a short note to the user that
-includes the text you sent.
+User input: $ARGUMENTS. It may specify a trigger or action scope, which overrides default action limits. If a PR number or name does not match, name the likely match in the note. Root is `gpt-6.1-sol` xhigh in Codex from `$start-development` (`docs/skills/start-development/SKILL.md`), with up to five subagents and component worktrees and draft PRs targeting `rust-migration`. Read AGENTS.md and docs/roadmap.md first.
 
-User input, if any: $ARGUMENTS
-This may be a trigger ("at 50% weekly usage") or scope ("only finish #218",
-"don't merge #244", "stop #220"). User scope overrides the default action limits
-below. If a PR number or name doesn't match anything, name the one you think
-they meant in your note.
-
-## Background
-
-Root is gpt-6.1-sol at xhigh effort, running in Codex from `$start-development`
-(docs/skills/start-development/SKILL.md). It orchestrates up to five
-subagents. Each component has its own worktree and a draft PR that targets
-`rust-migration`. Read AGENTS.md and docs/roadmap.md first.
-
-The wind-down rules are the two paragraphs under `### Automatic rollback and
-wind-down` in AGENTS.md: wind-down is bounded by actions, with no time estimate
-or deadline, and an eligible rollback is applied without asking. The message
-quotes those paragraphs verbatim from the current base (step 4), so root has
-one version whether or not it rereads the file, and this skill cannot drift
-from it. Do not paraphrase them, restate other process steps (base updates,
-count runs, records, review rounds) or add any that AGENTS.md does not require:
-root reads a restated step as a new rule.
-
-The rest of the message applies those rules to this session: what to finish,
-what to hand off, what can merge, and the rollback target. The rules replace
-the normal development loop, including the reviewer's usual fix-and-recheck
-loop. Do not turn an unfinished item into a requirement to reach a passing
-milestone. Pending CI and later notifications are recorded for resume, not
-reasons to restart work. A user's explicit alternative, such as "one CI run, no
-repairs", changes only that action allowance, not the merge checks or automatic
-rollback.
-
-Stopping preserves worktrees, uncommitted changes and branches for resume.
-Remove only verified merged work; do not close unfinished PRs just to stop.
+Quote the first two blocks of the [rollback and wind-down rules](../../workflow.md#automatic-rollback-and-wind-down) verbatim from current base in step 4. Apply them without adding process rules. Explicit user scope changes the action allowance, not the merge checks or automatic rollback.
 
 ## 1. Read root's live session
 
-- When root runs in T3 Code, load the T3 tools with ToolSearch
-  (`select:mcp__t3-code__t3_thread_list,mcp__t3-code__t3_thread_read,mcp__t3-code__t3_thread_send`).
-  `t3_thread_list` with `includeSubagents: true` shows root as the newest
-  top-level development thread identified by its assignment and roadmap
-  context; do not select by model alone or mistake this wind-down thread for
-  root. Its
-  subagents are the threads whose `parentThreadId` is root's id; `running`
-  status, or a recent `updatedAt`, marks the active ones. Read root's latest
-  messages with `t3_thread_read` (view `messages`, reading from near the end
-  of `itemCount`).
-- Otherwise, root's thread is the most recently modified
-  `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` whose first real user message
-  (after the AGENTS.md preamble) is `$start-development`. Subagent sessions sit
-  beside it.
-- Records with `type: response_item` and `payload.type: message` (role `user`
-  or `assistant`) are the conversation. `function_call` and
-  `custom_tool_call` records are tool calls, and `function_call_output`
-  records are their results. Messages between agents are encrypted.
-  `spawn_agent` task names and `list_agents` outputs are plain text. Codex has
-  no close-agent tool: an agent is done when `list_agents` shows `completed`.
-- Read root's recent status messages and its latest `list_agents` output. For
-  each running subagent, skim its session for its current step, its dirty
-  files, and the edit or review already underway.
+Identify root and the actions already underway.
+
+- In T3 Code, load tools with ToolSearch: `select:mcp__t3-code__t3_thread_list,mcp__t3-code__t3_thread_read,mcp__t3-code__t3_thread_send`. Call `t3_thread_list` with `includeSubagents: true`. Find the newest top-level development thread by its assignment and roadmap context, not model alone; do not select this wind-down thread. Subagents have root's `parentThreadId`; `running` or a recent `updatedAt` indicates activity. Read root's latest messages with `t3_thread_read`, view `messages`, near the end of `itemCount`.
+- Otherwise find the most recently modified `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` whose first real user message after the AGENTS.md preamble is `$start-development`. Subagent sessions sit beside it.
+- In Codex records, `type: response_item` and `payload.type: message` with role `user` or `assistant` are conversation; `function_call`, `custom_tool_call` and `function_call_output` are tools and results. Agent messages are encrypted, but `spawn_agent` names and `list_agents` outputs are plain text. An agent is done when `list_agents` shows `completed`; Codex has no close-agent tool.
+- Read root's recent status and latest `list_agents`. For each running subagent, skim its session for its current step, dirty files and edit or review underway.
+
+Done when root and each active subagent's current action are identified.
 
 ## 2. Survey the project, in parallel
 
-- `git fetch`; `gh run list --branch rust-migration`: anything red or running.
-- `git worktree list`. For each worktree: dirty state, unpushed commits, and
-  whether its branch already merged (including leftovers from earlier
-  sessions).
-- For each open PR: head, checks, the latest review report and the commit it
-  reviewed, `Full validation` at the current head, and the last state comment.
-- The roadmap's resume checkpoint and the count of unintegrated branches.
-- Running local jobs (cmake, ninja, cargo, openttd, tools/*.py), mapped to
-  their worktrees.
-- Cleanup only for work already verified as merged, and it is optional: root
-  may run `python3 tools/housekeeping.py` and, after reading its dry run,
-  `--apply`; the checkpoint lists each worktree it keeps for resume. Leave
-  cache/log audits and unrelated housekeeping for normal development.
+Verify the live state instead of trusting the roadmap or messages.
 
-Verify rather than trust the roadmap or root's messages.
+- Run `git fetch` and `gh run list --branch rust-migration`; identify red and running jobs.
+- Run `git worktree list`; check each worktree's dirty state, unpushed commits and merged status, including older leftovers.
+- For each open PR, inspect head, checks, latest review report and reviewed commit, current-head `Full validation`, and last state comment.
+- Read the roadmap checkpoint and count unintegrated branches. Map running cmake, ninja, cargo, openttd and tools/*.py jobs to worktrees.
+- For optional cleanup of verified merged work only, root may run `python3 tools/housekeeping.py`, read its dry run and use `--apply`. List retained worktrees in the checkpoint. Leave cache and log audits and unrelated housekeeping for normal development.
+
+Done when the live work, validation, jobs and eligible cleanup are known.
 
 ## 3. Classify everything in flight
 
-- Merge now: review and required validation already passed for the combination
-  that would be merged, and strict protection allows it. Do not update its base,
-  start CI, or fix a failure to make it eligible during wind-down.
-- Finish the current action: complete the edit already underway and save it,
-  or finish the active review with its findings recorded. No downstream round.
-  A worker whose tree is clean and pushed has no edit underway: root cancels it
-  and records its head. A worker can sit unresponsive after a stop message; if
-  it shows no activity, root sends the stop again, or cancels it once its edit
-  is pushed.
-- Hand off: anything needing implementation, a new review, fixes, validation,
-  or a CI result. Name the next action, not a chain to finish before stopping.
-- Recover: an identified breaking merge eligible for AGENTS.md's automatic
-  rollback. Name it and the restoration target; root verifies current state
-  and performs the rollback without asking. Other failures are handed off.
-- Leave alone: paused or older PRs nobody is working on.
+Assign each item its next action under the wind-down rules.
 
-Do not preserve an hours-long finish path and ask the user to cut it short.
-Do not weaken validation to fit the wind-down: leave the change unmerged.
+- **Merge now**: review and required validation already passed for the exact combination, and strict protection permits it. Do not update base, start CI or fix a failure to qualify it.
+- **Finish the current action**: finish and save an edit underway, or record findings of an active review; start no downstream round. Cancel a clean, pushed worker and record its head. If a worker is unresponsive, resend stop or cancel it once its edit is pushed.
+- **Hand off**: name the next action for work needing implementation, a new review, fixes, validation or a CI result, not a chain of actions.
+- **Recover**: name an identified breaking merge eligible for [automatic rollback](../../workflow.md#automatic-rollback-and-wind-down) and its restoration target. Root verifies and rolls back without asking. Hand off other failures.
+- **Leave alone**: paused or older PRs nobody is working on.
+- Do not demand an hours-long finish path or weaken validation to fit wind-down.
+
+Done when every item has a classification and, where needed, a next action.
 
 ## 4. Write the message
 
-Write it in the user's voice, in plain ASCII, inside one code block, in three
-parts:
+Write one ASCII code block in the user's voice, with three parts.
 
-1. One opening line: wind down now, or when the user's trigger fires (normal
-   work continues until then), plus any explicit user scope.
-2. The rules, copied exactly. After `git fetch`, print them from the current
-   base:
+1. Open with wind down now or when the user's trigger fires, plus explicit scope. Normal work continues until a trigger fires.
+2. Copy the rules exactly. After `git fetch`, print them from current base:
 
    ```sh
-   git show origin/rust-migration:AGENTS.md | perl -00 -ne \
-     'if (/^### Automatic rollback and wind-down/) { $f = 1; next } print if $f && $n++ < 2'
+   git show origin/rust-migration:docs/workflow.md | perl -00 -ne \
+     'if (/^## Automatic rollback and wind-down/) { $f = 1; next } print if $f && $n++ < 2'
    ```
 
-   Check that it printed the rollback paragraph and the wind-down paragraph;
-   if the section has been restructured, quote the paragraphs that now define
-   them. Put the text between `--- AGENTS.md at <short SHA of
-   origin/rust-migration>: Automatic rollback and wind-down ---` and
-   `--- end ---`, with no edits, summary or additions.
-3. Tailored lines, a line or two per item in flight. They go into a long
-   thread close to compaction, so every line is about this session: name the
-   PRs, agents and heads, and choose your own wording. Apply the quoted rules
-   rather than repeating them:
-   - The current action or handoff for each item from step 3. Name any
-     component, review, planner or repair round root was about to start as
-     "do not start it; stop it if already started", since root keeps working
-     until the message lands. Due speed/planning work stays due in the
-     checkpoint, not a new gate on resume.
-   - Which tested combinations can merge now, or that none can.
-   - The rollback target, if step 3 found one; root retains the removed work
-     for a replacement PR on resume. Never demand that root fix a red tip
-     through another PR/CI cycle before stopping.
-   - Changed facts, if root's state has moved on. Preserve unfinished work.
-   - One docs-only roadmap commit that updates "Where the fork stands" and
-     replaces the checkpoint with one opening "Paused at the user's request",
-     with each remaining draft, its head, next action and any running jobs or
-     CI. It leaves every other section as it is; `/steer` prunes the roadmap.
-   - A final report: integrations and rollbacks, current progress metrics if
-     available, remaining work and next actions, and CI state (including
-     pending or unknown). Do not launch measurement work to fill the report.
-     Report an unperformed or failed recovery honestly; do not wait for a
-     green report.
+   Check that it printed the rollback and wind-down paragraphs. If the section changed, quote the blocks that now define them. Put them between `--- docs/workflow.md at <short SHA of
+   origin/rust-migration>: Automatic rollback and wind-down ---` and `--- end ---`, without edits, summary or additions.
+3. Add one or two tailored lines per item. Name PRs, agents and heads; apply the quoted rules without repeating them.
+   - State each current action or handoff. Name any component, review, planner or repair round root was about to start as "do not start it; stop it if already started". Keep due speed and planning work in the checkpoint, not as a new resume gate.
+   - Name tested combinations eligible to merge now, or say none. Name an eligible rollback target; root retains removed work for a replacement PR on resume. Do not demand a fix PR or CI cycle before stopping.
+   - Record changed facts and preserve unfinished work.
+   - Request one docs-only roadmap commit updating "Where the fork stands" and replacing the checkpoint with one opening "Paused at the user's request", each remaining draft, head, next action and running jobs or CI. Leave other sections alone; `/steer` prunes the roadmap.
+   - Request a final report of integrations and rollbacks, available progress metrics, remaining work and next actions, and CI state including pending or unknown. Do not launch measurement work to fill it. Report unperformed or failed recovery honestly; do not wait for green.
+
+Done when the message quotes current rules and accounts for every item in flight.
 
 ## 5. Send it to root
 
-Just before sending, reread root's latest few items. If root has started or
-finished something since your survey, correct those lines.
+Refresh root's state, send once, and report delivery.
 
-Send the message text, without the code fence, with `t3_thread_send`: root's
-`threadId`, `mode: "auto"` (starts root if it is idle, steers it if it is
-mid-turn) and a stable `clientRequestId` such as `wind-down-YYYYMMDD-HHMM`, so
-a retry does not deliver it twice. Never use `create_threads` or
-`t3_thread_launch`; the message goes to root's existing thread. If the send
-fails, or root's thread is ambiguous, say so and print the message so the user
-can paste it. If the user's input asks for a review before sending, show the
-message and wait for their approval.
+1. Reread root's latest few items immediately before sending. Correct any lines affected by new activity.
+2. Send the message without the fence using `t3_thread_send`: root's `threadId`, `mode: "auto"` and a stable `clientRequestId`, such as `wind-down-YYYYMMDD-HHMM`, to prevent duplicate retries. Never use `create_threads` or `t3_thread_launch`. If sending fails or root is ambiguous, say so and print the message for the user to paste. If the user requested review before sending, show the message and wait for approval.
+3. Give the user a short note and the sent message in a code block. Include the thread link `[title](t3-thread://v1/<threadId>)`, delivery status, state and check time, and anything they may want to change. Send corrections as a short follow-up with a new `clientRequestId`, not another full message.
 
-Then give the user a short note, followed by the sent message in a code
-block:
-
-- that it was sent (thread link `[title](t3-thread://v1/<threadId>)` and the
-  delivery status);
-- the state you found, and the time you checked it;
-- anything they may want to change. Send corrections to root as a short
-  follow-up with a new `clientRequestId`, not as a second full message.
+Done when the message is delivered and reported, or a failure or requested review is presented to the user.

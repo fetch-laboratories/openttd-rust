@@ -5,12 +5,12 @@ body:
   - type: markdown
     attributes:
       value: |
-        Describe a migration task taken from docs/roadmap.md. The original game is the behavioral specification; preserve observed behavior, including quirks. Keep it to what the evidence budget in AGENTS.md lists.
+        Describe a migration task taken from docs/roadmap.md. The original game is the behavioral specification; preserve observed behavior, including quirks. See docs/workflow.md#records.
   - type: input
     id: attribution
     attributes:
       label: Agent attribution
-      description: For an agent-authored issue, identify the agent, exact model, and reasoning effort. Human authors may enter "Human".
+      description: Name the agent, exact model and effort; human authors may enter "Human".
       placeholder: "Agent: /root/implementation | Model: gpt-6.1-sol | Reasoning effort: high"
     validations:
       required: true
@@ -18,35 +18,35 @@ body:
     id: owner
     attributes:
       label: Task owner
-      description: Identify the agent or person responsible for the implementation and its draft PR targeting rust-migration.
+      description: Name the agent or person responsible for implementation and its draft PR.
     validations:
       required: true
   - type: input
     id: roadmap
     attributes:
       label: Roadmap item
-      description: The docs/roadmap.md phase and item this implements. Work outside the roadmap needs root to update the roadmap first.
+      description: Name the phase and item in docs/roadmap.md. Root updates it first for other work.
     validations:
       required: true
   - type: input
     id: component
     attributes:
       label: Component or coupled group
-      description: Name the C++ component(s) proposed for migration.
+      description: Name the C++ component or coupled group.
     validations:
       required: true
   - type: textarea
     id: boundary
     attributes:
       label: Ownership boundary
-      description: The state and control flow Rust will own, the C++ facade and callbacks that remain, and budgets for original C++ retirement, net fork glue and tooling. Removed fork glue does not count as original retirement.
+      description: Describe the state and control flow Rust will own and the C++ facade and callbacks that remain. Give budgets for original C++ retirement, net fork glue and tooling. Removed fork glue does not count as original retirement.
     validations:
       required: true
   - type: textarea
     id: evidence
     attributes:
       label: Evidence plan
-      description: The simulation-harness scenarios that exercise this component (existing or to add) and the relevant existing tests. Name any concrete gap that needs a narrow comparison instead.
+      description: Name the harness scenarios to use or add and the relevant tests. Name any concrete gap that needs a narrow comparison.
     validations:
       required: true
   - type: textarea

@@ -1,4 +1,4 @@
-<!-- Target rust-migration. See the evidence budget in AGENTS.md. -->
+<!-- Target rust-migration. See docs/workflow.md#records. -->
 
 Closes #<issue>. Roadmap item: <phase / issue>.
 
@@ -6,31 +6,31 @@ Agent: <agent path> | Model: <exact model> | Reasoning effort: <effort>
 
 ## Moved to Rust
 
-<!-- The state and control flow Rust now owns. One short paragraph or list. -->
+<!-- Describe the state and control flow Rust owns. -->
 
 ## Stays in C++
 
-<!-- The facade and callbacks that remain, and why each one is needed. -->
+<!-- Name the remaining facade and callbacks. Explain why each is needed. -->
 
 ## Checks
 
-<!-- Exact commands run, and their results. Harness scenarios that exercise this component. Exact-head CI is the evidence. -->
+<!-- List exact commands and results. Name the harness scenarios that exercise the component. -->
 
 ## Metrics
 
-<!-- Paste python3 tools/port-metrics.py: original C++ retired, fork glue added/removed and signed net glue remain separate. Conversions report net glue. If original retirement is no greater than net glue plus tooling added, explain why. Use --whole-fork for total retirement and simulation-source share; this is a source-line measure, not behavioral completion. -->
+<!-- Paste python3 tools/port-metrics.py: keep original C++ retired, fork glue added and removed, and signed net glue separate. Conversions report net glue. If original retirement is no greater than net glue plus tooling added, explain why. Use --whole-fork for total retirement and simulation-source share. This measures source lines, not behavioral completion. -->
 
 ## Known limits
 
-<!-- Divergences, uncovered input domains, and follow-up issues. "None" is a valid answer. -->
+<!-- List divergences, uncovered domains and follow-up issues, or write "None". -->
 
 <!--
 Review report (reviewer posts it as a separate comment):
-Agent: <path> | Model: <exact model> | Reasoning effort: <effort>
 Reviewed commit: <sha>
-Findings and fixing commits: <finding -> commit, or why it went to root; or "none">
+Agent: <path> | Model: <exact model> | Reasoning effort: <effort>
+Findings, checks and fixing commits: <finding, check and commit, or why it went to root; or "none">
 Compared against the original body: <functions or files>
 New callbacks duplicating a shared accessor: <each one is a finding; or "none">
-WITH_RUST bodies, exports or declarations left without a caller: <each one is a finding; or "none">
+WITH_RUST bodies and openttd_rust_* exports touched and their production callers; orphan bodies, exports or declarations: <each orphan is a finding; or "none">
 Shared credentials require an attributed report, not a GitHub platform approval.
 -->
