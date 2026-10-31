@@ -84,12 +84,14 @@ static void VehicleMaintenanceBoundary()
 	maintenance.transaction = &transactions;
 	base.status = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 	base.vehicle_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return VEH_ROAD; };
-	maintenance.interval = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicleMaintenanceInterval { return {.company = reinterpret_cast<const Company *>(&company_shell), .last_service = {0}, .now = {100}, .interval = 1, .no_service = true}; };
+	maintenance.interval = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicleMaintenanceInterval {
+		return {.company = reinterpret_cast<const Company *>(&company_shell), .last_service = {0}, .now = {100}, .reliability = 0, .interval = 1, .percent = false, .wallclock = false, .breakdowns = false, .no_service = true};
+	};
 	maintenance.replacement = [](OpenTTDVehicle *, const Company *) noexcept -> OpenTTDVehicleMaintenanceReplacement { return {.engine = 1, .when_old = false}; };
 	maintenance.replacement_available = [](OpenTTDVehicle *, uint16_t) noexcept { return true; };
 	const int64_t original_price = openttd_rust_economy_prices()[PR_BUILD_VEHICLE_ROAD];
 	openttd_rust_economy_prices()[PR_BUILD_VEHICLE_ROAD] = 25600;
-	for (uint16_t value : {CALLBACK_FAILED, uint16_t{17}}) {
+	for (uint16_t value : {uint16_t{CALLBACK_FAILED}, uint16_t{17}}) {
 		factor = value;
 		const int64_t needed = value == CALLBACK_FAILED ? 10700 : 3500;
 		for (bool funded : {false, true}) {
