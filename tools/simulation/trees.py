@@ -449,12 +449,13 @@ def check_editor_groups(lines: list[str]) -> None:
             group_tiles[group].append(int(row[2]))
     for index, row in enumerate(random_rows):
         y, x = divmod(int(row[2]), width)
-        # GroundTreeProbe observes TileArea(center).Expand(6); its interior
-        # anchor has at least eleven tiles remaining to the south/east edges.
+        # TileArea(center) starts with zero extents. Expand(6) therefore ends
+        # just before center + 6; the native constructor does not cover a tile.
+        # The interior anchor leaves enough room at the south/east edges.
         expected_tiles = [
             yy * width + xx
-            for yy in range(max(0, y - 6), y + 7)
-            for xx in range(max(0, x - 6), x + 7)
+            for yy in range(max(0, y - 6), y + 6)
+            for xx in range(max(0, x - 6), x + 6)
         ]
         if group_tiles[index] != expected_tiles:
             raise RuntimeError(f"missing editor group tile observations: {index}")
