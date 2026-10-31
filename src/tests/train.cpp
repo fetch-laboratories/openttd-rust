@@ -7,29 +7,56 @@
 #include "../rust/train_reservation_ffi.h"
 #include "../tile_type.h"
 #include "../track_type.h"
+#include "follower_fixture.hpp"
 
 TEST_CASE("PBS depot early return does not read or write train_on_res")
 {
-	std::unique_ptr<OpenTTDTrainState, decltype(&openttd_rust_train_state_destroy)> state(openttd_rust_train_state_new(), openttd_rust_train_state_destroy);
-	openttd_rust_train_state_set_track(state.get(), TRACK_BIT_X);
-	OpenTTDSharedServices shared{}; shared.tile_type = [](uint32_t) noexcept -> uint8_t { return MP_RAILWAY; };
-	OpenTTDRailMapServices rail{}; rail.is_rail_depot = [](uint32_t) noexcept { return true; };
-	auto train = OpenTTDTrainServices{};
-	train.read_tile = [](OpenTTDTrainHandle) noexcept -> uint32_t { return 23; };
-	train.read_trackdir = [](OpenTTDTrainHandle) noexcept -> OpenTTDTrainTrackdirRead { return {23, 1, 0}; };
-	train.first_track = [](OpenTTDTrainHandle, uint8_t) noexcept -> uint64_t { return 0; };
-	train.track_direction = [](OpenTTDTrainHandle, uint8_t, uint8_t) noexcept -> uint64_t { return 0; };
-	auto pbs = OpenTTDPbsServices{};
-	pbs.shared = &shared;
-	pbs.rail = &rail;
-	pbs.train = &train;
-	pbs.depot_bits = [](uint32_t) noexcept { return TRACK_BIT_NONE; };
+	FollowerFixture map;
+	map.Tile(23, MP_RAILWAY, 3 << 6);
+	map.train.read_tile = [](OpenTTDTrainHandle) noexcept -> uint32_t { return 23; };
+	map.train.read_trackdir = [](OpenTTDTrainHandle) noexcept -> OpenTTDTrainTrackdirRead { return {23, 1, 0}; };
+	map.train.first_track = [](OpenTTDTrainHandle, uint8_t) noexcept -> uint64_t { return 0; };
+	map.train.track_direction = [](OpenTTDTrainHandle, uint8_t, uint8_t) noexcept -> uint64_t { return 0; };
+	map.pbs.depot_bits = [](uint32_t) noexcept { return TRACK_BIT_NONE; };
+	openttd_rust_train_state_set_track(map.state.get(), TRACK_BIT_X);
 	void *other = nullptr;
-	const auto result = openttd_rust_pbs_follow_train(&pbs, {state.get(), state.get()}, reinterpret_cast<OpenTTDPbsTrainOutput *>(&other));
+	const auto result = openttd_rust_pbs_follow_train(&map.pbs, {map.state.get(), map.state.get()}, reinterpret_cast<OpenTTDPbsTrainOutput *>(&other));
 	CHECK(result.tile == 23); CHECK(result.td == 0); CHECK(result.okay == 0); CHECK(other == nullptr);
 }
 
 extern "C" void openttd_test_train_state_set_cached_max_curve_speed(OpenTTDTrainState *, uint16_t);
+namespace {
+bool _reservation_front;
+unsigned _reservation_front_reads;
+unsigned _reservation_assert_failures;
+}
+
+TEST_CASE("Train reservation - native front-engine assertion precedes depot return")
+{
+	for (bool assertions : {false, true}) for (bool front : {false, true}) {
+		CAPTURE(assertions, front);
+		FollowerFixture map;
+		map.Tile(23, MP_RAILWAY, TRACK_BIT_X);
+		map.pbs.assertions = assertions;
+		_reservation_front = front;
+		_reservation_front_reads = 0;
+		_reservation_assert_failures = 0;
+		map.train.read_front = [](OpenTTDTrainHandle) noexcept -> uint8_t { ++_reservation_front_reads; return _reservation_front; };
+		map.movement.native_assert = [](bool okay) noexcept { if (!okay) ++_reservation_assert_failures; };
+		auto leaves = OpenTTDTrainReservationLeaves{};
+		leaves.shared = &map.shared;
+		leaves.read_free = [](OpenTTDTrainHandle) noexcept -> OpenTTDTrainReservationFreeRead { return {23}; };
+		leaves.trackdir = [](void *, OpenTTDTrainHandle) noexcept -> uint64_t { return TRACKDIR_X_NE; };
+		leaves.is_station = [](void *, OpenTTDTrainHandle, uint32_t) noexcept -> uint64_t { return 0; };
+		leaves.is_depot = [](void *, OpenTTDTrainHandle, uint32_t) noexcept -> uint64_t { return 1; };
+		leaves.exit_dir = [](void *, OpenTTDTrainHandle, uint8_t) noexcept -> uint64_t { return DIAGDIR_NE; };
+		leaves.depot_dir = [](void *, OpenTTDTrainHandle, uint32_t) noexcept -> uint64_t { return DIAGDIR_SW; };
+		openttd_rust_train_reservation_free({map.Vehicle(), map.state.get()}, map.Vehicle(), &leaves, nullptr);
+		CHECK(_reservation_front_reads == unsigned(assertions));
+		CHECK(_reservation_assert_failures == unsigned(assertions && !front));
+	}
+}
+
 namespace {
 uint8_t _train_speed_status;
 uint64_t _train_speed_model;

@@ -17,12 +17,6 @@ struct OpenTTDTrainReservationLeaves;
 const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept;
 extern "C" {
 struct OpenTTDTrainState;
-struct OpenTTDTrainReservationFollow {
-	uint32_t old_tile, new_tile;
-	int32_t skipped;
-	uint16_t dirs;
-	uint8_t old_td, exitdir, tunnel, bridge, station, error;
-};
 struct OpenTTDTrainReservationPbs {
 	uint32_t tile;
 	OpenTTDTrainHandle other;
