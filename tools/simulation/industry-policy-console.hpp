@@ -38,7 +38,7 @@ static void IndustryPolicyObserve()
 static bool IndustryPolicy(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
-	if (args[1] == "inspect") { IndustryPolicyObserve(); fmt::print(stderr, "INDUSTRY-POLICY complete true\n"); return true; }
+	if (args[1] == "inspect") { _interactive_random.SetSeed(0x60100002); IndustryPolicyObserve(); fmt::print(stderr, "INDUSTRY-POLICY complete true\n"); return true; }
 	Industry *ind = nullptr;
 	for (Industry *candidate : Industry::Iterate()) if (!candidate->produced.empty() && IsValidCargoType(candidate->produced[0].cargo) && GetIndustrySpec(candidate->type)->life_type.Test(IndustryLifeType::Organic)) { ind = candidate; break; }
 	Vehicle *vehicle = nullptr;
@@ -82,6 +82,7 @@ static bool IndustryPolicy(std::span<std::string_view> args)
 		IndustryPolicyDaily();
 #endif
 	}
+	order.Restore(); cargo.Restore(); local.Restore();
 	IndustryPolicyObserve();
 	if (args.size() == 3) IndustryPolicyRequire(SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, SAVE_DIR, false) == SL_OK);
 	fmt::print(stderr, "INDUSTRY-POLICY complete true\n"); return true;
