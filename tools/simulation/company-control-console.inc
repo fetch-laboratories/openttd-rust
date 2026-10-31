@@ -2,6 +2,7 @@
 /** @file company-control-console.inc Native context, errors, notification order and saved keys. */
 #include "company_cmd.h"
 #include "network/network_type.h"
+#include "town.h"
 #include "window_func.h"
 
 static bool _company_control_capture = false, _company_control_transfer = false;
