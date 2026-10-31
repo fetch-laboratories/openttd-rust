@@ -34,6 +34,11 @@ template<typename... Extra> static void LandscapeResult(const char *name, const 
 	else LandscapeResult(name, std::get<0>(result), std::get<1>(result));
 }
 #include "tree_cmd.h"
+#include "tree_map.h"
+#include "core/string_consumer.hpp"
+#ifndef WITH_RUST
+uint PlaceTreeGroupAroundTile(TileIndex tile, TreeType treetype, uint radius, uint count, bool set_zone);
+#endif
 static void GroundTreeTile(const char *kind, TileIndex index)
 {
 	Tile t(index);
@@ -120,8 +125,10 @@ static bool LandscapeScenario(std::span<std::string_view> args)
 #endif
 	if (args[1] == "inspect") {
 		if (args.size() != 5) std::abort();
-		_interactive_random.state[0] = std::stoul(std::string(args[2])); _interactive_random.state[1] = std::stoul(std::string(args[3]));
-		const TileIndex anchor(std::stoul(std::string(args[4])));
+		auto first = ParseInteger<uint32_t>(args[2]), second = ParseInteger<uint32_t>(args[3]), at = ParseInteger<uint32_t>(args[4]);
+		if (!first || !second || !at) std::abort();
+		_interactive_random.state[0] = *first; _interactive_random.state[1] = *second;
+		const TileIndex anchor(*at);
 		GroundTreeRandom("restored", anchor);
 		AutoRestoreBackup<GameMode> editor(_game_mode, GM_EDITOR);
 		fmt::print(stderr, "GROUNDTREE continued {}\n", PlaceTreeGroupAroundTile(anchor, TREE_RAINFOREST, 3, 32, true));
