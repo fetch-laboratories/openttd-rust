@@ -522,6 +522,29 @@ class HousekeepingTests(unittest.TestCase):
             child_write(child)
             self.assertEqual(path.read_text(), "xvisible\n")
 
+    def test_unreadable_output_subdirectory_fails_closed(self) -> None:
+        folder = self.main / ".local/coverage/unreadable"
+        path = write(folder / "private/output.log")
+        with held_output(path, unreadable=True) as child:
+            (self.proc / str(child.pid)).symlink_to(Path("/proc") / str(child.pid))
+            item = housekeeping.Item(folder, True, "idle output")
+            path.parent.chmod(stat.S_IXUSR)
+            try:
+                handles, error = housekeeping.open_outputs()
+                self.assertIsNotNone(error)
+                self.assertIn(
+                    "cannot inspect output candidate",
+                    housekeeping.output_refusal(folder, handles, error) or "",
+                )
+                self.assertIn(
+                    "cannot inspect output candidate",
+                    housekeeping.remove(self.main, item) or "",
+                )
+            finally:
+                path.parent.chmod(stat.S_IRWXU)
+            child_write(child)
+            self.assertEqual(path.read_text(), "xvisible\n")
+
     def test_opened_after_planning_is_protected_at_removal(self) -> None:
         path = write(self.main / ".local/late.log")
         item = next(

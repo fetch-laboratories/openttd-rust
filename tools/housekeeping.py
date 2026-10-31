@@ -356,7 +356,12 @@ def output_refusal(
     try:
         paths = [path]
         if path.is_dir() and not path.is_symlink():
-            paths.extend(path.rglob("*"))
+
+            def unreadable(inspection_error: OSError) -> None:
+                raise inspection_error
+
+            for folder, directories, files in os.walk(path, onerror=unreadable):
+                paths.extend(Path(folder) / name for name in directories + files)
         if any(
             (info.st_dev, info.st_ino) in identities
             for info in (output_info(p) for p in paths)
