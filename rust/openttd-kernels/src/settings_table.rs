@@ -61,6 +61,8 @@ pub struct Services {
     pub clock: &'static crate::timer_game_common::ClockServices,
     pub company: &'static crate::company::Services,
     pub transactions: &'static crate::vehicle_transactions::TransactionServices,
+    pub refit: &'static crate::vehicle_transactions::refit::Services,
+    pub objectives: &'static crate::objectives::Services,
     pub(crate) schedule: &'static crate::linkgraph_schedule::Services,
     pub engines: &'static crate::engine_loading::Services,
     pub environment: EnvironmentServices,
@@ -70,7 +72,6 @@ pub struct Services {
     pub company_vehicle_defaults: extern "C" fn(u8) -> *mut VehicleDefaults,
     pub set_service_interval: extern "C" fn(u32, u16),
     pub set_service_interval_percent: extern "C" fn(u32, bool),
-    pub road_acceleration_model: extern "C" fn() -> u8,
     /// `_settings_newgame.economy.minutes_per_calendar_year`.
     pub newgame_minutes_per_year: extern "C" fn() -> u16,
     /// Store minutes per year in the new-game (true) or current game settings.
@@ -91,8 +92,6 @@ pub struct Services {
     /// `ChangeValue(&Company::Get(c)->settings, value)`.
     pub change_company_setting: extern "C" fn(*const SettingDesc, u8, i32),
     pub window_classes_dirty: extern "C" fn(u16),
-    pub window_classes_data: extern "C" fn(u16, i32),
-    pub screen_dirty: extern "C" fn(),
     /// `ShowErrorMessage(GetEncodedString(id), {}, WL_ERROR)`.
     pub error_message: extern "C" fn(u32),
     pub edges_not_empty: u32,
@@ -279,12 +278,12 @@ fn update_consists(s: &Services) {
             }
         }
     });
-    (s.window_classes_data)(WC_BUILD_VEHICLE, 0);
+    (s.objectives.window_classes)(WC_BUILD_VEHICLE, 0);
 }
 
 fn acceleration_windows(s: &Services) {
     (s.window_classes_dirty)(WC_ENGINE_PREVIEW);
-    (s.window_classes_data)(WC_BUILD_VEHICLE, 0);
+    (s.objectives.window_classes)(WC_BUILD_VEHICLE, 0);
     (s.window_classes_dirty)(WC_VEHICLE_DETAILS);
 }
 
@@ -335,7 +334,7 @@ fn road_front_engines(s: &Services, mut each: impl FnMut(VehicleRef)) {
 }
 
 fn road_acceleration_model_changed(s: &Services) {
-    if (s.road_acceleration_model)() != AM_ORIGINAL {
+    if (s.refit.road_acceleration)() != AM_ORIGINAL {
         road_front_engines(s, |v| {
             hit(witness::SETTINGS_ROAD_ACCELERATION);
             crate::ground_vehicle::cargo_changed(physics(s), v);
@@ -359,7 +358,7 @@ fn difficulty_noise_change(s: &Services) {
         unsafe { crate::station_cmd::openttd_rust_station_update_airport_noise(commands) };
         // SAFETY: As above.
         if (unsafe { &*commands }.noise_enabled)() {
-            (s.window_classes_data)(WC_TOWN_VIEW, 0);
+            (s.objectives.window_classes)(WC_TOWN_VIEW, 0);
         }
     }
 }
@@ -460,7 +459,7 @@ fn update_freeform_edges(s: &Services, new_value: i32) {
             set_tile_type(&w, map.tile_xy(0, i), MP_WATER, freeform);
         }
     }
-    (s.screen_dirty)();
+    (s.company.mark_whole_screen_dirty)();
 }
 
 fn check_dynamic_engines(s: &Services) -> bool {
@@ -499,7 +498,7 @@ fn station_catchment_changed(s: &Services) {
     crate::station::recompute_catchment_for_all(&unsafe {
         crate::station::Ctx::new((s.shared.station_catchment)())
     });
-    (s.screen_dirty)();
+    (s.company.mark_whole_screen_dirty)();
 }
 
 fn change_timekeeping_units(s: &Services) {
@@ -510,7 +509,7 @@ fn change_timekeeping_units(s: &Services) {
         #[allow(clippy::cast_possible_truncation)]
         (s.set_minutes_per_year)(true, DEF_MINUTES_PER_YEAR as u16);
     }
-    (s.window_classes_data)(WC_GAME_OPTIONS, 0);
+    (s.objectives.window_classes)(WC_GAME_OPTIONS, 0);
 
     if crate::session::mode() == GameMode::EDITOR {
         hit(witness::SETTINGS_TIMEKEEPING_EDITOR);
@@ -696,12 +695,12 @@ crate::abi::layouts! {
     };
     "OpenTTDSettingRange" ["settings"] => Range { min, max, };
     "OpenTTDSettingServices" ["settings"] => Services {
-        shared, clock, company, transactions, schedule, engines, environment,
+        shared, clock, company, transactions, refit, objectives, schedule, engines, environment,
         client_vehicle_defaults, company_vehicle_defaults, set_service_interval,
-        set_service_interval_percent, road_acceleration_model, newgame_minutes_per_year,
+        set_service_interval_percent, newgame_minutes_per_year,
         set_minutes_per_year, set_newgame_wallclock, setting, company_setting, setting_current,
         setting_int, setting_editable, change_game_setting, change_company_setting,
-        window_classes_dirty, window_classes_data, screen_dirty, error_message, edges_not_empty,
+        window_classes_dirty, error_message, edges_not_empty,
         edges_not_water, dynamic_engines_existing_vehicles, too_high_mountain,
     };
 }

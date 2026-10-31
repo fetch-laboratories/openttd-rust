@@ -9,6 +9,8 @@
 struct OpenTTDClockServices;
 struct OpenTTDCompanyServices;
 struct OpenTTDVehicleTransactionServices;
+struct OpenTTDVehicleRefitServices;
+struct OpenTTDObjectivesServices;
 struct OpenTTDScheduleServices;
 struct OpenTTDEngineLoadingServices;
 struct VehicleDefaultSettings;
@@ -20,6 +22,8 @@ struct OpenTTDSettingServices {
 	const OpenTTDClockServices *clock;
 	const OpenTTDCompanyServices *company;
 	const OpenTTDVehicleTransactionServices *transactions;
+	const OpenTTDVehicleRefitServices *refit;
+	const OpenTTDObjectivesServices *objectives;
 	const OpenTTDScheduleServices *schedule;
 	const OpenTTDEngineLoadingServices *engines;
 	OpenTTDEnvironmentServices environment;
@@ -27,7 +31,6 @@ struct OpenTTDSettingServices {
 	VehicleDefaultSettings *(*company_vehicle_defaults)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_vehicle_defaults);
 	void (*set_service_interval)(uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_service_interval);
 	void (*set_service_interval_percent)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_service_interval_percent);
-	uint8_t (*road_acceleration_model)() noexcept OPENTTD_SERVICE_DEFAULT(road_acceleration_model);
 	uint16_t (*newgame_minutes_per_year)() noexcept OPENTTD_SERVICE_DEFAULT(newgame_minutes_per_year);
 	void (*set_minutes_per_year)(bool, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_minutes_per_year);
 	void (*set_newgame_wallclock)() noexcept OPENTTD_SERVICE_DEFAULT(set_newgame_wallclock);
@@ -39,8 +42,6 @@ struct OpenTTDSettingServices {
 	void (*change_game_setting)(const SettingDesc *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(change_game_setting);
 	void (*change_company_setting)(const SettingDesc *, uint8_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(change_company_setting);
 	void (*window_classes_dirty)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(window_classes_dirty);
-	void (*window_classes_data)(uint16_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(window_classes_data);
-	void (*screen_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(screen_dirty);
 	void (*error_message)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(error_message);
 	uint32_t edges_not_empty;
 	uint32_t edges_not_water;

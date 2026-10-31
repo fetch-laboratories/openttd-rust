@@ -65,6 +65,8 @@
 #include "rust/clock_ffi.h"
 #include "rust/company_adapter.h"
 #include "rust/vehicle_transaction_ffi.h"
+#include "rust/vehicle_refit_ffi.h"
+#include "rust/objectives_ffi.h"
 #include "rust/engine_loading_ffi.h"
 #include "rust/command_cost_services.h"
 #include "rust/presentation_services.h"
@@ -1794,6 +1796,8 @@ const OpenTTDSettingServices &GetRustSettingServices() noexcept
 		.clock = &GetRustClockServices(),
 		.company = &GetRustCompanyServices(),
 		.transactions = &GetRustVehicleTransactionServices(),
+		.refit = &GetRustVehicleRefitServices(),
+		.objectives = &GetRustObjectivesServices(),
 		.schedule = &LinkGraphSchedule::services,
 		.engines = &GetRustEngineLoadingServices(),
 		.environment = GetRustEnvironmentServices(),
@@ -1801,7 +1805,6 @@ const OpenTTDSettingServices &GetRustSettingServices() noexcept
 		.company_vehicle_defaults = RustCompanyVehicleDefaults,
 		.set_service_interval = RustIndexedVehicleWrite<uint16_t, RustVehicleSetServiceInterval>,
 		.set_service_interval_percent = RustIndexedVehicleWrite<bool, RustVehicleSetServiceIntervalIsPercent>,
-		.road_acceleration_model = RustRoadAccelerationModel,
 		.newgame_minutes_per_year = RustNewgameMinutesPerCalendarYear,
 		.set_minutes_per_year = RustSetMinutesPerCalendarYear,
 		.set_newgame_wallclock = RustSetNewgameWallclockUnits,
@@ -1813,8 +1816,6 @@ const OpenTTDSettingServices &GetRustSettingServices() noexcept
 		.change_game_setting = [](const SettingDesc *sd, int32_t value) noexcept { sd->AsIntSetting()->ChangeValue(&GetGameSettings(), value); },
 		.change_company_setting = [](const SettingDesc *sd, uint8_t company, int32_t value) noexcept { sd->AsIntSetting()->ChangeValue(RustCompanySettings(company), value); },
 		.window_classes_dirty = RustSetWindowClassesDirty,
-		.window_classes_data = RustInvalidateWindowClassesData,
-		.screen_dirty = RustScreenDirty,
 		.error_message = [](uint32_t message) noexcept { ShowErrorMessage(GetEncodedString(message), {}, WL_ERROR); },
 		.edges_not_empty = STR_CONFIG_SETTING_EDGES_NOT_EMPTY,
 		.edges_not_water = STR_CONFIG_SETTING_EDGES_NOT_WATER,
