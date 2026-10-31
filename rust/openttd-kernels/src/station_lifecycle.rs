@@ -61,8 +61,6 @@ pub struct Services {
     pub set_industry_type: extern "C" fn(*mut BaseStation, u8),
     pub industry_generation: *const crate::industry::GenerationServices,
     pub spec_name: extern "C" fn(*const IndustrySpec) -> u32,
-    pub spec_life: extern "C" fn(*const IndustrySpec) -> u8,
-    pub forest: extern "C" fn(u32) -> bool,
     pub roadstop: *const crate::newgrf_roadstop::Services,
     pub cleaning_pool: extern "C" fn() -> bool,
     pub close_view: extern "C" fn(StationID),
@@ -139,7 +137,10 @@ fn mine(tile: u32, m: &TileTypeAccess, s: &Services) -> bool {
         crate::industry_map::get_industry_by_tile(m, tile, s.catchment.industry_by_id, s.check());
     let owner = (s.catchment.industry_owner)(shell);
     let kind = unsafe { (*crate::industry::openttd_rust_industry_metadata(owner)).kind };
-    if (s.spec_life)(s.spec(kind)) & crate::industry_type::LIFE_EXTRACTIVE == 0 {
+    if unsafe { ((*s.industry_generation).spec_life)(s.spec(kind)) }
+        & crate::industry_type::LIFE_EXTRACTIVE
+        == 0
+    {
         return false;
     }
     let mut result = false;
@@ -264,7 +265,9 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
     }
     if info.available(n.woods, s)
         && (count_around(tile, map, size_y, freeform, |t| m.read(t) == MP_TREES) >= 8
-            || count_around(tile, map, size_y, freeform, |t| (s.forest)(t)) >= 2)
+            || count_around(tile, map, size_y, freeform, |t| {
+                crate::industry::forest(t, unsafe { &*crate::animated_tile::services().industries })
+            }) >= 2)
     {
         return if Services::climate() == crate::landscape_type::TROPIC {
             n.forest
@@ -593,5 +596,5 @@ pub(crate) fn airport_maintenance(s: &Services, owner: u8) -> i64 {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStationNames" ["probe"] => Names { base, central, airport, oilfield, docks, heliport, mines, lakeside, woods, forest, valley, heights, north, south, east, west, transfer, halt, exchange, annexe, sidings, branch, upper, lower, fallback, undefined, null };
-    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, names, industry_type, set_industry_type, industry_generation, spec_name, spec_life, forest, roadstop, cleaning_pool, close_view, delete_news, sign_valid, remove_sign, last_loading, airport_maintenance, maintenance_price };
+    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, names, industry_type, set_industry_type, industry_generation, spec_name, roadstop, cleaning_pool, close_view, delete_news, sign_valid, remove_sign, last_loading, airport_maintenance, maintenance_price };
 }

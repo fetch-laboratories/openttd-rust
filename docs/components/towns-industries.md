@@ -102,3 +102,10 @@
 - C++ keeps: a facade. `TownNameParams`, the genworld drop-down and `GetGRFTownNameName` read the Rust lists; `GRFTownNameGenerate` passes its `StringBuilder` with an append callback that receives each selected part's bytes. `TranslateTTDPatchCodes`, `AddGRFString` and debug messages remain native, behind one loading service each; translated bytes are copied into the Rust part from a view backed by the native loader stack frame.
 - Limits: Generation preserves the native `gen < styles.size()` assertion. Self-referencing definitions recurse without a guard, as in the original.
 - PRs: pending.
+
+## Industry servicing, selection and specification policy (#601)
+
+- Rust owns: servicing classification over vehicles, consist cargo and orders; production-news category and opening event order; random pool selection and registry totals; forest-industry checks; industry history reduction; raw/processing and original-economy policy; construction/removal price arithmetic.
+- C++ keeps: pool shells and allocation, specification fields behind canonical accessors, and one native formatting/publication operation per news kind. Station naming and subsidies call the shared Rust owners directly.
+- Limits: Distinct train/order/refusal combinations, pool cardinality extremes, native news presentation and scheduling, arbitrary mods and historical saves remain on #156. News and interactive RNG are not serialized; reload observes the original reset and command-phase interactive RNG reseeding.
+- PRs: #609.

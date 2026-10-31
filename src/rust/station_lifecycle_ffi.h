@@ -27,8 +27,6 @@ struct OpenTTDStationLifecycleServices {
 	void (*set_industry_type)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_industry_type);
 	const OpenTTDIndustryGenerationServices *industry_generation;
 	uint32_t (*spec_name)(const IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_name);
-	uint8_t (*spec_life)(const IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_life);
-	bool (*forest)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(forest);
 	const OpenTTDRoadStopResolverServices *roadstop;
 	bool (*cleaning_pool)() noexcept OPENTTD_SERVICE_DEFAULT(cleaning_pool);
 	void (*close_view)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(close_view);
