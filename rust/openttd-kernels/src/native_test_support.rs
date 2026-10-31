@@ -294,3 +294,16 @@ pub unsafe extern "C" fn openttd_test_town_data_target(
 ) -> u32 {
     unsafe { &*services }.target(rotation, x, y).0
 }
+
+/// Exercise the production pending-replacement drain with native fixture tables.
+/// # Safety
+/// Live serialized service tables and caller-owned cost, as in the scheduler.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_fleet_pending_drain(
+    pending: *const crate::fleet::pending::Services,
+    transaction: *const crate::fleet::transactions::Services,
+    group: *const crate::fleet::GroupServices,
+    cost: *mut (),
+) {
+    unsafe { crate::fleet::pending::drain(pending, transaction, group, cost) }
+}

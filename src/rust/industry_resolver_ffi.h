@@ -45,7 +45,6 @@ struct OpenTTDIndustryResolverServices {
 	uint32_t (*nearby)(uint8_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(nearby);
 	uint32_t (*nearby_info)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(nearby_info);
 	uint32_t (*terrain)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terrain);
-	HouseZone (*town_zone)(const Town *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_zone);
 	uint32_t (*water_distance)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(water_distance);
 	uint32_t (*town_tile)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_tile);
 	uint16_t (*town_id)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_id);

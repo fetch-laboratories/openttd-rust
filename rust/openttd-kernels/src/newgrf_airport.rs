@@ -319,7 +319,7 @@ pub unsafe extern "C" fn openttd_rust_airport_town(
     let town = if !c.station.is_null() {
         (s.commands().station_town)(c.station).cast_mut()
     } else if c.tile != INVALID_TILE {
-        (s.shared().closest_town)(c.tile, u32::MAX).cast_mut()
+        crate::town::spatial::closest(s.shared(), c.tile, u32::MAX).cast_mut()
     } else {
         ptr::null_mut()
     };
@@ -447,7 +447,7 @@ pub unsafe extern "C" fn openttd_rust_airport_tile_variable(
     match variable {
         0x41 => (s.terrain)(c.tile),
         0x42 => {
-            let town = (s.shared().closest_town)(c.tile, u32::MAX);
+            let town = crate::town::spatial::closest(s.shared(), c.tile, u32::MAX);
             let owner = (s.shared().town_owner)(town);
             u32::from(unsafe { crate::town::get_radius_group(owner, c.tile, s.map()) })
         }

@@ -19,6 +19,8 @@
 #include "../table/strings.h"
 #include <map>
 #include "../safeguards.h"
+
+extern "C" void openttd_test_fleet_pending_drain(const OpenTTDFleetPendingServices *, const OpenTTDFleetTransactionServices *, const OpenTTDFleetGroupServices *, void *);
 TEST_CASE("Fleet - canonical state layouts and independent lifetimes")
 {
 	ABI_LAYOUT_CHECK;
@@ -136,7 +138,7 @@ TEST_CASE("Fleet - pending drain matches ordered map iteration under reentry")
 	_fleet_drain_company = 11;
 	_fleet_drain_trace.clear();
 	CommandCost cost;
-	openttd_rust_fleet_pending_drain(&pending, &transaction, &group, &cost);
+	openttd_test_fleet_pending_drain(&pending, &transaction, &group, &cost);
 	CHECK(_fleet_drain_trace == expected);
 	CHECK(_fleet_drain_company == 11);
 	openttd_rust_fleet_pending_clear();

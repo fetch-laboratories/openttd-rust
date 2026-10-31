@@ -50,8 +50,7 @@ pub unsafe extern "C" fn openttd_rust_fleet_pending_add(id: u32, leave: bool) {
 /// # Safety
 /// Static noexcept services, serial game thread and a native caller-owned cost.
 /// The map is accessed only to copy one current item before calling any service.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_fleet_pending_drain(
+pub(crate) unsafe fn drain(
     services: *const Services,
     transaction: *const TransactionServices,
     group: *const GroupServices,

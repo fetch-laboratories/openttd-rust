@@ -221,6 +221,5 @@ void openttd_rust_fleet_autoreplace(const OpenTTDFleetTransactionServices *, con
 uint32_t openttd_rust_fleet_set_rule(const OpenTTDFleetTransactionServices *, const OpenTTDFleetGroupServices *, uint32_t, uint16_t, uint16_t, uint16_t, bool);
 void openttd_rust_fleet_pending_clear();
 void openttd_rust_fleet_pending_add(uint32_t, bool);
-void openttd_rust_fleet_pending_drain(const OpenTTDFleetPendingServices *, const OpenTTDFleetTransactionServices *, const OpenTTDFleetGroupServices *, void *);
 }
 #endif /* RUST_FLEET_FFI_H */

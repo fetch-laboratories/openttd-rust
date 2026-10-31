@@ -1181,9 +1181,7 @@ impl MovementServices {
                     (self.vehicle().subtype)(v),
                 )
             {
-                if unsafe {
-                    crate::road_stop::openttd_rust_road_stop_enter(self.shared(), tile, v, h.road)
-                } {
+                if unsafe { crate::road_stop::enter_by_tile(self.shared(), tile, v, h.road) } {
                     w::hit(w::MOVE_ROAD_STOP_ADMIT);
                     return 0;
                 }

@@ -15,7 +15,6 @@ struct OpenTTDCargoPacket;
 struct OpenTTDCompanyFinanceServices;
 struct OpenTTDVehicleServices;
 enum ExpensesType : uint8_t;
-enum TownAcceptanceEffect : uint8_t;
 struct OpenTTDCargoRegistryServices;
 struct OpenTTDSubsidyServices;
 struct OpenTTDIndustryResolverServices;
@@ -56,7 +55,6 @@ struct OpenTTDCargoServices {
 	void (OPENTTD_RUST_CALL *spec)(uint8_t, OpenTTDCargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec);
 	const OpenTTDCargoRegistryServices *registry;
 	uint8_t (OPENTTD_RUST_CALL *station_company)(const Station *) noexcept OPENTTD_SERVICE_DEFAULT(station_company);
-	TownAcceptanceEffect (OPENTTD_RUST_CALL *town_acceptance_effect)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(town_acceptance_effect);
 	const OpenTTDTownHandle *(OPENTTD_RUST_CALL *station_town)(const Station *) noexcept OPENTTD_SERVICE_DEFAULT(station_town);
 	const OpenTTDIndustryResolverServices *resolver;
 	const OpenTTDSubsidyServices *(OPENTTD_RUST_CALL *subsidies)() noexcept OPENTTD_SERVICE_DEFAULT(subsidies);

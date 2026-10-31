@@ -199,7 +199,6 @@ const OpenTTDSubsidyServices &GetRustSubsidyServices() noexcept
 {
 	static const OpenTTDSubsidyServices services = {
 		.shared = &GetRustSharedServices(), .town = &GetRustTownServices(), .industry = &GetIndustryRustServices(),
-		.random_town = []() noexcept -> OpenTTDTownRef { Town *t = Town::GetRandom(); return {t, t->growth_owner.get(), t->index.base()}; },
 		.industry_owner = RustIndustryCanonicalOwner<void *>, .industry_id = RustIndustryID<void *>, .next_industry = RustIndustryNextID,
 		.has_source_flag = [](Source source, PartOfSubsidy part) noexcept { switch (source.type) { case SourceType::Town: return Town::Get(source.ToTownID())->cache.part_of_subsidy.Test(part); case SourceType::Industry: return Industry::Get(source.ToIndustryID())->part_of_subsidy.Test(part); default: NOT_REACHED(); } },
 		.set_source_flag = [](Source source, PartOfSubsidy part) noexcept { switch (source.type) { case SourceType::Town: Town::Get(source.ToTownID())->cache.part_of_subsidy.Set(part); return; case SourceType::Industry: Industry::Get(source.ToIndustryID())->part_of_subsidy.Set(part); return; default: NOT_REACHED(); } },

@@ -300,7 +300,6 @@ static const OpenTTDCargoServices _cargo_services = {
 	},
 	.registry = &GetRustCargoRegistryServices(),
 	.station_company = RustStationOwnerByte<const Station>,
-	.town_acceptance_effect = RustCargoTownAcceptanceEffect,
 	.station_town = RustStationStationTown<const Station>,
 	.resolver = &GetIndustryResolverServices(),
 	.subsidies = RustSubsidyServices,

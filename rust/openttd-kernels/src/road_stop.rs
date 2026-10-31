@@ -658,8 +658,7 @@ fn check_integrity(s: &Services, xy: u32, state: *mut State, dir: u8) {
 /// GetRoadStopType(tile))->Enter(rv)`.
 /// # Safety
 /// Live serialized shared table, front road vehicle and its owner.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_road_stop_enter(
+pub(crate) unsafe fn enter_by_tile(
     s: *const Services,
     tile: u32,
     v: VehicleRef,

@@ -241,10 +241,6 @@ pub struct Services {
     pub build_on_slopes: extern "C" fn() -> bool,
     /// Native leaves for direct shared Rust clear-square control.
     pub clear_square_services: ClearSquareServices,
-    /// Original native uncached nearest-town spatial lookup.
-    pub calc_closest_town: extern "C" fn(u32, u32) -> *const TownHandle,
-    /// Original native nearest-town spatial lookup; the result may be null.
-    pub closest_town: extern "C" fn(u32, u32) -> *const TownHandle,
     /// Whether this company pool ID is live.
     pub company_valid: extern "C" fn(u8) -> bool,
     /// Opaque context for test fixtures; production leaves ignore it.
@@ -380,6 +376,8 @@ pub struct Services {
     pub tile_animation_set_frame: extern "C" fn(u32, u8),
     /// Canonical shared `town_next_id` service.
     pub town_next_id: extern "C" fn(u32) -> u32,
+    /// Canonical native town shell resolver.
+    pub town_by_id: extern "C" fn(u32) -> *mut TownHandle,
     /// Canonical shared `town_owner_by_id` service.
     pub town_owner_by_id: extern "C" fn(u32) -> *mut crate::town::State,
     /// Canonical shared `utf8_length` service.
@@ -424,8 +422,6 @@ pub struct Services {
     pub tunnel_transport: extern "C" fn(u32) -> u8,
     /// Original `UpdateLevelCrossing`; callers retain their original sound argument.
     pub update_level_crossing: extern "C" fn(u32, bool),
-    /// Rebuild the canonical town spatial index.
-    pub rebuild_town_tree: extern "C" fn(),
     /// Whether the economy is in recession.
     pub recession: extern "C" fn() -> bool,
     /// Global game tick counter.
@@ -678,8 +674,6 @@ crate::abi::layouts! {
         bridge_speed,
         build_on_slopes,
         clear_square_services,
-        calc_closest_town,
-        closest_town,
         company_valid,
         context,
         crossing_road_bits,
@@ -746,6 +740,7 @@ crate::abi::layouts! {
 
         tile_animation_set_frame,
         town_next_id,
+        town_by_id,
         town_owner_by_id,
         utf8_length,
         vehicle_next,
@@ -768,7 +763,6 @@ crate::abi::layouts! {
         tunnel_bridge_direction,
         tunnel_transport,
         update_level_crossing,
-        rebuild_town_tree,
         recession,
         tick_counter,
         town_count,
@@ -825,7 +819,6 @@ pub fn fixture(
     extern "C" fn height(_: u32) -> i32 {
         0
     }
-    extern "C" fn noop() {}
     extern "C" fn tile(_: u32) {}
     extern "C" fn train(_: *const Train) {}
     extern "C" fn train_path(_: *mut Train, _: bool, _: bool) -> bool {
@@ -903,8 +896,6 @@ pub fn fixture(
             docking: flag,
             generating_world: flag0,
         },
-        calc_closest_town: unused_closest_town,
-        closest_town: unused_closest_town,
         company_valid: unused_company_valid,
         context,
         crossing_road_bits: fixture_crossing_road_bits,
@@ -971,6 +962,7 @@ pub fn fixture(
 
         tile_animation_set_frame: zone,
         town_next_id: word,
+        town_by_id: fixture_town_by_id,
         town_owner_by_id: unused_town_owner_by_id,
         utf8_length: unused_utf8_length,
         vehicle_next: unused_vehicle_next,
@@ -993,7 +985,6 @@ pub fn fixture(
         tunnel_bridge_direction: byte,
         tunnel_transport: byte,
         update_level_crossing: fixture_crossing_update,
-        rebuild_town_tree: noop,
         recession: flag0,
         tick_counter: tick0,
         town_count: count0,
@@ -1039,10 +1030,6 @@ pub(crate) extern "C" fn unused_next_company(_: u8) -> u8 {
     u8::MAX
 }
 
-#[cfg(test)]
-pub(crate) extern "C" fn unused_closest_town(_: u32, _: u32) -> *const TownHandle {
-    std::ptr::null()
-}
 #[cfg(test)]
 pub(crate) extern "C" fn unused_town_owner(_: *const TownHandle) -> *mut crate::town::State {
     std::ptr::null_mut()
@@ -1448,4 +1435,9 @@ extern "C" fn fixture_movement() -> *const crate::movement::MovementServices {
 #[cfg(test)]
 extern "C" fn fixture_type_availability() -> *const crate::type_availability::Services {
     std::process::abort()
+}
+
+#[cfg(test)]
+extern "C" fn fixture_town_by_id(_: u32) -> *mut TownHandle {
+    panic!("unused town shell")
 }

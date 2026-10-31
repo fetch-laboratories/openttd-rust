@@ -877,7 +877,7 @@ impl Ctx<'_> {
             if flags & 1 != 0 {
                 st = (self.s.new_station)(area.tile);
                 (self.s.index_insert)(st);
-                let town = (self.shared.closest_town)(area.tile, u32::MAX);
+                let town = crate::town::spatial::closest(self.shared, area.tile, u32::MAX);
                 (self.s.set_town)(st, town);
                 (self.s.set_string_id)(
                     st,
@@ -2773,7 +2773,7 @@ impl Ctx<'_> {
             cost.add_money(ret.money());
             success = true;
             if flags & 1 != 0 && (types[0] != 63 || types[1] != 63) {
-                let town = (self.shared.closest_town)(tile, u32::MAX);
+                let town = crate::town::spatial::closest(self.shared, tile, u32::MAX);
                 let authority = unsafe { &*self.s.authority };
                 let town = (authority.town_index)(town);
                 (self.rail().make_road)(
@@ -2946,7 +2946,8 @@ impl Ctx<'_> {
             if x != min_x && x != max_x && y != min_y && y != max_y {
                 continue;
             }
-            let town = (self.shared.calc_closest_town)(tile, distance.wrapping_add(1));
+            let town =
+                crate::town::spatial::calc_closest(self.shared, tile, distance.wrapping_add(1));
             if town.is_null() {
                 continue;
             }
@@ -3074,7 +3075,7 @@ impl Ctx<'_> {
                 refused = nearest;
             }
         } else if (authority.council_tolerance)() != 3 {
-            let town = (self.shared.closest_town)(tile, u32::MAX);
+            let town = crate::town::spatial::closest(self.shared, tile, u32::MAX);
             let mut count = 0_u32;
             for id in 0..(self.world().pool_size)() {
                 let st = self.full_station(id as u16);
@@ -3695,7 +3696,10 @@ impl Ctx<'_> {
         }
         let st = (self.s.new_station)(tile);
         (self.s.index_insert)(st);
-        (self.s.set_town)(st, (self.shared.closest_town)(tile, u32::MAX));
+        (self.s.set_town)(
+            st,
+            crate::town::spatial::closest(self.shared, tile, u32::MAX),
+        );
         (self.s.set_string_id)(
             st,
             crate::station_lifecycle::generate_name(st, tile, 3, unsafe { &*self.s.lifecycle }),

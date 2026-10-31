@@ -939,6 +939,8 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
             or "TOWN deletion-reuse true" not in run["log"]
         ):
             raise RuntimeError("town authority reload capture failed")
+        if not any(line.startswith("TOWN spatial ties ") for line in run["log"]):
+            raise RuntimeError("town nearest tie/threshold capture missing")
         check_statue_search(scenario, run, "capture", "reference", result)
         from .core import normalize
 
@@ -1710,6 +1712,31 @@ def check(scenario, run, mode, role, result):
         ):
             result[mode + "_common_action2_branches"] = counts
     elif scenario.get("town_founding") == "authority" and not run["exit"]:
+        for phase in (
+            ("reload",)
+            if scenario["town_commands_reload"]
+            else ("ties", "deleted", "empty")
+        ):
+            observations = [
+                line.split()
+                for line in run["log"]
+                if line.startswith(f"TOWN spatial {phase} ")
+            ]
+            if not observations or {int(row[4]) for row in observations} != {
+                0,
+                1,
+                9,
+                10,
+                11,
+                2**32 - 1,
+            }:
+                raise RuntimeError(
+                    f"town spatial {phase} threshold observations missing"
+                )
+            if not any(
+                line.startswith(f"TOWN spatial-rng {phase} ") for line in run["log"]
+            ):
+                raise RuntimeError(f"town spatial {phase} RNG streams missing")
         if not scenario["town_commands_reload"]:
             check_action_money(scenario, run, mode, role, result)
             check_statue_search(scenario, run, mode, role, result)

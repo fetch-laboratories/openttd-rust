@@ -28,7 +28,6 @@ struct OpenTTDSubsidyServices {
 	const OpenTTDSharedServices * shared;
 	const OpenTTDTownLeaves * town;
 	const OpenTTDIndustryServices * industry;
-	OpenTTDTownRef (*random_town)() noexcept OPENTTD_SERVICE_DEFAULT(random_town);
 	OpenTTDIndustry *(*industry_owner)(void *) noexcept OPENTTD_SERVICE_DEFAULT(industry_owner);
 	uint16_t (*industry_id)(void *) noexcept OPENTTD_SERVICE_DEFAULT(industry_id);
 	uint32_t (*next_industry)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_industry);

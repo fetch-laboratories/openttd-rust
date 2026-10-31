@@ -280,7 +280,6 @@ const OpenTTDIndustryResolverServices &GetIndustryResolverServices() noexcept
 		.nearby = RustNearbyTile,
 		.nearby_info = RustNearbyTileInformation,
 		.terrain = RustTerrainType,
-		.town_zone = RustTownRadiusGroup,
 		.water_distance = RustClosestWaterDistance,
 		.town_tile = OpenTTDTownTile,
 		.town_id = RustTownAuthorityIndex,
