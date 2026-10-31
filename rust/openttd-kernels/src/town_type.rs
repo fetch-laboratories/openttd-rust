@@ -25,7 +25,7 @@ pub const RATING_BRIBE_DOWN_TO: i32 = -50;
 
 /// Native `TownID`; all uint16 values remain representable.
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TownId(pub u16);
 
 /// Opaque native `Town`; valid only while its native pool shell lives.

@@ -53,7 +53,6 @@ pub struct TransactionServices {
     pub check_proc: unsafe extern "C" fn(*const SpecHandle) -> u8,
     pub conflicting: unsafe extern "C" fn(*const SpecHandle) -> ConflictKinds,
     pub multiple_per_town: unsafe extern "C" fn() -> bool,
-    pub closest_town: unsafe extern "C" fn(u32, u32) -> *const TownHandle,
     pub town: unsafe extern "C" fn(*mut ShellHandle) -> *const TownHandle,
     pub population: unsafe extern "C" fn(*const TownHandle) -> u32,
     pub town_position: unsafe extern "C" fn(*const TownHandle) -> u32,
@@ -260,7 +259,7 @@ impl Engine<'_> {
         self.success()
     }
     fn find_town(&self, tile: u32, kind: u8) -> Option<*const TownHandle> {
-        let town = unsafe { (self.x.closest_town)(tile, u32::MAX) };
+        let town = crate::town::spatial::closest(unsafe { &*self.s.shared }, tile, u32::MAX);
         if !unsafe { (self.x.multiple_per_town)() } {
             for n in 0..self.registry_count(kind) {
                 let shell = unsafe { (self.x.industry)(self.registry_id(kind, n)) };
@@ -699,7 +698,7 @@ unsafe extern "C" fn location_visit(context: *mut c_void, shell: *mut ShellHandl
         (*owner).metadata.kind = call.kind;
         (*owner).metadata.selected_layout = call.layout_index as u8;
     }
-    let town = unsafe { (e.x.closest_town)(call.tile, u32::MAX) };
+    let town = crate::town::spatial::closest(unsafe { &*e.s.shared }, call.tile, u32::MAX);
     unsafe {
         (e.c.set_town)(shell.cast(), town);
         (*owner).metadata.random = call.bits;

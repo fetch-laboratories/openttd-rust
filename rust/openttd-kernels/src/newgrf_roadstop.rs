@@ -105,7 +105,6 @@ pub struct Services {
     pub tile_random: unsafe extern "C" fn(*const BaseStation, u32) -> u8,
     pub town: unsafe extern "C" fn(*const BaseStation) -> *mut TownHandle,
     pub town_tile: unsafe extern "C" fn(*const TownHandle) -> u32,
-    pub town_zone: unsafe extern "C" fn(*const TownHandle, u32) -> u8,
     pub version: unsafe extern "C" fn(*const c_void) -> u8,
     pub waiting: unsafe extern "C" fn(*const BaseStation) -> u8,
 }
@@ -172,7 +171,7 @@ fn state(
 }
 unsafe fn town(c: State, s: &Services) -> *mut TownHandle {
     if c.station.is_null() {
-        (s.shared().closest_town)(c.tile, u32::MAX).cast_mut()
+        crate::town::spatial::closest(s.shared(), c.tile, u32::MAX).cast_mut()
     } else {
         unsafe { (s.town)(c.station) }
     }
@@ -257,7 +256,7 @@ unsafe fn variable(
             }
             let xy = unsafe { (s.town_tile)(t) };
             return if variable == 0x45 {
-                (u32::from(unsafe { (s.town_zone)(t, c.tile) }) << 16)
+                (u32::from(unsafe { crate::town::radius_from_shell(s.shared(), t, c.tile) }) << 16)
                     | s.map().distance_manhattan(c.tile, xy).min(65535)
             } else {
                 s.map().distance_square(c.tile, xy)
@@ -764,7 +763,7 @@ crate::abi::layouts! {
     "OpenTTDRoadStopSpecVacancy" ["station_service"] => SpecVacancy { spec, grfid, };
     "OpenTTDRoadStopSpecTriggers" ["station_service"] => SpecTriggers { animation, cargo, };
     "OpenTTDRoadStopReseed" ["station_service"] => Reseed { reseed, used, };
-    "OpenTTDRoadStopResolverServices" ["station_service"] => Services { rebind, badges, base_scope, build_date, by_tile, cached_cargo, clear, company, custom, facilities, frame, group, group_cargo, group_count, index, is_station, make_town, nearby, nearby_info, owner, random_bits, resize, resolve_callback, resolve_reseed, set_cached, set_random_bits, set_slot, set_tile_random, set_waiting, shared, slot_grfid, slot_key, slot_spec, slot_vacancy, spec_cargo, spec_count, spec_file, spec_grfid, spec_local_id, spec_triggers, station_id, terrain, tile, tile_count, tile_random, town, town_tile, town_zone, version, waiting, };
+    "OpenTTDRoadStopResolverServices" ["station_service"] => Services { rebind, badges, base_scope, build_date, by_tile, cached_cargo, clear, company, custom, facilities, frame, group, group_cargo, group_count, index, is_station, make_town, nearby, nearby_info, owner, random_bits, resize, resolve_callback, resolve_reseed, set_cached, set_random_bits, set_slot, set_tile_random, set_waiting, shared, slot_grfid, slot_key, slot_spec, slot_vacancy, spec_cargo, spec_count, spec_file, spec_grfid, spec_local_id, spec_triggers, station_id, terrain, tile, tile_count, tile_random, town, town_tile, version, waiting, };
 }
 
 /// Class index limit from `newgrf_roadstop.h`.

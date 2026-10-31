@@ -73,3 +73,5 @@ pub const PR_BUILD_INDUSTRY: usize = 48;
 pub const PR_CLEAR_INDUSTRY: usize = 49;
 /// `PR_BUILD_INDUSTRY_RAW`.
 pub const PR_BUILD_INDUSTRY_RAW: usize = 58;
+/// `PR_CLEAR_HOUSE`.
+pub const PR_CLEAR_HOUSE: usize = 40;

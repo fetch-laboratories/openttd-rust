@@ -56,6 +56,7 @@ mod history_type;
 mod house;
 mod industry_type;
 mod integer;
+mod kdtree;
 mod landscape;
 mod landscape_generation;
 mod landscape_type;

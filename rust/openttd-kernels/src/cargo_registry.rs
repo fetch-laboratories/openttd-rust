@@ -83,6 +83,7 @@ pub struct Services {
     clear_specs: extern "C" fn(u8),
     label_spec: extern "C" fn(Handle) -> LabelSpec,
     bitnum: extern "C" fn(Handle) -> u8,
+    town_acceptance_effect: extern "C" fn(u8) -> u8,
     finalise_spec: extern "C" fn(Handle) -> FinaliseSpec,
     order_spec: extern "C" fn(Handle) -> OrderSpec,
     index: extern "C" fn(Handle) -> u8,
@@ -512,9 +513,23 @@ crate::abi::layouts! {
     "OpenTTDCargoLabels" ["probe"] => Labels {data,size};
     "OpenTTDCargoFile" ["probe"] => File {labels,version,fallback};
     "OpenTTDCargoInvocation" ["probe"] => Invocation {label,file,root,callback,param1,param2};
-    "OpenTTDCargoRegistryServices" ["probe"] => Services {shared,common,spec,copy_default,clear_specs,label_spec,bitnum,finalise_spec,order_spec,index,production,sort,publish_sorted,publish_standard,publish_town,set_file,set_effect,invalidate_strings,file,assign_fallback,resize_fallback,set_fallback,clear_inverse,set_inverse,invocation,callback_frame,sprite_frame,sprite};
+    "OpenTTDCargoRegistryServices" ["probe"] => Services {shared,common,spec,copy_default,clear_specs,label_spec,bitnum,town_acceptance_effect,finalise_spec,order_spec,index,production,sort,publish_sorted,publish_standard,publish_town,set_file,set_effect,invalidate_strings,file,assign_fallback,resize_fallback,set_fallback,clear_inverse,set_inverse,invocation,callback_frame,sprite_frame,sprite};
 }
 
 pub(crate) fn file_cargo_count(file: Handle) -> usize {
     (services().file)(file).labels.size
+}
+
+/// `FindFirstCargoWithTownAcceptanceEffect`, in active cargo-slot order.
+pub(crate) fn first_town_acceptance(effect: u8) -> Option<u8> {
+    let s = services();
+    crate::cargotype::iterate(
+        |cargo| (s.spec)(cargo),
+        |spec| is_cargo_spec_valid((s.bitnum)(*spec)),
+    )
+    .find_map(|(cargo, _spec)| ((s.town_acceptance_effect)(cargo) == effect).then_some(cargo))
+}
+
+pub(crate) fn town_acceptance(cargo: u8) -> u8 {
+    (services().town_acceptance_effect)(cargo)
 }
