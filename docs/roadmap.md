@@ -216,7 +216,7 @@ No user direction is reversed. The restart prompt changed: work loop step 2, and
 | Change since the twenty-fourth review | Verdict and next observation |
 | --- | --- |
 | Opus writes code at medium effort (user, 2026-10-30) | Applied in the Claude Code root sessions; the Codex root used gpt-6.1-sol high. No defect traced to it. |
-| Deep checks only on the user's request (user, 2026-10-31) | Applied: the killed rotation was not restarted. Its two worktrees (64 GB) remain. |
+| Deep checks only on the user's request (user, 2026-10-31) | Applied: the killed rotation was not restarted, and its two worktrees (63 GB) were removed at the user's direction. |
 | Guidance routed from AGENTS.md to task docs (#597, user-directed) | Applied. Its background rule, which named Claude Code only, is finding 1. |
 | Navigation of 2026-10-31 (three commits) | Untested; no root session since. Watch whether #607 lands before other `src/` changes, whether #566 starts, whether phase 1 closes with #559 and #69 and no new owners, and whether stocktakes record the compiled-C++ rate. |
 
@@ -344,8 +344,8 @@ the others show only pending placeholders.
 Keep these unchanged as well: `t3-120ef117` (old #603 at `451ebd778e`),
 `t3-431c84b4` (cancelled #565 source with 58 dirty entries), `t3-d78d5f8b`
 (native fixture evidence at `51ade2d021`), `.local/reference/openttd` at
-`14ec60f248`, the instruction-profile worktrees and the deep evidence. `t3-`
-paths are under `/home/fetch/.t3/worktrees/openttd-rust/`; profile and deep
-worktrees are under the main checkout's `.local/worktrees/`. On resume, remove
+`14ec60f248` and the instruction-profile worktrees. `t3-` paths are under
+`/home/fetch/.t3/worktrees/openttd-rust/`; profile worktrees are under the main
+checkout's `.local/worktrees/`. On resume, remove
 the checkouts of finished reviews, merged #614 and the completed planner under
 [cleanup](workflow.md#cleanup).
