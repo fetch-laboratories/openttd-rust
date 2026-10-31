@@ -924,7 +924,8 @@ impl Ctx<'_> {
             return out.error(0xffff);
         }
         unsafe {
-            (self.command.ownership)(out.0, (self.world().station_owner)(st), 0);
+            self.command
+                .ownership(out.0, (self.world().station_owner)(st), 0);
         }
         if !out.ok() {
             return;
@@ -964,7 +965,7 @@ impl Ctx<'_> {
         let owner = (self.world().station_owner)(st);
         if owner != 0x10 {
             unsafe {
-                (self.command.ownership)(out.0, owner, 0);
+                self.command.ownership(out.0, owner, 0);
             }
             if !out.ok() {
                 return 0xffff;
@@ -1111,7 +1112,7 @@ pub unsafe extern "C" fn openttd_rust_station_open_close_airport(
         return out.error(0xffff);
     }
     unsafe {
-        (c.command.ownership)(out.0, owner, 0);
+        c.command.ownership(out.0, owner, 0);
     }
     if !out.ok() {
         return;
@@ -1802,7 +1803,8 @@ impl Ctx<'_> {
             }
             if (self.shared.current_company)() != 0x11 {
                 unsafe {
-                    (self.command.ownership)(ret.0, (self.world().station_owner)(st), 0);
+                    self.command
+                        .ownership(ret.0, (self.world().station_owner)(st), 0);
                 }
                 error.add(ret);
                 if !error.ok() {
@@ -1930,7 +1932,8 @@ impl Ctx<'_> {
     ) {
         if (self.shared.current_company)() != 0x11 {
             unsafe {
-                (self.command.ownership)(cost.0, (self.world().station_owner)(st), 0);
+                self.command
+                    .ownership(cost.0, (self.world().station_owner)(st), 0);
             }
             if !cost.ok() {
                 return;
@@ -2157,7 +2160,7 @@ impl Ctx<'_> {
                         }
                     } else if !(self.s.stop_on_competitor_road)() && owner != 0x10 {
                         unsafe {
-                            (self.command.ownership)(ret.0, owner, 0);
+                            self.command.ownership(ret.0, owner, 0);
                         }
                         if !ret.ok() {
                             return cost.take(ret);
@@ -2175,7 +2178,7 @@ impl Ctx<'_> {
                         && owner != 0x10
                     {
                         unsafe {
-                            (self.command.ownership)(ret.0, owner, 0);
+                            self.command.ownership(ret.0, owner, 0);
                         }
                         if !ret.ok() {
                             return cost.take(ret);
@@ -2196,7 +2199,7 @@ impl Ctx<'_> {
                         && (!(self.s.stop_on_competitor_road)() || bits.is_power_of_two())
                     {
                         unsafe {
-                            (self.command.ownership)(ret.0, owner, 0);
+                            self.command.ownership(ret.0, owner, 0);
                         }
                         if !ret.ok() {
                             return cost.take(ret);
@@ -2595,7 +2598,8 @@ impl Ctx<'_> {
         };
         if (self.shared.current_company)() != 0x11 {
             unsafe {
-                (self.command.ownership)(cost.0, (self.world().station_owner)(st), 0);
+                self.command
+                    .ownership(cost.0, (self.world().station_owner)(st), 0);
             }
             if !cost.ok() {
                 return;
@@ -3181,7 +3185,8 @@ impl Ctx<'_> {
         let st = self.full_station((self.shared.station_index)(tile));
         if (self.shared.current_company)() != 0x11 {
             unsafe {
-                (self.command.ownership)(cost.0, (self.world().station_owner)(st), 0);
+                self.command
+                    .ownership(cost.0, (self.world().station_owner)(st), 0);
             }
             if !cost.ok() {
                 return;
@@ -3589,7 +3594,7 @@ impl Ctx<'_> {
         let st = self.full_station((self.shared.station_index)(tile));
         let owner = (self.world().station_owner)(st);
         unsafe {
-            (self.command.ownership)(cost.0, owner, 0);
+            self.command.ownership(cost.0, owner, 0);
         }
         if !cost.ok() {
             return;
@@ -3940,7 +3945,7 @@ impl Ctx<'_> {
             let owner = self.road_owner(tile, true);
             if owner != 0x10 {
                 unsafe {
-                    (self.command.ownership)(cost.0, owner, 0);
+                    self.command.ownership(cost.0, owner, 0);
                 }
                 if !cost.ok() {
                     return;
@@ -3968,7 +3973,7 @@ impl Ctx<'_> {
                 }
             } else if owner != 0x10 {
                 unsafe {
-                    (self.command.ownership)(cost.0, owner, 0);
+                    self.command.ownership(cost.0, owner, 0);
                 }
                 if !cost.ok() {
                     return;

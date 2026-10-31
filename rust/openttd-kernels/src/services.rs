@@ -124,6 +124,11 @@ pub struct CommandCostServices {
     pub expense: extern "C" fn(*const CommandCost) -> ExpenseType,
     /// Native `MakeError`, keeping owner and encoded message.
     pub make_error: unsafe extern "C" fn(*mut CommandCost, u32),
+    /// Native owned-by parameter formatting after the local-company decision.
+    pub encode_owned_by:
+        extern "C" fn(*mut CommandCost, crate::company_type::Owner, crate::tile_type::TileIndex),
+    /// Native error-owner metadata.
+    pub error_owner: extern "C" fn(*mut CommandCost, crate::company_type::Owner),
 }
 
 /// Ordinary direct commands. Native result storage retains complete errors and
@@ -147,12 +152,32 @@ pub struct CommandServices {
     pub infrastructure_dirty: extern "C" fn(u8),
     /// Original `CMD_LANDSCAPE_CLEAR`, with actual `DoCommandFlags` width.
     pub landscape_commands: extern "C" fn() -> *const crate::landscape_cmd::LandscapeServices,
-    /// Original `CheckTileOwnership`, preserving native encoded errors.
-    pub tile_ownership: unsafe extern "C" fn(*mut CommandCost, u32),
-    /// Original `CheckOwnership`.
-    pub ownership: unsafe extern "C" fn(*mut CommandCost, u8, u32),
+    /// Company owner for direct ownership checks.
+    pub company: extern "C" fn() -> *const crate::company::Services,
     /// Direct Rust occupancy owner, shared by every command.
     pub occupancy: extern "C" fn() -> *const crate::vehicle::occupancy::Commands,
+}
+
+impl CommandServices {
+    /// Ownership checks require a live borrowed native command result.
+    pub(crate) unsafe fn ownership(&self, out: *mut CommandCost, owner: u8, tile: u32) {
+        let company = unsafe { &*(self.company)() };
+        crate::company::check_ownership(
+            company,
+            Cost(out, company.cost),
+            crate::company_type::CompanyID(owner),
+            crate::tile_type::TileIndex(tile),
+        );
+    }
+    /// Tile ownership checks also require a live canonical map interval.
+    pub(crate) unsafe fn tile_ownership(&self, out: *mut CommandCost, tile: u32) {
+        let company = unsafe { &*(self.company)() };
+        crate::company::check_tile_ownership(
+            company,
+            Cost(out, company.cost),
+            crate::tile_type::TileIndex(tile),
+        );
+    }
 }
 
 /// Opaque native town shell. Its address identifies the shell, not the Rust owner.
@@ -645,8 +670,7 @@ crate::abi::layouts! {
         money_error,
         infrastructure_dirty,
         landscape_commands,
-        tile_ownership,
-        ownership,
+        company,
         occupancy,
     };
     "OpenTTDCommandCostServices" ["probe"] => crate::services::CommandCostServices {
@@ -664,6 +688,8 @@ crate::abi::layouts! {
         money,
         expense,
         make_error,
+        encode_owned_by,
+        error_owner,
     };
     "OpenTTDClearSquareServices" ["probe"] => ClearSquareServices {
 
@@ -1346,12 +1372,21 @@ impl Cost<'_> {
     /// `CheckTileOwnership`.
     pub(crate) fn tile_ownership(self, command: &CommandServices, tile: u32) {
         // SAFETY: The impl contract above.
-        unsafe { (command.tile_ownership)(self.0, tile) };
+        crate::company::check_tile_ownership(
+            unsafe { &*(command.company)() },
+            self,
+            crate::tile_type::TileIndex(tile),
+        );
     }
     /// `CheckOwnership`.
     pub(crate) fn ownership(self, command: &CommandServices, owner: u8, tile: u32) {
         // SAFETY: The impl contract above.
-        unsafe { (command.ownership)(self.0, owner, tile) };
+        crate::company::check_ownership(
+            unsafe { &*(command.company)() },
+            self,
+            crate::company_type::CompanyID(owner),
+            crate::tile_type::TileIndex(tile),
+        );
     }
     /// `EnsureNoVehicleOnGround`.
     pub(crate) fn no_vehicle(self, command: &CommandServices, tile: u32) {

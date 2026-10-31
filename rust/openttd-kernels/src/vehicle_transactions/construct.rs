@@ -81,7 +81,7 @@ pub(crate) unsafe fn road(
     let info = (a.road_info)(e, true);
     (a.set_part)(v, info.image, (a.default_cargo)(e), info.capacity, true);
     (k.engine_common)(v, e);
-    (k.service_dates)(v, (b.interval_default)(company, VehicleType::ROAD.0) as u16);
+    (k.service_dates)(v, b.interval_default(company, VehicleType::ROAD.0) as u16);
     (k.build_stamp)(v);
     (a.random_bits)(v, b.shared.random() as u16);
     (k.road_front)(v, e);
@@ -191,7 +191,7 @@ pub(crate) unsafe fn aircraft(
     }
     (k.service_dates)(
         v,
-        (b.interval_default)(company, VehicleType::AIRCRAFT.0) as u16,
+        b.interval_default(company, VehicleType::AIRCRAFT.0) as u16,
     );
     (k.build_stamp)(v);
     (k.build_stamp)(u);

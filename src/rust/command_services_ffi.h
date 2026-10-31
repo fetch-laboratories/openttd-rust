@@ -12,6 +12,7 @@
 #include "command_cost_ffi.h"
 struct OpenTTDOccupancyCommands;
 struct OpenTTDCompanyFinanceServices;
+struct OpenTTDCompanyServices;
 struct OpenTTDLandscapeCommandServices;
 struct OpenTTDCommandServices {
 	bool (*enter)() noexcept OPENTTD_SERVICE_DEFAULT(enter);
@@ -21,8 +22,7 @@ struct OpenTTDCommandServices {
 	void (*money_error)(OpenTTDCommandCost *, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(money_error);
 	void (*infrastructure_dirty)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(infrastructure_dirty);
 	const OpenTTDLandscapeCommandServices *(*landscape_commands)() noexcept OPENTTD_SERVICE_DEFAULT(landscape_commands);
-	void (*tile_ownership)(OpenTTDCommandCost *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_ownership);
-	void (*ownership)(OpenTTDCommandCost *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ownership);
+	const OpenTTDCompanyServices *(*company)() noexcept OPENTTD_SERVICE_DEFAULT(company);
 	const OpenTTDOccupancyCommands *(*occupancy)() noexcept OPENTTD_SERVICE_DEFAULT(occupancy);
 };
 const OpenTTDCommandServices &GetRustCommandServices() noexcept;

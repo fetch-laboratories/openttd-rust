@@ -52,7 +52,7 @@
 ## Company identity, faces and liveries
 
 - Rust owns: company colour/name/president generation, manager-face validation/bit helpers, livery propagation, identity commands, engine livery-scheme selection and company-colour cache.
-- C++ keeps: company/vehicle shells and other fields, face tables and string rendering; console face parsing, local company selection and network allow lists remain with existing owners.
+- C++ keeps: company/vehicle shells and other fields, face tables and string rendering; console face parsing and network key containers remain native.
 - PRs: #579.
 
 ## Company finances and economy lifecycle
@@ -108,3 +108,10 @@
 - C++ keeps: native pools and records, canonical whole station/waypoint tile areas, qualified base sign movement and waypoint presentation, viewport indices, script/news/sound operations, and one stateless STL median-selection/strict-partition primitive. Each subtree with at least two IDs calls the primitive once; tree state and traversal remain Rust-owned.
 - Limits: External NewGRF programs, historical station saves and GUI/game-thread presentation are outside the bounded default fixtures (#156). Native STL permutation and consumer observations are fixture-only support; configured-platform results remain validation work until their checks run.
 - PRs: #612 (draft).
+
+## Company control, ownership checks and defaults (#610)
+
+- Rust owns: local-company transitions, ownership assertions/errors, allow-list validation and notification eligibility, first-playable selection and service-interval dispatch. Company, session, generation, command and vehicle consumers enter the existing owners directly.
+- C++ keeps: company shells and pool operations, current/local context and settings storage, key Add/Remove containers, encoded owner formatting, presentation and nested service commands.
+- Limits: Actual network packets, client/admin delivery, GUI rendering and terminating assertion paths remain outside the bounded native/reload evidence (#156). Interactive RNG is carried explicitly across reload because the save omits it.
+- PRs: #611.
