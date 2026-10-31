@@ -260,7 +260,6 @@ rebound | RustLinkGraphGet | src/linkgraph/linkgraphschedule.cpp | graph_get
 rebound | RustLinkGraphGet | src/rust/services.cpp | get
 rebound | RustLinkGraphNext | src/linkgraph/linkgraphschedule.cpp | next_graph
 rebound | RustLinkGraphNext | src/timer/timer_game_common.cpp | next_graph
-rebound | RustLocalCompanyID | src/genworld.cpp | local_company
 rebound | RustLocalCompanyID | src/rust/company_adapter.cpp | local_company
 rebound | RustLocalCompanyID | src/rust/engine_adapter.hpp | local_company
 rebound | RustLocalCompanyID | src/subsidy.cpp | local_company
@@ -339,8 +338,6 @@ rebound | RustSelectedHangarTile | src/newgrf_airport.cpp | hangar_tile
 rebound | RustSelectedHangarTile | src/rust/station_command_services.hpp | hangar_tile
 rebound | RustSetCurrentCompanyID | src/rust/company_adapter.cpp | set_current_company
 rebound | RustSetCurrentCompanyID | src/rust/fleet_pending_services.hpp | set_current
-rebound | RustSetLocalCompany | src/genworld.cpp | set_local_company
-rebound | RustSetLocalCompany | src/rust/company_adapter.cpp | set_local_company
 rebound | RustSetRailStationReservation | src/pbs.cpp | set_station
 rebound | RustSetRailStationReservation | src/rust/station_command_services.hpp | set_rail_station_reservation
 rebound | RustSetTileHeight | src/landscape.cpp | set_height

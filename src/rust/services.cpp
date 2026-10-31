@@ -135,6 +135,8 @@ static uint32_t CostErrorMessage(const OpenTTDCommandCost *cost) noexcept { retu
 static int64_t CostMoney(const OpenTTDCommandCost *cost) noexcept { return NativeCost(cost)->GetCost(); }
 static ExpensesType CostExpense(const OpenTTDCommandCost *cost) noexcept { const auto expense = NativeCost(cost)->GetExpensesType(); assert(expense != INVALID_EXPENSES); return expense; }
 static void CostMakeError(OpenTTDCommandCost *cost, uint32_t message) noexcept { NativeCost(cost)->MakeError(message); }
+static void CostEncodeOwnedBy(OpenTTDCommandCost *out, uint8_t owner, uint32_t tile) noexcept { RustEncodeOwnedBy(*NativeCost(out), Owner(owner), TileIndex(tile)); }
+static void CostErrorOwner(OpenTTDCommandCost *out, uint8_t owner) noexcept { NativeCost(out)->SetErrorOwner(Owner(owner)); }
 const OpenTTDCommandCostServices &GetRustCommandCostServices() noexcept
 {
 	static const OpenTTDCommandCostServices services{
@@ -143,6 +145,7 @@ const OpenTTDCommandCostServices &GetRustCommandCostServices() noexcept
 		.error_param = CostErrorParam, .add = CostAdd, .move = CostMove,
 		.amount = CostAmount, .success = CostSuccess, .error_message = CostErrorMessage, .money = CostMoney,
 		.expense = CostExpense, .make_error = CostMakeError,
+		.encode_owned_by = CostEncodeOwnedBy, .error_owner = CostErrorOwner,
 	};
 	return services;
 }
@@ -151,8 +154,6 @@ const OpenTTDCommandCostServices &GetRustCommandCostServices() noexcept
  * save/load code. They may reenter Rust owners, but ordinary play cannot unwind
  * these leaves; allocation/error-formatting failures terminate under noexcept.
  * The native returned object is moved whole into its caller's stack sink. */
-static void CommandTileOwnership(OpenTTDCommandCost *out, uint32_t tile) noexcept { *NativeCost(out) = CheckTileOwnership(TileIndex{tile}); }
-static void CommandOwnership(OpenTTDCommandCost *out, uint8_t owner, uint32_t tile) noexcept { *NativeCost(out) = CheckOwnership(Owner(owner), TileIndex{tile}); }
 static bool CommandInfiniteMoney() noexcept { return _settings_game.difficulty.infinite_money; }
 static void CommandMoneyError(OpenTTDCommandCost *cost, int64_t amount) noexcept
 {
@@ -172,7 +173,7 @@ const OpenTTDCommandServices &GetRustCommandServices() noexcept
 		.infinite_money = CommandInfiniteMoney, .money_error = CommandMoneyError,
 		.infrastructure_dirty = RustInfrastructureDirty,
 		.landscape_commands = []() noexcept { return &GetRustLandscapeCommandServices(); },
-		.tile_ownership = CommandTileOwnership, .ownership = CommandOwnership,
+		.company = []() noexcept { return &GetRustCompanyServices(); },
 		.occupancy = GetRustOccupancyCommands,
 	};
 	return services;

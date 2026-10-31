@@ -33,6 +33,8 @@ struct OpenTTDCommandCostServices {
 	int64_t (*money)(const OpenTTDCommandCost *) noexcept OPENTTD_SERVICE_DEFAULT(money);
 	ExpensesType (*expense)(const OpenTTDCommandCost *) noexcept OPENTTD_SERVICE_DEFAULT(expense);
 	void (*make_error)(OpenTTDCommandCost *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(make_error);
+	void (*encode_owned_by)(OpenTTDCommandCost *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(encode_owned_by);
+	void (*error_owner)(OpenTTDCommandCost *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(error_owner);
 };
 const OpenTTDCommandCostServices &GetRustCommandCostServices() noexcept;
 #endif /* RUST_COMMAND_COST_FFI_H */

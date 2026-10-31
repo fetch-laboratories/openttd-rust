@@ -11,3 +11,7 @@ pub const WC_VEHICLE_DETAILS: u16 = 23;
 pub const WC_BUILD_VEHICLE: u16 = 54;
 pub const WC_ENGINE_PREVIEW: u16 = 88;
 pub const WC_GAME_OPTIONS: u16 = 91;
+pub const WC_COMPANY: u16 = 51;
+pub const WC_SIGN_LIST: u16 = 36;
+pub const WC_COMPANY_COLOUR: u16 = 28;
+pub const WC_SEND_NETWORK_MSG: u16 = 72;

@@ -1487,3 +1487,5 @@ mod story_base;
 mod story_type;
 mod void_map;
 mod window_type;
+
+mod network_type;

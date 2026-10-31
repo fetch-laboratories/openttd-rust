@@ -31,9 +31,6 @@ struct OpenTTDWorldServices {
 	const OpenTTDDisasterServices *disasters;
 	bool (*modal)() noexcept OPENTTD_SERVICE_DEFAULT(modal);
 	void (*set_modal)(bool) noexcept OPENTTD_SERVICE_DEFAULT(set_modal);
-	uint8_t (*local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
-	void (*set_local_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_local_company);
-	void (*restore_companies)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(restore_companies);
 	bool (*initialize)(OpenTTDWorldSetupFrame *, uint32_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(initialize);
 	void (*prepare_progress)() noexcept OPENTTD_SERVICE_DEFAULT(prepare_progress);
 	OpenTTDWorldSettings (*settings)() noexcept OPENTTD_SERVICE_DEFAULT(settings);

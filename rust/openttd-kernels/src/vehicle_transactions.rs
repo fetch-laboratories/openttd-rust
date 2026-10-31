@@ -42,7 +42,6 @@ pub struct TransactionServices {
     pub set_name: extern "C" fn(*mut (), ByteSpan),
     pub name_dirty: extern "C" fn(*mut ()),
     pub interval_percent: extern "C" fn(u8) -> bool,
-    pub interval_default: extern "C" fn(u8, u8) -> i32,
     pub interval_clamp: extern "C" fn(i32, bool) -> u16,
     pub set_interval: extern "C" fn(*mut (), u16, bool, bool),
     pub unique_name: u32,
@@ -75,7 +74,7 @@ unsafe fn owned_primary(s: &TransactionServices, cost: *mut CommandCost, id: u32
         (s.cost.error)(cost, ERROR);
         return (std::ptr::null_mut(), 0);
     }
-    unsafe { (s.commands.ownership)(cost, target.owner, 0) };
+    unsafe { s.commands.ownership(cost, target.owner, 0) };
     if !(s.cost.success)(cost) {
         return (std::ptr::null_mut(), 0);
     }
@@ -149,7 +148,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_service_interval(
             return (s.cost.error)(cost, ERROR);
         }
     } else {
-        interval = (s.interval_default)(owner, unsafe { (s.groups.vehicle_type)(v) }) as u16;
+        interval = s.interval_default(owner, unsafe { (s.groups.vehicle_type)(v) }) as u16;
     }
     if flags & DoCommandFlag::EXECUTE != 0 {
         (s.set_interval)(v, interval, custom, percent);
@@ -476,7 +475,10 @@ pub(crate) unsafe fn sell(
         return (b.cost.error)(cost, ERROR);
     }
     let front = unsafe { (s.transactions.first)(v) };
-    unsafe { (b.commands.ownership)(cost, (b.groups.vehicle_owner)(front), 0) };
+    unsafe {
+        b.commands
+            .ownership(cost, (b.groups.vehicle_owner)(front), 0)
+    };
     if !(b.cost.success)(cost) {
         return;
     }
@@ -655,6 +657,17 @@ crate::abi::layouts! {
     };
     "OpenTTDVehicleTransactionServices" ["probe"] => TransactionServices {
         shared, commands, cost, groups, target, name, clear_name, set_name, name_dirty,
-        interval_percent, interval_default, interval_clamp, set_interval, unique_name, max_name,
+        interval_percent, interval_clamp, set_interval, unique_name, max_name,
     };
+}
+
+impl TransactionServices {
+    pub(crate) fn interval_default(&self, owner: u8, kind: u8) -> i32 {
+        let company = unsafe { &*(self.commands.company)() };
+        crate::company::service_interval(
+            unsafe { &*(company.settings)() },
+            Some(crate::company_type::CompanyID(owner)),
+            kind,
+        )
+    }
 }

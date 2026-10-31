@@ -143,9 +143,6 @@ pub struct WorldServices {
     pub disasters: *const crate::disaster::Services,
     pub modal: extern "C" fn() -> bool,
     pub set_modal: extern "C" fn(bool),
-    pub local_company: extern "C" fn() -> CompanyID,
-    pub set_local_company: extern "C" fn(CompanyID),
-    pub restore_companies: extern "C" fn(CompanyID),
     pub initialize: extern "C" fn(*mut SetupFrame, u32, u32, bool) -> bool,
     pub prepare_progress: extern "C" fn(),
     pub settings: extern "C" fn() -> Settings,
@@ -278,8 +275,12 @@ pub(crate) unsafe fn setup(
     (s.set_modal)(true);
     write_field!(INFO.get(), abort, false);
     write_field!(INFO.get(), abort_callback, None);
-    write_field!(INFO.get(), local_company, (s.local_company)());
-    (s.set_local_company)(CompanyID::SPECTATOR);
+    write_field!(
+        INFO.get(),
+        local_company,
+        CompanyID((unsafe { &*(*s.company).services }.local_company)())
+    );
+    crate::company::set_local_company(unsafe { &*(*s.company).services }, CompanyID::SPECTATOR);
     if !(s.initialize)(
         frame,
         read_field!(INFO.get(), size_x),
@@ -617,7 +618,10 @@ impl World<'_> {
         self.storage_mode(crate::newgrf_storage::PSM_LEAVE_GAMELOOP, false);
         (s.reset_object)();
         (s.trash_company)(self.frame);
-        (s.restore_companies)(read_field!(INFO.get(), local_company));
+        (unsafe { &*(*s.company).services }.assign_company_context)(read_field!(
+            INFO.get(),
+            local_company
+        ));
         if crate::session::mode() != GameMode::MENU {
             (s.show_windows)();
         }
@@ -625,7 +629,10 @@ impl World<'_> {
         match read_field!(INFO.get(), done) {
             Completion::Native(Some(callback)) => native((s.callback)(self.frame, Some(callback)))?,
             Completion::Native(None) => {}
-            Completion::Editor => (s.set_local_company)(CompanyID::NONE),
+            Completion::Editor => crate::company::set_local_company(
+                unsafe { &*(*s.company).services },
+                CompanyID::NONE,
+            ),
             Completion::NewGame => {
                 let frame = (s.session_frame)(self.frame);
                 crate::session::new_game_done(unsafe { &*s.session }, frame);
@@ -694,9 +701,6 @@ crate::abi::layouts! {
         disasters,
         modal,
         set_modal,
-        local_company,
-        set_local_company,
-        restore_companies,
         initialize,
         prepare_progress,
         settings,

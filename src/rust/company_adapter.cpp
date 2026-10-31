@@ -57,6 +57,9 @@
 #include "../waypoint_base.h"
 #include "../window_func.h"
 #include "company_adapter.h"
+#include "command_services.h"
+#include "settings_table_ffi.h"
+#include "objectives_ffi.h"
 #include "company_services.h"
 #include "company_identity_ffi.h"
 #include "object_ffi.h"
@@ -89,6 +92,8 @@ static_assert(CalendarTime::DAYS_IN_YEAR * 2 == 730 && PR_END == 71 && MAX_COMPA
 static_assert(RAILTYPE_END == 64 && ROADTYPE_END == 63 && MAX_HISTORY_QUARTERS == 24 && EXPENSES_END == 13);
 static_assert(CompanyID::Invalid().base() == 255 && OWNER_NONE.base() == 16 && OWNER_DEITY.base() == 18 && CRR_END == 3);
 static_assert(CalendarTime::ORIGINAL_BASE_YEAR.base() == 1920 && CalendarTime::ORIGINAL_MAX_YEAR.base() == 2090);
+static_assert(DESTTYPE_TEAM == 1 && OWNER_END.base() == 19 && NETWORK_PUBLIC_KEY_LENGTH == 65 && CALCA_ADD == 0 && CALCA_REMOVE == 1);
+static_assert(WC_COMPANY == 51 && WC_SIGN_LIST == 36 && WC_COMPANY_COLOUR == 28 && WC_SEND_NETWORK_MSG == 72);
 static_assert(RATING_INITIAL == 500 && VEH_TRAIN == 0 && VEH_ROAD == 1 && VEH_SHIP == 2 && VEH_AIRCRAFT == 3);
 
 /** Next pool item at or after @p from whose owner field is @p owner. */
@@ -311,12 +316,9 @@ static void Co_delete_vehicle(uint32_t id) noexcept { delete Vehicle::Get(id); }
 static void Co_count_group_engine(uint32_t id, int32_t delta) noexcept { GroupStatistics::CountEngine(Vehicle::Get(id), delta); }
 static void Co_count_group_vehicle(uint32_t id, int32_t delta) noexcept { GroupStatistics::CountVehicle(Vehicle::Get(id), delta); }
 /** The original's CompanyServiceInterval argument evaluation and nested command. */
-static void Co_reset_service_interval(uint32_t id, uint8_t company) noexcept
+static void Co_reset_service_interval(uint32_t id, int32_t interval, bool percent) noexcept
 {
-	const Vehicle *v = Vehicle::Get(id);
-	const Company *c = Company::Get(company);
-	int interval = CompanyServiceInterval(c, v->type);
-	Command<CMD_CHANGE_SERVICE_INT>::Do({DoCommandFlag::Execute, DoCommandFlag::Bankrupt}, v->index, interval, false, RustCompanyServiceIntervalPercent(c->index.base()));
+	Command<CMD_CHANGE_SERVICE_INT>::Do({DoCommandFlag::Execute, DoCommandFlag::Bankrupt}, VehicleID(id), interval, false, percent);
 }
 /** Owner write and its cache invalidation, consecutive in the original. */
 static void Co_set_vehicle_owner(uint32_t id, uint8_t owner) noexcept
@@ -401,12 +403,27 @@ const OpenTTDClockCompany &GetRustClockCompanyServices() noexcept
 	return services;
 }
 
+static void Co_close_construction_windows() noexcept { CloseConstructionWindows(); }
+static bool Co_allow_list_add(uint8_t id, OpenTTDByteSpan key) noexcept { return Company::Get(id)->allow_list.Add({reinterpret_cast<const char *>(key.data), key.size}); }
+static bool Co_allow_list_remove(uint8_t id, OpenTTDByteSpan key) noexcept { return Company::Get(id)->allow_list.Remove({reinterpret_cast<const char *>(key.data), key.size}); }
+static void Co_allow_list_changed() noexcept
+{
+	InvalidateWindowData(WC_CLIENT_LIST, 0);
+	SetWindowDirty(WC_COMPANY, _current_company);
+}
 const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 {
 	/* Construct process-lifetime C++ views before Rust accesses their storage. */
 	(void)GetRustEconomy(); (void)GetRustPrices(); (void)GetRustCompanyScores();
 	static const OpenTTDCompanyServices services{
 		.identity = &GetRustCompanyIdentityServices(), .finance = &GetRustCompanyFinanceServices(), .shared = &GetRustSharedServices(),
+		.cost = &GetRustCommandCostServices(),
+		.objectives = []() noexcept { return &GetRustObjectivesServices(); },
+		.settings = []() noexcept { return &GetRustSettingServices(); },
+		.assign_company_context = RustRestoreGenerationCompanies,
+		.close_construction_windows = Co_close_construction_windows,
+		.allow_list_add = Co_allow_list_add, .allow_list_remove = Co_allow_list_remove,
+		.allow_list_changed = Co_allow_list_changed, .owned_by = STR_ERROR_OWNED_BY,
 		.company_next = RustCompanyRefNext,
 		.company_count = Co_company_count, .can_allocate_company = Co_can_allocate_company,
 		.local_company = RustLocalCompanyID, .network_server = RustNetworkServer,
@@ -435,7 +452,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.assert_new_ai_slot = Co_assert_new_ai_slot, .company_bankrupt_news = Co_company_bankrupt_news,
 		.stop_ai = Co_stop_ai, .delete_company = Co_delete_company, .company_removed = Co_company_removed,
 		.merger_news = Co_merger_news, .acquisition_windows = Co_acquisition_windows,
-		.clients_to_spectators = Co_clients_to_spectators, .set_local_company = RustSetLocalCompany,
+		.clients_to_spectators = Co_clients_to_spectators,
 		.subsidies = RustSubsidyServices,
 		.town_next = Co_town_next, .town_rating = Co_town_rating,
 		.set_town_rating = Co_set_town_rating, .set_town_exclusivity = Co_set_town_exclusivity,
