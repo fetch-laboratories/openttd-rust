@@ -325,7 +325,7 @@ int main()
 {
 	static const OpenTTDMovementServices movement{.native_assert = [](bool condition) noexcept { if (!condition) std::abort(); }};
 	static auto shared = OpenTTDFixtureSharedServices(nullptr, nullptr);
-	shared.movement_services = []() noexcept { return &movement; };
+	shared.movement = &movement;
 	static std::array<uint32_t, 32> labels;
 	for (uint32_t cargo = 0; cargo < labels.size(); ++cargo) labels[cargo] = cargo == 31 ? UINT32_MAX : (cargo * 3 + 2) % 64 + 1;
 	static const OpenTTDCargoRegistryServices registry{

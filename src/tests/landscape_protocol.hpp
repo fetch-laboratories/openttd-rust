@@ -9,6 +9,7 @@
 #ifndef TESTS_LANDSCAPE_PROTOCOL_HPP
 #define TESTS_LANDSCAPE_PROTOCOL_HPP
 #include "../../tools/simulation/session-fixture.hpp"
+#include "fixture_map.hpp"
 #include "../tile_cmd.h"
 #include "../rust/landscape_loop_ffi.h"
 #include "../rust/station_lifecycle_ffi.h"
@@ -48,7 +49,10 @@ template<typename Check> void Run(Check check)
 	calls = reads = seen = 0;
 	expected_tile = 1;
 	passed = true;
+	/* A zero-size map selects the callback backend for every tile read. */
+	const OpenTTDFixtureMap callbacks{0};
 	auto shared = OpenTTDSharedServices{};
+	shared.map = &callbacks.statics;
 	shared.tile_type = Type;
 	shared.station_type = [](uint32_t) noexcept { return StationType::End; };
 	/* The Rust station loop's first native call is GetByTile. */
@@ -64,7 +68,6 @@ template<typename Check> void Run(Check check)
 	objects.loop_policy = ProbeObjectPolicy;
 	const OpenTTDLandscapeLoopServices services{
 		.shared = &shared,
-		.tile_types = {},
 		.trees = nullptr,
 		.industry = {},
 		.ground = {},

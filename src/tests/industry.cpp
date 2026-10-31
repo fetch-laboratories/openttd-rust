@@ -10,6 +10,7 @@
 #include "../3rdparty/catch2/catch.hpp"
 #include "../industry.h"
 #include "abi_layout.hpp"
+#include "fixture_map.hpp"
 #include "../rust/industry_generation_adapter.hpp"
 #include "../rust/industry_shell_services.h"
 #include "../rust/industry_resolver_ffi.h"
@@ -402,12 +403,10 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 	generation.spec = [](uint8_t kind) noexcept -> const OpenTTDIndustrySpecHandle * { CHECK(kind == 7); trace.push_back(0); return reinterpret_cast<const OpenTTDIndustrySpecHandle *>(&industry_spec); };
 	commands.owner = RustIndustryCanonicalOwner<Industry *>;
 	construction.set_town = [](void *shell, const OpenTTDTownHandle *town) noexcept { CHECK(town == nullptr); static_cast<Industry *>(shell)->town = nullptr; };
-	static const OpenTTDMovementServices movement = [] {
-		auto m = OpenTTDMovementServices{};
-		m.tile_types = []() noexcept -> OpenTTDTileTypeAllocation { return {}; };
-		return m;
-	}();
-	shared.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
+	const OpenTTDFixtureMap map{Map::LogX()};
+	shared.map = &map.statics;
+	static const OpenTTDMovementServices movement{};
+	shared.movement = &movement;
 	shared.tile_type = [](uint32_t tile) noexcept -> uint8_t { CHECK(tile == 123); CHECK(openttd_rust_industry_metadata(active_owner)->random == 0); trace.push_back(2); return MP_CLEAR; };
 	shared.town_count = []() noexcept -> size_t { return 0; };
 	transaction.temporary_shell = [](OpenTTDIndustry *owner, void *context, OpenTTDIndustryTemporaryVisit visit) noexcept {

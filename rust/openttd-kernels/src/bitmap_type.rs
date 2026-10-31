@@ -169,7 +169,7 @@ pub unsafe extern "C" fn openttd_rust_bitmap_set(
     shared: *const crate::services::Services,
 ) {
     let s = unsafe { &*shared };
-    let map = Map::from_log_x((s.map_log_x)());
+    let map = s.map();
     unsafe { (*bitmap).set_tile(tile, map, |ok| crate::movement::native_assert(s, ok)) };
 }
 /// Native `HasTile`.
@@ -182,7 +182,7 @@ pub unsafe extern "C" fn openttd_rust_bitmap_has(
     shared: *const crate::services::Services,
 ) -> bool {
     let s = unsafe { &*shared };
-    let map = Map::from_log_x((s.map_log_x)());
+    let map = s.map();
     unsafe { (*bitmap).has_tile(tile, map, |ok| crate::movement::native_assert(s, ok)) }
 }
 

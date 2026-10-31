@@ -7,6 +7,7 @@
 
 /** @file windows-abi.cpp Bounded first-32-bit layout and real C ABI call checks. */
 #include "stdafx.h"
+#include "tests/fixture_map.hpp"
 #include "ground_vehicle.hpp"
 #include "3rdparty/monocypher/monocypher.h"
 #include "misc/history_type.hpp"
@@ -128,7 +129,8 @@ static void Calls()
 		founding.found_setting = []() noexcept { return TF_CUSTOM_LAYOUT; };
 		founding.can_allocate = []() noexcept { return true; };
 		/* TileXY(32, 32) on a 64x64 map is 32 tiles from every edge. */
-		shared.map_log_x = []() noexcept -> uint32_t { return 6; };
+		const OpenTTDFixtureMap map{6};
+		shared.map = &map.statics;
 		shared.map_max_y = []() noexcept -> uint32_t { return 63; };
 		openttd_rust_town_simulation(owner)->xy = 2080;
 		shared.town_count = []() noexcept -> size_t { return 1; };

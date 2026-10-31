@@ -32,7 +32,10 @@ inline void OPENTTD_RUST_CALL WaterProbeDebug(uint8_t, int32_t, int32_t) noexcep
  * the ship AI corpus cannot reach: YAPF visitors do not execute world commands. */
 template <typename Check> void Run(Check check)
 {
-	FollowerFixture map{32, 32};
+	/* The cache's 32 by 32 map has a readable void southern guard for follower probes. */
+	FollowerFixture map{32, 64};
+	for (uint32_t tile = static_cast<uint32_t>(water.size()); tile < map.tiles.size; ++tile) map.Tile(tile, MP_VOID);
+	map.movement.tile_flat = [](uint32_t) noexcept { ++tracks_calls; return true; };
 	auto &world = map.shared;
 	world.tile_type = WaterType;
 	const OpenTTDWaterLeaves leaves{.shared = &world, .aqueduct = Aqueduct, .debug = WaterProbeDebug};
@@ -46,6 +49,7 @@ template <typename Check> void Run(Check check)
 	openttd_rust_water_invalidate(owner.get(), &leaves, 0);
 	check(openttd_rust_water_label(owner.get(), &leaves, 0) == 1);
 	const auto queries = tracks_calls;
+	check(queries > 0);
 	check(openttd_rust_water_label(owner.get(), &leaves, 0) == 1 && tracks_calls == queries);
 	OpenTTDWaterSnapshot snapshot{};
 	openttd_rust_water_snapshot(owner.get(), &leaves, 0, &snapshot);

@@ -2,6 +2,7 @@
 #ifndef SIMULATION_SESSION_FIXTURE_HPP
 #define SIMULATION_SESSION_FIXTURE_HPP
 #include "../../src/rust/session_ffi.h"
+#include "../../src/tests/fixture_map.hpp"
 #include "../../src/rust/fleet_ffi.h"
 #include "../../src/rust/station_lifecycle_ffi.h"
 #include "../../src/rust/roadstop_resolver_ffi.h"
@@ -13,6 +14,7 @@
 struct SessionFixture {
 	static inline SessionFixture *active = nullptr;
 	SessionFixture *previous = active;
+	OpenTTDFixtureMap map{6};
 	OpenTTDSharedServices shared{};
 	OpenTTDClockServices clock{};
 	OpenTTDLandscapeLoopServices tiles{};
@@ -48,7 +50,7 @@ struct SessionFixture {
 	SessionFixture()
 	{
 		active = this;
-		shared.map_log_x = []() noexcept -> uint32_t { return 6; };
+		shared.map = &map.statics;
 		shared.tile_type = [](uint32_t) noexcept -> uint8_t { return 5; };
 		tiles.shared = &shared;
 		/* Station tiles enter the Rust tile loop; its first native call is GetByTile. */

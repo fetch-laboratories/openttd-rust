@@ -164,7 +164,32 @@ class HousekeepingTests(unittest.TestCase):
             *(["--detach"] if detached else ["-b", name]),
             str(tree),
         )
+        self.age(tree, 2 * housekeeping.RUNNING_SECONDS)
         return tree
+
+    def age(self, tree: Path, seconds: float) -> None:
+        """Date the admin HEAD, index, reflog and top-level files SECONDS ago."""
+        admin = Path(git(tree, "rev-parse", "--absolute-git-dir").strip())
+        marks = [admin / "HEAD", admin / "index", admin / "logs/HEAD"]
+        marks += [child for child in tree.iterdir() if child.is_file()]
+        when = time.time() - seconds
+        for mark in marks:
+            if mark.exists():
+                os.utime(mark, (when, when))
+
+    def test_recently_active_t3_task_is_kept(self) -> None:
+        """A detached, clean task without a live cwd is kept while its admin HEAD is recent."""
+        tree = self.t3_tree("t3-active", detached=True)
+        admin = Path(git(tree, "rev-parse", "--absolute-git-dir").strip())
+        os.utime(admin / "HEAD")
+        entries = housekeeping.list_worktrees(self.main)[1:]
+        items = housekeeping.plan_worktrees(self.main, entries, pr_state)
+        item = next(i for i in items if i.path == tree)
+        self.assertFalse(item.remove, item.reason)
+        self.assertIn("active", item.reason)
+        self.age(tree, housekeeping.RUNNING_SECONDS + 60)
+        items = housekeeping.plan_worktrees(self.main, entries, pr_state)
+        self.assertTrue(next(i for i in items if i.path == tree).remove)
 
     def test_finished_t3_and_protected_tasks(self) -> None:
         finished = self.t3_tree("t3-finished")
@@ -497,6 +522,29 @@ class HousekeepingTests(unittest.TestCase):
             child_write(child)
             self.assertEqual(path.read_text(), "xvisible\n")
 
+    def test_unreadable_output_subdirectory_fails_closed(self) -> None:
+        folder = self.main / ".local/coverage/unreadable"
+        path = write(folder / "private/output.log")
+        with held_output(path, unreadable=True) as child:
+            (self.proc / str(child.pid)).symlink_to(Path("/proc") / str(child.pid))
+            item = housekeeping.Item(folder, True, "idle output")
+            path.parent.chmod(stat.S_IXUSR)
+            try:
+                handles, error = housekeeping.open_outputs()
+                self.assertIsNotNone(error)
+                self.assertIn(
+                    "cannot inspect output candidate",
+                    housekeeping.output_refusal(folder, handles, error) or "",
+                )
+                self.assertIn(
+                    "cannot inspect output candidate",
+                    housekeeping.remove(self.main, item) or "",
+                )
+            finally:
+                path.parent.chmod(stat.S_IRWXU)
+            child_write(child)
+            self.assertEqual(path.read_text(), "xvisible\n")
+
     def test_opened_after_planning_is_protected_at_removal(self) -> None:
         path = write(self.main / ".local/late.log")
         item = next(
@@ -512,6 +560,40 @@ class HousekeepingTests(unittest.TestCase):
             self.assertEqual(path.read_text(), "xvisible\n")
         self.assertIsNone(housekeeping.remove(self.main, item))
         self.assertFalse(path.exists())
+
+    def test_replaced_output_candidates_are_kept(self) -> None:
+        for directory, during in (
+            (False, False),
+            (False, True),
+            (True, False),
+            (True, True),
+        ):
+            with self.subTest(directory=directory, during_inspection=during):
+                path = self.main / ".local" / f"replaced-{int(directory)}-{int(during)}"
+                write(path / "output.log" if directory else path)
+                item = housekeeping.Item(path, True, "idle output")
+                retained = path.with_name(path.name + ".retained")
+
+                def replace_output(
+                    path: Path = path,
+                    retained: Path = retained,
+                    directory: bool = directory,
+                ) -> tuple[list[housekeeping.OutputHandle], None]:
+                    path.rename(retained)
+                    write(path / "new.log" if directory else path, "new output")
+                    return [], None
+
+                if during:
+                    with patch.object(housekeeping, "open_outputs", replace_output):
+                        refusal = housekeeping.remove(self.main, item)
+                else:
+                    replace_output()
+                    refusal = housekeeping.remove(self.main, item)
+                self.assertIn("identity changed", refusal or "")
+                self.assertEqual(
+                    (path / "new.log" if directory else path).read_text(), "new output"
+                )
+                self.assertTrue(retained.exists())
 
     def run_main(self, *arguments: str) -> list[Path]:
         output = io.StringIO()

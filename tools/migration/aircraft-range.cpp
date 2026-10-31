@@ -1,6 +1,7 @@
 /* OpenTTD-Rust migration evidence, licensed under GPLv2. */
 /** @file aircraft-range.cpp Finite NewGRF range gap against unchanged event bodies. */
 #include <algorithm>
+#include "tests/fixture_map.hpp"
 #include <array>
 #include <bit>
 #include <cstdio>
@@ -73,7 +74,8 @@ static std::unique_ptr<ControllerOrders> range_orders;
 static OpenTTDAircraftLeaves RangeLeaves()
 {
 	auto leaves = AircraftTestLeaves(vehicle, shared);
-	shared.map_log_x = []() noexcept { return uint32_t{6}; };
+	static OpenTTDFixtureMap map{6, 4096};
+	shared.map = &map.statics;
 	leaves.station = [](uint16_t id) noexcept -> const OpenTTDStation * { return reinterpret_cast<const OpenTTDStation *>(Station::GetIfValid(id)); };
 	leaves.airport_tile = [](const OpenTTDStation *s) noexcept { return reinterpret_cast<const Station *>(s)->airport.tile; };
 	vehicle.status = [](OpenTTDVehicle *) noexcept { return static_cast<uint8_t>(fixture->aircraft.vehstatus.value); };
@@ -127,13 +129,8 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	vehicle.vehicle_type = [](OpenTTDVehicle *) noexcept { return uint8_t{3}; };
 	vehicle.altitude_inputs = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleAltitudeInputs{100, 0}; };
 	movement.shared = &shared;
-	shared.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
+	shared.movement = &movement;
 	shared.tile_type = [](uint32_t) noexcept { return uint8_t{0}; }; // Flat clear ground.
-	movement.tile_types = []() noexcept -> OpenTTDTileTypeAllocation {
-		static std::array<TileBaseStorage, 4096> tiles{};
-		static std::array<TileExtendedStorage, 4096> extended{};
-		return {.base = tiles.data(), .extended = extended.data(), .count = 4096, .assertions = true};
-	};
 	shared.tile_height = [](uint32_t) noexcept { return uint32_t{0}; };
 	leaves.airport_entry = [](const void *, uint8_t) noexcept { return uint8_t{0}; };
 	vehicle.write_x = vehicle.write_y = vehicle.write_z = [](OpenTTDVehicle *, int32_t) noexcept {};
