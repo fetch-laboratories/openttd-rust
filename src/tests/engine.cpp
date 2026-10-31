@@ -258,7 +258,7 @@ TEST_CASE("Engine runtime observes live specs and original property and price ki
 			for (int8_t shift : {-2, 0, 2}) {
 				file.price_base_multipliers[c.build] = shift;
 				file.price_base_multipliers[c.running] = shift;
-				for (uint16_t value : {CALLBACK_FAILED, uint16_t{0}, uint16_t{32767}, uint16_t{65534}}) {
+				for (uint16_t value : {uint16_t{CALLBACK_FAILED}, uint16_t{0}, uint16_t{32767}, uint16_t{65534}}) {
 					result = value; calls = 0;
 					CHECK(openttd_rust_engine_cost(&services, RustEngine(&e)) == GetPrice(c.build, value == CALLBACK_FAILED ? 53 : value, &file, -8).base());
 					CHECK(calls == 1); CHECK(observed_engine == 123); CHECK(observed_property == c.build_prop);
