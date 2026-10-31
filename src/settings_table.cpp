@@ -52,6 +52,9 @@
 #include "void_map.h"
 #include "station_func.h"
 #include "station_base.h"
+#ifdef WITH_RUST
+#include "rust/settings_table_ffi.h"
+#endif
 
 #include "table/strings.h"
 #include "table/settings.h"
@@ -179,6 +182,22 @@ static void StationSpreadChanged(int32_t)
 	InvalidateWindowData(WC_BUILD_STATION, 0);
 }
 
+#ifdef WITH_RUST
+static void UpdateConsists(int32_t) { openttd_rust_settings_update_consists(&GetRustSettingServices()); }
+static void UpdateAllServiceInterval(int32_t new_value) { openttd_rust_settings_update_all_service_interval(&GetRustSettingServices(), new_value); }
+static bool CanUpdateServiceInterval(VehicleType, int32_t &new_value) { return openttd_rust_settings_can_update_service_interval(&GetRustSettingServices(), new_value); }
+static void UpdateServiceInterval(VehicleType type, int32_t new_value) { openttd_rust_settings_update_service_interval(&GetRustSettingServices(), type, new_value); }
+static int32_t GetDefaultServiceInterval(const IntSettingDesc &sd, VehicleType type) { return openttd_rust_settings_default_service_interval(&GetRustSettingServices(), sd.def, type); }
+static std::tuple<int32_t, uint32_t> GetServiceIntervalRange(const IntSettingDesc &)
+{
+	OpenTTDSettingRange range = openttd_rust_settings_service_interval_range(&GetRustSettingServices());
+	return {range.min, range.max};
+}
+static void TrainAccelerationModelChanged(int32_t) { openttd_rust_settings_train_acceleration_model_changed(&GetRustSettingServices()); }
+static void TrainSlopeSteepnessChanged(int32_t) { openttd_rust_settings_train_slope_steepness_changed(&GetRustSettingServices()); }
+static void RoadVehAccelerationModelChanged(int32_t) { openttd_rust_settings_road_acceleration_model_changed(&GetRustSettingServices()); }
+static void RoadVehSlopeSteepnessChanged(int32_t) { openttd_rust_settings_road_slope_steepness_changed(&GetRustSettingServices()); }
+#else
 static void UpdateConsists(int32_t)
 {
 	for (Train *t : Train::Iterate()) {
@@ -313,7 +332,7 @@ static void TrainAccelerationModelChanged(int32_t)
 {
 	for (Train *t : Train::Iterate()) {
 		if (t->IsFrontEngine()) {
-			t->SetCachedMaxCurveSpeed(t->GetCurveSpeedLimit());
+			t->tcache.cached_max_curve_speed = t->GetCurveSpeedLimit();
 			t->UpdateAcceleration();
 		}
 	}
@@ -362,6 +381,7 @@ static void RoadVehSlopeSteepnessChanged(int32_t)
 		if (rv->IsFrontEngine()) rv->CargoChanged();
 	}
 }
+#endif /* WITH_RUST */
 
 static void TownFoundingChanged(int32_t)
 {
@@ -407,6 +427,9 @@ static void InvalidateCompanyLiveryWindow(int32_t)
 	ResetVehicleColourMap();
 }
 
+#ifdef WITH_RUST
+static void DifficultyNoiseChange(int32_t) { openttd_rust_settings_difficulty_noise_change(&GetRustSettingServices()); }
+#else
 static void DifficultyNoiseChange(int32_t)
 {
 	if (_game_mode == GM_NORMAL) {
@@ -416,6 +439,7 @@ static void DifficultyNoiseChange(int32_t)
 		}
 	}
 }
+#endif /* WITH_RUST */
 
 static void MaxNoAIsChange(int32_t)
 {
@@ -432,10 +456,14 @@ static void MaxNoAIsChange(int32_t)
  * Check whether the road side may be changed.
  * @return true if the road side may be changed.
  */
+#ifndef WITH_RUST
 static bool CheckRoadSide(int32_t &)
 {
 	return _game_mode == GM_MENU || !RoadVehiclesAreBuilt();
 }
+#else
+static bool CheckRoadSide(int32_t &) { return openttd_rust_settings_check_road_side(&GetRustSettingServices()); }
+#endif /* WITH_RUST */
 
 /**
  * Conversion callback for _gameopt_settings_game.landscape
@@ -451,6 +479,13 @@ static std::optional<uint32_t> ConvertLandscape(std::string_view value)
 	return OneOfManySettingDesc::ParseSingleValue(value, _old_landscape_values);
 }
 
+#ifdef WITH_RUST
+static bool CheckFreeformEdges(int32_t &new_value) { return openttd_rust_settings_check_freeform_edges(&GetRustSettingServices(), new_value); }
+static void UpdateFreeformEdges(int32_t new_value) { openttd_rust_settings_update_freeform_edges(&GetRustSettingServices(), new_value); }
+static bool CheckDynamicEngines(int32_t &) { return openttd_rust_settings_check_dynamic_engines(&GetRustSettingServices()); }
+static bool CheckMaxHeightLevel(int32_t &new_value) { return openttd_rust_settings_check_max_height_level(&GetRustSettingServices(), new_value); }
+static void StationCatchmentChanged(int32_t) { openttd_rust_settings_station_catchment_changed(&GetRustSettingServices()); }
+#else
 static bool CheckFreeformEdges(int32_t &new_value)
 {
 	if (_game_mode == GM_MENU) return true;
@@ -558,6 +593,7 @@ static void StationCatchmentChanged(int32_t)
 	Station::RecomputeCatchmentForAll();
 	MarkWholeScreenDirty();
 }
+#endif /* WITH_RUST */
 
 static void MaxVehiclesChanged(int32_t)
 {
@@ -588,6 +624,7 @@ static void UpdateClientConfigValues()
 	}
 }
 
+#ifndef WITH_RUST
 /**
  * Callback for when the player changes the timekeeping units.
  * @param Unused.
@@ -684,5 +721,15 @@ static bool CanChangeTimetableMode(int32_t &)
 {
 	return !TimerGameEconomy::UsingWallclockUnits();
 }
+#else
+static void ChangeTimekeepingUnits(int32_t) { openttd_rust_settings_change_timekeeping_units(&GetRustSettingServices()); }
+static void ChangeMinutesPerYear(int32_t new_value) { openttd_rust_settings_change_minutes_per_year(&GetRustSettingServices(), new_value); }
+static std::tuple<int32_t, uint32_t> GetMinutesPerYearRange(const IntSettingDesc &)
+{
+	OpenTTDSettingRange range = openttd_rust_settings_minutes_per_year_range(&GetRustSettingServices());
+	return {range.min, range.max};
+}
+static bool CanChangeTimetableMode(int32_t &) { return openttd_rust_settings_can_change_timetable_mode(&GetRustSettingServices()); }
+#endif /* WITH_RUST */
 
 /* End - Callback Functions */

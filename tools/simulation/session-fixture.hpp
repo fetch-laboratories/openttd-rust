@@ -3,6 +3,8 @@
 #define SIMULATION_SESSION_FIXTURE_HPP
 #include "../../src/rust/session_ffi.h"
 #include "../../src/rust/fleet_ffi.h"
+#include "../../src/rust/station_lifecycle_ffi.h"
+#include "../../src/rust/roadstop_resolver_ffi.h"
 #include "../../src/rust/animation_save.hpp"
 #include "../../src/rust/newgrf_storage_ffi.h"
 #include "../../src/newgrf_storage.h"
@@ -14,6 +16,8 @@ struct SessionFixture {
 	OpenTTDSharedServices shared{};
 	OpenTTDClockServices clock{};
 	OpenTTDLandscapeLoopServices tiles{};
+	OpenTTDStationLifecycleServices station_tiles{};
+	OpenTTDRoadStopResolverServices roadstops{};
 	OpenTTDGenerationLoop loop{};
 	OpenTTDVehicleServices vehicles{};
 	OpenTTDVehicleSchedulerServices scheduler{};
@@ -47,7 +51,12 @@ struct SessionFixture {
 		shared.map_log_x = []() noexcept -> uint32_t { return 6; };
 		shared.tile_type = [](uint32_t) noexcept -> uint8_t { return 5; };
 		tiles.shared = &shared;
-		tiles.station_loop = [](uint32_t) noexcept {};
+		/* Station tiles enter the Rust tile loop; its first native call is GetByTile. */
+		shared.station_type = [](uint32_t) noexcept { return StationType::End; };
+		roadstops.by_tile = [](uint32_t) noexcept -> BaseStation * { return nullptr; };
+		station_tiles.shared = &shared;
+		station_tiles.roadstop = &roadstops;
+		tiles.station = &station_tiles;
 		group.current_company = []() noexcept -> uint8_t { return 0; };
 		pending.set_current = [](uint8_t) noexcept {};
 		loop = {{.tick_counter = 1, .size_x = 64, .climate = 0, .extra = 0, .ambient = false, .ambient_callback = false}, &tiles};

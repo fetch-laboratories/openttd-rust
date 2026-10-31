@@ -49,6 +49,7 @@ static_assert(sizeof(DestinationID) >= sizeof(StationID));
 #include "rust/services_map.h"
 #include "rust/vehicle_services.h"
 #include "rust/services_station.h"
+#include "rust/station_command_ffi.h"
 #include "rust/engine_services.h"
 static_assert(sizeof(Order) == sizeof(OpenTTDOrderFields) && alignof(Order) == alignof(OpenTTDOrderFields));
 static_assert(std::is_trivially_copyable_v<Order> && std::is_trivially_destructible_v<Order>);
@@ -400,11 +401,6 @@ extern "C" void openttd_orders_append_station(void *ctx, uint16_t station) noexc
 	static_cast<std::vector<StationID> *>(ctx)->push_back(StationID(station));
 }
 
-extern "C" void openttd_orders_invalidate_station_list() noexcept
-{
-	InvalidateWindowClassesData(WC_STATION_LIST, 0);
-}
-
 extern "C" void openttd_orders_command_error(void *ctx, uint32_t error, uint32_t detail) noexcept
 {
 	{
@@ -636,7 +632,7 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.fast_aircraft = openttd_orders_fast_aircraft,
 	.no_jet_crash = openttd_orders_no_jet_crash,
 	.append_station = openttd_orders_append_station,
-	.invalidate_station_list = openttd_orders_invalidate_station_list,
+	.station_commands = &GetRustStationCommandServices(),
 	.command_error = openttd_orders_command_error,
 	.timetable_dirty = openttd_orders_timetable_dirty,
 	.invalidate_order = openttd_orders_invalidate_order,

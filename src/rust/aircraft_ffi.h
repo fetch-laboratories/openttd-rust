@@ -130,7 +130,6 @@ void OPENTTD_RUST_CALL openttd_rust_aircraft_replacement(const OpenTTDAircraftLe
 uint16_t OPENTTD_RUST_CALL openttd_rust_aircraft_closest_depot(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle);
 bool OPENTTD_RUST_CALL openttd_rust_aircraft_event(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle, bool);
 void OPENTTD_RUST_CALL openttd_rust_aircraft_release_blocks(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle);
-void OPENTTD_RUST_CALL openttd_rust_aircraft_invalidate_target(const OpenTTDAircraftLeaves *, uint16_t);
 OpenTTDAircraftState *OPENTTD_RUST_CALL openttd_rust_aircraft_state_new();
 void OPENTTD_RUST_CALL openttd_rust_aircraft_state_destroy(OpenTTDAircraftState *);
 uint64_t *OPENTTD_RUST_CALL openttd_rust_airport_blocks_new();

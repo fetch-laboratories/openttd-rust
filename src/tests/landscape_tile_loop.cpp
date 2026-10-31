@@ -56,11 +56,12 @@ TEST_CASE("Session tile fixtures restore storage mode across nested entries")
 	static bool nested;
 	nested = false;
 	SessionFixture fixture;
-	fixture.tiles.station_loop = [](uint32_t) noexcept {
-		if (nested) return;
+	fixture.roadstops.by_tile = [](uint32_t) noexcept -> BaseStation * {
+		if (nested) return nullptr;
 		nested = true;
 		SessionFixture inner;
 		CHECK(inner.Run());
+		return nullptr;
 	};
 	CHECK(fixture.Run());
 	CHECK(nested);

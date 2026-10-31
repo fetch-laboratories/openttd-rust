@@ -141,6 +141,16 @@ impl Engine<'_> {
     fn map(&self) -> super::Map {
         self.context.map
     }
+    fn tile_add_wrap(&self, tile: u32, x: i32, y: i32) -> u32 {
+        let map = self.map();
+        map.coordinates().tile_add_wrap(
+            tile,
+            x,
+            y,
+            map.size_y,
+            (self.g.environment.freeform_edges)(),
+        )
+    }
     fn distance(&self, a: u32, b: u32) -> u32 {
         let map = self.map();
         let coordinates = map.coordinates();
@@ -285,8 +295,7 @@ impl Engine<'_> {
         for n in 0..unsafe { (self.c.layout_size)(layout) } {
             let part = unsafe { (self.c.layout_tile)(layout, n) };
             let gfx = unsafe { (self.c.translated_gfx)(part.gfx) };
-            let current =
-                unsafe { (self.s.tile_add_wrap)(tile, i32::from(part.x), i32::from(part.y)) };
+            let current = self.tile_add_wrap(tile, i32::from(part.x), i32::from(part.y));
             if current == u32::MAX {
                 return self.fail(self.e.site);
             }
@@ -365,8 +374,7 @@ impl Engine<'_> {
         for n in 0..unsafe { (self.c.layout_size)(layout) } {
             let part = unsafe { (self.c.layout_tile)(layout, n) };
             let gfx = unsafe { (self.c.translated_gfx)(part.gfx) };
-            let current =
-                unsafe { (self.s.tile_add_wrap)(tile, i32::from(part.x), i32::from(part.y)) };
+            let current = self.tile_add_wrap(tile, i32::from(part.x), i32::from(part.y));
             if gfx != crate::industry_map::GFX_WATERTILE_SPECIALCHECK {
                 let spec = unsafe { (self.t.spec)(gfx) };
                 if unsafe { (self.x.shape_callback)(spec) } {
