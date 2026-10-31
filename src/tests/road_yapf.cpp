@@ -231,7 +231,7 @@ TEST_CASE("Road YAPF observes accepted traversal once after transient exits", "[
 		map.movement.road = &road;
 		RoadOrder::limits.clear();
 		map.physics.display_max_speed = [](OpenTTDVehicle *) noexcept -> int32_t { RoadOrder::limits.push_back('D'); return 100; };
-		map.movement.order_speed = [](OpenTTDVehicle *) noexcept -> uint16_t { RoadOrder::limits.push_back('O'); return 40; };
+		map.orders.vehicle = [](void *) noexcept { RoadOrder::limits.push_back('O'); return &FollowerFixture::active->order_state; };
 		map.movement.road_type_speed = [](RoadType) noexcept -> uint16_t { RoadOrder::limits.push_back('R'); return 40; };
 		auto leaves = probe_leaves; leaves.shared = &map.shared; leaves.tile = RoadOrder::Tile;
 		OpenTTDRoadYapfInput input{}; input.map_x = input.map_y = 64; input.tile = 130; input.slope = 17;

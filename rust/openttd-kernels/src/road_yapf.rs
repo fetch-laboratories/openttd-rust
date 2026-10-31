@@ -462,14 +462,13 @@ impl Search<'_> {
                 std::ptr::NonNull::new(self.context.cast_mut().cast()).unwrap(),
             );
             let (display_speed, order_speed) = *self.speeds.get_or_init(|| {
-                (
-                    (movement.train().physics.display_max_speed)(vehicle),
-                    {
-                        // SAFETY: the movement table's orders leaves have process lifetime.
-                        let orders = unsafe { &*movement.orders };
-                        crate::orders::VisitOrders::new(orders).current(vehicle).speed
-                    },
-                )
+                ((movement.train().physics.display_max_speed)(vehicle), {
+                    // SAFETY: the movement table's orders leaves have process lifetime.
+                    let orders = unsafe { &*movement.orders };
+                    crate::orders::VisitOrders::new(orders)
+                        .current(vehicle)
+                        .speed
+                })
             });
             let max_speed = crate::follow_track::speed_limit_with_road(
                 shared,
