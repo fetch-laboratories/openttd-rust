@@ -2102,7 +2102,6 @@ const OpenTTDRoadGroundServices &GetRustRoadGroundServices() noexcept
 		.work_counter = [](uint32_t t) noexcept { return GB(Tile(TileIndex{t}).m7(), 0, 4); },
 		.set_work_counter = [](uint32_t t, uint32_t counter) noexcept { SB(Tile(TileIndex{t}).m7(), 0, 4, counter); },
 		.all_bits = [](uint32_t t) noexcept { return GetAllRoadBits(TileIndex{t}); },
-		.cleanup = [](uint32_t t, RoadBits bits) noexcept { return RustCleanRoadBits(TileIndex{t}, bits); },
 		.town = &GetRustTownServices(),
 		.set_road_type = [](uint32_t t, RoadType type) noexcept { RustSetRoadType(TileIndex{t}, RTT_ROAD, type); },
 	};

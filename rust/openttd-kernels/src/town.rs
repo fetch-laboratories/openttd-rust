@@ -733,7 +733,6 @@ pub struct Leaves {
     pub dirty_authority: extern "C" fn(u32),
     pub dirty_town: extern "C" fn(u32),
     pub terraform_price: extern "C" fn() -> i64,
-    pub clean_road_bits: extern "C" fn(u32, u32) -> u32,
     pub set_road_town: extern "C" fn(u32, u32),
     pub exchange_company: extern "C" fn(u32) -> u32,
     pub house_class: extern "C" fn(u16) -> u16,
@@ -1574,7 +1573,14 @@ impl Engine<'_> {
         if (self.services.has_water_ground)(at) {
             return 1;
         }
-        bits = (self.leaves.clean_road_bits)(at, bits);
+        bits = u32::from(
+            crate::road_cleanup::clean_up_road_bits(
+                self.services,
+                at,
+                crate::services::RoadBits(bits as u8),
+            )
+            .0,
+        );
         if bits == 0 {
             return 1;
         }
@@ -2590,7 +2596,6 @@ crate::abi::layouts! {
         dirty_authority,
         dirty_town,
         terraform_price,
-        clean_road_bits,
         set_road_town,
         exchange_company,
         house_class,

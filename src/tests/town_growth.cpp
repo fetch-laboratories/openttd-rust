@@ -95,4 +95,27 @@ TEST_CASE("Town growth - indexed construction, descriptor aliases and pool reuse
 	CHECK(a->flags.base() == 0);
 	_town_pool.CleanPool();
 }
+extern "C" uint32_t openttd_test_clean_up_road_bits(const OpenTTDSharedServices *, uint32_t, uint32_t);
+TEST_CASE("Town roads - cleanup widths and requested-bit short circuit")
+{
+	OpenTTDFixtureMap map(6, 64 * 64);
+	auto shared = OpenTTDSharedServices{};
+	auto movement = OpenTTDMovementServices{};
+	shared.map = &map.statics; shared.movement = &movement;
+	static uint calls;
+	calls = 0;
+	movement.add_by_diag_dir = [](uint32_t tile, uint8_t dir) noexcept { ++calls; return tile + std::array<int32_t, 4>{-1, 64, 1, -64}[dir]; };
+	movement.native_assert = [](bool) noexcept { std::abort(); };
+	shared.road_bits = [](uint32_t, uint8_t, bool) noexcept -> uint8_t { std::abort(); };
+	for (uint32_t bits : {0U, 15U, 255U, 256U, UINT32_MAX}) {
+		calls = 0;
+		CHECK(openttd_test_clean_up_road_bits(&shared, 65, bits) == static_cast<uint8_t>(bits));
+		CHECK(calls == 4);
+		CHECK(openttd_test_clean_up_road_bits(&shared, UINT32_MAX, bits) == 0);
+		CHECK(calls == 4);
+	}
+	/* A void neighbour removes only its selected bit; high bits are untouched. */
+	map.base[64].type = MP_VOID << 4;
+	CHECK(openttd_test_clean_up_road_bits(&shared, 65, UINT32_MAX) == 247);
+}
 #endif

@@ -139,6 +139,19 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
     from .rails import pbs_reference, pbs_wraps
 
     pbs_reference(folder)
+    # The road protocol compares against bodies extracted only from the pinned original.
+    import probe
+
+    import migration
+
+    migration.ensure_reference()
+    road = (migration.REFERENCE / "src/road.cpp").read_text()
+    (folder / "road-cleanup-original.hpp").write_text(
+        probe.body(road, "static bool IsPossibleCrossing(")
+        + "\n"
+        + probe.body(road, "RoadBits CleanUpRoadBits(")
+        + "\n"
+    )
     commands = json.loads((build / "compile_commands.json").read_text())
     signal = Path(
         next(row["file"] for row in commands if row["file"].endswith("/signal.cpp"))
@@ -166,7 +179,10 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
         env,
         source,
         "signals",
-        wraps=pbs_wraps(build),
+        wraps=(
+            *pbs_wraps(build),
+            "_Z19MarkTileDirtyByTileN10StrongType7TypedefIj12TileIndexTagJNS_7CompareENS_7IntegerENS_10CompatibleIiEENS4_IlEEEEEii",
+        ),
         native_test_support=True,
         replace_objects=("/src/signal.cpp.o",),
     )
