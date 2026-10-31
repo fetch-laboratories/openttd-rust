@@ -320,14 +320,27 @@ mod tests {
             elements.select_nth_unstable_by_key(mid, |id| xy(*id, dim));
             let coordinate = xy(elements[mid], dim);
             let (mut first, mut last) = (0, elements.len());
-            while first < last {
-                if xy(elements[first], dim) < coordinate {
+            loop {
+                while first < last && xy(elements[first], dim) < coordinate {
                     first += 1;
-                } else {
-                    last -= 1;
-                    elements.swap(first, last);
                 }
+                if first == last {
+                    break;
+                }
+                loop {
+                    last -= 1;
+                    if first == last || xy(elements[last], dim) < coordinate {
+                        break;
+                    }
+                }
+                if first == last {
+                    break;
+                }
+                elements.swap(first, last);
+                first += 1;
             }
+            // The boundary element supplies the node's split coordinate.
+            assert_eq!(xy(elements[first], dim), coordinate);
             first
         };
         let mut tree = Kdtree::new();
