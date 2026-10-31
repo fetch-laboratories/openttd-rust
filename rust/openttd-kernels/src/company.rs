@@ -265,18 +265,17 @@ pub struct Services {
     pub identity: &'static crate::company_identity::Services,
     pub finance: &'static FinanceServices,
     pub shared: &'static crate::services::Services,
-    pub cost: &'static crate::services::CommandCostServices,
-    pub objectives: extern "C" fn() -> *const crate::objectives::Services,
-    pub settings: extern "C" fn() -> *const crate::settings_table::Services,
-    pub assign_company_context: extern "C" fn(crate::company_type::CompanyID),
-    pub close_construction_windows: extern "C" fn(),
     pub allow_list_add:
         extern "C" fn(crate::company_type::CompanyID, crate::services::ByteSpan) -> bool,
+    pub allow_list_changed: extern "C" fn(),
     pub allow_list_remove:
         extern "C" fn(crate::company_type::CompanyID, crate::services::ByteSpan) -> bool,
-    pub allow_list_changed: extern "C" fn(),
+    pub assign_company_context: extern "C" fn(crate::company_type::CompanyID),
+    pub close_construction_windows: extern "C" fn(),
+    pub cost: &'static crate::services::CommandCostServices,
+    pub objectives: extern "C" fn() -> &'static crate::objectives::Services,
     pub owned_by: u32,
-
+    pub settings: extern "C" fn() -> &'static crate::settings_table::Services,
     pub company_next: extern "C" fn(u32) -> CompanyRef,
     pub company_count: extern "C" fn() -> usize,
     pub can_allocate_company: extern "C" fn() -> bool,
@@ -389,7 +388,7 @@ pub(crate) fn set_local_company(s: &Services, company: crate::company_type::Comp
             || company == CompanyID::NONE,
     );
     let switching = (s.local_company)() != company.0;
-    let windows = unsafe { &*(s.objectives)() };
+    let windows = (s.objectives)();
     if switching {
         (windows.window_data)(
             WC_SEND_NETWORK_MSG,
@@ -413,25 +412,34 @@ pub(crate) fn set_local_company(s: &Services, company: crate::company_type::Comp
     (s.identity.reset_colourmap)();
 }
 
-pub(crate) fn check_ownership(s: &Services, out: crate::services::Cost<'_>, owner: u8, tile: u32) {
+pub(crate) fn check_ownership(
+    s: &Services,
+    out: crate::services::Cost<'_>,
+    owner: crate::company_type::Owner,
+    tile: crate::tile_type::TileIndex,
+) {
     use crate::company_type::{OWNER_END, OWNER_TOWN};
-    crate::movement::native_assert(s.shared, owner < OWNER_END);
-    crate::movement::native_assert(s.shared, owner != OWNER_TOWN || tile != 0);
-    if owner == (s.finance.current_company)() {
+    crate::movement::native_assert(s.shared, owner.0 < OWNER_END);
+    crate::movement::native_assert(s.shared, owner.0 != OWNER_TOWN || tile.0 != 0);
+    if owner.0 == (s.finance.current_company)() {
         out.zero();
         return;
     }
     out.error(s.owned_by);
     if (s.local_company)() == (s.finance.current_company)() {
         (out.1.encode_owned_by)(out.0, owner, tile);
-        if owner != OWNER_TOWN {
+        if owner.0 != OWNER_TOWN {
             (out.1.error_owner)(out.0, owner);
         }
     }
 }
 
-pub(crate) fn check_tile_ownership(s: &Services, out: crate::services::Cost<'_>, tile: u32) {
-    let owner = crate::map_func::World::new(s.shared).owner(tile);
+pub(crate) fn check_tile_ownership(
+    s: &Services,
+    out: crate::services::Cost<'_>,
+    tile: crate::tile_type::TileIndex,
+) {
+    let owner = crate::company_type::CompanyID(crate::map_func::World::new(s.shared).owner(tile.0));
     check_ownership(s, out, owner, tile);
 }
 
@@ -480,20 +488,28 @@ fn allow_list(
 pub(crate) fn service_interval(
     settings: &crate::settings_table::Services,
     company: Option<crate::company_type::CompanyID>,
-    kind: u8,
+    kind: crate::vehicle_type::VehicleType,
 ) -> i32 {
-    use crate::vehicle_type::{VEH_AIRCRAFT, VEH_ROAD, VEH_SHIP, VEH_TRAIN};
     let defaults = match company {
         None => (settings.client_vehicle_defaults)(),
         Some(company) => (settings.company_vehicle_defaults)(company),
     };
-    i32::from(match kind {
+    service_interval_from(settings.shared, defaults, kind)
+}
+
+fn service_interval_from(
+    shared: &crate::services::Services,
+    defaults: *const crate::settings_table::VehicleDefaults,
+    kind: crate::vehicle_type::VehicleType,
+) -> i32 {
+    use crate::vehicle_type::{VEH_AIRCRAFT, VEH_ROAD, VEH_SHIP, VEH_TRAIN};
+    i32::from(match kind.0 {
         VEH_TRAIN => read_field!(defaults, servint_trains),
         VEH_ROAD => read_field!(defaults, servint_roadveh),
         VEH_AIRCRAFT => read_field!(defaults, servint_aircraft),
         VEH_SHIP => read_field!(defaults, servint_ships),
         _ => {
-            (settings.shared.not_reached)();
+            (shared.not_reached)();
             unreachable!()
         }
     })
@@ -535,8 +551,8 @@ pub extern "C" fn openttd_rust_company_set_local(
 pub extern "C" fn openttd_rust_company_check_ownership(
     s: &Services,
     out: *mut crate::services::CommandCost,
-    owner: u8,
-    tile: u32,
+    owner: crate::company_type::Owner,
+    tile: crate::tile_type::TileIndex,
 ) {
     check_ownership(s, crate::services::Cost(out, s.cost), owner, tile);
 }
@@ -544,7 +560,7 @@ pub extern "C" fn openttd_rust_company_check_ownership(
 pub extern "C" fn openttd_rust_company_check_tile_ownership(
     s: &Services,
     out: *mut crate::services::CommandCost,
-    tile: u32,
+    tile: crate::tile_type::TileIndex,
 ) {
     check_tile_ownership(s, crate::services::Cost(out, s.cost), tile);
 }
@@ -562,10 +578,10 @@ pub extern "C" fn openttd_rust_company_allow_list(
 pub extern "C" fn openttd_rust_company_service_interval(
     s: &Services,
     company: *mut crate::company_type::OpenTTDCompany,
-    kind: u8,
+    kind: crate::vehicle_type::VehicleType,
 ) -> i32 {
     service_interval(
-        unsafe { &*(s.settings)() },
+        (s.settings)(),
         if company.is_null() {
             None
         } else {
@@ -1324,15 +1340,16 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
             continue;
         }
         if !(s.vehicle_service_interval_is_custom)(v) {
-            let settings = unsafe { &*(s.settings)() };
+            let settings = (s.settings)();
             let vehicle = unsafe { (settings.transactions.groups.vehicle)(v) };
+            let defaults = (settings.company_vehicle_defaults)(crate::company_type::CompanyID(new));
             let kind = unsafe { (settings.transactions.groups.vehicle_type)(vehicle) };
-            let interval =
-                service_interval(settings, Some(crate::company_type::CompanyID(new)), kind);
-            let percent = read_field!(
-                (settings.company_vehicle_defaults)(crate::company_type::CompanyID(new)),
-                servint_ispercent
+            let interval = service_interval_from(
+                settings.shared,
+                defaults,
+                crate::vehicle_type::VehicleType(kind),
             );
+            let percent = read_field!(defaults, servint_ispercent);
             (s.reset_service_interval)(v, interval, percent);
         }
         (s.set_vehicle_owner)(v, new);
@@ -2167,15 +2184,15 @@ crate::abi::layouts! {
         identity,
         finance,
         shared,
-        cost,
-        objectives,
-        settings,
+        allow_list_add,
+        allow_list_changed,
+        allow_list_remove,
         assign_company_context,
         close_construction_windows,
-        allow_list_add,
-        allow_list_remove,
-        allow_list_changed,
+        cost,
+        objectives,
         owned_by,
+        settings,
         company_next,
         company_count,
         can_allocate_company,

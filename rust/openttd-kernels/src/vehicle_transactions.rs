@@ -665,9 +665,9 @@ impl TransactionServices {
     pub(crate) fn interval_default(&self, owner: u8, kind: u8) -> i32 {
         let company = unsafe { &*(self.commands.company)() };
         crate::company::service_interval(
-            unsafe { &*(company.settings)() },
+            (company.settings)(),
             Some(crate::company_type::CompanyID(owner)),
-            kind,
+            crate::vehicle_type::VehicleType(kind),
         )
     }
 }

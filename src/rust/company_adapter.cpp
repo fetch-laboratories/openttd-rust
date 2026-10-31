@@ -59,7 +59,7 @@
 #include "company_adapter.h"
 #include "command_services.h"
 #include "settings_table_ffi.h"
-#include "objectives_ffi.h"
+#include "services_objectives.h"
 #include "company_services.h"
 #include "company_identity_ffi.h"
 #include "object_ffi.h"
@@ -416,14 +416,18 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 	/* Construct process-lifetime C++ views before Rust accesses their storage. */
 	(void)GetRustEconomy(); (void)GetRustPrices(); (void)GetRustCompanyScores();
 	static const OpenTTDCompanyServices services{
-		.identity = &GetRustCompanyIdentityServices(), .finance = &GetRustCompanyFinanceServices(), .shared = &GetRustSharedServices(),
-		.cost = &GetRustCommandCostServices(),
-		.objectives = []() noexcept { return &GetRustObjectivesServices(); },
-		.settings = []() noexcept { return &GetRustSettingServices(); },
+		.identity = &GetRustCompanyIdentityServices(),
+		.finance = &GetRustCompanyFinanceServices(),
+		.shared = &GetRustSharedServices(),
+		.allow_list_add = Co_allow_list_add,
+		.allow_list_changed = Co_allow_list_changed,
+		.allow_list_remove = Co_allow_list_remove,
 		.assign_company_context = RustRestoreGenerationCompanies,
 		.close_construction_windows = Co_close_construction_windows,
-		.allow_list_add = Co_allow_list_add, .allow_list_remove = Co_allow_list_remove,
-		.allow_list_changed = Co_allow_list_changed, .owned_by = STR_ERROR_OWNED_BY,
+		.cost = &GetRustCommandCostServices(),
+		.objectives = GetRustObjectivesServices,
+		.owned_by = STR_ERROR_OWNED_BY,
+		.settings = GetRustSettingServices,
 		.company_next = RustCompanyRefNext,
 		.company_count = Co_company_count, .can_allocate_company = Co_can_allocate_company,
 		.local_company = RustLocalCompanyID, .network_server = RustNetworkServer,
