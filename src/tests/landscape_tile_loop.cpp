@@ -210,7 +210,7 @@ TEST_CASE("Rust world generation shares native lvalues across serialized threads
 	first.join();
 	CHECK(_generating_world);
 	CHECK(same_address);
-	OpenTTDWorldServices services{};
+	auto services = OpenTTDWorldServices{};
 	services.exit_game = []() noexcept { return false; };
 	std::thread second([&] { aborted = openttd_rust_world_aborted(&services); *openttd_rust_generating_world() = false; });
 	second.join();
@@ -223,7 +223,7 @@ TEST_CASE("Rust world generation replaces transient callbacks before invoking th
 {
 	AutoRestoreBackup<GameMode> mode(_game_mode, GM_EDITOR);
 	AutoRestoreBackup<SwitchMode> switching(_switch_mode, SM_NONE);
-	OpenTTDWorldServices services{};
+	auto services = OpenTTDWorldServices{};
 	services.callback = [](OpenTTDWorldFrame *, GWDoneProc *proc) noexcept { CHECK(_switch_mode == SM_EDITOR); proc(); return true; };
 	world_callback_value = 0;
 	openttd_test_world_set_abort_callback([] { world_callback_value = 1; });

@@ -78,7 +78,7 @@ template <typename Check> void CheckEffectProtocol(Check check)
 	const OpenTTDSharedServices services = OpenTTDFixtureSharedServices(&w, EffectTestRandom, EffectTestIndustry);
 	auto animation_shared = services;
 	animation_shared.mark_dirty = [](uint32_t) noexcept {};
-	OpenTTDAnimationServices animation{};
+	auto animation = OpenTTDAnimationServices{};
 	animation.shared = &animation_shared;
 	animation.state = [](uint32_t) noexcept -> AnimatedTileState { return AnimatedTileState::Deleted; };
 	animation.set_state = [](uint32_t tile, AnimatedTileState) noexcept { effect_test_world->animated = tile; };

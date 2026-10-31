@@ -151,7 +151,7 @@ static inline const OpenTTDClearServices town_protocol_clear = [] {
 	return clear;
 }();
 static inline const OpenTTDWaterLeaves town_protocol_water_leaves = [] {
-	OpenTTDWaterLeaves leaves{};
+	auto leaves = OpenTTDWaterLeaves{};
 	leaves.debug = [](uint8_t, int32_t, int32_t) noexcept {};
 	return leaves;
 }();
@@ -229,7 +229,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, TownProtocolRandom, TownProtocolIndustry);
 	/* The callback reenters the town owner through the direct resolver entry;
 	 * preserve the original fixture's mutation and success. */
-	OpenTTDHouseResolverServices resolver{};
+	auto resolver = OpenTTDHouseResolverServices{};
 	resolver.town_by_id = [](uint32_t) noexcept -> Town * { return nullptr; };
 	resolver.evaluate = [](const OpenTTDHouseCallbackArgs *, int32_t *, size_t) noexcept -> uint16_t {
 		openttd_rust_town_growth(town_protocol_world->owner)->flags = 0x88;
@@ -274,7 +274,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	services.road_type = [](uint32_t) noexcept { return uint8_t(63); };
 	static const OpenTTDTileOwnerServices owners{};
 	static const OpenTTDLandscapeTileServices tiles = [] {
-		OpenTTDLandscapeTileServices t{};
+		auto t = OpenTTDLandscapeTileServices{};
 		t.clear = [](OpenTTDCommandCost *p, uint32_t, uint16_t flags) noexcept { auto &w = *town_protocol_world; if (w.placing && !(flags & 1)) w.landscape_clears++; else w.clears++; TownProtocolCostOf(p)->ok = w.clear_ok; };
 		t.owners = &owners;
 		return t;
@@ -284,7 +284,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	const OpenTTDHouseAnimation animation_house{
 		.callback = [](uint16_t, uint32_t, uint32_t, const HouseSpec *, Town *, uint32_t, uint64_t) noexcept -> uint16_t { town_protocol_world->animations++; return UINT16_MAX; },
 	};
-	OpenTTDAnimationServices animation{};
+	auto animation = OpenTTDAnimationServices{};
 	animation.shared = &services;
 	animation.house = &animation_house;
 	animation.state = [](uint32_t) noexcept -> AnimatedTileState { return AnimatedTileState::Deleted; };
@@ -293,7 +293,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	RustAnimationScope animation_scope(animation);
 
 	bool road_ok = false;
-	OpenTTDCommandCostServices costs{};
+	auto costs = OpenTTDCommandCostServices{};
 	costs.success = [](const OpenTTDCommandCost *out) noexcept { return *reinterpret_cast<const bool *>(out); };
 	OpenTTDRailCommandServices rail{}; rail.cost = &costs;
 	OpenTTDRoadCommandServices roads{}; roads.do_build = [](const OpenTTDRoadCommandServices *, OpenTTDRoadCommandScratch *, OpenTTDCommandCost *out, OpenTTDCommandCost *, uint16_t flags, uint32_t tile, uint8_t bits, uint8_t rt, uint8_t, uint16_t town) noexcept {

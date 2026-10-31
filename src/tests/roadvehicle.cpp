@@ -202,9 +202,9 @@ TEST_CASE("Road max speed - front reversal, later curve assignment and hidden br
 {
 	auto *front = openttd_rust_road_new(), *tail = openttd_rust_road_new();
 	auto *v = reinterpret_cast<OpenTTDVehicle *>(1);
-	OpenTTDSharedServices shared{};
+	auto shared = OpenTTDSharedServices{};
 	shared.bridge_speed = BridgeSpeed;
-	OpenTTDRoadLeaves leaves{};
+	auto leaves = OpenTTDRoadLeaves{};
 	leaves.shared = &shared;
 	leaves.speed_part = SpeedPart;
 	for (uint16_t model = 0; model < 2; ++model) for (uint16_t state = 0; state < 256; ++state) for (uint16_t tail_state = 0; tail_state < 256; ++tail_state) {
