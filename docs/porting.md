@@ -24,7 +24,7 @@ For agents writing or reviewing port code, tests and Python tools.
 
 - The rewrite retires object classes and map accessors in headers (user, 2026-10-28). Once control flow is in Rust, move records to Rust: pool objects (vehicles first, #563; then stations, orders, towns, industries, companies and the rest), then map arrays.
 - Define each moved record once in Rust with a C-compatible layout. Generate its C++ declaration and check the layout at build. `tools/port-metrics.py` counts the declaration as compiled C++ glue. Both languages access fields in place.
-- Unported C++ drawing, GUI, save/load, scripts and network use inline accessors over the shared layout, never a call per field. Only operations such as allocation, deletion, iteration with hooks and virtual behavior cross as calls. Delete replaced per-field services and reader carriers.
+- Unported C++ drawing, GUI, save/load, scripts and network use inline accessors over the shared layout, never a call per field. Only operations such as allocation, deletion, iteration with hooks and virtual behavior cross as calls. Delete replaced per-field services and reader carriers, together with their rows in the rebound-callee and shared-accessor baselines, and report the rows removed in the PR.
 
 ## Fidelity
 

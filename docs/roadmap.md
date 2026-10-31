@@ -130,7 +130,9 @@ executable header logic into a different phase.
 
 The boundary has 1,377 Rust exports (+80) and 4,206 callback slots (+132).
 Rust totals 124,225 code lines (+6,446) and tooling 51,310 (+3,636).
-Simulation-source retirement is 40,288 of 61,148 (65.89%).
+Simulation-source retirement is 40,288 of 61,148 (65.89%). The duplicate
+baselines hold 581 rebound-callee rows (585 when the gate landed), 128
+shared-accessor rows (206 at the start) and 55 orphan exports (62).
 
 | Period (steering and navigation commits) | Days | Retired | Per day | Compiled C++ change | Per day |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -179,7 +181,7 @@ Why the course changed:
 | Phase | Left | Exit criterion | Status |
 | --- | --- | --- | --- |
 | 1. Simulation logic | About 2,250 lines of non-drawing bodies in the logic bucket, plus #559's command invocation (`command.cpp`, 151) and #69's tile areas (`tilearea.cpp`, 172) | Its open drafts, #559 and #69 integrate. Every other remaining non-drawing body belongs to the phase-2 owner of its file | Closing. #612, #616, #618 and #619 are in draft. #559 and #69 return now: their recorded condition is phase 1's exit. No further phase-1 owner is planned |
-| 2. Simulation storage | 11,007 in the storage bucket, plus the phase-1 bodies left in each pool's files | Every pool record and the map arrays are defined once in Rust and read in place by both languages. C++ calls Rust only for operations, and no per-field service or per-call-site reader remains for moved data. Each pool owner also ports the remaining non-drawing bodies in its files | PR-B (#607) first, then #570 with #566. Pools in order: vehicles (#570, then #598 and #599); stations and road stops; towns and industries; companies, groups, engines, link graph and the smaller pools; orders; then the map with the rail, road, water, tunnel, landscape and tile bodies |
+| 2. Simulation storage | 11,007 in the storage bucket, plus the phase-1 bodies left in each pool's files | Every pool record and the map arrays are defined once in Rust and read in place by both languages. C++ calls Rust only for operations, and no per-field service or per-call-site reader remains for moved data. Each pool owner also ports the remaining non-drawing bodies in its files and deletes the duplicate-baseline rows of its records | PR-B (#607) first, then #570 with #566. Pools in order: vehicles (#570, then #598 and #599); stations and road stops; towns and industries; companies, groups, engines, link graph and the smaller pools; orders; then the map with the rail, road, water, tunnel, landscape and tile bodies |
 | 3. Simulation data readers | 41,096: save/load 12,852, script 13,099, network 9,640, NewGRF 5,505 | These run in Rust; the Squirrel VM may stay C++ until phase 6 | #573, #574, #575, #497 and #498 are queued and ready. They take every slot phases 1 and 2 leave free |
 | 4. Support | 31,616 support and graphics lines, plus startup in `openttd.cpp` (510); data tables (12,931) retire with their consumers | Not planned yet | Not planned until it is the next phase (user direction, 2026-10-28) |
 | 5. Interface | 67,796 GUI and platform lines including script and network GUI, plus about 4,700 drawing and description lines in the logic bucket | Not planned yet | As above |
@@ -202,6 +204,12 @@ Root's first actions from this chart. They override the plan-after47 input's
    ranked under [selection](planning.md#selection).
 5. Size new owners to repay their review and Full ([selection](planning.md#selection)),
    and record the compiled-C++ rate at each stocktake (`/start-development`, step 4).
+6. Pay down glue duplication where it lives longest. About 194 of the 526
+   rebound rows bind fields of records that phase-2 owners delete
+   ([storage ports](porting.md#storage-ports)); do not tidy that code first.
+   The other 332 or so bind NewGRF specifications and shared operations, which
+   stay compiled until phases 3 to 5: #622 collapses them after PR-B. Each
+   stocktake records the baseline sizes.
 
 ## Twenty-fourth steering review (2026-10-29: per-entry map tolls, rebound callees and #581's hidden consumers)
 
@@ -439,6 +447,8 @@ and phase sizes.
    fields and orphan declaration, #577's single-use carriers, and the
    `CargoFlow` bounce once #568 integrates. Finish #603's reviewed scope after
    #606 without expanding it; take remaining repairs in the next bounded batch.
+   After PR-B, #622 collapses duplicate bindings in the long-lived NewGRF and
+   shared operation tables (no retirement; estimated -200 to -500 net glue).
 6. **Queued phase-1 owners under #3**, ranked by plan-phase1-rest on
    2026-10-31 at `11c285f939` (remaining code lines, estimated net glue):
    1. #587 simulation-setting transitions: integrated as #594 (integration 40);
