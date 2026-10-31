@@ -23,6 +23,8 @@
 #include "rust/depot_ffi.h"
 #include "rust/rail_command_ffi.h"
 #include "rust/services_ffi.h"
+#include "rust/station_command_ffi.h"
+#include "rust/vehicle_refit_ffi.h"
 #endif
 
 #include "table/strings.h"
@@ -35,11 +37,11 @@ static_assert(MAX_LENGTH_DEPOT_NAME_CHARS == 32);
 static void RustDepotRenamed(Depot *d) noexcept
 {
 	/* Update the orders and depot */
-	SetWindowClassesDirty(WC_VEHICLE_ORDERS);
+	GetRustStationCommandServices().orders_dirty();
 	SetWindowDirty(WC_VEHICLE_DEPOT, d->xy);
 
 	/* Update the depot list */
-	VehicleType vt = GetDepotVehicleType(d->xy);
+	VehicleType vt = GetRustVehicleBuildServices().depot_kind(d->xy.base());
 	SetWindowDirty(GetWindowClassForVehicleType(vt), VehicleListIdentifier(VL_DEPOT_LIST, vt, CompanyID(GetRustSharedServices().tile_owner(d->xy.base())), d->index).ToWindowNumber());
 }
 
