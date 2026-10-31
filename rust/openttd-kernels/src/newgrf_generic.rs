@@ -44,7 +44,6 @@ pub struct Result {
 #[repr(C)]
 pub struct Services {
     shared: *const Shared,
-    version: extern "C" fn(*const c_void) -> u8,
     cargo_map: extern "C" fn(*const c_void, u8) -> u8,
     cargo_bitnum: extern "C" fn(u8) -> u8,
     industry_substitute: extern "C" fn(u8) -> u16,
@@ -108,7 +107,11 @@ unsafe fn result(
         index -= 1;
         // SAFETY: loader lifetime excludes mutation. No slice/iterator survives evaluation.
         let entry = unsafe { (&(*STATE.get()).groups)[usize::from(feature)][index] };
-        let param1 = if (s.version)(entry.file) >= 8 { v8 } else { v7 };
+        let param1 = if (unsafe { &*s.shared }.grf_file_version)(entry.file) >= 8 {
+            v8
+        } else {
+            v7
+        };
         unsafe {
             (*invocation).file = entry.file;
             (*invocation).root = entry.group;
@@ -241,7 +244,9 @@ pub extern "C" fn openttd_rust_generic_ai(
         root: ptr::null(),
     };
     let mut answer = unsafe { result(&raw mut invocation, 0, 0, ptr::null_mut(), 0) };
-    if answer.result != CALLBACK_FAILED && (services().version)(answer.file) < 8 {
+    if answer.result != CALLBACK_FAILED
+        && (unsafe { &*services().shared }.grf_file_version)(answer.file) < 8
+    {
         answer.result &= 255;
     }
     answer
@@ -306,5 +311,5 @@ crate::abi::layouts! {
     "OpenTTDGenericScope" ["probe"] => Scope { cargo, selection, source, destination, distance, event, count, station_size, feature, ai };
     "OpenTTDGenericInvocation" ["probe"] => Invocation { scope, callback, param1, file, root };
     "OpenTTDGenericResult" ["probe"] => Result { file, result };
-    "OpenTTDGenericServices" ["probe"] => Services { shared, version, cargo_map, cargo_bitnum, industry_substitute, evaluate, common, enabled, ambient, water_class, sound, unsupported, unhandled };
+    "OpenTTDGenericServices" ["probe"] => Services { shared, cargo_map, cargo_bitnum, industry_substitute, evaluate, common, enabled, ambient, water_class, sound, unsupported, unhandled };
 }

@@ -22,7 +22,6 @@ pub const TRAIN_WIDTH_32_PIXELS: u8 = 3;
 pub struct Services {
     pub(crate) climate: unsafe extern "C" fn() -> u8,
     disable_elrails: unsafe extern "C" fn() -> bool,
-    pub(crate) file_version: unsafe extern "C" fn(*const c_void) -> u8,
     height_limit: unsafe extern "C" fn() -> u8,
     pub(crate) misc_bits: unsafe extern "C" fn() -> u8,
     newgrf_version: unsafe extern "C" fn() -> u32,
@@ -30,7 +29,7 @@ pub struct Services {
     pitch: unsafe extern "C" fn(*const c_void) -> i32,
     rail_cost: unsafe extern "C" fn(u8) -> u16,
     road_side: unsafe extern "C" fn() -> u8,
-    shared: *const Shared,
+    pub(crate) shared: *const Shared,
     width: unsafe extern "C" fn(*const c_void) -> u32,
 }
 #[unsafe(no_mangle)]
@@ -101,7 +100,7 @@ pub unsafe extern "C" fn openttd_rust_global_variable(
                 let snow = (shared.snow_line)();
                 if (s.climate)() == crate::landscape_type::ARCTIC && snow <= (s.height_limit)() {
                     (u32::from(snow)
-                        * if (s.file_version)(file) >= 8 {
+                        * if (shared.grf_file_version)(file) >= 8 {
                             1
                         } else {
                             crate::tile_type::TILE_HEIGHT
@@ -123,7 +122,7 @@ pub unsafe extern "C" fn openttd_rust_global_variable(
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDGlobalVariableServices" ["storage"] => Services { climate, disable_elrails, file_version, height_limit, misc_bits, newgrf_version, palette, pitch, rail_cost, road_side, shared, width };
+    "OpenTTDGlobalVariableServices" ["storage"] => Services { climate, disable_elrails, height_limit, misc_bits, newgrf_version, palette, pitch, rail_cost, road_side, shared, width };
 }
 
 // Feature identities from newgrf.h, pinned by native static assertions.

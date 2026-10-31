@@ -137,7 +137,6 @@ pub struct Services {
         *mut i32,
         usize,
     ) -> u16,
-    file_version: extern "C" fn(*const c_void) -> u8,
     company: extern "C" fn(u8, *const c_void) -> u32,
     spec_file: extern "C" fn(*const RailSpec) -> *const c_void,
     nearby_station: extern "C" fn(u8, u32, crate::services::Axis) -> u32,
@@ -644,7 +643,7 @@ pub unsafe extern "C" fn openttd_rust_station_base_variable(
 fn land_info(native: &Services, file: *const c_void, tile: u32, axis: u8) -> u32 {
     let slope = (native.shared().tile_slope)(tile);
     let swap = axis == AXIS_Y && (slope & SLOPE_W != 0) != (slope & SLOPE_E != 0);
-    (native.shared().nearby_tile_information)(tile, (native.file_version)(file) >= 8)
+    (native.shared().nearby_tile_information)(tile, (native.shared().grf_file_version)(file) >= 8)
         ^ if swap { u32::from(SLOPE_EW) } else { 0 }
 }
 fn build_date(date: i32) -> u32 {
@@ -1024,7 +1023,7 @@ crate::abi::layouts! {
  "OpenTTDStationResolverServices" ["station_service"] => Services {
  shared, cargo, cargo_owner, group_count, group_cargo, group, spec, loading_count, loaded_count,
  loading, loaded, axis, tile_add, tile_random, station_random, waiting, set_waiting, set_random,
- cached_cargo, spec_cargo, resolve_random, resolve_callback, file_version, company, spec_file, nearby_station, badges, build_date, airport_ttd_type, identity, town_scope, default_scope, unhandled, slope_error
+ cached_cargo, spec_cargo, resolve_random, resolve_callback, company, spec_file, nearby_station, badges, build_date, airport_ttd_type, identity, town_scope, default_scope, unhandled, slope_error
  };
 }
 

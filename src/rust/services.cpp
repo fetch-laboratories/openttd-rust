@@ -481,6 +481,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.nearby_tile_information = RustNearbyTileInformation,
 	.screen_dirty = RustScreenDirty,
 	.terrain_type = RustTerrainType,
+	.grf_file_version = RustGRFFileVersion,
 	.show_error = RustShowErrorMessage,
 	.not_reached = RustNotReached,
 };

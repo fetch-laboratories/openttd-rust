@@ -397,7 +397,7 @@ const OpenTTDObjectResolverServices &GetObjectResolverServices() noexcept
 		.file = RustSpecGRFFile<ObjectSpec>,
 		.root = RustSpecSpriteGroup<ObjectSpec>,
 		.local_id = RustSpecLocalID<ObjectSpec>,
-		.version = RustGRFFileVersion,
+		.shared = &GetRustSharedServices(),
 		.views = RustObjectViews,
 		.eligibility = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectEligibility { return {RustObjectSpecFlags(spec), spec->climate.base(), RustObjectViews(spec)}; },
 		.introduction = [](const ObjectSpec *spec) noexcept -> int32_t { return spec->introduction_date.base(); },

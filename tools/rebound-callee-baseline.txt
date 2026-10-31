@@ -200,15 +200,6 @@ rebound | RustGRFFileID | src/rust/airport_definitions.cpp | file_id
 rebound | RustGRFFileID | src/rust/engine_loading_services.hpp | file_id
 rebound | RustGRFFileID | src/rust/house_definition_services.hpp | file_id
 rebound | RustGRFFileID | src/rust/newgrf_storage_services.cpp | grfid
-rebound | RustGRFFileVersion | src/newgrf_generic.cpp | version
-rebound | RustGRFFileVersion | src/newgrf_house.cpp | version
-rebound | RustGRFFileVersion | src/newgrf_object.cpp | version
-rebound | RustGRFFileVersion | src/newgrf_station.cpp | file_version
-rebound | RustGRFFileVersion | src/rust/engine_capabilities_services.hpp | version
-rebound | RustGRFFileVersion | src/rust/engine_loading_services.hpp | file_version
-rebound | RustGRFFileVersion | src/rust/newgrf_spritegroup_services.cpp | file_version
-rebound | RustGRFFileVersion | src/rust/station_definitions.cpp | file_version
-rebound | RustGRFFileVersion | src/rust/vehicle_services_newgrf.h | grf_version
 rebound | RustGroundFirst | src/rust/ground_vehicle_services.cpp | first
 rebound | RustGroundFirst | src/rust/vehicle_services_newgrf.h | first
 rebound | RustHouseSpec | src/animated_tile.cpp | house_spec

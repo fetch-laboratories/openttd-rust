@@ -107,7 +107,6 @@ pub struct Services {
     pub(crate) cargo_classes: unsafe extern "C" fn(u8) -> u16,
     cargo_bitnum: unsafe extern "C" fn(u8) -> u8,
     cargo_translation: unsafe extern "C" fn(*const c_void, u8) -> u8,
-    grf_version: unsafe extern "C" fn(*const c_void) -> u8,
     valid_company: unsafe extern "C" fn(u8) -> bool,
     livery: unsafe extern "C" fn(u16, u8, u16, V) -> *const c_void,
     company_info: unsafe extern "C" fn(u8, *const c_void) -> u32,
@@ -360,7 +359,7 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
         let cargo = (value >> 8) as u8;
         let bitnum = if cargo == INVALID_CARGO {
             255
-        } else if grf.is_null() || (s.grf_version)(grf) < 8 {
+        } else if grf.is_null() || (s.shared.grf_file_version)(grf) < 8 {
             (s.cargo_bitnum)(cargo)
         } else {
             (s.cargo_translation)(grf, cargo)
@@ -1658,7 +1657,7 @@ crate::abi::layouts! {
     "OpenTTDVehicleOverrides" ["vehicle_resolver"] => Overrides { engine, count };
     "OpenTTDVehicleResolverServices" ["vehicle_resolver"] => Services {
         vehicle, shared, cache, first, move_vehicle => move, previous, capabilities,
-        cargo_classes, cargo_bitnum, cargo_translation, grf_version,
+        cargo_classes, cargo_bitnum, cargo_translation,
         valid_company, livery, company_info, first_engine, articulated, has_articulated,
         overrides, override_at, override_engine, cached_override, write_override, spritegroup, random_bits, waiting,
         write_random, write_waiting, resolve_callback, resolve_random, order, cargo_owner,

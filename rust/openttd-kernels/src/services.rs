@@ -490,6 +490,8 @@ pub struct Services {
     pub screen_dirty: extern "C" fn(),
     /// `GetTerrainType`.
     pub terrain_type: extern "C" fn(u32) -> u32,
+    /// `GRFFile::grf_version` of a non-null file.
+    pub grf_file_version: extern "C" fn(*const c_void) -> u8,
     /// `ShowErrorMessage` with two string IDs at `WL_ERROR`.
     pub show_error: extern "C" fn(u32, u32),
     /// Native `NOT_REACHED`.
@@ -821,6 +823,7 @@ crate::abi::layouts! {
         nearby_tile_information,
         screen_dirty,
         terrain_type,
+        grf_file_version,
         show_error,
         not_reached,
     };
@@ -933,7 +936,11 @@ pub fn fixture(
     extern "C" fn unexpected_terrain(_: u32) -> u32 {
         std::process::abort()
     }
+    extern "C" fn unexpected_version(_: *const c_void) -> u8 {
+        std::process::abort()
+    }
     Services {
+        grf_file_version: unexpected_version,
         nearby_tile: unexpected_nearby,
         nearby_tile_information: unexpected_information,
         screen_dirty: unexpected_path,

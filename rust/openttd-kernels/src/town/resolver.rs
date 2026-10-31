@@ -59,7 +59,6 @@ pub struct ResolverServices {
     storage: *const newgrf_storage::Services,
     larger_towns: extern "C" fn() -> u8,
     file: extern "C" fn(*const c_void) -> *const c_void,
-    version: extern "C" fn(*const c_void) -> u8,
     stage: extern "C" fn(u32) -> u8,
     age: extern "C" fn(u32) -> i32,
     random_bits: extern "C" fn(u32) -> u8,
@@ -478,7 +477,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
         }
         0x62 => (shared.nearby_tile_information)(
             (shared.nearby_tile)(parameter as u8, tile),
-            (s.version)((s.file)(ro)) >= 8,
+            (shared.grf_file_version)((s.file)(ro)) >= 8,
         ),
         0x63 => {
             let tile = (shared.nearby_tile)(parameter as u8, tile);
@@ -592,7 +591,7 @@ crate::abi::layouts! {
     "OpenTTDHouseFileIdentity" ["probe"] => FileIdentity { grfid, has_file };
     "OpenTTDHouseNearbySpec" ["probe"] => NearbySpec { file, local, house_class };
     "OpenTTDHouseResolverServices" ["probe"] => ResolverServices {
-        towns, shared, storage, larger_towns, file, version,
+        towns, shared, storage, larger_towns, file,
         stage, age, random_bits,
         random_triggers, search_spec, nearby_spec, file_identity,
         badges, root, spec_house, local_id, base_scope, evaluate, reseed, unhandled_house, unhandled_town,

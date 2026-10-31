@@ -342,7 +342,7 @@ pub(crate) unsafe fn file() -> *mut c_void {
 }
 /// `GRFFile::grf_version` through the engine loader's accessor.
 pub(crate) unsafe fn file_version(s: &Services, file: *const c_void) -> u8 {
-    unsafe { ((*s.engine).file_version)(file) }
+    unsafe { ((*(*s.engine).shared).grf_file_version)(file) }
 }
 unsafe fn config() -> *mut c_void {
     unsafe { (*execution()).grfconfig }

@@ -26,7 +26,6 @@ const OpenTTDEngineCapabilitiesServices &GetRustEngineCapabilitiesServices() noe
 		.aircraft_subtype = RustEngineAircraftSubtype,
 		.rail_kind = Engine_rail_kind,
 		.grf = RustEngineGRF,
-		.version = RustGRFFileVersion,
 		.loading = []() noexcept { return &GetRustEngineLoadingServices(); },
 		.cargo_classes = RustCargoClasses,
 		.multiplier = RustCargoMultiplier,

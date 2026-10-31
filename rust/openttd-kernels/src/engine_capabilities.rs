@@ -61,7 +61,6 @@ pub struct Services {
     aircraft_subtype: extern "C" fn(E) -> u8,
     pub(crate) rail_kind: extern "C" fn(E) -> RailVehicleTypes,
     pub(crate) grf: extern "C" fn(E) -> *const c_void,
-    version: extern "C" fn(*const c_void) -> u8,
     pub(crate) loading: extern "C" fn() -> *const crate::engine_loading::Services,
     cargo_classes: extern "C" fn(u8) -> u16,
     multiplier: extern "C" fn(u8) -> u16,
@@ -322,7 +321,7 @@ pub(crate) unsafe fn openttd_rust_articulated_next(
         if result == CALLBACK_FAILED {
             return INVALID_ENGINE;
         }
-        if (s.version)((s.grf)(e)) < 8 {
+        if (s.shared.grf_file_version)((s.grf)(e)) < 8 {
             result = gb(u32::from(result), 0, 8) as u16;
             if result == 0xff {
                 return INVALID_ENGINE;
@@ -584,7 +583,7 @@ crate::abi::layouts! {
     "OpenTTDEngineCapabilitiesServices" ["probe"] => Services {
         resolver, engine, engine_if_valid, kind, ground, id, default_cargo, callbacks, carrying, capacity_config, refit_mask,
         ship_capacity, passenger_capacity, mail_capacity, train_class, aircraft_subtype, rail_kind,
-        grf, version, loading, cargo_classes, multiplier, pool_available,
+        grf, loading, cargo_classes, multiplier, pool_available,
         new_temporary, destroy_temporary, set_engine, set_owner, vehicle_engine,
         vehicle_engine_object, vehicle_cargo, vehicle_subtype, has_articulated, next_articulated, shared, assertions, aircraft_cost, aircraft_range, aircraft_running, life_extension, life_years, price_shift, road_cost, road_price, road_running, ship_cost, ship_running, train_cost, train_price, train_running, valid_string,
     };

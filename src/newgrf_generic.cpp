@@ -38,7 +38,6 @@ const OpenTTDGenericServices &GetRustGenericServices() noexcept
 {
 	static const OpenTTDGenericServices services{
 		.shared = &GetRustSharedServices(),
-		.version = RustGRFFileVersion,
 		.cargo_map = RustGRFCargoMap,
 		.cargo_bitnum = RustCargoBitnum,
 		.industry_substitute = RustIndustrySubstitute,

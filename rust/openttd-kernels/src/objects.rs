@@ -1079,7 +1079,7 @@ impl<'a> World<'a> {
                         );
                         if result.callback != CALLBACK_FAILED {
                             let r = resolver_services(self.s);
-                            result.version = (r.version)((r.file)(spec));
+                            result.version = ((*r.shared).grf_file_version)((r.file)(spec));
                         }
                         crate::witness::hit(crate::witness::OBJECT_SLOPE_CALLBACK);
                     }
@@ -1848,7 +1848,7 @@ pub struct ResolverServices {
     pub file: unsafe extern "C" fn(*const Spec) -> *const std::ffi::c_void,
     pub root: unsafe extern "C" fn(*const Spec, bool) -> *const std::ffi::c_void,
     pub local_id: unsafe extern "C" fn(*const Spec) -> u16,
-    pub version: unsafe extern "C" fn(*const std::ffi::c_void) -> u8,
+    pub shared: *const crate::services::Services,
     pub views: unsafe extern "C" fn(*const Spec) -> u8,
     pub eligibility: unsafe extern "C" fn(*const Spec) -> Eligibility,
     pub introduction: unsafe extern "C" fn(*const Spec) -> i32,
@@ -2469,7 +2469,7 @@ crate::abi::layouts! {
     "OpenTTDObjectScope" ["landscape"] => ObjectScope { object, spec, parent, tile, view };
     "OpenTTDObjectEligibility" ["landscape"] => Eligibility { flags, climate, views };
     "OpenTTDObjectLifetime" ["landscape"] => Lifetime { introduction, end };
-    "OpenTTDObjectResolverServices" ["landscape"] => ResolverServices { file, root, local_id, version, views, eligibility, introduction, lifetime, town_scope, base_scope, evaluate };
+    "OpenTTDObjectResolverServices" ["landscape"] => ResolverServices { file, root, local_id, shared, views, eligibility, introduction, lifetime, town_scope, base_scope, evaluate };
     "OpenTTDObjectServices" ["landscape"] => ObjectServices {
         shared,
         cost,
