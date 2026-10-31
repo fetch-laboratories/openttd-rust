@@ -63,8 +63,26 @@ def runtime_markers(lines: list[str]) -> list[str]:
     from collections import Counter
 
     records = [line for line in lines if line.startswith("ENGINE properties-runtime ")]
-    counts = Counter(int(line.split()[2]) for line in records)
-    if counts != {0: 12, 1: 6, 2: 6, 3: 6}:
+    observed = []
+    for line in records:
+        fields = line.split()
+        if len(fields) != 8 or fields[4] not in ("false", "true"):
+            raise RuntimeError("engine runtime price record malformed")
+        try:
+            kind, price = int(fields[2]), int(fields[3])
+            base, cost, running = map(int, fields[5:])
+        except ValueError as error:
+            raise RuntimeError("engine runtime price record malformed") from error
+        if any(not -(1 << 63) <= value < 1 << 63 for value in (base, cost, running)):
+            raise RuntimeError("engine runtime price outside Money range")
+        observed.append((kind, price, fields[4], base))
+    expected = Counter(
+        (kind, price, dynamic, base)
+        for kind, price in ((0, 15), (0, 16), (1, 18), (2, 19), (3, 17))
+        for dynamic in ("false", "true")
+        for base in (2560, (1 << 63) - 1, -(1 << 63))
+    )
+    if Counter(observed) != expected:
         raise RuntimeError("engine runtime kinds, wagon, factors or saturation missing")
     required = {
         "runtime-null-grf": 4,
@@ -79,6 +97,7 @@ def runtime_markers(lines: list[str]) -> list[str]:
         "runtime-range-dynamic": 1,
         "runtime-life": 8,
         "runtime-rng": 1,
+        "runtime-built-life": 4,
     }
     for label, count in required.items():
         if lines.count("ENGINE loading-case " + label + " true") != count:
@@ -86,6 +105,12 @@ def runtime_markers(lines: list[str]) -> list[str]:
     rng = [line for line in lines if line.startswith("ENGINE properties-runtime-rng ")]
     if len(rng) != 1:
         raise RuntimeError("engine runtime random streams missing")
+    try:
+        words = [int(word) for word in rng[0].split()[2:]]
+    except ValueError as error:
+        raise RuntimeError("engine runtime random streams malformed") from error
+    if len(words) != 4 or any(not 0 <= word < 1 << 32 for word in words):
+        raise RuntimeError("engine runtime random streams malformed")
     return records + rng
 
 

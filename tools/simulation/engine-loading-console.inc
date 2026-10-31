@@ -139,7 +139,7 @@ static void RuntimeInspect()
 					LoadingRequire(cost == GetPrice(build, dynamic ? 32767 : 53, &file, -8) && observer->calls == 1 && observer->property == cost_prop, "runtime-build");
 					Money run = e->GetRunningCost();
 					LoadingRequire(run == GetPrice(running, dynamic ? 32767 : 29, &file, -8) && observer->calls == 2 && observer->property == run_prop, "runtime-running");
-					fmt::print(stderr, "ENGINE properties-runtime {} {} {} {} {}\n", type, dynamic, base, cost, run);
+					fmt::print(stderr, "ENGINE properties-runtime {} {} {} {} {} {}\n", type, build, dynamic, base, cost, run);
 					purchase.Restore(); upkeep.Restore();
 				}
 			}
