@@ -321,15 +321,6 @@ pub struct PathRead {
     pub dest: u32,
     pub owner: u8,
     pub articulated: bool,
-    pub bus: bool,
-}
-
-/// Road stop arrival and departure inputs.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct StopRead {
-    pub owner: u8,
-    pub bus: bool,
 }
 
 /// `RoadVehCheckOvertake` inputs of either vehicle.
@@ -367,7 +358,6 @@ pub struct DepotResult {
 #[derive(Clone, Copy)]
 pub struct ArrivalRead {
     pub had_vehicle_of_type: u8,
-    pub bus: bool,
 }
 
 #[repr(C)]
@@ -444,7 +434,6 @@ pub struct Leaves {
     pub tram_build_read:
         extern "C" fn(VehicleRef, *mut crate::road_cmd::CommandSlot) -> TramBuildRead,
     pub disconnect: extern "C" fn(),
-    pub stop_read: extern "C" fn(VehicleRef) -> StopRead,
     pub should_stop: extern "C" fn(VehicleRef, u32) -> bool,
     pub arrival_read: extern "C" fn(VehicleRef, u16) -> ArrivalRead,
     pub arrival_news: extern "C" fn(VehicleRef, u16, u8, u8),
@@ -1129,6 +1118,7 @@ impl Game<'_> {
         let red = (ts >> 16) & 0x3f3f;
         let mut trackdirs = ts & 0x3f3f;
         let p = service!(self.l.path_read)(v.v);
+        let bus = crate::road_stop::is_bus(self.ss, v.v);
         let kind = service!(self.ss.tile_type)(tile);
         if kind == MP_ROAD {
             if service!(self.l.is_road_depot_tile)(tile)
@@ -1143,15 +1133,11 @@ impl Game<'_> {
                 || p.articulated
             {
                 trackdirs = 0;
-            } else if service!(self.ss.road_stop_type)(tile).0 != u8::from(!p.bus)
+            } else if service!(self.ss.road_stop_type)(tile).0 != u8::from(!bus)
                 || (!self.queue
                     && !crate::road_stop::has_free_bay(
-                        crate::road_stop::get_by_tile(
-                            self.ss,
-                            tile,
-                            RoadStopType(u8::from(!p.bus)),
-                        )
-                        .1,
+                        crate::road_stop::get_by_tile(self.ss, tile, RoadStopType(u8::from(!bus)))
+                            .1,
                     ))
             {
                 trackdirs = 0;
@@ -1332,9 +1318,10 @@ impl Game<'_> {
     /// `RoadVehArrivesAt`, `BeginLoading` and the road stop arrival triggers.
     fn arrive_load(&self, v: Part, s: &Step, station: u16) {
         let r = service!(self.l.arrival_read)(v.v, station);
-        let bit = if r.bus { HVOT_BUS } else { HVOT_TRUCK };
+        let bus = crate::road_stop::is_bus(self.ss, v.v);
+        let bit = if bus { HVOT_BUS } else { HVOT_TRUCK };
         if r.had_vehicle_of_type & bit == 0 {
-            let headline = if r.bus { 0 } else { 2 } + u8::from(s.tram);
+            let headline = if bus { 0 } else { 2 } + u8::from(s.tram);
             service!(self.l.arrival_news)(v.v, station, bit, headline);
         }
         crate::vehicle::visits::begin_loading(v.v, self.vs.visits());
@@ -1347,10 +1334,11 @@ impl Game<'_> {
     }
     /// Drive-through stop test shared by the blocked and stop-frame paths.
     fn stops_here(&self, v: Part, tile: u32) -> bool {
-        let r = service!(self.l.stop_read)(v.v);
+        let owner = service!(self.vs.owner)(v.v);
+        let bus = crate::road_stop::is_bus(self.ss, v.v);
         service!(self.l.should_stop)(v.v, tile)
-            && r.owner == service!(self.ss.tile_owner)(tile)
-            && service!(self.ss.road_stop_type)(tile).0 == u8::from(!r.bus)
+            && owner == service!(self.ss.tile_owner)(tile)
+            && service!(self.ss.road_stop_type)(tile).0 == u8::from(!bus)
     }
     /// `IndividualRoadVehicleController`; `s` is a fresh observation of `v`.
     fn individual(
@@ -1600,10 +1588,11 @@ impl Game<'_> {
                     && in_range(v.state(), DT_STOP, DT_STOP + 16)
                     && service!(self.l.should_stop)(v.v, s.tile)
                 {
-                    let r = service!(self.l.stop_read)(v.v);
-                    if r.owner == service!(self.ss.tile_owner)(s.tile)
+                    let owner = service!(self.vs.owner)(v.v);
+                    let bus = crate::road_stop::is_bus(self.ss, v.v);
+                    if owner == service!(self.ss.tile_owner)(s.tile)
                         && service!(self.vs.order_type)(v.v) != OT_LEAVESTATION
-                        && service!(self.ss.road_stop_type)(s.tile).0 == u8::from(!r.bus)
+                        && service!(self.ss.road_stop_type)(s.tile).0 == u8::from(!bus)
                     {
                         let station = service!(self.ss.station_index)(s.tile);
                         service!(self.vs.write_last_station)(v.v, station);
@@ -2359,11 +2348,6 @@ crate::abi::layouts! {
         dest,
         owner,
         articulated,
-        bus,
-    };
-    "OpenTTDRoadStopRead" ["probe"] => StopRead {
-        owner,
-        bus,
     };
     "OpenTTDRoadOvertakeRead" ["probe"] => OvertakeRead {
         tile,
@@ -2385,7 +2369,6 @@ crate::abi::layouts! {
     };
     "OpenTTDRoadArrivalRead" ["probe"] => ArrivalRead {
         had_vehicle_of_type,
-        bus,
     };
     "OpenTTDRoadSoundRead" ["probe"] => SoundRead {
         sound,
@@ -2452,7 +2435,6 @@ crate::abi::layouts! {
         find_depot,
         tram_build_read,
         disconnect,
-        stop_read,
         should_stop,
         arrival_read,
         arrival_news,

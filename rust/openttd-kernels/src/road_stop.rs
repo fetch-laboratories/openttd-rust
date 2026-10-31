@@ -126,6 +126,10 @@ fn table(s: &Services) -> &RoadStopServices {
     unsafe { &*(s.road_stops)() }
 }
 
+/// Canonical `RoadVehicle::IsBus` observation.
+pub(crate) fn is_bus(s: &Services, v: VehicleRef) -> bool {
+    (table(s).is_bus)(v)
+}
 /// `Station::GetPrimaryRoadStop(const RoadVehicle *)`.
 pub(crate) fn primary_for_vehicle(
     s: &Services,
@@ -133,7 +137,7 @@ pub(crate) fn primary_for_vehicle(
     v: VehicleRef,
 ) -> *mut Stop {
     let stops = table(s);
-    let head = (stops.head)(station, !(stops.is_bus)(v));
+    let head = (stops.head)(station, !is_bus(s, v));
     accessible(s, head, v)
 }
 /// `RoadStop::GetNextRoadStop`: retain the native linked-list order.

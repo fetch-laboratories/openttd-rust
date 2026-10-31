@@ -2,6 +2,7 @@
 
 import hashlib
 import struct
+import subprocess
 from pathlib import Path
 
 from . import core, economy
@@ -1347,6 +1348,18 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
             )
         )
     )
+    target = "openttd-rust" if (build / "openttd-rust").exists() else "openttd"
+    news = [
+        line.split()[-1]
+        for line in subprocess.check_output(
+            ["nm", str(build / target)], text=True
+        ).splitlines()
+        if " T _Z11AddNewsItem" in line
+    ]
+    if len(news) != 1:
+        raise RuntimeError(
+            "station crash observation needs the canonical AddNewsItem symbol"
+        )
     source = folder / "station-commands.cpp"
     source.write_text(
         COMMAND_SOURCE.replace(
@@ -1357,7 +1370,9 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
             (ROOT / "tools/simulation/station-resolver-console.hpp").read_text()
             + (ROOT / "tools/simulation/airport-resolver-console.hpp").read_text()
             + (ROOT / "tools/simulation/station-lifecycle-console.hpp").read_text()
-            + (ROOT / "tools/simulation/station-spatial-console.hpp").read_text(),
+            + (ROOT / "tools/simulation/station-spatial-console.hpp")
+            .read_text()
+            .replace("STATION602_NEWS_SYMBOL", news[0]),
         )
     )
     return console_adapter(
@@ -1366,6 +1381,12 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
         env,
         source,
         "stations",
+        wraps=(
+            "_ZN2AI8NewEventE6PoolIDIh12CompanyIDTagLh15ELh255EEP11ScriptEvent",
+            "_ZN4Game8NewEventEP11ScriptEvent",
+            "_Z16SndPlayVehicleFxtPK7Vehicle",
+            news[0],
+        ),
         replace_objects=("/src/station_cmd.cpp.o",),
         native_test_support=True,
     )
@@ -1716,8 +1737,27 @@ def check_spatial602(log: list[str], reload: bool) -> None:
         for radius in (0, 1, 2, 8)
         for amount in (-160, -1, 0, 1, 255)
     ]
-    if not reload:
+    markers += [
+        f"STCMD spatial602-animation {axis} {blocked} {area} "
+        for axis in (0, 1)
+        for blocked in ("false", "true")
+        for area in (0, 1, 2)
+    ]
+    markers += [
+        f"STCMD spatial602-random {axis} {blocked} {area} "
+        for axis in (0, 1)
+        for blocked in ("false", "true")
+        for area in (1, 2)
+    ]
+    if reload:
+        markers += ["STCMD spatial602-crash-reload 40"]
+    else:
         markers += [
+            "STCMD spatial602-crash 0 ai-event 200",
+            "STCMD spatial602-crash 1 game-event 200",
+            "STCMD spatial602-crash 2 news 200",
+            "STCMD spatial602-crash 3 sound 40",
+            "STCMD owner562-rng spatial602-crash ",
             "STCMD spatial602-stop occupied-articulated ",
             "STCMD spatial602-collisions true true",
             "STCMD spatial602-deleted-tie ",

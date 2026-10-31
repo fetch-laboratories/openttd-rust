@@ -110,7 +110,7 @@ static OpenTTDRoadRoadTypes OPENTTD_RUST_CALL RoadSvcMoveTile(OpenTTDVehicle *v,
 static OpenTTDRoadPathRead OPENTTD_RUST_CALL RoadSvcPathRead(OpenTTDVehicle *v) noexcept
 {
 	const RoadVehicle *u = RoadOf(v);
-	return {.dest = RustVehicleDestTile(u), .owner = RustVehicleOwner(u), .articulated = RustGroundHasArticulated(u), .bus = u->IsBus()};
+	return {.dest = RustVehicleDestTile(u), .owner = RustVehicleOwner(u), .articulated = RustGroundHasArticulated(u)};
 }
 static OpenTTDRoadTrackChoice OPENTTD_RUST_CALL RoadSvcChooseTrack(OpenTTDVehicle *v, uint32_t tile, uint8_t entry, uint16_t trackdirs) noexcept
 {
@@ -131,19 +131,14 @@ static OpenTTDRoadTramBuildRead OPENTTD_RUST_CALL RoadSvcTramBuildRead(OpenTTDVe
 	return {.owner = RustVehicleOwner(u), .road_type = RustRoadVehicleType(u), .road = &std::construct_at(&slot->road)->view};
 }
 static void OPENTTD_RUST_CALL RoadSvcDisconnect() noexcept { FatalError("Disconnecting road vehicle."); }
-static OpenTTDRoadStopRead OPENTTD_RUST_CALL RoadSvcStopRead(OpenTTDVehicle *v) noexcept
-{
-	const RoadVehicle *u = RoadOf(v);
-	return {.owner = RustVehicleOwner(u), .bus = u->IsBus()};
-}
 static bool OPENTTD_RUST_CALL RoadSvcShouldStop(OpenTTDVehicle *v, uint32_t tile) noexcept
 {
 	const RoadVehicle *u = RoadOf(v);
 	return u->current_order.ShouldStopAtStation(u, StationID(GetRustSharedServices().station_index(tile)));
 }
-static OpenTTDRoadArrivalRead OPENTTD_RUST_CALL RoadSvcArrivalRead(OpenTTDVehicle *v, uint16_t station) noexcept
+static OpenTTDRoadArrivalRead OPENTTD_RUST_CALL RoadSvcArrivalRead(OpenTTDVehicle *, uint16_t station) noexcept
 {
-	return {.had_vehicle_of_type = Station::Get(StationID(station))->had_vehicle_of_type, .bus = RoadOf(v)->IsBus()};
+	return {.had_vehicle_of_type = Station::Get(StationID(station))->had_vehicle_of_type};
 }
 /** The first-arrival body of `RoadVehArrivesAt`: mark, news, AI and game events. */
 static void OPENTTD_RUST_CALL RoadSvcArrivalNews(OpenTTDVehicle *v, uint16_t station, uint8_t vehicle_type, uint8_t headline) noexcept
@@ -276,7 +271,6 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.find_depot = RoadSvcFindDepot,
 	.tram_build_read = RoadSvcTramBuildRead,
 	.disconnect = RoadSvcDisconnect,
-	.stop_read = RoadSvcStopRead,
 	.should_stop = RoadSvcShouldStop,
 	.arrival_read = RoadSvcArrivalRead,
 	.arrival_news = RoadSvcArrivalNews,

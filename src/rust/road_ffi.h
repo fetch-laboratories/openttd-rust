@@ -122,11 +122,6 @@ struct OpenTTDRoadPathRead {
 	uint32_t dest;
 	uint8_t owner;
 	bool articulated;
-	bool bus;
-};
-struct OpenTTDRoadStopRead {
-	uint8_t owner;
-	bool bus;
 };
 struct OpenTTDRoadOvertakeRead {
 	uint32_t tile;
@@ -148,7 +143,6 @@ struct OpenTTDRoadDepotResult {
 };
 struct OpenTTDRoadArrivalRead {
 	uint8_t had_vehicle_of_type;
-	bool bus;
 };
 struct OpenTTDRoadSoundRead {
 	uint16_t sound;
@@ -206,7 +200,6 @@ struct OpenTTDRoadLeaves {
 	OpenTTDRoadDepotResult (OPENTTD_RUST_CALL *find_depot)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(find_depot);
 	OpenTTDRoadTramBuildRead (OPENTTD_RUST_CALL *tram_build_read)(OpenTTDVehicle *, OpenTTDRoadCommandSlot *) noexcept OPENTTD_SERVICE_DEFAULT(tram_build_read);
 	void (OPENTTD_RUST_CALL *disconnect)() noexcept OPENTTD_SERVICE_DEFAULT(disconnect);
-	OpenTTDRoadStopRead (OPENTTD_RUST_CALL *stop_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(stop_read);
 	bool (OPENTTD_RUST_CALL *should_stop)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(should_stop);
 	OpenTTDRoadArrivalRead (OPENTTD_RUST_CALL *arrival_read)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(arrival_read);
 	void (OPENTTD_RUST_CALL *arrival_news)(OpenTTDVehicle *, uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(arrival_news);
