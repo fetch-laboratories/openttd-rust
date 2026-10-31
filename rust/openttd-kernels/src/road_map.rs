@@ -210,9 +210,9 @@ pub(crate) fn has_town_owned_road(world: &crate::map_func::World<'_>, tile: u32)
 pub(crate) fn get_present_road_types(world: &crate::map_func::World<'_>, tile: u32) -> u64 {
     let mut types = 0;
     if may_have_road(&world.types, crate::tile_type::TileIndex(tile)).expect("map tile") {
-        for kind in [world.road_type(tile, false), world.road_type(tile, true)] {
-            if kind != crate::road_type::INVALID_ROADTYPE {
-                types |= 1_u64 << kind;
+        for tram in [false, true] {
+            if world.road_type(tile, tram) != crate::road_type::INVALID_ROADTYPE {
+                types |= 1_u64 << world.road_type(tile, tram);
             }
         }
     }

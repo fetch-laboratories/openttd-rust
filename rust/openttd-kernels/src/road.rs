@@ -418,7 +418,6 @@ pub struct Leaves {
     pub link: extern "C" fn(VehicleRef) -> Link,
     pub link_tile: extern "C" fn(VehicleRef) -> LinkTile,
     pub after_enter_tile: extern "C" fn(VehicleRef, u8) -> Entered,
-    pub has_road: extern "C" fn(VehicleRef, u32) -> bool,
     pub any_road_bits: extern "C" fn(VehicleRef, u32, bool) -> u8,
     pub is_road_depot_tile: extern "C" fn(u32) -> bool,
     pub depot_direction: extern "C" fn(u32) -> u8,
@@ -655,6 +654,11 @@ impl Game<'_> {
     fn random(&self) -> u32 {
         service!(self.ss.random)(self.ss.context)
     }
+    fn has_road(&self, vehicle: VehicleRef, tile: u32) -> bool {
+        let types = (self.movement.get().road_compatible)(vehicle);
+        let world = crate::map_func::World::with_dimensions(self.ss, self.movement.get(), self.map);
+        crate::road_map::has_tile_any_road_type(&world, tile, types)
+    }
     fn tile_xy(&self, tile: u32, pos: (u8, u8)) -> (i32, i32) {
         (
             (self.map.tile_x(tile) * 16 + u32::from(pos.0)) as i32,
@@ -780,7 +784,7 @@ impl Game<'_> {
     }
     /// `CheckRoadBlockedForOvertaking`.
     fn overtake_blocked(&self, v: Part, u: VehicleRef, tile: u32, trackdir: u8) -> bool {
-        if !service!(self.l.has_road)(v.v, tile) {
+        if !self.has_road(v.v, tile) {
             return true;
         }
         let ts = self.movement.road_tracks(v.v, tile);
@@ -1402,7 +1406,7 @@ impl Game<'_> {
         if rd.0 & 128 != 0 {
             let mut tile = self.map.add_diag(s.tile, entry);
             let mut dir = if s.front {
-                if service!(self.l.has_road)(v.v, tile) {
+                if self.has_road(v.v, tile) {
                     self.path(v, s, tile, entry)
                 } else {
                     REVERSE[usize::from(entry)]
@@ -1431,7 +1435,7 @@ impl Game<'_> {
                             || (s.front
                                 && service!(self.ss.is_normal_road_tile)(tile)
                                 && !service!(self.ss.has_road_works)(tile)
-                                && service!(self.l.has_road)(v.v, tile)
+                                && self.has_road(v.v, tile)
                                 && needed & service!(self.ss.normal_road_bits)(tile, 1).0 != 0);
                         if !big {
                             if !s.front
@@ -1628,7 +1632,7 @@ impl Game<'_> {
                 if service!(self.l.is_drive_through)(s.tile) {
                     let next = self.map.add_dir(s.tile, s.direction);
                     if crate::road_stop::continuation(self.ss, s.tile, next)
-                        && service!(self.l.has_road)(v.v, next)
+                        && self.has_road(v.v, next)
                     {
                         v.set(FRAME, u16::from(frame) + 1);
                         self.move_to(v, ground, s, (x, y), true, false);
@@ -2420,7 +2424,6 @@ crate::abi::layouts! {
         link,
         link_tile,
         after_enter_tile,
-        has_road,
         any_road_bits,
         is_road_depot_tile,
         depot_direction,

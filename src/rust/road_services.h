@@ -91,8 +91,6 @@ static bool OPENTTD_RUST_CALL RoadSvcCandidate(OpenTTDVehicle *vehicle, OpenTTDV
 	return true;
 }
 
-static bool OPENTTD_RUST_CALL RoadSvcHasRoad(OpenTTDVehicle *v, uint32_t tile) noexcept { return HasTileAnyRoadType(TileIndex(tile), RoadOf(v)->compatible_roadtypes); }
-
 static uint8_t OPENTTD_RUST_CALL RoadSvcAnyRoadBits(OpenTTDVehicle *v, uint32_t tile, bool straight_only) noexcept
 {
 	return GetAnyRoadBits(TileIndex(tile), RustRoadTramType(RustRoadVehicleType(RoadOf(v))), straight_only);
@@ -255,7 +253,6 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.link = RoadSvcLink,
 	.link_tile = RoadSvcLinkTile,
 	.after_enter_tile = RoadSvcAfterEnterTile,
-	.has_road = RoadSvcHasRoad,
 
 	.any_road_bits = RoadSvcAnyRoadBits,
 	.is_road_depot_tile = Shared_is_road_depot,
