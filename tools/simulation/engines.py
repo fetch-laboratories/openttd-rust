@@ -18,6 +18,7 @@ from .core import (
 class RuntimeRun(TypedDict):
     exit: int | str
     log: list[str]
+    stdout: bytes
 
 
 def runtime_fatal_probes(
@@ -49,7 +50,7 @@ def runtime_fatal_probes(
                 not isinstance(run["exit"], int)
                 or not run["exit"]
                 or "ENGINE runtime-fatal " + command not in run["log"]
-                or not any("NOT_REACHED triggered" in line for line in run["log"])
+                or b"NOT_REACHED triggered" not in run["stdout"]
             ):
                 raise RuntimeError(
                     "engine invalid-kind fatal path missing: " + operation
