@@ -137,10 +137,25 @@ def install(scenario, run_dir):
         (run_dir / "fleet-drain.scr").write_text("fleet_scenario drain-inspect\n")
 
 
-def adapter(build, folder, env):
+def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
     from .console_adapter import console_adapter
 
-    return console_adapter(build, folder, env, ADAPTER, "fleet")
+    return console_adapter(
+        build,
+        folder,
+        env,
+        ADAPTER,
+        "fleet",
+        wraps=(
+            "_Z20InvalidateWindowData11WindowClass12WindowNumberib",
+            "_Z27InvalidateWindowClassesData11WindowClassib",
+            "_Z14SetWindowDirty11WindowClass12WindowNumber",
+            "_Z24CloseConstructionWindowsv",
+            "_Z20MarkWholeScreenDirtyv",
+            "_Z21ResetVehicleColourMapv",
+            "_Z19CmdChangeServiceInt10EnumBitSetI13DoCommandFlagtLS0_16EE6PoolIDIj12VehicleIDTagLj1044480ELj1048575EEtbb",
+        ),
+    )
 
 
 def prepare(scenario, binaries, builds, out, timeout, env, result):

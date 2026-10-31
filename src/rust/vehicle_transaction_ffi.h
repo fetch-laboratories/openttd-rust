@@ -29,7 +29,6 @@ struct OpenTTDVehicleTransactionServices {
 	void (*set_name)(void *, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(set_name);
 	void (*name_dirty)(void *) noexcept OPENTTD_SERVICE_DEFAULT(name_dirty);
 	bool (*interval_percent)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(interval_percent);
-	int32_t (*interval_default)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(interval_default);
 	uint16_t (*interval_clamp)(int32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(interval_clamp);
 	void (*set_interval)(void *, uint16_t, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_interval);
 	uint32_t unique_name;

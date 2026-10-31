@@ -68,7 +68,7 @@ static bool WaterScenario([[maybe_unused]] std::span<std::string_view> args)
 			if (captured == OWNER_TOWN && at == 0) continue; // original precondition
 			CommandCost cost;
 #ifdef WITH_RUST
-			GetRustCommandServices().ownership(RustCommandCost(&cost), captured.base(), at.base());
+			openttd_rust_company_check_ownership(GetRustCommandServices().company(), RustCommandCost(&cost), captured.base(), at.base());
 #else
 			cost = CheckOwnership(captured, at);
 #endif

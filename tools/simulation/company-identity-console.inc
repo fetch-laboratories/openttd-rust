@@ -6,6 +6,7 @@
 
 static void CompanyIdentityInspect()
 {
+	CompanyControlInspect();
 	for (const Company *c : Company::Iterate()) {
 		fmt::print(stderr, "COMPANY-IDENTITY record {} {} {} {} {} {} {}\n", c->index.base(), to_underlying(c->colour), c->name_1, c->name_2, c->president_name_1, c->president_name_2, c->face.bits);
 		for (uint scheme = 0; scheme < LS_END; scheme++) {

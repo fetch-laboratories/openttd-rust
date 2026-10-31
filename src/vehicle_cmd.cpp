@@ -76,7 +76,6 @@ static void VehicleTransactionNameDirty(void *shell) noexcept
 	InvalidateWindowClassesData(GetWindowClassForVehicleType(RustVehicleVehicleType(static_cast<Vehicle *>(shell))), 1);
 	RustScreenDirty();
 }
-static int32_t VehicleTransactionDefaultInterval(uint8_t owner, uint8_t type) noexcept { return CompanyServiceInterval(Company::Get(CompanyID(owner)), static_cast<VehicleType>(type)); }
 static uint16_t VehicleTransactionClampInterval(int32_t interval, bool percent) noexcept { return GetServiceIntervalClamped(interval, percent); }
 static void VehicleTransactionSetInterval(void *shell, uint16_t interval, bool custom, bool percent) noexcept
 {
@@ -99,7 +98,6 @@ const OpenTTDVehicleTransactionServices &GetRustVehicleTransactionServices() noe
 		.set_name = RustVehicleSetName,
 		.name_dirty = VehicleTransactionNameDirty,
 		.interval_percent = RustCompanyServiceIntervalPercent,
-		.interval_default = VehicleTransactionDefaultInterval,
 		.interval_clamp = VehicleTransactionClampInterval,
 		.set_interval = VehicleTransactionSetInterval,
 		.unique_name = STR_ERROR_NAME_MUST_BE_UNIQUE,
