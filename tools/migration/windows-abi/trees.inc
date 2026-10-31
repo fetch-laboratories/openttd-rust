@@ -130,7 +130,9 @@ static void Trees()
 	tree_probe.plant.tile_type = 0;
 	OpenTTDRoadStopResolverServices roadstops{};
 	roadstops.by_tile = [](uint32_t) noexcept -> BaseStation * { return nullptr; };
-	const OpenTTDStationLifecycleServices station{.shared = &shared, .roadstop = &roadstops};
+	auto station = OpenTTDStationLifecycleServices{};
+	station.shared = &shared;
+	station.roadstop = &roadstops;
 	const OpenTTDLandscapeLoopServices loop{
 		.shared = &shared,
 		.tile_types = {},

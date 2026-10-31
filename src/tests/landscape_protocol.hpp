@@ -54,7 +54,9 @@ template<typename Check> void Run(Check check)
 	/* The Rust station loop's first native call is GetByTile. */
 	OpenTTDRoadStopResolverServices roadstops{};
 	roadstops.by_tile = [](uint32_t tile) noexcept -> BaseStation * { Visit<5>(tile); return nullptr; };
-	const OpenTTDStationLifecycleServices station{.shared = &shared, .roadstop = &roadstops};
+	auto station = OpenTTDStationLifecycleServices{};
+	station.shared = &shared;
+	station.roadstop = &roadstops;
 	const OpenTTDIndustryTileServices object_tiles{.on_water = ProbeObjectOnWater};
 	auto objects = OpenTTDObjectServices{};
 	objects.shared = &shared;
