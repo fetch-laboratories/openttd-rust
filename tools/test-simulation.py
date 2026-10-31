@@ -1216,6 +1216,65 @@ class SpeedPassTests(unittest.TestCase):
                             )
 
 
+class DrawingWorkloadTests(unittest.TestCase):
+    def test_profiled_launch_counts_drawing_in_both_builds(self):
+        from simulation import drawing
+
+        (scenario,) = drawing.scenarios(False)
+        self.assertIn(scenario, simulate.scenario_list(False))
+        self.assertIn(scenario["name"], ir.PROFILED)
+        for reference in (True, False):
+            self.assertEqual(
+                ir.flags(scenario, reference)[-1], f"--toggle-collect={ir.DRAW_ENTRY}"
+            )
+        with tempfile.TemporaryDirectory() as directory:
+            plan = simulate.prepare_game(
+                scenario, Path("openttd"), Path(directory), Path(directory) / "run", 1
+            )
+        command = plan["command"]
+        self.assertNotIn("-vnull:ticks=1", command)
+        self.assertIn("-vsdl:no_threads", command)
+        self.assertEqual(command[command.index("-b") + 1], drawing.BLITTER)
+        self.assertEqual(plan["env"]["SDL_VIDEODRIVER"], "dummy")
+
+    def test_images_compare_byte_for_byte_and_require_equal_graphics(self):
+        from simulation import drawing
+
+        scenario = dict(draw=True)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for role in ("reference", "candidate"):
+                (root / role / "baseset").mkdir(parents=True)
+                (root / role / "baseset/opengfx.grf").write_bytes(b"gfx")
+                (root / role / "screenshot").mkdir()
+            builds = {role: root / role for role in ("reference", "candidate")}
+            self.assertIs(
+                drawing.prepare(scenario, {}, builds, root, 1, {}, {}), scenario
+            )
+            (root / "candidate/baseset/opengfx.grf").write_bytes(b"other")
+            with self.assertRaisesRegex(RuntimeError, "base graphics differ"):
+                drawing.prepare(scenario, {}, builds, root, 1, {}, {})
+            header = bytes(18) + (3).to_bytes(4, "little") + (2).to_bytes(4, "little")
+            for candidate, equal in ((b"same", True), (b"diff", False)):
+                result = dict(differences=[])
+                for role, body in (("reference", b"same"), ("candidate", candidate)):
+                    image = root / role / "screenshot/drawing.bmp"
+                    image.write_bytes(header + body)
+                    drawing.check(
+                        scenario, dict(dir=root / role), "plain", role, result
+                    )
+                self.assertEqual(result["plain_image"]["width"], 3)
+                self.assertEqual(result["plain_image"]["height"], 2)
+                self.assertEqual(not result["differences"], equal)
+                self.assertEqual(image.exists(), not equal)
+            self.assertEqual(result["differences"][0]["element"], "26")
+            image.unlink()
+            with self.assertRaisesRegex(RuntimeError, "candidate wrote screenshots"):
+                drawing.check(
+                    scenario, dict(dir=root / "candidate"), "plain", "candidate", {}
+                )
+
+
 class PlatformSubsetTests(unittest.TestCase):
     def test_generation_requires_no_jobs_before_and_after_initialization(self) -> None:
         for recalc_time, jobs in (
