@@ -47,8 +47,6 @@ pub(super) fn servicing(shell: *mut c_void, owner: *mut Industry, s: &Services) 
     let orders = crate::orders::VisitOrders::new(unsafe { &*(vehicles.orders)() });
     let resolver = unsafe { &*s.resolver };
     let subsidies = unsafe { &*(resolver.lifecycle().subsidies)() };
-    let catchment = unsafe { &*(shared.station_catchment)() };
-    let stations = unsafe { &*catchment.station };
     let mut result = Servicing::Nobody;
     let mut from = 0;
     while let Some(v) = (shared.vehicle_next)(from) {
@@ -91,7 +89,9 @@ pub(super) fn servicing(shell: *mut c_void, owner: *mut Industry, s: &Services) 
         let mut index = 0;
         while let Some(order) = orders.get(v, index) {
             if order.kind() == OT_GOTO_STATION && order.unload() != OUFB_TRANSFER {
-                let station = (stations.get)(order.destination);
+                let station = (subsidies.station)(order.destination)
+                    .cast_mut()
+                    .cast::<crate::station::BaseStation>();
                 crate::movement::native_assert(shared, !station.is_null());
                 if order.unload() == OUFB_UNLOAD && !accepts {
                     break;
