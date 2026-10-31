@@ -122,7 +122,8 @@ static SaveLoadParams _sl; ///< Parameters used for/at saveload.
 
 /** Codec action, length, array, block and header state and buffer cursors, owned by Rust. */
 static OpenTTDRustSaveLoadCodec &_codec = [] () -> OpenTTDRustSaveLoadCodec & {
-	static_assert(sizeof(SaveLoadVersion) == sizeof(uint16_t) && SLV_4 == 4 && SLV_69 == 69 && SLV_SAVELOAD_LIST_LENGTH == 293);
+	static_assert(sizeof(SaveLoadVersion) == sizeof(uint16_t) && SLV_4 == 4 && SLV_69 == 69 && SLV_169 == 169 && SLV_SAVELOAD_LIST_LENGTH == 293 && SLV_ENCODED_STRING_FORMAT == 350 && SLV_FIX_SCC_ENCODED_NEGATIVE == 353);
+	static_assert(SLF_ALLOW_CONTROL == 1 << 8 && SLF_ALLOW_NEWLINE == 1 << 9 && SLF_REPLACE_TABCRLF == 1 << 10);
 	static_assert(REF_VEHICLE == 1 && REF_LINK_GRAPH_JOB == 11 && sizeof(size_t) == sizeof(void *));
 	OpenTTDRustSaveLoadCodec &codec = *openttd_rust_saveload_codec();
 	codec.version = reinterpret_cast<const uint16_t *>(&_sl_version);
@@ -140,6 +141,9 @@ static bool SlNativeFrame(F &&operation) noexcept
 	catch (...) { _sl_native_exception = std::current_exception(); return false; }
 	return true;
 }
+
+void FixSCCEncoded(std::string &str, bool fix_code);
+void FixSCCEncodedNegative(std::string &str);
 
 /** Index of a pool item, for ReferenceToInt. */
 template <typename T>
@@ -183,6 +187,25 @@ static const OpenTTDSaveLoadServices _sl_services = {
 	.town_index = &SlPoolIndex<Town>,
 	.vehicle_get = &SlPoolGet<Vehicle>,
 	.vehicle_index = &SlPoolIndex<Vehicle>,
+	.string_data = [](const void *ptr, size_t *length) noexcept {
+		const std::string &str = *static_cast<const std::string *>(ptr);
+		*length = str.size();
+		return reinterpret_cast<const uint8_t *>(str.data());
+	},
+	.string_resize = [](void *ptr, size_t length) noexcept {
+		std::string &str = *static_cast<std::string *>(ptr);
+		str.resize(length);
+		return reinterpret_cast<uint8_t *>(str.data());
+	},
+	.fix_scc_encoded = [](void *ptr, bool fix_code) noexcept { FixSCCEncoded(*static_cast<std::string *>(ptr), fix_code); },
+	.fix_scc_encoded_negative = [](void *ptr) noexcept { FixSCCEncodedNegative(*static_cast<std::string *>(ptr)); },
+	.make_valid = [](void *ptr, bool control, bool newline, bool tabcrlf) noexcept {
+		StringValidationSettings settings = StringValidationSetting::ReplaceWithQuestionMark;
+		if (control) settings.Set(StringValidationSetting::AllowControlCode);
+		if (newline) settings.Set(StringValidationSetting::AllowNewline);
+		if (tabcrlf) settings.Set(StringValidationSetting::ReplaceTabCrNlWithSpace);
+		StrMakeValidInPlace(*static_cast<std::string *>(ptr), settings);
+	},
 };
 
 static const std::vector<ChunkHandlerRef> &ChunkHandlers()
@@ -559,28 +582,6 @@ void SlSetLength(size_t length)
 	openttd_rust_saveload_set_length(&_sl_services, length);
 }
 
-/**
- * Save/Load bytes. These do not need to be converted to Little/Big Endian
- * so directly write them or read them to/from file
- * @param ptr The source or destination of the object being manipulated
- * @param length number of bytes this fast CopyBytes lasts
- */
-static void SlCopyBytes(void *ptr, size_t length)
-{
-	uint8_t *p = (uint8_t *)ptr;
-
-	switch (_codec.action) {
-		case SLA_LOAD_CHECK:
-		case SLA_LOAD:
-			SlRaise(openttd_rust_saveload_read_bytes(&_sl_services, p, length));
-			break;
-		case SLA_SAVE:
-			openttd_rust_saveload_write_bytes(p, length);
-			break;
-		default: NOT_REACHED();
-	}
-}
-
 /** Get the length of the current object */
 size_t SlGetFieldLength()
 {
@@ -630,12 +631,8 @@ static void SlSaveLoadConv(void *ptr, VarType conv)
  */
 static inline size_t SlCalcStdStringLen(const void *ptr)
 {
-	const std::string *str = reinterpret_cast<const std::string *>(ptr);
-
-	size_t len = str->length();
-	return len + SlGetArrayLength(len); // also include the length of the index
+	return openttd_rust_saveload_std_string_len(&_sl_services, ptr);
 }
-
 
 /**
  * Scan the string for old values of SCC_ENCODED and fix it to it's new, value.
@@ -670,8 +667,7 @@ void FixSCCEncodedNegative(std::string &str)
  */
 void SlReadString(std::string &str, size_t length)
 {
-	str.resize(length);
-	SlCopyBytes(str.data(), length);
+	SlRaise(openttd_rust_saveload_read_string(&_sl_services, &str, length));
 }
 
 /**
@@ -681,45 +677,7 @@ void SlReadString(std::string &str, size_t length)
  */
 static void SlStdString(void *ptr, VarType conv)
 {
-	std::string *str = reinterpret_cast<std::string *>(ptr);
-
-	switch (_codec.action) {
-		case SLA_SAVE: {
-			size_t len = str->length();
-			SlWriteArrayLength(len);
-			SlCopyBytes(const_cast<void *>(static_cast<const void *>(str->data())), len);
-			break;
-		}
-
-		case SLA_LOAD_CHECK:
-		case SLA_LOAD: {
-			size_t len = SlReadArrayLength();
-			if (GetVarMemType(conv) == SLE_VAR_NULL) {
-				SlSkipBytes(len);
-				return;
-			}
-
-			SlReadString(*str, len);
-
-			StringValidationSettings settings = StringValidationSetting::ReplaceWithQuestionMark;
-			if ((conv & SLF_ALLOW_CONTROL) != 0) {
-				settings.Set(StringValidationSetting::AllowControlCode);
-				if (IsSavegameVersionBefore(SLV_ENCODED_STRING_FORMAT)) FixSCCEncoded(*str, IsSavegameVersionBefore(SLV_169));
-				if (IsSavegameVersionBefore(SLV_FIX_SCC_ENCODED_NEGATIVE)) FixSCCEncodedNegative(*str);
-			}
-			if ((conv & SLF_ALLOW_NEWLINE) != 0) {
-				settings.Set(StringValidationSetting::AllowNewline);
-			}
-			if ((conv & SLF_REPLACE_TABCRLF) != 0) {
-				settings.Set(StringValidationSetting::ReplaceTabCrNlWithSpace);
-			}
-			StrMakeValidInPlace(*str, settings);
-		}
-
-		case SLA_PTRS: break;
-		case SLA_NULL: break;
-		default: NOT_REACHED();
-	}
+	SlRaise(openttd_rust_saveload_std_string(&_sl_services, ptr, conv));
 }
 
 /**

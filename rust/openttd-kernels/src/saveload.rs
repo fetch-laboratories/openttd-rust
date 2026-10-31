@@ -56,7 +56,10 @@ pub(crate) const CH_SPARSE_TABLE: u8 = 4;
 /// `SaveLoadVersion` values in `saveload.h` that the codec tests.
 pub(crate) const SLV_4: u16 = 4;
 pub(crate) const SLV_69: u16 = 69;
+pub(crate) const SLV_169: u16 = 169;
 pub(crate) const SLV_SAVELOAD_LIST_LENGTH: u16 = 293;
+pub(crate) const SLV_ENCODED_STRING_FORMAT: u16 = 350;
+pub(crate) const SLV_FIX_SCC_ENCODED_NEGATIVE: u16 = 353;
 
 /// `SLRefType` in `saveload.h`.
 pub(crate) const REF_VEHICLE: u32 = 1;
@@ -103,6 +106,9 @@ pub(crate) const SLE_UINT16: u32 = SLE_FILE_U16 | SLE_VAR_U16;
 pub(crate) const SLE_INT32: u32 = SLE_FILE_I32 | SLE_VAR_I32;
 pub(crate) const SLE_UINT32: u32 = SLE_FILE_U32 | SLE_VAR_U32;
 pub(crate) const SLE_STRINGID: u32 = SLE_FILE_STRINGID | SLE_VAR_U32;
+pub(crate) const SLF_ALLOW_CONTROL: u32 = 1 << 8;
+pub(crate) const SLF_ALLOW_NEWLINE: u32 = 1 << 9;
+pub(crate) const SLF_REPLACE_TABCRLF: u32 = 1 << 10;
 
 /// `GetVarMemType`.
 const fn mem_type(conv: u32) -> u32 {
@@ -190,6 +196,16 @@ pub struct OpenTTDSaveLoadServices {
     pub town_index: extern "C" fn(obj: *const c_void) -> u32,
     pub vehicle_get: extern "C" fn(index: usize) -> *mut c_void,
     pub vehicle_index: extern "C" fn(obj: *const c_void) -> u32,
+    /// `std::string` at `ptr`: `data()`, with `size()` in `length`.
+    pub string_data: extern "C" fn(ptr: *const c_void, length: *mut usize) -> *const u8,
+    /// `std::string` at `ptr`: `resize(length)`, then `data()`.
+    pub string_resize: extern "C" fn(ptr: *mut c_void, length: usize) -> *mut u8,
+    /// `FixSCCEncoded(*str, fix_code)`.
+    pub fix_scc_encoded: extern "C" fn(ptr: *mut c_void, fix_code: bool),
+    /// `FixSCCEncodedNegative(*str)`.
+    pub fix_scc_encoded_negative: extern "C" fn(ptr: *mut c_void),
+    /// `StrMakeValidInPlace(*str, settings)` with `ReplaceWithQuestionMark` and the given flags.
+    pub make_valid: extern "C" fn(ptr: *mut c_void, control: bool, newline: bool, tabcrlf: bool),
 }
 
 struct Codec {
@@ -990,6 +1006,58 @@ unsafe fn save_load_ref(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, co
     Ok(())
 }
 
+/// `SlCalcStdStringLen`: the string's length plus its gamma length.
+fn calc_std_string_len(services: &OpenTTDSaveLoadServices, ptr: *const c_void) -> usize {
+    let mut len = 0;
+    (services.string_data)(ptr, &raw mut len);
+    len + gamma_length(len) as usize
+}
+
+/// `SlReadString`.
+fn read_string(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, length: usize) -> Status {
+    let data = (services.string_resize)(ptr, length);
+    copy_bytes(services, data, length)
+}
+
+/// `SlStdString`.
+fn std_string(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv: u32) -> Status {
+    match shared(|s| s.action) {
+        SLA_SAVE => {
+            let mut len = 0;
+            let data = (services.string_data)(ptr, &raw mut len);
+            write_simple_gamma(services, len);
+            copy_bytes(services, data.cast_mut(), len)?;
+        }
+        SLA_LOAD_CHECK | SLA_LOAD => {
+            let len = read_simple_gamma(services)? as usize;
+            if mem_type(conv) == SLE_VAR_NULL {
+                return skip_bytes(services, len);
+            }
+
+            read_string(services, ptr, len)?;
+
+            let control = conv & SLF_ALLOW_CONTROL != 0;
+            if control {
+                if version_before(SLV_ENCODED_STRING_FORMAT) {
+                    (services.fix_scc_encoded)(ptr, version_before(SLV_169));
+                }
+                if version_before(SLV_FIX_SCC_ENCODED_NEGATIVE) {
+                    (services.fix_scc_encoded_negative)(ptr);
+                }
+            }
+            (services.make_valid)(
+                ptr,
+                control,
+                conv & SLF_ALLOW_NEWLINE != 0,
+                conv & SLF_REPLACE_TABCRLF != 0,
+            );
+        }
+        SLA_PTRS | SLA_NULL => {}
+        _ => unreachable!("NOT_REACHED in SlStdString"),
+    }
+    Ok(())
+}
+
 fn status(result: Status) -> OpenTTDRustSaveLoadStatus {
     result.err().unwrap_or(SL_STATUS_OK)
 }
@@ -1147,28 +1215,6 @@ pub extern "C" fn openttd_rust_saveload_set_length(
     length: usize,
 ) {
     set_length(services, length);
-}
-
-/// `SlCopyBytes` when loading.
-///
-/// # Safety
-/// `ptr` has `length` writable bytes outside the codec's buffers.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_saveload_read_bytes(
-    services: &OpenTTDSaveLoadServices,
-    ptr: *mut u8,
-    length: usize,
-) -> OpenTTDRustSaveLoadStatus {
-    status(read_bytes(services, ptr, length))
-}
-
-/// `SlCopyBytes` when saving.
-///
-/// # Safety
-/// `ptr` has `length` readable bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_saveload_write_bytes(ptr: *const u8, length: usize) {
-    write_bytes(ptr, length);
 }
 
 /// `SlReadUint16`.
@@ -1329,6 +1375,44 @@ pub extern "C" fn openttd_rust_saveload_ref_len() -> usize {
     if version_before(SLV_69) { 2 } else { 4 }
 }
 
+/// `SlStdString`.
+///
+/// # Safety
+/// `ptr` points to a `std::string`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_saveload_std_string(
+    services: &OpenTTDSaveLoadServices,
+    ptr: *mut c_void,
+    conv: u32,
+) -> OpenTTDRustSaveLoadStatus {
+    status(std_string(services, ptr, conv))
+}
+
+/// `SlCalcStdStringLen`.
+///
+/// # Safety
+/// `ptr` points to a `std::string`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_saveload_std_string_len(
+    services: &OpenTTDSaveLoadServices,
+    ptr: *const c_void,
+) -> usize {
+    calc_std_string_len(services, ptr)
+}
+
+/// `SlReadString`.
+///
+/// # Safety
+/// `ptr` points to a `std::string`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_saveload_read_string(
+    services: &OpenTTDSaveLoadServices,
+    ptr: *mut c_void,
+    length: usize,
+) -> OpenTTDRustSaveLoadStatus {
+    status(read_string(services, ptr, length))
+}
+
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDRustSaveLoadCodec" ["probe"] => OpenTTDRustSaveLoadCodec {
@@ -1375,5 +1459,10 @@ crate::abi::layouts! {
         town_index,
         vehicle_get,
         vehicle_index,
+        string_data,
+        string_resize,
+        fix_scc_encoded,
+        fix_scc_encoded_negative,
+        make_valid,
     };
 }

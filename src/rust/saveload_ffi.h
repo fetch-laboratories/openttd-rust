@@ -68,6 +68,11 @@ typedef struct OpenTTDSaveLoadServices {
 	uint32_t (*town_index)(const void *obj);
 	void *(*vehicle_get)(size_t index);
 	uint32_t (*vehicle_index)(const void *obj);
+	const uint8_t *(*string_data)(const void *ptr, size_t *length);
+	uint8_t *(*string_resize)(void *ptr, size_t length);
+	void (*fix_scc_encoded)(void *ptr, bool fix_code);
+	void (*fix_scc_encoded_negative)(void *ptr);
+	void (*make_valid)(void *ptr, bool control, bool newline, bool tabcrlf);
 } OpenTTDSaveLoadServices;
 
 OpenTTDRustSaveLoadCodec *openttd_rust_saveload_codec(void);
@@ -90,8 +95,6 @@ uint32_t openttd_rust_saveload_gamma_length(size_t i);
 OpenTTDRustSaveLoadStatus openttd_rust_saveload_iterate_array(const OpenTTDSaveLoadServices *services, int32_t *index);
 OpenTTDRustSaveLoadStatus openttd_rust_saveload_skip_array(const OpenTTDSaveLoadServices *services);
 void openttd_rust_saveload_set_length(const OpenTTDSaveLoadServices *services, size_t length);
-OpenTTDRustSaveLoadStatus openttd_rust_saveload_read_bytes(const OpenTTDSaveLoadServices *services, uint8_t *ptr, size_t length);
-void openttd_rust_saveload_write_bytes(const uint8_t *ptr, size_t length);
 
 OpenTTDRustSaveLoadStatus openttd_rust_saveload_read_uint16(const OpenTTDSaveLoadServices *services, uint16_t *value);
 OpenTTDRustSaveLoadStatus openttd_rust_saveload_read_uint32(const OpenTTDSaveLoadServices *services, uint32_t *value);
@@ -102,6 +105,9 @@ OpenTTDRustSaveLoadStatus openttd_rust_saveload_conv(const OpenTTDSaveLoadServic
 OpenTTDRustSaveLoadStatus openttd_rust_saveload_conv_file_len(const OpenTTDSaveLoadServices *services, uint32_t conv, uint8_t *length);
 OpenTTDRustSaveLoadStatus openttd_rust_saveload_copy(const OpenTTDSaveLoadServices *services, void *object, size_t length, uint32_t conv);
 OpenTTDRustSaveLoadStatus openttd_rust_saveload_array(const OpenTTDSaveLoadServices *services, void *object, size_t length, uint32_t conv);
+OpenTTDRustSaveLoadStatus openttd_rust_saveload_std_string(const OpenTTDSaveLoadServices *services, void *ptr, uint32_t conv);
+size_t openttd_rust_saveload_std_string_len(const OpenTTDSaveLoadServices *services, const void *ptr);
+OpenTTDRustSaveLoadStatus openttd_rust_saveload_read_string(const OpenTTDSaveLoadServices *services, void *ptr, size_t length);
 OpenTTDRustSaveLoadStatus openttd_rust_saveload_ref(const OpenTTDSaveLoadServices *services, void *ptr, uint32_t conv);
 size_t openttd_rust_saveload_ref_len(void);
 OpenTTDRustSaveLoadStatus openttd_rust_saveload_array_len(const OpenTTDSaveLoadServices *services, size_t elements, uint32_t conv, size_t *length);
