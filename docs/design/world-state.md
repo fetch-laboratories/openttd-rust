@@ -50,7 +50,7 @@ Storage ports move every pool, then map arrays (user, 2026-10-28); vehicles are 
 
 ## Saves and evidence
 
-Keep chunk IDs, versions, field widths and reference numbering. `src/saveload/map_sl.cpp` serializes fields rather than struct bytes; `saveload.cpp` maps references to index + 1, with zero for null and legacy load and pointer-fixup rules. Adapt the existing C++ adapters and load lifecycle when an owner moves, without changing the format. Rust-owned persistent state must be visible before saving returns.
+Keep chunk IDs, versions, field widths and reference numbering. `src/saveload/map_sl.cpp` serializes fields rather than struct bytes; `saveload.cpp` maps references to index + 1, with zero for null and legacy load and pointer-fixup rules. Adapt the existing C++ adapters and load lifecycle when an owner moves, without changing the format. Rust-owned persistent state must be visible to saving before the mutating call returns.
 
 See [port evidence](../porting.md#evidence). Keep desync snapshots and plain runs: rebuilding caches can conceal faults. #83's masked `round_trip_time` needs separate evidence if touched. Vehicle ports need applicable #86/#104 evidence and each controller needs branch witnesses; saves cannot expose every transient state.
 
