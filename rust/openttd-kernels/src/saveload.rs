@@ -17,6 +17,12 @@
 //! borrow of the codec is held across a native call.
 
 #![allow(unsafe_code)]
+// Casts reproduce the narrowing and sign conversions of `saveload.cpp`.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
 
 use crate::game_state::GameState;
 use std::ffi::c_void;
@@ -153,7 +159,7 @@ fn fill(services: &OpenTTDSaveLoadServices) -> Status {
         (c.read_filter, buf)
     });
     let mut len = 0;
-    if !(services.read)(filter, buf, MEMORY_CHUNK_SIZE, &mut len) {
+    if !(services.read)(filter, buf, MEMORY_CHUNK_SIZE, &raw mut len) {
         return Err(SL_STATUS_NATIVE);
     }
     if len == 0 {
@@ -263,7 +269,7 @@ fn write_simple_gamma(services: &OpenTTDSaveLoadServices, i: usize) {
         if i >= 1 << 14 {
             if i >= 1 << 21 {
                 if i >= 1 << 28 {
-                    (services.native_assert)(i as u64 <= u64::from(u32::MAX));
+                    (services.native_assert)(u32::try_from(i).is_ok());
                     write_byte(0xF0);
                     write_byte((i >> 24) as u8);
                 } else {
@@ -413,7 +419,7 @@ fn set_length(services: &OpenTTDSaveLoadServices, length: usize) {
         }
         // `_sl.obj_len += (int)length`.
         NL_CALCLENGTH => {
-            shared(|s| s.obj_len = s.obj_len.wrapping_add(length as i32 as isize as usize))
+            shared(|s| s.obj_len = s.obj_len.wrapping_add(length as i32 as isize as usize));
         }
         _ => unreachable!("NOT_REACHED in SlSetLength"),
     }
