@@ -14,7 +14,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from simulation import community_ai, engines, newgrf_loading, platform_subset, runtime, stations
+from simulation import (
+    community_ai,
+    engines,
+    newgrf_loading,
+    platform_subset,
+    runtime,
+    stations,
+)
 from simulation import core as simulate
 from simulation import instructions as ir
 from simulation.instructions import SPEED_BUDGETS, speed_budget
@@ -128,6 +135,7 @@ class SimulationDeterminismTests(unittest.TestCase):
                             + lines[index + 1 :],
                             reload,
                         )
+
     def test_engine_runtime_requires_complete_price_matrix_and_rng(self) -> None:
         records = [
             f"ENGINE properties-runtime {kind} {price} {dynamic} {base} 0 -1"
