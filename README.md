@@ -13,8 +13,9 @@ the [migration guide](docs/rust-migration.md). Builds without Rust still compile
 the original C++ until Rust links on every configuration (#581). The
 [roadmap](docs/roadmap.md) lists current priorities.
 
-See [the migration guide](docs/rust-migration.md) for setup, verification, scope,
-and team process. The original game documentation follows below.
+See [the migration guide](docs/rust-migration.md) for setup and verification,
+and [AGENTS.md](AGENTS.md) for scope and team process. The original game
+documentation follows below.
 
 ```sh
 python3 tools/migration.py verify

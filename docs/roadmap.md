@@ -1,46 +1,48 @@
 # OpenTTD-Rust near-term roadmap
 
-Root selects here; `AGENTS.md` and `docs/rust-migration.md` define process. Follow
+Root selects here; `AGENTS.md` and the docs in its routing table define process. Follow
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-10-30, code at `29b65dd186`)
+## Where the fork stands (2026-10-31, code at `063e7b28f1`)
 
 Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh.
 
-- This session integrated #579 (32, company identity), #583 (33, Linux CI
-  builds Rust; #581 PR-A) and #590 (34, #582's rebound-callee gate and
-  housekeeping fix). Rows are under "Recent completed work". No rollback ran.
-- Whole fork at `29b65dd186` (`python3 tools/port-metrics.py --whole-fork`),
-  change since the Phases inventory at `06a644505a` in parentheses: retired
-  51,663 of 284,355 (18.17%, +761); glue 33,167 (+579); compiled C++ 265,859
-  (93.50%, -182). Simulation logic left 10,950 (-730), storage left 11,050
-  (-31). Boundary: 1,337 exports (+40) and 4,185 callback slots (+111). Rust
-  119,701 (+1,922), tooling 49,183 (+1,509). Glue again took most of the
-  retirement: #579 retired 373 for +315 net glue. Storage ports after #581's
-  sweep remain the fix.
-- Unintegrated branches: six (#568, #576, #591, and the new #587, #584 drafts
-  in progress; see the checkpoint).
-- Speed: the attribution of the profile-30 rise (#275, comment of 2026-10-30)
-  puts almost all of it on #569's road follower crossings: 31 C++ calls per
-  road follow, 20 new. Ranked fixes: the movement table by a load (Grok
-  3.72%), the road kind once per search (2.96%), #565 item 1 (1.17%). With
-  all three, Grok projects 1.345x, Opus 1.351x and P2016 1.475x. They form the
-  fix-forward batch on #275, which starts once #576 integrates. The quiet pass
-  is due (Grok and Opus in band); its collection waits for the deep run's lock.
-  The profile after integration 32 (`0de459cbe1`) moved every projection by
-  under 0.1% from profile 30, so #578 and #579 added no rise. Integrations 33
-  and 34 changed no game code, so profile 32 stands for 34. (Its first launch
-  omitted the pinned zlib/lzma `LD_LIBRARY_PATH` that docs/rust-migration.md
-  requires and failed the anchor identity check.)
+- This session integrated five PRs; no rollback ran. Metrics are
+  `tools/port-metrics.py` code lines (Rust / tooling / original retired / net
+  glue):
+  - 32, #579 company identity (`0de459cbe1`): 995 / 205 / 373 / +315;
+  - 33, #583 Rust by default and on Linux CI, #581 PR-A (`d531622d32`):
+    0 / 0 / 0 / 0;
+  - 34, #590 rebound-callee gate and housekeeping fix, #582 (`29b65dd186`):
+    0 / 964 / 0 / 0;
+  - 35, #591 Emscripten links Rust on emsdk 4.0.23 with WebAssembly
+    exceptions, #581 PR-E (`69f02851be`): 0 / 21 / 0 / 0;
+  - 36, #595 Clang missing-initializer fixes in `src/tests`
+    (`063e7b28f1`): 0 / 0 / 0 / +18.
+- Every CI configuration now builds Rust. #581 PR-B, the sweep, remains.
+- Whole fork at `29b65dd186` (not re-measured after it): retired 51,663 of
+  284,355 (18.17%); glue 33,167; compiled C++ 265,859 (93.50%); simulation
+  logic left 10,950, storage 11,050; 1,337 exports and 4,185 callback slots.
+- Speed: the profile after integration 32 (table below) moved every
+  projection by under 0.1% from profile 30. The integration-30 rise is
+  attributed to #569's road follower crossings (#275). Its fix-forward batch
+  (#565 item 1 plus #275's two items) and the quiet pass (Grok and Opus in the
+  play band) are due and not started.
+- Platform cadence: run 41146771150 on `69f02851be` failed every annotation
+  check on Linux Clang `-Wmissing-field-initializers` in `src/tests` (Clang
+  now builds Rust and the fork's tests). #595 fixes them; a `ci-build.yml`
+  dispatch on its branch (run 41150431792) passed every platform. A cadence
+  dispatch on `rust-migration` after #595 confirms it and is due.
 - Deep checks: the sanitized, threaded, TSan and multiplayer rotation started
-  at `2f3d78e774` (integration 31) and is in its sanitized member; the
-  integration-34 turn is skipped while it runs.
-- Platform cadence after integration 30: the rerun of macOS Debug passed, so
-  every platform passed. The next cadence is due after integration 35.
-- Housekeeping removed 49 finished T3 worktrees (71.8 GB) after #590. Codex
-  delegates hold no cwd in their worktrees, so a running reviewer's worktree
-  looked finished; root locked it by hand, and #592 fixes the rule.
+  at `2f3d78e774` was killed at 2026-10-31 01:35Z when the session restarted,
+  three hours into its sanitized member, without a report. It had passed 352
+  sanitized scenarios and failed 43, all with the harness error "Rust archive
+  missing" for the sanitized build's native-test-support archive (#503), not
+  fidelity differences. Deep checks now run only on the user's request
+  ([deep-check policy](deep-checks.md#policy), user decision 2026-10-31), so it does not restart by itself.
+- Housekeeping removed 49 finished T3 worktrees (71.8 GB). #592 now also
+  covers the shared-accessor check misreading `OpenTTDXServices name{};`.
 - Original coverage: 330 of 449 traces are complete; gaps are on #156.
 
 | Scenario | Latest quiet anchor | Profile-32 projection | Record with growth |
@@ -56,7 +58,7 @@ Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh.
 
 Agent: /root (Claude Code navigation) | Model: claude-opus-5-5 | Reasoning effort: not reported to the agent by host.
 
-The goal is a complete Rust rewrite (AGENTS.md "Migration method"). Each free
+The goal is a complete Rust rewrite ([goal and phases](planning.md#goal-and-phases)). Each free
 slot takes ready work from the earliest phase, and later phases fill the rest
 (user decision, 2026-10-28). Position at code `06a644505a` in code lines from
 `python3 tools/port-metrics.py --whole-fork`, with the change since the
@@ -132,13 +134,13 @@ Root's first actions from this chart:
    24th steering review rescoped it): Linux builds Rust, Emscripten links Rust,
    then the sweep, which also moves every oracle that reads a fallback body onto
    the pinned reference. Drafts adopt the sweep by rerunning its recorded
-   command over every `src/` file they touch (AGENTS.md, step 3).
+   command over every `src/` file they touch ([review](workflow.md#review)).
 2. #570 starts after the sweep integrates. #570 also makes
    `tools/port-metrics.py` count the C++ declarations it generates.
 3. Phase 2 takes every slot that ready phase 1 work leaves free, ranked by code
    retired, crossings removed and glue deleted.
-4. Before each stocktake and planning round, reread AGENTS.md, this chart and
-   the latest steering section if they changed (`/start-development`, step 4).
+4. Before each stocktake and planning round, refresh changed guidance and apply
+   its actions (`/start-development`, step 4).
 
 ## Twenty-fourth steering review (2026-10-29: per-entry map tolls, rebound callees and #581's hidden consumers)
 
@@ -217,7 +219,7 @@ Apply these corrections through the work order below:
      reference, sweeps `src/` only, and adds a quick-CI check against
      `WITH_RUST` in `src/`.
    - #570 still starts after PR-B.
-3. **The map view costs a load, not a call** (AGENTS.md map bullet,
+3. **The map view costs a load, not a call** ([map access](porting.md#map-access),
    world-state.md "Shared map view", #565 body).
    - After #576 integrates, root's own small PR makes `map_func::World` the one
      descriptor, reached by a load from the canonical C++ statics. A failed
@@ -236,7 +238,7 @@ Apply these corrections through the work order below:
    - #577's single-use carriers;
    - the `CargoFlow` bounce.
 6. **Speed.** Run the due profile after integration 30 first. If a projection
-   rose more than 3%, attribution follows AGENTS.md, and correction 3 is the
+   rose more than 3%, attribution follows [speed policy](speed.md#policy), and correction 3 is the
    first candidate.
 
 AGENTS.md changes:
@@ -288,9 +290,9 @@ candidates get no attribution research. Testing is maintenance: scenarios
 arrive with the ports that need them. Six branches, batched maintenance,
 fixing reviews, strict exact-combination Full, bounded rollback and
 action-based wind-down remain. A historical mention is not placement; CI-found
-behavior fixes get a scoped review; deep checks run every second integration;
+behavior fixes get a scoped review; deep checks run only on the user's request;
 active speed dependencies are preserved. #559 and the parked NewGRF corpus stay
-excluded with the return conditions in the work order. AGENTS.md carries the
+excluded with the return conditions in the work order. AGENTS.md and its routing table carry the
 rules; issue and PR bodies carry current actions and evidence.
 
 ## Recent completed work
@@ -401,8 +403,7 @@ Recurring:
 - Profile the merged tip after every second integration; the next is due
   after integration 36. Launch it with the pinned `LD_LIBRARY_PATH` that
   docs/rust-migration.md names.
-- Read the running deep member's report, then launch the next rotation under
-  the existing lock at idle priority.
+- Deep checks run only on the user's request (user decision, 2026-10-31).
 - The fifth-integration platform cadence is due after integration 35.
 - Preserve anchors, raw traces, frozen runtimes and failed outputs.
 - Root checks actual issue placement and exclusion conditions at stocktake.
@@ -423,23 +424,28 @@ Excluded, with return conditions checked by this review:
   near-full reproduction under #513's original-default setting policy. #513
   needs implementation when the first such improvement is accepted.
 
-## Resume checkpoint (2026-10-30, after integration 34)
+## Resume checkpoint (2026-10-31, paused after integration 36)
 
-| Draft | Pushed head | Next action |
-| --- | --- | --- |
-| #562 / #568 | update568 merged base | update568 is running checks and the 21 scenarios on its base update; its last line says whether the resolution changed lines. Then a fresh conflict review if it did, a base update and Full. |
-| #565 / #576 | review576-r4 fixing | fix576-assert made the World helpers return the original's raw bits after a returning native assertion (1470fadb71); review576-r4 is reviewing and pushed 51ade2d021. Then root's spot-check, a base update and Full. Then #565 item 1 with the #275 fix-forward. |
-| #581 PR-E / #591 | 188e623ca6 | emsdk4-591 moves the build to emsdk 4.x with `-fwasm-exceptions`; then a fresh review and a bootstrap Full (`CI_ON_DEMAND` unset for it, restored after merge). |
-| #587 | branch `t3/port-setting-transitions-587` | settings587 implementing; draft PR after the first passing build. |
-| #584 | branch `t3/port-world-input-584` | worldinput584 implementing; draft PR after the first passing build. |
+Paused at the user's request after integration 36 (`063e7b28f1`); no rollback
+ran. Every worktree and branch below is preserved.
+
+| Draft | Pushed head | State and next action on resume | Worktree |
+| --- | --- | --- | --- |
+| #565 / #576 | `98de8a1a23` | Reviewed (review576-r4, -r5) and spot-checked. Full 41148035929 at `d899ead4b6` failed only on an Emscripten missing-initializer annotation in its trees ABI fixture, which root's warning-only commit `98de8a1a23` fixes. 1. Update from base (#595 also edits `src/tests`; build before pushing). 2. Exact-head Full. 3. Merge. Then #565 item 1 with #275's fix-forward and #592. | `t3-9b7a8224` |
+| #562 / #568 | `ae124c2b6e` | review568-r3 found nothing in fix568-rebound's commits. Quick passed; no native result at this head. 1. Update from base and rerun the rebound gate. 2. Full. 3. Merge. | `t3-070c9aac` |
+| #584 / #593 | `3eb4c2815c` | Reviewed by review593 and spot-checked; cost accepted. Quick is red. 1. Read the Quick failure. 2. Update from base and reconcile it. 3. Full. | `t3-183f9668` |
+| #587 / #594 | `0ea4a457af` | Reviewed by review594 and spot-checked; cost accepted; it adopts #565 item 1 at its base update. Quick is red and the PR conflicts with base. 1. Update from base; a fresh conflict review if the resolution changes lines. 2. Rebound gate. 3. Full. | `t3-fbbd1132` |
+| #585 / #596 | `84b323f599` | review596 fixed its findings, including the translated-text bounce (report of 2026-10-31). Its final `simulate newgrf-loading- town-names- town-founding- town-commands` was still running at wind-down (PID 1694439), and `tools/test-simulation.py`, `tools/test-orphan-exports.py`, Ruff and ty were not rerun after `84b323f599`. 1. Read or rerun that validation. 2. Root's spot-check of review596's fixes. 3. Base update and Full. | `t3-489ff2ae` (implementation), `t3-1bac609b` (review) |
 
 | Running or due work | State / next action |
 | --- | --- |
-| Deep rotation | Running detached since 22:37Z at `2f3d78e774` in `.local/worktrees/deep-after30-569` (locked); log `.local/deep-launches/after31.log`. Read its report before the next integration after it finishes. |
-| Quiet speed pass | Due (Grok and Opus in band). Its collection takes the deep lock and a host without builds, so it follows the deep run; prepare from a clean checkout of the tip with the pinned `LD_LIBRARY_PATH`. |
-| Instruction profile | Profile 32 done (table above); `.local/worktrees/profile-after32-579` replaces profile 28. Next after integration 36. |
-| Platform cadence | Passed for integration 30; next after integration 35. |
+| Deep checks | On the user's request only (user decision, 2026-10-31); do not restart the killed rotation unprompted. It died at 2026-10-31 01:35Z with the session restart, three hours into its sanitized member at `2f3d78e774`, with no report (352 passed; 43 failed only on the missing native-test-support archive, #503). If a run is requested, in `.local/worktrees/deep-after30-569` (locked; move it with `git checkout --detach origin/rust-migration` and relock): 1. `python3 tools/migration.py build --jobs 2`. 2. `cmake --build build-rust-sanitized --target openttd_rust_native_test_support_build` until #503's fix lands. 3. `python3 tools/migration.py deep` with the requested `--member` options. Launch it outside the session's process group (for example a `systemd-run --user` unit), since a `setsid` child of the session died with it. |
+| Platform cadence | Due on `rust-migration` at `063e7b28f1`: `gh workflow run ci-build.yml --ref rust-migration`. |
+| Instruction profile | Due after integration 36; launch with the pinned `LD_LIBRARY_PATH` from docs/rust-migration.md. Profile 32 is retained in `.local/worktrees/profile-after32-579` (locked). |
+| Quiet speed pass | Due (Grok and Opus in the play band). |
+| Maintenance | #565 item 1 with #275's fix-forward and #592, after #576 integrates; #199's batch; #581 PR-B after #568 and #576 integrate. |
 | Housekeeping | Lock a running Codex agent's worktree before `--apply` until #592 integrates. |
+| CI | No request pending. |
 
 Keep the pinned reference unchanged. Preserve unfinished checkouts and existing
 profile and deep evidence.
