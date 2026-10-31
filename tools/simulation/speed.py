@@ -1,4 +1,4 @@
-"""Quiet speed pass: frozen runtimes, interleaved wall pairs and new anchors (AGENTS.md).
+"""Quiet speed pass: frozen runtimes, interleaved wall pairs and new anchors (docs/speed.md).
 
 `prepare` freezes both runtimes and proves their instruction identities against
 an optional `simulate --instructions` report; it runs no games. `collect` holds

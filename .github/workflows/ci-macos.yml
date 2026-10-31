@@ -130,7 +130,7 @@ jobs:
         cd build
 
         echo "::group::CMake"
-        rust_parameters=()
+        rust_parameters=(-DOPTION_RUST=OFF)
         if [ "${{ inputs.rust }}" = true ]; then
           rust_parameters=(-DOPTION_RUST=ON -DCMAKE_OSX_SYSROOT="$SDKROOT" -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET"
             -DCMAKE_C_COMPILER_LAUNCHER="$CCACHE_EXE" -DCMAKE_CXX_COMPILER_LAUNCHER="$CCACHE_EXE"
