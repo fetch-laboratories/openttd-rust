@@ -1202,6 +1202,10 @@ def check_town_data(run: dict[str, Any]) -> None:
     for name, _, towns, signs, errors in TOWN_DATA_INPUTS:
         if rows.get(name) != [str(towns), str(signs), str(errors)]:
             raise RuntimeError(f"town data {name}: {rows.get(name)}")
+    if sum(line.startswith("TOWN data-error ") for line in run["log"]) != sum(
+        errors for _, _, _, _, errors in TOWN_DATA_INPUTS
+    ):
+        raise RuntimeError("import error messages missing")
     if sum(line.startswith("TOWN data-town ") for line in run["log"]) != 6:
         raise RuntimeError("imported town records missing")
 

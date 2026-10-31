@@ -369,6 +369,17 @@ def check(scenario, run, mode, role, result):
                 "missing successful heightmap landscape/climate/river progress"
             )
         check_heightmap_inputs(lines)
+        # The two outer missing-file loads also report their decoded errors.
+        expected_errors = 2 + sum(
+            int(size is None)
+            + int(size is None or name in ("truncated.bmp", "mono-odd.bmp"))
+            for name, (_, size) in heightmap_inputs().items()
+        )
+        if (
+            sum(line.startswith("GENERATION error ") for line in lines)
+            != expected_errors
+        ):
+            raise RuntimeError("missing heightmap error messages")
         if any(
             len(line.split()) != 10
             for line in lines
