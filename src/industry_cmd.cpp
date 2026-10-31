@@ -3360,7 +3360,7 @@ bool IndustrySpec::IsProcessingIndustry() const
  */
 Money IndustrySpec::GetConstructionCost() const
 {
-	return openttd_rust_industry_construction_cost(this->cost_multiplier, this->life_type.base(), _settings_game.construction.raw_industry_construction);
+	return openttd_rust_industry_construction_cost(RustIndustrySpecCostMultiplier(this), this->life_type.base(), _settings_game.construction.raw_industry_construction);
 }
 
 /**
@@ -3371,7 +3371,7 @@ Money IndustrySpec::GetConstructionCost() const
  */
 Money IndustrySpec::GetRemovalCost() const
 {
-	return openttd_rust_industry_removal_cost(this->removal_cost_multiplier);
+	return openttd_rust_industry_removal_cost(RustIndustrySpecRemovalMultiplier(this));
 }
 
 /**
@@ -3686,7 +3686,7 @@ const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices()
 		.spec = RustIndustryTypeSpec<OpenTTDIndustrySpecHandle>,
 		.spec_behaviour = RustIndustrySpecHandleBehaviour,
 		.spec_life = RustIndustrySpecLife<OpenTTDIndustrySpecHandle>,
-		.cost_multiplier = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> uint8_t { return reinterpret_cast<const IndustrySpec *>(spec)->cost_multiplier; },
+		.cost_multiplier = RustIndustrySpecCostMultiplier<OpenTTDIndustrySpecHandle>,
 		.info = [](const OpenTTDIndustrySpecHandle *handle) noexcept -> OpenTTDIndustryGenerationInfo {
 			const auto *spec = reinterpret_cast<const IndustrySpec *>(handle);
 			return {spec->appear_creation[to_underlying(_settings_game.game_creation.landscape)], spec->enabled, !spec->layouts.empty()};
@@ -3835,7 +3835,7 @@ const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices() noexcep
 		.close_ai = [](Industry *industry) noexcept { AI::BroadcastNewEvent(new ScriptEventIndustryClose(industry->index)); },
 		.close_game = [](Industry *industry) noexcept { Game::NewEvent(new ScriptEventIndustryClose(industry->index)); },
 		.destroy = [](Industry *industry) noexcept { delete industry; },
-		.removal_multiplier = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> uint32_t { return reinterpret_cast<const IndustrySpec *>(spec)->removal_cost_multiplier; },
+		.removal_multiplier = RustIndustrySpecRemovalMultiplier<OpenTTDIndustrySpecHandle>,
 		.tile_max_z = [](uint32_t tile) noexcept -> int32_t { return OpenTTDTileMaxZ(TileIndex(tile)); },
 		.autoslope_callback = [](const OpenTTDIndustryTileSpec *spec) noexcept -> bool { return spec->callback_mask.Test(IndustryTileCallbackMask::Autoslope); },
 		.callback_boolean = RustSpecBooleanCallback<IndustryTileSpec>,

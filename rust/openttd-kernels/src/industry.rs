@@ -828,16 +828,7 @@ fn rotate(history: &mut [Pair; RECORDS], mask: u64, month: u32) {
             history[first] = history[0];
             history[0] = Pair::default();
         } else if mask & (1 << (first - division)) != 0 {
-            let mut a = 0u32;
-            let mut b = 0u32;
-            for pair in &history[first - division..first] {
-                a += u32::from(pair.first);
-                b += u32::from(pair.second);
-            }
-            history[first] = Pair {
-                first: (a / division as u32).min(65535) as u16,
-                second: (b / division as u32).min(65535) as u16,
-            };
+            history[first] = policy::sum_history(&history[first - division..first]);
         }
     }
 }
@@ -992,7 +983,7 @@ fn change(i: *mut c_void, s: &Services, monthly: bool) {
                 }
                 if percent.abs() >= 10 {
                     unsafe {
-                        (s.production_news)(i, (*p).cargo, percent, servicing(i, o.owner, s))
+                        (s.production_news)(i, (*p).cargo, percent, servicing(i, o.owner, s));
                     };
                 }
             }
@@ -1072,7 +1063,7 @@ fn change(i: *mut c_void, s: &Services, monthly: bool) {
                 } else {
                     servicing(i, o.owner, s)
                 },
-            )
+            );
         };
     }
 }

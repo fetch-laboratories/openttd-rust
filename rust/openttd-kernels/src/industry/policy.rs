@@ -224,7 +224,10 @@ pub unsafe extern "C" fn openttd_rust_industry_sum_history(
     history: *const Pair,
     count: usize,
 ) -> Pair {
-    let history = unsafe { std::slice::from_raw_parts(history, count) };
+    sum_history(unsafe { std::slice::from_raw_parts(history, count) })
+}
+pub(super) fn sum_history(history: &[Pair]) -> Pair {
+    let count = history.len();
     let a = history
         .iter()
         .fold(0u32, |sum, pair| sum.wrapping_add(u32::from(pair.first)));

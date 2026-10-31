@@ -25,6 +25,8 @@
 #include "../object_base.h"
 #include "../industrytype.h"
 #include "../water_map.h"
+#include "../core/backup_type.hpp"
+#include "../economy_func.h"
 #include <thread>
 static_assert(sizeof(CargoArray::value_type) == sizeof(uint32_t) && sizeof(CargoTypes) == sizeof(uint64_t));
 static_assert(std::is_trivially_destructible_v<TileArea>);
@@ -498,4 +500,22 @@ TEST_CASE("NewGRF storage canonical aliases and complete transaction lifetime", 
 	CHECK(temporary.GetValue(0x10F) == 456);
 	temporary.ClearChanges();
 	CHECK(temporary.GetValue(0x110) == 0);
+}
+
+TEST_CASE("Industry - specification price widths and saturation")
+{
+	IndustrySpec spec{};
+	spec.life_type = {IndustryLifeType::Organic};
+	Backup<uint8_t> setting(_settings_game.construction.raw_industry_construction, 1);
+	for (Money price : {Money(INT64_MIN), Money(-12345), Money(0), Money(12345), Money(INT64_MAX)}) {
+		Backup<Money> raw(_price[PR_BUILD_INDUSTRY_RAW], price), clear(_price[PR_CLEAR_INDUSTRY], price);
+		for (uint8_t multiplier : {uint8_t(0), uint8_t(1), uint8_t(255)}) {
+			spec.cost_multiplier = multiplier;
+			CHECK(spec.GetConstructionCost() == ((price * multiplier) >> 8));
+		}
+		for (uint32_t multiplier : {0U, 1U, 0x7FFFFFFFU, 0x80000000U, UINT32_MAX}) {
+			spec.removal_cost_multiplier = multiplier;
+			CHECK(spec.GetRemovalCost() == ((price * multiplier) >> 8));
+		}
+	}
 }

@@ -253,7 +253,7 @@ def game_environment(scenario):
     )
 
 
-def adapter(build, folder, env):
+def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
     import probe
 
     import migration
@@ -295,57 +295,9 @@ def adapter(build, folder, env):
 
 def prepare(scenario, binaries, builds, out, timeout, env, result):
     mode = scenario.get("industry")
-    if mode in ("definitions", "definitions-reload"):
+    if mode in ("definitions", "definitions-reload", "policy", "policy-reload"):
         return prepare_definitions(
             scenario, binaries, builds, out, timeout, env, result
-        )
-    if mode in ("policy", "policy-reload"):
-        folder = out / scenario["name"] / "input"
-        source, _ = core.normalize(Path(scenario["save"]), folder / "normalized")
-        executables = prepared_console(
-            "industries", adapter, binaries, builds, folder, env
-        )
-        prepared = dict(
-            scenario,
-            save=str(source),
-            executables=executables,
-            short_checkpoint=True,
-            ticks=1,
-        )
-        if mode == "policy":
-            return dict(prepared, console=["industry_policy run", "unpause"])
-        saves = {role: folder / role / "policy.sav" for role in executables}
-        captures = core.capture_pair(
-            lambda role: dict(
-                prepared, console=[f'industry_policy run "{saves[role]}"', "unpause"]
-            ),
-            executables,
-            builds,
-            folder,
-            timeout,
-            env,
-        )
-        for role, run in captures.items():
-            if (
-                run["exit"]
-                or not saves[role].is_file()
-                or "INDUSTRY-POLICY complete true" not in run["log"]
-            ):
-                raise RuntimeError("industry policy capture failed: " + role)
-        differences = core.compare_saves(
-            saves["reference"],
-            saves["candidate"],
-            scenario["name"],
-            10,
-            {"chunks": 0, "elements": 0, "masked": {}},
-        )
-        if differences or captures["reference"]["log"] != captures["candidate"]["log"]:
-            result["differences"].extend(differences)
-            raise RuntimeError("industry policy captures differ")
-        return dict(
-            prepared,
-            role_inputs={role: {"save": str(save)} for role, save in saves.items()},
-            console=["industry_policy inspect", "unpause"],
         )
     if mode == "resolver":
         folder = out / scenario["name"] / "input"
@@ -1085,16 +1037,26 @@ def definition_grfs(folder):
 def prepare_definitions(scenario, binaries, builds, out, timeout, env, result):
     folder = out / scenario["name"] / "input"
     source, _ = core.normalize(Path(scenario["save"]), folder / "normalized")
-    definition_grfs(folder / "grfs")
+    policy = scenario["industry"].startswith("policy")
+    if not policy:
+        definition_grfs(folder / "grfs")
     executables = prepared_console("industries", adapter, binaries, builds, folder, env)
-    command = f'industry_definitions run "{folder / "grfs"}"'
+    command = (
+        "industry_policy run"
+        if policy
+        else f'industry_definitions run "{folder / "grfs"}"'
+    )
+    marker = "INDUSTRY-POLICY" if policy else "INDUSTRY-DEFINITIONS"
     scenario = dict(
         scenario,
         executables=executables,
         save=str(source),
-        industry_definition_dir=str(folder / "grfs"),
     )
-    if scenario["industry"] == "definitions":
+    if policy:
+        scenario.update(ticks=1, short_checkpoint=True)
+    else:
+        scenario["industry_definition_dir"] = str(folder / "grfs")
+    if not scenario["industry"].endswith("-reload"):
         return dict(
             scenario,
             console=[command, "setting difficulty.industry_density 0", "unpause"],
@@ -1117,9 +1079,9 @@ def prepare_definitions(scenario, binaries, builds, out, timeout, env, result):
         if (
             run["exit"]
             or not saves[role].is_file()
-            or "INDUSTRY-DEFINITIONS complete true" not in run["log"]
+            or marker + " complete true" not in run["log"]
         ):
-            raise RuntimeError("industry definition capture failed: " + role)
+            raise RuntimeError("industry capture failed: " + role)
     differences = core.compare_saves(
         saves["reference"],
         saves["candidate"],
@@ -1129,12 +1091,12 @@ def prepare_definitions(scenario, binaries, builds, out, timeout, env, result):
     )
     if differences or captures["reference"]["log"] != captures["candidate"]["log"]:
         result["differences"].extend(differences)
-        raise RuntimeError("industry definition captures differ")
+        raise RuntimeError("industry captures differ")
     return dict(
         scenario,
         role_inputs={role: {"save": str(save)} for role, save in saves.items()},
         console=[
-            "industry_definitions inspect",
+            "industry_policy inspect" if policy else "industry_definitions inspect",
             "setting difficulty.industry_density 0",
             "unpause",
         ],
