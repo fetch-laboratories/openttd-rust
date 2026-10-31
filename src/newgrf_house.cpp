@@ -64,9 +64,6 @@ const OpenTTDHouseResolverServices &GetHouseResolverServices() noexcept
 		.file = RustResolverGRFFile,
 		.version = RustGRFFileVersion,
 
-		.nearby = RustSignedNearbyTile,
-		.nearby_info = RustNearbyTileInformation,
-		.terrain = RustTerrainType,
 		.stage = [](uint32_t tile) noexcept { return GetHouseBuildingStage(TileIndex{tile}); },
 		.age = RustHouseAge,
 		.random_bits = RustHouseRandomBits,

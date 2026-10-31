@@ -60,7 +60,6 @@ struct OpenTTDWorldServices {
 	void (*busy)(bool) noexcept OPENTTD_SERVICE_DEFAULT(busy);
 	void (*close_progress)() noexcept OPENTTD_SERVICE_DEFAULT(close_progress);
 	void (*show_error)() noexcept OPENTTD_SERVICE_DEFAULT(show_error);
-	void (*dirty)() noexcept OPENTTD_SERVICE_DEFAULT(dirty);
 	bool (*set_progress)(OpenTTDWorldFrame *, GenWorldProgress, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_progress);
 	bool (*increase_progress)(OpenTTDWorldFrame *, GenWorldProgress) noexcept OPENTTD_SERVICE_DEFAULT(increase_progress);
 	bool (*freeform)() noexcept OPENTTD_SERVICE_DEFAULT(freeform);

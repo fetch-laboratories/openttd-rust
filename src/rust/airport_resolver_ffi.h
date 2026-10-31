@@ -60,9 +60,6 @@ struct OpenTTDAirportResolverServices {
 	uint16_t (*tile_substitute)(const AirportTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(tile_substitute);
 	bool (*belongs)(const Station *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(belongs);
 	uint8_t (*tile_random)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_random);
-	uint32_t (*nearby)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(nearby);
-	uint32_t (*nearby_info)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(nearby_info);
-	uint32_t (*terrain)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terrain);
 	uint8_t (*frame)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(frame);
 	uint8_t (*version)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(version);
 	uint32_t (*grfid)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(grfid);

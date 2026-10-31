@@ -193,7 +193,6 @@ const OpenTTDEngineServices &EngineServices() noexcept
 		.available_event = Engine_available_event,
 		.available_news = Engine_available_news,
 		.no_engines = Engine_no_engines,
-		.screen_dirty = RustScreenDirty,
 		.utf8_length = GetRustSharedServices().utf8_length,
 	};
 	return services;

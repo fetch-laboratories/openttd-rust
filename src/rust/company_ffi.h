@@ -212,7 +212,6 @@ struct OpenTTDCompanyServices {
 	uint32_t (OPENTTD_RUST_CALL *story_page_next_owned)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(story_page_next_owned);
 	void (OPENTTD_RUST_CALL *delete_story_page)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_story_page);
 	void (OPENTTD_RUST_CALL *change_window_owner)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(change_window_owner);
-	void (OPENTTD_RUST_CALL *mark_whole_screen_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(mark_whole_screen_dirty);
 };
 /* All entry points run serially on the game thread with borrowed static tables.
  * Rust owns the finance allocations; C++ starts the field objects in that raw

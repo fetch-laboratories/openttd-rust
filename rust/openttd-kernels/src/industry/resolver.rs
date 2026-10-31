@@ -61,8 +61,6 @@ pub struct ResolverServices {
     pub tile_substitute: unsafe extern "C" fn(*const TileSpec) -> u16,
     pub clean_gfx: unsafe extern "C" fn(u32) -> u16,
     pub nearby: unsafe extern "C" fn(u8, u32, bool) -> u32,
-    pub nearby_info: unsafe extern "C" fn(u32, bool) -> u32,
-    pub terrain: unsafe extern "C" fn(u32) -> u32,
     pub water_distance: unsafe extern "C" fn(u32, bool) -> u32,
     pub town_tile: unsafe extern "C" fn(*const crate::services::TownHandle) -> u32,
     pub town_id: unsafe extern "C" fn(*const crate::services::TownHandle) -> u16,
@@ -167,7 +165,7 @@ fn nearby_information(
         tile = unsafe { (s.nearby)(parameter, tile, signed) };
     }
     let same = s.belongs(tile, id);
-    (unsafe { (s.nearby_info)(tile, version8) }) | (u32::from(same) << 8)
+    (s.shared().nearby_tile_information)(tile, version8) | (u32::from(same) << 8)
 }
 pub(crate) fn relative_position(tile: u32, north: u32, map: crate::map_func::Map) -> u32 {
     let x = map.tile_x(tile).wrapping_sub(map.tile_x(north)) as u8;
@@ -291,7 +289,7 @@ fn variable(
                 (s.pointer_magic)();
             },
             0x86 => return u32::from(unsafe { (*i).metadata.selected_layout }),
-            0x87 => return unsafe { (s.terrain)(c.tile) },
+            0x87 => return (s.shared().terrain_type)(c.tile),
             0x88 => {
                 return u32::from(unsafe {
                     crate::town::radius_from_shell(s.shared(), c.town, c.tile)
@@ -573,7 +571,7 @@ fn tile_variable(
                 0
             }
         }
-        0x41 => unsafe { (s.terrain)(c.tile) },
+        0x41 => (s.shared().terrain_type)(c.tile),
         0x42 => {
             let town = crate::town::spatial::closest(s.shared(), c.tile, u32::MAX);
             u32::from(unsafe { crate::town::radius_from_shell(s.shared(), town.cast(), c.tile) })
@@ -898,8 +896,6 @@ crate::abi::layouts! {
         tile_substitute,
         clean_gfx,
         nearby,
-        nearby_info,
-        terrain,
         water_distance,
         town_tile,
         town_id,

@@ -278,8 +278,6 @@ const OpenTTDIndustryResolverServices &GetIndustryResolverServices() noexcept
 		.tile_substitute = RustSpecSubstitute<IndustryTileSpec>,
 		.clean_gfx = [](uint32_t tile) noexcept { return GetCleanIndustryGfx(TileIndex(tile)); },
 		.nearby = RustNearbyTile,
-		.nearby_info = RustNearbyTileInformation,
-		.terrain = RustTerrainType,
 		.water_distance = RustClosestWaterDistance,
 		.town_tile = OpenTTDTownTile,
 		.town_id = RustTownAuthorityIndex,

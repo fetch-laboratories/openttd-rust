@@ -96,10 +96,7 @@ pub struct Services {
     file_version: extern "C" fn(*const c_void) -> u8,
     company: extern "C" fn(u8, *const c_void) -> u32,
     spec_file: extern "C" fn(*const RailSpec) -> *const c_void,
-    nearby: extern "C" fn(u8, u32) -> u32,
     nearby_station: extern "C" fn(u8, u32, crate::services::Axis) -> u32,
-    nearby_info: extern "C" fn(u32, bool) -> u32,
-    terrain: extern "C" fn(u32) -> u32,
     badges: extern "C" fn(*const c_void, *const RailSpec, u32) -> u32,
     build_date: extern "C" fn(*mut BaseStation) -> i32,
     airport_ttd_type: extern "C" fn(
@@ -603,7 +600,7 @@ pub unsafe extern "C" fn openttd_rust_station_base_variable(
 fn land_info(native: &Services, file: *const c_void, tile: u32, axis: u8) -> u32 {
     let slope = (native.shared().tile_slope)(tile);
     let swap = axis == AXIS_Y && (slope & SLOPE_W != 0) != (slope & SLOPE_E != 0);
-    (native.nearby_info)(tile, (native.file_version)(file) >= 8)
+    (native.shared().nearby_tile_information)(tile, (native.file_version)(file) >= 8)
         ^ if swap { u32::from(SLOPE_EW) } else { 0 }
 }
 fn build_date(date: i32) -> u32 {
@@ -658,7 +655,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
     }
     match variable {
         0x42 => {
-            (native.terrain)(tile)
+            (native.shared().terrain_type)(tile)
                 | (u32::from(crate::type_registry::openttd_rust_rail_reverse(
                     (native.rail().rail_type)(tile).0,
                     (native.spec_file)(spec),
@@ -677,7 +674,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
         }
         0x66 => {
             let nearby = if parameter != 0 {
-                (native.nearby)(parameter as u8, tile)
+                (native.shared().nearby_tile)(parameter as u8, tile)
             } else {
                 tile
             };
@@ -692,14 +689,14 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
         0x67 => {
             let axis = (native.axis)(tile).0;
             let nearby = if parameter != 0 {
-                (native.nearby)(parameter as u8, tile)
+                (native.shared().nearby_tile)(parameter as u8, tile)
             } else {
                 tile
             };
             land_info(native, file, nearby, axis)
         }
         0x68 | 0x6a | 0x6b => {
-            let nearby = (native.nearby)(parameter as u8, tile);
+            let nearby = (native.shared().nearby_tile)(parameter as u8, tile);
             if !crate::map_func::World::new(native.shared()).has_station_rail(nearby) {
                 return u32::MAX;
             }
@@ -982,7 +979,7 @@ crate::abi::layouts! {
  "OpenTTDStationResolverServices" ["station_service"] => Services {
  shared, cargo, cargo_owner, group_count, group_cargo, group, spec, loading_count, loaded_count,
  loading, loaded, axis, tile_add, tile_random, station_random, waiting, set_waiting, set_random,
- cached_cargo, spec_cargo, resolve_random, resolve_callback, file_version, company, spec_file, nearby, nearby_station, nearby_info, terrain, badges, build_date, airport_ttd_type, identity, town_scope, default_scope, unhandled, slope_error
+ cached_cargo, spec_cargo, resolve_random, resolve_callback, file_version, company, spec_file, nearby_station, badges, build_date, airport_ttd_type, identity, town_scope, default_scope, unhandled, slope_error
  };
 }
 

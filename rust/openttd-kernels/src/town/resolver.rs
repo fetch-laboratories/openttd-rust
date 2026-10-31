@@ -60,9 +60,6 @@ pub struct ResolverServices {
     larger_towns: extern "C" fn() -> u8,
     file: extern "C" fn(*const c_void) -> *const c_void,
     version: extern "C" fn(*const c_void) -> u8,
-    nearby: extern "C" fn(u8, u32) -> u32,
-    nearby_info: extern "C" fn(u32, bool) -> u32,
-    terrain: extern "C" fn(u32) -> u32,
     stage: extern "C" fn(u32) -> u8,
     age: extern "C" fn(u32) -> i32,
     random_bits: extern "C" fn(u32) -> u8,
@@ -434,7 +431,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
                 ))
             }
         }
-        0x43 => (s.terrain)(tile),
+        0x43 => (shared.terrain_type)(tile),
         0x44 => unsafe { num_houses(scope.town.owner, scope.house, (l.house_class)(scope.house)) },
         0x45 => u32::from((l.generating_world)()),
         0x46 => {
@@ -479,12 +476,12 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
                 unsafe { num_houses(scope.town.owner, house, (l.house_class)(house)) }
             }
         }
-        0x62 => (s.nearby_info)(
-            (s.nearby)(parameter as u8, tile),
+        0x62 => (shared.nearby_tile_information)(
+            (shared.nearby_tile)(parameter as u8, tile),
             (s.version)((s.file)(ro)) >= 8,
         ),
         0x63 => {
-            let tile = (s.nearby)(parameter as u8, tile);
+            let tile = (shared.nearby_tile)(parameter as u8, tile);
             if (shared.tile_type)(tile) == MP_HOUSE {
                 u32::from(crate::animated_tile_map::animation_frame(
                     crate::animated_tile::services(),
@@ -498,7 +495,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
         0x64 => unsafe { acceptance_history(s, scope, ro, parameter, map()) },
         0x65 => unsafe { distance(s, scope, parameter as u8, map()) },
         0x66 => {
-            let tile = (s.nearby)(parameter as u8, tile);
+            let tile = (shared.nearby_tile)(parameter as u8, tile);
             if (shared.tile_type)(tile) != MP_HOUSE {
                 return u32::MAX;
             }
@@ -520,7 +517,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
             class << 16 | local
         }
         0x67 => {
-            let tile = (s.nearby)(parameter as u8, tile);
+            let tile = (shared.nearby_tile)(parameter as u8, tile);
             if (shared.tile_type)(tile) != MP_HOUSE {
                 return u32::MAX;
             }
@@ -596,7 +593,7 @@ crate::abi::layouts! {
     "OpenTTDHouseNearbySpec" ["probe"] => NearbySpec { file, local, house_class };
     "OpenTTDHouseResolverServices" ["probe"] => ResolverServices {
         towns, shared, storage, larger_towns, file, version,
-        nearby, nearby_info, terrain, stage, age, random_bits,
+        stage, age, random_bits,
         random_triggers, search_spec, nearby_spec, file_identity,
         badges, root, spec_house, local_id, base_scope, evaluate, reseed, unhandled_house, unhandled_town,
     };

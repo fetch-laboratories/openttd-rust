@@ -607,7 +607,7 @@ impl Session<'_> {
             crate::newgrf_storage::openttd_rust_storage_switch_mode(
                 mode,
                 false,
-                (*world.landscape).assert_condition,
+                crate::movement::table(&*(*world.landscape).shared).native_assert,
                 world.storage_discard,
             );
         }

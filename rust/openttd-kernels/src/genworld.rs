@@ -172,7 +172,6 @@ pub struct WorldServices {
     pub busy: extern "C" fn(bool),
     pub close_progress: extern "C" fn(),
     pub show_error: extern "C" fn(),
-    pub dirty: extern "C" fn(),
     pub set_progress: extern "C" fn(*mut Frame, Progress, u32) -> bool,
     pub increase_progress: extern "C" fn(*mut Frame, Progress) -> bool,
     pub freeform: extern "C" fn() -> bool,
@@ -372,7 +371,7 @@ impl World<'_> {
         write_field!(INFO.get(), abort_callback, None);
         (self.s.close_progress)();
         (self.s.show_error)();
-        (self.s.dirty)();
+        (unsafe { &*(*self.s.landscape).shared }.screen_dirty)();
     }
     fn abort(&self) -> Result<(), Failure> {
         native(unsafe { openttd_rust_world_handle_abort(self.s, self.frame) })?;
@@ -384,7 +383,7 @@ impl World<'_> {
             crate::newgrf_storage::openttd_rust_storage_switch_mode(
                 mode,
                 ignore,
-                landscape.assert_condition,
+                crate::movement::table(&*landscape.shared).native_assert,
                 self.s.storage_discard,
             );
         }
@@ -729,7 +728,6 @@ crate::abi::layouts! {
         busy,
         close_progress,
         show_error,
-        dirty,
         set_progress,
         increase_progress,
         freeform,

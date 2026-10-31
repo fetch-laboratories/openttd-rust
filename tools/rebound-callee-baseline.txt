@@ -136,7 +136,6 @@ rebound | RustAirportTileSpec | src/rust/airport_definitions.cpp | tile_base
 rebound | RustAnimationRailSpec | src/animated_tile.cpp | rail_spec
 rebound | RustAnimationRailSpec | src/rust/station_command_services.hpp | rail_spec
 rebound | RustAssertCondition | src/cargomonitor.cpp | check
-rebound | RustAssertCondition | src/landscape.cpp | assert_condition
 rebound | RustAssertCondition | src/landscape.cpp | native_assert
 rebound | RustAssertCondition | src/newgrf_airport.cpp | check
 rebound | RustAssertCondition | src/rust/fleet_transaction_services.hpp | check
@@ -253,12 +252,6 @@ rebound | RustMapHeightLimit | src/landscape.cpp | height_limit
 rebound | RustMapHeightLimit | src/rust/newgrf_spritegroup_services.cpp | height_limit
 rebound | RustMaxBridgeHeight | src/landscape.cpp | max_bridge_height
 rebound | RustMaxBridgeHeight | src/tunnelbridge_cmd.cpp | max_bridge_height
-rebound | RustNearbyTileInformation | src/newgrf_airport.cpp | nearby_info
-rebound | RustNearbyTileInformation | src/newgrf_house.cpp | nearby_info
-rebound | RustNearbyTileInformation | src/newgrf_industries.cpp | nearby_info
-rebound | RustNearbyTileInformation | src/newgrf_object.cpp | nearby_info
-rebound | RustNearbyTileInformation | src/newgrf_roadstop.cpp | nearby_info
-rebound | RustNearbyTileInformation | src/newgrf_station.cpp | nearby_info
 rebound | RustNetworkServer | src/order_cmd.cpp | network_server
 rebound | RustNetworkServer | src/rust/company_adapter.cpp | network_server
 rebound | RustOnWater | src/industry_cmd.cpp | on_water
@@ -312,12 +305,6 @@ rebound | RustRoadStopDataTile | src/animated_tile.cpp | road_tile
 rebound | RustRoadStopDataTile | src/newgrf_roadstop.cpp | tile
 rebound | RustRoadStopTileDataCount | src/animated_tile.cpp | road_count
 rebound | RustRoadStopTileDataCount | src/newgrf_roadstop.cpp | tile_count
-rebound | RustScreenDirty | src/genworld.cpp | dirty
-rebound | RustScreenDirty | src/landscape.cpp | screen_dirty
-rebound | RustScreenDirty | src/rust/company_adapter.cpp | mark_whole_screen_dirty
-rebound | RustScreenDirty | src/rust/engine_adapter.hpp | screen_dirty
-rebound | RustScreenDirty | src/rust/fleet_group_services.hpp | screen_dirty
-rebound | RustScreenDirty | src/town_cmd.cpp | dirty_screen
 rebound | RustSelectedHangarTile | src/newgrf_airport.cpp | hangar_tile
 rebound | RustSelectedHangarTile | src/rust/station_command_services.hpp | hangar_tile
 rebound | RustSetCurrentCompanyID | src/rust/company_adapter.cpp | set_current_company
@@ -328,11 +315,6 @@ rebound | RustSetTileHeight | src/landscape.cpp | set_height
 rebound | RustSetTileHeight | src/landscape.cpp | set_height | 2
 rebound | RustSetTunnelBridgeReservation | src/pbs.cpp | set_wormhole
 rebound | RustSetTunnelBridgeReservation | src/tunnelbridge_cmd.cpp | set_reservation
-rebound | RustSignedNearbyTile | src/newgrf_airport.cpp | nearby
-rebound | RustSignedNearbyTile | src/newgrf_house.cpp | nearby
-rebound | RustSignedNearbyTile | src/newgrf_object.cpp | nearby
-rebound | RustSignedNearbyTile | src/newgrf_roadstop.cpp | nearby
-rebound | RustSignedNearbyTile | src/newgrf_station.cpp | nearby
 rebound | RustSpecAnimationFrames | src/rust/airport_definitions.cpp | tile_frames
 rebound | RustSpecAnimationFrames | src/rust/industry_property_services.cpp | set_animation_frames
 rebound | RustSpecAnimationFrames | src/rust/station_definitions.cpp | road_frames
@@ -477,13 +459,6 @@ rebound | RustStationWaitingTriggers | src/newgrf_station.cpp | waiting
 rebound | RustSubsidyServices | src/economy.cpp | subsidies
 rebound | RustSubsidyServices | src/industry_cmd.cpp | subsidies
 rebound | RustSubsidyServices | src/rust/company_adapter.cpp | subsidies
-rebound | RustTerrainType | src/newgrf_airport.cpp | terrain
-rebound | RustTerrainType | src/newgrf_generic.cpp | terrain
-rebound | RustTerrainType | src/newgrf_house.cpp | terrain
-rebound | RustTerrainType | src/newgrf_industries.cpp | terrain
-rebound | RustTerrainType | src/newgrf_object.cpp | terrain
-rebound | RustTerrainType | src/newgrf_roadstop.cpp | terrain
-rebound | RustTerrainType | src/newgrf_station.cpp | terrain
 rebound | RustTileRailType | src/rust/vehicle_effect_services.hpp | tile_rail
 rebound | RustTileRailType | src/rust/vehicle_services_newgrf.h | tile_railtype
 rebound | RustTownAuthorityIndex | src/newgrf_industries.cpp | town_id

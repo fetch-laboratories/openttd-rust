@@ -233,7 +233,6 @@ pub struct Services {
     pub available_event: unsafe extern "C" fn(u16),
     pub available_news: unsafe extern "C" fn(u16),
     pub no_engines: unsafe extern "C" fn(i32),
-    pub screen_dirty: unsafe extern "C" fn(),
     pub utf8_length: unsafe extern "C" fn(*const u8, usize) -> usize,
 }
 
@@ -1131,7 +1130,7 @@ pub unsafe extern "C" fn openttd_rust_engine_rename(
         crate::witness::hit(crate::witness::ENGINE_RENAME);
         unsafe {
             openttd_rust_engine_set_name(e.state, name);
-            call!(s, screen_dirty);
+            call!(&*s.shared, screen_dirty);
         }
     }
     0
@@ -1311,7 +1310,6 @@ crate::abi::layouts! {
         available_event,
         available_news,
         no_engines,
-        screen_dirty,
         utf8_length,
     };
 }

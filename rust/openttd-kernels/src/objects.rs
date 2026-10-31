@@ -375,9 +375,6 @@ pub struct QueryServices {
     pub date: unsafe extern "C" fn(*mut Object) -> i32,
     pub colour: unsafe extern "C" fn(*mut Object) -> u8,
     pub view: unsafe extern "C" fn(*mut Object) -> u8,
-    pub nearby: unsafe extern "C" fn(u8, u32) -> u32,
-    pub nearby_info: unsafe extern "C" fn(u32, bool) -> u32,
-    pub terrain: unsafe extern "C" fn(u32) -> u32,
     pub badges: unsafe extern "C" fn(*const Resolver, *const Spec, u32) -> u32,
     pub grfid: unsafe extern "C" fn(*const Resolver) -> u32,
     pub version8: unsafe extern "C" fn(*const Resolver) -> bool,
@@ -454,10 +451,10 @@ impl<'a> World<'a> {
         // SAFETY: native nearby helper wraps to the map, as in the original.
         unsafe {
             if parameter != 0 {
-                tile = (q.nearby)(parameter, tile);
+                tile = (self.shared.nearby_tile)(parameter, tile);
             }
             let same = (self.shared.tile_type)(tile) == MP_OBJECT && (q.index)(tile) == index;
-            (q.nearby_info)(tile, version8) | u32::from(same) << 8
+            (self.shared.nearby_tile_information)(tile, version8) | u32::from(same) << 8
         }
     }
     fn closest(&self, tile: u32, kind: u16, current: *mut Object) -> u32 {
@@ -536,7 +533,10 @@ impl<'a> World<'a> {
                     let y = self.map.tile_y(offset);
                     y << 20 | x << 16 | y << 8 | x
                 }
-                0x41 => u32::from((self.shared.tile_slope)(tile)) << 8 | (q.terrain)(tile),
+                0x41 => {
+                    u32::from((self.shared.tile_slope)(tile)) << 8
+                        | (self.shared.terrain_type)(tile)
+                }
                 0x42 => (q.date)(obj) as u32,
                 0x43 => u32::from(((*self.s.industry_tiles).frame)(tile)),
                 0x44 => u32::from((self.shared.tile_owner)(tile)),
@@ -547,9 +547,12 @@ impl<'a> World<'a> {
                 0x46 => (q.square)(tile, (q.town_tile)(town)),
                 0x47 => u32::from((q.colour)(obj)),
                 0x48 => u32::from((q.view)(obj)),
-                0x60 => self.id_at_offset((q.nearby)(parameter as u8, tile), (q.grfid)(ro)),
+                0x60 => self.id_at_offset(
+                    (self.shared.nearby_tile)(parameter as u8, tile),
+                    (q.grfid)(ro),
+                ),
                 0x61 | 0x63 => {
-                    let near = (q.nearby)(parameter as u8, tile);
+                    let near = (self.shared.nearby_tile)(parameter as u8, tile);
                     if (self.shared.tile_type)(near) == MP_OBJECT && (q.by_tile)(near) == obj {
                         if variable == 0x61 {
                             u32::from((q.random_bits)(near))
@@ -2453,9 +2456,6 @@ crate::abi::layouts! {
         date,
         colour,
         view,
-        nearby,
-        nearby_info,
-        terrain,
         badges,
         grfid,
         version8,

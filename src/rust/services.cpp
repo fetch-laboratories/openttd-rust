@@ -466,6 +466,10 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.for_each_station = SharedForEachStation,
 	.road_stop_type = SharedRoadStopType,
 	.road_stops = []() noexcept { return &GetRustRoadStopServices(); },
+	.nearby_tile = RustSignedNearbyTile,
+	.nearby_tile_information = RustNearbyTileInformation,
+	.screen_dirty = RustScreenDirty,
+	.terrain_type = RustTerrainType,
 	.show_error = RustShowErrorMessage,
 	.not_reached = RustNotReached,
 };

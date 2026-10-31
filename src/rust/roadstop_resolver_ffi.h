@@ -43,8 +43,6 @@ struct OpenTTDRoadStopResolverServices {
 	uint32_t (*index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(index);
 	bool (*is_station)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(is_station);
 	TownScopeResolver * (*make_town)(ResolverObject *, Town *, bool) noexcept OPENTTD_SERVICE_DEFAULT(make_town);
-	uint32_t (*nearby)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(nearby);
-	uint32_t (*nearby_info)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(nearby_info);
 	uint8_t (*owner)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(owner);
 	uint16_t (*random_bits)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(random_bits);
 	void (*resize)(BaseStation *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(resize);
@@ -67,7 +65,6 @@ struct OpenTTDRoadStopResolverServices {
 	uint16_t (*spec_local_id)(const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_local_id);
 	OpenTTDRoadStopSpecTriggers (*spec_triggers)(const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_triggers);
 	uint16_t (*station_id)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_id);
-	uint32_t (*terrain)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terrain);
 	uint32_t (*tile)(BaseStation *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(tile);
 	size_t (*tile_count)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(tile_count);
 	uint8_t (*tile_random)(const BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_random);

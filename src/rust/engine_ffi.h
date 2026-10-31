@@ -92,7 +92,6 @@ struct OpenTTDEngineServices {
 	void (*available_event)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(available_event);
 	void (*available_news)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(available_news);
 	void (*no_engines)(int32_t) noexcept OPENTTD_SERVICE_DEFAULT(no_engines);
-	void (*screen_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(screen_dirty);
 	size_t (*utf8_length)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(utf8_length);
 };
 const OpenTTDEngineServices &EngineServices() noexcept;

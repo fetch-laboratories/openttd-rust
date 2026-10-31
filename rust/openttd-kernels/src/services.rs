@@ -480,6 +480,14 @@ pub struct Services {
     pub road_stop_type: extern "C" fn(u32) -> RoadStopType,
     /// Native road stop shells and their vehicle reads.
     pub road_stops: extern "C" fn() -> *const crate::road_stop::RoadStopServices,
+    /// `GetNearbyTile` with signed offsets.
+    pub nearby_tile: extern "C" fn(u8, u32) -> u32,
+    /// `GetNearbyTileInformation`.
+    pub nearby_tile_information: extern "C" fn(u32, bool) -> u32,
+    /// `MarkWholeScreenDirty`.
+    pub screen_dirty: extern "C" fn(),
+    /// `GetTerrainType`.
+    pub terrain_type: extern "C" fn(u32) -> u32,
     /// `ShowErrorMessage` with two string IDs at `WL_ERROR`.
     pub show_error: extern "C" fn(u32, u32),
     /// Native `NOT_REACHED`.
@@ -806,6 +814,10 @@ crate::abi::layouts! {
         for_each_station,
         road_stop_type,
         road_stops,
+        nearby_tile,
+        nearby_tile_information,
+        screen_dirty,
+        terrain_type,
         show_error,
         not_reached,
     };
@@ -909,7 +921,20 @@ pub fn fixture(
     extern "C" fn unexpected_path() {
         std::process::abort()
     }
+    extern "C" fn unexpected_nearby(_: u8, _: u32) -> u32 {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_information(_: u32, _: bool) -> u32 {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_terrain(_: u32) -> u32 {
+        std::process::abort()
+    }
     Services {
+        nearby_tile: unexpected_nearby,
+        nearby_tile_information: unexpected_information,
+        screen_dirty: unexpected_path,
+        terrain_type: unexpected_terrain,
         show_error: unexpected_error,
         not_reached: unexpected_path,
         movement: std::ptr::null(),
