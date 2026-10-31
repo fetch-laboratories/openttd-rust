@@ -656,7 +656,7 @@ impl Game<'_> {
     }
     fn has_road(&self, vehicle: VehicleRef, tile: u32) -> bool {
         let types = (self.movement.get().road_compatible)(vehicle);
-        let world = crate::map_func::World::with_dimensions(self.ss, self.movement.get(), self.map);
+        let world = crate::map_func::World::new(self.ss);
         crate::road_map::has_tile_any_road_type(&world, tile, types)
     }
     fn tile_xy(&self, tile: u32, pos: (u8, u8)) -> (i32, i32) {
