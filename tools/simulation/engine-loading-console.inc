@@ -120,6 +120,7 @@ static void RuntimeInspect()
 		e->info.climates.Set(); e->info.string_id = STR_NEWGRF_INVALID_ENGINE;
 		LoadingRequire(!e->IsEnabled(), "runtime-invalid-engine");
 		e->info.string_id = STR_EMPTY; LoadingRequire(e->IsEnabled(), "runtime-enabled");
+		if (!SpriteGroup::CanAllocateItem(2)) FixtureAbort(__LINE__);
 		auto value = std::make_unique<CallbackResultSpriteGroup>(32767);
 		auto observer = std::make_unique<RuntimeObserver>(); observer->result = value.get();
 		e->grf_prop.spritegroups.clear(); e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, observer.get());
