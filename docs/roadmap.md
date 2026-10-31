@@ -450,8 +450,9 @@ Excluded, with return conditions checked by this review:
 
 ## Resume checkpoint (2026-10-31, integration 38)
 
-Claude Code root (claude-opus-5-5, xhigh) resumed at `11c285f939`. #593
-integrated as integration 37 (`b74888c4bc`) and #576 as integration 38
+Codex root has taken over from Claude Code root at `9cf6b7898e`.
+Agent: /root | Model: gpt-6.1-sol | Reasoning effort: xhigh.
+#593 integrated as integration 37 (`b74888c4bc`) and #576 as integration 38
 (`e48846d8fd`). Drafts integrate one at a time because every pair shares
 service files; each merge needs the next draft updated from base. Order: #568,
 #603, #594, #596 once fixed, then #586 and the #565 PR.
