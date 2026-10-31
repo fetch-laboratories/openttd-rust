@@ -10,6 +10,8 @@ from . import core
 from .console_adapter import console_adapter, prepared_console
 
 ADAPTER = core.ROOT / "tools/simulation/newgrf-loading-console.cpp"
+# Reference town-name lines per scenario and mode, compared with the candidate run.
+TOWN_NAMES = {}
 
 
 def scenarios(soak):
@@ -189,8 +191,72 @@ def fixtures(folder, version):
         # its prior group until loader reset erases the temporary publication map.
         bytes((2, 1, 30, 0x81, 0x0C, 0, 255, 1, 4, 128)),
     ]
+
+    def town_names(identifier, actions):
+        return [info(identifier)] + [bytes((15,)) + action for action in actions]
+
+    def text(prob, value):
+        return bytes((prob,)) + value + b"\x00"
+
+    # ActionF: <id> [<lang> <name>]... 00 <parts> {<texts> <bitstart> <bitcount> {<prob> ...}}
+    names_a = town_names(
+        b"TNA5",
+        [
+            bytes((0x01, 1, 2, 0, 8)) + text(1, b"Al") + text(127, b"Be"),
+            # A repeated definition appends a second part list.
+            bytes((0x01, 1, 1, 8, 4)) + text(5, b"ton"),
+            bytes((0x02, 1, 3, 12, 0)) + text(0, b"X") + text(3, b"Y") + text(0, b"Z"),
+            # Two localized names; bit 7 of the second language is cleared.
+            bytes((0x83, 0x7F))
+            + b"Alpha\x00\x81Alpha US\x00\x00"
+            # A 32-bit count follows the x86 shift masking of the original GB.
+            + bytes((2, 2, 16, 2, 0x81, 0x01, 0x82, 0x02, 1, 30, 32))
+            + text(1, b" Hill"),
+            bytes((0x84, 0x7F))
+            + b"Beta\x00\x00"
+            + bytes((1, 2, 0, 16, 0xFF, 0x03))
+            + text(1, b"Q"),
+        ],
+    )
+    names_bad = town_names(
+        b"TNX5",
+        [
+            bytes((0x05, 1, 1, 0, 1)) + text(1, b"ok"),
+            bytes((0x80, 0x7F))
+            + b"Bad\x00\x00"
+            + bytes((1, 2, 0, 1))
+            + text(1, b"ok")
+            + bytes((0x81, 0x10)),
+        ],
+    )
+    names_b = town_names(
+        b"TNB5",
+        [
+            bytes((0x85, 0x7F))
+            + b"Gamma\x00\x00"
+            + bytes((1, 1, 0, 1))
+            + text(1, b"Gam\x9e")
+        ],
+    )
+    # The reference byte of the last part is missing.
+    names_short = town_names(
+        b"TNS5",
+        [
+            bytes((0x81, 0x7F))
+            + b"Short\x00\x00"
+            + bytes((2, 1, 0, 3))
+            + text(2, b"Short")
+            + bytes((3, 4, 4))
+            + text(1, b"ort")
+            + bytes((0x82,)),
+        ],
+    )
     for name, actions in (
         ("main", main),
+        ("names-a", names_a),
+        ("names-bad", names_bad),
+        ("names-b", names_b),
+        ("names-short", names_short),
         ("graph-broken", graph_broken),
         ("broken", broken),
         ("victim", [info(b"V471"), param(0, 999)]),
@@ -294,6 +360,36 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     )
 
 
+def townname_observations(log: list[str], phases: tuple[str, ...]) -> list[str]:
+    """Require each generator lookup and seed sample before comparing roles."""
+    names = [line for line in log if line.startswith("LOADING townname ")]
+    seeds = (0, 1, 0x80000000, 0xFFFFFFFF) + tuple(
+        (k * 0x9E3779B9) & 0xFFFFFFFF for k in range(4, 40)
+    )
+    for phase in phases:
+        prefix = f"LOADING townname {phase} "
+        sizes = [line for line in names if line.startswith(prefix + "styles ")]
+        if len(sizes) != 1:
+            raise RuntimeError("file-loaded GRF style count missing: " + phase)
+        count = int(sizes[0].split()[-1])
+        expected = {
+            (str(gen), f"{seed:08X}") for gen in range(count + 1) for seed in seeds
+        }
+        actual = {
+            tuple(line.split()[4:6])
+            for line in names
+            if line.startswith(prefix + "name ")
+        }
+        styles = {
+            line.split()[4] for line in names if line.startswith(prefix + "style ")
+        }
+        if actual != expected or styles != {str(gen) for gen in range(count + 1)}:
+            raise RuntimeError(
+                "file-loaded GRF town-name observations missing: " + phase
+            )
+    return names
+
+
 def check(scenario, run, mode, role, result):
     if "newgrf_loading" not in scenario or run["exit"]:
         return
@@ -317,6 +413,21 @@ def check(scenario, run, mode, role, result):
         "LOADING case action2-layout-flag-error true",
     )
     if scenario["newgrf_loading"] != "reload":
+        expected += tuple(
+            f"LOADING case townname-{case} true"
+            for case in (
+                "style-order",
+                "fallback",
+                "repeated-definition",
+                "recursive-final",
+                "second-grf",
+                "invalid-reference-deleted",
+                "invalid-reference",
+                "partial-read",
+                "found",
+            )
+        )
+    if scenario["newgrf_loading"] != "reload":
         expected += (
             "LOADING case action2-station-command true",
             "LOADING case action2-industry-command true",
@@ -330,6 +441,16 @@ def check(scenario, run, mode, role, result):
     for marker in expected:
         if marker not in run["log"]:
             raise RuntimeError("file-loaded GRF result missing: " + marker)
+    phases = (
+        ("inspect",) if scenario["newgrf_loading"] == "reload" else ("first", "reload")
+    )
+    names = townname_observations(run["log"], phases)
+    # Generated name bytes and style lookups are not saved; compare them across roles.
+    key = (scenario["name"], mode)
+    if role == "reference":
+        TOWN_NAMES[key] = names
+    elif TOWN_NAMES.pop(key, None) != names:
+        raise RuntimeError("file-loaded GRF town names differ")
 
 
 def install(scenario, run_dir):

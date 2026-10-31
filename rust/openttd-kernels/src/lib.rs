@@ -87,6 +87,7 @@ mod settings_type;
 
 mod newgrf_station;
 mod newgrf_storage;
+mod newgrf_townname;
 mod node_hash;
 mod object_type;
 mod objects;
@@ -140,6 +141,7 @@ mod town_map;
 mod town_type;
 mod townname;
 mod townname_data;
+mod townname_type;
 mod track_func;
 mod track_type;
 mod transport_type;
@@ -1468,7 +1470,9 @@ pub use vehicle_type::VehicleID;
 
 mod tunnel_map;
 
+mod depot_cmd;
 mod depot_map;
+mod depot_type;
 mod session;
 
 mod fileio_type;
@@ -1478,6 +1482,8 @@ mod goal_type;
 mod league_type;
 mod objectives;
 mod settings_table;
+mod signs_cmd;
+mod signs_type;
 mod story_base;
 mod story_type;
 mod void_map;

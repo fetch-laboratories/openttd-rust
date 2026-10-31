@@ -95,3 +95,10 @@
 - C++ keeps: town pool shells and their coupled constructors/destructors, viewport signs and the local-authority presentation index, error formatting, cargo scaling and map/pool access. The shared native k-d template remains compiled for GUI users.
 - Limits: Arbitrary NewGRF road availability/error combinations, historical saves and GUI/game-thread integration remain outside the default corpus (#156).
 - PRs: #608.
+
+## NewGRF town names and Action 0F (#585)
+
+- Rust owns: Action 0F parsing (`FeatureTownName`) in the INIT stage, per-GRF style and part lists, the generator-name list, recursive seeded generation, style/GRF lookups and cleanup. The loader calls the parser, cleanup and list rebuild directly. Both `TownNameParams` constructors are shared Rust logic; town founding reads its style setting directly and keeps the parameters locally. Name verification calls the Rust generator directly.
+- C++ keeps: a facade. `TownNameParams`, the genworld drop-down and `GetGRFTownNameName` read the Rust lists; `GRFTownNameGenerate` passes its `StringBuilder` with an append callback that receives each selected part's bytes. `TranslateTTDPatchCodes`, `AddGRFString` and debug messages remain native, behind one loading service each; translated bytes are copied into the Rust part from a view backed by the native loader stack frame.
+- Limits: Generation preserves the native `gen < styles.size()` assertion. Self-referencing definitions recurse without a guard, as in the original.
+- PRs: pending.

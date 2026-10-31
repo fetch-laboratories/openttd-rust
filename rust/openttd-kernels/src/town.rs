@@ -148,7 +148,7 @@ pub struct GrowthFields {
 pub struct State {
     name: Vec<u8>,
     text: Vec<u8>,
-    simulation: SimulationFields,
+    pub(crate) simulation: SimulationFields,
     supplied: Vec<Supplied>,
     id_counts: Vec<u16>,
     class_counts: Vec<u16>,

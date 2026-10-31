@@ -174,6 +174,13 @@ def game_environment(scenario):
     return env
 
 
+def type_load_wraps(build):
+    # Rust owns town-name and vehicle-order finalization; its pre-sort is the first native call.
+    if (build / "openttd-rust").exists():
+        return ("_Z20RustVehicleOrderSortPtm",)
+    return ("_Z29CommitVehicleListOrderChangesv",)
+
+
 def adapter(build, folder, env):
     economy.subsidy_reference(folder)
     return console_adapter(
@@ -182,7 +189,7 @@ def adapter(build, folder, env):
         env,
         ADAPTER,
         "engines",
-        wraps=("_Z25InitGRFTownGeneratorNamesv",),
+        wraps=type_load_wraps(build),
         replace_objects=("saveload.cpp.o", "/newgrf.cpp.o", "/newgrf_act0_cargo.cpp.o"),
     )
 
