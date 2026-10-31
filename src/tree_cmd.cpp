@@ -47,6 +47,7 @@ enum ExtraTreePlacement : uint8_t {
 
 #ifdef WITH_RUST
 #include "rust/trees_ffi.h"
+#include "rust/world_generation_ffi.h"
 #include "rust/generation_services.hpp"
 #include "rust/settings_services.h"
 #include "rust/ground_services.h"
@@ -188,16 +189,6 @@ OpenTTDTreeGenerateSettings TreeGenerateSettings() noexcept
 		.editor = _game_mode == GM_EDITOR,
 		.freeform_edges = _settings_game.construction.freeform_edges,
 	};
-}
-
-static bool CanPlantTreesOnTile(TileIndex tile, bool allow_desert)
-{
-	return openttd_rust_trees_can_plant(tile.base(), allow_desert, &_tree_services);
-}
-
-static void PlantTreesOnTile(TileIndex tile, TreeType type, uint count, TreeGrowthStage growth)
-{
-	openttd_rust_trees_plant(tile.base(), type, count, to_underlying(growth), &_tree_services, &GetRustSharedServices());
 }
 
 void PlaceTree(TileIndex tile, uint32_t r, bool keep_density)
@@ -648,43 +639,7 @@ void PlaceTreesRandomly()
  */
 uint PlaceTreeGroupAroundTile(TileIndex tile, TreeType treetype, uint radius, uint count, bool set_zone)
 {
-	assert(_game_mode == GM_EDITOR); // Due to InteractiveRandom being used in this function
-	assert(treetype < TREE_TOYLAND + TREE_COUNT_TOYLAND);
-	const bool allow_desert = treetype == TREE_CACTUS;
-	uint planted = 0;
-
-	for (; count > 0; count--) {
-		/* Simple quasi-normal distribution with range [-radius; radius) */
-		auto mkcoord = [&]() -> int32_t {
-			const uint32_t rand = InteractiveRandom();
-			const int32_t dist = GB<int32_t>(rand, 0, 8) + GB<int32_t>(rand, 8, 8) + GB<int32_t>(rand, 16, 8) + GB<int32_t>(rand, 24, 8);
-			const int32_t scu = dist * radius / 512;
-			return scu - radius;
-		};
-		const int32_t xofs = mkcoord();
-		const int32_t yofs = mkcoord();
-		const TileIndex tile_to_plant = TileAddWrap(tile, xofs, yofs);
-		if (tile_to_plant != INVALID_TILE) {
-			if (IsTileType(tile_to_plant, MP_TREES) && GetTreeCount(tile_to_plant) < 4) {
-				AddTreeCount(tile_to_plant, 1);
-				SetTreeGrowth(tile_to_plant, TreeGrowthStage::Growing1);
-				MarkTileDirtyByTile(tile_to_plant, 0);
-				planted++;
-			} else if (CanPlantTreesOnTile(tile_to_plant, allow_desert)) {
-				PlantTreesOnTile(tile_to_plant, treetype, 0, TreeGrowthStage::Grown);
-				MarkTileDirtyByTile(tile_to_plant, 0);
-				planted++;
-			}
-		}
-	}
-
-	if (set_zone && IsInsideMM(treetype, TREE_RAINFOREST, TREE_CACTUS)) {
-		for (TileIndex t : TileArea(tile).Expand(radius)) {
-			if (GetTileType(t) != MP_VOID && DistanceSquare(tile, t) < radius * radius) SetTropicZone(t, TROPICZONE_RAINFOREST);
-		}
-	}
-
-	return planted;
+	return openttd_rust_trees_place_group(tile.base(), treetype, radius, count, set_zone, &_tree_services, &GetRustSharedServices(), &GetRustEnvironmentServices(), &GetRustWorldServices());
 }
 
 #ifndef WITH_RUST

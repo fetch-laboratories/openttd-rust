@@ -24,6 +24,10 @@
 #include "../tile_map.h"
 #include "../slope_func.h"
 #include "../landscape.h"
+#include "../clear_map.h"
+#include "../strings_func.h"
+#include "../table/strings.h"
+#include "../rust/command_services.h"
 #include "../heightmap.h"
 #include "../road_type.h"
 #include "../station_type.h"
@@ -159,6 +163,25 @@ TEST_CASE("Rust production pixel entries observe live native corners and realloc
 			auto [slope, z] = GetTilePixelSlope(t);
 			CHECK(openttd_rust_movement_pixel_z(&GetRustMovementServices(), x * TILE_SIZE, y * TILE_SIZE, false) == z + static_cast<int>(GetPartialPixelZ(0, 0, slope)));
 		}
+	}
+	Map::Allocate(64, 64);
+}
+
+TEST_CASE("Clear-ground production entry keeps native zero-cost metadata")
+{
+	for (const uint width : {64U, 128U}) {
+		Map::Allocate(width, 64);
+		const TileIndex tile = TileXY(1, 1);
+		MakeClear(tile, CLEAR_GRASS, 0);
+		CommandCost cost(STR_ERROR_OWNED_BY, STR_ERROR_OWNED_BY);
+		cost.SetErrorOwner(CompanyID{3});
+		cost.SetEncodedMessage(GetEncodedString(STR_ERROR_OWNED_BY, STR_COMPANY_SOMEONE, std::monostate{}));
+		openttd_rust_clear_tile(RustCommandCost(&cost), tile.base(), 0, &GetRustCommandCostServices(), &GetRustSharedServices());
+		CHECK(cost.Succeeded()); CHECK(cost.GetCost() == 0);
+		CHECK(cost.GetExpensesType() == EXPENSES_CONSTRUCTION);
+		CHECK(cost.GetErrorMessage() == INVALID_STRING_ID); CHECK(cost.GetExtraErrorMessage() == INVALID_STRING_ID);
+		CHECK(cost.GetErrorOwner() == CompanyID::Invalid()); CHECK(cost.GetEncodedMessage().empty());
+		CHECK(GetClearDensity(tile) == 0);
 	}
 	Map::Allocate(64, 64);
 }

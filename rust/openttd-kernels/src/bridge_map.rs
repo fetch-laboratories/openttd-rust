@@ -50,3 +50,8 @@ impl crate::map_func::World<'_> {
         crate::bitmath_func::gb(u32::from(Self::byte(self.types.m6(t))), 2, 4)
     }
 }
+
+/// `IsBridgeAbove`, over the canonical tile's bridge-axis bits.
+pub(crate) fn is_bridge_above(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<bool> {
+    Some(m.kind(tile)? & 12 != 0)
+}

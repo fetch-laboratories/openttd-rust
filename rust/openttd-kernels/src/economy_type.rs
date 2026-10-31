@@ -75,3 +75,10 @@ pub const PR_CLEAR_INDUSTRY: usize = 49;
 pub const PR_BUILD_INDUSTRY_RAW: usize = 58;
 /// `PR_CLEAR_HOUSE`.
 pub const PR_CLEAR_HOUSE: usize = 40;
+
+/// `PR_CLEAR_GRASS`.
+pub const PR_CLEAR_GRASS: usize = 22;
+/// `PR_CLEAR_ROCKS`.
+pub const PR_CLEAR_ROCKS: usize = 24;
+/// `PR_CLEAR_FIELDS`.
+pub const PR_CLEAR_FIELDS: usize = 25;

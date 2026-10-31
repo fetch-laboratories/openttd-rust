@@ -400,3 +400,37 @@ AI_FOLDER = "tree-scenario-ai"
 
 def uses_ai(scenario):
     return scenario.get("trees") == "commands"
+
+
+def check_editor_groups(lines: list[str]) -> None:
+    """Require full native-result, dirty-point, tile and both-stream observations."""
+    costs = [line.split() for line in lines if line.startswith("GROUNDTREE cost ")]
+    groups = [line.split() for line in lines if line.startswith("GROUNDTREE group ")]
+    if (
+        [int(row[2]) for row in costs] != list(range(2880))
+        or [int(row[2]) for row in groups] != list(range(56))
+        or "GROUNDTREE complete 2880 56" not in lines
+        or sum(line.startswith("GROUNDTREE clear ") for line in lines) != 2880
+        or sum(line.startswith("GROUNDTREE neighbor ") for line in lines) != 2880
+        or sum(line.startswith("GROUNDTREE group-rng ") for line in lines) != 56
+        or not any(line.startswith("GROUNDTREE dirty ") for line in lines)
+    ):
+        raise RuntimeError("missing clear-ground/editor group observations")
+    for row in costs:
+        if row[9] != "true" or row[11:] != ["0", "65535", "65535", "255", "true"]:
+            raise RuntimeError(f"clear-ground native result metadata differs: {row}")
+    for row in groups:
+        mode, planted = int(row[5]), int(row[9])
+        expected = {0: 0, 1: 2, 2: 0, 3: 4, 4: 0, 5: 0, 8: 0, 9: 0, 10: 0, 12: 0}
+        if mode in expected and planted != expected[mode]:
+            raise RuntimeError(f"editor group branch not reached: {row}")
+        if mode in (6, 7, 11) and planted == 0:
+            raise RuntimeError(f"editor group planting missing: {row}")
+    boundaries = [
+        line.split() for line in lines if line.startswith("GROUNDTREE boundary ")
+    ]
+    if len(boundaries) != 12 or any(
+        row[3:] != (["0", "0"] if int(row[2]) % 14 == 12 else ["2", "0"])
+        for row in boundaries
+    ):
+        raise RuntimeError("missing strict rainforest boundaries/type interval")

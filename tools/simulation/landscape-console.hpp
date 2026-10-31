@@ -33,6 +33,82 @@ template<typename... Extra> static void LandscapeResult(const char *name, const 
 	if constexpr (sizeof...(Extra) == 2) LandscapeResult(name, std::get<0>(result), std::get<1>(result), std::get<2>(result));
 	else LandscapeResult(name, std::get<0>(result), std::get<1>(result));
 }
+#include "tree_cmd.h"
+static void GroundTreeTile(const char *kind, TileIndex index)
+{
+	Tile t(index);
+	fmt::print(stderr, "GROUNDTREE {} {} {} {} {} {} {} {} {} {}\n", kind, index.base(), t.type(), t.m1(), t.m2(), t.m3(), t.m4(), t.m5(), t.m6(), t.m8());
+}
+static void GroundTreeRandom(const char *kind, TileIndex tile)
+{
+	fmt::print(stderr, "GROUNDTREE {} {} {} {} {} {}\n", kind, tile.base(), _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]);
+}
+static void GroundTreeProbe(TileIndex tile)
+{
+	AutoRestoreBackup<GameMode> editor(_game_mode, GM_EDITOR);
+	const std::array<Price, 4> prices{PR_CLEAR_GRASS, PR_CLEAR_ROUGH, PR_CLEAR_ROCKS, PR_CLEAR_FIELDS};
+	std::array<Money, 4> saved_prices; for (uint i = 0; i < 4; ++i) saved_prices[i] = _price[prices[i]];
+	const std::array<std::array<int64_t, 4>, 5> amounts{{{0, 0, 0, 0}, {5, 2, 11, 17}, {INT64_MAX, INT64_MAX, INT64_MAX, INT64_MAX}, {INT64_MIN, INT64_MIN + 1, INT64_MAX, -7}, {1, INT64_MAX, INT64_MIN, INT64_MIN + 1}}};
+	landscape_dirty_observer = [](TileIndex t) { GroundTreeTile("dirty", t); };
+	uint clears = 0;
+	const TileIndex water = tile + 1; Tile original_water(water);
+	const auto water_fields = std::tuple(original_water.type(), original_water.m1(), original_water.m2(), original_water.m3(), original_water.m4(), original_water.m5(), original_water.m6(), original_water.m7(), original_water.m8());
+	for (const auto &values : amounts) {
+		for (uint i = 0; i < 4; ++i) _price[prices[i]] = values[i];
+		for (uint ground = 0; ground < 6; ++ground) for (uint density = 0; density < 4; ++density) for (bool snow : {false, true}) for (bool generating : {false, true}) for (DoCommandFlags flags : {DoCommandFlags{}, DoCommandFlags{DoCommandFlag::QueryCost}, DoCommandFlags{DoCommandFlag::Execute}}) for (bool dispatch : {false, true}) {
+			AutoRestoreBackup<bool> generation(_generating_world, generating);
+			MakeClear(tile, static_cast<ClearGround>(ground), density); if (snow) MakeSnow(tile, density);
+			MakeSea(water); SetNonFloodingWaterTile(water, true); ResetScratch();
+			RecursiveCommandCounter nested;
+			auto cost = dispatch ? CmdLandscapeClear(flags, tile) : _tile_type_procs[MP_CLEAR]->clear_tile_proc(tile, flags);
+			fmt::print(stderr, "GROUNDTREE cost {} {} {} {} {} {} {} {} {} {} {} {} {} {}\n", clears++, ground, density, snow, generating, flags.base(), dispatch, cost.Succeeded(), cost.GetCost(), to_underlying(cost.GetExpensesType()), cost.GetErrorMessage(), cost.GetExtraErrorMessage(), cost.GetErrorOwner().base(), cost.GetEncodedMessage().empty());
+			GroundTreeTile("clear", tile); GroundTreeTile("neighbor", water);
+		}
+	}
+	std::tie(original_water.type(), original_water.m1(), original_water.m2(), original_water.m3(), original_water.m4(), original_water.m5(), original_water.m6(), original_water.m7(), original_water.m8()) = water_fields;
+	for (uint i = 0; i < 4; ++i) _price[prices[i]] = saved_prices[i];
+	GroundTreeRandom("clear-rng", tile);
+	uint groups = 0;
+	for (bool edge : {false, true}) for (bool freeform : {false, true}) for (uint mode = 0; mode < 14; ++mode) {
+		AutoRestoreBackup<bool> edges(_settings_game.construction.freeform_edges, freeform);
+		const TileIndex center = edge ? TileXY(1, 1) : tile;
+		const uint radius = mode == 0 || mode == 1 || mode == 2 || mode == 3 ? 0 : mode == 10 ? (1U << 24) : mode == 9 ? 5 : 3;
+		const uint count = mode == 0 || mode == 8 || mode == 9 || mode == 12 ? 0 : 32;
+		const TreeType type = mode == 6 ? TREE_CACTUS : mode == 11 ? static_cast<TreeType>(TREE_TOYLAND + TREE_COUNT_TOYLAND - 1) : mode == 12 ? TREE_SUB_TROPICAL : mode == 9 ? static_cast<TreeType>(TREE_CACTUS - 1) : mode >= 7 && mode != 10 && mode != 13 ? TREE_RAINFOREST : TREE_TEMPERATE;
+		const TileArea area = TileArea(center).Expand(6);
+		using Fields = std::tuple<uint8_t, uint8_t, uint16_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint16_t>;
+		std::vector<Fields> fields;
+		for (TileIndex t : area) {
+			Tile native(t); fields.emplace_back(native.type(), native.m1(), native.m2(), native.m3(), native.m4(), native.m5(), native.m6(), native.m7(), native.m8());
+			if (IsTileType(t, MP_VOID)) continue;
+			MakeClear(t, mode == 5 || mode == 6 ? CLEAR_DESERT : mode == 4 ? CLEAR_ROCKS : CLEAR_GRASS, 2);
+			SetTropicZone(t, TROPICZONE_NORMAL);
+			if (mode == 13) {
+				if (TileX(t) % 3 == 0) MakeClear(t, CLEAR_FIELDS, 3);
+				else if (TileX(t) % 3 == 1) SetBridgeMiddle(t, AXIS_X);
+				else MakeShore(t);
+			}
+			if (mode == 1 || mode == 2) MakeTree(t, type, mode == 1 ? 1 : 3, TreeGrowthStage::Dead, TREE_GROUND_ROUGH, 2);
+		}
+		_random.SetSeed(615); _interactive_random.SetSeed(615 + groups);
+		Randomizer expected = _interactive_random; for (uint i = 0; i < 2 * count; ++i) expected.Next();
+		const uint planted = PlaceTreeGroupAroundTile(center, type, radius, count, mode >= 6);
+		if (!std::ranges::equal(expected.state, _interactive_random.state)) std::abort();
+		if (mode == 8 || mode == 9 || mode == 12) {
+			const auto inside = GetTropicZone(center + TileDiffXY(1, 1));
+			const auto boundary = GetTropicZone(center + (mode == 9 ? TileDiffXY(3, 4) : TileDiffXY(3, 0)));
+			fmt::print(stderr, "GROUNDTREE boundary {} {} {}\n", groups, to_underlying(inside), to_underlying(boundary));
+		}
+		fmt::print(stderr, "GROUNDTREE group {} {} {} {} {} {} {} {}\n", groups++, edge, freeform, mode, type, radius, count, planted);
+		GroundTreeRandom("group-rng", center);
+		uint at = 0; for (TileIndex t : area) {
+			GroundTreeTile("group-tile", t); Tile native(t);
+			std::tie(native.type(), native.m1(), native.m2(), native.m3(), native.m4(), native.m5(), native.m6(), native.m7(), native.m8()) = fields[at++];
+		}
+	}
+	landscape_dirty_observer = nullptr;
+	fmt::print(stderr, "GROUNDTREE complete {} {}\n", clears, groups);
+}
 static bool LandscapeScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
@@ -42,7 +118,15 @@ static bool LandscapeScenario(std::span<std::string_view> args)
 #else
 	auto &finance = *c;
 #endif
-	if (args[1] == "inspect") { fmt::print(stderr, "LANDSCAPE reload {} {} {}\n", finance.money, finance.clear_limit, finance.terraform_limit); return true; }
+	if (args[1] == "inspect") {
+		if (args.size() != 5) std::abort();
+		_interactive_random.state[0] = std::stoul(std::string(args[2])); _interactive_random.state[1] = std::stoul(std::string(args[3]));
+		const TileIndex anchor(std::stoul(std::string(args[4])));
+		GroundTreeRandom("restored", anchor);
+		AutoRestoreBackup<GameMode> editor(_game_mode, GM_EDITOR);
+		fmt::print(stderr, "GROUNDTREE continued {}\n", PlaceTreeGroupAroundTile(anchor, TREE_RAINFOREST, 3, 32, true));
+		GroundTreeRandom("continued-rng", anchor);
+		fmt::print(stderr, "LANDSCAPE reload {} {} {}\n", finance.money, finance.clear_limit, finance.terraform_limit); return true; }
 	finance.money = 1000000000; finance.clear_limit = finance.terraform_limit = UINT32_MAX;
 	AutoRestoreBackup<bool> infinite(_settings_game.difficulty.infinite_money, false);
 	TileIndex tile = INVALID_TILE; std::vector<uint8_t> heights;
@@ -53,6 +137,7 @@ static bool LandscapeScenario(std::span<std::string_view> args)
 		tile = TileXY(x + 3, y + 3); for (TileIndex t : area) { heights.push_back(TileHeight(t)); SetTileHeight(t, 3); } break;
 	}
 	if (tile == INVALID_TILE) std::abort();
+	GroundTreeProbe(tile);
 	auto terraform = [&](const char *name, TileIndex t, Slope slope, bool up, DoCommandFlags flags) { LandscapeResult(name, Command<CMD_TERRAFORM_LAND>::Do(flags, t, slope, up)); };
 	for (DoCommandFlags flags : {DoCommandFlags{}, DoCommandFlags{DoCommandFlag::QueryCost}, DoCommandFlags{DoCommandFlag::Execute}}) {
 		terraform("raise", tile, SLOPE_N, true, flags); terraform("lower", tile, SLOPE_N, false, flags);
@@ -101,6 +186,7 @@ static bool LandscapeScenario(std::span<std::string_view> args)
 
 	uint index = 0; for (TileIndex t : TileArea(tile - TileDiffXY(3, 3), 14, 14)) SetTileHeight(t, heights[index++]);
 	fmt::print(stderr, "LANDSCAPE final {} {} {}\n", finance.money, finance.clear_limit, finance.terraform_limit);
+	GroundTreeRandom("checkpoint", tile);
 	if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
 	std::fflush(stderr); return true;
 }

@@ -9,6 +9,8 @@
 //! `None` routes to the original typed native accessor (including failed assertions).
 use crate::map_func::TileTypeAccess;
 use crate::tile_type::MP_TREES;
+/// `TREE_COUNT_TOYLAND`.
+pub(crate) const TREE_COUNT_TOYLAND: u8 = 9;
 #[inline]
 pub(crate) fn get_tree_ground(m: &TileTypeAccess, t: u32) -> Option<u8> {
     m.require_type(t, MP_TREES)?;

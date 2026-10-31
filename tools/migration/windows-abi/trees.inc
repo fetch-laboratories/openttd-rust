@@ -126,8 +126,8 @@ static void Trees()
 	Tick(4096 * 4096);
 	CHECK(*counter == 36 && tree_probe.writes == 0);
 	tree_probe.plant = {.tile_type = 0, .bridge = false, .ground = 0, .density = 2, .snow = false, .coast = false, .zone = 0};
-	openttd_rust_trees_plant(1, 12, 2, 6, &tree_probe_services, &shared);
-	CHECK(tree_probe.writes == 1 && openttd_rust_trees_can_plant(1, false, &tree_probe_services));
+	openttd_rust_trees_place(1, 0x00860000, true, 1, &tree_probe_services, &shared);
+	CHECK(tree_probe.writes == 1);
 	tree_probe.plant.tile_type = 4;
 	const OpenTTDCommandServices commands{};
 	const auto command = openttd_rust_trees_cmd_plant(nullptr, 1, 1, 255, false,
