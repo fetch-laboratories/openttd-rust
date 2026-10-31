@@ -53,5 +53,5 @@ impl crate::map_func::World<'_> {
 
 /// `IsBridgeAbove`, over the canonical tile's bridge-axis bits.
 pub(crate) fn is_bridge_above(m: &crate::map_func::TileTypeAccess, tile: u32) -> Option<bool> {
-    Some(m.kind(tile)? & 12 != 0)
+    Some(m.kind(tile)? & 0x0c != 0)
 }
