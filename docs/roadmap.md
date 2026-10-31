@@ -322,7 +322,7 @@ six-branch limit and disjoint-service rule; completing review/integration takes
 priority. A lower rank can run while a higher one waits. Scopes live in issues.
 
 1. **Finish the remaining drafts in readiness order, with the steering fixes.**
-   #576, #596, #568 and #594 remain; each next action is in the
+   #596, #568, #594 and #603 remain; each next action is in the
    checkpoint. No reviewed owner gains other scope; a fix the audit found is
    not new scope.
 2. **#581 Rust on every CI configuration and retirement of the portable
@@ -450,20 +450,21 @@ Excluded, with return conditions checked by this review:
 
 ## Resume checkpoint (2026-10-31, integration 38)
 
-Claude Code root (claude-opus-5-5, xhigh) resumed at `11c285f939`. #593
-integrated as integration 37 (`b74888c4bc`) and #576 as integration 38
+Codex root has taken over from Claude Code root at `9cf6b7898e`.
+Agent: /root | Model: gpt-6.1-sol | Reasoning effort: xhigh.
+#593 integrated as integration 37 (`b74888c4bc`) and #576 as integration 38
 (`e48846d8fd`). Drafts integrate one at a time because every pair shares
 service files; each merge needs the next draft updated from base. Order: #568,
 #603, #594, #596 once fixed, then #586 and the #565 PR.
 
 | Draft | Pushed head | State and next action | Worktree |
 | --- | --- | --- | --- |
-| #585 / #596 | `cc56eeb7a1` | Full 41178590847 failed: the engine-types fixture wraps `InitGRFTownGeneratorNames`, which the Rust build no longer defines. fix596-engines is moving the hook. Then a fresh scoped review, a base update and Full. | `t3-d920cf58` |
-| #562 / #568 | `6ab951af32` | Updated (update568, condition (a)); root's warning-only fix. Base update, then Full (next to integrate). | `t3-070c9aac` (implementation) |
+| #585 / #596 | `8b4cb010f8` | Engine-types fixture hook fixed after Full's link failure. Codex review596-engines is running; then base update and Full. | `t3-ef9058e1` (review) |
+| #562 / #568 | `e689bd68fe` | Base merge pushed at takeover. Substantive conflicts in `landscape.cpp` and the Windows trees ABI fixture require fresh conflict review. Then current-base Full (next to integrate). | `t3-05b5586e` (update) |
 | #587 / #594 | `b655b40c0a` | conflict594 reviewed the `train.cpp` resolution and fixed two docs omissions. Base update, then Full. | `t3-9836ee35` |
 | #199 / #603 | `70215c21cb` | review603 fixed four missing native assertions; root spot-checked. Item 4 waits for #604. Base update, then Full. | T3 worktree |
-| #565 / #275 / #592 | none yet | mapload565 running: #565 item 1, #275's two fix-forward items, #592 and the profile-38 regression fix (target: profile 36's Ir). Independent review, then Full. | T3 worktree |
-| #586 | none yet | signs586 running. Cost decision at its first checkpoint, then review. | T3 worktree |
+| #565 / #275 / #592 | none yet | Uncommitted mapload565 implementation and background build preserved for Codex recovery: #565 item 1, #275's two fix-forward items, #592 and the profile-38 regression fix (target: profile 36's Ir). Independent review, then Full. | `t3-431c84b4` (locked source) |
+| #586 | `926751d97b` (local) | Seven scenarios equal before base merge; post-merge checks pending. First metrics: 75 retired, +131 net glue, 260 tooling. Root accepts the whole native operations and command evidence cost; Codex recovery will check for duplicate accessors before review. | `t3-a695ea95` (locked source) |
 
 | Running or due work | State / next action |
 | --- | --- |
@@ -471,7 +472,7 @@ service files; each merge needs the next draft updated from base. Order: #568,
 | Deep checks | On the user's request only (user decision, 2026-10-31). If one is requested, use `.local/worktrees/deep-after30-569` (locked). Move it with `git checkout --detach origin/rust-migration` and relock it. Then run `python3 tools/migration.py build --jobs 2`, then `cmake --build build-rust-sanitized --target openttd_rust_native_test_support_build` until #503's fix lands, then `python3 tools/migration.py deep` with the requested `--member` options. Launch outside the session's process group, for example as a `systemd-run --user` unit. |
 | Instruction profile | Profiles 36 and 38 are retained in `.local/worktrees/profile-after36-595` and `profile-after38-576` (locked) for the regression comparison. The next is due after integration 40, or when the fix-forward PR integrates. |
 | Quiet speed pass | Waits for the profile-38 regression fix; needs an idle host. |
-| Maintenance | #581 PR-B after #568 integrates; #604 at the next planning round. |
+| Maintenance | #581 PR-B after #568 integrates; fresh Astra planning ranks #604 without adding a seventh component branch. |
 | Housekeeping | Lock a running Codex agent's worktree before `--apply` until #592 integrates. |
 
 Keep the pinned reference unchanged. Preserve unfinished checkouts and existing
