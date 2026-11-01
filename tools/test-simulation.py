@@ -1217,6 +1217,20 @@ class SpeedPassTests(unittest.TestCase):
 
 
 class DrawingWorkloadTests(unittest.TestCase):
+    def test_drawing_ratio_has_no_speed_ceiling(self):
+        from simulation import drawing
+
+        self.assertIsNone(ir.speed_budget(drawing.NAME, 1.4))
+        self.assertIsNone(ir.speed_budget(drawing.NAME, 1.4, 1.2, 1.1))
+        anchor = dict(ratio=1.1, Ir=100, identity={"compatible": "drawing"})
+        report = ir.budget(
+            drawing.NAME,
+            dict(Ir=110, identity=anchor["identity"]),
+            dict(anchor=anchor, integrated=dict(Ir=100)),
+        )
+        self.assertEqual(set(report), {"projected_ratio"})
+        self.assertAlmostEqual(report["projected_ratio"], 1.32)
+
     def test_profiled_launch_counts_drawing_in_both_builds(self):
         from simulation import drawing
 

@@ -70,6 +70,9 @@ def speed_budget(
     anchor_ratio: float | None = None,
 ) -> SpeedBudget | None:
     """Report the speed record and ceiling without making timings a CI failure."""
+    # docs/speed.md defines ceilings only for play and generation.
+    if name.startswith("draw-"):
+        return None
     mean = SPEED_BUDGETS.get(name, anchor_ratio)
     if mean is None or ratio is None:
         return None
@@ -302,5 +305,6 @@ def budget(name, measurement, record):
     ratio = projection(anchor, measurement["Ir"])
     rolling = projection(anchor, integrated["Ir"])
     return dict(
-        projected_ratio=ratio, **speed_budget(name, ratio, rolling, anchor["ratio"])
+        projected_ratio=ratio,
+        **(speed_budget(name, ratio, rolling, anchor["ratio"]) or {}),
     )
