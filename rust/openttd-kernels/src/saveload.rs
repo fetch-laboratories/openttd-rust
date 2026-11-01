@@ -290,7 +290,7 @@ fn fill(services: &OpenTTDSaveLoadServices) -> Status {
         return Err(corrupt("Unexpected end of chunk".to_owned()));
     }
     codec(|c| {
-        c.read += len;
+        c.read = c.read.wrapping_add(len);
         c.shared.read_cursor = buf;
         // SAFETY: The filter filled `len <= MEMORY_CHUNK_SIZE` bytes of the buffer.
         c.shared.read_end = unsafe { buf.add(len) };
@@ -315,7 +315,10 @@ fn read_byte(services: &OpenTTDSaveLoadServices) -> Result<u8, OpenTTDRustSaveLo
 
 /// `ReadBuffer::GetSize`.
 fn read_size() -> usize {
-    codec(|c| c.read - (c.shared.read_end as usize - c.shared.read_cursor as usize))
+    codec(|c| {
+        c.read
+            .wrapping_sub(c.shared.read_end as usize - c.shared.read_cursor as usize)
+    })
 }
 
 /// `MemoryDumper::WriteByte`'s new block.
