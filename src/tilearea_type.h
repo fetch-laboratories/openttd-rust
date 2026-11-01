@@ -50,8 +50,6 @@ struct OrthogonalTileArea {
 		this->h    = 0;
 	}
 
-	bool Intersects(const OrthogonalTileArea &ta) const;
-
 	bool Contains(TileIndex tile) const;
 
 	OrthogonalTileArea &Expand(int rad);
@@ -70,38 +68,6 @@ struct OrthogonalTileArea {
 	OrthogonalTileIterator begin() const;
 
 	OrthogonalTileIterator end() const;
-};
-
-/** Represents a diagonal tile area. */
-struct DiagonalTileArea {
-
-	TileIndex tile; ///< Base tile of the area
-	int16_t a;        ///< Extent in diagonal "x" direction (may be negative to signify the area stretches to the left)
-	int16_t b;        ///< Extent in diagonal "y" direction (may be negative to signify the area stretches upwards)
-
-	/**
-	 * Construct this tile area with some set values.
-	 * @param tile The base tile.
-	 * @param a The "x" extent.
-	 * @param b The "y" extent.
-	 */
-	DiagonalTileArea(TileIndex tile = INVALID_TILE, int16_t a = 0, int16_t b = 0) : tile(tile), a(a), b(b)
-	{
-	}
-
-	DiagonalTileArea(TileIndex start, TileIndex end);
-
-	/**
-	 * Clears the TileArea by making the tile invalid and setting a and b to 0.
-	 */
-	void Clear()
-	{
-		this->tile = INVALID_TILE;
-		this->a    = 0;
-		this->b    = 0;
-	}
-
-	bool Contains(TileIndex tile) const;
 };
 
 /** Shorthand for the much more common orthogonal tile area. */
@@ -166,8 +132,6 @@ public:
 	{
 		return this->tile == rhs;
 	}
-
-	static std::unique_ptr<TileIterator> Create(TileIndex corner1, TileIndex corner2, bool diagonal);
 };
 
 /** Iterator to iterate over a tile area (rectangle) of the map. */
@@ -184,16 +148,6 @@ public:
 	 */
 	OrthogonalTileIterator(const OrthogonalTileArea &ta) : TileIterator(ta.w == 0 || ta.h == 0 ? INVALID_TILE : ta.tile), w(ta.w), x(ta.w), y(ta.h)
 	{
-	}
-
-	/**
-	 * Construct the iterator.
-	 * @param corner1 Tile from where to begin iterating.
-	 * @param corner2 Tile where to end the iterating.
-	 */
-	OrthogonalTileIterator(TileIndex corner1, TileIndex corner2)
-	{
-		*this = OrthogonalTileIterator(OrthogonalTileArea(corner1, corner2));
 	}
 
 	/**
@@ -217,40 +171,6 @@ public:
 	std::unique_ptr<TileIterator> Clone() const override
 	{
 		return std::make_unique<OrthogonalTileIterator>(*this);
-	}
-};
-
-/** Iterator to iterate over a diagonal area of the map. */
-class DiagonalTileIterator : public TileIterator {
-private:
-	OpenTTDDiagonalTileCursor state; ///< Base coordinates and the current and end rotated coordinates.
-
-public:
-
-	/**
-	 * Construct the iterator.
-	 * @param ta Area, i.e. begin point and (diagonal) width/height of to-be-iterated area.
-	 */
-	DiagonalTileIterator(const DiagonalTileArea &ta) :
-		TileIterator(ta.tile), state{TileX(ta.tile), TileY(ta.tile), 0, 0, ta.a, ta.b}
-	{
-	}
-
-	/**
-	 * Construct the iterator.
-	 * @param corner1 Tile from where to begin iterating.
-	 * @param corner2 Tile where to end the iterating.
-	 */
-	DiagonalTileIterator(TileIndex corner1, TileIndex corner2)
-	{
-		*this = DiagonalTileIterator(DiagonalTileArea(corner1, corner2));
-	}
-
-	TileIterator& operator ++() override;
-
-	std::unique_ptr<TileIterator> Clone() const override
-	{
-		return std::make_unique<DiagonalTileIterator>(*this);
 	}
 };
 

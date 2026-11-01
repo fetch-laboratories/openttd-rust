@@ -34,16 +34,6 @@ void OrthogonalTileArea::Add(TileIndex to_add)
 }
 
 /**
- * Does this tile area intersect with another?
- * @param ta the other tile area to check against.
- * @return true if they intersect.
- */
-bool OrthogonalTileArea::Intersects(const OrthogonalTileArea &ta) const
-{
-	return openttd_rust_tile_area_intersects(this, &ta, &GetRustSharedServices());
-}
-
-/**
  * Does this tile area contain a tile?
  * @param tile Tile to test for.
  * @return True if the tile is inside the area.
@@ -88,50 +78,6 @@ OrthogonalTileIterator OrthogonalTileArea::begin() const
 OrthogonalTileIterator OrthogonalTileArea::end() const
 {
 	return OrthogonalTileIterator(OrthogonalTileArea());
-}
-
-/**
- * Create a diagonal tile area from two corners.
- * @param start First corner of the area.
- * @param end Second corner of the area.
- */
-DiagonalTileArea::DiagonalTileArea(TileIndex start, TileIndex end)
-{
-	openttd_rust_diagonal_tile_area_corners(this, start.base(), end.base(), &GetRustSharedServices());
-}
-
-/**
- * Does this tile area contain a tile?
- * @param tile Tile to test for.
- * @return True if the tile is inside the area.
- */
-bool DiagonalTileArea::Contains(TileIndex tile) const
-{
-	return openttd_rust_diagonal_tile_area_contains(this, tile.base(), &GetRustSharedServices());
-}
-
-/**
- * Move ourselves to the next tile in the rectangle on the map.
- */
-TileIterator &DiagonalTileIterator::operator++()
-{
-	this->tile = TileIndex{openttd_rust_diagonal_tile_advance(&this->state, this->tile.base(), &GetRustSharedServices())};
-	return *this;
-}
-
-/**
- * Create either an OrthogonalTileIterator or DiagonalTileIterator given the diagonal parameter.
- * @param corner1 Tile from where to begin iterating.
- * @param corner2 Tile where to end the iterating.
- * @param diagonal Whether to create a DiagonalTileIterator or OrthogonalTileIterator.
- * @return unique_ptr to the allocated TileIterator.
- */
-/* static */ std::unique_ptr<TileIterator> TileIterator::Create(TileIndex corner1, TileIndex corner2, bool diagonal)
-{
-	if (diagonal) {
-		return std::make_unique<DiagonalTileIterator>(corner1, corner2);
-	}
-	return std::make_unique<OrthogonalTileIterator>(corner1, corner2);
 }
 
 /**

@@ -7,9 +7,9 @@
 
 //! Orthogonal and diagonal tile areas from `tilearea_type.h` and `tilearea.cpp`.
 //!
-//! Native facades pass their area or iterator fields in place; each export
-//! borrows them only for its call. The orthogonal iterator's advance stays
-//! inline in C++ loops; [`OrthogonalTileIterator`] serves Rust loops.
+//! Native `OrthogonalTileArea` facades pass their area in place; each export
+//! borrows it only for its call. The orthogonal iterator's advance stays inline
+//! in C++ loops. Diagonal areas and [`TileIterator`] serve Rust loops only.
 #![allow(unsafe_code)]
 use crate::map_func::Map;
 /// Native `OrthogonalTileArea` scalar fields.
@@ -183,8 +183,7 @@ impl OrthogonalTileIterator {
     }
 }
 
-/// Native `DiagonalTileArea`: extents are one past the end, signed by direction.
-#[repr(C)]
+/// `DiagonalTileArea`: extents are one past the end, signed by direction.
 #[derive(Clone, Copy)]
 pub struct DiagonalTileArea {
     /// Base tile of the area.
@@ -249,7 +248,6 @@ impl DiagonalTileArea {
 }
 
 /// `DiagonalTileIterator` fields after the inherited current tile.
-#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct DiagonalTileCursor {
     /// Base tile x coordinate.
@@ -442,18 +440,6 @@ pub unsafe extern "C" fn openttd_rust_tile_area_add(
     let w = unsafe { entry(shared) };
     unsafe { (*area).add(to_add, w.dimensions) };
 }
-/// Native `OrthogonalTileArea::Intersects`.
-/// # Safety
-/// Both areas are live; `shared` is the live shared table.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_tile_area_intersects(
-    area: *const TileArea,
-    other: *const TileArea,
-    shared: *const crate::services::Services,
-) -> bool {
-    let w = unsafe { entry(shared) };
-    unsafe { (*area).intersects(*other, w.dimensions, |ok| w.check(ok)) }
-}
 /// Native `OrthogonalTileArea::Contains`.
 /// # Safety
 /// `area` is live; `shared` is the live shared table.
@@ -488,52 +474,6 @@ pub unsafe extern "C" fn openttd_rust_tile_area_clamp_to_map(
 ) {
     let w = unsafe { entry(shared) };
     unsafe { (*area).clamp_to_map(w.dimensions, w.types.count(), |ok| w.check(ok)) };
-}
-/// Native `DiagonalTileArea(start, end)`.
-/// # Safety
-/// `out` is a writable native area; `shared` is the live shared table.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_diagonal_tile_area_corners(
-    out: *mut DiagonalTileArea,
-    start: u32,
-    end: u32,
-    shared: *const crate::services::Services,
-) {
-    let w = unsafe { entry(shared) };
-    let area = DiagonalTileArea::from_corners(w.dimensions, w.types.count(), start, end, |ok| {
-        w.check(ok);
-    });
-    unsafe { out.write(area) };
-}
-/// Native `DiagonalTileArea::Contains`.
-/// # Safety
-/// `area` is live; `shared` is the live shared table.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_diagonal_tile_area_contains(
-    area: *const DiagonalTileArea,
-    tile: u32,
-    shared: *const crate::services::Services,
-) -> bool {
-    let w = unsafe { entry(shared) };
-    unsafe { (*area).contains(tile, w.dimensions) }
-}
-/// Native `DiagonalTileIterator::operator++`; returns the next current tile.
-/// # Safety
-/// `cursor` is the live iterator's state with no other borrow; `shared` is the live shared table.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_diagonal_tile_advance(
-    cursor: *mut DiagonalTileCursor,
-    tile: u32,
-    shared: *const crate::services::Services,
-) -> u32 {
-    let w = unsafe { entry(shared) };
-    unsafe { (*cursor).advance(tile, w.dimensions, w.types.count(), |ok| w.check(ok)) }
-}
-
-crate::abi::layouts! {
-    fn abi_layout;
-    "DiagonalTileArea" ["station_service"] => DiagonalTileArea { tile, a, b };
-    "OpenTTDDiagonalTileCursor" ["station_service"] => DiagonalTileCursor { base_x, base_y, a_cur, b_cur, a_max, b_max };
 }
 
 #[cfg(test)]
