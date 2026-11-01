@@ -42,7 +42,6 @@ struct OpenTTDHouseDefinitionServices {
 	void (*map_string)(const HouseSpec *spec, uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(map_string);
 	void (*set_animation)(const HouseSpec *spec, uint8_t frames, AnimationStatus status) noexcept OPENTTD_SERVICE_DEFAULT(set_animation);
 	std::vector<BadgeID> *(*badges)(const HouseSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(badges);
-	uint32_t (*file_id)(const GRFFile *file) noexcept OPENTTD_SERVICE_DEFAULT(file_id);
 	void (*resize_specs)(size_t count) noexcept OPENTTD_SERVICE_DEFAULT(resize_specs);
 	void (*move_spec)(const HouseSpec *spec, uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(move_spec);
 	void (*set_override)(const HouseSpec *spec, uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(set_override);

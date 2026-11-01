@@ -117,7 +117,7 @@ Why the course changed:
 | --- | --- | --- | --- |
 | 1. Simulation logic | About 2,250 lines of non-drawing bodies in the logic bucket, plus #559's command invocation (`command.cpp`, 151) and #69's tile areas (`tilearea.cpp`, 172) | Its open drafts, #559 and #69 integrate. Every other remaining non-drawing body belongs to the phase-2 owner of its file | Closing. #612, #616, #618 and #619 are in draft. #559 and #69 return now: their recorded condition is phase 1's exit. No further phase-1 owner is planned |
 | 2. Simulation storage | 11,007 in the storage bucket, plus the phase-1 bodies left in each pool's files | Every pool record and the map arrays are defined once in Rust, keep the original pool, lifetime and save behavior ([world-state design](design/world-state.md#transferring-shared-storage)), and are read in place by both languages. C++ calls Rust only for operations, and no per-field service or per-call-site reader remains for moved data. Each pool owner also ports the remaining non-drawing bodies in its files | PR-B (#607) first, then #570 with #566. Pools in order: vehicles (#570, then #598 and #599); stations and road stops; towns and industries; companies, groups, engines, link graph and the smaller pools; orders; then the map with the rail, road, water, tunnel, landscape and tile bodies |
-| 3. Simulation data readers | 41,096: save/load 12,852, script 13,099, network 9,640, NewGRF 5,505 | These run in Rust; the Squirrel VM may stay C++ until phase 6 | #573, #574, #575, #497 and #498 are queued and ready. They take every slot phases 1 and 2 leave free |
+| 3. Simulation data readers | 41,096: save/load 12,852, script 13,099, network 9,640, NewGRF 5,505 | These run in Rust; the Squirrel VM may stay C++ until phase 6 | #573, #574 and #575 are queued; #497 and #498 are parked (work order 5). They take every slot phases 1 and 2 leave free |
 | 4. Support | 31,616 support and graphics lines, plus startup in `openttd.cpp` (510); data tables (12,931) retire with their consumers | Not planned yet | Not planned until it is the next phase (user direction, 2026-10-28) |
 | 5. Interface | 67,796 GUI and platform lines including script and network GUI, plus about 4,700 drawing and description lines in the logic bucket | Not planned yet | As above |
 | 6. Vendored | 54,626 | Not planned yet | As above |
@@ -135,7 +135,7 @@ Root's first actions from this chart. They override the plan-after47 input's
 3. Finish #612, #616, #618 and #619, and select #559 and #69 as phase 1's last
    owners. The plan-after47 phase-1 candidates (link-graph job lifecycle, elrail
    transition, land count) join the phase-2 owners of their files.
-4. Fill every other free slot with phase 3 (#573, #574, #575, #497, #498),
+4. Fill every other free slot with phase 3 (#573, #574, #575; #497 and #498 are parked),
    ranked under [selection](planning.md#selection).
 5. Size new owners to repay their review and Full ([selection](planning.md#selection)),
    and record the compiled-C++ rate at each stocktake (`/start-development`, step 4).
@@ -260,6 +260,8 @@ Rust / tooling / original C++ retired / net glue.
 | 54 | #617 snow-line state and map-edge water scans / #618 | `b29e8036f5` | 159 / 200 / 34 / +61 |
 | 55 | #622 batch: five shared-operation families / #624 | `181a962caa` | see #624 / rebound rows 567 to 523 |
 | 56 | #573 save/load codec slices 1 to 3a (#627) and #619 road-bit cleanup (#620) / #631 | `2d2cd78f53` | see stocktake 56: save/load retired +603 |
+| 57 | #629 multiplayer comparison isolated from host loopback probes / #632 | `46a2f240d7` | 0 / 8 / 0 / 0 |
+| 58 | #622 later batch: shared NewGRF spec and GRF-file bindings / #639 | `83c62ef441` | net glue -34 / rebound rows 523 to 420 |
 
 ## Work order
 
@@ -281,17 +283,19 @@ The 10-31 session hold on #559, #69 and #570 has expired, and the wrap-up course
 
    No further phase-1 owner is planned. Every other remaining non-drawing body moves with the phase-2 owner of its file, including plan-after47's link-graph job lifecycle, elrail transition and land count; #621 lists them.
 3. **One maintenance batch at a time** (one reviewer, one Full):
-   - #629 first: isolate the multiplayer comparison from other loopback connections on port 41051. It fails on base too, and #628 needs it as its per-slice check.
-   - #622's later batch: the shared typed `RustSpec*` table (root's answers on #624), then `RustGRFFileID`, `RustGRFCargoMap`, `RustGRFFileAtOrNull` and the `RustResolverGRF*` callees, and extending `tools/rebound-callees.py` to `.inc` service tables.
+   - #641 shared Rust packet owner (root's shared-service PR), in the first free slot: #628 and #64 call C++ `Packet` methods that bounce back into `packet.rs`, and both must adopt #641 before they integrate.
    - #199's open items, disjoint from #570: the `CargoFlow` bounce, #578's story-page bounce, #580's date parameters and the sweep's stale comments.
    - #565 item 2, after #570 integrates, because both change `movement.rs`. Delete the map fallbacks and convert the remaining rail, crossing, depot, stop, water and tunnel leaves, `tile_slope_z`, and world generation's per-tile services (issue body). Production net glue -300 to -600. It also deletes the native `bridge_above` and `rail_tile_type` services that #616 and #620 duplicated with Rust map readers (`road_cmd.rs:932`, `road_cmd.rs:1443`, `station_cmd.rs:447`).
-   - Later: #604 shared settings access, after #570's generator; then #168/#199/#500 completed-job publication and #501 probe typing.
-4. **The next phase-2 pool after #570 integrates**, in the order of "Phases": stations and road stops (1,604 storage lines, about 600 callback slots; it removes #612's two C++ calls per k-d tree coordinate read in `station/spatial.rs:12`); towns and industries (1,295, about 344); companies, groups, engines, link graph and the smaller pools (952, about 286); orders and order lists (390, about 111); then the map (3,988) with the rail, road, water, tunnel, landscape and tile bodies. Each pool gets an issue and a design section when selected. It moves its coupled save adapters with each record, generates native declarations, verifies the layout, and deletes the displaced readers, services and their baseline rows.
+   - Later: #604 shared settings access, after #570's generator, now also extending `tools/rebound-callees.py` to `.inc` tables (51 rows, moved from #639 by root decision on #622); then #168/#199/#500 completed-job publication and #501 probe typing.
+4. **The next phase-2 pools after #570 integrates** (ranked by plan-after56, 2026-11-01). Each needs #570's generator, save descriptors and record lookup:
+   - #634 stations and road stops: 450 to 650 retired, -300 to -800 net glue, about 110 to 160 station-field slots. It removes the per-station `SharedForEachStation` bounce and #612's two C++ calls per k-d tree coordinate (`station/spatial.rs:12`).
+   - #635 towns, industries and subsidies: 350 to 550 retired, -150 to -450 net glue, about 40 to 70 field slots. Disjoint from #634; the two may run together.
+   - Then orders and order lists (441 left; read on every vehicle tick), #637 engines (545, with #497's engine bindings), companies and groups (510), link graph (607), #638 the smaller pools (615, with #498's ObjectSpec payloads), and the map (3,988 storage) with the rail, road, water, tunnel, landscape and tile bodies. Pools without an issue get one and a design section when selected. It moves its coupled save adapters with each record, generates native declarations, verifies the layout, and deletes the displaced readers, services and their baseline rows.
 5. **Phase 3 fills every other free slot:**
    - #628 (#574 network protocol) resumes from slice 2 once #629 integrates. Read its status comment first.
    - #575 script host, commands and events, with its unsaved-output evidence.
-   - #573's next PR, after #570 integrates: slice 3b changes the `SaveLoad` base and the `saveload.h` macros that #570's vehicle descriptors use. Then slice 4, the corrupt-input and LoadCheck probes, and the native `CopyFromOldName` helper, as #627's status comment lists.
-   - Then #497 with its engine and feature binding payloads, and #498 with its ObjectSpec payloads.
+   - #573's next PR, after #570 integrates: slice 3b changes the `SaveLoad` base and the `saveload.h` macros that #570's vehicle descriptors use. Its brief keeps the save-descriptor macros unchanged so it can run beside #634 and #635; otherwise whichever starts second waits. Then slice 4, the corrupt-input and LoadCheck probes, and the native `CopyFromOldName` helper, as #627's status comment lists.
+   - #497 and #498 stay parked (twenty-first steering, correction 2): their plans keep data in C++ behind setters. #497's `Engine::grf_prop` and `overrides` bindings join #637 (item 4); its other spec handlers are re-planned after #622's shared `RustSpec*` table integrates. #498 joins #638 (item 4). The 11-01 start of #497 stopped on this before any code (root, 2026-11-01).
 
    Size each owner to repay its review and Full ([selection](planning.md#selection)). Plan no Squirrel port.
 6. **#503 coverage continuation last:** first the bounded clock-preparation and sanitized native-test-support build fixes, then the 119 unfinished traces with provenance checks. Do not recollect just to fill a slot.
@@ -308,13 +312,18 @@ Excluded, with return conditions checked by this review:
 - #64 and #68 become maintained Rust crates that reproduce the game's observable cryptography. They return when phase 3's network ports reach authentication, or with phase 6, whichever comes first.
 - #12, #26, #41, #67, #71 and #83 are behavior improvements deferred until near-full reproduction under #513's original-default setting policy. #513 needs implementation when the first such improvement is accepted.
 
-## Resume checkpoint (2026-11-01, wrap-up complete after integration 56)
+## Resume checkpoint (2026-11-01 22:20Z, Claude session limit)
 
-Code is `2d2cd78f53`. `CI_ON_DEMAND` is `true`. No agent is running. Read #628's status comment before resuming it.
+Code is `83c62ef441` (integration 58). `CI_ON_DEMAND` is `true`. Stocktake 58 and profile 58 are due first on resume. Claude agents paused at pushed checkpoints for the session limit (resets 02:10Z); each PR's status comment holds its next action. Codex agents keep running.
 
-| Issue / PR | State at this commit | Next action | Checkout |
+| Issue / PR | State | Next action | Agent |
 | --- | --- | --- | --- |
-| #574 / #628 | Slice 1 of 5 at `77c0b8295e`, held | Slice 2 after #629 integrates (work order 3 and 5) | `t3-1e4ffc20` |
+| #570 / #636 | Checkpoint 1 builds; 235 of 235 CTests; focused set rerun result in the status comment | Fix any failures it lists, then ground and train records, then checkpoint 2 (deletes readers; net glue must turn negative) | Opus, paused |
+| #69 / #633 | Round-2 review at `346169fe0f`: 7 unfixed findings ([report](https://github.com/fetch-laboratories/openttd-rust/pull/633#issuecomment-6564617420)) | Opus fixes them (user: Opus, not Codex, for #633 repairs), then fresh review and Full | Opus |
+| #559 / #640 | Hop removed (`6684c7946c`); 10 of 11 scenarios equal; `commands-play-1` town ratings wrong (test depth goes negative on the first `rail.build`) | Find the unmatched decrement, then the issue's evidence cases | Opus, paused |
+| #574 / #628 | Slices 1-2 reviewed, open findings wait for #641 and #570's generator; slice 3 in progress | Slice 3 to review | Codex /root/network_slice3, running |
+| #64 / #642 | Crates pinned (`605dd16abd`); nothing compiled yet; #68 folded in | Compose crates, known-answer tests from Monocypher, port `network_crypto.cpp`; adopt #641 | Opus, paused |
+| #641 | Issue only | Start in the free slot | Not started |
 
 Since 2026-11-01, AGENTS.md requires a named job ID before an agent ends its turn on a background job, and short checks run in the foreground. Codex children had been ending turns on jobs they never started (`ae3fd45dff`).
 

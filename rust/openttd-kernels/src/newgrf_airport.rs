@@ -73,29 +73,16 @@ pub struct Services {
     /// `AirportSpec::catchment`.
     pub(crate) catchment: extern "C" fn(*const AirportSpec) -> u8,
     base_spec: extern "C" fn(u16) -> *const AirportSpec,
-    enabled: extern "C" fn(*const AirportSpec) -> bool,
     min_year: extern "C" fn(*const AirportSpec) -> i32,
     max_year: extern "C" fn(*const AirportSpec) -> i32,
-    override_id: extern "C" fn(*const AirportSpec) -> u16,
     never_expire: extern "C" fn() -> bool,
     station_layout: extern "C" fn(*const BaseStation) -> u8,
     random: extern "C" fn(*mut BaseStation) -> u16,
     build_date: extern "C" fn(*mut BaseStation) -> i32,
-    root: extern "C" fn(*const AirportSpec, bool) -> *const c_void,
-    tile_root: extern "C" fn(*const TileSpec, bool) -> *const c_void,
-    badges: extern "C" fn(*const c_void, *const AirportSpec, u32) -> u32,
-    tile_badges: extern "C" fn(*const c_void, *const TileSpec, u32) -> u32,
     tile_spec: extern "C" fn(u8) -> *const TileSpec,
-    tile_override: extern "C" fn(*const TileSpec) -> u16,
-    tile_local: extern "C" fn(*const TileSpec) -> u16,
-    tile_grfid: extern "C" fn(*const TileSpec) -> u32,
-    tile_has_groups: extern "C" fn(*const TileSpec) -> bool,
-    tile_substitute: extern "C" fn(*const TileSpec) -> u16,
     belongs: extern "C" fn(*const BaseStation, u32) -> bool,
     tile_random: extern "C" fn(u32) -> u8,
     frame: extern "C" fn(u32) -> u8,
-    version: extern "C" fn(*const c_void) -> u8,
-    grfid: extern "C" fn(*const c_void) -> u32,
     base_scope: extern "C" fn(*mut c_void, u8, u8) -> *mut c_void,
     town_scope: extern "C" fn(*mut c_void, *const crate::services::TownHandle, bool) -> *mut c_void,
     evaluate_tile: extern "C" fn(
@@ -167,7 +154,7 @@ pub(crate) fn station_fta(st: *mut BaseStation, s: &Services) -> *const c_void {
 pub(crate) fn get(kind: u8, s: &Services) -> *const AirportSpec {
     (s.check)(u16::from(kind) < crate::airport::NUM_AIRPORTS);
     let mut spec = (s.base_spec)(u16::from(kind));
-    if kind >= NEW_AIRPORT_OFFSET && !(s.enabled)(spec) {
+    if kind >= NEW_AIRPORT_OFFSET && !(s.shared().specs().airport().substitute().enabled)(spec) {
         if unsafe {
             crate::override_manager::openttd_rust_override_grfid(
                 crate::override_manager::airport(),
@@ -188,7 +175,7 @@ pub(crate) fn get(kind: u8, s: &Services) -> *const AirportSpec {
         }
         spec = (s.base_spec)(u16::from(substitute));
     }
-    let over = (s.override_id)(spec);
+    let over = (s.shared().specs().airport().substitute().override_id)(spec);
     if over != AT_INVALID {
         (s.base_spec)(over)
     } else {
@@ -196,7 +183,7 @@ pub(crate) fn get(kind: u8, s: &Services) -> *const AirportSpec {
     }
 }
 pub(crate) fn available(spec: *const AirportSpec, s: &Services) -> bool {
-    if !(s.enabled)(spec) {
+    if !(s.shared().specs().airport().substitute().enabled)(spec) {
         return false;
     }
     if crate::timer_game_common::calendar_year().0 < (s.min_year)(spec) {
@@ -285,7 +272,10 @@ pub unsafe extern "C" fn openttd_rust_airport_tile_init(
         (&raw mut (*parent).spec).write(spec);
         (&raw mut (*parent).layout).write(layout);
     }
-    (s.tile_root)(tile.tile_spec, !tile.station.is_null())
+    (s.shared().specs().airport_tile().standard().sprite_group)(
+        tile.tile_spec,
+        !tile.station.is_null(),
+    )
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_airport_root(
@@ -295,9 +285,12 @@ pub unsafe extern "C" fn openttd_rust_airport_root(
     let c = unsafe { *state };
     let s = unsafe { &*s };
     if c.tile_spec.is_null() {
-        (s.root)(c.spec, !c.station.is_null())
+        (s.shared().specs().airport().standard().sprite_group)(c.spec, !c.station.is_null())
     } else {
-        (s.tile_root)(c.tile_spec, !c.station.is_null())
+        (s.shared().specs().airport_tile().standard().sprite_group)(
+            c.tile_spec,
+            !c.station.is_null(),
+        )
     }
 }
 #[unsafe(no_mangle)]
@@ -365,7 +358,7 @@ pub unsafe extern "C" fn openttd_rust_airport_variable(
     let s = unsafe { &*s };
     match variable {
         0x40 => return u32::from(c.layout),
-        0x7a => return (s.badges)(resolver, c.spec, parameter),
+        0x7a => return (s.shared().specs().airport().badges)(resolver, c.spec, parameter),
         _ => {}
     }
     if c.station.is_null() {
@@ -406,25 +399,34 @@ fn id_at_offset(tile: u32, st: *mut BaseStation, grfid: u32, s: &Services) -> u3
     let gfx = crate::station_map::get_airport_gfx(tile, s.shared(), s);
     let spec = (s.tile_spec)(gfx);
     if gfx < NEW_AIRPORTTILE_OFFSET {
-        let over = (s.tile_override)(spec);
+        let over = (s.shared().specs().airport_tile().substitute().override_id)(spec);
         if over == INVALID_AIRPORTTILE {
             return 0xff00 | u32::from(gfx);
         }
         let other = (s.tile_spec)(over as u8);
-        return if (s.tile_grfid)(other) == grfid {
-            u32::from((s.tile_local)(other))
+        return if (s.shared().specs().airport_tile().grfid)(other) == grfid {
+            u32::from((s.shared().specs().airport_tile().local_id)(other))
         } else {
             0xfffe
         };
     }
-    if (s.tile_has_groups)(spec) {
-        if (s.tile_grfid)(spec) == grfid {
-            u32::from((s.tile_local)(spec))
+    if (s
+        .shared()
+        .specs()
+        .airport_tile()
+        .standard()
+        .has_sprite_groups)(spec)
+    {
+        if (s.shared().specs().airport_tile().grfid)(spec) == grfid {
+            u32::from((s.shared().specs().airport_tile().local_id)(spec))
         } else {
             0xfffe
         }
     } else {
-        0xff00 | u32::from((s.tile_substitute)(spec))
+        0xff00
+            | u32::from((s.shared().specs().airport_tile().substitute().substitute)(
+                spec,
+            ))
     }
 }
 #[unsafe(no_mangle)]
@@ -461,8 +463,10 @@ pub unsafe extern "C" fn openttd_rust_airport_tile_variable(
             let same = (s.shared().tile_type)(tile) == crate::tile_type::MP_STATION
                 && crate::station_map::is_airport(tile, s.shared())
                 && (s.shared().station_index)(tile) == (s.station_id)(c.station);
-            (s.shared().nearby_tile_information)(tile, (s.version)(resolver) >= 8)
-                | (u32::from(same) << 8)
+            (s.shared().nearby_tile_information)(
+                tile,
+                (s.shared().resolver_grf_version)(resolver) >= 8,
+            ) | (u32::from(same) << 8)
         }
         0x61 => {
             let tile = (s.shared().nearby_tile)(parameter as u8, c.tile);
@@ -475,10 +479,10 @@ pub unsafe extern "C" fn openttd_rust_airport_tile_variable(
         0x62 => id_at_offset(
             (s.shared().nearby_tile)(parameter as u8, c.tile),
             c.station,
-            (s.grfid)(resolver),
+            (s.shared().resolver_grf_file_id)(resolver),
             s,
         ),
-        0x7a => (s.tile_badges)(resolver, c.tile_spec, parameter),
+        0x7a => (s.shared().specs().airport_tile().badges)(resolver, c.tile_spec, parameter),
         _ => {
             (s.unhandled)(variable);
             unsafe {
@@ -509,7 +513,7 @@ pub unsafe extern "C" fn openttd_rust_airport_random(
         }
 }
 pub(crate) fn translate_tile(gfx: u8, s: &Services) -> u8 {
-    let over = (s.tile_override)((s.tile_spec)(gfx));
+    let over = (s.shared().specs().airport_tile().substitute().override_id)((s.tile_spec)(gfx));
     if over == INVALID_AIRPORTTILE {
         gfx
     } else {
@@ -551,7 +555,7 @@ pub(crate) fn tile_callback(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAirportResolverState" ["probe"] => State { station, spec, tile_spec, tile, layout, town, };
-    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, by_tile, station_id, facilities, get_station, check, engine_if_valid, engine_id, engine_kind, engine_subtype, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, catchment, base_spec, enabled, min_year, max_year, override_id, never_expire, station_layout, random, build_date, root, tile_root, badges, tile_badges, tile_spec, tile_override, tile_local, tile_grfid, tile_has_groups, tile_substitute, belongs, tile_random, frame, version, grfid, base_scope, town_scope, evaluate_tile, unhandled, };
+    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, by_tile, station_id, facilities, get_station, check, engine_if_valid, engine_id, engine_kind, engine_subtype, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, catchment, base_spec, min_year, max_year, never_expire, station_layout, random, build_date, tile_spec, belongs, tile_random, frame, base_scope, town_scope, evaluate_tile, unhandled, };
 }
 
 #[unsafe(no_mangle)]

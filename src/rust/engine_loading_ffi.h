@@ -24,7 +24,6 @@ struct OpenTTDEngineLoadingServices {
 	OpenTTDEngineRef (*next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next);
 	OpenTTDEngineRef (*resolve)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve);
 	bool (*dynamic)() noexcept OPENTTD_SERVICE_DEFAULT(dynamic);
-	uint32_t (*file_id)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(file_id);
 	GRFFile *(*find_file)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(find_file);
 	const GRFFile *(*engine_file)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_file);
 	bool (*has_file)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(has_file);
@@ -49,7 +48,6 @@ struct OpenTTDEngineLoadingServices {
 	bool (*old_refittable)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(old_refittable);
 	void (*set_old_refittable)(const OpenTTDEngine *, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_old_refittable);
 	OpenTTDEngineCargoClass (*cargo_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_next);
-	uint8_t (*cargo_map)(const GRFFile *, CargoType) noexcept OPENTTD_SERVICE_DEFAULT(cargo_map);
 	size_t (*cargo_list_size)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_list_size);
 	void (*unknown_refit)(uint32_t, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(unknown_refit);
 	uint8_t (*climate)() noexcept OPENTTD_SERVICE_DEFAULT(climate);
