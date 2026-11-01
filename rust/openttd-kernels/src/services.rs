@@ -491,6 +491,20 @@ pub struct Services {
     pub terrain_type: extern "C" fn(u32) -> u32,
     /// `GRFFile::grf_version` of a non-null file.
     pub grf_file_version: extern "C" fn(*const c_void) -> u8,
+    /// `GRFFile::cargo_map` entry of a non-null file.
+    pub grf_cargo_map: extern "C" fn(*const c_void, u8) -> u8,
+    /// Loaded GRF file at an index, or null past the end.
+    pub grf_file_at_or_null: extern "C" fn(usize) -> *mut c_void,
+    /// `GRFFile::grfid` of a non-null file.
+    pub grf_file_id: extern "C" fn(*const c_void) -> u32,
+    /// `_rust_newgrf_specs`; read through `specs`.
+    pub newgrf_specs: *const crate::newgrf_specs::Specs,
+    /// `ResolverObject::grffile`.
+    pub resolver_grf_file: extern "C" fn(*const c_void) -> *const c_void,
+    /// `GRFFile::grfid` of the resolver's non-null file.
+    pub resolver_grf_file_id: extern "C" fn(*const c_void) -> u32,
+    /// `GRFFile::grf_version` of the resolver's non-null file.
+    pub resolver_grf_version: extern "C" fn(*const c_void) -> u8,
     /// `ShowErrorMessage` with two string IDs at `WL_ERROR`.
     pub show_error: extern "C" fn(u32, u32),
     /// Native `NOT_REACHED`.
@@ -512,6 +526,15 @@ pub struct FoundationSlope {
     pub slope: Slope,
 }
 impl Services {
+    /// Typed NewGRF specification leaves.
+    #[must_use]
+    pub fn specs(&self) -> &crate::newgrf_specs::Specs {
+        // SAFETY: `GetRustSharedServices` points at the process-lifetime `_rust_newgrf_specs`.
+        #[allow(unsafe_code)]
+        unsafe {
+            &*self.newgrf_specs
+        }
+    }
     /// Capture `Map::LogX()` once for a synchronous entry.
     #[must_use]
     pub fn map(&self) -> Map {
@@ -823,6 +846,13 @@ crate::abi::layouts! {
         screen_dirty,
         terrain_type,
         grf_file_version,
+        grf_cargo_map,
+        grf_file_at_or_null,
+        grf_file_id,
+        newgrf_specs,
+        resolver_grf_file,
+        resolver_grf_file_id,
+        resolver_grf_version,
         show_error,
         not_reached,
     };
@@ -941,8 +971,27 @@ pub fn fixture(
     extern "C" fn unexpected_version(_: *const c_void) -> u8 {
         std::process::abort()
     }
+    extern "C" fn unexpected_cargo_map(_: *const c_void, _: u8) -> u8 {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_file_at(_: usize) -> *mut c_void {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_file_id(_: *const c_void) -> u32 {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_file(_: *const c_void) -> *const c_void {
+        std::process::abort()
+    }
     Services {
         grf_file_version: unexpected_version,
+        grf_cargo_map: unexpected_cargo_map,
+        grf_file_at_or_null: unexpected_file_at,
+        grf_file_id: unexpected_file_id,
+        newgrf_specs: std::ptr::null(),
+        resolver_grf_file: unexpected_file,
+        resolver_grf_file_id: unexpected_file_id,
+        resolver_grf_version: unexpected_version,
         nearby_tile: unexpected_nearby,
         nearby_tile_information: unexpected_information,
         screen_dirty: unexpected_path,

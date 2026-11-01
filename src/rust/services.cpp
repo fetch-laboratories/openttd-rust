@@ -44,6 +44,7 @@
 #include "../bridge_map.h"
 #include "services_rail.h"
 #include "services_newgrf.h"
+#include "spec_services.hpp"
 #include "services_road.h"
 #include "../road_map.h"
 #include "../station_map.h"
@@ -482,6 +483,13 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.screen_dirty = RustScreenDirty,
 	.terrain_type = RustTerrainType,
 	.grf_file_version = RustGRFFileVersion,
+	.grf_cargo_map = RustGRFCargoMap,
+	.grf_file_at_or_null = RustGRFFileAtOrNull,
+	.grf_file_id = RustGRFFileID,
+	.newgrf_specs = &_rust_newgrf_specs,
+	.resolver_grf_file = RustResolverGRFFile,
+	.resolver_grf_file_id = RustResolverGRFFileID,
+	.resolver_grf_version = RustResolverGRFVersion,
 	.show_error = RustShowErrorMessage,
 	.not_reached = RustNotReached,
 };
