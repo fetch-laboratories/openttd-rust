@@ -273,26 +273,6 @@ TEST_CASE("Commands - road price saturation, rounding and independent type masks
 	CHECK(RoadClearCost(ROADTYPE_TRAM) == Money(864691128455135205LL));
 }
 
-/** A `Command<Tcmd>::Do` frame whose procedure returns a scripted result, optionally inside a nested `Do`. */
-struct ScriptedCommandFrame : OpenTTDCommandFrame {
-	CommandCost result;
-	CommandCost scripted;
-	const OpenTTDCommandServices *services = nullptr;
-	ScriptedCommandFrame *inner = nullptr;
-	uint16_t inner_flags = 0;
-
-	explicit ScriptedCommandFrame(CommandCost scripted) : OpenTTDCommandFrame{}, scripted(std::move(scripted))
-	{
-		this->results[0] = RustCommandCost(&this->result);
-		this->run = [](OpenTTDCommandFrame *base, uint16_t, uint8_t) noexcept {
-			auto &f = *static_cast<ScriptedCommandFrame *>(base);
-			if (f.inner != nullptr) CHECK(openttd_rust_command_do(f.services, f.inner, 0, f.inner_flags));
-			f.result = f.scripted;
-			return true;
-		};
-	}
-};
-
 /* Save comparison cannot observe skipped metadata reads or local encoded errors.
  * Unreachable callbacks retain their generated abort defaults. */
 TEST_CASE("Commands - pre-post money short circuits and local error encoding")
@@ -306,20 +286,25 @@ TEST_CASE("Commands - pre-post money short circuits and local error encoding")
 	auto skipped = costs;
 	skipped.money = OpenTTDCommandCostServices{}.money;
 	command.cost = &skipped;
-	for (DoCommandFlags execute : {DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Execute}}) {
-		ScriptedCommandFrame failed(CommandCost(STR_ERROR_INSUFFICIENT_FUNDS));
-		CHECK(openttd_rust_command_do(&command, &failed, 0, execute.base()));
-		CHECK(failed.result.Failed());
+	/* The Do steps: entry into test or execution, then reconciliation of that result. */
+	auto run = [&](CommandCost &result, DoCommandFlags flags, bool top, bool test) {
+		CHECK(openttd_rust_command_do_test(&command, false, test ? 0 : DoCommandFlags{DoCommandFlag::Execute}.base()) == test);
+		if (test) {
+			CHECK_FALSE(openttd_rust_command_do_tested(&command, RustCommandCost(&result), flags.base(), top));
+		} else {
+			openttd_rust_command_do_executed(&command, RustCommandCost(&result), flags.base(), top);
+		}
+	};
+	for (bool test : {false, true}) {
+		CommandCost failed(STR_ERROR_INSUFFICIENT_FUNDS);
+		run(failed, {}, true, test);
+		CHECK(failed.Failed());
 		for (DoCommandFlags flags : {DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Bankrupt}, DoCommandFlags{DoCommandFlag::QueryCost}}) {
 			bool top = flags.Any();
-			if (execute.Any() && flags.Test(DoCommandFlag::QueryCost)) continue;
-			ScriptedCommandFrame result(CommandCost(EXPENSES_CONSTRUCTION, Money(50)));
-			ScriptedCommandFrame outer(CommandCost{});
-			outer.services = &command;
-			outer.inner = &result;
-			outer.inner_flags = (flags | execute).base();
-			CHECK(openttd_rust_command_do(&command, top ? &result : &outer, 0, top ? (flags | execute).base() : 0));
-			CHECK(result.result.Succeeded());
+			if (!test && flags.Test(DoCommandFlag::QueryCost)) continue;
+			CommandCost result(EXPENSES_CONSTRUCTION, Money(50));
+			run(result, flags, top, test);
+			CHECK(result.Succeeded());
 		}
 	}
 	command.cost = &costs;
@@ -348,11 +333,9 @@ TEST_CASE("Commands - pre-post money short circuits and local error encoding")
 	CommandCost zero;
 	skipped = costs; skipped.expense = OpenTTDCommandCostServices{}.expense;
 	openttd_rust_command_subtract_money(&command, &skipped, RustCommandCost(&zero));
-	/* A top-level execution tests first; the money check passes before each subtraction. */
 	for (auto [amount, expense] : {std::pair{5, EXPENSES_CONSTRUCTION}, std::pair{-3, EXPENSES_ROADVEH_REVENUE}, std::pair{2, EXPENSES_ROADVEH_RUN}}) {
-		ScriptedCommandFrame result(CommandCost(expense, Money(amount)));
-		CHECK(openttd_rust_command_do(&command, &result, 0, DoCommandFlags{DoCommandFlag::Execute}.base()));
-		CHECK(result.result.Succeeded());
+		CommandCost result(expense, Money(amount));
+		run(result, {}, true, false);
 	}
 	const auto &finances = fixture_companies[0]->Finances();
 	CHECK(finances.money == Money(16));

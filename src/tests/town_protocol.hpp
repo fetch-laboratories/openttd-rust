@@ -17,6 +17,7 @@
 #include "../rust/house_ffi.h"
 #include "../rust/house_resolver_ffi.h"
 #include "../rust/command_services_ffi.h"
+#include "../command_func.h"
 #include "../rust/ground_ffi.h"
 #include "../rust/movement_ffi.h"
 #include "../tile_storage_type.h"
@@ -194,6 +195,8 @@ static inline OpenTTDTownLeaves TownProtocolServices()
 }
 template <typename Check> void CheckTownProtocol(Check check)
 {
+	/* Commands the protocol reaches run nested, without the top-level money steps. */
+	RecursiveCommandCounter nested;
 	AutoRestoreBackup<decltype(GetRustClockState().calendar_year)> calendar_year_scope(GetRustClockState().calendar_year, decltype(GetRustClockState().calendar_year){1950});
 	AutoRestoreBackup<uint64_t> road_mask(*openttd_rust_road_mask(), 0);
 	/* Source quirks: first-road execute failure still returns success; a failed

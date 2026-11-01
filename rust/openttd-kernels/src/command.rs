@@ -1,8 +1,9 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Command invocation lifecycle: `Command<Tcmd>::Do`, `Post`, `Unsafe` and `Execute`
 //! control, process-wide recursion, admission, company restoration and money
-//! reconciliation. Native frames keep typed argument and result tuples; every Rust
-//! access ends before a native step can reenter a command.
+//! reconciliation. The typed native templates call each decision step and run the
+//! procedures between them, so a procedure's exception unwinds native frames only;
+//! no Rust access spans a procedure.
 #![allow(
     unsafe_code,
     clippy::too_many_arguments,
@@ -14,12 +15,12 @@
 )]
 use crate::command_type::{
     CMD_COMPANY_CTRL, COMMAND_TYPE_PAUSE_LEVEL, COMMAND_TYPE_SERVER_SETTING, CommandFlag,
-    DoCommandFlag, command_flags_to_dc_flags,
+    DoCommandFlag,
 };
 use crate::company_type::{COMPANY_SPECTATOR, OWNER_DEITY};
 use crate::game_state::GameState;
 use crate::openttd::{GameMode, PauseMode};
-use crate::services::{CommandCost, CommandCostServices, CommandServices, Cost};
+use crate::services::{CommandCost, CommandCostServices, CommandServices};
 
 /// `INVALID_STRING_ID`, the message of `CMD_ERROR`.
 const INVALID_STRING_ID: u32 = 0xFFFF;
@@ -163,10 +164,7 @@ impl Nesting {
 }
 impl Drop for Nesting {
     fn drop(&mut self) {
-        // SAFETY: serialized game-state access.
-        unsafe {
-            *COUNTER.get() = (*COUNTER.get()).wrapping_sub(1);
-        }
+        openttd_rust_command_leave();
     }
 }
 
@@ -180,76 +178,32 @@ pub(crate) fn nested<T: Default>(
     flags: u16,
     mut body: impl FnMut(u16) -> T,
 ) -> T {
-    do_command(s, shared, out, tile, flags, |f| Some(body(f))).unwrap_or_default()
-}
-
-/// `CommandHelper::Do`. A body returns `None` when a native exception abandons the
-/// call; the remaining steps are skipped and only the nesting scope unwinds.
-fn do_command<T: Default>(
-    s: &CommandServices,
-    shared: &crate::services::Services,
-    out: crate::services::Cost<'_>,
-    tile: u32,
-    flags: u16,
-    mut body: impl FnMut(u16) -> Option<T>,
-) -> Option<T> {
-    let size = ((shared.map_max_y)() + 1) << shared.map().log_x;
-    if tile != 0
-        && (tile >= size || (!(shared.tile_valid)(tile) && flags & DoCommandFlag::ALL_TILES == 0))
-    {
+    if tile_rejected(shared, tile, flags & DoCommandFlag::ALL_TILES != 0) {
         out.error(INVALID_STRING_ID);
-        return Some(T::default());
+        return T::default();
     }
     let counter = Nesting::new();
     let top = counter.0;
     if top || flags & DoCommandFlag::EXECUTE == 0 {
         before(s, top, true);
-        let extra = body(flags & !DoCommandFlag::EXECUTE)?;
+        let extra = body(flags & !DoCommandFlag::EXECUTE);
         // SAFETY: the command caller supplies live exclusive native result storage.
         unsafe {
             after(s, out.1, out.0, flags, top, true);
         }
         if !out.ok() || flags & DoCommandFlag::EXECUTE == 0 {
-            return Some(extra);
+            return extra;
         }
     }
     before(s, top, false);
-    let extra = body(flags)?;
+    let extra = body(flags);
     // SAFETY: the command caller supplies live exclusive native result storage.
     unsafe {
         after(s, out.1, out.0, flags, top, false);
     }
-    Some(extra)
+    extra
 }
 
-/// Native frame of one typed `Command<Tcmd>` invocation. `results` address the
-/// `CommandCost` of the test, execution and untouched default result tuples. Each
-/// step runs only the typed native part: the trait procedure on the argument tuple,
-/// its desync log line, network enqueueing, client identifiers and the callback.
-/// A procedure step returns `false` after capturing a native exception, which the
-/// caller rethrows once Rust has returned. `Do` frames set only the first result and
-/// `run`, and frames without a callback leave `callback` null, so Rust reads single
-/// fields and never forms a reference to a whole frame.
-#[repr(C)]
-pub struct Frame {
-    pub results: [*mut CommandCost; 3],
-    pub run: unsafe extern "C" fn(*mut Frame, u16, u8) -> bool,
-    pub additional_money: unsafe extern "C" fn(*mut Frame) -> i64,
-    pub log: unsafe extern "C" fn(*mut Frame, bool),
-    pub send: unsafe extern "C" fn(*mut Frame, u8),
-    pub set_client_ids: unsafe extern "C" fn(*mut Frame),
-    pub assert_client_ids: unsafe extern "C" fn(*mut Frame),
-    pub callback: unsafe extern "C" fn(*mut Frame, u8),
-}
-
-/// Result slot of the test run.
-const TEST: u8 = 0;
-/// Result slot of the execution run.
-const EXEC: u8 = 1;
-/// Untouched default result, `{}` or `MakeResult(CMD_ERROR)`.
-const EMPTY: u8 = 2;
-/// A captured native exception abandons the invocation.
-const ABANDONED: u8 = u8::MAX;
 /// `PSM_ENTER_COMMAND` to `PSM_LEAVE_TESTMODE`.
 const PSM_ENTER_COMMAND: u8 = 2;
 const PSM_LEAVE_COMMAND: u8 = 3;
@@ -303,316 +257,347 @@ pub extern "C" fn openttd_rust_command_allowed_while_paused(
     allowed_while_paused(s, command_type)
 }
 
-/// One `CommandHelper::Execute` call: its process-wide recursion scope, company
-/// backup and restoration, storage modes, money checks and result reconciliation.
-/// Returns the slot holding the native result, or `ABANDONED`.
-/// # Safety
-/// `frame` is a live native frame whose result slots stay valid for the call.
-unsafe fn execute(
-    s: &CommandServices,
-    frame: *mut Frame,
-    cmd: u8,
-    command_type: u8,
-    cmd_flags: u16,
-    estimate_only: bool,
-    network_command: bool,
-    tile: u32,
-) -> u8 {
-    let c = s.cost;
-    // SAFETY: the caller supplies a live frame; its steps never move it.
-    let (results, run, additional_money, log, send, assert_client_ids) = unsafe {
-        (
-            (*frame).results,
-            (*frame).run,
-            (*frame).additional_money,
-            (*frame).log,
-            (*frame).send,
-            (*frame).assert_client_ids,
-        )
-    };
-    let counter = Nesting::new();
-    (s.signals.assert_condition)(counter.0);
-    if cmd_flags & CommandFlag::CLIENT_ID != 0 {
-        // SAFETY: live frame for the call.
-        unsafe { assert_client_ids(frame) };
-    }
-    let finance = s.finance;
-    let original = (finance.current_company)();
+/// `RecursiveCommandCounter` construction from a native command template.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_command_enter() -> bool {
+    enter()
+}
 
-    let exec_as_spectator = cmd_flags & (CommandFlag::SPECTATOR | CommandFlag::SERVER) != 0;
+/// `RecursiveCommandCounter` destruction, also while an exception unwinds.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_command_leave() {
+    // SAFETY: serialized game-state access.
+    unsafe {
+        *COUNTER.get() = (*COUNTER.get()).wrapping_sub(1);
+    }
+}
+
+/// "Do not even think about executing out-of-bounds tile-commands."
+fn tile_rejected(shared: &crate::services::Services, tile: u32, all_tiles: bool) -> bool {
+    let size = ((shared.map_max_y)() + 1) << shared.map().log_x;
+    tile != 0 && (tile >= size || (!(shared.tile_valid)(tile) && !all_tiles))
+}
+
+/// Tile rejection of `Do` and `InternalPost`, before any nesting.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_command_tile_rejected(
+    s: &CommandServices,
+    tile: u32,
+    all_tiles: bool,
+) -> bool {
+    tile_rejected(s.shared, tile, all_tiles)
+}
+
+/// `Do`: whether to run the test procedure, entering test or execution preparation.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_command_do_test(s: &CommandServices, top: bool, flags: u16) -> bool {
+    let test = top || flags & DoCommandFlag::EXECUTE == 0;
+    before(s, top, test);
+    test
+}
+
+/// `Do` after its test procedure: reconcile the result and, when execution follows,
+/// prepare it. `false` returns the test result.
+/// # Safety
+/// `result` is the live exclusive test result.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_command_do_tested(
+    s: &CommandServices,
+    result: *mut CommandCost,
+    flags: u16,
+    top: bool,
+) -> bool {
+    // SAFETY: caller guarantees live exclusive storage.
+    unsafe { after(s, s.cost, result, flags, top, true) };
+    if !(s.cost.success)(result) || flags & DoCommandFlag::EXECUTE == 0 {
+        return false;
+    }
+    before(s, top, false);
+    true
+}
+
+/// `Do` after its execution procedure.
+/// # Safety
+/// `result` is the live exclusive execution result.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_command_do_executed(
+    s: &CommandServices,
+    result: *mut CommandCost,
+    flags: u16,
+    top: bool,
+) {
+    // SAFETY: caller guarantees live exclusive storage.
+    unsafe { after(s, s.cost, result, flags, top, false) };
+}
+
+/// Company backup of the running top-level `Execute`; `Execute` never nests.
+static BACKUP: GameState<Option<u8>> = GameState::new(None);
+
+fn backup() -> Option<u8> {
+    // SAFETY: serialized game-state access.
+    unsafe { *BACKUP.get() }
+}
+
+fn set_backup(value: Option<u8>) {
+    // SAFETY: serialized game-state access.
+    unsafe { *BACKUP.get() = value };
+}
+
+/// `Backup::Restore`.
+fn restore(s: &CommandServices) {
+    if let Some(original) = backup() {
+        (s.finance.set_current_company)(original);
+    }
+    set_backup(None);
+}
+
+/// `Backup::Verify` under the spectator rule of server and spectator commands.
+fn verify_company(s: &CommandServices, cmd_flags: u16) -> bool {
+    let current = (s.finance.current_company)();
+    if cmd_flags & (CommandFlag::SPECTATOR | CommandFlag::SERVER) != 0 {
+        current == COMPANY_SPECTATOR
+    } else {
+        Some(current) == backup()
+    }
+}
+
+/// `Execute` up to its test procedure: company backup, admission of the current
+/// company, spectator execution and test-mode entry. `false` returns `CMD_ERROR`.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_command_prepare(
+    s: &CommandServices,
+    top: bool,
+    cmd_flags: u16,
+) -> bool {
+    /* Prevent recursion; it gives a mess over the network. */
+    (s.signals.assert_condition)(top);
+    let finance = s.finance;
     let current = (finance.current_company)();
+    set_backup(Some(current));
+    /* Always execute server and spectator commands as spectator. */
+    let exec_as_spectator = cmd_flags & (CommandFlag::SPECTATOR | CommandFlag::SERVER) != 0;
+    /* An invalid company may only do server commands or start a new company. */
     if crate::session::mode() == GameMode::NORMAL
         && !exec_as_spectator
         && !(s.shared.company_valid)(current)
         && !(current == OWNER_DEITY && cmd_flags & CommandFlag::DEITY != 0)
     {
-        Cost(results[usize::from(EMPTY)], c).error(INVALID_STRING_ID);
-        return EMPTY;
+        set_backup(None);
+        return false;
     }
     if exec_as_spectator {
         (finance.set_current_company)(COMPANY_SPECTATOR);
     }
     before(s, true, true);
     storage_mode(s, PSM_ENTER_TESTMODE);
+    true
+}
 
-    let flags = command_flags_to_dc_flags(cmd_flags);
-    // SAFETY: live frame; no Rust borrow spans the native procedure.
-    if !unsafe { run(frame, flags, TEST) } {
-        return abandon(s, original);
-    }
+/// Decision of `Execute` after its test procedure.
+#[repr(u8)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Tested {
+    /// Restore the company and return the test result.
+    Exit = 0,
+    /// Log the test result as failed, restore the company and return the test result.
+    ExitLogged = 1,
+    /// Enqueue the command for the network, restore the company and return `{}`.
+    Send = 2,
+    /// Run the execution procedure; execution preparation is done.
+    Execute = 3,
+}
 
+/// `Execute` after its test procedure: leave test mode, apply the money check and
+/// decide between returning, sending and executing.
+/// # Safety
+/// `result` is the live exclusive test result.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_command_tested(
+    s: &CommandServices,
+    result: *mut CommandCost,
+    cmd_flags: u16,
+    estimate_only: bool,
+    network_command: bool,
+) -> Tested {
+    let finance = s.finance;
     storage_mode(s, PSM_LEAVE_TESTMODE);
     crate::town::openttd_rust_town_rating_test(false);
-    (s.signals.assert_condition)(if exec_as_spectator {
-        (finance.current_company)() == COMPANY_SPECTATOR
-    } else {
-        (finance.current_company)() == original
-    });
-    let test = results[usize::from(TEST)];
+    /* Make sure we're not messing things up here. */
+    (s.signals.assert_condition)(verify_company(s, cmd_flags));
+    /* Commands whose test and execution may cost differently skip the money check. */
     let test_and_exec_can_differ = cmd_flags & CommandFlag::NO_TEST != 0;
-    // SAFETY: live exclusive native results in the frame.
-    if !(c.success)(test)
+    // SAFETY: live exclusive native result.
+    if !(s.cost.success)(result)
         || estimate_only
-        || (!test_and_exec_can_differ && !unsafe { check_money(s, c, test) })
+        || (!test_and_exec_can_differ && !unsafe { check_money(s, s.cost, result) })
     {
         let generating = (s.shared.clear_square_services.generating_world)();
-        if !(finance.networking)() || generating || network_command {
-            // SAFETY: live frame.
-            unsafe { log(frame, true) };
-        }
-        (finance.set_current_company)(original);
-        return TEST;
+        let logged = !(finance.networking)() || generating || network_command;
+        return if logged {
+            Tested::ExitLogged
+        } else {
+            Tested::Exit
+        };
     }
     let send_net = (finance.networking)()
         && !(s.shared.clear_square_services.generating_world)()
         && !network_command;
-    if !send_net {
-        before(s, true, false);
-        storage_mode(s, PSM_ENTER_COMMAND);
-    }
     if send_net {
-        // SAFETY: live frame.
-        unsafe { send(frame, (finance.current_company)()) };
-        (finance.set_current_company)(original);
-        return EMPTY;
+        return Tested::Send;
     }
-    // The log step applies `Debug(desync, 1)`'s level filter, the original condition here.
-    // SAFETY: live frame.
-    unsafe { log(frame, false) };
-    // SAFETY: live frame; no Rust borrow spans the native procedure.
-    if !unsafe { run(frame, flags | DoCommandFlag::EXECUTE, EXEC) } {
-        return abandon(s, original);
-    }
-    // SAFETY: live frame with a constructed execution result.
-    let extra_cash = unsafe { additional_money(frame) };
-    let exec = results[usize::from(EXEC)];
+    before(s, true, false);
+    storage_mode(s, PSM_ENTER_COMMAND);
+    Tested::Execute
+}
 
+/// `Backup::Restore` when `Execute` returns after its test procedure.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_command_restore(s: &CommandServices) {
+    restore(s);
+}
+
+/// `InternalExecuteProcessResult` on the execution result in place.
+/// # Safety
+/// `test` and `exec` are the live test and exclusive execution results.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_command_finish(
+    s: &CommandServices,
+    cmd: u8,
+    command_type: u8,
+    cmd_flags: u16,
+    test: *const CommandCost,
+    exec: *mut CommandCost,
+    extra_cash: i64,
+    tile: u32,
+) {
+    let c = s.cost;
+    let finance = s.finance;
     storage_mode(s, PSM_LEAVE_COMMAND);
     if cmd == CMD_COMPANY_CTRL {
-        // A new company switches to it, a closed one to spectator; the caller restores others.
+        /* A new company switches to it, a closed one to spectator; the caller restores others. */
+        set_backup(None);
         // SAFETY: the company table is immutable for the process lifetime.
         (finance.set_current_company)((unsafe { &*(s.company)() }.local_company)());
     } else {
-        (s.signals.assert_condition)(if exec_as_spectator {
-            (finance.current_company)() == COMPANY_SPECTATOR
-        } else {
-            (finance.current_company)() == original
-        });
-        (finance.set_current_company)(original);
+        /* Make sure nothing bad happened, like changing the current company. */
+        (s.signals.assert_condition)(verify_company(s, cmd_flags));
+        restore(s);
     }
-
-    if !test_and_exec_can_differ {
+    if cmd_flags & CommandFlag::NO_TEST == 0 {
         (s.signals.assert_condition)(
             (c.money)(test) == (c.money)(exec) && (c.success)(test) == (c.success)(exec),
         );
     } else if !(c.success)(exec) {
-        return EXEC;
+        return;
     }
     if extra_cash != 0 && (c.money)(exec) == 0 {
-        // Removed rail can refund money and leave queued signals.
+        /* Removed rail can refund money and leave queued signals. */
         flush_signals(s);
         (c.error_param)(exec, s.not_enough_cash, extra_cash as u64);
-        return EXEC;
+        return;
     }
     if tile != 0 {
         (s.last_build_coordinate)((finance.current_company)(), tile);
     }
     // SAFETY: live native execution result.
     unsafe { subtract_money(s, c, exec) };
+    /* Record a command during pause; pause and other setting changes do not count. */
     let pause = crate::session::pause();
     if pause != 0 && command_type != COMMAND_TYPE_SERVER_SETTING {
         crate::session::set_pause(pause | PauseMode::COMMAND_DURING_PAUSE.bit());
     }
     flush_signals(s);
-    EXEC
 }
 
-/// `Backup<CompanyID>` destruction during unwinding: restore without a prior `Restore`.
-fn abandon(s: &CommandServices, original: u8) -> u8 {
-    (s.finance.set_current_company)(original);
-    ABANDONED
+/// `Backup<CompanyID>` destruction at the end of `Execute`. Returns whether the
+/// backup was still held, as when a procedure's exception unwinds; it is restored.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_command_unwind(s: &CommandServices) -> bool {
+    let held = backup().is_some();
+    restore(s);
+    held
 }
 
-/// `CommandHelper::InternalPost` after its typed tuple preparation. Returns 0 or 1
-/// for the result's success, or `ABANDONED`.
-/// # Safety
-/// `frame` is a live native frame whose result slots stay valid for the call.
-unsafe fn post(
+/// Admission and presentation decisions of `InternalPostBefore`.
+#[repr(C)]
+pub struct Admission {
+    pub rejected: bool,
+    pub estimate_only: bool,
+    pub only_sending: bool,
+}
+
+fn pixel(s: &CommandServices, tile: u32) -> (i32, i32) {
+    let map = s.shared.map();
+    (
+        map.tile_x(tile).wrapping_mul(TILE_SIZE) as i32,
+        map.tile_y(tile).wrapping_mul(TILE_SIZE) as i32,
+    )
+}
+
+/// `InternalPostBefore`: estimate and send decisions and pause admission.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_command_admit(
     s: &CommandServices,
-    frame: *mut Frame,
-    cmd: u8,
     command_type: u8,
     cmd_flags: u16,
-    err_message: u32,
-    my_cmd: bool,
-    network_command: bool,
     tile: u32,
-    has_callback: bool,
-) -> u8 {
-    let shared = s.shared;
-    let size = ((shared.map_max_y)() + 1) << shared.map().log_x;
-    if tile != 0
-        && (tile >= size || (!(shared.tile_valid)(tile) && cmd_flags & CommandFlag::ALL_TILES == 0))
-    {
-        return 0;
-    }
-    let map = shared.map();
-    let x = map.tile_x(tile).wrapping_mul(TILE_SIZE) as i32;
-    let y = map.tile_y(tile).wrapping_mul(TILE_SIZE) as i32;
-
-    /* InternalPostBefore: estimates come from a local shift press, never from network,
-     * world generation or the pause button. */
+    err_message: u32,
+    network_command: bool,
+) -> Admission {
+    /* Estimates come from a local shift press, never from network, world
+     * generation or the pause button. */
     let estimate_only = (s.shift_pressed)()
         && is_local_company(s)
-        && !(shared.clear_square_services.generating_world)()
+        && !(s.shared.clear_square_services.generating_world)()
         && !network_command
         && cmd_flags & CommandFlag::NO_EST == 0;
+    /* Only sending: no fancy things for success. */
     let only_sending = (s.finance.networking)() && !network_command;
-    if crate::session::pause() != 0 && !allowed_while_paused(s, command_type) && !estimate_only {
+    let rejected =
+        crate::session::pause() != 0 && !allowed_while_paused(s, command_type) && !estimate_only;
+    if rejected {
+        let (x, y) = pixel(s, tile);
         (s.paused_error)(err_message, x, y);
-        return 0;
     }
-
-    // SAFETY: live frame; no Rust borrow spans the native steps.
-    unsafe {
-        if !network_command && cmd_flags & CommandFlag::CLIENT_ID != 0 {
-            ((*frame).set_client_ids)(frame);
-        }
-        let slot = execute(
-            s,
-            frame,
-            cmd,
-            command_type,
-            cmd_flags,
-            estimate_only,
-            network_command,
-            tile,
-        );
-        if slot == ABANDONED {
-            return ABANDONED;
-        }
-        let c = s.cost;
-        let res = (*frame).results[usize::from(slot)];
-
-        /* InternalPostResult. */
-        if !(c.success)(res) {
-            if estimate_only || (is_local_company(s) && err_message != 0 && my_cmd) {
-                (s.error_message)(err_message, x, y, res);
-            }
-        } else if estimate_only {
-            (s.estimate)((c.money)(res), x, y);
-        } else if !only_sending
-            && tile != 0
-            && is_local_company(s)
-            && crate::session::mode() != GameMode::EDITOR
-        {
-            (s.cost_animation)(x, y, (c.money)(res));
-        }
-
-        if !estimate_only && !only_sending && has_callback {
-            ((*frame).callback)(frame, slot);
-        }
-        u8::from((c.success)(res))
+    Admission {
+        rejected,
+        estimate_only,
+        only_sending,
     }
 }
 
-/// `CommandHelper::Do` for a native caller of `Command<Tcmd>::Do`. Returns `false`
-/// when a native exception abandoned the call.
+/// `InternalPostResult`, then callback eligibility.
 /// # Safety
-/// `frame` is a live native frame whose first result slot stays valid for the call.
+/// `result` is the live final result.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_command_do(
+pub unsafe extern "C" fn openttd_rust_command_posted(
     s: &CommandServices,
-    frame: *mut Frame,
+    result: *const CommandCost,
     tile: u32,
-    flags: u16,
-) -> bool {
-    // SAFETY: live frame for the whole call.
-    let (out, run) = unsafe { ((*frame).results[usize::from(TEST)], (*frame).run) };
-    do_command(s, s.shared, Cost(out, s.cost), tile, flags, |f| {
-        // SAFETY: live frame; no Rust borrow spans the native procedure.
-        unsafe { run(frame, f, TEST) }.then_some(())
-    })
-    .is_some()
-}
-
-/// `CommandHelper::Execute` for `Command<Tcmd>::Unsafe`; returns its result slot.
-/// # Safety
-/// `frame` is a live native frame whose result slots stay valid for the call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_command_execute(
-    s: &CommandServices,
-    frame: *mut Frame,
-    cmd: u8,
-    command_type: u8,
-    cmd_flags: u16,
     estimate_only: bool,
-    tile: u32,
-) -> u8 {
-    unsafe {
-        execute(
-            s,
-            frame,
-            cmd,
-            command_type,
-            cmd_flags,
-            estimate_only,
-            false,
-            tile,
-        )
-    }
-}
-
-/// `CommandHelper::InternalPost` for `Post` and `PostFromNet`.
-/// # Safety
-/// `frame` is a live native frame whose result slots stay valid for the call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_command_post(
-    s: &CommandServices,
-    frame: *mut Frame,
-    cmd: u8,
-    command_type: u8,
-    cmd_flags: u16,
+    only_sending: bool,
     err_message: u32,
     my_cmd: bool,
-    network_command: bool,
-    tile: u32,
     has_callback: bool,
-) -> u8 {
-    unsafe {
-        post(
-            s,
-            frame,
-            cmd,
-            command_type,
-            cmd_flags,
-            err_message,
-            my_cmd,
-            network_command,
-            tile,
-            has_callback,
-        )
+) -> bool {
+    let c = s.cost;
+    let (x, y) = pixel(s, tile);
+    if !(c.success)(result) {
+        /* Only show the error when it's for us. */
+        if estimate_only || (is_local_company(s) && err_message != 0 && my_cmd) {
+            (s.error_message)(err_message, x, y, result);
+        }
+    } else if estimate_only {
+        (s.estimate)((c.money)(result), x, y);
+    } else if !only_sending
+        && tile != 0
+        && is_local_company(s)
+        && crate::session::mode() != GameMode::EDITOR
+    {
+        /* The cost animation shows only for an executed local command outside the editor. */
+        (s.cost_animation)(x, y, (c.money)(result));
     }
+    !estimate_only && !only_sending && has_callback
 }
 
 /// Own one independently constructed native result for a synchronous nested call.

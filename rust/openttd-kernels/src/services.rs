@@ -711,15 +711,10 @@ crate::abi::layouts! {
         estimate,
         cost_animation,
     };
-    "OpenTTDCommandFrame" ["probe"] => crate::command::Frame {
-        results,
-        run,
-        additional_money,
-        log,
-        send,
-        set_client_ids,
-        assert_client_ids,
-        callback,
+    "OpenTTDCommandAdmission" ["probe"] => crate::command::Admission {
+        rejected,
+        estimate_only,
+        only_sending,
     };
     "OpenTTDCommandCostServices" ["probe"] => crate::services::CommandCostServices {
         construct,

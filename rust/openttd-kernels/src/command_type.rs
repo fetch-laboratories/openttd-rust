@@ -18,16 +18,8 @@ impl CommandFlag {
     pub const SERVER: u16 = 1 << 0;
     /// `CommandFlag::Spectator`.
     pub const SPECTATOR: u16 = 1 << 1;
-    /// `CommandFlag::Auto`.
-    pub const AUTO: u16 = 1 << 3;
-    /// `CommandFlag::AllTiles`.
-    pub const ALL_TILES: u16 = 1 << 4;
     /// `CommandFlag::NoTest`.
     pub const NO_TEST: u16 = 1 << 5;
-    /// `CommandFlag::NoWater`.
-    pub const NO_WATER: u16 = 1 << 6;
-    /// `CommandFlag::ClientID`.
-    pub const CLIENT_ID: u16 = 1 << 7;
     /// `CommandFlag::Deity`.
     pub const DEITY: u16 = 1 << 8;
     /// `CommandFlag::NoEst`.
@@ -39,22 +31,6 @@ pub const COMMAND_TYPE_SERVER_SETTING: u8 = 7;
 
 /// `IsCommandAllowedWhilePaused` lookup: `CommandPauseLevel` per `CommandType`.
 pub const COMMAND_TYPE_PAUSE_LEVEL: [u8; 9] = [3, 2, 2, 1, 1, 1, 0, 0, 0];
-
-/// `CommandFlagsToDCFlags`.
-#[must_use]
-pub const fn command_flags_to_dc_flags(flags: u16) -> u16 {
-    let mut out = 0;
-    if flags & CommandFlag::NO_WATER != 0 {
-        out |= DoCommandFlag::NO_WATER;
-    }
-    if flags & CommandFlag::AUTO != 0 {
-        out |= DoCommandFlag::AUTO;
-    }
-    if flags & CommandFlag::ALL_TILES != 0 {
-        out |= DoCommandFlag::ALL_TILES;
-    }
-    out
-}
 
 /// `DoCommandFlag` values as `DoCommandFlags` bits.
 pub struct DoCommandFlag;

@@ -158,11 +158,10 @@ bool CommandHelperBase::DesyncLogging()
 	return _debug_desync_level >= 1;
 }
 
-/** `Backup<CompanyID>` destruction while a command procedure's exception unwinds `Execute`. */
-void CommandHelperBase::AbandonExecution(std::exception_ptr exception, std::source_location location)
+/** `Backup<CompanyID>` destruction: unrestored only while a procedure's exception unwinds `Execute`. */
+CommandExecutionScope::~CommandExecutionScope() noexcept
 {
-	Debug(misc, 0, "{}:{}: Backed-up value was not restored!", location.file_name(), location.line());
-	std::rethrow_exception(exception);
+	if (openttd_rust_command_unwind(&GetRustCommandServices())) Debug(misc, 0, "{}:{}: Backed-up value was not restored!", this->location.file_name(), this->location.line());
 }
 
 /**

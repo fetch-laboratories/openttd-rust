@@ -6,7 +6,6 @@
 #include "vehicle_base.h"
 #include "vehicle_func.h"
 #include "tunnelbridge_cmd.h"
-#include "command-nesting.hpp"
 #ifdef WITH_RUST
 #include "session-fixture.hpp"
 #include "rust/landscape_generation_frame.hpp"
@@ -69,8 +68,8 @@ static void GroundTreeProbe(TileIndex tile)
 			AutoRestoreBackup<bool> generation(_generating_world, generating);
 			MakeClear(tile, static_cast<ClearGround>(ground), density); if (snow) MakeSnow(tile, density);
 			MakeSea(water); SetNonFloodingWaterTile(water, true); ResetScratch();
-			CommandCost cost;
-			NestedCommand([&] { cost = dispatch ? CmdLandscapeClear(flags, tile) : _tile_type_procs[MP_CLEAR]->clear_tile_proc(tile, flags); });
+			RecursiveCommandCounter nested;
+			auto cost = dispatch ? CmdLandscapeClear(flags, tile) : _tile_type_procs[MP_CLEAR]->clear_tile_proc(tile, flags);
 			fmt::print(stderr, "GROUNDTREE cost {} {} {} {} {} {} {} {} {} {} {} {} {} {}\n", clears++, ground, density, snow, generating, flags.base(), dispatch, cost.Succeeded(), cost.GetCost(), to_underlying(cost.GetExpensesType()), cost.GetErrorMessage(), cost.GetExtraErrorMessage(), cost.GetErrorOwner().base(), cost.GetEncodedMessage().empty());
 			GroundTreeTile("clear", tile); GroundTreeTile("neighbor", water);
 		}
@@ -167,15 +166,15 @@ static bool LandscapeScenario(std::span<std::string_view> args)
 		LandscapeResult("clear-exec", Command<CMD_CLEAR_AREA>::Do(DoCommandFlag::Execute, tile + TileDiffXY(2, 2), tile, diagonal));
 	}
 	{ AutoRestoreBackup<uint32_t> limit(finance.clear_limit, 0); LandscapeResult("clear-limit", Command<CMD_CLEAR_AREA>::Do(DoCommandFlag::Execute, tile, tile, false)); }
-	{ AutoRestoreBackup<Money> money(finance.money, 0); MakeClear(tile, CLEAR_GRASS, 3); ResetScratch(); NestedCommand([&] {
+	{ AutoRestoreBackup<Money> money(finance.money, 0); MakeClear(tile, CLEAR_GRASS, 3); ResetScratch(); RecursiveCommandCounter nested;
 		LandscapeResult("clear-cash", CmdClearArea(DoCommandFlag::Execute, tile + 1, tile, false));
-		LandscapeResult("level-cash", CmdLevelLand(DoCommandFlag::Execute, tile + 1, tile, false, LM_RAISE)); }); }
+		LandscapeResult("level-cash", CmdLevelLand(DoCommandFlag::Execute, tile + 1, tile, false, LM_RAISE)); }
 	ObjectSpec *spec = const_cast<ObjectSpec *>(ObjectSpec::Get(OBJECT_TRANSMITTER)); Backup<ObjectSpec> original(*spec);
 	TileIndex object = tile + TileDiffXY(5, 5); spec->flags = {ObjectFlag::Autoremove}; spec->size = 0x22;
 	Object::CanAllocateItem(); BuildObject(OBJECT_TRANSMITTER, object, c->index);
 	terraform("object-two-pass", object, SLOPE_ELEVATED, true, DoCommandFlag::Execute);
 	spec->size = OBJECT_SIZE_1X1; spec->flags = {}; Object::CanAllocateItem(); BuildObject(OBJECT_TRANSMITTER, object, c->index);
-	ResetScratch(); NestedCommand([&] { LandscapeResult("partial-clear", CmdClearArea({DoCommandFlag::Execute, DoCommandFlag::Auto}, object, object - 1, false)); });
+	ResetScratch(); { RecursiveCommandCounter nested; LandscapeResult("partial-clear", CmdClearArea({DoCommandFlag::Execute, DoCommandFlag::Auto}, object, object - 1, false)); }
 	LandscapeResult("object-remove", Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, object)); original.Restore();
 	{ AutoRestoreBackup<GameMode> editor(_game_mode, GM_EDITOR); bool before = _generating_world;
 		terraform("editor", tile, SLOPE_N, true, DoCommandFlag::Execute); fmt::print(stderr, "LANDSCAPE editor-restored {}\n", _generating_world == before); }
