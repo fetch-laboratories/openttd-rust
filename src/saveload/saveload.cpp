@@ -142,9 +142,6 @@ static bool SlNativeFrame(F &&operation) noexcept
 	return true;
 }
 
-void FixSCCEncoded(std::string &str, bool fix_code);
-void FixSCCEncodedNegative(std::string &str);
-
 /** Index of a pool item, for ReferenceToInt. */
 template <typename T>
 static uint32_t SlPoolIndex(const void *obj) noexcept
@@ -160,6 +157,7 @@ static void *SlPoolGet(size_t index) noexcept
 }
 
 static const OpenTTDSaveLoadServices _sl_services = {
+	.shared = &GetRustSharedServices(),
 	.native_assert = []([[maybe_unused]] bool ok) noexcept { assert(ok); },
 	.debug_iterate_error = []() noexcept { Debug(sl, 0, "SlIterateArray error"); },
 	.read = [](void *filter, uint8_t *buf, size_t len, size_t *read) noexcept { return SlNativeFrame([&] { *read = static_cast<LoadFilter *>(filter)->Read(buf, len); }); },
@@ -197,8 +195,11 @@ static const OpenTTDSaveLoadServices _sl_services = {
 		str.resize(length);
 		return reinterpret_cast<uint8_t *>(str.data());
 	},
-	.fix_scc_encoded = [](void *ptr, bool fix_code) noexcept { FixSCCEncoded(*static_cast<std::string *>(ptr), fix_code); },
-	.fix_scc_encoded_negative = [](void *ptr) noexcept { FixSCCEncodedNegative(*static_cast<std::string *>(ptr)); },
+	.apply_encoded = [](void *ptr, OpenTTDRustEncodedResult *result) noexcept {
+		auto owner = OwnRustEncoded(result);
+		std::string &str = *static_cast<std::string *>(ptr);
+		str = CopyRustEncoded(owner, str);
+	},
 	.make_valid = [](void *ptr, bool control, bool newline, bool tabcrlf) noexcept {
 		StringValidationSettings settings = StringValidationSetting::ReplaceWithQuestionMark;
 		if (control) settings.Set(StringValidationSetting::AllowControlCode);
@@ -597,7 +598,7 @@ size_t SlGetFieldLength()
  */
 int64_t ReadValue(const void *ptr, VarType conv)
 {
-	return openttd_rust_saveload_read_value(ptr, conv);
+	return openttd_rust_saveload_read_value(&_sl_services, ptr, conv);
 }
 
 /**
@@ -644,17 +645,6 @@ static inline size_t SlCalcStdStringLen(const void *ptr)
 void FixSCCEncoded(std::string &str, bool fix_code)
 {
 	auto result = OwnRustEncoded(openttd_rust_encoded_legacy(reinterpret_cast<const uint8_t *>(str.data()), str.size(), fix_code));
-	if (openttd_rust_encoded_view(result.get()).apply == 0) return;
-	str = CopyRustEncoded(result, str);
-}
-
-/**
- * Scan the string for SCC_ENCODED_NUMERIC with negative values, and reencode them as uint64_t.
- * @param str the string to fix.
- */
-void FixSCCEncodedNegative(std::string &str)
-{
-	auto result = OwnRustEncoded(openttd_rust_encoded_negatives(reinterpret_cast<const uint8_t *>(str.data()), str.size()));
 	if (openttd_rust_encoded_view(result.get()).apply == 0) return;
 	str = CopyRustEncoded(result, str);
 }

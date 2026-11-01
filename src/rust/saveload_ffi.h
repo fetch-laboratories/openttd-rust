@@ -7,6 +7,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "services_ffi.h"
+#include "encoded_ffi.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -40,6 +42,7 @@ typedef struct OpenTTDRustSaveLoadCodec {
 
 /** Native leaves; filter frames catch exceptions, keep them and return false. */
 typedef struct OpenTTDSaveLoadServices {
+	const OpenTTDSharedServices *shared; ///< not_reached is the native NOT_REACHED.
 	void (*native_assert)(bool ok);
 	void (*debug_iterate_error)(void);
 	bool (*read)(void *filter, uint8_t *buf, size_t len, size_t *read);
@@ -70,8 +73,7 @@ typedef struct OpenTTDSaveLoadServices {
 	uint32_t (*vehicle_index)(const void *obj);
 	const uint8_t *(*string_data)(const void *ptr, size_t *length);
 	uint8_t *(*string_resize)(void *ptr, size_t length);
-	void (*fix_scc_encoded)(void *ptr, bool fix_code);
-	void (*fix_scc_encoded_negative)(void *ptr);
+	void (*apply_encoded)(void *ptr, OpenTTDRustEncodedResult *result); ///< Takes ownership of result.
 	void (*make_valid)(void *ptr, bool control, bool newline, bool tabcrlf);
 	bool (*autolength)(const void *proc, int32_t arg);
 } OpenTTDSaveLoadServices;
@@ -100,7 +102,7 @@ void openttd_rust_saveload_set_length(const OpenTTDSaveLoadServices *services, s
 OpenTTDRustSaveLoadStatus openttd_rust_saveload_read_uint16(const OpenTTDSaveLoadServices *services, uint16_t *value);
 OpenTTDRustSaveLoadStatus openttd_rust_saveload_read_uint32(const OpenTTDSaveLoadServices *services, uint32_t *value);
 void openttd_rust_saveload_write_uint32(uint32_t v);
-int64_t openttd_rust_saveload_read_value(const void *ptr, uint32_t conv);
+int64_t openttd_rust_saveload_read_value(const OpenTTDSaveLoadServices *services, const void *ptr, uint32_t conv);
 void openttd_rust_saveload_write_value(const OpenTTDSaveLoadServices *services, void *ptr, uint32_t conv, int64_t val);
 OpenTTDRustSaveLoadStatus openttd_rust_saveload_conv(const OpenTTDSaveLoadServices *services, void *ptr, uint32_t conv);
 OpenTTDRustSaveLoadStatus openttd_rust_saveload_conv_file_len(const OpenTTDSaveLoadServices *services, uint32_t conv, uint8_t *length);

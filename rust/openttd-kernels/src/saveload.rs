@@ -156,9 +156,18 @@ pub struct OpenTTDRustSaveLoadCodec {
     pub expect_table_header: bool,
 }
 
+/// Native `NOT_REACHED`: prints the native fatal-error message and exits.
+fn not_reached(services: &OpenTTDSaveLoadServices) -> ! {
+    // SAFETY: `shared` is the process-wide shared table, live for the whole program.
+    unsafe { ((*services.shared).not_reached)() };
+    std::process::abort()
+}
+
 /// Native leaves the codec calls; each is a typed `noexcept` C++ function.
 #[repr(C)]
 pub struct OpenTTDSaveLoadServices {
+    /// Shared native services; `not_reached` is the native `NOT_REACHED`.
+    pub shared: *const crate::services::Services,
     /// Native `assert`, keeping the native assertion policy.
     pub native_assert: extern "C" fn(bool),
     /// `Debug(sl, 0, "SlIterateArray error")`.
@@ -200,10 +209,9 @@ pub struct OpenTTDSaveLoadServices {
     pub string_data: extern "C" fn(ptr: *const c_void, length: *mut usize) -> *const u8,
     /// `std::string` at `ptr`: `resize(length)`, then `data()`.
     pub string_resize: extern "C" fn(ptr: *mut c_void, length: usize) -> *mut u8,
-    /// `FixSCCEncoded(*str, fix_code)`.
-    pub fix_scc_encoded: extern "C" fn(ptr: *mut c_void, fix_code: bool),
-    /// `FixSCCEncodedNegative(*str)`.
-    pub fix_scc_encoded_negative: extern "C" fn(ptr: *mut c_void),
+    /// `*str = CopyRustEncoded(result, *str)` for the `std::string` at `ptr`: replays the
+    /// result's diagnostics and assertions, then destroys the result it owns.
+    pub apply_encoded: extern "C" fn(ptr: *mut c_void, result: *mut c_void),
     /// `StrMakeValidInPlace(*str, settings)` with `ReplaceWithQuestionMark` and the given flags.
     pub make_valid: extern "C" fn(ptr: *mut c_void, control: bool, newline: bool, tabcrlf: bool),
     /// `proc(arg)` for `SlAutolength`, where `proc` is an `AutolengthProc *`; false when it threw.
@@ -569,14 +577,14 @@ fn set_length(services: &OpenTTDSaveLoadServices, length: usize) {
                     write_simple_gamma(services, length.wrapping_add(1).wrapping_add(sparse));
                     write_simple_gamma(services, index as u32 as usize);
                 }
-                _ => unreachable!("NOT_REACHED in SlSetLength"),
+                _ => not_reached(services),
             }
         }
         // `_sl.obj_len += (int)length`.
         NL_CALCLENGTH => {
             shared(|s| s.obj_len = s.obj_len.wrapping_add(length as i32 as isize as usize));
         }
-        _ => unreachable!("NOT_REACHED in SlSetLength"),
+        _ => not_reached(services),
     }
 }
 
@@ -637,7 +645,7 @@ fn copy_bytes(services: &OpenTTDSaveLoadServices, ptr: *mut u8, length: usize) -
             write_bytes(ptr, length);
             Ok(())
         }
-        _ => unreachable!("NOT_REACHED in SlCopyBytes"),
+        _ => not_reached(services),
     }
 }
 
@@ -645,7 +653,7 @@ fn copy_bytes(services: &OpenTTDSaveLoadServices, ptr: *mut u8, length: usize) -
 ///
 /// # Safety
 /// `ptr` points to a value of the memory type of `conv`.
-unsafe fn read_value(ptr: *const c_void, conv: u32) -> i64 {
+unsafe fn read_value(services: &OpenTTDSaveLoadServices, ptr: *const c_void, conv: u32) -> i64 {
     // SAFETY: The caller's contract.
     unsafe {
         match mem_type(conv) {
@@ -659,7 +667,7 @@ unsafe fn read_value(ptr: *const c_void, conv: u32) -> i64 {
             SLE_VAR_I64 => ptr.cast::<i64>().read_unaligned(),
             SLE_VAR_U64 => ptr.cast::<u64>().read_unaligned() as i64,
             SLE_VAR_NULL => 0,
-            _ => unreachable!("NOT_REACHED in ReadValue"),
+            _ => not_reached(services),
         }
     }
 }
@@ -683,7 +691,7 @@ unsafe fn write_value(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv
             SLE_VAR_U64 => ptr.cast::<u64>().write_unaligned(val as u64),
             SLE_VAR_NAME => (services.copy_from_old_name)(ptr, val as u32),
             SLE_VAR_NULL => {}
-            _ => unreachable!("NOT_REACHED in WriteValue"),
+            _ => not_reached(services),
         }
     }
 }
@@ -701,7 +709,7 @@ unsafe fn save_load_conv(
     match shared(|s| s.action) {
         SLA_SAVE => {
             // SAFETY: The caller's contract.
-            let x = unsafe { read_value(ptr, conv) };
+            let x = unsafe { read_value(services, ptr, conv) };
             match file_type(conv) {
                 SLE_FILE_I8 => {
                     check((-128..=127).contains(&x));
@@ -721,7 +729,7 @@ unsafe fn save_load_conv(
                 }
                 SLE_FILE_I32 | SLE_FILE_U32 => write_uint32(x as u32),
                 SLE_FILE_I64 | SLE_FILE_U64 => write_uint64(x as u64),
-                _ => unreachable!("NOT_REACHED in SlSaveLoadConv"),
+                _ => not_reached(services),
             }
         }
         SLA_LOAD_CHECK | SLA_LOAD => {
@@ -736,13 +744,13 @@ unsafe fn save_load_conv(
                 SLE_FILE_STRINGID => i64::from((services.remap_old_string)(u32::from(
                     read_uint16(services)?,
                 ))),
-                _ => unreachable!("NOT_REACHED in SlSaveLoadConv"),
+                _ => not_reached(services),
             };
             // SAFETY: The caller's contract.
             unsafe { write_value(services, ptr, conv, x) };
         }
         SLA_PTRS | SLA_NULL => {}
-        _ => unreachable!("NOT_REACHED in SlSaveLoadConv"),
+        _ => not_reached(services),
     }
     Ok(())
 }
@@ -759,7 +767,7 @@ fn calc_conv_mem_len(
         SLE_VAR_I64 | SLE_VAR_U64 => 8,
         SLE_VAR_NULL => 0,
         SLE_VAR_STR | SLE_VAR_STRQ => read_simple_gamma(services)?,
-        _ => unreachable!("NOT_REACHED in SlCalcConvMemLen"),
+        _ => not_reached(services),
     })
 }
 
@@ -775,7 +783,7 @@ fn calc_conv_file_len(
         SLE_FILE_I32 | SLE_FILE_U32 => 4,
         SLE_FILE_I64 | SLE_FILE_U64 => 8,
         SLE_FILE_STRING => read_simple_gamma(services)? as u8,
-        _ => unreachable!("NOT_REACHED in SlCalcConvFileLen"),
+        _ => not_reached(services),
     })
 }
 
@@ -900,7 +908,7 @@ unsafe fn array(
             unsafe { copy_internal(services, object, length, conv) }
         }
         SLA_PTRS | SLA_NULL => Ok(()),
-        _ => unreachable!("NOT_REACHED in SlArray"),
+        _ => not_reached(services),
     }
 }
 
@@ -924,7 +932,7 @@ fn reference_to_int(services: &OpenTTDSaveLoadServices, obj: *const c_void, rt: 
         REF_STORAGE => services.persistent_storage_index,
         REF_LINK_GRAPH => services.link_graph_index,
         REF_LINK_GRAPH_JOB => services.link_graph_job_index,
-        _ => unreachable!("NOT_REACHED in ReferenceToInt"),
+        _ => not_reached(services),
     };
     index(obj) as usize + 1
 }
@@ -962,7 +970,7 @@ fn int_to_reference(
         REF_STORAGE => (services.persistent_storage_get, "PersistentStorage"),
         REF_LINK_GRAPH => (services.link_graph_get, "LinkGraph"),
         REF_LINK_GRAPH_JOB => (services.link_graph_job_get, "LinkGraphJob"),
-        _ => unreachable!("NOT_REACHED in IntToReference"),
+        _ => not_reached(services),
     };
     let obj = get(index);
     if obj.is_null() {
@@ -1003,7 +1011,7 @@ unsafe fn save_load_ref(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, co
         }
         // SAFETY: The caller's contract.
         SLA_NULL => unsafe { ptr.write_unaligned(std::ptr::null_mut()) },
-        _ => unreachable!("NOT_REACHED in SlSaveLoadRef"),
+        _ => not_reached(services),
     }
     Ok(())
 }
@@ -1019,6 +1027,22 @@ fn calc_std_string_len(services: &OpenTTDSaveLoadServices, ptr: *const c_void) -
 fn read_string(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, length: usize) -> Status {
     let data = (services.string_resize)(ptr, length);
     copy_bytes(services, data, length)
+}
+
+/// `FixSCCEncoded` and `FixSCCEncodedNegative` on the `std::string` at `ptr`: the string is
+/// replaced, with the native diagnostic logs and assertions, only when the fix applies.
+fn fix_encoded(
+    services: &OpenTTDSaveLoadServices,
+    ptr: *mut c_void,
+    fix: impl FnOnce(&[u8]) -> crate::encoded::Output,
+) {
+    let mut len = 0;
+    let data = (services.string_data)(ptr, &raw mut len);
+    // SAFETY: `string_data` returns the string's live bytes, unchanged until `apply_encoded`.
+    let output = fix(unsafe { crate::utf8::borrow(data, len) });
+    if output.view().apply != 0 {
+        (services.apply_encoded)(ptr, Box::into_raw(Box::new(output)).cast());
+    }
 }
 
 /// `SlStdString`.
@@ -1041,10 +1065,11 @@ fn std_string(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv: u32) -
             let control = conv & SLF_ALLOW_CONTROL != 0;
             if control {
                 if version_before(SLV_ENCODED_STRING_FORMAT) {
-                    (services.fix_scc_encoded)(ptr, version_before(SLV_169));
+                    let fix_code = version_before(SLV_169);
+                    fix_encoded(services, ptr, |src| crate::encoded::legacy(src, fix_code));
                 }
                 if version_before(SLV_FIX_SCC_ENCODED_NEGATIVE) {
-                    (services.fix_scc_encoded_negative)(ptr);
+                    fix_encoded(services, ptr, crate::encoded::negatives);
                 }
             }
             (services.make_valid)(
@@ -1055,7 +1080,7 @@ fn std_string(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv: u32) -
             );
         }
         SLA_PTRS | SLA_NULL => {}
-        _ => unreachable!("NOT_REACHED in SlStdString"),
+        _ => not_reached(services),
     }
     Ok(())
 }
@@ -1320,9 +1345,13 @@ pub extern "C" fn openttd_rust_saveload_write_uint32(v: u32) {
 /// # Safety
 /// `ptr` points to a value of the memory type of `conv`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_saveload_read_value(ptr: *const c_void, conv: u32) -> i64 {
+pub unsafe extern "C" fn openttd_rust_saveload_read_value(
+    services: &OpenTTDSaveLoadServices,
+    ptr: *const c_void,
+    conv: u32,
+) -> i64 {
     // SAFETY: The caller's contract.
-    unsafe { read_value(ptr, conv) }
+    unsafe { read_value(services, ptr, conv) }
 }
 
 /// `WriteValue`.
@@ -1538,6 +1567,7 @@ crate::abi::layouts! {
         expect_table_header,
     };
     "OpenTTDSaveLoadServices" ["probe"] => OpenTTDSaveLoadServices {
+        shared,
         native_assert,
         debug_iterate_error,
         read,
@@ -1567,9 +1597,170 @@ crate::abi::layouts! {
         vehicle_index,
         string_data,
         string_resize,
-        fix_scc_encoded,
-        fix_scc_encoded_negative,
+        apply_encoded,
         make_valid,
         autolength,
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    extern "C" fn assert_ok(ok: bool) {
+        assert!(ok, "native assertion");
+    }
+    extern "C" fn unused() {
+        unreachable!("unused service");
+    }
+    extern "C" fn unused_read(_: *mut c_void, _: *mut u8, _: usize, _: *mut usize) -> bool {
+        unreachable!("the test buffer holds every byte");
+    }
+    extern "C" fn unused_write(_: *mut c_void, _: *const u8, _: usize) -> bool {
+        unreachable!("unused service")
+    }
+    extern "C" fn unused_filter(_: *mut c_void) -> bool {
+        unreachable!("unused service")
+    }
+    extern "C" fn unused_u32(_: u32) -> u32 {
+        unreachable!("unused service")
+    }
+    extern "C" fn unused_ptr_u32(_: *mut c_void, _: u32) {
+        unreachable!("unused service")
+    }
+    extern "C" fn unused_get(_: usize) -> *mut c_void {
+        unreachable!("unused service")
+    }
+    extern "C" fn unused_index(_: *const c_void) -> u32 {
+        unreachable!("unused service")
+    }
+    extern "C" fn unused_data(_: *const c_void, _: *mut usize) -> *const u8 {
+        unreachable!("unused service")
+    }
+    extern "C" fn unused_resize(_: *mut c_void, _: usize) -> *mut u8 {
+        unreachable!("unused service")
+    }
+    extern "C" fn unused_apply(_: *mut c_void, _: *mut c_void) {
+        unreachable!("unused service")
+    }
+    extern "C" fn unused_valid(_: *mut c_void, _: bool, _: bool, _: bool) {
+        unreachable!("unused service")
+    }
+    extern "C" fn unused_autolength(_: *const c_void, _: i32) -> bool {
+        unreachable!("unused service")
+    }
+
+    const SERVICES: OpenTTDSaveLoadServices = OpenTTDSaveLoadServices {
+        shared: std::ptr::null(),
+        native_assert: assert_ok,
+        debug_iterate_error: unused,
+        read: unused_read,
+        write: unused_write,
+        finish: unused_filter,
+        remap_old_string: unused_u32,
+        copy_from_old_name: unused_ptr_u32,
+        cargo_packet_get: unused_get,
+        cargo_packet_index: unused_index,
+        engine_renew_get: unused_get,
+        engine_renew_index: unused_index,
+        link_graph_get: unused_get,
+        link_graph_index: unused_index,
+        link_graph_job_get: unused_get,
+        link_graph_job_index: unused_index,
+        order_list_get: unused_get,
+        order_list_index: unused_index,
+        persistent_storage_get: unused_get,
+        persistent_storage_index: unused_index,
+        road_stop_get: unused_get,
+        road_stop_index: unused_index,
+        station_get: unused_get,
+        station_index: unused_index,
+        town_get: unused_get,
+        town_index: unused_index,
+        vehicle_get: unused_get,
+        vehicle_index: unused_index,
+        string_data: unused_data,
+        string_resize: unused_resize,
+        apply_encoded: unused_apply,
+        make_valid: unused_valid,
+        autolength: unused_autolength,
+    };
+
+    /// Decode `bytes` from an in-place read buffer; returns the value and the bytes read.
+    fn read_gamma(bytes: &mut [u8]) -> (Result<u32, OpenTTDRustSaveLoadStatus>, usize) {
+        let start = bytes.as_mut_ptr();
+        shared(|s| {
+            s.read_cursor = start;
+            // SAFETY: One past the end of `bytes`.
+            s.read_end = unsafe { start.add(bytes.len()) };
+        });
+        let value = read_simple_gamma(&SERVICES);
+        let used = shared(|s| s.read_cursor as usize - start as usize);
+        shared(|s| {
+            (s.read_cursor, s.read_end) = (std::ptr::null_mut(), std::ptr::null_mut());
+        });
+        (value, used)
+    }
+
+    /// The gamma encoding of `saveload.cpp`, including the 4- and 5-byte forms that need a
+    /// length of 2 MiB or more and that no regression save reaches.
+    #[test]
+    fn gamma_follows_the_documented_encoding() {
+        let table: &[(usize, &[u8])] = &[
+            (0, &[0x00]),
+            (0x7F, &[0x7F]),
+            (0x80, &[0x80, 0x80]),
+            (0x3FFF, &[0xBF, 0xFF]),
+            (0x4000, &[0xC0, 0x40, 0x00]),
+            (0x1F_FFFF, &[0xDF, 0xFF, 0xFF]),
+            (0x20_0000, &[0xE0, 0x20, 0x00, 0x00]),
+            (0x0FFF_FFFF, &[0xEF, 0xFF, 0xFF, 0xFF]),
+            (0x1000_0000, &[0xF0, 0x10, 0x00, 0x00, 0x00]),
+            (0x1234_5678, &[0xF0, 0x12, 0x34, 0x56, 0x78]),
+            (0xFFFF_FFFF, &[0xF0, 0xFF, 0xFF, 0xFF, 0xFF]),
+        ];
+        for &(value, bytes) in table {
+            assert_eq!(
+                gamma_length(value) as usize,
+                bytes.len(),
+                "length of {value:#x}"
+            );
+
+            let mut out = [0u8; 8];
+            let start = out.as_mut_ptr();
+            shared(|s| {
+                s.write_cursor = start;
+                // SAFETY: One past the end of `out`.
+                s.write_end = unsafe { start.add(out.len()) };
+            });
+            write_simple_gamma(&SERVICES, value);
+            let written = shared(|s| s.write_cursor as usize - start as usize);
+            shared(|s| {
+                (s.write_cursor, s.write_end) = (std::ptr::null_mut(), std::ptr::null_mut());
+            });
+            assert_eq!(&out[..written], bytes, "encoding of {value:#x}");
+
+            let mut input = bytes.to_vec();
+            let (decoded, used) = read_gamma(&mut input);
+            assert_eq!(decoded.ok(), Some(value as u32), "decoding of {value:#x}");
+            assert_eq!(used, bytes.len(), "bytes read for {value:#x}");
+        }
+
+        // The reader accepts non-minimal forms and ignores the 5-byte prefix's low bits.
+        for (mut bytes, value) in [
+            (vec![0x80, 0x05], 5),
+            (vec![0xE0, 0x00, 0x00, 0x7F], 0x7F),
+            (vec![0xF7, 0x12, 0x34, 0x56, 0x78], 0x1234_5678),
+        ] {
+            let len = bytes.len();
+            assert_eq!(read_gamma(&mut bytes), (Ok(value), len));
+        }
+
+        // A sixth form is corrupt after reading only its prefix.
+        for prefix in [0xF8, 0xFF] {
+            let (decoded, used) = read_gamma(&mut [prefix, 0, 0, 0, 0]);
+            assert_eq!((decoded, used), (Err(SL_STATUS_CORRUPT), 1));
+            assert_eq!(codec(|c| std::mem::take(&mut c.error)), "Unsupported gamma");
+        }
+    }
 }
