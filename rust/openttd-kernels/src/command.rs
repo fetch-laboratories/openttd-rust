@@ -3,7 +3,8 @@
 //! control, process-wide recursion, admission, company restoration and money
 //! reconciliation. The typed native templates call each decision step and run the
 //! procedures between them, so a procedure's exception unwinds native frames only;
-//! no Rust access spans a procedure.
+//! no Rust access spans a procedure. Exported predicates return `u8` 0 or 1: rustc
+//! leaves bits 1 to 7 of a returned `bool` undefined, while GCC tests the whole byte.
 #![allow(
     unsafe_code,
     clippy::too_many_arguments,
@@ -253,14 +254,14 @@ pub(crate) fn allowed_while_paused(s: &CommandServices, command_type: u8) -> boo
 pub extern "C" fn openttd_rust_command_allowed_while_paused(
     s: &CommandServices,
     command_type: u8,
-) -> bool {
-    allowed_while_paused(s, command_type)
+) -> u8 {
+    u8::from(allowed_while_paused(s, command_type))
 }
 
 /// `RecursiveCommandCounter` construction from a native command template.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_command_enter() -> bool {
-    enter()
+pub extern "C" fn openttd_rust_command_enter() -> u8 {
+    u8::from(enter())
 }
 
 /// `RecursiveCommandCounter` destruction, also while an exception unwinds.
@@ -284,16 +285,16 @@ pub extern "C" fn openttd_rust_command_tile_rejected(
     s: &CommandServices,
     tile: u32,
     all_tiles: bool,
-) -> bool {
-    tile_rejected(s.shared, tile, all_tiles)
+) -> u8 {
+    u8::from(tile_rejected(s.shared, tile, all_tiles))
 }
 
 /// `Do`: whether to run the test procedure, entering test or execution preparation.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_command_do_test(s: &CommandServices, top: bool, flags: u16) -> bool {
+pub extern "C" fn openttd_rust_command_do_test(s: &CommandServices, top: bool, flags: u16) -> u8 {
     let test = top || flags & DoCommandFlag::EXECUTE == 0;
     before(s, top, test);
-    test
+    u8::from(test)
 }
 
 /// `Do` after its test procedure: reconcile the result and, when execution follows,
@@ -306,14 +307,14 @@ pub unsafe extern "C" fn openttd_rust_command_do_tested(
     result: *mut CommandCost,
     flags: u16,
     top: bool,
-) -> bool {
+) -> u8 {
     // SAFETY: caller guarantees live exclusive storage.
     unsafe { after(s, s.cost, result, flags, top, true) };
     if !(s.cost.success)(result) || flags & DoCommandFlag::EXECUTE == 0 {
-        return false;
+        return 0;
     }
     before(s, top, false);
-    true
+    1
 }
 
 /// `Do` after its execution procedure.
@@ -368,7 +369,7 @@ pub extern "C" fn openttd_rust_command_prepare(
     s: &CommandServices,
     top: bool,
     cmd_flags: u16,
-) -> bool {
+) -> u8 {
     /* Prevent recursion; it gives a mess over the network. */
     (s.signals.assert_condition)(top);
     let finance = s.finance;
@@ -383,14 +384,14 @@ pub extern "C" fn openttd_rust_command_prepare(
         && !(current == OWNER_DEITY && cmd_flags & CommandFlag::DEITY != 0)
     {
         set_backup(None);
-        return false;
+        return 0;
     }
     if exec_as_spectator {
         (finance.set_current_company)(COMPANY_SPECTATOR);
     }
     before(s, true, true);
     storage_mode(s, PSM_ENTER_TESTMODE);
-    true
+    1
 }
 
 /// Decision of `Execute` after its test procedure.
@@ -512,10 +513,10 @@ pub unsafe extern "C" fn openttd_rust_command_finish(
 /// `Backup<CompanyID>` destruction at the end of `Execute`. Returns whether the
 /// backup was still held, as when a procedure's exception unwinds; it is restored.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_command_unwind(s: &CommandServices) -> bool {
+pub extern "C" fn openttd_rust_command_unwind(s: &CommandServices) -> u8 {
     let held = backup().is_some();
     restore(s);
-    held
+    u8::from(held)
 }
 
 /// Admission and presentation decisions of `InternalPostBefore`.
@@ -579,7 +580,7 @@ pub unsafe extern "C" fn openttd_rust_command_posted(
     err_message: u32,
     my_cmd: bool,
     has_callback: bool,
-) -> bool {
+) -> u8 {
     let c = s.cost;
     let (x, y) = pixel(s, tile);
     if !(c.success)(result) {
@@ -597,7 +598,7 @@ pub unsafe extern "C" fn openttd_rust_command_posted(
         /* The cost animation shows only for an executed local command outside the editor. */
         (s.cost_animation)(x, y, (c.money)(result));
     }
-    !estimate_only && !only_sending && has_callback
+    u8::from(!estimate_only && !only_sending && has_callback)
 }
 
 /// Own one independently constructed native result for a synchronous nested call.

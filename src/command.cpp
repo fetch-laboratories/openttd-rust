@@ -143,7 +143,7 @@ std::string_view GetCommandName(Commands cmd)
 bool IsCommandAllowedWhilePaused(Commands cmd)
 {
 	assert(IsValidCommand(cmd));
-	return openttd_rust_command_allowed_while_paused(&GetRustCommandServices(), to_underlying(_command_proc_table[cmd].type));
+	return openttd_rust_command_allowed_while_paused(&GetRustCommandServices(), to_underlying(_command_proc_table[cmd].type)) != 0;
 }
 
 /** Helper to make a desync log for a command. */
@@ -161,7 +161,7 @@ bool CommandHelperBase::DesyncLogging()
 /** `Backup<CompanyID>` destruction: unrestored only while a procedure's exception unwinds `Execute`. */
 CommandExecutionScope::~CommandExecutionScope() noexcept
 {
-	if (openttd_rust_command_unwind(&GetRustCommandServices())) Debug(misc, 0, "{}:{}: Backed-up value was not restored!", this->location.file_name(), this->location.line());
+	if (openttd_rust_command_unwind(&GetRustCommandServices()) != 0) Debug(misc, 0, "{}:{}: Backed-up value was not restored!", this->location.file_name(), this->location.line());
 }
 
 /**

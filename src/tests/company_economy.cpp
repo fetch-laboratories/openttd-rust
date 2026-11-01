@@ -288,9 +288,9 @@ TEST_CASE("Commands - pre-post money short circuits and local error encoding")
 	command.cost = &skipped;
 	/* The Do steps: entry into test or execution, then reconciliation of that result. */
 	auto run = [&](CommandCost &result, DoCommandFlags flags, bool top, bool test) {
-		CHECK(openttd_rust_command_do_test(&command, false, test ? 0 : DoCommandFlags{DoCommandFlag::Execute}.base()) == test);
+		CHECK((openttd_rust_command_do_test(&command, false, test ? 0 : DoCommandFlags{DoCommandFlag::Execute}.base()) != 0) == test);
 		if (test) {
-			CHECK_FALSE(openttd_rust_command_do_tested(&command, RustCommandCost(&result), flags.base(), top));
+			CHECK(openttd_rust_command_do_tested(&command, RustCommandCost(&result), flags.base(), top) == 0);
 		} else {
 			openttd_rust_command_do_executed(&command, RustCommandCost(&result), flags.base(), top);
 		}

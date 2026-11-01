@@ -59,7 +59,7 @@ static constexpr inline DoCommandFlags CommandFlagsToDCFlags(CommandFlags cmd_fl
 
 /** Helper class to keep track of command nesting level; Rust holds the depth. */
 struct RecursiveCommandCounter {
-	RecursiveCommandCounter() noexcept : top_level(openttd_rust_command_enter()) {}
+	RecursiveCommandCounter() noexcept : top_level(openttd_rust_command_enter() != 0) {}
 	~RecursiveCommandCounter() noexcept { openttd_rust_command_leave(); }
 
 	/** Are we in the top-level command execution? */
@@ -153,15 +153,15 @@ public:
 		if constexpr (std::is_same_v<TileIndex, std::tuple_element_t<0, std::tuple<Targs...>>>) {
 			/* Do not even think about executing out-of-bounds tile-commands. */
 			TileIndex tile = std::get<0>(std::make_tuple(args...));
-			if (openttd_rust_command_tile_rejected(&services, tile.base(), flags.Test(DoCommandFlag::AllTiles))) return MakeResult(CMD_ERROR);
+			if (openttd_rust_command_tile_rejected(&services, tile.base(), flags.Test(DoCommandFlag::AllTiles)) != 0) return MakeResult(CMD_ERROR);
 		}
 
 		RecursiveCommandCounter counter{};
 
 		/* Only execute the test call if it's toplevel, or we're not execing. */
-		if (openttd_rust_command_do_test(&services, counter.IsTopLevel(), flags.base())) {
+		if (openttd_rust_command_do_test(&services, counter.IsTopLevel(), flags.base()) != 0) {
 			Tret res = CommandTraits<Tcmd>::proc(DoCommandFlags{flags}.Reset(DoCommandFlag::Execute), args...);
-			if (!openttd_rust_command_do_tested(&services, Cost(res), flags.base(), counter.IsTopLevel())) return res; // Can modify res.
+			if (openttd_rust_command_do_tested(&services, Cost(res), flags.base(), counter.IsTopLevel()) == 0) return res; // Can modify res.
 		}
 
 		/* Execute the command here. All cost-relevant functions set the expenses type
@@ -293,7 +293,7 @@ protected:
 	{
 		const auto &services = GetRustCommandServices();
 		/* Do not even think about executing out-of-bounds tile-commands. */
-		if (openttd_rust_command_tile_rejected(&services, tile.base(), GetCommandFlags<Tcmd>().Test(CommandFlag::AllTiles))) return false;
+		if (openttd_rust_command_tile_rejected(&services, tile.base(), GetCommandFlags<Tcmd>().Test(CommandFlag::AllTiles)) != 0) return false;
 
 		auto [err, estimate_only, only_sending] = openttd_rust_command_admit(&services, to_underlying(CommandTraits<Tcmd>::type), GetCommandFlags<Tcmd>().base(), tile.base(), err_message, network_command);
 		if (err) return false;
@@ -302,7 +302,7 @@ protected:
 		if (!network_command && GetCommandFlags<Tcmd>().Test(CommandFlag::ClientID)) SetClientIds(args, std::index_sequence_for<Targs...>{});
 
 		Tret res = Execute(err_message, reinterpret_cast<CommandCallback *>(reinterpret_cast<void(*)()>(callback)), my_cmd, estimate_only, network_command, tile, args);
-		if (openttd_rust_command_posted(&services, Cost(res), tile.base(), estimate_only, only_sending, err_message, my_cmd, callback != nullptr)) {
+		if (openttd_rust_command_posted(&services, Cost(res), tile.base(), estimate_only, only_sending, err_message, my_cmd, callback != nullptr) != 0) {
 			if constexpr (std::is_same_v<Tcallback, CommandCallback>) {
 				/* Callback that doesn't need any command arguments. */
 				callback(Tcmd, ExtractCommandCost(res), tile);
@@ -372,7 +372,7 @@ protected:
 
 		const auto &services = GetRustCommandServices();
 		CommandExecutionScope cur_company{};
-		if (!openttd_rust_command_prepare(&services, counter.IsTopLevel(), cmd_flags.base())) return MakeResult(CMD_ERROR);
+		if (openttd_rust_command_prepare(&services, counter.IsTopLevel(), cmd_flags.base()) == 0) return MakeResult(CMD_ERROR);
 
 		/* Test the command. */
 		DoCommandFlags flags = CommandFlagsToDCFlags(cmd_flags);

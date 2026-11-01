@@ -52,22 +52,23 @@ struct OpenTTDCommandAdmission {
 	bool only_sending;
 };
 const OpenTTDCommandServices &GetRustCommandServices() noexcept;
+/* Predicates return 0 or 1 as uint8_t; see command.rs. */
 extern "C" {
 bool openttd_rust_command_stack_probe(const OpenTTDCommandCostServices *);
-bool openttd_rust_command_allowed_while_paused(const OpenTTDCommandServices *, uint8_t);
-bool openttd_rust_command_enter();
+uint8_t openttd_rust_command_allowed_while_paused(const OpenTTDCommandServices *, uint8_t);
+uint8_t openttd_rust_command_enter();
 void openttd_rust_command_leave();
-bool openttd_rust_command_tile_rejected(const OpenTTDCommandServices *, uint32_t, bool);
-bool openttd_rust_command_do_test(const OpenTTDCommandServices *, bool, uint16_t);
-bool openttd_rust_command_do_tested(const OpenTTDCommandServices *, OpenTTDCommandCost *, uint16_t, bool);
+uint8_t openttd_rust_command_tile_rejected(const OpenTTDCommandServices *, uint32_t, bool);
+uint8_t openttd_rust_command_do_test(const OpenTTDCommandServices *, bool, uint16_t);
+uint8_t openttd_rust_command_do_tested(const OpenTTDCommandServices *, OpenTTDCommandCost *, uint16_t, bool);
 void openttd_rust_command_do_executed(const OpenTTDCommandServices *, OpenTTDCommandCost *, uint16_t, bool);
-bool openttd_rust_command_prepare(const OpenTTDCommandServices *, bool, uint16_t);
+uint8_t openttd_rust_command_prepare(const OpenTTDCommandServices *, bool, uint16_t);
 OpenTTDCommandTested openttd_rust_command_tested(const OpenTTDCommandServices *, OpenTTDCommandCost *, uint16_t, bool, bool);
 void openttd_rust_command_restore(const OpenTTDCommandServices *);
 void openttd_rust_command_finish(const OpenTTDCommandServices *, uint8_t, uint8_t, uint16_t, const OpenTTDCommandCost *, OpenTTDCommandCost *, int64_t, uint32_t);
-bool openttd_rust_command_unwind(const OpenTTDCommandServices *);
+uint8_t openttd_rust_command_unwind(const OpenTTDCommandServices *);
 OpenTTDCommandAdmission openttd_rust_command_admit(const OpenTTDCommandServices *, uint8_t, uint16_t, uint32_t, uint32_t, bool);
-bool openttd_rust_command_posted(const OpenTTDCommandServices *, const OpenTTDCommandCost *, uint32_t, bool, bool, uint32_t, bool, bool);
+uint8_t openttd_rust_command_posted(const OpenTTDCommandServices *, const OpenTTDCommandCost *, uint32_t, bool, bool, uint32_t, bool, bool);
 void openttd_rust_command_subtract_money(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, const OpenTTDCommandCost *);
 bool openttd_rust_command_check_money(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *);
 }
