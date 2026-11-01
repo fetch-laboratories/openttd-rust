@@ -1133,7 +1133,7 @@ static void VisualEffectProbe()
 		SaveRandomSeeds(&after);
 		fmt::print(stderr, "FLEET effect-gate {} callbacks {} sound {} count {} rng {}\n", label, observer->spawn - old_spawn, observer->sound - old_sound, EffectVehicle::GetNumItems() - effects, _random.state[0] == expected.state[0] && _random.state[1] == expected.state[1] && (attempted || SameRandom(before, after)));
 	}
-	FIXTURE_FIELD(v, cur_speed) = 2; FIXTURE_SET(v, VehStatus, vehstatus, {});
+	FIXTURE_FIELD(v, cur_speed) = 2; FIXTURE_SET(v, VehStatus, vehstatus, VehStates{});
 	for (const char *label : {"steam", "diesel", "electric", "steam-tick", "electric-tick", "diesel-top"}) {
 		const std::string_view name(label);
 		const uint8_t model = name.starts_with("steam") ? 1 : name.starts_with("diesel") ? 2 : 3;

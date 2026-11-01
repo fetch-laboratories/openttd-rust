@@ -58,7 +58,7 @@ struct Fixture {
 	int32_t x = 0, y = 0, z = 1;
 	uint16_t speed = 0;
 	uint8_t subtype = 2;
-	Direction direction{};
+	uint8_t direction{};
 	uint64_t blocks = 0;
 	std::array<unsigned, 4> messages{};
 	OpenTTDVehicleTileLinks links[2];

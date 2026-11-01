@@ -80,6 +80,14 @@ def pbs_reference(folder: Path) -> None:
         .replace("v->railtypes", "PbsTrainRailTypes(v)")
         .replace("CFollowTrack", "PbsOriginalFollowTrack")
     )
+    # Moved vehicle fields read through vehicle-record-fixture.hpp on both sides.
+    for field, name in (
+        ("type", "Type"),
+        ("owner", "Owner"),
+        ("tile", "Tile"),
+        ("vehstatus", "VehStatus"),
+    ):
+        body = re.sub(rf"\bv->{field}\b", f"FIXTURE_GET(v, {name}, {field})", body)
     body += "using PbsOriginalMask = PbsOriginalFollowTrackFreeRail;\n"
     body += "".join(f"#undef {name}\n" for name in names)
     (folder / "pbs-original.hpp").write_text(body)

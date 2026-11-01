@@ -427,7 +427,7 @@ static bool SignalsScenario(std::span<std::string_view> args)
 	for (Vehicle *v : Vehicle::Iterate()) if (v->type == VEH_TRAIN && Train::From(v)->IsFrontEngine()) { train = Train::From(v); break; }
 	if (train == nullptr) SignalFixtureAbort(__LINE__);
 	Owner owner = train->owner;
-	Backup<CompanyID> company(_current_company, FIXTURE_GET(this, Owner, owner));
+	Backup<CompanyID> company(_current_company, owner);
 	if (args[1] == "overflow") { SignalOverflowLayout(owner); company.Restore(); return true; }
 	if (args[1] == "rail-commands") { RailCommandsLayout(owner); company.Restore(); return true; }
 	if (args[1] == "rail-live") { RailLiveReservations(owner); company.Restore(); return true; }

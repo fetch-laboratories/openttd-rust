@@ -303,7 +303,7 @@ static bool RoadCommandsScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
 	CompanyID owner = (*Company::Iterate().begin())->index;
-	Backup<CompanyID> company(_current_company, FIXTURE_GET(this, Owner, owner));
+	Backup<CompanyID> company(_current_company, owner);
 	if (args[1] == "inspect") {
 		uint roads = 0, depots = 0;
 		for (TileIndex tile : Map::Iterate()) if (IsTileType(tile, MP_ROAD)) { ++roads; depots += IsRoadDepot(tile); }
