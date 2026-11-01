@@ -98,6 +98,7 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
         "rails",
         wraps=pbs_wraps(build),
         native_test_support=True,
+        interpose=pbs_interpose(build),
     )
 
 
@@ -108,10 +109,15 @@ PBS_WRAPS = (
 
 
 def pbs_wraps(build):
+    return () if (build / "openttd-rust").exists() else PBS_WRAPS
+
+
+def pbs_interpose(build):
     # Rust owners call each other directly, bypassing both native trigger facades.
+    # rustc may place a caller in its callee's codegen unit, out of --wrap's reach.
     if (build / "openttd-rust").exists():
         return ("openttd_rust_station_randomisation", "openttd_rust_trigger_station")
-    return PBS_WRAPS
+    return ()
 
 
 def uses_ai(scenario):
