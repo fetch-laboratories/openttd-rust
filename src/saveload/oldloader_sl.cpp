@@ -165,10 +165,13 @@ static void FixOldTowns()
 void FixOldVehicles(LoadgameState &ls)
 {
 	for (Vehicle *v : Vehicle::Iterate()) {
-		if ((size_t)v->next == 0xFFFF) {
-			v->next = nullptr;
+		/* The old loader parks the next index in the record link until here. */
+		size_t next = reinterpret_cast<size_t>(v->Record().next);
+		if (next == 0xFFFF) {
+			v->Record().next = nullptr;
 		} else {
-			v->next = Vehicle::GetIfValid((size_t)v->next);
+			Vehicle *u = Vehicle::GetIfValid(next);
+			v->Record().next = u == nullptr ? nullptr : u->record;
 		}
 
 		/* For some reason we need to correct for this */
@@ -1195,7 +1198,7 @@ static bool LoadOldVehicleUnion(LoadgameState &ls, int)
 static uint16_t _cargo_count;
 
 static const OldChunks vehicle_chunk[] = {
-	OCL_SVAR(  OC_UINT8, Vehicle, this->Record().subtype ),
+	OCL_SVAR(  OC_UINT8, Vehicle, Record().subtype ),
 
 	OCL_NULL( 2 ),         ///< Hash, calculated automatically
 	OCL_NULL( 2 ),         ///< Index, calculated automatically
@@ -1205,59 +1208,59 @@ static const OldChunks vehicle_chunk[] = {
 
 	OCL_NULL ( 1 ), ///< num_orders, now calculated
 	OCL_SVAR(  OC_UINT8, Vehicle, cur_implicit_order_index ),
-	OCL_SVAR(   OC_TILE, Vehicle, this->GetDestTile() ),
+	OCL_SVAR(   OC_TILE, Vehicle, Record().dest_tile ),
 	OCL_SVAR( OC_UINT16, Vehicle, load_unload_ticks ),
 	OCL_SVAR( OC_FILE_U16 | OC_VAR_U32, Vehicle, date_of_last_service ),
 	OCL_SVAR( OC_UINT16, Vehicle, service_interval ),
-	OCL_SVAR( OC_FILE_U8 | OC_VAR_U16, Vehicle, this->GetLastStationVisited() ),
-	OCL_SVAR( OC_TTD | OC_UINT8, Vehicle, this->Record().tick_counter ),
+	OCL_SVAR( OC_FILE_U8 | OC_VAR_U16, Vehicle, Record().last_station_visited ),
+	OCL_SVAR( OC_TTD | OC_UINT8, Vehicle, Record().tick_counter ),
 	OCL_CNULL( OC_TTD, 2 ), ///< max_speed, now it is calculated.
 	OCL_CNULL( OC_TTO, 1 ), ///< max_speed, now it is calculated.
 
-	OCL_SVAR( OC_FILE_U16 | OC_VAR_I32, Vehicle, this->Record().x_pos ),
-	OCL_SVAR( OC_FILE_U16 | OC_VAR_I32, Vehicle, this->Record().y_pos ),
-	OCL_SVAR( OC_FILE_U8  | OC_VAR_I32, Vehicle, this->Record().z_pos ),
-	OCL_SVAR(  OC_UINT8, Vehicle, this->GetDirection() ),
+	OCL_SVAR( OC_FILE_U16 | OC_VAR_I32, Vehicle, Record().x_pos ),
+	OCL_SVAR( OC_FILE_U16 | OC_VAR_I32, Vehicle, Record().y_pos ),
+	OCL_SVAR( OC_FILE_U8  | OC_VAR_I32, Vehicle, Record().z_pos ),
+	OCL_SVAR(  OC_UINT8, Vehicle, Record().direction ),
 	OCL_NULL( 2 ),         ///< x_offs and y_offs, calculated automatically
 	OCL_NULL( 2 ),         ///< x_extent and y_extent, calculated automatically
 	OCL_NULL( 1 ),         ///< z_extent, calculated automatically
 
-	OCL_SVAR(  OC_UINT8, Vehicle, this->GetOwner() ),
-	OCL_SVAR(   OC_TILE, Vehicle, this->GetTile() ),
+	OCL_SVAR(  OC_UINT8, Vehicle, Record().owner ),
+	OCL_SVAR(   OC_TILE, Vehicle, Record().tile ),
 	OCL_SVAR( OC_FILE_U16 | OC_VAR_U32, Vehicle, sprite_cache.sprite_seq.seq[0].sprite ),
 
 	OCL_NULL( 8 ),        ///< Vehicle sprite box, calculated automatically
 
-	OCL_SVAR( OC_FILE_U16 | OC_VAR_U8, Vehicle, this->GetVehStatus() ),
-	OCL_SVAR( OC_TTD | OC_UINT16, Vehicle, this->Record().cur_speed ),
-	OCL_SVAR( OC_TTO | OC_FILE_U8 | OC_VAR_U16, Vehicle, this->Record().cur_speed ),
-	OCL_SVAR(  OC_UINT8, Vehicle, this->Record().subspeed ),
-	OCL_SVAR(  OC_UINT8, Vehicle, this->Record().acceleration ),
-	OCL_SVAR(  OC_UINT8, Vehicle, this->Record().progress ),
+	OCL_SVAR( OC_FILE_U16 | OC_VAR_U8, Vehicle, Record().vehstatus ),
+	OCL_SVAR( OC_TTD | OC_UINT16, Vehicle, Record().cur_speed ),
+	OCL_SVAR( OC_TTO | OC_FILE_U8 | OC_VAR_U16, Vehicle, Record().cur_speed ),
+	OCL_SVAR(  OC_UINT8, Vehicle, Record().subspeed ),
+	OCL_SVAR(  OC_UINT8, Vehicle, Record().acceleration ),
+	OCL_SVAR(  OC_UINT8, Vehicle, Record().progress ),
 
 	OCL_SVAR(  OC_UINT8, Vehicle, cargo_type ),
-	OCL_SVAR( OC_TTD | OC_UINT16, Vehicle, this->Record().cargo_cap ),
-	OCL_SVAR( OC_TTO | OC_FILE_U8 | OC_VAR_U16, Vehicle, this->Record().cargo_cap ),
+	OCL_SVAR( OC_TTD | OC_UINT16, Vehicle, Record().cargo_cap ),
+	OCL_SVAR( OC_TTO | OC_FILE_U8 | OC_VAR_U16, Vehicle, Record().cargo_cap ),
 	OCL_VAR ( OC_TTD | OC_UINT16, 1, &_cargo_count ),
 	OCL_VAR ( OC_TTO | OC_FILE_U8 | OC_VAR_U16, 1, &_cargo_count ),
 	OCL_VAR (  OC_UINT8, 1,       &_cargo_source ),
 	OCL_VAR (  OC_UINT8, 1,       &_cargo_periods ),
 
-	OCL_SVAR( OC_TTO | OC_UINT8, Vehicle, this->Record().tick_counter ),
+	OCL_SVAR( OC_TTO | OC_UINT8, Vehicle, Record().tick_counter ),
 
 	OCL_SVAR( OC_FILE_U16 | OC_VAR_U32, Vehicle, age ),
 	OCL_SVAR( OC_FILE_U16 | OC_VAR_U32, Vehicle, max_age ),
 	OCL_SVAR( OC_FILE_U8 | OC_VAR_I32, Vehicle, build_year ),
 	OCL_SVAR( OC_FILE_U8 | OC_VAR_U16, Vehicle, unitnumber ),
 
-	OCL_SVAR( OC_TTD | OC_UINT16, Vehicle, this->GetEngineType() ),
-	OCL_SVAR( OC_TTO | OC_FILE_U8 | OC_VAR_U16, Vehicle, this->GetEngineType() ),
+	OCL_SVAR( OC_TTD | OC_UINT16, Vehicle, Record().engine_type ),
+	OCL_SVAR( OC_TTO | OC_FILE_U8 | OC_VAR_U16, Vehicle, Record().engine_type ),
 
 	OCL_SVAR(  OC_UINT8, Vehicle, spritenum ),
-	OCL_SVAR(  OC_UINT8, Vehicle, this->Record().day_counter ),
+	OCL_SVAR(  OC_UINT8, Vehicle, Record().day_counter ),
 
 	OCL_SVAR(  OC_UINT8, Vehicle, breakdowns_since_last_service ),
-	OCL_SVAR(  OC_UINT8, Vehicle, this->Record().breakdown_ctr ),
+	OCL_SVAR(  OC_UINT8, Vehicle, Record().breakdown_ctr ),
 	OCL_SVAR(  OC_UINT8, Vehicle, breakdown_delay ),
 	OCL_SVAR(  OC_UINT8, Vehicle, breakdown_chance ),
 
@@ -1412,7 +1415,7 @@ bool LoadOldVehicle(LoadgameState &ls, int num)
 			DisasterVehicle::From(v)->State() = UnpackOldOrder(_old_order).GetDestination().value;
 		}
 
-		v->next = (Vehicle *)(size_t)_old_next_ptr;
+		v->Record().next = reinterpret_cast<OpenTTDVehicle *>(static_cast<size_t>(_old_next_ptr));
 
 		if (_cargo_count != 0 && CargoPacket::CanAllocateItem()) {
 			StationID source =    (_cargo_source == 0xFF) ? StationID::Invalid() : StationID{_cargo_source};
