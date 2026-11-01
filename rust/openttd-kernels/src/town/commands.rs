@@ -73,7 +73,6 @@ pub struct CommandServices {
     pub delete_storage: extern "C" fn(*mut TownHandle, usize),
     pub clear_storage: extern "C" fn(*mut TownHandle),
     pub delete_inspect: extern "C" fn(u16),
-    pub dirty_screen: extern "C" fn(),
     pub assertions: bool,
     pub too_many_objects: u32,
     pub no_statue_place: u32,
@@ -811,7 +810,7 @@ pub unsafe extern "C" fn openttd_rust_town_destruct(s: &CommandServices, t: Town
             crate::source_type::Source::TOWN,
         );
     }
-    (s.dirty_screen)();
+    (unsafe { &*(*s.founding).shared }.screen_dirty)();
     w::hit(w::TOWN_COMMAND_DESTRUCT);
 }
 #[unsafe(no_mangle)]
@@ -892,7 +891,6 @@ crate::abi::layouts! {
         delete_storage,
         clear_storage,
         delete_inspect,
-        dirty_screen,
         assertions,
         too_many_objects,
         no_statue_place,

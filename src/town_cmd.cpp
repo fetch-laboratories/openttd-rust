@@ -865,7 +865,6 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 		.delete_storage = [](Town *town, size_t index) noexcept { delete town->psa_list[index]; },
 		.clear_storage = [](Town *town) noexcept { town->psa_list.clear(); },
 		.delete_inspect = OpenTTDDeleteTownInspect,
-		.dirty_screen = RustScreenDirty,
 #ifdef WITH_ASSERT
 		.assertions = true,
 #else

@@ -180,7 +180,6 @@ const OpenTTDGlobalVariableServices &GetRustGlobalVariableServices() noexcept
 	static const OpenTTDGlobalVariableServices services{
 		.climate = OpenTTDLandscapeValue,
 		.disable_elrails = RustDisableElrails,
-		.file_version = RustGRFFileVersion,
 		.height_limit = RustMapHeightLimit,
 		.misc_bits = RustGRFMiscBits,
 		.newgrf_version = RustNewGRFVersion,

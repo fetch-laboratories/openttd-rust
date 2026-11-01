@@ -61,7 +61,6 @@ pub struct Services {
     aircraft_subtype: extern "C" fn(E) -> u8,
     pub(crate) rail_kind: extern "C" fn(E) -> RailVehicleTypes,
     pub(crate) grf: extern "C" fn(E) -> *const c_void,
-    version: extern "C" fn(*const c_void) -> u8,
     pub(crate) loading: extern "C" fn() -> *const crate::engine_loading::Services,
     cargo_classes: extern "C" fn(u8) -> u16,
     multiplier: extern "C" fn(u8) -> u16,
@@ -70,14 +69,13 @@ pub struct Services {
     destroy_temporary: extern "C" fn(V),
     set_engine: extern "C" fn(V, u16),
     set_owner: extern "C" fn(V, u8),
-    current_company: extern "C" fn() -> u8,
     vehicle_engine: extern "C" fn(V) -> u16,
     vehicle_engine_object: extern "C" fn(V) -> E,
     vehicle_cargo: extern "C" fn(V) -> u8,
     vehicle_subtype: extern "C" fn(V) -> u8,
     has_articulated: extern "C" fn(V) -> bool,
     next_articulated: extern "C" fn(V) -> V,
-    check: extern "C" fn(bool),
+    pub(crate) shared: &'static crate::services::Services,
     assertions: bool,
     pub(crate) aircraft_cost: extern "C" fn(E) -> u8,
     pub(crate) aircraft_range: extern "C" fn(E) -> u16,
@@ -148,7 +146,10 @@ pub unsafe extern "C" fn openttd_rust_engine_capacity(
 ) -> u32 {
     unsafe {
         if s.assertions {
-            (s.check)(v.is_null() || (s.id)(e) == (s.vehicle_engine)(v));
+            crate::movement::native_assert(
+                s.shared,
+                v.is_null() || (s.id)(e) == (s.vehicle_engine)(v),
+            );
         }
         if !mail.is_null() {
             mail.write(0);
@@ -310,14 +311,17 @@ pub(crate) unsafe fn openttd_rust_articulated_next(
 ) -> u16 {
     unsafe {
         if s.assertions {
-            (s.check)(v.is_null() || (s.vehicle_engine)(v) == engine);
+            crate::movement::native_assert(
+                s.shared,
+                v.is_null() || (s.vehicle_engine)(v) == engine,
+            );
         }
         let e = (s.engine)(engine);
         let mut result = callback(s, CBID_VEHICLE_ARTIC_ENGINE.0, index, engine, v);
         if result == CALLBACK_FAILED {
             return INVALID_ENGINE;
         }
-        if (s.version)((s.grf)(e)) < 8 {
+        if (s.shared.grf_file_version)((s.grf)(e)) < 8 {
             result = gb(u32::from(result), 0, 8) as u16;
             if result == 0xff {
                 return INVALID_ENGINE;
@@ -362,7 +366,7 @@ pub unsafe extern "C" fn openttd_rust_articulated_count(
         } else {
             let v = (s.new_temporary)();
             (s.set_engine)(v, engine);
-            (s.set_owner)(v, (s.current_company)());
+            (s.set_owner)(v, (s.shared.current_company)());
             v
         };
         let mut i = 1;
@@ -579,9 +583,9 @@ crate::abi::layouts! {
     "OpenTTDEngineCapabilitiesServices" ["probe"] => Services {
         resolver, engine, engine_if_valid, kind, ground, id, default_cargo, callbacks, carrying, capacity_config, refit_mask,
         ship_capacity, passenger_capacity, mail_capacity, train_class, aircraft_subtype, rail_kind,
-        grf, version, loading, cargo_classes, multiplier, pool_available,
-        new_temporary, destroy_temporary, set_engine, set_owner, current_company, vehicle_engine,
-        vehicle_engine_object, vehicle_cargo, vehicle_subtype, has_articulated, next_articulated, check, assertions, aircraft_cost, aircraft_range, aircraft_running, life_extension, life_years, price_shift, road_cost, road_price, road_running, ship_cost, ship_running, train_cost, train_price, train_running, valid_string,
+        grf, loading, cargo_classes, multiplier, pool_available,
+        new_temporary, destroy_temporary, set_engine, set_owner, vehicle_engine,
+        vehicle_engine_object, vehicle_cargo, vehicle_subtype, has_articulated, next_articulated, shared, assertions, aircraft_cost, aircraft_range, aircraft_running, life_extension, life_years, price_shift, road_cost, road_price, road_running, ship_cost, ship_running, train_cost, train_price, train_running, valid_string,
     };
 }
 
@@ -603,7 +607,7 @@ pub unsafe extern "C" fn openttd_rust_engine_life_days(s: &Services, e: E) -> i3
         .wrapping_mul(crate::timer_game_common::DAYS_IN_LEAP_YEAR)
 }
 unsafe fn invalid_kind(s: &Services) -> ! {
-    unsafe { ((*((s.resolver)())).shared.not_reached)() };
+    (s.shared.not_reached)();
     std::process::abort()
 }
 /// `Engine::GetRange` narrows the live property result to `uint16_t`.

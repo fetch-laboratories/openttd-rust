@@ -17,7 +17,7 @@ const OpenTTDStationDefinitionServices &GetStationDefinitionServices() noexcept
 		.empty_string = STR_EMPTY,
 		.cargo = &GetAct3CargoServices(),
 		.reader = &GetRustByteReaderServices(),
-		.file_version = RustGRFFileVersion,
+		.shared = &GetRustSharedServices(),
 		.station_resize = [](GRFFile *file, uint32_t count) noexcept -> void { file->stations.resize(count); },
 		.station_count = [](const GRFFile *file) noexcept -> size_t { return file->stations.size(); },
 		.station_get = [](GRFFile *file, uint32_t id) noexcept -> StationSpec * { return id < file->stations.size() ? file->stations[id].get() : nullptr; },

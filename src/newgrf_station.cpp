@@ -84,13 +84,9 @@ const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
 			return OpenTTDStationReseed{object.GetReseedSum(), object.GetUsedRandomTriggers().base()};
 		},
 		.resolve_callback = RustEvaluateStationCallback,
-		.file_version = RustGRFFileVersion,
 		.company = RustCompanyInfo,
 		.spec_file = RustSpecGRFFile<StationSpec>,
-		.nearby = RustSignedNearbyTile,
 		.nearby_station = RustNearbyStationTile,
-		.nearby_info = RustNearbyTileInformation,
-		.terrain = RustTerrainType,
 		.badges = RustSpecBadges<StationSpec>,
 
 		.build_date = RustStationBuildDate<BaseStation>,

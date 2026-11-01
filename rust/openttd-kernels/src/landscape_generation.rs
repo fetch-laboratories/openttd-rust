@@ -114,9 +114,14 @@ pub struct GenerationServices {
     pub set_height: extern "C" fn(u32, u32),
     pub inner_tile: extern "C" fn(u32) -> bool,
     pub make_void: extern "C" fn(u32),
-    pub screen_dirty: extern "C" fn(),
     pub set_freeform: extern "C" fn(bool),
     pub clear_bridge_middle: extern "C" fn(u32),
+}
+impl GenerationServices {
+    fn shared(&self) -> &Services {
+        // SAFETY: Production tables hold the process-lifetime shared table.
+        unsafe { &*self.shared }
+    }
 }
 pub(crate) struct World<'a> {
     pub(crate) a: &'a GenerationServices,
@@ -243,7 +248,7 @@ impl World<'_> {
             }
         }
         self.fix_slopes(max_height);
-        (self.a.screen_dirty)();
+        (self.a.shared().screen_dirty)();
     }
     fn greyscale(&self, image: &Image, rotation: u8, freeform: bool, heightmap_height: u8) {
         const DIV: u32 = 16384;
@@ -287,8 +292,8 @@ impl World<'_> {
                     } else {
                         (col - col_pad) * DIV / scale
                     };
-                    (self.a.assert_condition)(img_row < image.height);
-                    (self.a.assert_condition)(img_col < image.width);
+                    crate::movement::native_assert(self.a.shared(), img_row < image.height);
+                    crate::movement::native_assert(self.a.shared(), img_col < image.width);
                     let mut level =
                         u32::from(image.map[(img_row * image.width + img_col) as usize]);
                     if level > 0 {
@@ -331,7 +336,7 @@ impl World<'_> {
         self.greyscale(&image, rotation, freeform, heightmap_height);
         self.fix_slopes(max_height);
         (self.a.set_freeform)(!crate::landscape::surrounded_by_water(self.s));
-        (self.a.screen_dirty)();
+        (self.a.shared().screen_dirty)();
         true
     }
 }
@@ -444,7 +449,10 @@ impl World<'_> {
         }
         let direction = ((r >> 22) & 3) as u8;
         let (mut width, mut height) = (template.width, template.height);
-        if diag_dir_to_axis(direction, |ok| (self.a.assert_condition)(ok)) == AXIS_Y {
+        if diag_dir_to_axis(direction, |ok| {
+            crate::movement::native_assert(self.a.shared(), ok);
+        }) == AXIS_Y
+        {
             std::mem::swap(&mut width, &mut height);
         }
         if flag & 4 != 0 {
@@ -722,7 +730,10 @@ impl World<'_> {
         true
     }
     fn flows_down(&self, begin: u32, end: u32) -> bool {
-        (self.a.assert_condition)(self.map.distance_manhattan(begin, end) == 1);
+        crate::movement::native_assert(
+            self.a.shared(),
+            self.map.distance_manhattan(begin, end) == 1,
+        );
         let last = (self.s.tile_slope_z)(end);
         if last.slope.0 != SLOPE_FLAT && !is_inclined_slope(last.slope.0) {
             return false;
@@ -979,7 +990,10 @@ impl World<'_> {
                     }
                 }
                 _ => {
-                    (self.a.assert_condition)(g.sea != CUSTOM_SEA_LEVEL_NUMBER_DIFFICULTY);
+                    crate::movement::native_assert(
+                        self.a.shared(),
+                        g.sea != CUSTOM_SEA_LEVEL_NUMBER_DIFFICULTY,
+                    );
                     let amount =
                         (r & 127) + 3_u32.wrapping_sub(u32::from(g.sea)).wrapping_mul(256) + 100;
                     for _ in 0..self.map.scale_by_size(self.size_y, amount) {
@@ -990,12 +1004,12 @@ impl World<'_> {
         }
         // No progress/redraw may observe the still-invalid source slopes.
         self.fix_slopes(g.height_limit);
-        (self.a.screen_dirty)();
+        (self.a.shared().screen_dirty)();
         if !(self.a.increase_progress)(frame, GWP_LANDSCAPE) {
             return false;
         }
         self.convert_ground_water();
-        (self.a.screen_dirty)();
+        (self.a.shared().screen_dirty)();
         if !(self.a.increase_progress)(frame, GWP_LANDSCAPE) {
             return false;
         }
@@ -1082,7 +1096,7 @@ impl World<'_> {
                 self.terraform(tile, complement_slope(current), true, F::EXECUTE | F::AUTO);
             } else if is_inclined_slope(desired) {
                 let direction = reverse_diag_dir(get_inclined_slope_direction(desired), |ok| {
-                    (self.a.assert_condition)(ok);
+                    crate::movement::native_assert(self.a.shared(), ok);
                 });
                 for diff in DIAGDIRDIFF_SAME..DIAGDIRDIFF_END {
                     if diff == DIAGDIRDIFF_SAME || diff == DIAGDIRDIFF_REVERSE {
@@ -1112,7 +1126,9 @@ impl World<'_> {
             let upstream = self.map.add_diag(tile, direction);
             let downstream = self.map.add_diag(
                 tile,
-                reverse_diag_dir(direction, |ok| (self.a.assert_condition)(ok)),
+                reverse_diag_dir(direction, |ok| {
+                    crate::movement::native_assert(self.a.shared(), ok);
+                }),
             );
             if !self.valid(upstream) || !self.valid(downstream) {
                 return;
@@ -1239,7 +1255,10 @@ impl<'a, 'w> RiverBuilder<'a, 'w> {
         node.estimate = node
             .cost
             .wrapping_add(self.world.map.distance_manhattan(self.end, node.get_tile()) as i32);
-        (self.world.a.assert_condition)(node.estimate >= self.nodes[node.parent.unwrap()].estimate);
+        crate::movement::native_assert(
+            self.world.a.shared(),
+            node.estimate >= self.nodes[node.parent.unwrap()].estimate,
+        );
     }
     fn add_new_node(&mut self, mut node: RiverNode) {
         Self::node_cache_fetch(&mut node);
@@ -1336,6 +1355,6 @@ crate::abi::layouts! {
     "OpenTTDGenerationLoop" ["landscape"] => crate::landscape_generation::Loop {settings,services,};
     "OpenTTDLandscapeGenerationSettings" ["landscape"] => crate::landscape_generation::Settings {max_search_nodes,climate,generator,rivers,min_river_length,route_random,terrain,sea,snow_coverage,desert_coverage,tree_placer,height_limit,rotation,heightmap_height,freeform,};
     "OpenTTDLandscapeGenerationServices" ["landscape"] => crate::landscape_generation::GenerationServices {
-        shared, clear, water, trees, landscape_commands, water_commands, set_progress, increase_progress, begin_loop, end_loop, tgp_settings, terrain_template, flat_height, river, set_snow_line, river_debug, assert_condition, sea_construct, sea_destroy, sea_insert, sea_contains, sea_size, sea_first, sea_next, set_height, inner_tile, make_void, screen_dirty, set_freeform, clear_bridge_middle,
+        shared, clear, water, trees, landscape_commands, water_commands, set_progress, increase_progress, begin_loop, end_loop, tgp_settings, terrain_template, flat_height, river, set_snow_line, river_debug, assert_condition, sea_construct, sea_destroy, sea_insert, sea_contains, sea_size, sea_first, sea_next, set_height, inner_tile, make_void, set_freeform, clear_bridge_middle,
     };
 }

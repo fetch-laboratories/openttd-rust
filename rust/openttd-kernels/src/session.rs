@@ -96,7 +96,6 @@ pub struct Services {
     pub window_tick: extern "C" fn(),
     pub check_caches: extern "C" fn(),
     pub reset_engine_overrides: extern "C" fn(),
-    pub dirty: extern "C" fn(),
     pub reload_config: extern "C" fn() -> bool,
     pub reset_grf: extern "C" fn(bool),
     pub autosave_frequency: extern "C" fn(bool),
@@ -373,7 +372,7 @@ impl Session<'_> {
         }
         (s.check_engines)();
         (s.check_industries)();
-        (s.dirty)();
+        (unsafe { &*s.shared }.screen_dirty)();
         Ok(())
     }
     fn new_game(&self, heightmap: bool, reset: bool) -> Outcome {
@@ -525,7 +524,7 @@ impl Session<'_> {
                 set_mode(GameMode::EDITOR);
                 self.sized_world(crate::genworld::Mode(crate::genworld::GWM_HEIGHTMAP), true)?;
                 (s.generate_id)();
-                (s.dirty)();
+                (unsafe { &*s.shared }.screen_dirty)();
                 (s.social_mode)(GameMode::EDITOR);
             }
             SwitchMode::LOAD_SCENARIO => {
@@ -573,7 +572,7 @@ impl Session<'_> {
             SwitchMode::GENRANDLAND => {
                 crate::company::set_local_company(unsafe { &*s.company }, CompanyID::NONE);
                 self.sized_world(crate::genworld::GWM_RANDOM, true)?;
-                (s.dirty)();
+                (unsafe { &*s.shared }.screen_dirty)();
             }
             _ => (unsafe { &*s.shared }.not_reached)(),
         }
@@ -916,7 +915,6 @@ crate::abi::layouts! {
         window_tick,
         check_caches,
         reset_engine_overrides,
-        dirty,
         reload_config,
         reset_grf,
         autosave_frequency,
