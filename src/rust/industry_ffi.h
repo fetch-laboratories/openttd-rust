@@ -144,7 +144,6 @@ typedef struct OpenTTDIndustryServices {
 	const OpenTTDEnvironmentServices *environment;
 	/* Farm fields and lumber mills. */
 	OpenTTDIndustryFarmTile (*farm_tile)(uint32_t tile) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(farm_tile);
-	uint8_t (*snow_line)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(snow_line);
 	void (*make_field)(uint32_t tile, uint8_t field_type, uint8_t counter, uint16_t industry) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(make_field);
 	bool (*fence_wanted)(uint32_t tile, uint8_t side) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(fence_wanted);
 	bool (*tile_completed)(void *industry, uint32_t tile) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(tile_completed);
@@ -415,7 +414,6 @@ typedef struct OpenTTDIndustryTransactionServices {
 	uint32_t (*population)(const OpenTTDTownHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(population);
 	uint32_t (*town_position)(const OpenTTDTownHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(town_position);
 	OpenTTDIndustryShell * (*industry)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(industry);
-	uint8_t (*highest_snow_line)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(highest_snow_line);
 	uint32_t (*edge_distance)(uint32_t, uint8_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(edge_distance);
 	uint8_t (*refinery_limit)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(refinery_limit);
 	uint32_t (*tile_height)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(tile_height);

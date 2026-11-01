@@ -161,7 +161,6 @@ struct OpenTTDGrfLoadingServices {
 	const OpenTTDRoadStopClassServices *roadstop_classes;
 	void (*reset_water_features)() noexcept OPENTTD_SERVICE_DEFAULT(reset_water_features);
 	void (*reset_faces)() noexcept OPENTTD_SERVICE_DEFAULT(reset_faces);
-	void (*clear_snowline)() noexcept OPENTTD_SERVICE_DEFAULT(clear_snowline);
 	void (*reset_files)() noexcept OPENTTD_SERVICE_DEFAULT(reset_files);
 	void (*reset_loaded_features)() noexcept OPENTTD_SERVICE_DEFAULT(reset_loaded_features);
 	void (*initialize_sounds)() noexcept OPENTTD_SERVICE_DEFAULT(initialize_sounds);

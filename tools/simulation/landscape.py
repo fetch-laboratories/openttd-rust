@@ -384,6 +384,26 @@ def check(scenario, run, mode, role, result):
             raise RuntimeError(
                 "missing successful heightmap landscape/climate/river progress"
             )
+        borders = [
+            line.split() for line in lines if line.startswith("GENERATION border ")
+        ]
+        keys = [
+            (str(edges).lower(), str(case))
+            for edges in (False, True)
+            for case in range(10)
+        ]
+        if len(borders) != len(keys):
+            raise RuntimeError("missing or duplicate water border observations")
+        for fields, key in zip(borders, keys, strict=True):
+            if (
+                len(fields) != 11
+                or tuple(fields[2:4]) != key
+                or fields[4:6]
+                != [str(1 << scenario["map_log2"]), str(1 << scenario["map_log2_y"])]
+                or fields[6] != str(key[1] == "0").lower()
+                or any(not 0 <= int(v) <= 0xFFFFFFFF for v in fields[7:])
+            ):
+                raise RuntimeError("water border dimensions/result/RNG payload differs")
         check_heightmap_inputs(lines)
         # The two outer missing-file loads also report their decoded errors.
         expected_errors = 2 + sum(

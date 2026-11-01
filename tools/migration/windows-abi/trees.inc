@@ -24,7 +24,6 @@ static const OpenTTDTreeServices tree_probe_services{
 	.tree_observation = [](uint32_t) noexcept { return tree_probe.tree; },
 	.tree_count = [](uint32_t) noexcept { return uint32_t{tree_probe.tree.count}; },
 	.clear_observation = [](uint32_t) noexcept { return OpenTTDTreeClearObservation{.count = tree_probe.tree.count, .species = tree_probe.tree.species}; },
-	.snow_line = TreeUnused<uint8_t>,
 	.sin = [](float value) noexcept { return value; },
 	.cos = [](float value) noexcept { return value; },
 	.make_tree = [](uint32_t tile, uint8_t type, uint32_t count, uint8_t growth, uint8_t ground, uint32_t density) noexcept {

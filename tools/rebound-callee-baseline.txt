@@ -10,7 +10,6 @@ forwarded | src/industry_cmd.cpp | generating = GetRustSharedServices().clear_sq
 forwarded | src/industry_cmd.cpp | magic_bulldozer = GetRustTownAuthorityServices().bulldozer
 forwarded | src/industry_cmd.cpp | serve_neutral = GetRustSharedServices().station_serve_neutral
 forwarded | src/industry_cmd.cpp | set_frame = GetRustSharedServices().tile_animation_set_frame
-forwarded | src/industry_cmd.cpp | snow_line = GetRustSharedServices().snow_line
 forwarded | src/landscape.cpp | exchange_generating = GetRustTownFoundingServices().exchange_generating
 forwarded | src/landscape.cpp | lock_direction = GetRustWaterCommandServices().lock_direction
 forwarded | src/landscape.cpp | owned_land = GetRustRailGroundServices().owned_land
@@ -50,9 +49,7 @@ forwarded | src/rust/vehicle_properties_services.hpp | train_class = GetRustEngi
 forwarded | src/station_cmd.cpp | next_vehicle = GetRustVehicleServices().next
 forwarded | src/town_cmd.cpp | generating_world = GetRustSharedServices().clear_square_services.generating_world
 forwarded | src/town_cmd.cpp | next_town = GetRustSharedServices().town_next_id
-forwarded | src/town_cmd.cpp | snow_line = GetRustSharedServices().snow_line
 forwarded | src/townname.cpp | utf8_length = GetRustSharedServices().utf8_length
-forwarded | src/tree_cmd.cpp | snow_line = GetRustSharedServices().snow_line
 rebound | Engine_next | src/rust/engine_adapter.hpp | next
 rebound | Engine_next | src/rust/engine_adapter.hpp | next | 2
 rebound | Engine_next | src/rust/engine_loading_services.hpp | next
@@ -93,8 +90,6 @@ rebound | OpenTTDEditor | src/rust/services.cpp | editor
 rebound | OpenTTDFreeformEdges | src/genworld.cpp | freeform
 rebound | OpenTTDFreeformEdges | src/landscape.cpp | freeform_edges
 rebound | OpenTTDFreeformEdges | src/rust/services.cpp | freeform_edges
-rebound | OpenTTDHighestSnowLine | src/industry_cmd.cpp | highest_snow_line
-rebound | OpenTTDHighestSnowLine | src/town_cmd.cpp | highest_snow_line
 rebound | OpenTTDIsDockingTile | src/rust/services.cpp | docking
 rebound | OpenTTDIsDockingTile | src/rust/services.cpp | docking_tile
 rebound | OpenTTDIsTileFlat | src/rust/station_command_services.hpp | tile_flat

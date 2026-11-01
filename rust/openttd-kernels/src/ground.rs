@@ -298,7 +298,7 @@ pub(crate) unsafe fn clear_tile_loop(
     if climate == 1 {
         let k = crate::tile_map::get_tile_z(map, tile, size_x, map.count() / size_x)
             .unwrap_or_else(|| (s.tile_z)(tile))
-            - i32::from((s.snow_line)())
+            - i32::from(crate::snow_line::get(s))
             + 1;
         if !crate::clear_map::is_snow_tile(map, tile).unwrap_or_else(|| (c.snow)(tile)) {
             if k >= 0 {
@@ -544,7 +544,7 @@ pub(crate) unsafe fn rail_tile_loop(
         } else if ground.slope.0 != 0 {
             ground.z += 1;
         }
-        let snow = i32::from((s.snow_line)());
+        let snow = i32::from(crate::snow_line::get(s));
         if ground.z > snow {
             new = Some(if half && ground.z - snow == 1 { 14 } else { 12 });
         }
@@ -612,7 +612,7 @@ pub(crate) unsafe fn tunnel_tile_loop(
     let (t, s) = unsafe { (&*tunnel, &*shared) };
     if climate == 1 {
         let ground = (t.snow)(tile);
-        let snow = ground.z > i32::from((s.snow_line)());
+        let snow = ground.z > i32::from(crate::snow_line::get(s));
         if ground.snow != snow {
             (t.set_snow_or_desert)(tile, !ground.snow);
             hit(Witness::TunnelGround);
@@ -678,7 +678,7 @@ pub(crate) unsafe fn road_tile_loop(
     if climate == 1 {
         let flat = crate::movement::foundation_slope(s, tile).slope.0 == 0;
         let ground = (r.snow)(tile, flat);
-        if ground.snow != (ground.z > i32::from((s.snow_line)())) {
+        if ground.snow != (ground.z > i32::from(crate::snow_line::get(s))) {
             (r.toggle_snow_or_desert)(tile);
             (s.mark_dirty)(tile);
         }

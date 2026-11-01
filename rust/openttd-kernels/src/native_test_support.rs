@@ -343,6 +343,16 @@ pub unsafe extern "C" fn openttd_test_town_data_target(
     unsafe { &*services }.target(rotation, x, y).0
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_test_map_surrounded_by_water(s: &crate::services::Services) -> bool {
+    crate::landscape::surrounded_by_water(s)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_test_snow_line_highest(s: &crate::services::Services) -> u8 {
+    crate::snow_line::highest(s)
+}
+
 /// # Safety
 /// Every station, road vehicle and service table is live and serialized throughout these probes.
 #[unsafe(no_mangle)]

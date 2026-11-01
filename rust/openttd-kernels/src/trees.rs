@@ -230,7 +230,6 @@ pub struct TreeServices {
     pub tree_observation: extern "C" fn(u32) -> TreeObservation,
     pub tree_count: extern "C" fn(u32) -> u32,
     pub clear_observation: extern "C" fn(u32) -> ClearObservation,
-    pub snow_line: extern "C" fn() -> u8,
     pub sin: extern "C" fn(f32) -> f32,
     pub cos: extern "C" fn(f32) -> f32,
     pub make_tree: extern "C" fn(u32, u8, u32, u8, u8, u32),
@@ -550,7 +549,7 @@ impl Trees<'_> {
         }
         let ht = (self.s.tile_z)(tile);
         let mut j = (self.s.tile_z)(tile).wrapping_mul(2);
-        if g.climate == ARCTIC && ht > i32::from((self.t.snow_line)()) {
+        if g.climate == ARCTIC && ht > i32::from(crate::snow_line::get(self.s)) {
             j = j.wrapping_mul(3);
         }
         if g.height_limit > MAP_HEIGHT_LIMIT_ORIGINAL {
@@ -675,7 +674,7 @@ impl Trees<'_> {
                 crate::tile_map::get_tile_z(map, tile, s.size_x, map.count() / s.size_x)
             })
             .unwrap_or_else(|| (self.s.tile_z)(tile))
-            .wrapping_sub(i32::from((self.t.snow_line)()))
+            .wrapping_sub(i32::from(crate::snow_line::get(self.s)))
             .wrapping_add(1);
         if k < 0 {
             match self.ground(tile) {
@@ -1285,7 +1284,7 @@ crate::abi::layouts! {
         tree_observation,
         tree_count,
         clear_observation,
-        snow_line,
+
         sin,
         cos,
         make_tree,
@@ -1375,7 +1374,6 @@ mod tests {
         Progress,
         Total(u32),
         TileZ,
-        Snow,
         Plant,
         Tree,
         Count,
@@ -1438,6 +1436,10 @@ mod tests {
     fn shared() -> Services {
         crate::map_func::fixture::set(water_map(), 6);
         Services {
+            snow_line_support: crate::snow_line::Support {
+                height: &4,
+                ..crate::services::fixture(std::ptr::null_mut(), random, industry).snow_line_support
+            },
             tile_z,
             mark_dirty: dirty,
             set_tropic_zone: set_zone,
@@ -1475,10 +1477,6 @@ mod tests {
             count: u32::from(w.tree.count),
             species: w.tree.species,
         })
-    }
-    extern "C" fn snow_line() -> u8 {
-        log(Event::Snow);
-        4
     }
     extern "C" fn trig(value: f32) -> f32 {
         value
@@ -1661,7 +1659,7 @@ mod tests {
         tree_observation,
         tree_count,
         clear_observation,
-        snow_line,
+
         sin: trig,
         cos: trig,
         make_tree,
@@ -1860,7 +1858,7 @@ mod tests {
     }
 
     #[test]
-    fn arctic_loop_reads_height_and_snow_line_once() {
+    fn arctic_loop_uses_configured_snow_line() {
         reset(World {
             tree: TreeObservation {
                 ground: GROUND_SNOW_DESERT,
@@ -1886,7 +1884,6 @@ mod tests {
             [
                 Event::Tree,
                 Event::TileZ,
-                Event::Snow,
                 Event::Tree,
                 Event::Tree,
                 Event::Draw,

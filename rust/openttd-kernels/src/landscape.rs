@@ -8,6 +8,38 @@
 use crate::slope_func::{get_slope_max_pixel_z, is_halftile_slope};
 use crate::tile_type::{TILE_HEIGHT, TILE_SIZE};
 
+/// Original ordered `IsMapSurroundedByWater` scan, including duplicate corners.
+pub(crate) fn scan_water_edges(
+    width: u32,
+    height: u32,
+    mut slope: impl FnMut(u32, u32) -> (u8, i32),
+) -> bool {
+    let mut check = |x, y| {
+        let (slope, h) = slope(x, y);
+        slope == crate::slope_func::SLOPE_FLAT && h == 0
+    };
+    if !check(0, 0) || !check(0, height) || !check(width, 0) || !check(width, height) {
+        return false;
+    }
+    for x in 0..=width {
+        if !check(x, 0) || !check(x, height) {
+            return false;
+        }
+    }
+    for y in 1..height {
+        if !check(0, y) || !check(width, y) {
+            return false;
+        }
+    }
+    true
+}
+pub(crate) fn surrounded_by_water(s: &crate::services::Services) -> bool {
+    let w = crate::map_func::World::new(s);
+    scan_water_edges(w.dimensions.size_x(), w.size_y(), |x, y| {
+        w.tile_pixel_slope_outside_map(x.cast_signed(), y.cast_signed())
+    })
+}
+
 /// `landscape.h::ApplyPixelFoundationToSlope`, using the canonical native
 /// `ApplyFoundationToSlope` leaf and preserving unsigned pixel multiplication.
 #[inline]
@@ -151,3 +183,39 @@ pub(super) fn partial_pixel_z(x: i32, y: i32, corners: u8) -> Option<u32> {
 
 /// Original `TILE_UPDATE_FREQUENCY` in landscape.cpp.
 pub(crate) const TILE_UPDATE_FREQUENCY: u32 = 256;
+
+#[cfg(test)]
+mod water_edges_tests {
+    #[test]
+    fn visits_duplicates_in_original_order_and_stops_at_each_failure() {
+        // Independent literal stream for a 2 by 3 map, including repeated corners.
+        let expected = [
+            (0, 0),
+            (0, 3),
+            (2, 0),
+            (2, 3),
+            (0, 0),
+            (0, 3),
+            (1, 0),
+            (1, 3),
+            (2, 0),
+            (2, 3),
+            (0, 1),
+            (2, 1),
+            (0, 2),
+            (2, 2),
+        ];
+        for failure in 0..=expected.len() {
+            for bad in [(1, 0), (0, 8)] {
+                let mut observed = Vec::new();
+                let success = super::scan_water_edges(2, 3, |x, y| {
+                    let index = observed.len();
+                    observed.push((x, y));
+                    if index == failure { bad } else { (0, 0) }
+                });
+                assert_eq!(success, failure == expected.len());
+                assert_eq!(observed, expected[..(failure + 1).min(expected.len())]);
+            }
+        }
+    }
+}

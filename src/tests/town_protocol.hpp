@@ -58,12 +58,10 @@ static inline uint32_t TownProtocolIndustry(int32_t, int32_t, uint32_t *) noexce
 
 static inline uint32_t TownProtocol_map_log_x() noexcept { town_protocol_world->map_reads++; return 6; }
 static inline uint8_t TownProtocol_growth_rate() noexcept { return 2; }
-static inline uint8_t TownProtocol_snow_line() noexcept { return 0; }
 static inline bool TownProtocol_editor() noexcept { return false; }
 static inline bool TownProtocol_generating_world() noexcept { return false; }
 static inline bool TownProtocol_allow_crossings() noexcept { return false; }
 static inline uint8_t TownProtocol_climate() noexcept { return 0; }
-static inline uint8_t TownProtocol_highest_snow_line() noexcept { return 0; }
 static inline bool TownProtocol_allow_roads() noexcept { return false; }
 static inline uint8_t TownProtocol_road_flags(uint8_t) noexcept { return 0; }
 static inline OpenTTDTownHouseAvailability TownProtocol_house_availability(uint16_t) noexcept { return {.zones = 0xFFFF, .override_id = UINT16_MAX, .class_id = town_protocol_world->house_class, .probability = 1, .enabled = true}; }
@@ -164,12 +162,10 @@ static inline OpenTTDTownLeaves TownProtocolServices()
 	return {
 		.map_log_x = TownProtocol_map_log_x,
 		.growth_rate = TownProtocol_growth_rate,
-		.snow_line = TownProtocol_snow_line,
 		.environment = {.editor = TownProtocol_editor, .freeform_edges = TownProtocol_editor},
 		.generating_world = TownProtocol_generating_world,
 		.allow_crossings = TownProtocol_allow_crossings,
 		.climate = TownProtocol_climate,
-		.highest_snow_line = TownProtocol_highest_snow_line,
 		.allow_roads = TownProtocol_allow_roads,
 		.road_flags = TownProtocol_road_flags,
 		.house_availability = TownProtocol_house_availability,

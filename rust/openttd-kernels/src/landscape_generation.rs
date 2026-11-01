@@ -115,7 +115,6 @@ pub struct GenerationServices {
     pub inner_tile: extern "C" fn(u32) -> bool,
     pub make_void: extern "C" fn(u32),
     pub screen_dirty: extern "C" fn(),
-    pub surrounded_by_water: extern "C" fn() -> bool,
     pub set_freeform: extern "C" fn(bool),
     pub clear_bridge_middle: extern "C" fn(u32),
 }
@@ -331,7 +330,7 @@ impl World<'_> {
         });
         self.greyscale(&image, rotation, freeform, heightmap_height);
         self.fix_slopes(max_height);
-        (self.a.set_freeform)(!(self.a.surrounded_by_water)());
+        (self.a.set_freeform)(!crate::landscape::surrounded_by_water(self.s));
         (self.a.screen_dirty)();
         true
     }
@@ -1337,6 +1336,6 @@ crate::abi::layouts! {
     "OpenTTDGenerationLoop" ["landscape"] => crate::landscape_generation::Loop {settings,services,};
     "OpenTTDLandscapeGenerationSettings" ["landscape"] => crate::landscape_generation::Settings {max_search_nodes,climate,generator,rivers,min_river_length,route_random,terrain,sea,snow_coverage,desert_coverage,tree_placer,height_limit,rotation,heightmap_height,freeform,};
     "OpenTTDLandscapeGenerationServices" ["landscape"] => crate::landscape_generation::GenerationServices {
-        shared, clear, water, trees, landscape_commands, water_commands, set_progress, increase_progress, begin_loop, end_loop, tgp_settings, terrain_template, flat_height, river, set_snow_line, river_debug, assert_condition, sea_construct, sea_destroy, sea_insert, sea_contains, sea_size, sea_first, sea_next, set_height, inner_tile, make_void, screen_dirty, surrounded_by_water, set_freeform, clear_bridge_middle,
+        shared, clear, water, trees, landscape_commands, water_commands, set_progress, increase_progress, begin_loop, end_loop, tgp_settings, terrain_template, flat_height, river, set_snow_line, river_debug, assert_condition, sea_construct, sea_destroy, sea_insert, sea_contains, sea_size, sea_first, sea_next, set_height, inner_tile, make_void, screen_dirty, set_freeform, clear_bridge_middle,
     };
 }
