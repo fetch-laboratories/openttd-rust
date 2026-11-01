@@ -758,7 +758,6 @@ const OpenTTDLandscapeGenerationServices &GetRustLandscapeGenerationServices() n
 		.set_height = RustSetTileHeight,
 		.inner_tile = RustInnerTile,
 		.make_void = [](uint32_t t) noexcept { MakeVoid(TileIndex{t}); },
-		.screen_dirty = RustScreenDirty,
 		.set_freeform = RustSetFreeformEdges,
 		.clear_bridge_middle = RustClearBridgeMiddle,
 	};

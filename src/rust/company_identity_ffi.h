@@ -53,7 +53,6 @@ struct OpenTTDCompanyIdentityServices {
 	void (OPENTTD_RUST_CALL *president_windows)() noexcept OPENTTD_SERVICE_DEFAULT(president_windows);
 	void (OPENTTD_RUST_CALL *colour_windows)() noexcept OPENTTD_SERVICE_DEFAULT(colour_windows);
 	void (OPENTTD_RUST_CALL *object_colours)(Company *c) noexcept OPENTTD_SERVICE_DEFAULT(object_colours);
-	void (OPENTTD_RUST_CALL *dirty)() noexcept OPENTTD_SERVICE_DEFAULT(dirty);
 	void (OPENTTD_RUST_CALL *reset_colourmap)() noexcept OPENTTD_SERVICE_DEFAULT(reset_colourmap);
 	const OpenTTDEngine * (OPENTTD_RUST_CALL *engine)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(engine);
 	VehicleType (OPENTTD_RUST_CALL *engine_type)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_type);

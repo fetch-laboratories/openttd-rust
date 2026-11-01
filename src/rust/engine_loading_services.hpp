@@ -46,7 +46,6 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 		.set_old_refittable = RustSetEngineOldRefittable,
 		.cargo_next = [](uint32_t from) noexcept { for (const CargoSpec *cs : CargoSpec::Iterate(from)) return OpenTTDEngineCargoClass{.classes = RustCargoSpecClasses(cs), .cargo = cs->Index()}; return OpenTTDEngineCargoClass{.classes = 0, .cargo = INVALID_CARGO}; },
 		.cargo_map = RustGRFCargoMap,
-		.file_version = RustGRFFileVersion,
 		.cargo_list_size = [](const GRFFile *file) noexcept { return file->cargo_list.size(); },
 		.unknown_refit = RustUnknownCallbackResult,
 		.climate = OpenTTDLandscapeValue,

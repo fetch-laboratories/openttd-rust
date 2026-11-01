@@ -373,7 +373,6 @@ pub struct Services {
     pub story_page_next_owned: extern "C" fn(u8, u32) -> u32,
     pub delete_story_page: extern "C" fn(u32),
     pub change_window_owner: extern "C" fn(u8, u8),
-    pub mark_whole_screen_dirty: extern "C" fn(),
 }
 /// `SetLocalCompany`: team chat observes the old context before the assertion and assignment.
 pub(crate) fn set_local_company(s: &Services, company: crate::company_type::CompanyID) {
@@ -405,7 +404,7 @@ pub(crate) fn set_local_company(s: &Services, company: crate::company_type::Comp
         (windows.window_classes)(WC_COMPANY, 0);
         (s.close_construction_windows)();
     }
-    (s.identity.dirty)();
+    (s.identity.shared.screen_dirty)();
     (windows.window_classes)(WC_SIGN_LIST, -1);
     (windows.window_classes)(WC_GOALS_LIST, 0);
     (windows.window_classes)(WC_COMPANY_COLOUR, -1);
@@ -1433,7 +1432,7 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
         (s.change_window_owner)(old, new);
     }
     (f.set_current_company)(current);
-    (s.mark_whole_screen_dirty)();
+    (s.shared.screen_dirty)();
 }
 fn control(s: &Services, ownership: &crate::tile_owner::Context, c: &mut Control) -> bool {
     if c.stage == 0 {
@@ -2296,7 +2295,6 @@ crate::abi::layouts! {
         story_page_next_owned,
         delete_story_page,
         change_window_owner,
-        mark_whole_screen_dirty,
     };
     "OpenTTDCompanyRef" ["company_economy"] => CompanyRef {
         finances,

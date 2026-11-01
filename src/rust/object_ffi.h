@@ -62,9 +62,6 @@ struct OpenTTDObjectQueryServices {
 	int32_t (*date)(Object *) noexcept OPENTTD_SERVICE_DEFAULT(date);
 	uint8_t (*colour)(Object *) noexcept OPENTTD_SERVICE_DEFAULT(colour);
 	uint8_t (*view)(Object *) noexcept OPENTTD_SERVICE_DEFAULT(view);
-	uint32_t (*nearby)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(nearby);
-	uint32_t (*nearby_info)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(nearby_info);
-	uint32_t (*terrain)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terrain);
 	uint32_t (*badges)(const ResolverObject *, const ObjectSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(badges);
 	uint32_t (*grfid)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(grfid);
 	bool (*version8)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(version8);

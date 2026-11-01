@@ -6,6 +6,7 @@
 #include "newgrf_bytereader_ffi.h"
 #include "../newgrf_commons.h"
 struct StationSpec;
+struct OpenTTDSharedServices;
 struct RoadStopSpec;
 struct GRFFile;
 struct SpriteGroup;
@@ -17,7 +18,7 @@ struct OpenTTDStationDefinitionServices {
 	StringID empty_string;
 	const OpenTTDAct3CargoServices *cargo;
 	const OpenTTDByteReaderServices *reader;
-	uint8_t (*file_version)(const GRFFile *file) noexcept OPENTTD_SERVICE_DEFAULT(file_version);
+	const OpenTTDSharedServices *shared;
 	void (*station_resize)(GRFFile *file, uint32_t count) noexcept OPENTTD_SERVICE_DEFAULT(station_resize);
 	size_t (*station_count)(const GRFFile *file) noexcept OPENTTD_SERVICE_DEFAULT(station_count);
 	StationSpec * (*station_get)(GRFFile *file, uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(station_get);

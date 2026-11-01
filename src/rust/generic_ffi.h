@@ -28,7 +28,6 @@ struct OpenTTDGenericInvocation {
 struct OpenTTDGenericResult { const GRFFile *file; uint16_t result; };
 struct OpenTTDGenericServices {
 	const OpenTTDSharedServices *shared;
-	uint8_t (*version)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(version);
 	uint8_t (*cargo_map)(const GRFFile *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_map);
 	uint8_t (*cargo_bitnum)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_bitnum);
 	uint16_t (*industry_substitute)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_substitute);
@@ -36,7 +35,6 @@ struct OpenTTDGenericServices {
 	const OpenTTDSpriteGroupServices *common;
 	bool (*enabled)() noexcept OPENTTD_SERVICE_DEFAULT(enabled);
 	bool (*ambient)() noexcept OPENTTD_SERVICE_DEFAULT(ambient);
-	uint32_t (*terrain)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terrain);
 	WaterClass (*water_class)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(water_class);
 	void (*sound)(const GRFFile *, uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(sound);
 	void (*unsupported)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unsupported);

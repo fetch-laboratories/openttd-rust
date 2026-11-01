@@ -115,7 +115,7 @@ const OpenTTDFleetGroupServices &FleetGroupServices()
 		.vehicle_dirty = FleetGroup_vehicle_dirty,
 		.depot_dirty = RustVehicleDirtyDepotOpaque,
 		.close_replace = FleetGroup_close_replace,
-		.screen_dirty = RustScreenDirty,
+		.shared = &GetRustSharedServices(),
 		.list_generate = FleetGroup_list_generate,
 		.list_size = FleetGroup_list_size,
 		.list_at = FleetGroup_list_at,

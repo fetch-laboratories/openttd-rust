@@ -475,7 +475,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.sign_next_owned = Co_sign_next_owned, .set_sign_owner = Co_set_sign_owner,
 		.goal_next_owned = Co_goal_next_owned, .delete_goal = Co_delete_goal,
 		.story_page_next_owned = Co_story_page_next_owned, .delete_story_page = Co_delete_story_page,
-		.change_window_owner = Co_change_window_owner, .mark_whole_screen_dirty = RustScreenDirty,
+		.change_window_owner = Co_change_window_owner,
 	};
 	return services;
 }

@@ -430,7 +430,7 @@ TEST_CASE("Company control - network local switch precedes native settings conti
 		fixture_services.objectives = []() noexcept -> const OpenTTDObjectivesServices & { return windows; };
 		fixture_services.assign_company_context = [](uint8_t company) noexcept { local = company; fixture_current = company; fixture_trace.push_back("assign"); };
 		fixture_services.close_construction_windows = []() noexcept { fixture_trace.push_back("construction"); };
-		fixture_identity.dirty = []() noexcept { fixture_trace.push_back("screen"); };
+		fixture_identity_shared.screen_dirty = []() noexcept { fixture_trace.push_back("screen"); };
 		fixture_identity.reset_colourmap = []() noexcept { fixture_trace.push_back("colourmap"); };
 		OpenTTDCompanyControl call{.result = {}, .startup = {}, .client = 7, .action = static_cast<uint8_t>(CCA_NEW), .target = 255, .reason = 0, .execute = true, .stage = 0};
 		CHECK_FALSE(openttd_rust_company_control(&fixture_services, &ownership.view, &call));
