@@ -51,12 +51,8 @@
 #include "saveload_internal.h"
 #include "saveload_filter.h"
 #include "../rust/encoded_adapter.hpp"
-#include "../rust/environment_services.h"
 #include "../rust/saveload_ffi.h"
-#include "../rust/services_autoreplace.h"
-#include "../rust/services_linkgraph.h"
-#include "../rust/services_station.h"
-#include "../rust/vehicle_services.h"
+#include "../rust/services_saveload.h"
 
 #include <atomic>
 #ifdef __EMSCRIPTEN__
@@ -147,40 +143,6 @@ static bool SlNativeFrame(F &&operation) noexcept
 	return true;
 }
 
-/** Index of a pool item, for ReferenceToInt. */
-template <typename T>
-static uint32_t SlPoolIndex(const void *obj) noexcept
-{
-	if constexpr (std::is_same_v<T, Vehicle>) {
-		return RustVehicleIndexOpaque(obj);
-	} else if constexpr (std::is_same_v<T, Station>) {
-		return RustBaseStationID(static_cast<const Station *>(obj));
-	} else if constexpr (std::is_same_v<T, Town>) {
-		return RustTownAuthorityIndex(static_cast<const OpenTTDTownHandle *>(obj));
-	} else if constexpr (std::is_same_v<T, EngineRenew>) {
-		return RustEngineRenewIndex(obj);
-	} else {
-		return static_cast<const T *>(obj)->index.base();
-	}
-}
-
-/** Pool item at an index, or nullptr when the index is invalid, for IntToReference. */
-template <typename T>
-static void *SlPoolGet(size_t index) noexcept
-{
-	if (!T::IsValidID(index)) return nullptr;
-	/* Validate the full size_t index before narrowing it for shared accessors. */
-	if constexpr (std::is_same_v<T, Station>) {
-		return RustStationGet<Station *>(static_cast<uint16_t>(index));
-	} else if constexpr (std::is_same_v<T, Town>) {
-		return OpenTTDTownShellByID(static_cast<uint32_t>(index));
-	} else if constexpr (std::is_same_v<T, LinkGraph>) {
-		return RustLinkGraphGet(static_cast<uint16_t>(index));
-	} else {
-		return T::Get(index);
-	}
-}
-
 static const OpenTTDSaveLoadServices _sl_services = {
 	.shared = &GetRustSharedServices(),
 	.native_assert = []([[maybe_unused]] bool ok) noexcept { assert(ok); },
@@ -190,26 +152,26 @@ static const OpenTTDSaveLoadServices _sl_services = {
 	.finish = [](void *filter) noexcept { return SlNativeFrame([&] { static_cast<SaveFilter *>(filter)->Finish(); }); },
 	.remap_old_string = [](uint32_t id) noexcept -> uint32_t { return RemapOldStringID(static_cast<uint16_t>(id)); },
 	.copy_from_old_name = [](void *ptr, uint32_t id) noexcept { return SlNativeFrame([&] { *reinterpret_cast<std::string *>(ptr) = CopyFromOldName(id); }); },
-	.cargo_packet_get = &SlPoolGet<CargoPacket>,
-	.cargo_packet_index = &SlPoolIndex<CargoPacket>,
-	.engine_renew_get = &SlPoolGet<EngineRenew>,
-	.engine_renew_index = &SlPoolIndex<EngineRenew>,
-	.link_graph_get = &SlPoolGet<LinkGraph>,
-	.link_graph_index = &SlPoolIndex<LinkGraph>,
-	.link_graph_job_get = &SlPoolGet<LinkGraphJob>,
-	.link_graph_job_index = &SlPoolIndex<LinkGraphJob>,
-	.order_list_get = &SlPoolGet<OrderList>,
-	.order_list_index = &SlPoolIndex<OrderList>,
-	.persistent_storage_get = &SlPoolGet<PersistentStorage>,
-	.persistent_storage_index = &SlPoolIndex<PersistentStorage>,
-	.road_stop_get = &SlPoolGet<RoadStop>,
-	.road_stop_index = &SlPoolIndex<RoadStop>,
-	.station_get = &SlPoolGet<Station>,
-	.station_index = &SlPoolIndex<Station>,
-	.town_get = &SlPoolGet<Town>,
-	.town_index = &SlPoolIndex<Town>,
-	.vehicle_get = &SlPoolGet<Vehicle>,
-	.vehicle_index = &SlPoolIndex<Vehicle>,
+	.cargo_packet_get = &RustSaveReferenceGet<CargoPacket>,
+	.cargo_packet_index = &RustSaveReferenceIndex<CargoPacket>,
+	.engine_renew_get = &RustSaveReferenceGet<EngineRenew>,
+	.engine_renew_index = &RustSaveReferenceIndex<EngineRenew>,
+	.link_graph_get = &RustSaveReferenceGet<LinkGraph>,
+	.link_graph_index = &RustSaveReferenceIndex<LinkGraph>,
+	.link_graph_job_get = &RustSaveReferenceGet<LinkGraphJob>,
+	.link_graph_job_index = &RustSaveReferenceIndex<LinkGraphJob>,
+	.order_list_get = &RustSaveReferenceGet<OrderList>,
+	.order_list_index = &RustSaveReferenceIndex<OrderList>,
+	.persistent_storage_get = &RustSaveReferenceGet<PersistentStorage>,
+	.persistent_storage_index = &RustSaveReferenceIndex<PersistentStorage>,
+	.road_stop_get = &RustSaveReferenceGet<RoadStop>,
+	.road_stop_index = &RustSaveReferenceIndex<RoadStop>,
+	.station_get = &RustSaveReferenceGet<Station>,
+	.station_index = &RustSaveReferenceIndex<Station>,
+	.town_get = &RustSaveReferenceGet<Town>,
+	.town_index = &RustSaveReferenceIndex<Town>,
+	.vehicle_get = &RustSaveReferenceGet<Vehicle>,
+	.vehicle_index = &RustSaveReferenceIndex<Vehicle>,
 	.string_data = [](const void *ptr, size_t *length) noexcept {
 		const std::string &str = *static_cast<const std::string *>(ptr);
 		*length = str.size();
