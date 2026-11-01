@@ -96,6 +96,7 @@ static void Layout(const char *name, std::initializer_list<size_t> values)
 static void Layouts()
 {
 #include "abi-layout-probe.inc"
+#include "abi-layout-packet.inc"
 #include "abi-layout-record_test.inc"
 #include "abi-layout-grf_loading.inc"
 #include "abi-layout-act2.inc"

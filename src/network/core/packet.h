@@ -48,9 +48,6 @@ struct Packet {
 private:
 	/** The current read/write position in the packet */
 	OpenTTDPacketState state;
-	/** The buffer of this packet. */
-	std::vector<uint8_t> buffer;
-	/** The limit for the packet size. */
 
 	/** Socket we're associated with. */
 	NetworkSocketHandler *cs;
@@ -63,6 +60,15 @@ private:
 public:
 	Packet(NetworkSocketHandler *cs, size_t limit, size_t initial_read_size = EncodedLengthOfPacketSize());
 	Packet(NetworkSocketHandler *cs, PacketType type, size_t limit = COMPAT_MTU);
+
+	Packet(const Packet &other) : cs(other.cs) { openttd_rust_packet_clone(&this->state, &other.state); }
+	Packet &operator=(const Packet &other)
+	{
+		openttd_rust_packet_assign(&this->state, &other.state);
+		this->cs = other.cs;
+		return *this;
+	}
+	~Packet() { openttd_rust_packet_destroy(&this->state); }
 
 	/* Sending/writing of packets */
 	void PrepareToSend();
@@ -113,9 +119,9 @@ public:
 		size_t amount = openttd_rust_packet_transfer_amount(&this->state, this->Size(), limit);
 		if (amount == 0) return 0;
 
-		assert(this->Position() < this->buffer.size());
-		assert(this->Position() + amount <= this->buffer.size());
-		auto transfer_buffer = std::span<const uint8_t>(this->buffer.data() + this->Position(), amount);
+		assert(this->Position() < this->state.size);
+		assert(this->Position() + amount <= this->state.size);
+		auto transfer_buffer = std::span<const uint8_t>(this->state.data + this->Position(), amount);
 		ssize_t bytes = transfer_function(transfer_buffer);
 		/* A reentrant callback may change this packet's cursor. Commit to its live value. */
 		openttd_rust_packet_transfer_commit(&this->state, static_cast<intptr_t>(bytes));
@@ -166,9 +172,9 @@ public:
 		size_t amount = openttd_rust_packet_transfer_amount(&this->state, this->Size(), std::numeric_limits<size_t>::max());
 		if (amount == 0) return 0;
 
-		assert(this->Position() < this->buffer.size());
-		assert(this->Position() + amount <= this->buffer.size());
-		auto transfer_buffer = std::span<uint8_t>(this->buffer.data() + this->Position(), amount);
+		assert(this->Position() < this->state.size);
+		assert(this->Position() + amount <= this->state.size);
+		auto transfer_buffer = std::span<uint8_t>(this->state.data + this->Position(), amount);
 		ssize_t bytes = transfer_function(transfer_buffer);
 		/* A reentrant callback may change this packet's cursor. Commit to its live value. */
 		openttd_rust_packet_transfer_commit(&this->state, static_cast<intptr_t>(bytes));

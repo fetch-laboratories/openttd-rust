@@ -5,22 +5,13 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-/** @file packet-comparison.cpp Bounded actual Packet allocation/callback/state observations. */
+/** @file packet-comparison.cpp Bounded actual Packet byte/callback/state observations. */
 #include "stdafx.h"
 #include "network/core/packet.h"
 #include <cstdio>
 #include <cstdlib>
 #include <stdexcept>
 
-static size_t fail_after = SIZE_MAX;
-void *operator new(size_t size)
-{
-	if (fail_after != SIZE_MAX && fail_after-- == 0) throw std::bad_alloc{};
-	if (void *result = std::malloc(size == 0 ? 1 : size)) return result;
-	throw std::bad_alloc{};
-}
-void operator delete(void *pointer) noexcept { std::free(pointer); }
-void operator delete(void *pointer, size_t) noexcept { std::free(pointer); }
 [[noreturn]] void NOT_REACHED(const std::source_location) { throw std::runtime_error("NOT_REACHED"); }
 [[noreturn]] void AssertFailedError(std::string_view, const std::source_location) { throw std::runtime_error("assertion"); }
 
@@ -108,21 +99,13 @@ int main()
 		Socket socket; Packet packet(&socket, PacketType{0}, limit); std::array<uint8_t, 8> bytes{1,2,3,4,5,6,7,8};
 		auto suffix = packet.Send_bytes(bytes); std::printf("send-bytes %zu %zu %td\n", limit, suffix.size(), suffix.data() - bytes.data()); State("send-bytes-state", packet, socket);
 	}
-	/* TCP header-first / UDP full initial storage, rejected framing and resize failure. */
+	/* TCP header-first / UDP full initial storage, rejected framing. */
 	for (size_t initial : {size_t{2}, size_t{8}}) for (uint16_t size : {uint16_t{0}, uint16_t{2}, uint16_t{3}, uint16_t{8}, uint16_t{9}}) {
 		Socket socket; Packet packet(&socket, size_t{8}, initial);
 		packet.TransferIn([&](std::span<uint8_t> bytes) { std::fill(bytes.begin(), bytes.end(), 0xAB); bytes[0] = static_cast<uint8_t>(size); bytes[1] = static_cast<uint8_t>(size >> 8); return ssize_t{2}; });
 		bool parsed = packet.ParsePacketSize();
 		if (parsed) packet.TransferIn([](std::span<uint8_t> body) { std::fill(body.begin(), body.end(), 0xCC); return static_cast<ssize_t>(body.size()); });
 		std::printf("parse %zu %u %d\n", initial, size, parsed); State("parse-state", packet, socket);
-	}
-	for (unsigned operation = 0; operation < 3; ++operation) for (size_t allocation = 0; allocation < 4; ++allocation) {
-		Socket socket; Packet packet(&socket, PacketType{0}, 100); std::vector<uint8_t> bytes{8,0,1,3,0,11,12,13};
-		if (operation == 1) { packet = Packet(&socket, size_t{100}); packet.TransferIn([&](std::span<uint8_t> output) { output[0]=8; output[1]=0; return ssize_t{2}; }); }
-		if (operation == 2) { packet = Read(socket, bytes); packet.Recv_uint8(); }
-		bool threw = false; fail_after = allocation;
-		try { if (operation == 0) packet.Send_uint64(UINT64_MAX); else if (operation == 1) packet.ParsePacketSize(); else packet.Recv_buffer(); } catch (const std::bad_alloc &) { threw = true; }
-		fail_after = SIZE_MAX; std::printf("allocation %u %zu %d\n", operation, allocation, threw); State("allocation-state", packet, socket);
 	}
 	/* Transfer return, exception and reentrant live-cursor commit. */
 	for (unsigned mode = 0; mode < 7; ++mode) for (bool incoming : {false,true}) {

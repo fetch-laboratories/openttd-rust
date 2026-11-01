@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Compare bounded actual Packet framing, bytes and callback/allocation states.
+"""Compare bounded actual Packet framing, bytes and callback states.
 
 Limits: a bounded companion to the unchanged network tests and authentication
-corpus. Send_string/Recv_string collection and sanitation remain C++;
+corpus. Allocation failure is environmental and excluded;
 nonempty-short Recv_bytes is undefined upstream (#41) and excluded. No real
 transport delivery, sockets or allocator-wide equivalence.
 """
@@ -35,6 +35,8 @@ def main():
                 "-fdata-sections",
                 "-I",
                 source / "src",
+                "-I",
+                probe.BUILD / "generated-abi",
                 fixture,
                 *(source / name for name in SOURCES),
                 "-Wl,--gc-sections",

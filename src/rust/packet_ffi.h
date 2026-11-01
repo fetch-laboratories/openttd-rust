@@ -5,28 +5,30 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-/** @file packet_ffi.h Copyable scalar Packet algorithms; C++ retains owners/effects. */
+/** @file packet_ffi.h Rust-owned packet storage and byte operations. */
 #ifndef OPENTTD_RUST_PACKET_FFI_H
 #define OPENTTD_RUST_PACKET_FFI_H
 #include <stddef.h>
 #include <stdint.h>
 #include "builder_ffi.h"
 #include "call_ffi.h"
+#include "abi-record-packet.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
 typedef struct {
-	size_t limit;
-	uint16_t position;
-} OpenTTDPacketState;
-typedef struct {
 	size_t message;
 	size_t payload;
 } OpenTTDPacketFrame;
-/* Stack scalar state copies with Packet bytes. State, byte storage and outputs are disjoint, and no
- * borrow survives vector allocation, external handler or transfer calls, or copying. Original
- * bounds, span and count preconditions apply, with no new clamping or maximum length. The
- * persistent cursor narrows to uint16 after each consumption and each positive post-callback result.
+void OPENTTD_RUST_CALL openttd_rust_packet_resize(OpenTTDPacketState *, size_t);
+void OPENTTD_RUST_CALL openttd_rust_packet_append(OpenTTDPacketState *, const uint8_t *, size_t);
+void OPENTTD_RUST_CALL openttd_rust_packet_shrink(OpenTTDPacketState *);
+void OPENTTD_RUST_CALL openttd_rust_packet_clone(OpenTTDPacketState *, const OpenTTDPacketState *);
+void OPENTTD_RUST_CALL openttd_rust_packet_assign(OpenTTDPacketState *, const OpenTTDPacketState *);
+void OPENTTD_RUST_CALL openttd_rust_packet_destroy(OpenTTDPacketState *);
+/* Rust allocates and releases the byte buffer. Native spans expire before resizing or destruction.
+ * State and byte storage are disjoint, and no borrow survives a handler or transfer call.
+ * The persistent cursor narrows to uint16 after each consumption and positive transfer result.
  * Pointers are live and aligned, exclusive for writes; bytes occupy one allocation <= PTRDIFF_MAX. */
 void OPENTTD_RUST_CALL openttd_rust_packet_init(OpenTTDPacketState *, size_t limit);
 uint8_t OPENTTD_RUST_CALL openttd_rust_packet_boolean(uint8_t value);

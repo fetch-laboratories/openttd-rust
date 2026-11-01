@@ -5,13 +5,22 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Copyable scalar packet state; buffers/allocations/external effects stay in C++.
+//! Packet storage and byte operations. Native sockets and callbacks borrow the shared record.
+#![allow(unsafe_code)]
 
-/// Native-width limit with the original persistently narrowed 16-bit cursor.
-#[repr(C)]
-pub struct State {
-    pub limit: usize,
-    pub position: u16,
+use std::mem::ManuallyDrop;
+use std::ptr;
+
+crate::abi::shared_records! {
+    fn abi_record;
+    /// Rust-owned allocation, accessed in place by the native Packet facade.
+    "OpenTTDPacketState" ["packet"] => pub struct State {
+        pub data: *mut u8,
+        pub size: usize,
+        pub capacity: usize,
+        pub limit: usize,
+        pub position: u16,
+    }
 }
 
 /// Packet-specific framing offsets, with native unsigned arithmetic.
@@ -22,8 +31,125 @@ pub struct Frame {
 }
 
 impl State {
+    /// Temporarily recover the unique allocation; no callback runs during an edit.
+    fn edit_buffer(&mut self, edit: impl FnOnce(&mut Vec<u8>)) {
+        // SAFETY: Only Rust allocates this storage; an empty native record may be null.
+        let data = if self.capacity == 0 {
+            ptr::NonNull::<u8>::dangling().as_ptr()
+        } else {
+            self.data
+        };
+        let mut bytes =
+            ManuallyDrop::new(unsafe { Vec::from_raw_parts(data, self.size, self.capacity) });
+        edit(&mut bytes);
+        self.data = bytes.as_mut_ptr();
+        self.size = bytes.len();
+        self.capacity = bytes.capacity();
+    }
+
+    pub(crate) fn resize(&mut self, size: usize) {
+        self.edit_buffer(|bytes| bytes.resize(size, 0));
+    }
+
+    pub(crate) fn append(&mut self, input: &[u8]) {
+        self.edit_buffer(|bytes| bytes.extend_from_slice(input));
+    }
+
+    pub(crate) fn shrink(&mut self) {
+        self.edit_buffer(Vec::shrink_to_fit);
+    }
+}
+
+impl Clone for State {
+    fn clone(&self) -> Self {
+        let mut result = Self::new(self.limit);
+        result.position = self.position;
+        // SAFETY: This owner's initialized byte interval remains live during the copy.
+        result.append(unsafe { crate::utf8::borrow(self.data, self.size) });
+        result
+    }
+}
+
+impl Drop for State {
+    fn drop(&mut self) {
+        if self.capacity != 0 {
+            // SAFETY: Matching Rust allocation, uniquely owned and freed once.
+            unsafe {
+                drop(Vec::from_raw_parts(self.data, self.size, self.capacity));
+            }
+        }
+    }
+}
+
+/// Resize the shared packet allocation, zero-initializing new bytes.
+/// # Safety
+/// State is live, aligned and exclusive; no native span is in use during allocation.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_packet_resize(state: *mut State, size: usize) {
+    unsafe { &mut *state }.resize(size);
+}
+
+/// Append bytes without retaining the source interval.
+/// # Safety
+/// State is exclusive. Input is disjoint live storage, null only when empty.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_packet_append(
+    state: *mut State,
+    input: *const u8,
+    length: usize,
+) {
+    unsafe { &mut *state }.append(unsafe { crate::utf8::borrow(input, length) });
+}
+
+/// Release spare packet capacity after resetting the transfer cursor.
+/// # Safety
+/// State is exclusive and has no live native span.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_packet_shrink(state: *mut State) {
+    unsafe { &mut *state }.shrink();
+}
+
+/// Deep-copy into uninitialized native record storage.
+/// # Safety
+/// Source is initialized and shared; destination is disjoint, aligned and writable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_packet_clone(destination: *mut State, source: *const State) {
+    unsafe {
+        destination.write((&*source).clone());
+    }
+}
+
+/// Assign independent byte storage, including the live cursor and limit.
+/// # Safety
+/// Destination is initialized and exclusive; source is shared or aliases destination exactly.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_packet_assign(destination: *mut State, source: *const State) {
+    if !ptr::eq(destination, source) {
+        unsafe {
+            *destination = (&*source).clone();
+        }
+    }
+}
+
+/// Destroy a native packet's Rust allocation.
+/// # Safety
+/// State is initialized and exclusive, and is destroyed exactly once.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_packet_destroy(state: *mut State) {
+    unsafe {
+        ptr::drop_in_place(state);
+    }
+}
+
+impl State {
     pub(crate) fn new(limit: usize) -> Self {
-        Self { limit, position: 0 }
+        Self {
+            data: ptr::null_mut(),
+            size: 0,
+            capacity: 0,
+            limit,
+            position: 0,
+        }
     }
     pub(crate) fn can_write(&self, size: usize, amount: usize) -> bool {
         size.wrapping_add(amount) <= self.limit
@@ -99,10 +225,6 @@ pub(crate) fn header(bytes: &mut [u8]) {
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDPacketState" ["probe"] => State {
-        limit,
-        position,
-    };
     "OpenTTDPacketFrame" ["probe"] => Frame {
         message,
         payload,
