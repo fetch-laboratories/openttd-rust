@@ -74,6 +74,9 @@
 
 #include "safeguards.h"
 
+/* Rust reads the record in place (rust/snow_line_ffi.h). */
+static_assert(std::is_standard_layout_v<SnowLine> && std::is_trivially_copyable_v<SnowLine>);
+
 extern const TileTypeProcs
 	_tile_type_clear_procs,
 	_tile_type_rail_procs,
