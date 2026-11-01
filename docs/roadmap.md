@@ -4,33 +4,33 @@ Root selects here; `AGENTS.md` and the docs in its routing table define process.
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-11-01, after integration 54)
+## Where the fork stands (2026-11-01, after integration 56)
 
 Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh
 
-- Code is `b29e8036f5` (integration 54). This session integrated #616 (52), #625 with #623 through #630 (53) and #618 (54). There were no rollbacks.
-- The stocktake at `b29e8036f5` uses `python3 tools/port-metrics.py --whole-fork`. Changes are since stocktake 52 at `1daa611627`, 1.6 hours earlier, too short for a per-day rate.
-  - Retired: 52,546 of 284,355 original code lines (18.48%, +34).
-  - Compiled C++: 265,137 (93.24%, +27).
-  - Glue 33,328 (+61), with 1,380 exports (+5) and 4,178 callback slots (-7).
-  - Rust 124,727 (+118) and tooling 52,812 (+584).
-  - Simulation-source retirement: 40,028 of 61,148 (65.46%).
-- Compiled C++ rose 27 lines: #618 retired 34 original lines but added 61 glue lines, mostly native fixtures and the snow-line boundary. #630 is tooling only: 409 lines for the per-function inventory and the drawing workload.
-- Baselines at `b29e8036f5`: 562 rebound-callee rows (-5), 127 shared-accessor rows (0) and 55 orphan exports (0).
-- Speed: profile 54 ran on merged `b29e8036f5`, and every scenario is equal. Every candidate Ir stays below its anchor, so every projection equals profile 46's. TGP rose 0.40% since profile 52, most likely from #618's generation changes; that is below the 3% trigger. The drawing row from #623 reports Ir with no budget (2,024,423,440). The next profile is due after 56.
+- Code is `2d2cd78f53` (integration 56). This session integrated #616 (52), #625 with #623 through #630 (53), #618 (54), #624 (55), and #627 with #620 through #631 (56). There were no rollbacks.
+- The stocktake at `2d2cd78f53` uses `python3 tools/port-metrics.py --whole-fork`. Changes are since stocktake 54 at `b29e8036f5`.
+  - Retired: 53,195 of 284,355 original code lines (18.71%, +649). Save/load retired 1,075 (+603).
+  - Compiled C++: 264,758 (93.11%, -379). Since stocktake 49 at `ec11d2ba4d`, 0.98 days earlier, it fell 518 lines.
+  - Glue 33,598 (+270), with 1,415 exports (+35) and 4,172 callback slots (-6).
+  - Rust 126,262 (+1,535) and tooling 53,054 (+242).
+  - Simulation-source retirement: 40,074 of 61,148 (65.54%).
+- #627 retired 603 save/load lines for +206 save/load glue. #624 removed 39 rebound rows.
+- Baselines at `2d2cd78f53`: 523 rebound-callee rows (-39), 127 shared-accessor rows (0) and 55 orphan exports (0).
+- Speed: profile 56 ran on merged `2d2cd78f53`, and every scenario is equal. Every play and generation Ir fell 0.1% to 0.4% since profile 54, so every projection still equals profile 46's. The drawing row is 2,024,515,373 Ir with no budget. The next profile is due after 58.
 
-| Scenario | Candidate Ir, profile 54 | Projection | Carried three-pass record |
+| Scenario | Candidate Ir, profile 56 | Projection | Carried three-pass record |
 | --- | ---: | ---: | ---: |
-| TGP | 2,733,198,760 | 1.111722x | 1.154106x |
-| Grok | 26,931,382,412 | 1.387147x | 1.385653x |
-| Opus | 28,327,648,316 | 1.393949x | 1.394556x |
-| P1996 | 4,542,837,208 | 1.336551x | 1.337764x |
-| P2000 | 7,391,597,792 | 1.400577x | 1.401446x |
-| P2016 | 13,378,127,411 | 1.522911x | 1.481910x |
+| TGP | 2,729,609,930 | 1.111722x | 1.154106x |
+| Grok | 26,828,480,584 | 1.387147x | 1.385653x |
+| Opus | 28,216,022,308 | 1.393949x | 1.394556x |
+| P1996 | 4,534,487,327 | 1.336551x | 1.337764x |
+| P2000 | 7,384,638,935 | 1.400577x | 1.401446x |
+| P2016 | 13,362,841,068 | 1.522911x | 1.481910x |
 
-- The integration-50 platform cadence (run 41242566571) passed on every platform. The next is due after 55.
+- The integration-55 platform cadence (run 41339144900) passed on every platform. The next is due after 60.
 - Coverage is unchanged: #156 holds the gaps, and #503 comes last.
-- Unintegrated branches: #620, #624, #627 and #628, two slots open. The wrap-up course in the work order brought the count down from eight (user, 2026-11-01).
+- Unintegrated branches: #628 only, held. The wrap-up course brought the count down from eight (user, 2026-11-01).
 
 ## Phases
 
@@ -287,6 +287,8 @@ Rust / tooling / original C++ retired / net glue.
 | 52 | #615 clear-ground clearing and editor tree groups / #616 | `1daa611627` | 131 / 196 / 52 / +17 |
 | 53 | #621 per-function inventory (#625) and #566 drawing workload (#623) / #630 | `5ecf4fbc57` | 0 / 409 / 0 / 0 |
 | 54 | #617 snow-line state and map-edge water scans / #618 | `b29e8036f5` | 159 / 200 / 34 / +61 |
+| 55 | #622 batch: five shared-operation families / #624 | `181a962caa` | see #624 / rebound rows 567 to 523 |
+| 56 | #573 save/load codec slices 1 to 3a (#627) and #619 road-bit cleanup (#620) / #631 | `2d2cd78f53` | see stocktake 56: save/load retired +603 |
 
 ## Work order
 
@@ -294,23 +296,16 @@ One ranked list. Each free slot takes the highest unblocked item that fits the
 six-branch limit and the disjoint-service rule; finishing review and integration
 comes first. A lower rank can run while a higher one waits. Scopes live in issues.
 
-First, **the wrap-up course (user, 2026-11-01).** Bring the count to four or five unintegrated branches, so one or two of the six slots stay open. Start no branch unless an in-flight item needs one to finish; an integration PR that assembles reviewed heads is such a branch. Finish in readiness order:
-- Done: #616 (52), #625 with #623 through #630 (53) and #618 (54).
-- #627 (#573) and #620 (#619) share integration PR #631. Its first Full failed because two harness adapters (`cargomonitor-console.inc`, `storage-console.inc`) still used codec state #627 moved into Rust; the fix goes on #627's branch, then a fresh Full. Slices 3b and 4 continue in a later PR under #573.
-- #620 resumed at the user's direction (2026-11-01) and passed its review with no findings.
-- #624 (#622): integrates with its five converted families after #631. Its base merge with integration 54 combined two slot deletions and gets a scoped review of that resolution. The `RustSpec*` table, the `.inc` gap in the rebound checker and the remaining callees stay on #622 for a later batch.
-- #628 (#574) holds as a draft with no work: it has one of five slices and needs #629 for its per-slice check. It resumes when the user resumes forward work.
+First, **the wrap-up course (user, 2026-11-01) is complete.** It integrated #616 (52), #630 (53), #618 (54), #624 (55) and #631 (56). #628 (#574) is the only open branch and stays held: it has one of five slices and needs #629 for its per-slice check. Forward work resumes from item 1 below when the user directs it, within the six-branch limit.
 - #607 integrated as 48. Every draft adopting it reruns the recorded sweep over the `src/` files it touches ([sweep](rust-migration.md#rust-only-source-sweep)).
 
-1. **Finish the open drafts**, in readiness order. No reviewed draft gains scope, but a fix the audits found is not new scope.
-   - #618 (#617 snow line and water borders): fresh full fixing review, then base update and Full.
-   - #620 (#619 road bits and crossings): continue the implementation after the wrap-up.
-   - #623 (#566 drawing workload): finish its independent review, which includes keeping the drawing row free of a speed ceiling (root's answers on the PR). Then Full and merge. It must integrate before #570.
-   - #622's later batch: the shared typed `RustSpec*` table (root's answers on #624), then `RustGRFFileID`, `RustGRFCargoMap`, `RustGRFFileAtOrNull` and the `RustResolverGRF*` callees.
-   - #573's later PR: slices 3b and 4 from #627's status comment. #628 (#574 network protocol) continues from slice 2 after #629.
+1. **Continue the started owners**, in readiness order. No reviewed draft gains scope, but a fix the audits found is not new scope.
+   - #622's later batch: the shared typed `RustSpec*` table (root's answers on #624), then `RustGRFFileID`, `RustGRFCargoMap`, `RustGRFFileAtOrNull` and the `RustResolverGRF*` callees, and extending `tools/rebound-callees.py` to `.inc` service tables.
+   - #573's later PR: slices 3b and 4 from #627's status comment, the corrupt-input and LoadCheck probes, and the native `CopyFromOldName` helper.
+   - #628 (#574 network protocol) continues from slice 2 after #629.
 
    Then come **#559**, command invocation, and **#69**, tile areas: phase 1's last owners. No further phase-1 owner is planned. Every other remaining non-drawing body moves with the phase-2 owner of its file, including plan-after47's link-graph job lifecycle, elrail transition and land count; #621 lists them.
-2. **#570 shared vehicle records starts now that #607 has integrated**; #623 integrates first.
+2. **#570 shared vehicle records starts now that #607 and #623 have integrated.**
    - #570 follows the [world-state design](design/world-state.md). It deletes the replaced readers, the direct Tick bounces and their baseline rows, and makes `tools/port-metrics.py` count the C++ declarations it generates. Estimated net glue is -500 to -1,100; its 0.86% instruction credit is a model.
    - Then, one at a time in the shared vehicle files: #598 vehicle routing decisions, then #599 vehicle base lifecycle. Remeasure #599's inventory after #570. The airport automata follow #570's declaration generator.
 3. **One maintenance batch at a time** (one reviewer, one Full):
@@ -328,8 +323,8 @@ First, **the wrap-up course (user, 2026-11-01).** Bring the count to four or fiv
 6. **#503 coverage continuation last:** first the bounded clock-preparation and sanitized native-test-support build fixes, then the 119 unfinished traces with provenance checks. Do not recollect just to fill a slot.
 
 Recurring:
-- After every second integration (next after 56), take stock under `/start-development` step 4, including the compiled-C++ rate and the baseline sizes. Profile the merged tip with the pinned `LD_LIBRARY_PATH` from [speed](speed.md#instruction-projections).
-- Run the platform cadence after every fifth integration (integration 50 is running; next after 55). Fix a red cadence before further integrations.
+- After every second integration (next after 58), take stock under `/start-development` step 4, including the compiled-C++ rate and the baseline sizes. Profile the merged tip with the pinned `LD_LIBRARY_PATH` from [speed](speed.md#instruction-projections).
+- Run the platform cadence after every fifth integration (next after 60). Fix a red cadence before further integrations.
 - Deep checks run only on the user's request (user, 2026-10-31).
 - Preserve anchors, raw traces, frozen runtimes and failed outputs.
 - At each stocktake, root checks issue placement and exclusion conditions.
@@ -339,14 +334,14 @@ Excluded, with return conditions checked by this review:
 - #64 and #68 become maintained Rust crates that reproduce the game's observable cryptography. They return when phase 3's network ports reach authentication, or with phase 6, whichever comes first.
 - #12, #26, #41, #67, #71 and #83 are behavior improvements deferred until near-full reproduction under #513's original-default setting policy. #513 needs implementation when the first such improvement is accepted.
 
-## Resume checkpoint (2026-11-01, wrap-up after integration 54)
+## Resume checkpoint (2026-11-01, wrap-up complete after integration 56)
 
-Code is `b29e8036f5`. `CI_ON_DEMAND` is `true`. Read each open PR's status comment before resuming. Each active branch's T3 worktree is under `/home/fetch/.t3/worktrees/openttd-rust/`.
+Code is `2d2cd78f53`. `CI_ON_DEMAND` is `true`. No agent is running. Read #628's status comment before resuming it.
 
 | Issue / PR | State at this commit | Next action | Checkout |
 | --- | --- | --- | --- |
-| #573 / #627 and #619 / #620 | Reviewed; combined in integration PR #631, whose first Full failed on two harness adapters | Fix the adapters on #627 (fix631), re-merge into #631, fresh Full, merge | `t3-fdca1ad8`, `t3-90e92030` |
-| #622 / #624 | Reviewed; merged with integration 54 at `be0342f27e`, all local and cheap checks pass | Scoped review of the merge resolution, merge #631, Full, merge | `t3-b2cef9d7` |
-| #574 / #628 | Slice 1 of 5 at `77c0b8295e` | Hold; slice 2 after #629 when forward work resumes | `t3-1e4ffc20` |
+| #574 / #628 | Slice 1 of 5 at `77c0b8295e`, held | Slice 2 after #629, when the user resumes forward work | `t3-1e4ffc20` |
+
+Since 2026-11-01, AGENTS.md requires a named job ID before an agent ends its turn on a background job, and short checks run in the foreground. Codex children had been ending turns on jobs they never started (`ae3fd45dff`).
 
 Keep unchanged: `t3-120ef117` (old #603), `t3-431c84b4` (cancelled #565 source with 58 dirty entries), `t3-d78d5f8b` (native fixture evidence), `.local/reference/openttd` at `14ec60f248` and the instruction-profile worktrees under the main checkout's `.local/worktrees/`. The merged #603, #607, #612, #616, #618, #626 and #630 checkouts and the finished review checkouts are T3-locked. Housekeeping keeps them until T3 releases them.
