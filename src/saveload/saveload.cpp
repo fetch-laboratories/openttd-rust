@@ -650,6 +650,17 @@ void FixSCCEncoded(std::string &str, bool fix_code)
 }
 
 /**
+ * Scan the string for SCC_ENCODED_NUMERIC with negative values, and reencode them as uint64_t.
+ * @param str the string to fix.
+ */
+void FixSCCEncodedNegative(std::string &str)
+{
+	auto result = OwnRustEncoded(openttd_rust_encoded_negatives(reinterpret_cast<const uint8_t *>(str.data()), str.size()));
+	if (openttd_rust_encoded_view(result.get()).apply == 0) return;
+	str = CopyRustEncoded(result, str);
+}
+
+/**
  * Read the given amount of bytes from the buffer into the string.
  * @param str The string to write to.
  * @param length The amount of bytes to read into the string.
