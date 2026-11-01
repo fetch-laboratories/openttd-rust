@@ -497,3 +497,15 @@ pub unsafe extern "C" fn openttd_test_fleet_pending_drain(
 ) {
     unsafe { crate::fleet::pending::drain(pending, transaction, group, cost) }
 }
+
+// Mixed widths force padding; the recursive pointer checks the generated native type.
+crate::abi::shared_records! {
+    fn abi_record;
+    "OpenTTDAbiRecordFixture" ["record_test"] => pub struct AbiRecordFixture {
+        pub tag: u8,
+        pub value: crate::tile_type::TileIndex,
+        pub count: usize,
+        pub data: *mut u8,
+        pub next: *const AbiRecordFixture,
+    }
+}
