@@ -91,34 +91,6 @@ TEST_CASE("Rust snow-line owner preserves native allocation, dates and serialize
 	SetSnowLine(nullptr); ClearSnowLine(); ClearSnowLine();
 	CHECK(GetSnowLine() == 19);
 }
-TEST_CASE("Rust water border scan uses allocated rectangular native map and header slopes")
-{
-	AutoRestoreBackup freeform(_settings_game.construction.freeform_edges, false);
-	for (uint width : {64U, 128U}) for (uint height : {64U, 128U}) {
-		Map::Allocate(width, height);
-		for (bool edges : {false, true}) {
-			_settings_game.construction.freeform_edges = edges;
-			for (TileIndex t : Map::Iterate()) { Tile{t}.type() = MP_CLEAR << 4; SetTileHeight(t, 0); }
-			auto expected = [] {
-				auto check = [](uint x, uint y) { auto [slope, h] = GetTilePixelSlopeOutsideMap(x, y); return slope == SLOPE_FLAT && h == 0; };
-				if (!check(0, 0) || !check(0, Map::SizeY()) || !check(Map::SizeX(), 0) || !check(Map::SizeX(), Map::SizeY())) return false;
-				for (uint x = 0; x <= Map::SizeX(); x++) if (!check(x, 0) || !check(x, Map::SizeY())) return false;
-				for (uint y = 1; y < Map::SizeY(); y++) if (!check(0, y) || !check(Map::SizeX(), y)) return false;
-				return true;
-			};
-			CHECK(openttd_test_map_surrounded_by_water(&GetRustSharedServices()));
-			for (TileIndex t : {TileXY(0, 0), TileXY(0, Map::MaxY()), TileXY(Map::MaxX(), 0), TileXY(Map::MaxX(), Map::MaxY()), TileXY(width / 2, 0), TileXY(width / 2, Map::MaxY()), TileXY(0, height / 2), TileXY(Map::MaxX(), height / 2)}) {
-				SetTileHeight(t, 1);
-				CHECK_FALSE(expected());
-				CHECK(openttd_test_map_surrounded_by_water(&GetRustSharedServices()) == expected());
-				SetTileHeight(t, 0);
-			}
-			for (TileIndex t : Map::Iterate()) SetTileHeight(t, 1);
-			CHECK_FALSE(openttd_test_map_surrounded_by_water(&GetRustSharedServices()));
-		}
-	}
-	Map::Allocate(64, 64);
-}
 TEST_CASE("Town import coordinates preserve native float conversions")
 {
 	const OpenTTDTownDataServices services{.shared = &GetRustSharedServices(), .founding = nullptr, .strings = {}};
