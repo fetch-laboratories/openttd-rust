@@ -1164,9 +1164,6 @@ static_assert(NETWORK_RECV_STATUS_OKAY == 0 && NETWORK_RECV_STATUS_MALFORMED_PAC
 const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 {
 	static const OpenTTDNetworkFrameServices services{
-		.command = &GetRustNetworkCommandServices(),
-		.connection = &GetRustNetworkConnectionServices(),
-		.random = _random.state,
 		.bytes_per_frame = RustNetworkBytesPerFrame,
 		.bytes_per_frame_burst = RustNetworkBytesPerFrameBurst,
 		.client_desync = []() noexcept {
@@ -1177,6 +1174,8 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 		},
 		.client_game = []() noexcept -> void * { return static_cast<NetworkGameSocketHandler *>(ClientNetworkGameSocketHandler::my_client); },
 		.client_sync = []() noexcept -> OpenTTDNetworkSocketSync * { return ClientNetworkGameSocketHandler::my_client; },
+		.command = &GetRustNetworkCommandServices(),
+		.connection = &GetRustNetworkConnectionServices(),
 		.console_bad_acks = [](void *cs) noexcept {
 			IConsolePrint(CC_WARNING, "Client #{} (IP: {}) is dropped because it fails to send valid acks.", static_cast<NetworkClientSocket *>(cs)->client_id, static_cast<NetworkClientSocket *>(cs)->GetClientIP());
 		},
@@ -1223,15 +1222,17 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 		.on_server_connect = []() noexcept { IConsoleCmdExec("exec scripts/on_server_connect.scr 0"); },
 		.packet_can_read = [](void *p, size_t size) noexcept { return static_cast<Packet *>(p)->CanReadFromPacket(size); },
 		.packet_new = [](void *game, uint8_t type) noexcept -> void * { return new Packet(static_cast<NetworkGameSocketHandler *>(game), static_cast<PacketType>(type)); },
-		.packet_recv_uint8 = [](void *p) noexcept { return static_cast<Packet *>(p)->Recv_uint8(); },
+		.packet_recv_string = [](void *packet, void *text, size_t limit) noexcept { *static_cast<std::string *>(text) = static_cast<Packet *>(packet)->Recv_string(limit); },
 		.packet_recv_uint32 = [](void *p) noexcept { return static_cast<Packet *>(p)->Recv_uint32(); },
+		.packet_recv_uint8 = [](void *p) noexcept { return static_cast<Packet *>(p)->Recv_uint8(); },
 		.packet_send = [](void *game, void *p) noexcept { static_cast<NetworkGameSocketHandler *>(game)->SendPacket(std::unique_ptr<Packet>(static_cast<Packet *>(p))); },
-		.packet_send_uint8 = [](void *p, uint8_t value) noexcept { static_cast<Packet *>(p)->Send_uint8(value); },
+		.packet_send_string = [](void *packet, OpenTTDByteSpan text) noexcept { static_cast<Packet *>(packet)->Send_string(std::string_view(reinterpret_cast<const char *>(text.data), text.size)); },
 		.packet_send_uint32 = [](void *p, uint32_t value) noexcept { static_cast<Packet *>(p)->Send_uint32(value); },
+		.packet_send_uint8 = [](void *p, uint8_t value) noexcept { static_cast<Packet *>(p)->Send_uint8(value); },
+		.random = _random.state,
 		.receive = [](OpenTTDSessionFrame *f, bool *received) noexcept { return SessionException(f, [=] { *received = NetworkReceive(); }); },
 		.replay_commands = []() noexcept { NetworkReplayCommands(); },
 		.send = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { NetworkSend(); }); },
-		.send_error = [](void *cs, uint8_t error) noexcept -> uint8_t { return static_cast<NetworkClientSocket *>(cs)->SendError(static_cast<NetworkErrorCode>(error)); },
 		.sync_freq = RustNetworkSyncFreq,
 		.sync_log = []() noexcept { NetworkSyncLog(); },
 		.wait_sent = [](void *cs) noexcept { static_cast<NetworkClientSocket *>(cs)->last_packet = std::chrono::steady_clock::now(); },

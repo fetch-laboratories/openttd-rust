@@ -85,16 +85,15 @@ pub struct SocketSync {
 /// `NetworkClientSocket *`, and packets are `Packet *` owned until `packet_send`.
 #[repr(C)]
 pub struct Services {
-    pub command: &'static crate::network_command::Services,
-    pub connection: &'static crate::network_connection::Services,
-    /// `_random.state`, read in place.
-    pub random: *const u32,
     pub bytes_per_frame: extern "C" fn() -> u16,
     pub bytes_per_frame_burst: extern "C" fn() -> u16,
     pub client_desync: extern "C" fn(),
     /// `my_client` as a `NetworkGameSocketHandler *`.
     pub client_game: extern "C" fn() -> *mut c_void,
     pub client_sync: extern "C" fn() -> *mut SocketSync,
+    pub command: &'static crate::network_command::Services,
+    pub connection: &'static crate::network_connection::Services,
+    /// `_random.state`, read in place.
     pub console_bad_acks: extern "C" fn(*mut c_void),
     pub console_download_timeout: extern "C" fn(*mut c_void),
     pub console_init_timeout: extern "C" fn(*mut c_void),
@@ -121,18 +120,20 @@ pub struct Services {
     pub on_server_connect: extern "C" fn(),
     pub packet_can_read: extern "C" fn(*mut c_void, usize) -> bool,
     pub packet_new: extern "C" fn(*mut c_void, u8) -> *mut c_void,
-    pub packet_recv_uint8: extern "C" fn(*mut c_void) -> u8,
+    pub packet_recv_string: extern "C" fn(*mut c_void, *mut c_void, usize),
     pub packet_recv_uint32: extern "C" fn(*mut c_void) -> u32,
+    pub packet_recv_uint8: extern "C" fn(*mut c_void) -> u8,
     pub packet_send: extern "C" fn(*mut c_void, *mut c_void),
-    pub packet_send_uint8: extern "C" fn(*mut c_void, u8),
+    pub packet_send_string: extern "C" fn(*mut c_void, crate::services::ByteSpan),
     pub packet_send_uint32: extern "C" fn(*mut c_void, u32),
     /// `NetworkReceive`; records an exception in the frame and returns false.
+    pub packet_send_uint8: extern "C" fn(*mut c_void, u8),
+    pub random: *const u32,
     pub receive: extern "C" fn(*mut Frame, *mut bool) -> bool,
     /// The `DEBUG_DUMP_COMMANDS` replay of `commands.log`; empty without that define.
     pub replay_commands: extern "C" fn(),
     /// `NetworkSend`; records an exception in the frame and returns false.
     pub send: extern "C" fn(*mut Frame) -> bool,
-    pub send_error: extern "C" fn(*mut c_void, u8) -> u8,
     pub sync_freq: extern "C" fn() -> u16,
     /// The server's daily `sync:` desync log line.
     pub sync_log: extern "C" fn(),
@@ -256,7 +257,7 @@ pub unsafe extern "C" fn openttd_rust_network_receive_ack(
 ) -> u8 {
     // SAFETY: `status` is the socket's one-byte status field (see above).
     if unsafe { *status } < AUTHORIZED {
-        return (s.send_error)(socket, NETWORK_ERROR_NOT_AUTHORIZED);
+        return send_error(s, socket, NETWORK_ERROR_NOT_AUTHORIZED);
     }
     let frame = (s.packet_recv_uint32)(p);
     (s.debug_receive_ack)(game, frame);
@@ -384,6 +385,16 @@ fn client_game_loop(
     Ok(true)
 }
 
+fn send_error(s: &Services, socket: *mut c_void, error: u8) -> u8 {
+    crate::network_connection::send_error(
+        s.connection,
+        s,
+        socket,
+        error,
+        crate::network_connection::EMPTY_TEXT,
+    )
+}
+
 /// `NetworkServer_Tick`.
 fn server_tick(s: &Services, send_frame: bool) {
     let mut send_sync = false;
@@ -417,7 +428,7 @@ fn server_tick(s: &Services, send_frame: bool) {
                     // A packet within the lag means a lagging client, else a lost connection.
                     let recent = within(lag.wrapping_mul(MILLISECONDS_PER_TICK));
                     (s.console_lagging)(socket, lag, recent);
-                    (s.send_error)(socket, NETWORK_ERROR_TIMEOUT_COMPUTER);
+                    send_error(s, socket, NETWORK_ERROR_TIMEOUT_COMPUTER);
                     continue;
                 }
                 // Warn once, and only while packets still arrive.
@@ -429,14 +440,14 @@ fn server_tick(s: &Services, send_frame: bool) {
                     .wrapping_sub(read_field!(sync, last_token_frame));
                 if token_age >= u32::from((s.max_lag_time)()) {
                     (s.console_bad_acks)(socket);
-                    (s.send_error)(socket, NETWORK_ERROR_TIMEOUT_COMPUTER);
+                    send_error(s, socket, NETWORK_ERROR_TIMEOUT_COMPUTER);
                     continue;
                 }
             }
             INACTIVE | IDENTIFY | NEWGRFS_CHECK | AUTHORIZED => {
                 if lag > u32::from((s.max_init_time)()) {
                     (s.console_init_timeout)(socket);
-                    (s.send_error)(socket, NETWORK_ERROR_TIMEOUT_COMPUTER);
+                    send_error(s, socket, NETWORK_ERROR_TIMEOUT_COMPUTER);
                     continue;
                 }
             }
@@ -454,21 +465,21 @@ fn server_tick(s: &Services, send_frame: bool) {
             MAP => {
                 if lag > u32::from((s.max_download_time)()) {
                     (s.console_download_timeout)(socket);
-                    (s.send_error)(socket, NETWORK_ERROR_TIMEOUT_MAP);
+                    send_error(s, socket, NETWORK_ERROR_TIMEOUT_MAP);
                     continue;
                 }
             }
             DONE_MAP | PRE_ACTIVE => {
                 if lag > u32::from((s.max_join_time)()) {
                     (s.console_join_timeout)(socket);
-                    (s.send_error)(socket, NETWORK_ERROR_TIMEOUT_JOIN);
+                    send_error(s, socket, NETWORK_ERROR_TIMEOUT_JOIN);
                     continue;
                 }
             }
             AUTH_GAME => {
                 if lag > u32::from((s.max_password_time)()) {
                     (s.console_password_timeout)(socket);
-                    (s.send_error)(socket, NETWORK_ERROR_TIMEOUT_PASSWORD);
+                    send_error(s, socket, NETWORK_ERROR_TIMEOUT_PASSWORD);
                     continue;
                 }
             }
@@ -593,16 +604,17 @@ crate::abi::layouts! {
         on_server_connect,
         packet_can_read,
         packet_new,
-        packet_recv_uint8,
+        packet_recv_string,
         packet_recv_uint32,
+        packet_recv_uint8,
         packet_send,
-        packet_send_uint8,
+        packet_send_string,
         packet_send_uint32,
+        packet_send_uint8,
         random,
         receive,
         replay_commands,
         send,
-        send_error,
         sync_freq,
         sync_log,
         wait_sent,

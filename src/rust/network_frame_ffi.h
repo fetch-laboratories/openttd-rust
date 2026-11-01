@@ -30,14 +30,13 @@ struct OpenTTDNetworkSocketSync {
 };
 /** Native leaves of the frame protocol: `game` is a NetworkGameSocketHandler, `socket` a NetworkClientSocket, packets are owned until sent. */
 struct OpenTTDNetworkFrameServices {
-	const OpenTTDNetworkCommandServices *command;
-	const OpenTTDNetworkConnectionServices *connection;
-	const uint32_t *random;
 	uint16_t (*bytes_per_frame)() noexcept OPENTTD_SERVICE_DEFAULT(bytes_per_frame);
 	uint16_t (*bytes_per_frame_burst)() noexcept OPENTTD_SERVICE_DEFAULT(bytes_per_frame_burst);
 	void (*client_desync)() noexcept OPENTTD_SERVICE_DEFAULT(client_desync);
 	void *(*client_game)() noexcept OPENTTD_SERVICE_DEFAULT(client_game);
 	OpenTTDNetworkSocketSync *(*client_sync)() noexcept OPENTTD_SERVICE_DEFAULT(client_sync);
+	const OpenTTDNetworkCommandServices *command;
+	const OpenTTDNetworkConnectionServices *connection;
 	void (*console_bad_acks)(void *) noexcept OPENTTD_SERVICE_DEFAULT(console_bad_acks);
 	void (*console_download_timeout)(void *) noexcept OPENTTD_SERVICE_DEFAULT(console_download_timeout);
 	void (*console_init_timeout)(void *) noexcept OPENTTD_SERVICE_DEFAULT(console_init_timeout);
@@ -63,15 +62,17 @@ struct OpenTTDNetworkFrameServices {
 	void (*on_server_connect)() noexcept OPENTTD_SERVICE_DEFAULT(on_server_connect);
 	bool (*packet_can_read)(void *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(packet_can_read);
 	void *(*packet_new)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(packet_new);
-	uint8_t (*packet_recv_uint8)(void *) noexcept OPENTTD_SERVICE_DEFAULT(packet_recv_uint8);
+	void (*packet_recv_string)(void *, void *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(packet_recv_string);
 	uint32_t (*packet_recv_uint32)(void *) noexcept OPENTTD_SERVICE_DEFAULT(packet_recv_uint32);
+	uint8_t (*packet_recv_uint8)(void *) noexcept OPENTTD_SERVICE_DEFAULT(packet_recv_uint8);
 	void (*packet_send)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(packet_send);
-	void (*packet_send_uint8)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(packet_send_uint8);
+	void (*packet_send_string)(void *, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(packet_send_string);
 	void (*packet_send_uint32)(void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(packet_send_uint32);
+	void (*packet_send_uint8)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(packet_send_uint8);
+	const uint32_t *random;
 	bool (*receive)(OpenTTDSessionFrame *, bool *) noexcept OPENTTD_SERVICE_DEFAULT(receive);
 	void (*replay_commands)() noexcept OPENTTD_SERVICE_DEFAULT(replay_commands);
 	bool (*send)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(send);
-	uint8_t (*send_error)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(send_error);
 	uint16_t (*sync_freq)() noexcept OPENTTD_SERVICE_DEFAULT(sync_freq);
 	void (*sync_log)() noexcept OPENTTD_SERVICE_DEFAULT(sync_log);
 	void (*wait_sent)(void *) noexcept OPENTTD_SERVICE_DEFAULT(wait_sent);
