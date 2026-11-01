@@ -115,7 +115,11 @@ inline void RustAirportTileCloseInspect(uint32_t tile) noexcept { RustCloseNewGR
 inline void RustStationMarkTilesDirty(BaseStation *st, bool cargo) noexcept { Station::From(st)->MarkTilesDirty(cargo); }
 inline const OpenTTDStation *RustStation(const Station *s) noexcept { return reinterpret_cast<const OpenTTDStation *>(s); }
 inline Station *RustStationByTile(uint32_t tile) noexcept { return Station::GetByTile(TileIndex{tile}); }
-inline const OrthogonalTileArea *RustStationDockingArea(uint32_t station) noexcept { return &Station::Get(StationID(station))->docking_station; }
+inline OrthogonalTileArea *RustStationStopArea(BaseStation *st, bool truck) noexcept { return truck ? &Station::From(st)->truck_station : &Station::From(st)->bus_station; }
+inline OrthogonalTileArea *RustStationAirportArea(BaseStation *st) noexcept { return &Station::From(st)->airport; }
+inline OrthogonalTileArea *RustStationShipArea(BaseStation *st) noexcept { return &Station::From(st)->ship_station; }
+inline OrthogonalTileArea *RustStationDockingArea(BaseStation *st) noexcept { return &Station::From(st)->docking_station; }
+inline OrthogonalTileArea *RustWaypointRoadArea(BaseStation *st) noexcept { return &Waypoint::From(st)->road_waypoint_area; }
 inline const OpenTTDStation *OpenTTDStationByTile(uint32_t tile) noexcept { return RustStation(RustStationByTile(tile)); }
 inline const Station *StationOf(const OpenTTDStation *s) noexcept { return reinterpret_cast<const Station *>(s); }
 /* GetSpec preserves the native dummy-airport fallback. Resolver-specific tile

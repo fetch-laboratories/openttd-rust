@@ -362,7 +362,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.dock = Ship_dock, .dock_water = Ship_dock_water,
 		.station = Ship_station, .industry_station = Ship_industry_station,
 		.oilrig = Ship_oilrig,
-		.station_xy = Ship_station_xy, .station_docking_area = RustStationDockingArea,
+		.station_xy = Ship_station_xy,
 		.station_dock = Ship_station_dock, .station_visits = Ship_station_visits,
 		.visit_set = Ship_visit_set, .arrival = Ship_arrival,
 		.leave_unbunch = Ship_leave_unbunch,

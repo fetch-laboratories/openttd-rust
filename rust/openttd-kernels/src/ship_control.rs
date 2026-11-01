@@ -182,8 +182,6 @@ pub struct Leaves {
     pub industry_station: extern "C" fn(u32) -> u32,
     pub oilrig: extern "C" fn(u32) -> bool,
     pub station_xy: extern "C" fn(u32) -> u32,
-    /// `Station::Get(station)->docking_station`, in place.
-    pub station_docking_area: extern "C" fn(u32) -> *const crate::tilearea::TileArea,
     pub station_dock: extern "C" fn(u32) -> bool,
     pub station_visits: extern "C" fn(u32) -> u32,
     pub visit_set: extern "C" fn(u32, u32),
@@ -769,9 +767,13 @@ impl Game<'_> {
                                 && (self.leaves.docking)(new_tile)
                             {
                                 let station = observed_order_destination;
-                                // SAFETY: The accessor addresses the live station's docking area.
-                                let docking =
-                                    unsafe { *(self.leaves.station_docking_area)(station) };
+                                // SAFETY: The shared table is immutable; `Station::Get` names a
+                                // live station whose docking area is read in place.
+                                let docking = unsafe {
+                                    let table = &*(self.services.station_commands)();
+                                    let st = ((*table.station).get)(station as u16);
+                                    *(table.docking_area)(st)
+                                };
                                 if docking.contains(new_tile, self.services.map(), |ok| {
                                     crate::movement::native_assert(self.services, ok);
                                 }) && self.destination_station(new_tile, station)
@@ -1167,7 +1169,6 @@ crate::abi::layouts! {
         industry_station,
         oilrig,
         station_xy,
-        station_docking_area,
         station_dock,
         station_visits,
         visit_set,
