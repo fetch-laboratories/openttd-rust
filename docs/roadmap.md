@@ -164,7 +164,7 @@ Agent: /root (Claude Code steering review) | Model: claude-opus-5-5 | Reasoning 
 - When the user widened the budget, root kept the hold "since you didn't lift that". It filled the room with #621, #622, then phase-3 #573 and #574 (`97c01a0df8`).
 - The 11-01 wrap-up integrated #616, #618 and #620. Its work order then ranked "Continue the started owners" (#622's later batch, #573's slices 3b and 4, #628) above #559, #69 and #570. That contradicts [selection](planning.md#selection) (earliest phase first, user 2026-10-28) and the navigation's "Start #570 when PR-B integrates".
 - Cost: #570, phase 2's only ready owner, had no branch for about 25 hours after #607 integrated, across eight integrations. Phase 3 gained #627's 603 retired save/load lines. #628 holds a slot at slice 1 of 5, blocked on #629.
-- Root cause: no rule said that a session hold expires with its session, or that a started owner's next slice is new work.
+- Root cause: a one-off session hold whose reason went unstated, which the wrap-up's work order then carried forward. It adds no rule: the user judged it rare (user, 2026-11-01).
 
 **2. The held owners' briefs are stale.**
 - #570's issue and design put the vehicle reference adapters in `saveload.cpp`; #627 moved reference conversion to `saveload.rs`.
@@ -174,9 +174,7 @@ Agent: /root (Claude Code steering review) | Model: claude-opus-5-5 | Reasoning 
 
 Apply these corrections through the work order:
 
-1. **Session holds expire with their session** ([selection](planning.md#selection)). A hold does not lower rank and the roadmap does not carry it. When the user widens a session's budget, root names the held items that now fit and asks whether they are released before starting later-phase work.
-2. **Only finishing an open branch outranks new work** ([selection](planning.md#selection)). A started owner's next slice or follow-up PR is a new selection and ranks by phase.
-3. **#570 first, then #69 and #559, then #629** (work order 1 to 3). Root rewrites #69's and #559's bodies before their briefs. #573's next PR waits for #570, and #565 item 2 waits for #570 to leave `movement.rs`.
+1. **#570 first, then #69 and #559, then #629** (work order 1 to 3), under the existing earliest-phase [selection](planning.md#selection). Root rewrites #69's and #559's bodies before their briefs. #573's next PR waits for #570, and #565 item 2 waits for #570 to leave `movement.rs`.
 
 Template watch: #627's per-container typed leaves for STL containers are a phase-3 necessity. They do not justify per-field leaves in phase-2 records, which #570 defines once in Rust.
 
@@ -267,9 +265,8 @@ Rust / tooling / original C++ retired / net glue.
 
 One ranked list. Each free slot takes the highest unblocked item that fits the
 six-branch limit and the disjoint-service rule; finishing review and integration
-of an open branch comes first. A started owner's next slice is a new selection
-and ranks by phase ([selection](planning.md#selection)). A lower rank can run
-while a higher one waits. Scopes live in issues.
+of an open branch comes first. A lower rank can run while a higher one waits.
+Scopes live in issues.
 
 The 10-31 session hold on #559, #69 and #570 has expired, and the wrap-up course
 (user, 2026-11-01) is complete. Forward work resumes here.
