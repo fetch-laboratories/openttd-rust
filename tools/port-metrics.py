@@ -502,6 +502,13 @@ def spans(text: str, path: str) -> list[tuple[str, int, int, int]]:
     found: list[tuple[str, int, int, int]] = []
     header, start, opened, inner, init, kind = "", 0, 0, 0, 0, ""
     for n, line in enumerate(masked.split("\n"), 1):
+        if (
+            not inner
+            and not init
+            and line.strip() in ("public:", "protected:", "private:")
+        ):
+            header = ""
+            continue
         if not inner and not init and not line.strip():
             header = ""  # Blank, comment or directive lines end a header.
         for ch in line:
@@ -510,18 +517,27 @@ def spans(text: str, path: str) -> list[tuple[str, int, int, int]]:
                 if not inner and kind:
                     found.append((kind, start, opened, n))
                 continue
-            # Brace initialisers in a constructor's member initialiser list.
+            # Braces inside arguments and constructor member initialisers.
             if init or (
                 ch == "{"
-                and re.search(r"\)\s*:(?!:)", header)
-                and re.search(r"[\w>]\s*$", header)
+                and (
+                    header.count("(") > header.count(")")
+                    or re.search(r"\)\s*:(?!:)", header)
+                    and re.search(r"[\w>]\s*$", header)
+                )
             ):
                 init += {"{": 1, "}": -1}.get(ch, 0)
                 header += ch
                 continue
             if ch == "{":
                 pre = header.split("(")[0]
-                if "(" not in header and not re.search(r"\benum\b|=", header):
+                if (
+                    "(" not in header
+                    and re.search(
+                        r"\b(?:namespace|class|struct|union|extern)\b", header
+                    )
+                    and not re.search(r"\benum\b|=", header)
+                ):
                     pass  # Namespaces, classes and linkage blocks are transparent.
                 elif "(" not in header or re.search(
                     r"=|\b(?:class|struct|union|enum)\b",
@@ -554,12 +570,25 @@ def function_rows(
         if not path.endswith(SOURCES) or area(path) not in names:
             continue
         text = show(BASELINE, path)
+        lines = without_comments(text, path, strings=True).split("\n")
         code = code_lines(text, path)
         left = code - retired.get(path, set())
         found: list[tuple[str, int, set[int], bool]] = []
         for name, first, opened, last in spans(text, path):
             body = set(range(first, last + 1))
-            signature = {*range(first, opened + 1), last}
+            signature = set(range(first, opened))
+            header = "\n".join(lines[first - 1 : opened])
+            initializer = re.search(r"\)\s*:(?!:)\s*", header)
+            if initializer:
+                signature = set(
+                    range(first, first + header[: initializer.end()].count("\n"))
+                )
+            if re.fullmatch(r"[^{}]*\{", lines[opened - 1].strip()) and (
+                not initializer or lines[opened - 1].strip() == "{"
+            ):
+                signature.add(opened)
+            if re.fullmatch(r"};?", lines[last - 1].strip()):
+                signature.add(last)
             facade = bool(body & code - left) and body & left <= signature
             found.append((name, first, body & left, facade))
             left -= body
