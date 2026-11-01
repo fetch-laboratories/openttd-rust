@@ -86,12 +86,11 @@ pub struct SocketSync {
 #[repr(C)]
 pub struct Services {
     pub command: &'static crate::network_command::Services,
+    pub connection: &'static crate::network_connection::Services,
     /// `_random.state`, read in place.
     pub random: *const u32,
     pub bytes_per_frame: extern "C" fn() -> u16,
     pub bytes_per_frame_burst: extern "C" fn() -> u16,
-    pub check_min_active_clients: extern "C" fn(),
-    pub check_pause_on_join: extern "C" fn(),
     pub client_desync: extern "C" fn(),
     /// `my_client` as a `NetworkGameSocketHandler *`.
     pub client_game: extern "C" fn() -> *mut c_void,
@@ -134,11 +133,11 @@ pub struct Services {
     /// `NetworkSend`; records an exception in the frame and returns false.
     pub send: extern "C" fn(*mut Frame) -> bool,
     pub send_error: extern "C" fn(*mut c_void, u8) -> u8,
-    /// `SendWait`, then `last_packet` becomes now.
-    pub send_wait: extern "C" fn(*mut c_void),
     pub sync_freq: extern "C" fn() -> u16,
     /// The server's daily `sync:` desync log line.
     pub sync_log: extern "C" fn(),
+    /// `last_packet` becomes now after `SendWait`.
+    pub wait_sent: extern "C" fn(*mut c_void),
 }
 
 static STATE: GameState<State> = GameState::new(State {
@@ -444,7 +443,12 @@ fn server_tick(s: &Services, send_frame: bool) {
             MAP_WAIT => {
                 // Keep a waiting client informed every two seconds.
                 if (s.now)() > last_packet + 2000 * NANOSECONDS_PER_MILLISECOND {
-                    (s.send_wait)(socket);
+                    crate::network_connection::openttd_rust_network_send_wait(
+                        s.connection,
+                        s,
+                        socket,
+                    );
+                    (s.wait_sent)(socket);
                 }
             }
             MAP => {
@@ -473,11 +477,7 @@ fn server_tick(s: &Services, send_frame: bool) {
         }
         if status >= PRE_ACTIVE {
             unsafe {
-                crate::network_command::openttd_rust_network_handle_command_queue(
-                    s.command,
-                    socket,
-                    client.outgoing,
-                );
+                crate::network_command::handle_command_queue(s.command, socket, client.outgoing);
             }
             if send_frame {
                 unsafe { openttd_rust_network_send_frame(s, game, sync) };
@@ -510,8 +510,8 @@ pub(crate) fn game_loop(
         (s.replay_commands)();
         if frame_counter() >= frame_counter_max() {
             // Only just before sending commands, so frame_freq > 1 sends one (un)pause.
-            (s.check_pause_on_join)();
-            (s.check_min_active_clients)();
+            crate::network_connection::check_pause_on_join(session, s);
+            crate::network_connection::check_min_active_clients(session, s);
             crate::network_command::distribute_commands(s.command);
         }
         let mut send_frame = false;
@@ -563,12 +563,11 @@ crate::abi::layouts! {
     "OpenTTDNetworkFrameServices" ["probe"] => Services {
         bytes_per_frame,
         bytes_per_frame_burst,
-        check_min_active_clients,
-        check_pause_on_join,
         client_desync,
         client_game,
         client_sync,
         command,
+        connection,
         console_bad_acks,
         console_download_timeout,
         console_init_timeout,
@@ -604,8 +603,8 @@ crate::abi::layouts! {
         replay_commands,
         send,
         send_error,
-        send_wait,
         sync_freq,
         sync_log,
+        wait_sent,
     };
 }

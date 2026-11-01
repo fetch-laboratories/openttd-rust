@@ -18,7 +18,7 @@
 #include "../../command_type.h"
 #include "../../company_type.h"
 #include "../../rust/network_command_ffi.h"
-#include "../../rust/network_frame_ffi.h"
+#include "../../rust/network_connection_ffi.h"
 #include <chrono>
 
 /**

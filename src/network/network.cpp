@@ -382,77 +382,6 @@ void NetworkHandlePauseChange(PauseModes prev_mode, PauseMode changed_mode)
 
 
 /**
- * Helper function for the pause checkers. If pause is true and the
- * current pause mode isn't set the game will be paused, if it it false
- * and the pause mode is set the game will be unpaused. In the other
- * cases nothing happens to the pause state.
- * @param pause whether we'd like to pause
- * @param pm the mode which we would like to pause with
- */
-static void CheckPauseHelper(bool pause, PauseMode pm)
-{
-	if (pause == _pause_mode.Test(pm)) return;
-
-	Command<CMD_PAUSE>::Post(pm, pause);
-}
-
-/**
- * Counts the number of active clients connected.
- * It has to be in STATUS_ACTIVE and not a spectator
- * @return number of active clients
- */
-static uint NetworkCountActiveClients()
-{
-	uint count = 0;
-
-	for (const NetworkClientSocket *cs : NetworkClientSocket::Iterate()) {
-		if (cs->status != NetworkClientSocket::STATUS_ACTIVE) continue;
-		if (!Company::IsValidID(cs->GetInfo()->client_playas)) continue;
-		count++;
-	}
-
-	return count;
-}
-
-/**
- * Check if the minimum number of active clients has been reached and pause or unpause the game as appropriate
- */
-static void CheckMinActiveClients()
-{
-	if (_pause_mode.Test(PauseMode::Error) ||
-			!_network_dedicated ||
-			(_settings_client.network.min_active_clients == 0 && !_pause_mode.Test(PauseMode::ActiveClients))) {
-		return;
-	}
-	CheckPauseHelper(NetworkCountActiveClients() < _settings_client.network.min_active_clients, PauseMode::ActiveClients);
-}
-
-/**
- * Checks whether there is a joining client
- * @return true iff one client is joining (but not authorizing)
- */
-static bool NetworkHasJoiningClient()
-{
-	for (const NetworkClientSocket *cs : NetworkClientSocket::Iterate()) {
-		if (cs->status >= NetworkClientSocket::STATUS_AUTHORIZED && cs->status < NetworkClientSocket::STATUS_ACTIVE) return true;
-	}
-
-	return false;
-}
-
-/**
- * Check whether we should pause on join
- */
-static void CheckPauseOnJoin()
-{
-	if (_pause_mode.Test(PauseMode::Error) ||
-			(!_settings_client.network.pause_on_join && !_pause_mode.Test(PauseMode::Join))) {
-		return;
-	}
-	CheckPauseHelper(NetworkHasJoiningClient(), PauseMode::Join);
-}
-
-/**
  * Parse the company part ("#company" postfix) of a connecting string.
  * @param connection_string The string with the connection data.
  * @param company_id        The company ID to set, if available.
@@ -1236,11 +1165,10 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 {
 	static const OpenTTDNetworkFrameServices services{
 		.command = &GetRustNetworkCommandServices(),
+		.connection = &GetRustNetworkConnectionServices(),
 		.random = _random.state,
 		.bytes_per_frame = RustNetworkBytesPerFrame,
 		.bytes_per_frame_burst = RustNetworkBytesPerFrameBurst,
-		.check_min_active_clients = []() noexcept { CheckMinActiveClients(); },
-		.check_pause_on_join = []() noexcept { CheckPauseOnJoin(); },
 		.client_desync = []() noexcept {
 			ShowNetworkError(STR_NETWORK_ERROR_DESYNC);
 			Debug(desync, 1, "sync_err: {:08x}; {:02x}", TimerGameEconomy::date, TimerGameEconomy::date_fract);
@@ -1304,17 +1232,9 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 		.replay_commands = []() noexcept { NetworkReplayCommands(); },
 		.send = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { NetworkSend(); }); },
 		.send_error = [](void *cs, uint8_t error) noexcept -> uint8_t { return static_cast<NetworkClientSocket *>(cs)->SendError(static_cast<NetworkErrorCode>(error)); },
-		.send_wait = [](void *cs) noexcept {
-			static_cast<NetworkClientSocket *>(cs)->SendWait();
-			/* We need to reset the timer, as otherwise we will be
-			 * spamming the client. Strictly speaking this variable
-			 * tracks when we last received a packet from the client,
-			 * but as it is waiting, it will not send us any till we
-			 * start sending them data. */
-			static_cast<NetworkClientSocket *>(cs)->last_packet = std::chrono::steady_clock::now();
-		},
 		.sync_freq = RustNetworkSyncFreq,
 		.sync_log = []() noexcept { NetworkSyncLog(); },
+		.wait_sent = [](void *cs) noexcept { static_cast<NetworkClientSocket *>(cs)->last_packet = std::chrono::steady_clock::now(); },
 	};
 	return services;
 }

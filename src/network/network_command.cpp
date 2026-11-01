@@ -241,32 +241,12 @@ void NetworkSendCommand(Commands cmd, StringID err_message, CommandCallback *cal
 }
 
 /**
- * Sync our local command queue to the command queue of the given socket.
- * @param cs The client to sync the queue to.
- */
-void NetworkSyncCommandQueue(NetworkClientSocket *cs)
-{
-	openttd_rust_network_sync_command_queue(&cs->outgoing_queue);
-}
-
-
-/**
  * Free the local command queues.
  */
 void NetworkFreeLocalCommandQueue()
 {
 	openttd_rust_network_free_local_command_queue();
 }
-
-/**
- * Send the outgoing command queue of a client.
- * @param cs The client to send the commands to.
- */
-void NetworkHandleCommandQueue(NetworkClientSocket *cs)
-{
-	openttd_rust_network_handle_command_queue(&GetRustNetworkCommandServices(), cs, &cs->outgoing_queue);
-}
-
 
 /**
  * Receives a command from the network.

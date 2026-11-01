@@ -13,3 +13,5 @@ pub const NETWORK_ERROR_TIMEOUT_JOIN: u8 = 19;
 /// `NetworkRecvStatus` values returned by the frame protocol.
 pub const NETWORK_RECV_STATUS_OKAY: u8 = 0;
 pub const NETWORK_RECV_STATUS_MALFORMED_PACKET: u8 = 5;
+
+pub const NETWORK_ERROR_NOT_EXPECTED: u8 = 7;

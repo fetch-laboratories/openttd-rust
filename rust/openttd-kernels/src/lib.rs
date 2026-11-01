@@ -1492,5 +1492,7 @@ mod void_map;
 mod window_type;
 
 mod network_command;
+mod network_connection;
 mod network_frame;
 mod network_type;
+mod tcp_game;

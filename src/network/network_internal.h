@@ -88,8 +88,6 @@ void UpdateNetworkGameWindow();
 
 /* From network_command.cpp */
 void NetworkFreeLocalCommandQueue();
-void NetworkSyncCommandQueue(NetworkClientSocket *cs);
-void NetworkHandleCommandQueue(NetworkClientSocket *cs);
 void NetworkReplaceCommandClientId(CommandPacket &cp, ClientID client_id);
 
 void ShowNetworkError(StringID error_string);

@@ -5,6 +5,7 @@
 #include "service_defaults.hpp"
 #include "network_command_ffi.h"
 struct OpenTTDSessionFrame;
+struct OpenTTDNetworkConnectionServices;
 /** The frame globals of the network game loop; C++ aliases each field in place. */
 struct OpenTTDNetworkFrameState {
 	uint32_t frame_counter_server;
@@ -30,11 +31,10 @@ struct OpenTTDNetworkSocketSync {
 /** Native leaves of the frame protocol: `game` is a NetworkGameSocketHandler, `socket` a NetworkClientSocket, packets are owned until sent. */
 struct OpenTTDNetworkFrameServices {
 	const OpenTTDNetworkCommandServices *command;
+	const OpenTTDNetworkConnectionServices *connection;
 	const uint32_t *random;
 	uint16_t (*bytes_per_frame)() noexcept OPENTTD_SERVICE_DEFAULT(bytes_per_frame);
 	uint16_t (*bytes_per_frame_burst)() noexcept OPENTTD_SERVICE_DEFAULT(bytes_per_frame_burst);
-	void (*check_min_active_clients)() noexcept OPENTTD_SERVICE_DEFAULT(check_min_active_clients);
-	void (*check_pause_on_join)() noexcept OPENTTD_SERVICE_DEFAULT(check_pause_on_join);
 	void (*client_desync)() noexcept OPENTTD_SERVICE_DEFAULT(client_desync);
 	void *(*client_game)() noexcept OPENTTD_SERVICE_DEFAULT(client_game);
 	OpenTTDNetworkSocketSync *(*client_sync)() noexcept OPENTTD_SERVICE_DEFAULT(client_sync);
@@ -72,9 +72,9 @@ struct OpenTTDNetworkFrameServices {
 	void (*replay_commands)() noexcept OPENTTD_SERVICE_DEFAULT(replay_commands);
 	bool (*send)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(send);
 	uint8_t (*send_error)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(send_error);
-	void (*send_wait)(void *) noexcept OPENTTD_SERVICE_DEFAULT(send_wait);
 	uint16_t (*sync_freq)() noexcept OPENTTD_SERVICE_DEFAULT(sync_freq);
 	void (*sync_log)() noexcept OPENTTD_SERVICE_DEFAULT(sync_log);
+	void (*wait_sent)(void *) noexcept OPENTTD_SERVICE_DEFAULT(wait_sent);
 };
 const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept;
 extern "C" {

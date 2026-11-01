@@ -211,8 +211,7 @@ pub extern "C" fn openttd_rust_network_send_command(
 ///
 /// # Safety
 /// `outgoing` is the live queue of a client socket.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_network_sync_command_queue(outgoing: *mut CommandQueue) {
+pub(crate) unsafe fn sync_command_queue(outgoing: *mut CommandQueue) {
     unsafe {
         let execution = EXECUTION.get();
         for index in 0..(*execution).size {
@@ -327,8 +326,7 @@ pub(crate) fn distribute_commands(s: &Services) {
 ///
 /// # Safety
 /// `outgoing` is the live queue of `socket`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_network_handle_command_queue(
+pub(crate) unsafe fn handle_command_queue(
     s: &Services,
     socket: *mut c_void,
     outgoing: *mut CommandQueue,

@@ -28,6 +28,8 @@ inline uint16_t RustCommandsPerFrame() noexcept { return _settings_client.networ
 inline uint16_t RustCommandsPerFrameServer() noexcept { return _settings_client.network.commands_per_frame_server; }
 inline uint16_t RustNetworkBytesPerFrame() noexcept { return _settings_client.network.bytes_per_frame; }
 inline uint16_t RustNetworkBytesPerFrameBurst() noexcept { return _settings_client.network.bytes_per_frame_burst; }
+inline uint8_t RustNetworkMinActiveClients() noexcept { return _settings_client.network.min_active_clients; }
+inline bool RustNetworkPauseOnJoin() noexcept { return _settings_client.network.pause_on_join; }
 inline uint8_t RustNetworkFrameFreq() noexcept { return _settings_client.network.frame_freq; }
 inline uint16_t RustNetworkMaxDownloadTime() noexcept { return _settings_client.network.max_download_time; }
 inline uint16_t RustNetworkMaxInitTime() noexcept { return _settings_client.network.max_init_time; }
