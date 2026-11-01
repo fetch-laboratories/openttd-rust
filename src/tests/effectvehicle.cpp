@@ -159,7 +159,7 @@ TEST_CASE("Effect vehicles - zero construction, nested save staging and pool cle
  * test translation unit, which GCC 15 diagnoses when devirtualizing delete. */
 static void ExpireEffect(EffectVehicle *v)
 {
-	v->subtype = EV_BREAKDOWN_SMOKE;
+	v->Record().subtype = EV_BREAKDOWN_SMOKE;
 	v->SetAnimationState(1);
 	CHECK_FALSE(v->Tick());
 }
@@ -176,13 +176,13 @@ TEST_CASE("Effect vehicles - first sprite mutation and sequence replacement")
 	sequence.count = 2;
 	sequence.seq[0] = {3738, 17};
 	sequence.seq[1] = {3740, 19};
-	v->progress = 7;
+	v->Record().progress = 7;
 	REQUIRE(v->Tick());
 	CHECK(sequence.seq[0].sprite == 3739);
 	CHECK(sequence.count == 2);
 	CHECK(sequence.seq[0].pal == 17);
 	sequence.seq[0].sprite = 3740;
-	v->progress = 15;
+	v->Record().progress = 15;
 	REQUIRE(v->Tick());
 	CHECK(sequence.seq[0].sprite == 3737);
 	CHECK(sequence.count == 1);
@@ -206,15 +206,15 @@ TEST_CASE("Effect vehicles - all factory variants and relative terrain coordinat
 		auto *v = CreateEffectVehicle(40, 50, 60, static_cast<EffectVehicleType>(subtype));
 		REQUIRE(v != nullptr);
 		CHECK(v->sprite_cache.sprite_seq.seq[0].sprite == sprites[subtype] + (subtype == 0 ? chimney_random & 7 : 0));
-		CHECK(v->progress == (subtype == 0 ? (chimney_random >> 16) & 7 : progress[subtype]));
-		CHECK((v->x_pos == 40 && v->y_pos == 50 && v->z_pos == 60));
+		CHECK(v->Record().progress == (subtype == 0 ? (chimney_random >> 16) & 7 : progress[subtype]));
+		CHECK((v->Record().x_pos == 40 && v->Record().y_pos == 50 && v->Record().z_pos == 60));
 		CHECK(v->GetAnimationState() == 0);
 		CHECK(v->GetAnimationSubstate() == 0);
-		CHECK(v->tile == TileIndex{});
+		CHECK(v->GetTile() == TileIndex{});
 		CHECK(v->spritenum == 0);
 		auto *relative = CreateEffectVehicleRel(v, -4, 5, -6, EV_ELECTRIC_SPARK);
 		REQUIRE(relative != nullptr);
-		CHECK((relative->x_pos == 36 && relative->y_pos == 55 && relative->z_pos == 54));
+		CHECK((relative->Record().x_pos == 36 && relative->Record().y_pos == 55 && relative->Record().z_pos == 54));
 		ExpireEffect(relative);
 		ExpireEffect(v);
 	}
@@ -222,8 +222,8 @@ TEST_CASE("Effect vehicles - all factory variants and relative terrain coordinat
 	/* Above clamps only the terrain query. Original x/y remain outside the map. */
 	auto *above = CreateEffectVehicleAbove(-9, 2000, 17, EV_ELECTRIC_SPARK);
 	REQUIRE(above != nullptr);
-	CHECK((above->x_pos == -9 && above->y_pos == 2000));
-	CHECK(above->z_pos == GetSlopePixelZ(0, Map::MaxY() * TILE_SIZE) + 17);
+	CHECK((above->Record().x_pos == -9 && above->Record().y_pos == 2000));
+	CHECK(above->Record().z_pos == GetSlopePixelZ(0, Map::MaxY() * TILE_SIZE) + 17);
 	ExpireEffect(above);
 	RestoreRandomSeeds(saved);
 }
