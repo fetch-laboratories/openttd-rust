@@ -13,6 +13,7 @@ SOURCES = (
     "src/network/core/packet.cpp",
     "src/string.cpp",
     "src/core/string_builder.cpp",
+    "src/core/string_consumer.cpp",
     "src/core/string_inplace.cpp",
     "src/core/utf8.cpp",
 )

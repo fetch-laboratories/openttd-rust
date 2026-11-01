@@ -15,6 +15,8 @@
 [[noreturn]] void NOT_REACHED(const std::source_location) { throw std::runtime_error("NOT_REACHED"); }
 [[noreturn]] void AssertFailedError(std::string_view, const std::source_location) { throw std::runtime_error("assertion"); }
 
+void DebugPrint(std::string_view, int, std::string &&) { std::abort(); }
+
 struct Socket : NetworkSocketHandler {
 	using NetworkSocketHandler::receive_encryption_handler;
 	using NetworkSocketHandler::send_encryption_handler;
