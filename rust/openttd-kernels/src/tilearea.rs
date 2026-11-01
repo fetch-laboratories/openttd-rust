@@ -329,6 +329,84 @@ impl DiagonalTileCursor {
     }
 }
 
+impl DiagonalTileCursor {
+    /// `DiagonalTileIterator(const DiagonalTileArea &)`, starting at the base tile.
+    #[must_use]
+    pub fn new(area: DiagonalTileArea, map: Map) -> Self {
+        Self {
+            base_x: map.tile_x(area.tile),
+            base_y: map.tile_y(area.tile),
+            a_cur: 0,
+            b_cur: 0,
+            a_max: i32::from(area.a),
+            b_max: i32::from(area.b),
+        }
+    }
+}
+
+/// `TileIterator::Create(corner1, corner2, diagonal)` for Rust area loops.
+#[derive(Clone, Copy)]
+pub enum TileIterator {
+    /// `OrthogonalTileIterator(corner1, corner2)`.
+    Orthogonal(OrthogonalTileIterator),
+    /// `DiagonalTileIterator(corner1, corner2)` and its current tile.
+    Diagonal(u32, DiagonalTileCursor),
+}
+impl TileIterator {
+    /// Build the iterator; both corner constructors assert their map range.
+    #[must_use]
+    pub fn create(
+        map: Map,
+        size: u32,
+        corner1: u32,
+        corner2: u32,
+        diagonal: bool,
+        check: impl Fn(bool),
+    ) -> Self {
+        if diagonal {
+            let area = DiagonalTileArea::from_corners(map, size, corner1, corner2, check);
+            Self::Diagonal(area.tile, DiagonalTileCursor::new(area, map))
+        } else {
+            Self::Orthogonal(OrthogonalTileIterator::new(TileArea::from_corners(
+                map, size, corner1, corner2, check,
+            )))
+        }
+    }
+    /// The current tile, `INVALID_TILE` at the end.
+    #[must_use]
+    pub fn tile(&self) -> u32 {
+        match self {
+            Self::Orthogonal(iter) => iter.tile,
+            Self::Diagonal(tile, _) => *tile,
+        }
+    }
+    /// `operator++`, with each iterator's end-of-range assertion.
+    pub fn advance(&mut self, map: Map, size: u32, check: impl FnOnce(bool)) {
+        match self {
+            Self::Orthogonal(iter) => iter.advance(map, check),
+            Self::Diagonal(tile, cursor) => *tile = cursor.advance(*tile, map, size, check),
+        }
+    }
+}
+
+/// `DiagonalTileArea(start, end).Contains(tile)` or its `OrthogonalTileArea` form.
+#[must_use]
+pub fn corners_contain(
+    map: Map,
+    size: u32,
+    start: u32,
+    end: u32,
+    diagonal: bool,
+    tile: u32,
+    check: impl Fn(bool),
+) -> bool {
+    if diagonal {
+        DiagonalTileArea::from_corners(map, size, start, end, check).contains(tile, map)
+    } else {
+        TileArea::from_corners(map, size, start, end, &check).contains(tile, map, &check)
+    }
+}
+
 /// Map dimensions and the native assertion for a facade entry.
 /// # Safety
 /// `shared` is the live shared table; the map is not being reset.
@@ -524,19 +602,11 @@ mod tests {
         for &(start, end, a, b, sequence, contained) in cases {
             let area = DiagonalTileArea::from_corners(MAP, SIZE, start, end, on_map);
             assert_eq!((area.tile, area.a, area.b), (start, a, b));
-            let mut cursor = DiagonalTileCursor {
-                base_x: MAP.tile_x(start),
-                base_y: MAP.tile_y(start),
-                a_cur: 0,
-                b_cur: 0,
-                a_max: i32::from(a),
-                b_max: i32::from(b),
-            };
-            let mut tile = area.tile;
+            let mut iter = TileIterator::create(MAP, SIZE, start, end, true, on_map);
             let mut seen = Vec::new();
-            while tile != INVALID_TILE {
-                seen.push(tile);
-                tile = cursor.advance(tile, MAP, SIZE, on_map);
+            while iter.tile() != INVALID_TILE {
+                seen.push(iter.tile());
+                iter.advance(MAP, SIZE, on_map);
             }
             assert_eq!(seen, sequence, "{start} -> {end}");
             let inside: Vec<u32> = (0..SIZE).filter(|&t| area.contains(t, MAP)).collect();
@@ -548,6 +618,21 @@ mod tests {
     fn orthogonal_corners_add_and_clamp_follow_the_original() {
         let a = TileArea::from_corners(MAP, SIZE, MAP.tile_xy(7, 5), MAP.tile_xy(2, 1), on_map);
         assert_eq!((a.tile, a.w, a.h), (18, 6, 5));
+        // Reversed corners iterate x-fast from the north corner.
+        let mut iter = TileIterator::create(
+            MAP,
+            SIZE,
+            MAP.tile_xy(3, 2),
+            MAP.tile_xy(2, 1),
+            false,
+            on_map,
+        );
+        let mut seen = Vec::new();
+        while iter.tile() != INVALID_TILE {
+            seen.push(iter.tile());
+            iter.advance(MAP, SIZE, on_map);
+        }
+        assert_eq!(seen, [18, 19, 34, 35]);
         let mut b = TileArea {
             tile: INVALID_TILE,
             w: 0,
