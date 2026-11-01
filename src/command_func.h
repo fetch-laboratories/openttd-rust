@@ -17,6 +17,8 @@
 #include "core/backup_type.hpp"
 #include "misc/endian_buffer.hpp"
 #include "tile_map.h"
+#include "rust/command_services_ffi.h"
+#include <source_location>
 
 /**
  * Define a default return value for a failed command.
@@ -55,18 +57,23 @@ static constexpr inline DoCommandFlags CommandFlagsToDCFlags(CommandFlags cmd_fl
 	return flags;
 }
 
-/** Helper class to keep track of command nesting level. */
+/** Helper class to keep track of command nesting level; Rust holds the depth. */
 struct RecursiveCommandCounter {
-	RecursiveCommandCounter() noexcept { Enter(); }
-	~RecursiveCommandCounter() noexcept { Leave(); }
-
-	static bool Enter() noexcept { return ++_counter == 1; }
-	static void Leave() noexcept { --_counter; }
+	RecursiveCommandCounter() noexcept : top_level(openttd_rust_command_enter() != 0) {}
+	~RecursiveCommandCounter() noexcept { openttd_rust_command_leave(); }
 
 	/** Are we in the top-level command execution? */
-	bool IsTopLevel() const { return _counter == 1; }
+	bool IsTopLevel() const { return this->top_level; }
 private:
-	static int _counter;
+	bool top_level;
+};
+
+/** Company backup scope of \c Execute; Rust holds and restores the backup. */
+struct CommandExecutionScope {
+	explicit CommandExecutionScope(std::source_location location = std::source_location::current()) noexcept : location(location) {}
+	~CommandExecutionScope() noexcept;
+private:
+	std::source_location location;
 };
 
 #if defined(__GNUC__) && !defined(__clang__)
@@ -87,16 +94,9 @@ private:
 template <Commands TCmd, typename T, bool THasTile> struct CommandHelper;
 
 class CommandHelperBase {
-public:
-	static void InternalDoBefore(bool top_level, bool test);
-	static void InternalDoAfter(CommandCost &res, DoCommandFlags flags, bool top_level, bool test);
 protected:
-	static std::tuple<bool, bool, bool> InternalPostBefore(Commands cmd, CommandFlags flags, TileIndex tile, StringID err_message, bool network_command);
-	static void InternalPostResult(CommandCost &res, TileIndex tile, bool estimate_only, bool only_sending, StringID err_message, bool my_cmd);
-	static bool InternalExecutePrepTest(CommandFlags cmd_flags, TileIndex tile, Backup<CompanyID> &cur_company);
-	static std::tuple<bool, bool, bool> InternalExecuteValidateTestAndPrepExec(CommandCost &res, CommandFlags cmd_flags, bool estimate_only, bool network_command, Backup<CompanyID> &cur_company);
-	static CommandCost InternalExecuteProcessResult(Commands cmd, CommandFlags cmd_flags, const CommandCost &res_test, const CommandCost &res_exec, Money extra_cash, TileIndex tile, Backup<CompanyID> &cur_company);
 	static void LogCommandExecution(Commands cmd, StringID err_message, const CommandDataBuffer &args, bool failed);
+	static bool DesyncLogging();
 };
 
 /**
@@ -117,6 +117,12 @@ private:
 		} else {
 			return std::get<0>(ret);
 		}
+	}
+
+	/** The native result of a command proc result, for the Rust lifecycle steps. */
+	static inline OpenTTDCommandCost *Cost(Tret &ret)
+	{
+		return reinterpret_cast<OpenTTDCommandCost *>(&ExtractCommandCost(ret));
 	}
 
 	/** Make a command proc result from a \c CommandCost. */
@@ -143,28 +149,25 @@ public:
 	 */
 	static Tret Do(DoCommandFlags flags, Targs... args)
 	{
+		const auto &services = GetRustCommandServices();
 		if constexpr (std::is_same_v<TileIndex, std::tuple_element_t<0, std::tuple<Targs...>>>) {
 			/* Do not even think about executing out-of-bounds tile-commands. */
 			TileIndex tile = std::get<0>(std::make_tuple(args...));
-			if (tile != 0 && (tile >= Map::Size() || (!IsValidTile(tile) && !flags.Test(DoCommandFlag::AllTiles)))) return MakeResult(CMD_ERROR);
+			if (openttd_rust_command_tile_rejected(&services, tile.base(), flags.Test(DoCommandFlag::AllTiles)) != 0) return MakeResult(CMD_ERROR);
 		}
 
 		RecursiveCommandCounter counter{};
 
 		/* Only execute the test call if it's toplevel, or we're not execing. */
-		if (counter.IsTopLevel() || !flags.Test(DoCommandFlag::Execute)) {
-			InternalDoBefore(counter.IsTopLevel(), true);
+		if (openttd_rust_command_do_test(&services, counter.IsTopLevel(), flags.base()) != 0) {
 			Tret res = CommandTraits<Tcmd>::proc(DoCommandFlags{flags}.Reset(DoCommandFlag::Execute), args...);
-			InternalDoAfter(ExtractCommandCost(res), flags, counter.IsTopLevel(), true); // Can modify res.
-
-			if (ExtractCommandCost(res).Failed() || !flags.Test(DoCommandFlag::Execute)) return res;
+			if (openttd_rust_command_do_tested(&services, Cost(res), flags.base(), counter.IsTopLevel()) == 0) return res; // Can modify res.
 		}
 
 		/* Execute the command here. All cost-relevant functions set the expenses type
 		 * themselves to the cost object at some point. */
-		InternalDoBefore(counter.IsTopLevel(), false);
 		Tret res = CommandTraits<Tcmd>::proc(flags, args...);
-		InternalDoAfter(ExtractCommandCost(res), flags, counter.IsTopLevel(), false);
+		openttd_rust_command_do_executed(&services, Cost(res), flags.base(), counter.IsTopLevel());
 
 		return res;
 	}
@@ -288,19 +291,18 @@ protected:
 	template <typename Tcallback>
 	static bool InternalPost(StringID err_message, Tcallback *callback, bool my_cmd, bool network_command, TileIndex tile, std::tuple<Targs...> args)
 	{
+		const auto &services = GetRustCommandServices();
 		/* Do not even think about executing out-of-bounds tile-commands. */
-		if (tile != 0 && (tile >= Map::Size() || (!IsValidTile(tile) && !GetCommandFlags<Tcmd>().Test(CommandFlag::AllTiles)))) return false;
+		if (openttd_rust_command_tile_rejected(&services, tile.base(), GetCommandFlags<Tcmd>().Test(CommandFlag::AllTiles)) != 0) return false;
 
-		auto [err, estimate_only, only_sending] = InternalPostBefore(Tcmd, GetCommandFlags<Tcmd>(), tile, err_message, network_command);
+		auto [err, estimate_only, only_sending] = openttd_rust_command_admit(&services, to_underlying(CommandTraits<Tcmd>::type), GetCommandFlags<Tcmd>().base(), tile.base(), err_message, network_command);
 		if (err) return false;
 
 		/* Only set client IDs when the command does not come from the network. */
 		if (!network_command && GetCommandFlags<Tcmd>().Test(CommandFlag::ClientID)) SetClientIds(args, std::index_sequence_for<Targs...>{});
 
 		Tret res = Execute(err_message, reinterpret_cast<CommandCallback *>(reinterpret_cast<void(*)()>(callback)), my_cmd, estimate_only, network_command, tile, args);
-		InternalPostResult(ExtractCommandCost(res), tile, estimate_only, only_sending, err_message, my_cmd);
-
-		if (!estimate_only && !only_sending && callback != nullptr) {
+		if (openttd_rust_command_posted(&services, Cost(res), tile.base(), estimate_only, only_sending, err_message, my_cmd, callback != nullptr) != 0) {
 			if constexpr (std::is_same_v<Tcallback, CommandCallback>) {
 				/* Callback that doesn't need any command arguments. */
 				callback(Tcmd, ExtractCommandCost(res), tile);
@@ -368,37 +370,38 @@ protected:
 			assert(AllClientIdsSet(args, std::index_sequence_for<Targs...>{}));
 		}
 
-		Backup<CompanyID> cur_company(_current_company);
-		if (!InternalExecutePrepTest(cmd_flags, tile, cur_company)) {
-			cur_company.Trash();
-			return MakeResult(CMD_ERROR);
-		}
+		const auto &services = GetRustCommandServices();
+		CommandExecutionScope cur_company{};
+		if (openttd_rust_command_prepare(&services, counter.IsTopLevel(), cmd_flags.base()) == 0) return MakeResult(CMD_ERROR);
 
 		/* Test the command. */
 		DoCommandFlags flags = CommandFlagsToDCFlags(cmd_flags);
 		Tret res = std::apply(CommandTraits<Tcmd>::proc, std::tuple_cat(std::make_tuple(flags), args));
 
-		auto [exit_test, desync_log, send_net] = InternalExecuteValidateTestAndPrepExec(ExtractCommandCost(res), cmd_flags, estimate_only, network_command, cur_company);
-		if (exit_test) {
-			if (desync_log) LogCommandExecution(Tcmd, err_message, EndianBufferWriter<CommandDataBuffer>::FromValue(args), true);
-			cur_company.Restore();
-			return res;
+		switch (openttd_rust_command_tested(&services, Cost(res), cmd_flags.base(), estimate_only, network_command)) {
+			case OpenTTDCommandTested::ExitLogged:
+				LogCommandExecution(Tcmd, err_message, EndianBufferWriter<CommandDataBuffer>::FromValue(args), true);
+				[[fallthrough]];
+			case OpenTTDCommandTested::Exit:
+				openttd_rust_command_restore(&services);
+				return res;
+
+			case OpenTTDCommandTested::Send:
+				/* In network and not from the network: send it to the command-queue and abort execution. */
+				::NetworkSendCommand(Tcmd, err_message, callback, _current_company, EndianBufferWriter<CommandDataBuffer>::FromValue(args));
+				openttd_rust_command_restore(&services);
+
+				/* Don't return anything special here; no error, no costs.
+				 * This way it's not handled by DoCommand and only the
+				 * actual execution of the command causes messages. Also
+				 * reset the storages as we've not executed the command. */
+				return {};
+
+			case OpenTTDCommandTested::Execute:
+				break;
 		}
 
-		/* If we are in network, and the command is not from the network
-		 * send it to the command-queue and abort execution. */
-		if (send_net) {
-			::NetworkSendCommand(Tcmd, err_message, callback, _current_company, EndianBufferWriter<CommandDataBuffer>::FromValue(args));
-			cur_company.Restore();
-
-			/* Don't return anything special here; no error, no costs.
-			 * This way it's not handled by DoCommand and only the
-			 * actual execution of the command causes messages. Also
-			 * reset the storages as we've not executed the command. */
-			return {};
-		}
-
-		if (desync_log) LogCommandExecution(Tcmd, err_message, EndianBufferWriter<CommandDataBuffer>::FromValue(args), false);
+		if (DesyncLogging()) LogCommandExecution(Tcmd, err_message, EndianBufferWriter<CommandDataBuffer>::FromValue(args), false);
 
 		/* Actually try and execute the command. */
 		Tret res2 = std::apply(CommandTraits<Tcmd>::proc, std::tuple_cat(std::make_tuple(flags | DoCommandFlag::Execute), args));
@@ -410,12 +413,8 @@ protected:
 			additional_money = ExtractAdditionalMoney(res2);
 		}
 
-		if constexpr (std::is_same_v<Tret, CommandCost>) {
-			return InternalExecuteProcessResult(Tcmd, cmd_flags, res, res2, additional_money, tile, cur_company);
-		} else {
-			std::get<0>(res2) = InternalExecuteProcessResult(Tcmd, cmd_flags, ExtractCommandCost(res), ExtractCommandCost(res2), additional_money, tile, cur_company);
-			return res2;
-		}
+		openttd_rust_command_finish(&services, Tcmd, to_underlying(CommandTraits<Tcmd>::type), cmd_flags.base(), Cost(res), Cost(res2), static_cast<int64_t>(additional_money), tile.base());
+		return res2;
 	}
 };
 

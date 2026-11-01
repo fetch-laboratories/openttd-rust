@@ -66,9 +66,6 @@
 #include "safeguards.h"
 
 
-int RecursiveCommandCounter::_counter = 0;
-
-
 /**
  * Define a command with the flags which belongs to it.
  *
@@ -145,106 +142,8 @@ std::string_view GetCommandName(Commands cmd)
  */
 bool IsCommandAllowedWhilePaused(Commands cmd)
 {
-	/* Lookup table for the command types that are allowed for a given pause level setting. */
-	static constexpr CommandPauseLevel command_type_lookup[] = {
-		CommandPauseLevel::AllActions, // CommandType::LandscapeConstruction
-		CommandPauseLevel::NoLandscaping, // CommandType::VehicleConstruction
-		CommandPauseLevel::NoLandscaping, // CommandType::MoneyManagement
-		CommandPauseLevel::NoConstruction, // CommandType::VehicleManagement
-		CommandPauseLevel::NoConstruction, // CommandType::RouteManagement
-		CommandPauseLevel::NoConstruction, // CommandType::OtherManagement
-		CommandPauseLevel::NoActions, // CommandType::CompanySetting
-		CommandPauseLevel::NoActions, // CommandType::ServerSetting
-		CommandPauseLevel::NoActions, // CommandType::Cheat
-	};
-	static_assert(std::size(command_type_lookup) == to_underlying(CommandType::End));
-
 	assert(IsValidCommand(cmd));
-	return _game_mode == GM_EDITOR || command_type_lookup[to_underlying(_command_proc_table[cmd].type)] <= _settings_game.construction.command_pause_level;
-}
-
-/**
- * Prepare for calling a command proc.
- * @param top_level Top level of command execution, i.e. command from a command.
- * @param test Test run of command?
- */
-void CommandHelperBase::InternalDoBefore(bool top_level, bool test)
-{
-	openttd_rust_command_before(&GetRustCommandServices(), top_level, test);
-}
-
-/**
- * Process result after calling a command proc.
- * @param[in,out] res Command result, may be modified.
- * @param flags Command flags.
- * @param top_level Top level of command execution, i.e. command from a command.
- * @param test Test run of command?
- */
-void CommandHelperBase::InternalDoAfter(CommandCost &res, DoCommandFlags flags, bool top_level, bool test)
-{
-	openttd_rust_command_after(&GetRustCommandServices(), &GetRustCommandCostServices(), reinterpret_cast<OpenTTDCommandCost *>(&res), flags.base(), top_level, test);
-}
-
-/**
- * Decide what to do with the command depending on current game state.
- * @param cmd Command to execute.
- * @param flags Command flags.
- * @param tile Tile of command execution.
- * @param err_message Message prefix to show on error.
- * @param network_command Does this command come from the network?
- * @return error state + do only cost estimation? + send to network only?
- */
-std::tuple<bool, bool, bool> CommandHelperBase::InternalPostBefore(Commands cmd, CommandFlags flags, TileIndex tile, StringID err_message, bool network_command)
-{
-	/* Cost estimation is generally only done when the
-	 * local user presses shift while doing something.
-	 * However, in case of incoming network commands,
-	 * map generation or the pause button we do want
-	 * to execute. */
-	bool estimate_only = _shift_pressed && IsLocalCompany() && !_generating_world && !network_command && !flags.Test(CommandFlag::NoEst);
-
-	/* We're only sending the command, so don't do
-	 * fancy things for 'success'. */
-	bool only_sending = _networking && !network_command;
-
-	if (_pause_mode.Any() && !IsCommandAllowedWhilePaused(cmd) && !estimate_only) {
-		ShowErrorMessage(GetEncodedString(err_message), GetEncodedString(STR_ERROR_NOT_ALLOWED_WHILE_PAUSED),
-			WL_INFO, TileX(tile) * TILE_SIZE, TileY(tile) * TILE_SIZE);
-		return { true, estimate_only, only_sending };
-	} else {
-		return { false, estimate_only, only_sending };
-	}
-}
-
-/**
- * Process result of executing a command, possibly displaying any error to the player.
- * @param res Command result.
- * @param tile Tile of command execution.
- * @param estimate_only Is this just cost estimation?
- * @param only_sending Was the command only sent to network?
- * @param err_message Message prefix to show on error.
- * @param my_cmd Is the command from this client?
- */
-void CommandHelperBase::InternalPostResult(CommandCost &res, TileIndex tile, bool estimate_only, bool only_sending, StringID err_message, bool my_cmd)
-{
-	int x = TileX(tile) * TILE_SIZE;
-	int y = TileY(tile) * TILE_SIZE;
-
-	if (res.Failed()) {
-		/* Only show the error when it's for us. */
-		if (estimate_only || (IsLocalCompany() && err_message != 0 && my_cmd)) {
-			ShowErrorMessage(GetEncodedString(err_message), x, y, res);
-		}
-	} else if (estimate_only) {
-		ShowEstimatedCostOrIncome(res.GetCost(), x, y);
-	} else if (!only_sending && tile != 0 && IsLocalCompany() && _game_mode != GM_EDITOR) {
-		/* Only show the cost animation when we did actually
-		 * execute the command, i.e. we're not sending it to
-		 * the server, when it has cost the local company
-		 * something. Furthermore in the editor there is no
-		 * concept of cost, so don't show it there either. */
-		ShowCostOrIncomeAnimation(x, y, GetSlopePixelZ(x, y), res.GetCost());
-	}
+	return openttd_rust_command_allowed_while_paused(&GetRustCommandServices(), to_underlying(_command_proc_table[cmd].type)) != 0;
 }
 
 /** Helper to make a desync log for a command. */
@@ -253,134 +152,17 @@ void CommandHelperBase::LogCommandExecution(Commands cmd, StringID err_message, 
 	Debug(desync, 1, "{}: {:08x}; {:02x}; {:02x}; {:08x}; {:08x}; {} ({})", failed ? "cmdf" : "cmd", (uint32_t)TimerGameEconomy::date.base(), TimerGameEconomy::date_fract, _current_company, cmd, err_message, FormatArrayAsHex(args), GetCommandName(cmd));
 }
 
-/**
- * Prepare for the test run of a command proc call.
- * @param cmd_flags Command flags.
- * @param[in,out] cur_company Backup of current company at start of command execution.
- * @return True if test run can go ahead, false on error.
- */
-bool CommandHelperBase::InternalExecutePrepTest(CommandFlags cmd_flags, TileIndex, Backup<CompanyID> &cur_company)
+/** Whether a desync log line would be printed. */
+bool CommandHelperBase::DesyncLogging()
 {
-	/* Always execute server and spectator commands as spectator */
-	bool exec_as_spectator = cmd_flags.Any({CommandFlag::Spectator, CommandFlag::Server});
-
-	/* If the company isn't valid it may only do server command or start a new company!
-	 * The server will ditch any server commands a client sends to it, so effectively
-	 * this guards the server from executing functions for an invalid company. */
-	if (_game_mode == GM_NORMAL && !exec_as_spectator && !Company::IsValidID(_current_company) && !(_current_company == OWNER_DEITY && cmd_flags.Test(CommandFlag::Deity))) {
-		return false;
-	}
-
-	if (exec_as_spectator) cur_company.Change(COMPANY_SPECTATOR);
-
-	/* Enter test mode. */
-	InternalDoBefore(true, true);
-	BasePersistentStorageArray::SwitchMode(PSM_ENTER_TESTMODE);
-	return true;
+	return _debug_desync_level >= 1;
 }
 
-/**
- * Validate result of test run and prepare for real execution.
- * @param cmd_flags Command flags.
- * @param[in,out] res Command result of test run, may be modified.
- * @param estimate_only Is this just cost estimation?
- * @param network_command Does this command come from the network?
- * @param[in,out] cur_company Backup of current company at start of command execution.
- * @return True if test run can go ahead, false on error.
- */
-std::tuple<bool, bool, bool> CommandHelperBase::InternalExecuteValidateTestAndPrepExec(CommandCost &res, CommandFlags cmd_flags, bool estimate_only, bool network_command, [[maybe_unused]] Backup<CompanyID> &cur_company)
+/** `Backup<CompanyID>` destruction: unrestored only while a procedure's exception unwinds `Execute`. */
+CommandExecutionScope::~CommandExecutionScope() noexcept
 {
-	BasePersistentStorageArray::SwitchMode(PSM_LEAVE_TESTMODE);
-	SetTownRatingTestMode(false);
-
-	/* Make sure we're not messing things up here. */
-	assert(cmd_flags.Any({CommandFlag::Spectator, CommandFlag::Server}) ? _current_company == COMPANY_SPECTATOR : cur_company.Verify());
-
-	/* If the command fails, we're doing an estimate
-	 * or the player does not have enough money
-	 * (unless it's a command where the test and
-	 * execution phase might return different costs)
-	 * we bail out here. */
-	bool test_and_exec_can_differ = cmd_flags.Test(CommandFlag::NoTest);
-	if (res.Failed() || estimate_only || (!test_and_exec_can_differ && !CheckCompanyHasMoney(res))) {
-		return { true, !_networking || _generating_world || network_command, false };
-	}
-
-	bool send_net = _networking && !_generating_world && !network_command;
-
-	if (!send_net) {
-		/* Prepare for command execution. */
-		InternalDoBefore(true, false);
-		BasePersistentStorageArray::SwitchMode(PSM_ENTER_COMMAND);
-	}
-
-	return { false, _debug_desync_level >= 1, send_net };
+	if (openttd_rust_command_unwind(&GetRustCommandServices()) != 0) Debug(misc, 0, "{}:{}: Backed-up value was not restored!", this->location.file_name(), this->location.line());
 }
-
-/**
- * Process the result of a command test run and execution run.
- * @param cmd Command that was executed.
- * @param cmd_flags Command flags.
- * @param res_test Command result of test run.
- * @param tes_exec Command result of real run.
- * @param extra_cash Additional cash required for successful command execution.
- * @param tile Tile of command execution.
- * @param[in,out] cur_company Backup of current company at start of command execution.
- * @return Final command result.
- */
-CommandCost CommandHelperBase::InternalExecuteProcessResult(Commands cmd, CommandFlags cmd_flags, [[maybe_unused]] const CommandCost &res_test, const CommandCost &res_exec, Money extra_cash, TileIndex tile, Backup<CompanyID> &cur_company)
-{
-	BasePersistentStorageArray::SwitchMode(PSM_LEAVE_COMMAND);
-
-	if (cmd == CMD_COMPANY_CTRL) {
-		cur_company.Trash();
-		/* We are a new company                  -> Switch to new local company.
-		 * We were closed down                   -> Switch to spectator
-		 * Some other company opened/closed down -> The outside function will switch back */
-		_current_company = _local_company;
-	} else {
-		/* Make sure nothing bad happened, like changing the current company. */
-		assert(cmd_flags.Any({CommandFlag::Spectator, CommandFlag::Server}) ? _current_company == COMPANY_SPECTATOR : cur_company.Verify());
-		cur_company.Restore();
-	}
-
-	/* If the test and execution can differ we have to check the
-	 * return of the command. Otherwise we can check whether the
-	 * test and execution have yielded the same result,
-	 * i.e. cost and error state are the same. */
-	bool test_and_exec_can_differ = cmd_flags.Test(CommandFlag::NoTest);
-	if (!test_and_exec_can_differ) {
-		assert(res_test.GetCost() == res_exec.GetCost() && res_test.Failed() == res_exec.Failed()); // sanity check
-	} else if (res_exec.Failed()) {
-		return res_exec;
-	}
-
-	/* If we're needing more money and we haven't done
-	 * anything yet, ask for the money! */
-	if (extra_cash != 0 && res_exec.GetCost() == 0) {
-		/* It could happen we removed rail, thus gained money, and deleted something else.
-		 * So make sure the signal buffer is empty even in this case */
-		UpdateSignalsInBuffer();
-		return CommandCostWithParam(STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY, extra_cash);
-	}
-
-	/* update last build coordinate of company. */
-	if (tile != 0) {
-		Company *c = Company::GetIfValid(_current_company);
-		if (c != nullptr) c->last_build_coordinate = tile;
-	}
-
-	SubtractMoneyFromCompany(res_exec);
-
-	/* Record if there was a command issues during pause; ignore pause/other setting related changes. */
-	if (_pause_mode.Any() && _command_proc_table[cmd].type != CommandType::ServerSetting) _pause_mode.Set(PauseMode::CommandDuringPause);
-
-	/* update signals if needed */
-	UpdateSignalsInBuffer();
-
-	return res_exec;
-}
-
 
 /**
  * Adds the cost of the given command return value to this cost.

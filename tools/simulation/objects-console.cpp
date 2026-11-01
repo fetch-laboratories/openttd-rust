@@ -21,7 +21,15 @@ void ObjectProbeIncreaseProgress(GenWorldProgress);
 using HiddenObjectArea = OpenTTDObjectHiddenArea;
 static HiddenObjectArea HideObjectForTunnel(TileIndex t) { return openttd_rust_object_tunnel_hide(t.base(), Map::LogX()); }
 static void RestoreObjectFirstTile(HiddenObjectArea h) { openttd_rust_object_restore_first(h); }
-static void ResetScratch() { openttd_rust_command_before(&GetRustCommandServices(), true, false); }
+/* A top-level command lifecycle around no procedure: it clears the cleared-object areas. */
+static void ResetScratch()
+{
+	CommandCost none;
+	const auto &services = GetRustCommandServices();
+	RecursiveCommandCounter top;
+	openttd_rust_command_do_test(&services, top.IsTopLevel(), 0);
+	openttd_rust_command_do_tested(&services, reinterpret_cast<OpenTTDCommandCost *>(&none), 0, top.IsTopLevel());
+}
 #else
 class AbortGenerateWorldSignal {};
 struct HiddenObjectArea { size_t index; uint32_t first_tile; };

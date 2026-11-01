@@ -14,9 +14,10 @@ struct OpenTTDOccupancyCommands;
 struct OpenTTDCompanyFinanceServices;
 struct OpenTTDCompanyServices;
 struct OpenTTDLandscapeCommandServices;
+struct OpenTTDRailMapServices;
+struct OpenTTDSharedServices;
+struct OpenTTDSignalServices;
 struct OpenTTDCommandServices {
-	bool (*enter)() noexcept OPENTTD_SERVICE_DEFAULT(enter);
-	void (*leave)() noexcept OPENTTD_SERVICE_DEFAULT(leave);
 	const OpenTTDCompanyFinanceServices *finance;
 	bool (*infinite_money)() noexcept OPENTTD_SERVICE_DEFAULT(infinite_money);
 	void (*money_error)(OpenTTDCommandCost *, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(money_error);
@@ -24,12 +25,50 @@ struct OpenTTDCommandServices {
 	const OpenTTDLandscapeCommandServices *(*landscape_commands)() noexcept OPENTTD_SERVICE_DEFAULT(landscape_commands);
 	const OpenTTDCompanyServices *(*company)() noexcept OPENTTD_SERVICE_DEFAULT(company);
 	const OpenTTDOccupancyCommands *(*occupancy)() noexcept OPENTTD_SERVICE_DEFAULT(occupancy);
+	const OpenTTDSharedServices *shared;
+	const OpenTTDCommandCostServices *cost;
+	const OpenTTDRailMapServices *rail_map;
+	const OpenTTDSignalServices *signals;
+	bool (*shift_pressed)() noexcept OPENTTD_SERVICE_DEFAULT(shift_pressed);
+	uint8_t (*pause_level)() noexcept OPENTTD_SERVICE_DEFAULT(pause_level);
+	void (*last_build_coordinate)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(last_build_coordinate);
+	uint32_t not_enough_cash;
+	void (*paused_error)(uint32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(paused_error);
+	void (*error_message)(uint32_t, int32_t, int32_t, const OpenTTDCommandCost *) noexcept OPENTTD_SERVICE_DEFAULT(error_message);
+	void (*estimate)(int64_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(estimate);
+	void (*cost_animation)(int32_t, int32_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(cost_animation);
+};
+/** Decision of `Execute` after its test procedure; see `command.rs` `Tested`. */
+enum class OpenTTDCommandTested : uint8_t {
+	Exit,
+	ExitLogged,
+	Send,
+	Execute,
+};
+/** `InternalPostBefore` decisions; see `command.rs` `Admission`. */
+struct OpenTTDCommandAdmission {
+	bool rejected;
+	bool estimate_only;
+	bool only_sending;
 };
 const OpenTTDCommandServices &GetRustCommandServices() noexcept;
+/* Predicates return 0 or 1 as uint8_t; see command.rs. */
 extern "C" {
 bool openttd_rust_command_stack_probe(const OpenTTDCommandCostServices *);
-void openttd_rust_command_before(const OpenTTDCommandServices *, bool, bool);
-void openttd_rust_command_after(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *, uint16_t, bool, bool);
+uint8_t openttd_rust_command_allowed_while_paused(const OpenTTDCommandServices *, uint8_t);
+uint8_t openttd_rust_command_enter();
+void openttd_rust_command_leave();
+uint8_t openttd_rust_command_tile_rejected(const OpenTTDCommandServices *, uint32_t, bool);
+uint8_t openttd_rust_command_do_test(const OpenTTDCommandServices *, bool, uint16_t);
+uint8_t openttd_rust_command_do_tested(const OpenTTDCommandServices *, OpenTTDCommandCost *, uint16_t, bool);
+void openttd_rust_command_do_executed(const OpenTTDCommandServices *, OpenTTDCommandCost *, uint16_t, bool);
+uint8_t openttd_rust_command_prepare(const OpenTTDCommandServices *, bool, uint16_t);
+OpenTTDCommandTested openttd_rust_command_tested(const OpenTTDCommandServices *, OpenTTDCommandCost *, uint16_t, bool, bool);
+void openttd_rust_command_restore(const OpenTTDCommandServices *);
+void openttd_rust_command_finish(const OpenTTDCommandServices *, uint8_t, uint8_t, uint16_t, const OpenTTDCommandCost *, OpenTTDCommandCost *, int64_t, uint32_t);
+uint8_t openttd_rust_command_unwind(const OpenTTDCommandServices *);
+OpenTTDCommandAdmission openttd_rust_command_admit(const OpenTTDCommandServices *, uint8_t, uint16_t, uint32_t, uint32_t, bool);
+uint8_t openttd_rust_command_posted(const OpenTTDCommandServices *, const OpenTTDCommandCost *, uint32_t, bool, bool, uint32_t, bool, bool);
 void openttd_rust_command_subtract_money(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, const OpenTTDCommandCost *);
 bool openttd_rust_command_check_money(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *);
 }

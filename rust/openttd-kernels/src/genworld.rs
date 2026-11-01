@@ -199,7 +199,6 @@ pub struct WorldServices {
     pub restore_company: extern "C" fn(*mut Frame),
     pub callback: extern "C" fn(*mut Frame, Callback) -> bool,
     pub exception_kind: extern "C" fn(*mut Frame) -> u8,
-    pub storage_discard: extern "C" fn(*mut std::ffi::c_void),
     pub dedicated: extern "C" fn() -> bool,
     pub exit_game: extern "C" fn() -> bool,
     pub set_exit: extern "C" fn(),
@@ -379,12 +378,14 @@ impl World<'_> {
     }
     fn storage_mode(&self, mode: u8, ignore: bool) {
         let landscape = unsafe { &*self.s.landscape };
+        // SAFETY: the shared table is immutable for the process lifetime.
+        let discard = unsafe { (*landscape.shared).storage_discard };
         unsafe {
             crate::newgrf_storage::openttd_rust_storage_switch_mode(
                 mode,
                 ignore,
                 landscape.assert_condition,
-                self.s.storage_discard,
+                discard,
             );
         }
     }
@@ -755,7 +756,6 @@ crate::abi::layouts! {
         restore_company,
         callback,
         exception_kind,
-        storage_discard,
         dedicated,
         exit_game,
         set_exit,
