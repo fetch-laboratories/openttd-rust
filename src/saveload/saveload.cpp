@@ -51,7 +51,11 @@
 #include "saveload_internal.h"
 #include "saveload_filter.h"
 #include "../rust/encoded_adapter.hpp"
+#include "../rust/environment_services.h"
 #include "../rust/saveload_ffi.h"
+#include "../rust/services_linkgraph.h"
+#include "../rust/services_station.h"
+#include "../rust/vehicle_services.h"
 
 #include <atomic>
 #ifdef __EMSCRIPTEN__
@@ -146,14 +150,32 @@ static bool SlNativeFrame(F &&operation) noexcept
 template <typename T>
 static uint32_t SlPoolIndex(const void *obj) noexcept
 {
-	return static_cast<const T *>(obj)->index.base();
+	if constexpr (std::is_same_v<T, Vehicle>) {
+		return RustVehicleIndexOpaque(obj);
+	} else if constexpr (std::is_same_v<T, Station>) {
+		return RustBaseStationID(static_cast<const Station *>(obj));
+	} else if constexpr (std::is_same_v<T, Town>) {
+		return RustTownAuthorityIndex(static_cast<const OpenTTDTownHandle *>(obj));
+	} else {
+		return static_cast<const T *>(obj)->index.base();
+	}
 }
 
 /** Pool item at an index, or nullptr when the index is invalid, for IntToReference. */
 template <typename T>
 static void *SlPoolGet(size_t index) noexcept
 {
-	return T::IsValidID(index) ? T::Get(index) : nullptr;
+	if (!T::IsValidID(index)) return nullptr;
+	/* Validate the full size_t index before narrowing it for shared accessors. */
+	if constexpr (std::is_same_v<T, Station>) {
+		return RustStationGet<Station *>(static_cast<uint16_t>(index));
+	} else if constexpr (std::is_same_v<T, Town>) {
+		return OpenTTDTownShellByID(static_cast<uint32_t>(index));
+	} else if constexpr (std::is_same_v<T, LinkGraph>) {
+		return RustLinkGraphGet(static_cast<uint16_t>(index));
+	} else {
+		return T::Get(index);
+	}
 }
 
 static const OpenTTDSaveLoadServices _sl_services = {
