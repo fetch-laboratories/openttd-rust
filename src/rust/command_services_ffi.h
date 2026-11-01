@@ -14,9 +14,10 @@ struct OpenTTDOccupancyCommands;
 struct OpenTTDCompanyFinanceServices;
 struct OpenTTDCompanyServices;
 struct OpenTTDLandscapeCommandServices;
+struct OpenTTDRailMapServices;
+struct OpenTTDSharedServices;
+struct OpenTTDSignalServices;
 struct OpenTTDCommandServices {
-	bool (*enter)() noexcept OPENTTD_SERVICE_DEFAULT(enter);
-	void (*leave)() noexcept OPENTTD_SERVICE_DEFAULT(leave);
 	const OpenTTDCompanyFinanceServices *finance;
 	bool (*infinite_money)() noexcept OPENTTD_SERVICE_DEFAULT(infinite_money);
 	void (*money_error)(OpenTTDCommandCost *, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(money_error);
@@ -24,12 +25,40 @@ struct OpenTTDCommandServices {
 	const OpenTTDLandscapeCommandServices *(*landscape_commands)() noexcept OPENTTD_SERVICE_DEFAULT(landscape_commands);
 	const OpenTTDCompanyServices *(*company)() noexcept OPENTTD_SERVICE_DEFAULT(company);
 	const OpenTTDOccupancyCommands *(*occupancy)() noexcept OPENTTD_SERVICE_DEFAULT(occupancy);
+	const OpenTTDSharedServices *shared;
+	const OpenTTDCommandCostServices *cost;
+	const OpenTTDRailMapServices *rail_map;
+	const OpenTTDSignalServices *signals;
+	void (*assert_condition)(bool) noexcept OPENTTD_SERVICE_DEFAULT(assert_condition);
+	void (*storage_discard)(void *) noexcept OPENTTD_SERVICE_DEFAULT(storage_discard);
+	bool (*shift_pressed)() noexcept OPENTTD_SERVICE_DEFAULT(shift_pressed);
+	uint8_t (*pause_level)() noexcept OPENTTD_SERVICE_DEFAULT(pause_level);
+	int32_t (*desync_level)() noexcept OPENTTD_SERVICE_DEFAULT(desync_level);
+	void (*last_build_coordinate)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(last_build_coordinate);
+	uint32_t not_enough_cash;
+	void (*paused_error)(uint32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(paused_error);
+	void (*error_message)(uint32_t, int32_t, int32_t, const OpenTTDCommandCost *) noexcept OPENTTD_SERVICE_DEFAULT(error_message);
+	void (*estimate)(int64_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(estimate);
+	void (*cost_animation)(int32_t, int32_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(cost_animation);
+};
+/** One typed `Command<Tcmd>` invocation; see `command.rs` `Frame`. */
+struct OpenTTDCommandFrame {
+	OpenTTDCommandCost *results[3];
+	bool (*run)(OpenTTDCommandFrame *, uint16_t, uint8_t) noexcept;
+	int64_t (*additional_money)(OpenTTDCommandFrame *) noexcept;
+	void (*log)(OpenTTDCommandFrame *, bool) noexcept;
+	void (*send)(OpenTTDCommandFrame *, uint8_t) noexcept;
+	void (*set_client_ids)(OpenTTDCommandFrame *) noexcept;
+	void (*assert_client_ids)(OpenTTDCommandFrame *) noexcept;
+	void (*callback)(OpenTTDCommandFrame *, uint8_t) noexcept;
 };
 const OpenTTDCommandServices &GetRustCommandServices() noexcept;
 extern "C" {
 bool openttd_rust_command_stack_probe(const OpenTTDCommandCostServices *);
-void openttd_rust_command_before(const OpenTTDCommandServices *, bool, bool);
-void openttd_rust_command_after(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *, uint16_t, bool, bool);
+bool openttd_rust_command_allowed_while_paused(const OpenTTDCommandServices *, uint8_t);
+bool openttd_rust_command_do(const OpenTTDCommandServices *, OpenTTDCommandFrame *, uint32_t, uint16_t);
+uint8_t openttd_rust_command_execute(const OpenTTDCommandServices *, OpenTTDCommandFrame *, uint8_t, uint8_t, uint16_t, bool, uint32_t);
+uint8_t openttd_rust_command_post(const OpenTTDCommandServices *, OpenTTDCommandFrame *, uint8_t, uint8_t, uint16_t, uint32_t, bool, bool, uint32_t, bool);
 void openttd_rust_command_subtract_money(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, const OpenTTDCommandCost *);
 bool openttd_rust_command_check_money(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *);
 }

@@ -149,35 +149,11 @@ const OpenTTDCommandCostServices &GetRustCommandCostServices() noexcept
 	return services;
 }
 
-/* Direct command execution and its tile callbacks do not run a script VM or
- * save/load code. They may reenter Rust owners, but ordinary play cannot unwind
- * these leaves; allocation/error-formatting failures terminate under noexcept.
- * The native returned object is moved whole into its caller's stack sink. */
-static bool CommandInfiniteMoney() noexcept { return _settings_game.difficulty.infinite_money; }
-static void CommandMoneyError(OpenTTDCommandCost *cost, int64_t amount) noexcept
-{
-	NativeCost(cost)->MakeError(STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY);
-	if (RustIsLocalCompany()) NativeCost(cost)->SetEncodedMessage(GetEncodedString(STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY, Money(amount)));
-}
 const OpenTTDEnvironmentServices &GetRustEnvironmentServices() noexcept
 {
 	static const OpenTTDEnvironmentServices services{.editor = OpenTTDEditor, .freeform_edges = OpenTTDFreeformEdges};
 	return services;
 }
-const OpenTTDCommandServices &GetRustCommandServices() noexcept
-{
-	static const OpenTTDCommandServices services{
-		.enter = RecursiveCommandCounter::Enter, .leave = RecursiveCommandCounter::Leave,
-		.finance = &GetRustCompanyFinanceServices(),
-		.infinite_money = CommandInfiniteMoney, .money_error = CommandMoneyError,
-		.infrastructure_dirty = RustInfrastructureDirty,
-		.landscape_commands = []() noexcept { return &GetRustLandscapeCommandServices(); },
-		.company = []() noexcept { return &GetRustCompanyServices(); },
-		.occupancy = GetRustOccupancyCommands,
-	};
-	return services;
-}
-
 const OpenTTDWaterRestorationServices &GetRustWaterRestorationServices() noexcept
 {
 	static const OpenTTDWaterRestorationServices services{
@@ -293,6 +269,11 @@ static_assert(ROAD_X == 10 && ROAD_Y == 5);
 static_assert(AXIS_X == 0 && AXIS_Y == 1 && INVALID_AXIS == 0xFF);
 static_assert(PR_TERRAFORM == 21 && PR_CLEAR_CANAL == 61 && PR_CLEAR_TREES == 26);
 static_assert(to_underlying(DoCommandFlag::AutoReplace) == 6 && to_underlying(DoCommandFlag::NoCargoCapacityCheck) == 7);
+static_assert(to_underlying(DoCommandFlag::AllTiles) == 8 && CMD_COMPANY_CTRL == 90 && std::is_same_v<CommandFlags::BaseType, uint16_t>);
+static_assert(to_underlying(CommandFlag::Server) == 0 && to_underlying(CommandFlag::Spectator) == 1 && to_underlying(CommandFlag::Auto) == 3 && to_underlying(CommandFlag::AllTiles) == 4 && to_underlying(CommandFlag::NoTest) == 5);
+static_assert(to_underlying(CommandFlag::NoWater) == 6 && to_underlying(CommandFlag::ClientID) == 7 && to_underlying(CommandFlag::Deity) == 8 && to_underlying(CommandFlag::NoEst) == 10);
+static_assert(to_underlying(CommandType::ServerSetting) == 7 && to_underlying(CommandType::End) == 9);
+static_assert(to_underlying(CommandPauseLevel::NoActions) == 0 && to_underlying(CommandPauseLevel::NoConstruction) == 1 && to_underlying(CommandPauseLevel::NoLandscaping) == 2 && to_underlying(CommandPauseLevel::AllActions) == 3);
 static_assert(AIR_HELICOPTER == 0 && AIR_AIRCRAFT == 2 && AIR_CTOL == 1 && HANGAR == 1);
 static_assert(OT_NOTHING == 0 && OT_GOTO_STATION == 1 && OT_GOTO_DEPOT == 2 && OT_LOADING == 3 && OT_LEAVESTATION == 4 && OT_DUMMY == 5 && OT_GOTO_WAYPOINT == 6 && OT_CONDITIONAL == 7 && OT_IMPLICIT == 8);
 static_assert(INVALID_VEH_ORDER_ID == 0xFF && to_underlying(OrderLoadType::NoLoad) == 4 && to_underlying(OrderUnloadType::Unload) == 1 && to_underlying(OrderUnloadType::Transfer) == 2 && to_underlying(OrderUnloadType::NoUnload) == 4);

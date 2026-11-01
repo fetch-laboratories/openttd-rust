@@ -138,10 +138,6 @@ pub struct CommandCostServices {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct CommandServices {
-    /// Enter native command nesting and report whether this entry is top-level.
-    pub enter: extern "C" fn() -> bool,
-    /// Leave exactly one command nesting level.
-    pub leave: extern "C" fn(),
     /// Canonical native finance owner resolution and presentation leaves.
     pub finance: &'static crate::company::FinanceServices,
     /// Current infinite-money difficulty setting.
@@ -156,6 +152,36 @@ pub struct CommandServices {
     pub company: extern "C" fn() -> *const crate::company::Services,
     /// Direct Rust occupancy owner, shared by every command.
     pub occupancy: extern "C" fn() -> *const crate::vehicle::occupancy::Commands,
+    /// Shared map, company and generation observations of the invocation lifecycle.
+    pub shared: &'static Services,
+    /// Native result storage of every invocation.
+    pub cost: &'static CommandCostServices,
+    /// Rail map table of the signal buffer owner for `UpdateSignalsInBuffer`.
+    pub rail_map: &'static RailMapServices,
+    /// Native signal leaves of the signal buffer owner.
+    pub signals: &'static crate::signal::SignalServices,
+    /// Native `assert` policy.
+    pub assert_condition: extern "C" fn(bool),
+    /// Persistent storage backup release on leaving test mode.
+    pub storage_discard: extern "C" fn(*mut std::ffi::c_void),
+    /// `_shift_pressed`.
+    pub shift_pressed: extern "C" fn() -> bool,
+    /// `_settings_game.construction.command_pause_level`.
+    pub pause_level: extern "C" fn() -> u8,
+    /// `_debug_desync_level`.
+    pub desync_level: extern "C" fn() -> i32,
+    /// `Company::GetIfValid(company)->last_build_coordinate = tile`.
+    pub last_build_coordinate: extern "C" fn(u8, u32),
+    /// `STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY`.
+    pub not_enough_cash: u32,
+    /// `ShowErrorMessage` with `STR_ERROR_NOT_ALLOWED_WHILE_PAUSED` at pixel coordinates.
+    pub paused_error: extern "C" fn(u32, i32, i32),
+    /// `ShowErrorMessage` for a failed result at pixel coordinates.
+    pub error_message: extern "C" fn(u32, i32, i32, *const CommandCost),
+    /// `ShowEstimatedCostOrIncome`.
+    pub estimate: extern "C" fn(i64, i32, i32),
+    /// `ShowCostOrIncomeAnimation` at the tile's slope height.
+    pub cost_animation: extern "C" fn(i32, i32, i64),
 }
 
 impl CommandServices {
@@ -669,8 +695,6 @@ crate::abi::layouts! {
         wormhole_reserved,
     };
     "OpenTTDCommandServices" ["probe"] => crate::services::CommandServices {
-        enter,
-        leave,
         finance,
         infinite_money,
         money_error,
@@ -678,6 +702,31 @@ crate::abi::layouts! {
         landscape_commands,
         company,
         occupancy,
+        shared,
+        cost,
+        rail_map,
+        signals,
+        assert_condition,
+        storage_discard,
+        shift_pressed,
+        pause_level,
+        desync_level,
+        last_build_coordinate,
+        not_enough_cash,
+        paused_error,
+        error_message,
+        estimate,
+        cost_animation,
+    };
+    "OpenTTDCommandFrame" ["probe"] => crate::command::Frame {
+        results,
+        run,
+        additional_money,
+        log,
+        send,
+        set_client_ids,
+        assert_client_ids,
+        callback,
     };
     "OpenTTDCommandCostServices" ["probe"] => crate::services::CommandCostServices {
         construct,
