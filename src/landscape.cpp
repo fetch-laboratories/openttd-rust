@@ -123,14 +123,10 @@ static const uint TILE_UPDATE_FREQUENCY = 1 << TILE_UPDATE_FREQUENCY_LOG;  ///< 
  * @ingroup SnowLineGroup
  * @see GetSnowLine() GameCreationSettings
  */
-#ifdef WITH_RUST
 /* Preserve the native static owner's shutdown point. */
 static struct SnowLineCleanup {
 	~SnowLineCleanup() { ClearSnowLine(); }
 } _snow_line_cleanup;
-#else
-static std::unique_ptr<SnowLine> _snow_line;
-#endif
 
 /**
  * Map 2D viewport or smallmap coordinate to 3D world or tile coordinate.
@@ -575,11 +571,7 @@ void GetTileDesc(TileIndex tile, TileDesc &td)
  */
 bool IsSnowLineSet()
 {
-#ifdef WITH_RUST
 	return openttd_rust_snow_line_is_set();
-#else
-	return _snow_line != nullptr;
-#endif
 }
 
 /**
@@ -589,11 +581,7 @@ bool IsSnowLineSet()
  */
 void SetSnowLine(std::unique_ptr<SnowLine> &&snow_line)
 {
-#ifdef WITH_RUST
 	openttd_rust_snow_line_set(&GetRustSharedServices().snow_line_support, snow_line.release());
-#else
-	_snow_line = std::move(snow_line);
-#endif
 }
 
 /**
@@ -603,14 +591,7 @@ void SetSnowLine(std::unique_ptr<SnowLine> &&snow_line)
  */
 uint8_t GetSnowLine()
 {
-#ifdef WITH_RUST
 	return openttd_rust_snow_line_get(&GetRustSharedServices());
-#else
-	if (_snow_line == nullptr) return _settings_game.game_creation.snow_line_height;
-
-	TimerGameCalendar::YearMonthDay ymd = TimerGameCalendar::ConvertDateToYMD(TimerGameCalendar::date);
-	return _snow_line->table[ymd.month][ymd.day];
-#endif
 }
 
 /**
@@ -618,12 +599,6 @@ uint8_t GetSnowLine()
  * @return the highest snow line height.
  * @ingroup SnowLineGroup
  */
-#ifndef WITH_RUST
-uint8_t HighestSnowLine()
-{
-	return _snow_line == nullptr ? _settings_game.game_creation.snow_line_height : _snow_line->highest_value;
-}
-#endif
 
 /**
  * Get the lowest possible snow line height, either variable or static.
@@ -632,11 +607,7 @@ uint8_t HighestSnowLine()
  */
 uint8_t LowestSnowLine()
 {
-#ifdef WITH_RUST
 	return openttd_rust_snow_line_lowest(&GetRustSharedServices());
-#else
-	return _snow_line == nullptr ? _settings_game.game_creation.snow_line_height : _snow_line->lowest_value;
-#endif
 }
 
 /**
@@ -645,44 +616,13 @@ uint8_t LowestSnowLine()
  */
 void ClearSnowLine()
 {
-#ifdef WITH_RUST
 	openttd_rust_snow_line_clear(&GetRustSharedServices());
-#else
-	_snow_line = nullptr;
-#endif
 }
 
 /**
  * Check if all tiles on the map edge should be considered water borders.
  * @return true If the edge of the map is flat and height 0, allowing for infinite water borders.
  */
-#ifndef WITH_RUST
-bool IsMapSurroundedByWater()
-{
-	auto check_tile = [](uint x, uint y) -> bool {
-		auto [slope, h] = GetTilePixelSlopeOutsideMap(x, y);
-		return ((slope == SLOPE_FLAT) && (h == 0));
-	};
-
-	/* Check the map corners. */
-	if (!check_tile(0, 0)) return false;
-	if (!check_tile(0, Map::SizeY())) return false;
-	if (!check_tile(Map::SizeX(), 0)) return false;
-	if (!check_tile(Map::SizeX(), Map::SizeY())) return false;
-
-	/* Check the map edges.*/
-	for (uint x = 0; x <= Map::SizeX(); x++) {
-		if (!check_tile(x, 0)) return false;
-		if (!check_tile(x, Map::SizeY())) return false;
-	}
-	for (uint y = 1; y < Map::SizeY(); y++) {
-		if (!check_tile(0, y)) return false;
-		if (!check_tile(Map::SizeX(), y)) return false;
-	}
-
-	return true;
-}
-#endif
 
 /**
  * Clear a piece of landscape

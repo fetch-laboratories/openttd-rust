@@ -29,15 +29,9 @@ struct SnowLine {
 bool IsSnowLineSet();
 void SetSnowLine(std::unique_ptr<SnowLine> &&snow_line);
 uint8_t GetSnowLine();
-#ifndef WITH_RUST
-uint8_t HighestSnowLine();
-#endif
 uint8_t LowestSnowLine();
 void ClearSnowLine();
 
-#ifndef WITH_RUST
-bool IsMapSurroundedByWater();
-#endif
 
 int GetSlopeZInCorner(Slope tileh, Corner corner);
 std::tuple<Slope, int> GetFoundationSlope(TileIndex tile);
