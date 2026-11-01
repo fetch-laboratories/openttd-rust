@@ -29,6 +29,7 @@ struct StationSpec;
 struct RoadStopSpec;
 struct OpenTTDRoadStopResolverServices;
 struct BridgeableTileInfo;
+struct OrthogonalTileArea;
 struct OpenTTDStationArea { uint32_t tile; uint16_t w, h; };
 struct OpenTTDStationBridgeInfo { const BridgeableTileInfo *data; size_t size; };
 struct OpenTTDStationAssociationServices;
