@@ -195,17 +195,11 @@ static const OpenTTDSaveLoadServices _sl_services = {
 		str.resize(length);
 		return reinterpret_cast<uint8_t *>(str.data());
 	},
-	.apply_encoded = [](void *ptr, OpenTTDRustEncodedResult *result) noexcept {
-		auto owner = OwnRustEncoded(result);
+	.apply_encoded = [](void *ptr, const OpenTTDRustEncodedView *view, const OpenTTDRustEncodedDiagnostic *diagnostics) noexcept {
 		std::string &str = *static_cast<std::string *>(ptr);
-		str = CopyRustEncoded(owner, str);
-	},
-	.make_valid = [](void *ptr, bool control, bool newline, bool tabcrlf) noexcept {
-		StringValidationSettings settings = StringValidationSetting::ReplaceWithQuestionMark;
-		if (control) settings.Set(StringValidationSetting::AllowControlCode);
-		if (newline) settings.Set(StringValidationSetting::AllowNewline);
-		if (tabcrlf) settings.Set(StringValidationSetting::ReplaceTabCrNlWithSpace);
-		StrMakeValidInPlace(*static_cast<std::string *>(ptr), settings);
+		for (size_t i = 0; i < view->diagnostic_count; ++i) LogRustEncodedDiagnostic(diagnostics[i], str);
+		AssertRustEncoded(*view, str);
+		str = view->length == 0 ? std::string{} : std::string(reinterpret_cast<const char *>(view->bytes), view->length);
 	},
 	.autolength = [](const void *proc, int32_t arg) noexcept { return SlNativeFrame([&] { reinterpret_cast<AutolengthProc *>(const_cast<void *>(proc))(arg); }); },
 };

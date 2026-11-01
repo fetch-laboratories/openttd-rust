@@ -209,11 +209,12 @@ pub struct OpenTTDSaveLoadServices {
     pub string_data: extern "C" fn(ptr: *const c_void, length: *mut usize) -> *const u8,
     /// `std::string` at `ptr`: `resize(length)`, then `data()`.
     pub string_resize: extern "C" fn(ptr: *mut c_void, length: usize) -> *mut u8,
-    /// `*str = CopyRustEncoded(result, *str)` for the `std::string` at `ptr`: replays the
-    /// result's diagnostics and assertions, then destroys the result it owns.
-    pub apply_encoded: extern "C" fn(ptr: *mut c_void, result: *mut c_void),
-    /// `StrMakeValidInPlace(*str, settings)` with `ReplaceWithQuestionMark` and the given flags.
-    pub make_valid: extern "C" fn(ptr: *mut c_void, control: bool, newline: bool, tabcrlf: bool),
+    /// Replay native diagnostics/assertions and copy the borrowed encoded output into `*str`.
+    pub apply_encoded: extern "C" fn(
+        ptr: *mut c_void,
+        view: *const crate::encoded::View,
+        diagnostics: *const crate::encoded::Diagnostic,
+    ),
     /// `proc(arg)` for `SlAutolength`, where `proc` is an `AutolengthProc *`; false when it threw.
     pub autolength: extern "C" fn(proc_: *const c_void, arg: i32) -> bool,
 }
@@ -1040,9 +1041,45 @@ fn fix_encoded(
     let data = (services.string_data)(ptr, &raw mut len);
     // SAFETY: `string_data` returns the string's live bytes, unchanged until `apply_encoded`.
     let output = fix(unsafe { crate::utf8::borrow(data, len) });
-    if output.view().apply != 0 {
-        (services.apply_encoded)(ptr, Box::into_raw(Box::new(output)).cast());
+    let view = output.view();
+    if view.apply != 0 {
+        (services.apply_encoded)(ptr, &raw const view, output.diagnostics().as_ptr());
     }
+}
+
+/// `StrMakeValidInPlace(std::string &)`: compact the existing allocation in place.
+fn make_valid(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv: u32) {
+    let mut length = 0;
+    let data = (services.string_data)(ptr, &raw mut length).cast_mut();
+    let settings = 1
+        | (u8::from(conv & SLF_ALLOW_NEWLINE != 0) << 1)
+        | (u8::from(conv & SLF_ALLOW_CONTROL != 0) << 2)
+        | (u8::from(conv & SLF_REPLACE_TABCRLF != 0) << 3);
+    let mut consumed = 0;
+    let mut written = 0;
+    while consumed < length {
+        // SAFETY: Each decision borrows the unread suffix only until the in-place write.
+        let step = crate::string_validation::step(
+            unsafe { crate::utf8::borrow(data.add(consumed), length - consumed) },
+            settings,
+        );
+        consumed += step.consumed;
+        if step.stopped != 0 {
+            break;
+        }
+        // SAFETY: Validation emits no more bytes than it consumes, as required by
+        // `InPlaceReplacement`; the output array is independent of the string.
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                step.output.bytes.as_ptr(),
+                data.add(written),
+                step.output.length,
+            );
+        }
+        written += step.output.length;
+    }
+    // Every string borrow has ended before the native resize.
+    (services.string_resize)(ptr, written);
 }
 
 /// `SlStdString`.
@@ -1072,12 +1109,7 @@ fn std_string(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv: u32) -
                     fix_encoded(services, ptr, crate::encoded::negatives);
                 }
             }
-            (services.make_valid)(
-                ptr,
-                control,
-                conv & SLF_ALLOW_NEWLINE != 0,
-                conv & SLF_REPLACE_TABCRLF != 0,
-            );
+            make_valid(services, ptr, conv);
         }
         SLA_PTRS | SLA_NULL => {}
         _ => not_reached(services),
@@ -1592,7 +1624,6 @@ crate::abi::layouts! {
         string_data,
         string_resize,
         apply_encoded,
-        make_valid,
         autolength,
     };
 }
@@ -1634,10 +1665,11 @@ mod tests {
     extern "C" fn unused_resize(_: *mut c_void, _: usize) -> *mut u8 {
         unreachable!("unused service")
     }
-    extern "C" fn unused_apply(_: *mut c_void, _: *mut c_void) {
-        unreachable!("unused service")
-    }
-    extern "C" fn unused_valid(_: *mut c_void, _: bool, _: bool, _: bool) {
+    extern "C" fn unused_apply(
+        _: *mut c_void,
+        _: *const crate::encoded::View,
+        _: *const crate::encoded::Diagnostic,
+    ) {
         unreachable!("unused service")
     }
     extern "C" fn unused_autolength(_: *const c_void, _: i32) -> bool {
@@ -1676,7 +1708,6 @@ mod tests {
         string_data: unused_data,
         string_resize: unused_resize,
         apply_encoded: unused_apply,
-        make_valid: unused_valid,
         autolength: unused_autolength,
     };
 
