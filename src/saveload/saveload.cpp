@@ -53,6 +53,7 @@
 #include "../rust/encoded_adapter.hpp"
 #include "../rust/environment_services.h"
 #include "../rust/saveload_ffi.h"
+#include "../rust/services_autoreplace.h"
 #include "../rust/services_linkgraph.h"
 #include "../rust/services_station.h"
 #include "../rust/vehicle_services.h"
@@ -156,6 +157,8 @@ static uint32_t SlPoolIndex(const void *obj) noexcept
 		return RustBaseStationID(static_cast<const Station *>(obj));
 	} else if constexpr (std::is_same_v<T, Town>) {
 		return RustTownAuthorityIndex(static_cast<const OpenTTDTownHandle *>(obj));
+	} else if constexpr (std::is_same_v<T, EngineRenew>) {
+		return RustEngineRenewIndex(obj);
 	} else {
 		return static_cast<const T *>(obj)->index.base();
 	}
