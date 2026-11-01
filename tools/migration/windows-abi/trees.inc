@@ -24,7 +24,6 @@ static const OpenTTDTreeServices tree_probe_services{
 	.tree_observation = [](uint32_t) noexcept { return tree_probe.tree; },
 	.tree_count = [](uint32_t) noexcept { return uint32_t{tree_probe.tree.count}; },
 	.clear_observation = [](uint32_t) noexcept { return OpenTTDTreeClearObservation{.count = tree_probe.tree.count, .species = tree_probe.tree.species}; },
-	.snow_line = TreeUnused<uint8_t>,
 	.sin = [](float value) noexcept { return value; },
 	.cos = [](float value) noexcept { return value; },
 	.make_tree = [](uint32_t tile, uint8_t type, uint32_t count, uint8_t growth, uint8_t ground, uint32_t density) noexcept {
@@ -121,8 +120,8 @@ static void Trees()
 	Tick(4096 * 4096);
 	CHECK(*counter == 36 && tree_probe.writes == 0);
 	tree_probe.plant = {.tile_type = 0, .bridge = false, .ground = 0, .density = 2, .snow = false, .coast = false, .zone = 0};
-	openttd_rust_trees_plant(1, 12, 2, 6, &tree_probe_services, &shared);
-	CHECK(tree_probe.writes == 1 && openttd_rust_trees_can_plant(1, false, &tree_probe_services));
+	openttd_rust_trees_place(1, 0x00860000, true, 1, &tree_probe_services, &shared);
+	CHECK(tree_probe.writes == 1);
 	tree_probe.plant.tile_type = 4;
 	const OpenTTDCommandServices commands{};
 	const auto command = openttd_rust_trees_cmd_plant(nullptr, 1, 1, 255, false,

@@ -119,6 +119,7 @@ mod signal;
 mod signal_func;
 mod signal_type;
 mod slope_func;
+mod snow_line;
 mod sound_type;
 mod sprites;
 mod station;

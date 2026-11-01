@@ -24,6 +24,12 @@
 #include "../tile_map.h"
 #include "../slope_func.h"
 #include "../landscape.h"
+#include "../timer/timer_game_calendar.h"
+#include "../rust/snow_line_ffi.h"
+#include "../clear_map.h"
+#include "../strings_func.h"
+#include "../table/strings.h"
+#include "../rust/command_services.h"
 #include "../heightmap.h"
 #include "../road_type.h"
 #include "../station_type.h"
@@ -33,6 +39,59 @@
 #include "world_generation_probe.hpp"
 #include "../safeguards.h"
 
+static uint snow_line_deleted;
+TEST_CASE("Rust snow-line owner preserves native allocation, dates and serialized threads")
+{
+	ABI_LAYOUT_CHECK;
+#include "abi-layout-landscape.inc"
+	AutoRestoreBackup height(_settings_game.game_creation.snow_line_height, uint8_t{7});
+	AutoRestoreBackup date(TimerGameCalendar::date, TimerGameCalendar::date);
+	ClearSnowLine();
+	TimerGameCalendar::date = TimerGameCalendar::Date{-1};
+	for (uint8_t value : {0, 255, 19}) {
+		_settings_game.game_creation.snow_line_height = value;
+		CHECK_FALSE(IsSnowLineSet());
+		CHECK(GetSnowLine() == value); CHECK(openttd_test_snow_line_highest(&GetRustSharedServices()) == value); CHECK(LowestSnowLine() == value);
+	}
+	auto table = std::make_unique<SnowLine>();
+	for (uint month = 0; month < 12; month++) for (uint day = 0; day < 32; day++) table->table[month][day] = static_cast<uint8_t>(month * 37 + day * 11);
+	table->highest_value = 3; table->lowest_value = 249;
+	std::thread install([&] { SetSnowLine(std::move(table)); }); install.join();
+	CHECK(table == nullptr); CHECK(IsSnowLineSet());
+	_settings_game.game_creation.snow_line_height = 255;
+	std::thread read([&] {
+		CHECK(openttd_test_snow_line_highest(&GetRustSharedServices()) == 3); CHECK(LowestSnowLine() == 249);
+		for (int year : {1999, 2000, 2001, 2100}) {
+			auto first = TimerGameCalendar::ConvertYMDToDate(TimerGameCalendar::Year{year}, 0, 1);
+			auto end = TimerGameCalendar::ConvertYMDToDate(TimerGameCalendar::Year{year + 1}, 0, 1);
+			for (auto day = first; day < end; ++day) {
+				TimerGameCalendar::date = day;
+				auto ymd = TimerGameCalendar::ConvertDateToYMD(day);
+				CHECK(GetSnowLine() == static_cast<uint8_t>(ymd.month * 37 + ymd.day * 11));
+			}
+		}
+	}); read.join();
+	_settings_game.game_creation.snow_line_height = 19;
+	snow_line_deleted = 0;
+	auto support = GetRustSharedServices().snow_line_support;
+	support.destroy = [](SnowLine *old) noexcept {
+		snow_line_deleted++;
+		CHECK(IsSnowLineSet() == (snow_line_deleted == 1));
+		delete old;
+	};
+	auto replacement = std::make_unique<SnowLine>();
+	replacement->table[0][1] = 255; replacement->highest_value = 0; replacement->lowest_value = 255;
+	TimerGameCalendar::date = TimerGameCalendar::ConvertYMDToDate(TimerGameCalendar::Year{2000}, 0, 1);
+	openttd_rust_snow_line_set(&support, replacement.release());
+	CHECK(snow_line_deleted == 1); CHECK(GetSnowLine() == 255); CHECK(openttd_test_snow_line_highest(&GetRustSharedServices()) == 0); CHECK(LowestSnowLine() == 255);
+	openttd_rust_snow_line_set(&support, nullptr);
+	CHECK(snow_line_deleted == 2); CHECK(GetSnowLine() == 19);
+	SetSnowLine(std::make_unique<SnowLine>());
+	std::thread clear([] { ClearSnowLine(); }); clear.join();
+	CHECK_FALSE(IsSnowLineSet());
+	SetSnowLine(nullptr); ClearSnowLine(); ClearSnowLine();
+	CHECK(GetSnowLine() == 19);
+}
 TEST_CASE("Town import coordinates preserve native float conversions")
 {
 	const OpenTTDTownDataServices services{.shared = &GetRustSharedServices(), .founding = nullptr, .strings = {}};
@@ -157,6 +216,25 @@ TEST_CASE("Rust production pixel entries observe live native corners and realloc
 			auto [slope, z] = GetTilePixelSlope(t);
 			CHECK(openttd_rust_movement_pixel_z(&GetRustMovementServices(), x * TILE_SIZE, y * TILE_SIZE, false) == z + static_cast<int>(GetPartialPixelZ(0, 0, slope)));
 		}
+	}
+	Map::Allocate(64, 64);
+}
+
+TEST_CASE("Clear-ground production entry keeps native zero-cost metadata")
+{
+	for (const uint width : {64U, 128U}) {
+		Map::Allocate(width, 64);
+		const TileIndex tile = TileXY(1, 1);
+		MakeClear(tile, CLEAR_GRASS, 0);
+		CommandCost cost(STR_ERROR_OWNED_BY, STR_ERROR_OWNED_BY);
+		cost.SetErrorOwner(CompanyID{3});
+		cost.SetEncodedMessage(GetEncodedString(STR_ERROR_OWNED_BY, STR_COMPANY_SOMEONE, std::monostate{}));
+		openttd_rust_clear_tile(RustCommandCost(&cost), tile.base(), 0, &GetRustCommandCostServices(), &GetRustSharedServices());
+		CHECK(cost.Succeeded()); CHECK(cost.GetCost() == 0);
+		CHECK(cost.GetExpensesType() == EXPENSES_CONSTRUCTION);
+		CHECK(cost.GetErrorMessage() == INVALID_STRING_ID); CHECK(cost.GetExtraErrorMessage() == INVALID_STRING_ID);
+		CHECK(cost.GetErrorOwner() == CompanyID::Invalid()); CHECK(cost.GetEncodedMessage().empty());
+		CHECK(GetClearDensity(tile) == 0);
 	}
 	Map::Allocate(64, 64);
 }

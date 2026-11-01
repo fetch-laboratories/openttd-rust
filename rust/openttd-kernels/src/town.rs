@@ -705,12 +705,10 @@ pub unsafe extern "C" fn openttd_rust_town_authority_remove(
 pub struct Leaves {
     pub map_log_x: extern "C" fn() -> u32,
     pub growth_rate: extern "C" fn() -> u8,
-    pub snow_line: extern "C" fn() -> u8,
     pub environment: crate::services::EnvironmentServices,
     pub generating_world: extern "C" fn() -> bool,
     pub allow_crossings: extern "C" fn() -> bool,
     pub climate: extern "C" fn() -> u8,
-    pub highest_snow_line: extern "C" fn() -> u8,
     pub allow_roads: extern "C" fn() -> bool,
     pub road_flags: extern "C" fn(u8) -> u8,
     pub house_availability: extern "C" fn(u16) -> HouseAvailability,
@@ -992,7 +990,7 @@ impl Engine<'_> {
                 match self.goals()[i] {
                     0xffff_fffe => {
                         if (self.services.tile_height)(self.position())
-                            >= u32::from((self.leaves.snow_line)())
+                            >= u32::from(crate::snow_line::get(self.services))
                             && self.old_received(i) == 0
                             && self.population() > 90
                         {
@@ -1939,7 +1937,7 @@ impl Engine<'_> {
         let climate = match (self.leaves.climate)() {
             0 => 12,
             1 => {
-                if maxz > i32::from((self.leaves.highest_snow_line)()) {
+                if maxz > i32::from(crate::snow_line::highest(self.services)) {
                     11
                 } else {
                     13
@@ -2527,12 +2525,12 @@ crate::abi::layouts! {
     "OpenTTDTownLeaves" ["probe"] => crate::town::Leaves {
         map_log_x,
         growth_rate,
-        snow_line,
+
         environment,
         generating_world,
         allow_crossings,
         climate,
-        highest_snow_line,
+
         allow_roads,
         road_flags,
         house_availability,

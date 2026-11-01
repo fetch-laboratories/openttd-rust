@@ -80,6 +80,7 @@ def scenario_modules():
         community_ai,
         companies,
         disasters,
+        drawing,
         economy,
         effects,
         engines,
@@ -134,6 +135,7 @@ def scenario_modules():
         cargo_storage,
         orders,
         vehicles,
+        drawing,
     )
 
 
@@ -571,7 +573,7 @@ def prepare_game(
         *game,
         "-snull",
         "-mnull",
-        f"-vnull:ticks={scenario['ticks']}",
+        scenario.get("video", f"-vnull:ticks={scenario['ticks']}"),
         *(["-d", "desync=3"] if desync else []),
     ]
     env = dict(
@@ -1296,7 +1298,7 @@ def main():
     parser.add_argument(
         "--instructions",
         action="store_true",
-        help="profile six speed scenarios; no wall-speed samples",
+        help="profile the speed scenarios; no wall-speed samples",
     )
     parser.add_argument(
         "--benchmark",
@@ -1333,9 +1335,9 @@ def main():
         )
     every = scenario_list(args.soak)
     if args.instructions:
-        from .instructions import SPEED_BUDGETS
+        from .instructions import PROFILED
 
-        every = [s for s in every if s["name"] in SPEED_BUDGETS]
+        every = [s for s in every if s["name"] in PROFILED]
     # An exact scenario name selects only that scenario; anything else is a substring filter.
     unmatched = [
         name for name in args.names if not any(name in s["name"] for s in every)

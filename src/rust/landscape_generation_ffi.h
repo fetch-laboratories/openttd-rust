@@ -46,7 +46,6 @@ struct OpenTTDLandscapeGenerationServices {
 	void (*set_height)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_height);
 	bool (*inner_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(inner_tile);
 	void (*make_void)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(make_void);
-	bool (*surrounded_by_water)() noexcept OPENTTD_SERVICE_DEFAULT(surrounded_by_water);
 	void (*set_freeform)(bool) noexcept OPENTTD_SERVICE_DEFAULT(set_freeform);
 	void (*clear_bridge_middle)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_bridge_middle);
 };

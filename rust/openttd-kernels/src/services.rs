@@ -374,9 +374,8 @@ pub struct Services {
     pub service_at_helipad: extern "C" fn() -> bool,
     /// `SetTropicZone`.
     pub set_tropic_zone: extern "C" fn(u32, u8),
-    /// Shared live slope observation.
-    /// Current snow line used by town, industry and trees.
-    pub snow_line: extern "C" fn() -> u8,
+    /// Native record deletion and canonical configured height address.
+    pub snow_line_support: crate::snow_line::Support,
     /// `GetStationIndex`.
     pub station_index: extern "C" fn(u32) -> u16,
     /// Canonical shared `docking_tile` service.
@@ -768,7 +767,7 @@ crate::abi::layouts! {
         pbs_services,
         service_at_helipad,
         set_tropic_zone,
-        snow_line,
+        snow_line_support,
         station_index,
         road_commands,
         kdtree_partition,
@@ -850,6 +849,9 @@ pub fn fixture(
     random: extern "C" fn(*mut c_void) -> u32,
     industry: extern "C" fn(i32, i32, *mut u32) -> u32,
 ) -> Services {
+    unsafe extern "C" fn unused_snow_line_destroy(_: *mut crate::snow_line::SnowLine) {
+        unreachable!()
+    }
     extern "C" fn zero_byte() -> u8 {
         0
     }
@@ -1013,7 +1015,10 @@ pub fn fixture(
         pbs_services: train_safe,
         service_at_helipad: flag0,
         set_tropic_zone: zone,
-        snow_line: zero_byte,
+        snow_line_support: crate::snow_line::Support {
+            height: &0,
+            destroy: unused_snow_line_destroy,
+        },
         station_index: short,
         road_commands: fixture_road_commands,
         kdtree_partition: fixture_kdtree_partition,

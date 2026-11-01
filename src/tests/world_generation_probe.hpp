@@ -9,6 +9,8 @@ extern "C" {
 void openttd_test_world_set_abort_callback(GWAbortProc *);
 uint32_t openttd_test_town_data_target(const OpenTTDTownDataServices *, uint8_t, float, float);
 GWAbortProc *openttd_test_world_abort_callback();
+uint8_t openttd_test_snow_line_highest(const OpenTTDSharedServices *);
+bool openttd_test_map_surrounded_by_water(const OpenTTDSharedServices *);
 bool openttd_test_generate_landscape(const OpenTTDLandscapeGenerationServices *, OpenTTDGenerationFrame *, const OpenTTDHeightmapInput *, OpenTTDLandscapeGenerationSettings, uint8_t);
 bool openttd_test_load_heightmap(const OpenTTDLandscapeGenerationServices *, const OpenTTDHeightmapInput *, uint8_t, bool, uint8_t, uint8_t);
 void openttd_test_flat_empty_world(const OpenTTDLandscapeGenerationServices *, uint8_t, bool, uint8_t);

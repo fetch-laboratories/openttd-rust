@@ -437,7 +437,6 @@ pub struct Services {
     pub scale_cargo: unsafe extern "C" fn(u32) -> u32,
     pub environment: *const crate::services::EnvironmentServices,
     pub farm_tile: unsafe extern "C" fn(u32) -> FarmTile,
-    pub snow_line: unsafe extern "C" fn() -> u8,
     pub make_field: unsafe extern "C" fn(u32, u8, u8, u16),
     pub fence_wanted: unsafe extern "C" fn(u32, u8) -> bool,
     pub tile_completed: unsafe extern "C" fn(*mut c_void, u32) -> bool,
@@ -1424,7 +1423,7 @@ fn fence(mut tile: u32, mut size: u32, kind: u8, side: u8, map: Map, s: &Service
 }
 fn plant(tile: u32, industry: u16, map: Map, s: &Services, landscape: &impl Fn() -> u8) {
     if landscape() == ARCTIC
-        && (s.shared().tile_z)(tile) + 2 >= i32::from(unsafe { (s.snow_line)() })
+        && (s.shared().tile_z)(tile) + 2 >= i32::from(crate::snow_line::get(s.shared()))
     {
         return;
     }
@@ -1952,7 +1951,7 @@ crate::abi::layouts! {
         population,
         town_position,
         industry,
-        highest_snow_line,
+
         edge_distance,
         refinery_limit,
         tile_height,
@@ -2246,7 +2245,7 @@ crate::abi::layouts! {
         scale_cargo,
         environment,
         farm_tile,
-        snow_line,
+
         make_field,
         fence_wanted,
         tile_completed,

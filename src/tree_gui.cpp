@@ -30,7 +30,6 @@
 #include "safeguards.h"
 
 void PlaceTreesRandomly();
-uint PlaceTreeGroupAroundTile(TileIndex tile, TreeType treetype, uint radius, uint count, bool set_zone);
 
 /** Tree Sprites with their palettes */
 const PalSpriteID tree_sprites[] = {

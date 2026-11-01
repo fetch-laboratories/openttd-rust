@@ -15,6 +15,8 @@ CANDIDATE_ENTRIES = (
     "openttd_rust_session_state_loop",
     "openttd_kernels::genworld::generate",
 )
+# Drawing workloads count C++ drawing, which both builds still share (#566).
+DRAW_ENTRY = "ViewportDoDraw(Viewport const&, int, int, int, int)"
 
 # Quiet speed pass at 755609b8ea (#275): ratio is the median of
 # four three-pair medians; Ir and compatible identity come from profiles of the
@@ -46,6 +48,8 @@ SPEED_ANCHORS = {
     )
 }
 SPEED_BUDGETS = {name: sum(ratios) / len(ratios) for name, ratios, _, _ in SPEED_PASS}
+# Profiled and speed-pass scenarios: anchored ones plus the unanchored drawing workload.
+PROFILED = (*SPEED_BUDGETS, "draw-padhattan-ridge-1996-giant")
 
 
 class SpeedBudget(TypedDict):
@@ -66,6 +70,9 @@ def speed_budget(
     anchor_ratio: float | None = None,
 ) -> SpeedBudget | None:
     """Report the speed record and ceiling without making timings a CI failure."""
+    # docs/speed.md defines ceilings only for play and generation.
+    if name.startswith("draw-"):
+        return None
     mean = SPEED_BUDGETS.get(name, anchor_ratio)
     if mean is None or ratio is None:
         return None
@@ -110,12 +117,39 @@ def verify_debug(archive):
                 )
 
 
+# #607 removed the always-on OPTION_RUST toggle and added Git discovery for
+# native-test oracles. Neither changes the measured game, so restore the
+# anchored cache spelling; a quiet pass would otherwise be needed to re-anchor.
+RUST_OPTION = (
+    "//Use migrated Rust game/tool algorithms (validated native platforms)\n"
+    "OPTION_RUST:BOOL=ON\n\n"
+)
+TEST_GIT_ENTRIES = (
+    r"//Git command line client\nGIT_EXECUTABLE:FILEPATH=[^\n]*\n\n",
+    r"//Details about finding Git\nFIND_PACKAGE_MESSAGE_DETAILS_Git:INTERNAL=[^\n]*\n",
+    r"//ADVANCED property for variable: GIT_EXECUTABLE\nGIT_EXECUTABLE-ADVANCED:INTERNAL=1\n",
+)
+
+
+def anchored_cache(text):
+    for entry in TEST_GIT_ENTRIES:
+        text = re.sub(entry, "", text)
+    if "\nOPTION_RUST:" not in text:
+        text = re.sub(
+            r"(\nOPTION_PACKAGE_DEPENDENCIES:BOOL=[^\n]*\n\n)",
+            rf"\1{RUST_OPTION}",
+            text,
+        )
+    return text
+
+
 def record_build(build, source, role, env):
     """Publish only successful builds, bound to the executable being measured."""
     import migration
 
     settings = (build / "CMakeCache.txt").read_text()
     if role == "candidate":
+        settings = anchored_cache(settings)
         files = ("rust-build-configuration.txt", "rust-toolchain.txt")
         settings += "".join((build / f).read_text() for f in files)
         verify_debug(migration.rust_archive(build))
@@ -142,6 +176,7 @@ def record_build(build, source, role, env):
 def flags(scenario, reference=True):
     entries = ENTRIES if reference else CANDIDATE_ENTRIES
     entries = entries if scenario["kind"] == "generate" else entries[:1]
+    entries = (DRAW_ENTRY,) if scenario.get("draw") else entries
     return [
         "--command-line-only=yes",
         "--tool=callgrind",
@@ -280,7 +315,8 @@ def finish(runs, result):
     temporary = runs["reference"]["dir"] / "reference-Ir.json"
     temporary.write_text(json.dumps(measurements["reference"]["Ir"]))
     temporary.replace(info["cache"])
-    return measurements
+    ratio = measurements["candidate"]["Ir"] / measurements["reference"]["Ir"]
+    return dict(measurements, Ir_ratio=ratio)
 
 
 def projection(anchor, value):
@@ -296,5 +332,6 @@ def budget(name, measurement, record):
     ratio = projection(anchor, measurement["Ir"])
     rolling = projection(anchor, integrated["Ir"])
     return dict(
-        projected_ratio=ratio, **speed_budget(name, ratio, rolling, anchor["ratio"])
+        projected_ratio=ratio,
+        **(speed_budget(name, ratio, rolling, anchor["ratio"]) or {}),
     )

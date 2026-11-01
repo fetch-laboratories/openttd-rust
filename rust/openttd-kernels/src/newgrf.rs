@@ -97,7 +97,7 @@ pub unsafe extern "C" fn openttd_rust_global_variable(
                 u32::from(bits)
             }
             0x20 => {
-                let snow = (shared.snow_line)();
+                let snow = crate::snow_line::get(shared);
                 if (s.climate)() == crate::landscape_type::ARCTIC && snow <= (s.height_limit)() {
                     (u32::from(snow)
                         * if (shared.grf_file_version)(file) >= 8 {

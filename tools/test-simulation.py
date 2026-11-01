@@ -973,6 +973,43 @@ class InstructionSpeedTests(unittest.TestCase):
             settings = json.loads(recorded[0])["settings"]
             self.assertIn(f"{shared}/deps/lib;<source>/src;<build>/x;", settings)
 
+    def test_rust_only_cache_keeps_anchored_compatible_spelling(self):
+        anchored = (
+            "GITCOMMAND:FILEPATH=/usr/bin/git\n\n//Global directory\n"
+            "OPTION_PACKAGE_DEPENDENCIES:BOOL=OFF\n\n" + ir.RUST_OPTION + "//Survey\n"
+            "//Details about finding Freetype\nFIND_PACKAGE_MESSAGE_DETAILS_Freetype:INTERNAL=[f]\n"
+            "//Details about finding ICU\nGITCOMMAND-ADVANCED:INTERNAL=1\n"
+            "//Test HAVE\n"
+        )
+        rust_only = (
+            "GITCOMMAND:FILEPATH=/usr/bin/git\n\n"
+            "//Git command line client\nGIT_EXECUTABLE:FILEPATH=/usr/bin/git\n\n"
+            "//Global directory\nOPTION_PACKAGE_DEPENDENCIES:BOOL=OFF\n\n//Survey\n"
+            "//Details about finding Freetype\nFIND_PACKAGE_MESSAGE_DETAILS_Freetype:INTERNAL=[f]\n"
+            "//Details about finding Git\nFIND_PACKAGE_MESSAGE_DETAILS_Git:INTERNAL=[/usr/bin/git][v2()]\n"
+            "//Details about finding ICU\nGITCOMMAND-ADVANCED:INTERNAL=1\n"
+            "//ADVANCED property for variable: GIT_EXECUTABLE\nGIT_EXECUTABLE-ADVANCED:INTERNAL=1\n"
+            "//Test HAVE\n"
+        )
+        self.assertEqual(ir.anchored_cache(anchored), anchored)
+        self.assertEqual(ir.anchored_cache(rust_only), anchored)
+        with tempfile.TemporaryDirectory() as directory:
+            build = Path(directory)
+            for name, text in (
+                ("CMakeCache.txt", rust_only),
+                ("rust-build-configuration.txt", "c"),
+                ("rust-toolchain.txt", "t"),
+                ("openttd-rust", "game"),
+            ):
+                (build / name).write_text(text)
+            with (
+                patch.object(ir, "verify_debug"),
+                patch.object(migration, "rust_archive"),
+            ):
+                ir.record_build(build, build, "candidate", {"CARGO_HOME": "-"})
+                settings = json.loads((build / "instruction-build.json").read_text())
+            self.assertTrue(settings["settings"].startswith(anchored + "ct"))
+
     def test_effective_compiled_debug_rejects_overrides_and_stripping(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -1325,6 +1362,81 @@ class SpeedPassTests(unittest.TestCase):
                             self.assertEqual(
                                 speed.summarize(out, manifest, names, len(groups)), 0
                             )
+
+
+class DrawingWorkloadTests(unittest.TestCase):
+    def test_drawing_ratio_has_no_speed_ceiling(self):
+        from simulation import drawing
+
+        self.assertIsNone(ir.speed_budget(drawing.NAME, 1.4))
+        self.assertIsNone(ir.speed_budget(drawing.NAME, 1.4, 1.2, 1.1))
+        anchor = dict(ratio=1.1, Ir=100, identity={"compatible": "drawing"})
+        report = ir.budget(
+            drawing.NAME,
+            dict(Ir=110, identity=anchor["identity"]),
+            dict(anchor=anchor, integrated=dict(Ir=100)),
+        )
+        self.assertEqual(set(report), {"projected_ratio"})
+        self.assertAlmostEqual(report["projected_ratio"], 1.32)
+
+    def test_profiled_launch_counts_drawing_in_both_builds(self):
+        from simulation import drawing
+
+        (scenario,) = drawing.scenarios(False)
+        self.assertIn(scenario, simulate.scenario_list(False))
+        self.assertIn(scenario["name"], ir.PROFILED)
+        for reference in (True, False):
+            self.assertEqual(
+                ir.flags(scenario, reference)[-1], f"--toggle-collect={ir.DRAW_ENTRY}"
+            )
+        with tempfile.TemporaryDirectory() as directory:
+            plan = simulate.prepare_game(
+                scenario, Path("openttd"), Path(directory), Path(directory) / "run", 1
+            )
+        command = plan["command"]
+        self.assertNotIn("-vnull:ticks=1", command)
+        self.assertIn("-vsdl:no_threads", command)
+        self.assertEqual(command[command.index("-b") + 1], drawing.BLITTER)
+        self.assertEqual(plan["env"]["SDL_VIDEODRIVER"], "dummy")
+
+    def test_images_compare_byte_for_byte_and_require_equal_graphics(self):
+        from simulation import drawing
+
+        scenario = dict(draw=True)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for role in ("reference", "candidate"):
+                (root / role / "baseset").mkdir(parents=True)
+                (root / role / "baseset/opengfx.grf").write_bytes(b"gfx")
+                (root / role / "screenshot").mkdir()
+            builds = {role: root / role for role in ("reference", "candidate")}
+            save = simulate.ROOT / "migration/saves/padhattan-ridge-1996.sav"
+            prepared = drawing.prepare(
+                dict(scenario, name="draw", save=str(save)), {}, builds, root, 1, {}, {}
+            )
+            self.assertNotIn("GLOG", simulate.read_save(Path(prepared["save"])))
+            (root / "candidate/baseset/opengfx.grf").write_bytes(b"other")
+            with self.assertRaisesRegex(RuntimeError, "base graphics differ"):
+                drawing.prepare(scenario, {}, builds, root, 1, {}, {})
+            header = bytes(18) + (3).to_bytes(4, "little") + (2).to_bytes(4, "little")
+            for candidate, equal in ((b"same", True), (b"diff", False)):
+                result = dict(differences=[])
+                for role, body in (("reference", b"same"), ("candidate", candidate)):
+                    image = root / role / "screenshot/drawing.bmp"
+                    image.write_bytes(header + body)
+                    drawing.check(
+                        scenario, dict(dir=root / role), "plain", role, result
+                    )
+                self.assertEqual(result["plain_image"]["width"], 3)
+                self.assertEqual(result["plain_image"]["height"], 2)
+                self.assertEqual(not result["differences"], equal)
+                self.assertEqual(image.exists(), not equal)
+            self.assertEqual(result["differences"][0]["element"], "26")
+            image.unlink()
+            with self.assertRaisesRegex(RuntimeError, "candidate wrote screenshots"):
+                drawing.check(
+                    scenario, dict(dir=root / "candidate"), "plain", "candidate", {}
+                )
 
 
 class PlatformSubsetTests(unittest.TestCase):
