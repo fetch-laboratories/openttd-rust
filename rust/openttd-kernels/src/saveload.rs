@@ -1230,12 +1230,6 @@ pub extern "C" fn openttd_rust_saveload_grow() {
     grow();
 }
 
-/// `MemoryDumper::GetSize`.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_saveload_dumper_size() -> usize {
-    dumper_size()
-}
-
 /// `MemoryDumper::Flush` into the native `SaveFilter` `writer`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_saveload_flush(

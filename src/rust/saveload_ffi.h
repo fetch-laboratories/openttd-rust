@@ -89,7 +89,6 @@ size_t openttd_rust_saveload_read_size(void);
 void openttd_rust_saveload_dumper_open(void);
 void openttd_rust_saveload_dumper_close(void);
 void openttd_rust_saveload_grow(void);
-size_t openttd_rust_saveload_dumper_size(void);
 OpenTTDRustSaveLoadStatus openttd_rust_saveload_flush(const OpenTTDSaveLoadServices *services, void *writer);
 
 OpenTTDRustSaveLoadStatus openttd_rust_saveload_read_gamma(const OpenTTDSaveLoadServices *services, uint32_t *value);
