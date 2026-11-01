@@ -155,7 +155,6 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.custom_road_index = RustCustomRoadStopIndex,
 		.remove_stop_tile_data = [](BaseStation *st, uint32_t tile) noexcept { st->RemoveRoadStopTileData(TileIndex{tile}); },
 		.close_stop_inspect = RustRoadStopCloseInspect,
-		.road_waypoint_area = [](BaseStation *st) noexcept -> OpenTTDStationArea { auto area = Waypoint::From(st)->road_waypoint_area; return {area.tile.base(), area.w, area.h}; },
 		.set_road_waypoint_area = [](BaseStation *st, OpenTTDStationArea area) noexcept { Waypoint::From(st)->road_waypoint_area = TileArea(TileIndex{area.tile}, area.w, area.h); },
 		.road_vehicle_owner = [](OpenTTDVehicle *v) noexcept { return RoadStateOf(RoadVehicle::From(VehicleOf(v))); },
 		.order_station_location = RustVehicleOrderStationLocation,

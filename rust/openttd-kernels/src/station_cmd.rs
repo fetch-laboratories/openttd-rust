@@ -253,7 +253,6 @@ pub struct CommandServicesTable {
 
     pub remove_stop_tile_data: extern "C" fn(*mut BaseStation, u32),
     pub close_stop_inspect: extern "C" fn(u32),
-    pub road_waypoint_area: extern "C" fn(*mut BaseStation) -> TileArea,
     pub set_road_waypoint_area: extern "C" fn(*mut BaseStation, TileArea),
     pub road_vehicle_owner: extern "C" fn(crate::vehicle::VehicleRef) -> *mut crate::road::State,
     pub order_station_location: extern "C" fn(crate::vehicle::VehicleRef, u16) -> u32,
@@ -2715,7 +2714,7 @@ impl Ctx<'_> {
             }
             if waypoint {
                 if replacement < 0 {
-                    let area = self.shrink(st, (self.s.road_waypoint_area)(st), 8);
+                    let area = self.shrink(st, Self::area((self.s.road_waypoint_tile_area)(st)), 8);
                     (self.s.set_road_waypoint_area)(st, area);
                     self.sign_coord(st);
                     if area.tile == u32::MAX {
@@ -4322,7 +4321,6 @@ crate::abi::layouts! {
 
         remove_stop_tile_data,
         close_stop_inspect,
-        road_waypoint_area,
         set_road_waypoint_area,
         road_vehicle_owner,
         order_station_location,
