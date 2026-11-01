@@ -182,7 +182,7 @@ pub struct OpenTTDSaveLoadServices {
     /// `RemapOldStringID`.
     pub remap_old_string: extern "C" fn(id: u32) -> u32,
     /// `*reinterpret_cast<std::string *>(ptr) = CopyFromOldName(id)`.
-    pub copy_from_old_name: extern "C" fn(ptr: *mut c_void, id: u32),
+    pub copy_from_old_name: extern "C" fn(ptr: *mut c_void, id: u32) -> bool,
     /// Pool references: `index` returns `obj->index`; `get` returns `T::Get(index)` when
     /// `T::IsValidID(index)`, otherwise null.
     pub cargo_packet_get: extern "C" fn(index: usize) -> *mut c_void,
@@ -208,13 +208,13 @@ pub struct OpenTTDSaveLoadServices {
     /// `std::string` at `ptr`: `data()`, with `size()` in `length`.
     pub string_data: extern "C" fn(ptr: *const c_void, length: *mut usize) -> *const u8,
     /// `std::string` at `ptr`: `resize(length)`, then `data()`.
-    pub string_resize: extern "C" fn(ptr: *mut c_void, length: usize) -> *mut u8,
+    pub string_resize: extern "C" fn(ptr: *mut c_void, length: usize, data: *mut *mut u8) -> bool,
     /// Replay native diagnostics/assertions and copy the borrowed encoded output into `*str`.
     pub apply_encoded: extern "C" fn(
         ptr: *mut c_void,
         view: *const crate::encoded::View,
         diagnostics: *const crate::encoded::Diagnostic,
-    ),
+    ) -> bool,
     /// `proc(arg)` for `SlAutolength`, where `proc` is an `AutolengthProc *`; false when it threw.
     pub autolength: extern "C" fn(proc_: *const c_void, arg: i32) -> bool,
 }
@@ -680,7 +680,12 @@ unsafe fn read_value(services: &OpenTTDSaveLoadServices, ptr: *const c_void, con
 ///
 /// # Safety
 /// `ptr` points to a value of the memory type of `conv`.
-unsafe fn write_value(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv: u32, val: i64) {
+unsafe fn write_value(
+    services: &OpenTTDSaveLoadServices,
+    ptr: *mut c_void,
+    conv: u32,
+    val: i64,
+) -> Status {
     // SAFETY: The caller's contract.
     unsafe {
         match mem_type(conv) {
@@ -693,11 +698,16 @@ unsafe fn write_value(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv
             SLE_VAR_U32 => ptr.cast::<u32>().write_unaligned(val as u32),
             SLE_VAR_I64 => ptr.cast::<i64>().write_unaligned(val),
             SLE_VAR_U64 => ptr.cast::<u64>().write_unaligned(val as u64),
-            SLE_VAR_NAME => (services.copy_from_old_name)(ptr, val as u32),
+            SLE_VAR_NAME => {
+                if !(services.copy_from_old_name)(ptr, val as u32) {
+                    return Err(SL_STATUS_NATIVE);
+                }
+            }
             SLE_VAR_NULL => {}
             _ => not_reached(services),
         }
     }
+    Ok(())
 }
 
 /// `SlSaveLoadConv`.
@@ -751,7 +761,7 @@ unsafe fn save_load_conv(
                 _ => not_reached(services),
             };
             // SAFETY: The caller's contract.
-            unsafe { write_value(services, ptr, conv, x) };
+            unsafe { write_value(services, ptr, conv, x) }?;
         }
         SLA_PTRS | SLA_NULL => {}
         _ => not_reached(services),
@@ -1029,7 +1039,10 @@ fn calc_std_string_len(services: &OpenTTDSaveLoadServices, ptr: *const c_void) -
 
 /// `SlReadString`.
 fn read_string(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, length: usize) -> Status {
-    let data = (services.string_resize)(ptr, length);
+    let mut data = std::ptr::null_mut();
+    if !(services.string_resize)(ptr, length, &raw mut data) {
+        return Err(SL_STATUS_NATIVE);
+    }
     copy_bytes(services, data, length)
 }
 
@@ -1039,21 +1052,27 @@ fn fix_encoded(
     services: &OpenTTDSaveLoadServices,
     ptr: *mut c_void,
     fix: impl FnOnce(&[u8]) -> crate::encoded::Output,
-) {
+) -> Status {
     let mut len = 0;
     let data = (services.string_data)(ptr, &raw mut len);
     // SAFETY: `string_data` returns the string's live bytes, unchanged until `apply_encoded`.
     let output = fix(unsafe { crate::utf8::borrow(data, len) });
     let view = output.view();
-    if view.apply != 0 {
-        (services.apply_encoded)(ptr, &raw const view, output.diagnostics().as_ptr());
+    if view.apply != 0
+        && !(services.apply_encoded)(ptr, &raw const view, output.diagnostics().as_ptr())
+    {
+        return Err(SL_STATUS_NATIVE);
     }
+    Ok(())
 }
 
 /// `StrMakeValidInPlace(std::string &)`: compact the existing allocation in place.
-fn make_valid(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv: u32) {
+fn make_valid(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv: u32) -> Status {
     let mut length = 0;
     let data = (services.string_data)(ptr, &raw mut length).cast_mut();
+    if length == 0 {
+        return Ok(());
+    }
     let settings = 1
         | (u8::from(conv & SLF_ALLOW_NEWLINE != 0) << 1)
         | (u8::from(conv & SLF_ALLOW_CONTROL != 0) << 2)
@@ -1070,19 +1089,29 @@ fn make_valid(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv: u32) {
         if step.stopped != 0 {
             break;
         }
-        // SAFETY: Validation emits no more bytes than it consumes, as required by
-        // `InPlaceReplacement`; the output array is independent of the string.
-        unsafe {
-            std::ptr::copy_nonoverlapping(
-                step.output.bytes.as_ptr(),
-                data.add(written),
-                step.output.length,
-            );
+        if step.output.length != 0 {
+            let write = crate::string_validation::write_plan(written, consumed, step.output.length);
+            if write.accepted == 0 {
+                not_reached(services);
+            }
+            // SAFETY: The original InPlaceBuilder capacity check accepted the write;
+            // the output array is independent of the string.
+            unsafe {
+                std::ptr::copy_nonoverlapping(
+                    step.output.bytes.as_ptr(),
+                    data.add(written),
+                    step.output.length,
+                );
+            }
+            written = write.position;
         }
-        written += step.output.length;
     }
     // Every string borrow has ended before the native resize.
-    (services.string_resize)(ptr, written);
+    let mut data = std::ptr::null_mut();
+    if !(services.string_resize)(ptr, written, &raw mut data) {
+        return Err(SL_STATUS_NATIVE);
+    }
+    Ok(())
 }
 
 /// `SlStdString`.
@@ -1106,13 +1135,13 @@ fn std_string(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv: u32) -
             if control {
                 if version_before(SLV_ENCODED_STRING_FORMAT) {
                     let fix_code = version_before(SLV_169);
-                    fix_encoded(services, ptr, |src| crate::encoded::legacy(src, fix_code));
+                    fix_encoded(services, ptr, |src| crate::encoded::legacy(src, fix_code))?;
                 }
                 if version_before(SLV_FIX_SCC_ENCODED_NEGATIVE) {
-                    fix_encoded(services, ptr, crate::encoded::negatives);
+                    fix_encoded(services, ptr, crate::encoded::negatives)?;
                 }
             }
-            make_valid(services, ptr, conv);
+            make_valid(services, ptr, conv)?;
         }
         SLA_PTRS | SLA_NULL => {}
         _ => not_reached(services),
@@ -1393,9 +1422,9 @@ pub unsafe extern "C" fn openttd_rust_saveload_write_value(
     ptr: *mut c_void,
     conv: u32,
     val: i64,
-) {
+) -> OpenTTDRustSaveLoadStatus {
     // SAFETY: The caller's contract.
-    unsafe { write_value(services, ptr, conv, val) }
+    status(unsafe { write_value(services, ptr, conv, val) })
 }
 
 /// `SlSaveLoadConv`.
@@ -1635,6 +1664,8 @@ crate::abi::layouts! {
 mod tests {
     use super::*;
 
+    static CODEC_TEST: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     extern "C" fn assert_ok(ok: bool) {
         assert!(ok, "native assertion");
     }
@@ -1653,7 +1684,7 @@ mod tests {
     extern "C" fn unused_u32(_: u32) -> u32 {
         unreachable!("unused service")
     }
-    extern "C" fn unused_ptr_u32(_: *mut c_void, _: u32) {
+    extern "C" fn unused_ptr_u32(_: *mut c_void, _: u32) -> bool {
         unreachable!("unused service")
     }
     extern "C" fn unused_get(_: usize) -> *mut c_void {
@@ -1665,14 +1696,14 @@ mod tests {
     extern "C" fn unused_data(_: *const c_void, _: *mut usize) -> *const u8 {
         unreachable!("unused service")
     }
-    extern "C" fn unused_resize(_: *mut c_void, _: usize) -> *mut u8 {
+    extern "C" fn unused_resize(_: *mut c_void, _: usize, _: *mut *mut u8) -> bool {
         unreachable!("unused service")
     }
     extern "C" fn unused_apply(
         _: *mut c_void,
         _: *const crate::encoded::View,
         _: *const crate::encoded::Diagnostic,
-    ) {
+    ) -> bool {
         unreachable!("unused service")
     }
     extern "C" fn unused_autolength(_: *const c_void, _: i32) -> bool {
@@ -1734,6 +1765,7 @@ mod tests {
     /// length of 2 MiB or more and that no regression save reaches.
     #[test]
     fn gamma_follows_the_documented_encoding() {
+        let _lock = CODEC_TEST.lock().unwrap();
         let table: &[(usize, &[u8])] = &[
             (0, &[0x00]),
             (0x7F, &[0x7F]),
@@ -1790,5 +1822,67 @@ mod tests {
             assert_eq!((decoded, used), (Err(SL_STATUS_CORRUPT), 1));
             assert_eq!(codec(|c| std::mem::take(&mut c.error)), "Unsupported gamma");
         }
+    }
+
+    /// Native failures return to the facade before any read or further string operation.
+    #[test]
+    fn native_string_failures_return_to_the_facade() {
+        let _lock = CODEC_TEST.lock().unwrap();
+        extern "C" fn fail_resize(_: *mut c_void, _: usize, _: *mut *mut u8) -> bool {
+            false
+        }
+        extern "C" fn fail_name(_: *mut c_void, _: u32) -> bool {
+            false
+        }
+        extern "C" fn encoded_data(_: *const c_void, length: *mut usize) -> *const u8 {
+            const INPUT: &[u8] = b"\xee\x80\x80";
+            // SAFETY: The codec supplies its writable length output.
+            unsafe { *length = INPUT.len() };
+            INPUT.as_ptr()
+        }
+        extern "C" fn fail_apply(
+            _: *mut c_void,
+            _: *const crate::encoded::View,
+            _: *const crate::encoded::Diagnostic,
+        ) -> bool {
+            false
+        }
+        let services = OpenTTDSaveLoadServices {
+            copy_from_old_name: fail_name,
+            string_data: encoded_data,
+            string_resize: fail_resize,
+            apply_encoded: fail_apply,
+            ..SERVICES
+        };
+        assert_eq!(
+            read_string(&services, std::ptr::null_mut(), 10),
+            Err(SL_STATUS_NATIVE)
+        );
+        // SAFETY: SLE_VAR_NAME delegates to the failing native frame without dereferencing ptr.
+        assert_eq!(
+            unsafe { write_value(&services, std::ptr::null_mut(), SLE_VAR_NAME, 0) },
+            Err(SL_STATUS_NATIVE)
+        );
+        assert_eq!(
+            fix_encoded(&services, std::ptr::null_mut(), |src| {
+                crate::encoded::legacy(src, false)
+            }),
+            Err(SL_STATUS_NATIVE)
+        );
+        extern "C" fn mutable_data(ptr: *const c_void, length: *mut usize) -> *const u8 {
+            // SAFETY: This case supplies a live one-byte array and the codec supplies length.
+            unsafe { *length = 1 };
+            ptr.cast()
+        }
+        let services = OpenTTDSaveLoadServices {
+            string_data: mutable_data,
+            ..services
+        };
+        let mut text = [b'x'];
+        assert_eq!(
+            make_valid(&services, text.as_mut_ptr().cast(), 0),
+            Err(SL_STATUS_NATIVE)
+        );
+        assert_eq!(text, [b'x']);
     }
 }

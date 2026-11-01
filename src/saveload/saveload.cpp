@@ -186,7 +186,7 @@ static const OpenTTDSaveLoadServices _sl_services = {
 	.write = [](void *filter, const uint8_t *buf, size_t len) noexcept { return SlNativeFrame([&] { static_cast<SaveFilter *>(filter)->Write(const_cast<uint8_t *>(buf), len); }); },
 	.finish = [](void *filter) noexcept { return SlNativeFrame([&] { static_cast<SaveFilter *>(filter)->Finish(); }); },
 	.remap_old_string = [](uint32_t id) noexcept -> uint32_t { return RemapOldStringID(static_cast<uint16_t>(id)); },
-	.copy_from_old_name = [](void *ptr, uint32_t id) noexcept { *reinterpret_cast<std::string *>(ptr) = CopyFromOldName(id); },
+	.copy_from_old_name = [](void *ptr, uint32_t id) noexcept { return SlNativeFrame([&] { *reinterpret_cast<std::string *>(ptr) = CopyFromOldName(id); }); },
 	.cargo_packet_get = &SlPoolGet<CargoPacket>,
 	.cargo_packet_index = &SlPoolIndex<CargoPacket>,
 	.engine_renew_get = &SlPoolGet<EngineRenew>,
@@ -212,16 +212,20 @@ static const OpenTTDSaveLoadServices _sl_services = {
 		*length = str.size();
 		return reinterpret_cast<const uint8_t *>(str.data());
 	},
-	.string_resize = [](void *ptr, size_t length) noexcept {
-		std::string &str = *static_cast<std::string *>(ptr);
-		str.resize(length);
-		return reinterpret_cast<uint8_t *>(str.data());
+	.string_resize = [](void *ptr, size_t length, uint8_t **data) noexcept {
+		return SlNativeFrame([&] {
+			std::string &str = *static_cast<std::string *>(ptr);
+			str.resize(length);
+			*data = reinterpret_cast<uint8_t *>(str.data());
+		});
 	},
 	.apply_encoded = [](void *ptr, const OpenTTDRustEncodedView *view, const OpenTTDRustEncodedDiagnostic *diagnostics) noexcept {
-		std::string &str = *static_cast<std::string *>(ptr);
-		for (size_t i = 0; i < view->diagnostic_count; ++i) LogRustEncodedDiagnostic(diagnostics[i], str);
-		AssertRustEncoded(*view, str);
-		str = view->length == 0 ? std::string{} : std::string(reinterpret_cast<const char *>(view->bytes), view->length);
+		return SlNativeFrame([&] {
+			std::string &str = *static_cast<std::string *>(ptr);
+			for (size_t i = 0; i < view->diagnostic_count; ++i) LogRustEncodedDiagnostic(diagnostics[i], str);
+			AssertRustEncoded(*view, str);
+			str = view->length == 0 ? std::string{} : std::string(reinterpret_cast<const char *>(view->bytes), view->length);
+		});
 	},
 	.autolength = [](const void *proc, int32_t arg) noexcept { return SlNativeFrame([&] { reinterpret_cast<AutolengthProc *>(const_cast<void *>(proc))(arg); }); },
 };
@@ -626,7 +630,7 @@ int64_t ReadValue(const void *ptr, VarType conv)
  */
 void WriteValue(void *ptr, VarType conv, int64_t val)
 {
-	openttd_rust_saveload_write_value(&_sl_services, ptr, conv, val);
+	SlRaise(openttd_rust_saveload_write_value(&_sl_services, ptr, conv, val));
 }
 
 /**
