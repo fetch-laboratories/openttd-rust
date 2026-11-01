@@ -37,10 +37,6 @@ macro_rules! carrier {
 carrier!(WaterTileType, LockPart, DepotPart);
 pub use crate::direction_type::Axis;
 #[repr(C)]
-pub struct Area {
-    _private: [u8; 0],
-}
-#[repr(C)]
 pub struct Strings {
     pub built_on_water: u32,
     pub demolish_bridge: u32,
@@ -70,9 +66,6 @@ pub struct WaterCommandServices {
     pub make_depot: extern "C" fn(u32, u8, u16, DepotPart, Axis, WaterClass),
     pub make_lock_tile:
         extern "C" fn(u32, u8, LockPart, crate::services::DiagDirection, WaterClass),
-    pub area_begin: unsafe extern "C" fn(*mut Area, u32, u32, bool),
-    pub area_tile: unsafe extern "C" fn(*mut Area) -> u32,
-    pub area_next: unsafe extern "C" fn(*mut Area),
     pub strings: Strings,
 }
 const FACTOR: u32 = 2;
@@ -500,7 +493,6 @@ impl World<'_> {
         &self,
         out: *mut CommandCost,
         ret: *mut CommandCost,
-        area: *mut Area,
         flags: u16,
         end: u32,
         start: u32,
@@ -515,12 +507,12 @@ impl World<'_> {
             return;
         }
         self.expense(out, 0);
-        // SAFETY: The facade supplies a live, independent stack area iterator.
-        let mut tile = unsafe {
-            (self.a.area_begin)(area, end, start, diagonal);
-            (self.a.area_tile)(area)
-        };
-        while tile != INVALID_TILE {
+        let check = |ok| crate::movement::native_assert(self.s, ok);
+        let size = self.size_x * self.size_y;
+        let mut iter =
+            crate::tilearea::TileIterator::create(self.map, size, end, start, diagonal, check);
+        while iter.tile() != INVALID_TILE {
+            let tile = iter.tile();
             let slope = (self.s.tile_slope)(tile);
             if slope != 0 && (wc.0 != 2 || !is_inclined_slope(slope)) {
                 self.error(out, self.a.strings.flat);
@@ -572,11 +564,7 @@ impl World<'_> {
             } else {
                 w::hit(w::WATER_CMD_SKIP);
             }
-            // SAFETY: Iterator remains live, and callbacks cannot replace it.
-            unsafe {
-                (self.a.area_next)(area);
-                tile = (self.a.area_tile)(area);
-            }
+            iter.advance(self.map, size, check);
         }
         if (self.c.money)(out) == 0 {
             self.error(out, self.a.strings.already_built);
@@ -725,9 +713,9 @@ entry!(openttd_rust_water_build_depot(out:*mut CommandCost,ret:*mut CommandCost,
     |world:&World<'_>| world.build_depot(out,ret,flags,tile,axis));
 entry!(openttd_rust_water_build_lock(out:*mut CommandCost,ret:*mut CommandCost,flags:u16,tile:u32)
     |world:&World<'_>| world.build_lock(out,ret,flags,tile));
-entry!(openttd_rust_water_build_canal(out:*mut CommandCost,ret:*mut CommandCost,area:*mut Area,flags:u16,end:u32,start:u32,wc:WaterClass,diagonal:bool)
-|world:&World<'_>| { // SAFETY: The facade owns the iterator and native result slots.
-    unsafe { world.build_canal(out,ret,area,flags,end,start,wc,diagonal); }
+entry!(openttd_rust_water_build_canal(out:*mut CommandCost,ret:*mut CommandCost,flags:u16,end:u32,start:u32,wc:WaterClass,diagonal:bool)
+|world:&World<'_>| { // SAFETY: The facade owns the native result slots.
+    unsafe { world.build_canal(out,ret,flags,end,start,wc,diagonal); }
 });
 entry!(openttd_rust_water_make_river(tile:u32) |world:&World<'_>| {
     (world.a.restoration.make_river)(tile,world.random()); (world.s.mark_dirty)(tile); world.desert(tile);
@@ -793,9 +781,6 @@ crate::abi::layouts! {
         environment,
         make_depot,
         make_lock_tile,
-        area_begin,
-        area_tile,
-        area_next,
         strings,
     };
 }

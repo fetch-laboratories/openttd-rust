@@ -56,8 +56,6 @@
 #include "rust/command_services.h"
 #include "rust/company_services.h"
 #include "rust/services_rail.h"
-#include <variant>
-#include <optional>
 
 #include "safeguards.h"
 
@@ -119,7 +117,6 @@ void MakeRiverAndModifyDesertZoneAround(TileIndex tile)
 }
 /* The selected command owns traversal; the established map iterator stays a
  * call-local native value. Variant construction has no per-command allocation. */
-#include "rust/water_area_services.h"
 // Direct Rust economy reads use these source Price indices.
 static_assert(PR_BUILD_DEPOT_SHIP == 7 && PR_CLEAR_DEPOT_SHIP == 32 && PR_BUILD_LOCK == 64 && PR_CLEAR_LOCK == 65);
 static_assert(PR_BUILD_CANAL == 60 && PR_CLEAR_CANAL == 61 && PR_CLEAR_WATER == 34 && PR_CLEAR_ROUGH == 23);
@@ -138,12 +135,6 @@ const OpenTTDWaterCommandServices &GetRustWaterCommandServices() noexcept
 		.environment = GetRustEnvironmentServices(),
 		.make_depot = [](uint32_t t, uint8_t o, uint16_t id, DepotPart part, Axis axis, WaterClass wc) noexcept { MakeShipDepot(TileIndex{t}, Owner{o}, DepotID{id}, part, axis, wc); },
 		.make_lock_tile = [](uint32_t t, uint8_t o, LockPart part, DiagDirection dir, WaterClass wc) noexcept { MakeLockTile(TileIndex{t}, Owner{o}, part, dir, wc); },
-		.area_begin = [](OpenTTDWaterArea *a, uint32_t tile, uint32_t start, bool diagonal) noexcept {
-			if (diagonal) a->iter.emplace(std::in_place_type<DiagonalTileIterator>, TileIndex{tile}, TileIndex{start});
-			else a->iter.emplace(std::in_place_type<OrthogonalTileIterator>, TileIndex{tile}, TileIndex{start});
-		},
-		.area_tile = [](OpenTTDWaterArea *a) noexcept { return std::visit([](auto &i) { return (*i).base(); }, *a->iter); },
-		.area_next = [](OpenTTDWaterArea *a) noexcept { std::visit([](auto &i) { ++i; }, *a->iter); },
 		.strings = {
 			.built_on_water = STR_ERROR_MUST_BE_BUILT_ON_WATER,
 			.demolish_bridge = STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST,
@@ -162,9 +153,8 @@ const OpenTTDWaterCommandServices &GetRustWaterCommandServices() noexcept
 }
 CommandCost CmdBuildCanal(DoCommandFlags flags, TileIndex tile, TileIndex start_tile, WaterClass wc, bool diagonal)
 {
-	OpenTTDWaterArea area;
 	CommandCost cost, ret;
-	openttd_rust_water_build_canal(&GetRustWaterCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), &area, flags.base(), tile.base(), start_tile.base(), wc, diagonal);
+	openttd_rust_water_build_canal(&GetRustWaterCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile.base(), start_tile.base(), wc, diagonal);
 	return cost;
 }
 static CommandCost ClearTile_Water(TileIndex tile, DoCommandFlags flags)

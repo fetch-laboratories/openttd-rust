@@ -23,7 +23,6 @@
 #include "table/strings.h"
 
 #include "rust/landscape_command_ffi.h"
-#include "rust/water_area_services.h"
 #include "rust/command_cost_services.h"
 static_assert(LM_LEVEL == 0 && LM_LOWER == 1 && LM_RAISE == 2);
 
@@ -58,8 +57,7 @@ std::tuple<CommandCost, Money, TileIndex> CmdTerraformLand(DoCommandFlags flags,
 std::tuple<CommandCost, Money, TileIndex> CmdLevelLand(DoCommandFlags flags, TileIndex tile, TileIndex start_tile, bool diagonal, LevelMode lm)
 {
 	CommandCost result, last, ret;
-	OpenTTDWaterArea area;
 	int64_t extra = 0;
-	TileIndex error{openttd_rust_landscape_level(&GetRustLandscapeCommandServices(), RustCommandCost(&result), RustCommandCost(&last), RustCommandCost(&ret), tile.base(), start_tile.base(), diagonal, lm, flags.base(), &area, &extra)};
+	TileIndex error{openttd_rust_landscape_level(&GetRustLandscapeCommandServices(), RustCommandCost(&result), RustCommandCost(&last), RustCommandCost(&ret), tile.base(), start_tile.base(), diagonal, lm, flags.base(), &extra)};
 	return {std::move(result), Money(extra), error};
 }
