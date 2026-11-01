@@ -68,7 +68,6 @@ struct OpenTTDSessionServices {
 	void (*window_tick)() noexcept OPENTTD_SERVICE_DEFAULT(window_tick);
 	void (*check_caches)() noexcept OPENTTD_SERVICE_DEFAULT(check_caches);
 	void (*reset_engine_overrides)() noexcept OPENTTD_SERVICE_DEFAULT(reset_engine_overrides);
-	void (*dirty)() noexcept OPENTTD_SERVICE_DEFAULT(dirty);
 	bool (*reload_config)() noexcept OPENTTD_SERVICE_DEFAULT(reload_config);
 	void (*reset_grf)(bool) noexcept OPENTTD_SERVICE_DEFAULT(reset_grf);
 	void (*autosave_frequency)(bool) noexcept OPENTTD_SERVICE_DEFAULT(autosave_frequency);
