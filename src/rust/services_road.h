@@ -18,6 +18,7 @@ inline void RustSetRoadOwner(uint32_t tile, uint8_t kind, uint8_t owner) noexcep
 inline RoadType RustRoadTileType(uint32_t tile, RoadTramType kind) noexcept { return GetRoadType(TileIndex(tile), kind); }
 inline uint32_t RustRoadDisasterTarget(const Vehicle *v) noexcept { return RoadVehicle::From(v)->disaster_vehicle.base(); }
 inline void RustWriteRoadDisasterTarget(Vehicle *v, uint32_t disaster) noexcept { RoadVehicle::From(v)->disaster_vehicle = VehicleID{disaster}; }
+inline bool RustRoadIsBus(const Vehicle *v) noexcept { return RoadVehicle::From(v)->IsBus(); }
 inline uint64_t RustRoadCompatibleTypes(const Vehicle *v) noexcept { return RoadVehicle::From(v)->compatible_roadtypes.base(); }
 inline uint16_t RustRoadTypeMaxSpeed(RoadType type) noexcept { return GetRoadTypeInfo(type)->max_speed; }
 inline RoadType RustRoadVehicleType(const RoadVehicle *v) noexcept { return v->roadtype; }

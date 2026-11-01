@@ -78,24 +78,11 @@ pub struct Traversal {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct Area {
-    pub tile: u32,
-    pub width: u16,
-    pub height: u16,
-    pub valid: u8,
-    pub stop: u8,
-    pub drive_through: u8,
-    pub next: u8,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
 pub struct Leaves {
     /// Shared table for the road stop owner's cost observations.
     pub shared: *const Services,
-    pub road_kind: unsafe extern "C" fn(*const c_void) -> crate::services::RoadTramType,
     pub tile: unsafe extern "C" fn(*const c_void, u32, u8, bool) -> Tile,
     pub closest: unsafe extern "C" fn(*const c_void, u16, u8) -> u32,
-    pub area: unsafe extern "C" fn(*const c_void, u16) -> Area,
 }
 #[repr(C)]
 pub struct Result {
@@ -251,9 +238,13 @@ impl Search<'_> {
     }
     fn tram(&self) -> bool {
         // SAFETY: The context's road kind is invariant throughout this search.
-        *self
-            .tram
-            .get_or_init(|| unsafe { (self.leaves.road_kind)(self.context) }.0)
+        *self.tram.get_or_init(|| {
+            // SAFETY: The native search retains the same live vehicle handle.
+            let vehicle = crate::vehicle::VehicleRef(unsafe {
+                std::ptr::NonNull::new_unchecked(self.context.cast_mut().cast())
+            });
+            (self.movement.get().road_kind)(vehicle).0
+        })
     }
     fn tracks(&self, tile: u32, status: u8) -> u16 {
         // SAFETY: The native search keeps the same live road vehicle context.
@@ -635,15 +626,38 @@ impl Search<'_> {
             index = parent;
         }
         if let Some(station) = self.dest_station {
-            // SAFETY: No road owner reference exists during the shared station query.
-            let a = unsafe { (self.leaves.area)(self.context, station) };
-            if a.valid != 0 && a.stop != 0 && (a.drive_through != 0 || a.next != 0) {
+            let shared = unsafe { &*self.leaves.shared };
+            let catchment = unsafe { &*(shared.station_catchment)() };
+            let st = (catchment.station_if_valid)(crate::station_type::StationID(station));
+            if st.is_null() {
+                return self.arena[index].td;
+            }
+            // Native entries supply the canonical vehicle handle as their context.
+            let vehicle = crate::vehicle::VehicleRef(unsafe {
+                std::ptr::NonNull::new_unchecked(self.context.cast_mut().cast())
+            });
+            let stop = crate::road_stop::primary_for_vehicle(shared, st, vehicle);
+            if stop.is_null() {
+                return self.arena[index].td;
+            }
+            let stops = unsafe { &*(shared.road_stops)() };
+            let world = crate::map_func::World::new(shared);
+            if world.station_road_stop((stops.tile)(stop)) && !world.bay_stop((stops.tile)(stop))
+                || !crate::road_stop::next_for_vehicle(shared, stop, vehicle).is_null()
+            {
+                let kind = if (stops.is_bus)(vehicle) {
+                    crate::station_type::STATION_BUS
+                } else {
+                    crate::station_type::STATION_TRUCK
+                };
+                let commands = unsafe { &*(shared.station_commands)() };
+                let a = (commands.tile_area)(st, kind);
                 let x = (a.tile % self.input.map_x) as i32;
                 let y = (a.tile / self.input.map_x) as i32;
                 let sx = (x - 8).max(0);
                 let sy = (y - 8).max(0);
-                let ex = (x + i32::from(a.width) + 8).min(self.input.map_x as i32);
-                let ey = (y + i32::from(a.height) + 8).min(self.input.map_y as i32);
+                let ex = (x + i32::from(a.w) + 8).min(self.input.map_x as i32);
+                let ey = (y + i32::from(a.h) + 8).min(self.input.map_y as i32);
                 // SAFETY: Shared query has returned; no callback overlaps the Vec borrow.
                 let path = unsafe { &mut (*state).path };
                 let end = path
@@ -834,21 +848,10 @@ crate::abi::layouts! {
         waypoint,
         drive_through,
     };
-    "OpenTTDRoadYapfArea" ["probe"] => Area {
-        tile,
-        width,
-        height,
-        valid,
-        stop,
-        drive_through,
-        next,
-    };
     "OpenTTDRoadYapfLeaves" ["probe"] => crate::road_yapf::Leaves {
         shared,
-        road_kind,
         tile,
         closest,
-        area,
     };
     "OpenTTDRoadYapfResult" ["probe"] => Result {
         tile,

@@ -15,6 +15,7 @@
 #include "../roadveh.h"
 #include "../rust/road_yapf_ffi.h"
 #include "../rust/movement_ffi.h"
+#include "../rust/station_catchment_ffi.h"
 #include "../tile_type.h"
 #include "../landscape.h"
 #include "../safeguards.h"
@@ -38,6 +39,9 @@ const OpenTTDSharedServices *MovementWorld()
 {
 	static OpenTTDSharedServices world{};
 	static OpenTTDMovementServices movement{};
+	static OpenTTDStationCatchmentServices stations{};
+	world.station_catchment = []() noexcept -> const OpenTTDStationCatchmentServices * { return &stations; };
+	stations.station_if_valid = [](uint16_t) noexcept -> BaseStation * { return nullptr; };
 	world.movement = &movement;
 	world.map = &movement_map.statics;
 	world.tile_type = [](uint32_t) noexcept -> uint8_t { return 2; };
@@ -50,18 +54,16 @@ const OpenTTDSharedServices *MovementWorld()
 	world.disallowed_road_directions = [](uint32_t) noexcept -> uint8_t { return fixture_dirs > 255 ? 1 : 2; };
 	world.has_road_works = [](uint32_t) noexcept { return false; };
 	movement.shared = &world;
+	movement.road_kind = [](OpenTTDVehicle *) noexcept { return RTT_ROAD; };
 	movement.has_tile_road_type = [](uint32_t, RoadTramType) noexcept { return true; };
 	SetFixtureDirs(fixture_dirs);
 	return &world;
 }
 uint32_t RoadProbeClosest(const void *, uint16_t, uint8_t) noexcept { return 0; }
-OpenTTDRoadYapfArea Area(const void *, uint16_t) noexcept { return {}; }
 const OpenTTDRoadYapfLeaves probe_leaves{
 	.shared = MovementWorld(),
-	.road_kind = [](const void *) noexcept { return RTT_ROAD; },
 	.tile = ProbeTile,
 	.closest = RoadProbeClosest,
-	.area = Area,
 };
 }
 

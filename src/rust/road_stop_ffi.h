@@ -36,6 +36,7 @@ struct OpenTTDRoadStopServices {
 	const OpenTTDGroundServices *ground;
 	RoadStop *(*primary)(uint32_t, RoadStopType) noexcept OPENTTD_SERVICE_DEFAULT(primary);
 	RoadStop *(*head)(BaseStation *, bool) noexcept OPENTTD_SERVICE_DEFAULT(head);
+	bool (*is_bus)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(is_bus);
 	RoadStop *(*next)(const RoadStop *) noexcept OPENTTD_SERVICE_DEFAULT(next);
 	uint32_t (*tile)(const RoadStop *) noexcept OPENTTD_SERVICE_DEFAULT(tile);
 	OpenTTDRoadStopState *(*state)(const RoadStop *) noexcept OPENTTD_SERVICE_DEFAULT(state);

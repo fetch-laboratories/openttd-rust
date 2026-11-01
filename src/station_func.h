@@ -20,7 +20,6 @@
 #include "linkgraph/linkgraph_type.h"
 #include "industry_type.h"
 
-void ModifyStationRatingAround(TileIndex tile, Owner owner, int amount, uint radius);
 
 void ShowStationViewWindow(StationID station);
 void UpdateAllStationVirtCoords();

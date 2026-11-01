@@ -69,9 +69,11 @@ extern "C" bool __wrap__ZN11BaseStation19SetRoadStopTileDataEN10StrongType7Typed
 	AnimationTrace(changed ? "setter-changed" : "setter-unchanged");
 	return changed;
 }
+static void (*landscape_dirty_observer)(TileIndex) = nullptr;
 extern "C" void __real__Z19MarkTileDirtyByTileN10StrongType7TypedefIj12TileIndexTagJNS_7CompareENS_7IntegerENS_10CompatibleIiEENS4_IlEEEEEii(TileIndex, int, int);
 extern "C" void __wrap__Z19MarkTileDirtyByTileN10StrongType7TypedefIj12TileIndexTagJNS_7CompareENS_7IntegerENS_10CompatibleIiEENS4_IlEEEEEii(TileIndex t, int b, int h)
 {
+	if (landscape_dirty_observer != nullptr) landscape_dirty_observer(t);
 	AnimationTrace("dirty");
 	__real__Z19MarkTileDirtyByTileN10StrongType7TypedefIj12TileIndexTagJNS_7CompareENS_7IntegerENS_10CompatibleIiEENS4_IlEEEEEii(t, b, h);
 }

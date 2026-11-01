@@ -26,7 +26,6 @@ pub struct AircraftInfo {
 pub struct Services {
     pub articulated: &'static articulated::Services,
     pub powered_roadtypes: extern "C" fn(*const OpenTTDEngine) -> u64,
-    pub any_roadtype: extern "C" fn(u32, u64) -> bool,
     pub new_road: extern "C" fn(u32) -> *mut (),
     pub road_front: extern "C" fn(*mut (), *const OpenTTDEngine),
     pub station: extern "C" fn(u32) -> *const Station,
@@ -66,7 +65,11 @@ pub(crate) unsafe fn road(
     let a = k.articulated;
     let r = s.refit;
     let b = r.common.base;
-    if !(k.any_roadtype)(tile, (k.powered_roadtypes)(e)) {
+    if !crate::road_map::has_tile_any_road_type(
+        &crate::map_func::World::new(b.shared),
+        tile,
+        (k.powered_roadtypes)(e),
+    ) {
         (b.cost.error)(out, k.wrong_depot);
         return ptr::null_mut();
     }
@@ -243,7 +246,7 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAircraftInfo" ["probe"] => AircraftInfo { image, passengers, mail, subtype, };
     "OpenTTDVehicleConstructServices" ["probe"] => Services {
-        articulated, powered_roadtypes, any_roadtype, new_road, road_front, station,
+        articulated, powered_roadtypes, new_road, road_front, station,
         hangar_tile, new_aircraft, aircraft_place, aircraft_info, aircraft_properties,
         rotor, mail_capacity_address, road_capacity, set_cargo_type, engine_common, service_dates,
         build_stamp, exclusive_preview, service_flags, wrong_depot,

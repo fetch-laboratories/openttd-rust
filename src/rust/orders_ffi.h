@@ -108,7 +108,6 @@ struct OpenTTDOrdersLeaves {
 	void *(*next_vehicle)(uint32_t first) noexcept OPENTTD_SERVICE_DEFAULT(next_vehicle);
 	uint64_t (*aircraft_range)(void *ctx) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_range);
 	uint64_t (*aircraft_range_square)(void *ctx) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_range_square);
-	uint64_t (*bus)(void *ctx) noexcept OPENTTD_SERVICE_DEFAULT(bus);
 	uint64_t (*backup_capacity)() noexcept OPENTTD_SERVICE_DEFAULT(backup_capacity);
 	void *(*create_backup)(void *ctx, uint32_t user) noexcept OPENTTD_SERVICE_DEFAULT(create_backup);
 	uint64_t (*networking)() noexcept OPENTTD_SERVICE_DEFAULT(networking);
@@ -273,7 +272,6 @@ void *openttd_orders_next_backup(uint32_t *cursor) noexcept;
 void *openttd_orders_next_vehicle(uint32_t first) noexcept;
 uint64_t openttd_orders_aircraft_range(void *ctx) noexcept;
 uint64_t openttd_orders_aircraft_range_square(void *ctx) noexcept;
-uint64_t openttd_orders_bus(void *ctx) noexcept;
 uint64_t openttd_orders_backup_capacity() noexcept;
 void *openttd_orders_create_backup(void *ctx, uint32_t user) noexcept;
 uint64_t openttd_orders_network_client() noexcept;

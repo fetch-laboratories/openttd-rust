@@ -76,6 +76,12 @@ pub const PR_BUILD_INDUSTRY_RAW: usize = 58;
 /// `PR_CLEAR_HOUSE`.
 pub const PR_CLEAR_HOUSE: usize = 40;
 
+/// `PR_CLEAR_GRASS`.
+pub const PR_CLEAR_GRASS: usize = 22;
+/// `PR_CLEAR_ROCKS`.
+pub const PR_CLEAR_ROCKS: usize = 24;
+/// `PR_CLEAR_FIELDS`.
+pub const PR_CLEAR_FIELDS: usize = 25;
 /// `PR_BUILD_VEHICLE_TRAIN`.
 pub const PR_BUILD_VEHICLE_TRAIN: u32 = 15;
 /// `PR_BUILD_VEHICLE_WAGON`.

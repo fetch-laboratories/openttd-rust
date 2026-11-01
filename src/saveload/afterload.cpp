@@ -8,6 +8,7 @@
 /** @file afterload.cpp Code updating data after game load */
 
 #include "../stdafx.h"
+#include "../station_kdtree.h"
 #include "../rust/movement_ffi.h"
 #include "../void_map.h"
 #include "../signs_base.h"
@@ -574,7 +575,7 @@ bool AfterLoadGame()
 	_gamelog.TestMode();
 
 	RebuildTownKdtree();
-	RebuildStationKdtree();
+	openttd_rust_station_rebuild_index(&GetRustSharedServices());
 	/* This needs to be done even before conversion, because some conversions will destroy objects
 	 * that otherwise won't exist in the tree. */
 	RebuildViewportKdtree();
