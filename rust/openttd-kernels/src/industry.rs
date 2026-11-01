@@ -1999,7 +1999,6 @@ crate::abi::layouts! {
         removal_multiplier,
         tile_max_z,
         autoslope_callback,
-        callback_boolean,
         command_checks,
     };
     "OpenTTDIndustryCostServices" ["industry"] => crate::industry::IndustryCostServices {
@@ -2027,6 +2026,7 @@ crate::abi::layouts! {
         owner,
     };
     "OpenTTDIndustryTileServices" ["industry"] => crate::industry::TileServices {
+        shared,
         gfx,
         set_gfx,
         frame,
@@ -2052,8 +2052,7 @@ crate::abi::layouts! {
         spec,
         acceptance,
         callback,
-        cargo_file,
-    };
+        };
     "OpenTTDIndustryPair" ["industry"] => Pair { first, second, };
     "Industry::ProducedHistory" ["industry"] => Pair { first => production, second => transported, };
     "Industry::AcceptedHistory" ["industry"] => Pair { first => accepted, second => waiting, };

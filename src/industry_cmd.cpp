@@ -1095,6 +1095,7 @@ const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices()
 const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept
 {
 	static const OpenTTDIndustryTileServices services = {
+		.shared = &GetRustSharedServices(),
 		.gfx = [](uint32_t tile) noexcept -> uint16_t { return GetIndustryGfx(TileIndex(tile)); },
 		.set_gfx = [](uint32_t tile, uint16_t gfx) noexcept { SetIndustryGfx(TileIndex(tile), gfx); },
 		.frame = OpenTTDAnimationFrame,
@@ -1128,7 +1129,6 @@ const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept
 			return result;
 		},
 		.callback = OpenTTDIndustryTileCallback,
-		.cargo_file = RustSpecGRFFile<IndustryTileSpec>,
 	};
 	return services;
 }
@@ -1168,7 +1168,6 @@ const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices() noexcep
 		.removal_multiplier = RustIndustrySpecRemovalMultiplier<OpenTTDIndustrySpecHandle>,
 		.tile_max_z = [](uint32_t tile) noexcept -> int32_t { return OpenTTDTileMaxZ(TileIndex(tile)); },
 		.autoslope_callback = [](const OpenTTDIndustryTileSpec *spec) noexcept -> bool { return spec->callback_mask.Test(IndustryTileCallbackMask::Autoslope); },
-		.callback_boolean = RustSpecBooleanCallback<IndustryTileSpec>,
 		.command_checks = &GetRustCommandServices(),
 	};
 	return services;

@@ -39,16 +39,10 @@ pub struct IndustryCargo {
 #[repr(C)]
 pub struct Services {
     pub generation: *const super::GenerationServices,
+    pub shared: *const crate::services::Services,
     pub industry: unsafe extern "C" fn(u16) -> *mut SpecHandle,
     pub tile: unsafe extern "C" fn(u16) -> *mut TileSpec,
-    pub grfid: unsafe extern "C" fn(*const SpecHandle) -> u32,
-    pub identity: unsafe extern "C" fn(*const SpecHandle) -> Identity,
-    pub tile_identity: unsafe extern "C" fn(*const TileSpec) -> Identity,
     pub availability: unsafe extern "C" fn(*const SpecHandle) -> Availability,
-    pub set_enabled: unsafe extern "C" fn(*mut SpecHandle, bool),
-    pub set_override: unsafe extern "C" fn(*mut SpecHandle, u16),
-    pub set_tile_override: unsafe extern "C" fn(*mut TileSpec, u16),
-    pub set_tile_enabled: unsafe extern "C" fn(*mut TileSpec, bool),
     pub publish: unsafe extern "C" fn(u16, *mut SpecHandle),
     pub publish_tile: unsafe extern "C" fn(u16, *mut TileSpec),
     pub industry_full: unsafe extern "C" fn(),
@@ -58,7 +52,6 @@ pub struct Services {
     pub climate_available: unsafe extern "C" fn(*const SpecHandle, u8) -> bool,
     pub reset_tile: unsafe extern "C" fn(u16),
     pub clear_tile: unsafe extern "C" fn(u16),
-    pub file: unsafe extern "C" fn(usize) -> *mut c_void,
     pub industry_count: unsafe extern "C" fn(*const c_void) -> usize,
     pub tile_count: unsafe extern "C" fn(*const c_void) -> usize,
     pub file_industry: unsafe extern "C" fn(*mut c_void, usize) -> *mut SpecHandle,
@@ -71,6 +64,12 @@ pub struct Services {
     pub set_produced: unsafe extern "C" fn(*mut SpecHandle, usize, u8),
     pub set_accepted: unsafe extern "C" fn(*mut SpecHandle, usize, u8),
     pub set_tile_accepted: unsafe extern "C" fn(*mut TileSpec, usize, u8),
+}
+impl Services {
+    fn shared(&self) -> &crate::services::Services {
+        // SAFETY: `GetIndustryDefinitionServices` points at the process-lifetime shared table.
+        unsafe { &*self.shared }
+    }
 }
 pub unsafe fn allocate(
     manager: *mut override_manager::Manager,
@@ -133,7 +132,7 @@ pub unsafe fn publish(
     spec: *mut SpecHandle,
     s: &Services,
 ) {
-    let identity = unsafe { (s.identity)(spec) };
+    let identity = (s.shared().specs().industry().substitute().identity)(spec);
     let invalid = unsafe { (*manager).invalid };
     // The original narrows GetID and AddEntityID to IndustryType before testing it.
     let mut id =
@@ -148,9 +147,7 @@ pub unsafe fn publish(
                 s,
             )
         } as u8;
-        unsafe {
-            (s.set_override)(spec, invalid);
-        }
+        (s.shared().specs().industry().substitute().set_override)(spec, invalid);
     }
     if u16::from(id) == invalid {
         unsafe {
@@ -160,7 +157,7 @@ pub unsafe fn publish(
     }
     unsafe {
         (s.publish)(u16::from(id), spec);
-        (s.set_enabled)((s.industry)(u16::from(id)), true);
+        (s.shared().specs().industry().substitute().set_enabled)((s.industry)(u16::from(id)), true);
     }
 }
 pub unsafe fn publish_tile(
@@ -168,7 +165,7 @@ pub unsafe fn publish_tile(
     spec: *mut TileSpec,
     s: &Services,
 ) {
-    let identity = unsafe { (s.tile_identity)(spec) };
+    let identity = (s.shared().specs().industry_tile().substitute().identity)(spec);
     let (offset, invalid) = unsafe { ((*manager).offset, (*manager).invalid) };
     let id =
         unsafe { allocate_tile_for(manager, identity.local, identity.grfid, identity.substitute) };
@@ -190,10 +187,8 @@ pub unsafe fn publish_tile(
             continue;
         }
         let overridden = unsafe { (s.tile)(i) };
-        unsafe {
-            (s.set_tile_override)(overridden, id);
-            (s.set_tile_enabled)(overridden, false);
-        }
+        (s.shared().specs().industry_tile().substitute().set_override)(overridden, id);
+        (s.shared().specs().industry_tile().substitute().set_enabled)(overridden, false);
         unsafe {
             (&mut (*manager).entities)[usize::from(i)] = invalid;
             (&mut (*manager).grfids)[usize::from(i)] = 0;
@@ -210,7 +205,7 @@ fn translate(label: crate::newgrf::CargoLabel) -> u8 {
 pub unsafe fn finalise(s: &Services) {
     let mut file_index = 0;
     loop {
-        let file = unsafe { (s.file)(file_index) };
+        let file = (s.shared().grf_file_at_or_null)(file_index);
         if file.is_null() {
             break;
         }
@@ -242,7 +237,7 @@ pub unsafe fn finalise(s: &Services) {
         let spec = unsafe { (s.industry)(id) };
         let status = unsafe { (s.availability)(spec) };
         if status.enabled && status.has_file {
-            let grfid = unsafe { (s.grfid)(spec) };
+            let grfid = (s.shared().specs().industry().grfid)(spec);
             let conflicting = unsafe { (s.conflicting)(spec) };
             for i in 0..3 {
                 let kind = unsafe { conflicting.add(i).read() };
@@ -287,9 +282,7 @@ pub(crate) unsafe fn reset(climate: u8, s: &Services) {
     for id in 0..crate::industry_type::NEW_INDUSTRYOFFSET {
         let spec = unsafe { (s.industry)(id) };
         let available = unsafe { (s.climate_available)(spec, climate) };
-        unsafe {
-            (s.set_enabled)(spec, available);
-        }
+        (s.shared().specs().industry().substitute().set_enabled)(spec, available);
     }
     for id in 0..crate::industry_type::NEW_INDUSTRYTILEOFFSET {
         unsafe {
@@ -315,6 +308,6 @@ crate::abi::layouts! {
     "OpenTTDIndustryAcceptedSlots" ["industry"] => CargoSlots<INDUSTRY_ORIGINAL_NUM_INPUTS> { cargo, labels };
     "OpenTTDIndustryDefinitionCargo" ["industry"] => IndustryCargo { produced, accepted };
     "OpenTTDIndustryDefinitionServices" ["industry"] => Services {
-        generation, industry, tile, grfid, identity, tile_identity, availability, set_enabled, set_override, set_tile_override, set_tile_enabled, publish, publish_tile, industry_full, tile_full, reset_industry, clear_industry, climate_available, reset_tile, clear_tile, file, industry_count, tile_count, file_industry, file_tile, clear_file, conflicting, invalid_name, cargo, tile_cargo, set_produced, set_accepted, set_tile_accepted
+        generation, shared, industry, tile, availability, publish, publish_tile, industry_full, tile_full, reset_industry, clear_industry, climate_available, reset_tile, clear_tile, industry_count, tile_count, file_industry, file_tile, clear_file, conflicting, invalid_name, cargo, tile_cargo, set_produced, set_accepted, set_tile_accepted
     };
 }
