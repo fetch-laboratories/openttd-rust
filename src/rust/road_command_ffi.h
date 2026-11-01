@@ -25,7 +25,6 @@ struct OpenTTDRoadCommandContext {
 };
 struct OpenTTDRoadConversionScratch {
 	OpenTTDRoadConvertFrame *frame;
-	OpenTTDRailConvertFrame *area;
 	OpenTTDCommandCost *error, *ret;
 };
 struct OpenTTDRoadNearestTownTile { bool road, depot, town_owned; };
@@ -66,7 +65,7 @@ void openttd_rust_road_build_depot(const OpenTTDRoadCommandServices *, OpenTTDCo
 void openttd_rust_road_clear(const OpenTTDRoadCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t);
 void openttd_rust_road_nearest_towns(const OpenTTDRoadCommandServices *, bool);
 void openttd_rust_road_terraform(const OpenTTDRoadCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, int32_t, uint8_t);
-void openttd_rust_road_convert(const OpenTTDRoadCommandServices *, OpenTTDRoadConvertFrame *, OpenTTDRailConvertFrame *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, uint8_t, bool);
+void openttd_rust_road_convert(const OpenTTDRoadCommandServices *, OpenTTDRoadConvertFrame *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, uint8_t, bool);
 void openttd_rust_road_build_above(const OpenTTDRoadCommandServices *, OpenTTDCommandCost *, uint16_t, uint32_t);
 }
 #endif /* RUST_ROAD_COMMAND_FFI_H */

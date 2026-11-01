@@ -226,14 +226,6 @@ pub struct RailCommandServices {
     /// `MakeShore`, keeping the docking flag as the original does.
     pub make_shore: extern "C" fn(u32),
     /// `IsPossibleDockingTile` then `CheckForDockingTile`.
-    /// Begin `TileIterator::Create(start, end, diagonal)` in the frame.
-    pub area_begin: unsafe extern "C" fn(*mut ConvertFrame, u32, u32, bool),
-    /// Current iterator tile (`INVALID_TILE` at end).
-    pub area_tile: unsafe extern "C" fn(*mut ConvertFrame) -> u32,
-    /// Advance the iterator.
-    pub area_next: unsafe extern "C" fn(*mut ConvertFrame),
-    /// `DiagonalTileArea`/`OrthogonalTileArea(start, end).Contains(tile)`.
-    pub area_contains: extern "C" fn(u32, u32, bool, u32) -> bool,
     /// `include(affected, first)` for every train on the tile, in iteration order.
     pub include_train: unsafe extern "C" fn(*mut ConvertFrame, crate::vehicle::VehicleRef),
     /// `ConsistChanged(CCF_TRACK)` for each collected train, in insertion order.
@@ -1668,9 +1660,17 @@ impl<'a> Ctx<'a> {
         cost.set(0);
         error.error(self.s.strings.no_suitable_track);
         let mut found = false;
-        unsafe { (self.s.area_begin)(frame, area_start, area_end, diagonal_area) };
+        let check = |ok| crate::movement::native_assert(self.shared, ok);
+        let mut iter = crate::tilearea::TileIterator::create(
+            self.map,
+            self.map_size(),
+            area_start,
+            area_end,
+            diagonal_area,
+            check,
+        );
         loop {
-            let tile = unsafe { (self.s.area_tile)(frame) };
+            let tile = iter.tile();
             if tile == INVALID_TILE {
                 break;
             }
@@ -1688,7 +1688,7 @@ impl<'a> Ctx<'a> {
             ) {
                 found = true;
             }
-            unsafe { (self.s.area_next)(frame) };
+            iter.advance(self.map, self.map_size(), check);
         }
         if execute {
             unsafe { (self.s.consist_changed)(frame) };
@@ -1821,7 +1821,15 @@ impl<'a> Ctx<'a> {
             MP_TUNNELBRIDGE => {
                 let endtile = (self.rail.other_tunnel_bridge_end)(tile);
                 if endtile < tile
-                    && (self.s.area_contains)(area_start, area_end, diagonal_area, endtile)
+                    && crate::tilearea::corners_contain(
+                        self.map,
+                        self.map_size(),
+                        area_start,
+                        area_end,
+                        diagonal_area,
+                        endtile,
+                        |ok| crate::movement::native_assert(self.shared, ok),
+                    )
                 {
                     return false;
                 }
@@ -2471,10 +2479,6 @@ crate::abi::layouts! {
         depot_windows,
         close_inspect,
         make_shore,
-        area_begin,
-        area_tile,
-        area_next,
-        area_contains,
         include_train,
         consist_changed,
     };

@@ -21,7 +21,7 @@ enum Foundation : uint8_t;
 enum FloodingBehaviour : uint8_t;
 struct Train;
 struct OpenTTDVehicle;
-struct OpenTTDRailConvertFrame; ///< Caller-owned TileIterator and ordered affected-train list.
+struct OpenTTDRailConvertFrame; ///< Caller-owned ordered affected-train list.
 struct OpenTTDRailTrainParking { uint8_t track; uint8_t status; uint16_t speed; uint8_t order; };
 struct OpenTTDRailTrainPosition { uint32_t tile; uint8_t trackdir; };
 struct OpenTTDCrossingRoad { uint8_t bits, road_type, tram_type; uint16_t town; uint8_t road_owner, tram_owner; };
@@ -72,10 +72,6 @@ struct OpenTTDRailCommandServices {
 	void (*depot_windows)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_windows);
 	void (*close_inspect)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(close_inspect);
 	void (*make_shore)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(make_shore);
-	void (*area_begin)(OpenTTDRailConvertFrame *, uint32_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(area_begin);
-	uint32_t (*area_tile)(OpenTTDRailConvertFrame *) noexcept OPENTTD_SERVICE_DEFAULT(area_tile);
-	void (*area_next)(OpenTTDRailConvertFrame *) noexcept OPENTTD_SERVICE_DEFAULT(area_next);
-	bool (*area_contains)(uint32_t, uint32_t, bool, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(area_contains);
 	void (*include_train)(OpenTTDRailConvertFrame *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(include_train);
 	void (*consist_changed)(OpenTTDRailConvertFrame *) noexcept OPENTTD_SERVICE_DEFAULT(consist_changed);
 };

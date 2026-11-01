@@ -1065,7 +1065,6 @@ static void GetTileDesc_Road(TileIndex tile, TileDesc &td)
 #include "rust/road_command_ffi.h"
 #include "rust/road_command_services.h"
 #include "rust/town_services.h"
-#include "rust/rail_command_services.h"
 #include "rust/command_cost_services.h"
 #include "rust/company_services.h"
 #include "rust/vehicle_services.h"
@@ -1116,7 +1115,7 @@ const OpenTTDRoadCommandServices &GetRustRoadCommandServices() noexcept
 		.scratch_cost = [](OpenTTDRoadCommandScratch *scratch) noexcept { return RustCommandCost(&scratch->ret.emplace()); },
 		.conversion_scratch = [](OpenTTDRoadCommandScratch *scratch) noexcept -> OpenTTDRoadConversionScratch {
 			auto &s = scratch->conversion.emplace();
-			return {.frame = &s.frame, .area = &s.area, .error = RustCommandCost(&s.error), .ret = RustCommandCost(&s.ret)};
+			return {.frame = &s.frame, .error = RustCommandCost(&s.error), .ret = RustCommandCost(&s.ret)};
 		},
 		.include_vehicle = RoadIncludeVehicle,
 		.affected_count = [](OpenTTDRoadConvertFrame *frame) noexcept { return frame->affected.size(); },
@@ -1173,8 +1172,7 @@ CommandCost CmdConvertRoad(DoCommandFlags flags, TileIndex tile, TileIndex start
 {
 	CommandCost cost, error, ret;
 	OpenTTDRoadConvertFrame frame;
-	OpenTTDRailConvertFrame area;
-	openttd_rust_road_convert(RoadServices(), &frame, &area, RustCommandCost(&cost), RustCommandCost(&error), RustCommandCost(&ret), flags.base(), tile.base(), start.base(), rt, diagonal);
+	openttd_rust_road_convert(RoadServices(), &frame, RustCommandCost(&cost), RustCommandCost(&error), RustCommandCost(&ret), flags.base(), tile.base(), start.base(), rt, diagonal);
 	return cost;
 }
 static CommandCost CheckBuildAbove_Road(TileIndex tile, DoCommandFlags flags, Axis, int)
