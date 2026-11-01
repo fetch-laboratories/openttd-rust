@@ -10,10 +10,9 @@
  */
 
 #include "../../stdafx.h"
+#include "packet.h"
 #include "../../rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDPacketServices.hpp"
-
-#include "packet.h"
 
 #include "../../safeguards.h"
 
