@@ -15,6 +15,8 @@ CANDIDATE_ENTRIES = (
     "openttd_rust_session_state_loop",
     "openttd_kernels::genworld::generate",
 )
+# Drawing workloads count C++ drawing, which both builds still share (#566).
+DRAW_ENTRY = "ViewportDoDraw(Viewport const&, int, int, int, int)"
 
 # Quiet speed pass at 755609b8ea (#275): ratio is the median of
 # four three-pair medians; Ir and compatible identity come from profiles of the
@@ -46,6 +48,8 @@ SPEED_ANCHORS = {
     )
 }
 SPEED_BUDGETS = {name: sum(ratios) / len(ratios) for name, ratios, _, _ in SPEED_PASS}
+# Profiled and speed-pass scenarios: anchored ones plus the unanchored drawing workload.
+PROFILED = (*SPEED_BUDGETS, "draw-padhattan-ridge-1996-giant")
 
 
 class SpeedBudget(TypedDict):
@@ -66,6 +70,9 @@ def speed_budget(
     anchor_ratio: float | None = None,
 ) -> SpeedBudget | None:
     """Report the speed record and ceiling without making timings a CI failure."""
+    # docs/speed.md defines ceilings only for play and generation.
+    if name.startswith("draw-"):
+        return None
     mean = SPEED_BUDGETS.get(name, anchor_ratio)
     if mean is None or ratio is None:
         return None
@@ -169,6 +176,7 @@ def record_build(build, source, role, env):
 def flags(scenario, reference=True):
     entries = ENTRIES if reference else CANDIDATE_ENTRIES
     entries = entries if scenario["kind"] == "generate" else entries[:1]
+    entries = (DRAW_ENTRY,) if scenario.get("draw") else entries
     return [
         "--command-line-only=yes",
         "--tool=callgrind",
@@ -307,7 +315,8 @@ def finish(runs, result):
     temporary = runs["reference"]["dir"] / "reference-Ir.json"
     temporary.write_text(json.dumps(measurements["reference"]["Ir"]))
     temporary.replace(info["cache"])
-    return measurements
+    ratio = measurements["candidate"]["Ir"] / measurements["reference"]["Ir"]
+    return dict(measurements, Ir_ratio=ratio)
 
 
 def projection(anchor, value):
@@ -323,5 +332,6 @@ def budget(name, measurement, record):
     ratio = projection(anchor, measurement["Ir"])
     rolling = projection(anchor, integrated["Ir"])
     return dict(
-        projected_ratio=ratio, **speed_budget(name, ratio, rolling, anchor["ratio"])
+        projected_ratio=ratio,
+        **(speed_budget(name, ratio, rolling, anchor["ratio"]) or {}),
     )
