@@ -17,11 +17,12 @@ void ObjectProbeIncreaseProgress(GenWorldProgress);
 #undef IncreaseGeneratingWorldProgress
 #include "console_internal.h"
 #include "saveload/saveload.h"
+#include "command-nesting.hpp"
 #ifdef WITH_RUST
 using HiddenObjectArea = OpenTTDObjectHiddenArea;
 static HiddenObjectArea HideObjectForTunnel(TileIndex t) { return openttd_rust_object_tunnel_hide(t.base(), Map::LogX()); }
 static void RestoreObjectFirstTile(HiddenObjectArea h) { openttd_rust_object_restore_first(h); }
-static void ResetScratch() { openttd_rust_command_before(&GetRustCommandServices(), true, false); }
+static void ResetScratch() { NestedCommand([] {}); }
 #else
 class AbortGenerateWorldSignal {};
 struct HiddenObjectArea { size_t index; uint32_t first_tile; };
@@ -332,8 +333,7 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 		for (uint8_t version : {7, 8}) {
 			file.grf_version = version; Result("owned", build(OBJECT_OWNED_LAND, tile));
 			ResetScratch(); SetBridgeMiddle(tile, AXIS_X);
-			RecursiveCommandCounter nested;
-			Result("bridge-after-clear", CmdBuildObject(DoCommandFlag::Execute, tile, OBJECT_TRANSMITTER, 0));
+			NestedCommand([&] { Result("bridge-after-clear", CmdBuildObject(DoCommandFlag::Execute, tile, OBJECT_TRANSMITTER, 0)); });
 			fmt::print(stderr, "OBJECT cleared-before-bridge {}\n", IsTileType(tile, MP_CLEAR));
 			ClearBridgeMiddle(tile);
 		}

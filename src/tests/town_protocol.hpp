@@ -109,7 +109,6 @@ static inline OpenTTDLandscapeCommandServices town_protocol_landscape;
 static inline const OpenTTDCommandServices town_protocol_commands = [] {
 	auto commands = OpenTTDCommandServices{};
 	commands.landscape_commands = []() noexcept -> const OpenTTDLandscapeCommandServices * { return &town_protocol_landscape; };
-	commands.enter = []() noexcept { return false; }; commands.leave = []() noexcept {};
 	return commands;
 }();
 static inline const OpenTTDTownAuthorityServices town_protocol_authority{

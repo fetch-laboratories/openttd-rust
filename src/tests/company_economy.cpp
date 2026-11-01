@@ -273,6 +273,26 @@ TEST_CASE("Commands - road price saturation, rounding and independent type masks
 	CHECK(RoadClearCost(ROADTYPE_TRAM) == Money(864691128455135205LL));
 }
 
+/** A `Command<Tcmd>::Do` frame whose procedure returns a scripted result, optionally inside a nested `Do`. */
+struct ScriptedCommandFrame : OpenTTDCommandFrame {
+	CommandCost result;
+	CommandCost scripted;
+	const OpenTTDCommandServices *services = nullptr;
+	ScriptedCommandFrame *inner = nullptr;
+	uint16_t inner_flags = 0;
+
+	explicit ScriptedCommandFrame(CommandCost scripted) : OpenTTDCommandFrame{}, scripted(std::move(scripted))
+	{
+		this->results[0] = RustCommandCost(&this->result);
+		this->run = [](OpenTTDCommandFrame *base, uint16_t, uint8_t) noexcept {
+			auto &f = *static_cast<ScriptedCommandFrame *>(base);
+			if (f.inner != nullptr) CHECK(openttd_rust_command_do(f.services, f.inner, 0, f.inner_flags));
+			f.result = f.scripted;
+			return true;
+		};
+	}
+};
+
 /* Save comparison cannot observe skipped metadata reads or local encoded errors.
  * Unreachable callbacks retain their generated abort defaults. */
 TEST_CASE("Commands - pre-post money short circuits and local error encoding")
@@ -285,20 +305,24 @@ TEST_CASE("Commands - pre-post money short circuits and local error encoding")
 	command.infinite_money = OpenTTDCommandServices{}.infinite_money;
 	auto skipped = costs;
 	skipped.money = OpenTTDCommandCostServices{}.money;
-	for (bool test : {false, true}) {
-		CommandCost failed(STR_ERROR_INSUFFICIENT_FUNDS);
-		openttd_rust_command_before(&command, false, test);
-		openttd_rust_command_after(&command, &skipped, RustCommandCost(&failed), 0, true, test);
-		CHECK(failed.Failed());
+	command.cost = &skipped;
+	for (DoCommandFlags execute : {DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Execute}}) {
+		ScriptedCommandFrame failed(CommandCost(STR_ERROR_INSUFFICIENT_FUNDS));
+		CHECK(openttd_rust_command_do(&command, &failed, 0, execute.base()));
+		CHECK(failed.result.Failed());
 		for (DoCommandFlags flags : {DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Bankrupt}, DoCommandFlags{DoCommandFlag::QueryCost}}) {
 			bool top = flags.Any();
-			if (!test && flags.Test(DoCommandFlag::QueryCost)) continue;
-			CommandCost result(EXPENSES_CONSTRUCTION, Money(50));
-			openttd_rust_command_before(&command, false, test);
-			openttd_rust_command_after(&command, &skipped, RustCommandCost(&result), flags.base(), top, test);
-			CHECK(result.Succeeded());
+			if (execute.Any() && flags.Test(DoCommandFlag::QueryCost)) continue;
+			ScriptedCommandFrame result(CommandCost(EXPENSES_CONSTRUCTION, Money(50)));
+			ScriptedCommandFrame outer(CommandCost{});
+			outer.services = &command;
+			outer.inner = &result;
+			outer.inner_flags = (flags | execute).base();
+			CHECK(openttd_rust_command_do(&command, top ? &result : &outer, 0, top ? (flags | execute).base() : 0));
+			CHECK(result.result.Succeeded());
 		}
 	}
+	command.cost = &costs;
 	for (int64_t amount : {-5, 0}) {
 		CommandCost result(EXPENSES_CONSTRUCTION, Money(amount));
 		CHECK(openttd_rust_command_check_money(&command, &costs, RustCommandCost(&result)));
@@ -324,9 +348,11 @@ TEST_CASE("Commands - pre-post money short circuits and local error encoding")
 	CommandCost zero;
 	skipped = costs; skipped.expense = OpenTTDCommandCostServices{}.expense;
 	openttd_rust_command_subtract_money(&command, &skipped, RustCommandCost(&zero));
+	/* A top-level execution tests first; the money check passes before each subtraction. */
 	for (auto [amount, expense] : {std::pair{5, EXPENSES_CONSTRUCTION}, std::pair{-3, EXPENSES_ROADVEH_REVENUE}, std::pair{2, EXPENSES_ROADVEH_RUN}}) {
-		CommandCost result(expense, Money(amount));
-		openttd_rust_command_after(&command, &costs, RustCommandCost(&result), 0, true, false);
+		ScriptedCommandFrame result(CommandCost(expense, Money(amount)));
+		CHECK(openttd_rust_command_do(&command, &result, 0, DoCommandFlags{DoCommandFlag::Execute}.base()));
+		CHECK(result.result.Succeeded());
 	}
 	const auto &finances = fixture_companies[0]->Finances();
 	CHECK(finances.money == Money(16));
