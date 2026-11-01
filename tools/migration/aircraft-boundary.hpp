@@ -4,6 +4,7 @@
 #define OPENTTD_AIRCRAFT_BOUNDARY_HPP
 #include "rust/aircraft_ffi.h"
 #include "rust/airport_resolver_ffi.h"
+#include "rust/spec_services_ffi.h"
 #include "rust/station_command_ffi.h"
 #include "rust/station_service_ffi.h"
 #include <cstdlib>
@@ -27,8 +28,14 @@ static OpenTTDAircraftLeaves AircraftTestLeaves(OpenTTDVehicleServices &vehicle,
 	runtime.dummy_spec = reinterpret_cast<const AirportSpec *>(&airport_tag);
 	runtime.dummy_fta = reinterpret_cast<const AirportFTAClass *>(&airport_tag);
 	runtime.base_spec = [](uint16_t) noexcept { return reinterpret_cast<const AirportSpec *>(&airport_tag); };
-	runtime.enabled = [](const AirportSpec *) noexcept { return true; };
-	runtime.override_id = [](const AirportSpec *) noexcept { return uint16_t{254}; };
+	static OpenTTDAirportSpecSubstitute substitute{};
+	substitute.enabled = [](const AirportSpec *) noexcept { return true; };
+	substitute.override_id = [](const AirportSpec *) noexcept { return uint16_t{254}; };
+	static OpenTTDAirportSpecServices airport{};
+	airport.substitute = &substitute;
+	static OpenTTDNewGRFSpecs specs{};
+	specs.airport = &airport;
+	shared.newgrf_specs = &specs;
 	runtime.fta = [](const AirportSpec *spec) noexcept { return reinterpret_cast<const AirportFTAClass *>(spec); };
 	runtime.check = [](bool condition) noexcept { if (!condition) std::abort(); };
 	runtime.engine_if_valid = [](uint16_t) noexcept { return reinterpret_cast<const OpenTTDEngine *>(&airport_tag); };

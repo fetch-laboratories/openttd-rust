@@ -313,7 +313,6 @@ pub struct ObjectServices {
     pub clear_price: unsafe extern "C" fn(*const Spec) -> Price,
     pub set_hq: unsafe extern "C" fn(u8, u32) -> (),
     pub statue_town: unsafe extern "C" fn(*mut Object) -> crate::town::TownRef,
-    pub boolean_callback: unsafe extern "C" fn(*const Spec, u16, u16) -> bool,
     pub close_inspect: unsafe extern "C" fn(u32) -> (),
     pub progress_set: unsafe extern "C" fn(*mut GenerationFrame, u32) -> bool,
     pub progress_increase: unsafe extern "C" fn(*mut GenerationFrame) -> bool,
@@ -375,8 +374,6 @@ pub struct QueryServices {
     pub date: unsafe extern "C" fn(*mut Object) -> i32,
     pub colour: unsafe extern "C" fn(*mut Object) -> u8,
     pub view: unsafe extern "C" fn(*mut Object) -> u8,
-    pub badges: unsafe extern "C" fn(*const Resolver, *const Spec, u32) -> u32,
-    pub grfid: unsafe extern "C" fn(*const Resolver) -> u32,
     pub version8: unsafe extern "C" fn(*const Resolver) -> bool,
     pub override_id: unsafe extern "C" fn(u16, u32) -> u16,
     pub manhattan: unsafe extern "C" fn(u32, u32) -> u32,
@@ -517,7 +514,9 @@ impl<'a> World<'a> {
                     0x42 => return crate::timer_game_common::calendar_date().0 as u32,
                     0x44 => return u32::from((self.shared.current_company)()),
                     0x48 => return u32::from(view),
-                    0x7a => return (q.badges)(ro, spec, parameter),
+                    0x7a => {
+                        return (self.shared.specs().object().badges)(ro.cast(), spec, parameter);
+                    }
                     _ => return self.unhandled(variable, available),
                 }
                 if !(self.shared.tile_valid)(tile) {
@@ -549,7 +548,7 @@ impl<'a> World<'a> {
                 0x48 => u32::from((q.view)(obj)),
                 0x60 => self.id_at_offset(
                     (self.shared.nearby_tile)(parameter as u8, tile),
-                    (q.grfid)(ro),
+                    (self.shared.resolver_grf_file_id)(ro.cast()),
                 ),
                 0x61 | 0x63 => {
                     let near = (self.shared.nearby_tile)(parameter as u8, tile);
@@ -573,8 +572,13 @@ impl<'a> World<'a> {
                     },
                     (q.version8)(ro),
                 ),
-                0x64 => self.count_distance(parameter as u8, (q.grfid)(ro), tile, obj),
-                0x7a => (q.badges)(ro, spec, parameter),
+                0x64 => self.count_distance(
+                    parameter as u8,
+                    (self.shared.resolver_grf_file_id)(ro.cast()),
+                    tile,
+                    obj,
+                ),
+                0x7a => (self.shared.specs().object().badges)(ro.cast(), spec, parameter),
                 _ => self.unhandled(variable, available),
             }
         }
@@ -1079,7 +1083,10 @@ impl<'a> World<'a> {
                         );
                         if result.callback != CALLBACK_FAILED {
                             let r = resolver_services(self.s);
-                            result.version = ((*r.shared).grf_file_version)((r.file)(spec));
+                            result.version =
+                                ((*r.shared).grf_file_version)(
+                                    ((*r.shared).specs().object().file)(spec),
+                                );
                         }
                         crate::witness::hit(crate::witness::OBJECT_SLOPE_CALLBACK);
                     }
@@ -1341,7 +1348,11 @@ impl World<'_> {
                                 0,
                             );
                             result == CALLBACK_FAILED
-                                || !(self.s.boolean_callback)(spec, CBID_OBJECT_AUTOSLOPE, result)
+                                || !(self.shared.specs().object().boolean_callback)(
+                                    spec,
+                                    CBID_OBJECT_AUTOSLOPE,
+                                    result,
+                                )
                         }
                     } else {
                         enabled(self.s, spec)
@@ -1845,9 +1856,6 @@ pub struct Lifetime {
 }
 #[repr(C)]
 pub struct ResolverServices {
-    pub file: unsafe extern "C" fn(*const Spec) -> *const std::ffi::c_void,
-    pub root: unsafe extern "C" fn(*const Spec, bool) -> *const std::ffi::c_void,
-    pub local_id: unsafe extern "C" fn(*const Spec) -> u16,
     pub shared: *const crate::services::Services,
     pub views: unsafe extern "C" fn(*const Spec) -> u8,
     pub eligibility: unsafe extern "C" fn(*const Spec) -> Eligibility,
@@ -1891,19 +1899,35 @@ pub extern "C" fn openttd_rust_object_scope_init(
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_file(spec: *const Spec) -> *const std::ffi::c_void {
-    unsafe { (resolver_services(invocation_services()).file)(spec) }
+    unsafe {
+        ((*resolver_services(invocation_services()).shared)
+            .specs()
+            .object()
+            .file)(spec)
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_root(
     context: *const ObjectScope,
 ) -> *const std::ffi::c_void {
     let ObjectScope { object, spec, .. } = unsafe { *context };
-    unsafe { (resolver_services(invocation_services()).root)(spec, !object.is_null()) }
+    unsafe {
+        ((*resolver_services(invocation_services()).shared)
+            .specs()
+            .object()
+            .standard()
+            .sprite_group)(spec, !object.is_null())
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_debug_id(context: *const ObjectScope) -> u32 {
     let spec = unsafe { (*context).spec };
-    unsafe { u32::from((resolver_services(invocation_services()).local_id)(spec)) }
+    unsafe {
+        u32::from(((*resolver_services(invocation_services()).shared)
+            .specs()
+            .object()
+            .local_id)(spec))
+    }
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_object_feature() -> u8 {
@@ -2456,8 +2480,6 @@ crate::abi::layouts! {
         date,
         colour,
         view,
-        badges,
-        grfid,
         version8,
         override_id,
         manhattan,
@@ -2469,7 +2491,7 @@ crate::abi::layouts! {
     "OpenTTDObjectScope" ["landscape"] => ObjectScope { object, spec, parent, tile, view };
     "OpenTTDObjectEligibility" ["landscape"] => Eligibility { flags, climate, views };
     "OpenTTDObjectLifetime" ["landscape"] => Lifetime { introduction, end };
-    "OpenTTDObjectResolverServices" ["landscape"] => ResolverServices { file, root, local_id, shared, views, eligibility, introduction, lifetime, town_scope, base_scope, evaluate };
+    "OpenTTDObjectResolverServices" ["landscape"] => ResolverServices { shared, views, eligibility, introduction, lifetime, town_scope, base_scope, evaluate };
     "OpenTTDObjectServices" ["landscape"] => ObjectServices {
         shared,
         cost,
@@ -2509,7 +2531,6 @@ crate::abi::layouts! {
         clear_price,
         set_hq,
         statue_town,
-        boolean_callback,
         close_inspect,
         progress_set,
         progress_increase,

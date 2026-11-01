@@ -377,8 +377,6 @@ const OpenTTDObjectQueryServices &GetRustObjectQueryServices() noexcept
 		.date = [](Object *o) noexcept { return o->build_date.base(); },
 		.colour = [](Object *o) noexcept { return o->colour; },
 		.view = [](Object *o) noexcept { return o->view; },
-		.badges = RustSpecBadges<ObjectSpec>,
-		.grfid = RustResolverGRFFileID,
 		.version8 = RustResolverGRFVersion8,
 		.override_id = [](uint16_t id, uint32_t grfid) noexcept { return _object_mngr.GetID(id, grfid); },
 		.manhattan = OpenTTDDistanceManhattan,
@@ -394,9 +392,6 @@ const OpenTTDObjectResolverServices &GetObjectResolverServices() noexcept
 {
 	static_assert(GSF_OBJECTS == 0x0F && VSG_SCOPE_SELF == 0 && VSG_SCOPE_PARENT == 1 && CBID_OBJECT_LAND_SLOPE_CHECK == 0x157 && CBID_OBJECT_COLOUR == 0x15B);
 	static const OpenTTDObjectResolverServices services{
-		.file = RustSpecGRFFile<ObjectSpec>,
-		.root = RustSpecSpriteGroup<ObjectSpec>,
-		.local_id = RustSpecLocalID<ObjectSpec>,
 		.shared = &GetRustSharedServices(),
 		.views = RustObjectViews,
 		.eligibility = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectEligibility { return {RustObjectSpecFlags(spec), spec->climate.base(), RustObjectViews(spec)}; },

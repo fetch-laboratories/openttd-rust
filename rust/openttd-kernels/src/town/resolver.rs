@@ -58,7 +58,6 @@ pub struct ResolverServices {
     shared: *const Services,
     storage: *const newgrf_storage::Services,
     larger_towns: extern "C" fn() -> u8,
-    file: extern "C" fn(*const c_void) -> *const c_void,
     stage: extern "C" fn(u32) -> u8,
     age: extern "C" fn(u32) -> i32,
     random_bits: extern "C" fn(u32) -> u8,
@@ -75,6 +74,12 @@ pub struct ResolverServices {
     reseed: extern "C" fn(u16, u32, *mut TownHandle, u8) -> house::HouseReseed,
     unhandled_house: extern "C" fn(u8),
     unhandled_town: extern "C" fn(u8),
+}
+impl ResolverServices {
+    pub(crate) fn shared(&self) -> &Services {
+        // SAFETY: `GetHouseResolverServices` points at the process-lifetime shared table.
+        unsafe { &*self.shared }
+    }
 }
 #[derive(Clone, Copy, Default)]
 struct ClassMapping {
@@ -183,7 +188,7 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
         return u32::MAX;
     }
     if variable == 0x7C {
-        let file = (s.file)(ro);
+        let file = (s.shared().resolver_grf_file)(ro);
         return unsafe {
             newgrf_storage::openttd_rust_storage_town_get(
                 &*s.storage,
@@ -297,7 +302,7 @@ pub unsafe extern "C" fn openttd_rust_town_scope_store(
     if scope.readonly {
         return;
     }
-    let file = (s.file)(ro);
+    let file = (s.shared().resolver_grf_file)(ro);
     unsafe {
         newgrf_storage::openttd_rust_storage_town(
             &*s.storage,
@@ -477,7 +482,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
         }
         0x62 => (shared.nearby_tile_information)(
             (shared.nearby_tile)(parameter as u8, tile),
-            (shared.grf_file_version)((s.file)(ro)) >= 8,
+            (shared.grf_file_version)((s.shared().resolver_grf_file)(ro)) >= 8,
         ),
         0x63 => {
             let tile = (shared.nearby_tile)(parameter as u8, tile);
@@ -500,7 +505,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
             }
             let house = (unsafe { &*l.houses }.house_type)(tile);
             let spec = (s.nearby_spec)(house);
-            let file = (s.file)(ro);
+            let file = (s.shared().resolver_grf_file)(ro);
             let same_file = if spec.file == file { 1 } else { 2 };
             let class = if spec.house_class == HOUSE_NO_CLASS {
                 0
@@ -547,8 +552,11 @@ unsafe fn acceptance_history(
     parameter: u32,
     map: Map,
 ) -> u32 {
-    let cargo =
-        crate::cargo_registry::openttd_rust_cargo_translate(parameter as u8, (s.file)(ro), false);
+    let cargo = crate::cargo_registry::openttd_rust_cargo_translate(
+        parameter as u8,
+        (s.shared().resolver_grf_file)(ro),
+        false,
+    );
     if !is_valid_cargo_type(cargo) {
         return 0;
     }
@@ -591,8 +599,7 @@ crate::abi::layouts! {
     "OpenTTDHouseFileIdentity" ["probe"] => FileIdentity { grfid, has_file };
     "OpenTTDHouseNearbySpec" ["probe"] => NearbySpec { file, local, house_class };
     "OpenTTDHouseResolverServices" ["probe"] => ResolverServices {
-        towns, shared, storage, larger_towns, file,
-        stage, age, random_bits,
+        towns, shared, storage, larger_towns, stage, age, random_bits,
         random_triggers, search_spec, nearby_spec, file_identity,
         badges, root, spec_house, local_id, base_scope, evaluate, reseed, unhandled_house, unhandled_town,
     };

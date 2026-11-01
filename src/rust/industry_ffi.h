@@ -270,7 +270,6 @@ typedef struct OpenTTDIndustryConstructionServices {
 	uint16_t (*callback)(void *, uint16_t, uint32_t, uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(callback);
 	void (*callback_error)(const OpenTTDIndustrySpecHandle *, uint16_t, uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(callback_error);
 	uint8_t (*grf_version)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(grf_version);
-	const GRFFile *(*cargo_file)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(cargo_file);
 	size_t (*layout_size)(const OpenTTDIndustryLayoutHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(layout_size);
 	OpenTTDIndustryLayoutTile (*layout_tile)(const OpenTTDIndustryLayoutHandle *, size_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(layout_tile);
 	uint8_t (*water_class)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(water_class);
@@ -312,7 +311,6 @@ typedef struct OpenTTDIndustryTilePolicyServices {
 	uint32_t (*removal_multiplier)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(removal_multiplier);
 	int32_t (*tile_max_z)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(tile_max_z);
 	bool (*autoslope_callback)(const OpenTTDIndustryTileSpec *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(autoslope_callback);
-	bool (*callback_boolean)(const OpenTTDIndustryTileSpec *, uint16_t, uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(callback_boolean);
 	const OpenTTDCommandServices *command_checks;
 } OpenTTDIndustryTilePolicyServices;
 typedef struct OpenTTDIndustryCommandServices {
@@ -361,6 +359,7 @@ typedef struct OpenTTDIndustryTileAcceptance {
 } OpenTTDIndustryTileAcceptance;
 /** Consumed direct leaves; generic animation/map leaves share native definitions. */
 typedef struct OpenTTDIndustryTileServices {
+	const OpenTTDSharedServices *shared;
 	uint16_t (*gfx)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(gfx);
 	void (*set_gfx)(uint32_t, uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(set_gfx);
 	uint8_t (*frame)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(frame);
@@ -386,7 +385,6 @@ typedef struct OpenTTDIndustryTileServices {
 	const OpenTTDIndustryTileSpec * (*spec)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(spec);
 	OpenTTDIndustryTileAcceptance (*acceptance)(const OpenTTDIndustryTileSpec *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(acceptance);
 	uint16_t (*callback)(uint32_t, uint16_t, uint16_t, uint32_t, uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(callback);
-	const GRFFile *(*cargo_file)(const OpenTTDIndustryTileSpec *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(cargo_file);
 } OpenTTDIndustryTileServices;
 void openttd_rust_industry_tile_acceptance(uint32_t tile, uint32_t *acceptance, uint64_t *always_accepted, const OpenTTDIndustryTileServices *);
 void openttd_rust_industry_tile_animate(uint32_t tile, const OpenTTDIndustryServices *, const OpenTTDIndustryConstructionServices *, const OpenTTDIndustryTileServices *);
@@ -403,7 +401,6 @@ OpenTTDIndustryLocationResult openttd_industry_resolve_shape(OpenTTDIndustryShel
 void openttd_industry_location_error(OpenTTDIndustryCost *, const OpenTTDIndustryLocationResult *, const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT;
 void openttd_industry_shape_error(OpenTTDIndustryCost *, const OpenTTDIndustryLocationResult *, const OpenTTDIndustryTileSpec *) OPENTTD_INDUSTRY_NOEXCEPT;
 typedef struct OpenTTDIndustryTransactionServices {
-	bool (*enabled)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(enabled);
 	size_t (*layout_count)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(layout_count);
 	const OpenTTDIndustryLayoutHandle * (*layout)(const OpenTTDIndustrySpecHandle *, size_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(layout);
 	uint8_t (*raw_setting)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(raw_setting);
