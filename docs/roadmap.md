@@ -153,10 +153,11 @@ Agent: /root (Claude Code steering review) | Model: claude-opus-5-5 | Reasoning 
 - Fidelity, line by line against the pinned original: #627's save/load codec slices 1 to 3a; #620, #616 and #618; #612 and #624.
 - Targeted: readiness of the held owners #570, #559 and #69, and of #628 and #573's remaining slices.
 
-**No reachable divergence in #612, #616, #618, #620 or #624.**
+**No reachable divergence in #612, #616, #618, #620, #624 or #627 from valid or old saves.**
 - Random draws, widths, wrapping and side-effect order match. #612's partition bounce is gone: `RustKdtreePartition` is a stateless `nth_element` over keys Rust fills first.
 - #612 reads each k-d tree coordinate through two C++ calls (`station/spatial.rs:12`), about four per visited node. The station pool owner removes them (work order 4).
 - #616 and #620 added Rust map readers beside the native `bridge_above` and `rail_tile_type` services they duplicate. #565 item 2 deletes the services.
+- #627: a corrupt table header's `NOT_REACHED` now names `services_assert.h` in its message, with the same text and exit. The `FixSCCEncoded` wrappers survive only for tests and keep two exports alive, and #573's next PR removes them. The old-save paths before `SLV_69` and 4.4 have no bundled save, so they go to #156.
 
 **1. The held owners were passed over.** This is the user's focus.
 - The 10-31 session scope said "Leave #616, #618, #620, #559, #69 and #570 untouched" because they did not fit that usage window. It did not say why.
