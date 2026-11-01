@@ -227,7 +227,6 @@ pub struct HouseServices {
     pub scale_cargo: extern "C" fn(u32) -> u32,
     pub cargogen_mode: extern "C" fn() -> u8,
     pub place_houses: extern "C" fn() -> u8,
-    pub company_human: extern "C" fn(u8) -> bool,
     pub errors: HouseErrors,
 }
 
@@ -337,7 +336,7 @@ impl<'a> House<'a> {
     /// `CanDeleteHouse`.
     fn can_delete(&self, town: TownRef, tile: u32, house: u16) -> bool {
         let company = (self.s.current_company)();
-        if (self.h.company_human)(company)
+        if (self.s.company_human)(company)
             || company == OWNER_WATER
             || company == OWNER_NONE
             || (self.l.environment.editor)()
@@ -1584,7 +1583,6 @@ crate::abi::layouts! {
         scale_cargo,
         cargogen_mode,
         place_houses,
-        company_human,
         errors,
     };
 }

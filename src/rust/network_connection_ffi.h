@@ -71,7 +71,6 @@ struct OpenTTDNetworkConnectionServices {
 	uint8_t * (*status)(void *) noexcept OPENTTD_SERVICE_DEFAULT(status);
 	OpenTTDNetworkSocketSync * (*sync)(void *) noexcept OPENTTD_SERVICE_DEFAULT(sync);
 	bool (*unique_name)(void *) noexcept OPENTTD_SERVICE_DEFAULT(unique_name);
-	bool (*valid_human_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(valid_human_company);
 	bool (*valid_name)(void *) noexcept OPENTTD_SERVICE_DEFAULT(valid_name);
 };
 const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexcept;

@@ -40,7 +40,6 @@
 #include "table/strings.h"
 
 #include "../rust/company_services.h"
-#include "../rust/network_services.h"
 #include "../rust/settings_services.h"
 
 #include "../safeguards.h"
@@ -1605,7 +1604,7 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 		.client_id = [](void *socket) noexcept -> uint32_t { return static_cast<NetworkClientSocket *>(socket)->client_id; },
 		.clients_on = &_network_game_info.clients_on,
 		.close = [](void *socket, uint8_t status) noexcept -> uint8_t { return static_cast<NetworkClientSocket *>(socket)->CloseConnection(static_cast<NetworkRecvStatus>(status)); },
-		.company_allows_client = RustNetworkCompanyAllowsClient,
+		.company_allows_client = [](uint8_t company, void *socket) noexcept { return RustCompanyAllowsPublicKey(company, static_cast<NetworkClientSocket *>(socket)->GetPeerPublicKey()); },
 		.debug_authorized = [](void *socket) noexcept { Debug(net, 9, "client[{}] status = AUTHORIZED", static_cast<NetworkClientSocket *>(socket)->client_id); },
 		.debug_done_map = [](void *socket) noexcept { Debug(net, 9, "client[{}] status = DONE_MAP", static_cast<NetworkClientSocket *>(socket)->client_id); },
 		.debug_game_info = [](void *socket) noexcept { Debug(net, 9, "client[{}] Receive_CLIENT_GAME_INFO()", static_cast<NetworkClientSocket *>(socket)->client_id); },
@@ -1674,7 +1673,6 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 		.status = [](void *socket) noexcept -> uint8_t * { return reinterpret_cast<uint8_t *>(&static_cast<NetworkClientSocket *>(socket)->status); },
 		.sync = [](void *socket) noexcept -> OpenTTDNetworkSocketSync * { return static_cast<NetworkClientSocket *>(socket); },
 		.unique_name = [](void *name) noexcept -> bool { return NetworkMakeClientNameUnique(*static_cast<std::string *>(name)); },
-		.valid_human_company = OpenTTDCompanyIsValidHuman,
 		.valid_name = [](void *name) noexcept -> bool { return NetworkIsValidClientName(*static_cast<std::string *>(name)); },
 	};
 	return services;

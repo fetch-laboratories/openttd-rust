@@ -370,6 +370,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 		.docking = OpenTTDIsDockingTile,
 		.generating_world = OpenTTDGeneratingWorld,
 	},
+	.company_human = OpenTTDCompanyIsValidHuman,
 	.company_valid = OpenTTDCompanyIsValid,
 	.context = nullptr,
 	.crossing_road_bits = SharedCrossingRoadBits,

@@ -266,6 +266,8 @@ pub struct Services {
     pub build_on_slopes: extern "C" fn() -> bool,
     /// Native leaves for direct shared Rust clear-square control.
     pub clear_square_services: ClearSquareServices,
+    /// Whether this company pool ID is a live human company.
+    pub company_human: extern "C" fn(u8) -> bool,
     /// Whether this company pool ID is live.
     pub company_valid: extern "C" fn(u8) -> bool,
     /// Opaque context for test fixtures; production leaves ignore it.
@@ -736,6 +738,7 @@ crate::abi::layouts! {
         bridge_speed,
         build_on_slopes,
         clear_square_services,
+        company_human,
         company_valid,
         context,
         crossing_road_bits,
@@ -1010,6 +1013,7 @@ pub fn fixture(
             docking: flag,
             generating_world: flag0,
         },
+        company_human: unused_company_valid,
         company_valid: unused_company_valid,
         context,
         crossing_road_bits: fixture_crossing_road_bits,

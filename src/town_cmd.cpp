@@ -514,7 +514,6 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 		.scale_cargo = OpenTTDScaleTownCargo,
 		.cargogen_mode = OpenTTDTownCargoGenMode,
 		.place_houses = OpenTTDPlaceHouses,
-		.company_human = OpenTTDCompanyIsValidHuman,
 		.errors = {STR_ERROR_BUILDING_MUST_BE_DEMOLISHED, STR_ERROR_BUILDING_IS_PROTECTED, STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS,
 			STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION, STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST, STR_ERROR_FLAT_LAND_REQUIRED, STR_ERROR_MUST_FOUND_TOWN_FIRST},
 	};

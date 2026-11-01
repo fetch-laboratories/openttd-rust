@@ -94,7 +94,6 @@ pub struct Services {
     pub status: extern "C" fn(*mut c_void) -> *mut u8,
     pub sync: extern "C" fn(*mut c_void) -> *mut SocketSync,
     pub unique_name: extern "C" fn(*mut c_void) -> bool,
-    pub valid_human_company: extern "C" fn(u8) -> bool,
     pub valid_name: extern "C" fn(*mut c_void) -> bool,
 }
 
@@ -168,7 +167,6 @@ crate::abi::layouts! {
         status,
         sync,
         unique_name,
-        valid_human_company,
         valid_name,
     };
 }
@@ -530,7 +528,7 @@ pub extern "C" fn openttd_rust_network_receive_identify(
         }
         crate::company_type::COMPANY_SPECTATOR => {}
         _ => {
-            if !(s.valid_human_company)(company) {
+            if !(f.command.company.shared.company_human)(company) {
                 return send_error(s, f, socket, NETWORK_ERROR_COMPANY_MISMATCH, EMPTY_TEXT);
             }
             if !(s.company_allows_client)(company, socket) {
