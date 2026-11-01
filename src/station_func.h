@@ -20,7 +20,6 @@
 #include "linkgraph/linkgraph_type.h"
 #include "industry_type.h"
 
-void ModifyStationRatingAround(TileIndex tile, Owner owner, int amount, uint radius);
 
 void ShowStationViewWindow(StationID station);
 void UpdateAllStationVirtCoords();
@@ -48,10 +47,6 @@ void UpdateAirportsNoise();
 
 bool SplitGroundSpriteForOverlay(const TileInfo *ti, SpriteID *ground, RailTrackOffset *overlay_offset);
 
-#ifndef WITH_RUST
-void IncreaseStats(Station *st, const Vehicle *v, StationID next_station_id, uint32_t time);
-void IncreaseStats(Station *st, CargoType cargo, StationID next_station_id, uint capacity, uint usage, uint32_t time, EdgeUpdateModes modes);
-#endif
 void RerouteCargo(Station *st, CargoType cargo, StationID avoid, StationID avoid2);
 
 /**

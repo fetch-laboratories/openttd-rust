@@ -161,7 +161,6 @@ static Town *ClosestTownFromTile(TileIndex tile, uint32_t threshold)
  * tag is global Town, while the reference body uses TownReference::Town. */
 static OpenTTDTownState *ResolveOwner(uint32_t id) noexcept { assert(id == world->town.index); return world->owner; }
 static ::Town *ResolveShell(uint32_t id) noexcept { assert(id == world->town.index); return reinterpret_cast<::Town *>(&world->town); }
-static void Stations(uint32_t, uint32_t, void *, void (*)(void *, const OpenTTDStation *, uint32_t)) noexcept {}
 static uint32_t Random(void *) noexcept { world->draws++; return 0; }
 static uint32_t Industry(int32_t, int32_t, uint32_t *) noexcept { return 0; }
 static uint32_t Read_map_log_x() noexcept { return 10; }
@@ -183,7 +182,7 @@ static bool Candidate()
 	leaves.resolve_owner = ResolveOwner;
 	auto house_services = *leaves.houses;
 	leaves.houses = &house_services;
-	leaves.stations = Stations; leaves.build_tunnel = BuildTunnel;
+	leaves.build_tunnel = BuildTunnel;
 	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, Random, Industry);
 	AutoRestoreBackup<decltype(GetRustClockState().calendar_date)> calendar_date_scope(GetRustClockState().calendar_date, decltype(GetRustClockState().calendar_date){0});
 	services.town_by_id = [](uint32_t id) noexcept { return reinterpret_cast<OpenTTDTownHandle *>(ResolveShell(id)); };

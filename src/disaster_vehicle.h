@@ -11,10 +11,8 @@
 #define DISASTER_VEHICLE_H
 
 #include "vehicle_base.h"
-#ifdef WITH_RUST
 #include "rust/disaster_ffi.h"
 #include <memory>
-#endif
 
 /** Different sub types of disaster vehicles. */
 enum DisasterSubType : uint8_t {
@@ -39,7 +37,6 @@ enum DisasterSubType : uint8_t {
  * Disasters, like submarines, skyrangers and their shadows, belong to this class.
  */
 struct DisasterVehicle final : public SpecializedVehicle<DisasterVehicle, VEH_DISASTER> {
-#ifdef WITH_RUST
 	struct RustStateDeleter {
 		void operator()(OpenTTDDisasterState *state) const { openttd_rust_disaster_state_destroy(state); }
 	};
@@ -48,16 +45,6 @@ struct DisasterVehicle final : public SpecializedVehicle<DisasterVehicle, VEH_DI
 	uint32_t &DestroyerTarget() { return this->rust_state->target; }
 	uint8_t &Flags() { return this->rust_state->flags; }
 	uint16_t &State() { return this->rust_state->state; }
-#else
-	SpriteID image_override{}; ///< Override for the default disaster vehicle sprite.
-	VehicleID big_ufo_destroyer_target = VehicleID::Invalid(); ///< The big UFO that this destroyer is supposed to bomb.
-	uint8_t flags = 0; ///< Flags about the state of the vehicle, @see AirVehicleFlags
-	uint16_t state = 0; ///< Action stage of the disaster vehicle.
-	SpriteID &ImageOverride() { return this->image_override; }
-	VehicleID &DestroyerTarget() { return this->big_ufo_destroyer_target; }
-	uint8_t &Flags() { return this->flags; }
-	uint16_t &State() { return this->state; }
-#endif
 
 	/** For use by saveload. */
 	DisasterVehicle() : SpecializedVehicleBase() {}
@@ -65,10 +52,6 @@ struct DisasterVehicle final : public SpecializedVehicle<DisasterVehicle, VEH_DI
 	/** We want to 'destruct' the right class. */
 	virtual ~DisasterVehicle() = default;
 
-#ifndef WITH_RUST
-	void UpdatePosition(int x, int y, int z);
-	void UpdateImage();
-#endif
 	void UpdateDeltaXY() override;
 	bool Tick() override;
 };

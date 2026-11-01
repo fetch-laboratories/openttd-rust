@@ -8,13 +8,8 @@
 /** @file tile_loop_cursor.h Serialization alias for the canonical scheduler cursor. */
 #ifndef RUST_TILE_LOOP_CURSOR_H
 #define RUST_TILE_LOOP_CURSOR_H
-#ifdef WITH_RUST
 #include <cstdint>
 extern "C" uint32_t *openttd_rust_tile_loop_cursor();
 using TileLoopCursorType = uint32_t;
 #define _cur_tileloop_tile (*openttd_rust_tile_loop_cursor())
-#else
-using TileLoopCursorType = TileIndex;
-extern TileIndex _cur_tileloop_tile;
-#endif
 #endif /* RUST_TILE_LOOP_CURSOR_H */

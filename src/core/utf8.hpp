@@ -14,12 +14,9 @@
 
 #include <iterator>
 #include "bitmath_func.hpp"
-#ifdef WITH_RUST
 #include "../rust/utf8_ffi.h"
-#endif
 
 [[nodiscard]] std::pair<char[4], size_t> EncodeUtf8(char32_t c);
-#ifdef WITH_RUST
 /** Decode ASCII without crossing the boundary; Rust handles the complete codec. */
 [[nodiscard]] inline std::pair<size_t, char32_t> DecodeUtf8(std::string_view buf)
 {
@@ -30,9 +27,6 @@
 	auto decoded = openttd_rust_decode_utf8(reinterpret_cast<const uint8_t *>(buf.data()), buf.size());
 	return {decoded.length, static_cast<char32_t>(decoded.codepoint)};
 }
-#else
-[[nodiscard]] std::pair<size_t, char32_t> DecodeUtf8(std::string_view buf);
-#endif
 
 /* Check if the given character is part of a UTF8 sequence */
 bool IsUtf8Part(char c);

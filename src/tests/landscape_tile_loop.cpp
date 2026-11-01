@@ -9,7 +9,6 @@
 #include "../stdafx.h"
 #include "fixture_map.hpp"
 #include "../3rdparty/catch2/catch.hpp"
-#ifdef WITH_RUST
 #include "../rust/tile_type_access.hpp"
 #include "../rust/movement_ffi.h"
 #include "../rust/landscape_command_ffi.h"
@@ -36,10 +35,8 @@
 #include "landscape_protocol.hpp"
 #include "ground_protocol.hpp"
 #include "world_generation_probe.hpp"
-#endif
 #include "../safeguards.h"
 
-#ifdef WITH_RUST
 TEST_CASE("Town import coordinates preserve native float conversions")
 {
 	const OpenTTDTownDataServices services{.shared = &GetRustSharedServices(), .founding = nullptr, .strings = {}};
@@ -259,9 +256,7 @@ TEST_CASE("Rust shared tile-type out-of-range preserves callback policy")
 	CHECK(calls == 3);
 	CHECK(observed == 0);
 }
-#endif
 
-#ifdef WITH_RUST
 TEST_CASE("Rust generation sea identity preserves native flattening iteration")
 {
 	RustGenerationSeaSet boundary;
@@ -281,9 +276,7 @@ TEST_CASE("Rust generation sea identity preserves native flattening iteration")
 		boundary.Destroy();
 	}
 }
-#endif
 
-#ifdef WITH_RUST
 TEST_CASE("Rust world generation shares native lvalues across serialized threads")
 {
 	bool *address = &_generating_world;
@@ -318,4 +311,3 @@ TEST_CASE("Rust world generation replaces transient callbacks before invoking th
 	CHECK(world_callback_value == 2);
 	CHECK(_switch_mode == SM_EDITOR);
 }
-#endif

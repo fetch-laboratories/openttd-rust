@@ -14,7 +14,6 @@
 #include "../newgrf_engine.h"
 #include "../table/strings.h"
 #include <thread>
-#ifdef WITH_RUST
 #include "../rust/engine_ffi.h"
 #include "../rust/engine_loading_ffi.h"
 #include "../rust/vehicle_properties_ffi.h"
@@ -29,22 +28,18 @@
 #include "../core/backup_type.hpp"
 #include "../rust/newgrf_translation_ffi.h"
 #include "abi_layout.hpp"
-#endif
 #include "../3rdparty/catch2/catch.hpp"
 #include "../safeguards.h"
 
 TEST_CASE("Engine lifecycle canonical ABI", "[rust][engine][abi]")
 {
-#ifdef WITH_RUST
 	ABI_LAYOUT_CHECK;
 #include "abi-layout-engine.inc"
 #include "abi-layout-engine_loading.inc"
-#endif
 }
 
 TEST_CASE("Engine temporary owners survive relocation and replacement", "[rust][engine][lifetime]")
 {
-#ifdef WITH_RUST
 	std::vector<Engine> staged;
 	staged.emplace_back();
 	staged[0].age = -123;
@@ -68,7 +63,6 @@ TEST_CASE("Engine temporary owners survive relocation and replacement", "[rust][
 	staged[0].rust_lifecycle.state->age = INT32_MIN;
 	REQUIRE(staged[0].age == INT32_MIN);
 	staged.clear();
-#endif
 }
 
 TEST_CASE("Engine mappings preserve reservation, sorted identity and replacement metadata", "[engine][loading]")
@@ -113,7 +107,6 @@ TEST_CASE("Engine mappings preserve reservation, sorted identity and replacement
 
 TEST_CASE("Engine capability observations preserve type and zero-capacity gates", "[rust][engine]")
 {
-#ifdef WITH_RUST
 	struct Case { VehicleType type; uint8_t capacity, cargo, observed_cargo; bool carries; };
 	for (const Case c : {
 		Case{VEH_TRAIN, 0, 0, INVALID_CARGO, false}, Case{VEH_TRAIN, 255, 0, 0, true},
@@ -137,10 +130,8 @@ TEST_CASE("Engine capability observations preserve type and zero-capacity gates"
 		CHECK(config.callbacks == 24);
 		CHECK(config.misc == 96);
 	}
-#endif
 }
 
-#ifdef WITH_RUST
 template <typename Info, typename Labels>
 static void CheckLiveTypeLabels(Info *types, size_t count, Labels labels)
 {
@@ -213,9 +204,7 @@ TEST_CASE("Engine type availability returns canonical booleans for sparse masks"
 	road_hidden.Restore();
 }
 
-#endif
 
-#ifdef WITH_RUST
 TEST_CASE("Engine runtime observes live specs and original property and price kinds", "[rust][engine]")
 {
 	static OpenTTDVehicleResolverServices resolver;
@@ -309,4 +298,3 @@ TEST_CASE("Engine runtime enablement short circuits and lifetime retains widths"
 		setting.Restore();
 	}
 }
-#endif

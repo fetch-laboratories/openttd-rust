@@ -65,7 +65,6 @@ pub struct Services {
     pub cleaning_pool: extern "C" fn() -> bool,
     pub close_view: extern "C" fn(StationID),
     pub delete_news: extern "C" fn(StationID),
-    pub remove_index: extern "C" fn(StationID),
     pub sign_valid: extern "C" fn(*mut BaseStation) -> bool,
     pub remove_sign: extern "C" fn(StationID),
     pub last_loading: extern "C" fn(VehicleRef) -> StationID,
@@ -313,7 +312,7 @@ pub(crate) fn add_facility(st: *mut BaseStation, facility: u8, tile: u32, s: &Se
     let c = s.commands();
     let world = unsafe { &*c.station };
     if (world.facilities)(st) == 0 {
-        (c.move_sign)(st, tile);
+        crate::station::spatial::move_sign(s.shared, st, tile);
         unsafe {
             ((*s.roadstop).set_random_bits)(st, (s.shared.random)(std::ptr::null_mut()) as u16);
         }
@@ -562,7 +561,7 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
     unsafe {
         crate::cargo_storage::openttd_rust_cargo_invalidate(storage, id.0, u8::MAX);
     }
-    (s.remove_index)(id);
+    crate::station::spatial::remove(s.shared, id);
     if (s.sign_valid)(st) {
         (s.remove_sign)(id);
     }
@@ -597,5 +596,5 @@ pub(crate) fn airport_maintenance(s: &Services, owner: u8) -> i64 {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStationNames" ["probe"] => Names { base, central, airport, oilfield, docks, heliport, mines, lakeside, woods, forest, valley, heights, north, south, east, west, transfer, halt, exchange, annexe, sidings, branch, upper, lower, fallback, undefined, null };
-    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, names, industry_type, set_industry_type, industry_generation, spec_name, roadstop, cleaning_pool, close_view, delete_news, remove_index, sign_valid, remove_sign, last_loading, airport_maintenance, maintenance_price };
+    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, names, industry_type, set_industry_type, industry_generation, spec_name, roadstop, cleaning_pool, close_view, delete_news, sign_valid, remove_sign, last_loading, airport_maintenance, maintenance_price };
 }

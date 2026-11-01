@@ -58,3 +58,25 @@ add_test_files(
     tilearea.cpp
     utf8.cpp
 )
+
+# Test oracles come from the immutable baseline, not fork fallback bodies.
+file(STRINGS "${CMAKE_SOURCE_DIR}/migration/baseline.json" baseline_line REGEX "\"commit\"")
+string(REGEX REPLACE ".*\"commit\": \"([0-9a-f]+)\".*" "\\1" baseline_commit "${baseline_line}")
+find_package(Git REQUIRED)
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/reference")
+foreach(header table/roadveh_movement.h pathfinder/yapf/yapf_node_road.hpp)
+    get_filename_component(name "${header}" NAME)
+    execute_process(
+        COMMAND "${GIT_EXECUTABLE}" show "${baseline_commit}:src/${header}"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        OUTPUT_FILE "${CMAKE_CURRENT_BINARY_DIR}/reference/reference-${name}"
+        RESULT_VARIABLE oracle_result
+    )
+    if(NOT oracle_result EQUAL 0)
+        message(FATAL_ERROR "Fetch migration/baseline.json commit before configuring native tests")
+    endif()
+endforeach()
+target_include_directories(openttd_test PRIVATE
+    "${CMAKE_CURRENT_BINARY_DIR}/reference"
+    "${CMAKE_SOURCE_DIR}/src/pathfinder/yapf"
+)

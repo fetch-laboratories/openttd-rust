@@ -16,9 +16,6 @@
 
 bool RoadVehLeaveDepot(RoadVehicle *v, bool first);
 bool IndividualRoadVehicleController(RoadVehicle *v, const RoadVehicle *prev);
-#ifndef WITH_RUST
-bool RoadVehiclesAreBuilt();
-#endif
 
 CommandCost CmdBuildRoadVehicle(DoCommandFlags flags, TileIndex tile, const Engine *e, Vehicle **v);
 

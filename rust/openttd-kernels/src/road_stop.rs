@@ -99,6 +99,8 @@ pub struct RoadStopServices {
     pub primary: extern "C" fn(u32, RoadStopType) -> *mut Stop,
     /// The station's bus or truck stop list head.
     pub head: extern "C" fn(*mut BaseStation, bool) -> *mut Stop,
+    /// `RoadVehicle::IsBus`, preserving its front-engine assertion.
+    pub is_bus: extern "C" fn(VehicleRef) -> bool,
     /// `RoadStop::next`.
     pub next: extern "C" fn(*const Stop) -> *mut Stop,
     /// `RoadStop::xy`.
@@ -124,6 +126,40 @@ fn table(s: &Services) -> &RoadStopServices {
     unsafe { &*(s.road_stops)() }
 }
 
+/// Canonical `RoadVehicle::IsBus` observation.
+pub(crate) fn is_bus(s: &Services, v: VehicleRef) -> bool {
+    (table(s).is_bus)(v)
+}
+/// `Station::GetPrimaryRoadStop(const RoadVehicle *)`.
+pub(crate) fn primary_for_vehicle(
+    s: &Services,
+    station: *mut BaseStation,
+    v: VehicleRef,
+) -> *mut Stop {
+    let stops = table(s);
+    let head = (stops.head)(station, !is_bus(s, v));
+    accessible(s, head, v)
+}
+/// `RoadStop::GetNextRoadStop`: retain the native linked-list order.
+pub(crate) fn next_for_vehicle(s: &Services, stop: *const Stop, v: VehicleRef) -> *mut Stop {
+    accessible(s, (table(s).next)(stop), v)
+}
+fn accessible(s: &Services, mut stop: *mut Stop, v: VehicleRef) -> *mut Stop {
+    let stops = table(s);
+    let movement = crate::movement::table(s);
+    let ground = unsafe { &*stops.ground };
+    let world = crate::map_func::World::new(s);
+    while !stop.is_null() {
+        let tile = (stops.tile)(stop);
+        if crate::road_map::has_tile_any_road_type(&world, tile, (movement.road_compatible)(v))
+            && (!world.bay_stop(tile) || !(ground.has_articulated)(v))
+        {
+            break;
+        }
+        stop = (stops.next)(stop);
+    }
+    stop
+}
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_road_stop_new() -> *mut State {
     Box::into_raw(Box::new(State {
@@ -658,8 +694,7 @@ fn check_integrity(s: &Services, xy: u32, state: *mut State, dir: u8) {
 /// GetRoadStopType(tile))->Enter(rv)`.
 /// # Safety
 /// Live serialized shared table, front road vehicle and its owner.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_road_stop_enter(
+pub(crate) unsafe fn enter_by_tile(
     s: *const Services,
     tile: u32,
     v: VehicleRef,
@@ -754,6 +789,7 @@ crate::abi::layouts! {
         ground,
         primary,
         head,
+        is_bus,
         next,
         tile,
         state,

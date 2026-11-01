@@ -26,9 +26,7 @@
 class Tile {
 private:
 	friend struct Map;
-#ifdef WITH_RUST
 	friend struct OpenTTDNativeTileTypeAccess;
-#endif
 	using TileBase = TileBaseStorage;
 	using TileExtended = TileExtendedStorage;
 
@@ -186,9 +184,7 @@ public:
  */
 struct Map {
 private:
-#ifdef WITH_RUST
 	friend struct OpenTTDNativeTileTypeAccess;
-#endif
 	/**
 	 * Iterator to iterate all Tiles
 	 */

@@ -13,6 +13,7 @@ Readers: Root and agents selecting or planning work.
   5. Port the GUI, simulation drawing and platform backends.
   6. Replace or port vendored libraries in `src/3rdparty`.
 - Plan no phase beyond the next; decide nothing about later phases unless it affects the current or next phase (user, 2026-10-28).
+- A phase exits once its remaining bodies belong to later owners that move their data or callers. A facade's signature and braces retire with its callers, so they never hold a phase open.
 - The first issue of each of phases 3 to 6 names the evidence for what the harness cannot see, such as network packets or script API results.
 - Replace a vendored library with a maintained Rust crate when it reproduces observed behavior; otherwise port it (user, 2026-10-28).
 - Decide Squirrel when phase 6 reaches it; deviation from the original may then be acceptable, so do not plan a Squirrel port (user, 2026-10-28).
@@ -23,6 +24,7 @@ Readers: Root and agents selecting or planning work.
 - In phases 1 and 2, port support code only when a selected game component needs it. A port keeping data in C++ behind one setter per field is support code.
 - Phase 2 storage ownership ports take every slot ready phase 1 work leaves free, without another gate. Rank them by code retired, crossings removed and glue deleted.
 - Rank by phase, then by what each item retires, protects or saves: C++ code and state still owned by C++, the speed profile's largest net costs, fidelity risk the harness cannot see, recurring costs such as CI time, and integrated design faults. Ease of scoping does not affect rank.
+- Size each owner to repay its fixed issue, review and exact-head Full cost. Fold an item too small for that into an owner of the same phase that shares its files or data, rather than queueing it alone.
 - Keep one roadmap work order for ports, maintenance, testing and housekeeping. Upstream unit-test coverage alone does not select a component; never fall back to utility kernels or `deferred-improvement` issues.
 - Select concurrent owners with disjoint unintegrated services. An owner needing a service another draft is building starts after that service integrates.
 

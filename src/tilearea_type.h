@@ -12,12 +12,10 @@
 
 #include "map_func.h"
 
-#ifdef WITH_RUST
 #include "rust/spiral_ffi.h"
 static_assert(sizeof(uint) == sizeof(uint32_t) && std::is_unsigned_v<uint> && std::numeric_limits<uint>::digits == 32);
 static_assert(sizeof(DiagDirection) == sizeof(uint8_t));
 static_assert(DIAGDIR_BEGIN == 0 && DIAGDIR_NE == 0 && DIAGDIR_SE == 1 && DIAGDIR_SW == 2 && DIAGDIR_NW == 3 && DIAGDIR_END == 4 && INVALID_DIAGDIR == 255);
-#endif
 
 class OrthogonalTileIterator;
 
@@ -276,32 +274,19 @@ public:
 
 	bool operator==(const SpiralTileIterator &rhs) const
 	{
-#ifdef WITH_RUST
 		return openttd_rust_spiral_equal(this->state, rhs.state) != 0;
-#else
-		return this->x == rhs.x && this->y == rhs.y;
-#endif
 	}
 	bool operator==(const std::default_sentinel_t &) const { return this->IsEnd(); }
 
 	TileIndex operator*() const
 	{
-#ifdef WITH_RUST
 		return TileXY(this->state.x, this->state.y);
-#else
-		return TileXY(this->x, this->y);
-#endif
 	}
 
 	SpiralTileIterator &operator++()
 	{
-#ifdef WITH_RUST
 		assert(!this->IsEnd());
 		this->state = openttd_rust_spiral_advance(this->state, Map::SizeX(), Map::SizeY());
-#else
-		this->Increment();
-		this->SkipOutsideMap();
-#endif
 		return *this;
 	}
 
@@ -313,34 +298,14 @@ public:
 	}
 
 private:
-#ifdef WITH_RUST
 	OpenTTDRustSpiralState state;
-#else
-	/* set by constructor, const afterwards */
-	uint max_radius;
-	std::array<uint, DIAGDIR_END> extent;
-
-	/* mutable iterator state */
-	uint cur_radius;
-	DiagDirection dir;
-	uint position;
-	uint x, y;
-
-	void SkipOutsideMap();
-	void InitPosition();
-	void Increment();
-#endif
 
 	/**
 	 * Test whether the iterator reached the end.
 	 */
 	bool IsEnd() const
 	{
-#ifdef WITH_RUST
 		return openttd_rust_spiral_end(this->state) != 0;
-#else
-		return this->cur_radius == this->max_radius && this->dir != INVALID_DIAGDIR;
-#endif
 	}
 };
 

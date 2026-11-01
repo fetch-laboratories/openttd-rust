@@ -21,12 +21,10 @@
 #include "table/sprites.h"
 #include "table/clear_land.h"
 
-#ifdef WITH_RUST
 #include "rust/ground_ffi.h"
 #include "rust/services_landscape.h"
 #include "rust/environment_services.h"
 #include "rust/command_services.h"
-#endif
 
 #include "safeguards.h"
 
@@ -144,23 +142,8 @@ static void DrawTile_Clear(TileInfo *ti)
 	DrawBridgeMiddle(ti, {});
 }
 
-#ifndef WITH_RUST
-static int GetSlopePixelZ_Clear(TileIndex tile, uint x, uint y, bool)
-{
-	auto [tileh, z] = GetTilePixelSlope(tile);
 
-	return z + GetPartialPixelZ(x & 0xF, y & 0xF, tileh);
-}
-#endif
 
-#ifndef WITH_RUST
-static Foundation GetFoundation_Clear(TileIndex, Slope)
-{
-	return FOUNDATION_NONE;
-}
-#endif
-
-#ifdef WITH_RUST
 const OpenTTDClearServices &GetRustClearServices() noexcept
 {
 	static const OpenTTDClearServices services{
@@ -177,202 +160,7 @@ const OpenTTDClearServices &GetRustClearServices() noexcept
 	};
 	return services;
 }
-#else
-static void UpdateFences(TileIndex tile)
-{
-	assert(IsTileType(tile, MP_CLEAR) && IsClearGround(tile, CLEAR_FIELDS));
-	bool dirty = false;
 
-	for (DiagDirection dir = DIAGDIR_BEGIN; dir < DIAGDIR_END; dir++) {
-		if (GetFence(tile, dir) != 0) continue;
-		TileIndex neighbour = tile + TileOffsByDiagDir(dir);
-		if (IsTileType(neighbour, MP_CLEAR) && IsClearGround(neighbour, CLEAR_FIELDS)) continue;
-		SetFence(tile, dir, 3);
-		dirty = true;
-	}
-
-	if (dirty) MarkTileDirtyByTile(tile);
-}
-
-
-/** Convert to or from snowy tiles. */
-static void TileLoopClearAlps(TileIndex tile)
-{
-	int k = GetTileZ(tile) - GetSnowLine() + 1;
-
-	if (!IsSnowTile(tile)) {
-		/* Below the snow line, do nothing if no snow. */
-		/* At or above the snow line, make snow tile if needed. */
-		if (k >= 0) {
-			/* Snow density is started at 0 so that it can gradually reach the required density. */
-			MakeSnow(tile, 0);
-			MarkTileDirtyByTile(tile);
-		}
-		return;
-	}
-
-	/* Update snow density. */
-	uint current_density = GetClearDensity(tile);
-	uint req_density = (k < 0) ? 0u : std::min<uint>(k, 3u);
-
-	if (current_density == req_density) {
-		/* Density at the required level. */
-		if (k >= 0) return;
-		ClearSnow(tile);
-	} else {
-		AddClearDensity(tile, current_density < req_density ? 1 : -1);
-	}
-
-	MarkTileDirtyByTile(tile);
-}
-
-/**
- * Tests if at least one surrounding tile is non-desert
- * @param tile tile to check
- * @return does this tile have at least one non-desert tile around?
- */
-static inline bool NeighbourIsNormal(TileIndex tile)
-{
-	for (DiagDirection dir = DIAGDIR_BEGIN; dir < DIAGDIR_END; dir++) {
-		TileIndex t = tile + TileOffsByDiagDir(dir);
-		if (!IsValidTile(t)) continue;
-		if (GetTropicZone(t) != TROPICZONE_DESERT) return true;
-		if (HasTileWaterClass(t) && GetWaterClass(t) == WaterClass::Sea) return true;
-	}
-	return false;
-}
-
-static void TileLoopClearDesert(TileIndex tile)
-{
-	/* Current desert level - 0 if it is not desert */
-	uint current = 0;
-	if (IsClearGround(tile, CLEAR_DESERT)) current = GetClearDensity(tile);
-
-	/* Expected desert level - 0 if it shouldn't be desert */
-	uint expected = 0;
-	if (GetTropicZone(tile) == TROPICZONE_DESERT) {
-		expected = NeighbourIsNormal(tile) ? 1 : 3;
-	}
-
-	if (current == expected) return;
-
-	if (expected == 0) {
-		SetClearGroundDensity(tile, CLEAR_GRASS, 3);
-	} else {
-		/* Transition from clear to desert is not smooth (after clearing desert tile) */
-		SetClearGroundDensity(tile, CLEAR_DESERT, expected);
-	}
-
-	MarkTileDirtyByTile(tile);
-}
-
-static void TileLoop_Clear(TileIndex tile)
-{
-	AmbientSoundEffect(tile);
-
-	switch (_settings_game.game_creation.landscape) {
-		case LandscapeType::Tropic: TileLoopClearDesert(tile); break;
-		case LandscapeType::Arctic: TileLoopClearAlps(tile);   break;
-		default: break;
-	}
-
-	if (IsSnowTile(tile)) return;
-
-	switch (GetClearGround(tile)) {
-		case CLEAR_GRASS:
-			if (GetClearDensity(tile) == 3) return;
-
-			if (_game_mode != GM_EDITOR) {
-				if (GetClearCounter(tile) < 7) {
-					AddClearCounter(tile, 1);
-					return;
-				} else {
-					SetClearCounter(tile, 0);
-					AddClearDensity(tile, 1);
-				}
-			} else {
-				SetClearGroundDensity(tile, GB(Random(), 0, 8) > 21 ? CLEAR_GRASS : CLEAR_ROUGH, 3);
-			}
-			break;
-
-		case CLEAR_FIELDS:
-			UpdateFences(tile);
-
-			if (_game_mode == GM_EDITOR) return;
-
-			if (GetClearCounter(tile) < 7) {
-				AddClearCounter(tile, 1);
-				return;
-			} else {
-				SetClearCounter(tile, 0);
-			}
-
-			if (GetIndustryIndexOfField(tile) == IndustryID::Invalid() && GetFieldType(tile) >= 7) {
-				/* This farmfield is no longer farmfield, so make it grass again */
-				MakeClear(tile, CLEAR_GRASS, 2);
-			} else {
-				uint field_type = GetFieldType(tile);
-				field_type = (field_type < 8) ? field_type + 1 : 0;
-				SetFieldType(tile, field_type);
-			}
-			break;
-
-		default:
-			return;
-	}
-
-	MarkTileDirtyByTile(tile);
-}
-
-#endif
-
-#ifndef WITH_RUST
-void GenerateClearTile()
-{
-	uint i, gi;
-	TileIndex tile;
-
-	/* add rough tiles */
-	i = Map::ScaleBySize(GB(Random(), 0, 10) + 0x400);
-	gi = Map::ScaleBySize(GB(Random(), 0, 7) + 0x80);
-
-	SetGeneratingWorldProgress(GWP_ROUGH_ROCKY, gi + i);
-	do {
-		IncreaseGeneratingWorldProgress(GWP_ROUGH_ROCKY);
-		tile = RandomTile();
-		if (IsTileType(tile, MP_CLEAR) && !IsClearGround(tile, CLEAR_DESERT)) SetClearGroundDensity(tile, CLEAR_ROUGH, 3);
-	} while (--i);
-
-	/* add rocky tiles */
-	i = gi;
-	do {
-		uint32_t r = Random();
-		tile = RandomTileSeed(r);
-
-		IncreaseGeneratingWorldProgress(GWP_ROUGH_ROCKY);
-		if (IsTileType(tile, MP_CLEAR) && !IsClearGround(tile, CLEAR_DESERT)) {
-			uint j = GB(r, 16, 4) + 5;
-			for (;;) {
-				TileIndex tile_new;
-
-				SetClearGroundDensity(tile, CLEAR_ROCKS, 3);
-				MarkTileDirtyByTile(tile);
-				do {
-					if (--j == 0) goto get_out;
-					tile_new = tile + TileOffsByDiagDir((DiagDirection)GB(Random(), 0, 2));
-				} while (!IsTileType(tile_new, MP_CLEAR) || IsClearGround(tile_new, CLEAR_DESERT));
-				tile = tile_new;
-			}
-get_out:;
-		}
-	} while (--i);
-}
-
-static TrackStatus GetTileTrackStatus_Clear(TileIndex, TransportType, uint, DiagDirection)
-{
-	return 0;
-}
-#endif
 
 static void GetTileDesc_Clear(TileIndex tile, TileDesc &td)
 {
@@ -400,61 +188,21 @@ static void ChangeTileOwner_Clear(TileIndex, Owner, Owner)
 	return;
 }
 
-#ifndef WITH_RUST
-static CommandCost TerraformTile_Clear(TileIndex tile, DoCommandFlags flags, int, Slope)
-{
-	return Command<CMD_LANDSCAPE_CLEAR>::Do(flags, tile);
-}
-#endif
 
-#ifndef WITH_RUST
-static CommandCost CheckBuildAbove_Clear(TileIndex, DoCommandFlags, Axis, int)
-{
-	/* Can always build above clear tiles. */
-	return CommandCost();
-}
-#endif
 
 extern const TileTypeProcs _tile_type_clear_procs = {
 	DrawTile_Clear,           ///< draw_tile_proc
-#ifdef WITH_RUST
 	nullptr, // Rust movement owner dispatches directly.
-#else
-	GetSlopePixelZ_Clear,     ///< get_slope_z_proc
-#endif
 	ClearTile_Clear,          ///< clear_tile_proc
 	nullptr,                     ///< add_accepted_cargo_proc
 	GetTileDesc_Clear,        ///< get_tile_desc_proc
-#ifdef WITH_RUST
 	nullptr, // Rust movement owner dispatches directly.
-#else
-	GetTileTrackStatus_Clear, ///< get_tile_track_status_proc
-#endif
 	nullptr,                     ///< click_tile_proc
-#ifndef WITH_RUST
-	nullptr,                     ///< animate_tile_proc
-#endif
-#ifdef WITH_RUST
 	nullptr,                 // Rust scheduler calls the owner directly.
-#else
-	TileLoop_Clear,           ///< tile_loop_proc
-#endif
 	ChangeTileOwner_Clear,    ///< change_tile_owner_proc
 	nullptr,                     ///< add_produced_cargo_proc
 	nullptr,                     ///< vehicle_enter_tile_proc
-#ifdef WITH_RUST
 	nullptr, // Rust movement owner dispatches directly.
-#else
-	GetFoundation_Clear,      ///< get_foundation_proc
-#endif
-#ifdef WITH_RUST
 	nullptr,                 // Rust landscape commands call the owner directly.
-#else
-	TerraformTile_Clear,      ///< terraform_tile_proc
-#endif
-#ifdef WITH_RUST
 	nullptr,                 // Rust tunnel and bridge construction owns the check.
-#else
-	CheckBuildAbove_Clear, // check_build_above_proc
-#endif
 };

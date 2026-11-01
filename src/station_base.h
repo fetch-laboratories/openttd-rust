@@ -19,160 +19,12 @@
 #include "linkgraph/linkgraph_type.h"
 #include "newgrf_storage.h"
 #include "bitmap_type.h"
-#ifdef WITH_RUST
 #include "rust/station_queue.hpp"
-#endif
 
 static const uint8_t INITIAL_STATION_RATING = 175;
 static const uint8_t MAX_STATION_RATING = 255;
 
-#ifdef WITH_RUST
 #include "rust/cargo_flow.hpp"
-#else
-/**
- * Flow statistics telling how much flow should be sent along a link. This is
- * done by creating "flow shares" and using std::map's upper_bound() method to
- * look them up with a random number. A flow share is the difference between a
- * key in a map and the previous key. So one key in the map doesn't actually
- * mean anything by itself.
- */
-class FlowStat {
-public:
-	typedef std::map<uint32_t, StationID> SharesMap;
-
-	static const SharesMap empty_sharesmap;
-
-	/**
-	 * Invalid constructor. This can't be called as a FlowStat must not be
-	 * empty. However, the constructor must be defined and reachable for
-	 * FlowStat to be used in a std::map.
-	 */
-	inline FlowStat() {NOT_REACHED();}
-
-	/**
-	 * Create a FlowStat with an initial entry.
-	 * @param st Station the initial entry refers to.
-	 * @param flow Amount of flow for the initial entry.
-	 * @param restricted If the flow to be added is restricted.
-	 */
-	inline FlowStat(StationID st, uint flow, bool restricted = false)
-	{
-		assert(flow > 0);
-		this->shares[flow] = st;
-		this->unrestricted = restricted ? 0 : flow;
-	}
-
-	/**
-	 * Add some flow to the end of the shares map. Only do that if you know
-	 * that the station isn't in the map yet. Anything else may lead to
-	 * inconsistencies.
-	 * @param st Remote station.
-	 * @param flow Amount of flow to be added.
-	 * @param restricted If the flow to be added is restricted.
-	 */
-	inline void AppendShare(StationID st, uint flow, bool restricted = false)
-	{
-		assert(flow > 0);
-		this->shares[(--this->shares.end())->first + flow] = st;
-		if (!restricted) this->unrestricted += flow;
-	}
-
-#ifdef WITH_RUST
-	/** Materialize already computed job shares without re-running flow mapping. */
-	FlowStat(SharesMap shares, uint unrestricted) : shares(std::move(shares)), unrestricted(unrestricted) {}
-#endif
-
-	uint GetShare(StationID st) const;
-
-	void ChangeShare(StationID st, int flow);
-
-	void RestrictShare(StationID st);
-
-	void ReleaseShare(StationID st);
-
-	void ScaleToMonthly(uint runtime);
-
-	/**
-	 * Get the actual shares as a const pointer so that they can be iterated
-	 * over.
-	 * @return Actual shares.
-	 */
-	inline const SharesMap *GetShares() const { return &this->shares; }
-
-	/**
-	 * Return total amount of unrestricted shares.
-	 * @return Amount of unrestricted shares.
-	 */
-	inline uint GetUnrestricted() const { return this->unrestricted; }
-
-	/**
-	 * Swap the shares maps, and thus the content of this FlowStat with the
-	 * other one.
-	 * @param other FlowStat to swap with.
-	 */
-	inline void SwapShares(FlowStat &other)
-	{
-		this->shares.swap(other.shares);
-		std::swap(this->unrestricted, other.unrestricted);
-	}
-
-	/**
-	 * Get a station a package can be routed to. This done by drawing a
-	 * random number between 0 and sum_shares and then looking that up in
-	 * the map with lower_bound. So each share gets selected with a
-	 * probability dependent on its flow. Do include restricted flows here.
-	 * @param is_restricted Output if a restricted flow was chosen.
-	 * @return A station ID from the shares map.
-	 */
-	inline StationID GetViaWithRestricted(bool &is_restricted) const
-	{
-		assert(!this->shares.empty());
-		uint rand = RandomRange((--this->shares.end())->first);
-		is_restricted = rand >= this->unrestricted;
-		return this->shares.upper_bound(rand)->second;
-	}
-
-	/**
-	 * Get a station a package can be routed to. This done by drawing a
-	 * random number between 0 and sum_shares and then looking that up in
-	 * the map with lower_bound. So each share gets selected with a
-	 * probability dependent on its flow. Don't include restricted flows.
-	 * @return A station ID from the shares map.
-	 */
-	inline StationID GetVia() const
-	{
-		assert(!this->shares.empty());
-		return this->unrestricted > 0 ?
-				this->shares.upper_bound(RandomRange(this->unrestricted))->second :
-				StationID::Invalid();
-	}
-
-	StationID GetVia(StationID excluded, StationID excluded2 = StationID::Invalid()) const;
-
-	void Invalidate();
-
-private:
-	SharesMap shares{}; ///< Shares of flow to be sent via specified station (or consumed locally).
-	uint unrestricted = 0; ///< Limit for unrestricted shares.
-};
-
-/** Flow descriptions by origin stations. */
-class FlowStatMap : public std::map<StationID, FlowStat> {
-public:
-	uint GetFlow() const;
-	uint GetFlowVia(StationID via) const;
-	uint GetFlowFrom(StationID from) const;
-	uint GetFlowFromVia(StationID from, StationID via) const;
-
-	void AddFlow(StationID origin, StationID via, uint amount);
-	void PassOnFlow(StationID origin, StationID via, uint amount);
-	std::vector<StationID> DeleteFlows(StationID via);
-	void RestrictFlows(StationID via);
-	void ReleaseFlows(StationID via);
-	void FinalizeLocalConsumption(StationID self);
-};
-
-#endif /* WITH_RUST */
 
 /**
  * Stores station stats for a single cargo.
@@ -232,7 +84,6 @@ struct GoodsEntry {
 		}
 	};
 
-#ifdef WITH_RUST
 	uint &max_waiting_cargo;
 	States &status;
 	uint8_t &time_since_pickup, &rating, &last_speed, &last_age, &amount_fract;
@@ -245,39 +96,6 @@ struct GoodsEntry {
 		static_assert(alignof(States) == alignof(uint8_t));
 		static_assert(std::is_trivially_copyable_v<States>);
 	}
-#else
-	uint max_waiting_cargo = 0; ///< Max cargo from this station waiting at any station.
-
-	States status{}; ///< Status of this cargo, see #State.
-
-	/**
-	 * Number of rating-intervals (up to 255) since the last vehicle tried to load this cargo.
-	 * The unit used is STATION_RATING_TICKS.
-	 * This does not imply there was any cargo to load.
-	 */
-	uint8_t time_since_pickup = 255;
-
-	uint8_t rating = INITIAL_STATION_RATING; ///< %Station rating for this cargo.
-
-	/**
-	 * Maximum speed (up to 255) of the last vehicle that tried to load this cargo.
-	 * This does not imply there was any cargo to load.
-	 * The unit used is a special vehicle-specific speed unit for station ratings.
-	 *  - Trains: km-ish/h
-	 *  - RV: km-ish/h
-	 *  - Ships: 0.5 * km-ish/h
-	 *  - Aircraft: 8 * mph
-	 */
-	uint8_t last_speed = 0;
-
-	/**
-	 * Age in years (up to 255) of the last vehicle that tried to load this cargo.
-	 * This does not imply there was any cargo to load.
-	 */
-	uint8_t last_age = 255;
-
-	uint8_t amount_fract = 0; ///< Fractional part of the amount in the cargo list
-#endif
 
 	NodeID node = INVALID_NODE; ///< ID of node in link graph referring to this goods entry.
 	LinkGraphID link_graph = LinkGraphID::Invalid(); ///< Link graph this station belongs to.
@@ -398,22 +216,16 @@ private:
 };
 
 /** All airport-related information. Only valid if tile != INVALID_TILE. */
-#ifdef WITH_RUST
 #include "rust/aircraft_ffi.h"
 static_assert(sizeof(AirportBlocks) == sizeof(uint64_t) && alignof(AirportBlocks) == alignof(uint64_t));
 static_assert(std::is_trivially_destructible_v<AirportBlocks>);
-#endif
 struct Airport : public TileArea {
 	Airport() : TileArea(INVALID_TILE, 0, 0) {}
 
-#ifdef WITH_RUST
 	std::unique_ptr<uint64_t, decltype(&openttd_rust_airport_blocks_destroy)> rust_blocks{openttd_rust_airport_blocks_new(), openttd_rust_airport_blocks_destroy};
 	/* Begin the trivial bitset's lifetime in its canonical allocation. Rust reads
 	 * and writes only its raw uint64 representation; allocation release ends it. */
 	AirportBlocks &blocks = *new (this->rust_blocks.get()) AirportBlocks{};
-#else
-	AirportBlocks blocks{}; ///< stores which blocks on the airport are taken. was 16 bit earlier on, then 32
-#endif
 	uint8_t type = 0; ///< Type of this airport, @see AirportTypes
 	uint8_t layout = 0; ///< Airport layout number.
 	Direction rotation = INVALID_DIR; ///< How this airport is rotated.
@@ -427,12 +239,7 @@ struct Airport : public TileArea {
 	 */
 	const AirportSpec *GetSpec() const
 	{
-#ifdef WITH_RUST
 		return openttd_rust_airport_get_spec(this->tile.base(), this->type, &GetAirportResolverServices());
-#else
-		if (this->tile == INVALID_TILE) return &AirportSpec::dummy;
-		return AirportSpec::Get(this->type);
-#endif
 	}
 
 	/**
@@ -582,20 +389,6 @@ private:
 	}
 };
 
-#ifndef WITH_RUST
-struct IndustryListEntry {
-	uint distance = 0;
-	Industry *industry = nullptr;
-
-	bool operator== (const IndustryListEntry &other) const { return this->distance == other.distance && this->industry == other.industry; };
-};
-
-struct IndustryCompare {
-	bool operator() (const IndustryListEntry &lhs, const IndustryListEntry &rhs) const;
-};
-
-typedef std::set<IndustryListEntry, IndustryCompare> IndustryList;
-#endif
 
 /** Station data structure */
 struct Station final : SpecializedStation<Station, false> {
@@ -605,7 +398,6 @@ public:
 		return type == RoadStopType::Bus ? bus_stops : truck_stops;
 	}
 
-	RoadStop *GetPrimaryRoadStop(const struct RoadVehicle *v) const;
 
 	RoadStop *bus_stops = nullptr; ///< All the road stops
 	TileArea bus_station{}; ///< Tile area the bus 'station' part covers
@@ -618,15 +410,10 @@ public:
 
 	IndustryType indtype = IT_INVALID; ///< Industry type to get the name from
 
-#ifdef WITH_RUST
 	BitmapTileArea catchment_tiles{openttd_rust_station_catchment_tiles(this->rust_service.get())};
-#else
-	BitmapTileArea catchment_tiles{}; ///< NOSAVE: Set of individual tiles covered by catchment area
-#endif
 
 	StationHadVehicleOfType had_vehicle_of_type{};
 
-#ifdef WITH_RUST
 	RustStationLoadingQueue loading_vehicles{this->rust_service.get()};
 	uint8_t &time_since_load = openttd_rust_station_service_fields(this->rust_service.get())->time_since_load;
 	uint8_t &time_since_unload = openttd_rust_station_service_fields(this->rust_service.get())->time_since_unload;
@@ -637,53 +424,24 @@ public:
 		return {{GoodsEntry(openttd_rust_station_service_cargo(state, I))...}};
 	}
 	std::array<GoodsEntry, NUM_CARGO> goods = MakeGoods(this->rust_service.get(), std::make_index_sequence<NUM_CARGO>{});
-#else
-	std::list<Vehicle *> loading_vehicles{};
-	uint8_t time_since_load = 0;
-	uint8_t time_since_unload = 0;
 
-	uint8_t last_vehicle_type = 0;
-	std::array<GoodsEntry, NUM_CARGO> goods; ///< Goods at this station
-	CargoTypes always_accepted{}; ///< Bitmask of always accepted cargo types (by houses, HQs, industry tiles when industry doesn't accept cargo)
-
-#endif
-
-#ifdef WITH_RUST
 	RustIndustryList industries_near{this->rust_service.get()};
-#else
-	IndustryList industries_near{}; ///< Cached list of industries near the station that can accept cargo, @see DeliverGoodsToIndustry()
-#endif
 	Industry *industry = nullptr; ///< NOSAVE: Associated industry for neutral stations. (Rebuilt on load from Industry->st)
 
 	Station(TileIndex tile = INVALID_TILE);
 	~Station();
 
-#ifndef WITH_RUST
-	void AddFacility(StationFacility new_facility_bit, TileIndex facil_xy);
-#endif
 
 	void MarkTilesDirty(bool cargo_change) const;
 
 	void UpdateVirtCoord() override;
 
-	void MoveSign(TileIndex new_xy) override;
 
 	void AfterStationTileSetChange(bool adding, StationType type);
 
-#ifndef WITH_RUST
-	uint GetPlatformLength(TileIndex tile, DiagDirection dir) const override;
-	uint GetPlatformLength(TileIndex tile) const override;
-	void RecomputeCatchment(bool no_clear_nearby_lists = false);
-#endif
 	static void RecomputeCatchmentForAll();
 
 	uint GetCatchmentRadius() const;
-#ifndef WITH_RUST
-	Rect GetCatchmentRect() const;
-	bool CatchmentCoversTown(TownID t) const;
-	void AddIndustryToDeliver(Industry *ind, TileIndex tile);
-	void RemoveIndustryToDeliver(Industry *ind);
-#endif
 	void RemoveFromAllNearbyLists();
 
 	inline bool TileIsInCatchment(TileIndex tile) const
@@ -741,49 +499,6 @@ public:
 	}
 };
 
-void RebuildStationKdtree();
 
-#ifndef WITH_RUST
-/**
- * Call a function on all stations that have any part of the requested area within their catchment.
- * @tparam Func The type of function to call
- * @param area The TileArea to check
- * @param func The function to call, must take two parameters: Station* and TileIndex and return true
- *             if coverage of that tile is acceptable for a given station or false if search should continue
- */
-template <typename Func>
-void ForAllStationsAroundTiles(const TileArea &ta, Func func)
-{
-	/* There are no stations, so we will never find anything. */
-	if (Station::GetNumItems() == 0) return;
-
-	/* Not using, or don't have a nearby stations list, so we need to scan. */
-	FlatSet<StationID> seen_stations;
-
-	/* Scan an area around the building covering the maximum possible station
-	 * to find the possible nearby stations. */
-	uint max_c = _settings_game.station.modified_catchment ? MAX_CATCHMENT : CA_UNMODIFIED;
-	TileArea ta_ext = TileArea(ta).Expand(max_c);
-	for (TileIndex tile : ta_ext) {
-		if (!IsTileType(tile, MP_STATION)) continue;
-		seen_stations.insert(GetStationIndex(tile));
-	}
-
-	for (StationID stationid : seen_stations) {
-		Station *st = Station::GetIfValid(stationid);
-		if (st == nullptr) continue; /* Waypoint */
-
-		/* Check if station is attached to an industry */
-		if (!_settings_game.station.serve_neutral_industries && st->industry != nullptr) continue;
-
-		/* Test if the tile is within the station's catchment */
-		for (TileIndex tile : ta) {
-			if (st->TileIsInCatchment(tile)) {
-				if (func(st, tile)) break;
-			}
-		}
-	}
-}
-#endif
 
 #endif /* STATION_BASE_H */

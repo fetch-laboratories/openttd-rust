@@ -79,13 +79,7 @@ enum GenWorldProgress : uint8_t {
 class AbortGenerateWorldSignal { };
 
 /* genworld.cpp */
-#ifndef WITH_RUST
-void GenerateWorldSetCallback(GWDoneProc *proc);
-void GenerateWorldSetAbortCallback(GWAbortProc *proc);
-void GenerateWorld(GenWorldMode mode, uint size_x, uint size_y, bool reset_settings = true);
-#else
 void GenerateWorld(GenWorldMode mode, uint size_x, uint size_y, bool reset_settings = true, GWDoneProc *const *callback = nullptr);
-#endif
 void AbortGeneratingWorld();
 bool IsGeneratingWorldAborted();
 void HandleGeneratingWorldAbortion();
@@ -101,14 +95,10 @@ void StartNewGameWithoutGUI(uint32_t seed);
 void ShowCreateScenario();
 void StartScenarioEditor();
 
-#ifdef WITH_RUST
 extern "C" bool *openttd_rust_generating_world();
 /* Rust's process-wide bool has static lifetime, one-byte layout and only 0/1
  * writes. All native lvalue users alias it under the game-state mutex. */
 static_assert(sizeof(bool) == 1 && alignof(bool) == 1);
 inline bool &_generating_world = *openttd_rust_generating_world();
-#else
-extern bool _generating_world;
-#endif
 
 #endif /* GENWORLD_H */

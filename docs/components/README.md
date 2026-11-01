@@ -11,9 +11,8 @@ their area file.
 
 Unless an entry says otherwise:
 
-- With `OPTION_RUST=ON` (`WITH_RUST`), the C++ facade calls Rust. Otherwise,
-  the original bodies compile until #581 removes them and makes Rust the only
-  build.
+- The C++ facade calls Rust in every fork build. Original bodies live only
+  in the pinned reference; `src/` contains no `WITH_RUST` conditionals.
 - Rust panics and allocation failures abort (`panic = "abort"` in both
   profiles). The C ABI never unwinds. No C++ exception crosses a Rust frame.
   Identical resource-exhaustion timing is not claimed.

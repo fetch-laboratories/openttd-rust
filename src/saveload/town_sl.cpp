@@ -19,13 +19,10 @@
 #include "../subsidy_func.h"
 #include "../strings_func.h"
 #include "../misc/history_func.hpp"
-#ifdef WITH_RUST
 #include "../rust/house_ffi.h"
-#endif
 
 #include "../safeguards.h"
 
-#ifdef WITH_RUST
 /** Rebuild all the cached variables of towns; Rust owns the traversal. */
 void RebuildTownCaches()
 {
@@ -37,98 +34,6 @@ void UpdateHousesAndTowns()
 {
 	openttd_rust_house_update_all(&GetRustTownServices(), &GetRustSharedServices());
 }
-#else
-/**
- * Rebuild all the cached variables of towns.
- */
-void RebuildTownCaches()
-{
-	InitializeBuildingCounts();
-	RebuildTownKdtree();
-
-	/* Reset town population and num_houses */
-	for (Town *town : Town::Iterate()) {
-		town->cache.population = 0;
-		town->cache.num_houses = 0;
-	}
-
-	for (const auto t : Map::Iterate()) {
-		if (!IsTileType(t, MP_HOUSE)) continue;
-
-		HouseID house_id = GetHouseType(t);
-		Town *town = Town::GetByTile(t);
-		IncreaseBuildingCount(town, house_id);
-		if (IsHouseCompleted(t)) town->cache.population += HouseSpec::Get(house_id)->population;
-
-		/* Increase the number of houses for every house, but only once. */
-		if (GetHouseNorthPart(house_id) == TileDiffXY(0, 0)) town->cache.num_houses++;
-	}
-
-	/* Update the population and num_house dependent values */
-	for (Town *town : Town::Iterate()) {
-		UpdateTownRadius(town);
-	}
-}
-
-/**
- * Check and update town and house values.
- *
- * Checked are the HouseIDs. Updated are the
- * town population the number of houses per
- * town, the town radius and the max passengers
- * of the town.
- */
-void UpdateHousesAndTowns()
-{
-	for (const auto t : Map::Iterate()) {
-		if (!IsTileType(t, MP_HOUSE)) continue;
-
-		HouseID house_id = GetCleanHouseType(t);
-		if (!HouseSpec::Get(house_id)->enabled && house_id >= NEW_HOUSE_OFFSET) {
-			/* The specs for this type of house are not available any more, so
-			 * replace it with the substitute original house type. */
-			house_id = _house_mngr.GetSubstituteID(house_id);
-			SetHouseType(t, house_id);
-		}
-	}
-
-	/* Check for cases when a NewGRF has set a wrong house substitute type. */
-	for (const TileIndex &t : Map::Iterate()) {
-		if (!IsTileType(t, MP_HOUSE)) continue;
-
-		HouseID house_type = GetCleanHouseType(t);
-		TileIndex north_tile = t + GetHouseNorthPart(house_type); // modifies 'house_type'!
-		if (t == north_tile) {
-			const HouseSpec *hs = HouseSpec::Get(house_type);
-			bool valid_house = true;
-			if (hs->building_flags.Test(BuildingFlag::Size2x1)) {
-				TileIndex tile = t + TileDiffXY(1, 0);
-				if (!IsTileType(tile, MP_HOUSE) || GetCleanHouseType(tile) != house_type + 1) valid_house = false;
-			} else if (hs->building_flags.Test(BuildingFlag::Size1x2)) {
-				TileIndex tile = t + TileDiffXY(0, 1);
-				if (!IsTileType(tile, MP_HOUSE) || GetCleanHouseType(tile) != house_type + 1) valid_house = false;
-			} else if (hs->building_flags.Test(BuildingFlag::Size2x2)) {
-				TileIndex tile = t + TileDiffXY(0, 1);
-				if (!IsTileType(tile, MP_HOUSE) || GetCleanHouseType(tile) != house_type + 1) valid_house = false;
-				tile = t + TileDiffXY(1, 0);
-				if (!IsTileType(tile, MP_HOUSE) || GetCleanHouseType(tile) != house_type + 2) valid_house = false;
-				tile = t + TileDiffXY(1, 1);
-				if (!IsTileType(tile, MP_HOUSE) || GetCleanHouseType(tile) != house_type + 3) valid_house = false;
-			}
-			/* If not all tiles of this house are present remove the house.
-			 * The other tiles will get removed later in this loop because
-			 * their north tile is not the correct type anymore. */
-			if (!valid_house) DoClearSquare(t);
-		} else if (!IsTileType(north_tile, MP_HOUSE) || GetCleanHouseType(north_tile) != house_type) {
-			/* This tile should be part of a multi-tile building but the
-			 * north tile of this house isn't on the map. */
-			DoClearSquare(t);
-		}
-	}
-
-	RebuildTownCaches();
-}
-#endif
 
 
 class SlTownOldSupplied : public DefaultSaveLoadHandler<SlTownOldSupplied, Town> {
@@ -268,7 +173,6 @@ public:
 static std::array<Town::SuppliedHistory, 2> _old_pass_supplied{};
 static std::array<Town::SuppliedHistory, 2> _old_mail_supplied{};
 
-#ifdef WITH_RUST
 struct TownTextSaveScope {
 	static inline EncodedString current;
 	EncodedString previous;
@@ -285,7 +189,6 @@ struct TownNameSaveScope {
 	TownNameSaveScope(Town *town, bool loading) : previous(std::move(current)), town(town), loading(loading) { current = town->name.View(); }
 	~TownNameSaveScope() { if (this->loading) this->town->name = current; current = std::move(this->previous); }
 };
-#endif
 
 static const SaveLoad _town_desc[] = {
 	SLE_CONDVAR(Town, xy,                    SLE_FILE_U16 | SLE_VAR_U32, SL_MIN_VERSION, SLV_6),
@@ -294,11 +197,7 @@ static const SaveLoad _town_desc[] = {
 	SLE_CONDVAR(Town, townnamegrfid,         SLE_UINT32, SLV_66, SL_MAX_VERSION),
 	    SLE_VAR(Town, townnametype,          SLE_UINT16),
 	    SLE_VAR(Town, townnameparts,         SLE_UINT32),
-#ifdef WITH_RUST
 	SLEG_CONDSSTR("name", TownNameSaveScope::current, SLE_STR | SLF_ALLOW_CONTROL, SLV_84, SL_MAX_VERSION),
-#else
-	SLE_CONDSSTR(Town, name,                 SLE_STR | SLF_ALLOW_CONTROL, SLV_84, SL_MAX_VERSION),
-#endif
 
 	    SLE_VAR(Town, flags,                 SLE_UINT8),
 	SLE_CONDVAR(Town, statues,               SLE_FILE_U8  | SLE_VAR_U16, SL_MIN_VERSION, SLV_104),
@@ -336,11 +235,7 @@ static const SaveLoad _town_desc[] = {
 
 	SLE_CONDARR(Town, goal, SLE_UINT32, NUM_TAE, SLV_165, SL_MAX_VERSION),
 
-#ifdef WITH_RUST
 	SLEG_CONDSSTR("text", TownTextSaveScope::current, SLE_STR | SLF_ALLOW_CONTROL, SLV_168, SL_MAX_VERSION),
-#else
-	SLE_CONDSSTR(Town, text,                 SLE_STR | SLF_ALLOW_CONTROL, SLV_168, SL_MAX_VERSION),
-#endif
 
 	SLE_CONDVAR(Town, time_until_rebuild,    SLE_FILE_U8 | SLE_VAR_U16,  SL_MIN_VERSION, SLV_54),
 	SLE_CONDVAR(Town, time_until_rebuild,    SLE_UINT16,                SLV_54, SL_MAX_VERSION),
@@ -381,10 +276,8 @@ struct CITYChunkHandler : ChunkHandler {
 
 		for (Town *t : Town::Iterate()) {
 			SlSetArrayIndex(t->index);
-#ifdef WITH_RUST
 			TownNameSaveScope name_scope(t, false);
 			TownTextSaveScope text_scope(t, false);
-#endif
 			SlObject(t, _town_desc);
 		}
 	}
@@ -398,10 +291,8 @@ struct CITYChunkHandler : ChunkHandler {
 		while ((index = SlIterateArray()) != -1) {
 			Town *t = new (TownID(index)) Town();
 			{
-#ifdef WITH_RUST
 				TownNameSaveScope name_scope(t, true);
 				TownTextSaveScope text_scope(t, true);
-#endif
 				SlObject(t, slt);
 			}
 
@@ -430,10 +321,8 @@ struct CITYChunkHandler : ChunkHandler {
 		if (IsSavegameVersionBefore(SLV_161)) return;
 
 		for (Town *t : Town::Iterate()) {
-#ifdef WITH_RUST
 			TownNameSaveScope name_scope(t, false);
 			TownTextSaveScope text_scope(t, false);
-#endif
 			SlObject(t, _town_desc);
 		}
 	}

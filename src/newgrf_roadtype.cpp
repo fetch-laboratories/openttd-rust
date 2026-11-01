@@ -17,9 +17,7 @@
 #include "town.h"
 #include "tunnelbridge_map.h"
 
-#ifdef WITH_RUST
 #include "rust/type_registry_ffi.h"
-#endif
 
 #include "safeguards.h"
 
@@ -174,30 +172,7 @@ SpriteID GetCustomRoadSprite(const RoadTypeInfo *rti, TileIndex tile, RoadTypeSp
  */
 RoadType GetRoadTypeTranslation(RoadTramType rtt, uint8_t tracktype, const GRFFile *grffile)
 {
-#ifdef WITH_RUST
 	return openttd_rust_road_translate(rtt, tracktype, grffile);
-#else
-	/* Because OpenTTD mixes RoadTypes and TramTypes into the same type,
-	 * the mapping of the original road- and tramtypes does not match the default GRF-local mapping.
-	 * So, this function cannot provide any similar behavior to GetCargoTranslation() and GetRailTypeTranslation()
-	 * when the GRF defines no translation table.
-	 * But since there is only one default road/tram-type, this makes little sense anyway.
-	 * So for GRF without translation table, we always return INVALID_ROADTYPE.
-	 */
-
-	if (grffile == nullptr) return INVALID_ROADTYPE;
-
-	const auto &list = rtt == RTT_TRAM ? grffile->tramtype_list : grffile->roadtype_list;
-	if (tracktype >= list.size()) return INVALID_ROADTYPE;
-
-	/* Look up roadtype including alternate labels. */
-	RoadType result = GetRoadTypeByLabel(list[tracktype]);
-
-	/* Check whether the result is actually the wanted road/tram-type */
-	if (result != INVALID_ROADTYPE && GetRoadTramType(result) != rtt) return INVALID_ROADTYPE;
-
-	return result;
-#endif
 }
 
 /**
@@ -208,29 +183,9 @@ RoadType GetRoadTypeTranslation(RoadTramType rtt, uint8_t tracktype, const GRFFi
  */
 uint8_t GetReverseRoadTypeTranslation(RoadType roadtype, const GRFFile *grffile)
 {
-#ifdef WITH_RUST
 	return openttd_rust_road_reverse(roadtype, grffile);
-#else
-	/* No road type table present, return road type as-is */
-	if (grffile == nullptr) return roadtype;
-
-	const std::vector<RoadTypeLabel> *list = RoadTypeIsRoad(roadtype) ? &grffile->roadtype_list : &grffile->tramtype_list;
-	if (list->empty()) return roadtype;
-
-	/* Look for a matching road type label in the table */
-	RoadTypeLabel label = GetRoadTypeInfo(roadtype)->label;
-
-	int index = find_index(*list, label);
-	if (index >= 0) return index;
-
-	/* If not found, return as invalid */
-	return 0xFF;
-#endif
 }
 
-#ifndef WITH_RUST
-std::vector<LabelObject<RoadTypeLabel>> _roadtype_list;
-#endif
 
 /**
  * Test if any saved road type labels are different to the currently loaded
@@ -238,70 +193,16 @@ std::vector<LabelObject<RoadTypeLabel>> _roadtype_list;
  */
 void ConvertRoadTypes()
 {
-#ifdef WITH_RUST
 	openttd_rust_road_saved_convert(&GetRustSharedServices(), Map::Size());
-#else
-	std::vector<RoadType> roadtype_conversion_map;
-	bool needs_conversion = false;
-	for (auto it = std::begin(_roadtype_list); it != std::end(_roadtype_list); ++it) {
-		RoadType rt = GetRoadTypeByLabel(it->label);
-		if (rt == INVALID_ROADTYPE || GetRoadTramType(rt) != it->subtype) {
-			rt = it->subtype ? ROADTYPE_TRAM : ROADTYPE_ROAD;
-		}
-
-		roadtype_conversion_map.push_back(rt);
-
-		/* Conversion is needed if the road type is in a different position than the list. */
-		if (it->label != 0 && rt != std::distance(std::begin(_roadtype_list), it)) needs_conversion = true;
-	}
-	if (!needs_conversion) return;
-
-	for (TileIndex t : Map::Iterate()) {
-		switch (GetTileType(t)) {
-			case MP_ROAD:
-				if (RoadType rt = GetRoadTypeRoad(t); rt != INVALID_ROADTYPE) SetRoadTypeRoad(t, roadtype_conversion_map[rt]);
-				if (RoadType rt = GetRoadTypeTram(t); rt != INVALID_ROADTYPE) SetRoadTypeTram(t, roadtype_conversion_map[rt]);
-				break;
-
-			case MP_STATION:
-				if (IsAnyRoadStop(t)) {
-					if (RoadType rt = GetRoadTypeRoad(t); rt != INVALID_ROADTYPE) SetRoadTypeRoad(t, roadtype_conversion_map[rt]);
-					if (RoadType rt = GetRoadTypeTram(t); rt != INVALID_ROADTYPE) SetRoadTypeTram(t, roadtype_conversion_map[rt]);
-				}
-				break;
-
-			case MP_TUNNELBRIDGE:
-				if (GetTunnelBridgeTransportType(t) == TRANSPORT_ROAD) {
-					if (RoadType rt = GetRoadTypeRoad(t); rt != INVALID_ROADTYPE) SetRoadTypeRoad(t, roadtype_conversion_map[rt]);
-					if (RoadType rt = GetRoadTypeTram(t); rt != INVALID_ROADTYPE) SetRoadTypeTram(t, roadtype_conversion_map[rt]);
-				}
-				break;
-
-			default:
-				break;
-		}
-	}
-#endif
 }
 
 /** Populate road type label list with current values. */
 void SetCurrentRoadTypeLabelList()
 {
-#ifdef WITH_RUST
 	openttd_rust_road_saved_current();
-#else
-	_roadtype_list.clear();
-	for (RoadType rt = ROADTYPE_BEGIN; rt != ROADTYPE_END; rt++) {
-		_roadtype_list.emplace_back(GetRoadTypeInfo(rt)->label, GetRoadTramType(rt));
-	}
-#endif
 }
 
 void ClearRoadTypeLabelList()
 {
-#ifdef WITH_RUST
 	openttd_rust_road_saved_clear();
-#else
-	_roadtype_list.clear();
-#endif
 }

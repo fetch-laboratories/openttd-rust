@@ -135,13 +135,7 @@ bool HasFoundationNW(TileIndex tile, Slope slope_here, uint z_here);
 bool HasFoundationNE(TileIndex tile, Slope slope_here, uint z_here);
 
 void DoClearSquare(TileIndex tile);
-#ifndef WITH_RUST
-void RunTileLoop();
-#endif
 
 void InitializeLandscape();
-#ifndef WITH_RUST
-bool GenerateLandscape(uint8_t mode);
-#endif
 
 #endif /* LANDSCAPE_H */

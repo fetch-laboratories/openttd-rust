@@ -52,9 +52,6 @@ static inline uint64_t TownProtocolLeaf(uint32_t op, uint32_t id, uint32_t a, ui
 	return 0;
 }
 static inline OpenTTDTownState *TownProtocolResolveOwner(uint32_t) noexcept { town_protocol_world->owner_reads++; return town_protocol_world->owner; }
-static inline void TownProtocolStations(uint32_t, uint32_t, void *, void (*)(void *, const OpenTTDStation *, uint32_t)) noexcept {}
-static inline const OpenTTDStationService *TownProtocolStationActivityOwner(const OpenTTDStation *) noexcept { return nullptr; }
-static inline uint8_t TownProtocolStationOwner(const OpenTTDStation *) noexcept { return UINT8_MAX; }
 static inline uint32_t TownProtocolRandom(void *) noexcept { town_protocol_world->draws++; return 0xABCDEF01; }
 static inline uint32_t TownProtocolIndustry(int32_t, int32_t, uint32_t *) noexcept { return 0; }
 
@@ -182,9 +179,6 @@ static inline OpenTTDTownLeaves TownProtocolServices()
 		.house_callbacks = TownProtocol_house_callbacks,
 		.road_info = TownProtocol_road_info,
 		.resolve_owner = TownProtocolResolveOwner,
-		.stations = TownProtocolStations,
-		.station_activity_owner = TownProtocolStationActivityOwner,
-		.station_owner = TownProtocolStationOwner,
 		.dirty_authority = TownProtocol_dirty_town,
 		.dirty_town = TownProtocol_dirty_town,
 

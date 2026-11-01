@@ -17,10 +17,6 @@ on:
         required: false
         type: boolean
         default: false
-      rust:
-        required: false
-        type: boolean
-        default: false
       extra-cmake-parameters:
         required: false
         type: string
@@ -35,7 +31,7 @@ jobs:
 
     runs-on: ${{ vars.CI_MACOS_HEAVY || 'macos-latest' }}
     env:
-      MACOSX_DEPLOYMENT_TARGET: ${{ inputs.rust && '11.0' || '10.13' }}
+      MACOSX_DEPLOYMENT_TARGET: 11.0
 
     steps:
     - name: Setup Xcode version
@@ -51,7 +47,6 @@ jobs:
         fetch-depth: 1
 
     - name: Install pinned Rust and select native SDK
-      if: inputs.rust
       run: |
         test "$(uname -m)" = arm64
         channel=$(python3 -c 'import tomllib; print(tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
@@ -62,7 +57,6 @@ jobs:
         rustup target list --installed | tee .local/macos-evidence/installed-targets.txt
 
     - name: Rust checks
-      if: inputs.rust
       run: |
         cargo fmt --all -- --check
         cargo check --workspace --all-targets --locked --target aarch64-apple-darwin
@@ -93,7 +87,6 @@ jobs:
           vcpkg-bin-${{ inputs.arch }}-osx-${{ hashFiles('vcpkg.json') }}-
 
     - name: Install ccache
-      if: inputs.rust
       run: |
         v=4.14.1
         curl -fsSL -o ccache.tar.gz "https://github.com/ccache/ccache/releases/download/v$v/ccache-$v-darwin.tar.gz"
@@ -104,7 +97,6 @@ jobs:
         echo "CCACHE_EXE=$RUNNER_TEMP/ccache-bin/ccache" >> "$GITHUB_ENV"
 
     - name: Restore compiler cache
-      if: inputs.rust
       id: compiler-cache
       uses: actions/cache/restore@v4
       with:
@@ -119,6 +111,12 @@ jobs:
     - name: Install GCC problem matcher
       uses: ammaraskar/gcc-problem-matcher@master
 
+    - name: Fetch pinned native-test oracle headers
+      shell: bash
+      run: |
+        baseline=$(sed -n 's/  "commit": "\(.*\)"/\1/p' migration/baseline.json)
+        git fetch --no-tags --depth=1 origin "$baseline"
+
     - name: Build
       env:
         VCPKG_BINARY_SOURCES: clear;files,${{ runner.temp }}/vcpkg-binary-cache,readwrite
@@ -130,13 +128,10 @@ jobs:
         cd build
 
         echo "::group::CMake"
-        rust_parameters=(-DOPTION_RUST=OFF)
-        if [ "${{ inputs.rust }}" = true ]; then
-          rust_parameters=(-DOPTION_RUST=ON -DCMAKE_OSX_SYSROOT="$SDKROOT" -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET"
-            -DCMAKE_C_COMPILER_LAUNCHER="$CCACHE_EXE" -DCMAKE_CXX_COMPILER_LAUNCHER="$CCACHE_EXE"
-            -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON)
-          "$CCACHE_EXE" -z
-        fi
+        rust_parameters=(-DCMAKE_OSX_SYSROOT="$SDKROOT" -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET"
+          -DCMAKE_C_COMPILER_LAUNCHER="$CCACHE_EXE" -DCMAKE_CXX_COMPILER_LAUNCHER="$CCACHE_EXE"
+          -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON)
+        "$CCACHE_EXE" -z
         cmake .. \
           -DCMAKE_OSX_ARCHITECTURES=${{ inputs.full_arch }} \
           -DVCPKG_TARGET_TRIPLET=${{ inputs.arch }}-osx \
@@ -150,10 +145,8 @@ jobs:
         echo "Running on $(sysctl -n hw.logicalcpu) cores"
         cmake --build . -j $(sysctl -n hw.logicalcpu)
         echo "::endgroup::"
-        if [ "${{ inputs.rust }}" = true ]; then
-          mkdir -p ../.local/macos-evidence
-          { "$CCACHE_EXE" --show-config; "$CCACHE_EXE" -sv; } | tee ../.local/macos-evidence/ccache-stats.txt
-        fi
+        mkdir -p ../.local/macos-evidence
+        { "$CCACHE_EXE" --show-config; "$CCACHE_EXE" -sv; } | tee ../.local/macos-evidence/ccache-stats.txt
 
     - name: Save vcpkg binary cache
       if: (github.event_name == 'push' || inputs.checkout-ref == '' && github.ref == 'refs/heads/rust-migration') && steps.vcpkg-binary-cache.outputs.cache-hit != 'true'
@@ -163,7 +156,7 @@ jobs:
         key: ${{ steps.vcpkg-binary-cache.outputs.cache-primary-key }}
 
     - name: Trim compiler cache
-      if: inputs.rust && github.event_name == 'push' && github.ref == 'refs/heads/rust-migration'
+      if: github.event_name == 'push' && github.ref == 'refs/heads/rust-migration'
       env:
         CCACHE_CONFIGPATH: ${{ github.workspace }}/migration/ccache.conf
         CCACHE_DIR: ${{ runner.temp }}/ccache
@@ -171,7 +164,7 @@ jobs:
       run: '"$CCACHE_EXE" --cleanup'
 
     - name: Save compiler cache
-      if: inputs.rust && inputs.checkout-ref == '' && github.ref == 'refs/heads/rust-migration' && steps.compiler-cache.outputs.cache-hit != 'true'
+      if: inputs.checkout-ref == '' && github.ref == 'refs/heads/rust-migration' && steps.compiler-cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@v4
       with:
         path: ${{ runner.temp }}/ccache
@@ -185,20 +178,18 @@ jobs:
         ctest -j $(sysctl -n hw.logicalcpu) --timeout 120 --output-junit ctest.xml
 
     - name: Compare accepted wide math templates with pinned C++
-      if: inputs.rust
       run: python3 tools/math-comparison.py --build build --output .local/macos-evidence/math-extensions
 
     - name: Reject unsupported Rust configurations
-      if: inputs.rust
       run: |
-        if cmake -S . -B .local/reject-universal -DOPTION_TOOLS_ONLY=ON -DOPTION_RUST=ON \
+        if cmake -S . -B .local/reject-universal -DOPTION_TOOLS_ONLY=ON \
           '-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64' -DCMAKE_OSX_SYSROOT="$SDKROOT" \
           -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 > .local/macos-evidence/reject-universal.log 2>&1; then
           echo "Universal Rust configuration unexpectedly succeeded"
           exit 1
         fi
         grep -q 'universal and Intel targets are unsupported' .local/macos-evidence/reject-universal.log
-        if cmake -S . -B .local/reject-old-minimum -DOPTION_TOOLS_ONLY=ON -DOPTION_RUST=ON \
+        if cmake -S . -B .local/reject-old-minimum -DOPTION_TOOLS_ONLY=ON \
           -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_SYSROOT="$SDKROOT" \
           -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15 > .local/macos-evidence/reject-old-minimum.log 2>&1; then
           echo "Unsupported deployment minimum unexpectedly succeeded"
@@ -207,10 +198,9 @@ jobs:
         grep -q 'deployment target of at least 11.0' .local/macos-evidence/reject-old-minimum.log
 
     - name: Fresh Rust native generators
-      if: inputs.rust
       run: |
         cmake -S . -B .local/build-tools-macos \
-          -DOPTION_TOOLS_ONLY=ON -DOPTION_RUST=ON \
+          -DOPTION_TOOLS_ONLY=ON \
           -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_SYSROOT="$SDKROOT" \
           -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET" \
           -DVCPKG_TARGET_TRIPLET=${{ inputs.arch }}-osx \
@@ -220,7 +210,6 @@ jobs:
         cmake --build .local/build-tools-macos -j $(sysctl -n hw.logicalcpu)
 
     - name: Check native Rust consumers, freshness and fresh generators
-      if: inputs.rust
       run: python3 tools/check-rust-platform.py --target aarch64-apple-darwin --build build --tools .local/build-tools-macos --output .local/macos-evidence
 
     - uses: actions/download-artifact@v4
@@ -245,7 +234,7 @@ jobs:
         if-no-files-found: error
 
     - name: Retain native Rust evidence
-      if: always() && inputs.rust
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         include-hidden-files: true

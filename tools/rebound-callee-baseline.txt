@@ -111,12 +111,8 @@ rebound | OpenTTDMapScaleLandProportion | src/industry_cmd.cpp | scale_by_land_p
 rebound | OpenTTDMapScaleLandProportion | src/town_cmd.cpp | scale_land
 rebound | OpenTTDMapScaleSize | src/industry_cmd.cpp | scale_by_map_size
 rebound | OpenTTDMapScaleSize | src/town_cmd.cpp | scale_size
-rebound | OpenTTDModifyStationRatingAround | src/rust/aircraft_adapter.hpp | station_rating
-rebound | OpenTTDModifyStationRatingAround | src/town_cmd.cpp | modify_station_rating
 rebound | OpenTTDScaleTownCargo | src/object_cmd.cpp | scale_cargo
 rebound | OpenTTDScaleTownCargo | src/town_cmd.cpp | scale_cargo
-rebound | OpenTTDStationActivityOwner | src/town_cmd.cpp | station_activity_owner
-rebound | OpenTTDStationActivityOwner | src/town_cmd.cpp | station_activity_owner | 2
 rebound | OpenTTDTileMaxPixelZ | src/industry_cmd.cpp | pixel_max_z
 rebound | OpenTTDTileMaxPixelZ | src/rust/vehicle_services.cpp | max_pixel_z
 rebound | OpenTTDTownOwnerByID | src/rust/services.cpp | town_owner_by_id
@@ -150,8 +146,6 @@ rebound | RustBaseStationID | src/newgrf_airport.cpp | station_id
 rebound | RustBaseStationID | src/newgrf_roadstop.cpp | station_id
 rebound | RustBaseStationID | src/rust/services.cpp | station_id
 rebound | RustBaseStationID | src/station.cpp | id
-rebound | RustBridgeSpecSpeed | src/landscape.cpp | bridge_type_speed
-rebound | RustBridgeSpecSpeed | src/tunnelbridge_cmd.cpp | speed
 rebound | RustCargoBitnum | src/newgrf_generic.cpp | cargo_bitnum
 rebound | RustCargoBitnum | src/rust/vehicle_services_newgrf.h | cargo_bitnum
 rebound | RustCargoClasses | src/rust/engine_capabilities_services.hpp | cargo_classes
@@ -167,8 +161,6 @@ rebound | RustCompanyRailTypes | src/rust/engine_adapter.hpp | company_railtypes
 rebound | RustCompanyRailTypes | src/rust/engine_adapter.hpp | company_railtypes | 2
 rebound | RustCompanyRoadTypes | src/rust/engine_adapter.hpp | company_roadtypes
 rebound | RustCompanyRoadTypes | src/rust/engine_adapter.hpp | company_roadtypes | 2
-rebound | RustCompatibleStationTiles | src/pbs.cpp | compatible_station
-rebound | RustCompatibleStationTiles | src/rust/station_command_services.hpp | compatible_tiles
 rebound | RustCostOrIncomeAnimation | src/economy.cpp | cost_animation
 rebound | RustCostOrIncomeAnimation | src/rust/fleet_pending_services.hpp | animation
 rebound | RustCurrentCompanyID | src/rust/company_adapter.cpp | current_company
@@ -278,8 +270,6 @@ rebound | RustOpaqueVehicleInvoke | src/rust/rail_construction_services.hpp | re
 rebound | RustOpaqueVehicleInvoke | src/rust/vehicle_articulated_services.hpp | flip_image
 rebound | RustOpaqueVehicleInvoke | src/rust/vehicle_build_services.hpp | mail_capacity_address
 rebound | RustOpaqueVehicleInvoke | src/vehicle_cmd.cpp | flip_stopped
-rebound | RustOtherBridgeEnd | src/landscape.cpp | other_bridge_end
-rebound | RustOtherBridgeEnd | src/tunnelbridge_cmd.cpp | other_bridge_end
 rebound | RustOtherTunnelBridgeEnd | src/rust/services.cpp | other_tunnel_bridge_end
 rebound | RustOtherTunnelBridgeEnd | src/rust/services.cpp | other_tunnel_end
 rebound | RustRailPoweredMask | src/rust/ground_vehicle_services.cpp | powered
@@ -464,12 +454,9 @@ rebound | RustStationOwnerByte | src/economy.cpp | station_company
 rebound | RustStationOwnerByte | src/newgrf_roadstop.cpp | owner
 rebound | RustStationOwnerByte | src/station_cmd.cpp | station_owner
 rebound | RustStationOwnerByte | src/town_cmd.cpp | station_owner
-rebound | RustStationOwnerByte | src/town_cmd.cpp | station_owner | 2
 rebound | RustStationRandomBits | src/newgrf_airport.cpp | random
 rebound | RustStationRandomBits | src/newgrf_roadstop.cpp | random_bits
 rebound | RustStationRandomBits | src/newgrf_station.cpp | station_random
-rebound | RustStationReserved | src/pbs.cpp | station_reserved
-rebound | RustStationReserved | src/rust/station_command_services.hpp | reserved
 rebound | RustStationServiceOwner | src/station.cpp | owner
 rebound | RustStationServiceOwner | src/station_cmd.cpp | owner
 rebound | RustStationSetRandomBits | src/newgrf_roadstop.cpp | set_random_bits
@@ -497,7 +484,6 @@ rebound | RustTerrainType | src/newgrf_industries.cpp | terrain
 rebound | RustTerrainType | src/newgrf_object.cpp | terrain
 rebound | RustTerrainType | src/newgrf_roadstop.cpp | terrain
 rebound | RustTerrainType | src/newgrf_station.cpp | terrain
-rebound | RustTileRailType | src/pbs.cpp | tile_rail_type
 rebound | RustTileRailType | src/rust/vehicle_effect_services.hpp | tile_rail
 rebound | RustTileRailType | src/rust/vehicle_services_newgrf.h | tile_railtype
 rebound | RustTownAuthorityIndex | src/newgrf_industries.cpp | town_id

@@ -110,12 +110,39 @@ def verify_debug(archive):
                 )
 
 
+# #607 removed the always-on OPTION_RUST toggle and added Git discovery for
+# native-test oracles. Neither changes the measured game, so restore the
+# anchored cache spelling; a quiet pass would otherwise be needed to re-anchor.
+RUST_OPTION = (
+    "//Use migrated Rust game/tool algorithms (validated native platforms)\n"
+    "OPTION_RUST:BOOL=ON\n\n"
+)
+TEST_GIT_ENTRIES = (
+    r"//Git command line client\nGIT_EXECUTABLE:FILEPATH=[^\n]*\n\n",
+    r"//Details about finding Git\nFIND_PACKAGE_MESSAGE_DETAILS_Git:INTERNAL=[^\n]*\n",
+    r"//ADVANCED property for variable: GIT_EXECUTABLE\nGIT_EXECUTABLE-ADVANCED:INTERNAL=1\n",
+)
+
+
+def anchored_cache(text):
+    for entry in TEST_GIT_ENTRIES:
+        text = re.sub(entry, "", text)
+    if "\nOPTION_RUST:" not in text:
+        text = re.sub(
+            r"(\nOPTION_PACKAGE_DEPENDENCIES:BOOL=[^\n]*\n\n)",
+            rf"\1{RUST_OPTION}",
+            text,
+        )
+    return text
+
+
 def record_build(build, source, role, env):
     """Publish only successful builds, bound to the executable being measured."""
     import migration
 
     settings = (build / "CMakeCache.txt").read_text()
     if role == "candidate":
+        settings = anchored_cache(settings)
         files = ("rust-build-configuration.txt", "rust-toolchain.txt")
         settings += "".join((build / f).read_text() for f in files)
         verify_debug(migration.rust_archive(build))

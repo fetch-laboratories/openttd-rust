@@ -86,25 +86,6 @@ pub(crate) fn is_road_waypoint_tile(tile: u32, s: &Services) -> bool {
     (s.tile_type)(tile) == MP_STATION && (s.station_type)(tile).0 == ROAD_WAYPOINT
 }
 
-/// `HasStationTileRail`, retaining its guard before `HasStationRail`'s assertions.
-#[allow(clippy::inline_always)]
-#[inline(always)]
-pub(crate) fn has_station_tile_rail(
-    tile: u32,
-    s: &Services,
-    rail: &crate::services::RailMapServices,
-) -> bool {
-    (s.tile_type)(tile) == MP_STATION && (rail.has_station_rail)(tile)
-}
-
-/// `IsStationRoadStopTile`: a bus or truck stop, not a road waypoint.
-#[allow(clippy::inline_always)]
-#[inline(always)]
-pub(crate) fn is_station_road_stop_tile(s: &Services, tile: u32) -> bool {
-    (s.tile_type)(tile) == MP_STATION
-        && matches!((s.station_type)(tile).0, STATION_TRUCK | STATION_BUS)
-}
-
 /// `GetAirportGfx`: airport membership is established by each caller before
 /// this read, proving its native `IsAirport` assertion. `GetStationGfx` retains its
 /// native station assertion; translation calls the Rust owner directly.

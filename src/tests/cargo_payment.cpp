@@ -9,17 +9,14 @@
 #include "../stdafx.h"
 #include "../3rdparty/catch2/catch.hpp"
 #include "../core/overflowsafe_type.hpp"
-#ifdef WITH_RUST
 #include "cargo_payment_stubs.hpp"
 #include "../company_base.h"
 #include "../rust/vehicle_ffi.h"
 #include "../economy_type.h"
 #include "../newgrf_sound.h"
 #include "../sound_type.h"
-#endif
 #include "../safeguards.h"
 
-#ifdef WITH_RUST
 static std::vector<std::tuple<uint8_t, int64_t, int64_t>> settlement;
 static CompanyFinances finances;
 static bool local, custom_sound, valid_company;
@@ -83,4 +80,3 @@ TEST_CASE("Cargo payment - settlement order, Money boundaries and cleanup")
 	openttd_rust_cargo_payment_destroy(p, &s, 0);
 	CHECK(settlement == std::vector<std::tuple<uint8_t, int64_t, int64_t>>{{0, 0, 0}});
 }
-#endif

@@ -24,21 +24,7 @@
  */
 void UpdateValidHistory(ValidHistoryMask &valid_history, const HistoryRange &hr, uint cur_month)
 {
-#ifdef WITH_RUST
 	valid_history = RustHistory::Scalar(0, hr, valid_history, 0, cur_month);
-#else
-	/* Update for subdivisions first. */
-	if (hr.hr != nullptr) UpdateValidHistory(valid_history, *hr.hr, cur_month);
-
-	/* No need to update if our last entry is marked valid. */
-	if (HasBit(valid_history, hr.last - 1)) return;
-	/* Is it the right time for this history range? */
-	if (cur_month % hr.total_division != 0) return;
-	/* Is the previous history range valid yet? */
-	if (hr.division != 1 && !HasBit(valid_history, hr.first - hr.division)) return;
-
-	SB(valid_history, hr.first, hr.records, GB(valid_history, hr.first, hr.records) << 1ULL | 1ULL);
-#endif
 }
 
 /**
@@ -50,24 +36,5 @@ void UpdateValidHistory(ValidHistoryMask &valid_history, const HistoryRange &hr,
  */
 bool IsValidHistory(ValidHistoryMask valid_history, const HistoryRange &hr, uint age)
 {
-#ifdef WITH_RUST
 	return RustHistory::Scalar(1, hr, valid_history, age, TimerGameEconomy::month) != 0;
-#else
-	if (hr.hr == nullptr) {
-		if (age < hr.periods) {
-			uint slot = hr.first + age;
-			return HasBit(valid_history, slot);
-		}
-	} else {
-		if (age * hr.division < static_cast<uint>(hr.hr->periods - hr.division)) {
-			uint start = age * hr.division + ((TimerGameEconomy::month / hr.hr->division) % hr.division);
-			return IsValidHistory(valid_history, *hr.hr, start);
-		}
-		if (age < hr.periods) {
-			uint slot = hr.first + age - ((hr.hr->periods / hr.division) - 1);
-			return HasBit(valid_history, slot);
-		}
-	}
-	return false;
-#endif
 }

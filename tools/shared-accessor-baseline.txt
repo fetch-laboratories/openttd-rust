@@ -58,7 +58,6 @@ src/order_cmd.cpp | openttd_orders_vehicle_status(void *ctx) noexcept | 0666ba99
 src/order_cmd.cpp | openttd_orders_vehicle_tile(void *ctx) noexcept | f946d116807a3631 | 1
 src/order_cmd.cpp | openttd_orders_vehicle_type(void *ctx) noexcept | 548f4cd5cae79f9e | 1
 src/pathfinder/water_regions.cpp | CalculateWaterRegionPatchHash(const WaterRegionPatchDesc &patch) | 43ab4b50224ccf7a | 1
-src/pathfinder/yapf/yapf_rail.cpp | YapfTrainFindNearestSafeTile(const Train *v, TileIndex tile, Trackdir td, bool override_railtype) | 02526afd5bf0c047 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_airport_blocks(const OpenTTDStation *s) noexcept | 97ae30fe84ad813b | 1
 src/rust/aircraft_adapter.hpp | Aircraft_engine_sound(OpenTTDAircraftVehicle vehicle) noexcept | ab16a3a16a30787d | 1
 src/rust/aircraft_adapter.hpp | Aircraft_engine_speed(OpenTTDAircraftVehicle vehicle) noexcept | a6cd81a57940c095 | 1
