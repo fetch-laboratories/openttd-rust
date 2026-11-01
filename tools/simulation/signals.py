@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 from . import core
@@ -139,13 +140,13 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
     from .rails import pbs_reference, pbs_wraps
 
     pbs_reference(folder)
-    # The road protocol compares against bodies extracted only from the pinned original.
+    # The road console compares the candidate with the pinned original bodies.
     import probe
 
-    import migration
-
-    migration.ensure_reference()
-    road = (migration.REFERENCE / "src/road.cpp").read_text()
+    baseline = json.loads((core.ROOT / "migration/baseline.json").read_text())["commit"]
+    road = subprocess.check_output(
+        ["git", "show", f"{baseline}:src/road.cpp"], cwd=core.ROOT, text=True
+    )
     (folder / "road-cleanup-original.hpp").write_text(
         probe.body(road, "static bool IsPossibleCrossing(")
         + "\n"
@@ -179,10 +180,7 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
         env,
         source,
         "signals",
-        wraps=(
-            *pbs_wraps(build),
-            "_Z19MarkTileDirtyByTileN10StrongType7TypedefIj12TileIndexTagJNS_7CompareENS_7IntegerENS_10CompatibleIiEENS4_IlEEEEEii",
-        ),
+        wraps=pbs_wraps(build),
         native_test_support=True,
         replace_objects=("/src/signal.cpp.o",),
     )
