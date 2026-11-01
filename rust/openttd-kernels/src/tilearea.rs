@@ -106,7 +106,7 @@ impl TileArea {
         let sy = (y - radius).max(0);
         let ex = (x + i32::from(self.w) + radius).min(map.size_x() as i32);
         let ey = (y + i32::from(self.h) + radius).min(size_y as i32);
-        self.tile = (sy as u32) * map.size_x() + sx as u32;
+        self.tile = map.tile_xy(sx as u32, sy as u32);
         self.w = (ex - sx) as u16;
         self.h = (ey - sy) as u16;
     }
@@ -589,6 +589,20 @@ mod tests {
         };
         c.clamp_to_map(MAP, SIZE, on_map);
         assert_eq!((c.tile, c.w, c.h), (108, 4, 2));
+    }
+
+    #[test]
+    fn negative_expansion_wraps_the_unsigned_base_tile() {
+        // 64x64: sx = sy = 2^26 and TileXY wraps (2^26 << 6) + 2^26 to 2^26;
+        // the signed extent -2^27 + 1 narrows to 1.
+        let map = Map::from_log_x(6);
+        let mut area = TileArea {
+            tile: 0,
+            w: 1,
+            h: 1,
+        };
+        area.expand(-67_108_864, map, 64);
+        assert_eq!((area.tile, area.w, area.h), (67_108_864, 1, 1));
     }
 
     #[test]
