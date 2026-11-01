@@ -1,5 +1,6 @@
 /** @file threaded-console.cpp Fixture commands running under the driver's existing state mutex. */
 #include "stdafx.h"
+#include "vehicle-record-fixture.hpp"
 #include "console_internal.h"
 #include "console_func.h"
 #include "video/video_driver.hpp"
@@ -39,9 +40,9 @@ static bool ThreadedStart(std::span<std::string_view>)
 	fmt::print(stderr, "THREAD506 credits {}\n", credits);
 	if (!credits) std::abort();
 	for (const Vehicle *v : Vehicle::Iterate()) {
-		if (v->type != VEH_ROAD || !IsTileType(v->tile, MP_ROAD) || !IsNormalRoad(v->tile)) continue;
-		const TileIndex tile = v->tile;
-		const CompanyID company = v->owner;
+		if (FIXTURE_GET(v, Type, type) != VEH_ROAD || !IsTileType(FIXTURE_GET(v, Tile, tile), MP_ROAD) || !IsNormalRoad(FIXTURE_GET(v, Tile, tile))) continue;
+		const TileIndex tile = FIXTURE_GET(v, Tile, tile);
+		const CompanyID company = FIXTURE_GET(v, Owner, owner);
 		const auto occupied = EnsureNoVehicleOnGround(tile);
 		fmt::print(stderr, "THREAD506 game tile {} occupied {} error {}\n", tile.base(), occupied.Failed(), occupied.GetErrorMessage());
 		if (occupied.Succeeded() || occupied.GetErrorMessage() != STR_ERROR_ROAD_VEHICLE_IN_THE_WAY) std::abort();

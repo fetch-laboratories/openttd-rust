@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file landscape-console.hpp Identical landscape transaction inputs in both games. */
 #include "terraform_cmd.h"
+#include "vehicle-record-fixture.hpp"
 #include "genworld.h"
 #include "clear_map.h"
 #include "vehicle_base.h"
@@ -191,8 +192,8 @@ static bool LandscapeScenario(std::span<std::string_view> args)
 	LandscapeResult("tunnel-build", Command<CMD_BUILD_TUNNEL>::Do(DoCommandFlag::Execute, tunnel, TRANSPORT_ROAD, 0));
 	terraform("tunnel-damage", tunnel + 2, SLOPE_N, false, {});
 	LandscapeResult("tunnel-remove", Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, tunnel));
-	for (const Vehicle *v : Vehicle::Iterate()) if ((v->type == VEH_ROAD || v->type == VEH_TRAIN) && v->owner == c->index && EnsureNoVehicleOnGround(v->tile).Failed()) {
-		ResetScratch(); uint32_t before = finance.clear_limit; LandscapeResult("occupied-clear", CmdLandscapeClear(DoCommandFlag::Execute, v->tile));
+	for (const Vehicle *v : Vehicle::Iterate()) if ((FIXTURE_GET(v, Type, type) == VEH_ROAD || FIXTURE_GET(v, Type, type) == VEH_TRAIN) && FIXTURE_GET(v, Owner, owner) == c->index && EnsureNoVehicleOnGround(FIXTURE_GET(v, Tile, tile)).Failed()) {
+		ResetScratch(); uint32_t before = finance.clear_limit; LandscapeResult("occupied-clear", CmdLandscapeClear(DoCommandFlag::Execute, FIXTURE_GET(v, Tile, tile)));
 		fmt::print(stderr, "LANDSCAPE occupied-limit {}\n", before - finance.clear_limit); break;
 	}
 

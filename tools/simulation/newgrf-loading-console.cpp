@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file newgrf-loading-console.cpp Production loading from deterministic on-disk GRFs. */
 #include "stdafx.h"
+#include "vehicle-record-fixture.hpp"
 #include "console_internal.h"
 #include "newgrf/newgrf_act2.cpp"
 #include "newgrf_station.h"
@@ -348,7 +349,7 @@ static bool LoadingScenario(std::span<std::string_view> args)
 		auto [cost, vehicle, capacity, mail, cargo] = Command<CMD_BUILD_VEHICLE>::Do(DoCommandFlag::Execute, depot->xy, id, false, INVALID_CARGO, INVALID_CLIENT_ID);
 		if (!cost.Succeeded()) continue;
 		fmt::print(stderr, "LOADING build {} {} {}\n", cost.Succeeded(), vehicle.base(), capacity);
-		Require(capacity == 55 && Vehicle::Get(vehicle)->cargo_cap == 55, "action2-build-capacity");
+		Require(capacity == 55 && FIXTURE_FIELD(Vehicle::Get(vehicle), cargo_cap) == 55, "action2-build-capacity");
 		auto [refit, refit_capacity, refit_mail, refit_cargos] = Command<CMD_REFIT_VEHICLE>::Do(DoCommandFlag::Execute, vehicle, Vehicle::Get(vehicle)->cargo_type, 1, false, true, 1);
 		Require(refit.Succeeded() && refit_capacity == 55, "action2-refit-capacity");
 		TriggerVehicleRandomisation(Vehicle::Get(vehicle), VehicleRandomTrigger::Depot);

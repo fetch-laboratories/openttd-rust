@@ -7,6 +7,7 @@
 
 /** @file fleet-console.cpp Identical command inputs for unchanged-reference fleet witnesses. */
 #include "stdafx.h"
+#include "vehicle-record-fixture.hpp"
 #include "console_internal.h"
 #include "command_func.h"
 #include "company_func.h"
@@ -80,7 +81,7 @@ struct AttachmentObserver : SpriteGroup {
 
 static void AttachmentCallbacks(Train *head)
 {
-	Engine *engine = Engine::Get(head->engine_type);
+	Engine *engine = Engine::Get(FIXTURE_GET(head, EngineType, engine_type));
 	Backup<CargoGRFFileProps> props(engine->grf_prop);
 	GRFFile grf;
 	grf.grfid = 0x156CA110;
@@ -139,19 +140,19 @@ template <class T, class Info>
 static void GroundPhysicsProbe(T *v, Info &info)
 {
 	Backup<GroundVehicleCache> cache(v->gcache);
-	Backup<uint16_t> flags(v->gv_flags), speed(v->cur_speed), maximum(v->vcache.cached_max_speed);
-	Backup<uint8_t> subspeed(v->subspeed), progress(v->progress), drag(info.air_drag);
-	Backup<VehStates> status(v->vehstatus);
+	Backup<uint16_t> flags(v->gv_flags), speed(FIXTURE_FIELD(v, cur_speed)), maximum(FIXTURE_FIELD(v, cached_max_speed));
+	Backup<uint8_t> subspeed(FIXTURE_FIELD(v, subspeed)), progress(FIXTURE_FIELD(v, progress)), drag(info.air_drag);
+	Backup<FIXTURE_FIELD_TYPE(v, vehstatus)> status(FIXTURE_FIELD(v, vehstatus));
 	uint cases = 0;
 	for (uint8_t air : {0, 1, 255}) for (uint16_t max : {0, 10, 11, 2048}) {
 		drag.Change(air); maximum.Change(max); v->PowerChanged();
-		fmt::print(stderr, "FLEET ground-drag {} {} {} {}\n", v->type, air, max, v->gcache.cached_air_drag);
+		fmt::print(stderr, "FLEET ground-drag {} {} {} {}\n", FIXTURE_GET(v, Type, type), air, max, v->gcache.cached_air_drag);
 		++cases;
 	}
 	maximum.Restore(); drag.Restore();
 	for (uint16_t spd : {0, 1, 65535}) for (bool brake : {false, true}) for (uint16_t slope : {0, 1, 2}) {
 		speed.Change(spd); subspeed.Change(255); progress.Change(19);
-		status.Change(brake ? VehStates{VehState::Stopped} : VehStates{}); flags.Change(slope);
+		status.Change(FixtureRaw(brake ? VehStates{VehState::Stopped} : VehStates{})); flags.Change(slope);
 		v->gcache.cached_weight = 8000000;
 		v->gcache.cached_power = 8000000; // Kickoff narrows watts through std::min<int>.
 		v->gcache.cached_max_te = UINT32_MAX;
@@ -161,10 +162,10 @@ static void GroundPhysicsProbe(T *v, Info &info)
 		int acceleration = v->GetAcceleration();
 		int distance = 0;
 		if constexpr (std::is_same_v<T, Train>) distance = v->UpdateSpeed();
-		fmt::print(stderr, "FLEET ground-arithmetic {} {} {} {} {} {} {} {} {}\n", v->type, spd, brake, slope, acceleration, distance, v->cur_speed, v->subspeed, v->progress);
+		fmt::print(stderr, "FLEET ground-arithmetic {} {} {} {} {} {} {} {} {}\n", FIXTURE_GET(v, Type, type), spd, brake, slope, acceleration, distance, FIXTURE_FIELD(v, cur_speed), FIXTURE_FIELD(v, subspeed), FIXTURE_FIELD(v, progress));
 		++cases;
 	}
-	fmt::print(stderr, "FLEET ground-probe {} {} {}\n", v->type, cases, static_cast<Vehicle *>(v)->GetMaxWeight());
+	fmt::print(stderr, "FLEET ground-probe {} {} {}\n", FIXTURE_GET(v, Type, type), cases, static_cast<Vehicle *>(v)->GetMaxWeight());
 	cache.Restore(); flags.Restore(); speed.Restore(); subspeed.Restore(); progress.Restore(); status.Restore();
 }
 
@@ -196,9 +197,9 @@ static Money &CompanyMoney(Company *c)
 static Vehicle *BuildFixture(VehicleType type)
 {
 	Vehicle *source = nullptr;
-	for (Vehicle *v : Vehicle::Iterate()) if (v->type == type && v->IsPrimaryVehicle() && v->GetNumOrders() >= 2) { source = v; break; }
+	for (Vehicle *v : Vehicle::Iterate()) if (FIXTURE_GET(v, Type, type) == type && v->IsPrimaryVehicle() && v->GetNumOrders() >= 2) { source = v; break; }
 	if (source == nullptr) FixtureAbort(__LINE__);
-	_current_company = source->owner;
+	_current_company = FIXTURE_GET(source, Owner, owner);
 	/* Declared funding input isolates actual construction/replacement policy. */
 	CompanyMoney(Company::Get(_current_company)) = Money(1000000000);
 	TileIndex tile = INVALID_TILE;
@@ -254,8 +255,8 @@ struct RefitCostObserver : SpriteGroup {
 static void CloneRefitCosts(Vehicle *front)
 {
 	Vehicle *v = front->GetNextVehicle();
-	if (v == nullptr || v->cargo_cap == 0) FixtureAbort(__LINE__);
-	Engine *e = Engine::Get(v->engine_type);
+	if (v == nullptr || FIXTURE_FIELD(v, cargo_cap) == 0) FixtureAbort(__LINE__);
+	Engine *e = Engine::Get(FIXTURE_GET(v, EngineType, engine_type));
 	Backup<EngineInfo> info(e->info);
 	Backup<CargoGRFFileProps> props(e->grf_prop);
 	CargoType cargo = GetCargoTypeByLabel(CT_MAIL);
@@ -282,12 +283,12 @@ static void CloneRefitCosts(Vehicle *front)
 		observer->null_calls = observer->live_calls = 0;
 		auto [live, cap, mail, capacities] = Command<CMD_REFIT_VEHICLE>::Do({}, v->index, cargo, 1, false, true, 0);
 		Checked("clone-refit-live", live);
-		const auto original = std::tuple{v->cargo_type, v->cargo_subtype, v->cargo_cap, v->refit_cap, Vehicle::GetNumItems(), CompanyMoney(Company::Get(_current_company))};
+		const auto original = std::tuple{v->cargo_type, v->cargo_subtype, FIXTURE_FIELD(v, cargo_cap), FIXTURE_FIELD(v, refit_cap), Vehicle::GetNumItems(), CompanyMoney(Company::Get(_current_company))};
 		SavedRandomSeeds before, after; SaveRandomSeeds(&before);
-		auto [cost, id] = Command<CMD_CLONE_VEHICLE>::Do({}, front->tile, front->index, false);
+		auto [cost, id] = Command<CMD_CLONE_VEHICLE>::Do({}, FIXTURE_GET(front, Tile, tile), front->index, false);
 		Checked("clone-refit-query", cost);
 		SaveRandomSeeds(&after);
-		bool unchanged = original == std::tuple{v->cargo_type, v->cargo_subtype, v->cargo_cap, v->refit_cap, Vehicle::GetNumItems(), CompanyMoney(Company::Get(_current_company))};
+		bool unchanged = original == std::tuple{v->cargo_type, v->cargo_subtype, FIXTURE_FIELD(v, cargo_cap), FIXTURE_FIELD(v, refit_cap), Vehicle::GetNumItems(), CompanyMoney(Company::Get(_current_company))};
 		fmt::print(stderr, "FLEET clone-refit-cost {} {} {} {} {} {} {}\n", value, live.GetCost(), cost.GetCost(), observer->null_calls > 0, observer->live_calls > 0, id == VehicleID::Invalid(), unchanged && SameRandom(before, after));
 	}
 	props.Restore(); info.Restore(); front->InvalidateNewGRFCacheOfChain();
@@ -319,15 +320,15 @@ struct CapabilityObserver : SpriteGroup {
 		if (object.callback == CBID_VEHICLE_REFIT_CAPACITY) {
 			++refits;
 			const Vehicle *v = static_cast<VehicleResolverObject &>(object).self_scope.v;
-			if (inspect_mail && v != nullptr) { ++mail_calls; mail_valid &= v->type == VEH_AIRCRAFT && v->Next() != nullptr && v->Next()->cargo_cap == 17; }
+			if (inspect_mail && v != nullptr) { ++mail_calls; mail_valid &= FIXTURE_GET(v, Type, type) == VEH_AIRCRAFT && v->Next() != nullptr && FIXTURE_FIELD(v->Next(), cargo_cap) == 17; }
 		}
 		if (object.callback == CBID_VEHICLE_ARTIC_ENGINE) {
 			indices.push_back(object.callback_param1);
 			const Vehicle *v = static_cast<VehicleResolverObject &>(object).self_scope.v;
 			purchase &= v == nullptr;
 			if (v != nullptr) {
-				pooled &= Vehicle::GetIfValid(v->index) == v && v->owner == _current_company;
-				if (v->type == VEH_INVALID) temporary = v->index;
+				pooled &= Vehicle::GetIfValid(v->index) == v && FIXTURE_GET(v, Owner, owner) == _current_company;
+				if (FIXTURE_GET(v, Type, type) == VEH_INVALID) temporary = v->index;
 			}
 		}
 		return SpriteGroup::Resolve(program, object, false);
@@ -367,7 +368,7 @@ struct CapabilityProgram {
 };
 static void CapabilityChain(const Vehicle *v, const char *stage)
 {
-	for (; v != nullptr; v = v->Next()) fmt::print(stderr, "FLEET capability-chain {} {} {} {} {} {} {} {}\n", stage, v->index.base(), v->engine_type.base(), v->subtype, v->cargo_type, v->cargo_subtype, v->cargo_cap, v->spritenum);
+	for (; v != nullptr; v = v->Next()) fmt::print(stderr, "FLEET capability-chain {} {} {} {} {} {} {} {}\n", stage, v->index.base(), FIXTURE_GET(v, EngineType, engine_type).base(), FIXTURE_FIELD(v, subtype), v->cargo_type, v->cargo_subtype, FIXTURE_FIELD(v, cargo_cap), v->spritenum);
 }
 static constexpr std::string_view CAPABILITY_CHAIN_NAME = "Capability reload chain";
 static void CapabilityLive(const Vehicle *v, const char *stage)
@@ -375,15 +376,15 @@ static void CapabilityLive(const Vehicle *v, const char *stage)
 	CapabilityChain(v, stage);
 	CargoType common = INVALID_CARGO;
 	CargoTypes cargoes = GetCargoTypesOfArticulatedVehicle(v, &common);
-	fmt::print(stderr, "FLEET capability-live {} {} {} {} {} {}\n", stage, cargoes, common, v->GetEngine()->DetermineCapacity(v), v->Next()->GetEngine()->DetermineCapacity(v->Next()), CountArticulatedParts(v->engine_type, true));
+	fmt::print(stderr, "FLEET capability-live {} {} {} {} {} {}\n", stage, cargoes, common, v->GetEngine()->DetermineCapacity(v), v->Next()->GetEngine()->DetermineCapacity(v->Next()), CountArticulatedParts(FIXTURE_GET(v, EngineType, engine_type), true));
 }
 static void CapabilitiesInspect()
 {
 	Vehicle *v = nullptr;
 	for (Train *t : Train::Iterate()) if (t->name == CAPABILITY_CHAIN_NAME) { v = t; break; }
 	if (v == nullptr || !v->HasArticulatedPart() || v->Next()->Next() != nullptr) FixtureAbort(__LINE__);
-	_current_company = v->owner;
-	Engine *e = Engine::Get(v->engine_type), *part = Engine::Get(v->Next()->engine_type);
+	_current_company = FIXTURE_GET(v, Owner, owner);
+	Engine *e = Engine::Get(FIXTURE_GET(v, EngineType, engine_type)), *part = Engine::Get(FIXTURE_GET(v->Next(), EngineType, engine_type));
 	Backup<bool> dynamic(_settings_game.vehicle.dynamic_engines, false);
 	Backup<RailVehicleInfo> rail(e->VehInfo<RailVehicleInfo>()), part_rail(part->VehInfo<RailVehicleInfo>());
 	Backup<EngineInfo> part_info(part->info);
@@ -407,7 +408,7 @@ static void CapabilitiesProbe()
 	Backup<Randomizer> interactive(_interactive_random);
 	_interactive_random.SetSeed(12345);
 	Vehicle *fixture = BuildFixture(VEH_TRAIN);
-	Engine *e = Engine::Get(fixture->engine_type), *part = Engine::Get(fixture->GetNextVehicle()->engine_type);
+	Engine *e = Engine::Get(FIXTURE_GET(fixture, EngineType, engine_type)), *part = Engine::Get(FIXTURE_GET(fixture->GetNextVehicle(), EngineType, engine_type));
 	Backup<bool> dynamic(_settings_game.vehicle.dynamic_engines, false);
 	Backup<RailVehicleInfo> rail(e->VehInfo<RailVehicleInfo>()), part_rail(part->VehInfo<RailVehicleInfo>());
 	Backup<EngineInfo> part_info(part->info);
@@ -485,7 +486,7 @@ static void CapabilitiesProbe()
 		fmt::print(stderr, "FLEET capability-query-rng {}\n", SameRandom(before, after));
 		for (DoCommandFlags flags : {DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Execute}}) {
 			SavedRandomSeeds a, b; SaveRandomSeeds(&a);
-			auto [cost, id, cap, secondary, capacities] = Command<CMD_BUILD_VEHICLE>::Do(flags, fixture->tile, e->index, false, INVALID_CARGO, INVALID_CLIENT_ID);
+			auto [cost, id, cap, secondary, capacities] = Command<CMD_BUILD_VEHICLE>::Do(flags, FIXTURE_GET(fixture, Tile, tile), e->index, false, INVALID_CARGO, INVALID_CLIENT_ID);
 			Checked("capability-build", cost); SaveRandomSeeds(&b);
 			fmt::print(stderr, "FLEET capability-build {} {} {} {} {}\n", flags.Test(DoCommandFlag::Execute), cap, secondary, SameRandom(a, b), CompanyMoney(Company::Get(_current_company)));
 			Vehicle *built = Vehicle::GetIfValid(id);
@@ -499,7 +500,7 @@ static void CapabilitiesProbe()
 				fmt::print(stderr, "FLEET capability-refit {} {} {}\n", refit_flags.Test(DoCommandFlag::Execute), cap, secondary);
 			}
 			CapabilityChain(built, "refit");
-			auto [cloned, clone] = Command<CMD_CLONE_VEHICLE>::Do(DoCommandFlag::Execute, fixture->tile, id, false); Checked("capability-clone", cloned); CapabilityChain(Vehicle::Get(clone), "clone");
+			auto [cloned, clone] = Command<CMD_CLONE_VEHICLE>::Do(DoCommandFlag::Execute, FIXTURE_GET(fixture, Tile, tile), id, false); Checked("capability-clone", cloned); CapabilityChain(Vehicle::Get(clone), "clone");
 			Checked("capability-name-clone", Command<CMD_RENAME_VEHICLE>::Do(DoCommandFlag::Execute, clone, std::string(CAPABILITY_CHAIN_NAME)));
 			CapabilityLive(Vehicle::Get(clone), "persist");
 			Checked("capability-renew-rule", Command<CMD_SET_AUTOREPLACE>::Do(DoCommandFlag::Execute, ALL_GROUP, e->index, e->index, true));
@@ -517,10 +518,10 @@ static void CapabilitiesProbe()
 }
 static void CapabilityAircraft(Vehicle *v)
 {
-	Engine *e = Engine::Get(v->engine_type);
+	Engine *e = Engine::Get(FIXTURE_GET(v, EngineType, engine_type));
 	Backup<AircraftVehicleInfo> info(e->VehInfo<AircraftVehicleInfo>());
 	Backup<uint8_t> cargo(v->cargo_type), subtype(v->cargo_subtype);
-	Backup<uint16_t> capacity(v->cargo_cap), secondary_capacity(v->Next()->cargo_cap), refit_capacity(v->refit_cap);
+	Backup<uint16_t> capacity(FIXTURE_FIELD(v, cargo_cap)), secondary_capacity(FIXTURE_FIELD(v->Next(), cargo_cap)), refit_capacity(FIXTURE_FIELD(v, refit_cap));
 	{
 	CapabilityProgram p(e);
 	e->info.cargo_type = GetCargoTypeByLabel(CT_PASSENGERS); e->info.refit_mask = CargoTypes{1} << GetCargoTypeByLabel(CT_MAIL);
@@ -550,14 +551,14 @@ static void CapabilityAircraft(Vehicle *v)
 	e->info.misc_flags.Set(EngineMiscFlag::NoDefaultCargoMultiplier);
 	p.observer->inspect_mail = true;
 	for (DoCommandFlags flags : {DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Execute}}) {
-		auto [cost, id, cap, mail, caps] = Command<CMD_BUILD_VEHICLE>::Do(flags, v->tile, e->index, false, INVALID_CARGO, INVALID_CLIENT_ID); Checked("capability-aircraft-build", cost);
+		auto [cost, id, cap, mail, caps] = Command<CMD_BUILD_VEHICLE>::Do(flags, FIXTURE_GET(v, Tile, tile), e->index, false, INVALID_CARGO, INVALID_CLIENT_ID); Checked("capability-aircraft-build", cost);
 		fmt::print(stderr, "FLEET capability-aircraft-build {} {} {} {}\n", flags.Test(DoCommandFlag::Execute), cap, mail, p.observer->mail_valid && (!flags.Test(DoCommandFlag::Execute) || p.observer->mail_calls != 0));
 		if (flags.Test(DoCommandFlag::Execute)) { CapabilityChain(Vehicle::Get(id), "aircraft"); Checked("capability-aircraft-sell", Command<CMD_SELL_VEHICLE>::Do(DoCommandFlag::Execute, id, true, false, INVALID_CLIENT_ID)); }
 	}
 	p.observer->inspect_mail = false; e->info.misc_flags.Reset(EngineMiscFlag::NoDefaultCargoMultiplier);
 	for (DoCommandFlags flags : {DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Execute}}) {
 		auto [cost, cap, mail, caps] = Command<CMD_REFIT_VEHICLE>::Do(flags, v->index, GetCargoTypeByLabel(CT_MAIL), 1, false, false, 0); Checked("capability-aircraft-refit", cost);
-		fmt::print(stderr, "FLEET capability-aircraft-refit {} {} {} {}\n", flags.Test(DoCommandFlag::Execute), cap, mail, v->Next()->cargo_cap);
+		fmt::print(stderr, "FLEET capability-aircraft-refit {} {} {} {}\n", flags.Test(DoCommandFlag::Execute), cap, mail, FIXTURE_FIELD(v->Next(), cargo_cap));
 	}
 	}
 	info.Restore(); cargo.Restore(); subtype.Restore(); capacity.Restore(); secondary_capacity.Restore(); refit_capacity.Restore();
@@ -575,9 +576,9 @@ static void OccupancyProbe()
 	if (!Vehicle::CanAllocateItem(3)) FixtureAbort(__LINE__);
 	std::array<Vehicle *, 3> shells{new Vehicle(VEH_ROAD), new Vehicle(VEH_ROAD), new Vehicle(VEH_ROAD)};
 	TileIndex tile(Map::Size() + 1), alias(tile.base() + (128U << Map::LogX()));
-	for (auto *v : shells) { v->tile = tile; v->x_pos = 16; v->y_pos = 0; v->z_pos = 0; v->UpdatePosition(); }
+	for (auto *v : shells) { FIXTURE_SET(v, Tile, tile, tile); FIXTURE_FIELD(v, x_pos) = 16; FIXTURE_FIELD(v, y_pos) = 0; FIXTURE_FIELD(v, z_pos) = 0; v->UpdatePosition(); }
 	/* Same hash, distinct tile: update must not move a shell to the head. */
-	shells[1]->tile = alias; shells[1]->UpdatePosition();
+	FIXTURE_SET(shells[1], Tile, tile, alias); shells[1]->UpdatePosition();
 	auto Trace = [&](auto range) {
 		uint64_t trace = 0; uint count = 0;
 		for (const Vehicle *v : range) { trace = trace * 131 + v->index.base(); ++count; }
@@ -589,29 +590,29 @@ static void OccupancyProbe()
 	}
 	auto it = VehiclesOnTile(tile).begin();
 	if (*it != shells[2]) FixtureAbort(__LINE__);
-	shells[2]->tile = alias; shells[2]->UpdatePosition(); // Same bucket retains LIVE next.
+	FIXTURE_SET(shells[2], Tile, tile, alias); shells[2]->UpdatePosition(); // Same bucket retains LIVE next.
 	++it;
 	if (*it != shells[0]) FixtureAbort(__LINE__); // Alias filtering skips shell 1.
 	/* Move the current head to a distinct bucket; advance now follows its NEW chain. */
-	shells[2]->tile = TileIndex(tile.base() + 1); shells[2]->UpdatePosition();
-	shells[1]->tile = tile; shells[1]->UpdatePosition();
+	FIXTURE_SET(shells[2], Tile, tile, TileIndex(tile.base() + 1)); shells[2]->UpdatePosition();
+	FIXTURE_SET(shells[1], Tile, tile, tile); shells[1]->UpdatePosition();
 	it = VehiclesOnTile(tile).begin();
 	if (*it != shells[1]) FixtureAbort(__LINE__);
-	shells[1]->tile = shells[2]->tile; shells[1]->UpdatePosition();
+	FIXTURE_SET(shells[1], Tile, tile, FIXTURE_GET(shells[2], Tile, tile)); shells[1]->UpdatePosition();
 	++it;
 	if (it != std::default_sentinel) FixtureAbort(__LINE__);
 	auto near = VehiclesNearTileXY(16, 0, 16).begin();
 	if (*near != shells[0]) FixtureAbort(__LINE__);
-	shells[0]->tile = shells[2]->tile; shells[0]->UpdatePosition();
+	FIXTURE_SET(shells[0], Tile, tile, FIXTURE_GET(shells[2], Tile, tile)); shells[0]->UpdatePosition();
 	uint live = 0;
 	for (++near; near != std::default_sentinel; ++near) ++live;
 	if (live != 5) FixtureAbort(__LINE__); // LIVE next plus the later bucket revisits the moved shell.
 	fmt::print(stderr, "FLEET occupancy-live-near {}\n", live);
 	Cost("occupancy-ground", EnsureNoVehicleOnGround(TileIndex(1)));
-	Cost("occupancy-wormhole", TunnelBridgeIsFree(tile, shells[2]->tile));
+	Cost("occupancy-wormhole", TunnelBridgeIsFree(tile, FIXTURE_GET(shells[2], Tile, tile)));
 	ResetVehicleHash();
 	for (Vehicle *v : Vehicle::Iterate()) v->UpdatePosition();
-	Trace(VehiclesOnTile(shells[2]->tile));
+	Trace(VehiclesOnTile(FIXTURE_GET(shells[2], Tile, tile)));
 	for (Vehicle *v : shells) delete v;
 	SaveRandomSeeds(&after);
 	fmt::print(stderr, "FLEET occupancy-probe 18 live-next {}\n", SameRandom(before, after));
@@ -623,7 +624,7 @@ static void ResolverVariables(Vehicle *v)
 	GRFFile grf;
 	grf.grf_version = 8;
 	for (uint i = 0; i < NUM_CARGO; ++i) grf.cargo_map[i] = NUM_CARGO - 1 - i;
-	VehicleResolverObject ro(v->engine_type, v, VehicleResolverObject::WO_NONE);
+	VehicleResolverObject ro(FIXTURE_GET(v, EngineType, engine_type), v, VehicleResolverObject::WO_NONE);
 	ro.grffile = &grf;
 	ro.SetRegister(0x10E, 0); ro.SetRegister(0x10F, 1);
 	uint64_t digest = 0;
@@ -637,14 +638,14 @@ static void ResolverVariables(Vehicle *v)
 	for (uint8_t variable : {0x25, 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x7A}) query(variable, 0);
 	for (uint variable = 0x80; variable <= 0xFF; ++variable) query(variable, 0);
 	for (uint32_t parameter : {0x5FU, 0x61U, 0x84U, 0xFFFFU}) query(0x61, parameter);
-	VehicleResolverObject purchase(v->engine_type, nullptr, VehicleResolverObject::WO_NONE);
+	VehicleResolverObject purchase(FIXTURE_GET(v, EngineType, engine_type), nullptr, VehicleResolverObject::WO_NONE);
 	purchase.grffile = &grf;
 	for (uint8_t variable : {0x43, 0x46, 0x47, 0x48, 0x49, 0x4B, 0x7A, 0x92, 0x93, 0xC4, 0xC6, 0xC7, 0xDA, 0xF2, 0xFF}) {
 		bool available = true;
 		digest = digest * 31337 + purchase.self_scope.GetVariable(variable, 0, available) + available;
 		++count;
 	}
-	fmt::print(stderr, "FLEET resolver-variables {} {} {} {}\n", v->type, v->subtype, count, digest);
+	fmt::print(stderr, "FLEET resolver-variables {} {} {} {}\n", FIXTURE_GET(v, Type, type), FIXTURE_FIELD(v, subtype), count, digest);
 	v->InvalidateNewGRFCacheOfChain();
 }
 
@@ -657,7 +658,7 @@ static void ResolverAircraft(Aircraft *v)
 	const AirportFTAClass *airport = st->airport.GetFTA();
 	Backup<uint8_t> state(v->state), pos(v->pos);
 	Backup<Order> order(v->current_order);
-	VehicleResolverObject ro(v->engine_type, v, VehicleResolverObject::WO_NONE);
+	VehicleResolverObject ro(FIXTURE_GET(v, EngineType, engine_type), v, VehicleResolverObject::WO_NONE);
 	uint64_t digest = 0;
 	uint count = 0;
 	for (bool loading : {false, true}) {
@@ -682,9 +683,9 @@ static void ResolverRealBoundaries(Train *v, Engine *engine)
 {
 	if (v->cargo.TotalCount() != 0 || !SpriteGroup::CanAllocateItem(7)) FixtureAbort(__LINE__);
 	Backup<decltype(engine->grf_prop.spritegroups)> sprites(engine->grf_prop.spritegroups);
-	Backup<uint16_t> capacity(v->cargo_cap);
+	Backup<uint16_t> capacity(FIXTURE_FIELD(v, cargo_cap));
 	Backup<Order> order(v->First()->current_order);
-	const uint16_t original_capacity = v->cargo_cap;
+	const uint16_t original_capacity = FIXTURE_FIELD(v, cargo_cap);
 	const Order original_order = v->First()->current_order;
 	Backup<Randomizer> interactive(_interactive_random);
 	_interactive_random.SetSeed(12345);
@@ -702,7 +703,7 @@ static void ResolverRealBoundaries(Train *v, Engine *engine)
 		real->loaded.clear(); real->loading.clear();
 		if (mask & 1) real->loaded.assign(loaded.begin(), loaded.end());
 		if (mask & 2) real->loading.assign(loading.begin(), loading.end());
-		fmt::print(stderr, "FLEET resolver-real-purchase {} {}\n", mask, GetEngineProperty(v->engine_type, PROP_TRAIN_SPEED, 17));
+		fmt::print(stderr, "FLEET resolver-real-purchase {} {}\n", mask, GetEngineProperty(FIXTURE_GET(v, EngineType, engine_type), PROP_TRAIN_SPEED, 17));
 		/* 0: moving, 1: loading, 2: both disabled, 3/4: only one disabled. */
 		for (uint state = 0; state < 5; ++state) {
 			if (state == 0) v->First()->current_order.MakeDummy(); else v->First()->current_order.MakeLoading(false);
@@ -713,9 +714,9 @@ static void ResolverRealBoundaries(Train *v, Engine *engine)
 				capacity.Change(cap);
 				if (count != 0) {
 					if (!CargoPacket::CanAllocateItem()) FixtureAbort(__LINE__);
-					v->cargo.Append(new CargoPacket(count, 3, StationID::Invalid(), v->tile, Money(133)));
+					v->cargo.Append(new CargoPacket(count, 3, StationID::Invalid(), FIXTURE_GET(v, Tile, tile), Money(133)));
 				}
-				fmt::print(stderr, "FLEET resolver-real-selection {} {} {} {} {} {}\n", mask, state, cap, count, v->cargo.StoredCount(), GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v));
+				fmt::print(stderr, "FLEET resolver-real-selection {} {} {} {} {} {}\n", mask, state, cap, count, v->cargo.StoredCount(), GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, FIXTURE_GET(v, EngineType, engine_type), v));
 				v->cargo.Truncate();
 			}
 		}
@@ -727,7 +728,7 @@ static void ResolverRealBoundaries(Train *v, Engine *engine)
 	for (auto *group : loaded) delete group;
 	for (auto *group : loading) delete group;
 	SaveRandomSeeds(&after);
-	fmt::print(stderr, "FLEET resolver-real-restored {} {} {} {} {} {}\n", roots_restored && v->cargo.TotalCount() == 0 && v->cargo_cap == original_capacity && v->First()->current_order.Equals(original_order), SameRandom(before, after), after.random.state[0], after.random.state[1], after.interactive_random.state[0], after.interactive_random.state[1]);
+	fmt::print(stderr, "FLEET resolver-real-restored {} {} {} {} {} {}\n", roots_restored && v->cargo.TotalCount() == 0 && FIXTURE_FIELD(v, cargo_cap) == original_capacity && v->First()->current_order.Equals(original_order), SameRandom(before, after), after.random.state[0], after.random.state[1], after.interactive_random.state[0], after.interactive_random.state[1]);
 	interactive.Restore();
 }
 /* Override registration order is observable: a default entry can win before a
@@ -735,7 +736,7 @@ static void ResolverRealBoundaries(Train *v, Engine *engine)
  * path, without editing either resolver's original selection body. */
 static void ResolverOverrideOrder(Train *wagon)
 {
-	Engine *engine = Engine::Get(wagon->engine_type);
+	Engine *engine = Engine::Get(FIXTURE_GET(wagon, EngineType, engine_type));
 	if (wagon->gcache.first_engine == EngineID::Invalid() || !SpriteGroup::CanAllocateItem(3)) FixtureAbort(__LINE__);
 	Backup<decltype(engine->overrides)> overrides(engine->overrides);
 	Backup<decltype(engine->grf_prop.spritegroups)> sprites(engine->grf_prop.spritegroups);
@@ -756,26 +757,26 @@ static void ResolverOverrideOrder(Train *wagon)
 	for (uint test = 0; test < 6; ++test) {
 		engine->overrides.clear();
 		/* Neither a wrong engine nor a wrong cargo may steal the match. */
-		SetWagonOverrideSprites(wagon->engine_type, CargoGRFFileProps::SG_DEFAULT, second, rejected);
-		SetWagonOverrideSprites(wagon->engine_type, (original_cargo + 2) % NUM_CARGO, second, matching);
+		SetWagonOverrideSprites(FIXTURE_GET(wagon, EngineType, engine_type), CargoGRFFileProps::SG_DEFAULT, second, rejected);
+		SetWagonOverrideSprites(FIXTURE_GET(wagon, EngineType, engine_type), (original_cargo + 2) % NUM_CARGO, second, matching);
 		if (test == 0) {
-			SetWagonOverrideSprites(wagon->engine_type, CargoGRFFileProps::SG_DEFAULT, first, matching);
-			SetWagonOverrideSprites(wagon->engine_type, original_cargo, second, matching);
+			SetWagonOverrideSprites(FIXTURE_GET(wagon, EngineType, engine_type), CargoGRFFileProps::SG_DEFAULT, first, matching);
+			SetWagonOverrideSprites(FIXTURE_GET(wagon, EngineType, engine_type), original_cargo, second, matching);
 		} else if (test == 1) {
-			SetWagonOverrideSprites(wagon->engine_type, original_cargo, second, matching);
-			SetWagonOverrideSprites(wagon->engine_type, CargoGRFFileProps::SG_DEFAULT, first, matching);
+			SetWagonOverrideSprites(FIXTURE_GET(wagon, EngineType, engine_type), original_cargo, second, matching);
+			SetWagonOverrideSprites(FIXTURE_GET(wagon, EngineType, engine_type), CargoGRFFileProps::SG_DEFAULT, first, matching);
 		} else if (test == 2) {
-			SetWagonOverrideSprites(wagon->engine_type, original_cargo, first, matching);
-			SetWagonOverrideSprites(wagon->engine_type, original_cargo, second, matching);
+			SetWagonOverrideSprites(FIXTURE_GET(wagon, EngineType, engine_type), original_cargo, first, matching);
+			SetWagonOverrideSprites(FIXTURE_GET(wagon, EngineType, engine_type), original_cargo, second, matching);
 		} else if (test == 3) {
-			SetWagonOverrideSprites(wagon->engine_type, original_cargo, nullptr, matching);
-			SetWagonOverrideSprites(wagon->engine_type, CargoGRFFileProps::SG_DEFAULT, second, matching);
+			SetWagonOverrideSprites(FIXTURE_GET(wagon, EngineType, engine_type), original_cargo, nullptr, matching);
+			SetWagonOverrideSprites(FIXTURE_GET(wagon, EngineType, engine_type), CargoGRFFileProps::SG_DEFAULT, second, matching);
 		} else if (test == 4) {
-			SetWagonOverrideSprites(wagon->engine_type, original_cargo, first, matching);
+			SetWagonOverrideSprites(FIXTURE_GET(wagon, EngineType, engine_type), original_cargo, first, matching);
 		}
 		for (uint input = 0; input < 2; ++input) {
 			cargo.Change(input == 0 ? original_cargo : other_cargo);
-			fmt::print(stderr, "FLEET resolver-override-order {} {} {}\n", test, input, GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, wagon->engine_type, wagon));
+			fmt::print(stderr, "FLEET resolver-override-order {} {} {}\n", test, input, GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, FIXTURE_GET(wagon, EngineType, engine_type), wagon));
 		}
 	}
 	cargo.Restore(); sprites.Restore(); overrides.Restore();
@@ -804,7 +805,7 @@ static void ResolverPropertyBoundaries(Train *v, Engine *engine)
 		if (value != CALLBACK_FAILED) engine->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, det);
 		det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = value}};
 		for (int fallback : {INT32_MIN, -17, 0, 17, INT32_MAX}) for (bool is_signed : {false, true}) {
-			fmt::print(stderr, "FLEET resolver-property-boundary {} {} {} {} {}\n", value, fallback, is_signed, GetVehicleProperty(v, PROP_TRAIN_SPEED, fallback, is_signed), GetEngineProperty(v->engine_type, PROP_TRAIN_SPEED, fallback, nullptr, is_signed));
+			fmt::print(stderr, "FLEET resolver-property-boundary {} {} {} {} {}\n", value, fallback, is_signed, GetVehicleProperty(v, PROP_TRAIN_SPEED, fallback, is_signed), GetEngineProperty(FIXTURE_GET(v, EngineType, engine_type), PROP_TRAIN_SPEED, fallback, nullptr, is_signed));
 		}
 	}
 	sprites.Revert();
@@ -824,7 +825,7 @@ static void ResolverProbe()
 	for (Train *t : Train::Iterate()) if (t->IsFrontEngine() && t->Next() != nullptr) { v = t; break; }
 	if (v == nullptr) FixtureAbort(__LINE__);
 	ResolverVariables(v);
-	Engine *e = Engine::Get(v->engine_type);
+	Engine *e = Engine::Get(FIXTURE_GET(v, EngineType, engine_type));
 	Backup<decltype(e->grf_prop.spritegroups)> sprites(e->grf_prop.spritegroups);
 	Backup<const GRFFile *> file(e->grf_prop.grffile);
 	GRFFile grf;
@@ -844,12 +845,12 @@ static void ResolverProbe()
 	e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, det);
 	v->InvalidateNewGRFCacheOfChain();
 	{
-		VehicleResolverObject ro(v->engine_type, v, VehicleResolverObject::WO_NONE);
+		VehicleResolverObject ro(FIXTURE_GET(v, EngineType, engine_type), v, VehicleResolverObject::WO_NONE);
 		bool available = true;
 		uint32_t translated = ro.self_scope.GetVariable(0x42, 0, available);
 		NewGRFCache before = v->grf_cache;
 		uint32_t hit = ro.self_scope.GetVariable(0x42, 0, available);
-		uint16_t callback = GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v);
+		uint16_t callback = GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, FIXTURE_GET(v, EngineType, engine_type), v);
 		fmt::print(stderr, "FLEET resolver-cache {} {} {} {} {}\n", available, translated, before.consist_cargo_information, hit == translated, callback == (translated & 0x7FFF));
 		ro.grffile = nullptr;
 		uint32_t untranslated = ro.self_scope.GetVariable(0x42, 0, available);
@@ -872,12 +873,12 @@ static void ResolverProbe()
 		ro.SetRegister(0x10F, 1);
 		ro.SetRegister(0x10E, 0);
 		uint32_t relative = ro.self_scope.GetVariable(0x61, 0x40, available);
-		VehicleResolverObject other(v->engine_type, v->Next(), VehicleResolverObject::WO_NONE);
+		VehicleResolverObject other(FIXTURE_GET(v, EngineType, engine_type), v->Next(), VehicleResolverObject::WO_NONE);
 		uint32_t direct = other.self_scope.GetVariable(0x40, 0, available);
 		fmt::print(stderr, "FLEET resolver-var61 {} {} {}\n", available, relative, relative == direct);
 		det->var_scope = VSG_SCOPE_PARENT;
 		det->adjusts[0].variable = 0x84;
-		uint16_t parent = GetVehicleCallbackParent(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v, v->Next());
+		uint16_t parent = GetVehicleCallbackParent(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, FIXTURE_GET(v, EngineType, engine_type), v, v->Next());
 		fmt::print(stderr, "FLEET resolver-parent {}\n", parent == (v->Next()->index.base() & 0x7FFF));
 		ro.SetRegister(0x100, 1);
 		auto *scope = ro.GetScope(VSG_SCOPE_RELATIVE, 0);
@@ -928,25 +929,25 @@ static void ResolverProbe()
 			{.operation = DSGA_OP_RST, .variable = 0x84, .and_mask = UINT32_MAX},
 		};
 		std::array<int32_t, 2> registers{};
-		uint16_t nested = GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v, registers);
+		uint16_t nested = GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, FIXTURE_GET(v, EngineType, engine_type), v, registers);
 		fmt::print(stderr, "FLEET resolver-reentry {} {} {}\n", nested == (v->index.base() & 0x7FFF), registers[0] == 1, registers[1] == static_cast<int32_t>(v->Next()->index.base() & 0x7FFF));
 		det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 0x7FFE}};
 		fmt::print(stderr, "FLEET resolver-property {} {}\n", GetVehicleProperty(v, PROP_TRAIN_SPEED, 17, true) == -2, GetVehicleProperty(v, PROP_TRAIN_SPEED, 17) == 0x7FFE);
 		SavedRandomSeeds probability_before, probability_after;
 		SaveRandomSeeds(&probability_before);
-		auto probability = TestVehicleBuildProbability(v, v->engine_type, BuildProbabilityType::Reversed);
+		auto probability = TestVehicleBuildProbability(v, FIXTURE_GET(v, EngineType, engine_type), BuildProbabilityType::Reversed);
 		SaveRandomSeeds(&probability_after);
 		fmt::print(stderr, "FLEET resolver-probability {} {} {}\n", probability.has_value(), probability.value_or(false), !SameRandom(probability_before, probability_after));
 		e->grf_prop.spritegroups.clear();
 		SaveRandomSeeds(&probability_before);
-		probability = TestVehicleBuildProbability(v, v->engine_type, BuildProbabilityType::Reversed);
+		probability = TestVehicleBuildProbability(v, FIXTURE_GET(v, EngineType, engine_type), BuildProbabilityType::Reversed);
 		SaveRandomSeeds(&probability_after);
 		fmt::print(stderr, "FLEET resolver-probability-failed {} {}\n", !probability.has_value(), SameRandom(probability_before, probability_after));
 		e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, det);
 		det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x61, .parameter = 0x84, .and_mask = UINT32_MAX}};
 		auto *fallback = new CallbackResultSpriteGroup(123);
 		det->error_group = fallback;
-		fmt::print(stderr, "FLEET resolver-unavailable {}\n", GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v) == 123);
+		fmt::print(stderr, "FLEET resolver-unavailable {}\n", GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, FIXTURE_GET(v, EngineType, engine_type), v) == 123);
 		/* DoResolve clears changed registers; the actual group above supplies them. */
 		delete fallback; delete procedure;
 	}
@@ -959,9 +960,9 @@ static void ResolverProbe()
 		Backup<Order> order(v->current_order);
 		for (bool loading : {false, true}) {
 			if (loading) v->current_order.MakeLoading(false); else v->current_order.MakeDummy();
-			fmt::print(stderr, "FLEET resolver-real {} {}\n", loading, GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v));
+			fmt::print(stderr, "FLEET resolver-real {} {}\n", loading, GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, FIXTURE_GET(v, EngineType, engine_type), v));
 		}
-		fmt::print(stderr, "FLEET resolver-purchase-real {}\n", GetEngineProperty(v->engine_type, PROP_TRAIN_SPEED, 17) == 11);
+		fmt::print(stderr, "FLEET resolver-purchase-real {}\n", GetEngineProperty(FIXTURE_GET(v, EngineType, engine_type), PROP_TRAIN_SPEED, 17) == 11);
 		order.Restore();
 		e->grf_prop.spritegroups.clear();
 		delete real; delete high; delete low;
@@ -1008,7 +1009,7 @@ static void ResolverProbe()
 	 * bits/waiting triggers survive; the transient cache is rebuilt, never restored. */
 	sprites.Trash(); file.Trash();
 	ReloadNewGRFData();
-	v = Train::Get(id); e = Engine::Get(v->engine_type);
+	v = Train::Get(id); e = Engine::Get(FIXTURE_GET(v, EngineType, engine_type));
 	fmt::print(stderr, "FLEET resolver-grf-reload {} {} {} {}\n", cache.cache_valid == 31, bits == v->random_bits, waiting == v->waiting_random_triggers.base(), v->grf_cache.cache_valid);
 	Backup<decltype(e->grf_prop.spritegroups)> reinstalled(e->grf_prop.spritegroups);
 	Backup<const GRFFile *> refile(e->grf_prop.grffile, &grf);
@@ -1020,10 +1021,10 @@ static void ResolverProbe()
 	e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, det);
 	v->InvalidateNewGRFCacheOfChain();
 	{
-		VehicleResolverObject ro(v->engine_type, v, VehicleResolverObject::WO_NONE);
+		VehicleResolverObject ro(FIXTURE_GET(v, EngineType, engine_type), v, VehicleResolverObject::WO_NONE);
 		bool available = true;
 		uint32_t value = ro.self_scope.GetVariable(0x42, 0, available);
-		fmt::print(stderr, "FLEET resolver-reinstalled {} {}\n", available, GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v) == (value & 0x7FFF));
+		fmt::print(stderr, "FLEET resolver-reinstalled {} {}\n", available, GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, FIXTURE_GET(v, EngineType, engine_type), v) == (value & 0x7FFF));
 	}
 	reinstalled.Restore(); refile.Restore(); delete det;
 	v->InvalidateNewGRFCacheOfChain();
@@ -1052,21 +1053,21 @@ static void VisualEffectProbe()
 	RoadVehicle *v = nullptr;
 	for (RoadVehicle *u : RoadVehicle::Iterate()) if (u->IsPrimaryVehicle() && u->Next() == nullptr) { v = u; break; }
 	if (v == nullptr) FixtureAbort(__LINE__);
-	Engine *e = Engine::Get(v->engine_type);
+	Engine *e = Engine::Get(FIXTURE_GET(v, EngineType, engine_type));
 	fmt::print(stderr, "FLEET effect-load-cache {}\n", v->vcache.cached_vis_effect);
 	Backup<CargoGRFFileProps> props(e->grf_prop);
 	Backup<VehicleCallbackMasks> mask(e->info.callback_mask);
 	Backup<uint8_t> smoke(_settings_game.vehicle.smoke_amount, 2);
 	Backup<bool> sound(_settings_client.sound.vehicle, true);
 	Backup<VehicleCache> cache(v->vcache);
-	Backup<VehStates> status(v->vehstatus, VehStates{});
-	Backup<uint16_t> speed(v->cur_speed, 2);
-	Backup<uint8_t> tick(v->tick_counter, 0);
-	Backup<Direction> direction(v->direction, DIR_NE);
+	Backup<FIXTURE_FIELD_TYPE(v, vehstatus)> status(FIXTURE_FIELD(v, vehstatus), FixtureRaw(VehStates{}));
+	Backup<uint16_t> speed(FIXTURE_FIELD(v, cur_speed), 2);
+	Backup<uint8_t> tick(FIXTURE_FIELD(v, tick_counter), 0);
+	Backup<FIXTURE_FIELD_TYPE(v, direction)> direction(FIXTURE_FIELD(v, direction), FixtureRaw(DIR_NE));
 	Backup<uint8_t> length(v->gcache.cached_veh_length, 5);
-	Backup<TileIndex> tile(v->tile);
-	for (uint32_t index = 0; index < Map::Size(); ++index) { TileIndex t{index}; if (IsTileType(t, MP_CLEAR) && !IsBridgeAbove(t)) { tile.Change(t); break; } }
-	Backup<int> x(v->x_pos, TileX(v->tile) * TILE_SIZE + 8), y(v->y_pos, TileY(v->tile) * TILE_SIZE + 8), z(v->z_pos, 30);
+	Backup<FIXTURE_FIELD_TYPE(v, tile)> tile(FIXTURE_FIELD(v, tile));
+	for (uint32_t index = 0; index < Map::Size(); ++index) { TileIndex t{index}; if (IsTileType(t, MP_CLEAR) && !IsBridgeAbove(t)) { tile.Change(FixtureRaw(t)); break; } }
+	Backup<int> x(FIXTURE_FIELD(v, x_pos), TileX(FIXTURE_GET(v, Tile, tile)) * TILE_SIZE + 8), y(FIXTURE_FIELD(v, y_pos), TileY(FIXTURE_GET(v, Tile, tile)) * TILE_SIZE + 8), z(FIXTURE_FIELD(v, z_pos), 30);
 	GRFFile grf; grf.grf_version = 8; grf.grfid = 0x466EFFE0;
 	auto config = std::make_unique<GRFConfig>("effect-fixture.grf");
 	config->ident.grfid = grf.grfid;
@@ -1103,7 +1104,7 @@ static void VisualEffectProbe()
 		uint count = 0;
 		for (const EffectVehicle *u : EffectVehicle::Iterate()) if (!before.contains(u->index)) {
 			++count;
-			fmt::print(stderr, "FLEET effect-created {} {} {} {} {} {}\n", result, u->index.base(), u->subtype, u->x_pos - v->x_pos, u->y_pos - v->y_pos, u->z_pos - v->z_pos);
+			fmt::print(stderr, "FLEET effect-created {} {} {} {} {} {}\n", result, u->index.base(), FIXTURE_FIELD(u, subtype), FIXTURE_FIELD(u, x_pos) - FIXTURE_FIELD(v, x_pos), FIXTURE_FIELD(u, y_pos) - FIXTURE_FIELD(v, y_pos), FIXTURE_FIELD(u, z_pos) - FIXTURE_FIELD(v, z_pos));
 		}
 		fmt::print(stderr, "FLEET effect-count {} {}\n", result, count);
 	}
@@ -1116,29 +1117,29 @@ static void VisualEffectProbe()
 		const bool attempted = observer->failed || std::string_view(label) == "unsupported" || std::string_view(label) == "bridge-middle";
 		if (attempted) expected.Next();
 		smoke.Change(std::string_view(label) == "smoke-off" ? 0 : 2);
-		v->cur_speed = std::string_view(label) == "slow" ? 1 : 2;
-		v->vehstatus = std::string_view(label) == "stopped" ? VehStates{VehState::Stopped} : std::string_view(label) == "hidden" ? VehStates{VehState::Hidden} : VehStates{};
-		Tile current(v->tile);
+		FIXTURE_FIELD(v, cur_speed) = std::string_view(label) == "slow" ? 1 : 2;
+		FIXTURE_SET(v, VehStatus, vehstatus, std::string_view(label) == "stopped" ? VehStates{VehState::Stopped} : std::string_view(label) == "hidden" ? VehStates{VehState::Hidden} : VehStates{});
+		Tile current(FIXTURE_GET(v, Tile, tile));
 		auto original_tile = std::tuple{current.type(), current.m1(), current.m2(), current.m3(), current.m4(), current.m5(), current.m6(), current.m7(), current.m8()};
-		const int original_x = v->x_pos;
-		if (std::string_view(label) == "depot") MakeRoadDepot(current, v->owner, DepotID::Invalid(), DIAGDIR_NE, ROADTYPE_ROAD);
-		if (std::string_view(label) == "tunnel") MakeRoadTunnel(current, v->owner, DIAGDIR_NE, ROADTYPE_ROAD, INVALID_ROADTYPE);
-		if (std::string_view(label) == "bridge-middle") { MakeBridgeRamp(current, v->owner, 0, DIAGDIR_NE, TRANSPORT_ROAD); SetBridgeMiddle(current, AXIS_X); v->x_pos += TILE_SIZE; }
-		if (std::string_view(label) == "bridge") SetBridgeMiddle(v->tile, AXIS_X);
+		const int original_x = FIXTURE_FIELD(v, x_pos);
+		if (std::string_view(label) == "depot") MakeRoadDepot(current, FIXTURE_GET(v, Owner, owner), DepotID::Invalid(), DIAGDIR_NE, ROADTYPE_ROAD);
+		if (std::string_view(label) == "tunnel") MakeRoadTunnel(current, FIXTURE_GET(v, Owner, owner), DIAGDIR_NE, ROADTYPE_ROAD, INVALID_ROADTYPE);
+		if (std::string_view(label) == "bridge-middle") { MakeBridgeRamp(current, FIXTURE_GET(v, Owner, owner), 0, DIAGDIR_NE, TRANSPORT_ROAD); SetBridgeMiddle(current, AXIS_X); FIXTURE_FIELD(v, x_pos) += TILE_SIZE; }
+		if (std::string_view(label) == "bridge") SetBridgeMiddle(FIXTURE_GET(v, Tile, tile), AXIS_X);
 		const size_t effects = EffectVehicle::GetNumItems();
 		v->ShowVisualEffect();
 		std::tie(current.type(), current.m1(), current.m2(), current.m3(), current.m4(), current.m5(), current.m6(), current.m7(), current.m8()) = original_tile;
-		v->x_pos = original_x;
+		FIXTURE_FIELD(v, x_pos) = original_x;
 		SaveRandomSeeds(&after);
 		fmt::print(stderr, "FLEET effect-gate {} callbacks {} sound {} count {} rng {}\n", label, observer->spawn - old_spawn, observer->sound - old_sound, EffectVehicle::GetNumItems() - effects, _random.state[0] == expected.state[0] && _random.state[1] == expected.state[1] && (attempted || SameRandom(before, after)));
 	}
-	v->cur_speed = 2; v->vehstatus = {};
+	FIXTURE_FIELD(v, cur_speed) = 2; FIXTURE_SET(v, VehStatus, vehstatus, {});
 	for (const char *label : {"steam", "diesel", "electric", "steam-tick", "electric-tick", "diesel-top"}) {
 		const std::string_view name(label);
 		const uint8_t model = name.starts_with("steam") ? 1 : name.starts_with("diesel") ? 2 : 3;
 		v->vcache.cached_vis_effect = (model << VE_TYPE_START) | VE_OFFSET_CENTRE;
-		v->tick_counter = name.ends_with("tick") ? 1 : 0;
-		v->cur_speed = name.ends_with("top") ? v->GetCurrentMaxSpeed() : 2;
+		FIXTURE_FIELD(v, tick_counter) = name.ends_with("tick") ? 1 : 0;
+		FIXTURE_FIELD(v, cur_speed) = name.ends_with("top") ? v->GetCurrentMaxSpeed() : 2;
 		SetRandomSeed(8);
 		auto expected = _random;
 		if (name == "diesel" || name == "electric") expected.Next();
@@ -1149,7 +1150,7 @@ static void VisualEffectProbe()
 		uint count = 0;
 		for (const EffectVehicle *u : EffectVehicle::Iterate()) if (!before.contains(u->index)) {
 			++count;
-			fmt::print(stderr, "FLEET effect-stock-created {} {} {} {} {} {}\n", label, u->index.base(), u->subtype, u->x_pos - v->x_pos, u->y_pos - v->y_pos, u->z_pos - v->z_pos);
+			fmt::print(stderr, "FLEET effect-stock-created {} {} {} {} {} {}\n", label, u->index.base(), FIXTURE_FIELD(u, subtype), FIXTURE_FIELD(u, x_pos) - FIXTURE_FIELD(v, x_pos), FIXTURE_FIELD(u, y_pos) - FIXTURE_FIELD(v, y_pos), FIXTURE_FIELD(u, z_pos) - FIXTURE_FIELD(v, z_pos));
 		}
 		fmt::print(stderr, "FLEET effect-stock {} count {} sound {} rng {}\n", label, count, observer->sound - old_sound, _random.state[0] == expected.state[0] && _random.state[1] == expected.state[1]);
 	}
@@ -1201,20 +1202,20 @@ static void VisualTrainProbe()
 	TileIndex track = INVALID_TILE;
 	for (uint32_t i = 0; i < Map::Size(); ++i) { TileIndex t{i}; if (IsPlainRailTile(t) && !IsBridgeAbove(t) && HasPowerOnRail(VisualTrainRail(v), GetTileRailType(t))) { track = t; break; } }
 	if (track == INVALID_TILE) FixtureAbort(__LINE__);
-	Backup<TileIndex> tile(v->tile, track);
-	Backup<int> x(v->x_pos, TileX(track) * TILE_SIZE + 8), y(v->y_pos, TileY(track) * TILE_SIZE + 8), z(v->z_pos, GetSlopePixelZ(TileX(track) * TILE_SIZE + 8, TileY(track) * TILE_SIZE + 8, true));
+	Backup<FIXTURE_FIELD_TYPE(v, tile)> tile(FIXTURE_FIELD(v, tile), FixtureRaw(track));
+	Backup<int> x(FIXTURE_FIELD(v, x_pos), TileX(track) * TILE_SIZE + 8), y(FIXTURE_FIELD(v, y_pos), TileY(track) * TILE_SIZE + 8), z(FIXTURE_FIELD(v, z_pos), GetSlopePixelZ(TileX(track) * TILE_SIZE + 8, TileY(track) * TILE_SIZE + 8, true));
 	std::vector<std::pair<Train *, VehicleCache>> caches;
 	for (Train *t = v; t != nullptr; t = t->Next()) { caches.emplace_back(t, t->vcache); t->vcache.cached_vis_effect = 0x40; }
-	Engine *e = Engine::Get(v->engine_type);
+	Engine *e = Engine::Get(FIXTURE_GET(v, EngineType, engine_type));
 	Backup<CargoGRFFileProps> props(e->grf_prop);
 	Backup<VehicleCallbackMasks> mask(e->info.callback_mask);
 	Backup<RailVehicleInfo> info(e->VehInfo<RailVehicleInfo>());
 	Backup<uint8_t> smoke(_settings_game.vehicle.smoke_amount, 2);
 	Backup<bool> sound(_settings_client.sound.vehicle, true);
-	Backup<VehStates> status(v->vehstatus, VehStates{});
-	Backup<uint16_t> speed(v->cur_speed, 2);
-	Backup<uint8_t> tick(v->tick_counter, 0);
-	Backup<Direction> direction(v->direction, DIR_NE);
+	Backup<FIXTURE_FIELD_TYPE(v, vehstatus)> status(FIXTURE_FIELD(v, vehstatus), FixtureRaw(VehStates{}));
+	Backup<uint16_t> speed(FIXTURE_FIELD(v, cur_speed), 2);
+	Backup<uint8_t> tick(FIXTURE_FIELD(v, tick_counter), 0);
+	Backup<FIXTURE_FIELD_TYPE(v, direction)> direction(FIXTURE_FIELD(v, direction), FixtureRaw(DIR_NE));
 	Backup<uint8_t> length(v->gcache.cached_veh_length, 5);
 	const auto flags = VisualTrainFlags(v);
 	const auto rail = VisualTrainRail(v);
@@ -1243,7 +1244,7 @@ static void VisualTrainProbe()
 		uint count = 0;
 		for (const EffectVehicle *u : EffectVehicle::Iterate()) if (!before.contains(u->index)) {
 			++count;
-			fmt::print(stderr, "FLEET effect-train-created {} {} {} {} {} {}\n", label, u->index.base(), u->subtype, u->x_pos - v->x_pos, u->y_pos - v->y_pos, u->z_pos - v->z_pos);
+			fmt::print(stderr, "FLEET effect-train-created {} {} {} {} {} {}\n", label, u->index.base(), FIXTURE_FIELD(u, subtype), FIXTURE_FIELD(u, x_pos) - FIXTURE_FIELD(v, x_pos), FIXTURE_FIELD(u, y_pos) - FIXTURE_FIELD(v, y_pos), FIXTURE_FIELD(u, z_pos) - FIXTURE_FIELD(v, z_pos));
 		}
 		fmt::print(stderr, "FLEET effect-train {} count {} sound {} rng {}\n", label, count, observer->sound - old_sound, _random.state[0] == expected.state[0] && _random.state[1] == expected.state[1]);
 	}
@@ -1298,18 +1299,18 @@ static bool FleetScenario(std::span<std::string_view> args)
 		VehicleType type = args[1].ends_with("train") ? VEH_TRAIN : args[1].ends_with("road") ? VEH_ROAD : args[1].ends_with("ship") ? VEH_SHIP : VEH_AIRCRAFT;
 		Vehicle *v = BuildFixture(type);
 		VehicleID original = v->index;
-		TileIndex tile = v->tile;
-		VehicleListIdentifier list(VL_SHARED_ORDERS, type, v->owner, v->index);
+		TileIndex tile = FIXTURE_GET(v, Tile, tile);
+		VehicleListIdentifier list(VL_SHARED_ORDERS, type, FIXTURE_GET(v, Owner, owner), v->index);
 		Checked("mass-start-test", Command<CMD_MASS_START_STOP>::Do({}, tile, true, true, list));
-		bool test_stopped = v->vehstatus.Test(VehState::Stopped);
+		bool test_stopped = FIXTURE_GET(v, VehStatus, vehstatus).Test(VehState::Stopped);
 		Checked("mass-start", Command<CMD_MASS_START_STOP>::Do(DoCommandFlag::Execute, tile, true, true, list));
-		bool started = !v->vehstatus.Test(VehState::Stopped);
+		bool started = !FIXTURE_GET(v, VehStatus, vehstatus).Test(VehState::Stopped);
 		Cost("mass-send-test", Command<CMD_SEND_VEHICLE_TO_DEPOT>::Do({}, VehicleID::Invalid(), {DepotCommandFlag::MassSend, DepotCommandFlag::Service}, list));
 		Cost("mass-send", Command<CMD_SEND_VEHICLE_TO_DEPOT>::Do(DoCommandFlag::Execute, VehicleID::Invalid(), {DepotCommandFlag::MassSend, DepotCommandFlag::Service}, list));
 		Checked("mass-stop", Command<CMD_MASS_START_STOP>::Do(DoCommandFlag::Execute, tile, false, false, list));
-		bool stopped = v->vehstatus.Test(VehState::Stopped);
+		bool stopped = FIXTURE_GET(v, VehStatus, vehstatus).Test(VehState::Stopped);
 		v->age = TimerGameCalendar::Date(v->max_age.base() + 366);
-		Checked("mass-renew-rule", Command<CMD_SET_AUTOREPLACE>::Do(DoCommandFlag::Execute, ALL_GROUP, v->engine_type, v->engine_type, true));
+		Checked("mass-renew-rule", Command<CMD_SET_AUTOREPLACE>::Do(DoCommandFlag::Execute, ALL_GROUP, FIXTURE_GET(v, EngineType, engine_type), FIXTURE_GET(v, EngineType, engine_type), true));
 		SavedRandomSeeds before, after;
 		SaveRandomSeeds(&before);
 		Cost("mass-replace-test", Command<CMD_DEPOT_MASS_AUTOREPLACE>::Do({}, tile, type));
@@ -1332,11 +1333,11 @@ static bool FleetScenario(std::span<std::string_view> args)
 		for (const Order &o : v->Orders()) if (o.IsType(OT_GOTO_STATION)) { station = o.GetDestination().ToStationID(); break; }
 		if (station == StationID::Invalid()) FixtureAbort(__LINE__);
 		for (Vehicle *u = v; u != nullptr; u = u->Next()) {
-			if (u->cargo_cap == 0) continue;
-			uint16_t amount = std::min<uint>(u->cargo_cap + 7U, UINT16_MAX);
+			if (FIXTURE_FIELD(u, cargo_cap) == 0) continue;
+			uint16_t amount = std::min<uint>(FIXTURE_FIELD(u, cargo_cap) + 7U, UINT16_MAX);
 			if (!CargoPacket::CanAllocateItem()) FixtureAbort(__LINE__);
-			u->cargo.Append(new CargoPacket(amount, 3, station, u->tile, Money(133)));
-			u->refit_cap = amount;
+			u->cargo.Append(new CargoPacket(amount, 3, station, FIXTURE_GET(u, Tile, tile), Money(133)));
+			FIXTURE_FIELD(u, refit_cap) = amount;
 		}
 		uint before_count = CargoCount(v);
 		SavedRandomSeeds before, after;
@@ -1358,7 +1359,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 		if (args[1] == "transaction-build-road") OccupancyProbe();
 		VehicleType type = args[1].ends_with("road") ? VEH_ROAD : VEH_AIRCRAFT;
 		Vehicle *v = BuildFixture(type);
-		if (type == VEH_ROAD) GroundPhysicsProbe(RoadVehicle::From(v), Engine::Get(v->engine_type)->VehInfo<RoadVehicleInfo>());
+		if (type == VEH_ROAD) GroundPhysicsProbe(RoadVehicle::From(v), Engine::Get(FIXTURE_GET(v, EngineType, engine_type))->VehInfo<RoadVehicleInfo>());
 		ResolverVariables(v);
 		if (type == VEH_AIRCRAFT) { ResolverAircraft(Aircraft::From(v)); CapabilityAircraft(v); }
 		SavedRandomSeeds before, after;
@@ -1367,22 +1368,22 @@ static bool FleetScenario(std::span<std::string_view> args)
 		for (const Engine *e : Engine::Iterate()) {
 			if (!IsEngineBuildable(e->index, type, _current_company)) continue;
 			for (DoCommandFlags flags : {DoCommandFlags{DoCommandFlag::QueryCost}, DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Execute}}) {
-				auto [cost, id, cap, mail, cargo] = Command<CMD_BUILD_VEHICLE>::Do(flags, v->tile, e->index, false, INVALID_CARGO, INVALID_CLIENT_ID);
+				auto [cost, id, cap, mail, cargo] = Command<CMD_BUILD_VEHICLE>::Do(flags, FIXTURE_GET(v, Tile, tile), e->index, false, INVALID_CARGO, INVALID_CLIENT_ID);
 				fmt::print(stderr, "FLEET build {} {} {} {} {} {} {}\n", e->index, flags.base(), cost.Succeeded(), cost.GetCost(), cost.GetErrorMessage(), cap, mail);
-				for (const Vehicle *u = Vehicle::GetIfValid(id); u != nullptr; u = u->Next()) fmt::print(stderr, "FLEET part {} {} {} {} {}\n", u->subtype, u->cargo_type, u->cargo_cap, u->z_pos, u->random_bits);
+				for (const Vehicle *u = Vehicle::GetIfValid(id); u != nullptr; u = u->Next()) fmt::print(stderr, "FLEET part {} {} {} {} {}\n", FIXTURE_FIELD(u, subtype), u->cargo_type, FIXTURE_FIELD(u, cargo_cap), FIXTURE_FIELD(u, z_pos), u->random_bits);
 			}
 			for (const CargoSpec *cs : CargoSpec::Iterate()) {
 				CargoType cargo = cs->Index();
 				if (cargo == e->GetDefaultCargoType()) continue;
 				SaveRandomSeeds(&before);
-				auto [cost, id, cap, mail, cargoes] = Command<CMD_BUILD_VEHICLE>::Do({}, v->tile, e->index, false, cargo, INVALID_CLIENT_ID);
+				auto [cost, id, cap, mail, cargoes] = Command<CMD_BUILD_VEHICLE>::Do({}, FIXTURE_GET(v, Tile, tile), e->index, false, cargo, INVALID_CLIENT_ID);
 				SaveRandomSeeds(&after);
 				restored = restored && SameRandom(before, after);
 				fmt::print(stderr, "FLEET build-refit {} {} {} {} {} {}\n", e->index, cargo, cost.Succeeded(), cost.GetCost(), cap, mail);
 				break;
 			}
 		}
-		auto [clone_cost, clone] = Command<CMD_CLONE_VEHICLE>::Do(DoCommandFlag::Execute, v->tile, v->index, true);
+		auto [clone_cost, clone] = Command<CMD_CLONE_VEHICLE>::Do(DoCommandFlag::Execute, FIXTURE_GET(v, Tile, tile), v->index, true);
 		Checked("clone-shared", clone_cost);
 		fmt::print(stderr, "FLEET build-restored {} {}\n", restored, Vehicle::Get(clone)->IsOrderListShared());
 		return true;
@@ -1392,12 +1393,12 @@ static bool FleetScenario(std::span<std::string_view> args)
 		Vehicle *v = BuildFixture(VEH_TRAIN);
 		CloneRefitCosts(v);
 		uint before = 0, after = 0;
-		for (const Vehicle *u : Vehicle::Iterate()) if (u->owner == _current_company) ++before;
+		for (const Vehicle *u : Vehicle::Iterate()) if (FIXTURE_GET(u, Owner, owner) == _current_company) ++before;
 		Backup<uint8_t> max_length(_settings_game.vehicle.max_train_length);
 		max_length.Change(1);
-		auto [cost, id] = Command<CMD_CLONE_VEHICLE>::Do(DoCommandFlag::Execute, v->tile, v->index, false);
+		auto [cost, id] = Command<CMD_CLONE_VEHICLE>::Do(DoCommandFlag::Execute, FIXTURE_GET(v, Tile, tile), v->index, false);
 		max_length.Restore();
-		for (const Vehicle *u : Vehicle::Iterate()) if (u->owner == _current_company) ++after;
+		for (const Vehicle *u : Vehicle::Iterate()) if (FIXTURE_GET(u, Owner, owner) == _current_company) ++after;
 		fmt::print(stderr, "FLEET clone-join {} {} {} {}\n", cost.Succeeded(), cost.GetErrorMessage() == STR_ERROR_TRAIN_TOO_LONG, id == VehicleID::Invalid(), before == after);
 		return true;
 	}
@@ -1406,9 +1407,9 @@ static bool FleetScenario(std::span<std::string_view> args)
 		 * front promotion/demotion, refusals with restoration, dual heads, sales and ID reuse. */
 		Train *v = Train::From(BuildFixture(VEH_TRAIN));
 		AttachmentCallbacks(v);
-		GroundPhysicsProbe(v, Engine::Get(v->engine_type)->VehInfo<RailVehicleInfo>());
-		TileIndex tile = v->tile;
-		EngineID wagon = v->GetNextVehicle()->engine_type;
+		GroundPhysicsProbe(v, Engine::Get(FIXTURE_GET(v, EngineType, engine_type))->VehInfo<RailVehicleInfo>());
+		TileIndex tile = FIXTURE_GET(v, Tile, tile);
+		EngineID wagon = FIXTURE_GET(v->GetNextVehicle(), EngineType, engine_type);
 		EngineID single = EngineID::Invalid(), multi = EngineID::Invalid();
 		for (const Engine *e : Engine::Iterate()) {
 			if (e->type != VEH_TRAIN || !std::get<0>(Command<CMD_BUILD_VEHICLE>::Do({}, tile, e->index, false, INVALID_CARGO, INVALID_CLIENT_ID)).Succeeded()) continue;
@@ -1436,7 +1437,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 			std::string out;
 			const Train *t = Train::GetIfValid(id);
 			if (t == nullptr) return std::string("gone");
-			for (const Train *u = t->First(); u != nullptr; u = u->Next()) out += fmt::format("{}:{}:{}:{} ", u->index, u->subtype, u->engine_type, u->cargo_cap);
+			for (const Train *u = t->First(); u != nullptr; u = u->Next()) out += fmt::format("{}:{}:{}:{} ", u->index, FIXTURE_FIELD(u, subtype), FIXTURE_GET(u, EngineType, engine_type), FIXTURE_FIELD(u, cargo_cap));
 			return out;
 		};
 		auto dump = [&](const char *name, VehicleID id) {
@@ -1517,9 +1518,9 @@ static bool FleetScenario(std::span<std::string_view> args)
 	if (args[1] == "transaction-meta") {
 		for (VehicleType type : {VEH_TRAIN, VEH_ROAD, VEH_SHIP, VEH_AIRCRAFT}) {
 			Vehicle *v = nullptr;
-			for (Vehicle *u : Vehicle::Iterate()) if (u->type == type && u->IsPrimaryVehicle()) { v = u; break; }
+			for (Vehicle *u : Vehicle::Iterate()) if (FIXTURE_GET(u, Type, type) == type && u->IsPrimaryVehicle()) { v = u; break; }
 			if (v == nullptr) FixtureAbort(__LINE__);
-			company.Change(v->owner);
+			company.Change(FIXTURE_GET(v, Owner, owner));
 			std::string name = fmt::format("Transaction snowman \xE2\x98\x83 {}", type);
 			Checked("name-test", Command<CMD_RENAME_VEHICLE>::Do({}, v->index, name));
 			Checked("name-exec", Command<CMD_RENAME_VEHICLE>::Do(DoCommandFlag::Execute, v->index, name));
@@ -1538,23 +1539,23 @@ static bool FleetScenario(std::span<std::string_view> args)
 	if (args[1] == "drain" || args[1] == "drain-cash") {
 		/* Typed inputs on an ordinary save: a running vehicle past renewal age, autorenew on, and for the cash case only the reserve. */
 		Vehicle *v = Vehicle::Get(VehicleID(12));
-		if (v->type != VEH_ROAD || v->vehstatus.Test(VehState::Stopped) || !v->current_order.IsType(OT_GOTO_DEPOT) || v->owner != _local_company) FixtureAbort(__LINE__);
-		Company *c = Company::Get(v->owner);
+		if (FIXTURE_GET(v, Type, type) != VEH_ROAD || FIXTURE_GET(v, VehStatus, vehstatus).Test(VehState::Stopped) || !v->current_order.IsType(OT_GOTO_DEPOT) || FIXTURE_GET(v, Owner, owner) != _local_company) FixtureAbort(__LINE__);
+		Company *c = Company::Get(FIXTURE_GET(v, Owner, owner));
 		c->settings.engine_renew = true;
 		v->age = TimerGameCalendar::Date(v->max_age.base() + 366);
 		if (args[1] == "drain-cash") CompanyMoney(c) = Money(c->settings.engine_renew_money);
 		_drain_vehicle = v->index;
 		_drain_unit = v->unitnumber;
-		fmt::print(stderr, "FLEET drain input {} {} {}\n", v->index, v->engine_type, CompanyMoney(c));
+		fmt::print(stderr, "FLEET drain input {} {} {}\n", v->index, FIXTURE_GET(v, EngineType, engine_type), CompanyMoney(c));
 		IConsoleCmdExec("schedule on-next-calendar-month fleet-drain.scr");
 		return true;
 	}
 	if (args[1] == "drain-inspect") {
 		const Vehicle *old = Vehicle::GetIfValid(_drain_vehicle);
-		fmt::print(stderr, "FLEET drain old {} {} {} money {}\n", old != nullptr, old != nullptr && old->vehstatus.Test(VehState::Stopped), old != nullptr ? old->age.base() : -1, CompanyMoney(Company::Get(_local_company)));
+		fmt::print(stderr, "FLEET drain old {} {} {} money {}\n", old != nullptr, old != nullptr && FIXTURE_GET(old, VehStatus, vehstatus).Test(VehState::Stopped), old != nullptr ? old->age.base() : -1, CompanyMoney(Company::Get(_local_company)));
 		for (const Vehicle *u : Vehicle::Iterate()) {
-			if (u->type != VEH_ROAD || !u->IsPrimaryVehicle() || u->unitnumber != _drain_unit || u->index == _drain_vehicle) continue;
-			fmt::print(stderr, "FLEET drain new {} {} {} {} {}\n", u->index, u->engine_type, u->age.base(), u->vehstatus.Test(VehState::Stopped), u->IsInDepot());
+			if (FIXTURE_GET(u, Type, type) != VEH_ROAD || !u->IsPrimaryVehicle() || u->unitnumber != _drain_unit || u->index == _drain_vehicle) continue;
+			fmt::print(stderr, "FLEET drain new {} {} {} {} {}\n", u->index, FIXTURE_GET(u, EngineType, engine_type), u->age.base(), FIXTURE_GET(u, VehStatus, vehstatus).Test(VehState::Stopped), u->IsInDepot());
 		}
 		for (const NewsItem &ni : GetNews()) {
 			if (ni.advice_type != AdviceType::AutorenewFailed) continue;
@@ -1576,10 +1577,10 @@ static bool FleetScenario(std::span<std::string_view> args)
 	Vehicle *v = args[1] == "ship" ? BuildFixture(VEH_SHIP) : args[1] == "aircraft" ? BuildFixture(VEH_AIRCRAFT) : args[1].starts_with("train") ? BuildFixture(VEH_TRAIN) : Vehicle::Get(VehicleID(126));
 	if (args[1] == "ship") ResolverVariables(v);
 	if (!v->IsInDepot()) FixtureAbort(__LINE__);
-	company.Change(v->owner);
+	company.Change(FIXTURE_GET(v, Owner, owner));
 	if (args[1] == "list") {
 		/* "Manage list -> Create group" (vehicle_gui.cpp) posts NEW_GROUP, VehicleID::Invalid() and the window's list. */
-		VehicleListIdentifier vli(VL_STANDARD, v->type, v->owner, v->owner);
+		VehicleListIdentifier vli(VL_STANDARD, FIXTURE_GET(v, Type, type), FIXTURE_GET(v, Owner, owner), FIXTURE_GET(v, Owner, owner));
 		VehicleList list;
 		if (!GenerateVehicleSortList(&list, vli) || list.size() < 2) FixtureAbort(__LINE__);
 		size_t groups = Group::GetNumItems();
@@ -1588,7 +1589,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 		/* A network veh_id of 0xFFFFFFFF is not VehicleID::Invalid(): no list, no vehicle. */
 		auto [wide_cost, wide_group] = Command<CMD_ADD_VEHICLE_GROUP>::Do(DoCommandFlag::Execute, NEW_GROUP, VehicleID(0xFFFFFFFF), false, vli);
 		Cost("list-wide-id", wide_cost);
-		VehicleListIdentifier invalid(VLT_END, v->type, v->owner, v->owner);
+		VehicleListIdentifier invalid(VLT_END, FIXTURE_GET(v, Type, type), FIXTURE_GET(v, Owner, owner), FIXTURE_GET(v, Owner, owner));
 		auto [invalid_cost, invalid_group] = Command<CMD_ADD_VEHICLE_GROUP>::Do(DoCommandFlag::Execute, NEW_GROUP, VehicleID::Invalid(), false, invalid);
 		Cost("list-invalid", invalid_cost);
 		fmt::print(stderr, "FLEET list-rejected {} {} {} {}\n", test_group == GroupID::Invalid(), wide_group == GroupID::Invalid(), invalid_group == GroupID::Invalid(), Group::GetNumItems() == groups);
@@ -1596,27 +1597,27 @@ static bool FleetScenario(std::span<std::string_view> args)
 		Checked("list-create", cost);
 		bool members = Group::IsValidID(group);
 		for (const Vehicle *u : list) members &= u->group_id == group;
-		fmt::print(stderr, "FLEET list-group {} {} {}\n", members, GetGroupNumVehicle(v->owner, group, v->type) == list.size(), Group::GetNumItems() == groups + 1);
+		fmt::print(stderr, "FLEET list-group {} {} {}\n", members, GetGroupNumVehicle(FIXTURE_GET(v, Owner, owner), group, FIXTURE_GET(v, Type, type)) == list.size(), Group::GetNumItems() == groups + 1);
 	} else if (args[1] == "groups" || args[1] == "groups-store") {
-		auto [parent_cost, parent] = Command<CMD_CREATE_GROUP>::Do(DoCommandFlag::Execute, v->type, GroupID::Invalid());
+		auto [parent_cost, parent] = Command<CMD_CREATE_GROUP>::Do(DoCommandFlag::Execute, FIXTURE_GET(v, Type, type), GroupID::Invalid());
 		Checked("parent", parent_cost);
-		auto [child_cost, child] = Command<CMD_CREATE_GROUP>::Do(DoCommandFlag::Execute, v->type, parent);
+		auto [child_cost, child] = Command<CMD_CREATE_GROUP>::Do(DoCommandFlag::Execute, FIXTURE_GET(v, Type, type), parent);
 		Checked("child", child_cost);
 		Checked("rename", Command<CMD_ALTER_GROUP>::Do(DoCommandFlag::Execute, AlterGroupMode::Rename, child, GroupID::Invalid(), "Fleet snowman \xE2\x98\x83"));
 		Checked("membership", std::get<0>(Command<CMD_ADD_VEHICLE_GROUP>::Do(DoCommandFlag::Execute, child, v->index, false, VehicleListIdentifier{})));
-		Checked("all-rule", Command<CMD_SET_AUTOREPLACE>::Do(DoCommandFlag::Execute, ALL_GROUP, v->engine_type, v->engine_type, false));
+		Checked("all-rule", Command<CMD_SET_AUTOREPLACE>::Do(DoCommandFlag::Execute, ALL_GROUP, FIXTURE_GET(v, EngineType, engine_type), FIXTURE_GET(v, EngineType, engine_type), false));
 		bool old = false;
-		EngineID replacement = EngineReplacementForCompany(Company::Get(v->owner), v->engine_type, child, &old);
-		fmt::print(stderr, "FLEET rule all {} {}\n", replacement == v->engine_type, old);
+		EngineID replacement = EngineReplacementForCompany(Company::Get(FIXTURE_GET(v, Owner, owner)), FIXTURE_GET(v, EngineType, engine_type), child, &old);
+		fmt::print(stderr, "FLEET rule all {} {}\n", replacement == FIXTURE_GET(v, EngineType, engine_type), old);
 		Checked("protection", Command<CMD_SET_GROUP_FLAG>::Do(DoCommandFlag::Execute, parent, GroupFlag::ReplaceProtection, true, true));
-		replacement = EngineReplacementForCompany(Company::Get(v->owner), v->engine_type, child, &old);
+		replacement = EngineReplacementForCompany(Company::Get(FIXTURE_GET(v, Owner, owner)), FIXTURE_GET(v, EngineType, engine_type), child, &old);
 		fmt::print(stderr, "FLEET rule protected {} {}\n", replacement == EngineID::Invalid(), old);
-		Checked("parent-rule", Command<CMD_SET_AUTOREPLACE>::Do(DoCommandFlag::Execute, parent, v->engine_type, v->engine_type, false));
-		replacement = EngineReplacementForCompany(Company::Get(v->owner), v->engine_type, child, &old);
-		fmt::print(stderr, "FLEET rule inherited {} {}\n", replacement == v->engine_type, old);
+		Checked("parent-rule", Command<CMD_SET_AUTOREPLACE>::Do(DoCommandFlag::Execute, parent, FIXTURE_GET(v, EngineType, engine_type), FIXTURE_GET(v, EngineType, engine_type), false));
+		replacement = EngineReplacementForCompany(Company::Get(FIXTURE_GET(v, Owner, owner)), FIXTURE_GET(v, EngineType, engine_type), child, &old);
+		fmt::print(stderr, "FLEET rule inherited {} {}\n", replacement == FIXTURE_GET(v, EngineType, engine_type), old);
 		Cost("recursive-parent", Command<CMD_ALTER_GROUP>::Do(DoCommandFlag::Execute, AlterGroupMode::SetParent, parent, child, ""));
 		Checked("livery", Command<CMD_SET_GROUP_LIVERY>::Do(DoCommandFlag::Execute, parent, true, COLOUR_RED));
-		fmt::print(stderr, "FLEET groups {} {} {} {}\n", GroupIsInGroup(child, parent), GetGroupNumVehicle(v->owner, parent, v->type), GetGroupNumEngines(v->owner, parent, v->engine_type), Group::Get(child)->livery.colour1 == COLOUR_RED);
+		fmt::print(stderr, "FLEET groups {} {} {} {}\n", GroupIsInGroup(child, parent), GetGroupNumVehicle(FIXTURE_GET(v, Owner, owner), parent, FIXTURE_GET(v, Type, type)), GetGroupNumEngines(FIXTURE_GET(v, Owner, owner), parent, FIXTURE_GET(v, EngineType, engine_type)), Group::Get(child)->livery.colour1 == COLOUR_RED);
 		if (args[1] == "groups") {
 		Checked("delete", Command<CMD_DELETE_GROUP>::Do(DoCommandFlag::Execute, parent));
 		fmt::print(stderr, "FLEET deleted {} {} {}\n", !Group::IsValidID(parent), !Group::IsValidID(child), v->group_id == DEFAULT_GROUP);
@@ -1624,8 +1625,8 @@ static bool FleetScenario(std::span<std::string_view> args)
 	} else if (args[1] == "train-wagons") {
 		/* Typed inputs: a single-headed old train holding the fixture's wagons plus one,
 		 * so it fills four tiles exactly, and a free chain whose second unit is an old engine. */
-		TileIndex tile = v->tile;
-		EngineID wagon = v->GetNextVehicle()->engine_type;
+		TileIndex tile = FIXTURE_GET(v, Tile, tile);
+		EngineID wagon = FIXTURE_GET(v->GetNextVehicle(), EngineType, engine_type);
 		auto build = [&](EngineID e) {
 			auto built = Command<CMD_BUILD_VEHICLE>::Do(DoCommandFlag::Execute, tile, e, false, INVALID_CARGO, INVALID_CLIENT_ID);
 			Checked("build-extra", std::get<0>(built));
@@ -1669,11 +1670,11 @@ static bool FleetScenario(std::span<std::string_view> args)
 		bool free_rng = SameRandom(before, after);
 		Checked("free-execute", Command<CMD_AUTOREPLACE_VEHICLE>::Do(DoCommandFlag::Execute, free_engine));
 		const Train *head = Train::Get(free_head);
-		fmt::print(stderr, "FLEET free-replaced {} {} {} {}\n", free_rng, !Vehicle::IsValidID(free_engine), head->IsFreeWagon(), head->GetNextUnit() != nullptr && head->GetNextUnit()->engine_type == engine && head->GetNextUnit()->age == 0);
+		fmt::print(stderr, "FLEET free-replaced {} {} {} {}\n", free_rng, !Vehicle::IsValidID(free_engine), head->IsFreeWagon(), head->GetNextUnit() != nullptr && FIXTURE_GET(head->GetNextUnit(), EngineType, engine_type) == engine && head->GetNextUnit()->age == 0);
 		/* ReplaceChain: a different, longer engine; replaced wagons that no longer fit are sold. */
 		VehicleID original = train;
 		uint vehicles = 0;
-		for (const Vehicle *u : Vehicle::Iterate()) if (u->type == VEH_TRAIN && u->owner == _current_company) ++vehicles;
+		for (const Vehicle *u : Vehicle::Iterate()) if (FIXTURE_GET(u, Type, type) == VEH_TRAIN && FIXTURE_GET(u, Owner, owner) == _current_company) ++vehicles;
 		SaveRandomSeeds(&before);
 		Cost("wagons-test", Command<CMD_AUTOREPLACE_VEHICLE>::Do({}, original));
 		SaveRandomSeeds(&after);
@@ -1685,10 +1686,10 @@ static bool FleetScenario(std::span<std::string_view> args)
 		uint wagons = 0;
 		for (const Train *u = replaced; u != nullptr; u = u->GetNextUnit()) if (u->IsWagon()) ++wagons;
 		uint now = 0;
-		for (const Vehicle *u : Vehicle::Iterate()) if (u->type == VEH_TRAIN && u->owner == _current_company) ++now;
-		fmt::print(stderr, "FLEET wagons-replaced {} {} {} {} {} {}\n", chain_rng, !Vehicle::IsValidID(original), replaced->engine_type == multihead, wagons, replaced->gcache.cached_total_length <= old_length, static_cast<int>(now) - static_cast<int>(vehicles));
+		for (const Vehicle *u : Vehicle::Iterate()) if (FIXTURE_GET(u, Type, type) == VEH_TRAIN && FIXTURE_GET(u, Owner, owner) == _current_company) ++now;
+		fmt::print(stderr, "FLEET wagons-replaced {} {} {} {} {} {}\n", chain_rng, !Vehicle::IsValidID(original), FIXTURE_GET(replaced, EngineType, engine_type) == multihead, wagons, replaced->gcache.cached_total_length <= old_length, static_cast<int>(now) - static_cast<int>(vehicles));
 	} else {
-		Company *c = Company::Get(v->owner);
+		Company *c = Company::Get(FIXTURE_GET(v, Owner, owner));
 		/* Typed inputs: old-enough actual command-built vehicles, carrying cargo. */
 		v->age = TimerGameCalendar::Date(v->max_age.base() + 366);
 		uint injected = 0;
@@ -1696,16 +1697,16 @@ static bool FleetScenario(std::span<std::string_view> args)
 		for (const Order &order : v->Orders()) if (order.IsType(OT_GOTO_STATION)) { first = order.GetDestination().ToStationID(); break; }
 		if (first == StationID::Invalid()) FixtureAbort(__LINE__);
 		for (Vehicle *u = v; u != nullptr; u = u->Next()) {
-			if (u->cargo_cap == 0) continue;
-			uint16_t amount = std::min<uint16_t>(u->cargo_cap, 7);
+			if (FIXTURE_FIELD(u, cargo_cap) == 0) continue;
+			uint16_t amount = std::min<uint16_t>(FIXTURE_FIELD(u, cargo_cap), 7);
 			if (!CargoPacket::CanAllocateItem()) FixtureAbort(__LINE__);
-			u->cargo.Append(new CargoPacket(amount, 3, first, u->tile, Money(133)));
+			u->cargo.Append(new CargoPacket(amount, 3, first, FIXTURE_GET(u, Tile, tile), Money(133)));
 			injected += amount;
 		}
 		if (injected == 0) FixtureAbort(__LINE__);
-		Checked("renew-rule", Command<CMD_SET_AUTOREPLACE>::Do(DoCommandFlag::Execute, ALL_GROUP, v->engine_type, v->engine_type, true));
+		Checked("renew-rule", Command<CMD_SET_AUTOREPLACE>::Do(DoCommandFlag::Execute, ALL_GROUP, FIXTURE_GET(v, EngineType, engine_type), FIXTURE_GET(v, EngineType, engine_type), true));
 		VehicleID original = v->index;
-		EngineID engine = v->engine_type;
+		EngineID engine = FIXTURE_GET(v, EngineType, engine_type);
 		uint orders = v->GetNumOrders();
 		uint old_count = CargoCount(v);
 		SavedRandomSeeds before, after;
@@ -1729,7 +1730,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 			Checked("execute", Command<CMD_AUTOREPLACE_VEHICLE>::Do(DoCommandFlag::Execute, original));
 			fmt::print(stderr, "FLEET replaced {}\n", !Vehicle::IsValidID(original));
 			bool transferred = false;
-			for (Vehicle *u : Vehicle::Iterate()) if (u->IsPrimaryVehicle() && u->engine_type == engine && u->age == 0 && u->GetNumOrders() == orders && CargoCount(u) == old_count) transferred = true;
+			for (Vehicle *u : Vehicle::Iterate()) if (u->IsPrimaryVehicle() && FIXTURE_GET(u, EngineType, engine_type) == engine && u->age == 0 && u->GetNumOrders() == orders && CargoCount(u) == old_count) transferred = true;
 			fmt::print(stderr, "FLEET transferred {} {}\n", transferred, old_count > 0);
 		}
 	}

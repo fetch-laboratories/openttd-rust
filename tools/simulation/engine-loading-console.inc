@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** Real FILE-loaded engine definitions, native EIDS reload and construction/refit commands. */
 #include "newgrf.h"
+#include "vehicle-record-fixture.hpp"
 #include "newgrf_config.h"
 #include "newgrf_engine.h"
 #include "newgrf_cargo.h"
@@ -277,7 +278,7 @@ static void LoadingBuild(uint16_t local = 300)
 		SaveRandomSeeds(&after);
 		LoadingRequire(std::get<0>(tested).Succeeded() && TypeSameRng(before, after), "build-test");
 		auto [cost, id, capacity, mail_capacity, cargoes] = Command<CMD_BUILD_VEHICLE>::Do(DoCommandFlag::Execute, tile, engine->index, false, INVALID_CARGO, INVALID_CLIENT_ID);
-		LoadingRequire(cost.Succeeded() && cost.GetCost() == std::get<0>(tested).GetCost() && capacity == std::get<2>(tested) && mail_capacity == std::get<3>(tested) && Vehicle::Get(id)->engine_type == engine->index, "build-execute");
+		LoadingRequire(cost.Succeeded() && cost.GetCost() == std::get<0>(tested).GetCost() && capacity == std::get<2>(tested) && mail_capacity == std::get<3>(tested) && FIXTURE_GET(Vehicle::Get(id), EngineType, engine_type) == engine->index, "build-execute");
 		LoadingRequire(type == VEH_TRAIN && engine->VehInfo<RailVehicleInfo>().railveh_type == RAILVEH_WAGON ? true : Vehicle::Get(id)->max_age == engine->GetLifeLengthInDays(), "runtime-built-life");
 		fmt::print(stderr, "ENGINE loading-build {} {} {} {} {} {}\n", type, id, engine->index, cost.GetCost(), capacity, mail_capacity);
 		const CargoType mail = GetCargoTypeByLabel(CT_MAIL), passengers = GetCargoTypeByLabel(CT_PASSENGERS);
@@ -290,11 +291,11 @@ static void LoadingBuild(uint16_t local = 300)
 		LoadingRequire(std::get<0>(refused).Failed() && std::get<0>(excluded).Succeeded() && std::get<1>(excluded) == 0 && std::get<0>(refit_test).Succeeded() && Vehicle::Get(id)->cargo_type == original && TypeSameRng(before, after), "refit-tests");
 		auto refit = Command<CMD_REFIT_VEHICLE>::Do(DoCommandFlag::Execute, id, mail, 0, false, false, 0);
 		LoadingRequire(std::get<0>(refit).Succeeded() && std::get<0>(refit).GetCost() == std::get<0>(refit_test).GetCost() && std::get<1>(refit) == std::get<1>(refit_test) && Vehicle::Get(id)->cargo_type == mail, "refit-execute");
-		fmt::print(stderr, "ENGINE loading-refit {} {} {} {} {}\n", type, id, std::get<0>(refit).GetCost(), std::get<1>(refit), Vehicle::Get(id)->cargo_cap);
+		fmt::print(stderr, "ENGINE loading-refit {} {} {} {} {}\n", type, id, std::get<0>(refit).GetCost(), std::get<1>(refit), FIXTURE_FIELD(Vehicle::Get(id), cargo_cap));
 		if (local == 500) {
 			bool orders = false;
 			for (const Vehicle *source : Vehicle::Iterate()) {
-				if (source->index == id || source->type != type || source->owner != company->index || !source->IsPrimaryVehicle() || source->GetNumOrders() == 0) continue;
+				if (source->index == id || FIXTURE_GET(source, Type, type) != type || FIXTURE_GET(source, Owner, owner) != company->index || !source->IsPrimaryVehicle() || source->GetNumOrders() == 0) continue;
 				if (type == VEH_ROAD && (source->cargo_type == passengers) != (Vehicle::Get(id)->cargo_type == passengers)) continue;
 				if (Command<CMD_CLONE_ORDER>::Do({}, CO_COPY, id, source->index).Failed()) continue;
 				orders = Command<CMD_CLONE_ORDER>::Do(DoCommandFlag::Execute, CO_COPY, id, source->index).Succeeded();
@@ -345,12 +346,12 @@ static bool LoadingScenario(std::span<std::string_view> args)
 		for (VehicleType type = VEH_BEGIN; type != VEH_COMPANY_END; type++) {
 			uint count = 0;
 			for (const Vehicle *v : Vehicle::Iterate()) {
-				if (v->type != type || !v->IsPrimaryVehicle() || v->engine_type != LoadingEngine(1, type, local)->index) continue;
-				LoadingRequire(v->cargo_type == GetCargoTypeByLabel(CT_MAIL) && v->cargo_cap > 0, "reloaded-vehicle");
-				fmt::print(stderr, "ENGINE loading-vehicle {} {} {} {} {}\n", type, v->index, v->engine_type, v->cargo_type, v->cargo_cap);
+				if (FIXTURE_GET(v, Type, type) != type || !v->IsPrimaryVehicle() || FIXTURE_GET(v, EngineType, engine_type) != LoadingEngine(1, type, local)->index) continue;
+				LoadingRequire(v->cargo_type == GetCargoTypeByLabel(CT_MAIL) && FIXTURE_FIELD(v, cargo_cap) > 0, "reloaded-vehicle");
+				fmt::print(stderr, "ENGINE loading-vehicle {} {} {} {} {}\n", type, v->index, FIXTURE_GET(v, EngineType, engine_type), v->cargo_type, FIXTURE_FIELD(v, cargo_cap));
 				if (properties) {
-					moving += !v->IsInDepot() && v->cur_speed != 0;
-					fmt::print(stderr, "ENGINE properties-movement {} {} {} {} {}\n", type, v->tile, v->x_pos, v->y_pos, v->cur_speed);
+					moving += !v->IsInDepot() && FIXTURE_FIELD(v, cur_speed) != 0;
+					fmt::print(stderr, "ENGINE properties-movement {} {} {} {} {}\n", type, FIXTURE_GET(v, Tile, tile), FIXTURE_FIELD(v, x_pos), FIXTURE_FIELD(v, y_pos), FIXTURE_FIELD(v, cur_speed));
 				}
 				++count;
 			}

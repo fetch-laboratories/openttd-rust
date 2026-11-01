@@ -7,6 +7,7 @@
 
 /** @file roads-console.cpp Road-command inputs, included by the shared signal fixture. */
 #include "town.h"
+#include "vehicle-record-fixture.hpp"
 #include "tunnelbridge.h"
 #include "water_map.h"
 #include "void_map.h"
@@ -209,9 +210,9 @@ static void TunnelBridgeCommands(CompanyID owner, CompanyID other, RoadVehicle *
 		}
 		if (transport == TRANSPORT_ROAD) {
 			RoadRun<CMD_BUILD_ROAD>(name + "-tram", start, AxisToRoadBits(axis), ROADTYPE_TRAM, DRD_NONE, TownID::Invalid());
-			TileIndex old = rv->tile; rv->tile = start; rv->UpdatePosition();
+			TileIndex old = FIXTURE_GET(rv, Tile, tile); FIXTURE_SET(rv, Tile, tile, start); rv->UpdatePosition();
 			RoadRun<CMD_LANDSCAPE_CLEAR>(name + "-occupied", start);
-			rv->tile = old; rv->UpdatePosition();
+			FIXTURE_SET(rv, Tile, tile, old); rv->UpdatePosition();
 		}
 		for (TileIndex tile : {start, end}) ChangeTileOwner(tile, owner, other);
 		RoadPrint(name + "-foreign", _tile_type_tunnelbridge_procs.clear_tile_proc(start, {}));
@@ -238,9 +239,9 @@ static void TunnelBridgeCommands(CompanyID owner, CompanyID other, RoadVehicle *
 		RoadRun<CMD_BUILD_TUNNEL>(name, start, transport, 0);
 		if (!IsTunnelTile(start)) SignalFixtureAbort(__LINE__);
 		RoadPrint(name + "-above", _tile_type_tunnelbridge_procs.check_build_above_proc(start, {}, AXIS_X, 0));
-		TileIndex old = rv->tile; rv->tile = end; rv->UpdatePosition();
+		TileIndex old = FIXTURE_GET(rv, Tile, tile); FIXTURE_SET(rv, Tile, tile, end); rv->UpdatePosition();
 		RoadRun<CMD_LANDSCAPE_CLEAR>(name + "-occupied", start);
-		rv->tile = old; rv->UpdatePosition();
+		FIXTURE_SET(rv, Tile, tile, old); rv->UpdatePosition();
 		RoadRun<CMD_LANDSCAPE_CLEAR>(name + "-clear", start);
 	}
 	for (BridgeType bridge : {BridgeType{255}, BridgeType{256}, std::numeric_limits<BridgeType>::max()}) {
@@ -302,7 +303,7 @@ static bool RoadCommandsScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
 	CompanyID owner = (*Company::Iterate().begin())->index;
-	Backup<CompanyID> company(_current_company, owner);
+	Backup<CompanyID> company(_current_company, FIXTURE_GET(this, Owner, owner));
 	if (args[1] == "inspect") {
 		uint roads = 0, depots = 0;
 		for (TileIndex tile : Map::Iterate()) if (IsTileType(tile, MP_ROAD)) { ++roads; depots += IsRoadDepot(tile); }
@@ -326,7 +327,7 @@ static bool RoadCommandsScenario(std::span<std::string_view> args)
 		for (Engine *e : Engine::IterateType(VEH_ROAD)) {
 			if (!IsEngineBuildable(e->index, VEH_ROAD, owner)) continue;
 			bool used = false;
-			for (const RoadVehicle *v : RoadVehicle::Iterate()) used |= v->engine_type == e->index;
+			for (const RoadVehicle *v : RoadVehicle::Iterate()) used |= FIXTURE_GET(v, EngineType, engine_type) == e->index;
 			if (!used) { tram = e; break; }
 		}
 		if (tram == nullptr) SignalFixtureAbort(__LINE__);
@@ -481,7 +482,7 @@ static bool RoadCommandsScenario(std::span<std::string_view> args)
 	RoadRun<CMD_CONVERT_ROAD>("rv-depot-power", t(2, 13), t(2, 13), alternate, false);
 	rv_power.Restore();
 	RoadRun<CMD_CONVERT_ROAD>("rv-depot-back", t(2, 13), t(2, 13), ROADTYPE_ROAD, false);
-	auto move = [rv](TileIndex tile) { rv->tile = tile; rv->UpdatePosition(); };
+	auto move = [rv](TileIndex tile) { FIXTURE_SET(rv, Tile, tile, tile); rv->UpdatePosition(); };
 	move(t(4, 13));
 	RoadRun<CMD_BUILD_ROAD>("rv-oneway", t(4, 13), ROAD_X, ROADTYPE_ROAD, DRD_NORTHBOUND, TownID::Invalid());
 	RoadRun<CMD_REMOVE_LONG_ROAD>("rv-remove", t(4, 13), t(4, 13), ROADTYPE_ROAD, AXIS_X, false, true);

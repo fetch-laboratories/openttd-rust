@@ -3,6 +3,7 @@
 #ifdef WITH_RUST
 #include "tests/station_spatial_fixture.hpp"
 #endif
+#include "vehicle-record-fixture.hpp"
 #include "tree_map.h"
 #ifdef WITH_RUST
 #include "rust/ground_services.h"
@@ -155,7 +156,7 @@ static void Station562Delete(TileIndex origin, bool reload, bool stage)
 		for (RoadVehicle *v : RoadVehicle::Iterate()) if (v->IsPrimaryVehicle() && v->cargo_type == 0 && !v->IsInDepot()) { vehicle = v; break; }
 		StationNeed(vehicle != nullptr && vehicle->cargo_payment == nullptr && LinkGraph::CanAllocateItem(2) && CargoPacket::CanAllocateItem(2), __LINE__);
 		vehicle->current_order.MakeLoading(false); vehicle->current_order.SetLoadType(OrderLoadType::NoLoad); vehicle->current_order.SetUnloadType(OrderUnloadType::NoUnload);
-		vehicle->last_station_visited = victim->index; vehicle->last_loading_station = victim->index; victim->loading_vehicles.push_back(vehicle);
+		FIXTURE_SET(vehicle, LastStationVisited, last_station_visited, victim->index); vehicle->last_loading_station = victim->index; victim->loading_vehicles.push_back(vehicle);
 		for (CargoType cargo : {0, 1}) {
 			LinkGraph *graph = new LinkGraph(cargo); victim->goods[cargo].link_graph = graph->index; victim->goods[cargo].node = graph->AddNode(victim);
 			if (cargo == 0) {
@@ -177,7 +178,7 @@ static void Station562Delete(TileIndex origin, bool reload, bool stage)
 	if (!stage) {
 		StationID id = victim->index; LinkGraphID empty = victim->goods[1].link_graph; delete victim;
 		StationNeed(!Station::IsValidID(id) && !LinkGraph::IsValidID(empty), __LINE__);
-		StationNeed(vehicle->last_station_visited == StationID::Invalid() && vehicle->last_loading_station == StationID::Invalid() && !vehicle->current_order.IsType(OT_LOADING), __LINE__);
+		StationNeed(FIXTURE_GET(vehicle, LastStationVisited, last_station_visited) == StationID::Invalid() && vehicle->last_loading_station == StationID::Invalid() && !vehicle->current_order.IsType(OT_LOADING), __LINE__);
 		StationNeed(LinkGraph::Get(survivor->goods[0].link_graph)->Size() == 1 && survivor->goods[0].node == 0 && survivor->goods[0].GetData().flows.find(id) == survivor->goods[0].GetData().flows.end(), __LINE__);
 		StationNeed(survivor->goods[0].AvailableCount() == 5, __LINE__);
 		const auto packets = survivor->goods[0].GetData().cargo.Packets(); StationNeed(packets->find(id) == packets->end(), __LINE__);
