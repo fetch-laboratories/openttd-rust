@@ -440,18 +440,6 @@ pub unsafe extern "C" fn openttd_rust_tile_area_add(
     let w = unsafe { entry(shared) };
     unsafe { (*area).add(to_add, w.dimensions) };
 }
-/// Native `OrthogonalTileArea::Contains`.
-/// # Safety
-/// `area` is live; `shared` is the live shared table.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_tile_area_contains(
-    area: *const TileArea,
-    tile: u32,
-    shared: *const crate::services::Services,
-) -> bool {
-    let w = unsafe { entry(shared) };
-    unsafe { (*area).contains(tile, w.dimensions, |ok| w.check(ok)) }
-}
 /// Native `OrthogonalTileArea::Expand`.
 /// # Safety
 /// `area` is a live native area with no other borrow; `shared` is the live shared table.

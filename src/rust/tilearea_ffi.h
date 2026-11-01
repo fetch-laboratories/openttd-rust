@@ -17,7 +17,6 @@ struct OrthogonalTileArea;
 extern "C" {
 void openttd_rust_tile_area_corners(OrthogonalTileArea *out, uint32_t start, uint32_t end, const OpenTTDSharedServices *shared);
 void openttd_rust_tile_area_add(OrthogonalTileArea *area, uint32_t to_add, const OpenTTDSharedServices *shared);
-bool openttd_rust_tile_area_contains(const OrthogonalTileArea *area, uint32_t tile, const OpenTTDSharedServices *shared);
 void openttd_rust_tile_area_expand(OrthogonalTileArea *area, int32_t radius, const OpenTTDSharedServices *shared);
 void openttd_rust_tile_area_clamp_to_map(OrthogonalTileArea *area, const OpenTTDSharedServices *shared);
 }

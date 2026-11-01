@@ -34,16 +34,6 @@ void OrthogonalTileArea::Add(TileIndex to_add)
 }
 
 /**
- * Does this tile area contain a tile?
- * @param tile Tile to test for.
- * @return True if the tile is inside the area.
- */
-bool OrthogonalTileArea::Contains(TileIndex tile) const
-{
-	return openttd_rust_tile_area_contains(this, tile.base(), &GetRustSharedServices());
-}
-
-/**
  * Expand a tile area by rad tiles in each direction, keeping within map bounds.
  * @param rad Number of tiles to expand
  * @return The OrthogonalTileArea.
