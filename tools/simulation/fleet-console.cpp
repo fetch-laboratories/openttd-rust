@@ -140,7 +140,7 @@ template <class T, class Info>
 static void GroundPhysicsProbe(T *v, Info &info)
 {
 	Backup<GroundVehicleCache> cache(v->gcache);
-	Backup<uint16_t> flags(v->gv_flags), speed(FIXTURE_FIELD(v, cur_speed)), maximum(FIXTURE_FIELD(v, cached_max_speed));
+	Backup<uint16_t> flags(v->gv_flags), speed(FIXTURE_FIELD(v, cur_speed)), maximum(FIXTURE_CACHE(v, cached_max_speed));
 	Backup<uint8_t> subspeed(FIXTURE_FIELD(v, subspeed)), progress(FIXTURE_FIELD(v, progress)), drag(info.air_drag);
 	Backup<FIXTURE_FIELD_TYPE(v, vehstatus)> status(FIXTURE_FIELD(v, vehstatus));
 	uint cases = 0;
