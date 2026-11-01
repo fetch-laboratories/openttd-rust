@@ -44,8 +44,6 @@ protected:
 	NetworkRecvStatus Receive_CLIENT_MOVE(Packet &p) override;
 
 	NetworkRecvStatus SendGameInfo();
-	NetworkRecvStatus SendNewGRFCheck();
-	NetworkRecvStatus SendWelcome();
 	NetworkRecvStatus SendAuthRequest();
 	NetworkRecvStatus SendEnableEncryption();
 
@@ -78,14 +76,8 @@ public:
 	NetworkRecvStatus CloseConnection(NetworkRecvStatus status) override;
 	std::string GetClientName() const;
 
-	void CheckNextClientToSendMap(NetworkClientSocket *ignore_cs = nullptr);
 
-	NetworkRecvStatus SendWait();
 	NetworkRecvStatus SendMap();
-	NetworkRecvStatus SendErrorQuit(ClientID client_id, NetworkErrorCode errorno);
-	NetworkRecvStatus SendQuit(ClientID client_id);
-	NetworkRecvStatus SendShutdown();
-	NetworkRecvStatus SendNewGame();
 	NetworkRecvStatus SendRConResult(uint16_t colour, std::string_view command);
 	NetworkRecvStatus SendMove(ClientID client_id, CompanyID company_id);
 
@@ -93,9 +85,6 @@ public:
 	NetworkRecvStatus SendError(NetworkErrorCode error, std::string_view reason = {});
 	NetworkRecvStatus SendChat(NetworkAction action, ClientID client_id, bool self_send, std::string_view msg, int64_t data);
 	NetworkRecvStatus SendExternalChat(std::string_view source, TextColour colour, std::string_view user, std::string_view msg);
-	NetworkRecvStatus SendJoin(ClientID client_id);
-	NetworkRecvStatus SendFrame();
-	NetworkRecvStatus SendSync();
 	NetworkRecvStatus SendCommand(const OpenTTDCommandPacket &cp);
 	NetworkRecvStatus SendConfigUpdate();
 

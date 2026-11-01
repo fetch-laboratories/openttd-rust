@@ -500,55 +500,11 @@ static void InitializeNetworkPools(bool close_admins = true)
 	PoolBase::Clean(to_clean);
 }
 
-/**
- * Close current connections.
- * @param close_admins Whether the admin connections have to be closed as well.
- */
-void NetworkClose(bool close_admins)
-{
-	if (_network_server) {
-		if (close_admins) {
-			for (ServerNetworkAdminSocketHandler *as : ServerNetworkAdminSocketHandler::Iterate()) {
-				as->CloseConnection(true);
-			}
-		}
-
-		for (NetworkClientSocket *cs : NetworkClientSocket::Iterate()) {
-			cs->CloseConnection(NETWORK_RECV_STATUS_CLIENT_QUIT);
-		}
-		ServerNetworkGameSocketHandler::CloseListeners();
-		ServerNetworkAdminSocketHandler::CloseListeners();
-
-		_network_coordinator_client.CloseConnection();
-	} else {
-		if (MyClient::my_client != nullptr) {
-			MyClient::SendQuit();
-			MyClient::my_client->CloseConnection(NETWORK_RECV_STATUS_CLIENT_QUIT);
-		}
-
-		_network_coordinator_client.CloseAllConnections();
-	}
-	NetworkGameSocketHandler::ProcessDeferredDeletions();
-
-	TCPConnecter::KillAll();
-
-	_networking = false;
-	_network_server = false;
-
-	NetworkFreeLocalCommandQueue();
-
-	InitializeNetworkPools(close_admins);
-}
 
 /* Initializes the network (cleans sockets and stuff) */
 static void NetworkInitialize(bool close_admins = true)
 {
-	InitializeNetworkPools(close_admins);
-
-	_sync_frame = 0;
-	_network_first_time = true;
-
-	_network_reconnect = 0;
+	openttd_rust_network_initialize(&GetRustNetworkLifecycleServices(), &GetRustNetworkFrameServices(), close_admins);
 }
 
 /** Non blocking connection to query servers for their game info. */
@@ -699,66 +655,10 @@ public:
  */
 bool NetworkClientConnectGame(std::string_view connection_string, CompanyID default_company, const std::string &join_server_password)
 {
-	Debug(net, 9, "NetworkClientConnectGame(): connection_string={}", connection_string);
-
-	CompanyID join_as = default_company;
-	std::string resolved_connection_string = ServerAddress::Parse(connection_string, NETWORK_DEFAULT_PORT, &join_as).connection_string;
-
-	if (!_network_available) return false;
-	if (!NetworkValidateOurClientName()) return false;
-
-	_network_join.connection_string = std::move(resolved_connection_string);
-	_network_join.company = join_as;
-	_network_join.server_password = join_server_password;
-
-	if (_game_mode == GM_MENU) {
-		/* From the menu we can immediately continue with the actual join. */
-		NetworkClientJoinGame();
-	} else {
-		/* When already playing a game, first go back to the main menu. This
-		 * disconnects the user from the current game, meaning we can safely
-		 * load in the new. After all, there is little point in continuing to
-		 * play on a server if we are connecting to another one.
-		 */
-		_switch_mode = SM_JOIN_GAME;
-	}
-	return true;
+	std::string resolved;
+	return openttd_rust_network_connect_game(&GetRustNetworkLifecycleServices(), &GetRustNetworkFrameServices(), &GetRustSessionServices(), {reinterpret_cast<const uint8_t *>(connection_string.data()), connection_string.size()}, default_company.base(), &join_server_password, &resolved);
 }
 
-/**
- * Actually perform the joining to the server. Use #NetworkClientConnectGame
- * when you want to connect to a specific server/company. This function
- * assumes _network_join is already fully set up.
- */
-void NetworkClientJoinGame()
-{
-	NetworkDisconnect();
-	NetworkInitialize();
-
-	_settings_client.network.last_joined = _network_join.connection_string;
-	Debug(net, 9, "status = CONNECTING");
-	_network_join_status = NETWORK_JOIN_STATUS_CONNECTING;
-	ShowJoinStatusWindow();
-
-	TCPConnecter::Create<TCPClientConnecter>(_network_join.connection_string);
-}
-
-static void NetworkInitGameInfo()
-{
-	FillStaticNetworkServerGameInfo();
-	/* The server is a client too */
-	_network_game_info.clients_on = _network_dedicated ? 0 : 1;
-
-	/* There should be always space for the server. */
-	assert(NetworkClientInfo::CanAllocateItem());
-	NetworkClientInfo *ci = new NetworkClientInfo(CLIENT_ID_SERVER);
-	ci->client_playas = COMPANY_SPECTATOR;
-
-	ci->client_name = _settings_client.network.client_name;
-
-	NetworkAuthenticationClientHandler::EnsureValidSecretKeyAndUpdatePublicKey(_settings_client.network.client_secret_key, _settings_client.network.client_public_key);
-	ci->public_key = _settings_client.network.client_public_key;
-}
 
 /**
  * Trim the given server name in place, i.e. remove leading and trailing spaces.
@@ -802,110 +702,6 @@ static void CheckClientAndServerName()
 	}
 }
 
-bool NetworkServerStart()
-{
-	if (!_network_available) return false;
-
-	/* Call the pre-scripts */
-	IConsoleCmdExec("exec scripts/pre_server.scr 0");
-	if (_network_dedicated) IConsoleCmdExec("exec scripts/pre_dedicated.scr 0");
-
-	/* Check for the client and server names to be set, but only after the scripts had a chance to set them.*/
-	if (_network_dedicated) CheckClientAndServerName();
-
-	NetworkDisconnect(false);
-	NetworkInitialize(false);
-	NetworkUDPInitialize();
-	Debug(net, 5, "Starting listeners for clients");
-	if (!ServerNetworkGameSocketHandler::Listen(_settings_client.network.server_port)) return false;
-
-	/* Only listen for admins when the authentication is configured. */
-	if (_settings_client.network.AdminAuthenticationConfigured()) {
-		Debug(net, 5, "Starting listeners for admins");
-		if (!ServerNetworkAdminSocketHandler::Listen(_settings_client.network.server_admin_port)) return false;
-	}
-
-	/* Try to start UDP-server */
-	Debug(net, 5, "Starting listeners for incoming server queries");
-	NetworkUDPServerListen();
-
-	_network_server = true;
-	_networking = true;
-	_frame_counter = 0;
-	_frame_counter_server = 0;
-	_frame_counter_max = 0;
-	_last_sync_frame = 0;
-	_network_own_client_id = CLIENT_ID_SERVER;
-
-	_network_clients_connected = 0;
-
-	NetworkInitGameInfo();
-
-	if (_settings_client.network.server_game_type != SERVER_GAME_TYPE_LOCAL) {
-		_network_coordinator_client.Register();
-	}
-
-	/* execute server initialization script */
-	IConsoleCmdExec("exec scripts/on_server.scr 0");
-	/* if the server is dedicated ... add some other script */
-	if (_network_dedicated) IConsoleCmdExec("exec scripts/on_dedicated.scr 0");
-
-	return true;
-}
-
-/**
- * Perform tasks when the server is started. This consists of things
- * like putting the server's client in a valid company and resetting the restart time.
- */
-void NetworkOnGameStart()
-{
-	if (!_network_server) return;
-
-	/* Update the static game info to set the values from the new game. */
-	NetworkServerUpdateGameInfo();
-
-	ChangeNetworkRestartTime(true);
-
-	if (!_network_dedicated) {
-		Company *c = Company::GetIfValid(GetFirstPlayableCompanyID());
-		NetworkClientInfo *ci = NetworkClientInfo::GetByClientID(CLIENT_ID_SERVER);
-		if (c != nullptr && ci != nullptr) {
-			ci->client_playas = c->index;
-
-			/*
-			 * If the company has not been named yet, the company was just started.
-			 * Otherwise it would have gotten a name already, so announce it as a new company.
-			 */
-			if (c->name_1 == STR_SV_UNNAMED && c->name.empty()) NetworkServerNewCompany(c, ci);
-		}
-
-		ShowClientList();
-	} else {
-		/* welcome possibly still connected admins - this can only happen on a dedicated server. */
-		ServerNetworkAdminSocketHandler::WelcomeAll();
-	}
-}
-
-/* The server is rebooting...
- * The only difference with NetworkDisconnect, is the packets that is sent */
-void NetworkReboot()
-{
-	if (_network_server) {
-		for (NetworkClientSocket *cs : NetworkClientSocket::Iterate()) {
-			cs->SendNewGame();
-			cs->SendPackets();
-		}
-
-		for (ServerNetworkAdminSocketHandler *as : ServerNetworkAdminSocketHandler::IterateActive()) {
-			as->SendNewGame();
-			as->SendPackets();
-		}
-	}
-
-	/* For non-dedicated servers we have to kick the admins as we are not
-	 * certain that we will end up in a new network game. */
-	NetworkClose(!_network_dedicated);
-}
 
 /**
  * We want to disconnect from the host/clients.
@@ -913,26 +709,7 @@ void NetworkReboot()
  */
 void NetworkDisconnect(bool close_admins)
 {
-	if (_network_server) {
-		for (NetworkClientSocket *cs : NetworkClientSocket::Iterate()) {
-			cs->SendShutdown();
-			cs->SendPackets();
-		}
-
-		if (close_admins) {
-			for (ServerNetworkAdminSocketHandler *as : ServerNetworkAdminSocketHandler::IterateActive()) {
-				as->SendShutdown();
-				as->SendPackets();
-			}
-		}
-	}
-
-	CloseWindowById(WC_NETWORK_STATUS_WINDOW, WN_NETWORK_STATUS_WINDOW_JOIN);
-
-	NetworkClose(close_admins);
-
-	/* Reinitialize the UDP stack, i.e. close all existing connections. */
-	NetworkUDPInitialize();
+	openttd_rust_network_disconnect(&GetRustNetworkLifecycleServices(), &GetRustNetworkFrameServices(), close_admins);
 }
 
 /**
@@ -1212,6 +989,7 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 		.debug_send_sync = [](void *game, uint32_t frame, uint32_t seed) noexcept { Debug(net, 9, "client[{}] SendSync(), frame_counter={}, sync_seed_1={}", static_cast<NetworkGameSocketHandler *>(game)->client_id, frame, seed); },
 		.frame_freq = RustNetworkFrameFreq,
 		.interactive_random_range = [](uint32_t limit) noexcept { return InteractiveRandomRange(limit); },
+		.lifecycle = &GetRustNetworkLifecycleServices(),
 		.max_download_time = RustNetworkMaxDownloadTime,
 		.max_init_time = RustNetworkMaxInitTime,
 		.max_join_time = RustNetworkMaxJoinTime,
@@ -1297,3 +1075,92 @@ void CDECL em_openttd_add_server(const char *connection_string)
 
 }
 #endif
+
+const OpenTTDNetworkLifecycleServices &GetRustNetworkLifecycleServices() noexcept
+{
+	static_assert(SERVER_GAME_TYPE_LOCAL == 0 && CLIENT_ID_SERVER == 1);
+	static const OpenTTDNetworkLifecycleServices services{
+		.admin_auth_configured = RustNetworkAdminAuthenticationConfigured,
+		.admin_port = RustNetworkServerAdminPort,
+		.admins_close = []() noexcept {
+			for (ServerNetworkAdminSocketHandler *as : ServerNetworkAdminSocketHandler::Iterate()) {
+				as->CloseConnection(true);
+			}
+		},
+		.admins_newgame = []() noexcept {
+			for (ServerNetworkAdminSocketHandler *as : ServerNetworkAdminSocketHandler::IterateActive()) {
+				as->SendNewGame();
+				as->SendPackets();
+			}
+		},
+		.admins_shutdown = []() noexcept {
+			for (ServerNetworkAdminSocketHandler *as : ServerNetworkAdminSocketHandler::IterateActive()) {
+				as->SendShutdown();
+				as->SendPackets();
+			}
+		},
+		.admins_welcome = []() noexcept { ServerNetworkAdminSocketHandler::WelcomeAll(); },
+		.allocate_server_info = []() noexcept -> void * {
+			assert(NetworkClientInfo::CanAllocateItem());
+			auto *ci = new NetworkClientInfo(CLIENT_ID_SERVER);
+			ci->client_playas = COMPANY_SPECTATOR;
+			ci->client_name = _settings_client.network.client_name;
+			return ci;
+		},
+		.auth_client_key = []() noexcept { NetworkAuthenticationClientHandler::EnsureValidSecretKeyAndUpdatePublicKey(_settings_client.network.client_secret_key, _settings_client.network.client_public_key); },
+		.check_names = []() noexcept { CheckClientAndServerName(); },
+		.close_admin_listeners = []() noexcept { ServerNetworkAdminSocketHandler::CloseListeners(); },
+		.close_client_listeners = []() noexcept { ServerNetworkGameSocketHandler::CloseListeners(); },
+		.connect_debug = [](OpenTTDByteSpan connection) noexcept { Debug(net, 9, "NetworkClientConnectGame(): connection_string={}", std::string_view(reinterpret_cast<const char *>(connection.data), connection.size)); },
+		.connect_text_begin = [](void *storage) noexcept -> void * {
+			static_assert(sizeof(std::string) <= 8 * sizeof(uint64_t));
+			static_assert(alignof(std::string) <= alignof(uint64_t));
+			return new (storage) std::string;
+		},
+		.connect_text_end = [](void *text) noexcept { std::destroy_at<std::string>(static_cast<std::string *>(text)); },
+		.coordinator_close_client = []() noexcept { _network_coordinator_client.CloseAllConnections(); },
+		.coordinator_close_server = []() noexcept { _network_coordinator_client.CloseConnection(); },
+		.coordinator_register = []() noexcept { _network_coordinator_client.Register(); },
+		.create_client_connecter = []() noexcept { TCPConnecter::Create<TCPClientConnecter>(_network_join.connection_string); },
+		.debug_connecting = []() noexcept { Debug(net, 9, "status = CONNECTING"); },
+		.debug_listen_admins = []() noexcept { Debug(net, 5, "Starting listeners for admins"); },
+		.debug_listen_clients = []() noexcept { Debug(net, 5, "Starting listeners for clients"); },
+		.debug_listen_queries = []() noexcept { Debug(net, 5, "Starting listeners for incoming server queries"); },
+		.deferred_deletions = []() noexcept { NetworkGameSocketHandler::ProcessDeferredDeletions(); },
+		.fill_game_info = []() noexcept { FillStaticNetworkServerGameInfo(); },
+		.initialize_pools = [](bool close_admins) noexcept { InitializeNetworkPools(close_admins); },
+		.join_connection = []() noexcept -> OpenTTDByteSpan { const auto &connection = _network_join.connection_string; return {reinterpret_cast<const uint8_t *>(connection.data()), connection.size()}; },
+		.kill_connecters = []() noexcept { TCPConnecter::KillAll(); },
+		.last_joined = RustNetworkLastJoined,
+		.listen_admins = [](uint16_t port) noexcept -> bool { return ServerNetworkAdminSocketHandler::Listen(port); },
+		.listen_clients = [](uint16_t port) noexcept -> bool { return ServerNetworkGameSocketHandler::Listen(port); },
+		.new_company = [](const Company *company, void *info) noexcept { NetworkServerNewCompany(company, static_cast<NetworkClientInfo *>(info)); },
+		.on_dedicated = []() noexcept { IConsoleCmdExec("exec scripts/on_dedicated.scr 0"); },
+		.on_server = []() noexcept { IConsoleCmdExec("exec scripts/on_server.scr 0"); },
+		.parse_connection = [](OpenTTDByteSpan connection, uint8_t *company, void *resolved) noexcept {
+			CompanyID join_as(*company);
+			*static_cast<std::string *>(resolved) = ServerAddress::Parse(std::string_view(reinterpret_cast<const char *>(connection.data), connection.size), NETWORK_DEFAULT_PORT, &join_as).connection_string;
+			*company = join_as.base();
+		},
+		.pre_dedicated = []() noexcept { IConsoleCmdExec("exec scripts/pre_dedicated.scr 0"); },
+		.pre_server = []() noexcept { IConsoleCmdExec("exec scripts/pre_server.scr 0"); },
+		.remember_joined_server = RustNetworkSetLastJoined,
+		.reset_restart_time = []() noexcept { ChangeNetworkRestartTime(true); },
+		.server_game_type = RustNetworkServerGameType,
+		.server_port = RustNetworkServerPort,
+		.set_info_company = [](void *info, uint8_t company) noexcept { static_cast<NetworkClientInfo *>(info)->client_playas = CompanyID(company); },
+		.set_join_info = [](void *resolved, uint8_t company, const void *password) noexcept {
+			_network_join.connection_string = std::move(*static_cast<std::string *>(resolved));
+			_network_join.company = CompanyID(company);
+			_network_join.server_password = *static_cast<const std::string *>(password);
+		},
+		.set_server_info_key = [](void *info) noexcept { static_cast<NetworkClientInfo *>(info)->public_key = _settings_client.network.client_public_key; },
+		.udp_initialize = []() noexcept { NetworkUDPInitialize(); },
+		.udp_listen = []() noexcept { NetworkUDPServerListen(); },
+		.update_game_info = []() noexcept { NetworkServerUpdateGameInfo(); },
+		.validate_client_name = []() noexcept -> bool { return NetworkValidateOurClientName(); },
+	};
+	return services;
+}
+#include "abi-visit-OpenTTDNetworkLifecycleServices.hpp"
+bool CheckAbi_network_lifecycle() { return AbiServicesComplete(GetRustNetworkLifecycleServices()); }

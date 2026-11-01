@@ -36,12 +36,7 @@ struct OpenTTDSessionServices {
 	bool (*exit_game)() noexcept OPENTTD_SERVICE_DEFAULT(exit_game);
 	void (*set_exit)() noexcept OPENTTD_SERVICE_DEFAULT(set_exit);
 	bool (*modal)() noexcept OPENTTD_SERVICE_DEFAULT(modal);
-	void (*network_reboot)() noexcept OPENTTD_SERVICE_DEFAULT(network_reboot);
-	void (*network_disconnect)() noexcept OPENTTD_SERVICE_DEFAULT(network_disconnect);
-	bool (*network_server_start)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(network_server_start);
 	void (*network_background)() noexcept OPENTTD_SERVICE_DEFAULT(network_background);
-	void (*network_start_game)() noexcept OPENTTD_SERVICE_DEFAULT(network_start_game);
-	void (*network_join)() noexcept OPENTTD_SERVICE_DEFAULT(network_join);
 	void (*kill_ai)() noexcept OPENTTD_SERVICE_DEFAULT(kill_ai);
 	void (*load_config)() noexcept OPENTTD_SERVICE_DEFAULT(load_config);
 	void (*reset_session_stats)() noexcept OPENTTD_SERVICE_DEFAULT(reset_session_stats);
@@ -100,12 +95,10 @@ struct OpenTTDSessionServices {
 	void (*pause_change)(uint8_t, PauseMode) noexcept OPENTTD_SERVICE_DEFAULT(pause_change);
 	void (*pause_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(pause_dirty);
 	bool (*full_animation)() noexcept OPENTTD_SERVICE_DEFAULT(full_animation);
-	bool (*reconnect_due)() noexcept OPENTTD_SERVICE_DEFAULT(reconnect_due);
 	bool (*console_script)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(console_script);
 	bool (*game_script)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(game_script);
 	bool (*ai_script)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(ai_script);
 	bool (*startup_company)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(startup_company);
-	bool (*network_reconnect)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(network_reconnect);
 	OpenTTDSessionFrame *(*state_frame_begin)(OpenTTDSessionFrameStorage *) noexcept OPENTTD_SERVICE_DEFAULT(state_frame_begin);
 	bool (*state_frame_end)(OpenTTDSessionFrame *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(state_frame_end);
 	bool (*real_time)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(real_time);

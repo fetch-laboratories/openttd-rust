@@ -253,8 +253,7 @@ pub(crate) fn execute_local_command_queue(s: &Services) {
 }
 
 /// `NetworkFreeLocalCommandQueue`.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_free_local_command_queue() {
+pub(crate) fn free_local_command_queue() {
     unsafe {
         CommandQueue::edit(WAIT.get(), Vec::clear);
         CommandQueue::edit(EXECUTION.get(), Vec::clear);

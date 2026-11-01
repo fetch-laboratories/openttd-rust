@@ -242,12 +242,7 @@ pub(crate) fn check_min_active_clients(session: &crate::session::Services, f: &F
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_send_welcome(
-    s: &Services,
-    f: &FrameServices,
-    socket: *mut c_void,
-) -> u8 {
+pub(crate) fn send_welcome(s: &Services, f: &FrameServices, socket: *mut c_void) -> u8 {
     (s.debug_send_welcome)(socket);
     if status(s, socket) != NEWGRFS_CHECK {
         return close_connection(s, f, socket, NETWORK_RECV_STATUS_MALFORMED_PACKET);
@@ -272,12 +267,7 @@ pub extern "C" fn openttd_rust_network_send_welcome(
     )
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_send_wait(
-    s: &Services,
-    f: &FrameServices,
-    socket: *mut c_void,
-) -> u8 {
+pub(crate) fn send_wait(s: &Services, f: &FrameServices, socket: *mut c_void) -> u8 {
     (s.debug_send_wait)(socket);
     let mut waiting = 1_u32;
     let mut cursor = 0;
@@ -300,13 +290,7 @@ pub extern "C" fn openttd_rust_network_send_wait(
     NETWORK_RECV_STATUS_OKAY
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_next_map(
-    s: &Services,
-    f: &FrameServices,
-    socket: *mut c_void,
-    ignore: *mut c_void,
-) {
+pub(crate) fn next_map(s: &Services, f: &FrameServices, socket: *mut c_void, ignore: *mut c_void) {
     (s.debug_next_map)(socket);
     let mut best: *mut c_void = std::ptr::null_mut();
     let mut cursor = 0;
@@ -329,7 +313,7 @@ pub extern "C" fn openttd_rust_network_next_map(
         let mut cursor = 0;
         while let Some(client) = next_client(f.command, &mut cursor) {
             if client.status == MAP_WAIT {
-                openttd_rust_network_send_wait(s, f, client.socket);
+                send_wait(s, f, client.socket);
             }
         }
     }
@@ -364,7 +348,7 @@ pub extern "C" fn openttd_rust_network_send_map(
         (s.map_destroy)(socket);
         (s.debug_done_map)(socket);
         set_status(s, socket, DONE_MAP);
-        openttd_rust_network_next_map(s, f, socket, std::ptr::null_mut());
+        next_map(s, f, socket, std::ptr::null_mut());
     }
     NETWORK_RECV_STATUS_OKAY
 }
@@ -384,7 +368,7 @@ pub extern "C" fn openttd_rust_network_receive_getmap(
         if client.status == MAP {
             (s.debug_map_wait)(socket);
             set_status(s, socket, MAP_WAIT);
-            return openttd_rust_network_send_wait(s, f, socket);
+            return send_wait(s, f, socket);
         }
     }
     openttd_rust_network_send_map(s, f, socket)
@@ -408,20 +392,14 @@ pub extern "C" fn openttd_rust_network_receive_map_ok(
                 (s.outgoing_queue)(socket),
             );
         };
-        unsafe {
-            crate::network_frame::openttd_rust_network_send_frame(
-                f,
-                (s.game)(socket),
-                (s.sync)(socket),
-            )
-        };
-        crate::network_frame::openttd_rust_network_send_sync(f, (s.game)(socket));
+        unsafe { crate::network_frame::send_frame(f, (s.game)(socket), (s.sync)(socket)) };
+        crate::network_frame::send_sync(f, (s.game)(socket));
         reset_lag(s, socket);
         let mut cursor = 0;
         while let Some(client) = next_client(f.command, &mut cursor) {
             if client.status >= AUTHORIZED {
                 (s.send_client_info)(client.socket, (s.info)(socket));
-                openttd_rust_network_send_join(s, f, client.socket, (s.client_id)(socket));
+                send_join(s, f, client.socket, (s.client_id)(socket));
             }
         }
         (s.admin_joined)(socket);
@@ -430,12 +408,7 @@ pub extern "C" fn openttd_rust_network_receive_map_ok(
     send_error(s, f, socket, NETWORK_ERROR_NOT_EXPECTED, EMPTY_TEXT)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_send_newgrf_check(
-    s: &Services,
-    f: &FrameServices,
-    socket: *mut c_void,
-) -> u8 {
+pub(crate) fn send_newgrf_check(s: &Services, f: &FrameServices, socket: *mut c_void) -> u8 {
     (s.debug_newgrf_check)(socket);
     if status(s, socket) != IDENTIFY {
         return close_connection(s, f, socket, NETWORK_RECV_STATUS_MALFORMED_PACKET);
@@ -443,7 +416,7 @@ pub extern "C" fn openttd_rust_network_send_newgrf_check(
     (s.debug_newgrfs)(socket);
     set_status(s, socket, NEWGRFS_CHECK);
     if (s.grfs_empty)() {
-        return openttd_rust_network_send_welcome(s, f, socket);
+        return send_welcome(s, f, socket);
     }
     let p = (s.grfs_packet)(socket);
     (f.packet_send)((s.game)(socket), p);
@@ -460,7 +433,7 @@ pub extern "C" fn openttd_rust_network_receive_newgrfs_checked(
         return send_error(s, f, socket, NETWORK_ERROR_NOT_EXPECTED, EMPTY_TEXT);
     }
     (s.debug_newgrfs_checked)(socket);
-    openttd_rust_network_send_welcome(s, f, socket)
+    send_welcome(s, f, socket)
 }
 
 #[unsafe(no_mangle)]
@@ -554,7 +527,7 @@ pub extern "C" fn openttd_rust_network_receive_identify(
     }
     (s.allocate_info)(socket, name, company);
     (s.reset_company_empty)(company);
-    openttd_rust_network_send_newgrf_check(s, f, socket)
+    send_newgrf_check(s, f, socket)
 }
 
 pub(crate) fn send_error(
@@ -591,13 +564,7 @@ pub(crate) fn send_error(
                 ) {
                     error = NETWORK_ERROR_ILLEGAL_PACKET;
                 }
-                openttd_rust_network_send_error_quit(
-                    s,
-                    f,
-                    client.socket,
-                    (s.client_id)(socket),
-                    error,
-                );
+                send_error_quit(s, f, client.socket, (s.client_id)(socket), error);
             }
         }
         (s.admin_error)(socket, error);
@@ -618,8 +585,7 @@ pub extern "C" fn openttd_rust_network_send_error(
     send_error(s, f, socket, error, reason)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_send_error_quit(
+pub(crate) fn send_error_quit(
     s: &Services,
     f: &FrameServices,
     socket: *mut c_void,
@@ -635,8 +601,7 @@ pub extern "C" fn openttd_rust_network_send_error_quit(
     NETWORK_RECV_STATUS_OKAY
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_send_quit(
+pub(crate) fn send_quit(
     s: &Services,
     f: &FrameServices,
     socket: *mut c_void,
@@ -650,8 +615,7 @@ pub extern "C" fn openttd_rust_network_send_quit(
     NETWORK_RECV_STATUS_OKAY
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_send_join(
+pub(crate) fn send_join(
     s: &Services,
     f: &FrameServices,
     socket: *mut c_void,
@@ -665,12 +629,7 @@ pub extern "C" fn openttd_rust_network_send_join(
     NETWORK_RECV_STATUS_OKAY
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_send_shutdown(
-    s: &Services,
-    f: &FrameServices,
-    socket: *mut c_void,
-) -> u8 {
+pub(crate) fn send_shutdown(s: &Services, f: &FrameServices, socket: *mut c_void) -> u8 {
     (s.debug_send_shutdown)(socket);
     let game = (s.game)(socket);
     let p = (f.packet_new)(game, PACKET_SERVER_SHUTDOWN);
@@ -678,12 +637,7 @@ pub extern "C" fn openttd_rust_network_send_shutdown(
     NETWORK_RECV_STATUS_OKAY
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_send_newgame(
-    s: &Services,
-    f: &FrameServices,
-    socket: *mut c_void,
-) -> u8 {
+pub(crate) fn send_newgame(s: &Services, f: &FrameServices, socket: *mut c_void) -> u8 {
     (s.debug_send_newgame)(socket);
     let game = (s.game)(socket);
     let p = (f.packet_new)(game, PACKET_SERVER_NEWGAME);
@@ -707,7 +661,7 @@ pub extern "C" fn openttd_rust_network_receive_error(
     let mut cursor = 0;
     while let Some(client) = next_client(f.command, &mut cursor) {
         if client.status >= AUTHORIZED {
-            openttd_rust_network_send_error_quit(s, f, client.socket, (s.client_id)(socket), error);
+            send_error_quit(s, f, client.socket, (s.client_id)(socket), error);
         }
     }
     (s.admin_error)(socket, error);
@@ -728,7 +682,7 @@ pub extern "C" fn openttd_rust_network_receive_quit(
     let mut cursor = 0;
     while let Some(client) = next_client(f.command, &mut cursor) {
         if client.status >= AUTHORIZED && client.socket != socket {
-            openttd_rust_network_send_quit(s, f, client.socket, (s.client_id)(socket));
+            send_quit(s, f, client.socket, (s.client_id)(socket));
         }
     }
     (s.admin_quit)(socket);
@@ -749,7 +703,7 @@ fn close_connection(s: &Services, f: &FrameServices, socket: *mut c_void, result
         let mut cursor = 0;
         while let Some(client) = next_client(f.command, &mut cursor) {
             if client.status >= AUTHORIZED && client.socket != socket {
-                openttd_rust_network_send_error_quit(
+                send_error_quit(
                     s,
                     f,
                     client.socket,
@@ -761,7 +715,7 @@ fn close_connection(s: &Services, f: &FrameServices, socket: *mut c_void, result
     }
     if status(s, socket) == MAP {
         (s.map_destroy)(socket);
-        openttd_rust_network_next_map(s, f, socket, socket);
+        next_map(s, f, socket, socket);
     }
     (s.admin_error)(socket, NETWORK_ERROR_CONNECTION_LOST);
     (s.debug_closed)(socket);

@@ -40,7 +40,6 @@ protected:
 	friend const OpenTTDNetworkClientServices &GetRustNetworkClientServices() noexcept;
 	friend const OpenTTDNetworkCommandServices &GetRustNetworkCommandServices() noexcept;
 	friend const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept;
-	friend void NetworkClose(bool close_admins);
 	static ClientNetworkGameSocketHandler *my_client; ///< This is us!
 
 	NetworkRecvStatus Receive_SERVER_FULL(Packet &p) override;
@@ -70,9 +69,6 @@ protected:
 	NetworkRecvStatus Receive_SERVER_MOVE(Packet &p) override;
 	NetworkRecvStatus Receive_SERVER_CONFIG_UPDATE(Packet &p) override;
 
-	static NetworkRecvStatus SendNewGRFsOk();
-	static NetworkRecvStatus SendGetMap();
-	static NetworkRecvStatus SendMapOk();
 	static NetworkRecvStatus SendIdentify();
 	void CheckConnection();
 public:
@@ -82,10 +78,7 @@ public:
 	NetworkRecvStatus CloseConnection(NetworkRecvStatus status) override;
 	void ClientError(NetworkRecvStatus res);
 
-	static NetworkRecvStatus SendJoin();
 	static NetworkRecvStatus SendCommand(const OpenTTDCommandPacket &cp);
-	static NetworkRecvStatus SendError(NetworkErrorCode errorno);
-	static NetworkRecvStatus SendQuit();
 
 	static NetworkRecvStatus SendAuthResponse();
 

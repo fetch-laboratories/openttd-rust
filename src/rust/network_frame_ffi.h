@@ -7,6 +7,7 @@
 struct OpenTTDSessionFrame;
 struct OpenTTDNetworkConnectionServices;
 struct OpenTTDNetworkClientServices;
+struct OpenTTDNetworkLifecycleServices;
 /** The frame globals of the network game loop; C++ aliases each field in place. */
 struct OpenTTDNetworkFrameState {
 	uint32_t frame_counter_server;
@@ -55,6 +56,7 @@ struct OpenTTDNetworkFrameServices {
 	void (*debug_send_sync)(void *, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_send_sync);
 	uint8_t (*frame_freq)() noexcept OPENTTD_SERVICE_DEFAULT(frame_freq);
 	uint32_t (*interactive_random_range)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(interactive_random_range);
+	const OpenTTDNetworkLifecycleServices *lifecycle;
 	uint16_t (*max_download_time)() noexcept OPENTTD_SERVICE_DEFAULT(max_download_time);
 	uint16_t (*max_init_time)() noexcept OPENTTD_SERVICE_DEFAULT(max_init_time);
 	uint16_t (*max_join_time)() noexcept OPENTTD_SERVICE_DEFAULT(max_join_time);
@@ -91,8 +93,6 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept;
 extern "C" {
 OpenTTDNetworkFrameState *openttd_rust_network_frame_storage();
 uint32_t openttd_rust_network_calculate_lag(const OpenTTDNetworkFrameServices *, const OpenTTDNetworkSocketSync *sync);
-uint8_t openttd_rust_network_send_frame(const OpenTTDNetworkFrameServices *, void *game, OpenTTDNetworkSocketSync *sync);
-uint8_t openttd_rust_network_send_sync(const OpenTTDNetworkFrameServices *, void *game);
 uint8_t openttd_rust_network_receive_ack(const OpenTTDNetworkFrameServices *, void *socket, void *game, uint8_t *status, OpenTTDNetworkSocketSync *sync, void *packet);
 uint8_t openttd_rust_network_receive_frame(const OpenTTDNetworkFrameServices *, uint8_t status, OpenTTDNetworkSocketSync *sync, void *packet);
 uint8_t openttd_rust_network_receive_sync(const OpenTTDNetworkFrameServices *, uint8_t status, void *packet);

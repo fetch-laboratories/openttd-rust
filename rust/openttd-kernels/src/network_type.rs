@@ -42,3 +42,6 @@ pub const NETWORK_RECV_STATUS_CLOSE_QUERY: u8 = 9;
 
 /// Server identity.
 pub const CLIENT_ID_SERVER: u32 = 1;
+
+/// Coordinator-local server visibility.
+pub const SERVER_GAME_TYPE_LOCAL: u8 = 0;

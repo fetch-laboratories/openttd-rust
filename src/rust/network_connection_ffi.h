@@ -79,23 +79,14 @@ struct OpenTTDNetworkConnectionServices {
 const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexcept;
 extern "C" {
 uint32_t openttd_rust_network_next_client_id();
-uint8_t openttd_rust_network_send_welcome(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket);
-uint8_t openttd_rust_network_send_wait(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket);
 uint8_t openttd_rust_network_send_map(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket);
-uint8_t openttd_rust_network_send_newgrf_check(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket);
 uint8_t openttd_rust_network_receive_newgrfs_checked(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket);
 uint8_t openttd_rust_network_receive_getmap(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket);
 uint8_t openttd_rust_network_receive_map_ok(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket);
 uint8_t openttd_rust_network_receive_game_info(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket);
-void openttd_rust_network_next_map(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket, void *ignore);
 uint8_t openttd_rust_network_receive_join(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket, void *packet, void *text);
 uint8_t openttd_rust_network_receive_identify(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket, void *packet, void *text);
 uint8_t openttd_rust_network_send_error(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket, uint8_t error, OpenTTDByteSpan reason);
-uint8_t openttd_rust_network_send_error_quit(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket, uint32_t client_id, uint8_t error);
-uint8_t openttd_rust_network_send_quit(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket, uint32_t client_id);
-uint8_t openttd_rust_network_send_shutdown(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket);
-uint8_t openttd_rust_network_send_newgame(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket);
-uint8_t openttd_rust_network_send_join(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket, uint32_t client_id);
 uint8_t openttd_rust_network_receive_error(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket, void *packet);
 uint8_t openttd_rust_network_receive_quit(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket);
 uint8_t openttd_rust_network_server_close(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void * socket, uint8_t result);

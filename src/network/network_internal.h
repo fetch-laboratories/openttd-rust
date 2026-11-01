@@ -18,6 +18,7 @@
 #include "../command_func.h"
 #include "../misc/endian_buffer.hpp"
 #include "../strings_type.h"
+#include "../rust/network_lifecycle_ffi.h"
 
 #ifdef RANDOM_DEBUG
 /**
@@ -87,7 +88,6 @@ void NetworkRebuildHostList();
 void UpdateNetworkGameWindow();
 
 /* From network_command.cpp */
-void NetworkFreeLocalCommandQueue();
 void NetworkReplaceCommandClientId(CommandPacket &cp, ClientID client_id);
 
 void ShowNetworkError(StringID error_string);

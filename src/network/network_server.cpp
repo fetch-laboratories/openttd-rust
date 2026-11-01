@@ -314,11 +314,6 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::SendError(NetworkErrorCode err
 	return static_cast<NetworkRecvStatus>(openttd_rust_network_send_error(&GetRustNetworkConnectionServices(), &GetRustNetworkFrameServices(), this, error, {reinterpret_cast<const uint8_t *>(reason.data()), reason.size()}));
 }
 
-/** Send the check for the NewGRFs. */
-NetworkRecvStatus ServerNetworkGameSocketHandler::SendNewGRFCheck()
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_send_newgrf_check(&GetRustNetworkConnectionServices(), &GetRustNetworkFrameServices(), this));
-}
 
 /** Request the game password. */
 NetworkRecvStatus ServerNetworkGameSocketHandler::SendAuthRequest()
@@ -359,22 +354,6 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::SendEnableEncryption()
 	return NETWORK_RECV_STATUS_OKAY;
 }
 
-/** Send the client a welcome message with some basic information. */
-NetworkRecvStatus ServerNetworkGameSocketHandler::SendWelcome()
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_send_welcome(&GetRustNetworkConnectionServices(), &GetRustNetworkFrameServices(), this));
-}
-
-/** Tell the client that its put in a waiting queue. */
-NetworkRecvStatus ServerNetworkGameSocketHandler::SendWait()
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_send_wait(&GetRustNetworkConnectionServices(), &GetRustNetworkFrameServices(), this));
-}
-
-void ServerNetworkGameSocketHandler::CheckNextClientToSendMap(NetworkClientSocket *ignore_cs)
-{
-	openttd_rust_network_next_map(&GetRustNetworkConnectionServices(), &GetRustNetworkFrameServices(), this, ignore_cs);
-}
 
 /** This sends the map to the client */
 NetworkRecvStatus ServerNetworkGameSocketHandler::SendMap()
@@ -382,26 +361,6 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::SendMap()
 	return static_cast<NetworkRecvStatus>(openttd_rust_network_send_map(&GetRustNetworkConnectionServices(), &GetRustNetworkFrameServices(), this));
 }
 
-/**
- * Tell that a client joined.
- * @param client_id The client that joined.
- */
-NetworkRecvStatus ServerNetworkGameSocketHandler::SendJoin(ClientID client_id)
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_send_join(&GetRustNetworkConnectionServices(), &GetRustNetworkFrameServices(), this, client_id));
-}
-
-/** Tell the client that they may run to a particular frame. */
-NetworkRecvStatus ServerNetworkGameSocketHandler::SendFrame()
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_send_frame(&GetRustNetworkFrameServices(), static_cast<NetworkGameSocketHandler *>(this), this));
-}
-
-/** Request the client to sync. */
-NetworkRecvStatus ServerNetworkGameSocketHandler::SendSync()
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_send_sync(&GetRustNetworkFrameServices(), static_cast<NetworkGameSocketHandler *>(this)));
-}
 
 /**
  * Send a command to the client to execute.
@@ -471,36 +430,6 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::SendExternalChat(std::string_v
 	return NETWORK_RECV_STATUS_OKAY;
 }
 
-/**
- * Tell the client another client quit with an error.
- * @param client_id The client that quit.
- * @param errorno The reason the client quit.
- */
-NetworkRecvStatus ServerNetworkGameSocketHandler::SendErrorQuit(ClientID client_id, NetworkErrorCode errorno)
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_send_error_quit(&GetRustNetworkConnectionServices(), &GetRustNetworkFrameServices(), this, client_id, errorno));
-}
-
-/**
- * Tell the client another client quit.
- * @param client_id The client that quit.
- */
-NetworkRecvStatus ServerNetworkGameSocketHandler::SendQuit(ClientID client_id)
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_send_quit(&GetRustNetworkConnectionServices(), &GetRustNetworkFrameServices(), this, client_id));
-}
-
-/** Tell the client we're shutting down. */
-NetworkRecvStatus ServerNetworkGameSocketHandler::SendShutdown()
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_send_shutdown(&GetRustNetworkConnectionServices(), &GetRustNetworkFrameServices(), this));
-}
-
-/** Tell the client we're starting a new game. */
-NetworkRecvStatus ServerNetworkGameSocketHandler::SendNewGame()
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_send_newgame(&GetRustNetworkConnectionServices(), &GetRustNetworkFrameServices(), this));
-}
 
 /**
  * Send the result of a console action.

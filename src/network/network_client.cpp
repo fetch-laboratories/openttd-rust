@@ -174,22 +174,12 @@ NetworkJoinInfo _network_join;
  * Sending functions
  ************/
 
-/** Tell the server we would like to join. */
-NetworkRecvStatus ClientNetworkGameSocketHandler::SendJoin()
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_send_join(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices()));
-}
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::SendIdentify()
 {
 	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_send_identify(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices()));
 }
 
-/** Tell the server we got all the NewGRFs. */
-NetworkRecvStatus ClientNetworkGameSocketHandler::SendNewGRFsOk()
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_send_grfs_ok(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices()));
-}
 
 /**
  * Set the game password as requested.
@@ -206,17 +196,6 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::SendAuthResponse()
 	return NETWORK_RECV_STATUS_OKAY;
 }
 
-/** Request the map from the server. */
-NetworkRecvStatus ClientNetworkGameSocketHandler::SendGetMap()
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_send_getmap(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices()));
-}
-
-/** Tell the server we received the complete map. */
-NetworkRecvStatus ClientNetworkGameSocketHandler::SendMapOk()
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_send_map_ok(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices()));
-}
 
 /**
  * Send a command to the server.
@@ -250,11 +229,6 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::SendChat(NetworkAction action,
 	return NETWORK_RECV_STATUS_OKAY;
 }
 
-/** Send an error-packet over the network */
-NetworkRecvStatus ClientNetworkGameSocketHandler::SendError(NetworkErrorCode errorno)
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_send_error(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), errorno));
-}
 
 /**
  * Tell the server that we like to change the name of the client.
@@ -271,13 +245,6 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::SendSetName(const std::string 
 	return NETWORK_RECV_STATUS_OKAY;
 }
 
-/**
- * Tell the server we would like to quit.
- */
-NetworkRecvStatus ClientNetworkGameSocketHandler::SendQuit()
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_send_quit(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices()));
-}
 
 /**
  * Send a console command.

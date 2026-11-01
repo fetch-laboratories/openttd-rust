@@ -241,14 +241,6 @@ void NetworkSendCommand(Commands cmd, StringID err_message, CommandCallback *cal
 }
 
 /**
- * Free the local command queues.
- */
-void NetworkFreeLocalCommandQueue()
-{
-	openttd_rust_network_free_local_command_queue();
-}
-
-/**
  * Receives a command from the network.
  * @param p the packet to read from.
  * @param cp the struct to write the data to.

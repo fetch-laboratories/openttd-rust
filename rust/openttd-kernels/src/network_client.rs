@@ -198,8 +198,7 @@ fn empty_packet(f: &FrameServices, game: *mut c_void, kind: u8) -> u8 {
     NETWORK_RECV_STATUS_OKAY
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_send_join(s: &Services, f: &FrameServices) -> u8 {
+pub(crate) fn send_join(s: &Services, f: &FrameServices) -> u8 {
     (s.debug_send_join)();
     (s.debug_status_join)();
     let game = (f.client_game)();
@@ -225,34 +224,26 @@ pub extern "C" fn openttd_rust_network_client_send_identify(s: &Services, f: &Fr
     NETWORK_RECV_STATUS_OKAY
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_send_grfs_ok(s: &Services, f: &FrameServices) -> u8 {
+pub(crate) fn send_grfs_ok(s: &Services, f: &FrameServices) -> u8 {
     (s.debug_send_grfs_ok)();
     empty_packet(f, (f.client_game)(), PACKET_CLIENT_NEWGRFS_CHECKED)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_send_getmap(s: &Services, f: &FrameServices) -> u8 {
+pub(crate) fn send_getmap(s: &Services, f: &FrameServices) -> u8 {
     (s.debug_send_getmap)();
     (s.debug_status_map_wait)();
     set_status(s, (f.client_game)(), status::MAP_WAIT);
     empty_packet(f, (f.client_game)(), PACKET_CLIENT_GETMAP)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_send_map_ok(s: &Services, f: &FrameServices) -> u8 {
+pub(crate) fn send_map_ok(s: &Services, f: &FrameServices) -> u8 {
     (s.debug_send_map_ok)();
     (s.debug_status_active)();
     set_status(s, (f.client_game)(), status::ACTIVE);
     empty_packet(f, (f.client_game)(), PACKET_CLIENT_MAP_OK)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_send_error(
-    s: &Services,
-    f: &FrameServices,
-    error: u8,
-) -> u8 {
+pub(crate) fn send_error(s: &Services, f: &FrameServices, error: u8) -> u8 {
     (s.debug_send_error)(error);
     let game = (f.client_game)();
     let p = (f.packet_new)(game, PACKET_CLIENT_ERROR);
@@ -261,8 +252,7 @@ pub extern "C" fn openttd_rust_network_client_send_error(
     NETWORK_RECV_STATUS_OKAY
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_send_quit(s: &Services, f: &FrameServices) -> u8 {
+pub(crate) fn send_quit(s: &Services, f: &FrameServices) -> u8 {
     (s.debug_send_quit)();
     empty_packet(f, (f.client_game)(), PACKET_CLIENT_QUIT)
 }
@@ -331,7 +321,7 @@ pub extern "C" fn openttd_rust_network_client_receive_grfs(
         }
     }
     if result == NETWORK_RECV_STATUS_OKAY {
-        return openttd_rust_network_client_send_grfs_ok(s, f);
+        return send_grfs_ok(s, f);
     }
     (s.show_newgrf_mismatch)();
     result
@@ -351,7 +341,7 @@ pub extern "C" fn openttd_rust_network_client_receive_welcome(
     set_status(s, game, status::AUTHORIZED);
     unsafe { s.own_client_id.write((f.packet_recv_uint32)(p)) };
     (s.debug_welcome)(unsafe { s.own_client_id.read() });
-    openttd_rust_network_client_send_getmap(s, f)
+    send_getmap(s, f)
 }
 
 #[unsafe(no_mangle)]
@@ -450,7 +440,7 @@ pub extern "C" fn openttd_rust_network_client_receive_map_done(
         (s.show_savegame_error)();
         return NETWORK_RECV_STATUS_SAVEGAME;
     }
-    openttd_rust_network_client_send_map_ok(s, f);
+    send_map_ok(s, f);
     (s.map_loaded_stats)();
     (s.show_client_list)();
     if join_company(s) == crate::company_type::COMPANY_NEW_COMPANY
@@ -626,7 +616,7 @@ pub(crate) fn client_error(s: &Services, f: &FrameServices, game: *mut c_void, r
     ) {
         close(s, f, game, result);
     } else {
-        openttd_rust_network_client_send_error(s, f, error);
+        send_error(s, f, error);
         close(s, f, game, result);
         (s.emergency_save)();
     }
@@ -686,5 +676,5 @@ pub extern "C" fn openttd_rust_network_client_is_connected(
 pub extern "C" fn openttd_rust_network_client_connected(s: &Services, f: &FrameServices) {
     crate::network_frame::client_connected();
     (s.debug_connected)();
-    openttd_rust_network_client_send_join(s, f);
+    send_join(s, f);
 }

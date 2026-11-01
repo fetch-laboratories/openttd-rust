@@ -77,13 +77,7 @@ struct OpenTTDNetworkClientServices {
 };
 const OpenTTDNetworkClientServices &GetRustNetworkClientServices() noexcept;
 extern "C" {
-uint8_t openttd_rust_network_client_send_join(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *);
 uint8_t openttd_rust_network_client_send_identify(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *);
-uint8_t openttd_rust_network_client_send_grfs_ok(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *);
-uint8_t openttd_rust_network_client_send_getmap(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *);
-uint8_t openttd_rust_network_client_send_map_ok(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *);
-uint8_t openttd_rust_network_client_send_error(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, uint8_t error);
-uint8_t openttd_rust_network_client_send_quit(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *);
 uint8_t openttd_rust_network_client_receive_full(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game);
 uint8_t openttd_rust_network_client_receive_banned(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game);
 uint8_t openttd_rust_network_client_receive_error(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game, void * packet, void * scratch);
