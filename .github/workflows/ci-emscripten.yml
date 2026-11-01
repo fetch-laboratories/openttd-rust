@@ -68,7 +68,7 @@ jobs:
         cd build-host
 
         echo "::group::CMake"
-        cmake .. -DOPTION_TOOLS_ONLY=ON -DOPTION_RUST=ON
+        cmake .. -DOPTION_TOOLS_ONLY=ON
         echo "::endgroup::"
 
         echo "::group::Build"
@@ -79,13 +79,19 @@ jobs:
     - name: Install GCC problem matcher
       uses: ammaraskar/gcc-problem-matcher@master
 
+    - name: Fetch pinned native-test oracle headers
+      shell: bash
+      run: |
+        baseline=$(sed -n 's/  "commit": "\(.*\)"/\1/p' migration/baseline.json)
+        git fetch --no-tags --depth=1 origin "$baseline"
+
     - name: Build
       run: |
         mkdir build
         cd build
 
         echo "::group::CMake"
-        emcmake cmake .. -DHOST_BINARY_DIR=../build-host -DOPTION_RUST=ON
+        emcmake cmake .. -DHOST_BINARY_DIR=../build-host
         echo "::endgroup::"
 
         echo "::group::Build"

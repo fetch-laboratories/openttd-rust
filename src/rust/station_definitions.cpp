@@ -1,7 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file station_definitions.cpp Typed native storage leaves for station definitions. */
 #include "../stdafx.h"
-#ifdef WITH_RUST
 #include "station_definitions_ffi.h"
 #include "newgrf_bytereader_services.h"
 #include "../newgrf_station.h"
@@ -103,4 +102,3 @@ const OpenTTDStationDefinitionServices &GetStationDefinitionServices() noexcept
 	};
 	return services;
 }
-#endif

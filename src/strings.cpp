@@ -46,9 +46,7 @@
 #include "3rdparty/fmt/std.h"
 
 #include "strings_internal.h"
-#ifdef WITH_RUST
 #include "rust/encoded_adapter.hpp"
-#endif
 
 #include "safeguards.h"
 
@@ -104,51 +102,11 @@ EncodedString GetEncodedString(StringID str)
  */
 EncodedString GetEncodedStringWithArgs(StringID str, std::span<const StringParameter> params)
 {
-#ifdef WITH_RUST
 	std::vector<OpenTTDRustEncodedParameter> descriptors;
 	descriptors.reserve(params.size());
 	for (const auto &parameter : params) descriptors.push_back(RustEncodedParameter(parameter));
 	auto result = OwnRustEncoded(openttd_rust_encoded_serialize(str, descriptors.data(), descriptors.size(), RUST_ENCODED_STRING_ASSERTIONS));
 	return EncodedString{CopyRustEncoded(result)};
-#else
-	std::string result;
-	StringBuilder builder(result);
-	builder.PutUtf8(SCC_ENCODED_INTERNAL);
-	builder.PutIntegerBase(str, 16);
-
-	struct visitor {
-		StringBuilder &builder;
-
-		void operator()(const std::monostate &) {}
-
-		void operator()(const uint64_t &arg)
-		{
-			this->builder.PutUtf8(SCC_ENCODED_NUMERIC);
-			this->builder.PutIntegerBase(arg, 16);
-		}
-
-		void operator()(const std::string &value)
-		{
-#ifdef WITH_ASSERT
-			/* Don't allow an encoded string to contain another encoded string. */
-			{
-				auto [len, c] = DecodeUtf8(value);
-				assert(len == 0 || (c != SCC_ENCODED && c != SCC_ENCODED_INTERNAL && c != SCC_RECORD_SEPARATOR));
-			}
-#endif /* WITH_ASSERT */
-			this->builder.PutUtf8(SCC_ENCODED_STRING);
-			this->builder += value;
-		}
-	};
-
-	visitor v{builder};
-	for (const auto &param : params) {
-		builder.PutUtf8(SCC_RECORD_SEPARATOR);
-		std::visit(v, param.data);
-	}
-
-	return EncodedString{std::move(result)};
-#endif
 }
 
 /**
@@ -160,61 +118,9 @@ EncodedString GetEncodedStringWithArgs(StringID str, std::span<const StringParam
  */
 EncodedString EncodedString::ReplaceParam(size_t param, StringParameter &&data) const
 {
-#ifdef WITH_RUST
 	auto result = OwnRustEncoded(openttd_rust_encoded_replace(reinterpret_cast<const uint8_t *>(this->string.data()), this->string.size(),
 		param, RustEncodedParameter(data), RUST_ENCODED_NUMERIC_ASSERTIONS, RUST_ENCODED_STRING_ASSERTIONS));
 	return EncodedString{CopyRustEncoded(result, this->string)};
-#else
-	if (this->empty()) return {};
-
-	std::vector<StringParameter> params;
-	StringConsumer consumer(this->string);
-
-	if (!consumer.ReadUtf8If(SCC_ENCODED_INTERNAL)) return {};
-
-	StringID str;
-	if (auto r = consumer.TryReadIntegerBase<uint32_t>(16); r.has_value()) {
-		str = *r;
-	} else {
-		return {};
-	}
-	if (consumer.AnyBytesLeft() && !consumer.ReadUtf8If(SCC_RECORD_SEPARATOR)) return {};
-
-	while (consumer.AnyBytesLeft()) {
-		StringConsumer record(consumer.ReadUntilUtf8(SCC_RECORD_SEPARATOR, StringConsumer::SKIP_ONE_SEPARATOR));
-
-		if (!record.AnyBytesLeft()) {
-			/* This is an empty parameter. */
-			params.emplace_back(std::monostate{});
-			continue;
-		}
-
-		/* Get the parameter type. */
-		char32_t parameter_type = record.ReadUtf8();
-		switch (parameter_type) {
-			case SCC_ENCODED_NUMERIC: {
-				uint64_t value = record.ReadIntegerBase<uint64_t>(16);
-				assert(!record.AnyBytesLeft());
-				params.emplace_back(value);
-				break;
-			}
-
-			case SCC_ENCODED_STRING: {
-				params.emplace_back(record.Read(StringConsumer::npos));
-				break;
-			}
-
-			default:
-				/* Unknown parameter, make it blank. */
-				params.emplace_back(std::monostate{});
-				break;
-		}
-	}
-
-	if (param >= std::size(params)) return {};
-	params[param] = data;
-	return GetEncodedStringWithArgs(str, params);
-#endif
 }
 
 /**
@@ -1672,11 +1578,7 @@ static void FormatString(StringBuilder &builder, std::string_view str_arg, Strin
 
 					if (!e->name.empty() && e->IsEnabled()) {
 						auto tmp_params = MakeParameters(
-#ifdef WITH_RUST
 							e->name.View()
-#else
-							e->name
-#endif
 						);
 						GetStringWithArgs(builder, STR_JUST_RAW_STRING, tmp_params);
 						break;
@@ -1804,11 +1706,7 @@ static void FormatString(StringBuilder &builder, std::string_view str_arg, Strin
 						builder += t->GetCachedName();
 					} else if (!t->name.empty()) {
 						auto tmp_params = MakeParameters(
-#ifdef WITH_RUST
 							t->name.View()
-#else
-							t->name
-#endif
 						);
 						GetStringWithArgs(builder, STR_JUST_RAW_STRING, tmp_params);
 					} else {

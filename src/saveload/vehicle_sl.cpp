@@ -278,11 +278,7 @@ void AfterLoadVehiclesPhase1(bool part_of_load)
 
 		for (Vehicle *v : Vehicle::Iterate()) {
 			if (
-#ifdef WITH_RUST
 				IsSavegameVersionBefore(SLV_105) ? v->old_orders != 0 : v->orders != nullptr
-#else
-				v->orders != nullptr
-#endif
 			) {
 				if (IsSavegameVersionBefore(SLV_105)) { // Pre-105 didn't save an OrderList
 					if (mapping[v->old_orders] == nullptr) {
@@ -392,9 +388,7 @@ void AfterLoadVehiclesPhase1(bool part_of_load)
 		} else {
 			for (Ship *s : Ship::Iterate()) {
 				if (s->GetRotation() == s->direction) continue;
-#ifdef WITH_RUST
 				openttd_rust_ship_control_reload_rotation();
-#endif
 				/* In case we are rotating on gameload, set the rotation position to
 				 * the current position, otherwise the applied workaround offset would
 				 * be with respect to 0,0.
@@ -653,7 +647,6 @@ static Money  _cargo_feeder_share;
 
 class SlVehicleCommon : public DefaultSaveLoadHandler<SlVehicleCommon, Vehicle> {
 public:
-#ifdef WITH_RUST
 	static inline CargoPacketList cargo_packets;
 	static inline uint32_t cargo_actions[4];
 	static void ExportCargo(Vehicle *v)
@@ -669,7 +662,6 @@ public:
 		std::copy(std::begin(cargo_actions), std::end(cargo_actions), fields.action_counts);
 		v->cargo.ImportMeta(fields);
 	}
-#endif
 	static inline const SaveLoad description[] = {
 		    SLE_VAR(Vehicle, subtype,               SLE_UINT8),
 
@@ -714,13 +706,8 @@ public:
 		    SLE_VAR(Vehicle, cargo_cap,             SLE_UINT16),
 		SLE_CONDVAR(Vehicle, refit_cap,             SLE_UINT16,                 SLV_182, SL_MAX_VERSION),
 		SLEG_CONDVAR("cargo_count", _cargo_count,   SLE_UINT16,                   SL_MIN_VERSION,  SLV_68),
-#ifdef WITH_RUST
 		SLEG_CONDREFLIST("cargo.packets", cargo_packets, REF_CARGO_PACKET, SLV_68, SL_MAX_VERSION),
 		SLEG_CONDARR("cargo.action_counts", cargo_actions, SLE_UINT, 4, SLV_181, SL_MAX_VERSION),
-#else
-		SLE_CONDREFLIST(Vehicle, cargo.packets,     REF_CARGO_PACKET,            SLV_68, SL_MAX_VERSION),
-		SLE_CONDARR(Vehicle, cargo.action_counts,   SLE_UINT, VehicleCargoList::NUM_MOVE_TO_ACTION, SLV_181, SL_MAX_VERSION),
-#endif
 		SLE_CONDVAR(Vehicle, cargo_age_counter,     SLE_UINT16,                 SLV_162, SL_MAX_VERSION),
 
 		    SLE_VAR(Vehicle, day_counter,           SLE_UINT8),
@@ -810,33 +797,23 @@ public:
 
 	void Save(Vehicle *v) const override
 	{
-#ifdef WITH_RUST
 		ExportCargo(v);
-#endif
 		SlObject(v, this->GetDescription());
 	}
 
 	void Load(Vehicle *v) const override
 	{
-#ifdef WITH_RUST
 		cargo_packets.clear();
 		std::fill(std::begin(cargo_actions), std::end(cargo_actions), 0);
-#endif
 		SlObject(v, this->GetLoadDescription());
-#ifdef WITH_RUST
 		ImportCargo(v);
-#endif
 	}
 
 	void FixPointers(Vehicle *v) const override
 	{
-#ifdef WITH_RUST
 		ExportCargo(v);
-#endif
 		SlObject(v, this->GetDescription());
-#ifdef WITH_RUST
 		ImportCargo(v);
-#endif
 	}
 };
 
@@ -844,7 +821,6 @@ class SlVehicleTrain : public DefaultSaveLoadHandler<SlVehicleTrain, Vehicle> {
 public:
 	static inline const SaveLoad description[] = {
 		 SLEG_STRUCT("common", SlVehicleCommon),
-#ifdef WITH_RUST
 		     SLEG_VAR("crash_anim_pos", TrainStateScope::CrashAnimPos(), SLE_UINT16),
 		     SLEG_VAR("force_proceed", TrainStateScope::ForceProceed(), SLE_UINT8),
 		     SLEG_VAR("track", TrainStateScope::Track(), SLE_UINT8),
@@ -852,15 +828,6 @@ public:
 		 SLEG_CONDVAR("flags", TrainStateScope::Flags(), SLE_FILE_U8  | SLE_VAR_U16,   SLV_2,  SLV_100),
 		 SLEG_CONDVAR("flags", TrainStateScope::Flags(), SLE_UINT16,                 SLV_100, SL_MAX_VERSION),
 		 SLEG_CONDVAR("wait_counter", TrainStateScope::WaitCounter(), SLE_UINT16,                 SLV_136, SL_MAX_VERSION),
-#else
-		     SLE_VAR(Train, crash_anim_pos,      SLE_UINT16),
-		     SLE_VAR(Train, force_proceed,       SLE_UINT8),
-		     SLE_VAR(Train, track,               SLE_UINT8),
-
-		 SLE_CONDVAR(Train, flags,               SLE_FILE_U8  | SLE_VAR_U16,   SLV_2,  SLV_100),
-		 SLE_CONDVAR(Train, flags,               SLE_UINT16,                 SLV_100, SL_MAX_VERSION),
-		 SLE_CONDVAR(Train, wait_counter,        SLE_UINT16,                 SLV_136, SL_MAX_VERSION),
-#endif
 		 SLE_CONDVAR(Train, gv_flags,            SLE_UINT16,                 SLV_139, SL_MAX_VERSION),
 	};
 	static inline const SaveLoadCompatTable compat_description = _vehicle_train_sl_compat;
@@ -868,27 +835,21 @@ public:
 	void Save(Vehicle *v) const override
 	{
 		if (v->type != VEH_TRAIN) return;
-#ifdef WITH_RUST
 		TrainStateScope scope(Train::From(v), false);
-#endif
 		SlObject(v, this->GetDescription());
 	}
 
 	void Load(Vehicle *v) const override
 	{
 		if (v->type != VEH_TRAIN) return;
-#ifdef WITH_RUST
 		TrainStateScope scope(Train::From(v), true);
-#endif
 		SlObject(v, this->GetLoadDescription());
 	}
 
 	void FixPointers(Vehicle *v) const override
 	{
 		if (v->type != VEH_TRAIN) return;
-#ifdef WITH_RUST
 		TrainStateScope scope(Train::From(v), false);
-#endif
 		SlObject(v, this->GetDescription());
 	}
 };
@@ -903,30 +864,18 @@ public:
 
 	std::vector<RoadVehPathElement> &GetVector([[maybe_unused]] RoadVehicle *rv) const override
 	{
-#ifdef WITH_RUST
 		return RoadVehicleStateScope::Path();
-#else
-		return rv->path;
-#endif
 	}
 };
 
 class SlVehicleRoadVeh : public DefaultSaveLoadHandler<SlVehicleRoadVeh, Vehicle> {
 public:
 	/* Historical saves store trackdirs and tiles in separate vectors. */
-#ifdef WITH_RUST
 	static std::vector<Trackdir> &PathTrackdirs() { return RoadVehicleStateScope::PathTrackdirs(); }
 	static std::vector<TileIndex> &PathTiles() { return RoadVehicleStateScope::PathTiles(); }
-#else
-	static inline std::vector<Trackdir> rv_path_td;
-	static inline std::vector<TileIndex> rv_path_tile;
-	static std::vector<Trackdir> &PathTrackdirs() { return rv_path_td; }
-	static std::vector<TileIndex> &PathTiles() { return rv_path_tile; }
-#endif
 
 	static inline const SaveLoad description[] = {
 		  SLEG_STRUCT("common", SlVehicleCommon),
-#ifdef WITH_RUST
 		     SLEG_VAR("state", RoadVehicleStateScope::State(), SLE_UINT8),
 		     SLEG_VAR("frame", RoadVehicleStateScope::Frame(), SLE_UINT8),
 		     SLEG_VAR("blocked_ctr", RoadVehicleStateScope::BlockedCounter(), SLE_UINT16),
@@ -934,15 +883,6 @@ public:
 		     SLEG_VAR("overtaking_ctr", RoadVehicleStateScope::OvertakingCounter(), SLE_UINT8),
 		     SLEG_VAR("crashed_ctr", RoadVehicleStateScope::CrashedCounter(), SLE_UINT16),
 		     SLEG_VAR("reverse_ctr", RoadVehicleStateScope::ReverseCounter(), SLE_UINT8),
-#else
-		      SLE_VAR(RoadVehicle, state,                SLE_UINT8),
-		      SLE_VAR(RoadVehicle, frame,                SLE_UINT8),
-		      SLE_VAR(RoadVehicle, blocked_ctr,          SLE_UINT16),
-		      SLE_VAR(RoadVehicle, overtaking,           SLE_UINT8),
-		      SLE_VAR(RoadVehicle, overtaking_ctr,       SLE_UINT8),
-		      SLE_VAR(RoadVehicle, crashed_ctr,          SLE_UINT16),
-		      SLE_VAR(RoadVehicle, reverse_ctr,          SLE_UINT8),
-#endif
 		SLEG_CONDVECTOR("path.td",   PathTrackdirs(),         SLE_UINT8,                  SLV_ROADVEH_PATH_CACHE, SLV_PATH_CACHE_FORMAT),
 		SLEG_CONDVECTOR("path.tile", PathTiles(),       SLE_UINT32,                 SLV_ROADVEH_PATH_CACHE, SLV_PATH_CACHE_FORMAT),
 		SLEG_CONDSTRUCTLIST("path", SlVehicleRoadVehPath, SLV_PATH_CACHE_FORMAT, SL_MAX_VERSION),
@@ -962,11 +902,7 @@ public:
 		size_t n = std::min(rv_path_td.size(), rv_path_tile.size());
 		if (n == 0) return;
 
-#ifdef WITH_RUST
 		auto &path = RoadVehicleStateScope::Path();
-#else
-		auto &path = rv.path;
-#endif
 		path.reserve(n);
 		for (size_t c = 0; c < n; ++c) {
 			path.emplace_back(rv_path_td[c], rv_path_tile[c]);
@@ -979,18 +915,14 @@ public:
 	void Save(Vehicle *v) const override
 	{
 		if (v->type != VEH_ROAD) return;
-#ifdef WITH_RUST
 		RoadVehicleStateScope scope(RoadVehicle::From(v), false);
-#endif
 		SlObject(v, this->GetDescription());
 	}
 
 	void Load(Vehicle *v) const override
 	{
 		if (v->type != VEH_ROAD) return;
-#ifdef WITH_RUST
 		RoadVehicleStateScope scope(RoadVehicle::From(v), true);
-#endif
 		SlObject(v, this->GetLoadDescription());
 		if (!IsSavegameVersionBefore(SLV_ROADVEH_PATH_CACHE) && IsSavegameVersionBefore(SLV_PATH_CACHE_FORMAT)) {
 			ConvertPathCache(*static_cast<RoadVehicle *>(v));
@@ -1000,14 +932,11 @@ public:
 	void FixPointers(Vehicle *v) const override
 	{
 		if (v->type != VEH_ROAD) return;
-#ifdef WITH_RUST
 		RoadVehicleStateScope scope(RoadVehicle::From(v), false);
-#endif
 		SlObject(v, this->GetDescription());
 	}
 };
 
-#ifdef WITH_RUST
 class SlVehicleShipPath : public DefaultSaveLoadHandler<SlVehicleShipPath, Ship> {
 public:
 	static inline const SaveLoad description[] = { SLE_VAR(ShipPathElement, trackdir, SLE_UINT8) };
@@ -1037,18 +966,6 @@ public:
 		}
 	}
 };
-#else
-class SlVehicleShipPath : public VectorSaveLoadHandler<SlVehicleShipPath, Ship, ShipPathElement> {
-public:
-	static inline const SaveLoad description[] = {
-		SLE_VAR(ShipPathElement, trackdir, SLE_UINT8),
-	};
-	static inline const SaveLoadCompatTable compat_description = {};
-
-	std::vector<ShipPathElement> &GetVector(Ship *s) const override { return s->path; }
-};
-
-#endif
 
 class SlVehicleShip : public DefaultSaveLoadHandler<SlVehicleShip, Vehicle> {
 public:
@@ -1056,55 +973,37 @@ public:
 
 	static inline const SaveLoad description[] = {
 		  SLEG_STRUCT("common", SlVehicleCommon),
-#ifdef WITH_RUST
 		     SLEG_VAR("state", ShipStateScope::State(), SLE_UINT8),
-#else
-		      SLE_VAR(Ship, state,                     SLE_UINT8),
-#endif
 		SLEG_CONDVECTOR("path", ship_path_td, SLE_UINT8, SLV_SHIP_PATH_CACHE, SLV_PATH_CACHE_FORMAT),
 		SLEG_CONDSTRUCTLIST("path", SlVehicleShipPath, SLV_PATH_CACHE_FORMAT, SL_MAX_VERSION),
-#ifdef WITH_RUST
 		 SLEG_CONDVAR("rotation", ShipStateScope::Rotation(), SLE_UINT8, SLV_SHIP_ROTATION, SL_MAX_VERSION),
-#else
-		  SLE_CONDVAR(Ship, rotation,                  SLE_UINT8,                  SLV_SHIP_ROTATION, SL_MAX_VERSION),
-#endif
 	};
 	static inline const SaveLoadCompatTable compat_description = _vehicle_ship_sl_compat;
 
 	void Save(Vehicle *v) const override
 	{
 		if (v->type != VEH_SHIP) return;
-#ifdef WITH_RUST
 		ShipStateScope scope(Ship::From(v), false);
-#endif
 		SlObject(v, this->GetDescription());
 	}
 
 	void Load(Vehicle *v) const override
 	{
 		if (v->type != VEH_SHIP) return;
-#ifdef WITH_RUST
 		ShipStateScope scope(Ship::From(v), true);
-#endif
 		SlObject(v, this->GetLoadDescription());
 
 		if (IsSavegameVersionBefore(SLV_PATH_CACHE_FORMAT)) {
 			/* Path cache is now taken from back instead of front, so needs reversing. */
 			Ship *s = static_cast<Ship *>(v);
-#ifdef WITH_RUST
 			for (auto it = ship_path_td.rbegin(); it != ship_path_td.rend(); ++it) s->path.push_back(*it);
-#else
-			std::transform(std::rbegin(ship_path_td), std::rend(ship_path_td), std::back_inserter(s->path), [](Trackdir trackdir) { return trackdir; });
-#endif
 		}
 	}
 
 	void FixPointers(Vehicle *v) const override
 	{
 		if (v->type != VEH_SHIP) return;
-#ifdef WITH_RUST
 		ShipStateScope scope(Ship::From(v), false);
-#endif
 		SlObject(v, this->GetDescription());
 	}
 };
@@ -1168,13 +1067,8 @@ public:
 		     SLE_VAR(Vehicle, progress,              SLE_UINT8),
 		     SLE_VAR(Vehicle, vehstatus,             SLE_UINT8),
 
-#ifdef WITH_RUST
 		    SLEG_VAR("animation_state", EffectVehicleAnimationScope::State(), SLE_UINT16),
 		    SLEG_VAR("animation_substate", EffectVehicleAnimationScope::Substate(), SLE_UINT8),
-#else
-		     SLE_VAR(EffectVehicle, animation_state,    SLE_UINT16),
-		     SLE_VAR(EffectVehicle, animation_substate, SLE_UINT8),
-#endif
 
 		 SLE_CONDVAR(Vehicle, spritenum,             SLE_UINT8,                    SLV_2, SL_MAX_VERSION),
 	};
@@ -1183,27 +1077,21 @@ public:
 	void Save(Vehicle *v) const override
 	{
 		if (v->type != VEH_EFFECT) return;
-#ifdef WITH_RUST
 		EffectVehicleAnimationScope scope(EffectVehicle::From(v), false);
-#endif
 		SlObject(v, this->GetDescription());
 	}
 
 	void Load(Vehicle *v) const override
 	{
 		if (v->type != VEH_EFFECT) return;
-#ifdef WITH_RUST
 		EffectVehicleAnimationScope scope(EffectVehicle::From(v), true);
-#endif
 		SlObject(v, this->GetLoadDescription());
 	}
 
 	void FixPointers(Vehicle *v) const override
 	{
 		if (v->type != VEH_EFFECT) return;
-#ifdef WITH_RUST
 		EffectVehicleAnimationScope scope(EffectVehicle::From(v), false);
-#endif
 		SlObject(v, this->GetDescription());
 	}
 };

@@ -48,9 +48,7 @@ public:
 
 	TPeriod period; ///< The period of the timer.
 	TStorage storage = {}; ///< The storage of the timer.
-#ifdef WITH_RUST
 	[[no_unique_address]] std::conditional_t<IsRustGameClock<TTimerType>, RustClockBinding, RustEmptyClockBinding> clock_binding{};
-#endif
 
 protected:
 	virtual void Elapsed(TElapsed delta) = 0;
@@ -84,22 +82,18 @@ public:
 		BaseTimer<TTimerType>(interval),
 		callback(std::move(callback))
 	{
-#ifdef WITH_RUST
 		if constexpr (IsRustGameClock<TTimerType>) {
 			RustClockBind(*this, {[](const void *context, void *) noexcept {
 				const_cast<IntervalTimer *>(static_cast<const IntervalTimer *>(context))->Elapsed(1);
 				return true;
 			}, this}, nullptr);
 		}
-#endif
 	}
 
-#ifdef WITH_RUST
 	[[nodiscard]] IntervalTimer(const TPeriod interval, RustClockCallback callback) requires IsRustGameClock<TTimerType> : BaseTimer<TTimerType>(interval)
 	{
 		RustClockBind(*this, callback, nullptr);
 	}
-#endif
 
 	/**
 	 * Set a new interval for the timer.
@@ -143,14 +137,12 @@ public:
 		fired(!start),
 		callback(std::move(callback))
 	{
-#ifdef WITH_RUST
 		if constexpr (IsRustGameClock<TTimerType>) {
 			RustClockBind(*this, {[](const void *context, void *) noexcept {
 				const_cast<TimeoutTimer *>(static_cast<const TimeoutTimer *>(context))->Elapsed(1);
 				return true;
 			}, this}, &this->fired);
 		}
-#endif
 	}
 
 	/**
@@ -202,8 +194,6 @@ private:
 	void Elapsed(TElapsed count) override;
 };
 
-#ifdef WITH_RUST
 #include "../rust/clock_registration.hpp"
-#endif
 
 #endif /* TIMER_H */

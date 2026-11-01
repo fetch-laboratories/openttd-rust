@@ -13,9 +13,9 @@
 #include "../pathfinder/pathfinder_type.h"
 #include "../track_func.h"
 #include "../roadveh.h"
-#ifdef WITH_RUST
 #include "../rust/road_yapf_ffi.h"
 #include "../rust/movement_ffi.h"
+#include "../rust/station_catchment_ffi.h"
 #include "../tile_type.h"
 #include "../landscape.h"
 #include "../safeguards.h"
@@ -39,6 +39,9 @@ const OpenTTDSharedServices *MovementWorld()
 {
 	static OpenTTDSharedServices world{};
 	static OpenTTDMovementServices movement{};
+	static OpenTTDStationCatchmentServices stations{};
+	world.station_catchment = []() noexcept -> const OpenTTDStationCatchmentServices * { return &stations; };
+	stations.station_if_valid = [](uint16_t) noexcept -> BaseStation * { return nullptr; };
 	world.movement = &movement;
 	world.map = &movement_map.statics;
 	world.tile_type = [](uint32_t) noexcept -> uint8_t { return 2; };
@@ -51,18 +54,16 @@ const OpenTTDSharedServices *MovementWorld()
 	world.disallowed_road_directions = [](uint32_t) noexcept -> uint8_t { return fixture_dirs > 255 ? 1 : 2; };
 	world.has_road_works = [](uint32_t) noexcept { return false; };
 	movement.shared = &world;
+	movement.road_kind = [](OpenTTDVehicle *) noexcept { return RTT_ROAD; };
 	movement.has_tile_road_type = [](uint32_t, RoadTramType) noexcept { return true; };
 	SetFixtureDirs(fixture_dirs);
 	return &world;
 }
 uint32_t RoadProbeClosest(const void *, uint16_t, uint8_t) noexcept { return 0; }
-OpenTTDRoadYapfArea Area(const void *, uint16_t) noexcept { return {}; }
 const OpenTTDRoadYapfLeaves probe_leaves{
 	.shared = MovementWorld(),
-	.road_kind = [](const void *) noexcept { return RTT_ROAD; },
 	.tile = ProbeTile,
 	.closest = RoadProbeClosest,
-	.area = Area,
 };
 }
 
@@ -114,9 +115,7 @@ TEST_CASE("Road YAPF origin masks match shared track constants", "[road][rust]")
 /* Loaded games clamp max_search_nodes. The generic native search still checks
  * low limits and open-key replacement, now using the production follower on a
  * concrete junction grid instead of an injected transition callback. */
-#undef WITH_RUST
-#include "../pathfinder/yapf/yapf_node_road.hpp"
-#define WITH_RUST
+#include "reference-yapf_node_road.hpp"
 #include "../pathfinder/yapf/yapf_base.hpp"
 #include "../pathfinder/follow_track.hpp"
 #include "follower_fixture.hpp"
@@ -127,13 +126,9 @@ OpenTTDRoadYapfTile ProbeTile(const void *, uint32_t tile, uint8_t, bool) noexce
 {
 	OpenTTDRoadYapfTile out{}; out.type = 2; out.depot = tile == goal; out.depot_dir = DIAGDIR_SW; return out;
 }
-OpenTTDFollowTrackState Follow(uint32_t tile, uint8_t td)
+OpenTTDTestFollow Follow(uint32_t tile, uint8_t td)
 {
-	OpenTTDFollowTrackState ft{};
-	const auto &s = FollowerFixture::active->shared;
-	openttd_test_follower_init(&ft, &s, TRANSPORT_ROAD, reinterpret_cast<Vehicle *>(FollowerFixture::active->Vehicle()), 0, 0, true, false, true);
-	if (!openttd_test_follower_follow(&s, &ft, tile, td)) ft.new_td_bits = TRACKDIR_BIT_NONE;
-	return ft;
+	return OpenTTDTestFollowOnce(FollowerFixture::active->shared, TRANSPORT_ROAD, reinterpret_cast<Vehicle *>(FollowerFixture::active->Vehicle()), 0, 0, true, tile, td);
 }
 struct Follower {};
 class Search;
@@ -235,7 +230,7 @@ TEST_CASE("Road YAPF observes accepted traversal once after transient exits", "[
 		map.movement.road = &road;
 		RoadOrder::limits.clear();
 		map.physics.display_max_speed = [](OpenTTDVehicle *) noexcept -> int32_t { RoadOrder::limits.push_back('D'); return 100; };
-		map.movement.order_speed = [](OpenTTDVehicle *) noexcept -> uint16_t { RoadOrder::limits.push_back('O'); return 40; };
+		map.orders.vehicle = [](void *) noexcept { RoadOrder::limits.push_back('O'); return &FollowerFixture::active->order_state; };
 		map.movement.road_type_speed = [](RoadType) noexcept -> uint16_t { RoadOrder::limits.push_back('R'); return 40; };
 		auto leaves = probe_leaves; leaves.shared = &map.shared; leaves.tile = RoadOrder::Tile;
 		OpenTTDRoadYapfInput input{}; input.map_x = input.map_y = 64; input.tile = 130; input.slope = 17;
@@ -251,5 +246,3 @@ TEST_CASE("Road YAPF observes accepted traversal once after transient exits", "[
 		}
 	}
 }
-
-#endif

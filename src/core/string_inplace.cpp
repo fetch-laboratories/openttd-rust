@@ -11,9 +11,7 @@
 
 #include "../stdafx.h"
 #include "string_inplace.hpp"
-#ifdef WITH_RUST
 #include "../rust/string_validation_ffi.h"
-#endif
 #include "../safeguards.h"
 
 /**
@@ -37,16 +35,9 @@
  */
 void InPlaceBuilder::PutBuffer(std::span<const char> str)
 {
-#ifdef WITH_RUST
 	auto result = openttd_rust_inplace_write(reinterpret_cast<uint8_t *>(this->dest.data()), this->position, this->consumer.GetBytesRead(), reinterpret_cast<const uint8_t *>(str.data()), str.size());
 	if (!result.accepted) NOT_REACHED();
 	this->position = result.position;
-#else
-	auto unused = this->GetBytesUnused();
-	if (str.size() > unused) NOT_REACHED();
-	std::ranges::copy(str, this->dest.data() + this->position);
-	this->position += str.size();
-#endif
 }
 
 /**

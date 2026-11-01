@@ -19,9 +19,7 @@
 #include "vehicle_type.h"
 #include "timer/timer_game_tick.h"
 #include "saveload/saveload.h"
-#ifdef WITH_RUST
 #include "rust/orders_ffi.h"
-#endif
 
 using OrderListPool = Pool<OrderList, OrderListID, 128>;
 extern OrderListPool _orderlist_pool;
@@ -257,7 +255,6 @@ public:
 	void ConvertFromOldSavegame();
 };
 
-#ifdef WITH_RUST
 /** Thin scoped view of the canonical contiguous Rust order allocation. Structural
  * writes invalidate pointers at the same logical operations as std::vector. */
 class RustOrderVector {
@@ -295,7 +292,6 @@ public:
 	void Move(size_t from, size_t to) { openttd_rust_order_vector_move(this->owner.get(), from, to); }
 	OpenTTDOrderVector *GetRustOwner() const { return this->owner.get(); }
 };
-#endif
 
 /** Compatibility struct to allow saveload of pool-based orders. */
 struct OldOrderSaveLoadItem {
@@ -322,28 +318,15 @@ private:
 	template <typename T>
 	friend class SlOrders;
 
-#ifdef WITH_RUST
 	std::unique_ptr<OpenTTDOrderListState, decltype(&openttd_rust_orderlist_delete)> rust_state{openttd_rust_orderlist_new(), openttd_rust_orderlist_delete};
 	VehicleOrderID &num_manual_orders = this->rust_state->manual;
 	uint &num_vehicles = this->rust_state->vehicles;
 	Vehicle *&first_shared = *new (std::addressof(this->rust_state->first_shared)) Vehicle *{nullptr};
 	RustOrderVector orders;
-#else
-	VehicleOrderID num_manual_orders = 0; ///< NOSAVE: How many manually added orders are there in the list.
-	uint num_vehicles = 0; ///< NOSAVE: Number of vehicles that share this order list.
-	Vehicle *first_shared = nullptr; ///< NOSAVE: pointer to the first vehicle in the shared order chain.
-	std::vector<Order> orders; ///< Orders of the order list.
-#endif
 	uint32_t old_order_index = 0;
 
-#ifdef WITH_RUST
 	TimerGameTick::Ticks &timetable_duration = this->rust_state->timetable_duration;
 	TimerGameTick::Ticks &total_duration = this->rust_state->total_duration;
-#else
-	TimerGameTick::Ticks timetable_duration{}; ///< NOSAVE: Total timetabled duration of the order list.
-	TimerGameTick::Ticks total_duration{}; ///< NOSAVE: Total (timetabled or not) duration of the order list.
-
-#endif
 
 public:
 	/** Default constructor producing an invalid order list. */
@@ -374,11 +357,9 @@ public:
 	/** Destructor. Invalidates OrderList for re-usage by the pool. */
 	~OrderList() {}
 
-#ifdef WITH_RUST
 	OrderList(RustOrderVector &&orders, Vehicle *v) : orders(std::move(orders)) { this->Initialize(v); }
 	OpenTTDOrderListState *GetRustState() const { return this->rust_state.get(); }
 	OpenTTDOrderVector *GetRustOrders() const { return this->orders.GetRustOwner(); }
-#endif
 	void Initialize(Vehicle *v);
 
 	void RecalculateTimetableDuration();

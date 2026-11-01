@@ -17,10 +17,8 @@
 #include "core.h"
 #include "../../core/convertible_through_base.hpp"
 #include "../../string_type.h"
-#ifdef WITH_RUST
 #include "../../rust/packet_ffi.h"
 static_assert(sizeof(ssize_t) == sizeof(intptr_t) && std::is_signed_v<ssize_t>);
-#endif
 
 typedef uint16_t PacketSize; ///< Size of the whole packet.
 typedef uint8_t  PacketType; ///< Identifier for the packet
@@ -49,28 +47,17 @@ struct Packet {
 	static constexpr size_t EncodedLengthOfPacketType() { return sizeof(PacketType); }
 private:
 	/** The current read/write position in the packet */
-#ifdef WITH_RUST
 	OpenTTDPacketState state;
-#else
-	PacketSize pos;
-#endif
 	/** The buffer of this packet. */
 	std::vector<uint8_t> buffer;
 	/** The limit for the packet size. */
-#ifndef WITH_RUST
-	size_t limit;
-#endif
 
 	/** Socket we're associated with. */
 	NetworkSocketHandler *cs;
 
 	PacketSize Position() const
 	{
-#ifdef WITH_RUST
 		return this->state.position;
-#else
-		return this->pos;
-#endif
 	}
 
 public:
@@ -123,7 +110,6 @@ public:
 	template <typename F>
 	ssize_t TransferOutWithLimit(F transfer_function, size_t limit)
 	{
-#ifdef WITH_RUST
 		size_t amount = openttd_rust_packet_transfer_amount(&this->state, this->Size(), limit);
 		if (amount == 0) return 0;
 
@@ -134,17 +120,6 @@ public:
 		/* A reentrant callback may change this packet's cursor. Commit to its live value. */
 		openttd_rust_packet_transfer_commit(&this->state, static_cast<intptr_t>(bytes));
 		return bytes;
-#else
-		size_t amount = std::min(this->RemainingBytesToTransfer(), limit);
-		if (amount == 0) return 0;
-
-		assert(this->pos < this->buffer.size());
-		assert(this->pos + amount <= this->buffer.size());
-		auto output_buffer = std::span<const uint8_t>(this->buffer.data() + this->pos, amount);
-		ssize_t bytes = transfer_function(output_buffer);
-		if (bytes > 0) this->pos += bytes;
-		return bytes;
-#endif
 	}
 
 	/**
@@ -188,7 +163,6 @@ public:
 	template <typename F>
 	ssize_t TransferIn(F transfer_function)
 	{
-#ifdef WITH_RUST
 		size_t amount = openttd_rust_packet_transfer_amount(&this->state, this->Size(), std::numeric_limits<size_t>::max());
 		if (amount == 0) return 0;
 
@@ -199,17 +173,6 @@ public:
 		/* A reentrant callback may change this packet's cursor. Commit to its live value. */
 		openttd_rust_packet_transfer_commit(&this->state, static_cast<intptr_t>(bytes));
 		return bytes;
-#else
-		size_t amount = this->RemainingBytesToTransfer();
-		if (amount == 0) return 0;
-
-		assert(this->pos < this->buffer.size());
-		assert(this->pos + amount <= this->buffer.size());
-		auto input_buffer = std::span<uint8_t>(this->buffer.data() + this->pos, amount);
-		ssize_t bytes = transfer_function(input_buffer);
-		if (bytes > 0) this->pos += bytes;
-		return bytes;
-#endif
 	}
 };
 

@@ -333,14 +333,6 @@ inline RailTypes GetAllPoweredRailTypes(RailTypes railtypes)
  * @param railtypes Set of railtypes to get the introduced railtypes from.
  * @return Union of all introduced railtypes.
  */
-#ifndef WITH_RUST
-inline RailTypes GetAllIntroducesRailTypes(RailTypes railtypes)
-{
-	RailTypes introduces{};
-	for (RailType rt : railtypes) introduces.Set(GetRailTypeInfo(rt)->introduces_railtypes);
-	return introduces;
-}
-#endif
 
 /**
  * Checks if an engine of the given RailType can drive on a tile with a given
@@ -515,20 +507,8 @@ RailTypes GetRailTypes(bool introduces);
 
 RailType GetRailTypeByLabel(RailTypeLabel label, bool allow_alternate_labels = true);
 
-#ifndef WITH_RUST
-void ResetRailTypes();
-#endif
-#ifndef WITH_RUST
-void InitRailTypes();
-RailType AllocateRailType(RailTypeLabel label);
-#endif
 
-#ifdef WITH_RUST
 extern std::span<RailType> _sorted_railtypes;
 extern RailTypes &_railtypes_hidden_mask;
-#else
-extern std::vector<RailType> _sorted_railtypes;
-extern RailTypes _railtypes_hidden_mask;
-#endif
 
 #endif /* RAIL_H */

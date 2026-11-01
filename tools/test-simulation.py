@@ -14,7 +14,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from simulation import community_ai, engines, newgrf_loading, platform_subset, runtime
+from simulation import (
+    community_ai,
+    engines,
+    newgrf_loading,
+    platform_subset,
+    runtime,
+    stations,
+)
 from simulation import core as simulate
 from simulation import instructions as ir
 from simulation.instructions import SPEED_BUDGETS, speed_budget
@@ -25,6 +32,110 @@ simulate.scenario_modules()
 
 
 class SimulationDeterminismTests(unittest.TestCase):
+    def test_station_spatial_requires_complete_unique_rows(self) -> None:
+        for reload in (False, True):
+            phases = (
+                ("reload",)
+                if reload
+                else (
+                    "build",
+                    "move-unchanged",
+                    "move-away",
+                    "move-back",
+                    "remove",
+                    "reuse",
+                )
+            )
+            lines = [
+                f"STCMD spatial602-visit {phase} 1000 8 1:true:32767"
+                for phase in phases
+            ]
+            lines += [
+                "STCMD spatial602-visit zero 1000 0",
+                "STCMD spatial602-visit edge 0 1",
+            ]
+            lines += [
+                f"STCMD owner562-rng {phase} 1 2 3 4"
+                for phase in ("spatial602-before", "spatial602")
+            ]
+            lines += [
+                f"STCMD spatial602-town {initial} 10 1000"
+                for initial in (-32768, -1000, 999, 32767)
+            ]
+            ratings = " ".join(f"{i}:0" for i in range(19 if reload else 20))
+            lines += [
+                f"STCMD spatial602-rating {radius} {amount} {ratings}"
+                for radius in (0, 1, 2, 8)
+                for amount in (-160, -1, 0, 1, 255)
+            ]
+            tiles = " ".join(f"{i}:0" for i in range(6))
+            for axis in (0, 1):
+                for blocked in ("false", "true"):
+                    for mode in (0, 1, 2):
+                        lines.append(
+                            f"STCMD spatial602-animation {axis} {blocked} {mode} {tiles} rng 1 2 3 4"
+                        )
+                        if mode != 0:
+                            lines.append(
+                                f"STCMD spatial602-random {axis} {blocked} {mode} {tiles} rng 1 2 3 4"
+                            )
+                        if not reload:
+                            lines.append(
+                                f"STCMD spatial602-rail {axis} {blocked} {mode} 1000 3 2"
+                            )
+            if reload:
+                lines.append("STCMD spatial602-crash-reload 40")
+            else:
+                lines += ["STCMD spatial602-crash-input 20 3 1 2 3 4"]
+                lines += [
+                    f"STCMD spatial602-crash-event {event} type 0 id 21 site 10005 reason 1 victims 3 expected 3 rng 1 2"
+                    for event in ("ai-event", "game-event")
+                ]
+                lines += [
+                    f"STCMD spatial602-crash {i} {operation} {40 if i == 3 else 200}"
+                    for i, operation in enumerate(
+                        ("ai-event", "game-event", "news", "sound")
+                    )
+                ]
+                lines += [
+                    "STCMD owner562-rng spatial602-crash 1 2 3 4",
+                    "STCMD spatial602-stop occupied-articulated 0 1",
+                    "STCMD spatial602-collisions true true",
+                    "STCMD spatial602-deleted-tie 0 0",
+                    "STCMD spatial602-waypoint 1000 1 1",
+                ]
+                lines += [
+                    f"STCMD spatial602-stop {bus} {incompatible} 0 1"
+                    for bus in ("true", "false")
+                    for incompatible in ("false", "true")
+                ]
+            lines.append("STCMD complete")
+            stations.check_spatial602(lines, reload)
+            for index, line in enumerate(lines):
+                with (
+                    self.subTest(reload=reload, missing=line),
+                    self.assertRaises(RuntimeError),
+                ):
+                    stations.check_spatial602(
+                        lines[:index] + lines[index + 1 :], reload
+                    )
+                with (
+                    self.subTest(reload=reload, duplicate=line),
+                    self.assertRaises(RuntimeError),
+                ):
+                    stations.check_spatial602(lines + [line], reload)
+                if line.endswith(" rng 1 2 3 4"):
+                    with (
+                        self.subTest(reload=reload, incomplete=line),
+                        self.assertRaises(RuntimeError),
+                    ):
+                        stations.check_spatial602(
+                            lines[:index]
+                            + [line.split(" rng ")[0]]
+                            + lines[index + 1 :],
+                            reload,
+                        )
+
     def test_engine_runtime_requires_complete_price_matrix_and_rng(self) -> None:
         records = [
             f"ENGINE properties-runtime {kind} {price} {dynamic} {base} 0 -1"
@@ -862,6 +973,43 @@ class InstructionSpeedTests(unittest.TestCase):
             settings = json.loads(recorded[0])["settings"]
             self.assertIn(f"{shared}/deps/lib;<source>/src;<build>/x;", settings)
 
+    def test_rust_only_cache_keeps_anchored_compatible_spelling(self):
+        anchored = (
+            "GITCOMMAND:FILEPATH=/usr/bin/git\n\n//Global directory\n"
+            "OPTION_PACKAGE_DEPENDENCIES:BOOL=OFF\n\n" + ir.RUST_OPTION + "//Survey\n"
+            "//Details about finding Freetype\nFIND_PACKAGE_MESSAGE_DETAILS_Freetype:INTERNAL=[f]\n"
+            "//Details about finding ICU\nGITCOMMAND-ADVANCED:INTERNAL=1\n"
+            "//Test HAVE\n"
+        )
+        rust_only = (
+            "GITCOMMAND:FILEPATH=/usr/bin/git\n\n"
+            "//Git command line client\nGIT_EXECUTABLE:FILEPATH=/usr/bin/git\n\n"
+            "//Global directory\nOPTION_PACKAGE_DEPENDENCIES:BOOL=OFF\n\n//Survey\n"
+            "//Details about finding Freetype\nFIND_PACKAGE_MESSAGE_DETAILS_Freetype:INTERNAL=[f]\n"
+            "//Details about finding Git\nFIND_PACKAGE_MESSAGE_DETAILS_Git:INTERNAL=[/usr/bin/git][v2()]\n"
+            "//Details about finding ICU\nGITCOMMAND-ADVANCED:INTERNAL=1\n"
+            "//ADVANCED property for variable: GIT_EXECUTABLE\nGIT_EXECUTABLE-ADVANCED:INTERNAL=1\n"
+            "//Test HAVE\n"
+        )
+        self.assertEqual(ir.anchored_cache(anchored), anchored)
+        self.assertEqual(ir.anchored_cache(rust_only), anchored)
+        with tempfile.TemporaryDirectory() as directory:
+            build = Path(directory)
+            for name, text in (
+                ("CMakeCache.txt", rust_only),
+                ("rust-build-configuration.txt", "c"),
+                ("rust-toolchain.txt", "t"),
+                ("openttd-rust", "game"),
+            ):
+                (build / name).write_text(text)
+            with (
+                patch.object(ir, "verify_debug"),
+                patch.object(migration, "rust_archive"),
+            ):
+                ir.record_build(build, build, "candidate", {"CARGO_HOME": "-"})
+                settings = json.loads((build / "instruction-build.json").read_text())
+            self.assertTrue(settings["settings"].startswith(anchored + "ct"))
+
     def test_effective_compiled_debug_rejects_overrides_and_stripping(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -909,7 +1057,7 @@ class InstructionSpeedTests(unittest.TestCase):
             build = Path(directory)
             (build / "build.ninja").touch()
             (build / "CMakeCache.txt").write_text(
-                f"CMAKE_HOME_DIRECTORY:PATH={build}\nOPTION_RUST:BOOL=ON\n"
+                f"CMAKE_HOME_DIRECTORY:PATH={build}\nRUST_TARGET:STRING=x86_64-unknown-linux-gnu\n"
             )
             configuration = build / "rust-build-configuration.txt"
             profile_env = {"CARGO_PROFILE_RELEASE_DEBUG": "line-tables-only"}
@@ -1214,6 +1362,81 @@ class SpeedPassTests(unittest.TestCase):
                             self.assertEqual(
                                 speed.summarize(out, manifest, names, len(groups)), 0
                             )
+
+
+class DrawingWorkloadTests(unittest.TestCase):
+    def test_drawing_ratio_has_no_speed_ceiling(self):
+        from simulation import drawing
+
+        self.assertIsNone(ir.speed_budget(drawing.NAME, 1.4))
+        self.assertIsNone(ir.speed_budget(drawing.NAME, 1.4, 1.2, 1.1))
+        anchor = dict(ratio=1.1, Ir=100, identity={"compatible": "drawing"})
+        report = ir.budget(
+            drawing.NAME,
+            dict(Ir=110, identity=anchor["identity"]),
+            dict(anchor=anchor, integrated=dict(Ir=100)),
+        )
+        self.assertEqual(set(report), {"projected_ratio"})
+        self.assertAlmostEqual(report["projected_ratio"], 1.32)
+
+    def test_profiled_launch_counts_drawing_in_both_builds(self):
+        from simulation import drawing
+
+        (scenario,) = drawing.scenarios(False)
+        self.assertIn(scenario, simulate.scenario_list(False))
+        self.assertIn(scenario["name"], ir.PROFILED)
+        for reference in (True, False):
+            self.assertEqual(
+                ir.flags(scenario, reference)[-1], f"--toggle-collect={ir.DRAW_ENTRY}"
+            )
+        with tempfile.TemporaryDirectory() as directory:
+            plan = simulate.prepare_game(
+                scenario, Path("openttd"), Path(directory), Path(directory) / "run", 1
+            )
+        command = plan["command"]
+        self.assertNotIn("-vnull:ticks=1", command)
+        self.assertIn("-vsdl:no_threads", command)
+        self.assertEqual(command[command.index("-b") + 1], drawing.BLITTER)
+        self.assertEqual(plan["env"]["SDL_VIDEODRIVER"], "dummy")
+
+    def test_images_compare_byte_for_byte_and_require_equal_graphics(self):
+        from simulation import drawing
+
+        scenario = dict(draw=True)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for role in ("reference", "candidate"):
+                (root / role / "baseset").mkdir(parents=True)
+                (root / role / "baseset/opengfx.grf").write_bytes(b"gfx")
+                (root / role / "screenshot").mkdir()
+            builds = {role: root / role for role in ("reference", "candidate")}
+            save = simulate.ROOT / "migration/saves/padhattan-ridge-1996.sav"
+            prepared = drawing.prepare(
+                dict(scenario, name="draw", save=str(save)), {}, builds, root, 1, {}, {}
+            )
+            self.assertNotIn("GLOG", simulate.read_save(Path(prepared["save"])))
+            (root / "candidate/baseset/opengfx.grf").write_bytes(b"other")
+            with self.assertRaisesRegex(RuntimeError, "base graphics differ"):
+                drawing.prepare(scenario, {}, builds, root, 1, {}, {})
+            header = bytes(18) + (3).to_bytes(4, "little") + (2).to_bytes(4, "little")
+            for candidate, equal in ((b"same", True), (b"diff", False)):
+                result = dict(differences=[])
+                for role, body in (("reference", b"same"), ("candidate", candidate)):
+                    image = root / role / "screenshot/drawing.bmp"
+                    image.write_bytes(header + body)
+                    drawing.check(
+                        scenario, dict(dir=root / role), "plain", role, result
+                    )
+                self.assertEqual(result["plain_image"]["width"], 3)
+                self.assertEqual(result["plain_image"]["height"], 2)
+                self.assertEqual(not result["differences"], equal)
+                self.assertEqual(image.exists(), not equal)
+            self.assertEqual(result["differences"][0]["element"], "26")
+            image.unlink()
+            with self.assertRaisesRegex(RuntimeError, "candidate wrote screenshots"):
+                drawing.check(
+                    scenario, dict(dir=root / "candidate"), "plain", "candidate", {}
+                )
 
 
 class PlatformSubsetTests(unittest.TestCase):

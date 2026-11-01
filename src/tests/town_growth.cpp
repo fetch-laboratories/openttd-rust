@@ -9,12 +9,9 @@
 #include "../stdafx.h"
 #include "../3rdparty/catch2/catch.hpp"
 #include "../town.h"
-#ifdef WITH_RUST
 #include "town_protocol.hpp"
-#endif
 #include "../safeguards.h"
 
-#ifdef WITH_RUST
 TEST_CASE("Town growth - command boundaries and callback reentry")
 {
 	CheckTownProtocol([](bool result) { CHECK(result); });
@@ -118,4 +115,3 @@ TEST_CASE("Town roads - cleanup widths and requested-bit short circuit")
 	map.base[64].type = MP_VOID << 4;
 	CHECK(openttd_test_clean_up_road_bits(&shared, 65, UINT32_MAX) == 247);
 }
-#endif

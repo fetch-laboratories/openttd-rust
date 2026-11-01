@@ -32,9 +32,7 @@
 
 #include "table/strings.h"
 
-#ifdef WITH_RUST
 #include "rust/industry_definition_ffi.h"
-#endif
 
 #include "safeguards.h"
 
@@ -46,7 +44,6 @@
  */
 OverrideManagerBase::OverrideManagerBase(uint16_t offset, uint16_t maximum, uint16_t invalid)
 {
-#ifdef WITH_RUST
 	this->max_offset = offset;
 	this->max_entities = maximum;
 	this->invalid_id = invalid;
@@ -55,19 +52,8 @@ OverrideManagerBase::OverrideManagerBase(uint16_t offset, uint16_t maximum, uint
 	this->mappings = {view.mappings, maximum};
 	this->entity_overrides = {view.entities, offset};
 	this->grfid_overrides = {view.grfids, offset};
-#else
-	this->max_offset = offset;
-	this->max_entities = maximum;
-	this->invalid_id = invalid;
-
-	this->mappings.resize(this->max_entities);
-	this->entity_overrides.resize(this->max_offset);
-	std::fill(this->entity_overrides.begin(), this->entity_overrides.end(), this->invalid_id);
-	this->grfid_overrides.resize(this->max_offset);
-#endif
 }
 
-#ifdef WITH_RUST
 OverrideManagerBase::OverrideManagerBase(const OverrideManagerBase &other) :
 		rust_owner(openttd_rust_override_clone(other.rust_owner)), max_offset(other.max_offset), max_entities(other.max_entities), invalid_id(other.invalid_id)
 {
@@ -89,9 +75,7 @@ OverrideManagerBase &OverrideManagerBase::operator=(const OverrideManagerBase &o
 	return *this;
 }
 OverrideManagerBase::~OverrideManagerBase() { openttd_rust_override_delete(this->rust_owner); }
-#endif
 
-#ifdef WITH_RUST
 HouseOverrideManager::HouseOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
 		OverrideManagerBase(offset, maximum, invalid)
 {
@@ -117,7 +101,6 @@ IndustryTileOverrideManager::IndustryTileOverrideManager(uint16_t offset, uint16
 {
 	if (this == &_industile_mngr) openttd_rust_industry_tile_register_manager(this->rust_owner);
 }
-#endif
 
 /**
  * Since the entity IDs defined by the GRF file does not necessarily correlate
@@ -129,37 +112,20 @@ IndustryTileOverrideManager::IndustryTileOverrideManager(uint16_t offset, uint16
  */
 void OverrideManagerBase::Add(uint16_t local_id, uint32_t grfid, uint entity_type)
 {
-#ifdef WITH_RUST
 	assert(entity_type < this->max_offset);
 	openttd_rust_override_add(this->rust_owner, local_id, grfid, entity_type);
-#else
-	assert(entity_type < this->max_offset);
-	/* An override can be set only once */
-	if (this->entity_overrides[entity_type] != this->invalid_id) return;
-	this->entity_overrides[entity_type] = local_id;
-	this->grfid_overrides[entity_type] = grfid;
-#endif
 }
 
 /** Resets the mapping, which is used while initializing game */
 void OverrideManagerBase::ResetMapping()
 {
-#ifdef WITH_RUST
 	openttd_rust_override_reset_mapping(this->rust_owner);
-#else
-	std::fill(this->mappings.begin(), this->mappings.end(), EntityIDMapping{});
-#endif
 }
 
 /** Resets the override, which is used while initializing game */
 void OverrideManagerBase::ResetOverride()
 {
-#ifdef WITH_RUST
 	openttd_rust_override_reset(this->rust_owner);
-#else
-	std::fill(this->entity_overrides.begin(), this->entity_overrides.end(), this->invalid_id);
-	std::fill(this->grfid_overrides.begin(), this->grfid_overrides.end(), uint32_t());
-#endif
 }
 
 /**
@@ -170,18 +136,7 @@ void OverrideManagerBase::ResetOverride()
  */
 uint16_t OverrideManagerBase::GetID(uint16_t grf_local_id, uint32_t grfid) const
 {
-#ifdef WITH_RUST
 	return openttd_rust_override_get(this->rust_owner, grf_local_id, grfid);
-#else
-	for (uint16_t id = 0; id < this->max_entities; id++) {
-		const EntityIDMapping *map = &this->mappings[id];
-		if (map->entity_id == grf_local_id && map->grfid == grfid) {
-			return id;
-		}
-	}
-
-	return this->invalid_id;
-#endif
 }
 
 /**
@@ -193,33 +148,9 @@ uint16_t OverrideManagerBase::GetID(uint16_t grf_local_id, uint32_t grfid) const
  */
 uint16_t OverrideManagerBase::AddEntityID(uint16_t grf_local_id, uint32_t grfid, uint16_t substitute_id)
 {
-#ifdef WITH_RUST
 	return openttd_rust_override_allocate(this->rust_owner, grf_local_id, grfid, substitute_id, this,
 		this->GetID(grf_local_id, grfid),
 		[](void *self, uint16_t id) noexcept { return static_cast<OverrideManagerBase *>(self)->CheckValidNewID(id); });
-#else
-	uint16_t id = this->GetID(grf_local_id, grfid);
-
-	/* Look to see if this entity has already been added. This is done
-	 * separately from the loop below in case a GRF has been deleted, and there
-	 * are any gaps in the array.
-	 */
-	if (id != this->invalid_id) return id;
-
-	/* This entity hasn't been defined before, so give it an ID now. */
-	for (id = this->max_offset; id < this->max_entities; id++) {
-		EntityIDMapping *map = &this->mappings[id];
-
-		if (CheckValidNewID(id) && map->entity_id == 0 && map->grfid == 0) {
-			map->entity_id     = grf_local_id;
-			map->grfid         = grfid;
-			map->substitute_id = substitute_id;
-			return id;
-		}
-	}
-
-	return this->invalid_id;
-#endif
 }
 
 /**
@@ -229,11 +160,7 @@ uint16_t OverrideManagerBase::AddEntityID(uint16_t grf_local_id, uint32_t grfid,
  */
 uint32_t OverrideManagerBase::GetGRFID(uint16_t entity_id) const
 {
-#ifdef WITH_RUST
 	return openttd_rust_override_grfid(this->rust_owner, entity_id);
-#else
-	return this->mappings[entity_id].grfid;
-#endif
 }
 
 /**
@@ -243,11 +170,7 @@ uint32_t OverrideManagerBase::GetGRFID(uint16_t entity_id) const
  */
 uint16_t OverrideManagerBase::GetSubstituteID(uint16_t entity_id) const
 {
-#ifdef WITH_RUST
 	return openttd_rust_override_substitute(this->rust_owner, entity_id);
-#else
-	return this->mappings[entity_id].substitute_id;
-#endif
 }
 
 /**
@@ -255,34 +178,6 @@ uint16_t OverrideManagerBase::GetSubstituteID(uint16_t entity_id) const
  * It will find itself the proper slot on which it will go
  * @param hs HouseSpec read from the grf file, ready for inclusion
  */
-#ifndef WITH_RUST
-void HouseOverrideManager::SetEntitySpec(HouseSpec &&hs)
-{
-	HouseID house_id = this->AddEntityID(hs.grf_prop.local_id, hs.grf_prop.grfid, hs.grf_prop.subst_id);
-
-	if (house_id == this->invalid_id) {
-		GrfMsg(1, "House.SetEntitySpec: Too many houses allocated. Ignoring.");
-		return;
-	}
-
-	auto &house_specs = HouseSpec::Specs();
-
-	/* Now that we know we can use the given id, copy the spec to its final destination. */
-	if (house_id >= house_specs.size()) house_specs.resize(house_id + 1);
-	house_specs[house_id] = std::move(hs);
-
-	/* Now add the overrides. */
-	for (int i = 0; i < this->max_offset; i++) {
-		HouseSpec *overridden_hs = HouseSpec::Get(i);
-
-		if (this->entity_overrides[i] != house_specs[house_id].grf_prop.local_id || this->grfid_overrides[i] != house_specs[house_id].grf_prop.grfid) continue;
-
-		overridden_hs->grf_prop.override_id = house_id;
-		this->entity_overrides[i] = this->invalid_id;
-		this->grfid_overrides[i] = 0;
-	}
-}
-#endif
 
 /**
  * Return the ID (if ever available) of a previously inserted entity.
@@ -292,19 +187,7 @@ void HouseOverrideManager::SetEntitySpec(HouseSpec &&hs)
  */
 uint16_t IndustryOverrideManager::GetID(uint16_t grf_local_id, uint32_t grfid) const
 {
-#ifdef WITH_RUST
 	return openttd_rust_industry_definition_id(this->rust_owner, grf_local_id, grfid);
-#else
-	uint16_t id = OverrideManagerBase::GetID(grf_local_id, grfid);
-	if (id != this->invalid_id) return id;
-
-	/* No mapping found, try the overrides */
-	for (id = 0; id < this->max_offset; id++) {
-		if (this->entity_overrides[id] == grf_local_id && this->grfid_overrides[id] == grfid) return id;
-	}
-
-	return this->invalid_id;
-#endif
 }
 
 /**
@@ -314,36 +197,6 @@ uint16_t IndustryOverrideManager::GetID(uint16_t grf_local_id, uint32_t grfid) c
  * @param substitute_id industry from which data has been copied
  * @return a free entity id (slotid) if ever one has been found, or Invalid_ID marker otherwise
  */
-#ifndef WITH_RUST
-uint16_t IndustryOverrideManager::AddEntityID(uint16_t grf_local_id, uint32_t grfid, uint16_t substitute_id)
-{
-	/* This entity hasn't been defined before, so give it an ID now. */
-	for (uint16_t id = 0; id < this->max_entities; id++) {
-		/* Skip overridden industries */
-		if (id < this->max_offset && this->entity_overrides[id] != this->invalid_id) continue;
-
-		/* Get the real live industry */
-		const IndustrySpec *inds = GetIndustrySpec(id);
-
-		/* This industry must be one that is not available(enabled), mostly because of climate.
-		 * And it must not already be used by a grf (grffile == nullptr).
-		 * So reserve this slot here, as it is the chosen one */
-		if (!inds->enabled && !inds->grf_prop.HasGrfFile()) {
-			EntityIDMapping *map = &this->mappings[id];
-
-			if (map->entity_id == 0 && map->grfid == 0) {
-				/* winning slot, mark it as been used */
-				map->entity_id     = grf_local_id;
-				map->grfid         = grfid;
-				map->substitute_id = substitute_id;
-				return id;
-			}
-		}
-	}
-
-	return this->invalid_id;
-}
-#endif
 
 /**
  * Method to install the new industry data in its proper slot
@@ -351,59 +204,8 @@ uint16_t IndustryOverrideManager::AddEntityID(uint16_t grf_local_id, uint32_t gr
  * checking what is available
  * @param inds Industryspec that comes from the grf decoding process
  */
-#ifndef WITH_RUST
-void IndustryOverrideManager::SetEntitySpec(IndustrySpec &&inds)
-{
-	/* First step : We need to find if this industry is already specified in the savegame data. */
-	IndustryType ind_id = this->GetID(inds.grf_prop.local_id, inds.grf_prop.grfid);
-
-	if (ind_id == this->invalid_id) {
-		/* Not found.
-		 * Or it has already been overridden, so you've lost your place.
-		 * Or it is a simple substitute.
-		 * We need to find a free available slot */
-		ind_id = this->AddEntityID(inds.grf_prop.local_id, inds.grf_prop.grfid, inds.grf_prop.subst_id);
-		inds.grf_prop.override_id = this->invalid_id;  // make sure it will not be detected as overridden
-	}
-
-	if (ind_id == this->invalid_id) {
-		GrfMsg(1, "Industry.SetEntitySpec: Too many industries allocated. Ignoring.");
-		return;
-	}
-
-	/* Now that we know we can use the given id, copy the spec to its final destination... */
-	_industry_specs[ind_id] = std::move(inds);
-	/* ... and mark it as usable*/
-	_industry_specs[ind_id].enabled = true;
-}
-#endif
 
 
-#ifndef WITH_RUST
-void IndustryTileOverrideManager::SetEntitySpec(IndustryTileSpec &&its)
-{
-	IndustryGfx indt_id = this->AddEntityID(its.grf_prop.local_id, its.grf_prop.grfid, its.grf_prop.subst_id);
-
-	if (indt_id == this->invalid_id) {
-		GrfMsg(1, "IndustryTile.SetEntitySpec: Too many industry tiles allocated. Ignoring.");
-		return;
-	}
-
-	_industry_tile_specs[indt_id] = std::move(its);
-
-	/* Now add the overrides. */
-	for (int i = 0; i < this->max_offset; i++) {
-		IndustryTileSpec *overridden_its = &_industry_tile_specs[i];
-
-		if (this->entity_overrides[i] != _industry_tile_specs[indt_id].grf_prop.local_id || this->grfid_overrides[i] != _industry_tile_specs[indt_id].grf_prop.grfid) continue;
-
-		overridden_its->grf_prop.override_id = indt_id;
-		overridden_its->enabled = false;
-		this->entity_overrides[i] = this->invalid_id;
-		this->grfid_overrides[i] = 0;
-	}
-}
-#endif
 
 /**
  * Method to install the new object data in its proper slot

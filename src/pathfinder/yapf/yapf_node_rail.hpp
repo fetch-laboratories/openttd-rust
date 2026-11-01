@@ -127,36 +127,6 @@ struct CYapfRailNode : CYapfNodeT<CYapfNodeKeyTrackDir, CYapfRailNode> {
 	SignalType last_red_signal_type;
 	SignalType last_signal_type;
 
-#ifndef WITH_RUST
-	inline void Set(CYapfRailNode *parent, TileIndex tile, Trackdir td, bool is_choice)
-	{
-		this->base::Set(parent, tile, td, is_choice);
-		this->segment = nullptr;
-		if (parent == nullptr) {
-			this->num_signals_passed      = 0;
-			this->flags_u.inherited_flags = 0;
-			this->last_red_signal_type    = SIGTYPE_BLOCK;
-			/* We use PBS as initial signal type because if we are in
-			 * a PBS section and need to route, i.e. we're at a safe
-			 * waiting point of a station, we need to account for the
-			 * reservation costs. If we are in a normal block then we
-			 * should be alone in there and as such the reservation
-			 * costs should be 0 anyway. If there would be another
-			 * train in the block, i.e. passing signals at danger
-			 * then avoiding that train with help of the reservation
-			 * costs is not a bad thing, actually it would probably
-			 * be a good thing to do. */
-			this->last_signal_type        = SIGTYPE_PBS;
-		} else {
-			this->num_signals_passed      = parent->num_signals_passed;
-			this->flags_u.inherited_flags = parent->flags_u.inherited_flags;
-			this->last_red_signal_type    = parent->last_red_signal_type;
-			this->last_signal_type        = parent->last_signal_type;
-		}
-		this->flags_u.flags_s.choice_seen |= is_choice;
-	}
-
-#endif /* !WITH_RUST */
 
 	inline TileIndex GetLastTile() const
 	{
@@ -177,27 +147,6 @@ struct CYapfRailNode : CYapfNodeT<CYapfNodeKeyTrackDir, CYapfRailNode> {
 		this->segment->last_td = td;
 	}
 
-#ifndef WITH_RUST
-	template <class Tbase, class Tfunc, class Tpf>
-	bool IterateTiles(const Train *v, Tpf &yapf, Tbase &obj, bool (Tfunc::*func)(TileIndex, Trackdir)) const
-	{
-		typename Tbase::TrackFollower follower{v, yapf.GetCompatibleRailTypes()};
-		TileIndex cur = this->base::GetTile();
-		Trackdir  cur_td = this->base::GetTrackdir();
-
-		while (cur != this->GetLastTile() || cur_td != this->GetLastTrackdir()) {
-			if (!((obj.*func)(cur, cur_td))) return false;
-
-			if (!follower.Follow(cur, cur_td)) break;
-			cur = follower.new_tile;
-			assert(KillFirstBit(follower.new_td_bits) == TRACKDIR_BIT_NONE);
-			cur_td = FindFirstTrackdir(follower.new_td_bits);
-		}
-
-		return (obj.*func)(cur, cur_td);
-	}
-
-#endif /* !WITH_RUST */
 
 	void Dump(DumpTarget &dmp) const
 	{

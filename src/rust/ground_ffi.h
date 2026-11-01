@@ -73,6 +73,7 @@ struct OpenTTDTunnelServices {
 	bool (*snow_or_desert)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(snow_or_desert);
 	void (*set_snow_or_desert)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_snow_or_desert);
 };
+extern "C" void openttd_rust_clear_tile(OpenTTDCommandCost *, uint32_t, uint16_t, const OpenTTDCommandCostServices *, const OpenTTDSharedServices *);
 struct OpenTTDGroundCall; // Native optional CommandCost, independently owned by each facade invocation.
 struct OpenTTDGroundCostServices {
 	const OpenTTDCommandServices *commands;

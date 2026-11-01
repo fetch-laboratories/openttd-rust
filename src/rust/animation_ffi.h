@@ -49,7 +49,6 @@ struct OpenTTDAnimationServices {
 	const HouseSpec *(*house_spec)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(house_spec);
 	uint8_t (*road_frame)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_frame);
 	bool (*set_road_frame)(BaseStation *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_road_frame);
-	OpenTTDAnimationArea (*rail_area)(BaseStation *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_area);
 	bool (*rail_belongs)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_belongs);
 	bool (*station_triggers)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_triggers);
 	bool (*road_triggers)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_triggers);
@@ -67,7 +66,6 @@ struct OpenTTDAnimationServices {
 	size_t (*road_count)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(road_count);
 	uint32_t (*road_tile)(BaseStation *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(road_tile);
 };
-OpenTTDAnimationArea OpenTTDAnimationRailArea(BaseStation *, uint32_t, uint8_t) noexcept;
 const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices();
 const OpenTTDHouseAnimation &GetHouseAnimationBinding() noexcept;
 const OpenTTDIndustryAnimation &GetIndustryAnimationBinding() noexcept;

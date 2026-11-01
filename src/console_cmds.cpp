@@ -52,9 +52,7 @@
 
 #include "table/strings.h"
 
-#ifdef WITH_RUST
 #include "rust/clock_native.hpp"
-#endif
 
 #include "safeguards.h"
 
@@ -65,7 +63,6 @@ static uint _script_current_depth; ///< Depth of scripts running (used to abort 
 static std::string _scheduled_monthly_script; ///< Script scheduled to execute by the 'schedule' console command (empty if no script is scheduled).
 
 /** Timer that runs every month of game time for the 'schedule' console command. */
-#ifdef WITH_RUST
 static void RunScheduledMonthlyConsole()
 {
 	if (_scheduled_monthly_script.empty()) {
@@ -85,21 +82,6 @@ static bool RelayScheduledMonthlyConsole(const void *, void *exception) noexcept
 	return RustClockRelayScheduledConsole(RunScheduledMonthlyConsole, exception);
 }
 static const IntervalTimer<TimerGameCalendar> _scheduled_monthly_timer({TimerGameCalendar::MONTH, TimerGameCalendar::Priority::NONE}, RustClockCallback{RelayScheduledMonthlyConsole, nullptr});
-#else
-static const IntervalTimer<TimerGameCalendar> _scheduled_monthly_timer = {{TimerGameCalendar::MONTH, TimerGameCalendar::Priority::NONE}, [](auto) {
-	if (_scheduled_monthly_script.empty()) {
-		return;
-	}
-
-	/* Clear the schedule before rather than after the script to allow the script to itself call
-	 * schedule without it getting immediately cleared. */
-	const std::string filename = _scheduled_monthly_script;
-	_scheduled_monthly_script.clear();
-
-	IConsolePrint(CC_DEFAULT, "Executing scheduled script file '{}'...", filename);
-	IConsoleCmdExec(fmt::format("exec {}", filename));
-}};
-#endif
 
 
 /**

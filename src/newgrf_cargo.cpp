@@ -12,14 +12,11 @@
 #include "newgrf_cargo.h"
 #include "newgrf_spritegroup.h"
 
-#ifdef WITH_RUST
 #include "rust/cargo_resolver.h"
 #include "rust/newgrf_spritegroup_ffi.h"
-#endif
 
 #include "safeguards.h"
 
-#ifdef WITH_RUST
 uint16_t CargoCallbackFrame(const OpenTTDCargoInvocation *invocation, int32_t *regs, size_t count) noexcept
 {
 	CargoResolverObject object(*invocation);
@@ -30,41 +27,6 @@ uint32_t CargoSpriteFrame(const OpenTTDCargoInvocation *invocation) noexcept
 	CargoResolverObject object(*invocation);
 	return openttd_rust_cargo_evaluate_sprite(invocation, &object, object.CommonState());
 }
-#else
-/** Resolver of cargo. */
-struct CargoResolverObject : public ResolverObject {
-	const CargoSpec *cargospec;
-
-	CargoResolverObject(const CargoSpec *cs, CallbackID callback = CBID_NO_CALLBACK, uint32_t callback_param1 = 0, uint32_t callback_param2 = 0);
-
-	GrfSpecFeature GetFeature() const override;
-	uint32_t GetDebugID() const override;
-};
-
-GrfSpecFeature CargoResolverObject::GetFeature() const
-{
-	return GSF_CARGOES;
-}
-
-uint32_t CargoResolverObject::GetDebugID() const
-{
-	return this->cargospec->label.base();
-}
-
-/**
- * Constructor of the cargo resolver.
- * @param cs Cargo being resolved.
- * @param callback Callback ID.
- * @param callback_param1 First parameter (var 10) of the callback.
- * @param callback_param2 Second parameter (var 18) of the callback.
- */
-CargoResolverObject::CargoResolverObject(const CargoSpec *cs, CallbackID callback, uint32_t callback_param1, uint32_t callback_param2)
-		: ResolverObject(cs->grffile, callback, callback_param1, callback_param2), cargospec(cs)
-{
-	this->root_spritegroup = cs->group;
-}
-
-#endif
 
 /**
  * Get the custom sprite for the given cargo type.
@@ -73,26 +35,13 @@ CargoResolverObject::CargoResolverObject(const CargoSpec *cs, CallbackID callbac
  */
 SpriteID GetCustomCargoSprite(const CargoSpec *cs)
 {
-#ifdef WITH_RUST
 	return openttd_rust_cargo_custom_sprite(cs);
-#else
-	CargoResolverObject object(cs);
-	const auto *group = object.Resolve<ResultSpriteGroup>();
-	if (group == nullptr || group->num_sprites == 0) return 0;
-
-	return group->sprite;
-#endif
 }
 
 
 uint16_t GetCargoCallback(CallbackID callback, uint32_t param1, uint32_t param2, const CargoSpec *cs, std::span<int32_t> regs100)
 {
-#ifdef WITH_RUST
 	return openttd_rust_cargo_callback(callback, param1, param2, cs, regs100.data(), regs100.size());
-#else
-	CargoResolverObject object(cs, callback, param1, param2);
-	return object.ResolveCallback(regs100);
-#endif
 }
 
 /**
@@ -106,21 +55,5 @@ uint16_t GetCargoCallback(CallbackID callback, uint32_t param1, uint32_t param2,
  */
 CargoType GetCargoTranslation(uint8_t cargo, const GRFFile *grffile, bool usebit)
 {
-#ifdef WITH_RUST
 	return openttd_rust_cargo_translate(cargo, grffile, usebit);
-#else
-	/* We can't use GetCargoTranslationTable here as the usebit flag changes behaviour. */
-	/* Pre-version 7 uses the bitnum lookup from (standard in v8) instead of climate dependent in some places.. */
-	std::span<const CargoLabel> cargo_list;
-	if (grffile->grf_version < 7 && !usebit && !grffile->cargo_list_is_fallback) {
-		cargo_list = GetClimateDependentCargoTranslationTable();
-	} else if (!grffile->cargo_list.empty()) {
-		cargo_list = grffile->cargo_list;
-	} else {
-		cargo_list = GetClimateIndependentCargoTranslationTable();
-	}
-
-	if (cargo < cargo_list.size()) return GetCargoTypeByLabel(cargo_list[cargo]);
-	return INVALID_CARGO;
-#endif
 }

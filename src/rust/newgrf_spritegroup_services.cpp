@@ -1,7 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file newgrf_spritegroup_services.cpp Immutable parsed nodes and shared native resolver frames. */
 #include "../stdafx.h"
-#ifdef WITH_RUST
 #include "../newgrf_spritegroup.h"
 #include "../newgrf_profiling.h"
 #include "../newgrf.h"
@@ -217,4 +216,3 @@ const SpriteGroup *ResolverObject::ResolveReal(const RealSpriteGroup &group) con
 #include "abi-visit-OpenTTDSpriteGroupServices.hpp"
 #include "abi-visit-OpenTTDGlobalVariableServices.hpp"
 bool CheckAbi_spritegroup() { return AbiServicesComplete(GetRustSpriteGroupServices()) && AbiServicesComplete(GetRustGlobalVariableServices()); }
-#endif

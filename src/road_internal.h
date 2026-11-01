@@ -13,10 +13,6 @@
 #include "tile_cmd.h"
 #include "road_type.h"
 
-#ifndef WITH_RUST
-RoadBits CleanUpRoadBits(const TileIndex tile, RoadBits org_rb);
-#endif
-
 CommandCost CheckAllowRemoveRoad(TileIndex tile, RoadBits remove, Owner owner, RoadTramType rtt, DoCommandFlags flags, bool town_check = true);
 
 void DrawRoadCatenary(const TileInfo *ti);

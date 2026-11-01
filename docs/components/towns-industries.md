@@ -91,7 +91,7 @@
 ## Town spatial index and remaining policy (#600)
 
 - Rust owns: the simulation town k-d tree and its insertion, deletion, rebuild and nearest lookups; random-town selection; road-type availability; monthly maximum passenger/mail production; climate masks; cargo-effect selection; house removal costs; the radius, acceptance and supplied-history facades.
-- The shared Rust index preserves uint16 coordinates, signed int Manhattan distances, strict splits, the original rebuild threshold and lower-ID nearest ties. Queries allocate nothing. Native and Rust median selection can arrange equal coordinates differently; town nearest results do not depend on that arrangement. Rectangle traversal is node/left/right and remains unused until #602 audits its consumers.
+- The shared Rust index preserves uint16 coordinates, signed int Manhattan distances, strict splits, the original rebuild threshold and lower-ID nearest ties. Queries allocate nothing. Town and station trees use one stateless native STL selection primitive for the original unsorted permutation; Rust owns tree state and traversal. Town nearest results retain lower-ID ties. Station-radius consumers and their traversal-sensitive town ratings belong to #602.
 - C++ keeps: town pool shells and their coupled constructors/destructors, viewport signs and the local-authority presentation index, error formatting, cargo scaling and map/pool access. The shared native k-d template remains compiled for GUI users.
 - Limits: Arbitrary NewGRF road availability/error combinations, historical saves and GUI/game-thread integration remain outside the default corpus (#156).
 - PRs: #608.

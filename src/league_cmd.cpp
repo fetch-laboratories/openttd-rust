@@ -18,9 +18,7 @@
 #include "window_func.h"
 #include "core/pool_func.hpp"
 
-#ifdef WITH_RUST
 #include "rust/services_objectives.h"
-#endif
 
 #include "safeguards.h"
 
@@ -37,20 +35,7 @@ INSTANTIATE_POOL_METHODS(LeagueTable)
  */
 bool IsValidLink(Link link)
 {
-#ifdef WITH_RUST
 	return openttd_rust_valid_link(&GetRustObjectivesServices(), link.type, link.target);
-#else
-	switch (link.type) {
-		case LT_NONE: return (link.target == 0);
-		case LT_TILE: return IsValidTile(link.target);
-		case LT_INDUSTRY: return Industry::IsValidID(link.target);
-		case LT_TOWN: return Town::IsValidID(link.target);
-		case LT_COMPANY: return Company::IsValidID(link.target);
-		case LT_STORY_PAGE: return StoryPage::IsValidID(link.target);
-		default: return false;
-	}
-	return false;
-#endif
 }
 
 /**
@@ -63,22 +48,9 @@ bool IsValidLink(Link link)
  */
 std::tuple<CommandCost, LeagueTableID> CmdCreateLeagueTable(DoCommandFlags flags, const EncodedString &title, const EncodedString &header, const EncodedString &footer)
 {
-#ifdef WITH_RUST
 	uint8_t result;
 	bool success = openttd_rust_create_league_table(&GetRustObjectivesServices(), flags.base(), &title, &header, &footer, &result);
 	return { success ? CommandCost() : CMD_ERROR, LeagueTableID(result) };
-#else
-	if (_current_company != OWNER_DEITY) return { CMD_ERROR, LeagueTableID::Invalid() };
-	if (!LeagueTable::CanAllocateItem()) return { CMD_ERROR, LeagueTableID::Invalid() };
-	if (title.empty()) return { CMD_ERROR, LeagueTableID::Invalid() };
-
-	if (flags.Test(DoCommandFlag::Execute)) {
-		LeagueTable *lt = new LeagueTable(title, header, footer);
-		return { CommandCost(), lt->index };
-	}
-
-	return { CommandCost(), LeagueTableID::Invalid() };
-#endif
 }
 
 
@@ -96,24 +68,9 @@ std::tuple<CommandCost, LeagueTableID> CmdCreateLeagueTable(DoCommandFlags flags
  */
 std::tuple<CommandCost, LeagueTableElementID> CmdCreateLeagueTableElement(DoCommandFlags flags, LeagueTableID table, int64_t rating, CompanyID company, const EncodedString &text, const EncodedString &score, LinkType link_type, LinkTargetID link_target)
 {
-#ifdef WITH_RUST
 	uint16_t result;
 	bool success = openttd_rust_create_league_table_element(&GetRustObjectivesServices(), flags.base(), table.base(), rating, company.base(), &text, &score, link_type, link_target, &result);
 	return { success ? CommandCost() : CMD_ERROR, LeagueTableElementID(result) };
-#else
-	if (_current_company != OWNER_DEITY) return { CMD_ERROR, LeagueTableElementID::Invalid() };
-	if (!LeagueTableElement::CanAllocateItem()) return { CMD_ERROR, LeagueTableElementID::Invalid() };
-	Link link{link_type, link_target};
-	if (!IsValidLink(link)) return { CMD_ERROR, LeagueTableElementID::Invalid() };
-	if (company != CompanyID::Invalid() && !Company::IsValidID(company)) return { CMD_ERROR, LeagueTableElementID::Invalid() };
-
-	if (flags.Test(DoCommandFlag::Execute)) {
-		LeagueTableElement *lte = new LeagueTableElement(table, rating, company, text, score, link);
-		InvalidateWindowData(WC_COMPANY_LEAGUE, table);
-		return { CommandCost(), lte->index };
-	}
-	return { CommandCost(), LeagueTableElementID::Invalid() };
-#endif
 }
 
 /**
@@ -128,24 +85,7 @@ std::tuple<CommandCost, LeagueTableElementID> CmdCreateLeagueTableElement(DoComm
  */
 CommandCost CmdUpdateLeagueTableElementData(DoCommandFlags flags, LeagueTableElementID element, CompanyID company, const EncodedString &text, LinkType link_type, LinkTargetID link_target)
 {
-#ifdef WITH_RUST
 	return openttd_rust_update_league_table_element_data(&GetRustObjectivesServices(), flags.base(), element.base(), company.base(), &text, link_type, link_target) ? CommandCost() : CMD_ERROR;
-#else
-	if (_current_company != OWNER_DEITY) return CMD_ERROR;
-	auto lte = LeagueTableElement::GetIfValid(element);
-	if (lte == nullptr) return CMD_ERROR;
-	if (company != CompanyID::Invalid() && !Company::IsValidID(company)) return CMD_ERROR;
-	Link link{link_type, link_target};
-	if (!IsValidLink(link)) return CMD_ERROR;
-
-	if (flags.Test(DoCommandFlag::Execute)) {
-		lte->company = company;
-		lte->text = text;
-		lte->link = link;
-		InvalidateWindowData(WC_COMPANY_LEAGUE, lte->table);
-	}
-	return CommandCost();
-#endif
 }
 
 /**
@@ -158,20 +98,7 @@ CommandCost CmdUpdateLeagueTableElementData(DoCommandFlags flags, LeagueTableEle
  */
 CommandCost CmdUpdateLeagueTableElementScore(DoCommandFlags flags, LeagueTableElementID element, int64_t rating, const EncodedString &score)
 {
-#ifdef WITH_RUST
 	return openttd_rust_update_league_table_element_score(&GetRustObjectivesServices(), flags.base(), element.base(), rating, &score) ? CommandCost() : CMD_ERROR;
-#else
-	if (_current_company != OWNER_DEITY) return CMD_ERROR;
-	auto lte = LeagueTableElement::GetIfValid(element);
-	if (lte == nullptr) return CMD_ERROR;
-
-	if (flags.Test(DoCommandFlag::Execute)) {
-		lte->rating = rating;
-		lte->score = score;
-		InvalidateWindowData(WC_COMPANY_LEAGUE, lte->table);
-	}
-	return CommandCost();
-#endif
 }
 
 /**
@@ -182,18 +109,5 @@ CommandCost CmdUpdateLeagueTableElementScore(DoCommandFlags flags, LeagueTableEl
  */
 CommandCost CmdRemoveLeagueTableElement(DoCommandFlags flags, LeagueTableElementID element)
 {
-#ifdef WITH_RUST
 	return openttd_rust_remove_league_table_element(&GetRustObjectivesServices(), flags.base(), element.base()) ? CommandCost() : CMD_ERROR;
-#else
-	if (_current_company != OWNER_DEITY) return CMD_ERROR;
-	auto lte = LeagueTableElement::GetIfValid(element);
-	if (lte == nullptr) return CMD_ERROR;
-
-	if (flags.Test(DoCommandFlag::Execute)) {
-		auto table = lte->table;
-		delete lte;
-		InvalidateWindowData(WC_COMPANY_LEAGUE, table);
-	}
-	return CommandCost();
-#endif
 }

@@ -8,7 +8,6 @@
 /** @file industry.cpp Canonical industry slot/history and native ABI checks. */
 #include "../stdafx.h"
 #include "../3rdparty/catch2/catch.hpp"
-#ifdef WITH_RUST
 #include "../industry.h"
 #include "abi_layout.hpp"
 #include "fixture_map.hpp"
@@ -454,7 +453,6 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 	}
 	CHECK(Industry::GetNumItems() == pool_count);
 }
-#endif
 
 #include "../newgrf_storage.h"
 TEST_CASE("NewGRF storage canonical aliases and complete transaction lifetime", "[industry][storage]")
@@ -462,12 +460,10 @@ TEST_CASE("NewGRF storage canonical aliases and complete transaction lifetime", 
 	using Modern = PersistentStorageArray<int32_t, 256>;
 	OldPersistentStorage legacy;
 	Modern modern;
-#ifdef WITH_RUST
 	CHECK(modern.storage.data() == RustStorageData(modern.rust_storage));
 	CHECK(legacy.storage.data() == RustStorageData(legacy.rust_storage));
 	ABI_LAYOUT_CHECK;
 #include "abi-layout-storage.inc"
-#endif
 	legacy.storage[15] = -7;
 	std::copy(legacy.storage.begin(), legacy.storage.end(), modern.storage.begin());
 	CHECK(modern.GetValue(15) == -7);
@@ -491,12 +487,10 @@ TEST_CASE("NewGRF storage canonical aliases and complete transaction lifetime", 
 	modern.StoreValue(1, -3);
 	modern.ClearChanges(); // Same operation the PSAC saver uses.
 	CHECK(modern.GetValue(1) == INT32_MAX);
-#ifdef WITH_RUST
 	static uint discarded;
 	discarded = 0;
 	openttd_rust_storage_switch_mode(PSM_LEAVE_GAMELOOP, true, RustAssertCondition, [](void *) noexcept { ++discarded; });
 	CHECK(discarded == 1); // Saving rolls back but retains registry membership.
-#endif
 	{ auto pending = std::make_unique<Modern>(); pending->StoreValue(0, 1); }
 	BasePersistentStorageArray::SwitchMode(PSM_LEAVE_GAMELOOP, true);
 	TemporaryStorageArray<int32_t, 0x110> temporary;

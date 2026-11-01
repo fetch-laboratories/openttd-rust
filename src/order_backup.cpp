@@ -35,54 +35,14 @@ OrderBackup::~OrderBackup() = default;
  * @param user The user that is requesting the backup.
  */
 OrderBackup::OrderBackup(const Vehicle *v, uint32_t user)
-#ifndef WITH_RUST
-	: user(user), tile(v->tile), group(v->group_id)
-#endif
 {
-#ifdef WITH_RUST
 	openttd_rust_capture_backup(this, v, user, &GetRustOrdersLeaves());
-#else
-	this->CopyConsistPropertiesFrom(v);
-
-	/* If we have shared orders, store the vehicle we share the order with. */
-	if (v->IsOrderListShared()) {
-		this->clone = (v->FirstShared() == v) ? v->NextShared() : v->FirstShared();
-	} else {
-		/* Else copy the orders */
-		this->orders.assign(std::begin(v->Orders()), std::end(v->Orders()));
-	}
-#endif
 }
 
 /**
  * Restore the data of this order to the given vehicle.
  * @param v The vehicle to restore to.
  */
-#ifndef WITH_RUST
-void OrderBackup::DoRestore(Vehicle *v)
-{
-	/* If we had shared orders, recover that */
-	if (this->clone != nullptr) {
-		Command<CMD_CLONE_ORDER>::Do(DoCommandFlag::Execute, CO_SHARE, v->index, this->clone->index);
-	} else if (!this->orders.empty() && OrderList::CanAllocateItem()) {
-		v->orders = new OrderList(std::move(this->orders), v);
-		/* Make sure buoys/oil rigs are updated in the station list. */
-		InvalidateWindowClassesData(WC_STATION_LIST, 0);
-	}
-
-	/* Remove backed up name if it's no longer unique. */
-	if (!IsUniqueVehicleName(this->name)) this->name.clear();
-
-	v->CopyConsistPropertiesFrom(this);
-
-	/* Make sure orders are in range */
-	v->UpdateRealOrderIndex();
-	if (v->cur_implicit_order_index >= v->GetNumOrders()) v->cur_implicit_order_index = v->cur_real_order_index;
-
-	/* Restore vehicle group */
-	Command<CMD_ADD_VEHICLE_GROUP>::Do(DoCommandFlag::Execute, this->group, v->index, false, VehicleListIdentifier{});
-}
-#endif
 
 /**
  * Create an order backup for the given vehicle.
@@ -92,18 +52,7 @@ void OrderBackup::DoRestore(Vehicle *v)
  */
 /* static */ void OrderBackup::Backup(const Vehicle *v, uint32_t user)
 {
-#ifdef WITH_RUST
 	openttd_rust_backup_create(const_cast<Vehicle *>(v), user, &GetRustOrdersLeaves());
-#else
-	/* Don't use reset as that broadcasts over the network to reset the variable,
-	 * which is what we are doing at the moment. */
-	for (OrderBackup *ob : OrderBackup::Iterate()) {
-		if (ob->user == user) delete ob;
-	}
-	if (OrderBackup::CanAllocateItem()) {
-		new OrderBackup(v, user);
-	}
-#endif
 }
 
 /**
@@ -114,16 +63,7 @@ void OrderBackup::DoRestore(Vehicle *v)
  */
 /* static */ void OrderBackup::Restore(Vehicle *v, uint32_t user)
 {
-#ifdef WITH_RUST
 	openttd_rust_backup_restore(v, user, &GetRustOrdersLeaves());
-#else
-	for (OrderBackup *ob : OrderBackup::Iterate()) {
-		if (v->tile != ob->tile || ob->user != user) continue;
-
-		ob->DoRestore(v);
-		delete ob;
-	}
-#endif
 }
 
 /**
@@ -134,13 +74,7 @@ void OrderBackup::DoRestore(Vehicle *v)
  */
 /* static */ void OrderBackup::ResetOfUser(TileIndex tile, uint32_t user)
 {
-#ifdef WITH_RUST
 	openttd_rust_backup_clear_user(tile.base(), user, &GetRustOrdersLeaves());
-#else
-	for (OrderBackup *ob : OrderBackup::Iterate()) {
-		if (ob->user == user && (ob->tile == tile || tile == INVALID_TILE)) delete ob;
-	}
-#endif
 }
 
 /**
@@ -152,14 +86,7 @@ void OrderBackup::DoRestore(Vehicle *v)
  */
 CommandCost CmdClearOrderBackup(DoCommandFlags flags, TileIndex tile, ClientID user_id)
 {
-#ifdef WITH_RUST
 	openttd_rust_command_clear_backup(tile.base(), user_id, flags.Test(DoCommandFlag::Execute), &GetRustOrdersLeaves()); return CommandCost();
-#else
-	/* No need to check anything. If the tile or user don't exist we just ignore it. */
-	if (flags.Test(DoCommandFlag::Execute)) OrderBackup::ResetOfUser(tile == 0 ? INVALID_TILE : tile, user_id);
-
-	return CommandCost();
-#endif
 }
 
 /**
@@ -170,19 +97,7 @@ CommandCost CmdClearOrderBackup(DoCommandFlags flags, TileIndex tile, ClientID u
  */
 /* static */ void OrderBackup::ResetUser(uint32_t user)
 {
-#ifdef WITH_RUST
 	assert(_network_server); openttd_rust_backup_reset(user, &GetRustOrdersLeaves());
-#else
-	assert(_network_server);
-
-	for (OrderBackup *ob : OrderBackup::Iterate()) {
-		/* If it's not a backup of us, ignore it. */
-		if (ob->user != user) continue;
-
-		Command<CMD_CLEAR_ORDER_BACKUP>::Post(TileIndex{}, static_cast<ClientID>(user));
-		return;
-	}
-#endif
 }
 
 /**
@@ -193,33 +108,7 @@ CommandCost CmdClearOrderBackup(DoCommandFlags flags, TileIndex tile, ClientID u
  */
 /* static */ void OrderBackup::Reset(TileIndex t, bool from_gui)
 {
-#ifdef WITH_RUST
 	openttd_rust_backup_tile_clear(t.base(), from_gui, &GetRustOrdersLeaves());
-#else
-	/* The user has CLIENT_ID_SERVER as default when network play is not active,
-	 * but compiled it. A network client has its own variable for the unique
-	 * client/user identifier. Finally if networking isn't compiled in the
-	 * default is just plain and simple: 0. */
-	uint32_t user = _networking && !_network_server ? _network_own_client_id : CLIENT_ID_SERVER;
-
-	for (OrderBackup *ob : OrderBackup::Iterate()) {
-		/* If this is a GUI action, and it's not a backup of us, ignore it. */
-		if (from_gui && ob->user != user) continue;
-		/* If it's not for our chosen tile either, ignore it. */
-		if (t != INVALID_TILE && t != ob->tile) continue;
-
-		if (from_gui) {
-			/* We need to circumvent the "prevention" from this command being executed
-			 * while the game is paused, so use the internal method. Nor do we want
-			 * this command to get its cost estimated when shift is pressed. */
-			Command<CMD_CLEAR_ORDER_BACKUP>::Unsafe<CommandCallback>(STR_NULL, nullptr, true, false, ob->tile, CommandTraits<CMD_CLEAR_ORDER_BACKUP>::Args{ ob->tile, static_cast<ClientID>(user) });
-		} else {
-			/* The command came from the game logic, i.e. the clearing of a tile.
-			 * In that case we have no need to actually sync this, just do it. */
-			delete ob;
-		}
-	}
-#endif
 }
 
 /**
@@ -228,13 +117,7 @@ CommandCost CmdClearOrderBackup(DoCommandFlags flags, TileIndex tile, ClientID u
  */
 /* static */ void OrderBackup::ClearGroup(GroupID group)
 {
-#ifdef WITH_RUST
 	openttd_rust_backup_group_clear(group.base(), &GetRustOrdersLeaves());
-#else
-	for (OrderBackup *ob : OrderBackup::Iterate()) {
-		if (ob->group == group) ob->group = DEFAULT_GROUP;
-	}
-#endif
 }
 
 /**
@@ -246,19 +129,7 @@ CommandCost CmdClearOrderBackup(DoCommandFlags flags, TileIndex tile, ClientID u
  */
 /* static */ void OrderBackup::ClearVehicle(const Vehicle *v)
 {
-#ifdef WITH_RUST
 	assert(v != nullptr); openttd_rust_backup_vehicle_clear(const_cast<Vehicle *>(v), &GetRustOrdersLeaves());
-#else
-	assert(v != nullptr);
-	for (OrderBackup *ob : OrderBackup::Iterate()) {
-		if (ob->clone == v) {
-			/* Get another item in the shared list. */
-			ob->clone = (v->FirstShared() == v) ? v->NextShared() : v->FirstShared();
-			/* But if that isn't there, remove it. */
-			if (ob->clone == nullptr) delete ob;
-		}
-	}
-#endif
 }
 
 /**
@@ -271,21 +142,5 @@ CommandCost CmdClearOrderBackup(DoCommandFlags flags, TileIndex tile, ClientID u
  */
 /* static */ void OrderBackup::RemoveOrder(OrderType type, DestinationID destination, bool hangar)
 {
-#ifdef WITH_RUST
 	openttd_rust_backup_destination_clear(type, destination.base(), hangar, &GetRustOrdersLeaves());
-#else
-	for (OrderBackup *ob : OrderBackup::Iterate()) {
-		for (Order &order : ob->orders) {
-			OrderType ot = order.GetType();
-			if (ot == OT_GOTO_DEPOT && order.GetDepotActionType().Test(OrderDepotActionFlag::NearestDepot)) continue;
-			if (ot == OT_GOTO_DEPOT && hangar && !IsHangarTile(ob->tile)) continue; // Not an aircraft? Can't have a hangar order.
-			if (ot == OT_IMPLICIT || (IsHangarTile(ob->tile) && ot == OT_GOTO_DEPOT && !hangar)) ot = OT_GOTO_STATION;
-			if (ot == type && order.GetDestination() == destination) {
-				/* Remove the order backup! If a station/depot gets removed, we can't/shouldn't restore those broken orders. */
-				delete ob;
-				break;
-			}
-		}
-	}
-#endif
 }

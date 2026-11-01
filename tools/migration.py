@@ -129,7 +129,7 @@ def rust_configuration(build: Path):
         "i686-pc-windows-msvc": ("Windows", 4),
         "x86_64-pc-windows-msvc": ("Windows", 8),
     }
-    if cache.get("OPTION_RUST") != "ON" or target not in supported:
+    if target not in supported:
         raise RuntimeError(
             f"{build}: Rust must be enabled with a supported validated target"
         )
@@ -277,7 +277,7 @@ def configured_as(build, source, command, env=None):
     cache = cmake_cache(build)
     if Path(cache.get("CMAKE_HOME_DIRECTORY", "")).resolve() != Path(source).resolve():
         return False
-    if cache.get("OPTION_RUST") == "ON" and env is not None:
+    if "RUST_TARGET" in cache and env is not None:
         captured = f"CARGO_PROFILE_RELEASE_DEBUG={env.get('CARGO_PROFILE_RELEASE_DEBUG', '<unset>')}\n"
         if captured not in (build / "rust-build-configuration.txt").read_text():
             return False
@@ -699,7 +699,6 @@ def main() -> None:
                     if name == "reference"
                     else [
                         "-DBINARY_NAME=openttd-rust",
-                        "-DOPTION_RUST=ON",
                         *deps_build_options(),
                     ]
                 )

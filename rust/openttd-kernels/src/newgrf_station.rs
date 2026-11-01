@@ -27,6 +27,50 @@ use crate::{
 use std::{ffi::c_void, ptr};
 const TA_PLATFORM: u8 = 1;
 pub(crate) const TA_WHOLE: u8 = 2;
+/// `GetRailTileArea`: forward scan precedes backward scan, and both compare
+/// each neighbour to the original trigger tile.
+pub(crate) fn rail_tile_area(
+    shared: &Shared,
+    st: *const BaseStation,
+    tile: u32,
+    area: u8,
+) -> crate::tilearea::TileArea {
+    use crate::tilearea::TileArea;
+    match area {
+        0 => TileArea { tile, w: 1, h: 1 },
+        TA_PLATFORM => {
+            let world = crate::map_func::World::new(shared);
+            let delta = world.dimensions.offs_by_axis(world.station_axis(tile));
+            let (mut start, mut end) = (tile, tile);
+            while world.rail_station(end.wrapping_add(delta))
+                && world.compatible_station(end.wrapping_add(delta), tile)
+            {
+                end = end.wrapping_add(delta);
+            }
+            while world.rail_station(start.wrapping_sub(delta))
+                && world.compatible_station(start.wrapping_sub(delta), tile)
+            {
+                start = start.wrapping_sub(delta);
+            }
+            TileArea {
+                tile: start,
+                w: world
+                    .dimensions
+                    .tile_x(end)
+                    .wrapping_sub(world.dimensions.tile_x(start))
+                    .wrapping_add(1) as u16,
+                h: world
+                    .dimensions
+                    .tile_y(end)
+                    .wrapping_sub(world.dimensions.tile_y(start))
+                    .wrapping_add(1) as u16,
+            }
+        }
+        TA_WHOLE => unsafe { &*(shared.station_commands)() }.rail_area(st),
+        _ => unreachable!(),
+    }
+}
+
 #[repr(C)]
 pub struct State {
     station: *mut BaseStation,
@@ -666,7 +710,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
         }
         0x43 => (native.company)((native.world().station_owner)(st), ptr::null()),
         0x44 => {
-            if (crate::pbs::Pbs::acquire(native.shared()).0.station_reserved)(tile) {
+            if crate::map_func::World::new(native.shared()).station_reserved(tile) {
                 7
             } else {
                 4
@@ -700,7 +744,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
         }
         0x68 | 0x6a | 0x6b => {
             let nearby = (native.nearby)(parameter as u8, tile);
-            if !crate::station_map::has_station_tile_rail(nearby, native.shared(), native.rail()) {
+            if !crate::map_func::World::new(native.shared()).has_station_rail(nearby) {
                 return u32::MAX;
             }
             let index = (native.commands().custom_rail_index)(nearby);
@@ -774,7 +818,7 @@ pub unsafe extern "C" fn openttd_rust_station_resolve_real(
     };
     let spec = (native.spec)(unsafe { (*state).spec });
     if spec.divide {
-        let a = unsafe { (native.commands().train_area)(st) };
+        let a = native.commands().rail_area(st);
         cargo /= u32::from(a.w) + u32::from(a.h);
     }
     cargo = cargo.min(0xfff);
@@ -858,7 +902,8 @@ pub extern "C" fn openttd_rust_station_randomisation(
         (native.waiting)(st) | (1_u8.wrapping_shl(u32::from(trigger))),
     );
     let a = crate::animated_tile::services();
-    let area = (a.rail_area)(
+    let area = rail_tile_area(
+        unsafe { &*a.shared },
         st,
         tile,
         if trigger <= SRT_CARGO_TAKEN {

@@ -23,18 +23,6 @@ INSTANTIATE_POOL_METHODS(EngineRenew)
  * Retrieves the EngineRenew that specifies the replacement of the given
  * engine type from the given renewlist
  */
-#ifndef WITH_RUST
-static EngineRenew *GetEngineReplacement(EngineRenewList erl, EngineID engine, GroupID group)
-{
-	EngineRenew *er = (EngineRenew *)erl;
-
-	while (er != nullptr) {
-		if (er->from == engine && GroupIsInGroup(group, er->group_id)) return er;
-		er = er->next;
-	}
-	return nullptr;
-}
-#endif /* !WITH_RUST */
 
 /**
  * Remove all engine replacement settings for the company.
@@ -43,19 +31,7 @@ static EngineRenew *GetEngineReplacement(EngineRenewList erl, EngineID engine, G
  */
 void RemoveAllEngineReplacement(EngineRenewList *erl)
 {
-#ifdef WITH_RUST
 	openttd_rust_fleet_remove_all_replacements(&FleetGroupServices(), reinterpret_cast<void **>(erl));
-#else
-	EngineRenew *er = (EngineRenew *)(*erl);
-	EngineRenew *next;
-
-	while (er != nullptr) {
-		next = er->next;
-		delete er;
-		er = next;
-	}
-	*erl = nullptr; // Empty list
-#endif /* WITH_RUST */
 }
 
 /**
@@ -69,28 +45,7 @@ void RemoveAllEngineReplacement(EngineRenewList *erl)
  */
 EngineID EngineReplacement(EngineRenewList erl, EngineID engine, GroupID group, bool *replace_when_old)
 {
-#ifdef WITH_RUST
 	return EngineID(openttd_rust_fleet_replacement(&FleetGroupServices(), const_cast<EngineRenew *>(erl), engine.base(), group.base(), replace_when_old));
-#else
-	const EngineRenew *er = GetEngineReplacement(erl, engine, group);
-	if (er == nullptr && (group == DEFAULT_GROUP || (Group::IsValidID(group) && !Group::Get(group)->flags.Test(GroupFlag::ReplaceProtection)))) {
-		/* We didn't find anything useful in the vehicle's own group so we will try ALL_GROUP */
-		er = GetEngineReplacement(erl, engine, ALL_GROUP);
-	}
-	if (replace_when_old != nullptr) {
-		if (er == nullptr) {
-			/* Not replacing */
-			*replace_when_old = false;
-		} else if (er->to == engine) {
-			/* When replacing with same model, only ever do it when old */
-			*replace_when_old = true;
-		} else {
-			/* Use player setting */
-			*replace_when_old = er->replace_when_old;
-		}
-	}
-	return er == nullptr ? EngineID::Invalid() : er->to;
-#endif /* WITH_RUST */
 }
 
 /**
@@ -105,29 +60,8 @@ EngineID EngineReplacement(EngineRenewList erl, EngineID engine, GroupID group, 
  */
 CommandCost AddEngineReplacement(EngineRenewList *erl, EngineID old_engine, EngineID new_engine, GroupID group, bool replace_when_old, DoCommandFlags flags)
 {
-#ifdef WITH_RUST
 	uint32_t error = openttd_rust_fleet_add_replacement(&FleetGroupServices(), reinterpret_cast<void **>(erl), old_engine.base(), new_engine.base(), group.base(), replace_when_old, flags.base());
 	return error == UINT32_MAX ? CommandCost() : CommandCost(error);
-#else
-	/* Check if the old vehicle is already in the list */
-	EngineRenew *er = GetEngineReplacement(*erl, old_engine, group);
-	if (er != nullptr) {
-		if (flags.Test(DoCommandFlag::Execute)) {
-			er->to = new_engine;
-			er->replace_when_old = replace_when_old;
-		}
-		return CommandCost();
-	}
-
-	if (!EngineRenew::CanAllocateItem()) return CMD_ERROR;
-
-	if (flags.Test(DoCommandFlag::Execute)) {
-		/* Insert before the first element */
-		*erl = new EngineRenew(old_engine, new_engine, group, replace_when_old, *erl);
-	}
-
-	return CommandCost();
-#endif /* WITH_RUST */
 }
 
 /**
@@ -140,31 +74,6 @@ CommandCost AddEngineReplacement(EngineRenewList *erl, EngineID old_engine, Engi
  */
 CommandCost RemoveEngineReplacement(EngineRenewList *erl, EngineID engine, GroupID group, DoCommandFlags flags)
 {
-#ifdef WITH_RUST
 	uint32_t error = openttd_rust_fleet_remove_replacement(&FleetGroupServices(), reinterpret_cast<void **>(erl), engine.base(), group.base(), flags.base());
 	return error == UINT32_MAX ? CommandCost() : CommandCost(error);
-#else
-	EngineRenew *er = (EngineRenew *)(*erl);
-	EngineRenew *prev = nullptr;
-
-	while (er != nullptr) {
-		if (er->from == engine && er->group_id == group) {
-			if (flags.Test(DoCommandFlag::Execute)) {
-				if (prev == nullptr) { // First element
-					/* The second becomes the new first element */
-					*erl = (EngineRenewList)er->next;
-				} else {
-					/* Cut this element out */
-					prev->next = er->next;
-				}
-				delete er;
-			}
-			return CommandCost();
-		}
-		prev = er;
-		er = er->next;
-	}
-
-	return CMD_ERROR;
-#endif /* WITH_RUST */
 }

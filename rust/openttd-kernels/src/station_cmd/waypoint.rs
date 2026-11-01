@@ -124,13 +124,15 @@ impl Ctx<'_> {
             tile,
             other: false,
         };
-        unsafe { (self.s.radius)(tile, 0, (&raw mut search).cast(), sign_visit) };
+        crate::station::spatial::radius(self.shared, tile, 0, |st| unsafe {
+            sign_visit((&raw mut search).cast(), st);
+        });
         if search.other {
             out.error(self.s.strings.unsuitable);
             return INVALID_STATION;
         }
         if flags & DoCommandFlag::EXECUTE != 0 {
-            (self.s.move_sign)(st, tile);
+            crate::station::spatial::move_sign(self.shared, st, tile);
             (self.s.virtual_coord)(st);
         }
         out.zero();
@@ -359,7 +361,7 @@ impl Ctx<'_> {
             if (self.world().station_owner)(wp) != (self.shared.current_company)() {
                 return cost.error(self.s.strings.waypoint_close);
             }
-            if unsafe { (self.s.train_area)(wp) }.tile != INVALID_TILE {
+            if self.s.rail_area(wp).tile != INVALID_TILE {
                 area = self.expand_rail(ret, wp, area);
                 if !ret.ok() {
                     return cost.take(ret);
@@ -419,13 +421,12 @@ impl Ctx<'_> {
         let mut tile = start;
         for i in 0..count {
             let gfx = (self.s.waypoint_layout_gfx)(layout, i == 0);
-            let old =
-                if crate::station_map::has_station_tile_rail(tile, self.shared, self.rail_map()) {
-                    (self.s.custom_rail_index)(tile) as u8
-                } else {
-                    0
-                };
-            if !crate::station_map::has_station_tile_rail(tile, self.shared, self.rail_map()) {
+            let old = if crate::map_func::World::new(self.shared).has_station_rail(tile) {
+                (self.s.custom_rail_index)(tile) as u8
+            } else {
+                0
+            };
+            if !crate::map_func::World::new(self.shared).has_station_rail(tile) {
                 (self.s.station_infrastructure)(owner, 1);
             }
             let track = crate::track_func::axis_to_track(crate::services::Axis(axis), |ok| {

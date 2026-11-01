@@ -50,9 +50,7 @@
 #include "../settings_internal.h"
 #include "saveload_internal.h"
 #include "saveload_filter.h"
-#ifdef WITH_RUST
 #include "../rust/encoded_adapter.hpp"
-#endif
 
 #include <atomic>
 #ifdef __EMSCRIPTEN__
@@ -935,71 +933,9 @@ static inline size_t SlCalcStdStringLen(const void *ptr)
  */
 void FixSCCEncoded(std::string &str, bool fix_code)
 {
-#ifdef WITH_RUST
 	auto result = OwnRustEncoded(openttd_rust_encoded_legacy(reinterpret_cast<const uint8_t *>(str.data()), str.size(), fix_code));
 	if (openttd_rust_encoded_view(result.get()).apply == 0) return;
 	str = CopyRustEncoded(result, str);
-#else
-	if (str.empty()) return;
-
-	/* We need to convert from old escape-style encoding to record separator encoding.
-	 * Initial `<SCC_ENCODED><STRINGID>` stays the same.
-	 *
-	 * `:<SCC_ENCODED><STRINGID>` becomes `<RS><SCC_ENCODED><STRINGID>`
-	 * `:<HEX>`                   becomes `<RS><SCC_ENCODED_NUMERIC><HEX>`
-	 * `:"<STRING>"`              becomes `<RS><SCC_ENCODED_STRING><STRING>`
-	 */
-	std::string result;
-	StringBuilder builder(result);
-
-	bool is_encoded = false; // Set if we determine by the presence of SCC_ENCODED that the string is an encoded string.
-	bool in_string = false; // Set if we in a string, between double-quotes.
-	bool need_type = true; // Set if a parameter type needs to be emitted.
-
-	StringConsumer consumer(str);
-	while (consumer.AnyBytesLeft()) {
-		char32_t c;
-		if (auto r = consumer.TryReadUtf8(); r.has_value()) {
-			c = *r;
-		} else {
-			break;
-		}
-		if (c == SCC_ENCODED || (fix_code && (c == 0xE028 || c == 0xE02A))) {
-			builder.PutUtf8(SCC_ENCODED);
-			need_type = false;
-			is_encoded = true;
-			continue;
-		}
-
-		/* If the first character is not SCC_ENCODED then we don't have to do any conversion. */
-		if (!is_encoded) return;
-
-		if (c == '"') {
-			in_string = !in_string;
-			if (in_string && need_type) {
-				/* Started a new string parameter. */
-				builder.PutUtf8(SCC_ENCODED_STRING);
-				need_type = false;
-			}
-			continue;
-		}
-
-		if (!in_string && c == ':') {
-			builder.PutUtf8(SCC_RECORD_SEPARATOR);
-			need_type = true;
-			continue;
-		}
-		if (need_type) {
-			/* Started a new numeric parameter. */
-			builder.PutUtf8(SCC_ENCODED_NUMERIC);
-			need_type = false;
-		}
-
-		builder.PutUtf8(c);
-	}
-
-	str = std::move(result);
-#endif
 }
 
 /**
@@ -1008,41 +944,9 @@ void FixSCCEncoded(std::string &str, bool fix_code)
  */
 void FixSCCEncodedNegative(std::string &str)
 {
-#ifdef WITH_RUST
 	auto result = OwnRustEncoded(openttd_rust_encoded_negatives(reinterpret_cast<const uint8_t *>(str.data()), str.size()));
 	if (openttd_rust_encoded_view(result.get()).apply == 0) return;
 	str = CopyRustEncoded(result, str);
-#else
-	if (str.empty()) return;
-
-	StringConsumer consumer(str);
-
-	/* Check whether this is an encoded string */
-	if (!consumer.ReadUtf8If(SCC_ENCODED)) return;
-
-	std::string result;
-	StringBuilder builder(result);
-	builder.PutUtf8(SCC_ENCODED);
-	while (consumer.AnyBytesLeft()) {
-		/* Copy until next record */
-		builder.Put(consumer.ReadUntilUtf8(SCC_RECORD_SEPARATOR, StringConsumer::READ_ONE_SEPARATOR));
-
-		/* Check whether this is a numeric parameter */
-		if (!consumer.ReadUtf8If(SCC_ENCODED_NUMERIC)) continue;
-		builder.PutUtf8(SCC_ENCODED_NUMERIC);
-
-		/* First try unsigned */
-		if (auto u = consumer.TryReadIntegerBase<uint64_t>(16); u.has_value()) {
-			builder.PutIntegerBase<uint64_t>(*u, 16);
-		} else {
-			/* Read as signed, store as unsigned */
-			auto s = consumer.ReadIntegerBase<int64_t>(16);
-			builder.PutIntegerBase<uint64_t>(static_cast<uint64_t>(s), 16);
-		}
-	}
-
-	str = std::move(result);
-#endif
 }
 
 /**

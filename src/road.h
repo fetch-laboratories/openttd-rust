@@ -10,9 +10,7 @@
 #ifndef ROAD_H
 #define ROAD_H
 
-#ifdef WITH_RUST
 #include "rust/road_cost_ffi.h"
-#endif
 
 #include "road_type.h"
 #include "gfx_type.h"
@@ -186,13 +184,8 @@ public:
  */
 inline RoadTypes GetMaskForRoadTramType(RoadTramType rtt)
 {
-#ifdef WITH_RUST
 	extern RoadTypes &_roadtypes_road;
 	extern RoadTypes &_roadtypes_tram;
-#else
-	extern RoadTypes _roadtypes_road;
-	extern RoadTypes _roadtypes_tram;
-#endif
 	return rtt == RTT_ROAD ? _roadtypes_road : _roadtypes_tram;
 }
 
@@ -248,12 +241,7 @@ inline bool HasPowerOnRoad(RoadType enginetype, RoadType tiletype)
  */
 inline Money RoadBuildCost(RoadType roadtype)
 {
-#ifdef WITH_RUST
 	return openttd_rust_road_build_cost(&GetRustSharedServices(), roadtype);
-#else
-	assert(roadtype < ROADTYPE_END);
-	return (_price[PR_BUILD_ROAD] * GetRoadTypeInfo(roadtype)->cost_multiplier) >> 3;
-#endif /* WITH_RUST */
 }
 
 /**
@@ -263,18 +251,7 @@ inline Money RoadBuildCost(RoadType roadtype)
  */
 inline Money RoadClearCost(RoadType roadtype)
 {
-#ifdef WITH_RUST
 	return openttd_rust_road_clear_cost(&GetRustSharedServices(), roadtype);
-#else
-	assert(roadtype < ROADTYPE_END);
-
-	/* Flat fee for removing road. */
-	if (RoadTypeIsRoad(roadtype)) return _price[PR_CLEAR_ROAD];
-
-	/* Clearing tram earns a little money, but also incurs the standard clear road cost,
-	 * so no profit can be made. */
-	return _price[PR_CLEAR_ROAD] - RoadBuildCost(roadtype) * 3 / 4;
-#endif /* WITH_RUST */
 }
 
 /**
@@ -285,15 +262,7 @@ inline Money RoadClearCost(RoadType roadtype)
  */
 inline Money RoadConvertCost(RoadType from, RoadType to)
 {
-#ifdef WITH_RUST
 	return openttd_rust_road_convert_cost(&GetRustSharedServices(), from, to);
-#else
-	/* Don't apply convert costs when converting to the same roadtype (ex. building a roadstop over existing road) */
-	if (from == to) return (Money)0;
-
-	/* Same cost as removing and then building. */
-	return RoadBuildCost(to) + RoadClearCost(from);
-#endif /* WITH_RUST */
 }
 
 /**
@@ -309,21 +278,9 @@ inline bool RoadNoLevelCrossing(RoadType roadtype)
 
 RoadType GetRoadTypeByLabel(RoadTypeLabel label, bool allow_alternate_labels = true);
 
-#ifndef WITH_RUST
-void ResetRoadTypes();
-#endif
-#ifndef WITH_RUST
-void InitRoadTypes();
-RoadType AllocateRoadType(RoadTypeLabel label, RoadTramType rtt);
-#endif
 bool HasAnyRoadTypesAvail(CompanyID company, RoadTramType rtt);
 
-#ifdef WITH_RUST
 extern std::span<RoadType> _sorted_roadtypes;
 extern RoadTypes &_roadtypes_hidden_mask;
-#else
-extern std::vector<RoadType> _sorted_roadtypes;
-extern RoadTypes _roadtypes_hidden_mask;
-#endif
 
 #endif /* ROAD_H */

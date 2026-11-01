@@ -10,9 +10,7 @@
 #ifndef PATHFINDER_FUNC_H
 #define PATHFINDER_FUNC_H
 
-#ifdef WITH_RUST
 #include "../rust/movement_ffi.h"
-#endif
 
 #include "../tile_cmd.h"
 #include "../waypoint_base.h"
@@ -62,33 +60,8 @@ inline TileIndex CalcClosestStationTile(StationID station, TileIndex tile, Stati
  */
 inline TrackdirBits GetTrackdirBitsForRoad(TileIndex tile, RoadTramType rtt)
 {
-#ifdef WITH_RUST
 	static const OpenTTDMovementServices * const movement = &GetRustMovementServices();
 	return static_cast<TrackdirBits>(openttd_rust_road_trackdirs(movement, tile.base(), rtt));
-#else
-	TrackdirBits bits = TrackStatusToTrackdirBits(GetTileTrackStatus(tile, TRANSPORT_ROAD, rtt));
-
-	if (rtt == RTT_TRAM && bits == TRACKDIR_BIT_NONE) {
-		if (IsNormalRoadTile(tile)) {
-			RoadBits rb = GetRoadBits(tile, RTT_TRAM);
-			switch (rb) {
-				case ROAD_NE:
-				case ROAD_SW:
-					bits = TRACKDIR_BIT_X_NE | TRACKDIR_BIT_X_SW;
-					break;
-
-				case ROAD_NW:
-				case ROAD_SE:
-					bits = TRACKDIR_BIT_Y_NW | TRACKDIR_BIT_Y_SE;
-					break;
-
-				default: break;
-			}
-		}
-	}
-
-	return bits;
-#endif
 }
 
 #endif /* PATHFINDER_FUNC_H */

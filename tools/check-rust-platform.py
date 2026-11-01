@@ -180,7 +180,7 @@ def check_build(out, label, build, target, windows):
 def refuse(out, name, flags, changes, diagnostic):
     generator = [] if flags[:1] == ["-G"] else ["-G", "Ninja"]
     argv = ["cmake", "-S", migration.ROOT, "-B", out / f"reject-{name}"]
-    argv += ["-DOPTION_RUST=ON", "-DOPTION_TOOLS_ONLY=ON", "-DOPTION_USE_ASSERTS=ON"]
+    argv += ["-DOPTION_TOOLS_ONLY=ON", "-DOPTION_USE_ASSERTS=ON"]
     argv += ["-DCMAKE_BUILD_TYPE=RelWithDebInfo", RUNTIME + "MultiThreaded"]
     log = out / f"reject-{name}.log"
     result = run([*argv, *generator, *flags], log, os.environ | changes)

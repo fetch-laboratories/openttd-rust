@@ -5,7 +5,7 @@ import subprocess
 import zlib
 from pathlib import Path
 
-from . import core, objects
+from . import core, objects, trees
 from .console_adapter import prepared_console
 from .core import ROOT, WITNESS_ENVIRONMENT, branch_witnesses, patch, read_save, rows
 from .effects import effect_rows
@@ -175,7 +175,24 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             timeout,
             env,
         )
+        reload_inputs = {}
         for role, run in runs.items():
+            trees.check_editor_groups(run["log"])
+            checkpoint = [
+                line.split()
+                for line in run["log"]
+                if line.startswith("GROUNDTREE checkpoint ")
+            ]
+            if len(checkpoint) != 1 or len(checkpoint[0]) != 7:
+                raise RuntimeError("missing interactive RNG reload checkpoint")
+            _, _, tile, _, _, first, second = checkpoint[0]
+            reload_inputs[role] = {
+                "save": str(saves[role]),
+                "console": [
+                    f"landscape_scenario inspect {first} {second} {tile}",
+                    "unpause",
+                ],
+            }
             save = saves[role]
             if (
                 run["exit"]
@@ -194,8 +211,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         return dict(
             scenario,
             executables=executables,
-            role_inputs={r: {"save": str(s)} for r, s in saves.items()},
-            console=["landscape_scenario inspect", "unpause"],
+            role_inputs=reload_inputs,
         )
     if "ground" not in scenario:
         return scenario
@@ -424,6 +440,7 @@ def check(scenario, run, mode, role, result):
         if len(lines) < (35 if scenario["landscape_commands"] == "control" else 1):
             raise RuntimeError("missing landscape command output")
         if scenario["landscape_commands"] == "control":
+            trees.check_editor_groups(run["log"])
             costs = {
                 parts[1]: parts for line in lines if len(parts := line.split()) == 7
             }
@@ -435,6 +452,13 @@ def check(scenario, run, mode, role, result):
                 raise RuntimeError("landscape command/restoration evidence missing")
             if any(int(costs[name][5]) <= 0 for name in ("clear-cash", "level-cash")):
                 raise RuntimeError("landscape insufficient-cash branch missing")
+        else:
+            for marker in ("restored", "continued", "continued-rng"):
+                if (
+                    sum(line.startswith(f"GROUNDTREE {marker} ") for line in run["log"])
+                    != 1
+                ):
+                    raise RuntimeError("missing tree-group reload continuation")
         required = (
             ("recursive", "two_pass", "indirect", "partial")
             if scenario["landscape_commands"] == "control"

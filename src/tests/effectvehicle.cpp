@@ -16,13 +16,10 @@
 #include "../landscape.h"
 #include "../core/random_func.hpp"
 #include "mock_environment.h"
-#ifdef WITH_RUST
 #include "../../tools/simulation/session-fixture.hpp"
 #include "effect_protocol.hpp"
-#endif
 #include "../safeguards.h"
 
-#ifdef WITH_RUST
 TEST_CASE("Effect vehicles - native direct services and ownership")
 {
 	CheckEffectProtocol([](bool result) { CHECK(result); });
@@ -156,7 +153,6 @@ TEST_CASE("Effect vehicles - zero construction, nested save staging and pool cle
 	 * the Pool::Cleaning early return; no world/map initialization is needed. */
 	_vehicle_pool.CleanPool();
 }
-#endif
 
 /* Use the real controller's expiry route for ordinary owner destruction. This
  * also avoids invoking the pool's post-destructor index read directly from a

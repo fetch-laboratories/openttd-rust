@@ -15,7 +15,6 @@
 #include "safeguards.h"
 
 
-#ifdef WITH_RUST
 /* Ordinary C++ copies retain their original full-value semantics. Each copy
  * constructs its own typed aliases and Rust owner before assigning values. */
 BaseConsist &BaseConsist::operator=(const BaseConsist &src)
@@ -34,7 +33,6 @@ BaseConsist &BaseConsist::operator=(const BaseConsist &src)
 	this->vehicle_flags = src.vehicle_flags;
 	return *this;
 }
-#endif
 
 /**
  * Copy properties of other BaseConsist.
@@ -46,27 +44,8 @@ void BaseConsist::CopyConsistPropertiesFrom(const BaseConsist *src)
 
 	this->name = src->name;
 
-#ifdef WITH_RUST
 	openttd_rust_consist_copy(this->rust_orders.get(), src->rust_orders.get());
 	this->service_interval = src->service_interval;
-#else
-	this->current_order_time = src->current_order_time;
-	this->lateness_counter = src->lateness_counter;
-	this->timetable_start = src->timetable_start;
-
-	this->service_interval = src->service_interval;
-
-	this->cur_real_order_index = src->cur_real_order_index;
-	this->cur_implicit_order_index = src->cur_implicit_order_index;
-
-	if (src->vehicle_flags.Test(VehicleFlag::TimetableStarted)) this->vehicle_flags.Set(VehicleFlag::TimetableStarted);
-	if (src->vehicle_flags.Test(VehicleFlag::AutofillTimetable)) this->vehicle_flags.Set(VehicleFlag::AutofillTimetable);
-	if (src->vehicle_flags.Test(VehicleFlag::AutofillPreserveWaitTime)) this->vehicle_flags.Set(VehicleFlag::AutofillPreserveWaitTime);
-	if (src->vehicle_flags.Test(VehicleFlag::ServiceIntervalIsPercent) != this->vehicle_flags.Test(VehicleFlag::ServiceIntervalIsPercent)) {
-		this->vehicle_flags.Flip(VehicleFlag::ServiceIntervalIsPercent);
-	}
-	if (src->vehicle_flags.Test(VehicleFlag::ServiceIntervalIsCustom)) this->vehicle_flags.Set(VehicleFlag::ServiceIntervalIsCustom);
-#endif
 }
 
 /**
@@ -74,11 +53,5 @@ void BaseConsist::CopyConsistPropertiesFrom(const BaseConsist *src)
  */
 void BaseConsist::ResetDepotUnbunching()
 {
-#ifdef WITH_RUST
 	openttd_rust_consist_reset(this->rust_orders.get());
-#else
-	this->depot_unbunching_last_departure = 0;
-	this->depot_unbunching_next_departure = 0;
-	this->round_trip_time = 0;
-#endif
 }

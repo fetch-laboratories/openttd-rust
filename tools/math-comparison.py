@@ -15,7 +15,6 @@ import migration
 
 LABELS = (
     ("reference", probe.REFERENCE),
-    ("portable", probe.ROOT),
     ("candidate", probe.ROOT),
 )
 # The pinned strict template never accepted these extended-type combinations.

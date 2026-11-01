@@ -30,11 +30,9 @@
 
 #include "table/strings.h"
 
-#ifdef WITH_RUST
 #include "../rust/newgrf_global_ffi.h"
 #include "../rust/newgrf_translation_ffi.h"
 #include "../rust/newgrf_bytereader_services.h"
-#endif
 
 #include "../safeguards.h"
 
@@ -50,7 +48,6 @@
 template <typename T, typename TGetTableFunc>
 static ChangeInfoResult LoadTranslationTable(uint first, uint last, ByteReader &buf, TGetTableFunc gettable, std::string_view name)
 {
-#ifdef WITH_RUST
 	(void)gettable;
 	static const OpenTTDTranslationServices services = {
 		.reset = [](GRFFile *file, uint32_t last) noexcept { auto &table = TGetTableFunc{}(*file); table.clear(); table.reserve(last); },
@@ -63,29 +60,6 @@ static ChangeInfoResult LoadTranslationTable(uint first, uint last, ByteReader &
 	int32_t result = openttd_rust_load_translation(&services, &GetRustByteReaderServices(), _cur_gps.grffile, first, last, &buf, name.data(), name.size());
 	if (result < 0) RustGRFRethrowReadError();
 	return static_cast<ChangeInfoResult>(result);
-#else
-	if (first != 0) {
-		GrfMsg(1, "LoadTranslationTable: {} translation table must start at zero", name);
-		return CIR_INVALID_ID;
-	}
-
-	std::vector<T> &translation_table = gettable(*_cur_gps.grffile);
-	translation_table.clear();
-	translation_table.reserve(last);
-	for (uint id = first; id < last; ++id) {
-		translation_table.push_back(T(std::byteswap(buf.ReadDWord())));
-	}
-
-	GRFFile *grf_override = GetCurrentGRFOverride();
-	if (grf_override != nullptr) {
-		/* GRF override is present, copy the translation table to the overridden GRF as well. */
-		GrfMsg(1, "LoadTranslationTable: Copying {} translation table to override GRFID {:08X}", name, std::byteswap(grf_override->grfid));
-		std::vector<T> &override_table = gettable(*grf_override);
-		override_table = translation_table;
-	}
-
-	return CIR_SUCCESS;
-#endif
 }
 
 static ChangeInfoResult LoadBadgeTranslationTable(uint first, uint last, ByteReader &buf, std::vector<BadgeID> &translation_table, std::string_view name)
@@ -442,140 +416,7 @@ static ChangeInfoResult GlobalVarReserveInfo(uint first, uint last, int prop, By
  */
 bool GetGlobalVariable(uint8_t param, uint32_t *value, const GRFFile *grffile)
 {
-#ifdef WITH_RUST
 	return openttd_rust_global_variable(&GetRustGlobalVariableServices(), param, value, grffile);
-#else
-	switch (param) {
-		case 0x00: // current date
-			*value = std::max(TimerGameCalendar::date - CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR, TimerGameCalendar::Date(0)).base();
-			return true;
-
-		case 0x01: // current year
-			*value = (Clamp(TimerGameCalendar::year, CalendarTime::ORIGINAL_BASE_YEAR, CalendarTime::ORIGINAL_MAX_YEAR) - CalendarTime::ORIGINAL_BASE_YEAR).base();
-			return true;
-
-		case 0x02: { // detailed date information: month of year (bit 0-7), day of month (bit 8-12), leap year (bit 15), day of year (bit 16-24)
-			TimerGameCalendar::YearMonthDay ymd = TimerGameCalendar::ConvertDateToYMD(TimerGameCalendar::date);
-			TimerGameCalendar::Date start_of_year = TimerGameCalendar::ConvertYMDToDate(ymd.year, 0, 1);
-			*value = ymd.month | (ymd.day - 1) << 8 | (TimerGameCalendar::IsLeapYear(ymd.year) ? 1 << 15 : 0) | (TimerGameCalendar::date - start_of_year).base() << 16;
-			return true;
-		}
-
-		case 0x03: // current climate, 0=temp, 1=arctic, 2=trop, 3=toyland
-			*value = to_underlying(_settings_game.game_creation.landscape);
-			return true;
-
-		case 0x06: // road traffic side, bit 4 clear=left, set=right
-			*value = _settings_game.vehicle.road_side << 4;
-			return true;
-
-		case 0x09: // date fraction
-			*value = TimerGameCalendar::date_fract * 885;
-			return true;
-
-		case 0x0A: // animation counter
-			*value = GB(TimerGameTick::counter, 0, 16);
-			return true;
-
-		case 0x0B: { // TTDPatch version
-			uint major    = 2;
-			uint minor    = 6;
-			uint revision = 1; // special case: 2.0.1 is 2.0.10
-			uint build    = 1382;
-			*value = (major << 24) | (minor << 20) | (revision << 16) | build;
-			return true;
-		}
-
-		case 0x0D: // TTD Version, 00=DOS, 01=Windows
-			*value = GetGRFConfig(grffile->grfid)->palette & GRFP_USE_MASK;
-			return true;
-
-		case 0x0E: // Y-offset for train sprites
-			*value = grffile->traininfo_vehicle_pitch;
-			return true;
-
-		case 0x0F: // Rail track type cost factors
-			*value = 0;
-			SB(*value, 0, 8, GetRailTypeInfo(RAILTYPE_RAIL)->cost_multiplier); // normal rail
-			if (_settings_game.vehicle.disable_elrails) {
-				/* skip elrail multiplier - disabled */
-				SB(*value, 8, 8, GetRailTypeInfo(RAILTYPE_MONO)->cost_multiplier); // monorail
-			} else {
-				SB(*value, 8, 8, GetRailTypeInfo(RAILTYPE_ELECTRIC)->cost_multiplier); // electrified railway
-				/* Skip monorail multiplier - no space in result */
-			}
-			SB(*value, 16, 8, GetRailTypeInfo(RAILTYPE_MAGLEV)->cost_multiplier); // maglev
-			return true;
-
-		case 0x11: // current rail tool type
-			*value = 0; // constant fake value to avoid desync
-			return true;
-
-		case 0x12: // Game mode
-			*value = _game_mode;
-			return true;
-
-		/* case 0x13: // Tile refresh offset to left    not implemented */
-		/* case 0x14: // Tile refresh offset to right   not implemented */
-		/* case 0x15: // Tile refresh offset upwards    not implemented */
-		/* case 0x16: // Tile refresh offset downwards  not implemented */
-		/* case 0x17: // temperate snow line            not implemented */
-
-		case 0x1A: // Always -1
-			*value = UINT_MAX;
-			return true;
-
-		case 0x1B: // Display options
-			*value = 0x3F; // constant fake value to avoid desync
-			return true;
-
-		case 0x1D: // TTD Platform, 00=TTDPatch, 01=OpenTTD
-			*value = 1;
-			return true;
-
-		case 0x1E: { // Miscellaneous GRF features
-			GrfMiscBits bits = _misc_grf_features;
-
-			/* Add the local flags */
-			assert(!bits.Test(GrfMiscBit::TrainWidth32Pixels));
-			if (grffile->traininfo_vehicle_width == VEHICLEINFO_FULL_VEHICLE_WIDTH) bits.Set(GrfMiscBit::TrainWidth32Pixels);
-
-			*value = bits.base();
-			return true;
-		}
-
-		/* case 0x1F: // locale dependent settings not implemented to avoid desync */
-
-		case 0x20: { // snow line height
-			uint8_t snowline = GetSnowLine();
-			if (_settings_game.game_creation.landscape == LandscapeType::Arctic && snowline <= _settings_game.construction.map_height_limit) {
-				*value = Clamp(snowline * (grffile->grf_version >= 8 ? 1 : TILE_HEIGHT), 0, 0xFE);
-			} else {
-				/* No snow */
-				*value = 0xFF;
-			}
-			return true;
-		}
-
-		case 0x21: // OpenTTD version
-			*value = _openttd_newgrf_version;
-			return true;
-
-		case 0x22: // difficulty level
-			*value = SP_CUSTOM;
-			return true;
-
-		case 0x23: // long format date
-			*value = TimerGameCalendar::date.base();
-			return true;
-
-		case 0x24: // long format year
-			*value = TimerGameCalendar::year.base();
-			return true;
-
-		default: return false;
-	}
-#endif
 }
 
 template <> ChangeInfoResult GrfChangeInfoHandler<GSF_GLOBALVAR>::Reserve(uint first, uint last, int prop, ByteReader &buf) { return GlobalVarReserveInfo(first, last, prop, buf); }
