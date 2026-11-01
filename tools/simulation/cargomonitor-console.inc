@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /* Real facades/chunk handlers; malformed loads terminate before any further game work. */
 #include "cargomonitor.h"
+#include "saveload-codec-console.hpp"
 /* Monitors change only through final deliveries. The station's loaded catchment
  * supplies the nearby industry and the always-accepted passengers. */
 struct MonitorSite {
@@ -66,8 +67,12 @@ static bool MonitorScenario(std::span<std::string_view> args)
 		MonitorDeliver(site, pax, source, 17);
 		last.Restore();
 		auto file = FileHandle::Open(args[2], "rb"); if (!file.has_value()) FixtureAbort(__LINE__);
+#ifdef WITH_RUST
+		ConsoleOpenReader(std::make_shared<FileReader>(std::move(*file))); _sl_version = SAVEGAME_VERSION;
+#else
 		_sl.reader = std::make_unique<ReadBuffer>(std::make_shared<FileReader>(std::move(*file)));
 		_sl.action = SLA_LOAD; _sl_version = SAVEGAME_VERSION; _next_offs = 0;
+#endif
 		bool failed = false;
 		try { SlLoadChunk(*SlFindChunkHandler(args[3] == "CMDL" ? 'CMDL' : 'CMPU')); } catch (const std::exception &) { failed = true; }
 		auto query = args[3] == "CMDL" ? GetDeliveryAmount : GetPickupAmount;

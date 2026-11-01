@@ -801,6 +801,7 @@ def adapter(build, folder, env):
     local = folder / "towns-console.cpp"
     local.write_bytes((ROOT / "tools/simulation/towns-console.cpp").read_bytes())
     shutil.copy2(ROOT / "tools/simulation/storage-console.inc", folder)
+    shutil.copy2(ROOT / "tools/simulation/saveload-codec-console.hpp", folder)
     shutil.copy2(ROOT / "tools/simulation/house-resolver-console.inc", folder)
     from .console_adapter import console_adapter
 

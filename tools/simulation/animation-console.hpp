@@ -13,6 +13,7 @@
 #ifdef WITH_RUST
 #include "rust/animation_ffi.h"
 #include "rust/animation_save.hpp"
+#include "saveload-codec-console.hpp"
 #else
 extern std::vector<TileIndex> _animated_tiles;
 #endif
@@ -102,24 +103,13 @@ struct AnimationOutput : SaveFilter {
 	void Write(uint8_t *buf, size_t length) override { this->bytes.insert(this->bytes.end(), buf, buf + length); }
 	void Finish() override {}
 };
-/* Reset the Rust codec as the reference's `_sl = {}` resets its state. */
-static void AnimationResetCodec(uint8_t action)
-{
-	_sl = {};
-	openttd_rust_saveload_dumper_close();
-	openttd_rust_saveload_reader_close();
-	_codec = {};
-	_codec.version = reinterpret_cast<const uint16_t *>(&_sl_version);
-	_codec.minor_version = &_sl_minor_version;
-	_codec.action = action;
-}
 #endif
 static void AnimationLoadProbe(std::string_view kind)
 {
 	const auto &handler = *std::ranges::find_if(ChunkHandlers(), [](const ChunkHandler &ch) { return ch.id == 'ANIT'; });
 	RestoreAnimationQueue({TileIndex{333}, TileIndex{444}, TileIndex{555}});
 #ifdef WITH_RUST
-	AnimationResetCodec(SLA_SAVE); _sl_version = SAVEGAME_VERSION;
+	ConsoleResetCodec(SLA_SAVE); _sl_version = SAVEGAME_VERSION;
 	openttd_rust_saveload_dumper_open();
 	SlSaveChunk(handler);
 	AnimationOutput output;
@@ -143,9 +133,7 @@ static void AnimationLoadProbe(std::string_view kind)
 	if (AnimationQueue().size() != 2) std::abort();
 	_sl_version = kind == "fixed" ? static_cast<SaveLoadVersion>(79) : kind == "riff" ? SLV_80 : SAVEGAME_VERSION;
 #ifdef WITH_RUST
-	AnimationResetCodec(SLA_LOAD);
-	_sl.read_filter = std::make_shared<AnimationInput>(std::move(bytes));
-	openttd_rust_saveload_reader_open(_sl.read_filter.get());
+	ConsoleOpenReader(std::make_shared<AnimationInput>(std::move(bytes)));
 #else
 	_sl = {}; _sl.action = SLA_LOAD; _next_offs = 0;
 	_sl.reader = std::make_unique<ReadBuffer>(std::make_shared<AnimationInput>(std::move(bytes)));
