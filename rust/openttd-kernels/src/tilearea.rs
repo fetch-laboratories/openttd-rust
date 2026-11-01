@@ -5,7 +5,12 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Shared orthogonal tile-area helpers from `tilearea_type.h` and `tilearea.cpp`.
+//! Orthogonal and diagonal tile areas from `tilearea_type.h` and `tilearea.cpp`.
+//!
+//! Native facades pass their area or iterator fields in place; each export
+//! borrows them only for its call. The orthogonal iterator's advance stays
+//! inline in C++ loops; [`OrthogonalTileIterator`] serves Rust loops.
+#![allow(unsafe_code)]
 use crate::map_func::Map;
 /// Native `OrthogonalTileArea` scalar fields.
 #[repr(C)]
@@ -31,21 +36,50 @@ impl TileArea {
             h: (map.tile_y(a).max(map.tile_y(b)) - y + 1) as u16,
         }
     }
-    /// Original `Intersects`, including empty-area handling.
+    /// Original `OrthogonalTileArea(start, end)`, asserting both corners are on the map.
     #[must_use]
-    pub fn intersects(self, other: Self, map: Map) -> bool {
+    pub fn from_corners(map: Map, size: u32, start: u32, end: u32, check: impl Fn(bool)) -> Self {
+        check(start < size);
+        check(end < size);
+        Self::between(map, start, end)
+    }
+    /// Original `Add`: an invalid base tile becomes the single added tile.
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn add(&mut self, to_add: u32, map: Map) {
+        if self.tile == crate::tile_type::INVALID_TILE {
+            *self = Self {
+                tile: to_add,
+                w: 1,
+                h: 1,
+            };
+            return;
+        }
+        let sx = map.tile_x(self.tile);
+        let sy = map.tile_y(self.tile);
+        let ex = sx.wrapping_add(u32::from(self.w)).wrapping_sub(1);
+        let ey = sy.wrapping_add(u32::from(self.h)).wrapping_sub(1);
+        let ax = map.tile_x(to_add);
+        let ay = map.tile_y(to_add);
+        let (sx, sy, ex, ey) = (ax.min(sx), ay.min(sy), ax.max(ex), ay.max(ey));
+        self.tile = map.tile_xy(sx, sy);
+        self.w = ex.wrapping_sub(sx).wrapping_add(1) as u16;
+        self.h = ey.wrapping_sub(sy).wrapping_add(1) as u16;
+    }
+    /// Original `Intersects`, including its empty-width return before the assertion.
+    #[must_use]
+    pub fn intersects(self, other: Self, map: Map, check: impl FnOnce(bool)) -> bool {
         if other.w == 0 || self.w == 0 {
             return false;
         }
-        assert!(other.h != 0 && self.h != 0);
+        check(other.h != 0 && self.h != 0);
         let left1 = map.tile_x(self.tile);
         let top1 = map.tile_y(self.tile);
-        let right1 = left1 + u32::from(self.w) - 1;
-        let bottom1 = top1 + u32::from(self.h) - 1;
+        let right1 = left1.wrapping_add(u32::from(self.w)).wrapping_sub(1);
+        let bottom1 = top1.wrapping_add(u32::from(self.h)).wrapping_sub(1);
         let left2 = map.tile_x(other.tile);
         let top2 = map.tile_y(other.tile);
-        let right2 = left2 + u32::from(other.w) - 1;
-        let bottom2 = top2 + u32::from(other.h) - 1;
+        let right2 = left2.wrapping_add(u32::from(other.w)).wrapping_sub(1);
+        let bottom2 = top2.wrapping_add(u32::from(other.h)).wrapping_sub(1);
         !(left2 > right1 || right2 < left1 || top2 > bottom1 || bottom2 < top1)
     }
     /// Original `Contains`, including its empty-width return before the assertion.
@@ -75,6 +109,20 @@ impl TileArea {
         self.tile = (sy as u32) * map.size_x() + sx as u32;
         self.w = (ex - sx) as u16;
         self.h = (ey - sy) as u16;
+    }
+    /// Original `ClampToMap`; the unsigned remaining extent converts to `int` before the minimum.
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap,
+        clippy::cast_sign_loss
+    )]
+    pub fn clamp_to_map(&mut self, map: Map, size: u32, check: impl FnOnce(bool)) {
+        check(self.tile < size);
+        let size_y = size >> map.log_x;
+        let w = i32::from(self.w).min(map.size_x().wrapping_sub(map.tile_x(self.tile)) as i32);
+        let h = i32::from(self.h).min(size_y.wrapping_sub(map.tile_y(self.tile)) as i32);
+        self.w = w as u16;
+        self.h = h as u16;
     }
     /// Original row-major orthogonal tile iterator.
     pub fn tiles(self, map: Map) -> impl Iterator<Item = u32> + use<> {
@@ -132,5 +180,407 @@ impl OrthogonalTileIterator {
                 self.tile = crate::tile_type::INVALID_TILE;
             }
         }
+    }
+}
+
+/// Native `DiagonalTileArea`: extents are one past the end, signed by direction.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct DiagonalTileArea {
+    /// Base tile of the area.
+    pub tile: u32,
+    /// Extent along `TileY + TileX`.
+    pub a: i16,
+    /// Extent along `TileY - TileX`.
+    pub b: i16,
+}
+impl DiagonalTileArea {
+    /// Original `DiagonalTileArea(start, end)`. Unsigned coordinate sums narrow to
+    /// `int16_t` before the one-past-end step, which also narrows.
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn from_corners(map: Map, size: u32, start: u32, end: u32, check: impl Fn(bool)) -> Self {
+        check(start < size);
+        check(end < size);
+        let (sx, sy, ex, ey) = (
+            map.tile_x(start),
+            map.tile_y(start),
+            map.tile_x(end),
+            map.tile_y(end),
+        );
+        let a = ey.wrapping_add(ex).wrapping_sub(sy).wrapping_sub(sx) as i16;
+        let b = ey.wrapping_sub(ex).wrapping_sub(sy).wrapping_add(sx) as i16;
+        let past = |e: i16| {
+            if e > 0 {
+                e.wrapping_add(1)
+            } else {
+                e.wrapping_sub(1)
+            }
+        };
+        Self {
+            tile: start,
+            a: past(a),
+            b: past(b),
+        }
+    }
+    /// Original `Contains`; unsigned coordinate sums convert to `int`.
+    #[must_use]
+    #[allow(clippy::cast_possible_wrap)]
+    pub fn contains(self, tile: u32, map: Map) -> bool {
+        let rotated = |t: u32| {
+            (
+                map.tile_y(t).wrapping_add(map.tile_x(t)) as i32,
+                map.tile_y(t).wrapping_sub(map.tile_x(t)) as i32,
+            )
+        };
+        let (a, b) = rotated(tile);
+        let (mut start_a, mut start_b) = rotated(self.tile);
+        let mut end_a = start_a.wrapping_add(i32::from(self.a));
+        let mut end_b = start_b.wrapping_add(i32::from(self.b));
+        // Swap if necessary, preserving the one-past-end semantics.
+        if start_a > end_a {
+            (start_a, end_a) = (end_a.wrapping_add(1), start_a.wrapping_add(1));
+        }
+        if start_b > end_b {
+            (start_b, end_b) = (end_b.wrapping_add(1), start_b.wrapping_add(1));
+        }
+        a >= start_a && a < end_a && b >= start_b && b < end_b
+    }
+}
+
+/// `DiagonalTileIterator` fields after the inherited current tile.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct DiagonalTileCursor {
+    /// Base tile x coordinate.
+    pub base_x: u32,
+    /// Base tile y coordinate.
+    pub base_y: u32,
+    /// Current rotated x coordinate.
+    pub a_cur: i32,
+    /// Current rotated y coordinate.
+    pub b_cur: i32,
+    /// Rotated x coordinate of the end.
+    pub a_max: i32,
+    /// Rotated y coordinate of the end.
+    pub b_max: i32,
+}
+impl DiagonalTileCursor {
+    /// Original `operator++` from `tile`, clipping at the map borders. Its loop
+    /// continues while `tile > Map::Size()`, so only `INVALID_TILE` is skipped.
+    #[allow(clippy::cast_sign_loss)]
+    pub fn advance(&mut self, tile: u32, map: Map, size: u32, check: impl FnOnce(bool)) -> u32 {
+        check(tile != crate::tile_type::INVALID_TILE);
+        let size_y = size >> map.log_x;
+        let mut tile;
+        loop {
+            if self.a_max == 1 || self.a_max == -1 {
+                // Every second column has zero length; skip them completely.
+                self.a_cur = 0;
+                self.b_cur = if self.b_max > 0 {
+                    self.b_cur.wrapping_add(2).min(self.b_max)
+                } else {
+                    self.b_cur.wrapping_sub(2).max(self.b_max)
+                };
+            } else {
+                let new_line = if self.a_max > 0 {
+                    self.a_cur = self.a_cur.wrapping_add(2);
+                    self.a_cur >= self.a_max
+                } else {
+                    self.a_cur = self.a_cur.wrapping_sub(2);
+                    self.a_cur <= self.a_max
+                };
+                if new_line {
+                    // Every second line starts one tile further in the direction of a_max.
+                    self.a_cur = if self.a_cur.wrapping_abs() % 2 != 0 {
+                        0
+                    } else if self.a_max > 0 {
+                        1
+                    } else {
+                        -1
+                    };
+                    self.b_cur = if self.b_max > 0 {
+                        self.b_cur.wrapping_add(1)
+                    } else {
+                        self.b_cur.wrapping_sub(1)
+                    };
+                }
+            }
+            let x = self
+                .base_x
+                .wrapping_add((self.a_cur.wrapping_sub(self.b_cur) / 2) as u32);
+            let y = self
+                .base_y
+                .wrapping_add((self.b_cur.wrapping_add(self.a_cur) / 2) as u32);
+            tile = if x >= map.size_x() || y >= size_y {
+                crate::tile_type::INVALID_TILE
+            } else {
+                map.tile_xy(x, y)
+            };
+            if !(tile > size && self.b_max != self.b_cur) {
+                break;
+            }
+        }
+        if self.b_max == self.b_cur {
+            crate::tile_type::INVALID_TILE
+        } else {
+            tile
+        }
+    }
+}
+
+/// Map dimensions and the native assertion for a facade entry.
+/// # Safety
+/// `shared` is the live shared table; the map is not being reset.
+unsafe fn entry<'a>(shared: *const crate::services::Services) -> crate::map_func::World<'a> {
+    crate::map_func::World::new(unsafe { &*shared })
+}
+
+/// Native `OrthogonalTileArea(start, end)`.
+/// # Safety
+/// `out` is a writable native area; `shared` is the live shared table.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_tile_area_corners(
+    out: *mut TileArea,
+    start: u32,
+    end: u32,
+    shared: *const crate::services::Services,
+) {
+    let w = unsafe { entry(shared) };
+    let area = TileArea::from_corners(w.dimensions, w.types.count(), start, end, |ok| {
+        w.check(ok);
+    });
+    unsafe { out.write(area) };
+}
+/// Native `OrthogonalTileArea::Add`.
+/// # Safety
+/// `area` is a live native area with no other borrow; `shared` is the live shared table.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_tile_area_add(
+    area: *mut TileArea,
+    to_add: u32,
+    shared: *const crate::services::Services,
+) {
+    let w = unsafe { entry(shared) };
+    unsafe { (*area).add(to_add, w.dimensions) };
+}
+/// Native `OrthogonalTileArea::Intersects`.
+/// # Safety
+/// Both areas are live; `shared` is the live shared table.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_tile_area_intersects(
+    area: *const TileArea,
+    other: *const TileArea,
+    shared: *const crate::services::Services,
+) -> bool {
+    let w = unsafe { entry(shared) };
+    unsafe { (*area).intersects(*other, w.dimensions, |ok| w.check(ok)) }
+}
+/// Native `OrthogonalTileArea::Contains`.
+/// # Safety
+/// `area` is live; `shared` is the live shared table.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_tile_area_contains(
+    area: *const TileArea,
+    tile: u32,
+    shared: *const crate::services::Services,
+) -> bool {
+    let w = unsafe { entry(shared) };
+    unsafe { (*area).contains(tile, w.dimensions, |ok| w.check(ok)) }
+}
+/// Native `OrthogonalTileArea::Expand`.
+/// # Safety
+/// `area` is a live native area with no other borrow; `shared` is the live shared table.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_tile_area_expand(
+    area: *mut TileArea,
+    radius: i32,
+    shared: *const crate::services::Services,
+) {
+    let w = unsafe { entry(shared) };
+    unsafe { (*area).expand(radius, w.dimensions, w.size_y()) };
+}
+/// Native `OrthogonalTileArea::ClampToMap`.
+/// # Safety
+/// `area` is a live native area with no other borrow; `shared` is the live shared table.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_tile_area_clamp_to_map(
+    area: *mut TileArea,
+    shared: *const crate::services::Services,
+) {
+    let w = unsafe { entry(shared) };
+    unsafe { (*area).clamp_to_map(w.dimensions, w.types.count(), |ok| w.check(ok)) };
+}
+/// Native `DiagonalTileArea(start, end)`.
+/// # Safety
+/// `out` is a writable native area; `shared` is the live shared table.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_diagonal_tile_area_corners(
+    out: *mut DiagonalTileArea,
+    start: u32,
+    end: u32,
+    shared: *const crate::services::Services,
+) {
+    let w = unsafe { entry(shared) };
+    let area = DiagonalTileArea::from_corners(w.dimensions, w.types.count(), start, end, |ok| {
+        w.check(ok);
+    });
+    unsafe { out.write(area) };
+}
+/// Native `DiagonalTileArea::Contains`.
+/// # Safety
+/// `area` is live; `shared` is the live shared table.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_diagonal_tile_area_contains(
+    area: *const DiagonalTileArea,
+    tile: u32,
+    shared: *const crate::services::Services,
+) -> bool {
+    let w = unsafe { entry(shared) };
+    unsafe { (*area).contains(tile, w.dimensions) }
+}
+/// Native `DiagonalTileIterator::operator++`; returns the next current tile.
+/// # Safety
+/// `cursor` is the live iterator's state with no other borrow; `shared` is the live shared table.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_diagonal_tile_advance(
+    cursor: *mut DiagonalTileCursor,
+    tile: u32,
+    shared: *const crate::services::Services,
+) -> u32 {
+    let w = unsafe { entry(shared) };
+    unsafe { (*cursor).advance(tile, w.dimensions, w.types.count(), |ok| w.check(ok)) }
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "DiagonalTileArea" ["station_service"] => DiagonalTileArea { tile, a, b };
+    "OpenTTDDiagonalTileCursor" ["station_service"] => DiagonalTileCursor { base_x, base_y, a_cur, b_cur, a_max, b_max };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tile_type::INVALID_TILE;
+
+    // A 16x8 map; expectations come from the pinned `tilearea.cpp` bodies.
+    const MAP: Map = Map { log_x: 4 };
+    const SIZE: u32 = 128;
+
+    fn on_map(ok: bool) {
+        assert!(ok);
+    }
+
+    #[test]
+    fn diagonal_areas_follow_the_original_extents_order_and_clipping() {
+        type Case = (u32, u32, i16, i16, &'static [u32], &'static [u32]);
+        let cases: &[Case] = &[
+            (
+                51,
+                38,
+                3,
+                -5,
+                &[51, 68, 52, 36, 53, 37, 21, 38],
+                &[21, 36, 37, 38, 51, 52, 53, 68],
+            ),
+            (
+                38,
+                51,
+                -3,
+                5,
+                &[38, 21, 37, 53, 36, 52, 68, 51],
+                &[21, 36, 37, 38, 51, 52, 53, 68],
+            ),
+            (85, 85, -1, -1, &[85], &[85]),
+            (17, 68, 7, -1, &[17, 34, 51, 68], &[17, 34, 51, 68]),
+            (
+                30,
+                127,
+                8,
+                6,
+                &[
+                    30, 47, 46, 63, 45, 62, 79, 61, 78, 95, 60, 77, 94, 111, 76, 93, 110, 127,
+                ],
+                &[
+                    30, 45, 46, 47, 60, 61, 62, 63, 76, 77, 78, 79, 93, 94, 95, 110, 111, 127,
+                ],
+            ),
+            (
+                112,
+                2,
+                -6,
+                -10,
+                &[
+                    112, 96, 97, 80, 81, 64, 82, 65, 48, 66, 49, 32, 67, 50, 33, 51, 34, 17, 52,
+                    35, 18, 36, 19, 2,
+                ],
+                &[
+                    2, 17, 18, 19, 32, 33, 34, 35, 36, 48, 49, 50, 51, 52, 64, 65, 66, 67, 80, 81,
+                    82, 96, 97, 112,
+                ],
+            ),
+            (68, 69, 2, -2, &[68, 69], &[68, 69]),
+        ];
+        for &(start, end, a, b, sequence, contained) in cases {
+            let area = DiagonalTileArea::from_corners(MAP, SIZE, start, end, on_map);
+            assert_eq!((area.tile, area.a, area.b), (start, a, b));
+            let mut cursor = DiagonalTileCursor {
+                base_x: MAP.tile_x(start),
+                base_y: MAP.tile_y(start),
+                a_cur: 0,
+                b_cur: 0,
+                a_max: i32::from(a),
+                b_max: i32::from(b),
+            };
+            let mut tile = area.tile;
+            let mut seen = Vec::new();
+            while tile != INVALID_TILE {
+                seen.push(tile);
+                tile = cursor.advance(tile, MAP, SIZE, on_map);
+            }
+            assert_eq!(seen, sequence, "{start} -> {end}");
+            let inside: Vec<u32> = (0..SIZE).filter(|&t| area.contains(t, MAP)).collect();
+            assert_eq!(inside, contained, "{start} -> {end}");
+        }
+    }
+
+    #[test]
+    fn orthogonal_corners_add_and_clamp_follow_the_original() {
+        let a = TileArea::from_corners(MAP, SIZE, MAP.tile_xy(7, 5), MAP.tile_xy(2, 1), on_map);
+        assert_eq!((a.tile, a.w, a.h), (18, 6, 5));
+        let mut b = TileArea {
+            tile: INVALID_TILE,
+            w: 0,
+            h: 0,
+        };
+        for (x, y) in [(9, 3), (4, 6), (6, 1)] {
+            b.add(MAP.tile_xy(x, y), MAP);
+        }
+        assert_eq!((b.tile, b.w, b.h), (20, 6, 6));
+        let mut c = TileArea {
+            tile: MAP.tile_xy(12, 6),
+            w: 9,
+            h: 5,
+        };
+        c.clamp_to_map(MAP, SIZE, on_map);
+        assert_eq!((c.tile, c.w, c.h), (108, 4, 2));
+    }
+
+    #[test]
+    fn zero_height_intersection_reports_the_assertion_and_wraps() {
+        // The original asserts after its zero-width return; a zero height at row 0 wraps.
+        let flat = TileArea {
+            tile: 3,
+            w: 2,
+            h: 0,
+        };
+        let one = TileArea {
+            tile: 3,
+            w: 1,
+            h: 1,
+        };
+        let failures = std::cell::Cell::new(0);
+        let hit = flat.intersects(one, MAP, |ok| failures.set(failures.get() + u32::from(!ok)));
+        assert_eq!((hit, failures.get()), (true, 1));
     }
 }

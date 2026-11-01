@@ -102,7 +102,7 @@ fn openttd_rust_object_areas_find(tile: u32, log_x: u32) -> usize {
                 w: a.width,
                 h: a.height,
             }
-            .intersects(tile_area, map)
+            .intersects(tile_area, map, |ok| assert!(ok))
         })
         .unwrap_or(usize::MAX)
 }

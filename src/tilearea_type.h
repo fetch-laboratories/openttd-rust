@@ -13,6 +13,7 @@
 #include "map_func.h"
 
 #include "rust/spiral_ffi.h"
+#include "rust/tilearea_ffi.h"
 static_assert(sizeof(uint) == sizeof(uint32_t) && std::is_unsigned_v<uint> && std::numeric_limits<uint>::digits == 32);
 static_assert(sizeof(DiagDirection) == sizeof(uint8_t));
 static_assert(DIAGDIR_BEGIN == 0 && DIAGDIR_NE == 0 && DIAGDIR_SE == 1 && DIAGDIR_SW == 2 && DIAGDIR_NW == 3 && DIAGDIR_END == 4 && INVALID_DIAGDIR == 255);
@@ -222,12 +223,7 @@ public:
 /** Iterator to iterate over a diagonal area of the map. */
 class DiagonalTileIterator : public TileIterator {
 private:
-	uint base_x; ///< The base tile x coordinate from where the iterating happens.
-	uint base_y; ///< The base tile y coordinate from where the iterating happens.
-	int a_cur;   ///< The current (rotated) x coordinate of the iteration.
-	int b_cur;   ///< The current (rotated) y coordinate of the iteration.
-	int a_max;   ///< The (rotated) x coordinate of the end of the iteration.
-	int b_max;   ///< The (rotated) y coordinate of the end of the iteration.
+	OpenTTDDiagonalTileCursor state; ///< Base coordinates and the current and end rotated coordinates.
 
 public:
 
@@ -236,7 +232,7 @@ public:
 	 * @param ta Area, i.e. begin point and (diagonal) width/height of to-be-iterated area.
 	 */
 	DiagonalTileIterator(const DiagonalTileArea &ta) :
-		TileIterator(ta.tile), base_x(TileX(ta.tile)), base_y(TileY(ta.tile)), a_cur(0), b_cur(0), a_max(ta.a), b_max(ta.b)
+		TileIterator(ta.tile), state{TileX(ta.tile), TileY(ta.tile), 0, 0, ta.a, ta.b}
 	{
 	}
 
