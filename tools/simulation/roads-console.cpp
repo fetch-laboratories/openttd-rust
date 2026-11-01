@@ -67,7 +67,7 @@ static void Run(TileIndex center)
 	}
 	uint count = 0;
 	auto compare = [&](TileIndex tile, uint32_t plan) {
-		const uint32_t expected = CleanUpRoadBits(tile, static_cast<RoadBits>(plan));
+		const uint32_t expected = RoadCleanupProbe::CleanUpRoadBits(tile, static_cast<RoadBits>(plan));
 		const uint32_t actual = Candidate(tile, plan);
 		if (actual != expected) {
 			fmt::print(stderr, "ROADCMD cleanup-failure {} {} {} {}\n", tile.base(), plan, expected, actual);
@@ -84,7 +84,7 @@ static void Run(TileIndex center)
 			switch (kind) {
 				case 0: break;
 				case 1: MakeTree(at, TREE_TEMPERATE, 0, TreeGrowthStage::Grown, TREE_GROUND_GRASS, 3); break;
-				case 2: MakeVoid(at); break;
+				case 2: MakeRailNormal(at, OWNER_NONE, TRACK_BIT_UPPER, RAILTYPE_RAIL); break;
 				case 3: MakeSea(at); break;
 				case 4: MakeShore(at); break;
 				case 5: MakeRiver(at, 0); break;
