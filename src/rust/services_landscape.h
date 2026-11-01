@@ -41,7 +41,6 @@ inline void RustSetTileHeight(uint32_t tile, uint32_t height) noexcept { SetTile
 inline bool RustInnerTile(uint32_t tile) noexcept { return IsInnerTile(TileIndex{tile}); }
 inline OpenTTDFoundationSlope RustTileSlopeZ(uint32_t tile) noexcept { auto [slope, z] = GetTileSlopeZ(TileIndex{tile}); return {.z = z, .slope = slope}; }
 inline OpenTTDFoundationSlope RustApplyFoundation(Foundation foundation, Slope slope) noexcept { int z = ApplyFoundationToSlope(foundation, slope); return {.z = z, .slope = slope}; }
-inline RoadBits RustCleanRoadBits(TileIndex tile, RoadBits bits) noexcept { return CleanUpRoadBits(tile, bits); }
 inline uint8_t RustTileOwnerValue(uint32_t tile) noexcept { return GetTileOwner(TileIndex{tile}).base(); }
 inline bool RustPlainRailTile(uint32_t tile) noexcept { return IsPlainRailTile(TileIndex{tile}); }
 inline ClearGround RustClearGround(Tile tile) noexcept { return GetClearGround(tile); }

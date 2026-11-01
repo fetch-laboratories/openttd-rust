@@ -286,6 +286,19 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     return dict(scenario, save=str(fixture))
 
 
+def cleanup_complete(lines: list[str]) -> bool:
+    """Whether the original road cleanup matrix ran to completion without draws."""
+    matrices = [
+        line.split()[2:] for line in lines if line.startswith("ROADCMD cleanup-matrix ")
+    ]
+    done = [
+        line.split()[2:4] for line in lines if line.startswith("ROADCMD cleanup-done ")
+    ]
+    return matrices == [
+        [str(d), str((d + 1) * 34 * 4 * 259)] for d in range(4)
+    ] and done == [[str(4 * 34 * 4 * 259 + 6 * 256), "true"]]
+
+
 def check(scenario, run, mode, role, result):
     if scenario.get("roads"):
         from . import core
@@ -319,6 +332,10 @@ def check(scenario, run, mode, role, result):
         if scenario["road_commands"] == "tram":
             check_tram(scenario, run, mode, role, result, lines)
         if scenario["road_commands"] == "commands":
+            if not cleanup_complete(lines):
+                result["problems"].append(
+                    f"{mode}/{role}: incomplete road cleanup matrix"
+                )
             for expected in (
                 "protocol-outside false",
                 "protocol-void false",
