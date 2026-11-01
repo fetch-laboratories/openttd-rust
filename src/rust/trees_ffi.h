@@ -62,7 +62,7 @@ struct OpenTTDTreeCommandResult {
 	int64_t cost;
 	uint8_t status, message;
 };
-/* Command flags, company, tile iterator and nested result; opaque to Rust. */
+/* Command flags, company and nested result; opaque to Rust. */
 struct OpenTTDTreeCommand;
 
 /* Reads are pure; writes are the same-named tree_map.h/clear_map.h functions. Direct water calls,
@@ -89,9 +89,7 @@ struct OpenTTDTreeServices {
 	bool (*progress)() noexcept OPENTTD_SERVICE_DEFAULT(progress);
 	bool (*progress_total)(uint32_t total) noexcept OPENTTD_SERVICE_DEFAULT(progress_total);
 	void (*town_rating)(uint16_t, uint32_t tile, bool up) noexcept OPENTTD_SERVICE_DEFAULT(town_rating);
-	int32_t (*command_begin)(OpenTTDTreeCommand *, uint32_t end, uint32_t start, bool diagonal) noexcept OPENTTD_SERVICE_DEFAULT(command_begin);
-	uint32_t (*command_tile)(OpenTTDTreeCommand *) noexcept OPENTTD_SERVICE_DEFAULT(command_tile);
-	uint32_t (*command_next)(OpenTTDTreeCommand *) noexcept OPENTTD_SERVICE_DEFAULT(command_next);
+	int32_t (*command_begin)(OpenTTDTreeCommand *) noexcept OPENTTD_SERVICE_DEFAULT(command_begin);
 	void (*command_debit)(OpenTTDTreeCommand *) noexcept OPENTTD_SERVICE_DEFAULT(command_debit);
 };
 

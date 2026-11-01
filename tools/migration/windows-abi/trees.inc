@@ -40,9 +40,7 @@ static const OpenTTDTreeServices tree_probe_services{
 	.progress = []() noexcept { return tree_probe.abort; },
 	.progress_total = TreeUnused<bool, uint32_t>,
 	.town_rating = TreeUnused<void, uint16_t, uint32_t, bool>,
-	.command_begin = [](OpenTTDTreeCommand *, uint32_t, uint32_t, bool) noexcept { return INT32_MAX; },
-	.command_tile = [](OpenTTDTreeCommand *) noexcept { return uint32_t{1}; },
-	.command_next = [](OpenTTDTreeCommand *) noexcept { return UINT32_MAX; },
+	.command_begin = [](OpenTTDTreeCommand *) noexcept { return INT32_MAX; },
 	.command_debit = TreeUnused<void, OpenTTDTreeCommand *>,
 };
 static void Trees()
