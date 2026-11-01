@@ -12,10 +12,11 @@ struct OpenTTDNetworkConnectionServices {
 	uint8_t (*client_company)(void *) noexcept OPENTTD_SERVICE_DEFAULT(client_company);
 	void (*client_error_announcement)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(client_error_announcement);
 	uint32_t (*client_id)(void *) noexcept OPENTTD_SERVICE_DEFAULT(client_id);
+	uint8_t *clients_connected;
 	uint8_t *clients_on;
-	uint8_t (*close)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(close);
 	bool (*company_allows_client)(uint8_t, void *) noexcept OPENTTD_SERVICE_DEFAULT(company_allows_client);
 	void (*debug_authorized)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_authorized);
+	void (*debug_closed)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_closed);
 	void (*debug_done_map)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_done_map);
 	void (*debug_game_info)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_game_info);
 	void (*debug_getmap)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_getmap);
@@ -47,10 +48,11 @@ struct OpenTTDNetworkConnectionServices {
 	void * (*game)(void *) noexcept OPENTTD_SERVICE_DEFAULT(game);
 	bool (*grfs_empty)() noexcept OPENTTD_SERVICE_DEFAULT(grfs_empty);
 	void * (*grfs_packet)(void *) noexcept OPENTTD_SERVICE_DEFAULT(grfs_packet);
-	bool (*has_quit)(void *) noexcept OPENTTD_SERVICE_DEFAULT(has_quit);
 	void * (*info)(void *) noexcept OPENTTD_SERVICE_DEFAULT(info);
+	void * (*info_by_id)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(info_by_id);
 	int32_t (*join_date)(void *) noexcept OPENTTD_SERVICE_DEFAULT(join_date);
 	void (*joined)(void *) noexcept OPENTTD_SERVICE_DEFAULT(joined);
+	void (*lost_connection_announcement)(void *) noexcept OPENTTD_SERVICE_DEFAULT(lost_connection_announcement);
 	void (*map_create)(void *) noexcept OPENTTD_SERVICE_DEFAULT(map_create);
 	void (*map_destroy)(void *) noexcept OPENTTD_SERVICE_DEFAULT(map_destroy);
 	void (*map_save)(void *) noexcept OPENTTD_SERVICE_DEFAULT(map_save);
@@ -58,6 +60,8 @@ struct OpenTTDNetworkConnectionServices {
 	uint8_t (*max_clients)() noexcept OPENTTD_SERVICE_DEFAULT(max_clients);
 	uint8_t (*max_companies)() noexcept OPENTTD_SERVICE_DEFAULT(max_companies);
 	uint8_t (*min_active_clients)() noexcept OPENTTD_SERVICE_DEFAULT(min_active_clients);
+	bool *network_server;
+	bool *networking;
 	uint32_t (*newgrf_version)() noexcept OPENTTD_SERVICE_DEFAULT(newgrf_version);
 	OpenTTDCommandQueue * (*outgoing_queue)(void *) noexcept OPENTTD_SERVICE_DEFAULT(outgoing_queue);
 	bool (*pause_on_join)() noexcept OPENTTD_SERVICE_DEFAULT(pause_on_join);
@@ -67,7 +71,6 @@ struct OpenTTDNetworkConnectionServices {
 	uint8_t (*send_client_info)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(send_client_info);
 	uint8_t (*send_config)(void *) noexcept OPENTTD_SERVICE_DEFAULT(send_config);
 	uint8_t (*send_game_info)(void *) noexcept OPENTTD_SERVICE_DEFAULT(send_game_info);
-	void * (*server_info)() noexcept OPENTTD_SERVICE_DEFAULT(server_info);
 	uint8_t * (*status)(void *) noexcept OPENTTD_SERVICE_DEFAULT(status);
 	OpenTTDNetworkSocketSync * (*sync)(void *) noexcept OPENTTD_SERVICE_DEFAULT(sync);
 	bool (*unique_name)(void *) noexcept OPENTTD_SERVICE_DEFAULT(unique_name);
@@ -95,5 +98,6 @@ uint8_t openttd_rust_network_send_newgame(const OpenTTDNetworkConnectionServices
 uint8_t openttd_rust_network_send_join(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket, uint32_t client_id);
 uint8_t openttd_rust_network_receive_error(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket, void *packet);
 uint8_t openttd_rust_network_receive_quit(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket);
+uint8_t openttd_rust_network_server_close(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void * socket, uint8_t result);
 }
 #endif

@@ -10,11 +10,12 @@ use crate::network_frame::{
     },
 };
 use crate::network_type::{
-    NETWORK_ERROR_COMPANY_MISMATCH, NETWORK_ERROR_FULL, NETWORK_ERROR_ILLEGAL_PACKET,
-    NETWORK_ERROR_INVALID_CLIENT_NAME, NETWORK_ERROR_KICKED, NETWORK_ERROR_NAME_IN_USE,
-    NETWORK_ERROR_NOT_AUTHORIZED, NETWORK_ERROR_NOT_EXPECTED, NETWORK_ERROR_WRONG_REVISION,
-    NETWORK_RECV_STATUS_CLIENT_QUIT, NETWORK_RECV_STATUS_MALFORMED_PACKET,
-    NETWORK_RECV_STATUS_OKAY, NETWORK_RECV_STATUS_SERVER_ERROR,
+    NETWORK_ERROR_COMPANY_MISMATCH, NETWORK_ERROR_CONNECTION_LOST, NETWORK_ERROR_FULL,
+    NETWORK_ERROR_ILLEGAL_PACKET, NETWORK_ERROR_INVALID_CLIENT_NAME, NETWORK_ERROR_KICKED,
+    NETWORK_ERROR_NAME_IN_USE, NETWORK_ERROR_NOT_AUTHORIZED, NETWORK_ERROR_NOT_EXPECTED,
+    NETWORK_ERROR_WRONG_REVISION, NETWORK_RECV_STATUS_CLIENT_QUIT,
+    NETWORK_RECV_STATUS_MALFORMED_PACKET, NETWORK_RECV_STATUS_OKAY,
+    NETWORK_RECV_STATUS_SERVER_ERROR,
 };
 use crate::openttd::PauseMode;
 use crate::raw_field::write_field;
@@ -35,10 +36,11 @@ pub struct Services {
     pub client_company: extern "C" fn(*mut c_void) -> u8,
     pub client_error_announcement: extern "C" fn(*mut c_void, u8),
     pub client_id: extern "C" fn(*mut c_void) -> u32,
+    pub clients_connected: *mut u8,
     pub clients_on: *mut u8,
-    pub close: extern "C" fn(*mut c_void, u8) -> u8,
     pub company_allows_client: extern "C" fn(u8, *mut c_void) -> bool,
     pub debug_authorized: extern "C" fn(*mut c_void),
+    pub debug_closed: extern "C" fn(*mut c_void),
     pub debug_done_map: extern "C" fn(*mut c_void),
     pub debug_game_info: extern "C" fn(*mut c_void),
     pub debug_getmap: extern "C" fn(*mut c_void),
@@ -70,10 +72,11 @@ pub struct Services {
     pub game: extern "C" fn(*mut c_void) -> *mut c_void,
     pub grfs_empty: extern "C" fn() -> bool,
     pub grfs_packet: extern "C" fn(*mut c_void) -> *mut c_void,
-    pub has_quit: extern "C" fn(*mut c_void) -> bool,
     pub info: extern "C" fn(*mut c_void) -> *mut c_void,
+    pub info_by_id: extern "C" fn(u32) -> *mut c_void,
     pub join_date: extern "C" fn(*mut c_void) -> i32,
     pub joined: extern "C" fn(*mut c_void),
+    pub lost_connection_announcement: extern "C" fn(*mut c_void),
     pub map_create: extern "C" fn(*mut c_void),
     pub map_destroy: extern "C" fn(*mut c_void),
     pub map_save: extern "C" fn(*mut c_void),
@@ -81,6 +84,8 @@ pub struct Services {
     pub max_clients: extern "C" fn() -> u8,
     pub max_companies: extern "C" fn() -> u8,
     pub min_active_clients: extern "C" fn() -> u8,
+    pub network_server: *mut bool,
+    pub networking: *mut bool,
     pub newgrf_version: extern "C" fn() -> u32,
     pub outgoing_queue: extern "C" fn(*mut c_void) -> *mut crate::network_command::CommandQueue,
     pub pause_on_join: extern "C" fn() -> bool,
@@ -90,7 +95,6 @@ pub struct Services {
     pub send_client_info: extern "C" fn(*mut c_void, *mut c_void) -> u8,
     pub send_config: extern "C" fn(*mut c_void) -> u8,
     pub send_game_info: extern "C" fn(*mut c_void) -> u8,
-    pub server_info: extern "C" fn() -> *mut c_void,
     pub status: extern "C" fn(*mut c_void) -> *mut u8,
     pub sync: extern "C" fn(*mut c_void) -> *mut SocketSync,
     pub unique_name: extern "C" fn(*mut c_void) -> bool,
@@ -108,10 +112,11 @@ crate::abi::layouts! {
         client_company,
         client_error_announcement,
         client_id,
+        clients_connected,
         clients_on,
-        close,
         company_allows_client,
         debug_authorized,
+        debug_closed,
         debug_done_map,
         debug_game_info,
         debug_getmap,
@@ -143,10 +148,11 @@ crate::abi::layouts! {
         game,
         grfs_empty,
         grfs_packet,
-        has_quit,
         info,
+        info_by_id,
         join_date,
         joined,
+        lost_connection_announcement,
         map_create,
         map_destroy,
         map_save,
@@ -154,6 +160,8 @@ crate::abi::layouts! {
         max_clients,
         max_companies,
         min_active_clients,
+        network_server,
+        networking,
         newgrf_version,
         outgoing_queue,
         pause_on_join,
@@ -163,7 +171,6 @@ crate::abi::layouts! {
         send_client_info,
         send_config,
         send_game_info,
-        server_info,
         status,
         sync,
         unique_name,
@@ -243,7 +250,7 @@ pub extern "C" fn openttd_rust_network_send_welcome(
 ) -> u8 {
     (s.debug_send_welcome)(socket);
     if status(s, socket) != NEWGRFS_CHECK {
-        return (s.close)(socket, NETWORK_RECV_STATUS_MALFORMED_PACKET);
+        return close_connection(s, f, socket, NETWORK_RECV_STATUS_MALFORMED_PACKET);
     }
     (s.debug_authorized)(socket);
     set_status(s, socket, AUTHORIZED);
@@ -259,7 +266,10 @@ pub extern "C" fn openttd_rust_network_send_welcome(
             (s.send_client_info)(socket, (s.info)(client.socket));
         }
     }
-    (s.send_client_info)(socket, (s.server_info)())
+    (s.send_client_info)(
+        socket,
+        (s.info_by_id)(crate::network_type::CLIENT_ID_SERVER),
+    )
 }
 
 #[unsafe(no_mangle)]
@@ -365,7 +375,7 @@ pub extern "C" fn openttd_rust_network_receive_getmap(
     f: &FrameServices,
     socket: *mut c_void,
 ) -> u8 {
-    if status(s, socket) < AUTHORIZED || (s.has_quit)(socket) {
+    if status(s, socket) < AUTHORIZED || (f.socket_has_quit)((s.game)(socket)) {
         return send_error(s, f, socket, NETWORK_ERROR_NOT_AUTHORIZED, EMPTY_TEXT);
     }
     (s.debug_getmap)(socket);
@@ -386,7 +396,7 @@ pub extern "C" fn openttd_rust_network_receive_map_ok(
     f: &FrameServices,
     socket: *mut c_void,
 ) -> u8 {
-    if status(s, socket) == DONE_MAP && !(s.has_quit)(socket) {
+    if status(s, socket) == DONE_MAP && !(f.socket_has_quit)((s.game)(socket)) {
         (s.debug_map_ok)(socket);
         (s.joined)(socket);
         (s.debug_pre_active)(socket);
@@ -428,7 +438,7 @@ pub extern "C" fn openttd_rust_network_send_newgrf_check(
 ) -> u8 {
     (s.debug_newgrf_check)(socket);
     if status(s, socket) != IDENTIFY {
-        return (s.close)(socket, NETWORK_RECV_STATUS_MALFORMED_PACKET);
+        return close_connection(s, f, socket, NETWORK_RECV_STATUS_MALFORMED_PACKET);
     }
     (s.debug_newgrfs)(socket);
     set_status(s, socket, NEWGRFS_CHECK);
@@ -517,7 +527,7 @@ pub extern "C" fn openttd_rust_network_receive_identify(
     (s.debug_identify)(socket);
     (f.packet_recv_string)(p, name, crate::network_config::NETWORK_CLIENT_NAME_LENGTH);
     let mut company = (f.packet_recv_uint8)(p);
-    if (s.has_quit)(socket) {
+    if (f.socket_has_quit)((s.game)(socket)) {
         return NETWORK_RECV_STATUS_CLIENT_QUIT;
     }
     match company {
@@ -594,7 +604,7 @@ pub(crate) fn send_error(
     } else {
         (s.error_unjoined)(socket, strid);
     }
-    (s.close)(socket, NETWORK_RECV_STATUS_SERVER_ERROR)
+    close_connection(s, f, socket, NETWORK_RECV_STATUS_SERVER_ERROR)
 }
 
 #[unsafe(no_mangle)]
@@ -690,8 +700,8 @@ pub extern "C" fn openttd_rust_network_receive_error(
 ) -> u8 {
     let error = (f.packet_recv_uint8)(p);
     (s.debug_receive_error)(socket, error);
-    if status(s, socket) < DONE_MAP || (s.has_quit)(socket) {
-        return (s.close)(socket, NETWORK_RECV_STATUS_CLIENT_QUIT);
+    if status(s, socket) < DONE_MAP || (f.socket_has_quit)((s.game)(socket)) {
+        return close_connection(s, f, socket, NETWORK_RECV_STATUS_CLIENT_QUIT);
     }
     (s.client_error_announcement)(socket, error);
     let mut cursor = 0;
@@ -701,7 +711,7 @@ pub extern "C" fn openttd_rust_network_receive_error(
         }
     }
     (s.admin_error)(socket, error);
-    (s.close)(socket, NETWORK_RECV_STATUS_CLIENT_QUIT)
+    close_connection(s, f, socket, NETWORK_RECV_STATUS_CLIENT_QUIT)
 }
 
 #[unsafe(no_mangle)]
@@ -710,8 +720,8 @@ pub extern "C" fn openttd_rust_network_receive_quit(
     f: &FrameServices,
     socket: *mut c_void,
 ) -> u8 {
-    if status(s, socket) < DONE_MAP || (s.has_quit)(socket) {
-        return (s.close)(socket, NETWORK_RECV_STATUS_CLIENT_QUIT);
+    if status(s, socket) < DONE_MAP || (f.socket_has_quit)((s.game)(socket)) {
+        return close_connection(s, f, socket, NETWORK_RECV_STATUS_CLIENT_QUIT);
     }
     (s.debug_receive_quit)(socket);
     (s.quit_announcement)(socket);
@@ -722,5 +732,57 @@ pub extern "C" fn openttd_rust_network_receive_quit(
         }
     }
     (s.admin_quit)(socket);
-    (s.close)(socket, NETWORK_RECV_STATUS_CLIENT_QUIT)
+    close_connection(s, f, socket, NETWORK_RECV_STATUS_CLIENT_QUIT)
+}
+
+fn close_connection(s: &Services, f: &FrameServices, socket: *mut c_void, result: u8) -> u8 {
+    assert_ne!(result, NETWORK_RECV_STATUS_OKAY);
+    if (f.socket_pending_deletion)((s.game)(socket)) || !(f.socket_valid)((s.game)(socket)) {
+        return result;
+    }
+    if result != NETWORK_RECV_STATUS_CLIENT_QUIT
+        && result != NETWORK_RECV_STATUS_SERVER_ERROR
+        && !(f.socket_has_quit)((s.game)(socket))
+        && status(s, socket) >= AUTHORIZED
+    {
+        (s.lost_connection_announcement)(socket);
+        let mut cursor = 0;
+        while let Some(client) = next_client(f.command, &mut cursor) {
+            if client.status >= AUTHORIZED && client.socket != socket {
+                openttd_rust_network_send_error_quit(
+                    s,
+                    f,
+                    client.socket,
+                    (s.client_id)(socket),
+                    NETWORK_ERROR_CONNECTION_LOST,
+                );
+            }
+        }
+    }
+    if status(s, socket) == MAP {
+        (s.map_destroy)(socket);
+        openttd_rust_network_next_map(s, f, socket, socket);
+    }
+    (s.admin_error)(socket, NETWORK_ERROR_CONNECTION_LOST);
+    (s.debug_closed)(socket);
+    if status(s, socket) >= AUTHORIZED {
+        unsafe { s.clients_on.write(s.clients_on.read().wrapping_sub(1)) };
+    }
+    unsafe {
+        s.clients_connected
+            .write(s.clients_connected.read().wrapping_sub(1));
+    };
+    (f.socket_send_packets)((s.game)(socket), true);
+    (f.socket_defer_deletion)((s.game)(socket));
+    result
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_network_server_close(
+    s: &Services,
+    f: &FrameServices,
+    socket: *mut c_void,
+    result: u8,
+) -> u8 {
+    close_connection(s, f, socket, result)
 }

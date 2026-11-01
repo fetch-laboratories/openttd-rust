@@ -1166,11 +1166,11 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 	static const OpenTTDNetworkFrameServices services{
 		.bytes_per_frame = RustNetworkBytesPerFrame,
 		.bytes_per_frame_burst = RustNetworkBytesPerFrameBurst,
+		.client = &GetRustNetworkClientServices(),
 		.client_desync = []() noexcept {
 			ShowNetworkError(STR_NETWORK_ERROR_DESYNC);
 			Debug(desync, 1, "sync_err: {:08x}; {:02x}", TimerGameEconomy::date, TimerGameEconomy::date_fract);
 			Debug(net, 0, "Sync error detected");
-			ClientNetworkGameSocketHandler::my_client->ClientError(NETWORK_RECV_STATUS_DESYNC);
 		},
 		.client_game = []() noexcept -> void * { return static_cast<NetworkGameSocketHandler *>(ClientNetworkGameSocketHandler::my_client); },
 		.client_sync = []() noexcept -> OpenTTDNetworkSocketSync * { return ClientNetworkGameSocketHandler::my_client; },
@@ -1233,9 +1233,17 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 		.receive = [](OpenTTDSessionFrame *f, bool *received) noexcept { return SessionException(f, [=] { *received = NetworkReceive(); }); },
 		.replay_commands = []() noexcept { NetworkReplayCommands(); },
 		.send = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { NetworkSend(); }); },
+		.socket_close = [](void *game) noexcept { static_cast<NetworkGameSocketHandler *>(game)->NetworkGameSocketHandler::CloseConnection(); },
+		.socket_defer_deletion = [](void *game) noexcept { static_cast<NetworkGameSocketHandler *>(game)->DeferDeletion(); },
+		.socket_has_quit = [](void *game) noexcept -> bool { return static_cast<NetworkGameSocketHandler *>(game)->HasClientQuit(); },
+		.socket_last_packet = [](void *game) noexcept -> int64_t { return static_cast<NetworkGameSocketHandler *>(game)->last_packet.time_since_epoch().count(); },
+		.socket_mark_closed = [](void *game) noexcept { static_cast<NetworkGameSocketHandler *>(game)->MarkClosed(); },
+		.socket_pending_deletion = [](void *game) noexcept -> bool { return static_cast<NetworkGameSocketHandler *>(game)->IsPendingDeletion(); },
+		.socket_send_packets = [](void *game, bool closing) noexcept { static_cast<NetworkGameSocketHandler *>(game)->SendPackets(closing); },
+		.socket_set_last_packet_now = [](void *game) noexcept { static_cast<NetworkGameSocketHandler *>(game)->last_packet = std::chrono::steady_clock::now(); },
+		.socket_valid = [](void *game) noexcept -> bool { return static_cast<NetworkGameSocketHandler *>(game)->sock != INVALID_SOCKET; },
 		.sync_freq = RustNetworkSyncFreq,
 		.sync_log = []() noexcept { NetworkSyncLog(); },
-		.wait_sent = [](void *cs) noexcept { static_cast<NetworkClientSocket *>(cs)->last_packet = std::chrono::steady_clock::now(); },
 	};
 	return services;
 }

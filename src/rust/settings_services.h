@@ -9,6 +9,7 @@
 #ifndef RUST_SETTINGS_SERVICES_H
 #define RUST_SETTINGS_SERVICES_H
 #include "services_road.h"
+#include "byte_span_ffi.h"
 #include "../settings_type.h"
 #include "../road.h"
 #include "../autoslope.h"
@@ -28,6 +29,11 @@ inline uint16_t RustCommandsPerFrame() noexcept { return _settings_client.networ
 inline uint16_t RustCommandsPerFrameServer() noexcept { return _settings_client.network.commands_per_frame_server; }
 inline uint16_t RustNetworkBytesPerFrame() noexcept { return _settings_client.network.bytes_per_frame; }
 inline uint16_t RustNetworkBytesPerFrameBurst() noexcept { return _settings_client.network.bytes_per_frame_burst; }
+inline OpenTTDByteSpan RustNetworkClientName() noexcept
+{
+	const auto &name = _settings_client.network.client_name;
+	return {reinterpret_cast<const uint8_t *>(name.data()), name.size()};
+}
 inline uint8_t RustNetworkMaxClients() noexcept { return _settings_client.network.max_clients; }
 inline uint8_t RustNetworkMaxCompanies() noexcept { return _settings_client.network.max_companies; }
 inline uint8_t RustNetworkMinActiveClients() noexcept { return _settings_client.network.min_active_clients; }

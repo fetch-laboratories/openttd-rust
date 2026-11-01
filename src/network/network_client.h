@@ -11,6 +11,7 @@
 #define NETWORK_CLIENT_H
 
 #include "network_internal.h"
+#include "../rust/network_client_ffi.h"
 
 /** Class for handling the client side of the game connection. */
 class ClientNetworkGameSocketHandler : public NetworkGameSocketHandler {
@@ -36,6 +37,7 @@ private:
 	ServerStatus status = STATUS_INACTIVE; ///< Status of the connection with the server.
 
 protected:
+	friend const OpenTTDNetworkClientServices &GetRustNetworkClientServices() noexcept;
 	friend const OpenTTDNetworkCommandServices &GetRustNetworkCommandServices() noexcept;
 	friend const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept;
 	friend void NetworkClose(bool close_admins);

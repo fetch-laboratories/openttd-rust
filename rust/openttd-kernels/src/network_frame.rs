@@ -28,11 +28,7 @@ use std::ffi::c_void;
 const MILLISECONDS_PER_TICK: u32 = 27;
 const NANOSECONDS_PER_MILLISECOND: i64 = 1_000_000;
 
-/// `PacketGameType` values sent or received here.
-pub const PACKET_SERVER_FRAME: u8 = 26;
-pub const PACKET_CLIENT_ACK: u8 = 27;
-pub const PACKET_SERVER_SYNC: u8 = 28;
-
+use crate::tcp_game::{PACKET_CLIENT_ACK, PACKET_SERVER_FRAME, PACKET_SERVER_SYNC};
 /// `ServerNetworkGameSocketHandler::ClientStatus`.
 pub mod server_status {
     pub const INACTIVE: u8 = 0;
@@ -46,8 +42,7 @@ pub mod server_status {
     pub const PRE_ACTIVE: u8 = 8;
     pub const ACTIVE: u8 = 9;
 }
-/// `ClientNetworkGameSocketHandler::STATUS_ACTIVE`.
-pub const CLIENT_STATUS_ACTIVE: u8 = 8;
+use crate::network_client::status::ACTIVE as CLIENT_STATUS_ACTIVE;
 
 /// The frame globals of `network.cpp` and `network_client.cpp`.
 #[repr(C)]
@@ -87,13 +82,13 @@ pub struct SocketSync {
 pub struct Services {
     pub bytes_per_frame: extern "C" fn() -> u16,
     pub bytes_per_frame_burst: extern "C" fn() -> u16,
+    pub client: &'static crate::network_client::Services,
     pub client_desync: extern "C" fn(),
     /// `my_client` as a `NetworkGameSocketHandler *`.
     pub client_game: extern "C" fn() -> *mut c_void,
     pub client_sync: extern "C" fn() -> *mut SocketSync,
     pub command: &'static crate::network_command::Services,
     pub connection: &'static crate::network_connection::Services,
-    /// `_random.state`, read in place.
     pub console_bad_acks: extern "C" fn(*mut c_void),
     pub console_download_timeout: extern "C" fn(*mut c_void),
     pub console_init_timeout: extern "C" fn(*mut c_void),
@@ -115,7 +110,7 @@ pub struct Services {
     pub max_join_time: extern "C" fn() -> u16,
     pub max_lag_time: extern "C" fn() -> u16,
     pub max_password_time: extern "C" fn() -> u16,
-    /// `std::chrono::steady_clock::now()` as nanoseconds since its epoch.
+    /// Steady-clock nanoseconds since its epoch.
     pub now: extern "C" fn() -> i64,
     pub on_server_connect: extern "C" fn(),
     pub packet_can_read: extern "C" fn(*mut c_void, usize) -> bool,
@@ -126,19 +121,27 @@ pub struct Services {
     pub packet_send: extern "C" fn(*mut c_void, *mut c_void),
     pub packet_send_string: extern "C" fn(*mut c_void, crate::services::ByteSpan),
     pub packet_send_uint32: extern "C" fn(*mut c_void, u32),
-    /// `NetworkReceive`; records an exception in the frame and returns false.
     pub packet_send_uint8: extern "C" fn(*mut c_void, u8),
+    /// `_random.state`, read in place.
     pub random: *const u32,
+    /// `NetworkReceive`; records an exception in the session frame.
     pub receive: extern "C" fn(*mut Frame, *mut bool) -> bool,
-    /// The `DEBUG_DUMP_COMMANDS` replay of `commands.log`; empty without that define.
+    /// The developer-only `DEBUG_DUMP_COMMANDS` replay.
     pub replay_commands: extern "C" fn(),
-    /// `NetworkSend`; records an exception in the frame and returns false.
+    /// `NetworkSend`; records an exception in the session frame.
     pub send: extern "C" fn(*mut Frame) -> bool,
+    pub socket_close: extern "C" fn(*mut c_void),
+    pub socket_defer_deletion: extern "C" fn(*mut c_void),
+    pub socket_has_quit: extern "C" fn(*mut c_void) -> bool,
+    pub socket_last_packet: extern "C" fn(*mut c_void) -> i64,
+    pub socket_mark_closed: extern "C" fn(*mut c_void),
+    pub socket_pending_deletion: extern "C" fn(*mut c_void) -> bool,
+    pub socket_send_packets: extern "C" fn(*mut c_void, bool),
+    pub socket_set_last_packet_now: extern "C" fn(*mut c_void),
+    pub socket_valid: extern "C" fn(*mut c_void) -> bool,
     pub sync_freq: extern "C" fn() -> u16,
     /// The server's daily `sync:` desync log line.
     pub sync_log: extern "C" fn(),
-    /// `last_packet` becomes now after `SendWait`.
-    pub wait_sent: extern "C" fn(*mut c_void),
 }
 
 static STATE: GameState<State> = GameState::new(State {
@@ -338,11 +341,16 @@ pub extern "C" fn openttd_rust_network_receive_sync(
 }
 
 /// `NetworkClient_Connected`'s reset of the client frame state.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_connected() {
+pub(crate) fn client_connected() {
     state!(frame_counter = 0);
     state!(frame_counter_server = 0);
     state!(last_ack_frame = 0);
+}
+/// Reset all three map-transfer frame counters, in native assignment order.
+pub(crate) fn map_begin(frame: u32) {
+    state!(frame_counter_max = frame);
+    state!(frame_counter_server = frame);
+    state!(frame_counter = frame);
 }
 
 fn state_loop(session: &crate::session::Services, frame: *mut Frame) -> Result<(), ()> {
@@ -369,6 +377,12 @@ fn client_game_loop(
         if sync_frame == frame_counter() {
             if state!(sync_seed_1) != random_state(s, 0) {
                 (s.client_desync)();
+                crate::network_client::client_error(
+                    s.client,
+                    s,
+                    (s.client_game)(),
+                    crate::network_type::NETWORK_RECV_STATUS_DESYNC,
+                );
                 return Ok(false);
             }
             // The first sync tells the server this client is ready at its frame.
@@ -459,7 +473,7 @@ fn server_tick(s: &Services, send_frame: bool) {
                         s,
                         socket,
                     );
-                    (s.wait_sent)(socket);
+                    (s.socket_set_last_packet_now)((s.connection.game)(socket));
                 }
             }
             MAP => {
@@ -574,6 +588,7 @@ crate::abi::layouts! {
     "OpenTTDNetworkFrameServices" ["probe"] => Services {
         bytes_per_frame,
         bytes_per_frame_burst,
+        client,
         client_desync,
         client_game,
         client_sync,
@@ -615,8 +630,16 @@ crate::abi::layouts! {
         receive,
         replay_commands,
         send,
+        socket_close,
+        socket_defer_deletion,
+        socket_has_quit,
+        socket_last_packet,
+        socket_mark_closed,
+        socket_pending_deletion,
+        socket_send_packets,
+        socket_set_last_packet_now,
+        socket_valid,
         sync_freq,
         sync_log,
-        wait_sent,
     };
 }

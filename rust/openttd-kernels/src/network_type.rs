@@ -28,3 +28,17 @@ pub const NETWORK_RECV_STATUS_SERVER_ERROR: u8 = 6;
 
 /// First non-server client identity.
 pub const CLIENT_ID_FIRST: u32 = 2;
+pub const NETWORK_ERROR_GENERAL: u8 = 0;
+pub const NETWORK_ERROR_DESYNC: u8 = 1;
+pub const NETWORK_ERROR_SAVEGAME_FAILED: u8 = 2;
+pub const NETWORK_ERROR_CONNECTION_LOST: u8 = 3;
+pub const NETWORK_ERROR_NEWGRF_MISMATCH: u8 = 5;
+pub const NETWORK_RECV_STATUS_DESYNC: u8 = 1;
+pub const NETWORK_RECV_STATUS_NEWGRF_MISMATCH: u8 = 2;
+pub const NETWORK_RECV_STATUS_SAVEGAME: u8 = 3;
+pub const NETWORK_RECV_STATUS_SERVER_FULL: u8 = 7;
+pub const NETWORK_RECV_STATUS_SERVER_BANNED: u8 = 8;
+pub const NETWORK_RECV_STATUS_CLOSE_QUERY: u8 = 9;
+
+/// Server identity.
+pub const CLIENT_ID_SERVER: u32 = 1;

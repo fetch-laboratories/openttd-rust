@@ -35,6 +35,9 @@
 
 #include "table/strings.h"
 
+#include "../rust/network_client_ffi.h"
+#include "../rust/settings_services.h"
+
 #include "../safeguards.h"
 
 /* This file handles all the client-commands */
@@ -116,26 +119,7 @@ ClientNetworkGameSocketHandler::~ClientNetworkGameSocketHandler()
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::CloseConnection(NetworkRecvStatus status)
 {
-	assert(status != NETWORK_RECV_STATUS_OKAY);
-	if (this->IsPendingDeletion()) return status;
-
-	assert(this->sock != INVALID_SOCKET);
-
-	if (!this->HasClientQuit()) {
-		Debug(net, 3, "Closed client connection {}", this->client_id);
-
-		this->SendPackets(true);
-
-		/* Wait a number of ticks so our leave message can reach the server.
-		 * This is especially needed for Windows servers as they seem to get
-		 * the "socket is closed" message before receiving our leave message,
-		 * which would trigger the server to close the connection as well. */
-		CSleep(3 * MILLISECONDS_PER_TICK);
-	}
-
-	this->DeferDeletion();
-
-	return status;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_close(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<NetworkGameSocketHandler *>(this), status));
 }
 
 /**
@@ -144,50 +128,7 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::CloseConnection(NetworkRecvSta
  */
 void ClientNetworkGameSocketHandler::ClientError(NetworkRecvStatus res)
 {
-	if (this->IsPendingDeletion()) return;
-
-	/* First, send a CLIENT_ERROR to the server, so it knows we are
-	 *  disconnected (and why!) */
-	NetworkErrorCode errorno;
-
-	/* We just want to close the connection.. */
-	if (res == NETWORK_RECV_STATUS_CLOSE_QUERY) {
-		this->NetworkSocketHandler::MarkClosed();
-		this->CloseConnection(res);
-		_networking = false;
-
-		CloseWindowById(WC_NETWORK_STATUS_WINDOW, WN_NETWORK_STATUS_WINDOW_JOIN);
-		return;
-	}
-
-	switch (res) {
-		case NETWORK_RECV_STATUS_DESYNC:          errorno = NETWORK_ERROR_DESYNC; break;
-		case NETWORK_RECV_STATUS_SAVEGAME:        errorno = NETWORK_ERROR_SAVEGAME_FAILED; break;
-		case NETWORK_RECV_STATUS_NEWGRF_MISMATCH: errorno = NETWORK_ERROR_NEWGRF_MISMATCH; break;
-		default:                                  errorno = NETWORK_ERROR_GENERAL; break;
-	}
-
-	if (res == NETWORK_RECV_STATUS_SERVER_ERROR || res == NETWORK_RECV_STATUS_SERVER_FULL ||
-			res == NETWORK_RECV_STATUS_SERVER_BANNED) {
-		/* This means the server closed the connection. Emergency save is
-		 * already created if this was appropriate during handling of the
-		 * disconnect. */
-		this->CloseConnection(res);
-	} else {
-		/* This means we as client made a boo-boo. */
-		SendError(errorno);
-
-		/* Close connection before we make an emergency save, as the save can
-		 * take a bit of time; better that the server doesn't stall while we
-		 * are doing the save, and already disconnects us. */
-		this->CloseConnection(res);
-		ClientNetworkEmergencySave();
-	}
-
-	CloseWindowById(WC_NETWORK_STATUS_WINDOW, WN_NETWORK_STATUS_WINDOW_JOIN);
-
-	if (_game_mode != GM_MENU) _switch_mode = SM_MENU;
-	_networking = false;
+	openttd_rust_network_client_error(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<NetworkGameSocketHandler *>(this), res);
 }
 
 
@@ -236,41 +177,18 @@ NetworkJoinInfo _network_join;
 /** Tell the server we would like to join. */
 NetworkRecvStatus ClientNetworkGameSocketHandler::SendJoin()
 {
-	Debug(net, 9, "Client::SendJoin()");
-
-	Debug(net, 9, "Client::status = JOIN");
-	my_client->status = STATUS_JOIN;
-	Debug(net, 9, "Client::join_status = AUTHORIZING");
-	_network_join_status = NETWORK_JOIN_STATUS_AUTHORIZING;
-	SetWindowDirty(WC_NETWORK_STATUS_WINDOW, WN_NETWORK_STATUS_WINDOW_JOIN);
-
-	auto p = std::make_unique<Packet>(my_client, PACKET_CLIENT_JOIN);
-	p->Send_string(GetNetworkRevisionString());
-	p->Send_uint32(_openttd_newgrf_version);
-	my_client->SendPacket(std::move(p));
-
-	return NETWORK_RECV_STATUS_OKAY;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_send_join(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices()));
 }
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::SendIdentify()
 {
-	Debug(net, 9, "Client::SendIdentify()");
-
-	auto p = std::make_unique<Packet>(my_client, PACKET_CLIENT_IDENTIFY);
-	p->Send_string(_settings_client.network.client_name); // Client name
-	p->Send_uint8(_network_join.company); // PlayAs
-	my_client->SendPacket(std::move(p));
-	return NETWORK_RECV_STATUS_OKAY;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_send_identify(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices()));
 }
 
 /** Tell the server we got all the NewGRFs. */
 NetworkRecvStatus ClientNetworkGameSocketHandler::SendNewGRFsOk()
 {
-	Debug(net, 9, "Client::SendNewGRFsOk()");
-
-	auto p = std::make_unique<Packet>(my_client, PACKET_CLIENT_NEWGRFS_CHECKED);
-	my_client->SendPacket(std::move(p));
-	return NETWORK_RECV_STATUS_OKAY;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_send_grfs_ok(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices()));
 }
 
 /**
@@ -291,27 +209,13 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::SendAuthResponse()
 /** Request the map from the server. */
 NetworkRecvStatus ClientNetworkGameSocketHandler::SendGetMap()
 {
-	Debug(net, 9, "Client::SendGetMap()");
-
-	Debug(net, 9, "Client::status = MAP_WAIT");
-	my_client->status = STATUS_MAP_WAIT;
-
-	auto p = std::make_unique<Packet>(my_client, PACKET_CLIENT_GETMAP);
-	my_client->SendPacket(std::move(p));
-	return NETWORK_RECV_STATUS_OKAY;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_send_getmap(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices()));
 }
 
 /** Tell the server we received the complete map. */
 NetworkRecvStatus ClientNetworkGameSocketHandler::SendMapOk()
 {
-	Debug(net, 9, "Client::SendMapOk()");
-
-	Debug(net, 9, "Client::status = ACTIVE");
-	my_client->status = STATUS_ACTIVE;
-
-	auto p = std::make_unique<Packet>(my_client, PACKET_CLIENT_MAP_OK);
-	my_client->SendPacket(std::move(p));
-	return NETWORK_RECV_STATUS_OKAY;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_send_map_ok(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices()));
 }
 
 /**
@@ -349,13 +253,7 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::SendChat(NetworkAction action,
 /** Send an error-packet over the network */
 NetworkRecvStatus ClientNetworkGameSocketHandler::SendError(NetworkErrorCode errorno)
 {
-	Debug(net, 9, "Client::SendError(): errorno={}", errorno);
-
-	auto p = std::make_unique<Packet>(my_client, PACKET_CLIENT_ERROR);
-
-	p->Send_uint8(errorno);
-	my_client->SendPacket(std::move(p));
-	return NETWORK_RECV_STATUS_OKAY;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_send_error(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), errorno));
 }
 
 /**
@@ -378,12 +276,7 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::SendSetName(const std::string 
  */
 NetworkRecvStatus ClientNetworkGameSocketHandler::SendQuit()
 {
-	Debug(net, 9, "Client::SendQuit()");
-
-	auto p = std::make_unique<Packet>(my_client, PACKET_CLIENT_QUIT);
-
-	my_client->SendPacket(std::move(p));
-	return NETWORK_RECV_STATUS_OKAY;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_send_quit(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices()));
 }
 
 /**
@@ -422,7 +315,7 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::SendMove(CompanyID company)
  */
 bool ClientNetworkGameSocketHandler::IsConnected()
 {
-	return my_client != nullptr && my_client->status == STATUS_ACTIVE;
+	return openttd_rust_network_client_is_connected(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices());
 }
 
 
@@ -434,22 +327,12 @@ extern bool SafeLoad(const std::string &filename, SaveLoadOperation fop, Detaile
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_FULL(Packet &)
 {
-	Debug(net, 9, "Client::Receive_SERVER_FULL()");
-
-	/* We try to join a server which is full */
-	ShowErrorMessage(GetEncodedString(STR_NETWORK_ERROR_SERVER_FULL), {}, WL_CRITICAL);
-
-	return NETWORK_RECV_STATUS_SERVER_FULL;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_full(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<NetworkGameSocketHandler *>(this)));
 }
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_BANNED(Packet &)
 {
-	Debug(net, 9, "Client::Receive_SERVER_BANNED()");
-
-	/* We try to join a server where we are banned */
-	ShowErrorMessage(GetEncodedString(STR_NETWORK_ERROR_SERVER_BANNED), {}, WL_CRITICAL);
-
-	return NETWORK_RECV_STATUS_SERVER_BANNED;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_banned(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<NetworkGameSocketHandler *>(this)));
 }
 
 /* This packet contains info about the client (playas and name)
@@ -518,85 +401,14 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_CLIENT_INFO(Pac
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_ERROR(Packet &p)
 {
-	static const StringID network_error_strings[] = {
-		STR_NETWORK_ERROR_LOSTCONNECTION,      // NETWORK_ERROR_GENERAL
-		STR_NETWORK_ERROR_LOSTCONNECTION,      // NETWORK_ERROR_DESYNC
-		STR_NETWORK_ERROR_LOSTCONNECTION,      // NETWORK_ERROR_SAVEGAME_FAILED
-		STR_NETWORK_ERROR_LOSTCONNECTION,      // NETWORK_ERROR_CONNECTION_LOST
-		STR_NETWORK_ERROR_LOSTCONNECTION,      // NETWORK_ERROR_ILLEGAL_PACKET
-		STR_NETWORK_ERROR_LOSTCONNECTION,      // NETWORK_ERROR_NEWGRF_MISMATCH
-		STR_NETWORK_ERROR_SERVER_ERROR,        // NETWORK_ERROR_NOT_AUTHORIZED
-		STR_NETWORK_ERROR_SERVER_ERROR,        // NETWORK_ERROR_NOT_EXPECTED
-		STR_NETWORK_ERROR_WRONG_REVISION,      // NETWORK_ERROR_WRONG_REVISION
-		STR_NETWORK_ERROR_LOSTCONNECTION,      // NETWORK_ERROR_NAME_IN_USE
-		STR_NETWORK_ERROR_WRONG_PASSWORD,      // NETWORK_ERROR_WRONG_PASSWORD
-		STR_NETWORK_ERROR_SERVER_ERROR,        // NETWORK_ERROR_COMPANY_MISMATCH
-		STR_NETWORK_ERROR_KICKED,              // NETWORK_ERROR_KICKED
-		STR_NETWORK_ERROR_CHEATER,             // NETWORK_ERROR_CHEATER
-		STR_NETWORK_ERROR_SERVER_FULL,         // NETWORK_ERROR_FULL
-		STR_NETWORK_ERROR_TOO_MANY_COMMANDS,   // NETWORK_ERROR_TOO_MANY_COMMANDS
-		STR_NETWORK_ERROR_TIMEOUT_PASSWORD,    // NETWORK_ERROR_TIMEOUT_PASSWORD
-		STR_NETWORK_ERROR_TIMEOUT_COMPUTER,    // NETWORK_ERROR_TIMEOUT_COMPUTER
-		STR_NETWORK_ERROR_TIMEOUT_MAP,         // NETWORK_ERROR_TIMEOUT_MAP
-		STR_NETWORK_ERROR_TIMEOUT_JOIN,        // NETWORK_ERROR_TIMEOUT_JOIN
-		STR_NETWORK_ERROR_INVALID_CLIENT_NAME, // NETWORK_ERROR_INVALID_CLIENT_NAME
-		STR_NETWORK_ERROR_NOT_ON_ALLOW_LIST,   // NETWORK_ERROR_NOT_ON_ALLOW_LIST
-		STR_NETWORK_ERROR_SERVER_ERROR,        // NETWORK_ERROR_NO_AUTHENTICATION_METHOD_AVAILABLE
-	};
-	static_assert(lengthof(network_error_strings) == NETWORK_ERROR_END);
-
-	NetworkErrorCode error = (NetworkErrorCode)p.Recv_uint8();
-
-	Debug(net, 9, "Client::Receive_SERVER_ERROR(): error={}", error);
-
-	StringID err = STR_NETWORK_ERROR_LOSTCONNECTION;
-	if (error < (ptrdiff_t)lengthof(network_error_strings)) err = network_error_strings[error];
-	/* In case of kicking a client, we assume there is a kick message in the packet if we can read one byte */
-	if (error == NETWORK_ERROR_KICKED && p.CanReadFromPacket(1)) {
-		ShowErrorMessage(GetEncodedString(err),
-			GetEncodedString(STR_NETWORK_ERROR_KICK_MESSAGE, p.Recv_string(NETWORK_CHAT_LENGTH)),
-			WL_CRITICAL);
-	} else {
-		ShowErrorMessage(GetEncodedString(err), {}, WL_CRITICAL);
-	}
-
-	/* Perform an emergency save if we had already entered the game */
-	if (this->status == STATUS_ACTIVE) ClientNetworkEmergencySave();
-
-	return NETWORK_RECV_STATUS_SERVER_ERROR;
+	std::string scratch;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_error(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<NetworkGameSocketHandler *>(this), &p, &scratch));
 }
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_CHECK_NEWGRFS(Packet &p)
 {
-	if (this->status != STATUS_ENCRYPTED) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
-
-	uint grf_count = p.Recv_uint8();
-	NetworkRecvStatus ret = NETWORK_RECV_STATUS_OKAY;
-
-	Debug(net, 9, "Client::Receive_SERVER_CHECK_NEWGRFS(): grf_count={}", grf_count);
-
-	/* Check all GRFs */
-	for (; grf_count > 0; grf_count--) {
-		GRFIdentifier c;
-		DeserializeGRFIdentifier(p, c);
-
-		/* Check whether we know this GRF */
-		const GRFConfig *f = FindGRFConfig(c.grfid, FGCM_EXACT, &c.md5sum);
-		if (f == nullptr) {
-			/* We do not know this GRF, bail out of initialization */
-			Debug(grf, 0, "NewGRF {:08X} not found; checksum {}", std::byteswap(c.grfid), FormatArrayAsHex(c.md5sum));
-			ret = NETWORK_RECV_STATUS_NEWGRF_MISMATCH;
-		}
-	}
-
-	if (ret == NETWORK_RECV_STATUS_OKAY) {
-		/* Start receiving the map */
-		return SendNewGRFsOk();
-	}
-
-	/* NewGRF mismatch, bail out */
-	ShowErrorMessage(GetEncodedString(STR_NETWORK_ERROR_NEWGRF_MISMATCH), {}, WL_CRITICAL);
-	return ret;
+	GRFIdentifier scratch;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_grfs(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<NetworkGameSocketHandler *>(this), &p, &scratch));
 }
 
 class ClientGamePasswordRequestHandler : public NetworkAuthenticationPasswordRequestHandler {
@@ -656,147 +468,32 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_ENABLE_ENCRYPTI
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_WELCOME(Packet &p)
 {
-	if (this->status < STATUS_ENCRYPTED || this->status >= STATUS_AUTHORIZED) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
-	Debug(net, 9, "Client::status = AUTHORIZED");
-	this->status = STATUS_AUTHORIZED;
-
-	_network_own_client_id = (ClientID)p.Recv_uint32();
-
-	Debug(net, 9, "Client::Receive_SERVER_WELCOME(): client_id={}", _network_own_client_id);
-
-	/* Start receiving the map */
-	return SendGetMap();
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_welcome(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<NetworkGameSocketHandler *>(this), &p));
 }
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_WAIT(Packet &p)
 {
-	/* We set the internal wait state when requesting the map. */
-	if (this->status != STATUS_MAP_WAIT) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
-
-	Debug(net, 9, "Client::Receive_SERVER_WAIT()");
-
-	/* But... only now we set the join status to waiting, instead of requesting. */
-	Debug(net, 9, "Client::join_status = WAITING");
-	_network_join_status = NETWORK_JOIN_STATUS_WAITING;
-	_network_join_waiting = p.Recv_uint8();
-	SetWindowDirty(WC_NETWORK_STATUS_WINDOW, WN_NETWORK_STATUS_WINDOW_JOIN);
-
-	return NETWORK_RECV_STATUS_OKAY;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_wait(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<NetworkGameSocketHandler *>(this), &p));
 }
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_MAP_BEGIN(Packet &p)
 {
-	if (this->status < STATUS_AUTHORIZED || this->status >= STATUS_MAP) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
-	Debug(net, 9, "Client::status = MAP");
-	this->status = STATUS_MAP;
-
-	if (this->savegame != nullptr) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
-
-	this->savegame = std::make_shared<PacketReader>();
-
-	_frame_counter = _frame_counter_server = _frame_counter_max = p.Recv_uint32();
-
-	Debug(net, 9, "Client::Receive_SERVER_MAP_BEGIN(): frame_counter={}", _frame_counter);
-
-	_network_join_bytes = 0;
-	_network_join_bytes_total = 0;
-
-	Debug(net, 9, "Client::join_status = DOWNLOADING");
-	_network_join_status = NETWORK_JOIN_STATUS_DOWNLOADING;
-	SetWindowDirty(WC_NETWORK_STATUS_WINDOW, WN_NETWORK_STATUS_WINDOW_JOIN);
-
-	return NETWORK_RECV_STATUS_OKAY;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_map_begin(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<NetworkGameSocketHandler *>(this), &p));
 }
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_MAP_SIZE(Packet &p)
 {
-	if (this->status != STATUS_MAP) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
-	if (this->savegame == nullptr) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
-
-	_network_join_bytes_total = p.Recv_uint32();
-	SetWindowDirty(WC_NETWORK_STATUS_WINDOW, WN_NETWORK_STATUS_WINDOW_JOIN);
-
-	Debug(net, 9, "Client::Receive_SERVER_MAP_SIZE(): bytes_total={}", _network_join_bytes_total);
-
-	return NETWORK_RECV_STATUS_OKAY;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_map_size(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<NetworkGameSocketHandler *>(this), &p));
 }
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_MAP_DATA(Packet &p)
 {
-	if (this->status != STATUS_MAP) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
-	if (this->savegame == nullptr) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
-
-	/* We are still receiving data, put it to the file */
-	this->savegame->AddPacket(p);
-
-	_network_join_bytes = static_cast<uint32_t>(this->savegame->buffer.size());
-	SetWindowDirty(WC_NETWORK_STATUS_WINDOW, WN_NETWORK_STATUS_WINDOW_JOIN);
-
-	return NETWORK_RECV_STATUS_OKAY;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_map_data(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<NetworkGameSocketHandler *>(this), &p));
 }
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_MAP_DONE(Packet &)
 {
-	if (this->status != STATUS_MAP) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
-	if (this->savegame == nullptr) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
-
-	Debug(net, 9, "Client::Receive_SERVER_MAP_DONE()");
-
-	Debug(net, 9, "Client::join_status = PROCESSING");
-	_network_join_status = NETWORK_JOIN_STATUS_PROCESSING;
-	SetWindowDirty(WC_NETWORK_STATUS_WINDOW, WN_NETWORK_STATUS_WINDOW_JOIN);
-
-	this->savegame->Reset();
-
-	/* The map is done downloading, load it */
-	ClearErrorMessages();
-
-	/* Set the abstract filetype. This is read during savegame load. */
-	_file_to_saveload.SetMode(FIOS_TYPE_FILE, SLO_LOAD);
-
-	bool load_success = SafeLoad({}, SLO_LOAD, DFT_GAME_FILE, GM_NORMAL, NO_DIRECTORY, this->savegame);
-	this->savegame = nullptr;
-
-	/* Long savegame loads shouldn't affect the lag calculation! */
-	this->last_packet = std::chrono::steady_clock::now();
-
-	if (!load_success) {
-		ShowErrorMessage(GetEncodedString(STR_NETWORK_ERROR_SAVEGAMEERROR), {}, WL_CRITICAL);
-		return NETWORK_RECV_STATUS_SAVEGAME;
-	}
-	/* If the savegame has successfully loaded, ALL windows have been removed,
-	 * only toolbar/statusbar and gamefield are visible */
-
-	/* Say we received the map and loaded it correctly! */
-	SendMapOk();
-
-	/* As we skipped switch-mode, update the time we "switched". */
-	_game_session_stats.start_time = std::chrono::steady_clock::now();
-	_game_session_stats.savegame_size = std::nullopt;
-
-	ShowClientList();
-
-	/* New company/spectator (invalid company) or company we want to join is not active
-	 * Switch local company to spectator and await the server's judgement */
-	if (_network_join.company == COMPANY_NEW_COMPANY || !Company::IsValidID(_network_join.company)) {
-		SetLocalCompany(COMPANY_SPECTATOR);
-
-		if (_network_join.company != COMPANY_SPECTATOR) {
-			/* We have arrived and ready to start playing; send a command to make a new company;
-			 * the server will give us a client-id and let us in */
-			Debug(net, 9, "Client::join_status = REGISTERING");
-			_network_join_status = NETWORK_JOIN_STATUS_REGISTERING;
-			ShowJoinStatusWindow();
-			Command<CMD_COMPANY_CTRL>::Post(CCA_NEW, CompanyID::Invalid(), CRR_NONE, _network_own_client_id);
-		}
-	} else {
-		/* take control over an existing company */
-		SetLocalCompany(_network_join.company);
-	}
-
-	SocialIntegration::EventEnterMultiplayer(Map::SizeX(), Map::SizeY());
-
-	return NETWORK_RECV_STATUS_OKAY;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_map_done(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<NetworkGameSocketHandler *>(this)));
 }
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_FRAME(Packet &p)
@@ -900,95 +597,27 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_EXTERNAL_CHAT(P
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_ERROR_QUIT(Packet &p)
 {
-	if (this->status < STATUS_AUTHORIZED) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
-
-	ClientID client_id = (ClientID)p.Recv_uint32();
-
-	Debug(net, 9, "Client::Receive_SERVER_ERROR_QUIT(): client_id={}", client_id);
-
-	NetworkClientInfo *ci = NetworkClientInfo::GetByClientID(client_id);
-	if (ci != nullptr) {
-		NetworkTextMessage(NETWORK_ACTION_LEAVE, CC_DEFAULT, false, ci->client_name, "", GetNetworkErrorMsg((NetworkErrorCode)p.Recv_uint8()));
-		delete ci;
-	}
-
-	InvalidateWindowData(WC_CLIENT_LIST, 0);
-
-	return NETWORK_RECV_STATUS_OKAY;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_error_quit(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<NetworkGameSocketHandler *>(this), &p));
 }
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_QUIT(Packet &p)
 {
-	if (this->status < STATUS_AUTHORIZED) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
-
-	ClientID client_id = (ClientID)p.Recv_uint32();
-
-	Debug(net, 9, "Client::Receive_SERVER_QUIT(): client_id={}", client_id);
-
-	NetworkClientInfo *ci = NetworkClientInfo::GetByClientID(client_id);
-	if (ci != nullptr) {
-		NetworkTextMessage(NETWORK_ACTION_LEAVE, CC_DEFAULT, false, ci->client_name, "", STR_NETWORK_MESSAGE_CLIENT_LEAVING);
-		delete ci;
-	} else {
-		Debug(net, 1, "Unknown client ({}) is leaving the game", client_id);
-	}
-
-	InvalidateWindowData(WC_CLIENT_LIST, 0);
-
-	/* If we come here it means we could not locate the client.. strange :s */
-	return NETWORK_RECV_STATUS_OKAY;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_quit(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<NetworkGameSocketHandler *>(this), &p));
 }
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_JOIN(Packet &p)
 {
-	if (this->status < STATUS_AUTHORIZED) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
-
-	ClientID client_id = (ClientID)p.Recv_uint32();
-
-	Debug(net, 9, "Client::Receive_SERVER_JOIN(): client_id={}", client_id);
-
-	NetworkClientInfo *ci = NetworkClientInfo::GetByClientID(client_id);
-	if (ci != nullptr) {
-		NetworkTextMessage(NETWORK_ACTION_JOIN, CC_DEFAULT, false, ci->client_name);
-	}
-
-	InvalidateWindowData(WC_CLIENT_LIST, 0);
-
-	return NETWORK_RECV_STATUS_OKAY;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_join(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<NetworkGameSocketHandler *>(this), &p));
 }
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_SHUTDOWN(Packet &)
 {
-	Debug(net, 9, "Client::Receive_SERVER_SHUTDOWN()");
-
-	/* Only when we're trying to join we really
-	 * care about the server shutting down. */
-	if (this->status >= STATUS_JOIN) {
-		ShowErrorMessage(GetEncodedString(STR_NETWORK_MESSAGE_SERVER_SHUTDOWN), {}, WL_CRITICAL);
-	}
-
-	if (this->status == STATUS_ACTIVE) ClientNetworkEmergencySave();
-
-	return NETWORK_RECV_STATUS_SERVER_ERROR;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_shutdown(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<NetworkGameSocketHandler *>(this)));
 }
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_NEWGAME(Packet &)
 {
-	Debug(net, 9, "Client::Receive_SERVER_NEWGAME()");
-
-	/* Only when we're trying to join we really
-	 * care about the server shutting down. */
-	if (this->status >= STATUS_JOIN) {
-		/* To throttle the reconnects a bit, every clients waits its
-		 * Client ID modulo 16 + 1 (value 0 means no reconnect).
-		 * This way reconnects should be spread out a bit. */
-		_network_reconnect = _network_own_client_id % 16 + 1;
-		ShowErrorMessage(GetEncodedString(STR_NETWORK_MESSAGE_SERVER_REBOOT), {}, WL_CRITICAL);
-	}
-
-	if (this->status == STATUS_ACTIVE) ClientNetworkEmergencySave();
-
-	return NETWORK_RECV_STATUS_SERVER_ERROR;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_newgame(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<NetworkGameSocketHandler *>(this)));
 }
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_RCON(Packet &p)
@@ -1056,42 +685,14 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_CONFIG_UPDATE(P
  */
 void ClientNetworkGameSocketHandler::CheckConnection()
 {
-	/* Only once we're authorized we can expect a steady stream of packets. */
-	if (this->status < STATUS_AUTHORIZED) return;
-
-	/* 5 seconds are roughly twice the server's "you're slow" threshold (1 game day). */
-	std::chrono::steady_clock::duration lag = std::chrono::steady_clock::now() - this->last_packet;
-	if (lag < std::chrono::seconds(5)) return;
-
-	/* 20 seconds are (way) more than 4 game days after which
-	 * the server will forcefully disconnect you. */
-	if (lag > std::chrono::seconds(20)) {
-		this->NetworkGameSocketHandler::CloseConnection();
-		return;
-	}
-
-	/* Prevent showing the lag message every tick; just update it when needed. */
-	static std::chrono::steady_clock::duration last_lag = {};
-	if (std::chrono::duration_cast<std::chrono::seconds>(last_lag) == std::chrono::duration_cast<std::chrono::seconds>(lag)) return;
-
-	last_lag = lag;
-	ShowErrorMessage(
-		GetEncodedString(STR_NETWORK_ERROR_CLIENT_GUI_LOST_CONNECTION_CAPTION),
-		GetEncodedString(STR_NETWORK_ERROR_CLIENT_GUI_LOST_CONNECTION, std::chrono::duration_cast<std::chrono::seconds>(lag).count()),
-		WL_INFO);
+	openttd_rust_network_client_check_connection(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<NetworkGameSocketHandler *>(this));
 }
 
 
 /** Is called after a client is connected to the server */
 void NetworkClient_Connected()
 {
-	/* Set the frame-counter to 0 so nothing happens till we are ready */
-	openttd_rust_network_client_connected();
-
-	Debug(net, 9, "Client::NetworkClient_Connected()");
-
-	/* Request the game-info */
-	MyClient::SendJoin();
+	openttd_rust_network_client_connected(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices());
 }
 
 /**
@@ -1254,3 +855,149 @@ bool NetworkMaxCompaniesReached()
 {
 	return Company::GetNumItems() >= NetworkMaxCompaniesAllowed();
 }
+
+static ClientNetworkGameSocketHandler *ClientFromGame(void *game) noexcept
+{
+	return static_cast<ClientNetworkGameSocketHandler *>(static_cast<NetworkGameSocketHandler *>(game));
+}
+const OpenTTDNetworkClientServices &GetRustNetworkClientServices() noexcept
+{
+	static_assert(ClientNetworkGameSocketHandler::STATUS_JOIN == 1 && ClientNetworkGameSocketHandler::STATUS_ENCRYPTED == 3);
+	static_assert(ClientNetworkGameSocketHandler::STATUS_AUTHORIZED == 5 && ClientNetworkGameSocketHandler::STATUS_MAP_WAIT == 6);
+	static_assert(ClientNetworkGameSocketHandler::STATUS_MAP == 7 && ClientNetworkGameSocketHandler::STATUS_ACTIVE == 8);
+	static_assert(NETWORK_JOIN_STATUS_CONNECTING == 0 && NETWORK_JOIN_STATUS_AUTHORIZING == 1 && NETWORK_JOIN_STATUS_WAITING == 2);
+	static_assert(NETWORK_JOIN_STATUS_DOWNLOADING == 3 && NETWORK_JOIN_STATUS_PROCESSING == 4 && NETWORK_JOIN_STATUS_REGISTERING == 5);
+	static_assert(NETWORK_CHAT_LENGTH == 900);
+	static_assert(PACKET_CLIENT_JOIN == 2 && PACKET_CLIENT_IDENTIFY == 13 && PACKET_CLIENT_NEWGRFS_CHECKED == 15);
+	static_assert(PACKET_CLIENT_GETMAP == 18 && PACKET_CLIENT_MAP_OK == 24 && PACKET_CLIENT_ERROR == 42 && PACKET_CLIENT_QUIT == 40);
+	static_assert(NETWORK_ERROR_GENERAL == 0 && NETWORK_ERROR_DESYNC == 1 && NETWORK_ERROR_SAVEGAME_FAILED == 2 && NETWORK_ERROR_CONNECTION_LOST == 3 && NETWORK_ERROR_NEWGRF_MISMATCH == 5);
+	static_assert(NETWORK_RECV_STATUS_DESYNC == 1 && NETWORK_RECV_STATUS_NEWGRF_MISMATCH == 2 && NETWORK_RECV_STATUS_SAVEGAME == 3);
+	static_assert(NETWORK_RECV_STATUS_SERVER_FULL == 7 && NETWORK_RECV_STATUS_SERVER_BANNED == 8 && NETWORK_RECV_STATUS_CLOSE_QUERY == 9);
+
+	static const OpenTTDNetworkClientServices services{
+		.check_grf = [](void *packet, void *identifier) noexcept -> bool {
+			auto &c = *static_cast<GRFIdentifier *>(identifier);
+			DeserializeGRFIdentifier(*static_cast<Packet *>(packet), c);
+			const GRFConfig *f = FindGRFConfig(c.grfid, FGCM_EXACT, &c.md5sum);
+			if (f != nullptr) return true;
+			Debug(grf, 0, "NewGRF {:08X} not found; checksum {}", std::byteswap(c.grfid), FormatArrayAsHex(c.md5sum));
+			return false;
+		},
+		.client_list_changed = []() noexcept { InvalidateWindowData(WC_CLIENT_LIST, 0); },
+		.client_name = RustNetworkClientName,
+		.debug_banned = []() noexcept { Debug(net, 9, "Client::Receive_SERVER_BANNED()"); },
+		.debug_close = [](void *game) noexcept { Debug(net, 3, "Closed client connection {}", static_cast<NetworkGameSocketHandler *>(game)->client_id); },
+		.debug_connected = []() noexcept { Debug(net, 9, "Client::NetworkClient_Connected()"); },
+		.debug_error = [](uint8_t value) noexcept { Debug(net, 9, "Client::Receive_SERVER_ERROR(): error={}", value); },
+		.debug_error_quit = [](uint32_t value) noexcept { Debug(net, 9, "Client::Receive_SERVER_ERROR_QUIT(): client_id={}", value); },
+		.debug_full = []() noexcept { Debug(net, 9, "Client::Receive_SERVER_FULL()"); },
+		.debug_grfs = [](uint32_t value) noexcept { Debug(net, 9, "Client::Receive_SERVER_CHECK_NEWGRFS(): grf_count={}", value); },
+		.debug_join = [](uint32_t value) noexcept { Debug(net, 9, "Client::Receive_SERVER_JOIN(): client_id={}", value); },
+		.debug_join_authorizing = []() noexcept { Debug(net, 9, "Client::join_status = AUTHORIZING"); },
+		.debug_join_downloading = []() noexcept { Debug(net, 9, "Client::join_status = DOWNLOADING"); },
+		.debug_join_processing = []() noexcept { Debug(net, 9, "Client::join_status = PROCESSING"); },
+		.debug_join_registering = []() noexcept { Debug(net, 9, "Client::join_status = REGISTERING"); },
+		.debug_join_waiting = []() noexcept { Debug(net, 9, "Client::join_status = WAITING"); },
+		.debug_map_begin = [](uint32_t value) noexcept { Debug(net, 9, "Client::Receive_SERVER_MAP_BEGIN(): frame_counter={}", value); },
+		.debug_map_done = []() noexcept { Debug(net, 9, "Client::Receive_SERVER_MAP_DONE()"); },
+		.debug_map_size = [](uint32_t value) noexcept { Debug(net, 9, "Client::Receive_SERVER_MAP_SIZE(): bytes_total={}", value); },
+		.debug_newgame = []() noexcept { Debug(net, 9, "Client::Receive_SERVER_NEWGAME()"); },
+		.debug_quit = [](uint32_t value) noexcept { Debug(net, 9, "Client::Receive_SERVER_QUIT(): client_id={}", value); },
+		.debug_send_error = [](uint8_t value) noexcept { Debug(net, 9, "Client::SendError(): errorno={}", value); },
+		.debug_send_getmap = []() noexcept { Debug(net, 9, "Client::SendGetMap()"); },
+		.debug_send_grfs_ok = []() noexcept { Debug(net, 9, "Client::SendNewGRFsOk()"); },
+		.debug_send_identify = []() noexcept { Debug(net, 9, "Client::SendIdentify()"); },
+		.debug_send_join = []() noexcept { Debug(net, 9, "Client::SendJoin()"); },
+		.debug_send_map_ok = []() noexcept { Debug(net, 9, "Client::SendMapOk()"); },
+		.debug_send_quit = []() noexcept { Debug(net, 9, "Client::SendQuit()"); },
+		.debug_shutdown = []() noexcept { Debug(net, 9, "Client::Receive_SERVER_SHUTDOWN()"); },
+		.debug_status_active = []() noexcept { Debug(net, 9, "Client::status = ACTIVE"); },
+		.debug_status_authorized = []() noexcept { Debug(net, 9, "Client::status = AUTHORIZED"); },
+		.debug_status_join = []() noexcept { Debug(net, 9, "Client::status = JOIN"); },
+		.debug_status_map = []() noexcept { Debug(net, 9, "Client::status = MAP"); },
+		.debug_status_map_wait = []() noexcept { Debug(net, 9, "Client::status = MAP_WAIT"); },
+		.debug_wait = []() noexcept { Debug(net, 9, "Client::Receive_SERVER_WAIT()"); },
+		.debug_welcome = [](uint32_t value) noexcept { Debug(net, 9, "Client::Receive_SERVER_WELCOME(): client_id={}", value); },
+		.delete_info = [](void *info) noexcept { delete static_cast<NetworkClientInfo *>(info); },
+		.dirty_join = []() noexcept { SetWindowDirty(WC_NETWORK_STATUS_WINDOW, WN_NETWORK_STATUS_WINDOW_JOIN); },
+		.emergency_save = []() noexcept { ClientNetworkEmergencySave(); },
+		.enter_multiplayer = []() noexcept { SocialIntegration::EventEnterMultiplayer(Map::SizeX(), Map::SizeY()); },
+		.join = [](void *info) noexcept { NetworkTextMessage(NETWORK_ACTION_JOIN, CC_DEFAULT, false, static_cast<NetworkClientInfo *>(info)->client_name); },
+		.join_bytes = &_network_join_bytes,
+		.join_bytes_total = &_network_join_bytes_total,
+		.join_company = reinterpret_cast<const uint8_t *>(&_network_join.company),
+		.join_status = reinterpret_cast<uint8_t *>(&_network_join_status),
+		.join_waiting = &_network_join_waiting,
+		.leave = [](void *info) noexcept { NetworkTextMessage(NETWORK_ACTION_LEAVE, CC_DEFAULT, false, static_cast<NetworkClientInfo *>(info)->client_name, "", STR_NETWORK_MESSAGE_CLIENT_LEAVING); },
+		.leave_error = [](void *info, uint8_t error) noexcept { NetworkTextMessage(NETWORK_ACTION_LEAVE, CC_DEFAULT, false, static_cast<NetworkClientInfo *>(info)->client_name, "", GetNetworkErrorMsg(static_cast<NetworkErrorCode>(error))); },
+		.map_add_packet = [](void *game, void *packet) noexcept -> uint32_t { auto *cs = ClientFromGame(game); cs->savegame->AddPacket(*static_cast<Packet *>(packet)); return static_cast<uint32_t>(cs->savegame->buffer.size()); },
+		.map_create = [](void *game) noexcept { ClientFromGame(game)->savegame = std::make_shared<PacketReader>(); },
+		.map_exists = [](void *game) noexcept -> bool { return ClientFromGame(game)->savegame != nullptr; },
+		.map_load = [](void *game) noexcept -> bool {
+			auto *cs = ClientFromGame(game);
+			cs->savegame->Reset();
+			ClearErrorMessages();
+			_file_to_saveload.SetMode(FIOS_TYPE_FILE, SLO_LOAD);
+			bool success = SafeLoad({}, SLO_LOAD, DFT_GAME_FILE, GM_NORMAL, NO_DIRECTORY, cs->savegame);
+			cs->savegame = nullptr;
+			return success;
+		},
+		.map_loaded_stats = []() noexcept { _game_session_stats.start_time = std::chrono::steady_clock::now(); _game_session_stats.savegame_size = std::nullopt; },
+		.new_company = [](uint32_t client_id) noexcept { Command<CMD_COMPANY_CTRL>::Post(CCA_NEW, CompanyID::Invalid(), CRR_NONE, static_cast<ClientID>(client_id)); },
+		.own_client_id = reinterpret_cast<uint32_t *>(&_network_own_client_id),
+		.reconnect = &_network_reconnect,
+		.revision = []() noexcept -> OpenTTDByteSpan { auto value = GetNetworkRevisionString(); return {reinterpret_cast<const uint8_t *>(value.data()), value.size()}; },
+		.show_banned = []() noexcept { ShowErrorMessage(GetEncodedString(STR_NETWORK_ERROR_SERVER_BANNED), {}, WL_CRITICAL); },
+		.show_client_list = []() noexcept { ShowClientList(); },
+		.show_full = []() noexcept { ShowErrorMessage(GetEncodedString(STR_NETWORK_ERROR_SERVER_FULL), {}, WL_CRITICAL); },
+		.show_join_window = []() noexcept { ShowJoinStatusWindow(); },
+		.show_lag = [](int64_t seconds) noexcept { ShowErrorMessage(GetEncodedString(STR_NETWORK_ERROR_CLIENT_GUI_LOST_CONNECTION_CAPTION), GetEncodedString(STR_NETWORK_ERROR_CLIENT_GUI_LOST_CONNECTION, seconds), WL_INFO); },
+		.show_newgrf_mismatch = []() noexcept { ShowErrorMessage(GetEncodedString(STR_NETWORK_ERROR_NEWGRF_MISMATCH), {}, WL_CRITICAL); },
+		.show_reboot = []() noexcept { ShowErrorMessage(GetEncodedString(STR_NETWORK_MESSAGE_SERVER_REBOOT), {}, WL_CRITICAL); },
+		.show_savegame_error = []() noexcept { ShowErrorMessage(GetEncodedString(STR_NETWORK_ERROR_SAVEGAMEERROR), {}, WL_CRITICAL); },
+		.show_server_error = [](uint8_t error, void *reason) noexcept {
+			static const StringID network_error_strings[] = {
+				STR_NETWORK_ERROR_LOSTCONNECTION,      // NETWORK_ERROR_GENERAL
+				STR_NETWORK_ERROR_LOSTCONNECTION,      // NETWORK_ERROR_DESYNC
+				STR_NETWORK_ERROR_LOSTCONNECTION,      // NETWORK_ERROR_SAVEGAME_FAILED
+				STR_NETWORK_ERROR_LOSTCONNECTION,      // NETWORK_ERROR_CONNECTION_LOST
+				STR_NETWORK_ERROR_LOSTCONNECTION,      // NETWORK_ERROR_ILLEGAL_PACKET
+				STR_NETWORK_ERROR_LOSTCONNECTION,      // NETWORK_ERROR_NEWGRF_MISMATCH
+				STR_NETWORK_ERROR_SERVER_ERROR,        // NETWORK_ERROR_NOT_AUTHORIZED
+				STR_NETWORK_ERROR_SERVER_ERROR,        // NETWORK_ERROR_NOT_EXPECTED
+				STR_NETWORK_ERROR_WRONG_REVISION,      // NETWORK_ERROR_WRONG_REVISION
+				STR_NETWORK_ERROR_LOSTCONNECTION,      // NETWORK_ERROR_NAME_IN_USE
+				STR_NETWORK_ERROR_WRONG_PASSWORD,      // NETWORK_ERROR_WRONG_PASSWORD
+				STR_NETWORK_ERROR_SERVER_ERROR,        // NETWORK_ERROR_COMPANY_MISMATCH
+				STR_NETWORK_ERROR_KICKED,              // NETWORK_ERROR_KICKED
+				STR_NETWORK_ERROR_CHEATER,             // NETWORK_ERROR_CHEATER
+				STR_NETWORK_ERROR_SERVER_FULL,         // NETWORK_ERROR_FULL
+				STR_NETWORK_ERROR_TOO_MANY_COMMANDS,   // NETWORK_ERROR_TOO_MANY_COMMANDS
+				STR_NETWORK_ERROR_TIMEOUT_PASSWORD,    // NETWORK_ERROR_TIMEOUT_PASSWORD
+				STR_NETWORK_ERROR_TIMEOUT_COMPUTER,    // NETWORK_ERROR_TIMEOUT_COMPUTER
+				STR_NETWORK_ERROR_TIMEOUT_MAP,         // NETWORK_ERROR_TIMEOUT_MAP
+				STR_NETWORK_ERROR_TIMEOUT_JOIN,        // NETWORK_ERROR_TIMEOUT_JOIN
+				STR_NETWORK_ERROR_INVALID_CLIENT_NAME, // NETWORK_ERROR_INVALID_CLIENT_NAME
+				STR_NETWORK_ERROR_NOT_ON_ALLOW_LIST,   // NETWORK_ERROR_NOT_ON_ALLOW_LIST
+				STR_NETWORK_ERROR_SERVER_ERROR,        // NETWORK_ERROR_NO_AUTHENTICATION_METHOD_AVAILABLE
+			};
+			static_assert(lengthof(network_error_strings) == NETWORK_ERROR_END);
+
+			StringID err = STR_NETWORK_ERROR_LOSTCONNECTION;
+			if (error < lengthof(network_error_strings)) err = network_error_strings[error];
+			if (reason != nullptr) {
+				ShowErrorMessage(GetEncodedString(err), GetEncodedString(STR_NETWORK_ERROR_KICK_MESSAGE, *static_cast<std::string *>(reason)), WL_CRITICAL);
+			} else {
+				ShowErrorMessage(GetEncodedString(err), {}, WL_CRITICAL);
+			}
+		},
+		.show_shutdown = []() noexcept { ShowErrorMessage(GetEncodedString(STR_NETWORK_MESSAGE_SERVER_SHUTDOWN), {}, WL_CRITICAL); },
+		.status = [](void *game) noexcept -> uint8_t * { return reinterpret_cast<uint8_t *>(&ClientFromGame(game)->status); },
+		.unknown_quit = [](uint32_t client_id) noexcept { Debug(net, 1, "Unknown client ({}) is leaving the game", client_id); },
+		.wait_for_quit_packets = []() noexcept { CSleep(3 * MILLISECONDS_PER_TICK); },
+	};
+	return services;
+}
+#include "../rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDNetworkClientServices.hpp"
+bool CheckAbi_network_client() { return AbiServicesComplete(GetRustNetworkClientServices()); }

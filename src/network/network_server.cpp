@@ -234,53 +234,7 @@ std::unique_ptr<Packet> ServerNetworkGameSocketHandler::ReceivePacket()
 
 NetworkRecvStatus ServerNetworkGameSocketHandler::CloseConnection(NetworkRecvStatus status)
 {
-	assert(status != NETWORK_RECV_STATUS_OKAY);
-	/*
-	 * Sending a message just before leaving the game calls cs->SendPackets.
-	 * This might invoke this function, which means that when we close the
-	 * connection after cs->SendPackets we will close an already closed
-	 * connection. This handles that case gracefully without having to make
-	 * that code any more complex or more aware of the validity of the socket.
-	 */
-	if (this->IsPendingDeletion() || this->sock == INVALID_SOCKET) return status;
-
-	if (status != NETWORK_RECV_STATUS_CLIENT_QUIT && status != NETWORK_RECV_STATUS_SERVER_ERROR && !this->HasClientQuit() && this->status >= STATUS_AUTHORIZED) {
-		/* We did not receive a leave message from this client... */
-		std::string client_name = this->GetClientName();
-
-		NetworkTextMessage(NETWORK_ACTION_LEAVE, CC_DEFAULT, false, client_name, "", STR_NETWORK_ERROR_CLIENT_CONNECTION_LOST);
-
-		/* Inform other clients of this... strange leaving ;) */
-		for (NetworkClientSocket *new_cs : NetworkClientSocket::Iterate()) {
-			if (new_cs->status >= STATUS_AUTHORIZED && this != new_cs) {
-				new_cs->SendErrorQuit(this->client_id, NETWORK_ERROR_CONNECTION_LOST);
-			}
-		}
-	}
-
-	/* If we were transferring a map to this client, stop the savegame creation
-	 * process and queue the next client to receive the map. */
-	if (this->status == STATUS_MAP) {
-		/* Ensure the saving of the game is stopped too. */
-		this->savegame->Destroy();
-		this->savegame = nullptr;
-
-		this->CheckNextClientToSendMap(this);
-	}
-
-	NetworkAdminClientError(this->client_id, NETWORK_ERROR_CONNECTION_LOST);
-	Debug(net, 3, "[{}] Client #{} closed connection", ServerNetworkGameSocketHandler::GetName(), this->client_id);
-
-	/* We just lost one client :( */
-	if (this->status >= STATUS_AUTHORIZED) _network_game_info.clients_on--;
-	extern uint8_t _network_clients_connected;
-	_network_clients_connected--;
-
-	this->SendPackets(true);
-
-	this->DeferDeletion();
-
-	return status;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_server_close(&GetRustNetworkConnectionServices(), &GetRustNetworkFrameServices(), this, status));
 }
 
 /**
@@ -1580,13 +1534,16 @@ static_assert(NETWORK_RECV_STATUS_CLIENT_QUIT == 4 && NETWORK_RECV_STATUS_SERVER
 static_assert(PACKET_SERVER_ERROR == 3 && PACKET_SERVER_ERROR_QUIT == 43 && PACKET_SERVER_QUIT == 41 && PACKET_SERVER_SHUTDOWN == 9 && PACKET_SERVER_NEWGAME == 8);
 static_assert(PACKET_SERVER_WELCOME == 16 && PACKET_SERVER_WAIT == 19 && PACKET_SERVER_MAP_BEGIN == 20 && PACKET_SERVER_JOIN == 25);
 
+extern uint8_t _network_clients_connected;
+
 const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexcept
 {
 	static const OpenTTDNetworkConnectionServices services{
 		.admin_error = [](void *socket, uint8_t error) noexcept { NetworkAdminClientError(static_cast<NetworkClientSocket *>(socket)->client_id, static_cast<NetworkErrorCode>(error)); },
 		.admin_joined = [](void *socket) noexcept { NetworkAdminClientInfo(static_cast<NetworkClientSocket *>(socket), true); },
 		.admin_quit = [](void *socket) noexcept { NetworkAdminClientQuit(static_cast<NetworkClientSocket *>(socket)->client_id); },
-		.allocate_info = [](void *socket, void *name, uint8_t company) noexcept { assert(NetworkClientInfo::CanAllocateItem());
+		.allocate_info = [](void *socket, void *name, uint8_t company) noexcept {
+			assert(NetworkClientInfo::CanAllocateItem());
 			auto *cs = static_cast<NetworkClientSocket *>(socket);
 			auto *ci = new NetworkClientInfo(cs->client_id);
 			cs->SetInfo(ci);
@@ -1594,18 +1551,22 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 			ci->client_name = std::move(*static_cast<std::string *>(name));
 			ci->client_playas = CompanyID(company);
 			ci->public_key = cs->peer_public_key;
-			Debug(desync, 1, "client: {:08x}; {:02x}; {:02x}; {:02x}", TimerGameEconomy::date, TimerGameEconomy::date_fract, ci->client_playas, ci->index); },
+			Debug(desync, 1, "client: {:08x}; {:02x}; {:02x}; {:02x}", TimerGameEconomy::date, TimerGameEconomy::date_fract, ci->client_playas, ci->index);
+		},
 		.auth_request = [](void *socket) noexcept -> uint8_t { return static_cast<NetworkClientSocket *>(socket)->SendAuthRequest(); },
 		.client_company = [](void *socket) noexcept -> uint8_t { return static_cast<NetworkClientSocket *>(socket)->GetInfo()->client_playas.base(); },
-		.client_error_announcement = [](void *socket, uint8_t error) noexcept { std::string client_name = static_cast<NetworkClientSocket *>(socket)->GetClientName();
+		.client_error_announcement = [](void *socket, uint8_t error) noexcept {
+			std::string client_name = static_cast<NetworkClientSocket *>(socket)->GetClientName();
 			StringID strid = GetNetworkErrorMsg(static_cast<NetworkErrorCode>(error));
 			Debug(net, 1, "'{}' reported an error and is closing its connection: {}", client_name, GetString(strid));
-			NetworkTextMessage(NETWORK_ACTION_LEAVE, CC_DEFAULT, false, client_name, "", strid); },
+			NetworkTextMessage(NETWORK_ACTION_LEAVE, CC_DEFAULT, false, client_name, "", strid);
+		},
 		.client_id = [](void *socket) noexcept -> uint32_t { return static_cast<NetworkClientSocket *>(socket)->client_id; },
+		.clients_connected = &_network_clients_connected,
 		.clients_on = &_network_game_info.clients_on,
-		.close = [](void *socket, uint8_t status) noexcept -> uint8_t { return static_cast<NetworkClientSocket *>(socket)->CloseConnection(static_cast<NetworkRecvStatus>(status)); },
 		.company_allows_client = [](uint8_t company, void *socket) noexcept { return RustCompanyAllowsPublicKey(company, static_cast<NetworkClientSocket *>(socket)->GetPeerPublicKey()); },
 		.debug_authorized = [](void *socket) noexcept { Debug(net, 9, "client[{}] status = AUTHORIZED", static_cast<NetworkClientSocket *>(socket)->client_id); },
+		.debug_closed = [](void *socket) noexcept { Debug(net, 3, "[{}] Client #{} closed connection", ServerNetworkGameSocketHandler::GetName(), static_cast<NetworkClientSocket *>(socket)->client_id); },
 		.debug_done_map = [](void *socket) noexcept { Debug(net, 9, "client[{}] status = DONE_MAP", static_cast<NetworkClientSocket *>(socket)->client_id); },
 		.debug_game_info = [](void *socket) noexcept { Debug(net, 9, "client[{}] Receive_CLIENT_GAME_INFO()", static_cast<NetworkClientSocket *>(socket)->client_id); },
 		.debug_getmap = [](void *socket) noexcept { Debug(net, 9, "client[{}] Receive_CLIENT_GETMAP()", static_cast<NetworkClientSocket *>(socket)->client_id); },
@@ -1631,28 +1592,35 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 		.debug_send_shutdown = [](void *socket) noexcept { Debug(net, 9, "client[{}] SendShutdown()", static_cast<NetworkClientSocket *>(socket)->client_id); },
 		.debug_send_wait = [](void *socket) noexcept { Debug(net, 9, "client[{}] SendWait()", static_cast<NetworkClientSocket *>(socket)->client_id); },
 		.debug_send_welcome = [](void *socket) noexcept { Debug(net, 9, "client[{}] SendWelcome()", static_cast<NetworkClientSocket *>(socket)->client_id); },
-		.error_announcement = [](void *socket, uint32_t strid, OpenTTDByteSpan reason, bool kicked) noexcept { std::string client_name = static_cast<NetworkClientSocket *>(socket)->GetClientName();
+		.error_announcement = [](void *socket, uint32_t strid, OpenTTDByteSpan reason, bool kicked) noexcept {
+			std::string client_name = static_cast<NetworkClientSocket *>(socket)->GetClientName();
 			Debug(net, 1, "'{}' made an error and has been disconnected: {}", client_name, GetString(strid));
-			NetworkTextMessage(kicked ? NETWORK_ACTION_KICKED : NETWORK_ACTION_LEAVE, CC_DEFAULT, false, client_name, kicked ? std::string_view(reinterpret_cast<const char *>(reason.data), reason.size) : "", strid); },
+			NetworkTextMessage(kicked ? NETWORK_ACTION_KICKED : NETWORK_ACTION_LEAVE, CC_DEFAULT, false, client_name, kicked ? std::string_view(reinterpret_cast<const char *>(reason.data), reason.size) : "", strid);
+		},
 		.error_message = [](uint8_t error) noexcept -> uint32_t { return GetNetworkErrorMsg(static_cast<NetworkErrorCode>(error)); },
 		.error_unjoined = [](void *socket, uint32_t strid) noexcept { Debug(net, 1, "Client {} made an error and has been disconnected: {}", static_cast<NetworkClientSocket *>(socket)->client_id, GetString(strid)); },
 		.game = [](void *socket) noexcept -> void * { return static_cast<NetworkGameSocketHandler *>(static_cast<NetworkClientSocket *>(socket)); },
 		.grfs_empty = []() noexcept -> bool { return _grfconfig.empty(); },
-		.grfs_packet = [](void *socket) noexcept -> void * { auto *p = new Packet(static_cast<NetworkClientSocket *>(socket), PACKET_SERVER_CHECK_NEWGRFS, TCP_MTU);
+		.grfs_packet = [](void *socket) noexcept -> void * {
+			auto *p = new Packet(static_cast<NetworkClientSocket *>(socket), PACKET_SERVER_CHECK_NEWGRFS, TCP_MTU);
 			uint grf_count = std::ranges::count_if(_grfconfig, [](const auto &c){ return !c->flags.Test(GRFConfigFlag::Static); });
 			p->Send_uint8(grf_count);
 			for (const auto &c : _grfconfig) {
 				if (!c->flags.Test(GRFConfigFlag::Static)) SerializeGRFIdentifier(*p, c->ident);
 			}
-			return p; },
-		.has_quit = [](void *socket) noexcept -> bool { return static_cast<NetworkClientSocket *>(socket)->HasClientQuit(); },
+			return p;
+		},
 		.info = [](void *socket) noexcept -> void * { return static_cast<NetworkClientSocket *>(socket)->GetInfo(); },
+		.info_by_id = [](uint32_t client_id) noexcept -> void * { return NetworkClientInfo::GetByClientID(static_cast<ClientID>(client_id)); },
 		.join_date = [](void *socket) noexcept -> int32_t { return static_cast<NetworkClientSocket *>(socket)->GetInfo()->join_date.base(); },
-		.joined = [](void *socket) noexcept { auto *cs = static_cast<NetworkClientSocket *>(socket);
+		.joined = [](void *socket) noexcept {
+			auto *cs = static_cast<NetworkClientSocket *>(socket);
 			std::string client_name = cs->GetClientName();
 			NetworkTextMessage(NETWORK_ACTION_JOIN, CC_DEFAULT, false, client_name, "", cs->client_id);
 			InvalidateWindowData(WC_CLIENT_LIST, 0);
-			Debug(net, 3, "[{}] Client #{} ({}) joined as {}", ServerNetworkGameSocketHandler::GetName(), cs->client_id, cs->GetClientIP(), client_name); },
+			Debug(net, 3, "[{}] Client #{} ({}) joined as {}", ServerNetworkGameSocketHandler::GetName(), cs->client_id, cs->GetClientIP(), client_name);
+		},
+		.lost_connection_announcement = [](void *socket) noexcept { std::string client_name = static_cast<NetworkClientSocket *>(socket)->GetClientName(); NetworkTextMessage(NETWORK_ACTION_LEAVE, CC_DEFAULT, false, client_name, "", STR_NETWORK_ERROR_CLIENT_CONNECTION_LOST); },
 		.map_create = [](void *socket) noexcept { WaitTillSaved(); static_cast<NetworkClientSocket *>(socket)->savegame = std::make_shared<PacketWriter>(static_cast<NetworkClientSocket *>(socket)); },
 		.map_destroy = [](void *socket) noexcept { auto *cs = static_cast<NetworkClientSocket *>(socket); cs->savegame->Destroy(); cs->savegame = nullptr; },
 		.map_save = [](void *socket) noexcept { if (SaveWithFilter(static_cast<NetworkClientSocket *>(socket)->savegame, true) != SL_OK) UserError("network savedump failed"); },
@@ -1660,6 +1628,8 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 		.max_clients = RustNetworkMaxClients,
 		.max_companies = RustNetworkMaxCompanies,
 		.min_active_clients = RustNetworkMinActiveClients,
+		.network_server = &_network_server,
+		.networking = &_networking,
 		.newgrf_version = []() noexcept -> uint32_t { return _openttd_newgrf_version; },
 		.outgoing_queue = [](void *socket) noexcept -> OpenTTDCommandQueue * { return &static_cast<NetworkClientSocket *>(socket)->outgoing_queue; },
 		.pause_on_join = RustNetworkPauseOnJoin,
@@ -1669,7 +1639,6 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 		.send_client_info = [](void *socket, void *info) noexcept -> uint8_t { return static_cast<NetworkClientSocket *>(socket)->SendClientInfo(static_cast<NetworkClientInfo *>(info)); },
 		.send_config = [](void *socket) noexcept -> uint8_t { return static_cast<NetworkClientSocket *>(socket)->SendConfigUpdate(); },
 		.send_game_info = [](void *socket) noexcept -> uint8_t { return static_cast<NetworkClientSocket *>(socket)->SendGameInfo(); },
-		.server_info = []() noexcept -> void * { return NetworkClientInfo::GetByClientID(CLIENT_ID_SERVER); },
 		.status = [](void *socket) noexcept -> uint8_t * { return reinterpret_cast<uint8_t *>(&static_cast<NetworkClientSocket *>(socket)->status); },
 		.sync = [](void *socket) noexcept -> OpenTTDNetworkSocketSync * { return static_cast<NetworkClientSocket *>(socket); },
 		.unique_name = [](void *name) noexcept -> bool { return NetworkMakeClientNameUnique(*static_cast<std::string *>(name)); },
