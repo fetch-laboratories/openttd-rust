@@ -172,7 +172,7 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.station_town = RustStationStationTown,
 		.airport_tile = RustStationAirportTile,
 		.airport_type = RustStationAirportType,
-		.airport_geometry = [](BaseStation *base) noexcept -> OpenTTDAirportGeometry { const auto *st = Station::From(base); const auto &a = st->airport; return {{a.tile.base(), a.w, a.h}, RustStationAirportRotation(st)}; },
+		.airport_rotation = RustStationAirportRotation,
 		.airport_airplanes = [](const AirportFTAClass *fta) noexcept { return fta->flags.Test(AirportFTAClass::Flag::Airplanes); },
 		.set_airport_details = [](BaseStation *base, uint8_t type, uint8_t layout, uint8_t rotation) noexcept { auto &a = Station::From(base)->airport; a.type = type; a.layout = layout; a.blocks = {}; a.rotation = static_cast<Direction>(rotation); },
 		.make_airport = [](uint32_t tile, uint8_t owner, uint16_t id, uint8_t gfx, uint8_t water) noexcept { MakeAirport(Tile{TileIndex{tile}}, Owner(owner), StationID(id), gfx, static_cast<WaterClass>(water)); },

@@ -115,11 +115,6 @@ pub struct AirportTile {
     pub gfx: u8,
 }
 #[repr(C)]
-pub struct AirportGeometry {
-    pub area: TileArea,
-    pub rotation: u8,
-}
-#[repr(C)]
 pub struct Strings {
     pub demolish_bridge: u32,
     pub flat_land: u32,
@@ -270,7 +265,8 @@ pub struct CommandServicesTable {
     pub station_town: extern "C" fn(*mut BaseStation) -> *const crate::services::TownHandle,
     pub airport_tile: extern "C" fn(*const BaseStation) -> u32,
     pub airport_type: extern "C" fn(*const BaseStation) -> u8,
-    pub airport_geometry: extern "C" fn(*mut BaseStation) -> AirportGeometry,
+    /// `Station::airport.rotation`.
+    pub airport_rotation: extern "C" fn(*const BaseStation) -> u8,
     pub airport_airplanes: extern "C" fn(*const std::ffi::c_void) -> bool,
     pub set_airport_details: extern "C" fn(*mut BaseStation, u8, u8, u8),
     pub make_airport: extern "C" fn(u32, u8, u16, u8, u8),
@@ -2993,13 +2989,14 @@ impl Ctx<'_> {
         &self,
         st: *mut BaseStation,
     ) -> (*const crate::services::TownHandle, u32) {
-        let geometry = (self.s.airport_geometry)(st);
+        let area = Self::area((self.s.airport_area)(st));
+        let rotation = (self.s.airport_rotation)(st);
         let id = (self.links().graphs.station_id)(st);
         self.nearest_town(
             crate::newgrf_airport::station_spec(st, unsafe { &*self.s.airport_runtime }),
-            geometry.rotation,
-            geometry.area.tile,
-            geometry.area.tiles(self.map()).filter(|&t| {
+            rotation,
+            area.tile,
+            area.tiles(self.map()).filter(|&t| {
                 (self.shared.tile_type)(t) == MP_STATION
                     && (self.shared.station_type)(t).0 == 1
                     && (self.shared.station_index)(t) == id
@@ -3244,7 +3241,7 @@ impl Ctx<'_> {
                 (self.s.town_view_dirty)(nearest);
             }
         }
-        let area = (self.s.airport_geometry)(st).area;
+        let area = Self::area((self.s.airport_area)(st));
         for tile in area.tiles(self.map()) {
             if (self.shared.tile_type)(tile) != MP_STATION
                 || (self.shared.station_type)(tile).0 != 1
@@ -4338,7 +4335,7 @@ crate::abi::layouts! {
         station_town,
         airport_tile,
         airport_type,
-        airport_geometry,
+        airport_rotation,
         airport_airplanes,
         set_airport_details,
         make_airport,
@@ -4491,9 +4488,5 @@ crate::abi::layouts! {
     "OpenTTDAirportLayoutTile" ["probe"] => AirportTile {
         tile,
         gfx,
-    };
-    "OpenTTDAirportGeometry" ["probe"] => AirportGeometry {
-        area,
-        rotation,
     };
 }
