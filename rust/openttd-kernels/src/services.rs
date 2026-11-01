@@ -526,7 +526,7 @@ pub struct FoundationSlope {
     pub slope: Slope,
 }
 impl Services {
-    /// Typed NewGRF specification leaves.
+    /// Typed `NewGRF` specification leaves.
     #[must_use]
     pub fn specs(&self) -> &crate::newgrf_specs::Specs {
         // SAFETY: `GetRustSharedServices` points at the process-lifetime `_rust_newgrf_specs`.

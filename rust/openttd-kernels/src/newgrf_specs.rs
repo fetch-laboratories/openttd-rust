@@ -5,7 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Shared typed NewGRF specification leaves (`spec_services_ffi.h`), one native
+//! Shared typed `NewGRF` specification leaves (`spec_services_ffi.h`), one native
 //! table per spec type, reached through `Services::newgrf_specs`. Specs stay
 //! native and live for each synchronous call; every table is process-lifetime.
 #![allow(unsafe_code)]
