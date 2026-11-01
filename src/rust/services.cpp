@@ -44,6 +44,7 @@
 #include "../bridge_map.h"
 #include "services_rail.h"
 #include "services_newgrf.h"
+#include "spec_services.hpp"
 #include "services_road.h"
 #include "../road_map.h"
 #include "../station_map.h"
@@ -482,6 +483,13 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.screen_dirty = RustScreenDirty,
 	.terrain_type = RustTerrainType,
 	.grf_file_version = RustGRFFileVersion,
+	.grf_cargo_map = RustGRFCargoMap,
+	.grf_file_at_or_null = RustGRFFileAtOrNull,
+	.grf_file_id = RustGRFFileID,
+	.newgrf_specs = &_rust_newgrf_specs,
+	.resolver_grf_file = RustResolverGRFFile,
+	.resolver_grf_file_id = RustResolverGRFFileID,
+	.resolver_grf_version = RustResolverGRFVersion,
 	.show_error = RustShowErrorMessage,
 	.not_reached = RustNotReached,
 };
@@ -634,6 +642,39 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 #include "abi-visit-OpenTTDClearSquareServices.hpp"
 #include "abi-visit-OpenTTDWaterRestorationServices.hpp"
 #include "abi-visit-OpenTTDByteReaderServices.hpp"
+#include "abi-visit-OpenTTDAirportSpecServices.hpp"
+#include "abi-visit-OpenTTDAirportTileSpecServices.hpp"
+#include "abi-visit-OpenTTDIndustrySpecServices.hpp"
+#include "abi-visit-OpenTTDIndustryTileSpecServices.hpp"
+#include "abi-visit-OpenTTDObjectSpecServices.hpp"
+#include "abi-visit-OpenTTDRoadStopSpecServices.hpp"
+#include "abi-visit-OpenTTDStationSpecServices.hpp"
+#include "abi-visit-OpenTTDAirportTileSpecAnimation.hpp"
+#include "abi-visit-OpenTTDIndustryTileSpecAnimation.hpp"
+#include "abi-visit-OpenTTDRoadStopSpecAnimation.hpp"
+#include "abi-visit-OpenTTDStationSpecAnimation.hpp"
+#include "abi-visit-OpenTTDAirportSpecStandard.hpp"
+#include "abi-visit-OpenTTDAirportTileSpecStandard.hpp"
+#include "abi-visit-OpenTTDIndustrySpecStandard.hpp"
+#include "abi-visit-OpenTTDIndustryTileSpecStandard.hpp"
+#include "abi-visit-OpenTTDObjectSpecStandard.hpp"
+#include "abi-visit-OpenTTDAirportSpecSubstitute.hpp"
+#include "abi-visit-OpenTTDAirportTileSpecSubstitute.hpp"
+#include "abi-visit-OpenTTDIndustrySpecSubstitute.hpp"
+#include "abi-visit-OpenTTDIndustryTileSpecSubstitute.hpp"
+/* Each capability table Rust reaches is present and complete. */
+static bool NewGRFSpecsComplete()
+{
+	const OpenTTDNewGRFSpecs &s = _rust_newgrf_specs;
+	auto complete = [](const auto *table) { return table != nullptr && AbiServicesComplete(*table); };
+	return complete(s.airport) && complete(s.airport->standard) && complete(s.airport->substitute) &&
+		complete(s.airport_tile) && complete(s.airport_tile->animation) && complete(s.airport_tile->standard) && complete(s.airport_tile->substitute) &&
+		complete(s.industry) && complete(s.industry->standard) && complete(s.industry->substitute) &&
+		complete(s.industry_tile) && complete(s.industry_tile->animation) && complete(s.industry_tile->standard) && complete(s.industry_tile->substitute) &&
+		complete(s.object) && complete(s.object->standard) &&
+		complete(s.road_stop) && complete(s.road_stop->animation) &&
+		complete(s.station) && complete(s.station->animation);
+}
 bool CheckAbi_services()
 {
 	return AbiServicesComplete(GetPbsServices()) && AbiServicesComplete(GetRustLiveGraphServices()) &&
@@ -646,7 +687,8 @@ bool CheckAbi_services()
 		AbiServicesComplete(GetRustSharedServices()) &&
 		AbiServicesComplete(GetRustSharedServices().clear_square_services) &&
 		AbiServicesComplete(GetRustSharedServices().snow_line_support) &&
-		AbiServicesComplete(GetRustWaterRestorationServices());
+		AbiServicesComplete(GetRustWaterRestorationServices()) &&
+		GetRustSharedServices().newgrf_specs == &_rust_newgrf_specs && NewGRFSpecsComplete();
 }
 
 static OpenTTDLiveGraphAccess LiveGraphAccess(OpenTTDLinkGraph *graph) noexcept { return {LiveGraphOwner(graph), graph->index.base()}; }

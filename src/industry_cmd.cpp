@@ -1072,7 +1072,6 @@ const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices()
 		},
 		.callback_error = RustSpecCallbackError<IndustrySpec, OpenTTDIndustrySpecHandle>,
 		.grf_version = RustSpecGRFVersion<IndustrySpec, OpenTTDIndustrySpecHandle>,
-		.cargo_file = RustSpecHandleGRFFile<IndustrySpec, OpenTTDIndustrySpecHandle>,
 		.layout_size = [](const OpenTTDIndustryLayoutHandle *layout) noexcept -> size_t { return reinterpret_cast<const IndustryTileLayout *>(layout)->size(); },
 		.layout_tile = [](const OpenTTDIndustryLayoutHandle *layout, size_t index) noexcept -> OpenTTDIndustryLayoutTile {
 			const auto &tile = (*reinterpret_cast<const IndustryTileLayout *>(layout))[index];
@@ -1095,6 +1094,7 @@ const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices()
 const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept
 {
 	static const OpenTTDIndustryTileServices services = {
+		.shared = &GetRustSharedServices(),
 		.gfx = [](uint32_t tile) noexcept -> uint16_t { return GetIndustryGfx(TileIndex(tile)); },
 		.set_gfx = [](uint32_t tile, uint16_t gfx) noexcept { SetIndustryGfx(TileIndex(tile), gfx); },
 		.frame = OpenTTDAnimationFrame,
@@ -1128,7 +1128,6 @@ const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept
 			return result;
 		},
 		.callback = OpenTTDIndustryTileCallback,
-		.cargo_file = RustSpecGRFFile<IndustryTileSpec>,
 	};
 	return services;
 }
@@ -1168,7 +1167,6 @@ const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices() noexcep
 		.removal_multiplier = RustIndustrySpecRemovalMultiplier<OpenTTDIndustrySpecHandle>,
 		.tile_max_z = [](uint32_t tile) noexcept -> int32_t { return OpenTTDTileMaxZ(TileIndex(tile)); },
 		.autoslope_callback = [](const OpenTTDIndustryTileSpec *spec) noexcept -> bool { return spec->callback_mask.Test(IndustryTileCallbackMask::Autoslope); },
-		.callback_boolean = RustSpecBooleanCallback<IndustryTileSpec>,
 		.command_checks = &GetRustCommandServices(),
 	};
 	return services;
@@ -1177,7 +1175,6 @@ const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices() noexcep
 static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices()
 {
 	static const OpenTTDIndustryTransactionServices services = {
-		.enabled = RustSpecEnabled<IndustrySpec, OpenTTDIndustrySpecHandle>,
 		.layout_count = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> size_t { return reinterpret_cast<const IndustrySpec *>(spec)->layouts.size(); },
 		.layout = [](const OpenTTDIndustrySpecHandle *spec, size_t index) noexcept -> const OpenTTDIndustryLayoutHandle * { return reinterpret_cast<const OpenTTDIndustryLayoutHandle *>(&reinterpret_cast<const IndustrySpec *>(spec)->layouts[index]); },
 		.raw_setting = []() noexcept -> uint8_t { return _settings_game.construction.raw_industry_construction; },

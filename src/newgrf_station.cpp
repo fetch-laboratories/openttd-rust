@@ -85,9 +85,7 @@ const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
 		},
 		.resolve_callback = RustEvaluateStationCallback,
 		.company = RustCompanyInfo,
-		.spec_file = RustSpecGRFFile<StationSpec>,
 		.nearby_station = RustNearbyStationTile,
-		.badges = RustSpecBadges<StationSpec>,
 
 		.build_date = RustStationBuildDate<BaseStation>,
 		.airport_ttd_type = RustAirportTTDType,

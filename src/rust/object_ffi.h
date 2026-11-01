@@ -62,8 +62,6 @@ struct OpenTTDObjectQueryServices {
 	int32_t (*date)(Object *) noexcept OPENTTD_SERVICE_DEFAULT(date);
 	uint8_t (*colour)(Object *) noexcept OPENTTD_SERVICE_DEFAULT(colour);
 	uint8_t (*view)(Object *) noexcept OPENTTD_SERVICE_DEFAULT(view);
-	uint32_t (*badges)(const ResolverObject *, const ObjectSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(badges);
-	uint32_t (*grfid)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(grfid);
 	bool (*version8)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(version8);
 	uint16_t (*override_id)(uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(override_id);
 	uint32_t (*manhattan)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(manhattan);
@@ -112,7 +110,6 @@ struct OpenTTDObjectServices {
 	OpenTTDObjectPrice (*clear_price)(const ObjectSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(clear_price);
 	void (*set_hq)(uint8_t owner, uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(set_hq);
 	OpenTTDTownRef (*statue_town)(Object *) noexcept OPENTTD_SERVICE_DEFAULT(statue_town);
-	bool (*boolean_callback)(const ObjectSpec *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(boolean_callback);
 	void (*close_inspect)(uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(close_inspect);
 	bool (*progress_set)(OpenTTDObjectGenerationFrame *frame, uint32_t total) noexcept OPENTTD_SERVICE_DEFAULT(progress_set);
 	bool (*progress_increase)(OpenTTDObjectGenerationFrame *frame) noexcept OPENTTD_SERVICE_DEFAULT(progress_increase);

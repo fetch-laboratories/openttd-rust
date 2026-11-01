@@ -14,7 +14,7 @@
     clippy::cast_possible_wrap
 )]
 use crate::newgrf_act2::{self, Services as Action2Services};
-use crate::newgrf_bytereader::{BadgeList, ByteReader, ReadError, Reader};
+use crate::newgrf_bytereader::{ByteReader, ReadError, Reader};
 use crate::newgrf_internal::{CIR_DISABLED, CIR_INVALID_ID, CIR_SUCCESS, CIR_UNKNOWN};
 use crate::newgrf_layout::{Layout, LayoutSequence, Sequence};
 use crate::newgrf_loading::Services as LoadingServices;
@@ -36,18 +36,10 @@ pub struct Services {
     station_class: unsafe extern "C" fn(*mut RailSpec, u16) -> (),
     station_name: unsafe extern "C" fn(*mut RailSpec, u16) -> (),
     station_class_name: unsafe extern "C" fn(*mut RailSpec, u16) -> (),
-    station_badges: unsafe extern "C" fn(*mut RailSpec) -> *mut BadgeList,
     station_cargo_triggers: unsafe extern "C" fn(*mut RailSpec, u64) -> (),
-    station_frames: unsafe extern "C" fn(*mut RailSpec, u8) -> (),
-    station_status: unsafe extern "C" fn(*mut RailSpec, u8) -> (),
-    station_speed: unsafe extern "C" fn(*mut RailSpec, u8) -> (),
-    station_triggers: unsafe extern "C" fn(*mut RailSpec, u16) -> (),
     station_callback_mask: unsafe extern "C" fn(*mut RailSpec, u8) -> (),
     station_flags: unsafe extern "C" fn(*mut RailSpec, u8) -> (),
-    station_has_file: unsafe extern "C" fn(*const RailSpec) -> bool,
     station_set_group: unsafe extern "C" fn(*mut RailSpec, u8, *const c_void) -> (),
-    station_set_file: unsafe extern "C" fn(*mut RailSpec, *const c_void) -> (),
-    station_set_local: unsafe extern "C" fn(*mut RailSpec, u16) -> (),
     road_resize: unsafe extern "C" fn(*mut c_void, u32) -> (),
     road_count: unsafe extern "C" fn(*const c_void) -> usize,
     road_get: unsafe extern "C" fn(*mut c_void, u32) -> *mut RoadSpec,
@@ -55,18 +47,10 @@ pub struct Services {
     road_class: unsafe extern "C" fn(*mut RoadSpec, u16) -> (),
     road_name: unsafe extern "C" fn(*mut RoadSpec, u16) -> (),
     road_class_name: unsafe extern "C" fn(*mut RoadSpec, u16) -> (),
-    road_badges: unsafe extern "C" fn(*mut RoadSpec) -> *mut BadgeList,
     road_cargo_triggers: unsafe extern "C" fn(*mut RoadSpec, u64) -> (),
-    road_frames: unsafe extern "C" fn(*mut RoadSpec, u8) -> (),
-    road_status: unsafe extern "C" fn(*mut RoadSpec, u8) -> (),
-    road_speed: unsafe extern "C" fn(*mut RoadSpec, u8) -> (),
-    road_triggers: unsafe extern "C" fn(*mut RoadSpec, u16) -> (),
     road_callback_mask: unsafe extern "C" fn(*mut RoadSpec, u8) -> (),
     road_flags: unsafe extern "C" fn(*mut RoadSpec, u32) -> (),
-    road_has_file: unsafe extern "C" fn(*const RoadSpec) -> bool,
     road_set_group: unsafe extern "C" fn(*mut RoadSpec, u8, *const c_void) -> (),
-    road_set_file: unsafe extern "C" fn(*mut RoadSpec, *const c_void) -> (),
-    road_set_local: unsafe extern "C" fn(*mut RoadSpec, u16) -> (),
     station_disallowed_platforms: unsafe extern "C" fn(*mut RailSpec, u8) -> (),
     station_disallowed_lengths: unsafe extern "C" fn(*mut RailSpec, u8) -> (),
     station_cargo_threshold: unsafe extern "C" fn(*mut RailSpec, u16) -> (),
@@ -111,9 +95,15 @@ pub struct Services {
     undefined_publication: unsafe extern "C" fn(u16) -> (),
     duplicate_publication: unsafe extern "C" fn(u16) -> (),
 }
+impl Services {
+    fn shared(&self) -> &crate::services::Services {
+        // SAFETY: `GetStationDefinitionServices` points at the process-lifetime shared table.
+        unsafe { &*self.shared }
+    }
+}
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDStationDefinitionServices" ["station_service"] => Services { empty_string, cargo, reader, shared, station_resize, station_count, station_get, station_new, station_class, station_name, station_class_name, station_badges, station_cargo_triggers, station_frames, station_status, station_speed, station_triggers, station_callback_mask, station_flags, station_has_file, station_set_group, station_set_file, station_set_local, road_resize, road_count, road_get, road_new, road_class, road_name, road_class_name, road_badges, road_cargo_triggers, road_frames, road_status, road_speed, road_triggers, road_callback_mask, road_flags, road_has_file, road_set_group, road_set_file, road_set_local, station_disallowed_platforms, station_disallowed_lengths, station_cargo_threshold, road_stop_type, road_draw_mode, road_build_cost, road_clear_cost, station_render_clear, station_render_reserve, station_render_size, station_render_append, station_render_pop, station_render_copy_append, sequence_reset, sequence_append, layout_sequence_move, layout_original, station_custom_assign, station_custom_tile, station_custom_copy, station_tileflags_size, station_tileflags_resize, station_pylons, station_wires, station_blocked, station_tileflags_assign, station_bridge_size, station_bridge_resize, road_bridge_size, station_bridge_height, station_bridge_pillars, road_bridge_height, road_bridge_pillars, station_invalid, road_invalid, station_undefined, road_undefined, odd_layout, missing_sprite, missing_custom, invalid_tile, undefined_publication, duplicate_publication };
+    "OpenTTDStationDefinitionServices" ["station_service"] => Services { empty_string, cargo, reader, shared, station_resize, station_count, station_get, station_new, station_class, station_name, station_class_name, station_cargo_triggers, station_callback_mask, station_flags, station_set_group, road_resize, road_count, road_get, road_new, road_class, road_name, road_class_name, road_cargo_triggers, road_callback_mask, road_flags, road_set_group, station_disallowed_platforms, station_disallowed_lengths, station_cargo_threshold, road_stop_type, road_draw_mode, road_build_cost, road_clear_cost, station_render_clear, station_render_reserve, station_render_size, station_render_append, station_render_pop, station_render_copy_append, sequence_reset, sequence_append, layout_sequence_move, layout_original, station_custom_assign, station_custom_tile, station_custom_copy, station_tileflags_size, station_tileflags_resize, station_pylons, station_wires, station_blocked, station_tileflags_assign, station_bridge_size, station_bridge_resize, road_bridge_size, station_bridge_height, station_bridge_pillars, road_bridge_height, road_bridge_pillars, station_invalid, road_invalid, station_undefined, road_undefined, odd_layout, missing_sprite, missing_custom, invalid_tile, undefined_publication, duplicate_publication };
 }
 
 unsafe fn station_change(
@@ -294,11 +284,11 @@ unsafe fn station_change(
                 }
                 0x13 => (s.station_flags)(spec, reader.byte()?),
                 0x16 => {
-                    (s.station_frames)(spec, reader.byte()?);
-                    (s.station_status)(spec, reader.byte()?);
+                    (s.shared().specs().station().animation().frames)(spec, reader.byte()?);
+                    (s.shared().specs().station().animation().status)(spec, reader.byte()?);
                 }
-                0x17 => (s.station_speed)(spec, reader.byte()?),
-                0x18 => (s.station_triggers)(spec, reader.word()?),
+                0x17 => (s.shared().specs().station().animation().speed)(spec, reader.byte()?),
+                0x18 => (s.shared().specs().station().animation().triggers)(spec, reader.word()?),
                 0x1a => {
                     let tiles = reader.extended()?;
                     (s.station_render_clear)(spec);
@@ -337,7 +327,10 @@ unsafe fn station_change(
                     let data = reader.bytes(tiles)?;
                     (s.station_tileflags_assign)(spec, data, tiles);
                 }
-                0x1f => reader.badges(GSF_STATIONS, (s.station_badges)(spec))?,
+                0x1f => reader.badges(
+                    GSF_STATIONS,
+                    (s.shared().specs().station().badge_list)(spec),
+                )?,
                 0x20 | 0x21 => {
                     let tiles = usize::from(reader.extended()?);
                     if (s.station_bridge_size)(spec) < tiles {
@@ -427,11 +420,11 @@ unsafe fn road_change(
                     (s.road_cargo_triggers)(spec, cargo);
                 }
                 0x0e => {
-                    (s.road_frames)(spec, reader.byte()?);
-                    (s.road_status)(spec, reader.byte()?);
+                    (s.shared().specs().road_stop().animation().frames)(spec, reader.byte()?);
+                    (s.shared().specs().road_stop().animation().status)(spec, reader.byte()?);
                 }
-                0x0f => (s.road_speed)(spec, reader.byte()?),
-                0x10 => (s.road_triggers)(spec, reader.word()?),
+                0x0f => (s.shared().specs().road_stop().animation().speed)(spec, reader.byte()?),
+                0x10 => (s.shared().specs().road_stop().animation().triggers)(spec, reader.word()?),
                 0x11 => (s.road_callback_mask)(spec, reader.byte()?),
                 0x12 => (s.road_flags)(spec, reader.dword()?),
                 0x13 | 0x14 => {
@@ -453,7 +446,10 @@ unsafe fn road_change(
                     (s.road_build_cost)(spec, reader.byte()?);
                     (s.road_clear_cost)(spec, reader.byte()?);
                 }
-                0x16 => reader.badges(GSF_ROADSTOPS, (s.road_badges)(spec))?,
+                0x16 => reader.badges(
+                    GSF_ROADSTOPS,
+                    (s.shared().specs().road_stop().badge_list)(spec),
+                )?,
                 _ => result = CIR_UNKNOWN,
             }
         }
@@ -558,15 +554,15 @@ pub unsafe extern "C" fn openttd_rust_station_map_default(
         unsafe {
             (s.undefined_publication)(id);
         }
-    } else if unsafe { (s.station_has_file)(spec) } {
+    } else if (s.shared().specs().station().has_file)(spec) {
         unsafe {
             (s.duplicate_publication)(id);
         }
     } else {
         unsafe {
             (s.station_set_group)(spec, crate::newgrf_commons::SG_DEFAULT, group);
-            (s.station_set_file)(spec, file);
-            (s.station_set_local)(spec, id);
+            (s.shared().specs().station().set_file)(spec, file);
+            (s.shared().specs().station().set_local_id)(spec, id);
             crate::newgrf_class::station::assign(spec);
         }
     }
@@ -610,15 +606,15 @@ pub unsafe extern "C" fn openttd_rust_roadstop_map_default(
         unsafe {
             (s.undefined_publication)(id);
         }
-    } else if unsafe { (s.road_has_file)(spec) } {
+    } else if (s.shared().specs().road_stop().has_file)(spec) {
         unsafe {
             (s.duplicate_publication)(id);
         }
     } else {
         unsafe {
             (s.road_set_group)(spec, crate::newgrf_commons::SG_DEFAULT, group);
-            (s.road_set_file)(spec, file);
-            (s.road_set_local)(spec, id);
+            (s.shared().specs().road_stop().set_file)(spec, file);
+            (s.shared().specs().road_stop().set_local_id)(spec, id);
             crate::newgrf_class::roadstop::assign(spec);
         }
     }

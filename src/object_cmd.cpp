@@ -372,7 +372,6 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 		.clear_price = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectPrice { return {spec->clear_cost_multiplier, RustGRFPriceShift(RustSpecGRFFile(spec), PR_CLEAR_OBJECT)}; },
 		.set_hq = [](uint8_t owner, uint32_t tile) noexcept -> void { Company::Get(CompanyID(owner))->location_of_HQ = TileIndex(tile); SetWindowDirty(WC_COMPANY, owner); },
 		.statue_town = [](Object *o) noexcept -> OpenTTDTownRef { Town *t = o->town; return {t, t->growth_owner.get(), t->index.base()}; },
-		.boolean_callback = RustSpecBooleanCallback<ObjectSpec>,
 		.close_inspect = RustCloseInspect<GSF_OBJECTS, uint32_t>,
 		.progress_set = [](OpenTTDObjectGenerationFrame *frame, uint32_t total) noexcept -> bool { return RunGenerationProgress(frame, [total] { RustSetGeneratingWorldProgress(GWP_OBJECT, total); }); },
 		.progress_increase = [](OpenTTDObjectGenerationFrame *frame) noexcept -> bool { return RunGenerationProgress(frame, [] { RustIncreaseGeneratingWorldProgress(GWP_OBJECT); }); },

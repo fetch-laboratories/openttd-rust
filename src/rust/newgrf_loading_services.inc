@@ -37,7 +37,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.action2 = &GetRustAction2Services(),
 		.engine_range = [](GrfSpecFeature feature) noexcept { return OpenTTDGrfEngineRange{_engine_offsets[feature], _engine_counts[feature]}; },
 		.parameter = RustGRFParameter,
-		.file_id = RustGRFFileID,
 		.config_id = [](const GRFConfig *c) noexcept { return c->ident.grfid; },
 		.config_status = [](const GRFConfig *c) noexcept { return c->status; },
 		.config_flags = [](const GRFConfig *c) noexcept { return c->flags.base(); },

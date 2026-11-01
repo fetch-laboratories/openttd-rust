@@ -324,7 +324,6 @@ const OpenTTDRoadStopResolverServices &GetRoadStopResolverServices() noexcept
 	static_assert(CBID_STATION_AVAILABILITY == 0x13);
 	static const OpenTTDRoadStopResolverServices services{
 		.rebind = RustRoadStopRebindSpec,
-		.badges = RustSpecBadges<RoadStopSpec>,
 		.base_scope = RustResolverBaseScope,
 		.build_date = RustStationBuildDate<const BaseStation>,
 		.by_tile = RustBaseStationByTile,
@@ -357,9 +356,6 @@ const OpenTTDRoadStopResolverServices &GetRoadStopResolverServices() noexcept
 		.slot_vacancy = RustRoadStopSlotVacancy,
 		.spec_cargo = RustRoadStopCargoTriggers,
 		.spec_count = RustRoadStopSpecCount,
-		.spec_file = RustSpecGRFFile<RoadStopSpec>,
-		.spec_grfid = RustSpecGRFID<RoadStopSpec>,
-		.spec_local_id = RustSpecLocalID<RoadStopSpec>,
 		.spec_triggers = RustRoadStopSpecTriggers,
 		.station_id = RustBaseStationID<BaseStation>,
 		.tile = RustRoadStopDataTile,
@@ -367,7 +363,6 @@ const OpenTTDRoadStopResolverServices &GetRoadStopResolverServices() noexcept
 		.tile_random = RustRoadStopRandomBits,
 		.town = OpenTTDBaseStationTown,
 		.town_tile = OpenTTDTownTile,
-		.version = RustResolverGRFVersion,
 		.waiting = RustStationWaitingTriggers<const BaseStation>,
 	};
 	return services;
