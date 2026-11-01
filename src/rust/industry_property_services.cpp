@@ -51,10 +51,6 @@ const OpenTTDIndustryPropertyServices &GetIndustryPropertyServices() noexcept
 		.set_callbacks = [](IndustrySpec *spec, uint16_t value) noexcept { spec->callback_mask = IndustryCallbackMasks{value}; },
 		.set_tile_slopes = [](IndustryTileSpec *spec, uint8_t value) noexcept { spec->slopes_refused = static_cast<Slope>(value); },
 		.set_tile_callbacks = [](IndustryTileSpec *spec, uint8_t value) noexcept { spec->callback_mask = static_cast<IndustryTileCallbackMasks>(value); },
-		.set_animation_frames = RustSpecAnimationFrames<IndustryTileSpec>,
-		.set_animation_status = RustSpecAnimationStatus<IndustryTileSpec>,
-		.set_animation_speed = RustSpecAnimationSpeed<IndustryTileSpec>,
-		.set_animation_triggers = RustSpecAnimationTriggers<IndustryTileSpec>,
 		.set_tile_flags = [](IndustryTileSpec *spec, uint8_t value) noexcept { spec->special_flags = IndustryTileSpecialFlags{value}; },
 		.map_closure_text = [](IndustrySpec *spec, uint16_t string) noexcept { AddStringForMapping(GRFStringID{string}, &spec->closure_text); },
 		.map_production_up_text = [](IndustrySpec *spec, uint16_t string) noexcept { AddStringForMapping(GRFStringID{string}, &spec->production_up_text); },
@@ -76,8 +72,6 @@ const OpenTTDIndustryPropertyServices &GetIndustryPropertyServices() noexcept
 		.layout_import_index = [](uint32_t id) noexcept { GrfMsg(1, "IndustriesChangeInfo: Invalid original industry layout index for layout import, industry {}", id); },
 		.layout_tile_undefined = [](uint16_t tile, uint32_t id) noexcept { GrfMsg(2, "IndustriesChangeInfo: Attempt to use industry tile {} with industry id {}, not yet defined. Ignoring.", tile, id); },
 		.layout_invalid = [](uint32_t id) noexcept { GrfMsg(1, "IndustriesChangeInfo: Invalid industry layout for industry id {}. Ignoring", id); },
-		.industry_badges = RustSpecBadgeList<IndustrySpec>,
-		.tile_badges = RustSpecBadgeList<IndustryTileSpec>,
 	};
 	return services;
 }

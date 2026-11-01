@@ -39,6 +39,7 @@ pub struct TileAcceptance {
 }
 #[repr(C)]
 pub struct TileServices {
+    pub shared: *const crate::services::Services,
     pub gfx: unsafe extern "C" fn(u32) -> u16,
     pub set_gfx: unsafe extern "C" fn(u32, u16),
     pub frame: unsafe extern "C" fn(u32) -> u8,
@@ -64,7 +65,6 @@ pub struct TileServices {
     pub spec: unsafe extern "C" fn(u16) -> *const TileSpec,
     pub acceptance: unsafe extern "C" fn(*const TileSpec) -> TileAcceptance,
     pub callback: unsafe extern "C" fn(u32, u16, u16, u32, u32) -> u16,
-    pub cargo_file: unsafe extern "C" fn(*const TileSpec) -> *const std::ffi::c_void,
 }
 fn chance(s: &Services, a: u32, b: u32) -> bool {
     crate::random_func::chance16_i(a, b, s.shared().random())
@@ -517,13 +517,11 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
         if result != CALLBACK_FAILED {
             info.cargo.fill(255);
             for n in 0..3 {
-                info.cargo[n] = unsafe {
-                    crate::cargo_registry::openttd_rust_cargo_translate(
-                        ((result >> (n * 5)) & 31) as u8,
-                        (t.cargo_file)(spec),
-                        false,
-                    )
-                };
+                info.cargo[n] = crate::cargo_registry::openttd_rust_cargo_translate(
+                    ((result >> (n * 5)) & 31) as u8,
+                    (unsafe { &*t.shared }.specs().industry_tile().file)(spec),
+                    false,
+                );
             }
         }
     }
@@ -571,7 +569,6 @@ pub struct TilePolicyServices {
     pub removal_multiplier: unsafe extern "C" fn(*const SpecHandle) -> u32,
     pub tile_max_z: unsafe extern "C" fn(u32) -> i32,
     pub autoslope_callback: unsafe extern "C" fn(*const TileSpec) -> bool,
-    pub callback_boolean: unsafe extern "C" fn(*const TileSpec, u16, u16) -> bool,
     pub command_checks: *const crate::services::CommandServices,
 }
 /// # Safety
@@ -641,7 +638,8 @@ pub(crate) unsafe fn openttd_rust_industry_tile_terraform(
             let spec = unsafe { (t.spec)(gfx) };
             let allowed = if unsafe { (p.autoslope_callback)(spec) } {
                 let result = unsafe { (t.callback)(tile, gfx, 0x3c, 0, 0) };
-                result == CALLBACK_FAILED || !unsafe { (p.callback_boolean)(spec, 0x3c, result) }
+                result == CALLBACK_FAILED
+                    || !(shared.specs().industry_tile().boolean_callback)(spec, 0x3c, result)
             } else {
                 true
             };

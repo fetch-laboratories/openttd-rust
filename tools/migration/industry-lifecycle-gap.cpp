@@ -13,6 +13,7 @@
 #include "rust/animation_save.hpp"
 #include "rust/cargo_registry_ffi.h"
 #include "rust/movement_ffi.h"
+#include "rust/spec_services_ffi.h"
 namespace IndustryReference {
 #include "industry-graphics-reference.inc"
 using TileIndex = uint32_t;
@@ -129,6 +130,12 @@ static uint16_t GetIndustryTileCallback(uint16_t callback, uint32_t, uint32_t, I
 #include "industry-acceptance-reference.inc"
 static void CheckAcceptance()
 {
+	OpenTTDIndustryTileSpecServices tile_spec{};
+	tile_spec.file = [](const ::IndustryTileSpec *spec) noexcept -> const GRFFile * { return reinterpret_cast<const GRFFile *>(reinterpret_cast<const IndustryTileSpec *>(spec)->grf_prop.grffile); };
+	OpenTTDNewGRFSpecs spec_tables{};
+	spec_tables.industry_tile = &tile_spec;
+	auto shared = OpenTTDFixtureSharedServices(nullptr, nullptr);
+	shared.newgrf_specs = &spec_tables;
 	OpenTTDIndustryTileServices service{};
 	service.gfx = [](uint32_t tile) noexcept -> uint16_t { return GetIndustryGfx(tile); };
 	service.industry = [](uint32_t tile) noexcept -> OpenTTDIndustryTileOwner { return {reinterpret_cast<::Industry *>(Industry::GetByTile(tile)), acceptance_owner}; };
@@ -144,7 +151,7 @@ static void CheckAcceptance()
 		return result;
 	};
 	service.callback = [](uint32_t tile, uint16_t gfx, uint16_t callback, uint32_t p1, uint32_t p2) noexcept -> uint16_t { return GetIndustryTileCallback(callback, p1, p2, gfx, Industry::GetByTile(tile), tile); };
-	service.cargo_file = [](const OpenTTDIndustryTileSpec *spec) noexcept -> const GRFFile * { return reinterpret_cast<const GRFFile *>(reinterpret_cast<const IndustryTileSpec *>(spec)->grf_prop.grffile); };
+	service.shared = &shared;
 	Industry industry{}; active = &industry;
 	OpenTTDIndustry *owner = openttd_rust_industry_new();
 	uint cases = 0;
