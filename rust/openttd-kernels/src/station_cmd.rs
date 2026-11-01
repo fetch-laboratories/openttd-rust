@@ -294,7 +294,6 @@ pub struct CommandServicesTable {
     pub clear: *const crate::ground::ClearServices,
     pub restoration: *const crate::water::RestorationServices,
     pub set_docking: extern "C" fn(u32, bool),
-    pub ship_area: extern "C" fn(*mut BaseStation) -> TileArea,
     pub set_ship_area: extern "C" fn(*mut BaseStation, TileArea),
     /// `ship_station`, in place.
     pub ship_station_area: extern "C" fn(*mut BaseStation) -> *mut TileArea,
@@ -428,6 +427,11 @@ impl<'a> Ctx<'a> {
     /// `Station::From(st)->RecomputeCatchment(no_clear)`.
     fn recompute_catchment(&self, st: *mut BaseStation, no_clear_nearby_lists: bool) {
         crate::station::recompute_catchment(st, no_clear_nearby_lists, &self.catchment());
+    }
+    /// Read a station area at this observation point.
+    fn area(area: *mut TileArea) -> TileArea {
+        // SAFETY: The accessor addresses a live station area.
+        unsafe { area.read() }
     }
     /// `TileArea::Add` on a station area resolved in place for this call.
     fn area_add(&self, area: *mut TileArea, tile: u32) {
@@ -3410,7 +3414,7 @@ impl Ctx<'_> {
         (self.s.docking_clear)(st);
         let industry = (self.s.associated_industry)(st);
         let area = if industry.is_null() {
-            (self.s.ship_area)(st)
+            Self::area((self.s.ship_station_area)(st))
         } else {
             (self.s.industry_area)(industry)
         };
@@ -3642,7 +3646,7 @@ impl Ctx<'_> {
             }
             self.after_remove_tile(st, land);
             self.after_remove_tile(st, water);
-            let area = self.shrink(st, (self.s.ship_area)(st), 5);
+            let area = self.shrink(st, Self::area((self.s.ship_station_area)(st)), 5);
             (self.s.set_ship_area)(st, area);
             self.update_docking(st);
             if area.tile == u32::MAX {
@@ -4358,7 +4362,6 @@ crate::abi::layouts! {
         clear,
         restoration,
         set_docking,
-        ship_area,
         set_ship_area,
         ship_station_area,
         docking_clear,

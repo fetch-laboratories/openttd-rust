@@ -187,7 +187,6 @@ struct OpenTTDStationCommandServices {
 	const OpenTTDClearServices *clear;
 	const OpenTTDWaterRestorationServices *restoration;
 	void (*set_docking)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_docking);
-	OpenTTDStationArea (*ship_area)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(ship_area);
 	void (*set_ship_area)(BaseStation *, OpenTTDStationArea) noexcept OPENTTD_SERVICE_DEFAULT(set_ship_area);
 	OrthogonalTileArea *(*ship_station_area)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(ship_station_area);
 	void (*docking_clear)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(docking_clear);

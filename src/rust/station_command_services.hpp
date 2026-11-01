@@ -195,7 +195,6 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.restoration = &GetRustWaterRestorationServices(),
 
 		.set_docking = OpenTTDSetDockingTile,
-		.ship_area = [](BaseStation *st) noexcept -> OpenTTDStationArea { const auto &a = Station::From(st)->ship_station; return {a.tile.base(), a.w, a.h}; },
 		.set_ship_area = [](BaseStation *st, OpenTTDStationArea area) noexcept { Station::From(st)->ship_station = TileArea(TileIndex{area.tile}, area.w, area.h); },
 		.ship_station_area = RustStationShipArea,
 		.docking_clear = [](BaseStation *st) noexcept { Station::From(st)->docking_station.Clear(); },
