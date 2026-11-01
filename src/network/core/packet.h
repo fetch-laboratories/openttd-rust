@@ -12,6 +12,8 @@
 #ifndef NETWORK_CORE_PACKET_H
 #define NETWORK_CORE_PACKET_H
 
+#include <utility>
+
 #include "os_abstraction.h"
 #include "config.h"
 #include "core.h"
