@@ -12,6 +12,7 @@ include = [
     "tools/code_lines.py",
     "tools/orphan-exports.py",
     "tools/port-metrics.py",
+    "tools/generate-abi.py",
     "tools/test-orphan-exports.py",
     "tools/rebound-callees.py",
     "tools/test-rebound-callees.py",

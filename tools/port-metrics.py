@@ -6,6 +6,7 @@ lines), then physical-line totals for comparison with historical metrics.
 --whole-fork adds original/retired/remaining/glue by area, compiled C++ distance,
 whole-fork and simulation shares, and Rust exports/service callback slots.
 --functions [AREA ...] adds the remaining lines per file and top-level function.
+Glue includes the C++ record declarations tools/generate-abi.py generates.
 This is a source/guard inventory, not full preprocessing or behavioral coverage.
 
 Both guard forms are understood: `#ifdef WITH_RUST ... #else <original>
@@ -13,9 +14,13 @@ Both guard forms are understood: `#ifdef WITH_RUST ... #else <original>
 """
 
 import argparse
+import io
 import json
 import re
+import runpy
 import subprocess
+import tarfile
+import tempfile
 from collections.abc import Iterator, Sequence
 from functools import lru_cache
 from pathlib import Path
@@ -418,6 +423,33 @@ def source_metrics(
     return result
 
 
+# Generated declarations are compiled glue in the boundary layer's area.
+GENERATED_AREA = "Boundary layer"
+
+
+@lru_cache(maxsize=8)
+def generated_glue(rev: str, all_lines: bool = False) -> int:
+    """Lines of the C++ record declarations tools/generate-abi.py emits at `rev`."""
+    paths = ["rust/openttd-kernels/src", "tools/generate-abi.py"]
+    listed = git("ls-tree", "--name-only", rev, "--", *paths).split()
+    if len(listed) != len(paths):
+        return 0
+    archive = subprocess.check_output(["git", "archive", rev, "--", *paths], cwd=ROOT)
+    with tempfile.TemporaryDirectory() as directory:
+        with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
+            tar.extractall(directory, filter="data")
+        generator = runpy.run_path(str(Path(directory) / "tools/generate-abi.py"))
+        if "shared_records" not in generator:
+            return 0
+        fragments = generator["generate"](Path(directory))
+    total = 0
+    for name, text in fragments.items():
+        if name.startswith("abi-record-"):
+            count = len(classify(text)) if all_lines else len(code_lines(text, name))
+            total += count
+    return total
+
+
 def metrics(
     base: str,
     head: str = "HEAD",
@@ -433,9 +465,14 @@ def metrics(
         name: dict(original=0, retired=0, glue=0) for name in AREAS
     }
     after = source_metrics(BASELINE, head, after_glue, all_lines, areas, retired_lines)
+    generated_before = generated_glue(base, all_lines)
+    generated_after = generated_glue(head, all_lines)
+    after["glue"] += generated_after
+    areas[GENERATED_AREA]["glue"] += generated_after
     result["retired"] = after["retired"] - before["retired"]
-    result["net_glue"] = after["glue"] - before["glue"]
-    result["glue"], result["glue_removed"] = 0, 0
+    result["net_glue"] = after["glue"] - before["glue"] - generated_before
+    result["glue"] = max(generated_after - generated_before, 0)
+    result["glue_removed"] = max(generated_before - generated_after, 0)
     # Compare fork line identities, excluding restored original lines and
     # including unchanged fork lines whose WITH_RUST compilation state changes.
     for status, old, new in changes(base, head):
