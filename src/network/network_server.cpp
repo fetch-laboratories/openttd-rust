@@ -1592,7 +1592,7 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 			cs->SetInfo(ci);
 			ci->join_date = TimerGameEconomy::date;
 			ci->client_name = std::move(*static_cast<std::string *>(name));
-			ci->client_playas = company;
+			ci->client_playas = CompanyID(company);
 			ci->public_key = cs->peer_public_key;
 			Debug(desync, 1, "client: {:08x}; {:02x}; {:02x}; {:02x}", TimerGameEconomy::date, TimerGameEconomy::date_fract, ci->client_playas, ci->index); },
 		.auth_request = [](void *socket) noexcept -> uint8_t { return static_cast<NetworkClientSocket *>(socket)->SendAuthRequest(); },
