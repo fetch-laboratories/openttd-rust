@@ -72,7 +72,7 @@ extern "C" void openttd_orders_destroy(void *data, size_t length) noexcept
 extern "C" uint64_t openttd_orders_last_station(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return v->last_station_visited.base();
+	return v->GetLastStationVisited().base();
 }
 
 extern "C" uint64_t openttd_orders_ownerless_station(uint16_t station, uint8_t if_valid) noexcept
@@ -86,13 +86,13 @@ extern "C" uint64_t openttd_orders_ownerless_station(uint16_t station, uint8_t i
 extern "C" uint64_t openttd_orders_vehicle_type(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return v->type;
+	return v->GetType();
 }
 
 extern "C" uint64_t openttd_orders_vehicle_status(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return v->vehstatus.base();
+	return v->GetVehStatus().base();
 }
 
 
@@ -120,7 +120,7 @@ extern "C" uint64_t openttd_orders_timetable_year_limit() noexcept
 extern "C" uint64_t openttd_orders_stopped_or_crashed(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return v->vehstatus.Any({VehState::Stopped, VehState::Crashed});
+	return v->GetVehStatus().Any({VehState::Stopped, VehState::Crashed});
 }
 
 extern "C" void *openttd_orders_allocate_list() noexcept
@@ -137,7 +137,7 @@ extern "C" uint64_t openttd_orders_suppress_implicit(void *ctx) noexcept
 extern "C" uint64_t openttd_orders_shared_window(void *ctx, void *first) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return VehicleListIdentifier(VL_SHARED_ORDERS, v->type, v->owner, static_cast<Vehicle *>(first)->index).ToWindowNumber();
+	return VehicleListIdentifier(VL_SHARED_ORDERS, v->GetType(), v->GetOwner(), static_cast<Vehicle *>(first)->index).ToWindowNumber();
 }
 
 extern "C" uint64_t openttd_orders_vehicle_id(void *ctx) noexcept
@@ -182,7 +182,7 @@ extern "C" uint64_t openttd_orders_depot_tile(uint16_t destination) noexcept
 extern "C" uint64_t openttd_orders_destination_tile(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return v->dest_tile.base();
+	return v->GetDestTile().base();
 }
 
 extern "C" uint64_t openttd_orders_aircraft_flying(void *ctx) noexcept
@@ -205,7 +205,7 @@ extern "C" uint64_t openttd_orders_waypoint_tile(uint16_t destination) noexcept
 extern "C" uint64_t openttd_orders_at_station(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return IsTileType(v->tile, MP_STATION);
+	return IsTileType(v->GetTile(), MP_STATION);
 }
 
 extern "C" uint64_t openttd_orders_valid_station(uint16_t destination) noexcept
@@ -335,7 +335,7 @@ extern "C" uint64_t openttd_orders_default_group() noexcept
 extern "C" uint64_t openttd_orders_vehicle_tile(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return v->tile.base();
+	return v->GetTile().base();
 }
 
 extern "C" uint64_t openttd_orders_vehicle_group(void *ctx) noexcept
@@ -360,7 +360,7 @@ extern "C" uint64_t openttd_orders_review_setting() noexcept
 extern "C" uint64_t openttd_orders_local_owner(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return v->owner == _local_company;
+	return v->GetOwner() == _local_company;
 }
 
 extern "C" uint64_t openttd_orders_fast_aircraft(void *ctx) noexcept
@@ -417,27 +417,27 @@ extern "C" void openttd_orders_suppress_implicit_write(void *ctx, uint8_t suppre
 
 extern "C" void openttd_orders_invalidate_vehicle_list(void *ctx) noexcept
 {
-	InvalidateWindowClassesData(GetWindowClassForVehicleType(static_cast<Vehicle *>(ctx)->type), 0);
+	InvalidateWindowClassesData(GetWindowClassForVehicleType(static_cast<Vehicle *>(ctx)->GetType()), 0);
 }
 
 extern "C" void openttd_orders_close_shared_window(void *ctx, uint32_t window) noexcept
 {
-	CloseWindowById(GetWindowClassForVehicleType(static_cast<Vehicle *>(ctx)->type), window);
+	CloseWindowById(GetWindowClassForVehicleType(static_cast<Vehicle *>(ctx)->GetType()), window);
 }
 
 extern "C" void openttd_orders_invalidate_shared_window(void *ctx, uint32_t window, int32_t data) noexcept
 {
-	InvalidateWindowData(GetWindowClassForVehicleType(static_cast<Vehicle *>(ctx)->type), window, static_cast<int>(data));
+	InvalidateWindowData(GetWindowClassForVehicleType(static_cast<Vehicle *>(ctx)->GetType()), window, static_cast<int>(data));
 }
 
 extern "C" void openttd_orders_last_station_write(void *ctx, uint16_t station) noexcept
 {
-	static_cast<Vehicle *>(ctx)->last_station_visited = StationID(station);
+	static_cast<Vehicle *>(ctx)->SetLastStationVisited(StationID(station));
 }
 
 extern "C" void openttd_orders_dirty_vehicle_windows(void *ctx) noexcept
 {
-	SetWindowClassesDirty(GetWindowClassForVehicleType(static_cast<Vehicle *>(ctx)->type));
+	SetWindowClassesDirty(GetWindowClassForVehicleType(static_cast<Vehicle *>(ctx)->GetType()));
 }
 
 extern "C" void openttd_orders_capture_backup_metadata(void *ctx, void *source_context) noexcept
@@ -1230,7 +1230,7 @@ bool ProcessOrders(Vehicle *v)
  */
 bool Order::ShouldStopAtStation(const Vehicle *v, StationID station) const
 {
-	return openttd_rust_order_should_stop(const_cast<Order *>(this), v->last_station_visited.base(), station.base()) != 0;
+	return openttd_rust_order_should_stop(const_cast<Order *>(this), v->GetLastStationVisited().base(), station.base()) != 0;
 }
 
 bool Order::CanLoadOrUnload() const

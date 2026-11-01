@@ -358,7 +358,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		bool refit = v->current_order.IsRefit();
 		return {
 			.ticks = RustVehicleLoadUnloadTicks(handle),
-			.vehicle_type = v->type,
+			.vehicle_type = v->GetType(),
 			.unload_type = to_underlying(RustVehicleOrderUnloadType(v)),
 			.load_type = to_underlying(RustVehicleOrderLoadType(v)),
 			.refit_cargo = refit ? v->current_order.GetRefitCargo() : uint8_t(0),
@@ -375,7 +375,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		return {
 			.capacity = capacity,
 			.cargo = capacity != 0 ? v->cargo_type : uint8_t(0),
-			.vehicle_type = v->type,
+			.vehicle_type = v->GetType(),
 			.unloading = capacity != 0 && v->vehicle_flags.Test(VehicleFlag::CargoUnloading),
 		};
 	},
@@ -391,8 +391,8 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		int speed;
 		switch (kind) {
 			case VEH_TRAIN:
-			case VEH_SHIP: speed = front->vcache.cached_max_speed; break;
-			case VEH_ROAD: speed = front->vcache.cached_max_speed / 2; break;
+			case VEH_SHIP: speed = front->Record().cached_max_speed; break;
+			case VEH_ROAD: speed = front->Record().cached_max_speed / 2; break;
 			case VEH_AIRCRAFT: speed = Aircraft::From(front)->GetSpeedOldUnits(); break;
 			default: NOT_REACHED();
 		}
@@ -440,7 +440,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	.cargo_reservation = [](OpenTTDVehicle *handle) noexcept -> OpenTTDCargoReservation {
 		Vehicle *v = VehicleOf(handle);
 		return {
-			static_cast<uint64_t>(EngInfo(v->engine_type)->refit_mask), v->cargo.ReservedCount(), RustVehicleCargoCap(handle), v->cargo_type
+			static_cast<uint64_t>(EngInfo(v->GetEngineType())->refit_mask), v->cargo.ReservedCount(), RustVehicleCargoCap(handle), v->cargo_type
 		};
 	},
 	.cargo_capacity = [](OpenTTDVehicle *handle) noexcept -> OpenTTDCargoCapacity {
@@ -516,7 +516,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	.order_time = GetRustVehicleServices().order_time,
 	.refit_mask = [](OpenTTDVehicle *handle) noexcept -> uint64_t {
 		Vehicle *v = VehicleOf(handle);
-		return static_cast<uint64_t>(EngInfo(v->engine_type)->refit_mask);
+		return static_cast<uint64_t>(EngInfo(v->GetEngineType())->refit_mask);
 	},
 	.set_cargo_unloading = [](OpenTTDVehicle *handle, bool value) noexcept -> void {
 		Vehicle *front = VehicleOf(handle);
@@ -545,18 +545,18 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	},
 	.vehicle_dirty = [](OpenTTDVehicle *handle) noexcept -> void {
 		Vehicle *front = VehicleOf(handle);
-		SetWindowDirty(GetWindowClassForVehicleType(front->type), front->owner);
+		SetWindowDirty(GetWindowClassForVehicleType(front->GetType()), front->GetOwner());
 		SetWindowDirty(WC_VEHICLE_DETAILS, front->index);
 		front->MarkDirty();
 	},
 	.indicator = [](OpenTTDVehicle *handle) noexcept -> bool {
 		const Vehicle *front = VehicleOf(handle);
-		return _game_mode != GM_MENU && (_settings_client.gui.loading_indicators > (uint)(front->owner != _local_company && _local_company != COMPANY_SPECTATOR));
+		return _game_mode != GM_MENU && (_settings_client.gui.loading_indicators > (uint)(front->GetOwner() != _local_company && _local_company != COMPANY_SPECTATOR));
 	},
 	.show_indicator = [](OpenTTDVehicle *handle, uint8_t percent, uint32_t percent_up_down) noexcept -> void {
 		Vehicle *front = VehicleOf(handle);
 		if (front->fill_percent_te_id == INVALID_TE_ID) {
-			front->fill_percent_te_id = ShowFillingPercent(front->x_pos, front->y_pos, front->z_pos + 20, percent, percent_up_down);
+			front->fill_percent_te_id = ShowFillingPercent(front->Record().x_pos, front->Record().y_pos, front->Record().z_pos + 20, percent, percent_up_down);
 		} else {
 			UpdateFillingPercent(front->fill_percent_te_id, percent, percent_up_down);
 		}

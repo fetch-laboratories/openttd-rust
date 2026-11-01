@@ -651,7 +651,7 @@ public:
 				uint64_t occupancy = 0;
 
 				for (const Vehicle * const v : this->vehicles) {
-					assert(v->owner == this->owner);
+					assert(v->GetOwner() == this->owner);
 
 					this_year += v->GetDisplayProfitThisYear();
 					last_year += v->GetDisplayProfitLastYear();
@@ -1248,7 +1248,7 @@ void ShowCompanyGroup(CompanyID company, VehicleType vehicle_type, GroupID group
  */
 void ShowCompanyGroupForVehicle(const Vehicle *v)
 {
-	ShowCompanyGroupInternal<true>(v->owner, v->type, v->group_id);
+	ShowCompanyGroupInternal<true>(v->GetOwner(), v->GetType(), v->group_id);
 }
 
 /**
@@ -1311,6 +1311,6 @@ void DeleteGroupHighlightOfVehicle(const Vehicle *v)
 	 */
 	if (_special_mouse_mode != WSM_DRAGDROP) return;
 
-	VehicleGroupWindow *w = FindVehicleGroupWindow(v->type, v->owner);
+	VehicleGroupWindow *w = FindVehicleGroupWindow(v->GetType(), v->GetOwner());
 	if (w != nullptr) w->UnselectVehicle(v->index);
 }

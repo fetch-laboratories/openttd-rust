@@ -239,7 +239,7 @@ void InitializeWindowViewport(Window *w, int x, int y,
 
 		vp->follow_vehicle = std::get<VehicleID>(focus);
 		veh = Vehicle::Get(vp->follow_vehicle);
-		pt = MapXYZToViewport(*vp, veh->x_pos, veh->y_pos, veh->z_pos);
+		pt = MapXYZToViewport(*vp, veh->Record().x_pos, veh->Record().y_pos, veh->Record().z_pos);
 	} else {
 		TileIndex tile = std::get<TileIndex>(focus);
 		if (tile == INVALID_TILE) {
@@ -1991,7 +1991,7 @@ void UpdateViewportPosition(Window *w, uint32_t delta_ms)
 
 	if (vp.follow_vehicle != VehicleID::Invalid()) {
 		const Vehicle *veh = Vehicle::Get(vp.follow_vehicle);
-		Point pt = MapXYZToViewport(vp, veh->x_pos, veh->y_pos, veh->z_pos);
+		Point pt = MapXYZToViewport(vp, veh->Record().x_pos, veh->Record().y_pos, veh->Record().z_pos);
 
 		vp.scrollpos_x = pt.x;
 		vp.scrollpos_y = pt.y;
@@ -2513,7 +2513,7 @@ bool HandleViewportClicked(const Viewport &vp, int x, int y)
 		Debug(misc, 2, "Vehicle {} (index {}) at {}", v->unitnumber, v->index, fmt::ptr(v));
 		if (IsCompanyBuildableVehicleType(v)) {
 			v = v->First();
-			if (_ctrl_pressed && v->owner == _local_company) {
+			if (_ctrl_pressed && v->GetOwner() == _local_company) {
 				StartStopVehicle(v, true);
 			} else {
 				ShowVehicleViewWindow(v);

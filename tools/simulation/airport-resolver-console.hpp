@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file airport-resolver-console.hpp Actual transient Action2 programs on both games. */
 #include "newgrf_airporttiles.h"
+#include "vehicle-record-fixture.hpp"
 static AirportSpec *AirportFixtureBaseSpec(uint8_t type)
 {
 #ifdef WITH_RUST
@@ -286,6 +287,6 @@ static void AirportDefinitionFixture(TileIndex origin, DoCommandFlags test, DoCo
 	AnimateAirportTile(at); StationNeed(GetAnimationFrame(at) == 3, __LINE__);
 	fmt::print(stderr, "STCMD airport-def-callbacks {} {} {}\n", station->index.base(), callback.ResolveCallback({}), GetAnimationFrame(at));
 	fmt::print(stderr, "STCMD airport-def-occupied {} {} {} {}\n", station->airport.type, GetAirportGfx(at), spec->grf_prop.grfid, tile_spec->grf_prop.local_id);
-	for (Aircraft *plane : Aircraft::Iterate()) if (plane->name == "Airport definition plane") fmt::print(stderr, "STCMD airport-def-plane {} {} {} {}\n", plane->index.base(), plane->x_pos, plane->y_pos, plane->z_pos);
+	for (Aircraft *plane : Aircraft::Iterate()) if (plane->name == "Airport definition plane") fmt::print(stderr, "STCMD airport-def-plane {} {} {} {}\n", plane->index.base(), FIXTURE_FIELD(plane, x_pos), FIXTURE_FIELD(plane, y_pos), FIXTURE_FIELD(plane, z_pos));
 	fmt::print(stderr, "STCMD airport-def-rng {} {}\n", _random.state[0], _random.state[1]);
 }

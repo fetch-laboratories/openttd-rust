@@ -28,7 +28,7 @@
 			for (CargoPacket *cp : *packets) {
 				auto f = cp->Export();
 				StationID first(f.first_station);
-				f.source_xy = (Station::IsValidID(first) ? Station::Get(first)->xy : v->tile).base();
+				f.source_xy = (Station::IsValidID(first) ? Station::Get(first)->xy : v->GetTile()).base();
 				cp->Import(f);
 			}
 		}

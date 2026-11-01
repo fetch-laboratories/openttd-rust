@@ -64,7 +64,7 @@ void UnreserveRailTrack(TileIndex tile, Track t) { openttd_rust_pbs_unreserve(&G
 
 PBSTileInfo FollowTrainReservation(const Train *v, Vehicle **other)
 {
-	assert(v->type == VEH_TRAIN);
+	assert(v->GetType() == VEH_TRAIN);
 	auto result = openttd_rust_pbs_follow_train(&GetPbsServices(), TrainHandle(v), reinterpret_cast<OpenTTDPbsTrainOutput *>(other));
 	return {TileIndex{result.tile}, static_cast<Trackdir>(result.td), result.okay != 0};
 }

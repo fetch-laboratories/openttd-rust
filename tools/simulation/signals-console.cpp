@@ -9,6 +9,7 @@
 /* signal.cpp is included by the scenario adapter builder before this file, so
  * portable work sets are visible without changing the pinned source checkout. */
 #include "console_internal.h"
+#include "vehicle-record-fixture.hpp"
 #include "console_func.h"
 #include "command_func.h"
 #include "company_func.h"
@@ -423,9 +424,9 @@ static bool SignalsScenario(std::span<std::string_view> args)
 	UpdateSignalsInBuffer();
 	if (args[1] == "inspect") { SignalPending("reload"); return true; }
 	Train *train = nullptr;
-	for (Vehicle *v : Vehicle::Iterate()) if (v->type == VEH_TRAIN && Train::From(v)->IsFrontEngine()) { train = Train::From(v); break; }
+	for (Vehicle *v : Vehicle::Iterate()) if (FIXTURE_GET(v, Type, type) == VEH_TRAIN && Train::From(v)->IsFrontEngine()) { train = Train::From(v); break; }
 	if (train == nullptr) SignalFixtureAbort(__LINE__);
-	Owner owner = train->owner;
+	Owner owner = FIXTURE_GET(train, Owner, owner);
 	Backup<CompanyID> company(_current_company, owner);
 	if (args[1] == "overflow") { SignalOverflowLayout(owner); company.Restore(); return true; }
 	if (args[1] == "rail-commands") { RailCommandsLayout(owner); company.Restore(); return true; }

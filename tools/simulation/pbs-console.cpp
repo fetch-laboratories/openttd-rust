@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file pbs-console.cpp Transient endpoint/output and trigger-order gap against unchanged bodies. */
 #include "stdafx.h"
+#include "vehicle-record-fixture.hpp"
 #include "viewport_func.h"
 #include "vehicle_func.h"
 #include "newgrf_station.h"
@@ -115,7 +116,7 @@ static bool PbsProbe([[maybe_unused]] std::span<std::string_view> args)
 	const auto original = PbsMapRead(); const Randomizer random = _random; uint32_t checked = 0;
 	for (Train *v : Train::Iterate()) if (v->IsFrontEngine()) {
 		for (Vehicle *initial : {static_cast<Vehicle *>(nullptr), static_cast<Vehicle *>(v)}) { Vehicle *a = initial, *b = initial; PbsRequire(PbsSame(PbsOriginalFollowTrainReservation(v, &a), FollowTrainReservation(v, &b)) && a == b); ++checked; }
-		for (bool end : {false, true}) for (bool no90 : {false, true}) { PbsRequire(PbsOriginalIsSafeWaitingPosition(v, v->tile, v->GetVehicleTrackdir(), end, no90) == IsSafeWaitingPosition(v, v->tile, v->GetVehicleTrackdir(), end, no90)); PbsRequire(PbsOriginalIsWaitingPositionFree(v, v->tile, v->GetVehicleTrackdir(), no90) == IsWaitingPositionFree(v, v->tile, v->GetVehicleTrackdir(), no90)); }
+		for (bool end : {false, true}) for (bool no90 : {false, true}) { PbsRequire(PbsOriginalIsSafeWaitingPosition(v, FIXTURE_GET(v, Tile, tile), v->GetVehicleTrackdir(), end, no90) == IsSafeWaitingPosition(v, FIXTURE_GET(v, Tile, tile), v->GetVehicleTrackdir(), end, no90)); PbsRequire(PbsOriginalIsWaitingPositionFree(v, FIXTURE_GET(v, Tile, tile), v->GetVehicleTrackdir(), no90) == IsWaitingPositionFree(v, FIXTURE_GET(v, Tile, tile), v->GetVehicleTrackdir(), no90)); }
 	}
 	for (TileIndex t(0); t < Map::Size(); ++t) {
 		PbsRequire(PbsOriginalGetReservedTrackbits(t) == GetReservedTrackbits(t));
@@ -134,7 +135,7 @@ static bool PbsProbe([[maybe_unused]] std::span<std::string_view> args)
 	PbsRequire(PbsCheckMask(a, TRACKDIR_LOWER_W));
 	PbsRequire(PbsSame(PbsOriginalFollowReservation(Owner(0), RailTypes(1), a, TRACKDIR_LOWER_W), PbsFollow(Owner(0), RailTypes(1), a, TRACKDIR_LOWER_W))); PbsRequire(GetTrainForReservation(a, TRACK_LOWER) == PbsOriginalGetTrainForReservation(a, TRACK_LOWER));
 	std::vector<std::tuple<Train *, TileIndex, TrackBits>> moved;
-	for (Train *v : Train::Iterate()) if (v->IsFrontEngine() && !v->vehstatus.Test(VehState::Crashed) && moved.size() < 2) { moved.emplace_back(v, v->tile, PbsTrainTrack(v)); v->tile = tiles[1]; PbsTrainTrack(v, TRACK_BIT_WORMHOLE); v->UpdatePosition(); }
+	for (Train *v : Train::Iterate()) if (v->IsFrontEngine() && !FIXTURE_GET(v, VehStatus, vehstatus).Test(VehState::Crashed) && moved.size() < 2) { moved.emplace_back(v, FIXTURE_GET(v, Tile, tile), PbsTrainTrack(v)); FIXTURE_SET(v, Tile, tile, tiles[1]); PbsTrainTrack(v, TRACK_BIT_WORMHOLE); v->UpdatePosition(); }
 	PbsRequire(moved.size() == 2);
 	PbsRequire(!IsWaitingPositionFree(std::get<0>(moved[0]), a, TRACKDIR_LOWER_W, false));
 	PbsRequire(moved.size() == 2 && GetTrainForReservation(a, TRACK_LOWER) == std::get<0>(moved[0]) && GetTrainForReservation(a, TRACK_LOWER) == PbsOriginalGetTrainForReservation(a, TRACK_LOWER));
@@ -144,7 +145,7 @@ static bool PbsProbe([[maybe_unused]] std::span<std::string_view> args)
 	SetPresentSignals(tiles[1], SignalAlongTrackdir(TRACKDIR_RIGHT_N)); PbsRequire(PbsSame(PbsOriginalFollowReservation(Owner(0), RailTypes(1), a, TRACKDIR_LOWER_W), PbsFollow(Owner(0), RailTypes(1), a, TRACKDIR_LOWER_W)));
 	SetSignalType(tiles[1], TRACK_RIGHT, SIGTYPE_PBS_ONEWAY); for (bool end : {false, true}) PbsRequire(PbsOriginalIsSafeWaitingPosition(std::get<0>(moved[0]), a, TRACKDIR_LOWER_W, end, false) == IsSafeWaitingPosition(std::get<0>(moved[0]), a, TRACKDIR_LOWER_W, end, false));
 	SetPresentSignals(tiles[1], SignalAlongTrackdir(TRACKDIR_RIGHT_S)); PbsRequire(GetTrainForReservation(tiles[1], TRACK_RIGHT) == PbsOriginalGetTrainForReservation(tiles[1], TRACK_RIGHT));
-	for (auto [v, tile, track] : moved) { v->tile = tile; PbsTrainTrack(v, track); v->UpdatePosition(); }
+	for (auto [v, tile, track] : moved) { FIXTURE_SET(v, Tile, tile, tile); PbsTrainTrack(v, track); v->UpdatePosition(); }
 	PbsMapRestore(original);
 	/* The 2006 input has a rail tunnel and road bridges. Add a native rail bridge
 	 * for the transient end query without changing pool or infrastructure state. */
@@ -156,8 +157,8 @@ static bool PbsProbe([[maybe_unused]] std::span<std::string_view> args)
 	/* The other end can hold the train even when the queried end has no vehicle. */
 	for (bool bridge : {false, true}) for (TileIndex t(0); t < Map::Size(); ++t) if (IsTileType(t, MP_TUNNELBRIDGE) && GetTunnelBridgeTransportType(t) == TRANSPORT_RAIL && IsBridgeTile(t) == bridge) {
 		bool occupied = false; for ([[maybe_unused]] Vehicle *v : VehiclesOnTile(t)) occupied = true; if (occupied) continue;
-		Train *v = std::get<0>(moved[0]); const TileIndex old = v->tile; const TrackBits track = PbsTrainTrack(v); const TileIndex other = GetOtherTunnelBridgeEnd(t); SetTunnelBridgeReservation(t, true); SetTunnelBridgeReservation(other, false); v->tile = other; PbsTrainTrack(v, TRACK_BIT_WORMHOLE); v->UpdatePosition();
-		PbsRequire(GetTrainForReservation(t, DiagDirToDiagTrack(GetTunnelBridgeDirection(t))) == v && PbsOriginalGetTrainForReservation(t, DiagDirToDiagTrack(GetTunnelBridgeDirection(t))) == v); ++ends[bridge]; v->tile = old; PbsTrainTrack(v, track); v->UpdatePosition(); PbsMapRestore(cleared); break;
+		Train *v = std::get<0>(moved[0]); const TileIndex old = FIXTURE_GET(v, Tile, tile); const TrackBits track = PbsTrainTrack(v); const TileIndex other = GetOtherTunnelBridgeEnd(t); SetTunnelBridgeReservation(t, true); SetTunnelBridgeReservation(other, false); FIXTURE_SET(v, Tile, tile, other); PbsTrainTrack(v, TRACK_BIT_WORMHOLE); v->UpdatePosition();
+		PbsRequire(GetTrainForReservation(t, DiagDirToDiagTrack(GetTunnelBridgeDirection(t))) == v && PbsOriginalGetTrainForReservation(t, DiagDirToDiagTrack(GetTunnelBridgeDirection(t))) == v); ++ends[bridge]; FIXTURE_SET(v, Tile, tile, old); PbsTrainTrack(v, track); v->UpdatePosition(); PbsMapRestore(cleared); break;
 	}
 	PbsMapRestore(original); _random = random; fmt::print(stderr, "PBS checked {}\nPBS ends {} {}\n", checked, ends[0], ends[1]); PbsRequire(checked != 0); return true;
 }
@@ -233,8 +234,8 @@ static bool FollowerProbe([[maybe_unused]] std::span<std::string_view> args)
 	FollowerCase("platform_reserved", free, old, TRACKDIR_X_NE, false, 5, true);
 	RoadVehicle *v = nullptr; for (RoadVehicle *r : RoadVehicle::Iterate()) { v = r; break; }
 	PbsRequire(v != nullptr);
-	const Owner owner = v->owner; const RoadType type = v->roadtype; const RoadTypes compatible = v->compatible_roadtypes;
-	v->owner = Owner(0); v->roadtype = ROADTYPE_ROAD; v->compatible_roadtypes = RoadTypes{1};
+	const Owner owner = FIXTURE_GET(v, Owner, owner); const RoadType type = v->roadtype; const RoadTypes compatible = v->compatible_roadtypes;
+	FIXTURE_SET(v, Owner, owner, Owner(0)); v->roadtype = ROADTYPE_ROAD; v->compatible_roadtypes = RoadTypes{1};
 	const auto road = [&](RoadBits bits = ROAD_X, bool tram = false) {
 		clear(); for (const TileIndex t : {old, tile}) MakeRoadNormal(t, bits, tram ? INVALID_ROADTYPE : ROADTYPE_ROAD, tram ? ROADTYPE_TRAM : INVALID_ROADTYPE, TownID(0), Owner(0), Owner(0));
 	};
@@ -259,7 +260,7 @@ static bool FollowerProbe([[maybe_unused]] std::span<std::string_view> args)
 	FollowerCase("tram_type", tram, old, TRACKDIR_X_NE, false, 2);
 	v->compatible_roadtypes = RoadTypes{uint64_t{1} << ROADTYPE_TRAM};
 	road(ROAD_NE, true); FollowerCase("tram_bad_exit", tram, old, TRACKDIR_Y_SE, false, 4);
-	v->owner = owner; v->roadtype = type; v->compatible_roadtypes = compatible;
+	FIXTURE_SET(v, Owner, owner, owner); v->roadtype = type; v->compatible_roadtypes = compatible;
 	clear(); MakeSea(old); MakeSea(tile);
 	FollowerProbeWater water;
 	FollowerCase("water", water, old, TRACKDIR_X_NE, true, 0);

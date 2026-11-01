@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /* Subsidy control boundaries and actual final-delivery payments on the stock save. */
 #include "news_func.h"
+#include "vehicle-record-fixture.hpp"
 #include "strings_func.h"
 #include "table/strings.h"
 #include "ai/ai.hpp"
@@ -37,7 +38,7 @@ static bool SubsidyScenario(std::span<std::string_view> args)
 	AutoRestoreBackup<Randomizer> interactive_seed(_interactive_random, _interactive_random);
 	_interactive_random.SetSeed(12345);
 	SubsidyClean();
-	Vehicle *front = nullptr; for (Vehicle *v : Vehicle::Iterate()) if (v->type == VEH_TRAIN && v->IsPrimaryVehicle() && v->cargo_payment == nullptr) { front = v; break; }
+	Vehicle *front = nullptr; for (Vehicle *v : Vehicle::Iterate()) if (FIXTURE_GET(v, Type, type) == VEH_TRAIN && v->IsPrimaryVehicle() && v->cargo_payment == nullptr) { front = v; break; }
 	if (front == nullptr || Town::GetNumItems() < 2 || Industry::GetNumItems() < 2) FixtureAbort(__LINE__);
 	CargoType cargo = CargoSpec::town_production_cargoes[TPE_PASSENGERS][0]->Index();
 	/* The loaded catchment of a passenger-accepting station covers town a's houses
@@ -58,16 +59,16 @@ static bool SubsidyScenario(std::span<std::string_view> args)
 	Industry *i = nullptr; for (Industry *ind : Industry::Iterate()) if (i == nullptr && !lists(ind)) i = ind;
 	if (b == nullptr || i == nullptr) FixtureAbort(__LINE__);
 	Backup<CompanyID> current(_current_company, OWNER_DEITY);
-	Backup<StationID> last(front->last_station_visited, st->index);
+	Backup<FIXTURE_FIELD_TYPE(front, last_station_visited)> last(FIXTURE_FIELD(front, last_station_visited), FixtureRaw(st->index));
 	fmt::print(stderr, "SUBSIDY nearby true\n");
 	Source town{a->index, SourceType::Town}, other{b->index, SourceType::Town}, industry{i->index, SourceType::Industry}, destination{j->index, SourceType::Industry};
 	bool commands = true; for (Source src : {town, industry}) for (Source dst : {town, destination}) { commands &= CmdCreateSubsidy({}, cargo, src, dst).Succeeded(); commands &= CmdCreateSubsidy(DoCommandFlag::Execute, cargo, src, dst).Succeeded(); }
 	commands &= CmdCreateSubsidy(DoCommandFlag::Execute, cargo, town, town).Succeeded(); // duplicates/self routes remain legal
 	bool refusals = CmdCreateSubsidy({}, INVALID_CARGO, town, other).Failed() && CmdCreateSubsidy({}, cargo, {Source::Invalid, SourceType::Town}, other).Failed();
-	current.Change(front->owner); refusals &= CmdCreateSubsidy({}, cargo, town, other).Failed(); current.Change(OWNER_DEITY);
+	current.Change(FIXTURE_GET(front, Owner, owner)); refusals &= CmdCreateSubsidy({}, cargo, town, other).Failed(); current.Change(OWNER_DEITY);
 	fmt::print(stderr, "SUBSIDY commands {} {}\n", commands, refusals);
-	bool classes = CheckSubsidised(cargo, front->owner, town, st) && CheckSubsidised(cargo, front->owner, industry, st);
-	bool rival = !CheckSubsidised(cargo, CompanyID((front->owner.base() + 1) % 15), town, st);
+	bool classes = CheckSubsidised(cargo, FIXTURE_GET(front, Owner, owner), town, st) && CheckSubsidised(cargo, FIXTURE_GET(front, Owner, owner), industry, st);
+	bool rival = !CheckSubsidised(cargo, CompanyID((FIXTURE_GET(front, Owner, owner).base() + 1) % 15), town, st);
 	fmt::print(stderr, "SUBSIDY classes {} {}\n", classes, rival);
 	bool multipliers = true;
 	for (uint8_t multiplier = 0; multiplier < 4; ++multiplier) {
@@ -79,11 +80,11 @@ static bool SubsidyScenario(std::span<std::string_view> args)
 		payment->PayFinalDelivery(cargo, cp, 10, tile);
 		Money expected = multiplier == 0 ? base + (base >> 1) : base * (multiplier + 1);
 		multipliers &= base > 0 && payment->route_profit == expected;
-		for (Subsidy *s : Subsidy::Iterate()) multipliers &= (s->awarded == front->owner) == (s->dst == town || s->dst == destination);
+		for (Subsidy *s : Subsidy::Iterate()) multipliers &= (s->awarded == FIXTURE_GET(front, Owner, owner)) == (s->dst == town || s->dst == destination);
 		payment->route_profit = payment->visual_profit = payment->visual_transfer = 0; delete payment; delete cp;
 	}
 	fmt::print(stderr, "SUBSIDY multipliers {}\n", multipliers);
-	SubsidyClean(); _settings_game.difficulty.subsidy_duration = 65535; Subsidy *s = FixtureSubsidy(cargo, town, town, 0); RebuildSubsidisedSourceAndDestinationCache(); CheckSubsidised(cargo, front->owner, town, st);
+	SubsidyClean(); _settings_game.difficulty.subsidy_duration = 65535; Subsidy *s = FixtureSubsidy(cargo, town, town, 0); RebuildSubsidisedSourceAndDestinationCache(); CheckSubsidised(cargo, FIXTURE_GET(front, Owner, owner), town, st);
 	#ifdef WITH_RUST
 	if (&s->cargo_type != &s->rust_state->cargo_type || &s->remaining != &s->rust_state->remaining || &s->awarded != &s->rust_state->awarded || &s->src != &s->rust_state->src || &s->dst != &s->rust_state->dst) FixtureAbort(__LINE__);
 #endif
@@ -113,7 +114,7 @@ static bool SubsidyScenario(std::span<std::string_view> args)
 	}
 	for (auto [field, value] : histories) { *field = value; } for (auto [t, value] : populations) { t->cache.population = value; }
 	fmt::print(stderr, "SUBSIDY routes {} {} {}\n", found[0], found[1], found[2]); SubsidyClean();
-	if (!Company::CanAllocateItem()) { FixtureAbort(__LINE__); } Company *empty = new Company(); s = FixtureSubsidy(cargo, industry, other, 12); s->awarded = empty->index; RebuildSubsidisedSourceAndDestinationCache(); ChangeOwnershipOfCompanyItems(empty->index, front->owner); bool transfer = s->awarded == front->owner;
+	if (!Company::CanAllocateItem()) { FixtureAbort(__LINE__); } Company *empty = new Company(); s = FixtureSubsidy(cargo, industry, other, 12); s->awarded = empty->index; RebuildSubsidisedSourceAndDestinationCache(); ChangeOwnershipOfCompanyItems(empty->index, FIXTURE_GET(front, Owner, owner)); bool transfer = s->awarded == FIXTURE_GET(front, Owner, owner);
 	s->awarded = empty->index; ChangeOwnershipOfCompanyItems(empty->index, INVALID_OWNER); bool removed = Subsidy::GetNumItems() == 0; delete empty;
 	s = FixtureSubsidy(cargo, industry, other, 12); RebuildSubsidisedSourceAndDestinationCache();
 #ifdef WITH_RUST
@@ -123,7 +124,7 @@ static bool SubsidyScenario(std::span<std::string_view> args)
 #endif
 	removed &= Subsidy::GetNumItems() == 0;
 	fmt::print(stderr, "SUBSIDY transfer {} {}\n", transfer, removed);
-	s = FixtureSubsidy(cargo, town, other, 54321); s->awarded = front->owner; RebuildSubsidisedSourceAndDestinationCache();
+	s = FixtureSubsidy(cargo, town, other, 54321); s->awarded = FIXTURE_GET(front, Owner, owner); RebuildSubsidisedSourceAndDestinationCache();
 	last.Restore(); current.Restore();
 	if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
 	return true;

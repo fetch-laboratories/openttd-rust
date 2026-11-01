@@ -294,8 +294,8 @@ static void Co_set_town_exclusivity(uint32_t id, uint8_t owner, uint8_t counter)
 static uint32_t Co_vehicle_next_owned(uint8_t owner, uint32_t from, uint8_t *type) noexcept
 {
 	for (const Vehicle *v : Vehicle::Iterate(from)) {
-		if (v->owner != CompanyID(owner)) continue;
-		*type = v->type;
+		if (v->GetOwner() != CompanyID(owner)) continue;
+		*type = v->GetType();
 		return v->index.base();
 	}
 	return UINT32_MAX;

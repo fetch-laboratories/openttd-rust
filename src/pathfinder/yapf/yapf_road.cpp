@@ -25,7 +25,7 @@
 static OpenTTDRoadYapfInput RoadInput(const RoadVehicle *v)
 {
 	const auto &s = _settings_game.pf.yapf;
-	return {Map::SizeX(), Map::SizeY(), v->tile.base(), v->dest_tile.base(), static_cast<int32_t>(s.max_search_nodes), static_cast<int32_t>(s.road_slope_penalty), static_cast<int32_t>(s.road_crossing_penalty), static_cast<int32_t>(s.road_stop_penalty), static_cast<int32_t>(s.road_stop_occupied_penalty), static_cast<int32_t>(s.road_stop_bay_occupied_penalty), static_cast<int32_t>(s.road_curve_penalty), v->current_order.GetDestination().base(), static_cast<uint8_t>(v->current_order.GetType()), v->IsBus(), v->HasArticulatedPart(), static_cast<uint8_t>(v->GetVehicleTrackdir())};
+	return {Map::SizeX(), Map::SizeY(), v->GetTile().base(), v->GetDestTile().base(), static_cast<int32_t>(s.max_search_nodes), static_cast<int32_t>(s.road_slope_penalty), static_cast<int32_t>(s.road_crossing_penalty), static_cast<int32_t>(s.road_stop_penalty), static_cast<int32_t>(s.road_stop_occupied_penalty), static_cast<int32_t>(s.road_stop_bay_occupied_penalty), static_cast<int32_t>(s.road_curve_penalty), v->current_order.GetDestination().base(), static_cast<uint8_t>(v->current_order.GetType()), v->IsBus(), v->HasArticulatedPart(), static_cast<uint8_t>(v->GetVehicleTrackdir())};
 }
 
 static OpenTTDRoadYapfTile RoadTile(const void *, uint32_t index, uint8_t td, bool cost) noexcept
@@ -47,7 +47,7 @@ static OpenTTDRoadYapfTile RoadTile(const void *, uint32_t index, uint8_t td, bo
 
 static uint32_t RoadClosest(const void *ctx, uint16_t station, uint8_t type) noexcept
 {
-	return CalcClosestStationTile(StationID(station), VehicleOf(static_cast<const OpenTTDVehicle *>(ctx))->tile, static_cast<StationType>(type)).base();
+	return CalcClosestStationTile(StationID(station), VehicleOf(static_cast<const OpenTTDVehicle *>(ctx))->GetTile(), static_cast<StationType>(type)).base();
 }
 
 static const OpenTTDRoadYapfLeaves _road_yapf_leaves{.shared = &_rust_shared_services, .tile = RoadTile, .closest = RoadClosest};

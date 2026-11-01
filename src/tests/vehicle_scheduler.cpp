@@ -32,7 +32,7 @@ static std::vector<uint32_t> _lifetime_visits;
 static bool _lifetime_mutate;
 static uint32_t _lifetime_growth;
 struct SchedulerLifetimeVehicle final : Vehicle {
-	SchedulerLifetimeVehicle() : Vehicle(VEH_EFFECT) { this->vehstatus.Set(VehState::Hidden); }
+	SchedulerLifetimeVehicle() : Vehicle(VEH_EFFECT) { this->SetVehStatus(this->GetVehStatus().Set(VehState::Hidden)); }
 	bool Tick() override
 	{
 		const auto id = this->index.base();
@@ -126,18 +126,18 @@ TEST_CASE("Aircraft phase boundary - canonical movement scalar address identity"
 	{
 		const auto movement = services.movement_observations(RustVehicle(v));
 		const auto position = services.position_observations(RustVehicle(v));
-		static_assert(std::is_same_v<decltype(movement.x), const decltype(v->x_pos) *>);
-		static_assert(std::is_same_v<decltype(movement.y), const decltype(v->y_pos) *>);
-		static_assert(std::is_same_v<decltype(position.z), const decltype(v->z_pos) *>);
-		static_assert(std::is_same_v<decltype(movement.speed), const decltype(v->cur_speed) *>);
-		static_assert(std::is_same_v<decltype(movement.direction), const Direction *>);
+		static_assert(std::is_same_v<decltype(movement.x), const decltype(v->Record().x_pos) *>);
+		static_assert(std::is_same_v<decltype(movement.y), const decltype(v->Record().y_pos) *>);
+		static_assert(std::is_same_v<decltype(position.z), const decltype(v->Record().z_pos) *>);
+		static_assert(std::is_same_v<decltype(movement.speed), const decltype(v->Record().cur_speed) *>);
+		static_assert(std::is_same_v<decltype(movement.direction), const uint8_t *>);
 		static_assert(sizeof(Direction) == sizeof(uint8_t));
-		CHECK(movement.x == &v->x_pos);
-		CHECK(movement.y == &v->y_pos);
-		CHECK(movement.speed == &v->cur_speed);
-		CHECK(movement.direction == &v->direction);
-		CHECK(movement.position.subtype == &v->subtype);
-		CHECK(movement.position.z == &v->z_pos);
+		CHECK(movement.x == &v->Record().x_pos);
+		CHECK(movement.y == &v->Record().y_pos);
+		CHECK(movement.speed == &v->Record().cur_speed);
+		CHECK(movement.direction == &v->Record().direction);
+		CHECK(movement.position.subtype == &v->Record().subtype);
+		CHECK(movement.position.z == &v->Record().z_pos);
 		CHECK(position.z == movement.position.z);
 		CHECK(position.subtype == movement.position.subtype);
 		services.write_coordinates(RustVehicle(v), -31, 49, 77);
@@ -170,32 +170,32 @@ TEST_CASE("Base vehicle scheduler - scalar member identity and lifetime")
 	static_assert(std::is_same_v<decltype(post.counter), uint16_t *>);
 	static_assert(std::is_same_v<decltype(post.motion), uint32_t *>);
 	static_assert(std::is_same_v<decltype(post.speed), const uint16_t *>);
-	static_assert(std::is_same_v<decltype(post.front_type), const VehicleType *>);
+	static_assert(std::is_same_v<decltype(post.front_type), const uint8_t *>);
 	static_assert(std::is_same_v<decltype(post.front_status), const uint8_t *>);
 	static_assert(std::is_same_v<decltype(post.status), const uint8_t *>);
-	static_assert(std::is_same_v<decltype(v->vehstatus.base_address()), const uint8_t *>);
+	static_assert(std::is_same_v<decltype(&std::as_const(*v).Record().vehstatus), const uint8_t *>);
 	CHECK(post.type == VEH_ROAD);
 	CHECK(part->First() == v);
-	CHECK(post.period == &part->vcache.cached_cargo_age_period);
-	CHECK(post.counter == &part->cargo_age_counter);
-	CHECK(post.motion == &part->motion_counter);
-	CHECK(post.speed == &v->cur_speed);
-	CHECK(post.front_type == &v->type);
-	CHECK(post.subtype == &part->subtype);
-	CHECK(post.tick == &part->tick_counter);
-	CHECK(post.front_status == v->vehstatus.base_address());
-	CHECK(post.status == part->vehstatus.base_address());
+	CHECK(post.period == &part->Record().cached_cargo_age_period);
+	CHECK(post.counter == &part->Record().cargo_age_counter);
+	CHECK(post.motion == &part->Record().motion_counter);
+	CHECK(post.speed == &v->Record().cur_speed);
+	CHECK(post.front_type == &v->Record().type);
+	CHECK(post.subtype == &part->Record().subtype);
+	CHECK(post.tick == &part->Record().tick_counter);
+	CHECK(post.front_status == &v->Record().vehstatus);
+	CHECK(post.status == &part->Record().vehstatus);
 	CHECK(post.front_status != post.status);
-	v->vehstatus.Set(VehState::Stopped);
-	part->vehstatus.Set(VehState::Hidden);
+	v->SetVehStatus(v->GetVehStatus().Set(VehState::Stopped));
+	part->SetVehStatus(part->GetVehStatus().Set(VehState::Hidden));
 	CHECK(*post.front_status == RustVehicleStatus(v));
 	CHECK(*post.status == RustVehicleStatus(part));
-	v->vehstatus.Reset(VehState::Stopped);
+	v->SetVehStatus(v->GetVehStatus().Reset(VehState::Stopped));
 	CHECK(*post.front_status == 0);
 	*post.counter = UINT16_MAX;
 	*post.motion = UINT32_MAX;
-	CHECK(part->cargo_age_counter == UINT16_MAX);
-	CHECK(part->motion_counter == UINT32_MAX);
+	CHECK(part->Record().cargo_age_counter == UINT16_MAX);
+	CHECK(part->Record().motion_counter == UINT32_MAX);
 	const auto old_id = v->index;
 	const auto grow_id = VehicleID(static_cast<uint32_t>(_vehicle_pool.data.size()));
 	REQUIRE(Vehicle::CanAllocateItem());
@@ -206,7 +206,7 @@ TEST_CASE("Base vehicle scheduler - scalar member identity and lifetime")
 	REQUIRE(Vehicle::CanAllocateItem());
 	auto *reused = new (old_id) Vehicle(VEH_ROAD);
 	const auto fresh = SurvivingPostTick(reused);
-	CHECK(fresh.counter == &reused->cargo_age_counter);
+	CHECK(fresh.counter == &reused->Record().cargo_age_counter);
 	CHECK(*fresh.counter == 1);
 	CHECK(*fresh.motion == 0);
 	_vehicle_pool.CleanPool();
@@ -293,7 +293,7 @@ struct SchedulerProbeVehicle final : Vehicle {
 		if (this->index.base() == 0) {
 			CHECK(Vehicle::CanAllocateItem());
 			new (VehicleID(static_cast<uint32_t>(_vehicle_pool.data.size()))) SchedulerProbeVehicle();
-			this->type = VEH_DISASTER;
+			this->SetType(VEH_DISASTER);
 			return true;
 		}
 		delete this;
@@ -392,31 +392,31 @@ TEST_CASE("Vehicle maintenance native scalar stores and cadence")
 	v->value = Money{-257};
 	DecreaseVehicleValue(v);
 	CHECK(v->value == -255);
-	v->breakdown_ctr = 1;
+	v->Record().breakdown_ctr = 1;
 	v->breakdown_delay = 3;
-	v->type = VEH_TRAIN;
+	v->SetType(VEH_TRAIN);
 	for (uint8_t tick : {1, 2, 3}) {
-		v->tick_counter = tick;
+		v->Record().tick_counter = tick;
 		CHECK(v->HandleBreakdown());
 		CHECK(v->breakdown_delay == 3);
 	}
-	v->tick_counter = 4;
+	v->Record().tick_counter = 4;
 	CHECK(v->HandleBreakdown());
 	CHECK(v->breakdown_delay == 2);
-	v->type = VEH_ROAD;
+	v->SetType(VEH_ROAD);
 	v->breakdown_delay = 1;
-	v->tick_counter = 2;
+	v->Record().tick_counter = 2;
 	CHECK(v->HandleBreakdown());
-	CHECK(v->breakdown_ctr == 0);
+	CHECK(v->Record().breakdown_ctr == 0);
 	CHECK(v->breakdown_delay == 0);
-	v->type = VEH_AIRCRAFT;
-	v->breakdown_ctr = 1;
+	v->SetType(VEH_AIRCRAFT);
+	v->Record().breakdown_ctr = 1;
 	v->breakdown_delay = 1;
 	CHECK_FALSE(v->HandleBreakdown());
 	CHECK(v->breakdown_delay == 1);
-	CHECK(v->breakdown_ctr == 1);
-	v->type = VEH_ROAD;
-	v->breakdown_ctr = 1;
+	CHECK(v->Record().breakdown_ctr == 1);
+	v->SetType(VEH_ROAD);
+	v->Record().breakdown_ctr = 1;
 	v->breakdown_delay = 0;
 	CHECK(v->HandleBreakdown());
 	CHECK(v->breakdown_delay == 255); // Native uint8_t pre-decrement wraps.
@@ -428,31 +428,31 @@ TEST_CASE("Vehicle maintenance native scalar stores and cadence")
 	base.play_vehicle_sound = [](OpenTTDVehicle *handle, VehicleSoundEvent event) noexcept {
 		CHECK(event == VSE_BREAKDOWN);
 		Vehicle *current = VehicleOf(handle);
-		CHECK(current->cur_speed == 0);
-		CHECK(current->breakdown_ctr == 1);
+		CHECK(current->Record().cur_speed == 0);
+		CHECK(current->Record().breakdown_ctr == 1);
 		CHECK(current->breakdowns_since_last_service == 255);
-		current->vehstatus.Set(VehState::Hidden);
+		current->SetVehStatus(current->GetVehStatus().Set(VehState::Hidden));
 		return true;
 	};
 	maintenance.mark_dirty = [](OpenTTDVehicle *handle) noexcept {
-		CHECK(VehicleOf(handle)->vehstatus.Test(VehState::Hidden));
-		VehicleOf(handle)->type = VEH_AIRCRAFT;
+		CHECK(VehicleOf(handle)->GetVehStatus().Test(VehState::Hidden));
+		VehicleOf(handle)->SetType(VEH_AIRCRAFT);
 	};
-	v->cur_speed = 10;
-	v->breakdown_ctr = 2;
+	v->Record().cur_speed = 10;
+	v->Record().breakdown_ctr = 2;
 	v->breakdown_delay = 5;
 	v->breakdowns_since_last_service = 255;
 	CHECK_FALSE(openttd_rust_vehicle_handle_breakdown(RustVehicle(v), &base));
 	CHECK(v->breakdown_delay == 5);
-	CHECK(v->type == VEH_AIRCRAFT);
-	v->type = VEH_EFFECT;
-	v->breakdown_ctr = 3;
+	CHECK(v->GetType() == VEH_AIRCRAFT);
+	v->SetType(VEH_EFFECT);
+	v->Record().breakdown_ctr = 3;
 	v->current_order.MakeLoading(false);
 	CHECK_FALSE(v->HandleBreakdown());
-	CHECK(v->breakdown_ctr == 3);
+	CHECK(v->Record().breakdown_ctr == 3);
 	v->current_order.MakeDummy();
 	CHECK_FALSE(v->HandleBreakdown());
-	CHECK(v->breakdown_ctr == 2);
+	CHECK(v->Record().breakdown_ctr == 2);
 	pool.CleanPool();
 	CHECK(Vehicle::GetNumItems() == 0);
 }
@@ -462,27 +462,28 @@ TEST_CASE("Vehicle occupancy - canonical links, stale removal and copied cursors
 	Map::Allocate(64, 64);
 	REQUIRE(Vehicle::CanAllocateItem(2));
 	auto *a = new Vehicle(VEH_ROAD), *b = new Vehicle(VEH_ROAD);
-	a->tile = b->tile = TileXY(1, 1);
+	a->SetTile(TileXY(1, 1));
+	b->SetTile(TileXY(1, 1));
 	for (auto t : {TileXY(1, 1), TileXY(2, 1), TileXY(1, 2), TileXY(2, 2)}) SetTileHeight(t, 1);
-	a->z_pos = b->z_pos = 8;
+	a->Record().z_pos = b->Record().z_pos = 8;
 	a->UpdatePosition(); b->UpdatePosition();
-	REQUIRE(GetTileMaxPixelZ(a->tile) == 8);
-	CHECK(EnsureNoVehicleOnGround(a->tile).Failed());
-	a->z_pos = b->z_pos = 9;
-	CHECK(EnsureNoVehicleOnGround(a->tile).Succeeded());
+	REQUIRE(GetTileMaxPixelZ(a->GetTile()) == 8);
+	CHECK(EnsureNoVehicleOnGround(a->GetTile()).Failed());
+	a->Record().z_pos = b->Record().z_pos = 9;
+	CHECK(EnsureNoVehicleOnGround(a->GetTile()).Succeeded());
 	const auto &s = GetRustVehicleServices();
 	CHECK(s.tile_links(RustVehicle(a)) == &a->tile_links);
 	CHECK(s.tile_links(RustVehicle(b)) == &b->tile_links);
 	const auto update = s.occupancy_update(RustVehicle(a));
 	CHECK(update.links == &a->tile_links);
-	CHECK(update.tile == a->tile.base());
-	a->x_pos = 17; a->y_pos = 29;
+	CHECK(update.tile == a->GetTile().base());
+	a->Record().x_pos = 17; a->Record().y_pos = 29;
 	const auto near = s.occupancy_near(RustVehicle(a));
 	CHECK(near.links == &a->tile_links);
 	CHECK(near.xy.x == 17); CHECK(near.xy.y == 29);
 	CHECK(b->tile_links.next == RustVehicle(a));
 	CHECK(a->tile_links.prev == &b->tile_links.next);
-	auto it = VehiclesOnTile(a->tile).begin(), copy = it;
+	auto it = VehiclesOnTile(a->GetTile()).begin(), copy = it;
 	// Removal must not read tile, dimensions or either normal observation.
 	auto removal = s;
 	removal.tile = [](OpenTTDVehicle *) noexcept -> uint32_t { CHECK(false); return 0; };
@@ -498,6 +499,6 @@ TEST_CASE("Vehicle occupancy - canonical links, stale removal and copied cursors
 	CHECK(a->tile_links.current == nullptr);
 	CHECK(b->tile_links.next == RustVehicle(a));
 	a->UpdatePosition(); b->UpdatePosition();
-	CHECK(*VehiclesOnTile(a->tile).begin() == b);
+	CHECK(*VehiclesOnTile(a->GetTile()).begin() == b);
 	delete b; delete a;
 }

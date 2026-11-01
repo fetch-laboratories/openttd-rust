@@ -12,7 +12,7 @@
 /* Typed tick-end services. Rust owns ordering and policy; native CommandCost
  * and presentation encoding stay on the native caller stack. Vehicle, owner,
  * locality and CommandCost reads reuse the group and transaction tables. */
-static void FleetPending_restart(void *shell) noexcept { static_cast<Vehicle *>(shell)->vehstatus.Reset(VehState::Stopped); }
+static void FleetPending_restart(void *shell) noexcept { Vehicle *v = static_cast<Vehicle *>(shell); v->SetVehStatus(v->GetVehStatus().Reset(VehState::Stopped)); }
 static void FleetPending_subtract(int64_t amount) noexcept { SubtractMoneyFromCompany(CommandCost(EXPENSES_NEW_VEHICLES, Money(amount))); }
 static void FleetPending_command(void *out, uint32_t id) noexcept { *static_cast<CommandCost *>(out) = Command<CMD_AUTOREPLACE_VEHICLE>::Do(DoCommandFlag::Execute, VehicleID(id)); }
 static void FleetPending_length_news(uint32_t id) noexcept { AddVehicleAdviceNewsItem(AdviceType::AutorenewFailed, GetEncodedString(STR_ERROR_TRAIN_TOO_LONG_AFTER_REPLACEMENT, VehicleID(id)), VehicleID(id)); }

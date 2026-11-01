@@ -157,7 +157,7 @@ void RoadVehicle::GetImage(Direction direction, EngineImageType image_type, Vehi
 	assert(IsValidImageIndex<VEH_ROAD>(spritenum));
 	SpriteID sprite = direction + _roadveh_images[spritenum];
 
-	if (this->cargo.StoredCount() >= this->cargo_cap / 2U) sprite += _roadveh_full_adder[spritenum];
+	if (this->cargo.StoredCount() >= this->Record().cargo_cap / 2U) sprite += _roadveh_full_adder[spritenum];
 
 	result->Set(sprite);
 }
@@ -229,7 +229,7 @@ void RoadVehUpdateCache(RoadVehicle *v, bool same_length)
 
 static FindDepotData FindClosestRoadDepot(const RoadVehicle *v, int max_distance)
 {
-	if (IsRoadDepotTile(v->tile)) return FindDepotData(v->tile, 0);
+	if (IsRoadDepotTile(v->GetTile())) return FindDepotData(v->GetTile(), 0);
 
 	return YapfRoadVehicleFindNearestDepot(v, max_distance);
 }
@@ -255,7 +255,7 @@ CommandCost CmdTurnRoadVeh(DoCommandFlags flags, VehicleID veh_id)
 
 	if (!v->IsPrimaryVehicle()) return CMD_ERROR;
 
-	CommandCost ret = CheckOwnership(v->owner);
+	CommandCost ret = CheckOwnership(v->GetOwner());
 	if (ret.Failed()) return ret;
 
 	if (!openttd_rust_road_turn(RustVehicle(v), v->GetRustState(), flags.Test(DoCommandFlag::Execute), &GetRoadLeaves())) return CMD_ERROR;
@@ -278,7 +278,7 @@ void RoadVehicle::UpdateDeltaXY()
 	/* Set common defaults. */
 	this->bounds = {{-1, -1, 0}, {3, 3, 6}, {}};
 
-	if (!IsDiagonalDirection(this->direction)) {
+	if (!IsDiagonalDirection(this->GetDirection())) {
 		static const Point _sign_table[] = {
 			/* x, y */
 			{-1, -1}, // DIR_N
@@ -290,11 +290,11 @@ void RoadVehicle::UpdateDeltaXY()
 		int half_shorten = (VEHICLE_LENGTH - this->gcache.cached_veh_length) / 2;
 
 		/* For all straight directions, move the bound box to the centre of the vehicle, but keep the size. */
-		this->bounds.offset.x -= half_shorten * _sign_table[DirToDiagDir(this->direction)].x;
-		this->bounds.offset.y -= half_shorten * _sign_table[DirToDiagDir(this->direction)].y;
+		this->bounds.offset.x -= half_shorten * _sign_table[DirToDiagDir(this->GetDirection())].x;
+		this->bounds.offset.y -= half_shorten * _sign_table[DirToDiagDir(this->GetDirection())].y;
 	} else {
 		/* Unlike trains, road vehicles do not have their offsets moved to the centre. */
-		switch (this->direction) {
+		switch (this->GetDirection()) {
 				/* Shorten southern corner of the bounding box according the vehicle length. */
 			case DIR_NE:
 				this->bounds.origin.x = -3;
@@ -364,7 +364,7 @@ uint RoadVehicle::Crash(bool flooded)
 
 TileIndex RoadVehicle::GetOrderStationLocation(StationID station)
 {
-	if (station == this->last_station_visited) this->last_station_visited = StationID::Invalid();
+	if (station == this->GetLastStationVisited()) this->SetLastStationVisited(StationID::Invalid());
 
 	const Station *st = Station::Get(station);
 	if (!CanVehicleUseStation(this, st)) {
@@ -461,7 +461,7 @@ bool RoadVehicle::Tick()
 
 void RoadVehicle::SetDestTile(TileIndex tile)
 {
-	openttd_rust_road_set_dest(RustVehicle(this), this->GetRustState(), tile.base(), this->dest_tile.base(), &GetRoadLeaves());
+	openttd_rust_road_set_dest(RustVehicle(this), this->GetRustState(), tile.base(), this->GetDestTile().base(), &GetRoadLeaves());
 }
 
 

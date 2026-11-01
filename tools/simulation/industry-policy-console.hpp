@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file industry-policy-console.hpp Industry timer consequences on real pool shells. */
 #include "company_type.h"
+#include "vehicle-record-fixture.hpp"
 #include "economy_type.h"
 #include "news_gui.h"
 #include "news_func.h"
@@ -40,7 +41,7 @@ static bool IndustryPolicy(std::span<std::string_view> args)
 	if (args.size() < 2) return false;
 	if (args[1] == "inspect") { _interactive_random.SetSeed(0x60100002); IndustryPolicyObserve(); fmt::print(stderr, "INDUSTRY-POLICY complete true\n"); return true; }
 	Vehicle *vehicle = nullptr;
-	for (Vehicle *v : Vehicle::Iterate()) if (v->type == VEH_ROAD && v->GetNumOrders() != 0) { vehicle = v; break; }
+	for (Vehicle *v : Vehicle::Iterate()) if (FIXTURE_GET(v, Type, type) == VEH_ROAD && v->GetNumOrders() != 0) { vehicle = v; break; }
 	IndustryPolicyRequire(vehicle != nullptr);
 	Backup<CompanyID> local(_local_company);
 	Backup<CargoType> cargo(vehicle->cargo_type);
@@ -48,7 +49,7 @@ static bool IndustryPolicy(std::span<std::string_view> args)
 	_settings_game.economy.type = ET_SMOOTH;
 	_random.SetSeed(0x601); _interactive_random.SetSeed(0x60100001);
 	for (uint outcome = 0; outcome < 3; ++outcome) {
-		local.Change(outcome == 2 ? vehicle->owner : CompanyID{OWNER_NONE});
+		local.Change(outcome == 2 ? FIXTURE_GET(vehicle, Owner, owner) : CompanyID{OWNER_NONE});
 		Industry *ind = nullptr;
 		for (Industry *candidate : Industry::Iterate()) {
 			const auto *spec = GetIndustrySpec(candidate->type);

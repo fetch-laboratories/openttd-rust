@@ -569,8 +569,8 @@ const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept
 		.aircraft_pose = [](OpenTTDVehicle *v) noexcept { Vehicle *u = VehicleOf(v); return OpenTTDAircraftFloodPose{.tile = RustVehicleTile(u), .z = RustVehicleZ(u), .subtype = RustVehicleSubtype(u)}; },
 		.ground_pose = [](OpenTTDVehicle *v) noexcept { Vehicle *u = VehicleOf(v); return OpenTTDGroundFloodPose{.z = RustVehicleZ(u), .first = RustVehicle(RustVehicleFirst(u))}; },
 		.crash = [](OpenTTDVehicle *v) noexcept { return VehicleOf(v)->Crash(true); },
-		.ai_event = [](OpenTTDVehicle *v, uint32_t victims) noexcept { Vehicle *u = VehicleOf(v); AI::NewEvent(u->owner, new ScriptEventVehicleCrashed(u->index, u->tile, ScriptEventVehicleCrashed::CRASH_FLOODED, victims, u->owner)); },
-		.game_event = [](OpenTTDVehicle *v, uint32_t victims) noexcept { Vehicle *u = VehicleOf(v); Game::NewEvent(new ScriptEventVehicleCrashed(u->index, u->tile, ScriptEventVehicleCrashed::CRASH_FLOODED, victims, u->owner)); },
+		.ai_event = [](OpenTTDVehicle *v, uint32_t victims) noexcept { Vehicle *u = VehicleOf(v); AI::NewEvent(u->GetOwner(), new ScriptEventVehicleCrashed(u->index, u->GetTile(), ScriptEventVehicleCrashed::CRASH_FLOODED, victims, u->GetOwner())); },
+		.game_event = [](OpenTTDVehicle *v, uint32_t victims) noexcept { Vehicle *u = VehicleOf(v); Game::NewEvent(new ScriptEventVehicleCrashed(u->index, u->GetTile(), ScriptEventVehicleCrashed::CRASH_FLOODED, victims, u->GetOwner())); },
 		.news = [](OpenTTDVehicle *v, uint32_t victims) noexcept { AddTileNewsItem(GetEncodedString(STR_NEWS_DISASTER_FLOOD_VEHICLE, victims), NewsType::Accident, TileIndex{RustVehicleTile(VehicleOf(v))}); },
 	};
 	return services;

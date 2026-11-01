@@ -23,7 +23,7 @@ static struct AircraftBoundaryProbe {
 	unsigned orders = 0, deleted = 0, ticks = 0, rotor_reads = 0, moves = 0;
 	int32_t order_time = 0, x = 0, y = 0, z = 1;
 	uint8_t order_kind = 0, progress = 0, subtype = 2;
-	Direction direction = DIR_N;
+	uint8_t direction = DIR_N;
 	uint16_t maximum_speed = 0, cargo_age = 0;
 	bool live = true;
 } aircraft_probe;

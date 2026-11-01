@@ -211,7 +211,7 @@ struct Train final : public GroundVehicle<Train, VEH_TRAIN> {
 	bool IsPrimaryVehicle() const override { return this->IsFrontEngine(); }
 	void GetImage(Direction direction, EngineImageType image_type, VehicleSpriteSeq *result) const override;
 	int GetDisplaySpeed() const override { return this->gcache.last_speed; }
-	int GetDisplayMaxSpeed() const override { return this->vcache.cached_max_speed; }
+	int GetDisplayMaxSpeed() const override { return this->Record().cached_max_speed; }
 	Money GetRunningCost() const override;
 	int GetCursorImageOffset() const;
 	int GetDisplayImageWidth(Point *offset = nullptr) const;
@@ -351,7 +351,7 @@ protected: // These functions should not be called outside acceleration code.
 	 */
 	inline int16_t GetCurveSpeedModifier() const
 	{
-		return GetVehicleProperty(this, PROP_TRAIN_CURVE_SPEED_MOD, RailVehInfo(this->engine_type)->curve_speed_mod, true);
+		return GetVehicleProperty(this, PROP_TRAIN_CURVE_SPEED_MOD, RailVehInfo(this->GetEngineType())->curve_speed_mod, true);
 	}
 
 	/**

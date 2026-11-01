@@ -231,7 +231,7 @@ inline bool IsCompanyBuildableVehicleType(VehicleType type)
  */
 inline bool IsCompanyBuildableVehicleType(const BaseVehicle *v)
 {
-	return IsCompanyBuildableVehicleType(v->type);
+	return IsCompanyBuildableVehicleType(v->GetType());
 }
 
 LiveryScheme GetEngineLiveryScheme(EngineID engine_type, EngineID parent_engine_type, const Vehicle *v);
@@ -255,7 +255,7 @@ inline StringID GetCmdBuildVehMsg(VehicleType type)
 
 inline StringID GetCmdBuildVehMsg(const BaseVehicle *v)
 {
-	return GetCmdBuildVehMsg(v->type);
+	return GetCmdBuildVehMsg(v->GetType());
 }
 
 inline StringID GetCmdSellVehMsg(VehicleType type)
@@ -265,7 +265,7 @@ inline StringID GetCmdSellVehMsg(VehicleType type)
 
 inline StringID GetCmdSellVehMsg(const BaseVehicle *v)
 {
-	return GetCmdSellVehMsg(v->type);
+	return GetCmdSellVehMsg(v->GetType());
 }
 
 inline StringID GetCmdSellAllVehMsg(VehicleType type)
@@ -285,7 +285,7 @@ inline StringID GetCmdRefitVehMsg(VehicleType type)
 
 inline StringID GetCmdRefitVehMsg(const BaseVehicle *v)
 {
-	return GetCmdRefitVehMsg(v->type);
+	return GetCmdRefitVehMsg(v->GetType());
 }
 
 inline StringID GetCmdSendToDepotMsg(VehicleType type)
@@ -295,7 +295,7 @@ inline StringID GetCmdSendToDepotMsg(VehicleType type)
 
 inline StringID GetCmdSendToDepotMsg(const BaseVehicle *v)
 {
-	return GetCmdSendToDepotMsg(v->type);
+	return GetCmdSendToDepotMsg(v->GetType());
 }
 
 CommandCost EnsureNoVehicleOnGround(TileIndex tile);

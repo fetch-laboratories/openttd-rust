@@ -292,29 +292,29 @@ TEST_CASE("Road tick prologue - actual scalar places and nonfront entry")
 {
 	REQUIRE(Vehicle::CanAllocateItem());
 	auto *v = new RoadVehicle();
-	v->subtype = 1 << GVSF_FRONT;
+	v->Record().subtype = 1 << GVSF_FRONT;
 	{
 		const auto read = RustRoadTickRead(v);
 		static_assert(std::is_same_v<decltype(read.status), const uint8_t *>);
-		static_assert(std::is_same_v<decltype(read.running), const decltype(v->running_ticks) *>);
+		static_assert(std::is_same_v<decltype(read.running), const decltype(v->Record().running_ticks) *>);
 		static_assert(std::is_same_v<decltype(read.order_time), const std::remove_reference_t<decltype(v->current_order_time)> *>);
 		CHECK(read.movement.ground == v->rust_ground.state);
 		CHECK(static_cast<void *>(read.movement.ground) != static_cast<void *>(v->GetRustState()));
-		CHECK(read.status == v->vehstatus.base_address());
-		CHECK(read.running == &v->running_ticks);
+		CHECK(read.status == &v->Record().vehstatus);
+		CHECK(read.running == &v->Record().running_ticks);
 		CHECK(read.order_time == &v->current_order_time);
-		v->running_ticks = UINT8_MAX;
+		v->Record().running_ticks = UINT8_MAX;
 		v->current_order_time = INT32_MAX;
-		v->vehstatus = {VehState::Stopped};
+		v->SetVehStatus({VehState::Stopped});
 		CHECK(*read.running == RustVehicleRunning(v));
 		CHECK(*read.order_time == RustVehicleOrderTime(v));
 		CHECK(*read.status == RustVehicleStatus(v));
 	}
-	v->subtype = 0;
-	v->tick_counter = UINT8_MAX;
+	v->Record().subtype = 0;
+	v->Record().tick_counter = UINT8_MAX;
 	CHECK(v->Tick()); // Actual nonfront entry consumes no front-only place or callback.
-	CHECK(v->tick_counter == 0);
-	CHECK(v->running_ticks == UINT8_MAX);
+	CHECK(v->Record().tick_counter == 0);
+	CHECK(v->Record().running_ticks == UINT8_MAX);
 	CHECK(v->current_order_time == INT32_MAX);
 	_vehicle_pool.CleanPool();
 }
@@ -342,10 +342,10 @@ TEST_CASE("Road links - ground owners follow the current consist")
 TEST_CASE("Road visual eligibility precedes maximum-speed lookup")
 {
 	REQUIRE(Vehicle::CanAllocateItem());
-	auto *road = new RoadVehicle(); road->subtype = 1 << GVSF_FRONT;
+	auto *road = new RoadVehicle(); road->Record().subtype = 1 << GVSF_FRONT;
 	const auto saved_smoke = _settings_game.vehicle.smoke_amount;
 	for (uint8_t smoke : {0, 1, 2}) for (uint8_t status : {0, 1, 2, 16, 128}) for (uint16_t speed : {0, 1, 2}) {
-		_settings_game.vehicle.smoke_amount = smoke; road->vehstatus = VehStates{status}; road->cur_speed = speed;
+		_settings_game.vehicle.smoke_amount = smoke; road->SetVehStatus(VehStates{status}); road->Record().cur_speed = speed;
 		CHECK(road->VisualEffectEligible() == (smoke != 0 && (status & 18) == 0 && speed >= 2));
 	}
 	_settings_game.vehicle.smoke_amount = saved_smoke; _vehicle_pool.CleanPool();

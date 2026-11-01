@@ -26,9 +26,9 @@ static OpenTTDShipYapfDestination ShipDestination(const void *context) noexcept
 {
 	const Ship *v = static_cast<const Ship *>(context);
 	if (v->current_order.IsType(OT_GOTO_STATION)) {
-		return {.tile = CalcClosestStationTile(v->current_order.GetDestination().ToStationID(), v->tile, StationType::Dock).base(), .station = true};
+		return {.tile = CalcClosestStationTile(v->current_order.GetDestination().ToStationID(), v->GetTile(), StationType::Dock).base(), .station = true};
 	}
-	return {.tile = v->dest_tile.base(), .station = false};
+	return {.tile = v->GetDestTile().base(), .station = false};
 }
 static OpenTTDShipTile ShipTile(const void *context, uint32_t tile, uint8_t cost) noexcept
 {
@@ -38,7 +38,7 @@ static OpenTTDShipTile ShipTile(const void *context, uint32_t tile, uint8_t cost
 	if (cost == 0) return {0, static_cast<uint8_t>(docking), 0, 0,
 		static_cast<uint8_t>(docking && IsShipDestinationTile(t, v->current_order.GetDestination().ToStationID()))};
 	uint count = 0;
-	if (docking) count = std::ranges::count_if(VehiclesOnTile(t), [](const Vehicle *other) { return other->type == VEH_SHIP && !other->vehstatus.Test(VehState::Hidden); });
+	if (docking) count = std::ranges::count_if(VehiclesOnTile(t), [](const Vehicle *other) { return other->GetType() == VEH_SHIP && !other->GetVehStatus().Test(VehState::Hidden); });
 	return {count, static_cast<uint8_t>(docking), static_cast<uint8_t>(GetEffectiveWaterClass(t) == WaterClass::Sea),
 		static_cast<uint8_t>(GetRustSharedServices().water_middle_lock(tile)),
 		0};
@@ -65,14 +65,14 @@ static const OpenTTDShipYapfLeaves _ship_yapf_leaves{
 
 static OpenTTDShipYapfInput ShipInput(const Ship *v, bool blocked = false)
 {
-	const auto *svi = ShipVehInfo(v->engine_type);
+	const auto *svi = ShipVehInfo(v->GetEngineType());
 	const bool station = v->current_order.IsType(OT_GOTO_STATION);
 	TrackdirBits reverse_dirs = TRACKDIR_BIT_NONE;
 	if (blocked) {
-		const DiagDirection entry = ReverseDiagDir(VehicleExitDir(v->direction, v->GetState()));
-		reverse_dirs = DiagdirReachesTrackdirs(entry) & TrackStatusToTrackdirBits(GetTileTrackStatus(v->tile, TRANSPORT_WATER, 0, entry));
+		const DiagDirection entry = ReverseDiagDir(VehicleExitDir(v->GetDirection(), v->GetState()));
+		reverse_dirs = DiagdirReachesTrackdirs(entry) & TrackStatusToTrackdirBits(GetTileTrackStatus(v->GetTile(), TRANSPORT_WATER, 0, entry));
 	}
-	return {Map::SizeX(), Map::SizeY(), v->tile.base(), v->dest_tile.base(), static_cast<int32_t>(_settings_game.pf.yapf.ship_curve90_penalty),
+	return {Map::SizeX(), Map::SizeY(), v->GetTile().base(), v->GetDestTile().base(), static_cast<int32_t>(_settings_game.pf.yapf.ship_curve90_penalty),
 		static_cast<int32_t>(_settings_game.pf.yapf.ship_curve45_penalty), svi->max_speed,
 		0, static_cast<uint16_t>(reverse_dirs), static_cast<uint8_t>(v->GetVehicleTrackdir()), svi->ocean_speed_frac, svi->canal_speed_frac, static_cast<uint8_t>(station), v->unitnumber};
 }
@@ -85,7 +85,7 @@ static std::vector<uint32_t> ShipOrigins(const Ship *v)
 			if (OpenTTDIsDockingTile(tile.base()) && IsShipDestinationTile(tile, station)) tiles.push_back(tile.base());
 		}
 	} else {
-		tiles.push_back(v->dest_tile.base());
+		tiles.push_back(v->GetDestTile().base());
 	}
 	return tiles;
 }

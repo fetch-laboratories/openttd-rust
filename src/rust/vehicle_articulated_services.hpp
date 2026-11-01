@@ -1,7 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file vehicle_articulated_services.hpp Native specification, pool and shell leaves. */
 #include "services_road.h"
-static void *VehicleArticPreparePrevious(void *shell) noexcept { Vehicle *v = static_cast<Vehicle *>(shell); auto *cache = v->GetGroundVehicleCache(); RustGroundSetFirstEngine(cache, v->engine_type); return cache; }
+static void *VehicleArticPreparePrevious(void *shell) noexcept { Vehicle *v = static_cast<Vehicle *>(shell); auto *cache = v->GetGroundVehicleCache(); RustGroundSetFirstEngine(cache, v->GetEngineType()); return cache; }
 template <class T> static void *VehicleArticNew(void *previous) noexcept { T *v = new T(); RustVehicleSetNext(static_cast<Vehicle *>(previous), v); RustVehicleSetSubtype(v, 0); return v; }
 static void VehicleArticRoadLength(void *cache) noexcept { static_cast<GroundVehicleCache *>(cache)->cached_veh_length = VEHICLE_LENGTH; }
 static void VehicleArticCopyRoadtype(void *shell, void *head) noexcept { RoadVehicle *v = static_cast<RoadVehicle *>(shell); const auto *first = static_cast<const RoadVehicle *>(head); v->roadtype = RustRoadVehicleType(first); v->compatible_roadtypes = first->compatible_roadtypes; }
@@ -20,12 +20,12 @@ static void VehicleArticCopyCommon(void *shell, void *head, uint16_t engine) noe
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);
 	const Vehicle *first = static_cast<Vehicle *>(head);
-	v->direction = first->direction; RustVehicleSetOwner(RustVehicle(v), RustVehicleOwner(first)); RustWriteVehicleTile(v, first->tile);
-	RustWriteVehicleX(v, first->x_pos); RustWriteVehicleY(v, first->y_pos); RustWriteVehicleZ(v, first->z_pos);
+	v->SetDirection(first->GetDirection()); RustVehicleSetOwner(RustVehicle(v), RustVehicleOwner(first)); RustWriteVehicleTile(v, first->GetTile());
+	RustWriteVehicleX(v, first->Record().x_pos); RustWriteVehicleY(v, first->Record().y_pos); RustWriteVehicleZ(v, first->Record().z_pos);
 	v->date_of_last_service = first->date_of_last_service;
 	v->date_of_last_service_newgrf = RustVehicleCalendarService(first);
 	v->build_year = RustVehicleBuildYear(first);
-	RustWriteVehicleStatus(v, first->vehstatus); v->vehstatus.Reset(VehState::Stopped);
+	RustWriteVehicleStatus(v, first->GetVehStatus()); v->SetVehStatus(v->GetVehStatus().Reset(VehState::Stopped));
 	RustVehicleSetCargoSubtype(RustVehicle(v), 0);
 	v->max_age = CalendarTime::MIN_DATE; RustVehicleSetEngine(RustVehicle(v), engine); v->value = 0;
 	RustWriteVehicleSpriteSequence(v, SPR_IMG_QUERY);

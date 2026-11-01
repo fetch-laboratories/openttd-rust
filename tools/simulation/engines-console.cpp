@@ -7,6 +7,7 @@
 
 /** @file engines-console.cpp Identical typed lifecycle inputs for both game bodies. */
 #include "stdafx.h"
+#include "vehicle-record-fixture.hpp"
 #include "console_internal.h"
 #include "command_func.h"
 #include "company_base.h"
@@ -53,7 +54,7 @@ static Engine *UnusedEngine(EngineID except = EngineID::Invalid())
 	for (Engine *e : Engine::IterateType(VEH_TRAIN)) {
 		if (e->index == except || e->VehInfo<RailVehicleInfo>().railveh_type == RAILVEH_WAGON || !e->IsEnabled()) continue;
 		bool used = false;
-		for (Vehicle *v : Vehicle::Iterate()) if (v->engine_type == e->index) used = true;
+		for (Vehicle *v : Vehicle::Iterate()) if (FIXTURE_GET(v, EngineType, engine_type) == e->index) used = true;
 		if (!used) return e;
 	}
 	FixtureAbort(__LINE__);
@@ -85,7 +86,7 @@ static bool EnginesScenario(std::span<std::string_view> args)
 	if (args[1].starts_with("monitors")) return MonitorScenario(args);
 	if (args[1].starts_with("subsidies")) return SubsidyScenario(args);
 	Company *c = nullptr;
-	for (Vehicle *v : Vehicle::Iterate()) if (v->type == VEH_TRAIN && v->GetEngine()->CanCarryCargo()) { c = Company::Get(v->owner); break; }
+	for (Vehicle *v : Vehicle::Iterate()) if (FIXTURE_GET(v, Type, type) == VEH_TRAIN && v->GetEngine()->CanCarryCargo()) { c = Company::Get(FIXTURE_GET(v, Owner, owner)); break; }
 	if (c == nullptr) FixtureAbort(__LINE__);
 	Backup<CompanyID> company(_current_company, c->index);
 	Engine *e = UnusedEngine();

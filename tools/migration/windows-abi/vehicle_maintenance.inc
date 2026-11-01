@@ -125,7 +125,7 @@ static void VehicleMaintenanceBoundary()
  * native size_t/pointer cursor calls on every platform. */
 static void VehicleSchedulerBoundary()
 {
-	using Status = decltype(std::declval<Vehicle>().vehstatus);
+	using Status = decltype(std::declval<Vehicle>().GetVehStatus());
 	static_assert(std::is_same_v<Status::BaseType, uint8_t>);
 	static_assert(std::is_same_v<decltype(RustVehicleStatusAddress(nullptr)), const uint8_t *>);
 	Status status;

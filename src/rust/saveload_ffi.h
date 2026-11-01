@@ -71,6 +71,7 @@ typedef struct OpenTTDSaveLoadServices {
 	uint32_t (*town_index)(const void *obj);
 	void *(*vehicle_get)(size_t index);
 	uint32_t (*vehicle_index)(const void *obj);
+	void *(*vehicle_record_get)(size_t index);
 	const uint8_t *(*string_data)(const void *ptr, size_t *length);
 	bool (*string_resize)(void *ptr, size_t length, uint8_t **data);
 	bool (*apply_encoded)(void *ptr, const OpenTTDRustEncodedView *view, const OpenTTDRustEncodedDiagnostic *diagnostics);

@@ -51,7 +51,7 @@ void Aircraft::UpdateDeltaXY()
 {
 	this->bounds = {{-1, -1, 0}, {2, 2, 0}, {}};
 
-	switch (this->subtype) {
+	switch (this->Record().subtype) {
 		default: NOT_REACHED();
 
 		case AIR_AIRCRAFT:
@@ -131,7 +131,7 @@ void Aircraft::GetImage(Direction direction, EngineImageType image_type, Vehicle
 
 void GetRotorImage(const Aircraft *v, EngineImageType image_type, VehicleSpriteSeq *result)
 {
-	assert(v->subtype == AIR_HELICOPTER);
+	assert(v->Record().subtype == AIR_HELICOPTER);
 
 	const Aircraft *w = v->Next()->Next();
 	if (IsCustomVehicleSpriteNum(v->spritenum)) {
@@ -215,7 +215,7 @@ void Aircraft::MarkDirty()
 {
 	this->colourmap = PAL_NONE;
 	this->UpdateViewport(true, false);
-	if (this->subtype == AIR_HELICOPTER) {
+	if (this->Record().subtype == AIR_HELICOPTER) {
 		GetRotorImage(this, EIT_ON_MAP, &this->Next()->Next()->sprite_cache.sprite_seq);
 	}
 }

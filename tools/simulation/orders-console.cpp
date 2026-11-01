@@ -7,6 +7,7 @@
 
 /** @file orders-console.cpp Identical native command adapter for the orders scenarios. */
 #include "stdafx.h"
+#include "vehicle-record-fixture.hpp"
 #include "console_internal.h"
 #include "command_func.h"
 #include "company_func.h"
@@ -50,13 +51,13 @@ static void ReservedDeparture()
 	 * units, reserve them through the real cargo list, then leave by SkipToOrder. */
 	bool reservation = false;
 	for (Vehicle *u : Vehicle::Iterate()) {
-		if (!u->IsPrimaryVehicle() || !u->current_order.IsType(OT_LOADING) || u->cargo_cap < u->cargo.TotalCount() + 7) continue;
-		Station *st = Station::Get(u->last_station_visited);
+		if (!u->IsPrimaryVehicle() || !u->current_order.IsType(OT_LOADING) || FIXTURE_FIELD(u, cargo_cap) < u->cargo.TotalCount() + 7) continue;
+		Station *st = Station::Get(FIXTURE_GET(u, LastStationVisited, last_station_visited));
 		auto &cargo = st->goods[u->cargo_type].GetOrCreateData().cargo;
 		if (!CargoPacket::CanAllocateItem()) std::abort();
 		cargo.Append(new CargoPacket(7, 3, st->index, st->xy, Money(133)), StationID::Invalid());
 		const std::array<StationID, 1> next{StationID::Invalid()};
-		uint amount = cargo.Reserve(7, &u->cargo, next, u->tile);
+		uint amount = cargo.Reserve(7, &u->cargo, next, FIXTURE_GET(u, Tile, tile));
 		uint waiting = cargo.AvailableCount(), reserved = cargo.ReservedCount();
 		uint load = u->cargo.ActionCount(VehicleCargoList::MTA_LOAD);
 		CheckCommand("reserved-skip", Command<CMD_SKIP_TO_ORDER>::Do(DoCommandFlag::Execute, u->index, u->orders->GetNext(u->cur_implicit_order_index)));
@@ -79,7 +80,7 @@ static bool VisitsScenario(std::span<std::string_view> args)
 	 * change is an ordinary command, checked against the vehicle it expects. */
 	auto vehicle = [](uint16_t index, VehicleType type) {
 		Vehicle *u = Vehicle::GetIfValid(VehicleID(index));
-		if (u == nullptr || u->type != type || !u->IsPrimaryVehicle()) std::abort();
+		if (u == nullptr || FIXTURE_GET(u, Type, type) != type || !u->IsPrimaryVehicle()) std::abort();
 		return u;
 	};
 	Backup<CompanyID> company(_current_company, CompanyID::Begin());
@@ -128,7 +129,7 @@ static bool VisitsScenario(std::span<std::string_view> args)
 		TileIndex from = Station::Get(u->GetOrder(0)->GetDestination().ToStationID())->xy;
 		const Depot *best = nullptr;
 		for (const Depot *d : Depot::Iterate()) {
-			if (GetTileOwner(d->xy) != u->owner || !(u->type == VEH_TRAIN ? IsRailDepotTile(d->xy) : IsRoadDepotTile(d->xy))) continue;
+			if (GetTileOwner(d->xy) != FIXTURE_GET(u, Owner, owner) || !(FIXTURE_GET(u, Type, type) == VEH_TRAIN ? IsRailDepotTile(d->xy) : IsRoadDepotTile(d->xy))) continue;
 			if (best == nullptr || DistanceManhattan(from, d->xy) < DistanceManhattan(from, best->xy)) best = d;
 		}
 		if (best == nullptr) std::abort();
@@ -164,7 +165,7 @@ static bool OrdersScenario(std::span<std::string_view> args)
 	if (args.size() < 2) return false;
 	if (args[1].starts_with("visits")) return VisitsScenario(args);
 	Vehicle *v = Vehicle::Get(VehicleID(126));
-	Backup<CompanyID> company(_current_company, v->owner);
+	Backup<CompanyID> company(_current_company, FIXTURE_GET(v, Owner, owner));
 	if (args[1] == "restore") {
 		fmt::print(stderr, "ORDERS backups before {}\n", BackupCount());
 		CheckCommand("clear-for-restore", Command<CMD_DELETE_ORDER>::Do(DoCommandFlag::Execute, v->index, VehicleOrderID(255)));
@@ -239,13 +240,13 @@ static bool OrdersScenario(std::span<std::string_view> args)
 		CheckCommand("autofill-off", Command<CMD_AUTOFILL_TIMETABLE>::Do(DoCommandFlag::Execute, v->index, false, false));
 		CheckCommand("start", Command<CMD_SET_TIMETABLE_START>::Do(DoCommandFlag::Execute, v->index, false, TimerGameTick::counter + 100));
 		OrderBackup::Backup(v, 101);
-		auto [cost, peer_id] = Command<CMD_CLONE_VEHICLE>::Do(DoCommandFlag::Execute, v->tile, v->index, true);
+		auto [cost, peer_id] = Command<CMD_CLONE_VEHICLE>::Do(DoCommandFlag::Execute, FIXTURE_GET(v, Tile, tile), v->index, true);
 		CheckCommand("clone", cost);
 		Vehicle *peer = Vehicle::Get(peer_id);
 		CheckCommand("group-start", Command<CMD_SET_TIMETABLE_START>::Do(DoCommandFlag::Execute, v->index, true, TimerGameTick::counter + 200));
 		CheckCommand("on-time", Command<CMD_SET_VEHICLE_ON_TIME>::Do(DoCommandFlag::Execute, v->index, true));
 		const Depot *depot = nullptr;
-		for (Depot *candidate : Depot::Iterate()) if (candidate->xy == v->tile) depot = candidate;
+		for (Depot *candidate : Depot::Iterate()) if (candidate->xy == FIXTURE_GET(v, Tile, tile)) depot = candidate;
 		if (depot == nullptr) std::abort();
 		Order order;
 		order.MakeGoToDepot(depot->index, OrderDepotTypeFlag::PartOfOrders, {}, OrderDepotActionFlag::Unbunch, CARGO_NO_REFIT);
@@ -256,17 +257,17 @@ static bool OrdersScenario(std::span<std::string_view> args)
 		v->depot_unbunching_last_departure = TimerGameTick::counter - 3000;
 		v->cur_real_order_index = v->cur_implicit_order_index = 2;
 		v->current_order = *v->GetOrder(2);
-		v->dest_tile = v->tile;
-		v->vehstatus.Reset(VehState::Stopped);
-		peer->vehstatus.Reset(VehState::Stopped);
+		FIXTURE_SET(v, DestTile, dest_tile, FIXTURE_GET(v, Tile, tile));
+		FIXTURE_SET(v, VehStatus, vehstatus, FIXTURE_GET(v, VehStatus, vehstatus).Reset(VehState::Stopped));
+		FIXTURE_SET(peer, VehStatus, vehstatus, FIXTURE_GET(peer, VehStatus, vehstatus).Reset(VehState::Stopped));
 		VehicleEnterDepot(v);
-		v->vehstatus.Reset(VehState::Stopped);
+		FIXTURE_SET(v, VehStatus, vehstatus, FIXTURE_GET(v, VehStatus, vehstatus).Reset(VehState::Stopped));
 		v->LeaveUnbunchingDepot();
 		fmt::print(stderr, "ORDERS waiting {} {}\n", v->IsWaitingForUnbunching(), peer->IsWaitingForUnbunching());
 		State("departure", v);
 		State("peer", peer);
-		v->vehstatus.Set(VehState::Stopped);
-		peer->vehstatus.Set(VehState::Stopped);
+		FIXTURE_SET(v, VehStatus, vehstatus, FIXTURE_GET(v, VehStatus, vehstatus).Set(VehState::Stopped));
+		FIXTURE_SET(peer, VehStatus, vehstatus, FIXTURE_GET(peer, VehStatus, vehstatus).Set(VehState::Stopped));
 		OrderBackup::Backup(v, 102);
 		fmt::print(stderr, "ORDERS backups captured {}\n", BackupCount());
 		if (args.size() >= 3) {
@@ -299,9 +300,9 @@ static bool OrdersScenario(std::span<std::string_view> args)
 		InsertOrder(v, std::move(implicit), 1);
 		v->cur_real_order_index = v->cur_implicit_order_index = 0;
 		v->current_order.Free();
-		v->vehstatus.Reset(VehState::Stopped);
+		FIXTURE_SET(v, VehStatus, vehstatus, FIXTURE_GET(v, VehStatus, vehstatus).Reset(VehState::Stopped));
 		ProcessOrders(v);
-		v->vehstatus.Set(VehState::Stopped);
+		FIXTURE_SET(v, VehStatus, vehstatus, FIXTURE_GET(v, VehStatus, vehstatus).Set(VehState::Stopped));
 		State("conditional-active", v);
 		fmt::print(stderr, "ORDERS active {} {} {}\n", v->GetOrder(0)->GetType(), v->GetOrder(1)->GetType(), v->current_order.GetType());
 	}

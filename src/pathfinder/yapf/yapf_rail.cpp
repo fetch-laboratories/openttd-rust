@@ -38,8 +38,8 @@ static OpenTTDRailTrain RailTrain(void *context) noexcept
 	const Train *v = static_cast<RailYapfContext *>(context)->train;
 	const Train *rear = v->Last();
 	return {v->GetCompatibleRailTypes().base(), RustAllCompatibleRailTypes(v->GetRailTypes().base()),
-		v->tile.base(), rear->tile.base(), TileVirtXY(v->x_pos, v->y_pos).base(), TileVirtXY(rear->x_pos, rear->y_pos).base(),
-		v->dest_tile.base(), RustGroundCachedTotalLength(&v->gcache), static_cast<uint32_t>(std::min<int>(RustVehicleDisplayMaxSpeed(v), RustVehicleOrderMaxSpeed(v))),
+		v->GetTile().base(), rear->GetTile().base(), TileVirtXY(v->Record().x_pos, v->Record().y_pos).base(), TileVirtXY(rear->Record().x_pos, rear->Record().y_pos).base(),
+		v->GetDestTile().base(), RustGroundCachedTotalLength(&v->gcache), static_cast<uint32_t>(std::min<int>(RustVehicleDisplayMaxSpeed(v), RustVehicleOrderMaxSpeed(v))),
 		v->current_order.GetDestination().base(), GetRustSharedServices().train_trackdir(v), GetRustSharedServices().train_trackdir(rear),
 		static_cast<uint8_t>(v->GetTrack() == TRACK_BIT_WORMHOLE), static_cast<uint8_t>(rear->GetTrack() == TRACK_BIT_WORMHOLE),
 		static_cast<uint8_t>(v->current_order.GetType()), static_cast<uint8_t>(v->current_order.GetDepotActionType().Test(OrderDepotActionFlag::NearestDepot)),
@@ -82,7 +82,7 @@ static OpenTTDRailTile RailTile(uint32_t tile, uint8_t direction) noexcept
 static uint32_t RailClosestStation(void *context, uint8_t station) noexcept
 {
 	const Train *v = static_cast<RailYapfContext *>(context)->train;
-	return CalcClosestStationTile(v->current_order.GetDestination().ToStationID(), v->tile, station ? StationType::Rail : StationType::RailWaypoint).base();
+	return CalcClosestStationTile(v->current_order.GetDestination().ToStationID(), v->GetTile(), station ? StationType::Rail : StationType::RailWaypoint).base();
 }
 static void RailOutput(void *context, uint8_t mask, const OpenTTDRailStep *result) noexcept
 {

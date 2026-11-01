@@ -33,7 +33,7 @@
 {
 	EnforceDeityOrCompanyModeValid(false);
 	const Vehicle *v = ::Vehicle::GetIfValid(vehicle_id);
-	return v != nullptr && (v->owner == ScriptObject::GetCompany() || ScriptCompanyMode::IsDeity()) && (v->IsPrimaryVehicle() || (v->type == VEH_TRAIN && ::Train::From(v)->IsFreeWagon()));
+	return v != nullptr && (v->GetOwner() == ScriptObject::GetCompany() || ScriptCompanyMode::IsDeity()) && (v->IsPrimaryVehicle() || (v->GetType() == VEH_TRAIN && ::Train::From(v)->IsFreeWagon()));
 }
 
 /* static */ bool ScriptVehicle::IsPrimaryVehicle(VehicleID vehicle_id)
@@ -47,7 +47,7 @@
 {
 	if (!IsValidVehicle(vehicle_id)) return ScriptCompany::COMPANY_INVALID;
 
-	return ScriptCompany::ToScriptCompanyID(::Vehicle::Get(vehicle_id)->owner);
+	return ScriptCompany::ToScriptCompanyID(::Vehicle::Get(vehicle_id)->GetOwner());
 }
 
 /* static */ SQInteger ScriptVehicle::GetNumWagons(VehicleID vehicle_id)
@@ -124,8 +124,8 @@
 	EnforceCompanyModeValid(false);
 	EnforcePrecondition(false, IsValidVehicle(source_vehicle_id) && source_wagon < GetNumWagons(source_vehicle_id));
 	EnforcePrecondition(false, dest_vehicle_id == -1 || (IsValidVehicle(static_cast<VehicleID>(dest_vehicle_id)) && dest_wagon < GetNumWagons(static_cast<VehicleID>(dest_vehicle_id))));
-	EnforcePrecondition(false, ::Vehicle::Get(source_vehicle_id)->type == VEH_TRAIN);
-	EnforcePrecondition(false, dest_vehicle_id == -1 || ::Vehicle::Get(static_cast<VehicleID>(dest_vehicle_id))->type == VEH_TRAIN);
+	EnforcePrecondition(false, ::Vehicle::Get(source_vehicle_id)->GetType() == VEH_TRAIN);
+	EnforcePrecondition(false, dest_vehicle_id == -1 || ::Vehicle::Get(static_cast<VehicleID>(dest_vehicle_id))->GetType() == VEH_TRAIN);
 
 	const Train *v = ::Train::Get(source_vehicle_id);
 	while (source_wagon-- > 0) v = v->GetNextUnit();
@@ -172,14 +172,14 @@
 	EnforcePrecondition(false, IsValidVehicle(vehicle_id));
 
 	const Vehicle *v = ::Vehicle::Get(vehicle_id);
-	return ScriptObject::Command<CMD_SELL_VEHICLE>::Do(vehicle_id, v->type == VEH_TRAIN, false, INVALID_CLIENT_ID);
+	return ScriptObject::Command<CMD_SELL_VEHICLE>::Do(vehicle_id, v->GetType() == VEH_TRAIN, false, INVALID_CLIENT_ID);
 }
 
 /* static */ bool ScriptVehicle::_SellWagonInternal(VehicleID vehicle_id, SQInteger wagon, bool sell_attached_wagons)
 {
 	EnforceCompanyModeValid(false);
 	EnforcePrecondition(false, IsValidVehicle(vehicle_id) && wagon < GetNumWagons(vehicle_id));
-	EnforcePrecondition(false, ::Vehicle::Get(vehicle_id)->type == VEH_TRAIN);
+	EnforcePrecondition(false, ::Vehicle::Get(vehicle_id)->GetType() == VEH_TRAIN);
 
 	const Train *v = ::Train::Get(vehicle_id);
 	while (wagon-- > 0) v = v->GetNextUnit();
@@ -237,9 +237,9 @@
 {
 	EnforceCompanyModeValid(false);
 	EnforcePrecondition(false, IsPrimaryVehicle(vehicle_id));
-	EnforcePrecondition(false, ::Vehicle::Get(vehicle_id)->type == VEH_ROAD || ::Vehicle::Get(vehicle_id)->type == VEH_TRAIN);
+	EnforcePrecondition(false, ::Vehicle::Get(vehicle_id)->GetType() == VEH_ROAD || ::Vehicle::Get(vehicle_id)->GetType() == VEH_TRAIN);
 
-	switch (::Vehicle::Get(vehicle_id)->type) {
+	switch (::Vehicle::Get(vehicle_id)->GetType()) {
 		case VEH_ROAD: return ScriptObject::Command<CMD_TURN_ROADVEH>::Do(vehicle_id);
 		case VEH_TRAIN: return ScriptObject::Command<CMD_REVERSE_TRAIN_DIRECTION>::Do(vehicle_id, false);
 		default: NOT_REACHED();
@@ -265,20 +265,20 @@
 	if (!IsValidVehicle(vehicle_id)) return INVALID_TILE;
 
 	const Vehicle *v = ::Vehicle::Get(vehicle_id);
-	if (v->type == VEH_AIRCRAFT) {
-		uint x = Clamp(v->x_pos / TILE_SIZE, 0, ScriptMap::GetMapSizeX() - 2);
-		uint y = Clamp(v->y_pos / TILE_SIZE, 0, ScriptMap::GetMapSizeY() - 2);
+	if (v->GetType() == VEH_AIRCRAFT) {
+		uint x = Clamp(v->Record().x_pos / TILE_SIZE, 0, ScriptMap::GetMapSizeX() - 2);
+		uint y = Clamp(v->Record().y_pos / TILE_SIZE, 0, ScriptMap::GetMapSizeY() - 2);
 		return ::TileXY(x, y);
 	}
 
-	return v->tile;
+	return v->GetTile();
 }
 
 /* static */ EngineID ScriptVehicle::GetEngineType(VehicleID vehicle_id)
 {
 	if (!IsValidVehicle(vehicle_id)) return ::EngineID::Invalid();
 
-	return ::Vehicle::Get(vehicle_id)->engine_type;
+	return ::Vehicle::Get(vehicle_id)->GetEngineType();
 }
 
 /* static */ EngineID ScriptVehicle::GetWagonEngineType(VehicleID vehicle_id, SQInteger wagon)
@@ -287,10 +287,10 @@
 	if (wagon >= GetNumWagons(vehicle_id)) return ::EngineID::Invalid();
 
 	const Vehicle *v = ::Vehicle::Get(vehicle_id);
-	if (v->type == VEH_TRAIN) {
+	if (v->GetType() == VEH_TRAIN) {
 		while (wagon-- > 0) v = ::Train::From(v)->GetNextUnit();
 	}
-	return v->engine_type;
+	return v->GetEngineType();
 }
 
 /* static */ SQInteger ScriptVehicle::GetUnitNumber(VehicleID vehicle_id)
@@ -320,7 +320,7 @@
 	if (wagon >= GetNumWagons(vehicle_id)) return -1;
 
 	const Vehicle *v = ::Vehicle::Get(vehicle_id);
-	if (v->type == VEH_TRAIN) {
+	if (v->GetType() == VEH_TRAIN) {
 		while (wagon-- > 0) v = ::Train::From(v)->GetNextUnit();
 	}
 	return v->age.base();
@@ -345,7 +345,7 @@
 	if (!IsPrimaryVehicle(vehicle_id)) return -1;
 
 	const ::Vehicle *v = ::Vehicle::Get(vehicle_id);
-	return !v->vehstatus.Any({::VehState::Stopped, ::VehState::Crashed}) ? v->GetDisplaySpeed() : 0; // km-ish/h
+	return !v->GetVehStatus().Any({::VehState::Stopped, ::VehState::Crashed}) ? v->GetDisplaySpeed() : 0; // km-ish/h
 }
 
 /* static */ ScriptVehicle::VehicleState ScriptVehicle::GetState(VehicleID vehicle_id)
@@ -353,10 +353,10 @@
 	if (!IsValidVehicle(vehicle_id)) return ScriptVehicle::VS_INVALID;
 
 	const Vehicle *v = ::Vehicle::Get(vehicle_id);
-	VehStates vehstatus = v->vehstatus;
+	VehStates vehstatus = v->GetVehStatus();
 
 	if (vehstatus.Test(::VehState::Crashed)) return ScriptVehicle::VS_CRASHED;
-	if (v->breakdown_ctr != 0) return ScriptVehicle::VS_BROKEN;
+	if (v->Record().breakdown_ctr != 0) return ScriptVehicle::VS_BROKEN;
 	if (v->IsStoppedInDepot()) return ScriptVehicle::VS_IN_DEPOT;
 	if (vehstatus.Test(::VehState::Stopped)) return ScriptVehicle::VS_STOPPED;
 	if (v->current_order.IsType(OT_LOADING)) return ScriptVehicle::VS_AT_STATION;
@@ -395,7 +395,7 @@
 {
 	if (!IsValidVehicle(vehicle_id)) return VT_INVALID;
 
-	switch (::Vehicle::Get(vehicle_id)->type) {
+	switch (::Vehicle::Get(vehicle_id)->GetType()) {
 		case VEH_ROAD:     return VT_ROAD;
 		case VEH_TRAIN:    return VT_RAIL;
 		case VEH_SHIP:     return VT_WATER;
@@ -419,7 +419,7 @@
 
 	uint32_t amount = 0;
 	for (const Vehicle *v = ::Vehicle::Get(vehicle_id); v != nullptr; v = v->Next()) {
-		if (v->cargo_type == cargo) amount += v->cargo_cap;
+		if (v->cargo_type == cargo) amount += v->Record().cargo_cap;
 	}
 
 	return amount;
@@ -451,7 +451,7 @@
 	if (GetVehicleType(vehicle_id) != VT_ROAD && GetVehicleType(vehicle_id) != VT_RAIL) return false;
 
 	const Vehicle *v = ::Vehicle::Get(vehicle_id);
-	switch (v->type) {
+	switch (v->GetType()) {
 		case VEH_ROAD: return ::RoadVehicle::From(v)->HasArticulatedPart();
 		case VEH_TRAIN: return ::Train::From(v)->HasArticulatedPart();
 		default: NOT_REACHED();
@@ -479,6 +479,6 @@
 	if (!IsPrimaryVehicle(vehicle_id)) return 0;
 
 	const ::Vehicle *v = ::Vehicle::Get(vehicle_id);
-	if (v->type != VEH_AIRCRAFT) return 0;
+	if (v->GetType() != VEH_AIRCRAFT) return 0;
 	return ::Aircraft::From(v)->acache.cached_max_range_sqr;
 }

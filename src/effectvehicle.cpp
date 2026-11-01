@@ -146,7 +146,7 @@ void EffectVehicle::UpdateDeltaXY()
 TransparencyOption EffectVehicle::GetTransparencyOption() const
 {
 	static const std::array<TransparencyOption, EV_END> transparency{TO_INDUSTRIES, TO_INVALID, TO_INVALID, TO_INVALID, TO_INVALID, TO_INVALID, TO_INVALID, TO_INVALID, TO_INVALID, TO_INDUSTRIES, TO_INVALID, TO_INDUSTRIES};
-	return transparency[this->subtype];
+	return transparency[this->Record().subtype];
 }
 
 #include "rust/service_table_check.hpp"
