@@ -102,8 +102,9 @@ int main()
 		auto suffix = packet.Send_bytes(bytes); std::printf("send-bytes %zu %zu %td\n", limit, suffix.size(), suffix.data() - bytes.data()); State("send-bytes-state", packet, socket);
 	}
 	/* Truncation can split UTF-8; drain the terminator before reading the next field. */
-	for (std::string_view input : {"a\xC3\xA9z", "a\xFFz", "a\nb\r\nc\t"}) {
-		for (size_t length : {size_t{2}, size_t{3}, size_t{4}, size_t{20}}) {
+	std::string long_input(80, 'q');
+	for (std::string_view input : std::array<std::string_view, 4>{"a\xC3\xA9z", "a\xFFz", "a\nb\r\nc\t", long_input}) {
+		for (size_t length : {size_t{2}, size_t{3}, size_t{4}, size_t{20}, size_t{65}, size_t{66}, size_t{100}}) {
 			for (StringValidationSettings settings : {StringValidationSetting::ReplaceWithQuestionMark, StringValidationSetting::AllowNewline, StringValidationSetting::ReplaceTabCrNlWithSpace}) {
 				Socket socket; Packet packet(&socket, PacketType{1}, 100);
 				packet.Send_string(input); packet.Send_uint8(0xED); packet.PrepareToSend(); (void)packet.PrepareToRead(); packet.Recv_uint8();

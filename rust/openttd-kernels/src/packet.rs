@@ -439,7 +439,9 @@ fn validate_string(input: &[u8], settings: u8, mut append: impl FnMut(&[u8])) {
         if step.stopped != 0 {
             break;
         }
-        append(&step.output.bytes[..step.output.length]);
+        if step.output.length != 0 {
+            append(&step.output.bytes[..step.output.length]);
+        }
     }
 }
 
@@ -456,7 +458,10 @@ pub unsafe fn recv_string_into(
     append: impl FnMut(&[u8]),
 ) {
     assert!(length > 1);
-    let mut raw = Vec::new();
+    // Packet::Recv_string uses native small-string storage for short input.
+    let mut inline = [0; 64];
+    let mut inline_size = 0;
+    let mut overflow = Vec::new();
     loop {
         length -= 1;
         if length == 0 {
@@ -466,12 +471,26 @@ pub unsafe fn recv_string_into(
         if byte == 0 {
             break;
         }
-        raw.push(byte);
+        if inline_size < inline.len() {
+            inline[inline_size] = byte;
+            inline_size += 1;
+        } else {
+            if overflow.is_empty() {
+                overflow.reserve(inline.len() * 2);
+                overflow.extend_from_slice(&inline);
+            }
+            overflow.push(byte);
+        }
     }
     if length == 0 {
         while unsafe { recv_uint8(state, services) } != 0 {}
     }
-    validate_string(&raw, settings, append);
+    let raw = if overflow.is_empty() {
+        &inline[..inline_size]
+    } else {
+        &overflow
+    };
+    validate_string(raw, settings, append);
 }
 
 /// Construct an outgoing packet after resolving the live send handler.
