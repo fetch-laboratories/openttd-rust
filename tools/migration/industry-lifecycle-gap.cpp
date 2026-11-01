@@ -144,7 +144,7 @@ static void CheckAcceptance()
 		return result;
 	};
 	service.callback = [](uint32_t tile, uint16_t gfx, uint16_t callback, uint32_t p1, uint32_t p2) noexcept -> uint16_t { return GetIndustryTileCallback(callback, p1, p2, gfx, Industry::GetByTile(tile), tile); };
-	service.cargo_file = [](const OpenTTDIndustryTileSpec *spec) noexcept -> const GRFFile * { return reinterpret_cast<const GRFFile *>(reinterpret_cast<const IndustryTileSpec *>(spec)->grf_prop.grffile); };
+	service.shared = &GetRustSharedServices();
 	Industry industry{}; active = &industry;
 	OpenTTDIndustry *owner = openttd_rust_industry_new();
 	uint cases = 0;

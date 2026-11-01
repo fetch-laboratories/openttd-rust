@@ -11,6 +11,7 @@ struct Industry;
 struct Station;
 struct Town;
 struct GRFFile;
+struct OpenTTDSharedServices;
 struct OpenTTDStorage16;
 struct OpenTTDStorage256;
 struct OpenTTDStorageReference { OpenTTDStorage256 *owner; uint32_t grfid; };
