@@ -281,7 +281,7 @@ The 10-31 session hold on #559, #69 and #570 has expired, and the wrap-up course
 
    No further phase-1 owner is planned. Every other remaining non-drawing body moves with the phase-2 owner of its file, including plan-after47's link-graph job lifecycle, elrail transition and land count; #621 lists them.
 3. **One maintenance batch at a time** (one reviewer, one Full):
-   - #629 first: isolate the multiplayer comparison from other loopback connections on port 41051. It fails on base too, and #628 needs it as its per-slice check.
+   - #629 first: isolate the multiplayer comparison from other loopback connections on port 41051. It fails on base too, and #628 needs it as its per-slice check. As a fix a draft needs, it may go alone, so #622's later batch runs beside it.
    - #622's later batch: the shared typed `RustSpec*` table (root's answers on #624), then `RustGRFFileID`, `RustGRFCargoMap`, `RustGRFFileAtOrNull` and the `RustResolverGRF*` callees, and extending `tools/rebound-callees.py` to `.inc` service tables.
    - #199's open items, disjoint from #570: the `CargoFlow` bounce, #578's story-page bounce, #580's date parameters and the sweep's stale comments.
    - #565 item 2, after #570 integrates, because both change `movement.rs`. Delete the map fallbacks and convert the remaining rail, crossing, depot, stop, water and tunnel leaves, `tile_slope_z`, and world generation's per-tile services (issue body). Production net glue -300 to -600. It also deletes the native `bridge_above` and `rail_tile_type` services that #616 and #620 duplicated with Rust map readers (`road_cmd.rs:932`, `road_cmd.rs:1443`, `station_cmd.rs:447`).
@@ -291,7 +291,7 @@ The 10-31 session hold on #559, #69 and #570 has expired, and the wrap-up course
    - #628 (#574 network protocol) resumes from slice 2 once #629 integrates. Read its status comment first.
    - #575 script host, commands and events, with its unsaved-output evidence.
    - #573's next PR, after #570 integrates: slice 3b changes the `SaveLoad` base and the `saveload.h` macros that #570's vehicle descriptors use. Then slice 4, the corrupt-input and LoadCheck probes, and the native `CopyFromOldName` helper, as #627's status comment lists.
-   - Then #497 with its engine and feature binding payloads, and #498 with its ObjectSpec payloads.
+   - #497 and #498 stay parked (twenty-first steering, correction 2): their plans keep data in C++ behind setters. #497's `Engine::grf_prop` and `overrides` bindings join the engine-pool owner (item 4); its other spec handlers are re-planned after #622's shared `RustSpec*` table integrates. #498 joins the owner of the object pool among the smaller pools (item 4). The 11-01 start of #497 stopped on this before any code (root, 2026-11-01).
 
    Size each owner to repay its review and Full ([selection](planning.md#selection)). Plan no Squirrel port.
 6. **#503 coverage continuation last:** first the bounded clock-preparation and sanitized native-test-support build fixes, then the 119 unfinished traces with provenance checks. Do not recollect just to fill a slot.
