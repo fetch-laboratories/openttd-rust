@@ -137,7 +137,7 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
     inspection calls the Rust diagnostic entry without resetting its owner.
     """
     folder.mkdir(parents=True, exist_ok=True)
-    from .rails import pbs_reference, pbs_wraps
+    from .rails import pbs_interpose, pbs_reference, pbs_wraps
 
     pbs_reference(folder)
     # The road console compares the candidate with the pinned original bodies.
@@ -183,6 +183,7 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
         wraps=pbs_wraps(build),
         native_test_support=True,
         replace_objects=("/src/signal.cpp.o",),
+        interpose=pbs_interpose(build),
     )
 
 

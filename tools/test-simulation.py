@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from functools import partial
 from pathlib import Path
 from unittest.mock import patch
 
@@ -388,6 +389,31 @@ class SimulationDeterminismTests(unittest.TestCase):
 
 
 class SimulationRuntimeTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == "linux", "ELF archive interposition")
+    def test_interposition_reaches_callers_in_the_same_object(self) -> None:
+        from simulation.console_adapter import interposed_archive
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "owner.c").write_text(
+                "int callee(void) { return 1; }\n"
+                "int caller(void) { return callee(); }\n"
+            )
+            (root / "console.c").write_text(
+                "int __real_callee(void);\n"
+                "int caller(void);\n"
+                "int callee(void) { return 10 + __real_callee(); }\n"
+                "int main(void) { return caller() == 11 ? 0 : 1; }\n"
+            )
+            run = partial(subprocess.run, cwd=root, check=True)
+            run(["cc", "-c", "-O2", "-fPIC", "-ffunction-sections", "owner.c"])
+            run(["ar", "rc", "libowner.a", "owner.o"])
+            archive = interposed_archive(
+                root / "libowner.a", root, ("callee",), dict(os.environ)
+            )
+            run(["cc", "console.c", str(archive), "-o", "console"])
+            self.assertEqual(subprocess.run([root / "console"]).returncode, 0)
+
     def exercise(
         self,
         *,
