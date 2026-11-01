@@ -100,7 +100,7 @@ struct OpenTTDVehicleMovementObservations {
 	const int32_t *x;
 	const int32_t *y;
 	const uint16_t *speed;
-	const Direction *direction;
+	const uint8_t *direction;
 };
 struct OpenTTDVehicleAltitudeInputs { uint16_t max_speed; uint8_t direction; };
 struct OpenTTDVehicleMaintenanceServices;
@@ -244,7 +244,7 @@ struct OpenTTDVehiclePostTick {
 	uint16_t *counter;
 	uint32_t *motion;
 	const uint16_t *speed;
-	const VehicleType *front_type;
+	const uint8_t *front_type;
 	const uint8_t *subtype;
 	const uint8_t *tick;
 	const uint8_t *front_status;

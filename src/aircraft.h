@@ -99,16 +99,16 @@ struct Aircraft final : public SpecializedVehicle<Aircraft, VEH_AIRCRAFT> {
 	ExpensesType GetExpenseType(bool income) const override { return income ? EXPENSES_AIRCRAFT_REVENUE : EXPENSES_AIRCRAFT_RUN; }
 	bool IsPrimaryVehicle() const override                  { return this->IsNormalAircraft(); }
 	void GetImage(Direction direction, EngineImageType image_type, VehicleSpriteSeq *result) const override;
-	int GetDisplaySpeed() const override    { return this->cur_speed; }
-	int GetDisplayMaxSpeed() const override { return this->vcache.cached_max_speed; }
-	int GetSpeedOldUnits() const            { return this->vcache.cached_max_speed * 10 / 128; }
+	int GetDisplaySpeed() const override    { return this->Record().cur_speed; }
+	int GetDisplayMaxSpeed() const override { return this->Record().cached_max_speed; }
+	int GetSpeedOldUnits() const            { return this->Record().cached_max_speed * 10 / 128; }
 	int GetCurrentMaxSpeed() const override { return this->GetSpeedOldUnits(); }
 	Money GetRunningCost() const override;
 
 	bool IsInDepot() const override
 	{
 		assert(this->IsPrimaryVehicle());
-		return this->vehstatus.Test(VehState::Hidden) && IsHangarTile(this->tile);
+		return this->GetVehStatus().Test(VehState::Hidden) && IsHangarTile(this->GetTile());
 	}
 
 	bool Tick() override;
@@ -116,7 +116,7 @@ struct Aircraft final : public SpecializedVehicle<Aircraft, VEH_AIRCRAFT> {
 	void OnNewEconomyDay() override;
 	uint Crash(bool flooded = false) override;
 	TileIndex GetOrderStationLocation(StationID station) override;
-	TileIndex GetCargoTile() const override { return this->First()->tile; }
+	TileIndex GetCargoTile() const override { return this->First()->GetTile(); }
 	ClosestDepot FindClosestDepot() override;
 
 	/**
@@ -130,7 +130,7 @@ struct Aircraft final : public SpecializedVehicle<Aircraft, VEH_AIRCRAFT> {
 		/* To be fully correct the commented out functionality is the proper one,
 		 * but since value can only be 0 or 2, it is sufficient to only check <= 2
 		 * return (this->subtype == AIR_HELICOPTER) || (this->subtype == AIR_AIRCRAFT); */
-		return this->subtype <= AIR_AIRCRAFT;
+		return this->Record().subtype <= AIR_AIRCRAFT;
 	}
 
 	/**

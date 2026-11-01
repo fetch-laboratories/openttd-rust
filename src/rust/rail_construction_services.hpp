@@ -16,7 +16,7 @@ static void *RailNewWagon(uint32_t tile_index, const OpenTTDEngine *engine) noex
 
 	DiagDirection dir = RustRailDepotDirection(tile.base());
 
-	v->direction = DiagDirToDir(dir);
+	v->SetDirection(DiagDirToDir(dir));
 	RustWriteVehicleTile(v, tile);
 
 	int x = TileX(tile) * TILE_SIZE | _vehicle_initial_x_fract[dir];
@@ -37,7 +37,7 @@ static void *RailNewWagon(uint32_t tile_index, const OpenTTDEngine *engine) noex
 	v->cargo_type = RustEngineDefaultCargo(engine);
 	assert(IsValidCargoType(v->cargo_type));
 	RustVehicleSetCargoCap(RustVehicle(v), RustEngineRailCapacity(engine));
-	v->refit_cap = 0;
+	v->Record().refit_cap = 0;
 
 	v->SetRailTypes(RailTypes{RustEngineRailTypes(e)});
 
@@ -58,7 +58,7 @@ static void *RailNewEngine(uint32_t tile_index, const OpenTTDEngine *engine) noe
 	int y = TileY(tile) * TILE_SIZE + _vehicle_initial_y_fract[dir];
 
 	Train *v = new Train();
-	v->direction = DiagDirToDir(dir);
+	v->SetDirection(DiagDirToDir(dir));
 	RustWriteVehicleTile(v, tile);
 	RustVehicleSetOwner(RustVehicle(v), RustCurrentCompanyID());
 	RustWriteVehicleX(v, x);
@@ -70,8 +70,8 @@ static void *RailNewEngine(uint32_t tile_index, const OpenTTDEngine *engine) noe
 	v->cargo_type = RustEngineDefaultCargo(engine);
 	assert(IsValidCargoType(v->cargo_type));
 	RustVehicleSetCargoCap(RustVehicle(v), RustEngineRailCapacity(engine));
-	v->refit_cap = 0;
-	v->last_station_visited = StationID::Invalid();
+	v->Record().refit_cap = 0;
+	v->SetLastStationVisited(StationID::Invalid());
 	RustVehicleSetLastLoadingStation(RustVehicle(v), StationID::Invalid().base());
 
 	RustVehicleSetEngine(RustVehicle(v), e->index.base());
@@ -102,20 +102,20 @@ static void *RailNewRear(void *front) noexcept
 	Train *u = new Train();
 	v->value >>= 1;
 	u->value = v->value;
-	u->direction = v->direction;
+	u->SetDirection(v->GetDirection());
 	RustVehicleSetOwner(RustVehicle(u), RustVehicleOwner(v));
-	RustWriteVehicleTile(u, v->tile);
-	RustWriteVehicleX(u, v->x_pos);
-	RustWriteVehicleY(u, v->y_pos);
-	RustWriteVehicleZ(u, v->z_pos);
+	RustWriteVehicleTile(u, v->GetTile());
+	RustWriteVehicleX(u, v->Record().x_pos);
+	RustWriteVehicleY(u, v->Record().y_pos);
+	RustWriteVehicleZ(u, v->Record().z_pos);
 	u->SetTrack(TRACK_BIT_DEPOT);
-	RustWriteVehicleStatus(u, v->vehstatus);
-	u->vehstatus.Reset(VehState::Stopped);
+	RustWriteVehicleStatus(u, v->GetVehStatus());
+	u->SetVehStatus(u->GetVehStatus().Reset(VehState::Stopped));
 	RustWriteVehicleSprite(u, RustVehicleSprite(v) + 1);
 	u->cargo_type = v->cargo_type;
 	u->cargo_subtype = v->cargo_subtype;
-	u->cargo_cap = v->cargo_cap;
-	u->refit_cap = v->refit_cap;
+	u->Record().cargo_cap = v->Record().cargo_cap;
+	u->Record().refit_cap = v->Record().refit_cap;
 	u->SetRailTypes(RailTypes{RustTrainRailTypes(v)});
 	RustVehicleSetEngine(RustVehicle(u), RustVehicleEngineID(v));
 	u->date_of_last_service = v->date_of_last_service;

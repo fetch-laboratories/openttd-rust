@@ -48,7 +48,7 @@ extern void ChangeVehicleViewWindow(VehicleID from_index, VehicleID to_index);
 static void CargoCapacityRead(void *shell, OpenTTDCargoCapacityVehicle *out) noexcept
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);
-	*out = {RustVehicleCargoOwner(v), v->cargo_cap, v->cargo_type, static_cast<uint8_t>(v->type == VEH_TRAIN), static_cast<uint8_t>(v->IsArticulatedPart())};
+	*out = {RustVehicleCargoOwner(v), v->Record().cargo_cap, v->cargo_type, static_cast<uint8_t>(v->GetType() == VEH_TRAIN), static_cast<uint8_t>(v->IsArticulatedPart())};
 }
 static void *CargoCapacityOtherMultiheadedPart(void *shell) noexcept
 {

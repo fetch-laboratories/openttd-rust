@@ -66,11 +66,11 @@ void ConnectMultiheadedTrains()
 					}
 
 					/* Find a matching back part */
-					EngineID eid = u->engine_type;
+					EngineID eid = u->GetEngineType();
 					Train *w;
 					if (sequential_matching) {
 						for (w = u->GetNextVehicle(); w != nullptr; w = w->GetNextVehicle()) {
-							if (w->engine_type != eid || w->other_multiheaded_part != nullptr || !w->IsMultiheaded()) continue;
+							if (w->GetEngineType() != eid || w->other_multiheaded_part != nullptr || !w->IsMultiheaded()) continue;
 
 							/* we found a car to partner with this engine. Now we will make sure it face the right way */
 							if (w->IsEngine()) {
@@ -82,7 +82,7 @@ void ConnectMultiheadedTrains()
 					} else {
 						uint stack_pos = 0;
 						for (w = u->GetNextVehicle(); w != nullptr; w = w->GetNextVehicle()) {
-							if (w->engine_type != eid || w->other_multiheaded_part != nullptr || !w->IsMultiheaded()) continue;
+							if (w->GetEngineType() != eid || w->other_multiheaded_part != nullptr || !w->IsMultiheaded()) continue;
 
 							if (w->IsEngine()) {
 								stack_pos++;
@@ -112,15 +112,15 @@ void ConnectMultiheadedTrains()
  */
 void ConvertOldMultiheadToNew()
 {
-	for (Train *t : Train::Iterate()) SetBit(t->subtype, 7); // indicates that it's the old format and needs to be converted in the next loop
+	for (Train *t : Train::Iterate()) SetBit(t->Record().subtype, 7); // indicates that it's the old format and needs to be converted in the next loop
 
 	for (Train *t : Train::Iterate()) {
-		if (HasBit(t->subtype, 7) && ((t->subtype & ~0x80) == 0 || (t->subtype & ~0x80) == 4)) {
+		if (HasBit(t->Record().subtype, 7) && ((t->Record().subtype & ~0x80) == 0 || (t->Record().subtype & ~0x80) == 4)) {
 			for (Train *u = t; u != nullptr; u = u->Next()) {
-				const RailVehicleInfo *rvi = RailVehInfo(u->engine_type);
+				const RailVehicleInfo *rvi = RailVehInfo(u->GetEngineType());
 
-				ClrBit(u->subtype, 7);
-				switch (u->subtype) {
+				ClrBit(u->Record().subtype, 7);
+				switch (u->Record().subtype) {
 					case 0: // TS_Front_Engine
 						if (rvi->railveh_type == RAILVEH_MULTIHEAD) u->SetMultiheaded();
 						u->SetFrontEngine();
@@ -128,12 +128,12 @@ void ConvertOldMultiheadToNew()
 						break;
 
 					case 1: // TS_Artic_Part
-						u->subtype = 0;
+						u->Record().subtype = 0;
 						u->SetArticulatedPart();
 						break;
 
 					case 2: // TS_Not_First
-						u->subtype = 0;
+						u->Record().subtype = 0;
 						if (rvi->railveh_type == RAILVEH_WAGON) {
 							/* normal wagon */
 							u->SetWagon();
@@ -149,7 +149,7 @@ void ConvertOldMultiheadToNew()
 						break;
 
 					case 4: // TS_Free_Car
-						u->subtype = 0;
+						u->Record().subtype = 0;
 						u->SetWagon();
 						u->SetFreeWagon();
 						break;
@@ -174,15 +174,15 @@ void UpdateOldAircraft()
 		 * skip those */
 		if (a->IsNormalAircraft()) {
 			/* airplane in terminal stopped doesn't hurt anyone, so goto next */
-			if (a->vehstatus.Test(VehState::Stopped) && a->state == 0) {
+			if (a->GetVehStatus().Test(VehState::Stopped) && a->state == 0) {
 				a->state = HANGAR;
 				continue;
 			}
 
-			AircraftLeaveHangar(a, a->direction); // make airplane visible if it was in a depot for example
-			a->vehstatus.Reset(VehState::Stopped); // make airplane moving
+			AircraftLeaveHangar(a, a->GetDirection()); // make airplane visible if it was in a depot for example
+			a->SetVehStatus(a->GetVehStatus().Reset(VehState::Stopped)); // make airplane moving
 			UpdateAircraftCache(a);
-			a->cur_speed = a->vcache.cached_max_speed; // so aircraft don't have zero speed while in air
+			a->Record().cur_speed = a->Record().cached_max_speed; // so aircraft don't have zero speed while in air
 			if (!a->current_order.IsType(OT_GOTO_STATION) && !a->current_order.IsType(OT_GOTO_DEPOT)) {
 				/* reset current order so aircraft doesn't have invalid "station-only" order */
 				a->current_order.MakeDummy();
@@ -190,13 +190,13 @@ void UpdateOldAircraft()
 			a->state = FLYING;
 			AircraftNextAirportPos_and_Order(a); // move it to the entry point of the airport
 			GetNewVehiclePosResult gp = GetNewVehiclePos(a);
-			a->tile = TileIndex{}; // aircraft in air is tile=0
+			a->SetTile(TileIndex{}); // aircraft in air is tile=0
 
 			/* correct speed of helicopter-rotors */
-			if (a->subtype == AIR_HELICOPTER) a->Next()->Next()->cur_speed = 32;
+			if (a->Record().subtype == AIR_HELICOPTER) a->Next()->Next()->Record().cur_speed = 32;
 
 			/* set new position x,y,z */
-			GetAircraftFlightLevelBounds(a, &a->z_pos, nullptr);
+			GetAircraftFlightLevelBounds(a, &a->Record().z_pos, nullptr);
 			SetAircraftPosition(a, gp.x, gp.y, GetAircraftFlightLevel(a));
 		}
 	}
@@ -205,7 +205,7 @@ void UpdateOldAircraft()
 	for (Station *st : Station::Iterate()) {
 		for (auto iter = st->loading_vehicles.begin(); iter != st->loading_vehicles.end(); /* nothing */) {
 			Vehicle *v = *iter;
-			if (v->type == VEH_AIRCRAFT && !v->current_order.IsType(OT_LOADING)) {
+			if (v->GetType() == VEH_AIRCRAFT && !v->current_order.IsType(OT_LOADING)) {
 				iter = st->loading_vehicles.erase(iter);
 				delete v->cargo_payment;
 			} else {
@@ -234,13 +234,13 @@ static void CheckValidVehicles()
 
 	for (Vehicle *v : Vehicle::Iterate()) {
 		/* Test if engine types match */
-		switch (v->type) {
+		switch (v->GetType()) {
 			case VEH_TRAIN:
 			case VEH_ROAD:
 			case VEH_SHIP:
 			case VEH_AIRCRAFT:
-				if (v->engine_type >= total_engines || v->type != v->GetEngine()->type) {
-					v->engine_type = first_engine[v->type];
+				if (v->GetEngineType() >= total_engines || v->GetType() != v->GetEngine()->type) {
+					v->SetEngineType(first_engine[v->GetType()]);
 				}
 				break;
 
@@ -257,11 +257,11 @@ void AfterLoadVehiclesPhase1(bool part_of_load)
 {
 	for (Vehicle *v : Vehicle::Iterate()) {
 		/* Reinstate the previous pointer */
-		if (v->Next() != nullptr) v->Next()->previous = v;
+		if (v->Next() != nullptr) v->Next()->Record().previous = v->record;
 		if (v->NextShared() != nullptr) v->NextShared()->previous_shared = v;
 
 		if (part_of_load) v->fill_percent_te_id = INVALID_TE_ID;
-		v->first = nullptr;
+		v->Record().first = nullptr;
 		if (v->IsGroundVehicle()) v->GetGroundVehicleCache()->first_engine = EngineID::Invalid();
 	}
 
@@ -313,7 +313,7 @@ void AfterLoadVehiclesPhase1(bool part_of_load)
 		/* Fill the first pointers */
 		if (v->Previous() == nullptr) {
 			for (Vehicle *u = v; u != nullptr; u = u->Next()) {
-				u->first = v;
+				u->Record().first = v->record;
 			}
 		}
 	}
@@ -337,12 +337,12 @@ void AfterLoadVehiclesPhase1(bool part_of_load)
 		if (IsSavegameVersionBefore(SLV_157)) {
 			/* The road vehicle subtype was converted to a flag. */
 			for (RoadVehicle *rv : RoadVehicle::Iterate()) {
-				if (rv->subtype == 0) {
+				if (rv->Record().subtype == 0) {
 					/* The road vehicle is at the front. */
 					rv->SetFrontEngine();
-				} else if (rv->subtype == 1) {
+				} else if (rv->Record().subtype == 1) {
 					/* The road vehicle is an articulated part. */
-					rv->subtype = 0;
+					rv->Record().subtype = 0;
 					rv->SetArticulatedPart();
 				} else {
 					SlErrorCorrupt("Invalid road vehicle subtype");
@@ -353,7 +353,7 @@ void AfterLoadVehiclesPhase1(bool part_of_load)
 		if (IsSavegameVersionBefore(SLV_160)) {
 			/* In some old savegames there might be some "crap" stored. */
 			for (Vehicle *v : Vehicle::Iterate()) {
-				if (!v->IsPrimaryVehicle() && v->type != VEH_DISASTER) {
+				if (!v->IsPrimaryVehicle() && v->GetType() != VEH_DISASTER) {
 					v->current_order.Free();
 					v->unitnumber = 0;
 				}
@@ -363,7 +363,7 @@ void AfterLoadVehiclesPhase1(bool part_of_load)
 		if (IsSavegameVersionBefore(SLV_162)) {
 			/* Set the vehicle-local cargo age counter from the old global counter. */
 			for (Vehicle *v : Vehicle::Iterate()) {
-				v->cargo_age_counter = _age_cargo_skip_counter;
+				v->Record().cargo_age_counter = _age_cargo_skip_counter;
 			}
 		}
 
@@ -372,8 +372,8 @@ void AfterLoadVehiclesPhase1(bool part_of_load)
 			for (Vehicle *v : Vehicle::Iterate()) {
 				if (!v->IsPrimaryVehicle()) continue;
 
-				const Company *c = Company::Get(v->owner);
-				int interval = CompanyServiceInterval(c, v->type);
+				const Company *c = Company::Get(v->GetOwner());
+				int interval = CompanyServiceInterval(c, v->GetType());
 
 				v->SetServiceIntervalIsCustom(v->GetServiceInterval() != interval);
 				v->SetServiceIntervalIsPercent(c->settings.vehicle.servint_ispercent);
@@ -383,18 +383,18 @@ void AfterLoadVehiclesPhase1(bool part_of_load)
 		if (IsSavegameVersionBefore(SLV_SHIP_ROTATION)) {
 			/* Ship rotation added */
 			for (Ship *s : Ship::Iterate()) {
-				s->SetRotation(s->direction);
+				s->SetRotation(s->GetDirection());
 			}
 		} else {
 			for (Ship *s : Ship::Iterate()) {
-				if (s->GetRotation() == s->direction) continue;
+				if (s->GetRotation() == s->GetDirection()) continue;
 				openttd_rust_ship_control_reload_rotation();
 				/* In case we are rotating on gameload, set the rotation position to
 				 * the current position, otherwise the applied workaround offset would
 				 * be with respect to 0,0.
 				 */
-				s->SetRotationX(s->x_pos);
-				s->SetRotationY(s->y_pos);
+				s->SetRotationX(s->Record().x_pos);
+				s->SetRotationY(s->Record().y_pos);
 			}
 		}
 
@@ -427,11 +427,11 @@ void AfterLoadVehiclesPhase2(bool part_of_load)
 
 		v->trip_occupancy = CalcPercentVehicleFilled(v, nullptr);
 
-		switch (v->type) {
+		switch (v->GetType()) {
 			case VEH_TRAIN: {
 				Train *t = Train::From(v);
 				if (t->IsFrontEngine() || t->IsFreeWagon()) {
-					t->gcache.last_speed = t->cur_speed; // update displayed train speed
+					t->gcache.last_speed = t->Record().cur_speed; // update displayed train speed
 					t->ConsistChanged(CCF_SAVELOAD);
 				}
 				break;
@@ -440,15 +440,15 @@ void AfterLoadVehiclesPhase2(bool part_of_load)
 			case VEH_ROAD: {
 				RoadVehicle *rv = RoadVehicle::From(v);
 				if (rv->IsFrontEngine()) {
-					rv->gcache.last_speed = rv->cur_speed; // update displayed road vehicle speed
+					rv->gcache.last_speed = rv->Record().cur_speed; // update displayed road vehicle speed
 
-					rv->roadtype = Engine::Get(rv->engine_type)->VehInfo<RoadVehicleInfo>().roadtype;
+					rv->roadtype = Engine::Get(rv->GetEngineType())->VehInfo<RoadVehicleInfo>().roadtype;
 					rv->compatible_roadtypes = GetRoadTypeInfo(rv->roadtype)->powered_roadtypes;
 					RoadTramType rtt = GetRoadTramType(rv->roadtype);
 					for (RoadVehicle *u = rv; u != nullptr; u = u->Next()) {
 						u->roadtype = rv->roadtype;
 						u->compatible_roadtypes = rv->compatible_roadtypes;
-						if (GetRoadType(u->tile, rtt) == INVALID_ROADTYPE) SlErrorCorrupt("Road vehicle on invalid road type");
+						if (GetRoadType(u->GetTile(), rtt) == INVALID_ROADTYPE) SlErrorCorrupt("Road vehicle on invalid road type");
 					}
 
 					RoadVehUpdateCache(rv);
@@ -470,34 +470,34 @@ void AfterLoadVehiclesPhase2(bool part_of_load)
 	/* Stop non-front engines */
 	if (part_of_load && IsSavegameVersionBefore(SLV_112)) {
 		for (Vehicle *v : Vehicle::Iterate()) {
-			if (v->type == VEH_TRAIN) {
+			if (v->GetType() == VEH_TRAIN) {
 				Train *t = Train::From(v);
 				if (!t->IsFrontEngine()) {
-					if (t->IsEngine()) t->vehstatus.Set(VehState::Stopped);
+					if (t->IsEngine()) t->SetVehStatus(t->GetVehStatus().Set(VehState::Stopped));
 					/* cur_speed is now relevant for non-front parts - nonzero breaks
 					 * moving-wagons-inside-depot- and autoreplace- code */
-					t->cur_speed = 0;
+					t->Record().cur_speed = 0;
 				}
 			}
 			/* trains weren't stopping gradually in old OTTD versions (and TTO/TTD)
 			 * other vehicle types didn't have zero speed while stopped (even in 'recent' OTTD versions) */
-			if (v->vehstatus.Test(VehState::Stopped) && (v->type != VEH_TRAIN || IsSavegameVersionBefore(SLV_2, 1))) {
-				v->cur_speed = 0;
+			if (v->GetVehStatus().Test(VehState::Stopped) && (v->GetType() != VEH_TRAIN || IsSavegameVersionBefore(SLV_2, 1))) {
+				v->Record().cur_speed = 0;
 			}
 		}
 	}
 
 	for (Vehicle *v : Vehicle::Iterate()) {
-		switch (v->type) {
+		switch (v->GetType()) {
 			case VEH_ROAD:
 			case VEH_TRAIN:
 			case VEH_SHIP:
-				v->GetImage(v->direction, EIT_ON_MAP, &v->sprite_cache.sprite_seq);
+				v->GetImage(v->GetDirection(), EIT_ON_MAP, &v->sprite_cache.sprite_seq);
 				break;
 
 			case VEH_AIRCRAFT:
 				if (Aircraft::From(v)->IsNormalAircraft()) {
-					v->GetImage(v->direction, EIT_ON_MAP, &v->sprite_cache.sprite_seq);
+					v->GetImage(v->GetDirection(), EIT_ON_MAP, &v->sprite_cache.sprite_seq);
 
 					/* The aircraft's shadow will have the same image as the aircraft, but no colour */
 					Vehicle *shadow = v->Next();
@@ -506,7 +506,7 @@ void AfterLoadVehiclesPhase2(bool part_of_load)
 					shadow->sprite_cache.sprite_seq.CopyWithoutPalette(v->sprite_cache.sprite_seq);
 
 					/* In the case of a helicopter we will update the rotor sprites */
-					if (v->subtype == AIR_HELICOPTER) {
+					if (v->Record().subtype == AIR_HELICOPTER) {
 						Vehicle *rotor = shadow->Next();
 						if (rotor == nullptr) SlErrorCorrupt("Missing rotor for helicopter");
 
@@ -519,8 +519,8 @@ void AfterLoadVehiclesPhase2(bool part_of_load)
 
 			case VEH_DISASTER: {
 				auto *dv = DisasterVehicle::From(v);
-				if (dv->subtype == ST_SMALL_UFO && dv->State() != 0) {
-					RoadVehicle *u = RoadVehicle::GetIfValid(v->dest_tile.base());
+				if (dv->Record().subtype == ST_SMALL_UFO && dv->State() != 0) {
+					RoadVehicle *u = RoadVehicle::GetIfValid(v->GetDestTile().base());
 					if (u != nullptr && u->IsFrontEngine()) {
 						/* Delete UFO targetting a vehicle which is already a target. */
 						if (u->disaster_vehicle != VehicleID::Invalid() && u->disaster_vehicle != dv->index) {
@@ -538,13 +538,13 @@ void AfterLoadVehiclesPhase2(bool part_of_load)
 		}
 
 		if (part_of_load && v->unitnumber != 0) {
-			Company::Get(v->owner)->freeunits[v->type].UseID(v->unitnumber);
+			Company::Get(v->GetOwner())->freeunits[v->GetType()].UseID(v->unitnumber);
 		}
 
 		v->UpdateDeltaXY();
 		v->coord.left = INVALID_COORD;
 		v->sprite_cache.old_coord.left = INVALID_COORD;
-		if (v->type != VEH_EFFECT) v->UpdatePosition();
+		if (v->GetType() != VEH_EFFECT) v->UpdatePosition();
 		v->UpdateViewport(false);
 	}
 }
@@ -559,12 +559,12 @@ void FixupTrainLengths()
 	/* Vehicle center was moved from 4 units behind the front to half the length
 	 * behind the front. Move vehicles so they end up on the same spot. */
 	for (Vehicle *v : Vehicle::Iterate()) {
-		if (v->type == VEH_TRAIN && v->IsPrimaryVehicle()) {
+		if (v->GetType() == VEH_TRAIN && v->IsPrimaryVehicle()) {
 			/* The vehicle center is now more to the front depending on vehicle length,
 			 * so we need to move all vehicles forward to cover the difference to the
 			 * old center, otherwise wagon spacing in trains would be broken upon load. */
 			for (Train *u = Train::From(v); u != nullptr; u = u->Next()) {
-				if (u->GetTrack() == TRACK_BIT_DEPOT || u->vehstatus.Test(VehState::Crashed)) continue;
+				if (u->GetTrack() == TRACK_BIT_DEPOT || u->GetVehStatus().Test(VehState::Crashed)) continue;
 
 				Train *next = u->Next();
 
@@ -625,8 +625,8 @@ void FixupTrainLengths()
 					int d = TicksToLeaveDepot(u);
 					if (d <= 0) {
 						/* Next vehicle should have left the depot already, show it and pull forward. */
-						next->vehstatus.Reset(VehState::Hidden);
-						next->SetTrack(TrackToTrackBits(GetRailDepotTrack(next->tile)));
+						next->SetVehStatus(next->GetVehStatus().Reset(VehState::Hidden));
+						next->SetTrack(TrackToTrackBits(GetRailDepotTrack(next->GetTile())));
 						for (int i = 0; i >= d; i--) TrainController(next, nullptr);
 					}
 				}
@@ -663,38 +663,38 @@ public:
 		v->cargo.ImportMeta(fields);
 	}
 	static inline const SaveLoad description[] = {
-		    SLE_VAR(Vehicle, subtype,               SLE_UINT8),
+		    SLE_CONDVARNAME(Vehicle, Record().subtype, "subtype", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
 
-		    SLE_REF(Vehicle, next,                  REF_VEHICLE_OLD),
+		    SLE_GENERAL_NAME(SL_REF, "next", Vehicle, Record().next, REF_VEHICLE_RECORD_OLD, 0, SL_MIN_VERSION, SL_MAX_VERSION, 0),
 		SLE_CONDVAR(Vehicle, name,                  SLE_NAME,                     SL_MIN_VERSION,  SLV_84),
 		SLE_CONDSSTR(Vehicle, name,                  SLE_STR | SLF_ALLOW_CONTROL,  SLV_84, SL_MAX_VERSION),
 		SLE_CONDVAR(Vehicle, unitnumber,            SLE_FILE_U8  | SLE_VAR_U16,   SL_MIN_VERSION,   SLV_8),
 		SLE_CONDVAR(Vehicle, unitnumber,            SLE_UINT16,                   SLV_8, SL_MAX_VERSION),
-		    SLE_VAR(Vehicle, owner,                 SLE_UINT8),
-		SLE_CONDVAR(Vehicle, tile,                  SLE_FILE_U16 | SLE_VAR_U32,   SL_MIN_VERSION,   SLV_6),
-		SLE_CONDVAR(Vehicle, tile,                  SLE_UINT32,                   SLV_6, SL_MAX_VERSION),
-		SLE_CONDVAR(Vehicle, dest_tile,             SLE_FILE_U16 | SLE_VAR_U32,   SL_MIN_VERSION,   SLV_6),
-		SLE_CONDVAR(Vehicle, dest_tile,             SLE_UINT32,                   SLV_6, SL_MAX_VERSION),
+		    SLE_CONDVARNAME(Vehicle, Record().owner, "owner", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().tile, "tile", SLE_FILE_U16 | SLE_VAR_U32,   SL_MIN_VERSION,   SLV_6),
+		SLE_CONDVARNAME(Vehicle, Record().tile, "tile", SLE_UINT32,                   SLV_6, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().dest_tile, "dest_tile", SLE_FILE_U16 | SLE_VAR_U32,   SL_MIN_VERSION,   SLV_6),
+		SLE_CONDVARNAME(Vehicle, Record().dest_tile, "dest_tile", SLE_UINT32,                   SLV_6, SL_MAX_VERSION),
 
-		SLE_CONDVAR(Vehicle, x_pos,                 SLE_FILE_U16 | SLE_VAR_U32,   SL_MIN_VERSION,   SLV_6),
-		SLE_CONDVAR(Vehicle, x_pos,                 SLE_UINT32,                   SLV_6, SL_MAX_VERSION),
-		SLE_CONDVAR(Vehicle, y_pos,                 SLE_FILE_U16 | SLE_VAR_U32,   SL_MIN_VERSION,   SLV_6),
-		SLE_CONDVAR(Vehicle, y_pos,                 SLE_UINT32,                   SLV_6, SL_MAX_VERSION),
-		SLE_CONDVAR(Vehicle, z_pos,                 SLE_FILE_U8  | SLE_VAR_I32,   SL_MIN_VERSION, SLV_164),
-		SLE_CONDVAR(Vehicle, z_pos,                 SLE_INT32,                  SLV_164, SL_MAX_VERSION),
-		    SLE_VAR(Vehicle, direction,             SLE_UINT8),
+		SLE_CONDVARNAME(Vehicle, Record().x_pos, "x_pos", SLE_FILE_U16 | SLE_VAR_U32,   SL_MIN_VERSION,   SLV_6),
+		SLE_CONDVARNAME(Vehicle, Record().x_pos, "x_pos", SLE_UINT32,                   SLV_6, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().y_pos, "y_pos", SLE_FILE_U16 | SLE_VAR_U32,   SL_MIN_VERSION,   SLV_6),
+		SLE_CONDVARNAME(Vehicle, Record().y_pos, "y_pos", SLE_UINT32,                   SLV_6, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().z_pos, "z_pos", SLE_FILE_U8  | SLE_VAR_I32,   SL_MIN_VERSION, SLV_164),
+		SLE_CONDVARNAME(Vehicle, Record().z_pos, "z_pos", SLE_INT32,                  SLV_164, SL_MAX_VERSION),
+		    SLE_CONDVARNAME(Vehicle, Record().direction, "direction", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
 
 		    SLE_VAR(Vehicle, spritenum,             SLE_UINT8),
-		    SLE_VAR(Vehicle, engine_type,           SLE_UINT16),
-		    SLE_VAR(Vehicle, cur_speed,             SLE_UINT16),
-		    SLE_VAR(Vehicle, subspeed,              SLE_UINT8),
-		    SLE_VAR(Vehicle, acceleration,          SLE_UINT8),
-		SLE_CONDVAR(Vehicle, motion_counter,        SLE_UINT32,                   SLV_VEH_MOTION_COUNTER, SL_MAX_VERSION),
-		    SLE_VAR(Vehicle, progress,              SLE_UINT8),
+		    SLE_CONDVARNAME(Vehicle, Record().engine_type, "engine_type", SLE_UINT16, SL_MIN_VERSION, SL_MAX_VERSION),
+		    SLE_CONDVARNAME(Vehicle, Record().cur_speed, "cur_speed", SLE_UINT16, SL_MIN_VERSION, SL_MAX_VERSION),
+		    SLE_CONDVARNAME(Vehicle, Record().subspeed, "subspeed", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
+		    SLE_CONDVARNAME(Vehicle, Record().acceleration, "acceleration", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().motion_counter, "motion_counter", SLE_UINT32,                   SLV_VEH_MOTION_COUNTER, SL_MAX_VERSION),
+		    SLE_CONDVARNAME(Vehicle, Record().progress, "progress", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
 
-		    SLE_VAR(Vehicle, vehstatus,             SLE_UINT8),
-		SLE_CONDVAR(Vehicle, last_station_visited,  SLE_FILE_U8  | SLE_VAR_U16,   SL_MIN_VERSION,   SLV_5),
-		SLE_CONDVAR(Vehicle, last_station_visited,  SLE_UINT16,                   SLV_5, SL_MAX_VERSION),
+		    SLE_CONDVARNAME(Vehicle, Record().vehstatus, "vehstatus", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().last_station_visited, "last_station_visited", SLE_FILE_U8  | SLE_VAR_U16,   SL_MIN_VERSION,   SLV_5),
+		SLE_CONDVARNAME(Vehicle, Record().last_station_visited, "last_station_visited", SLE_UINT16,                   SLV_5, SL_MAX_VERSION),
 		SLE_CONDVAR(Vehicle, last_loading_station,  SLE_UINT16,                 SLV_182, SL_MAX_VERSION),
 
 		    SLE_VAR(Vehicle, cargo_type,            SLE_UINT8),
@@ -703,16 +703,16 @@ public:
 		SLEG_CONDVAR("cargo_source", _cargo_source, SLE_FILE_U8  | SLE_VAR_U16,   SL_MIN_VERSION,   SLV_7),
 		SLEG_CONDVAR("cargo_source", _cargo_source, SLE_UINT16,                   SLV_7,  SLV_68),
 		SLEG_CONDVAR("cargo_source_xy", _cargo_source_xy, SLE_UINT32,             SLV_44,  SLV_68),
-		    SLE_VAR(Vehicle, cargo_cap,             SLE_UINT16),
-		SLE_CONDVAR(Vehicle, refit_cap,             SLE_UINT16,                 SLV_182, SL_MAX_VERSION),
+		    SLE_CONDVARNAME(Vehicle, Record().cargo_cap, "cargo_cap", SLE_UINT16, SL_MIN_VERSION, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().refit_cap, "refit_cap", SLE_UINT16,                 SLV_182, SL_MAX_VERSION),
 		SLEG_CONDVAR("cargo_count", _cargo_count,   SLE_UINT16,                   SL_MIN_VERSION,  SLV_68),
 		SLEG_CONDREFLIST("cargo.packets", cargo_packets, REF_CARGO_PACKET, SLV_68, SL_MAX_VERSION),
 		SLEG_CONDARR("cargo.action_counts", cargo_actions, SLE_UINT, 4, SLV_181, SL_MAX_VERSION),
-		SLE_CONDVAR(Vehicle, cargo_age_counter,     SLE_UINT16,                 SLV_162, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().cargo_age_counter, "cargo_age_counter", SLE_UINT16,                 SLV_162, SL_MAX_VERSION),
 
-		    SLE_VAR(Vehicle, day_counter,           SLE_UINT8),
-		    SLE_VAR(Vehicle, tick_counter,          SLE_UINT8),
-		SLE_CONDVAR(Vehicle, running_ticks,         SLE_UINT8,                   SLV_88, SL_MAX_VERSION),
+		    SLE_CONDVARNAME(Vehicle, Record().day_counter, "day_counter", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
+		    SLE_CONDVARNAME(Vehicle, Record().tick_counter, "tick_counter", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().running_ticks, "running_ticks", SLE_UINT8,                   SLV_88, SL_MAX_VERSION),
 
 		    SLE_VAR(Vehicle, cur_implicit_order_index,  SLE_UINT8),
 		SLE_CONDVAR(Vehicle, cur_real_order_index,  SLE_UINT8,                  SLV_158, SL_MAX_VERSION),
@@ -755,7 +755,7 @@ public:
 		SLE_CONDVAR(Vehicle, service_interval,      SLE_UINT16,                 SLV_180, SL_MAX_VERSION),
 		    SLE_VAR(Vehicle, reliability,           SLE_UINT16),
 		    SLE_VAR(Vehicle, reliability_spd_dec,   SLE_UINT16),
-		    SLE_VAR(Vehicle, breakdown_ctr,         SLE_UINT8),
+		    SLE_CONDVARNAME(Vehicle, Record().breakdown_ctr, "breakdown_ctr", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
 		    SLE_VAR(Vehicle, breakdown_delay,       SLE_UINT8),
 		    SLE_VAR(Vehicle, breakdowns_since_last_service, SLE_UINT8),
 		    SLE_VAR(Vehicle, breakdown_chance,      SLE_UINT8),
@@ -834,21 +834,21 @@ public:
 
 	void Save(Vehicle *v) const override
 	{
-		if (v->type != VEH_TRAIN) return;
+		if (v->GetType() != VEH_TRAIN) return;
 		TrainStateScope scope(Train::From(v), false);
 		SlObject(v, this->GetDescription());
 	}
 
 	void Load(Vehicle *v) const override
 	{
-		if (v->type != VEH_TRAIN) return;
+		if (v->GetType() != VEH_TRAIN) return;
 		TrainStateScope scope(Train::From(v), true);
 		SlObject(v, this->GetLoadDescription());
 	}
 
 	void FixPointers(Vehicle *v) const override
 	{
-		if (v->type != VEH_TRAIN) return;
+		if (v->GetType() != VEH_TRAIN) return;
 		TrainStateScope scope(Train::From(v), false);
 		SlObject(v, this->GetDescription());
 	}
@@ -914,14 +914,14 @@ public:
 
 	void Save(Vehicle *v) const override
 	{
-		if (v->type != VEH_ROAD) return;
+		if (v->GetType() != VEH_ROAD) return;
 		RoadVehicleStateScope scope(RoadVehicle::From(v), false);
 		SlObject(v, this->GetDescription());
 	}
 
 	void Load(Vehicle *v) const override
 	{
-		if (v->type != VEH_ROAD) return;
+		if (v->GetType() != VEH_ROAD) return;
 		RoadVehicleStateScope scope(RoadVehicle::From(v), true);
 		SlObject(v, this->GetLoadDescription());
 		if (!IsSavegameVersionBefore(SLV_ROADVEH_PATH_CACHE) && IsSavegameVersionBefore(SLV_PATH_CACHE_FORMAT)) {
@@ -931,7 +931,7 @@ public:
 
 	void FixPointers(Vehicle *v) const override
 	{
-		if (v->type != VEH_ROAD) return;
+		if (v->GetType() != VEH_ROAD) return;
 		RoadVehicleStateScope scope(RoadVehicle::From(v), false);
 		SlObject(v, this->GetDescription());
 	}
@@ -982,14 +982,14 @@ public:
 
 	void Save(Vehicle *v) const override
 	{
-		if (v->type != VEH_SHIP) return;
+		if (v->GetType() != VEH_SHIP) return;
 		ShipStateScope scope(Ship::From(v), false);
 		SlObject(v, this->GetDescription());
 	}
 
 	void Load(Vehicle *v) const override
 	{
-		if (v->type != VEH_SHIP) return;
+		if (v->GetType() != VEH_SHIP) return;
 		ShipStateScope scope(Ship::From(v), true);
 		SlObject(v, this->GetLoadDescription());
 
@@ -1002,7 +1002,7 @@ public:
 
 	void FixPointers(Vehicle *v) const override
 	{
-		if (v->type != VEH_SHIP) return;
+		if (v->GetType() != VEH_SHIP) return;
 		ShipStateScope scope(Ship::From(v), false);
 		SlObject(v, this->GetDescription());
 	}
@@ -1031,19 +1031,19 @@ public:
 
 	void Save(Vehicle *v) const override
 	{
-		if (v->type != VEH_AIRCRAFT) return;
+		if (v->GetType() != VEH_AIRCRAFT) return;
 		SlObject(v, this->GetDescription());
 	}
 
 	void Load(Vehicle *v) const override
 	{
-		if (v->type != VEH_AIRCRAFT) return;
+		if (v->GetType() != VEH_AIRCRAFT) return;
 		SlObject(v, this->GetLoadDescription());
 	}
 
 	void FixPointers(Vehicle *v) const override
 	{
-		if (v->type != VEH_AIRCRAFT) return;
+		if (v->GetType() != VEH_AIRCRAFT) return;
 		SlObject(v, this->GetDescription());
 	}
 };
@@ -1051,21 +1051,21 @@ public:
 class SlVehicleEffect : public DefaultSaveLoadHandler<SlVehicleEffect, Vehicle> {
 public:
 	static inline const SaveLoad description[] = {
-		     SLE_VAR(Vehicle, subtype,               SLE_UINT8),
+		     SLE_CONDVARNAME(Vehicle, Record().subtype, "subtype", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
 
-		 SLE_CONDVAR(Vehicle, tile,                  SLE_FILE_U16 | SLE_VAR_U32,   SL_MIN_VERSION,   SLV_6),
-		 SLE_CONDVAR(Vehicle, tile,                  SLE_UINT32,                   SLV_6, SL_MAX_VERSION),
+		 SLE_CONDVARNAME(Vehicle, Record().tile, "tile", SLE_FILE_U16 | SLE_VAR_U32,   SL_MIN_VERSION,   SLV_6),
+		 SLE_CONDVARNAME(Vehicle, Record().tile, "tile", SLE_UINT32,                   SLV_6, SL_MAX_VERSION),
 
-		 SLE_CONDVAR(Vehicle, x_pos,                 SLE_FILE_I16 | SLE_VAR_I32,   SL_MIN_VERSION,   SLV_6),
-		 SLE_CONDVAR(Vehicle, x_pos,                 SLE_INT32,                    SLV_6, SL_MAX_VERSION),
-		 SLE_CONDVAR(Vehicle, y_pos,                 SLE_FILE_I16 | SLE_VAR_I32,   SL_MIN_VERSION,   SLV_6),
-		 SLE_CONDVAR(Vehicle, y_pos,                 SLE_INT32,                    SLV_6, SL_MAX_VERSION),
-		 SLE_CONDVAR(Vehicle, z_pos,                 SLE_FILE_U8  | SLE_VAR_I32,   SL_MIN_VERSION, SLV_164),
-		 SLE_CONDVAR(Vehicle, z_pos,                 SLE_INT32,                  SLV_164, SL_MAX_VERSION),
+		 SLE_CONDVARNAME(Vehicle, Record().x_pos, "x_pos", SLE_FILE_I16 | SLE_VAR_I32,   SL_MIN_VERSION,   SLV_6),
+		 SLE_CONDVARNAME(Vehicle, Record().x_pos, "x_pos", SLE_INT32,                    SLV_6, SL_MAX_VERSION),
+		 SLE_CONDVARNAME(Vehicle, Record().y_pos, "y_pos", SLE_FILE_I16 | SLE_VAR_I32,   SL_MIN_VERSION,   SLV_6),
+		 SLE_CONDVARNAME(Vehicle, Record().y_pos, "y_pos", SLE_INT32,                    SLV_6, SL_MAX_VERSION),
+		 SLE_CONDVARNAME(Vehicle, Record().z_pos, "z_pos", SLE_FILE_U8  | SLE_VAR_I32,   SL_MIN_VERSION, SLV_164),
+		 SLE_CONDVARNAME(Vehicle, Record().z_pos, "z_pos", SLE_INT32,                  SLV_164, SL_MAX_VERSION),
 
 		     SLE_VAR(Vehicle, sprite_cache.sprite_seq.seq[0].sprite, SLE_FILE_U16 | SLE_VAR_U32),
-		     SLE_VAR(Vehicle, progress,              SLE_UINT8),
-		     SLE_VAR(Vehicle, vehstatus,             SLE_UINT8),
+		     SLE_CONDVARNAME(Vehicle, Record().progress, "progress", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
+		     SLE_CONDVARNAME(Vehicle, Record().vehstatus, "vehstatus", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
 
 		    SLEG_VAR("animation_state", EffectVehicleAnimationScope::State(), SLE_UINT16),
 		    SLEG_VAR("animation_substate", EffectVehicleAnimationScope::Substate(), SLE_UINT8),
@@ -1076,21 +1076,21 @@ public:
 
 	void Save(Vehicle *v) const override
 	{
-		if (v->type != VEH_EFFECT) return;
+		if (v->GetType() != VEH_EFFECT) return;
 		EffectVehicleAnimationScope scope(EffectVehicle::From(v), false);
 		SlObject(v, this->GetDescription());
 	}
 
 	void Load(Vehicle *v) const override
 	{
-		if (v->type != VEH_EFFECT) return;
+		if (v->GetType() != VEH_EFFECT) return;
 		EffectVehicleAnimationScope scope(EffectVehicle::From(v), true);
 		SlObject(v, this->GetLoadDescription());
 	}
 
 	void FixPointers(Vehicle *v) const override
 	{
-		if (v->type != VEH_EFFECT) return;
+		if (v->GetType() != VEH_EFFECT) return;
 		EffectVehicleAnimationScope scope(EffectVehicle::From(v), false);
 		SlObject(v, this->GetDescription());
 	}
@@ -1099,24 +1099,24 @@ public:
 class SlVehicleDisaster : public DefaultSaveLoadHandler<SlVehicleDisaster, Vehicle> {
 public:
 	static inline const SaveLoad description[] = {
-		    SLE_REF(Vehicle, next,                  REF_VEHICLE_OLD),
+		    SLE_GENERAL_NAME(SL_REF, "next", Vehicle, Record().next, REF_VEHICLE_RECORD_OLD, 0, SL_MIN_VERSION, SL_MAX_VERSION, 0),
 
-		    SLE_VAR(Vehicle, subtype,               SLE_UINT8),
-		SLE_CONDVAR(Vehicle, tile,                  SLE_FILE_U16 | SLE_VAR_U32,   SL_MIN_VERSION,   SLV_6),
-		SLE_CONDVAR(Vehicle, tile,                  SLE_UINT32,                   SLV_6, SL_MAX_VERSION),
-		SLE_CONDVAR(Vehicle, dest_tile,             SLE_FILE_U16 | SLE_VAR_U32,   SL_MIN_VERSION,   SLV_6),
-		SLE_CONDVAR(Vehicle, dest_tile,             SLE_UINT32,                   SLV_6, SL_MAX_VERSION),
+		    SLE_CONDVARNAME(Vehicle, Record().subtype, "subtype", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().tile, "tile", SLE_FILE_U16 | SLE_VAR_U32,   SL_MIN_VERSION,   SLV_6),
+		SLE_CONDVARNAME(Vehicle, Record().tile, "tile", SLE_UINT32,                   SLV_6, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().dest_tile, "dest_tile", SLE_FILE_U16 | SLE_VAR_U32,   SL_MIN_VERSION,   SLV_6),
+		SLE_CONDVARNAME(Vehicle, Record().dest_tile, "dest_tile", SLE_UINT32,                   SLV_6, SL_MAX_VERSION),
 
-		SLE_CONDVAR(Vehicle, x_pos,                 SLE_FILE_I16 | SLE_VAR_I32,   SL_MIN_VERSION,   SLV_6),
-		SLE_CONDVAR(Vehicle, x_pos,                 SLE_INT32,                    SLV_6, SL_MAX_VERSION),
-		SLE_CONDVAR(Vehicle, y_pos,                 SLE_FILE_I16 | SLE_VAR_I32,   SL_MIN_VERSION,   SLV_6),
-		SLE_CONDVAR(Vehicle, y_pos,                 SLE_INT32,                    SLV_6, SL_MAX_VERSION),
-		SLE_CONDVAR(Vehicle, z_pos,                 SLE_FILE_U8  | SLE_VAR_I32,   SL_MIN_VERSION, SLV_164),
-		SLE_CONDVAR(Vehicle, z_pos,                 SLE_INT32,                  SLV_164, SL_MAX_VERSION),
-		    SLE_VAR(Vehicle, direction,             SLE_UINT8),
+		SLE_CONDVARNAME(Vehicle, Record().x_pos, "x_pos", SLE_FILE_I16 | SLE_VAR_I32,   SL_MIN_VERSION,   SLV_6),
+		SLE_CONDVARNAME(Vehicle, Record().x_pos, "x_pos", SLE_INT32,                    SLV_6, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().y_pos, "y_pos", SLE_FILE_I16 | SLE_VAR_I32,   SL_MIN_VERSION,   SLV_6),
+		SLE_CONDVARNAME(Vehicle, Record().y_pos, "y_pos", SLE_INT32,                    SLV_6, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().z_pos, "z_pos", SLE_FILE_U8  | SLE_VAR_I32,   SL_MIN_VERSION, SLV_164),
+		SLE_CONDVARNAME(Vehicle, Record().z_pos, "z_pos", SLE_INT32,                  SLV_164, SL_MAX_VERSION),
+		    SLE_CONDVARNAME(Vehicle, Record().direction, "direction", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
 
-		    SLE_VAR(Vehicle, owner,                 SLE_UINT8),
-		    SLE_VAR(Vehicle, vehstatus,             SLE_UINT8),
+		    SLE_CONDVARNAME(Vehicle, Record().owner, "owner", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
+		    SLE_CONDVARNAME(Vehicle, Record().vehstatus, "vehstatus", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
 		SLE_CONDVARNAME(DisasterVehicle, State(), "current_order.dest", SLE_FILE_U8 | SLE_VAR_U16, SL_MIN_VERSION,         SLV_5),
 		SLE_CONDVARNAME(DisasterVehicle, State(), "current_order.dest", SLE_UINT16,                SLV_5,                  SLV_DISASTER_VEH_STATE),
 		SLE_CONDVARNAME(DisasterVehicle, State(), "state",                       SLE_UINT16,                SLV_DISASTER_VEH_STATE, SL_MAX_VERSION),
@@ -1124,7 +1124,7 @@ public:
 		    SLE_VAR(Vehicle, sprite_cache.sprite_seq.seq[0].sprite, SLE_FILE_U16 | SLE_VAR_U32),
 		SLE_CONDVAR(Vehicle, age,                   SLE_FILE_U16 | SLE_VAR_I32,   SL_MIN_VERSION,  SLV_31),
 		SLE_CONDVAR(Vehicle, age,                   SLE_INT32,                   SLV_31, SL_MAX_VERSION),
-		    SLE_VAR(Vehicle, tick_counter,          SLE_UINT8),
+		    SLE_CONDVARNAME(Vehicle, Record().tick_counter, "tick_counter", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
 
 		SLE_CONDVARNAME(DisasterVehicle, ImageOverride(), "image_override",            SLE_FILE_U16 | SLE_VAR_U32,   SL_MIN_VERSION, SLV_191),
 		SLE_CONDVARNAME(DisasterVehicle, ImageOverride(), "image_override",            SLE_UINT32,                 SLV_191, SL_MAX_VERSION),
@@ -1137,25 +1137,25 @@ public:
 
 	void Save(Vehicle *v) const override
 	{
-		if (v->type != VEH_DISASTER) return;
+		if (v->GetType() != VEH_DISASTER) return;
 		SlObject(v, this->GetDescription());
 	}
 
 	void Load(Vehicle *v) const override
 	{
-		if (v->type != VEH_DISASTER) return;
+		if (v->GetType() != VEH_DISASTER) return;
 		SlObject(v, this->GetLoadDescription());
 	}
 
 	void FixPointers(Vehicle *v) const override
 	{
-		if (v->type != VEH_DISASTER) return;
+		if (v->GetType() != VEH_DISASTER) return;
 		SlObject(v, this->GetDescription());
 	}
 };
 
 static const SaveLoad _vehicle_desc[] = {
-	SLE_SAVEBYTE(Vehicle, type),
+	SLE_GENERAL_NAME(SL_SAVEBYTE, "type", Vehicle, Record().type, 0, 0, SL_MIN_VERSION, SL_MAX_VERSION, 0),
 	SLEG_STRUCT("train", SlVehicleTrain),
 	SLEG_STRUCT("roadveh", SlVehicleRoadVeh),
 	SLEG_STRUCT("ship", SlVehicleShip),
@@ -1210,8 +1210,8 @@ struct VEHSChunkHandler : ChunkHandler {
 			}
 
 			/* Old savegames used 'last_station_visited = 0xFF' */
-			if (IsSavegameVersionBefore(SLV_5) && v->last_station_visited == 0xFF) {
-				v->last_station_visited = StationID::Invalid();
+			if (IsSavegameVersionBefore(SLV_5) && v->GetLastStationVisited() == 0xFF) {
+				v->SetLastStationVisited(StationID::Invalid());
 			}
 
 			if (IsSavegameVersionBefore(SLV_182)) v->last_loading_station = StationID::Invalid();

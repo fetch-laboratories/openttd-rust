@@ -189,7 +189,7 @@ static void GetCustomEngineSprite(EngineID engine, const Vehicle *v, Direction d
 
 void GetCustomVehicleSprite(const Vehicle *v, Direction direction, EngineImageType image_type, VehicleSpriteSeq *result)
 {
-	GetCustomEngineSprite(v->engine_type, v, direction, image_type, result);
+	GetCustomEngineSprite(v->GetEngineType(), v, direction, image_type, result);
 }
 
 void GetCustomVehicleIcon(EngineID engine, Direction direction, EngineImageType image_type, VehicleSpriteSeq *result)
@@ -231,7 +231,7 @@ static void GetRotorOverrideSprite(EngineID engine, const struct Aircraft *v, En
 
 void GetCustomRotorSprite(const struct Aircraft *v, EngineImageType image_type, VehicleSpriteSeq *result)
 {
-	GetRotorOverrideSprite(v->engine_type, v, image_type, result);
+	GetRotorOverrideSprite(v->GetEngineType(), v, image_type, result);
 }
 
 void GetCustomRotorIcon(EngineID engine, EngineImageType image_type, VehicleSpriteSeq *result)
@@ -246,7 +246,7 @@ void GetCustomRotorIcon(EngineID engine, EngineImageType image_type, VehicleSpri
  */
 bool UsesWagonOverride(const Vehicle *v)
 {
-	assert(v->type == VEH_TRAIN);
+	assert(v->GetType() == VEH_TRAIN);
 	return Train::From(v)->tcache.cached_override != nullptr;
 }
 
@@ -285,7 +285,7 @@ uint16_t GetVehicleCallbackParent(CallbackID callback, uint32_t param1, uint32_t
 /* Callback 36 handlers */
 int GetVehicleProperty(const Vehicle *v, PropertyID property, int orig_value, bool is_signed)
 {
-	return GetEngineProperty(v->engine_type, property, orig_value, v, is_signed);
+	return GetEngineProperty(v->GetEngineType(), property, orig_value, v, is_signed);
 }
 
 

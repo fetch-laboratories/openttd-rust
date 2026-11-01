@@ -6,11 +6,11 @@ static uint16_t VehicleBuildFreeUnit(VehicleType type) noexcept { return GetFree
 static void *VehicleConstructNewRoad(uint32_t tile) noexcept
 {
 	RoadVehicle *v = new RoadVehicle();
-	v->direction = DiagDirToDir(static_cast<DiagDirection>(Shared_road_depot_direction(tile)));
+	v->SetDirection(DiagDirToDir(static_cast<DiagDirection>(Shared_road_depot_direction(tile))));
 	RustVehicleSetOwner(RustVehicle(v), RustCurrentCompanyID());
 	RustWriteVehicleTile(v, TileIndex(tile));
-	int x = TileX(v->tile) * TILE_SIZE + TILE_SIZE / 2;
-	int y = TileY(v->tile) * TILE_SIZE + TILE_SIZE / 2;
+	int x = TileX(v->GetTile()) * TILE_SIZE + TILE_SIZE / 2;
+	int y = TileY(v->GetTile()) * TILE_SIZE + TILE_SIZE / 2;
 	RustWriteVehicleX(v, x);
 	RustWriteVehicleY(v, y);
 	RustWriteVehicleZ(v, SharedSlopePixelZ(x, y, true));
@@ -38,15 +38,15 @@ static void VehicleConstructAircraftPlace(void *aircraft, void *shadow, uint32_t
 {
 	Aircraft *v = static_cast<Aircraft *>(aircraft);
 	Aircraft *u = static_cast<Aircraft *>(shadow);
-	v->direction = DIR_SE;
+	v->SetDirection(DIR_SE);
 	RustVehicleSetOwner(RustVehicle(u), RustCurrentCompanyID()); RustVehicleSetOwner(RustVehicle(v), RustVehicleOwner(u));
 	RustWriteVehicleTile(v, TileIndex(tile));
-	uint x = TileX(v->tile) * TILE_SIZE + 5;
-	uint y = TileY(v->tile) * TILE_SIZE + 3;
+	uint x = TileX(v->GetTile()) * TILE_SIZE + 5;
+	uint y = TileY(v->GetTile()) * TILE_SIZE + 3;
 	RustWriteVehicleX(u, x); RustWriteVehicleX(v, x);
 	RustWriteVehicleY(u, y); RustWriteVehicleY(v, y);
 	RustWriteVehicleZ(u, SharedSlopePixelZ(x, y, false));
-	RustWriteVehicleZ(v, u->z_pos + 1);
+	RustWriteVehicleZ(v, u->Record().z_pos + 1);
 	RustWriteVehicleStatus(v, {VehState::Hidden, VehState::Stopped, VehState::DefaultPalette});
 	RustWriteVehicleStatus(u, {VehState::Hidden, VehState::Unclickable, VehState::Shadow});
 }
@@ -59,7 +59,7 @@ static void VehicleConstructAircraftProperties(void *aircraft, void *shadow, con
 {
 	Aircraft *v = static_cast<Aircraft *>(aircraft);
 	Aircraft *u = static_cast<Aircraft *>(shadow);
-	v->acceleration = EngineOf(e)->VehInfo<AircraftVehicleInfo>().acceleration;
+	v->Record().acceleration = EngineOf(e)->VehInfo<AircraftVehicleInfo>().acceleration;
 	RustVehicleSetEngine(RustVehicle(u), RustEngineID(e));
 	RustVehicleSetSubtype(v, subtype);
 	RustVehicleSetSubtype(u, AIR_SHADOW);
@@ -71,11 +71,11 @@ static void VehicleConstructRotor(void *rotor, void *aircraft, void *shadow) noe
 	Aircraft *w = static_cast<Aircraft *>(rotor);
 	const Aircraft *v = static_cast<Aircraft *>(aircraft);
 	RustVehicleSetEngine(RustVehicle(w), RustVehicleEngineID(v));
-	w->direction = DIR_N;
+	w->SetDirection(DIR_N);
 	RustVehicleSetOwner(RustVehicle(w), RustCurrentCompanyID());
-	RustWriteVehicleX(w, v->x_pos);
-	RustWriteVehicleY(w, v->y_pos);
-	RustWriteVehicleZ(w, v->z_pos + ROTOR_Z_OFFSET);
+	RustWriteVehicleX(w, v->Record().x_pos);
+	RustWriteVehicleY(w, v->Record().y_pos);
+	RustWriteVehicleZ(w, v->Record().z_pos + ROTOR_Z_OFFSET);
 	RustWriteVehicleStatus(w, {VehState::Hidden, VehState::Unclickable});
 	RustWriteVehicleSprite(w, 0xFF);
 	RustVehicleSetSubtype(w, AIR_ROTOR);
@@ -86,8 +86,8 @@ static void VehicleConstructRoadCapacity(void *front, void *part, uint16_t capac
 {
 	Vehicle *v = static_cast<Vehicle *>(front);
 	Vehicle *u = static_cast<Vehicle *>(part);
-	u->cargo_cap = capacity;
-	u->refit_cap = 0;
+	u->Record().cargo_cap = capacity;
+	u->Record().refit_cap = 0;
 	RustVehicleInvalidateNewGRFCache(v);
 	RustVehicleInvalidateNewGRFCache(u);
 }
@@ -95,7 +95,7 @@ static void VehicleConstructEngineCommon(void *shell, const OpenTTDEngine *engin
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);
 	const Engine *e = EngineOf(engine);
-	v->last_station_visited = StationID::Invalid();
+	v->SetLastStationVisited(StationID::Invalid());
 	RustVehicleSetLastLoadingStation(RustVehicle(v), StationID::Invalid().base());
 	RustVehicleSetEngine(RustVehicle(v), e->index.base());
 	v->reliability = RustEngineReliability(e);
@@ -147,7 +147,7 @@ static void VehicleBuildPresentation(void *shell, VehicleType type) noexcept
 	RustVehicleInvalidateDepot(v);
 	InvalidateWindowClassesData(GetWindowClassForVehicleType(type), 0);
 	SetWindowDirty(WC_COMPANY, OpenTTDCurrentCompany());
-	if (RustIsLocalCompany()) InvalidateAutoreplaceWindow(v->engine_type, v->group_id);
+	if (RustIsLocalCompany()) InvalidateAutoreplaceWindow(v->GetEngineType(), v->group_id);
 }
 const OpenTTDVehicleBuildServices &GetRustVehicleBuildServices() noexcept
 {

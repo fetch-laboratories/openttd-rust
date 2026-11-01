@@ -79,7 +79,7 @@ struct IntroGameViewportCommand {
 	{
 		if (this->vehicle != VehicleID::Invalid()) {
 			const Vehicle *v = Vehicle::Get(this->vehicle);
-			this->position = RemapCoords(v->x_pos, v->y_pos, v->z_pos);
+			this->position = RemapCoords(v->Record().x_pos, v->Record().y_pos, v->Record().z_pos);
 		}
 
 		Point p;

@@ -80,7 +80,7 @@ static OpenTTDAircraftMoving OPENTTD_RUST_CALL Aircraft_moving(const void * airp
 static uint16_t OPENTTD_RUST_CALL Aircraft_engine_speed(OpenTTDAircraftVehicle vehicle) noexcept
 {
 	const Vehicle *v = VehicleOf(vehicle.handle);
-	return AircraftVehInfo(v->engine_type)->max_speed;
+	return AircraftVehInfo(v->GetEngineType())->max_speed;
 }
 
 static uint8_t OPENTTD_RUST_CALL Aircraft_engine_subtype(OpenTTDAircraftVehicle vehicle) noexcept
@@ -92,7 +92,7 @@ static uint8_t OPENTTD_RUST_CALL Aircraft_engine_subtype(OpenTTDAircraftVehicle 
 static uint16_t OPENTTD_RUST_CALL Aircraft_engine_sound(OpenTTDAircraftVehicle vehicle) noexcept
 {
 	const Vehicle *v = VehicleOf(vehicle.handle);
-	return AircraftVehInfo(v->engine_type)->sfx;
+	return AircraftVehInfo(v->GetEngineType())->sfx;
 }
 
 static uint8_t OPENTTD_RUST_CALL Aircraft_airport_entry(const void * ap, uint8_t direction) noexcept
@@ -118,7 +118,7 @@ static uint8_t OPENTTD_RUST_CALL Aircraft_hangar_exit(const OpenTTDStation *stat
 static uint16_t OPENTTD_RUST_CALL Aircraft_service_interval(OpenTTDAircraftVehicle vehicle) noexcept
 {
 	const Vehicle *v = VehicleOf(vehicle.handle);
-	return RustCompanyAircraftServiceInterval(v->owner);
+	return RustCompanyAircraftServiceInterval(v->GetOwner());
 }
 
 static bool OPENTTD_RUST_CALL Aircraft_chain_in_depot(OpenTTDAircraftVehicle vehicle) noexcept
@@ -172,9 +172,9 @@ static void OPENTTD_RUST_CALL Aircraft_crash_news(OpenTTDAircraftVehicle vehicle
 	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); StationID station{station_id};
 	TileIndex vt = TileVirtXYClampedToMap(RustVehicleX(v), RustVehicleY(v)); bool missing = station == StationID::Invalid();
 	EncodedString headline = missing ? GetEncodedString(STR_NEWS_PLANE_CRASH_OUT_OF_FUEL, victims) : GetEncodedString(STR_NEWS_AIRCRAFT_CRASH, victims, station);
-	AI::NewEvent(v->owner, new ScriptEventVehicleCrashed(v->index, vt, missing ? ScriptEventVehicleCrashed::CRASH_AIRCRAFT_NO_AIRPORT : ScriptEventVehicleCrashed::CRASH_PLANE_LANDING, victims, v->owner));
-	Game::NewEvent(new ScriptEventVehicleCrashed(v->index, vt, missing ? ScriptEventVehicleCrashed::CRASH_AIRCRAFT_NO_AIRPORT : ScriptEventVehicleCrashed::CRASH_PLANE_LANDING, victims, v->owner));
-	AddTileNewsItem(std::move(headline), v->owner == _local_company ? NewsType::Accident : NewsType::AccidentOther, vt, station);
+	AI::NewEvent(v->GetOwner(), new ScriptEventVehicleCrashed(v->index, vt, missing ? ScriptEventVehicleCrashed::CRASH_AIRCRAFT_NO_AIRPORT : ScriptEventVehicleCrashed::CRASH_PLANE_LANDING, victims, v->GetOwner()));
+	Game::NewEvent(new ScriptEventVehicleCrashed(v->index, vt, missing ? ScriptEventVehicleCrashed::CRASH_AIRCRAFT_NO_AIRPORT : ScriptEventVehicleCrashed::CRASH_PLANE_LANDING, victims, v->GetOwner()));
+	AddTileNewsItem(std::move(headline), v->GetOwner() == _local_company ? NewsType::Accident : NewsType::AccidentOther, vt, station);
 }
 
 
@@ -191,16 +191,16 @@ static void OPENTTD_RUST_CALL Aircraft_dirty_depot(OpenTTDAircraftVehicle vehicl
 static void OPENTTD_RUST_CALL Aircraft_first_arrival(OpenTTDAircraftVehicle vehicle, uint16_t station) noexcept
 {
 	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); Station *st = Station::Get(station); st->had_vehicle_of_type |= HVOT_AIRCRAFT;
-	AddVehicleNewsItem(GetEncodedString(STR_NEWS_FIRST_AIRCRAFT_ARRIVAL, st->index), v->owner == _local_company ? NewsType::ArrivalCompany : NewsType::ArrivalOther, v->index, st->index);
-	AI::NewEvent(v->owner, new ScriptEventStationFirstVehicle(st->index, v->index)); Game::NewEvent(new ScriptEventStationFirstVehicle(st->index, v->index));
+	AddVehicleNewsItem(GetEncodedString(STR_NEWS_FIRST_AIRCRAFT_ARRIVAL, st->index), v->GetOwner() == _local_company ? NewsType::ArrivalCompany : NewsType::ArrivalOther, v->index, st->index);
+	AI::NewEvent(v->GetOwner(), new ScriptEventStationFirstVehicle(st->index, v->index)); Game::NewEvent(new ScriptEventStationFirstVehicle(st->index, v->index));
 }
 
 
 
 static void OPENTTD_RUST_CALL Aircraft_destination_too_far(OpenTTDAircraftVehicle vehicle) noexcept
 {
-	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); AI::NewEvent(v->owner, new ScriptEventAircraftDestTooFar(v->index));
-	if (v->owner == _local_company) AddVehicleAdviceNewsItem(AdviceType::AircraftDestinationTooFar, GetEncodedString(STR_NEWS_AIRCRAFT_DEST_TOO_FAR, v->index), v->index);
+	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); AI::NewEvent(v->GetOwner(), new ScriptEventAircraftDestTooFar(v->index));
+	if (v->GetOwner() == _local_company) AddVehicleAdviceNewsItem(AdviceType::AircraftDestinationTooFar, GetEncodedString(STR_NEWS_AIRCRAFT_DEST_TOO_FAR, v->index), v->index);
 }
 
 static void OPENTTD_RUST_CALL Aircraft_delete_range_news(OpenTTDAircraftVehicle vehicle) noexcept
@@ -217,7 +217,7 @@ static void OPENTTD_RUST_CALL Aircraft_service_order(OpenTTDAircraftVehicle vehi
 
 static void OPENTTD_RUST_CALL Aircraft_subtract_cost(OpenTTDAircraftVehicle vehicle, int64_t cost) noexcept
 {
-	SubtractMoneyFromCompanyFract(VehicleOf(vehicle.handle)->owner, CommandCost(EXPENSES_AIRCRAFT_RUN, Money{cost}));
+	SubtractMoneyFromCompanyFract(VehicleOf(vehicle.handle)->GetOwner(), CommandCost(EXPENSES_AIRCRAFT_RUN, Money{cost}));
 }
 
 static void OPENTTD_RUST_CALL Aircraft_dirty_lists(OpenTTDAircraftVehicle vehicle) noexcept
@@ -422,7 +422,7 @@ ClosestDepot Aircraft::FindClosestDepot()
 }
 Station *GetTargetAirportIfValid(const Aircraft *v)
 {
-	assert(v->type == VEH_AIRCRAFT);
+	assert(v->GetType() == VEH_AIRCRAFT);
 	Station *st = RustStationIfValid<Station *>(v->targetairport.base());
 	return st == nullptr || RustStationAirportTile(st) == INVALID_TILE.base() ? nullptr : st;
 }

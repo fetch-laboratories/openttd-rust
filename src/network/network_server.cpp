@@ -1494,16 +1494,16 @@ NetworkCompanyStatsArray NetworkGetCompanyStats()
 
 	/* Go through all vehicles and count the type of vehicles */
 	for (const Vehicle *v : Vehicle::Iterate()) {
-		if (!Company::IsValidID(v->owner) || !v->IsPrimaryVehicle()) continue;
+		if (!Company::IsValidID(v->GetOwner()) || !v->IsPrimaryVehicle()) continue;
 		uint8_t type = 0;
-		switch (v->type) {
+		switch (v->GetType()) {
 			case VEH_TRAIN: type = NETWORK_VEH_TRAIN; break;
 			case VEH_ROAD: type = RoadVehicle::From(v)->IsBus() ? NETWORK_VEH_BUS : NETWORK_VEH_LORRY; break;
 			case VEH_AIRCRAFT: type = NETWORK_VEH_PLANE; break;
 			case VEH_SHIP: type = NETWORK_VEH_SHIP; break;
 			default: continue;
 		}
-		stats[v->owner].num_vehicle[type]++;
+		stats[v->GetOwner()].num_vehicle[type]++;
 	}
 
 	/* Go through all stations and count the types of stations */

@@ -183,11 +183,11 @@ inline OpenTTDEngineRoadAvailability RustEngineRoadAvailability(const OpenTTDEng
 }
 inline uint64_t RustEngineCompatibleRailTypes(const Engine *e) noexcept { return RustAllCompatibleRailTypes(RustEngineRailTypes(RustEngine(e))); }
 /** Reserve a unit number and assign the returned native ID to the shell. */
-inline void RustVehicleUseUnitNumber(Vehicle *v, uint16_t unit) noexcept { v->unitnumber = RustCompanyUseVehicleUnit(v->owner, v->type, unit); }
+inline void RustVehicleUseUnitNumber(Vehicle *v, uint16_t unit) noexcept { v->unitnumber = RustCompanyUseVehicleUnit(v->GetOwner(), v->GetType(), unit); }
 inline void RustVehicleUseCurrentUnit(void *shell) noexcept
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);
-	RustCompanyUseVehicleUnit(v->owner, v->type, RustVehicleUnitNumber(v));
+	RustCompanyUseVehicleUnit(v->GetOwner(), v->GetType(), RustVehicleUnitNumber(v));
 }
 inline bool RustEngineCompatibleRail(const OpenTTDEngine *e, uint32_t tile) noexcept { return RustRailCompatible(RailTypes{RustEngineRailTypes(e)}, RustRailType(tile)); }
 inline bool RustEngineHasPowerOnRail(const OpenTTDEngine *e, uint32_t tile) noexcept { return RustRailPowered(RailTypes{RustEngineRailTypes(e)}, RustRailType(tile)); }
@@ -214,10 +214,10 @@ inline uint16_t RustEngineTrainPower(const OpenTTDEngine *e) noexcept { return R
 inline uint16_t RustEngineTrainWeight(const OpenTTDEngine *e) noexcept { return RustRailEngineWeight(&EngineOf(e)->VehInfo<RailVehicleInfo>()); }
 inline EngineClass RustEngineTrainClass(const OpenTTDEngine *e) noexcept { return static_cast<EngineClass>(RustRailEngineClass(&EngineOf(e)->VehInfo<RailVehicleInfo>())); }
 inline std::vector<BadgeID> *RustEngineBadges(const OpenTTDEngine *e) noexcept { return &const_cast<Engine *>(EngineOf(e))->badges; }
-inline uint16_t RustGroundEnginePower(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->type == VEH_TRAIN ? RustRailEnginePower(RailVehInfo(v->engine_type)) : RoadVehInfo(v->engine_type)->power; }
-inline uint16_t RustGroundEngineWeight(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->type == VEH_TRAIN ? RustRailEngineWeight(RailVehInfo(v->engine_type)) : RoadVehInfo(v->engine_type)->weight; }
-inline uint8_t RustGroundEngineTE(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->type == VEH_TRAIN ? RailVehInfo(v->engine_type)->tractive_effort : RoadVehInfo(v->engine_type)->tractive_effort; }
-inline uint8_t RustGroundEngineDrag(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->type == VEH_TRAIN ? RailVehInfo(v->engine_type)->air_drag : RoadVehInfo(v->engine_type)->air_drag; }
+inline uint16_t RustGroundEnginePower(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->GetType() == VEH_TRAIN ? RustRailEnginePower(RailVehInfo(v->GetEngineType())) : RoadVehInfo(v->GetEngineType())->power; }
+inline uint16_t RustGroundEngineWeight(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->GetType() == VEH_TRAIN ? RustRailEngineWeight(RailVehInfo(v->GetEngineType())) : RoadVehInfo(v->GetEngineType())->weight; }
+inline uint8_t RustGroundEngineTE(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->GetType() == VEH_TRAIN ? RailVehInfo(v->GetEngineType())->tractive_effort : RoadVehInfo(v->GetEngineType())->tractive_effort; }
+inline uint8_t RustGroundEngineDrag(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->GetType() == VEH_TRAIN ? RailVehInfo(v->GetEngineType())->air_drag : RoadVehInfo(v->GetEngineType())->air_drag; }
 inline uint16_t RustEngineWagonPower(uint16_t engine) noexcept { return RailVehInfo(EngineID(engine))->pow_wag_power; }
 inline uint8_t RustEngineWagonWeight(uint16_t engine) noexcept { return RailVehInfo(EngineID(engine))->pow_wag_weight; }
 inline uint8_t RustEngineGRFVersionOpaque(const OpenTTDEngine *e) noexcept { return RustEngineGRFVersion(EngineOf(e)); }

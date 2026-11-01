@@ -83,7 +83,7 @@ static OpenTTDRoadEntered OPENTTD_RUST_CALL RoadSvcAfterEnterTile(OpenTTDVehicle
 static bool OPENTTD_RUST_CALL RoadSvcCandidate(OpenTTDVehicle *vehicle, OpenTTDVehicle *probe, OpenTTDRoadCandidate *out) noexcept
 {
 	const Vehicle *u = VehicleOf(vehicle);
-	if (u->type != VEH_ROAD || RustVehicleFirst(u) == VehicleOf(probe)) return false;
+	if (u->GetType() != VEH_ROAD || RustVehicleFirst(u) == VehicleOf(probe)) return false;
 	const RoadVehicle *r = RoadVehicle::From(u);
 	const RoadVehicle *first = RustVehicleFirst(r);
 	*out = {.vehicle = vehicle, .state = RoadStateOf(r), .first = RustVehicle(first), .first_state = RoadStateOf(first), .first_ground = first->rust_ground.state,
@@ -100,10 +100,10 @@ static bool OPENTTD_RUST_CALL RoadSvcIsStationRoadStop(uint32_t tile) noexcept {
 static OpenTTDRoadRoadTypes OPENTTD_RUST_CALL RoadSvcMoveTile(OpenTTDVehicle *v, uint32_t tile) noexcept
 {
 	RoadVehicle *u = RoadOf(v);
-	TileIndex old_tile = u->tile;
+	TileIndex old_tile = u->GetTile();
 	RustWriteVehicleTile(u, TileIndex(tile));
 	RoadTramType rtt = RustRoadTramType(RustRoadVehicleType(u));
-	return {.before = RustRoadTileType(old_tile.base(), rtt), .after = RustRoadTileType(u->tile.base(), rtt)};
+	return {.before = RustRoadTileType(old_tile.base(), rtt), .after = RustRoadTileType(u->GetTile().base(), rtt)};
 }
 static OpenTTDRoadPathRead OPENTTD_RUST_CALL RoadSvcPathRead(OpenTTDVehicle *v) noexcept
 {
@@ -145,8 +145,8 @@ static void OPENTTD_RUST_CALL RoadSvcArrivalNews(OpenTTDVehicle *v, uint16_t sta
 	const RoadVehicle *u = RoadOf(v);
 	Station *st = Station::Get(StationID(station));
 	st->had_vehicle_of_type |= static_cast<StationHadVehicleOfType>(vehicle_type);
-	AddVehicleNewsItem(GetEncodedString(headlines[headline], st->index), (u->owner == _local_company) ? NewsType::ArrivalCompany : NewsType::ArrivalOther, u->index, st->index);
-	AI::NewEvent(u->owner, new ScriptEventStationFirstVehicle(st->index, u->index));
+	AddVehicleNewsItem(GetEncodedString(headlines[headline], st->index), (u->GetOwner() == _local_company) ? NewsType::ArrivalCompany : NewsType::ArrivalOther, u->index, st->index);
+	AI::NewEvent(u->GetOwner(), new ScriptEventStationFirstVehicle(st->index, u->index));
 	Game::NewEvent(new ScriptEventStationFirstVehicle(st->index, u->index));
 }
 /** The road stop arrival triggers after `BeginLoading`. */
@@ -158,13 +158,13 @@ static OpenTTDRoadOvertakeRead OPENTTD_RUST_CALL RoadSvcOvertakeRead(OpenTTDVehi
 static OpenTTDRoadSoundRead OPENTTD_RUST_CALL RoadSvcSoundRead(OpenTTDVehicle *v) noexcept
 {
 	const RoadVehicle *u = RoadOf(v);
-	return {.sound = RoadVehInfo(u->engine_type)->sfx, .tick = RustVehicleTick(u)};
+	return {.sound = RoadVehInfo(u->GetEngineType())->sfx, .tick = RustVehicleTick(u)};
 }
 /** The depot exit tail of `RoadVehLeaveDepot` after the state and frame stores. */
 static void OPENTTD_RUST_CALL RoadSvcDepotExit(OpenTTDVehicle *v, int32_t x, int32_t y) noexcept
 {
 	RoadVehicle *u = RoadOf(v);
-	u->vehstatus.Reset(VehState::Hidden);
+	u->SetVehStatus(u->GetVehStatus().Reset(VehState::Hidden));
 	RustWriteVehicleX(u, x);
 	RustWriteVehicleY(u, y);
 }
@@ -176,15 +176,15 @@ static void OPENTTD_RUST_CALL RoadSvcDepotExitDirty(OpenTTDVehicle *v) noexcept
 static void OPENTTD_RUST_CALL RoadSvcCrashNews(OpenTTDVehicle *v, uint32_t victims) noexcept
 {
 	RoadVehicle *u = RoadOf(v);
-	AI::NewEvent(u->owner, new ScriptEventVehicleCrashed(u->index, u->tile, ScriptEventVehicleCrashed::CRASH_RV_LEVEL_CROSSING, victims, u->owner));
-	Game::NewEvent(new ScriptEventVehicleCrashed(u->index, u->tile, ScriptEventVehicleCrashed::CRASH_RV_LEVEL_CROSSING, victims, u->owner));
+	AI::NewEvent(u->GetOwner(), new ScriptEventVehicleCrashed(u->index, u->GetTile(), ScriptEventVehicleCrashed::CRASH_RV_LEVEL_CROSSING, victims, u->GetOwner()));
+	Game::NewEvent(new ScriptEventVehicleCrashed(u->index, u->GetTile(), ScriptEventVehicleCrashed::CRASH_RV_LEVEL_CROSSING, victims, u->GetOwner()));
 
 	EncodedString headline = (victims == 1)
 		? GetEncodedString(STR_NEWS_ROAD_VEHICLE_CRASH_DRIVER)
 		: GetEncodedString(STR_NEWS_ROAD_VEHICLE_CRASH, victims);
-	NewsType newstype = u->owner == _local_company ? NewsType::Accident : NewsType::AccidentOther;
+	NewsType newstype = u->GetOwner() == _local_company ? NewsType::Accident : NewsType::AccidentOther;
 
-	AddTileNewsItem(std::move(headline), newstype, u->tile);
+	AddTileNewsItem(std::move(headline), newstype, u->GetTile());
 
 }
 static uint8_t OPENTTD_RUST_CALL RoadSvcShortenFactor(const OpenTTDEngine *e) noexcept
@@ -205,9 +205,9 @@ static void OPENTTD_RUST_CALL RoadSvcPayRunning(OpenTTDVehicle *v, int64_t amoun
 	CommandCost cost(EXPENSES_ROADVEH_RUN, Money(amount));
 
 	u->profit_this_year -= cost.GetCost();
-	u->running_ticks = 0;
+	u->Record().running_ticks = 0;
 
-	SubtractMoneyFromCompanyFract(u->owner, cost);
+	SubtractMoneyFromCompanyFract(u->GetOwner(), cost);
 
 	RustVehicleDetailsDirty(RustVehicle(u));
 	SetWindowClassesDirty(WC_ROADVEH_LIST);
@@ -215,7 +215,7 @@ static void OPENTTD_RUST_CALL RoadSvcPayRunning(OpenTTDVehicle *v, int64_t amoun
 static OpenTTDRoadServiceRead OPENTTD_RUST_CALL RoadSvcServiceRead(OpenTTDVehicle *v) noexcept
 {
 	const RoadVehicle *u = RoadOf(v);
-	return {.tile = RustVehicleTile(u), .servint = Company::Get(u->owner)->settings.vehicle.servint_roadveh, .cur_speed = RustVehicleSpeed(u)};
+	return {.tile = RustVehicleTile(u), .servint = Company::Get(u->GetOwner())->settings.vehicle.servint_roadveh, .cur_speed = RustVehicleSpeed(u)};
 }
 static OpenTTDRoadTurnRead OPENTTD_RUST_CALL RoadSvcTurnRead(OpenTTDVehicle *v) noexcept
 {

@@ -145,7 +145,7 @@ static void TrainDepotMoveVehicle(const Vehicle *wagon, VehicleID sel, const Veh
 
 	if (wagon == v) return;
 
-	Command<CMD_MOVE_RAIL_VEHICLE>::Post(STR_ERROR_CAN_T_MOVE_VEHICLE, v->tile, v->index, wagon == nullptr ? VehicleID::Invalid() : wagon->index, _ctrl_pressed);
+	Command<CMD_MOVE_RAIL_VEHICLE>::Post(STR_ERROR_CAN_T_MOVE_VEHICLE, v->GetTile(), v->index, wagon == nullptr ? VehicleID::Invalid() : wagon->index, _ctrl_pressed);
 }
 
 static VehicleCellSize _base_block_sizes_depot[VEH_COMPANY_END];    ///< Cell size for vehicle images in the depot view.
@@ -345,7 +345,7 @@ struct DepotWindow : Window {
 		Rect text = r.Shrink(RectPadding::zero, WidgetDimensions::scaled.matrix);       /* Ract for text elements, horizontal is already applied. */
 		Rect image = r.Indent(this->header_width, rtl).Indent(this->count_width, !rtl); /* Rect for vehicle images */
 
-		switch (v->type) {
+		switch (v->GetType()) {
 			case VEH_TRAIN: {
 				const Train *u = Train::From(v);
 				free_wagon = u->IsFreeWagon();
@@ -387,7 +387,7 @@ struct DepotWindow : Window {
 			DrawString(text, STR_DEPOT_NO_ENGINE);
 		} else {
 			Rect flag = r.WithWidth(this->flag_size.width, rtl).WithHeight(this->flag_size.height).Translate(0, diff_y);
-			DrawSpriteIgnorePadding((v->vehstatus.Test(VehState::Stopped)) ? SPR_FLAG_VEH_STOPPED : SPR_FLAG_VEH_RUNNING, PAL_NONE, flag, SA_CENTER);
+			DrawSpriteIgnorePadding((v->GetVehStatus().Test(VehState::Stopped)) ? SPR_FLAG_VEH_STOPPED : SPR_FLAG_VEH_RUNNING, PAL_NONE, flag, SA_CENTER);
 
 			DrawString(text, GetString(STR_JUST_COMMA, v->unitnumber), (v->max_age - CalendarTime::DAYS_IN_LEAP_YEAR) >= v->age ? TC_BLACK : TC_RED);
 		}
@@ -890,12 +890,12 @@ struct DepotWindow : Window {
 		/* loop through vehicle chain and collect cargoes */
 		uint num = 0;
 		for (const Vehicle *w = v; w != nullptr; w = w->Next()) {
-			if (w->cargo_cap > 0 && w->cargo_type < NUM_CARGO) {
-				capacity[w->cargo_type] += w->cargo_cap;
+			if (w->Record().cargo_cap > 0 && w->cargo_type < NUM_CARGO) {
+				capacity[w->cargo_type] += w->Record().cargo_cap;
 				loaded  [w->cargo_type] += w->cargo.StoredCount();
 			}
 
-			if (w->type == VEH_TRAIN && !w->HasArticulatedPart()) {
+			if (w->GetType() == VEH_TRAIN && !w->HasArticulatedPart()) {
 				num++;
 				if (!whole_chain) break;
 			}
@@ -917,7 +917,7 @@ struct DepotWindow : Window {
 		if (whole_chain) {
 			GuiShowTooltips(this, GetEncodedString(STR_DEPOT_VEHICLE_TOOLTIP_CHAIN, num, details), TCC_RIGHT_CLICK);
 		} else {
-			GuiShowTooltips(this, GetEncodedString(STR_DEPOT_VEHICLE_TOOLTIP, v->engine_type, details), TCC_RIGHT_CLICK);
+			GuiShowTooltips(this, GetEncodedString(STR_DEPOT_VEHICLE_TOOLTIP, v->GetEngineType(), details), TCC_RIGHT_CLICK);
 		}
 
 		return true;
@@ -932,10 +932,10 @@ struct DepotWindow : Window {
 	{
 		if (_ctrl_pressed) {
 			/* Share-clone, do not open new viewport, and keep tool active */
-			Command<CMD_CLONE_VEHICLE>::Post(STR_ERROR_CAN_T_BUY_TRAIN + v->type, TileIndex(this->window_number), v->index, true);
+			Command<CMD_CLONE_VEHICLE>::Post(STR_ERROR_CAN_T_BUY_TRAIN + v->GetType(), TileIndex(this->window_number), v->index, true);
 		} else {
 			/* Copy-clone, open viewport for new vehicle, and deselect the tool (assume player wants to change things on new vehicle) */
-			if (Command<CMD_CLONE_VEHICLE>::Post(STR_ERROR_CAN_T_BUY_TRAIN + v->type, CcCloneVehicle, TileIndex(this->window_number), v->index, false)) {
+			if (Command<CMD_CLONE_VEHICLE>::Post(STR_ERROR_CAN_T_BUY_TRAIN + v->GetType(), CcCloneVehicle, TileIndex(this->window_number), v->index, false)) {
 				ResetObjectToPlace();
 			}
 		}
@@ -961,11 +961,11 @@ struct DepotWindow : Window {
 				})) {
 					OnVehicleSelect(*begin);
 				} else {
-					ShowErrorMessage(GetEncodedString(STR_ERROR_CAN_T_BUY_TRAIN + (*begin)->type),
+					ShowErrorMessage(GetEncodedString(STR_ERROR_CAN_T_BUY_TRAIN + (*begin)->GetType()),
 						GetEncodedString(STR_ERROR_CAN_T_COPY_ORDER_VEHICLE_LIST), WL_INFO);
 				}
 			} else {
-				ShowErrorMessage(GetEncodedString(STR_ERROR_CAN_T_BUY_TRAIN + (*begin)->type),
+				ShowErrorMessage(GetEncodedString(STR_ERROR_CAN_T_BUY_TRAIN + (*begin)->GetType()),
 					GetEncodedString(STR_ERROR_CAN_T_CLONE_VEHICLE_LIST), WL_INFO);
 			}
 		} else {
@@ -978,11 +978,11 @@ struct DepotWindow : Window {
 				})) {
 					OnVehicleSelect(*begin);
 				} else {
-					ShowErrorMessage(GetEncodedString(STR_ERROR_CAN_T_BUY_TRAIN + (*begin)->type),
+					ShowErrorMessage(GetEncodedString(STR_ERROR_CAN_T_BUY_TRAIN + (*begin)->GetType()),
 						GetEncodedString(STR_ERROR_CAN_T_SHARE_ORDER_VEHICLE_LIST), WL_INFO);
 				}
 			} else {
-				ShowErrorMessage(GetEncodedString(STR_ERROR_CAN_T_BUY_TRAIN + (*begin)->type),
+				ShowErrorMessage(GetEncodedString(STR_ERROR_CAN_T_BUY_TRAIN + (*begin)->GetType()),
 					GetEncodedString(STR_ERROR_CAN_T_CLONE_VEHICLE_LIST), WL_INFO);
 			}
 		}
@@ -1082,7 +1082,7 @@ struct DepotWindow : Window {
 
 					if (this->GetVehicleFromDepotWndPt(pt.x, pt.y, &v, &gdvp) == MODE_DRAG_VEHICLE && sel != VehicleID::Invalid()) {
 						if (gdvp.wagon != nullptr && gdvp.wagon->index == sel && _ctrl_pressed) {
-							Command<CMD_REVERSE_TRAIN_DIRECTION>::Post(STR_ERROR_CAN_T_REVERSE_DIRECTION_RAIL_VEHICLE, Vehicle::Get(sel)->tile, Vehicle::Get(sel)->index, true);
+							Command<CMD_REVERSE_TRAIN_DIRECTION>::Post(STR_ERROR_CAN_T_REVERSE_DIRECTION_RAIL_VEHICLE, Vehicle::Get(sel)->GetTile(), Vehicle::Get(sel)->index, true);
 						} else if (gdvp.wagon == nullptr || gdvp.wagon->index != sel) {
 							this->vehicle_over = VehicleID::Invalid();
 							TrainDepotMoveVehicle(gdvp.wagon, sel, gdvp.head);
@@ -1106,8 +1106,8 @@ struct DepotWindow : Window {
 				this->sel = VehicleID::Invalid();
 				this->SetDirty();
 
-				bool sell_cmd = (v->type == VEH_TRAIN && (widget == WID_D_SELL_CHAIN || _ctrl_pressed));
-				Command<CMD_SELL_VEHICLE>::Post(GetCmdSellVehMsg(v->type), v->tile, v->index, sell_cmd, true, INVALID_CLIENT_ID);
+				bool sell_cmd = (v->GetType() == VEH_TRAIN && (widget == WID_D_SELL_CHAIN || _ctrl_pressed));
+				Command<CMD_SELL_VEHICLE>::Post(GetCmdSellVehMsg(v->GetType()), v->GetTile(), v->index, sell_cmd, true, INVALID_CLIENT_ID);
 				break;
 			}
 
@@ -1206,7 +1206,7 @@ void DeleteDepotHighlightOfVehicle(const Vehicle *v)
 	 */
 	if (_special_mouse_mode != WSM_DRAGDROP) return;
 
-	w = dynamic_cast<DepotWindow*>(FindWindowById(WC_VEHICLE_DEPOT, v->tile));
+	w = dynamic_cast<DepotWindow*>(FindWindowById(WC_VEHICLE_DEPOT, v->GetTile()));
 	if (w != nullptr) {
 		if (w->sel == v->index) ResetObjectToPlace();
 	}

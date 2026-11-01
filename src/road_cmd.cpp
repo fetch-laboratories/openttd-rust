@@ -1080,7 +1080,7 @@ static_assert(OWNER_TOWN.base() == 15 && OWNER_NONE.base() == 16 && INVALID_OWNE
 static_assert(FOUNDATION_NONE == 0 && FOUNDATION_LEVELED == 1 && FOUNDATION_INCLINED_X == 2 && FOUNDATION_INCLINED_Y == 3);
 static OpenTTDRoadWorksEffect RoadNextEffect(uint32_t from) noexcept
 {
-	for (const EffectVehicle *v : EffectVehicle::Iterate(from)) return {.id = v->index.base(), .tile = TileVirtXY(v->x_pos, v->y_pos).base()};
+	for (const EffectVehicle *v : EffectVehicle::Iterate(from)) return {.id = v->index.base(), .tile = TileVirtXY(v->Record().x_pos, v->Record().y_pos).base()};
 	return {.id = UINT32_MAX, .tile = 0};
 }
 static void RoadIncludeVehicle(OpenTTDRoadConvertFrame *frame, OpenTTDVehicle *v) noexcept { include(frame->affected, v); }

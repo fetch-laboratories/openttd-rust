@@ -125,7 +125,7 @@ static SaveLoadParams _sl; ///< Parameters used for/at saveload.
 static OpenTTDRustSaveLoadCodec &_codec = [] () -> OpenTTDRustSaveLoadCodec & {
 	static_assert(sizeof(SaveLoadVersion) == sizeof(uint16_t) && SLV_4 == 4 && SLV_69 == 69 && SLV_169 == 169 && SLV_SAVELOAD_LIST_LENGTH == 293 && SLV_ENCODED_STRING_FORMAT == 350 && SLV_FIX_SCC_ENCODED_NEGATIVE == 353);
 	static_assert(SLF_ALLOW_CONTROL == 1 << 8 && SLF_ALLOW_NEWLINE == 1 << 9 && SLF_REPLACE_TABCRLF == 1 << 10);
-	static_assert(REF_VEHICLE == 1 && REF_LINK_GRAPH_JOB == 11 && sizeof(size_t) == sizeof(void *));
+	static_assert(REF_VEHICLE == 1 && REF_LINK_GRAPH_JOB == 11 && REF_VEHICLE_RECORD == 12 && REF_VEHICLE_RECORD_OLD == 13 && sizeof(size_t) == sizeof(void *));
 	OpenTTDRustSaveLoadCodec &codec = *openttd_rust_saveload_codec();
 	codec.version = reinterpret_cast<const uint16_t *>(&_sl_version);
 	codec.minor_version = &_sl_minor_version;
@@ -172,6 +172,7 @@ static const OpenTTDSaveLoadServices _sl_services = {
 	.town_index = &RustSaveReferenceIndex<Town>,
 	.vehicle_get = &RustSaveReferenceGet<Vehicle>,
 	.vehicle_index = &RustSaveReferenceIndex<Vehicle>,
+	.vehicle_record_get = [](size_t index) noexcept -> void * { Vehicle *v = static_cast<Vehicle *>(RustSaveReferenceGet<Vehicle>(index)); return v == nullptr ? nullptr : v->record; },
 	.string_data = [](const void *ptr, size_t *length) noexcept {
 		const std::string &str = *static_cast<const std::string *>(ptr);
 		*length = str.size();

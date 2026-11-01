@@ -115,9 +115,9 @@ struct Ship final : public SpecializedVehicle<Ship, VEH_SHIP> {
 	void PlayLeaveStationSound(bool force = false) const override;
 	bool IsPrimaryVehicle() const override { return true; }
 	void GetImage(Direction direction, EngineImageType image_type, VehicleSpriteSeq *result) const override;
-	int GetDisplaySpeed() const override { return this->cur_speed / 2; }
-	int GetDisplayMaxSpeed() const override { return this->vcache.cached_max_speed / 2; }
-	int GetCurrentMaxSpeed() const override { return std::min<int>(this->vcache.cached_max_speed, this->current_order.GetMaxSpeed() * 2); }
+	int GetDisplaySpeed() const override { return this->Record().cur_speed / 2; }
+	int GetDisplayMaxSpeed() const override { return this->Record().cached_max_speed / 2; }
+	int GetCurrentMaxSpeed() const override { return std::min<int>(this->Record().cached_max_speed, this->current_order.GetMaxSpeed() * 2); }
 	Money GetRunningCost() const override;
 	bool IsInDepot() const override { return this->GetState() == TRACK_BIT_DEPOT; }
 	bool Tick() override;

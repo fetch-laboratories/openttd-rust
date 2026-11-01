@@ -181,12 +181,12 @@ static void TrainReservationWriteDest(void *, OpenTTDTrainHandle id, uint32_t a)
 {
 	Train *v = static_cast<Train *>(id.shell);
 	TileIndex t(static_cast<uint32_t>(a));
-	v->dest_tile = t;
+	v->StoreDestTile(t);
 }
 static void TrainReservationWriteLast(void *, OpenTTDTrainHandle id, uint16_t a) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	v->last_station_visited = StationID(static_cast<uint16_t>(a));
+	v->SetLastStationVisited(StationID(static_cast<uint16_t>(a)));
 }
 static void TrainReservationWriteSuppress(void *, OpenTTDTrainHandle id, uint8_t a) noexcept
 {
@@ -222,7 +222,7 @@ static OpenTTDTrainReservationFree1Read TrainReservationReadFree1(OpenTTDTrainHa
 static OpenTTDTrainReservationNewRead TrainReservationReadNew(OpenTTDTrainHandle id) noexcept
 {
 	const Train *v=static_cast<Train *>(id.shell);
-	return {RustVehicleDestTile(v), v->last_station_visited.base(), RustVehicleRealOrderIndex(v), static_cast<uint8_t>(HasBit(v->gv_flags, GVF_SUPPRESS_IMPLICIT_ORDERS))};
+	return {RustVehicleDestTile(v), v->GetLastStationVisited().base(), RustVehicleRealOrderIndex(v), static_cast<uint8_t>(HasBit(v->gv_flags, GVF_SUPPRESS_IMPLICIT_ORDERS))};
 }
 static OpenTTDTrainReservationChooseRead TrainReservationReadChoose(OpenTTDTrainHandle id) noexcept
 {

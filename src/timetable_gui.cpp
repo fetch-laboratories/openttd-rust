@@ -195,7 +195,7 @@ struct TimetableWindow : Window {
 		this->UpdateSelectionStates();
 		this->FinishInitNested(window_number);
 
-		this->owner = this->vehicle->owner;
+		this->owner = this->vehicle->GetOwner();
 	}
 
 	/**
@@ -341,7 +341,7 @@ struct TimetableWindow : Window {
 
 		this->vscroll->SetCount(v->GetNumOrders() * 2);
 
-		if (v->owner == _local_company) {
+		if (v->GetOwner() == _local_company) {
 			bool disable = true;
 			if (selected != -1) {
 				const Order *order = v->GetOrder(((selected + 1) / 2) % v->GetNumOrders());
@@ -351,7 +351,7 @@ struct TimetableWindow : Window {
 					disable = order == nullptr || ((!order->IsType(OT_GOTO_STATION) || order->GetNonStopType().Test(OrderNonStopFlag::NoDestination)) && !order->IsType(OT_CONDITIONAL));
 				}
 			}
-			bool disable_speed = disable || selected % 2 == 0 || v->type == VEH_AIRCRAFT;
+			bool disable_speed = disable || selected % 2 == 0 || v->GetType() == VEH_AIRCRAFT;
 
 			this->SetWidgetDisabledState(WID_VT_CHANGE_TIME, disable);
 			this->SetWidgetDisabledState(WID_VT_CLEAR_TIME, disable);
@@ -403,19 +403,19 @@ struct TimetableWindow : Window {
 		if (order.IsTravelTimetabled()) {
 			auto [str, value] = GetTimetableParameters(order.GetTimetabledTravel());
 			return order.GetMaxSpeed() != UINT16_MAX
-				? GetString(STR_TIMETABLE_TRAVEL_FOR_SPEED, str, value, PackVelocity(order.GetMaxSpeed(), this->vehicle->type))
+				? GetString(STR_TIMETABLE_TRAVEL_FOR_SPEED, str, value, PackVelocity(order.GetMaxSpeed(), this->vehicle->GetType()))
 				: GetString(STR_TIMETABLE_TRAVEL_FOR, str, value);
 		}
 
 		if (order.GetTravelTime() > 0) {
 			auto [str, value] = GetTimetableParameters(order.GetTravelTime());
 			return order.GetMaxSpeed() != UINT16_MAX
-				? GetString(STR_TIMETABLE_TRAVEL_FOR_SPEED_ESTIMATED, str, value, PackVelocity(order.GetMaxSpeed(), this->vehicle->type))
+				? GetString(STR_TIMETABLE_TRAVEL_FOR_SPEED_ESTIMATED, str, value, PackVelocity(order.GetMaxSpeed(), this->vehicle->GetType()))
 				: GetString(STR_TIMETABLE_TRAVEL_FOR_ESTIMATED, str, value);
 		}
 
 		return order.GetMaxSpeed() != UINT16_MAX
-			? GetString(STR_TIMETABLE_TRAVEL_NOT_TIMETABLED_SPEED, PackVelocity(order.GetMaxSpeed(), this->vehicle->type))
+			? GetString(STR_TIMETABLE_TRAVEL_NOT_TIMETABLED_SPEED, PackVelocity(order.GetMaxSpeed(), this->vehicle->GetType()))
 			: GetString(STR_TIMETABLE_TRAVEL_NOT_TIMETABLED);
 	}
 
@@ -680,7 +680,7 @@ struct TimetableWindow : Window {
 				const Order *order = v->GetOrder(real);
 				if (order != nullptr) {
 					if (order->GetMaxSpeed() != UINT16_MAX) {
-						current = GetString(STR_JUST_INT, ConvertKmhishSpeedToDisplaySpeed(order->GetMaxSpeed(), v->type));
+						current = GetString(STR_JUST_INT, ConvertKmhishSpeedToDisplaySpeed(order->GetMaxSpeed(), v->GetType()));
 					}
 				}
 
@@ -740,7 +740,7 @@ struct TimetableWindow : Window {
 
 		switch (query_widget) {
 			case WID_VT_CHANGE_SPEED: {
-				val = ConvertDisplaySpeedToKmhishSpeed(val, v->type);
+				val = ConvertDisplaySpeedToKmhishSpeed(val, v->GetType());
 
 				if (this->change_timetable_all) {
 					Command<CMD_BULK_CHANGE_TIMETABLE>::Post(STR_ERROR_CAN_T_TIMETABLE_VEHICLE, v->index, mtf, ClampTo<uint16_t>(val));

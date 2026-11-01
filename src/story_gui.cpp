@@ -915,7 +915,7 @@ public:
 		/* Check that the vehicle matches the requested type */
 		StoryPageButtonData data{ pe->referenced_id };
 		VehicleType wanted_vehtype = data.GetVehicleType();
-		if (wanted_vehtype != VEH_INVALID && wanted_vehtype != v->type) return false;
+		if (wanted_vehtype != VEH_INVALID && wanted_vehtype != v->GetType()) return false;
 
 		Command<CMD_STORY_PAGE_BUTTON>::Post(TileIndex{}, pe->index, v->index);
 		ResetObjectToPlace();

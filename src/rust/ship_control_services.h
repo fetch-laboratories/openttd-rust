@@ -36,7 +36,7 @@ static bool Ship_wait_unbunch(uint32_t id) noexcept { Ship *v = Ship::Get(Vehicl
 
 static bool Ship_chain_depot(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return v->IsChainInDepot(); }
 
-static uint32_t Ship_servint(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return Company::Get(v->owner)->settings.vehicle.servint_ships; }
+static uint32_t Ship_servint(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return Company::Get(v->GetOwner())->settings.vehicle.servint_ships; }
 
 
 static uint32_t Ship_max_distance() noexcept { return RustMaximumDepotPenalty() / YAPF_TILE_LENGTH; }
@@ -92,8 +92,8 @@ static void Ship_visit_set(uint32_t station, uint32_t vehicle_type) noexcept
 static void Ship_arrival(uint32_t id, uint32_t station) noexcept
 {
 	Ship *v = Ship::Get(VehicleID(id));
-	AddVehicleNewsItem(GetEncodedString(STR_NEWS_FIRST_SHIP_ARRIVAL, StationID(station)), v->owner == _local_company ? NewsType::ArrivalCompany : NewsType::ArrivalOther, v->index, StationID(station));
-	AI::NewEvent(v->owner, new ScriptEventStationFirstVehicle(StationID(station), v->index));
+	AddVehicleNewsItem(GetEncodedString(STR_NEWS_FIRST_SHIP_ARRIVAL, StationID(station)), v->GetOwner() == _local_company ? NewsType::ArrivalCompany : NewsType::ArrivalOther, v->index, StationID(station));
+	AI::NewEvent(v->GetOwner(), new ScriptEventStationFirstVehicle(StationID(station), v->index));
 	Game::NewEvent(new ScriptEventStationFirstVehicle(StationID(station), v->index));
 }
 
@@ -142,18 +142,18 @@ static void Ship_pay_running(uint32_t id, int64_t amount) noexcept
 	Ship *v = Ship::Get(VehicleID(id));
 	CommandCost cost(EXPENSES_SHIP_RUN, Money(amount));
 	v->profit_this_year -= cost.GetCost();
-	v->running_ticks = 0;
-	SubtractMoneyFromCompanyFract(v->owner, cost);
+	v->Record().running_ticks = 0;
+	SubtractMoneyFromCompanyFract(v->GetOwner(), cost);
 }
 
-static uint32_t Ship_speed_default(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return ShipVehInfo(v->engine_type)->max_speed; }
+static uint32_t Ship_speed_default(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return ShipVehInfo(v->GetEngineType())->max_speed; }
 
 static uint32_t Ship_age_default(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return RustEngineCargoAge(RustVehicleGetEngine(RustVehicle(v))); }
 
 static uint32_t Ship_speed_frac(uint32_t id, bool sea) noexcept
 {
 	Ship *v = Ship::Get(VehicleID(id));
-	return sea ? ShipVehInfo(v->engine_type)->ocean_speed_frac : ShipVehInfo(v->engine_type)->canal_speed_frac;
+	return sea ? ShipVehInfo(v->GetEngineType())->ocean_speed_frac : ShipVehInfo(v->GetEngineType())->canal_speed_frac;
 }
 
 
@@ -236,7 +236,7 @@ static void Ship_build_properties(uint32_t id, uint32_t engine) noexcept
 	assert(OpenTTDIsValidCargo(RustVehicleCargoType(RustVehicle(v))));
 	RustVehicleSetCargoCap(RustVehicle(v), RustEngineShipCapacity(RustEngine(e)));
 	RustVehicleSetRefitCap(RustVehicle(v), 0);
-	v->last_station_visited = StationID::Invalid();
+	v->SetLastStationVisited(StationID::Invalid());
 	RustVehicleSetLastLoadingStation(RustVehicle(v), StationID::Invalid().base());
 	RustVehicleSetEngine(RustVehicle(v), e->index.base());
 	v->reliability = RustEngineReliability(e);
@@ -257,7 +257,7 @@ static void Ship_build_acceleration(uint32_t id, uint32_t engine) noexcept
 {
 	Ship *v = Ship::Get(VehicleID(id));
 	const auto &svi = Engine::Get(EngineID(engine))->VehInfo<ShipVehicleInfo>();
-	v->acceleration = svi.acceleration;
+	v->Record().acceleration = svi.acceleration;
 }
 
 static void Ship_build_prototype(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->vehicle_flags.Set(VehicleFlag::BuiltAsPrototype); }
@@ -278,29 +278,29 @@ static void Ship_set_y(uint32_t id, int32_t value) noexcept { Ship *v = Ship::Ge
 
 static void Ship_set_z(uint32_t id, int32_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustWriteVehicleZ(v, static_cast<int32_t>(value)); }
 
-static void Ship_set_direction(uint32_t id, uint8_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->direction = static_cast<Direction>(value); }
+static void Ship_set_direction(uint32_t id, uint8_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->SetDirection(static_cast<Direction>(value)); }
 
-static void Ship_set_speed(uint32_t id, uint16_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->cur_speed = static_cast<uint16_t>(value); }
+static void Ship_set_speed(uint32_t id, uint16_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->Record().cur_speed = static_cast<uint16_t>(value); }
 
 static void Ship_set_tick(uint32_t id, uint8_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustWriteVehicleTick(v, static_cast<uint8_t>(value)); }
 
-static void Ship_set_running(uint32_t id, uint8_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->running_ticks = static_cast<uint8_t>(value); }
+static void Ship_set_running(uint32_t id, uint8_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->Record().running_ticks = static_cast<uint8_t>(value); }
 
-static void Ship_set_day(uint32_t id, uint8_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->day_counter = static_cast<uint8_t>(value); }
+static void Ship_set_day(uint32_t id, uint8_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->Record().day_counter = static_cast<uint8_t>(value); }
 
 static void Ship_set_order_time(uint32_t id, int32_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->current_order_time = static_cast<int32_t>(value); }
 
 static void Ship_set_progress(uint32_t id, uint8_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustWriteVehicleProgress(v, static_cast<uint8_t>(value)); }
 
-static void Ship_set_last_station(uint32_t id, uint16_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->last_station_visited = StationID(static_cast<uint16_t>(value)); }
+static void Ship_set_last_station(uint32_t id, uint16_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->SetLastStationVisited(StationID(static_cast<uint16_t>(value))); }
 
-static void Ship_set_hidden(uint32_t id, bool value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->vehstatus.Set(VehState::Hidden, value); }
+static void Ship_set_hidden(uint32_t id, bool value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->SetVehStatus(v->GetVehStatus().Set(VehState::Hidden, value)); }
 
-static void Ship_set_max_speed(uint32_t id, uint16_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->vcache.cached_max_speed = static_cast<uint16_t>(value); }
+static void Ship_set_max_speed(uint32_t id, uint16_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->Record().cached_max_speed = static_cast<uint16_t>(value); }
 
-static void Ship_set_cargo_age(uint32_t id, uint16_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->vcache.cached_cargo_age_period = static_cast<uint16_t>(value); }
+static void Ship_set_cargo_age(uint32_t id, uint16_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->Record().cached_cargo_age_period = static_cast<uint16_t>(value); }
 
-static void Ship_set_dest(uint32_t id, uint32_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->dest_tile = TileIndex(static_cast<uint32_t>(value)); }
+static void Ship_set_dest(uint32_t id, uint32_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->StoreDestTile(TileIndex(static_cast<uint32_t>(value))); }
 
 static uint32_t Ship_tile(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(RustVehicleTile(v)); }
 
@@ -320,7 +320,7 @@ static uint32_t Ship_status(uint32_t id) noexcept { const Ship *v = Ship::Get(Ve
 
 static uint32_t Ship_owner(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(RustVehicleOwner(v)); }
 
-static uint32_t Ship_last_station(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(v->last_station_visited.base()); }
+static uint32_t Ship_last_station(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(v->GetLastStationVisited().base()); }
 
 static uint32_t Ship_order_destination(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(RustVehicleOrderDestination(v)); }
 
@@ -328,7 +328,7 @@ static uint32_t Ship_order_type(uint32_t id) noexcept { const Ship *v = Ship::Ge
 
 static uint32_t Ship_order_max_speed(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return RustVehicleOrderMaxSpeed(v); }
 
-static uint32_t Ship_acceleration(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(v->acceleration); }
+static uint32_t Ship_acceleration(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(v->Record().acceleration); }
 
 static OpenTTDShipState *Ship_state_owner(uint32_t id) noexcept { return RustVehicleShipOwner(Ship::Get(VehicleID(id))); }
 static OpenTTDWaterPatch Ship_patch(uint32_t tile) noexcept { auto p = GetWaterRegionPatchInfo(TileIndex(tile)); return {p.x, p.y, p.label.base()}; }

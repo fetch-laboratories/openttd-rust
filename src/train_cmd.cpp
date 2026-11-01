@@ -93,13 +93,13 @@ void CheckTrainsLengths()
 	bool first = true;
 
 	for (const Train *v : Train::Iterate()) {
-		if (v->First() == v && !v->vehstatus.Test(VehState::Crashed)) {
+		if (v->First() == v && !v->GetVehStatus().Test(VehState::Crashed)) {
 			for (const Train *u = v, *w = v->Next(); w != nullptr; u = w, w = w->Next()) {
 				if (u->GetTrack() != TRACK_BIT_DEPOT) {
 					if ((w->GetTrack() != TRACK_BIT_DEPOT &&
-							std::max(abs(u->x_pos - w->x_pos), abs(u->y_pos - w->y_pos)) != u->CalcNextVehicleOffset()) ||
+							std::max(abs(u->Record().x_pos - w->Record().x_pos), abs(u->Record().y_pos - w->Record().y_pos)) != u->CalcNextVehicleOffset()) ||
 							(w->GetTrack() == TRACK_BIT_DEPOT && TicksToLeaveDepot(u) <= 0)) {
-						ShowErrorMessage(GetEncodedString(STR_BROKEN_VEHICLE_LENGTH, v->index, v->owner), {}, WL_CRITICAL);
+						ShowErrorMessage(GetEncodedString(STR_BROKEN_VEHICLE_LENGTH, v->index, v->GetOwner()), {}, WL_CRITICAL);
 
 						if (!_networking && first) {
 							first = false;
@@ -163,7 +163,7 @@ void Train::UpdateAcceleration()
 
 int Train::GetCursorImageOffset() const
 {
-	if (this->gcache.cached_veh_length != 8 && this->GetTrainFlags().Test(VehicleRailFlag::Flipped) && !EngInfo(this->engine_type)->misc_flags.Test(EngineMiscFlag::RailFlips)) {
+	if (this->gcache.cached_veh_length != 8 && this->GetTrainFlags().Test(VehicleRailFlag::Flipped) && !EngInfo(this->GetEngineType())->misc_flags.Test(EngineMiscFlag::RailFlips)) {
 		int reference_width = TRAININFO_DEFAULT_VEHICLE_WIDTH;
 
 		const Engine *e = this->GetEngine();
@@ -193,7 +193,7 @@ int Train::GetDisplayImageWidth(Point *offset) const
 	}
 
 	if (offset != nullptr) {
-		if (this->GetTrainFlags().Test(VehicleRailFlag::Flipped) && !EngInfo(this->engine_type)->misc_flags.Test(EngineMiscFlag::RailFlips)) {
+		if (this->GetTrainFlags().Test(VehicleRailFlag::Flipped) && !EngInfo(this->GetEngineType())->misc_flags.Test(EngineMiscFlag::RailFlips)) {
 			offset->x = ScaleSpriteTrad(((int)this->gcache.cached_veh_length - (int)VEHICLE_LENGTH / 2) * reference_width / (int)VEHICLE_LENGTH);
 		} else {
 			offset->x = ScaleSpriteTrad(reference_width) / 2;
@@ -232,7 +232,7 @@ void Train::GetImage(Direction direction, EngineImageType image_type, VehicleSpr
 	assert(IsValidImageIndex<VEH_TRAIN>(spritenum));
 	SpriteID sprite = GetDefaultTrainSprite(spritenum, direction);
 
-	if (this->cargo.StoredCount() >= this->cargo_cap / 2U) sprite += _wagon_full_adder[spritenum];
+	if (this->cargo.StoredCount() >= this->Record().cargo_cap / 2U) sprite += _wagon_full_adder[spritenum];
 
 	result->Set(sprite);
 }
@@ -354,11 +354,11 @@ void Train::UpdateDeltaXY()
 	this->bounds = {{-1, -1, 0}, {3, 3, 6}, {}};
 
 	/* Set if flipped and engine is NOT flagged with custom flip handling. */
-	int flipped = this->GetTrainFlags().Test(VehicleRailFlag::Flipped) && !EngInfo(this->engine_type)->misc_flags.Test(EngineMiscFlag::RailFlips);
+	int flipped = this->GetTrainFlags().Test(VehicleRailFlag::Flipped) && !EngInfo(this->GetEngineType())->misc_flags.Test(EngineMiscFlag::RailFlips);
 	/* If flipped and vehicle length is odd, we need to adjust the bounding box offset slightly. */
 	int flip_offs = flipped && (this->gcache.cached_veh_length & 1);
 
-	Direction dir = this->direction;
+	Direction dir = this->GetDirection();
 	if (flipped) dir = ReverseDir(dir);
 
 	if (!IsDiagonalDirection(dir)) {
@@ -562,7 +562,7 @@ CommandCost CmdReverseTrainDirection(DoCommandFlags flags, VehicleID veh_id, boo
 {
 	Train *v = Train::GetIfValid(veh_id);
 	if (v == nullptr) return CMD_ERROR;
-	CommandCost ret = CheckOwnership(v->owner);
+	CommandCost ret = CheckOwnership(v->GetOwner());
 	if (ret.Failed()) return ret;
 	switch (openttd_rust_train_reverse_command(TrainHandle(v), static_cast<uint8_t>(flags.Test(DoCommandFlag::Execute)), static_cast<uint8_t>(reverse_single_veh), &GetTrainServices(), &GetRustSharedServices())) {
 		case 0: return CommandCost();
@@ -595,7 +595,7 @@ CommandCost CmdForceTrainProceed(DoCommandFlags flags, VehicleID veh_id)
 	if (t == nullptr) return CMD_ERROR;
 	/* Preserve primary validation before the ownership shared service. */
 	if (!t->IsPrimaryVehicle()) return CMD_ERROR;
-	CommandCost ret = CheckOwnership(t->owner);
+	CommandCost ret = CheckOwnership(t->GetOwner());
 	if (ret.Failed()) return ret;
 	openttd_rust_train_force_command(TrainHandle(t), static_cast<uint8_t>(flags.Test(DoCommandFlag::Execute)), &GetTrainServices(), &GetRustSharedServices());
 	return CommandCost();
@@ -610,7 +610,7 @@ CommandCost CmdForceTrainProceed(DoCommandFlags flags, VehicleID veh_id)
  */
 static FindDepotData FindClosestTrainDepot(Train *v, int max_distance)
 {
-	assert(!v->vehstatus.Test(VehState::Crashed));
+	assert(!v->GetVehStatus().Test(VehState::Crashed));
 
 	return YapfTrainFindNearestDepot(v, max_distance);
 }
@@ -636,7 +636,7 @@ void Train::PlayLeaveStationSound(bool force) const
 
 	if (PlayVehicleSound(this, VSE_START, force)) return;
 
-	SndPlayVehicleFx(sfx[RailVehInfo(this->engine_type)->engclass], this);
+	SndPlayVehicleFx(sfx[RailVehInfo(this->GetEngineType())->engclass], this);
 }
 
 /**

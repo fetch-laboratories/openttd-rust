@@ -179,16 +179,16 @@ void FixOldVehicles(LoadgameState &ls)
 		}
 
 		/* Vehicle-subtype is different in TTD(Patch) */
-		if (v->type == VEH_EFFECT) v->subtype = v->subtype >> 1;
+		if (v->GetType() == VEH_EFFECT) v->Record().subtype = v->Record().subtype >> 1;
 
 		v->name = CopyFromOldName(ls.vehicle_names[v->index.base()]);
 
 		/* We haven't used this bit for stations for ages */
-		if (v->type == VEH_ROAD) {
+		if (v->GetType() == VEH_ROAD) {
 			RoadVehicle *rv = RoadVehicle::From(v);
 			if (rv->GetState() != RVSB_IN_DEPOT && rv->GetState() != RVSB_WORMHOLE) {
 				rv->SetState(rv->GetState() & ~(1U << 2));
-				Tile tile(rv->tile);
+				Tile tile(rv->GetTile());
 				if (IsTileType(tile, MP_STATION) && tile.m5() >= 168) {
 					/* Update the vehicle's road state to show we're in a drive through road stop. */
 					rv->SetState(rv->GetState() | (1U << RVS_IN_DT_ROAD_STOP));
@@ -197,7 +197,7 @@ void FixOldVehicles(LoadgameState &ls)
 		}
 
 		/* The subtype should be 0, but it sometimes isn't :( */
-		if (v->type == VEH_ROAD || v->type == VEH_SHIP) v->subtype = 0;
+		if (v->GetType() == VEH_ROAD || v->GetType() == VEH_SHIP) v->Record().subtype = 0;
 
 		/* Sometimes primary vehicles would have a nothing (invalid) order
 		 * or vehicles that could not have an order would still have a
@@ -377,8 +377,8 @@ static bool FixTTOEngines()
 	};
 
 	for (Vehicle *v : Vehicle::Iterate()) {
-		if (v->engine_type >= lengthof(tto_to_ttd)) return false;
-		v->engine_type = static_cast<EngineID>(tto_to_ttd[v->engine_type.base()]);
+		if (v->GetEngineType() >= lengthof(tto_to_ttd)) return false;
+		v->SetEngineType(static_cast<EngineID>(tto_to_ttd[v->GetEngineType().base()]));
 	}
 
 	/* Load the default engine set. Many of them will be overridden later */
@@ -1156,7 +1156,7 @@ static bool LoadOldVehicleUnion(LoadgameState &ls, int)
 	if (v == nullptr) {
 		res = LoadChunk(ls, nullptr, vehicle_empty_chunk);
 	} else {
-		switch (v->type) {
+		switch (v->GetType()) {
 			default: SlErrorCorrupt("Invalid vehicle type");
 			case VEH_TRAIN: {
 				TrainStateScope scope(Train::From(v), true);
@@ -1195,7 +1195,7 @@ static bool LoadOldVehicleUnion(LoadgameState &ls, int)
 static uint16_t _cargo_count;
 
 static const OldChunks vehicle_chunk[] = {
-	OCL_SVAR(  OC_UINT8, Vehicle, subtype ),
+	OCL_SVAR(  OC_UINT8, Vehicle, this->Record().subtype ),
 
 	OCL_NULL( 2 ),         ///< Hash, calculated automatically
 	OCL_NULL( 2 ),         ///< Index, calculated automatically
@@ -1205,59 +1205,59 @@ static const OldChunks vehicle_chunk[] = {
 
 	OCL_NULL ( 1 ), ///< num_orders, now calculated
 	OCL_SVAR(  OC_UINT8, Vehicle, cur_implicit_order_index ),
-	OCL_SVAR(   OC_TILE, Vehicle, dest_tile ),
+	OCL_SVAR(   OC_TILE, Vehicle, this->GetDestTile() ),
 	OCL_SVAR( OC_UINT16, Vehicle, load_unload_ticks ),
 	OCL_SVAR( OC_FILE_U16 | OC_VAR_U32, Vehicle, date_of_last_service ),
 	OCL_SVAR( OC_UINT16, Vehicle, service_interval ),
-	OCL_SVAR( OC_FILE_U8 | OC_VAR_U16, Vehicle, last_station_visited ),
-	OCL_SVAR( OC_TTD | OC_UINT8, Vehicle, tick_counter ),
+	OCL_SVAR( OC_FILE_U8 | OC_VAR_U16, Vehicle, this->GetLastStationVisited() ),
+	OCL_SVAR( OC_TTD | OC_UINT8, Vehicle, this->Record().tick_counter ),
 	OCL_CNULL( OC_TTD, 2 ), ///< max_speed, now it is calculated.
 	OCL_CNULL( OC_TTO, 1 ), ///< max_speed, now it is calculated.
 
-	OCL_SVAR( OC_FILE_U16 | OC_VAR_I32, Vehicle, x_pos ),
-	OCL_SVAR( OC_FILE_U16 | OC_VAR_I32, Vehicle, y_pos ),
-	OCL_SVAR( OC_FILE_U8  | OC_VAR_I32, Vehicle, z_pos ),
-	OCL_SVAR(  OC_UINT8, Vehicle, direction ),
+	OCL_SVAR( OC_FILE_U16 | OC_VAR_I32, Vehicle, this->Record().x_pos ),
+	OCL_SVAR( OC_FILE_U16 | OC_VAR_I32, Vehicle, this->Record().y_pos ),
+	OCL_SVAR( OC_FILE_U8  | OC_VAR_I32, Vehicle, this->Record().z_pos ),
+	OCL_SVAR(  OC_UINT8, Vehicle, this->GetDirection() ),
 	OCL_NULL( 2 ),         ///< x_offs and y_offs, calculated automatically
 	OCL_NULL( 2 ),         ///< x_extent and y_extent, calculated automatically
 	OCL_NULL( 1 ),         ///< z_extent, calculated automatically
 
-	OCL_SVAR(  OC_UINT8, Vehicle, owner ),
-	OCL_SVAR(   OC_TILE, Vehicle, tile ),
+	OCL_SVAR(  OC_UINT8, Vehicle, this->GetOwner() ),
+	OCL_SVAR(   OC_TILE, Vehicle, this->GetTile() ),
 	OCL_SVAR( OC_FILE_U16 | OC_VAR_U32, Vehicle, sprite_cache.sprite_seq.seq[0].sprite ),
 
 	OCL_NULL( 8 ),        ///< Vehicle sprite box, calculated automatically
 
-	OCL_SVAR( OC_FILE_U16 | OC_VAR_U8, Vehicle, vehstatus ),
-	OCL_SVAR( OC_TTD | OC_UINT16, Vehicle, cur_speed ),
-	OCL_SVAR( OC_TTO | OC_FILE_U8 | OC_VAR_U16, Vehicle, cur_speed ),
-	OCL_SVAR(  OC_UINT8, Vehicle, subspeed ),
-	OCL_SVAR(  OC_UINT8, Vehicle, acceleration ),
-	OCL_SVAR(  OC_UINT8, Vehicle, progress ),
+	OCL_SVAR( OC_FILE_U16 | OC_VAR_U8, Vehicle, this->GetVehStatus() ),
+	OCL_SVAR( OC_TTD | OC_UINT16, Vehicle, this->Record().cur_speed ),
+	OCL_SVAR( OC_TTO | OC_FILE_U8 | OC_VAR_U16, Vehicle, this->Record().cur_speed ),
+	OCL_SVAR(  OC_UINT8, Vehicle, this->Record().subspeed ),
+	OCL_SVAR(  OC_UINT8, Vehicle, this->Record().acceleration ),
+	OCL_SVAR(  OC_UINT8, Vehicle, this->Record().progress ),
 
 	OCL_SVAR(  OC_UINT8, Vehicle, cargo_type ),
-	OCL_SVAR( OC_TTD | OC_UINT16, Vehicle, cargo_cap ),
-	OCL_SVAR( OC_TTO | OC_FILE_U8 | OC_VAR_U16, Vehicle, cargo_cap ),
+	OCL_SVAR( OC_TTD | OC_UINT16, Vehicle, this->Record().cargo_cap ),
+	OCL_SVAR( OC_TTO | OC_FILE_U8 | OC_VAR_U16, Vehicle, this->Record().cargo_cap ),
 	OCL_VAR ( OC_TTD | OC_UINT16, 1, &_cargo_count ),
 	OCL_VAR ( OC_TTO | OC_FILE_U8 | OC_VAR_U16, 1, &_cargo_count ),
 	OCL_VAR (  OC_UINT8, 1,       &_cargo_source ),
 	OCL_VAR (  OC_UINT8, 1,       &_cargo_periods ),
 
-	OCL_SVAR( OC_TTO | OC_UINT8, Vehicle, tick_counter ),
+	OCL_SVAR( OC_TTO | OC_UINT8, Vehicle, this->Record().tick_counter ),
 
 	OCL_SVAR( OC_FILE_U16 | OC_VAR_U32, Vehicle, age ),
 	OCL_SVAR( OC_FILE_U16 | OC_VAR_U32, Vehicle, max_age ),
 	OCL_SVAR( OC_FILE_U8 | OC_VAR_I32, Vehicle, build_year ),
 	OCL_SVAR( OC_FILE_U8 | OC_VAR_U16, Vehicle, unitnumber ),
 
-	OCL_SVAR( OC_TTD | OC_UINT16, Vehicle, engine_type ),
-	OCL_SVAR( OC_TTO | OC_FILE_U8 | OC_VAR_U16, Vehicle, engine_type ),
+	OCL_SVAR( OC_TTD | OC_UINT16, Vehicle, this->GetEngineType() ),
+	OCL_SVAR( OC_TTO | OC_FILE_U8 | OC_VAR_U16, Vehicle, this->GetEngineType() ),
 
 	OCL_SVAR(  OC_UINT8, Vehicle, spritenum ),
-	OCL_SVAR(  OC_UINT8, Vehicle, day_counter ),
+	OCL_SVAR(  OC_UINT8, Vehicle, this->Record().day_counter ),
 
 	OCL_SVAR(  OC_UINT8, Vehicle, breakdowns_since_last_service ),
-	OCL_SVAR(  OC_UINT8, Vehicle, breakdown_ctr ),
+	OCL_SVAR(  OC_UINT8, Vehicle, this->Record().breakdown_ctr ),
 	OCL_SVAR(  OC_UINT8, Vehicle, breakdown_delay ),
 	OCL_SVAR(  OC_UINT8, Vehicle, breakdown_chance ),
 
@@ -1315,7 +1315,7 @@ bool LoadOldVehicle(LoadgameState &ls, int num)
 
 			if (!LoadChunk(ls, v, vehicle_chunk)) return false;
 			if (v == nullptr) continue;
-			v->refit_cap = v->cargo_cap;
+			v->Record().refit_cap = v->Record().cargo_cap;
 
 			SpriteID sprite = v->sprite_cache.sprite_seq.seq[0].sprite;
 			/* no need to override other sprites */
@@ -1330,7 +1330,7 @@ bool LoadOldVehicle(LoadgameState &ls, int num)
 			}
 			v->sprite_cache.sprite_seq.seq[0].sprite = sprite;
 
-			switch (v->type) {
+			switch (v->GetType()) {
 				case VEH_TRAIN: {
 					static const uint8_t spriteset_rail[] = {
 						  0,   2,   4,   4,   8,  10,  12,  14,  16,  18,  20,  22,  40,  42,  44,  46,
@@ -1408,7 +1408,7 @@ bool LoadOldVehicle(LoadgameState &ls, int num)
 		}
 		v->current_order.AssignOrder(UnpackOldOrder(_old_order));
 
-		if (v->type == VEH_DISASTER) {
+		if (v->GetType() == VEH_DISASTER) {
 			DisasterVehicle::From(v)->State() = UnpackOldOrder(_old_order).GetDestination().value;
 		}
 

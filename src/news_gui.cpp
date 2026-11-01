@@ -377,7 +377,7 @@ struct NewsWindow : Window {
 		NWidgetCore *nwid = this->GetWidget<NWidgetCore>(WID_N_SHOW_GROUP);
 		if (has_vehicle_id && nwid != nullptr) {
 			const Vehicle *v = Vehicle::Get(std::get<VehicleID>(ni->ref1));
-			switch (v->type) {
+			switch (v->GetType()) {
 				case VEH_TRAIN:
 					nwid->SetString(STR_TRAIN);
 					break;
@@ -589,7 +589,7 @@ struct NewsWindow : Window {
 			default:
 				if (std::holds_alternative<VehicleID>(ni->ref1)) {
 					const Vehicle *v = Vehicle::Get(std::get<VehicleID>(this->ni->ref1));
-					ScrollMainWindowTo(v->x_pos, v->y_pos, v->z_pos);
+					ScrollMainWindowTo(v->Record().x_pos, v->Record().y_pos, v->Record().z_pos);
 				} else {
 					TileIndex tile1 = GetReferenceTile(this->ni->ref1);
 					TileIndex tile2 = GetReferenceTile(this->ni->ref2);

@@ -61,7 +61,7 @@ static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterResolve(uint32_t id) noe
 static OpenTTDDisasterRoadTarget OPENTTD_RUST_CALL DisasterRoadTarget(uint32_t id) noexcept
 {
 	RoadVehicle *target = RoadVehicle::Get(id);
-	assert(target != nullptr && target->type == VEH_ROAD && target->IsFrontEngine());
+	assert(target != nullptr && target->GetType() == VEH_ROAD && target->IsFrontEngine());
 	return DisasterRoadHandle(target);
 }
 static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterNext(uint32_t from) noexcept
@@ -115,8 +115,8 @@ static void OPENTTD_RUST_CALL DisasterZeppelinCleared(uint32_t tile, uint16_t st
 static void OPENTTD_RUST_CALL DisasterRoadCrashed(OpenTTDVehicle *shell, uint32_t victims) noexcept
 {
 	const Vehicle *target = VehicleOf(shell);
-	AI::NewEvent(target->owner, new ScriptEventVehicleCrashed(target->index, target->tile, ScriptEventVehicleCrashed::CRASH_RV_UFO, victims, target->owner));
-	Game::NewEvent(new ScriptEventVehicleCrashed(target->index, target->tile, ScriptEventVehicleCrashed::CRASH_RV_UFO, victims, target->owner));
+	AI::NewEvent(target->GetOwner(), new ScriptEventVehicleCrashed(target->index, target->GetTile(), ScriptEventVehicleCrashed::CRASH_RV_UFO, victims, target->GetOwner()));
+	Game::NewEvent(new ScriptEventVehicleCrashed(target->index, target->GetTile(), ScriptEventVehicleCrashed::CRASH_RV_UFO, victims, target->GetOwner()));
 }
 static void OPENTTD_RUST_CALL DisasterZeppelinNews(uint32_t tile, uint16_t station) noexcept { AddTileNewsItem(GetEncodedString(STR_NEWS_DISASTER_ZEPPELIN, station), NewsType::Accident, TileIndex{tile}); }
 static void OPENTTD_RUST_CALL DisasterSmallUfoNews(uint32_t tile) noexcept { AddTileNewsItem(GetEncodedString(STR_NEWS_DISASTER_SMALL_UFO), NewsType::Accident, TileIndex{tile}); }
@@ -210,7 +210,7 @@ void ReleaseDisasterVehicle(VehicleID vehicle)
 {
 	DisasterVehicle *v = DisasterVehicle::GetIfValid(vehicle);
 	if (v == nullptr) return;
-	assert(v->subtype == ST_SMALL_UFO);
+	assert(v->Record().subtype == ST_SMALL_UFO);
 	assert(v->State() != 0);
 	openttd_rust_disaster_release_vehicle(&DisasterServices(), DisasterHandle(v));
 }

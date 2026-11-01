@@ -29,7 +29,7 @@ ScriptVehicleList::ScriptVehicleList(HSQUIRRELVM vm)
 
 	ScriptList::FillList<Vehicle>(vm, this,
 		[is_deity, owner](const Vehicle *v) {
-			return (is_deity || v->owner == owner) && (v->IsPrimaryVehicle() || (v->type == VEH_TRAIN && ::Train::From(v)->IsFreeWagon()));
+			return (is_deity || v->GetOwner() == owner) && (v->IsPrimaryVehicle() || (v->GetType() == VEH_TRAIN && ::Train::From(v)->IsFreeWagon()));
 		}
 	);
 }
@@ -63,7 +63,7 @@ ScriptVehicleList_Station::ScriptVehicleList_Station(HSQUIRRELVM vm)
 	}
 
 	FindVehiclesWithOrder(
-		[is_deity, owner, type](const Vehicle *v) { return (is_deity || v->owner == owner) && (type == VEH_INVALID || v->type == type); },
+		[is_deity, owner, type](const Vehicle *v) { return (is_deity || v->GetOwner() == owner) && (type == VEH_INVALID || v->GetType() == type); },
 		[station_id](const Order *order) { return (order->IsType(OT_GOTO_STATION) || order->IsType(OT_GOTO_WAYPOINT)) && order->GetDestination() == station_id; },
 		[this](const Vehicle *v) { this->AddItem(v->index.base()); }
 	);
@@ -78,7 +78,7 @@ ScriptVehicleList_Waypoint::ScriptVehicleList_Waypoint(StationID waypoint_id)
 	::CompanyID owner = ScriptObject::GetCompany();
 
 	FindVehiclesWithOrder(
-		[is_deity, owner](const Vehicle *v) { return is_deity || v->owner == owner; },
+		[is_deity, owner](const Vehicle *v) { return is_deity || v->GetOwner() == owner; },
 		[waypoint_id](const Order *order) { return order->IsType(OT_GOTO_WAYPOINT) && order->GetDestination() == waypoint_id; },
 		[this](const Vehicle *v) { this->AddItem(v->index.base()); }
 	);
@@ -125,7 +125,7 @@ ScriptVehicleList_Depot::ScriptVehicleList_Depot(TileIndex tile)
 	::CompanyID owner = ScriptObject::GetCompany();
 
 	FindVehiclesWithOrder(
-		[is_deity, owner, type](const Vehicle *v) { return (is_deity || v->owner == owner) && v->type == type; },
+		[is_deity, owner, type](const Vehicle *v) { return (is_deity || v->GetOwner() == owner) && v->GetType() == type; },
 		[dest](const Order *order) { return order->IsType(OT_GOTO_DEPOT) && order->GetDestination() == dest; },
 		[this](const Vehicle *v) { this->AddItem(v->index.base()); }
 	);
@@ -148,7 +148,7 @@ ScriptVehicleList_Group::ScriptVehicleList_Group(GroupID group_id)
 	::CompanyID owner = ScriptObject::GetCompany();
 
 	ScriptList::FillList<Vehicle>(this,
-		[owner](const Vehicle *v) { return v->owner == owner && v->IsPrimaryVehicle(); },
+		[owner](const Vehicle *v) { return v->GetOwner() == owner && v->IsPrimaryVehicle(); },
 		[group_id](const Vehicle *v) { return v->group_id == group_id; }
 	);
 }
@@ -161,7 +161,7 @@ ScriptVehicleList_DefaultGroup::ScriptVehicleList_DefaultGroup(ScriptVehicle::Ve
 	::CompanyID owner = ScriptObject::GetCompany();
 
 	ScriptList::FillList<Vehicle>(this,
-		[owner](const Vehicle *v) { return v->owner == owner && v->IsPrimaryVehicle(); },
-		[vehicle_type](const Vehicle *v) { return v->type == (::VehicleType)vehicle_type && v->group_id == ScriptGroup::GROUP_DEFAULT; }
+		[owner](const Vehicle *v) { return v->GetOwner() == owner && v->IsPrimaryVehicle(); },
+		[vehicle_type](const Vehicle *v) { return v->GetType() == (::VehicleType)vehicle_type && v->group_id == ScriptGroup::GROUP_DEFAULT; }
 	);
 }

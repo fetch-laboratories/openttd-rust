@@ -188,7 +188,7 @@ void Ship::MarkDirty()
 void Ship::PlayLeaveStationSound(bool force) const
 {
 	if (PlayVehicleSound(this, VSE_START, force)) return;
-	SndPlayVehicleFx(ShipVehInfo(this->engine_type)->sfx, this);
+	SndPlayVehicleFx(ShipVehInfo(this->GetEngineType())->sfx, this);
 }
 
 TileIndex Ship::GetOrderStationLocation(StationID station)
@@ -211,13 +211,13 @@ void Ship::UpdateDeltaXY()
 
 	this->bounds = ship_bounds[this->GetRotation()];
 
-	if (this->direction != this->GetRotation()) {
+	if (this->GetDirection() != this->GetRotation()) {
 		/* If we are rotating, then it is possible the ship was moved to its next position. In that
 		 * case, because we are still showing the old direction, the ship will appear to glitch sideways
 		 * slightly. We can work around this by applying an additional offset to make the ship appear
 		 * where it was before it moved. */
-		this->bounds.origin.x -= this->x_pos - this->GetRotationX();
-		this->bounds.origin.y -= this->y_pos - this->GetRotationY();
+		this->bounds.origin.x -= this->Record().x_pos - this->GetRotationX();
+		this->bounds.origin.y -= this->Record().y_pos - this->GetRotationY();
 	}
 }
 

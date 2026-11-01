@@ -130,7 +130,7 @@ TEST_CASE("Aircraft phase boundary - canonical movement scalar address identity"
 		static_assert(std::is_same_v<decltype(movement.y), const decltype(v->y_pos) *>);
 		static_assert(std::is_same_v<decltype(position.z), const decltype(v->z_pos) *>);
 		static_assert(std::is_same_v<decltype(movement.speed), const decltype(v->cur_speed) *>);
-		static_assert(std::is_same_v<decltype(movement.direction), const Direction *>);
+		static_assert(std::is_same_v<decltype(movement.direction), const uint8_t *>);
 		static_assert(sizeof(Direction) == sizeof(uint8_t));
 		CHECK(movement.x == &v->x_pos);
 		CHECK(movement.y == &v->y_pos);
@@ -170,7 +170,7 @@ TEST_CASE("Base vehicle scheduler - scalar member identity and lifetime")
 	static_assert(std::is_same_v<decltype(post.counter), uint16_t *>);
 	static_assert(std::is_same_v<decltype(post.motion), uint32_t *>);
 	static_assert(std::is_same_v<decltype(post.speed), const uint16_t *>);
-	static_assert(std::is_same_v<decltype(post.front_type), const VehicleType *>);
+	static_assert(std::is_same_v<decltype(post.front_type), const uint8_t *>);
 	static_assert(std::is_same_v<decltype(post.front_status), const uint8_t *>);
 	static_assert(std::is_same_v<decltype(post.status), const uint8_t *>);
 	static_assert(std::is_same_v<decltype(v->vehstatus.base_address()), const uint8_t *>);

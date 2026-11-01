@@ -624,6 +624,8 @@ enum SLRefType : uint8_t {
 	REF_STORAGE        =  9, ///< Load/save a reference to a persistent storage.
 	REF_LINK_GRAPH     = 10, ///< Load/save a reference to a link graph.
 	REF_LINK_GRAPH_JOB = 11, ///< Load/save a reference to a link graph job.
+	REF_VEHICLE_RECORD = 12, ///< Internal: a vehicle reference held as its shared record, encoded as #REF_VEHICLE.
+	REF_VEHICLE_RECORD_OLD = 13, ///< Internal: a vehicle record reference encoded as #REF_VEHICLE_OLD.
 };
 
 /**

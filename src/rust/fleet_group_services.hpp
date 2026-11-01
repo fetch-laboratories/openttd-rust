@@ -19,7 +19,7 @@ struct FleetVehicleListContext { VehicleList list; const VehicleListIdentifier &
 static void * FleetGroup_group(uint16_t id) noexcept { auto *g = Group::GetIfValid(GroupID(id)); return g == nullptr ? nullptr : g->state.state; }
 static uint32_t FleetGroup_next_group(uint32_t from) noexcept { for (Group *g : Group::Iterate(from)) { if (g->index.base() >= from) return g->index.base(); } return UINT32_MAX; }
 static void * FleetGroup_vehicle(uint32_t id) noexcept { return Vehicle::GetIfValid(VehicleID(id)); }
-static uint8_t FleetGroup_vehicle_type(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->type; }
+static uint8_t FleetGroup_vehicle_type(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->GetType(); }
 static uint16_t FleetGroup_vehicle_group(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->group_id.base(); }
 static uint16_t FleetGroup_vehicle_engine(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return RustVehicleEngineID(v); }
 static bool FleetGroup_countable(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->IsEngineCountable(); }
