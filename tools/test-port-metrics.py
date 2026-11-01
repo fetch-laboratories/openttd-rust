@@ -71,6 +71,22 @@ class PortMetricsTests(unittest.TestCase):
         self.assertEqual(result["compiled_cpp"], 7)
         self.assertEqual(METRICS.generated_glue(added, all_lines=True), 4)
         self.assertEqual(counts(METRICS.metrics(added, added), *keys), (0, 0, 0))
+        generator = self.root / "tools/generate-abi.py"
+        generator.write_text(generator.read_text().replace("uint16_t id", "int16_t id"))
+        replaced = self.commit()
+        # Equal-sized declarations can still replace a field's type. Report
+        # both sides of that change, rather than just the zero signed net.
+        for all_lines in (False, True):
+            result = METRICS.metrics(
+                added, replaced, all_lines=all_lines, whole_fork=True
+            )
+            self.assertEqual(
+                counts(result, *keys),
+                (1, 1, 0),
+            )
+            self.assertEqual(
+                result["areas"]["Boundary layer"]["glue"], 4 if all_lines else 3
+            )
         (self.root / "tools/generate-abi.py").unlink()
         removed = self.commit()
         self.assertEqual(counts(METRICS.metrics(added, removed), *keys), (0, 3, -3))
